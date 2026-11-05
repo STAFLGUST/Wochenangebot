@@ -400,6 +400,10 @@ def pruefe_daten(rw: Regelwerk, liste: list) -> None:
             rw.f(f"Dokument {n}: beschreibung fehlt")
         if d.get("bereich") not in BEREICHE:
             rw.f(f"Dokument {n}: bereich muss eines von {', '.join(BEREICHE)} sein (ADR-007 Stufe 2)")
+        if "trennstufe" in d and (d.get("bereich") != "intern" or not isinstance(d["trennstufe"], int) or not 2 <= d["trennstufe"] <= TRENNSTUFE_MAX):
+            rw.f(f"Dokument {n}: trennstufe nur bei bereich = \"intern\" und als Zahl 2…{TRENNSTUFE_MAX} (Dokument zieht erst mit dieser Trennstufe um)")
+        if "felder_kundenseite" in d and n != "kunden":
+            rw.f(f"Dokument {n}: felder_kundenseite gibt es nur für kunden (Teilung in kunden und kundenstamm, ADR-007 Stufe 2b)")
         for feld in ("leser", "schreiber"):
             for x in d.get(feld, []):
                 if x not in ids:
@@ -607,6 +611,10 @@ def pruefe_caddy(rw: Regelwerk) -> None:
 
 BEREICHE = ("kundenseite", "intern")
 BEREICHE_LISTE = "app/api/lib/datenbereiche-liste.php"
+# Höchste Trennstufe, die dieser Stand kennt: 1 = interne Dokumente getrennt (Stufe 2a), 2 = Kundendokument geteilt, Bestand/
+# Stammdaten, Postfächer, Vorlagen und Empfänger nur noch innen (Stufe 2b). Dokumente mit „trennstufe = n“ liegen bis zur Stufe n
+# im gemeinsamen Ordner (so ändert ein Release allein nichts) und ziehen mit `deploy/daten-trennen.sh trennen` um.
+TRENNSTUFE_MAX = 2
 
 
 def kundenseite_dokumente(rw: Regelwerk) -> tuple:
@@ -620,16 +628,35 @@ def kundenseite_dokumente(rw: Regelwerk) -> tuple:
     return sorted(namen), sorted(praefixe)
 
 
+def ab_stufe_dokumente(rw: Regelwerk) -> dict:
+    """Interne Dokumente, die erst mit einer späteren Trennstufe umziehen: Name → Stufe."""
+    return {d["name"]: d["trennstufe"] for d in rw.daten.get("dokument", []) if d.get("bereich") == "intern" and "trennstufe" in d}
+
+
+def kunden_felder(rw: Regelwerk) -> list:
+    """Felder eines Kunden, die ab Trennstufe 2 im gemeinsamen Ordner bleiben (Portal); alle übrigen liegen in kundenstamm."""
+    for d in rw.daten.get("dokument", []):
+        if d.get("name") == "kunden":
+            return list(d.get("felder_kundenseite", []))
+    return []
+
+
 def bereiche_php(rw: Regelwerk) -> str:
     namen, praefixe = kundenseite_dokumente(rw)
     liste = lambda xs: "[" + ", ".join(f"'{x}'" for x in xs) + "]"
+    stufen = ab_stufe_dokumente(rw)
     z = ["<?php", "declare(strict_types=1);",
          "/* ERZEUGT von `python3 werkzeuge/regeln.py erzeugen` aus regeln/datenverantwortung.toml (Feld bereich) – nicht von Hand ändern.",
          "   Speicherbereiche (ADR-007 Stufe 2, app/api/storage.php): Dokumente, die die Kundenseite braucht, bleiben im gemeinsamen",
-         "   Ordner; alle anderen liegen nach deploy/daten-trennen.sh im Ordner daten-intern, den die Kundenseite nicht sieht. */",
+         "   Ordner; alle anderen liegen nach deploy/daten-trennen.sh im Ordner daten-intern, den die Kundenseite nicht sieht.",
+         "   DATEN_AB_STUFE: interne Dokumente, die erst mit dieser Trennstufe umziehen (bis dahin im gemeinsamen Ordner).",
+         "   KUNDEN_FELDER_KUNDENSEITE: ab Trennstufe 2 bleiben nur diese Felder eines Kunden im Dokument kunden (Rest: kundenstamm). */",
          "if (realpath((string)($_SERVER['SCRIPT_FILENAME'] ?? '')) === __FILE__) { http_response_code(404); exit; }", "",
          f"const DATEN_KUNDENSEITE = {liste(namen)};",
-         f"const DATEN_KUNDENSEITE_PRAEFIX = {liste(praefixe)};"]
+         f"const DATEN_KUNDENSEITE_PRAEFIX = {liste(praefixe)};",
+         f"const DATEN_TRENNSTUFE = {TRENNSTUFE_MAX};",
+         "const DATEN_AB_STUFE = [" + ", ".join(f"'{k}' => {v}" for k, v in sorted(stufen.items())) + "];",
+         f"const KUNDEN_FELDER_KUNDENSEITE = {liste(kunden_felder(rw))};"]
     return "\n".join(z) + "\n"
 
 

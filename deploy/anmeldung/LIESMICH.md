@@ -166,18 +166,22 @@ wie bisher in den Bestellwünschen zum Nachsenden. Vor einem Rückfall auf ein �
 zurueck` (Passwörter zurück auf das alte Format, Schlüssel zurück in den Datenordner), danach
 `docker compose up -d --remove-orphans`.
 
-## Daten trennen (ADR-007 Stufe 2a)
+## Daten trennen (ADR-007 Stufe 2a und 2b)
 
-Mit dem Release ändert sich noch nichts: `app-mitarbeiter` und `postausgang` binden `./daten-intern` ein, nutzen ihn aber erst
-nach dem Serverschritt (nur mit Freigabe des Inhabers, im Wartungsfenster – die Anwendung steht dabei kurz):
+Mit einem Release ändert sich noch nichts: `app-mitarbeiter` und `postausgang` binden `./daten-intern` ein, die Daten ziehen erst
+mit dem Serverschritt um (nur mit Freigabe des Inhabers, im Wartungsfenster – die Anwendung steht dabei kurz):
 
 ```sh
-sh deploy/daten-trennen.sh status            # Plan: welche internen Dokumente umziehen (ändert nichts)
-sh deploy/daten-trennen.sh trennen           # Sicherung → Stopp → trennen → Start
+sh deploy/daten-trennen.sh status            # Stufe und Plan: was umzieht (ändert nichts)
+sh deploy/daten-trennen.sh trennen           # Sicherung → Stopp → trennen → Start (auf die höchste Stufe des Stands)
 ```
 
-Danach sieht die Kundenseite Personal, Mitarbeiterkonten, CRM, Controlling, QS-Dokumente usw. nicht mehr. Sicherungen enthalten
-zusätzlich `intern-<Zeit>.tar.gz`. Vor einem Rückfall auf ein Release vor der Trennung: `sh deploy/daten-trennen.sh zusammenfuehren`.
+Trennstufe 1 (Stufe 2a, seit 04.11.2026): Die Kundenseite sieht Personal, Mitarbeiterkonten, CRM, Controlling, QS-Dokumente
+usw. nicht mehr. Trennstufe 2 (Stufe 2b): zusätzlich Bestand, Stammdaten, Postfach-Zugänge, Signatur, Benachrichtigungen,
+Empfänger der Bestellwünsche und vom Kundendokument alles außer den Portalfeldern (Anschrift, E-Mail, Telefon, Warenwirtschaft);
+der Postausgang verschickt nur noch an Empfänger aus den internen Daten. Sicherungen enthalten zusätzlich `intern-<Zeit>.tar.gz`.
+Vor einem Rückfall auf ein Release mit niedrigerer Stufe: `sh deploy/daten-trennen.sh zusammenfuehren`, danach mit dem älteren
+Release gegebenenfalls erneut `trennen`.
 
 ## Design der Anmeldeseite und der E-Mails
 

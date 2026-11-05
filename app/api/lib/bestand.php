@@ -177,6 +177,47 @@ function bestand_mit_stammdaten(?array $st): ?array
     return $st;
 }
 
+/* ---------------- Auszug für die Kundenseite (ADR-007 Stufe 2b) ----------------
+   Ab Trennstufe 2 liegen Bestand und Stammdaten innen. Die Kundenseite braucht davon nur, welche Artikel Lagerbestand haben
+   (ausverkaufte Sonderposten, stock_codes) und Fleischart, Herkunft und Zustand je Artikel (Einzelangebote, einzel_model) – nie
+   Mengen, Partien, MHD oder Einkaufspreise (GR-001, GR-008). Neu geschrieben nach jeder Änderung von Bestand oder Stammdaten
+   (bestand_speichern, stammdaten_speichern); der Postausgang prüft zusätzlich bei jedem Durchgang, ob er zum Stand passt. */
+function artikelauszug_erzeugen(?array $bestand, ?array $stamm): array
+{
+    $lager = null;   // null: keine Bestandsliste vorhanden (dann gilt nichts als ausverkauft)
+    if (is_array($bestand) && !empty($bestand['articles'])) {
+        $lager = [];
+        foreach ($bestand['articles'] as $a) if (is_array($a) && (float)($a['kg'] ?? 0) > 0) $lager[code_key((string)($a['code'] ?? ''))] = true;
+        $lager = array_map('strval', array_keys($lager)); sort($lager, SORT_STRING);
+    }
+    $merkmale = [];
+    foreach ((is_array($stamm['articles'] ?? null) ? $stamm['articles'] : []) as $a) {
+        if (!is_array($a) || (string)($a['code'] ?? '') === '') continue;
+        $merkmale[code_key((string)$a['code'])] = ['category' => $a['category'] ?? null, 'origin' => $a['origin'] ?? null, 'condition' => $a['condition'] ?? null];
+    }
+    ksort($merkmale, SORT_STRING);
+    return ['lager' => $lager, 'merkmale' => (object)$merkmale];
+}
+/* Auszug neu schreiben, wenn er nicht zum Stand von Bestand und Stammdaten passt (nur ab Trennstufe 2, nur mit Sicht auf die
+   internen Daten). $immer: ohne Vergleich der Zeitstempel (Durchsicht des Postausgangs). Rückgabe: geschrieben? */
+function artikelauszug_aktualisieren(bool $immer = true): bool
+{
+    if (store_stufe() < 2 || !store_innen()) return false;
+    $quelle = ['bestand' => store_mtime('bestand'), 'stammdaten' => store_mtime('stammdaten')];
+    $alt = store_read('artikelauszug');
+    if (!$immer && is_array($alt) && ($alt['quelle'] ?? null) == $quelle) return false;
+    $neu = artikelauszug_erzeugen(store_read('bestand'), store_read('stammdaten'));
+    if (is_array($alt) && json_encode([$alt['lager'] ?? null, (object)($alt['merkmale'] ?? [])]) === json_encode([$neu['lager'], $neu['merkmale']]) && ($alt['quelle'] ?? null) == $quelle) return false;
+    with_lock('artikelauszug', function () use ($neu, $quelle) { store_write('artikelauszug', $neu + ['quelle' => $quelle, 'erzeugt' => now()]); });
+    return true;
+}
+/* Kundenseite: Auszug lesen (null, wenn es noch keinen gibt) */
+function artikelauszug(): ?array
+{
+    $a = store_read('artikelauszug');
+    return is_array($a) ? $a : null;
+}
+
 /* ---------------- Stammdaten ---------------- */
 
 function code_key(string $c): string { return ctype_digit($c) ? (ltrim($c, '0') === '' ? '0' : ltrim($c, '0')) : strtoupper($c); }

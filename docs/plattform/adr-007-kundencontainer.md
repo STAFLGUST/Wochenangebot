@@ -4,7 +4,9 @@
 (Dienstkonto in Keycloak, Realm Stand 16) umgesetzt und eingespielt (PR #283), **Notzugang über einen SSH-Tunnel**
 (Regel 6 der Zielarchitektur Kundenseite) umgesetzt und eingespielt (PR #285); **Postausgang von innen** (Regel 4)
 umgesetzt und eingespielt (PR #286, Schlüssel umgezogen am 04.11.2026); **Stufe 2a** (interne Daten in eigenen Ordner)
-umgesetzt – wirksam erst mit dem Serverschritt `deploy/daten-trennen.sh trennen` (Freigabe des Inhabers); **Stufe 2b** geplant.
+umgesetzt und eingespielt (PR #287, Daten getrennt am 04.11.2026); **Stufe 2b** (Trennstufe 2: Kundendokument geteilt, Bestand,
+Stammdaten, Postfächer und Empfänger innen, Postausgang prüft Versandaufträge) umgesetzt – wirksam erst mit dem Serverschritt
+`deploy/daten-trennen.sh trennen` nach dem Release (Freigabe des Inhabers); eigene Protokolle und Zähler der Kundenseite offen.
 **Anlass:** Sicherheitsdurchsicht vom 26.10.2026, Befund 5, und Durchsicht aus Kundensicht vom 04.11.2026 (ohne Befund,
 aber mit diesem Restrisiko). Umsetzung der Vorgabe aus [ADR-003](adr-003-domains-anmeldung.md): Trennung
 Kunden/Mitarbeiter; eine kompromittierte Anwendung darf nicht automatisch andere Fachbereiche öffnen.
@@ -145,9 +147,9 @@ kein Postfach.
   liegt; Format v1 bleibt lesbar.
 - **Einführung (Serverschritt nach dem Release):** `sh deploy/postfach-schluessel.sh umziehen` – verschiebt den Schlüssel
   (ohne Neustart; bis dahin gilt der bisherige Ort) und bindet vorhandene Passwörter (v1 → v2) im Dienst `postausgang`.
-- **Grenze bis Stufe 2:** Solange der Datenordner gemeinsam ist, könnte eine übernommene Kundenseite gefälschte
-  Versandaufträge ablegen, die der Postausgang verschickt (Empfänger und Inhalt stehen in den Daten). Das Passwort selbst
-  bekommt sie nicht mehr. Dicht wird das erst mit der Datentrennung.
+- **Grenze bis Stufe 2b:** Solange Empfänger und Inhalt im gemeinsamen Ordner standen, konnte eine übernommene Kundenseite
+  gefälschte Versandaufträge ablegen, die der Postausgang verschickte. Das Passwort selbst bekam sie nicht mehr. Geschlossen mit
+  Trennstufe 2 (Abschnitt Stufe 2b).
 - **Geprüft:** E2E-Gruppe `postausgang` (zwei Server wie im Betrieb: Kundenseite ohne Postfach, Mitarbeiterseite mit
   Schlüsselordner; Dienst wie im Container; Oberfläche Desktop und 390 px), `tests/deploy/test_postfach_schluessel.sh`,
   `deploy/anmeldung/pruefen.sh` (Konfiguration und echter Start: Dienst läuft, abgeschottet, Kundenseite ohne Postfach).
@@ -157,7 +159,7 @@ kein Postfach.
   Aufträge im Dokument `postausgang` verarbeitet der alte Stand nicht – offene Versandaufträge stehen weiter beim Vorgang und
   lassen sich in den Bestellwünschen nachsenden.
 
-### Stufe 2a – Interne Daten in einen eigenen Ordner (umgesetzt 04.11.2026, Serverschritt mit Freigabe)
+### Stufe 2a – Interne Daten in einen eigenen Ordner (umgesetzt und getrennt am 04.11.2026, Trennstufe 1)
 
 Gemessen (Zugriffsspur der Speicherschicht über 24 Testgruppen, 04.11.2026): Die öffentlichen Kundenaktionen fassen 38
 Speicherdokumente an. Alle übrigen – Personal (HR), Mitarbeiterkonten und Sitzungen, Rechte, CRM, Controlling, Marketing,
@@ -189,28 +191,72 @@ Leergut, REWE, QS mit der Dateiablage, Entwurf, Versionen, Preisverlauf, Einkauf
   geschrieben, keine Mitarbeiteranmeldung oder Ersteinrichtung), volle E2E-Suite einmal lokal mit getrennten Daten
   (`WA_TEST_TRENNUNG=1`), `deploy/anmeldung/pruefen.sh` (Einbindung).
 
-### Stufe 2b – Restliche Trennung (geplant)
+### Stufe 2b – Trennstufe 2: weniger Daten außen, Postausgang vertraut der Kundenseite nicht mehr (umgesetzt, Serverschritt mit Freigabe)
 
-Nach Stufe 2a sieht die Kundenseite noch Dokumente, die sie heute braucht, die aber mehr enthalten als nötig:
+Nach Stufe 2a sah die Kundenseite noch Dokumente, die mehr enthielten als nötig, und der Postausgang vertraute Empfängern und
+Inhalt im gemeinsamen Ordner. Seit Stufe 2b gilt: **Was die Kundenseite schreiben kann, entscheidet nie, wohin oder was die Firma
+verschickt, und enthält keine Daten, die sie nicht braucht.**
 
-- Das Kundendokument `kunden` mit Warenwirtschaftszahlen (Umsätze, Kreditlimit) → in **Zugangsdaten/Portalfelder** und
-  **Stammdaten mit Warenwirtschaftszahlen** teilen – eine Datenmigration mit eigener Freigabe (GR-006).
-- `bestand` und `stammdaten` (Mengen, Einkaufspreise) → nur eine veröffentlichte Liste ausverkaufter Artikel ohne Mengen.
-- Protokoll, Anmeldeversuche, Firewall-Zähler und Live-Verkehr enthalten auch Einträge der Mitarbeiterseite → eigene
-  Dokumente der Kundenseite, die Oberflächen führen beide zusammen.
-- Versandaufträge: Der Postausgang vertraut Empfängern und Inhalt im gemeinsamen Ordner (siehe oben, Grenze).
-- Später PostgreSQL (Zielarchitektur §5): Die Bereiche entsprechen dann eigenen Datenbanknutzern.
+- **Trennstufen:** Das Kennzeichen `daten/.daten-getrennt` enthält die Stufe (1 = Stufe 2a, 2 = Stufe 2b; `store_stufe()`).
+  Dokumente mit `trennstufe = 2` in `regeln/datenverantwortung.toml` liegen bis zu dieser Stufe im gemeinsamen Ordner – so ändert
+  das Release allein nichts. `deploy/daten-trennen.sh trennen` bringt die Daten auf die höchste Stufe des eingespielten Stands (auch
+  von Stufe 1 auf 2); `status` zeigt den Plan. Kennt ein Stand die Stufe im Kennzeichen nicht (Rückfall ohne Zusammenführen), bricht
+  die Speicherschicht ab, statt still falsch zu lesen.
+- **Ab Trennstufe 2 innen:** Bestand und Stammdaten (Mengen, Partien, MHD, Einkaufspreise), beide Postfach-Zugänge, die
+  Signatur (`mailvorlage`), die Benachrichtigungen und die Empfänger der Bestellwünsche (`bestellung-empfaenger`; außen steht nur
+  ihre Anzahl). Neu: `kundenstamm` (intern).
+- **Kundendokument geteilt:** In `kunden` bleiben je Kunde nur die Portalfelder (`felder_kundenseite`: Kennung, Nummer, Firma,
+  Ansprechpartner, Gruppe, Angebote, aktiv, Zugang, Wochenangebot an/ab, gekürzte E-Mail für die Abmeldeseite). Anschrift, E-Mail,
+  Telefon, Notiz, Vertreter und die Daten der Warenwirtschaft (Umsätze, Kreditlimit) stehen in `kundenstamm`. Die Mitarbeiterseite
+  liest beide zusammengeführt (`customers_load`) und speichert geteilt (`customers_save`) – alle Module (CRM, Controlling, REWE …)
+  sehen dieselben Felder wie bisher. Die Kundenseite liest und schreibt nur die Portalfelder.
+- **Auszug für die Kundenseite:** `artikelauszug` – Artikelnummern mit Lagerbestand (ohne Mengen) und Fleischart, Herkunft,
+  Zustand je Artikel. Neu geschrieben nach jeder Änderung von Bestand oder Stammdaten; der Postausgang prüft ihn bei jedem Durchgang.
+- **Postausgang prüft Versandaufträge** (`order_outbox.php`, `lib/postausgang.php`): Die Kundenseite legt für einen Bestellwunsch
+  nur einen offenen Auftrag ohne Empfänger an; der Postausgang bestimmt die Empfänger (Bestellfunktion, Adresse aus `kundenstamm`),
+  ergänzt den Schnappschuss des Kunden einmalig aus den Stammdaten (GR-106) und erzeugt den Inhalt beim Versand selbst. An das Team
+  gehen E-Mails nur an heutige oder frühere Empfänger (so bleibt beim Nachsenden der Originalempfänger), die Kopie nur an die
+  heutige Adresse des Kunden; je Kunde höchstens 30 am Tag. Andere Aufträge werden verworfen, stehen mit Grund beim Vorgang und
+  gehen als Sicherheitsereignis ins Protokoll. Abmeldehinweise enthalten nur noch die Kennung des Kunden (Firma und Adresse liest
+  der Dienst selbst, nur wenn die Änderung gespeichert ist, höchstens 10 je Kunde und Tag); Benachrichtigungen der Kundenseite nimmt
+  der Dienst nur als Sicherheitsereignis an. Bis Trennstufe 2 gilt wie bisher der gespeicherte Originalstand.
+- **Grenze, die bleibt:** Eine übernommene Kundenseite kann weiterhin im Namen eines Kunden Bestellwünsche anlegen (Positionen,
+  Bemerkung) – die gehen an das Team und als Kopie an die hinterlegte Adresse dieses Kunden, wie bei einem echten Bestellwunsch.
+  Firma und Kundennummer stehen weiter außen (Anzeige im Portal). Was die Kundenseite selbst anzeigt, kann sie ohnehin bestimmen.
+- **Serverschritt** nach dem Release (Wartungsfenster, Freigabe des Inhabers): `sh deploy/daten-trennen.sh status`, dann
+  `trennen` – Sicherung → Stopp → `deploy/daten_trennen.py` (neue interne Dokumente kopieren und vergleichen, dann umschalten, dann
+  im gemeinsamen Ordner bereinigen: Originale entfernen, `kunden` und `bestellung` kürzen) → Start. Den Auszug schreibt der
+  Postausgang beim ersten Durchgang nach dem Start (bis dahin, wenige Sekunden, gilt kein Sonderposten als ausverkauft).
+- **Rückfall:** auf ein Release mit Trennstufe 1 (Stufe 2a) oder älter: vorher `sh deploy/daten-trennen.sh zusammenfuehren` (setzt
+  `kunden` und `bestellung` wieder zusammen, entfernt den Auszug), dann das Release, dann – falls es eine Trennung kennt – erneut
+  `trennen` mit dessen Stand. Offene Bestellwünsche mit offenem Auftrag (ohne Empfänger) verarbeitet ein älterer Stand nicht; sie
+  stehen in den Bestellwünschen und lassen sich nach dem Wiedereinspielen nachsenden.
+- **Geprüft:** `tests/deploy/test_daten_trennen.py` (Stufe 0→2 und 1→2 in Dateien und SQLite, Wiederholung nach Abbruch ohne
+  Verlust, Zusammenführen mit vollständigem Kundendokument, gleiche Einteilung in PHP und Python je Stufe, Speichern beider Seiten),
+  `tests/regeln/test_regeln.py` (`trennstufe`, `felder_kundenseite`), E2E-Gruppe `datentrennung` auf Trennstufe 2 (Kundenseite
+  ohne eine einzige Anfrage nach internen Dokumenten; gefälschte Aufträge im gemeinsamen Ordner – fremde Empfänger, fremder Inhalt,
+  gefälschter Abmeldehinweis, fremde Benachrichtigung – gehen nicht hinaus; Originalempfänger nach einer Änderung; Auszug ohne
+  Mengen), `postausgang`, `order_outbox` und die übrige Suite auf Stufe 0.
+- **Offen (eigene Schritte):**
+  - Protokoll, Anmeldeversuche, Firewall-Zähler und Live-Verkehr enthalten auch Einträge der Mitarbeiterseite und liegen außen →
+    eigene Dokumente der Kundenseite, die Oberflächen führen beide zusammen.
+  - Veröffentlichte Einstellungen, die auch die Mitarbeiterseite liest (`sicherheit`, `firewall`, `sperrliste`, `wartung`,
+    `angebote`, `angebot`, `fracht` …), liegen im gemeinsamen Ordner und wären für eine übernommene Kundenseite beschreibbar
+    (z. B. Sicherheitseinstellungen abschwächen, Angebotsnamen in der Wochenangebots-Mail). Abhilfe: Veröffentlichtes in einen
+    Bereich, den die Kundenseite nur lesen kann (eigener Ordner, nur lesbar eingebunden), bzw. PostgreSQL (Zielarchitektur §5) mit
+    eigenen Datenbanknutzern und Rechten je Bereich – Entscheidung des Inhabers.
 
 ## Wirkung
 
 | Wenn die Kundenseite geknackt würde | vorher | nach Stufe 1 | nach Stufe 2 |
 | --- | --- | --- | --- |
 | Personaldaten, Mitarbeiterkonten, CRM, Controlling, QS-Dokumente lesen | ja | ja (gemeinsamer Datenordner) | nein (2a) |
-| Protokoll, Kunden-Warenwirtschaftszahlen, Bestand lesen | ja | ja | ja nach 2a, nein nach 2b |
+| Kunden-Warenwirtschaftszahlen, Anschriften, Bestand, Einkaufspreise lesen | ja | ja | ja nach 2a, nein nach 2b |
+| Protokoll und Anmeldeversuche der Mitarbeiter lesen | ja | ja | ja (eigener Schritt offen) |
 | Mitarbeiterkonten in Keycloak übernehmen | ja | nein (kein Geheimnis, kein Netzweg) | nein |
 | Anmelde-Geheimnisse der Mitarbeiter-Hosts | ja | nein | nein |
 | Postfach-Passwort | ja | ja – nein seit dem Postausgang von innen (nach `postfach-schluessel.sh umziehen`) | nein |
-| E-Mails über das Firmenpostfach auslösen | ja | ja – auch mit Postausgang, über gefälschte Aufträge im gemeinsamen Datenordner | nein |
+| E-Mails über das Firmenpostfach an beliebige Empfänger, mit beliebigem Inhalt | ja | ja – auch mit Postausgang, über gefälschte Aufträge im gemeinsamen Datenordner | nein (2b): nur Bestellwünsche im Namen eines Kunden an Team und dessen hinterlegte Adresse, höchstens 30 am Tag |
 | Dateien der Anwendung verändern | nein (nur lesend) | nein | nein |
 | Mitarbeiter-Hosts durch Überlast ausbremsen | ja | nein (Grenzen) | nein |
 
@@ -241,7 +287,8 @@ niemand (Stufe 1b).
 - **Geänderte Anmelde-Werte in `.env`** liest die Anwendung nach `docker compose up -d app-mitarbeiter` (bisher `app`).
 - **Speicher umschalten** (`deploy/datenbank-umschalten.sh`) stoppt beide Anwendungs-Container und den Postausgang; mit
   getrennten Daten erst `daten-trennen.sh zusammenfuehren` (Stufe 2a).
-- **Daten trennen:** `sh deploy/daten-trennen.sh status` (Plan, ändert nichts), `trennen`, `zusammenfuehren` – Abschnitt Stufe 2a.
+- **Daten trennen:** `sh deploy/daten-trennen.sh status` (Stufe und Plan, ändert nichts), `trennen` (auf die höchste Stufe des
+  eingespielten Stands), `zusammenfuehren` – Abschnitte Stufe 2a und 2b.
 - **Postausgang:** `docker compose ps postausgang` (Zustand „healthy“ = Lebenszeichen frisch), `docker compose logs postausgang`
   (je Durchgang mit Versand eine Zeile). Steht der Dienst länger als 15 Minuten, nimmt das Portal keine Bestellwünsche an.
   Einführung: Release einspielen (erstellt den Dienst), danach einmal `sh deploy/postfach-schluessel.sh umziehen`.

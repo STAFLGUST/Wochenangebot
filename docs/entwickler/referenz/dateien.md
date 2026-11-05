@@ -65,7 +65,7 @@ Jede Code-Datei beginnt mit einem Kopfkommentar; dessen erste Aussage steht hier
 | `geo.php` | plattform | Länderzuordnung von IP-Adressen (für Ländersperren) Datenquelle: ip-location-db „geo-whois-asn-country“ (CC0 / Public Domain) Binärformat laender.dat.php (beginnt mit einer PHP-Sperre, damit die Datei im Browser … |
 | `index.php` | plattform | API-Einstieg der STAFL-Plattform (/api/?action=…): prüft jede Anfrage (Herkunft, Host, Schreibschutz, Sperren, Wartung, Modulzugang) und bindet die Aktionen aus aktionen/*.php ein. |
 | `mail.php` | plattform | E-Mail-Versand über einen SMTP-Server (z. |
-| `order_outbox.php` | angebot | Durable per-recipient jobs live in the same document/transaction as the order. |
+| `order_outbox.php` | angebot | Versandaufträge eines Bestellwunschs: je Empfänger ein Auftrag im selben Dokument (bestellungen) wie der Vorgang. |
 | `orders.php` | angebot | Shared order operations for the website and future app clients. |
 | `ort.php` | verwaltung | Ungefährer Ort (Stadt) einer IP-Adresse – für die Karte der Kunden-Anmeldungen (Auswertung) Datenquelle |
 | `postausgang.php` | plattform | Dienst „postausgang“ (ADR-007, Postausgang von innen): ein Durchgang – fällige Versandaufträge der Kundenseite verschicken (lib/postausgang.php) und ein Lebenszeichen schreiben. |

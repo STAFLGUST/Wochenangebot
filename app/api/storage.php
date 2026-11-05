@@ -11,15 +11,26 @@ require_once __DIR__ . '/lib/datenbereiche-liste.php';   // Speicherbereiche (er
    Jeder Bereich hat eigene Sperren und (im SQLite-Modus) eine eigene Datenbank. Die Kundenseite (ohne WA_DATEN_INTERN) sieht
    interne Dokumente nicht: Lesen liefert null, Schreiben bricht ab. */
 final class StoreKeinZugang extends RuntimeException {}
-function store_getrennt(): bool
+/* Trennstufe (Inhalt von daten/.daten-getrennt): 0 = nicht getrennt, 1 = interne Dokumente getrennt (Stufe 2a), 2 = zusätzlich
+   Kundendokument geteilt, Bestand/Stammdaten, Postfächer, Vorlagen und Empfänger innen (Stufe 2b). Dokumente aus DATEN_AB_STUFE
+   bleiben bis zu ihrer Stufe im gemeinsamen Ordner – ein Release allein ändert nichts; umgestellt wird mit daten-trennen.sh. */
+function store_stufe(): int
 {
     global $DATA;
-    static $g = null;
-    return $g ??= is_file($DATA . '/.daten-getrennt');
+    static $s = null;
+    if ($s !== null) return $s;
+    $p = $DATA . '/.daten-getrennt';
+    if (!is_file($p)) return $s = 0;
+    $v = max(1, (int)trim((string)@file_get_contents($p)));
+    // Daten weiter getrennt, als dieser Stand kennt (Rückfall ohne „zusammenfuehren“): nie still falsch lesen
+    if ($v > DATEN_TRENNSTUFE) throw new RuntimeException('Daten sind weiter getrennt (Stufe ' . $v . '), als dieser Stand kennt – erst deploy/daten-trennen.sh zusammenfuehren');
+    return $s = $v;
 }
+function store_getrennt(): bool { return store_stufe() > 0; }
 function store_bereich(string $name): string
 {
     if (!store_getrennt() || in_array($name, STORE_SIDECARS, true) || in_array($name, DATEN_KUNDENSEITE, true)) return 'haupt';
+    if (isset(DATEN_AB_STUFE[$name]) && store_stufe() < DATEN_AB_STUFE[$name]) return 'haupt';   // zieht erst mit späterer Stufe um
     // Muster „name/*“: auch die Sperre unter dem Namen der Gruppe (z. B. with_lock('protokoll') für protokoll/<Monat>)
     foreach (DATEN_KUNDENSEITE_PRAEFIX as $p) if (strncmp($name, $p, strlen($p)) === 0 || $name . '/' === $p) return 'haupt';
     return 'intern';
@@ -38,6 +49,15 @@ function store_ordner(string $bereich): string
     if ($intern === null) throw new StoreKeinZugang('Dieses Dokument gehört nicht zur Kundenseite.');
     return $intern;
 }
+/* Sieht dieser Server die internen Dokumente? (nicht getrennt: ja; getrennt: nur mit WA_DATEN_INTERN – Mitarbeiterseite und
+   Postausgang). Die Kundenseite (getrennt, ohne WA_DATEN_INTERN) nutzt stattdessen Auszüge, z. B. den artikelauszug. */
+function store_innen(): bool
+{
+    if (!store_getrennt()) return true;
+    try { store_ordner('intern'); return true; } catch (StoreKeinZugang $e) { return false; }
+}
+/* Kann dieser Server das Dokument lesen? (Kundenseite: nur Dokumente im gemeinsamen Ordner – je nach Trennstufe) */
+function store_sichtbar(string $name): bool { return store_bereich($name) === 'haupt' || store_innen(); }
 /* Prüfhilfe (nur Tests, WA_SPUR_INTERN=1): Kundenseite fragt ein internes Dokument an – ins Serverprotokoll. Im Betrieb geschieht
    das nicht; die Testgruppe datentrennung stellt sicher, dass Kundenaktionen keine internen Dokumente brauchen. */
 function store_spur(string $name): void
@@ -193,5 +213,5 @@ function store_stats(): array
             if ($f->isFile() && substr($rel, -4) === '.php' && $rel !== 'index.php' && strpos($rel, 'geo/') !== 0 && $rel[0] !== '.') { $n++; $bytes += $f->getSize(); }
         }
     }
-    return ['mode' => store_mode('haupt'), 'documents' => $n, 'bytes' => $bytes, 'getrennt' => store_getrennt()];
+    return ['mode' => store_mode('haupt'), 'documents' => $n, 'bytes' => $bytes, 'getrennt' => store_getrennt(), 'trennstufe' => store_stufe()];
 }

@@ -746,6 +746,27 @@ class Verstoesse(unittest.TestCase):
         self.p.ersetzen("regeln/datenverantwortung.toml", 'bereich = "intern"', 'bereich = "kundenseite"')
         self.assertFehler("datenbereiche-liste.php passt nicht zu regeln/datenverantwortung.toml")
 
+    def test_trennstufe(self):
+        # Dokument zieht erst mit Trennstufe 2 um (ADR-007 Stufe 2b): nur bei bereich = "intern", nur 2…TRENNSTUFE_MAX
+        self.p.ersetzen("regeln/datenverantwortung.toml", 'bereich = "intern"\n', 'bereich = "intern"\ntrennstufe = 2\n')
+        self.assertEqual([f for f in self.p.fehler() if "trennstufe" in f], [])
+        text = regeln.bereiche_php(regeln.laden(self.p.wurzel))
+        self.assertIn("const DATEN_AB_STUFE = ['bestand' => 2];", text)
+        self.assertIn(f"const DATEN_TRENNSTUFE = {regeln.TRENNSTUFE_MAX};", text)
+        self.p.ersetzen("regeln/datenverantwortung.toml", "trennstufe = 2", "trennstufe = 9")
+        self.assertFehler("Dokument bestand: trennstufe nur bei bereich")
+        self.p.ersetzen("regeln/datenverantwortung.toml", "trennstufe = 9", "")
+        self.p.ersetzen("regeln/datenverantwortung.toml", 'bereich = "kundenseite"\nschutz = "oeffentlich"', 'bereich = "kundenseite"\ntrennstufe = 2\nschutz = "oeffentlich"')
+        self.assertFehler("Dokument angebot: trennstufe nur bei bereich")
+
+    def test_kundenfelder(self):
+        self.p.ersetzen("regeln/datenverantwortung.toml", 'bereich = "intern"\n', 'bereich = "intern"\nfelder_kundenseite = ["id"]\n')
+        self.assertFehler("Dokument bestand: felder_kundenseite gibt es nur für kunden")
+        rw = regeln.laden(WURZEL)   # echtes Regelwerk: Portalfelder der Kunden, gleiche Liste in PHP
+        self.assertIn("login", regeln.kunden_felder(rw))
+        self.assertNotIn("email", regeln.kunden_felder(rw))
+        self.assertNotIn("wawi", regeln.kunden_felder(rw))
+
     def test_veraltete_module_liste(self):
         self.p.erzeugen_module()
         self.assertEqual(self.p.fehler(), [])

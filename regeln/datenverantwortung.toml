@@ -19,6 +19,10 @@
 #          intern      – nur Mitarbeiterseite und Postausgang: Ordner daten-intern/, den die Kundenseite nicht sieht
 #          Neue Dokumente sind intern, außer die Kundenseite liest oder schreibt sie nachweislich (Testgruppe datentrennung).
 #          Erzeugt app/api/lib/datenbereiche-liste.php (`python3 werkzeuge/regeln.py erzeugen`).
+# trennstufe = n: internes Dokument, das erst mit Trennstufe n umzieht (bis dahin im gemeinsamen Ordner, damit ein Release
+#          allein nichts ändert); umgestellt wird mit `deploy/daten-trennen.sh trennen` (Stufe 1 = Stufe 2a, Stufe 2 = Stufe 2b).
+# felder_kundenseite (nur kunden): ab Trennstufe 2 bleiben nur diese Felder im gemeinsamen Ordner, alle übrigen (Anschrift,
+#          E-Mail, Telefon, Notiz, Vertreter, Daten der Warenwirtschaft …) stehen im internen Dokument kundenstamm.
 
 schema = 1
 
@@ -112,7 +116,16 @@ eigentuemer = "angebot"
 bereich = "kundenseite"
 schreiber = ["plattform"]   # Altbestand: E-Mail-Einstellungen (aktionen/mail.php)
 schutz = "intern"
-beschreibung = "Einstellungen der Bestellfunktion (an/aus, Empfänger)"
+beschreibung = "Einstellungen der Bestellfunktion (an/aus, Kopie an den Kunden); ab Trennstufe 2 nur die Anzahl der Empfänger – die Adressen stehen in bestellung-empfaenger"
+
+[[dokument]]
+name = "bestellung-empfaenger"
+eigentuemer = "angebot"
+bereich = "intern"
+schreiber = ["plattform"]   # Altbestand: Empfänger werden unter „Benachrichtigungen“ gepflegt (aktionen/mail.php)
+leser = ["plattform"]       # Postausgang: Empfänger der Bestellwünsche nur aus diesem Dokument (lib/postausgang.php)
+schutz = "intern"
+beschreibung = "Empfänger der Bestellwünsche (ab Trennstufe 2, ADR-007 Stufe 2b): nur innen – der Postausgang verschickt Bestellwünsche nur an diese Adressen"
 
 [[dokument]]
 name = "fracht"
@@ -139,7 +152,8 @@ beschreibung = "Schlüssel für Abmelde-Links in Kunden-E-Mails"
 [[dokument]]
 name = "mailvorlage"
 eigentuemer = "angebot"
-bereich = "kundenseite"
+bereich = "intern"
+trennstufe = 2   # Kundenseite rendert keine E-Mails mehr (Postausgang, ADR-007 Stufe 2b)
 schreiber = ["plattform"]   # Altbestand: Signatur wird in den E-Mail-Einstellungen gepflegt (aktionen/mail.php)
 schutz = "intern"
 beschreibung = "Signatur der Kunden-E-Mails"
@@ -149,10 +163,20 @@ beschreibung = "Signatur der Kunden-E-Mails"
 [[dokument]]
 name = "bestand"
 eigentuemer = "bestand"
-bereich = "kundenseite"
+bereich = "intern"
+trennstufe = 2   # Kundenseite liest nur noch den artikelauszug (ADR-007 Stufe 2b)
 leser = ["angebot", "einkauf", "crm"]   # crm: nur die MHD-Liste ohne Preise über mhd_liste_ohne_preise() (lib/bestand-mhd.php), Reiter „MHD-Ware“
 schutz = "vertraulich"
 beschreibung = "Bestandsliste: Partien, Mengen, MHD, Einkaufspreise, erwartete Zugänge (nie öffentlich, GR-001)"
+
+[[dokument]]
+name = "artikelauszug"
+eigentuemer = "bestand"
+bereich = "kundenseite"
+leser = ["angebot"]   # ausverkaufte Sonderposten (stock_codes) und Merkmale im Einzelangebot (einzel_model)
+schutz = "oeffentlich"
+beschreibung = "Auszug aus Bestand und Stammdaten für die Kundenseite (ab Trennstufe 2, ADR-007 Stufe 2b): Artikelnummern mit Lagerbestand ohne Mengen, Fleischart/Herkunft/Zustand je Artikel – nie Mengen, Partien, MHD oder Einkaufspreise (GR-001, GR-008)"
+historie = "Wird bei jeder Änderung von Bestand oder Stammdaten neu erzeugt (lib/bestand.php artikelauszug_aktualisieren)"
 
 [[dokument]]
 name = "bestand-verlauf"
@@ -434,7 +458,8 @@ historie = "Statuswechsel im Verlauf mit Name; Abschluss als wirksam mit Datum, 
 [[dokument]]
 name = "stammdaten"
 eigentuemer = "verwaltung"
-bereich = "kundenseite"
+bereich = "intern"
+trennstufe = 2   # Kundenseite liest nur noch den artikelauszug (ADR-007 Stufe 2b)
 leser = ["angebot", "bestand", "controlling"]   # master_save (aktionen/bestand.php) speichert über stammdaten_speichern() der Verwaltung; Controlling: Artikelname, VK-Gruppe, Fleischart der Umsatzauswertung
 schutz = "intern"
 beschreibung = "Artikelstammdaten (Bezeichnung, Fleischart, Herkunft, Zustand, VK-Gruppe, GTIN)"
@@ -446,7 +471,17 @@ bereich = "kundenseite"
 leser = ["angebot", "crm", "rewe", "controlling"]   # CRM, REWE und Controlling: nur lesend über customers_load (E-1); REWE-Märkte sind WinAB-Kunden (Name, Anschrift über die Kd.-Nr.); Controlling: Firma, Ort, Vertreter, Kundengruppe der Umsatzauswertung
 schreiber = ["angebot", "plattform"]   # Altbestand: Kundenportal (Passwort, Abmelden), Kunden-E-Mails
 schutz = "vertraulich"
-beschreibung = "Kundenstammdaten und Kundenzugänge des Portals (Passwort nur als Hash, GR-003)"
+beschreibung = "Kundenzugänge des Portals (Passwort nur als Hash, GR-003); bis Trennstufe 2 auch alle Stammdaten, danach nur die Felder unter felder_kundenseite"
+# Ab Trennstufe 2 im gemeinsamen Ordner nur diese Felder (lib/kunden.php kunden_teilen); emailMaske: gekürzte Adresse für die Abmeldeseite
+felder_kundenseite = ["id", "nr", "firma", "ansprechpartner", "gruppe", "angebote", "active", "login", "mailAngebot", "abgemeldet", "emailMaske"]
+
+[[dokument]]
+name = "kundenstamm"
+eigentuemer = "verwaltung"
+bereich = "intern"
+leser = ["angebot", "crm", "rewe", "controlling", "plattform"]   # nur über customers_load (zusammengeführt mit kunden); Postausgang: E-Mail-Adresse der Kopie
+schutz = "vertraulich"
+beschreibung = "Ab Trennstufe 2 (ADR-007 Stufe 2b): alle Kundenfelder außer den Portalfeldern – Anschrift, E-Mail, Telefon, Notiz, Vertreter, Daten der Warenwirtschaft"
 
 [[dokument]]
 name = "kundensitzungen"
@@ -669,7 +704,8 @@ historie = "Nur anhängen; Einträge werden nicht geändert. Aufbewahrung: laufe
 [[dokument]]
 name = "benachrichtigungen"
 eigentuemer = "plattform"
-bereich = "kundenseite"
+bereich = "intern"
+trennstufe = 2   # Empfänger bestimmt nur noch der Postausgang (ADR-007 Stufe 2b)
 schutz = "intern"
 beschreibung = "Einstellungen der Benachrichtigungen an Mitarbeiter"
 
@@ -714,14 +750,16 @@ beschreibung = "Abgefangene E-Mails der Testumgebung (WA_TESTUMGEBUNG=1)"
 [[dokument]]
 name = "mailkonto"
 eigentuemer = "plattform"
-bereich = "kundenseite"
+bereich = "intern"
+trennstufe = 2   # Kundenseite verschickt nichts (Postausgang)
 schutz = "geheim"
 beschreibung = "Postfach-Zugang (Passwort verschlüsselt)"
 
 [[dokument]]
 name = "mailkonto-intern"
 eigentuemer = "plattform"
-bereich = "kundenseite"
+bereich = "intern"
+trennstufe = 2   # Kundenseite verschickt nichts (Postausgang)
 schutz = "geheim"
 beschreibung = "Postfach-Zugang für interne E-Mails an Mitarbeiter, z. B. verwaltung@… (Passwort verschlüsselt; ohne Eintrag gilt mailkonto)"
 

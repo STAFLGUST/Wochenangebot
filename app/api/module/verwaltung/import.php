@@ -235,7 +235,7 @@ function kunden_import_lauf(array $b, bool $pruefen, bool $details = false): arr
             usort($d['customers'], function ($x, $y) { return strcasecmp($x['firma'], $y['firma']); });
             $d['rev'] = (int)$d['rev'] + 1;
             $d['updatedAt'] = now();
-            store_write('kunden', $d);
+            customers_save($d);
         }
         return [$out, $d['rev'], $ch];
     });
@@ -403,6 +403,7 @@ function stammdaten_speichern($articles, int $rev, array $me): array
         if ($rev !== (int)$cur['rev']) fail('Die Stammdaten wurden inzwischen an anderer Stelle geändert. Bitte die Seite neu laden.', 409);
         $m = ['rev' => (int)$cur['rev'] + 1, 'updatedAt' => now(), 'updatedBy' => $me['name'], 'articles' => $articles];
         store_write('stammdaten', $m);
+        artikelauszug_aktualisieren();   // Kundenseite ab Trennstufe 2: nur der Auszug (Schnittstelle des Bestands, lib/bestand.php)
         return [$m, master_changes($cur['articles'], $articles)];
     });
 }

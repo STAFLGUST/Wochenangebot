@@ -33,13 +33,13 @@ switch ($action) {
                         if ($gi === null) { password_verify($pw, (string)$l['hash']); return ['locked', $c]; }
                         if (!password_verify($pw, (string)$l['hash'])) {
                             geraet_fehlversuch($d['customers'][$i]['login'], $gi);
-                            store_write('kunden', $d);
+                            customers_save($d);
                             return ['bad', $d['customers'][$i]];
                         }
                     }
                     if (!$gesperrt && !password_verify($pw, (string)$l['hash'])) {
                         $lockedNow = login_failure($d['customers'][$i]['login']);
-                        store_write('kunden', $d);
+                        customers_save($d);
                         return [$lockedNow ? 'lockednow' : 'bad', $d['customers'][$i]];
                     }
                     if (empty($c['active']) || empty($l['active'])) return ['inactive', $c];
@@ -48,7 +48,7 @@ switch ($action) {
                     $d['customers'][$i]['login']['lockedUntil'] = 0;
                     $d['customers'][$i]['login']['lastLogin'] = now();
                     geraet_merken($d['customers'][$i]['login']);
-                    store_write('kunden', $d);
+                    customers_save($d);
                     return ['ok', $d['customers'][$i]];
                 }
                 dummy_verify($pw, array_map(fn($x) => $x['login']['hash'] ?? null, $d['customers'])); // gleiche Laufzeit
@@ -75,7 +75,7 @@ switch ($action) {
                     foreach ($d['customers'] as $i => $x) if ($x['id'] === $c['id'] && !empty($x['login']) && hash_equals((string)($x['login']['hash'] ?? ''), (string)$c['login']['hash'])) {
                         $d['customers'][$i]['login']['leakGeprueft'] = $merker;
                         if ($leak) { $d['customers'][$i]['login']['mustChange'] = true; $d['customers'][$i]['login']['mustChangeGrund'] = 'datenleck'; }
-                        store_write('kunden', $d);
+                        customers_save($d);
                         return $d['customers'][$i];
                     }
                     return $c;
@@ -129,7 +129,7 @@ switch ($action) {
                     $d['customers'][$i]['login']['sv'] = (int)($x['login']['sv'] ?? 0) + 1;
                     geraete_zuruecksetzen($d['customers'][$i]['login']);   // vertraut bleibt nur dieses Gerät
                     unset($d['customers'][$i]['login']['token']);
-                    store_write('kunden', $d);
+                    customers_save($d);
                     return $d['customers'][$i];
                 }
                 return null;
@@ -172,7 +172,7 @@ switch ($action) {
                     geraete_zuruecksetzen($l, true);   // Passwort über den Link neu gesetzt: bisherige Geräte nicht mehr vertraut,
                     geraet_merken($l);                 // dieses Gerät (Inhaber des E-Mail-Postfachs) schon
                     unset($l['token']);
-                    store_write('kunden', $d);
+                    customers_save($d);
                     return $d['customers'][$i];
                 }
                 return null;
@@ -254,8 +254,7 @@ switch ($action) {
                 $o = ['nr' => sprintf('B-%s-%04d', $y, $n + 1), 't' => now(), 'kid' => $c['id'], 'firma' => $c['firma'], 'angebot' => $def['id'], 'angebotName' => $def['name'],
                       'week' => (int)($off['meta']['week'] ?? 0), 'year' => (int)($off['meta']['year'] ?? 0), 'positions' => $pos, 'total' => round($total, 2), 'totalQty' => round($qtyT, 2),
                       'onRequest' => $req, 'fracht' => $fr, 'termin' => $termin, 'referenz' => $ref, 'bemerkung' => $bem, 'status' => 'neu', 'workflow' => 'neu', 'revision' => 1, 'requestId' => $key, 'requestHash' => $hash];
-                $o['kunde'] = array_intersect_key($c, array_flip(['firma','nr','ansprechpartner','strasse','plz','ort','email','telefon']));
-                $o['kunde']['username'] = $c['login']['username'];
+                $o['kunde'] = kunde_schnappschuss($c);   // Kundenseite ab Trennstufe 2 ohne Anschrift/E-Mail – ergänzt der Postausgang
                 $o['outbox'] = order_outbox_create($o);
                 $all[] = $o;
                 store_write('bestellungen', $all);
@@ -284,8 +283,8 @@ switch ($action) {
             $to = array_key_exists('to', $b) ? notify_parse_to($b['to'], 'Bestellwünsche') : $old['to'];
             $en = !empty($b['enabled']);
             if ($en && !$to) fail('Bitte zuerst unter „Benachrichtigungen“ mindestens eine Adresse für neue Bestellwünsche eintragen.', 422);
-            $new = ['enabled' => $en, 'to' => $to, 'copy' => !empty($b['copy']), 'updatedAt' => now(), 'updatedBy' => $me['name']];
-            store_write('bestellung', $new);
+            $new = ['enabled' => $en, 'to' => $to, 'copy' => !empty($b['copy'])];
+            order_settings_speichern($new, $me['name']);
             $ch = [];
             if ($old['enabled'] !== $en) $ch[] = ['k' => 'best|en', 'code' => '', 'name' => 'Bestellungen', 'f' => 'Bestellfunktion', 'from' => $old['enabled'] ? 'an' : 'aus', 'to' => $en ? 'an' : 'aus'];
             if (implode(', ', $old['to']) !== implode(', ', $to)) $ch[] = ['k' => 'best|to', 'code' => '', 'name' => 'Bestellungen', 'f' => 'Empfänger', 'from' => implode(', ', $old['to']), 'to' => implode(', ', $to)];
@@ -350,9 +349,7 @@ switch ($action) {
             attempts_check('kundelink');
             $c = abmelde_kunde((string)(body()['token'] ?? ''));
             if (!$c) { attempts_record(false, 'kundelink'); fail('Dieser Abmeldelink ist ungültig. Bitte wenden Sie sich direkt an uns.', 404); }
-            $e = (string)($c['email'] ?? '');
-            $masked = $e !== '' ? preg_replace('/^(.).*?(@.*)$/u', '$1•••$2', $e) : '';
-            respond(['ok' => true, 'firma' => $c['firma'], 'email' => $masked, 'subscribed' => !array_key_exists('mailAngebot', $c) || !empty($c['mailAngebot']), 'company' => $CFG['company']]);
+            respond(['ok' => true, 'firma' => $c['firma'], 'email' => kunden_email_anzeige($c), 'subscribed' => !array_key_exists('mailAngebot', $c) || !empty($c['mailAngebot']), 'company' => $CFG['company']]);
         }
 
         case 'kunde_abmelden': {
