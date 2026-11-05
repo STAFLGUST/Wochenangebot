@@ -87,6 +87,7 @@ switch ($action) {
             });
             if (!$weg) fail('Diese Adresse ist nicht gesperrt.', 404);
             with_lock('fw_zaehler', function () use ($ip) { $z = store_read('fw_zaehler') ?? []; unset($z[$ip]); store_write('fw_zaehler', $z); });
+            store_aussen_aendern('fw_zaehler', function (array $z) use ($ip) { unset($z[$ip]); return $z; });   // Zähler der Kundenseite (ab Trennstufe 5)
             audit('security', "Sperre der Adresse {$ip} aufgehoben");
             respond(['ok' => true] + fw_status());
         }

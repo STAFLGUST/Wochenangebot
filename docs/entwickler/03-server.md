@@ -287,6 +287,10 @@ selbst schreibt (Zähler, Sitzungen, Bestellwünsche …), darf nie `veroeffentl
 `protokoll_monate()` lesen – nie `store_read('protokoll/…')` direkt: Ab Stufe 4 liegt das Protokoll der Mitarbeiterseite innen, das
 der Kundenseite in `kundenprotokoll/*`; die Funktionen führen beide zusammen.
 
+**Je Seite (Trennstufe 5, ADR-007 Stufe 2e):** `bereich = "je_seite"` für Dokumente, die beide Seiten für sich schreiben (Zähler,
+Anmeldeversuche, Live-Verkehr). Jede Seite liest und schreibt ihr eigenes; für Übersichten der Mitarbeiterseite beide lesen:
+`store_aussen_lesen($name)` (Beispiele `fw_verkehr_alle()`, `logins_alle()`), ändern nur über `store_aussen_aendern($name, $fn)`.
+
 **Sperren und Transaktionen:**
 
 - Dateien: `with_lock` sperrt `$DATA/.<name>.lock` mit `flock(LOCK_EX)`. Verschachtelt derselbe Name → keine zweite

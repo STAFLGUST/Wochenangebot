@@ -19,6 +19,8 @@
 #          intern      – nur Mitarbeiterseite und Postausgang: Ordner daten-intern/, den die Kundenseite nicht sieht
 #          veroeffentlicht – schreibt nur die Mitarbeiterseite (innen); die Kundenseite liest eine Kopie im gemeinsamen Ordner, die sie
 #                      nicht schreiben kann – verändert sie die Kopie doch, stellt der Postausgang sie wieder her und meldet es (Stufe 2c)
+#          je_seite    – jede Seite schreibt ihr eigenes Dokument gleichen Namens (Kundenseite außen, Mitarbeiterseite innen), z. B.
+#                      Zähler und Live-Verkehr; die Mitarbeiterseite liest beide zusammen (Stufe 2e)
 #          Neue Dokumente sind intern, außer die Kundenseite liest oder schreibt sie nachweislich (Testgruppe datentrennung).
 #          Erzeugt app/api/lib/datenbereiche-liste.php (`python3 werkzeuge/regeln.py erzeugen`).
 # trennstufe = n: internes Dokument, das erst mit Trennstufe n umzieht (bis dahin im gemeinsamen Ordner, damit ein Release
@@ -554,7 +556,8 @@ beschreibung = "Altformat des ersten Administratorzugangs (wird beim Lesen in �
 [[dokument]]
 name = "anmeldenamen"
 eigentuemer = "plattform"
-bereich = "kundenseite"
+bereich = "je_seite"
+trennstufe = 5   # jede Seite schreibt ihr eigenes (ADR-007 Stufe 2e)
 schutz = "intern"
 beschreibung = "Vergebene Benutzernamen"
 
@@ -589,7 +592,8 @@ beschreibung = "Kennungen der Keycloak-Konten gelöschter Mitarbeiter → Zeitpu
 [[dokument]]
 name = "logins"
 eigentuemer = "plattform"
-bereich = "kundenseite"
+bereich = "je_seite"
+trennstufe = 5   # jede Seite schreibt ihr eigenes (ADR-007 Stufe 2e)
 schutz = "intern"
 beschreibung = "Fehlversuche und Sperren bei der Anmeldung"
 
@@ -688,14 +692,16 @@ beschreibung = "Externe Bedrohungsliste (Spamhaus DROP) mit Suchindex"
 [[dokument]]
 name = "fw_zaehler"
 eigentuemer = "plattform"
-bereich = "kundenseite"
+bereich = "je_seite"
+trennstufe = 5   # jede Seite schreibt ihr eigenes (ADR-007 Stufe 2e)
 schutz = "intern"
 beschreibung = "Zähler der Firewall"
 
 [[dokument]]
 name = "verkehr"
 eigentuemer = "plattform"
-bereich = "kundenseite"
+bereich = "je_seite"
+trennstufe = 5   # jede Seite schreibt ihr eigenes (ADR-007 Stufe 2e)
 schutz = "intern"
 beschreibung = "Live-Verkehr (Ringpuffer) der Schutzzentrale"
 

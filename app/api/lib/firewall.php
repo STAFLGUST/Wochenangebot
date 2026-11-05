@@ -457,11 +457,21 @@ function fw_status(string $filter = ''): array
 /* Zahlen aus dem Verkehrsprotokoll für einen Zeitraum (Sekunden; Lagebild 24 h, Wochenbericht 7 Tage): Angriffsmuster,
    abgewiesene Anfragen gesperrter Adressen, fehlgeschlagene Anmeldungen. Das Protokoll ist in der Länge begrenzt – bei sehr
    viel Verkehr zählen nur die noch gespeicherten Einträge. */
+/* Live-Verkehr beider Seiten (Mitarbeiterseite ab Trennstufe 5: eigener Ringpuffer innen und der der Kundenseite), zeitlich sortiert */
+function fw_verkehr_alle(): array
+{
+    $v = store_read('verkehr') ?? [];
+    if ($k = store_aussen_lesen('verkehr')) {
+        $v = array_merge($v, $k);
+        usort($v, fn($a, $b) => (int)($a['t'] ?? 0) <=> (int)($b['t'] ?? 0));
+    }
+    return $v;
+}
 function fw_zahlen(int $sekunden): array
 {
     $ab = time() - $sekunden;
     $angriffe = 0; $gesperrt = 0; $fehlAnm = 0;
-    foreach (store_read('verkehr') ?? [] as $e) {
+    foreach (fw_verkehr_alle() as $e) {
         if ((int)($e['t'] ?? 0) <= $ab) continue;
         $w = (string)($e['why'] ?? ''); $n = (int)($e['n'] ?? 1);
         if (strpos($w, 'Firewall:') === 0 || strpos($w, 'Falle:') === 0) $angriffe += $n;
@@ -476,7 +486,7 @@ function fw_stunden(): array
 {
     $jetzt = time();
     $out = array_fill(0, 24, ['angriffe' => 0, 'abgewiesen' => 0]);
-    foreach (store_read('verkehr') ?? [] as $e) {
+    foreach (fw_verkehr_alle() as $e) {
         $alter = $jetzt - (int)($e['t'] ?? 0);
         if ($alter < 0 || $alter >= 86400) continue;
         $i = 23 - intdiv($alter, 3600);
@@ -488,7 +498,7 @@ function fw_stunden(): array
 }
 function fw_verkehr_liste(string $filter, int $seit): array
 {
-    $v = array_reverse(store_read('verkehr') ?? []);
+    $v = array_reverse(fw_verkehr_alle());
     $out = [];
     foreach ($v as $e) {
         if ($seit && (int)$e['t'] <= $seit) break;

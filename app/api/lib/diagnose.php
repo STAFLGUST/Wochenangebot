@@ -58,7 +58,7 @@ function sec_top_ips(array $entries): array
     }
     usort($by, function ($a, $b) { return $b['n'] <=> $a['n'] ?: strcmp($b['last'], $a['last']); });
     $blocked = [];
-    foreach (store_read('logins') ?? [] as $v) if ((int)($v['until'] ?? 0) > time()) $blocked[(string)($v['ip'] ?? '')] = true;
+    foreach (logins_alle() as $v) if ((int)($v['until'] ?? 0) > time()) $blocked[(string)($v['ip'] ?? '')] = true;
     return array_map(function ($b) use ($blocked) { return $b + ['cc' => geo_country($b['ip']), 'blocked' => isset($blocked[$b['ip']])]; }, array_slice(array_values($by), 0, 10));
 }
 
@@ -264,7 +264,7 @@ function sec_lagebild(array $me): array
     $admins = array_filter($aktiv, function ($u) { return $u['role'] === 'admin'; });
     $ohne2 = array_filter($aktiv, function ($u) { return !has_second_factor($u) && ($u['oidcSub'] ?? '') === ''; });
     $gesperrtIp = 0;
-    foreach (store_read('logins') ?? [] as $v) if ((int)($v['until'] ?? 0) > time()) $gesperrtIp++;
+    foreach (logins_alle() as $v) if ((int)($v['until'] ?? 0) > time()) $gesperrtIp++;
     $fw = fw_status();
     $ip = integritaet_stand(false)['result'];
     $S = sec();

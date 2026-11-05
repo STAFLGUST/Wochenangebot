@@ -7,8 +7,8 @@ umgesetzt und eingespielt (PR #286, Schlüssel umgezogen am 04.11.2026); **Stufe
 umgesetzt und eingespielt (PR #287, Daten getrennt am 04.11.2026); **Stufe 2b** (Trennstufe 2: Kundendokument geteilt, Bestand,
 Stammdaten, Postfächer und Empfänger innen, Postausgang prüft Versandaufträge) umgesetzt – wirksam erst mit dem Serverschritt
 `deploy/daten-trennen.sh trennen` nach dem Release (Freigabe des Inhabers); **Stufe 2c** (Trennstufe 3: Veröffentlichtes
-maßgeblich innen, Kundenseite nur eine nicht beschreibbare Kopie) und **Stufe 2d** (Trennstufe 4: Protokoll getrennt) umgesetzt –
-ebenfalls erst mit `trennen`; Anmeldeversuche, Zähler und Live-Verkehr der Kundenseite offen.
+maßgeblich innen, Kundenseite nur eine nicht beschreibbare Kopie), **Stufe 2d** (Trennstufe 4: Protokoll getrennt) und **Stufe 2e**
+(Trennstufe 5: Anmeldeversuche, Zähler und Live-Verkehr je Seite) umgesetzt – ebenfalls erst mit `trennen`.
 **Anlass:** Sicherheitsdurchsicht vom 26.10.2026, Befund 5, und Durchsicht aus Kundensicht vom 04.11.2026 (ohne Befund,
 aber mit diesem Restrisiko). Umsetzung der Vorgabe aus [ADR-003](adr-003-domains-anmeldung.md): Trennung
 Kunden/Mitarbeiter; eine kompromittierte Anwendung darf nicht automatisch andere Fachbereiche öffnen.
@@ -240,9 +240,9 @@ verschickt, und enthält keine Daten, die sie nicht braucht.**
   gefälschter Abmeldehinweis, fremde Benachrichtigung – gehen nicht hinaus; Originalempfänger nach einer Änderung; Auszug ohne
   Mengen), `postausgang`, `order_outbox` und die übrige Suite auf Stufe 0.
 - **Offen (eigene Schritte):**
-  - Protokoll: erledigt mit Stufe 2d (Trennstufe 4). Anmeldeversuche (`logins`, `anmeldenamen`), Firewall-Zähler (`fw_zaehler`),
-    Live-Verkehr (`verkehr`) und Anmeldeorte enthalten auch Einträge der Mitarbeiterseite (Adressen, Benutzernamen, aufgerufene
-    Aktionen) und liegen außen → je Seite eigene Dokumente, die Oberflächen führen beide zusammen (eigener Schritt).
+  - Protokoll: erledigt mit Stufe 2d (Trennstufe 4); Anmeldeversuche, Zähler und Live-Verkehr: erledigt mit Stufe 2e (Trennstufe 5).
+    Gemeinsam bleiben bewusst die Sperrliste (`sperrliste`: eine von der Kundenseite gesperrte Angreifer-Adresse soll überall gesperrt
+    sein), die Länderzählung und die Anmeldeorte der Kunden.
   - Veröffentlichte Einstellungen, die auch die Mitarbeiterseite liest (`sicherheit`, `firewall`, `wartung`, `angebote`, `angebot`,
     `fracht` …), lagen beschreibbar im gemeinsamen Ordner – erledigt mit Stufe 2c (Trennstufe 3, nächster Abschnitt). Zähler und
     Listen, die die Kundenseite selbst schreibt (`sperrliste`, `laendersperre`, `anmeldenamen` …), bleiben gemeinsam.
@@ -291,6 +291,23 @@ E-Mail und Anschrift), Nutzern, Rechten und Personal sowie Namen und Adressen de
   eigene Protokoll, Mitarbeiterseite liest beide, Aufbewahrung, Zusammenführen), E2E-Gruppe `datentrennung` auf Stufe 4
   (Kundenprotokoll ohne Einträge der Mitarbeiterseite, Protokollansicht zeigt beide).
 
+### Stufe 2e – Trennstufe 5: Anmeldeversuche, Zähler und Live-Verkehr je Seite (umgesetzt, Serverschritt mit Freigabe)
+
+`logins` (Fehlversuche und Sperren je Adresse), `anmeldenamen` (Fehlversuche je Benutzername), `fw_zaehler` (Firewall-Zähler je
+Adresse) und `verkehr` (Live-Verkehr: Adresse, aufgerufene Aktion, Benutzername des Mitarbeiters) schrieben beide Seiten in dasselbe
+Dokument im gemeinsamen Ordner – die Kundenseite konnte Adressen und Aktionen der Mitarbeiter lesen.
+
+- Ab Trennstufe 5: Bereich `je_seite` – jede Seite schreibt ihr eigenes Dokument gleichen Namens (Kundenseite außen,
+  Mitarbeiterseite und Postausgang innen); `store_read`/`store_write`/`with_lock` wählen es selbst, Fachcode unverändert. Die
+  Mitarbeiterseite liest das der Kundenseite zusätzlich (`store_aussen_lesen`: Live-Verkehr, Lagebild, Sperren in der Übersicht,
+  Diagnose) und ändert es nur beim Aufheben einer Sperre (`store_aussen_aendern`). Jede Seite bremst ihre eigenen Fehlversuche.
+- **Serverschritt:** `trennen` verschiebt die bisherigen (gemischten) Dokumente nach innen; die Kundenseite beginnt mit leeren
+  Zählern. **Rückfall:** `zusammenfuehren` vereint beide Fassungen (Listen zeitlich, sonst je Schlüssel).
+- **Geprüft:** `tests/deploy/test_daten_trennen.py` (Stufe 4→5 in Dateien und SQLite: Umzug, jede Seite liest/schreibt nur ihre
+  Fassung, Mitarbeiterseite sieht beide und hebt Sperren der Kundenseite auf, Zusammenführen), E2E-Gruppe `datentrennung` auf Stufe 5
+  (Anmeldung der Mitarbeiter nur im internen Live-Verkehr), `schutz`, `anmeldebremse`, `sicherheit_*`. Dazu wie im Betrieb: von
+  Stufe 1 in einem Schritt auf Stufe 5 und mit `zusammenfuehren` zurück – alle Dokumente danach wie vorher (Dateien und SQLite).
+
 ## Wirkung
 
 | Wenn die Kundenseite geknackt würde | vorher | nach Stufe 1 | nach Stufe 2 |
@@ -299,7 +316,7 @@ E-Mail und Anschrift), Nutzern, Rechten und Personal sowie Namen und Adressen de
 | Kunden-Warenwirtschaftszahlen, Anschriften, Bestand, Einkaufspreise lesen | ja | ja | ja nach 2a, nein nach 2b |
 | Sicherheits-, Firewall-, Wartungs- und Notfalleinstellungen oder Angebote dauerhaft verändern | ja | ja | nein nach 2c (Kopie wird wiederhergestellt und gemeldet) |
 | Protokoll der Mitarbeiterseite lesen (Änderungen an Kunden, Nutzern, Personal) | ja | ja | nein nach 2d |
-| Anmeldeversuche, Zähler und Live-Verkehr der Mitarbeiterseite lesen | ja | ja | ja (eigener Schritt offen) |
+| Anmeldeversuche, Zähler und Live-Verkehr der Mitarbeiterseite lesen | ja | ja | nein nach 2e |
 | Mitarbeiterkonten in Keycloak übernehmen | ja | nein (kein Geheimnis, kein Netzweg) | nein |
 | Anmelde-Geheimnisse der Mitarbeiter-Hosts | ja | nein | nein |
 | Postfach-Passwort | ja | ja – nein seit dem Postausgang von innen (nach `postfach-schluessel.sh umziehen`) | nein |

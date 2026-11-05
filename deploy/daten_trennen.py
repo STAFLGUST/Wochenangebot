@@ -13,7 +13,8 @@ Postfächer, Vorlage und Benachrichtigungen innen, Kundendokument geteilt (Porta
 kundenstamm) und Empfänger der Bestellwünsche innen (bestellung-empfaenger) – Stufe 2b; 3 = veröffentlichte Dokumente (Angebote,
 Sicherheit, Firewall, Wartung …) maßgeblich innen, im gemeinsamen Ordner nur eine Kopie für die Kundenseite – Stufe 2c; 4 = Protokoll
 getrennt: protokoll/* (Mitarbeiterseite) innen, die Kundenseite schreibt in kundenprotokoll/* – Stufe 2d (beim Zusammenführen
-werden beide wieder zu protokoll/* vereint).
+werden beide wieder zu protokoll/* vereint); 5 = Zähler, Anmeldeversuche und Live-Verkehr je Seite (logins, anmeldenamen, fw_zaehler,
+verkehr): die bisherigen ziehen nach innen, die Kundenseite beginnt neu – Stufe 2e (beim Zusammenführen vereint).
 
 Ablauf beim Trennen: interne Dokumente (Dateien bzw. Zeilen der SQLite-Datenbank), die Dateiablage dateien/ und die neuen internen
 Dokumente der Umstellung nach daten-intern kopieren und vergleichen, dann die Kennzeichen setzen (daten-intern/.daten-intern, zuletzt
@@ -40,7 +41,7 @@ import datenbank as db  # noqa: E402  GUARD, SIDECARS, SCHEMA, document_path, va
 MARKER_HAUPT = '.daten-getrennt'
 MARKER_INTERN = '.daten-intern'
 REGELN = Path(__file__).resolve().parent.parent / 'regeln' / 'datenverantwortung.toml'
-ZIELSTUFE = 4   # höchste Trennstufe dieses Stands (wie TRENNSTUFE_MAX in werkzeuge/regeln.py, DATEN_TRENNSTUFE in PHP)
+ZIELSTUFE = 5   # höchste Trennstufe dieses Stands (wie TRENNSTUFE_MAX in werkzeuge/regeln.py, DATEN_TRENNSTUFE in PHP)
 # Neue interne Dokumente der Stufe 2: entstehen beim Trennen aus kunden bzw. bestellung und gehen beim Zusammenführen dort wieder auf
 GETEILT = ('kundenstamm', 'bestellung-empfaenger')
 AUSZUG = 'artikelauszug'   # Auszug für die Kundenseite (erzeugt die Anwendung ab Stufe 2); beim Zusammenführen entfernt
@@ -56,7 +57,7 @@ def kundenseite(regeln=REGELN, stufe=ZIELSTUFE):
     namen, praefixe = set(), []
     for d in regeln_laden(regeln):
         # veröffentlichte Dokumente bleiben immer (als Kopie) im gemeinsamen Ordner
-        if d.get('bereich') in ('kundenseite', 'veroeffentlicht') or (d.get('bereich') == 'intern' and d.get('trennstufe', 1) > stufe):
+        if d.get('bereich') in ('kundenseite', 'veroeffentlicht', 'je_seite') or (d.get('bereich') == 'intern' and d.get('trennstufe', 1) > stufe):
             n = d['name']
             if n.endswith('/*'):
                 praefixe.append(n[:-1])
@@ -70,6 +71,19 @@ def kundenseite(regeln=REGELN, stufe=ZIELSTUFE):
 def veroeffentlicht(regeln=REGELN, stufe=ZIELSTUFE):
     """Veröffentlichte Dokumente dieser Stufe: maßgeblich innen, im gemeinsamen Ordner eine Kopie (wie DATEN_VEROEFFENTLICHT)."""
     return sorted(d['name'] for d in regeln_laden(regeln) if d.get('bereich') == 'veroeffentlicht' and d.get('trennstufe', 1) <= stufe)
+
+
+def je_seite(regeln=REGELN, stufe=ZIELSTUFE):
+    """Je Seite getrennte Dokumente dieser Stufe (wie DATEN_JE_SEITE): außen die der Kundenseite, innen die der Mitarbeiterseite."""
+    return sorted(d['name'] for d in regeln_laden(regeln) if d.get('bereich') == 'je_seite' and d.get('trennstufe', 1) <= stufe)
+
+
+def je_seite_vereinen(a, b):
+    """Beide Fassungen eines je Seite getrennten Dokuments zusammen: Listen zeitlich (höchstens 500, wie der Ringpuffer), sonst Schlüssel."""
+    a, b = a or None, b or None   # leer aus PHP ([]) zählt nicht
+    if isinstance(a, list) or isinstance(b, list):
+        return sorted((a if isinstance(a, list) else []) + (b if isinstance(b, list) else []), key=lambda e: e.get('t', 0) if isinstance(e, dict) else 0)[-500:]
+    return {**(a or {}), **(b or {})}
 
 
 def kunden_felder(regeln=REGELN):
@@ -334,6 +348,11 @@ def umstellung_planen(haupt, intern, regeln, stufe, ziel=ZIELSTUFE):
     der gemeinsame Ordner (frühere Reste eines Abbruchs in daten-intern werden überschrieben). Stufe 2: kundenstamm und
     bestellung-empfaenger; Stufe 3: maßgebliche Stände der veröffentlichten Dokumente (die Kopie bleibt im gemeinsamen Ordner)."""
     neu = {}
+    if stufe < 5 <= ziel:   # Zähler und Verkehr bisher (beide Seiten gemischt): nach innen, die Kundenseite beginnt neu
+        for n in je_seite(regeln, ziel):
+            v = dok_lesen(haupt, n)
+            if v is not None:
+                neu[n] = v
     if stufe < 3 <= ziel:
         for n in veroeffentlicht(regeln, ziel):
             v = dok_lesen(haupt, n)
@@ -412,6 +431,11 @@ def trennen(haupt, intern, regeln, ziel=ZIELSTUFE):
                 dok_schreiben(intern, n, v)
         for rel in dateien + ablage:
             kopieren(haupt, intern, rel)
+        # Zähler und Verkehr (Stufe 5): außen leeren – die Kundenseite beginnt neu (vor dem Umschalten; ein Abbruch kostet nur Zähler)
+        if stufe < 5 <= ziel:
+            for n in je_seite(regeln, ziel):
+                if n in neu:
+                    dok_loeschen(haupt, n)
         # 2. umschalten: erst der interne Ordner, zuletzt der gemeinsame (ab hier liest die Anwendung mit der neuen Stufe)
         kennzeichen(intern / MARKER_INTERN, ziel)
         kennzeichen(haupt / MARKER_HAUPT, ziel)
@@ -477,7 +501,8 @@ def zusammenfuehren(haupt, intern, regeln):
     if stufe > ZIELSTUFE:
         raise ValueError(f'Daten sind weiter getrennt (Stufe {stufe}), als dieser Stand kennt – mit dem neueren Stand zusammenführen')
     veroeff = set(veroeffentlicht(regeln, ZIELSTUFE))   # innen maßgeblich, außen eine Kopie: Kopie wird ersetzt, kein Vergleich
-    ohne = set(GETEILT) | veroeff
+    seiten = set(je_seite(regeln, ZIELSTUFE))            # je Seite: beide Fassungen werden vereint
+    ohne = set(GETEILT) | veroeff | seiten
     dateien = [p.relative_to(intern) for p in sorted(intern.rglob('*.php'))
                if not any(part.startswith('.') for part in p.relative_to(intern).parts) and p.relative_to(intern).parts[0] != 'dateien'
                and str(p.relative_to(intern).with_suffix('')) not in ohne]
@@ -494,6 +519,10 @@ def zusammenfuehren(haupt, intern, regeln):
         v = dok_lesen(intern, n)
         if v is not None and dok_lesen(haupt, n) != v:
             dok_schreiben(haupt, n, v)
+    for n in sorted(seiten):
+        v = dok_lesen(intern, n)
+        if v is not None:
+            dok_schreiben(haupt, n, je_seite_vereinen(v, dok_lesen(haupt, n)))
     # 1. geteilte Dokumente im gemeinsamen Ordner wieder vollständig machen (bei Stufe 2 gelten dort nur die Portalfelder –
     #    die zusätzlichen Felder stören die laufende Stufe nicht, ein Abbruch hier lässt alles lesbar)
     if stufe >= 2:
