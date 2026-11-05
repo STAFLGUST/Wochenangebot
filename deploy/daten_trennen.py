@@ -369,10 +369,11 @@ def umstellung_planen(haupt, intern, regeln, stufe, ziel=ZIELSTUFE):
     return neu
 
 
-def bereinigung_noetig(haupt, regeln):
+def bereinigung_noetig(haupt, regeln, intern=None):
+    """Kundendokument mit internen Feldern oder bestellung mit Adressen – außen bzw. (ab Stufe 3 maßgeblich) innen."""
     kunden = dok_lesen(haupt, 'kunden')
-    best = dok_lesen(haupt, 'bestellung')
-    return hat_interne_felder(kunden, kunden_felder(regeln)) or (isinstance(best, dict) and 'to' in best)
+    best = [dok_lesen(r, 'bestellung') for r in (haupt, intern) if r is not None]
+    return hat_interne_felder(kunden, kunden_felder(regeln)) or any(isinstance(b, dict) and 'to' in b for b in best)
 
 
 def plan(haupt, intern, regeln, ziel=ZIELSTUFE):
@@ -382,7 +383,7 @@ def plan(haupt, intern, regeln, ziel=ZIELSTUFE):
     zeilen = interne_zeilen(haupt, ks)
     ablage = ablage_dateien(haupt)
     neu = umstellung_planen(haupt, intern, regeln, stufe, ziel)
-    bereinigen = ziel >= 2 and bereinigung_noetig(haupt, regeln)
+    bereinigen = ziel >= 2 and bereinigung_noetig(haupt, regeln, intern if (intern / MARKER_INTERN).is_file() else None)
     zustand = 'gemeinsam' if stufe == 0 else f'getrennt, Stufe {stufe}'
     print(f"Zustand: {zustand}; Ziel dieses Stands: Stufe {ziel}; Speicher: {'SQLite' if sqlite_aktiv(haupt) else 'Dateien'}")
     print(f'Interne Dokumente im gemeinsamen Ordner: {len(zeilen)} in der Datenbank, {len(dateien)} als Datei, {len(ablage)} Dateien in der Ablage')
@@ -393,8 +394,10 @@ def plan(haupt, intern, regeln, ziel=ZIELSTUFE):
     if stufe < ziel:
         print(f'  Trennstufe {stufe} → {ziel}')
     erklaerung = {'kundenstamm': ' (Anschrift, E-Mail, Telefon, Notiz, Vertreter, Warenwirtschaft der Kunden)', 'bestellung-empfaenger': ' (Empfänger der Bestellwünsche)'}
+    seiten = set(je_seite(regeln, ziel))
     for n in sorted(neu):
-        print(f'  neu in daten-intern: {n}' + erklaerung.get(n, ' (veröffentlicht: maßgeblich innen, Kopie bleibt für die Kundenseite)'))
+        art = ' (je Seite: bisheriger Stand innen, die Kundenseite beginnt leer)' if n in seiten else ' (veröffentlicht: maßgeblich innen, Kopie bleibt für die Kundenseite)'
+        print(f'  neu in daten-intern: {n}' + erklaerung.get(n, art))
     if bereinigen:
         print('  im gemeinsamen Ordner kürzen: kunden auf die Portalfelder, bestellung ohne Empfängeradressen')
     return stufe, ks, dateien, zeilen, ablage, neu
@@ -482,12 +485,15 @@ def bereinigen(haupt, intern, regeln):
         if stamm != alt:
             dok_schreiben(intern, 'kundenstamm', stamm)
         dok_schreiben(haupt, 'kunden', portal)
-    best = dok_lesen(haupt, 'bestellung')
-    if isinstance(best, dict) and 'to' in best:
-        if dok_lesen(intern, 'bestellung-empfaenger') is None:
-            dok_schreiben(intern, 'bestellung-empfaenger', {'to': best['to'], 'updatedAt': best.get('updatedAt'), 'updatedBy': best.get('updatedBy', '')})
-        to = best['to'] if isinstance(best['to'], list) else []
-        dok_schreiben(haupt, 'bestellung', {**{k: v for k, v in best.items() if k != 'to'}, 'empfaenger': len(to)})
+    # bestellung außen und – ab Stufe 3 veröffentlicht, also maßgeblich innen – auch innen: Sonst bekäme die Kopie außen beim
+    # Abgleich (Postausgang, store_kopien_abgleichen) die Adressen zurück und verlöre die Anzahl (Kundenseite: Bestellfunktion aus)
+    for root in (haupt, intern):
+        best = dok_lesen(root, 'bestellung')
+        if isinstance(best, dict) and 'to' in best:
+            if dok_lesen(intern, 'bestellung-empfaenger') is None:
+                dok_schreiben(intern, 'bestellung-empfaenger', {'to': best['to'], 'updatedAt': best.get('updatedAt'), 'updatedBy': best.get('updatedBy', '')})
+            to = best['to'] if isinstance(best['to'], list) else []
+            dok_schreiben(root, 'bestellung', {**{k: v for k, v in best.items() if k != 'to'}, 'empfaenger': len(to)})
 
 
 def zusammenfuehren(haupt, intern, regeln):

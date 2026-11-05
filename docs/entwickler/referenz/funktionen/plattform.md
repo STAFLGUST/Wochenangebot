@@ -914,7 +914,7 @@ _Daten trennen (ADR-007 Stufe 2): interne Dokumente aus daten/ in daten-intern/ 
 - `db_ergaenzen(ziel, zeilen)` – Zeilen in die vorhandene Datenbank des Zielordners übernehmen (Hochstufen) und vergleichen.
 - `kennzeichen(p, stufe)`
 - `umstellung_planen(haupt, intern, regeln, stufe, ziel)` – Neue interne Dokumente aus dem gemeinsamen Ordner: {Name: Inhalt}.
-- `bereinigung_noetig(haupt, regeln)`
+- `bereinigung_noetig(haupt, regeln, intern)` – Kundendokument mit internen Feldern oder bestellung mit Adressen – außen bzw. (ab Stufe 3 maßgeblich) innen.
 - `plan(haupt, intern, regeln, ziel)`
 
 **Trennen und Zusammenführen**

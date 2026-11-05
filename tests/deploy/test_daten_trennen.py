@@ -420,6 +420,41 @@ for art in ('dateien', 'sqlite'):
         check(f'{w}: zusammenführen: alles wieder wie auf Stufe 0 (ohne Verlust)', code == 0 and nachher == vorher and dt.leer(i) and not (d / '.daten-getrennt').exists(),
               (out, [n for n in vorher if nachher[n] != vorher[n]]))
 
+# ─────────────── Wie auf dem Server am 05.11.2026: Stufe 1 → 5 in einem Schritt, danach gleicht der Postausgang die Kopien ab ───────────────
+# Das veröffentlichte Dokument bestellung entsteht innen aus dem Original – es darf dort keine Empfängeradressen behalten, sonst bringt
+# der Abgleich sie in die Kopie zurück (und die Kundenseite sieht 0 Empfänger: Bestellfunktion aus).
+for art in ('dateien', 'sqlite'):
+    with tempfile.TemporaryDirectory() as t:
+        t = Path(t); d = aufbau2(t); i = t / 'daten-intern'; w = f'{art} 1→{dt.ZIELSTUFE} mit Abgleich'
+        doc(d, 'verkehr', [{'t': 100, 'ip': '198.51.100.9', 'u': 'erika', 'q': 'action=log'}])
+        if art == 'sqlite':
+            subprocess.run([sys.executable, str(DB), 'migrate', str(d), '--offline'], check=True, capture_output=True)
+        lauf('trennen', str(d), str(i), '--offline', '--stufe', '1')
+        code, out = lauf('trennen', str(d), str(i), '--offline')
+        innen = dt.dok_lesen(i, 'bestellung')
+        check(f'{w}: Plan beschriftet Zähler/Verkehr als je Seite (nicht als veröffentlicht)', 'verkehr (je Seite' in out and 'verkehr (veröffentlicht' not in out, out[-600:])
+        check(f'{w}: bestellung innen ohne Adressen, mit Anzahl', code == 0 and isinstance(innen, dict) and 'to' not in innen and innen.get('empfaenger') == 2
+              and innen.get('enabled') is True, (out[-300:], innen))
+        r = php_lib("echo json_encode(store_kopien_abgleichen());", d, i)   # wie der Postausgang alle 5 Sekunden
+        aussen = dt.dok_lesen(d, 'bestellung')
+        check(f'{w}: nach dem Abgleich außen weiter ohne Adressen, Anzahl 2', isinstance(aussen, dict) and 'to' not in aussen and aussen.get('empfaenger') == 2, (r, aussen))
+        r = php_lib("echo json_encode(order_settings()['empfaenger']);", d)
+        check(f'{w}: Kundenseite sieht 2 Empfänger (Bestellfunktion bleibt an)', r == '2', r)
+        r = php_lib("echo json_encode(order_settings()['to']);", d, i)
+        check(f'{w}: Mitarbeiterseite kennt die Adressen (bestellung-empfaenger)', json.loads(r or 'null') == ['team@test.invalid', 'chef@test.invalid'], r)
+        code, out = lauf('pruefen', str(d), str(i), '--offline')
+        check(f'{w}: Status danach ohne „kürzen“', code == 0 and 'kürzen' not in out, out)
+        # Reparatur eines Servers, der mit dem fehlerhaften Stand getrennt hat: Adressen innen und außen, keine Anzahl
+        kaputt = {'enabled': True, 'to': ['team@test.invalid', 'chef@test.invalid'], 'copy': True, 'updatedAt': 'y', 'updatedBy': 'admin'}
+        dt.dok_schreiben(i, 'bestellung', kaputt); dt.dok_schreiben(d, 'bestellung', kaputt)
+        code, out = lauf('pruefen', str(d), str(i), '--offline')
+        meldet = 'kürzen' in out
+        code, out = lauf('trennen', str(d), str(i), '--offline')
+        php_lib("store_kopien_abgleichen();", d, i)
+        check(f'{w}: erneutes „trennen“ repariert den Stand des fehlerhaften Werkzeugs (Status meldet es vorher)', meldet and code == 0
+              and all('to' not in dt.dok_lesen(r, 'bestellung') and dt.dok_lesen(r, 'bestellung').get('empfaenger') == 2 for r in (d, i))
+              and php_lib("echo json_encode(order_settings()['empfaenger']);", d) == '2', out[-300:])
+
 # ─────────────── Ein Vorgang über beide Datenbanken: ganz oder gar nicht (with_lock_in, store_beitreten) ───────────────
 # Mitarbeiterseite mit getrennten Daten in SQLite: zwei Datenbanken. Die äußerste Sperre schließt beide gemeinsam ab – wie mit
 # gemeinsamen Daten bleibt ein abgebrochener Vorgang ganz ungespeichert (vorher: der äußere Teil blieb schon gespeichert).
