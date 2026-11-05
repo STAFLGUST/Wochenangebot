@@ -2,7 +2,7 @@
 
 <!-- ERZEUGT von `python3 werkzeuge/doku.py erzeugen` – nicht von Hand ändern. Quelle: Funktionen und Kommentare im Code. Die CI prüft, dass diese Datei zum Code passt. -->
 
-42 Dateien, 632 Funktionen – in der Reihenfolge der Datei, **fett** die Abschnitte. Text = erste Aussage des Kommentars direkt über der Funktion (Python: Docstring). Übersicht aller Module: [README.md](README.md).
+42 Dateien, 633 Funktionen – in der Reihenfolge der Datei, **fett** die Abschnitte. Text = erste Aussage des Kommentars direkt über der Funktion (Python: Docstring). Übersicht aller Module: [README.md](README.md).
 
 ## `app/api/lib/angebote.php`
 
@@ -135,6 +135,7 @@ _E-Mails an Kunden, Abmelden, Bestellwunsch-Vorlagen, Einmal-Links, Versand_
 - `mail_send_many(cfg, jobs)` – Mehrere Nachrichten über eine Verbindung; Ergebnis je Auftrag
 - `mail_record(entries, wk)` – Versand an Kunden vermerken (letzte E-Mail, Wochenversand) und ins Versandprotokoll schreiben
 - `mail_job_for(c, typ, note, wk)`
+- `ksess_begrenzen(r, kid)` – Register auf die Obergrenzen kürzen: erst je Zugang, dann insgesamt (die zuletzt benutzten bleiben)
 - `kunde_sign_in(c, via)` – Kunde anmelden (nach Passwortprüfung oder Einmal-Link)
 
 ## `app/api/lib/preisverlauf.php`
