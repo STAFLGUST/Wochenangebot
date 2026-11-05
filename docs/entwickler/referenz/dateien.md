@@ -750,7 +750,7 @@ Jede Code-Datei beginnt mit einem Kopfkommentar; dessen erste Aussage steht hier
 | `test_order_management_ui.py` | angebot | Artikelnummer als normale Tabellenzelle (Klasse „mono“ ist in app.css das runde Kategorie-Monogramm) |
 | `test_order_outbox.py` | angebot | Testgruppe order_outbox: dauerhafte Versandaufträge für Bestellwunsch-Mails – Teilfehler, SMTP-Ausfall, Sperren, Neuversand. |
 | `test_order_outbox_ui.py` | angebot | Testgruppe order_outbox_ui |
-| `test_p0.py` | angebot | 1) leeres System ohne WA_INSTALLED → Ersteinrichtung erlaubt |
+| `test_p0.py` | angebot | Testgruppe p0: Ersteinrichtung gesperrt (leeres System, WA_INSTALLED, kaputte Nutzerdatei – kein Übernehmen), CSV-Formel-Schutz im Protokoll, Sicherungs- und Bereitstellungsanzeige (Sicherheit → System) und … |
 | `test_passkeys.py` | plattform | Passkeys (WebAuthn) für Mitarbeiter-Zugänge. |
 | `test_passwortpruefung.py` | plattform | Datenleck-Prüfung der Passwörter („Pwned Passwords“, nachgebauter Dienst auf AUX_PORT): standardmäßig aus; eingeschaltet werden betroffene Passwörter beim Festlegen abgelehnt (Mitarbeiter, Kunden), bestehende bei der … |
 | `test_postausgang.py` | plattform | Testgruppe postausgang |

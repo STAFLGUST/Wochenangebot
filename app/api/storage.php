@@ -11,7 +11,7 @@ require_once __DIR__ . '/lib/datenbereiche-liste.php';   // Speicherbereiche (er
    Jeder Bereich hat eigene Sperren und (im SQLite-Modus) eine eigene Datenbank. Die Kundenseite (ohne WA_DATEN_INTERN) sieht
    interne Dokumente nicht: Lesen liefert null, Schreiben bricht ab. */
 final class StoreKeinZugang extends RuntimeException {}
-/* Trennstufe (Inhalt von daten/.daten-getrennt): 0 = nicht getrennt, 1 = interne Dokumente getrennt (Stufe 2a), 2 = zusätzlich
+/* Trennstufe (Inhalt von daten-intern/.daten-intern, sonst daten/.daten-getrennt): 0 = nicht getrennt, 1 = interne Dokumente getrennt (Stufe 2a), 2 = zusätzlich
    Kundendokument geteilt, Bestand/Stammdaten, Postfächer, Vorlagen und Empfänger innen (Stufe 2b), 3 = Veröffentlichtes maßgeblich
    innen, außen nur eine Kopie (2c), 4 = Protokoll getrennt (2d), 5 = Zähler, Anmeldeversuche und Live-Verkehr je Seite (2e).
    Dokumente aus DATEN_AB_STUFE(_PRAEFIX) bleiben bis zu ihrer Stufe im gemeinsamen Ordner – ein Release allein ändert nichts;
@@ -22,8 +22,17 @@ function store_stufe(): int
     static $s = null;
     if ($s !== null) return $s;
     $p = $DATA . '/.daten-getrennt';
-    if (!is_file($p)) return $s = 0;
-    $v = max(1, (int)trim((string)@file_get_contents($p)));
+    $aussen = is_file($p) ? max(1, (int)trim((string)@file_get_contents($p))) : 0;
+    /* Maßgeblich ist das Kennzeichen des internen Ordners: dort kann die Kundenseite nicht schreiben (sie bindet den Ordner
+       nicht ein). Die Kundenseite selbst hat keinen internen Ordner und liest weiter das gemeinsame Kennzeichen – dort gewinnt
+       eine Herabsetzung nichts, weil sie die internen Dokumente ohnehin nicht sieht. */
+    $e = store_intern_pfad();
+    $innen = ($e !== '' && is_file($e . '/.daten-intern')) ? max(1, (int)trim((string)@file_get_contents($e . '/.daten-intern'))) : 0;
+    // Niedrigere oder fehlende Stufe im gemeinsamen, für die Kundenseite beschreibbaren Ordner: nie still falsch lesen oder
+    // schreiben (wie bei „Stufe zu hoch“). deploy/daten-trennen.sh arbeitet mit gestoppter Anwendung, dort stört das nicht.
+    if ($innen > 0 && $aussen < $innen) throw new RuntimeException('Kennzeichen der Datentrennung widersprüchlich (gemeinsamer Ordner Stufe ' . $aussen . ', interner Ordner Stufe ' . $innen . ') – Zustand prüfen: sh deploy/daten-trennen.sh status');
+    $v = $innen > 0 ? $innen : $aussen;
+    if ($v === 0) return $s = 0;
     // Daten weiter getrennt, als dieser Stand kennt (Rückfall ohne „zusammenfuehren“): nie still falsch lesen
     if ($v > DATEN_TRENNSTUFE) throw new RuntimeException('Daten sind weiter getrennt (Stufe ' . $v . '), als dieser Stand kennt – erst deploy/daten-trennen.sh zusammenfuehren');
     return $s = $v;
@@ -42,6 +51,13 @@ function store_bereich(string $name): string
     foreach (DATEN_KUNDENSEITE_PRAEFIX as $p) if (strncmp($name, $p, strlen($p)) === 0 || $name . '/' === $p) return 'haupt';
     return 'intern';
 }
+/* Eingerichteter interner Datenordner aus der Umgebung (ohne Prüfung des Kennzeichens; '' = Kundenseite) */
+function store_intern_pfad(): string
+{
+    static $e = null;
+    if ($e === null) $e = rtrim(trim((string)(getenv('WA_DATEN_INTERN') ?: ($_SERVER['WA_DATEN_INTERN'] ?? ''))), '/');
+    return $e;
+}
 /* Ordner eines Bereichs; Kundenseite (kein WA_DATEN_INTERN) → StoreKeinZugang für „intern“ */
 function store_ordner(string $bereich): string
 {
@@ -49,7 +65,7 @@ function store_ordner(string $bereich): string
     static $intern = false;
     if ($bereich === 'haupt') return $DATA;
     if ($intern === false) {
-        $e = rtrim(trim((string)(getenv('WA_DATEN_INTERN') ?: ($_SERVER['WA_DATEN_INTERN'] ?? ''))), '/');
+        $e = store_intern_pfad();
         if ($e !== '' && !is_file($e . '/.daten-intern')) throw new RuntimeException('Interner Datenordner nicht eingerichtet (WA_DATEN_INTERN ohne .daten-intern)');
         $intern = $e === '' ? null : $e;
     }
@@ -187,6 +203,7 @@ function store_path(string $name): string
 }
 function store_mode(string $bereich = 'haupt'): string
 {
+    global $DATA;
     static $lock = [], $mode = [];
     if (isset($mode[$bereich])) return $mode[$bereich];
     $dir = store_ordner($bereich);
@@ -194,6 +211,13 @@ function store_mode(string $bereich = 'haupt'): string
     // Lesend öffnen genügt für flock – so stört auch eine von root (Wartungsskript) angelegte Sperrdatei nicht.
     $lock[$bereich] = @fopen($dir . '/.storage.lock', 'c') ?: (is_file($dir . '/.storage.lock') ? @fopen($dir . '/.storage.lock', 'r') : false);
     if (!$lock[$bereich] || !flock($lock[$bereich], LOCK_SH)) throw new RuntimeException('Cannot lock storage');
+    /* Getrennte Daten: beide Ordner führen dieselbe Speicherart (deploy/daten_trennen.py lässt nichts anderes zu). Der Schalter
+       im gemeinsamen Ordner ist für die Kundenseite beschreibbar – weicht er vom internen ab, nie still falsch lesen. */
+    $e = store_intern_pfad();
+    if ($e !== '' && is_file($e . '/.daten-intern') && store_getrennt()
+        && is_file($DATA . '/.sqlite-active') !== is_file($e . '/.sqlite-active')) {
+        throw new RuntimeException('Speicherart in daten/ und daten-intern/ verschieden – Zustand prüfen: sh deploy/daten-trennen.sh status');
+    }
     // Held until the end of the process: migration cannot switch a live request's backend.
     return $mode[$bereich] = is_file($dir . '/.sqlite-active') ? 'sqlite' : 'files';
 }

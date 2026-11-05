@@ -18,6 +18,27 @@ KEY = re.compile(r'^[a-zA-Z0-9_-]+(?:/[a-zA-Z0-9_-]+)*$')
 SCHEMA = '''CREATE TABLE documents(name TEXT PRIMARY KEY, payload TEXT NOT NULL CHECK(json_valid(payload)), mtime INTEGER NOT NULL) WITHOUT ROWID; PRAGMA user_version=1;'''
 
 
+def write_nofollow(path, data, mode=0o600):
+    """Write a staging file without ever following a symbolic link planted under that name.
+
+    daten/ is mounted writable in the application containers (ADR-007): a link left there must never redirect this
+    root tool to a file of the host. Same rule as status_schreiben() in deploy/sichern.sh. Unlinking first only ever
+    removes the name, never the target of a link; O_NOFOLLOW|O_EXCL then refuses anything but a fresh file.
+    """
+    path = Path(path)
+    try:
+        os.unlink(path)   # leftover of an abort, or a link planted under this name
+    except FileNotFoundError:
+        pass
+    fd = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW, mode)
+    try:
+        with os.fdopen(fd, 'wb') as f:
+            f.write(data)
+    except BaseException:
+        os.unlink(path)
+        raise
+
+
 def document_path(relative):
     """True for a data file that belongs in the database: not a dot path, geo/, index.php or a sidecar."""
     if any(part.startswith('.') for part in relative.parts) or relative.parts[0] == 'geo' or relative.name == 'index.php':
@@ -81,7 +102,7 @@ def migrate(root):
         stage.rename(target)
         # Marker is last. Without it the application keeps using the original files.
         marker = root / '.sqlite-active.tmp'
-        marker.write_text('1\n'); marker.replace(root / '.sqlite-active')
+        write_nofollow(marker, b'1\n', 0o644); marker.replace(root / '.sqlite-active')
     finally:
         if stage.exists():
             shutil.rmtree(stage)

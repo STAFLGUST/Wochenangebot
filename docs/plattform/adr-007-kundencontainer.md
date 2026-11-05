@@ -175,12 +175,31 @@ Leergut, REWE, QS mit der Dateiablage, Entwurf, Versionen, Preisverlauf, Einkauf
   SQLite-Betrieb eigener Datenbank; die Dateiablage `dateien/` ebenso. Nur `app-mitarbeiter` und `postausgang` binden
   `./daten-intern` ein (außerhalb der Webwurzel). Die Kundenseite liest interne Dokumente nicht (null), schreiben bricht ab.
   Ohne Kennzeichen ist alles wie bisher – das Release allein ändert nichts.
+- **Maßgeblich ist das Kennzeichen innen** (seit 05.11.2026): `daten/.daten-getrennt` liegt im Ordner, den die Kundenseite
+  beschreiben kann – ein herabgesetztes oder entferntes Kennzeichen hätte interne Dokumente (Bestand, Protokoll, Postfach …)
+  wieder dem gemeinsamen Ordner zugeordnet. Server mit `WA_DATEN_INTERN` (Mitarbeiterseite, Postausgang) nehmen die Stufe
+  deshalb aus `daten-intern/.daten-intern` und brechen ab, wenn das gemeinsame Kennzeichen eine niedrigere Stufe nennt, fehlt
+  oder eine andere Speicherart meldet (`.sqlite-active`) – nie still falsch lesen oder schreiben. Die Kundenseite liest weiter
+  das gemeinsame Kennzeichen; dort gewinnt eine Herabsetzung nichts, weil sie den internen Ordner nicht sieht.
+  `daten-trennen.sh` arbeitet mit gestoppter Anwendung, die Prüfung greift also nur im laufenden Betrieb.
 - **Serverschritt** `sh deploy/daten-trennen.sh trennen` (im Wartungsfenster, Freigabe des Inhabers): Sicherung → Stopp von
   `app`, `app-mitarbeiter`, `postausgang` → `deploy/daten_trennen.py` (kopieren und vergleichen, dann umschalten, dann
   Originale entfernen; ein Abbruch vor dem Umschalten lässt alles wie vorher) → Eigentümer → Start. `status` zeigt den Plan,
   ohne etwas zu ändern. Dateien und SQLite werden beide unterstützt.
+- **Altbestand des Speicher-Umbaus** (seit 05.11.2026): Der Umstieg auf SQLite lässt die bisherigen Datendateien absichtlich
+  liegen, ein Rückfall die inaktive Datenbank. `status` nennt diese Reste („Reste des Speicher-Umbaus im gemeinsamen Ordner“);
+  `trennen` bricht ab, solange eine inaktive `daten/.sqlite` dort liegt (erst archivieren, `docs/datenbank.md`), und entfernt
+  die Altdateien der gekürzten Dokumente `kunden` und `bestellung` – sonst stünden Anschriften, Warenwirtschaftsdaten und die
+  Empfängeradressen weiter im Ordner der Kundenseite. Gelesen werden die Altdateien nie; ein Rückfall auf Dateien schreibt sie
+  aus der Datenbank neu (`datenbank.py rollback`).
+- **Zwischendateien der Serverskripte** (seit 05.11.2026): `daten/` und `daten-geheim/` sind in den Containern beschreibbar.
+  Skripte, die als root dort hineinschreiben, legen die Datei außerhalb an und bringen sie nur per Umbenennen hinein
+  (`mv -fT`, `os.replace`) bzw. öffnen sie mit `O_NOFOLLOW` – ein dort vorab angelegter Verweis lenkt so nichts um
+  (`deploy/postfach-schluessel.sh`, `deploy/daten_trennen.py`, `deploy/datenbank.py`; Vorbild `deploy/sichern.sh`).
 - **Sicherung:** `deploy/sichern.sh` sichert danach zusätzlich `daten-intern/` als `intern-<Zeit>.tar.gz` (gleich geprüft) und
-  bricht ab, wenn der Ordner fehlt. Dabei behoben: Im SQLite-Betrieb fehlte die Dateiablage (hochgeladene QS-Dokumente) in der
+  bricht ab, wenn der Ordner fehlt. Ob gesichert wird, entscheidet seit 05.11.2026 das Kennzeichen `daten-intern/.daten-intern`
+  (nicht mehr allein das gemeinsame): ein entferntes Kennzeichen in `daten/` kann die internen Daten nicht still aus der
+  Sicherung nehmen; fehlt eines der beiden, bricht die Sicherung mit Fehler ab. Dabei behoben: Im SQLite-Betrieb fehlte die Dateiablage (hochgeladene QS-Dokumente) in der
   Sicherung – der Datenbankabzug nimmt sie jetzt mit.
 - **Speicher umschalten / Altdateien** (`datenbank-umschalten.sh`, `altdateien.sh`) laufen nur mit allen Daten in einem
   Ordner: erst `daten-trennen.sh zusammenfuehren`, dann umschalten, dann wieder trennen.

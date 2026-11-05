@@ -49,6 +49,28 @@ printf '%s\n{"key":"YmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmI=","created":"202
 AUS=$(sh "$REPO/deploy/postfach-schluessel.sh" umziehen 2>&1) && CODE=0 || CODE=$?
 ok "umziehen bei unterschiedlichen Schlüsseln: Abbruch, nichts verändert" '[ $CODE = 1 ] && echo "$AUS" | grep -q "unterschiedliche Schlüssel" && [ -f daten/mail-schluessel.php ] && cmp -s original daten-geheim/mail-schluessel.php'
 rm -f daten/mail-schluessel.php
+
+# daten/ und daten-geheim sind im Container beschreibbar: dort angelegte Verweise dürfen root nie umlenken (wie tests/deploy/test_sichern.sh)
+echo ORIGINAL > "$T/opfer"; chmod 644 "$T/opfer"
+ln -s "$T/opfer" daten/mail-schluessel.php.neu; ln -s "$T/opfer2" daten/mail-schluessel.php
+AUS=$(sh "$REPO/deploy/postfach-schluessel.sh" zurueck 2>&1) && CODE=0 || CODE=$?
+ok "zurueck folgt keinem Verweis in daten/ (Ziel unverändert, Verweis ersetzt)" '[ $CODE = 0 ] && [ "$(cat "$T/opfer")" = ORIGINAL ] && [ "$(stat -c %a "$T/opfer")" = 644 ] \
+  && [ ! -e "$T/opfer2" ] && [ ! -L daten/mail-schluessel.php ] && cmp -s original daten/mail-schluessel.php \
+  && [ "$(stat -c %a daten/mail-schluessel.php)" = 600 ] && [ -z "$(ls -A "$T" | grep "^\.mail-schluessel\.")" ]'
+rm -f daten/mail-schluessel.php.neu daten/mail-schluessel.php daten-geheim/mail-schluessel.php
+cp "$T/original" daten/mail-schluessel.php
+ln -s "$T/opfer" daten-geheim/mail-schluessel.php.neu
+AUS=$(sh "$REPO/deploy/postfach-schluessel.sh" umziehen 2>&1) && CODE=0 || CODE=$?
+ok "umziehen folgt keinem Verweis in daten-geheim (Ziel unverändert, Schlüssel echt abgelegt)" '[ $CODE = 0 ] && [ "$(cat "$T/opfer")" = ORIGINAL ] && [ "$(stat -c %a "$T/opfer")" = 644 ] \
+  && [ ! -L daten-geheim/mail-schluessel.php ] && cmp -s original daten-geheim/mail-schluessel.php && [ ! -e daten/mail-schluessel.php ]'
+rm -f daten-geheim/mail-schluessel.php.neu daten-geheim/mail-schluessel.php
+ln -s "$T/opfer" daten/mail-schluessel.php
+AUS=$(sh "$REPO/deploy/postfach-schluessel.sh" umziehen 2>&1) && CODE=0 || CODE=$?
+ok "Verweis statt Schlüssel im Datenordner: Abbruch, fremde Datei nicht ausgelesen" '[ $CODE = 1 ] && echo "$AUS" | grep -q "kein echter Schlüssel" \
+  && [ ! -e daten-geheim/mail-schluessel.php ] && [ "$(cat "$T/opfer")" = ORIGINAL ]'
+rm -f daten/mail-schluessel.php
+cp "$T/original" daten-geheim/mail-schluessel.php; chmod 600 daten-geheim/mail-schluessel.php
+
 AUS=$(sh "$REPO/deploy/postfach-schluessel.sh" vielleicht 2>&1) && CODE=0 || CODE=$?
 ok "unbekannter Befehl abgelehnt" '[ $CODE = 2 ]'
 mkdir "$T/leer"; cd "$T/leer"
