@@ -359,6 +359,9 @@ niemand (Stufe 1b).
   (`with_lock_in`, `store_beitreten`). Vorher blieb bei einem Fehler mitten im Vorgang der schon geschriebene Teil der anderen
   Datenbank gespeichert (seit Stufe 2a, z. B. ein veröffentlichtes Angebot ohne gesicherte Vorversion). Zwei SQLite-Dateien lassen
   sich nicht in einem einzigen Schritt abschließen – offen bleibt nur ein Fehler genau zwischen den beiden Abschlüssen.
+- **Prüfung in der CI:** Die volle E2E-Suite läuft zusätzlich mit getrennten Daten (SQLite wie auf dem Server, höchste
+  Trennstufe des Stands, `WA_TEST_TRENNUNG=1`, Aufträge „Ende-zu-Ende-Tests (sqlite, getrennt, Teil k/3)“). So fällt vor dem
+  Merge auf, wenn neuer Code Daten am falschen Ort erwartet oder die Kundenseite interne Dokumente braucht.
 - **Postausgang:** `docker compose ps postausgang` (Zustand „healthy“ = Lebenszeichen frisch), `docker compose logs postausgang`
   (je Durchgang mit Versand eine Zeile). Steht der Dienst länger als 15 Minuten, nimmt das Portal keine Bestellwünsche an.
   Einführung: Release einspielen (erstellt den Dienst), danach einmal `sh deploy/postfach-schluessel.sh umziehen`.

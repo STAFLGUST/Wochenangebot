@@ -22,16 +22,17 @@ geprüft hat (`docs/release-freigabe.md`, „Keine Doppelprüfung nach dem Merge
 
 ### Aufteilung der Ende-zu-Ende-Tests in der CI
 
-Die CI führt die Gruppen je Speicherart in **3 Aufträgen** aus („Ende-zu-Ende-Tests (files, Teil 1/3)“ …, zusammen
-6 Aufträge, je 4 Gruppen parallel). `tests/run_e2e.py` verteilt mit `WA_TEIL=k/n` deterministisch: Gruppen nach
+Die CI führt die Gruppen je Speicherart in **3 Aufträgen** aus („Ende-zu-Ende-Tests (files, Teil 1/3)“ …) und noch einmal
+in SQLite mit getrennten Daten wie auf dem Server („Ende-zu-Ende-Tests (sqlite, getrennt, Teil 1/3)“ …, `WA_TEST_TRENNUNG=1`) –
+zusammen 9 Aufträge, je 4 Gruppen parallel. `tests/run_e2e.py` verteilt mit `WA_TEIL=k/n` deterministisch: Gruppen nach
 geschätzter Laufzeit (`GEWICHT`, Sekunden aus den CI-Protokollen; neue Gruppen zählen 15 s) absteigend, jede in den
 Teil mit der bisher kleinsten Summe. Die Verteilung hängt nicht davon ab, ob ein optionaler Build vorliegt. Ohne
 `WA_TEIL` läuft lokal alles wie bisher (nur die Startreihenfolge richtet sich jetzt nach `GEWICHT`).
 
 - Lokal einen Teil nachstellen: `WA_TEIL=2/3 python3 tests/run_e2e.py` (die Liste der Gruppen steht in der ersten Zeile).
-- Der Pflicht-Check „Ende-zu-Ende-Tests“ ist nur grün, wenn **alle** Teile beider Speicherarten grün sind.
-- Artefakte bei Fehlern: `e2e-ergebnisse-<speicherart>-teil<k>`.
-- Mehr oder weniger Teile: in `ci.yml` die Liste `teil: [1, 2, 3]` **und** den Nenner in `WA_TEIL` ändern –
+- Der Pflicht-Check „Ende-zu-Ende-Tests“ ist nur grün, wenn **alle** Teile beider Speicherarten und mit getrennten Daten grün sind.
+- Artefakte bei Fehlern: `e2e-ergebnisse-<speicherart>-teil<k>` bzw. `e2e-ergebnisse-sqlite-getrennt-teil<k>`.
+- Mehr oder weniger Teile: in `ci.yml` die Liste `teil: [1, 2, 3]`, die Einträge unter `include` (getrennte Daten) **und** den Nenner in `WA_TEIL` ändern –
   `tests/unit/test_run_e2e_teile.py` prüft, dass beides zusammenpasst (sonst bliebe ein Teil ungeprüft).
 - Gewichte erneuern, wenn sich Laufzeiten deutlich ändern: Zeilen „[gruppe] … bestanden in N s“ der CI-Protokolle.
   Die längste Gruppe (`sicherheit_freigaben`, ~2 Min.) bestimmt die Mindestdauer eines Teils.

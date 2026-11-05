@@ -274,15 +274,23 @@ jobs:
   e2e:
     # Je Speicherart drei Teile mit möglichst gleicher Laufzeit (tests/run_e2e.py, teile()). Die Zahl der Teile steht
     # zweimal: Liste „teil“ und Nenner in WA_TEIL – tests/unit/test_run_e2e_teile.py prüft, dass beides zusammenpasst.
+    # Dazu die volle Suite mit getrennten Daten (ADR-007, höchste Trennstufe, WA_TEST_TRENNUNG=1) in SQLite – so wie der
+    # Server nach „daten-trennen.sh trennen“ arbeitet; drei zusätzliche Aufträge über „include“ (getrennt = 1).
     strategy:
       fail-fast: false
       matrix:
         storage: [files, sqlite]
         teil: [1, 2, 3]
-    name: Ende-zu-Ende-Tests (${{ matrix.storage }}, Teil ${{ matrix.teil }}/3)
+        getrennt: ['']
+        include:
+          - {storage: sqlite, teil: 1, getrennt: '1'}
+          - {storage: sqlite, teil: 2, getrennt: '1'}
+          - {storage: sqlite, teil: 3, getrennt: '1'}
+    name: Ende-zu-Ende-Tests (${{ matrix.storage }}${{ matrix.getrennt == '1' && ', getrennt' || '' }}, Teil ${{ matrix.teil }}/3)
     env:
       WA_TEST_STORAGE: ${{ matrix.storage }}
       WA_TEIL: ${{ matrix.teil }}/3
+      WA_TEST_TRENNUNG: ${{ matrix.getrennt }}
     needs: [nachweis, statisch]
     if: ${{ !cancelled() && needs.statisch.result == 'success' && !(needs.nachweis.result == 'success' && needs.nachweis.outputs.uebernommen == 'true') }}
     runs-on: ubuntu-24.04
@@ -315,7 +323,7 @@ jobs:
         if: failure()
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
-          name: e2e-ergebnisse-${{ matrix.storage }}-teil${{ matrix.teil }}
+          name: e2e-ergebnisse-${{ matrix.storage }}${{ matrix.getrennt == '1' && '-getrennt' || '' }}-teil${{ matrix.teil }}
           path: |
             tests/.ergebnisse/
             tests/.arbeit/*.log
@@ -323,13 +331,14 @@ jobs:
 
   e2e_required:
     # Stable required-check name: preserve existing branch protection with the new matrix.
-    # Verlangt alle Teile beider Speicherarten. Übersprungen nur, wenn der Nachweis die Prüfung übernommen hat (main).
+    # Verlangt alle Teile beider Speicherarten und der getrennten Daten. Übersprungen nur, wenn der Nachweis die Prüfung
+    # übernommen hat (main).
     name: Ende-zu-Ende-Tests
     needs: [nachweis, e2e]
     if: ${{ always() && !(needs.nachweis.result == 'success' && needs.nachweis.outputs.uebernommen == 'true') }}
     runs-on: ubuntu-24.04
     steps:
-      - name: Alle Teile beider Speicherarten erfolgreich
+      - name: Alle Teile beider Speicherarten und mit getrennten Daten erfolgreich
         env:
           RESULT: ${{ needs.e2e.result }}
         run: test "$RESULT" = success
