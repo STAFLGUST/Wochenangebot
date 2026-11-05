@@ -2,7 +2,7 @@
 
 <!-- ERZEUGT von `python3 werkzeuge/doku.py erzeugen` – nicht von Hand ändern. Quelle: Funktionen und Kommentare im Code. Die CI prüft, dass diese Datei zum Code passt. -->
 
-108 Dateien, 1091 Funktionen – in der Reihenfolge der Datei, **fett** die Abschnitte. Text = erste Aussage des Kommentars direkt über der Funktion (Python: Docstring). Übersicht aller Module: [README.md](README.md).
+110 Dateien, 1104 Funktionen – in der Reihenfolge der Datei, **fett** die Abschnitte. Text = erste Aussage des Kommentars direkt über der Funktion (Python: Docstring). Übersicht aller Module: [README.md](README.md).
 
 ## `.github/scripts/apt_vorrat.py`
 
@@ -1717,6 +1717,14 @@ _Werkzeug der Entwickler-Dokumentation (werkzeuge/doku.py)_
 - `hilfe(x)` – Docstring über mehrere Zeilen.
 - `git(*a)`
 
+## `tests/unit/test_images_aktualisieren.py`
+
+_Sicherheitsupdates der Container-Images (werkzeuge/images_aktualisieren.py) – ohne Netz, mit Digests aus einer Datei. python3 tests/unit/test_images_aktualisieren.py Prüft an einer Kopie der echten Dateien_
+
+- `ok(name, cond, info)`
+- `kopie()`
+- `lauf(*args)`
+
 ## `tests/unit/test_run_e2e_teile.py`
 
 _Aufteilung der E2E-Testgruppen auf CI-Aufträge (tests/run_e2e.py_
@@ -1769,6 +1777,21 @@ _Nachschlageteil der Entwickler-Dokumentation aus dem Code erzeugen und prüfen 
 - `testdaten_absatz(pfad)` – Absatz „Testdaten:“ aus dem Kopfkommentar einer Testdatei ('' = keiner).
 - `funktionen_md(rw, liste)` – Je Modul eine Datei funktionen/<modul>.md und eine Übersicht funktionen/README.md.
 - `alle(rw)`
+- `main(argv)`
+
+## `werkzeuge/images_aktualisieren.py`
+
+_Sicherheitsupdates der Container-Images: festgelegte Digests auf den neuesten Stand derselben Fassung bringen._
+
+- `dateien(wurzel)` – Textdateien des Repositorys (git ls-files, sonst Ordner durchsuchen).
+- `fundstellen(wurzel)` – {(name, tag): {digest: [Datei:Zeile, …]}} aller festgelegten Images
+- `registry(name)` – (Registry-Adresse, Repository) – Docker Hub für Namen ohne eigene Registry, offizielle Images unter library/
+- `_anfrage(url, methode, token, accept, versuche)` – Eine Anfrage; bei „zu viele Anfragen“ (429) oder Serverfehler kurz warten und erneut versuchen
+- `_token(www_auth)` – Anonymes Lese-Token nach den Angaben aus WWW-Authenticate (Bearer realm, service, scope)
+- `_mit_token(url, methode, accept, tokens, schluessel)`
+- `digest_holen(name, tag, tokens)`
+- `fassungen_holen(name, tag, tokens, grenze)` – Fassungen (Tags) derselben Reihe wie `tag` – über die gefilterten Schnittstellen von Docker Hub bzw. quay.io (wenige Anfragen statt tausender Tags), sonst …
+- `neuere_fassungen(tag, alle)` – Neuere Fassungen derselben Reihe: gleiche Haupt- und Nebenversion, gleicher Zusatz (z. B. 26.8.1 → 26.8.2, 3.12.14-bookworm → 3.12.15-bookworm, v1.31.2 → …
 - `main(argv)`
 
 ## `werkzeuge/integritaet.py`

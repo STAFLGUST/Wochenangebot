@@ -39,6 +39,7 @@ Jede Code-Datei beginnt mit einem Kopfkommentar; dessen erste Aussage steht hier
 | `ci-nachweis.yml` | plattform | Trockenlauf des Nachweises „schon im Pull Request vollständig geprüft“ (ci.yml, Auftrag „nachweis“): zeigt für einen Commit auf main, ob die CI dort die schweren Aufträge überspringen würde und warum (nicht). |
 | `ci.yml` | plattform | Automatische Prüfungen für jeden Pull Request und jeden Commit auf main. |
 | `release.yml` | plattform | Produktive Freigabe. Nach jedem erfolgreichen CI-Lauf auf main startet die CI diesen Lauf automatisch; er wartet dann auf die Freigabe in der GitHub-Umgebung „produktion“ (E-Mail/App |
+| `sicherheitsupdates.yml` | plattform | Wöchentliche Sicherheitsupdates der Container-Images (PHP/Apache, Caddy, Keycloak, PostgreSQL, Hilfsimages). |
 | `zwischenspeicher.yml` | plattform | Füllt den GitHub-Zwischenspeicher für die Testaufträge der CI (ci.yml |
 
 ## `app/`
@@ -819,6 +820,7 @@ Jede Code-Datei beginnt mit einem Kopfkommentar; dessen erste Aussage steht hier
 | `test_apt_vorrat.py` | plattform | Paketvorrat der CI (.github/scripts/apt_vorrat.py) mit nachgebautem apt-cache. python3 tests/unit/test_apt_vorrat.py Prüft: nur Pakete mit passender SHA-256 aus der (signierten) Paketliste werden übernommen; … |
 | `test_ci_nachweis.py` | plattform | Nachweis „schon im Pull Request vollständig geprüft“ (.github/scripts/ci_nachweis.py) mit nachgebauter GitHub-API. python3 tests/unit/test_ci_nachweis.py Prüft |
 | `test_doku.py` | plattform | Werkzeug der Entwickler-Dokumentation (werkzeuge/doku.py) |
+| `test_images_aktualisieren.py` | plattform | Sicherheitsupdates der Container-Images (werkzeuge/images_aktualisieren.py) – ohne Netz, mit Digests aus einer Datei. python3 tests/unit/test_images_aktualisieren.py Prüft an einer Kopie der echten Dateien |
 | `test_run_e2e_teile.py` | plattform | Aufteilung der E2E-Testgruppen auf CI-Aufträge (tests/run_e2e.py |
 
 ## `werkzeuge/`
@@ -827,6 +829,7 @@ Jede Code-Datei beginnt mit einem Kopfkommentar; dessen erste Aussage steht hier
 | --- | --- | --- |
 | `asset_versionen.py` | plattform | Einbindungen der Skripte und Stylesheets in den HTML-Seiten unter app/ und dashboard/ prüfen. |
 | `doku.py` | plattform | Nachschlageteil der Entwickler-Dokumentation aus dem Code erzeugen und prüfen (nur Python-Standardbibliothek). python3 werkzeuge/doku.py erzeugen docs/entwickler/referenz/*.md neu schreiben python3 werkzeuge/doku.py … |
+| `images_aktualisieren.py` | plattform | Sicherheitsupdates der Container-Images: festgelegte Digests auf den neuesten Stand derselben Fassung bringen. |
 | `integritaet.py` | plattform | Prüfliste der Dateiprüfung (app/api/lib/integritaet-liste.php): prüfen, dass sie NICHT im Repository steht. |
 | `karte_auszug.py` | plattform | Kleiner Ausschnitt aus einer Protomaps-Basiskarte (PMTiles, OpenStreetMap-Daten, ODbL) – für Testdaten und lokale Vorschau der Detailkarte. |
 | `karte_bauen.py` | verwaltung | Baut die Landkarte für die Auswertung (app/assets/karte.json) aus Natural Earth (gemeinfrei), weitergegeben als TopoJSON im npm-Paket „world-atlas“ (ISC). |

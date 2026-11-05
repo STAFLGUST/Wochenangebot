@@ -33,9 +33,14 @@ if not (php and php == test_php and php[0] == dockerfile and skript == dockerfil
     fehler.append(f"PHP-Grundimage uneinheitlich: Kundenseite {php}, Testumgebung {test_php}/{skript}, Dockerfile {dockerfile}")
 
 ci = Path(".github/workflows/ci.yml").read_text(encoding="utf-8")
-for img in alle.get("deploy/anmeldung/docker-compose.anmeldung.yml", []):
-    if f"docker pull -q {img}" not in ci:
-        fehler.append(f"CI lädt {img} nicht in derselben Fassung (Auftrag „image“)")
+# CI lädt die Images der zentralen Anmeldung aus der Compose-Datei (dieselbe Fassung); Digests stehen nie in Workflow-Dateien –
+# der wöchentliche Lauf „Sicherheitsupdates“ (werkzeuge/images_aktualisieren.py) darf sie mit dem GITHUB_TOKEN nicht ändern
+anmeldung = ci.split("Betriebskonfiguration der zentralen Anmeldung prüfen")[1].split("\n\n")[0] if "Betriebskonfiguration der zentralen Anmeldung prüfen" in ci else ""
+if "deploy/anmeldung/docker-compose.anmeldung.yml" not in anmeldung or 'docker pull -q "$img"' not in anmeldung:
+    fehler.append("CI lädt die Images der zentralen Anmeldung nicht aus deploy/anmeldung/docker-compose.anmeldung.yml (Auftrag „image“)")
+for wf in sorted(Path(".github/workflows").glob("*.yml")):
+    if re.search(r"@sha256:[0-9a-f]{64}", wf.read_text(encoding="utf-8")):
+        fehler.append(f"{wf}: Image-Digest in einer Workflow-Datei – gehört in die Compose-Datei (Sicherheitsupdates)")
 if "caddy:2 " in ci or "caddy:2 " in Path("deploy/anmeldung/pruefen.sh").read_text(encoding="utf-8"):
     fehler.append("Caddy-Prüfung nutzt noch das gleitende caddy:2 statt der Fassung aus docker-compose.yml")
 if "deploy/anmeldung/docker-compose.anmeldung.yml" not in ci.split("Container-Images auf bekannte Lücken prüfen")[1].split("\n\n")[0]:
