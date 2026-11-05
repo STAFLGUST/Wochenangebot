@@ -511,6 +511,15 @@ dynamisch = true
 beschreibung = "Kundengruppen (GRUPPEN_LISTEN in lib/kunden.php)"
 
 [[dokument]]
+name = "angebotskategorien"
+eigentuemer = "verwaltung"
+bereich = "intern"
+leser = ["angebot"]   # Editor ordnet das Angebot danach (Aktion angebotskategorien, OfferCore.nachKategorien)
+schutz = "intern"
+dynamisch = true
+beschreibung = "Angebotskategorien: Abschnitte des Angebots mit zugeordneten VK-Gruppen in fester Reihenfolge"
+
+[[dokument]]
 name = "vkgruppen"
 eigentuemer = "verwaltung"
 bereich = "intern"

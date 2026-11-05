@@ -79,6 +79,7 @@ SUITES['web_app'] = (8790, 'data-seed', True)
 SUITES['kundengruppen'] = (8790, 'data-seed', True)
 SUITES['einzelangebote'] = SUITES['bestellung']
 SUITES['vkgruppen'] = (8790, 'data-seed', True)
+SUITES['angebotskategorien'] = (8790, 'data-seed', True)   # Stammdaten Angebotskategorien und Aufbau des Angebots danach
 SUITES['kundenimport'] = SUITES['bestellung']
 SUITES['vertreter'] = SUITES['bestellung']
 SUITES['sicherheit_freigaben'] = SUITES['bestellung']

@@ -2,7 +2,7 @@
 
 <!-- ERZEUGT von `python3 werkzeuge/doku.py erzeugen` – nicht von Hand ändern. Quelle: Funktionen und Kommentare im Code. Die CI prüft, dass diese Datei zum Code passt. -->
 
-17 Dateien, 210 Funktionen – in der Reihenfolge der Datei, **fett** die Abschnitte. Text = erste Aussage des Kommentars direkt über der Funktion (Python: Docstring). Übersicht aller Module: [README.md](README.md).
+20 Dateien, 224 Funktionen – in der Reihenfolge der Datei, **fett** die Abschnitte. Text = erste Aussage des Kommentars direkt über der Funktion (Python: Docstring). Übersicht aller Module: [README.md](README.md).
 
 ## `app/api/lib/auswertung.php`
 
@@ -46,6 +46,15 @@ _Kundenstammdaten und Kunden-Sitzung_
 - `kundengruppen_load()`
 - `kundengruppen_clean(list)`
 - `vertreter_load()`
+
+## `app/api/module/verwaltung/angebotskategorien.php`
+
+_Angebotskategorien (Stammdaten der Verwaltung, Wunsch des Inhabers vom 05.11.2026)._
+
+- `kategorien_load()`
+- `kategorien_clean(liste)` – Gesendete Liste prüfen und vereinheitlichen.
+- `kategorien_speichern(liste, rev, me)` – Speichern mit Revision (409 bei zwischenzeitlicher Änderung) und Protokoll.
+- `kategorien_vk_namen()` – Nummer und Bezeichnung der VK-Gruppen – für Ansicht und Editor (auch ohne „stammdaten.sehen“, nur diese zwei Felder)
 
 ## `app/api/module/verwaltung/import.php`
 
@@ -248,6 +257,29 @@ _Wochenangebot – Eingabebereich, Verwaltung Mitarbeiter, Bestellungen, Kunden,
 - `csvZeilen(text)` – CSV lesen: UTF-8, sonst Windows-1252 (Export der Warenwirtschaft); Semikolon, Anführungszeichen
 - `csvText(buf)`
 - `gruppenListe(cfg)`
+
+## `app/module/verwaltung/angebotskategorien.js`
+
+_Verwaltung → Angebotskategorien (Stammdaten, Inhaber 05.11.2026) Angebotskategorien sind die Abschnitte des Angebots (z._
+
+- `laden()`
+- `markieren()`
+- `render()`
+- `katHTML(k, i, edit, f)`
+- `freiHTML(f, edit)`
+- `neuerName()`
+- `speichern()`
+
+## `tests/e2e/test_angebotskategorien.py`
+
+_Angebotskategorien (Stammdaten der Verwaltung, Inhaber 05.11.2026)_
+
+- `check(n, c, i)`
+- `doc(name)`
+
+**Schnittstelle**
+
+- `gsec(pg)`
 
 ## `tests/e2e/test_auswertung.py`
 
