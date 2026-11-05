@@ -4636,9 +4636,12 @@
   }
   function masterNeuAus(r) {
     const sug = C.suggestAttributes(r.name, [vkName(r.vkGruppe), r.name2].filter(Boolean).join(' '), '');
-    const e = { code: r.code, name: r.name, category: sug.category, origin: sug.origin || null, condition: sug.condition };
-    C.normalizeItem(e);
-    e.nameWawi = r.name;   // Original (Bezeichnung1), bevor „frisch“ in den Zustand wandert   // „frisch“ aus der Bezeichnung in den Zustand, Herkunft vereinheitlichen
+    // Import aus der Warenwirtschaft: Bezeichnung als Vorschlag ohne „frisch“ (steht im Zustand) – von Hand bleibt sie danach frei
+    const name = C.nameVorschlag(r.name);
+    const e = { code: r.code, name, category: sug.category, origin: sug.origin || null, condition: sug.condition };
+    if (name !== r.name && e.condition === 'unbekannt') e.condition = 'frisch';
+    C.normalizeItem(e);   // Herkunft vereinheitlichen
+    e.nameWawi = r.name;   // Original (Bezeichnung1), bevor „frisch“ in den Zustand wandert
     const kurz = e.name.replace(/[\s,]+(?:fri|fr)\.?$/, '');   // abgekürztes „frisch“ der Warenwirtschaft („…,Hac.Horiz.,fri“)
     if (kurz !== e.name && kurz.length > 2) { e.name = kurz; if (e.condition === 'unbekannt') e.condition = 'frisch'; }
     if (r.vkGruppe) e.vkGruppe = r.vkGruppe;
