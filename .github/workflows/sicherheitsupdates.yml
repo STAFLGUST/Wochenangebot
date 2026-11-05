@@ -77,7 +77,7 @@ jobs:
             echo "- Danach mergen und wie immer ein Release freigeben. Neue Images für Caddy, Keycloak oder PostgreSQL starten diese Container dabei neu (Keycloak: rund eine Minute keine neue Mitarbeiteranmeldung)."
             echo "- Rückfall: Release zurücknehmen (alte Digests)."
             echo
-            echo "_Automatisch angelegt vom Workflow „Sicherheitsupdates“ (.github/workflows/sicherheitsupdates.yml)._"
+            echo '_Automatisch angelegt vom Workflow Sicherheitsupdates (.github/workflows/sicherheitsupdates.yml)._'
           } > "$RUNNER_TEMP/pr.md"
           if url=$(gh pr create --base main --head "$branch" --title "Sicherheitsupdates der Container-Images (KW $kw)" --body-file "$RUNNER_TEMP/pr.md"); then
             echo "Pull Request: $url" >> "$GITHUB_STEP_SUMMARY"
@@ -88,7 +88,7 @@ jobs:
                 gh pr close "$nr" --delete-branch --comment "Ersetzt durch $url (neuere Digests)." || true
               done
           else
-            echo "Pull Request konnte nicht angelegt werden (Einstellung „Allow GitHub Actions to create and approve pull requests“?) – Issue statt dessen." >> "$GITHUB_STEP_SUMMARY"
+            echo 'Pull Request konnte nicht angelegt werden (Einstellung: Allow GitHub Actions to create and approve pull requests?) – Issue statt dessen.' >> "$GITHUB_STEP_SUMMARY"
             { echo "Branch: \`$branch\` – bitte daraus einen Pull Request nach \`main\` anlegen."; echo; cat "$RUNNER_TEMP/pr.md"; } > "$RUNNER_TEMP/issue.md"
             gh issue create --title "Sicherheitsupdates der Container-Images (KW $kw)" --body-file "$RUNNER_TEMP/issue.md"
           fi
