@@ -427,6 +427,30 @@ function mail_job_for(array $c, string $typ, string $note = '', ?array $wk = nul
     return ['to' => $c['email'], 'name' => $c['ansprechpartner'] ?: $c['firma'], 'subject' => $sub, 'text' => $txt, 'html' => $html,
             'headers' => ['List-Unsubscribe' => '<' . $one . '>', 'List-Unsubscribe-Post' => 'List-Unsubscribe=One-Click']];
 }
+/* Obergrenzen für das Sitzungsregister der Kunden (jede Anfrage eines angemeldeten Kunden liest es vollständig, also darf
+   es nicht beliebig wachsen). Ohne Grenze bliebe jede Anmeldung bis zum Ende der Leerlaufzeit stehen, und ein einziger
+   Zugang könnte durch wiederholtes Anmelden die Anfragen aller anderen Kunden verlangsamen.
+   KSESS_MAX_ZUGANG ist die wichtige Grenze: ein Zugang verdrängt nur eigene Sitzungen (wie GERAET_MAX bei den vertrauten
+   Geräten). KSESS_MAX ist nur das Netz darunter (wie ANMELDEORT_MAX bei den Anmeldeorten) und liegt weit über dem, was im
+   Betrieb gleichzeitig anfällt. Verdrängt wird immer die am längsten nicht benutzte Sitzung; sie ist danach abgemeldet. */
+const KSESS_MAX_ZUGANG = 10;     // gleichzeitige Sitzungen je Kundenzugang (die zuletzt benutzten bleiben)
+const KSESS_MAX = 5000;          // Sitzungen aller Kunden zusammen
+
+/* Register auf die Obergrenzen kürzen: erst je Zugang, dann insgesamt (die zuletzt benutzten bleiben) */
+function ksess_begrenzen(array $r, string $kid): array
+{
+    $eigen = array_filter($r, fn($v) => is_array($v) && (string)($v['kid'] ?? '') === $kid);
+    if (count($eigen) > KSESS_MAX_ZUGANG) {
+        uasort($eigen, fn($a, $b) => (int)($a['seen'] ?? 0) <=> (int)($b['seen'] ?? 0));
+        foreach (array_slice(array_keys($eigen), 0, count($eigen) - KSESS_MAX_ZUGANG) as $k) unset($r[$k]);
+    }
+    if (count($r) > KSESS_MAX) {
+        uasort($r, fn($a, $b) => (int)($b['seen'] ?? 0) <=> (int)($a['seen'] ?? 0));
+        $r = array_slice($r, 0, KSESS_MAX, true);
+    }
+    return $r;
+}
+
 /* Kunde anmelden (nach Passwortprüfung oder Einmal-Link) */
 function kunde_sign_in(array $c, string $via = 'passwort'): void
 {
@@ -440,6 +464,7 @@ function kunde_sign_in(array $c, string $via = 'passwort'): void
         $r = ksess_prune(store_read('kundensitzungen') ?? []);
         $sid = bin2hex(random_bytes(12));
         $r[$sid] = ['kid' => $c['id'], 'ip' => client_ip(), 'ua' => mb_substr((string)($_SERVER['HTTP_USER_AGENT'] ?? ''), 0, 240), 'created' => now(), 'seen' => time()];
+        $r = ksess_begrenzen($r, (string)$c['id']);
         store_write('kundensitzungen', $r);
         $_SESSION['ksid'] = $sid;
     });

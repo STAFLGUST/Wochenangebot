@@ -422,6 +422,12 @@ Kunden sind eine eigene, externe Nutzergruppe (Dokument `kunden`, Zugang im Feld
 - **Sitzung:** `kunde_sign_in()` (`lib/kundenmail.php`) vergibt eine neue Sitzungskennung und setzt nur Kundenschlüssel
   (`kid`, `ksv`, `kseen`, `kcsrf`, `ksid`) plus Eintrag im Register `kundensitzungen`. `current_customer()`
   (`lib/kunden.php`) liest Kunde und Zugang bei jeder Anfrage frisch und prüft aktiv, `sv`, Leerlauf und Register.
+  Weil jede Kundenanfrage das ganze Register liest, ist es beim Eintragen begrenzt (`ksess_begrenzen`,
+  `lib/kundenmail.php`): `KSESS_MAX_ZUGANG` = 10 Sitzungen je Kundenzugang (wie `GERAET_MAX`) und `KSESS_MAX` = 5000
+  insgesamt (wie `ANMELDEORT_MAX`). Verdrängt wird die am längsten nicht benutzte Sitzung; sie ist danach abgemeldet.
+  Die Grenze je Zugang ist die wichtige: ein Zugang verdrängt nur eigene Sitzungen und kann die Anfragen anderer
+  Kunden nicht verlangsamen. `ksess_prune` (`lib/kunden.php`) entfernt zusätzlich alles, was länger als `idleMinutes`
+  nicht benutzt wurde.
 - **Trennung:** Mitarbeiteraktionen kennen nur `current_user()`/`require_auth()` (`$_SESSION['uid']`); ein Kunde hat
   nie `uid` und damit nie Zugriff auf Aktionen des Eingabebereichs oder auf Mitarbeiter-Hosts. Kundenaktionen prüfen
   `current_customer()` und `require_customer_csrf()`.

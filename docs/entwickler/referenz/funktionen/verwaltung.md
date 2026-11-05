@@ -2,7 +2,7 @@
 
 <!-- ERZEUGT von `python3 werkzeuge/doku.py erzeugen` – nicht von Hand ändern. Quelle: Funktionen und Kommentare im Code. Die CI prüft, dass diese Datei zum Code passt. -->
 
-17 Dateien, 209 Funktionen – in der Reihenfolge der Datei, **fett** die Abschnitte. Text = erste Aussage des Kommentars direkt über der Funktion (Python: Docstring). Übersicht aller Module: [README.md](README.md).
+17 Dateien, 210 Funktionen – in der Reihenfolge der Datei, **fett** die Abschnitte. Text = erste Aussage des Kommentars direkt über der Funktion (Python: Docstring). Übersicht aller Module: [README.md](README.md).
 
 ## `app/api/lib/auswertung.php`
 
@@ -310,6 +310,10 @@ _Kunden: Stammdaten, Freischaltung von Angeboten, Kunden-Anmeldung auf der Angeb
 **Änderungen wirken sofort**
 
 **Merkliste je Kunde**
+
+**Obergrenze des Sitzungsregisters (kundensitzungen wird bei jeder Kundenanfrage vollständig gelesen)**
+
+- `ksess()`
 
 **Oberfläche**
 
