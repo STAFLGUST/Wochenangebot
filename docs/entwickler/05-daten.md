@@ -307,6 +307,15 @@ Vertreter `name`, `kurz`, `telefon`, `plz`, `ort`, `land`. Nummer `^[0-9A-Za-z._
 Gespeichert wird immer die ganze Liste (fehlende Nummern entfallen); je Eintrag bleiben nicht gesendete Felder und
 unbekannte Felder der gespeicherten Fassung erhalten (`gruppen_clean` mit `$alt`), ebenso weitere Felder des Dokuments.
 
+**`angebotskategorien`** (Verwaltung, seit 05.11.2026): `{"rev": 3, "kategorien": [{"id": "k1a2b3c4d5", "name": "Eigene Zerlegung, Marke \"Fleischmeister\"", "vk": ["1050", "1150"]}], "updatedAt": "…", "updatedBy": "…"}`.
+Reihenfolge der Kategorien und darin der VK-Gruppen = Aufbau aller Angebote; jede VK-Gruppe höchstens einer Kategorie,
+Bezeichnungen eindeutig, höchstens 100 Kategorien (`module/verwaltung/angebotskategorien.php`, `kategorien_clean`).
+Lesen: Aktion `angebotskategorien` mit `stammdaten.sehen` oder `angebot.bearbeiten` (liefert dazu Nummer und Name der
+VK-Gruppen), speichern: `angebotskategorien_save` mit `stammdaten.bearbeiten` und Revision. Der Editor ordnet den
+Entwurf danach (`OfferCore.nachKategorien`: VK-Gruppe der Angebotsgruppe `groups[].vk`, sonst die häufigste ihrer
+Artikel – einmal gemerkt; Abschnitt `section` = Kategorie; Gruppen ohne Kategorie am Ende ohne Abschnitt). Leer =
+Reihenfolge von Hand wie früher.
+
 **`stammdaten`**: Artikelstammdaten aus `clean_master()`.
 `{"rev": 12, "updatedAt": "…", "updatedBy": "…", "articles": [{"code": "1001", "name": "Testartikel Rinderhüfte", "category": "Rind", "origin": "DE", "condition": "frisch", "vkGruppe?": "200", "gtin?": "4000000000000", "nameWawi?": "Testartikel Hüfte, DE, frisch", "namen?": {"kunde-a": "Rinderhüfte Spezial"}}]}`.
 Höchstens 20 000 Sätze, Artikelnummern eindeutig über `code_key()` (führende Nullen und Groß-/Kleinschreibung zählen

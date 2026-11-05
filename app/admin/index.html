@@ -14,6 +14,7 @@
 <link rel="stylesheet" href="../assets/admin-import.css">
 <link rel="stylesheet" href="../module/hr/verwaltung-hr.css">
 <link rel="stylesheet" href="../module/angebot/preisimport.css">
+<link rel="stylesheet" href="../module/verwaltung/angebotskategorien.css">
 </head>
 <body class="adm">
 
@@ -97,6 +98,7 @@
       <div class="side-sep" id="side-stamm" aria-hidden="true">Stammdaten</div>
       <button role="tab" type="button" id="vt-master" aria-selected="false" aria-controls="view-master"><svg class="i" aria-hidden="true"><use href="#i-db"/></svg><span>Artikel<span class="m-hide">stammdaten</span></span></button>
       <button role="tab" type="button" id="vt-vkgruppen" aria-selected="false" aria-controls="view-vkgruppen" hidden><svg class="i" aria-hidden="true"><use href="#i-list"/></svg><span>VK-Gruppen</span></button>
+      <button role="tab" type="button" id="vt-kategorien" aria-selected="false" aria-controls="view-kategorien" hidden><svg class="i" aria-hidden="true"><use href="#i-tag"/></svg><span>Angebots&shy;kategorien</span></button>
       <button role="tab" type="button" id="vt-angebote" aria-selected="false" aria-controls="view-angebote" hidden><svg class="i" aria-hidden="true"><use href="#i-tag"/></svg><span>Angebote</span></button>
       <button role="tab" type="button" id="vt-kunden" aria-selected="false" aria-controls="view-kunden" hidden><svg class="i" aria-hidden="true"><use href="#i-store"/></svg><span>Kunden</span></button>
       <button role="tab" type="button" id="vt-gruppen" aria-selected="false" aria-controls="view-gruppen" hidden><svg class="i" aria-hidden="true"><use href="#i-users"/></svg><span>Kundengruppen</span></button>
@@ -163,6 +165,7 @@
     <div id="view-kunden" hidden></div>
     <div id="view-gruppen" hidden></div>
     <div id="view-vkgruppen" hidden></div>
+    <div id="view-kategorien" hidden></div>
     <div id="view-angebote" hidden></div>
     <div id="view-vertreter" hidden></div>
     <div id="view-importe" hidden></div>
@@ -323,6 +326,7 @@
 <script src="../assets/admin-rollen.js"></script>
 <script src="../assets/admin-import.js"></script>
 <script src="../module/angebot/preisimport.js"></script>
+<script src="../module/verwaltung/angebotskategorien.js"></script>
 <script src="../module/hr/verwaltung-hr.js"></script>
 <script src="../module/controlling/umsatz-import.js"></script>
 <script src="../module/controlling/arbeitszeit-import.js"></script>

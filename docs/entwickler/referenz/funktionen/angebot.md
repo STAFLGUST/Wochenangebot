@@ -2,7 +2,7 @@
 
 <!-- ERZEUGT von `python3 werkzeuge/doku.py erzeugen` – nicht von Hand ändern. Quelle: Funktionen und Kommentare im Code. Die CI prüft, dass diese Datei zum Code passt. -->
 
-43 Dateien, 643 Funktionen – in der Reihenfolge der Datei, **fett** die Abschnitte. Text = erste Aussage des Kommentars direkt über der Funktion (Python: Docstring). Übersicht aller Module: [README.md](README.md).
+43 Dateien, 648 Funktionen – in der Reihenfolge der Datei, **fett** die Abschnitte. Text = erste Aussage des Kommentars direkt über der Funktion (Python: Docstring). Übersicht aller Module: [README.md](README.md).
 
 ## `app/api/lib/angebote.php`
 
@@ -357,6 +357,13 @@ _Wochenangebot – Eingabebereich Bearbeitet einen Entwurf auf dem Server (autom
 
 - `emptyModel()`
 - `strip(m)`
+
+**Angebotskategorien (Stammdaten der Verwaltung, Inhaber 05.11.2026)**
+
+- `nachKategorienOrdnen()`
+- `kategorienLaden(opts)` – Kategorien holen und den Entwurf danach ordnen; Rückgabe: ob der Entwurf neu geordnet wurde (still: ohne Hinweis)
+- `vkOptionen(cur)` – VK-Gruppe einer Angebotsgruppe wählen (Gruppenkopf, nur mit Angebotskategorien): Nummer · Name → Kategorie
+- `kategorienVorschlag()` – Vorschlag für die Stammdaten-Ansicht (Schnittstelle W.angebot): heutige Abschnitte des Angebots als Kategorien in ihrer Reihenfolge, darin die VK-Gruppen der …
 - `normalizeNames(m)` – Merkmale vereinheitlichen: Herkunft als Kürzel, unbekannter Zustand aus „frisch“ in der Bezeichnung – die Bezeichnung bleibt unverändert
 - `showEingabeWartung(w)`
 - `renderWartungBanner()`
@@ -837,6 +844,7 @@ _Wochenangebot – gemeinsamer Kern für Frontend und Eingabebereich - Excel-Les
 - `validateModel(m)` – Prüft ein Modell vor dem Speichern/Veröffentlichen
 - `stripFrisch(name)` – „frisch“ gehört in den Zustand, nicht in die Bezeichnung.
 - `titelMitKw(meta)` – Überschrift der Angebotsliste (Bildschirm und Druck): Titel der früher importierten Excel-Liste, aber immer mit der Kalenderwoche des Angebots – der Titel …
+- `nachKategorien(model, kategorien, vkVon)` – Aufbau nach Angebotskategorien (Stammdaten der Verwaltung, Inhaber 05.11.2026): Reihenfolge der Kategorien, darin der VK-Gruppen, bestimmt die Reihenfolge …
 - `nameVorschlag(name, group)` – Vorschlag für die Bezeichnung eines neu aufgenommenen Artikels (z. B. aus der Bestandsliste der Warenwirtschaft): – „frisch“ gehört in den Zustand …
 - `normalizeItem(it, group)` – Merkmale vereinheitlichen (beim Laden des Entwurfs, Wiederherstellen einer Version, Stammdaten): – Herkunft als Kürzel; von Hand gesetzte Kürzel bleiben – …
 

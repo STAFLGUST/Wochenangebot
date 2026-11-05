@@ -152,7 +152,7 @@ eingebunden werden und darf `W.views` nur ergänzen. `setView` ruft Ansichten nu
 
 ```js
 const BEREICH_VIEWS = {
-  'verwaltung.verwaltung': ['master', 'vkgruppen', 'kunden', 'gruppen', 'vertreter', 'importe', 'auswertung', 'mail', 'users', 'rollen', 'urlaub', 'log'],
+  'verwaltung.verwaltung': ['master', 'vkgruppen', 'kategorien', 'kunden', 'gruppen', 'vertreter', 'importe', 'auswertung', 'mail', 'users', 'rollen', 'urlaub', 'log'],
   'angebot.eingabe': ['orders', 'edit', 'einzel', 'hist', 'einkauf', 'angebote'],
   'bestand.intern': ['stock'],
   'verwaltung.import': ['importe'],

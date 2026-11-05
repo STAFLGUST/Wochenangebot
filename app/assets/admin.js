@@ -412,13 +412,13 @@
   let me = null;                                   // angemeldeter Nutzer
   const can = (role) => !!me && ROLE_RANK[me.role] >= ROLE_RANK[role];
   /* Bereiche und das Recht, das sie sichtbar macht (ohne Eintrag: alle; ADMIN_VIEWS: nur Administratoren) */
-  const VIEW_PERM = { einzel: 'einzelangebote.sehen', hist: 'preisverlauf.sehen', stock: 'bestand.sehen', einkauf: 'einkauf.sehen', master: 'stammdaten.sehen', orders: 'bestellungen.sehen', kunden: 'kunden.sehen', gruppen: 'stammdaten.sehen', vkgruppen: 'stammdaten.sehen', angebote: 'angebote.verwalten', vertreter: 'stammdaten.sehen', auswertung: 'auswertung.sehen', log: 'protokoll.sehen', mail: '', users: '', rollen: '', importe: '', urlaub: 'hr.verwalten' };
+  const VIEW_PERM = { einzel: 'einzelangebote.sehen', hist: 'preisverlauf.sehen', stock: 'bestand.sehen', einkauf: 'einkauf.sehen', master: 'stammdaten.sehen', orders: 'bestellungen.sehen', kunden: 'kunden.sehen', gruppen: 'stammdaten.sehen', vkgruppen: 'stammdaten.sehen', kategorien: 'stammdaten.sehen', angebote: 'angebote.verwalten', vertreter: 'stammdaten.sehen', auswertung: 'auswertung.sehen', log: 'protokoll.sehen', mail: '', users: '', rollen: '', importe: '', urlaub: 'hr.verwalten' };
   /* Verwaltung unter eigener Adresse (verwaltung.dashboard-stafl.de): nur ihre Bereiche – Anzeige, die Rechte prüft der Server */
   /* Angebot unter der zentralen Anmeldung (angebot.dashboard-stafl.de): Angebotsbereiche ohne Verwaltung und ohne die
      Bestandsliste (die Bestandsdaten im Angebotseditor bleiben). Bestand (bestand.dashboard-stafl.de): nur die Bestandsliste
      mit Bestandsimport. Ohne Bereich (bisheriger Zugang angebot-stafl.de/admin/) bleibt alles sichtbar. */
   const BEREICH_VIEWS = {
-    'verwaltung.verwaltung': ['master', 'vkgruppen', 'kunden', 'gruppen', 'vertreter', 'importe', 'auswertung', 'mail', 'users', 'rollen', 'urlaub', 'log'],
+    'verwaltung.verwaltung': ['master', 'vkgruppen', 'kategorien', 'kunden', 'gruppen', 'vertreter', 'importe', 'auswertung', 'mail', 'users', 'rollen', 'urlaub', 'log'],
     'angebot.eingabe': ['orders', 'edit', 'einzel', 'hist', 'einkauf', 'angebote'],
     'bestand.intern': ['stock'],
     'verwaltung.import': ['importe'],
@@ -800,7 +800,7 @@
     $('#btn-publish').hidden = !may('angebot.veroeffentlichen');
     if (!may('wochenangebot.senden')) $('#send-hint').hidden = true;
     $('#side-admin').hidden = !['importe', 'auswertung', 'mail', 'users', 'rollen', 'urlaub', 'log'].some(viewAllowed);
-    $('#side-stamm').hidden = !['master', 'vkgruppen', 'angebote', 'kunden', 'gruppen', 'vertreter'].some(viewAllowed);
+    $('#side-stamm').hidden = !['master', 'vkgruppen', 'kategorien', 'angebote', 'kunden', 'gruppen', 'vertreter'].some(viewAllowed);
     $('#menu-user').innerHTML = me ? `<strong>${esc(me.name)}</strong><span>${esc(me.username)} · ${esc(me.rollenName || ROLE_LABEL[me.role] || '')}</span>` : '';
     if (!viewAllowed(currentView)) setView(VIEWS.find(viewAllowed) || 'edit');
   }
@@ -829,6 +829,62 @@
     c.items.forEach((i) => { i.altPrices = i.altPrices || []; });
     return c;
   }
+  /* ======================= Angebotskategorien (Stammdaten der Verwaltung, Inhaber 05.11.2026) =======================
+     Sind Kategorien angelegt, bestimmen sie den Aufbau aller Angebote: Reihenfolge der Kategorien, darin der VK-Gruppen;
+     Abschnitt einer Angebotsgruppe = Kategorie ihrer VK-Gruppe (OfferCore.nachKategorien, bei jeder Änderung). Ohne
+     Kategorien bleibt die Reihenfolge von Hand wie bisher. Gepflegt werden sie unter Verwaltung → Angebotskategorien
+     (app/module/verwaltung/angebotskategorien.js), gelesen über die Aktion „angebotskategorien“. */
+  let kategorien = null, kategorienVk = [], kategorienOhne = new Set();
+  const kategorienAktiv = () => !!(kategorien && kategorien.length);
+  const vkVonArtikel = (code) => { const e = masterOf(code); return (e && e.vkGruppe) || (awDaten && awDaten.vkVon.get(S.normCode(code))) || ''; };
+  function nachKategorienOrdnen() {
+    if (ro || !model || !kategorienAktiv()) { kategorienOhne = new Set(); return false; }
+    const r = C.nachKategorien(model, kategorien, vkVonArtikel);
+    kategorienOhne = new Set(r.ohne);
+    return r.changed;
+  }
+  /* Kategorien holen und den Entwurf danach ordnen; Rückgabe: ob der Entwurf neu geordnet wurde (still: ohne Hinweis) */
+  async function kategorienLaden(opts = {}) {
+    let r;
+    try { r = await api('angebotskategorien'); } catch { return false; }   // ohne Recht oder bei Fehler: Reihenfolge bleibt von Hand
+    kategorien = Array.isArray(r.kategorien) ? r.kategorien : [];
+    kategorienVk = Array.isArray(r.vk) ? r.vk : [];
+    if (ro || !model) return false;
+    if (nachKategorienOrdnen()) {
+      if (!saveNote) saveNote = { type: 'kategorien' };
+      changed({ render: true });
+      if (!opts.still) toast('Angebot nach den Angebotskategorien geordnet (Stammdaten). Zum Übernehmen veröffentlichen.', 6000);
+      return true;
+    }
+    if (currentView === 'edit') renderGroups();
+    return false;
+  }
+  /* VK-Gruppe einer Angebotsgruppe wählen (Gruppenkopf, nur mit Angebotskategorien): Nummer · Name → Kategorie */
+  function vkOptionen(cur) {
+    const katVon = new Map();
+    for (const k of kategorien || []) for (const v of k.vk || []) katVon.set(String(v), k.name);
+    const liste = kategorienVk.slice();
+    if (cur && !liste.some((x) => x.nr === cur)) liste.push({ nr: cur, name: '' });
+    liste.sort((a, b) => a.nr.localeCompare(b.nr, 'de', { numeric: true }));
+    return '<option value="">VK-Gruppe wählen …</option>' + liste.map((x) => `<option value="${esc(x.nr)}"${x.nr === cur ? ' selected' : ''}>${esc(x.nr)}${x.name ? ' · ' + esc(x.name) : ''}${katVon.has(x.nr) ? ' → ' + esc(katVon.get(x.nr)) : ' (ohne Kategorie)'}</option>`).join('');
+  }
+  /* Vorschlag für die Stammdaten-Ansicht (Schnittstelle W.angebot): heutige Abschnitte des Angebots als Kategorien in ihrer
+     Reihenfolge, darin die VK-Gruppen der Gruppen bzw. ihrer Artikel in der Reihenfolge des Angebots; jede VK-Gruppe nur einmal. */
+  function kategorienVorschlag() {
+    if (!model || !model.groups.length) return null;
+    const out = [], byName = new Map(), vergeben = new Set();
+    for (const g of model.groups) {
+      const sec = C.clean(g.section || '');
+      if (!sec) continue;
+      let k = byName.get(sec.toLowerCase());
+      if (!k) { k = { name: sec, vk: [] }; byName.set(sec.toLowerCase(), k); out.push(k); }
+      const vks = g.vk ? [String(g.vk)] : [];
+      for (const it of model.items) if (it.groupId === g.id && it.code) { const v = String(vkVonArtikel(it.code) || ''); if (v && !vks.includes(v)) vks.push(v); }
+      for (const v of vks) if (!vergeben.has(v)) { vergeben.add(v); k.vk.push(v); }
+    }
+    return out;
+  }
+
   /* Merkmale vereinheitlichen: Herkunft als Kürzel, unbekannter Zustand aus „frisch“ in der Bezeichnung – die Bezeichnung bleibt unverändert */
   function normalizeNames(m) {
     const gb = new Map(m.groups.map((g) => [g.id, g]));
@@ -877,6 +933,10 @@
   }
 
   async function openEditor() {
+    // Erst wenn alle Skripte geladen sind: Ansichten der übrigen Skripte (z. B. Importzentrale, admin-import.js) melden sich
+    // beim Laden an – kam die Antwort des Servers schneller, fehlten sie bei Rechten und Startansicht (Befund CI 05.11.2026:
+    // …/import/ nach erstmaliger Anmeldung landete im Angebot statt in der Importzentrale)
+    await seiteGeladen();
     if (window.STAFL_THEME && me) window.STAFL_THEME.konto(me, csrf, '../api/');   // Hell/Dunkel am Konto (theme.js) – gilt auf jedem Host
     if (me && me.modulzugang === false) { zeigeKeinZugang(me.modulName || ''); return; }   // Rolle ohne Zugang zu diesem Bereich
     refreshWartung();
@@ -901,7 +961,7 @@
     if (!ro) {
       const n = normalizeNames(model);
       if (n) { saveNote = { type: 'cleanup', count: n }; changed({ render: true }); toast(`${plural(n, 'Artikel', 'Artikel')} vereinheitlicht (Herkunft als Kürzel, Zustand „frisch“). Zum Übernehmen veröffentlichen.`, 7000); }
-      loadMaster().then(() => migrateMaster()).catch(() => {});
+      loadMaster().then(() => migrateMaster()).catch(() => {}).then(() => kategorienLaden());   // VK-Gruppen der Artikel aus den Stammdaten
     }
     const start = startAnsicht();
     if (start) currentView = start;
@@ -934,6 +994,7 @@
   }
   function changed(opts = {}) {
     if (ro) return;
+    if (nachKategorienOrdnen()) opts = { ...opts, render: true };   // Aufbau nach Angebotskategorien (falls angelegt)
     werbungBereinigen();
     diff = C.diffOffers(published, model);
     if (opts.render) renderGroups(); else if (opts.row) updateRow(opts.row);
@@ -1287,21 +1348,28 @@
       return;
     }
     const vis = sichtbareGruppen();
+    const kat = kategorienAktiv();
     let out = '', sec = null;
     vis.forEach((g, gi) => {
       const items = mem.filter((i) => i.groupId === g.id);
       const visible = items.filter(matchesFilter);
       const hide = (filterQ || onlyChanges) && !visible.length;
-      if ((g.section || '') !== sec) { sec = g.section || ''; if (sec) out += `<h2 class="gsec">${esc(sec)}</h2>`; }
+      const ohneKat = kat && kategorienOhne.has(g.id);
+      const abschnitt = ohneKat ? '\u0000ohne' : g.section || '';
+      if (abschnitt !== sec) { sec = abschnitt; if (ohneKat) out += '<h2 class="gsec gsec-ohne">Ohne Angebotskategorie</h2>'; else if (sec) out += `<h2 class="gsec">${esc(sec)}</h2>`; }
       const vk = g.vk ? `VK-Gruppe ${esc(g.vk)}${vkLabel(g.vk) ? ' · ' + esc(vkLabel(g.vk)) : ''}` : '';
+      // mit Angebotskategorien: Abschnitt und Reihenfolge kommen aus den Stammdaten – statt „Bereich“ und ↑/↓ die VK-Gruppe der Gruppe
+      const unter = kat
+        ? `<select class="in g-sec g-vksel" data-gf="vk" aria-label="VK-Gruppe der Angebotsgruppe (bestimmt Kategorie und Reihenfolge)">${vkOptionen(g.vk || '')}</select>${ohneKat ? '<span class="g-vk g-kat-ohne">keiner Angebotskategorie zugeordnet – VK-Gruppe wählen oder unter Verwaltung → Angebotskategorien zuordnen</span>' : ''}`
+        : `<input class="in g-sec" data-gf="section" value="${esc(g.section || '')}" list="dl-sections" placeholder="Bereich (optional)" aria-label="Bereich" maxlength="200">${vk ? `<span class="g-vk">${vk}</span>` : ''}`;
       out += `<section class="gcard" data-gid="${esc(g.id)}"${hide ? ' hidden' : ''}>
         <div class="ghead">
           <div class="g-t"><input class="in g-name" data-gf="name" value="${esc(g.name)}" aria-label="Name der Angebotsgruppe" maxlength="200">
-            <div class="g-sub"><input class="in g-sec" data-gf="section" value="${esc(g.section || '')}" list="dl-sections" placeholder="Bereich (optional)" aria-label="Bereich" maxlength="200">${vk ? `<span class="g-vk">${vk}</span>` : ''}</div></div>
+            <div class="g-sub">${unter}</div></div>
           <span class="g-count">${plural(items.length, 'Artikel', 'Artikel')}</span>
           <span class="g-actions">
-            <button type="button" class="ibtn" data-act="g-up" aria-label="Gruppe nach oben"${gi === 0 ? ' disabled' : ''}>${icon('up')}</button>
-            <button type="button" class="ibtn" data-act="g-down" aria-label="Gruppe nach unten"${gi === vis.length - 1 ? ' disabled' : ''}>${icon('down')}</button>
+            ${kat ? '' : `<button type="button" class="ibtn" data-act="g-up" aria-label="Gruppe nach oben"${gi === 0 ? ' disabled' : ''}>${icon('up')}</button>
+            <button type="button" class="ibtn" data-act="g-down" aria-label="Gruppe nach unten"${gi === vis.length - 1 ? ' disabled' : ''}>${icon('down')}</button>`}
             <button type="button" class="ibtn danger" data-act="g-del" aria-label="Gruppe aus diesem Angebot entfernen" title="Alle Artikel der Gruppe aus „${esc(offerShort(curOffer))}“ entfernen">${icon('trash')}</button>
           </span>
         </div>
@@ -1419,8 +1487,8 @@
       const v = C.clean(el.value);
       if (el.dataset.gf === 'name' && !v) { el.value = g.name; toast('Die Gruppe braucht einen Namen.'); return; }
       pushUndo();
-      g[el.dataset.gf] = v;
-      changed({ render: el.dataset.gf === 'section' });
+      if (el.dataset.gf === 'vk') { if (v) g.vk = v; else delete g.vk; } else g[el.dataset.gf] = v;
+      changed({ render: el.dataset.gf === 'section' || el.dataset.gf === 'vk' });
       renderMetaInfo();
     }
   });
@@ -2563,7 +2631,7 @@
   }
 
   /* Ansicht umschalten */
-  const VIEWS = ['orders', 'edit', 'einzel', 'hist', 'stock', 'einkauf', 'master', 'vkgruppen', 'angebote', 'kunden', 'gruppen', 'vertreter', 'importe', 'auswertung', 'mail', 'users', 'rollen', 'urlaub', 'log'];
+  const VIEWS = ['orders', 'edit', 'einzel', 'hist', 'stock', 'einkauf', 'master', 'vkgruppen', 'kategorien', 'angebote', 'kunden', 'gruppen', 'vertreter', 'importe', 'auswertung', 'mail', 'users', 'rollen', 'urlaub', 'log'];
   const ADMIN_VIEWS = ['mail', 'users', 'rollen'];
   /* Aktiven Eintrag in der Seitenleiste sichtbar halten: am Computer scrollt die Leiste senkrecht (mehr Einträge als
      Bildschirmhöhe), schmal ist sie eine waagerechte Spur. Nur die Leiste selbst wird verschoben, nie die Seite. */
@@ -2606,6 +2674,7 @@
     if (v === 'kunden' && window.WA.views.kunden) window.WA.views.kunden();
     if (v === 'gruppen' && window.WA.views.gruppen) window.WA.views.gruppen();
     if (v === 'vkgruppen' && window.WA.views.vkgruppen) window.WA.views.vkgruppen();
+    if (v === 'kategorien' && window.WA.views.kategorien) window.WA.views.kategorien();   // Angebotskategorien (app/module/verwaltung/angebotskategorien.js)
     if (v === 'vertreter' && window.WA.views.vertreter) window.WA.views.vertreter();
     if (v === 'einzel' && window.WA.views.einzel) window.WA.views.einzel();
     if (v === 'importe' && window.WA.views.importe) window.WA.views.importe();   // Importzentrale (admin-import.js)
@@ -4838,6 +4907,8 @@
     get wartungSt() { return wartungSt; }, set wartungSt(v) { wartungSt = v; },
     get wartungEingabe() { return wartungEingabe; }, set wartungEingabe(v) { wartungEingabe = v; },
     views: {},
+    // Angebotskategorien (app/module/verwaltung/angebotskategorien.js): Vorschlag aus dem Angebot; nach dem Speichern neu ordnen
+    angebot: { kategorienVorschlag, kategorienGeaendert: () => kategorienLaden({ still: true }) },
   };
 
   /* Höhe der Kopfleiste für die links angeheftete Navigation */

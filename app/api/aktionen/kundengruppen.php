@@ -1,6 +1,7 @@
 <?php
 declare(strict_types=1);
-/* Aktionen: Listen der Stammdaten – Kundengruppen, VK-Gruppen und Vertreter (Beschreibung: lib/kunden.php).
+/* Aktionen: Listen der Stammdaten – Kundengruppen, VK-Gruppen, Vertreter (Beschreibung: lib/kunden.php) und
+   Angebotskategorien (module/verwaltung/angebotskategorien.php).
    Kundengruppen und Vertreter ansehen mit „stammdaten.sehen“ oder „kunden.sehen“, VK-Gruppen mit „stammdaten.sehen“;
    Ändern und CSV-Import mit „stammdaten.bearbeiten“. Kunden verweisen über „gruppe“ und „vertreter“/„vertreter2“,
    Artikel über „vkGruppe“ auf die Nummer.
@@ -8,6 +9,23 @@ declare(strict_types=1);
 if (!defined('WA_API')) { http_response_code(404); exit; }   // nur über api/index.php nutzbar
 
 switch ($action) {
+        /* Angebotskategorien (module/verwaltung/angebotskategorien.php): Abschnitte des Angebots mit zugeordneten VK-Gruppen.
+           Lesen auch mit „angebot.bearbeiten“ (der Editor ordnet das Angebot danach), ändern mit „stammdaten.bearbeiten“. */
+        case 'angebotskategorien': {
+            $me = require_auth();
+            if (!may($me, 'stammdaten.sehen') && !may($me, 'angebot.bearbeiten')) fail('Dafür fehlt Ihnen die Berechtigung. Bitte an einen Administrator wenden.', 403);
+            require_once dirname(__DIR__) . '/module/verwaltung/angebotskategorien.php';
+            header('Cache-Control: no-store');
+            respond(['ok' => true] + kategorien_load() + ['vk' => kategorien_vk_namen()]);
+        }
+
+        case 'angebotskategorien_save': {
+            $me = require_perm('stammdaten.bearbeiten', true);
+            require_once dirname(__DIR__) . '/module/verwaltung/angebotskategorien.php';
+            $b = body();
+            respond(['ok' => true] + kategorien_speichern($b['kategorien'] ?? null, (int)($b['rev'] ?? -1), $me));
+        }
+
         case 'kundengruppen':
         case 'vkgruppen':
         case 'vertreter': {

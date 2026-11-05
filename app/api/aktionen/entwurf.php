@@ -66,6 +66,9 @@ switch ($action) {
                 } elseif ($note && ($note['type'] ?? '') === 'cleanup') {
                     $d = changes_between($before, $model);
                     if ($d) audit('draft', 'Merkmale vereinheitlicht (' . count($d) . ' Änderungen: Herkunft als Kürzel, Zustand „frisch“)', array_slice($d, 0, 2000));
+                } elseif ($note && ($note['type'] ?? '') === 'kategorien') {
+                    $d = changes_between($before, $model);
+                    audit('draft', 'Angebot nach den Angebotskategorien geordnet (Stammdaten)' . ($d ? ': ' . changes_summary($d) : ''), array_slice($d, 0, 2000));
                 } elseif ($note && ($note['type'] ?? '') === 'master') {
                     $d = changes_between($before, $model);
                     if ($d) audit('draft', 'Stammdaten auf den Entwurf angewendet', array_slice($d, 0, 2000));
