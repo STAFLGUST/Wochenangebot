@@ -443,14 +443,14 @@ Mengen sind Zuordnungen Lademittel → ganze Stückzahl (`{"e2": 40, "h1": 2}`),
   "quelle": "import|winab"?}]}`. `kundenNr` = WinAB-Kundennummer (nur Ziffern, eindeutig; ohne Angabe beim Ändern bleibt sie), `quelle: "winab"` =
   beim WinAB-Import angelegt (Kunde „Firma (Kd.-Nr.)“, Lieferant „Lieferant <Nr.> (WinAB)“). `lieferantNr` = WinAB-Lieferantennummer
   (Lieferanten, Speditionen; nur Ziffern, eindeutig). Lademittel tragen `winabNr` und `kurz` (WinAB-Stammdaten). `winab` (nach einer WinAB-Datei):
-  `{"ersteLieferung": "…", "letzteLieferung": "…", "letzteRueckgabe": "…", "spedition": "4000001"?, "bis": "<Stand der Datei>"}` – laut WinAB, auch aus reinem Tausch
+  `{"ersteLieferung": "…", "letzteLieferung": "…", "letzteRueckgabe": "…", "bis": "<Stand der Datei>"}` – laut WinAB, auch aus reinem Tausch
   (Belege ohne Wirkung auf den Saldo werden nicht gebucht); spätere Berichte führen es fort (erste = früheste, letzte = späteste Angabe).
   Ohne Dokument gelten die Grundwerte `lg_grund_lademittel()` (E2 5,50 €, H1 36,00 €, übrige ohne Wert). Lademittel werden nie
   entfernt, nur deaktiviert (sonst wären Buchungen nicht mehr lesbar); neue Kennungen entstehen aus dem Namen.
 - **`leergut-bewegungen`** (Historie): `{"rev": 9, "liste": [{"id": "b…", "partner": "p…", "datum": "2026-10-26", "typ": "bewegung",
   "abgang": {"e2": 63}, "zugang": {}, "beleg": "", "text": "", "quelle": "hand|import|winab", "erfasst": {"t": "…", "von": "…", "vonId": "u…"},
-  "storno": null, "winab": {"kd": "9100001", "art": "Lieferschein", "beleg": "500001", "sped": "4000001"?} | {"lf": "2850008", "art": …, "beleg": …}?}]}`.
-  `winab` (nur bei `quelle: "winab"`) ist der Schlüssel für den Abgleich mit der nächsten Datei (Kunde `kd` oder Lieferant `lf`; `sped` nur als Angabe). Nur anhängen; Stornieren setzt `storno: {t, von, vonId, grund}`, die Bewegung zählt dann nicht mehr.
+  "storno": null, "winab": {"kd": "9100001", "art": "Lieferschein", "beleg": "500001"} | {"lf": "2850008", "art": …, "beleg": …}?}]}`.
+  `winab` (nur bei `quelle: "winab"`) ist der Schlüssel für den Abgleich mit der nächsten Datei (Kunde `kd` oder Lieferant `lf`). Nur anhängen; Stornieren setzt `storno: {t, von, vonId, grund}`, die Bewegung zählt dann nicht mehr.
 - **`leergut-abstimmungen`** (Historie): `{"liste": [{"id": "a…", "partner": "p…", "stichtag": "…", "eingang": "…", "fristBis": "…",
   "saldo": {"e2": -15}, "status": "offen|bestaetigt|widersprochen|info", "quelle": "", "notiz": "", "eigen": {…}, "verlauf": [{t, von, was}],
   "rev": 2, "herkunft": "import"?}]}`. `saldo` = Saldo laut Partner in unserem Vorzeichen; `eigen` = unser Saldo zum Stichtag beim
@@ -469,15 +469,16 @@ Datenpaket (`leergut_import`, nur mit `leergut.verwalten`): `{"format": "stafl-l
 nur mit `ersetzen`. Echte Pakete liegen nie im Repository (GR-007); Beispiel: `tests/fixtures/leergut/datenpaket.json`.
 
 WinAB-Datei (`leergut_winab_import`, nur mit `leergut.verwalten`, `vorschau: true` schreibt nichts): `{"bericht": {"datei": "…", "von": "<Übernehmen ab>",
-"bis": "<Stand>", "dateiVon": "<Beginn der Datei>"?, "quelle": "csv"?}, "kunden": [{"nr": "9100001", "name": "…"?, "spedition": "…"?}],
-"lieferanten": [{"nr": "2850008", "art": "lieferant|spedition", "lieferscheine": 12}]?, "belege": [{"kd": "9100001" | "lf": "2850008",
-"art": "Lieferschein|Gutschrift|Rechnung", "beleg": "500001", "datum": "…", "abgang": {"e2": 21}, "zugang": {"e2": 20}, "sped": "4000001"?}],
+"bis": "<Stand>", "dateiVon": "<Beginn der Datei>"?, "quelle": "csv"?}, "kunden": [{"nr": "9100001", "name": "…"?}],
+"lieferanten": [{"nr": "2850008", "lieferscheine": 12}]?, "belege": [{"kd": "9100001" | "lf": "2850008",
+"art": "Lieferschein|Gutschrift|Rechnung", "beleg": "500001", "datum": "…", "abgang": {"e2": 21}, "zugang": {"e2": 20}}],
 "zuordnung": {"2850008": "<Partner-ID>|neu"}?}` – `kunden`/`lieferanten` nennen alle der Datei (je Kunde optional `ersteLieferung`,
 `letzteLieferung`, `letzteRueckgabe` ab `dateiVon`). Ohne Name holt der Server die Firma aus dem Kundenstamm der Verwaltung (`customers_load`,
 nur lesend). Lieferantenbelege werden nur bei Partnern mit `lieferantNr` gebucht; `zuordnung` setzt die Nummer an einem bestehenden Partner
 (kein Kundenkonto, noch ohne Nummer) oder legt ein Konto an. Abgleich je Kunde bzw. Lieferant, Belegart und Belegnr. nur im Zeitraum und für die
 Genannten; geänderte Belege werden storniert und neu gebucht, fehlende storniert (Grund „WinAB-Abgleich vom …“). Antwort zusätzlich
-`lieferanten` (Nr., Art, Belege mit Wirkung, Saldo ohne Konto, zugeordneter Partner) und `summeLieferanten`. Die Datei bleibt im Browser;
+`lieferanten` (Nr., Belege mit Wirkung, Saldo ohne Konto, zugeordneter Partner) und `summeLieferanten`. Zeilen mit Kunde sind Kundenbelege,
+auch wenn WinAB dort zusätzlich eine Lieferantennummer nennt (die zählt dort nicht). Die Datei bleibt im Browser;
 gespeichert werden nur die Buchungen.
 
 ### REWE (`module/rewe/rewe.php`, in Prüfung)

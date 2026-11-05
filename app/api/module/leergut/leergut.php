@@ -516,7 +516,6 @@ function lg_kunden_leergut(array $stamm, array $bewegungen, string $heute): arra
 {
     $werte = []; foreach ($stamm['lademittel'] as $l) $werte[$l['id']] = $l['wert'] ?? null;
     $konten = []; foreach (lg_konten($stamm, $bewegungen, [], $heute) as $k) $konten[$k['id']] = $k;
-    $sped = []; foreach ($stamm['partner'] as $p) if ((string)($p['lieferantNr'] ?? '') !== '') $sped[(string)$p['lieferantNr']] = $p['name'];   // Spedition laut WinAB
     $zeilen = [];
     foreach ($stamm['partner'] as $p) {
         $k = $konten[$p['id']];
@@ -527,8 +526,7 @@ function lg_kunden_leergut(array $stamm, array $bewegungen, string $heute): arra
         $tage = $seit !== '' ? max(0, (int)round((strtotime($heute . ' 12:00:00 UTC') - strtotime($seit . ' 12:00:00 UTC')) / 86400)) : null;
         $zeilen[] = ['partner' => $p['id'], 'name' => $p['name'], 'kundenNr' => (string)($p['kundenNr'] ?? ''), 'mandant' => $p['mandant'], 'saldo' => $k['saldo'],
                      'euro' => ['betrag' => round($e, 2), 'vollstaendig' => $voll], 'stueck' => $stueck, 'letzteAbgabe' => $k['letzteAbgabe'],
-                     'letzteRueckgabe' => $k['rueckgabeUnbekannt'] ? '' : $k['letzteRueckgabe'], 'ohneRueckgabeSeit' => $seit, 'tage' => $tage,
-                     'spedition' => ($sn = (string)($p['winab']['spedition'] ?? '')) !== '' ? ($sped[$sn] ?? "Spedition $sn") : ''];
+                     'letzteRueckgabe' => $k['rueckgabeUnbekannt'] ? '' : $k['letzteRueckgabe'], 'ohneRueckgabeSeit' => $seit, 'tage' => $tage];
     }
     usort($zeilen, function ($a, $b) { return [$b['euro']['betrag'], $b['stueck']] <=> [$a['euro']['betrag'], $a['stueck']] ?: strcmp(mb_strtolower($a['name']), mb_strtolower($b['name'])); });
     return $zeilen;
@@ -536,7 +534,7 @@ function lg_kunden_leergut(array $stamm, array $bewegungen, string $heute): arra
 function lg_csv_kunden(array $zeilen, array $stamm): string
 {
     $lm = array_values(array_filter($stamm['lademittel'], function ($l) use ($zeilen) { foreach ($zeilen as $z) if (!empty($z['saldo'][$l['id']])) return true; return false; }));
-    $kopf = array_merge(['Kunde', 'WinAB-Kd.-Nr.', 'Firma'], array_map(function ($l) { return $l['name']; }, $lm), ['Wert €', 'Letzte Lieferung', 'Letzte Rückgabe', 'Ohne Rückgabe seit (Tage)', 'Spedition (zuletzt)']);
+    $kopf = array_merge(['Kunde', 'WinAB-Kd.-Nr.', 'Firma'], array_map(function ($l) { return $l['name']; }, $lm), ['Wert €', 'Letzte Lieferung', 'Letzte Rückgabe', 'Ohne Rückgabe seit (Tage)']);
     $z = [implode(';', array_map('lg_csv_zelle', $kopf))];
     $tag = function (string $d) { return $d === '' ? '' : date('d.m.Y', strtotime($d . ' 12:00:00')); };
     foreach ($zeilen as $r) {
@@ -544,7 +542,6 @@ function lg_csv_kunden(array $zeilen, array $stamm): string
         foreach ($lm as $l) $row[] = isset($r['saldo'][$l['id']]) ? (string)$r['saldo'][$l['id']] : '';
         $row[] = number_format($r['euro']['betrag'], 2, ',', '');   // nur bewertete Lademittel (wie in der Bilanz)
         $row[] = $tag($r['letzteAbgabe']); $row[] = $tag($r['letzteRueckgabe']); $row[] = $r['tage'] === null ? '' : (string)$r['tage'];
-        $row[] = $r['spedition'];   // laut WinAB (letzte Lieferung) – hilft bei der Planung der Abholung
         $z[] = implode(';', array_map('lg_csv_zelle', $row));
     }
     return "\xEF\xBB\xBF" . implode("\r\n", $z) . "\r\n";
@@ -619,14 +616,14 @@ function lg_paket_pruefen($p, array $me): array
 
 /* ---------- WinAB: Lademittelbewegungen (CSV „Lademittelbewegungen komplett“ oder Bericht „… Kunden“ als .XLS) ----------
    Die Oberfläche liest die Datei im Browser und schickt { bericht: {datei, von, bis, datum, dateiVon, quelle},
-   kunden: [{nr, name?, ersteLieferung?, letzteLieferung?, letzteRueckgabe?, spedition?}], lieferanten: [{nr, art, lieferscheine}],
-   belege: [{kd | lf, art, beleg, datum, abgang, zugang, sped?}], zuordnung: {Lieferanten-Nr.: Partner-ID | "neu" | ""} } –
+   kunden: [{nr, name?, ersteLieferung?, letzteLieferung?, letzteRueckgabe?}], lieferanten: [{nr, lieferscheine}],
+   belege: [{kd | lf, art, beleg, datum, abgang, zugang}], zuordnung: {Lieferanten-Nr.: Partner-ID | "neu" | ""} } –
    nur Lieferscheine, Gutschriften und Einzelrechnungen (Sammelrechnungen wiederholen die Lieferscheine, Offerten bewegen
    nichts), nur aktive Lademittel des Moduls (Karton ist kein Leergut) und nur Belege, die den Saldo ändern (Abgang ≠ Zugang),
    ab „von“ (Übernehmen ab). Vorzeichen wie im Modul: Abgang = an den Partner, Zugang = vom Partner zurück. Korrekturzeilen
    mit Minus (WinAB bis 2023) rechnet der Browser gegen, je Seite bleibt eine Menge ab 0.
-   Kunden: WinAB-Kundennummer (kundenNr); Belege mit Spedition (Spalte „Lieferant“ bei Kundenzeilen) gehören dem Kunden, die
-   Spedition steht nur als Angabe dabei. Lieferanten und Speditionen ohne Kunden: WinAB-Lieferantennummer (lieferantNr) –
+   Kunden: WinAB-Kundennummer (kundenNr) – Zeilen mit Kunde gehören dem Kunden (Kundenbeleg), auch wenn WinAB dort zusätzlich
+   eine Lieferantennummer nennt. Lieferanten (Zeilen ohne Kunde, z. B. Wareneingänge): WinAB-Lieferantennummer (lieferantNr) –
    gebucht nur bei zugeordneten Partnern (Zuordnung in der Vorschau oder im Partner), sonst nur gezählt.
    Kundennamen für neue Konten aus dem Kundenstamm der Verwaltung (nur lesend über customers_load, Firma je Kd.-Nr.).
    „dateiVon“: erster Tag der Datei – Lieferung und Rückgabe je Kunde gelten auch vor „von“. */
@@ -658,7 +655,6 @@ function lg_winab_pruefen($b, array $stamm): array
             if ($d !== '' && ($d < $dateiVon || $d > $bis)) throw new InvalidArgumentException("Kunde $nr: $was liegt außerhalb des Zeitraums der Datei.");
             $dt[$f] = $d;
         }
-        if (array_key_exists('spedition', $k)) $dt['spedition'] = (string)($k['spedition'] ?? '') === '' ? '' : lg_winab_nr($k['spedition'], "Kunde $nr: Spedition");
         if (array_intersect_key($k, $dt)) $daten[$nr] = $dt;   // ältere Oberflächen schicken keine Angaben: dann nichts ändern
     }
     $lieferanten = [];
@@ -666,8 +662,7 @@ function lg_winab_pruefen($b, array $stamm): array
     if (!is_array($ll) || count($ll) > LG_MAX_WINAB_KUNDEN) throw new InvalidArgumentException('Lieferantenliste ist zu lang.');
     foreach (array_values($ll) as $i => $x) {
         $nr = lg_winab_nr(is_array($x) ? ($x['nr'] ?? '') : '', 'Lieferant ' . ($i + 1));
-        $lieferanten[$nr] = ['nr' => $nr, 'art' => ($x['art'] ?? '') === 'spedition' ? 'spedition' : 'lieferant',
-                             'lieferscheine' => max(0, min(1000000, (int)($x['lieferscheine'] ?? 0)))];
+        $lieferanten[$nr] = ['nr' => $nr, 'lieferscheine' => max(0, min(1000000, (int)($x['lieferscheine'] ?? 0)))];
     }
     $bl = $b['belege'] ?? [];
     if (!is_array($bl) || count($bl) > LG_MAX_WINAB_BELEGE) throw new InvalidArgumentException('Belegliste fehlt oder ist zu lang (höchstens ' . LG_MAX_WINAB_BELEGE . ').');
@@ -678,7 +673,7 @@ function lg_winab_pruefen($b, array $stamm): array
         try {
             if (!is_array($x)) throw new InvalidArgumentException('ungültige Angaben');
             $kd = (string)($x['kd'] ?? ''); $lf = (string)($x['lf'] ?? '');
-            if ($kd !== '' && $lf !== '') throw new InvalidArgumentException('Beleg mit Kunde und Lieferant – die Spedition gehört in „sped“');
+            if ($kd !== '' && $lf !== '') throw new InvalidArgumentException('Beleg mit Kunde und Lieferant – ein Beleg gehört entweder einem Kunden oder einem Lieferanten');
             if ($kd !== '' ? !isset($kunden[$kd]) : !isset($lieferanten[$lf]))
                 throw new InvalidArgumentException($kd !== '' ? 'Kundennummer „' . mb_substr($kd, 0, 20) . '“ fehlt in der Kundenliste' : 'Lieferantennummer „' . mb_substr($lf, 0, 20) . '“ fehlt in der Lieferantenliste');
             $art = lg_wahl($x['art'] ?? '', LG_WINAB_ARTEN, 'Belegart');
@@ -689,10 +684,9 @@ function lg_winab_pruefen($b, array $stamm): array
             $ab = lg_mengen($x['abgang'] ?? [], $lm, 'Abgang', false);
             $zu = lg_mengen($x['zugang'] ?? [], $lm, 'Zugang', false);
             if (!lg_ohne_null(lg_delta(['abgang' => $ab, 'zugang' => $zu]))) { $ohneWirkung++; continue; }
-            $sped = $kd !== '' && (string)($x['sped'] ?? '') !== '' ? lg_winab_nr($x['sped'], 'Spedition') : '';
             $key = $kd !== '' ? "$kd|$art|$nr" : "L:$lf|$art|$nr";   // Kundenbelege wie bisher, Lieferanten getrennt
             if (isset($belege[$key])) throw new InvalidArgumentException("$art $nr ist doppelt");
-            $belege[$key] = ($kd !== '' ? ['kd' => $kd] : ['lf' => $lf]) + ['art' => $art, 'beleg' => $nr, 'datum' => $datum, 'abgang' => $ab, 'zugang' => $zu, 'sped' => $sped];
+            $belege[$key] = ($kd !== '' ? ['kd' => $kd] : ['lf' => $lf]) + ['art' => $art, 'beleg' => $nr, 'datum' => $datum, 'abgang' => $ab, 'zugang' => $zu];
         } catch (InvalidArgumentException $e) { if (count($fehler) < 200) $fehler[] = ['zeile' => $i + 1, 'text' => $e->getMessage()]; }
     }
     $zuordnung = [];
@@ -741,14 +735,13 @@ function lg_winab_abgleich(array $w, array $stamm, array $bew, array $me): array
         return array_values(array_filter(lg_ids($stamm['lademittel']), function ($l) use ($genutzt, $k) { return isset($genutzt[$k][$l]) || in_array($l, ['e2', 'h1'], true); }));
     };
     $herkunft = $w['bericht']['quelle'] === 'csv' ? 'der WinAB-Datei „Lademittelbewegungen“' : 'dem WinAB-Bericht „Lademittelbewegungen Kunden“';
-    // Zuordnung der Lieferanten- und Speditionsnummern (aus der Vorschau): bestehender Partner oder neues Konto
+    // Zuordnung der Lieferantennummern (aus der Vorschau): bestehender Partner oder neues Konto
     $neuLief = [];
     foreach ($w['zuordnung'] as $lf => $ziel) {
         $lf = (string)$lf;
         if (isset($nachLf[$lf])) continue;   // schon zugeordnet
-        $info = $w['lieferanten'][$lf];
         if ($ziel === 'neu') {
-            $stamm['partner'][] = ['id' => lg_id('p'), 'name' => $eindeutig(($info['art'] === 'spedition' ? 'Spedition ' : 'Lieferant ') . $lf . ' (WinAB)'), 'art' => $info['art'],
+            $stamm['partner'][] = ['id' => lg_id('p'), 'name' => $eindeutig('Lieferant ' . $lf . ' (WinAB)'), 'art' => 'lieferant',
                 'mandant' => 'standard', 'kontoNr' => '', 'kundenNr' => '', 'lieferantNr' => $lf, 'fristTage' => LG_FRIST_STANDARD, 'email' => '', 'ansprechpartner' => '',
                 'lieferanten' => '', 'lademittel' => $lmsFuer('L:' . $lf), 'aktiv' => true, 'quelle' => 'winab',
                 'notiz' => "Aus $herkunft angelegt (WinAB-Lieferantennummer $lf). Bitte den Namen eintragen.", 'erstellt' => lg_wer($me), 'rev' => 1, 'geaendert' => lg_wer($me)];
@@ -800,7 +793,6 @@ function lg_winab_abgleich(array $w, array $stamm, array $bew, array $me): array
     $z = ['kunden' => count($neuKunden), 'lieferantenNeu' => count($neuLief), 'neu' => 0, 'gleich' => 0, 'geaendert' => 0, 'ausgeglichen' => 0,
           'ohneWirkung' => $w['ohneWirkung'], 'ohneKonto' => 0];
     $offenAb = date('Y-m-d', strtotime($w['bericht']['bis'] . ' 12:00:00 UTC') - 3 * 86400);
-    $lfName = function (string $nr) use ($nachLf, $stamm) { return isset($nachLf[$nr]) ? $stamm['partner'][$nachLf[$nr]]['name'] : "Spedition $nr (WinAB)"; };
     $ohneKonto = [];   // Lieferanten mit Belegen, aber ohne Partner: nur gezählt (Vorschau zeigt sie zur Zuordnung)
     foreach ($w['belege'] as $key => $b) {
         $istLf = isset($b['lf']);
@@ -821,16 +813,15 @@ function lg_winab_abgleich(array $w, array $stamm, array $bew, array $me): array
         } else $z['neu']++;
         $text = $w['bericht']['quelle'] === 'csv' ? 'Aus WinAB („Lademittelbewegungen“' : 'Aus WinAB („Lademittelbewegungen Kunden“';
         $text .= ($w['bericht']['datei'] !== '' ? ', ' . $w['bericht']['datei'] : '') . ')';
-        if ($b['sped'] !== '') $text .= ' – über ' . $lfName($b['sped']);
         if ($b['datum'] >= $offenAb && !$b['zugang']) $text .= ' – zum Stand der Datei noch nicht zurück';
-        $herk = $istLf ? ['lf' => $b['lf'], 'art' => $b['art'], 'beleg' => $b['beleg']] : ['kd' => $b['kd'], 'art' => $b['art'], 'beleg' => $b['beleg']] + ($b['sped'] !== '' ? ['sped' => $b['sped']] : []);
+        $herk = $istLf ? ['lf' => $b['lf'], 'art' => $b['art'], 'beleg' => $b['beleg']] : ['kd' => $b['kd'], 'art' => $b['art'], 'beleg' => $b['beleg']];
         $bew[] = ['id' => lg_id('b'), 'partner' => $pid, 'datum' => $b['datum'], 'typ' => $b['art'] === 'Gutschrift' ? 'abholung' : 'bewegung',
                   'abgang' => $b['abgang'], 'zugang' => $b['zugang'], 'beleg' => $b['art'] . ' ' . $b['beleg'], 'text' => mb_substr($text, 0, 300),
                   'quelle' => 'winab', 'winab' => $herk, 'erfasst' => lg_wer($me), 'storno' => null];
     }
     foreach ($alt as $i) { $bew[$i]['storno'] = lg_wer($me) + ['grund' => "WinAB-Abgleich vom $heute: Beleg ausgeglichen oder nicht mehr in der Datei"]; $z['ausgeglichen']++; }
     // Lieferung und Rückgabe laut WinAB am Kundenkonto (Feld winab). Frühere Dateien bleiben gültig: erste = früheste,
-    // letzte = späteste Angabe; Spedition = die zuletzt gemeldete. „daten“ zählt die Konten, deren Angaben sich ändern.
+    // letzte = späteste Angabe. „daten“ zählt die Konten, deren Angaben sich ändern.
     $z['daten'] = 0;
     foreach ($w['daten'] ?? [] as $kd => $dt) {
         $kd = (string)$kd;
@@ -842,14 +833,13 @@ function lg_winab_abgleich(array $w, array $stamm, array $bew, array $me): array
             $a = (string)($vorher[$f] ?? ''); $n = (string)($dt[$f] ?? '');
             $felder[$f] = $n === '' ? $a : ($a === '' ? $n : ($f === 'ersteLieferung' ? min($a, $n) : max($a, $n)));
         }
-        if (array_key_exists('spedition', $dt) || array_key_exists('spedition', $vorher)) $felder['spedition'] = array_key_exists('spedition', $dt) ? $dt['spedition'] : (string)$vorher['spedition'];
         $alteFelder = [];
         foreach (array_keys($felder) as $f) $alteFelder[$f] = (string)($vorher[$f] ?? '');
         if ($felder !== $alteFelder) $z['daten']++;
         $nachher = $felder + ['bis' => max((string)($vorher['bis'] ?? ''), $w['bericht']['bis'])];
         if ($nachher !== $vorher) $stamm['partner'][$i]['winab'] = $nachher;
     }
-    // Saldo aller Konten mit WinAB-Nummer nach dem Abgleich (Kunden; Lieferanten und Speditionen getrennt)
+    // Saldo aller Konten mit WinAB-Nummer nach dem Abgleich (Kunden; Lieferanten getrennt)
     $art = [];
     foreach ($stamm['partner'] as $p) {
         if ((string)($p['kundenNr'] ?? '') !== '') $art[$p['id']] = 'k';
@@ -863,13 +853,13 @@ function lg_winab_abgleich(array $w, array $stamm, array $bew, array $me): array
         if ($art[$pid] === 'k') { $mitSaldo++; lg_addiere($summe, $s); } else lg_addiere($summeLf, $s);
     }
     $z['konten'] = $mitSaldo;
-    // Lieferanten- und Speditionsnummern der Datei für die Vorschau: zugeordnet (Partner), Belege mit Wirkung im Zeitraum
+    // Lieferantennummern der Datei für die Vorschau: zugeordnet (Partner), Belege mit Wirkung im Zeitraum
     $liste = [];
     foreach ($w['lieferanten'] as $nr => $info) {
         $o = $ohneKonto[$nr] ?? null; $nr = (string)$nr;
         $mit = 0; foreach ($w['belege'] as $b) if (($b['lf'] ?? null) === $nr) $mit++;
-        if (!$mit && $info['art'] !== 'spedition' && !isset($nachLf[$nr])) continue;   // reiner Tausch ohne Zuordnung: nur gezählt
-        $liste[] = ['nr' => $nr, 'art' => $info['art'], 'lieferscheine' => $info['lieferscheine'], 'belege' => $mit, 'saldo' => $o ? lg_ohne_null($o['saldo']) : [],
+        if (!$mit && !isset($nachLf[$nr])) continue;   // reiner Tausch ohne Zuordnung: nur gezählt
+        $liste[] = ['nr' => $nr, 'lieferscheine' => $info['lieferscheine'], 'belege' => $mit, 'saldo' => $o ? lg_ohne_null($o['saldo']) : [],
                     'partner' => isset($nachLf[$nr]) ? ['id' => $stamm['partner'][$nachLf[$nr]]['id'], 'name' => $stamm['partner'][$nachLf[$nr]]['name']] : null];
     }
     usort($liste, function ($a, $b) { return [$b['belege'], $b['lieferscheine']] <=> [$a['belege'], $a['lieferscheine']] ?: strcmp($a['nr'], $b['nr']); });

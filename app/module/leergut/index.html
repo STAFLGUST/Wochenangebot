@@ -170,7 +170,7 @@
         </section>
         <section class="lg-panel lg-glas">
           <div class="lg-panelkopf"><h2>Lademittelbewegungen aus WinAB</h2><span class="lg-hilfe">Datei „Lademittelbewegungen komplett“ (.CSV) oder Bericht „Lademittelbewegungen Kunden“ (.XLS)</span></div>
-          <p class="lg-hinweis">Übernommen werden nur Belege, die einen Saldo ändern: Lieferscheine, Gutschriften und Einzelrechnungen. Sammelrechnungen wiederholen die Lieferscheine und bleiben weg, Offerten bewegen nichts, Karton ist kein Leergut. Kundenbelege landen auf dem Kundenkonto (die Spedition steht dabei), Belege von Lieferanten nur auf zugeordneten Konten. Eine neue Datei gleicht ihren Zeitraum ab – geänderte und inzwischen ausgeglichene Belege werden storniert.</p>
+          <p class="lg-hinweis">Übernommen werden nur Belege, die einen Saldo ändern: Lieferscheine, Gutschriften und Einzelrechnungen. Sammelrechnungen wiederholen die Lieferscheine und bleiben weg, Offerten bewegen nichts, Karton ist kein Leergut. Kundenbelege landen auf dem Kundenkonto, Belege von Lieferanten (Zeilen ohne Kunde) nur auf zugeordneten Konten. Eine neue Datei gleicht ihren Zeitraum ab – geänderte und inzwischen ausgeglichene Belege werden storniert.</p>
           <div class="lg-import">
             <label class="btn" for="lg-w-datei"><svg class="i" aria-hidden="true"><use href="#i-upload"/></svg>Datei wählen</label>
             <input type="file" id="lg-w-datei" accept=".csv,.CSV,text/csv,.xls,.XLS,application/vnd.ms-excel" class="sr-only">

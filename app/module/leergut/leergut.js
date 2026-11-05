@@ -92,8 +92,6 @@
   const nachName = (a, b) => String(a.name).localeCompare(String(b.name), 'de', { sensitivity: 'base' });
   const darf = (r) => !!(S.d && S.d.rechte && S.d.rechte[r]);
   const istWinab = (p) => !!(p && p.quelle === 'winab' && p.art === 'kunde');   // beim WinAB-Import angelegtes Kundenkonto (Lieferantenkonten einzeln)
-  /* Spedition der letzten Lieferung laut WinAB (Feld winab.spedition): Name des zugeordneten Partners, sonst die Nummer */
-  const spedition = (p) => { const nr = p && p.winab && p.winab.spedition; if (!nr) return ''; const x = S.d.partner.find((q) => q.lieferantNr === nr); return x ? x.name : `Spedition ${nr}`; };
   const tageBis = (iso) => (iso ? Math.max(0, Math.round((Date.parse(S.d.heute + 'T12:00:00Z') - Date.parse(iso + 'T12:00:00Z')) / 86400000)) : null);
   /* Leergut bei Kunden: Konten der Art Kunde mit Saldo, nach Wert. „Ohne Rückgabe seit“ nur, wenn der Kunde uns schuldet:
      letzte Rückgabe, ohne Rückgabe die erste Lieferung (gleiche Regel wie die Abholliste des Servers). */
@@ -221,7 +219,7 @@
         + (lange ? ` · ${zahl(lange)} seit mindestens 60 Tagen ohne Rückgabe.` : '.') + ' Nur bewertete Lademittel zählen zum Wert.'
         + (kl.some((z) => z.k.rueckgabeUnbekannt) ? ' Letzte Rückgabe „unbekannt“: den WinAB-Bericht unter Einstellungen noch einmal wählen.' : '');
       $('#lg-u-kunden').innerHTML = `<table class="lg-tabelle lg-karten"><thead><tr><th>Kunde</th><th>Saldo</th><th class="lg-zahl">Wert</th><th>Letzte Lieferung</th><th>Letzte Rückgabe</th></tr></thead><tbody>
-        ${kl.slice(0, 10).map((z) => `<tr class="lg-klick" data-konto="${esc(z.p.id)}"><td class="lg-voll"><span class="lg-name">${esc(z.p.name)}</span>${z.p.kundenNr ? `<span class="lg-sub">WinAB-Kd. ${esc(z.p.kundenNr)}${spedition(z.p) ? ' · über ' + esc(spedition(z.p)) : ''}</span>` : ''}</td>
+        ${kl.slice(0, 10).map((z) => `<tr class="lg-klick" data-konto="${esc(z.p.id)}"><td class="lg-voll"><span class="lg-name">${esc(z.p.name)}</span>${z.p.kundenNr ? `<span class="lg-sub">WinAB-Kd. ${esc(z.p.kundenNr)}</span>` : ''}</td>
           <td data-label="Saldo">${mengen(z.saldo)}</td><td class="lg-zahl" data-label="Wert">${z.euro.betrag ? euro(z.euro.betrag) + (z.euro.vollstaendig ? '' : '*') : '—'}</td>
           <td data-label="Letzte Lieferung">${z.k.letzteAbgabe ? esc(datum(z.k.letzteAbgabe)) : '<span class="lg-null">—</span>'}</td>
           <td data-label="Letzte Rückgabe">${z.k.rueckgabeUnbekannt ? '<span class="lg-null" title="Den WinAB-Bericht unter Einstellungen noch einmal wählen – dann zählen auch Rückgaben aus reinem Tausch.">unbekannt</span>'
@@ -319,7 +317,6 @@
     const best = ko.bestaetigt, la = ko.letzteAbstimmung;
     const meta = [`<span class="lg-chip">${esc(S.d.arten[p.art] || p.art)}</span>`, `<span class="lg-chip firma">${esc(S.d.mandanten[p.mandant] || p.mandant)}</span>`,
       p.aktiv ? '' : '<span class="lg-chip">inaktiv</span>', p.kontoNr ? `<span>Konto-Nr. ${esc(p.kontoNr)}</span>` : '', p.kundenNr ? `<span>WinAB-Kd. ${esc(p.kundenNr)}</span>` : '', p.lieferantNr ? `<span>WinAB-Lief. ${esc(p.lieferantNr)}</span>` : '',
-      spedition(p) ? `<span>zuletzt über ${esc(spedition(p))}</span>` : '',
       p.fristTage ? `<span>Widerspruch binnen ${zahl(p.fristTage)} Tagen</span>` : '<span>ohne Widerspruchsfrist</span>',
       p.ansprechpartner ? `<span>${esc(p.ansprechpartner)}</span>` : '',
       p.email ? `<a href="mailto:${esc(p.email.replace(/\s/g, ''))}">${esc(p.email)}</a>` : ''].filter(Boolean).join('');
@@ -731,10 +728,11 @@
   }
   /* ---------- WinAB-Datei „Lademittelbewegungen komplett“ (.CSV) ----------
      Spalten (Kopfzeile, Semikolon, Windows-1252): Lademittel (Nr.), Datum, Kunde, Lieferant, Menge, Bewegungsart (Abgang/
-     Zugang), Belegnummer, Belegart, Bezeichnung. Bei Kundenzeilen ist „Lieferant“ die Spedition, sonst der Lieferant.
+     Zugang), Belegnummer, Belegart, Bezeichnung. Zeilen mit Kunde sind Kundenbelege (eine zusätzlich genannte Lieferantennummer
+     zählt dort nicht), Zeilen nur mit Lieferant sind Lieferantenbelege (z. B. Wareneingänge).
      Je Beleg (Kunde bzw. Lieferant, Belegart, Belegnr.) und Lademittel werden die Mengen mit Vorzeichen summiert –
      Korrekturzeilen mit Minus (WinAB bis 2023) heben sich so auf; was danach auf einer Seite negativ ist, zählt zur anderen.
-     Gesendet werden alle Kunden und Lieferanten der Datei (für Lieferung, Rückgabe, Spedition) und die Belege mit Wirkung
+     Gesendet werden alle Kunden und Lieferanten der Datei (Kunden für Lieferung und Rückgabe) und die Belege mit Wirkung
      auf den Saldo ab „Übernehmen ab“. */
   function csvZeilen(text) {
     const out = [];
@@ -785,18 +783,16 @@
       if (!kd && !lf) { info.ohnePartner++; continue; }
       if (!bn) { info.ohneBeleg++; continue; }
       if (menge < 0) info.korrektur++;
-      if (kd) {   // Kunde (Spalte „Lieferant“ = Spedition); Lieferung/Rückgabe unten aus den saldierten Belegen
-        if (!kunden.has(kd)) kunden.set(kd, { ersteLieferung: '', letzteLieferung: '', letzteRueckgabe: '', spedition: '' });
-        if (lf) { const x = lieferanten.get(lf) || { art: 'spedition', ls: new Set() }; x.art = 'spedition'; if (art === 'Lieferschein') x.ls.add(kd + '|' + bn); lieferanten.set(lf, x); }
+      if (kd) {   // Kundenbeleg; Lieferung/Rückgabe unten aus den saldierten Belegen
+        if (!kunden.has(kd)) kunden.set(kd, { ersteLieferung: '', letzteLieferung: '', letzteRueckgabe: '' });
       } else {
-        const x = lieferanten.get(lf) || { art: 'lieferant', ls: new Set() };
+        const x = lieferanten.get(lf) || { ls: new Set() };
         if (art === 'Lieferschein') x.ls.add('L|' + bn);
         lieferanten.set(lf, x);
       }
       const key = kd ? `${kd}|${art}|${bn}` : `L:${lf}|${art}|${bn}`;
-      const b = belege.get(key) || { ...(kd ? { kd } : { lf }), art, beleg: bn, datum: tag, sped: kd ? lf : '', netto: {} };
+      const b = belege.get(key) || { ...(kd ? { kd } : { lf }), art, beleg: bn, datum: tag, netto: {} };
       if (tag < b.datum) b.datum = tag;
-      if (kd && lf && !b.sped) b.sped = lf;
       const n = b.netto[lm] || { ab: 0, zu: 0 };
       if (ba === 'Abgang') n.ab += menge; else n.zu += menge;
       b.netto[lm] = n;
@@ -812,10 +808,10 @@
         if (a) abgang[lm] = a;
         if (z) zugang[lm] = z;
       }
-      const x = { ...(b.kd ? { kd: b.kd } : { lf: b.lf }), art: b.art, beleg: b.beleg, datum: b.datum, abgang, zugang, ...(b.sped ? { sped: b.sped } : {}) };
-      if (b.kd) {   // Lieferung und Rückgabe je Kunde – auch aus reinem Tausch, nicht aus stornierten Zeilen; Spedition der letzten Lieferung
+      const x = { ...(b.kd ? { kd: b.kd } : { lf: b.lf }), art: b.art, beleg: b.beleg, datum: b.datum, abgang, zugang };
+      if (b.kd) {   // Lieferung und Rückgabe je Kunde – auch aus reinem Tausch, nicht aus stornierten Zeilen
         const k = kunden.get(b.kd), ab = !leerMap(abgang), zu = !leerMap(zugang);
-        if (ab) { if (!k.ersteLieferung || b.datum < k.ersteLieferung) k.ersteLieferung = b.datum; if (b.datum >= k.letzteLieferung) { k.letzteLieferung = b.datum; if (b.art === 'Lieferschein') k.spedition = b.sped || ''; } }
+        if (ab) { if (!k.ersteLieferung || b.datum < k.ersteLieferung) k.ersteLieferung = b.datum; if (b.datum > k.letzteLieferung) k.letzteLieferung = b.datum; }
         if (zu && b.datum > k.letzteRueckgabe) k.letzteRueckgabe = b.datum;
       }
       if (leerMap(delta(x))) info.ohneWirkung++; else mitWirkung.push(x);
@@ -827,8 +823,8 @@
     if (w.quelle !== 'csv') return { bericht: w.bericht, kunden: w.kunden, belege: w.belege };
     const von = ab < w.dateiVon ? w.dateiVon : ab;
     return { bericht: { datei: w.datei, von, bis: w.bis, datum: w.bis, dateiVon: w.dateiVon, quelle: 'csv' },
-      kunden: [...w.kunden].map(([nr, k]) => ({ nr, ersteLieferung: k.ersteLieferung, letzteLieferung: k.letzteLieferung, letzteRueckgabe: k.letzteRueckgabe, spedition: k.spedition })),
-      lieferanten: [...w.lieferanten].map(([nr, x]) => ({ nr, art: x.art, lieferscheine: x.ls.size })),
+      kunden: [...w.kunden].map(([nr, k]) => ({ nr, ersteLieferung: k.ersteLieferung, letzteLieferung: k.letzteLieferung, letzteRueckgabe: k.letzteRueckgabe })),
+      lieferanten: [...w.lieferanten].map(([nr, x]) => ({ nr, lieferscheine: x.ls.size })),
       belege: w.belege.filter((b) => b.datum >= von), zuordnung };
   }
   function winabVorher(w, ab) {   // Belege mit Wirkung vor „Übernehmen ab“ (nur CSV): Anzahl und Saldo der Kunden
@@ -851,12 +847,12 @@
     const lief = r.lieferanten || [];
     const partnerWahl = S.d.partner.filter((p) => p.art !== 'kunde' && !p.lieferantNr).sort(nachName);
     const zuordnungZeile = (x) => {
-      const kopf = `<td data-label="WinAB-Nr."><b>${esc(x.nr)}</b></td><td data-label="Art">${x.art === 'spedition' ? 'Spedition (bei Kundenlieferungen)' : 'Lieferant'}</td>
+      const kopf = `<td data-label="Lieferanten-Nr."><b>${esc(x.nr)}</b></td>
         <td class="lg-zahl" data-label="Lieferscheine mit Leergut">${zahl(x.lieferscheine)}</td><td class="lg-zahl" data-label="Belege mit Wirkung">${x.belege ? zahl(x.belege) : '—'}</td>`;
       const wahl = st.zuordnung[x.nr] || '';
       if (x.partner && !wahl) return `<tr data-lf-zeile="${esc(x.nr)}">${kopf}<td data-label="Konto">${esc(x.partner.name)}</td></tr>`;
       return `<tr data-lf-zeile="${esc(x.nr)}">${kopf}<td data-label="Konto"><select class="lg-eingabe" data-lf="${esc(x.nr)}" aria-label="Konto für WinAB-Nr. ${esc(x.nr)}">
-        <option value="">${x.art === 'spedition' ? 'nicht zuordnen' : 'nicht übernehmen'}</option><option value="neu"${wahl === 'neu' ? ' selected' : ''}>Neues Konto anlegen</option>
+        <option value="">nicht übernehmen</option><option value="neu"${wahl === 'neu' ? ' selected' : ''}>Neues Konto anlegen</option>
         ${partnerWahl.map((p) => `<option value="${esc(p.id)}"${wahl === p.id ? ' selected' : ''}>${esc(p.name)}</option>`).join('')}</select>
         ${x.belege && !wahl ? `<span class="lg-sub">${mengen(x.saldo, { leer: '' })} – nicht gebucht</span>` : ''}</td></tr>`;
     };
@@ -869,12 +865,12 @@
       ${z.geaendert || z.ausgeglichen ? `<p class="lg-meldung">${zahl(z.geaendert + z.ausgeglichen)} schon übernommene Belege werden storniert${z.geaendert ? ' und neu gebucht' : ''}, weil WinAB sie geändert hat oder sie nicht mehr in der Datei stehen. Die Datei deshalb immer für alle Lademittel ziehen.</p>` : ''}
       ${z.daten ? `<p class="lg-hinweis">Letzte Lieferung und Rückgabe laut WinAB (auch aus reinem Tausch) für ${zahl(z.daten)} ${z.daten === 1 ? 'Kundenkonto' : 'Kundenkonten'} aktualisiert.</p>` : ''}
       <p class="lg-wsumme">Saldo aller Kundenkonten aus WinAB danach (${zahl(z.konten)} mit Saldo): ${mengen(r.summe, { leer: 'ausgeglichen' })}</p>
-      ${lief.length ? `<h3 class="lg-w-titel">Lieferanten und Speditionen aus WinAB</h3>
-        <p class="lg-hilfe">Gebucht wird nur auf zugeordnete Konten. Die Nummer bleibt am Konto – künftige Dateien ordnen von selbst zu. Speditionen stehen bei Kundenbelegen nur als Angabe.</p>
-        <div class="lg-tabelle-wrap"><table class="lg-tabelle lg-karten" id="lg-w-lief"><thead><tr><th>WinAB-Nr.</th><th>Art</th><th class="lg-zahl">Lieferscheine mit Leergut</th><th class="lg-zahl">Belege mit Wirkung</th><th>Konto</th></tr></thead>
+      ${lief.length ? `<h3 class="lg-w-titel">Lieferanten aus WinAB</h3>
+        <p class="lg-hilfe">Lieferantenbelege (Zeilen ohne Kunde, z. B. Wareneingänge) werden nur auf zugeordnete Konten gebucht. Die Nummer bleibt am Konto – künftige Dateien ordnen von selbst zu.</p>
+        <div class="lg-tabelle-wrap"><table class="lg-tabelle lg-karten" id="lg-w-lief"><thead><tr><th>Lieferanten-Nr.</th><th class="lg-zahl">Lieferscheine mit Leergut (Datei)</th><th class="lg-zahl">Belege mit Wirkung</th><th>Konto</th></tr></thead>
         <tbody>${lief.map(zuordnungZeile).join('')}</tbody></table></div>
         ${z.ohneKonto ? `<p class="lg-meldung">${zahl(z.ohneKonto)} ${z.ohneKonto === 1 ? 'Lieferantenbeleg wird' : 'Lieferantenbelege werden'} nicht gebucht, weil kein Konto zugeordnet ist.</p>` : ''}
-        ${leerMap(r.summeLieferanten) ? '' : `<p class="lg-wsumme">Saldo der zugeordneten Lieferanten- und Speditionskonten danach: ${mengen(r.summeLieferanten)}</p>`}` : ''}
+        ${leerMap(r.summeLieferanten) ? '' : `<p class="lg-wsumme">Saldo der zugeordneten Lieferantenkonten danach: ${mengen(r.summeLieferanten)}</p>`}` : ''}
       ${inf.sammelwert.length ? `<p class="lg-hinweis">Nur zur Information – Gesamtwert oben im WinAB-Bericht (WinAB-Vorzeichen, Minus = mehr an Kunden abgegeben als zurückgenommen): ${esc(inf.sammelwert.map((x) => `${x.name} ${vz(x.wert)}`).join(' · '))}</p>` : ''}`;
   }
   /* Vorschau beim Server anfragen (Abgleich ohne Speichern) – nach Dateiwahl, „Übernehmen ab“ und Zuordnung */
