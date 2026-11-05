@@ -49,20 +49,31 @@ with sync_playwright() as p:
     a.on('pageerror', lambda e: errs.append(str(e))); a.on('dialog', lambda d: d.accept())
     login(a, 'admin', 'Sicheres-Passwort-1')
     a.wait_for_timeout(500); wait_saved(a)
+    _vh = [e for e in get(a, 'log')['entries'] if 'vereinheitlicht' in e.get('s', '')]
+    check('Protokoll: Vereinheitlichung beim Laden (nur Merkmale, keine Bezeichnung geändert)', len(_vh) == 1 and 'Merkmale vereinheitlicht' in _vh[0]['s']
+          and _vh[0].get('d') and all(x.get('f') != 'Bezeichnung' for x in _vh[0]['d']), [e.get('s') for e in _vh])
+    # Beim Laden werden nur Merkmale vereinheitlicht (Herkunft als Kürzel); Bezeichnungen bleiben, wie sie sind –
+    # auch mit „frisch“ und ohne ergänzte Marke (Inhaber 05.11.2026: Bezeichnung ohne Einschränkung bearbeiten)
     left = [n for n in names(a) if FR.search(n)]
-    check('frisch removed from names (except frisch/gefr.)', left == ['Backe, frisch/gefr.'], left)
+    check('Laden: Bezeichnungen unverändert (auch mit „frisch“)', 'Roastbeef, frisch' in left and 'Backe, frisch/gefr.' in left, left[:6])
     row = a.locator('tr[data-id]:has(input[data-f="code"][value="10601"])').first
-    check('10601 → "Roastbeef Fleischmeister", Zustand frisch, Herkunft 4xD', row.locator('input[data-f=name]').input_value() == 'Roastbeef Fleischmeister' and row.locator('select[data-f=condition]').input_value() == 'frisch' and row.locator('input[data-f=origin]').input_value() == '4xD', (row.locator('input[data-f=name]').input_value(), row.locator('input[data-f=origin]').input_value()))
+    check('10601: Bezeichnung wie gespeichert (keine Marke ergänzt), Zustand frisch, Herkunft 4xD', row.locator('input[data-f=name]').input_value() == 'Roastbeef, frisch' and row.locator('select[data-f=condition]').input_value() == 'frisch' and row.locator('input[data-f=origin]').input_value() == '4xD', (row.locator('input[data-f=name]').input_value(), row.locator('input[data-f=origin]').input_value()))
     r10701 = a.locator('tr[data-id]:has(input[data-f="code"][value="10701"])').first
-    check('10701 → "Entrecote Fleischmeister" / 4xD', r10701.locator('input[data-f=name]').input_value() == 'Entrecote Fleischmeister' and r10701.locator('input[data-f=origin]').input_value() == '4xD')
+    check('10701: Herkunft 4xD, Bezeichnung unverändert', r10701.locator('input[data-f=name]').input_value() == 'Entrecote, frisch' and r10701.locator('input[data-f=origin]').input_value() == '4xD')
     origins = set(a.locator('tr[data-id] input[data-f=origin]').evaluate_all('els => els.map(e => e.value)'))
     check('origins are codes only', origins <= {'', '4xD', '3xD', 'D', 'EG', 'NZ', 'ARG', 'UY', 'PY', 'BR', 'AUS', 'IRL', 'DK', 'ES', 'Südamerika'}, origins)
     r_nz = a.locator('tr[data-id]:has(input[data-f="code"][value="10674"])').first
     check('Neuseeland → NZ, no brand outside Fleischmeister', r_nz.locator('input[data-f=origin]').input_value() == 'NZ' and 'Fleischmeister' not in r_nz.locator('input[data-f=name]').input_value())
     check('cleanup counts as unpublished change', 'noch nicht veröffentlicht' in a.inner_text('#save-state'))
-    # manuelle Eingabe
-    ni = row.locator('input[data-f=name]'); ni.fill('Roastbeef Fleischmeister frisch'); ni.press('Tab'); a.wait_for_timeout(300)
-    check('typed "frisch" is stripped', a.locator('tr[data-id]:has(input[data-f="code"][value="10601"]) input[data-f=name]').first.input_value() == 'Roastbeef Fleischmeister' and 'Zustand' in a.inner_text('#toast'))
+    # manuelle Eingabe: ohne Einschränkung, „frisch“ bleibt stehen (vorher entfernt und in den Zustand verschoben)
+    ni = row.locator('input[data-f=name]'); ni.fill('Roastbeef Fleischmeister frisch'); ni.press('Tab')
+    gesp = until_names(a, 'std', '10601', ['Roastbeef Fleischmeister frisch'])
+    row = a.locator('tr[data-id]:has(input[data-f="code"][value="10601"])').first
+    check('Handeingabe mit „frisch“ bleibt stehen (Feld und gespeicherter Entwurf), Zustand unverändert',
+          row.locator('input[data-f=name]').input_value() == 'Roastbeef Fleischmeister frisch' and gesp == ['Roastbeef Fleischmeister frisch']
+          and row.locator('select[data-f=condition]').input_value() == 'frisch', (row.locator('input[data-f=name]').input_value(), gesp))
+    ni = row.locator('input[data-f=name]'); ni.fill('Roastbeef Fleischmeister'); ni.press('Tab')
+    check('Handeingabe ohne „frisch“ ebenso übernommen', until_names(a, 'std', '10601', ['Roastbeef Fleischmeister']) == ['Roastbeef Fleischmeister'])
     wait_saved(a)
     # Stammdaten: automatisch angelegt
     a.click('#vt-master'); a.wait_for_selector('.mtab'); wait_master(a)
@@ -75,15 +86,19 @@ with sync_playwright() as p:
     open_art(a, '10601')
     check('popup: Originalbezeichnung, Basiswert und je Kundenangebot ein Feld', a.locator('#ma-orig').count() == 1 and a.input_value('#master-art-body [name=name]') == 'Roastbeef Fleischmeister'
           and a.locator('#master-art-body [name=oname]').count() == 4 and a.get_attribute('#master-art-body [name=oname][data-on="edeka"]', 'placeholder') == 'Roastbeef Fleischmeister')
-    a.fill('#master-art-body [name=name]', 'Roastbeef Färse Fleischmeister frisch')
-    check('popup: Platzhalter folgt dem Basiswert', a.get_attribute('#master-art-body [name=oname][data-on="edeka"]', 'placeholder') == 'Roastbeef Färse Fleischmeister frisch')
+    a.fill('#master-art-body [name=name]', 'Roastbeef Färse Fleischmeister')
+    check('popup: Platzhalter folgt dem Basiswert', a.get_attribute('#master-art-body [name=oname][data-on="edeka"]', 'placeholder') == 'Roastbeef Färse Fleischmeister')
     a.fill('#master-art-body [name=oname][data-on="edeka"]', 'Roastbeef Edeka-Spezial')
     a.screenshot(path=SH + '/master-popup.png')
     save_art(a); wait_master(a)
     ent = master_ent(a, '10601')
-    check('popup: Basiswert ohne „frisch“, Bezeichnung je Angebot gespeichert', ent['name'] == 'Roastbeef Färse Fleischmeister' and ent.get('namen') == {'edeka': 'Roastbeef Edeka-Spezial'} and ent['condition'] == 'frisch', ent)
+    check('popup: Basiswert und Bezeichnung je Angebot gespeichert', ent['name'] == 'Roastbeef Färse Fleischmeister' and ent.get('namen') == {'edeka': 'Roastbeef Edeka-Spezial'} and ent['condition'] == 'frisch', ent)
     a.wait_for_selector('.mtab tr[data-mcode="10601"] .m-ok')
     check('popup: Änderung in den Entwurf übernommen (✓, Hinweis)', 'Entwurf' in a.inner_text('#toast') and a.locator('.mtab tr[data-mcode="10601"] .m-eigen').count() == 1, a.inner_text('#toast'))
+    # Stammdaten-Pop-up: Bezeichnung mit „frisch“ bleibt wie eingegeben (Zustand ist das eigene Feld)
+    open_art(a, '10701'); a.fill('#master-art-body [name=name]', 'Entrecote Fleischmeister, frisch'); save_art(a); wait_master(a)
+    e7 = master_ent(a, '10701')
+    check('popup: Bezeichnung mit „frisch“ gespeichert wie eingegeben', e7['name'] == 'Entrecote Fleischmeister, frisch' and e7['condition'] == 'frisch', e7)
     a.fill('#ms-q', 'roastbeef'); a.wait_for_function("document.querySelectorAll('.mtab tr[data-mcode]').length > 3"); a.screenshot(path=SH + '/master-liste.png')
     a.click('#vt-edit'); wait_saved(a)
     check('draft item renamed from master', a.locator('tr[data-id]:has(input[data-f="code"][value="10601"]) input[data-f=name]').first.input_value() == 'Roastbeef Färse Fleischmeister')
@@ -157,7 +172,8 @@ with sync_playwright() as p:
     a.reload(); a.wait_for_selector('tr[data-id]')
     # Protokoll
     a.click('#vt-log'); a.wait_for_selector('.ltab'); t = a.inner_text('#log-list')
-    check('log: cleanup + Stammdaten', 'vereinheitlicht' in t and 'Stammdaten bearbeitet' in t)
+    # die Vereinheitlichung beim Laden prüft der Anfang (danach fasst das Protokoll weitere Entwurfsänderungen zusammen)
+    check('log: Stammdaten', 'Stammdaten bearbeitet' in t)
     # Nachtmodus: Pop-up mit eigener Bezeichnung (Farben aus den Variablen)
     a.click('#vt-master'); a.wait_for_selector('.mtab')
     a.evaluate("document.documentElement.setAttribute('data-theme', 'dark')")
