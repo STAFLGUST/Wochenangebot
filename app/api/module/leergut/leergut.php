@@ -760,6 +760,12 @@ function lg_winab_abgleich(array $w, array $stamm, array $bew, array $me): array
    (20 Zeichen), Ort, Zustelldatum, Anzahl, Packmittel, Kennzeichen, Grund und Sendungsnummer; am Ende den Saldo je
    Packmittel „zu Gunsten DA“. Eingefügt wird der Text der Mail oder die gespeicherte Mail (.eml). */
 const LG_MAX_DACHSER_TEXT = 2000000;
+/* Höchstlänge einer Zeile (Byte). Die Liste hat feste Spalten, die längsten Zeilen bleiben unter 100 Zeichen. Längere
+   Zeilen gehen gar nicht erst durch die Zeilen-Regexe: in der Fallzeile steht ein sparsames (.+?) vor einem gierigen
+   \s+, dessen Aufwand quadratisch mit der Zeilenlänge wächst – eine einzige sehr lange Zeile innerhalb der
+   zugelassenen 2 MB würde einen Webserver-Prozess sonst minutenlang auslasten (preg_match läuft in C und wird von
+   max_execution_time nicht unterbrochen). */
+const LG_MAX_DACHSER_ZEILE = 300;
 
 /* Text einer gespeicherten Mail (.eml): erster text/plain-Teil (sonst text/html ohne Auszeichnung), Transfer-Kodierung
    und Zeichensatz aufgelöst. Ohne Mailkopf (eingefügter Text) bleibt der Text unverändert. */
@@ -805,7 +811,9 @@ function lg_dachser_datum(string $d): string
 }
 
 /* Liest die Liste: Fälle je Zeile, Stichtag(e), Saldo laut Dachser; Zeilen, die wie ein Fall aussehen, aber nicht lesbar
-   sind, kommen als Fehler zurück. Packmittel ohne Lademittel im Modul (z. B. Gitterbox) werden gezählt, nicht übernommen. */
+   sind, kommen als Fehler zurück. Packmittel ohne Lademittel im Modul (z. B. Gitterbox) werden gezählt, nicht übernommen.
+   Zeilen über LG_MAX_DACHSER_ZEILE Byte werden nicht geparst (siehe dort): fängt die Zeile wie ein Fall an, kommt
+   „Zeile zu lang“ als Fehler zurück, sonst wird sie übergangen wie jede andere Zeile, die kein Fall ist. */
 function lg_dachser_lesen(string $text, array $stamm): array
 {
     $lm = lg_ids($stamm['lademittel']);
@@ -818,6 +826,14 @@ function lg_dachser_lesen(string $text, array $stamm): array
     $zeilen = []; $fehler = []; $unbekannt = []; $saldo = []; $per = []; $konto = '';
     $auftrag = ''; $empf = null; $imSaldo = false; $erwarteEmpf = false;
     foreach (explode("\n", str_replace(["\r", "\f"], ['', ''], $text)) as $i => $z) {
+        if (strlen($z) > LG_MAX_DACHSER_ZEILE) {   // vor den Regexen, sonst wächst der Aufwand quadratisch mit der Zeilenlänge
+            // Beginnt die Zeile wie ein Fall, ist sie eine unlesbare Fallzeile und wird gemeldet; sonst ist sie Beiwerk (Vorspann,
+            // Fußnote, Hinweistext) und wird wie jede andere nicht passende Zeile übergangen – ein langer Absatz soll den Import nicht blockieren.
+            if (preg_match('/^\s*\d{1,2}\.\d{2}\.\d{2}\s/u', $z) && count($fehler) < 50) {
+                $fehler[] = ['zeile' => $i + 1, 'text' => 'Zeile zu lang (höchstens ' . LG_MAX_DACHSER_ZEILE . ' Zeichen)'];
+            }
+            continue;
+        }
         if (preg_match('/Unterkonto-Vorspediteur\s+(\S+)/u', $z, $m)) { $konto = $m[1]; $imSaldo = false; continue; }
         if (preg_match('/^\s*per\s+(\d{1,2}\.\d{2}\.\d{2,4})\b/u', $z, $m)) { $d = lg_dachser_datum($m[1]); if ($d !== '') $per[$d] = true; continue; }
         if (preg_match('/Unterkonto\s+Saldo\s+per\s+(\d{1,2}\.\d{2}\.\d{2,4})/u', $z, $m)) { $imSaldo = true; $d = lg_dachser_datum($m[1]); if ($d !== '') $per[$d] = true; continue; }

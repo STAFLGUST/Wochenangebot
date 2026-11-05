@@ -51,7 +51,7 @@ Ein Release kann jederzeit auf die Vorversion zurückfallen (automatisch, wenn d
 
 **1. Neue Felder sind optional und fehlen, solange sie leer sind.** `user_save` schreibt `vorname`, `nachname`,
 `email`, `rollen`, `grant`, `deny`, `twofaPflicht` nur, wenn sie einen Wert haben; `clean_model` schreibt `nameRaw`,
-`cell`, `variants`, `sale` nur bei Bedarf; `clean_master` ebenso `vkGruppe` und `gtin`:
+`cell`, `variants`, `sale`, `namen` nur bei Bedarf; `clean_master` ebenso `vkGruppe`, `gtin`, `nameWawi` und `namen`:
 
 ```php
 if ($vk !== '') $e['vkGruppe'] = $vk;
@@ -211,7 +211,8 @@ als `versionen/<JJJJMMTT-hhmmss>-<hex>` ab (höchstens `keep_versions`) und den 
 
 ```json
 {"meta": {"week": 2, "year": 2026, "notice": "", "title?": "…", "source?": "…", "sheetName?": "…",
-          "werbung?": {"std": {"titel": "Aktion der Woche", "text?": "…", "artikel": [{"id": "i1", "text?": "Top-Preis"}]}}},
+          "werbung?": {"std": {"titel": "Aktion der Woche", "text?": "…", "artikel": [{"id": "i1", "text?": "Top-Preis"}],
+                               "weitere?": [{"titel": "Zweite Aktion", "artikel": [{"id": "i2"}]}]}}},
  "sections": ["Frischfleisch"],
  "groups": [{"id": "g1", "name": "Rind", "section": "Frischfleisch", "vk?": "1600"}],
  "items": [{
@@ -219,7 +220,7 @@ als `versionen/<JJJJMMTT-hhmmss>-<hex>` ab (höchstens `keep_versions`) und den 
    "condition": "frisch", "groupId": "g1",
    "price": {"status": "value", "value": 12.5}, "altPrices": [],
    "variants": {"kunde-a": {"status": "value", "value": 11.9}, "std": {"status": "hidden"}},
-   "sale": {"value": 9.9, "offers": {"kunde-a": {"status": "none"}}, "since": "…"}
+   "sale": {"value": 9.9, "offers": {"kunde-a": {"status": "none"}, "kunde-b": {"status": "mark"}}, "since": "…"}
  }]}
 ```
 
@@ -229,13 +230,14 @@ als `versionen/<JJJJMMTT-hhmmss>-<hex>` ab (höchstens `keep_versions`) und den 
 | `condition` | `CONDITIONS`: frisch, gefroren, frisch-gefroren, dry-aged, unbekannt |
 | `price`, `altPrices[]` | `{status: value|request|none, value?, raw?, label?}`, `value` 0 bis unter 100 000, 4 Nachkommastellen; höchstens 5 Zusatzpreise |
 | `variants?` | Einträge je Angebots-ID: `{status: value|request|hidden, value?, carried?}`; unter `std` nur `{status: hidden}` = nicht im Wochenangebot; in Angeboten mit eigener Artikelliste macht ein Eintrag `value`/`request` den Artikel zum Teil des Angebots, in Angeboten, die dem Wochenangebot folgen, blendet `hidden` ihn aus; Schlüssel gelöschter Angebote fallen weg |
-| `sale?` | Sonderpreis „solange der Vorrat reicht“: Grundpreis `value`, je Angebot abweichend `{value}` oder `{status: none}` |
+| `sale?` | Empfehlung (bis 11/2026 „Sonderpreis“): Grundwert `value` (Empfehlungspreis = Sonderposten „solange der Vorrat reicht“) oder `mark: true` (ohne Preisänderung, nur hervorheben); je Angebot abweichend `{value}`, `{status: mark}` oder `{status: none}`. `offer_resolve` liefert mit Preis `sale: true` und `regular` (ohne Bestand ausgeblendet), ohne Preis `empfehlung: true` (Preis und Sichtbarkeit unverändert). Ältere Fassungen verwerfen Einträge ohne `value` |
 | `cell?`, `nameRaw?` | Zelladresse und Originaltext der Excel-Datei (intern) |
-| `meta.werbung?` | Werbung je Angebots-ID (`std` oder Kundenangebot): `titel` (≤ 80 Zeichen), `text?` (≤ 240), `artikel` = höchstens 12 Artikel-IDs in Reihenfolge mit `text?` (Hinweis, ≤ 40); unbekannte Angebote/Artikel und doppelte fallen weg (`clean_werbung`), keine Übernahme durch Angebote, die dem Wochenangebot folgen; `offer_resolve` liefert nur den Eintrag des jeweiligen Angebots und nur ausgelieferte Artikel (`meta.werbung = {titel, text?, artikel}`); ältere Fassungen verwerfen das Feld |
+| `namen?` | Eigene Bezeichnung je Kundenangebot: `{<Angebots-ID>: Text ≤ 200}`; fehlt ein Eintrag, gilt `name` (Basiswert, zugleich die Bezeichnung im Wochenangebot – unter `std` gibt es keinen Eintrag); leere Texte und Schlüssel gelöschter Angebote fallen weg (`angebotsnamen_clean`); `offer_resolve` setzt `name` des jeweiligen Angebots und entfernt das Feld; ältere Fassungen verwerfen das Feld (dann gilt überall wieder `name`) |
+| `meta.werbung?` | Werbung je Angebots-ID (`std` oder Kundenangebot): `titel` (≤ 80 Zeichen), `text?` (≤ 240), `artikel` = höchstens 12 Artikel-IDs in Reihenfolge mit `text?` (Hinweis, ≤ 40), `weitere?` = eine zweite Werbung im selben Aufbau (höchstens zwei je Angebot, `WERBUNG_BLOECKE`; ältere Fassungen lesen nur die erste); unbekannte Angebote/Artikel und doppelte fallen weg, leere Werbungen ebenso – die nächste rückt nach (`clean_werbung`), keine Übernahme durch Angebote, die dem Wochenangebot folgen; `offer_resolve` liefert nur den Eintrag des jeweiligen Angebots und nur ausgelieferte Artikel (`meta.werbung = {titel, text?, artikel, weitere?}`); ältere Fassungen verwerfen das Feld |
 | Gruppe `vk?` | VK-Gruppe (Stammdaten), aus der „Artikel hinzufügen“ die Angebotsgruppe wählt; `^[0-9A-Za-z._-]{1,10}$`, intern (`offer_resolve` entfernt sie); ältere Fassungen verwerfen das Feld |
 
 Grenzen: höchstens 5000 Artikel und 1000 Gruppen; IDs `^[A-Za-z0-9_-]+$`; Artikelnummer `^[0-9A-Za-z./-]+$`.
-`variants`, `sale`, `cell` und `meta.werbung` verlassen den Server nie roh – `offer_resolve()` löst sie je Angebot auf und entfernt sie
+`variants`, `sale`, `cell`, `namen` und `meta.werbung` verlassen den Server nie roh – `offer_resolve()` löst sie je Angebot auf und entfernt sie
 (GR-001, GR-002, GR-005).
 
 **`angebote`**: Kundenangebote.
@@ -305,10 +307,21 @@ Vertreter `name`, `kurz`, `telefon`, `plz`, `ort`, `land`. Nummer `^[0-9A-Za-z._
 Gespeichert wird immer die ganze Liste (fehlende Nummern entfallen); je Eintrag bleiben nicht gesendete Felder und
 unbekannte Felder der gespeicherten Fassung erhalten (`gruppen_clean` mit `$alt`), ebenso weitere Felder des Dokuments.
 
+**`angebotskategorien`** (Verwaltung, seit 05.11.2026): `{"rev": 3, "kategorien": [{"id": "k1a2b3c4d5", "name": "Eigene Zerlegung, Marke \"Fleischmeister\"", "vk": ["1050", "1150"]}], "updatedAt": "…", "updatedBy": "…"}`.
+Reihenfolge der Kategorien und darin der VK-Gruppen = Aufbau aller Angebote; jede VK-Gruppe höchstens einer Kategorie,
+Bezeichnungen eindeutig, höchstens 100 Kategorien (`module/verwaltung/angebotskategorien.php`, `kategorien_clean`).
+Lesen: Aktion `angebotskategorien` mit `stammdaten.sehen` oder `angebot.bearbeiten` (liefert dazu Nummer und Name der
+VK-Gruppen), speichern: `angebotskategorien_save` mit `stammdaten.bearbeiten` und Revision. Der Editor ordnet den
+Entwurf danach (`OfferCore.nachKategorien`: VK-Gruppe der Angebotsgruppe `groups[].vk`, sonst die häufigste ihrer
+Artikel – einmal gemerkt; Abschnitt `section` = Kategorie; Gruppen ohne Kategorie am Ende ohne Abschnitt). Leer =
+Reihenfolge von Hand wie früher.
+
 **`stammdaten`**: Artikelstammdaten aus `clean_master()`.
-`{"rev": 12, "updatedAt": "…", "updatedBy": "…", "articles": [{"code": "1001", "name": "Testartikel Rinderhüfte", "category": "Rind", "origin": "DE", "condition": "frisch", "vkGruppe?": "200", "gtin?": "4000000000000"}]}`.
+`{"rev": 12, "updatedAt": "…", "updatedBy": "…", "articles": [{"code": "1001", "name": "Testartikel Rinderhüfte", "category": "Rind", "origin": "DE", "condition": "frisch", "vkGruppe?": "200", "gtin?": "4000000000000", "nameWawi?": "Testartikel Hüfte, DE, frisch", "namen?": {"kunde-a": "Rinderhüfte Spezial"}}]}`.
 Höchstens 20 000 Sätze, Artikelnummern eindeutig über `code_key()` (führende Nullen und Groß-/Kleinschreibung zählen
-nicht), GTIN 8–14 Ziffern.
+nicht), GTIN 8–14 Ziffern. `name` ist die Angebotsbezeichnung (Basiswert), `nameWawi` die Originalbezeichnung der
+Warenwirtschaft (Bezeichnung1 des Artikelstammdaten-Imports, nur dort gesetzt; steht in der MHD-Liste), `namen` die eigene
+Bezeichnung je Kundenangebot wie beim Artikel des Angebots (Vorgabe für künftige Wochen und neu aufgenommene Artikel).
 
 ### Bestand
 
@@ -335,23 +348,33 @@ Mitarbeiter sind die Nutzer der Plattform (`users_load()`); HR speichert nur eig
   `verfall` (seit 03.11.2026, optional): `false` = der Resturlaub aus dem Vorjahr verfällt für diese Person nicht; fehlt
   das Feld oder ist es `true`, verfällt er am Verfallstag (`hr-einstellungen.uebertragBis`).
 - **`hr-abwesenheiten`**: `{"rev": 9, "eintraege": [{"id": "a0123456789ab", "person": "u…", "art": "U", "von": "2026-03-02", "bis": "2026-03-06", "status": "beantragt", "notiz": "", "vertretung": null, "quelle": "antrag", "erfasst": {"t": "…", "by": "…", "byId": "u…"}}]}`.
-  `art`: `U` Urlaub, `K` Krank, `G` Gleittag, `X` freier Tag. `status`: `beantragt`, `genehmigt`, `abgelehnt`,
+  `vertretung` (Person) ist bei Urlaubsanträgen Pflicht, solange `hr-einstellungen.planung.vertretungPflicht` nicht `false` ist. `art`: `U` Urlaub, `K` Krank, `G` Gleittag, `X` freier Tag, `F` unentschuldigt (seit 03.11.2026, nur Personalstelle; zählt nicht
+  gegen den Urlaub, beim Eintragen E-Mail an den Mitarbeiter über `hr_fehlen_mail`). `status`: `beantragt`, `genehmigt`, `abgelehnt`,
   `zurueckgezogen`, `storniert` – Einträge werden nie gelöscht, nur der Status ändert sich (mit
   `entscheidung: {t, by, grund}`). `quelle`: `antrag`, `personalstelle`, `zeiterfassung`; optional `geaendert`,
   `urlaubAbzug` (in der Zeiterfassung vom Urlaub abgezogene Krankheit – nur Hinweis für die Personalstelle; Krankheit
   zählt in `hr_konto` nie gegen den Urlaub, Inhaber 30.10.2026). Überschneidungen (`hr_kollision`) gelten nur zwischen aktiven
-  Einträgen derselben Gruppe: Abwesenheiten (U/K/G) untereinander und freie Tage (X) untereinander – ein freier Tag in
+  Einträgen derselben Gruppe: Abwesenheiten (U/K/G/F) untereinander und freie Tage (X) untereinander – ein freier Tag in
   einer Urlaubswoche zählt dort nur nicht mit.
 - **`hr-einstellungen`**: `{"rev": 1, "sperren": [{"von": "…", "bis": "…", "text": "Inventur"}], "ferien": [ … ], "uebertragBis": "03-31", "antraege": true}` – `uebertragBis` (Verfallstag des Resturlaubs, Monat-Tag) ist optional; fehlt es, gilt der 31.03. `antraege` (Schalter „Urlaubsanträge über die Plattform“, Verwaltung → Urlaub, Aktion `hr_antraege_save`) ist optional; nur `false` schaltet Anträge aus, fehlt es, sind sie eingeschaltet.
   Seit 03.11.2026 zusätzlich optional: `regelSperren` (Sperren aus den Urlaubsregeln – Ostergeschäft: zwei Wochen vor
   Karfreitag, Weihnachtsgeschäft: Montag der letzten Novemberwoche bis 24.12. – jedes Jahr berechnet, nicht gespeichert;
   nur `false` schaltet sie aus) und `regeln` (Text der Urlaubsregeln beim Urlaubsantrag; fehlt das Feld, gilt die Vorlage
-  `HR_REGELN_STANDARD`, leer = keine Regeln). `sperren` enthält nur die eingetragenen Sperren.
+  `HR_REGELN_STANDARD`, leer = keine Regeln; steht dort unverändert eine frühere Vorlage aus `HR_REGELN_FRUEHER`, gilt
+  ebenfalls die aktuelle Vorlage – nur beim Lesen, gespeichert wird nichts). `sperren` enthält nur die eingetragenen Sperren.
+  `verfallAb` (seit 03.11.2026, optional, Jahreszahl 2000–2100 oder `null`): Übergangsregel – Resturlaub verfällt erstmals am
+  Verfallstag dieses Jahres; in den Jahren davor verfällt bei niemandem etwas (`hr_verfall_ab()`, `hr_konto`). Fehlt das Feld
+  oder ist es `null`, verfällt Resturlaub jedes Jahr.
+  `planung` (seit 03.11.2026, optional, `module/hr/planung.php`): Jahresplanung des nächsten Jahres –
+  `{"start": "10-01", "stichtag": "12-01", "prozent": 90, "vertretungPflicht": true, "abschluss": {"2027": {"t": "…", "by": "…", "byId": "u…"}}}`.
+  Fehlende Felder gelten als Standard (Beginn 01.10., Stichtag 01.12., 90 %, Vertretung Pflicht); `abschluss` je Jahr setzt
+  `hr_planung_abschluss` (Verwaltung → Urlaub speichert ihn nie mit). `mailVerlauf` kennt dazu die Arten `planung` und
+  `jahresuebersicht` (mit `jahr`).
   E-Mails der Urlaubsverwaltung (`module/hr/mail.php`, optional): `mail` = `{"monat": {"an": false, "stand": "2026-10"},
   "test": {"an": false, "adresse": ""}, "steuerberater": {"an": false, "adresse": "", "tag": 5, "stand": "2026-11"}}` –
   `stand` ist der zuletzt automatisch versendete Monat (Monatsübersicht: Vormonat; Steuerberater: Versandmonat);
-  `mailVerlauf` = die letzten 40 Versände `[{t, art: monat|erinnerung|steuerberater, wie: manuell|automatisch, gesendet,
-  fehler, ohneAdresse, monat, test, by}]` (ohne Inhalte).
+  `mailVerlauf` = die letzten 40 Versände `[{t, art: monat|erinnerung|steuerberater|fehlen, wie: manuell|automatisch, gesendet,
+  fehler, ohneAdresse, monat, name (nur `fehlen`: Mitarbeiter), test, by}]` (ohne Inhalte).
 - **`hr-korrekturen`**: `{"rev": 2, "meldungen": [{"id": "k0123456789ab", "person": "u…", "von": "2026-09-09", "bis": "2026-09-11", "eintrag": "a…", "text": "…", "status": "offen", "erfasst": {"t": "…", "by": "…", "byId": "u…"}, "erledigt": {"t": "…", "by": "…", "byId": "u…", "antwort": "…"}}]}` –
   Korrekturmeldungen der Mitarbeiter („Korrektur melden“, Aktion `hr_korrektur`; `von`/`bis`/`eintrag` optional,
   höchstens 20 offene je Person). Die Personalstelle erledigt sie (`hr_korrektur_erledigt`, nie die eigene); Meldungen

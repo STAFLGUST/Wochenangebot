@@ -4,16 +4,87 @@
 #   docker compose -f docker-compose.yml -f deploy/anmeldung/docker-compose.anmeldung.yml up -d
 # Nur nach ausdrücklicher Freigabe des Inhabers und in der Reihenfolge aus docs/plattform/inbetriebnahme-anmeldung.md.
 # Alle Images fest über Version und Digest. Geheimnisse nur in .env auf dem Server (Namen: deploy/anmeldung/LIESMICH.md).
+#
+# Zwei Anwendungs-Container aus demselben Image und demselben Code (ADR-007, docs/plattform/adr-007-kundencontainer.md):
+#   app              – nur die Kundenseite angebot-stafl.de: keine Anmelde-Geheimnisse, kein Dashboard, nur im Netz „default“
+#                      mit Caddy (Keycloak und app-mitarbeiter von dort nicht erreichbar), Dateisystem nur lesbar, Grenzen für
+#                      Speicher, Rechenzeit und Prozesse. Baut das gemeinsame Image.
+#   app-mitarbeiter  – alle Mitarbeiter-Hosts (dashboard-stafl.de und *.dashboard-stafl.de) mit Keycloak-Anmeldung,
+#                      Dashboard, Detailkarte und allen Anmelde-Geheimnissen; im Netz „intern“ mit Caddy und Keycloak.
+#   postausgang      – verschickt die E-Mails, die die Kundenseite nur als Auftrag ablegt (Postausgang von innen, ADR-007): nur
+#                      hier und in app-mitarbeiter gibt es Postfach-Zugangsdaten und den Schlüssel des hinterlegten Postfach-Passworts
+#                      (Ordner daten-geheim, nie in der Kundenseite). Kein Port, eigenes Netz nur mit Ausgang ins Internet (SMTP).
+# Alle nutzen den Datenordner daten/. Nach der Datentrennung (ADR-007 Stufe 2, sh deploy/daten-trennen.sh trennen) liegen interne
+# Dokumente (Personal, Nutzer, CRM, Controlling, QS, Dateiablage …) in daten-intern/ – nur app-mitarbeiter und postausgang.
 services:
   app:
-    # Anwendungs-Image mit mod_auth_openidc (deploy/image, in der CI gebaut und mit php:8.3-apache verglichen)
+    # Kundenseite angebot-stafl.de (ADR-007): dasselbe Anwendungs-Image wie app-mitarbeiter (deploy/image, in der CI gebaut und
+    # mit php:8.3-apache verglichen), aber ohne Keycloak-Hosts in Apache, ohne Dashboard und ohne Anmelde-Geheimnisse. Bleibt
+    # im Netz „default“ (Caddy) – Keycloak und app-mitarbeiter liegen im Netz „intern“ und sind von hier nicht erreichbar.
     image: stafl-app:${STAFL_APP_VERSION:-lokal}
-    build: ./deploy/image
-    volumes:
-      - ./dashboard:/var/www/dashboard:ro                 # Dashboard (außerhalb von app/; per Alias nur auf den Keycloak-Hosts)
-      - ./deploy/anmeldung/apache-oidc.conf:/etc/apache2/sites-enabled/zz-stafl-oidc.conf:ro   # nach 000-default: angebot-stafl.de bleibt Standard
-      - ./daten-karte:/var/www/karte:ro                   # Detailkarte (deploy/karte-laden.sh); fehlt sie, zeigen die Seiten die Übersichtskarte
+    build: ./deploy/image                                  # baut das gemeinsame Image (auch für app-mitarbeiter)
     environment:
+      # Alter Eingabebereich angebot-stafl.de/admin/ mit eigener Anmeldung stillgelegt (Entscheidung Inhaber 23.10.2026) – fest:
+      # die Kundenseite öffnet ihn nie wieder (ADR-007 Regel 6). Notzugang bei gestörter Anmeldung nur noch über einen SSH-Tunnel
+      # zu app-mitarbeiter (sh deploy/notzugang.sh an). Kundenseite und Kundenanmeldung unverändert.
+      WA_EIGENE_ANMELDUNG: "aus"
+      # Postausgang von innen (ADR-007, lib/postausgang.php): die Kundenseite legt E-Mails nur als Auftrag ab und kennt kein
+      # Postfach – die Werte aus docker-compose.yml werden hier geleert; verschickt wird nur im Dienst postausgang
+      WA_POSTAUSGANG: "warteschlange"
+      MAIL_SMTP_HOST: ""
+      MAIL_SMTP_PORT: ""
+      MAIL_SMTP_SECURE: ""
+      MAIL_SMTP_USER: ""
+      MAIL_SMTP_PASS: ""
+      MAIL_FROM: ""
+      MAIL_FROM_NAME: ""
+      MAIL_REPLY_TO: ""
+    # Härtung (ADR-007): Dateisystem nur lesbar (Anwendung ist ohnehin nur lesend eingebunden, Daten im Datenordner); Apache
+    # und PHP schreiben nur in /tmp (Sitzungen) und /run (PID, Sperren). Keine Rechteausweitung über setuid-Programme.
+    read_only: true
+    tmpfs:
+      - /tmp:mode=1777,size=256m
+      - /run:mode=755,size=16m
+    security_opt:
+      - no-new-privileges:true
+    # Grenzen: Überlast auf der öffentlichen Seite bremst die Mitarbeiter-Hosts nicht aus (Server: Hostinger KVM 8,
+    # 8 vCPU / 32 GB). Anpassbar über .env (KUNDEN_CPUS, KUNDEN_SPEICHER).
+    cpus: ${KUNDEN_CPUS:-3}
+    mem_limit: ${KUNDEN_SPEICHER:-4g}
+    pids_limit: 1024
+
+  app-mitarbeiter:
+    # Mitarbeiter-Hosts (ADR-003, ADR-007): dashboard-stafl.de, angebot./verwaltung./bestand./hr./crm./marketing./sicherheit./
+    # controlling./leergut./rewe./qs.dashboard-stafl.de und die Prüfung vor der Anmeldeseite (Caddy forward_auth). Gleiches Image
+    # und gleicher Code wie app; das Image baut der Dienst app (nie aus dem Netz holen).
+    image: stafl-app:${STAFL_APP_VERSION:-lokal}
+    pull_policy: never
+    restart: unless-stopped
+    logging:                        # Container-Protokoll begrenzt: höchstens 3 × 10 MB je Dienst (sonst wächst es unbegrenzt)
+      driver: json-file
+      options: { max-size: "10m", max-file: "3" }
+    volumes:
+      - ./app:/var/www/html:ro      # Website (nur lesend) – wie app
+      - ./daten:/var/www/html/data  # gemeinsamer Datenordner (Stufe 1, ADR-007)
+      - ./dashboard:/var/www/dashboard:ro                 # Dashboard (außerhalb von app/; per Alias nur auf den Keycloak-Hosts)
+      - ./deploy/anmeldung/apache-oidc.conf:/etc/apache2/sites-enabled/zz-stafl-oidc.conf:ro   # Keycloak-Hosts in Apache
+      - ./daten-karte:/var/www/karte:ro                   # Detailkarte (deploy/karte-laden.sh); fehlt sie, zeigen die Seiten die Übersichtskarte
+      - ./daten-geheim:/var/www/geheim                    # Schlüssel des hinterlegten Postfach-Passworts (nicht in der Kundenseite, nicht gesichert)
+      - ./daten-intern:/var/www/daten-intern              # interne Daten nach deploy/daten-trennen.sh (ADR-007 Stufe 2; nicht in der Kundenseite)
+    environment:
+      # wie app in docker-compose.yml (die CI prüft, dass hier nichts davon fehlt: deploy/anmeldung/pruefen.sh)
+      WA_INSTALLED: "1"
+      WA_TRUSTED_PROXIES: caddy
+      DOMAIN: ${DOMAIN}
+      MAIL_SMTP_HOST: ${MAIL_SMTP_HOST:-}
+      MAIL_SMTP_PORT: ${MAIL_SMTP_PORT:-587}
+      MAIL_SMTP_SECURE: ${MAIL_SMTP_SECURE:-starttls}
+      MAIL_SMTP_USER: ${MAIL_SMTP_USER:-}
+      MAIL_SMTP_PASS: ${MAIL_SMTP_PASS:-}
+      MAIL_FROM: ${MAIL_FROM:-}
+      MAIL_FROM_NAME: ${MAIL_FROM_NAME:-}
+      MAIL_REPLY_TO: ${MAIL_REPLY_TO:-}
+      # Anmeldung über Keycloak – nur in diesem Container
       OIDC_ISSUER: https://login.dashboard-stafl.de/realms/mitarbeiter
       OIDC_SECRET_DASHBOARD: ${OIDC_SECRET_DASHBOARD:?in .env setzen}
       OIDC_SECRET_ANGEBOT: ${OIDC_SECRET_ANGEBOT:?in .env setzen}
@@ -54,17 +125,76 @@ services:
       # internen Netz (nicht über Caddy). Ohne Geheimnis zeigt die Verwaltung „noch nicht eingerichtet“ – die Anwendung startet trotzdem
       OIDC_SECRET_KONTEN: ${OIDC_SECRET_KONTEN:-noch-nicht-eingerichtet}
       WA_KONTEN_URL: http://keycloak:8080
-      # Alter Eingabebereich angebot-stafl.de/admin/ mit eigener Anmeldung stillgelegt (Entscheidung Inhaber 23.10.2026) – Mitarbeiter
-      # nur noch über die zentrale Anmeldung; Kundenseite und Kundenanmeldung unverändert. Notzugang bei gestörter Anmeldung:
-      # sh deploy/notzugang.sh an (setzt WA_EIGENE_ANMELDUNG=an in .env und startet die App neu), danach wieder „aus“
-      WA_EIGENE_ANMELDUNG: ${WA_EIGENE_ANMELDUNG:-aus}
+      # Alter Eingabebereich auf den Mitarbeiter-Hosts fest aus; nur der Notzugang (eigener Host auf Port 8090, apache-oidc.conf)
+      # öffnet ihn – mit WA_NOTZUGANG=an in .env (sh deploy/notzugang.sh an|aus, erstellt diesen Container neu)
+      WA_EIGENE_ANMELDUNG: "aus"
+      WA_NOTZUGANG: ${WA_NOTZUGANG:-aus}
+      # Schlüssel des im Eingabebereich hinterlegten Postfach-Passworts außerhalb des gemeinsamen Datenordners (ADR-007);
+      # liegt er noch im Datenordner, gilt bis deploy/postfach-schluessel.sh umziehen der bisherige Ort
+      WA_GEHEIM_DIR: /var/www/geheim
+      # Interne Daten (ADR-007 Stufe 2): wirksam erst nach sh deploy/daten-trennen.sh trennen (Kennzeichen in daten/ und daten-intern/);
+      # vorher liegt alles wie bisher in daten/
+      WA_DATEN_INTERN: /var/www/daten-intern
+    ports:
+      # Notzugang (ADR-007 Regel 6): nur auf 127.0.0.1 des Servers – vom eigenen Rechner per SSH-Tunnel
+      # (ssh -L 8190:127.0.0.1:8190 …, dann http://localhost:8190/admin/), wie die Keycloak-Verwaltung; nie über Caddy
+      - "127.0.0.1:${NOTZUGANG_PORT:-8190}:8090"
     networks:
-      default:
-        aliases:
-          - app-mitarbeiter                                # Ziel von Caddy für dashboard-stafl.de/angebot./verwaltung./bestand./hr./crm./marketing./sicherheit./controlling./leergut./rewe./qs. – nur mit dieser Datei
+      intern:                                              # mit Caddy und Keycloak; nicht im Netz der Kundenseite
+
+  postausgang:
+    # Postausgang von innen (ADR-007, lib/postausgang.php, api/postausgang.php): verschickt Bestellwünsche, Benachrichtigungen und
+    # Hinweise, die die Kundenseite nur als Auftrag ablegt. Ein Durchgang alle 5 Sekunden, jeder als eigener Prozess (hält keine
+    # Sperre der Speicherschicht dauerhaft). Gleiches Image und gleicher Code wie app; kein Webserver, kein Port.
+    image: stafl-app:${STAFL_APP_VERSION:-lokal}
+    pull_policy: never
+    restart: unless-stopped
+    logging:
+      driver: json-file
+      options: { max-size: "10m", max-file: "3" }
+    user: www-data
+    command: ["sh", "-c", "trap 'exit 0' TERM INT; while :; do php /var/www/html/api/postausgang.php; sleep 5 & wait $$!; done"]
+    healthcheck:
+      test: ["CMD", "php", "/var/www/html/api/postausgang.php", "--pruefen"]
+      interval: 60s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+    volumes:
+      - ./app:/var/www/html:ro
+      - ./daten:/var/www/html/data
+      - ./daten-geheim:/var/www/geheim:ro                 # Schlüssel des Postfach-Passworts (nur lesen; neu angelegt wird er in app-mitarbeiter)
+      - ./daten-intern:/var/www/daten-intern              # interne Daten (Versandprotokoll, Benachrichtigungsstand) nach der Trennung
+    environment:
+      DOMAIN: ${DOMAIN}             # Adresse für Links in E-Mails
+      MAIL_SMTP_HOST: ${MAIL_SMTP_HOST:-}
+      MAIL_SMTP_PORT: ${MAIL_SMTP_PORT:-587}
+      MAIL_SMTP_SECURE: ${MAIL_SMTP_SECURE:-starttls}
+      MAIL_SMTP_USER: ${MAIL_SMTP_USER:-}
+      MAIL_SMTP_PASS: ${MAIL_SMTP_PASS:-}
+      MAIL_FROM: ${MAIL_FROM:-}
+      MAIL_FROM_NAME: ${MAIL_FROM_NAME:-}
+      MAIL_REPLY_TO: ${MAIL_REPLY_TO:-}
+      WA_GEHEIM_DIR: /var/www/geheim
+      WA_DATEN_INTERN: /var/www/daten-intern
+      WA_EIGENE_ANMELDUNG: "aus"    # Links in Benachrichtigungen auf den Eingabebereich im Dashboard (wie app-mitarbeiter)
+    read_only: true
+    tmpfs:
+      - /tmp:mode=1777,size=16m
+    security_opt:
+      - no-new-privileges:true
+    cpus: 0.5
+    mem_limit: 256m
+    pids_limit: 64
+    networks:
+      postausgang:                                         # nur Ausgang ins Internet (Postfach); weder Caddy noch Keycloak noch die Apps
+
+  caddy:
+    networks:
+      intern:                                              # zusätzlich zu default und edge: Ziele app-mitarbeiter und keycloak
 
   keycloak:
-    image: quay.io/keycloak/keycloak:26.8.1@sha256:79c623a22abacf3fe6c00a5fb30f5b7843d717b234033b80995891c06116d244
+    image: quay.io/keycloak/keycloak:26.8.1@sha256:3f3c5f8e03c614774b4bd9173b88391fefa4153bfc010d8012d59ad825377332
     restart: unless-stopped
     logging:                        # Container-Protokoll begrenzt: höchstens 3 × 10 MB je Dienst (sonst wächst es unbegrenzt)
       driver: json-file
@@ -107,11 +237,11 @@ services:
     ports:
       - "127.0.0.1:8180:8080"                              # nur lokal (SSH-Tunnel für die Verwaltung)
     networks:
-      default:
+      intern:                                              # Caddy (Anmeldeseite) und app-mitarbeiter (Konten); nie die Kundenseite
       anmeldung:
 
   keycloak-db:
-    image: postgres:17-alpine@sha256:b0f9560a2de083e2cc7382e75f808c7381a32852a7ec49117deedb300e552b24
+    image: postgres:17-alpine@sha256:266d3c257594e195b309ae9d1805e54c788f1d7b375f56bf6c367aac6c917e7b
     restart: unless-stopped
     logging:                        # Container-Protokoll begrenzt: höchstens 3 × 10 MB je Dienst (sonst wächst es unbegrenzt)
       driver: json-file
@@ -127,8 +257,13 @@ services:
       anmeldung:                                           # eigene Datenbank und eigenes Netz, getrennt von den Geschäftsdaten
 
 networks:
+  # Mitarbeiterseite: Caddy, app-mitarbeiter und Keycloak (mit Ausgang ins Internet: Postfach, Keycloak-Metadaten über
+  # login.dashboard-stafl.de). Die Kundenseite (app) ist nicht darin – ADR-007.
+  intern:
   anmeldung:
     internal: true
+  # Dienst postausgang allein: Ausgang zum Postfach (SMTP), sonst nichts
+  postausgang:
 
 volumes:
   keycloak_db:

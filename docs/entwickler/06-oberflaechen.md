@@ -48,7 +48,8 @@ Testserver (`tests/run_e2e.py`), in der Testumgebung und auf jedem Produktions-H
 | `hr.dashboard-stafl.de` | `/` und `/admin/…` → `/module/hr/` | nur Aktionen von `hr.intern` (GR-109) |
 | `crm.dashboard-stafl.de` | `/` und `/admin/…` → `/module/crm/` | nur Aktionen von `crm.intern` (GR-109) |
 
-Alle `*.dashboard-stafl.de`-Hosts sind dieselbe Anwendung (Caddy → `app-mitarbeiter`) mit je eigenem Keycloak-Client
+Alle `*.dashboard-stafl.de`-Hosts sind dieselbe Anwendung im Container `app-mitarbeiter` (Caddy → `app-mitarbeiter`, getrennt
+von der Kundenseite, ADR-007) mit je eigenem Keycloak-Client
 und eigener Sitzung. Apache setzt je Host `WA_OBERFLAECHE`; daraus macht der Server `me.bereich`
 (`app/api/lib/sitzung.php`).
 
@@ -151,7 +152,7 @@ eingebunden werden und darf `W.views` nur ergänzen. `setView` ruft Ansichten nu
 
 ```js
 const BEREICH_VIEWS = {
-  'verwaltung.verwaltung': ['master', 'vkgruppen', 'kunden', 'gruppen', 'vertreter', 'importe', 'auswertung', 'mail', 'users', 'rollen', 'urlaub', 'log'],
+  'verwaltung.verwaltung': ['master', 'vkgruppen', 'kategorien', 'kunden', 'gruppen', 'vertreter', 'importe', 'auswertung', 'mail', 'users', 'rollen', 'urlaub', 'log'],
   'angebot.eingabe': ['orders', 'edit', 'einzel', 'hist', 'einkauf', 'angebote'],
   'bestand.intern': ['stock'],
   'verwaltung.import': ['importe'],
@@ -181,7 +182,7 @@ sonst wirft sie einen `Error` mit `status`. Zentral behandelt werden:
 | 403 `kein_modulzugang` | `zeigeKeinZugang(name)` – Seite wird verdeckt, nicht ersetzt |
 | 410 `umgezogen` | `zeigeUmgezogen(ziel)` – Hinweis, nach 1,5 s Weiterleitung |
 | 503 mit `wartung` und `bereich` | `showEingabeWartung()` – Wartungsseite für Nicht-Administratoren |
-| 403 `reauth_required` mit `anmelden` (`/oidc/…`) | **schreibende Anfrage** (mit `body`): Dialog `#dlg-reauth-kc` „Kurz bestätigen“, Anmeldung bei Keycloak in einem **eigenen Fenster** (`bestaetigenPerFenster`), Rücksprung auf `admin/bestaetigt.html` meldet sich per BroadcastChannel/postMessage/`storage` (nur gleicher Ursprung), danach dieselbe Anfrage noch einmal (höchstens drei Runden) – offene Dialoge und Eingaben bleiben erhalten. Blockiertes Fenster: „Hier anmelden“ wie bisher. **Sonst** (Seitenaufbau, Abfragen): ungespeicherten Entwurf sichern, erneute Anmeldung bei Keycloak im selben Fenster, zurück auf dieselbe Adresse |
+| 403 `reauth_required` mit `anmelden` (`/oidc/…`) | **schreibende Anfrage** (mit `body`): Dialog `#dlg-reauth-kc` „Kurz bestätigen“, Anmeldung bei Keycloak in einem **eigenen Fenster** (`bestaetigenPerFenster`), Rücksprung auf `admin/bestaetigt.html` meldet sich per BroadcastChannel/postMessage/`storage` (nur gleicher Ursprung) – ersatzweise genügt, dass sich das Fenster schließt –, danach dieselbe Anfrage noch einmal (höchstens drei Runden) – offene Dialoge und Eingaben bleiben erhalten. Blockiertes Fenster: „Hier anmelden“ wie bisher. **Sonst** (Seitenaufbau, Abfragen): ungespeicherten Entwurf sichern, erneute Anmeldung bei Keycloak im selben Fenster, zurück auf dieselbe Adresse |
 | 403 `confirmation_required` | Dialog `#dlg-reauth` (Passwort), danach **ein** automatischer Wiederholungsversuch |
 | sonst nicht `ok` | `Error(data.error)` bzw. „Serverfehler (…)“ |
 
@@ -208,28 +209,58 @@ Geändert wird die Zugehörigkeit nur über `aufnehmen()`, `nurIn()` (neuer Arti
 `entfernen()` (löscht den Artikel, wenn er in keinem Angebot mehr steht) – so beeinflussen sich die Angebote nie.
 „Artikel hinzufügen“ nutzt das gemeinsame Fenster `admin-artikelwahl.js` (`WA.artikelwahl.oeffnen(cfg)`, auch für
 Einzelangebote) mit Daten aus `angebot_artikel` (Recht `angebot.bearbeiten`, Bestand nur mit `bestand.sehen`);
-die Zielgruppe bestimmt `zielGruppe()` aus der VK-Gruppe. Der Excel-Import ersetzt nur das Wochenangebot
-(`importKundenangebote()` übernimmt Kundeneinträge auf gleiche Artikelnummern bzw. behält Artikel nur in Kundenangeboten).
+die Zielgruppe bestimmt `zielGruppe()` aus der VK-Gruppe. Einen Excel-Import im Editor gibt es seit 04.11.2026 nicht mehr;
+Artikelpreise kommen über die Importzentrale (Importart `angebot_preise`, Server `module/angebot/import.php`); ihre
+Vorschau zeigt die eigene Darstellung `app/module/angebot/preisimport.js` (bisher → neu je Angebot, „Bitte prüfen“ ab
+10 %, Kundengruppen ohne Angebot einzeln anhaken – Option `gruppen`), Vertrag in `docs/plattform/schnittstellen/import.md`.
+
+### Export für WinAB
+
+Knopf „Export für WinAB“ (`#btn-winab`) in der Werkzeugleiste: sichtbar nur mit dem Recht `angebot.winab_export` und nur
+beim Wochenangebot (eine Zeile in `renderWerbungBtn()`, `admin.js`); den Klick behandelt `app/module/angebot/winab-export.js`.
+Die Datei erzeugt der Server (Aktion `angebot_winab_export`, POST mit CSRF, `module/angebot/winab-export.php`) aus dem
+**veröffentlichten** Wochenangebot über `offer_resolve()` – also mit Sonderpreisen und ohne ausgeblendete oder ausverkaufte
+Artikel – und gibt `{datei, csv, anzahl, doppelt, ohnePreis, woche}` zurück; der Browser speichert `csv` als Datei.
+Je Artikelnummer (`code_key`) eine Zeile mit dem höchsten Preis aus Preis und Zusatzpreisen; Format `Artikelnummer;Preis`
+mit Kopfzeile, Dezimalkomma, CRLF, ohne BOM. Jeder Export steht im Protokoll (Bereich „Angebote“).
 
 ### Werbung schalten
 
 Knopf „Werbung“ in der Werkzeugleiste (Zahl = beworbene Artikel des gewählten Angebots): `openWerbung()` (`admin.js`)
-übergibt die Artikel des Angebots an das Fenster `admin-werbung.js` (`WA.werbung.oeffnen(cfg)`: Überschrift, Werbetext,
-bis zu 12 Artikel mit Reihenfolge und Hinweis; Leser nur ansehen). „Artikel auswählen …“ öffnet über den Rückruf
+übergibt die Artikel des Angebots an das Fenster `admin-werbung.js` (`WA.werbung.oeffnen(cfg)`: bis zu zwei Werbungen –
+„Weitere Werbung“ legt die zweite an, Reiter `.wb-tab` wechseln, „Werbung 2 entfernen“ nimmt eine heraus, eine zweite ohne
+Artikel lässt sich nicht übernehmen –, je Werbung Überschrift, Werbetext, bis zu 12 Artikel mit Reihenfolge und Hinweis;
+Leser nur ansehen). „Artikel auswählen …“ öffnet über den Rückruf
 `auswaehlen` die gemeinsame Artikelauswahl (`werbungAuswahl()`: `WA.artikelwahl.oeffnen` mit Filter „nur in diesem
 Angebot“, alle Gruppen, Bestand ohne Filter, beworbene vorausgewählt, höchstens 12; Artikel außerhalb des Angebots
 nimmt `artikelAufnehmen()` – dieselbe Funktion wie „Artikel hinzufügen“ – mit Preis auf; Positionen ohne Artikelnummer
 erscheinen mit eigenem Schlüssel ohne Nummer). Die Artikelauswahl kennt dafür `preis.fest(a)` (Preis als Text statt
 Eingabefeld) und `a.nr` (angezeigte Nummer); `spannen()` passt die colspan der Gruppen-/Detailzeilen an die sichtbaren
-Spalten an (Handy). Gespeichert wird in `model.meta.werbung[<Angebot>]`
+Spalten an (Handy). Gespeichert wird in `model.meta.werbung[<Angebot>]` (zweite Werbung in `weitere`; Hilfen `werbBloecke()`/`werbEintrag()`)
 (Entwurf, sichtbar nach „Veröffentlichen“; Rücknahme je Angebot im Veröffentlichen-Dialog). `werbungBereinigen()` nimmt
-bei jeder Änderung Artikel heraus, die nicht mehr im Angebot stehen; der Excel-Import überträgt die Werbung auf die
-Artikel mit derselben Nummer (`werbungUebernehmen()`); `mergeModels` gleicht die Werbung je Angebot ab. Beworbene Zeilen
+bei jeder Änderung Artikel heraus, die nicht mehr im Angebot stehen; `mergeModels` gleicht die Werbung je Angebot ab. Beworbene Zeilen
 tragen `tr.e-werb` und das Kennzeichen „Werbung“. Auf der Angebotsseite (`frontend.js`, `werbungHTML()`) steht oben ein
 eigener Abschnitt im Aufbau der Liste (`.werb-sec`: Band `.werb-st` in der Akzentfarbe mit Überschrift und Text, darunter
 die Artikel mit `plBlockHTML(…, 'werb')` als normale Zeilen in den Spalten der Liste; Bestell- und Kachelansicht: in eigener
-Karte; nur ohne Suche/Filter in „Alle Artikel“). Beworbene Zeilen/Kacheln der Liste tragen `.werb-an` und den Hinweis
-(sonst „Empfehlung“) als Kennzeichen.
+Karte; nur ohne Suche/Filter in „Alle Artikel“). Eine zweite Werbung steht in `.werb-duo` rechts neben der ersten (je die
+Hälfte der Spalten der Liste; bei nur einer Spalte `.werb-stapel` untereinander). Beworbene Zeilen/Kacheln der Liste und
+Empfehlungen ohne Preisänderung (`it.empfehlung`) tragen `.werb-an` (dezent hinterlegt) und den Hinweis (sonst
+„Empfehlung“) als Kennzeichen.
+
+### Empfehlung (früher „Sonderpreis“)
+
+Etikett in der Preiszelle (`saleBtnHTML`/`saleTagHTML`) und Leiste „Kurzes MHD“ öffnen `openSale()` (`#dlg-sale`):
+Empfehlungspreis optional (leer = `mark: true`, nur hervorheben), je Angebot „wie oben“, „eigener Preis“, „ohne
+Preisänderung“ (`{status: 'mark'}`) oder „keine Empfehlung“ (`{status: 'none'}`). Neu gesetzt steht nur das gewählte
+Angebot auf „wie oben“, alle anderen auf „keine Empfehlung“; `empfehlungNichtUebernehmen()` setzt ein Angebot, in das der
+Artikel später kommt („Artikel hinzufügen“, „Aus anderem Angebot“), ebenfalls auf „keine“. Auswertung je Angebot:
+`C.empfehlungFor(it, oid)` (`offer-core.js`; `null` oder `{preis}`), Server `empfehlung_fuer()`.
+
+### Angebotsauswahl in der Seitenleiste
+
+`offerBarPlatzieren()` hängt `#offer-bar` ab 901 px (`matchMedia`) in die `.side-nav` unter die Bereiche, schmaler zurück
+in `.ed-layout` (Auswahl über dem Angebot); `body.ob-links` steuert das Layout, `body.in-other` blendet die Liste in
+anderen Bereichen aus. Inhalt und Ereignisse bleiben dieselben (`renderOfferBar`).
 
 ### Vorschau
 

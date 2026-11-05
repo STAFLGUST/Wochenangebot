@@ -27,7 +27,7 @@ function import_arten_verwaltung(): array
                            ['id' => 'aktivRegel', 'typ' => 'schalter', 'label' => 'Kunden ohne Rechnung seit ' . KUNDEN_AKTIV_MONATE . ' Monaten auf inaktiv setzen (mit neuer Rechnung wieder aktiv)', 'standard' => true]]],
         'kundengruppen' => $liste('kundengruppen', 'Kundengruppen', 'Liste der Kundengruppen aus der Warenwirtschaft: Nummer, Bezeichnung, Klasse, Kategorie.', 'gruppen', 'Nummer, Bezeichnung, Klasse, Kategorie'),
         'vertreter' => $liste('vertreter', 'Vertreter', 'Vertreter-Export der Warenwirtschaft: Nummer, Alpha, Name1, Land, PLZ, Ort, Telefon.', 'vertreter', 'Nummer, Name, Ort, Telefon'),
-        'stammdaten' => $csv + ['name' => 'Artikelstammdaten', 'kurz' => 'Neue Artikel, VK-Gruppe und GTIN', 'beschreibung' => 'Artikelstammdaten-Export der Warenwirtschaft: Nummer, Bezeichnung1, Bezeichnung2, VGrp, GTIN. Neue Artikel werden angelegt, bestehende um VK-Gruppe und GTIN ergänzt.',
+        'stammdaten' => $csv + ['name' => 'Artikelstammdaten', 'kurz' => 'Neue Artikel, Originalbezeichnung, VK-Gruppe und GTIN', 'beschreibung' => 'Artikelstammdaten-Export der Warenwirtschaft: Nummer, Bezeichnung1, Bezeichnung2, VGrp, GTIN. Neue Artikel werden angelegt, bestehende um Originalbezeichnung (Bezeichnung1), VK-Gruppe und GTIN ergänzt.',
             'recht' => ['stammdaten.bearbeiten'], 'aktion' => 'master_save', 'ansicht' => 'master',
             'vorschau' => 'stammdaten_import_vorschau', 'uebernahme' => 'stammdaten_import_uebernehmen'],
         'vkgruppen' => $liste('vkgruppen', 'VK-Gruppen', 'Liste der VK-Gruppen aus der Warenwirtschaft: Nummer, Bezeichnung, Klasse, Kategorie.', 'vkgruppen', 'Nummer, Bezeichnung, Klasse, Kategorie'),
@@ -235,7 +235,7 @@ function kunden_import_lauf(array $b, bool $pruefen, bool $details = false): arr
             usort($d['customers'], function ($x, $y) { return strcasecmp($x['firma'], $y['firma']); });
             $d['rev'] = (int)$d['rev'] + 1;
             $d['updatedAt'] = now();
-            store_write('kunden', $d);
+            customers_save($d);
         }
         return [$out, $d['rev'], $ch];
     });
@@ -403,6 +403,7 @@ function stammdaten_speichern($articles, int $rev, array $me): array
         if ($rev !== (int)$cur['rev']) fail('Die Stammdaten wurden inzwischen an anderer Stelle geändert. Bitte die Seite neu laden.', 409);
         $m = ['rev' => (int)$cur['rev'] + 1, 'updatedAt' => now(), 'updatedBy' => $me['name'], 'articles' => $articles];
         store_write('stammdaten', $m);
+        artikelauszug_aktualisieren();   // Kundenseite ab Trennstufe 2: nur der Auszug (Schnittstelle des Bestands, lib/bestand.php)
         return [$m, master_changes($cur['articles'], $articles)];
     });
 }
@@ -430,7 +431,7 @@ function stammdaten_import_vorschau(array $e, array $me): array
                 'text' => implode('; ', array_map(function ($c) { return $c['f'] . ': ' . ($c['from'] === '' ? '–' : $c['from']) . ' → ' . ($c['to'] === '' ? '–' : $c['to']); }, $list))];
     }
     $n['unveraendert'] = max(0, count(array_filter(array_keys($zeileVon), function ($k) use ($by) { return !isset($by[$k]); })));
-    $h = [['stufe' => 'info', 'text' => 'Bezeichnung, Fleischart, Herkunft und Zustand bestehender Artikel bleiben unverändert; Artikel, die nicht in der Datei stehen, bleiben erhalten. EK, Bestand, Umsatz und Lieferant werden nicht übernommen.']];
+    $h = [['stufe' => 'info', 'text' => 'Angebotsbezeichnung, Bezeichnungen je Angebot, Fleischart, Herkunft und Zustand bestehender Artikel bleiben unverändert; die Originalbezeichnung (Bezeichnung1) wird aktualisiert. Artikel, die nicht in der Datei stehen, bleiben erhalten. EK, Bestand, Umsatz und Lieferant werden nicht übernommen.']];
     return ['zahlen' => $n, 'zeilen' => $z, 'hinweise' => $h, 'stand' => (int)$cur['rev']];
 }
 

@@ -107,7 +107,7 @@ erw_weih = sum(1 for i in range(7) if (weih + dt.timedelta(days=i)).weekday() < 
 eintrag(PA, 'K', AUG, AUG + dt.timedelta(days=4))                                         # Mo–Fr, 4-Tage-Woche: 4
 storno = eintrag(PA, 'G', AUG + dt.timedelta(days=7), AUG + dt.timedelta(days=7))
 check('stornierter Gleittag', P.call('hr_eintrag_save', {'id': storno, 'stornieren': True})[0] == 200)
-st, r = L.call('hr_antrag', {'von': iso(AUG), 'bis': iso(AUG + dt.timedelta(days=1)), 'notiz': 'Sommerreise-Notiz'})
+st, r = L.call('hr_antrag', {'von': iso(AUG), 'bis': iso(AUG + dt.timedelta(days=1)), 'notiz': 'Sommerreise-Notiz', 'vertretung': ids['andre-vierzig']})   # Vertretung Pflicht (Standard)
 check('Lena beantragt 2 Tage', st == 200, r)
 
 st, r, raw = U.call('hr_uebersicht&jahr=' + str(Y), raw=True)

@@ -28,11 +28,26 @@ function oidc_modus(): bool
     return oidc_einstellung('WA_OIDC') === '1';
 }
 /* Bisheriger Eingabebereich mit eigener Anmeldung (angebot-stafl.de/admin/) stillgelegt (Entscheidung Inhaber 23.10.2026):
-   WA_EIGENE_ANMELDUNG=aus (Betrieb: docker-compose.anmeldung.yml). Mitarbeiter arbeiten nur noch über die zentrale
-   Anmeldung; Kundenseite und Kundenanmeldung bleiben unverändert. Notzugang (Keycloak gestört): deploy/notzugang.sh an */
+   WA_EIGENE_ANMELDUNG=aus (Betrieb: docker-compose.anmeldung.yml, beide Anwendungs-Container fest). Mitarbeiter arbeiten
+   nur noch über die zentrale Anmeldung; Kundenseite und Kundenanmeldung bleiben unverändert.
+   Notzugang (Keycloak gestört, ADR-007 Regel 6): nur noch über einen SSH-Tunnel auf den eigenen Host des Notzugangs
+   (notzugang_host) – offen genau dann, wenn WA_NOTZUGANG=an (deploy/notzugang.sh an), sonst wie stillgelegt. */
 function alter_zugang_aus(): bool
 {
+    if (notzugang_host()) return oidc_einstellung('WA_NOTZUGANG') !== 'an';
     return oidc_einstellung('WA_EIGENE_ANMELDUNG') === 'aus';
+}
+/* Host des Notzugangs: eigener Apache-Host in app-mitarbeiter (deploy/anmeldung/apache-oidc.conf, Port 8090), den Docker nur
+   auf 127.0.0.1 des Servers veröffentlicht – erreichbar nur über einen SSH-Tunnel, nie über Caddy. Der Webserver meldet ihn
+   mit WA_NOTZUGANG_HOST (nie aus Kopfzeilen); gilt nur für direkte Anfragen von einer internen Adresse (Docker-Netz des
+   Tunnels) ohne weitergereichte Besucheradresse. Keine zentrale Anmeldung auf diesem Host. */
+function notzugang_host(): bool
+{
+    if (oidc_modus() || oidc_einstellung('WA_NOTZUGANG_HOST') !== '1') return false;
+    if ((string)($_SERVER['HTTP_X_FORWARDED_FOR'] ?? '') !== '') return false;
+    $ip = (string)($_SERVER['REMOTE_ADDR'] ?? '');
+    return filter_var($ip, FILTER_VALIDATE_IP) !== false
+        && filter_var($ip, FILTER_VALIDATE_IP, FILTER_FLAG_NO_PRIV_RANGE | FILTER_FLAG_NO_RES_RANGE) === false;
 }
 /* Gilt für diese Anfrage: Host ohne zentrale Anmeldung und alter Zugang aus */
 function eigene_anmeldung_stillgelegt(): bool
@@ -106,15 +121,56 @@ function oidc_konto(array $id): array
         audit('oidc_ohne_konto', 'Anmeldung über Keycloak ohne Mitarbeiterkonto', ['benutzer' => substr($id['name'], 0, 60)]);
         fail('Für diese Anmeldung gibt es hier kein Mitarbeiterkonto. Bitte an einen Administrator wenden.', 403);
     }
+    // Konto eines gelöschten Mitarbeiters (Keycloak beim Löschen nicht erreichbar oder Konto von Hand neu angelegt mit
+    // derselben Kennung): nie mit einem späteren, gleich benannten Mitarbeiter verknüpfen
+    if (isset(oidc_geloescht()[$id['sub']])) {
+        audit('oidc_ohne_konto', 'Anmeldung mit dem Konto eines gelöschten Mitarbeiters abgelehnt', ['benutzer' => substr($id['name'], 0, 60)]);
+        fail('Für diese Anmeldung gibt es hier kein Mitarbeiterkonto. Bitte an einen Administrator wenden.', 403);
+    }
+    oidc_admin_konto_pruefen($kandidat, $id, true);
     $neu = user_update($kandidat['id'], function (array &$u) use ($id) { if (empty($u['oidcSub'])) $u['oidcSub'] = $id['sub']; });
     if ($neu === null || (string)($neu['oidcSub'] ?? '') !== $id['sub']) fail('Für diese Anmeldung gibt es hier kein Mitarbeiterkonto.', 403);
     audit('oidc_verknuepft', 'Mitarbeiterkonto mit der zentralen Anmeldung verknüpft', [], $neu);
     return oidc_aktiv($neu);
 }
+/* Administratoren nie mit einem Keycloak-Konto, das die Verwaltung der Anwendung ändern darf (Gruppe „anwendungskonten“,
+   Stand 16, ADR-007 Stufe 1b): sonst könnte, wer das Geheimnis des Clients „konten“ hat, ein Konto mit dem Benutzernamen
+   eines noch nicht verknüpften Administrators anlegen oder das Passwort eines frisch beförderten Administrators setzen und
+   sich damit als Administrator anmelden. Erste Verknüpfung ($neu): nur, wenn feststeht, dass das Konto nicht in der Gruppe
+   ist; neue Sitzung eines verknüpften Administrators: abgelehnt, wenn es in der Gruppe ist (Abhilfe in der Serverkonsole:
+   konten.sh gruppe-abgleichen). Ohne eingerichteten Client „konten“ gibt es die Gruppe für die Anwendung nicht. */
+function oidc_admin_konto_pruefen(array $u, array $id, bool $neu): void
+{
+    if (($u['role'] ?? '') !== 'admin' || !konten_eingerichtet()) return;
+    $in = konten_in_gruppe($id['sub']);
+    if ($in === false || ($in === null && !$neu)) return;
+    audit('oidc_ohne_konto', $in ? 'Anmeldung als Administrator mit einem Konto der Gruppe anwendungskonten abgelehnt'
+        : 'Erste Anmeldung als Administrator abgelehnt (Gruppe anwendungskonten nicht prüfbar)', ['benutzer' => substr($id['name'], 0, 60)], $u);
+    fail($in ? 'Ihr Konto in der zentralen Anmeldung darf noch die Verwaltung der Anwendung ändern – als Administrator erst nach dem Abgleich in der Serverkonsole (sh deploy/anmeldung/konten.sh gruppe-abgleichen). Bitte an den Inhaber wenden.'
+        : 'Die zentrale Anmeldung ist gerade nicht erreichbar. Bitte später erneut versuchen.', 403);
+}
 function oidc_aktiv(array $u): array
 {
     if (empty($u['active'])) fail('Ihr Mitarbeiterkonto ist gesperrt. Bitte an einen Administrator wenden.', 403);
     return $u;
+}
+/* Kennungen (sub) der Keycloak-Konten gelöschter Mitarbeiter → Zeitpunkt (Dokument „oidc-geloescht“, nur wachsend und
+   klein). Beim Löschen eines Mitarbeiters löscht die Anwendung dessen Konto in Keycloak (lib/anmeldekonten.php); der
+   Vermerk sichert ab, dass ein übrig gebliebenes Konto nie mit einem neuen, gleich benannten Mitarbeiter verknüpft wird. */
+function oidc_geloescht(): array
+{
+    $d = store_read('oidc-geloescht');
+    return is_array($d) ? $d : [];
+}
+function oidc_geloescht_merken(string $sub): void
+{
+    if ($sub === '' || !preg_match('/^[A-Za-z0-9-]{1,64}$/', $sub)) return;
+    with_lock('oidc-geloescht', function () use ($sub) {
+        $d = oidc_geloescht();
+        if (isset($d[$sub])) return;
+        $d[$sub] = time();
+        store_write('oidc-geloescht', $d);
+    });
 }
 
 /* Angemeldeter Mitarbeiter auf einem Keycloak-Host. Die PHP-Sitzung dieses Hosts (eigenes __Host-Cookie) trägt nur noch
@@ -145,6 +201,8 @@ function oidc_nutzer(): ?array
     }
     start_session();
     unset($_SESSION['oidcStufeAngefordert']);
+    // Leerlauf der Keycloak-Sitzung über alle Adressen der Plattform (Sicherheitseinstellung „abmelden nach Inaktivität“)
+    oidc_leerlauf($id);
     // Abgelaufen (Inaktivität) oder in Verwaltung → Sitzungen beendet: weiter erst nach erneuter Anmeldung bei Keycloak
     [$ende, $grund] = oidc_ende_zeit($id, $u);
     if ($ende > 0) {
@@ -158,6 +216,7 @@ function oidc_nutzer(): ?array
     $passt = ($_SESSION['uid'] ?? '') === $u['id'] && ($_SESSION['oidcSub'] ?? '') === $id['sub'] && ($_SESSION['oidcSid'] ?? '') === $id['sid']
         && (int)($_SESSION['sv'] ?? -1) === (int)$u['sv'] && isset((store_read('sitzungen') ?? [])[(string)($_SESSION['sid'] ?? '')]);
     if (!$passt) {
+        oidc_admin_konto_pruefen($u, $id, false);
         $_SESSION = [];
         sign_in($u);
         $_SESSION['oidcSub'] = $id['sub'];
@@ -177,7 +236,49 @@ function oidc_nutzer(): ?array
         }
         oidc_gesehen();
     }
+    oidc_aktivitaet_merken($id);
     return $u;
+}
+/* ---------- Leerlauf über alle Adressen (seit 04.11.2026) ----------
+   „Automatisch abmelden nach Inaktivität“ gilt für die Anmeldung bei Keycloak als Ganzes, nicht je Adresse: Aktivität in
+   irgendeinem Modul hält die Anmeldung überall, ohne Aktivität läuft sie überall ab – auch auf einer Adresse, die der
+   Mitarbeiter danach zum ersten Mal öffnet (dort entstünde sonst über Single Sign-on still eine neue Sitzung). Merker:
+   Dokument „oidc-aktivitaet“ (Keycloak-Sitzung sid → letzte Aktivität), höchstens einmal je Minute geschrieben;
+   Hintergrundabfragen zählen nicht (bg_request). Weiter geht es erst nach erneuter Anmeldung bei Keycloak (oidc_erneuern,
+   max_age=0). Neue Aktivität kann es nach dem Ablauf nur nach einer solchen erneuten Anmeldung geben (jede Adresse prüft vor
+   dem Merken) – sie gilt dann auch auf den anderen Adressen, ohne dort noch einmal das Passwort zu verlangen. */
+const OIDC_AKTIV_HALTEN = 46800;   // Sekunden; länger als die längste Einstellung (12 Stunden)
+function oidc_aktiv_schluessel(array $id): string
+{
+    return $id['sid'] !== '' ? $id['sid'] : 'sub:' . $id['sub'];
+}
+function oidc_aktivitaet(): array
+{
+    $d = store_read('oidc-aktivitaet');
+    return is_array($d) ? $d : [];
+}
+/* Abgelaufen? Dann Ende in der PHP-Sitzung merken – oidc_ende_zeit verlangt die erneute Anmeldung (Grund „inaktiv“) */
+function oidc_leerlauf(array $id): void
+{
+    $zuletzt = (int)(oidc_aktivitaet()[oidc_aktiv_schluessel($id)] ?? 0);
+    if (isset($_SESSION['oidcEnde'])) {
+        // hier abgelaufen, inzwischen auf einer anderen Adresse erneut angemeldet (Aktivität nach dem Ablauf): gilt auch hier
+        if ($zuletzt > (int)$_SESSION['oidcEnde']) unset($_SESSION['oidcEnde'], $_SESSION['oidcEndeAuth']);
+        return;
+    }
+    if ($zuletzt > 0 && time() - $zuletzt > (int)sec()['idleMinutes'] * 60) $_SESSION['oidcEnde'] = time();
+}
+function oidc_aktivitaet_merken(array $id): void
+{
+    if (bg_request()) return;
+    $k = oidc_aktiv_schluessel($id);
+    if (time() - (int)(oidc_aktivitaet()[$k] ?? 0) < 60) return;
+    with_lock('oidc-aktivitaet', function () use ($k) {
+        $grenze = time() - OIDC_AKTIV_HALTEN;
+        $d = array_filter(oidc_aktivitaet(), fn($t) => is_int($t) && $t > $grenze);
+        $d[$k] = time();
+        store_write('oidc-aktivitaet', $d);
+    });
 }
 /* Letzte Anmeldung am Mitarbeiterkonto (lastLogin) = Anmeldezeitpunkt bei Keycloak (auth_time) – für „letzte Anmeldung“ und
    ungenutzte Konten (Modul Sicherheit). Geschrieben nur, wenn die Anmeldung neuer ist (eine Anmeldung gilt für alle Hosts). */

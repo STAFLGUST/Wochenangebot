@@ -1,0 +1,99 @@
+# Wöchentliche Sicherheitsupdates der Container-Images (PHP/Apache, Caddy, Keycloak, PostgreSQL, Hilfsimages).
+# Die Images sind über Fassung und Digest festgelegt (tests/deploy/test_images.py). Herausgeber bauen dieselbe Fassung
+# regelmäßig neu, wenn das Betriebssystem darunter Sicherheitskorrekturen bekommt – dieser Lauf trägt die neuen Digests
+# überall gleich ein (werkzeuge/images_aktualisieren.py) und legt dafür einen Pull Request an. Die volle CI (Bau,
+# Vergleich mit dem Grundimage, Trivy-Scan, alle Tests) prüft ihn wie jeden anderen; Merge und Release macht wie immer
+# nur der Inhaber. Neuere Fassungen (z. B. Keycloak 26.8.2) meldet der Lauf nur – ein Fassungswechsel betrifft auch die
+# Downloads und Prüfsummen der CI (tests/oidc/umgebung.sh) und wird von Hand gemacht.
+#
+# Die CI läuft als normale Pull-Request-Prüfung (nur sie zählt für die Pflicht-Prüfungen des Hauptbranch-Schutzes).
+# GitHub behandelt den Autor github-actions[bot] als Erstbeitragenden und hält sie an, bis der Inhaber im Pull Request
+# „Approve workflows to run“ klickt (Einstellung „Require approval for first-time contributors“) – der PR-Text sagt das.
+# Ein zusätzlicher CI-Start für den Branch (workflow_dispatch) zählt nicht für den Pull Request und entfällt daher.
+# Darf GitHub Actions keine Pull Requests anlegen (Einstellung „Allow GitHub Actions to create and approve pull
+# requests“), entsteht stattdessen ein Issue mit Bericht und Branch; nur dann startet dieser Lauf die CI für den Branch.
+name: Sicherheitsupdates
+
+on:
+  schedule:
+    - cron: "41 4 * * 1"   # montags 04:41 UTC (vor Arbeitsbeginn; die CI ist danach in rund 25 Minuten durch)
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: sicherheitsupdates
+  cancel-in-progress: false
+
+jobs:
+  images:
+    name: Container-Images auf neue Digests prüfen
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    permissions:
+      contents: write        # Branch mit den neuen Digests
+      pull-requests: write   # Pull Request anlegen, ältere ersetzen
+      actions: write         # Rückfall ohne Pull Request: CI für den Branch starten
+      issues: write          # Rückfall: Bericht als Issue
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
+        with:
+          persist-credentials: false
+      - name: Neue Digests suchen und eintragen
+        id: pruefen
+        run: |
+          set +e
+          python3 werkzeuge/images_aktualisieren.py --setzen --neuere --bericht "$RUNNER_TEMP/bericht.md"
+          rc=$?
+          set -e
+          echo "rc=$rc" >> "$GITHUB_OUTPUT"
+          cat "$RUNNER_TEMP/bericht.md" >> "$GITHUB_STEP_SUMMARY"
+          # 0 = alles aktuell, 3 = neue Digests eingetragen, sonst Fehler (z. B. Registry nicht erreichbar) → Lauf rot
+          if [ "$rc" != 0 ] && [ "$rc" != 3 ]; then exit "$rc"; fi
+      - name: Festlegungen weiter einheitlich (tests/deploy/test_images.py), keine Workflow-Datei geändert
+        if: steps.pruefen.outputs.rc == '3'
+        run: |
+          python3 tests/deploy/test_images.py
+          # Das GITHUB_TOKEN darf Workflow-Dateien nicht ändern – Digests stehen deshalb nur in Compose-Dateien und Dockerfile
+          if git diff --name-only | grep -q '^\.github/workflows/'; then echo "::error::Digest in einer Workflow-Datei"; exit 1; fi
+          git diff --stat
+      - name: Branch, Pull Request und CI
+        if: steps.pruefen.outputs.rc == '3'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -eu
+          datum=$(date -u +%Y-%m-%d)
+          kw=$(date -u +%V)
+          branch="plattform/sicherheitsupdates-$datum-$(date -u +%H%M)"
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git switch -c "$branch"
+          git commit -am "Sicherheitsupdates der Container-Images (KW $kw): neue Digests derselben Fassungen"
+          git push "https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git" "HEAD:refs/heads/$branch"
+          {
+            cat "$RUNNER_TEMP/bericht.md"
+            echo
+            echo "## Prüfen und einspielen"
+            echo '- Zeigt GitHub unten "1 workflow awaiting approval": auf "Approve workflows to run" klicken (GitHub behandelt den Bot als Erstbeitragenden; geändert sind nur die Digest-Zeilen oben, keine Workflow-Datei).'
+            echo "- Grüne CI heißt: Image gebaut, mit dem Grundimage verglichen, Trivy-Scan ohne kritische Lücke mit Korrektur, alle Tests."
+            echo "- Danach mergen und wie immer ein Release freigeben. Neue Images für Caddy, Keycloak oder PostgreSQL starten diese Container dabei neu (Keycloak: rund eine Minute keine neue Mitarbeiteranmeldung)."
+            echo "- Rückfall: Release zurücknehmen (alte Digests)."
+            echo
+            echo '_Automatisch angelegt vom Workflow Sicherheitsupdates (.github/workflows/sicherheitsupdates.yml)._'
+          } > "$RUNNER_TEMP/pr.md"
+          if url=$(gh pr create --base main --head "$branch" --title "Sicherheitsupdates der Container-Images (KW $kw)" --body-file "$RUNNER_TEMP/pr.md"); then
+            echo "Pull Request: $url" >> "$GITHUB_STEP_SUMMARY"
+            # ältere, noch offene Pull Requests dieses Laufs sind damit überholt (der neue enthält den aktuellen Stand)
+            gh pr list --state open --json number,headRefName --jq '.[] | select(.headRefName | startswith("plattform/sicherheitsupdates-")) | "\(.number) \(.headRefName)"' |
+              while read -r nr kopf; do
+                [ "$kopf" = "$branch" ] && continue
+                gh pr close "$nr" --delete-branch --comment "Ersetzt durch $url (neuere Digests)." || true
+              done
+          else
+            echo 'Pull Request konnte nicht angelegt werden (Einstellung: Allow GitHub Actions to create and approve pull requests?) – Issue statt dessen.' >> "$GITHUB_STEP_SUMMARY"
+            { echo "Branch: \`$branch\` – bitte daraus einen Pull Request nach \`main\` anlegen."; echo; cat "$RUNNER_TEMP/pr.md"; } > "$RUNNER_TEMP/issue.md"
+            gh issue create --title "Sicherheitsupdates der Container-Images (KW $kw)" --body-file "$RUNNER_TEMP/issue.md"
+            gh workflow run ci.yml --ref "$branch"   # ohne Pull Request gibt es keine PR-Prüfung – CI für den Branch
+          fi

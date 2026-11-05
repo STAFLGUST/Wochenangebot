@@ -49,8 +49,9 @@ ok "unbekannter Befehl abgelehnt" '[ $CODE = 2 ]'
 mkdir "$T/leer" && cd "$T/leer"
 AUS=$(sh "$REPO/deploy/speicher.sh" 2>&1) && CODE=0 || CODE=$?
 ok "außerhalb des Installationsordners: Abbruch mit Hinweis" '[ $CODE = 1 ] && echo "$AUS" | grep -q "/opt/wochenangebot"'
-# Container-Protokolle begrenzt: jeder Dienst in jeder Compose-Datei (app, caddy · keycloak, keycloak-db · app-test)
+# Container-Protokolle begrenzt: jeder Dienst in jeder Compose-Datei (app, caddy · app-mitarbeiter, postausgang, keycloak, keycloak-db · app-test);
+# app und caddy erben die Begrenzung in der Ergänzungsdatei aus docker-compose.yml
 AUS=$(grep -c 'max-size: "10m"' "$REPO/docker-compose.yml" "$REPO/deploy/anmeldung/docker-compose.anmeldung.yml" "$REPO/deploy/testumgebung/docker-compose.yml")
-ok "Compose: Protokollbegrenzung für alle Dienste" 'echo "$AUS" | grep -q "docker-compose.yml:2" && echo "$AUS" | grep -q "anmeldung.yml:2" && echo "$AUS" | grep -q "testumgebung/docker-compose.yml:1"'
+ok "Compose: Protokollbegrenzung für alle Dienste" 'echo "$AUS" | grep -q "docker-compose.yml:2" && echo "$AUS" | grep -q "anmeldung.yml:4" && echo "$AUS" | grep -q "testumgebung/docker-compose.yml:1"'
 echo "speicher.sh: $PASS bestanden, $FAIL fehlgeschlagen"
 [ "$FAIL" = 0 ]

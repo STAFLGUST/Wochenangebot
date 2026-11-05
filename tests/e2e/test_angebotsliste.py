@@ -19,6 +19,16 @@ with sync_playwright() as pw:
     pg.goto(B + '/'); pg.wait_for_selector('.al tr.row')
     check('default view is the offer list', pg.is_visible('.al') and pg.get_attribute('#modebar [data-mode=angebot]', 'aria-checked') == 'true' and pg.is_hidden('#view-seg') and not pg.is_visible('table.grid'))
     check('title like the printed list', 'Freibleibendes Angebot für die KW 43 - 2026' in pg.inner_text('.al-head'))
+    # Gemeldet 05.11.2026: Titel aus dem früheren Import nannte die alte KW („KW 43“ im Angebot der KW 45) –
+    # die Überschrift nimmt immer die Woche des Angebots
+    import json as _jt
+    _raw = storage_raw('angebot'); _doc = _jt.loads(_raw[_raw.index('{'):])
+    storage_write('angebot', dict(_doc, meta=dict(_doc['meta'], week=45)))
+    _kw = br.new_page(viewport={'width': 1440, 'height': 1000}); _kw.on('pageerror', lambda e: errs.append(str(e)))   # eigene Seite (eigener Service Worker)
+    _kw.goto(B + '/?r=kw'); _kw.wait_for_selector('.al tr.row')
+    _kopf = _kw.inner_text('.al-head')
+    check('title follows the offer week, not the imported title (KW 45 instead of 43)', 'Freibleibendes Angebot für die KW 45 - 2026' in _kopf and 'KW 43' not in _kopf, _kopf)
+    _kw.close(); storage_write('angebot', _doc)
     check('sections as headings', pg.locator('.al-st').count() == 4 and 'Eigene Zerlegung' in pg.locator('.al-st').first.inner_text(), pg.locator('.al-st').count())
     check('one block per group, every article exactly once', pg.locator('.al-grp').count() >= 30 and pg.locator('.al tr.row').count() == 276
           and len(set(pg.eval_on_selector_all('.al tr.row', 'rs => rs.map(r => r.dataset.id)'))) == 276, (pg.locator('.al-grp').count(), pg.locator('.al tr.row').count()))
@@ -125,14 +135,19 @@ with sync_playwright() as pw:
     total = 276 + len(extra)
     x = br.new_page(viewport={'width': 1440, 'height': 900}); x.on('pageerror', lambda q: errs.append(str(q)))
     x.goto(B + '/?r=gross'); x.wait_for_selector('.al tr.row')
-    names = x.eval_on_selector_all('.al-sec:first-of-type td.c-name', 'cs => cs.map(c => c.innerText)')
+    names = x.evaluate("[...document.querySelector('.al-band .al-sec').querySelectorAll('td.c-name')].map(c => c.innerText)")
     check('brand left out of article names under a "Fleischmeister" heading', not any('Fleischmeister' in n for n in names) and any('Zuschnitt 1' in n for n in names), [n for n in names if 'Fleischmeister' in n][:3])
     x.fill('#q', 'Fleischmeister Zuschnitt'); x.wait_for_function(f"document.querySelectorAll('.al tr.row').length >= {len(extra)} && document.querySelectorAll('.al tr.row').length < {total}")
     check('search still finds the full name', x.locator('.al tr.row').count() >= len(extra))
     x.fill('#q', ''); x.wait_for_function(f"document.querySelectorAll('.al tr.row').length === {total}")
-    check('large offer on screen: every article once, three blocks', x.locator('.al tr.row').count() == total and x.locator('.al-sec').first.locator('.al-col').count() == 3, x.locator('.al tr.row').count())
-    hs = x.evaluate("[...document.querySelectorAll('.al-sec')[0].querySelectorAll('.al-col')].map(c => c.getBoundingClientRect().height)")
-    check('large offer: big group split, columns balanced', x.locator('.al-sec').first.locator('.al-cont').count() >= 1 and max(hs) - min(hs) <= max(hs) * 0.15, [round(h) for h in hs])
+    ngr = len({i['groupId'] for i in doc['items']})
+    check('large offer on screen: every article once, every group exactly one block', x.locator('.al tr.row').count() == total and x.locator('.al-grp').count() == ngr, (x.locator('.al tr.row').count(), x.locator('.al-grp').count(), ngr))
+    # Inhaber 05.11.2026: ein Block steht immer vollständig untereinander – auch die große Gruppe wird nicht geteilt
+    g1n = len([i for i in doc['items'] if i['groupId'] == 'g1'])
+    check('large offer: no block split on screen (no „Forts.“), big group complete in one column', x.locator('#list .al-cont').count() == 0
+          and max(x.eval_on_selector_all('.al-grp', 'gs => gs.map(g => g.querySelectorAll("tr.row").length)')) == g1n, g1n)
+    spalten = x.evaluate("[...document.querySelectorAll('.al-band')].map(b => [...b.querySelectorAll(':scope > .al-sec')].reduce((a, s) => a + s.querySelectorAll(':scope > .al-cols > .al-col').length, 0))")
+    check('large offer: at most three columns per row', spalten and max(spalten) <= 3, spalten)
     x.evaluate("window.dispatchEvent(new Event('beforeprint'))")
     pages = x.locator('#print-root .pl-page').count()
     check('large offer export: section continues on further pages', pages >= 5 and x.locator('#print-root tr.row').count() == total and x.locator('#print-root .al-st .al-cont').count() >= 1, pages)
@@ -141,6 +156,31 @@ with sync_playwright() as pw:
     n_pdf = len(_re.findall(rb'/Type\s*/Page[^s]', pdf))
     check('large offer export: nothing overflows (PDF pages = laid-out pages)', n_pdf == pages, (n_pdf, pages))
     x.close()
+    # Gemeldet 05.11.2026 (Angebot Bela): Blöcke liefen mit „Forts.“ in die Nachbarspalte, Platz blieb leer. Jetzt: jeder Block
+    # vollständig in einer Spalte; kleine Abschnitte nebeneinander, wenn das Platz spart (Rindfleisch/Schwein/Geflügel + Paraguay)
+    vorlage = doc['items'][0]
+    def art(n, gid, nr):
+        return dict(vorlage, id=f'b{gid}{nr}', code=str(90000 + n), name=f'Testartikel {gid} {nr}', groupId=gid, price={'status': 'value', 'value': 9.9, 'raw': '9.9'}, altPrices=[])
+    gruppen = [('gA1', 'Färse HV, 4 x D, frisch', 'Eigene Zerlegung, Marke "Fleischmeister"', 1), ('gA2', 'Färse HV, EG, frisch', 'Eigene Zerlegung, Marke "Fleischmeister"', 2),
+               ('gB1', 'Rindfleisch, EU & Deutschland, frisch', '', 2), ('gB2', 'Schweinefleisch, frisch', '', 7), ('gB3', 'Geflügel, frisch', '', 7),
+               ('gC1', 'Paraguay, frisch', 'Südamerika & Neuseeland, frisch', 7)]
+    items, n = [], 0
+    for gid, _, _, anz in gruppen:
+        for k in range(anz): n += 1; items.append(art(n, gid, k))
+    klein = dict(doc, groups=[{'id': g, 'name': nm, 'section': sec} for g, nm, sec, _ in gruppen], items=items,
+                 sections=['Eigene Zerlegung, Marke "Fleischmeister"', 'Südamerika & Neuseeland, frisch'])
+    storage_write('angebot', klein)
+    y = br.new_page(viewport={'width': 1440, 'height': 1000}); y.on('pageerror', lambda q: errs.append(str(q)))
+    y.goto(B + '/?r=bela'); y.wait_for_selector('.al tr.row')
+    check('small offer: every block complete in one column (no „Forts.“)', y.locator('#list .al-cont').count() == 0 and y.locator('.al-grp').count() == 6
+          and y.eval_on_selector_all('.al-grp', 'gs => gs.map(g => g.querySelectorAll("tr.row").length)') == [1, 2, 2, 7, 7, 7],
+          y.eval_on_selector_all('.al-grp', 'gs => gs.map(g => g.querySelectorAll("tr.row").length)'))
+    zeilen = y.evaluate("[...document.querySelectorAll('.al-band')].map(b => [...b.querySelectorAll(':scope > .al-sec')].map(s => s.querySelectorAll(':scope > .al-cols > .al-col').length))")
+    check('small offer: space used – Paraguay next to Rind/Schwein/Geflügel (2 + 1 columns), Eigene Zerlegung in its own row', zeilen == [[2], [2, 1]], zeilen)
+    oben = y.evaluate("[...document.querySelectorAll('.al-band')[1].querySelectorAll('.al-grp')].map(g => Math.round(g.getBoundingClientRect().top))")
+    check('small offer: blocks of a row start level (placeholder for the section without a name)', len(set([oben[0], oben[-1]])) == 1 and y.locator('.al-st-leer').count() == 1, oben)
+    y.screenshot(path=SH + '/angebotsliste-klein.png', full_page=True)
+    y.close(); storage_write('angebot', doc)
     check('no page errors', not errs, errs[:3])
     br.close()
 

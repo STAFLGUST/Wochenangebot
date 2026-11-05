@@ -10,6 +10,9 @@ declare(strict_types=1);
      sich selbst Abwesenheiten ein – auch Administratoren nicht (Vier-Augen-Prinzip, hr_eigen).
      Mitarbeiter beantragen Urlaub und – soweit ihr Gleittage-Konto reicht – Gleittage (Inhaber 02.11.2026).
    - Krank (K) und freie Tage (X) trägt nur die Personalstelle ein, Gleittage (G) auch sie.
+   - Unentschuldigtes Fehlen (F, Inhaber 03.11.2026) trägt nur die Personalstelle ein; dabei geht (abwählbar) eine E-Mail an
+     den Mitarbeiter mit seiner Urlaubsübersicht und der Bitte um eine unverzügliche Erklärung (hr_fehlen_mail in mail.php).
+     Zählt nicht gegen den Urlaub; Kollegen sehen nur „abwesend“; im Export und in der Übersicht als eigene Spalte.
    - Gleittage-Konto (Inhaber 02.11.2026): die Personalstelle gewährt Mitarbeitern Gleittage als Zusatztage (Anzahl, Grund;
      gespeichert je Person in hr-personal „gleittage“, Rücknahme als Storno). Konto je Jahr: Übertrag + gewährt − genommen −
      geplant = Rest; der Rest geht unbegrenzt ins Folgejahr (kein Verfall). Das Konto beginnt mit der ersten Gewährung –
@@ -26,7 +29,8 @@ declare(strict_types=1);
      hr-einstellungen.antraege, Standard an). Ausgeschaltet lehnt der Server neue Anträge ab; Kalender, Urlaubskonto,
      Eintragen durch die Personalstelle, Entscheiden und Zurückziehen offener Anträge bleiben.
    - Urlaubsregeln (Inhaber 03.11.2026): Text der Personalstelle (hr-einstellungen „regeln“, Vorlage HR_REGELN_STANDARD),
-     den jeder Mitarbeiter beim Urlaubsantrag sieht; änderbar in Verwaltung → Urlaub.
+     den jeder Mitarbeiter beim Urlaubsantrag sieht; änderbar in Verwaltung → Urlaub. Eine unverändert gespeicherte frühere
+     Vorlage (HR_REGELN_FRUEHER) zeigt die aktuelle – kompakte – Vorlage.
    - Urlaubssperren aus den Regeln jedes Jahr automatisch (Inhaber 03.11.2026, hr-einstellungen „regelSperren“, Standard an):
      Ostergeschäft (die zwei Wochen vor Karfreitag) und Weihnachtsgeschäft (Montag der letzten Novemberwoche bis 24.12.).
      Sie gelten wie eingetragene Sperren (hr_einstellungen „sperren“ enthält beide; „sperrenEigene“ nur die eingetragenen).
@@ -38,7 +42,7 @@ declare(strict_types=1);
      Gespeichert im eigenen Dokument hr-korrekturen (nur die Person selbst und hr.verwalten). */
 if (!defined('WA_API')) { http_response_code(404); exit; }   // nur über api/index.php nutzbar
 
-const HR_ARTEN = ['U' => 'Urlaub', 'K' => 'Krank', 'G' => 'Gleittag', 'X' => 'Freier Tag'];
+const HR_ARTEN = ['U' => 'Urlaub', 'K' => 'Krank', 'G' => 'Gleittag', 'X' => 'Freier Tag', 'F' => 'Unentschuldigt'];
 const HR_STATUS = ['beantragt', 'genehmigt', 'abgelehnt', 'zurueckgezogen', 'storniert'];
 const HR_AKTIV = ['beantragt', 'genehmigt'];
 const HR_UEBERTRAG_BIS = '03-31';            // Standard: Resturlaub aus dem Vorjahr verfällt nach diesem Tag (einstellbar: hr_uebertrag_bis)
@@ -239,28 +243,55 @@ function hr_einstellungen(): array
     usort($alle, function ($a, $b) { return [$a['von'], $a['bis']] <=> [$b['von'], $b['bis']]; });
     return ['rev' => (int)($d['rev'] ?? 0), 'sperren' => $alle, 'sperrenEigene' => $eigene, 'regelSperren' => $regelSperren, 'ferien' => $z($d['ferien'] ?? []),
             'uebertragBis' => hr_uebertrag_bis_norm($d['uebertragBis'] ?? null) ?? HR_UEBERTRAG_BIS,
+            // Übergangsregel: Resturlaub verfällt erstmals am Verfallstag dieses Jahres (fehlt: jedes Jahr – GR-006)
+            'verfallAb' => hr_verfall_ab_norm($d['verfallAb'] ?? null),
             // Urlaubsanträge über die Plattform: nur ein ausdrückliches false schaltet sie aus (fehlt das Feld: an – GR-006)
             'antraege' => ($d['antraege'] ?? true) !== false,
             // Urlaubsregeln: gespeicherter Text (auch leer = keine Regeln anzeigen), ohne Feld die Vorlage
-            'regeln' => is_string($d['regeln'] ?? null) ? $d['regeln'] : HR_REGELN_STANDARD];
+            'regeln' => hr_regeln_text($d['regeln'] ?? null)];
 }
 
 /* ---------------- Urlaubsregeln und Sperren aus den Regeln (Inhaber 03.11.2026) ---------------- */
 const HR_REGELN_MAX = 6000;   // Zeichen
+/* Vorlage (Inhaber 03.11.2026: kompakt und einfach) – eine Zeile „1. Überschrift“, darunter der Text, Absätze durch Leerzeilen */
 const HR_REGELN_STANDARD = "1. Urlaubsanspruch\n"
-    . "Der Urlaubsanspruch jedes Arbeitnehmers ist individuell über den Arbeitsvertrag geregelt.\n\n"
+    . "Wie viele Urlaubstage Sie haben, steht in Ihrem Arbeitsvertrag.\n\n"
     . "2. Planung\n"
-    . "Gemäß § 7 Abs. 3 Satz 1 BUrlG muss der Urlaub im Kalenderjahr vollständig genommen werden. Um eine Planung sinnvoll und für alle Beteiligten gerecht zu gestalten, sollte die jeweilige individuelle Jahresurlaubsplanung bis zum 31.03. eines jeden Kalenderjahres vom Arbeitnehmer eingereicht werden.\n\n"
+    . "Bitte reichen Sie Ihre Urlaubsplanung für das ganze Jahr bis zum 31.03. ein – so können alle fair planen.\n\n"
     . "3. Urlaubsdauer\n"
-    . "Das BUrlG gesteht dem Arbeitnehmer das Anrecht auf Urlaub an 10 aufeinander folgenden Arbeitstagen zu. Die innerbetriebliche Regelung gewährt den Arbeitnehmern aktuell einen Urlaub an 15 aufeinander folgenden Arbeitstagen.\n\n"
+    . "Am Stück sind bis zu 15 Arbeitstage Urlaub möglich (gesetzlich zugesichert: 10).\n\n"
     . "4. Urlaubssperre\n"
-    . "Aus betrieblichen Gründen wird zu folgenden Zeiten kein Urlaub gewährt:\n"
-    . "Ostergeschäft: Zwei Wochen vor den Osterfeiertagen eines jeden Kalenderjahres.\n"
-    . "Weihnachtsgeschäft: Ab der letzten Novemberwoche bis einschließlich dem 24.12. eines jeden Kalenderjahres.\n\n"
+    . "Kein Urlaub im Ostergeschäft (zwei Wochen vor den Osterfeiertagen) und im Weihnachtsgeschäft (letzte Novemberwoche bis 24.12.).\n\n"
     . "5. Resturlaub\n"
-    . "Gemäß § 7 Abs. 3 Satz 1 BUrlG muss der Urlaub im Kalenderjahr vollständig genommen werden. Konnte der Arbeitnehmer seinen Resturlaub wegen Urlaubssperre, Übermaß an Arbeit oder wegen Krankheit nicht nehmen, so muss der Resturlaub gemäß § 7 Abs. 3 Satz 3 BUrlG in den ersten drei Monaten des folgenden Kalenderjahres, d. h. bis zum 31. März, genommen werden. Andernfalls verfällt er grundsätzlich.\n\n"
-    . "6. Urlaubsvertretung\n"
-    . "Der Urlaub muss so geplant werden, dass es keine Überschneidung mit dem jeweiligen Vertreter (Vollvertretung) gibt. Die Urlaubsvertretung ist im Vertretungsplan festgelegt.";
+    . "Urlaub muss im laufenden Jahr genommen werden. Ging das wegen Urlaubssperre, viel Arbeit oder Krankheit nicht, haben Sie bis zum 31.03. des Folgejahres Zeit – danach verfällt der Rest in der Regel (§ 7 Abs. 3 BUrlG).\n\n"
+    . "6. Vertretung\n"
+    . "Ihr Urlaub darf sich nicht mit dem Ihrer Vertretung überschneiden. Wer Sie vertritt, steht im Vertretungsplan.";
+/* Frühere Vorlagen: wurde eine davon unverändert gespeichert (Verwaltung → Urlaub speichert den Text immer mit), gilt die
+   aktuelle Vorlage – eigene Texte der Personalstelle bleiben unberührt; gespeichert wird dabei nichts (GR-006). */
+const HR_REGELN_FRUEHER = [
+    // bis 03.11.2026: ausführlicher Wortlaut
+    "1. Urlaubsanspruch\n"
+        . "Der Urlaubsanspruch jedes Arbeitnehmers ist individuell über den Arbeitsvertrag geregelt.\n\n"
+        . "2. Planung\n"
+        . "Gemäß § 7 Abs. 3 Satz 1 BUrlG muss der Urlaub im Kalenderjahr vollständig genommen werden. Um eine Planung sinnvoll und für alle Beteiligten gerecht zu gestalten, sollte die jeweilige individuelle Jahresurlaubsplanung bis zum 31.03. eines jeden Kalenderjahres vom Arbeitnehmer eingereicht werden.\n\n"
+        . "3. Urlaubsdauer\n"
+        . "Das BUrlG gesteht dem Arbeitnehmer das Anrecht auf Urlaub an 10 aufeinander folgenden Arbeitstagen zu. Die innerbetriebliche Regelung gewährt den Arbeitnehmern aktuell einen Urlaub an 15 aufeinander folgenden Arbeitstagen.\n\n"
+        . "4. Urlaubssperre\n"
+        . "Aus betrieblichen Gründen wird zu folgenden Zeiten kein Urlaub gewährt:\n"
+        . "Ostergeschäft: Zwei Wochen vor den Osterfeiertagen eines jeden Kalenderjahres.\n"
+        . "Weihnachtsgeschäft: Ab der letzten Novemberwoche bis einschließlich dem 24.12. eines jeden Kalenderjahres.\n\n"
+        . "5. Resturlaub\n"
+        . "Gemäß § 7 Abs. 3 Satz 1 BUrlG muss der Urlaub im Kalenderjahr vollständig genommen werden. Konnte der Arbeitnehmer seinen Resturlaub wegen Urlaubssperre, Übermaß an Arbeit oder wegen Krankheit nicht nehmen, so muss der Resturlaub gemäß § 7 Abs. 3 Satz 3 BUrlG in den ersten drei Monaten des folgenden Kalenderjahres, d. h. bis zum 31. März, genommen werden. Andernfalls verfällt er grundsätzlich.\n\n"
+        . "6. Urlaubsvertretung\n"
+        . "Der Urlaub muss so geplant werden, dass es keine Überschneidung mit dem jeweiligen Vertreter (Vollvertretung) gibt. Die Urlaubsvertretung ist im Vertretungsplan festgelegt.",
+];
+
+/* Gespeicherter Text der Urlaubsregeln für die Anzeige: ohne Feld oder als unveränderte frühere Vorlage die aktuelle Vorlage */
+function hr_regeln_text($t): string
+{
+    if (!is_string($t)) return HR_REGELN_STANDARD;
+    return in_array(trim($t), HR_REGELN_FRUEHER, true) ? HR_REGELN_STANDARD : $t;
+}
 
 /* Text der Urlaubsregeln prüfen: Zeichenkette, höchstens HR_REGELN_MAX Zeichen, ohne Steuerzeichen (Zeilenumbrüche bleiben) */
 function hr_regeln_pruefen($t): string
@@ -296,6 +327,21 @@ function hr_uebertrag_bis(bool $neu = false): string
 {
     static $wert = null;
     if ($wert === null || $neu) $wert = hr_einstellungen()['uebertragBis'];
+    return $wert;
+}
+/* Übergangsregel (Inhaber 03.11.2026: „im ersten Jahr streichen wir noch keine Urlaubstage, erst nächstes Jahr“):
+   Resturlaub verfällt erstmals am Verfallstag des Jahres „verfallAb“ (hr-einstellungen, Jahreszahl, nur erweitert – GR-006).
+   In Jahren davor verfällt bei niemandem etwas; der ganze Rest geht ins Folgejahr. Fehlt das Feld: Verfall in jedem Jahr. */
+const HR_VERFALL_AB_MIN = 2000, HR_VERFALL_AB_MAX = 2100;
+function hr_verfall_ab_norm($v): ?int
+{
+    return is_int($v) && $v >= HR_VERFALL_AB_MIN && $v <= HR_VERFALL_AB_MAX ? $v : null;
+}
+/* Erstes Jahr mit Verfall (0 = jedes Jahr) */
+function hr_verfall_ab(bool $neu = false): int
+{
+    static $wert = null;
+    if ($wert === null || $neu) $wert = hr_einstellungen()['verfallAb'] ?? 0;
     return $wert;
 }
 /* Reihenfolge für Kalender und Export: Abteilungen nach der kleinsten Position ihrer Mitarbeiter, darin nach Position
@@ -591,7 +637,8 @@ function hr_konto(array $p, array $eintraege, int $jahr, ?string $heute = null, 
         $vorjahrDaten = (bool)array_filter($p['jahre'], function ($v, $j) use ($jahr) { return (int)$j < $jahr && $v['anspruch'] !== null; }, ARRAY_FILTER_USE_BOTH);
         $uebertrag = $vorjahrDaten && $tiefe < 30 ? hr_konto($p, $eintraege, $jahr - 1, $heute, $tiefe + 1)['rest_jahresende'] : 0.0;
     }
-    $verfall = ($p['verfall'] ?? true) !== false;
+    // Verfall: je Mitarbeiter abschaltbar (hr-personal „verfall“) und erst ab dem Jahr der Übergangsregel (hr_verfall_ab)
+    $verfall = ($p['verfall'] ?? true) !== false && $jahr >= hr_verfall_ab();
     $offen = $verfall ? max(0.0, $uebertrag - $u['bis_frist']) : 0.0;   // bis zur Frist noch nicht verplanter Übertrag (ohne Verfall: nichts)
     $verfallen = $heute > $frist ? $offen : 0.0;
     $rest = $anspruch + $uebertrag - $verfallen - $u['genommen'] - $u['geplant'];
@@ -725,7 +772,7 @@ function hr_gleittage_setzen(array $b, array $me): array
    erscheinen nur hier als Anzahl. */
 function hr_tage_je_art(array $p, array $eintraege, int $jahr): array
 {
-    $n = ['K' => 0, 'G' => 0];
+    $n = ['K' => 0, 'G' => 0, 'F' => 0];
     $frei = hr_freie_tage($eintraege, $p['id']);
     foreach ($eintraege as $e) {
         if ($e['person'] !== $p['id'] || $e['status'] !== 'genehmigt' || !isset($n[$e['art']])) continue;
@@ -748,7 +795,7 @@ function hr_uebersicht(int $jahr): array
         $zeilen[] = ['id' => $p['id'], 'name' => hr_name($p), 'abteilung' => $p['abteilung'],
                      'anspruch' => $k['anspruch'], 'uebertrag' => $k['uebertrag'], 'verfallen' => $k['verfallen'], 'verfaellt' => $k['verfaellt'],
                      'genommen' => $k['genommen'], 'geplant' => $k['geplant'], 'beantragt' => $k['beantragt'], 'rest' => $k['rest'],
-                     'krank' => $t['K'], 'gleittage' => $t['G']] + hr_gleit_summen(hr_gleit_konto($p, $abw, $jahr));
+                     'krank' => $t['K'], 'gleittage' => $t['G'], 'unentschuldigt' => $t['F']] + hr_gleit_summen(hr_gleit_konto($p, $abw, $jahr));
     }
     return $zeilen;
 }
@@ -885,3 +932,4 @@ function hr_monat(int $jahr, int $monat, array $me, bool $voll): array
 }
 
 require_once __DIR__ . '/mail.php';   // E-Mails der Urlaubsverwaltung (Erinnerung, Monatsübersicht, Steuerberater)
+require_once __DIR__ . '/planung.php';   // Jahresplanung (Vorplanung des nächsten Jahres, Konflikte, Jahresübersicht)

@@ -16,18 +16,18 @@ keine Dateiformate und greift auf keine Daten zu; sie ruft nur die Funktionen de
 | `stammdaten` | CSV Artikelstammdaten-Export | `masterAusCsv` + `masterZusammenfuehren` (admin.js) | `stammdaten_speichern` | `stammdaten.bearbeiten` | verwaltung | Stammdaten → Artikelstammdaten, Aktion `master_save` |
 | `bestand` | WinAB-Bestandsliste als CSV (Semikolon, Windows-1252/UTF-8) oder .xls/.xlsx | `StockCore` (stock-core.js) über `stockAusDatei` (admin.js) | `bestand_speichern` | `bestand.importieren` | bestand | Bestand, Aktion `stock_import` |
 | `preisverlauf` | Angebotslisten .xlsx (mehrere) | `OfferCore.parseOfferWorkbook` über `histAusDatei` (admin.js) | `preisverlauf_woche_speichern` | `preisverlauf.bearbeiten` | angebot | Preisverlauf → Daten, Aktion `history_import` |
-| `angebot_excel` | Wochenangebot .xlsx | Angebotsleser (offer-core.js) | Entwurf (`save_draft`) | `angebot.bearbeiten` | angebot | Angebotseditor „Excel importieren“ – Ablauf `editor` |
 | `zeiterfassung` | Abwesenheitsbericht der Zeiterfassung (.xlsx, Importvorlage für Urlaub und Krankheit) | `importLeser.zeiterfassung` (app/module/hr/verwaltung-hr.js, erstes Blatt) | `hr_zeit_vorschau`/`hr_zeit_uebernehmen` (Personalnummer, sonst Name; Option `abteilungen`; ersetzt frühere Übernahme im Zeitraum) | `hr.verwalten` | hr | – |
-| `angebot_preise` | CSV Artikelpreise | `preiseAusCsv` (admin.js) | Entwurf (`save_draft`) | `angebot.bearbeiten`, `angebote.verwalten` | angebot | Stammdaten → Angebote „Preise importieren“ – Ablauf `editor` |
+| `angebot_preise` | CSV Artikelpreise der Warenwirtschaft (Preis-Art; Kundengruppe; Artikel; Preis) | `preiseAusCsv` (admin.js, Leser `angebot_preise`) | `angebot_preise_vorschau` / `_uebernehmen` (module/angebot/import.php): ohne Kundengruppe ins Wochenangebot, mit Kundengruppe ins Angebot der Gruppe, in den **Entwurf** (Sperre `entwurf`, Stand = Revision Entwurf und Angebotsliste, 409); Option `woche` (Auswahl, Standard aktuelle KW) setzt die Angebotswoche, Option `gruppen` (Liste, Standard leer) nennt die Kundengruppen ohne Angebot, für die je ein Angebot angelegt wird; eigene Darstellung `importDarstellung.angebot_preise` (app/module/angebot/preisimport.js: bisher → neu je Angebot, „Bitte prüfen“ ab 10 %, Gruppen einzeln anhaken) | `angebot.bearbeiten`, `angebote.verwalten` | angebot | – (seit 04.11.2026 nur hier; vorher Stammdaten → Angebote) |
 | `umsatzdaten` | CSV Kundenumsatztabelle der Warenwirtschaft (Kunde, Datum, Artikel, Kolli, Menge, Preis, Gesamtbetrag, EKPreis; bis 200 MB) | `importLeser.umsatzdaten` (app/module/controlling/umsatz-import.js): je Kunde, Artikel und Tag zusammengefasst, je Monat ein Teil mit Prüfsumme | `umsatzdaten_import_vorschau` / `_teil` / `_uebernehmen` (module/controlling/umsatzdaten.php): Zeitraum der Datei ersetzt den gespeicherten Zeitraum, nur geänderte Monate werden übertragen | `controlling.umsatz_importieren` | controlling | – (neu, November 2026) |
 | `zeitbericht` | Zeitbericht der Zeiterfassung (.xlsx; Vorname, Nachname, Datum, Hinein, Hinaus, Geplant, Gearbeitete Stunden, Saldo, optional Abwesenheit, Pause, Mitarbeiternummer, Department) | `importLeser.zeitbericht` (app/module/controlling/arbeitszeit-import.js, erstes Blatt als Raster) | `arbeitszeit_import_vorschau` / `_uebernehmen` (module/controlling/arbeitszeit.php): Zeitraum der Datei ersetzt die gespeicherten Tage, Stempelfehler markiert, nie geschätzt | `controlling.arbeitszeit_importieren` | controlling | – (neu, November 2026) |
 
 Nicht aufgenommen: Import der Schutz-Einstellungen (`fw_import`, Plattformkern, nur Administratoren) – das ist eine
 Konfigurationsdatei dieser Anwendung, kein Datenimport aus einem Fremdsystem; er bleibt in der Schutzzentrale.
 
-Ablauf `editor`: Wochenangebot und Artikelpreise ändern den **Entwurf**; Vorschau, Abgleich mit dem Stand anderer
-Bearbeiter, „Rückgängig“ und Veröffentlichen gibt es nur im Angebotseditor. Die Zentrale führt sie auf (Rechte wie dort)
-und öffnet den Editor – es gibt keinen zweiten Weg, der den Entwurf ersetzt.
+Ablauf `editor` (Importart nur aufgeführt, die Zentrale öffnet die Ansicht `ansicht`): wird derzeit von keiner Importart
+genutzt. Der Excel-Import des Wochenangebots im Angebotseditor ist am 04.11.2026 entfallen; die Artikelpreise laufen seitdem
+in der Zentrale und schreiben in den Entwurf – offene Angebotseditoren übernehmen die Änderung über den Abgleich
+(`draft_ping`/`mergeModels`), veröffentlicht wird weiter nur im Editor.
 
 ## Vertrag des Eigentümers (Server)
 
@@ -43,7 +43,7 @@ Datei `app/api/module/<modul>/import.php`, geladen von `app/api/index.php`, Modu
 | `dateien`, `kodierung` | ja | erlaubte Endungen (`csv`, `xls`, `xlsx`, `xlsm`) und Text für die Anzeige |
 | `vorschau`, `uebernahme` | bei Ablauf `zentrale` | Funktionsnamen `f(array $eingabe, array $nutzer): array` |
 | `ablauf` | nein | `zentrale` (Standard) oder `editor` |
-| `optionen` | nein | `[{id, typ: schalter|datum, label, standard?, pflicht?}]` – die Zentrale übergibt nur diese, mit Standardwert |
+| `optionen` | nein | `[{id, typ: schalter|datum|auswahl|liste, label, standard?, pflicht?, werte?}]` – die Zentrale übergibt nur diese, mit Standardwert; `auswahl`: feste Werte `werte: [{wert, text}]`, `standard` muss einer davon sein, andere Werte ersetzt der Server durch den Standard; `liste`: Kennungen (`[A-Za-z0-9._-]{1,40}`, ohne Doppelte, höchstens 500, `standard` eine solche Liste) – die einheitliche Oberfläche zeigt dafür kein Feld, gesetzt wird sie von der eigenen Darstellung des Eigentümers; ob die Kennungen passen, prüft der Eigentümer |
 | `mehrere`, `bestaetigung`, `ansicht` | nein | mehrere Dateien; Schlüssel der Passwortbestätigung (Katalog `BESTAETIGUNG`); Ansicht für „… öffnen“ |
 | `teile` | nein | große Datei in Teilen: Funktionsname `f(array $eingabe, array $nutzer): void` für einen Teil (Zwischenablage des Eigentümers); nur Ablauf `zentrale` |
 | `maxMb` | nein | Größe einer Datei in MB (Prüfung im Browser): Standard 30, mit `teile` bis 200 |
@@ -56,7 +56,14 @@ zahlen   { neu, geaendert, entfaellt, unveraendert, fehler }   – zählen immer
 zeilen   [{ art: neu|geaendert|entfaellt|fehler, zeile?, schluessel, name, text }]   – die Zentrale sendet höchstens 500
 hinweise [{ stufe: info|warn, text }]
 stand    Revision/Kennung des gespeicherten Stands
+details  (nein) beliebige Daten nur für die eigene Darstellung des Eigentümers im Browser – die Zentrale wertet sie nicht aus,
+         reicht sie nur bis 3 MB (JSON) durch, sonst entfallen sie und der Browser zeigt die einheitliche Vorschau
+fuss     (nein) Zusammenfassung über dem Knopf, z. B. „3 Preise in 3 Angeboten · keine neuen Angebote“ (höchstens 300 Zeichen)
+knopf    (nein) Beschriftung des Knopfs, z. B. „3 Preise übernehmen“ (höchstens 60 Zeichen)
 ```
+
+`details` dienen nur der Anzeige: Was übernommen wird, ermittelt die Übernahme des Eigentümers erneut aus Datei und
+Optionen (GR-103); `zahlen`, `zeilen` und `hinweise` müssen weiterhin vollständig sein (einheitliche Vorschau als Rückfall).
 
 Zusätzlich bei Importarten mit `teile`: die Vorschau liefert `teile` = Liste der Kennungen (höchstens 2000, `[A-Za-z0-9_-]{1,40}`),
 die der Eigentümer für die Übernahme braucht (z. B. nur geänderte Monate), und `$eingabe` enthält `upload` (Kennung des Importlaufs,
@@ -78,6 +85,21 @@ admin-verwaltung.js). Wirft der Leser, ist die Datei unlesbar oder falsch (Meldu
 Vor dem Leser prüft die Zentrale einheitlich Endung, leere Datei, Größe (30 MB bzw. `maxMb`), Excel statt CSV, UTF-16 statt
 UTF-8/Windows-1252 und Excel-Kennung.
 
+## Eigene Darstellung der Vorschau (Browser, optional)
+
+`window.WA.importDarstellung[<id>] = { html(ctx) → HTML, binden(root, ctx) }` – Datei beim Eigentümer
+(`app/module/<modul>/…`, in `admin/index.html` nach `admin-import.js` geladen). Liefert die Vorschau `details`, ersetzt
+`html(ctx)` die einheitlichen Zahlen, Hinweise und Zeilen; Schritte, Kopf, Optionen (außer `liste`), Fuß, Übernahme,
+Fehlerbehandlung und 409 bleiben bei der Zentrale. Wirft `html`, zeigt die Zentrale die einheitliche Vorschau.
+
+`ctx` = `{ details, vorschau, optionen, zustand, zahlen, fehler, leserHinweise, hinweiseHTML, aktualisiert, setzen(id, wert) }`:
+`zustand` bleibt für den Importlauf erhalten (Filter, Suche, Fokus); `fehler` = Fehlerzeilen von Leser und Server;
+`setzen` ändert eine Option und lässt die Vorschau neu rechnen – die bisherige bleibt bis dahin abgeblendet stehen
+(`aktualisiert`, Übernehmen gesperrt), bei schnellem Umschalten gilt nur die letzte Anfrage. `binden` wird nach jeder
+Darstellung aufgerufen (Ereignisse nur an Elementen innerhalb der eigenen Darstellung).
+
+Heute: `angebot_preise` (app/module/angebot/preisimport.js, preisimport.css).
+
 ## Aktionen der Zentrale
 
 | Aktion | Art | Inhalt |
@@ -91,5 +113,6 @@ Heute auf der Oberfläche `angebot.eingabe` registriert (`regeln/aktionen/verwal
 `verwaltung.import` ziehen sie dorthin um.
 
 **Neue Importart:** Eintrag in `import_arten_<modul>()` des Eigentümers, Vorschau-/Übernahmefunktion dort, Leser in
-`window.WA.importLeser` und – falls ein neues Recht – in `RECHTE` von `admin-import.js` (nur Anzeige des Menüpunkts);
+`window.WA.importLeser`, bei Bedarf eine eigene Darstellung in `window.WA.importDarstellung` und – falls ein neues Recht – in
+`RECHTE` von `admin-import.js` (nur Anzeige des Menüpunkts);
 Test in der Gruppe des Eigentümers und in `importzentrale`.

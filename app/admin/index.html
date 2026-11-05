@@ -13,6 +13,8 @@
 <link rel="stylesheet" href="../assets/admin.css">
 <link rel="stylesheet" href="../assets/admin-import.css">
 <link rel="stylesheet" href="../module/hr/verwaltung-hr.css">
+<link rel="stylesheet" href="../module/angebot/preisimport.css">
+<link rel="stylesheet" href="../module/verwaltung/angebotskategorien.css">
 </head>
 <body class="adm">
 
@@ -58,7 +60,6 @@
       <div class="save-state" id="save-state" role="status" aria-live="polite"></div>
       <div class="actions">
         <button class="btn ghost" type="button" id="btn-undo" disabled title="Letzte Änderung rückgängig (Strg+Z)"><svg class="i" aria-hidden="true"><use href="#i-undo"/></svg><span class="lbl">Rückgängig</span></button>
-        <button class="btn ghost" type="button" id="btn-import" title="Excel-Datei mit Preisen importieren"><svg class="i" aria-hidden="true"><use href="#i-upload"/></svg><span class="lbl">Excel importieren</span></button>
         <a class="btn ghost" id="btn-site" href="../index.html" target="_blank" rel="noopener" title="Öffentliche Angebotsseite in neuem Tab öffnen (veröffentlichter Stand)"><svg class="i" aria-hidden="true"><use href="#i-home"/></svg><span class="lbl">Angebotsseite</span></a>
         <button class="btn ghost" type="button" id="btn-preview" title="Entwurf des gewählten Angebots so ansehen, wie Kunden ihn nach dem Veröffentlichen sehen"><svg class="i" aria-hidden="true"><use href="#i-eye"/></svg><span class="lbl">Vorschau</span></button>
         <button class="btn" type="button" id="btn-ez-druck" title="Einzelangebot drucken oder als PDF speichern – mit dem Druckdialog der Angebotsseite"><svg class="i" aria-hidden="true"><use href="#i-print"/></svg><span class="lbl">Drucken / PDF</span></button>
@@ -97,6 +98,7 @@
       <div class="side-sep" id="side-stamm" aria-hidden="true">Stammdaten</div>
       <button role="tab" type="button" id="vt-master" aria-selected="false" aria-controls="view-master"><svg class="i" aria-hidden="true"><use href="#i-db"/></svg><span>Artikel<span class="m-hide">stammdaten</span></span></button>
       <button role="tab" type="button" id="vt-vkgruppen" aria-selected="false" aria-controls="view-vkgruppen" hidden><svg class="i" aria-hidden="true"><use href="#i-list"/></svg><span>VK-Gruppen</span></button>
+      <button role="tab" type="button" id="vt-kategorien" aria-selected="false" aria-controls="view-kategorien" hidden><svg class="i" aria-hidden="true"><use href="#i-tag"/></svg><span>Angebots&shy;kategorien</span></button>
       <button role="tab" type="button" id="vt-angebote" aria-selected="false" aria-controls="view-angebote" hidden><svg class="i" aria-hidden="true"><use href="#i-tag"/></svg><span>Angebote</span></button>
       <button role="tab" type="button" id="vt-kunden" aria-selected="false" aria-controls="view-kunden" hidden><svg class="i" aria-hidden="true"><use href="#i-store"/></svg><span>Kunden</span></button>
       <button role="tab" type="button" id="vt-gruppen" aria-selected="false" aria-controls="view-gruppen" hidden><svg class="i" aria-hidden="true"><use href="#i-users"/></svg><span>Kundengruppen</span></button>
@@ -133,9 +135,8 @@
 
     <section class="send-hint" id="send-hint" role="status" hidden></section>
 
-    <div class="ed-panels" id="ed-panels">
+    <div class="ed-panels one" id="ed-panels">
       <section id="mhd-panel" hidden></section>
-      <section id="noprice-panel" hidden></section>
     </div>
 
     <div class="ed-toolbar">
@@ -146,6 +147,7 @@
       <label class="check ed-chip"><input type="checkbox" id="only-changes"> Nur Änderungen</label>
       <span class="ed-hint">Preis: Zahl (23,30) · „a. Anfr.“</span>
       <span class="ed-sp"></span>
+      <button class="btn" type="button" id="btn-winab" hidden title="Veröffentlichtes Wochenangebot als CSV für WinAB herunterladen: Artikelnummer;Preis – steht ein Artikel mehrfach im Angebot, der höhere Preis"><svg class="i" aria-hidden="true"><use href="#i-download"/></svg>Export für WinAB</button>
       <button class="btn" type="button" id="btn-werbung" title="Artikel auf der Angebotsseite oben hervorheben (Werbung schalten)"><svg class="i" aria-hidden="true"><use href="#i-megaphone"/></svg>Werbung<span class="werb-n" id="werb-n" hidden></span></button>
       <button class="btn primary" type="button" id="btn-add-art"><svg class="i" aria-hidden="true"><use href="#i-plus"/></svg>Artikel hinzufügen</button>
     </div>
@@ -163,6 +165,7 @@
     <div id="view-kunden" hidden></div>
     <div id="view-gruppen" hidden></div>
     <div id="view-vkgruppen" hidden></div>
+    <div id="view-kategorien" hidden></div>
     <div id="view-angebote" hidden></div>
     <div id="view-vertreter" hidden></div>
     <div id="view-importe" hidden></div>
@@ -179,7 +182,6 @@
 <!-- Artikel-Details -->
 <dialog class="modal" id="dlg-item" aria-labelledby="it-title" data-ohne-warnung><form class="dlg" method="dialog" id="item-body"></form></dialog>
 <!-- Import -->
-<dialog class="modal" id="dlg-import" aria-labelledby="imp-title"><div class="dlg" id="import-body"></div></dialog>
 <!-- Veröffentlichen -->
 <dialog class="modal wide" id="dlg-publish" aria-labelledby="pub-title"><div class="dlg" id="publish-body"></div></dialog>
 <!-- Versionen -->
@@ -209,6 +211,7 @@
 <dialog class="modal wide" id="dlg-stock-filter" aria-labelledby="sf-title"><div class="dlg" id="stock-filter-body"></div></dialog>
 <dialog class="modal st-vk" id="dlg-stock-vk" aria-labelledby="sv-title"><div class="dlg" id="stock-vk-body"></div></dialog>
 <dialog class="modal" id="dlg-master-new" aria-labelledby="mn-title"><form class="dlg" id="master-new-body" autocomplete="off"></form></dialog>
+<dialog class="modal wide" id="dlg-master-art" aria-labelledby="ma-title"><form class="dlg" id="master-art-body" autocomplete="off"></form></dialog>
 <dialog class="modal wide" id="dlg-sale" aria-labelledby="sp-title"><form class="dlg" id="sale-body" autocomplete="off"></form></dialog>
 <dialog class="modal wide" id="dlg-rest" aria-labelledby="rp-title"><div class="dlg" id="rest-body"></div></dialog>
 <!-- Mitarbeiter anlegen / bearbeiten -->
@@ -254,7 +257,6 @@
 <dialog class="modal wide" id="dlg-order-admin" aria-labelledby="order-admin-title"></dialog>
 <!-- Bestätigung -->
 <dialog class="modal" id="dlg-of-gruppen" aria-labelledby="ofg-title"><div class="dlg" id="of-gruppen-body"></div></dialog>
-<dialog class="modal wide" id="dlg-of-preise" aria-labelledby="ofp-title"><div class="dlg" id="of-preise-body"></div></dialog>
 <dialog class="modal wide" id="dlg-k-import" aria-labelledby="ki-title"><div class="dlg" id="k-import-body"></div></dialog>
 <dialog class="modal pv" id="dlg-vorschau" aria-labelledby="pv-title"><div class="dlg" id="vorschau-body"></div></dialog>
 <dialog class="modal" id="dlg-offer-copy" aria-labelledby="oc-title"><form class="dlg" id="offer-copy-body" autocomplete="off"></form></dialog>
@@ -263,7 +265,6 @@
 
 <input type="file" id="hist-file-input" multiple accept=".xlsx,.xlsm,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" hidden>
 <input type="file" id="stock-file-input" accept=".csv,.xls,.xlsx,text/csv,application/vnd.ms-excel,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" hidden>
-<input type="file" id="file-input" accept=".xlsx,.xlsm,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" hidden>
 <datalist id="dl-origins"></datalist>
 <datalist id="dl-vkgruppen"></datalist>
 <datalist id="dl-sections"></datalist>
@@ -319,10 +320,13 @@
 <script src="../assets/vendor/qrcode.js"></script>
 <script src="../assets/stock-core.js"></script>
 <script src="../assets/admin.js"></script>
+<script src="../module/angebot/winab-export.js"></script>
 <script src="../assets/admin-verwaltung.js"></script>
 <script src="../assets/admin-rollen-vorschau.js"></script>
 <script src="../assets/admin-rollen.js"></script>
 <script src="../assets/admin-import.js"></script>
+<script src="../module/angebot/preisimport.js"></script>
+<script src="../module/verwaltung/angebotskategorien.js"></script>
 <script src="../module/hr/verwaltung-hr.js"></script>
 <script src="../module/controlling/umsatz-import.js"></script>
 <script src="../module/controlling/arbeitszeit-import.js"></script>

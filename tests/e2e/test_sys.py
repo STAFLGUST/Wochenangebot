@@ -3,7 +3,7 @@ from umgebung import BASE  # Testserver je Gruppe (parallel)
 import re, json, time
 from playwright.sync_api import sync_playwright, expect
 B = BASE
-from umgebung import SH, FIX, REPO, WORK, XL44
+from umgebung import SH, FIX, REPO, WORK
 from testdaten import de, preis, preise, artikel, bestand_kg, excel_preis
 results = []
 def check(n, c, info=''):
@@ -132,7 +132,8 @@ with sync_playwright() as p:
     a.click('#dlg-ez-pick [data-pick-extra="frei"]'); a.wait_for_selector('#dlg-ez-pick', state='hidden')
     a.wait_for_function("document.activeElement && document.activeElement.dataset.f === 'name'")
     nm = a.locator(':focus'); nm.fill('Aktions-Rumpsteak, frisch'); nm.press('Tab')
-    ar = a.locator('tr[data-id]:has(input[data-f=name][value="Aktions-Rumpsteak"])')
+    ar = a.locator('tr[data-id]:has(input[data-f=name][value="Aktions-Rumpsteak, frisch"])')
+    check('Bezeichnung bleibt wie eingegeben (auch mit „frisch“, Inhaber 05.11.2026)', ar.count() == 1, a.locator('tr.is-new input[data-f=name]').evaluate_all('e => e.map(x => x.value)'))
     ar.locator('[data-act="item"]').click(); a.wait_for_selector('#dlg-item[open]')
     a.select_option('#item-body [name=groupId]', '__neu'); a.wait_for_selector('#dlg-item', state='hidden')
     a.wait_for_function("document.activeElement && document.activeElement.dataset.gf === 'name'")
@@ -169,13 +170,12 @@ with sync_playwright() as p:
     check('public removed item gone', pub_price('10207') is None)
     pub.goto(B + '/?r=1#suche=rumpsteak'); pub.wait_for_selector('tr.row'); check('public new group', 'Wochenaktion' in pub.inner_text('#list'))
 
-    # import KW44
-    with a.expect_file_chooser() as fc: a.click('#btn-import')
-    fc.value.set_files(XL44); a.wait_for_selector('#dlg-import [data-ia="apply"]')
-    t = a.inner_text('#dlg-import'); check('import preview KW 44', 'KW 44 / 2026 erkannt' in t and 'xx' in t)
-    a.screenshot(path=SH + '/admin-import.png')
-    a.click('#dlg-import [data-ia="apply"]'); a.wait_for_timeout(200)
-    check('import applied to draft', a.input_value('#m-week') == '44' and a.locator('tr[data-id]').count() == 276)
+    # nächste Woche (KW 44) im Entwurf vorbereiten – der Excel-Import im Editor ist entfallen (Auftrag des Inhabers 04.11.2026)
+    check('kein Excel-Import mehr im Editor', a.locator('#btn-import').count() == 0 and a.locator('#file-input').count() == 0)
+    a.fill('#m-week', '44'); a.press('#m-week', 'Tab')
+    row('10601').locator('input[data-f="price"]').fill(de(excel_preis('10601'))); row('10601').locator('input[data-f="price"]').press('Tab')
+    a.wait_for_function("document.querySelector('#m-week').value === '44'")
+    check('Entwurf: KW 44 vorbereitet', a.input_value('#m-week') == '44')
     pub.goto(B + '/?r=2'); pub.wait_for_selector('tr.row'); check('public KW43 still', 'KW 43' in pub.inner_text('#kw-pill'))
     wait_saved()
     a.click('#btn-publish'); a.click('#dlg-publish [data-ia="publish"]'); a.wait_for_function("!document.querySelector('#dlg-publish').open")

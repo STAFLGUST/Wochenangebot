@@ -60,6 +60,8 @@
 .imp-kopf p { margin: 2px 0 0; color: var(--text-2); font-size: 13px; overflow-wrap: anywhere; }
 .imp-optionen { display: flex; flex-wrap: wrap; gap: 8px 20px; align-items: flex-end; margin: 0 0 14px; }
 .imp-optionen .fld { max-width: 220px; }
+.imp-optionen .fld.imp-auswahl { width: auto; max-width: 100%; }   /* Auswahl (z. B. Angebotswoche „KW 45/2026 · 02.11.–08.11.2026 (aktuelle Woche)“): ganze Zeile lesbar */
+.imp-optionen .fld.imp-auswahl select { width: auto; max-width: 100%; }
 .imp-zahlen { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; margin-bottom: 6px; }
 .imp-zahlen div { padding: 10px 12px; border-radius: 10px; background: var(--surface-2); border: 1px solid var(--line); }
 .imp-zahlen span { display: block; font-size: 11.5px; color: var(--muted); font-weight: 600; letter-spacing: .03em; text-transform: uppercase; }

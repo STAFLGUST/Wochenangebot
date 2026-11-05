@@ -34,13 +34,12 @@ import zipfile
 from playwright.sync_api import sync_playwright
 
 from kunden_hilfe import Client, B, API
-from umgebung import SH, storage_raw, storage_sqlite
+from umgebung import SH, ablageordner, storage_raw, storage_sqlite
 
 PW = 'Sicheres-Passwort-1'
 HIER = os.path.dirname(os.path.abspath(__file__))
 PAKET_DATEI = os.path.join(HIER, '..', 'fixtures', 'qs', 'datenpaket.json')
-UDATA = os.environ['UDATA']
-ABLAGE = os.path.join(UDATA, 'dateien')
+ABLAGE = os.path.join(ablageordner(), 'dateien')   # nach der Datentrennung innen
 HEUTE = datetime.date.today().isoformat()
 MB = 1024 * 1024
 TEIL = 3 * MB

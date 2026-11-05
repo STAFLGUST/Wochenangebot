@@ -1,13 +1,14 @@
 """Mehrere Angebote: Kundenangebote mit eigenen Preisen, eigene Artikelliste je Angebot (Artikel hinzufügen wie im
 Einzelangebot, entfernen nur im gewählten Angebot, Umstellung „folgt dem Wochenangebot“ → eigene Liste), Verwaltung,
 Übernahme, Excel-Import ohne Verlust der Kundenangebote, Veröffentlichen, Auslieferung nur an Berechtigte (Regel:
-Kundenpreise nie öffentlich), Werbung je Angebot (Fenster, Prüfung, Auslieferung nur des eigenen Eintrags, Angebotsseite)."""
+Kundenpreise nie öffentlich), Werbung je Angebot (Fenster, Prüfung, Auslieferung nur des eigenen Eintrags, Angebotsseite), zweite Werbung rechts daneben,
+Angebotsauswahl unter den Bereichen der Seitenleiste."""
 import sys
 from umgebung import shot
 from umgebung import BASE  # Testserver je Gruppe (parallel)
 import json, re
 from playwright.sync_api import sync_playwright
-from umgebung import SH, XL44, storage_raw, storage_write
+from umgebung import SH, storage_raw, storage_write
 from testdaten import de, preis
 B = BASE
 res = []
@@ -67,7 +68,12 @@ with sync_playwright() as p:
     n_std = len(codes(a))
     check('Liste zeigt Artikelzahl je Angebot; bestehende Angebote folgen dem Wochenangebot', zahl(a, 'Wochenangebot') == n_std and zahl(a, 'Edeka') == n_std
           and 'folgt dem Wochenangebot' in tab(a, 'Edeka').inner_text(), (zahl(a, 'Wochenangebot'), zahl(a, 'Edeka'), n_std))
-    check('Leisten „Kurzes MHD“/„Bestand ohne Preis“ zugeklappt (ohne Bestand: ausgeblendet)', a.locator('#ed-panels .np-card.open').count() == 0)
+    check('Leiste „Kurzes MHD“ zugeklappt (ohne Bestand: ausgeblendet), „Bestand ohne Preis“ entfallen', a.locator('#ed-panels .np-card.open').count() == 0 and a.locator('#noprice-panel').count() == 0)
+    check('Angebotsauswahl unter den Bereichen der Seitenleiste (Desktop), nur bei „Angebot bearbeiten“', a.evaluate("document.querySelector('#offer-bar').parentElement.classList.contains('side-nav')")
+          and a.evaluate("(() => { const t = document.querySelector('.side-tabs').getBoundingClientRect(), o = document.querySelector('#offer-bar').getBoundingClientRect(); return o.top >= t.bottom - 1 && Math.abs(o.left - t.left) < 30; })()"))
+    a.click('#vt-hist'); a.wait_for_selector('#view-hist:not([hidden])')
+    check('… in anderen Bereichen ausgeblendet', not a.locator('#offer-bar').is_visible())
+    a.click('#vt-edit'); a.wait_for_selector('#offer-bar [data-offer="std"]', state='visible')
     # Edeka: eigene Preise
     tab(a, 'Edeka').click(); a.wait_for_timeout(200)
     th = a.locator('.gcard').first.locator('thead').inner_text()
@@ -120,7 +126,7 @@ with sync_playwright() as p:
     a.click('[data-ofa=add]'); a.locator('#view-angebote [data-of=name]').last.fill('Wochenangebot Metro')
     check('neues Angebot: Voreinstellung „Eigene Artikelliste“', a.locator('#view-angebote tr[data-oi]').last.locator('[data-of=fallback]').input_value() == 'hidden')
     a.click('[data-ofa=save]'); a.wait_for_selector('#toast.show:has-text("Angebote gespeichert")', timeout=8000)
-    a.click('#vt-edit'); a.wait_for_selector('#view-edit:not([hidden]) #offer-bar:not([hidden])')
+    a.click('#vt-edit'); a.wait_for_selector('#view-edit:not([hidden]) #groups'); a.wait_for_selector('#offer-bar:not([hidden])', state='visible')
     check('new offer tab appears', tab(a, 'Metro').count() == 1)
     tab(a, 'Metro').click(); a.wait_for_selector('#groups .ed-empty')
     check('eigene Artikelliste: leer, Hinweis und „Artikel hinzufügen“', 'Noch keine Artikel in diesem Angebot' in a.inner_text('#groups') and zahl(a, 'Metro') == 0
@@ -226,11 +232,16 @@ with sync_playwright() as p:
     check('Fenster: Überschrift vorbelegt, noch keine Artikel', a.input_value('#wb-titel') == 'Unsere Empfehlung der Woche' and a.locator('#wb-liste [data-wid]').count() == 0)
     a.fill('#wb-titel', 'Aktion der Woche'); a.fill('#wb-text', 'Nur solange der Vorrat reicht.')
     id01, id23 = row(a, '10601').get_attribute('data-id'), row(a, '10823').get_attribute('data-id')
-    # Artikelauswahl (gemeinsames Fenster): Filter „nur in diesem Angebot“ an, Bestand ohne Filter, alle Gruppen
+    # Artikelauswahl (gemeinsames Fenster): Filter „nur in diesem Angebot“ nicht vorausgewählt (Inhaber 05.11.2026),
+    # Bestand ohne Filter, alle Gruppen
     a.click('#wb-auswahl'); a.wait_for_selector('#dlg-ez-pick[open] #ezp-list tr[data-code="10601"]')
-    check('Artikelauswahl für die Werbung: nur dieses Angebot, ohne Bestandsfilter, alle Gruppen', 'Werbung' in a.inner_text('#ez-pick-body .ezp-head')
-          and a.is_checked('#ezp-angebot') and 'Wochenangebot' in a.inner_text('label:has(#ezp-angebot)') and (a.locator('#ezp-bestand').count() == 0 or not a.is_checked('#ezp-bestand'))
-          and a.locator('#ezp-list tr.ezp-z').count() > 100 and all(c in set(codes(a)) or c.startswith('~') for c in a.locator('#ezp-list tr.ezp-z').evaluate_all('e => e.map(x => x.dataset.code)')), a.locator('#ezp-list tr.ezp-z').count())
+    alle_n = a.locator('#ezp-list tr.ezp-z').count()
+    check('Artikelauswahl für die Werbung: „nur in …“ nicht vorausgewählt, ohne Bestandsfilter, alle Gruppen', 'Werbung' in a.inner_text('#ez-pick-body .ezp-head')
+          and not a.is_checked('#ezp-angebot') and 'Wochenangebot' in a.inner_text('label:has(#ezp-angebot)') and (a.locator('#ezp-bestand').count() == 0 or not a.is_checked('#ezp-bestand'))
+          and alle_n > 100, alle_n)
+    a.check('#ezp-angebot'); a.wait_for_selector('#ezp-list tr.ezp-z')   # Filter wirkt sofort (hier ohne Bestand: gleiche Artikel)
+    check('… Filter von Hand: nur Artikel dieses Angebots', all(c in set(codes(a)) or c.startswith('~') for c in a.locator('#ezp-list tr.ezp-z').evaluate_all('e => e.map(x => x.dataset.code)')),
+          a.locator('#ezp-list tr.ezp-z').count())
     for c in ('10823', '10601'):
         a.fill('#ezp-q', c); a.wait_for_selector(f'#ezp-list tr[data-code="{c}"]'); a.click(f'#ezp-list tr[data-code="{c}"] .ezp-n')
     check('… Preis im Angebot fest angezeigt (kein Eingabefeld)', a.locator('#ezp-list tr[data-code="10601"] [data-preis]').count() == 0 and de(P10601) in a.inner_text('#ezp-list tr[data-code="10601"] .ezp-pr'))
@@ -252,7 +263,9 @@ with sync_playwright() as p:
     a.screenshot(path=SH + '/werbung-editor.png')
     tab(a, 'Edeka').click(); a.wait_for_selector('#offer-head:has-text("Edeka")')
     a.click('#btn-werbung'); a.click('#wb-auswahl'); a.wait_for_selector('#dlg-ez-pick[open] #ezp-list tr[data-code="10601"]')
-    check('Edeka (eigene Liste): Auswahl zeigt nur den einen Artikel des Angebots', a.locator('#ezp-list tr.ezp-z').count() == 1)
+    check('Edeka (eigene Liste): „nur in „Edeka““ nicht vorausgewählt, Auswahl zeigt auch Artikel außerhalb', not a.is_checked('#ezp-angebot') and a.locator('#ezp-list tr.ezp-z').count() > 1, a.locator('#ezp-list tr.ezp-z').count())
+    a.check('#ezp-angebot'); a.wait_for_function("document.querySelectorAll('#ezp-list tr.ezp-z').length === 1")
+    check('… Filter von Hand: nur der eine Artikel des Angebots', a.locator('#ezp-list tr.ezp-z').count() == 1)
     a.uncheck('#ezp-angebot'); a.fill('#ezp-q', '10823'); a.wait_for_selector('#ezp-list tr[data-code="10823"]'); a.click('#ezp-list tr[data-code="10823"] .ezp-n')
     check('… Filter aus: Artikel außerhalb des Angebots mit Preisfeld (Wochenpreis vorgeschlagen)', a.input_value('#ezp-list [data-preis="10823"]') == de(P10823))
     a.click('#ezp-ok'); a.wait_for_selector('#dlg-ez-pick', state='hidden'); a.wait_for_selector('#toast.show:has-text("aufgenommen")')
@@ -317,22 +330,54 @@ with sync_playwright() as p:
     pm.goto(B + '/'); pm.wait_for_selector('#list .werb-sec tr.row')
     sw = pm.evaluate('document.documentElement.scrollWidth'); check('Angebotsseite mobil: Block ohne seitliches Scrollen', sw <= 390, sw)
     pm.screenshot(path=SH + '/werbung-angebotsseite-mobil.png'); pm.close()
-    # Excel-Import ersetzt nur das Wochenangebot: Kundenangebote behalten Artikel und Preise
-    tab(a, 'Wochenangebot').click(); a.wait_for_timeout(200)
-    with a.expect_file_chooser() as fc: a.click('#btn-import')
-    fc.value.set_files(XL44); a.wait_for_selector('#dlg-import [data-ia="apply"]')
-    check('Import-Vorschau: Kundenangebote bleiben erhalten', 'Kundenangebote bleiben erhalten' in a.inner_text('#dlg-import'), a.inner_text('#dlg-import')[:300])
-    a.click('#dlg-import [data-ia="apply"]'); wait_saved(a)
-    check('nach dem Import: Metro und Edeka behalten ihre Artikel', zahl(a, 'Metro') == 2 and zahl(a, 'Edeka') == 1 and a.input_value('#m-week') == '44', (zahl(a, 'Metro'), zahl(a, 'Edeka')))
-    wi = (get(a, 'draft')[1]['draft']['meta'] or {}).get('werbung', {}).get('std', {})
-    di = {i['id']: i['code'] for i in get(a, 'draft')[1]['draft']['items']}
-    check('… Werbung geht auf die importierten Artikel über (gleiche Nummer)', [di.get(x['id']) for x in wi.get('artikel', [])] == ['10601', '10823'] and a.inner_text('#werb-n') == '2', wi)
-    tab(a, 'Edeka').click(); a.wait_for_timeout(200)
-    check('… eigener Preis wandert auf den importierten Artikel', row(a, '10601').locator('input[data-f=vprice]').input_value() == '22,00')
-    tab(a, 'Metro').click(); a.wait_for_timeout(200)
-    check('… Position nur im Kundenangebot bleibt', any(x.startswith('Metro-Spezial') for x in a.locator('#groups input[data-f=name]').evaluate_all('e => e.map(x => x.value)')))
-    a.click('#btn-undo'); wait_saved(a)
-    check('Import mit Rückgängig zurückgenommen', a.input_value('#m-week') != '44')
+    check('kein Excel-Import mehr im Editor (Auftrag des Inhabers 04.11.2026)', a.locator('#btn-import').count() == 0)
+    # Zweite Werbung (Wunsch des Inhabers): „Weitere Werbung“ im Fenster, Reiter, Prüfung, Auslieferung, rechts daneben
+    tab(a, 'Wochenangebot').click(); a.wait_for_selector('#werb-n:not([hidden])')
+    id701 = row(a, '10701').get_attribute('data-id')
+    a.click('#btn-werbung'); a.wait_for_selector('#dlg-werbung[open] [data-wa=neu]')
+    check('Fenster: Knopf „Weitere Werbung“ (rechts daneben), noch keine Reiter', a.locator('#wb-reiter .wb-tab').count() == 0 and 'rechts daneben' in a.inner_text('#wb-reiter'))
+    a.click('[data-wa=neu]'); a.wait_for_selector('#wb-reiter .wb-tab[aria-selected="true"][data-wr="1"]')
+    check('… zweiter Reiter aktiv, Überschrift vorbelegt, leer, kein weiterer Knopf', a.input_value('#wb-titel') == 'Aktion der Woche' and a.locator('#wb-liste [data-wid]').count() == 0
+          and a.locator('[data-wa=neu]').count() == 0 and 'Werbung 2 entfernen' in a.inner_text('#wb-ende'))
+    a.click('#dlg-werbung [data-wa=ok]')
+    check('leere zweite Werbung: Hinweis statt Übernehmen', 'Werbung 2 hat noch keine Artikel' in a.inner_text('#wb-err') and a.locator('#dlg-werbung[open]').count() == 1)
+    a.fill('#wb-titel', 'Zweite Aktion')
+    a.click('#wb-auswahl'); a.wait_for_selector('#dlg-ez-pick[open] #ezp-q'); a.fill('#ezp-q', '10701'); a.wait_for_selector('#ezp-list tr[data-code="10701"]')
+    a.click('#ezp-list tr[data-code="10701"] .ezp-n'); a.click('#ezp-ok'); a.wait_for_selector('#dlg-ez-pick', state='hidden')
+    a.click('#wb-reiter [data-wr="0"]'); a.wait_for_selector('#wb-reiter [data-wr="0"][aria-selected="true"]')
+    check('Reiter wechseln: erste Werbung unverändert', a.input_value('#wb-titel') == 'Aktion der Woche' and a.locator('#wb-liste [data-wid]').count() == 2
+          and a.inner_text('#wb-reiter [data-wr="1"] .wb-tz') == '1')
+    a.screenshot(path=SH + '/werbung-zwei.png')
+    a.click('#dlg-werbung [data-wa=ok]'); a.wait_for_selector('#dlg-werbung', state='hidden'); wait_saved(a)
+    w = (get(a, 'draft')[1]['draft']['meta'] or {}).get('werbung', {}).get('std', {})
+    check('Entwurf: zweite Werbung in „weitere“', [x['id'] for x in w.get('artikel', [])] == [id01, id23] and w.get('weitere') == [{'titel': 'Zweite Aktion', 'artikel': [{'id': id701}]}]
+          and a.inner_text('#werb-n') == '3 · 2×', (w, a.inner_text('#werb-n')))
+    # Server: höchstens zwei Werbungen; leere erste rückt nach; Auslieferung nur ausgelieferter Artikel
+    d = get(a, 'draft')[1]; mdl = d['draft']
+    mdl['meta']['werbung']['edeka'] = {'titel': 'Leer', 'artikel': [{'id': 'gibt-es-nicht'}], 'weitere': [{'titel': 'Edeka 2', 'artikel': [{'id': id01}]}, {'titel': 'Edeka 3', 'artikel': [{'id': id01}]}]}
+    mdl['meta']['werbung']['std']['weitere'].append({'titel': 'Dritte', 'artikel': [{'id': id01}]})
+    r = post(a, 'save_draft', {'model': mdl, 'revision': d['revision']})
+    w2 = (get(a, 'draft')[1]['draft']['meta'] or {}).get('werbung', {})
+    check('Server: höchstens zwei Werbungen je Angebot, leere fallen weg (die nächste rückt nach)', r[0] == 200 and len(w2['std'].get('weitere', [])) == 1 and w2['std']['weitere'][0]['titel'] == 'Zweite Aktion'
+          and w2['edeka'].get('titel') == 'Edeka 2' and [x['titel'] for x in w2['edeka'].get('weitere', [])] == ['Edeka 3'], (r[0], w2.get('std', {}).get('weitere'), w2.get('edeka')))
+    vo = get(a, 'offer&draft=1')[1]['offer']['meta'].get('werbung', {})
+    check('Auslieferung (Vorschau): zweite Werbung in „weitere“', [x['id'] for x in (vo.get('weitere') or [{}])[0].get('artikel', [])] == [id701] and 'Edeka 2' not in json.dumps(vo), vo)
+    a.reload(); a.wait_for_selector('#screen-editor:not([hidden]) #offer-bar:not([hidden])'); a.wait_for_selector('#groups tr[data-id]'); wait_saved(a)
+    a.click('#btn-publish'); a.wait_for_selector('#dlg-publish[open]')
+    check('Veröffentlichen-Dialog nennt beide Werbungen', 'Zweite Aktion' in a.inner_text('#publish-body'))
+    a.click('[data-ia=publish]'); a.wait_for_function("!document.querySelector('#dlg-publish').open", timeout=15000)
+    pub.goto(B + '/'); pub.wait_for_selector('#list .werb-duo .werb-sec tr.row')
+    bx = pub.evaluate("[...document.querySelectorAll('#list .werb-duo > .werb-sec')].map((e) => { const r = e.getBoundingClientRect(); return [r.left, r.top, r.width, e.querySelector('h3').textContent]; })")
+    check('Angebotsseite: zweite Werbung rechts neben der ersten', len(bx) == 2 and bx[1][0] > bx[0][0] + bx[0][2] - 1 and abs(bx[0][1] - bx[1][1]) < 2 and bx[1][3] == 'Zweite Aktion'
+          and pub.locator('#list .werb-duo .werb-sec').nth(1).locator('tr.row').get_attribute('data-id') == id701, bx)
+    check('… Artikel der zweiten Werbung in der Liste hervorgehoben', pub.locator(f'#list .al-sec:not(.werb-sec) tr.row.werb-an[data-id="{id701}"]').count() == 1)
+    pub.screenshot(path=SH + '/werbung-zwei-angebotsseite.png')
+    pm = br.new_page(viewport={'width': 390, 'height': 844}, is_mobile=True); pm.on('pageerror', lambda x: errs.append('pm: ' + str(x)))
+    pm.goto(B + '/'); pm.wait_for_selector('#list .werb-duo .werb-sec tr.row')
+    bm = pm.evaluate("[...document.querySelectorAll('#list .werb-duo > .werb-sec')].map((e) => e.getBoundingClientRect().top)")
+    sw = pm.evaluate('document.documentElement.scrollWidth')
+    check('Angebotsseite mobil: zwei Werbungen untereinander, ohne seitliches Scrollen', len(bm) == 2 and bm[1] > bm[0] and sw <= 390, (bm, sw))
+    pm.screenshot(path=SH + '/werbung-zwei-mobil.png'); pm.close()
     # Rechte
     post(a, 'user_save', {'name': 'Eddi', 'username': 'eddi', 'role': 'editor', 'active': True, 'password': 'Bearbeiter-Zugang-1', 'mustChange': False})
     post(a, 'user_save', {'name': 'Vera', 'username': 'vera', 'role': 'viewer', 'active': True, 'password': 'Leserin-Zugang-1', 'mustChange': False})

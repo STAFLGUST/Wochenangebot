@@ -88,12 +88,15 @@ Zwischenspeicher werden nur mit passender Prüfsumme aus der signierten Ubuntu-P
    das ihn behebt. Die Hilfsdateien in `deploy/` (`datenbank.py`, `sicherung-pruefen.*`) stammen dabei noch aus dem
    alten Stand. Ohne Sicherung kein Release.
 4. Code wechseln. Alle Container werden neu erstellt, wenn sich `Caddyfile`, `docker-compose.yml` oder die
-   Ergänzungsdatei ändern; wurde in Schritt 2 nur das Image gebaut, nur die App (Keycloak läuft weiter). Das bisherige
-   Image bleibt als `stafl-app:release-vorher` erhalten.
+   Ergänzungsdatei ändern; wurde in Schritt 2 nur das Image gebaut, nur die beiden Anwendungs-Container `app` und
+   `app-mitarbeiter` (ADR-007; Keycloak läuft weiter); hat sich nur `deploy/anmeldung/apache-oidc.conf` geändert, nur
+   `app-mitarbeiter`. Das bisherige Image bleibt als `stafl-app:release-vorher` erhalten.
    Direkt danach **Bereitstellung** (`deploy/bereitstellen.py` des neuen Stands): Versionsnummern der Skripte/Stylesheets
    und Prüfliste der Dateiprüfung aus den Git-Objekten genau dieses Commits (siehe unten). Ein Fehler dabei verhindert das
    Release nicht – die Seite lädt Dateien ohne Nummer mit Rückfrage, `aktualisieren.sh` holt die Bereitstellung nach.
-5. Healthcheck wie ein Besucher. Schlägt er fehl: zurück auf den alten Commit, das alte Image wieder aktiv
+5. Healthcheck wie ein Besucher – mit der Ergänzungsdatei der Anmeldung auch die Mitarbeiter-Hosts
+   (`dashboard-stafl.de/api/?action=status` muss ohne Anmeldung mit 401 antworten; 502 heißt: Container `app-mitarbeiter`
+   läuft nicht). Schlägt er fehl: zurück auf den alten Commit, das alte Image wieder aktiv
    (`stafl-app:release-vorher` → aktiver Name), Container neu erstellt.
 6. Nach erfolgreichem Healthcheck: `docker image prune -f` entfernt nur hängende Images ohne Namen (z. B. das von
    `release-vorher` verdrängte). Getaggte und laufende Images sowie Volumes bleiben unberührt; ein Fehler beim Aufräumen
@@ -149,8 +152,9 @@ automatischen Rückfall:
 Es wartet immer nur der neueste Lauf: Ein neuer Merge beendet einen älteren, noch nicht freigegebenen Lauf
 (Status „abgebrochen“). Das Protokoll (Tag-Beschreibung) nennt, wer freigegeben hat.
 
-Der Server bleibt unverändert: Er übernimmt nur den neuesten erfolgreichen Release-Lauf auf `main` und prüft die
-CI selbst noch einmal.
+Der Server bleibt unverändert: Er übernimmt nur den neuesten erfolgreichen Release-Lauf auf `main` (nach Startzeit) und
+prüft die CI selbst noch einmal. Einen Stand, der älter ist als der aktive, spielt er nie von selbst ein – zurück geht es
+nur über den Notfall-Rückfall (`deploy/release-zurueck.sh`).
 
 ## Einmalige Einrichtung in GitHub (nur Inhaber)
 

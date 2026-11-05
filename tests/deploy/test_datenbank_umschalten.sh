@@ -70,6 +70,25 @@ lauf migrate
 ok "Fehler der Übernahme: Hinweis, App bleibt gestoppt (kein Start)" '[ $CODE = 1 ] && echo "$AUS" | grep -q "bleibt absichtlich gestoppt" && grep -q "compose stop" "$T/aufrufe" && ! grep -q "compose start" "$T/aufrufe"'
 rm "$T/fehler"
 
+# Mit der Ergänzungsdatei der Anmeldung (COMPOSE_FILE): Kundenseite und Mitarbeiter-Hosts stehen beide (ADR-007)
+neu; mkdir -p "$T/i/deploy/anmeldung"; printf 'services:\n  app:\n  app-mitarbeiter:\n' > "$T/i/deploy/anmeldung/docker-compose.anmeldung.yml"
+printf 'DOMAIN=x\nCOMPOSE_FILE=docker-compose.yml:deploy/anmeldung/docker-compose.anmeldung.yml\n' > "$T/i/.env"
+lauf migrate
+ok "mit COMPOSE_FILE der Anmeldung: beide Anwendungs-Container gestoppt und wieder gestartet" '[ $CODE = 0 ] \
+  && grep -qx "docker compose stop app app-mitarbeiter" "$T/aufrufe" && grep -qx "docker compose start app app-mitarbeiter" "$T/aufrufe"'
+neu; mkdir -p "$T/i/deploy/anmeldung"; printf 'services:\n  app:\n  app-mitarbeiter:\n  postausgang:\n' > "$T/i/deploy/anmeldung/docker-compose.anmeldung.yml"
+printf 'DOMAIN=x\nCOMPOSE_FILE=docker-compose.yml:deploy/anmeldung/docker-compose.anmeldung.yml\n' > "$T/i/.env"
+lauf migrate
+ok "mit dem Dienst postausgang: auch er steht während der Übernahme" '[ $CODE = 0 ] \
+  && grep -qx "docker compose stop app app-mitarbeiter postausgang" "$T/aufrufe" && grep -qx "docker compose start app app-mitarbeiter postausgang" "$T/aufrufe"'
+neu; printf 'DOMAIN=x\n' > "$T/i/.env"
+lauf migrate
+ok "ohne COMPOSE_FILE: nur der eine Anwendungs-Container" '[ $CODE = 0 ] && grep -qx "docker compose stop app" "$T/aufrufe" && grep -qx "docker compose start app" "$T/aufrufe"'
+
+neu; touch "$T/i/daten/.daten-getrennt"; : > "$T/aufrufe"; lauf migrate
+ok "getrennte Daten (ADR-007 Stufe 2): Abbruch mit Weg über zusammenfuehren, nichts aufgerufen" '[ $CODE = 1 ] && echo "$AUS" | grep -q "daten-trennen.sh zusammenfuehren" && [ ! -s "$T/aufrufe" ]'
+rm -f "$T/i/daten/.daten-getrennt"
+
 lauf unsinn
 ok "unbekannte Aktion abgelehnt" '[ $CODE = 1 ] && echo "$AUS" | grep -q "Aufruf:"'
 

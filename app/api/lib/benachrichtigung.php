@@ -26,7 +26,8 @@ const NOTIFY_AUDIT = ['security' => 'sicherheit', 'twofa' => 'sicherheit', 'user
    Die Empfänger der Bestellwünsche liegen weiterhin bei der Bestellfunktion (Dokument „bestellung“). */
 function notify_settings(): array
 {
-    $d = store_read('benachrichtigungen');
+    // Kundenseite ab Trennstufe 2: Einstellungen sind intern – dann Vorgaben (der Postausgang entscheidet mit den echten)
+    $d = store_sichtbar('benachrichtigungen') ? store_read('benachrichtigungen') : null;
     $ord = order_settings();
     $ev = [];
     foreach (NOTIFY_EVENTS as $k => $def) {
@@ -147,7 +148,8 @@ function notify_send(string $ev, array $to, array $items, int $skipped, bool $te
     foreach ($jobs as $k => $j) $out[] = ['to' => $j['to'], 'ok' => !empty($res[$k]['ok']), 'error' => $res[$k]['error'] ?? ''];
     return $out;
 }
-/* Nach der Antwort: vorgemerkte Ereignisse je Art bündeln, Pause beachten, versenden. Fehler nie nach außen. */
+/* Nach der Antwort: vorgemerkte Ereignisse je Art bündeln, Pause beachten, versenden. Fehler nie nach außen.
+   Kundenseite (WA_POSTAUSGANG=warteschlange, lib/postausgang.php): nur als Auftrag ablegen – senden darf dort nichts. */
 function notify_flush(): void
 {
     $q = $GLOBALS['notify_queue'] ?? [];
@@ -155,29 +157,41 @@ function notify_flush(): void
     if (!$q) return;
     try {
         if (!empty($GLOBALS['store_tx'])) return;   // nicht gespeichert → nichts melden
-        $by = [];
-        foreach ($q as $it) if (notify_targets($it['ev'])) $by[$it['ev']][] = $it;
-        if (!$by || !mail_cfg_intern()) return;
-        if (function_exists('fastcgi_finish_request')) fastcgi_finish_request();
-        ignore_user_abort(true);
-        foreach ($by as $ev => $items) {
-            $pause = (int)NOTIFY_EVENTS[$ev]['pause'];
-            $skipped = with_lock('benachrichtigung-stand', function () use ($ev, $items, $pause) {
-                $st = store_read('benachrichtigung-stand') ?? [];
-                $e = is_array($st[$ev] ?? null) ? $st[$ev] : ['last' => 0, 'skipped' => 0];
-                if ($pause > 0 && (int)$e['last'] > time() - $pause) {
-                    $e['skipped'] = (int)$e['skipped'] + count($items);
-                    $st[$ev] = $e; store_write('benachrichtigung-stand', $st);
-                    return -1;
-                }
-                $n = (int)$e['skipped'];
-                $st[$ev] = ['last' => time(), 'skipped' => 0]; store_write('benachrichtigung-stand', $st);
-                return $n;
-            });
-            if ($skipped < 0) continue;
-            notify_send($ev, notify_targets($ev), $items, $skipped, false, 'Benachrichtigung');
+        if (postausgang_warteschlange()) {
+            // Empfänger kann erst der Dienst bestimmen (Ersatzadresse aus dem Postfach); hier nur eingeschaltete Ereignisse – ab
+            // Trennstufe 2 sieht die Kundenseite die Einstellungen nicht mehr (intern): dann prüft nur der Dienst (notify_targets)
+            if (store_sichtbar('benachrichtigungen')) $q = array_values(array_filter($q, fn($it) => !empty(notify_settings()['events'][$it['ev']]['on'])));
+            if ($q) postausgang_ablegen('benachrichtigung', ['items' => $q]);
+            return;
         }
+        notify_verarbeiten($q, true);
     } catch (Throwable $e) {
         error_log('[wochenangebot] Benachrichtigung: ' . $e->getMessage());
+    }
+}
+/* Ereignisse versenden (am Ende einer Anfrage oder im Dienst „postausgang“): je Art bündeln, Pause beachten */
+function notify_verarbeiten(array $q, bool $nachAntwort = false): void
+{
+    $by = [];
+    foreach ($q as $it) if (is_array($it) && isset(NOTIFY_EVENTS[$it['ev'] ?? '']) && notify_targets($it['ev'])) $by[$it['ev']][] = $it;
+    if (!$by || !mail_cfg_intern()) return;
+    if ($nachAntwort && function_exists('fastcgi_finish_request')) fastcgi_finish_request();
+    ignore_user_abort(true);
+    foreach ($by as $ev => $items) {
+        $pause = (int)NOTIFY_EVENTS[$ev]['pause'];
+        $skipped = with_lock('benachrichtigung-stand', function () use ($ev, $items, $pause) {
+            $st = store_read('benachrichtigung-stand') ?? [];
+            $e = is_array($st[$ev] ?? null) ? $st[$ev] : ['last' => 0, 'skipped' => 0];
+            if ($pause > 0 && (int)$e['last'] > time() - $pause) {
+                $e['skipped'] = (int)$e['skipped'] + count($items);
+                $st[$ev] = $e; store_write('benachrichtigung-stand', $st);
+                return -1;
+            }
+            $n = (int)$e['skipped'];
+            $st[$ev] = ['last' => time(), 'skipped' => 0]; store_write('benachrichtigung-stand', $st);
+            return $n;
+        });
+        if ($skipped < 0) continue;
+        notify_send($ev, notify_targets($ev), $items, $skipped, false, 'Benachrichtigung');
     }
 }

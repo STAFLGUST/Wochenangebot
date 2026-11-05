@@ -11,6 +11,9 @@ declare(strict_types=1);
    Große Dateien (Registrierung „teile“): Der Leser liefert neben den Daten der Vorschau einzelne Teile; die Vorschau nennt,
    welche Teile der Eigentümer für die Übernahme braucht, der Browser schickt sie vorher einzeln (import_teil, je Anfrage
    höchstens 6 MB), der Eigentümer legt sie in seiner Zwischenablage ab und übernimmt erst mit import_uebernehmen.
+   Eigene Darstellung: Der Eigentümer darf der Vorschau „details“ (beliebige Daten, nur für seine Darstellung im Browser,
+   W.importDarstellung), „fuss“ (Zusammenfassung über dem Knopf) und „knopf“ (Beschriftung) mitgeben; die Zentrale reicht
+   sie nur begrenzt durch und wertet sie nie aus.
    Aktionen: aktionen/importzentrale.php (import_arten, import_pruefen, import_teil, import_uebernehmen). */
 if (!defined('WA_API')) { http_response_code(404); exit; }   // nur über api/index.php nutzbar
 
@@ -20,7 +23,10 @@ const IMPORT_EIGENTUEMER = ['verwaltung', 'bestand', 'angebot', 'hr', 'controlli
 const IMPORT_ZEILEN_MAX = 500;              // Zeilen der Vorschau, die an den Browser gehen (Zahlen zählen immer alle)
 const IMPORT_DATEITYPEN = ['csv', 'xls', 'xlsx', 'xlsm'];
 const IMPORT_ABLAEUFE = ['zentrale', 'editor'];
-const IMPORT_OPTIONSTYPEN = ['schalter', 'datum'];
+const IMPORT_OPTIONSTYPEN = ['schalter', 'datum', 'auswahl', 'liste'];   // auswahl: feste Werte des Eigentümers ({wert, text}), z. B. Angebotswoche;
+                                                                          // liste: Kennungen, die die Darstellung des Eigentümers setzt (z. B. gewählte Kundengruppen)
+const IMPORT_LISTE_MAX = 500;               // Einträge einer Option „liste“
+const IMPORT_DETAILS_MAX = 3000000;         // Bytes der „details“ einer Vorschau (JSON)
 const IMPORT_ZEILENARTEN = ['neu', 'geaendert', 'entfaellt', 'fehler'];
 const IMPORT_MB = 30;                       // Größe einer Datei (Prüfung im Browser); Importarten mit Teilen dürfen mehr („maxMb“, bis 200)
 const IMPORT_TEILE_MAX = 2000;              // Teile, die eine Vorschau für die Übernahme anfordern darf
@@ -45,7 +51,12 @@ function import_registry(): array
                 || !is_int($a['maxMb']) || $a['maxMb'] < 1 || $a['maxMb'] > ($a['teile'] !== '' ? 200 : IMPORT_MB)) {
                 throw new LogicException("Importart „{$id}“ ist ungültig registriert.");
             }
-            foreach ($a['optionen'] as $o) if (!in_array($o['typ'] ?? '', IMPORT_OPTIONSTYPEN, true)) throw new LogicException("Importart „{$id}“: unbekannte Option.");
+            foreach ($a['optionen'] as $o) {
+                if (!in_array($o['typ'] ?? '', IMPORT_OPTIONSTYPEN, true)) throw new LogicException("Importart „{$id}“: unbekannte Option.");
+                if ($o['typ'] === 'auswahl' && (empty($o['werte']) || array_filter($o['werte'], fn($w) => !is_string($w['wert'] ?? null) || !is_string($w['text'] ?? null))
+                    || !in_array($o['standard'] ?? null, array_column($o['werte'], 'wert'), true))) throw new LogicException("Importart „{$id}“: Auswahl „{$o['id']}“ ohne gültige Werte.");
+                if ($o['typ'] === 'liste' && (!is_array($o['standard'] ?? null) || import_liste($o['standard']) !== array_values($o['standard']))) throw new LogicException("Importart „{$id}“: Liste „{$o['id']}“ ohne gültigen Standard.");
+            }
             $reg[$id] = $a;
         }
     }
@@ -71,6 +82,17 @@ function import_art_anzeige(string $id, array $a, array $me): array
             'verfuegbar' => $z === null || $z['zugang'], 'wartung' => $z !== null && $z['betrieb'] === 'wartung'];
 }
 
+/* Wert einer Option „liste“: nur Kennungen (Buchstaben, Ziffern, . _ -), ohne Doppelte, höchstens IMPORT_LISTE_MAX */
+function import_liste($v): array
+{
+    $out = [];
+    foreach (is_array($v) ? $v : [] as $x) {
+        if (is_int($x)) $x = (string)$x;
+        if (is_string($x) && preg_match('/^[A-Za-z0-9._-]{1,40}$/', $x)) $out[$x] = true;
+    }
+    return array_slice(array_keys($out), 0, IMPORT_LISTE_MAX);
+}
+
 /* Optionen der Importart aus der Anfrage: nur registrierte, mit Standardwert */
 function import_optionen(array $a, $roh): array
 {
@@ -78,13 +100,17 @@ function import_optionen(array $a, $roh): array
     $out = [];
     foreach ($a['optionen'] as $o) {
         $v = $roh[$o['id']] ?? ($o['standard'] ?? null);
-        $out[$o['id']] = $o['typ'] === 'schalter' ? (bool)$v : (is_string($v) ? mb_substr($v, 0, 20) : null);
-        if (!empty($o['pflicht']) && ($out[$o['id']] === null || $out[$o['id']] === '')) throw new InvalidArgumentException("Bitte „{$o['label']}“ angeben.");
+        if ($o['typ'] === 'auswahl') $out[$o['id']] = in_array($v, array_column($o['werte'], 'wert'), true) ? $v : $o['standard'];   // nur angebotene Werte
+        elseif ($o['typ'] === 'liste') $out[$o['id']] = import_liste($v);   // ob die Kennungen passen, prüft der Eigentümer
+        else $out[$o['id']] = $o['typ'] === 'schalter' ? (bool)$v : (is_string($v) ? mb_substr($v, 0, 20) : null);
+        if (!empty($o['pflicht']) && ($out[$o['id']] === null || $out[$o['id']] === '' || $out[$o['id']] === [])) throw new InvalidArgumentException("Bitte „{$o['label']}“ angeben.");
     }
     return $out;
 }
 
-/* Antwort des Eigentümers vereinheitlichen: Zahlen, höchstens IMPORT_ZEILEN_MAX Zeilen (Fehler zuerst), Hinweise */
+/* Antwort des Eigentümers vereinheitlichen: Zahlen, höchstens IMPORT_ZEILEN_MAX Zeilen (Fehler zuerst), Hinweise;
+   „details“, „fuss“ und „knopf“ des Eigentümers nur begrenzt durchgereicht (zu große Details entfallen – dann zeigt der
+   Browser die einheitliche Vorschau) */
 function import_ergebnis(array $r): array
 {
     $n = [];
@@ -102,8 +128,11 @@ function import_ergebnis(array $r): array
     $teile = [];   // Teile, die der Browser vor der Übernahme schicken soll (nur Kennungen, Reihenfolge des Eigentümers)
     foreach ((is_array($r['teile'] ?? null) ? $r['teile'] : []) as $k) if (is_string($k) && preg_match('/^[A-Za-z0-9_-]{1,40}$/', $k)) $teile[$k] = true;
     if (count($teile) > IMPORT_TEILE_MAX) throw new LogicException('Zu viele Teile für eine Übernahme.');
+    $details = is_array($r['details'] ?? null) ? $r['details'] : null;
+    if ($details !== null) { $j = json_encode($details, JSON_UNESCAPED_UNICODE); if ($j === false || strlen($j) > IMPORT_DETAILS_MAX) $details = null; }
     return ['zahlen' => $n, 'zeilen' => array_slice($zeilen, 0, IMPORT_ZEILEN_MAX), 'zeilenGesamt' => count($zeilen), 'hinweise' => $h,
-            'stand' => is_int($r['stand'] ?? null) || is_string($r['stand'] ?? null) ? $r['stand'] : null, 'teile' => array_keys($teile)];
+            'stand' => is_int($r['stand'] ?? null) || is_string($r['stand'] ?? null) ? $r['stand'] : null, 'teile' => array_keys($teile),
+            'details' => $details, 'fuss' => is_string($r['fuss'] ?? null) ? mb_substr($r['fuss'], 0, 300) : '', 'knopf' => is_string($r['knopf'] ?? null) ? mb_substr($r['knopf'], 0, 60) : ''];
 }
 
 /* Kennung eines Importlaufs (vom Browser zufällig gewählt, 32 Hex-Zeichen) – nur bei Importarten mit Teilen nötig */

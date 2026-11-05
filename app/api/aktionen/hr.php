@@ -31,7 +31,8 @@ function hr_einstellungen_aus(array $einst): array
 {
     $j = (int)date('Y');
     return ['sperren' => $einst['sperrenEigene'], 'regelSperren' => $einst['regelSperren'], 'sperrenAuto' => array_merge(hr_regel_sperren($j), hr_regel_sperren($j + 1)),
-            'ferien' => $einst['ferien'], 'regeln' => $einst['regeln'], 'regelnStandard' => HR_REGELN_STANDARD];
+            'ferien' => $einst['ferien'], 'regeln' => $einst['regeln'], 'regelnStandard' => HR_REGELN_STANDARD, 'verfallAb' => $einst['verfallAb'],
+            'planung' => array_diff_key(hr_planung_einst(), ['abschluss' => true])];
 }
 
 switch ($action) {
@@ -70,7 +71,9 @@ switch ($action) {
                      'konto' => $ich ? hr_konto($ich, $abw['eintraege'], $jahr) : null, 'eintraege' => $eigene, 'kollegen' => $kollegen,
                      'gleitKonto' => $ich ? hr_gleit_konto($ich, $abw['eintraege'], $jahr) : null, 'gleittage' => $ich ? hr_gleit_aus($ich) : [],
                      'feiertage' => hr_feiertage($jahr), 'sperren' => $einst['sperren'], 'uebertragBis' => $einst['uebertragBis'],
-                     'antraege' => $einst['antraege'], 'regeln' => $einst['regeln']]);
+                     'antraege' => $einst['antraege'], 'regeln' => $einst['regeln'],
+                     // Jahresplanung: Stand des Mitarbeiters nur in der Planungsphase; Vertretung Pflicht bei Urlaubsanträgen
+                     'planung' => hr_planung_ich($ich, $abw['eintraege']), 'vertretungPflicht' => hr_planung_einst()['vertretungPflicht']]);
         }
 
         /* Urlaubsübersicht: alle Mitarbeiter im Urlaubsplan mit Summen eines Jahres (Recht hr.uebersicht oder hr.verwalten).
@@ -125,7 +128,7 @@ switch ($action) {
                     $vp = hr_personen_index($personal)[(string)$b['vertretung']] ?? null;
                     if (!$vp || !$vp['aktiv'] || $vp['id'] === $ich['id']) fail('Bitte eine gültige Vertretung wählen.', 422);
                     $vert = $vp['id'];
-                }
+                } elseif ($art === 'U' && hr_planung_einst()['vertretungPflicht']) fail('Bitte wählen Sie eine Vertretung für die Zeit Ihres Urlaubs aus.', 422);
                 $e = ['id' => hr_neue_id('a'), 'person' => $ich['id'], 'art' => $art, 'von' => $von, 'bis' => $bis, 'status' => 'beantragt', 'notiz' => $notiz,
                       'vertretung' => $vert, 'quelle' => 'antrag', 'erfasst' => ['t' => now(), 'by' => $me['name'], 'byId' => $me['id']]];
                 $abw['eintraege'][] = $e;
@@ -135,8 +138,16 @@ switch ($action) {
             });
             [$e, $ich, $n, $konto, $frei, $gleit] = $res;
             audit('hr', 'HR: ' . ($e['art'] === 'G' ? 'Gleittag' : 'Urlaub') . ' beantragt ' . hr_zeitraum_text($e['von'], $e['bis']) . " ($n Arbeitstage)");
-            respond(['ok' => true, 'eintrag' => hr_eintrag_aus($e, $ich, $frei), 'konto' => $konto, 'gleitKonto' => $gleit,
-                     'hinweis' => $e['art'] === 'U' && $konto['verfuegbar'] < 0 ? 'Der Antrag übersteigt Ihren Resturlaub um ' . (-$konto['verfuegbar']) . ' Tage – die Personalstelle entscheidet.' : null]);
+            // Hinweise (der Antrag gilt trotzdem): über dem Resturlaub; Vertretung im Zeitraum selbst abwesend (ohne Grund)
+            $hinweise = [];
+            if ($e['art'] === 'U' && $konto['verfuegbar'] < 0) $hinweise[] = 'Der Antrag übersteigt Ihren Resturlaub um ' . (-$konto['verfuegbar']) . ' Tage – die Personalstelle entscheidet.';
+            // Vertretung: nur genehmigte Abwesenheiten (wie im Kalender – nie offene Anträge oder Gründe anderer) und ihre Arbeitstage
+            if ($e['vertretung'] && ($vp_ = hr_personen_index(hr_personal())[$e['vertretung']] ?? null)) {
+                $l = hr_vertretung_luecken($e, $ich, $vp_, hr_abwesenheiten()['eintraege'], true);
+                if ($l['abwesend']) $hinweise[] = 'Ihre Vertretung ' . hr_name($vp_) . ' ist in dieser Zeit selbst abwesend (' . hr_daten_text($l['abwesend']) . ') – bitte mit der Personalstelle klären.';
+                if ($l['frei']) $hinweise[] = 'Ihre Vertretung ' . hr_name($vp_) . ' arbeitet an diesen Tagen nicht (' . hr_daten_text($l['frei']) . ') – bitte mit der Personalstelle klären.';
+            }
+            respond(['ok' => true, 'eintrag' => hr_eintrag_aus($e, $ich, $frei), 'konto' => $konto, 'gleitKonto' => $gleit, 'hinweis' => $hinweise ? implode(' ', $hinweise) : null]);
         }
 
         /* Eigenen Antrag zurückziehen (offen oder genehmigt, solange er noch nicht begonnen hat) */
@@ -328,6 +339,7 @@ switch ($action) {
                     $abw['eintraege'][] = $e;
                 } else {
                     $e = $abw['eintraege'][$i];
+                    $artVorher = $e['art'];
                     if (!in_array($e['status'], HR_AKTIV, true)) fail('Erledigte Einträge lassen sich nicht mehr ändern.', 409);
                     if ($e['status'] === 'beantragt') fail('Offene Anträge bitte genehmigen oder ablehnen.', 409);
                     $e = array_merge($e, ['person' => $p['id'], 'art' => $art, 'von' => $von, 'bis' => $bis, 'notiz' => s($b['notiz'] ?? '', 300) ?? '', 'geaendert' => $jetzt]);
@@ -335,9 +347,10 @@ switch ($action) {
                     $abw['eintraege'][$i] = $e;
                 }
                 hr_abwesenheiten_schreiben($abw);
-                return [$e, $p, $i === null ? 'eingetragen' : 'geändert', hr_freie_tage($abw['eintraege'], $p['id']), $abw['eintraege']];
+                return [$e, $p, $i === null ? 'eingetragen' : 'geändert', hr_freie_tage($abw['eintraege'], $p['id']), $abw['eintraege'], $artVorher ?? null];
             });
-            [$e, $p, $was, $frei, $alle] = $res;
+            [$e, $p, $was, $frei] = $res;
+            $alle = $res[4] ?? []; $artVorher = $res[5] ?? null;
             // Protokoll ohne Art der Abwesenheit (Krankheit ist ein Gesundheitsdatum)
             audit('hr', 'HR: Abwesenheit ' . ($p ? hr_name($p) : '') . ' ' . hr_zeitraum_text($e['von'], $e['bis']) . ' ' . $was);
             // Gleittag über das Gleittage-Konto hinaus: erlaubt (Personalstelle), aber mit Hinweis
@@ -347,7 +360,11 @@ switch ($action) {
                 if (!$gk['aktiv']) $hinweis = hr_name($p) . ' hat noch kein Gleittage-Konto – der Gleittag zählt erst, wenn Gleittage gewährt sind.';
                 elseif ($gk['rest'] < 0) $hinweis = 'Das Gleittage-Konto von ' . hr_name($p) . ' steht damit bei ' . str_replace('.', ',', (string)$gk['rest']) . ' Tagen.';
             }
-            respond(['ok' => true, 'eintrag' => $p ? hr_eintrag_aus($e, $p, $frei) : null, 'hinweis' => $hinweis]);
+            // Unentschuldigtes Fehlen (neu eingetragen oder geändert zu F): E-Mail an den Mitarbeiter, außer ausdrücklich abgewählt
+            $mail = null;
+            if ($p && $e['art'] === 'F' && $e['status'] === 'genehmigt' && $was !== 'storniert' && ($b['mail'] ?? true) !== false
+                && ($was === 'eingetragen' || $artVorher !== 'F')) $mail = hr_fehlen_mail($p, $e, $alle, $me);
+            respond(['ok' => true, 'eintrag' => $p ? hr_eintrag_aus($e, $p, $frei) : null, 'hinweis' => $hinweis, 'mail' => $mail]);
         }
 
         /* Gleittage gewähren ({person, tage, grund}; negative Anzahl = Korrektur mit Grund) oder eine Gewährung stornieren
@@ -502,6 +519,14 @@ switch ($action) {
                 $zusatz['regelSperren'] = $b['regelSperren'];
             }
             if (array_key_exists('regeln', $b)) $zusatz['regeln'] = hr_regeln_pruefen($b['regeln']);
+            // Jahresplanung (optional): Beginn, Stichtag, Anteil, Vertretung Pflicht – der Abschluss bleibt
+            $planung = null;
+            if (array_key_exists('planung', $b)) { try { $planung = hr_planung_einst_pruefen($b['planung']); } catch (InvalidArgumentException $ex) { fail($ex->getMessage(), 422); } }
+            // Übergangsregel: erstes Jahr mit Verfall (Jahreszahl) oder null = jedes Jahr
+            if (array_key_exists('verfallAb', $b)) {
+                if ($b['verfallAb'] !== null && hr_verfall_ab_norm($b['verfallAb']) === null) fail('Erster Verfall: bitte ein Jahr zwischen ' . HR_VERFALL_AB_MIN . ' und ' . HR_VERFALL_AB_MAX . ' wählen oder „jedes Jahr“.', 422);
+                $zusatz['verfallAb'] = $b['verfallAb'];
+            }
             // Verfallstag des Resturlaubs (optional; ohne Angabe bleibt der gespeicherte Wert)
             $bis = null;
             if (array_key_exists('uebertragBis', $b)) {
@@ -509,15 +534,28 @@ switch ($action) {
                 if ($bis === null) fail('Verfallstag des Resturlaubs: bitte ein gültiges Datum wählen (der 29.02. ist nicht möglich, weil es ihn nicht jedes Jahr gibt).', 422);
             }
             $alt = hr_einstellungen(); $vorher = $alt['uebertragBis'];
-            with_lock('hr-einstellungen', function () use ($sperren, $ferien, $bis, $zusatz) {
+            $planungVorher = hr_planung_einst();
+            with_lock('hr-einstellungen', function () use ($sperren, $ferien, $bis, $zusatz, $planung) {
                 $d = store_read('hr-einstellungen') ?? [];
+                if ($planung !== null) $zusatz['planung'] = array_merge(is_array($d['planung'] ?? null) ? $d['planung'] : [], $planung);
                 store_write('hr-einstellungen', array_merge($d, ['rev' => (int)($d['rev'] ?? 0) + 1, 'sperren' => $sperren, 'ferien' => $ferien],
                                                             $bis !== null ? ['uebertragBis' => $bis] : [], $zusatz));
             });
+            if ($planung !== null && array_diff_assoc($planung, array_intersect_key($planungVorher, $planung))) {
+                $tm = function ($v) { return substr($v, 3, 2) . '.' . substr($v, 0, 2) . '.'; };
+                audit('hr', 'HR: Jahresplanung eingestellt (ab ' . $tm($planung['start']) . ', Stichtag ' . $tm($planung['stichtag']) . ', ' . $planung['prozent'] . ' %, Vertretung '
+                    . ($planung['vertretungPflicht'] ? 'Pflicht' : 'freiwillig') . ')');
+            }
             audit('hr', 'HR: Urlaubssperren und Ferien gespeichert (' . count($sperren) . ' Sperren, ' . count($ferien) . ' Ferienzeiträume)');
             if ($bis !== null && $bis !== $vorher) audit('hr', 'HR: Verfallstag Resturlaub auf ' . substr($bis, 3, 2) . '.' . substr($bis, 0, 2) . '. geändert (vorher ' . substr($vorher, 3, 2) . '.' . substr($vorher, 0, 2) . '.)');
             if (isset($zusatz['regelSperren']) && $zusatz['regelSperren'] !== $alt['regelSperren']) audit('hr', 'HR: Sperren aus den Urlaubsregeln ' . ($zusatz['regelSperren'] ? 'eingeschaltet' : 'ausgeschaltet'));
-            if (isset($zusatz['regeln']) && $zusatz['regeln'] !== $alt['regeln']) audit('hr', 'HR: Urlaubsregeln geändert');
+            if (isset($zusatz['regeln']) && hr_regeln_text($zusatz['regeln']) !== $alt['regeln']) audit('hr', 'HR: Urlaubsregeln geändert');   // verglichen wird, was Mitarbeiter sehen
+            if (array_key_exists('verfallAb', $zusatz) && $zusatz['verfallAb'] !== $alt['verfallAb']) {
+                $tag = substr(hr_einstellungen()['uebertragBis'], 3, 2) . '.' . substr(hr_einstellungen()['uebertragBis'], 0, 2) . '.';
+                audit('hr', $zusatz['verfallAb'] === null ? 'HR: Resturlaub verfällt jedes Jahr (keine Übergangsregel mehr)'
+                    : 'HR: Resturlaub verfällt erstmals am ' . $tag . $zusatz['verfallAb'] . ' (vorher kein Verfall)');
+            }
+            hr_verfall_ab(true);
             $neu = hr_einstellungen();
             respond(['ok' => true, 'ferien' => $neu['ferien'], 'uebertragBis' => hr_uebertrag_bis(true)] + hr_einstellungen_aus($neu));
         }
@@ -580,6 +618,63 @@ switch ($action) {
             try { $r = hr_stb_senden('manuell', $me); } catch (RuntimeException $e) { fail($e->getMessage(), 409); }
             if (!$r['gesendet']) fail('Übersicht nicht zugestellt: ' . ($r['fehlerText'][0] ?? 'Versandfehler'), 502);
             respond(['ok' => true, 'ergebnis' => $r, 'mail' => hr_mail_aus()]);
+        }
+
+        /* Jahresplanung: Zusammenfassung eines Jahres (Standard: das nächste) – nur Personalstelle. Sie enthält alle
+           Urlaubszeiträume; zusammen mit dem Kalender („abwesend“) ließen sich daraus sonst Krankheitstage ableiten.
+           Genehmiger ohne Personalstelle entscheiden wie bisher unter „Anträge“ (hr_offen). */
+        case 'hr_planung': {
+            $me = require_perm('hr.verwalten');
+            header('Cache-Control: no-store');
+            $jahr = isset($_GET['jahr']) ? hr_jahr_param($_GET['jahr']) : hr_planung_jahr();
+            respond(['ok' => true, 'verwalten' => may($me, 'hr.verwalten'), 'genehmigen' => may($me, 'hr.genehmigen')] + hr_planung($jahr, $me));
+        }
+        /* Konfliktfreie Anträge gesammelt genehmigen: {jahr, ids[]} – Recht hr.genehmigen, nie die eigenen; jeder Antrag wird neu geprüft */
+        case 'hr_planung_freigeben': {
+            $me = require_perm('hr.genehmigen', true);
+            $b = body();
+            $jahr = isset($b['jahr']) ? hr_jahr_param($b['jahr']) : hr_planung_jahr();
+            $ids = $b['ids'] ?? null;
+            if (!is_array($ids) || !$ids || count($ids) > 500 || array_filter($ids, function ($x) { return !is_string($x) || !preg_match('/^[a-z0-9]{1,40}$/i', $x); })) fail('Bitte die Anträge angeben.', 422);
+            [$ok, $weg] = hr_planung_freigeben($jahr, array_values(array_unique($ids)), $me);
+            if ($ok) audit('hr', "HR: Jahresplanung $jahr: " . count($ok) . ' Urlaubsanträge gesammelt genehmigt');
+            respond(['ok' => true, 'genehmigt' => $ok, 'uebersprungen' => $weg]);
+        }
+        /* Erinnerung „Bitte planen Sie Ihren Urlaub“ an alle Mitarbeiter mit Adresse, die das Ziel noch nicht erreicht haben */
+        case 'hr_planung_erinnern': {
+            $me = require_perm('hr.verwalten', true);
+            $b = body();
+            $jahr = isset($b['jahr']) ? hr_jahr_param($b['jahr']) : hr_planung_jahr();
+            if ($jahr < (int)substr(hr_heute(), 0, 4)) fail("Die Planung $jahr liegt in der Vergangenheit.", 409);
+            if (isset(hr_planung_einst()['abschluss'][(string)$jahr])) fail("Die Planung $jahr ist abgeschlossen – erst wieder öffnen.", 409);
+            try { $r = hr_planung_senden('planung', $jahr, $me); } catch (RuntimeException $e) { fail($e->getMessage(), 409); }
+            if (!$r['gesendet']) fail('Erinnerung nicht zugestellt: ' . ($r['fehlerText'][0] ?? 'Versandfehler'), 502);
+            respond(['ok' => true, 'ergebnis' => $r]);
+        }
+        /* Planung abschließen (mit Jahresübersicht an alle mit Adresse, Standard) oder wieder öffnen: {jahr, abgeschlossen, senden} */
+        case 'hr_planung_abschluss': {
+            $me = require_perm('hr.verwalten', true);
+            $b = body();
+            $jahr = isset($b['jahr']) ? hr_jahr_param($b['jahr']) : hr_planung_jahr();
+            if (!is_bool($b['abgeschlossen'] ?? null)) fail('Bitte abschließen oder wieder öffnen.', 422);
+            $zu = $b['abgeschlossen'];
+            if (!hr_planung_abschluss_setzen($jahr, $zu, $me)) fail($zu ? "Die Planung $jahr ist bereits abgeschlossen." : "Die Planung $jahr ist nicht abgeschlossen.", 409);
+            audit('hr', "HR: Jahresplanung $jahr " . ($zu ? 'abgeschlossen' : 'wieder geöffnet'));
+            $r = null;
+            if ($zu && ($b['senden'] ?? true) !== false && hr_planung_empfaenger($jahr, false)[0]) {
+                try { $r = hr_planung_senden('jahresuebersicht', $jahr, $me); } catch (RuntimeException $e) { $r = ['gesendet' => 0, 'fehler' => 0, 'fehlerText' => [$e->getMessage()]]; }
+            }
+            respond(['ok' => true, 'ergebnis' => $r]);
+        }
+        /* Jahresübersicht (erneut) senden: {jahr, person?} – an alle mit Adresse oder eine Person */
+        case 'hr_planung_uebersicht_senden': {
+            $me = require_perm('hr.verwalten', true);
+            $b = body();
+            $jahr = isset($b['jahr']) ? hr_jahr_param($b['jahr']) : hr_planung_jahr();
+            $person = isset($b['person']) && $b['person'] !== '' ? (string)$b['person'] : null;
+            try { $r = hr_planung_senden('jahresuebersicht', $jahr, $me, $person); } catch (RuntimeException $e) { fail($e->getMessage(), 409); }
+            if (!$r['gesendet']) fail('Jahresübersicht nicht zugestellt: ' . ($r['fehlerText'][0] ?? 'Versandfehler'), 502);
+            respond(['ok' => true, 'ergebnis' => $r]);
         }
 
         case 'hr_export': {

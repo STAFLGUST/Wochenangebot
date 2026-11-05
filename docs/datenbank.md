@@ -84,6 +84,17 @@ leeren Datenordner entpacken, Eigentümer wieder auf Containerbenutzer 33:33 set
 prüfen. Keine Sicherungen verschiedener Zeitpunkte mischen. Das Postfachpasswort nötigenfalls neu
 hinterlegen. Ein vollständiger Wiederherstellungstest am Produktionssystem steht weiterhin aus.
 
+Der Snapshot nimmt auch die Dateiablage `daten/dateien/` mit (hochgeladene Dokumente stehen nie in der Datenbank; bis
+04.11.2026 fehlten sie in Sicherungen des SQLite-Betriebs) – ohne halbe Uploads (`.teile`).
+
+**Getrennte Daten (ADR-007 Stufe 2a):** Nach `deploy/daten-trennen.sh trennen` gibt es je Lauf zwei Archive vom selben
+Zeitpunkt: `daten-<Zeit>.tar.gz` (nach `daten/`) und `intern-<Zeit>.tar.gz` (nach `daten-intern/`, mit eigener Datenbank im
+SQLite-Betrieb). Beide gehören zusammen; nie Archive verschiedener Zeitpunkte mischen. Umschalten (`datenbank-umschalten.sh`)
+und Altdateien (`altdateien.sh`) brechen bei getrennten Daten ab: erst `daten-trennen.sh zusammenfuehren`, danach wieder
+`trennen`. Ab Trennstufe 2 (Stufe 2b) gehören auch Kundenstamm (`kundenstamm`), Bestand, Stammdaten und Postfach-Zugänge zum
+Archiv `intern-…`; `daten-…` enthält vom Kundendokument nur die Portalfelder – beide Archive zusammen ergeben den vollständigen Stand. Ab Trennstufe 3
+stehen veröffentlichte Dokumente (Angebote, Einstellungen) in beiden Archiven; maßgeblich ist der Stand in `intern-…`.
+
 ## Rückfall ohne Verlust neuer Daten
 
 Vor Rückkehr zu einem älteren Release ohne SQLite-Unterstützung:
@@ -93,7 +104,10 @@ schaltet erst nach erfolgreichem Vergleich auf Dateien zurück. Erst anschließe
 Release-Rückfall durchführen. Die Release-Skripte verhindern den direkten Rückfall auf Code ohne
 Speicherschicht, solange SQLite aktiv ist. Nicht über ein manuelles `git reset` umgehen.
 Die inaktive Datenbank bleibt zur Untersuchung erhalten; vor einer späteren erneuten Migration
-muss `.sqlite` im gestoppten Zustand separat archiviert/umbenannt werden.
+muss `.sqlite` im gestoppten Zustand separat archiviert/umbenannt werden. Dasselbe gilt vor der Datentrennung
+(ADR-007 Stufe 2): `sh deploy/daten-trennen.sh trennen` bricht ab, solange die inaktive Datenbank im gemeinsamen Ordner
+liegt – sie enthält den vollen früheren Datenbestand (Nutzer, Bestand, Kundenstamm) und wäre dort für die Kundenseite
+lesbar. `status` nennt sie als Rest des Speicher-Umbaus, ebenso liegen gebliebene Datendateien.
 
 ## Webschutz und Tests
 

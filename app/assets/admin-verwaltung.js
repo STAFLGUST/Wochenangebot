@@ -79,12 +79,16 @@
   const rollenListe = () => (rights && rights.rollen ? rights.rollen : ['admin', 'editor', 'viewer'].map((id) => ({ id, name: ROLE_LABEL[id], beschreibung: ROLE_DESC[id] })));
   const startRollen = (u) => (u ? rollenVon(u) : ['editor']);
   let editUid = null;
-  function genPassword(n = 14) {   // 14: Passwort der Anwendung (12 Zeichen + Striche) · 16: zentrale Anmeldung (mindestens 12 Zeichen ohne Striche)
+  function genPassword(n = 14) {   // 14: Passwort der Anwendung (12 Zeichen + Striche) · ab 16: zentrale Anmeldung (Mindestlänge ohne Striche)
     const chars = 'abcdefghijkmnpqrstuvwxyzABCDEFGHJKLMNPQRSTUVWXYZ23456789';
-    const a = new Uint32Array(n);
-    crypto.getRandomValues(a);
-    const s = [...a].map((x) => chars[x % chars.length]).join('').replace(/(.{4})(?=.)/g, '$1-');
-    return n === 14 ? s.slice(0, 14) : s;
+    let s;
+    do {   // immer Groß-, Kleinbuchstabe und Ziffer (Regel „gemischte Zeichen“ der zentralen Anmeldung, konten.sh richtlinien)
+      const a = new Uint32Array(n);
+      crypto.getRandomValues(a);
+      s = [...a].map((x) => chars[x % chars.length]).join('').replace(/(.{4})(?=.)/g, '$1-');
+      if (n === 14) s = s.slice(0, 14);
+    } while (!/[A-Z]/.test(s) || !/[a-z]/.test(s) || !/\d/.test(s));
+    return s;
   }
   function userRightsRows(u, rollen) {
     if (!rights || rollen.includes('admin')) return '';
@@ -167,7 +171,7 @@
       st.innerHTML = `<span class="st-warn">Noch kein Konto in der zentralen Anmeldung – der Mitarbeiter kann sich nicht anmelden.</span>${k.hinweis ? `<br><span class="muted">${esc(k.hinweis)}</span>` : ''}`;
       // Mit E-Mail: anlegen und gleich die Einladung (Link zum Passwort-Festlegen) schicken – der übliche Weg
       const mu = users.find((x) => x.id === editUid), mitMail = !!(mu && mu.email);
-      kn.innerHTML = k.fremd ? '' : mitMail
+      kn.innerHTML = k.fremd || k.anlegbar === false ? '' : mitMail
         ? `<button type="button" class="btn primary" data-ka="anlegen-einladen">${icon('mail', 'sm')}Konto anlegen und Einladung senden</button><button type="button" class="btn" data-ka="anlegen">Nur anlegen</button>`
         : `<button type="button" class="btn" data-ka="anlegen">${icon('plus', 'sm')}Konto anlegen</button><span class="hint ka-ohnemail">Für eine Einladung per Mail oben eine E-Mail-Adresse eintragen und speichern.</span>`;
       return;
@@ -178,7 +182,12 @@
     if (k.passwortAendern) t.push('muss bei der nächsten Anmeldung ein eigenes Passwort festlegen');
     if (k.einmalcode) t.push(k.einmalcode === 1 ? 'Einmalcode eingerichtet' : `${k.einmalcode} Einmalcode-Geräte`);
     if (k.passkeys) t.push(k.passkeys === 1 ? '1 Passkey' : `${k.passkeys} Passkeys`);
-    st.innerHTML = t.join(' · ');
+    st.innerHTML = t.join(' · ') + (k.hinweis ? `<br><span class="${k.warnung ? 'st-warn' : 'muted'}">${esc(k.hinweis)}</span>` : '');
+    // Konten von Administratoren ändert nur die Serverkonsole (Stand 16): keine Knöpfe, der Hinweis nennt den Befehl
+    if (k.verwaltbar === false) { kn.innerHTML = ''; if ($('#ka-pw')) $('#ka-pw').hidden = true; return; }
+    // Mindestlänge der zentralen Anmeldung (Einstellung „Passwörter mindestens …“, nie unter 12)
+    const pwf = $('#user-body [name="ka_pw"]'), min = k.minLaenge || 12;
+    if (pwf) { pwf.minLength = min; pwf.placeholder = `mindestens ${min} Zeichen`; }
     // Administratoren und Pflicht-Konten: Passwort nur vorübergehend (der Server erzwingt es ebenfalls)
     const cb = $('#user-body [name="ka_aendern"]'), nur = !!k.nurTemporaer;
     if (cb) { if (nur) cb.checked = true; cb.disabled = nur; }
@@ -221,7 +230,7 @@
     const a = k.dataset.ka;
     if (a === 'pw-auf') { $('#ka-pw').hidden = false; const i = $('#user-body [name="ka_pw"]'); i.readOnly = false; i.value = ''; $('#ka-pw [data-ka="passwort"]').hidden = false; $('#ka-pw [data-ka="gen"]').hidden = false; i.focus(); return; }
     if (a === 'pw-ab') { $('#ka-pw').hidden = true; return; }
-    if (a === 'gen') { const i = $('#user-body [name="ka_pw"]'); i.value = genPassword(16); i.select(); return; }
+    if (a === 'gen') { const i = $('#user-body [name="ka_pw"]'); i.value = genPassword(Math.max(16, Math.ceil(((kaKonto && kaKonto.minLaenge) || 12) / 4) * 4)); i.select(); return; }
     kaAktion(a, k);
   });
 
@@ -353,7 +362,8 @@
     if (a === 'del') {
       const u = users.find((x) => x.id === editUid);
       if (!(await confirmBox('Mitarbeiter löschen?', `„${esc(u.name)}“ (${esc(u.username)}) wird gelöscht. Die Einträge im Protokoll und in der Urlaubsverwaltung bleiben erhalten. Alternativ können Sie den Zugang nur deaktivieren oder auf „ohne Anmeldung“ stellen.`, 'Löschen', true))) return;
-      try { await api('user_delete', { body: { id: u.id } }); dlgUser.close(); toast(`Mitarbeiter „${u.username}“ gelöscht.`); renderUsersView(); } catch (ex) { $('#user-err').textContent = ex.message; }
+      // Das Konto der zentralen Anmeldung löscht der Server mit; scheitert das, kommt ein Hinweis (länger sichtbar)
+      try { const r = await api('user_delete', { body: { id: u.id } }); dlgUser.close(); toast(`Mitarbeiter „${u.username}“ gelöscht.${r && r.hinweis ? ' ' + r.hinweis : ''}`, r && r.hinweis ? 12000 : 3200); renderUsersView(); } catch (ex) { $('#user-err').textContent = ex.message; }
     }
   });
   $('#user-body').addEventListener('submit', async (e) => {
@@ -542,7 +552,7 @@
         ${o.onRequest ? `<p class="hint">Zuzüglich ${plural(o.onRequest, 'Position', 'Positionen')} mit Preis auf Anfrage.</p>` : ''}
         <section class="ord-outbox"><h3>E-Mail-Versand</h3>
           <p class="hint">Erfolgreich bedeutet: vom Mailserver angenommen. Bei einem Verbindungsabbruch kann eine E-Mail trotz fehlender Bestätigung angekommen sein. Vor erneutem Versand bitte prüfen.</p>
-          ${(o.outbox || []).length ? o.outbox.map((j) => `<div class="ord-mailjob"><strong>${j.kind === 'bestellkopie' ? 'Kundenkopie' : 'Interner Empfänger'} · ${esc(j.to)}</strong><p>${esc(({queued:'Wartet auf Versand',sending:'Versand läuft oder wurde unterbrochen – Status prüfen',sent:'Vom Mailserver angenommen',failed:'Versand nicht bestätigt'})[j.state] || j.state)} · Versuche: ${esc(j.attempts)} · ${esc(dateTime(j.updatedAt))}</p>${j.error ? `<p class="form-err">${esc(j.error)}</p>` : ''}${j.state !== 'sent' ? `<button type="button" class="btn sm" data-order-mail="${esc(j.id)}">${j.attempts ? 'Erneuten Versand prüfen' : 'Versand starten'}</button>` : ''}${j.history.length ? `<details><summary>Versandverlauf</summary><ul>${j.history.map((h) => `<li>${esc(dateTime(h.t))} · ${esc(h.by)} · Versuch ${esc(h.attempt)} · ${esc(({sending:'Gestartet',sent:'Angenommen',failed:'Nicht bestätigt'})[h.state] || h.state)}</li>`).join('')}</ul></details>` : ''}</div>`).join('') : '<p class="hint">Für diesen älteren Vorgang liegen keine einzelnen Versandaufträge vor. Ein gezielter Neuversand ist hier nicht möglich.</p>'}
+          ${(o.outbox || []).length ? o.outbox.map((j) => `<div class="ord-mailjob"><strong>${j.kind === 'bestellkopie' ? 'Kundenkopie' : j.kind === 'offen' ? 'Empfänger bestimmt der Postausgang' : 'Interner Empfänger'}${j.to ? ` · ${esc(j.to)}` : ''}</strong><p>${esc(({queued:'Wartet auf Versand',sending:'Versand läuft oder wurde unterbrochen – Status prüfen',sent:'Vom Mailserver angenommen',failed:'Versand nicht bestätigt'})[j.state] || j.state)} · Versuche: ${esc(j.attempts)} · ${esc(dateTime(j.updatedAt))}</p>${j.error ? `<p class="form-err">${esc(j.error)}</p>` : ''}${j.state !== 'sent' ? `<button type="button" class="btn sm" data-order-mail="${esc(j.id)}">${j.attempts ? 'Erneuten Versand prüfen' : 'Versand starten'}</button>` : ''}${j.history.length ? `<details><summary>Versandverlauf</summary><ul>${j.history.map((h) => `<li>${esc(dateTime(h.t))} · ${esc(h.by)} · Versuch ${esc(h.attempt)} · ${esc(({sending:'Gestartet',sent:'Angenommen',failed:'Nicht bestätigt'})[h.state] || h.state)}</li>`).join('')}</ul></details>` : ''}</div>`).join('') : '<p class="hint">Für diesen älteren Vorgang liegen keine einzelnen Versandaufträge vor. Ein gezielter Neuversand ist hier nicht möglich.</p>'}
         </section>
         <div class="form-grid two">
           <label class="fld"><span>Bearbeitungsstatus</span><select name="workflow"${closed ? ' disabled' : ''}>${states.map((s) => `<option value="${s}"${o.workflow === s ? ' selected' : ''}>${ORDER_LABELS[s]}</option>`).join('')}</select></label>

@@ -43,8 +43,9 @@ const ABLAGE_ARTEN = [
 /* ---------- Pfade und Namen ---------- */
 function ablage_wurzel(): string
 {
-    global $DATA;
-    return rtrim((string)$DATA, '/') . '/dateien';
+    // Dateien sind intern (Dokumentenablage QS u. a.): nach der Datentrennung im Ordner daten-intern, den die Kundenseite
+    // nicht sieht (app/api/storage.php, ADR-007 Stufe 2); vorher wie bisher im Datenordner
+    return rtrim(store_ordner(store_getrennt() ? 'intern' : 'haupt'), '/') . '/dateien';
 }
 function ablage_bereich(string $bereich): string
 {

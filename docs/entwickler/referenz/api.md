@@ -6,7 +6,7 @@ Aufruf: `/api/?action=<aktion>` (GET lesend, POST mit JSON und `X-CSRF-Token` sc
 
 Spalten: **Art** – lesend, schreibend (nur POST) oder post (GET liest, POST schreibt); **Kennzeichen** – öffentlich (ohne Mitarbeiteranmeldung), Kunden-Wartung, wartungsfrei, fremde Herkunft, eigene Anmeldung (siehe [regeln/aktionen/LIESMICH.md](../../../regeln/aktionen/LIESMICH.md)).
 
-262 Aktionen in 14 Modulen.
+270 Aktionen in 14 Modulen.
 
 ## Angebot (`angebot`)
 
@@ -14,6 +14,7 @@ Spalten: **Art** – lesend, schreibend (nur POST) oder post (GET liest, POST sc
 | --- | --- | --- | --- | --- | --- |
 | `abmelden1` | `angebot.kunden` | lesend | öffentlich, fremde Herkunft | – | `app/api/aktionen/kundenportal.php` |
 | `angebot_artikel` | `angebot.eingabe` | lesend | – | Recht angebot.bearbeiten | `app/api/aktionen/angebote.php` |
+| `angebot_winab_export` | `angebot.eingabe` | schreibend | – | Recht angebot.winab_export | `app/api/aktionen/entwurf.php` |
 | `bestell_settings_save` | `angebot.eingabe` | schreibend | – | Administrator + Bestätigung | `app/api/aktionen/kundenportal.php` |
 | `bestellung` | `angebot.eingabe` | lesend | – | siehe Datei | `app/api/aktionen/kundenportal.php` |
 | `bestellung_mail_retry` | `angebot.eingabe` | schreibend | – | siehe Datei | `app/api/orders.php` |
@@ -187,6 +188,11 @@ Spalten: **Art** – lesend, schreibend (nur POST) oder post (GET liest, POST sc
 | `hr_monatsuebersicht_senden` | `angebot.eingabe` | schreibend | – | Recht hr.verwalten | `app/api/aktionen/hr.php` |
 | `hr_offen` | `hr.intern` | lesend | – | Recht hr.genehmigen | `app/api/aktionen/hr.php` |
 | `hr_personal_uebernehmen` | `angebot.eingabe` | schreibend | – | Recht hr.verwalten | `app/api/aktionen/hr.php` |
+| `hr_planung` | `hr.intern` | lesend | – | Recht hr.verwalten | `app/api/aktionen/hr.php` |
+| `hr_planung_abschluss` | `hr.intern` | schreibend | – | Recht hr.verwalten | `app/api/aktionen/hr.php` |
+| `hr_planung_erinnern` | `hr.intern` | schreibend | – | Recht hr.verwalten | `app/api/aktionen/hr.php` |
+| `hr_planung_freigeben` | `hr.intern` | schreibend | – | Recht hr.genehmigen | `app/api/aktionen/hr.php` |
+| `hr_planung_uebersicht_senden` | `hr.intern` | schreibend | – | Recht hr.verwalten | `app/api/aktionen/hr.php` |
 | `hr_start` | `hr.intern` | lesend | – | Recht hr.antrag | `app/api/aktionen/hr.php` |
 | `hr_steuerberater_senden` | `angebot.eingabe` | schreibend | – | Recht hr.verwalten | `app/api/aktionen/hr.php` |
 | `hr_uebersicht` | `hr.intern` | lesend | – | angemeldet | `app/api/aktionen/hr.php` |
@@ -227,6 +233,8 @@ Spalten: **Art** – lesend, schreibend (nur POST) oder post (GET liest, POST sc
 
 | Aktion | Oberfläche | Art | Kennzeichen | Prüfung im Code | Datei |
 | --- | --- | --- | --- | --- | --- |
+| `angebotskategorien` | `angebot.eingabe` | lesend | – | angemeldet | `app/api/aktionen/kundengruppen.php` |
+| `angebotskategorien_save` | `angebot.eingabe` | schreibend | – | Recht stammdaten.bearbeiten | `app/api/aktionen/kundengruppen.php` |
 | `auswertung` | `angebot.eingabe` | lesend | – | Recht auswertung.sehen | `app/api/aktionen/auswertung.php` |
 | `import_arten` | `angebot.eingabe` | lesend | – | angemeldet | `app/api/aktionen/importzentrale.php` |
 | `import_pruefen` | `angebot.eingabe` | schreibend | – | – | `app/api/aktionen/importzentrale.php` |

@@ -61,8 +61,8 @@ with sync_playwright() as p:
     check('glass: Veröffentlichen is the coloured button (bordeaux gradient)', 'linear-gradient' in css('#btn-publish', 'backgroundImage')
           and '163, 32, 47' in css('#btn-publish', 'backgroundImage') and css('#btn-publish', 'borderTopLeftRadius') == '999px')
     check('glass: other top bar buttons are neutral pills', css('#btn-preview', 'backgroundImage') == 'none' and css('#btn-preview', 'borderTopLeftRadius') == '999px')
-    check('glass: group cards 28 px, offer list a glass card with the active offer as glass entry', css('#groups .gcard', 'borderTopLeftRadius') == '28px'
-          and css('#offer-bar', 'borderTopLeftRadius') == '28px'
+    check('glass: group cards 28 px, offer list inside the side navigation card (no card of its own) with the active offer as glass entry', css('#groups .gcard', 'borderTopLeftRadius') == '28px'
+          and g.evaluate("document.querySelector('#offer-bar').parentElement.classList.contains('side-nav')") and css('#offer-bar', 'borderTopLeftRadius') == '0px' and css('#offer-bar', 'backdropFilter') in ('none', '')
           and css('#offer-bar .ob-o[aria-selected="true"]', 'borderTopLeftRadius') == '14px' and g.locator('#offer-bar .ob-o[aria-selected="true"]').bounding_box()['height'] >= 44)
     check('glass: dense table cards stay mostly opaque', float(css('#groups .gcard', 'backgroundColor').split(',')[-1].strip(' )')) >= .7, css('#groups .gcard', 'backgroundColor'))
     check('glass: price fields 10 px radius', css('#groups tr[data-id] .e-price .in.num', 'borderTopLeftRadius') == '10px')
@@ -235,6 +235,33 @@ with sync_playwright() as p:
         check(f'{w}px Kachel „Verwaltung“: alle Verwaltungsbereiche mit Seitenleiste', {'importe', 'users', 'log'} <= set(v.evaluate(sichtbar_js)) and not {'schutz', 'sec'} & set(v.evaluate(sichtbar_js))
               and v.is_visible('.side-nav') and v.text_content('#topbar h1') == 'Verwaltung', v.evaluate(sichtbar_js))
         v.close()
+    # Langsames Skript (Befund CI 05.11.2026, erstmalige Anmeldung ohne Zwischenspeicher): kommt admin-import.js erst nach der
+    # Antwort des Servers, darf der Eingabebereich die Startansicht nicht vorher festlegen – sonst fehlt die Importzentrale
+    # (sie meldet sich erst mit ihrem Skript an) und die Seite landet im Angebot.
+    v = br.new_page(viewport={'width': 1440, 'height': 900}); v.on('pageerror', lambda x: errs.append(str(x)))
+    login(v, 'admin', 'Sicheres-Passwort-1')
+    v.route('**/api/?action=status*', verwaltung)
+    gehalten = []
+    v.route('**/assets/admin-import.js*', lambda r: gehalten.append(r))
+    with v.expect_response('**/api/?action=status*'):
+        v.goto(B + '/admin/?ansicht=importe&nur=import', wait_until='commit')
+    abrufe = []
+    v.on('request', lambda r: abrufe.append(r.url.split('action=')[1].split('&')[0]) if '/api/?action=' in r.url else None)
+    try:   # bisheriger Fehler: Editor legte die Startansicht fest (in derselben Aufgabe wie der Abruf „master“), obwohl admin-import.js fehlte
+        with v.expect_request('**/api/?action=master*', timeout=2500):
+            pass
+    except Exception:
+        pass
+    abrufe.append('|freigabe|')
+    v.evaluate('0')   # eigene Aufgabe in der Seite: die laufende (Editor öffnen, Startansicht) ist damit sicher beendet
+    for r in gehalten: r.continue_()
+    try:
+        v.wait_for_selector('#view-importe:not([hidden])', timeout=8000); ok = True
+    except Exception:
+        ok = False
+    check('langsames admin-import.js: Import-Adresse öffnet trotzdem die Importzentrale (Startansicht erst nach allen Skripten)',
+          ok and v.is_hidden('#view-edit'), (len(gehalten), abrufe, v.evaluate("[...document.querySelectorAll('[id^=view-]')].filter(e => !e.hidden).map(e => e.id)")))
+    v.close()
     check('no JS errors', not errs, errs)
 print(f'{sum(res)}/{len(res)} passed')
 sys.exit(0 if all(res) else 1)

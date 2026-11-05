@@ -11,6 +11,10 @@
    Klick auf einen Import klappt darunter sein Ablagefenster auf (Datei hineinziehen oder auswählen, Beschreibung, Format);
    immer nur eines offen. Drag & Drop: Datei auf eine Zeile oder ins offene Fenster → dieser Import; auf eine Vorschau
    gezogen → ersetzt die Datei desselben Imports.
+   Eigene Darstellung: Liefert die Vorschau „details“ und hat der Eigentümer eine Darstellung registriert
+   (window.WA.importDarstellung[art] = { html(ctx), binden(root, ctx) }), zeigt sie die Vorschau statt Zahlen und Zeilen;
+   Optionen vom Typ „liste“ setzt nur sie (ctx.setzen → neue Vorschau, die bisherige bleibt bis dahin abgeblendet stehen).
+   Kopf, Optionen, Fuß und Übernahme bleiben einheitlich; „fuss“ und „knopf“ der Vorschau beschriften den Fuß.
    Vertrag: docs/plattform/schnittstellen/import.md
    ========================================================================== */
 (function () {
@@ -30,7 +34,8 @@
   const ART_LABEL = { neu: 'Neu', geaendert: 'Geändert', entfaellt: 'Entfällt', fehler: 'Fehler' };
   const SCHRITTE = ['Importart', 'Datei', 'Vorschau', 'Ergebnis'];
   let arten = null;        // Importarten des Nutzers (Server)
-  let lauf = null;         // { art, dateien, quelle, gelesen, optionen, vorschau, ergebnis, schritt, fehler, filter, busy }
+  let lauf = null;         // { art, dateien, quelle, gelesen, optionen, vorschau, ergebnis, schritt, fehler, filter, busy, aktualisiert, darst }
+  W.importDarstellung = W.importDarstellung || {};   // Darstellungen der Eigentümer (z. B. admin-preisimport.js)
   let offen = '';          // Importart mit aufgeklapptem Ablagefenster (Liste)
   const view = () => $('#view-importe');
 
@@ -123,11 +128,13 @@
       <button type="button" class="btn sm ghost" data-imp="liste">${icon('undo', 'sm')}Alle Importe</button></div>`;
   }
   function optionenHTML() {
-    const ops = lauf.art.optionen;
+    const ops = lauf.art.optionen.filter((o) => o.typ !== 'liste');   // „liste“ setzt die Darstellung des Eigentümers
     if (!ops.length) return '';
     return `<div class="imp-optionen">${ops.map((o) => o.typ === 'datum'
       ? `<label class="fld sm"><span>${esc(o.label)}</span><input type="date" data-imp-opt="${esc(o.id)}" value="${esc(lauf.optionen[o.id] || '')}"${o.pflicht ? ' required' : ''}></label>`
-      : `<label class="check"><input type="checkbox" data-imp-opt="${esc(o.id)}"${lauf.optionen[o.id] ? ' checked' : ''}> ${esc(o.label)}</label>`).join('')}</div>`;
+      : o.typ === 'auswahl'   // feste Werte des Eigentümers (z. B. Angebotswoche)
+        ? `<label class="fld sm imp-auswahl"><span>${esc(o.label)}</span><select data-imp-opt="${esc(o.id)}">${(o.werte || []).map((w) => `<option value="${esc(w.wert)}"${w.wert === lauf.optionen[o.id] ? ' selected' : ''}>${esc(w.text)}</option>`).join('')}</select></label>`
+        : `<label class="check"><input type="checkbox" data-imp-opt="${esc(o.id)}"${lauf.optionen[o.id] ? ' checked' : ''}> ${esc(o.label)}</label>`).join('')}</div>`;
   }
   /* Zeilen der Vorschau: Fehler aus dem Leser (Datei) + Ergebnis des Servers */
   function alleZeilen() {
@@ -160,6 +167,13 @@
   function hinweiseHTML(list) {
     return list.length ? `<ul class="issues imp-hinweise">${list.map((x) => `<li class="${x.stufe === 'warn' ? 'warn' : 'info'}"><span class="lvl">${x.stufe === 'warn' ? 'Prüfen' : 'Info'}</span><span>${esc(x.text)}</span></li>`).join('')}</ul>` : '';
   }
+  /* Eigene Darstellung des Eigentümers für diese Vorschau (nur mit „details“) und was sie bekommt */
+  const darstellung = (l) => (l.vorschau && l.vorschau.details && W.importDarstellung[l.art.id]) || null;
+  function kontext(l) {
+    return { details: l.vorschau.details, vorschau: l.vorschau, optionen: l.optionen, zustand: l.darst || (l.darst = {}), zahlen: zahlen(),
+      fehler: alleZeilen().filter((x) => x.art === 'fehler'), leserHinweise: l.gelesen.hinweise || [], hinweiseHTML, aktualisiert: !!l.aktualisiert,
+      setzen: (id, wert) => { if (lauf !== l || l.busy) return; l.optionen[id] = wert; pruefen(true, true); } };
+  }
   function renderLauf() {
     const l = lauf, h = view();
     if (l.schritt === 'lesen' || (l.schritt === 'vorschau' && !l.vorschau)) {
@@ -178,26 +192,35 @@
       const ziel = l.art.ansicht && l.art.ansicht !== 'importe' ? $('#vt-' + l.art.ansicht) : null;
       h.innerHTML = `${schritte(3)}${kopf()}
         <div class="imp-ergebnis" id="imp-ergebnis" role="status">
-          <div class="sec-card ok"><span class="sec-dot"></span><div><strong>Import übernommen</strong><span>${esc([`${fmtInt.format(z.neu)} neu`, `${fmtInt.format(z.geaendert)} geändert`, `${fmtInt.format(z.entfaellt)} entfallen`, z.fehler ? `${fmtInt.format(z.fehler)} fehlerhafte Zeilen nicht übernommen` : ''].filter(Boolean).join(' · '))}</span>
+          <div class="sec-card ok"><span class="sec-dot"></span><div><strong>Import übernommen</strong><span>${esc(l.ergebnis.fuss ? [l.ergebnis.fuss, z.fehler ? `${fmtInt.format(z.fehler)} fehlerhafte Zeilen nicht übernommen` : ''].filter(Boolean).join(' · ')
+            : [`${fmtInt.format(z.neu)} neu`, `${fmtInt.format(z.geaendert)} geändert`, `${fmtInt.format(z.entfaellt)} entfallen`, z.fehler ? `${fmtInt.format(z.fehler)} fehlerhafte Zeilen nicht übernommen` : ''].filter(Boolean).join(' · '))}</span>
             <em>Im Protokoll eingetragen${may('protokoll.sehen') ? ' (Verwaltung → Protokoll)' : ''}.</em></div></div>
           ${zahlenHTML(z, false)}
           <div class="imp-fuss">${ziel && !ziel.hidden ? `<button type="button" class="btn" data-imp="ansicht">${esc(ziel.textContent.trim())} öffnen</button>` : ''}<span class="sp"></span><button type="button" class="btn primary" data-imp="liste">Weiteren Import</button></div>
         </div>`;
       return;
     }
-    // Vorschau
+    // Vorschau (eigene Darstellung des Eigentümers oder einheitlich: Zahlen, Hinweise, Zeilen)
     const z = zahlen();
     const nix = !z.neu && !z.geaendert && !z.entfaellt;
+    const d = darstellung(l);
+    let inhalt = '', ctx = null;
+    if (d) {
+      try { ctx = kontext(l); inhalt = d.html(ctx); } catch (ex) { console.warn('Importdarstellung', ex); ctx = null; }   // dann einheitlich
+    }
+    if (!ctx) inhalt = `${zahlenHTML(z, true)}${hinweiseHTML((l.gelesen.hinweise || []).concat(l.vorschau.hinweise))}${zeilenHTML()}`;
+    const v = l.vorschau;
+    const text = nix ? 'Keine Änderungen – die Daten sind bereits aktuell.'
+      : `${v.fuss ? `<strong>Übernehmen:</strong> ${esc(v.fuss)}.` : `Übernommen werden die neuen, geänderten und entfallenden Einträge${z.fehler ? '; Zeilen mit Fehler werden übersprungen' : ''}.`}${v.fuss && z.fehler ? ' Zeilen mit Fehler werden übersprungen.' : ''}${l.art.bestaetigung ? ' Zum Übernehmen fragt der Eingabebereich nach Ihrem Passwort.' : ''}`;
     h.innerHTML = `${schritte(2)}${kopf()}${optionenHTML()}
-      ${zahlenHTML(z, true)}
-      ${hinweiseHTML((l.gelesen.hinweise || []).concat(l.vorschau.hinweise))}
-      ${zeilenHTML()}
-      <div class="imp-fuss">
-        <p class="hint">${nix ? 'Keine Änderungen – die Daten sind bereits aktuell.' : `Übernommen werden die neuen, geänderten und entfallenden Einträge${z.fehler ? '; Zeilen mit Fehler werden übersprungen' : ''}.${l.art.bestaetigung ? ' Zum Übernehmen fragt der Eingabebereich nach Ihrem Passwort.' : ''}`}</p>
+      <div class="imp-inhalt"${l.aktualisiert ? ' aria-busy="true"' : ''}>${inhalt}</div>
+      <div class="imp-fuss${v.fuss ? ' mit-text' : ''}">
+        <p class="hint" id="imp-fusstext">${text}</p>
         <p class="kerr" id="imp-err" role="alert"></p>
         <button type="button" class="btn" data-imp="liste">Abbrechen</button><button type="button" class="btn" data-imp="andere">Andere Datei</button><span class="sp"></span>
-        <button type="button" class="btn primary" id="imp-ok" data-imp="ok"${nix || l.busy ? ' disabled' : ''}>${icon('check')}Übernehmen</button>
+        <button type="button" class="btn primary" id="imp-ok" data-imp="ok"${nix || l.busy || l.aktualisiert ? ' disabled' : ''}>${icon('check')}${esc(v.knopf || 'Übernehmen')}</button>
       </div>`;
+    if (ctx && d.binden) { try { d.binden(h, ctx); } catch (ex) { console.warn('Importdarstellung', ex); } }
   }
 
   /* ---------- Ablauf ---------- */
@@ -225,30 +248,41 @@
       const leser = W.importLeser && W.importLeser[l.art.id];
       if (!leser) throw new Error('Für diese Importart ist im Eingabebereich kein Leser geladen. Bitte die Seite neu laden.');
       l.gelesen = await leser.lesen(l.dateien);
-      for (const o of l.art.optionen) if (!(o.id in l.optionen)) l.optionen[o.id] = l.gelesen.optionen && o.id in l.gelesen.optionen ? l.gelesen.optionen[o.id] : (o.standard ?? (o.typ === 'schalter' ? false : ''));
+      for (const o of l.art.optionen) {
+        if (o.id in l.optionen) continue;
+        const v = l.gelesen.optionen && o.id in l.gelesen.optionen ? l.gelesen.optionen[o.id] : (o.standard ?? (o.typ === 'schalter' ? false : o.typ === 'liste' ? [] : ''));
+        l.optionen[o.id] = Array.isArray(v) ? [...v] : v;
+      }
     } catch (ex) {
       if (lauf !== l) return;
       l.schritt = 'fehler'; l.fehler = ex.message || String(ex); renderLauf(); return;
     }
     if (lauf === l) await pruefen();
   }
-  async function pruefen(nochmal = true) {
+  /* sanft: Option aus der eigenen Darstellung geändert – die bisherige Vorschau bleibt abgeblendet stehen (kein Springen,
+     Übernehmen gesperrt), bis die neue da ist; bei schnellem Umschalten gilt nur die letzte Anfrage. */
+  async function pruefen(nochmal = true, sanft = false) {
     const l = lauf;
-    const fehlt = l.art.optionen.find((o) => o.pflicht && !l.optionen[o.id]);
-    l.schritt = 'vorschau'; l.vorschau = null;
-    if (fehlt) { l.schritt = 'fehler'; l.fehler = `Bitte „${fehlt.label}“ angeben.`; renderLauf(); return; }
+    const fehlt = l.art.optionen.find((o) => o.pflicht && (!l.optionen[o.id] || (Array.isArray(l.optionen[o.id]) && !l.optionen[o.id].length)));
+    const nr = l.pruefNr = (l.pruefNr || 0) + 1;
+    sanft = sanft && !!l.vorschau && l.schritt === 'vorschau';
+    l.schritt = 'vorschau';
+    if (sanft) l.aktualisiert = true; else { l.vorschau = null; l.aktualisiert = false; }
+    if (fehlt) { l.schritt = 'fehler'; l.aktualisiert = false; l.fehler = `Bitte „${fehlt.label}“ angeben.`; renderLauf(); return; }
     renderLauf();
     try {
       const r = await api('import_pruefen', { body: datenAnfrage() });
-      if (lauf !== l) return;
-      l.vorschau = r; l.filter = 'alle';
+      if (lauf !== l || l.pruefNr !== nr) return;
+      l.vorschau = r; l.aktualisiert = false;
+      if (!sanft) l.filter = 'alle';
     } catch (ex) {
-      if (lauf !== l) return;
+      if (lauf !== l || l.pruefNr !== nr) return;
+      l.aktualisiert = false;
       if (ex.status === 409 && nochmal) { await lesen(); return; }   // Stand hat sich geändert (z. B. Stammdaten): neu lesen
       l.schritt = 'fehler'; l.fehler = ex.message; renderLauf(); return;
     }
     renderLauf();
-    view().scrollIntoView({ block: 'start' });
+    if (!sanft) view().scrollIntoView({ block: 'start' });
   }
   async function uebernehmen(btn) {
     const l = lauf;
@@ -269,7 +303,7 @@
       if (ex.status === 409) { toast(ex.message + ' Die Vorschau wurde neu geladen.', 7000); await lesen(); return; }
       if (ex.wartung || ex.status === 401) return;
       btn.disabled = false;
-      if (l.art.inTeilen) btn.innerHTML = `${icon('check')}Übernehmen`;
+      if (l.art.inTeilen) btn.innerHTML = `${icon('check')}${esc(l.vorschau.knopf || 'Übernehmen')}`;
       const e = $('#imp-err'); if (e) e.textContent = ex.message;
     }
   }
@@ -318,8 +352,6 @@
     if (ed) {
       const a = arten.find((x) => x.id === ed.dataset.impEditor);
       setView(a.ansicht);
-      if (a.id === 'angebot_excel') { const b = $('#btn-import'); if (b && !b.hidden) b.click(); }
-      else toast('Preise importieren: Knopf „Preise importieren“ unter den Angeboten.', 5000);
       return;
     }
     const fb = e.target.closest('[data-imp-filter]');
@@ -329,7 +361,7 @@
     const act = b.dataset.imp;
     if (act === 'liste') { zurListe(); return; }
     if (act === 'andere' && lauf) { const art = lauf.art; lauf = null; offen = ''; renderListe(); host.querySelector(`input[data-imp-datei="${art.id}"]`)?.click(); return; }
-    if (act === 'ok' && lauf && lauf.vorschau) { uebernehmen(b); return; }
+    if (act === 'ok' && lauf && lauf.vorschau && !lauf.aktualisiert) { uebernehmen(b); return; }
     if (act === 'ansicht' && lauf) { const v = lauf.art.ansicht; lauf = null; setView(v); }
   });
   host.addEventListener('keydown', (e) => {

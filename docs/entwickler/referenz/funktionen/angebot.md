@@ -2,7 +2,7 @@
 
 <!-- ERZEUGT von `python3 werkzeuge/doku.py erzeugen` – nicht von Hand ändern. Quelle: Funktionen und Kommentare im Code. Die CI prüft, dass diese Datei zum Code passt. -->
 
-41 Dateien, 594 Funktionen – in der Reihenfolge der Datei, **fett** die Abschnitte. Text = erste Aussage des Kommentars direkt über der Funktion (Python: Docstring). Übersicht aller Module: [README.md](README.md).
+43 Dateien, 648 Funktionen – in der Reihenfolge der Datei, **fett** die Abschnitte. Text = erste Aussage des Kommentars direkt über der Funktion (Python: Docstring). Übersicht aller Module: [README.md](README.md).
 
 ## `app/api/lib/angebote.php`
 
@@ -17,10 +17,14 @@ _Angebote, Kundenpreise, Sonderpreise, Datenmodell, gemeinsames Bearbeiten_
 - `std_public()` – Ist das Standard-Wochenangebot ohne Anmeldung sichtbar?
 - `offer_def(id)`
 - `clean_variants(v, where, known)`
+- `werbung_bloecke(e)` – Blöcke eines Eintrags in Reihenfolge: erster Block, danach „weitere“ (ungeprüft)
+- `werbung_eintrag(bloecke)` – Blöcke wieder zu einem Eintrag zusammensetzen (leere fallen weg, ein späterer rückt nach vorn); null = keine Werbung
+- `werbung_block_clean(e, iids)`
 - `clean_werbung(w, known, iids)`
-- `clean_money(x, what)` – Sonderpreis „solange der Vorrat reicht“ (Artikel mit kurzem oder überschrittenem MHD): $item['sale'] = {value: Grundsonderpreis für alle Angebote, offers?: …
+- `clean_money(x, what)` – Empfehlung (bis 11/2026 „Sonderpreis“) je Artikel und Angebot: $item['sale'] = {value: Empfehlungspreis für alle Angebote \| mark: true (ohne Preisänderung), …
 - `clean_sale(v, where, known)`
-- `sale_for(it, oid)`
+- `empfehlung_fuer(it, oid)` – Empfehlung eines Artikels in einem Angebot: null = keine, sonst ['preis' => Empfehlungspreis \| null (nur hervorheben)]
+- `sale_for(it, oid)` – Empfehlungspreis (Sonderposten „solange der Vorrat reicht“) eines Artikels in einem Angebot, sonst null
 - `stock_codes()` – Artikelnummern mit eingelagertem Bestand (null = keine Bestandsliste vorhanden)
 - `sold_out(it)`
 - `offer_resolve(m, def)` – Angebot für die Auslieferung: nur Preise dieses Angebots, keine Kundenpreise anderer Angebote, keine ausgeblendeten Artikel, Sonderpreise aufgelöst (ohne …
@@ -110,11 +114,13 @@ _E-Mails an Kunden, Abmelden, Bestellwunsch-Vorlagen, Einmal-Links, Versand_
 - `abmelde_url(c)`
 - `abmelde_setzen(c, ab, via)` – Abmelden/Wiederanmelden speichern; true, wenn sich der Status geändert hat
 - `abmelde_melden(c, ab, via)`
+- `abmelde_hinweis_senden(c, ab, t)` – Hinweis an das Team über eine Ab- bzw. Wiederanmeldung ($t: Zeitpunkt der Änderung, UTC)
 
 **Bestellwünsche**
 
-- `order_settings()`
-- `order_enabled()`
+- `order_settings()` – Einstellungen der Bestellfunktion.
+- `order_settings_speichern(neu, wer)` – Einstellungen speichern ($neu: enabled, copy und/oder to – fehlende bleiben).
+- `order_enabled()` – Bestellfunktion nutzbar?
 - `de_num(v, dec)`
 - `de_qty(v)` – Menge immer mit 2 Nachkommastellen wie überall (12,50 kg; app/assets/format.js)
 - `mail_tpl_bestellung(o, copy)` – Mail an uns bzw. Kopie an den Kunden: [Betreff, Text, HTML]
@@ -129,6 +135,7 @@ _E-Mails an Kunden, Abmelden, Bestellwunsch-Vorlagen, Einmal-Links, Versand_
 - `mail_send_many(cfg, jobs)` – Mehrere Nachrichten über eine Verbindung; Ergebnis je Auftrag
 - `mail_record(entries, wk)` – Versand an Kunden vermerken (letzte E-Mail, Wochenversand) und ins Versandprotokoll schreiben
 - `mail_job_for(c, typ, note, wk)`
+- `ksess_begrenzen(r, kid)` – Register auf die Obergrenzen kürzen: erst je Zugang, dann insgesamt (die zuletzt benutzten bleiben)
 - `kunde_sign_in(c, via)` – Kunde anmelden (nach Passwortprüfung oder Einmal-Link)
 
 ## `app/api/lib/preisverlauf.php`
@@ -149,20 +156,51 @@ _Preisverlauf (Wochenstände)_
 _Importvertrag des Moduls Angebot – Schnittstelle zur Importzentrale (docs/plattform/schnittstellen/import.md). - Preisverlauf: frühere Angebotslisten (.xlsx) als Wochen im Preisverlauf._
 
 - `import_arten_angebot()`
+
+**Artikelpreise (CSV)**
+
+- `angebot_preise_aktuelle_woche()` – Aktuelle Kalenderwoche (ISO 8601, Zeitzone der Anwendung) als „JJJJ-WW“ – Standard der Option „Angebotswoche“
+- `angebot_preise_wochen()` – Auswahl der Angebotswoche: vier Wochen zurück bis acht Wochen voraus, die aktuelle gekennzeichnet
+- `angebot_code_key(c)` – Schlüssel einer Artikelnummer wie im Browser (StockCore.normCode): reine Zahlen ohne führende Nullen, sonst Großbuchstaben
+- `angebot_slug(name)` – Kennung eines neuen Angebots aus dem Namen (wie slug() im Eingabebereich)
+- `angebot_preis_text(v)` – Preise eintragen in 2 Nachkommastellen, mehr nur wenn vorhanden
+- `angebot_preise_zeilen(e)` – Zeilen des Lesers prüfen: {zeile, code, gruppe, preis}.
+- `angebot_preise_woche(v)` – Gewählte Angebotswoche „JJJJ-WW“ → [Woche, Jahr] (nur gültige ISO-Wochen; sonst die aktuelle)
+- `angebot_preise_basis()` – Ausgangsstand: Entwurf, sonst veröffentlichtes Angebot; Stand = Revision des Entwurfs und der Angebotsliste
+- `angebot_preise_plan(model, offers, rows, gewaehlt)` – Zuordnung der Preise zu Angeboten und Artikeln (ohne zu schreiben).
+- `angebot_preise_ergebnis(plan, model, fehler, woche, opt, stand)` – Vorschau/Ergebnis im Format der Importzentrale aus Plan, Fehlerzeilen und Angebotswoche
+- `angebot_preise_vorschau(e, me)`
+- `angebote_fuer_gruppen_anlegen(neuName, rev, me)` – Neue Angebote für Kundengruppen ohne Angebot (eigene Artikelliste, Gruppe zugeordnet) – Regeln wie offers_save: eindeutige Namen, nie die ID eines gelöschten …
+- `angebot_preise_uebernehmen(e, me)`
 - `preisverlauf_woche_speichern(week, year, items, source)` – Eine Woche speichern (ersetzt eine vorhandene Woche) und protokollieren – Aktion history_import und Importzentrale
 - `preisverlauf_import_wochen(e)` – Wochen der Dateien prüfen: gültige Woche, Artikel; doppelte Woche → die spätere Datei zählt (wie im Preisverlauf)
 - `preisverlauf_import_vorschau(e, me)`
 - `preisverlauf_import_uebernehmen(e, me)`
 
+## `app/api/module/angebot/winab-export.php`
+
+_Export des Wochenangebots für WinAB (Auftrag des Inhabers 05.11.2026)_
+
+- `winab_preis(v)` – Preis für WinAB: 26,1 → „26,10“, 12.345 → „12,345“
+- `winab_zeilen(pub)` – Zeilen [Artikelnummer, Preis] aus einem veröffentlichten Angebotsmodell (höchster Preis je Nummer) und Zählung
+- `winab_export()` – Datei für den Download: Name, Inhalt und Zahlen; 422 ohne veröffentlichtes Angebot oder ohne Preise
+
 ## `app/api/order_outbox.php`
 
-_Durable per-recipient jobs live in the same document/transaction as the order._
+_Versandaufträge eines Bestellwunschs: je Empfänger ein Auftrag im selben Dokument (bestellungen) wie der Vorgang._
 
-- `order_outbox_create(o)`
+- `order_outbox_job(kind, to, name)`
+- `order_outbox_create(o)` – Aufträge eines neuen Bestellwunschs; ohne Sicht auf die internen Daten (Kundenseite ab Trennstufe 2) nur der offene Auftrag
+- `order_outbox_empfaenger(o)` – Aufträge je Empfänger aus den aktuellen Einstellungen (Team) und den Stammdaten des Kunden (Kopie).
+- `order_kopie_name(o)`
+- `order_kunden_email(kid)` – Adresse eines Kunden aus den Stammdaten (null: unbekannt, inaktiv oder ohne gültige Adresse) – nie aus dem Vorgang
+- `order_outbox_vorbereiten(nr)` – Offenen Auftrag der Kundenseite ausführen (unter der Versandsperre des Vorgangs): Schnappschuss ergänzen, Aufträge je Empfänger anlegen.
+- `order_outbox_pruefen(o, j, ausdruecklich)` – Darf dieser Auftrag jetzt verschickt werden? null = ja, sonst der Grund (Auftrag wird verworfen, nicht wiederholt).
+- `order_tageszahl(kid, typ, to)` – Zugestellte E-Mails dieser Art an diese Adresse für diesen Kunden in den letzten 24 Stunden (Versandprotokoll)
 - `order_outbox_summary(o)`
 - `order_outbox_view(o)`
 - `order_outbox_cleanup_locks(own)` – Sperrdateien abgeschlossener Vorgänge gelegentlich entfernen (älter als 2 Tage, nicht die eigene).
-- `order_outbox_send(nr, jobId, expected, by)` – No SQLite transaction spans SMTP.
+- `order_outbox_send(nr, jobId, expected, by, ausdruecklich)` – No SQLite transaction spans SMTP.
 
 ## `app/api/orders.php`
 
@@ -181,11 +219,14 @@ _Eingabebereich – Fenster „Artikel hinzufügen“ (gemeinsam für „Angebot
 
 - `bestandHTML(a, kurz)`
 - `naechsteEta(a)` – Nächste erwartete Ankunft (frühestes Datum; ohne Datum: keine Angabe)
+- `hayVon(a)` – Suchtext eines Artikels (einmal je Öffnen berechnet): Nummer mit und ohne führende Nullen, Bezeichnung (auch die der Stammdaten/Bestandsliste), Herkunft und …
 - `passt(a, toks)`
 - `pickBasis()` – Treffer der Filter/Suche (ohne Gruppenwahl) und Anzahl je Gruppe
 - `pickZeilen(basis)` – Angezeigte Artikel: gewählte Gruppe, sonst (bei Suche) alle Gruppen; sortiert nach Gruppe und Artikelnummer
 - `oeffnen(c)`
 - `renderPick()`
+- `suchPlatzhalter()` – Suchfeld oben: sucht in der gewählten Gruppe, ohne gewählte Gruppe in allen Gruppen
+- `gruppenFiltern()` – Gruppenleiste nach dem Suchtext links filtern (Nummer oder Name); die gewählte Gruppe bleibt sichtbar
 - `renderPickNav(basis)`
 - `detailHTML(a)`
 - `preisFeld(a, k)`
@@ -245,11 +286,14 @@ _Wochenangebot – Eingabebereich, Einzelangebote (Angebot je Kunde) Kunde über
 
 ## `app/assets/admin-werbung.js`
 
-_Eingabebereich – Fenster „Werbung schalten“ (Angebot bearbeiten, Knopf „Werbung“ in der Werkzeugleiste) Überschrift, optionaler Werbetext und bis zu 12 Artikel des gewählten Angebots (Reihenfolge, je Artikel ein …_
+_Eingabebereich – Fenster „Werbung schalten“ (Angebot bearbeiten, Knopf „Werbung“ in der Werkzeugleiste) Bis zu zwei Werbungen je Angebot (Reiter „Werbung 1“/„Werbung 2“, „Weitere Werbung“ legt die zweite an): je …_
 
 - `listeHTML()`
+- `reiterHTML()` – Reiter der Werbungen (nur ab zwei Werbungen) und Knopf „Weitere Werbung“
+- `blockHTML()` – Felder und Liste der angezeigten Werbung
+- `zeigen(i)`
 - `ausAuswahl(ids, artikel)` – Rückkehr aus der Artikelauswahl: ids = gewählte Artikel (Reihenfolge der Auswahl), artikel = aktuelle Liste des Angebots.
-- `oeffnen(c)` – cfg: { angebot, eintrag: {titel, text?, artikel: [{id, text?}]} \| null, artikel: [{id, code, name, merkmale, preis}], max, ro, auswaehlen(ids, fertig(ids, …
+- `oeffnen(c)` – cfg: { angebot, eintrag: {titel, text?, artikel: [{id, text?}], weitere?: [{titel, text?, artikel}]} \| null, artikel: [{id, code, name, merkmale, preis}], …
 
 ## `app/assets/admin.js`
 
@@ -266,8 +310,11 @@ _Wochenangebot – Eingabebereich Bearbeitet einen Entwurf auf dem Server (autom
 - `variantShort(v, oid)`
 - `inOffer(it, oid)`
 - `aufnehmen(it, oid, p)` – In ein Angebot aufnehmen; p = Preis ({status, value?}) oder null (Preis bleibt, in eigener Liste „auf Anfrage“)
+- `empfehlungNichtUebernehmen(it, oid)` – Empfehlung gilt nur, wo sie gesetzt wurde: kommt ein Artikel mit Empfehlung neu in ein Angebot, steht er dort auf „keine Empfehlung“ (sonst übernähme er den …
 - `nurIn(it, oid)` – Neuer Artikel nur für dieses Angebot: im Wochenangebot und in Angeboten, die ihm folgen, nicht enthalten
 - `entfernen(it, oid)` – Aus einem Angebot entfernen.
+- `namenBekannt(n)` – nur Einträge bestehender Kundenangebote; null, wenn keiner
+- `setzeName(x, oid, text)` – eigene Bezeichnung setzen; leer oder gleich dem Basiswert = keine eigene
 - `werbungBereinigen()` – Artikel, die nicht mehr im Angebot stehen, fallen aus dessen Werbung (unbekannte Angebote prüft der Server)
 
 **API**
@@ -310,7 +357,14 @@ _Wochenangebot – Eingabebereich Bearbeitet einen Entwurf auf dem Server (autom
 
 - `emptyModel()`
 - `strip(m)`
-- `normalizeNames(m)` – Bezeichnungen/Herkunft vereinheitlichen: „frisch“ nur im Zustand, Marke „Fleischmeister“ in der Bezeichnung, Herkunft als Kürzel
+
+**Angebotskategorien (Stammdaten der Verwaltung, Inhaber 05.11.2026)**
+
+- `nachKategorienOrdnen()`
+- `kategorienLaden(opts)` – Kategorien holen und den Entwurf danach ordnen; Rückgabe: ob der Entwurf neu geordnet wurde (still: ohne Hinweis)
+- `vkOptionen(cur)` – VK-Gruppe einer Angebotsgruppe wählen (Gruppenkopf, nur mit Angebotskategorien): Nummer · Name → Kategorie
+- `kategorienVorschlag()` – Vorschlag für die Stammdaten-Ansicht (Schnittstelle W.angebot): heutige Abschnitte des Angebots als Kategorien in ihrer Reihenfolge, darin die VK-Gruppen der …
+- `normalizeNames(m)` – Merkmale vereinheitlichen: Herkunft als Kürzel, unbekannter Zustand aus „frisch“ in der Bezeichnung – die Bezeichnung bleibt unverändert
 - `showEingabeWartung(w)`
 - `renderWartungBanner()`
 - `refreshWartung()`
@@ -370,21 +424,12 @@ _Wochenangebot – Eingabebereich Bearbeitet einen Entwurf auf dem Server (autom
 
 - `openItem(id)`
 
-**Excel-Import**
-
-- `pickFile()`
-- `importFile(file)`
-- `importError(msg)`
-- `issuesHTML(issues)`
-- `renderImport(d)`
-- `werbungUebernehmen(alt, neu)` – Werbung geht beim Excel-Import auf den Artikel mit derselben Artikelnummer über (ohne Nummer: gleiche Bezeichnung)
-- `importKundenangebote(alt, neu)`
-
 **Angebote (Standard + Kundenangebote)**
 
 - `loadOffers()`
 - `angebotsseite(abfrage)` – Adresse der Angebotsseite auf diesem Host (Angebotsseite, Vorschau, Kundenangebot).
 - `renderOfferBar()`
+- `offerBarPlatzieren()`
 - `obFilter()`
 - `renderOfferHead()` – Kopf des gewählten Angebots: Art, Name, Artikelliste, Anzahl, Aktionen; Hinweis bei „folgt dem Wochenangebot“
 - `setOffer(id)`
@@ -400,10 +445,7 @@ _Wochenangebot – Eingabebereich Bearbeitet einen Entwurf auf dem Server (autom
 - `ofMark()`
 - `openOfGruppen(key)`
 - `ofgCount()`
-- `preiseAusCsv(buf)`
-- `ofPreisPlan()`
-- `ofPreiseDatei(file)`
-- `renderOfPreise(err)`
+- `preiseAusCsv(buf)` – Artikelpreise der Warenwirtschaft (CSV „Artikelpreise“: Preis-Art; Kundengruppe; Artikel; Preis) – Leser der Importart „angebot_preise“ der Importzentrale …
 - `openCopy()`
 
 **Vorschau**
@@ -501,7 +543,7 @@ _Wochenangebot – Eingabebereich Bearbeitet einen Entwurf auf dem Server (autom
 - `mhdAnVerkauf(btn)`
 - `printStock()` – Druck / PDF (DIN A4)
 
-**Angebot: Vorwoche, Bestand, Bestand ohne Preis**
+**Angebot: Vorwoche, Bestand**
 
 - `loadPrev()`
 - `loadAux()`
@@ -512,10 +554,6 @@ _Wochenangebot – Eingabebereich Bearbeitet einen Entwurf auf dem Server (autom
 - `prevCellHTML(it)`
 - `stockCellHTML(it)`
 - `refreshAux()` – Spalten nach dem Laden von Bestand/Vorwoche aktualisieren, ohne Eingabefelder neu zu zeichnen
-- `noPriceList()`
-- `renderNoPrice()`
-- `panelLayout()` – Beide Leisten nebeneinander; eine aufgeklappte Leiste nimmt die volle Breite ein
-- `gotoPrice(it)`
 
 **Artikel hinzufügen (Fenster wie im Einzelangebot)**
 
@@ -528,7 +566,7 @@ _Wochenangebot – Eingabebereich Bearbeitet einen Entwurf auf dem Server (autom
 - `werbungAuswahl(oid, ids, fertig)`
 - `openWerbung()`
 
-**Sonderposten (kurzes MHD, solange der Vorrat reicht)**
+**Empfehlung (früher „Sonderpreis“; mit Preis: Sonderposten solange der Vorrat reicht)**
 
 - `openSale(id)`
 - `mhdList()`
@@ -542,19 +580,26 @@ _Wochenangebot – Eingabebereich Bearbeitet einen Entwurf auf dem Server (autom
 - `loadMaster(force)`
 - `masterOf(code)`
 - `draftByCode(m)`
+- `namenSetzen(it, e)` – Bezeichnungen je Angebot eines Stammsatzes auf einen Artikel des Angebots übertragen (nur bestehende Angebote)
 - `applyMasterTo(m, onlyCode)` – Stammdaten auf Artikel anwenden (nur eindeutige Artikelnummern)
 - `migrateMaster()` – Stammdaten an die Regeln anpassen (einmalig je Änderung der Regeln, danach ohne Wirkung)
 - `addFromDraft()`
 - `setMasterState(st, msg)`
 - `masterChanged()`
-- `saveMaster()`
+- `saveMaster()` – Rückgabe: true = gespeichert, false = Fehler (bei 409 ist danach der aktuelle Stand geladen), undefined = eingereiht
 - `offerStatus(e, by)`
 - `renderMasterView()`
 - `vkFilterOpts()`
-- `renderMasterList()`
+- `masterOrig(e)` – Originalbezeichnung eines Stammsatzes: Bezeichnung1 aus dem Artikelstammdaten-Import, sonst der Name der Bestandsliste (WinAB).
+- `renderMasterList()` – Liste nur zum Ansehen (Vorgabe des Inhabers 03.11.2026): Klick auf einen Artikel öffnet das Pop-up zum Ändern
+
+**Pop-up „Artikel“ der Artikelstammdaten (Auftrag des Inhabers 03.11.2026)**
+
+- `maDraftItem(code)`
+- `openMasterArt(code)`
 - `masterAusCsv(buf)`
 - `masterNeuAus(r)`
-- `masterZusammenfuehren(res, basis)` – Gelesene Zeilen mit den Stammdaten zusammenführen: neue Artikel mit vorgeschlagenen Merkmalen, bestehende nur um VK-Gruppe/GTIN ergänzt (leere Felder in der …
+- `masterZusammenfuehren(res, basis)` – Gelesene Zeilen mit den Stammdaten zusammenführen: neue Artikel mit vorgeschlagenen Merkmalen, bestehende nur um Originalbezeichnung (Bezeichnung1), …
 - `masterImportDatei(file)`
 - `openMasterNew(code)`
 - `saveItemToMaster(it)` – Artikel-Dialog: aktuellen Artikel als Stammdaten speichern
@@ -631,8 +676,10 @@ _Wochenangebot – öffentliches Frontend_
 - `plName(it)` – „Fleischmeister“ in der Bezeichnung weglassen, wenn Gruppe oder Abschnitt die Marke schon nennen (dort ist sie Überschrift)
 - `plLabels(items)`
 - `plCells(it, labels)`
-- `plFill(units, k, H)` – Verteilung auf k Spalten. units: [{key, items, weight(i), head}]; cap = feste Spaltenhöhe (Druck) oder null (ausgleichen)
-- `plBalance(units, k)`
+- `plFill(units, k, H)` – Druck: Spalten fester Höhe H nacheinander füllen.
+- `plOhneTeilen(units, c)` – Blöcke in fester Reihenfolge ohne Teilen auf c Spalten: die höchste Spalte so niedrig wie möglich (lineare Aufteilung).
+- `plGleichTeilen(u, k)` – Sortierte Gesamtliste (ohne Gruppen) ist ein einziger Block: er wird gleichmäßig auf die k Spalten verteilt (ab der zweiten Spalte mit „Forts.“) – sonst …
+- `plBaender(secs, k)`
 - `plUnits(list, grouped, charsPerLine)`
 - `plSections(units)`
 - `plBlockHTML(b, mode)` – Ein Block: Nummer \| Bezeichnung \| Preis(e) \| [Merken].
@@ -791,11 +838,15 @@ _Wochenangebot – gemeinsamer Kern für Frontend und Eingabebereich - Excel-Les
 **Vergleich & Prüfung**
 
 - `matchKey(it, groups)`
-- `saleFor(it, oid)` – Sonderpreis „solange der Vorrat reicht“: Grundpreis für alle Angebote, je Angebot änderbar
+- `empfehlungFor(it, oid)` – Empfehlung (früher „Sonderpreis“) je Artikel: sale = {value: Empfehlungspreis \| mark: true (ohne Preisänderung), offers?: {<Angebot>: {value} \| {status: …
+- `saleFor(it, oid)`
 - `diffOffers(oldM, newM)`
 - `validateModel(m)` – Prüft ein Modell vor dem Speichern/Veröffentlichen
 - `stripFrisch(name)` – „frisch“ gehört in den Zustand, nicht in die Bezeichnung.
-- `normalizeItem(it, group)` – Bezeichnung und Herkunft vereinheitlichen: – „frisch“ nur im Zustand – Eigenmarke „Fleischmeister“ (Gruppe/Bereich) steht in der Bezeichnung – Herkunft als …
+- `titelMitKw(meta)` – Überschrift der Angebotsliste (Bildschirm und Druck): Titel der früher importierten Excel-Liste, aber immer mit der Kalenderwoche des Angebots – der Titel …
+- `nachKategorien(model, kategorien, vkVon)` – Aufbau nach Angebotskategorien (Stammdaten der Verwaltung, Inhaber 05.11.2026): Reihenfolge der Kategorien, darin der VK-Gruppen, bestimmt die Reihenfolge …
+- `nameVorschlag(name, group)` – Vorschlag für die Bezeichnung eines neu aufgenommenen Artikels (z. B. aus der Bestandsliste der Warenwirtschaft): – „frisch“ gehört in den Zustand …
+- `normalizeItem(it, group)` – Merkmale vereinheitlichen (beim Laden des Entwurfs, Wiederherstellen einer Version, Stammdaten): – Herkunft als Kürzel; von Hand gesetzte Kürzel bleiben – …
 
 **Gemeinsames Bearbeiten**
 
@@ -811,6 +862,33 @@ _Wochenangebot – gemeinsamer Kern für Frontend und Eingabebereich - Excel-Les
 _Web-App: Offline-Speicher (sw.js) anmelden und Hinweis „Als App auf den Home-Bildschirm“._
 
 - `zeigen(inhalt)`
+
+## `app/module/angebot/preisimport.js`
+
+_STAFL-Plattform · Angebot · Darstellung der Vorschau „Artikelpreise (CSV)“ in der Importzentrale (Verwaltung → Import)._
+
+- `zeile(r)` – Zeile der Details [Artikelnummer, Artikel, bisher\|null, neu, Dateizeile, prüfen 1/0] → Anzeige
+- `zustand(ctx)`
+
+**Kopf: Angebotswoche und Kacheln**
+
+- `wocheHTML(w)`
+- `kachelnHTML(k, fehler)`
+- `fehlerHTML(list)` – Fehlerhafte Zeilen (Leser und Server) – aufklappbar, werden nicht übernommen
+
+**Kundengruppen ohne Angebot: einzeln anhaken**
+
+- `gruppenHTML(d, ctx)`
+
+**Preisänderungen je Angebot**
+
+- `listeHTML(d, z)`
+- `aenderungenHTML(d, z)`
+
+**Vertrag mit der Importzentrale**
+
+- `html(ctx)`
+- `binden(root, ctx)`
 
 ## `app/sw.js`
 
@@ -850,6 +928,7 @@ _Mehrere Angebote: Kundenangebote mit eigenen Preisen, eigene Artikelliste je An
 _Angebotsliste (Standardansicht der Angebotsseite)_
 
 - `check(n, c, i)`
+- `art(n, gid, nr)`
 
 ## `tests/e2e/test_bestellung.py`
 
@@ -880,6 +959,12 @@ _Testgruppe editor_aux_
 - `check(n, c, i)`
 - `login(pg, user, pw)`
 - `post(pg, action, body)`
+- `treffer(q)`
+
+**Export für WinAB (Recht angebot.winab_export): veröffentlichtes Wochenangebot, je Nummer der höchste Preis**
+
+- `art(src, nid, **f)`
+- `wb(v)`
 
 ## `tests/e2e/test_einzelangebote.py`
 
@@ -1022,7 +1107,7 @@ _Testgruppe order_outbox_ui_
 
 ## `tests/e2e/test_p0.py`
 
-_1) leeres System ohne WA_INSTALLED → Ersteinrichtung erlaubt_
+_Testgruppe p0: Ersteinrichtung gesperrt (leeres System, WA_INSTALLED, kaputte Nutzerdatei – kein Übernehmen), CSV-Formel-Schutz im Protokoll, Sicherungs- und Bereitstellungsanzeige (Sicherheit → System) und …_
 
 - `check(n, c, i)`
 - `srv(port, data, env)`
@@ -1031,7 +1116,7 @@ _1) leeres System ohne WA_INSTALLED → Ersteinrichtung erlaubt_
 
 ## `tests/e2e/test_restposten.py`
 
-_Sonderposten (kurzes MHD, solange der Vorrat reicht), Ausblenden in jedem Angebot, eigene Artikelliste (Sonderposten nur für eigene Artikel), Kein-Bestand-Zeichen und Sonderposten-Mail je Angebot._
+_Empfehlung (früher „Sonderpreis“): mit Preis Sonderposten (kurzes MHD, solange der Vorrat reicht), ohne Preis nur hervorgehoben; neu gesetzt nur im bearbeiteten Angebot._
 
 - `check(n, c, i)`
 - `customer(firma, user, offers, email, mail)`

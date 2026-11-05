@@ -1,6 +1,8 @@
 #!/bin/sh
 # Release-Modus: spielt nur einen von Hand freigegebenen Commit ein (GitHub-Workflow „Release“),
 # prüft danach die Erreichbarkeit wie ein Besucher und kehrt bei Fehlern automatisch zur Vorversion zurück.
+# Maßgeblich ist der neueste erfolgreiche Release-Lauf (nach Startzeit); ein Stand, der älter ist als der aktive, wird nie
+# automatisch eingespielt (zurück nur von Hand mit deploy/release-zurueck.sh).
 # Wird von aktualisieren.sh aufgerufen, sobald der Release-Modus eingerichtet ist
 # (deploy/release-modus-einrichten.sh). Ohne diese Einrichtung ändert sich nichts.
 #
@@ -22,7 +24,13 @@
 # der Skripte/Stylesheets und erzeugt die Prüfliste der Dateiprüfung aus genau diesem Commit. Fehlt sie oder schlägt sie
 # fehl, bleibt die Seite korrekt (Dateien ohne Nummer werden mit Rückfrage geladen); aktualisieren.sh holt sie nach.
 #
-# Für Tests überschreibbar: WA_BASIS, WA_API (GitHub-API), WA_HEALTH_URL, WA_HEALTH_HOST, WA_COMPOSE, WA_DOCKER, WA_SICHERN
+# Zwei Anwendungs-Container (ADR-007): Mit aktiver Ergänzungsdatei der Anmeldung laufen die Kundenseite („app“) und die
+# Mitarbeiter-Hosts („app-mitarbeiter“) getrennt aus demselben Image. Neues Image → beide neu erstellen; nur die Apache-
+# Konfiguration der Anmeldung geändert → nur app-mitarbeiter. Die Prüfung nach dem Einspielen fragt dann zusätzlich die
+# Mitarbeiter-Hosts ab (dashboard-stafl.de/api/?action=status: ohne Anmeldung 401) – fällt ihr Container aus, geht es zurück.
+#
+# Für Tests überschreibbar: WA_BASIS, WA_API (GitHub-API), WA_HEALTH_URL, WA_HEALTH_HOST, WA_HEALTH_MA_URL, WA_HEALTH_MA_HOST,
+# WA_COMPOSE, WA_DOCKER, WA_SICHERN
 set -eu
 BASIS=${WA_BASIS:-/opt/wochenangebot}
 cd "$BASIS"
@@ -33,6 +41,8 @@ API=${WA_API:-https://api.github.com}
 DOMAIN=$(envwert DOMAIN)
 HEALTH_URL=${WA_HEALTH_URL:-https://$DOMAIN}
 HEALTH_HOST=${WA_HEALTH_HOST:-$DOMAIN:443:127.0.0.1}
+HEALTH_MA_URL=${WA_HEALTH_MA_URL:-https://dashboard-stafl.de}       # Mitarbeiter-Hosts (nur mit Ergänzungsdatei der Anmeldung)
+HEALTH_MA_HOST=${WA_HEALTH_MA_HOST:-dashboard-stafl.de:443:127.0.0.1}
 # bunny vor dem Server (docs/bunny-cdn.md): Mit CDN_PFLICHT=1 nimmt Caddy auch Abrufe vom Server selbst nur mit dem Schlüssel an.
 # Die Prüfung schickt ihn wie bunny mit – über die Konfiguration auf der Standardeingabe, nicht in der Prozessliste.
 CDN_KEY=$(envwert CDN_SCHLUESSEL)
@@ -54,6 +64,10 @@ GUARD='<?php http_response_code(404); exit; ?>'
 
 [ -n "$REPO" ] && [ -n "$TOKEN" ] || { echo "Release-Modus: GITHUB_REPO oder GITHUB_TOKEN_LESEN fehlt in .env"; exit 1; }
 
+anmeldung_aktiv() { envwert COMPOSE_FILE | grep -qF "$ANMELDUNG_COMPOSE"; }
+# Kennt der ausgecheckte Stand den eigenen Container der Mitarbeiter-Hosts (ADR-007)? Ältere Stände: ein Container „app“
+mitarbeiter_container() { anmeldung_aktiv && grep -q '^  app-mitarbeiter:' "$ANMELDUNG_COMPOSE" 2>/dev/null; }
+
 api() { curl -fsS -m 20 -H "Authorization: Bearer $TOKEN" -H "Accept: application/vnd.github+json" -H "X-GitHub-Api-Version: 2022-11-28" "$API/repos/$REPO/$1"; }
 melden() { [ -n "$HC_URL" ] || return 0; if [ "$1" = ok ]; then curl -fsS -m 10 --retry 3 "$HC_URL" >/dev/null 2>&1 || true; else curl -fsS -m 10 --retry 3 "$HC_URL/fail" >/dev/null 2>&1 || true; fi; }
 status() { # ok sha vorher lauf meldung
@@ -72,7 +86,13 @@ angebot_ok() { # Angebots-API antwortet: öffentlich (200, ok:true), mit der Auf
   { [ "$CODE" = 200 ] && printf '%s' "$ANT" | grep -q '"ok":true'; } || { [ "$CODE" = 401 ] && printf '%s' "$ANT" | grep -q '"ok":false'; } \
     || { [ "$CODE" = 503 ] && printf '%s' "$ANT" | grep -q '"wartung":true'; }   # Wartungsmodus eingeschaltet
 }
-gesund() { # Status-API, Angebot, Startseite und Eingabebereich wie ein Besucher über Caddy;
+mitarbeiter_ok() { # Mitarbeiter-Hosts antworten über Caddy (nur mit Ergänzungsdatei der Anmeldung): Schnittstelle ohne
+  # Anmeldung 401 (Keycloak-Host) – 502/503 oder keine Antwort heißt: Container der Mitarbeiter-Hosts nicht erreichbar
+  anmeldung_aktiv || return 0
+  MA_CODE=$(pruefabruf -sS -o /dev/null -m 5 --resolve "$HEALTH_MA_HOST" -w '%{http_code}' "$HEALTH_MA_URL/api/?action=status" 2>/dev/null) || return 1
+  [ "$MA_CODE" = 401 ] || [ "$MA_CODE" = 200 ]
+}
+gesund() { # Status-API, Angebot, Startseite und Eingabebereich wie ein Besucher über Caddy, dazu die Mitarbeiter-Hosts;
   # erst nach 3 s (Caches von PHP/Webserver), dann zwei erfolgreiche Prüfungen hintereinander, insgesamt bis zu 40 s
   sleep 3
   i=0; gut=0
@@ -80,7 +100,8 @@ gesund() { # Status-API, Angebot, Startseite und Eingabebereich wie ein Besucher
     if pruefabruf -fsS -m 5 --resolve "$HEALTH_HOST" "$HEALTH_URL/api/?action=status" 2>/dev/null | grep -q '"ok":true' \
       && angebot_ok \
       && pruefabruf -fsS -m 5 --resolve "$HEALTH_HOST" "$HEALTH_URL/" 2>/dev/null | grep -q 'assets/frontend.js' \
-      && pruefabruf -fsS -m 5 --resolve "$HEALTH_HOST" "$HEALTH_URL/admin/" 2>/dev/null | grep -q 'assets/admin.js'; then
+      && pruefabruf -fsS -m 5 --resolve "$HEALTH_HOST" "$HEALTH_URL/admin/" 2>/dev/null | grep -q 'assets/admin.js' \
+      && mitarbeiter_ok; then
       gut=$((gut + 1)); [ $gut -ge 2 ] && return 0
     else
       gut=0
@@ -107,23 +128,36 @@ einspielen() { # sha vorher [zurueck]: Code wechseln; Container nur neu erstelle
   git reset -q --hard "$1"
   bereitstellen
   # Container-Konfiguration: Caddyfile, docker-compose.yml und die Ergänzungsdatei der Anmeldung (COMPOSE_FILE in .env);
-  # nur das Image geändert: nur die App neu erstellen (Keycloak und seine Datenbank laufen weiter)
+  # nur das Image geändert: nur die Anwendungs-Container neu erstellen (Keycloak und seine Datenbank laufen weiter)
   # Apache-Konfiguration der Anmeldung (als einzelne Datei eingebunden: nach dem Codewechsel sähe der Container sonst
-  # weiter die alte Fassung) → nur die App neu erstellen
+  # weiter die alte Fassung) → nur den Container der Mitarbeiter-Hosts (bzw. bei älteren Ständen die App) neu erstellen
   if git diff --name-only "$2" "$1" | grep -qE '^(Caddyfile|docker-compose\.yml|deploy/anmeldung/docker-compose\.anmeldung\.yml)$'; then $COMPOSE up -d --force-recreate
-  elif [ "$BAUEN" = 1 ] || git diff --name-only "$2" "$1" | grep -qx 'deploy/anmeldung/apache-oidc\.conf'; then $COMPOSE up -d --force-recreate app; fi
+  elif [ "$BAUEN" = 1 ]; then
+    if mitarbeiter_container; then $COMPOSE up -d --force-recreate app app-mitarbeiter; else $COMPOSE up -d --force-recreate app; fi
+  elif git diff --name-only "$2" "$1" | grep -qx 'deploy/anmeldung/apache-oidc\.conf'; then
+    if mitarbeiter_container; then $COMPOSE up -d --force-recreate app-mitarbeiter; else $COMPOSE up -d --force-recreate app; fi
+  fi
 }
 
-# 1. Neuester erfolgreicher, von Hand gestarteter Release-Lauf auf main
-LAUF=$(api "actions/workflows/release.yml/runs?branch=main&event=workflow_dispatch&status=success&per_page=1") || { echo "GitHub-API nicht erreichbar"; exit 1; }
+# 1. Neuester erfolgreicher, von Hand gestarteter Release-Lauf auf main – selbst nach Startzeit ausgewählt (nicht der erste
+#    Eintrag der Antwort: GitHub lieferte am 03.11.2026 einmalig einen vier Tage alten Lauf zuerst, der Server ging zurück)
+LAUF=$(api "actions/workflows/release.yml/runs?branch=main&event=workflow_dispatch&status=success&per_page=20") || { echo "GitHub-API nicht erreichbar"; exit 1; }
 json() { python3 -c "import json,sys; d=json.load(sys.stdin); $1" ; }
-SHA=$(printf '%s' "$LAUF" | json "r=(d.get('workflow_runs') or [{}])[0]; print(r.get('head_sha','') if r.get('path')=='.github/workflows/release.yml' and r.get('head_branch')=='main' and r.get('conclusion')=='success' else '')")
-LAUF_ID=$(printf '%s' "$LAUF" | json "print((d.get('workflow_runs') or [{}])[0].get('id',''))")
+NEUESTER="l=[r for r in d.get('workflow_runs') or [] if r.get('path')=='.github/workflows/release.yml' and r.get('head_branch')=='main' and r.get('conclusion')=='success']; r=max(l, key=lambda r: (str(r.get('created_at') or ''), int(r.get('id') or 0))) if l else {}"
+SHA=$(printf '%s' "$LAUF" | json "$NEUESTER; print(r.get('head_sha',''))")
+LAUF_ID=$(printf '%s' "$LAUF" | json "$NEUESTER; print(r.get('id',''))")
 [ -n "$SHA" ] || exit 0                       # noch kein Release
 AKTUELL=$(git rev-parse HEAD)
 [ "$SHA" = "$AKTUELL" ] && exit 0             # schon live
 ABGELEHNT="$BASIS/.release-abgelehnt"
 [ "$SHA" = "$(cat "$ABGELEHNT" 2>/dev/null)" ] && exit 0   # schon einmal abgelehnt/zurückgesetzt → nicht erneut versuchen
+# Nie automatisch zurück: Ein Release, der älter ist als der aktive Stand (Vorgänger von HEAD), kann nur eine veraltete oder
+# falsch sortierte Antwort von GitHub sein (Release-Läufe starten immer auf dem neuesten main). Zurück geht es nur von Hand
+# (deploy/release-zurueck.sh). Nichts ändern, nur im Protokoll vermerken.
+if git merge-base --is-ancestor "$SHA" "$AKTUELL" 2>/dev/null; then
+  echo "Release $SHA ist älter als der aktive Stand $(git rev-parse --short HEAD) – nicht eingespielt (kein automatischer Rückschritt)"
+  exit 0
+fi
 ablehnen() { echo "$SHA" > "$ABGELEHNT"; status false "$AKTUELL" "$AKTUELL" "$LAUF_ID" "$1"; melden fail; echo "$1"; exit 1; }
 printf '%s' "$SHA" | grep -qE '^[0-9a-f]{40}$' || { echo "Ungültige Commit-Kennung"; exit 1; }
 

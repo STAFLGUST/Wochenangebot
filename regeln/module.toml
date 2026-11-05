@@ -59,7 +59,7 @@ pfade = [
   "tests/e2e/test_sidenav.py", "tests/e2e/test_p0.py", "tests/e2e/test_fehlerpruefung.py",
   "tests/unit/merge.test.js", "tests/fixtures/angebote/**",
 ]
-pfade_geplant = ["app/api/module/angebot/**"]
+pfade_geplant = ["app/api/module/angebot/**", "app/module/angebot/**"]
 hinweise = [
   "Kunden-Frontend angebot-stafl.de ist produktiv und besonders schützenswert (Regeln GR-001 bis GR-005).",
   "app/assets/admin.js ist der gemeinsame Eingabebereich aller heutigen Fachfunktionen (Hotspot): nur kleine, klar abgegrenzte Änderungen.",
@@ -427,7 +427,7 @@ dashboard = true
 dashboard_gruppe = "verwaltung"   # Dashboard: eigener Bereich „Verwaltung & Daten“ unter den Anwendungen
 agent = "verwaltung"
 abhaengigkeiten = ["plattform"]
-testgruppen = ["kunden", "kundengruppen", "vkgruppen", "vertreter", "kundenimport", "auswertung", "master", "importzentrale"]
+testgruppen = ["kunden", "kundengruppen", "vkgruppen", "angebotskategorien", "vertreter", "kundenimport", "auswertung", "master", "importzentrale"]
 pfade = [
   "regeln/aktionen/verwaltung.toml",
   "app/api/lib/kunden.php", "app/api/lib/auswertung.php", "app/api/ort.php",
@@ -436,7 +436,7 @@ pfade = [
   "app/assets/admin-verwaltung.js", "app/assets/admin-auswertung.js", "app/assets/karte.json",
   "app/assets/admin-import.js", "app/assets/admin-import.css",
   "werkzeuge/karte_bauen.py",
-  "tests/e2e/test_kunden.py", "tests/e2e/test_kundengruppen.py", "tests/e2e/test_vkgruppen.py",
+  "tests/e2e/test_kunden.py", "tests/e2e/test_kundengruppen.py", "tests/e2e/test_vkgruppen.py", "tests/e2e/test_angebotskategorien.py",
   "tests/e2e/test_vertreter.py", "tests/e2e/test_kundenimport.py", "tests/e2e/test_auswertung.py",
   "tests/e2e/test_master.py", "tests/e2e/test_importzentrale.py",
   "tests/fixtures/kunden/**", "tests/fixtures/kundengruppen/**", "tests/fixtures/stammdaten/**",
@@ -534,11 +534,11 @@ agent = "plattform"
 abhaengigkeiten = []
 testgruppen = ["einheit", "rollen", "rollen_host", "stilllegung", "anmeldeseite", "users", "nutzer_anlegen", "auth_hardening", "security", "passkeys", "geraete", "passwortpruefung",
   "admin_confirmation", "admin_confirmation_ui", "bestaetigung", "geo", "geo_ip", "schutz", "sicherheit_it",
-  "sicherheit_freigaben", "sicherheit_druck", "integritaet", "storage", "benachrichtigung", "mail_intern", "rechte", "testumgebung",
+  "sicherheit_freigaben", "sicherheit_druck", "integritaet", "storage", "benachrichtigung", "mail_intern", "postausgang", "datentrennung", "rechte", "testumgebung",
   "app_api", "sitzung_cookie", "herkunft", "modulverwaltung", "oidc_kern", "oidc_dashboard", "anmeldebremse", "aktionsregister", "module_status", "modul_wartung", "protokoll"]
 pfade = [
   "regeln/aktionen/plattform.toml",
-  "app/.htaccess", "app/data/**", "app/api/index.php", "app/api/config.php", "app/api/storage.php", "app/api/mail.php",
+  "app/.htaccess", "app/data/**", "app/api/index.php", "app/api/postausgang.php", "app/api/config.php", "app/api/storage.php", "app/api/mail.php",
   "app/api/geo.php", "app/api/geo/**", "app/api/lib/**", "app/api/aktionen/**",
   "app/assets/theme.js", "app/assets/format.js", "app/assets/admin.css", "app/assets/admin-rollen.js", "app/assets/admin-rollen-vorschau.js", "app/assets/vendor/**",
   "app/assets/detailkarte.js", "app/assets/karte/**",
@@ -610,7 +610,7 @@ pfade = ["app/api/storage.php", "app/api/lib/dateiablage.php", "deploy/datenbank
 
 [[koordination]]
 bereich = "Gemeinsamer API-Einstieg"
-pfade = ["app/api/index.php", "app/api/config.php", "app/api/lib/kern.php", "app/.htaccess"]
+pfade = ["app/api/index.php", "app/api/config.php", "app/api/lib/kern.php", "app/api/lib/laden.php", "app/api/postausgang.php", "app/.htaccess"]
 
 [[koordination]]
 bereich = "Geschäftsregeln, Modulregister und Wartung"

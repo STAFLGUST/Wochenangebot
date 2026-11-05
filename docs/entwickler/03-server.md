@@ -106,6 +106,8 @@ Wichtig: Die Schritte 6–17 sind **Vorprüfungen**. Sie ersetzen nie die Rechte
 | Ort | Inhalt | Regel |
 | --- | --- | --- |
 | `index.php` | Einstieg, Prüfreihenfolge oben | koordinationspflichtig (API-Einstieg) |
+| `lib/laden.php` | lädt Einstellungen, Speicherschicht und alle Funktionsdateien – für `index.php` und den Dienst `postausgang.php` | neue Funktionsdateien hier eintragen; koordinationspflichtig |
+| `postausgang.php` | Dienst „postausgang“ (nur Kommandozeile, ADR-007): verschickt die Versandaufträge der Kundenseite | `fail()`/`respond()` werfen dort `WaAntwort` statt den Prozess zu beenden |
 | `lib/*.php` | Bibliotheken nach Fachbereich: nur Funktionen und Konstanten, keine Ausgabe beim Einbinden | beginnen mit `if (!defined('WA_API')) { http_response_code(404); exit; }` |
 | `aktionen/*.php` | Aktionen je Fachbereich: `switch ($action) { case '…': { … } }` bzw. `if ($action === '…')` | jede Aktion endet mit `respond()`/`fail()` |
 | `module/<modul>/` | Fachcode der Module (z. B. `module/hr/urlaub.php`, `module/crm/crm.php`, Importverträge `module/<modul>/import.php`) | neuer Fachcode gehört hierher (`pfade_geplant` in `regeln/module.toml`), nicht in gemeinsame Dateien |
@@ -238,7 +240,8 @@ Dokumente es gibt und wem sie gehören: [Kapitel 5](05-daten.md), [referenz/date
 | `store_names(string $prefix)` | Namen unter `prefix/` (z. B. `store_names('versionen')`) |
 | `with_lock(string $name, callable $fn)` | `$fn` unter exklusiver Sperre ausführen, Rückgabewert durchreichen |
 | `store_commit()`, `store_rollback()` | offene SQLite-Transaktion abschließen bzw. verwerfen; `store_rollback` leert auch vorgemerkte Benachrichtigungen |
-| `store_mode()` | `files` oder `sqlite` (einmal je Prozess entschieden) |
+| `store_mode(string $bereich = 'haupt')` | `files` oder `sqlite` (einmal je Prozess und Bereich entschieden) |
+| `store_bereich(string $name)`, `store_ordner(string $bereich)`, `store_getrennt()` | Speicherbereich eines Dokuments und sein Ordner (Datentrennung, unten) |
 | `store_stats()` | Anzahl und Größe für die Übersicht |
 
 Namen müssen `^[a-zA-Z0-9_-]+(?:/[a-zA-Z0-9_-]+)*$` entsprechen, sonst `RuntimeException`.
@@ -255,12 +258,51 @@ Sicherung und Rückfall: [datenbank.md](../datenbank.md).
 **Seitendateien:** `STORE_SIDECARS = ['mail-schluessel', 'sicherung', 'deployment']` bleiben auch bei SQLite Dateien
 (Postfach-Schlüssel außerhalb der Sicherung, Statusdateien der Skripte).
 
+**Zwei Bereiche (ADR-007 Stufe 2a):** Nach `deploy/daten-trennen.sh trennen` (Kennzeichen `$DATA/.daten-getrennt`) liegen
+interne Dokumente im Ordner `WA_DATEN_INTERN` (Kennzeichen `.daten-intern`, eigene Sperren, im SQLite-Betrieb eigene
+Datenbank, dazu die Dateiablage). `store_bereich($name)` entscheidet nach `regeln/datenverantwortung.toml` (Feld `bereich`,
+erzeugt in `lib/datenbereiche-liste.php`): Dokumente der Kundenseite und Seitendateien bleiben in `$DATA` (`haupt`), alles
+andere ist `intern`. Die Kundenseite hat kein `WA_DATEN_INTERN`: Lesen interner Dokumente liefert `null`, Schreiben wirft
+`StoreKeinZugang`. Maßgeblich für einen Server mit `WA_DATEN_INTERN` ist die Stufe in `daten-intern/.daten-intern`: das
+Kennzeichen in `$DATA` kann die Kundenseite beschreiben, weicht es ab (niedrigere Stufe, fehlt, andere Speicherart), bricht
+`store_stufe()`/`store_mode()` ab statt still falsch zu lesen. Transaktionen gelten je Bereich (`$GLOBALS['store_tx']` ist eine Liste offener Bereiche; `store_commit()`
+und `store_rollback()` ohne Angabe schließen alle). Ein neues Dokument, das die Kundenseite lesen oder schreiben muss, braucht
+`bereich = "kundenseite"` – sonst sieht die Kundenseite es nach der Trennung nicht (die Gruppe `datentrennung` meldet das).
+
+**Trennstufen (ADR-007 Stufe 2b):** Das Kennzeichen enthält die Stufe (`store_stufe()`: 0 nicht getrennt, 1 = Stufe 2a,
+2 = Stufe 2b). Ein bestehendes Dokument, das künftig innen liegen soll, bekommt `bereich = "intern"` und `trennstufe = n` – bis
+zur Stufe n bleibt es im gemeinsamen Ordner, umgezogen wird mit `daten-trennen.sh trennen` (dazu `TRENNSTUFE_MAX` in
+`werkzeuge/regeln.py` und `ZIELSTUFE` in `deploy/daten_trennen.py` erhöhen, Umstellung dort ergänzen). Ob dieser Server ein
+Dokument lesen kann: `store_sichtbar($name)` bzw. `store_innen()` (sieht er die internen Daten?). Die Kundenseite liest dann
+statt des internen Dokuments einen Auszug (Beispiel: `artikelauszug` statt `bestand`/`stammdaten`, lib/bestand.php). Ab
+Stufe 2 ist das Kundendokument geteilt: Kundendaten immer über `customers_load()`/`customers_save()` (nie
+`store_write('kunden', …)` direkt) – die Funktionen führen `kunden` (Portalfelder, `felder_kundenseite`) und `kundenstamm`
+zusammen bzw. teilen sie auf; die Kundenseite sieht und schreibt nur die Portalfelder.
+
+**Veröffentlichte Dokumente (Trennstufe 3, ADR-007 Stufe 2c):** `bereich = "veroeffentlicht"` (mit `trennstufe = 3`) für
+Dokumente, die nur die Mitarbeiterseite schreibt und die Kundenseite liest (Angebote, Einstellungen …). Der Code bleibt gleich
+(`store_read`/`store_write`/`with_lock`): Die Speicherschicht schreibt innen und legt die Kopie im gemeinsamen Ordner ab
+(`store_kopie`), die Kundenseite liest die Kopie und kann nicht schreiben (`StoreKeinZugang`). Ein Dokument, das die Kundenseite
+selbst schreibt (Zähler, Sitzungen, Bestellwünsche …), darf nie `veroeffentlicht` sein – die Gruppe `datentrennung` zeigt das.
+
+**Protokoll (Trennstufe 4, ADR-007 Stufe 2d):** Einträge immer über `audit()` schreiben und über `protokoll_monat($monat)` /
+`protokoll_monate()` lesen – nie `store_read('protokoll/…')` direkt: Ab Stufe 4 liegt das Protokoll der Mitarbeiterseite innen, das
+der Kundenseite in `kundenprotokoll/*`; die Funktionen führen beide zusammen.
+
+**Je Seite (Trennstufe 5, ADR-007 Stufe 2e):** `bereich = "je_seite"` für Dokumente, die beide Seiten für sich schreiben (Zähler,
+Anmeldeversuche, Live-Verkehr). Jede Seite liest und schreibt ihr eigenes; für Übersichten der Mitarbeiterseite beide lesen:
+`store_aussen_lesen($name)` (Beispiele `fw_verkehr_alle()`, `logins_alle()`), ändern nur über `store_aussen_aendern($name, $fn)`.
+
 **Sperren und Transaktionen:**
 
 - Dateien: `with_lock` sperrt `$DATA/.<name>.lock` mit `flock(LOCK_EX)`. Verschachtelt derselbe Name → keine zweite
   Sperre. Verschiedene Namen sperren unabhängig.
 - SQLite: Die äußerste `with_lock` startet `BEGIN IMMEDIATE`; verschachtelte Aufrufe (auch andere Namen) laufen in
   derselben Transaktion. Normales Ende → `COMMIT`, Ausnahme → `ROLLBACK` und Ausnahme weiterwerfen.
+- Getrennte Daten (zwei Datenbanken): Eine innere Sperre in einem anderen Bereich und Schreiben in einen anderen Bereich
+  ohne eigene Sperre (`store_beitreten`) bleiben offen, bis die **äußerste** Sperre endet; die schließt alle Bereiche
+  gemeinsam ab bzw. setzt alle zurück – ein Vorgang bleibt also wie mit gemeinsamen Daten ganz oder gar nicht gespeichert.
+  Scheitert eine innere Sperre, setzt sie nur ihren Bereich zurück. Kein Versand (SMTP) innerhalb einer Sperre.
 - `fail()`/`respond()` innerhalb einer Sperre beenden die Anfrage mit `exit`; `respond()` ruft vorher `store_commit()`.
   Für „alles oder nichts“ daher prüfen, **bevor** geschrieben wird (wie `stammdaten_speichern`: erst
   `clean_master`, dann Revision, dann `store_write`).
@@ -294,6 +336,14 @@ Nachrichten), `mail_build` (Text/HTML, Anhänge als multipart/mixed; Anhänge mi
   Eingabebereich gespeicherte Postfach (Dokument `mailkonto`, Passwort `passEnc` mit libsodium verschlüsselt,
   Schlüssel im Dokument `mail-schluessel`, nie in Sicherungen, nie in Antworten); sonst die Umgebungsvariablen
   `MAIL_*` (3.10). In der Testumgebung ohne beides: Pseudo-Postfach `testpostfach`.
+- **Postausgang von innen (ADR-007, `lib/postausgang.php`):** Mit `WA_POSTAUSGANG=warteschlange` (nur die Kundenseite)
+  verschickt eine Anfrage nichts: Bestellwunsch (`postausgang_ablegen('bestellung', …)` im selben Speichervorgang),
+  Benachrichtigungen (`notify_flush`) und Abmeldehinweise (`abmelde_melden`) werden als Auftrag abgelegt; der Dienst
+  `api/postausgang.php` verschickt sie (`postausgang_lauf`). Neue E-Mails, die eine Aktion der Kundenseite auslöst, müssen
+  diesen Weg nehmen – nie `mail_send_many` direkt. `order_enabled()` prüft dort das Lebenszeichen des Dienstes statt des Postfachs.
+- **Schlüssel und Bindung:** Mit `WA_GEHEIM_DIR` liegt der Schlüssel in einem eigenen Ordner (nur Mitarbeiterseite und
+  Postausgang). Solange er dort liegt, wird ein neu gespeichertes Passwort an Server, Port, Verschlüsselung und Benutzer
+  gebunden (`passEnc` Format `v2:`, AEAD); `v1:` bleibt lesbar (`mail_decrypt($enc, $konto)`).
 - **Zwei Postfächer (seit 29.10.2026):** `mail_cfg()` ist das Postfach für Kunden-E-Mails. Für E-Mails, die nur an
   Mitarbeiter gehen, gibt es optional ein eigenes Postfach (Dokument `mailkonto-intern`, z. B. `verwaltung@…`, gleiche
   Felder und Verschlüsselung). `mail_cfg_intern()` liefert es, ohne Eintrag das Kunden-Postfach; `require_mail(true)`

@@ -137,12 +137,13 @@ jobs:
           python3 -m venv /tmp/adressen
           /tmp/adressen/bin/pip install -q --no-deps --only-binary=:all: --require-hashes -r deploy/karte/requirements.txt
           /tmp/adressen/bin/python tests/unit/test_adressen.py
-      - name: Unit-Tests CI-Werkzeuge (Aufteilung der Testgruppen, Nachweis nach dem Merge, Paketvorrat, Entwickler-Doku)
+      - name: Unit-Tests CI-Werkzeuge (Aufteilung der Testgruppen, Nachweis nach dem Merge, Paketvorrat, Entwickler-Doku, Image-Updates)
         run: |
           python3 tests/unit/test_run_e2e_teile.py
           python3 tests/unit/test_ci_nachweis.py
           python3 tests/unit/test_apt_vorrat.py
           python3 tests/unit/test_doku.py
+          python3 tests/unit/test_images_aktualisieren.py
       - name: Workflows prüfen (actionlint)
         run: |
           curl -sSLf -o /tmp/al.tgz "https://github.com/rhysd/actionlint/releases/download/v${ACTIONLINT_VERSION}/actionlint_${ACTIONLINT_VERSION}_linux_amd64.tar.gz"
@@ -187,8 +188,9 @@ jobs:
           done
 
   image:
-    # Anwendungs-Image mit mod_auth_openidc (deploy/image): in Betrieb für die Mitarbeiter-Hosts (Dienst app-mitarbeiter,
-    # deploy/anmeldung/docker-compose.anmeldung.yml); die Kundenseite (docker-compose.yml) nutzt weiter php:8.3-apache.
+    # Anwendungs-Image mit mod_auth_openidc (deploy/image): im Betrieb für beide Anwendungs-Container (ADR-007) – Kundenseite
+    # „app“ (Modul nicht geladen) und Mitarbeiter-Hosts „app-mitarbeiter“ (deploy/anmeldung/docker-compose.anmeldung.yml);
+    # ohne Ergänzungsdatei nutzt die Kundenseite (docker-compose.yml) weiter php:8.3-apache.
     # Geprüft: Bau, gleiches Verhalten wie das Grundimage, Schwachstellen (kritisch blockiert).
     name: Anwendungs-Image prüfen
     needs: [nachweis, statisch]
@@ -203,9 +205,12 @@ jobs:
       - name: Image bauen und mit dem Grundimage vergleichen
         run: bash deploy/image/pruefen.sh
       - name: Betriebskonfiguration der zentralen Anmeldung prüfen (deploy/anmeldung)
+        # Images genau in der Fassung der Compose-Datei (Digests stehen nur dort – der wöchentliche Lauf „Sicherheitsupdates“
+        # darf keine Workflow-Dateien ändern)
         run: |
-          docker pull -q quay.io/keycloak/keycloak:26.8.1@sha256:79c623a22abacf3fe6c00a5fb30f5b7843d717b234033b80995891c06116d244 >/dev/null
-          docker pull -q postgres:17-alpine@sha256:b0f9560a2de083e2cc7382e75f808c7381a32852a7ec49117deedb300e552b24 >/dev/null
+          grep -hE '^\s*image:' deploy/anmeldung/docker-compose.anmeldung.yml | awk '{print $2}' | grep -v '^stafl-app:' | sort -u | while read -r img; do
+            docker pull -q "$img" >/dev/null
+          done
           bash deploy/anmeldung/pruefen.sh
       - name: Trivy installieren
         run: |
@@ -258,6 +263,13 @@ jobs:
         run: sh tests/deploy/test_anmeldung_einrichten.sh
       - name: Notzugang zum alten Eingabebereich (deploy/notzugang.sh, mit Platzhalter für docker compose)
         run: sh tests/deploy/test_notzugang.sh
+      - name: Schlüssel des Postfach-Passworts aus dem gemeinsamen Datenordner (deploy/postfach-schluessel.sh, ADR-007)
+        run: sh tests/deploy/test_postfach_schluessel.sh
+      - name: Daten trennen (deploy/daten_trennen.py, daten-trennen.sh, ADR-007 Stufe 2) – Dateien und SQLite, Speicherschicht beider Seiten
+        run: |
+          python3 tests/deploy/test_daten_trennen.py
+          sh tests/deploy/test_daten_trennen.sh
+          sh tests/deploy/test_notfallwerkzeuge.sh
       - name: Diagnose von Anmeldeproblemen (konten.sh pruefen, mit Platzhalter für Keycloak)
         run: sh tests/deploy/test_konten_pruefen.sh
       - name: Speicherbelegung und Aufräumen (deploy/speicher.sh, mit Platzhalter für docker), Protokollbegrenzung
@@ -266,15 +278,23 @@ jobs:
   e2e:
     # Je Speicherart drei Teile mit möglichst gleicher Laufzeit (tests/run_e2e.py, teile()). Die Zahl der Teile steht
     # zweimal: Liste „teil“ und Nenner in WA_TEIL – tests/unit/test_run_e2e_teile.py prüft, dass beides zusammenpasst.
+    # Dazu die volle Suite mit getrennten Daten (ADR-007, höchste Trennstufe, WA_TEST_TRENNUNG=1) in SQLite – so wie der
+    # Server nach „daten-trennen.sh trennen“ arbeitet; drei zusätzliche Aufträge über „include“ (getrennt = 1).
     strategy:
       fail-fast: false
       matrix:
         storage: [files, sqlite]
         teil: [1, 2, 3]
-    name: Ende-zu-Ende-Tests (${{ matrix.storage }}, Teil ${{ matrix.teil }}/3)
+        getrennt: ['']
+        include:
+          - {storage: sqlite, teil: 1, getrennt: '1'}
+          - {storage: sqlite, teil: 2, getrennt: '1'}
+          - {storage: sqlite, teil: 3, getrennt: '1'}
+    name: Ende-zu-Ende-Tests (${{ matrix.storage }}${{ matrix.getrennt == '1' && ', getrennt' || '' }}, Teil ${{ matrix.teil }}/3)
     env:
       WA_TEST_STORAGE: ${{ matrix.storage }}
       WA_TEIL: ${{ matrix.teil }}/3
+      WA_TEST_TRENNUNG: ${{ matrix.getrennt }}
     needs: [nachweis, statisch]
     if: ${{ !cancelled() && needs.statisch.result == 'success' && !(needs.nachweis.result == 'success' && needs.nachweis.outputs.uebernommen == 'true') }}
     runs-on: ubuntu-24.04
@@ -307,7 +327,7 @@ jobs:
         if: failure()
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
-          name: e2e-ergebnisse-${{ matrix.storage }}-teil${{ matrix.teil }}
+          name: e2e-ergebnisse-${{ matrix.storage }}${{ matrix.getrennt == '1' && '-getrennt' || '' }}-teil${{ matrix.teil }}
           path: |
             tests/.ergebnisse/
             tests/.arbeit/*.log
@@ -315,13 +335,14 @@ jobs:
 
   e2e_required:
     # Stable required-check name: preserve existing branch protection with the new matrix.
-    # Verlangt alle Teile beider Speicherarten. Übersprungen nur, wenn der Nachweis die Prüfung übernommen hat (main).
+    # Verlangt alle Teile beider Speicherarten und der getrennten Daten. Übersprungen nur, wenn der Nachweis die Prüfung
+    # übernommen hat (main).
     name: Ende-zu-Ende-Tests
     needs: [nachweis, e2e]
     if: ${{ always() && !(needs.nachweis.result == 'success' && needs.nachweis.outputs.uebernommen == 'true') }}
     runs-on: ubuntu-24.04
     steps:
-      - name: Alle Teile beider Speicherarten erfolgreich
+      - name: Alle Teile beider Speicherarten und mit getrennten Daten erfolgreich
         env:
           RESULT: ${{ needs.e2e.result }}
         run: test "$RESULT" = success

@@ -14,6 +14,11 @@ fremde_herkunft = true   # kommt vom E-Mail-Programm, nicht von unserer Seite (G
 oberflaeche = "angebot.eingabe"
 # Artikelauswahl „Artikel hinzufügen“ im Angebot (Stammdaten, VK-Gruppe, Bestand nur mit bestand.sehen)
 
+# Export für WinAB (Recht angebot.winab_export): veröffentlichtes Wochenangebot als CSV, POST wegen Protokolleintrag
+[aktion.angebot_winab_export]
+oberflaeche = "angebot.eingabe"
+schreibend = true
+
 [aktion.bestell_settings_save]
 oberflaeche = "angebot.eingabe"
 schreibend = true

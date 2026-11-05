@@ -39,6 +39,7 @@ Jede Code-Datei beginnt mit einem Kopfkommentar; dessen erste Aussage steht hier
 | `ci-nachweis.yml` | plattform | Trockenlauf des Nachweises „schon im Pull Request vollständig geprüft“ (ci.yml, Auftrag „nachweis“): zeigt für einen Commit auf main, ob die CI dort die schweren Aufträge überspringen würde und warum (nicht). |
 | `ci.yml` | plattform | Automatische Prüfungen für jeden Pull Request und jeden Commit auf main. |
 | `release.yml` | plattform | Produktive Freigabe. Nach jedem erfolgreichen CI-Lauf auf main startet die CI diesen Lauf automatisch; er wartet dann auf die Freigabe in der GitHub-Umgebung „produktion“ (E-Mail/App |
+| `sicherheitsupdates.yml` | plattform | Wöchentliche Sicherheitsupdates der Container-Images (PHP/Apache, Caddy, Keycloak, PostgreSQL, Hilfsimages). |
 | `zwischenspeicher.yml` | plattform | Füllt den GitHub-Zwischenspeicher für die Testaufträge der CI (ci.yml |
 
 ## `app/`
@@ -65,9 +66,10 @@ Jede Code-Datei beginnt mit einem Kopfkommentar; dessen erste Aussage steht hier
 | `geo.php` | plattform | Länderzuordnung von IP-Adressen (für Ländersperren) Datenquelle: ip-location-db „geo-whois-asn-country“ (CC0 / Public Domain) Binärformat laender.dat.php (beginnt mit einer PHP-Sperre, damit die Datei im Browser … |
 | `index.php` | plattform | API-Einstieg der STAFL-Plattform (/api/?action=…): prüft jede Anfrage (Herkunft, Host, Schreibschutz, Sperren, Wartung, Modulzugang) und bindet die Aktionen aus aktionen/*.php ein. |
 | `mail.php` | plattform | E-Mail-Versand über einen SMTP-Server (z. |
-| `order_outbox.php` | angebot | Durable per-recipient jobs live in the same document/transaction as the order. |
+| `order_outbox.php` | angebot | Versandaufträge eines Bestellwunschs: je Empfänger ein Auftrag im selben Dokument (bestellungen) wie der Vorgang. |
 | `orders.php` | angebot | Shared order operations for the website and future app clients. |
 | `ort.php` | verwaltung | Ungefährer Ort (Stadt) einer IP-Adresse – für die Karte der Kunden-Anmeldungen (Auswertung) Datenquelle |
+| `postausgang.php` | plattform | Dienst „postausgang“ (ADR-007, Postausgang von innen): ein Durchgang – fällige Versandaufträge der Kundenseite verschicken (lib/postausgang.php) und ein Lebenszeichen schreiben. |
 | `storage.php` | plattform | Shared persistence for HTTP and maintenance tools. |
 
 ## `app/api/aktionen/`
@@ -87,7 +89,7 @@ Jede Code-Datei beginnt mit einem Kopfkommentar; dessen erste Aussage steht hier
 | `hr.php` | hr | Aktionen: HR · Urlaubsverwaltung (Oberfläche hr.intern, Logik in app/api/module/hr/) Rechte (GR-103): hr.antrag – eigener Urlaub und Gleittage, Anträge (nur wenn in Verwaltung → Urlaub eingeschaltet; Gleittage nur … |
 | `importzentrale.php` | verwaltung | Aktionen: Importzentrale (Verwaltung → Import; Ablauf und Prüfungen: module/verwaltung/importzentrale.php) GET import_arten Importarten, für die der angemeldete Nutzer das Recht hat (Anzeige ist keine Berechtigung) … |
 | `integritaet.php` | plattform | Aktion: Dateiprüfung (lib/integritaet.php) – nur Administratoren. |
-| `kundengruppen.php` | verwaltung | Aktionen: Listen der Stammdaten – Kundengruppen, VK-Gruppen und Vertreter (Beschreibung: lib/kunden.php). |
+| `kundengruppen.php` | verwaltung | Aktionen: Listen der Stammdaten – Kundengruppen, VK-Gruppen, Vertreter (Beschreibung: lib/kunden.php) und Angebotskategorien (module/verwaltung/angebotskategorien.php). |
 | `kundenportal.php` | angebot | Aktionen: Kunden auf der Angebotsseite |
 | `kundenverwaltung.php` | verwaltung | Aktionen: Kundenstammdaten (Administrator) Wird von api/index.php im globalen Gültigkeitsbereich eingebunden; jede Aktion endet mit respond()/fail(). |
 | `leergut.php` | leergut | Aktionen: Leergut · Leergutkonten und Abstimmung (Oberfläche leergut.intern, Daten und Regeln in app/api/module/leergut/leergut.php) Rechte (GR-103): leergut.sehen – Übersicht, Konten mit Bewegungen, Abstimmungen, … |
@@ -118,6 +120,7 @@ Jede Code-Datei beginnt mit einem Kopfkommentar; dessen erste Aussage steht hier
 | `bestand-pdf.php` | bestand | Bestand als PDF (Verwaltung → Bestand → „PDF“) |
 | `bestand.php` | bestand | Bestandsliste und Stammdaten |
 | `dateiablage.php` | plattform | Dateiablage der Plattform (neben der Speicherschicht): hochgeladene Dateien eines Moduls (z. |
+| `datenbereiche-liste.php` | plattform | ERZEUGT von `python3 werkzeuge/regeln.py erzeugen` aus regeln/datenverantwortung.toml (Feld bereich) – nicht von Hand ändern. |
 | `diagnose.php` | plattform | Sicherheit für IT-Administratoren |
 | `einkauf.php` | einkauf | Einkauf: Fehlmengen aus offenen Bestellwünschen gegenüber der zuletzt übernommenen Bestandsliste. |
 | `einzelangebote.php` | angebot | Einzelangebote: ein Angebot für genau einen Kunden (Angebot bearbeiten → Einzelangebote). |
@@ -129,6 +132,7 @@ Jede Code-Datei beginnt mit einem Kopfkommentar; dessen erste Aussage steht hier
 | `kern.php` | plattform | Antworten, Eingaben, Datenprüfung |
 | `kunden.php` | verwaltung | Kundenstammdaten und Kunden-Sitzung |
 | `kundenmail.php` | angebot | E-Mails an Kunden, Abmelden, Bestellwunsch-Vorlagen, Einmal-Links, Versand |
+| `laden.php` | plattform | Grundlagen laden: Einstellungen, Speicherschicht und alle Funktionen der Fachbereiche – gemeinsam für den API-Einstieg (api/index.php) und den Dienst „postausgang“ (api/postausgang.php, ADR-007). |
 | `module-liste.php` | plattform | ERZEUGT von `python3 werkzeuge/regeln.py erzeugen` aus regeln/module.toml und regeln/wartung.toml – nicht von Hand ändern. |
 | `module.php` | plattform | Modulzustand zur Laufzeit: wer darf welche Oberfläche nutzen (GR-102)? Grundlage ist ausschließlich die erzeugte Liste lib/module-liste.php (Modulregister regeln/module.toml und Entscheidungstabelle regeln/wartung.toml). |
 | `notfall.php` | plattform | Notfallmodus (Oberfläche |
@@ -137,6 +141,7 @@ Jede Code-Datei beginnt mit einem Kopfkommentar; dessen erste Aussage steht hier
 | `passkey.php` | plattform | Passkeys (WebAuthn) für Mitarbeiter-Zugänge – ohne Fremdbibliothek. |
 | `pdf-breiten.php` | plattform | Zeichenbreiten der PDF-Standardschriften Helvetica und Helvetica-Bold (WinAnsiEncoding, Byte 0–255, Tausendstel der Schriftgröße), aus den Adobe-Metriken. |
 | `pdf.php` | plattform | Schlanker PDF-Erzeuger (ohne Fremdbibliothek) |
+| `postausgang.php` | plattform | Postausgang von innen (ADR-007, Zielarchitektur Kundenseite Regel 4) |
 | `preisverlauf.php` | angebot | Preisverlauf (Wochenstände) |
 | `protokoll.php` | plattform | Protokoll, Änderungstexte, Anmeldeversuche |
 | `rechte.php` | plattform | Nutzerrechte: was eine Rolle bzw. ein einzelner Nutzer im Eingabebereich sehen und tun darf. |
@@ -148,6 +153,7 @@ Jede Code-Datei beginnt mit einem Kopfkommentar; dessen erste Aussage steht hier
 | Datei | Modul | Inhalt |
 | --- | --- | --- |
 | `import.php` | angebot | Importvertrag des Moduls Angebot – Schnittstelle zur Importzentrale (docs/plattform/schnittstellen/import.md). - Preisverlauf: frühere Angebotslisten (.xlsx) als Wochen im Preisverlauf. |
+| `winab-export.php` | angebot | Export des Wochenangebots für WinAB (Auftrag des Inhabers 05.11.2026) |
 
 ## `app/api/module/bestand/`
 
@@ -184,6 +190,7 @@ Jede Code-Datei beginnt mit einem Kopfkommentar; dessen erste Aussage steht hier
 | `export.php` | hr | Modul HR · Excel-Export für den Steuerberater: ein Blatt je Monat in Aufbau und Gestaltung der bisherigen Planungsdatei „Urlaub 2026“ (Legende, Monatstitel, Wochentage, Tageszahlen, Abteilungen senkrecht, Kürzel … |
 | `import.php` | hr | Modul HR · Importe für die Importzentrale (Verwaltung → Import, docs/plattform/schnittstellen/import.md) |
 | `mail.php` | hr | Modul HR · E-Mails der Urlaubsverwaltung (Inhaber 03.11.2026). |
+| `planung.php` | hr | Modul HR · Jahresplanung des Urlaubs (Inhaber 03.11.2026). |
 | `urlaub.php` | hr | Modul HR · Urlaubsverwaltung – Fachlogik (Daten, Feiertage, Urlaubskonto, Anträge, Korrekturmeldungen, Monatsplan). |
 | `zeiterfassung.php` | hr | Modul HR · Import „Abwesenheiten aus der Zeiterfassung“ (Abwesenheitsbericht, .xlsx) – Importvorlage für die Urlaubstage (Entscheidung des Inhabers, 23.10.2026). |
 
@@ -218,6 +225,7 @@ Jede Code-Datei beginnt mit einem Kopfkommentar; dessen erste Aussage steht hier
 
 | Datei | Modul | Inhalt |
 | --- | --- | --- |
+| `angebotskategorien.php` | verwaltung | Angebotskategorien (Stammdaten der Verwaltung, Wunsch des Inhabers vom 05.11.2026). |
 | `import.php` | verwaltung | Importvertrag der Verwaltung – Schnittstelle zur Importzentrale (docs/plattform/schnittstellen/import.md). |
 | `importzentrale.php` | verwaltung | Importzentrale (Verwaltung → Import, Roadmap 10b) – ein Ablauf für alle Importe |
 
@@ -233,7 +241,7 @@ Jede Code-Datei beginnt mit einem Kopfkommentar; dessen erste Aussage steht hier
 | `admin-rollen-vorschau.js` | plattform | Wochenangebot – Verwaltung → Rollen und Rechte |
 | `admin-rollen.js` | plattform | Wochenangebot – Eingabebereich, Verwaltung → Rollen und Rechte (nur Administratoren) Eigene Rollen anlegen, umbenennen, kopieren und löschen; je Rolle und Modul eine Stufe (Kein Zugang · Ansehen · Bearbeiten · Voll), … |
 | `admin-verwaltung.js` | verwaltung | Wochenangebot – Eingabebereich, Verwaltung Mitarbeiter, Bestellungen, Kunden, E-Mail, Protokoll. |
-| `admin-werbung.js` | angebot | Eingabebereich – Fenster „Werbung schalten“ (Angebot bearbeiten, Knopf „Werbung“ in der Werkzeugleiste) Überschrift, optionaler Werbetext und bis zu 12 Artikel des gewählten Angebots (Reihenfolge, je Artikel ein … |
+| `admin-werbung.js` | angebot | Eingabebereich – Fenster „Werbung schalten“ (Angebot bearbeiten, Knopf „Werbung“ in der Werkzeugleiste) Bis zu zwei Werbungen je Angebot (Reiter „Werbung 1“/„Werbung 2“, „Weitere Werbung“ legt die zweite an): je … |
 | `admin.css` | plattform | Eingabebereich – ergänzt app.css |
 | `admin.js` | angebot | Wochenangebot – Eingabebereich Bearbeitet einen Entwurf auf dem Server (automatisch gespeichert). |
 | `app.css` | angebot | Designsystem „Klar“: neutrale Flächen, ein Akzent (Bordeaux), Geist / Geist Mono (lokal eingebunden, SIL Open Font License, assets/fonts/LICENSE-Geist.txt – keine Verbindung zu fremden Servern) |
@@ -316,6 +324,14 @@ Jede Code-Datei beginnt mit einem Kopfkommentar; dessen erste Aussage steht hier
 | --- | --- | --- |
 | `index.html` | angebot | Seite „Kontakt · Standard-Fleisch“ |
 
+## `app/module/angebot/`
+
+| Datei | Modul | Inhalt |
+| --- | --- | --- |
+| `preisimport.css` | angebot | STAFL-Plattform · Angebot · Vorschau „Artikelpreise (CSV)“ in der Importzentrale (preisimport.js). |
+| `preisimport.js` | angebot | STAFL-Plattform · Angebot · Darstellung der Vorschau „Artikelpreise (CSV)“ in der Importzentrale (Verwaltung → Import). |
+| `winab-export.js` | angebot | STAFL-Plattform · Angebot · Knopf „Export für WinAB“ in der Werkzeugleiste des Wochenangebots (Auftrag des Inhabers 05.11.2026). |
+
 ## `app/module/controlling/`
 
 | Datei | Modul | Inhalt |
@@ -392,6 +408,13 @@ Jede Code-Datei beginnt mit einem Kopfkommentar; dessen erste Aussage steht hier
 | `sicherheit.css` | sicherheit | STAFL-Plattform · Sicherheit – „Leitstand“ (Entwurf des Inhabers 26.10.2026): dunkel ein Leitstand mit Graphit-Grund, Bordeaux- und Blaulicht, hell dieselbe Gliederung auf warmem Grau; folgt der Hell/Dunkel-Wahl am … |
 | `sicherheit.js` | sicherheit | STAFL-Plattform · Sicherheit (Modul sicherheit, Oberfläche sicherheit.intern; docs/plattform/modul-sicherheit.md) Reiter |
 
+## `app/module/verwaltung/`
+
+| Datei | Modul | Inhalt |
+| --- | --- | --- |
+| `angebotskategorien.css` | verwaltung | Verwaltung → Angebotskategorien (app/module/verwaltung/angebotskategorien.js) und Hinweise im Angebotseditor (Gruppen ohne Angebotskategorie, admin.js renderGroups). |
+| `angebotskategorien.js` | verwaltung | Verwaltung → Angebotskategorien (Stammdaten, Inhaber 05.11.2026) Angebotskategorien sind die Abschnitte des Angebots (z. |
+
 ## `dashboard/`
 
 | Datei | Modul | Inhalt |
@@ -409,6 +432,8 @@ Jede Code-Datei beginnt mit einem Kopfkommentar; dessen erste Aussage steht hier
 | `aktualisieren.sh` | plattform | Holt neue Versionen aus GitHub und spielt sie ein (läuft alle 2 Minuten per systemd-Timer). .env und daten/ werden nie verändert (außer der Statusdatei daten/sicherung.php der Datensicherung). |
 | `altdateien.sh` | plattform | Alte Datendateien aufräumen |
 | `bereitstellen.py` | plattform | Bereitstellung eines Stands |
+| `daten-trennen.sh` | plattform | Daten trennen (ADR-007 Stufe 2): interne Dokumente (Personal, Nutzer, CRM, Controlling, QS, Dateiablage …) aus dem gemeinsamen Ordner daten/ in daten-intern/ verschieben, den nur die Mitarbeiterseite … |
+| `daten_trennen.py` | plattform | Daten trennen (ADR-007 Stufe 2): interne Dokumente aus daten/ in daten-intern/ verschieben – bzw. zurückführen. |
 | `datenbank-umschalten.sh` | plattform | Speicher umschalten: Dateien → SQLite (migrate) oder zurück (rollback), im Wartungsfenster durch den Betreiber. |
 | `datenbank.py` | plattform | Offline migration/rollback and online SQLite backup. |
 | `einrichten.sh` | plattform | Einmalig auf dem Server ausführen: richtet die automatische Aktualisierung ein. |
@@ -418,12 +443,13 @@ Jede Code-Datei beginnt mit einem Kopfkommentar; dessen erste Aussage steht hier
 | `karte-laden.sh` | plattform | Detailkarte (Straßen, Gebäude, Ortsnamen) für CRM-Karte und Auswertung laden – OpenStreetMap-Daten als eine Datei auf dem eigenen Server (keine fremden Kartendienste beim Ansehen). |
 | `notfall-aus.php` | plattform | Notfallmodus beenden (Server-Werkzeug zu deploy/notfall-aus.sh) – gleicher Ablauf wie notfall_ende() in app/api/lib/notfall.php, aber ohne Anmeldung |
 | `notfall-aus.sh` | plattform | Notfallmodus beenden (Modul Sicherheit), wenn das in der Oberfläche nicht mehr geht – z. |
-| `notzugang.sh` | plattform | Notzugang zum alten Eingabebereich (angebot-stafl.de/admin/ mit eigener Anmeldung) – nur wenn die zentrale Anmeldung (Keycloak) gestört ist. |
+| `notzugang.sh` | plattform | Notzugang zum alten Eingabebereich (eigene Anmeldung mit den bisherigen Passwörtern) – nur wenn die zentrale Anmeldung (Keycloak) gestört ist. |
 | `passwort-zuruecksetzen.php` | plattform | Wird von passwort-zuruecksetzen.sh im App-Container ausgeführt (nicht über das Web erreichbar). |
 | `passwort-zuruecksetzen.sh` | plattform | Notfall: Passwort eines Nutzers zurücksetzen (z. |
+| `postfach-schluessel.sh` | plattform | Schlüssel des im Eingabebereich hinterlegten Postfach-Passworts aus dem gemeinsamen Datenordner in den Ordner daten-geheim umziehen (ADR-007, Postausgang von innen). daten-geheim ist nur in app-mitarbeiter und im … |
 | `release-modus-einrichten.sh` | plattform | Einmalig auf dem Server (als root) |
 | `release-zurueck.sh` | plattform | Notfall: auf die Version vor dem letzten Release zurückgehen (Daten bleiben unverändert). sh /opt/wochenangebot/deploy/release-zurueck.sh Der zurückgenommene Stand wird nicht erneut automatisch eingespielt; ein neuer … |
-| `sichern.sh` | plattform | Tägliche Datensicherung des Ordners daten/. |
+| `sichern.sh` | plattform | Tägliche Datensicherung des Ordners daten/ (nach der Datentrennung, ADR-007 Stufe 2, zusätzlich daten-intern/ als intern-*.tar.gz). |
 | `sicherung-einrichten.sh` | plattform | Einmalig auf dem Server (als root): eigene Zeitsteuerung für die Datensicherung einrichten. sh /opt/wochenangebot/deploy/sicherung-einrichten.sh Danach läuft die Sicherung täglich um 02:30 Uhr unabhängig von der … |
 | `sicherung-pruefen.php` | plattform | Prüft eine entpackte Datensicherung (Ersatz für sicherung-pruefen.py, falls kein Python vorhanden ist): jede Datendatei muss gültiges JSON enthalten. |
 | `sicherung-pruefen.py` | plattform | Prüft eine entpackte Datensicherung: jede Datendatei muss gültiges JSON enthalten. |
@@ -456,6 +482,7 @@ Jede Code-Datei beginnt mit einem Kopfkommentar; dessen erste Aussage steht hier
 | Datei | Modul | Inhalt |
 | --- | --- | --- |
 | `executeActions.ftl` | plattform | STAFL-Plattform: E-Mail „Konto aktualisieren“ (Einladung aus der Verwaltung bzw. konten.sh einladen, Link zum Passwort-Festlegen) im Stil der Plattform-Mails (app/api/mail.php: mail_layout_einladung). |
+| `password-reset.ftl` | plattform | STAFL-Plattform: E-Mail „Passwort vergessen“ (Link von der Anmeldeseite, konten.sh passwort-vergessen an) im Stil der Plattform-Mails (wie executeActions.ftl). |
 
 ## `deploy/anmeldung/theme/stafl/email/messages/`
 
@@ -468,6 +495,7 @@ Jede Code-Datei beginnt mit einem Kopfkommentar; dessen erste Aussage steht hier
 | Datei | Modul | Inhalt |
 | --- | --- | --- |
 | `executeActions.ftl` | plattform | STAFL-Plattform: Textfassung der E-Mail „Konto aktualisieren“ (zur HTML-Fassung html/executeActions.ftl) |
+| `password-reset.ftl` | plattform | STAFL-Plattform: Textfassung der E-Mail „Passwort vergessen“ (zur HTML-Fassung html/password-reset.ftl) |
 
 ## `deploy/anmeldung/theme/stafl/login/`
 
@@ -587,6 +615,7 @@ Jede Code-Datei beginnt mit einem Kopfkommentar; dessen erste Aussage steht hier
 | --- | --- | --- |
 | `README.md` | plattform | STAFL-Plattform – Überblick |
 | `adr-003-domains-anmeldung.md` | plattform | ADR-003: Domainstruktur und Mitarbeiteranmeldung |
+| `adr-007-kundencontainer.md` | plattform | ADR-007: Kundenseite in eigenem Container |
 | `bestandsaufnahme.md` | plattform | Bestandsaufnahme (Phase 0) – Stand 21.10.2026 |
 | `inbetriebnahme-anmeldung.md` | plattform | Inbetriebnahme der zentralen Anmeldung (Keycloak) – Ablaufplan |
 | `modul-sicherheit.md` | sicherheit | Modul Sicherheit (sicherheit.dashboard-stafl.de) |
@@ -647,13 +676,17 @@ Jede Code-Datei beginnt mit einem Kopfkommentar; dessen erste Aussage steht hier
 | `test_anmeldung_einrichten.sh` | plattform | Test von deploy/anmeldung/einrichten.sh (Schritt 2 der Inbetriebnahme) – in einem Wegwerf-Ordner, ohne Docker. |
 | `test_cdn.py` | plattform | bunny.net vor dem Server (Caddyfile, Abschnitt „cdn“) mit echtem Caddy in der Fassung des Betriebs. |
 | `test_dashboard_domains.py` | plattform | Dashboard-Hosts: Modul-Hosts bleiben 503-Platzhalter bis zur Freigabe (GR-105); die Hosts der zentralen Anmeldung (ADR-003, Inbetriebnahme Schritt 6) führen nur zu Zielen, die es ausschließlich mit der … |
+| `test_daten_trennen.py` | plattform | Test von deploy/daten_trennen.py (ADR-007 Stufe 2: interne Dokumente aus dem gemeinsamen Datenordner) – in Wegwerf-Ordnern, für Dateien und SQLite |
+| `test_daten_trennen.sh` | plattform | Test von deploy/daten-trennen.sh (ADR-007 Stufe 2) – mit Platzhaltern für docker, sichern.sh und chown in einem Wegwerf-Ordner; die eigentliche Trennung macht das echte deploy/daten_trennen.py (eigene Tests: … |
 | `test_datenbank.py` | plattform | Real PHP/SQLite, independent SQL inspection, migration failure and restore tests. |
 | `test_datenbank_umschalten.sh` | plattform | Test von deploy/datenbank-umschalten.sh – Vorprüfung vor Sicherung und Stopp, mit Platzhaltern für docker, sichern.sh und datenbank.py in einem Wegwerf-Ordner (keine echten Daten, kein Container). |
 | `test_freigabe.sh` | plattform | Integrationstest des Release-Modus (deploy/freigabe-einspielen.sh) – komplett lokal: eigenes Git-„origin“, GitHub-API-Ersatz, PHP-Testserver als Live-Seite, echte Datensicherung. |
 | `test_images.py` | plattform | Container-Images fest über Digest (Sicherheitsdurchsicht 26.10.2026, Befund 12): jedes fremde Image in den Compose-Dateien und im Dockerfile ist mit @sha256 festgelegt – ein Release holt so nie unbemerkt eine andere … |
 | `test_karte_laden.sh` | plattform | Test von deploy/karte-laden.sh – mit Platzhaltern für docker und curl, in einem Wegwerf-Ordner (lädt nichts herunter). |
 | `test_konten_pruefen.sh` | plattform | Test von „konten.sh pruefen“ (Anmeldeprobleme erkennen) – mit Platzhalter für kcadm und einer lokalen Zeitquelle, ohne Docker. |
-| `test_notzugang.sh` | plattform | Test von deploy/notzugang.sh – mit Platzhalter für docker compose, in einem Wegwerf-Ordner. |
+| `test_notfallwerkzeuge.sh` | plattform | Test der Notfallwerkzeuge (wartung-aus, ip-freigabe-aus, notfall-aus, passwort-zuruecksetzen) |
+| `test_notzugang.sh` | plattform | Test von deploy/notzugang.sh (Notzugang über einen SSH-Tunnel, ADR-007 Regel 6) – mit Platzhalter für docker compose, in einem Wegwerf-Ordner. |
+| `test_postfach_schluessel.sh` | plattform | Test von deploy/postfach-schluessel.sh (Schlüssel des Postfach-Passworts aus dem gemeinsamen Datenordner, ADR-007) – in einem Wegwerf-Ordner, ohne root (Besitzer wird nur versucht zu setzen) – und dass die Anwendung … |
 | `test_release_pruefen.sh` | plattform | Test der Release-Prüfungen (.github/scripts/release-pruefen.sh) mit einem Platzhalter für gh |
 | `test_sichern.sh` | plattform | Test der Datensicherung (deploy/sichern.sh) in einem Wegwerf-Ordner mit Testdaten. |
 | `test_speicher.sh` | plattform | Test von deploy/speicher.sh – mit Platzhalter für docker, in einem Wegwerf-Ordner. |
@@ -673,6 +706,7 @@ Jede Code-Datei beginnt mit einem Kopfkommentar; dessen erste Aussage steht hier
 | `test_admin_confirmation_ui.py` | plattform | Abgelaufene Admin-Freigabe im Browser |
 | `test_aktionsregister.py` | plattform | Aktionsregister (regeln/aktionen/*.toml → app/api/lib/aktionen-liste.php) wirkt im API-Einstieg für jede Aktion. |
 | `test_angebote.py` | angebot | Mehrere Angebote: Kundenangebote mit eigenen Preisen, eigene Artikelliste je Angebot (Artikel hinzufügen wie im Einzelangebot, entfernen nur im gewählten Angebot, Umstellung „folgt dem Wochenangebot“ → eigene Liste), … |
+| `test_angebotskategorien.py` | verwaltung | Angebotskategorien (Stammdaten der Verwaltung, Inhaber 05.11.2026) |
 | `test_angebotsliste.py` | angebot | Angebotsliste (Standardansicht der Angebotsseite) |
 | `test_anmeldebremse.py` | plattform | Fehlversuchsbremse je Adresse (lib/protokoll.php), Abmelden mit CSRF und Bedrohungsliste ohne Nebenwirkung beim Lesen. - Eine erfolgreiche Anmeldung nimmt nur die Fehlversuche für denselben Namen zurück (eigene … |
 | `test_anmeldeseite.py` | plattform | Testgruppe anmeldeseite |
@@ -688,6 +722,7 @@ Jede Code-Datei beginnt mit einem Kopfkommentar; dessen erste Aussage steht hier
 | `test_controlling_umsatzdaten.py` | controlling | Controlling · Umsatzdaten der Warenwirtschaft |
 | `test_crm.py` | crm | CRM · Vertrieb (Modul crm, Oberfläche crm.intern unter /module/crm/). |
 | `test_dashboard.py` | dashboard | Mitarbeiter-Dashboard (dashboard/, Roadmap PR 6) |
+| `test_datentrennung.py` | plattform | Testgruppe datentrennung (ADR-007 Stufe 2): getrennte Daten wie im Betrieb. |
 | `test_design.py` | angebot | Gestaltung der Angebotsseite („Klar“ mit dem Design „Liquid Glass“: schwebende Glas-Kopfzeile, Kapseln, Liste als Glaskarte): lokale Schriften (keine fremden Server), Kopf, Filterleiste mit Aufklappmenüs (Desktop) bzw. |
 | `test_editor_aux.py` | angebot | Testgruppe editor_aux |
 | `test_einheit.py` | plattform | Einheitliches Erscheinungsbild aller Mitarbeiter-Oberflächen (Dashboard, Eingabebereich auf den Bereichs-Hosts Angebot, Verwaltung, Bestand, alle Modulseiten – HR, CRM, Controlling, Leergut, Marketing, QS, REWE, … |
@@ -726,16 +761,17 @@ Jede Code-Datei beginnt mit einem Kopfkommentar; dessen erste Aussage steht hier
 | `test_order_management_ui.py` | angebot | Artikelnummer als normale Tabellenzelle (Klasse „mono“ ist in app.css das runde Kategorie-Monogramm) |
 | `test_order_outbox.py` | angebot | Testgruppe order_outbox: dauerhafte Versandaufträge für Bestellwunsch-Mails – Teilfehler, SMTP-Ausfall, Sperren, Neuversand. |
 | `test_order_outbox_ui.py` | angebot | Testgruppe order_outbox_ui |
-| `test_p0.py` | angebot | 1) leeres System ohne WA_INSTALLED → Ersteinrichtung erlaubt |
+| `test_p0.py` | angebot | Testgruppe p0: Ersteinrichtung gesperrt (leeres System, WA_INSTALLED, kaputte Nutzerdatei – kein Übernehmen), CSV-Formel-Schutz im Protokoll, Sicherungs- und Bereitstellungsanzeige (Sicherheit → System) und … |
 | `test_passkeys.py` | plattform | Passkeys (WebAuthn) für Mitarbeiter-Zugänge. |
 | `test_passwortpruefung.py` | plattform | Datenleck-Prüfung der Passwörter („Pwned Passwords“, nachgebauter Dienst auf AUX_PORT): standardmäßig aus; eingeschaltet werden betroffene Passwörter beim Festlegen abgelehnt (Mitarbeiter, Kunden), bestehende bei der … |
+| `test_postausgang.py` | plattform | Testgruppe postausgang |
 | `test_protokoll.py` | plattform | Aufbewahrung des Aktivitätsprotokolls (lib/protokoll.php, PROTOKOLL_MONATE = 6; Inhaber 25.10.2026). |
 | `test_qs.py` | qs | Qualitätssicherung (Modul qs, Oberfläche qs.intern unter /module/qs/) – QM-System |
 | `test_qs_ablage.py` | qs | Qualitätssicherung – Dokumentenablage (QM-System Bauabschnitt 2) |
 | `test_qs_bericht.py` | qs | Qualitätssicherung – Audit-Bericht (app/api/module/qs/bericht.php, Aktionen qs_bericht und qs_bericht_excel, Reiter „Audit“). |
 | `test_qs_vorlagen.py` | qs | Qualitätssicherung – Vorlagen und Nummernstruktur (QM-System Bauabschnitt 3, app/api/module/qs/vorlagen.php). |
 | `test_rechte.py` | plattform | Nutzerrechte: Rechte je Rolle (einstellbar) und Ausnahmen je Nutzer (erlauben/verbieten). |
-| `test_restposten.py` | angebot | Sonderposten (kurzes MHD, solange der Vorrat reicht), Ausblenden in jedem Angebot, eigene Artikelliste (Sonderposten nur für eigene Artikel), Kein-Bestand-Zeichen und Sonderposten-Mail je Angebot. |
+| `test_restposten.py` | angebot | Empfehlung (früher „Sonderpreis“): mit Preis Sonderposten (kurzes MHD, solange der Vorrat reicht), ohne Preis nur hervorgehoben; neu gesetzt nur im bearbeiteten Angebot. |
 | `test_revert.py` | angebot | sauberer Ausgangspunkt: einmal veröffentlichen |
 | `test_rewe.py` | rewe | REWE (Modul rewe, Oberfläche rewe.intern unter /module/rewe/) – Vordisposition Dry Aged für REWE-Märkte. |
 | `test_rollen.py` | plattform | Rollen und Rechte: eigene Rollen (anlegen, umbenennen, kopieren, löschen), Modulzugang „<modul>.zugang“ je Rolle, mehrere Rollen je Mitarbeiter, Standardrollen unverändert, Durchsetzung auf dem Server (GR-103), … |
@@ -795,6 +831,7 @@ Jede Code-Datei beginnt mit einem Kopfkommentar; dessen erste Aussage steht hier
 | `test_apt_vorrat.py` | plattform | Paketvorrat der CI (.github/scripts/apt_vorrat.py) mit nachgebautem apt-cache. python3 tests/unit/test_apt_vorrat.py Prüft: nur Pakete mit passender SHA-256 aus der (signierten) Paketliste werden übernommen; … |
 | `test_ci_nachweis.py` | plattform | Nachweis „schon im Pull Request vollständig geprüft“ (.github/scripts/ci_nachweis.py) mit nachgebauter GitHub-API. python3 tests/unit/test_ci_nachweis.py Prüft |
 | `test_doku.py` | plattform | Werkzeug der Entwickler-Dokumentation (werkzeuge/doku.py) |
+| `test_images_aktualisieren.py` | plattform | Sicherheitsupdates der Container-Images (werkzeuge/images_aktualisieren.py) – ohne Netz, mit Digests aus einer Datei. python3 tests/unit/test_images_aktualisieren.py Prüft an einer Kopie der echten Dateien |
 | `test_run_e2e_teile.py` | plattform | Aufteilung der E2E-Testgruppen auf CI-Aufträge (tests/run_e2e.py |
 
 ## `werkzeuge/`
@@ -803,6 +840,7 @@ Jede Code-Datei beginnt mit einem Kopfkommentar; dessen erste Aussage steht hier
 | --- | --- | --- |
 | `asset_versionen.py` | plattform | Einbindungen der Skripte und Stylesheets in den HTML-Seiten unter app/ und dashboard/ prüfen. |
 | `doku.py` | plattform | Nachschlageteil der Entwickler-Dokumentation aus dem Code erzeugen und prüfen (nur Python-Standardbibliothek). python3 werkzeuge/doku.py erzeugen docs/entwickler/referenz/*.md neu schreiben python3 werkzeuge/doku.py … |
+| `images_aktualisieren.py` | plattform | Sicherheitsupdates der Container-Images: festgelegte Digests auf den neuesten Stand derselben Fassung bringen. |
 | `integritaet.py` | plattform | Prüfliste der Dateiprüfung (app/api/lib/integritaet-liste.php): prüfen, dass sie NICHT im Repository steht. |
 | `karte_auszug.py` | plattform | Kleiner Ausschnitt aus einer Protomaps-Basiskarte (PMTiles, OpenStreetMap-Daten, ODbL) – für Testdaten und lokale Vorschau der Detailkarte. |
 | `karte_bauen.py` | verwaltung | Baut die Landkarte für die Auswertung (app/assets/karte.json) aus Natural Earth (gemeinfrei), weitergegeben als TopoJSON im npm-Paket „world-atlas“ (ISC). |

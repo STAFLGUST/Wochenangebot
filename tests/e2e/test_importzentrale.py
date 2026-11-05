@@ -75,10 +75,10 @@ ids = lambda cl: sorted(a['id'] for a in cl.call('import_arten')[1].get('arten',
 # ---------- Registrierung: jede Importart gehört dem Daten-Eigentümer ----------
 st, r = A.call('import_arten')
 arten = {a['id']: a for a in r.get('arten', [])}
-ALLE = ['angebot_excel', 'angebot_preise', 'bestand', 'kunden', 'kundengruppen', 'preisverlauf', 'stammdaten', 'umsatzdaten', 'vertreter', 'vkgruppen', 'zeitbericht', 'zeiterfassung']
+ALLE = ['angebot_preise', 'bestand', 'kunden', 'kundengruppen', 'preisverlauf', 'stammdaten', 'umsatzdaten', 'vertreter', 'vkgruppen', 'zeitbericht', 'zeiterfassung']
 check('Administrator sieht alle heutigen Importe', st == 200 and sorted(arten) == ALLE, sorted(arten))
 EIG = {'kunden': 'verwaltung', 'kundengruppen': 'verwaltung', 'vkgruppen': 'verwaltung', 'vertreter': 'verwaltung', 'stammdaten': 'verwaltung',
-       'bestand': 'bestand', 'preisverlauf': 'angebot', 'angebot_excel': 'angebot', 'angebot_preise': 'angebot', 'zeiterfassung': 'hr',
+       'bestand': 'bestand', 'preisverlauf': 'angebot', 'angebot_preise': 'angebot', 'zeiterfassung': 'hr',
        'umsatzdaten': 'controlling', 'zeitbericht': 'controlling'}
 check('Eigentümer je Importart wie in der Datenverantwortung', all(arten[k]['eigentuemer'] == v for k, v in EIG.items()), {k: a['eigentuemer'] for k, a in arten.items()})
 daten = tomllib.load(open(os.path.join(REPO, 'regeln/datenverantwortung.toml'), 'rb'))
@@ -92,7 +92,16 @@ zentrale = open(os.path.join(REPO, 'app/api/module/verwaltung/importzentrale.php
 check('Zentrale liest und schreibt selbst keine Daten (nur über den Eigentümer)', not re.search(r'store_(read|write|delete|names)\(|with_lock\(', zentrale))
 check('Zentrale liest keine Dateiformate selbst (Leser beim Eigentümer)', not re.search(r'csvZeilen|parseStockWorkbook|parseOfferWorkbook|xlsxReadWorkbook|TextDecoder', open(os.path.join(REPO, 'app/assets/admin-import.js'), encoding='utf-8').read().split('/* ---------- Darstellung')[1]))
 check('Dateitypen und Optionen angegeben', arten['kunden']['dateien'] == ['csv'] and arten['bestand']['dateien'] == ['csv', 'xls', 'xlsx'] and arten['preisverlauf']['mehrere'] is True
-      and arten['kunden']['bestaetigung'] is True and [o['id'] for o in arten['bestand']['optionen']] == ['datum'] and arten['angebot_excel']['ablauf'] == 'editor', arten['kunden'])
+      and arten['kunden']['bestaetigung'] is True and [o['id'] for o in arten['bestand']['optionen']] == ['datum'], arten['kunden'])
+import datetime, zoneinfo   # noqa: E401
+_j = datetime.datetime.now(zoneinfo.ZoneInfo('Europe/Berlin')).isocalendar()
+ap = {o['id']: o for o in arten['angebot_preise']['optionen']}
+check('Artikelpreise (Auftrag 04.11.2026): in der Zentrale (kein Editor-Ablauf), Angebotswoche = aktuelle KW (Auswahl −4 bis +8), neue Angebote je Kundengruppe einzeln wählbar (Standard: keine)',
+      arten['angebot_preise']['ablauf'] == 'zentrale' and list(ap) == ['woche', 'gruppen'] and ap['woche']['typ'] == 'auswahl' and ap['woche']['standard'] == f'{_j[0]:04d}-{_j[1]:02d}'
+      and len(ap['woche']['werte']) == 13 and ap['woche']['werte'][4]['wert'] == ap['woche']['standard'] and '(aktuelle Woche)' in ap['woche']['werte'][4]['text']
+      and ap['gruppen']['typ'] == 'liste' and ap['gruppen']['standard'] == [] and not any(a['ablauf'] == 'editor' for a in arten.values()), arten['angebot_preise'])
+_erg = zentrale.split('function import_ergebnis')[1].split('\nfunction ')[0]
+check('Zentrale wertet „details“ nicht aus (nur in import_ergebnis begrenzt durchgereicht)', zentrale.count("'details'") == _erg.count("'details'") > 0 and 'IMPORT_DETAILS_MAX' in _erg)
 check('Kurztext je Importart (eine Zeile in der Liste, höchstens 60 Zeichen), ausführliche Beschreibung bleibt', all(0 < len(a['kurz']) <= 60 and len(a['beschreibung']) > len(a['kurz']) for a in arten.values())
       and arten['bestand']['kurz'] == 'Bestandsliste aus WinAB – ersetzt den Bestand', {k: a['kurz'] for k, a in arten.items()})
 check('keine internen Funktionsnamen an den Browser', 'vorschau' not in json.dumps(r) and 'uebernahme' not in json.dumps(r))
@@ -104,7 +113,7 @@ check('Bearbeiter: alles außer Kunden-, HR- und Controlling-Importen (kein Kund
 check('Teil: ohne Anmeldung 401, ohne Recht 403, Importart ohne Teile 422', Client().call('import_teil', {'art': 'umsatzdaten'})[0] == 401
       and E.call('import_teil', {'art': 'umsatzdaten', 'upload': 'a' * 32, 'schluessel': '2026-01', 'daten': {}})[0] == 403
       and A.call('import_teil', {'art': 'stammdaten', 'upload': 'a' * 32, 'schluessel': 'x', 'daten': {}})[0] == 422
-      and A.call('import_teil', {'art': 'angebot_excel', 'upload': 'a' * 32, 'schluessel': 'x', 'daten': {}})[0] == 422)
+      and A.call('import_teil', {'art': 'angebot_preise', 'upload': 'a' * 32, 'schluessel': 'x', 'daten': {}})[0] == 422)
 check('nur Kundenrecht: nur Kunden', ids(K) == ['kunden'], ids(K))
 ROWS = [{'nr': '2000001', 'firma': 'Zentrale Eins GmbH', 'plz': '20095', 'ort': 'Hamburg', 'zeile': 2}]
 check('Leser: Kundenimport 403', L.call('import_pruefen', {'art': 'kunden', 'daten': {'rows': ROWS}})[0] == 403)
@@ -115,13 +124,24 @@ check('Leser: Preisverlauf 403', L.call('import_pruefen', {'art': 'preisverlauf'
 check('nur per POST', A.call('import_pruefen')[0] == 405)
 check('unbekannte Importart 404', A.call('import_pruefen', {'art': 'gibt_es_nicht'})[0] == 404)
 st, r = E.call('import_pruefen', {'art': 'angebot_excel'})
-check('Angebot (Excel) läuft im Editor, nicht in der Zentrale', st == 422 and 'Angebotseditor' in r.get('error', ''), r)
+check('Wochenangebot (Excel) gibt es nicht mehr (Auftrag 04.11.2026)', st == 404, r)
+check('Artikelpreise: Leser 403', L.call('import_pruefen', {'art': 'angebot_preise', 'daten': {'preise': [{'zeile': 2, 'code': '10601', 'gruppe': '', 'preis': 1.0}]}})[0] == 403)
 st, r = A.call('import_pruefen', {'art': 'kunden', 'daten': {'rows': []}})
 check('leere Zeilenliste 422', st == 422 and 'Keine Kunden' in r.get('error', ''), r)
 check('Übernahme ohne Vorschau-Stand 422', A.call('import_uebernehmen', {'art': 'kunden', 'daten': {'rows': ROWS}})[0] == 422)
 
 # ---------- Kunden über die Schnittstelle der Zentrale ----------
 assert A.call('kundengruppen_save', {'rev': 0, 'groups': [{'nr': '1', 'name': 'Gastronomie'}, {'nr': '5', 'name': 'Kantinen'}, {'nr': '7', 'name': 'Handel'}]})[0] == 200
+# Option „liste“ (Kennungen; ob sie passen, prüft der Eigentümer) und eigene Darstellung („details“, „fuss“, „knopf“ nur durchgereicht)
+_d = A.call('draft')[1]
+_code = next(i['code'] for i in ((_d.get('draft') or _d['published'])['items']) if i.get('code'))
+_pz = [{'zeile': 2, 'code': str(_code), 'gruppe': '1', 'preis': 23.0}]
+_g = lambda opt: A.call('import_pruefen', {'art': 'angebot_preise', 'daten': {'preise': _pz}, 'optionen': opt})[1]
+_r0, _r1, _rx = _g({}), _g({'gruppen': ['1', 'a;b', '1', None, {'x': 1}]}), _g({'gruppen': 'kein-array'})
+check('Option „liste“: ungültige Einträge und Doppelte verworfen, gewählte Gruppe angelegt; ohne Auswahl keine', _r0['zahlen']['neu'] == 0 and _r1['zahlen']['neu'] == 2
+      and _r1['details']['ohne'][0]['an'] is True and _r0['details']['ohne'][0]['an'] is False and _rx['zahlen']['neu'] == 0, (_r0.get('zahlen'), _r1.get('zahlen'), _rx.get('zahlen')))
+check('Vorschau mit eigener Darstellung: details, fuss und knopf durchgereicht (übrige Arten ohne)', isinstance(_r1.get('details'), dict) and '1 neues Angebot' in _r1['fuss'] and _r1['knopf'] == '1 Preis übernehmen'
+      and _r0['fuss'].startswith('0 Preise') and _r0['knopf'] == 'Übernehmen', (_r1.get('fuss'), _r1.get('knopf'), _r0.get('fuss')))
 rev0 = K.call('kunden')[1]['rev']
 KR = [{'nr': '3000001', 'firma': 'API Eins GmbH', 'plz': '20095', 'ort': 'Hamburg', 'gruppe': '1', 'zeile': 2},
       {'nr': '3000002', 'firma': 'API Zwei KG', 'gruppe': '99', 'zeile': 3},
@@ -213,7 +233,8 @@ with sync_playwright() as p:
     check('Zeile: Name, Kurztext (ganze Beschreibung im Hinweis), Dateiart, Knopf', 'Bestandsliste aus WinAB' in zb and a.text_content('.imp-art[data-art="bestand"] .imp-format') == 'CSV / Excel'
           and a.text_content('.imp-art[data-art="kunden"] .imp-format') == 'CSV' and 'WinAB' in (a.get_attribute('.imp-art[data-art="bestand"] p', 'title') or '')
           and a.locator('.imp-art[data-art="kunden"] .imp-schloss').count() == 1 and a.locator('.imp-art[data-art="bestand"] .imp-schloss').count() == 0
-          and a.locator('[data-imp-waehlen="preisverlauf"]').inner_text() == 'Dateien wählen' and a.locator('[data-imp-editor="angebot_excel"]').count() == 1, zb)
+          and a.locator('[data-imp-waehlen="preisverlauf"]').inner_text() == 'Dateien wählen' and a.locator('[data-imp-editor]').count() == 0
+          and a.locator('[data-imp-waehlen="angebot_preise"]').inner_text() == 'Datei wählen', zb)
     check('eine Zeile je Import (Desktop)', a.evaluate("[...document.querySelectorAll('#view-importe .imp-art')].every((z) => z.getBoundingClientRect().height < 70)"))
     check('Hinweis unten: nur das Schloss erklärt, kein Fenster offen', 'Übernahme mit Passwortbestätigung' in a.inner_text('.imp-hinweis') and a.locator('.imp-fenster').count() == 0)
     a.screenshot(path=SH + '/importzentrale-liste.png', full_page=True)
@@ -391,11 +412,15 @@ with sync_playwright() as p:
     check('Preisverlauf übernommen', doc('historie/2026-37') is not None and doc('historie/2026-38')['origin'] == 'Import')
     check('Protokoll: Wochen hochgeladen', 'Preisverlauf: KW 37/2026 hochgeladen' in log_text(A))
 
-    # Angebot (Excel) ist aufgeführt und öffnet den Editor
+    # Artikelpreise: Auswahl der Angebotswoche und Schalter in der Vorschau (Ablauf und Übernahme: Gruppe kundenimport)
+    a.click('[data-imp="liste"]'); a.wait_for_selector('#view-importe .imp-art[data-art="angebot_preise"]')
+    a.set_input_files('#view-importe input[data-imp-datei="angebot_preise"]', FIX + '/angebote/artikelpreise.csv')
+    a.wait_for_selector('#view-importe [data-pi] #pi-hoch')
+    check('Artikelpreise-Vorschau: Auswahl „Angebotswoche“ (aktuelle KW), eigene Darstellung des Eigentümers, Kundengruppen nicht angehakt',
+          a.locator('#view-importe select[data-imp-opt="woche"]').count() == 1 and '(aktuelle Woche)' in a.inner_text('#view-importe [data-imp-opt="woche"] option:checked')
+          and a.locator('#view-importe [data-imp-opt="gruppen"]').count() == 0 and a.locator('#view-importe [data-pi-gruppe]').count() >= 1
+          and not a.locator('#view-importe [data-pi-gruppe]:checked').count() and a.locator('#imp-zeilen').count() == 0)
     a.click('[data-imp="liste"]')
-    with a.expect_file_chooser() as fc:
-        a.click('[data-imp-editor="angebot_excel"]')
-    check('Wochenangebot (Excel): öffnet den Editor mit Dateiauswahl', a.locator('#view-edit').is_visible() and fc.value is not None)
 
     # Mobil 390 px
     m = br.new_context(viewport={'width': 390, 'height': 844}, is_mobile=True).new_page()
@@ -432,7 +457,8 @@ with sync_playwright() as p:
     check('Leser: kein Menüpunkt Import (keine Importart)', not lp.locator('#vt-importe').is_visible())
     ep = sicht('eddi')
     ep.click('#vt-importe'); ep.wait_for_selector('#view-importe .imp-art')
-    check('Bearbeiter: Import sichtbar, ohne Kunden', ep.locator('#view-importe .imp-art').count() == 8 and ep.locator('.imp-art[data-art="kunden"]').count() == 0)
+    check('Bearbeiter: Import sichtbar, ohne Kunden', ep.locator('#view-importe .imp-art').count() == 7 and ep.locator('.imp-art[data-art="kunden"]').count() == 0
+          and ep.locator('.imp-art[data-art="angebot_preise"]').count() == 1)
     kp = sicht('kai')
     kp.click('#vt-importe'); kp.wait_for_selector('#view-importe .imp-art')
     check('nur Kundenrecht: Import sichtbar, nur Kunden', kp.locator('#view-importe .imp-art').count() == 1)

@@ -126,7 +126,7 @@ Agent: `controlling` · hängt ab von `plattform`, `verwaltung`, `bestand` · Te
 
 Stammdaten, Import, Benutzer, Berechtigungen, Geschäftsregeln, E-Mail, Protokoll
 
-Agent: `verwaltung` · hängt ab von `plattform` · Testgruppen: `kunden`, `kundengruppen`, `vkgruppen`, `vertreter`, `kundenimport`, `auswertung`, `master`, `importzentrale`
+Agent: `verwaltung` · hängt ab von `plattform` · Testgruppen: `kunden`, `kundengruppen`, `vkgruppen`, `angebotskategorien`, `vertreter`, `kundenimport`, `auswertung`, `master`, `importzentrale`
 
 | Oberfläche | Art | Adresse | Entwicklung | Freigabe |
 | --- | --- | --- | --- | --- |
@@ -163,7 +163,7 @@ Agent: `mobile` · hängt ab von `angebot`, `plattform` · Testgruppen: `app_api
 
 Anmeldung, Sitzungen, Rechte, Sicherheit, Speicherschicht, E-Mail, Protokoll, Betrieb, CI und Regelwerk
 
-Agent: `plattform` · Testgruppen: `einheit`, `rollen`, `rollen_host`, `stilllegung`, `anmeldeseite`, `users`, `nutzer_anlegen`, `auth_hardening`, `security`, `passkeys`, `geraete`, `passwortpruefung`, `admin_confirmation`, `admin_confirmation_ui`, `bestaetigung`, `geo`, `geo_ip`, `schutz`, `sicherheit_it`, `sicherheit_freigaben`, `sicherheit_druck`, `integritaet`, `storage`, `benachrichtigung`, `mail_intern`, `rechte`, `testumgebung`, `app_api`, `sitzung_cookie`, `herkunft`, `modulverwaltung`, `oidc_kern`, `oidc_dashboard`, `anmeldebremse`, `aktionsregister`, `module_status`, `modul_wartung`, `protokoll`
+Agent: `plattform` · Testgruppen: `einheit`, `rollen`, `rollen_host`, `stilllegung`, `anmeldeseite`, `users`, `nutzer_anlegen`, `auth_hardening`, `security`, `passkeys`, `geraete`, `passwortpruefung`, `admin_confirmation`, `admin_confirmation_ui`, `bestaetigung`, `geo`, `geo_ip`, `schutz`, `sicherheit_it`, `sicherheit_freigaben`, `sicherheit_druck`, `integritaet`, `storage`, `benachrichtigung`, `mail_intern`, `postausgang`, `datentrennung`, `rechte`, `testumgebung`, `app_api`, `sitzung_cookie`, `herkunft`, `modulverwaltung`, `oidc_kern`, `oidc_dashboard`, `anmeldebremse`, `aktionsregister`, `module_status`, `modul_wartung`, `protokoll`
 
 | Oberfläche | Art | Adresse | Entwicklung | Freigabe |
 | --- | --- | --- | --- | --- |

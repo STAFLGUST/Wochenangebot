@@ -79,6 +79,7 @@ SUITES['web_app'] = (8790, 'data-seed', True)
 SUITES['kundengruppen'] = (8790, 'data-seed', True)
 SUITES['einzelangebote'] = SUITES['bestellung']
 SUITES['vkgruppen'] = (8790, 'data-seed', True)
+SUITES['angebotskategorien'] = (8790, 'data-seed', True)   # Stammdaten Angebotskategorien und Aufbau des Angebots danach
 SUITES['kundenimport'] = SUITES['bestellung']
 SUITES['vertreter'] = SUITES['bestellung']
 SUITES['sicherheit_freigaben'] = SUITES['bestellung']
@@ -86,6 +87,13 @@ SUITES['schutz'] = SUITES['bestellung']
 SUITES['nutzer_anlegen'] = SUITES['bestellung']
 SUITES['mhd_mail'] = SUITES['bestellung']   # MHD-Liste an den Verkauf (Test-Mailserver)
 SUITES['mail_intern'] = SUITES['bestellung']   # Postfach für interne E-Mails (zweiter Test-Mailserver)
+# Postausgang von innen (ADR-007, lib/postausgang.php): Testserver = Kundenseite ohne Postfach; die Mitarbeiterseite startet der Test
+# selbst (zweiter Server auf dem Hilfsport) und ruft den Dienst api/postausgang.php mit deren Zugangsdaten auf
+SUITES['postausgang'] = (8790, 'data-seed', True, {'WA_POSTAUSGANG': 'warteschlange', 'WA_URL': 'http://127.0.0.1:8790'})
+# Datentrennung (ADR-007 Stufe 2): Testserver = Kundenseite wie im Betrieb (ohne internen Ordner, Postausgang); die Mitarbeiterseite
+# startet der Test selbst. Daten vorher mit deploy/daten_trennen.py getrennt (TRENNUNG)
+SUITES['datentrennung'] = (8790, 'data-seed', True, {'WA_POSTAUSGANG': 'warteschlange', 'WA_URL': 'http://127.0.0.1:8790'})
+TRENNUNG = {'datentrennung': 'kundenseite'}   # Gruppe → Rolle des Testservers
 SUITES['fehlerpruefung'] = SUITES['bestellung']
 SUITES['sicherheit_druck'] = SUITES['bestellung']
 SUITES['integritaet'] = SUITES['bestellung']   # Dateiprüfung; Test-Mailserver für die Benachrichtigung
@@ -146,7 +154,7 @@ GEWICHT = {
     'fehlerpruefung': 14, 'kundengruppen': 13, 'importzentrale': 13, 'versand': 12, 'kundenimport': 12,
     'sicherheit_druck': 11, 'angebotsliste': 11, 'stock_overview': 11, 'sicherheit_it': 10, 'auswertung': 9,
     'benachrichtigung': 9, 'vertreter': 9, 'admin_confirmation': 8, 'einkauf': 8, 'wartung': 7,
-    'order_management_ui': 7, 'nutzer_anlegen': 7, 'mhd_mail': 6, 'mail_intern': 5, 'auth_hardening': 7, 'web_app': 7, 'dashboard': 6,
+    'order_management_ui': 7, 'nutzer_anlegen': 7, 'mhd_mail': 6, 'mail_intern': 5, 'postausgang': 9, 'datentrennung': 6, 'auth_hardening': 7, 'web_app': 7, 'dashboard': 6,
     'passwortpruefung': 6, 'bestaetigung': 6, 'geo_ip': 6, 'integritaet': 6, 'sitzung_cookie': 6, 'design': 5,
     'testumgebung': 5, 'modul_wartung': 5, 'bestand_pdf': 5, 'modulverwaltung': 4, 'order_outbox_ui': 4,
     'admin_confirmation_ui': 4, 'herkunft': 4, 'legal_pages': 2, 'order_outbox': 1, 'order_management': 1,
@@ -169,6 +177,7 @@ GEWICHT = {
     'qs_vorlagen': 25,   # geschätzt (Oktober 2026), noch ohne CI-Median
     'qs_bericht': 20,   # geschätzt (Oktober 2026), noch ohne CI-Median
     'protokoll': 6,   # geschätzt (Oktober 2026), noch ohne CI-Median
+    'angebotskategorien': 12,   # geschätzt (November 2026), noch ohne CI-Median
     'rollen': 20, 'rollen_host': 8, 'einheit': 90,   # geschätzt (Oktober 2026), noch ohne CI-Median
 }
 
@@ -322,6 +331,17 @@ def run_in(name, slot):
             sqlite_test_seed(data)
         else:
             subprocess.run([sys.executable, os.path.join(REPO, 'deploy/datenbank.py'), 'migrate', data, '--offline'], check=True, capture_output=True)
+    # Getrennte Daten (ADR-007 Stufe 2): Gruppe datentrennung immer, alle anderen mit WA_TEST_TRENNUNG=1 – mit dem echten
+    # Werkzeug deploy/daten_trennen.py; der Testserver ist dann die Mitarbeiterseite (WA_DATEN_INTERN). Standard ist die höchste
+    # Trennstufe; WA_TEST_TRENNSTUFE=n prüft eine frühere (z. B. 1 = Stand nach dem Einspielen, vor dem Serverschritt).
+    intern = os.path.join(WORK, f'intern-{name}')
+    shutil.rmtree(intern, ignore_errors=True)
+    if name in TRENNUNG or os.environ.get('WA_TEST_TRENNUNG') == '1':
+        stufe = ['--stufe', os.environ['WA_TEST_TRENNSTUFE']] if os.environ.get('WA_TEST_TRENNSTUFE') and name not in TRENNUNG else []
+        subprocess.run([sys.executable, os.path.join(REPO, 'deploy/daten_trennen.py'), 'trennen', data, intern, '--offline'] + stufe, check=True, capture_output=True)
+        php_env['WA_SPUR_INTERN'] = '1'   # Zugriffe der Kundenseite auf interne Dokumente ins Serverprotokoll (app/api/storage.php)
+        if TRENNUNG.get(name) != 'kundenseite':
+            php_env['WA_DATEN_INTERN'] = intern
     if not wait_port(port, up=False, timeout=5):
         with PRINT: print(f'[{name}] Port {port} ist belegt')
         return name, 0, 1, False
@@ -332,7 +352,8 @@ def run_in(name, slot):
     srv = subprocess.Popen(['php', '-d', 'session.save_path=' + sessions, '-S', f'127.0.0.1:{port}'], cwd=app, stdout=log, stderr=subprocess.STDOUT, start_new_session=True, env=php_env)
     try:
         wait_port(port)
-        env = {**os.environ, 'TZ': 'Europe/Berlin', 'UDATA': data, 'WA_WORK': WORK, 'WA_SESSION_DIR': sessions,   # Tests rechnen wie der Server in deutscher Zeit
+        env = {**os.environ, 'TZ': 'Europe/Berlin', 'UDATA': data, 'UINTERN': intern, 'WA_WORK': WORK, 'WA_SESSION_DIR': sessions,   # Tests rechnen wie der Server in deutscher Zeit
+               **({'WA_DATEN_INTERN': php_env['WA_DATEN_INTERN']} if 'WA_DATEN_INTERN' in php_env else {}),   # Server-Werkzeuge der Tests wie der Server
                'WA_BASE': base, 'WA_AUX_PORT': str(aux), 'WA_SMTP_PORT': str(smtp1), 'WA_SMTP_PORT2': str(smtp2)}
         t0 = time.time()
         p = subprocess.run([sys.executable, os.path.join(REPO, 'tests', 'e2e', f'test_{name}.py')], cwd=os.path.join(REPO, 'tests', 'e2e'),

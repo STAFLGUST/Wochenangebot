@@ -34,8 +34,8 @@ den Release vorlegt.
 | Sicherheitsprüfungen (`sicherheit`) | gitleaks über den Verlauf bis `HEAD` (`.gitleaks.toml`, Version und Prüfsumme fest); Trivy: `tests/requirements.txt` (HIGH/CRITICAL blockiert), Images aus `docker-compose.yml` (nur Bericht) | immer |
 | Anwendungs-Image prüfen (`image`) | `deploy/image/pruefen.sh` (Bau, Vergleich mit `php:8.3-apache`); `deploy/anmeldung/pruefen.sh` mit festen Keycloak-/PostgreSQL-Digests; Trivy auf `stafl-app:pruefung` (CRITICAL mit Korrektur blockiert, HIGH als Bericht) | nach `statisch`, außer übernommen |
 | Sicherung und Release-Prozess (`betrieb`) | `tests/deploy/`: `test_datenbank.py`, `test_sqlite_http.sh`, `test_sichern.sh`, `test_freigabe.sh`, `test_testumgebung.sh`, `test_release_pruefen.sh`, `test_anmeldung_einrichten.sh`, `test_notzugang.sh`, `test_konten_pruefen.sh`, `test_speicher.sh`, `test_datenbank_umschalten.sh`, `test_altdateien.sh`, `test_karte_laden.sh`, `test_adressen_laden.sh` | nach `statisch`, außer übernommen |
-| Ende-zu-Ende-Tests (*speicherart*, Teil *k*/3) (`e2e`) | Matrix `storage: [files, sqlite]` × `teil: [1, 2, 3]`; `.github/scripts/testumgebung.sh e2e`, dann `python tests/run_e2e.py` mit `WA_JOBS=4`; Artefakt bei Fehler | nach `statisch`, außer übernommen |
-| Ende-zu-Ende-Tests (`e2e_required`) | fester Name für den Branchschutz; grün nur, wenn alle sechs Teile grün sind | nach `e2e` |
+| Ende-zu-Ende-Tests (*speicherart*, Teil *k*/3) (`e2e`) | Matrix `storage: [files, sqlite]` × `teil: [1, 2, 3]`, dazu über `include` „(sqlite, getrennt, Teil *k*/3)“ mit `WA_TEST_TRENNUNG=1` (Daten getrennt wie auf dem Server, ADR-007); `.github/scripts/testumgebung.sh e2e`, dann `python tests/run_e2e.py` mit `WA_JOBS=4`; Artefakt bei Fehler | nach `statisch`, außer übernommen |
+| Ende-zu-Ende-Tests (`e2e_required`) | fester Name für den Branchschutz; grün nur, wenn alle neun Teile grün sind | nach `e2e` |
 | Anmeldung über Keycloak (nur CI) (`oidc`) | `testumgebung.sh oidc`, `tests/oidc/umgebung.sh start`, `tests/oidc/test_oidc.py`, `stop`; Artefakt `oidc-ergebnisse` | nach `statisch`, außer übernommen |
 | App prüfen (iOS, Android, Web) (`app`) | in `mobile/`: `npm ci`, `npm run typecheck`, `npm test -- --ci`, `npm run export:native` (Bundles iOS/Android), `npm run export:web`; danach `python tests/run_e2e.py app_web` in beiden Speicherarten; Artefakt `app-ergebnisse` | nach `statisch`, außer übernommen |
 | Vollständig geprüft (Stand *Tree*) (`vollstaendig`) | nur wenn alle vorigen Aufträge grün sind; der Name trägt den geprüften Tree (Nachweis für `main` und für den Release) | am Ende |
@@ -61,7 +61,7 @@ den Release vorlegt.
 10. Prüfliste der Dateiprüfung (`werkzeuge/integritaet.py`)
 11. Tests ohne fest eingetragene Ports (`127.0.0.1:<Port>` in `tests/e2e/` nur in `umgebung.py`)
 12. Unit-Tests: Bestands-Parser, Bestandswochen und Preisvergleich (PHP und JavaScript), gemeinsames Bearbeiten
-13. Unit-Tests der CI-Werkzeuge (`test_run_e2e_teile.py`, `test_ci_nachweis.py`, `test_apt_vorrat.py`)
+13. Unit-Tests der CI-Werkzeuge (`test_run_e2e_teile.py`, `test_ci_nachweis.py`, `test_apt_vorrat.py`, `test_images_aktualisieren.py`)
 14. Workflows prüfen (`actionlint`, Version und Prüfsumme fest)
 
 **Keine Doppelprüfung nach dem Merge:** Die PR-CI prüft den Stand nach dem Zusammenführen (`refs/pull/N/merge`). Ist der
@@ -75,6 +75,7 @@ Sicherheitsprüfungen laufen trotzdem. Bei jedem Zweifel läuft die volle CI. Ei
 | --- | --- | --- | --- |
 | Release | `.github/workflows/release.yml` | von Hand oder durch `release_vorlegen` | wartet auf Freigabe in `produktion`, prüft (`.github/scripts/release-pruefen.sh schutz`, `aktuell`, `ci`) und legt den Tag `release-<JJJJMMTT-HHMMSS>` mit Freigebendem und Grund an; nur vom Branch `main`; ein neuer Lauf beendet einen älteren wartenden |
 | Zwischenspeicher | `.github/workflows/zwischenspeicher.yml` | Push auf `main`, montags (Zeitplan), von Hand, PR nur bei Änderungen am Ablauf | füllt Paketvorrat (`testumgebung.sh vorrat`) und Keycloak/Caddy-Downloads (`tests/oidc/umgebung.sh laden`) für E2E und Keycloak; übernommen werden Pakete nur mit passender Prüfsumme (`.github/scripts/apt_vorrat.py`) |
+| Sicherheitsupdates | `.github/workflows/sicherheitsupdates.yml` | montags 04:41 UTC, von Hand | `werkzeuge/images_aktualisieren.py`: neue Digests derselben Image-Fassungen (vom Herausgeber neu gebaut, meist Betriebssystem-Korrekturen) überall gleich eintragen, Branch `plattform/sicherheitsupdates-…`, Pull Request (ersetzt einen älteren offenen); dessen CI hält GitHub an, bis der Inhaber „Approve workflows to run“ klickt (Bot als Erstbeitragender) – nur diese PR-Prüfung zählt für die Pflicht-Prüfungen, ein CI-Start für den Branch nicht (nur im Rückfall ohne Pull Request); neuere Fassungen nur als Hinweis. Merge/Release wie immer durch den Inhaber. Digests stehen deshalb nie in Workflow-Dateien (das GITHUB_TOKEN darf sie nicht ändern; `tests/deploy/test_images.py` prüft das) |
 | CI-Nachweis (Trockenlauf) | `.github/workflows/ci-nachweis.yml` | von Hand | zeigt, ob ein `main`-Commit die PR-Prüfung übernehmen würde und warum (nicht); ändert nichts, zählt nicht als CI |
 
 Die App `mobile/` prüft die CI im Auftrag „App prüfen (iOS, Android, Web)“ (Typprüfung, Unit-Tests, Bundles, `app_web`).
@@ -116,18 +117,24 @@ Schritte im Einzelnen:
    (`deploy/bereitstellen.py`) und ruft im Release-Modus (Datei `.release-modus`, eingerichtet mit
    `deploy/release-modus-einrichten.sh`) `deploy/freigabe-einspielen.sh` auf.
 5. **`freigabe-einspielen.sh`** fragt die GitHub-API mit einem nur lesenden Token (`GITHUB_TOKEN_LESEN` in `.env`) nach
-   dem neuesten erfolgreichen Release-Lauf auf `main`, prüft erneut die CI und dass der Commit auf `main` liegt. Ein
-   abgelehnter oder zurückgenommener Commit steht in `.release-abgelehnt` und wird nicht erneut versucht.
+   dem neuesten erfolgreichen Release-Lauf auf `main` (selbst nach Startzeit ausgewählt, nicht der erste Eintrag der
+   Antwort), prüft erneut die CI und dass der Commit auf `main` liegt. Ein abgelehnter oder zurückgenommener Commit steht in
+   `.release-abgelehnt` und wird nicht erneut versucht. Ein Release, der älter ist als der aktive Stand, wird nie
+   automatisch eingespielt (nur Vermerk im Protokoll) – zurück geht es nur von Hand mit `deploy/release-zurueck.sh`.
+   Anlass: Am 03.11.2026 lieferte GitHub einmalig einen vier Tage alten Lauf zuerst; der Server ging darauf zurück, und das
+   alte Prüfskript (ohne bunny-Schlüssel) lehnte danach den richtigen Release ab.
 6. **Image:** Ändert das Release `deploy/image/` und enthält `COMPOSE_FILE` die Ergänzungsdatei der Anmeldung, wird das
    Image vorab gebaut (`docker compose build --pull app` als `stafl-app:release-neu`). Fehler → nichts eingespielt.
 7. **Sicherung** mit dem Sicherungsskript des neuen Commits (`deploy/.sichern-release.sh`). Ohne Sicherung kein Release.
 8. **Code wechseln.** Ändern sich `Caddyfile`, `docker-compose.yml` oder die Ergänzungsdatei, werden alle Container
-   neu erstellt; sonst bei Bedarf nur die App. Das bisherige Image bleibt als `stafl-app:release-vorher`. Danach
+   neu erstellt; sonst bei neuem Image nur die Anwendungs-Container `app` und `app-mitarbeiter`, bei geänderter
+   `apache-oidc.conf` nur `app-mitarbeiter` (ADR-007). Das bisherige Image bleibt als `stafl-app:release-vorher`. Danach
    `deploy/bereitstellen.py`: Versionsnummern `?v=…` und Prüfliste `app/api/lib/integritaet-liste.php` aus den
    Git-Objekten genau dieses Commits.
 9. **Healthcheck** über Caddy wie ein Besucher: `status` (`"ok":true`), Angebots-API (200, 401 oder 503 im
-   Wartungsmodus), Startseite mit `assets/frontend.js`, `/admin/` mit `assets/admin.js`; zwei Erfolge hintereinander,
-   insgesamt bis etwa 40 s.
+   Wartungsmodus), Startseite mit `assets/frontend.js`, `/admin/` mit `assets/admin.js`; mit der Ergänzungsdatei der
+   Anmeldung zusätzlich die Mitarbeiter-Hosts (`dashboard-stafl.de/api/?action=status` → 401, eigener Container
+   `app-mitarbeiter`); zwei Erfolge hintereinander, insgesamt bis etwa 40 s.
 10. **Ergebnis:** Erfolg → `docker image prune -f` (nur hängende Images). Fehler → automatischer Rückfall auf den alten
     Commit und `stafl-app:release-vorher`. Status steht in `daten/deployment.php` und im Eingabebereich; optional
     Meldung an `HC_DEPLOY_URL`.
@@ -146,8 +153,10 @@ Ein VPS mit Docker Compose; Installationsordner `/opt/wochenangebot` (Git-Checko
 | Dienst | Herkunft | Aufgabe |
 | --- | --- | --- |
 | `caddy` | `docker-compose.yml`, Image `caddy:2`, Konfiguration `Caddyfile` | einziger öffentlicher Eingang (Ports 80/443), TLS-Zertifikate, Sicherheits-Header, Browser-Zwischenspeicher (Abschnitt `zwischenspeichern`); leitet an `app`, `app-mitarbeiter`, `keycloak` bzw. `app-test` weiter; nicht freigegebene Dashboard-Hosts als 503-Platzhalter (GR-105) |
-| `app` | `docker-compose.yml`; mit Ergänzungsdatei Image `stafl-app` aus `deploy/image/` (PHP 8.3, Apache, mod_auth_openidc) | die Anwendung; `app/` nur lesend, `daten/` als Datenordner; mit Ergänzungsdatei zusätzlich `dashboard/` und `apache-oidc.conf` (Keycloak-Hosts) und Netzwerkname `app-mitarbeiter` |
-| `keycloak` | `deploy/anmeldung/docker-compose.anmeldung.yml` (Version und Digest fest) | Mitarbeiteranmeldung, Realm `mitarbeiter`; Verwaltung nur auf `127.0.0.1:8180`; öffentlich über Caddy nur `/realms/mitarbeiter/` und `/resources/` |
+| `app` | `docker-compose.yml`; mit Ergänzungsdatei Image `stafl-app` aus `deploy/image/` (PHP 8.3, Apache, mod_auth_openidc nicht geladen) – baut dieses Image | die Anwendung; `app/` nur lesend, `daten/` als Datenordner. Mit Ergänzungsdatei **nur die Kundenseite** `angebot-stafl.de` (ADR-007): keine Anmelde-Geheimnisse, nur im Netz `default` mit Caddy, Dateisystem nur lesbar (`/tmp`, `/run` im Speicher), `no-new-privileges`, Grenzen `KUNDEN_CPUS`/`KUNDEN_SPEICHER` (Standard 3 CPU, 4 GB) |
+| `app-mitarbeiter` | `deploy/anmeldung/docker-compose.anmeldung.yml`, dasselbe Image `stafl-app` (nie aus dem Netz geholt) | alle Mitarbeiter-Hosts und die Prüfung vor der Anmeldeseite: `app/` nur lesend, derselbe Datenordner, dazu `dashboard/`, `apache-oidc.conf` (Keycloak-Hosts), Detailkarte, alle Anmelde-Geheimnisse und das Dienstkonto `konten`; Netz `intern` mit Caddy und Keycloak. Neue Anmelde-Werte aus `.env`: `docker compose up -d app-mitarbeiter` |
+| `postausgang` | `deploy/anmeldung/docker-compose.anmeldung.yml`, dasselbe Image `stafl-app` | verschickt die E-Mails, die die Kundenseite nur als Auftrag ablegt (ADR-007): alle 5 s `php api/postausgang.php` als `www-data`, Dateisystem nur lesbar, kein Port, eigenes Netz `postausgang` nur mit Ausgang zum Postfach; Postfach-Werte aus `.env` und `daten-geheim/` (nur lesend). Zustand: `docker compose ps postausgang` (Healthcheck = Lebenszeichen) |
+| `keycloak` | `deploy/anmeldung/docker-compose.anmeldung.yml` (Version und Digest fest) | Mitarbeiteranmeldung, Realm `mitarbeiter`; Verwaltung nur auf `127.0.0.1:8180`; öffentlich über Caddy nur `/realms/mitarbeiter/` und `/resources/`; Netze `intern` (Caddy, app-mitarbeiter) und `anmeldung` – von der Kundenseite nicht erreichbar |
 | `keycloak-db` | ebenda, PostgreSQL 17 (Digest fest) | Datenbank nur für Keycloak, internes Netz `anmeldung` |
 | `app-test` | `deploy/testumgebung/docker-compose.yml` in `/opt/wochenangebot-test` | Testumgebung, nur im Netz `wochenangebot-edge` |
 
@@ -183,7 +192,9 @@ Ohne gültigen Schlüssel wirkt nichts davon. Jede neue Weiterleitung (`reverse_
 | --- | --- |
 | `.env` | Domain, Mail-Zugang, Geheimnisse der Anmeldung, Token für den Release-Modus, Schlüssel für bunny.net (`CDN_SCHLUESSEL`, `CDN_PFLICHT`) (nur root) |
 | `.release-vorher`, `.release-abgelehnt` | Stand vor dem letzten Release (Notfall-Rückfall) bzw. abgelehnter Release (nur root) |
-| `daten/` | Geschäftsdaten (Dateien oder `daten/.sqlite/store.sqlite`), Dateiablage `daten/dateien/` (hochgeladene Dateien, z. B. QM-Dokumente; in der Sicherung enthalten), Status von Sicherung und Deployment, `mail-schluessel.php` (nicht in Sicherungen) |
+| `daten/` | Geschäftsdaten (Dateien oder `daten/.sqlite/store.sqlite`), Dateiablage `daten/dateien/` (hochgeladene Dateien, z. B. QM-Dokumente; in der Sicherung enthalten), Status von Sicherung und Deployment, `mail-schluessel.php` bis zum Umzug nach `daten-geheim/` (nicht in Sicherungen), Versandaufträge der Kundenseite (`postausgang`) |
+| `daten-intern/` | Interne Dokumente nach `deploy/daten-trennen.sh trennen` (ADR-007 Stufe 2a: Personal, Nutzer, CRM, Controlling, QS mit Dateiablage …; ab Trennstufe 2 auch Kundenstamm, Bestand, Stammdaten, Postfach-Zugänge, Empfänger der Bestellwünsche); nur in `app-mitarbeiter` und `postausgang` (`/var/www/daten-intern`), nie in der Kundenseite; gesichert als `intern-<Zeit>.tar.gz`; nur root/www-data |
+| `daten-geheim/` | Schlüssel des im Eingabebereich hinterlegten Postfach-Passworts (`mail-schluessel.php`, nach `postfach-schluessel.sh umziehen`); nur in `app-mitarbeiter` und `postausgang`, nie in der Kundenseite, nicht gesichert, nur root/www-data |
 | `daten-anmeldung/` | Realm-Import, Tresor `vault/` (Postfach-Passwort für Keycloak, nicht gesichert), während der Einrichtung `einrichtung.env` |
 | `daten-karte/` | Detailkarte `karte.pmtiles` (OpenStreetMap, Deutschland bis Zoomstufe 15, ca. 5–6 GB) und `stand.txt`, Adressverzeichnis `adressen.sqlite` (geschätzt um 1 GB) und `adressen-stand.txt`; im Anwendungs-Container nur lesend unter `/var/www/karte`, nicht gesichert (jederzeit neu ladbar) |
 | `sicherungen/` | Datensicherungen und `anmeldung-<Zeit>.dump`, je 30 Stände, nur root |
@@ -207,7 +218,9 @@ Ohne gültigen Schlüssel wirkt nichts davon. Jede neue Weiterleitung (`reverse_
 | `altdateien.sh` | `zeigen` / `archivieren` der alten Datendateien nach der Umschaltung (nur bei aktivem SQLite, Archiv in `sicherungen/`) | Inhaber, nur mit Freigabe; Anwendung bleibt in Betrieb |
 | `testumgebung.sh` | Testumgebung `test.<Domain>` (siehe unten) | Inhaber |
 | `wartung-aus.sh` | Notfall: alle Wartungen beenden | Inhaber |
-| `notzugang.sh` | Notfall: alten Eingabebereich mit eigener Anmeldung öffnen/schließen | Inhaber |
+| `notzugang.sh` | Notfall: alten Eingabebereich mit eigener Anmeldung öffnen/schließen – nur über einen SSH-Tunnel (`127.0.0.1:8190`) | Inhaber |
+| `daten-trennen.sh` | `status` (Stufe und Plan) / `trennen` (auf die höchste Trennstufe des eingespielten Stands: Sicherung, Stopp, `daten_trennen.py`, Start – auch von Stufe 1 auf 2) / `zusammenfuehren` (zurück in einen Ordner, vor einem Rückfall auf ein Release mit niedrigerer Stufe) | Inhaber, nur mit Freigabe und Wartungsfenster |
+| `postfach-schluessel.sh` | `status` / `umziehen` (Schlüssel des Postfach-Passworts nach `daten-geheim/`, Passwörter an Server und Benutzer binden) / `zurueck` (vor einem Rückfall: zurück auf Format v1 und in den Datenordner) | Inhaber, einmalig nach dem Release mit dem Postausgang |
 | `passwort-zuruecksetzen.sh` | Notfall: Passwort eines Nutzers zurücksetzen bzw. Administrator neu anlegen | Inhaber |
 | `ip-freigabe-aus.sh` | Notfall: IP-Freigabe und Ländersperre ausschalten | Inhaber |
 | `karte-laden.sh` | Detailkarte laden bzw. aktualisieren (`pruefen`: Stand und geschätzte Größe ohne Download; ohne Angabe: neuester Protomaps-Stand, Ausschnitt `deploy/karte/deutschland.geojson`, go-pmtiles fest über Digest, neue Datei neben der alten, geprüft, dann ausgetauscht; `entfernen`) – mindestens 14 GB frei | Inhaber, einmalig bzw. bei Bedarf |
@@ -244,6 +257,7 @@ ohne SSH-Tunnel. Benutzernamen wie im Eingabebereich.
 | `liste` | Konten anzeigen |
 | `mail-einrichten [<adresse>]` | Mailversand von Keycloak über das Postfach der Anwendung (Vorrang: Postfach für interne E-Mails), Testmail |
 | `design-setzen [standard]` | Anmeldeseite im Plattform-Design bzw. Rückfall auf Standard |
+| `passwort-vergessen an\|aus\|status` | „Passwort vergessen?“ auf der Anmeldeseite (Link per Mail, 15 Min.; eigener Ablauf: zweiter Faktor bleibt Pflicht, wenn eingerichtet) |
 | `realm-aktualisieren` | Realm auf den Stand von `realm-mitarbeiter.json` bringen (idempotent, neue Clients; Stand 8: Client `konten` für die Verwaltung; Stand 9: Client `sicherheit`; Stand 10: Client `controlling`; Stand 11: Client `leergut`; Stand 12: Client `rewe`; Stand 13: Client `qs`) |
 
 Neue Mitarbeiter brauchen beides: Mitarbeiterkonto im Eingabebereich (Rechte) und Keycloak-Konto (Identität). Seit Stand 8 legt der
@@ -299,7 +313,7 @@ Keycloak-Anmeldung gibt es in der Testumgebung nicht; sie wird nur in der CI gep
 | --- | --- |
 | Release defekt, automatischer Rückfall reichte nicht | `sh deploy/release-zurueck.sh` |
 | Wartung blockiert die Arbeit | `sh deploy/wartung-aus.sh` (beendet alle Wartungen; macht kein Modul produktiv) |
-| Keycloak nicht erreichbar | `docker compose ps -a`, `docker compose up -d`; hilft das nicht: `sh deploy/notzugang.sh an` (alter Eingabebereich mit eigener Anmeldung), danach `sh deploy/notzugang.sh aus` |
+| Keycloak nicht erreichbar | `docker compose ps -a`, `docker compose up -d`; hilft das nicht: `sh deploy/notzugang.sh an` (alter Eingabebereich mit eigener Anmeldung, über `ssh -L 8190:127.0.0.1:8190 …` und `http://localhost:8190/admin/`), danach `sh deploy/notzugang.sh aus` |
 | Administrator-Passwort vergessen (alte Anmeldung) | `sh deploy/passwort-zuruecksetzen.sh <name>` (setzt auch Zwei-Faktor und Passkeys zurück); nach Datenverlust `… admin --neu` |
 | Selbst ausgesperrt (IP-Freigabe, Ländersperre) – auch an der Anmeldeseite | `sh deploy/ip-freigabe-aus.sh` |
 | Anmeldung bei Keycloak klappt nicht | `sh deploy/anmeldung/konten.sh pruefen <name>`, dann ggf. `entsperren` bzw. `zuruecksetzen` |

@@ -127,6 +127,13 @@
     else if (it.variants[oid] && it.variants[oid].status === 'hidden') delete it.variants[oid];   // folgt dem Wochenangebot: Standardpreis
     dropEmptyVariants(it);
   }
+  /* Empfehlung gilt nur, wo sie gesetzt wurde: kommt ein Artikel mit Empfehlung neu in ein Angebot, steht er dort auf
+     „keine Empfehlung“ (sonst übernähme er den Grundwert) */
+  function empfehlungNichtUebernehmen(it, oid) {
+    const s = it.sale;
+    if (!s || (typeof s.value !== 'number' && !s.mark) || (s.offers && s.offers[oid])) return;
+    s.offers = { ...(s.offers || {}), [oid]: { status: 'none' } };
+  }
   /* Neuer Artikel nur für dieses Angebot: im Wochenangebot und in Angeboten, die ihm folgen, nicht enthalten */
   function nurIn(it, oid) {
     if (oid === OSTD) return;
@@ -147,21 +154,48 @@
   /* Angebote, in denen der Artikel ausdrücklich steht: Wochenangebot, eigene Artikellisten und Angebote, die dem
      Wochenangebot folgen, nur mit eigenem Preis (sonst folgen sie dem Wochenangebot und zählen nicht extra) */
   const explizit = (it) => offersOf(it).filter((o) => !followsStd(o) || !!(it.variants && it.variants[o] && it.variants[o].status !== 'hidden'));
-  /* „auch in …“: andere Angebote, in denen der Artikel steht (Bezeichnung, Merkmale und Gruppe gelten dort ebenso) */
+  /* „auch in …“: andere Angebote, in denen der Artikel steht (Merkmale und Gruppe gelten dort ebenso) */
   const otherOffers = (it) => explizit(it).filter((o) => o !== curOffer);
+  /* Bezeichnung je Angebot (Auftrag des Inhabers 03.11.2026): it.name ist der Basiswert (Wochenangebot und jedes Angebot
+     ohne eigene Bezeichnung), it.namen[<Kundenangebot>] eine eigene Bezeichnung nur dort – jedes Angebot für sich. Gleiches
+     Feld in den Artikelstammdaten (Vorgabe für künftige Wochen). Aufgelöst wird auf dem Server (offer_resolve). */
+  const eigenName = (x, oid) => (oid !== OSTD && x && x.namen && x.namen[oid]) || '';
+  const nameIn = (it, oid) => eigenName(it, oid) || it.name;
+  /* nur Einträge bestehender Kundenangebote; null, wenn keiner */
+  function namenBekannt(n) {
+    const o = {};
+    for (const [k, v] of Object.entries(n || {})) if (k !== OSTD && offerDef(k) && v) o[k] = v;
+    return Object.keys(o).length ? o : null;
+  }
+  const namenSig = (n) => { const o = namenBekannt(n); return o ? Object.keys(o).sort().map((k) => k + '=' + o[k]).join('|') : ''; };
+  /* eigene Bezeichnung setzen; leer oder gleich dem Basiswert = keine eigene */
+  function setzeName(x, oid, text) {
+    const t = C.clean(text || '');
+    x.namen = x.namen || {};
+    if (!t || t === x.name) delete x.namen[oid]; else x.namen[oid] = t;
+    if (!Object.keys(x.namen).length) delete x.namen;
+  }
   const vChanges = () => (diff && diff.variantChanged ? diff.variantChanged.filter((c) => knownOffer(c.offer)) : []);
   const sChanges = () => (diff && diff.saleChanged ? diff.saleChanged : []);
   const saleText = (sl) => {
-    if (!sl) return 'kein Sonderpreis';
-    const ex = Object.entries(sl.offers || {}).map(([o, x]) => `${offerShort(o)}: ${x.status === 'none' ? 'keiner' : fmtNum.format(x.value)}`);
-    return `${fmtNum.format(sl.value)} €/kg${ex.length ? ' (' + ex.join(', ') + ')' : ''}`;
+    if (!sl || (typeof sl.value !== 'number' && !sl.mark)) return 'keine Empfehlung';
+    const ex = Object.entries(sl.offers || {}).map(([o, x]) => `${offerShort(o)}: ${x.status === 'none' ? 'keine' : x.status === 'mark' ? 'ohne Preis' : fmtNum.format(x.value)}`);
+    return `${typeof sl.value === 'number' ? fmtNum.format(sl.value) + ' €/kg' : 'ohne Preisänderung'}${ex.length ? ' (' + ex.join(', ') + ')' : ''}`;
   };
 
-  /* Werbung je Angebot (model.meta.werbung[<Angebot>] = {titel, text?, artikel: [{id, text?}]}): Fenster in admin-werbung.js.
-     Gilt nur für das eigene Angebot; der Server liefert je Angebot nur den eigenen Eintrag aus (offer_resolve). */
-  const WERB_MAX = 12;
+  /* Werbung je Angebot (model.meta.werbung[<Angebot>] = {titel, text?, artikel: [{id, text?}], weitere?: [{titel, text?,
+     artikel}]}): bis zu zwei Werbungen, die erste in den Feldern des Eintrags, die zweite in „weitere“ (Kundenseite: rechts
+     daneben). Fenster in admin-werbung.js. Gilt nur für das eigene Angebot; der Server liefert je Angebot nur den eigenen
+     Eintrag aus (offer_resolve). */
+  const WERB_MAX = 12, WERB_BLOECKE = 2;
   const werbungVon = (oid, m = model) => (m && m.meta && m.meta.werbung && m.meta.werbung[oid]) || null;
-  const werbAn = (it, oid = curOffer) => { const e = werbungVon(oid); return !!e && e.artikel.some((a) => a.id === it.id); };
+  /* Werbungen eines Eintrags als Liste (ohne „weitere“ im Block) und zurück zu einem Eintrag (leere fallen weg) */
+  const werbOhneWeitere = (b) => { const r = { ...b }; delete r.weitere; return r; };
+  const werbAlle = (e) => (e ? [e, ...(Array.isArray(e.weitere) ? e.weitere : [])].map(werbOhneWeitere) : []);
+  const werbBloecke = (e) => werbAlle(e).filter((b) => Array.isArray(b.artikel) && b.artikel.length);
+  const werbEintrag = (bl) => { const l = bl.filter((b) => b && b.artikel && b.artikel.length).slice(0, WERB_BLOECKE); return !l.length ? null : l.length > 1 ? { ...l[0], weitere: l.slice(1) } : l[0]; };
+  const werbArtikelZahl = (e) => werbBloecke(e).reduce((n, b) => n + b.artikel.length, 0);
+  const werbAn = (it, oid = curOffer) => werbBloecke(werbungVon(oid)).some((b) => b.artikel.some((a) => a.id === it.id));
   /* Artikel, die nicht mehr im Angebot stehen, fallen aus dessen Werbung (unbekannte Angebote prüft der Server) */
   function werbungBereinigen() {
     const w = model && model.meta.werbung;
@@ -169,8 +203,8 @@
     const byId = new Map(model.items.map((i) => [i.id, i]));
     for (const oid of Object.keys(w)) {
       if (!knownOffer(oid)) continue;
-      w[oid].artikel = (w[oid].artikel || []).filter((a) => { const it = byId.get(a.id); return it && inOffer(it, oid); });
-      if (!w[oid].artikel.length) delete w[oid];
+      const e = werbEintrag(werbAlle(w[oid]).map((b) => ({ ...b, artikel: (b.artikel || []).filter((a) => { const it = byId.get(a.id); return it && inOffer(it, oid); }) })));
+      if (e) w[oid] = e; else delete w[oid];
     }
     if (!Object.keys(w).length) delete model.meta.werbung;
   }
@@ -239,7 +273,8 @@
 
   /* Bestätigung auf Keycloak-Hosts ohne Seitenwechsel: Hinweis-Dialog, Anmeldung in einem eigenen Fenster (Klick = Nutzergeste,
      kein Popup-Blocker), Rücksprung auf admin/bestaetigt.html meldet sich per BroadcastChannel, postMessage bzw. localStorage
-     (alle nur gleicher Ursprung). Danach wiederholt api() die Anfrage – ob bestätigt ist, entscheidet allein der Server.
+     (alle nur gleicher Ursprung); kommt keine davon an, genügt das Schließen des Fensters. Danach wiederholt api() die Anfrage –
+     ob bestätigt ist, entscheidet allein der Server.
      Blockiertes Fenster: Anmeldung wie bisher in diesem Fenster (Eingaben im offenen Dialog gehen dann verloren). */
   let fensterBestaetigung = null;
   function bestaetigenPerFenster(adresse, erneut) {
@@ -259,7 +294,9 @@
         fensterBestaetigung = null;
         if (fehler) reject(fehler); else resolve();
       };
-      const onClose = () => ende(Object.assign(new Error('Bestätigung abgebrochen. Die Änderung wurde nicht ausgeführt.'), { status: 403 }));
+      // Ein „close“ des vorigen Durchgangs kann erst eintreffen, wenn der Dialog für die Wiederholung schon wieder offen ist –
+      // dann nicht als Abbruch werten (sonst schlösse sich der Hinweis „noch nicht angekommen“ sofort wieder).
+      const onClose = () => { if (!d.open) ende(Object.assign(new Error('Bestätigung abgebrochen. Die Änderung wurde nicht ausgeführt.'), { status: 403 })); };
       const onNachricht = (e) => { if (e.origin === location.origin && e.data && e.data.typ === 'stafl-bestaetigt') ende(); };
       const onSpeicher = (e) => { if (e.key === 'stafl-bestaetigung' && e.newValue) ende(); };
       try { kanal = new BroadcastChannel('stafl-bestaetigung'); kanal.onmessage = (e) => { if (e.data && e.data.typ === 'stafl-bestaetigt') ende(); }; } catch { /* älterer Browser */ }
@@ -280,6 +317,12 @@
         st.className = 'rkc-st';
         st.textContent = 'Bitte im neuen Fenster anmelden. Danach schließt es sich, und Ihre Änderung wird hier automatisch ausgeführt.';
         weiter.hidden = false;
+        // Rückfall, falls keine der drei Meldungen ankommt: Schließt sich das Fenster, wird die Anfrage wiederholt – ob bestätigt
+        // ist, entscheidet der Server (sonst erscheint dieser Hinweis mit „noch nicht angekommen“ erneut).
+        const wache = setInterval(() => {
+          if (fertig) clearInterval(wache);
+          else if (w.closed) { clearInterval(wache); ende(); }
+        }, 500);
       };
       weiter.onclick = () => ende();   // selbst weiter: der Server prüft die Bestätigung erneut
       hier.onclick = async () => {
@@ -369,13 +412,13 @@
   let me = null;                                   // angemeldeter Nutzer
   const can = (role) => !!me && ROLE_RANK[me.role] >= ROLE_RANK[role];
   /* Bereiche und das Recht, das sie sichtbar macht (ohne Eintrag: alle; ADMIN_VIEWS: nur Administratoren) */
-  const VIEW_PERM = { einzel: 'einzelangebote.sehen', hist: 'preisverlauf.sehen', stock: 'bestand.sehen', einkauf: 'einkauf.sehen', master: 'stammdaten.sehen', orders: 'bestellungen.sehen', kunden: 'kunden.sehen', gruppen: 'stammdaten.sehen', vkgruppen: 'stammdaten.sehen', angebote: 'angebote.verwalten', vertreter: 'stammdaten.sehen', auswertung: 'auswertung.sehen', log: 'protokoll.sehen', mail: '', users: '', rollen: '', importe: '', urlaub: 'hr.verwalten' };
+  const VIEW_PERM = { einzel: 'einzelangebote.sehen', hist: 'preisverlauf.sehen', stock: 'bestand.sehen', einkauf: 'einkauf.sehen', master: 'stammdaten.sehen', orders: 'bestellungen.sehen', kunden: 'kunden.sehen', gruppen: 'stammdaten.sehen', vkgruppen: 'stammdaten.sehen', kategorien: 'stammdaten.sehen', angebote: 'angebote.verwalten', vertreter: 'stammdaten.sehen', auswertung: 'auswertung.sehen', log: 'protokoll.sehen', mail: '', users: '', rollen: '', importe: '', urlaub: 'hr.verwalten' };
   /* Verwaltung unter eigener Adresse (verwaltung.dashboard-stafl.de): nur ihre Bereiche – Anzeige, die Rechte prüft der Server */
   /* Angebot unter der zentralen Anmeldung (angebot.dashboard-stafl.de): Angebotsbereiche ohne Verwaltung und ohne die
      Bestandsliste (die Bestandsdaten im Angebotseditor bleiben). Bestand (bestand.dashboard-stafl.de): nur die Bestandsliste
      mit Bestandsimport. Ohne Bereich (bisheriger Zugang angebot-stafl.de/admin/) bleibt alles sichtbar. */
   const BEREICH_VIEWS = {
-    'verwaltung.verwaltung': ['master', 'vkgruppen', 'kunden', 'gruppen', 'vertreter', 'importe', 'auswertung', 'mail', 'users', 'rollen', 'urlaub', 'log'],
+    'verwaltung.verwaltung': ['master', 'vkgruppen', 'kategorien', 'kunden', 'gruppen', 'vertreter', 'importe', 'auswertung', 'mail', 'users', 'rollen', 'urlaub', 'log'],
     'angebot.eingabe': ['orders', 'edit', 'einzel', 'hist', 'einkauf', 'angebote'],
     'bestand.intern': ['stock'],
     'verwaltung.import': ['importe'],
@@ -757,7 +800,7 @@
     $('#btn-publish').hidden = !may('angebot.veroeffentlichen');
     if (!may('wochenangebot.senden')) $('#send-hint').hidden = true;
     $('#side-admin').hidden = !['importe', 'auswertung', 'mail', 'users', 'rollen', 'urlaub', 'log'].some(viewAllowed);
-    $('#side-stamm').hidden = !['master', 'vkgruppen', 'angebote', 'kunden', 'gruppen', 'vertreter'].some(viewAllowed);
+    $('#side-stamm').hidden = !['master', 'vkgruppen', 'kategorien', 'angebote', 'kunden', 'gruppen', 'vertreter'].some(viewAllowed);
     $('#menu-user').innerHTML = me ? `<strong>${esc(me.name)}</strong><span>${esc(me.username)} · ${esc(me.rollenName || ROLE_LABEL[me.role] || '')}</span>` : '';
     if (!viewAllowed(currentView)) setView(VIEWS.find(viewAllowed) || 'edit');
   }
@@ -786,7 +829,63 @@
     c.items.forEach((i) => { i.altPrices = i.altPrices || []; });
     return c;
   }
-  /* Bezeichnungen/Herkunft vereinheitlichen: „frisch“ nur im Zustand, Marke „Fleischmeister“ in der Bezeichnung, Herkunft als Kürzel */
+  /* ======================= Angebotskategorien (Stammdaten der Verwaltung, Inhaber 05.11.2026) =======================
+     Sind Kategorien angelegt, bestimmen sie den Aufbau aller Angebote: Reihenfolge der Kategorien, darin der VK-Gruppen;
+     Abschnitt einer Angebotsgruppe = Kategorie ihrer VK-Gruppe (OfferCore.nachKategorien, bei jeder Änderung). Ohne
+     Kategorien bleibt die Reihenfolge von Hand wie bisher. Gepflegt werden sie unter Verwaltung → Angebotskategorien
+     (app/module/verwaltung/angebotskategorien.js), gelesen über die Aktion „angebotskategorien“. */
+  let kategorien = null, kategorienVk = [], kategorienOhne = new Set();
+  const kategorienAktiv = () => !!(kategorien && kategorien.length);
+  const vkVonArtikel = (code) => { const e = masterOf(code); return (e && e.vkGruppe) || (awDaten && awDaten.vkVon.get(S.normCode(code))) || ''; };
+  function nachKategorienOrdnen() {
+    if (ro || !model || !kategorienAktiv()) { kategorienOhne = new Set(); return false; }
+    const r = C.nachKategorien(model, kategorien, vkVonArtikel);
+    kategorienOhne = new Set(r.ohne);
+    return r.changed;
+  }
+  /* Kategorien holen und den Entwurf danach ordnen; Rückgabe: ob der Entwurf neu geordnet wurde (still: ohne Hinweis) */
+  async function kategorienLaden(opts = {}) {
+    let r;
+    try { r = await api('angebotskategorien'); } catch { return false; }   // ohne Recht oder bei Fehler: Reihenfolge bleibt von Hand
+    kategorien = Array.isArray(r.kategorien) ? r.kategorien : [];
+    kategorienVk = Array.isArray(r.vk) ? r.vk : [];
+    if (ro || !model) return false;
+    if (nachKategorienOrdnen()) {
+      if (!saveNote) saveNote = { type: 'kategorien' };
+      changed({ render: true });
+      if (!opts.still) toast('Angebot nach den Angebotskategorien geordnet (Stammdaten). Zum Übernehmen veröffentlichen.', 6000);
+      return true;
+    }
+    if (currentView === 'edit') renderGroups();
+    return false;
+  }
+  /* VK-Gruppe einer Angebotsgruppe wählen (Gruppenkopf, nur mit Angebotskategorien): Nummer · Name → Kategorie */
+  function vkOptionen(cur) {
+    const katVon = new Map();
+    for (const k of kategorien || []) for (const v of k.vk || []) katVon.set(String(v), k.name);
+    const liste = kategorienVk.slice();
+    if (cur && !liste.some((x) => x.nr === cur)) liste.push({ nr: cur, name: '' });
+    liste.sort((a, b) => a.nr.localeCompare(b.nr, 'de', { numeric: true }));
+    return '<option value="">VK-Gruppe wählen …</option>' + liste.map((x) => `<option value="${esc(x.nr)}"${x.nr === cur ? ' selected' : ''}>${esc(x.nr)}${x.name ? ' · ' + esc(x.name) : ''}${katVon.has(x.nr) ? ' → ' + esc(katVon.get(x.nr)) : ' (ohne Kategorie)'}</option>`).join('');
+  }
+  /* Vorschlag für die Stammdaten-Ansicht (Schnittstelle W.angebot): heutige Abschnitte des Angebots als Kategorien in ihrer
+     Reihenfolge, darin die VK-Gruppen der Gruppen bzw. ihrer Artikel in der Reihenfolge des Angebots; jede VK-Gruppe nur einmal. */
+  function kategorienVorschlag() {
+    if (!model || !model.groups.length) return null;
+    const out = [], byName = new Map(), vergeben = new Set();
+    for (const g of model.groups) {
+      const sec = C.clean(g.section || '');
+      if (!sec) continue;
+      let k = byName.get(sec.toLowerCase());
+      if (!k) { k = { name: sec, vk: [] }; byName.set(sec.toLowerCase(), k); out.push(k); }
+      const vks = g.vk ? [String(g.vk)] : [];
+      for (const it of model.items) if (it.groupId === g.id && it.code) { const v = String(vkVonArtikel(it.code) || ''); if (v && !vks.includes(v)) vks.push(v); }
+      for (const v of vks) if (!vergeben.has(v)) { vergeben.add(v); k.vk.push(v); }
+    }
+    return out;
+  }
+
+  /* Merkmale vereinheitlichen: Herkunft als Kürzel, unbekannter Zustand aus „frisch“ in der Bezeichnung – die Bezeichnung bleibt unverändert */
   function normalizeNames(m) {
     const gb = new Map(m.groups.map((g) => [g.id, g]));
     let n = 0;
@@ -810,6 +909,8 @@
   /* Wartungsmodus: Hinweis für alle Mitarbeiter oben im Eingabebereich. Verwaltet werden Wartung, Module und Freigaben seit
      27.10.2026 im Modul Sicherheit, Reiter System (vorher Verwaltung → System; die alte Adresse #sec leitet dorthin). */
   const SICHERHEIT_SYSTEM = (/(^|\.)dashboard-stafl\.de$/.test(location.hostname) ? 'https://sicherheit.dashboard-stafl.de/module/sicherheit/' : '../module/sicherheit/') + '#system';
+  /* Importzentrale (Artikelpreise, Stammdaten, …): auf der zentralen Anmeldung unter verwaltung…/import/, sonst Ansicht „importe“ */
+  const IMPORTZENTRALE = /(^|\.)dashboard-stafl\.de$/.test(location.hostname) ? 'https://verwaltung.dashboard-stafl.de/import/' : '?ansicht=importe';
   let wartungSt = null;
   const wartungBis = (w) => (w && w.until ? ` · voraussichtlich bis ${new Date(w.until).toLocaleString('de-DE', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' })} Uhr` : '');
   function renderWartungBanner() {
@@ -832,6 +933,10 @@
   }
 
   async function openEditor() {
+    // Erst wenn alle Skripte geladen sind: Ansichten der übrigen Skripte (z. B. Importzentrale, admin-import.js) melden sich
+    // beim Laden an – kam die Antwort des Servers schneller, fehlten sie bei Rechten und Startansicht (Befund CI 05.11.2026:
+    // …/import/ nach erstmaliger Anmeldung landete im Angebot statt in der Importzentrale)
+    await seiteGeladen();
     if (window.STAFL_THEME && me) window.STAFL_THEME.konto(me, csrf, '../api/');   // Hell/Dunkel am Konto (theme.js) – gilt auf jedem Host
     if (me && me.modulzugang === false) { zeigeKeinZugang(me.modulName || ''); return; }   // Rolle ohne Zugang zu diesem Bereich
     refreshWartung();
@@ -855,8 +960,8 @@
     if (ro) loadMaster().catch(() => {});
     if (!ro) {
       const n = normalizeNames(model);
-      if (n) { saveNote = { type: 'cleanup', count: n }; changed({ render: true }); toast(`${plural(n, 'Artikel', 'Artikel')} vereinheitlicht (ohne „frisch“, Marke Fleischmeister, Herkunft als Kürzel). Zum Übernehmen veröffentlichen.`, 7000); }
-      loadMaster().then(() => migrateMaster()).catch(() => {});
+      if (n) { saveNote = { type: 'cleanup', count: n }; changed({ render: true }); toast(`${plural(n, 'Artikel', 'Artikel')} vereinheitlicht (Herkunft als Kürzel, Zustand „frisch“). Zum Übernehmen veröffentlichen.`, 7000); }
+      loadMaster().then(() => migrateMaster()).catch(() => {}).then(() => kategorienLaden());   // VK-Gruppen der Artikel aus den Stammdaten
     }
     const start = startAnsicht();
     if (start) currentView = start;
@@ -889,10 +994,11 @@
   }
   function changed(opts = {}) {
     if (ro) return;
+    if (nachKategorienOrdnen()) opts = { ...opts, render: true };   // Aufbau nach Angebotskategorien (falls angelegt)
     werbungBereinigen();
     diff = C.diffOffers(published, model);
     if (opts.render) renderGroups(); else if (opts.row) updateRow(opts.row);
-    renderNoPrice();
+    renderMhd();
     if (prevKey !== `${model.meta.year}-${model.meta.week}`) loadPrev().then(refreshAux, () => {});
     renderChanges();
     renderMetaInfo();
@@ -902,7 +1008,7 @@
     clearTimeout(saveTimer);
     saveTimer = setTimeout(saveNow, 700);
   }
-  let saveNote = null;       // Hinweis für das Protokoll (Excel-Import, Version geladen)
+  let saveNote = null;       // Hinweis für das Protokoll (Version geladen, Stammdaten angewendet)
   async function saveNow() {
     clearTimeout(saveTimer);
     if (ro || !model) return;
@@ -1018,7 +1124,7 @@
     diff = C.diffOffers(published, model);
     renderOfferBar();
     renderGroups();
-    renderNoPrice();
+    renderMhd();
     renderChanges();
     updatePublishBtn();
     const n = tr && f ? $(`tr[data-id="${CSS.escape(tr.dataset.id)}"] [data-f="${f}"]`) : metaId ? $('#' + metaId) : null;
@@ -1063,7 +1169,7 @@
     diff = C.diffOffers(published, model);
     renderOfferBar();
     renderGroups();
-    renderNoPrice();
+    renderMhd();
     renderChanges();
     updatePublishBtn();
   }
@@ -1108,7 +1214,7 @@
     if (diff.removed.length) parts.push(`${diff.removed.length} entfernt`);
     if (vc.length) parts.push(`${vc.length} Angebotspreis${vc.length === 1 ? '' : 'e'} geändert`);
     if (vh.length) parts.push(`${vh.length} im Wochenangebot hinzugefügt/entfernt`);
-    if (sc.length) parts.push(`${sc.length} Sonderpreis${sc.length === 1 ? '' : 'e'} geändert`);
+    if (sc.length) parts.push(`${sc.length} Empfehlung${sc.length === 1 ? '' : 'en'} geändert`);
     if (wChanges().length) parts.push('Werbung geändert');
     b.title = parts.length ? 'Unveröffentlichte Änderungen: ' + parts.join(' · ') : 'Keine unveröffentlichten Änderungen';
   }
@@ -1138,7 +1244,7 @@
   function matchesFilter(it) {
     if (onlyChanges && !rowState(it)) return false;
     if (!filterQ) return true;
-    const hay = fold([it.code, it.name, it.origin, it.category, C.CONDITION_LABELS[it.condition]].join(' '));
+    const hay = fold([it.code, it.name, ...Object.values(it.namen || {}), it.origin, it.category, C.CONDITION_LABELS[it.condition]].join(' '));
     return fold(filterQ).split(/\s+/).filter(Boolean).every((t) => hay.includes(t));
   }
   function wasHTML(it, st, before = diff.before[it.id]) {
@@ -1156,10 +1262,16 @@
     const alts = altsHTML(it);
     const auch = followsStd(curOffer) ? [] : otherOffers(it);   // folgt dem Wochenangebot: alles gilt dort ohnehin gemeinsam
     const werb = werbAn(it);
+    // Kundenangebot: das Feld bearbeitet die Bezeichnung nur in diesem Angebot (leer = Basiswert aus dem Wochenangebot).
+    // Steht der Artikel nur hier (ohne eigene Bezeichnung), ist seine Bezeichnung der Basiswert selbst.
+    const eig = eigenName(it, curOffer), kd = curOffer !== OSTD && (!!eig || offersOf(it).length > 1);
+    const nameFeld = kd
+      ? `<input class="in e-nm${eig ? ' e-nm-eigen' : ''}" data-f="oname" value="${esc(eig || it.name)}" placeholder="${esc(it.name)}" aria-label="Bezeichnung in ${esc(offerShort(curOffer))}" title="${eig ? `Eigene Bezeichnung in „${esc(offerShort(curOffer))}“ – Basiswert: ${esc(it.name)}. Leeren = Basiswert.` : `Bezeichnung nur in „${esc(offerShort(curOffer))}“ ändern – die anderen Angebote bleiben unverändert.`}" maxlength="200">${eig ? `<span class="e-eigen" title="Eigene Bezeichnung in „${esc(offerShort(curOffer))}“ – Basiswert: ${esc(it.name)}">eigene</span>` : ''}`
+      : `<input class="in e-nm" data-f="name" value="${esc(it.name)}" aria-label="Bezeichnung" maxlength="200">`;
     return `<tr data-id="${esc(it.id)}" class="${st}${werb ? ' e-werb' : ''}${matchesFilter(it) ? '' : ' hidden-row'}">
       <td class="e-code"><input class="in mono" data-f="code" value="${esc(it.code || '')}" placeholder="—" aria-label="Artikelnummer" maxlength="20"></td>
-      <td class="e-name"><div class="e-nmrow"><input class="in e-nm" data-f="name" value="${esc(it.name)}" aria-label="Bezeichnung" maxlength="200">${st === 'is-new' ? '<span class="newtag">neu</span>' : ''}${werb ? `<button type="button" class="werbtag" data-act="werbung" title="Wird auf der Angebotsseite oben beworben – Werbung bearbeiten">${icon('megaphone', 'sm')}Werbung</button>` : ''}</div>
-        <div class="e-attr">${it.code ? `<span class="e-codem">${esc(it.code)}</span>` : ''}<select class="in chip" data-f="category" aria-label="Fleischart">${CAT_OPTS(it.category)}</select><input class="in chip" data-f="origin" value="${esc(it.origin || '')}" list="dl-origins" placeholder="Herkunft" aria-label="Herkunft" maxlength="60" size="${Math.max(6, Math.min(16, (it.origin || 'Herkunft').length + 1))}"><select class="in chip" data-f="condition" aria-label="Zustand">${COND_OPTS(it.condition)}</select>${auch.length ? `<span class="e-auch" title="Steht auch in: ${esc(auch.map(offerShort).join(', '))} – Bezeichnung, Merkmale und Gruppe gelten dort ebenso">auch in ${auch.length === 1 ? esc(offerShort(auch[0])) : auch.length + ' weiteren'}</span>` : ''}</div></td>
+      <td class="e-name"><div class="e-nmrow">${nameFeld}${st === 'is-new' ? '<span class="newtag">neu</span>' : ''}${werb ? `<button type="button" class="werbtag" data-act="werbung" title="Wird auf der Angebotsseite oben beworben – Werbung bearbeiten">${icon('megaphone', 'sm')}Werbung</button>` : ''}</div>
+        <div class="e-attr">${it.code ? `<span class="e-codem">${esc(it.code)}</span>` : ''}<select class="in chip" data-f="category" aria-label="Fleischart">${CAT_OPTS(it.category)}</select><input class="in chip" data-f="origin" value="${esc(it.origin || '')}" list="dl-origins" placeholder="Herkunft" aria-label="Herkunft" maxlength="60" size="${Math.max(6, Math.min(16, (it.origin || 'Herkunft').length + 1))}"><select class="in chip" data-f="condition" aria-label="Zustand">${COND_OPTS(it.condition)}</select>${auch.length ? `<span class="e-auch" title="Steht auch in: ${esc(auch.map(offerShort).join(', '))} – Merkmale und Gruppe gelten dort ebenso, die Bezeichnung lässt sich je Angebot anpassen">auch in ${auch.length === 1 ? esc(offerShort(auch[0])) : auch.length + ' weiteren'}</span>` : ''}</div></td>
       ${prevCellHTML(it)}
       ${curOffer === OSTD ? stdCellHTML(it, bad, label, was, alts) : variantCellHTML(it, st)}
       ${stockCellHTML(it)}
@@ -1168,14 +1280,15 @@
   }
   function saleBtnHTML(it) {
     const a = stockOf(it.code), hot = !it.sale && a && mhdClass(a.mhd);
-    return `<button type="button" class="vtog sale${it.sale ? ' on' : hot ? ' hot' : ''}" data-act="sale" title="${it.sale ? 'Sonderpreis bearbeiten' : hot ? `Kurzes MHD (${esc(mhdShort(a.mhd))}) – Sonderpreis festlegen` : 'Sonderpreis festlegen (solange der Vorrat reicht)'}" aria-label="Sonderpreis">${icon('tag', 'sm')}</button>`;
+    return `<button type="button" class="vtog sale${it.sale ? ' on' : hot ? ' hot' : ''}" data-act="sale" title="${it.sale ? 'Empfehlung bearbeiten' : hot ? `Kurzes MHD (${esc(mhdShort(a.mhd))}) – als Empfehlung hervorheben, optional mit Preis` : 'Als Empfehlung hervorheben (optional mit Empfehlungspreis)'}" aria-label="Empfehlung">${icon('tag', 'sm')}</button>`;
   }
   function saleTagHTML(it) {
     if (!it.sale) return '';
-    const v = C.saleFor(it, curOffer);
-    if (v == null) return '<span class="sale-tag off">kein Sonderpreis in diesem Angebot</span>';
+    const e = C.empfehlungFor(it, curOffer);
+    if (!e) return '<span class="sale-tag off">keine Empfehlung in diesem Angebot</span>';
+    if (e.preis == null) return '<button type="button" class="sale-tag mark" data-act="sale" title="Empfehlung ohne Preisänderung – Artikel wird hervorgehoben">Empfehlung</button>';
     const out = soldOut(it);
-    return `<button type="button" class="sale-tag${out ? ' out' : ''}" data-act="sale" title="${out ? 'Kein Bestand mehr – wird in allen Angeboten automatisch ausgeblendet' : 'Sonderpreis – solange der Vorrat reicht'}">${out ? 'ohne Bestand · ausgeblendet' : 'Sonderpreis ' + esc(F.euroKg(v))}</button>`;
+    return `<button type="button" class="sale-tag${out ? ' out' : ''}" data-act="sale" title="${out ? 'Kein Bestand mehr – wird in allen Angeboten automatisch ausgeblendet' : 'Empfehlung mit Preis – solange der Vorrat reicht'}">${out ? 'ohne Bestand · ausgeblendet' : 'Empfehlung ' + esc(F.euroKg(e.preis))}</button>`;
   }
   function stdCellHTML(it, bad, label, was, alts) {
     return `<td class="e-price e-var std">${label}<div class="vrow"><input class="in num${bad ? ' invalid' : ''}" data-f="price" value="${esc(bad ? invalid.get(it.id) : priceToInput(it.price))}" placeholder="ohne Preis" aria-label="Preis in Euro je kg" inputmode="decimal">${saleBtnHTML(it)}</div>${saleTagHTML(it)}${was}${alts}</td>`;
@@ -1216,8 +1329,9 @@
     const e = werbungVon(curOffer), n = $('#werb-n');
     if (!n) return;
     n.hidden = !e;
-    n.textContent = e ? String(e.artikel.length) : '';
+    n.textContent = e ? String(werbArtikelZahl(e)) + (werbBloecke(e).length > 1 ? ' · 2×' : '') : '';
     $('#btn-werbung').classList.toggle('on', !!e);
+    $('#btn-winab').hidden = !(may('angebot.winab_export') && curOffer === OSTD);   // Export für WinAB (module/angebot/winab-export.js)
   }
   function renderGroups() {
     renderWerbungBtn();
@@ -1226,29 +1340,36 @@
     if (!mem.length) {
       const leer = !model.items.length && curOffer === OSTD;
       host.innerHTML = `<div class="ed-empty">${icon('box', 'ed-empty-i')}<h3>${leer ? 'Noch keine Artikel' : 'Noch keine Artikel in diesem Angebot'}</h3>
-        <p>${leer ? 'Importieren Sie die Excel-Angebotsliste oder fügen Sie Artikel hinzu.' : 'Jedes Angebot hat seine eigene Liste. Artikel aus dem Wochenangebot oder anderen Angeboten erscheinen hier nur, wenn Sie sie hinzufügen.'}</p>
-        <div class="row-actions"><button type="button" class="btn primary" data-act="add-art">${icon('plus')}Artikel hinzufügen</button>${leer ? `<button type="button" class="btn" data-act="import">${icon('upload')}Excel importieren</button>` : `<button type="button" class="btn" data-act="copy">${icon('copy')}Aus einem anderen Angebot übernehmen …</button>`}</div></div>`;
+        <p>${leer ? 'Fügen Sie Artikel hinzu. Preise der Warenwirtschaft kommen über Verwaltung → Import („Artikelpreise“).' : 'Jedes Angebot hat seine eigene Liste. Artikel aus dem Wochenangebot oder anderen Angeboten erscheinen hier nur, wenn Sie sie hinzufügen.'}</p>
+        <div class="row-actions"><button type="button" class="btn primary" data-act="add-art">${icon('plus')}Artikel hinzufügen</button>${leer ? '' : `<button type="button" class="btn" data-act="copy">${icon('copy')}Aus einem anderen Angebot übernehmen …</button>`}</div></div>`;
       host.classList.toggle('no-stock', !stock);
       host.classList.toggle('no-prev', !prevWeek);
       auxGemerkt();
       return;
     }
     const vis = sichtbareGruppen();
+    const kat = kategorienAktiv();
     let out = '', sec = null;
     vis.forEach((g, gi) => {
       const items = mem.filter((i) => i.groupId === g.id);
       const visible = items.filter(matchesFilter);
       const hide = (filterQ || onlyChanges) && !visible.length;
-      if ((g.section || '') !== sec) { sec = g.section || ''; if (sec) out += `<h2 class="gsec">${esc(sec)}</h2>`; }
+      const ohneKat = kat && kategorienOhne.has(g.id);
+      const abschnitt = ohneKat ? '\u0000ohne' : g.section || '';
+      if (abschnitt !== sec) { sec = abschnitt; if (ohneKat) out += '<h2 class="gsec gsec-ohne">Ohne Angebotskategorie</h2>'; else if (sec) out += `<h2 class="gsec">${esc(sec)}</h2>`; }
       const vk = g.vk ? `VK-Gruppe ${esc(g.vk)}${vkLabel(g.vk) ? ' · ' + esc(vkLabel(g.vk)) : ''}` : '';
+      // mit Angebotskategorien: Abschnitt und Reihenfolge kommen aus den Stammdaten – statt „Bereich“ und ↑/↓ die VK-Gruppe der Gruppe
+      const unter = kat
+        ? `<select class="in g-sec g-vksel" data-gf="vk" aria-label="VK-Gruppe der Angebotsgruppe (bestimmt Kategorie und Reihenfolge)">${vkOptionen(g.vk || '')}</select>${ohneKat ? '<span class="g-vk g-kat-ohne">keiner Angebotskategorie zugeordnet – VK-Gruppe wählen oder unter Verwaltung → Angebotskategorien zuordnen</span>' : ''}`
+        : `<input class="in g-sec" data-gf="section" value="${esc(g.section || '')}" list="dl-sections" placeholder="Bereich (optional)" aria-label="Bereich" maxlength="200">${vk ? `<span class="g-vk">${vk}</span>` : ''}`;
       out += `<section class="gcard" data-gid="${esc(g.id)}"${hide ? ' hidden' : ''}>
         <div class="ghead">
           <div class="g-t"><input class="in g-name" data-gf="name" value="${esc(g.name)}" aria-label="Name der Angebotsgruppe" maxlength="200">
-            <div class="g-sub"><input class="in g-sec" data-gf="section" value="${esc(g.section || '')}" list="dl-sections" placeholder="Bereich (optional)" aria-label="Bereich" maxlength="200">${vk ? `<span class="g-vk">${vk}</span>` : ''}</div></div>
+            <div class="g-sub">${unter}</div></div>
           <span class="g-count">${plural(items.length, 'Artikel', 'Artikel')}</span>
           <span class="g-actions">
-            <button type="button" class="ibtn" data-act="g-up" aria-label="Gruppe nach oben"${gi === 0 ? ' disabled' : ''}>${icon('up')}</button>
-            <button type="button" class="ibtn" data-act="g-down" aria-label="Gruppe nach unten"${gi === vis.length - 1 ? ' disabled' : ''}>${icon('down')}</button>
+            ${kat ? '' : `<button type="button" class="ibtn" data-act="g-up" aria-label="Gruppe nach oben"${gi === 0 ? ' disabled' : ''}>${icon('up')}</button>
+            <button type="button" class="ibtn" data-act="g-down" aria-label="Gruppe nach unten"${gi === vis.length - 1 ? ' disabled' : ''}>${icon('down')}</button>`}
             <button type="button" class="ibtn danger" data-act="g-del" aria-label="Gruppe aus diesem Angebot entfernen" title="Alle Artikel der Gruppe aus „${esc(offerShort(curOffer))}“ entfernen">${icon('trash')}</button>
           </span>
         </div>
@@ -1300,11 +1421,17 @@
     else if (f === 'name') {
       const typed = C.clean(v);
       if (!typed) { el.value = it.name; toast('Die Bezeichnung darf nicht leer sein.'); return false; }
-      const n = C.stripFrisch(typed);
-      if (n !== typed) { el.value = n; if (it.condition !== 'frisch-gefroren') it.condition = 'frisch'; toast('„frisch“ steht im Zustand, nicht in der Bezeichnung.'); }
+      const n = typed;   // Bezeichnung ohne Einschränkung, auch mit „frisch“ (Inhaber 05.11.2026) – der Zustand bleibt eigenes Feld
+      el.value = n;
+      if (it.condition === 'unbekannt' && C.stripFrisch(n) !== n) it.condition = 'frisch';
       it.name = n;
       delete it.nameRaw;
       if (autoAttr.has(it.id)) { const g = gById(it.groupId); Object.assign(it, C.suggestAttributes(n, g ? g.name : '', g ? g.section : '')); }
+    } else if (f === 'oname') {   // eigene Bezeichnung in einem Kundenangebot (Zeile: das gewählte, Artikel-Dialog: data-on)
+      const oid = el.dataset.on || curOffer;
+      if (oid === OSTD || !offerDef(oid)) return false;
+      setzeName(it, oid, v);
+      el.value = el.dataset.on ? eigenName(it, oid) : nameIn(it, oid);   // Zeile zeigt leer den Basiswert, der Dialog bleibt leer
     } else if (f === 'category') it.category = v;
     else if (f === 'condition') it.condition = v;
     else if (f === 'origin') it.origin = C.clean(v) || null;
@@ -1360,8 +1487,8 @@
       const v = C.clean(el.value);
       if (el.dataset.gf === 'name' && !v) { el.value = g.name; toast('Die Gruppe braucht einen Namen.'); return; }
       pushUndo();
-      g[el.dataset.gf] = v;
-      changed({ render: el.dataset.gf === 'section' });
+      if (el.dataset.gf === 'vk') { if (v) g.vk = v; else delete g.vk; } else g[el.dataset.gf] = v;
+      changed({ render: el.dataset.gf === 'section' || el.dataset.gf === 'vk' });
       renderMetaInfo();
     }
   });
@@ -1412,7 +1539,6 @@
     if (ro) return;
     if (act === 'sale' && tr) { openSale(tr.dataset.id); return; }
     if (act === 'remove' && tr) { ausAngebot(tr.dataset.id); return; }
-    if (act === 'import') { pickFile(); return; }
     if (act === 'add-art') { openArtikelwahl(); return; }
     if (act === 'copy') { openCopy(); return; }
     if (!g) return;
@@ -1453,7 +1579,10 @@
     $(id).addEventListener('change', (e) => {
       pushUndo();
       if (f === 'notice') model.meta.notice = C.clean(e.target.value);
-      else { const n = parseInt(e.target.value, 10); model.meta[f] = Number.isInteger(n) ? n : null; }
+      else {
+        const n = parseInt(e.target.value, 10); model.meta[f] = Number.isInteger(n) ? n : null;
+        if (model.meta.title) model.meta.title = C.titelMitKw(model.meta);   // Titel aus dem Import nennt sonst die alte KW
+      }
       changed();
     });
   }
@@ -1462,7 +1591,7 @@
   let qTimer;
   $('#ed-q').addEventListener('input', (e) => { clearTimeout(qTimer); qTimer = setTimeout(() => { filterQ = e.target.value.trim(); filterAnwenden(); }, 120); });
   $('#only-changes').addEventListener('change', (e) => { onlyChanges = e.target.checked; filterAnwenden(); });
-  $('#ed-q').addEventListener('input', () => setTimeout(renderNoPrice, 150));
+  $('#ed-q').addEventListener('input', () => setTimeout(renderMhd, 150));
 
   /* ======================= Artikel-Dialog ======================= */
   const dlgItem = $('#dlg-item');
@@ -1476,13 +1605,18 @@
     const sameGroup = model.items.filter((i) => i.groupId === it.groupId && inOffer(i, curOffer));
     const pos = sameGroup.indexOf(it);
     const inStd = inOffer(it, OSTD), drin = offersOf(it), eigen = explizit(it);
+    const kundIn = drin.filter((o) => o !== OSTD);   // Kundenangebote mit diesem Artikel: dort eigene Bezeichnung möglich
     $('#item-body').innerHTML = `
       <div class="dlg-head"><div><h2 id="it-title">Artikel bearbeiten</h2><p>${it.cell ? `Aus Excel-Zelle ${esc(it.cell)} · ` : ''}Änderungen werden sofort in den Entwurf übernommen.</p></div>
         <button class="btn icon ghost" type="button" data-close aria-label="Schließen">${icon('x')}</button></div>
       <div class="dlg-body form-grid two">
         <label class="fld"><span>Artikelnummer</span><input name="code" value="${esc(it.code || '')}" maxlength="20" autocomplete="off"></label>
         <label class="fld"><span>Angebotsgruppe</span><select name="groupId">${groups}</select></label>
-        <label class="fld span2"><span>Bezeichnung</span><input name="name" value="${esc(it.name)}" maxlength="200" required autocomplete="off"></label>
+        <label class="fld span2"><span>${kundIn.length ? 'Bezeichnung (Basiswert)' : 'Bezeichnung'}</span><input name="name" value="${esc(it.name)}" maxlength="200" required autocomplete="off"></label>
+        ${kundIn.length ? `<div class="fld span2 it-namen"><span>Bezeichnung je Angebot</span>
+          <p class="hint">Gilt nur im jeweiligen Angebot – leer = Basiswert (Wochenangebot).</p>
+          ${kundIn.map((o) => `<label class="it-nrow"><span>${esc(offerShort(o))}</span><input name="oname" data-on="${esc(o)}" value="${esc(eigenName(it, o))}" placeholder="${esc(it.name)}" maxlength="200" autocomplete="off" aria-label="Bezeichnung in ${esc(offerShort(o))}"></label>`).join('')}
+        </div>` : ''}
         <label class="fld"><span>Fleischart</span><select name="category">${CAT_OPTS(it.category)}</select></label>
         <label class="fld"><span>Zustand</span><select name="condition">${COND_OPTS(it.condition)}</select></label>
         <label class="fld"><span>Herkunft</span><input name="origin" value="${esc(it.origin || '')}" list="dl-origins" placeholder="nicht angegeben" maxlength="60"></label>
@@ -1492,7 +1626,7 @@
           <div class="altlist" id="altlist">${(it.altPrices || []).map((p, k) => altRow(p, k)).join('')}</div>
           <div><button type="button" class="btn sm ghost" data-ia="alt-add">${icon('plus', 'sm')}Zusatzpreis</button></div>
         </div>` : ''}
-        <p class="hint span2 it-in" id="item-in">${icon('list', 'sm')} Enthalten in: <strong>${esc(drin.map(offerShort).join(', ') || 'keinem Angebot')}</strong>${drin.length > 1 ? ' – Bezeichnung, Merkmale und Gruppe gelten in allen diesen Angeboten.' : ''}</p>
+        <p class="hint span2 it-in" id="item-in">${icon('list', 'sm')} Enthalten in: <strong>${esc(drin.map(offerShort).join(', ') || 'keinem Angebot')}</strong>${drin.length > 1 ? ' – Merkmale und Gruppe gelten in allen diesen Angeboten, die Bezeichnung lässt sich je Angebot anpassen.' : ''}</p>
         <div class="fld span2" id="item-stock"></div>
         <div class="fld span2" id="item-hist"></div>
         <p class="form-err span2" id="item-err" role="alert"></p>
@@ -1502,7 +1636,7 @@
           <button type="button" class="btn sm ghost" data-ia="up"${pos <= 0 ? ' disabled' : ''}>${icon('up', 'sm')}Nach oben</button>
           <button type="button" class="btn sm ghost" data-ia="down"${pos >= sameGroup.length - 1 ? ' disabled' : ''}>${icon('down', 'sm')}Nach unten</button>
           <button type="button" class="btn sm ghost" data-ia="dup">${icon('copy', 'sm')}Duplizieren</button>
-          ${it.code ? `<button type="button" class="btn sm ghost" data-ia="to-master" title="Bezeichnung, Fleischart, Herkunft und Zustand als Stammdaten für ${esc(it.code)} speichern">${icon('check', 'sm')}Als Stammdaten speichern</button>` : ''}
+          ${it.code ? `<button type="button" class="btn sm ghost" data-ia="to-master" title="Bezeichnung (auch je Angebot), Fleischart, Herkunft und Zustand als Stammdaten für ${esc(it.code)} speichern">${icon('check', 'sm')}Als Stammdaten speichern</button>` : ''}
           ${inOffer(it, curOffer) && drin.length > 1 ? `<button type="button" class="btn sm ghost" data-ia="remove" style="color:var(--accent)" title="Nur aus diesem Angebot entfernen – andere Angebote bleiben unverändert">${icon('x', 'sm')}Aus „${esc(offerShort(curOffer))}“ entfernen</button>` : ''}
           <button type="button" class="btn sm ghost" data-ia="del" style="color:var(--accent)" title="${eigen.length > 1 ? 'Aus allen Angeboten löschen' : 'Artikel löschen'}">${icon('trash', 'sm')}${eigen.length > 1 ? 'In allen Angeboten löschen' : 'Löschen'}</button>
         </span>
@@ -1564,6 +1698,7 @@
         dlgItem.querySelector('[name="condition"]').value = it.condition;
         dlgItem.querySelector('[name="origin"]').value = it.origin || '';
       }
+      if (el.name === 'name') for (const o of dlgItem.querySelectorAll('[name="oname"]')) { o.placeholder = it.name; o.value = eigenName(it, o.dataset.on); }   // Basiswert geändert
     }
     if (JSON.stringify(model) !== snap) { undoStack.push(snap); $('#btn-undo').disabled = false; }
     changed({ render: true });
@@ -1633,149 +1768,16 @@
   });
   $('#item-body').addEventListener('submit', (e) => { e.preventDefault(); dlgItem.close(); });
 
-  /* ======================= Excel-Import ======================= */
-  const dlgImport = $('#dlg-import');
-  let pending = null;
-  const fileInput = $('#file-input');
-  function pickFile() { if (!ro) fileInput.click(); }
-  fileInput.addEventListener('change', () => { const f = fileInput.files[0]; fileInput.value = ''; if (f) importFile(f); });
+  /* Datei auf die Seite gezogen: in der Bestandsliste der Bestandsimport; sonst nichts (der Browser soll die Datei nicht
+     öffnen und die Seite verlassen). Der frühere Excel-Import des Wochenangebots ist entfallen (Auftrag des Inhabers
+     04.11.2026) – Artikelpreise kommen über Verwaltung → Import. */
   window.addEventListener('dragover', (e) => { if ([...(e.dataTransfer?.types || [])].includes('Files')) e.preventDefault(); });
   window.addEventListener('drop', (e) => {
     const f = e.dataTransfer?.files?.[0];
     if (!f || !model) return;
     e.preventDefault();
-    if (currentView === 'edit' && !ro) importFile(f);
-    else if (currentView === 'stock' && !roStock) stockImportFile(f);
+    if (currentView === 'stock' && !roStock) stockImportFile(f);
   });
-
-  const impHead = (t, s) => `<div class="dlg-head"><div><h2 id="imp-title">${t}</h2>${s ? `<p>${s}</p>` : ''}</div><button type="button" class="btn icon ghost" data-close aria-label="Schließen">${icon('x')}</button></div>`;
-  async function importFile(file) {
-    if (!dlgImport.open) dlgImport.showModal();
-    const body = $('#import-body');
-    if (!/\.(xlsx|xlsm)$/i.test(file.name)) { importError(`„${file.name}“ ist keine .xlsx-Datei. Ältere .xls-Dateien bitte in Excel als „Excel-Arbeitsmappe (.xlsx)“ speichern.`); return; }
-    if (file.size > 25 * 1024 * 1024) { importError('Die Datei ist größer als 25 MB.'); return; }
-    body.innerHTML = `${impHead('Excel-Import', esc(file.name))}<div class="dlg-body"><div class="loading"><div class="spinner"></div>Datei wird gelesen …</div></div>`;
-    try {
-      const parsed = C.parseOfferWorkbook(await C.xlsxReadWorkbook(await file.arrayBuffer()), file.name);
-      if (!parsed.items.length) throw new Error('In der Datei wurden keine Artikel gefunden.');
-      pending = parsed;
-      renderImport(parsed);
-    } catch (e) { importError(e.message || String(e)); }
-  }
-  function importError(msg) {
-    $('#import-body').innerHTML = `${impHead('Import nicht möglich')}<div class="dlg-body"><div class="err-box">${esc(msg)}</div><p class="hint">Der Entwurf bleibt unverändert.</p></div>
-      <div class="dlg-foot"><button type="button" class="btn" data-close>Schließen</button><button type="button" class="btn primary" data-ia="again">Andere Datei wählen</button></div>`;
-  }
-  function issuesHTML(issues) {
-    if (!issues.length) return '<p class="notice">Alle Zeilen wurden eindeutig erkannt.</p>';
-    const s = issues.slice().sort((a, b) => (a.level === 'warn' ? 0 : 1) - (b.level === 'warn' ? 0 : 1));
-    return `<ul class="issues">${s.map((x) => `<li class="${x.level}"><span class="lvl">${x.level === 'warn' ? 'Prüfen' : 'Info'}</span><span>${esc(x.message)}</span>${x.cell ? `<span class="cell">Zelle ${esc(x.cell)}</span>` : ''}</li>`).join('')}</ul>`;
-  }
-  function renderImport(d) {
-    const ref = published || model;
-    const df = C.diffOffers(ref, d);
-    const nVal = d.items.filter((i) => i.price.status === 'value').length;
-    const warn = d.issues.filter((x) => x.level === 'warn').length;
-    const draftDirty = published && C.diffOffers(published, model);
-    const hasDraftEdits = draftDirty && (draftDirty.added.length + draftDirty.removed.length + draftDirty.priceChanged.length + draftDirty.changed.length) > 0;
-    $('#import-body').innerHTML = `${impHead(d.meta.week ? `KW ${esc(d.meta.week)} / ${esc(d.meta.year ?? '?')} erkannt` : 'Datei gelesen', `${esc(d.meta.source)} · Blatt „${esc(d.meta.sheetName)}“`)}
-      <div class="dlg-body">
-        <div class="imp-sum">
-          <div><span>Positionen</span><strong>${fmtInt.format(d.items.length)}</strong></div>
-          <div><span>Gruppen</span><strong>${fmtInt.format(d.groups.length)}</strong></div>
-          <div><span>Mit Preis</span><strong>${fmtInt.format(nVal)}</strong></div>
-        </div>
-        <p class="diff">Gegenüber ${published ? `der veröffentlichten KW ${esc(published.meta.week)}` : 'dem Entwurf'}: <span><b>${df.added.length}</b> neu</span><span><b>${df.removed.length}</b> entfallen</span><span><b>${df.priceChanged.length}</b> Preisänderungen</span></p>
-        ${hasDraftEdits ? '<p class="err-box" style="margin:0 0 14px">Der aktuelle Entwurf enthält unveröffentlichte manuelle Änderungen. Der Import ersetzt das Wochenangebot vollständig (mit „Rückgängig“ wiederherstellbar).</p>' : ''}
-        ${kundenArtikel() ? `<p class="notice">${icon('info', 'sm')} Kundenangebote bleiben erhalten: ${plural(kundenArtikel(), 'Artikel mit eigenem Preis', 'Artikel mit eigenen Preisen')} in Kundenangeboten ${kundenArtikel() === 1 ? 'wird' : 'werden'} übernommen.</p>` : ''}
-        <h3 class="d-h"><span>Hinweise zur Übernahme${warn ? ` · ${warn} zu prüfen` : ''}</span></h3>
-        ${issuesHTML(d.issues)}
-      </div>
-      <div class="dlg-foot"><button type="button" class="btn" data-ia="again">Andere Datei</button><span class="spacer"></span><button type="button" class="btn" data-close>Abbrechen</button><button type="button" class="btn primary" data-ia="apply">${icon('check')}Als Entwurf übernehmen</button></div>`;
-  }
-  dlgImport.addEventListener('click', (e) => {
-    if (e.target.closest('[data-close]')) { dlgImport.close(); return; }
-    const a = e.target.closest('[data-ia]')?.dataset.ia;
-    if (a === 'again') pickFile();
-    if (a === 'apply' && pending) {
-      pushUndo();
-      const d = pending;
-      pending = null;
-      const alt = model;
-      model = { meta: { week: d.meta.week, year: d.meta.year, notice: d.meta.notice || model.meta.notice || '', title: d.meta.title, source: d.meta.source, sheetName: d.meta.sheetName }, sections: d.sections, groups: d.groups, items: d.items };
-      saveNote = { type: 'import', file: d.meta.source || '' };
-      normalizeNames(model);
-      const nm = applyMasterTo(model);
-      importKundenangebote(alt, model);
-      werbungUebernehmen(alt, model);
-      invalid.clear(); autoAttr.clear();
-      dlgImport.close();
-      renderMeta();
-      changed({ render: true });
-      toast(`Import übernommen: ${plural(d.items.length, 'Position', 'Positionen')}${nm ? `, ${plural(nm, 'Artikel', 'Artikel')} nach Stammdaten angepasst` : ''}. Prüfen, ggf. anpassen, dann veröffentlichen.`, 6000);
-    }
-  });
-
-  /* Excel-Import ersetzt nur das Wochenangebot. Eigene Preise der Kundenangebote (und dort ausgeblendete Artikel) gehen auf
-     den Artikel mit derselben Artikelnummer über; Artikel, die nur in Kundenangeboten stehen, bleiben dort erhalten. */
-  const kundenEintraege = (it) => Object.entries(it.variants || {}).filter(([k]) => k !== OSTD && knownOffer(k));
-  const kundenArtikel = () => (model ? model.items.filter((it) => kundenEintraege(it).some(([, v]) => v.status !== 'hidden')).length : 0);
-  /* Werbung geht beim Excel-Import auf den Artikel mit derselben Artikelnummer über (ohne Nummer: gleiche Bezeichnung) */
-  function werbungUebernehmen(alt, neu) {
-    const w = alt.meta && alt.meta.werbung;
-    if (!w) return;
-    const byId = new Map(alt.items.map((i) => [i.id, i])), out = {};
-    for (const [oid, e] of Object.entries(w)) {
-      const vergeben = new Set(), artikel = [];
-      for (const a of e.artikel || []) {
-        const o = byId.get(a.id);
-        if (!o) continue;
-        const z = neu.items.find((x) => !vergeben.has(x.id) && (o.code ? x.code && mKey(x.code) === mKey(o.code) : fold(x.name) === fold(o.name)) && inOffer(x, oid));
-        if (z) { vergeben.add(z.id); artikel.push({ ...clone(a), id: z.id }); }
-      }
-      if (artikel.length) out[oid] = { ...clone(e), artikel };
-    }
-    if (Object.keys(out).length) neu.meta.werbung = out;
-  }
-  function importKundenangebote(alt, neu) {
-    const byCode = draftByCode(neu), vergeben = new Set();
-    const gIds = new Set(neu.groups.map((g) => g.id)), iIds = new Set(neu.items.map((i) => i.id));
-    const gName = new Map(neu.groups.map((g) => [fold(g.name), g])), grpFuer = new Map();
-    const gruppeFuer = (og) => {
-      if (grpFuer.has(og.id)) return grpFuer.get(og.id);
-      let g = gName.get(fold(og.name));
-      if (!g) { g = { ...clone(og), id: gIds.has(og.id) ? uid('g') : og.id }; neu.groups.push(g); gIds.add(g.id); gName.set(fold(g.name), g); }
-      grpFuer.set(og.id, g);
-      return g;
-    };
-    let n = 0;
-    for (const it of alt.items) {
-      const kv = kundenEintraege(it);
-      if (!kv.length) continue;
-      const ziel = it.code && (byCode.get(mKey(it.code)) || []).find((x) => !vergeben.has(x.id));
-      if (ziel) {   // gleiche Artikelnummer im Import: Kundenpreise wandern mit
-        ziel.variants = { ...(ziel.variants || {}), ...Object.fromEntries(kv) };
-        vergeben.add(ziel.id); n++;
-        continue;
-      }
-      if (!kv.some(([, v]) => v.status !== 'hidden')) continue;   // nur Ausblendungen – entfällt mit dem alten Wochenangebot
-      const og = alt.groups.find((x) => x.id === it.groupId);
-      if (!og) continue;
-      const keep = clone(it);
-      delete keep.cell;
-      if (iIds.has(keep.id)) keep.id = uid('n');
-      iIds.add(keep.id);
-      keep.groupId = gruppeFuer(og).id;
-      keep.variants = Object.fromEntries(kv);
-      nurIn(keep, '');   // nicht im neuen Wochenangebot und nicht in Angeboten, die ihm folgen (außer eigene Einträge)
-      for (const [k, v] of kv) keep.variants[k] = v;
-      neu.items.push(keep); n++;
-    }
-    const secs = [];
-    for (const g of neu.groups) if (g.section && !secs.includes(g.section)) secs.push(g.section);
-    neu.sections = secs;
-    return n;
-  }
 
   /* ======================= Angebote (Standard + Kundenangebote) ======================= */
   async function loadOffers() {
@@ -1815,6 +1817,17 @@
     if (site) site.href = angebotsseite(curOffer !== OSTD ? '?angebot=' + encodeURIComponent(curOffer) : '');
     renderOfferHead();
   }
+  /* Angebotsauswahl ab 901 px unter den Bereichen der Seitenleiste (Wunsch des Inhabers, 03.11.2026), schmal wie bisher
+     als Auswahl über dem Angebot. Nur das Element wandert – Ereignisse und Inhalt bleiben dieselben. */
+  const obLinks = matchMedia('(min-width: 901px)');
+  function offerBarPlatzieren() {
+    const ob = $('#offer-bar'), nav = $('.side-nav'), lay = $('.ed-layout');
+    if (!ob || !nav || !lay) return;
+    if (obLinks.matches) { if (ob.parentElement !== nav) nav.append(ob); } else if (ob.parentElement !== lay) lay.prepend(ob);
+    document.body.classList.toggle('ob-links', obLinks.matches);
+  }
+  obLinks.addEventListener('change', offerBarPlatzieren);
+  offerBarPlatzieren();
   function obFilter() {
     const toks = fold(obQ).split(/\s+/).filter(Boolean);
     for (const b of $$('#offer-bar .ob-o')) b.hidden = toks.length > 0 && !toks.every((t) => b.dataset.hay.includes(t));
@@ -1844,7 +1857,7 @@
     store.set('angebot', id);
     renderOfferBar();
     renderGroups();
-    renderNoPrice();
+    renderMhd();
   }
   async function obAktion(b) {
     const a = b.dataset.ob;
@@ -1882,7 +1895,7 @@
       offers = r.offers; offersRev = r.rev; stdPublic = r.stdPublic !== false;
       ofReset();
       diff = C.diffOffers(published, model);
-      renderOfferBar(); renderGroups(); renderNoPrice(); renderChanges(); updatePublishBtn();
+      renderOfferBar(); renderGroups(); renderMhd(); renderChanges(); updatePublishBtn();
       toast(`„${offerShort(oid)}“ hat jetzt eine eigene Artikelliste.`, 5000);
     } catch (ex) { toast(ex.message, 7000); }
   }
@@ -1943,10 +1956,10 @@
           <td class="act">${admin || o.isNew ? `<button type="button" class="ibtn danger" data-ofa="del" aria-label="Angebot ${esc(o.name)} löschen" title="${o.isNew ? 'Entfernen' : 'Löschen'}">${icon('trash')}</button>` : ''}</td></tr>`).join('')}
       </tbody></table></div>
       ${edit && offerEdit.some((o) => o.fallback !== 'hidden') ? `<div class="notice of-folgt">${icon('info', 'sm')}<span>${plural(offerEdit.filter((o) => o.fallback !== 'hidden').length, 'Angebot folgt', 'Angebote folgen')} noch dem Wochenangebot. Mit eigener Artikelliste enthält ein Angebot nur noch Artikel mit eigenem Preis – Angebote ohne eigene Preise starten leer.</span><button type="button" class="btn sm" data-ofa="alle-eigen">Alle auf eigene Artikelliste umstellen</button></div>` : ''}
-      ${edit ? `<div class="of-actions"><button type="button" class="btn" data-ofa="add">${icon('plus')}Angebot hinzufügen</button>${ro ? '' : `<button type="button" class="btn" data-ofa="preise" title="Artikelpreise der Warenwirtschaft (CSV) in den Entwurf übernehmen: ohne Kundengruppe = Wochenangebot, mit Kundengruppe = Angebot der Gruppe">${icon('upload')}Preise importieren</button><input type="file" id="of-file" accept=".csv,text/csv,text/plain" hidden>`}<span class="sp"></span>
+      ${edit ? `<div class="of-actions"><button type="button" class="btn" data-ofa="add">${icon('plus')}Angebot hinzufügen</button><span class="sp"></span>
         <button type="button" class="btn" data-ofa="reset"${ofDirty ? '' : ' disabled'}>Verwerfen</button><button type="button" class="btn primary" data-ofa="save"${ofDirty ? '' : ' disabled'}>${icon('check')}Speichern</button></div>` : ''}
       <p class="form-err" id="of-err" role="alert">${esc(err)}</p>
-      <p class="hint">${ofKunden ? 'Kunden = direkt freigeschaltet oder über eine zugeordnete Kundengruppe (Stand der Eingabe, vor dem Speichern).' : ''} Kundengruppen pflegen: Stammdaten → Kundengruppen; Gruppe eines Kunden: Stammdaten → Kunden.</p>`;
+      <p class="hint">${ofKunden ? 'Kunden = direkt freigeschaltet oder über eine zugeordnete Kundengruppe (Stand der Eingabe, vor dem Speichern).' : ''} Kundengruppen pflegen: Stammdaten → Kundengruppen; Gruppe eines Kunden: Stammdaten → Kunden.${ro ? '' : ` Artikelpreise der Warenwirtschaft importieren: <a href="${esc(IMPORTZENTRALE)}" id="of-preise-link">Verwaltung → Import</a>.`}</p>`;
   }
   /* Artikel eines Angebots mit der (noch nicht gespeicherten) Regel aus der Eingabe */
   function ofArtikel(id, fallback) {
@@ -2003,7 +2016,6 @@
     if (tr && e.target.dataset.of) { offerEdit[+tr.dataset.oi][e.target.dataset.of] = e.target.value; ofMark(); }
   });
   $('#view-angebote').addEventListener('change', (e) => {
-    if (e.target.id === 'of-file' && e.target.files[0]) { const f = e.target.files[0]; e.target.value = ''; ofPreiseDatei(f); return; }
     if (e.target.matches('[data-ofa-pub]')) { offerEdit.stdPublic = e.target.checked; ofMark(); renderOffersBody(); return; }
     const tr = e.target.closest('[data-oi]');
     if (tr && e.target.dataset.of) { offerEdit[+tr.dataset.oi][e.target.dataset.of] = e.target.value; ofMark(); }
@@ -2013,7 +2025,6 @@
     if (!b) return;
     const a = b.dataset.ofa;
     if (a === 'gruppen') { openOfGruppen(b.dataset.ofk); return; }
-    if (a === 'preise') { $('#of-file').click(); return; }
     if (a === 'reset') { ofReset(); renderOffersBody(); return; }
     if (a === 'alle-eigen') {
       for (const o of offerEdit) o.fallback = 'hidden';
@@ -2059,6 +2070,7 @@
         let dropped = false;
         for (const it of model.items) {
           if (it.variants) for (const k of Object.keys(it.variants)) if (!gone.has(k)) { delete it.variants[k]; dropped = true; }
+          if (it.namen) { for (const k of Object.keys(it.namen)) if (!gone.has(k)) { delete it.namen[k]; dropped = true; } if (!Object.keys(it.namen).length) delete it.namen; }
           if (it.sale && it.sale.offers) { for (const k of Object.keys(it.sale.offers)) if (!gone.has(k)) { delete it.sale.offers[k]; dropped = true; } if (!Object.keys(it.sale.offers).length) delete it.sale.offers; }
         }
         if (!knownOffer(curOffer)) curOffer = OSTD;
@@ -2072,12 +2084,10 @@
     }
   });
 
-  /* Preise aus der Warenwirtschaft importieren (CSV „Artikelpreise“: Preis-Art; Kundengruppe; Artikel; Preis).
-     Zeilen ohne Kundengruppe = Wochenangebot (Preis im Entwurf), mit Kundengruppe = Preis im Angebot dieser Gruppe.
-     Eingetragen wird in den Entwurf (zum Übernehmen veröffentlichen); Artikel, die nicht im Angebot stehen, und Preise,
-     die nicht in der Datei stehen, bleiben unverändert. Kundengruppen ohne Angebot: auf Wunsch je ein Angebot anlegen. */
-  const dlgOfP = $('#dlg-of-preise');
-  let ofImp = null;
+  /* Artikelpreise der Warenwirtschaft (CSV „Artikelpreise“: Preis-Art; Kundengruppe; Artikel; Preis) – Leser der Importart
+     „angebot_preise“ der Importzentrale (Verwaltung → Import, IMPORT_LESER unten). Zuordnung zu den Angeboten, Vorschau und
+     Übernahme in den Entwurf macht der Server (module/angebot/import.php). Zeilen ohne Preis werden übersprungen,
+     unlesbare Preise sind Fehlerzeilen. */
   function preiseAusCsv(buf) {
     const rows = window.WA.csvZeilen(window.WA.csvText(buf));
     if (!rows.length) throw new Error('Die Datei ist leer.');
@@ -2085,127 +2095,19 @@
     const sp = (...n) => kopf.findIndex((k) => n.includes(k));
     const iArt = sp('artikel', 'artikelnummer', 'nummer'), iGr = sp('kundengruppe', 'gruppe'), iPr = sp('preis', 'vk', 'vkpreis');
     if (iArt < 0 || iPr < 0 || iGr < 0) throw new Error('Spalten „Kundengruppe“, „Artikel“ und „Preis“ nicht gefunden. Erwartet wird die Artikelpreis-Liste der Warenwirtschaft (Preis-Art; Kundengruppe; Artikel; Preis).');
-    const out = [];
-    let leer = 0, fehler = 0;
-    for (const r of rows.slice(1)) {
+    const preise = [], fehler = [];
+    let leer = 0;
+    rows.slice(1).forEach((r, i) => {
       const code = (r[iArt] || '').trim(), gruppe = (r[iGr] || '').trim(), roh = (r[iPr] || '').trim();
-      if (!code) continue;
-      if (!roh) { leer++; continue; }
+      if (!code) return;
+      if (!roh) { leer++; return; }
       const p = C.parsePrice(roh);
-      if (p.status !== 'value') { fehler++; continue; }
-      out.push({ code, gruppe, value: p.value });
-    }
-    if (!out.length) throw new Error('Keine Preise in der Datei gefunden.');
-    return { rows: out, leer, fehler };
+      if (p.status !== 'value') { fehler.push({ zeile: i + 2, schluessel: code, text: `Preis „${roh}“ nicht lesbar – nicht übernommen` }); return; }
+      preise.push({ zeile: i + 2, code, gruppe, preis: p.value });
+    });
+    if (!preise.length) throw new Error('Keine Preise in der Datei gefunden.');
+    return { preise, leer, fehler };
   }
-  function ofPreisPlan() {
-    const anlegen = ofImp.anlegen;
-    const bei = new Map();
-    for (const o of offers) for (const g of (o.gruppen || [])) if (!bei.has(g)) bei.set(g, o.id);
-    const items = new Map();
-    for (const it of model.items) if (it.code) { const k = mKey(it.code); if (!items.has(k)) items.set(k, []); items.get(k).push(it); }
-    const ziele = new Map(), fehltGruppe = new Map(), nichtIm = new Set(), gesetzt = new Map();
-    let konflikt = 0;
-    for (const r of ofImp.data.rows) {
-      let ziel = OSTD;
-      if (r.gruppe) {
-        ziel = bei.get(r.gruppe) || (anlegen ? 'neu:' + r.gruppe : null);
-        if (!bei.has(r.gruppe)) fehltGruppe.set(r.gruppe, (fehltGruppe.get(r.gruppe) || 0) + 1);
-        if (!ziel) continue;
-      }
-      const list = items.get(mKey(r.code));
-      if (!list) { nichtIm.add(r.code); continue; }
-      const key = ziel + '|' + mKey(r.code);
-      if (gesetzt.has(key)) { if (gesetzt.get(key) !== r.value) konflikt++; continue; }
-      gesetzt.set(key, r.value);
-      const z = ziele.get(ziel) || { preise: 0, geaendert: 0, neu: 0, aend: [] };
-      for (const it of list) {
-        const alt = ziel === OSTD ? it.price : ziel.startsWith('neu:') ? null : (it.variants || {})[ziel];
-        if (alt && alt.status === 'value' && Math.abs(alt.value - r.value) < 0.00005) continue;
-        if (alt && alt.status === 'value') z.geaendert++; else z.neu++;
-        z.aend.push({ it, value: r.value });
-      }
-      z.preise++;
-      ziele.set(ziel, z);
-    }
-    return { ziele, fehltGruppe, nichtIm, konflikt };
-  }
-  async function ofPreiseDatei(file) {
-    if (ro) { toast('Preise importieren dürfen nur Nutzer, die das Angebot bearbeiten dürfen.'); return; }
-    if (ofDirty) { toast('Bitte zuerst die Änderungen an den Angeboten speichern oder verwerfen.', 6000); return; }
-    let data;
-    try { data = preiseAusCsv(await file.arrayBuffer()); } catch (ex) { toast(ex.message, 8000); return; }
-    ofImp = { file, data, anlegen: true };
-    renderOfPreise();
-    dlgOfP.showModal();
-  }
-  function renderOfPreise(err = '') {
-    const plan = ofImp.plan = ofPreisPlan();
-    const name = (z) => (z === OSTD ? 'Wochenangebot' : z.startsWith('neu:') ? `Wochenangebot ${kgName(z.slice(4)) || z.slice(4)} (neu)` : offerName(z));
-    const gruppenVon = (z) => (z === OSTD ? 'ohne Kundengruppe' : z.startsWith('neu:') ? z.slice(4) : (offers.find((o) => o.id === z) || {}).gruppen?.join(', ') || '');
-    const ziele = [...plan.ziele.entries()].sort((a, b) => (a[0] === OSTD ? -1 : b[0] === OSTD ? 1 : name(a[0]).localeCompare(name(b[0]), 'de')));
-    const summe = ziele.reduce((n, [, z]) => n + z.aend.length, 0);
-    const fehlt = [...plan.fehltGruppe.entries()];
-    const platz = OFFER_MAX_UI - offers.length;
-    $('#of-preise-body').innerHTML = `
-      <div class="dlg-head"><div><h2 id="ofp-title">Preise importieren</h2><p>${esc(ofImp.file.name)} · ${plural(ofImp.data.rows.length, 'Preis', 'Preise')}</p></div>
-        <button class="btn icon ghost" type="button" data-close aria-label="Schließen">${icon('x')}</button></div>
-      <div class="dlg-body">
-        ${fehlt.length ? `<div class="ofp-fehlt"><p class="hint st-warn">${plural(fehlt.length, 'Kundengruppe hat', 'Kundengruppen haben')} noch kein Angebot: ${esc(fehlt.slice(0, 12).map(([nr, n]) => `${nr}${kgName(nr) ? ' ' + kgName(nr) : ''} (${n})`).join(', '))}${fehlt.length > 12 ? ' …' : ''}</p>
-          <label class="check"><input type="checkbox" data-ofp="anlegen"${ofImp.anlegen ? ' checked' : ''}${fehlt.length > platz ? ' disabled' : ''}> Für ${fehlt.length === 1 ? 'diese Kundengruppe ein Angebot' : `diese ${fehlt.length} Kundengruppen je ein Angebot`} anlegen <small class="muted">(„Wochenangebot &lt;Gruppe&gt;“ mit eigener Artikelliste: die Artikel mit Preis aus der Datei)</small></label>
-          ${fehlt.length > platz ? `<p class="hint">Es sind höchstens ${OFFER_MAX_UI} Angebote möglich.</p>` : ''}</div>` : ''}
-        <table class="etab ofptab"><thead><tr><th>Angebot</th><th>Kundengruppe</th><th class="num-s">Preise</th><th class="num-s">geändert</th><th class="num-s">neu</th></tr></thead><tbody>
-          ${ziele.map(([z, v]) => `<tr data-ofp-ziel="${esc(z)}"><td>${esc(name(z))}<small class="ofp-gr">${esc(gruppenVon(z))}</small></td><td class="sub ofp-grs">${esc(gruppenVon(z))}</td><td class="num-s">${fmtInt.format(v.preise)}</td><td class="num-s">${fmtInt.format(v.geaendert)}</td><td class="num-s">${fmtInt.format(v.neu)}</td></tr>`).join('') || '<tr><td colspan="5" class="muted">Keine Preise zuzuordnen.</td></tr>'}
-        </tbody></table>
-        <p class="hint">Eingetragen wird in den Entwurf – erst mit „Veröffentlichen“ sehen die Kunden die Preise. Preise, die nicht in der Datei stehen, bleiben unverändert.${plan.nichtIm.size ? ` ${plural(plan.nichtIm.size, 'Artikelnummer steht', 'Artikelnummern stehen')} nicht im Angebot und ${plan.nichtIm.size === 1 ? 'wird' : 'werden'} übersprungen.` : ''}${ofImp.data.leer ? ` ${fmtInt.format(ofImp.data.leer)} Zeilen ohne Preis übersprungen.` : ''}${ofImp.data.fehler ? ` ${ofImp.data.fehler} unlesbare Preise übersprungen.` : ''}${plan.konflikt ? ` ${plan.konflikt}× unterschiedliche Preise für denselben Artikel im selben Angebot (mehrere Gruppen) – der erste gilt.` : ''}</p>
-        <p class="kerr" id="ofp-err" role="alert">${esc(err)}</p>
-      </div>
-      <div class="dlg-foot"><button type="button" class="btn" data-close>Abbrechen</button><button type="button" class="btn primary" data-ofp="ok"${summe || (ofImp.anlegen && fehlt.length) ? '' : ' disabled'}>${icon('check')}${summe ? `${fmtInt.format(summe)} Preise eintragen` : 'Übernehmen'}</button></div>`;
-  }
-  const OFFER_MAX_UI = 100;
-  $('#of-preise-body').addEventListener('change', (e) => { if (e.target.dataset.ofp === 'anlegen') { ofImp.anlegen = e.target.checked; renderOfPreise(); } });
-  $('#of-preise-body').addEventListener('click', async (e) => {
-    if (e.target.closest('[data-close]')) { dlgOfP.close(); return; }
-    const b = e.target.closest('[data-ofp="ok"]');
-    if (!b) return;
-    b.disabled = true;
-    try {
-      const neu = ofImp.anlegen ? [...ofImp.plan.fehltGruppe.keys()] : [];
-      const ids = new Map();
-      if (neu.length) {   // Angebote für Kundengruppen ohne Angebot anlegen
-        const used = new Set(offers.map((o) => o.id)), names = new Set(offers.map((o) => fold(o.name)));
-        const list = offers.map((o) => ({ id: o.id, name: o.name, fallback: o.fallback || 'standard', gruppen: o.gruppen || [] }));
-        for (const nr of neu) {
-          let nm = `Wochenangebot ${kgName(nr) || 'Kundengruppe ' + nr}`.slice(0, 80);
-          if (names.has(fold(nm))) nm = `${nm.slice(0, 70)} (${nr})`;
-          names.add(fold(nm));
-          const base = slug(nm); let id = base, k = 2; while (used.has(id) || id === OSTD) id = `${base}-${k++}`; used.add(id);
-          list.push({ id, name: nm, fallback: 'hidden', gruppen: [nr] });
-          ids.set('neu:' + nr, id);
-        }
-        const r = await api('offers_save', { body: { rev: offersRev, offers: list } });
-        offers = r.offers; offersRev = r.rev; stdPublic = r.stdPublic !== false;
-      }
-      pushUndo();
-      let n = 0;
-      for (const [ziel, z] of ofImp.plan.ziele) {
-        const oid = ziel.startsWith('neu:') ? ids.get(ziel) : ziel;
-        if (!oid) continue;
-        for (const { it, value } of z.aend) {
-          if (oid === OSTD) it.price = { status: 'value', value, ...(it.price && it.price.label ? { label: it.price.label } : {}) };
-          else { it.variants = it.variants || {}; it.variants[oid] = { status: 'value', value }; }
-          n++;
-        }
-      }
-      dlgOfP.close();
-      ofReset();
-      if (n) { saveNote = { type: 'import', file: `Preise ${ofImp.file.name}` }; changed({ render: true }); }
-      diff = C.diffOffers(published, model);
-      renderOfferBar(); renderChanges(); updatePublishBtn();
-      renderOffersBody();
-      toast(`${fmtInt.format(n)} Preise im Entwurf eingetragen${neu.length ? `, ${plural(neu.length, 'Angebot', 'Angebote')} angelegt` : ''} – zum Übernehmen veröffentlichen.`, 7000);
-    } catch (ex) { b.disabled = false; renderOfPreise(ex.message); }
-  });
 
   /* Aus anderem Angebot übernehmen: Artikel und Preise eines anderen Angebots in das gewählte Angebot,
      optional mit Auf-/Abschlag. Nimmt die Artikel in dieses Angebot auf; das Quellangebot bleibt unverändert. */
@@ -2237,6 +2139,7 @@
       const hier = inOffer(it, curOffer), eigen = curOffer === OSTD ? hier : !!(it.variants && it.variants[curOffer] && it.variants[curOffer].status !== 'hidden');
       if (eigen && !all) continue;
       const np = p.status === 'value' ? { status: 'value', value: Math.round(Math.round(p.value * (1 + pct / 100) / step) * step * 100) / 100 } : { status: 'request' };
+      if (!hier) empfehlungNichtUebernehmen(it, curOffer);
       aufnehmen(it, curOffer, np);
       invalid.delete(it.id + '|' + curOffer);
       n++;
@@ -2327,9 +2230,9 @@
       const vc = vChanges();
       if (vc.length) body += sec(`Angebotspreise (${vc.length})`, `<ul class="plist">${vc.slice(0, 80).map((c) => { const it = byId.get(c.id); return it ? `<li><span><b class="ob-tag">${esc(offerShort(c.offer))}</b> ${esc(it.code || '—')} · ${esc(it.name)}</span><span>${esc(variantShort(c.from, c.offer))} → <strong>${esc(variantShort(c.to, c.offer))}</strong></span>${rv('variant', c.id + '|' + c.offer)}</li>` : ''; }).join('')}${vc.length > 80 ? `<li><span>… und ${vc.length - 80} weitere</span><span></span></li>` : ''}</ul>`);
       const sc = sChanges();
-      if (sc.length) body += sec(`Sonderpreise – solange der Vorrat reicht (${sc.length})`, `<ul class="plist">${sc.slice(0, 80).map((c) => { const it = byId.get(c.id); return it ? `<li><span>${esc(it.code || '—')} · ${esc(it.name)}</span><span>${esc(saleText(c.from))} → <strong>${esc(saleText(c.to))}</strong></span>${rv('sale', c.id)}</li>` : ''; }).join('')}</ul>`);
+      if (sc.length) body += sec(`Empfehlungen (${sc.length})`, `<ul class="plist">${sc.slice(0, 80).map((c) => { const it = byId.get(c.id); return it ? `<li><span>${esc(it.code || '—')} · ${esc(it.name)}</span><span>${esc(saleText(c.from))} → <strong>${esc(saleText(c.to))}</strong></span>${rv('sale', c.id)}</li>` : ''; }).join('')}</ul>`);
       const wc = wChanges();
-      if (wc.length) body += sec(`Werbung (${wc.length})`, `<ul class="plist">${wc.map((oid) => { const w = werbungVon(oid); return `<li><span><b class="ob-tag">${esc(offerShort(oid))}</b> ${w ? esc(w.titel || window.WA.werbung.TITEL) : 'Werbung beendet'}</span><span>${w ? esc(plural(w.artikel.length, 'Artikel', 'Artikel')) : ''}</span>${rv('werbung', oid)}</li>`; }).join('')}</ul>`);
+      if (wc.length) body += sec(`Werbung (${wc.length})`, `<ul class="plist">${wc.map((oid) => { const w = werbungVon(oid); return `<li><span><b class="ob-tag">${esc(offerShort(oid))}</b> ${w ? esc(werbBloecke(w).map((b, i) => b.titel || (i ? window.WA.werbung.TITEL2 : window.WA.werbung.TITEL)).join(' · ')) : 'Werbung beendet'}</span><span>${w ? esc(plural(werbArtikelZahl(w), 'Artikel', 'Artikel')) : ''}</span>${rv('werbung', oid)}</li>`; }).join('')}</ul>`);
       if (!metaChanged() && !diff.priceChanged.length && !diff.added.length && !diff.changed.length && !diff.removed.length && !vc.length && !sc.length && !wc.length) body += '<p class="notice">Keine Änderungen gegenüber der veröffentlichten Fassung.</p>';
     }
     if (v.warnings.length) body += `<p class="hint">${v.warnings.map(esc).join('<br>')}</p>`;
@@ -2398,7 +2301,7 @@
   function revertText(kind, id) {
     if (kind === 'sale') {
       const it = model.items.find((x) => x.id === id), c = sChanges().find((x) => x.id === id);
-      return ['Sonderpreis zurücknehmen?', `Der Sonderpreis von „${esc(it ? (it.code ? it.code + ' · ' : '') + it.name : id)}“ wird von <strong>${esc(saleText(c && c.to))}</strong> wieder auf <strong>${esc(saleText(c && c.from))}</strong> gesetzt.`];
+      return ['Empfehlung zurücknehmen?', `Die Empfehlung von „${esc(it ? (it.code ? it.code + ' · ' : '') + it.name : id)}“ wird von <strong>${esc(saleText(c && c.to))}</strong> wieder auf <strong>${esc(saleText(c && c.from))}</strong> gesetzt.`];
     }
     if (kind === 'variant') {
       const [iid, oid] = id.split('|');
@@ -2569,7 +2472,6 @@
   });
 
   $('#btn-undo').addEventListener('click', undo);
-  $('#btn-import').addEventListener('click', pickFile);
   /* Versand an Kunden: Knopf oben und Hinweis direkt nach dem Veröffentlichen (an jedem Tag möglich) */
   function showSendHint(week, year) {
     const h = $('#send-hint');
@@ -2729,7 +2631,7 @@
   }
 
   /* Ansicht umschalten */
-  const VIEWS = ['orders', 'edit', 'einzel', 'hist', 'stock', 'einkauf', 'master', 'vkgruppen', 'angebote', 'kunden', 'gruppen', 'vertreter', 'importe', 'auswertung', 'mail', 'users', 'rollen', 'urlaub', 'log'];
+  const VIEWS = ['orders', 'edit', 'einzel', 'hist', 'stock', 'einkauf', 'master', 'vkgruppen', 'kategorien', 'angebote', 'kunden', 'gruppen', 'vertreter', 'importe', 'auswertung', 'mail', 'users', 'rollen', 'urlaub', 'log'];
   const ADMIN_VIEWS = ['mail', 'users', 'rollen'];
   /* Aktiven Eintrag in der Seitenleiste sichtbar halten: am Computer scrollt die Leiste senkrecht (mehr Einträge als
      Bildschirmhöhe), schmal ist sie eine waagerechte Spur. Nur die Leiste selbst wird verschoben, nie die Seite. */
@@ -2772,6 +2674,7 @@
     if (v === 'kunden' && window.WA.views.kunden) window.WA.views.kunden();
     if (v === 'gruppen' && window.WA.views.gruppen) window.WA.views.gruppen();
     if (v === 'vkgruppen' && window.WA.views.vkgruppen) window.WA.views.vkgruppen();
+    if (v === 'kategorien' && window.WA.views.kategorien) window.WA.views.kategorien();   // Angebotskategorien (app/module/verwaltung/angebotskategorien.js)
     if (v === 'vertreter' && window.WA.views.vertreter) window.WA.views.vertreter();
     if (v === 'einzel' && window.WA.views.einzel) window.WA.views.einzel();
     if (v === 'importe' && window.WA.views.importe) window.WA.views.importe();   // Importzentrale (admin-import.js)
@@ -3171,6 +3074,8 @@
      unter der Bezeichnung, in CSV und Dialogen als „Lachs · Schwein · DE · frisch“ (wie Excel/Text der MHD-Mail) */
   const merkHTML = (a) => (a.merkmale ? `<small class="s-merk">${esc(a.merkmale)}</small>` : '');
   const bezeichnungLang = (a) => `${a.name || ''}${a.merkmale ? ' · ' + a.merkmale : ''}`;
+  /* Originalbezeichnung der Warenwirtschaft (MHD-Liste; Server: bestand_originalname()) */
+  const stockOrigName = (a) => a.nameOrig || a.name;
   function stockItems() {
     const prices = S.weekPriceMap(stockPrices?.current), previous = S.weekPriceMap(stockPrices?.previous);
     const offers = offerPriceMap();
@@ -3184,7 +3089,7 @@
       const key = S.normCode(a.code), price = prices.get(key), prevPrice = previous.get(key);
       a.incoming.sort((x, y) => (x.arrival || '9999').localeCompare(y.arrival || '9999'));
       return { ...a, idx, wg: S.warengruppe(a.code), offer: offers.get(key) || [], price, prevPrice, nextEta: naechsteEta(a.incoming),
-        incomingKg: sum(a.incoming, 'kg'), totalKg: (a.kg ?? 0) + sum(a.incoming, 'kg'), cls: mhdClass(a.mhd), _hay: fold(`${a.code} ${a.name} ${a.nameImport || ''} ${a.merkmale || ''}`) };
+        incomingKg: sum(a.incoming, 'kg'), totalKg: (a.kg ?? 0) + sum(a.incoming, 'kg'), cls: mhdClass(a.mhd), _hay: fold(`${a.code} ${a.name} ${a.nameImport || ''} ${a.nameOrig || ''} ${a.merkmale || ''}`) };
     });
   }
   const stockPriceNumber = new Intl.NumberFormat('de-DE', { minimumFractionDigits: 2, maximumFractionDigits: 4 });
@@ -3222,7 +3127,8 @@
     const all = stockItems().filter(filterPasst);
     if (isMhdQuery(q)) {
       const lim = isoToday(14);
-      const list = all.filter((a) => a.mhd && a.mhd <= lim).sort((a, b) => colCompare(a, b) || a.mhd.localeCompare(b.mhd) || byCode(a, b));
+      // immer nach kürzestem MHD (Inhaber, 03.11.2026) – eine gemerkte Spaltensortierung gilt hier nicht
+      const list = all.filter((a) => a.mhd && a.mhd <= lim).sort((a, b) => a.mhd.localeCompare(b.mhd) || byCode(a, b));
       return { flat: true, list, groups: null };
     }
     const toks = fold(q).split(/\s+/).filter(Boolean);
@@ -3437,16 +3343,27 @@
     }
   });
   dlgSV.addEventListener('change', (e) => { if (e.target.id === 'vk-sort') { vkSort = e.target.value; openStockVk(); } });
-  const sortTh = (key, cls, label, print) => {
-    const on = stockSort && stockSort.key === key, f = stockFilter[key];
-    const dir = on ? (stockSort.dir > 0 ? 'ascending' : 'descending') : 'none';
+  const sortTh = (key, cls, label, print, mhd) => {
+    const f = stockFilter[key];
     if (print) return `<th class="${cls}">${label}</th>`;
+    if (mhd) {   // MHD-Liste: fest nach kürzestem MHD sortiert, Filter bleiben
+      const fest = key === 'mhd';
+      return `<th class="${cls}${f ? ' gefiltert' : ''}" aria-sort="${fest ? 'ascending' : 'none'}"><span class="st-th"><span class="sort-btn fest${fest ? ' on' : ''}"${fest ? ' title="MHD-Liste: immer nach kürzestem MHD sortiert"' : ''}>${label}<span class="sort-ind" aria-hidden="true">${fest ? '▲' : ''}</span></span>`
+        + `<button type="button" class="st-fbtn${f ? ' on' : ''}" data-sfilter="${key}" aria-haspopup="dialog" aria-label="Filtern: ${esc(ST_SPK[key].titel)}${f ? ' (Filter aktiv)' : ''}" title="${f ? esc(filterText(key)) : 'Filtern'}">${icon('filter', 'sm')}</button></span></th>`;
+    }
+    const on = stockSort && stockSort.key === key;
+    const dir = on ? (stockSort.dir > 0 ? 'ascending' : 'descending') : 'none';
     return `<th class="${cls}${f ? ' gefiltert' : ''}" aria-sort="${dir}"><span class="st-th"><button type="button" class="sort-btn${on ? ' on' : ''}" data-ssort="${key}" title="Nach ${esc(label.replace('<br>', ' '))} sortieren">${label}<span class="sort-ind" aria-hidden="true">${on ? (stockSort.dir > 0 ? '▲' : '▼') : ''}</span></button>`
       + `<button type="button" class="st-fbtn${f ? ' on' : ''}" data-sfilter="${key}" aria-haspopup="dialog" aria-label="Sortieren und Filtern: ${esc(ST_SPK[key].titel)}${f ? ' (Filter aktiv)' : ''}" title="${f ? esc(filterText(key)) : 'Sortieren und Filtern'}">${icon('filter', 'sm')}</button></span></th>`;
   };
-  const stockHead = (print = false) => `<tr>${sortTh('code', 's-code', 'Art.-Nr.', print)}${sortTh('name', 's-name', 'Art. Bezeichnung', print)}${sortTh('vk', 's-vk', `Aktueller Preis<br>${esc(stockWeekLabel('current'))}`, print)}${sortTh('prev', 's-prev', `Preis Vorwoche<br>${esc(stockWeekLabel('previous'))}`, print)}${sortTh('kg', 's-kg', 'Eingelagerter<br>Bestand', print)}${sortTh('mhd', 's-mhd', 'Kürz.<br>MHD', print)}${sortTh('mhdKg', 's-mkg', 'Menge kürz.<br>MHD', print)}${sortTh('incomingKg', 's-registered', 'Erfasster<br>Bestand', print)}${sortTh('totalKg', 's-total-kg', 'Gesamt<br>verfügbar', print)}${sortTh('zugaenge', 's-incoming', 'Erwartete<br>Zugänge', print)}</tr>`;
-  const stockRow = (a, print = false) => `<tr class="srow" data-sidx="${a.idx}" tabindex="0">
-      <td class="s-code">${esc(a.code)}</td><td class="s-name" title="${esc(a.name)}${a.merkmale ? ` · ${esc(a.merkmale)}` : ''}${a.nameImport ? ` – in der Bestandsliste: ${esc(a.nameImport)}` : ''}">${esc(a.name)}${merkHTML(a)}</td>
+  const stockHead = (print = false, mhd = false) => `<tr>${sortTh('code', 's-code', 'Art.-Nr.', print, mhd)}${sortTh('name', 's-name', 'Art. Bezeichnung', print, mhd)}${sortTh('vk', 's-vk', `Aktueller Preis<br>${esc(stockWeekLabel('current'))}`, print, mhd)}${sortTh('prev', 's-prev', `Preis Vorwoche<br>${esc(stockWeekLabel('previous'))}`, print, mhd)}${sortTh('kg', 's-kg', 'Eingelagerter<br>Bestand', print, mhd)}${sortTh('mhd', 's-mhd', 'Kürz.<br>MHD', print, mhd)}${sortTh('mhdKg', 's-mkg', 'Menge kürz.<br>MHD', print, mhd)}${sortTh('incomingKg', 's-registered', 'Erfasster<br>Bestand', print, mhd)}${sortTh('totalKg', 's-total-kg', 'Gesamt<br>verfügbar', print, mhd)}${sortTh('zugaenge', 's-incoming', 'Erwartete<br>Zugänge', print, mhd)}</tr>`;
+  /* Bezeichnung in der Liste: normal Angebotsbezeichnung mit Merkmalen darunter; in der MHD-Liste die volle Bezeichnung der
+     Warenwirtschaft ohne Merkmalzeile (Inhaber, 03.11.2026) – wie in der MHD-Mail */
+  const nameZelle = (a, mhd) => (mhd
+    ? `<td class="s-name s-orig" title="${esc(stockOrigName(a))}${stockOrigName(a) !== a.name ? ` – im Angebot: ${esc(a.name)}` : ''}">${esc(stockOrigName(a))}</td>`
+    : `<td class="s-name" title="${esc(a.name)}${a.merkmale ? ` · ${esc(a.merkmale)}` : ''}${a.nameImport ? ` – in der Bestandsliste: ${esc(a.nameImport)}` : ''}">${esc(a.name)}${merkHTML(a)}</td>`);
+  const stockRow = (a, print = false, mhd = false) => `<tr class="srow" data-sidx="${a.idx}" tabindex="0">
+      <td class="s-code">${esc(a.code)}</td>${nameZelle(a, mhd)}
       <td class="s-vk" data-l="Aktuell ${esc(stockWeekLabel('current'))}">${esc(stockPriceText(a.price))}</td>
       <td class="s-prev" data-l="Vorwoche ${esc(stockWeekLabel('previous'))}">${esc(stockPriceText(a.prevPrice))}</td>
       <td class="s-kg" data-l="Eingelagerter Bestand">${a.kg == null ? '—' : esc(kgText(a.kg))}</td>
@@ -3455,11 +3372,12 @@
       <td class="s-incoming" data-l="Erwartete Zugänge">${print ? incomingHTML(a) : a.incoming.length ? `<button type="button" class="btn sm" data-incoming="${a.idx}" aria-haspopup="dialog" aria-label="Erwartete Zugänge für ${esc(a.name)} anzeigen">Zugänge (${a.incoming.length})</button>` : '—'}</td></tr>`;
   const totalRow = (label, list, cls) => `<tr class="${cls}"><td colspan="4">${esc(label)}</td><td class="s-kg" data-l="Eingelagerter Bestand">${esc(kgText(sum(list, 'kg')))}</td><td class="s-mhd"></td><td class="s-mkg" data-l="Menge kürz. MHD">${esc(kgText(sum(list, 'mhdKg')))}</td><td class="s-registered" data-l="Erfasster Bestand">${esc(kgText(sum(list, 'incomingKg')))}</td><td class="s-total-kg" data-l="Gesamt verfügbar">${esc(kgText(sum(list, 'totalKg')))}</td><td class="s-incoming"></td></tr>`;
   function stockTableHTML(res, print = false) {
-    const rows = (list) => list.map((a) => stockRow(a, print)).join('');
+    const mhd = res.flat;   // flache Liste = Suche „MHD“
+    const rows = (list) => list.map((a) => stockRow(a, print, mhd)).join('');
     let body;
     if (res.flat) body = `<tbody>${rows(res.list)}</tbody>`;
     else body = res.groups.map((g, i) => `<tbody class="wg">${i ? '<tr class="wg-gap" aria-hidden="true"><td colspan="10"></td></tr>' : ''}<tr class="wg-h"><td colspan="10">${esc(g.label)}</td></tr>${rows(g.items)}${totalRow('Summe ' + g.label, g.items, 'wg-sum')}</tbody>`).join('');
-    return `<table class="stab${res.flat ? ' flat' : ''}"><thead>${stockHead(print)}</thead>${body}<tfoot>${totalRow('Gesamtsumme', res.list, 'st-total')}</tfoot></table>`;
+    return `<table class="stab${res.flat ? ' flat' : ''}"><thead>${stockHead(print, mhd)}</thead>${body}<tfoot>${totalRow('Gesamtsumme', res.list, 'st-total')}</tfoot></table>`;
   }
   const legendHTML = () => `<div class="mhd-legend" aria-label="MHD-Kennzeichnung"><span class="mhd-past">${SKULL} abgelaufen</span><span class="mhd-0-4">heute – 4 Tage</span><span class="mhd-5-7">5 – 7 Tage</span><span class="mhd-8-14">8 – 14 Tage</span></div>`;
 
@@ -3694,7 +3612,7 @@
     const q = csvCell;
     const n2 = (v) => (v == null || !Number.isFinite(v) ? '' : fmtKg.format(v).replace(/\./g, ''));
     const lines = [['Art.-Nr.', 'Bezeichnung', `Aktuell ${stockWeekLabel('current')}`, `Vorwoche ${stockWeekLabel('previous')}`, 'Eingelagerter Bestand kg', 'Kürz. MHD', 'Kg kürz. MHD', 'Erfasster Bestand kg', 'Gesamt verfügbar kg', 'Erwartete Zugänge (Menge kg / ETA / Partie)', 'Warengruppe', 'Bestand vom'].map(q).join(';')];
-    for (const a of res.list) lines.push([a.code, bezeichnungLang(a), stockPriceText(a.price), stockPriceText(a.prevPrice), n2(a.kg), mhdShort(a.mhd).replace('—', ''), n2(a.mhdKg), n2(a.incomingKg), n2(a.totalKg), a.incoming.map((d) => `${n2(d.kg)} kg / ${d.arrival ? dmy(d.arrival) : 'ETA unbekannt'} / ${d.lot || '—'}`).join(' | '), a.wg.label, stock.date ? dmy(stock.date) : ''].map(q).join(';'));
+    for (const a of res.list) lines.push([a.code, res.flat ? stockOrigName(a) : bezeichnungLang(a), stockPriceText(a.price), stockPriceText(a.prevPrice), n2(a.kg), mhdShort(a.mhd).replace('—', ''), n2(a.mhdKg), n2(a.incomingKg), n2(a.totalKg), a.incoming.map((d) => `${n2(d.kg)} kg / ${d.arrival ? dmy(d.arrival) : 'ETA unbekannt'} / ${d.lot || '—'}`).join(' | '), a.wg.label, stock.date ? dmy(stock.date) : ''].map(q).join(';'));
     const blob = new Blob(['﻿' + lines.join('\r\n')], { type: 'text/csv;charset=utf-8' });
     const el = document.createElement('a');
     el.href = URL.createObjectURL(blob);
@@ -3744,7 +3662,7 @@
      bei sehr langen Listen in doppelter (Größengrenzen des Servers: lib/bestand-mhd.php). Rückgabe { bild, breite }. */
   function mhdBild(list) {
     const preise = !!stockPrices?.allowed, ZH = 32, KH = 46, RAND = 18;
-    const sp = [['Art.-Nr.', 80, 'l', (a) => a.code], ['Bezeichnung', 340, 'l', (a) => a.name, false, (a) => a.merkmale]];
+    const sp = [['Art.-Nr.', 80, 'l', (a) => a.code], ['Bezeichnung', 340, 'l', stockOrigName, false, (a) => a.merkmale]];   // Originalbezeichnung (Inhaber 03.11.2026)
     if (preise) sp.push([`Aktueller Preis ${stockWeekLabel('current')}`, 120, 'r', (a) => stockPriceText(a.price)], [`Preis Vorwoche ${stockWeekLabel('previous')}`, 120, 'r', (a) => stockPriceText(a.prevPrice)]);
     sp.push(['Eingelagerter Bestand', 118, 'r', (a) => kgText(a.kg)], ['Kürz. MHD', 86, 'c', (a) => mhdShort(a.mhd), true], ['Menge kürz. MHD', 124, 'r', (a) => (a.cls === 'mhd-past' ? '\u2620 ' : '') + kgText(a.mhdKg), true],
       ['Erfasster Bestand', 118, 'r', (a) => kgText(a.incomingKg)], ['Nächste ETA', 84, 'c', (a) => (a.nextEta ? mhdShort(a.nextEta.t) : '—')], ['Gesamt verfügbar', 118, 'r', (a) => kgText(a.totalKg)]);
@@ -3846,7 +3764,7 @@
     setTimeout(() => { try { w.focus(); w.print(); } catch { /* Fenster geschlossen */ } }, 300);
   }
 
-  /* ======================= Angebot: Vorwoche, Bestand, Bestand ohne Preis ======================= */
+  /* ======================= Angebot: Vorwoche, Bestand ======================= */
   let prevWeek = null, prevKey = '', prevMap = new Map();
   let stockIdx = new Map(), stockIdxFor = null;
   async function loadPrev() {
@@ -3867,8 +3785,8 @@
   }
   async function loadAux() {
     await Promise.all([may('bestand.sehen') ? loadStock().catch(() => {}) : Promise.resolve(), loadPrev().catch(() => {})]);
-    // Leistung: Bestand und Vorwoche unverändert seit dem letzten Zeichnen → keine ~550 Zellen neu (nur Liste „ohne Preis“)
-    if (auxStand.stock === stock && auxStand.prev === prevWeek) { renderNoPrice(); return; }
+    // Leistung: Bestand und Vorwoche unverändert seit dem letzten Zeichnen → keine ~550 Zellen neu (nur Leiste „Kurzes MHD“)
+    if (auxStand.stock === stock && auxStand.prev === prevWeek) { renderMhd(); return; }
     refreshAux();
   }
   /* Stand von Bestand/Vorwoche, mit dem der Editor zuletzt gezeichnet wurde (renderGroups, refreshAux) */
@@ -3932,90 +3850,18 @@
       const sb = tr.querySelector('.vtog.sale');
       if (sb) { const t2 = document.createElement('div'); t2.innerHTML = saleBtnHTML(it) + saleTagHTML(it); sb.replaceWith(t2.firstElementChild); const tag = tr.querySelector('.sale-tag'); if (tag && t2.firstElementChild) tag.replaceWith(t2.firstElementChild); }
     }
-    renderNoPrice();
+    renderMhd();
   }
 
-  /* Bestand ohne Preis: eingelagerte Artikel, die im gewählten Angebot fehlen oder dort keinen Preis haben.
-     Die Leisten „Kurzes MHD“ und „Bestand ohne Preis“ sind beim Öffnen immer zugeklappt. */
-  let npOpen = false;
+  /* Artikel des Entwurfs je Artikelnummer (Leiste „Kurzes MHD“, Artikel hinzufügen). Die frühere Leiste „Bestand ohne
+     Preis“ ist entfallen (Wunsch des Inhabers, 03.11.2026); die Leiste „Kurzes MHD“ ist beim Öffnen immer zugeklappt. */
   const poolByCode = () => { const m = new Map(); for (const it of model.items) if (it.code) { const k = S.normCode(it.code); if (!m.has(k)) m.set(k, []); m.get(k).push(it); } return m; };
-  function noPriceList() {
-    if (!stock || !model) return [];
-    const byCode = poolByCode();
-    const out = [];
-    for (const a of stock.articles) {
-      const items = (byCode.get(S.normCode(a.code)) || []).filter((x) => inOffer(x, curOffer));
-      if (items.some((x) => { const p = effPrice(x, curOffer); return p && (p.status === 'value' || p.status === 'request'); })) continue;
-      out.push({ a, items, wg: S.warengruppe(a.code), cls: mhdClass(a.mhd) });
-    }
-    const rank = (x) => (x.cls ? 0 : 1);
-    return out.sort((x, y) => x.wg.order - y.wg.order || rank(x) - rank(y) || (rank(x) === 0 ? x.a.mhd.localeCompare(y.a.mhd) : 0) || x.a.code.localeCompare(y.a.code, 'de', { numeric: true }));
-  }
-  function renderNoPrice() {
-    renderMhd();
-    const host = $('#noprice-panel');
-    if (!host) return;
-    if (!stock || !model) { host.hidden = true; return; }
-    const all = noPriceList();
-    const toks = fold(filterQ).split(/\s+/).filter(Boolean);
-    const list = toks.length ? all.filter((x) => { const h = fold(x.a.code + ' ' + x.a.name); return toks.every((t) => h.includes(t)); }) : all;
-    host.hidden = false;
-    const kg = list.reduce((t, x) => t + x.a.kg, 0);
-    const rows = list.map((x) => {
-      const p = prevOf({ code: x.a.code, name: x.a.name });
-      const inOfferNow = x.items.length;
-      return `<tr data-npcode="${esc(x.a.code)}">
-        <td class="np-code">${esc(x.a.code)}</td><td class="np-name">${esc(x.a.name)}</td><td class="np-wg">${esc(x.wg.label)}</td>
-        <td class="np-kg">${esc(kgText(x.a.kg))}</td><td class="np-mhd"><span class="${x.cls}">${esc(mhdShort(x.a.mhd))}</span></td>
-        <td class="np-prev">${p && p.price.status === 'value' ? esc(F.euroKg(p.price.value)) : p && p.price.status === 'request' ? 'auf Anfrage' : '—'}</td>
-        <td class="np-act">${ro ? (inOfferNow ? '<span class="muted">im Angebot ohne Preis</span>' : '') : inOfferNow
-          ? '<button type="button" class="btn sm" data-np="goto">Preis eintragen</button>'
-          : `<button type="button" class="btn sm" data-np="add">${icon('plus', 'sm')}Ins Angebot</button>`}</td>
-      </tr>`;
-    }).join('');
-    host.innerHTML = `<div class="np-card${npOpen ? ' open' : ''}">
-      <button type="button" class="np-head" data-np="toggle" aria-expanded="${npOpen}">
-        <span class="np-badge">${fmtInt.format(all.length)}</span>
-        <span class="np-tt"><span class="np-title">Bestand ohne Preis</span>
-        <span class="np-sub">eingelagert, in „${esc(offerShort(curOffer))}“ ohne Preis · ${esc(kgText(all.reduce((t, x) => t + x.a.kg, 0)))} · Bestand vom ${stock.date ? esc(dmy(stock.date)) : '?'}</span></span>
-        ${icon('chev', 'np-chev')}
-      </button>
-      ${npOpen ? (list.length ? `<div class="np-body"><table class="etab nptab"><thead><tr><th class="np-code">Art.-Nr.</th><th class="np-name">Bezeichnung</th><th class="np-wg">Warengruppe</th><th class="np-kg">Verfügbar</th><th class="np-mhd">Kürz. MHD</th><th class="np-prev" title="Preis ${esc(prevLabel())}">Vorwoche</th><th class="np-act"><span class="sr-only">Aktion</span></th></tr></thead><tbody>${rows}</tbody>
-          ${toks.length ? `<tfoot><tr><td colspan="7" class="muted">${plural(list.length, 'Treffer', 'Treffer')} zur Suche · ${esc(kgText(kg))}</td></tr></tfoot>` : ''}</table></div>`
-        : `<p class="np-empty">${all.length ? 'Kein Treffer zur Suche.' : 'Alle Artikel mit eingelagertem Bestand haben in diesem Angebot einen Preis.'}</p>`) : ''}
-    </div>`;
-    for (const s of host.querySelectorAll('.np-sub')) s.title = s.textContent;   // eingeklappt gekürzt: voller Text im Tooltip
-    panelLayout();
-  }
-  /* Beide Leisten nebeneinander; eine aufgeklappte Leiste nimmt die volle Breite ein */
-  function panelLayout() {
-    const w = $('#ed-panels');
-    if (w) w.classList.toggle('one', [$('#mhd-panel'), $('#noprice-panel')].filter((x) => x && !x.hidden).length < 2);
-  }
-  function gotoPrice(it) {
-    if (filterQ || onlyChanges) { filterQ = ''; onlyChanges = false; $('#ed-q').value = ''; $('#only-changes').checked = false; renderGroups(); }
-    const inp = $(`tr[data-id="${CSS.escape(it.id)}"] input[data-f="${curOffer === OSTD ? 'price' : 'vprice'}"]`);
-    if (inp) { inp.scrollIntoView({ block: 'center', behavior: 'smooth' }); inp.focus(); inp.select(); }
-  }
-  $('#noprice-panel').addEventListener('click', (e) => {
-    const b = e.target.closest('[data-np]');
-    if (!b) return;
-    const act = b.dataset.np;
-    if (act === 'toggle') { npOpen = !npOpen; renderNoPrice(); return; }
-    const code = b.closest('tr[data-npcode]')?.dataset.npcode;
-    if (!code || ro) return;
-    if (act === 'goto') {
-      const it = model.items.find((x) => x.code && S.normCode(x.code) === S.normCode(code) && inOffer(x, curOffer));
-      if (it) gotoPrice(it);
-    }
-    if (act === 'add') openArtikelwahl({ code });
-  });
 
   /* ======================= Artikel hinzufügen (Fenster wie im Einzelangebot) =======================
      Artikel aus Stammdaten und Bestand (Server: angebot_artikel), nach VK-Gruppe. Die Angebotsgruppe ergibt sich aus der
      VK-Gruppe des Artikels: Gruppe mit dieser VK-Gruppe → gleichnamige Gruppe → Gruppe, in der die meisten Artikel dieser
      VK-Gruppe stehen → neue Gruppe. Aufgenommen wird nur ins gewählte Angebot; andere Angebote bleiben unverändert. */
-  const awZustand = { grp: null, nurBestand: true, nurAngebot: false };
+  const awZustand = { grp: null, nurBestand: false, nurAngebot: false };   // „nur mit Bestand“ nicht vorausgewählt (Inhaber, 03.11.2026)
   let awDaten = null, awFest = null;
   async function ladeArtikelwahl() {
     if (awDaten && awDaten.stock === stock && Date.now() - awDaten.t < 120000) return awDaten;
@@ -4086,10 +3932,11 @@
     for (const a of liste) {
       const p = ps.get(K(a.code));
       const vorh = (pool.get(S.normCode(a.code)) || []).find((x) => !inOffer(x, curOffer));
-      if (vorh) { aufnehmen(vorh, curOffer, p); ids.set(K(a.code), vorh.id); continue; }   // steht schon in einem anderen Angebot
+      if (vorh) { empfehlungNichtUebernehmen(vorh, curOffer); aufnehmen(vorh, curOffer, p); ids.set(K(a.code), vorh.id); continue; }   // steht schon in einem anderen Angebot
       const g = zielGruppe(a, true);
       const m = masterOf(a.code);
-      const name = C.stripFrisch(C.clean((m && m.name) || a.name || a.code));
+      // gepflegte Stammdaten-Bezeichnung unverändert, sonst Vorschlag aus der Bestandsliste (ohne „frisch“, Marke Fleischmeister)
+      const name = m && C.clean(m.name) ? C.clean(m.name) : C.nameVorschlag(C.clean(a.name || a.code), g);
       const it = { id: uid('n'), code: a.code, name, ...C.suggestAttributes(name, g.name, g.section || ''), groupId: g.id, price: std && p ? p : { status: 'none' }, altPrices: [] };
       const quelle = m || a;
       if (C.CATEGORY_ORDER.includes(quelle.category)) it.category = quelle.category;
@@ -4113,7 +3960,7 @@
     const art = new Map();
     const eintrag = (a, items) => {
       const stdIt = items.find((i) => inOffer(i, OSTD));
-      return { ...a, name: (items[0] && items[0].name) || a.name, stdPrice: stdIt ? stdIt.price : null, inOffer: !!stdIt };
+      return { ...a, name: (items[0] && items[0].name) || a.name, name0: a.name, stdPrice: stdIt ? stdIt.price : null, inOffer: !!stdIt };
     };
     for (const a of d.articles) art.set(K(a.code), eintrag(a, pool.get(S.normCode(a.code)) || []));
     for (const items of pool.values()) {   // Artikelnummern nur im Entwurf (ohne Stammdaten und Bestand)
@@ -4150,7 +3997,7 @@
         const g = fest || (awZustand.grp && awZustand.grp !== '*' && awZustand.grp !== '–' ? zielGruppe({ code: '', vk: awZustand.grp }, true) : vis[vis.length - 1]) || zielGruppe({ code: '' }, true);
         const it = newItem(g.id);
         changed({ render: true });
-        const inp = $(`tr[data-id="${CSS.escape(it.id)}"] input[data-f="name"]`);
+        const inp = $(`tr[data-id="${CSS.escape(it.id)}"] input.e-nm`);
         if (inp) { inp.scrollIntoView({ block: 'center', behavior: 'smooth' }); inp.focus(); inp.select(); }
       },
       uebernehmen(liste, preise) {
@@ -4176,20 +4023,20 @@
       .sort((a, b) => (gi.get(a.it.groupId) ?? 1e9) - (gi.get(b.it.groupId) ?? 1e9) || a.i - b.i)
       .map(({ it }) => {
         const sv = C.saleFor(it, oid), p = effPrice(it, oid);
-        return { id: it.id, code: it.code || '', name: it.name, merkmale: [it.origin, it.condition !== 'unbekannt' ? C.CONDITION_LABELS[it.condition] : ''].filter(Boolean).join(' · '),
-          preis: sv != null ? 'Sonderpreis ' + fmtNum.format(sv) + ' €/kg' : p ? priceShort(p) : '' };
+        return { id: it.id, code: it.code || '', name: nameIn(it, oid), merkmale: [it.origin, it.condition !== 'unbekannt' ? C.CONDITION_LABELS[it.condition] : ''].filter(Boolean).join(' · '),
+          preis: sv != null ? 'Empfehlung ' + fmtNum.format(sv) + ' €/kg' : p ? priceShort(p) : '' };
       });
   }
-  /* Artikelauswahl für die Werbung (gemeinsames Fenster admin-artikelwahl.js): Filter „nur in diesem Angebot“ voreingestellt,
-     Bestand sichtbar, aber ohne Filter; beworbene Artikel vorausgewählt. Artikel, die noch nicht im Angebot stehen
+  /* Artikelauswahl für die Werbung (gemeinsames Fenster admin-artikelwahl.js): Filter „nur in diesem Angebot“ nicht
+     vorausgewählt (Inhaber 05.11.2026), Bestand sichtbar, aber ohne Filter; beworbene Artikel vorausgewählt. Artikel, die noch nicht im Angebot stehen
      (Filter aus), werden mit Preis aufgenommen wie bei „Artikel hinzufügen“. fertig(ids, artikel) gibt die Auswahl zurück. */
-  const werbZustand = { grp: '*', nurBestand: false, nurAngebot: true };
+  const werbZustand = { grp: '*', nurBestand: false, nurAngebot: false };
   async function werbungAuswahl(oid, ids, fertig) {
     if (ro || oid !== curOffer) return;
     let d;
     try { d = await ladeArtikelwahl(); } catch (ex) { toast(ex.message, 6000); return; }
     awFest = null;
-    Object.assign(werbZustand, { grp: '*', nurAngebot: true, nurBestand: false });   // jedes Mal: alle Gruppen, nur dieses Angebot, Bestand ohne Filter
+    Object.assign(werbZustand, { grp: '*', nurAngebot: false, nurBestand: false });   // jedes Mal: alle Gruppen, ohne Filter („nur in …“ nicht vorausgewählt)
     const K = window.WA.artikelwahl.key, std = oid === OSTD;
     const pool = poolByCode();
     const ohneNr = (it) => '~' + it.id;   // Positionen ohne Artikelnummer: eigener Schlüssel, ohne angezeigte Nummer
@@ -4260,43 +4107,48 @@
         if (e) w[oid] = e; else delete w[oid];
         if (!Object.keys(w).length) delete model.meta.werbung;
         changed({ render: true });
-        toast(e ? `Werbung für „${offerShort(oid)}“ übernommen (${plural(e.artikel.length, 'Artikel', 'Artikel')}) – für Kunden sichtbar nach „Veröffentlichen“.` : `Werbung für „${offerShort(oid)}“ beendet – wirksam nach „Veröffentlichen“.`, 5000);
+        toast(e ? `${werbBloecke(e).length > 1 ? '2 Werbungen' : 'Werbung'} für „${offerShort(oid)}“ übernommen (${plural(werbArtikelZahl(e), 'Artikel', 'Artikel')}) – für Kunden sichtbar nach „Veröffentlichen“.` : `Werbung für „${offerShort(oid)}“ beendet – wirksam nach „Veröffentlichen“.`, 5000);
       },
     });
   }
   $('#btn-werbung').addEventListener('click', openWerbung);
 
-  /* ======================= Sonderposten (kurzes MHD, solange der Vorrat reicht) ======================= */
-  /* Sonderpreis je Artikel: Grundpreis für alle Angebote, die den Artikel enthalten, je Angebot änderbar (eigener / keiner) */
+  /* ======================= Empfehlung (früher „Sonderpreis“; mit Preis: Sonderposten solange der Vorrat reicht) =======================
+     Empfehlung je Artikel: Grundwert (Empfehlungspreis oder ohne Preisänderung) für die Angebote, je Angebot änderbar
+     (wie oben / eigener Preis / ohne Preisänderung / keine). Neu gesetzt gilt sie nur im gerade bearbeiteten Angebot –
+     alle anderen Angebote mit dem Artikel stehen auf „keine Empfehlung“. Mit Preis sehen Kunden den bisherigen Preis
+     durchgestrichen und der Artikel wird ohne Bestand ausgeblendet; ohne Preis wird er nur hervorgehoben. */
   const dlgSale = $('#dlg-sale');
   let saleId = null;
+  const EMPF_MODI = [['base', 'wie oben'], ['own', 'eigener Preis'], ['mark', 'ohne Preisänderung'], ['none', 'keine Empfehlung']];
   function openSale(id) {
     const it = iById(id);
     if (!it) return;
     saleId = id;
-    const sl = it.sale || null, a = stockOf(it.code), cls = a ? mhdClass(a.mhd) : '';
-    const ids = offersOf(it);
+    const sl = it.sale && (typeof it.sale.value === 'number' || it.sale.mark) ? it.sale : null, a = stockOf(it.code), cls = a ? mhdClass(a.mhd) : '';
+    const ids = offersOf(it).sort((x, y) => (y === curOffer) - (x === curOffer));   // gerade bearbeitetes Angebot zuerst
     const rows = ids.map((oid) => {
       const o = sl && sl.offers && sl.offers[oid];
-      const mode = !o ? 'base' : o.status === 'none' ? 'none' : 'own';
+      // neue Empfehlung: nur im gerade bearbeiteten Angebot, sonst „keine Empfehlung“
+      const mode = !sl ? (oid === curOffer ? 'base' : 'none') : !o ? 'base' : o.status === 'none' ? 'none' : o.status === 'mark' ? 'mark' : 'own';
       const norm = effPrice(it, oid);
-      return `<tr data-soid="${esc(oid)}"><td>${esc(offerShort(oid))}</td><td class="sp-norm">${norm ? esc(priceShort(norm)) : '—'}</td>
-        <td><select class="in" data-sm aria-label="Sonderpreis ${esc(offerShort(oid))}"><option value="base"${mode === 'base' ? ' selected' : ''}>wie oben</option><option value="own"${mode === 'own' ? ' selected' : ''}>eigener Sonderpreis</option><option value="none"${mode === 'none' ? ' selected' : ''}>kein Sonderpreis</option></select></td>
-        <td class="sp-own"><input class="in num" data-sv inputmode="decimal" value="${mode === 'own' ? esc(fmtNum.format(o.value)) : ''}" placeholder="€/kg" aria-label="Eigener Sonderpreis ${esc(offerShort(oid))}"${mode === 'own' ? '' : ' hidden'}></td></tr>`;
+      return `<tr data-soid="${esc(oid)}"${oid === curOffer ? ' class="sp-akt"' : ''}><td>${esc(offerShort(oid))}${oid === curOffer ? ' <small class="muted">(dieses Angebot)</small>' : ''}</td><td class="sp-norm">${norm ? esc(priceShort(norm)) : '—'}</td>
+        <td><select class="in" data-sm aria-label="Empfehlung ${esc(offerShort(oid))}">${EMPF_MODI.map(([v, t]) => `<option value="${v}"${mode === v ? ' selected' : ''}>${t}</option>`).join('')}</select></td>
+        <td class="sp-own"><input class="in num" data-sv inputmode="decimal" value="${mode === 'own' ? esc(fmtNum.format(o.value)) : ''}" placeholder="€/kg" aria-label="Eigener Empfehlungspreis ${esc(offerShort(oid))}"${mode === 'own' ? '' : ' hidden'}></td></tr>`;
     }).join('');
-    const stockLine = !it.code ? `<p class="notice k-pend">${icon('info', 'sm')}<span>Ohne Artikelnummer ist kein Bestandsabgleich möglich – der Sonderposten wird dann nicht automatisch ausgeblendet.</span></p>`
-      : !stock ? '' : !a ? `<p class="notice k-pend">${icon('info', 'sm')}<span>Laut Bestand vom ${esc(dmy(stock.date || ''))} ist <strong>kein Bestand</strong> vorhanden – der Sonderposten wird in allen Angeboten automatisch ausgeblendet.</span></p>` : '';
+    const stockLine = !it.code ? `<p class="notice k-pend">${icon('info', 'sm')}<span>Ohne Artikelnummer ist kein Bestandsabgleich möglich – mit Empfehlungspreis wird der Artikel dann nicht automatisch ausgeblendet.</span></p>`
+      : !stock ? '' : !a ? `<p class="notice k-pend">${icon('info', 'sm')}<span>Laut Bestand vom ${esc(dmy(stock.date || ''))} ist <strong>kein Bestand</strong> vorhanden – mit Empfehlungspreis wird der Artikel in allen Angeboten automatisch ausgeblendet.</span></p>` : '';
     $('#sale-body').innerHTML = `
-      <div class="dlg-head"><div><h2 id="sp-title">Sonderpreis – solange der Vorrat reicht</h2><p>${esc(it.code || '—')} · ${esc(it.name)}${a ? ` · ${esc(kgText(a.kg))} verfügbar · kürz. MHD <span class="${cls}">${esc(mhdShort(a.mhd))}</span>` : ''}</p></div>
+      <div class="dlg-head"><div><h2 id="sp-title">Empfehlung</h2><p>${esc(it.code || '—')} · ${esc(it.name)}${a ? ` · ${esc(kgText(a.kg))} verfügbar · kürz. MHD <span class="${cls}">${esc(mhdShort(a.mhd))}</span>` : ''}</p></div>
         <button class="btn icon ghost" type="button" data-close aria-label="Schließen">${icon('x')}</button></div>
       <div class="dlg-body">
         ${stockLine}
-        <label class="fld sp-base"><span>Sonderpreis €/kg <small class="muted">(gilt in allen Angeboten mit diesem Artikel)</small></span><input name="value" inputmode="decimal" value="${sl ? esc(fmtNum.format(sl.value)) : ''}" placeholder="z. B. 9,90" required></label>
-        <table class="etab sptab"><thead><tr><th>Angebot</th><th class="sp-norm">Normalpreis</th><th>Sonderpreis</th><th></th></tr></thead><tbody>${rows}</tbody></table>
-        <p class="hint">Gilt nur in den Angeboten, die den Artikel enthalten (oben aufgeführt). Kunden sehen „Sonderposten – solange der Vorrat reicht“ und den bisherigen Preis durchgestrichen. Ist laut Bestandsliste kein Bestand mehr da, wird der Artikel automatisch ausgeblendet. Wirksam nach dem Veröffentlichen.</p>
+        <label class="fld sp-base"><span>Empfehlungspreis €/kg <small class="muted">(optional – leer: nur hervorheben, Preis bleibt)</small></span><input name="value" inputmode="decimal" value="${sl && typeof sl.value === 'number' ? esc(fmtNum.format(sl.value)) : ''}" placeholder="leer = ohne Preisänderung"></label>
+        <table class="etab sptab"><thead><tr><th>Angebot</th><th class="sp-norm">Normalpreis</th><th>Empfehlung</th><th></th></tr></thead><tbody>${rows}</tbody></table>
+        <p class="hint">Gilt nur in den Angeboten, die den Artikel enthalten (oben aufgeführt). <strong>Mit Preis:</strong> Kunden sehen „Sonderposten – solange der Vorrat reicht“ und den bisherigen Preis durchgestrichen; ist laut Bestandsliste kein Bestand mehr da, wird der Artikel automatisch ausgeblendet. <strong>Ohne Preis:</strong> der Artikel wird nur hervorgehoben (Kennzeichen „Empfehlung“). Wirksam nach dem Veröffentlichen.</p>
         <p class="form-err" id="sp-err" role="alert"></p>
       </div>
-      <div class="dlg-foot">${sl ? `<span class="left"><button type="button" class="btn ghost danger" data-sp="remove">${icon('trash', 'sm')}Sonderpreis entfernen</button></span>` : ''}<button type="button" class="btn" data-close>Abbrechen</button><button type="submit" class="btn primary">${icon('check')}Übernehmen</button></div>`;
+      <div class="dlg-foot">${sl ? `<span class="left"><button type="button" class="btn ghost danger" data-sp="remove">${icon('trash', 'sm')}Empfehlung entfernen</button></span>` : ''}<button type="button" class="btn" data-close>Abbrechen</button><button type="submit" class="btn primary">${icon('check')}Übernehmen</button></div>`;
     dlgSale.showModal();
     $('#sale-body [name="value"]').focus();
   }
@@ -4315,30 +4167,34 @@
     delete it.sale;
     dlgSale.close();
     changed({ row: it.id });
-    toast('Sonderpreis entfernt (wirksam nach dem Veröffentlichen).');
+    toast('Empfehlung entfernt (wirksam nach dem Veröffentlichen).');
   });
   $('#sale-body').addEventListener('submit', (e) => {
     e.preventDefault();
     const it = iById(saleId);
     if (!it || ro) return;
     const err = (m) => { $('#sp-err').textContent = m; };
-    const base = C.parsePrice(e.target.elements.value.value);
-    if (base.status !== 'value' || base.invalid) { err('Bitte einen Sonderpreis in €/kg angeben, z. B. 9,90.'); return; }
+    const t = e.target.elements.value.value.trim();
+    const base = t ? C.parsePrice(t) : null;
+    if (base && (base.status !== 'value' || base.invalid)) { err('Empfehlungspreis nicht lesbar – z. B. 9,90, oder leer lassen (ohne Preisänderung).'); return; }
     const offersOut = {};
+    let aktiv = 0;
     for (const tr of $$('#sale-body tr[data-soid]')) {
       const oid = tr.dataset.soid, mode = tr.querySelector('[data-sm]').value;
-      if (mode === 'none') offersOut[oid] = { status: 'none' };
+      if (mode !== 'none') aktiv++;
+      if (mode === 'none' || mode === 'mark') offersOut[oid] = { status: mode };
       if (mode === 'own') {
         const p = C.parsePrice(tr.querySelector('[data-sv]').value);
-        if (p.status !== 'value' || p.invalid) { err(`Eigener Sonderpreis für „${offerShort(oid)}“ fehlt oder ist nicht lesbar.`); return; }
+        if (p.status !== 'value' || p.invalid) { err(`Eigener Empfehlungspreis für „${offerShort(oid)}“ fehlt oder ist nicht lesbar.`); return; }
         offersOut[oid] = { value: p.value };
       }
     }
+    if (!aktiv) { err('In keinem Angebot ausgewählt – mindestens ein Angebot auf „wie oben“ stellen oder „Empfehlung entfernen“.'); return; }
     pushUndo();
-    it.sale = { value: base.value, ...(Object.keys(offersOut).length ? { offers: offersOut } : {}), since: (it.sale && it.sale.since) || isoToday() };
+    it.sale = { ...(base ? { value: base.value } : { mark: true }), ...(Object.keys(offersOut).length ? { offers: offersOut } : {}), since: (it.sale && it.sale.since) || isoToday() };
     dlgSale.close();
     changed({ row: it.id });
-    toast(`Sonderpreis ${fmtNum.format(base.value)} €/kg für „${it.name}“ gesetzt – wirksam nach dem Veröffentlichen.`, 5000);
+    toast(`Empfehlung ${base ? fmtNum.format(base.value) + ' €/kg' : 'ohne Preisänderung'} für „${it.name}“ gesetzt – wirksam nach dem Veröffentlichen.`, 5000);
   });
 
   /* Liste: Artikel mit kurzem oder überschrittenem MHD (Farbskala der Bestandsliste), bezogen auf das gewählte Angebot */
@@ -4352,22 +4208,22 @@
   function renderMhd() {
     const host = $('#mhd-panel');
     if (!host) return;
-    if (!stock || !model) { host.hidden = true; panelLayout(); return; }
+    if (!stock || !model) { host.hidden = true; return; }
     const all = mhdList();
     const toks = fold(filterQ).split(/\s+/).filter(Boolean);
     const list = toks.length ? all.filter((x) => { const h = fold(x.a.code + ' ' + x.a.name + ' ' + x.items.map((i) => i.name).join(' ')); return toks.every((t) => h.includes(t)); }) : all;
-    const withSale = all.filter((x) => x.items.some((i) => C.saleFor(i, curOffer) != null)).length;
+    const withSale = all.filter((x) => x.items.some((i) => C.empfehlungFor(i, curOffer))).length;
     host.hidden = false;
     const rows = list.map((x) => {
       const it = x.items[0];
-      const cur = it ? effPrice(it, curOffer) : null, sp = it ? C.saleFor(it, curOffer) : null;
+      const cur = it ? effPrice(it, curOffer) : null, emp = it ? C.empfehlungFor(it, curOffer) : null, sp = emp ? emp.preis : null;
       return `<tr data-mcode="${esc(x.a.code)}"${it ? ` data-mid="${esc(it.id)}"` : ''}>
         <td class="np-code">${esc(x.a.code)}</td><td class="np-name">${esc(it ? it.name : x.a.name)}${!it ? ' <span class="muted">(nicht in diesem Angebot)</span>' : ''}</td>
         <td class="np-kg">${esc(kgText(x.a.kg))}</td><td class="np-mhd"><span class="${x.cls}">${esc(mhdShort(x.a.mhd))}</span></td>
         <td class="np-prev">${it ? (cur ? esc(priceShort(cur)) : '<span class="muted">ohne Preis</span>') : '—'}</td>
-        <td class="np-prev">${sp != null ? `<strong class="sp-val">${esc(F.euroKg(sp))}</strong>` : '—'}</td>
+        <td class="np-prev">${sp != null ? `<strong class="sp-val">${esc(F.euroKg(sp))}</strong>` : emp ? '<span class="sp-val">ohne Preis</span>' : '—'}</td>
         <td class="np-act">${ro ? '' : it
-          ? `<button type="button" class="btn sm${it.sale ? '' : ' primary'}" data-mp="sale">${icon('tag', 'sm')}${it.sale ? 'Sonderpreis ändern' : 'Sonderpreis'}</button>`
+          ? `<button type="button" class="btn sm${it.sale ? '' : ' primary'}" data-mp="sale">${icon('tag', 'sm')}${it.sale ? 'Empfehlung ändern' : 'Empfehlung'}</button>`
           : `<button type="button" class="btn sm" data-mp="add">${icon('plus', 'sm')}Ins Angebot</button>`}</td>
       </tr>`;
     }).join('');
@@ -4375,14 +4231,13 @@
       <button type="button" class="np-head" data-mp="toggle" aria-expanded="${mhdOpen}">
         <span class="np-badge">${fmtInt.format(all.length)}</span>
         <span class="np-tt"><span class="np-title">Kurzes MHD – Sonderposten</span>
-        <span class="np-sub">MHD überschritten oder in höchstens 14 Tagen · ${plural(withSale, 'Artikel', 'Artikel')} mit Sonderpreis in „${esc(offerShort(curOffer))}“ · ohne Bestand automatisch ausgeblendet</span></span>
+        <span class="np-sub">MHD überschritten oder in höchstens 14 Tagen · ${plural(withSale, 'Artikel', 'Artikel')} mit Empfehlung in „${esc(offerShort(curOffer))}“ · mit Preis ohne Bestand automatisch ausgeblendet</span></span>
         ${icon('chev', 'np-chev')}
       </button>
-      ${mhdOpen ? (list.length ? `<div class="np-body"><table class="etab nptab"><thead><tr><th class="np-code">Art.-Nr.</th><th class="np-name">Bezeichnung</th><th class="np-kg">Verfügbar</th><th class="np-mhd">Kürz. MHD</th><th class="np-prev">Preis</th><th class="np-prev">Sonderpreis</th><th class="np-act"><span class="sr-only">Aktion</span></th></tr></thead><tbody>${rows}</tbody></table></div>`
+      ${mhdOpen ? (list.length ? `<div class="np-body"><table class="etab nptab"><thead><tr><th class="np-code">Art.-Nr.</th><th class="np-name">Bezeichnung</th><th class="np-kg">Verfügbar</th><th class="np-mhd">Kürz. MHD</th><th class="np-prev">Preis</th><th class="np-prev">Empfehlung</th><th class="np-act"><span class="sr-only">Aktion</span></th></tr></thead><tbody>${rows}</tbody></table></div>`
         : `<p class="np-empty">${all.length ? 'Kein Treffer zur Suche.' : 'Keine Artikel mit kurzem oder überschrittenem MHD im Bestand.'}</p>`) : ''}
     </div>`;
     for (const s of host.querySelectorAll('.np-sub')) s.title = s.textContent;   // eingeklappt gekürzt: voller Text im Tooltip
-    panelLayout();
   }
   $('#mhd-panel').addEventListener('click', (e) => {
     const b = e.target.closest('[data-mp]');
@@ -4408,9 +4263,9 @@
     $('#rest-body').innerHTML = `<div class="dlg-head"><div><h2 id="rp-title">Sonderposten „${esc(info.offer.name)}“ versenden</h2><p>Nur Kunden mit dem Angebot <strong>${esc(info.offer.name)}</strong> erhalten diese E-Mail – jeder einzeln, mit den Sonderpreisen dieses Angebots. Andere Angebote und Kunden bleiben unsichtbar.</p></div><button class="btn icon ghost" type="button" data-close aria-label="Schließen">${icon('x')}</button></div>
       <div class="dlg-body">
         ${!info.mailReady ? '<div class="err-box">Der E-Mail-Versand ist noch nicht eingerichtet (Verwaltung → E-Mail).</div>' : ''}
-        ${pend ? `<div class="notice k-pend">${icon('info', 'sm')}<span>Es gibt ${plural(pend, 'unveröffentlichte Änderung', 'unveröffentlichte Änderungen')} im Entwurf. Versendet wird der <strong>veröffentlichte</strong> Stand – neue Sonderpreise bitte zuerst veröffentlichen.</span></div>` : ''}
+        ${pend ? `<div class="notice k-pend">${icon('info', 'sm')}<span>Es gibt ${plural(pend, 'unveröffentlichte Änderung', 'unveröffentlichte Änderungen')} im Entwurf. Versendet wird der <strong>veröffentlichte</strong> Stand – neue Empfehlungspreise bitte zuerst veröffentlichen.</span></div>` : ''}
         ${items.length ? `<h3 class="d-h"><span>${plural(items.length, 'Sonderposten', 'Sonderposten')}</span></h3><ul class="plist">${items.map((x) => `<li><span>${esc(x.code || '—')} · ${esc(x.name)}</span><span><strong>${esc(fmtNum.format(x.price))} €/kg</strong>${x.regular != null ? ` <s class="muted">${esc(F.euroKg(x.regular))}</s>` : ''}</span></li>`).join('')}</ul>`
-          : `<div class="err-box">Im veröffentlichten Angebot „${esc(info.offer.name)}“ ist kein Sonderposten mit Bestand enthalten. Sonderpreise festlegen (${icon('tag', 'sm')}) und veröffentlichen.</div>`}
+          : `<div class="err-box">Im veröffentlichten Angebot „${esc(info.offer.name)}“ ist kein Sonderposten mit Bestand enthalten. Empfehlung mit Preis festlegen (${icon('tag', 'sm')}) und veröffentlichen.</div>`}
         <h3 class="d-h"><span>Empfänger</span></h3>
         ${ok.length ? `<div class="k-rlist"><label class="check k-rall"><input type="checkbox" id="rp-all"> Alle auswählen</label>
           <table class="etab ktab k-rtab"><tbody>${ok.map((c) => `<tr data-rid="${esc(c.id)}"><td class="k-rchk"><input type="checkbox" data-psel="${esc(c.id)}" checked aria-label="${esc(c.firma)} auswählen"></td>
@@ -4500,7 +4355,9 @@
     return map;
   }
   const M_FIELDS = ['name', 'category', 'origin', 'condition'];
-  const differs = (e, it) => M_FIELDS.some((f) => (e[f] || '') !== (it[f] || ''));
+  const differs = (e, it) => M_FIELDS.some((f) => (e[f] || '') !== (it[f] || '')) || namenSig(e.namen) !== namenSig(it.namen);
+  /* Bezeichnungen je Angebot eines Stammsatzes auf einen Artikel des Angebots übertragen (nur bestehende Angebote) */
+  function namenSetzen(it, e) { const n = namenBekannt(e.namen); if (n) it.namen = { ...n }; else delete it.namen; }
   /* Stammdaten auf Artikel anwenden (nur eindeutige Artikelnummern) */
   function applyMasterTo(m, onlyCode) {
     if (!master || !master.articles.length) return 0;
@@ -4512,6 +4369,7 @@
       if (!list || list.length !== 1 || !differs(e, list[0])) continue;
       const it = list[0];
       for (const f of M_FIELDS) it[f] = e[f] ?? null;
+      namenSetzen(it, e);
       delete it.nameRaw;
       autoAttr.delete(it.id);
       n++;
@@ -4538,7 +4396,10 @@
     for (const [k, list] of by) {
       if (list.length !== 1 || masterOf(k)) continue;
       const it = list[0];
-      master.articles.push({ code: it.code, name: C.stripFrisch(it.name), category: it.category, origin: it.origin || null, condition: it.condition });
+      const e = { code: it.code, name: it.name, category: it.category, origin: it.origin || null, condition: it.condition };
+      const nm = namenBekannt(it.namen);
+      if (nm) e.namen = nm;
+      master.articles.push(e);
       n++;
     }
     master.articles.sort((a, b) => a.code.localeCompare(b.code, 'de', { numeric: true }));
@@ -4551,22 +4412,25 @@
     el.innerHTML = st === 'saving' ? 'Speichert …' : st === 'error' ? `Nicht gespeichert: ${esc(msg || '')} <button type="button" class="link-btn" data-ma="retry">Erneut</button>` : master && master.updatedAt ? `Gespeichert · ${esc(timeOnly(master.updatedAt))} Uhr` : '';
   }
   function masterChanged() { clearTimeout(masterTimer); setMasterState('saving'); masterTimer = setTimeout(saveMaster, 700); }
+  /* Rückgabe: true = gespeichert, false = Fehler (bei 409 ist danach der aktuelle Stand geladen), undefined = eingereiht */
   async function saveMaster() {
     clearTimeout(masterTimer);
-    if (roMaster || !master) return;
-    if (masterSaving) { masterQueued = true; return; }
+    if (roMaster || !master) return false;
+    if (masterSaving) { masterQueued = true; return undefined; }
     masterSaving = true;
     setMasterState('saving');
     try {
       const r = await api('master_save', { body: { rev: master.rev, articles: master.articles } });
       master.rev = r.rev; master.updatedAt = r.updatedAt; masterErr = null;
       setMasterState('saved');
+      return true;
     } catch (e) {
       masterErr = e.message; setMasterState('error', e.message);
       if (e.status === 409) {   // jemand anderes hat gespeichert: aktuellen Stand laden statt endlos mit altem Stand zu scheitern
         masterErr = null;
         try { await loadMaster(true); toast('Die Stammdaten wurden inzwischen an anderer Stelle geändert – der aktuelle Stand wurde geladen. Bitte die letzte Änderung prüfen.', 8000); if (currentView === 'master') renderMasterView(); } catch { /* bleibt beim Fehlerhinweis */ }
       }
+      return false;
     }
     finally { masterSaving = false; if (masterQueued) { masterQueued = false; saveMaster(); } }
   }
@@ -4592,7 +4456,7 @@
     const dev = master.articles.filter((e) => { const l = by.get(mKey(e.code)); return l && l.length === 1 && differs(e, l[0]); }).length;
     host.innerHTML = `
       <div class="st-info">
-        <div><strong>Stammdaten</strong><span class="sub">Bezeichnung, Fleischart, Herkunft, Zustand und VK-Gruppe je Artikelnummer – werden beim Excel-Import automatisch übernommen. „frisch“ gehört in den Zustand, nicht in die Bezeichnung.</span></div>
+        <div><strong>Stammdaten</strong><span class="sub">Je Artikelnummer die Bezeichnung der Warenwirtschaft (auch in der MHD-Liste), die Angebotsbezeichnung – auf Wunsch je Angebot eigene –, Fleischart, Herkunft, Zustand und VK-Gruppe; gelten für neu aufgenommene Artikel und lassen sich auf den Entwurf anwenden. Artikel anklicken zum Ändern.</span></div>
         <span class="ms-state" id="ms-state"></span>
       </div>
       <div class="ed-toolbar">
@@ -4600,7 +4464,7 @@
         <label class="select ms-vk"><span class="sr-only">VK-Gruppe</span><select id="ms-vk" aria-label="Nach VK-Gruppe filtern">${vkFilterOpts()}</select>${icon('chev', 'sm')}</label>
         <span class="ed-hint" id="ms-count"></span>
         ${roMaster ? '' : `<span class="st-actions">
-          <button type="button" class="btn" data-ma="import" title="Artikelstammdaten-Export der Warenwirtschaft (CSV) einlesen: neue Artikel, VK-Gruppe und GTIN">${icon('upload')}CSV importieren</button><input type="file" id="ms-file" accept=".csv,text/csv,text/plain" hidden>
+          <button type="button" class="btn" data-ma="import" title="Artikelstammdaten-Export der Warenwirtschaft (CSV) einlesen: neue Artikel, Originalbezeichnung, VK-Gruppe und GTIN">${icon('upload')}CSV importieren</button><input type="file" id="ms-file" accept=".csv,text/csv,text/plain" hidden>
           <button type="button" class="btn" data-ma="from-draft"${missing ? '' : ' disabled'} title="Artikelnummern aus dem Angebot, die noch keine Stammdaten haben">${icon('plus')}Aus Angebot ergänzen${missing ? ` (${missing})` : ''}</button>
           ${ro ? '' : `<button type="button" class="btn" data-ma="apply-all"${dev ? '' : ' disabled'} title="Abweichende Artikel im Entwurf an die Stammdaten anpassen">${icon('check')}Auf Angebot anwenden${dev ? ` (${dev})` : ''}</button>`}
           <button type="button" class="btn primary" data-ma="new">${icon('plus')}Artikel anlegen</button>
@@ -4620,6 +4484,14 @@
       + vkg.map((g) => `<option value="${esc(g.nr)}"${masterVk === g.nr ? ' selected' : ''}>${esc(g.nr)} · ${esc(g.name)} (${fmtInt.format(n.get(g.nr) || 0)})</option>`).join('')
       + fremd.map((nr) => `<option value="${esc(nr)}"${masterVk === nr ? ' selected' : ''}>${esc(nr)} · nicht in der Liste (${fmtInt.format(n.get(nr))})</option>`).join('');
   }
+  /* Originalbezeichnung eines Stammsatzes: Bezeichnung1 aus dem Artikelstammdaten-Import, sonst der Name der
+     Bestandsliste (WinAB). Rückgabe { text, quelle } – quelle: 'import' | 'bestand' | '' (unbekannt). */
+  function masterOrig(e) {
+    if (e.nameWawi) return { text: e.nameWawi, quelle: 'import' };
+    const st = stockOf(e.code), b = st ? st.nameImport || st.name : '';
+    return b ? { text: b, quelle: 'bestand' } : { text: '', quelle: '' };
+  }
+  /* Liste nur zum Ansehen (Vorgabe des Inhabers 03.11.2026): Klick auf einen Artikel öffnet das Pop-up zum Ändern */
   function renderMasterList() {
     const host = $('#ms-list');
     if (!host || !master) return;
@@ -4627,61 +4499,43 @@
     const list = master.articles.filter((e) => {
       if (masterVk && (masterVk === '-' ? e.vkGruppe : e.vkGruppe !== masterVk)) return false;
       if (!toks.length) return true;
-      const h = fold([e.code, e.name, e.origin, e.category, C.CONDITION_LABELS[e.condition], e.vkGruppe, vkName(e.vkGruppe), e.gtin].join(' '));
+      const h = fold([e.code, e.name, masterOrig(e).text, ...Object.values(e.namen || {}), e.origin, e.category, C.CONDITION_LABELS[e.condition], e.vkGruppe, vkName(e.vkGruppe), e.gtin].join(' '));
       return toks.every((t) => h.includes(t));
     });
     $('#ms-count').textContent = `${fmtInt.format(list.length)} von ${plural(master.articles.length, 'Artikel', 'Artikeln')}${list.length > 1500 ? ' – die ersten 1.500 angezeigt, Suche oder VK-Gruppe eingrenzen' : ''}`;
     const by = draftByCode();
     const rows = list.slice(0, 1500).map((e) => {
-      const st = stockOf(e.code);
-      return `<tr data-mcode="${esc(e.code)}">
+      const o = masterOrig(e), nEig = Object.keys(namenBekannt(e.namen) || {}).length;
+      const origHTML = o.text ? `${esc(o.text)}${o.quelle === 'bestand' ? ' <span class="m-quelle" title="Noch nicht aus dem Artikelstammdaten-Import – Name der Bestandsliste">Bestandsliste</span>' : ''}` : '<span class="muted">—</span>';
+      return `<tr data-mcode="${esc(e.code)}" class="m-row">
         <td class="m-code">${esc(e.code)}</td>
-        <td class="m-name"><input class="in" data-mf="name" value="${esc(e.name)}" maxlength="200" aria-label="Bezeichnung">${st && fold(st.nameImport || st.name) !== fold(e.name) ? `<div class="m-winab" title="Bezeichnung in WinAB / Bestandsliste">WinAB: ${esc(st.nameImport || st.name)}</div>` : ''}</td>
-        <td class="m-cat"><select class="in" data-mf="category" aria-label="Fleischart">${CAT_OPTS(e.category)}</select></td>
-        <td class="m-origin"><input class="in" data-mf="origin" value="${esc(e.origin || '')}" list="dl-origins" placeholder="nicht angegeben" maxlength="60" aria-label="Herkunft"></td>
-        <td class="m-cond"><select class="in" data-mf="condition" aria-label="Zustand">${COND_OPTS(e.condition)}</select></td>
-        <td class="m-vk"><input class="in" data-mf="vkGruppe" value="${esc(e.vkGruppe || '')}" list="dl-vkgruppen" placeholder="–" maxlength="10" aria-label="VK-Gruppe"><div class="m-vkname${e.vkGruppe && !vkName(e.vkGruppe) ? ' st-warn' : ''}" title="${e.vkGruppe ? esc(vkName(e.vkGruppe) || '') : ''}">${e.vkGruppe ? esc(vkName(e.vkGruppe) || 'nicht in der Liste') : ''}</div></td>
+        <td class="m-orig" title="${esc(o.text)}">${origHTML}</td>
+        <td class="m-name"><span class="m-nm">${esc(e.name)}</span>${nEig ? `<span class="m-eigen" title="${esc(Object.entries(namenBekannt(e.namen)).map(([k, v]) => `${offerShort(k)}: ${v}`).join(' · '))}">${nEig === 1 ? 'eigene in 1 Angebot' : `eigene in ${nEig} Angeboten`}</span>` : ''}<div class="m-orig-sub">${o.text ? esc(o.text) : ''}</div></td>
+        <td class="m-cat">${esc(e.category)}</td>
+        <td class="m-origin">${e.origin ? esc(e.origin) : '<span class="muted">—</span>'}</td>
+        <td class="m-cond">${esc(C.CONDITION_LABELS[e.condition] || e.condition)}</td>
+        <td class="m-vk">${e.vkGruppe ? `${esc(e.vkGruppe)}<div class="m-vkname${vkName(e.vkGruppe) ? '' : ' st-warn'}" title="${esc(vkName(e.vkGruppe) || '')}">${esc(vkName(e.vkGruppe) || 'nicht in der Liste')}</div>` : '<span class="muted">—</span>'}</td>
         <td class="m-offer">${offerStatus(e, by)}</td>
-        <td class="m-act">${roMaster ? '' : `<button type="button" class="ibtn danger" data-ma="del" aria-label="Stammsatz ${esc(e.code)} löschen">${icon('trash')}</button>`}</td>
+        <td class="m-act"><button type="button" class="ibtn" data-ma="open" aria-label="Artikel ${esc(e.code)} ${roMaster ? 'ansehen' : 'bearbeiten'}" title="${roMaster ? 'Ansehen' : 'Bearbeiten'}">${icon('dots')}</button></td>
       </tr>`;
     }).join('');
-    host.innerHTML = list.length ? `<div class="gcard"><table class="etab mtab"><thead><tr><th class="m-code">Art.-Nr.</th><th class="m-name">Bezeichnung</th><th class="m-cat">Fleischart</th><th class="m-origin">Herkunft</th><th class="m-cond">Zustand</th><th class="m-vk">VK-Gruppe</th><th class="m-offer">Angebot</th><th class="m-act"><span class="sr-only">Aktion</span></th></tr></thead><tbody>${rows}</tbody></table></div>`
+    host.innerHTML = list.length ? `<div class="gcard"><table class="etab mtab"><thead><tr><th class="m-code">Art.-Nr.</th><th class="m-orig">Bezeichnung (Warenwirtschaft)</th><th class="m-name">Angebotsbezeichnung</th><th class="m-cat">Fleischart</th><th class="m-origin">Herkunft</th><th class="m-cond">Zustand</th><th class="m-vk">VK-Gruppe</th><th class="m-offer">Angebot</th><th class="m-act"><span class="sr-only">Öffnen</span></th></tr></thead><tbody>${rows}</tbody></table></div>`
       : `<div class="ed-empty"><h3>${master.articles.length ? 'Keine Treffer' : 'Noch keine Stammdaten'}</h3><p>${master.articles.length ? 'Suchbegriff anpassen.' : 'Mit „Aus Angebot ergänzen“ oder „Artikel anlegen“ beginnen.'}</p></div>`;
-    lockInputs(host);
   }
   $('#view-master').addEventListener('input', (e) => {
     if (e.target.id === 'ms-q') { clearTimeout(qTimer); qTimer = setTimeout(() => { masterQ = e.target.value.trim(); renderMasterList(); }, 120); }
   });
   $('#view-master').addEventListener('change', (e) => {
     if (e.target.id === 'ms-vk') { masterVk = e.target.value; renderMasterList(); return; }
-    if (e.target.id === 'ms-file' && e.target.files[0]) { const f = e.target.files[0]; e.target.value = ''; masterImportDatei(f); return; }
-    const el = e.target, tr = el.closest('tr[data-mcode]');
-    if (!tr || !el.dataset.mf || roMaster) return;
-    const ent = masterOf(tr.dataset.mcode);
-    if (!ent) return;
-    const f = el.dataset.mf;
-    if (f === 'name') {
-      const typed = C.clean(el.value);
-      if (!typed) { el.value = ent.name; toast('Die Bezeichnung darf nicht leer sein.'); return; }
-      const n = C.stripFrisch(typed);
-      if (n !== typed) { if (ent.condition !== 'frisch-gefroren') { ent.condition = 'frisch'; tr.querySelector('[data-mf="condition"]').value = 'frisch'; } toast('„frisch“ steht im Zustand, nicht in der Bezeichnung.'); }
-      ent.name = n; el.value = n;
-    } else if (f === 'origin') { ent.origin = C.clean(el.value) || null; el.value = ent.origin || ''; }
-    else if (f === 'vkGruppe') {
-      const nr = el.value.trim();
-      if (nr && (!/^[0-9A-Za-z._-]{1,10}$/.test(nr) || (vkg.length && !vkgMap.has(nr)))) { el.value = ent.vkGruppe || ''; toast(`Die VK-Gruppe „${nr}“ gibt es nicht. Bitte unter Stammdaten → VK-Gruppen anlegen.`, 6000); return; }
-      if (nr) ent.vkGruppe = nr; else delete ent.vkGruppe;
-      el.value = nr;
-      const nm = tr.querySelector('.m-vkname'); nm.textContent = nr ? vkName(nr) || 'nicht in der Liste' : ''; nm.title = nr ? vkName(nr) || '' : ''; nm.classList.toggle('st-warn', !!nr && !vkName(nr));
-    }
-    else ent[f] = el.value;
-    tr.querySelector('.m-offer').innerHTML = offerStatus(ent, draftByCode());
-    masterChanged();
+    if (e.target.id === 'ms-file' && e.target.files[0]) { const f = e.target.files[0]; e.target.value = ''; masterImportDatei(f); }
   });
   $('#view-master').addEventListener('click', async (e) => {
     const b = e.target.closest('[data-ma]');
-    if (!b || roMaster) return;
-    const a = b.dataset.ma, code = b.closest('tr[data-mcode]')?.dataset.mcode;
+    const tr = e.target.closest('tr[data-mcode]');
+    if (!b) { if (tr && !e.target.closest('a, button, input, select, label')) openMasterArt(tr.dataset.mcode); return; }   // ganze Zeile öffnet das Pop-up
+    const a = b.dataset.ma, code = tr?.dataset.mcode;
+    if (a === 'open' && code) { openMasterArt(code); return; }
+    if (roMaster) return;
     if (a === 'retry') { saveMaster(); return; }
     if (a === 'import') { $('#ms-file').click(); return; }
     if (a === 'from-draft') { const n = addFromDraft(); saveMaster(); toast(`${plural(n, 'Artikel', 'Artikel')} aus dem Angebot ergänzt.`); renderMasterView(); return; }
@@ -4690,7 +4544,7 @@
       const preview = clone(model);
       const n = applyMasterTo(preview, a === 'apply1' ? code : null);
       if (!n) return;
-      if (a === 'apply-all' && !(await confirmBox('Stammdaten auf das Angebot anwenden?', `${plural(n, 'Artikel', 'Artikel')} im Entwurf ${n === 1 ? 'wird' : 'werden'} an die Stammdaten angepasst (Bezeichnung, Fleischart, Herkunft, Zustand). Mit „Rückgängig“ wiederherstellbar.`, 'Anwenden'))) return;
+      if (a === 'apply-all' && !(await confirmBox('Stammdaten auf das Angebot anwenden?', `${plural(n, 'Artikel', 'Artikel')} im Entwurf ${n === 1 ? 'wird' : 'werden'} an die Stammdaten angepasst (Bezeichnung, auch je Angebot, Fleischart, Herkunft, Zustand). Mit „Rückgängig“ wiederherstellbar.`, 'Anwenden'))) return;
       pushUndo();
       applyMasterTo(model, a === 'apply1' ? code : null);
       saveNote = { type: 'master' };
@@ -4699,15 +4553,124 @@
       renderMasterView();
       return;
     }
-    if (a === 'del' && code) {
-      const ent = masterOf(code);
-      if (!(await confirmBox('Stammsatz löschen?', `${esc(ent.code)} · ${esc(ent.name)} wird aus den Stammdaten entfernt. Das Angebot bleibt unverändert.`, 'Löschen', true))) return;
-      master.articles = master.articles.filter((x) => x !== ent);
-      saveMaster();
-      renderMasterView();
+    if (a === 'new') openMasterNew();
+  });
+
+  /* ---------- Pop-up „Artikel“ der Artikelstammdaten (Auftrag des Inhabers 03.11.2026) ----------
+     Originalbezeichnung der Warenwirtschaft (nur lesen; steht auch in der MHD-Liste), Angebotsbezeichnung als Basiswert,
+     je Kundenangebot ein Feld für eine eigene Bezeichnung (leer = Basiswert; jedes Angebot für sich), Merkmale und VK-Gruppe.
+     „Speichern“ schreibt die Stammdaten und übernimmt die geänderten Felder in den Entwurf, wenn der Artikel dort genau
+     einmal steht – sichtbar für Kunden erst nach „Veröffentlichen“. */
+  const dlgMA = $('#dlg-master-art');
+  let maCode = null;
+  function maDraftItem(code) {
+    const l = draftByCode().get(mKey(code));
+    return l && l.length === 1 ? l[0] : null;
+  }
+  function openMasterArt(code) {
+    const e = masterOf(code);
+    if (!e) return;
+    maCode = e.code;
+    const o = masterOrig(e), it = maDraftItem(e.code), l = draftByCode().get(mKey(e.code)) || [];
+    const quelle = o.quelle === 'import' ? 'aus dem Artikelstammdaten-Import' : o.quelle === 'bestand' ? 'aus der Bestandsliste – mit dem nächsten Artikelstammdaten-Import (CSV) kommt die Bezeichnung der Warenwirtschaft' : 'noch nicht bekannt – kommt mit dem Artikelstammdaten-Import (CSV)';
+    const imAngebot = (oid) => !!(it && inOffer(it, oid));
+    // Abgleich mit dem Artikel im Angebotsentwurf (alle Angebote teilen ihn)
+    const status = !l.length ? 'Steht in keinem Angebot.' : l.length > 1 ? `Steht ${l.length}× in den Angeboten – wird nicht automatisch abgeglichen.` : differs(e, l[0]) ? 'In den Angeboten abweichend – „Speichern“ übernimmt die geänderten Felder dorthin.' : 'In den Angeboten gleich wie hier.';
+    $('#master-art-body').innerHTML = `
+      <div class="dlg-head"><div><h2 id="ma-title"><span class="ma-nr">${esc(e.code)}</span> ${esc(o.text || e.name)}</h2><p>${roMaster ? 'Nur Ansicht – Ihre Rolle erlaubt keine Änderungen.' : 'Stammdaten gelten für alle künftigen Wochen und für neu aufgenommene Artikel.'}</p></div>
+        <button class="btn icon ghost" type="button" data-close aria-label="Schließen">${icon('x')}</button></div>
+      <div class="dlg-body form-grid two">
+        <div class="fld span2"><span>Bezeichnung (Warenwirtschaft)</span><div class="ma-orig" id="ma-orig">${o.text ? esc(o.text) : '<span class="muted">—</span>'}</div><p class="hint">Original ${esc(quelle)}. Steht so in der MHD-Liste.</p></div>
+        <label class="fld span2"><span>Angebotsbezeichnung (Basiswert)</span><input name="name" value="${esc(e.name)}" maxlength="200" required autocomplete="off"><small class="hint">Gilt im Wochenangebot und in jedem Angebot ohne eigene Bezeichnung.</small></label>
+        ${offers.length ? `<div class="fld span2 ma-namen"><span>Bezeichnung je Angebot</span>
+          ${offers.map((x) => `<label class="ma-nrow"><span class="ma-on">${esc(offerShort(x.id))}${it ? `<small class="${imAngebot(x.id) ? 'ma-drin' : 'muted'}">${imAngebot(x.id) ? 'im Angebot' : 'nicht im Angebot'}</small>` : ''}</span><input name="oname" data-on="${esc(x.id)}" value="${esc(eigenName(e, x.id))}" placeholder="${esc(e.name)}" maxlength="200" autocomplete="off" aria-label="Bezeichnung in ${esc(offerShort(x.id))}"></label>`).join('')}
+          <p class="hint">Leer = Basiswert. Jedes Angebot steht für sich; ändern lässt sich die Bezeichnung auch direkt im Angebot.</p>
+        </div>` : ''}
+        <label class="fld"><span>Fleischart</span><select name="category">${CAT_OPTS(e.category)}</select></label>
+        <label class="fld"><span>Zustand</span><select name="condition">${COND_OPTS(e.condition)}</select></label>
+        <label class="fld"><span>Herkunft</span><input name="origin" value="${esc(e.origin || '')}" list="dl-origins" placeholder="nicht angegeben" maxlength="60"></label>
+        <label class="fld"><span>VK-Gruppe</span><input name="vkGruppe" value="${esc(e.vkGruppe || '')}" list="dl-vkgruppen" placeholder="–" maxlength="10" autocomplete="off"><small class="hint" id="ma-vkname">${e.vkGruppe ? esc(vkName(e.vkGruppe) || 'nicht in der Liste') : ''}</small></label>
+        ${e.gtin ? `<div class="fld"><span>GTIN</span><div class="ma-orig ma-gtin">${esc(e.gtin)}</div></div>` : ''}
+        <p class="hint span2 ma-status">${icon('info', 'sm')}<span>${esc(status)}</span></p>
+        <p class="form-err span2" id="ma-err" role="alert"></p>
+      </div>
+      <div class="dlg-foot">
+        ${roMaster ? '<span class="spacer"></span><button type="button" class="btn" data-close>Schließen</button>' : `<span class="left"><button type="button" class="btn sm ghost" data-ma-del style="color:var(--accent)">${icon('trash', 'sm')}Löschen</button></span>
+        <button type="button" class="btn" data-close>Abbrechen</button><button type="submit" class="btn primary">${icon('check')}Speichern</button>`}
+      </div>`;
+    if (roMaster) lockInputs($('#master-art-body'));
+    if (!dlgMA.open) dlgMA.showModal();
+  }
+  $('#master-art-body').addEventListener('input', (ev) => {
+    const f = ev.currentTarget.elements;
+    if (ev.target.name === 'name') for (const x of ev.currentTarget.querySelectorAll('[name="oname"]')) x.placeholder = C.clean(f.name.value) || '';
+    if (ev.target.name === 'vkGruppe') { const nr = ev.target.value.trim(); $('#ma-vkname').textContent = nr ? vkName(nr) || 'nicht in der Liste' : ''; }
+  });
+  $('#master-art-body').addEventListener('click', async (ev) => {
+    if (ev.target.closest('[data-close]')) { dlgMA.close(); return; }
+    if (!ev.target.closest('[data-ma-del]') || roMaster) return;
+    const e = masterOf(maCode);
+    if (!e) return;
+    if (!(await confirmBox('Stammsatz löschen?', `${esc(e.code)} · ${esc(e.name)} wird aus den Stammdaten entfernt. Das Angebot bleibt unverändert.`, 'Löschen', true))) return;
+    master.articles = master.articles.filter((x) => x !== e);
+    dlgMA.close();
+    saveMaster();
+    renderMasterView();
+  });
+  $('#master-art-body').addEventListener('submit', async (ev) => {
+    ev.preventDefault();
+    if (roMaster) return;
+    const e = masterOf(maCode), form = ev.currentTarget, f = form.elements, err = $('#ma-err');
+    if (!e) { dlgMA.close(); return; }
+    err.textContent = '';
+    const typed = C.clean(f.name.value);
+    if (!typed) { err.textContent = 'Die Angebotsbezeichnung darf nicht leer sein.'; f.name.focus(); return; }
+    const name = typed;   // Bezeichnung ohne Einschränkung (auch mit „frisch“); der Zustand ist das eigene Feld
+    const condition = f.condition.value;
+    const vk = f.vkGruppe.value.trim();
+    if (vk && (!/^[0-9A-Za-z._-]{1,10}$/.test(vk) || (vkg.length && !vkgMap.has(vk)))) { err.textContent = `Die VK-Gruppe „${vk}“ gibt es nicht. Bitte unter Stammdaten → VK-Gruppen anlegen.`; f.vkGruppe.focus(); return; }
+    const neu = { ...e, name, category: f.category.value, origin: C.clean(f.origin.value) || null, condition };
+    if (vk) neu.vkGruppe = vk; else delete neu.vkGruppe;
+    delete neu.namen;
+    for (const x of form.querySelectorAll('[name="oname"]')) setzeName(neu, x.dataset.on, x.value);
+    const felder = [...M_FIELDS, 'vkGruppe'].filter((k) => (e[k] || '') !== (neu[k] || ''));
+    const namenNeu = namenSig(e.namen) !== namenSig(neu.namen);
+    if (!felder.length && !namenNeu) { window.STAFL_FENSTER?.gespeichert(dlgMA); dlgMA.close(); return; }
+    const vorher = { ...e };
+    for (const k of Object.keys(e)) delete e[k];
+    Object.assign(e, neu);
+    const btn = form.querySelector('[type=submit]');
+    btn.disabled = true;
+    while (masterSaving) await new Promise((r) => setTimeout(r, 100));
+    const ok = await saveMaster();
+    btn.disabled = false;
+    if (!ok) {
+      const noch = masterOf(vorher.code);   // nach einem Konflikt ist der aktuelle Stand geladen
+      if (noch === e) { for (const k of Object.keys(e)) delete e[k]; Object.assign(e, vorher); }
+      err.textContent = masterErr || 'Die Stammdaten wurden inzwischen an anderer Stelle geändert – bitte das Fenster schließen und erneut öffnen.';
       return;
     }
-    if (a === 'new') openMasterNew();
+    // geänderte Felder auch in den Entwurf (nur, wo der Artikel genau einmal steht)
+    let imEntwurf = false;
+    const it = ro ? null : maDraftItem(e.code);
+    if (it) {
+      const z = felder.filter((k) => M_FIELDS.includes(k) && (it[k] || '') !== (e[k] || ''));
+      const zn = namenNeu && namenSig(it.namen) !== namenSig(e.namen);
+      if (z.length || zn) {
+        pushUndo();
+        for (const k of z) it[k] = e[k] ?? null;
+        if (zn) namenSetzen(it, e);
+        if (z.includes('name')) delete it.nameRaw;
+        autoAttr.delete(it.id);
+        saveNote = { type: 'master' };
+        changed({ render: true });
+        imEntwurf = true;
+      }
+    }
+    window.STAFL_FENSTER?.gespeichert(dlgMA);
+    dlgMA.close();
+    toast(`Stammdaten für ${e.code} gespeichert${imEntwurf ? ' und in den Entwurf übernommen – für Kunden sichtbar nach „Veröffentlichen“' : ''}.`, imEntwurf ? 6000 : 3000);
+    renderMasterView();
   });
 
   /* Artikelstammdaten-Export der Warenwirtschaft (CSV) einlesen. Übernommen werden Nummer, Bezeichnung1 (neue Artikel;
@@ -4743,8 +4706,12 @@
   }
   function masterNeuAus(r) {
     const sug = C.suggestAttributes(r.name, [vkName(r.vkGruppe), r.name2].filter(Boolean).join(' '), '');
-    const e = { code: r.code, name: r.name, category: sug.category, origin: sug.origin || null, condition: sug.condition };
-    C.normalizeItem(e);   // „frisch“ aus der Bezeichnung in den Zustand, Herkunft vereinheitlichen
+    // Import aus der Warenwirtschaft: Bezeichnung als Vorschlag ohne „frisch“ (steht im Zustand) – von Hand bleibt sie danach frei
+    const name = C.nameVorschlag(r.name);
+    const e = { code: r.code, name, category: sug.category, origin: sug.origin || null, condition: sug.condition };
+    if (name !== r.name && e.condition === 'unbekannt') e.condition = 'frisch';
+    C.normalizeItem(e);   // Herkunft vereinheitlichen
+    e.nameWawi = r.name;   // Original (Bezeichnung1), bevor „frisch“ in den Zustand wandert
     const kurz = e.name.replace(/[\s,]+(?:fri|fr)\.?$/, '');   // abgekürztes „frisch“ der Warenwirtschaft („…,Hac.Horiz.,fri“)
     if (kurz !== e.name && kurz.length > 2) { e.name = kurz; if (e.condition === 'unbekannt') e.condition = 'frisch'; }
     if (r.vkGruppe) e.vkGruppe = r.vkGruppe;
@@ -4752,7 +4719,7 @@
     return e;
   }
   /* Gelesene Zeilen mit den Stammdaten zusammenführen: neue Artikel mit vorgeschlagenen Merkmalen, bestehende nur um
-     VK-Gruppe/GTIN ergänzt (leere Felder in der Datei löschen nichts). Liefert auch die vollständige neue Liste –
+     Originalbezeichnung (Bezeichnung1), VK-Gruppe und GTIN ergänzt (leere Felder in der Datei löschen nichts). Liefert auch die vollständige neue Liste –
      dieselbe Regel für den Import hier und in der Importzentrale (dort prüft und vergleicht der Server die Liste). */
   function masterZusammenfuehren(res, basis) {
     const by = new Map();
@@ -4762,11 +4729,11 @@
     for (const r of res.rows) {
       const ent = by.get(mKey(r.code));
       if (!ent) { neu.push(masterNeuAus(r)); continue; }
-      const vk = r.vkGruppe || ent.vkGruppe || '', gtin = r.gtin || ent.gtin || '';
-      if (vk !== (ent.vkGruppe || '') || gtin !== (ent.gtin || '')) ergaenzt.push({ ent, vk, gtin }); else gleich++;
+      const vk = r.vkGruppe || ent.vkGruppe || '', gtin = r.gtin || ent.gtin || '', wawi = r.name || ent.nameWawi || '';
+      if (vk !== (ent.vkGruppe || '') || gtin !== (ent.gtin || '') || wawi !== (ent.nameWawi || '')) ergaenzt.push({ ent, vk, gtin, wawi }); else gleich++;
     }
     const erg = new Map(ergaenzt.map((x) => [x.ent, x]));
-    const articles = basis.map((e) => { const x = erg.get(e); if (!x) return e; const c = { ...e }; if (x.vk) c.vkGruppe = x.vk; if (x.gtin) c.gtin = x.gtin; return c; }).concat(neu);
+    const articles = basis.map((e) => { const x = erg.get(e); if (!x) return e; const c = { ...e }; if (x.vk) c.vkGruppe = x.vk; if (x.gtin) c.gtin = x.gtin; if (x.wawi) c.nameWawi = x.wawi; return c; }).concat(neu);
     articles.sort((a, b) => a.code.localeCompare(b.code, 'de', { numeric: true }));
     return { neu, ergaenzt, gleich, articles };
   }
@@ -4789,11 +4756,11 @@
       <div class="dlg-head"><div><h2 id="msi-title">Artikelstammdaten importieren</h2><p>${esc(file.name)} · ${plural(res.rows.length, 'Artikel', 'Artikel')} · ${fmtInt.format(mitVk)} mit VK-Gruppe</p></div>
         <button class="btn icon ghost" type="button" data-close aria-label="Schließen">${icon('x')}</button></div>
       <div class="dlg-body">
-        <div class="cmp-stats"><div><span>Neu</span><strong id="msi-neu">${fmtInt.format(neu.length)}</strong></div><div><span>VK-Gruppe/GTIN ergänzt</span><strong id="msi-erg">${fmtInt.format(ergaenzt.length)}</strong></div><div><span>Unverändert</span><strong id="msi-gleich">${fmtInt.format(gleich)}</strong></div></div>
+        <div class="cmp-stats"><div><span>Neu</span><strong id="msi-neu">${fmtInt.format(neu.length)}</strong></div><div><span>Ergänzt</span><strong id="msi-erg">${fmtInt.format(ergaenzt.length)}</strong></div><div><span>Unverändert</span><strong id="msi-gleich">${fmtInt.format(gleich)}</strong></div></div>
         ${!vkg.length ? '<p class="hint st-warn">Die VK-Gruppen-Liste ist noch leer. Am besten zuerst unter Stammdaten → VK-Gruppen die Liste importieren – dann helfen die Gruppennamen beim Vorschlag von Fleischart, Herkunft und Zustand.</p>' : ''}
         ${neu.length ? `<h3 class="d-h"><span>Neu – Merkmale vorgeschlagen, danach in der Liste prüfbar</span></h3><ul class="kg-prev">${li(neu, (e) => `<li><span class="muted">${esc(e.code)}</span> ${esc(e.name)} <span class="muted">· ${esc(e.category)} · ${esc(C.CONDITION_LABELS[e.condition] || e.condition)}${e.origin ? ' · ' + esc(e.origin) : ''}${e.vkGruppe ? ' · ' + esc(vkName(e.vkGruppe) || 'VK ' + e.vkGruppe) : ''}</span></li>`)}</ul>` : ''}
-        ${ergaenzt.length ? `<h3 class="d-h"><span>Bestehende Artikel – VK-Gruppe/GTIN</span></h3><ul class="kg-prev">${li(ergaenzt, (x) => `<li><span class="muted">${esc(x.ent.code)}</span> ${esc(x.ent.name)} <span class="muted">· ${esc(vkName(x.vk) || (x.vk ? 'VK ' + x.vk : ''))}</span></li>`)}</ul>` : ''}
-        <p class="hint">Bezeichnung, Fleischart, Herkunft und Zustand bestehender Artikel bleiben unverändert.${nichtInDatei ? ` ${plural(nichtInDatei, 'Artikel steht', 'Artikel stehen')} nicht in der Datei und ${nichtInDatei === 1 ? 'bleibt' : 'bleiben'} erhalten.` : ''} EK, Bestand, Umsatz und Lieferant werden nicht übernommen.</p>
+        ${ergaenzt.length ? `<h3 class="d-h"><span>Bestehende Artikel – Originalbezeichnung, VK-Gruppe, GTIN</span></h3><ul class="kg-prev">${li(ergaenzt, (x) => `<li><span class="muted">${esc(x.ent.code)}</span> ${esc(x.ent.name)} <span class="muted">· ${esc(vkName(x.vk) || (x.vk ? 'VK ' + x.vk : ''))}</span></li>`)}</ul>` : ''}
+        <p class="hint">Angebotsbezeichnung (auch je Angebot), Fleischart, Herkunft und Zustand bestehender Artikel bleiben unverändert; die Originalbezeichnung wird aus Bezeichnung1 aktualisiert.${nichtInDatei ? ` ${plural(nichtInDatei, 'Artikel steht', 'Artikel stehen')} nicht in der Datei und ${nichtInDatei === 1 ? 'bleibt' : 'bleiben'} erhalten.` : ''} EK, Bestand, Umsatz und Lieferant werden nicht übernommen.</p>
         ${fremd.size ? `<p class="hint st-warn">VK-Gruppe nicht in der Liste: ${esc([...fremd].slice(0, 8).map(([nr, n]) => `${nr} (${n})`).join(', '))}${fremd.size > 8 ? ' …' : ''} – wird trotzdem eingetragen; bitte unter Stammdaten → VK-Gruppen ergänzen.</p>` : ''}
         ${res.ohneName || res.doppelt || res.fehler.length ? `<p class="hint" id="msi-skip">Übersprungen: ${[res.ohneName ? plural(res.ohneName, 'Zeile', 'Zeilen') + ' ohne Bezeichnung' : '', res.doppelt ? `${res.doppelt}× doppelte Nummer` : '', res.fehler.length ? `${res.fehler.length}× keine gültige Artikelnummer (${esc(res.fehler.slice(0, 5).join(', '))}${res.fehler.length > 5 ? ' …' : ''})` : ''].filter(Boolean).join(' · ')}</p>` : ''}
         ${nix ? '<p class="hint">Keine Änderungen – die Stammdaten sind bereits aktuell.</p>' : ''}
@@ -4820,7 +4787,7 @@
   const dlgMN = $('#dlg-master-new');
   function openMasterNew(code = '') {
     $('#master-new-body').innerHTML = `
-      <div class="dlg-head"><div><h2 id="mn-title">Artikel anlegen</h2><p>Stammdaten gelten für alle künftigen Wochen und werden beim Excel-Import übernommen.</p></div>
+      <div class="dlg-head"><div><h2 id="mn-title">Artikel anlegen</h2><p>Stammdaten gelten für alle künftigen Wochen und für neu aufgenommene Artikel.</p></div>
         <button class="btn icon ghost" type="button" data-close aria-label="Schließen">${icon('x')}</button></div>
       <div class="dlg-body form-grid two">
         <label class="fld"><span>Artikelnummer</span><input name="code" value="${esc(code)}" maxlength="20" required autocomplete="off"></label>
@@ -4853,8 +4820,8 @@
     if (masterOf(code)) { err.textContent = `Für ${code} gibt es bereits Stammdaten.`; return; }
     const typed = C.clean(f.name.value);
     if (!typed) { err.textContent = 'Bitte eine Bezeichnung angeben.'; return; }
-    const name = C.stripFrisch(typed);
-    master.articles.push({ code, name, category: f.category.value, origin: C.clean(f.origin.value) || null, condition: name !== typed && f.condition.value !== 'frisch-gefroren' ? 'frisch' : f.condition.value });
+    const name = typed;   // wie eingegeben (Vorschlag aus der Bestandsliste steht schon ohne „frisch“ im Feld)
+    master.articles.push({ code, name, category: f.category.value, origin: C.clean(f.origin.value) || null, condition: f.condition.value });
     master.articles.sort((x, y) => x.code.localeCompare(y.code, 'de', { numeric: true }));
     dlgMN.close();
     saveMaster();
@@ -4868,7 +4835,9 @@
     if (roMaster || !it.code) return;
     try { await loadMaster(); } catch (e) { toast(e.message); return; }
     const ent = masterOf(it.code);
-    const rec = { code: ent ? ent.code : it.code, name: C.stripFrisch(it.name), category: it.category, origin: it.origin || null, condition: it.condition };
+    const rec = { code: ent ? ent.code : it.code, name: it.name, category: it.category, origin: it.origin || null, condition: it.condition };
+    const nm = namenBekannt(it.namen);   // Bezeichnungen je Angebot gehören dazu
+    if (nm) rec.namen = nm; else if (ent) delete ent.namen;
     if (ent) Object.assign(ent, rec); else { master.articles.push(rec); master.articles.sort((x, y) => x.code.localeCompare(y.code, 'de', { numeric: true })); }
     await saveMaster();
     toast(masterErr ? `Nicht gespeichert: ${masterErr}` : `Stammdaten für ${it.code} ${ent ? 'aktualisiert' : 'angelegt'}.`);
@@ -4919,6 +4888,15 @@
       },
       nachher() { hist = null; prevKey = ''; },   // Preisverlauf und Vorwochenpreise beim nächsten Öffnen neu laden
     },
+    angebot_preise: {
+      async lesen([file]) {
+        const r = preiseAusCsv(await file.arrayBuffer());
+        const hinweise = r.leer ? [{ stufe: 'info', text: `${plural(r.leer, 'Zeile', 'Zeilen')} ohne Preis übersprungen.` }] : [];
+        return { daten: { preise: r.preise }, zeilen: r.preise.length + r.fehler.length + r.leer, fehler: r.fehler, hinweise };
+      },
+      // Entwurf und Angebote neu holen, falls der Angebotseditor in dieser Seite geladen ist (sonst beim nächsten Öffnen)
+      async nachher() { if (model) { try { await loadOffers(); await pullRemote(); } catch { /* der Hintergrundabgleich holt es nach */ } } },
+    },
   };
 
   window.WA = {
@@ -4929,6 +4907,8 @@
     get wartungSt() { return wartungSt; }, set wartungSt(v) { wartungSt = v; },
     get wartungEingabe() { return wartungEingabe; }, set wartungEingabe(v) { wartungEingabe = v; },
     views: {},
+    // Angebotskategorien (app/module/verwaltung/angebotskategorien.js): Vorschlag aus dem Angebot; nach dem Speichern neu ordnen
+    angebot: { kategorienVorschlag, kategorienGeaendert: () => kategorienLaden({ still: true }) },
   };
 
   /* Höhe der Kopfleiste für die links angeheftete Navigation */
@@ -4940,6 +4920,7 @@
 
   /* Alter Eingabebereich stillgelegt: nur ein Hinweis mit Verweis, danach Weiterleitung (Adresse vom Server, nur https) */
   function zeigeUmgezogen(ziel) {
+    if (document.readyState === 'loading') { document.addEventListener('DOMContentLoaded', () => zeigeUmgezogen(ziel), { once: true }); return; }   // erst nach allen Skripten (siehe seiteGeladen)
     const url = /^https:\/\/[^/\s"'<>]+\/[^\s"'<>]*$/.test(ziel || '') ? ziel : 'https://angebot.dashboard-stafl.de/admin/';
     document.title = 'Eingabebereich umgezogen';
     document.body.className = 'adm umgezogen';
@@ -4965,10 +4946,14 @@
   }
 
   /* ======================= Start ======================= */
+  /* Die Seite erst ersetzen, wenn alle Skripte geladen sind: die übrigen Skripte (admin-verwaltung.js, admin-artikelwahl.js …)
+     binden sich beim Laden an Elemente des Eingabebereichs – kam die Antwort des Servers schneller, fehlten diese Elemente
+     und es gab JavaScript-Fehler (Befund 03.11.2026, Gruppe stilllegung unter Last). */
+  const seiteGeladen = () => (document.readyState === 'loading' ? new Promise((r) => document.addEventListener('DOMContentLoaded', r, { once: true })) : Promise.resolve());
   (async function boot() {
     try {
       const s = await api('status');
-      if (s.umgezogen) { zeigeUmgezogen(s.umgezogen); return; }
+      if (s.umgezogen) { await seiteGeladen(); zeigeUmgezogen(s.umgezogen); return; }
       company = s.company || '';
       document.body.classList.toggle('is-test', !!s.testumgebung);   // Kennzeichen „Testumgebung“
       $$('[data-company]').forEach((el) => { el.textContent = company; el.hidden = !company; });
@@ -4981,6 +4966,7 @@
       if (me.needTwofa) { showAuth('twofa'); return; }
       await openEditor();
     } catch (e) {
+      await seiteGeladen();
       document.body.innerHTML = `<main class="auth"><div class="auth-card"><h1 style="margin:0;font-size:18px">Eingabebereich nicht erreichbar</h1><p class="auth-intro">${esc(e.message)}</p>${e.status === 403 ? '' : '<p class="auth-intro">Die Seite muss über den Webserver aufgerufen werden, PHP muss aktiv sein.</p>'}</div></main>`;
     }
   })();

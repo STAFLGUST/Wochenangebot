@@ -10,26 +10,47 @@ if (!defined('WA_API')) { http_response_code(404); exit; }   // nur über api/in
    Sicherungen enthalten ältere Stände weiter, bis sie selbst ablaufen. */
 const PROTOKOLL_MONATE = 6;
 
+/* Getrenntes Protokoll (ADR-007 Stufe 2d, ab Trennstufe 4): Die Kundenseite (ohne internen Ordner) schreibt ihre Einträge in
+   „kundenprotokoll/JJJJ-MM“ im gemeinsamen Ordner; das Protokoll der Mitarbeiterseite und des Postausgangs liegt innen und ist für
+   die Kundenseite nicht lesbar (Änderungen an Kunden, Nutzern, Personal …). Die Mitarbeiterseite liest beide zusammen
+   (protokoll_monat, protokoll_monate). Bis Trennstufe 4 steht alles wie bisher in „protokoll/JJJJ-MM“. */
+function protokoll_kundenseite(): bool { return store_stufe() >= 4 && !store_innen(); }
+function protokoll_beide(): bool { return store_stufe() >= 4 && store_innen(); }
+/* Einträge eines Monats (zeitlich sortiert) – auf der Mitarbeiterseite ab Trennstufe 4 beide Protokolle zusammen */
+function protokoll_monat(string $m): array
+{
+    $e = store_read((protokoll_kundenseite() ? 'kundenprotokoll/' : 'protokoll/') . $m) ?? [];
+    if (protokoll_beide() && ($k = store_read('kundenprotokoll/' . $m) ?? [])) {
+        $e = array_merge($e, $k);
+        usort($e, fn($x, $y) => strcmp((string)($x['t'] ?? ''), (string)($y['t'] ?? '')));
+    }
+    return $e;
+}
 /* Ältester aufbewahrter Monat (JJJJ-MM): laufender Monat minus PROTOKOLL_MONATE */
 function protokoll_grenze(?int $jetzt = null): string { return utc_monat(-PROTOKOLL_MONATE, $jetzt); }
 /* Monate des Protokolls, die aufbewahrt werden (neueste zuerst) – Protokollansicht bietet nur diese an */
 function protokoll_monate(): array
 {
     $grenze = protokoll_grenze(); $out = [];
-    foreach (store_names('protokoll') as $f) { $m = basename($f); if (preg_match('/^\d{4}-\d{2}$/', $m) && $m >= $grenze) $out[] = $m; }
+    $namen = protokoll_kundenseite() ? store_names('kundenprotokoll') : array_merge(store_names('protokoll'), protokoll_beide() ? store_names('kundenprotokoll') : []);
+    foreach ($namen as $f) { $m = basename($f); if (preg_match('/^\d{4}-\d{2}$/', $m) && $m >= $grenze) $out[$m] = $m; }
     rsort($out);
-    return $out;
+    return array_values($out);
 }
 /* Monatsdokumente vor der Grenze löschen; liefert die entfernten Monate (aufsteigend). Nur innerhalb von with_lock('protokoll'). */
 function protokoll_aufraeumen(): array
 {
     $grenze = protokoll_grenze(); $weg = [];
-    foreach (store_names('protokoll') as $f) {
+    if (!protokoll_kundenseite()) foreach (store_names('protokoll') as $f) {
         $m = basename($f);
-        if (preg_match('/^\d{4}-\d{2}$/', $m) && $m < $grenze) { store_delete('protokoll/' . $m); $weg[] = $m; }
+        if (preg_match('/^\d{4}-\d{2}$/', $m) && $m < $grenze) { store_delete('protokoll/' . $m); $weg[$m] = $m; }
+    }
+    if (protokoll_kundenseite() || protokoll_beide()) foreach (store_names('kundenprotokoll') as $f) {   // alte Monate der Kundenseite räumen beide Seiten
+        $m = basename($f);
+        if (preg_match('/^\d{4}-\d{2}$/', $m) && $m < $grenze) { store_delete('kundenprotokoll/' . $m); $weg[$m] = $m; }
     }
     sort($weg);
-    return $weg;
+    return array_values($weg);
 }
 
 /* Ein Eintrag je Vorgang; fortlaufendes Bearbeiten des Entwurfs durch dieselbe Person wird zusammengefasst */
@@ -44,8 +65,10 @@ function audit(string $a, string $s, array $d = [], ?array $who = null, bool $me
     try {
         $who = $who ?? $ME;
         $month = gmdate('Y-m');
-        with_lock('protokoll', function () use ($a, $s, $d, $who, $merge, $month) {
-            $log = store_read('protokoll/' . $month) ?? [];
+        $kunde = protokoll_kundenseite();   // ab Trennstufe 4: Kundenseite schreibt in kundenprotokoll/<Monat>
+        with_lock($kunde ? 'kundenprotokoll' : 'protokoll', function () use ($a, $s, $d, $who, $merge, $month, $kunde) {
+            $doc = $kunde ? 'kundenprotokoll/' . $month : 'protokoll/' . $month;
+            $log = store_read($doc) ?? [];
             // Aufbewahrung: ältere Monate entfernen und das im laufenden Monat vermerken (nur Monate, keine Inhalte)
             if ($weg = protokoll_aufraeumen()) {
                 $log[] = ['t' => now(), 'u' => 'system', 'n' => 'System', 'r' => '', 'ip' => '', 'a' => 'protokoll_aufbewahrung',
@@ -60,14 +83,14 @@ function audit(string $a, string $s, array $d = [], ?array $who = null, bool $me
                 $last['s'] = $s;
                 if (!$last['d']) array_pop($log); else $log[count($log) - 1] = $last;
             } else {
-                if ($merge && !$d) { if ($weg) store_write('protokoll/' . $month, $log); return; }
+                if ($merge && !$d) { if ($weg) store_write($doc, $log); return; }
                 // Kunden: IP nur bei fehlgeschlagener Anmeldung (Sicherheit), sonst nicht speichern (wie bei der Auswertung zugesagt)
                 $ip = ($who['role'] ?? '') === 'kunde' && $a !== 'kunde_login_fail' ? '' : client_ip();
                 $e = ['t' => now(), 'u' => $u, 'n' => $who['name'] ?? '', 'r' => $who['role'] ?? '', 'ip' => $ip, 'a' => $a, 's' => $s];
                 if ($d) $e['d'] = $d;
                 $log[] = $e;
             }
-            store_write('protokoll/' . $month, $log);
+            store_write($doc, $log);
         });
         if (function_exists('notify_from_audit')) notify_from_audit($a, $s, $d, $who);
     } catch (Throwable $e) {
@@ -88,11 +111,12 @@ function price_text($p): string
 }
 function sale_text($sale): string
 {
-    if (!is_array($sale) || !isset($sale['value'])) return '';
-    $t = 'Sonderpreis ' . price_text(['status' => 'value', 'value' => $sale['value']]);
+    if (!is_array($sale) || (!isset($sale['value']) && empty($sale['mark']))) return '';
+    $t = 'Empfehlung ' . (isset($sale['value']) ? price_text(['status' => 'value', 'value' => $sale['value']]) : 'ohne Preisänderung');
     foreach ($sale['offers'] ?? [] as $oid => $o) {
         $def = offer_def((string)$oid);
-        $t .= '; ' . ($def['name'] ?? $oid) . ': ' . (($o['status'] ?? '') === 'none' ? 'kein Sonderpreis' : price_text(['status' => 'value', 'value' => $o['value']]));
+        $st = $o['status'] ?? '';
+        $t .= '; ' . ($def['name'] ?? $oid) . ': ' . ($st === 'none' ? 'keine Empfehlung' : ($st === 'mark' ? 'ohne Preisänderung' : price_text(['status' => 'value', 'value' => $o['value']])));
     }
     return $t;
 }
@@ -125,10 +149,14 @@ function changes_between(?array $a, array $b): array
         $wB = is_array($bm['werbung'] ?? null) ? $bm['werbung'] : [];
         $names = [];
         foreach (array_merge($a['items'] ?? [], $b['items'] ?? []) as $it) $names[(string)($it['id'] ?? '')] = (string)($it['name'] ?? '');
-        $wtext = function ($e) use ($names) {
-            if (!is_array($e) || empty($e['artikel'])) return '';
-            $n = array_map(function ($x) use ($names) { return $names[(string)($x['id'] ?? '')] ?? '?'; }, $e['artikel']);
-            return trim((string)($e['titel'] ?? '') . ': ' . implode(' · ', $n), ': ');
+        $wtext = function ($e) use ($names) {   // alle Werbungen des Angebots (erste und „weitere“)
+            $t = [];
+            foreach (werbung_bloecke($e) as $b) {
+                if (empty($b['artikel']) || !is_array($b['artikel'])) continue;
+                $n = array_map(function ($x) use ($names) { return $names[(string)($x['id'] ?? '')] ?? '?'; }, $b['artikel']);
+                $t[] = trim((string)($b['titel'] ?? '') . ': ' . implode(' · ', $n), ': ');
+            }
+            return implode(' | ', $t);
         };
         foreach (array_unique(array_merge(array_map('strval', array_keys($wA)), array_map('strval', array_keys($wB)))) as $oid) {
             $wf = $wtext($wA[$oid] ?? null); $wt = $wtext($wB[$oid] ?? null);
@@ -165,7 +193,11 @@ function changes_between(?array $a, array $b): array
             $vf = variant_text($o['variants'][$oid] ?? null, (string)$oid); $vt = variant_text($it['variants'][$oid] ?? null, (string)$oid);
             if ($vf !== $vt) { $def = offer_def((string)$oid); $out[] = ['k' => "$id|v:$oid", 'code' => $code, 'name' => $it['name'], 'f' => ($oid === OFFER_STD ? 'Sichtbar im ' : 'Preis ') . ($def['name'] ?? $oid), 'from' => $vf, 'to' => $vt]; }
         }
-        if (sale_text($o['sale'] ?? null) !== sale_text($it['sale'] ?? null)) $out[] = ['k' => "$id|sale", 'code' => $code, 'name' => $it['name'], 'f' => 'Sonderpreis (solange der Vorrat reicht)', 'from' => sale_text($o['sale'] ?? null) ?: 'kein Sonderpreis', 'to' => sale_text($it['sale'] ?? null) ?: 'kein Sonderpreis'];
+        foreach (array_unique(array_merge(array_map('strval', array_keys($o['namen'] ?? [])), array_map('strval', array_keys($it['namen'] ?? [])))) as $oid) {   // eigene Bezeichnung je Angebot
+            $nf = (string)($o['namen'][$oid] ?? ''); $nt = (string)($it['namen'][$oid] ?? '');
+            if ($nf !== $nt) { $def = offer_def($oid); $out[] = ['k' => "$id|n:$oid", 'code' => $code, 'name' => $it['name'], 'f' => 'Bezeichnung ' . ($def['name'] ?? $oid), 'from' => $nf ?: 'wie Basis', 'to' => $nt ?: 'wie Basis']; }
+        }
+        if (sale_text($o['sale'] ?? null) !== sale_text($it['sale'] ?? null)) $out[] = ['k' => "$id|sale", 'code' => $code, 'name' => $it['name'], 'f' => 'Empfehlung', 'from' => sale_text($o['sale'] ?? null) ?: 'keine Empfehlung', 'to' => sale_text($it['sale'] ?? null) ?: 'keine Empfehlung'];
     }
     foreach ($ia as $id => $it) {
         if (!isset($ib[$id])) $out[] = ['k' => "$id|-", 'code' => (string)($it['code'] ?? ''), 'name' => $it['name'], 'f' => 'Artikel entfernt', 'from' => price_text($it['price']), 'to' => ''];
@@ -286,6 +318,11 @@ function client_key(): string
     if ($bin !== false && strlen($bin) === 16 && substr($bin, 0, 12) !== str_repeat("\0", 10) . "\xff\xff") $ip = inet_ntop(substr($bin, 0, 8) . str_repeat("\0", 8)) . '/64';
     return hash('sha256', $ip);
 }
+/* Fehlversuche und Sperren beider Seiten (Mitarbeiterseite ab Trennstufe 5: eigene innen und die der Kundenseite) – für Übersichten */
+function logins_alle(): array
+{
+    return (store_read('logins') ?? []) + (store_aussen_lesen('logins') ?? []);
+}
 /* Fehlversuchsbremse je Adresse (Dokument „logins“: Schlüssel → {n, t, ip, until, bereich, wer}).
    - Eine erfolgreiche Anmeldung nimmt nur die Fehlversuche **für denselben Benutzernamen** zurück (wer sich vertippt und
      dann anmeldet, wird wie bisher nicht gesperrt). Fehlversuche für andere Namen bleiben stehen: Sonst könnte jemand mit
@@ -296,9 +333,11 @@ function client_key(): string
      und umgekehrt. Mitarbeiter behalten den bisherigen Schlüssel (Rückfall auf die Vorversion liest ihn weiter, GR-006).
    - Eine laufende Sperre (until) hebt keine Anmeldung auf – nur ein Administrator (ip_unblock) oder der Zeitablauf. */
 const ATTEMPTS_FENSTER = 3600;
+/* Bereiche: 'mitarbeiter' (Anmeldung im Eingabebereich), 'kunde' (Kunden-Login mit Passwort), 'kundelink' (Links aus
+   Kunden-E-Mails: ein schon benutzter oder abgelaufener Link sperrt nie den Kunden-Login derselben Adresse, Befund 03.11.2026) */
 function attempts_key(string $bereich = 'mitarbeiter'): string
 {
-    return $bereich === 'kunde' ? hash('sha256', 'kunde|' . client_key()) : client_key();
+    return in_array($bereich, ['kunde', 'kundelink'], true) ? hash('sha256', $bereich . '|' . client_key()) : client_key();
 }
 function attempts_wer(string $name): string
 {

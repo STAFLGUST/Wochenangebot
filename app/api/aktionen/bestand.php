@@ -33,7 +33,7 @@ switch ($action) {
             $filter = s($b['filter'] ?? '', 160) ?? '';   // Spaltenfilter der Ansicht (nur Text für die Überschrift)
             $zusatz = ($mhd ? ' – MHD bis ' . date('d.m.Y', strtotime('+14 days')) : ($q !== '' ? ' – Suche „' . $q . '“' : '')) . ($filter !== '' ? ' – Filter: ' . $filter : '');
             require_once __DIR__ . '/../lib/bestand-pdf.php';
-            $pdf = stock_pdf(bestand_mit_stammdaten($st), $zeilen, $zusatz);
+            $pdf = stock_pdf(bestand_mit_stammdaten($st), $zeilen, $zusatz, $mhd);
             header('Content-Type: application/pdf');
             header('Content-Disposition: attachment; filename="' . stock_pdf_name($st, $mhd ? 'MHD' : ($q !== '' ? 'Auswahl' : '')) . '"');
             header('Cache-Control: private, no-store');

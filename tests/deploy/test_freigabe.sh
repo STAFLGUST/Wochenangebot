@@ -3,6 +3,7 @@
 # eigenes Git-„origin“, GitHub-API-Ersatz, PHP-Testserver als Live-Seite, echte Datensicherung.
 # Prüft: kein Release → nichts passiert; freigegebener Commit geht live; defekter Release wird erkannt und
 # automatisch zurückgesetzt (und nicht erneut versucht); Release ohne CI und Commit außerhalb von main werden abgelehnt;
+# neuester Release-Lauf nach Startzeit (auch bei unsortierter Antwort), nie automatisch auf einen älteren Stand;
 # Sicherung mit dem Skript des neuen Commits; Anwendungs-Image wird nur bei Änderungen unter deploy/image/ (und aktiver
 # Ergänzungsdatei der Anmeldung) gebaut, ein Bau-Fehler verhindert das Einspielen, beim Rückfall gilt das alte Image;
 # nach erfolgreichem Release nur hängende Images aufgeräumt (Fehler dabei unschädlich); manueller Notfall-Rückfall
@@ -67,7 +68,9 @@ STUB
 python3 "$REPO/tests/deploy/github_stub.py" $API_PORT "$T/state.json" & API_PID=$!
 (cd "$B/app" && exec php -S 127.0.0.1:$WEB_PORT >/dev/null 2>&1) & WEB_PID=$!
 sleep 1
+# Mitarbeiter-Hosts (nur mit COMPOSE_FILE der Anmeldung geprüft): dieselbe Testseite; MA_URL_TEST=… simuliert einen Ausfall
 lauf() { WA_BASIS="$B" WA_API="http://127.0.0.1:$API_PORT" WA_HEALTH_URL="http://127.0.0.1:$WEB_PORT" WA_HEALTH_HOST="test.local:80:127.0.0.1" \
+         WA_HEALTH_MA_URL="${MA_URL_TEST:-http://127.0.0.1:$WEB_PORT}" WA_HEALTH_MA_HOST="test.local:80:127.0.0.1" \
          WA_COMPOSE="sh $T/compose.sh" WA_DOCKER="sh $T/docker.sh" sh "$B/deploy/freigabe-einspielen.sh" > "$T/out.txt" 2>&1; rc=$?; [ -z "${DEBUG:-}" ] || { echo "--- rc=$rc"; cat "$T/out.txt"; }; return $rc; }
 # manueller Notfall-Rückfall mit denselben Ersatzbefehlen
 zurueck() { WA_COMPOSE="sh $T/compose.sh" WA_DOCKER="sh $T/docker.sh" sh "$B/deploy/release-zurueck.sh" > "$T/out.txt" 2>&1; rc=$?; [ -z "${DEBUG:-}" ] || { echo "--- rc=$rc"; cat "$T/out.txt"; }; return $rc; }
@@ -136,6 +139,18 @@ printf '{"release":"%s","ci_ok":["%s"]}' "$H_SHA" "$H_SHA" > "$T/state.json"
 lauf || true; ok "nicht öffentliches Wochenangebot: Release geht live" '[ "$(kopf)" = "$H_SHA" ] && [ "$(st ok)" = True ]'
 rm -f "$B/daten/angebote.php"
 
+# Kein automatischer Rückschritt (Vorfall 03.11.2026: GitHub lieferte einen alten Release-Lauf zuerst, der Server ging zurück)
+V_SHA=$(commit gut2 x "echo '<!-- gut2 -->' >> '$T/src/app/index.html'")
+printf '{"laeufe":[{"sha":"%s","t":"2026-10-30T21:52:36Z"},{"sha":"%s","t":"2026-11-03T15:17:18Z"},{"sha":"%s","t":"2026-10-01T08:00:00Z"}],"ci_ok":["%s","%s","%s"]}' \
+  "$G_SHA" "$V_SHA" "$A_SHA" "$G_SHA" "$V_SHA" "$A_SHA" > "$T/state.json"
+lauf || true; ok "unsortierte Antwort: neuester Release-Lauf nach Startzeit geht live (nicht der erste Eintrag)" '[ "$(kopf)" = "$V_SHA" ] && [ "$(st ok)" = True ] && [ "$(st lauf)" = 11 ]'
+printf '{"laeufe":[{"sha":"%s","t":"2026-10-30T21:52:36Z"}],"ci_ok":["%s"]}' "$G_SHA" "$G_SHA" > "$T/state.json"
+N0=$(ls "$B"/sicherungen/daten-*.tar.gz | wc -l)
+lauf || true
+ok "Release älter als der aktive Stand: nichts eingespielt, nicht gesichert, nicht gesperrt, Status unverändert" '[ "$(kopf)" = "$V_SHA" ] && grep -q "älter als der aktive Stand" "$T/out.txt" \
+  && [ "$(ls "$B"/sicherungen/daten-*.tar.gz | wc -l)" = "$N0" ] && [ "$(cat "$B/.release-abgelehnt" 2>/dev/null)" != "$G_SHA" ] && [ "$(st ok)" = True ] && [ "$(st sha)" = "$V_SHA" ] \
+  && ! grep -qE "^(compose|docker)" "$T/out.txt"'
+
 # Wartungsmodus eingeschaltet (Angebots-API antwortet 503 mit wartung:true) – Release muss trotzdem durchgehen
 W_SHA=$(commit gut3 x "echo '<!-- gut3 -->' >> '$T/src/app/index.html'")
 printf '%s\n{"active":true,"message":"Test"}' '<?php http_response_code(404); exit; ?>' > "$B/daten/wartung.php"
@@ -199,10 +214,10 @@ printf 'COMPOSE_FILE=docker-compose.yml:deploy/anmeldung/docker-compose.anmeldun
 I_SHA=$(commit image x "echo '# Update 2' >> '$T/src/deploy/image/Dockerfile'")
 printf '{"release":"%s","ci_ok":["%s"]}' "$I_SHA" "$I_SHA" > "$T/state.json"
 lauf || true
-ok "Image geändert mit COMPOSE_FILE: gebaut, umgetaggt, Container neu erstellt" '[ "$(kopf)" = "$I_SHA" ] && [ "$(st ok)" = True ] \
+ok "Image geändert mit COMPOSE_FILE: gebaut, umgetaggt, beide Anwendungs-Container neu erstellt (ADR-007)" '[ "$(kopf)" = "$I_SHA" ] && [ "$(st ok)" = True ] \
   && grep -q "^compose build --pull app \[STAFL_APP_VERSION=release-neu\]" "$T/out.txt" \
   && grep -q "^docker tag stafl-app:lokal stafl-app:release-vorher" "$T/out.txt" && grep -q "^docker tag stafl-app:release-neu stafl-app:lokal" "$T/out.txt" \
-  && grep -qx "compose up -d --force-recreate app" "$T/out.txt"'
+  && grep -qx "compose up -d --force-recreate app app-mitarbeiter" "$T/out.txt"'
 ok "Image mit dem neuen Bauplan gebaut, bevor der Code wechselt" 'grep -q "^bau-stand $I0_SHA app-alt # Update 2" "$T/out.txt"'
 J_SHA=$(commit nur-code x "echo '<!-- j -->' >> '$T/src/app/index.html'")
 printf '{"release":"%s","ci_ok":["%s"]}' "$J_SHA" "$J_SHA" > "$T/state.json"
@@ -223,16 +238,30 @@ Q_SHA=$(commit image-defekt x "echo '# Update 4' >> '$T/src/deploy/image/Dockerf
 printf '{"release":"%s","ci_ok":["%s"]}' "$Q_SHA" "$Q_SHA" > "$T/state.json"
 lauf || true
 ok "Image geändert, Release defekt: zurück, altes Image wieder aktiv" '[ "$(kopf)" = "$P_SHA" ] && [ "$(st ok)" = False ] && grep -q "zurückgesetzt" "$B/daten/deployment.php" \
-  && grep -q "^docker tag stafl-app:release-vorher stafl-app:lokal" "$T/out.txt" && [ "$(grep -cx "compose up -d --force-recreate app" "$T/out.txt")" = 2 ]'
+  && grep -q "^docker tag stafl-app:release-vorher stafl-app:lokal" "$T/out.txt" && [ "$(grep -cx "compose up -d --force-recreate app app-mitarbeiter" "$T/out.txt")" = 2 ]'
 S_SHA=$(commit repariert2 x "sed -i 's/ kaputt(//' '$T/src/app/api/index.php'")
 printf '{"release":"%s","ci_ok":["%s"]}' "$S_SHA" "$S_SHA" > "$T/state.json"
 lauf || true
 ok "reparierter Release mit Image geht live" '[ "$(kopf)" = "$S_SHA" ] && [ "$(st ok)" = True ]'
+# Zwei Anwendungs-Container (ADR-007): nur die Apache-Konfiguration der Anmeldung geändert → nur die Mitarbeiter-Hosts neu
+OA_SHA=$(commit apache-oidc-2 x "echo '# geändert 2' >> '$T/src/deploy/anmeldung/apache-oidc.conf'")
+printf '{"release":"%s","ci_ok":["%s"]}' "$OA_SHA" "$OA_SHA" > "$T/state.json"
+lauf || true
+ok "COMPOSE_FILE, Apache-Konfiguration der Anmeldung geändert: nur app-mitarbeiter neu erstellt" '[ "$(kopf)" = "$OA_SHA" ] && [ "$(st ok)" = True ] \
+  && grep -qx "compose up -d --force-recreate app-mitarbeiter" "$T/out.txt" && ! grep -qE "^compose up -d --force-recreate( app)?$" "$T/out.txt"'
+# Mitarbeiter-Hosts antworten nach dem Einspielen nicht (eigener Container ausgefallen): zurück, obwohl die Kundenseite antwortet
+MT_SHA=$(commit ma-tot x "echo '<!-- ma -->' >> '$T/src/app/index.html'")
+printf '{"release":"%s","ci_ok":["%s"]}' "$MT_SHA" "$MT_SHA" > "$T/state.json"
+MA_URL_TEST="http://127.0.0.1:9" lauf || true
+ok "COMPOSE_FILE, Mitarbeiter-Hosts antworten nicht: Release zurückgesetzt und nicht erneut versucht" '[ "$(kopf)" = "$OA_SHA" ] && [ "$(st ok)" = False ] \
+  && [ "$(cat "$B/.release-abgelehnt")" = "$MT_SHA" ] && grep -q "Healthcheck fehlgeschlagen" "$T/out.txt"'
+lauf || true
+ok "… danach mit erreichbaren Mitarbeiter-Hosts: abgelehnter Stand wird nicht erneut versucht" '[ "$(kopf)" = "$OA_SHA" ]'
 E_SHA=$(commit image-und-ergaenzung x "echo '# Update 5' >> '$T/src/deploy/image/Dockerfile'; echo '# geändert 2' >> '$T/src/deploy/anmeldung/docker-compose.anmeldung.yml'")
 printf '{"release":"%s","ci_ok":["%s"]}' "$E_SHA" "$E_SHA" > "$T/state.json"
 lauf || true
 ok "Image und Ergänzungsdatei geändert: gebaut, alle Container neu erstellt" '[ "$(kopf)" = "$E_SHA" ] && [ "$(st ok)" = True ] \
-  && grep -q "^compose build --pull app" "$T/out.txt" && grep -qx "compose up -d --force-recreate" "$T/out.txt" && ! grep -qx "compose up -d --force-recreate app" "$T/out.txt"'
+  && grep -q "^compose build --pull app" "$T/out.txt" && grep -qx "compose up -d --force-recreate" "$T/out.txt" && ! grep -qE "^compose up -d --force-recreate app" "$T/out.txt"'
 
 # Manueller Notfall-Rückfall (deploy/release-zurueck.sh): Container und Image wie beim automatischen Rückfall
 zurueck_lage() { # aktiv vorher: Lage wie nach einem erfolgreichen Release von <vorher> auf <aktiv>
@@ -256,8 +285,8 @@ ok "Übergang ohne .release-vorher: Stand aus daten/deployment.php nur, wenn Vor
 zurueck_lage "$ZC_SHA" "$E_SHA"; rm -f "$B/.release-vorher"; zurueck || true
 ok "Übergang ohne .release-vorher: Vorgänger aus daten/deployment.php mit Hinweis" '[ "$(kopf)" = "$E_SHA" ] && grep -q ".release-vorher fehlt" "$T/out.txt"'
 zurueck_lage "$ZI_SHA" "$ZC_SHA"; zurueck || true
-ok "Notfall-Rückfall, Image unterscheidet sich: gemerktes Image wieder aktiv, nur die App neu erstellt" '[ "$(kopf)" = "$ZC_SHA" ] \
-  && grep -qx "docker tag stafl-app:release-vorher stafl-app:lokal" "$T/out.txt" && grep -qx "compose up -d --force-recreate app" "$T/out.txt" \
+ok "Notfall-Rückfall, Image unterscheidet sich: gemerktes Image wieder aktiv, nur die Anwendungs-Container neu erstellt" '[ "$(kopf)" = "$ZC_SHA" ] \
+  && grep -qx "docker tag stafl-app:release-vorher stafl-app:lokal" "$T/out.txt" && grep -qx "compose up -d --force-recreate app app-mitarbeiter" "$T/out.txt" \
   && ! grep -qx "compose up -d --force-recreate" "$T/out.txt" && ! grep -q "^compose build" "$T/out.txt" && ! grep -q "image prune" "$T/out.txt"'
 touch "$T/tag-fehler"
 zurueck_lage "$ZI_SHA" "$ZC_SHA"; RC=0; zurueck || RC=$?
@@ -268,7 +297,7 @@ touch "$T/kein-vorher"
 zurueck_lage "$ZI_SHA" "$ZC_SHA"; zurueck || true
 ok "Notfall-Rückfall, gemerktes Image fehlt: Meldung, Bau aus dem alten Bauplan vor dem Codewechsel" '[ "$(kopf)" = "$ZC_SHA" ] \
   && grep -q "release-vorher fehlt" "$T/out.txt" && grep -qx "compose build app" "$T/out.txt" && grep -qx "bau-stand $ZI_SHA app-alt # Update 5" "$T/out.txt" \
-  && grep -qx "compose up -d --force-recreate app" "$T/out.txt"'
+  && grep -qx "compose up -d --force-recreate app app-mitarbeiter" "$T/out.txt"'
 touch "$T/bau-fehler"
 zurueck_lage "$ZI_SHA" "$ZC_SHA"; RC=0; zurueck || RC=$?
 ok "Notfall-Rückfall, Bau scheitert: Abbruch ohne Codewechsel" '[ "$RC" != 0 ] && [ "$(kopf)" = "$ZI_SHA" ] && grep -q "Rückfall abgebrochen" "$T/out.txt" \

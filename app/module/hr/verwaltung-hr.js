@@ -21,6 +21,8 @@
   const JAHR = new Date().getFullYear();
   const datumDe = (iso) => { const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(iso || ''); return m ? `${m[3]}.${m[2]}.${m[1]}` : ''; };
   const tagMonat = (mmtt) => { const m = /^(\d{2})-(\d{2})$/.exec(mmtt || ''); return m ? `${m[2]}.${m[1]}.` : '31.03.'; };   // Verfallstag „MM-TT“ → „TT.MM.“
+  // Übergangsregel (hr-einstellungen.verfallAb): erstes Jahr mit Verfall; davor verfällt nichts
+  const verfallText = (d) => (d && d.verfallAb ? `erstmals am ${tagMonat(d.uebertragBis)}${d.verfallAb}` : `jedes Jahr am ${tagMonat(d && d.uebertragBis)}`);
 
   async function laden() {
     if (!may('hr.verwalten')) { daten = null; return null; }
@@ -50,7 +52,8 @@
     // eigene Person: Urlaubsangaben ändert eine andere Person der Personalstelle (Vier-Augen-Prinzip, der Server prüft das)
     const eigen = !!(uid && W.me && W.me.id === uid);
     const aus = eigen ? ' disabled' : '';
-    return `<fieldset class="span2 hr-teil" id="hr-teil" data-uid="${esc(uid || '')}"><legend>Urlaubsverwaltung</legend>
+    return `<fieldset class="span2 hr-teil${eigen ? ' hr-eigen' : ''}" id="hr-teil" data-uid="${esc(uid || '')}"><legend>Urlaubsverwaltung</legend>
+      ${eigen ? `<p class="hr-eigen-hinweis">${icon('lock', 'sm')}<span>Ihre eigenen Urlaubsangaben (Anspruch, Übertrag, Verfall, Arbeitstage, Urlaubsplan, Personalnummer) ändert eine andere Person der Personalstelle (Vier-Augen-Prinzip). Abteilung und Position können Sie selbst ändern.</span></p>` : ''}
       <div class="form-grid two">
         <label class="fld span2"><span>Abteilung</span><input name="hr_abteilung" value="${esc(p ? p.abteilung : '')}" maxlength="40" list="hr-abteilungen" autocomplete="off"></label>
         <label class="fld"><span>Personalnummer <small class="muted">(Zeiterfassung)</small></span><input name="hr_personalnummer" value="${esc(p ? p.personalnummer || '' : '')}" maxlength="20" autocomplete="off" inputmode="numeric"${aus}></label>
@@ -58,10 +61,9 @@
         <div class="span2 hr-tage-feld"><span class="hr-lbl">Arbeitstage</span><div class="hr-tage">${WT.map((w, i) => `<label class="check"><input type="checkbox" name="hr_tag" value="${i + 1}"${at.includes(i + 1) ? ' checked' : ''}${aus}> ${w}</label>`).join('')}</div></div>
         <label class="fld"><span>Urlaubsanspruch ${JAHR}</span><input name="hr_anspruch" type="number" min="0" max="100" step="0.5" value="${esc(jv.anspruch ?? (p && p.konto.anspruch ? p.konto.anspruch : ''))}"${aus}></label>
         <label class="fld"><span>Übertrag aus ${JAHR - 1}</span><input name="hr_uebertrag" type="number" min="-100" max="100" step="0.5" value="${esc(jv.uebertrag ?? '')}" placeholder="${p ? 'automatisch (' + esc(zahl(p.konto.uebertrag)) + ')' : 'automatisch'}"${aus}></label>
-        <label class="check span2 hr-verfall-check"><input type="checkbox" name="hr_verfall"${!p || p.verfall !== false ? ' checked' : ''}${aus}> <span>Resturlaub aus dem Vorjahr verfällt am ${esc(tagMonat(daten && daten.uebertragBis))}<small class="muted">Ohne Haken bleibt der Übertrag das ganze Jahr erhalten.</small></span></label>
+        <label class="check span2 hr-verfall-check"><input type="checkbox" name="hr_verfall"${!p || p.verfall !== false ? ' checked' : ''}${aus}> <span>Resturlaub aus dem Vorjahr verfällt am ${esc(tagMonat(daten && daten.uebertragBis))}${daten && daten.verfallAb > JAHR ? ` (erstmals ${esc(tagMonat(daten.uebertragBis))}${daten.verfallAb})` : ''}<small class="muted">Ohne Haken bleibt der Übertrag das ganze Jahr erhalten.${daten && daten.verfallAb > JAHR ? ` Bis ${daten.verfallAb - 1} verfällt bei niemandem etwas (Verwaltung → Urlaub).` : ''}</small></span></label>
         <label class="check span2"><input type="checkbox" name="hr_aktiv"${!p || p.aktiv ? ' checked' : ''}${aus}> im Urlaubsplan (Kalender, Export für den Steuerberater)</label>
       </div>
-      ${eigen ? '<p class="hint span2" style="margin:0">Ihre eigenen Urlaubsangaben (Anspruch, Übertrag, Verfall, Arbeitstage, Urlaubsplan, Personalnummer) ändert eine andere Person der Personalstelle.</p>' : ''}
       <datalist id="hr-abteilungen">${abt.map((a) => `<option value="${esc(a)}">`).join('')}</datalist>
       ${p && p.aktiv ? `<p class="hint" style="margin:0">Urlaub ${JAHR}: ${esc(zahl(p.konto.rest))} Tage Rest · ${esc(zahl(p.konto.genommen))} genommen · ${esc(zahl(p.konto.geplant))} geplant${p.konto.verfaellt > 0 ? ` · ${esc(zahl(p.konto.verfaellt))} Tage Übertrag verfallen nach dem ${esc(tagMonat((p.konto.frist || '').slice(5)))}` : ''}${p.gleitKonto && p.gleitKonto.aktiv ? ` · Gleittage: ${esc(zahl(p.gleitKonto.rest))} Rest (gewähren in HR → Übersicht)` : ''}</p>` : ''}
     </fieldset>`;
@@ -192,6 +194,21 @@
   /* ---------- Verwaltung → Urlaub: Urlaubssperren und Ferien ---------- */
   const zeile = (z) => `<div class="hr-zr"><input type="date" value="${esc(z.von || '')}" aria-label="Von"><input type="date" value="${esc(z.bis || '')}" aria-label="Bis">
     <input type="text" value="${esc(z.text || '')}" maxlength="80" placeholder="Bezeichnung" aria-label="Bezeichnung"><button type="button" class="btn icon ghost" data-weg aria-label="Entfernen">${icon('x')}</button></div>`;
+  /* Jahresplanung (03.11.2026): Mitarbeiter planen bis zum Stichtag einen Anteil ihres Urlaubs des nächsten Jahres vor;
+     Hinweis in der Urlaubsverwaltung ab dem Beginn; Vertretung bei Urlaubsanträgen Pflicht (abschaltbar). Gespeichert als
+     hr-einstellungen.planung über hr_einstellungen_save (nur Tag und Monat der Daten). */
+  function planungFelder() {
+    const p = Object.assign({ start: '10-01', stichtag: '12-01', prozent: 90, vertretungPflicht: true }, daten.planung || {});
+    return `<h3 class="sec-h">Jahresplanung</h3><p class="hint">Jeder Mitarbeiter plant bis zum Stichtag mindestens diesen Anteil seines Urlaubsanspruchs für das nächste Jahr mit Urlaubsanträgen vor.
+        Ab „Hinweis ab“ zeigt die Urlaubsverwaltung jedem seinen Stand; Prüfen, Erinnern und Abschließen in HR → Jahresplanung (nur Personalstelle). Gespeichert werden nur Tag und Monat – beide liegen immer im Jahr vor dem geplanten Jahr (für ${JAHR + 1}: ${esc(tagMonat(p.start))}${JAHR} bis ${esc(tagMonat(p.stichtag))}${JAHR}).</p>
+      <div class="hr-verfall-felder hr-plan-felder">
+        <label class="fld hr-verfall"><span>Hinweis ab</span><input type="date" id="hr-plan-start" value="${esc(`${JAHR}-${p.start}`)}" required></label>
+        <label class="fld hr-verfall"><span>Stichtag</span><input type="date" id="hr-plan-stichtag" value="${esc(`${JAHR}-${p.stichtag}`)}" required></label>
+        <label class="fld hr-verfall"><span>Anteil in %</span><input type="number" id="hr-plan-prozent" min="10" max="100" step="1" inputmode="numeric" value="${esc(String(p.prozent))}" required></label>
+      </div>
+      <label class="check hr-regelsperren"><input type="checkbox" id="hr-plan-vertretung"${p.vertretungPflicht ? ' checked' : ''}> <span>Vertretung bei Urlaubsanträgen Pflicht
+        <small class="muted">Mitarbeiter wählen für jeden Urlaubsantrag eine Vertretung (Regel 6 der Urlaubsregeln); bei Gleittagen freiwillig</small></span></label>`;
+  }
   async function renderUrlaub() {
     const host = $('#view-urlaub');
     host.innerHTML = '<div class="loading" style="justify-content:center;padding:48px 0"><div class="spinner"></div>Wird geladen …</div>';
@@ -213,9 +230,14 @@
       <div id="hr-sperren">${daten.sperren.map(zeile).join('')}</div><button type="button" class="btn sm" data-plus="hr-sperren">${icon('plus', 'sm')}Sperre</button>
       <h3 class="sec-h">Ferien</h3><p class="hint">Nur zur Anzeige im Kalender und im Excel-Export (grün).</p>
       <div id="hr-ferien">${daten.ferien.map(zeile).join('')}</div><button type="button" class="btn sm" data-plus="hr-ferien">${icon('plus', 'sm')}Ferien</button>
-      <h3 class="sec-h">Resturlaub aus dem Vorjahr</h3><p class="hint">Nicht genommener Übertrag verfällt nach diesem Tag. Gilt für alle Jahre und alle Mitarbeiter, bei denen „Resturlaub verfällt“ angehakt ist (Verwaltung → Mitarbeiter, Standard) – gespeichert werden nur Tag und Monat (der 29.02. ist nicht möglich).</p>
-      <label class="fld hr-verfall"><span>Verfällt am</span><input type="date" id="hr-uebertrag-bis" value="${esc(`${JAHR}-${daten.uebertragBis || '03-31'}`)}" required></label>
-      <p class="hint" id="hr-uebertrag-anzeige">Aktuell: verfällt am ${esc(tagMonat(daten.uebertragBis))}</p>
+      <h3 class="sec-h">Resturlaub aus dem Vorjahr</h3><p class="hint">Nicht genommener Übertrag verfällt nach diesem Tag. Gilt für alle Mitarbeiter, bei denen „Resturlaub verfällt“ angehakt ist (Verwaltung → Mitarbeiter, Standard) – gespeichert werden nur Tag und Monat (der 29.02. ist nicht möglich).
+        Mit „Verfällt erstmals“ gilt eine Übergangsregel: in den Jahren davor verfällt bei niemandem etwas, der ganze Rest geht ins Folgejahr.</p>
+      <div class="hr-verfall-felder">
+        <label class="fld hr-verfall"><span>Verfällt am</span><input type="date" id="hr-uebertrag-bis" value="${esc(`${JAHR}-${daten.uebertragBis || '03-31'}`)}" required></label>
+        <label class="fld hr-verfall"><span>Verfällt erstmals</span><select id="hr-verfall-ab"><option value="">jedes Jahr</option>${[...new Set([JAHR - 1, JAHR, JAHR + 1, JAHR + 2, JAHR + 3, daten.verfallAb].filter(Boolean))].sort().map((j) => `<option value="${j}"${daten.verfallAb === j ? ' selected' : ''}>${j}</option>`).join('')}</select></label>
+      </div>
+      <p class="hint" id="hr-uebertrag-anzeige">Aktuell: verfällt ${esc(verfallText(daten))}${daten.verfallAb ? ` – Resturlaub aus ${daten.verfallAb - 2} bleibt ${daten.verfallAb - 1} ganz erhalten` : ''}</p>
+      ${planungFelder()}
       <h3 class="sec-h">Urlaubsregeln</h3><p class="hint">Stehen für alle Mitarbeiter beim Urlaubsantrag. Eine Zeile wie „1. Urlaubsanspruch“ wird zur Überschrift; leer = keine Regeln anzeigen.</p>
       <label class="fld hr-regeln-feld"><span class="sr-only">Text der Urlaubsregeln</span><textarea id="hr-regeln" rows="14" maxlength="6000">${esc(daten.regeln || '')}</textarea></label>
       <div class="hr-regeln-knoepfe"><button type="button" class="btn sm" id="hr-regeln-vorlage">Vorlage einsetzen</button></div>
@@ -230,13 +252,13 @@
      Änderung erst speichern). Der automatische Versand läuft beim ersten Aufruf der Urlaubsverwaltung ab dem Termin. */
   const MONATE = ['Januar', 'Februar', 'März', 'April', 'Mai', 'Juni', 'Juli', 'August', 'September', 'Oktober', 'November', 'Dezember'];
   const monatText = (ym) => (/^\d{4}-\d{2}$/.test(ym || '') ? `${MONATE[Number(ym.slice(5, 7)) - 1]} ${ym.slice(0, 4)}` : '');
-  const ART = { monat: 'Monatsübersicht', erinnerung: 'Erinnerung', steuerberater: 'Steuerberater' };
+  const ART = { monat: 'Monatsübersicht', erinnerung: 'Erinnerung', steuerberater: 'Steuerberater', fehlen: 'Unentschuldigt: Bitte um Erklärung', planung: 'Erinnerung Jahresplanung', jahresuebersicht: 'Jahresübersicht' };
   function mailKarte() {
     const m = daten && daten.mail;
     if (!m) return '';
     const e = m.einst, n = m.naechste, [vor, dies] = m.monate;
     const klein = (t) => (t ? `<small class="muted">${t}</small>` : '');
-    const verlauf = (m.verlauf || []).slice(0, 8).map((v) => `<li><span>${esc(W.dateTime ? W.dateTime(v.t) : v.t)}</span><span>${esc(ART[v.art] || v.art)}${v.monat ? ' · ' + esc(v.monat.split('/').map(monatText).join(' und ')) : ''}${v.wie === 'automatisch' ? ' · automatisch' : ''}${v.test ? ' · Testmodus' : ''}</span>
+    const verlauf = (m.verlauf || []).slice(0, 8).map((v) => `<li><span>${esc(W.dateTime ? W.dateTime(v.t) : v.t)}</span><span>${esc(ART[v.art] || v.art)}${v.jahr ? ' ' + esc(String(v.jahr)) : ''}${v.name ? ' an ' + esc(v.name) : ''}${v.monat ? ' · ' + esc(v.monat.split('/').map(monatText).join(' und ')) : ''}${v.wie === 'automatisch' ? ' · automatisch' : ''}${v.test ? ' · Testmodus' : ''}</span>
       <span>${esc(String(v.gesendet))} gesendet${v.fehler ? ` · <b class="hr-mail-fehler">${esc(String(v.fehler))} nicht zugestellt</b>` : ''}${v.ohneAdresse ? ` · ${esc(String(v.ohneAdresse))} ohne Adresse` : ''}</span></li>`).join('');
     return `<form class="gcard hr-einst hr-mail" id="hr-mail" novalidate>
       <h3 class="sec-h">E-Mails</h3>
@@ -264,7 +286,7 @@
       </div>
       <div class="hr-mail-block">
         <h4>Testmodus</h4>
-        <label class="check hr-mail-check"><input type="checkbox" id="hrm-test-an"${e.test.an ? ' checked' : ''}> <span>Alle HR-E-Mails nur an die Testadresse${klein('Monatsübersicht, Erinnerung und Steuerberater – automatisch und auf Knopfdruck; der Betreff nennt den eigentlichen Empfänger.')}</span></label>
+        <label class="check hr-mail-check"><input type="checkbox" id="hrm-test-an"${e.test.an ? ' checked' : ''}> <span>Alle HR-E-Mails nur an die Testadresse${klein('Monatsübersicht, Erinnerung, Steuerberater und Bitte um Erklärung bei unentschuldigtem Fehlen – automatisch und auf Knopfdruck; der Betreff nennt den eigentlichen Empfänger.')}</span></label>
         <label class="fld hr-mail-test"><span>Testadresse</span><input type="email" id="hrm-test-adresse" value="${esc(e.test.adresse)}" maxlength="200" autocomplete="off"></label>
       </div>
       ${verlauf ? `<h4 class="hr-mail-vh">Zuletzt gesendet</h4><ul class="hr-mail-verlauf" id="hrm-verlauf">${verlauf}</ul>` : ''}
@@ -330,9 +352,13 @@
     try {
       const bis = $('#hr-uebertrag-bis').value;
       if (!bis) { $('#hr-einst-err').textContent = 'Bitte den Verfallstag des Resturlaubs wählen.'; return; }
+      const ab = $('#hr-verfall-ab').value;
+      const planung = { start: $('#hr-plan-start').value, stichtag: $('#hr-plan-stichtag').value, prozent: Number($('#hr-plan-prozent').value), vertretungPflicht: $('#hr-plan-vertretung').checked };
+      if (!planung.start || !planung.stichtag) { $('#hr-einst-err').textContent = 'Jahresplanung: bitte „Hinweis ab“ und Stichtag wählen.'; return; }
+      if (!Number.isInteger(planung.prozent) || planung.prozent < 10 || planung.prozent > 100) { $('#hr-einst-err').textContent = 'Jahresplanung: Anteil bitte als ganze Zahl zwischen 10 und 100 Prozent.'; return; }
       const r = await api('hr_einstellungen_save', { body: { sperren: liste('hr-sperren'), ferien: liste('hr-ferien'), uebertragBis: bis,
-        regelSperren: $('#hr-regelsperren').checked, regeln: $('#hr-regeln').value } });
-      Object.assign(daten, { sperren: r.sperren, ferien: r.ferien, uebertragBis: r.uebertragBis, regelSperren: r.regelSperren, sperrenAuto: r.sperrenAuto, regeln: r.regeln });
+        verfallAb: ab ? Number(ab) : null, regelSperren: $('#hr-regelsperren').checked, regeln: $('#hr-regeln').value, planung } });
+      Object.assign(daten, { sperren: r.sperren, ferien: r.ferien, uebertragBis: r.uebertragBis, verfallAb: r.verfallAb, regelSperren: r.regelSperren, sperrenAuto: r.sperrenAuto, regeln: r.regeln, planung: r.planung });
       toast('Urlaubseinstellungen gespeichert.');
       renderUrlaub();
     } catch (ex) { $('#hr-einst-err').textContent = ex.message; }

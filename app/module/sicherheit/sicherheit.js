@@ -91,7 +91,8 @@
   function toast(text, fehler = false) {
     const t = $('#sic-toast');
     t.textContent = text; t.className = 'sic-toast zeigen' + (fehler ? ' fehler' : '');
-    clearTimeout(toastZeit); toastZeit = setTimeout(() => { t.className = 'sic-toast'; }, fehler ? 4500 : 2400);
+    // lange Meldungen (z. B. mit Befehl für die Serverkonsole) bleiben länger stehen
+    clearTimeout(toastZeit); toastZeit = setTimeout(() => { t.className = 'sic-toast'; }, Math.max(fehler ? 4500 : 2400, String(text).length * 60));
   }
   const dlg = $('#sic-dlg');
   let dlgZurueck = null, dlgHandler = null;
@@ -527,7 +528,7 @@
     const kacheln = n ? `<div class="sic-karten wirkung">${[
       karte('ok', 'Angebotsseite', 'Wartung', 'Kunden sehen den neutralen Hinweis'),
       karte('ok', 'Mitarbeiter ohne Administratorrolle', 'gesperrt', 'Administratoren arbeiten weiter'),
-      ...(n.wirkung ? [karte('ok', 'Sitzungen beendet', zahl((+n.wirkung.mitarbeiterSitzungen || 0) + (+n.wirkung.kundenSitzungen || 0)), `${zahl(n.wirkung.mitarbeiterSitzungen)} Mitarbeiter · ${zahl(n.wirkung.kundenSitzungen)} Kunden${n.wirkung.keycloak ? ` · ${zahl(n.wirkung.keycloak.beendet)} bei Keycloak` : ''}`)] : []),
+      ...(n.wirkung ? [karte('ok', 'Sitzungen beendet', zahl((+n.wirkung.mitarbeiterSitzungen || 0) + (+n.wirkung.kundenSitzungen || 0)), `${zahl(n.wirkung.mitarbeiterSitzungen)} Mitarbeiter · ${zahl(n.wirkung.kundenSitzungen)} Kunden${n.wirkung.keycloak ? ` · ${zahl(n.wirkung.keycloak.beendet)} bei Keycloak${+n.wirkung.keycloak.nurKonsole ? ` (${zahl(n.wirkung.keycloak.nurKonsole)} Administratoren nur über die Serverkonsole)` : ''}` : ''}`)] : []),
       karte('ok', 'E-Mail-Versand', 'pausiert', 'Benachrichtigungen gehen weiter'),
       ...(n.wirkung ? [karte(/^nicht angewendet/.test(n.wirkung.firewall || '') ? 'warn' : 'ok', 'Firewall', /angewendet/.test(n.wirkung.firewall || '') && !/^nicht/.test(n.wirkung.firewall || '') ? 'Notfall' : 'unverändert', esc(n.wirkung.firewall || ''))] : []),
     ].join('')}</div>` : '';
@@ -871,7 +872,7 @@
     const sperren = [
       ...d.manuell.map((e) => `<tr><td class="mono-s">${esc(e.ip)}</td><td>von Hand${e.grund ? ' – ' + esc(e.grund) : ''}<div class="sub">${esc(e.von || '')} · ${esc(zeit(e.t))}</div></td><td class="num-s">${e.bis ? 'bis ' + esc(sekZeit(e.bis)) : 'dauerhaft'}</td><td class="act"><button type="button" class="btn sm" data-fw="frei" data-ip="${esc(e.ip)}">Freigeben</button></td></tr>`),
       ...d.auto.map((e) => `<tr><td class="mono-s">${esc(e.ip)}</td><td>automatisch – ${esc(e.grund || '')}<div class="sub">${esc(zeit(e.t))}${e.n > 1 ? ' · ' + e.n + '. Sperre' : ''}</div></td><td class="num-s">bis ${esc(sekZeit(e.bis))}</td><td class="act"><button type="button" class="btn sm" data-fw="frei" data-ip="${esc(e.ip)}">Freigeben</button></td></tr>`)].join('');
-    const bremse = sec.blockedIps.map((x) => `<tr><td class="mono-s">${esc(x.ip)}</td><td>${x.n ? plural(x.n, 'Fehlversuch', 'Fehlversuche') : ''}<div class="sub">${x.bereich === 'kunde' ? 'Kunden-Anmeldung' : 'Mitarbeiter-Anmeldung'}</div></td><td>${x.until ? `<span class="sic-pille bad">bis ${esc(uhr(x.until))} Uhr</span>` : '<span class="sub">beobachtet</span>'}</td><td class="act"><button type="button" class="btn sm" data-fw="bremse" data-key="${esc(x.key)}" data-ip="${esc(x.ip)}">Aufheben</button></td></tr>`).join('');
+    const bremse = sec.blockedIps.map((x) => `<tr><td class="mono-s">${esc(x.ip)}</td><td>${x.n ? plural(x.n, 'Fehlversuch', 'Fehlversuche') : ''}<div class="sub">${x.bereich === 'kunde' ? 'Kunden-Anmeldung' : x.bereich === 'kundelink' ? 'Links aus Kunden-E-Mails' : 'Mitarbeiter-Anmeldung'}</div></td><td>${x.until ? `<span class="sic-pille bad">bis ${esc(uhr(x.until))} Uhr</span>` : '<span class="sub">beobachtet</span>'}</td><td class="act"><button type="button" class="btn sm" data-fw="bremse" data-key="${esc(x.key)}" data-ip="${esc(x.ip)}">Aufheben</button></td></tr>`).join('');
     const laender = (sec.geoStats || []).map((x) => `<tr><td>${esc(land(x.cc))}${x.cc === '??' ? '' : ` <span class="sub">${esc(x.cc)}</span>`}</td><td class="num-s">${zahl(x.n)}</td><td class="num-s">${esc(zeit(x.last))}</td></tr>`).join('');
     $('#tab-firewall').innerHTML = `
       <div class="sic-karten vier">
@@ -1213,18 +1214,23 @@
     dialog(`${dKopf('Anmeldung und Passwörter')}<div class="sic-dinhalt" id="sec-form">
         <label class="sic-feld">Zwei-Faktor-Anmeldung verpflichtend<select name="twofa">${Object.entries(TWOFA).map(([k, l]) => `<option value="${k}"${St.twofa === k ? ' selected' : ''}>${l}</option>`).join('')}</select>
           <small>Wer sie noch nicht eingerichtet hat, wird beim nächsten Anmelden dazu aufgefordert. Auf den Keycloak-Hosts gilt zusätzlich die Pflicht der zentralen Anmeldung.</small></label>
-        <label class="sic-feld">Automatisch abmelden nach Inaktivität<select name="idleMinutes">${IDLE.map(([v, l]) => `<option value="${v}"${St.idleMinutes === v ? ' selected' : ''}>${l}</option>`).join('')}</select></label>
+        <label class="sic-feld">Automatisch abmelden nach Inaktivität<select name="idleMinutes">${IDLE.map(([v, l]) => `<option value="${v}"${St.idleMinutes === v ? ' selected' : ''}>${l}</option>`).join('')}</select>
+          <small>Gilt für alle Adressen der Plattform zusammen: Arbeit in einem Modul hält die Anmeldung überall.</small></label>
         <div class="sic-feld"><span>Passwörter</span><label>mindestens <input type="number" name="pwMin" min="10" max="32" value="${St.pwMin}"> Zeichen</label>
           <label class="sic-check"><input type="checkbox" name="pwComplex"${St.pwComplex ? ' checked' : ''}><span>Groß-/Kleinbuchstaben, Ziffern oder Sonderzeichen verlangen</span></label>
           <label class="sic-check"><input type="checkbox" name="pwLeak"${St.pwLeak ? ' checked' : ''}><span>Gegen bekannte Datenlecks prüfen <span class="sub">(übertragen werden nur die ersten 5 Zeichen eines Prüfwerts, nie das Passwort)</span></span></label></div>
         <div class="sic-feld"><span>Kontosperre</span><div class="sic-inline"><label>nach <input type="number" name="lockAfter" min="3" max="20" value="${St.lockAfter}"> Fehlversuchen</label><label>für <input type="number" name="lockMinutes" min="5" max="1440" value="${St.lockMinutes}"> Minuten</label></div>
-          <small>Zusätzlich wird jede Adresse nach 5 Fehlversuchen für 10 Minuten gesperrt.</small></div></div>
+          <small>Zusätzlich wird jede Adresse nach 5 Fehlversuchen für 10 Minuten gesperrt.</small></div>
+        <p class="sic-hinweis">Passwortregeln und Kontosperre gelten auch für die zentrale Anmeldung (dort mindestens 12 Zeichen; „gemischt“ heißt dort Groß-, Kleinbuchstabe und Ziffer; ohne Datenleck-Prüfung). Nach einer Änderung in der Serverkonsole übernehmen: <code>sh deploy/anmeldung/konten.sh richtlinien</code></p></div>
       ${dFuss(`<button type="button" class="btn" data-d="zu">Abbrechen</button><button type="submit" class="btn primary">${icon('check')}Speichern</button>`)}`,
     { breit: true, handler: async (a, b, form) => {
       if (a !== 'submit') return;
       const el = (n) => form.querySelector(`[name="${n}"]`);
-      await secSpeichern({ twofa: el('twofa').value, idleMinutes: +el('idleMinutes').value, pwMin: +el('pwMin').value, pwComplex: el('pwComplex').checked, pwLeak: el('pwLeak').checked,
-        lockAfter: +el('lockAfter').value, lockMinutes: +el('lockMinutes').value }, 'Sicherheitseinstellungen gespeichert.');
+      const neu = { twofa: el('twofa').value, idleMinutes: +el('idleMinutes').value, pwMin: +el('pwMin').value, pwComplex: el('pwComplex').checked, pwLeak: el('pwLeak').checked,
+        lockAfter: +el('lockAfter').value, lockMinutes: +el('lockMinutes').value };
+      // Werte, die Keycloak übernimmt (konten.sh richtlinien) – bei einer Änderung daran erinnern
+      const zentral = ['pwMin', 'pwComplex', 'lockAfter', 'lockMinutes'].some((k) => neu[k] !== St[k]);
+      await secSpeichern(neu, zentral ? 'Sicherheitseinstellungen gespeichert. Für die zentrale Anmeldung in der Serverkonsole übernehmen: sh deploy/anmeldung/konten.sh richtlinien' : 'Sicherheitseinstellungen gespeichert.');
     } });
   }
   function ipDialog() {

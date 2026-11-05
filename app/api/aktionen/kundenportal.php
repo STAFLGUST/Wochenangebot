@@ -33,13 +33,13 @@ switch ($action) {
                         if ($gi === null) { password_verify($pw, (string)$l['hash']); return ['locked', $c]; }
                         if (!password_verify($pw, (string)$l['hash'])) {
                             geraet_fehlversuch($d['customers'][$i]['login'], $gi);
-                            store_write('kunden', $d);
+                            customers_save($d);
                             return ['bad', $d['customers'][$i]];
                         }
                     }
                     if (!$gesperrt && !password_verify($pw, (string)$l['hash'])) {
                         $lockedNow = login_failure($d['customers'][$i]['login']);
-                        store_write('kunden', $d);
+                        customers_save($d);
                         return [$lockedNow ? 'lockednow' : 'bad', $d['customers'][$i]];
                     }
                     if (empty($c['active']) || empty($l['active'])) return ['inactive', $c];
@@ -48,7 +48,7 @@ switch ($action) {
                     $d['customers'][$i]['login']['lockedUntil'] = 0;
                     $d['customers'][$i]['login']['lastLogin'] = now();
                     geraet_merken($d['customers'][$i]['login']);
-                    store_write('kunden', $d);
+                    customers_save($d);
                     return ['ok', $d['customers'][$i]];
                 }
                 dummy_verify($pw, array_map(fn($x) => $x['login']['hash'] ?? null, $d['customers'])); // gleiche Laufzeit
@@ -75,7 +75,7 @@ switch ($action) {
                     foreach ($d['customers'] as $i => $x) if ($x['id'] === $c['id'] && !empty($x['login']) && hash_equals((string)($x['login']['hash'] ?? ''), (string)$c['login']['hash'])) {
                         $d['customers'][$i]['login']['leakGeprueft'] = $merker;
                         if ($leak) { $d['customers'][$i]['login']['mustChange'] = true; $d['customers'][$i]['login']['mustChangeGrund'] = 'datenleck'; }
-                        store_write('kunden', $d);
+                        customers_save($d);
                         return $d['customers'][$i];
                     }
                     return $c;
@@ -129,7 +129,7 @@ switch ($action) {
                     $d['customers'][$i]['login']['sv'] = (int)($x['login']['sv'] ?? 0) + 1;
                     geraete_zuruecksetzen($d['customers'][$i]['login']);   // vertraut bleibt nur dieses Gerät
                     unset($d['customers'][$i]['login']['token']);
-                    store_write('kunden', $d);
+                    customers_save($d);
                     return $d['customers'][$i];
                 }
                 return null;
@@ -145,19 +145,19 @@ switch ($action) {
 
         /* ---------- Passwort über Link aus der E-Mail (Einladung / Zurücksetzen) ---------- */
         case 'kunde_token_check': {
-            attempts_check('kunde');
+            attempts_check('kundelink');   // eigener Zähler: alte Links sperren nie den Kunden-Login (lib/protokoll.php)
             $c = kunde_by_token((string)(body()['token'] ?? ''));
-            if (!$c) { attempts_record(false, 'kunde'); fail('Dieser Link ist abgelaufen oder wurde bereits verwendet. Bitte fordern Sie bei uns einen neuen an.', 410); }
+            if (!$c) { attempts_record(false, 'kundelink'); fail('Dieser Link ist abgelaufen oder wurde bereits verwendet. Bitte fordern Sie bei uns einen neuen an.', 410); }
             respond(['ok' => true, 'firma' => $c['firma'], 'username' => $c['login']['username'], 'purpose' => $c['login']['token']['p'], 'exp' => (int)$c['login']['token']['exp']]);
         }
 
         case 'kunde_token_set': {
             start_session();
-            attempts_check('kunde');
+            attempts_check('kundelink');
             $b = body();
             $tok = (string)($b['token'] ?? '');
             $c = kunde_by_token($tok);
-            if (!$c) { attempts_record(false, 'kunde'); fail('Dieser Link ist abgelaufen oder wurde bereits verwendet. Bitte fordern Sie bei uns einen neuen an.', 410); }
+            if (!$c) { attempts_record(false, 'kundelink'); fail('Dieser Link ist abgelaufen oder wurde bereits verwendet. Bitte fordern Sie bei uns einen neuen an.', 410); }
             $new = check_password($b['password'] ?? '', $c['login']['username']);
             $c2 = with_lock('kunden', function () use ($c, $new, $tok) {
                 $d = customers_load();
@@ -172,7 +172,7 @@ switch ($action) {
                     geraete_zuruecksetzen($l, true);   // Passwort über den Link neu gesetzt: bisherige Geräte nicht mehr vertraut,
                     geraet_merken($l);                 // dieses Gerät (Inhaber des E-Mail-Postfachs) schon
                     unset($l['token']);
-                    store_write('kunden', $d);
+                    customers_save($d);
                     return $d['customers'][$i];
                 }
                 return null;
@@ -254,17 +254,22 @@ switch ($action) {
                 $o = ['nr' => sprintf('B-%s-%04d', $y, $n + 1), 't' => now(), 'kid' => $c['id'], 'firma' => $c['firma'], 'angebot' => $def['id'], 'angebotName' => $def['name'],
                       'week' => (int)($off['meta']['week'] ?? 0), 'year' => (int)($off['meta']['year'] ?? 0), 'positions' => $pos, 'total' => round($total, 2), 'totalQty' => round($qtyT, 2),
                       'onRequest' => $req, 'fracht' => $fr, 'termin' => $termin, 'referenz' => $ref, 'bemerkung' => $bem, 'status' => 'neu', 'workflow' => 'neu', 'revision' => 1, 'requestId' => $key, 'requestHash' => $hash];
-                $o['kunde'] = array_intersect_key($c, array_flip(['firma','nr','ansprechpartner','strasse','plz','ort','email','telefon']));
-                $o['kunde']['username'] = $c['login']['username'];
+                $o['kunde'] = kunde_schnappschuss($c);   // Kundenseite ab Trennstufe 2 ohne Anschrift/E-Mail – ergänzt der Postausgang
                 $o['outbox'] = order_outbox_create($o);
                 $all[] = $o;
                 store_write('bestellungen', $all);
+                // Kundenseite (lib/postausgang.php): Versand übernimmt der Dienst „postausgang“ – Auftrag im selben Vorgang ablegen
+                if (postausgang_warteschlange()) postausgang_ablegen('bestellung', ['nr' => $o['nr']]);
                 return $o;
             });
-            try { $o = order_outbox_send($o['nr']); } catch (RuntimeException $e) { $o['status'] = 'fehler'; }   // Bestellung ist gespeichert; Versand bleibt als offener Auftrag sichtbar
-            $okIn = ($o['status'] ?? '') === 'gesendet';
+            if (postausgang_warteschlange()) {
+                $o['status'] = 'eingegangen';   // gespeichert, E-Mails folgen in Kürze (nur für die Quittung)
+            } else {
+                try { $o = order_outbox_send($o['nr']); } catch (RuntimeException $e) { $o['status'] = 'fehler'; }   // Bestellung ist gespeichert; Versand bleibt als offener Auftrag sichtbar
+            }
+            $okIn = in_array($o['status'] ?? '', ['gesendet', 'eingegangen'], true);
             $who = ['username' => 'kunde:' . $c['login']['username'], 'name' => $c['firma'], 'role' => 'kunde'];
-            audit('bestellung', "Bestellwunsch {$o['nr']} ({$def['name']}, " . count($pos) . ' Positionen, ' . de_qty($o['totalQty']) . ' kg' . ($fr['kosten'] > 0 ? ', Frachtanteil ' . de_num($fr['kosten']) . ' €' : '') . ')' . ($okIn ? '' : ' – E-Mail nicht zugestellt'),
+            audit('bestellung', "Bestellwunsch {$o['nr']} ({$def['name']}, " . count($pos) . ' Positionen, ' . de_qty($o['totalQty']) . ' kg' . ($fr['kosten'] > 0 ? ', Frachtanteil ' . de_num($fr['kosten']) . ' €' : '') . ')' . ($okIn ? ($o['status'] === 'eingegangen' ? ' – E-Mail über den Postausgang' : '') : ' – E-Mail nicht zugestellt'),
                 array_map(function ($p) { return ['k' => 'b|' . $p['id'], 'code' => $p['code'], 'name' => $p['name'], 'f' => 'Menge', 'from' => '', 'to' => de_qty($p['qty']) . ' kg' . ($p['price'] !== null ? ' × ' . de_num($p['price']) . ' €' : ' (Preis auf Anfrage)')]; }, $pos), $who);
             if (!$okIn) fail('Ihr Bestellwunsch wurde gespeichert, die E-Mail konnte aber nicht bestätigt werden. Bitte nicht als neuen Bestellwunsch erneut eingeben. Unser Team kann den Versand prüfen.', 502);
             order_receipt($o);
@@ -278,8 +283,8 @@ switch ($action) {
             $to = array_key_exists('to', $b) ? notify_parse_to($b['to'], 'Bestellwünsche') : $old['to'];
             $en = !empty($b['enabled']);
             if ($en && !$to) fail('Bitte zuerst unter „Benachrichtigungen“ mindestens eine Adresse für neue Bestellwünsche eintragen.', 422);
-            $new = ['enabled' => $en, 'to' => $to, 'copy' => !empty($b['copy']), 'updatedAt' => now(), 'updatedBy' => $me['name']];
-            store_write('bestellung', $new);
+            $new = ['enabled' => $en, 'to' => $to, 'copy' => !empty($b['copy'])];
+            order_settings_speichern($new, $me['name']);
             $ch = [];
             if ($old['enabled'] !== $en) $ch[] = ['k' => 'best|en', 'code' => '', 'name' => 'Bestellungen', 'f' => 'Bestellfunktion', 'from' => $old['enabled'] ? 'an' : 'aus', 'to' => $en ? 'an' : 'aus'];
             if (implode(', ', $old['to']) !== implode(', ', $to)) $ch[] = ['k' => 'best|to', 'code' => '', 'name' => 'Bestellungen', 'f' => 'Empfänger', 'from' => implode(', ', $old['to']), 'to' => implode(', ', $to)];
@@ -341,19 +346,17 @@ switch ($action) {
 
         /* ---------- Abmelden vom Wochenangebot (Link aus der E-Mail, ohne Anmeldung) ---------- */
         case 'kunde_abmelden_info': {
-            attempts_check('kunde');
+            attempts_check('kundelink');
             $c = abmelde_kunde((string)(body()['token'] ?? ''));
-            if (!$c) { attempts_record(false, 'kunde'); fail('Dieser Abmeldelink ist ungültig. Bitte wenden Sie sich direkt an uns.', 404); }
-            $e = (string)($c['email'] ?? '');
-            $masked = $e !== '' ? preg_replace('/^(.).*?(@.*)$/u', '$1•••$2', $e) : '';
-            respond(['ok' => true, 'firma' => $c['firma'], 'email' => $masked, 'subscribed' => !array_key_exists('mailAngebot', $c) || !empty($c['mailAngebot']), 'company' => $CFG['company']]);
+            if (!$c) { attempts_record(false, 'kundelink'); fail('Dieser Abmeldelink ist ungültig. Bitte wenden Sie sich direkt an uns.', 404); }
+            respond(['ok' => true, 'firma' => $c['firma'], 'email' => kunden_email_anzeige($c), 'subscribed' => !array_key_exists('mailAngebot', $c) || !empty($c['mailAngebot']), 'company' => $CFG['company']]);
         }
 
         case 'kunde_abmelden': {
-            attempts_check('kunde');
+            attempts_check('kundelink');
             $b = body();
             $c = abmelde_kunde((string)($b['token'] ?? ''));
-            if (!$c) { attempts_record(false, 'kunde'); fail('Dieser Abmeldelink ist ungültig. Bitte wenden Sie sich direkt an uns.', 404); }
+            if (!$c) { attempts_record(false, 'kundelink'); fail('Dieser Abmeldelink ist ungültig. Bitte wenden Sie sich direkt an uns.', 404); }
             $ab = empty($b['wieder']);
             if (abmelde_setzen($c, $ab, 'link')) abmelde_melden($c, $ab, 'link');
             respond(['ok' => true, 'subscribed' => !$ab]);
@@ -362,9 +365,9 @@ switch ($action) {
         case 'abmelden1': {
             // Ein-Klick-Abmeldung (RFC 8058): das E-Mail-Programm sendet POST mit „List-Unsubscribe=One-Click“
             if ($method !== 'POST') fail('Bitte den Abmeldelink in der E-Mail verwenden.', 405);
-            attempts_check('kunde');
+            attempts_check('kundelink');
             $c = abmelde_kunde((string)($_GET['t'] ?? ''));
-            if (!$c) { attempts_record(false, 'kunde'); fail('Ungültiger Abmeldelink.', 404); }
+            if (!$c) { attempts_record(false, 'kundelink'); fail('Ungültiger Abmeldelink.', 404); }
             if (abmelde_setzen($c, true, '1klick')) abmelde_melden($c, true, '1klick');
             respond(['ok' => true]);
         }

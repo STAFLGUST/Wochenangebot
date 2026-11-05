@@ -18,13 +18,13 @@ switch ($action) {
             }
             usort($sess, function ($a, $b) { return strcmp($b['seen'], $a['seen']); });
             $ips = [];
-            foreach (store_read('logins') ?? [] as $k => $v) {
+            foreach (logins_alle() as $k => $v) {   // ab Trennstufe 5 beide Seiten
                 if ((int)($v['until'] ?? 0) <= time() && (int)($v['n'] ?? 0) === 0) continue;
                 $ips[] = ['key' => $k, 'ip' => $v['ip'] ?? 'unbekannt', 'n' => (int)($v['n'] ?? 0), 'until' => (int)($v['until'] ?? 0) > time() ? gmdate('Y-m-d\TH:i:s\Z', (int)$v['until']) : null, 't' => gmdate('Y-m-d\TH:i:s\Z', (int)($v['t'] ?? time())), 'bereich' => (string)($v['bereich'] ?? 'mitarbeiter')];
             }
             $fails = [];
             foreach ([utc_monat(), utc_monat(-1)] as $m) {
-                foreach (store_read('protokoll/' . $m) ?? [] as $e) if (in_array($e['a'], ['login_fail', 'kunde_login_fail'], true) && strtotime($e['t']) > time() - 7 * 86400) $fails[] = ['t' => $e['t'], 'u' => $e['u'], 'ip' => $e['ip'] ?? '', 's' => $e['s']];
+                foreach (protokoll_monat($m) as $e) if (in_array($e['a'], ['login_fail', 'kunde_login_fail'], true) && strtotime($e['t']) > time() - 7 * 86400) $fails[] = ['t' => $e['t'], 'u' => $e['u'], 'ip' => $e['ip'] ?? '', 's' => $e['s']];
             }
             usort($fails, function ($a, $b) { return strcmp($b['t'], $a['t']); });
             $f24 = count(array_filter($fails, function ($e) { return strtotime($e['t']) > time() - 86400; }));
@@ -136,6 +136,7 @@ switch ($action) {
                 store_write('logins', $a);
                 return $ip;
             });
+            store_aussen_aendern('logins', function (array $a) use ($key, &$ip) { $ip ??= $a[$key]['ip'] ?? null; unset($a[$key]); return $a; });   // Kundenseite (ab Trennstufe 5)
             audit('security', 'IP-Sperre aufgehoben' . ($ip ? " ({$ip})" : ''));
             respond(['ok' => true]);
         }
@@ -493,7 +494,10 @@ switch ($action) {
             });
             sess_remove(function ($k, $v) use ($gone) { return $v['uid'] === $gone['id']; });
             audit('user', 'Mitarbeiter „' . $gone['username'] . '“ (' . $gone['name'] . ') gelöscht');
-            respond(['ok' => true]);
+            // Konto der zentralen Anmeldung (Keycloak) mitlöschen – sonst verknüpfte es mit einem späteren, gleich benannten
+            // Mitarbeiter (lib/anmeldekonten.php). Scheitert es, bleibt der Mitarbeiter trotzdem gelöscht (Hinweis).
+            $hinweis = konten_entfernen($gone);
+            respond(['ok' => true] + ($hinweis !== '' ? ['hinweis' => $hinweis] : []));
         }
 
         case 'log': {
@@ -502,7 +506,7 @@ switch ($action) {
             $months = protokoll_monate();   // nur aufbewahrte Monate (PROTOKOLL_MONATE)
             $month = (string)($_GET['month'] ?? '');
             if (!preg_match('/^\d{4}-\d{2}$/', $month) || $month < protokoll_grenze()) $month = $months[0] ?? gmdate('Y-m');
-            $entries = array_reverse(store_read('protokoll/' . $month) ?? []);
+            $entries = array_reverse(protokoll_monat($month));   // ab Trennstufe 4 mit dem Protokoll der Kundenseite
             // Ohne Recht „Kunden ansehen“: Einträge mit Kundendaten (Adressen, E-Mails, Bestellungen, Kunden-IP) nur als Vorgang zeigen
             if (!may($me, 'kunden.sehen')) {
                 foreach ($entries as &$e) {

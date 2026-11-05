@@ -41,6 +41,7 @@ LG = f'https://leergut.stafl.test:{PORT}'   # Modul Leergut (Stand 11, Auftrag d
 RW = f'https://rewe.stafl.test:{PORT}'   # Modul REWE (Stand 12, Auftrag des Inhabers 30.10.2026)
 QS = f'https://qs.stafl.test:{PORT}'   # Modul Qualitätssicherung (Stand 13, Auftrag des Inhabers 30.10.2026)
 LEGACY = f'http://127.0.0.1:{os.environ.get("APACHE_PORT", "8280")}'
+NZ = f'http://127.0.0.1:{os.environ.get("NOTZUGANG_PORT", "8290")}'   # Notzugang über einen SSH-Tunnel (ADR-007 Regel 6)
 KC = f'http://127.0.0.1:{os.environ.get("KC_PORT", "8180")}'
 CA = os.path.join(WORK, 'caddy', 'pki', 'authorities', 'local', 'root.crt')
 GEHEIM = dict(z.strip().split('=', 1) for z in open(os.path.join(WORK, 'geheim.env')) if '=' in z)
@@ -163,6 +164,8 @@ check('Vorbereitung: Mitarbeiterkonto für eine Einladung per Mail', 'eva.einlad
 code, _, text = anfrage(L + '/realms/mitarbeiter/.well-known/openid-configuration')
 meta = json.loads(text) if code == 200 else {}
 check('Realm „mitarbeiter“ über login.stafl.test erreichbar, Aussteller stimmt', meta.get('issuer') == L + '/realms/mitarbeiter', meta.get('issuer'))
+for _p in ('/realms/mitarbeiter/account', '/realms/mitarbeiter/account/', '/realms/mitarbeiter/account/personal-info'):
+    check(f'Kontokonsole von Keycloak gesperrt ({_p}): 404, E-Mail-Adresse dort nicht änderbar', anfrage(L + _p)[0] == 404, _p)
 check('PKCE mit S256 angeboten', 'S256' in meta.get('code_challenge_methods_supported', []))
 for pfad in ('/admin/', '/admin/master/console/', '/realms/master/.well-known/openid-configuration', '/realms/master/protocol/openid-connect/auth'):
     check(f'Verwaltung/Master-Realm nicht öffentlich: {pfad} → 404', anfrage(L + pfad)[0] == 404)
@@ -200,6 +203,13 @@ try:
     code, _, text = anfrage(L + '/realms/mitarbeiter/.well-known/openid-configuration')
     check('… Abrufe der Anwendung selbst (Metadaten, Schlüssel, Token) bleiben frei', code == 200 and '"issuer"' in text, code)
     check('… Dateien der Anmeldeseite ebenso (nicht geprüft)', anfrage(L + '/resources/nicht-vorhanden.css')[0] != 403)
+    # Notzugang über den SSH-Tunnel: dorthin kommt nur, wer sich am Server anmelden kann – die IP-Freigabe gilt dort nicht
+    code, _, text = anfrage(NZ + '/api/?action=users')
+    check('Notzugang (Tunnel): IP-Freigabe gilt dort nicht – ohne Anmeldung 401 statt 403', code == 401, (code, text[:160]))
+    code, _, text = anfrage(LEGACY + '/api/?action=users', kopf={'Host': 'legacy.stafl.test'})
+    check('… dieselbe Anfrage an einen anderen Host ohne Keycloak: 403 (Ausnahme nur für den Notzugang)', code == 403 and 'nicht freigegeben' in text, (code, text[:160]))
+    code, _, text = anfrage(NZ + '/api/?action=users', kopf={'X-Forwarded-For': '203.0.113.7'})
+    check('… über den Notzugang mit weitergereichter Besucheradresse (nicht der Tunnel): keine Ausnahme (403)', code == 403 and 'nicht freigegeben' in text, (code, text[:160]))
 finally:
     if _sic_vorher is None:
         os.remove(_sic)
@@ -216,7 +226,7 @@ tok = json.loads(text).get('access_token', '') if code == 200 else ''
 check('Verwaltungszugang nur lokal (Testvorbereitung)', bool(tok), (code, text[:100]))
 _, _, text = anfrage(KC + '/admin/realms/mitarbeiter', kopf={'Authorization': 'Bearer ' + tok})
 realm = json.loads(text) if text.startswith('{') else {}
-check('Realm: Brute-Force-Schutz an, keine Selbstregistrierung, kein Passwort-Zurücksetzen per E-Mail',
+check('Realm: Brute-Force-Schutz an, keine Selbstregistrierung, kein Passwort-Zurücksetzen per E-Mail (bis konten.sh passwort-vergessen an – wie im Betrieb)',
       realm.get('bruteForceProtected') is True and realm.get('registrationAllowed') is False and realm.get('resetPasswordAllowed') is False, realm.get('bruteForceProtected'))
 check('Realm: nur HTTPS, Anmeldesitzung 4 Std. Leerlauf / 10 Std. höchstens',
       realm.get('sslRequired') == 'all' and realm.get('ssoSessionIdleTimeout') == 14400 and realm.get('ssoSessionMaxLifespan') == 36000)
@@ -234,10 +244,20 @@ for cid in ('dashboard', 'angebot', 'verwaltung', 'bestand', 'hr', 'crm', 'marke
           (c.get('attributes', {}).get('minimum.acr.value'), [m.get('protocolMapper') for m in c.get('protocolMappers', [])]))
 check('Realm: eigener Anmeldeablauf mit Stufen (Passwort, zweiter Faktor)', realm.get('browserFlow') == 'mitarbeiter-browser', realm.get('browserFlow'))
 _log = open(os.path.join(WORK, 'realm-aktualisieren.log'), encoding='utf-8').read()
-check('Realm auf aktuellem Stand (realm-aktualisieren beim Start, Protokoll)', 'Realm aktuell (Stand 13' in _log, _log[-300:])
+check('Realm auf aktuellem Stand (realm-aktualisieren beim Start, Protokoll)', 'Realm aktuell (Stand 16' in _log, _log[-300:])
+# Stand 15: Passwortregeln aus der Anwendung – beim Start ist sie hier nicht über APP_PHP erreichbar: Hinweis, nichts geändert, kein Abbruch
+check('Stand 15: ohne lesbare Anwendung Hinweis statt Abbruch, Passwortregeln unverändert',
+      'Einstellungen der Anwendung nicht lesbar' in _log and 'konten.sh richtlinien' in _log and realm.get('failureFactor') == 5, _log[-500:])
+# Stand 14: kein Passwort-Grant – auch nicht über die Clients, die Keycloak selbst anlegt
+check('Stand 14: kein Client des Realms erlaubt den Passwort-Grant', not [c['clientId'] for c in clients.values() if c.get('directAccessGrantsEnabled')],
+      [c['clientId'] for c in clients.values() if c.get('directAccessGrantsEnabled')])
+for _cid in ('admin-cli', 'dashboard'):
+    code, _, text = anfrage(L + '/realms/mitarbeiter/protocol/openid-connect/token', 'POST', urllib.parse.urlencode({
+        'grant_type': 'password', 'client_id': _cid, 'username': 'gibt-es-nicht', 'password': 'falsch-falsch'}).encode(), {'Content-Type': 'application/x-www-form-urlencoded'})
+    check(f'Token-Endpunkt über Caddy: Passwort-Grant mit {_cid} abgelehnt', code in (400, 401) and 'invalid_grant' not in text, (code, text[:120]))
 check('Stand 3: Client „verwaltung“ nachträglich angelegt, Geheimnisse in .env erzeugt (ohne Anzeige), Hinweis auf Neustart',
       'angelegt:  Client verwaltung' in _log and 'erzeugt:   OIDC_SECRET_VERWALTUNG in .env' in _log and 'erzeugt:   OIDC_CRYPTO_VERWALTUNG in .env' in _log
-      and GEHEIM['OIDC_SECRET_VERWALTUNG'] not in _log and 'docker compose up -d app' in _log, _log[-400:])
+      and GEHEIM['OIDC_SECRET_VERWALTUNG'] not in _log and 'docker compose up -d app-mitarbeiter' in _log, _log[-400:])
 check('Client „verwaltung“: Geheimnis aus .env übernommen (Code-Austausch funktioniert, siehe Anmeldung unten), kein Platzhalter',
       clients.get('verwaltung', {}).get('secret') not in (None, '@GEHEIM_VERWALTUNG@'))
 check('Stand 4: Client „bestand“ nachträglich angelegt (Schleife über alle Clients der Realm-Datei), Geheimnisse in .env erzeugt (ohne Anzeige)',
@@ -287,7 +307,14 @@ check('Client „qs“: Geheimnis aus .env übernommen, kein Platzhalter, Rücks
       clients.get('qs', {}).get('secret') not in (None, '@GEHEIM_QS@') and clients.get('qs', {}).get('redirectUris') == [QS + '/oidc/callback'])
 check('Stand 8: Client „konten“ (Mitarbeiterkonten aus der Verwaltung) nachträglich angelegt, nur Geheimnis (kein Sitzungsschlüssel), nicht angezeigt',
       'angelegt:  Client konten' in _log and 'erzeugt:   OIDC_SECRET_KONTEN in .env' in _log and 'OIDC_CRYPTO_KONTEN' not in _log
-      and GEHEIM['OIDC_SECRET_KONTEN'] not in _log and 'gesetzt:   Recht view-users' in _log and 'gesetzt:   Recht manage-users' in _log, _log[-600:])
+      and GEHEIM['OIDC_SECRET_KONTEN'] not in _log and 'gesetzt:   Recht view-users' in _log and 'manage-users' not in _log, _log[-600:])
+# Stand 16 (ADR-007 Stufe 1b): ändern nur Konten der Gruppe anwendungskonten – beim Start ist die Anwendung nicht lesbar:
+# Gruppe, Regel und Berechtigung angelegt, Abgleich mit Hinweis auf später (kein Abbruch), Gruppe noch leer
+check('Stand 16: Gruppe anwendungskonten, Regel und Berechtigung angelegt; ohne lesbare Anwendung Hinweis auf gruppe-abgleichen',
+      'angelegt:  Gruppe anwendungskonten' in _log and "angelegt:  Regel 'Dienstkonto der Anwendung (Client konten)'" in _log
+      and "angelegt:  Berechtigung 'Anwendung verwaltet Mitarbeiterkonten (Gruppe anwendungskonten)'" in _log
+      and 'konten.sh gruppe-abgleichen' in _log, _log[-900:])
+check('Stand 16: feingranulare Verwaltungsrechte im Realm eingeschaltet', realm.get('adminPermissionsEnabled') is True, realm.get('adminPermissionsEnabled'))
 _k = clients.get('konten', {})
 check('Client „konten“: vertraulich, nur Service-Account (kein Anmeldeablauf, kein Passwort-Grant, keine Weiterleitungen), ohne Anmeldestufe',
       _k.get('publicClient') is False and _k.get('serviceAccountsEnabled') is True and _k.get('standardFlowEnabled') is False
@@ -296,7 +323,7 @@ check('Client „konten“: vertraulich, nur Service-Account (kein Anmeldeablauf
 _sa = json.loads(anfrage(f"{KC}/admin/realms/mitarbeiter/clients/{_k.get('id')}/service-account-user", kopf={'Authorization': 'Bearer ' + tok})[2])
 _rm = clients.get('realm-management', {}).get('id')
 _rollen = sorted(x['name'] for x in json.loads(anfrage(f"{KC}/admin/realms/mitarbeiter/users/{_sa.get('id')}/role-mappings/clients/{_rm}", kopf={'Authorization': 'Bearer ' + tok})[2]))
-check('Service-Account „konten“: genau view-users und manage-users (keine Realm-/Client-Verwaltung, kein impersonation)', _rollen == ['manage-users', 'view-users'], _rollen)
+check('Service-Account „konten“: nur noch view-users (Ändern nur über die Gruppe; keine Realm-/Client-Verwaltung, kein impersonation)', _rollen == ['view-users'], _rollen)
 _c, _, _t = anfrage(KC + '/realms/mitarbeiter/protocol/openid-connect/token', 'POST', urllib.parse.urlencode({
     'grant_type': 'client_credentials', 'client_id': 'konten', 'client_secret': GEHEIM['OIDC_SECRET_KONTEN']}).encode(), {'Content-Type': 'application/x-www-form-urlencoded'})
 _kt = json.loads(_t).get('access_token', '') if _c == 200 else ''
@@ -309,6 +336,44 @@ _c, _, _t = anfrage(KC + '/realms/mitarbeiter/protocol/openid-connect/token', 'P
     'grant_type': 'password', 'client_id': 'konten', 'client_secret': GEHEIM['OIDC_SECRET_KONTEN'], 'username': 'erika', 'password': NUTZER['erika'][0]}).encode(),
     {'Content-Type': 'application/x-www-form-urlencoded'})
 check('… kein Passwort-Grant (Anmeldung im Namen von Mitarbeitern unmöglich)', _c in (400, 401) and 'access_token' not in _t, (_c, _t[:120]))
+# Stand 16: was der Client „konten“ außerhalb der Gruppe darf – nichts ändern, nur lesen; Konten nur in der Gruppe anlegen
+_KA = KC + '/admin/realms/mitarbeiter'
+def _frisch(daten):   # frisches Token (Verwaltungs-Tokens gelten nur kurz)
+    _c, _, _t = anfrage(daten[0], 'POST', urllib.parse.urlencode(daten[1]).encode(), {'Content-Type': 'application/x-www-form-urlencoded'})
+    return json.loads(_t).get('access_token', '') if _c == 200 else ''
+_kt = _frisch((KC + '/realms/mitarbeiter/protocol/openid-connect/token', {'grant_type': 'client_credentials', 'client_id': 'konten', 'client_secret': GEHEIM['OIDC_SECRET_KONTEN']}))
+_at = _frisch((KC + '/realms/master/protocol/openid-connect/token', {'grant_type': 'password', 'client_id': 'admin-cli', 'username': 'verwaltung-ci', 'password': GEHEIM['KC_ADMIN_PASSWORD']}))
+def _kh(json_=False):
+    return {'Authorization': 'Bearer ' + _kt, **({'Content-Type': 'application/json'} if json_ else {})}
+def _uid(n):
+    _j = json.loads(anfrage(f'{_KA}/users?exact=true&username={n}', kopf={'Authorization': 'Bearer ' + _at})[2] or '[]')
+    return _j[0]['id'] if _j else ''
+_gid = json.loads(anfrage(f'{_KA}/group-by-path/anwendungskonten', kopf={'Authorization': 'Bearer ' + _at})[2] or '{}').get('id', '')
+_admin_kc = _uid('admin')
+_rm_roll = json.loads(anfrage(f"{_KA}/clients/{_rm}/roles/realm-admin", kopf={'Authorization': 'Bearer ' + _at})[2] or '{}')
+check('Stand 16: „konten“ liest Konten (Administrator: access.manage = false)', _admin_kc != '' and json.loads(
+      anfrage(f'{_KA}/users/{_admin_kc}', kopf=_kh())[2] or '{}').get('access', {}).get('manage') is False)
+check('… darf Konten außerhalb der Gruppe nicht ändern: Passwort, Daten, Abmelden, Löschen, Mail (403)', all(c == 403 for c in (
+      anfrage(f'{_KA}/users/{_admin_kc}/reset-password', 'PUT', json.dumps({'type': 'password', 'value': 'Fremd-Gesetzt-Kennwort-9', 'temporary': True}).encode(), _kh(json_=True))[0],
+      anfrage(f'{_KA}/users/{_admin_kc}', 'PUT', b'{"email":"x@stafl.test"}', _kh(json_=True))[0],
+      anfrage(f'{_KA}/users/{_admin_kc}/logout', 'POST', b'', _kh())[0],
+      anfrage(f'{_KA}/users/{_admin_kc}', 'DELETE', None, _kh())[0],
+      anfrage(f'{_KA}/users/{_admin_kc}/execute-actions-email', 'PUT', b'["UPDATE_PASSWORD"]', _kh(json_=True))[0])))
+check('… darf niemanden in die Gruppe aufnehmen und keine Rollen vergeben (403)', _gid != '' and all(c == 403 for c in (
+      anfrage(f'{_KA}/users/{_admin_kc}/groups/{_gid}', 'PUT', b'', _kh())[0],
+      anfrage(f'{_KA}/groups/{_gid}/role-mappings/clients/{_rm}', 'POST', json.dumps([_rm_roll]).encode(), _kh(json_=True))[0],
+      anfrage(f'{_KA}/groups', 'POST', b'{"name":"andere"}', _kh(json_=True))[0])))
+check('… legt kein Konto außerhalb der Gruppe an (403)',
+      anfrage(f'{_KA}/users', 'POST', b'{"username":"probe-ohne-gruppe","enabled":true}', _kh(json_=True))[0] == 403 and _uid('probe-ohne-gruppe') == '')
+_c, _, _t = anfrage(f'{_KA}/users', 'POST', b'{"username":"probe-in-gruppe","enabled":true,"groups":["/anwendungskonten"]}', _kh(json_=True))
+_pid = _uid('probe-in-gruppe')
+_mit = [g.get('path') for g in json.loads(anfrage(f'{_KA}/users/{_pid}/groups', kopf={'Authorization': 'Bearer ' + _at})[2] or '[]')] if _pid else []
+check('… legt Konten nur in der Gruppe an, ändert sie, vergibt aber keine Verwaltungsrolle und entfernt sie nicht aus der Gruppe',
+      _c == 201 and _mit == ['/anwendungskonten']
+      and anfrage(f'{_KA}/users/{_pid}', 'PUT', b'{"firstName":"Probe"}', _kh(json_=True))[0] == 204
+      and anfrage(f'{_KA}/users/{_pid}/role-mappings/clients/{_rm}', 'POST', json.dumps([_rm_roll]).encode(), _kh(json_=True))[0] == 403
+      and anfrage(f'{_KA}/users/{_pid}/groups/{_gid}', 'DELETE', None, _kh())[0] == 403, (_c, _mit))
+check('… und löscht nur Konten der Gruppe', anfrage(f'{_KA}/users/{_pid}', 'DELETE', None, _kh())[0] == 204 and _uid('probe-in-gruppe') == '')
 
 
 def kc_token():
@@ -636,6 +701,35 @@ with sync_playwright() as pw:
     ctx = br.new_context(ignore_https_errors=True, viewport={'width': 1280, 'height': 900})
     pg = eigene_seite(ctx.new_page())
 
+    # ── Notzugang über einen SSH-Tunnel (ADR-007 Regel 6): alter Eingabebereich mit eigener Anmeldung über http (wie
+    #    http://localhost:8190/admin/ auf dem eigenen Rechner) – Skripte laden ohne upgrade-insecure-requests, keine Fehler ──
+    _h = anfrage(NZ + '/admin/')[1]
+    _hl = anfrage(LEGACY + '/admin/', kopf={'Host': 'legacy.stafl.test'})[1]
+    check('Notzugang: Inhaltsrichtlinie ohne upgrade-insecure-requests (nur http über den Tunnel), sonst unverändert',
+          'upgrade-insecure-requests' not in (_h.get('Content-Security-Policy') or '') and "script-src 'self'" in (_h.get('Content-Security-Policy') or '')
+          and 'upgrade-insecure-requests' in (_hl.get('Content-Security-Policy') or '') and 'noindex' in (_h.get('X-Robots-Tag') or ''),
+          (_h.get('Content-Security-Policy'), _hl.get('Content-Security-Policy')))
+    _nz = br.new_context(viewport={'width': 1280, 'height': 900}); _np = _nz.new_page()
+    _nz_fehler, _nz_https = [], []
+    _np.on('pageerror', lambda e: _nz_fehler.append(str(e)))
+    _np.on('request', lambda r: _nz_https.append(r.url) if r.url.startswith('https://') else None)
+    _np.goto(NZ + '/admin/')
+    _nz_st = {}
+    try:
+        _np.wait_for_selector('#screen-auth:not([hidden])', timeout=20000)
+        _np.fill('#au-user', 'admin'); _np.fill('#pw1', PW_ALT); _np.click('#auth-submit')
+        _np.wait_for_selector('#screen-editor:not([hidden])', timeout=20000)
+        _nz_st = _np.evaluate("fetch('../api/?action=status').then(r => r.json())")
+        _np.screenshot(path=os.path.join(SH, 'oidc_notzugang_1280.png'))
+        _np.set_viewport_size({'width': 390, 'height': 844}); _np.screenshot(path=os.path.join(SH, 'oidc_notzugang_390.png'))
+    except Exception as _e:
+        _nz_fehler.append(f'{type(_e).__name__}: {_np.url}')
+    check('Notzugang: Anmeldung mit dem bisherigen Passwort über http, Eingabebereich geladen, keine Skriptfehler, nichts über https',
+          bool(_nz_st.get('loggedIn')) and (_nz_st.get('user') or {}).get('username') == 'admin' and not _nz_fehler and not _nz_https,
+          (_nz_st.get('user'), _nz_fehler[:3], _nz_https[:3]))
+    check('… Sitzung des Notzugangs ohne Keycloak-Verknüpfung (zentral = nein)', not (_nz_st.get('user') or {}).get('zentral'), _nz_st.get('user'))
+    _nz.close()
+
     # ── Skript des Designs: Formular kommt beim Server nur einmal an, auch wenn es mehrmals kurz nacheinander abgeschickt wird
     #    (langsamer Server nachgestellt; ohne das Skript kommen alle Absendungen an → bei Keycloak Sperre für 60 s) ──
     import http.server, socketserver, threading
@@ -795,7 +889,7 @@ with sync_playwright() as pw:
 
     # ── Single Sign-on in die zweite Anwendung, aber eigene Sitzung je Host ──
     pa = eigene_seite(ctx.new_page())
-    pa.goto(A + '/admin/'); pa.wait_for_function("location.host.startsWith('angebot.')")
+    pa.goto(A + '/admin/'); pa.wait_for_url(lambda u: urllib.parse.urlsplit(u).hostname.startswith('angebot.'))
     sta = pa.evaluate("fetch('../api/?action=status').then(r => r.json())")
     check('Single Sign-on: Mitarbeiter-Eingabe ohne erneute Eingabe angemeldet', sta.get('loggedIn') and sta['user']['username'] == 'erika', sta.get('user'))
     code, j = pa.evaluate("t => fetch('../api/?action=security_status', {headers: {'X-CSRF-Token': t}}).then(async r => [r.status, await r.json()])", sta.get('csrf', ''))
@@ -807,11 +901,11 @@ with sync_playwright() as pw:
           and ka.get('__Host-WA_ADMIN', {}).get('value') != k.get('__Host-WA_ADMIN', {}).get('value'), sorted(ka))
     pa.wait_for_selector('#screen-editor:not([hidden]), #screen-auth:not([hidden])', timeout=30000)
     check('Mitarbeiter-Eingabe zeigt den Editor (keine eigene Anmeldemaske)', pa.is_visible('#screen-editor'))
-    pa.wait_for_function("document.querySelector('#vt-master').hidden && !document.querySelector('#vt-edit').hidden")
+    pa.wait_for_selector('#vt-edit:not([hidden])', state='attached'); pa.wait_for_selector('#vt-master[hidden]', state='attached')
     sicht_a = pa.evaluate("[...document.querySelectorAll('[id^=vt-]')].filter(b => !b.hidden).map(b => b.id.slice(3))")
     check('Angebot (angebot.stafl.test): nur Angebotsbereiche, keine Verwaltung (Stammdaten, Kunden, Import …) und keine Bestandsliste (wandert ins Bestandsmodul)',
           'edit' in sicht_a and not {'stock', 'master', 'vkgruppen', 'kunden', 'gruppen', 'vertreter', 'importe', 'auswertung', 'users', 'log', 'sec'} & set(sicht_a), sicht_a)
-    pa.goto(A + '/admin/?ansicht=stock'); pa.wait_for_selector('#screen-editor:not([hidden])'); pa.wait_for_function("!document.querySelector('#vt-edit').hidden")
+    pa.goto(A + '/admin/?ansicht=stock'); pa.wait_for_selector('#screen-editor:not([hidden])'); pa.wait_for_selector('#vt-edit:not([hidden])', state='attached')
     check('Angebot: Bestandsliste auch über die Adresse nicht zu öffnen (?ansicht=stock → Angebot bearbeiten)', pa.is_hidden('#view-stock') and pa.is_visible('#view-edit'))
     check('Angebot: Bestandsdaten im Angebotseditor bleiben (Bestandsliste über die Schnittstelle lesbar)', pa.evaluate("fetch('../api/?action=stock').then(r => r.status)") == 200)
     # Gemeldet 25.10.2026: „Angebotsseite“ öffnete auf diesem Host wieder den Editor („/“ → /admin/). Jetzt index.html.
@@ -823,7 +917,7 @@ with sync_playwright() as pw:
     ps.close()
     # Vorschau seit 27.10.2026 als Fenster im Editor (iframe derselben Adresse) statt eines neuen Tabs
     pa.click('#btn-preview'); pa.wait_for_selector('#dlg-vorschau[open] #pv-stage:not(.laden)', timeout=30000)
-    pa.wait_for_function("() => { const d = document.querySelector('#pv-frame').contentDocument; const l = d && d.querySelector('#list'); return !!(l && l.children.length); }", timeout=30000)
+    pa.frame_locator('#pv-frame').locator('#list > *').first.wait_for(state='attached', timeout=30000)
     pv = pa.frame_locator('#pv-frame')
     pvu = pa.eval_on_selector('#pv-frame', 'f => f.contentWindow.location.href')
     check('Angebot: Vorschau zeigt den Entwurf der Angebotsseite im Fenster (index.html?vorschau=1, nicht den Editor)', pvu.startswith(A + '/index.html?vorschau=1&eingebettet=1')
@@ -847,7 +941,7 @@ with sync_playwright() as pw:
     kv = kekse(ctx, 'verwaltung.stafl.test')
     check('Verwaltung: eigene Sitzung (andere Cookie-Werte als angebot)', kv.get('__Host-oidc_sitzung', {}).get('value') not in (None, ka.get('__Host-oidc_sitzung', {}).get('value'))
           and kv.get('__Host-WA_ADMIN', {}).get('value') not in (None, ka.get('__Host-WA_ADMIN', {}).get('value')), sorted(kv))
-    pv.wait_for_function("!document.querySelector('#vt-master').hidden")
+    pv.wait_for_selector('#vt-master:not([hidden])', state='attached')
     check('Verwaltung: Überschrift und Titel', pv.text_content('#topbar h1') == 'Verwaltung' and pv.title().startswith('Verwaltung'), (pv.text_content('#topbar h1'), pv.title()))
     sichtbar = pv.evaluate("[...document.querySelectorAll('[id^=vt-]')].filter(b => !b.hidden).map(b => b.id.slice(3))")
     check('Verwaltung: nur Verwaltungsbereiche (kein Angebot, Bestand, Einkauf, Bestellungen); Bearbeiterin ohne Nutzer/Sicherheit',
@@ -1190,7 +1284,7 @@ with sync_playwright() as pw:
     pg.fill('#otp', totp(chef_otp, 1)); pg.click('#kc-login'); pg.wait_for_selector('#screen-editor:not([hidden])')
     code, _ = pg.evaluate("fetch('../api/?action=status').then(async r => [r.status, await r.json().catch(() => ({}))])")
     check('… ohne zweite Abfrage in der Mitarbeiter-Eingabe (Einmalcode als Anmeldemethode erkannt)', code == 200 and pg.url.startswith(A + '/admin/'), (code, pg.url))
-    pg.goto(W + '/admin/'); pg.wait_for_selector('#screen-editor:not([hidden])'); pg.wait_for_function("!document.querySelector('#vt-users').hidden")
+    pg.goto(W + '/admin/'); pg.wait_for_selector('#screen-editor:not([hidden])'); pg.wait_for_selector('#vt-users:not([hidden])', state='attached')
     sichtbar = pg.evaluate("[...document.querySelectorAll('[id^=vt-]')].filter(b => !b.hidden).map(b => b.id.slice(3))")
     check('Administrator in der Verwaltung (Single Sign-on mit zweitem Faktor): Import, Nutzer, E-Mail, Protokoll; kein Angebot, kein „Schutz“, kein System (Modul Sicherheit)',
           {'master', 'kunden', 'importe', 'users', 'mail', 'log'} <= set(sichtbar) and not {'edit', 'schutz', 'sec'} & set(sichtbar), sichtbar)
@@ -1211,7 +1305,7 @@ with sync_playwright() as pw:
     pg.set_viewport_size({'width': 1280, 'height': 900})
     pg.goto(W + '/admin/'); pg.wait_for_selector('#screen-editor:not([hidden])')
     try:
-        pg.wait_for_function("!document.querySelector('#vt-users').hidden", timeout=10000)
+        pg.wait_for_selector('#vt-users:not([hidden])', state='attached', timeout=10000)
     except Exception:
         pass
     _zustand = pg.evaluate("({ url: location.href, titel: document.title, sichtbar: [...document.querySelectorAll('[role=tab][id^=vt-]')].filter(b => !b.hidden).map(b => b.id.slice(3)), "
@@ -1275,6 +1369,25 @@ with sync_playwright() as pw:
         pg.wait_for_url(SIC + '/module/sicherheit/**'); pg.wait_for_selector('#sic-app:not([hidden])')
         code, j = pg.evaluate(js, ['geo_clear_stats', st['csrf']])
         check('nach der erneuten Anmeldung: Aktion bestätigt (Rücksprung ins Modul Sicherheit)', code == 200, (code, j))
+        # Befund 03.11.2026: Zwei-Faktor-Pflicht „Administratoren“ speichern – der eigene zweite Faktor zählt an der Keycloak-
+        # Anmeldung (vorher am alten Konto: ohne lokalen Einmalcode konnte kein Administrator mehr speichern)
+        pg.click('#sic-tabs [data-tab="einstellungen"]'); pg.wait_for_selector('#tab-einstellungen:not([hidden]) [data-e="e-anmeldung"]')
+        pg.click('[data-e="e-anmeldung"]'); pg.wait_for_selector('#sic-dlg[open] #sec-form')
+        twofa_vorher = pg.input_value('#sec-form [name="twofa"]')
+        pg.select_option('#sec-form [name="twofa"]', 'admins')
+        with pg.expect_response(lambda r: 'action=security_save' in r.url) as antwort2:
+            pg.click('#sic-dlg .sic-dfuss [type=submit]')
+        check('Administrator (zweiter Faktor bei Keycloak) speichert Zwei-Faktor-Pflicht „Administratoren“ (200)', antwort2.value.status == 200, antwort2.value.status)
+        # Warten über Selektoren statt wait_for_function("…"): ein Text-Prädikat wertet Playwright beim Nachprüfen mit eval aus –
+        # die CSP (script-src 'self', wie im Betrieb) verbietet das; es klappte nur, wenn die Bedingung sofort galt (wackelig)
+        pg.wait_for_selector('#sic-dlg[open]', state='detached')
+        if twofa_vorher != 'admins':   # Ausgangszustand für die weiteren Prüfungen wiederherstellen
+            pg.click('[data-e="e-anmeldung"]'); pg.wait_for_selector('#sic-dlg[open] #sec-form')
+            pg.select_option('#sec-form [name="twofa"]', twofa_vorher)
+            with pg.expect_response(lambda r: 'action=security_save' in r.url) as antwort3:
+                pg.click('#sic-dlg .sic-dfuss [type=submit]')
+            check('… Ausgangszustand wiederhergestellt', antwort3.value.status == 200, antwort3.value.status)
+            pg.wait_for_selector('#sic-dlg[open]', state='detached')
     # Bestätigung über ein Recht (require_perm_confirmed, z. B. Kunden pflegen, Wochenangebot senden): ebenfalls erneute
     # Anmeldung bei Keycloak – nie die hier gesperrte Passwortabfrage (sonst wäre die Aktion nicht mehr bestätigbar)
     pg.goto(W + '/admin/'); pg.wait_for_selector('#screen-editor:not([hidden])')   # Single Sign-on auf die Verwaltung
@@ -1429,8 +1542,15 @@ with sync_playwright() as pw:
     check('… angemeldet und mit dem Mitarbeiterkonto verknüpft', st.get('loggedIn') and st['user']['username'] == 'sven.start', st.get('user'))
     code, aus = konten('sperren', 'sven.start')
     check('Konsole: Konto gesperrt', code == 0 and 'gesperrt' in aus, aus)
-    pg.wait_for_function("fetch('../api/?action=status').then(r => r.status === 401)", polling=500, timeout=15000)
-    check('… und sofort überall abgemeldet (Back-Channel-Logout)', True)
+    # bis zu 15 s auf den Zustand warten (vorher wait_for_function mit Text-Prädikat: lieferte schon beim ersten Versuch
+    # das Promise als „wahr“ und prüfte damit nichts; Nachprüfen per eval verbietet ohnehin die CSP)
+    _status = []
+    for _ in range(30):
+        _status.append(pg.evaluate("fetch('../api/?action=status').then(r => r.status)"))
+        if _status[-1] == 401:
+            break
+        pg.wait_for_timeout(500)
+    check('… und sofort überall abgemeldet (Back-Channel-Logout)', _status[-1] == 401, _status)
     pg.goto(D + '/'); pg.wait_for_selector('#username'); pg.fill('#username', 'sven.start'); pg.fill('#password', SVEN['eigen']); pg.click('#kc-login')
     pg.wait_for_load_state()
     check('gesperrtes Konto: keine Anmeldung', pg.url.startswith(L) and pg.locator('#db-grid').count() == 0, pg.url)
@@ -1554,6 +1674,11 @@ with sync_playwright() as pw:
 
     code, aus = konten('einladen', 'eva.einladung')
     check('Einladung: ohne eingerichteten Mailversand abgelehnt', code == 1 and 'mail-einrichten' in aus, aus)
+    code, aus = konten('passwort-vergessen', 'an')
+    check('Passwort vergessen: ohne eingerichteten Mailversand nicht einschaltbar', code == 1 and 'mail-einrichten' in aus, aus)
+    code, aus = konten('passwort-vergessen', 'status')
+    check('… Status wie bisher im Betrieb: aus, Keycloak-Standardablauf (nicht abgesichert), Mailversand fehlt', code == 0 and 'Passwort vergessen: aus' in aus
+          and 'NICHT abgesichert' in aus and 'Mailversand der Anmeldung: fehlt' in aus, aus)
     code, aus = konten('mail-einrichten', 'pruefung@stafl.test')
     tresor = os.path.join(WORK, 'vault', 'mitarbeiter_smtp__password')
     check('Mailversand eingerichtet, Testmail angekommen', code == 0 and warte_mail('pruefung@stafl.test') is not None, aus)
@@ -1607,6 +1732,21 @@ with sync_playwright() as pw:
     code, aus = konten('einladen', 'eva.einladung')
     m2 = warte_mail('eva@stafl.test', 2)
     check('erneute Einladung: wieder nur „Passwort festlegen“', code == 0 and m2 and 'Passwort festlegen' in m2['text'] and 'Mehrfachauthentifizierung' not in m2['text'], (aus, m2 and m2['text'][:200]))
+
+    # ── Stand 16 (ADR-007 Stufe 1b): Gruppe anwendungskonten abgleichen – Konten der Mitarbeiter ohne Administratorrolle ──
+    def kc_mitglied(n):
+        _k = json.loads(anfrage(KC + '/admin/realms/mitarbeiter/users?exact=true&username=' + n, kopf={'Authorization': 'Bearer ' + vtoken()})[2] or '[]')
+        return bool(_k) and '/anwendungskonten' in [g.get('path') for g in json.loads(anfrage(
+            f"{KC}/admin/realms/mitarbeiter/users/{_k[0]['id']}/groups", kopf={'Authorization': 'Bearer ' + vtoken()})[2] or '[]')]
+    check('Einladung aus der Konsole: neues Konto gleich in der Gruppe (Bearbeiterin)', kc_mitglied('eva.einladung'))
+    code, aus = konten('gruppe-abgleichen')
+    check('Konsole gruppe-abgleichen: Bearbeiter aufgenommen, Administratoren und Konten ohne Mitarbeiter nicht',
+          code == 0 and "aufgenommen: Konto 'erika'" in aus and "aufgenommen: Konto 'neu'" in aus and 'Gruppe anwendungskonten:' in aus
+          and not any(f"Konto '{n}'" in aus for n in ('admin', 'chef', 'fremd')), aus)
+    check('… Mitglieder in Keycloak: erika und neu ja; admin, chef und fremd nein',
+          kc_mitglied('erika') and kc_mitglied('neu') and not any(kc_mitglied(n) for n in ('admin', 'chef', 'fremd')))
+    code, aus = konten('gruppe-abgleichen')
+    check('… erneut ausgeführt ändert nichts', code == 0 and 'aufgenommen:' not in aus and 'entfernt:' not in aus, aus)
 
     # ── Mitarbeiterkonten aus der Verwaltung (Stand 8, lib/anmeldekonten.php): EIN Passwort – das der zentralen Anmeldung ──
     KIM = {'eigen': 'Kim-Eigenes-Kennwort-1', 'zweit': 'Kim-Zweites-Kennwort-2'}
@@ -1726,6 +1866,90 @@ with sync_playwright() as pw:
     check('normales Konto: Wahl bleibt', code == 200 and j['konto'].get('nurTemporaer') is False, (code, j))
     code, j = pg.evaluate(post, ['anmeldekonto_aendern', {'id': kim, 'was': 'passwort', 'passwort': KIM['zweit'], 'aendern': False}])
     check('… dauerhaft gesetzt (kein eigenes Passwort verlangt)', code == 200 and j.get('temporaer') is False and j['konto'].get('passwortAendern') is False, (code, j))
+    check('… über die Verwaltung angelegte Konten stehen in der Gruppe (Kim, Lea, Ole)', all(kc_mitglied(n) for n in ('kim.konto', 'lea-einladung', 'ole.ohnemail')))
+
+    # ── Stand 16: Konten von Administratoren nur über die Serverkonsole ──
+    chef_id = nutzer_roh()['chef']['id']
+    code, j = pg.evaluate(hole, chef_id)
+    check('Administrator „chef“: Zustand lesbar, nicht über die Verwaltung änderbar (Befehl der Serverkonsole genannt)',
+          code == 200 and j['konto'].get('vorhanden') is True and j['konto'].get('verwaltbar') is False and j['konto'].get('admin') is True
+          and 'konten.sh startpasswort chef' in j['konto'].get('hinweis', ''), (code, j))
+    code, j = pg.evaluate(post, ['anmeldekonto_aendern', {'id': chef_id, 'was': 'passwort', 'passwort': 'Fremd-Gesetzt-Kennwort-2'}])
+    code2, j2 = pg.evaluate(post, ['anmeldekonto_aendern', {'id': chef_id, 'was': 'entsperren'}])
+    check('… Passwort setzen und Entsperren abgelehnt (403, Hinweis auf die Serverkonsole)', code == 403 and code2 == 403
+          and 'Serverkonsole' in j.get('error', '') and 'Serverkonsole' in j2.get('error', ''), (code, j, code2, j2))
+    pg.click('#vt-users'); pg.wait_for_selector(f'#view-users tr[data-uid="{chef_id}"]')
+    pg.click(f'#view-users tr[data-uid="{chef_id}"]'); pg.wait_for_selector('#ka-status:has-text("Serverkonsole")')
+    check('Dialog Administrator: keine Knöpfe (Passwort, Link, Entsperren), Hinweis mit Befehl',
+          pg.locator('#ka-knoepfe button').count() == 0 and 'konten.sh startpasswort chef' in pg.inner_text('#ka-status'), pg.inner_text('#ka'))
+    pg.locator('#ka').scroll_into_view_if_needed(); pg.screenshot(path=os.path.join(SH, 'oidc_anmeldekonto_admin_1280.png'))
+    pg.set_viewport_size({'width': 390, 'height': 844})
+    check('… 390 px: kein waagerechtes Scrollen', pg.evaluate("document.querySelector('#dlg-user').scrollWidth <= document.querySelector('#dlg-user').clientWidth + 1"))
+    pg.locator('#ka').scroll_into_view_if_needed(); pg.screenshot(path=os.path.join(SH, 'oidc_anmeldekonto_admin_390.png'))
+    pg.set_viewport_size({'width': 1280, 'height': 900})
+    pg.click('#dlg-user [data-close]')
+    code, j = pg.evaluate(post, ['user_save', {'id': '', 'vorname': 'Bea', 'nachname': 'Boss', 'username': 'bea.boss', 'email': 'bea@stafl.test', 'rollen': ['admin'], 'active': True}])
+    bea = j.get('user', {}).get('id', '')
+    code, j = pg.evaluate(hole, bea)
+    check('Neuer Administrator ohne Konto: kein „Konto anlegen“, Befehl der Serverkonsole genannt', bool(bea) and code == 200
+          and j['konto'].get('vorhanden') is False and j['konto'].get('anlegbar') is False and 'konten.sh einladen bea.boss' in j['konto'].get('hinweis', ''), (code, j))
+    code, j = pg.evaluate(post, ['anmeldekonto_aendern', {'id': bea, 'was': 'anlegen', 'einladen': True}])
+    _bea_kc = json.loads(anfrage(KC + '/admin/realms/mitarbeiter/users?exact=true&username=bea.boss', kopf={'Authorization': 'Bearer ' + vtoken()})[2] or '[]')
+    check('… Anlegen über die Verwaltung abgelehnt (403), kein Konto in Keycloak', code == 403 and 'Serverkonsole' in j.get('error', '') and not _bea_kc, (code, j))
+    # Angriff mit dem Geheimnis des Clients „konten“: Konto mit dem Namen des noch nicht verknüpften Administrators in der Gruppe
+    # anlegen, Passwort setzen, anmelden → abgelehnt (lib/oidc.php, oidc_admin_konto_pruefen), keine Verknüpfung
+    _ktok = json.loads(anfrage(KC + '/realms/mitarbeiter/protocol/openid-connect/token', 'POST', urllib.parse.urlencode({
+        'grant_type': 'client_credentials', 'client_id': 'konten', 'client_secret': GEHEIM['OIDC_SECRET_KONTEN']}).encode(),
+        {'Content-Type': 'application/x-www-form-urlencoded'})[2]).get('access_token', '')
+    _kk = {'Authorization': 'Bearer ' + _ktok, 'Content-Type': 'application/json'}
+    ANGRIFF_PW = 'Angreifer-Kennwort-CI-7'   # nur Testumgebung
+    _c1 = anfrage(KC + '/admin/realms/mitarbeiter/users', 'POST', json.dumps({'username': 'bea.boss', 'enabled': True, 'email': 'angreifer@stafl.test',
+        'emailVerified': True, 'firstName': 'Bea', 'lastName': 'Boss', 'groups': ['/anwendungskonten']}).encode(), _kk)[0]
+    _bid = (json.loads(anfrage(KC + '/admin/realms/mitarbeiter/users?exact=true&username=bea.boss', kopf={'Authorization': 'Bearer ' + vtoken()})[2] or '[{}]') or [{}])[0].get('id', '')
+    _c2 = anfrage(f'{KC}/admin/realms/mitarbeiter/users/{_bid}/reset-password', 'PUT', json.dumps({'type': 'password', 'value': ANGRIFF_PW, 'temporary': False}).encode(), _kk)[0]
+    ca = br.new_context(ignore_https_errors=True); pa = eigene_seite(ca.new_page())
+    pa.goto(D + '/'); pa.wait_for_selector('#username'); pa.fill('#username', 'bea.boss'); pa.fill('#password', ANGRIFF_PW); pa.click('#kc-login')
+    pa.wait_for_selector('#db-err:not([hidden])')
+    check('Angriff (Konto mit dem Namen eines Administrators über den Client „konten“): Anmeldung abgelehnt, keine Verknüpfung, protokolliert',
+          _c1 == 201 and _c2 == 204 and 'gruppe-abgleichen' in pa.text_content('#db-err') and pa.is_hidden('#db-bereich')
+          and not nutzer_roh()['bea.boss'].get('oidcSub') and any('mit einem Konto der Gruppe anwendungskonten abgelehnt' in str(e) for e in protokoll_roh()),
+          (_c1, _c2, pa.text_content('#db-err'), nutzer_roh()['bea.boss'].get('oidcSub')))
+    ca.close()
+    check('… das Konto in der Gruppe löscht die Verwaltung wieder (Aufräumen)', anfrage(f'{KC}/admin/realms/mitarbeiter/users/{_bid}', 'DELETE', None, _kk)[0] == 204)
+    # Beförderung: Erikas Konto steht noch in der Gruppe – als Administratorin erst nach konten.sh gruppe-abgleichen
+    V4 = Legacy()
+    V4.call('login', {'username': 'admin', 'password': PW_ALT})
+    code_p, j_p = V4.call('user_save', {'id': erika_id, 'name': 'Erika Editor', 'username': 'erika', 'role': 'admin', 'active': True})
+    code, j = pg.evaluate(hole, erika_id)
+    check('Befördert (Konto noch in der Gruppe): Verwaltung ändert es nicht mehr und warnt mit Befehl', code_p == 200 and code == 200
+          and j['konto'].get('verwaltbar') is False and j['konto'].get('warnung') is True and 'gruppe-abgleichen' in j['konto'].get('hinweis', ''), (code_p, j_p, j))
+    # Anmeldung eines Administrators, dessen Konto noch in der Gruppe steht – nachgestellt mit „chef“ (Einmalcode oben eingerichtet):
+    # Konto wie die Serverkonsole in die Gruppe legen, anmelden → abgelehnt; konten.sh gruppe-abgleichen chef nimmt es wieder heraus
+    _vk = {'Authorization': 'Bearer ' + vtoken(), 'Content-Type': 'application/json'}
+    _chef_kc = (json.loads(anfrage(KC + '/admin/realms/mitarbeiter/users?exact=true&username=chef', kopf=_vk)[2] or '[{}]') or [{}])[0].get('id', '')
+    _g16 = json.loads(anfrage(KC + '/admin/realms/mitarbeiter/group-by-path/anwendungskonten', kopf=_vk)[2] or '{}').get('id', '')
+    _ca = anfrage(f'{KC}/admin/realms/mitarbeiter/users/{_chef_kc}/groups/{_g16}', 'PUT', b'', _vk)[0]
+    c4 = br.new_context(ignore_https_errors=True); p4 = eigene_seite(c4.new_page())
+    p4.goto(D + '/'); p4.wait_for_selector('#username'); p4.fill('#username', 'chef'); p4.fill('#password', NUTZER['chef'][0]); p4.click('#kc-login')
+    _seite = ''
+    try:
+        p4.wait_for_selector('#otp', timeout=15000); p4.fill('#otp', totp(chef_otp)); p4.click('#kc-login')
+        p4.wait_for_selector('#db-err:not([hidden])', timeout=20000)
+    except Exception as _e:   # Anmeldeseite festhalten statt abzubrechen (Fehlersuche)
+        _seite = f'{type(_e).__name__}: {p4.url} {p4.inner_text("body")[:300]}'
+    _db_err = p4.text_content('#db-err') if p4.locator('#db-err').count() else ''
+    check('Administrator mit einem Konto der Gruppe: Anmeldung abgelehnt (Hinweis gruppe-abgleichen)', _ca == 204 and not _seite
+          and 'gruppe-abgleichen' in (_db_err or '') and p4.is_hidden('#db-bereich'), (_ca, _seite, _db_err))
+    c4.close()
+    code, aus = konten('gruppe-abgleichen', 'chef')
+    check('… konten.sh gruppe-abgleichen chef nimmt das Administratorkonto heraus', code == 0 and "entfernt:  Konto 'chef'" in aus and 'Administrator' in aus
+          and not kc_mitglied('chef'), aus)
+    code, aus = konten('gruppe-abgleichen', 'erika')
+    check('Konsole gruppe-abgleichen erika: als Administratorin aus der Gruppe entfernt', code == 0 and "entfernt:  Konto 'erika'" in aus and 'Administrator' in aus
+          and not kc_mitglied('erika'), aus)
+    code_p, j_p = V4.call('user_save', {'id': erika_id, 'name': 'Erika Editor', 'username': 'erika', 'role': 'editor', 'active': True})
+    code, aus = konten('gruppe-abgleichen', 'erika')
+    check('… zurückgestuft: wieder aufgenommen', code_p == 200 and code == 0 and "aufgenommen: Konto 'erika'" in aus and kc_mitglied('erika'), (code_p, aus))
 
     # ── Ablauf und Beenden von Sitzungen auf Keycloak-Hosts (Sicherheitsdurchsicht 26.10.2026): keine stille neue Sitzung ──
     ck = br.new_context(ignore_https_errors=True); pk = eigene_seite(ck.new_page())
@@ -1734,22 +1958,59 @@ with sync_playwright() as pw:
     stat = "fetch('../api/?action=status').then(async r => [r.status, await r.json().catch(() => ({}))])"
     code, j = pk.evaluate(stat)
     check('Sitzungen: Kim im Dashboard angemeldet', code == 200 and j.get('loggedIn'), (code, j))
-    # Inaktivität nachgestellt (sonst 8 Stunden warten): letzte Aktivität der PHP-Sitzung zurückdrehen
-    sid_k = kekse(ck, 'dashboard.stafl.test')['__Host-WA_ADMIN']['value']; pfad = os.path.join(WORK, 'sessions', 'sess_' + sid_k)
-    with open(pfad, encoding='utf-8') as f:
-        roh = f.read()
-    neu = re.sub(r'(^|;)seen\|i:\d+;', lambda m: f'{m.group(1)}seen|i:{int(time.time()) - 9 * 3600};', roh)
-    with open(pfad, 'w', encoding='utf-8') as f:
-        f.write(neu)
+    # Abmelden nach Inaktivität gilt über alle Adressen zusammen (04.11.2026): letzte Aktivität je Anmeldung bei Keycloak im
+    # Dokument oidc-aktivitaet. Inaktivität nachgestellt (sonst 8 Stunden warten): Kims Eintrag zurückdrehen.
+    def doc_roh(name):
+        p_ = os.path.join(WORK, 'app', 'data', name + '.php')
+        if not os.path.exists(p_):
+            return {}
+        r_ = open(p_, encoding='utf-8').read()
+        return json.loads(r_[r_.index('?>') + 2:].strip()) if '?>' in r_ else json.loads(r_)
+
+    def kim_inaktiv(sekunden):
+        sids = {v.get('oidcSid') for v in doc_roh('sitzungen').values() if v.get('uid') == kim and v.get('oidcSid')}
+        d = doc_roh('oidc-aktivitaet')
+        for k_ in d:
+            if k_ in sids:
+                d[k_] = int(time.time()) - sekunden
+        with open(os.path.join(WORK, 'app', 'data', 'oidc-aktivitaet.php'), 'w', encoding='utf-8') as f:
+            f.write('<?php http_response_code(404); exit; ?>\n' + json.dumps(d))
+        return bool(sids & set(d))
+
+    def php_sitzung_ruht(host, sekunden):
+        sid_ = kekse(ck, host)['__Host-WA_ADMIN']['value']; pfad_ = os.path.join(WORK, 'sessions', 'sess_' + sid_)
+        with open(pfad_, encoding='utf-8') as f:
+            roh_ = f.read()
+        with open(pfad_, 'w', encoding='utf-8') as f:
+            f.write(re.sub(r'(^|;)seen\|i:\d+;', lambda m: f'{m.group(1)}seen|i:{int(time.time()) - sekunden};', roh_))
+
+    pa_i = eigene_seite(ck.new_page())
+    pa_i.goto(A + '/admin/'); pa_i.wait_for_selector('#screen-editor:not([hidden])')
+    check('Kim zusätzlich im Eingabebereich (Single Sign-on), Aktivität je Anmeldung vermerkt', kim_inaktiv(0))
+    # Dashboard ruht 9 Stunden, Kim arbeitet aber im Eingabebereich: zählt, die Anmeldung gilt weiter (vorher je Adresse)
+    php_sitzung_ruht('dashboard.stafl.test', 9 * 3600)
     code, j = pk.evaluate(stat)
-    check('nach Inaktivität: keine neue Sitzung ohne erneute Anmeldung (403, max_age=0)', neu != roh and code == 403 and j.get('code') == 'reauth_required'
+    check('Leerlauf über alle Adressen: Dashboard lange ohne Anfrage, im Eingabebereich aktiv → weiter angemeldet', code == 200 and j.get('loggedIn'), (code, j))
+    check('Kim inaktiv nachgestellt (9 Stunden, Einstellung 8 Stunden)', kim_inaktiv(9 * 3600))
+    code, j = pk.evaluate(stat)
+    check('nach Inaktivität: keine neue Sitzung ohne erneute Anmeldung (403, max_age=0)', code == 403 and j.get('code') == 'reauth_required'
           and 'max_age%3D0' in j.get('anmelden', '') and 'Inaktivität' in j.get('error', ''), (code, j))
+    # Bestand hat Kim noch nie geöffnet: dort entstünde sonst über Single Sign-on still eine neue Sitzung
+    pb_i = eigene_seite(ck.new_page())
+    pb_i.goto(B + '/admin/'); pb_i.wait_for_selector('#password', timeout=30000)
+    check('… auch auf einer noch nie geöffneten Adresse: Keycloak verlangt das Passwort', pb_i.url.startswith(L) and pb_i.is_visible('#password'), pb_i.url)
     pk.goto(D + j.get('anmelden', '') + urllib.parse.quote(D + '/dashboard/', safe=''))
     pk.wait_for_selector('#password')
     check('… Keycloak verlangt das Passwort erneut', pk.is_visible('#password'))
     pk.fill('#password', KIM['zweit']); pk.click('#kc-login'); pk.wait_for_load_state()
     code, j = pk.evaluate(stat)
     check('… nach erneuter Anmeldung weiter', code == 200 and j.get('loggedIn'), (code, j))
+    # Die erneute Anmeldung gilt überall: Eingabebereich (Sitzung von vorher) und Bestand (verlangte eben noch das Passwort)
+    code, j = pa_i.evaluate(stat)
+    check('… danach im Eingabebereich ohne weitere Passwortabfrage', code == 200 and j.get('loggedIn'), (code, j))
+    pb_i.goto(B + '/admin/'); pb_i.wait_for_selector('#screen-editor:not([hidden]), #password', timeout=30000)
+    check('… und im Bestand ohne weitere Passwortabfrage', pb_i.url.startswith(B + '/admin/') and pb_i.locator('#password').count() == 0, pb_i.url)
+    pa_i.close(); pb_i.close()
     # „Sitzung beenden“ (seit Stand 9 im Modul Sicherheit, Aktion nur auf dessen Host – GR-109): gilt auch, solange die
     # Sitzung bei Keycloak und im Webserver-Modul noch läuft. Der Administrator ist in diesem Browser angemeldet (SSO).
     check('„Sitzung beenden“ auf dem Verwaltungs-Host nicht mehr erreichbar (404)', pg.evaluate(post, ['session_end', {'uid': kim}])[0] == 404)
@@ -1778,6 +2039,16 @@ with sync_playwright() as pw:
     code, j = pk.evaluate(stat)
     check('… nach erneuter Anmeldung wieder möglich', code == 200 and j.get('loggedIn'), (code, j))
     check('Protokoll: Ablauf und Beenden vermerkt', any('Inaktivität abgelaufen' in str(e) for e in protokoll_roh()) and any('Beendete Sitzung' in str(e) for e in protokoll_roh()))
+    # Abmelden nach Inaktivität (Befund 03.11.2026): vorher 403 „erneut anmelden“ ohne Abmeldeadresse – die Seite sah abgemeldet
+    # aus, die Anmeldung bei Keycloak blieb bestehen. Jetzt: 200 mit Adresse der zentralen Abmeldung, danach auch Keycloak abgemeldet.
+    # Wie die Oberfläche: CSRF-Token von vorher (die Seite kennt es), dann inaktiv
+    tok_k = pk.evaluate("fetch('../api/?action=status').then(r => r.json()).then(s => s.csrf)")
+    kim_inaktiv(9 * 3600)
+    code, j = pk.evaluate("t => fetch('../api/?action=logout', {method: 'POST', headers: {'Content-Type': 'application/json', 'X-CSRF-Token': t}, body: '{}'}).then(async r => [r.status, await r.json().catch(() => ({}))])", tok_k)
+    check('Abmelden nach Inaktivität: 200 mit Adresse der zentralen Abmeldung', code == 200 and str(j.get('abmelden', '')).startswith('/oidc/callback?logout='), (code, j))
+    pk.goto(D + str(j.get('abmelden', '/'))); pk.wait_for_url('**/dashboard/abgemeldet.html')
+    pk.goto(D + '/dashboard/'); pk.wait_for_selector('#username')
+    check('… danach auch bei Keycloak abgemeldet (Anmeldeseite mit Benutzername)', pk.url.startswith(L), pk.url)
     ck.close()
     code, j = pg.evaluate(post, ['anmeldekonto_aendern', {'id': nutzer_roh()['admin']['id'], 'was': 'passwort', 'passwort': 'Admin-Neues-Kennwort-7'}])
     check('eigenes Konto nicht über die Verwaltung (403)', code == 403, (code, j))
@@ -1795,6 +2066,292 @@ with sync_playwright() as pw:
     code, j = pg.evaluate(post, ['anmeldekonto_aendern', {'id': erika_id, 'was': 'passwort', 'passwort': 'Fremd-Gesetzt-Kennwort-1'}])
     check('Bearbeiterin: kein Passwort für andere (403)', code == 403, (code, j))
     ctx.close()
+    # ── Passwort vergessen (Stand 14, konten.sh passwort-vergessen; Inhaber 03.11.2026): Link per Mail an die hinterlegte
+    #    Adresse, eigener Ablauf ohne „Reset OTP“ – wer einen zweiten Faktor hat, braucht ihn auch hier; er bleibt erhalten ──
+    def anmelde_link_vergessen():
+        c = br.new_context(ignore_https_errors=True); p_ = c.new_page()
+        p_.goto(D + '/'); p_.wait_for_selector('#username')
+        n = p_.locator('a', has_text='Passwort vergessen').count()
+        c.close()
+        return n
+    check('Anmeldeseite ohne „Passwort vergessen?“, solange ausgeschaltet', anmelde_link_vergessen() == 0)
+    code, aus = konten('passwort-vergessen', 'an')
+    check('Konsole: Passwort vergessen eingeschaltet, eigener Ablauf angelegt, Link 15 Minuten', code == 0 and 'angelegt:  Ablauf mitarbeiter-passwort-vergessen' in aus
+          and 'eingeschaltet' in aus and '15 Minuten' in aus, aus)
+    code, aus = konten('passwort-vergessen', 'an')
+    check('… erneut ausgeführt: nichts doppelt angelegt', code == 0 and 'angelegt:' not in aus and 'eingeschaltet' in aus, aus)
+    code, aus = konten('passwort-vergessen', 'status')
+    check('… Status: an, Ablauf abgesichert, Mailversand eingerichtet', code == 0 and 'Passwort vergessen: an' in aus and '(abgesichert)' in aus
+          and 'Mailversand der Anmeldung: eingerichtet' in aus, aus)
+    vkopf = {'Authorization': 'Bearer ' + vtoken()}
+    _r = json.loads(anfrage(KC + '/admin/realms/mitarbeiter', kopf=vkopf)[2])
+    check('Realm: Zurücksetzen erlaubt, eigener Ablauf, Link 900 s gültig', _r.get('resetPasswordAllowed') is True and _r.get('resetCredentialsFlow') == 'mitarbeiter-passwort-vergessen'
+          and _r.get('attributes', {}).get('actionTokenGeneratedByUserLifespan.reset-credentials') == '900', (_r.get('resetPasswordAllowed'), _r.get('resetCredentialsFlow')))
+
+    def ablauf_datei():   # erwarteter Aufbau aus der Realm-Datei (gilt für neue Installationen)
+        r = json.load(open(os.path.join(REPO, 'tests', 'oidc', 'realm-mitarbeiter.json'), encoding='utf-8'))
+        fl = {f['alias']: f for f in r['authenticationFlows']}
+        z = []
+        def lauf(alias, ebene):
+            for e in sorted(fl[alias]['authenticationExecutions'], key=lambda e: e['priority']):
+                z.append(f"{ebene}|{e.get('flowAlias') or e.get('authenticator')}|{e['requirement']}|{e['priority']}")
+                if e.get('authenticatorFlow'):
+                    lauf(e['flowAlias'], ebene + 1)
+        lauf(r['resetCredentialsFlow'], 0)
+        return z
+    _ist = [f"{e['level']}|{e.get('providerId') or e.get('displayName')}|{e['requirement']}|{e.get('priority')}"
+            for e in json.loads(anfrage(KC + '/admin/realms/mitarbeiter/authentication/flows/mitarbeiter-passwort-vergessen/executions', kopf=vkopf)[2])]
+    check('Ablauf von konten.sh = Ablauf der Realm-Datei (neue Installationen gleich abgesichert), ohne „Reset OTP“, zweiter Faktor vor dem neuen Passwort',
+          _ist == ablauf_datei() and not any('reset-otp' in z for z in _ist)
+          and max(i for i, z in enumerate(_ist) if 'auth-otp-form' in z or 'webauthn-authenticator' in z) < next(i for i, z in enumerate(_ist) if 'reset-password' in z), (_ist, ablauf_datei()))
+    check('Anmeldeseite: „Passwort vergessen?“ sichtbar', anmelde_link_vergessen() == 1)
+
+    def vergessen_anfordern(p_, wer):
+        p_.goto(D + '/'); p_.wait_for_selector('#username')
+        p_.locator('a', has_text='Passwort vergessen').first.click(); p_.wait_for_selector('#username')
+        p_.fill('#username', wer); p_.click('[type=submit]')
+        p_.locator('text=Wenn es zu diesem Benutzernamen').first.wait_for()   # Locator: übersteht den Seitenwechsel
+        return p_.inner_text('body')
+
+    def link_aus(m_):
+        r_ = re.search(r'https://login\.stafl\.test:8443/realms/mitarbeiter/login-actions/action-token\?key=\S+', m_['text']) if m_ else None
+        return r_.group(0) if r_ else ''
+
+    # Konto ohne zweiten Faktor (eva): Link → gleich neues Passwort → Dashboard; Mail im STAFL-Design; unbekannter Name neutral
+    EVA_NEU, EVA_ZWEIT = 'Eva-Vergessen-Kennwort-4', 'Eva-Passkey-Kennwort-6'
+    vorher_alle, vorher_eva = len(pf.nachrichten), len(pf.an('eva@stafl.test'))
+    ctx = br.new_context(ignore_https_errors=True); pg = eigene_seite(ctx.new_page())
+    t_unbekannt = vergessen_anfordern(pg, 'gibt.es.nicht')
+    t_eva = vergessen_anfordern(pg, 'eva.einladung')
+    m = warte_mail('eva@stafl.test', vorher_eva + 1)
+    _meldung = lambda t: next((z for z in t.splitlines() if 'Wenn es zu diesem Benutzernamen' in z), '')   # noqa: E731
+    check('unbekannter Benutzername: dieselbe neutrale Bestätigung, keine Mail', _meldung(t_unbekannt) != '' and _meldung(t_unbekannt) == _meldung(t_eva)
+          and len(pf.nachrichten) == vorher_alle + 1, (_meldung(t_unbekannt), len(pf.nachrichten) - vorher_alle))
+    link = link_aus(m)
+    check('Mail „Passwort vergessen“ im STAFL-Design: Betreff, Benutzername, Knopf, 15 Minuten, Hinweis „Nicht angefordert?“, ohne Bilder',
+          m and m['betreff'] == 'STAFL-Plattform – neues Passwort festlegen' and 'Neues Passwort festlegen &rarr;' in m['html'] and 'eva.einladung' in m['html']
+          and 'Ihr Benutzername: eva.einladung' in m['text'] and '15 Minuten' in m['text'] and 'Nicht angefordert?' in m['text'] and link
+          and '<img' not in m['html'].lower() and m['von'] == 'anmeldung@stafl.test', (m and m['betreff'], m and m['text'][:300]))
+    if m and m['html']:
+        with open(os.path.join(SH, 'oidc_passwort_vergessen_mail.html'), 'w', encoding='utf-8') as _f:
+            _f.write(m['html'])
+    pg.goto(link); pg.wait_for_selector('#password-new')
+    check('Link: ohne zweiten Faktor direkt „neues Passwort“', pg.locator('#otp').count() == 0 and pg.locator('#authenticateWebAuthnButton').count() == 0)
+    pg.screenshot(path=os.path.join(SH, 'oidc_passwort_vergessen_neu.png'))
+    pg.fill('#password-new', EVA_NEU); pg.fill('#password-confirm', EVA_NEU); pg.click('#kc-submit')
+    pg.wait_for_selector('#db-grid .db-tile')
+    st = pg.evaluate("fetch('../api/?action=status').then(r => r.json())")
+    check('… danach angemeldet im Dashboard (dasselbe Mitarbeiterkonto)', st.get('loggedIn') and st['user']['username'] == 'eva.einladung', st.get('user'))
+    ctx.close()
+    ctx = br.new_context(ignore_https_errors=True); pg = ctx.new_page()
+    pg.goto(link); pg.wait_for_load_state()
+    check('Link nur einmal verwendbar', pg.locator('#password-new').count() == 0, pg.url)
+    ctx.close()
+    ctx = br.new_context(ignore_https_errors=True); pg = eigene_seite(ctx.new_page())
+    pg.goto(D + '/'); pg.wait_for_selector('#username'); pg.fill('#username', 'eva.einladung'); pg.fill('#password', SVEN['eva']); pg.click('#kc-login')
+    pg.wait_for_selector('#input-error-username, .kc-feedback-text, [id*=error]')
+    check('altes Passwort gilt nicht mehr', pg.url.startswith(L) and pg.locator('#db-grid').count() == 0, pg.url)
+    FEHLVERSUCH[0] = time.time(); fehlversuch_abstand()
+    pg.fill('#password', EVA_NEU)
+    if pg.locator('#username').is_visible() and not pg.input_value('#username'): pg.fill('#username', 'eva.einladung')
+    pg.click('#kc-login'); pg.wait_for_selector('#db-grid .db-tile')
+    check('neues Passwort gilt', pg.url.startswith(D + '/dashboard/'), pg.url)
+    ctx.close()
+    code, aus = konten('entsperren', 'eva.einladung')   # Fehlversuch zurücksetzen
+
+    # Administrator (zweiter Faktor Pflicht, Einmalcode): Link verlangt den Einmalcode, danach neues Passwort; Einmalcode bleibt
+    ADMIN_NEU = 'Admin-Vergessen-Kennwort-CI-5'
+    konten('entsperren', 'admin')   # frühere absichtliche Fehlversuche dürfen hier nicht in eine Sperre laufen
+    _aid = json.loads(anfrage(KC + '/admin/realms/mitarbeiter/users?exact=true&username=admin', kopf={'Authorization': 'Bearer ' + vtoken()})[2])[0]['id']
+    arten = lambda: sorted(c['type'] for c in json.loads(anfrage(f'{KC}/admin/realms/mitarbeiter/users/{_aid}/credentials', kopf={'Authorization': 'Bearer ' + vtoken()})[2]))
+    vor_arten = arten()
+    vorher_admin = len(pf.an('admin@stafl.test'))
+    ctx = br.new_context(ignore_https_errors=True); pg = eigene_seite(ctx.new_page())
+    vergessen_anfordern(pg, 'admin')
+    link = link_aus(warte_mail('admin@stafl.test', vorher_admin + 1))
+    pg.goto(link); pg.wait_for_selector('#otp, #password-new')
+    check('Link für ein Konto mit Einmalcode: zuerst der Einmalcode, kein neues Passwort ohne ihn', pg.locator('#otp').count() == 1 and pg.locator('#password-new').count() == 0, pg.url)
+    pg.screenshot(path=os.path.join(SH, 'oidc_passwort_vergessen_einmalcode.png'))
+    otp_eingeben(pg, 'admin'); pg.wait_for_selector('#password-new')
+    pg.fill('#password-new', ADMIN_NEU); pg.fill('#password-confirm', ADMIN_NEU); pg.click('#kc-submit')
+    pg.wait_for_selector('#db-grid .db-tile, #otp')
+    check('… danach im Dashboard ohne zweite Code-Abfrage (Pflicht-Konto: Einmalcode im Claim amr)', pg.locator('#otp').count() == 0 and pg.locator('#db-grid .db-tile').count() > 0, pg.url)
+    ctx.close()
+    check('… Einmalcode bleibt eingerichtet (kein „Reset OTP“)', 'otp' in arten() and [a for a in vor_arten if a != 'password-history'] == [a for a in arten() if a != 'password-history'], (vor_arten, arten()))
+    ctx = br.new_context(ignore_https_errors=True); pg = eigene_seite(ctx.new_page())
+    pg.goto(D + '/'); pg.wait_for_selector('#username'); pg.fill('#username', 'admin'); pg.fill('#password', ADMIN_NEU); pg.click('#kc-login')
+    pg.wait_for_selector('#otp')
+    check('nächste Anmeldung mit dem neuen Passwort: Einmalcode weiter verlangt', pg.is_visible('#otp'))
+    otp_eingeben(pg, 'admin'); pg.wait_for_selector('#db-grid .db-tile')
+    ctx.close()
+
+    # Passkey: eva richtet einen ein (virtueller Authenticator); der Link verlangt dann den Passkey
+    _eid = json.loads(anfrage(KC + '/admin/realms/mitarbeiter/users?exact=true&username=eva.einladung', kopf={'Authorization': 'Bearer ' + vtoken()})[2])[0]
+    _eid['requiredActions'] = ['webauthn-register']
+    anfrage(f"{KC}/admin/realms/mitarbeiter/users/{_eid['id']}", 'PUT', json.dumps(_eid).encode(), {'Authorization': 'Bearer ' + vtoken(), 'Content-Type': 'application/json'})
+    ctx = br.new_context(ignore_https_errors=True); pg = eigene_seite(ctx.new_page())
+    cdp = ctx.new_cdp_session(pg); cdp.send('WebAuthn.enable')
+    cdp.send('WebAuthn.addVirtualAuthenticator', {'options': {'protocol': 'ctap2', 'transport': 'internal', 'hasResidentKey': True,
+             'hasUserVerification': True, 'isUserVerified': True, 'automaticPresenceSimulation': True}})
+    pg.on('dialog', lambda d: d.accept('Testschlüssel'))
+    pg.goto(D + '/'); pg.wait_for_selector('#username'); pg.fill('#username', 'eva.einladung'); pg.fill('#password', EVA_NEU); pg.click('#kc-login')
+    pg.wait_for_selector('#registerWebAuthn'); pg.click('#registerWebAuthn'); pg.wait_for_selector('#db-grid .db-tile')
+    pg.click('#db-logout'); pg.wait_for_url('**/dashboard/abgemeldet.html')
+    vorher_eva = len(pf.an('eva@stafl.test'))
+    vergessen_anfordern(pg, 'eva.einladung')
+    link = link_aus(warte_mail('eva@stafl.test', vorher_eva + 1))
+    pg.goto(link); pg.wait_for_selector('#authenticateWebAuthnButton, #otp, #password-new')
+    check('Link für ein Konto mit Passkey: zuerst der Passkey (kein Einmalcode, kein neues Passwort ohne ihn)', pg.locator('#authenticateWebAuthnButton').count() == 1
+          and pg.locator('#otp').count() == 0 and pg.locator('#password-new').count() == 0, pg.url)
+    pg.click('#authenticateWebAuthnButton'); pg.wait_for_selector('#password-new')
+    pg.fill('#password-new', EVA_ZWEIT); pg.fill('#password-confirm', EVA_ZWEIT); pg.click('#kc-submit')
+    pg.wait_for_selector('#db-grid .db-tile')
+    st = pg.evaluate("fetch('../api/?action=status').then(r => r.json())")
+    check('… mit Passkey bestätigt, neues Passwort gesetzt, angemeldet; Passkey bleibt', st.get('loggedIn') and st['user']['username'] == 'eva.einladung'
+          and 'webauthn' in [c['type'] for c in json.loads(anfrage(f"{KC}/admin/realms/mitarbeiter/users/{_eid['id']}/credentials", kopf={'Authorization': 'Bearer ' + vtoken()})[2])], st.get('user'))
+    ctx.close()
+
+    # Von Hand veränderter Ablauf wird erkannt (nicht stillschweigend eingeschaltet); ausschalten = Link weg
+    _bed = next(e for e in json.loads(anfrage(KC + '/admin/realms/mitarbeiter/authentication/flows/mitarbeiter-passwort-vergessen/executions', kopf={'Authorization': 'Bearer ' + vtoken()})[2])
+                if e.get('providerId') == 'auth-otp-form')
+    _h = {'Authorization': 'Bearer ' + vtoken(), 'Content-Type': 'application/json'}
+    anfrage(KC + '/admin/realms/mitarbeiter/authentication/flows/mitarbeiter-vergessen-einmalcode/executions', 'PUT', json.dumps({'id': _bed['id'], 'requirement': 'DISABLED', 'priority': _bed['priority']}).encode(), _h)
+    code, aus = konten('passwort-vergessen', 'status')
+    code2, aus2 = konten('passwort-vergessen', 'an')
+    check('veränderter Ablauf (Einmalcode abgeschaltet): Status „NICHT abgesichert“, Einschalten verweigert', 'NICHT abgesichert' in aus and code2 == 1 and 'weicht' in aus2, (aus, aus2))
+    anfrage(KC + '/admin/realms/mitarbeiter/authentication/flows/mitarbeiter-vergessen-einmalcode/executions', 'PUT', json.dumps({'id': _bed['id'], 'requirement': 'REQUIRED', 'priority': _bed['priority']}).encode(), _h)
+    code, aus = konten('passwort-vergessen', 'aus')
+    check('Konsole: ausgeschaltet, Hinweis auf den bisherigen Weg', code == 0 and 'ausgeschaltet' in aus and 'startpasswort' in aus, aus)
+    check('… Anmeldeseite wieder ohne „Passwort vergessen?“', anmelde_link_vergessen() == 0)
+    code, aus = konten('passwort-vergessen', 'status')
+    check('… Status: aus, Ablauf bleibt abgesichert (für das nächste Einschalten)', 'Passwort vergessen: aus' in aus and '(abgesichert)' in aus, aus)
+
+    # ── Mitarbeiter löschen: Konto der zentralen Anmeldung wird mitgelöscht (Inhaber 04.11.2026) ──
+    ctx = br.new_context(ignore_https_errors=True); pg = eigene_seite(ctx.new_page())
+    pg.goto(W + '/admin/'); pg.wait_for_selector('#username'); pg.fill('#username', 'admin'); pg.fill('#password', ADMIN_NEU); pg.click('#kc-login')
+    otp_eingeben(pg, 'admin'); pg.wait_for_selector('#screen-editor:not([hidden])')
+    kc_h = lambda: {'Authorization': 'Bearer ' + vtoken(), 'Content-Type': 'application/json'}
+    kc_konto = lambda name: json.loads(anfrage(KC + '/admin/realms/mitarbeiter/users?exact=true&username=' + name, kopf=kc_h())[2])
+
+    def geloescht_roh():
+        p_ = os.path.join(WORK, 'app', 'data', 'oidc-geloescht.php')
+        if not os.path.exists(p_):
+            return {}
+        r_ = open(p_, encoding='utf-8').read()
+        return json.loads(r_[r_.index('?>') + 2:].strip()) if '?>' in r_ else {}
+
+    code, j = pg.evaluate(post, ['user_save', {'id': '', 'vorname': 'Otto', 'nachname': 'Alt', 'username': 'otto.alt', 'email': 'otto@stafl.test', 'rollen': ['editor'], 'active': True}])
+    otto = j.get('user', {}).get('id', '')
+    code, j = pg.evaluate(post, ['anmeldekonto_aendern', {'id': otto, 'was': 'anlegen'}])
+    otto_sub = nutzer_roh().get('otto.alt', {}).get('oidcSub', '')
+    check('Vorbereitung: Otto mit verknüpftem Konto in der zentralen Anmeldung', code == 200 and otto_sub and len(kc_konto('otto.alt')) == 1, (code, j))
+    code, j = pg.evaluate(post, ['user_delete', {'id': otto}])
+    check('Mitarbeiter gelöscht: Konto in der zentralen Anmeldung mitgelöscht (kein Hinweis nötig)', code == 200 and not j.get('hinweis') and kc_konto('otto.alt') == [], (code, j))
+    check('… Kennung als gelöscht vermerkt, Löschen im Protokoll', otto_sub in geloescht_roh()
+          and any('otto.alt' in str(e) and 'Mitarbeiter gelöscht' in str(e) for e in protokoll_roh()))
+    # Übrig gebliebenes Konto eines gelöschten Mitarbeiters (z. B. Keycloak beim Löschen nicht erreichbar) – nachgestellt:
+    # Konto „paul.rest“ in Keycloak, seine Kennung als gelöscht vermerkt; dann ein neuer Mitarbeiter mit demselben Namen
+    PAUL_PW = 'Paul-Altes-Kennwort-CI-4'
+    anfrage(KC + '/admin/realms/mitarbeiter/users', 'POST', json.dumps({'username': 'paul.rest', 'enabled': True, 'email': 'paul@stafl.test', 'emailVerified': True,
+            'firstName': 'Paul', 'lastName': 'Rest', 'credentials': [{'type': 'password', 'value': PAUL_PW, 'temporary': False}]}).encode(), kc_h())
+    paul_alt = (kc_konto('paul.rest') or [{}])[0].get('id', '')
+    _weg = {**geloescht_roh(), paul_alt: int(time.time())}   # erst lesen, dann schreiben ('w' leert die Datei sofort)
+    with open(os.path.join(WORK, 'app', 'data', 'oidc-geloescht.php'), 'w', encoding='utf-8') as f:
+        f.write('<?php http_response_code(404); exit; ?>\n' + json.dumps(_weg))
+    code, j = pg.evaluate(post, ['user_save', {'id': '', 'vorname': 'Paul', 'nachname': 'Neu', 'username': 'paul.rest', 'email': 'paul.neu@stafl.test', 'rollen': ['editor'], 'active': True}])
+    paul = j.get('user', {}).get('id', '')
+    check('Vorbereitung: altes Konto „paul.rest“ (als gelöscht vermerkt), neuer Mitarbeiter „paul.rest“', bool(paul_alt) and code == 200 and paul, (paul_alt, code, j))
+    c3 = br.new_context(ignore_https_errors=True); p3 = eigene_seite(c3.new_page())
+    p3.goto(D + '/'); p3.wait_for_selector('#username'); p3.fill('#username', 'paul.rest'); p3.fill('#password', PAUL_PW); p3.click('#kc-login')
+    p3.wait_for_selector('#db-err:not([hidden])')
+    check('Anmeldung mit dem alten Konto: kein Zugang zum neuen Mitarbeiter, keine Verknüpfung', 'kein Mitarbeiterkonto' in p3.text_content('#db-err')
+          and not nutzer_roh()['paul.rest'].get('oidcSub'), p3.text_content('#db-err'))
+    c3.close()
+    code, j = pg.evaluate(hole, paul)
+    # Stand 16: das alte Konto steht nicht in der Gruppe anwendungskonten – löschen kann es nur die Serverkonsole
+    check('Verwaltung: altes Konto erkannt; außerhalb der Gruppe erst in der Serverkonsole löschen (kein „Konto anlegen“)', code == 200
+          and j['konto'].get('vorhanden') is False and j['konto'].get('altkonto') is True and j['konto'].get('anlegbar') is False
+          and 'gelöschten Mitarbeiter' in j['konto'].get('hinweis', '') and 'verwaist --loeschen' in j['konto'].get('hinweis', ''), (code, j))
+    code, j = pg.evaluate(post, ['anmeldekonto_aendern', {'id': paul, 'was': 'anlegen'}])
+    check('… „Konto anlegen“ abgelehnt (403, Befehl genannt), altes Konto bleibt', code == 403 and 'verwaist --loeschen' in j.get('error', '')
+          and len(kc_konto('paul.rest')) == 1, (code, j))
+    # wie es die Serverkonsole täte (konten.sh verwaist --loeschen) – nachgestellt, damit „lisa.weg“ und „fremd“ für unten bleiben:
+    # das alte Konto in die Gruppe (die Anwendung darf es dann ersetzen)
+    _g = json.loads(anfrage(KC + '/admin/realms/mitarbeiter/group-by-path/anwendungskonten', kopf=kc_h())[2] or '{}').get('id', '')
+    anfrage(f'{KC}/admin/realms/mitarbeiter/users/{paul_alt}/groups/{_g}', 'PUT', b'', kc_h())
+    code, j = pg.evaluate(hole, paul)
+    check('… steht es in der Gruppe: „Konto anlegen“ ersetzt es', code == 200 and j['konto'].get('anlegbar') is True and 'ersetzt es durch ein neues' in j['konto'].get('hinweis', ''), (code, j))
+    code, j = pg.evaluate(post, ['anmeldekonto_aendern', {'id': paul, 'was': 'anlegen'}])
+    paul_neu = (kc_konto('paul.rest') or [{}])[0].get('id', '')
+    check('… „Konto anlegen“ ersetzt das alte Konto: neues Konto verknüpft, altes gelöscht', code == 200 and j['konto'].get('verknuepft') and paul_neu not in ('', paul_alt)
+          and nutzer_roh()['paul.rest'].get('oidcSub') == paul_neu and anfrage(f'{KC}/admin/realms/mitarbeiter/users/{paul_alt}', kopf=kc_h())[0] == 404, (code, j, paul_neu))
+    # Konsole: Konten ohne Mitarbeiter (vor dem 04.11.2026 gelöschte Mitarbeiter) finden und löschen
+    anfrage(KC + '/admin/realms/mitarbeiter/users', 'POST', json.dumps({'username': 'lisa.weg', 'enabled': True, 'firstName': 'Lisa', 'lastName': 'Weg'}).encode(), kc_h())
+    code, aus = konten('verwaist')
+    check('Konsole verwaist: zeigt Konten ohne Mitarbeiter, nicht die verknüpften oder noch nicht angemeldeten', code == 0 and "Konto 'lisa.weg'" in aus and "Konto 'fremd'" in aus
+          and not any(f"Konto '{n}'" in aus for n in ('erika', 'kim.konto', 'eva.einladung', 'paul.rest', 'admin', 'neu', 'chef')) and 'verwaist --loeschen' in aus, aus)
+    check('… nur lesen: nichts gelöscht', len(kc_konto('lisa.weg')) == 1)
+    code, aus = konten('verwaist', '--loeschen')
+    check('Konsole verwaist --loeschen: genau diese Konten gelöscht', code == 0 and "gelöscht:  Konto 'lisa.weg'" in aus and kc_konto('lisa.weg') == []
+          and len(kc_konto('erika')) == 1 and len(kc_konto('paul.rest')) == 1, aus)
+    code, aus = konten('verwaist', '--irgendwas')
+    check('… unbekannte Angabe abgelehnt', code == 1 and 'Aufruf' in aus, aus)
+    # „fremd“ (Konto ohne Mitarbeiter aus der Testdatei) für einen erneuten Testlauf ohne Neustart wiederherstellen
+    _fremd = next(u for u in json.load(open(os.path.join(REPO, 'tests', 'oidc', 'realm-mitarbeiter.json'), encoding='utf-8'))['users'] if u['username'] == 'fremd')
+    anfrage(KC + '/admin/realms/mitarbeiter/partialImport', 'POST', json.dumps({'ifResourceExists': 'SKIP', 'users': [_fremd]}).encode(), kc_h())
+    check('… Testkonto „fremd“ wiederhergestellt', len(kc_konto('fremd')) == 1)
+
+    # ── Passwortregeln und Kontosperre aus den Einstellungen der Anwendung (Stand 15, konten.sh richtlinien; Inhaber 04.11.2026) ──
+    _sic2 = os.path.join(WORK, 'app', 'data', 'sicherheit.php')
+    _sic2_alt = open(_sic2, encoding='utf-8').read() if os.path.exists(_sic2) else None
+    _sic2_w = json.loads(_sic2_alt[_sic2_alt.index('?>') + 2:].strip()) if _sic2_alt else {}
+    realm_kc = lambda: json.loads(anfrage(KC + '/admin/realms/mitarbeiter', kopf=kc_h())[2])
+    _realm_alt = {k: realm_kc().get(k) for k in ('passwordPolicy', 'failureFactor', 'waitIncrementSeconds', 'maxFailureWaitSeconds')}
+    try:
+        with open(_sic2, 'w', encoding='utf-8') as f:
+            f.write('<?php http_response_code(404); exit; ?>\n' + json.dumps({**_sic2_w, 'pwMin': 14, 'pwComplex': True, 'lockAfter': 4, 'lockMinutes': 7}))
+        code, aus = konten('richtlinien')
+        r_ = realm_kc()
+        check('Konsole richtlinien: Mindestlänge, gemischte Zeichen und Kontosperre aus den Einstellungen übernommen',
+              code == 0 and 'gesetzt:   Passwörter mindestens 14 Zeichen (Groß-, Kleinbuchstabe und Ziffer), Sperre nach 4 Fehlversuchen für 7 Minuten' in aus
+              and all(t in r_.get('passwordPolicy', '') for t in ('length(14)', 'upperCase(1)', 'lowerCase(1)', 'digits(1)', 'notUsername', 'notEmail', 'passwordHistory(3)'))
+              and r_.get('failureFactor') == 4 and r_.get('waitIncrementSeconds') == 420 and r_.get('maxFailureWaitSeconds') == 420
+              and r_.get('bruteForceProtected') is True and r_.get('permanentLockout') is False, (aus, {k: r_.get(k) for k in ('passwordPolicy', 'failureFactor', 'waitIncrementSeconds')}))
+        code, aus = konten('richtlinien')
+        check('… zweiter Lauf: unverändert („aktuell“)', code == 0 and 'aktuell:   Passwörter mindestens 14 Zeichen' in aus and 'gesetzt:' not in aus, aus)
+        code, j = pg.evaluate(hole, paul)
+        check('Verwaltung: Mindestlänge der zentralen Anmeldung im Zustand (14)', code == 200 and j['konto'].get('minLaenge') == 14, (code, j))
+        code, j = pg.evaluate(post, ['anmeldekonto_aendern', {'id': paul, 'was': 'passwort', 'passwort': 'Kurz-Kennw-13'}])
+        check('… 13 Zeichen abgelehnt („mindestens 14 Zeichen“)', code == 422 and 'mindestens 14 Zeichen' in j.get('error', ''), (code, j))
+        code, j = pg.evaluate(post, ['anmeldekonto_aendern', {'id': paul, 'was': 'passwort', 'passwort': 'nur-kleinbuchstaben-lang'}])
+        check('… ohne Großbuchstabe und Ziffer: Keycloak lehnt ab, verständliche Meldung (422)', code == 422
+              and any(w in j.get('error', '') for w in ('Großbuchstaben', 'Ziffern', 'Kleinbuchstaben')), (code, j))
+        code, j = pg.evaluate(post, ['anmeldekonto_aendern', {'id': paul, 'was': 'passwort', 'erzeugen': True}])
+        _sp = j.get('passwort', '')
+        check('… erzeugtes Startpasswort erfüllt die Regeln (lang genug, Groß-, Kleinbuchstabe, Ziffer)', code == 200 and len(_sp) >= 14
+              and re.search('[A-Z]', _sp) and re.search('[a-z]', _sp) and re.search('[0-9]', _sp), (code, {k: v for k, v in j.items() if k != 'passwort'}))
+        code, aus = konten('startpasswort', 'paul.rest')
+        _m = re.search(r'Startpasswort \(nur jetzt sichtbar, persönlich weitergeben\): (\S+)', aus)
+        check('Konsole startpasswort: lang genug und gemischt (von Keycloak angenommen)', code == 0 and _m and len(_m.group(1)) >= 14, aus.replace(_m.group(1), '***') if _m else aus)
+        # Sperre nach 4 Fehlversuchen (statt 5 der Realm-Datei) wirkt
+        for _ in range(4):
+            fehlversuch_abstand()
+            c4 = br.new_context(ignore_https_errors=True); p4 = c4.new_page()
+            p4.goto(D + '/'); p4.wait_for_selector('#username'); p4.fill('#username', 'paul.rest'); p4.fill('#password', 'Falsch-Falsch-Falsch-1'); p4.click('#kc-login')
+            p4.wait_for_load_state(); FEHLVERSUCH[0] = time.time(); c4.close()
+        _bf = json.loads(anfrage(f'{KC}/admin/realms/mitarbeiter/attack-detection/brute-force/users/{paul_neu}', kopf=kc_h())[2])
+        check('… nach 4 Fehlversuchen vorübergehend gesperrt', _bf.get('disabled') is True and _bf.get('numFailures') == 4, _bf)
+        konten('entsperren', 'paul.rest')
+    finally:
+        if _sic2_alt is None:
+            os.path.exists(_sic2) and os.remove(_sic2)
+        else:
+            with open(_sic2, 'w', encoding='utf-8') as f:
+                f.write(_sic2_alt)
+        anfrage(KC + '/admin/realms/mitarbeiter', 'PUT', json.dumps(_realm_alt).encode(), kc_h())
+    check('… Einstellungen und Realm zurückgesetzt', realm_kc().get('failureFactor') == _realm_alt['failureFactor'])
+    ctx.close()
+
     pf.schliessen()
     br.close()
 

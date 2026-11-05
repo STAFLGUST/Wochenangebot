@@ -236,6 +236,39 @@ W = Client('198.51.100.54'); W.call('kunde_login', {'username': 'weg.werf', 'pas
 A.call('kunde_delete', {'id': TMP['customer']['id'], 'rev': TMP['rev']})
 check('merkliste: deleted with the customer', TMP['customer']['id'] not in storage_raw('merklisten'))
 
+# ---------- Obergrenze des Sitzungsregisters (kundensitzungen wird bei jeder Kundenanfrage vollständig gelesen) ----------
+# Ohne Obergrenze könnte ein einziger Zugang das Register durch wiederholtes Anmelden beliebig groß machen und damit
+# die Anfragen aller anderen Kunden verlangsamen. KSESS_MAX_ZUGANG (= 10, app/api/lib/kundenmail.php) begrenzt das
+# je Zugang; verdrängt wird die am längsten nicht benutzte eigene Sitzung.
+KSESS_MAX_ZUGANG = 10
+
+
+def ksess():
+    raw = storage_raw('kundensitzungen') or ''
+    d = json.loads(raw.split('?>\n', 1)[-1] or 'null')
+    return d if isinstance(d, dict) else {}
+
+
+code, r = A.call('kunden')
+SIT = A.call('kunde_save', {**base, 'rev': r['rev'], 'firma': 'Sitzung Test', 'nr': 'K-ST', 'email': '', 'angebote': ['std'],
+                            'login': {'username': 'sitz.test', 'password': 'Start-Kennwort-42', 'mustChange': False, 'active': True}})[1]
+KST = SIT['customer']['id']
+sitzungen = []
+for i in range(KSESS_MAX_ZUGANG + 1):
+    c = Client('203.0.113.' + str(60 + i))
+    sitzungen.append((c, c.call('kunde_login', {'username': 'sitz.test', 'password': 'Start-Kennwort-42'})[0]))
+check('Sitzungen: alle 11 Anmeldungen erfolgreich', all(st == 200 for _, st in sitzungen), [st for _, st in sitzungen])
+eigene = [v for v in ksess().values() if isinstance(v, dict) and v.get('kid') == KST]
+check(f'Sitzungen: höchstens {KSESS_MAX_ZUGANG} Einträge je Zugang', len(eigene) == KSESS_MAX_ZUGANG, len(eigene))
+check('Sitzungen: die älteste Sitzung ist abgemeldet', sitzungen[0][0].call('kunde_merkliste')[0] == 401)
+check('Sitzungen: die neuesten Sitzungen gelten weiter',
+      sitzungen[-1][0].call('kunde_merkliste')[0] == 200 and sitzungen[1][0].call('kunde_merkliste')[0] == 200)
+check('Sitzungen: ein Zugang verdrängt nur eigene Sitzungen (fremder Kunde bleibt angemeldet)',
+      MT.call('kunde_merkliste')[0] == 200)
+code, r = A.call('kunden')
+A.call('kunde_delete', {'id': KST, 'rev': r['rev']})
+check('Sitzungen: Testzugang wieder entfernt', all(not isinstance(v, dict) or v.get('kid') != KST for v in ksess().values()))
+
 # ---------- Oberfläche ----------
 with sync_playwright() as p:
     br = p.chromium.launch()
@@ -308,8 +341,24 @@ with sync_playwright() as p:
     check('voluntary password dialog closable', c.inner_text('#kp-title') == 'Passwort ändern' and c.is_visible('#kp-close'))
     c.click('#kp-cancel'); c.wait_for_timeout(200)
     check('cancel closes', c.locator('#dlg-kunde-pw[open]').count() == 0)
+    # Abmelden muss beim Server ankommen (Befund 03.11.2026): ohne Verbindung Hinweis und angemeldet bleiben …
+    c.route('**/api/?action=kunde_logout*', lambda route: route.abort())
     c.click('#btn-kunde'); c.click('#menu-kunde [data-kact=logout]')
+    c.wait_for_selector('#toast:has-text("Abmelden hat nicht geklappt")')
+    check('Abmelden ohne Verbindung: Hinweis, Seite bleibt angemeldet', c.locator('#btn-kunde').count() == 1 and 'angebot=' in c.url, c.url)
+    c.unroute('**/api/?action=kunde_logout*')
+    # … und mit veraltetem Sicherheitsschlüssel (in einem anderen Tab neu angemeldet) wird er neu geholt
+    zaehl = {'n': 0}
+    def falscher_schluessel(route):
+        zaehl['n'] += 1
+        if zaehl['n'] == 1: route.continue_(headers={**route.request.headers, 'x-csrf-token': 'veraltet'})
+        else: route.continue_()
+    c.route('**/api/?action=kunde_logout*', falscher_schluessel)
+    if not c.is_visible('#menu-kunde [data-kact=logout]'): c.click('#btn-kunde')
+    c.click('#menu-kunde [data-kact=logout]')
     c.wait_for_selector('#btn-kunde-login'); c.wait_for_selector('tr.row')
+    c.unroute('**/api/?action=kunde_logout*')
+    check('Abmelden mit veraltetem Schlüssel: neu geholt, zweiter Versuch meldet ab', zaehl['n'] == 2, zaehl)
     check('logout returns to public Wochenangebot', 'angebot=' not in c.url and c.is_visible('#btn-kunde-login'), c.url)
     r = c.evaluate("async () => (await fetch('/api/?action=offer&angebot=bela')).status")
     check('after logout customer offer locked', r == 401)
@@ -343,9 +392,31 @@ with sync_playwright() as p:
     check('first login takes over the browser list into the account', NM.call('kunde_merkliste')[1]['keys'] == [k3] and c3.inner_text('#fav-count') == '1')
     c3.click('#btn-kunde'); c3.click('#menu-kunde [data-kact=logout]'); c3.wait_for_selector('#btn-kunde-login')
     c3.goto(B + '/'); c3.wait_for_selector('#btn-kunde-login')
+    check('übernommene Browser-Merkliste nach dem Abmelden fort (landet nicht im nächsten neuen Konto)', c3.inner_text('#fav-count') == '0'
+          and c3.evaluate("Object.keys(localStorage).filter(k => k.endsWith('merkliste') && localStorage.getItem(k) !== '[]').length") == 0)
     c3.click('#btn-kunde-login'); c3.fill('#kl-form [name=username]', 'merk.test'); c3.fill('#kl-form [name=password]', 'Merk-Kennwort-31'); c3.click('#kl-form [type=submit]')
     c3.wait_for_function("document.querySelector('#btn-kunde')"); c3.wait_for_selector('tr.row'); c3.wait_for_timeout(900)
     check('existing account list wins over browser list', MT.call('kunde_merkliste')[1]['keys'] == ['nur-merk-test'] and c3.inner_text('#fav-count') == '0')
+    # Wartung (GR-009): Kunden können sich trotzdem abmelden (Befund 03.11.2026 – vorher kein Knopf, Sitzung blieb bestehen)
+    wctx = br.new_context(viewport={'width': 1280, 'height': 900}); w = wctx.new_page(); w.on('pageerror', lambda e: cerr.append(str(e)))
+    w.goto(B + '/'); w.wait_for_selector('#btn-kunde-login'); w.click('#btn-kunde-login')
+    w.fill('#kl-form [name=username]', 'merk.test'); w.fill('#kl-form [name=password]', 'Merk-Kennwort-31'); w.click('#kl-form [type=submit]')
+    w.wait_for_selector('#btn-kunde')
+    check('Wartung einschalten (Vorbereitung)', A.call('wartung_save', {'active': True, 'message': 'Kurze Pause'})[0] == 200)
+    w.reload(); w.wait_for_selector('.k-wartung')
+    check('Wartung: angemeldeter Kunde sieht „Abmelden“', w.locator('.k-wartung [data-wartung-logout]').count() == 1)
+    w.screenshot(path=SH + '/kunden-wartung-abmelden.png')
+    w.click('.k-wartung [data-wartung-logout]'); w.wait_for_function("!document.querySelector('.k-wartung [data-wartung-logout]')")
+    st_ = w.evaluate("fetch('/api/?action=kunde_status').then(r => r.json())")
+    check('… und ist danach abgemeldet (Server)', not st_.get('kunde'), st_)
+    check('Wartung ausschalten', A.call('wartung_save', {'active': False})[0] == 200)
+    wctx.close()
+    # Touch-Geräte: 16 px in den Anmeldefeldern, sonst vergrößert Safari auf dem iPhone beim Antippen
+    tctx = br.new_context(viewport={'width': 390, 'height': 800}, is_mobile=True, has_touch=True); t = tctx.new_page()
+    t.goto(B + '/'); t.wait_for_selector('#btn-kunde-login'); t.click('#btn-kunde-login'); t.wait_for_selector('#dlg-kunde-login[open]')
+    check('Login-Felder am Handy 16 px (kein Hineinzoomen)', t.evaluate("getComputedStyle(document.querySelector('#kl-form [name=username]')).fontSize") == '16px')
+    t.screenshot(path=SH + '/kunden-login-handy.png')
+    tctx.close()
     # Mobil
     m = cctx.new_page(); m.set_viewport_size({'width': 390, 'height': 800}); m.goto(B + '/?angebot=bela'); m.wait_for_selector('tr.row, .card')
     check('mobile: no horizontal scroll', m.evaluate('document.documentElement.scrollWidth <= window.innerWidth + 1'))

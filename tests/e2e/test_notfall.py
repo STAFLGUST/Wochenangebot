@@ -85,6 +85,11 @@ n = doc('sicherheit-notfall') or {}
 check('Dokument: aktiv, Urheber, Schnappschuss der Einstellungen', n.get('aktiv') and n.get('von') == 'nina' and set(n.get('vorher') or {}) == {'sicherheit', 'firewall'}, {k: n.get(k) for k in ('aktiv', 'von', 'optionen')})
 check('Option „andere Administratoren“ nur für Administratoren, zentrale Anmeldung nur wenn eingerichtet',
       n.get('optionen') == {'firewall': True, 'admins': False, 'keycloak': False}, n.get('optionen'))
+# Keycloak-Hosts (Befund 03.11.2026): beendete Sitzungen dürfen dort nicht still neu entstehen – betroffene Mitarbeiter vermerkt
+_ids = {u['username']: u['id'] for u in A.call('users')[1]['users']}
+_abm = (doc('oidc-abmeldungen') or {}).get('nutzer', {})
+check('Keycloak-Hosts: betroffene Mitarbeiter vermerkt (erneute Anmeldung nötig), Auslöserin und Administratoren nicht',
+      _ids['bea'] in _abm and _ids['sven'] in _abm and _ids['nina'] not in _abm and _ids['admin'] not in _abm and _ids['adam'] not in _abm, sorted(_abm))
 check('Firewall auf „Notfall“: Sperre ab dem 1. Treffer für 7 Tage', (doc('firewall') or {}).get('treffer') == 1 and doc('firewall').get('sperrMinuten') == 10080, doc('firewall'))
 check('ohne eigenen zweiten Faktor: Zwei-Faktor-Pflicht unverändert, im Notfall vermerkt', 'Zwei-Faktor-Pflicht unverändert' in n.get('wirkung', {}).get('firewall', ''), n.get('wirkung'))
 st, r = Ni.call('sicherheit_notfall_an', {'grund': 'Noch einmal auslösen', 'wort': 'NOTFALL'})
@@ -160,6 +165,8 @@ check('Benachrichtigung „beendet“', until(lambda: any('Notfallmodus beendet'
 st, r = A.call('sicherheit_notfall_an', {'grund': 'Übung mit allen Optionen', 'wort': 'NOTFALL', 'admins': True, 'firewall': True})
 check('Administrator löst aus (Option andere Administratoren)', st == 200 and r['notfall']['optionen']['admins'] is True, (st, r))
 check('zweiter Administrator abgemeldet, eigene Sitzung bleibt', Ad.call('status')[1].get('loggedIn') is False and A.call('status')[1].get('loggedIn') is True)
+_abm = (doc('oidc-abmeldungen') or {}).get('nutzer', {})
+check('… mit Option auch andere Administratoren für Keycloak-Hosts vermerkt, der Auslösende nicht', _ids['adam'] in _abm and _ids['admin'] not in _abm, sorted(_abm))
 st, r = A.call('sicherheit_notfall_aus', {'firewall': False})
 check('Beenden ohne Wiederherstellen: strenge Firewall bleibt', st == 200 and r['ende']['einstellungen'] == 'unverändert (streng)' and (doc('firewall') or {}).get('treffer') == 1, (st, r))
 

@@ -17,7 +17,9 @@ Karton, Offerten und reiner Tausch weggelassen, Kunden zusammengefasst in Übers
 Lieferung und Rückgabe aus Buchungen und Bericht, unbekannt bei älteren WinAB-Buchungen, frühere Berichte bleiben gültig,
 Abholliste als CSV mit Rechten, Übersicht nach Wert mit Ampel, Konten nach Wert); Dachser-Liste „Unterkonto-Vorspediteur“
 (Rechte, Fälle je Sendung, REWE nur H1, mehrfach, unbekanntes Packmittel, Summe = Saldo laut Dachser, schon erfasst, ergänzt,
-andere Menge, abgeschlossener Fall, .eml mit quoted-printable/ISO-8859-1, unlesbares Datum; Dialog mit Datei, 390 px); Protokoll; Oberfläche (Übersicht,
+andere Menge, abgeschlossener Fall, .eml mit quoted-printable/ISO-8859-1, unlesbares Datum, überlange Zeile: langer Absatz
+ohne Fall wird übergangen, überlange Fallzeile kommt als Fehler „Zeile zu lang“ zurück und die Antwort kommt in Sekunden
+statt Minuten; Dialog mit Datei, 390 px); Protokoll; Oberfläche (Übersicht,
 Konto mit Saldo-Karten und Journal, Eingabemasken für Bewegung, Auszug, Abschreibung, Inventur, Partner, Lademittel,
 Import der Datei, nur ansehen; 1280 und 390 px, hell und dunkel, keine JavaScript-Fehler). Nur erfundene Testdaten.
 """
@@ -25,6 +27,7 @@ import datetime
 import json
 import os
 import tempfile
+import time
 
 from playwright.sync_api import sync_playwright
 
@@ -547,6 +550,26 @@ kaputt = DL2.replace('      7.10.26      1 H1', '     31.02.26      1 H1')
 st, r = Bb.call('leergut_dachser_import', {'text': kaputt, 'vorschau': True})
 st2, r2 = Bb.call('leergut_dachser_import', {'text': kaputt})
 check('Dachser: unlesbares Datum → Fehler mit Zeile, Übernehmen 422', st == 200 and len(r['fehler']) == 1 and 'Zustelldatum' in r['fehler'][0]['text'] and st2 == 422, (r, st2))
+
+# Sehr lange Zeilen gehen nicht mehr durch die Zeilen-Regexe: die Fallzeile „… (.+?)\s+(\d{8,14})\s*$“ brauchte dafür
+# quadratisch viel Rechenzeit (isoliert gemessen 15 s bei 100 KB, 79 s bei 200 KB; bei den zugelassenen 2 MB etwa eine
+# halbe Stunde) und hielt dabei einen PHP-Prozess des gemeinsamen Mitarbeiter-Containers fest – preg_match läuft in C
+# und wird von max_execution_time nicht unterbrochen. Geprüft wird nicht mit einer Wartezeit, sondern an der Antwortzeit.
+DL3 = dachser_liste([('2.10.26', '09900001', 'TESTMARKT NORD GMBH', 'MUSTERSTADT', '3.10.26', 12, 'E2', 'R', '09900000001')], per='31.12.26', seiten=1)
+lang_harmlos = '      Hinweis: ' + 'ein sehr langer Absatz ohne Fall ' * 3000          # kein Fall: wird wie jede andere Zeile übergangen
+lang_fall = '      3.10.26     12 E2  R  ' + 'A' * 100000 + ' ' * 100000             # Fallzeile ohne Sendungsnummer: der teure Fall
+vorher = len(abschr())
+st, r = Bb.call('leergut_dachser_import', {'text': DL3 + lang_harmlos + '\n', 'vorschau': True})
+check('Dachser: langer Absatz ohne Fall blockiert den Import nicht, echte Fallzeile weiter erkannt',
+      st == 200 and not r.get('fehler') and r['zahlen']['zeilen'] == 1 and r['zahlen']['schon'] == 1, r)
+t0 = time.monotonic()
+st, r = Bb.call('leergut_dachser_import', {'text': DL3 + lang_fall + '\n', 'vorschau': True})
+dauer = time.monotonic() - t0
+check('Dachser: überlange Fallzeile wird nicht geparst – Fehler „Zeile zu lang“ mit Zeilennummer, Antwort in Sekunden',
+      st == 200 and dauer < 10 and [f['text'] for f in r.get('fehler', [])] == ['Zeile zu lang (höchstens 300 Zeichen)']
+      and r['fehler'][0]['zeile'] == len(DL3.split('\n')), (st, round(dauer, 2), r))
+st, r = Bb.call('leergut_dachser_import', {'text': DL3 + lang_fall + '\n'})
+check('Dachser: überlange Fallzeile beim Übernehmen 422, nichts gespeichert', st == 422 and len(abschr()) == vorher, (st, vorher, len(abschr())))
 
 # ── Protokoll ──
 log = json.dumps(A.call('log')[1], ensure_ascii=False)

@@ -113,24 +113,27 @@ function prepare(raw) {
     /* Suche nur über Nummer, Bezeichnung und echte Artikelmerkmale – nicht über Gruppennamen,
        damit z. B. „Roastbeef“ keine anderen Teilstücke aus der Gruppe „Roastbeef am Knochen“ zeigt */
     o._hay = fold([it.code, it.name, it.nameRaw, it.category, SYN_CAT[it.category], it.origin, SYN_ORIGIN[it.origin],
-      COND_LABEL[it.condition], SYN_COND[it.condition], o.features.join(' '), it.sale ? 'sonderpreis restposten' : '', it.brand, priceTerms]
+      COND_LABEL[it.condition], SYN_COND[it.condition], o.features.join(' '), it.sale ? 'sonderpreis restposten empfehlung' : '', it.empfehlung ? 'empfehlung' : '', it.brand, priceTerms]
       .filter(Boolean).join(' ¦ '));
     o._cmp = it.category + '|' + it.cut;
     return o;
   });
   const byId = new Map(items.map((i) => [i.id, i]));
-  /* Werbung dieses Angebots (der Server liefert nur den eigenen Eintrag): Artikel oben im Block und in der Liste hervorgehoben */
+  /* Werbung dieses Angebots (der Server liefert nur den eigenen Eintrag): bis zu zwei Werbungen (erste im Eintrag, zweite in
+     „weitere“), Artikel oben im Block und in der Liste hervorgehoben */
   const wr = raw.meta && raw.meta.werbung;
-  const wa = wr && Array.isArray(wr.artikel) ? wr.artikel.map((a) => ({ it: byId.get(a.id), text: a.text || '' })).filter((x) => x.it) : [];
-  for (const x of wa) x.it.werb = x.text;
-  const werbung = wa.length ? { titel: wr.titel || '', text: wr.text || '', artikel: wa } : null;
+  const werbungen = (wr ? [wr, ...(Array.isArray(wr.weitere) ? wr.weitere : [])] : []).slice(0, 2).map((b) => {
+    const wa = b && Array.isArray(b.artikel) ? b.artikel.map((a) => ({ it: byId.get(a.id), text: a.text || '' })).filter((x) => x.it) : [];
+    for (const x of wa) if (!werbAn(x.it)) x.it.werb = x.text;
+    return wa.length ? { titel: b.titel || '', text: b.text || '', artikel: wa } : null;
+  }).filter(Boolean);
   const groupTotal = new Map();
   for (const i of items) groupTotal.set(i.groupId, (groupTotal.get(i.groupId) || 0) + 1);
   const cmpMap = new Map();
   for (const i of items) { if (!cmpMap.has(i._cmp)) cmpMap.set(i._cmp, []); cmpMap.get(i._cmp).push(i); }
   const priced = items.filter((i) => i.price.status === 'value').map((i) => i.price.value);
   return {
-    meta: raw.meta, sections: raw.sections, groups: raw.groups, issues: raw.issues || [], items, byId, groupTotal, cmpMap, werbung,
+    meta: raw.meta, sections: raw.sections, groups: raw.groups, issues: raw.issues || [], items, byId, groupTotal, cmpMap, werbungen,
     minPrice: priced.length ? Math.min(...priced) : null,
     maxPrice: priced.length ? Math.max(...priced) : null,
   };
@@ -285,22 +288,32 @@ function priceHTML(it) {
 /* ---------- Werbung: vom Angebot hervorgehobene Artikel (meta.werbung, je Angebot vom Server aufgelöst) ----------
    Oben ein eigener Abschnitt im Aufbau der Liste: Band in der Akzentfarbe (Überschrift, Text), darunter die Artikel als
    normale Zeilen (Nr. · Bezeichnung · Preis · Merken) in den Spalten der Liste – nur in der Gesamtansicht ohne
-   Suche/Filter. In der Liste tragen die beworbenen Zeilen ein kleines Kennzeichen (Hinweis oder „Empfehlung“). */
-const WERB_TITEL = 'Unsere Empfehlung der Woche';
+   Suche/Filter. Eine zweite Werbung steht rechts daneben (je Werbung die Hälfte der Spalten; schmal: untereinander).
+   In der Liste tragen die beworbenen Zeilen ein kleines Kennzeichen (Hinweis oder „Empfehlung“); Empfehlungen ohne
+   Preisänderung (it.empfehlung) sind ebenso hervorgehoben. */
+const WERB_TITEL = 'Unsere Empfehlung der Woche', WERB_TITEL2 = 'Aktion der Woche';
 const werbAn = (it) => typeof it.werb === 'string';
-const werbTagHTML = (it, cls, nurHinweis) => (werbAn(it) && (it.werb || !nurHinweis) ? `<span class="tag werb-tag${cls ? ' ' + cls : ''}">${esc(it.werb || 'Empfehlung')}</span>` : '');
+const empfAn = (it) => werbAn(it) || !!it.empfehlung;   // hervorgehobene Zeile (Werbung oder Empfehlung ohne Preisänderung)
+const werbTagHTML = (it, cls, nurHinweis) => (werbAn(it) && (it.werb || !nurHinweis) ? `<span class="tag werb-tag${cls ? ' ' + cls : ''}">${esc(it.werb || 'Empfehlung')}</span>`
+  : !werbAn(it) && it.empfehlung && !nurHinweis ? `<span class="tag werb-tag${cls ? ' ' + cls : ''}">Empfehlung</span>` : '');
 function werbungHTML(eigeneKarte) {
-  const w = DATA.werbung;
-  if (!w || state.tab !== 'all' || hasFilters()) return '';
+  const ws = DATA.werbungen;
+  if (!ws || !ws.length || state.tab !== 'all' || hasFilters()) return '';
   const host = $('#list');
   const k = plColsFor((host && host.clientWidth) || 1200);   // dieselben Spalten wie die Liste darunter
-  const items = w.artikel.map((x) => x.it), per = Math.ceil(items.length / k), labels = plLabels(items);
-  const cols = [];
-  for (let i = 0; i < k; i++) cols.push(items.slice(i * per, (i + 1) * per));
-  const block = (xs) => (xs.length ? plBlockHTML({ u: { key: 'werb', title: '', items: xs, labels }, items: xs, cont: false }, 'werb') : '');
-  const sec = `<section class="al-sec werb-sec" aria-labelledby="werb-h"><div class="al-st werb-st"><h3 id="werb-h">${icon('megaphone')}${esc(w.titel || WERB_TITEL)}</h3>${w.text ? `<span class="werb-txt">${esc(w.text)}</span>` : ''}</div>
-    <div class="al-cols" style="--k:${k}">${cols.map((c) => `<div class="al-col">${block(c)}</div>`).join('')}</div></section>`;
-  return eigeneKarte ? `<div class="al werb-al">${sec}</div>` : sec;
+  const duo = ws.length > 1 && k > 1;                        // zwei Werbungen nebeneinander, je die Hälfte der Spalten
+  const sec = (w, nr) => {
+    const kk = ws.length > 1 ? (duo ? Math.max(1, Math.floor(k / 2)) : 1) : k;
+    const items = w.artikel.map((x) => x.it), per = Math.ceil(items.length / kk), labels = plLabels(items);
+    const cols = [];
+    for (let i = 0; i < kk; i++) cols.push(items.slice(i * per, (i + 1) * per));
+    const block = (xs) => (xs.length ? plBlockHTML({ u: { key: 'werb', title: '', items: xs, labels }, items: xs, cont: false }, 'werb') : '');
+    const id = nr ? 'werb-h' + (nr + 1) : 'werb-h';
+    return `<section class="al-sec werb-sec" aria-labelledby="${id}"><div class="al-st werb-st"><h3 id="${id}">${icon('megaphone')}${esc(w.titel || (nr ? WERB_TITEL2 : WERB_TITEL))}</h3>${w.text ? `<span class="werb-txt">${esc(w.text)}</span>` : ''}</div>
+    <div class="al-cols" style="--k:${kk}">${cols.map((c) => `<div class="al-col">${block(c)}</div>`).join('')}</div></section>`;
+  };
+  const inner = ws.length > 1 ? `<div class="werb-duo${duo ? '' : ' werb-stapel'}">${ws.map(sec).join('')}</div>` : sec(ws[0], 0);
+  return eigeneKarte ? `<div class="al werb-al">${inner}</div>` : inner;
 }
 
 /* ---------- Kopf, Kennzahlen, Navigation ---------- */
@@ -490,7 +503,7 @@ function renderTable(list, grouped) {
       if (it.section !== sec) { sec = it.section; if (sec) rows.push(`<tr class="s-row"><th colspan="${KORDER ? 8 : 7}" scope="colgroup"><div class="s-in">${esc(sec)}</div></th></tr>`); }
       if (it.groupId !== grp) { grp = it.groupId; rows.push(`<tr class="g-row"><th colspan="${KORDER ? 8 : 7}" scope="colgroup"><div class="g-in"><span class="g-name">${esc(it.group)}</span><span class="g-meta">${info(grp)}</span></div></th></tr>`); }
     }
-    rows.push(`<tr class="row${werbAn(it) ? ' werb-an' : ''}" data-id="${it.id}">
+    rows.push(`<tr class="row${empfAn(it) ? ' werb-an' : ''}" data-id="${it.id}">
       <td class="c-fav">${starHTML(it)}</td>
       <td class="c-code">${it.code ? hl(it.code) : '<span class="muted" title="Ohne Artikelnummer">—</span>'}</td>
       <td class="c-name"><button type="button" class="name-btn" data-open="${it.id}" title="Details und Preisvergleich anzeigen">${hl(it.name)}</button>
@@ -508,10 +521,12 @@ function renderTable(list, grouped) {
 }
 
 /* ---------- Angebotsliste (Standard): Aufbau wie die gedruckte Liste – Abschnitte, Gruppen in Spalten, Nr. · Bezeichnung · € / Kg ----------
-   Die Gruppen werden in Leserichtung (spaltenweise) auf gleich hohe Spalten verteilt; nur eine Gruppe, die nicht
-   sinnvoll in den Rest einer Spalte passt, wird geteilt (Kopf mit „Forts.“ wiederholt). Bildschirm und Druck nutzen dasselbe Verfahren. */
+   Eine Gruppe (Block) steht immer vollständig untereinander in einer Spalte (Inhaber 05.11.2026: nicht mehr „Forts.“ in der
+   Nachbarspalte). Die Blöcke eines Abschnitts werden in Leserichtung so auf die Spalten verteilt, dass die höchste Spalte
+   möglichst niedrig ist; kleine Abschnitte stehen nebeneinander in einer Zeile, wenn das insgesamt Platz spart. Nur im Druck
+   wird ein Block geteilt, der höher als eine ganze Seitenspalte ist (Kopf mit „Forts.“ wiederholt). */
 const plPrice = (p) => (p.status === 'value' ? fmtNum.format(p.value) : p.status === 'request' ? 'a. Anfr.' : '—');
-const plTitle = () => { const m = DATA.meta || {}; return m.title || (m.week ? `Freibleibendes Angebot für die KW ${m.week}${m.year ? '/' + m.year : ''}` : 'Angebot'); };
+const plTitle = () => window.OfferCore.titelMitKw(DATA.meta);   // immer die KW des Angebots, nicht die des früheren Imports
 /* Text in Anführungszeichen (z. B. „Fleischmeister“) hervorheben wie in der Druckliste */
 const plGroupName = (n) => esc(n).replace(/(&quot;|„|“|”)([^&„“”]{2,40}?)(&quot;|“|”)/g, '<em class="al-brand">„$2“</em>');
 /* Preisspalten einer Gruppe: Zusatzpreise links, Hauptpreis rechts – wie in der Druckliste (Flugware | Schiffsware) */
@@ -536,39 +551,79 @@ function plCells(it, labels) {
   for (const p of free) { const k = p === it.price ? cells.lastIndexOf(null) : cells.indexOf(null); if (k >= 0) cells[k] = p; }   // ohne Beschriftung: Hauptpreis rechts
   return cells;
 }
-/* Verteilung auf k Spalten. units: [{key, items, weight(i), head}]; cap = feste Spaltenhöhe (Druck) oder null (ausgleichen) */
+/* Druck: Spalten fester Höhe H nacheinander füllen. Ein Block, der nicht mehr in die Spalte passt, beginnt in der nächsten;
+   geteilt wird nur ein Block, der höher als eine ganze Spalte ist. units: [{key, items, weight(i), head}] */
 function plFill(units, k, H) {
   const cols = [[]]; let load = 0;
   const next = () => { cols.push([]); load = 0; };
   for (const u of units) {
     let rest = u.items.slice(), cont = false;
     while (rest.length) {
-      const w = (xs) => u.head + xs.reduce((a, i) => a + u.weight(i), 0);
-      const W = w(rest), R = H - load;
+      const W = u.head + rest.reduce((a, i) => a + u.weight(i), 0), R = H - load;
       if (W <= R + 1e-6) { cols[cols.length - 1].push({ u, items: rest, cont }); load += W; break; }
-      if (load > 0 && W <= H && R < H * 0.35) { next(); continue; }   // passt in die nächste Spalte und der Rest hier ist klein: nicht teilen
-      let n = 0, acc = u.head;
+      if (load > 0) { next(); continue; }   // nicht teilen: in der nächsten Spalte vollständig
+      let n = 0, acc = u.head;   // höher als eine ganze Spalte: so viel wie passt, Rest mit „Forts.“
       while (n < rest.length && acc + u.weight(rest[n]) <= R + 1e-6) acc += u.weight(rest[n++]);
-      if (n >= 3 && rest.length - n >= 2) { cols[cols.length - 1].push({ u, items: rest.slice(0, n), cont }); rest = rest.slice(n); cont = true; next(); continue; }
-      if (load > 0) { next(); continue; }
-      n = Math.max(1, n); cols[cols.length - 1].push({ u, items: rest.slice(0, n), cont }); rest = rest.slice(n); cont = true; next();   // zu groß für eine Spalte
+      n = Math.max(1, n); cols[cols.length - 1].push({ u, items: rest.slice(0, n), cont }); rest = rest.slice(n); cont = true; next();
     }
   }
   if (!cols[cols.length - 1].length) cols.pop();
   return cols;
 }
-function plBalance(units, k) {
-  const total = units.reduce((a, u) => a + u.head + u.items.reduce((b, i) => b + u.weight(i), 0), 0);
-  /* Untergrenze der Spaltenhöhe: kleine Gruppen (bis 5 Positionen) werden nie geteilt, größere frühestens nach 3 Positionen –
-     sonst verteilt der Ausgleich z. B. ein Einzelangebot mit zwei Positionen auf zwei Spalten („Forts.“) */
-  const minH = (u) => u.head + u.items.slice(0, u.items.length <= 5 ? u.items.length : 3).reduce((a, i) => a + u.weight(i), 0);
-  let lo = Math.max(total / k, ...units.map(minH)), hi = total + 1, best = plFill(units, k, hi);
-  for (let n = 0; n < 24 && hi - lo > 0.25; n++) {
-    const mid = (lo + hi) / 2, c = plFill(units, k, mid);
-    if (c.length <= k) { best = c; hi = mid; } else lo = mid;
+const plHoehe = (u) => u.head + u.items.reduce((a, i) => a + u.weight(i), 0);
+/* Blöcke in fester Reihenfolge ohne Teilen auf c Spalten: die höchste Spalte so niedrig wie möglich (lineare Aufteilung).
+   Rückgabe { h: höchste Spalte, cols: [[{u, items, cont}]] } – genau min(c, Blöcke) Spalten, keine leer. */
+function plOhneTeilen(units, c) {
+  const n = units.length;
+  if (!n) return { h: 0, cols: [] };
+  c = Math.max(1, Math.min(c, n));
+  const pre = [0];
+  for (const u of units) pre.push(pre[pre.length - 1] + plHoehe(u));
+  const f = [[0].concat(Array(n).fill(Infinity))], cut = [[]];
+  for (let j = 1; j <= c; j++) {
+    f[j] = [Infinity]; cut[j] = [0];
+    for (let i = 1; i <= n; i++) {
+      let best = Infinity, at = j - 1;
+      for (let s = j - 1; s < i; s++) { const v = Math.max(f[j - 1][s], pre[i] - pre[s]); if (v < best - 1e-9) { best = v; at = s; } }
+      f[j][i] = best; cut[j][i] = at;
+    }
   }
-  while (best.length < k) best.push([]);
-  return best;
+  const cols = [];
+  for (let j = c, i = n; j >= 1; j--) { const s = cut[j][i]; cols.unshift(units.slice(s, i).map((u) => ({ u, items: u.items, cont: false }))); i = s; }
+  return { h: f[c][n], cols };
+}
+/* Sortierte Gesamtliste (ohne Gruppen) ist ein einziger Block: er wird gleichmäßig auf die k Spalten verteilt (ab der
+   zweiten Spalte mit „Forts.“) – sonst stünde die ganze Liste in einer Spalte. */
+function plGleichTeilen(u, k) {
+  const einzeln = u.items.map((i) => ({ head: 0, items: [i], weight: u.weight }));
+  return plOhneTeilen(einzeln, k).cols.map((col, x) => [{ u, items: col.map((b) => b.items[0]), cont: x > 0 }]);
+}
+const plVerteilen = (units, k) => (units.length === 1 && units[0].key === 'all' ? plGleichTeilen(units[0], k) : plOhneTeilen(units, k).cols);
+/* Bildschirm: Abschnitte zu Zeilen („Bändern“) zusammenstellen. Jeder Abschnitt bekommt 1…k Spalten; nebeneinander passen
+   Abschnitte, solange die Spalten zusammen höchstens k sind. Gewählt wird die Aufteilung mit der kleinsten Gesamthöhe
+   (Reihenfolge bleibt: Abschnitte von links nach rechts, Zeilen von oben nach unten). Nebeneinander nur, wenn es
+   deutlich Platz spart (Aufschlag PL_NEBEN je weiterem Abschnitt der Zeile) – große Abschnitte bleiben ganzbreit. */
+const PL_KOPF = 2.4, PL_ABSTAND = 0.9, PL_NEBEN = 0.15;   // Abschnittsband und Zeilenabstand in Artikelzeilen; Aufschlag nebeneinander
+function plBaender(secs, k) {
+  const n = secs.length;
+  const lay = secs.map((s) => { const r = []; for (let c = 1; c <= Math.min(k, s.units.length); c++) r[c] = plOhneTeilen(s.units, c); return r; });
+  const best = Array(n + 1).fill(Infinity), wahl = [];
+  best[n] = 0;
+  for (let i = n - 1; i >= 0; i--) {
+    const probe = (j, frei, cs) => {   // Abschnitte i..j in einer Zeile, cs = Spalten je Abschnitt
+      for (let c = 1; c <= Math.min(frei, secs[j].units.length); c++) {
+        const cs2 = cs.concat(c);
+        const h = Math.max(...cs2.map((cc, x) => lay[i + x][cc].h + (secs[i + x].name ? PL_KOPF : 0)));
+        const summe = h * (1 + PL_NEBEN * (cs2.length - 1)) + PL_ABSTAND + best[j + 1];
+        if (summe < best[i] - 1e-6) { best[i] = summe; wahl[i] = cs2; }
+        if (j + 1 < n && frei - c >= 1) probe(j + 1, frei - c, cs2);
+      }
+    };
+    probe(i, k, []);
+  }
+  const out = [];
+  for (let i = 0; i < n;) { const cs = wahl[i]; out.push(cs.map((c, x) => ({ sec: secs[i + x], c, cols: lay[i + x][c].cols }))); i += cs.length; }
+  return out;
 }
 function plUnits(list, grouped, charsPerLine) {
   const weight = (i) => 1 + (plName(i).length + (i.sale ? 14 : 0) > charsPerLine ? 0.85 : 0);
@@ -595,7 +650,7 @@ function plBlockHTML(b, mode) {
   const { u, items, cont } = b, labels = u.labels, cols = labels.length;
   const screen = mode !== 'print', werb = mode === 'werb';
   const span = 2 + cols + (screen ? 1 : 0);
-  const row = (it) => `<tr class="row${werbAn(it) && !werb ? ' werb-an' : ''}" data-id="${it.id}">
+  const row = (it) => `<tr class="row${empfAn(it) && !werb ? ' werb-an' : ''}" data-id="${it.id}">
     <td class="c-code">${it.code ? hl(it.code) : ''}</td>
     <td class="c-name">${screen ? `<button type="button" class="name-btn" data-open="${it.id}" title="Details und Preisvergleich anzeigen">${hl(plName(it))}</button>` : esc(plName(it))}${werbTagHTML(it, 'al-tag', werb)}${it.sale ? '<span class="tag sale al-tag" title="Sonderpreis, solange der Vorrat reicht">Sonderposten</span>' : ''}</td>
     ${plCells(it, labels).map((p) => `<td class="c-price${p && p.status !== 'value' ? ' al-np' : ''}">${p ? (it.sale && p === it.price ? `${it.regular != null ? `<s class="p-was al-was">${fmtNum.format(it.regular)}</s>` : ''}<span class="al-sale" title="Sonderposten – solange der Vorrat reicht">${plPrice(p)}</span>` : plPrice(p)) : ''}</td>`).join('')}${screen ? `<td class="c-fav">${starHTML(it)}</td>` : ''}</tr>`;
@@ -614,13 +669,19 @@ function renderListe(list, grouped) {
   const stand = PUBLISHED_AT ? new Date(PUBLISHED_AT).toLocaleDateString('de-DE', { day: '2-digit', month: '2-digit', year: 'numeric' }) : '';
   const m = DATA.meta || {};
   const head = `<div class="al-head">${PL_LOGO}<div class="al-ht"><h2>${esc(m.offerName && m.offerName !== 'Wochenangebot' && !m.einzel ? m.offerName + ' · ' : '')}${esc(plTitle())}</h2><span>${stand ? 'Stand ' + esc(stand) + ' · ' : ''}Preise in € je kg</span></div></div>${werbungHTML(false)}`;
-  const secs = plSections(units).map((sec) => {
+  const zeilen = grouped ? plBaender(plSections(units), plK)
+    : [[{ sec: { name: '', units }, c: Math.min(plK, units[0].items.length) || 1, cols: plGleichTeilen(units[0], plK) }]];
+  const baender = zeilen.map((band) => `<div class="al-band" style="--k:${plK}">${band.map(({ sec, c, cols }) => {
     const n = sec.units.reduce((a, u) => a + u.items.length, 0);
-    const cols = plBalance(sec.units, plK);
-    return `<section class="al-sec">${sec.name ? `<div class="al-st"><h3>${plGroupName(sec.name)}</h3><span>${plural(n, 'Artikel', 'Artikel')}</span></div>` : ''}
-      <div class="al-cols" style="--k:${plK}">${cols.map((c) => `<div class="al-col">${c.map((b) => plBlockHTML(b, 'screen')).join('')}</div>`).join('')}</div></section>`;
-  });
-  return `<div class="al" data-k="${plK}">${head}${secs.join('')}${hinweisHTML('al-note')}</div>`;
+    // Abschnitt ohne Namen neben einem benannten: unsichtbarer Platzhalter, damit die Blöcke der Zeile oben bündig beginnen
+    const kopf = sec.name ? `<div class="al-st"><h3>${plGroupName(sec.name)}</h3><span>${plural(n, 'Artikel', 'Artikel')}</span></div>`
+      : band.some((x) => x.sec.name) ? '<div class="al-st al-st-leer" aria-hidden="true"><h3>&nbsp;</h3></div>' : '';
+    // allein in der Zeile: Band über die ganze Breite, Spalten so breit wie in den anderen Zeilen (übrige bleiben frei)
+    const breite = band.length === 1 ? plK : c;
+    return `<section class="al-sec" style="--c:${breite}">${kopf}
+      <div class="al-cols" style="--k:${breite}">${cols.map((col) => `<div class="al-col">${col.map((b) => plBlockHTML(b, 'screen')).join('')}</div>`).join('')}</div></section>`;
+  }).join('')}</div>`);
+  return `<div class="al" data-k="${plK}">${head}${baender.join('')}${hinweisHTML('al-note')}</div>`;
 }
 /* Spaltenzahl folgt der Breite: bei Wechsel neu verteilen */
 if (window.ResizeObserver) new ResizeObserver(() => { const h = $('#list'); if (state.view === 'liste' && h && h.querySelector('.al') && plColsFor(h.clientWidth) !== plK) renderList(); }).observe(document.documentElement);
@@ -635,7 +696,8 @@ function buildPrintListe(list, grouped, scopeText) {
   const colW = (c) => c.reduce((a, bl) => a + bl.u.head + bl.items.reduce((x, i) => x + bl.u.weight(i), 0), 0);
   for (const sec of secs) {
     const cap = plCap(!pages.length, !!sec.name);
-    const one = plBalance(sec.units, 3);
+    const one = plVerteilen(sec.units, 3);
+    while (one.length < 3) one.push([]);
     if (Math.max(...one.map(colW)) <= cap) { pages.push({ sec: sec.name, cont: false, cols: one, cap }); continue; }   // Abschnitt passt auf eine Seite
     let cols = plFill(sec.units, Infinity, cap);
     const per = [];
@@ -645,10 +707,15 @@ function buildPrintListe(list, grouped, scopeText) {
     const byKey = new Map();
     for (const b of cols.flat()) { if (!byKey.has(b.u.key)) byKey.set(b.u.key, { ...b.u, items: [] }); byKey.get(b.u.key).items.push(...b.items); }
     const firstSeen = new Set();
-    per.push(plBalance([...byKey.values()], 3).map((c) => c.map((b) => {
-      const isFirst = !firstSeen.has(b.u.key); firstSeen.add(b.u.key);
-      return isFirst && earlier.has(b.u.key) ? { ...b, cont: true } : b;
-    })));
+    const lz = plVerteilen([...byKey.values()], 3);
+    if (Math.max(...lz.map(colW)) > plCap(false, !!sec.name) + 1e-6) per.push(cols.concat([[], [], []]).slice(0, 3));   // übergroßer Block: Spalten wie gefüllt
+    else {
+      while (lz.length < 3) lz.push([]);
+      per.push(lz.map((c) => c.map((b) => {
+        const isFirst = !firstSeen.has(b.u.key); firstSeen.add(b.u.key);
+        return isFirst && earlier.has(b.u.key) ? { ...b, cont: true } : b;
+      })));
+    }
     per.forEach((cols3, n) => pages.push({ sec: sec.name, cont: n > 0, cols: cols3, cap: plCap(false, !!sec.name) }));
   }
   /* Hinweis wie in der Excel-Liste: in die Spalte mit dem meisten Platz, sonst unter die Spalten, sonst auf eine eigene Seite */
@@ -672,7 +739,7 @@ function buildPrintListe(list, grouped, scopeText) {
 
 function cardHTML(it, grouped) {
   const feats = HIGHLIGHT_FEATURES.filter((f) => it.features.includes(f)).map((f) => `<span class="tag${f === 'Sonderposten' ? ' sale' : ''}">${esc(f)}</span>`).join('');
-  return `<article class="card${werbAn(it) ? ' werb-an' : ''}" data-id="${it.id}">
+  return `<article class="card${empfAn(it) ? ' werb-an' : ''}" data-id="${it.id}">
     <div class="card-top">${monoHTML(it.category)}<span class="code">${it.code ? 'Art.-Nr. ' + hl(it.code) : 'ohne Art.-Nr.'}</span>${starHTML(it)}</div>
     <h3 class="card-name"><button type="button" class="name-btn" data-open="${it.id}" title="Details und Preisvergleich anzeigen">${hl(it.name)}</button></h3>
     <p class="card-meta">${esc(it.category)}${it.origin ? ' · ' + hl(it.origin) : ''}</p>
@@ -799,7 +866,11 @@ async function kundeMerklisteLaden() {
     const r = await kundeApi('kunde_merkliste');
     favRemote = true;
     const local = store.get('merkliste', []);
-    if (!r.exists && local.length) { favs = new Set(local); saveFavs(); }
+    if (!r.exists && local.length) {
+      favs = new Set(local);
+      // gleich speichern und erst danach die Browser-Liste löschen: sonst landete sie im nächsten neuen Kundenkonto auf diesem Gerät
+      try { await kundeApi('kunde_merkliste_save', { keys: [...favs] }); store.del('merkliste'); } catch { saveFavs(); }
+    }
     else favs = new Set(r.keys);
   } catch { /* Server nicht erreichbar: Browser-Merkliste weiter nutzen */ }
 }
@@ -1539,8 +1610,8 @@ async function sendOrder(btn) {
     cart.clear(); saveCart(); renderOrderbar();
     for (const el of $$('#list .qty')) el.value = '';
     $('#order-body').innerHTML = `<div class="dlg-head"><div><h2 id="or-title">Vielen Dank!</h2><p>Bestellwunsch ${esc(r.nr)}</p></div><button class="btn icon ghost" type="button" data-close aria-label="Schließen">${icon('x')}</button></div>
-      <div class="dlg-body o-done"><div class="empty-ico">${icon('check')}</div><p>Ihr Bestellwunsch <strong>${esc(r.nr)}</strong> (${plural(r.positions, 'Position', 'Positionen')}, ${fmtKg.format(r.totalQty)} kg, ca. ${fmtEur.format(r.total)} €${r.fracht && r.fracht.kosten ? ` zzgl. ${fmtEur.format(r.fracht.kosten)} € Frachtanteil` : ''}) ${r.delivery === 'fehler' || r.delivery === 'neu' ? 'ist gespeichert. Die E-Mail-Zustellung ist noch nicht bestätigt; bitte nicht nochmals als neuen Vorgang absenden. Bei Rückfragen nennen Sie uns die Bestellnummer.' : 'wurde an uns übermittelt. Wir melden uns mit der Bestätigung.'}</p>
-        ${r.copy ? `<p class="muted">Eine Kopie haben wir an ${esc(r.copy)} gesendet.</p>` : ''}</div>
+      <div class="dlg-body o-done"><div class="empty-ico">${icon('check')}</div><p>Ihr Bestellwunsch <strong>${esc(r.nr)}</strong> (${plural(r.positions, 'Position', 'Positionen')}, ${fmtKg.format(r.totalQty)} kg, ca. ${fmtEur.format(r.total)} €${r.fracht && r.fracht.kosten ? ` zzgl. ${fmtEur.format(r.fracht.kosten)} € Frachtanteil` : ''}) ${r.delivery === 'eingegangen' ? 'ist bei uns eingegangen und wird in Kürze per E-Mail an unser Team weitergegeben. Wir melden uns mit der Bestätigung.' : r.delivery === 'fehler' || r.delivery === 'neu' ? 'ist gespeichert. Die E-Mail-Zustellung ist noch nicht bestätigt; bitte nicht nochmals als neuen Vorgang absenden. Bei Rückfragen nennen Sie uns die Bestellnummer.' : 'wurde an uns übermittelt. Wir melden uns mit der Bestätigung.'}</p>
+        ${r.copy ? `<p class="muted">Eine Kopie haben wir an ${esc(r.copy)} gesendet.</p>` : r.copyPlanned ? `<p class="muted">Eine Kopie senden wir in Kürze an ${esc(r.copyPlanned)}.</p>` : ''}</div>
       <div class="dlg-foot"><button class="btn primary" type="button" data-close>Fertig</button></div>`;
   } catch (ex) {
     err.textContent = ex.message;
@@ -1706,7 +1777,16 @@ function openKundePw(forced) {
 async function kundeLogout() {
   if (favRemote && favTimer) { clearTimeout(favTimer); favTimer = null; try { await kundeApi('kunde_merkliste_save', { keys: [...favs] }); } catch { /* weiter abmelden */ } }
   await favBusy;
-  try { await kundeApi('kunde_logout', {}); } catch { /* trotzdem neu laden */ }
+  // Abmelden muss auf dem Server ankommen – sonst bliebe die Sitzung auf einem gemeinsam genutzten Gerät bestehen, obwohl die
+  // Seite „abgemeldet“ aussieht. Veralteter Sicherheitsschlüssel (in einem anderen Tab neu angemeldet): neu holen, einmal wiederholen.
+  try { await kundeApi('kunde_logout', {}); }
+  catch (e) {
+    let ok = false;
+    if (e.status === 403) {
+      try { const st = await kundeApi('kunde_status'); KCSRF = st.csrf || ''; await kundeApi('kunde_logout', {}); ok = true; } catch { /* unten melden */ }
+    }
+    if (!ok) { toast('Abmelden hat nicht geklappt – bitte die Internetverbindung prüfen und erneut auf „Abmelden“ tippen.', 6000); return; }
+  }
   // Angefangene Bestellwünsche dieses Zugangs nicht auf dem (evtl. gemeinsam genutzten) Rechner zurücklassen
   try { const pre = STORAGE + 'bestellung.' + (KUNDE ? KUNDE.username : '-') + '.'; Object.keys(localStorage).filter((k) => k.startsWith(pre)).forEach((k) => localStorage.removeItem(k)); } catch { /* Speicher gesperrt */ }
   location.href = setOfferParam('').pathname;
@@ -1716,6 +1796,7 @@ function bindKunde() {
   const dl = $('#dlg-kunde-login'), dp = $('#dlg-kunde-pw');
   document.addEventListener('click', (e) => {
     if (e.target.closest('#btn-kunde-login, [data-kact="login"]')) { openKundeLogin(); return; }
+    if (e.target.closest('[data-wartung-logout]')) { kundeLogout(); return; }   // auch während der Wartung abmelden (GR-009: Abmelden bleibt erlaubt)
     const kb = e.target.closest('#btn-kunde');
     const km = $('#menu-kunde');
     if (kb && km) { const open = km.hidden; km.hidden = !open; kb.setAttribute('aria-expanded', open); if (open) { menuImBild(km); km.querySelector('button').focus(); } return; }
@@ -1855,7 +1936,7 @@ function renderWartung(w) {
   for (const id of ['quicknav', 'hits', 'chips']) { const el = $('#' + id); if (el) el.textContent = ''; }
   const slot = $('#kunde-slot'); if (slot) slot.innerHTML = '';
   $('#list').innerHTML = `<div class="empty k-locked k-wartung"><div class="empty-ico">${icon('info')}</div><h3>Wartungsarbeiten</h3><p>${esc(w.message || '')}</p>${bis ? `<p class="muted">Voraussichtlich wieder erreichbar ab ${esc(bis)} Uhr.</p>` : ''}
-    <div class="row-actions"><button type="button" class="btn" data-reload>Erneut versuchen</button></div></div>`;
+    <div class="row-actions"><button type="button" class="btn" data-reload>Erneut versuchen</button>${KUNDE ? `<button type="button" class="btn" data-wartung-logout>${icon('logout')}Abmelden</button>` : ''}</div></div>`;
 }
 
 /* ---------- Start ---------- */

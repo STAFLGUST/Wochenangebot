@@ -10,7 +10,8 @@ Gelesen und geschrieben über `app/api/storage.php` (`store_read`, `store_write`
 | `angebot` | Angebot | oeffentlich | bestand, plattform | – | Veröffentlichtes Wochenangebot; öffentlich nur gefiltert über offer_resolve (GR-001, GR-002) – Historie: Jede Veröffentlichung legt eine Version an (versionen/*) und den Preisverlauf (historie/*) |
 | `angebote` | Angebot | vertraulich | crm | – | Kundenangebote mit Kundenpreisen (variants), Sichtbarkeit und Sonderpreisen |
 | `anwesenheit` | Angebot | intern | – | – | Wer bearbeitet gerade den Entwurf (gemeinsames Bearbeiten) |
-| `bestellung` | Angebot | intern | – | plattform | Einstellungen der Bestellfunktion (an/aus, Empfänger) |
+| `bestellung` | Angebot | intern | – | plattform | Einstellungen der Bestellfunktion (an/aus, Kopie an den Kunden); ab Trennstufe 2 nur die Anzahl der Empfänger – die Adressen stehen in bestellung-empfaenger |
+| `bestellung-empfaenger` | Angebot | intern | plattform | plattform | Empfänger der Bestellwünsche (ab Trennstufe 2, ADR-007 Stufe 2b): nur innen – der Postausgang verschickt Bestellwünsche nur an diese Adressen |
 | `bestellungen` | Angebot | vertraulich | einkauf, plattform | – | Bestellwünsche der Kunden (Bestell-API v1) mit Verlauf – Historie: Positionen, Preise, Firma und Angebotswoche werden beim Absenden als Schnappschuss gespeichert |
 | `einzelangebote` | Angebot | vertraulich | crm | crm | Einzelangebote für genau einen Kunden (E-JJJJ-0001) |
 | `entwurf` | Angebot | intern | – | – | Bearbeitungsstand des nächsten Wochenangebots (gemeinsames Bearbeiten mit Revisionen) |
@@ -21,6 +22,7 @@ Gelesen und geschrieben über `app/api/storage.php` (`store_read`, `store_write`
 | `mailvorlage` | Angebot | intern | – | plattform | Signatur der Kunden-E-Mails |
 | `merklisten` | Angebot | vertraulich | – | verwaltung | Merklisten angemeldeter Kunden (geräteübergreifend) |
 | `versionen/*` | Angebot | intern | bestand | – | Frühere veröffentlichte Angebote (unveränderliche Schnappschüsse) – Historie: Schnappschuss je Veröffentlichung; Anzahl begrenzt (keep_versions) |
+| `artikelauszug` | Bestand | oeffentlich | angebot | – | Auszug aus Bestand und Stammdaten für die Kundenseite (ab Trennstufe 2, ADR-007 Stufe 2b): Artikelnummern mit Lagerbestand ohne Mengen, Fleischart/Herkunft/Zustand je Artikel – nie Mengen, Partien, MHD oder Einkaufspreise (GR-001, GR-008) – Historie: Wird bei jeder Änderung von Bestand oder Stammdaten neu erzeugt (lib/bestand.php artikelauszug_aktualisieren) |
 | `bestand` | Bestand | vertraulich | angebot, einkauf, crm | – | Bestandsliste: Partien, Mengen, MHD, Einkaufspreise, erwartete Zugänge (nie öffentlich, GR-001) |
 | `bestand-verlauf*` | Bestand | vertraulich | controlling | – | Bestandsverlauf – Verzeichnis: je Tag die Summen (kg eingelagert, erwartete Zugänge, Lagerwert zum EK, Artikel, Partien) und die Herkunft (Datei, wer, wann) – Historie: Tagesstand beim Hochladen der Bestandsliste (Schnappschuss); erneutes Hochladen für denselben Tag ersetzt ihn, frühere Tage bleiben |
 | `bestand-verlauf/**` | Bestand | vertraulich | controlling | – | Bestandsverlauf je Tag (JJJJ-MM-TT): je Artikel kg eingelagert, erwartete Zugänge, Lagerwert zum EK, kg mit EK, Partien und Bezeichnung – Historie: Schnappschuss des Tages; spätere Stammdatenänderungen ändern ihn nicht (GR-106) |
@@ -55,6 +57,7 @@ Gelesen und geschrieben über `app/api/storage.php` (`store_read`, `store_write`
 | `firewall` | Plattformkern | intern | – | – | Firewall-Einstellungen der Schutzzentrale |
 | `fw_zaehler` | Plattformkern | intern | – | – | Zähler der Firewall |
 | `integritaet` | Plattformkern | intern | – | – | Ergebnisse der Dateiprüfung |
+| `kundenprotokoll/*` | Plattformkern | vertraulich | – | – | Protokoll der Kundenseite je Monat (ab Trennstufe 4, ADR-007 Stufe 2d): Anmeldungen, Bestellwünsche, Abmeldungen, Passwörter der Kunden – die Mitarbeiterseite zeigt es zusammen mit protokoll/* – Historie: Nur anhängen; Aufbewahrung wie protokoll/* (audit() löscht ältere Monate) |
 | `laendersperre` | Plattformkern | intern | – | – | Statistik der Länder-/IP-Sperre |
 | `logins` | Plattformkern | intern | – | – | Fehlversuche und Sperren bei der Anmeldung |
 | `mail-schluessel*` | Plattformkern | geheim | – | – | Schlüssel für das Postfach-Passwort – nie in Sicherungen (Konstante MAIL_KEY_STORE) |
@@ -64,7 +67,11 @@ Gelesen und geschrieben über `app/api/storage.php` (`store_read`, `store_write`
 | `module` | Plattformkern | intern | dashboard, verwaltung | – | Laufzeitzustand je Oberfläche: Wartung (aktiv oder geplant, Grund, Hinweis, bis), Freigabe aus der Modulverwaltung (innerhalb des Entwicklungsstands im Code), Tester und Verlauf der Änderungen (lib/module.php) – Historie: Verlauf der letzten 100 Änderungen (wer, wann, Bereich, alt, neu, Grund, Beginn, bis) zusätzlich zum Protokoll |
 | `nutzer` | Plattformkern | geheim | angebot, hr, marketing, qs | hr | Mitarbeiterzugänge, Rollen, Rechte-Ausnahmen, Zwei-Faktor, Passkeys, vertraute Geräte |
 | `oidc-abmeldungen` | Plattformkern | intern | – | – | Beendete Sitzungen der zentralen Anmeldung (Keycloak-Sitzung bzw. Mitarbeiter → Zeitpunkt, höchstens 11 Stunden): weiter erst nach erneuter Anmeldung bei Keycloak |
-| `protokoll/*` | Plattformkern | vertraulich | – | – | Änderungsprotokoll je Monat (audit) – Historie: Nur anhängen; Einträge werden nicht geändert. Aufbewahrung: laufender Monat und 6 Monate davor – ältere Monatsdokumente löscht audit() (PROTOKOLL_MONATE, lib/protokoll.php) |
+| `oidc-aktivitaet` | Plattformkern | intern | – | – | Letzte Aktivität je Anmeldung bei Keycloak (Keycloak-Sitzung → Zeitpunkt, höchstens 13 Stunden): Abmelden nach Inaktivität gilt über alle Adressen der Plattform |
+| `oidc-geloescht` | Plattformkern | intern | – | – | Kennungen der Keycloak-Konten gelöschter Mitarbeiter → Zeitpunkt: verknüpfen nie mit einem neuen, gleich benannten Mitarbeiter (lib/oidc.php, konten.sh verwaist) |
+| `postausgang` | Plattformkern | vertraulich | – | – | Postausgang von innen (ADR-007, lib/postausgang.php): Versandaufträge der Kundenseite – Bestellnummer, Benachrichtigungen, Abmeldehinweise mit Firma und E-Mail; nie Postfachdaten oder Mailinhalte – Historie: Kurzlebig: der Dienst postausgang entnimmt fällige Aufträge; höchstens 500 offen |
+| `postausgang-stand` | Plattformkern | intern | – | – | Lebenszeichen des Dienstes postausgang und ob ein Postfach eingerichtet ist (die Kundenseite prüft damit die Bestellfunktion) |
+| `protokoll/*` | Plattformkern | vertraulich | – | – | Änderungsprotokoll je Monat (audit); ab Trennstufe 4 nur noch Einträge der Mitarbeiterseite und des Postausgangs – Historie: Nur anhängen; Einträge werden nicht geändert. Aufbewahrung: laufender Monat und 6 Monate davor – ältere Monatsdokumente löscht audit() (PROTOKOLL_MONATE, lib/protokoll.php) |
 | `rechte` | Plattformkern | intern | – | – | Rechte der Standardrollen (Katalog PERMS und Modulzugang in lib/rechte.php), „bekannt“ = Katalog beim Speichern |
 | `rollen` | Plattformkern | intern | – | – | Eigene Rollen (Name, Beschreibung, Rechte) und Namen der Standardrollen (lib/rechte.php) |
 | `sicherheit` | Plattformkern | intern | – | – | Sicherheitseinstellungen (Zwei-Faktor-Pflicht, IP-/Ländersperre, Passwortbestätigungen) |
@@ -86,10 +93,12 @@ Gelesen und geschrieben über `app/api/storage.php` (`store_read`, `store_write`
 | `rewe-stamm` | REWE | intern | – | – | REWE: Lieferwege (Zentrallager oder Direktbelieferung, Bestellschluss) und Artikel (Name, Einheit, WinAB-Artikelnummer) |
 | `rewe-verlauf` | REWE | vertraulich | – | – | REWE-Marktakte: Notizen, Telefonate, Besuche, Reklamationen, Ware ohne Berechnung, Wiedervorlagen (erledigt mit Namen) und Änderungen (Kaufbereitschaft, Dauerauftrag, Zuweisung, Lieferweg) – Historie: Nur anfügen; Wiedervorlagen werden als erledigt markiert, nichts wird gelöscht |
 | `rewe-wochen/*` | REWE | vertraulich | – | – | REWE-Wochenabfrage je ISO-Jahr: Antwort je Markt und KW (bestellt mit Mengen je Artikel, kein Bedarf, nicht erreicht, Pause), ohne Berechnung, Notiz, wer/wann, Herkunft; Wochenabschluss (exportiert, in WinAB erfasst) – Historie: Jede Antwort speichert Lieferweg und Zuständigkeit der KW als Schnappschuss (GR-106); Änderungen nach dem Export sind als Nachtrag gekennzeichnet |
+| `angebotskategorien*` | Verwaltung | intern | angebot | – | Angebotskategorien: Abschnitte des Angebots mit zugeordneten VK-Gruppen in fester Reihenfolge |
 | `anmeldeorte` | Verwaltung | vertraulich | – | – | Anmeldeorte der Kunden für die Auswertung (90 Tage, ohne IP) |
-| `kunden` | Verwaltung | vertraulich | angebot, crm, rewe, controlling | angebot, plattform | Kundenstammdaten und Kundenzugänge des Portals (Passwort nur als Hash, GR-003) |
+| `kunden` | Verwaltung | vertraulich | angebot, crm, rewe, controlling | angebot, plattform | Kundenzugänge des Portals (Passwort nur als Hash, GR-003); bis Trennstufe 2 auch alle Stammdaten, danach nur die Felder unter felder_kundenseite |
 | `kundengruppen*` | Verwaltung | intern | angebot, crm, controlling | – | Kundengruppen (GRUPPEN_LISTEN in lib/kunden.php) |
 | `kundensitzungen` | Verwaltung | geheim | – | angebot | Sitzungen der Kunden im Portal; Ziel: zentraler Identitätsdienst (Phase 6) |
+| `kundenstamm` | Verwaltung | vertraulich | angebot, crm, rewe, controlling, plattform | – | Ab Trennstufe 2 (ADR-007 Stufe 2b): alle Kundenfelder außer den Portalfeldern – Anschrift, E-Mail, Telefon, Notiz, Vertreter, Daten der Warenwirtschaft |
 | `stammdaten` | Verwaltung | intern | angebot, bestand, controlling | – | Artikelstammdaten (Bezeichnung, Fleischart, Herkunft, Zustand, VK-Gruppe, GTIN) |
 | `vertreter*` | Verwaltung | vertraulich | crm, controlling | – | Vertreter mit Kontaktdaten |
 | `vkgruppen*` | Verwaltung | intern | angebot, bestand, controlling | – | VK-Gruppen der Artikel |

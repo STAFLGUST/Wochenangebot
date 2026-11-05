@@ -2,7 +2,7 @@
 
 <!-- ERZEUGT von `python3 werkzeuge/doku.py erzeugen` – nicht von Hand ändern. Quelle: Funktionen und Kommentare im Code. Die CI prüft, dass diese Datei zum Code passt. -->
 
-103 Dateien, 944 Funktionen – in der Reihenfolge der Datei, **fett** die Abschnitte. Text = erste Aussage des Kommentars direkt über der Funktion (Python: Docstring). Übersicht aller Module: [README.md](README.md).
+110 Dateien, 1108 Funktionen – in der Reihenfolge der Datei, **fett** die Abschnitte. Text = erste Aussage des Kommentars direkt über der Funktion (Python: Docstring). Übersicht aller Module: [README.md](README.md).
 
 ## `.github/scripts/apt_vorrat.py`
 
@@ -68,21 +68,29 @@ _Adressen → Koordinaten auf dem eigenen Server (Plattformkern, genutzt von der
 
 _Konten der zentralen Anmeldung (Keycloak, Realm „mitarbeiter“) aus der Verwaltung steuern – EIN Passwort für alles._
 
+- `konten_ist_admin(u)` – Administrator der Anwendung?
+- `konten_nur_konsole_text(u)` – Hinweis, wenn Keycloak dem Client ein Konto nicht freigibt (403 bzw. access.manage = false)
+- `konten_verboten(st, u)` – 403 von Keycloak bei einer Änderung → verständlicher Fehler (sonst nichts)
 - `__construct(meldung, status)`
 - `konten_einstellung()` – Einstellungen: Adresse von Keycloak im internen Netz (Betrieb http://keycloak:8080) und Geheimnis des Clients
 - `konten_eingerichtet()`
 - `konten_http(methode, url, inhalt, kopf)` – Eine Anfrage an Keycloak: [Status, JSON\|null, Kopfzeilen].
 - `konten_token()` – Zugangstoken des Clients „konten“ (client_credentials), nur im Speicher dieser Anfrage
-- `konten_api(methode, pfad, daten)` – Aufruf der Verwaltungsschnittstelle des Realms: $pfad relativ zu /admin/realms/<realm>/
-- `konten_finden(u)` – Keycloak-Konto zum Mitarbeiterkonto: [Konto\|null, Hinweis].
+- `konten_api(methode, pfad, daten)` – Aufruf der Verwaltungsschnittstelle des Realms: $pfad relativ zu /admin/realms/<realm>/.
+- `konten_finden(u)` – Keycloak-Konto zum Mitarbeiterkonto: [Konto\|null, Hinweis, Altkonto\|null].
 - `konten_status(u)` – Zustand für die Verwaltung (nur lesen)
+- `konten_gruppe_da()` – Gibt es die Gruppe „anwendungskonten“ (Realm auf Stand 16)?
+- `konten_in_gruppe(sub)` – Steht das Keycloak-Konto (sub) in der Gruppe „anwendungskonten“, darf es also die Verwaltung der Anwendung ändern? true/false; null = nicht feststellbar …
 - `konten_pflicht(u)` – Vorhandenes Konto oder Fehler (für schreibende Funktionen)
+- `konten_pflicht_aenderbar(u)` – Wie konten_pflicht, für Änderungen: Administratorkonten ändert ab Stand 16 nur die Serverkonsole – die Anwendung verweigert es selbst, auch solange Keycloak …
+- `konten_min_laenge()` – Mindestlänge für Passwörter der zentralen Anmeldung: Einstellung „Passwörter mindestens … Zeichen“, nie unter 12 (Grundwert des Realms).
 - `konten_passwort_meldung(j)` – Richtlinienfehler von Keycloak (Passwort) auf Deutsch
-- `konten_startpasswort()` – Gut vorlesbares Startpasswort wie konten.sh (16 Zeichen in Vierergruppen, ohne 0/O/1/l/I)
+- `konten_startpasswort()` – Gut vorlesbares Startpasswort wie konten.sh (mindestens 16 Zeichen in Vierergruppen, ohne 0/O/1/l/I), immer mit Groß- und Kleinbuchstaben und Ziffer – …
 - `konten_passwort(u, passwort, temporaer)` – Passwort setzen; $temporaer = bei der nächsten Anmeldung ändern.
 - `konten_entsperren(u)` – Sperre nach Fehlversuchen aufheben (und ein in Keycloak gesperrtes Konto wieder aktivieren, wie konten.sh entsperren)
 - `konten_link(u)` – Mail mit Link zum Passwort-Festlegen (72 Stunden, nur „Passwort aktualisieren“)
 - `konten_anlegen(u)` – Fehlendes Konto anlegen (Benutzername, Name, E-Mail aus dem Mitarbeiterkonto) und verknüpfen.
+- `konten_entfernen(u)` – Mitarbeiter gelöscht (Aktion user_delete, nach dem Löschen aufgerufen): Konto in der zentralen Anmeldung mitlöschen – sonst bliebe es bestehen und ein später …
 
 ## `app/api/lib/benachrichtigung.php`
 
@@ -97,6 +105,7 @@ _Benachrichtigungen an Mitarbeiter (E-Mail): welche Ereignisse an wen gehen, leg
 - `notify_mail(ev, items, skipped, test)` – Inhalt einer Benachrichtigung: [Betreff, Text, HTML]
 - `notify_send(ev, to, items, skipped, test, by, inhalt)` – An die Empfänger eines Ereignisses senden und im Versandprotokoll vermerken; Ergebnis je Empfänger.
 - `notify_flush()` – Nach der Antwort: vorgemerkte Ereignisse je Art bündeln, Pause beachten, versenden.
+- `notify_verarbeiten(q, nachAntwort)` – Ereignisse versenden (am Ende einer Anfrage oder im Dienst „postausgang“): je Art bündeln, Pause beachten
 
 ## `app/api/lib/bereitschaft.php`
 
@@ -239,7 +248,8 @@ _Schutzzentrale: Firewall (Angriffsmuster), Sperrliste (von Hand, automatisch, B
 - `fw_clean(b, old)` – Einstellungen prüfen (Firewall)
 - `fw_vorlage_anwenden(k, me, notfall)` – Vorlage anwenden (Aktion fw_vorlage, Notfallmodus lib/notfall.php): Sicherheits- und Firewall-Einstellungen speichern.
 - `fw_status(filter)` – Übersicht für die Ansicht „Schutz“
-- `fw_zahlen(sekunden)` – Zahlen aus dem Verkehrsprotokoll für einen Zeitraum (Sekunden; Lagebild 24 h, Wochenbericht 7 Tage): Angriffsmuster, abgewiesene Anfragen gesperrter …
+- `fw_verkehr_alle()` – Live-Verkehr beider Seiten (Mitarbeiterseite ab Trennstufe 5: eigener Ringpuffer innen und der der Kundenseite), zeitlich sortiert
+- `fw_zahlen(sekunden)`
 - `fw_stunden()` – Verlauf der letzten 24 Stunden je Stunde (älteste zuerst, letzte = laufende Stunde): Angriffsmuster und abgewiesene Anfragen gesperrter Adressen – für das …
 - `fw_verkehr_liste(filter, seit)`
 
@@ -293,6 +303,7 @@ _Antworten, Eingaben, Datenprüfung_
 **Hilfsfunktionen**
 
 - `testumgebung()` – Testumgebung (test.<Domain>): nur Testdaten; E-Mails gehen in das Testpostfach statt an echte Empfänger
+- `__construct(daten, status)`
 - `respond(data, status)`
 - `fail(msg, status)`
 - `body()`
@@ -396,6 +407,7 @@ _Mitarbeiteranmeldung über Keycloak (ADR-003, GR-110) – Roadmap 7b, vorerst n
 
 - `oidc_modus()`
 - `alter_zugang_aus()` – Bisheriger Eingabebereich mit eigener Anmeldung (angebot-stafl.de/admin/) stillgelegt (Entscheidung Inhaber 23.10.2026): WA_EIGENE_ANMELDUNG=aus (Betrieb: …
+- `notzugang_host()` – Host des Notzugangs: eigener Apache-Host in app-mitarbeiter (deploy/anmeldung/apache-oidc.conf, Port 8090), den Docker nur auf 127.0.0.1 des Servers …
 - `eigene_anmeldung_stillgelegt()` – Gilt für diese Anfrage: Host ohne zentrale Anmeldung und alter Zugang aus
 - `eingabe_adresse()` – Neuer Eingabebereich (Hinweis, Weiterleitung, Verweise in Mails) – nur https-Adressen
 - `oidc_einstellung(name)` – Einstellung des Webservers (SetEnv) bzw. des Prozesses – nie aus Kopfzeilen (die heißen HTTP_…)
@@ -404,8 +416,18 @@ _Mitarbeiteranmeldung über Keycloak (ADR-003, GR-110) – Roadmap 7b, vorerst n
 - `oidc_stufe_ok(id, u)`
 - `oidc_stufe_adresse()` – Anmeldung mit zweitem Faktor bei Keycloak anfordern (zweite Stufe; fehlt er, richtet der Mitarbeiter ihn dort ein)
 - `oidc_konto(id)` – Mitarbeiterkonto zur Identität; ohne aktives Konto 403 (nicht 401 – sonst meldete der Browser sich endlos neu an)
+- `oidc_admin_konto_pruefen(u, id, neu)` – Administratoren nie mit einem Keycloak-Konto, das die Verwaltung der Anwendung ändern darf (Gruppe „anwendungskonten“, Stand 16, ADR-007 Stufe 1b): sonst …
 - `oidc_aktiv(u)`
+- `oidc_geloescht()` – Kennungen (sub) der Keycloak-Konten gelöschter Mitarbeiter → Zeitpunkt (Dokument „oidc-geloescht“, nur wachsend und klein).
+- `oidc_geloescht_merken(sub)`
 - `oidc_nutzer()` – Angemeldeter Mitarbeiter auf einem Keycloak-Host.
+
+**Leerlauf über alle Adressen (seit 04.11.2026)**
+
+- `oidc_aktiv_schluessel(id)`
+- `oidc_aktivitaet()`
+- `oidc_leerlauf(id)` – Abgelaufen?
+- `oidc_aktivitaet_merken(id)`
 - `oidc_anmeldung_merken(u, authTime)` – Letzte Anmeldung am Mitarbeiterkonto (lastLogin) = Anmeldezeitpunkt bei Keycloak (auth_time) – für „letzte Anmeldung“ und ungenutzte Konten (Modul Sicherheit).
 
 **Ablauf und Beenden von Sitzungen auf Keycloak-Hosts**
@@ -479,12 +501,33 @@ _Schlanker PDF-Erzeuger (ohne Fremdbibliothek)_
 - `jpeg(file, x, y, w)` – JPEG einbinden (Breite in pt; Höhe aus dem Seitenverhältnis); liefert die Höhe
 - `output(title)`
 
+## `app/api/lib/postausgang.php`
+
+_Postausgang von innen (ADR-007, Zielarchitektur Kundenseite Regel 4)_
+
+- `postausgang_wiederholbar(j)`
+- `postausgang_warteschlange()` – Kundenseite: Aufträge nur ablegen, nie selbst senden
+- `postausgang_ablegen(art, daten)` – Auftrag ablegen.
+- `postausgang_liste()`
+- `postausgang_kuerzen(liste)` – Überlauf: zuerst die ältesten Benachrichtigungen und Hinweise verwerfen – Bestellwünsche stehen ohnehin beim Vorgang und werden bei der Durchsicht gefunden
+- `postausgang_stand()` – Stand des Dienstes: Lebenszeichen und ob ein Postfach eingerichtet ist (die Kundenseite kann das selbst nicht prüfen)
+- `postausgang_versand_bereit()`
+- `postausgang_lauf(jetzt)` – Ein Durchgang des Dienstes: fällige Aufträge abarbeiten, gelegentlich alle Vorgänge prüfen, Lebenszeichen schreiben.
+- `postausgang_ausfuehren(a)`
+- `postausgang_ereignisse(items)` – Ereignisse der Kundenseite: nur Sicherheitsereignisse (Anmeldesperre, Datenleck …), Texte gekürzt – Empfänger bestimmen die internen Einstellungen …
+- `postausgang_hinweis(a)` – Abmeldehinweis: Kunde aus den internen Stammdaten (nur die Kennung kommt aus dem Auftrag); nur wenn die Änderung dort auch gespeichert ist, höchstens …
+- `postausgang_bestellung(nr, versuche)` – Bestellwunsch: offene Versandaufträge senden; sicher nicht zugestellte nach POSTAUSGANG_WIEDERHOLEN erneut versuchen.
+- `postausgang_wieder(a, sekunden)`
+
 ## `app/api/lib/protokoll.php`
 
 _Protokoll, Änderungstexte, Anmeldeversuche_
 
 **Protokoll**
 
+- `protokoll_kundenseite()` – Getrenntes Protokoll (ADR-007 Stufe 2d, ab Trennstufe 4): Die Kundenseite (ohne internen Ordner) schreibt ihre Einträge in „kundenprotokoll/JJJJ-MM“ im …
+- `protokoll_beide()`
+- `protokoll_monat(m)` – Einträge eines Monats (zeitlich sortiert) – auf der Mitarbeiterseite ab Trennstufe 4 beide Protokolle zusammen
 - `protokoll_grenze(jetzt)` – Ältester aufbewahrter Monat (JJJJ-MM): laufender Monat minus PROTOKOLL_MONATE
 - `protokoll_monate()` – Monate des Protokolls, die aufbewahrt werden (neueste zuerst) – Protokollansicht bietet nur diese an
 - `protokoll_aufraeumen()` – Monatsdokumente vor der Grenze löschen; liefert die entfernten Monate (aufsteigend).
@@ -500,7 +543,8 @@ _Protokoll, Änderungstexte, Anmeldeversuche_
 - `trusted_proxy(ip)`
 - `client_ip()`
 - `client_key()` – Schlüssel für Fehlversuche: IPv4 je Adresse, IPv6 je /64-Netz (ein Anschluss hat meist ein ganzes /64 – sonst könnte man durch Wechseln der Adresse beliebig …
-- `attempts_key(bereich)`
+- `logins_alle()` – Fehlversuche und Sperren beider Seiten (Mitarbeiterseite ab Trennstufe 5: eigene innen und die der Kundenseite) – für Übersichten
+- `attempts_key(bereich)` – Bereiche: 'mitarbeiter' (Anmeldung im Eingabebereich), 'kunde' (Kunden-Login mit Passwort), 'kundelink' (Links aus Kunden-E-Mails: ein schon benutzter oder …
 - `attempts_wer(name)`
 - `attempts_check(bereich)`
 - `attempts_record(ok, bereich, name)` – $name: Benutzername des Versuchs ('' = ohne Namen, z. B. Einmal-Links – wird nie durch eine Anmeldung zurückgenommen)
@@ -612,9 +656,11 @@ _E-Mail-Versand über einen SMTP-Server (z._
 
 **Verschlüsselung des gespeicherten Postfach-Passworts**
 
-- `mail_key(create)`
-- `mail_encrypt(plain)`
-- `mail_decrypt(enc)`
+- `mail_key_datei()` – Eigener Ordner für den Schlüssel (WA_GEHEIM_DIR, ADR-007): nur in app-mitarbeiter und im Dienst „postausgang“ eingebunden, nicht in der Kundenseite – die …
+- `mail_key(create, ort)` – $ort: 'geheim' (eigener Ordner), 'daten' (bisheriger Ort im Datenordner) oder '' (kein Schlüssel)
+- `mail_bindung(a)` – Bindung an das Postfach (Format v2, ADR-007): Das verschlüsselte Passwort gilt nur für denselben Server, Port, dieselbe Verschlüsselung und denselben …
+- `mail_encrypt(plain, konto)`
+- `mail_decrypt(enc, konto)`
 - `mail_account(konto)`
 - `mail_cfg_aus_konto(a, source)` – Versanddaten aus einem gespeicherten Postfach (Passwort entschlüsselt; passError, wenn das nicht geht)
 - `mail_konto_view(a)` – Anzeige eines gespeicherten Postfachs für die Verwaltung – nie das Passwort, nur ob eines gespeichert ist
@@ -649,19 +695,47 @@ _E-Mail-Versand über einen SMTP-Server (z._
 
 _Shared persistence for HTTP and maintenance tools._
 
+**Speicherbereiche (ADR-007 Stufe 2)**
+
+- `store_stufe()` – Trennstufe (Inhalt von daten-intern/.daten-intern, sonst daten/.daten-getrennt): 0 = nicht getrennt, 1 = interne Dokumente getrennt (Stufe 2a), 2 = …
+- `store_getrennt()`
+- `store_bereich(name)`
+- `store_intern_pfad()` – Eingerichteter interner Datenordner aus der Umgebung (ohne Prüfung des Kennzeichens; '' = Kundenseite)
+- `store_ordner(bereich)` – Ordner eines Bereichs; Kundenseite (kein WA_DATEN_INTERN) → StoreKeinZugang für „intern“
+- `store_innen()` – Sieht dieser Server die internen Dokumente?
+
+**Veröffentlichte Dokumente (ADR-007 Stufe 2c, ab Trennstufe 3)**
+
+- `store_veroeffentlicht(name)`
+- `store_schreibschutz(name)`
+- `store_kopie(name)` – Kopie im gemeinsamen Ordner auf den internen Stand bringen – in einer laufenden Transaktion erst nach deren Abschluss (dann mit dem Stand nach dem Abschluss, …
+- `store_kopien_schreiben()`
+- `store_roh(name, bereich)` – Gespeicherter Inhalt (JSON-Text) und Zeitstempel eines Dokuments in einem bestimmten Bereich – ohne Einteilung nach Seite
+- `store_roh_schreiben(name, bereich, json)`
+- `store_kopien_abgleichen()` – Postausgang (und Mitarbeiterseite): alle Kopien mit dem internen Stand vergleichen und abweichende wiederherstellen.
+
+**Je Seite getrennte Dokumente (ADR-007 Stufe 2e, ab Trennstufe 5)**
+
+- `store_je_seite(name)`
+- `store_aussen_lesen(name)` – Mitarbeiterseite: Dokument der Kundenseite (null bis Trennstufe 5 – dann gibt es nur eines, das store_read schon liefert)
+- `store_aussen_aendern(name, fn)` – Mitarbeiterseite: Dokument der Kundenseite unter deren Sperre ändern ($fn bekommt den Inhalt und liefert den neuen)
+- `store_sichtbar(name)` – Kann dieser Server das Dokument lesen?
+- `store_spur(name)` – Prüfhilfe (nur Tests, WA_SPUR_INTERN=1): Kundenseite fragt ein internes Dokument an – ins Serverprotokoll.
 - `store_path(name)`
-- `store_mode()`
-- `store_db()`
+- `store_mode(bereich)`
+- `store_db(bereich)`
 - `store_sql(name)`
 - `store_read(name)`
 - `store_write(name, data)`
 - `store_delete(name)`
 - `store_mtime(name)`
 - `store_names(prefix)`
-- `store_commit()`
-- `store_rollback()`
+- `store_commit(bereich)` – Offene Transaktionen je Bereich ($GLOBALS['store_tx'] = ['haupt' => true, …]; leer = keine)
+- `store_rollback(bereich)`
+- `store_beitreten(b)` – Schreiben in einen Bereich ohne eigene Transaktion, während in einem anderen eine läuft (z. B. Veröffentlichen: Entwurf innen, Angebot bis Trennstufe 2 …
 - `with_lock(name, fn)`
-- `store_stats()` – Kennzahlen für die Übersicht im Eingabebereich
+- `with_lock_in(b, name, fn)` – Sperre bzw. Transaktion eines Dokuments in einem bestimmten Bereich (with_lock wählt den Bereich nach der Einteilung).
+- `store_stats()` – Kennzahlen für die Übersicht im Eingabebereich (beide Bereiche, soweit diese Seite sie sieht)
 
 ## `app/assets/admin-rollen.js`
 
@@ -799,10 +873,65 @@ _Bereitstellung eines Stands_
 - `zusatz_verzeichnis(app)` – Im Testlauf unter app/dashboard/ eingeblendetes Dashboard (tests/run_e2e.py, ZUSATZ) wie auf dem Server stempeln.
 - `main(argv)`
 
+## `deploy/daten_trennen.py`
+
+_Daten trennen (ADR-007 Stufe 2): interne Dokumente aus daten/ in daten-intern/ verschieben – bzw. zurückführen._
+
+- `regeln_laden(regeln)`
+- `kundenseite(regeln, stufe)` – Dokumente im gemeinsamen Ordner bei dieser Trennstufe: (Namen, Präfixe aus Mustern „name/*“) – alle anderen sind intern.
+- `veroeffentlicht(regeln, stufe)` – Veröffentlichte Dokumente dieser Stufe: maßgeblich innen, im gemeinsamen Ordner eine Kopie (wie DATEN_VEROEFFENTLICHT).
+- `je_seite(regeln, stufe)` – Je Seite getrennte Dokumente dieser Stufe (wie DATEN_JE_SEITE): außen die der Kundenseite, innen die der Mitarbeiterseite.
+- `je_seite_vereinen(a, b)` – Beide Fassungen eines je Seite getrennten Dokuments zusammen: Listen zeitlich (höchstens 500, wie der Ringpuffer), sonst Schlüssel.
+- `kunden_felder(regeln)`
+- `ist_intern(name, ks)` – Wie store_bereich() in app/api/storage.php: Sidecars und Dokumente der Kundenseite bleiben im gemeinsamen Ordner.
+- `stufe_lesen(haupt)`
+
+**Dokumente lesen und schreiben (Dateien oder SQLite, wie app/api/storage.php)**
+
+- `sqlite_aktiv(root)`
+- `dok_lesen(root, name)`
+- `json_text(wert)`
+- `dok_schreiben(root, name, wert)`
+- `dok_namen(root, praefix)` – Dokumente unter einem Präfix (z. B. kundenprotokoll/) in beiden Speicherarten
+- `protokoll_vereinen(alt, neu)` – Einträge beider Protokolle eines Monats zeitlich sortiert.
+- `dok_loeschen(root, name)`
+
+**Teilung des Kundendokuments und der Bestell-Einstellungen (Stufe 2)**
+
+- `email_maske(e)` – Wie kunden_email_maske() in app/api/lib/kunden.php: erstes Zeichen, Punkte, Domain.
+- `kunden_teilen(kunden, felder, stamm)` – kunden (alle Felder) → (kunden mit Portalfeldern, kundenstamm).
+- `kunden_zusammen(kunden, stamm)` – Umkehrung von kunden_teilen: Portalfelder aus kunden, übrige Felder aus kundenstamm; emailMaske entfällt.
+- `hat_interne_felder(kunden, felder)`
+
+**Plan**
+
+- `altbestand(haupt, ks)` – Reste des Speicher-Umbaus im gemeinsamen Ordner (ADR-007 Stufe 2b: dort liegt nichts, was die Kundenseite nicht braucht): frühere Datendateien äußerer …
+- `altdatei_entfernen(root, name)` – Im SQLite-Betrieb blieb die frühere Datendatei beim Umschalten liegen.
+- `interne_dateien(root, ks)` – Datendateien (*.php) interner Dokumente im Ordner – im SQLite-Modus auch übrig gebliebene alte Dateien.
+- `ablage_dateien(root)`
+- `interne_zeilen(root, ks)`
+- `leer(intern)` – Zielordner ohne Daten (Kennzeichen, Sperrdateien und leere Ordner sind erlaubt).
+- `kopieren(quelle, ziel, rel)`
+- `ordner_aufraeumen(root, rels)`
+- `db_anlegen(ziel, zeilen)` – Neue Datenbank im Zielordner mit genau diesen Zeilen (wie datenbank.py migrate: erst komplett, dann aktiv).
+- `db_ergaenzen(ziel, zeilen)` – Zeilen in die vorhandene Datenbank des Zielordners übernehmen (Hochstufen) und vergleichen.
+- `kennzeichen(p, stufe)`
+- `umstellung_planen(haupt, intern, regeln, stufe, ziel)` – Neue interne Dokumente aus dem gemeinsamen Ordner: {Name: Inhalt}.
+- `bereinigung_noetig(haupt, regeln, intern)` – Kundendokument mit internen Feldern oder bestellung mit Adressen – außen bzw. (ab Stufe 3 maßgeblich) innen.
+- `plan(haupt, intern, regeln, ziel)`
+
+**Trennen und Zusammenführen**
+
+- `trennen(haupt, intern, regeln, ziel)`
+- `bereinigen(haupt, intern, regeln)` – Ab Stufe 2: kunden auf die Portalfelder kürzen, bestellung ohne Adressen.
+- `zusammenfuehren(haupt, intern, regeln)`
+- `main()`
+
 ## `deploy/datenbank.py`
 
 _Offline migration/rollback and online SQLite backup._
 
+- `write_nofollow(path, data, mode)` – Write a staging file without ever following a symbolic link planted under that name. daten/ is mounted writable in the application containers (ADR-007): a …
 - `document_path(relative)` – True for a data file that belongs in the database: not a dot path, geo/, index.php or a sidecar.
 - `documents(root)`
 - `validate(db)`
@@ -862,6 +991,24 @@ _bunny.net vor dem Server (Caddyfile, Abschnitt „cdn“) mit echtem Caddy in d
 _Dashboard-Hosts: Modul-Hosts bleiben 503-Platzhalter bis zur Freigabe (GR-105); die Hosts der zentralen Anmeldung (ADR-003, Inbetriebnahme Schritt 6) führen nur zu Zielen, die es ausschließlich mit der …_
 
 - `site(kopf)`
+
+## `tests/deploy/test_daten_trennen.py`
+
+_Test von deploy/daten_trennen.py (ADR-007 Stufe 2: interne Dokumente aus dem gemeinsamen Datenordner) – in Wegwerf-Ordnern, für Dateien und SQLite_
+
+- `check(name, cond, info)`
+- `doc(root, name, value)`
+- `aufbau(t)`
+- `lauf(*args)`
+- `baum(root)`
+- `zeilen(root)`
+- `php(code, daten, intern)`
+
+**Trennstufe 2 (ADR-007 Stufe 2b): Kundendokument teilen, Bestand/Stammdaten/Postfächer innen**
+
+- `php_lib(code, daten, intern)` – Anwendung mit allen Funktionen (lib/laden.php) gegen diesen Datenordner – Mitarbeiterseite mit intern, Kundenseite ohne.
+- `aufbau2(t)`
+- `portal(c)`
 
 ## `tests/deploy/test_datenbank.py`
 
@@ -935,6 +1082,8 @@ _Abgelaufene Admin-Freigabe im Browser_
 
 - `check(name, value, info)`
 - `sicherheit()`
+- `kunde_save(route)`
+- `kunde_anlegen(firma)`
 
 ## `tests/e2e/test_aktionsregister.py`
 
@@ -983,6 +1132,33 @@ _Sicherheit (Modul) → Einstellungen → Passwortbestätigung: je Aktion einste
 - `check(n, c, i)`
 - `bestaetigt_vor(cl, sekunden)` – Passwortbestätigung dieser Sitzung auf „vor <sekunden> Sekunden“ setzen (simulierter Zeitablauf).
 - `sec_doc()`
+
+## `tests/e2e/test_datentrennung.py`
+
+_Testgruppe datentrennung (ADR-007 Stufe 2): getrennte Daten wie im Betrieb._
+
+- `check(n, c, i)`
+- `doc(name)`
+- `interne_im_gemeinsamen_ordner()` – Interne Dokumente, die (fälschlich) im gemeinsamen Ordner liegen – als Datei oder Datenbankzeile
+- `roh_v(ordner, name)` – Dokument direkt aus einem Ordner (je Seite getrennte Dokumente liegen in beiden)
+- `spur()`
+- `call(action, data, raw)`
+- `dienst()`
+
+**Ausgangslage nach dem Trennen**
+
+**Mitarbeiterseite: arbeitet mit beiden Ordnern**
+
+**Kundenseite: alle Kundenfunktionen ohne interne Dokumente**
+
+**Postausgang verschickt (Versandprotokoll intern)**
+
+**Stufe 2: Teilung, Empfänger und Inhalt nur von innen**
+
+**Stufe 3: Veröffentlichtes maßgeblich innen, außen nur eine Kopie**
+
+- `roh(ordner, name)`
+- `aussen_schreiben(name, wert)`
 
 ## `tests/e2e/test_einheit.py`
 
@@ -1179,6 +1355,24 @@ _Datenleck-Prüfung der Passwörter („Pwned Passwords“, nachgebauter Dienst 
 - `protokoll()`
 - `nutzer(name)`
 
+## `tests/e2e/test_postausgang.py`
+
+_Testgruppe postausgang_
+
+- `check(n, c, i)`
+- `doc(name)`
+- `call(action, data, raw)`
+- `dienst(env)` – Ein Durchgang des Dienstes postausgang (wie im Container: eigener Prozess je Durchgang)
+- `faellig_machen()`
+
+**Bestellfunktion nur mit Lebenszeichen des Dienstes**
+
+**Bestellwunsch: nur abgelegt, dann vom Dienst verschickt**
+
+**Postfach gestört: erneute Versuche, Kopie erst nach der Team-Mail**
+
+- `unklar(data)`
+
 ## `tests/e2e/test_protokoll.py`
 
 _Aufbewahrung des Aktivitätsprotokolls (lib/protokoll.php, PROTOKOLL_MONATE = 6; Inhaber 25.10.2026)._
@@ -1337,7 +1531,7 @@ _Alter Eingabebereich stillgelegt (WA_EIGENE_ANMELDUNG=aus, lib/oidc.php): auf d
 _Publication persists consistently; injected storage failures never report success._
 
 - `check(name, condition)`
-- `state(db)`
+- `state()`
 
 ## `tests/e2e/test_testumgebung.py`
 
@@ -1375,9 +1569,17 @@ _Erwartungswerte aus den anonymisierten Testdaten (tests/fixtures) – statt fes
 
 _Gemeinsame Pfade für die Ende-zu-Ende-Tests (gesetzt vom Testlauf tests/run_e2e.py)._
 
+- `_trennung()` – (Modul deploy/daten_trennen.py, Trennstufe aus dem Kennzeichen) bei getrennten Testdaten, sonst None
+- `datenordner(name)` – Ordner eines Dokuments: nach der Datentrennung liegen interne Dokumente in UINTERN; veröffentlichte (Stufe 3) und je Seite getrennte (Stufe 5) liest die …
+- `trennstufe()` – Trennstufe der Testdaten (0 = nicht getrennt)
+- `ablageordner()` – Ordner mit der Dateiablage dateien/ (QS-Dateien): nach der Datentrennung immer innen
+- `_kunden_geteilt()` – Kundendokument geteilt (ab Stufe 2: Portalfelder in kunden, übrige in kundenstamm) und der Testserver sieht beide Teile
+- `_json(raw)`
 - `storage_raw(name)` – Inspect actual persisted state, without going through the application API.
+- `_storage_raw(data, name)`
 - `storage_sqlite()`
 - `storage_write(name, value)` – Gespeichertes Dokument direkt ändern (Testvorbereitung, z. B. Zeitablauf simulieren).
+- `_storage_write(data, name, value)`
 - `storage_docs(prefix)` – Alle gespeicherten Geschäftsdokumente {Name: Inhalt} – unabhängig von der Speicherart.
 - `__init__(name)`
 - `__enter__()`
@@ -1409,6 +1611,9 @@ _Anmeldung über Keycloak (Roadmap 7b, ADR-003, GR-108/GR-110) – Prüfungen ge
 - `call(action, data, _erneut)`
 - `protokoll_roh()` – Einträge des Protokolls (Dateispeicher der Testumgebung, aktueller Monat).
 - `nutzer_roh()`
+- `_frisch(daten)`
+- `_kh(json_)`
+- `_uid(n)`
 - `kc_token()`
 - `_ablauf()` – Zustand wie im Betrieb nachstellen: nur die Passwort-Abfrage meldet ihre Anmeldemethode (amr), Einmalcode und Passkey nicht – so hatte „… \| while read“ mit …
 - `design_setzen(*args)`
@@ -1431,6 +1636,16 @@ _Anmeldung über Keycloak (Roadmap 7b, ADR-003, GR-108/GR-110) – Prüfungen ge
 - `vtoken_bf()`
 - `vtoken()` – Freiwillig eingerichteter Einmalcode (wie über „Konto“ auf der Anmeldeseite): wird danach immer abgefragt
 - `warte_mail(adresse, anzahl)`
+- `kc_mitglied(n)` – ── Stand 16 (ADR-007 Stufe 1b): Gruppe anwendungskonten abgleichen – Konten der Mitarbeiter ohne Administratorrolle ──
+- `doc_roh(name)` – Abmelden nach Inaktivität gilt über alle Adressen zusammen (04.11.2026): letzte Aktivität je Anmeldung bei Keycloak im Dokument oidc-aktivitaet.
+- `kim_inaktiv(sekunden)`
+- `php_sitzung_ruht(host, sekunden)`
+- `anmelde_link_vergessen()` – ── Passwort vergessen (Stand 14, konten.sh passwort-vergessen; Inhaber 03.11.2026): Link per Mail an die hinterlegte Adresse, eigener Ablauf ohne „Reset OTP“ …
+- `ablauf_datei()`
+- `lauf(alias, ebene)`
+- `vergessen_anfordern(p_, wer)`
+- `link_aus(m_)`
+- `geloescht_roh()`
 
 ## `tests/regeln/test_regeln.py`
 
@@ -1506,6 +1721,14 @@ _Werkzeug der Entwickler-Dokumentation (werkzeuge/doku.py)_
 - `hilfe(x)` – Docstring über mehrere Zeilen.
 - `git(*a)`
 
+## `tests/unit/test_images_aktualisieren.py`
+
+_Sicherheitsupdates der Container-Images (werkzeuge/images_aktualisieren.py) – ohne Netz, mit Digests aus einer Datei. python3 tests/unit/test_images_aktualisieren.py Prüft an einer Kopie der echten Dateien_
+
+- `ok(name, cond, info)`
+- `kopie()`
+- `lauf(*args)`
+
 ## `tests/unit/test_run_e2e_teile.py`
 
 _Aufteilung der E2E-Testgruppen auf CI-Aufträge (tests/run_e2e.py_
@@ -1558,6 +1781,21 @@ _Nachschlageteil der Entwickler-Dokumentation aus dem Code erzeugen und prüfen 
 - `testdaten_absatz(pfad)` – Absatz „Testdaten:“ aus dem Kopfkommentar einer Testdatei ('' = keiner).
 - `funktionen_md(rw, liste)` – Je Modul eine Datei funktionen/<modul>.md und eine Übersicht funktionen/README.md.
 - `alle(rw)`
+- `main(argv)`
+
+## `werkzeuge/images_aktualisieren.py`
+
+_Sicherheitsupdates der Container-Images: festgelegte Digests auf den neuesten Stand derselben Fassung bringen._
+
+- `dateien(wurzel)` – Textdateien des Repositorys (git ls-files, sonst Ordner durchsuchen).
+- `fundstellen(wurzel)` – {(name, tag): {digest: [Datei:Zeile, …]}} aller festgelegten Images
+- `registry(name)` – (Registry-Adresse, Repository) – Docker Hub für Namen ohne eigene Registry, offizielle Images unter library/
+- `_anfrage(url, methode, token, accept, versuche)` – Eine Anfrage; bei „zu viele Anfragen“ (429) oder Serverfehler kurz warten und erneut versuchen
+- `_token(www_auth)` – Anonymes Lese-Token nach den Angaben aus WWW-Authenticate (Bearer realm, service, scope)
+- `_mit_token(url, methode, accept, tokens, schluessel)`
+- `digest_holen(name, tag, tokens)`
+- `fassungen_holen(name, tag, tokens, grenze)` – Fassungen (Tags) derselben Reihe wie `tag` – über die gefilterten Schnittstellen von Docker Hub bzw. quay.io (wenige Anfragen statt tausender Tags), sonst …
+- `neuere_fassungen(tag, alle)` – Neuere Fassungen derselben Reihe: gleiche Haupt- und Nebenversion, gleicher Zusatz (z. B. 26.8.1 → 26.8.2, 3.12.14-bookworm → 3.12.15-bookworm, v1.31.2 → …
 - `main(argv)`
 
 ## `werkzeuge/integritaet.py`
@@ -1652,6 +1890,16 @@ _Regelwerk der STAFL-Plattform prüfen und Änderungsfolgen ermitteln (nur Pytho
 - `pruefe_katalog(rw)`
 - `pruefe_wartung(rw)`
 - `pruefe_caddy(rw)`
+
+**Speicherbereiche (ADR-007 Stufe 2)**
+
+- `kundenseite_dokumente(rw)` – Dokumente der Kundenseite: (genaue Namen, Präfixe aus Mustern „name/*“) – alle anderen sind intern.
+- `ab_stufe_dokumente(rw)` – Interne bzw. veröffentlichte Dokumente, die erst mit einer späteren Trennstufe umziehen: Name → Stufe (ohne Muster „name/*“).
+- `ab_stufe_praefixe(rw)` – Wie ab_stufe_dokumente für Muster „name/*“: Präfix „name/“ → Stufe.
+- `je_seite_dokumente(rw)` – Je Seite getrennte Dokumente: Kundenseite außen, Mitarbeiterseite innen, gleicher Name (Stufe 2e).
+- `veroeffentlicht_dokumente(rw)` – Veröffentlichte Dokumente: Mitarbeiterseite schreibt und liest innen, die Kundenseite liest eine Kopie im gemeinsamen Ordner.
+- `kunden_felder(rw)` – Felder eines Kunden, die ab Trennstufe 2 im gemeinsamen Ordner bleiben (Portal); alle übrigen liegen in kundenstamm.
+- `bereiche_php(rw)`
 
 **Aktionsregister**
 

@@ -7,9 +7,10 @@
 # Noch NICHT im Betrieb: docker-compose.yml nutzt weiterhin php:8.3-apache. Die Umstellung des Servers ist ein eigener
 # Schritt mit Freigabe des Inhabers.
 #
-# Grundimage fest über den Digest (Mehrplattform-Index, Stand 2026-10-21) – Aktualisieren: neuen Digest eintragen,
-# CI (Bau, Vergleich mit dem Grundimage, Schwachstellen-Scan) muss grün sein.
-FROM php:8.3-apache@sha256:9f1f03b7e093c8e70227d782e31a305590ab71d7b48c076589dcc92ba8c9300c
+# Grundimage fest über den Digest (Mehrplattform-Index) – neue Digests trägt der wöchentliche Lauf „Sicherheitsupdates“
+# per Pull Request ein (werkzeuge/images_aktualisieren.py, überall gleich); CI (Bau, Vergleich mit dem Grundimage,
+# Schwachstellen-Scan) muss grün sein.
+FROM php:8.3-apache@sha256:3614314e50a9b17a0c317dfd100c6346d8881d6565e713556b7a4e8eb3ec4505
 
 RUN set -eux; \
     apt-get update; \

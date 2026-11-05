@@ -5,7 +5,7 @@ Status: **Konzept** (umgesetzt ist bisher nur das Regelwerk mit Prüfwerkzeug). 
 
 ## 1. Grundsatz: modularer Monolith
 
-Ein Anwendungscontainer, ein gemeinsamer API-Einstieg, gemeinsame Dienste (Anmeldung, Rechte, Wartung, Speicher,
+Ein Anwendungs-Image, ein gemeinsamer API-Einstieg, gemeinsame Dienste (Anmeldung, Rechte, Wartung, Speicher,
 Protokoll, E-Mail) – Fachmodule mit klaren Grenzen darin. Bewertet gegen den vorhandenen Code: passt sehr gut, weil
 Einstieg, Sitzungen, Rechte und Speicherschicht bereits zentral und gut getestet sind. Microservices würden Anmeldung,
 Transaktionen und Betrieb auf dem einen VPS vervielfachen, ohne fachlichen Gewinn.
@@ -24,6 +24,10 @@ Eintrag – das Dashboard liest das Register, es gibt keine fest programmierte L
 | dashboard | Einstieg, keine Kachel | `dashboard-stafl.de` (nie sperrbar) |
 | plattform | Kern, keine Kachel | – |
 | mobile | App, keine Kachel | nutzt die API wie die Website |
+
+**Betrieb (ADR-007):** Das eine Image läuft in zwei Containern – `app` nur für die öffentliche Kundenseite (ohne
+Anmelde-Geheimnisse, ohne Netzweg zu Keycloak, gehärtet) und `app-mitarbeiter` für alle Mitarbeiter-Hosts. Der Code bleibt
+ein Monolith; getrennt wird nur die Laufzeit an der Grenze öffentlich ↔ intern ([ADR-007](adr-007-kundencontainer.md)).
 
 ## 2. Code-Struktur
 
@@ -63,7 +67,8 @@ um, wenn ein Modul ohnehin daran arbeitet.
 
 - Caddy schaltet einen Host erst frei, wenn **alle** seine Oberflächen eine Freigabe haben (GR-105, CI prüft gegen das
   Register). Freigegeben wird per Release, nicht per Klick.
-- Alle Hosts gehen an denselben Container; der Server ermittelt Modul und Oberfläche aus dem Host über das Register,
+- Die Kundenseite `angebot-stafl.de` geht an den Container `app`, alle Mitarbeiter-Hosts an `app-mitarbeiter` (ADR-007) –
+  beide mit demselben Code; der Server ermittelt Modul und Oberfläche aus dem Host über das Register,
   nicht aus einem Header. `angebot-stafl.de` liefert nie `/module/*` oder `/dashboard/*` aus (Caddy 404 – zusätzlich
   zur Prüfung im Server).
 - Externe Oberflächen liegen nie unter `dashboard-stafl.de` (CI prüft, GR-104).
@@ -169,3 +174,4 @@ nur in `.env`, gitleaks und Trivy in der CI. Neue Fremdabhängigkeiten nur mit B
 | ADR-4 | PostgreSQL als Ziel für gemeinsame Daten, Dokumente zunächst unverändert | vorgeschlagen | nur SQLite (ein Schreiber, keine Rollen je Modul) |
 | ADR-5 | Zugriff je Oberfläche nur über die Entscheidungstabelle | **umgesetzt (Spezifikation)** | Logik je Modul |
 | ADR-6 | Kein CODEOWNERS vorerst | vorgeschlagen | siehe [multi-agent.md](multi-agent.md) |
+| ADR-7 | Kundenseite in eigenem Container (gleiches Image): Stufe 1 Prozesse/Geheimnisse/Netze, 1b Dienstkonto, 2 Daten – [ADR-007](adr-007-kundencontainer.md) | **angenommen 04.11.2026, Stufe 1 umgesetzt** | ein Container für alles; eigene Kunden-Anwendung (doppelte Preislogik) |

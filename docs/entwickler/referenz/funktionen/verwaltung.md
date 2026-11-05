@@ -2,7 +2,7 @@
 
 <!-- ERZEUGT von `python3 werkzeuge/doku.py erzeugen` – nicht von Hand ändern. Quelle: Funktionen und Kommentare im Code. Die CI prüft, dass diese Datei zum Code passt. -->
 
-17 Dateien, 195 Funktionen – in der Reihenfolge der Datei, **fett** die Abschnitte. Text = erste Aussage des Kommentars direkt über der Funktion (Python: Docstring). Übersicht aller Module: [README.md](README.md).
+20 Dateien, 224 Funktionen – in der Reihenfolge der Datei, **fett** die Abschnitte. Text = erste Aussage des Kommentars direkt über der Funktion (Python: Docstring). Übersicht aller Module: [README.md](README.md).
 
 ## `app/api/lib/auswertung.php`
 
@@ -20,11 +20,18 @@ _Kundenstammdaten und Kunden-Sitzung_
 
 **Kunden**
 
+**Teilung des Kundendokuments (ADR-007 Stufe 2b, ab Trennstufe 2)**
+
+- `kunden_geteilt()`
+- `kunden_email_maske(e)` – Gekürzte Adresse für die Kundenseite (Abmeldeseite, Quittung): erstes Zeichen, Punkte, Domain – wie email_maske() in Python
+- `kunden_email_anzeige(c)` – Adresse zur Anzeige auf der Kundenseite: gekürzt (die volle Adresse kennt ab Trennstufe 2 nur die Mitarbeiterseite)
 - `customers_load()`
+- `customers_save(d)` – Kundendokument speichern (innerhalb von with_lock('kunden')).
 - `customer_offers_direct(c)` – Freigeschaltete Angebote: direkt beim Kunden eingetragen (angebote) oder über seine Kundengruppe (Stammdaten → Angebote)
 - `customer_offers_gruppe(c)` – Über die Kundengruppe: das Angebot, dem die Gruppe zugeordnet ist (Stammdaten → Angebote).
 - `customer_offers(c)`
 - `customer_public(c, wawi)` – Kunde für den Eingabebereich (ohne Passwort-Hash und Geräteschlüssel).
+- `kunde_schnappschuss(c)`
 - `kunde_clear()`
 - `ksess_prune(list)`
 - `ksess_remove(match)`
@@ -39,6 +46,15 @@ _Kundenstammdaten und Kunden-Sitzung_
 - `kundengruppen_load()`
 - `kundengruppen_clean(list)`
 - `vertreter_load()`
+
+## `app/api/module/verwaltung/angebotskategorien.php`
+
+_Angebotskategorien (Stammdaten der Verwaltung, Wunsch des Inhabers vom 05.11.2026)._
+
+- `kategorien_load()`
+- `kategorien_clean(liste)` – Gesendete Liste prüfen und vereinheitlichen.
+- `kategorien_speichern(liste, rev, me)` – Speichern mit Revision (409 bei zwischenzeitlicher Änderung) und Protokoll.
+- `kategorien_vk_namen()` – Nummer und Bezeichnung der VK-Gruppen – für Ansicht und Editor (auch ohne „stammdaten.sehen“, nur diese zwei Felder)
 
 ## `app/api/module/verwaltung/import.php`
 
@@ -80,8 +96,9 @@ _Importzentrale (Verwaltung → Import, Roadmap 10b) – ein Ablauf für alle Im
 - `import_registry()` – Alle registrierten Importarten (id → Eintrag mit Standardwerten).
 - `import_darf(me, a)` – Recht der Importart: alle eingetragenen Rechte (Administrator: alle)
 - `import_art_anzeige(id, a, me)` – Angaben für die Oberfläche (keine Funktionsnamen)
+- `import_liste(v)` – Wert einer Option „liste“: nur Kennungen (Buchstaben, Ziffern, . _ -), ohne Doppelte, höchstens IMPORT_LISTE_MAX
 - `import_optionen(a, roh)` – Optionen der Importart aus der Anfrage: nur registrierte, mit Standardwert
-- `import_ergebnis(r)` – Antwort des Eigentümers vereinheitlichen: Zahlen, höchstens IMPORT_ZEILEN_MAX Zeilen (Fehler zuerst), Hinweise
+- `import_ergebnis(r)` – Antwort des Eigentümers vereinheitlichen: Zahlen, höchstens IMPORT_ZEILEN_MAX Zeilen (Fehler zuerst), Hinweise; „details“, „fuss“ und „knopf“ des Eigentümers …
 - `import_upload(v, pflicht)` – Kennung eines Importlaufs (vom Browser zufällig gewählt, 32 Hex-Zeichen) – nur bei Importarten mit Teilen nötig
 - `import_vorbereiten(b)` – Gemeinsame Prüfung vor Vorschau, Teil und Übernahme: Anmeldung (mit CSRF), Importart, Recht, Ablauf, Wartung
 - `import_teil_ausfuehren()` – Ein Teil einer großen Datei an den Eigentümer (Zwischenablage).
@@ -144,6 +161,7 @@ _Wochenangebot – Eingabebereich, Importzentrale (Verwaltung → Import, Roadma
 - `zahlenHTML(z, ids)`
 - `zeilenHTML()`
 - `hinweiseHTML(list)`
+- `kontext(l)`
 - `renderLauf()`
 
 **Ablauf**
@@ -151,7 +169,7 @@ _Wochenangebot – Eingabebereich, Importzentrale (Verwaltung → Import, Roadma
 - `datenAnfrage()`
 - `teileSenden(l, btn)` – Teile, die die Vorschau für die Übernahme verlangt, einzeln schicken (Fortschritt im Knopf)
 - `lesen()`
-- `pruefen(nochmal)`
+- `pruefen(nochmal, sanft)` – sanft: Option aus der eigenen Darstellung geändert – die bisherige Vorschau bleibt abgeblendet stehen (kein Springen, Übernehmen gesperrt), bis die neue da …
 - `uebernehmen(btn)`
 - `starten(art, files)`
 - `zurListe()`
@@ -240,6 +258,29 @@ _Wochenangebot – Eingabebereich, Verwaltung Mitarbeiter, Bestellungen, Kunden,
 - `csvText(buf)`
 - `gruppenListe(cfg)`
 
+## `app/module/verwaltung/angebotskategorien.js`
+
+_Verwaltung → Angebotskategorien (Stammdaten, Inhaber 05.11.2026) Angebotskategorien sind die Abschnitte des Angebots (z._
+
+- `laden()`
+- `markieren()`
+- `render()`
+- `katHTML(k, i, edit, f)`
+- `freiHTML(f, edit)`
+- `neuerName()`
+- `speichern()`
+
+## `tests/e2e/test_angebotskategorien.py`
+
+_Angebotskategorien (Stammdaten der Verwaltung, Inhaber 05.11.2026)_
+
+- `check(n, c, i)`
+- `doc(name)`
+
+**Schnittstelle**
+
+- `gsec(pg)`
+
 ## `tests/e2e/test_auswertung.py`
 
 _Auswertung: Karte der Kunden-Anmeldungen._
@@ -294,6 +335,22 @@ _Kunden: Stammdaten, Freischaltung von Angeboten, Kunden-Anmeldung auf der Angeb
 
 - `kdoc()`
 
+**Rechte im Eingabebereich**
+
+**Kunden-Anmeldung (API)**
+
+**Änderungen wirken sofort**
+
+**Merkliste je Kunde**
+
+**Obergrenze des Sitzungsregisters (kundensitzungen wird bei jeder Kundenanfrage vollständig gelesen)**
+
+- `ksess()`
+
+**Oberfläche**
+
+- `falscher_schluessel(route)`
+
 ## `tests/e2e/test_kundengruppen.py`
 
 _Stammdaten: Navigation (Artikel, Kunden, Kundengruppen), Kundengruppen per CSV (Windows-1252/UTF-8) importieren, bearbeiten, Rechte, Zuordnung im Kunden, Protokoll._
@@ -322,14 +379,6 @@ _Stammdaten → Angebote mit Kundengruppen (Freischaltung über die Gruppe), Imp
 - `importiere(rows, felder, quelle)`
 - `speichern(nr, aktiv)`
 
-**Stammdaten → Angebote**
-
-**Kundengruppe nur einmal zuordenbar**
-
-**Preise importieren**
-
-- `entwurf_ok()`
-
 ## `tests/e2e/test_master.py`
 
 _Testgruppe master: Artikelstammdaten und Bezeichnungsregeln (Fleischart, Herkunft, Zustand, VK-Gruppe)._
@@ -339,6 +388,12 @@ _Testgruppe master: Artikelstammdaten und Bezeichnungsregeln (Fleischart, Herkun
 - `names(pg)`
 - `post(pg, action, body)`
 - `wait_saved(pg)`
+- `get(pg, q)`
+- `master_ent(pg, code)`
+- `offer_names(pg, oid, code)`
+- `until_names(pg, oid, code, soll, sek)`
+- `open_art(pg, code)`
+- `save_art(pg)`
 - `wait_master(pg)`
 
 ## `tests/e2e/test_vertreter.py`
@@ -354,6 +409,18 @@ _Stammdaten → VK-Gruppen und Import der Artikelstammdaten (CSV-Export der Ware
 
 - `check(n, c, i)`
 - `doc(name)`
+
+**VK-Gruppen: Schnittstelle**
+
+**VK-Gruppe und GTIN in den Artikelstammdaten**
+
+**VK-Gruppen: Oberfläche**
+
+**Artikelstammdaten importieren**
+
+**Filter und Bearbeiten**
+
+- `gtin_pruefen(breite)`
 
 ## `werkzeuge/karte_bauen.py`
 

@@ -37,6 +37,12 @@ mkdir "$T/restore"
 tar xzf "$LATEST" -C "$T/restore"
 ok "SQLite-Archiv enthält geprüfte Datenbank" 'python3 "$T/deploy/datenbank.py" check "$T/restore" >/dev/null'
 ok "SQLite-Archiv enthält keinen Postfachschlüssel" '[ ! -f "$T/restore/mail-schluessel.php" ]'
+# Dateiablage (hochgeladene Dokumente, nie in der Datenbank) gehört auch im SQLite-Modus in die Sicherung; halbe Uploads nicht
+mkdir -p "$T/daten/dateien/qs/ab" "$T/daten/dateien/.teile"; echo PDF-Inhalt > "$T/daten/dateien/qs/ab/ab12.bin"; echo halb > "$T/daten/dateien/.teile/x.part"; sleep 1
+sh "$T/deploy/sichern.sh" --jetzt >/dev/null
+LATEST=$(ls -1t "$T"/sicherungen/daten-*.tar.gz | head -1)
+ok "SQLite-Archiv enthält die Dateiablage (ohne halbe Uploads)" 'tar tzf "$LATEST" | grep -q "dateien/qs/ab/ab12.bin" && ! tar tzf "$LATEST" | grep -q "x.part"'
+rm -rf "$T/daten/dateien"
 printf 'broken' > "$T/restore/.sqlite/store.sqlite"
 ok "Beschädigte Datenbank im Archiv erkannt" '[ "$(python3 "$T/deploy/sicherung-pruefen.py" "$T/restore")" -gt 0 ]'
 ok "ohne zentrale Anmeldung: keine Keycloak-Sicherung, Status aus" '[ "$(st anmeldung)" = aus ] && ! ls "$T"/sicherungen/anmeldung-* >/dev/null 2>&1'
@@ -108,5 +114,33 @@ EOF2
   sh "$T/deploy/sichern.sh" --jetzt >/dev/null 2>&1 && R=0 || R=$?; export R
   ok "Anmeldung in Betrieb, Datenbank läuft nicht: Fehler statt stiller Lücke" '[ "$R" = 1 ] && [ "$(st anmeldung)" = fehler ] && grep -q "Datenbank läuft aber nicht" "$T/daten/sicherung.php"'
 fi
+# Getrennte Daten (ADR-007 Stufe 2): zweites Archiv intern-*.tar.gz für daten-intern/, gleich geprüft – Dateien und SQLite
+for ART in dateien sqlite; do
+  U=$(mktemp -d)
+  mkdir -p "$U/deploy" "$U/regeln"; cp "$REPO"/deploy/sichern.sh "$REPO"/deploy/sicherung-pruefen.* "$REPO"/deploy/datenbank.py "$REPO"/deploy/daten_trennen.py "$U/deploy/"
+  cp "$REPO/regeln/datenverantwortung.toml" "$U/regeln/"; cp -r "$REPO/tests/fixtures/data-seed" "$U/daten"
+  printf '%s\n{"personen":[{"name":"Test Person"}]}' '<?php http_response_code(404); exit; ?>' > "$U/daten/hr-personal.php"
+  [ "$ART" = sqlite ] && python3 "$U/deploy/datenbank.py" migrate "$U/daten" --offline >/dev/null
+  python3 "$U/deploy/daten_trennen.py" trennen "$U/daten" "$U/daten-intern" --offline >/dev/null
+  sh "$U/deploy/sichern.sh" --jetzt >/dev/null 2>&1 && R=0 || R=$?; export R U
+  su() { python3 -c "import json; t=open('$U/daten/sicherung.php').read(); print(json.loads(t[t.index(chr(10))+1:]).get('$1'))"; }
+  ok "getrennt ($ART): zwei Archive, beide geprüft" '[ "$R" = 0 ] && [ "$(su ok)" = True ] && [ "$(ls "$U"/sicherungen/daten-*.tar.gz | wc -l)" = 1 ] && [ "$(ls "$U"/sicherungen/intern-*.tar.gz | wc -l)" = 1 ] && [ "$(su intern_datei)" = "$(basename "$U"/sicherungen/intern-*.tar.gz)" ]'
+  mkdir "$U/r1" "$U/r2"; tar xzf "$U"/sicherungen/daten-*.tar.gz -C "$U/r1"; tar xzf "$U"/sicherungen/intern-*.tar.gz -C "$U/r2"
+  if [ "$ART" = dateien ]; then
+    ok "getrennt ($ART): Personaldaten nur im internen Archiv" '[ -f "$U/r2/hr-personal.php" ] && [ ! -e "$U/r1/hr-personal.php" ] && [ -f "$U/r1/angebot.php" ] && [ -f "$U/r2/.daten-intern" ] && [ -f "$U/r1/.daten-getrennt" ]'
+  else
+    ok "getrennt ($ART): Personaldaten nur in der internen Datenbank" 'python3 -c "import sqlite3,sys; a=sqlite3.connect(sys.argv[1]); b=sqlite3.connect(sys.argv[2]); n=lambda c: {r[0] for r in c.execute(\"SELECT name FROM documents\")}; sys.exit(0 if \"hr-personal\" in n(b) and \"hr-personal\" not in n(a) and \"angebot\" in n(a) else 1)" "$U/r1/.sqlite/store.sqlite" "$U/r2/.sqlite/store.sqlite"'
+  fi
+  ok "getrennt ($ART): Datensätze beider Bereiche gezählt" '[ "$(su datensaetze)" -ge 2 ] && [ "$(stat -c %a "$U"/sicherungen/intern-*.tar.gz)" = 600 ]'
+  rm -f "$U/daten/.daten-getrennt"; sleep 1
+  sh "$U/deploy/sichern.sh" --jetzt >/dev/null 2>&1 && R=0 || R=$?
+  ok "getrennt ($ART): Kennzeichen in daten/ entfernt → Fehler statt Sicherung ohne interne Daten" '[ "$R" = 1 ] && [ "$(su ok)" = False ] \
+    && grep -q "Kennzeichen" "$U/daten/sicherung.php" && [ "$(ls "$U"/sicherungen/intern-*.tar.gz | wc -l)" = 1 ]'
+  printf '%s\n' "$(cat "$U/daten-intern/.daten-intern")" > "$U/daten/.daten-getrennt"
+  mv "$U/daten-intern" "$U/weg"; sleep 1
+  sh "$U/deploy/sichern.sh" --jetzt >/dev/null 2>&1 && R=0 || R=$?
+  ok "getrennt ($ART): daten-intern fehlt → Fehler statt Sicherung ohne interne Daten" '[ "$R" = 1 ] && [ "$(su ok)" = False ] && grep -q "daten-intern" "$U/daten/sicherung.php"'
+  chmod -R u+rwx "$U" 2>/dev/null; rm -rf "$U"
+done
 echo "$PASS/$((PASS + FAIL)) passed"
 [ "$FAIL" -eq 0 ]

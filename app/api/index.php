@@ -84,20 +84,7 @@ header_remove('X-Powered-By');
 // und zeigt nachts bzw. in Mails 1–2 Stunden falsch an. Gespeichert wird weiter in UTC (now(), gmdate).
 date_default_timezone_set('Europe/Berlin');
 
-$CFG = require __DIR__ . '/config.php';
-require __DIR__ . '/geo.php';
-require __DIR__ . '/ort.php';
-require __DIR__ . '/mail.php';
-$DATA = rtrim((string)$CFG['data_dir'], '/');
-require __DIR__ . '/storage.php';
-require __DIR__ . '/orders.php';
-require __DIR__ . '/order_outbox.php';
-const CATEGORIES = ['Rind', 'Kalb', 'Schwein', 'Lamm & Schaf', 'Geflügel', 'Knochen', 'Sonstiges'];
-const CONDITIONS = ['frisch', 'gefroren', 'frisch-gefroren', 'dry-aged', 'unbekannt'];
-const PRICE_STATUS = ['value', 'request', 'none'];
-
-if (!function_exists('mb_substr')) { function mb_substr($s, $start, $len = null) { return $len === null ? substr($s, $start) : substr($s, $start, $len); } }
-if (!function_exists('mb_strlen')) { function mb_strlen($s) { return strlen(utf8_decode($s)); } }
+require __DIR__ . '/lib/laden.php';   // Einstellungen, Speicherschicht und Funktionen der Fachbereiche ($CFG, $DATA)
 
 header('Content-Type: application/json; charset=utf-8');
 header('X-Content-Type-Options: nosniff');
@@ -108,58 +95,6 @@ set_exception_handler(function (Throwable $e) {
     error_log('[wochenangebot] ' . $e->getMessage());
     respond(['ok' => false, 'error' => 'Interner Fehler auf dem Server.'], 500);
 });
-
-/* Funktionen nach Fachbereichen (app/api/lib) */
-require __DIR__ . '/lib/kern.php';
-require __DIR__ . '/lib/nutzer.php';
-require __DIR__ . '/lib/rechte.php';
-require __DIR__ . '/lib/sicherheit.php';
-require __DIR__ . '/lib/sitzung.php';
-require __DIR__ . '/lib/oidc.php';
-require __DIR__ . '/lib/anmeldekonten.php';   // Konten der zentralen Anmeldung (Keycloak) aus der Verwaltung
-require __DIR__ . '/lib/passkey.php';
-require __DIR__ . '/lib/protokoll.php';
-require __DIR__ . '/lib/angebote.php';
-require __DIR__ . '/lib/kunden.php';
-require __DIR__ . '/lib/kundenmail.php';
-require __DIR__ . '/lib/fracht.php';
-require __DIR__ . '/lib/einzelangebote.php';
-require __DIR__ . '/lib/benachrichtigung.php';
-require __DIR__ . '/lib/einkauf.php';
-require __DIR__ . '/lib/diagnose.php';
-require __DIR__ . '/lib/auswertung.php';
-require __DIR__ . '/lib/preisverlauf.php';
-require __DIR__ . '/lib/bestand.php';
-require __DIR__ . '/lib/firewall.php';
-require __DIR__ . '/lib/notfall.php';         // Notfallmodus (Modul Sicherheit): wirkt über Wartung, Sitzungen, E-Mail, Firewall
-require __DIR__ . '/lib/bereitschaft.php';    // Leitfaden, Probealarm, Wochenbericht (Modul Sicherheit)
-require __DIR__ . '/lib/integritaet.php';
-require __DIR__ . '/lib/geraete.php';
-require __DIR__ . '/lib/aktionen-liste.php';   // Aktionsregister (erzeugt aus regeln/aktionen/*.toml)
-require __DIR__ . '/lib/module-liste.php';     // Modulregister und Entscheidungstabelle (erzeugt aus regeln/)
-require __DIR__ . '/lib/module.php';
-require __DIR__ . '/lib/herkunft.php';
-/* Importverträge der Daten-Eigentümer und Importzentrale (docs/plattform/schnittstellen/import.md) */
-require __DIR__ . '/module/verwaltung/import.php';
-require __DIR__ . '/module/bestand/import.php';
-require __DIR__ . '/module/angebot/import.php';
-require __DIR__ . '/module/controlling/import.php';
-require __DIR__ . '/module/verwaltung/importzentrale.php';
-/* Fachmodule mit eigener Oberfläche */
-require __DIR__ . '/module/hr/urlaub.php';
-require __DIR__ . '/module/hr/export.php';
-require __DIR__ . '/module/hr/import.php';
-require __DIR__ . '/module/hr/zeiterfassung.php';
-require __DIR__ . '/module/crm/crm.php';
-require __DIR__ . '/module/marketing/marketing.php';
-require __DIR__ . '/module/controlling/controlling.php';
-require __DIR__ . '/module/controlling/umsatz.php';
-require __DIR__ . '/module/controlling/umsatzdaten.php';
-require __DIR__ . '/module/controlling/umsatzauswertung.php';
-require __DIR__ . '/module/leergut/leergut.php';
-require __DIR__ . '/module/rewe/rewe.php';
-require __DIR__ . '/module/rewe/export.php';
-require __DIR__ . '/module/qs/qs.php';
 
 /* ---------------- Aktionen ---------------- */
 
@@ -216,8 +151,10 @@ if ($AKTION !== null && $AKTION['kunden_wartung'] && ($W = wartung()) && !kunden
     respond(['ok' => false, 'wartung' => true, 'error' => $W['message'], 'until' => $W['until']], 503);
 }
 
-/* IP-Freigabe für den Eingabebereich (die öffentliche Angebotsseite bleibt frei) */
-if (!$isPublic) {
+/* IP-Freigabe für den Eingabebereich (die öffentliche Angebotsseite bleibt frei). Ausnahme: der Notzugang über den SSH-Tunnel
+   (lib/oidc.php, notzugang_host) – dorthin kommt nur, wer sich am Server anmelden kann; die Besucheradresse ist dort die
+   interne Adresse des Tunnels und stünde nie in der Liste. */
+if (!$isPublic && !notzugang_host()) {
     if (!empty($S['ipEnabled']) && $S['adminIps'] && !ip_allowed(client_ip(), $S['adminIps'])) {
         fail('Der Eingabebereich ist von dieser Internetadresse (' . client_ip() . ') aus nicht freigegeben.', 403);
     }

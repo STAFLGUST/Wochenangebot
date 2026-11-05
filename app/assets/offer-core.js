@@ -496,15 +496,25 @@
   /* Unterschiede zwischen zwei Modellen (z. B. Entwurf ↔ veröffentlicht) */
   /* Kundenpreis eines Artikels als Vergleichswert (ohne Kennzeichen „aus Vorwoche“) */
   const variantSig = (v) => (!v ? '' : v.status === 'value' ? 'v' + v.value : v.status);
-  /* Sonderpreis „solange der Vorrat reicht“: Grundpreis für alle Angebote, je Angebot änderbar */
-  function saleFor(it, oid) {
+  /* Empfehlung (früher „Sonderpreis“) je Artikel: sale = {value: Empfehlungspreis | mark: true (ohne Preisänderung),
+     offers?: {<Angebot>: {value} | {status: 'mark'} | {status: 'none'}}} – Grundwert für alle Angebote, je Angebot änderbar.
+     empfehlungFor: null = keine Empfehlung, sonst {preis: Zahl | null (nur hervorheben)}; saleFor: nur der Preis. */
+  function empfehlungFor(it, oid) {
     const s = it && it.sale;
-    if (!s || typeof s.value !== 'number') return null;
+    if (!s || (typeof s.value !== 'number' && !s.mark)) return null;
     const o = s.offers && s.offers[oid];
-    if (o) return o.status === 'none' ? null : o.value;
-    return s.value;
+    if (o) {
+      if (o.status === 'none') return null;
+      if (o.status === 'mark') return { preis: null };
+      if (typeof o.value === 'number') return { preis: o.value };
+    }
+    return { preis: typeof s.value === 'number' ? s.value : null };
   }
-  const saleSig = (s) => (!s || typeof s.value !== 'number' ? '' : 'v' + s.value + Object.keys(s.offers || {}).sort().map((k) => k + ':' + (s.offers[k].status === 'none' ? 'none' : s.offers[k].value)).join(','));
+  function saleFor(it, oid) { const e = empfehlungFor(it, oid); return e ? e.preis : null; }
+  const saleSig = (s) => (!s || (typeof s.value !== 'number' && !s.mark) ? '' : (typeof s.value === 'number' ? 'v' + s.value : 'm')
+    + Object.keys(s.offers || {}).sort().map((k) => k + ':' + (s.offers[k].status === 'none' || s.offers[k].status === 'mark' ? s.offers[k].status : s.offers[k].value)).join(','));
+  /* eigene Bezeichnungen je Angebot (it.namen) als Vergleichstext */
+  const namenSig = (it) => { const n = it.namen || {}; return Object.keys(n).sort().map((k) => k + '=' + n[k]).join('|'); };
   function diffOffers(oldM, newM) {
     const res = { added: [], removed: [], priceChanged: [], changed: [], before: {}, variantChanged: [], saleChanged: [] };
     if (!oldM) { res.added = newM.items.map((i) => i.id); return res; }
@@ -519,7 +529,7 @@
       const o = om.get(k) || oldById.get(it.id);
       if (!o) { res.added.push(it.id); continue; }
       if (priceSig(o) !== priceSig(it)) { res.priceChanged.push(it.id); res.before[it.id] = o; }
-      else if (o.code !== it.code || o.name !== it.name || o.category !== it.category || o.origin !== it.origin || o.condition !== it.condition) { res.changed.push(it.id); res.before[it.id] = o; }
+      else if (o.code !== it.code || o.name !== it.name || o.category !== it.category || o.origin !== it.origin || o.condition !== it.condition || namenSig(o) !== namenSig(it)) { res.changed.push(it.id); res.before[it.id] = o; }
       const ov = o.variants || {}, nv = it.variants || {};
       for (const k of new Set([...Object.keys(ov), ...Object.keys(nv)])) {
         if (variantSig(ov[k]) !== variantSig(nv[k])) { res.variantChanged.push({ id: it.id, offer: k, from: ov[k] || null, to: nv[k] || null }); res.before[it.id] = res.before[it.id] || o; }
@@ -574,18 +584,93 @@
     return s || src;
   }
 
-  /* Bezeichnung und Herkunft vereinheitlichen:
-     – „frisch“ nur im Zustand
+  const KW_IM_TITEL = /\bKW\s*\d{1,2}(?:(\s*[-/]\s*)\d{4})?/i;
+  /* Überschrift der Angebotsliste (Bildschirm und Druck): Titel der früher importierten Excel-Liste, aber immer mit der
+     Kalenderwoche des Angebots – der Titel wurde beim Wechsel der Woche nicht nachgezogen („KW 43“ im Angebot der KW 45,
+     gemeldet 05.11.2026). Ohne Titel: „Freibleibendes Angebot für die KW 45/2026“. */
+  function titelMitKw(meta) {
+    const m = meta || {};
+    const t = clean(m.title || '');
+    if (t && m.week && KW_IM_TITEL.test(t)) return t.replace(KW_IM_TITEL, (x, sep) => `KW ${m.week}${sep && m.year ? sep + m.year : ''}`);
+    if (t) return t;
+    return m.week ? `Freibleibendes Angebot für die KW ${m.week}${m.year ? '/' + m.year : ''}` : 'Angebot';
+  }
+
+  /* Aufbau nach Angebotskategorien (Stammdaten der Verwaltung, Inhaber 05.11.2026): Reihenfolge der Kategorien, darin
+     der VK-Gruppen, bestimmt die Reihenfolge der Angebotsgruppen in allen Angeboten; der Abschnitt einer Gruppe ist die
+     Kategorie ihrer VK-Gruppe. kategorien: [{ name, vk: ['1150', …] }] (leer = nichts tun, Reihenfolge bleibt von Hand);
+     vkVon(code) → VK-Gruppe eines Artikels (Stammdaten) oder ''.
+     – Angebotsgruppe ohne VK-Gruppe: die häufigste VK-Gruppe ihrer Artikel wird gemerkt (g.vk), einmalig.
+     – Mehrere Gruppen derselben VK-Gruppe und Gruppen ohne Kategorie behalten ihre bisherige Reihenfolge untereinander;
+       Gruppen ohne Kategorie stehen am Ende, ohne Abschnitt.
+     – Artikel stehen danach in der Reihenfolge ihrer Gruppen; innerhalb einer Gruppe bleibt die Reihenfolge.
+     Ändert das Modell an Ort und Stelle. Rückgabe { changed, ohne: [Gruppen-IDs ohne Kategorie] }. */
+  function nachKategorien(model, kategorien, vkVon) {
+    const out = { changed: false, ohne: [] };
+    if (!model || !Array.isArray(kategorien) || !kategorien.length) return out;
+    const pos = new Map();
+    kategorien.forEach((k, ki) => (k.vk || []).forEach((v, vi) => { if (!pos.has(String(v))) pos.set(String(v), [ki, vi]); }));
+    for (const g of model.groups) {
+      if (g.vk) continue;
+      const n = new Map();
+      for (const it of model.items) {
+        if (it.groupId !== g.id || !it.code) continue;
+        const v = String((vkVon && vkVon(it.code)) || '');
+        if (v) n.set(v, (n.get(v) || 0) + 1);
+      }
+      let best = '', bestN = 0;
+      for (const [v, c] of n) if (c > bestN || (c === bestN && pos.has(v) && !pos.has(best))) { best = v; bestN = c; }
+      if (best) { g.vk = best; out.changed = true; }
+    }
+    const altG = new Map(model.groups.map((g, i) => [g.id, i]));
+    const stelle = (g) => (g.vk && pos.get(String(g.vk))) || null;
+    const groups = model.groups.slice().sort((a, b) => {
+      const pa = stelle(a), pb = stelle(b);
+      if (pa && pb) return pa[0] - pb[0] || pa[1] - pb[1] || altG.get(a.id) - altG.get(b.id);
+      if (pa || pb) return pa ? -1 : 1;
+      return altG.get(a.id) - altG.get(b.id);
+    });
+    for (const g of groups) {
+      const p = stelle(g);
+      const sec = p ? clean(kategorien[p[0]].name) : '';
+      if (!p) out.ohne.push(g.id);
+      if ((g.section || '') !== sec) { g.section = sec; out.changed = true; }
+    }
+    if (groups.some((g, i) => g !== model.groups[i])) { model.groups.splice(0, model.groups.length, ...groups); out.changed = true; }
+    const neuG = new Map(model.groups.map((g, i) => [g.id, i]));
+    const altI = new Map(model.items.map((it, i) => [it, i]));
+    const rang = (it) => (neuG.has(it.groupId) ? neuG.get(it.groupId) : Infinity);
+    const items = model.items.slice().sort((a, b) => rang(a) - rang(b) || altI.get(a) - altI.get(b));
+    if (items.some((it, i) => it !== model.items[i])) { model.items.splice(0, model.items.length, ...items); out.changed = true; }
+    if (Array.isArray(model.sections)) {
+      const secs = [];
+      for (const g of model.groups) if (g.section && !secs.includes(g.section)) secs.push(g.section);
+      if (secs.join('\u0000') !== model.sections.join('\u0000')) { model.sections = secs; out.changed = true; }
+    }
+    return out;
+  }
+
+  /* Vorschlag für die Bezeichnung eines neu aufgenommenen Artikels (z. B. aus der Bestandsliste der Warenwirtschaft):
+     – „frisch“ gehört in den Zustand („frisch/gefr.“ bleibt)
      – Eigenmarke „Fleischmeister“ (Gruppe/Bereich) steht in der Bezeichnung
-     – Herkunft als Kürzel; von Hand gesetzte Kürzel bleiben */
+     Nur ein Vorschlag beim Anlegen – von Hand eingegebene Bezeichnungen ändert das System nicht (Inhaber 05.11.2026). */
+  function nameVorschlag(name, group) {
+    const g = group || {};
+    let n = stripFrisch(name);
+    if (/fleischmeister/i.test(`${g.name || ''} ${g.section || ''}`) && !/fleischmeister/i.test(n)) n = n.replace(/^([^,]+?)(\s*,|$)/, '$1 Fleischmeister$2');
+    return n;
+  }
+
+  /* Merkmale vereinheitlichen (beim Laden des Entwurfs, Wiederherstellen einer Version, Stammdaten):
+     – Herkunft als Kürzel; von Hand gesetzte Kürzel bleiben
+     – unbekannter Zustand wird „frisch“, wenn die Bezeichnung „frisch“ nennt
+     Die Bezeichnung selbst bleibt unverändert – sie wird ohne Einschränkung von Hand gepflegt (Inhaber 05.11.2026;
+     vorher wurden „frisch“ entfernt und „Fleischmeister“ ergänzt, auch in von Hand geänderten Bezeichnungen). */
   function normalizeItem(it, group) {
     const g = group || {};
     let changed = false;
     const n0 = it.name;
-    let name = stripFrisch(n0);
-    if (name !== n0 && it.condition === 'unbekannt') { it.condition = 'frisch'; }
-    if (/fleischmeister/i.test(`${g.name || ''} ${g.section || ''}`) && !/fleischmeister/i.test(name)) name = name.replace(/^([^,]+?)(\s*,|$)/, '$1 Fleischmeister$2');
-    if (name !== n0) { it.name = name; changed = true; }
+    if (it.condition === 'unbekannt' && stripFrisch(n0) !== n0) { it.condition = 'frisch'; changed = true; }
     if (!it.origin || ORIGIN_LONG[it.origin] !== undefined) {
       const o = originFrom(low(n0)) || originFrom(low(g.name || '')) || ORIGIN_LONG[it.origin] || it.origin || null;
       if ((o || null) !== (it.origin || null)) { it.origin = o; changed = true; }
@@ -690,7 +775,7 @@
   const api = {
     CATEGORY_ORDER, CONDITIONS, CONDITION_LABELS, PRICE_STATUS_LABELS,
     xlsxReadWorkbook, parseOfferWorkbook, parseOfferGrid, parsePrice, suggestAttributes,
-    enrichOffer, isoWeekRange, diffOffers, validateModel, clean, stripFrisch, normalizeItem, ORIGIN_CODES, mergeModels, sameModel: same, saleFor,
+    enrichOffer, isoWeekRange, diffOffers, validateModel, clean, stripFrisch, nameVorschlag, titelMitKw, nachKategorien, normalizeItem, ORIGIN_CODES, mergeModels, sameModel: same, saleFor, empfehlungFor,
   };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   else root.OfferCore = api;

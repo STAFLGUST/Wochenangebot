@@ -32,6 +32,7 @@ Einstellungen aller Zonen:
 | Speicherzeit | Angaben des Servers | nur ausdrücklich „public“ wird gespeichert (Abschnitt 2) |
 | Query-Strings | berücksichtigt | `?v=…` und `?action=…` sind verschiedene Inhalte |
 | Smart Cache, Fehler speichern, Stale | aus | nichts speichern, was der Server nicht freigibt |
+| Optimize for large object delivery | **an** in `stafl-dashboard-1` (seit 04.11.2026), sonst aus | gibt Range-Anfragen auch für nicht gespeicherte Dateien weiter – nötig für die Detailkarte (Abschnitt 6) |
 | Anfragen zusammenfassen | aus | sonst könnten sich gleichzeitige Anfragen verschiedener Nutzer mischen |
 | Wiederholen bei Fehler/Zeitüberschreitung | aus (nur Verbindungsaufbau) | keine doppelten Aktionen, z. B. Mails |
 | Zeitlimit Antwort | 60 s | lange Importe |
@@ -190,3 +191,14 @@ Auftragsverarbeitung mit bunny sind offen (Inhaber).
 - **Länderangabe:** bunny schickt `CDN-RequestCountryCode`. Die Anwendung nutzt weiter ihre eigene Ländersperre mit der
   Besucher-IP.
 - Die Server-IP ist aus früheren DNS-Einträgen bekannt. Deshalb ist die Sperre (Schritt 7) nötig; ohne sie ließe sich bunny umgehen.
+- **Detailkarte (CRM-Karte, Verwaltung → Auswertung):** Die Karte liest die Kartendatei `/karte/karte.pmtiles` (rund 6 GB)
+  in kleinen Abschnitten (Range-Anfragen, Antwort 206). Die Datei ist nur mit Anmeldung abrufbar und wird von bunny nicht
+  gespeichert („private“). Befund 04.11.2026: Über bunny kam auf die Abschnitts-Anfrage die ganze Datei zurück (Status 200
+  statt 206) – auf crm. und verwaltung.; die Seiten zeigten nur die Übersichtskarte. Laut bunny gibt eine Zone
+  Range-Anfragen für nicht gespeicherte Inhalte nur mit „Optimize for large object delivery“ (Caching → General) weiter.
+  **Eingeschaltet am 04.11.2026 in `stafl-dashboard-1` und geprüft:** Abschnitte kommen mit 206 (auch mitten in der Datei,
+  unter 0,2 s), bunny speichert nichts (jede Anfrage „MISS“), ohne Anmeldung leitet die Datei weiterhin zur Anmeldung um
+  (302), CRM-Karte und Auswertung zeigen wieder die Detailkarte. Neue Kartenhosts gehören in diese Zone oder brauchen dort
+  dieselbe Einstellung. Kommt trotzdem einmal die ganze Datei, bricht die Seite den Abruf sofort ab
+  (`app/assets/detailkarte.js`, Hinweis in der Browser-Konsole). **Rückfall:** Einstellung ausschalten – die Seiten zeigen
+  dann wieder die Übersichtskarte.

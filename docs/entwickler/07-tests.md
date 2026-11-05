@@ -14,7 +14,7 @@ Server, nie mit echten Daten (GR-007). Keine Erfolgsmeldung ohne tatsächlich au
 | Ende-zu-Ende (E2E) | `tests/e2e/test_<gruppe>.py`, Starter `tests/run_e2e.py` | `python3 tests/run_e2e.py [gruppe …]` | PHP 8.3, Python, Playwright-Chromium |
 | Unit (JavaScript) | `tests/unit/*.test.js` | `node tests/unit/<datei>.test.js` | Node.js |
 | Unit (PHP) | `tests/unit/stock_prices.php` | `php tests/unit/stock_prices.php` | PHP 8.3 |
-| Unit (CI-Werkzeuge) | `tests/unit/test_run_e2e_teile.py`, `test_ci_nachweis.py`, `test_apt_vorrat.py` | `python3 tests/unit/<datei>.py` | Python |
+| Unit (CI-Werkzeuge) | `tests/unit/test_run_e2e_teile.py`, `test_ci_nachweis.py`, `test_apt_vorrat.py`, `test_images_aktualisieren.py` | `python3 tests/unit/<datei>.py` | Python |
 | Regelwerk | `werkzeuge/regeln.py`, `tests/regeln/test_regeln.py` | `python3 werkzeuge/regeln.py pruefen` und `python3 tests/regeln/test_regeln.py` | Python (nur Standardbibliothek) |
 | Betrieb/Deploy | `tests/deploy/` | `sh tests/deploy/<datei>.sh` bzw. `python3 tests/deploy/<datei>.py` | Shell, Python, teils Docker |
 | Keycloak-Anmeldung | `tests/oidc/` | `bash tests/oidc/umgebung.sh start` … `stop` | Apache, mod_auth_openidc, PostgreSQL, Java 21 |
@@ -68,6 +68,8 @@ Eine **Gruppe** ist eine Testdatei `tests/e2e/test_<gruppe>.py` mit einem Eintra
 | `WA_TEST_STORAGE=sqlite` | Testdaten in SQLite statt Dateien | Dateien |
 | `WA_TEIL=k/n` | nur Teil *k* von *n* (Aufteilung nach `GEWICHT`, siehe unten) | alle Gruppen |
 | `WA_RETRY=0` | fehlgeschlagene Gruppen nicht wiederholen | Wiederholung an |
+| `WA_TEST_TRENNUNG=1` | Testdaten jeder Gruppe vorher getrennt (ADR-007, höchste Trennstufe), Testserver = Mitarbeiterseite; die volle Suite muss auch so grün sein (`tests/README.md`) | gemeinsame Daten |
+| `WA_TEST_TRENNSTUFE=n` | mit `WA_TEST_TRENNUNG=1`: auf Stufe *n* statt der höchsten trennen (z. B. `1` = Server nach dem Einspielen, vor `daten-trennen.sh trennen`) | höchste Stufe |
 | `WA_SHOTS` | Ordner für Bildschirmfotos | `tests/.ergebnisse/` |
 
 **`GEWICHT`:** geschätzte Laufzeit je Gruppe in Sekunden (Median aus CI-Protokollen). Bestimmt nur die
@@ -81,13 +83,13 @@ Eintrag. Lokal nachstellen, was ein CI-Teil ausführt: `WA_TEIL=2/3 python3 test
   `test-<gruppe>-fehlversuch.log`). Nie zwei Testläufe gleichzeitig im selben Arbeitsordner; parallele Agenten arbeiten
   je in ihrem Worktree und mit eigenem `WA_PORT_BASE`.
 - `tests/.ergebnisse/` – Bildschirmfotos der Oberflächentests. In der CI bei Fehlern als Artefakt
-  `e2e-ergebnisse-<speicherart>-teil<k>` (7 Tage).
+  `e2e-ergebnisse-<speicherart>-teil<k>` bzw. `e2e-ergebnisse-sqlite-getrennt-teil<k>` (7 Tage).
 
 ### Hilfsmodule in `tests/e2e/`
 
 | Modul | Zweck |
 | --- | --- |
-| `umgebung.py` | einzige Quelle für Adressen und Pfade: `BASE`, `SMTP_PORT`, `SMTP_PORT2`, `AUX_PORT`, `SH` (Bildschirmfotos), `FIX`, `WORK`, `XL44` (Test-Angebotsliste); Speicherzugriff unabhängig von der Speicherart (`storage_raw`, `storage_write`, `storage_docs`, `storage_sqlite`, `storage_lock`); Warten ohne feste Zeiten (`wait_text`, `until`); `shot()` für Bildschirmfotos |
+| `umgebung.py` | einzige Quelle für Adressen und Pfade: `BASE`, `SMTP_PORT`, `SMTP_PORT2`, `AUX_PORT`, `SH` (Bildschirmfotos), `FIX`, `WORK`, `XL44` (Test-Angebotsliste); Speicherzugriff unabhängig von der Speicherart und von getrennten Daten (`storage_raw`, `storage_write`, `storage_docs`, `storage_sqlite`, `storage_lock`; Ordner nur über `datenordner(name)` und `ablageordner()`, nie direkt `UDATA`; `trennstufe()`); Warten ohne feste Zeiten (`wait_text`, `until`); `shot()` für Bildschirmfotos |
 | `kunden_hilfe.py` | `Client` – HTTP-Client mit eigener Cookie-Sitzung für API-Tests. `call(aktion, daten)` liefert `(status, json)` (mit `raw=True` zusätzlich den Text), übernimmt das CSRF-Token aus Antworten und setzt `X-Forwarded-For` auf die IP des Clients (Standard `198.51.100.1`); zusätzliche Kopfzeilen über `client.headers`. Außerdem `B` (= `BASE`) |
 | `auth_helpers.py` | eigener `Client` mit `login()` und `expire()`; `expire_session()` setzt eine Passwortbestätigung in der Sitzungsablage zurück (ohne Testendpunkt in der Anwendung); Nutzerdaten lesen/ändern |
 | `smtp_test.py` | `TestSmtp(port, …)` – Test-Mailserver im Speicher (EHLO, optional STARTTLS/TLS, AUTH, `messages`); Empfänger `abgelehnt@…` werden mit 550 abgewiesen |
@@ -234,6 +236,11 @@ with sync_playwright() as pw:
 
 - **Keine festen Wartezeiten.** Nie `wait_for_timeout` vor einem `check`, sondern auf den erwarteten Zustand warten:
   `wait_for_selector`, `wait_for_function`, `umgebung.wait_text()` oder `umgebung.until()` (Python-seitig).
+- **Unter echter CSP kein `wait_for_function` mit Text-Prädikat** (`tests/oidc/`: Apache und Caddy senden wie im Betrieb
+  `script-src 'self'`). Playwright wertet das Prädikat beim Nachprüfen mit `eval` aus, das die CSP verbietet – es klappt
+  nur, wenn die Bedingung schon beim ersten Versuch gilt (wackelig). Stattdessen Selektoren (`wait_for_selector(…,
+  state='attached'|'detached')`, `frame_locator(…).locator(…).wait_for()`, `wait_for_url(lambda u: …)`) oder
+  Python-seitig mit `evaluate` nachfragen. Die E2E-Tests laufen ohne die Seiten-CSP (der PHP-Testserver liest keine `.htaccess`).
 - **Ports und Adressen nur über `umgebung.py`** (`BASE`, `SMTP_PORT`, `SMTP_PORT2`, `AUX_PORT`). Die CI bricht ab, wenn
   in `tests/e2e/` außerhalb von `umgebung.py` eine Adresse `127.0.0.1:<Port>` steht.
 - **Hintergrundabgleich:** Der Eingabebereich zeigt bei beendeter Sitzung jederzeit die Anmeldemaske. Nach Abmelden,
@@ -319,7 +326,7 @@ Bei jedem Pull Request und jedem Commit auf `main` läuft `.github/workflows/ci.
 - Auf `main` werden die schweren Aufträge übersprungen, wenn der PR genau denselben Inhalt schon vollständig geprüft hat
   ([`docs/release-freigabe.md`](../release-freigabe.md), „Keine Doppelprüfung nach dem Merge“).
 
-Bei Fehlern: Artefakte `e2e-ergebnisse-<speicherart>-teil<k>`, `oidc-ergebnisse` bzw. `app-ergebnisse` herunterladen (Protokolle und
+Bei Fehlern: Artefakte `e2e-ergebnisse-<speicherart>-teil<k>` (mit getrennten Daten `…-sqlite-getrennt-teil<k>`), `oidc-ergebnisse` bzw. `app-ergebnisse` herunterladen (Protokolle und
 Bildschirmfotos), Gruppe lokal mit `WA_JOBS=1 python3 tests/run_e2e.py <gruppe>` nachstellen.
 
 Stand: 2026-10-24

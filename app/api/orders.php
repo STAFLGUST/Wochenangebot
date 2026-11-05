@@ -37,7 +37,10 @@ function order_receipt(array $o, bool $replayed = false): void
 {
     respond(['ok' => true, 'apiVersion' => 1, 'nr' => $o['nr'], 'total' => $o['total'], 'totalQty' => $o['totalQty'],
         'positions' => count($o['positions']), 'onRequest' => $o['onRequest'], 'fracht' => $o['fracht'] ?? null, 'copy' => !empty($o['kopie']) ? ($o['kunde']['email'] ?? null) : null,
-        'delivery' => $o['status'] ?? 'neu', 'replayed' => $replayed]);
+        'delivery' => $o['status'] ?? 'neu', 'replayed' => $replayed,
+        // „eingegangen“ (Postausgang, lib/postausgang.php): Kopie geht in Kürze an diese Adresse (nur wenn eingeschaltet)
+        // Kundenseite ab Trennstufe 2: nur die gekürzte Adresse (die volle kennt nur die Mitarbeiterseite)
+        'copyPlanned' => ($o['status'] ?? '') === 'eingegangen' && order_settings()['copy'] ? (filter_var($o['kunde']['email'] ?? '', FILTER_VALIDATE_EMAIL) ? $o['kunde']['email'] : (($o['kunde']['emailMaske'] ?? '') ?: null)) : null]);
 }
 function order_replay(array $all, string $kid, string $key, string $hash): void
 {
@@ -61,7 +64,7 @@ function orders_action(string $action): bool
     if ($action === 'bestellung_mail_retry') {
         $b = body();
         if (!is_string($b['nr'] ?? null) || !is_string($b['jobId'] ?? null) || !is_int($b['attempts'] ?? null) || ($b['confirm'] ?? false) !== true) fail('Versandauftrag und ausdrückliche Bestätigung erforderlich.', 422);
-        $o = order_outbox_send($b['nr'], $b['jobId'], $b['attempts'], $me['name']);
+        $o = order_outbox_send($b['nr'], $b['jobId'], $b['attempts'], $me['name'], true);
         audit('bestellung', 'E-Mail-Versand geprüft/erneut versucht: ' . $o['nr']);
         respond(['ok'=>true, 'order'=>order_view($o, true)]);
     }

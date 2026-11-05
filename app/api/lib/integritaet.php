@@ -171,93 +171,99 @@ function integritaet_pruefen(): array
         $add($rel, 'unbekannt', $exe ? 'kritisch' : 'warnung', $exe ? 'Unbekannte ausführbare Datei – nicht Teil der freigegebenen Fassung' : 'Unbekannte Datei – nicht Teil der freigegebenen Fassung', $sig, $ss);
     }
 
-    /* 3. Datenordner: nur Datensätze mit Sperrzeile, keine ausführbaren Dateien, Schutz des Datenbankordners */
+    /* 3. Datenordner: nur Datensätze mit Sperrzeile, keine ausführbaren Dateien, Schutz des Datenbankordners – nach der Datentrennung
+       (ADR-007 Stufe 2a) auch der interne Ordner, soweit diese Seite ihn sieht (Anzeige „data-intern/…“) */
     $sqlite = is_file($DATA . '/.sqlite-active');
-    if (is_dir($DATA)) {
-        $dd = new RecursiveCallbackFilterIterator(new RecursiveDirectoryIterator($DATA, FilesystemIterator::SKIP_DOTS),
-            function (SplFileInfo $f) use ($DATA) {
-                if (!$f->isDir()) return true;
-                $b = $f->getFilename();
-                return substr($f->getPathname(), strlen($DATA) + 1) !== '.sqlite' && strpos($b, '.sqlite-stage-') !== 0 && strpos($b, '.export-') !== 0;
-            });
-        foreach (new RecursiveIteratorIterator($dd) as $f) {
-            if ($grenze()) break;
-            if ($f->isDir()) continue;
-            $rel = str_replace('\\', '/', substr($f->getPathname(), strlen($DATA) + 1));
-            $base = $f->getFilename();
-            $path = 'data/' . $rel;
-            if (substr($base, -4) === '.tmp' || ($base[0] === '.' && substr($base, -5) === '.lock') || $rel === '.sqlite-active') continue;   // Zwischendateien, Sperren, Schalter
-            $n++; $c['checked']++;
-            if (preg_match(INTEGRITAET_ABLAGE, $rel)) continue;   // Dateiablage der Module
-            if (substr($base, -4) === '.php') {
-                $fh = @fopen($f->getPathname(), 'rb'); $head = $fh ? (string)fread($fh, 128) : ''; if ($fh) fclose($fh);
-                if ($rel === 'index.php') {
-                    $ok = strncmp($head, GUARD, strlen(GUARD)) === 0 || trim($head) === '<?php http_response_code(404); exit;';
-                    if (!$ok) { $c['data']++; $add($path, 'daten', 'kritisch', 'Sperrdatei des Datenordners enthält anderen PHP-Code'); }
-                    continue;
-                }
-                if (strpos($rel, 'geo/') === 0 && substr($base, -8) === '.dat.php') {
-                    if (strncmp($head, GEO_GUARD, strlen(GEO_GUARD)) !== 0) { $c['data']++; $add($path, 'daten', 'kritisch', 'Länder-/Ortsdaten ohne Zugriffssperre (anderer PHP-Code)'); }
-                    continue;
-                }
-                if (strncmp($head, GUARD, strlen(GUARD)) !== 0) { $c['data']++; $add($path, 'daten', 'kritisch', 'Datensatz ohne Zugriffssperre – enthält ausführbaren PHP-Code'); continue; }
-                $raw = $lesen($f->getPathname());
-                if ($raw === null) continue;
-                [$sig, $ss] = integritaet_muster(str_replace(['\\"', '\\/'], ['"', '/'], substr($raw, strlen(GUARD))), 'daten');
-                if ($sig) { $c['suspicious']++; $add($path, 'verdaechtig', $ss, 'Auffälliges Muster in gespeicherten Daten', $sig); }
-                continue;
-            }
-            // Zugriffssperre im Datenordner (z. B. aus der Zeit vor Docker): erlaubt, solange sie nur sperrt
-            if ($rel === '.htaccess') {
-                if (integritaet_nur_sperre((string)$lesen($f->getPathname()))) continue;
-                $c['data']++; $add($path, 'daten', 'kritisch', 'Zugriffsregeln im Datenordner (.htaccess) enthalten mehr als eine Sperre');
-                continue;
-            }
-            // Proxy-Merkdatei der Anwendung: erwartet, solange sie nur IP-Adressen enthält
-            if (preg_match(INTEGRITAET_PROXY_DATEI, $rel)) {
-                if (integritaet_proxy_ok($lesen($f->getPathname()))) continue;
-                $c['data']++; $add($path, 'daten', 'warnung', 'Merkdatei der Proxy-Adressen mit unerwartetem Inhalt');
-                continue;
-            }
-            $c['data']++;
-            if (preg_match(INTEGRITAET_AUSFUEHRBAR, $rel)) $add($path, 'daten', 'kritisch', 'Ausführbare Datei im Datenordner');
-            else $add($path, 'daten', 'hinweis', 'Unerwartete Datei im Datenordner');
-        }
-        // Datenbankordner: nur die Datenbank selbst und eine sperrende .htaccess
-        if (is_dir($DATA . '/.sqlite')) {
-            foreach (scandir($DATA . '/.sqlite') ?: [] as $b) {
-                if ($b === '.' || $b === '..' || preg_match('~^store\.sqlite(?:-wal|-shm|-journal)?$~', $b) || $b === '.htaccess') continue;
-                $n++; $c['checked']++; $c['data']++;
-                $add('data/.sqlite/' . $b, 'daten', preg_match(INTEGRITAET_AUSFUEHRBAR, $b) || is_dir($DATA . '/.sqlite/' . $b) ? 'kritisch' : 'hinweis', 'Unerwartete Datei im Datenbankordner');
-            }
-            $ht = $DATA . '/.sqlite/.htaccess';
-            if (is_file($ht)) {
-                $n++; $c['checked']++;
-                $t = (string)@file_get_contents($ht, false, null, 0, 4096);
-                if (!integritaet_nur_sperre($t)) {
-                    $c['data']++; $add('data/.sqlite/.htaccess', 'daten', 'kritisch', 'Zugriffssperre des Datenbankordners verändert');
-                }
-            } elseif ($sqlite) { $c['data']++; $add('data/.sqlite/.htaccess', 'daten', 'warnung', 'Zugriffssperre des Datenbankordners (.htaccess) fehlt'); }
-        }
-    }
-    /* 4. Datensätze in der Datenbank durchsuchen */
-    if ($sqlite && $abbruch === '') {
-        try {
-            $q = store_db()->query('SELECT name, length(payload) AS n FROM documents ORDER BY name');
-            $one = store_db()->prepare('SELECT payload FROM documents WHERE name = ?');
-            foreach ($q->fetchAll(PDO::FETCH_ASSOC) as $r) {
+    $ordner = [['haupt', $DATA, 'data', '.daten-getrennt']];
+    if (store_getrennt()) { try { $ordner[] = ['intern', store_ordner('intern'), 'data-intern', '.daten-intern']; } catch (StoreKeinZugang $e) { } }
+    foreach ($ordner as [$bereich, $DD, $label, $schalter]) {
+        $sqliteDD = is_file($DD . '/.sqlite-active');
+        if (is_dir($DD)) {
+            $dd = new RecursiveCallbackFilterIterator(new RecursiveDirectoryIterator($DD, FilesystemIterator::SKIP_DOTS),
+                function (SplFileInfo $f) use ($DD) {
+                    if (!$f->isDir()) return true;
+                    $b = $f->getFilename();
+                    return substr($f->getPathname(), strlen($DD) + 1) !== '.sqlite' && strpos($b, '.sqlite-stage-') !== 0 && strpos($b, '.export-') !== 0;
+                });
+            foreach (new RecursiveIteratorIterator($dd) as $f) {
                 if ($grenze()) break;
+                if ($f->isDir()) continue;
+                $rel = str_replace('\\', '/', substr($f->getPathname(), strlen($DD) + 1));
+                $base = $f->getFilename();
+                $path = $label . '/' . $rel;
+                if (substr($base, -4) === '.tmp' || ($base[0] === '.' && substr($base, -5) === '.lock') || $rel === '.sqlite-active' || $rel === $schalter) continue;   // Zwischendateien, Sperren, Schalter
                 $n++; $c['checked']++;
-                if ((int)$r['n'] > INTEGRITAET_MAX_BYTES) continue;
-                $one->execute([$r['name']]);
-                [$sig, $ss] = integritaet_muster(str_replace(['\\"', '\\/'], ['"', '/'], (string)$one->fetchColumn()), 'daten');
-                if ($sig) { $c['suspicious']++; $add('datenbank/' . $r['name'], 'verdaechtig', $ss, 'Auffälliges Muster in gespeicherten Daten', $sig); }
+                if (preg_match(INTEGRITAET_ABLAGE, $rel)) continue;   // Dateiablage der Module
+                if (substr($base, -4) === '.php') {
+                    $fh = @fopen($f->getPathname(), 'rb'); $head = $fh ? (string)fread($fh, 128) : ''; if ($fh) fclose($fh);
+                    if ($rel === 'index.php') {
+                        $ok = strncmp($head, GUARD, strlen(GUARD)) === 0 || trim($head) === '<?php http_response_code(404); exit;';
+                        if (!$ok) { $c['data']++; $add($path, 'daten', 'kritisch', 'Sperrdatei des Datenordners enthält anderen PHP-Code'); }
+                        continue;
+                    }
+                    if (strpos($rel, 'geo/') === 0 && substr($base, -8) === '.dat.php') {
+                        if (strncmp($head, GEO_GUARD, strlen(GEO_GUARD)) !== 0) { $c['data']++; $add($path, 'daten', 'kritisch', 'Länder-/Ortsdaten ohne Zugriffssperre (anderer PHP-Code)'); }
+                        continue;
+                    }
+                    if (strncmp($head, GUARD, strlen(GUARD)) !== 0) { $c['data']++; $add($path, 'daten', 'kritisch', 'Datensatz ohne Zugriffssperre – enthält ausführbaren PHP-Code'); continue; }
+                    $raw = $lesen($f->getPathname());
+                    if ($raw === null) continue;
+                    [$sig, $ss] = integritaet_muster(str_replace(['\\"', '\\/'], ['"', '/'], substr($raw, strlen(GUARD))), 'daten');
+                    if ($sig) { $c['suspicious']++; $add($path, 'verdaechtig', $ss, 'Auffälliges Muster in gespeicherten Daten', $sig); }
+                    continue;
+                }
+                // Zugriffssperre im Datenordner (z. B. aus der Zeit vor Docker): erlaubt, solange sie nur sperrt
+                if ($rel === '.htaccess') {
+                    if (integritaet_nur_sperre((string)$lesen($f->getPathname()))) continue;
+                    $c['data']++; $add($path, 'daten', 'kritisch', 'Zugriffsregeln im Datenordner (.htaccess) enthalten mehr als eine Sperre');
+                    continue;
+                }
+                // Proxy-Merkdatei der Anwendung: erwartet, solange sie nur IP-Adressen enthält
+                if (preg_match(INTEGRITAET_PROXY_DATEI, $rel)) {
+                    if (integritaet_proxy_ok($lesen($f->getPathname()))) continue;
+                    $c['data']++; $add($path, 'daten', 'warnung', 'Merkdatei der Proxy-Adressen mit unerwartetem Inhalt');
+                    continue;
+                }
+                $c['data']++;
+                if (preg_match(INTEGRITAET_AUSFUEHRBAR, $rel)) $add($path, 'daten', 'kritisch', 'Ausführbare Datei im Datenordner');
+                else $add($path, 'daten', 'hinweis', 'Unerwartete Datei im Datenordner');
             }
-        } catch (Throwable $e) {
-            error_log('[wochenangebot] Dateiprüfung: ' . $e->getMessage());
-            $add('data/.sqlite/store.sqlite', 'daten', 'warnung', 'Datenbank konnte nicht durchsucht werden');
+            // Datenbankordner: nur die Datenbank selbst und eine sperrende .htaccess
+            if (is_dir($DD . '/.sqlite')) {
+                foreach (scandir($DD . '/.sqlite') ?: [] as $b) {
+                    if ($b === '.' || $b === '..' || preg_match('~^store\.sqlite(?:-wal|-shm|-journal)?$~', $b) || $b === '.htaccess') continue;
+                    $n++; $c['checked']++; $c['data']++;
+                    $add($label . '/.sqlite/' . $b, 'daten', preg_match(INTEGRITAET_AUSFUEHRBAR, $b) || is_dir($DD . '/.sqlite/' . $b) ? 'kritisch' : 'hinweis', 'Unerwartete Datei im Datenbankordner');
+                }
+                $ht = $DD . '/.sqlite/.htaccess';
+                if (is_file($ht)) {
+                    $n++; $c['checked']++;
+                    $t = (string)@file_get_contents($ht, false, null, 0, 4096);
+                    if (!integritaet_nur_sperre($t)) {
+                        $c['data']++; $add($label . '/.sqlite/.htaccess', 'daten', 'kritisch', 'Zugriffssperre des Datenbankordners verändert');
+                    }
+                } elseif ($sqliteDD) { $c['data']++; $add($label . '/.sqlite/.htaccess', 'daten', 'warnung', 'Zugriffssperre des Datenbankordners (.htaccess) fehlt'); }
+            }
         }
-    }
+        /* 4. Datensätze in der Datenbank durchsuchen */
+        if ($sqliteDD && $abbruch === '') {
+            try {
+                $q = store_db($bereich)->query('SELECT name, length(payload) AS n FROM documents ORDER BY name');
+                $one = store_db($bereich)->prepare('SELECT payload FROM documents WHERE name = ?');
+                foreach ($q->fetchAll(PDO::FETCH_ASSOC) as $r) {
+                    if ($grenze()) break;
+                    $n++; $c['checked']++;
+                    if ((int)$r['n'] > INTEGRITAET_MAX_BYTES) continue;
+                    $one->execute([$r['name']]);
+                    [$sig, $ss] = integritaet_muster(str_replace(['\\"', '\\/'], ['"', '/'], (string)$one->fetchColumn()), 'daten');
+                    if ($sig) { $c['suspicious']++; $add(($bereich === 'intern' ? 'datenbank-intern/' : 'datenbank/') . $r['name'], 'verdaechtig', $ss, 'Auffälliges Muster in gespeicherten Daten', $sig); }
+                }
+            } catch (Throwable $e) {
+                error_log('[wochenangebot] Dateiprüfung: ' . $e->getMessage());
+                $add($label . '/.sqlite/store.sqlite', 'daten', 'warnung', 'Datenbank konnte nicht durchsucht werden');
+            }
+        }
+    }   // Ordner
 
     usort($items, function ($a, $b) { return INTEGRITAET_STUFEN[$b['stufe']] <=> INTEGRITAET_STUFEN[$a['stufe']] ?: strcmp($a['path'], $b['path']); });
     foreach ($items as $it) $c[['kritisch' => 'critical', 'warnung' => 'warnings', 'hinweis' => 'hints'][$it['stufe']]]++;

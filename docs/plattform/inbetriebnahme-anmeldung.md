@@ -63,8 +63,9 @@ Mitarbeiteranmeldung dort abschalten (Roadmap 8); HSTS der Kundendomain auf ein 
 - **Konten aus der Verwaltung (seit 26.10.2026, Stand 8):** Verwaltung → Mitarbeiter → Abschnitt „Zentrale Anmeldung“
   (nur Administratoren, mit Bestätigung, im Protokoll ohne Passwort): Konto anlegen, Passwort setzen (Standard: bei der
   ersten Anmeldung eigenes festlegen), Sperre nach Fehlversuchen aufheben, Link zum Passwort-Festlegen per Mail. Technisch
-  über den Client `konten` (nur Service-Account, Rollen `view-users`/`manage-users`, Geheimnis `OIDC_SECRET_KONTEN` in `.env`),
-  Keycloak im internen Netz. **Entscheidung:** Unter der zentralen Anmeldung bietet die Verwaltung kein Passwort der
+  über den Client `konten` (nur Service-Account, Geheimnis `OIDC_SECRET_KONTEN` in `.env`), Keycloak im internen Netz. Seit
+  Stand 16 (ADR-007 Stufe 1b) ändert er nur Konten der Gruppe `anwendungskonten` (Mitarbeiter ohne Administratorrolle);
+  Konten von Administratoren nur in der Konsole, nach Beförderungen `konten.sh gruppe-abgleichen <name>`. **Entscheidung:** Unter der zentralen Anmeldung bietet die Verwaltung kein Passwort der
   Anwendung mehr an (der Server lehnt es dort ab) – es gibt nur noch das Passwort von Keycloak. Die gespeicherten Passwörter
   der Anwendung bleiben unverändert für den Notzugang (`deploy/notzugang.sh`, Notfall-Administrator:
   `deploy/passwort-zuruecksetzen.sh`). Zweiter Faktor und Passkeys bleiben beim Setzen erhalten; zurücksetzen nur in der
@@ -82,7 +83,18 @@ Mitarbeiteranmeldung dort abschalten (Roadmap 8); HSTS der Kundendomain auf ein 
   seit 26.10.2026 auch hier: danach erneute Anmeldung bei Keycloak (Passwort erneut), keine stille neue Sitzung.
 - **Passwort aus der Verwaltung für Administratoren und Pflicht-Konten** (zweiter Faktor verpflichtend): immer nur
   vorübergehend – der Mitarbeiter legt bei der nächsten Anmeldung ein eigenes fest (seit 26.10.2026).
-- **Passwort vergessen:** `konten.sh startpasswort <name>` – wer einen zweiten Faktor hat, braucht ihn weiter, danach eigenes Passwort.
+- **Passwort vergessen** (seit 03.11.2026, Wunsch des Inhabers): Auf der Anmeldeseite „Passwort vergessen?“ – Keycloak
+  schickt einen Link (15 Minuten gültig, nur einmal verwendbar) an die hinterlegte E-Mail-Adresse; eingegeben wird nur der
+  Benutzername, die Bestätigung verrät nicht, ob es das Konto gibt. Eigener Ablauf `mitarbeiter-passwort-vergessen` statt
+  des eingebauten (der enthält „Reset OTP“ und würde den Einmalcode entfernen): Wer einen Passkey oder Einmalcode
+  eingerichtet hat, muss ihn nach dem Link eingeben, erst dann kommt das neue Passwort; zweiter Faktor und Passkeys bleiben,
+  Pflicht-Konten (Administratoren) bleiben damit geschützt, auch wenn jemand an ihr Postfach kommt. **Einschalten nach dem
+  Release** (einmalig, Mailversand der Anmeldung muss eingerichtet sein – `konten.sh mail-einrichten`):
+  `sh deploy/anmeldung/konten.sh passwort-vergessen an`; Zustand: `… passwort-vergessen status`; Rückweg:
+  `… passwort-vergessen aus` (Link verschwindet sofort, der Ablauf bleibt für ein späteres Einschalten). Neue Installationen
+  bekommen Ablauf und Einstellung über `realm-mitarbeiter.json`. Ohne E-Mail-Adresse oder bei ausgeschalteter Funktion wie
+  bisher: `konten.sh startpasswort <name>` (wer einen zweiten Faktor hat, braucht ihn weiter, danach eigenes Passwort) oder
+  Verwaltung → Mitarbeiter → „Zentrale Anmeldung“.
   Handy oder Passkey verloren: nach persönlicher Prüfung `konten.sh zuruecksetzen <name>` (löscht Einmalcode und
   Passkeys, meldet überall ab, neues Startpasswort). Konten nie löschen und neu anlegen – die Verknüpfung mit dem
   Mitarbeiterkonto hängt an der Keycloak-Kennung.
@@ -106,6 +118,10 @@ Mitarbeiteranmeldung dort abschalten (Roadmap 8); HSTS der Kundendomain auf ein 
   nach einem Fehlschlag auf den nächsten Code warten.
 - **Anmeldeereignisse** (Anmeldungen, Fehlversuche) speichert Keycloak 30 Tage, danach werden sie gelöscht
   (Realm-Einstellung `eventsExpiration`; Änderung als eigener Schritt).
+- **Zwei Anwendungs-Container (seit ADR-007, 04.11.2026):** Kundenseite `app`, Mitarbeiter-Hosts `app-mitarbeiter` (gleiches Image).
+  Wo in den Schritten oben nach neuen Werten in `.env` `docker compose up -d app` steht, gilt seitdem
+  `docker compose up -d app-mitarbeiter` – nur dieser Container kennt die Anmelde-Geheimnisse und trägt den Notzugang
+  (Port 8190 nur auf `127.0.0.1`). Kundenseite: `app`.
 - **Rechte** bleiben in der Anwendung (Verwaltung → Rollen und Rechte, inklusive Modulzugang je Rolle). Keycloak sagt nur „wer“; ein in der Anwendung
   gesperrtes Konto ist sofort ausgesperrt. Neue Mitarbeiter brauchen beides: Konto in Keycloak und Mitarbeiterkonto.
 - **Abmelden / Sperren:** Abmelden in einer Anwendung meldet in allen ab (Back-Channel-Logout). Ein Konto zentral
@@ -114,8 +130,9 @@ Mitarbeiteranmeldung dort abschalten (Roadmap 8); HSTS der Kundendomain auf ein 
   `tests/oidc/umgebung.sh` gemeinsam erhöhen; erst wenn der CI-Auftrag grün ist (ADR-003: kritische Lücken in 72 Std.).
 - **Notfall:** Keycloak nicht erreichbar → zuerst `docker compose ps -a` und `docker compose up -d` (startet fehlende
   Dienste, z. B. nach einem unterbrochenen Release). Hilft das nicht: `sh deploy/notzugang.sh an` öffnet vorübergehend den alten
-  Eingabebereich `angebot-stafl.de/admin/` (bisherige Passwörter, Notfall-Administrator: `deploy/passwort-zuruecksetzen.sh`);
-  sobald die Anmeldung wieder läuft: `sh deploy/notzugang.sh aus`.
+  Eingabebereich – seit 04.11.2026 nur über einen SSH-Tunnel: auf dem eigenen Rechner `ssh -L 8190:127.0.0.1:8190
+  <benutzer>@<server>`, dann `http://localhost:8190/admin/` (bisherige Passwörter, Notfall-Administrator:
+  `deploy/passwort-zuruecksetzen.sh`); sobald die Anmeldung wieder läuft: `sh deploy/notzugang.sh aus`.
 
 ## Rücksicherung der Anmeldung (Keycloak)
 

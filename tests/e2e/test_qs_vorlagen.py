@@ -29,11 +29,11 @@ import zipfile
 from playwright.sync_api import sync_playwright
 
 from kunden_hilfe import Client, B, API
-from umgebung import SH
+from umgebung import SH, ablageordner
 
 HIER = os.path.dirname(os.path.abspath(__file__))
 PAKET_DATEI = os.path.join(HIER, '..', 'fixtures', 'qs', 'datenpaket.json')
-UDATA = os.environ['UDATA']
+ABLAGEORDNER = ablageordner()   # Ordner der Dateiablage (nach der Datentrennung innen)
 HEUTE = datetime.date.today()
 HEUTE_DE = HEUTE.strftime('%d.%m.%Y')
 res = []
@@ -106,11 +106,11 @@ def roh(cli, query):
 
 
 def blob(did):
-    return os.path.join(UDATA, 'dateien', 'qs', did[:2], did + '.bin')
+    return os.path.join(ABLAGEORDNER, 'dateien', 'qs', did[:2], did + '.bin')
 
 
 def blobs():
-    return sorted(glob.glob(os.path.join(UDATA, 'dateien', 'qs', '*', '*.bin')))
+    return sorted(glob.glob(os.path.join(ABLAGEORDNER, 'dateien', 'qs', '*', '*.bin')))
 
 
 A = Client('198.51.100.2')

@@ -34,7 +34,8 @@ Alle Mitarbeiter-Hosts sind dieselbe PHP-Anwendung. Welcher Bereich ein Host ist
 | `einkauf.`, `container-import.`, `test.dashboard-stafl.de` | nur 503-Platzhalter in Caddy (GR-105) | – | – |
 
 Jeder Mitarbeiter-VirtualHost setzt außerdem `WA_OIDC 1`, `WA_OIDC_ISSUER` (Realm `mitarbeiter`) und
-`WA_OIDC_ACR mfa`. Caddy leitet die Mitarbeiter-Hosts an `app-mitarbeiter:80`; dieses Ziel gibt es nur mit
+`WA_OIDC_ACR mfa`. Caddy leitet die Mitarbeiter-Hosts an `app-mitarbeiter:80` – einen eigenen Container (ADR-007), der
+als einziger die Anmelde-Geheimnisse und das Dienstkonto `konten` kennt. Dieses Ziel gibt es nur mit
 `deploy/anmeldung/docker-compose.anmeldung.yml`. Fehlt die Ergänzung, antworten die Hosts mit 502 – nie mit der
 Anwendung ohne Keycloak (`Caddyfile`).
 
@@ -57,9 +58,14 @@ Auf Hosts ohne `WA_OIDC` (also `angebot-stafl.de`) liefert `current_user()` dann
 `code: umgezogen` und der neuen Adresse (`eingabe_adresse()`, nur `https://…`, Standard
 `https://angebot.dashboard-stafl.de/admin/`). Kundenfunktionen sind öffentliche Aktionen und laufen weiter.
 
-Notzugang bei gestörtem Keycloak: `sh deploy/notzugang.sh an|aus|status` im Installationsordner. Das Skript ändert nur
-die Zeile `WA_EIGENE_ANMELDUNG` in `.env` und erstellt den App-Container neu. Danach gilt auf `angebot-stafl.de/admin/`
-wieder die lokale Anmeldung (4.2). Nur mit Freigabe des Inhabers (Server-Eingriff, `AGENTS.md`).
+Notzugang bei gestörtem Keycloak (seit 04.11.2026 nur über einen SSH-Tunnel, ADR-007): `sh deploy/notzugang.sh
+an|aus|status` im Installationsordner. Das Skript ändert nur die Zeile `WA_NOTZUGANG` in `.env` und erstellt
+`app-mitarbeiter` neu. Der Notzugang ist ein eigener Apache-Host (Port 8090, `apache-oidc.conf`), den Docker nur auf
+`127.0.0.1:8190` des Servers veröffentlicht; dort gilt mit `WA_NOTZUGANG=an` wieder die lokale Anmeldung (4.2).
+`notzugang_host()` (`lib/oidc.php`) erkennt ihn (Webserver setzt `WA_NOTZUGANG_HOST`, direkte Anfrage von einer internen
+Adresse ohne `X-Forwarded-For`); nur dort gilt die IP-Freigabe nicht (`index.php`). `alter_zugang_aus()` liest auf diesem
+Host `WA_NOTZUGANG` (offen nur mit „an“), sonst wie bisher `WA_EIGENE_ANMELDUNG` – das steht in beiden Anwendungs-Containern
+fest auf „aus“. Nur mit Freigabe des Inhabers (Server-Eingriff, `AGENTS.md`).
 
 ## 4.2 Mitarbeiteranmeldung
 
@@ -147,7 +153,8 @@ beginnen, und hängen die aktuelle Seite als `target_link_uri` an; mod_auth_open
 eigenen Hosts (`OIDCRedirectURLsAllowed`). Nach der Rückkehr ist `auth_time` neuer als `authAt`; `oidc_nutzer()` setzt
 damit `adminConfirmedAt` neu (Protokoll `reauth`). Im Eingabebereich (`admin.js`) laufen **schreibende** Anfragen über ein
 eigenes Fenster: Rücksprungziel ist `admin/bestaetigt.html` (meldet „bestätigt“ und schließt sich), danach wiederholt
-`api()` die Anfrage – der Server entscheidet erneut, ob bestätigt ist. So gehen offene Dialoge (z. B. Kunde mit neuem
+`api()` die Anfrage – der Server entscheidet erneut, ob bestätigt ist. Kommt keine Meldung an, genügt das Schließen des
+Fensters (der Eingabebereich prüft alle 0,5 s, ob es noch offen ist). So gehen offene Dialoge (z. B. Kunde mit neuem
 Passwort, Mitarbeiterkonto) nicht verloren; vorher wurde die Seite gewechselt und die Änderung nie ausgeführt.
 
 **Abmelden:** Aktion `logout` verlangt bei bestehender Sitzung das CSRF-Token (ohne Sitzung geht sie immer), entfernt den Eintrag im Sitzungsregister, zerstört die PHP-Sitzung und liefert auf
@@ -165,6 +172,46 @@ am Registereintrag als `oidcSid` vermerkt) bzw. ohne bekannte `sid` oder bei „
 weiter erst mit `auth_time` nach dem Ende, Schleifenschutz 3 in 10 Minuten). Die Modul-Sitzung (4 Std. Leerlauf, wie
 `ssoSessionIdleTimeout` laut `konten.sh realm-aktualisieren`) bleibt die äußere Grenze. Sofort überall aussperren: Konto
 in der Anwendung sperren (`oidc_aktiv`) oder in Keycloak (`deploy/anmeldung/konten.sh sperren`).
+
+**Abmelden, Notfall, Token-Endpunkt (seit 03.11.2026):** `logout` ruft auf Keycloak-Hosts nicht `current_user()` auf
+(das antwortete bei abgelaufener, beendeter oder unvollständiger Sitzung mit `reauth_required`), sondern beendet die
+eigene PHP-Sitzung (mit Sitzung nur mit CSRF-Token) und liefert immer `abmelden` (zentrale Abmeldung über das Modul).
+Der Notfallmodus vermerkt alle betroffenen Mitarbeiter in `oidc-abmeldungen` (`oidc_abmeldung_merken`), auch ohne die
+Option „Keycloak“. Kein Client des Realms erlaubt den Passwort-Grant (`directAccessGrantsEnabled=false`, auch die von
+Keycloak selbst angelegten; Realm Stand 14). Die Kontokonsole `/realms/mitarbeiter/account` sperrt das Caddyfile (404).
+
+**Leerlauf über alle Adressen (seit 04.11.2026):** „Abmelden nach Inaktivität“ gilt auf Keycloak-Hosts für die Anmeldung
+bei Keycloak als Ganzes, nicht mehr je Adresse. `oidc_aktivitaet_merken` schreibt höchstens einmal je Minute die letzte
+Aktivität je Keycloak-Sitzung (`sid`) ins Dokument `oidc-aktivitaet` (13 Stunden; Hintergrundabgleiche zählen nicht);
+`oidc_leerlauf` setzt bei Überschreitung `oidcEnde` in der PHP-Sitzung – auch auf einer Adresse, die der Mitarbeiter danach
+zum ersten Mal öffnet. Weiter wie bisher nur nach erneuter Anmeldung bei Keycloak (`max_age=0`); Aktivität nach dem Ablauf
+(also nach einer erneuten Anmeldung) gilt dann auch auf den anderen Adressen. `start_session` prüft den Leerlauf je PHP-Sitzung
+nur noch für Sitzungen ohne `oidcSub` (Notzugang, Testserver, Kunden).
+
+**Gelöschte Mitarbeiter (seit 04.11.2026):** `user_delete` ruft `konten_entfernen` (lib/anmeldekonten.php): das Konto in
+Keycloak wird mitgelöscht, die Kennung vorher im Dokument `oidc-geloescht` vermerkt. `oidc_konto` verknüpft eine vermerkte
+Kennung nie mit einem neuen, gleich benannten Mitarbeiter; `konten_finden` meldet solche Konten als `geloescht`
+(Zustand `altkonto`), „Konto anlegen“ ersetzt sie. Scheitert das Löschen, bekommt die Oberfläche einen Hinweis
+(`hinweis`). Ältere Konten ohne Mitarbeiter: `deploy/anmeldung/konten.sh verwaist [--loeschen]`.
+
+**Administratorkonten nur über die Serverkonsole (Realm Stand 16, ADR-007 Stufe 1b):** Der Client `konten` liest alle
+Konten (`view-users`), ändert und legt aber nur Konten der Gruppe `anwendungskonten` an (feingranulare Verwaltungsrechte
+von Keycloak). `konten.sh gruppe-abgleichen` hält die Gruppe auf den Mitarbeitern ohne Administratorrolle (`role !==
+'admin'`). In `lib/anmeldekonten.php`: `konten_pflicht_aenderbar` verweigert Änderungen an Administratorkonten selbst,
+`konten_status` meldet `verwaltbar` (aus `access.manage` von Keycloak und der Rolle), `warnung` (Administrator noch in der
+Gruppe) und `anlegbar`; `konten_anlegen` schickt `groups: ['/anwendungskonten']` nur, wenn es die Gruppe gibt
+(`konten_gruppe_da`, Realm vor Stand 16: wie bisher). `konten_api` reicht 403 bei Änderungen an den Aufrufer weiter
+(`konten_verboten` → Hinweis mit Konsolenbefehl). `lib/oidc.php`, `oidc_admin_konto_pruefen`: Administratoren werden nie
+mit einem Konto der Gruppe verknüpft (erste Anmeldung: nur wenn feststeht, dass es nicht in der Gruppe ist) und bekommen mit
+einem solchen Konto keine neue Sitzung (`konten_in_gruppe`). Der Notfallmodus zählt abgelehnte Abmeldungen von
+Administratoren getrennt (`nurKonsole`). Tests mit echtem Keycloak: `tests/oidc/test_oidc.py` (Rechte des Clients,
+Abgleich, Angriff über den Benutzernamen eines Administrators, Beförderung).
+
+**Passwortregeln der zentralen Anmeldung (Realm Stand 15):** Quelle ist Sicherheit → Einstellungen (`pwMin`, `pwComplex`,
+`lockAfter`, `lockMinutes`). Die Anwendung darf in Keycloak keine Realm-Einstellungen ändern; übernommen werden die Werte mit
+`deploy/anmeldung/konten.sh richtlinien` (auch in `realm-aktualisieren`): `passwordPolicy` mit `length(max(12, pwMin))`,
+bei „gemischt“ `upperCase(1) and lowerCase(1) and digits(1)`; `failureFactor = lockAfter`, Sperre `lockMinutes` je Konto.
+`konten_min_laenge()` nutzt dieselbe Mindestlänge für Prüfung, Meldungen und erzeugte Startpasswörter.
 
 ### Lokale Anmeldung (nur Notzugang und Testserver)
 
@@ -214,7 +261,9 @@ Daraus folgt:
 - Passwortwechsel, Zurücksetzen des zweiten Faktors oder Sperren erhöhen `sv` → alle anderen Sitzungen enden.
 - Administratoren beenden Sitzungen über `session_end` (Registereintrag weg).
 - Leerlauf: `idleMinutes` (Standard 480) in `start_session()` und `sess_prune()`. Hintergrundabfragen
-  (`bg_request()`: `draft_ping`, `draft&bg=1`) zählen nicht als Aktivität.
+  (`bg_request()`: `draft_ping`, `draft&bg=1`) zählen nicht als Aktivität. `start_session()` setzt
+  `session.gc_maxlifetime` auf Leerlaufzeit + 10 Minuten (das Image hat keine php.ini; PHP räumte sonst nach 24 Minuten
+  ohne Anfrage ab – betraf vor allem Kunden).
 
 ### Was der API-Einstieg vor jeder Aktion prüft
 
@@ -367,10 +416,18 @@ Kunden sind eine eigene, externe Nutzergruppe (Dokument `kunden`, Zugang im Feld
 `kunde_token_set` als `lokale_anmeldung` gesperrt.
 
 - **Anmeldung:** `kunde_login` (`aktionen/kundenportal.php`) mit Sperre nach Fehlversuchen, vertrauten Geräten und
-  optionaler Datenleck-Prüfung; Passwort festlegen über Einmal-Link (`kunde_token_*`).
+  optionaler Datenleck-Prüfung; Passwort festlegen über Einmal-Link (`kunde_token_*`). Ungültige Links (auch Abmeldelinks)
+  zählen im eigenen Bereich `kundelink` (`attempts_key`), nie im Kunden-Login. `kunde_save` verwirft einen offenen Link,
+  wenn sich die E-Mail-Adresse ändert oder Kunde bzw. Zugang gesperrt wird.
 - **Sitzung:** `kunde_sign_in()` (`lib/kundenmail.php`) vergibt eine neue Sitzungskennung und setzt nur Kundenschlüssel
   (`kid`, `ksv`, `kseen`, `kcsrf`, `ksid`) plus Eintrag im Register `kundensitzungen`. `current_customer()`
   (`lib/kunden.php`) liest Kunde und Zugang bei jeder Anfrage frisch und prüft aktiv, `sv`, Leerlauf und Register.
+  Weil jede Kundenanfrage das ganze Register liest, ist es beim Eintragen begrenzt (`ksess_begrenzen`,
+  `lib/kundenmail.php`): `KSESS_MAX_ZUGANG` = 10 Sitzungen je Kundenzugang (wie `GERAET_MAX`) und `KSESS_MAX` = 5000
+  insgesamt (wie `ANMELDEORT_MAX`). Verdrängt wird die am längsten nicht benutzte Sitzung; sie ist danach abgemeldet.
+  Die Grenze je Zugang ist die wichtige: ein Zugang verdrängt nur eigene Sitzungen und kann die Anfragen anderer
+  Kunden nicht verlangsamen. `ksess_prune` (`lib/kunden.php`) entfernt zusätzlich alles, was länger als `idleMinutes`
+  nicht benutzt wurde.
 - **Trennung:** Mitarbeiteraktionen kennen nur `current_user()`/`require_auth()` (`$_SESSION['uid']`); ein Kunde hat
   nie `uid` und damit nie Zugriff auf Aktionen des Eingabebereichs oder auf Mitarbeiter-Hosts. Kundenaktionen prüfen
   `current_customer()` und `require_customer_csrf()`.

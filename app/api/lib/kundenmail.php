@@ -81,7 +81,7 @@ function abmelde_setzen(array $c, bool $ab, string $via): bool
             if ($ab) $d['customers'][$i]['abgemeldet'] = ['t' => now(), 'via' => $via];
             else unset($d['customers'][$i]['abgemeldet']);
             $d['rev'] = (int)$d['rev'] + 1;
-            store_write('kunden', $d);
+            customers_save($d);
             return true;
         }
         return false;
@@ -93,8 +93,18 @@ function abmelde_melden(array $c, bool $ab, string $via): void
     $who = ['username' => 'kunde:' . ($c['login']['username'] ?? $c['id']), 'name' => $c['firma'], 'role' => 'kunde'];
     $txt = $ab ? 'Kunde hat sich vom Wochenangebot per E-Mail abgemeldet' . ($via === '1klick' ? ' (Ein-Klick im E-Mail-Programm)' : '') : 'Kunde hat sich wieder für das Wochenangebot per E-Mail angemeldet';
     audit('kunde_abmeldung', $txt, [['k' => "c{$c['id']}|mailAngebot", 'code' => $c['nr'] ?? '', 'name' => $c['firma'], 'f' => 'Wochenangebot per E-Mail', 'from' => $ab ? 'ja' : 'nein', 'to' => $ab ? 'nein' : 'ja']], $who);
-    // Hinweis an uns (Empfänger laut Benachrichtigungen; ohne Angabe Antwortadresse, sonst Absender) – Fehler dabei stören den Kunden nicht;
-    // geht über das interne Postfach
+    // Hinweis an uns (Empfänger laut Benachrichtigungen; ohne Angabe Antwortadresse, sonst Absender) – Fehler dabei stören den Kunden
+    // nicht; geht über das interne Postfach. Kundenseite (lib/postausgang.php): nur als Auftrag ablegen, senden darf dort nichts.
+    if (postausgang_warteschlange()) {
+        // nur Kennung und Richtung: Firma, Nummer und Adresse liest der Postausgang aus den internen Stammdaten (ADR-007 Stufe 2b)
+        if (!empty(notify_settings()['events']['abmeldung']['on'])) postausgang_ablegen('hinweis', ['kunde' => ['id' => $c['id']], 'ab' => $ab]);
+        return;
+    }
+    abmelde_hinweis_senden($c, $ab, now());
+}
+/* Hinweis an das Team über eine Ab- bzw. Wiederanmeldung ($t: Zeitpunkt der Änderung, UTC) */
+function abmelde_hinweis_senden(array $c, bool $ab, string $t): void
+{
     $cfg = mail_cfg_intern();
     if (!$cfg || !mail_base_url()) return;
     $targets = notify_targets('abmeldung');
@@ -104,8 +114,8 @@ function abmelde_melden(array $c, bool $ab, string $via): void
         . "
 
 Kundennummer: " . (($c['nr'] ?? '') ?: '–') . "
-E-Mail: {$c['email']}
-Zeit: " . date('d.m.Y, H:i') . " Uhr
+E-Mail: " . ($c['email'] ?? '') . "
+Zeit: " . date('d.m.Y, H:i', strtotime($t) ?: time()) . " Uhr
 
 Die E-Mail-Adresse bleibt in den Stammdaten gespeichert. Einladungen und Passwort-Links können weiterhin gesendet werden.
 ";
@@ -120,13 +130,52 @@ Die E-Mail-Adresse bleibt in den Stammdaten gespeichert. Einladungen und Passwor
 }
 
 /* ---------- Bestellwünsche ---------- */
+/* Einstellungen der Bestellfunktion. Ab Trennstufe 2 (ADR-007 Stufe 2b) stehen die Empfängeradressen nur innen
+   (bestellung-empfaenger): Die Kundenseite sieht nur ihre Anzahl, der Postausgang verschickt nur an diese Adressen. */
 function order_settings(): array
 {
     $d = store_read('bestellung');
-    return ['enabled' => !empty($d['enabled']), 'to' => array_values(array_filter((array)($d['to'] ?? []), 'is_string')), 'copy' => !is_array($d) || !array_key_exists('copy', $d) || !empty($d['copy']),
+    $to = array_values(array_filter((array)($d['to'] ?? []), 'is_string'));
+    $anzahl = count($to);
+    if (store_stufe() >= 2) {
+        $e = store_sichtbar('bestellung-empfaenger') ? store_read('bestellung-empfaenger') : null;   // Kundenseite: nur die Anzahl
+        $to = array_values(array_filter((array)($e['to'] ?? []), 'is_string'));
+        $anzahl = store_innen() ? count($to) : (int)($d['empfaenger'] ?? 0);
+    }
+    $frueher = store_stufe() >= 2 && isset($e) && is_array($e) ? array_values(array_filter((array)($e['frueher'] ?? []), 'is_string')) : [];
+    return ['enabled' => !empty($d['enabled']), 'to' => $to, 'frueher' => $frueher, 'empfaenger' => $anzahl, 'copy' => !is_array($d) || !array_key_exists('copy', $d) || !empty($d['copy']),
             'updatedAt' => $d['updatedAt'] ?? null, 'updatedBy' => $d['updatedBy'] ?? ''];
 }
-function order_enabled(): bool { $o = order_settings(); return $o['enabled'] && $o['to'] && mail_cfg() && mail_base_url(); }
+/* Einstellungen speichern ($neu: enabled, copy und/oder to – fehlende bleiben). Ab Trennstufe 2: Adressen in bestellung-empfaenger,
+   im gemeinsamen Dokument nur ihre Anzahl. Nur Mitarbeiterseite. */
+function order_settings_speichern(array $neu, string $wer): void
+{
+    $doc = store_read('bestellung');
+    $doc = is_array($doc) ? $doc : [];
+    foreach (['enabled', 'copy'] as $k) if (array_key_exists($k, $neu)) $doc[$k] = (bool)$neu[$k];
+    $doc['updatedAt'] = now(); $doc['updatedBy'] = $wer;
+    if (store_stufe() >= 2) {
+        $to = $neu['to'] ?? order_settings()['to'];
+        // frühere Empfänger bleiben vermerkt: Aufträge älterer Bestellwünsche gehen beim Nachsenden an den Originalempfänger
+        if (array_key_exists('to', $neu)) with_lock('bestellung-empfaenger', function () use ($to, $wer) {
+            $alt = store_read('bestellung-empfaenger') ?? [];
+            $frueher = array_values(array_unique(array_merge(array_diff((array)($alt['to'] ?? []), $to), (array)($alt['frueher'] ?? []))));
+            store_write('bestellung-empfaenger', ['to' => $to, 'frueher' => array_slice(array_values(array_diff($frueher, $to)), 0, 50), 'updatedAt' => now(), 'updatedBy' => $wer]);
+        });
+        unset($doc['to']);
+        $doc['empfaenger'] = count($to);
+    } elseif (array_key_exists('to', $neu)) {
+        $doc['to'] = $neu['to'];
+    }
+    store_write('bestellung', $doc);
+}
+/* Bestellfunktion nutzbar? Kundenseite (lib/postausgang.php): ob ein Postfach eingerichtet ist, meldet der Dienst „postausgang“ –
+   ohne Lebenszeichen von ihm nimmt das Portal keine Bestellwünsche an (sonst blieben sie unbemerkt liegen). */
+function order_enabled(): bool
+{
+    $o = order_settings();
+    return $o['enabled'] && $o['empfaenger'] > 0 && (postausgang_warteschlange() ? postausgang_versand_bereit() : mail_cfg()) && mail_base_url();
+}
 function de_num(float $v, int $dec = 2): string { return number_format($v, $dec, ',', '.'); }
 /* Menge immer mit 2 Nachkommastellen wie überall (12,50 kg; app/assets/format.js) */
 function de_qty(float $v): string { return number_format($v, 2, ',', '.'); }
@@ -134,7 +183,7 @@ function de_qty(float $v): string { return number_format($v, 2, ',', '.'); }
 function mail_tpl_bestellung(array $o, bool $copy): array
 {
     global $CFG;
-    $c = $o['kunde'];
+    $c = (is_array($o['kunde'] ?? null) ? $o['kunde'] : []) + array_fill_keys(KUNDE_SCHNAPPSCHUSS, '') + ['username' => ''];
     $subject = $copy ? "Ihr Bestellwunsch {$o['nr']} – {$CFG['company']}" : "Bestellwunsch {$o['nr']} – {$c['firma']}" . ($o['week'] ? " (KW {$o['week']}/{$o['year']})" : '');
     $intro = $copy
         ? "vielen Dank für Ihren Bestellwunsch. Wir haben ihn erhalten und melden uns mit der Bestätigung bei Ihnen. Bitte beachten Sie: Erst mit unserer Bestätigung ist die Bestellung verbindlich."
@@ -294,7 +343,7 @@ function kunde_token_new(string $kid, string $purpose): array
         $d = customers_load();
         foreach ($d['customers'] as $i => $x) if ($x['id'] === $kid && !empty($x['login'])) {
             $d['customers'][$i]['login']['token'] = ['h' => hash('sha256', $tok), 'exp' => $exp, 'p' => $purpose, 't' => now()];
-            store_write('kunden', $d);
+            customers_save($d);
             return $d['customers'][$i];
         }
         return null;
@@ -360,7 +409,7 @@ function mail_record(array $entries, ?array $wk = null): void
             $d['customers'][$i]['mailLast'] = ['typ' => $e['typ'], 't' => now(), 'ok' => $e['ok'], 'to' => $e['to']];
             if ($e['ok'] && $e['typ'] === 'woche' && $wk) $d['customers'][$i]['weekly'] = ['week' => $wk['week'], 'year' => $wk['year'], 't' => now()];
         }
-        store_write('kunden', $d);
+        customers_save($d);
     });
     with_lock('mailversand', function () use ($entries, $ME) {
         $l = store_read('mailversand') ?? [];
@@ -378,6 +427,30 @@ function mail_job_for(array $c, string $typ, string $note = '', ?array $wk = nul
     return ['to' => $c['email'], 'name' => $c['ansprechpartner'] ?: $c['firma'], 'subject' => $sub, 'text' => $txt, 'html' => $html,
             'headers' => ['List-Unsubscribe' => '<' . $one . '>', 'List-Unsubscribe-Post' => 'List-Unsubscribe=One-Click']];
 }
+/* Obergrenzen für das Sitzungsregister der Kunden (jede Anfrage eines angemeldeten Kunden liest es vollständig, also darf
+   es nicht beliebig wachsen). Ohne Grenze bliebe jede Anmeldung bis zum Ende der Leerlaufzeit stehen, und ein einziger
+   Zugang könnte durch wiederholtes Anmelden die Anfragen aller anderen Kunden verlangsamen.
+   KSESS_MAX_ZUGANG ist die wichtige Grenze: ein Zugang verdrängt nur eigene Sitzungen (wie GERAET_MAX bei den vertrauten
+   Geräten). KSESS_MAX ist nur das Netz darunter (wie ANMELDEORT_MAX bei den Anmeldeorten) und liegt weit über dem, was im
+   Betrieb gleichzeitig anfällt. Verdrängt wird immer die am längsten nicht benutzte Sitzung; sie ist danach abgemeldet. */
+const KSESS_MAX_ZUGANG = 10;     // gleichzeitige Sitzungen je Kundenzugang (die zuletzt benutzten bleiben)
+const KSESS_MAX = 5000;          // Sitzungen aller Kunden zusammen
+
+/* Register auf die Obergrenzen kürzen: erst je Zugang, dann insgesamt (die zuletzt benutzten bleiben) */
+function ksess_begrenzen(array $r, string $kid): array
+{
+    $eigen = array_filter($r, fn($v) => is_array($v) && (string)($v['kid'] ?? '') === $kid);
+    if (count($eigen) > KSESS_MAX_ZUGANG) {
+        uasort($eigen, fn($a, $b) => (int)($a['seen'] ?? 0) <=> (int)($b['seen'] ?? 0));
+        foreach (array_slice(array_keys($eigen), 0, count($eigen) - KSESS_MAX_ZUGANG) as $k) unset($r[$k]);
+    }
+    if (count($r) > KSESS_MAX) {
+        uasort($r, fn($a, $b) => (int)($b['seen'] ?? 0) <=> (int)($a['seen'] ?? 0));
+        $r = array_slice($r, 0, KSESS_MAX, true);
+    }
+    return $r;
+}
+
 /* Kunde anmelden (nach Passwortprüfung oder Einmal-Link) */
 function kunde_sign_in(array $c, string $via = 'passwort'): void
 {
@@ -391,6 +464,7 @@ function kunde_sign_in(array $c, string $via = 'passwort'): void
         $r = ksess_prune(store_read('kundensitzungen') ?? []);
         $sid = bin2hex(random_bytes(12));
         $r[$sid] = ['kid' => $c['id'], 'ip' => client_ip(), 'ua' => mb_substr((string)($_SERVER['HTTP_USER_AGENT'] ?? ''), 0, 240), 'created' => now(), 'seen' => time()];
+        $r = ksess_begrenzen($r, (string)$c['id']);
         store_write('kundensitzungen', $r);
         $_SESSION['ksid'] = $sid;
     });

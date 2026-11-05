@@ -65,7 +65,10 @@ switch ($action) {
                     audit('import', 'Excel importiert: ' . (s($note['file'] ?? '', 120) ?: 'Datei') . ' – KW ' . ($model['meta']['week'] ?? '?') . '/' . ($model['meta']['year'] ?? '?') . ', ' . count($model['items']) . ' Artikel (gegenüber veröffentlicht: ' . changes_summary($d) . ')', array_slice($d, 0, 2000));
                 } elseif ($note && ($note['type'] ?? '') === 'cleanup') {
                     $d = changes_between($before, $model);
-                    if ($d) audit('draft', 'Bezeichnungen und Herkunft vereinheitlicht (' . count($d) . ' Änderungen: ohne „frisch“, Marke Fleischmeister, Herkunft als Kürzel)', array_slice($d, 0, 2000));
+                    if ($d) audit('draft', 'Merkmale vereinheitlicht (' . count($d) . ' Änderungen: Herkunft als Kürzel, Zustand „frisch“)', array_slice($d, 0, 2000));
+                } elseif ($note && ($note['type'] ?? '') === 'kategorien') {
+                    $d = changes_between($before, $model);
+                    audit('draft', 'Angebot nach den Angebotskategorien geordnet (Stammdaten)' . ($d ? ': ' . changes_summary($d) : ''), array_slice($d, 0, 2000));
                 } elseif ($note && ($note['type'] ?? '') === 'master') {
                     $d = changes_between($before, $model);
                     if ($d) audit('draft', 'Stammdaten auf den Entwurf angewendet', array_slice($d, 0, 2000));
@@ -115,6 +118,18 @@ switch ($action) {
                 audit('publish', 'KW ' . $model['meta']['week'] . '/' . $model['meta']['year'] . ' veröffentlicht – ' . count($model['items']) . ' Artikel' . ($prev ? ' (' . changes_summary($d) . ')' : ' (erste Veröffentlichung)'), array_slice($d, 0, 2000));
                 respond(['ok' => true, 'publishedAt' => $model['publishedAt'], 'revision' => $rev]);
             });
+        }
+
+        /* Export für WinAB: veröffentlichtes Wochenangebot als CSV (Artikelnummer;Preis, höchster Preis je Nummer) –
+           nur mit eigenem Recht, im Protokoll vermerkt (module/angebot/winab-export.php) */
+        case 'angebot_winab_export': {
+            $me = require_perm('angebot.winab_export', true);
+            require_once dirname(__DIR__) . '/module/angebot/winab-export.php';
+            $r = winab_export();
+            audit('offers', 'Wochenangebot ' . ($r['woche'] !== '' ? $r['woche'] . ' ' : '') . 'für WinAB exportiert – ' . $r['anzahl'] . ' Artikel'
+                . ($r['ohnePreis'] ? ', ' . $r['ohnePreis'] . ' ohne Preis ausgelassen' : '') . ($r['doppelt'] ? ', ' . $r['doppelt'] . '× doppelt (höchster Preis)' : ''));
+            header('Cache-Control: private, no-store');
+            respond(['ok' => true] + $r);
         }
 
         case 'versions': {

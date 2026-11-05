@@ -92,6 +92,13 @@ switch ($action) {
                     $row['login'] = $l;
                 }
                 if (!$row['active']) $ended = $ended || ($old && !empty($old['active']));
+                // Offener Link aus einer E-Mail (Einladung, Passwort festlegen) gilt nur für die Adresse, an die er ging, und nur
+                // solange Kunde und Zugang aktiv bleiben – sonst funktionierte er nach Korrektur der Adresse bzw. nach erneutem
+                // Freischalten weiter (Befund 03.11.2026). Einen neuen Link sendet die Verwaltung bei Bedarf danach.
+                if ($old && is_array($row['login'] ?? null) && isset($row['login']['token'])
+                    && (mb_strtolower(trim((string)($row['email'] ?? ''))) !== mb_strtolower(trim((string)($old['email'] ?? ''))) || !$row['active'] || empty($row['login']['active']))) {
+                    unset($row['login']['token']);
+                }
                 // Felder, die dieser Stand nicht kennt (neuere Fassung, andere Module, Daten der Warenwirtschaft „wawi“), bleiben erhalten (GR-006).
                 // Aktiv-Regel des Kundenimports (module/verwaltung/import.php): „autoInaktiv“ (vom Import deaktiviert) entfällt, sobald
                 // der Kunde aktiv ist oder der Status von Hand geändert wird – dann reaktiviert ihn ein späterer Import nicht mehr.
@@ -104,7 +111,7 @@ switch ($action) {
                 usort($d['customers'], function ($x, $y) { return strcasecmp($x['firma'], $y['firma']); });
                 $d['rev'] = (int)$d['rev'] + 1;
                 $d['updatedAt'] = now();
-                store_write('kunden', $d);
+                customers_save($d);
                 return [$d, $row, $old, $pwNew, $ended];
             });
             [$d, $row, $old, $pwNew, $ended] = $res;
@@ -135,7 +142,7 @@ switch ($action) {
                     array_splice($d['customers'], $i, 1);
                     $d['rev'] = (int)$d['rev'] + 1;
                     $d['updatedAt'] = now();
-                    store_write('kunden', $d);
+                    customers_save($d);
                     return [$d, $c];
                 }
                 fail('Kunde nicht gefunden.', 404);

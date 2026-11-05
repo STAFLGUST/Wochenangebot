@@ -8,6 +8,8 @@
   python3 werkzeuge/regeln.py erzeugen                  erzeugte PHP-Listen schreiben: app/api/lib/aktionen-liste.php
                                                         (regeln/aktionen/) und app/api/lib/module-liste.php (Modulregister,
                                                         Entscheidungstabelle aus regeln/module.toml und regeln/wartung.toml)
+                                                        und app/api/lib/datenbereiche-liste.php (Speicherbereiche, Feld
+                                                        bereich in regeln/datenverantwortung.toml, ADR-007 Stufe 2)
 
 Quelle aller Angaben: regeln/*.toml. Erklärung: docs/plattform/multi-agent.md
 """
@@ -396,6 +398,14 @@ def pruefe_daten(rw: Regelwerk, liste: list) -> None:
             rw.f(f"Dokument {n}: schutz muss eines von {', '.join(SCHUTZ)} sein")
         if not d.get("beschreibung"):
             rw.f(f"Dokument {n}: beschreibung fehlt")
+        if d.get("bereich") not in BEREICHE:
+            rw.f(f"Dokument {n}: bereich muss eines von {', '.join(BEREICHE)} sein (ADR-007 Stufe 2)")
+        if "trennstufe" in d and (d.get("bereich") not in ("intern", "veroeffentlicht", "je_seite") or not isinstance(d["trennstufe"], int) or not 2 <= d["trennstufe"] <= TRENNSTUFE_MAX):
+            rw.f(f"Dokument {n}: trennstufe nur bei bereich = \"intern\", \"veroeffentlicht\" oder \"je_seite\" und als Zahl 2…{TRENNSTUFE_MAX} (Dokument zieht erst mit dieser Trennstufe um)")
+        if d.get("bereich") in ("veroeffentlicht", "je_seite") and "trennstufe" not in d:
+            rw.f(f"Dokument {n}: bereich = \"{d.get('bereich')}\" braucht trennstufe (bis dahin bleibt es wie bisher im gemeinsamen Ordner)")
+        if "felder_kundenseite" in d and n != "kunden":
+            rw.f(f"Dokument {n}: felder_kundenseite gibt es nur für kunden (Teilung in kunden und kundenstamm, ADR-007 Stufe 2b)")
         for feld in ("leser", "schreiber"):
             for x in d.get(feld, []):
                 if x not in ids:
@@ -599,6 +609,83 @@ def pruefe_caddy(rw: Regelwerk) -> None:
             rw.f(f"Caddyfile: {h} ist weder Oberfläche noch Umgebung in regeln/module.toml")
 
 
+# ─────────────────────────────── Speicherbereiche (ADR-007 Stufe 2) ───────────────────────────────
+
+BEREICHE = ("kundenseite", "intern", "veroeffentlicht", "je_seite")
+BEREICHE_LISTE = "app/api/lib/datenbereiche-liste.php"
+# Höchste Trennstufe, die dieser Stand kennt: 1 = interne Dokumente getrennt (Stufe 2a), 2 = Kundendokument geteilt, Bestand/
+# Stammdaten, Postfächer, Vorlagen und Empfänger nur noch innen (Stufe 2b), 3 = Veröffentlichtes geschützt: die Mitarbeiterseite
+# liest es innen, die Kundenseite nur eine Kopie, die sie nicht schreiben kann (Stufe 2c), 4 = Protokoll getrennt: die Kundenseite
+# schreibt ihre Einträge in kundenprotokoll/*, das Protokoll der Mitarbeiterseite liegt innen (Stufe 2d). Dokumente mit
+# „trennstufe = n“ liegen bis zur Stufe n im gemeinsamen Ordner (so ändert ein Release allein nichts) und ziehen mit
+# `deploy/daten-trennen.sh trennen` um. 5 = Zähler, Anmeldeversuche und Live-Verkehr je Seite (Stufe 2e).
+TRENNSTUFE_MAX = 5
+
+
+def kundenseite_dokumente(rw: Regelwerk) -> tuple:
+    """Dokumente der Kundenseite: (genaue Namen, Präfixe aus Mustern „name/*“) – alle anderen sind intern."""
+    namen, praefixe = [], []
+    for d in rw.daten.get("dokument", []):
+        if d.get("bereich") != "kundenseite":
+            continue
+        n = d["name"]
+        (praefixe if n.endswith("/*") else namen).append(n[:-1] if n.endswith("/*") else n)
+    return sorted(namen), sorted(praefixe)
+
+
+def ab_stufe_dokumente(rw: Regelwerk) -> dict:
+    """Interne bzw. veröffentlichte Dokumente, die erst mit einer späteren Trennstufe umziehen: Name → Stufe (ohne Muster „name/*“)."""
+    return {d["name"]: d["trennstufe"] for d in rw.daten.get("dokument", []) if d.get("bereich") in ("intern", "veroeffentlicht", "je_seite") and "trennstufe" in d and not d["name"].endswith("/*")}
+
+
+def ab_stufe_praefixe(rw: Regelwerk) -> dict:
+    """Wie ab_stufe_dokumente für Muster „name/*“: Präfix „name/“ → Stufe."""
+    return {d["name"][:-1]: d["trennstufe"] for d in rw.daten.get("dokument", []) if d.get("bereich") in ("intern", "veroeffentlicht", "je_seite") and "trennstufe" in d and d["name"].endswith("/*")}
+
+
+def je_seite_dokumente(rw: Regelwerk) -> list:
+    """Je Seite getrennte Dokumente: Kundenseite außen, Mitarbeiterseite innen, gleicher Name (Stufe 2e)."""
+    return sorted(d["name"] for d in rw.daten.get("dokument", []) if d.get("bereich") == "je_seite")
+
+
+def veroeffentlicht_dokumente(rw: Regelwerk) -> list:
+    """Veröffentlichte Dokumente: Mitarbeiterseite schreibt und liest innen, die Kundenseite liest eine Kopie im gemeinsamen Ordner."""
+    return sorted(d["name"] for d in rw.daten.get("dokument", []) if d.get("bereich") == "veroeffentlicht")
+
+
+def kunden_felder(rw: Regelwerk) -> list:
+    """Felder eines Kunden, die ab Trennstufe 2 im gemeinsamen Ordner bleiben (Portal); alle übrigen liegen in kundenstamm."""
+    for d in rw.daten.get("dokument", []):
+        if d.get("name") == "kunden":
+            return list(d.get("felder_kundenseite", []))
+    return []
+
+
+def bereiche_php(rw: Regelwerk) -> str:
+    namen, praefixe = kundenseite_dokumente(rw)
+    liste = lambda xs: "[" + ", ".join(f"'{x}'" for x in xs) + "]"
+    stufen = ab_stufe_dokumente(rw)
+    z = ["<?php", "declare(strict_types=1);",
+         "/* ERZEUGT von `python3 werkzeuge/regeln.py erzeugen` aus regeln/datenverantwortung.toml (Feld bereich) – nicht von Hand ändern.",
+         "   Speicherbereiche (ADR-007 Stufe 2, app/api/storage.php): Dokumente, die die Kundenseite braucht, bleiben im gemeinsamen",
+         "   Ordner; alle anderen liegen nach deploy/daten-trennen.sh im Ordner daten-intern, den die Kundenseite nicht sieht.",
+         "   DATEN_AB_STUFE: interne Dokumente, die erst mit dieser Trennstufe umziehen (bis dahin im gemeinsamen Ordner).",
+         "   KUNDEN_FELDER_KUNDENSEITE: ab Trennstufe 2 bleiben nur diese Felder eines Kunden im Dokument kunden (Rest: kundenstamm).",
+         "   DATEN_VEROEFFENTLICHT: ab ihrer Trennstufe schreibt und liest die Mitarbeiterseite sie innen und legt eine Kopie in den",
+         "   gemeinsamen Ordner; die Kundenseite liest nur die Kopie und kann sie nicht schreiben.",
+         "   DATEN_JE_SEITE: ab ihrer Trennstufe schreibt jede Seite ihr eigenes Dokument (Kundenseite außen, Mitarbeiterseite innen). */",
+         "if (realpath((string)($_SERVER['SCRIPT_FILENAME'] ?? '')) === __FILE__) { http_response_code(404); exit; }", "",
+         f"const DATEN_KUNDENSEITE = {liste(namen)};",
+         f"const DATEN_KUNDENSEITE_PRAEFIX = {liste(praefixe)};",
+         f"const DATEN_TRENNSTUFE = {TRENNSTUFE_MAX};",
+         "const DATEN_AB_STUFE = [" + ", ".join(f"'{k}' => {v}" for k, v in sorted(stufen.items())) + "];",
+         "const DATEN_AB_STUFE_PRAEFIX = [" + ", ".join(f"'{k}' => {v}" for k, v in sorted(ab_stufe_praefixe(rw).items())) + "];",
+         f"const KUNDEN_FELDER_KUNDENSEITE = {liste(kunden_felder(rw))};",
+         f"const DATEN_VEROEFFENTLICHT = {liste(veroeffentlicht_dokumente(rw))};",
+         f"const DATEN_JE_SEITE = {liste(je_seite_dokumente(rw))};"]
+    return "\n".join(z) + "\n"
+
+
 # ─────────────────────────────── Aktionsregister ───────────────────────────────
 
 AKTIONEN_LISTE = "app/api/lib/aktionen-liste.php"
@@ -782,6 +869,10 @@ def pruefe_aktionen(rw: Regelwerk) -> None:
     if gesehen or liste.is_file():
         if not liste.is_file() or liste.read_text(encoding="utf-8") != aktionen_php(rw):
             rw.f(f"{AKTIONEN_LISTE} passt nicht zu regeln/aktionen/ – `python3 werkzeuge/regeln.py erzeugen` ausführen")
+    bliste = rw.wurzel / BEREICHE_LISTE
+    if bliste.is_file() or (rw.wurzel / "app/api/storage.php").is_file():
+        if not bliste.is_file() or bliste.read_text(encoding="utf-8") != bereiche_php(rw):
+            rw.f(f"{BEREICHE_LISTE} passt nicht zu regeln/datenverantwortung.toml – `python3 werkzeuge/regeln.py erzeugen` ausführen")
     mliste = rw.wurzel / MODULE_LISTE
     if mliste.is_file() or (rw.wurzel / "app/api/lib/module.php").is_file():
         if not mliste.is_file() or mliste.read_text(encoding="utf-8") != module_php(rw):
@@ -977,8 +1068,9 @@ def main(argv=None) -> int:
     if a.befehl == "erzeugen":
         (wurzel / AKTIONEN_LISTE).write_text(aktionen_php(rw), encoding="utf-8")
         (wurzel / MODULE_LISTE).write_text(module_php(rw), encoding="utf-8")
+        (wurzel / BEREICHE_LISTE).write_text(bereiche_php(rw), encoding="utf-8")
         print(f"geschrieben: {AKTIONEN_LISTE} ({len(aktionen_tabelle(rw))} Aktionen), {MODULE_LISTE} "
-              f"({len(rw.modulliste)} Module)")
+              f"({len(rw.modulliste)} Module), {BEREICHE_LISTE}")
         return 0
     if a.befehl == "betroffen":
         liste = sorted(set(a.dateien) | (set(geaenderte_dateien(wurzel, a.basis)) if a.basis else set()))
