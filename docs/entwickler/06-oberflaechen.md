@@ -214,6 +214,16 @@ Artikelpreise kommen über die Importzentrale (Importart `angebot_preise`, Serve
 Vorschau zeigt die eigene Darstellung `app/module/angebot/preisimport.js` (bisher → neu je Angebot, „Bitte prüfen“ ab
 10 %, Kundengruppen ohne Angebot einzeln anhaken – Option `gruppen`), Vertrag in `docs/plattform/schnittstellen/import.md`.
 
+### Export für WinAB
+
+Knopf „Export für WinAB“ (`#btn-winab`) in der Werkzeugleiste: sichtbar nur mit dem Recht `angebot.winab_export` und nur
+beim Wochenangebot (eine Zeile in `renderWerbungBtn()`, `admin.js`); den Klick behandelt `app/module/angebot/winab-export.js`.
+Die Datei erzeugt der Server (Aktion `angebot_winab_export`, POST mit CSRF, `module/angebot/winab-export.php`) aus dem
+**veröffentlichten** Wochenangebot über `offer_resolve()` – also mit Sonderpreisen und ohne ausgeblendete oder ausverkaufte
+Artikel – und gibt `{datei, csv, anzahl, doppelt, ohnePreis, woche}` zurück; der Browser speichert `csv` als Datei.
+Je Artikelnummer (`code_key`) eine Zeile mit dem höchsten Preis aus Preis und Zusatzpreisen; Format `Artikelnummer;Preis`
+mit Kopfzeile, Dezimalkomma, CRLF, ohne BOM. Jeder Export steht im Protokoll (Bereich „Angebote“).
+
 ### Werbung schalten
 
 Knopf „Werbung“ in der Werkzeugleiste (Zahl = beworbene Artikel des gewählten Angebots): `openWerbung()` (`admin.js`)
