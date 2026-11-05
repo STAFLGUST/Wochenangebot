@@ -177,6 +177,7 @@ GEWICHT = {
     'qs_vorlagen': 25,   # geschätzt (Oktober 2026), noch ohne CI-Median
     'qs_bericht': 20,   # geschätzt (Oktober 2026), noch ohne CI-Median
     'protokoll': 6,   # geschätzt (Oktober 2026), noch ohne CI-Median
+    'angebotskategorien': 12,   # geschätzt (November 2026), noch ohne CI-Median
     'rollen': 20, 'rollen_host': 8, 'einheit': 90,   # geschätzt (Oktober 2026), noch ohne CI-Median
 }
 
