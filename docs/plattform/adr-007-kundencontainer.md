@@ -354,6 +354,11 @@ niemand (Stufe 1b).
   getrennten Daten erst `daten-trennen.sh zusammenfuehren` (Stufe 2a).
 - **Daten trennen:** `sh deploy/daten-trennen.sh status` (Stufe und Plan, ändert nichts), `trennen` (auf die höchste Stufe des
   eingespielten Stands), `zusammenfuehren` – Abschnitte Stufe 2a und 2b.
+- **Ein Vorgang über beide Datenbanken** (z. B. Veröffentlichen bis Trennstufe 2: Entwurf innen, Angebot und Protokoll außen; ab
+  Stufe 2: Kunden außen, Stammdaten innen): Die äußerste Sperre schließt beide Datenbanken gemeinsam ab bzw. setzt beide zurück
+  (`with_lock_in`, `store_beitreten`). Vorher blieb bei einem Fehler mitten im Vorgang der schon geschriebene Teil der anderen
+  Datenbank gespeichert (seit Stufe 2a, z. B. ein veröffentlichtes Angebot ohne gesicherte Vorversion). Zwei SQLite-Dateien lassen
+  sich nicht in einem einzigen Schritt abschließen – offen bleibt nur ein Fehler genau zwischen den beiden Abschlüssen.
 - **Prüfung in der CI:** Die volle E2E-Suite läuft zusätzlich mit getrennten Daten (SQLite wie auf dem Server, höchste
   Trennstufe des Stands, `WA_TEST_TRENNUNG=1`, Aufträge „Ende-zu-Ende-Tests (sqlite, getrennt, Teil k/3)“). So fällt vor dem
   Merge auf, wenn neuer Code Daten am falschen Ort erwartet oder die Kundenseite interne Dokumente braucht.

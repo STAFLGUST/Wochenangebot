@@ -235,6 +235,7 @@ function store_write(string $name, array $data): void
     $json = json_encode($data, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_THROW_ON_ERROR);
     store_schreibschutz($name);
     if (store_sql($name)) {
+        store_beitreten(store_bereich($name));
         $q = store_db(store_bereich($name))->prepare('INSERT INTO documents(name,payload,mtime) VALUES(?,?,?) ON CONFLICT(name) DO UPDATE SET payload=excluded.payload,mtime=excluded.mtime');
         $q->execute([$name, $json, time()]);
         if (store_veroeffentlicht($name)) store_kopie($name);
@@ -250,7 +251,7 @@ function store_write(string $name, array $data): void
 function store_delete(string $name): void
 {
     store_schreibschutz($name);
-    if (store_sql($name)) { $q = store_db(store_bereich($name))->prepare('DELETE FROM documents WHERE name=?'); $q->execute([$name]); }
+    if (store_sql($name)) { store_beitreten(store_bereich($name)); $q = store_db(store_bereich($name))->prepare('DELETE FROM documents WHERE name=?'); $q->execute([$name]); }
     else { $p = store_path($name); if (is_file($p) && !unlink($p)) throw new RuntimeException('Cannot delete data'); }
     if (store_veroeffentlicht($name)) store_kopie($name);
 }
@@ -295,20 +296,33 @@ function store_rollback(?string $bereich = null): void
     }
     $GLOBALS['notify_queue'] = [];   // vorgemerkte Benachrichtigungen gehören zu verworfenen Änderungen
 }
+/* Schreiben in einen Bereich ohne eigene Transaktion, während in einem anderen eine läuft (z. B. Veröffentlichen: Entwurf innen,
+   Angebot bis Trennstufe 2 außen): Der Bereich tritt der laufenden Transaktion bei und wird mit ihr abgeschlossen (with_lock_in). */
+function store_beitreten(string $b): void
+{
+    if (empty($GLOBALS['store_tx']) || !empty($GLOBALS['store_tx'][$b]) || store_mode($b) !== 'sqlite') return;
+    store_db($b)->exec('BEGIN IMMEDIATE'); $GLOBALS['store_tx'][$b] = true;
+}
 function with_lock(string $name, callable $fn)
 {
     store_schreibschutz($name);   // Kundenseite sperrt (und schreibt) veröffentlichte Dokumente nie
     store_path($name);            // Name prüfen (und Prüfhilfe)
     return with_lock_in(store_bereich($name), $name, $fn);
 }
-/* Sperre bzw. Transaktion eines Dokuments in einem bestimmten Bereich (with_lock wählt den Bereich nach der Einteilung) */
+/* Sperre bzw. Transaktion eines Dokuments in einem bestimmten Bereich (with_lock wählt den Bereich nach der Einteilung).
+   Getrennte Daten (zwei Datenbanken): Die äußerste Transaktion schließt alle Bereiche gemeinsam ab – bzw. setzt alle zurück. Eine
+   innere in einem anderen Bereich (z. B. Entwurf innen, Protokoll außen) und Schreiben in einen weiteren Bereich (store_beitreten)
+   bleiben bis dahin offen. So bleibt ein Vorgang wie mit gemeinsamen Daten ganz oder gar nicht gespeichert (bis auf den Abschluss
+   selbst: zwei Datenbanken lassen sich nicht in einem Schritt abschließen). Scheitert eine innere, setzt sie nur ihren Bereich
+   zurück (wie bisher); ein nicht abgefangener Fehler setzt danach in der äußersten alles zurück. */
 function with_lock_in(string $b, string $name, callable $fn)
 {
     if (!in_array($name, STORE_SIDECARS, true) && store_mode($b) === 'sqlite') {
         if (!empty($GLOBALS['store_tx'][$b])) return $fn();
+        $aussen = empty($GLOBALS['store_tx']);
         store_db($b)->exec('BEGIN IMMEDIATE'); $GLOBALS['store_tx'][$b] = true;
-        try { $result = $fn(); store_commit($b); return $result; }
-        catch (Throwable $e) { store_rollback($b); throw $e; }
+        try { $result = $fn(); if ($aussen) store_commit(); return $result; }
+        catch (Throwable $e) { store_rollback($aussen ? null : $b); throw $e; }
     }
     static $held = [];
     if (!empty($held[$b . '|' . $name])) return $fn();
