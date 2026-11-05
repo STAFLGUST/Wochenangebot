@@ -596,6 +596,60 @@
     return m.week ? `Freibleibendes Angebot für die KW ${m.week}${m.year ? '/' + m.year : ''}` : 'Angebot';
   }
 
+  /* Aufbau nach Angebotskategorien (Stammdaten der Verwaltung, Inhaber 05.11.2026): Reihenfolge der Kategorien, darin
+     der VK-Gruppen, bestimmt die Reihenfolge der Angebotsgruppen in allen Angeboten; der Abschnitt einer Gruppe ist die
+     Kategorie ihrer VK-Gruppe. kategorien: [{ name, vk: ['1150', …] }] (leer = nichts tun, Reihenfolge bleibt von Hand);
+     vkVon(code) → VK-Gruppe eines Artikels (Stammdaten) oder ''.
+     – Angebotsgruppe ohne VK-Gruppe: die häufigste VK-Gruppe ihrer Artikel wird gemerkt (g.vk), einmalig.
+     – Mehrere Gruppen derselben VK-Gruppe und Gruppen ohne Kategorie behalten ihre bisherige Reihenfolge untereinander;
+       Gruppen ohne Kategorie stehen am Ende, ohne Abschnitt.
+     – Artikel stehen danach in der Reihenfolge ihrer Gruppen; innerhalb einer Gruppe bleibt die Reihenfolge.
+     Ändert das Modell an Ort und Stelle. Rückgabe { changed, ohne: [Gruppen-IDs ohne Kategorie] }. */
+  function nachKategorien(model, kategorien, vkVon) {
+    const out = { changed: false, ohne: [] };
+    if (!model || !Array.isArray(kategorien) || !kategorien.length) return out;
+    const pos = new Map();
+    kategorien.forEach((k, ki) => (k.vk || []).forEach((v, vi) => { if (!pos.has(String(v))) pos.set(String(v), [ki, vi]); }));
+    for (const g of model.groups) {
+      if (g.vk) continue;
+      const n = new Map();
+      for (const it of model.items) {
+        if (it.groupId !== g.id || !it.code) continue;
+        const v = String((vkVon && vkVon(it.code)) || '');
+        if (v) n.set(v, (n.get(v) || 0) + 1);
+      }
+      let best = '', bestN = 0;
+      for (const [v, c] of n) if (c > bestN || (c === bestN && pos.has(v) && !pos.has(best))) { best = v; bestN = c; }
+      if (best) { g.vk = best; out.changed = true; }
+    }
+    const altG = new Map(model.groups.map((g, i) => [g.id, i]));
+    const stelle = (g) => (g.vk && pos.get(String(g.vk))) || null;
+    const groups = model.groups.slice().sort((a, b) => {
+      const pa = stelle(a), pb = stelle(b);
+      if (pa && pb) return pa[0] - pb[0] || pa[1] - pb[1] || altG.get(a.id) - altG.get(b.id);
+      if (pa || pb) return pa ? -1 : 1;
+      return altG.get(a.id) - altG.get(b.id);
+    });
+    for (const g of groups) {
+      const p = stelle(g);
+      const sec = p ? clean(kategorien[p[0]].name) : '';
+      if (!p) out.ohne.push(g.id);
+      if ((g.section || '') !== sec) { g.section = sec; out.changed = true; }
+    }
+    if (groups.some((g, i) => g !== model.groups[i])) { model.groups.splice(0, model.groups.length, ...groups); out.changed = true; }
+    const neuG = new Map(model.groups.map((g, i) => [g.id, i]));
+    const altI = new Map(model.items.map((it, i) => [it, i]));
+    const rang = (it) => (neuG.has(it.groupId) ? neuG.get(it.groupId) : Infinity);
+    const items = model.items.slice().sort((a, b) => rang(a) - rang(b) || altI.get(a) - altI.get(b));
+    if (items.some((it, i) => it !== model.items[i])) { model.items.splice(0, model.items.length, ...items); out.changed = true; }
+    if (Array.isArray(model.sections)) {
+      const secs = [];
+      for (const g of model.groups) if (g.section && !secs.includes(g.section)) secs.push(g.section);
+      if (secs.join('\u0000') !== model.sections.join('\u0000')) { model.sections = secs; out.changed = true; }
+    }
+    return out;
+  }
+
   /* Vorschlag für die Bezeichnung eines neu aufgenommenen Artikels (z. B. aus der Bestandsliste der Warenwirtschaft):
      – „frisch“ gehört in den Zustand („frisch/gefr.“ bleibt)
      – Eigenmarke „Fleischmeister“ (Gruppe/Bereich) steht in der Bezeichnung
@@ -721,7 +775,7 @@
   const api = {
     CATEGORY_ORDER, CONDITIONS, CONDITION_LABELS, PRICE_STATUS_LABELS,
     xlsxReadWorkbook, parseOfferWorkbook, parseOfferGrid, parsePrice, suggestAttributes,
-    enrichOffer, isoWeekRange, diffOffers, validateModel, clean, stripFrisch, nameVorschlag, titelMitKw, normalizeItem, ORIGIN_CODES, mergeModels, sameModel: same, saleFor, empfehlungFor,
+    enrichOffer, isoWeekRange, diffOffers, validateModel, clean, stripFrisch, nameVorschlag, titelMitKw, nachKategorien, normalizeItem, ORIGIN_CODES, mergeModels, sameModel: same, saleFor, empfehlungFor,
   };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   else root.OfferCore = api;

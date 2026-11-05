@@ -1,0 +1,42 @@
+/* Verwaltung → Angebotskategorien (app/module/verwaltung/angebotskategorien.js) und Hinweise im Angebotseditor
+   (Gruppen ohne Angebotskategorie, admin.js renderGroups). Farben und Grundbausteine aus app.css/admin.css. */
+.ak-hinweis { margin: -4px 0 14px; max-width: 980px; }
+.ak-offen { color: var(--accent); font-weight: 650; }
+.ak-stand { font-size: 13px; color: var(--text-2); flex: 1 1 220px; min-width: 0; }
+.ak-stand-ro { margin: 16px 0 6px; }
+.ak-layout { display: grid; grid-template-columns: minmax(0, 1fr) minmax(260px, 340px); gap: 18px; align-items: start; }
+.ak-kats { display: flex; flex-direction: column; gap: 14px; min-width: 0; }
+.ak-kat { padding: 12px 14px; }
+.ak-kopf { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.ak-pos { flex: none; width: 26px; height: 26px; border-radius: 50%; display: inline-grid; place-items: center; font-size: 12.5px; font-weight: 650; background: var(--accent-soft); color: var(--accent); }
+.ak-kopf .ak-name { flex: 1 1 260px; min-width: 0; font-weight: 650; margin: 0; font-size: 15px; }
+.ak-kopf input.ak-name { height: 34px; }
+.ak-kopf .g-count { font-size: 12px; color: var(--muted); white-space: nowrap; }
+.ak-akt { display: flex; gap: 2px; }
+.ak-vks { list-style: none; margin: 10px 0 0; padding: 0; border-top: 1px solid var(--line); }
+.ak-vks li, .ak-freiliste li { display: flex; align-items: center; gap: 10px; min-height: 38px; padding: 4px 4px 4px 6px; border-bottom: 1px solid var(--line); }
+.ak-vks li:last-child { border-bottom: 0; }
+.ak-vnr { flex: none; min-width: 44px; font-variant-numeric: tabular-nums; font-weight: 600; }
+.ak-vname { flex: 1 1 auto; min-width: 0; overflow-wrap: anywhere; }
+.ak-anz { flex: none; font-size: 12px; color: var(--muted); white-space: nowrap; }
+.ak-leer { color: var(--muted); font-size: 13px; }
+.ak-add { margin-top: 10px; }
+.ak-add select { width: 100%; max-width: 460px; height: 34px; }
+.ak-frei { padding: 12px 14px; position: sticky; top: calc(var(--header-h, 64px) + 64px); max-height: calc(100vh - var(--header-h, 64px) - 90px); display: flex; flex-direction: column; }
+.ak-frei h3 { margin: 0 0 10px; font-size: 15px; display: flex; align-items: center; gap: 8px; }
+.ak-frei .g-count { font-size: 12px; color: var(--muted); font-weight: 500; }
+.ak-suche { max-width: none; margin-bottom: 8px; }
+.ak-suche input { height: 36px; }
+.ak-freiliste { list-style: none; margin: 0; padding: 0; overflow-y: auto; min-height: 0; }
+.ak-freiliste li { flex-wrap: wrap; }
+.ak-zu { flex: 1 1 100%; height: 32px; font-size: 13px; }
+@media (max-width: 900px) {
+  .ak-layout { grid-template-columns: minmax(0, 1fr); }
+  .ak-frei { position: static; max-height: none; }
+}
+/* Angebotseditor: Gruppen ohne Angebotskategorie (am Ende, mit Hinweis) */
+.gsec.gsec-ohne { color: var(--c-aged); }
+.g-vk.g-kat-ohne { color: var(--c-aged); white-space: normal; }
+.ghead .g-sub .g-vksel { flex: 0 1 380px; }
+/* Auswahlfelder sichtbar als Auswahl (die Editor-Felder „.in“ sind sonst randlos) */
+.ak-add select, select.ak-zu { appearance: auto; border: 1px solid var(--line-strong, var(--line)); border-radius: 8px; padding: 0 8px; background: var(--surface); color: var(--text); }

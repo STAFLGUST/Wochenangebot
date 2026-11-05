@@ -4,6 +4,14 @@
 schema = 1
 modul = "verwaltung"
 
+# Angebotskategorien (Stammdaten): Abschnitte des Angebots mit zugeordneten VK-Gruppen, ordnen den Aufbau aller Angebote
+[aktion.angebotskategorien]
+oberflaeche = "angebot.eingabe"
+
+[aktion.angebotskategorien_save]
+oberflaeche = "angebot.eingabe"
+schreibend = true
+
 [aktion.auswertung]
 oberflaeche = "angebot.eingabe"
 
