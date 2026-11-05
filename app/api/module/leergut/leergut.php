@@ -19,6 +19,9 @@ declare(strict_types=1);
      leergut-abschreibungen Dachser-Abschreibungen „lt. Empfänger“: Kunde, Sendung, Mengen, Status offen/widersprochen/
                             berechnet/ausgeglichen/nicht zu beachten, WinAB-Auftrag, Notiz, Verlauf
      leergut-inventur       Eigener Bestand zum Stichtag (z. B. Lager gefüllt, Kisten unbenutzt, Abholer) für die Bilanz
+   Lademittel tragen die Nummer und Kurzbezeichnung aus den WinAB-Stammdaten („Lademittel suchen“: 1 E2, 2 H1, 3 Kübel,
+   4 Euro-Palette, 5 Karton, 6 Eurohaken, 7 WK2); fehlende WinAB-Lademittel ergänzt lg_stamm beim Lesen (Karton inaktiv –
+   kein Leergut, solange niemand es aktiviert). Partner tragen die WinAB-Kunden- bzw. -Lieferantennummer (kundenNr, lieferantNr).
    Kundenkonten aus WinAB: den Bericht „Lademittelbewegungen Kunden“ liest die Oberfläche im Browser und schickt nur die
    Belege, die den Saldo eines Kunden ändern; lg_winab_pruefen/lg_winab_abgleich gleichen sie je Beleg ab (Partner mit
    WinAB-Kundennummer „kundenNr“, Bewegungen mit Herkunft „winab“; geänderte und ausgeglichene Belege werden storniert).
@@ -47,6 +50,17 @@ const LG_FRIST_STANDARD = 14;
 const LG_WINAB_ARTEN = ['Lieferschein', 'Gutschrift', 'Rechnung'];   // Sammelrechnungen wiederholen die Lieferscheine
 const LG_MAX_WINAB_BELEGE = 50000;
 const LG_MAX_WINAB_KUNDEN = 5000;
+/* Lademittel in WinAB (Stammdaten „Lademittel suchen“, Stand 03.11.2026): Nummer, Kurzbezeichnung, Kennung im Modul.
+   Karton ist kein Leergut (Entscheidung 29.10.2026) – angelegt, aber inaktiv: zählt weder im Saldo noch im WinAB-Abgleich. */
+const LG_WINAB_LADEMITTEL = [
+    ['id' => 'e2', 'nr' => '1', 'kurz' => 'E2', 'name' => 'E2-Kiste'],
+    ['id' => 'h1', 'nr' => '2', 'kurz' => 'H1', 'name' => 'H1-Palette'],
+    ['id' => 'kuebel', 'nr' => '3', 'kurz' => 'KÜ', 'name' => 'Kübel'],
+    ['id' => 'eu', 'nr' => '4', 'kurz' => 'EU', 'name' => 'Europalette'],
+    ['id' => 'karton', 'nr' => '5', 'kurz' => 'KT', 'name' => 'Karton', 'aktiv' => false],
+    ['id' => 'haken', 'nr' => '6', 'kurz' => 'EH', 'name' => 'Eurohaken'],
+    ['id' => 'wk2', 'nr' => '7', 'kurz' => 'WK2', 'name' => 'WK2-Kiste'],
+];
 
 /* ---------- Grundwerte ---------- */
 /* Lademittel der Excel-Liste; Werte je Stück laut Leitfaden (änderbar unter Einstellungen) */
@@ -64,9 +78,32 @@ function lg_stamm(): array
     $d = store_read('leergut-stamm');
     $d = is_array($d) ? $d : [];
     $out = ['rev' => (int)($d['rev'] ?? 0)];
-    $out['lademittel'] = is_array($d['lademittel'] ?? null) && $d['lademittel'] ? array_values($d['lademittel']) : lg_grund_lademittel();
+    $out['lademittel'] = lg_lademittel_winab(is_array($d['lademittel'] ?? null) && $d['lademittel'] ? array_values($d['lademittel']) : lg_grund_lademittel());
     $out['partner'] = is_array($d['partner'] ?? null) ? array_values($d['partner']) : [];
     return $out + $d;
+}
+/* WinAB-Stammdaten ergänzen: Lademittel ohne Angabe bekommen Nummer und Kurzbezeichnung aus WinAB (über Kennung oder
+   gleichen Namen), fehlende WinAB-Lademittel werden angehängt. Gespeicherte Angaben – auch eine bewusst leere Nummer –
+   bleiben; eine Nummer, die schon ein anderes Lademittel trägt, wird nicht doppelt vergeben. */
+function lg_lademittel_winab(array $liste): array
+{
+    $norm = function ($t) { return preg_replace('/[^a-z0-9]+/', '', strtr(mb_strtolower((string)$t), ['ä' => 'ae', 'ö' => 'oe', 'ü' => 'ue', 'ß' => 'ss'])); };
+    $vergeben = [];
+    foreach ($liste as $l) if (is_array($l) && (string)($l['winabNr'] ?? '') !== '') $vergeben[(string)$l['winabNr']] = true;
+    foreach (LG_WINAB_LADEMITTEL as $w) {
+        $i = null;
+        foreach ($liste as $j => $l) if (is_array($l) && (string)($l['id'] ?? '') === $w['id']) { $i = $j; break; }
+        if ($i === null) foreach ($liste as $j => $l) if (is_array($l) && $norm($l['name'] ?? '') === $norm($w['name'])) { $i = $j; break; }
+        if ($i === null) {
+            if (isset($vergeben[$w['nr']])) continue;
+            $liste[] = ['id' => $w['id'], 'name' => $w['name'], 'wert' => null, 'aktiv' => $w['aktiv'] ?? true, 'winabNr' => $w['nr'], 'kurz' => $w['kurz']];
+            $vergeben[$w['nr']] = true;
+            continue;
+        }
+        if (!array_key_exists('winabNr', $liste[$i]) && !isset($vergeben[$w['nr']])) { $liste[$i]['winabNr'] = $w['nr']; $vergeben[$w['nr']] = true; }
+        if (!array_key_exists('kurz', $liste[$i])) $liste[$i]['kurz'] = $w['kurz'];
+    }
+    return array_values($liste);
 }
 function lg_doc(string $name): array
 {
@@ -175,7 +212,7 @@ function lg_lademittel_pruefen($v, array $alt): array
     if (!is_array($v) || !$v) throw new InvalidArgumentException('Lademittel: mindestens ein Eintrag.');
     if (count($v) > LG_MAX_LADEMITTEL) throw new InvalidArgumentException('Lademittel: höchstens ' . LG_MAX_LADEMITTEL . ' Einträge.');
     $altNach = []; foreach ($alt as $a) if (is_array($a) && isset($a['id'])) $altNach[(string)$a['id']] = $a;
-    $out = []; $ids = [];
+    $out = []; $ids = []; $nrs = [];
     foreach (array_values($v) as $i => $x) {
         if (!is_array($x)) throw new InvalidArgumentException('Lademittel: ungültige Angaben.');
         $name = lg_text($x['name'] ?? '', 40, 'Lademittel ' . ($i + 1));
@@ -190,6 +227,16 @@ function lg_lademittel_pruefen($v, array $alt): array
         $row = $altNach[$id] ?? [];
         $row['id'] = $id; $row['name'] = $name; $row['wert'] = lg_betrag($x['wert'] ?? null, "Wert „{$name}“");
         $row['aktiv'] = !array_key_exists('aktiv', $x) || !empty($x['aktiv']);
+        // WinAB-Nummer und Kurzbezeichnung: ohne Angabe bleiben die gespeicherten Werte (ohne Wert ergänzt lg_lademittel_winab)
+        if (array_key_exists('winabNr', $x)) {
+            $nr = lg_text($x['winabNr'], 4, "WinAB-Nr. „{$name}“");
+            if ($nr !== '' && !preg_match('/^\d{1,4}$/', $nr)) throw new InvalidArgumentException("WinAB-Nr. „{$name}“: bitte nur Ziffern.");
+            $row['winabNr'] = $nr;
+        }
+        $nr = (string)($row['winabNr'] ?? '');
+        if ($nr !== '' && isset($nrs[$nr])) throw new InvalidArgumentException("Die WinAB-Nr. $nr ist doppelt vergeben („{$nrs[$nr]}“ und „{$name}“).");
+        if ($nr !== '') $nrs[$nr] = $name;
+        if (array_key_exists('kurz', $x)) $row['kurz'] = lg_text($x['kurz'], 8, "Kurzbezeichnung „{$name}“");
         $out[] = $row;
     }
     // Entfernen würde Buchungen unlesbar machen: nicht mehr genutzte Lademittel werden deaktiviert, nicht gelöscht
@@ -212,6 +259,13 @@ function lg_partner_pruefen(array $b, ?array $alt, array $stamm): array
         foreach ($stamm['partner'] as $p) if ($nr !== '' && ($alt === null || $p['id'] !== $alt['id']) && (string)($p['kundenNr'] ?? '') === $nr)
             throw new InvalidArgumentException("Die WinAB-Kundennummer $nr gehört schon zu „{$p['name']}“.");
         $row['kundenNr'] = $nr;
+    }
+    if (array_key_exists('lieferantNr', $b) || !isset($row['lieferantNr'])) {   // WinAB-Lieferantennummer (Lieferanten, Speditionen)
+        $nr = lg_text($b['lieferantNr'] ?? '', 12, 'WinAB-Lieferantennummer');
+        if ($nr !== '' && !preg_match('/^\d{1,12}$/', $nr)) throw new InvalidArgumentException('WinAB-Lieferantennummer: bitte nur Ziffern.');
+        foreach ($stamm['partner'] as $p) if ($nr !== '' && ($alt === null || $p['id'] !== $alt['id']) && (string)($p['lieferantNr'] ?? '') === $nr)
+            throw new InvalidArgumentException("Die WinAB-Lieferantennummer $nr gehört schon zu „{$p['name']}“.");
+        $row['lieferantNr'] = $nr;
     }
     $frist = $b['fristTage'] ?? LG_FRIST_STANDARD;
     $row['fristTage'] = ($frist === '' || $frist === null) ? 0 : lg_ganz($frist, 'Frist', false);
@@ -560,84 +614,164 @@ function lg_paket_pruefen($p, array $me): array
     return ['stamm' => $stamm, 'docs' => $docs, 'zahlen' => $zahlen, 'fehler' => $fehler];
 }
 
-/* ---------- WinAB-Bericht „Lademittelbewegungen Kunden“ ----------
-   Die Oberfläche liest den Bericht im Browser und schickt { bericht: {datei, von, bis, datum}, kunden: [{nr, name}],
-   belege: [{kd, art, beleg, datum, abgang, zugang}] } – nur Lieferscheine, Gutschriften und Einzelrechnungen
-   (Sammelrechnungen wiederholen die Lieferscheine), nur Lademittel des Moduls (Karton ist kein Leergut) und nur Belege,
-   die den Saldo ändern (Abgang ≠ Zugang). Vorzeichen wie im Modul: Abgang = an den Kunden, Zugang = vom Kunden zurück.
-   „bis“ ist das Berichtsdatum (der Bericht nennt sonst „bis 31.12.2078“). */
+/* ---------- WinAB: Lademittelbewegungen (CSV „Lademittelbewegungen komplett“ oder Bericht „… Kunden“ als .XLS) ----------
+   Die Oberfläche liest die Datei im Browser und schickt { bericht: {datei, von, bis, datum, dateiVon, quelle},
+   kunden: [{nr, name?, ersteLieferung?, letzteLieferung?, letzteRueckgabe?}], lieferanten: [{nr, lieferscheine}],
+   belege: [{kd | lf, art, beleg, datum, abgang, zugang}], zuordnung: {Lieferanten-Nr.: Partner-ID | "neu" | ""} } –
+   nur Lieferscheine, Gutschriften und Einzelrechnungen (Sammelrechnungen wiederholen die Lieferscheine, Offerten bewegen
+   nichts), nur aktive Lademittel des Moduls (Karton ist kein Leergut) und nur Belege, die den Saldo ändern (Abgang ≠ Zugang),
+   ab „von“ (Übernehmen ab). Vorzeichen wie im Modul: Abgang = an den Partner, Zugang = vom Partner zurück. Korrekturzeilen
+   mit Minus (WinAB bis 2023) rechnet der Browser gegen, je Seite bleibt eine Menge ab 0.
+   Kunden: WinAB-Kundennummer (kundenNr) – Zeilen mit Kunde gehören dem Kunden (Kundenbeleg), auch wenn WinAB dort zusätzlich
+   eine Lieferantennummer nennt. Lieferanten (Zeilen ohne Kunde, z. B. Wareneingänge): WinAB-Lieferantennummer (lieferantNr) –
+   gebucht nur bei zugeordneten Partnern (Zuordnung in der Vorschau oder im Partner), sonst nur gezählt.
+   Kundennamen für neue Konten aus dem Kundenstamm der Verwaltung (nur lesend über customers_load, Firma je Kd.-Nr.).
+   „dateiVon“: erster Tag der Datei – Lieferung und Rückgabe je Kunde gelten auch vor „von“. */
+function lg_winab_nr($v, string $was): string
+{
+    $nr = is_int($v) ? (string)$v : (is_string($v) ? trim($v) : '');
+    if (!preg_match('/^\d{1,12}$/', $nr)) throw new InvalidArgumentException("$was: ungültige Nummer.");
+    return $nr;
+}
 function lg_winab_pruefen($b, array $stamm): array
 {
     $ber = is_array($b['bericht'] ?? null) ? $b['bericht'] : [];
     $von = lg_datum($ber['von'] ?? '', 'Zeitraum von');
     $bis = lg_datum($ber['bis'] ?? '', 'Zeitraum bis');
     if ($bis < $von) throw new InvalidArgumentException('Zeitraum: „bis“ liegt vor „von“.');
-    $bericht = ['datei' => lg_text($ber['datei'] ?? '', 120, 'Datei'), 'von' => $von, 'bis' => $bis];
+    $dateiVon = lg_datum($ber['dateiVon'] ?? '', 'Beginn der Datei', false);
+    $dateiVon = $dateiVon !== '' && $dateiVon < $von ? $dateiVon : $von;
+    $quelle = ($ber['quelle'] ?? '') === 'csv' ? 'csv' : 'xls';
+    $bericht = ['datei' => lg_text($ber['datei'] ?? '', 120, 'Datei'), 'von' => $von, 'bis' => $bis, 'dateiVon' => $dateiVon, 'quelle' => $quelle];
     $kunden = []; $daten = [];
     $kl = $b['kunden'] ?? [];
     if (!is_array($kl) || count($kl) > LG_MAX_WINAB_KUNDEN) throw new InvalidArgumentException('Kundenliste fehlt oder ist zu lang.');
     foreach (array_values($kl) as $i => $k) {
-        $nr = is_array($k) ? (string)($k['nr'] ?? '') : '';
-        if (!preg_match('/^\d{1,12}$/', $nr)) throw new InvalidArgumentException('Kunde ' . ($i + 1) . ': ungültige Kundennummer.');
-        $name = lg_text($k['name'] ?? '', 100, 'Kundenname');
-        $kunden[$nr] = $name !== '' ? $name : 'Kunde';
-        $dt = [];   // Lieferung und Rückgabe laut Bericht (auch aus Belegen ohne Wirkung auf den Saldo)
+        $nr = lg_winab_nr(is_array($k) ? ($k['nr'] ?? '') : '', 'Kunde ' . ($i + 1));
+        $kunden[$nr] = lg_text($k['name'] ?? '', 100, 'Kundenname');   // leer (CSV): Name aus dem Kundenstamm der Verwaltung
+        $dt = [];   // Lieferung und Rückgabe laut WinAB (auch aus Belegen ohne Wirkung auf den Saldo)
         foreach (['ersteLieferung' => 'erste Lieferung', 'letzteLieferung' => 'letzte Lieferung', 'letzteRueckgabe' => 'letzte Rückgabe'] as $f => $was) {
             $d = lg_datum($k[$f] ?? '', "Kunde $nr: $was", false);
-            if ($d !== '' && ($d < $von || $d > $bis)) throw new InvalidArgumentException("Kunde $nr: $was liegt außerhalb des Berichtszeitraums.");
+            if ($d !== '' && ($d < $dateiVon || $d > $bis)) throw new InvalidArgumentException("Kunde $nr: $was liegt außerhalb des Zeitraums der Datei.");
             $dt[$f] = $d;
         }
         if (array_intersect_key($k, $dt)) $daten[$nr] = $dt;   // ältere Oberflächen schicken keine Angaben: dann nichts ändern
     }
+    $lieferanten = [];
+    $ll = $b['lieferanten'] ?? [];
+    if (!is_array($ll) || count($ll) > LG_MAX_WINAB_KUNDEN) throw new InvalidArgumentException('Lieferantenliste ist zu lang.');
+    foreach (array_values($ll) as $i => $x) {
+        $nr = lg_winab_nr(is_array($x) ? ($x['nr'] ?? '') : '', 'Lieferant ' . ($i + 1));
+        $lieferanten[$nr] = ['nr' => $nr, 'lieferscheine' => max(0, min(1000000, (int)($x['lieferscheine'] ?? 0)))];
+    }
     $bl = $b['belege'] ?? [];
     if (!is_array($bl) || count($bl) > LG_MAX_WINAB_BELEGE) throw new InvalidArgumentException('Belegliste fehlt oder ist zu lang (höchstens ' . LG_MAX_WINAB_BELEGE . ').');
-    $lm = lg_ids($stamm['lademittel']);
+    // nur aktive Lademittel: inaktive (z. B. Karton – kein Leergut) bucht der Abgleich nicht
+    $lm = lg_ids(array_values(array_filter($stamm['lademittel'], function ($l) { return !empty($l['aktiv']); })));
     $belege = []; $fehler = []; $ohneWirkung = 0;
     foreach (array_values($bl) as $i => $x) {
         try {
             if (!is_array($x)) throw new InvalidArgumentException('ungültige Angaben');
-            $kd = (string)($x['kd'] ?? '');
-            if (!isset($kunden[$kd])) throw new InvalidArgumentException('Kundennummer „' . mb_substr($kd, 0, 20) . '“ fehlt in der Kundenliste');
+            $kd = (string)($x['kd'] ?? ''); $lf = (string)($x['lf'] ?? '');
+            if ($kd !== '' && $lf !== '') throw new InvalidArgumentException('Beleg mit Kunde und Lieferant – ein Beleg gehört entweder einem Kunden oder einem Lieferanten');
+            if ($kd !== '' ? !isset($kunden[$kd]) : !isset($lieferanten[$lf]))
+                throw new InvalidArgumentException($kd !== '' ? 'Kundennummer „' . mb_substr($kd, 0, 20) . '“ fehlt in der Kundenliste' : 'Lieferantennummer „' . mb_substr($lf, 0, 20) . '“ fehlt in der Lieferantenliste');
             $art = lg_wahl($x['art'] ?? '', LG_WINAB_ARTEN, 'Belegart');
             $nr = lg_text(is_scalar($x['beleg'] ?? null) ? (string)$x['beleg'] : '', 30, 'Belegnr.');
             if ($nr === '') throw new InvalidArgumentException('Belegnr. fehlt');
             $datum = lg_datum($x['datum'] ?? '', 'Datum');
-            if ($datum < $von || $datum > $bis) throw new InvalidArgumentException("Datum $datum liegt außerhalb des Berichtszeitraums");
+            if ($datum < $von || $datum > $bis) throw new InvalidArgumentException("Datum $datum liegt außerhalb des Zeitraums");
             $ab = lg_mengen($x['abgang'] ?? [], $lm, 'Abgang', false);
             $zu = lg_mengen($x['zugang'] ?? [], $lm, 'Zugang', false);
             if (!lg_ohne_null(lg_delta(['abgang' => $ab, 'zugang' => $zu]))) { $ohneWirkung++; continue; }
-            $key = "$kd|$art|$nr";
+            $key = $kd !== '' ? "$kd|$art|$nr" : "L:$lf|$art|$nr";   // Kundenbelege wie bisher, Lieferanten getrennt
             if (isset($belege[$key])) throw new InvalidArgumentException("$art $nr ist doppelt");
-            $belege[$key] = ['kd' => $kd, 'art' => $art, 'beleg' => $nr, 'datum' => $datum, 'abgang' => $ab, 'zugang' => $zu];
+            $belege[$key] = ($kd !== '' ? ['kd' => $kd] : ['lf' => $lf]) + ['art' => $art, 'beleg' => $nr, 'datum' => $datum, 'abgang' => $ab, 'zugang' => $zu];
         } catch (InvalidArgumentException $e) { if (count($fehler) < 200) $fehler[] = ['zeile' => $i + 1, 'text' => $e->getMessage()]; }
     }
-    return ['bericht' => $bericht, 'kunden' => $kunden, 'daten' => $daten, 'belege' => $belege, 'fehler' => $fehler, 'ohneWirkung' => $ohneWirkung];
+    $zuordnung = [];
+    foreach (is_array($b['zuordnung'] ?? null) ? $b['zuordnung'] : [] as $nr => $ziel) {
+        $nr = (string)$nr; $ziel = is_string($ziel) ? trim($ziel) : '';
+        if (!isset($lieferanten[$nr]) || $ziel === '') continue;
+        $zuordnung[$nr] = $ziel;
+    }
+    return ['bericht' => $bericht, 'kunden' => $kunden, 'daten' => $daten, 'lieferanten' => $lieferanten, 'belege' => $belege,
+            'zuordnung' => $zuordnung, 'fehler' => $fehler, 'ohneWirkung' => $ohneWirkung];
 }
-/* Abgleich je Beleg (Kunde, Belegart, Belegnr.) im Berichtszeitraum: neu → buchen, gleich → nichts, geändert → alten
-   stornieren und neu buchen, nicht mehr im Bericht (ausgeglichen) → stornieren. Bewegungen außerhalb des Zeitraums, von
-   Kunden, die der Bericht nicht nennt, und von Hand gebuchte bleiben unberührt. Die Kundenliste enthält alle Kunden
-   des Berichts, auch solche ohne saldowirksamen Beleg. Kunden ohne Konto bekommen eins (Art Kunde, Name mit Kundennummer). */
+/* Firma je WinAB-Kundennummer aus dem Kundenstamm der Verwaltung (nur lesend, regeln/datenverantwortung.toml) */
+function lg_kundenstamm_namen(): array
+{
+    $n = [];
+    foreach (customers_load()['customers'] as $c) {
+        if (!is_array($c)) continue;
+        $nr = trim((string)($c['nr'] ?? '')); $f = trim((string)($c['firma'] ?? ''));
+        if ($nr !== '' && $f !== '') $n[$nr] = mb_substr($f, 0, 84);
+    }
+    return $n;
+}
+/* Abgleich je Beleg im Zeitraum (von–bis): neu → buchen, gleich → nichts, geändert → alten stornieren und neu buchen, nicht
+   mehr in der Datei (ausgeglichen) → stornieren. Bewegungen außerhalb des Zeitraums, von Kunden bzw. Lieferanten, die die
+   Datei nicht nennt, von nicht zugeordneten Lieferanten und von Hand gebuchte bleiben unberührt. Kunden ohne Konto bekommen
+   eins (Art Kunde, „Firma (Kd.-Nr.)“); Lieferanten nur über die Zuordnung (bestehender Partner oder „neu“). */
 function lg_winab_abgleich(array $w, array $stamm, array $bew, array $me): array
 {
     $heute = date('d.m.Y');
-    $nachNr = [];
-    foreach ($stamm['partner'] as $i => $p) if ((string)($p['kundenNr'] ?? '') !== '') $nachNr[(string)$p['kundenNr']] = $i;
+    $nachNr = []; $nachLf = [];
+    foreach ($stamm['partner'] as $i => $p) {
+        if ((string)($p['kundenNr'] ?? '') !== '') $nachNr[(string)$p['kundenNr']] = $i;
+        if ((string)($p['lieferantNr'] ?? '') !== '') $nachLf[(string)$p['lieferantNr']] = $i;
+    }
     $namen = [];
     foreach ($stamm['partner'] as $p) $namen[mb_strtolower((string)$p['name'])] = true;
-    $genutzt = [];
-    foreach ($w['belege'] as $b) foreach (array_merge(array_keys($b['abgang']), array_keys($b['zugang'])) as $l) $genutzt[$b['kd']][$l] = true;
-    $neuKunden = [];
-    foreach (array_keys($genutzt) as $kd) {
-        $kd = (string)$kd;
-        if (isset($nachNr[$kd])) continue;
-        $name = rtrim(mb_substr($w['kunden'][$kd], 0, 84)) . ' (' . $kd . ')';
+    $eindeutig = function (string $name) use (&$namen) {
         $basis = $name; $n = 2;
         while (isset($namen[mb_strtolower($name)])) $name = $basis . ' ' . $n++;
         $namen[mb_strtolower($name)] = true;
-        $lms = array_values(array_filter(lg_ids($stamm['lademittel']), function ($l) use ($genutzt, $kd) { return isset($genutzt[$kd][$l]) || in_array($l, ['e2', 'h1'], true); }));
+        return $name;
+    };
+    $genutzt = [];
+    foreach ($w['belege'] as $b) foreach (array_merge(array_keys($b['abgang']), array_keys($b['zugang'])) as $l) $genutzt[isset($b['kd']) ? $b['kd'] : 'L:' . $b['lf']][$l] = true;
+    $lmsFuer = function (string $k) use ($genutzt, $stamm) {
+        return array_values(array_filter(lg_ids($stamm['lademittel']), function ($l) use ($genutzt, $k) { return isset($genutzt[$k][$l]) || in_array($l, ['e2', 'h1'], true); }));
+    };
+    $herkunft = $w['bericht']['quelle'] === 'csv' ? 'der WinAB-Datei „Lademittelbewegungen“' : 'dem WinAB-Bericht „Lademittelbewegungen Kunden“';
+    // Zuordnung der Lieferantennummern (aus der Vorschau): bestehender Partner oder neues Konto
+    $neuLief = [];
+    foreach ($w['zuordnung'] as $lf => $ziel) {
+        $lf = (string)$lf;
+        if (isset($nachLf[$lf])) continue;   // schon zugeordnet
+        if ($ziel === 'neu') {
+            $stamm['partner'][] = ['id' => lg_id('p'), 'name' => $eindeutig('Lieferant ' . $lf . ' (WinAB)'), 'art' => 'lieferant',
+                'mandant' => 'standard', 'kontoNr' => '', 'kundenNr' => '', 'lieferantNr' => $lf, 'fristTage' => LG_FRIST_STANDARD, 'email' => '', 'ansprechpartner' => '',
+                'lieferanten' => '', 'lademittel' => $lmsFuer('L:' . $lf), 'aktiv' => true, 'quelle' => 'winab',
+                'notiz' => "Aus $herkunft angelegt (WinAB-Lieferantennummer $lf). Bitte den Namen eintragen.", 'erstellt' => lg_wer($me), 'rev' => 1, 'geaendert' => lg_wer($me)];
+            $nachLf[$lf] = count($stamm['partner']) - 1;
+            $neuLief[] = $stamm['partner'][$nachLf[$lf]]['name'];
+            continue;
+        }
+        $i = null;
+        foreach ($stamm['partner'] as $j => $p) if ($p['id'] === $ziel) { $i = $j; break; }
+        if ($i === null) throw new InvalidArgumentException("Zuordnung Lieferant $lf: Partner nicht gefunden.");
+        $p = $stamm['partner'][$i];
+        if ($p['art'] === 'kunde') throw new InvalidArgumentException("Zuordnung Lieferant $lf: „{$p['name']}“ ist ein Kundenkonto.");
+        if ((string)($p['lieferantNr'] ?? '') !== '') throw new InvalidArgumentException("Zuordnung Lieferant $lf: „{$p['name']}“ hat schon die WinAB-Lieferantennummer {$p['lieferantNr']}.");
+        $stamm['partner'][$i]['lieferantNr'] = $lf;
+        $stamm['partner'][$i]['rev'] = (int)($p['rev'] ?? 0) + 1;
+        $stamm['partner'][$i]['geaendert'] = lg_wer($me);
+        $nachLf[$lf] = $i;
+    }
+    // Kundenkonten für Kunden mit Belegen ohne Konto
+    $stammNamen = null;
+    $neuKunden = [];
+    foreach (array_keys($genutzt) as $kd) {
+        $kd = (string)$kd;
+        if (strpos($kd, 'L:') === 0 || isset($nachNr[$kd])) continue;
+        $name = $w['kunden'][$kd] ?? '';
+        if ($name === '') { $stammNamen = $stammNamen ?? lg_kundenstamm_namen(); $name = $stammNamen[$kd] ?? 'Kunde'; }
+        $name = $eindeutig(rtrim(mb_substr($name, 0, 84)) . ' (' . $kd . ')');
         $stamm['partner'][] = ['id' => lg_id('p'), 'name' => $name, 'art' => 'kunde', 'mandant' => 'standard', 'kontoNr' => '', 'kundenNr' => $kd,
-            'fristTage' => 0, 'email' => '', 'ansprechpartner' => '', 'lieferanten' => '', 'lademittel' => $lms, 'aktiv' => true, 'quelle' => 'winab',
-            'notiz' => 'Aus dem WinAB-Bericht „Lademittelbewegungen Kunden“ angelegt. Salden ab ' . date('d.m.Y', strtotime($w['bericht']['von'])) . ' – ältere Stände liegen in WinAB nicht vor.',
+            'fristTage' => 0, 'email' => '', 'ansprechpartner' => '', 'lieferanten' => '', 'lademittel' => $lmsFuer($kd), 'aktiv' => true, 'quelle' => 'winab',
+            'notiz' => "Aus $herkunft angelegt. Salden ab " . date('d.m.Y', strtotime($w['bericht']['von'])) . ' (übernommener Zeitraum).',
             'erstellt' => lg_wer($me), 'rev' => 1, 'geaendert' => lg_wer($me)];
         $nachNr[$kd] = count($stamm['partner']) - 1;
         $neuKunden[] = $name;
@@ -648,13 +782,28 @@ function lg_winab_abgleich(array $w, array $stamm, array $bew, array $me): array
         $k = $b['winab'] ?? null;
         if (($b['quelle'] ?? '') !== 'winab' || !empty($b['storno']) || !is_array($k)) continue;
         if ($b['datum'] < $w['bericht']['von'] || $b['datum'] > $w['bericht']['bis']) continue;
-        if (!isset($w['kunden'][(string)$k['kd']])) continue;   // Kunde nicht im Bericht (z. B. auf einzelne Kunden gefiltert): nicht anfassen
-        $alt[$k['kd'] . '|' . $k['art'] . '|' . $k['beleg']] = $i;
+        if (isset($k['lf'])) {
+            if (!isset($w['lieferanten'][(string)$k['lf']]) || !isset($nachLf[(string)$k['lf']])) continue;   // nicht in der Datei oder nicht zugeordnet
+            $alt['L:' . $k['lf'] . '|' . $k['art'] . '|' . $k['beleg']] = $i;
+        } else {
+            if (!isset($w['kunden'][(string)$k['kd']])) continue;   // Kunde nicht in der Datei (z. B. auf einzelne Kunden gefiltert): nicht anfassen
+            $alt[$k['kd'] . '|' . $k['art'] . '|' . $k['beleg']] = $i;
+        }
     }
-    $z = ['kunden' => count($neuKunden), 'neu' => 0, 'gleich' => 0, 'geaendert' => 0, 'ausgeglichen' => 0, 'ohneWirkung' => $w['ohneWirkung']];
+    $z = ['kunden' => count($neuKunden), 'lieferantenNeu' => count($neuLief), 'neu' => 0, 'gleich' => 0, 'geaendert' => 0, 'ausgeglichen' => 0,
+          'ohneWirkung' => $w['ohneWirkung'], 'ohneKonto' => 0];
     $offenAb = date('Y-m-d', strtotime($w['bericht']['bis'] . ' 12:00:00 UTC') - 3 * 86400);
+    $ohneKonto = [];   // Lieferanten mit Belegen, aber ohne Partner: nur gezählt (Vorschau zeigt sie zur Zuordnung)
     foreach ($w['belege'] as $key => $b) {
-        $pid = $stamm['partner'][$nachNr[$b['kd']]]['id'];
+        $istLf = isset($b['lf']);
+        if ($istLf && !isset($nachLf[$b['lf']])) {
+            $z['ohneKonto']++;
+            $o = $ohneKonto[$b['lf']] ?? ['belege' => 0, 'saldo' => []];
+            $o['belege']++; lg_addiere($o['saldo'], lg_delta($b));
+            $ohneKonto[$b['lf']] = $o;
+            continue;
+        }
+        $pid = $stamm['partner'][$istLf ? $nachLf[$b['lf']] : $nachNr[$b['kd']]]['id'];
         if (isset($alt[$key])) {
             $i = $alt[$key]; unset($alt[$key]);
             $a = $bew[$i];
@@ -662,14 +811,16 @@ function lg_winab_abgleich(array $w, array $stamm, array $bew, array $me): array
             $bew[$i]['storno'] = lg_wer($me) + ['grund' => "WinAB-Abgleich vom $heute: Beleg geändert"];
             $z['geaendert']++;
         } else $z['neu']++;
-        $text = 'Aus WinAB („Lademittelbewegungen Kunden“' . ($w['bericht']['datei'] !== '' ? ', ' . $w['bericht']['datei'] : '') . ')';
-        if ($b['datum'] >= $offenAb && !$b['zugang']) $text .= ' – zum Berichtsdatum noch nicht zurück';
+        $text = $w['bericht']['quelle'] === 'csv' ? 'Aus WinAB („Lademittelbewegungen“' : 'Aus WinAB („Lademittelbewegungen Kunden“';
+        $text .= ($w['bericht']['datei'] !== '' ? ', ' . $w['bericht']['datei'] : '') . ')';
+        if ($b['datum'] >= $offenAb && !$b['zugang']) $text .= ' – zum Stand der Datei noch nicht zurück';
+        $herk = $istLf ? ['lf' => $b['lf'], 'art' => $b['art'], 'beleg' => $b['beleg']] : ['kd' => $b['kd'], 'art' => $b['art'], 'beleg' => $b['beleg']];
         $bew[] = ['id' => lg_id('b'), 'partner' => $pid, 'datum' => $b['datum'], 'typ' => $b['art'] === 'Gutschrift' ? 'abholung' : 'bewegung',
-                  'abgang' => $b['abgang'], 'zugang' => $b['zugang'], 'beleg' => $b['art'] . ' ' . $b['beleg'], 'text' => $text,
-                  'quelle' => 'winab', 'winab' => ['kd' => $b['kd'], 'art' => $b['art'], 'beleg' => $b['beleg']], 'erfasst' => lg_wer($me), 'storno' => null];
+                  'abgang' => $b['abgang'], 'zugang' => $b['zugang'], 'beleg' => $b['art'] . ' ' . $b['beleg'], 'text' => mb_substr($text, 0, 300),
+                  'quelle' => 'winab', 'winab' => $herk, 'erfasst' => lg_wer($me), 'storno' => null];
     }
-    foreach ($alt as $i) { $bew[$i]['storno'] = lg_wer($me) + ['grund' => "WinAB-Abgleich vom $heute: Beleg ausgeglichen oder nicht mehr im Bericht"]; $z['ausgeglichen']++; }
-    // Lieferung und Rückgabe laut Bericht am Kundenkonto (Feld winab). Frühere Berichte bleiben gültig: erste = früheste,
+    foreach ($alt as $i) { $bew[$i]['storno'] = lg_wer($me) + ['grund' => "WinAB-Abgleich vom $heute: Beleg ausgeglichen oder nicht mehr in der Datei"]; $z['ausgeglichen']++; }
+    // Lieferung und Rückgabe laut WinAB am Kundenkonto (Feld winab). Frühere Dateien bleiben gültig: erste = früheste,
     // letzte = späteste Angabe. „daten“ zählt die Konten, deren Angaben sich ändern.
     $z['daten'] = 0;
     foreach ($w['daten'] ?? [] as $kd => $dt) {
@@ -682,22 +833,37 @@ function lg_winab_abgleich(array $w, array $stamm, array $bew, array $me): array
             $a = (string)($vorher[$f] ?? ''); $n = (string)($dt[$f] ?? '');
             $felder[$f] = $n === '' ? $a : ($a === '' ? $n : ($f === 'ersteLieferung' ? min($a, $n) : max($a, $n)));
         }
-        $alteFelder = array_map(function ($f) use ($vorher) { return (string)($vorher[$f] ?? ''); }, ['ersteLieferung' => 'ersteLieferung', 'letzteLieferung' => 'letzteLieferung', 'letzteRueckgabe' => 'letzteRueckgabe']);
+        $alteFelder = [];
+        foreach (array_keys($felder) as $f) $alteFelder[$f] = (string)($vorher[$f] ?? '');
         if ($felder !== $alteFelder) $z['daten']++;
         $nachher = $felder + ['bis' => max((string)($vorher['bis'] ?? ''), $w['bericht']['bis'])];
         if ($nachher !== $vorher) $stamm['partner'][$i]['winab'] = $nachher;
     }
-    // Saldo aller Kundenkonten mit WinAB-Nummer nach dem Abgleich
-    $kundenIds = [];
-    foreach ($stamm['partner'] as $p) if ((string)($p['kundenNr'] ?? '') !== '') $kundenIds[$p['id']] = true;
-    $summe = []; $mitSaldo = 0;
+    // Saldo aller Konten mit WinAB-Nummer nach dem Abgleich (Kunden; Lieferanten getrennt)
+    $art = [];
+    foreach ($stamm['partner'] as $p) {
+        if ((string)($p['kundenNr'] ?? '') !== '') $art[$p['id']] = 'k';
+        elseif ((string)($p['lieferantNr'] ?? '') !== '') $art[$p['id']] = 'l';
+    }
+    $summe = []; $summeLf = []; $mitSaldo = 0;
     foreach (lg_nach_partner($bew) as $pid => $l) {
-        if (!isset($kundenIds[$pid])) continue;
+        if (!isset($art[$pid])) continue;
         $s = lg_saldo_bis($l, '');
-        if ($s) { $mitSaldo++; lg_addiere($summe, $s); }
+        if (!$s) continue;
+        if ($art[$pid] === 'k') { $mitSaldo++; lg_addiere($summe, $s); } else lg_addiere($summeLf, $s);
     }
     $z['konten'] = $mitSaldo;
-    return [$stamm, $bew, $z, $neuKunden, lg_ohne_null($summe)];
+    // Lieferantennummern der Datei für die Vorschau: zugeordnet (Partner), Belege mit Wirkung im Zeitraum
+    $liste = [];
+    foreach ($w['lieferanten'] as $nr => $info) {
+        $o = $ohneKonto[$nr] ?? null; $nr = (string)$nr;
+        $mit = 0; foreach ($w['belege'] as $b) if (($b['lf'] ?? null) === $nr) $mit++;
+        if (!$mit && !isset($nachLf[$nr])) continue;   // reiner Tausch ohne Zuordnung: nur gezählt
+        $liste[] = ['nr' => $nr, 'lieferscheine' => $info['lieferscheine'], 'belege' => $mit, 'saldo' => $o ? lg_ohne_null($o['saldo']) : [],
+                    'partner' => isset($nachLf[$nr]) ? ['id' => $stamm['partner'][$nachLf[$nr]]['id'], 'name' => $stamm['partner'][$nachLf[$nr]]['name']] : null];
+    }
+    usort($liste, function ($a, $b) { return [$b['belege'], $b['lieferscheine']] <=> [$a['belege'], $a['lieferscheine']] ?: strcmp($a['nr'], $b['nr']); });
+    return [$stamm, $bew, $z, $neuKunden, lg_ohne_null($summe), ['neu' => $neuLief, 'liste' => $liste, 'summe' => lg_ohne_null($summeLf)]];
 }
 
 /* ---------- Dachser-Liste „Unterkonto-Vorspediteur“ (Mail „Infos von Fa. DACHSER“) ----------
