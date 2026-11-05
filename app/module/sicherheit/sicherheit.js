@@ -287,6 +287,7 @@
     dialog(`${dKopf(e.s, `${esc(zeit(e.t))} Uhr · ${esc(EV_ART[e.art] || e.art)}`)}<div class="sic-dinhalt">
       <dl class="sic-dl"><dt>Vorgang</dt><dd class="mono-s">${esc(e.a)}</dd><dt>Benutzer</dt><dd>${esc(e.n || '—')}${e.u ? ` <span class="sub">${esc(e.u)}</span>` : ''}</dd>
         <dt>Rolle</dt><dd>${esc(e.r || '—')}</dd><dt>IP-Adresse</dt><dd class="mono-s">${esc(e.ip || '—')}</dd></dl>
+      ${e.masked ? '<p class="sub">Kundendaten (Firma, E-Mail, Adresse) und Einzelheiten zeigt dieser Eintrag nur mit dem Recht „Kunden ansehen“.</p>' : ''}
       ${det ? `<table class="sic-tabelle klein"><thead><tr><th>Feld</th><th>vorher</th><th>nachher</th></tr></thead><tbody>${det}</tbody></table>` : ''}</div>
       ${dFuss('<button type="button" class="btn" data-d="zu">Schließen</button>')}`, { breit: !!det });
   }
@@ -826,15 +827,19 @@
     const n = S.lage.notfall;
     dialog(`${dKopf('Notfall beenden', 'Mitarbeiter und Kunden haben danach wieder Zugang')}<div class="sic-dinhalt">
         <p>Vor dem Beenden prüfen: betroffene Konten gesperrt bzw. Passwörter geändert, Protokoll und Dateiprüfung durchgesehen.</p>
-        ${n.firewallGesichert && n.optionen && n.optionen.firewall ? `<label class="sic-check"><input type="checkbox" id="nf-zurueck" checked><span>Sicherheits- und Firewall-Einstellungen wie vor dem Notfall wiederherstellen <span class="sub">(ohne Haken bleiben die strengen Einstellungen)</span></span></label>`
+        ${n.firewallGesichert && n.optionen && n.optionen.firewall ? `<label class="sic-check"><input type="checkbox" id="nf-zurueck" checked><span>Sicherheits- und Firewall-Einstellungen wie vor dem Notfall wiederherstellen <span class="sub">(ohne Haken bleiben die strengen Einstellungen)</span></span></label>
+          <p class="sub">Zurückgenommen werden nur die Werte, die der Notfall selbst gesetzt hat und die seitdem unverändert sind: Zwei-Faktor-Pflicht, Passwortregeln, Sitzungsdauer, Kontosperre, Firewall, automatische Sperre, Fehlerbremse, Bedrohungsliste und Mitschnitt. Was Sie während des Notfalls selbst geändert haben, bleibt so, wie Sie es eingestellt haben.</p>`
           : '<p class="sub">Die Firewall wurde beim Auslösen nicht geändert.</p>'}
         <label class="sic-feld">Notiz <small>(optional, z. B. Ursache und Maßnahmen)</small><textarea id="nf-notiz" rows="2" maxlength="300"></textarea></label>
-        <p class="sic-hinweis">Eine von Hand eingeschaltete Wartung der Angebotsseite bleibt bestehen. Gesperrte Adressen bleiben gesperrt.</p></div>
+        <p class="sic-hinweis">Eine von Hand eingeschaltete Wartung der Angebotsseite bleibt bestehen. Gesperrte Adressen bleiben gesperrt; die Listen „nie sperren“, die freigegebenen Adressen des Eingabebereichs und die Ländersperre bleiben unverändert.</p></div>
       ${dFuss('<button type="button" class="btn" data-d="zu">Abbrechen</button><button type="submit" class="btn primary">Notfall beenden</button>')}`,
     { breit: true, handler: async (a) => {
       if (a !== 'submit') return;
       const r = await aufruf('sicherheit_notfall_aus', { body: { firewall: !!($('#nf-zurueck', dlg) || {}).checked, notiz: $('#nf-notiz', dlg).value } });
-      dialog(`${dKopf('Notfall beendet', `Dauer ${esc(r.ende.dauer)}`)}<div class="sic-dinhalt"><dl class="sic-dl"><dt>Einstellungen</dt><dd>${esc(r.ende.einstellungen)}</dd></dl>
+      const zur = (r.ende.zurueckgenommen || []), beh = (r.ende.beibehalten || []);
+      dialog(`${dKopf('Notfall beendet', `Dauer ${esc(r.ende.dauer)}`)}<div class="sic-dinhalt"><dl class="sic-dl"><dt>Einstellungen</dt><dd>${esc(r.ende.einstellungen)}</dd>
+          ${zur.length ? `<dt>Zurückgenommen</dt><dd>${esc(zur.join(', '))}</dd>` : ''}
+          ${beh.length ? `<dt>Während des Notfalls geändert, beibehalten</dt><dd>${esc(beh.join(', '))}</dd>` : ''}</dl>
           <p class="sic-hinweis">Alle Mitarbeiter können wieder arbeiten; die Angebotsseite ist wieder erreichbar (sofern keine Wartung von Hand eingeschaltet ist).</p></div>
         ${dFuss('<button type="button" class="btn" data-d="zu">Schließen</button>')}`);
       toast('Notfallmodus beendet.');

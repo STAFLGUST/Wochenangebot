@@ -2,7 +2,7 @@
 
 <!-- ERZEUGT von `python3 werkzeuge/doku.py erzeugen` – nicht von Hand ändern. Quelle: Funktionen und Kommentare im Code. Die CI prüft, dass diese Datei zum Code passt. -->
 
-110 Dateien, 1104 Funktionen – in der Reihenfolge der Datei, **fett** die Abschnitte. Text = erste Aussage des Kommentars direkt über der Funktion (Python: Docstring). Übersicht aller Module: [README.md](README.md).
+110 Dateien, 1108 Funktionen – in der Reihenfolge der Datei, **fett** die Abschnitte. Text = erste Aussage des Kommentars direkt über der Funktion (Python: Docstring). Übersicht aller Module: [README.md](README.md).
 
 ## `.github/scripts/apt_vorrat.py`
 
@@ -208,12 +208,12 @@ _Sicherheit für IT-Administratoren_
 - `betrieb_daten(me)` – Betriebszustand (Modul Sicherheit: Reiter System und Lagebild): Wartung, Sicherung, Bereitstellung, Datenablage, Speicher, E-Mail-Versand, Bestellwünsche, …
 - `sec_config_checks(users)` – Konfigurationsprüfung (serverseitig sichtbar): [bereich, stufe ok\|warn\|bad\|info, titel, befund, empfehlung]
 - `sec_diag(check)` – Nur lesende Diagnosen; Ergebnis: ['ok' => bool, 'items' => [[label, wert, stufe]], 'ms' => int]
-- `sec_export_csv(days)` – Sicherheitsprotokoll als CSV (Semikolon, UTF-8 mit BOM)
+- `sec_export_csv(days, me)` – Sicherheitsprotokoll als CSV (Semikolon, UTF-8 mit BOM) – Kundendaten nur für Leser mit dem Recht „Kunden ansehen“ (heute nur die Administratoraktion …
 
 **Modul Sicherheit: Lagebild, Ereignisse, privilegierte Konten (nur lesend; Aufrufer prüfen die Rechte)**
 
 - `sec_ereignis_art(a)`
-- `sec_ereignisse(tage, art, q, max)` – Sicherheitsereignisse der letzten $tage Tage, neueste zuerst; Filter Art und Suchtext (Beschreibung, Benutzer, Name, IP)
+- `sec_ereignisse(tage, art, q, max, me)` – Sicherheitsereignisse der letzten $tage Tage, neueste zuerst; Filter Art und Suchtext (Beschreibung, Benutzer, Name, IP).
 - `sec_lagebild(me)` – Lagebild: Kennzahlen, Verlauf, auffällige Adressen, Konfigurationsprüfung, Dateiprüfung, letzte Ereignisse
 - `sec_ungenutzt(tage, users)`
 - `sec_konten()`
@@ -362,12 +362,15 @@ _Notfallmodus (Oberfläche_
 - `kunden_wartung_ausnahme(u)` – Wer trotz Wartung der Angebotsseite die Kundenfunktionen nutzt: angemeldete Mitarbeiter (GR-009) – im Notfall nur Administratoren
 - `notfall_mail_gesperrt()` – E-Mail-Versand gesperrt?
 - `notfall_anzeige(u)` – Anzeige für Status, Dashboard und Modul: alle sehen „aktiv seit“; Grund, Urheber und Wirkung nur Administratoren und Inhaber von …
-- `notfall_verlauf()` – Verlauf der letzten Notfälle (ohne Schnappschüsse)
+- `notfall_verlauf()` – Verlauf der letzten Notfälle – ohne die Schnappschüsse „vorher“/„nachher“: die bleiben am Eintrag gespeichert (Rückweg), gehen aber nie in eine Antwort (sie …
 - `notfall_wirkungen()` – Wirkungen als Text (eine Quelle für Oberfläche und Benachrichtigung) und aktuelle Zahlen zur Vorschau
 - `notfall_rollen()`
 - `notfall_ausloesen(me, b)` – Auslösen. $b: grund (Pflicht), wort (= NOTFALL), kundentext, firewall (Standard an), admins (nur Administratoren: auch andere Administratorsitzungen …
 - `notfall_beenden(me, b)` – Beenden (Administrator).
-- `notfall_ende(wer, einstellungenZurueck, notiz)` – Gemeinsamer Abschluss (auch für das Server-Werkzeug deploy/notfall-aus.php, das denselben Ablauf ohne API nachbildet)
+- `notfall_rueck_felder(dok)` – Felder, die die Vorlage „Notfall“ überhaupt setzt – nur sie darf das Beenden zurücknehmen.
+- `notfall_nachher(d)` – Vom Notfall geschriebener Stand.
+- `notfall_rueck_einstellungen(d)` – Rückweg feldbezogen (nur innerhalb von with_lock(NOTFALL_DOK) aufrufen): nur Felder der Vorlage „Notfall“ und nur, solange sie noch den vom Notfall …
+- `notfall_ende(wer, einstellungenZurueck, notiz)` – Gemeinsamer Abschluss (auch für das Server-Werkzeug deploy/notfall-aus.php, das dieselbe Funktion aufruft)
 - `notfall_benachrichtigen(titel, facts)` – Sofortige Benachrichtigung nach der Antwort – ohne Bündelpause, auch wenn das Ereignis ausgeschaltet ist, solange Empfänger eingetragen sind (ein Notfall …
 
 ## `app/api/lib/nutzer.php`
@@ -531,6 +534,7 @@ _Protokoll, Änderungstexte, Anmeldeversuche_
 - `protokoll_grenze(jetzt)` – Ältester aufbewahrter Monat (JJJJ-MM): laufender Monat minus PROTOKOLL_MONATE
 - `protokoll_monate()` – Monate des Protokolls, die aufbewahrt werden (neueste zuerst) – Protokollansicht bietet nur diese an
 - `protokoll_aufraeumen()` – Monatsdokumente vor der Grenze löschen; liefert die entfernten Monate (aufsteigend).
+- `protokoll_maskieren(entries, me)` – Einträge für einen Leser maskieren – eine Quelle für alle Leser des Protokolls (Aktion „log“, Sicherheitsereignisse und Lagebild im Modul Sicherheit, …
 - `audit(a, s, d, who, merge)`
 - `price_text(p)`
 - `sale_text(sale)`

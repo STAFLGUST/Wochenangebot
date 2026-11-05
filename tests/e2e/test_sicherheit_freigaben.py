@@ -1,7 +1,9 @@
 """Freigegebene Sicherheitsänderungen: Besucher-IP nur vom eigenen Proxy (WA_TRUSTED_PROXIES), Fehlversuche je IPv6-/64,
 gleiche Sperre für unbekannte Benutzernamen (Mitarbeiter und Kunden), gesperrter Zugang mit zweitem Faktor bleibt für den
 Inhaber erreichbar, Kundenangebote für Mitarbeiter nur aus freigegebenen Netzen, Protokoll ohne Kundendaten für Nutzer ohne
-Kundenrecht, keine IP bei erfolgreichen Kundenanmeldungen, Schutz-Header in .htaccess. Nur synthetische Testdaten."""
+Kundenrecht – dieselbe Maskierung in den Sicherheitsereignissen und im Lagebild des Moduls Sicherheit (Recht
+„sicherheit.sehen“ ohne „kunden.sehen“, Befund 05.11.2026), keine IP bei erfolgreichen Kundenanmeldungen,
+Schutz-Header in .htaccess. Nur synthetische Testdaten."""
 import base64
 import hashlib
 import hmac
@@ -317,6 +319,55 @@ check('ohne Kundenrecht: Kundenvorgänge nur als Vorgang (keine Firma, E-Mail, D
 check('… andere Vorgänge bleiben vollständig', any(e['a'] == 'user' and 'Eddi' in e['s'] for e in pl))
 al = json.dumps(A.call('log')[1]['entries'], ensure_ascii=False)
 check('mit Kundenrecht (Administrator) vollständig', 'Kantine Freigabe' in al)
+
+# ---------- Sicherheitsereignisse und Lagebild: dieselbe Maskierung wie die Protokollansicht ----------
+# Konto mit „sicherheit.sehen“ ohne „kunden.sehen“ zuerst anlegen und anmelden (danach schreibt kein Vorgang mehr ins
+# Protokoll), dann drei erfundene Einträge anhängen: Kundendaten und Postfachdaten in einem „mail“-Vorgang, Benutzername
+# und IP einer fehlgeschlagenen Kundenanmeldung, ein „security“-Vorgang der Rolle „kunde“ (steht nicht in LOG_KUNDENDATEN).
+A.call('user_save', {'username': 'sani', 'name': 'Sani Sicherheit', 'role': 'viewer', 'active': True, 'password': 'Leserin-Zugang-2',
+                     'mustChange': False, 'grant': ['sicherheit.sehen'], 'deny': []})
+Sa = Client('198.51.100.42')
+assert Sa.call('login', {'username': 'sani', 'password': 'Leserin-Zugang-2'})[0] == 200
+MONAT = time.strftime('%Y-%m', time.gmtime())
+JETZT = time.strftime('%Y-%m-%dT%H:%M:%SZ', time.gmtime())
+ARTEN = ['mail', 'kunde_login_fail', 'security']
+eintraege = doc('protokoll/' + MONAT) or []
+eintraege += [
+    {'t': JETZT, 'u': 'admin', 'n': 'Administrator', 'r': 'admin', 'ip': '198.51.100.2', 'a': 'mail',
+     's': 'Einzelangebot EA-2026-0042 an Metzgerei Beispielprüfung GmbH (einkauf@metzgerei-beispiel.example) versendet',
+     'd': [{'k': 'mail|host', 'code': '', 'name': 'Postfach', 'f': 'Mailserver', 'from': '', 'to': 'smtp.beispielpruefung.example'},
+           {'k': 'mail|user', 'code': '', 'name': 'Postfach', 'f': 'Benutzer', 'from': '', 'to': 'versand@beispielpruefung.example'}]},
+    {'t': JETZT, 'u': 'kunde:metzgerei42', 'n': 'Metzgerei Beispielprüfung GmbH', 'r': 'kunde', 'ip': '203.0.113.9', 'a': 'kunde_login_fail',
+     's': 'Kunden-Anmeldung fehlgeschlagen (Benutzername metzgerei42)'},
+    {'t': JETZT, 'u': 'kunde:metzgerei42', 'n': 'Metzgerei Beispielprüfung GmbH', 'r': 'kunde', 'ip': '203.0.113.9', 'a': 'security',
+     's': 'Passwort des Kundenzugangs metzgerei42 in einem Datenleck gefunden'},
+]
+storage_write('protokoll/' + MONAT, eintraege)
+GEHEIM = ['Metzgerei Beispielprüfung GmbH', 'einkauf@metzgerei-beispiel.example', 'smtp.beispielpruefung.example',
+          'versand@beispielpruefung.example', 'metzgerei42', '203.0.113.9']
+st, r = Sa.call('sicherheit_ereignisse&tage=7')
+ev = {e['a']: e for e in r.get('ereignisse', [])[:3]}   # neueste zuerst: die drei angehängten Einträge
+txt = json.dumps(r, ensure_ascii=False)
+check('Sicherheitsereignisse ohne Kundenrecht: neutraler Text, keine Detailliste, keine IP, kein Kundenname',
+      st == 200 and sorted(ev) == sorted(ARTEN) and all(e.get('masked') and not e.get('d') and not e.get('ip') for e in ev.values())
+      and ev['mail']['s'] == 'E-Mail-Versand' and ev['kunde_login_fail']['u'] == 'kunde' and ev['security']['n'] == 'Kunde'
+      and not [g for g in GEHEIM if g in txt], (st, [g for g in GEHEIM if g in txt] or list(ev.values())[:1]))
+st, r = Sa.call('sicherheit_lage')
+lev = {e['a']: e for e in (r.get('lage') or {}).get('ereignisse', [])[:3]}
+ltxt = json.dumps(lev, ensure_ascii=False)
+check('Lagebild ohne Kundenrecht: die letzten Ereignisse ebenso maskiert',
+      st == 200 and sorted(lev) == sorted(ARTEN) and all(e.get('masked') and not e.get('d') and not e.get('ip') for e in lev.values())
+      and not [g for g in GEHEIM if g in ltxt], (st, [g for g in GEHEIM if g in ltxt] or list(lev.values())[:1]))
+sid = next(u['id'] for u in A.call('users')[1]['users'] if u['username'] == 'sani')
+A.call('user_save', {'id': sid, 'username': 'sani', 'name': 'Sani Sicherheit', 'role': 'viewer', 'active': True,
+                     'grant': ['sicherheit.sehen', 'kunden.sehen'], 'deny': []})
+st, r = Sa.call('sicherheit_ereignisse&tage=7')
+ev = {e['a']: e for e in r.get('ereignisse', []) if e['t'] == JETZT and e['a'] in ARTEN}
+txt = json.dumps(r, ensure_ascii=False)
+check('mit Kundenrecht: dieselben Ereignisse vollständig (Firma, E-Mail, Postfachdaten, IP, Benutzername)',
+      st == 200 and sorted(ev) == sorted(ARTEN) and not any(e.get('masked') for e in ev.values()) and len(ev['mail'].get('d') or []) == 2
+      and ev['kunde_login_fail']['ip'] == '203.0.113.9' and all(g in txt for g in GEHEIM),
+      (st, [g for g in GEHEIM if g not in txt] or list(ev.values())[:1]))
 
 # ---------- Schutz-Header ohne Caddy ----------
 ht = open(os.path.join(REPO, 'app/.htaccess'), encoding='utf-8').read()

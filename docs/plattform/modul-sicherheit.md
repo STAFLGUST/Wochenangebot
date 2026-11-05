@@ -79,19 +79,27 @@ Wirkungen (alle serverseitig):
    Bestellmails lassen sich danach wie gewohnt nachsenden.
 5. **Firewall** auf Vorlage „Notfall“ (Sperre ab dem ersten Treffer für 7 Tage, Bedrohungsliste, Mitschnitt 60 Minuten,
    Zwei-Faktor für alle, kurze Sitzungen). Die vorherigen Einstellungen werden im Notfall-Dokument gesichert und beim Beenden
-   wiederhergestellt (abwählbar: strenge Einstellungen behalten).
+   wiederhergestellt (abwählbar: strenge Einstellungen behalten). Der Rückweg ist **feldbezogen** wie die auslösende Änderung:
+   zurückgenommen werden nur die Felder der Vorlage „Notfall“ und nur, solange sie noch den vom Notfall geschriebenen Wert
+   haben (`nachher` im Dokument). Was ein Administrator während des Vorfalls selbst eingestellt hat, bleibt stehen und steht
+   als „beibehalten“ im Protokoll und in der Benachrichtigung. Nie zurückgeschrieben werden Adress- und Länderlisten und die
+   Ausnahmeliste „nie sperren“ (`erlaubt`, `adminIps`, `ipEnabled`, `geo*` – gleiche Ausnahme wie `FW_NICHT_UEBERTRAGEN` und
+   `fw_import`): eine wieder eingetragene Ausnahme umgeht sonst alle Schutzschichten, eine wieder eingeschaltete IP-Freigabe
+   mit veralteter Liste sperrt alle Mitarbeiter aus (Befund 05.11.2026).
 6. **Benachrichtigung** sofort (ohne Bündelpause) an die Empfänger der Sicherheitsereignisse und Eintrag im Protokoll
    (Vorgang `notfall`, auch im Sicherheitsprotokoll-Export).
 
 Bewusst **nicht** betroffen: Datensicherung und andere Hintergrundläufe, Administratoren, Lesen der Daten. Importe und
 Schreibaktionen pausieren über Punkt 2 (nur Administratoren können noch etwas ändern, z. B. Daten wiederherstellen).
 
-Beenden: im Modul (Administrator, erneute Anmeldung) oder auf dem Server mit `sh deploy/notfall-aus.sh` – stellt auch die
-gesicherten Firewall- und Sicherheitseinstellungen wieder her (für den Fall, dass die strenge Firewall die eigene Adresse
-gesperrt hat). Danach Mitarbeiter wieder normal; eine vorher von Hand eingeschaltete Wartung bleibt bestehen.
+Beenden: im Modul (Administrator, erneute Anmeldung) oder auf dem Server mit `sh deploy/notfall-aus.sh` – beide Wege rufen
+dieselbe Funktion `notfall_ende()` auf und nehmen die Einstellungen der Vorlage feldbezogen zurück (für den Fall, dass die
+strenge Firewall die eigene Adresse gesperrt hat). Danach Mitarbeiter wieder normal; eine vorher von Hand eingeschaltete
+Wartung bleibt bestehen.
 
 Dokument `sicherheit-notfall` (Eigentümer `plattform`): `aktiv`, `seit`, `von`, `vonName`, `grund`, `kundentext`,
-`optionen`, `wirkung` (Zahlen), `vorher` (`sicherheit`, `firewall`), `verlauf` (letzte 20 Notfälle ohne Schnappschüsse).
+`optionen`, `wirkung` (Zahlen), `vorher` und `nachher` (je `sicherheit`, `firewall`), `verlauf` (letzte 20 Notfälle; die
+Schnappschüsse bleiben am Eintrag gespeichert, `notfall_verlauf()` liefert sie nie aus).
 
 ## 5. Technik
 

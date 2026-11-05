@@ -59,6 +59,35 @@ const LOG_KUNDENDATEN = ['customers', 'kunde_login', 'kunde_login_fail', 'kunde_
 const LOG_KUNDENDATEN_TEXT = ['customers' => 'Kundendaten geändert', 'kunde_login' => 'Kunde angemeldet', 'kunde_login_fail' => 'Kunden-Anmeldung fehlgeschlagen',
     'kunde_password' => 'Kunde hat Passwort festgelegt', 'kunde_abmeldung' => 'Kunde hat E-Mails ab- oder angemeldet', 'einzelangebot' => 'Einzelangebot bearbeitet',
     'bestellung' => 'Bestellwunsch bearbeitet', 'mail' => 'E-Mail-Versand', 'einkauf' => 'Einkauf benachrichtigt'];
+
+/* Einträge für einen Leser maskieren – eine Quelle für alle Leser des Protokolls (Aktion „log“, Sicherheitsereignisse und
+   Lagebild im Modul Sicherheit, Export): ohne Recht „Kunden ansehen“ zeigen Vorgänge mit Kundendaten (Rolle „kunde“ oder
+   Vorgangsart aus LOG_KUNDENDATEN) nur den Vorgang – ohne Detailliste (dort stehen z. B. auch Mailserver und Postfach-Benutzer),
+   ohne IP und ohne Benutzername/Name des Kundenzugangs. Ohne Recht „HR verwalten“ ebenso die Vorgänge der Urlaubsverwaltung
+   (aus Name und Zeitraum ließe sich auf Krankheit schließen). Jeder Leser derselben Daten setzt damit dieselbe Bedingung
+   serverseitig durch (GR-103). */
+function protokoll_maskieren(array $entries, array $me): array
+{
+    $kunden = may($me, 'kunden.sehen');
+    $hr = may($me, 'hr.verwalten');
+    if ($kunden && $hr) return $entries;
+    foreach ($entries as &$e) {
+        if (!$kunden && ((($e['r'] ?? '') === 'kunde') || in_array($e['a'] ?? '', LOG_KUNDENDATEN, true))) {
+            $e['s'] = LOG_KUNDENDATEN_TEXT[$e['a'] ?? ''] ?? 'Vorgang mit Kundendaten';
+            unset($e['d']);
+            $e['ip'] = '';
+            if (($e['r'] ?? '') === 'kunde') { $e['u'] = 'kunde'; $e['n'] = 'Kunde'; }
+            $e['masked'] = true;
+        }
+        if (!$hr && ($e['a'] ?? '') === 'hr') {
+            $e['s'] = 'Vorgang der Urlaubsverwaltung';
+            unset($e['d']);
+            $e['masked'] = true;
+        }
+    }
+    unset($e);
+    return $entries;
+}
 function audit(string $a, string $s, array $d = [], ?array $who = null, bool $merge = false): void
 {
     global $ME;

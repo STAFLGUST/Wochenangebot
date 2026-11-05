@@ -11,10 +11,15 @@ declare(strict_types=1);
      Administratoren und die Sitzungen in der zentralen Anmeldung). Auf Keycloak-Hosts ist die Sperre die 503-Antwort.
    - E-Mail-Versand pausiert (mail_send_many in lib/kundenmail.php), außer Benachrichtigungen an die eingetragenen Empfänger.
    - Firewall: Vorlage „Notfall“ (fw_vorlage_anwenden); die vorherigen Einstellungen werden gesichert und beim Beenden
-     wiederhergestellt (abwählbar).
-   - Sofortige Benachrichtigung (ohne Bündelpause) und Protokoll (Vorgang „notfall“).
+     wiederhergestellt (abwählbar). Der Rückweg ist feldbezogen wie die auslösende Änderung: zurückgenommen werden nur die
+     Felder der Vorlage „Notfall“ und nur, solange sie noch den vom Notfall geschriebenen Wert haben – während des Vorfalls
+     getroffene Härtung bleibt also stehen. Adress- und Länderlisten und die Ausnahmeliste „nie sperren“ schreibt das Beenden
+     nie zurück (gleiche Ausnahme wie FW_NICHT_UEBERTRAGEN und fw_import; Befund 05.11.2026).
+   - Sofortige Benachrichtigung (ohne Bündelpause) und Protokoll (Vorgang „notfall“, Felder einzeln wie security_save).
    Dokument „sicherheit-notfall“: {aktiv, seit, von, vonName, grund, kundentext, optionen, wirkung, vorher{sicherheit, firewall},
-   bis, beendetVon, ende{…}, verlauf[…]}. Beenden: Administrator mit Bestätigung oder deploy/notfall-aus.sh auf dem Server. */
+   nachher{sicherheit, firewall}, bis, beendetVon, ende{…}, verlauf[…]}. Die Schnappschüsse „vorher“/„nachher“ bleiben am
+   Verlaufseintrag (nie in der Anzeige: sie enthalten Adressen und Listen). Beenden: Administrator mit Bestätigung oder
+   deploy/notfall-aus.sh auf dem Server. */
 if (!defined('WA_API')) { http_response_code(404); exit; }   // nur über api/index.php nutzbar
 
 const NOTFALL_DOK = 'sicherheit-notfall';
@@ -67,10 +72,17 @@ function notfall_anzeige(?array $u): ?array
     }
     return $out;
 }
-/* Verlauf der letzten Notfälle (ohne Schnappschüsse) */
+/* Verlauf der letzten Notfälle – ohne die Schnappschüsse „vorher“/„nachher“: die bleiben am Eintrag gespeichert (Rückweg),
+   gehen aber nie in eine Antwort (sie enthalten Adressen, Länderlisten und die Ausnahmeliste „nie sperren“) */
 function notfall_verlauf(): array
 {
-    return array_values(array_filter((array)(notfall_dok()['verlauf'] ?? []), 'is_array'));
+    $out = [];
+    foreach ((array)(notfall_dok()['verlauf'] ?? []) as $v) {
+        if (!is_array($v)) continue;
+        unset($v['vorher'], $v['nachher']);
+        $out[] = $v;
+    }
+    return $out;
 }
 
 /* Wirkungen als Text (eine Quelle für Oberfläche und Benachrichtigung) und aktuelle Zahlen zur Vorschau */
@@ -130,8 +142,11 @@ function notfall_ausloesen(array $me, array $b): array
     notfall_dok(true);
     $w = ['zeit' => $jetzt];
     // Firewall und Sicherheitseinstellungen: Vorlage „Notfall“ (wie Aktion fw_vorlage, ohne Abbruch wegen eigener Zwei-Faktor-Pflicht)
+    $nachher = [];
     if ($opt['firewall']) {
-        try { $v = fw_vorlage_anwenden('notfall', $me, true); $w['firewall'] = 'Vorlage „Notfall“ angewendet' . $v['hinweis']; }
+        // „nachher“ merken: nur so kann das Beenden erkennen, welche Felder noch den vom Notfall geschriebenen Wert haben
+        // und welche ein Administrator während des Vorfalls bewusst geändert hat (die bleiben dann stehen)
+        try { $v = fw_vorlage_anwenden('notfall', $me, true); $w['firewall'] = 'Vorlage „Notfall“ angewendet' . $v['hinweis']; $nachher = ['sicherheit' => $v['sec'], 'firewall' => $v['fw']]; }
         catch (Throwable $e) { error_log('[wochenangebot] Notfall Firewall: ' . $e->getMessage()); $w['firewall'] = 'nicht angewendet: ' . mb_substr($e->getMessage(), 0, 160); }
     } else $w['firewall'] = 'unverändert (abgewählt)';
     // Sitzungen beenden: Kunden, Mitarbeiter ohne Administratorrolle (optional andere Administratoren) – nie die eigene
@@ -170,10 +185,11 @@ function notfall_ausloesen(array $me, array $b): array
         }
         $w['keycloak'] = ['beendet' => $ok, 'fehler' => $fehler, 'nurKonsole' => $konsole];
     }
-    with_lock(NOTFALL_DOK, function () use ($w) {
+    with_lock(NOTFALL_DOK, function () use ($w, $nachher) {
         $d = store_read(NOTFALL_DOK) ?? [];
         if (empty($d['aktiv'])) return;
         $d['wirkung'] = $w;
+        if ($nachher) $d['nachher'] = $nachher;   // nie in der Anzeige (notfall_anzeige liefert nur „firewallGesichert“)
         store_write(NOTFALL_DOK, $d);
     });
     notfall_dok(true);
@@ -197,34 +213,102 @@ function notfall_beenden(array $me, array $b): array
     if ($r === null) fail('Der Notfallmodus ist nicht aktiv.', 409);
     $GLOBALS['SEC'] = null; $GLOBALS['FWS'] = null;
     notfall_dok(true);
-    audit('notfall', 'Notfallmodus beendet' . ($notiz !== '' ? ': ' . $notiz : ''), [['k' => 'notfall', 'code' => '', 'name' => 'Notfallmodus', 'f' => 'Status', 'from' => 'aktiv', 'to' => 'aus'],
-        ['k' => 'notfall|fw', 'code' => '', 'name' => 'Notfallmodus', 'f' => 'Einstellungen', 'from' => '', 'to' => $r['einstellungen']]]);
+    // Protokoll feldweise wie security_save: jede zurückgenommene Einstellung mit alt/neu, dazu der Satz für die Übersicht
+    audit('notfall', 'Notfallmodus beendet' . ($notiz !== '' ? ': ' . $notiz : ''), array_merge([['k' => 'notfall', 'code' => '', 'name' => 'Notfallmodus', 'f' => 'Status', 'from' => 'aktiv', 'to' => 'aus'],
+        ['k' => 'notfall|fw', 'code' => '', 'name' => 'Notfallmodus', 'f' => 'Einstellungen', 'from' => '', 'to' => $r['einstellungen']]], (array)($r['felder'] ?? [])));
     modul_verlauf_eintragen(['t' => now(), 'wer' => (string)$me['name'], 'bereich' => 'alle', 'alt' => 'wartung', 'neu' => 'normal', 'grund' => 'Notfallmodus beendet', 'ab' => null, 'bis' => null]);
     notfall_benachrichtigen('Notfallmodus beendet', [['Beendet von', $me['name'] . ' (' . $me['username'] . ')'], ['Dauer', $r['dauer']],
-        ['Einstellungen', $r['einstellungen']], ['Notiz', $notiz !== '' ? $notiz : '–']]);
+        ['Einstellungen', $r['einstellungen']],
+        ['Zurückgenommen', $r['zurueckgenommen'] ? implode(', ', $r['zurueckgenommen']) : '–'],
+        ['Während des Notfalls geändert und beibehalten', $r['beibehalten'] ? implode(', ', $r['beibehalten']) : '–'],
+        ['Notiz', $notiz !== '' ? $notiz : '–']]);
     return $r;
 }
-/* Gemeinsamer Abschluss (auch für das Server-Werkzeug deploy/notfall-aus.php, das denselben Ablauf ohne API nachbildet) */
+/* Bezeichnungen der zurücknehmbaren Felder (Protokoll und Benachrichtigung – wie security_save) */
+const NOTFALL_FELD_LABEL = ['twofa' => 'Zwei-Faktor-Pflicht', 'pwMin' => 'Passwort-Mindestlänge', 'pwComplex' => 'Passwort-Komplexität',
+    'pwLeak' => 'Passwörter gegen Datenlecks prüfen', 'idleMinutes' => 'Abmeldung nach Inaktivität (Min.)',
+    'lockAfter' => 'Kontosperre nach Fehlversuchen', 'lockMinutes' => 'Kontosperre (Min.)', 'waf' => 'Firewall',
+    'autoSperre' => 'Automatische Sperre', 'treffer' => 'Sperre nach Treffern', 'sperrMinuten' => 'Sperrdauer (Min.)',
+    'fehlerLimit' => 'Fehlerbremse', 'feed' => 'Bedrohungsliste', 'mitschnittBis' => 'Mitschnitt der Anfragen'];
+
+/* Felder, die die Vorlage „Notfall“ überhaupt setzt – nur sie darf das Beenden zurücknehmen. Adress- und Länderlisten
+   (FW_NICHT_UEBERTRAGEN) und die Ausnahmeliste „nie sperren“ (erlaubt) bleiben immer, wie sie sind: eine wieder eingetragene
+   Ausnahme umgeht über fw_erlaubt() Sperrliste, Angriffsmuster, Fehlerbremse und Ländersperre, und eine zurückgeschriebene
+   IP-Freigabe mit veralteter Liste würde alle Mitarbeiter aussperren (Durchsetzung in api/index.php). */
+function notfall_rueck_felder(string $dok): array
+{
+    $V = FW_VORLAGEN['notfall'];
+    $f = array_keys($dok === 'sicherheit' ? $V['sec'] : $V['fw']);
+    if ($dok !== 'sicherheit') $f = array_map(function ($k) { return $k === 'mitschnittMinuten' ? 'mitschnittBis' : $k; }, $f);   // fw_clean rechnet Minuten in einen Zeitpunkt um
+    return array_values(array_diff($f, ['erlaubt'], array_keys(FW_NICHT_UEBERTRAGEN)));
+}
+/* Vom Notfall geschriebener Stand. Notfälle, die vor dieser Fassung ausgelöst wurden, haben kein „nachher“ – dann gelten die
+   Werte der Vorlage als Vergleich (der zeitabhängige Mitschnitt bleibt dabei außen vor; er läuft von selbst ab). */
+function notfall_nachher(array $d): array
+{
+    if (is_array($d['nachher'] ?? null) && $d['nachher']) return (array)$d['nachher'];
+    $V = FW_VORLAGEN['notfall'];
+    $fw = $V['fw']; unset($fw['mitschnittMinuten']);
+    return ['sicherheit' => $V['sec'], 'firewall' => $fw];
+}
+/* Rückweg feldbezogen (nur innerhalb von with_lock(NOTFALL_DOK) aufrufen): nur Felder der Vorlage „Notfall“ und nur, solange
+   sie noch den vom Notfall geschriebenen Wert haben. Während des Vorfalls geänderte Felder bleiben stehen und werden benannt.
+   Liefert [Text, zurückgenommene Felder, beibehaltene Felder, Protokollzeilen]. */
+function notfall_rueck_einstellungen(array $d): array
+{
+    $nachherAlle = notfall_nachher($d);
+    $zurueck = []; $behalten = []; $zeilen = [];
+    $fmt = function ($f, $v) {
+        if ($f === 'mitschnittBis') return (int)$v > time() ? 'an' : 'aus';
+        return is_bool($v) ? ($v ? 'an' : 'aus') : (is_array($v) ? implode(', ', $v) : (string)$v);
+    };
+    foreach (['sicherheit', 'firewall'] as $dok) {
+        $vorher = (array)($d['vorher'][$dok] ?? []);
+        $nachher = (array)($nachherAlle[$dok] ?? []);
+        $jetzt = store_read($dok) ?? [];
+        $neu = $jetzt;
+        foreach (notfall_rueck_felder($dok) as $f) {
+            if (!array_key_exists($f, $nachher)) continue;                      // vom Notfall nicht gesetzt
+            $label = NOTFALL_FELD_LABEL[$f] ?? $f;
+            if (($jetzt[$f] ?? null) !== $nachher[$f]) { $behalten[] = $label; continue; }   // während des Notfalls geändert
+            if (array_key_exists($f, $vorher)) $neu[$f] = $vorher[$f]; else unset($neu[$f]);
+            if (($neu[$f] ?? null) === ($jetzt[$f] ?? null)) continue;          // Wert war schon vorher so
+            $zurueck[] = $label;
+            $zeilen[] = ['k' => 'notfall|' . $dok . '|' . $f, 'code' => '', 'name' => $dok === 'sicherheit' ? 'Sicherheit' : 'Firewall',
+                         'f' => $label, 'from' => $fmt($f, $jetzt[$f] ?? ''), 'to' => $fmt($f, $neu[$f] ?? '')];
+        }
+        if ($neu !== $jetzt) store_write($dok, $neu);
+    }
+    $text = $zurueck ? 'wie vor dem Notfall wiederhergestellt' : 'nichts zurückzunehmen';
+    if ($behalten) $text .= ' · während des Notfalls geändert und beibehalten: ' . implode(', ', $behalten);
+    return [$text, $zurueck, $behalten, $zeilen];
+}
+
+/* Gemeinsamer Abschluss (auch für das Server-Werkzeug deploy/notfall-aus.php, das dieselbe Funktion aufruft) */
 function notfall_ende(string $wer, bool $einstellungenZurueck, string $notiz = ''): ?array
 {
     return with_lock(NOTFALL_DOK, function () use ($wer, $einstellungenZurueck, $notiz) {
         $d = store_read(NOTFALL_DOK) ?? [];
         if (empty($d['aktiv'])) return null;
-        $text = 'unverändert (streng)';
+        $text = 'unverändert (streng)'; $zurueck = []; $behalten = []; $zeilen = [];
         if ($einstellungenZurueck && is_array($d['vorher'] ?? null) && !empty($d['optionen']['firewall'])) {
-            store_write('sicherheit', (array)($d['vorher']['sicherheit'] ?? []));
-            store_write('firewall', (array)($d['vorher']['firewall'] ?? []));
-            $text = 'wie vor dem Notfall wiederhergestellt';
+            [$text, $zurueck, $behalten, $zeilen] = notfall_rueck_einstellungen($d);
         } elseif (empty($d['optionen']['firewall'])) $text = 'nicht geändert (Firewall war abgewählt)';
         $ende = now();
         $s = max(0, strtotime($ende) - strtotime((string)($d['seit'] ?? $ende)));
         $dauer = $s >= 3600 ? intdiv($s, 3600) . ' Std. ' . intdiv($s % 3600, 60) . ' Min.' : max(1, intdiv($s, 60)) . ' Min.';
+        // Schnappschüsse bleiben am Verlaufseintrag: auch nach „strenge Einstellungen behalten“ ist der alte Stand noch
+        // nachvollziehbar (notfall_verlauf() liefert sie nie aus)
         $eintrag = ['seit' => $d['seit'] ?? null, 'bis' => $ende, 'von' => (string)($d['vonName'] ?? ''), 'beendetVon' => $wer, 'grund' => (string)($d['grund'] ?? ''),
-                    'notiz' => $notiz, 'wirkung' => (array)($d['wirkung'] ?? []), 'einstellungen' => $text];
+                    'notiz' => $notiz, 'wirkung' => (array)($d['wirkung'] ?? []), 'einstellungen' => $text,
+                    'zurueckgenommen' => $zurueck, 'beibehalten' => $behalten,
+                    'vorher' => (array)($d['vorher'] ?? []), 'nachher' => (array)($d['nachher'] ?? [])];
         $v = (array)($d['verlauf'] ?? []);
         array_unshift($v, $eintrag);
         store_write(NOTFALL_DOK, ['aktiv' => false, 'verlauf' => array_slice($v, 0, NOTFALL_VERLAUF_MAX), 'geaendert' => $ende]);
-        return ['dauer' => $dauer, 'einstellungen' => $text, 'eintrag' => $eintrag];
+        unset($eintrag['vorher'], $eintrag['nachher']);
+        return ['dauer' => $dauer, 'einstellungen' => $text, 'zurueckgenommen' => $zurueck, 'beibehalten' => $behalten,
+                'felder' => $zeilen, 'eintrag' => $eintrag];
     });
 }
 

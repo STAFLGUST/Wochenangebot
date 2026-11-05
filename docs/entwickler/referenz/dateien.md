@@ -431,7 +431,7 @@ Jede Code-Datei beginnt mit einem Kopfkommentar; dessen erste Aussage steht hier
 | `ip-freigabe-aus.php` | plattform | Offline emergency tool, also supports SQLite. |
 | `ip-freigabe-aus.sh` | plattform | Notfall: IP-Freigabe und Ländersperre ausschalten (z. |
 | `karte-laden.sh` | plattform | Detailkarte (Straßen, Gebäude, Ortsnamen) für CRM-Karte und Auswertung laden – OpenStreetMap-Daten als eine Datei auf dem eigenen Server (keine fremden Kartendienste beim Ansehen). |
-| `notfall-aus.php` | plattform | Notfallmodus beenden (Server-Werkzeug zu deploy/notfall-aus.sh) – gleicher Ablauf wie notfall_ende() in app/api/lib/notfall.php, aber ohne Anmeldung |
+| `notfall-aus.php` | plattform | Notfallmodus beenden (Server-Werkzeug zu deploy/notfall-aus.sh) – ohne Anmeldung, aber mit genau derselben Funktion wie die Oberfläche: notfall_ende() in app/api/lib/notfall.php (Zustand „aus“, Verlauf ergänzen und … |
 | `notfall-aus.sh` | plattform | Notfallmodus beenden (Modul Sicherheit), wenn das in der Oberfläche nicht mehr geht – z. |
 | `notzugang.sh` | plattform | Notzugang zum alten Eingabebereich (eigene Anmeldung mit den bisherigen Passwörtern) – nur wenn die zentrale Anmeldung (Keycloak) gestört ist. |
 | `passwort-zuruecksetzen.php` | plattform | Wird von passwort-zuruecksetzen.sh im App-Container ausgeführt (nicht über das Web erreichbar). |

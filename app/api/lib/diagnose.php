@@ -203,10 +203,12 @@ function sec_diag(string $check): array
     return ['ok' => $ok, 'check' => $check, 'items' => $items, 'ms' => (int)round((microtime(true) - $t0) * 1000), 'serverTime' => gmdate('Y-m-d\TH:i:s\Z')];
 }
 
-/* Sicherheitsprotokoll als CSV (Semikolon, UTF-8 mit BOM) */
-function sec_export_csv(int $days): array
+/* Sicherheitsprotokoll als CSV (Semikolon, UTF-8 mit BOM) – Kundendaten nur für Leser mit dem Recht „Kunden ansehen“
+   (heute nur die Administratoraktion security_export; die Maskierung gilt trotzdem, damit ein künftiger Leser sie nicht umgeht) */
+function sec_export_csv(int $days, ?array $me = null): array
 {
-    $rows = array_filter(sec_log_entries($days), function ($e) { return in_array($e['a'], SEC_LOG_TYPES, true); });
+    $me = $me ?? (current_user() ?? ['role' => '']);
+    $rows = array_filter(protokoll_maskieren(sec_log_entries($days), $me), function ($e) { return in_array($e['a'], SEC_LOG_TYPES, true); });
     $cell = function ($v) { $v = (string)$v; if ($v !== '' && strpbrk($v[0], "=+-@\t\r") !== false) $v = "'" . $v; return '"' . str_replace('"', '""', $v) . '"'; };
     $out = ["\xEF\xBB\xBF" . 'Zeit (UTC);Vorgang;Benutzer;Name;Rolle;IP-Adresse;Beschreibung;Details'];
     foreach ($rows as $e) {
@@ -231,11 +233,15 @@ function sec_ereignis_art(string $a): string
     foreach (SEC_EREIGNIS_ARTEN as $k => [, $liste]) if (in_array($a, $liste, true)) return $k;
     return 'einstellungen';
 }
-/* Sicherheitsereignisse der letzten $tage Tage, neueste zuerst; Filter Art und Suchtext (Beschreibung, Benutzer, Name, IP) */
-function sec_ereignisse(int $tage, string $art = '', string $q = '', int $max = 300): array
+/* Sicherheitsereignisse der letzten $tage Tage, neueste zuerst; Filter Art und Suchtext (Beschreibung, Benutzer, Name, IP).
+   Dieselben Monatsdokumente liest die Aktion „log“ – mit derselben Maskierung: ohne das Recht „Kunden ansehen“ zeigen
+   Vorgänge mit Kundendaten nur den Vorgang (keine Detailliste, keine IP, kein Kundenname). Das Recht „sicherheit.sehen“
+   allein reicht dafür nicht (GR-103, Befund 05.11.2026). */
+function sec_ereignisse(int $tage, string $art = '', string $q = '', int $max = 300, ?array $me = null): array
 {
+    $me = $me ?? (current_user() ?? ['role' => '']);
     $q = mb_strtolower(trim($q));
-    $alle = array_reverse(array_values(array_filter(sec_log_entries($tage), function ($e) { return in_array($e['a'] ?? '', SEC_LOG_TYPES, true); })));
+    $alle = array_reverse(array_values(array_filter(protokoll_maskieren(sec_log_entries($tage), $me), function ($e) { return in_array($e['a'] ?? '', SEC_LOG_TYPES, true); })));
     $zahlen = array_fill_keys(array_keys(SEC_EREIGNIS_ARTEN), 0);
     $out = [];
     foreach ($alle as $e) {
@@ -246,7 +252,8 @@ function sec_ereignisse(int $tage, string $art = '', string $q = '', int $max = 
         if (count($out) >= $max) continue;
         $stufe = in_array($e['a'], ['login_fail', 'kunde_login_fail', 'reauth_fail', 'oidc_stufe'], true) ? 'warn' : ($e['a'] === 'notfall' ? 'bad' : 'info');
         $out[] = ['t' => $e['t'], 'a' => $e['a'], 'art' => $k, 'stufe' => $stufe, 'u' => (string)($e['u'] ?? ''), 'n' => (string)($e['n'] ?? ''), 'r' => (string)($e['r'] ?? ''),
-                  'ip' => (string)($e['ip'] ?? ''), 's' => (string)($e['s'] ?? ''), 'd' => array_slice(array_values(array_filter((array)($e['d'] ?? []), 'is_array')), 0, 20)];
+                  'ip' => (string)($e['ip'] ?? ''), 's' => (string)($e['s'] ?? ''), 'd' => array_slice(array_values(array_filter((array)($e['d'] ?? []), 'is_array')), 0, 20)]
+                 + (!empty($e['masked']) ? ['masked' => true] : []);
     }
     $arten = [];
     foreach (SEC_EREIGNIS_ARTEN as $k => [$label]) $arten[] = ['key' => $k, 'label' => $label, 'n' => $zahlen[$k]];
@@ -257,6 +264,9 @@ function sec_ereignisse(int $tage, string $art = '', string $q = '', int $max = 
 function sec_lagebild(array $me): array
 {
     $users = users_load();
+    // Verlauf und auffällige Adressen bleiben unmaskiert: dort stehen nur Zahlen, Adressen und versuchte Benutzernamen –
+    // genau das, was die Bezeichnung des Rechts „sicherheit.sehen“ ausdrücklich nennt. Die Ereignisliste unten läuft dagegen
+    // über sec_ereignisse() und damit über protokoll_maskieren() (Kundenstammdaten, Detaillisten, Postfachdaten).
     $log = sec_log_entries(14);
     $tag = time() - 86400;
     $n24 = function (array $arten) use ($log, $tag) { return count(array_filter($log, function ($e) use ($arten, $tag) { return in_array($e['a'], $arten, true) && strtotime((string)$e['t']) > $tag; })); };
@@ -285,7 +295,7 @@ function sec_lagebild(array $me): array
         'dateipruefung' => $ip ? ['ranAt' => $ip['ranAt'] ?? null, 'ok' => !empty($ip['ok']), 'counts' => $ip['counts'] ?? []] : null,
         'backup' => store_read('sicherung'), 'deployment' => store_read('deployment'), 'https' => is_https(),
         'timeline' => sec_timeline($log), 'topIps' => sec_top_ips($log), 'config' => sec_config_checks($users), 'stunden' => fw_stunden(),
-        'ereignisse' => array_slice(sec_ereignisse(7)['ereignisse'], 0, 8),
+        'ereignisse' => array_slice(sec_ereignisse(7, '', '', 300, $me)['ereignisse'], 0, 8),
     ];
 }
 

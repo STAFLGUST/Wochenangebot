@@ -7,12 +7,19 @@ Anmeldung 503 auf allen sperrbaren Oberflächen, Status/Abmelden/Modulübersicht
 der Kundenseite), eigene Sitzung bleibt; Firewall-Vorlage „Notfall“ mit Schnappschuss; E-Mail-Versand pausiert, Benachrichtigung
 geht sofort raus; Protokoll und Wartungsverlauf; doppeltes Auslösen 409; Beenden stellt Einstellungen wieder her (oder behält
 sie), Verlauf; von Hand eingeschaltete Wartung bleibt; Option „andere Administratoren abmelden“; Server-Werkzeug
-deploy/notfall-aus.php. Nur synthetische Testdaten.
+deploy/notfall-aus.php; Rückweg feldbezogen: während des Notfalls getroffene Härtung (Zwei-Faktor-Pflicht, entfernte
+Ausnahme in „nie sperren“) überdauert das Beenden, die Felder der Vorlage kommen trotzdem zurück, Protokoll nennt beide
+Feldgruppen (Befund 05.11.2026). Nur synthetische Testdaten.
 """
+import base64
+import hashlib
+import hmac
 import json
 import os
+import struct
 import subprocess
 import sys
+import time
 
 from kunden_hilfe import Client
 from order_setup import setup
@@ -24,6 +31,13 @@ res = []
 
 def check(n, c, i=''):
     res.append(bool(c)); print(('PASS ' if c else 'FAIL ') + n + (('  ' + str(i)[:400]) if i else ''))
+
+
+def totp(secret):
+    key = base64.b32decode(secret + '=' * (-len(secret) % 8))
+    h = hmac.new(key, struct.pack('>Q', int(time.time() // 30)), hashlib.sha1).digest()
+    o = h[19] & 15
+    return '%06d' % ((struct.unpack('>I', h[o:o + 4])[0] & 0x7fffffff) % 1000000)
 
 
 def doc(name):
@@ -186,6 +200,45 @@ check('Verlauf: Server-Werkzeug als Beender', nd.get('aktiv') is False and nd['v
 check('Protokoll: Ende auf dem Server vermerkt', 'Notfallmodus auf dem Server beendet' in json.dumps(A.call('log')[1], ensure_ascii=False))
 out = subprocess.run(['php', os.path.join(REPO, 'deploy', 'notfall-aus.php')], env={**os.environ, 'DATA_DIR': DATA}, capture_output=True, text=True)
 check('zweiter Aufruf: nicht aktiv', 'nicht aktiv' in out.stdout, out.stdout)
+
+# ── Rückweg feldbezogen: Härtung während des Notfalls bleibt (Befund 05.11.2026) ──
+# Ausgangslage: zwei Ausnahmen in „nie sperren“, bekannter Trefferwert
+assert A.call('reauth', {'password': PW})[0] == 200
+st, _ = A.call('fw_save', {'erlaubt': ['203.0.113.50', '192.0.2.10'], 'treffer': 7})
+check('Ausgangslage: Ausnahmeliste „nie sperren“ mit zwei Adressen, Sperre nach 7 Treffern',
+      st == 200 and (doc('firewall') or {}).get('erlaubt') == ['203.0.113.50', '192.0.2.10'] and doc('firewall')['treffer'] == 7, doc('firewall'))
+# zweiter Faktor für den Administrator: ohne ihn darf niemand die Zwei-Faktor-Pflicht auf „alle“ stellen (Selbstaussperrung)
+sek = A.call('twofa_begin', {})[1]['secret']
+assert A.call('twofa_enable', {'code': totp(sek)})[0] == 200, 'zweiter Faktor für den Administrator'
+# Auslösen durch die Mitarbeiterin ohne zweiten Faktor: die Zwei-Faktor-Pflicht bleibt dabei unverändert („aus“)
+Ni2 = Client('198.51.100.12')
+assert Ni2.call('login', {'username': 'nina', 'password': 'Notfall-Zugang-7'})[0] == 200
+st, r = Ni2.call('sicherheit_notfall_an', {'grund': 'Härtung soll den Vorfall überdauern', 'wort': 'NOTFALL'})
+check('Notfall ausgelöst: Vorlage setzt die Firewall-Felder, Zwei-Faktor-Pflicht und Ausnahmeliste unverändert',
+      st == 200 and doc('firewall')['treffer'] == 1 and (doc('sicherheit') or {}).get('twofa', 'off') == 'off'
+      and doc('firewall')['erlaubt'] == ['203.0.113.50', '192.0.2.10'], (st, doc('firewall'), (doc('sicherheit') or {}).get('twofa')))
+# Härtung während des laufenden Notfalls (Leitfaden: „Konten absichern“, „Ursache beheben“)
+assert A.call('reauth', {'password': PW})[0] == 200
+einst = A.call('security_status')[1]['settings']
+st, r = A.call('security_save', {**einst, 'twofa': 'all'})
+check('während des Notfalls: Zwei-Faktor-Pflicht auf „alle“ gesetzt', st == 200 and (doc('sicherheit') or {}).get('twofa') == 'all', (st, r.get('error')))
+st, r = A.call('fw_save', {'erlaubt': ['203.0.113.50']})
+check('während des Notfalls: Ausnahme 192.0.2.10 aus „nie sperren“ entfernt', st == 200 and doc('firewall')['erlaubt'] == ['203.0.113.50'], (st, doc('firewall')))
+# Beenden mit dem vorangekreuzten Haken (Feld „firewall“ fehlt = Standardfall)
+st, r = A.call('sicherheit_notfall_aus', {'notiz': 'Ursache behoben, Härtung bleibt'})
+ende = r.get('ende', {})
+check('Beenden: Zwei-Faktor-Pflicht bleibt „alle“ (während des Notfalls geändert)', st == 200 and (doc('sicherheit') or {}).get('twofa') == 'all', (st, ende))
+check('Beenden: entfernte Ausnahme kehrt nicht zurück', doc('firewall')['erlaubt'] == ['203.0.113.50'], doc('firewall'))
+check('Beenden: Felder der Vorlage trotzdem zurückgenommen (Sperre nach 7 Treffern)', doc('firewall')['treffer'] == 7, doc('firewall'))
+check('Beenden: Antwort nennt zurückgenommene und beibehaltene Felder',
+      'Zwei-Faktor-Pflicht' in ende.get('beibehalten', []) and 'Sperre nach Treffern' in ende.get('zurueckgenommen', [])
+      and 'beibehalten' in ende.get('einstellungen', ''), ende)
+log2 = json.dumps(A.call('log')[1], ensure_ascii=False)
+check('Protokoll: zurückgenommene Felder einzeln mit alt und neu', 'Sperre nach Treffern' in log2 and 'Notfallmodus beendet' in log2)
+nd2 = doc('sicherheit-notfall') or {}
+check('Verlaufseintrag behält den Schnappschuss (Rückweg bleibt offen), die Antwort nicht',
+      isinstance(nd2['verlauf'][0].get('vorher'), dict) and set(nd2['verlauf'][0]['vorher']) == {'sicherheit', 'firewall'}
+      and 'vorher' not in (A.call('sicherheit_lage')[1].get('verlauf') or [{}])[0], list((nd2['verlauf'][0] or {}).keys()))
 
 print(f'{sum(res)}/{len(res)} passed')
 sys.exit(0 if all(res) else 1)

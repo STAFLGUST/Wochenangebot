@@ -1,7 +1,9 @@
 #!/bin/sh
 # Notfallmodus beenden (Modul Sicherheit), wenn das in der Oberfläche nicht mehr geht – z. B. weil die strenge
-# Notfall-Firewall die eigene Adresse gesperrt hat. Stellt die vor dem Notfall gesicherten Sicherheits- und
-# Firewall-Einstellungen wieder her. Gesperrte Adressen bleiben gesperrt (aufheben: Sicherheit → Firewall & Sperren).
+# Notfall-Firewall die eigene Adresse gesperrt hat. Nimmt die Einstellungen der Vorlage „Notfall“ zurück, soweit sie
+# seit dem Auslösen unverändert sind (gleiche Funktion wie die Oberfläche); während des Notfalls geänderte Werte bleiben.
+# Gesperrte Adressen bleiben gesperrt (aufheben: Sicherheit → Firewall & Sperren); die Listen „nie sperren“, die
+# freigegebenen Adressen und die Ländersperre bleiben unverändert.
 # Aufruf auf dem Server:   sh /opt/wochenangebot/deploy/notfall-aus.sh
 # Strenge Einstellungen behalten:   sh /opt/wochenangebot/deploy/notfall-aus.sh --streng-behalten
 set -e
