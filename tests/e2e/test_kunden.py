@@ -236,6 +236,39 @@ W = Client('198.51.100.54'); W.call('kunde_login', {'username': 'weg.werf', 'pas
 A.call('kunde_delete', {'id': TMP['customer']['id'], 'rev': TMP['rev']})
 check('merkliste: deleted with the customer', TMP['customer']['id'] not in storage_raw('merklisten'))
 
+# ---------- Obergrenze des Sitzungsregisters (kundensitzungen wird bei jeder Kundenanfrage vollständig gelesen) ----------
+# Ohne Obergrenze könnte ein einziger Zugang das Register durch wiederholtes Anmelden beliebig groß machen und damit
+# die Anfragen aller anderen Kunden verlangsamen. KSESS_MAX_ZUGANG (= 10, app/api/lib/kundenmail.php) begrenzt das
+# je Zugang; verdrängt wird die am längsten nicht benutzte eigene Sitzung.
+KSESS_MAX_ZUGANG = 10
+
+
+def ksess():
+    raw = storage_raw('kundensitzungen') or ''
+    d = json.loads(raw.split('?>\n', 1)[-1] or 'null')
+    return d if isinstance(d, dict) else {}
+
+
+code, r = A.call('kunden')
+SIT = A.call('kunde_save', {**base, 'rev': r['rev'], 'firma': 'Sitzung Test', 'nr': 'K-ST', 'email': '', 'angebote': ['std'],
+                            'login': {'username': 'sitz.test', 'password': 'Start-Kennwort-42', 'mustChange': False, 'active': True}})[1]
+KST = SIT['customer']['id']
+sitzungen = []
+for i in range(KSESS_MAX_ZUGANG + 1):
+    c = Client('203.0.113.' + str(60 + i))
+    sitzungen.append((c, c.call('kunde_login', {'username': 'sitz.test', 'password': 'Start-Kennwort-42'})[0]))
+check('Sitzungen: alle 11 Anmeldungen erfolgreich', all(st == 200 for _, st in sitzungen), [st for _, st in sitzungen])
+eigene = [v for v in ksess().values() if isinstance(v, dict) and v.get('kid') == KST]
+check(f'Sitzungen: höchstens {KSESS_MAX_ZUGANG} Einträge je Zugang', len(eigene) == KSESS_MAX_ZUGANG, len(eigene))
+check('Sitzungen: die älteste Sitzung ist abgemeldet', sitzungen[0][0].call('kunde_merkliste')[0] == 401)
+check('Sitzungen: die neuesten Sitzungen gelten weiter',
+      sitzungen[-1][0].call('kunde_merkliste')[0] == 200 and sitzungen[1][0].call('kunde_merkliste')[0] == 200)
+check('Sitzungen: ein Zugang verdrängt nur eigene Sitzungen (fremder Kunde bleibt angemeldet)',
+      MT.call('kunde_merkliste')[0] == 200)
+code, r = A.call('kunden')
+A.call('kunde_delete', {'id': KST, 'rev': r['rev']})
+check('Sitzungen: Testzugang wieder entfernt', all(not isinstance(v, dict) or v.get('kid') != KST for v in ksess().values()))
+
 # ---------- Oberfläche ----------
 with sync_playwright() as p:
     br = p.chromium.launch()
