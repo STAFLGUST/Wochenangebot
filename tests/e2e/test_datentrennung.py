@@ -133,7 +133,12 @@ try:
     check('Kundenseite: Falle für Angriffswerkzeuge (404)', Client('203.0.113.41').call('waf_probe&p=wp-login.php')[0] == 404)
     monat = time.strftime('%Y-%m', time.gmtime())
     check('Kundenseite: Protokoll wird weiter geschrieben (Anmeldung, Bestellwunsch, Abmeldung)', {'kunde_login', 'kunde_login_fail', 'bestellung', 'kunde_abmeldung'}
-          <= {e.get('a') for e in (doc('protokoll/' + monat) or [])}, sorted({e.get('a') for e in (doc('protokoll/' + monat) or [])}))
+          <= {e.get('a') for e in (doc('kundenprotokoll/' + monat) or [])}, sorted({e.get('a') for e in (doc('kundenprotokoll/' + monat) or [])}))
+    check('Stufe 4: Protokoll der Kundenseite ohne Einträge der Mitarbeiterseite; deren Protokoll liegt innen', not any(e.get('r') not in ('kunde', '') or e.get('a') in ('user', 'customers', 'login')
+          for e in (doc('kundenprotokoll/' + monat) or [])) and any(e.get('a') == 'customers' for e in (doc('protokoll/' + monat) or []))
+          and not os.path.exists(DATA + '/protokoll'), sorted({(e.get('a'), e.get('r')) for e in (doc('kundenprotokoll/' + monat) or [])}))
+    lg = A.call('log&month=' + monat)[1]
+    check('Mitarbeiterseite zeigt beide Protokolle zusammen', {'kunde_login', 'bestellung', 'customers', 'user'} <= {e.get('a') for e in lg.get('entries', [])}, sorted({e.get('a') for e in lg.get('entries', [])}))
     neu = spur()[vorher:]
     check('Kundenseite: keine einzige Anfrage nach internen Dokumenten (Serverprotokoll)', not neu, neu[:8])
     check('Kundenseite: nichts Internes in den gemeinsamen Ordner geschrieben', not interne_im_gemeinsamen_ordner(), interne_im_gemeinsamen_ordner()[:5])
@@ -144,7 +149,7 @@ try:
     check('Versandprotokoll im internen Ordner', any(x.get('by') == 'Postausgang' for x in (doc('mailversand') or [])) and not os.path.exists(DATA + '/mailversand.php'))
 
     # ---------- Stufe 2: Teilung, Empfänger und Inhalt nur von innen ----------
-    check('höchste Trennstufe im Kennzeichen (3)', open(DATA + '/.daten-getrennt').read().strip() == '3')
+    check('höchste Trennstufe im Kennzeichen (4)', open(DATA + '/.daten-getrennt').read().strip() == '4')
     felder = set(daten_trennen.kunden_felder())
     kd = doc('kunden')
     check('gemeinsames Kundendokument nur mit Portalfeldern (keine Adresse, keine Warenwirtschaft)', all(set(c) <= felder for c in kd['customers'])

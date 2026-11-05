@@ -58,7 +58,8 @@ def php(code, daten, intern=None):
 
 ks = dt.kundenseite()
 check('Regelwerk: Kundenseite enthält Angebot, Kunden, Protokoll; HR und Nutzer sind intern',
-      not dt.ist_intern('angebot', ks) and not dt.ist_intern('kunden', ks) and not dt.ist_intern('protokoll/2026-11', ks)
+      not dt.ist_intern('angebot', ks) and not dt.ist_intern('kunden', ks) and not dt.ist_intern('protokoll/2026-11', dt.kundenseite(stufe=1))
+      and dt.ist_intern('protokoll/2026-11', ks) and not dt.ist_intern('kundenprotokoll/2026-11', ks)
       and dt.ist_intern('hr-personal', ks) and dt.ist_intern('nutzer', ks) and dt.ist_intern('versionen/v1', ks) and not dt.ist_intern('sicherung', ks))
 
 # Gleiche Einteilung in Python (Migration) und PHP (Anwendung) für jedes registrierte Dokument
@@ -66,7 +67,7 @@ import tomllib
 namen = [d['name'].replace('/*', '/beispiel') for d in tomllib.load(open(REPO / 'regeln/datenverantwortung.toml', 'rb'))['dokument']]
 namen += [d['name'][:-2] for d in tomllib.load(open(REPO / 'regeln/datenverantwortung.toml', 'rb'))['dokument'] if d['name'].endswith('/*')]   # Sperren der Gruppen
 with tempfile.TemporaryDirectory() as t:
-    t = Path(t); (t / 'd').mkdir(); (t / 'd' / '.daten-getrennt').write_text('2')
+    t = Path(t); (t / 'd').mkdir(); (t / 'd' / '.daten-getrennt').write_text(str(dt.ZIELSTUFE))
     aus_php = json.loads(php(f"echo json_encode(array_map('store_bereich', {json.dumps(namen)}));", t / 'd') or '[]')
 check('Einteilung in PHP und Python identisch (alle registrierten Dokumente, höchste Stufe)',
       aus_php == ['intern' if dt.ist_intern(n, ks) else 'haupt' for n in namen], [n for n, b in zip(namen, aus_php) if (b == 'intern') != dt.ist_intern(n, ks)][:5])
@@ -87,11 +88,11 @@ for art in ('dateien', 'sqlite'):
         if art == 'dateien':
             check(f'{art}: interne Dateien verschoben, Kundenseite und Sidecars bleiben', (i / 'hr-personal.php').is_file() and (i / 'versionen/v1.php').is_file()
                   and not (d / 'hr-personal.php').exists() and not (d / 'nutzer.php').exists() and not (d / 'versionen').exists()
-                  and (d / 'angebot.php').is_file() and (d / 'protokoll/2026-11.php').is_file() and (d / 'sicherung.php').is_file() and (d / 'geo/laender.dat.php').is_file())
+                  and (d / 'angebot.php').is_file() and (i / 'protokoll/2026-11.php').is_file() and not (d / 'protokoll').exists() and (d / 'sicherung.php').is_file() and (d / 'geo/laender.dat.php').is_file())
             check(f'{art}: Inhalt unverändert', (i / 'hr-personal.php').read_bytes() == vorher['hr-personal.php'])
         else:
-            check(f'{art}: Datenbank geteilt – interne Zeilen nur in daten-intern', set(zeilen(i)) == {'hr-personal', 'nutzer', 'versionen/v1', 'crm-kunden', 'kundenstamm', 'angebot'}
-                  and not ({'hr-personal', 'nutzer', 'crm-kunden'} & set(zeilen(d))) and {'angebot', 'kunden', 'protokoll/2026-11'} <= set(zeilen(d))
+            check(f'{art}: Datenbank geteilt – interne Zeilen nur in daten-intern', set(zeilen(i)) == {'hr-personal', 'nutzer', 'versionen/v1', 'crm-kunden', 'kundenstamm', 'angebot', 'protokoll/2026-11'}
+                  and not ({'hr-personal', 'nutzer', 'crm-kunden'} & set(zeilen(d))) and {'angebot', 'kunden'} <= set(zeilen(d)) and 'protokoll/2026-11' not in zeilen(d)
                   and (i / '.sqlite-active').is_file(), (sorted(zeilen(i)), sorted(zeilen(d))))
             check(f'{art}: alte interne Datendateien ebenfalls aus dem gemeinsamen Ordner', not (d / 'hr-personal.php').exists() and (i / 'hr-personal.php').is_file())
         check(f'{art}: Dateiablage verschoben', (i / 'dateien/qs/ab/ab12.bin').read_bytes() == b'PDF-Inhalt' and not (d / 'dateien').exists())
@@ -109,7 +110,7 @@ for art in ('dateien', 'sqlite'):
         r = php("echo json_encode(store_stats());", d, i)
         check(f'{art}: Kennzahlen zählen beide Bereiche', json.loads(r or '{}').get('getrennt') is True and json.loads(r)['documents'] >= 7, r)
         r = php("echo json_encode(store_read('hr-personal'));", d, t / 'falsch')
-        r2 = php("echo store_read('protokoll/2026-11') === null ? 'leer' : 'ok';", d, t / 'falsch')
+        r2 = php("echo store_read('kunden') === null ? 'leer' : 'ok';", d, t / 'falsch')
         check(f'{art}: WA_DATEN_INTERN ohne Kennzeichen → Fehler statt leerer interner Daten (gemeinsame lesbar)', 'nicht eingerichtet' in r and 'null' not in r and r2 == 'ok', (r, r2))
         # Wiederholung nach Abbruch: Kopie liegt noch im gemeinsamen Ordner → erneutes trennen entfernt sie (nur bei gleichem Inhalt)
         if art == 'dateien':
@@ -170,9 +171,9 @@ for stufe, ksx in ((1, ks1), (2, ks2), (3, ks3)):
     check(f'Stufe {stufe}: Einteilung in PHP und Python identisch', aus_php == ['intern' if dt.ist_intern(n, ksx) else 'haupt' for n in namen],
           [n for n, b in zip(namen, aus_php) if (b == 'intern') != dt.ist_intern(n, ksx)][:5])
 php_stufe = php("echo DATEN_TRENNSTUFE;", REPO / 'app')
-check('Höchste Stufe gleich in Python, PHP und Regelwerk', php_stufe == str(dt.ZIELSTUFE) == '3', php_stufe)
+check('Höchste Stufe gleich in Python, PHP und Regelwerk', php_stufe == str(dt.ZIELSTUFE) == '4', php_stufe)
 with tempfile.TemporaryDirectory() as t:
-    t = Path(t); (t / 'd').mkdir(); (t / 'd' / '.daten-getrennt').write_text('4\n')
+    t = Path(t); (t / 'd').mkdir(); (t / 'd' / '.daten-getrennt').write_text('5\n')
     r = php("try { store_bereich('kunden'); echo 'gelesen'; } catch (RuntimeException $e) { echo $e->getMessage(); }", t / 'd')
 check('Kennzeichen einer neueren Stufe → Fehler statt falscher Einteilung', 'zusammenfuehren' in r, r)
 
@@ -286,13 +287,13 @@ for art in ('dateien', 'sqlite'):
         if art == 'sqlite':
             subprocess.run([sys.executable, str(DB), 'migrate', str(d), '--offline'], check=True, capture_output=True)
         code, out = lauf('trennen', str(d), str(i), '--offline', '--stufe', '2')
-        code, out = lauf('pruefen', str(d), str(i))
+        code, out = lauf('pruefen', str(d), str(i), '--stufe', '3')
         check(f'{w}: pruefen nennt die veröffentlichten Dokumente', code == 0 and 'Trennstufe 2 → 3' in out and 'sicherheit' in out and 'veröffentlicht' in out, out)
-        code, out = lauf('trennen', str(d), str(i), '--offline')
+        code, out = lauf('trennen', str(d), str(i), '--offline', '--stufe', '3')
         check(f'{w}: trennen auf Stufe 3: maßgeblicher Stand innen, Kopie bleibt außen', code == 0 and (d / '.daten-getrennt').read_text() == '3\n'
               and dt.dok_lesen(i, 'sicherheit') == dt.dok_lesen(d, 'sicherheit') == {'idleMinutes': 30, 'pwMin': 12}
               and dt.dok_lesen(i, 'angebot') == dt.dok_lesen(d, 'angebot') == {'items': [1]} and dt.dok_lesen(i, 'kunden') is None, out)
-        code, out = lauf('pruefen', str(d), str(i))
+        code, out = lauf('pruefen', str(d), str(i), '--stufe', '3')
         check(f'{w}: danach nichts mehr zu tun', code == 0 and not [z for z in out.splitlines() if z.startswith('  ')], out)
         # Mitarbeiterseite schreibt innen und legt die Kopie ab – in Transaktionen erst nach deren Abschluss, nie bei Rücksetzen
         r = php_lib("with_lock('sicherheit', function () { store_write('sicherheit', ['idleMinutes' => 20, 'pwMin' => 14]); }); echo json_encode(store_read('sicherheit'));", d, i)
@@ -331,6 +332,40 @@ for art in ('dateien', 'sqlite'):
         code, out = lauf('zusammenfuehren', str(d), str(i), '--offline')
         check(f'{w}: zusammenführen von Stufe 3: interner Stand gilt, daten-intern leer', code == 0 and dt.dok_lesen(d, 'sicherheit') == {'idleMinutes': 20, 'pwMin': 14}
               and dt.dok_lesen(d, 'angebot') == {'items': [1]} and dt.leer(i) and dt.dok_lesen(d, 'kunden')['customers'][0]['email'] == KUNDE['email'], out)
+
+# ─────────────── Trennstufe 4 (ADR-007 Stufe 2d): Protokoll der Mitarbeiterseite innen, Kundenseite schreibt kundenprotokoll/* ───────────────
+MONAT = time.strftime('%Y-%m', time.gmtime())
+A1, A2, K1 = {'t': '1', 'a': 'user'}, {'t': '3', 'a': 'user'}, {'t': '2', 'a': 'kunde_login'}
+check('Protokolle vereinen: sortiert, gleiche Einträge bleiben, ein wiederholter Lauf fügt nichts erneut hinzu',
+      dt.protokoll_vereinen([A1, A2], [K1, K1]) == [A1, K1, K1, A2] and dt.protokoll_vereinen([A1, K1, K1, A2], [K1, K1]) == [A1, K1, K1, A2])
+for art in ('dateien', 'sqlite'):
+    with tempfile.TemporaryDirectory() as t:
+        t = Path(t); d = aufbau2(t); i = t / 'daten-intern'; w = f'{art} 3→4'
+        doc(d, 'protokoll/' + MONAT, [{'t': MONAT + '-01T08:00:00Z', 'u': 'erika', 'a': 'customers', 's': 'Kunde bearbeitet', 'd': [{'f': 'E-Mail', 'from': 'a@x.invalid', 'to': 'b@x.invalid'}]}])
+        if art == 'sqlite':
+            subprocess.run([sys.executable, str(DB), 'migrate', str(d), '--offline'], check=True, capture_output=True)
+        lauf('trennen', str(d), str(i), '--offline', '--stufe', '3')
+        code, out = lauf('trennen', str(d), str(i), '--offline')
+        check(f'{w}: trennen auf Stufe 4: Protokoll der Mitarbeiterseite innen', code == 0 and (d / '.daten-getrennt').read_text() == '4\n'
+              and dt.dok_lesen(d, 'protokoll/' + MONAT) is None and dt.dok_lesen(i, 'protokoll/' + MONAT)[0]['u'] == 'erika', out)
+        r = php_lib("audit('kunde_login', 'Kunde angemeldet', [], ['username' => 'kunde:test', 'name' => 'Test GmbH', 'role' => 'kunde']); echo json_encode([store_read('protokoll/" + MONAT + "'), protokoll_monate()]);", d)
+        k = dt.dok_lesen(d, 'kundenprotokoll/' + MONAT) or []
+        check(f'{w}: Kundenseite schreibt ins eigene Protokoll und sieht das der Mitarbeiterseite nicht', json.loads(r or '[1]')[0] is None
+              and [e['a'] for e in k] == ['kunde_login'] and 'erika' not in json.dumps(k), (r, k))
+        r = php_lib("audit('user', 'Nutzer geändert', [], ['username' => 'admin', 'name' => 'Admin', 'role' => 'admin']); echo json_encode([array_column(protokoll_monat('" + MONAT + "'), 'a'), protokoll_monate()]);", d, i)
+        v = json.loads(r or 'null') or [[], []]
+        check(f'{w}: Mitarbeiterseite schreibt innen und liest beide Protokolle zusammen (zeitlich sortiert)', sorted(v[0]) == ['customers', 'kunde_login', 'user'] and v[0][0] == 'customers' and v[1] == [MONAT]
+              and [e['a'] for e in dt.dok_lesen(i, 'protokoll/' + MONAT)] == ['customers', 'user'] and [e['a'] for e in dt.dok_lesen(d, 'kundenprotokoll/' + MONAT)] == ['kunde_login'], r)
+        # alte Monate der Kundenseite räumt auch die Mitarbeiterseite (Aufbewahrung)
+        dt.dok_schreiben(d, 'kundenprotokoll/2020-01', [{'t': '2020-01-01T00:00:00Z', 'a': 'kunde_login'}])
+        php_lib("audit('user', 'Nutzer geändert', [], ['username' => 'admin', 'name' => 'Admin', 'role' => 'admin']); echo 1;", d, i)
+        check(f'{w}: Aufbewahrung gilt auch für das Protokoll der Kundenseite', dt.dok_lesen(d, 'kundenprotokoll/2020-01') is None)
+        code, out = lauf('zusammenfuehren', str(d), str(i), '--offline')
+        p = dt.dok_lesen(d, 'protokoll/' + MONAT) or []
+        check(f'{w}: zusammenführen vereint beide Protokolle (sortiert, nichts doppelt)', code == 0 and sorted(e['a'] for e in p) == ['customers', 'kunde_login', 'protokoll_aufbewahrung', 'user', 'user'] and p == sorted(p, key=lambda e: e['t'])
+              and dt.dok_namen(d, 'kundenprotokoll/') == [] and not (d / 'kundenprotokoll').exists() and dt.leer(i), (out, [e['a'] for e in p]))
+        r = php_lib("echo json_encode(array_column(protokoll_monat('" + MONAT + "'), 'a'));", d)
+        check(f'{w}: danach liest die Anwendung das vereinte Protokoll', sorted(json.loads(r or '[]')) == ['customers', 'kunde_login', 'protokoll_aufbewahrung', 'user', 'user'], r)
 
 print(f'{ok_n}/{ok_n + fail_n} passed')
 sys.exit(0 if fail_n == 0 else 1)

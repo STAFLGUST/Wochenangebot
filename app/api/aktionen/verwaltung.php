@@ -24,7 +24,7 @@ switch ($action) {
             }
             $fails = [];
             foreach ([utc_monat(), utc_monat(-1)] as $m) {
-                foreach (store_read('protokoll/' . $m) ?? [] as $e) if (in_array($e['a'], ['login_fail', 'kunde_login_fail'], true) && strtotime($e['t']) > time() - 7 * 86400) $fails[] = ['t' => $e['t'], 'u' => $e['u'], 'ip' => $e['ip'] ?? '', 's' => $e['s']];
+                foreach (protokoll_monat($m) as $e) if (in_array($e['a'], ['login_fail', 'kunde_login_fail'], true) && strtotime($e['t']) > time() - 7 * 86400) $fails[] = ['t' => $e['t'], 'u' => $e['u'], 'ip' => $e['ip'] ?? '', 's' => $e['s']];
             }
             usort($fails, function ($a, $b) { return strcmp($b['t'], $a['t']); });
             $f24 = count(array_filter($fails, function ($e) { return strtotime($e['t']) > time() - 86400; }));
@@ -505,7 +505,7 @@ switch ($action) {
             $months = protokoll_monate();   // nur aufbewahrte Monate (PROTOKOLL_MONATE)
             $month = (string)($_GET['month'] ?? '');
             if (!preg_match('/^\d{4}-\d{2}$/', $month) || $month < protokoll_grenze()) $month = $months[0] ?? gmdate('Y-m');
-            $entries = array_reverse(store_read('protokoll/' . $month) ?? []);
+            $entries = array_reverse(protokoll_monat($month));   // ab Trennstufe 4 mit dem Protokoll der Kundenseite
             // Ohne Recht „Kunden ansehen“: Einträge mit Kundendaten (Adressen, E-Mails, Bestellungen, Kunden-IP) nur als Vorgang zeigen
             if (!may($me, 'kunden.sehen')) {
                 foreach ($entries as &$e) {

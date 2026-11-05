@@ -709,10 +709,19 @@ beschreibung = "Ergebnisse der Dateiprüfung"
 [[dokument]]
 name = "protokoll/*"
 eigentuemer = "plattform"
+bereich = "intern"
+trennstufe = 4   # ab Stufe 2d schreibt die Kundenseite in kundenprotokoll/* (ADR-007)
+schutz = "vertraulich"
+beschreibung = "Änderungsprotokoll je Monat (audit); ab Trennstufe 4 nur noch Einträge der Mitarbeiterseite und des Postausgangs"
+historie = "Nur anhängen; Einträge werden nicht geändert. Aufbewahrung: laufender Monat und 6 Monate davor – ältere Monatsdokumente löscht audit() (PROTOKOLL_MONATE, lib/protokoll.php)"
+
+[[dokument]]
+name = "kundenprotokoll/*"
+eigentuemer = "plattform"
 bereich = "kundenseite"
 schutz = "vertraulich"
-beschreibung = "Änderungsprotokoll je Monat (audit)"
-historie = "Nur anhängen; Einträge werden nicht geändert. Aufbewahrung: laufender Monat und 6 Monate davor – ältere Monatsdokumente löscht audit() (PROTOKOLL_MONATE, lib/protokoll.php)"
+beschreibung = "Protokoll der Kundenseite je Monat (ab Trennstufe 4, ADR-007 Stufe 2d): Anmeldungen, Bestellwünsche, Abmeldungen, Passwörter der Kunden – die Mitarbeiterseite zeigt es zusammen mit protokoll/*"
+historie = "Nur anhängen; Aufbewahrung wie protokoll/* (audit() löscht ältere Monate)"
 
 [[dokument]]
 name = "benachrichtigungen"

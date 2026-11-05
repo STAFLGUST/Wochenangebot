@@ -31,6 +31,9 @@ function store_bereich(string $name): string
 {
     if (!store_getrennt() || in_array($name, STORE_SIDECARS, true) || in_array($name, DATEN_KUNDENSEITE, true)) return 'haupt';
     if (isset(DATEN_AB_STUFE[$name]) && store_stufe() < DATEN_AB_STUFE[$name]) return 'haupt';   // zieht erst mit späterer Stufe um
+    foreach (DATEN_AB_STUFE_PRAEFIX as $p => $st) {   // Muster „name/*“ (auch die Sperre unter dem Namen der Gruppe)
+        if ((strncmp($name, $p, strlen($p)) === 0 || $name . '/' === $p) && store_stufe() < $st) return 'haupt';
+    }
     if (in_array($name, DATEN_VEROEFFENTLICHT, true)) return store_innen() ? 'intern' : 'haupt';   // Kundenseite: nur die Kopie
     // Muster „name/*“: auch die Sperre unter dem Namen der Gruppe (z. B. with_lock('protokoll') für protokoll/<Monat>)
     foreach (DATEN_KUNDENSEITE_PRAEFIX as $p) if (strncmp($name, $p, strlen($p)) === 0 || $name . '/' === $p) return 'haupt';
