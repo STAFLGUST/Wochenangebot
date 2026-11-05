@@ -289,14 +289,15 @@ switch ($action) {
                 $w = lg_winab_pruefen($b, $stamm);
                 if ($w['fehler']) return ['fehler' => $w['fehler']];
                 $doc = lg_doc('leergut-bewegungen');
-                [$stamm, $bew, $z, $neu, $summe] = lg_winab_abgleich($w, $stamm, $doc['liste'], $me);
+                [$stamm, $bew, $z, $neu, $summe, $lief] = lg_winab_abgleich($w, $stamm, $doc['liste'], $me);
                 if (count($bew) > LG_MAX_BEWEGUNGEN) fail('Zu viele Bewegungen.', 422);
                 if (!$vorschau) {
                     lg_schreiben('leergut-stamm', $stamm);
                     $doc['liste'] = $bew;
                     lg_schreiben('leergut-bewegungen', $doc);
                 }
-                return ['fehler' => [], 'zahlen' => $z, 'neueKunden' => array_slice($neu, 0, 50), 'summe' => $summe, 'bericht' => $w['bericht']];
+                return ['fehler' => [], 'zahlen' => $z, 'neueKunden' => array_slice($neu, 0, 50), 'summe' => $summe, 'bericht' => $w['bericht'],
+                        'lieferanten' => array_slice($lief['liste'], 0, 200), 'lieferantenNeu' => $lief['neu'], 'summeLieferanten' => $lief['summe']];
             });
             if ($erg['fehler']) {
                 if ($vorschau) respond(['ok' => true, 'fehler' => $erg['fehler']]);
@@ -304,8 +305,9 @@ switch ($action) {
             }
             if (!$vorschau) {
                 $z = $erg['zahlen']; $ber = $erg['bericht'];
-                audit('leergut', 'Leergut: WinAB-Kundenbewegungen ' . $ber['von'] . ' bis ' . $ber['bis'] . ' abgeglichen – ' . $z['kunden'] . ' neue Kundenkonten, '
-                    . $z['neu'] . ' neue Belege, ' . $z['geaendert'] . ' geändert, ' . $z['ausgeglichen'] . ' ausgeglichen');
+                audit('leergut', 'Leergut: WinAB-Lademittelbewegungen ' . $ber['von'] . ' bis ' . $ber['bis'] . ' abgeglichen – ' . $z['kunden'] . ($z['kunden'] === 1 ? ' neues Kundenkonto, ' : ' neue Kundenkonten, ')
+                    . ($z['lieferantenNeu'] ? $z['lieferantenNeu'] . ($z['lieferantenNeu'] === 1 ? ' neues Lieferantenkonto, ' : ' neue Lieferantenkonten, ') : '') . $z['neu'] . ' neue Belege, ' . $z['geaendert'] . ' geändert, '
+                    . $z['ausgeglichen'] . ' ausgeglichen' . ($z['ohneKonto'] ? ', ' . $z['ohneKonto'] . ' Lieferantenbelege ohne Konto' : ''));
             }
             respond(['ok' => true] + $erg);
         }

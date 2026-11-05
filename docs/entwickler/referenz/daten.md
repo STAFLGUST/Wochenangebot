@@ -95,10 +95,10 @@ Gelesen und geschrieben über `app/api/storage.php` (`store_read`, `store_write`
 | `rewe-wochen/*` | REWE | vertraulich | – | – | REWE-Wochenabfrage je ISO-Jahr: Antwort je Markt und KW (bestellt mit Mengen je Artikel, kein Bedarf, nicht erreicht, Pause), ohne Berechnung, Notiz, wer/wann, Herkunft; Wochenabschluss (exportiert, in WinAB erfasst) – Historie: Jede Antwort speichert Lieferweg und Zuständigkeit der KW als Schnappschuss (GR-106); Änderungen nach dem Export sind als Nachtrag gekennzeichnet |
 | `angebotskategorien*` | Verwaltung | intern | angebot | – | Angebotskategorien: Abschnitte des Angebots mit zugeordneten VK-Gruppen in fester Reihenfolge |
 | `anmeldeorte` | Verwaltung | vertraulich | – | – | Anmeldeorte der Kunden für die Auswertung (90 Tage, ohne IP) |
-| `kunden` | Verwaltung | vertraulich | angebot, crm, rewe, controlling | angebot, plattform | Kundenzugänge des Portals (Passwort nur als Hash, GR-003); bis Trennstufe 2 auch alle Stammdaten, danach nur die Felder unter felder_kundenseite |
+| `kunden` | Verwaltung | vertraulich | angebot, crm, rewe, controlling, leergut | angebot, plattform | Kundenzugänge des Portals (Passwort nur als Hash, GR-003); bis Trennstufe 2 auch alle Stammdaten, danach nur die Felder unter felder_kundenseite |
 | `kundengruppen*` | Verwaltung | intern | angebot, crm, controlling | – | Kundengruppen (GRUPPEN_LISTEN in lib/kunden.php) |
 | `kundensitzungen` | Verwaltung | geheim | – | angebot | Sitzungen der Kunden im Portal; Ziel: zentraler Identitätsdienst (Phase 6) |
-| `kundenstamm` | Verwaltung | vertraulich | angebot, crm, rewe, controlling, plattform | – | Ab Trennstufe 2 (ADR-007 Stufe 2b): alle Kundenfelder außer den Portalfeldern – Anschrift, E-Mail, Telefon, Notiz, Vertreter, Daten der Warenwirtschaft |
+| `kundenstamm` | Verwaltung | vertraulich | angebot, crm, rewe, controlling, plattform, leergut | – | Ab Trennstufe 2 (ADR-007 Stufe 2b): alle Kundenfelder außer den Portalfeldern – Anschrift, E-Mail, Telefon, Notiz, Vertreter, Daten der Warenwirtschaft |
 | `stammdaten` | Verwaltung | intern | angebot, bestand, controlling | – | Artikelstammdaten (Bezeichnung, Fleischart, Herkunft, Zustand, VK-Gruppe, GTIN) |
 | `vertreter*` | Verwaltung | vertraulich | crm, controlling | – | Vertreter mit Kontaktdaten |
 | `vkgruppen*` | Verwaltung | intern | angebot, bestand, controlling | – | VK-Gruppen der Artikel |

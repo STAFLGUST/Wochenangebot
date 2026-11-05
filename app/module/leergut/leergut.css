@@ -284,6 +284,14 @@ textarea.lg-eingabe{height:auto;padding:8px 10px;resize:vertical;line-height:1.4
 .lg-dialog form>label.lg-check{flex-direction:row;align-items:center;font-size:13px;font-weight:500}
 @media(max-width:760px){
   .lg-mengentabelle.lg-karten tr{grid-template-columns:repeat(3,minmax(0,1fr));align-items:end}
+  /* Lademittel (Einstellungen) als Karten: Bezeichnung über die ganze Breite, darunter Kurzbez., WinAB-Nr., Wert, Aktiv */
+  .lg-lm-tabelle.lg-karten tr{grid-template-columns:minmax(0,1fr) minmax(0,1fr) minmax(0,1.4fr) auto;align-items:end}
+  .lg-lm-tabelle.lg-karten td[data-label="Bezeichnung"]{grid-column:1/-1}
+  .lg-lm-tabelle.lg-karten td.lg-zahl input.lg-eingabe{max-width:none;margin-left:0}
+  .lg-lm-tabelle.lg-karten input.lg-kurz{max-width:none}
+  /* WinAB-Vorschau: Zuordnung über die ganze Breite */
+  #lg-w-lief td[data-label="Konto"]{grid-column:1/-1}
+  #lg-w-lief select{min-width:0;width:100%}
   .lg-mengentabelle.lg-karten td.lg-zahl{text-align:right!important}
   .lg-mengentabelle.lg-karten td[data-label]::before{text-align:left}
 }
@@ -291,6 +299,14 @@ textarea.lg-eingabe{height:auto;padding:8px 10px;resize:vertical;line-height:1.4
 /* WinAB-Import: Vorschau */
 #lg-w-vorschau p{margin:0 0 8px}
 .lg-wsumme{display:flex;flex-wrap:wrap;align-items:center;gap:6px 10px;margin:4px 0 8px;font-size:13px}
+.lg-w-ab{display:flex;flex-wrap:wrap;align-items:flex-end;gap:6px 14px;margin:2px 0 10px}
+.lg-w-ab label{display:flex;flex-direction:column;gap:5px;color:var(--lg-muted);font-size:12px;font-weight:650}
+.lg-w-ab input{width:170px}
+.lg-w-ab .lg-hilfe{flex:1 1 260px}
+.lg-w-titel{margin:14px 0 4px;font-size:14px}
+#lg-w-lief select{min-width:200px;max-width:100%}
+#lg-w-lief .lg-sub{display:block;margin-top:3px}
+#lg-w-vorher .lg-mengen,#lg-w-lief .lg-mengen{display:inline-flex;vertical-align:baseline}   /* Mengen im Satz, nicht als eigene Zeile */
 /* Leergut bei Kunden; Kontoliste nach Wert */
 .lg-liste .lg-listwert{grid-column:1/-1;font-size:11.5px;color:var(--lg-muted);font-variant-numeric:tabular-nums}
 #lg-u-kunden td .lg-chip{margin-left:4px}

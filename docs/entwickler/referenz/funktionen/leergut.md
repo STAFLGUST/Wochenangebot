@@ -2,7 +2,7 @@
 
 <!-- ERZEUGT von `python3 werkzeuge/doku.py erzeugen` – nicht von Hand ändern. Quelle: Funktionen und Kommentare im Code. Die CI prüft, dass diese Datei zum Code passt. -->
 
-4 Dateien, 106 Funktionen – in der Reihenfolge der Datei, **fett** die Abschnitte. Text = erste Aussage des Kommentars direkt über der Funktion (Python: Docstring). Übersicht aller Module: [README.md](README.md).
+4 Dateien, 115 Funktionen – in der Reihenfolge der Datei, **fett** die Abschnitte. Text = erste Aussage des Kommentars direkt über der Funktion (Python: Docstring). Übersicht aller Module: [README.md](README.md).
 
 ## `app/api/aktionen/leergut.php`
 
@@ -23,6 +23,7 @@ _Leergut · Leergutkonten und Abstimmung_
 **Laden und Schreiben**
 
 - `lg_stamm()`
+- `lg_lademittel_winab(liste)` – WinAB-Stammdaten ergänzen: Lademittel ohne Angabe bekommen Nummer und Kurzbezeichnung aus WinAB (über Kennung oder gleichen Namen), fehlende WinAB-Lademittel …
 - `lg_doc(name)`
 - `lg_schreiben(name, doc)`
 - `lg_id(praefix)`
@@ -90,10 +91,12 @@ _Leergut · Leergutkonten und Abstimmung_
 
 - `lg_paket_pruefen(p, me)`
 
-**WinAB-Bericht „Lademittelbewegungen Kunden“**
+**WinAB: Lademittelbewegungen (CSV „Lademittelbewegungen komplett“ oder Bericht „… Kunden“ als .XLS)**
 
+- `lg_winab_nr(v, was)`
 - `lg_winab_pruefen(b, stamm)`
-- `lg_winab_abgleich(w, stamm, bew, me)` – Abgleich je Beleg (Kunde, Belegart, Belegnr.) im Berichtszeitraum: neu → buchen, gleich → nichts, geändert → alten stornieren und neu buchen, nicht mehr im …
+- `lg_kundenstamm_namen()` – Firma je WinAB-Kundennummer aus dem Kundenstamm der Verwaltung (nur lesend, regeln/datenverantwortung.toml)
+- `lg_winab_abgleich(w, stamm, bew, me)` – Abgleich je Beleg im Zeitraum (von–bis): neu → buchen, gleich → nichts, geändert → alten stornieren und neu buchen, nicht mehr in der Datei (ausgeglichen) → …
 
 **Dachser-Liste „Unterkonto-Vorspediteur“ (Mail „Infos von Fa. DACHSER“)**
 
@@ -171,10 +174,18 @@ _STAFL-Plattform · Leergut – Oberfläche der Leergutkonten_
 
 **WinAB-Bericht „Lademittelbewegungen Kunden“ (.XLS)**
 
-- `winabLm(name)`
+- `winabLm(name, nr)` – Lademittel des Berichts → Modul: zuerst über die WinAB-Nummer (Stammdaten), sonst über den Namen.
 - `winabDatum(v)`
 - `leseWinab(sheets, datei)`
-- `zeigeWinabVorschau(w, r)`
+
+**WinAB-Datei „Lademittelbewegungen komplett“ (.CSV)**
+
+- `csvZeilen(text)`
+- `leseWinabCsv(buf, datei)`
+- `winabAnfrage(w, ab, zuordnung)` – Was an den Server geht: CSV ab „Übernehmen ab“ (Belege davor nur gezählt), Bericht (.XLS) unverändert
+- `winabVorher(w, ab)`
+- `zeigeWinabVorschau(st, r)`
+- `winabPruefen(fokus)` – Vorschau beim Server anfragen (Abgleich ohne Speichern) – nach Dateiwahl, „Übernehmen ab“ und Zuordnung
 
 **Eingabemasken: gemeinsame Hilfen**
 
@@ -222,6 +233,7 @@ _Leergut (Modul leergut, Oberfläche leergut.intern unter /module/leergut/) – 
 
 - `check(n, c, i)`
 - `winab_xls(zeilen, stand, titel)` – BIFF-Datei (Datensätze BOF, LABEL, NUMBER, EOF wie im WinAB-Export) aus den Bewegungszeilen.
+- `winab_csv(zeilen)`
 - `wb(**aend)`
 - `dachser_liste(faelle, per, saldo, seiten)` – ── Dachser-Liste „Unterkonto-Vorspediteur“ (Mail „Infos von Fa. DACHSER“) ── Erfundene Liste im Aufbau der Dachser-Mail: Seitenkopf mit Anschrift, je Fall …
 - `als_mail(text)` – Gespeicherte Mail (.eml) wie vom Dachser-Mailprogramm: quoted-printable, ISO-8859-1, umgebrochene Zeilen.

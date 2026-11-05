@@ -8,7 +8,7 @@ Karte für Entwickler und Agenten: Abschnitte und Funktionen jeder Code-Datei (P
 | --- | --- | --- | --- |
 | [Angebot](angebot.md) | `angebot` | 43 | 648 |
 | [Bestand](bestand.md) | `bestand` | 9 | 64 |
-| [Leergut](leergut.md) | `leergut` | 4 | 106 |
+| [Leergut](leergut.md) | `leergut` | 4 | 115 |
 | [CRM](crm.md) | `crm` | 9 | 176 |
 | [REWE](rewe.md) | `rewe` | 5 | 139 |
 | [Qualitätssicherung](qs.md) | `qs` | 9 | 249 |
