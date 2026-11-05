@@ -267,7 +267,10 @@ Sicherheitseinstellungen abschwächen, die Wartung oder den Notfallmodus beenden
 - **Wirkung:** Was die Mitarbeiterseite und der Postausgang lesen, kann die Kundenseite nicht mehr beeinflussen. Was sie Kunden
   anzeigt, kann eine übernommene Kundenseite ohnehin bestimmen – dauerhaft verändert bleibt davon nichts.
 - **Serverschritt:** wie bisher `sh deploy/daten-trennen.sh trennen` (kopiert die veröffentlichten Dokumente nach innen; die Kopie
-  bleibt). Von Stufe 1 aus geht es in einem Schritt auf Stufe 3.
+  bleibt). Von Stufe 1 aus geht es in einem Schritt auf Stufe 3. `bestellung` wird dabei innen **und** außen ohne Adressen (mit
+  Anzahl) gespeichert. Bis 05.11.2026 kürzte das Werkzeug nur die Kopie außen; der Postausgang stellte sie dann aus dem internen
+  Stand wieder her – mit Adressen und ohne Anzahl, die Kundenseite sah 0 Empfänger (Bestellfunktion aus). Behebung auf einem so
+  getrennten Server: Bestell-Einstellungen im Eingabebereich einmal speichern oder mit dem korrigierten Stand erneut `trennen`.
 - **Rückfall:** `sh deploy/daten-trennen.sh zusammenfuehren` – der interne Stand ersetzt dabei die Kopie im gemeinsamen Ordner.
 - **Geprüft:** `tests/deploy/test_daten_trennen.py` (Stufe 2→3 in Dateien und SQLite: Kopie und interner Stand, Transaktion
   zurückgesetzt, Löschen, Kundenseite kann nicht schreiben/sperren/löschen, veränderte und gelöschte Kopie wiederhergestellt und
