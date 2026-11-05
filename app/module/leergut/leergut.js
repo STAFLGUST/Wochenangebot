@@ -53,7 +53,7 @@
   const zeitpunkt = (t) => { const d = new Date(t); return isNaN(d) ? '' : window.STAFL_FORMAT.datumZeit(d); };   // 02.11.2026, 14:05 wie überall
   const euro = (n) => window.STAFL_FORMAT.euro(n);   // 1.234,50 € / −2.355,00 € wie überall
   const lm = (id) => (S.d.lademittel.find((l) => l.id === id) || { id, name: id, wert: null });
-  const kurz = (id) => KURZ[id] || lm(id).name;
+  const kurz = (id) => KURZ[id] || lm(id).kurz || lm(id).name;   // feste Kürzel, sonst Kurzbezeichnung aus WinAB
   const sortiertLm = (ids) => S.d.lademittel.map((l) => l.id).filter((id) => ids.has(id));
   /* Mengen „E2 +12 · H1 −3“ (nur Werte ≠ 0) */
   function mengen(m, { vorzeichen = true, leer = '—' } = {}) {
@@ -91,7 +91,7 @@
   const partnerSub = (p) => [S.d.arten[p.art] || p.art, mehrereFirmen() ? S.d.mandanten[p.mandant] : ''].filter(Boolean).join(' · ');
   const nachName = (a, b) => String(a.name).localeCompare(String(b.name), 'de', { sensitivity: 'base' });
   const darf = (r) => !!(S.d && S.d.rechte && S.d.rechte[r]);
-  const istWinab = (p) => !!(p && p.quelle === 'winab');   // beim WinAB-Import angelegtes Kundenkonto
+  const istWinab = (p) => !!(p && p.quelle === 'winab' && p.art === 'kunde');   // beim WinAB-Import angelegtes Kundenkonto (Lieferantenkonten einzeln)
   const tageBis = (iso) => (iso ? Math.max(0, Math.round((Date.parse(S.d.heute + 'T12:00:00Z') - Date.parse(iso + 'T12:00:00Z')) / 86400000)) : null);
   /* Leergut bei Kunden: Konten der Art Kunde mit Saldo, nach Wert. „Ohne Rückgabe seit“ nur, wenn der Kunde uns schuldet:
      letzte Rückgabe, ohne Rückgabe die erste Lieferung (gleiche Regel wie die Abholliste des Servers). */
@@ -279,7 +279,7 @@
     const art = $('#lg-k-art').value, firma = $('#lg-k-firma').value, inaktiv = $('#lg-k-inaktiv').checked, nachWert = $('#lg-k-sort').value === 'wert';
     const wert = (p) => euroVon(obj(S.kmap.get(p.id)?.saldo)).betrag;
     const liste = S.d.partner.filter((p) => (inaktiv || p.aktiv) && (!art || p.art === art) && (!firma || p.mandant === firma)
-      && (!q || [p.name, p.kontoNr, p.kundenNr, p.lieferanten, p.ansprechpartner].join(' ').toLocaleLowerCase('de-DE').includes(q)))
+      && (!q || [p.name, p.kontoNr, p.kundenNr, p.lieferantNr, p.lieferanten, p.ansprechpartner].join(' ').toLocaleLowerCase('de-DE').includes(q)))
       .sort((a, b) => (nachWert ? wert(b) - wert(a) : 0) || nachName(a, b));
     $('#lg-k-liste').innerHTML = liste.length ? liste.map((p) => {
       const k = S.kmap.get(p.id) || {};
@@ -316,7 +316,7 @@
     const p = k.partner, ko = S.kmap.get(id) || {}, lms = kontoLms(p, k.bewegungen);
     const best = ko.bestaetigt, la = ko.letzteAbstimmung;
     const meta = [`<span class="lg-chip">${esc(S.d.arten[p.art] || p.art)}</span>`, `<span class="lg-chip firma">${esc(S.d.mandanten[p.mandant] || p.mandant)}</span>`,
-      p.aktiv ? '' : '<span class="lg-chip">inaktiv</span>', p.kontoNr ? `<span>Konto-Nr. ${esc(p.kontoNr)}</span>` : '', p.kundenNr ? `<span>WinAB-Kd. ${esc(p.kundenNr)}</span>` : '',
+      p.aktiv ? '' : '<span class="lg-chip">inaktiv</span>', p.kontoNr ? `<span>Konto-Nr. ${esc(p.kontoNr)}</span>` : '', p.kundenNr ? `<span>WinAB-Kd. ${esc(p.kundenNr)}</span>` : '', p.lieferantNr ? `<span>WinAB-Lief. ${esc(p.lieferantNr)}</span>` : '',
       p.fristTage ? `<span>Widerspruch binnen ${zahl(p.fristTage)} Tagen</span>` : '<span>ohne Widerspruchsfrist</span>',
       p.ansprechpartner ? `<span>${esc(p.ansprechpartner)}</span>` : '',
       p.email ? `<a href="mailto:${esc(p.email.replace(/\s/g, ''))}">${esc(p.email)}</a>` : ''].filter(Boolean).join('');
@@ -565,7 +565,7 @@
     $('#lg-e-kunden-zeile').hidden = !nWinab; $('#lg-e-kunden-text').textContent = `Kundenkonten aus WinAB zeigen (${zahl(nWinab)})`;
     const liste = S.d.partner.filter((p) => $('#lg-e-kunden').checked || !istWinab(p)).sort((a, b) => (a.aktiv === b.aktiv ? 0 : a.aktiv ? -1 : 1) || nachName(a, b));
     $('#lg-e-partner').innerHTML = liste.length ? `<table class="lg-tabelle lg-karten"><thead><tr><th>Name</th><th>Art</th><th>Firma</th><th class="lg-zahl">Frist</th><th>E-Mail</th><th>Lademittel</th><th></th></tr></thead><tbody>
-      ${liste.map((p) => `<tr class="lg-klick" data-partner="${esc(p.id)}"><td class="lg-voll"><span class="lg-name">${esc(p.name)}</span>${p.kontoNr || p.kundenNr ? `<span class="lg-sub">${[p.kontoNr ? 'Konto-Nr. ' + esc(p.kontoNr) : '', p.kundenNr ? 'WinAB-Kd. ' + esc(p.kundenNr) : ''].filter(Boolean).join(' · ')}</span>` : ''}</td>
+      ${liste.map((p) => `<tr class="lg-klick" data-partner="${esc(p.id)}"><td class="lg-voll"><span class="lg-name">${esc(p.name)}</span>${p.kontoNr || p.kundenNr || p.lieferantNr ? `<span class="lg-sub">${[p.kontoNr ? 'Konto-Nr. ' + esc(p.kontoNr) : '', p.kundenNr ? 'WinAB-Kd. ' + esc(p.kundenNr) : '', p.lieferantNr ? 'WinAB-Lief. ' + esc(p.lieferantNr) : ''].filter(Boolean).join(' · ')}</span>` : ''}</td>
         <td data-label="Art">${esc(S.d.arten[p.art] || p.art)}</td><td data-label="Firma">${esc(S.d.mandanten[p.mandant] || p.mandant)}</td>
         <td class="lg-zahl" data-label="Frist">${p.fristTage ? zahl(p.fristTage) + ' Tage' : '—'}</td><td data-label="E-Mail">${esc(p.email) || '—'}</td>
         <td data-label="Lademittel">${(p.lademittel || []).map((id) => esc(kurz(id))).join(', ')}</td><td>${p.aktiv ? '' : '<span class="lg-chip">inaktiv</span>'}</td></tr>`).join('')}</tbody></table>`
@@ -573,6 +573,8 @@
     $('#lg-e-lm').innerHTML = S.d.lademittel.map((l) => lmZeile(l)).join('');
   }
   const lmZeile = (l) => `<tr data-id="${esc(l.id || '')}"><td data-label="Bezeichnung"><input class="lg-eingabe" data-f="name" maxlength="40" value="${esc(l.name || '')}" aria-label="Bezeichnung"></td>
+    <td data-label="Kurzbez."><input class="lg-eingabe lg-kurz" data-f="kurz" maxlength="8" value="${esc(l.kurz || '')}" aria-label="Kurzbezeichnung"></td>
+    <td data-label="WinAB-Nr."><input class="lg-eingabe lg-kurz" data-f="winabNr" inputmode="numeric" maxlength="4" value="${esc(l.winabNr || '')}" aria-label="Nummer in WinAB" placeholder="–"></td>
     <td class="lg-zahl" data-label="Wert je Stück (€)"><input class="lg-eingabe" data-f="wert" inputmode="decimal" maxlength="10" value="${l.wert === null || l.wert === undefined ? '' : esc(Number(l.wert).toFixed(2).replace('.', ','))}" aria-label="Wert je Stück in Euro" placeholder="ohne Wert"></td>
     <td data-label="Aktiv"><input type="checkbox" data-f="aktiv" ${l.aktiv !== false ? 'checked' : ''} aria-label="aktiv"></td></tr>`;
   $('#lg-e-partner-neu').addEventListener('click', () => oeffnePartner(''));
@@ -581,7 +583,8 @@
   $('#lg-e-lm-plus').addEventListener('click', () => { $('#lg-e-lm').insertAdjacentHTML('beforeend', lmZeile({ name: '', wert: null, aktiv: true })); $('#lg-e-lm tr:last-child input').focus(); });
   $('#lg-e-lm-form').addEventListener('submit', async (ev) => {
     ev.preventDefault();
-    const lademittel = $$('#lg-e-lm tr').map((tr) => ({ ...(tr.dataset.id ? { id: tr.dataset.id } : {}), name: $('[data-f="name"]', tr).value.trim(), wert: $('[data-f="wert"]', tr).value.trim(), aktiv: $('[data-f="aktiv"]', tr).checked }))
+    const lademittel = $$('#lg-e-lm tr').map((tr) => ({ ...(tr.dataset.id ? { id: tr.dataset.id } : {}), name: $('[data-f="name"]', tr).value.trim(), kurz: $('[data-f="kurz"]', tr).value.trim(),
+      winabNr: $('[data-f="winabNr"]', tr).value.trim(), wert: $('[data-f="wert"]', tr).value.trim(), aktiv: $('[data-f="aktiv"]', tr).checked }))
       .filter((l) => l.id || l.name);
     const d = await senden(ev.target, 'leergut_lademittel_save', { lademittel });
     if (d) { toast('Lademittel gespeichert'); await neuLaden(); }
@@ -637,8 +640,13 @@
      Übernommen werden Lieferscheine, Gutschriften und Rechnungen. Sammelrechnungen wiederholen die Lieferscheine,
      Offerten bewegen nichts, Karton ist kein Leergut. Den Abgleich (neu, gleich, geändert, ausgeglichen) macht der Server. */
   const WINAB_ARTEN = ['Lieferschein', 'Gutschrift', 'Rechnung'];
+  const WINAB_AB_STANDARD = '2026-01-01';   // Kundenkonten aus WinAB beginnen seit 29.10.2026 mit diesem Tag (Bericht 2026)
   const normName = (t) => String(t || '').toLowerCase().replace(/[^a-z0-9äöüß]+/g, '');
-  function winabLm(name) {
+  /* Lademittel des Berichts → Modul: zuerst über die WinAB-Nummer (Stammdaten), sonst über den Namen. Inaktive Lademittel
+     (z. B. Karton – kein Leergut) und Karton ohne Lademittel im Modul werden nicht übernommen ('-'). */
+  function winabLm(name, nr) {
+    const perNr = nr !== undefined && nr !== null && nr !== '' ? S.d.lademittel.find((l) => l.winabNr && String(l.winabNr) === String(nr)) : null;
+    if (perNr) return perNr.aktiv === false ? '-' : perNr.id;
     const n = normName(name);
     if (n.includes('karton')) return '-';
     const gleich = S.d.lademittel.find((l) => normName(l.name) === n);
@@ -677,7 +685,7 @@
         const kd = String(z[iK]), name = z.slice(iK + 1, iL).filter((v) => typeof v === 'string').join(' ');
         if (!/^\d{1,12}$/.test(kd)) { fehlerhaft(i, 'Kundennummer nicht lesbar'); block = null; return; }
         lmNamen.set(z[iL + 1], String(z[iL + 2] || ''));
-        block = { kd, nr: z[iL + 1], lm: winabLm(z[iL + 2]), lmName: String(z[iL + 2] || 'Lademittel ' + z[iL + 1]) };
+        block = { kd, nr: z[iL + 1], lm: winabLm(z[iL + 2], z[iL + 1]), lmName: String(z[iL + 2] || 'Lademittel ' + z[iL + 1]) };
         if (!kunden.get(kd)) kunden.set(kd, name);
         return;
       }
@@ -718,65 +726,219 @@
     info.sammelwert = info.sammelwert.map((x) => ({ name: lmNamen.get(x.nr) || 'Lademittel ' + x.nr, wert: x.wert }));
     return { bericht: { datei: String(datei || '').slice(0, 120), von, bis, datum: stand }, kunden: [...kunden].map(([nr, name]) => ({ nr, name: name || 'Kunde ' + nr, ...(daten.get(nr) || {}) })), belege: liste, info };
   }
-  function zeigeWinabVorschau(w, r) {
-    const z = r.zahlen, inf = w.info;
+  /* ---------- WinAB-Datei „Lademittelbewegungen komplett“ (.CSV) ----------
+     Spalten (Kopfzeile, Semikolon, Windows-1252): Lademittel (Nr.), Datum, Kunde, Lieferant, Menge, Bewegungsart (Abgang/
+     Zugang), Belegnummer, Belegart, Bezeichnung. Zeilen mit Kunde sind Kundenbelege (eine zusätzlich genannte Lieferantennummer
+     zählt dort nicht), Zeilen nur mit Lieferant sind Lieferantenbelege (z. B. Wareneingänge).
+     Je Beleg (Kunde bzw. Lieferant, Belegart, Belegnr.) und Lademittel werden die Mengen mit Vorzeichen summiert –
+     Korrekturzeilen mit Minus (WinAB bis 2023) heben sich so auf; was danach auf einer Seite negativ ist, zählt zur anderen.
+     Gesendet werden alle Kunden und Lieferanten der Datei (Kunden für Lieferung und Rückgabe) und die Belege mit Wirkung
+     auf den Saldo ab „Übernehmen ab“. */
+  function csvZeilen(text) {
+    const out = [];
+    let zeile = [], feld = '', inQ = false;
+    for (let i = 0; i < text.length; i++) {
+      const c = text[i];
+      if (inQ) { if (c === '"') { if (text[i + 1] === '"') { feld += '"'; i++; } else inQ = false; } else feld += c; continue; }
+      if (c === '"') inQ = true;
+      else if (c === ';') { zeile.push(feld); feld = ''; }
+      else if (c === '\n' || c === '\r') { if (c === '\r' && text[i + 1] === '\n') i++; zeile.push(feld); feld = ''; if (zeile.length > 1 || zeile[0] !== '') out.push(zeile); zeile = []; }
+      else feld += c;
+    }
+    if (feld !== '' || zeile.length) { zeile.push(feld); out.push(zeile); }
+    return out;
+  }
+  function leseWinabCsv(buf, datei) {
+    let text;
+    try { text = new TextDecoder('utf-8', { fatal: true }).decode(buf); } catch (e) { text = new TextDecoder('windows-1252').decode(buf); }
+    const zeilen = csvZeilen(text.replace(/^﻿/, ''));
+    const kopf = (zeilen[0] || []).map((v) => normName(v));
+    const sp = (n) => kopf.indexOf(n);
+    const iL = sp('lademittel'), iD = sp('datum'), iK = sp('kunde'), iF = sp('lieferant'), iM = sp('menge'), iB = sp('bewegungsart'), iN = sp('belegnummer'), iA = sp('belegart'), iX = sp('bezeichnung');
+    if ([iL, iD, iK, iF, iM, iB, iN, iA].some((i) => i < 0)) throw new Error('Das ist nicht die WinAB-Datei „Lademittelbewegungen“ – erwartet werden die Spalten Lademittel, Datum, Kunde, Lieferant, Menge, Bewegungsart, Belegnummer und Belegart.');
+    const info = { zeilen: 0, sammel: 0, karton: 0, andere: {}, unbekannt: {}, ohneBeleg: 0, ohnePartner: 0, korrektur: 0, ohneWirkung: 0, sammelwert: [] };
+    const fehlerListe = [], kunden = new Map(), lieferanten = new Map(), belege = new Map(), lmCache = new Map();
+    let dateiVon = '', bis = '';
+    const fehlerhaft = (i, t) => { if (fehlerListe.length < 20) fehlerListe.push(`Zeile ${i + 1}: ${t}`); };
+    for (let i = 1; i < zeilen.length; i++) {
+      const r = zeilen[i];
+      if (r.length < kopf.length - 1) { if (r.join('').trim()) fehlerhaft(i, 'zu wenige Spalten'); continue; }
+      info.zeilen++;
+      const tag = winabDatum(r[iD]), menge = Number(String(r[iM]).trim().replace(/\./g, '').replace(',', '.'));
+      const kd = String(r[iK] || '').trim(), lf = String(r[iF] || '').trim(), art = String(r[iA] || '').trim(), ba = String(r[iB] || '').trim(), bn = String(r[iN] || '').trim();
+      if (!tag) { fehlerhaft(i, 'Datum nicht lesbar'); continue; }
+      if (String(r[iM]).trim() === '' || menge === 0) { info.ohneBeleg++; continue; }
+      if (!Number.isInteger(menge)) { fehlerhaft(i, 'Menge nicht lesbar'); continue; }
+      if (ba !== 'Abgang' && ba !== 'Zugang') { fehlerhaft(i, 'Bewegungsart weder Abgang noch Zugang'); continue; }
+      if ((kd && !/^\d{1,12}$/.test(kd)) || (lf && !/^\d{1,12}$/.test(lf))) { fehlerhaft(i, 'Kunden- oder Lieferantennummer nicht lesbar'); continue; }
+      if (!dateiVon || tag < dateiVon) dateiVon = tag;
+      if (tag > bis) bis = tag;
+      if (/^sammel/i.test(art)) { info.sammel++; continue; }
+      if (!WINAB_ARTEN.includes(art)) { info.andere[art || '–'] = (info.andere[art || '–'] || 0) + 1; continue; }
+      const nr = String(r[iL] || '').trim(), bez = iX >= 0 ? String(r[iX] || '').trim() : '';
+      if (!lmCache.has(nr)) lmCache.set(nr, winabLm(bez, nr));
+      const lm = lmCache.get(nr);
+      if (lm === '-') { info.karton++; continue; }
+      if (!lm) { const n = bez || 'Lademittel ' + nr; info.unbekannt[n] = (info.unbekannt[n] || 0) + 1; continue; }
+      if (!kd && !lf) { info.ohnePartner++; continue; }
+      if (!bn) { info.ohneBeleg++; continue; }
+      if (menge < 0) info.korrektur++;
+      if (kd) {   // Kundenbeleg; Lieferung/Rückgabe unten aus den saldierten Belegen
+        if (!kunden.has(kd)) kunden.set(kd, { ersteLieferung: '', letzteLieferung: '', letzteRueckgabe: '' });
+      } else {
+        const x = lieferanten.get(lf) || { ls: new Set() };
+        if (art === 'Lieferschein') x.ls.add('L|' + bn);
+        lieferanten.set(lf, x);
+      }
+      const key = kd ? `${kd}|${art}|${bn}` : `L:${lf}|${art}|${bn}`;
+      const b = belege.get(key) || { ...(kd ? { kd } : { lf }), art, beleg: bn, datum: tag, netto: {} };
+      if (tag < b.datum) b.datum = tag;
+      const n = b.netto[lm] || { ab: 0, zu: 0 };
+      if (ba === 'Abgang') n.ab += menge; else n.zu += menge;
+      b.netto[lm] = n;
+      belege.set(key, b);
+    }
+    if (fehlerListe.length) throw new Error('Die Datei hat nicht das erwartete Format. ' + fehlerListe.slice(0, 5).join(' · '));
+    if (!bis) throw new Error('In der Datei stehen keine Lademittelbewegungen.');
+    const mitWirkung = [];
+    for (const b of belege.values()) {
+      const abgang = {}, zugang = {};
+      for (const [lm, { ab, zu }] of Object.entries(b.netto)) {   // je Seite ab 0: negative Mengen zählen zur Gegenseite
+        const a = Math.max(ab, 0) + Math.max(-zu, 0), z = Math.max(zu, 0) + Math.max(-ab, 0);
+        if (a) abgang[lm] = a;
+        if (z) zugang[lm] = z;
+      }
+      const x = { ...(b.kd ? { kd: b.kd } : { lf: b.lf }), art: b.art, beleg: b.beleg, datum: b.datum, abgang, zugang };
+      if (b.kd) {   // Lieferung und Rückgabe je Kunde – auch aus reinem Tausch, nicht aus stornierten Zeilen
+        const k = kunden.get(b.kd), ab = !leerMap(abgang), zu = !leerMap(zugang);
+        if (ab) { if (!k.ersteLieferung || b.datum < k.ersteLieferung) k.ersteLieferung = b.datum; if (b.datum > k.letzteLieferung) k.letzteLieferung = b.datum; }
+        if (zu && b.datum > k.letzteRueckgabe) k.letzteRueckgabe = b.datum;
+      }
+      if (leerMap(delta(x))) info.ohneWirkung++; else mitWirkung.push(x);
+    }
+    return { quelle: 'csv', datei: String(datei || '').slice(0, 120), dateiVon, bis, kunden, lieferanten, belege: mitWirkung, info };
+  }
+  /* Was an den Server geht: CSV ab „Übernehmen ab“ (Belege davor nur gezählt), Bericht (.XLS) unverändert */
+  function winabAnfrage(w, ab, zuordnung) {
+    if (w.quelle !== 'csv') return { bericht: w.bericht, kunden: w.kunden, belege: w.belege };
+    const von = ab < w.dateiVon ? w.dateiVon : ab;
+    return { bericht: { datei: w.datei, von, bis: w.bis, datum: w.bis, dateiVon: w.dateiVon, quelle: 'csv' },
+      kunden: [...w.kunden].map(([nr, k]) => ({ nr, ersteLieferung: k.ersteLieferung, letzteLieferung: k.letzteLieferung, letzteRueckgabe: k.letzteRueckgabe })),
+      lieferanten: [...w.lieferanten].map(([nr, x]) => ({ nr, lieferscheine: x.ls.size })),
+      belege: w.belege.filter((b) => b.datum >= von), zuordnung };
+  }
+  function winabVorher(w, ab) {   // Belege mit Wirkung vor „Übernehmen ab“ (nur CSV): Anzahl und Saldo der Kunden
+    const s = {}; let n = 0;
+    if (w.quelle === 'csv') for (const b of w.belege) if (b.datum < ab && b.kd) { n++; for (const [k, v] of Object.entries(delta(b))) s[k] = (s[k] || 0) + v; }
+    return { n, saldo: s };
+  }
+  function zeigeWinabVorschau(st, r) {
+    const w = st.w, z = r.zahlen, inf = w.info, csv = w.quelle === 'csv';
     const anz = (n, eins, mehr) => (n ? `${zahl(n)} ${n === 1 ? eins : mehr}` : '');
     const weg = [anz(inf.sammel, 'Zeile aus Sammelrechnungen', 'Zeilen aus Sammelrechnungen'), anz(inf.karton, 'Kartonzeile', 'Kartonzeilen'),
-      ...Object.entries(inf.andere).map(([a, n]) => `${zahl(n)} × ${a}`), anz(inf.ohneBeleg, 'Zeile ohne Belegnr.', 'Zeilen ohne Belegnr.'),
+      ...Object.entries(inf.andere).map(([a, n]) => `${zahl(n)} × ${a}`), anz(inf.ohneBeleg, 'Zeile ohne Belegnr. oder Menge', 'Zeilen ohne Belegnr. oder Menge'),
+      anz(inf.ohnePartner, 'Zeile ohne Kunde und Lieferant', 'Zeilen ohne Kunde und Lieferant'),
       anz(inf.ohneWirkung, 'Beleg ohne Wirkung', 'Belege ohne Wirkung') + (inf.ohneWirkung ? ' (gleich viel abgegeben wie zurückgenommen)' : '')].filter(Boolean);
     const unb = Object.entries(inf.unbekannt);
-    const kacheln = [['kunden', w.kunden.length, 'Kunden im Bericht'], ['belege', w.belege.length, 'Belege mit Wirkung'], ['neuKd', z.kunden, 'Neue Kundenkonten'],
-      ['neu', z.neu, 'Neue Belege'], ['gleich', z.gleich, 'Unverändert'], ['geaendert', z.geaendert, 'Geändert'], ['ausgeglichen', z.ausgeglichen, 'Ausgeglichen']];
-    $('#lg-w-vorschau').innerHTML = `<div class="lg-vorschau">${kacheln.map(([k, n, t]) => `<div data-z="${k}"><b>${zahl(n)}</b><span>${t}</span></div>`).join('')}</div>
-      <p class="lg-hinweis">Bericht vom ${esc(datum(w.bericht.datum || w.bericht.bis))} · übernommen wird der Zeitraum ${esc(datum(w.bericht.von))} bis ${esc(datum(w.bericht.bis))}.${weg.length ? ' Weggelassen: ' + esc(weg.join(', ')) + '.' : ''}</p>
-      ${unb.length ? `<p class="lg-meldung">Nicht übernommen, weil das Lademittel im Modul fehlt: ${esc(unb.map(([n, c]) => `${n} (${zahl(c)} Zeilen)`).join(', '))}. Unter „Lademittel“ anlegen und den Bericht erneut wählen.</p>` : ''}
-      ${z.geaendert || z.ausgeglichen ? `<p class="lg-meldung">${zahl(z.geaendert + z.ausgeglichen)} schon übernommene Belege werden storniert${z.geaendert ? ' und neu gebucht' : ''}, weil WinAB sie geändert hat oder sie nicht mehr im Bericht stehen. Den Bericht deshalb immer für alle Lademittel ziehen.</p>` : ''}
-      ${z.daten ? `<p class="lg-hinweis">Letzte Lieferung und Rückgabe laut Bericht (auch aus reinem Tausch) für ${zahl(z.daten)} ${z.daten === 1 ? 'Kundenkonto' : 'Kundenkonten'} aktualisiert.</p>` : ''}
+    const req = winabAnfrage(w, st.ab, st.zuordnung);
+    const kacheln = [['kunden', req.kunden.length, csv ? 'Kunden in der Datei' : 'Kunden im Bericht'], ['belege', req.belege.length, 'Belege mit Wirkung'],
+      ['neuKd', z.kunden, 'Neue Kundenkonten'], ['neu', z.neu, 'Neue Belege'], ['gleich', z.gleich, 'Unverändert'], ['geaendert', z.geaendert, 'Geändert'], ['ausgeglichen', z.ausgeglichen, 'Ausgeglichen']];
+    const vorher = winabVorher(w, req.bericht.von);
+    const lief = r.lieferanten || [];
+    const partnerWahl = S.d.partner.filter((p) => p.art !== 'kunde' && !p.lieferantNr).sort(nachName);
+    const zuordnungZeile = (x) => {
+      const kopf = `<td data-label="Lieferanten-Nr."><b>${esc(x.nr)}</b></td>
+        <td class="lg-zahl" data-label="Lieferscheine mit Leergut">${zahl(x.lieferscheine)}</td><td class="lg-zahl" data-label="Belege mit Wirkung">${x.belege ? zahl(x.belege) : '—'}</td>`;
+      const wahl = st.zuordnung[x.nr] || '';
+      if (x.partner && !wahl) return `<tr data-lf-zeile="${esc(x.nr)}">${kopf}<td data-label="Konto">${esc(x.partner.name)}</td></tr>`;
+      return `<tr data-lf-zeile="${esc(x.nr)}">${kopf}<td data-label="Konto"><select class="lg-eingabe" data-lf="${esc(x.nr)}" aria-label="Konto für WinAB-Nr. ${esc(x.nr)}">
+        <option value="">nicht übernehmen</option><option value="neu"${wahl === 'neu' ? ' selected' : ''}>Neues Konto anlegen</option>
+        ${partnerWahl.map((p) => `<option value="${esc(p.id)}"${wahl === p.id ? ' selected' : ''}>${esc(p.name)}</option>`).join('')}</select>
+        ${x.belege && !wahl ? `<span class="lg-sub">${mengen(x.saldo, { leer: '' })} – nicht gebucht</span>` : ''}</td></tr>`;
+    };
+    $('#lg-w-vorschau').innerHTML = `${csv ? `<div class="lg-w-ab"><label>Übernehmen ab<input type="date" class="lg-eingabe" id="lg-w-ab" min="${esc(w.dateiVon)}" max="${esc(w.bis)}" value="${esc(req.bericht.von)}"></label>
+        <span class="lg-hilfe">Datei vom ${esc(datum(w.dateiVon))} bis ${esc(datum(w.bis))}. Salden der Konten beginnen mit diesem Tag; Lieferung und Rückgabe je Kunde gelten aus der ganzen Datei.</span></div>` : ''}
+      <div class="lg-vorschau">${kacheln.map(([k, n, t]) => `<div data-z="${k}"><b>${zahl(n)}</b><span>${t}</span></div>`).join('')}</div>
+      <p class="lg-hinweis">${csv ? `WinAB-Datei bis ${esc(datum(w.bis))}` : `Bericht vom ${esc(datum(w.bericht.datum || w.bericht.bis))}`} · übernommen wird der Zeitraum ${esc(datum(req.bericht.von))} bis ${esc(datum(req.bericht.bis))}.${weg.length ? ' Weggelassen: ' + esc(weg.join(', ')) + '.' : ''}${inf.korrektur ? ` ${esc(anz(inf.korrektur, 'Korrekturzeile', 'Korrekturzeilen'))} mit Minus verrechnet.` : ''}</p>
+      ${vorher.n ? `<p class="lg-hinweis" id="lg-w-vorher">Vor dem ${esc(datum(req.bericht.von))}: ${anz(vorher.n, 'Kundenbeleg', 'Kundenbelege')} mit Wirkung (${mengen(vorher.saldo, { leer: 'ausgeglichen' })}) – nicht übernommen. Für die ganze Geschichte „Übernehmen ab“ auf den ${esc(datum(w.dateiVon))} setzen.</p>` : ''}
+      ${unb.length ? `<p class="lg-meldung">Nicht übernommen, weil das Lademittel im Modul fehlt: ${esc(unb.map(([n, c]) => `${n} (${zahl(c)} Zeilen)`).join(', '))}. Unter „Lademittel“ anlegen und die Datei erneut wählen.</p>` : ''}
+      ${z.geaendert || z.ausgeglichen ? `<p class="lg-meldung">${zahl(z.geaendert + z.ausgeglichen)} schon übernommene Belege werden storniert${z.geaendert ? ' und neu gebucht' : ''}, weil WinAB sie geändert hat oder sie nicht mehr in der Datei stehen. Die Datei deshalb immer für alle Lademittel ziehen.</p>` : ''}
+      ${z.daten ? `<p class="lg-hinweis">Letzte Lieferung und Rückgabe laut WinAB (auch aus reinem Tausch) für ${zahl(z.daten)} ${z.daten === 1 ? 'Kundenkonto' : 'Kundenkonten'} aktualisiert.</p>` : ''}
       <p class="lg-wsumme">Saldo aller Kundenkonten aus WinAB danach (${zahl(z.konten)} mit Saldo): ${mengen(r.summe, { leer: 'ausgeglichen' })}</p>
+      ${lief.length ? `<h3 class="lg-w-titel">Lieferanten aus WinAB</h3>
+        <p class="lg-hilfe">Lieferantenbelege (Zeilen ohne Kunde, z. B. Wareneingänge) werden nur auf zugeordnete Konten gebucht. Die Nummer bleibt am Konto – künftige Dateien ordnen von selbst zu.</p>
+        <div class="lg-tabelle-wrap"><table class="lg-tabelle lg-karten" id="lg-w-lief"><thead><tr><th>Lieferanten-Nr.</th><th class="lg-zahl">Lieferscheine mit Leergut (Datei)</th><th class="lg-zahl">Belege mit Wirkung</th><th>Konto</th></tr></thead>
+        <tbody>${lief.map(zuordnungZeile).join('')}</tbody></table></div>
+        ${z.ohneKonto ? `<p class="lg-meldung">${zahl(z.ohneKonto)} ${z.ohneKonto === 1 ? 'Lieferantenbeleg wird' : 'Lieferantenbelege werden'} nicht gebucht, weil kein Konto zugeordnet ist.</p>` : ''}
+        ${leerMap(r.summeLieferanten) ? '' : `<p class="lg-wsumme">Saldo der zugeordneten Lieferantenkonten danach: ${mengen(r.summeLieferanten)}</p>`}` : ''}
       ${inf.sammelwert.length ? `<p class="lg-hinweis">Nur zur Information – Gesamtwert oben im WinAB-Bericht (WinAB-Vorzeichen, Minus = mehr an Kunden abgegeben als zurückgenommen): ${esc(inf.sammelwert.map((x) => `${x.name} ${vz(x.wert)}`).join(' · '))}</p>` : ''}`;
   }
-  $('#lg-w-datei').addEventListener('change', async (ev) => {
-    const f = ev.target.files[0], m = $('#lg-w-meldung');
-    S.winab = null; $('#lg-w-vorschau').innerHTML = ''; $('#lg-w-knoepfe').hidden = true; m.textContent = ''; m.className = 'lg-meldung';
-    if (!f) return;
-    $('#lg-w-dateiname').textContent = f.name;
-    ev.target.value = '';
-    if (f.size > 40 * 1024 * 1024) { m.textContent = 'Die Datei ist zu groß (höchstens 40 MB).'; return; }
-    let w;
-    try {
-      const b = new Uint8Array(await f.arrayBuffer());
-      if (b[0] === 0x50 && b[1] === 0x4b && !window.OfferCore) throw new Error('Bitte den Bericht so verwenden, wie WinAB ihn speichert (.XLS) – .xlsx wird hier nicht gelesen.');
-      w = leseWinab(await window.StockCore.readStockWorkbook(b.buffer), f.name);
-    } catch (e) { m.textContent = e && e.message ? e.message : 'Die Datei konnte nicht gelesen werden.'; return; }
-    if (!w.belege.length && !w.kunden.length) { m.textContent = 'Im Bericht stehen keine Kundenbewegungen.'; return; }
-    m.className = 'lg-meldung ok'; m.textContent = 'Bericht gelesen – Abgleich wird geprüft …';
-    const r = await api('leergut_winab_import', { bericht: w.bericht, kunden: w.kunden, belege: w.belege, vorschau: true });
+  /* Vorschau beim Server anfragen (Abgleich ohne Speichern) – nach Dateiwahl, „Übernehmen ab“ und Zuordnung */
+  async function winabPruefen(fokus) {
+    const st = S.winabStand, m = $('#lg-w-meldung');
+    if (!st) return;
+    $('#lg-w-knoepfe').hidden = true;
+    m.className = 'lg-meldung ok'; m.textContent = 'Abgleich wird geprüft …';
+    const r = await api('leergut_winab_import', { ...winabAnfrage(st.w, st.ab, st.zuordnung), vorschau: true });
+    if (S.winabStand !== st) return;
     if (r.status === 401) { zeigeAnmeldung(); return; }
     m.className = 'lg-meldung'; m.textContent = '';
-    if (r.status !== 200 || !r.data.ok) { m.textContent = fehlerText(r, 'Der Bericht konnte nicht geprüft werden'); return; }
+    if (r.status !== 200 || !r.data.ok) { m.textContent = fehlerText(r, 'Die Datei konnte nicht geprüft werden'); return; }
     if ((r.data.fehler || []).length) {
       $('#lg-w-vorschau').innerHTML = `<p class="lg-meldung">${zahl(r.data.fehler.length)} Fehler – nichts übernommen:</p><ul class="lg-fehlerliste">${r.data.fehler.map((x) => `<li>Beleg ${zahl(x.zeile)}: ${esc(x.text)}</li>`).join('')}</ul>`;
       return;
     }
-    zeigeWinabVorschau(w, r.data);
+    zeigeWinabVorschau(st, r.data);
+    if (fokus) $(fokus)?.focus();
     const z = r.data.zahlen;
-    if (!z.kunden && !z.neu && !z.geaendert && !z.ausgeglichen && !z.daten) { m.className = 'lg-meldung ok'; m.textContent = 'Alles schon übernommen – es gibt nichts Neues.'; return; }
-    S.winab = w;
+    if (!z.kunden && !z.lieferantenNeu && !z.neu && !z.geaendert && !z.ausgeglichen && !z.daten && !Object.keys(st.zuordnung).length) {
+      m.className = 'lg-meldung ok'; m.textContent = 'Alles schon übernommen – es gibt nichts Neues.'; return;
+    }
     $('#lg-w-knoepfe').hidden = false;
+  }
+  $('#lg-w-vorschau').addEventListener('change', (ev) => {
+    const st = S.winabStand;
+    if (!st) return;
+    if (ev.target.id === 'lg-w-ab') { if (/^\d{4}-\d{2}-\d{2}$/.test(ev.target.value)) { st.ab = ev.target.value; winabPruefen('#lg-w-ab'); } return; }
+    const lf = ev.target.dataset.lf;
+    if (lf === undefined) return;
+    if (ev.target.value) st.zuordnung[lf] = ev.target.value; else delete st.zuordnung[lf];
+    winabPruefen(`#lg-w-vorschau [data-lf="${lf}"]`);
+  });
+  $('#lg-w-datei').addEventListener('change', async (ev) => {
+    const f = ev.target.files[0], m = $('#lg-w-meldung');
+    S.winabStand = null; $('#lg-w-vorschau').innerHTML = ''; $('#lg-w-knoepfe').hidden = true; m.textContent = ''; m.className = 'lg-meldung';
+    if (!f) return;
+    $('#lg-w-dateiname').textContent = f.name;
+    ev.target.value = '';
+    if (f.size > 150 * 1024 * 1024) { m.textContent = 'Die Datei ist zu groß (höchstens 150 MB).'; return; }
+    let w;
+    try {
+      const b = new Uint8Array(await f.arrayBuffer());
+      if (b[0] === 0x50 && b[1] === 0x4b) throw new Error('Bitte die Datei so verwenden, wie WinAB sie speichert (.CSV oder .XLS) – .xlsx wird hier nicht gelesen.');
+      const anfang = new TextDecoder('latin1').decode(b.subarray(0, 300)).replace(/^\u00ef\u00bb\u00bf/, '');
+      const istXls = !(/^"?[A-Za-zÄÖÜäöü]/.test(anfang) && anfang.split(/\r?\n/)[0].includes(';'));   // sonst altes Excel-Format (Bericht „… Kunden“)
+      if (istXls) { if (f.size > 40 * 1024 * 1024) throw new Error('Der Bericht ist zu groß (höchstens 40 MB).'); w = leseWinab(await window.StockCore.readStockWorkbook(b.buffer), f.name); w.quelle = 'xls'; }
+      else w = leseWinabCsv(b, f.name);
+    } catch (e) { m.textContent = e && e.message ? e.message : 'Die Datei konnte nicht gelesen werden.'; return; }
+    if (!w.belege.length && !(w.quelle === 'csv' ? w.kunden.size : w.kunden.length)) { m.textContent = 'In der Datei stehen keine Lademittelbewegungen.'; return; }
+    const ab = w.quelle === 'csv' ? (WINAB_AB_STANDARD < w.dateiVon || WINAB_AB_STANDARD > w.bis ? w.dateiVon : WINAB_AB_STANDARD) : '';
+    S.winabStand = { w, ab, zuordnung: {} };
+    await winabPruefen();
   });
   $('#lg-w-uebernehmen').addEventListener('click', async (ev) => {
-    const w = S.winab, m = $('#lg-w-meldung');
-    if (!w) return;
+    const st = S.winabStand, m = $('#lg-w-meldung');
+    if (!st) return;
     ev.target.disabled = true;
-    const r = await api('leergut_winab_import', { bericht: w.bericht, kunden: w.kunden, belege: w.belege });
+    const r = await api('leergut_winab_import', winabAnfrage(st.w, st.ab, st.zuordnung));
     ev.target.disabled = false;
     if (r.status === 401) { zeigeAnmeldung(); return; }
     if (r.status !== 200 || !r.data.ok) { m.className = 'lg-meldung'; m.textContent = fehlerText(r, 'Übernehmen fehlgeschlagen'); return; }
-    S.winab = null; $('#lg-w-knoepfe').hidden = true; $('#lg-w-vorschau').innerHTML = ''; $('#lg-w-dateiname').textContent = 'Keine Datei gewählt';
+    S.winabStand = null; $('#lg-w-knoepfe').hidden = true; $('#lg-w-vorschau').innerHTML = ''; $('#lg-w-dateiname').textContent = 'Keine Datei gewählt';
     const z = r.data.zahlen;
     m.className = 'lg-meldung ok';
-    m.textContent = `Übernommen: ${zahl(z.kunden)} neue Kundenkonten, ${zahl(z.neu)} neue Belege, ${zahl(z.geaendert)} geändert, ${zahl(z.ausgeglichen)} ausgeglichen.`;
-    toast('WinAB-Bericht übernommen');
+    m.textContent = `Übernommen: ${zahl(z.kunden)} neue Kundenkonten${z.lieferantenNeu ? `, ${zahl(z.lieferantenNeu)} ${z.lieferantenNeu === 1 ? 'neues Lieferantenkonto' : 'neue Lieferantenkonten'}` : ''}, ${zahl(z.neu)} neue Belege, ${zahl(z.geaendert)} geändert, ${zahl(z.ausgeglichen)} ausgeglichen.`;
+    toast('WinAB-Lademittelbewegungen übernommen');
     await neuLaden();
   });
 
@@ -1035,7 +1197,7 @@
     $('#pa-titel').textContent = p ? `Partner ${p.name}` : 'Partner anlegen';
     $('#pa-name').value = p ? p.name : ''; $('#pa-art').innerHTML = optionen(S.d.arten, p ? p.art : 'lieferant');
     $('#pa-firma').innerHTML = optionen(S.d.mandanten, p ? p.mandant : 'standard');
-    $('#pa-konto').value = p ? p.kontoNr : ''; $('#pa-kdnr').value = p ? (p.kundenNr || '') : ''; $('#pa-frist').value = p ? (p.fristTage || '') : '14';
+    $('#pa-konto').value = p ? p.kontoNr : ''; $('#pa-kdnr').value = p ? (p.kundenNr || '') : ''; $('#pa-lfnr').value = p ? (p.lieferantNr || '') : ''; $('#pa-frist').value = p ? (p.fristTage || '') : '14';
     $('#pa-email').value = p ? p.email : ''; $('#pa-ansprech').value = p ? p.ansprechpartner : ''; $('#pa-lieferanten').value = p ? p.lieferanten : '';
     $('#pa-notiz').value = p ? p.notiz : ''; $('#pa-aktiv').checked = p ? !!p.aktiv : true;
     const gewaehlt = new Set(p ? p.lademittel : ['e2', 'h1']);
@@ -1046,7 +1208,7 @@
   $('#pa-form').addEventListener('submit', async (ev) => {
     ev.preventDefault();
     const p = S.edit.partner;
-    const body = { name: $('#pa-name').value, art: $('#pa-art').value, mandant: $('#pa-firma').value, kontoNr: $('#pa-konto').value, kundenNr: $('#pa-kdnr').value.trim(), fristTage: $('#pa-frist').value.trim(),
+    const body = { name: $('#pa-name').value, art: $('#pa-art').value, mandant: $('#pa-firma').value, kontoNr: $('#pa-konto').value, kundenNr: $('#pa-kdnr').value.trim(), lieferantNr: $('#pa-lfnr').value.trim(), fristTage: $('#pa-frist').value.trim(),
       email: $('#pa-email').value, ansprechpartner: $('#pa-ansprech').value, lieferanten: $('#pa-lieferanten').value, notiz: $('#pa-notiz').value,
       lademittel: $$('#pa-lm input:checked').map((x) => x.value), aktiv: $('#pa-aktiv').checked };
     if (p) { body.id = p.id; body.rev = p.rev; }
