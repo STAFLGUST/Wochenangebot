@@ -521,8 +521,10 @@ function renderTable(list, grouped) {
 }
 
 /* ---------- Angebotsliste (Standard): Aufbau wie die gedruckte Liste – Abschnitte, Gruppen in Spalten, Nr. · Bezeichnung · € / Kg ----------
-   Die Gruppen werden in Leserichtung (spaltenweise) auf gleich hohe Spalten verteilt; nur eine Gruppe, die nicht
-   sinnvoll in den Rest einer Spalte passt, wird geteilt (Kopf mit „Forts.“ wiederholt). Bildschirm und Druck nutzen dasselbe Verfahren. */
+   Eine Gruppe (Block) steht immer vollständig untereinander in einer Spalte (Inhaber 05.11.2026: nicht mehr „Forts.“ in der
+   Nachbarspalte). Die Blöcke eines Abschnitts werden in Leserichtung so auf die Spalten verteilt, dass die höchste Spalte
+   möglichst niedrig ist; kleine Abschnitte stehen nebeneinander in einer Zeile, wenn das insgesamt Platz spart. Nur im Druck
+   wird ein Block geteilt, der höher als eine ganze Seitenspalte ist (Kopf mit „Forts.“ wiederholt). */
 const plPrice = (p) => (p.status === 'value' ? fmtNum.format(p.value) : p.status === 'request' ? 'a. Anfr.' : '—');
 const plTitle = () => window.OfferCore.titelMitKw(DATA.meta);   // immer die KW des Angebots, nicht die des früheren Imports
 /* Text in Anführungszeichen (z. B. „Fleischmeister“) hervorheben wie in der Druckliste */
@@ -549,39 +551,79 @@ function plCells(it, labels) {
   for (const p of free) { const k = p === it.price ? cells.lastIndexOf(null) : cells.indexOf(null); if (k >= 0) cells[k] = p; }   // ohne Beschriftung: Hauptpreis rechts
   return cells;
 }
-/* Verteilung auf k Spalten. units: [{key, items, weight(i), head}]; cap = feste Spaltenhöhe (Druck) oder null (ausgleichen) */
+/* Druck: Spalten fester Höhe H nacheinander füllen. Ein Block, der nicht mehr in die Spalte passt, beginnt in der nächsten;
+   geteilt wird nur ein Block, der höher als eine ganze Spalte ist. units: [{key, items, weight(i), head}] */
 function plFill(units, k, H) {
   const cols = [[]]; let load = 0;
   const next = () => { cols.push([]); load = 0; };
   for (const u of units) {
     let rest = u.items.slice(), cont = false;
     while (rest.length) {
-      const w = (xs) => u.head + xs.reduce((a, i) => a + u.weight(i), 0);
-      const W = w(rest), R = H - load;
+      const W = u.head + rest.reduce((a, i) => a + u.weight(i), 0), R = H - load;
       if (W <= R + 1e-6) { cols[cols.length - 1].push({ u, items: rest, cont }); load += W; break; }
-      if (load > 0 && W <= H && R < H * 0.35) { next(); continue; }   // passt in die nächste Spalte und der Rest hier ist klein: nicht teilen
-      let n = 0, acc = u.head;
+      if (load > 0) { next(); continue; }   // nicht teilen: in der nächsten Spalte vollständig
+      let n = 0, acc = u.head;   // höher als eine ganze Spalte: so viel wie passt, Rest mit „Forts.“
       while (n < rest.length && acc + u.weight(rest[n]) <= R + 1e-6) acc += u.weight(rest[n++]);
-      if (n >= 3 && rest.length - n >= 2) { cols[cols.length - 1].push({ u, items: rest.slice(0, n), cont }); rest = rest.slice(n); cont = true; next(); continue; }
-      if (load > 0) { next(); continue; }
-      n = Math.max(1, n); cols[cols.length - 1].push({ u, items: rest.slice(0, n), cont }); rest = rest.slice(n); cont = true; next();   // zu groß für eine Spalte
+      n = Math.max(1, n); cols[cols.length - 1].push({ u, items: rest.slice(0, n), cont }); rest = rest.slice(n); cont = true; next();
     }
   }
   if (!cols[cols.length - 1].length) cols.pop();
   return cols;
 }
-function plBalance(units, k) {
-  const total = units.reduce((a, u) => a + u.head + u.items.reduce((b, i) => b + u.weight(i), 0), 0);
-  /* Untergrenze der Spaltenhöhe: kleine Gruppen (bis 5 Positionen) werden nie geteilt, größere frühestens nach 3 Positionen –
-     sonst verteilt der Ausgleich z. B. ein Einzelangebot mit zwei Positionen auf zwei Spalten („Forts.“) */
-  const minH = (u) => u.head + u.items.slice(0, u.items.length <= 5 ? u.items.length : 3).reduce((a, i) => a + u.weight(i), 0);
-  let lo = Math.max(total / k, ...units.map(minH)), hi = total + 1, best = plFill(units, k, hi);
-  for (let n = 0; n < 24 && hi - lo > 0.25; n++) {
-    const mid = (lo + hi) / 2, c = plFill(units, k, mid);
-    if (c.length <= k) { best = c; hi = mid; } else lo = mid;
+const plHoehe = (u) => u.head + u.items.reduce((a, i) => a + u.weight(i), 0);
+/* Blöcke in fester Reihenfolge ohne Teilen auf c Spalten: die höchste Spalte so niedrig wie möglich (lineare Aufteilung).
+   Rückgabe { h: höchste Spalte, cols: [[{u, items, cont}]] } – genau min(c, Blöcke) Spalten, keine leer. */
+function plOhneTeilen(units, c) {
+  const n = units.length;
+  if (!n) return { h: 0, cols: [] };
+  c = Math.max(1, Math.min(c, n));
+  const pre = [0];
+  for (const u of units) pre.push(pre[pre.length - 1] + plHoehe(u));
+  const f = [[0].concat(Array(n).fill(Infinity))], cut = [[]];
+  for (let j = 1; j <= c; j++) {
+    f[j] = [Infinity]; cut[j] = [0];
+    for (let i = 1; i <= n; i++) {
+      let best = Infinity, at = j - 1;
+      for (let s = j - 1; s < i; s++) { const v = Math.max(f[j - 1][s], pre[i] - pre[s]); if (v < best - 1e-9) { best = v; at = s; } }
+      f[j][i] = best; cut[j][i] = at;
+    }
   }
-  while (best.length < k) best.push([]);
-  return best;
+  const cols = [];
+  for (let j = c, i = n; j >= 1; j--) { const s = cut[j][i]; cols.unshift(units.slice(s, i).map((u) => ({ u, items: u.items, cont: false }))); i = s; }
+  return { h: f[c][n], cols };
+}
+/* Sortierte Gesamtliste (ohne Gruppen) ist ein einziger Block: er wird gleichmäßig auf die k Spalten verteilt (ab der
+   zweiten Spalte mit „Forts.“) – sonst stünde die ganze Liste in einer Spalte. */
+function plGleichTeilen(u, k) {
+  const einzeln = u.items.map((i) => ({ head: 0, items: [i], weight: u.weight }));
+  return plOhneTeilen(einzeln, k).cols.map((col, x) => [{ u, items: col.map((b) => b.items[0]), cont: x > 0 }]);
+}
+const plVerteilen = (units, k) => (units.length === 1 && units[0].key === 'all' ? plGleichTeilen(units[0], k) : plOhneTeilen(units, k).cols);
+/* Bildschirm: Abschnitte zu Zeilen („Bändern“) zusammenstellen. Jeder Abschnitt bekommt 1…k Spalten; nebeneinander passen
+   Abschnitte, solange die Spalten zusammen höchstens k sind. Gewählt wird die Aufteilung mit der kleinsten Gesamthöhe
+   (Reihenfolge bleibt: Abschnitte von links nach rechts, Zeilen von oben nach unten). Nebeneinander nur, wenn es
+   deutlich Platz spart (Aufschlag PL_NEBEN je weiterem Abschnitt der Zeile) – große Abschnitte bleiben ganzbreit. */
+const PL_KOPF = 2.4, PL_ABSTAND = 0.9, PL_NEBEN = 0.15;   // Abschnittsband und Zeilenabstand in Artikelzeilen; Aufschlag nebeneinander
+function plBaender(secs, k) {
+  const n = secs.length;
+  const lay = secs.map((s) => { const r = []; for (let c = 1; c <= Math.min(k, s.units.length); c++) r[c] = plOhneTeilen(s.units, c); return r; });
+  const best = Array(n + 1).fill(Infinity), wahl = [];
+  best[n] = 0;
+  for (let i = n - 1; i >= 0; i--) {
+    const probe = (j, frei, cs) => {   // Abschnitte i..j in einer Zeile, cs = Spalten je Abschnitt
+      for (let c = 1; c <= Math.min(frei, secs[j].units.length); c++) {
+        const cs2 = cs.concat(c);
+        const h = Math.max(...cs2.map((cc, x) => lay[i + x][cc].h + (secs[i + x].name ? PL_KOPF : 0)));
+        const summe = h * (1 + PL_NEBEN * (cs2.length - 1)) + PL_ABSTAND + best[j + 1];
+        if (summe < best[i] - 1e-6) { best[i] = summe; wahl[i] = cs2; }
+        if (j + 1 < n && frei - c >= 1) probe(j + 1, frei - c, cs2);
+      }
+    };
+    probe(i, k, []);
+  }
+  const out = [];
+  for (let i = 0; i < n;) { const cs = wahl[i]; out.push(cs.map((c, x) => ({ sec: secs[i + x], c, cols: lay[i + x][c].cols }))); i += cs.length; }
+  return out;
 }
 function plUnits(list, grouped, charsPerLine) {
   const weight = (i) => 1 + (plName(i).length + (i.sale ? 14 : 0) > charsPerLine ? 0.85 : 0);
@@ -627,13 +669,19 @@ function renderListe(list, grouped) {
   const stand = PUBLISHED_AT ? new Date(PUBLISHED_AT).toLocaleDateString('de-DE', { day: '2-digit', month: '2-digit', year: 'numeric' }) : '';
   const m = DATA.meta || {};
   const head = `<div class="al-head">${PL_LOGO}<div class="al-ht"><h2>${esc(m.offerName && m.offerName !== 'Wochenangebot' && !m.einzel ? m.offerName + ' · ' : '')}${esc(plTitle())}</h2><span>${stand ? 'Stand ' + esc(stand) + ' · ' : ''}Preise in € je kg</span></div></div>${werbungHTML(false)}`;
-  const secs = plSections(units).map((sec) => {
+  const zeilen = grouped ? plBaender(plSections(units), plK)
+    : [[{ sec: { name: '', units }, c: Math.min(plK, units[0].items.length) || 1, cols: plGleichTeilen(units[0], plK) }]];
+  const baender = zeilen.map((band) => `<div class="al-band" style="--k:${plK}">${band.map(({ sec, c, cols }) => {
     const n = sec.units.reduce((a, u) => a + u.items.length, 0);
-    const cols = plBalance(sec.units, plK);
-    return `<section class="al-sec">${sec.name ? `<div class="al-st"><h3>${plGroupName(sec.name)}</h3><span>${plural(n, 'Artikel', 'Artikel')}</span></div>` : ''}
-      <div class="al-cols" style="--k:${plK}">${cols.map((c) => `<div class="al-col">${c.map((b) => plBlockHTML(b, 'screen')).join('')}</div>`).join('')}</div></section>`;
-  });
-  return `<div class="al" data-k="${plK}">${head}${secs.join('')}${hinweisHTML('al-note')}</div>`;
+    // Abschnitt ohne Namen neben einem benannten: unsichtbarer Platzhalter, damit die Blöcke der Zeile oben bündig beginnen
+    const kopf = sec.name ? `<div class="al-st"><h3>${plGroupName(sec.name)}</h3><span>${plural(n, 'Artikel', 'Artikel')}</span></div>`
+      : band.some((x) => x.sec.name) ? '<div class="al-st al-st-leer" aria-hidden="true"><h3>&nbsp;</h3></div>' : '';
+    // allein in der Zeile: Band über die ganze Breite, Spalten so breit wie in den anderen Zeilen (übrige bleiben frei)
+    const breite = band.length === 1 ? plK : c;
+    return `<section class="al-sec" style="--c:${breite}">${kopf}
+      <div class="al-cols" style="--k:${breite}">${cols.map((col) => `<div class="al-col">${col.map((b) => plBlockHTML(b, 'screen')).join('')}</div>`).join('')}</div></section>`;
+  }).join('')}</div>`);
+  return `<div class="al" data-k="${plK}">${head}${baender.join('')}${hinweisHTML('al-note')}</div>`;
 }
 /* Spaltenzahl folgt der Breite: bei Wechsel neu verteilen */
 if (window.ResizeObserver) new ResizeObserver(() => { const h = $('#list'); if (state.view === 'liste' && h && h.querySelector('.al') && plColsFor(h.clientWidth) !== plK) renderList(); }).observe(document.documentElement);
@@ -648,7 +696,8 @@ function buildPrintListe(list, grouped, scopeText) {
   const colW = (c) => c.reduce((a, bl) => a + bl.u.head + bl.items.reduce((x, i) => x + bl.u.weight(i), 0), 0);
   for (const sec of secs) {
     const cap = plCap(!pages.length, !!sec.name);
-    const one = plBalance(sec.units, 3);
+    const one = plVerteilen(sec.units, 3);
+    while (one.length < 3) one.push([]);
     if (Math.max(...one.map(colW)) <= cap) { pages.push({ sec: sec.name, cont: false, cols: one, cap }); continue; }   // Abschnitt passt auf eine Seite
     let cols = plFill(sec.units, Infinity, cap);
     const per = [];
@@ -658,10 +707,15 @@ function buildPrintListe(list, grouped, scopeText) {
     const byKey = new Map();
     for (const b of cols.flat()) { if (!byKey.has(b.u.key)) byKey.set(b.u.key, { ...b.u, items: [] }); byKey.get(b.u.key).items.push(...b.items); }
     const firstSeen = new Set();
-    per.push(plBalance([...byKey.values()], 3).map((c) => c.map((b) => {
-      const isFirst = !firstSeen.has(b.u.key); firstSeen.add(b.u.key);
-      return isFirst && earlier.has(b.u.key) ? { ...b, cont: true } : b;
-    })));
+    const lz = plVerteilen([...byKey.values()], 3);
+    if (Math.max(...lz.map(colW)) > plCap(false, !!sec.name) + 1e-6) per.push(cols.concat([[], [], []]).slice(0, 3));   // übergroßer Block: Spalten wie gefüllt
+    else {
+      while (lz.length < 3) lz.push([]);
+      per.push(lz.map((c) => c.map((b) => {
+        const isFirst = !firstSeen.has(b.u.key); firstSeen.add(b.u.key);
+        return isFirst && earlier.has(b.u.key) ? { ...b, cont: true } : b;
+      })));
+    }
     per.forEach((cols3, n) => pages.push({ sec: sec.name, cont: n > 0, cols: cols3, cap: plCap(false, !!sec.name) }));
   }
   /* Hinweis wie in der Excel-Liste: in die Spalte mit dem meisten Platz, sonst unter die Spalten, sonst auf eine eigene Seite */
