@@ -889,7 +889,7 @@ with sync_playwright() as pw:
 
     # ── Single Sign-on in die zweite Anwendung, aber eigene Sitzung je Host ──
     pa = eigene_seite(ctx.new_page())
-    pa.goto(A + '/admin/'); pa.wait_for_function("location.host.startsWith('angebot.')")
+    pa.goto(A + '/admin/'); pa.wait_for_url(lambda u: urllib.parse.urlsplit(u).hostname.startswith('angebot.'))
     sta = pa.evaluate("fetch('../api/?action=status').then(r => r.json())")
     check('Single Sign-on: Mitarbeiter-Eingabe ohne erneute Eingabe angemeldet', sta.get('loggedIn') and sta['user']['username'] == 'erika', sta.get('user'))
     code, j = pa.evaluate("t => fetch('../api/?action=security_status', {headers: {'X-CSRF-Token': t}}).then(async r => [r.status, await r.json()])", sta.get('csrf', ''))
@@ -901,11 +901,11 @@ with sync_playwright() as pw:
           and ka.get('__Host-WA_ADMIN', {}).get('value') != k.get('__Host-WA_ADMIN', {}).get('value'), sorted(ka))
     pa.wait_for_selector('#screen-editor:not([hidden]), #screen-auth:not([hidden])', timeout=30000)
     check('Mitarbeiter-Eingabe zeigt den Editor (keine eigene Anmeldemaske)', pa.is_visible('#screen-editor'))
-    pa.wait_for_function("document.querySelector('#vt-master').hidden && !document.querySelector('#vt-edit').hidden")
+    pa.wait_for_selector('#vt-edit:not([hidden])', state='attached'); pa.wait_for_selector('#vt-master[hidden]', state='attached')
     sicht_a = pa.evaluate("[...document.querySelectorAll('[id^=vt-]')].filter(b => !b.hidden).map(b => b.id.slice(3))")
     check('Angebot (angebot.stafl.test): nur Angebotsbereiche, keine Verwaltung (Stammdaten, Kunden, Import …) und keine Bestandsliste (wandert ins Bestandsmodul)',
           'edit' in sicht_a and not {'stock', 'master', 'vkgruppen', 'kunden', 'gruppen', 'vertreter', 'importe', 'auswertung', 'users', 'log', 'sec'} & set(sicht_a), sicht_a)
-    pa.goto(A + '/admin/?ansicht=stock'); pa.wait_for_selector('#screen-editor:not([hidden])'); pa.wait_for_function("!document.querySelector('#vt-edit').hidden")
+    pa.goto(A + '/admin/?ansicht=stock'); pa.wait_for_selector('#screen-editor:not([hidden])'); pa.wait_for_selector('#vt-edit:not([hidden])', state='attached')
     check('Angebot: Bestandsliste auch über die Adresse nicht zu öffnen (?ansicht=stock → Angebot bearbeiten)', pa.is_hidden('#view-stock') and pa.is_visible('#view-edit'))
     check('Angebot: Bestandsdaten im Angebotseditor bleiben (Bestandsliste über die Schnittstelle lesbar)', pa.evaluate("fetch('../api/?action=stock').then(r => r.status)") == 200)
     # Gemeldet 25.10.2026: „Angebotsseite“ öffnete auf diesem Host wieder den Editor („/“ → /admin/). Jetzt index.html.
@@ -917,7 +917,7 @@ with sync_playwright() as pw:
     ps.close()
     # Vorschau seit 27.10.2026 als Fenster im Editor (iframe derselben Adresse) statt eines neuen Tabs
     pa.click('#btn-preview'); pa.wait_for_selector('#dlg-vorschau[open] #pv-stage:not(.laden)', timeout=30000)
-    pa.wait_for_function("() => { const d = document.querySelector('#pv-frame').contentDocument; const l = d && d.querySelector('#list'); return !!(l && l.children.length); }", timeout=30000)
+    pa.frame_locator('#pv-frame').locator('#list > *').first.wait_for(state='attached', timeout=30000)
     pv = pa.frame_locator('#pv-frame')
     pvu = pa.eval_on_selector('#pv-frame', 'f => f.contentWindow.location.href')
     check('Angebot: Vorschau zeigt den Entwurf der Angebotsseite im Fenster (index.html?vorschau=1, nicht den Editor)', pvu.startswith(A + '/index.html?vorschau=1&eingebettet=1')
@@ -941,7 +941,7 @@ with sync_playwright() as pw:
     kv = kekse(ctx, 'verwaltung.stafl.test')
     check('Verwaltung: eigene Sitzung (andere Cookie-Werte als angebot)', kv.get('__Host-oidc_sitzung', {}).get('value') not in (None, ka.get('__Host-oidc_sitzung', {}).get('value'))
           and kv.get('__Host-WA_ADMIN', {}).get('value') not in (None, ka.get('__Host-WA_ADMIN', {}).get('value')), sorted(kv))
-    pv.wait_for_function("!document.querySelector('#vt-master').hidden")
+    pv.wait_for_selector('#vt-master:not([hidden])', state='attached')
     check('Verwaltung: Überschrift und Titel', pv.text_content('#topbar h1') == 'Verwaltung' and pv.title().startswith('Verwaltung'), (pv.text_content('#topbar h1'), pv.title()))
     sichtbar = pv.evaluate("[...document.querySelectorAll('[id^=vt-]')].filter(b => !b.hidden).map(b => b.id.slice(3))")
     check('Verwaltung: nur Verwaltungsbereiche (kein Angebot, Bestand, Einkauf, Bestellungen); Bearbeiterin ohne Nutzer/Sicherheit',
@@ -1284,7 +1284,7 @@ with sync_playwright() as pw:
     pg.fill('#otp', totp(chef_otp, 1)); pg.click('#kc-login'); pg.wait_for_selector('#screen-editor:not([hidden])')
     code, _ = pg.evaluate("fetch('../api/?action=status').then(async r => [r.status, await r.json().catch(() => ({}))])")
     check('… ohne zweite Abfrage in der Mitarbeiter-Eingabe (Einmalcode als Anmeldemethode erkannt)', code == 200 and pg.url.startswith(A + '/admin/'), (code, pg.url))
-    pg.goto(W + '/admin/'); pg.wait_for_selector('#screen-editor:not([hidden])'); pg.wait_for_function("!document.querySelector('#vt-users').hidden")
+    pg.goto(W + '/admin/'); pg.wait_for_selector('#screen-editor:not([hidden])'); pg.wait_for_selector('#vt-users:not([hidden])', state='attached')
     sichtbar = pg.evaluate("[...document.querySelectorAll('[id^=vt-]')].filter(b => !b.hidden).map(b => b.id.slice(3))")
     check('Administrator in der Verwaltung (Single Sign-on mit zweitem Faktor): Import, Nutzer, E-Mail, Protokoll; kein Angebot, kein „Schutz“, kein System (Modul Sicherheit)',
           {'master', 'kunden', 'importe', 'users', 'mail', 'log'} <= set(sichtbar) and not {'edit', 'schutz', 'sec'} & set(sichtbar), sichtbar)
@@ -1305,7 +1305,7 @@ with sync_playwright() as pw:
     pg.set_viewport_size({'width': 1280, 'height': 900})
     pg.goto(W + '/admin/'); pg.wait_for_selector('#screen-editor:not([hidden])')
     try:
-        pg.wait_for_function("!document.querySelector('#vt-users').hidden", timeout=10000)
+        pg.wait_for_selector('#vt-users:not([hidden])', state='attached', timeout=10000)
     except Exception:
         pass
     _zustand = pg.evaluate("({ url: location.href, titel: document.title, sichtbar: [...document.querySelectorAll('[role=tab][id^=vt-]')].filter(b => !b.hidden).map(b => b.id.slice(3)), "
@@ -1378,14 +1378,16 @@ with sync_playwright() as pw:
         with pg.expect_response(lambda r: 'action=security_save' in r.url) as antwort2:
             pg.click('#sic-dlg .sic-dfuss [type=submit]')
         check('Administrator (zweiter Faktor bei Keycloak) speichert Zwei-Faktor-Pflicht „Administratoren“ (200)', antwort2.value.status == 200, antwort2.value.status)
-        pg.wait_for_function("!document.querySelector('#sic-dlg[open]')")
+        # Warten über Selektoren statt wait_for_function("…"): ein Text-Prädikat wertet Playwright beim Nachprüfen mit eval aus –
+        # die CSP (script-src 'self', wie im Betrieb) verbietet das; es klappte nur, wenn die Bedingung sofort galt (wackelig)
+        pg.wait_for_selector('#sic-dlg[open]', state='detached')
         if twofa_vorher != 'admins':   # Ausgangszustand für die weiteren Prüfungen wiederherstellen
             pg.click('[data-e="e-anmeldung"]'); pg.wait_for_selector('#sic-dlg[open] #sec-form')
             pg.select_option('#sec-form [name="twofa"]', twofa_vorher)
             with pg.expect_response(lambda r: 'action=security_save' in r.url) as antwort3:
                 pg.click('#sic-dlg .sic-dfuss [type=submit]')
             check('… Ausgangszustand wiederhergestellt', antwort3.value.status == 200, antwort3.value.status)
-            pg.wait_for_function("!document.querySelector('#sic-dlg[open]')")
+            pg.wait_for_selector('#sic-dlg[open]', state='detached')
     # Bestätigung über ein Recht (require_perm_confirmed, z. B. Kunden pflegen, Wochenangebot senden): ebenfalls erneute
     # Anmeldung bei Keycloak – nie die hier gesperrte Passwortabfrage (sonst wäre die Aktion nicht mehr bestätigbar)
     pg.goto(W + '/admin/'); pg.wait_for_selector('#screen-editor:not([hidden])')   # Single Sign-on auf die Verwaltung
@@ -1540,8 +1542,15 @@ with sync_playwright() as pw:
     check('… angemeldet und mit dem Mitarbeiterkonto verknüpft', st.get('loggedIn') and st['user']['username'] == 'sven.start', st.get('user'))
     code, aus = konten('sperren', 'sven.start')
     check('Konsole: Konto gesperrt', code == 0 and 'gesperrt' in aus, aus)
-    pg.wait_for_function("fetch('../api/?action=status').then(r => r.status === 401)", polling=500, timeout=15000)
-    check('… und sofort überall abgemeldet (Back-Channel-Logout)', True)
+    # bis zu 15 s auf den Zustand warten (vorher wait_for_function mit Text-Prädikat: lieferte schon beim ersten Versuch
+    # das Promise als „wahr“ und prüfte damit nichts; Nachprüfen per eval verbietet ohnehin die CSP)
+    _status = []
+    for _ in range(30):
+        _status.append(pg.evaluate("fetch('../api/?action=status').then(r => r.status)"))
+        if _status[-1] == 401:
+            break
+        pg.wait_for_timeout(500)
+    check('… und sofort überall abgemeldet (Back-Channel-Logout)', _status[-1] == 401, _status)
     pg.goto(D + '/'); pg.wait_for_selector('#username'); pg.fill('#username', 'sven.start'); pg.fill('#password', SVEN['eigen']); pg.click('#kc-login')
     pg.wait_for_load_state()
     check('gesperrtes Konto: keine Anmeldung', pg.url.startswith(L) and pg.locator('#db-grid').count() == 0, pg.url)
