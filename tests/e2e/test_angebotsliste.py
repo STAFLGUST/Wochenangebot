@@ -19,6 +19,16 @@ with sync_playwright() as pw:
     pg.goto(B + '/'); pg.wait_for_selector('.al tr.row')
     check('default view is the offer list', pg.is_visible('.al') and pg.get_attribute('#modebar [data-mode=angebot]', 'aria-checked') == 'true' and pg.is_hidden('#view-seg') and not pg.is_visible('table.grid'))
     check('title like the printed list', 'Freibleibendes Angebot für die KW 43 - 2026' in pg.inner_text('.al-head'))
+    # Gemeldet 05.11.2026: Titel aus dem früheren Import nannte die alte KW („KW 43“ im Angebot der KW 45) –
+    # die Überschrift nimmt immer die Woche des Angebots
+    import json as _jt
+    _raw = storage_raw('angebot'); _doc = _jt.loads(_raw[_raw.index('{'):])
+    storage_write('angebot', dict(_doc, meta=dict(_doc['meta'], week=45)))
+    _kw = br.new_page(viewport={'width': 1440, 'height': 1000}); _kw.on('pageerror', lambda e: errs.append(str(e)))   # eigene Seite (eigener Service Worker)
+    _kw.goto(B + '/?r=kw'); _kw.wait_for_selector('.al tr.row')
+    _kopf = _kw.inner_text('.al-head')
+    check('title follows the offer week, not the imported title (KW 45 instead of 43)', 'Freibleibendes Angebot für die KW 45 - 2026' in _kopf and 'KW 43' not in _kopf, _kopf)
+    _kw.close(); storage_write('angebot', _doc)
     check('sections as headings', pg.locator('.al-st').count() == 4 and 'Eigene Zerlegung' in pg.locator('.al-st').first.inner_text(), pg.locator('.al-st').count())
     check('one block per group, every article exactly once', pg.locator('.al-grp').count() >= 30 and pg.locator('.al tr.row').count() == 276
           and len(set(pg.eval_on_selector_all('.al tr.row', 'rs => rs.map(r => r.dataset.id)'))) == 276, (pg.locator('.al-grp').count(), pg.locator('.al tr.row').count()))

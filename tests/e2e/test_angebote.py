@@ -232,11 +232,16 @@ with sync_playwright() as p:
     check('Fenster: Überschrift vorbelegt, noch keine Artikel', a.input_value('#wb-titel') == 'Unsere Empfehlung der Woche' and a.locator('#wb-liste [data-wid]').count() == 0)
     a.fill('#wb-titel', 'Aktion der Woche'); a.fill('#wb-text', 'Nur solange der Vorrat reicht.')
     id01, id23 = row(a, '10601').get_attribute('data-id'), row(a, '10823').get_attribute('data-id')
-    # Artikelauswahl (gemeinsames Fenster): Filter „nur in diesem Angebot“ an, Bestand ohne Filter, alle Gruppen
+    # Artikelauswahl (gemeinsames Fenster): Filter „nur in diesem Angebot“ nicht vorausgewählt (Inhaber 05.11.2026),
+    # Bestand ohne Filter, alle Gruppen
     a.click('#wb-auswahl'); a.wait_for_selector('#dlg-ez-pick[open] #ezp-list tr[data-code="10601"]')
-    check('Artikelauswahl für die Werbung: nur dieses Angebot, ohne Bestandsfilter, alle Gruppen', 'Werbung' in a.inner_text('#ez-pick-body .ezp-head')
-          and a.is_checked('#ezp-angebot') and 'Wochenangebot' in a.inner_text('label:has(#ezp-angebot)') and (a.locator('#ezp-bestand').count() == 0 or not a.is_checked('#ezp-bestand'))
-          and a.locator('#ezp-list tr.ezp-z').count() > 100 and all(c in set(codes(a)) or c.startswith('~') for c in a.locator('#ezp-list tr.ezp-z').evaluate_all('e => e.map(x => x.dataset.code)')), a.locator('#ezp-list tr.ezp-z').count())
+    alle_n = a.locator('#ezp-list tr.ezp-z').count()
+    check('Artikelauswahl für die Werbung: „nur in …“ nicht vorausgewählt, ohne Bestandsfilter, alle Gruppen', 'Werbung' in a.inner_text('#ez-pick-body .ezp-head')
+          and not a.is_checked('#ezp-angebot') and 'Wochenangebot' in a.inner_text('label:has(#ezp-angebot)') and (a.locator('#ezp-bestand').count() == 0 or not a.is_checked('#ezp-bestand'))
+          and alle_n > 100, alle_n)
+    a.check('#ezp-angebot'); a.wait_for_selector('#ezp-list tr.ezp-z')   # Filter wirkt sofort (hier ohne Bestand: gleiche Artikel)
+    check('… Filter von Hand: nur Artikel dieses Angebots', all(c in set(codes(a)) or c.startswith('~') for c in a.locator('#ezp-list tr.ezp-z').evaluate_all('e => e.map(x => x.dataset.code)')),
+          a.locator('#ezp-list tr.ezp-z').count())
     for c in ('10823', '10601'):
         a.fill('#ezp-q', c); a.wait_for_selector(f'#ezp-list tr[data-code="{c}"]'); a.click(f'#ezp-list tr[data-code="{c}"] .ezp-n')
     check('… Preis im Angebot fest angezeigt (kein Eingabefeld)', a.locator('#ezp-list tr[data-code="10601"] [data-preis]').count() == 0 and de(P10601) in a.inner_text('#ezp-list tr[data-code="10601"] .ezp-pr'))
@@ -258,7 +263,9 @@ with sync_playwright() as p:
     a.screenshot(path=SH + '/werbung-editor.png')
     tab(a, 'Edeka').click(); a.wait_for_selector('#offer-head:has-text("Edeka")')
     a.click('#btn-werbung'); a.click('#wb-auswahl'); a.wait_for_selector('#dlg-ez-pick[open] #ezp-list tr[data-code="10601"]')
-    check('Edeka (eigene Liste): Auswahl zeigt nur den einen Artikel des Angebots', a.locator('#ezp-list tr.ezp-z').count() == 1)
+    check('Edeka (eigene Liste): „nur in „Edeka““ nicht vorausgewählt, Auswahl zeigt auch Artikel außerhalb', not a.is_checked('#ezp-angebot') and a.locator('#ezp-list tr.ezp-z').count() > 1, a.locator('#ezp-list tr.ezp-z').count())
+    a.check('#ezp-angebot'); a.wait_for_function("document.querySelectorAll('#ezp-list tr.ezp-z').length === 1")
+    check('… Filter von Hand: nur der eine Artikel des Angebots', a.locator('#ezp-list tr.ezp-z').count() == 1)
     a.uncheck('#ezp-angebot'); a.fill('#ezp-q', '10823'); a.wait_for_selector('#ezp-list tr[data-code="10823"]'); a.click('#ezp-list tr[data-code="10823"] .ezp-n')
     check('… Filter aus: Artikel außerhalb des Angebots mit Preisfeld (Wochenpreis vorgeschlagen)', a.input_value('#ezp-list [data-preis="10823"]') == de(P10823))
     a.click('#ezp-ok'); a.wait_for_selector('#dlg-ez-pick', state='hidden'); a.wait_for_selector('#toast.show:has-text("aufgenommen")')
