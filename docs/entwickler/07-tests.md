@@ -236,6 +236,11 @@ with sync_playwright() as pw:
 
 - **Keine festen Wartezeiten.** Nie `wait_for_timeout` vor einem `check`, sondern auf den erwarteten Zustand warten:
   `wait_for_selector`, `wait_for_function`, `umgebung.wait_text()` oder `umgebung.until()` (Python-seitig).
+- **Unter echter CSP kein `wait_for_function` mit Text-Prädikat** (`tests/oidc/`: Apache und Caddy senden wie im Betrieb
+  `script-src 'self'`). Playwright wertet das Prädikat beim Nachprüfen mit `eval` aus, das die CSP verbietet – es klappt
+  nur, wenn die Bedingung schon beim ersten Versuch gilt (wackelig). Stattdessen Selektoren (`wait_for_selector(…,
+  state='attached'|'detached')`, `frame_locator(…).locator(…).wait_for()`, `wait_for_url(lambda u: …)`) oder
+  Python-seitig mit `evaluate` nachfragen. Die E2E-Tests laufen ohne die Seiten-CSP (der PHP-Testserver liest keine `.htaccess`).
 - **Ports und Adressen nur über `umgebung.py`** (`BASE`, `SMTP_PORT`, `SMTP_PORT2`, `AUX_PORT`). Die CI bricht ab, wenn
   in `tests/e2e/` außerhalb von `umgebung.py` eine Adresse `127.0.0.1:<Port>` steht.
 - **Hintergrundabgleich:** Der Eingabebereich zeigt bei beendeter Sitzung jederzeit die Anmeldemaske. Nach Abmelden,
