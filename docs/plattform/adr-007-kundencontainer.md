@@ -354,6 +354,9 @@ niemand (Stufe 1b).
   getrennten Daten erst `daten-trennen.sh zusammenfuehren` (Stufe 2a).
 - **Daten trennen:** `sh deploy/daten-trennen.sh status` (Stufe und Plan, ändert nichts), `trennen` (auf die höchste Stufe des
   eingespielten Stands), `zusammenfuehren` – Abschnitte Stufe 2a und 2b.
+- **Prüfung in der CI:** Die volle E2E-Suite läuft zusätzlich mit getrennten Daten (SQLite wie auf dem Server, höchste
+  Trennstufe des Stands, `WA_TEST_TRENNUNG=1`, Aufträge „Ende-zu-Ende-Tests (sqlite, getrennt, Teil k/3)“). So fällt vor dem
+  Merge auf, wenn neuer Code Daten am falschen Ort erwartet oder die Kundenseite interne Dokumente braucht.
 - **Postausgang:** `docker compose ps postausgang` (Zustand „healthy“ = Lebenszeichen frisch), `docker compose logs postausgang`
   (je Durchgang mit Versand eine Zeile). Steht der Dienst länger als 15 Minuten, nimmt das Portal keine Bestellwünsche an.
   Einführung: Release einspielen (erstellt den Dienst), danach einmal `sh deploy/postfach-schluessel.sh umziehen`.
