@@ -15,6 +15,8 @@ const PERMS = [
     'angebot.veroeffentlichen' => ['g' => 'Angebot', 'l' => 'Angebot veröffentlichen', 'k' => 'machen', 'd' => ['editor'], 'r' => []],
     'angebote.verwalten'       => ['g' => 'Angebot', 'l' => 'Kundenangebote anlegen und umbenennen', 'k' => 'machen', 'd' => ['editor'], 'r' => []],
     'angebote.loeschen'        => ['g' => 'Angebot', 'l' => 'Kundenangebote löschen, Wochenangebot nur für Kunden sichtbar machen', 'k' => 'machen', 'd' => [], 'r' => ['angebote.verwalten']],
+    // Export für WinAB (Auftrag des Inhabers 05.11.2026): ohne Standardrollen, nur wer es ausdrücklich bekommt
+    'angebot.winab_export'     => ['g' => 'Angebot', 'l' => 'Wochenangebot als CSV für WinAB exportieren (Artikelnummer und Preis des veröffentlichten Angebots)', 'k' => 'machen', 'd' => [], 'r' => []],
     'preisverlauf.sehen'       => ['g' => 'Preisverlauf', 'l' => 'Preisverlauf ansehen', 'k' => 'sehen', 'd' => ['viewer', 'editor'], 'r' => []],
     'preisverlauf.bearbeiten'  => ['g' => 'Preisverlauf', 'l' => 'Alte Angebotslisten hochladen und löschen', 'k' => 'machen', 'd' => ['editor'], 'r' => ['preisverlauf.sehen']],
     'bestand.sehen'            => ['g' => 'Bestand', 'l' => 'Bestand mit Mengen und MHD ansehen', 'k' => 'sehen', 'd' => ['viewer', 'editor'], 'r' => []],

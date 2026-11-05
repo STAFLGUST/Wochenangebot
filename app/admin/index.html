@@ -147,6 +147,7 @@
       <label class="check ed-chip"><input type="checkbox" id="only-changes"> Nur Änderungen</label>
       <span class="ed-hint">Preis: Zahl (23,30) · „a. Anfr.“</span>
       <span class="ed-sp"></span>
+      <button class="btn" type="button" id="btn-winab" hidden title="Veröffentlichtes Wochenangebot als CSV für WinAB herunterladen: Artikelnummer;Preis – steht ein Artikel mehrfach im Angebot, der höhere Preis"><svg class="i" aria-hidden="true"><use href="#i-download"/></svg>Export für WinAB</button>
       <button class="btn" type="button" id="btn-werbung" title="Artikel auf der Angebotsseite oben hervorheben (Werbung schalten)"><svg class="i" aria-hidden="true"><use href="#i-megaphone"/></svg>Werbung<span class="werb-n" id="werb-n" hidden></span></button>
       <button class="btn primary" type="button" id="btn-add-art"><svg class="i" aria-hidden="true"><use href="#i-plus"/></svg>Artikel hinzufügen</button>
     </div>
@@ -319,6 +320,7 @@
 <script src="../assets/vendor/qrcode.js"></script>
 <script src="../assets/stock-core.js"></script>
 <script src="../assets/admin.js"></script>
+<script src="../module/angebot/winab-export.js"></script>
 <script src="../assets/admin-verwaltung.js"></script>
 <script src="../assets/admin-rollen-vorschau.js"></script>
 <script src="../assets/admin-rollen.js"></script>
