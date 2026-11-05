@@ -2,7 +2,7 @@
 
 <!-- ERZEUGT von `python3 werkzeuge/doku.py erzeugen` – nicht von Hand ändern. Quelle: Funktionen und Kommentare im Code. Die CI prüft, dass diese Datei zum Code passt. -->
 
-108 Dateien, 1031 Funktionen – in der Reihenfolge der Datei, **fett** die Abschnitte. Text = erste Aussage des Kommentars direkt über der Funktion (Python: Docstring). Übersicht aller Module: [README.md](README.md).
+108 Dateien, 1056 Funktionen – in der Reihenfolge der Datei, **fett** die Abschnitte. Text = erste Aussage des Kommentars direkt über der Funktion (Python: Docstring). Übersicht aller Module: [README.md](README.md).
 
 ## `.github/scripts/apt_vorrat.py`
 
@@ -512,7 +512,9 @@ _Postausgang von innen (ADR-007, Zielarchitektur Kundenseite Regel 4)_
 - `postausgang_stand()` – Stand des Dienstes: Lebenszeichen und ob ein Postfach eingerichtet ist (die Kundenseite kann das selbst nicht prüfen)
 - `postausgang_versand_bereit()`
 - `postausgang_lauf(jetzt)` – Ein Durchgang des Dienstes: fällige Aufträge abarbeiten, gelegentlich alle Vorgänge prüfen, Lebenszeichen schreiben.
-- `postausgang_ausfuehren(a)` – Einen Auftrag ausführen.
+- `postausgang_ausfuehren(a)`
+- `postausgang_ereignisse(items)` – Ereignisse der Kundenseite: nur Sicherheitsereignisse (Anmeldesperre, Datenleck …), Texte gekürzt – Empfänger bestimmen die internen Einstellungen …
+- `postausgang_hinweis(a)` – Abmeldehinweis: Kunde aus den internen Stammdaten (nur die Kennung kommt aus dem Auftrag); nur wenn die Änderung dort auch gespeichert ist, höchstens …
 - `postausgang_bestellung(nr, versuche)` – Bestellwunsch: offene Versandaufträge senden; sicher nicht zugestellte nach POSTAUSGANG_WIEDERHOLEN erneut versuchen.
 - `postausgang_wieder(a, sekunden)`
 
@@ -690,9 +692,12 @@ _Shared persistence for HTTP and maintenance tools._
 
 **Speicherbereiche (ADR-007 Stufe 2)**
 
+- `store_stufe()` – Trennstufe (Inhalt von daten/.daten-getrennt): 0 = nicht getrennt, 1 = interne Dokumente getrennt (Stufe 2a), 2 = zusätzlich Kundendokument geteilt, …
 - `store_getrennt()`
 - `store_bereich(name)`
 - `store_ordner(bereich)` – Ordner eines Bereichs; Kundenseite (kein WA_DATEN_INTERN) → StoreKeinZugang für „intern“
+- `store_innen()` – Sieht dieser Server die internen Dokumente?
+- `store_sichtbar(name)` – Kann dieser Server das Dokument lesen?
 - `store_spur(name)` – Prüfhilfe (nur Tests, WA_SPUR_INTERN=1): Kundenseite fragt ein internes Dokument an – ins Serverprotokoll.
 - `store_path(name)`
 - `store_mode(bereich)`
@@ -848,20 +853,47 @@ _Bereitstellung eines Stands_
 
 _Daten trennen (ADR-007 Stufe 2): interne Dokumente aus daten/ in daten-intern/ verschieben – bzw. zurückführen._
 
-- `kundenseite(regeln)`
+- `regeln_laden(regeln)`
+- `kundenseite(regeln, stufe)` – Dokumente im gemeinsamen Ordner bei dieser Trennstufe: (Namen, Präfixe aus Mustern „name/*“) – alle anderen sind intern.
+- `kunden_felder(regeln)`
 - `ist_intern(name, ks)` – Wie store_bereich() in app/api/storage.php: Sidecars und Dokumente der Kundenseite bleiben im gemeinsamen Ordner.
+- `stufe_lesen(haupt)`
+
+**Dokumente lesen und schreiben (Dateien oder SQLite, wie app/api/storage.php)**
+
+- `sqlite_aktiv(root)`
+- `dok_lesen(root, name)`
+- `json_text(wert)`
+- `dok_schreiben(root, name, wert)`
+- `dok_loeschen(root, name)`
+
+**Teilung des Kundendokuments und der Bestell-Einstellungen (Stufe 2)**
+
+- `email_maske(e)` – Wie kunden_email_maske() in app/api/lib/kunden.php: erstes Zeichen, Punkte, Domain.
+- `kunden_teilen(kunden, felder, stamm)` – kunden (alle Felder) → (kunden mit Portalfeldern, kundenstamm).
+- `kunden_zusammen(kunden, stamm)` – Umkehrung von kunden_teilen: Portalfelder aus kunden, übrige Felder aus kundenstamm; emailMaske entfällt.
+- `hat_interne_felder(kunden, felder)`
+
+**Plan**
+
 - `interne_dateien(root, ks)` – Datendateien (*.php) interner Dokumente im Ordner – im SQLite-Modus auch übrig gebliebene alte Dateien.
 - `ablage_dateien(root)`
-- `sqlite_aktiv(root)`
 - `interne_zeilen(root, ks)`
 - `leer(intern)` – Zielordner ohne Daten (Kennzeichen, Sperrdateien und leere Ordner sind erlaubt).
 - `kopieren(quelle, ziel, rel)`
 - `ordner_aufraeumen(root, rels)`
 - `db_anlegen(ziel, zeilen)` – Neue Datenbank im Zielordner mit genau diesen Zeilen (wie datenbank.py migrate: erst komplett, dann aktiv).
-- `kennzeichen(p)`
-- `plan(haupt, intern, ks)`
-- `trennen(haupt, intern, ks)`
-- `zusammenfuehren(haupt, intern, ks)`
+- `db_ergaenzen(ziel, zeilen)` – Zeilen in die vorhandene Datenbank des Zielordners übernehmen (Hochstufen) und vergleichen.
+- `kennzeichen(p, stufe)`
+- `umstellung_planen(haupt, intern, regeln, stufe)` – Neue interne Dokumente der Stufe 2 aus dem gemeinsamen Ordner: {Name: Inhalt}.
+- `bereinigung_noetig(haupt, regeln)`
+- `plan(haupt, intern, regeln, ziel)`
+
+**Trennen und Zusammenführen**
+
+- `trennen(haupt, intern, regeln, ziel)`
+- `bereinigen(haupt, intern, regeln)` – Ab Stufe 2: kunden auf die Portalfelder kürzen, bestellung ohne Adressen.
+- `zusammenfuehren(haupt, intern, regeln)`
 - `main()`
 
 ## `deploy/datenbank.py`
@@ -939,6 +971,12 @@ _Test von deploy/daten_trennen.py (ADR-007 Stufe 2: interne Dokumente aus dem ge
 - `baum(root)`
 - `zeilen(root)`
 - `php(code, daten, intern)`
+
+**Trennstufe 2 (ADR-007 Stufe 2b): Kundendokument teilen, Bestand/Stammdaten/Postfächer innen**
+
+- `php_lib(code, daten, intern)` – Anwendung mit allen Funktionen (lib/laden.php) gegen diesen Datenordner – Mitarbeiterseite mit intern, Kundenseite ohne.
+- `aufbau2(t)`
+- `portal(c)`
 
 ## `tests/deploy/test_datenbank.py`
 
@@ -1778,6 +1816,8 @@ _Regelwerk der STAFL-Plattform prüfen und Änderungsfolgen ermitteln (nur Pytho
 **Speicherbereiche (ADR-007 Stufe 2)**
 
 - `kundenseite_dokumente(rw)` – Dokumente der Kundenseite: (genaue Namen, Präfixe aus Mustern „name/*“) – alle anderen sind intern.
+- `ab_stufe_dokumente(rw)` – Interne Dokumente, die erst mit einer späteren Trennstufe umziehen: Name → Stufe.
+- `kunden_felder(rw)` – Felder eines Kunden, die ab Trennstufe 2 im gemeinsamen Ordner bleiben (Portal); alle übrigen liegen in kundenstamm.
 - `bereiche_php(rw)`
 
 **Aktionsregister**

@@ -91,7 +91,8 @@ Der Snapshot nimmt auch die Dateiablage `daten/dateien/` mit (hochgeladene Dokum
 Zeitpunkt: `daten-<Zeit>.tar.gz` (nach `daten/`) und `intern-<Zeit>.tar.gz` (nach `daten-intern/`, mit eigener Datenbank im
 SQLite-Betrieb). Beide gehören zusammen; nie Archive verschiedener Zeitpunkte mischen. Umschalten (`datenbank-umschalten.sh`)
 und Altdateien (`altdateien.sh`) brechen bei getrennten Daten ab: erst `daten-trennen.sh zusammenfuehren`, danach wieder
-`trennen`.
+`trennen`. Ab Trennstufe 2 (Stufe 2b) gehören auch Kundenstamm (`kundenstamm`), Bestand, Stammdaten und Postfach-Zugänge zum
+Archiv `intern-…`; `daten-…` enthält vom Kundendokument nur die Portalfelder – beide Archive zusammen ergeben den vollständigen Stand.
 
 ## Rückfall ohne Verlust neuer Daten
 

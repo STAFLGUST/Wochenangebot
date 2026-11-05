@@ -248,7 +248,11 @@ function einzel_von_kennung(string $oid): ?array
 function einzel_model(array $e): array
 {
     $master = [];
-    foreach ((store_read('stammdaten')['articles'] ?? []) as $a) $master[code_key((string)$a['code'])] = $a;
+    if (!store_sichtbar('stammdaten')) {   // Kundenseite ab Trennstufe 2: Merkmale aus dem Auszug (lib/bestand.php)
+        foreach ((artikelauszug()['merkmale'] ?? []) as $k => $m) if (is_array($m)) $master[(string)$k] = $m;
+    } else {
+        foreach ((store_read('stammdaten')['articles'] ?? []) as $a) $master[code_key((string)$a['code'])] = $a;
+    }
     $pub = store_read('angebot');   // Merkmale (Fleischart, Herkunft, Zustand) ergänzend aus dem Wochenangebot, nie dessen Preise
     if ($pub) foreach ($pub['items'] ?? [] as $it) {
         $k = code_key((string)($it['code'] ?? ''));

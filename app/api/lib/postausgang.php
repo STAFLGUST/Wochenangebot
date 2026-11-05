@@ -99,6 +99,10 @@ function postausgang_lauf(?int $jetzt = null): array
         }
         $stand['durchsicht'] = $jetzt;
     }
+    // Auszug aus Bestand und Stammdaten für die Kundenseite (ab Trennstufe 2): bei jedem Durchgang nach Zeitstempel, bei der
+    // Durchsicht vollständig – falls eine Änderung den Auszug nicht neu geschrieben hat (z. B. Abbruch dazwischen)
+    try { artikelauszug_aktualisieren(isset($stand['durchsicht']) && $stand['durchsicht'] === $jetzt); }
+    catch (Throwable $e) { store_rollback(); error_log('[postausgang] Artikelauszug: ' . $e->getMessage()); }
     // Lebenszeichen (höchstens einmal je Minute schreiben) und ob überhaupt ein Postfach eingerichtet ist
     $versand = mail_cfg() !== null;
     if ((int)($stand['t'] ?? 0) <= $jetzt - 60 || ($stand['versand'] ?? null) !== $versand || isset($stand['durchsicht']) && $stand['durchsicht'] === $jetzt) {
@@ -107,19 +111,52 @@ function postausgang_lauf(?int $jetzt = null): array
     }
     return $r;
 }
-/* Einen Auftrag ausführen. Rückgabe: null = erledigt, false = endgültig fehlgeschlagen, int = erneut versuchen in Sekunden */
+/* Einen Auftrag ausführen. Rückgabe: null = erledigt, false = endgültig fehlgeschlagen, int = erneut versuchen in Sekunden.
+   Aufträge stammen von der Kundenseite und gelten als unzuverlässig (ADR-007 Stufe 2b): Empfänger und Kundendaten kommen nie aus
+   dem Auftrag, sondern aus den internen Einstellungen und Stammdaten; Benachrichtigungen nur der Art, die die Kundenseite auslöst. */
+const POSTAUSGANG_HINWEIS_TAG = 10;   // Abmeldehinweise je Kunde und Tag höchstens
 function postausgang_ausfuehren(array $a)
 {
     switch ($a['art'] ?? '') {
         case 'bestellung': return postausgang_bestellung((string)($a['nr'] ?? ''), (int)($a['versuche'] ?? 0));
-        case 'benachrichtigung': notify_verarbeiten(is_array($a['items'] ?? null) ? $a['items'] : []); return null;
-        case 'hinweis':
-            $c = is_array($a['kunde'] ?? null) ? $a['kunde'] : null;
-            if ($c && ($c['id'] ?? '') !== '') abmelde_hinweis_senden($c, !empty($a['ab']), (string)($a['t'] ?? now()));
-            return null;
+        case 'benachrichtigung': notify_verarbeiten(postausgang_ereignisse($a['items'] ?? null)); return null;
+        case 'hinweis': postausgang_hinweis($a); return null;
     }
     error_log('[postausgang] unbekannter Auftrag: ' . ($a['art'] ?? '?'));
     return false;
+}
+/* Ereignisse der Kundenseite: nur Sicherheitsereignisse (Anmeldesperre, Datenleck …), Texte gekürzt – Empfänger bestimmen die
+   internen Einstellungen (notify_targets) */
+function postausgang_ereignisse($items): array
+{
+    $out = [];
+    foreach (is_array($items) ? array_slice($items, 0, 20) : [] as $it) {
+        if (!is_array($it) || ($it['ev'] ?? '') !== 'sicherheit' || !is_string($it['title'] ?? null)) continue;
+        $facts = [];
+        foreach (is_array($it['facts'] ?? null) ? array_slice($it['facts'], 0, 12) : [] as $f) {
+            if (is_array($f) && is_scalar($f[0] ?? null) && is_scalar($f[1] ?? null)) $facts[] = [mb_substr((string)$f[0], 0, 60), mb_substr((string)$f[1], 0, 300)];
+        }
+        $t = is_string($it['t'] ?? null) && strtotime($it['t']) ? $it['t'] : now();
+        $out[] = ['ev' => 'sicherheit', 'title' => mb_substr($it['title'], 0, 200), 'facts' => $facts, 't' => $t];
+    }
+    return $out;
+}
+/* Abmeldehinweis: Kunde aus den internen Stammdaten (nur die Kennung kommt aus dem Auftrag); nur wenn die Änderung dort auch
+   gespeichert ist, höchstens POSTAUSGANG_HINWEIS_TAG je Kunde und Tag */
+function postausgang_hinweis(array $a): void
+{
+    $kid = is_array($a['kunde'] ?? null) ? (string)($a['kunde']['id'] ?? '') : '';
+    $ab = !empty($a['ab']);
+    $c = null;
+    foreach (customers_load()['customers'] as $x) if (($x['id'] ?? '') === $kid) $c = $x;
+    if ($c === null) { error_log('[postausgang] Abmeldehinweis: Kunde unbekannt'); return; }
+    $angemeldet = !array_key_exists('mailAngebot', $c) || !empty($c['mailAngebot']);
+    if ($angemeldet === $ab) { error_log('[postausgang] Abmeldehinweis: Stand des Kunden ' . $kid . ' passt nicht – verworfen'); return; }
+    $seit = gmdate('Y-m-d\TH:i:s', time() - 86400); $n = 0;
+    foreach (store_read('mailversand') ?? [] as $e) if (($e['typ'] ?? '') === 'hinweis' && ($e['kid'] ?? '') === $kid && (string)($e['t'] ?? '') >= $seit) $n++;
+    if ($n >= POSTAUSGANG_HINWEIS_TAG) { error_log('[postausgang] Abmeldehinweis: Tagesgrenze für Kunde ' . $kid); return; }
+    $t = is_string($a['t'] ?? null) && strtotime($a['t']) ? $a['t'] : now();
+    abmelde_hinweis_senden($c, $ab, $t);
 }
 /* Bestellwunsch: offene Versandaufträge senden; sicher nicht zugestellte nach POSTAUSGANG_WIEDERHOLEN erneut versuchen.
    Danach (oder bei unklarem Ausgang sofort) bleibt der Vorgang mit „E-Mail offen“ in den Bestellwünschen stehen – dort kann

@@ -2,11 +2,15 @@
 # Daten trennen (ADR-007 Stufe 2): interne Dokumente (Personal, Nutzer, CRM, Controlling, QS, Dateiablage …) aus dem gemeinsamen
 # Ordner daten/ in daten-intern/ verschieben, den nur die Mitarbeiterseite (app-mitarbeiter) und der Postausgang einbinden –
 # die Kundenseite (app) sieht sie danach nicht mehr. Welche Dokumente die Kundenseite braucht: regeln/datenverantwortung.toml.
+# Trennstufe 1 (Stufe 2a): interne Dokumente. Trennstufe 2 (Stufe 2b): zusätzlich Bestand, Stammdaten, Postfächer, Vorlage und
+# Benachrichtigungen innen, Kundendokument geteilt (Anschrift, E-Mail, Warenwirtschaft → kundenstamm), Empfänger der Bestellwünsche
+# innen. `trennen` bringt die Daten auf die höchste Stufe des eingespielten Stands – auch von Stufe 1 auf 2.
 # Nur mit Freigabe des Inhabers, im Wartungsfenster (die Anwendung steht kurz). Im Installationsordner als root:
 #
-#   sh deploy/daten-trennen.sh status            # Zustand und Plan (ändert nichts, Anwendung läuft weiter)
+#   sh deploy/daten-trennen.sh status            # Zustand, Stufe und Plan (ändert nichts, Anwendung läuft weiter)
 #   sh deploy/daten-trennen.sh trennen           # Sicherung → Stopp → trennen → Start
-#   sh deploy/daten-trennen.sh zusammenfuehren   # zurück in einen Ordner – vor einem Rückfall auf ein Release vor der Trennung
+#   sh deploy/daten-trennen.sh zusammenfuehren   # zurück in einen Ordner – vor einem Rückfall auf ein Release mit niedrigerer Stufe
+#                                                # (danach mit dem älteren Release erneut `trennen`, falls es eine Trennung kennt)
 #
 # Ablauf und Abbruchverhalten: deploy/daten_trennen.py. Nach einem Fehler bleibt die Anwendung absichtlich gestoppt.
 set -eu
@@ -51,7 +55,8 @@ fi
 # shellcheck disable=SC2086
 $DOCKER compose start $APPS
 if [ "$AKTION" = trennen ]; then
-  echo "Daten getrennt. Jetzt prüfen: Kundenseite (Angebot, Kundenanmeldung, Bestellwunsch), Dashboard, Personal/QS-Dokumente."
+  echo "Daten getrennt (Stufe $(cat daten/.daten-getrennt 2>/dev/null)). Jetzt prüfen: Kundenseite (Angebot, Kundenanmeldung, Bestellwunsch mit"
+  echo "Kopie), Dashboard (Kunden mit Anschrift, Bestand, E-Mail-Einstellungen), Personal/QS-Dokumente; sh deploy/sichern.sh --jetzt."
 else
-  echo "Daten wieder in einem Ordner. Erst jetzt auf ein Release vor der Trennung zurückgehen."
+  echo "Daten wieder in einem Ordner. Erst jetzt auf ein älteres Release zurückgehen."
 fi

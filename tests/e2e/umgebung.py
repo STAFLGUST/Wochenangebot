@@ -23,7 +23,8 @@ def datenordner(name):
     import sys
     sys.path.insert(0, os.path.join(REPO, 'deploy'))
     import daten_trennen
-    return os.environ['UINTERN'] if daten_trennen.ist_intern(name, daten_trennen.kundenseite()) else data
+    ks = daten_trennen.kundenseite(stufe=daten_trennen.stufe_lesen(__import__('pathlib').Path(data)))   # Einteilung der Trennstufe im Kennzeichen
+    return os.environ['UINTERN'] if daten_trennen.ist_intern(name, ks) else data
 
 
 def storage_raw(name):

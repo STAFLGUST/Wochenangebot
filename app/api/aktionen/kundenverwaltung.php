@@ -111,7 +111,7 @@ switch ($action) {
                 usort($d['customers'], function ($x, $y) { return strcasecmp($x['firma'], $y['firma']); });
                 $d['rev'] = (int)$d['rev'] + 1;
                 $d['updatedAt'] = now();
-                store_write('kunden', $d);
+                customers_save($d);
                 return [$d, $row, $old, $pwNew, $ended];
             });
             [$d, $row, $old, $pwNew, $ended] = $res;
@@ -142,7 +142,7 @@ switch ($action) {
                     array_splice($d['customers'], $i, 1);
                     $d['rev'] = (int)$d['rev'] + 1;
                     $d['updatedAt'] = now();
-                    store_write('kunden', $d);
+                    customers_save($d);
                     return [$d, $c];
                 }
                 fail('Kunde nicht gefunden.', 404);
