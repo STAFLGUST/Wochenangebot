@@ -36,7 +36,7 @@ import urllib.parse
 from playwright.sync_api import sync_playwright
 
 from kunden_hilfe import Client
-from umgebung import BASE, SH, WORK, storage_raw, storage_sqlite, storage_write
+from umgebung import BASE, SH, WORK, datenordner, storage_raw, storage_sqlite, storage_write
 
 PW = 'Sicheres-Passwort-1'
 res = []
@@ -319,14 +319,14 @@ assert teil(INA, '2025-03', TEILE_C['2025-03'], upload='d' * 32)[0] == 200
 # alter Rest einer abgebrochenen Übernahme (älter als ein Tag) wird aufgeräumt
 REST = 'controlling-umsatzteile/' + 'e' * 32 + '-2025-05'
 if not storage_sqlite():
-    os.makedirs(os.path.join(os.environ['UDATA'], 'controlling-umsatzteile'), exist_ok=True)
+    os.makedirs(os.path.join(datenordner(REST), 'controlling-umsatzteile'), exist_ok=True)
 storage_write(REST, {'von': 'x', 't': 0, 'monat': '2025-05', 'hash': '0' * 64, 'zeilen': []})
 if storage_sqlite():
     import sqlite3
-    with sqlite3.connect(os.environ['UDATA'] + '/.sqlite/store.sqlite') as db:
+    with sqlite3.connect(datenordner(REST) + '/.sqlite/store.sqlite') as db:
         db.execute('UPDATE documents SET mtime=? WHERE name=?', (1000, REST))
 else:
-    os.utime(os.path.join(os.environ['UDATA'], REST + '.php'), (1000, 1000))
+    os.utime(os.path.join(datenordner(REST), REST + '.php'), (1000, 1000))
 st, u = uebernehmen(INA, DATEN_C, v['stand'], upload='d' * 32)
 idx = dokument('controlling-umsatzdaten')
 check('April gelöscht, März ersetzt', st == 200 and '2025-04' not in idx['monate'] and dokument('controlling-umsatzdaten/2025-04') is None

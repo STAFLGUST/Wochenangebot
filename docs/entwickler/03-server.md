@@ -277,6 +277,20 @@ Stufe 2 ist das Kundendokument geteilt: Kundendaten immer über `customers_load(
 `store_write('kunden', …)` direkt) – die Funktionen führen `kunden` (Portalfelder, `felder_kundenseite`) und `kundenstamm`
 zusammen bzw. teilen sie auf; die Kundenseite sieht und schreibt nur die Portalfelder.
 
+**Veröffentlichte Dokumente (Trennstufe 3, ADR-007 Stufe 2c):** `bereich = "veroeffentlicht"` (mit `trennstufe = 3`) für
+Dokumente, die nur die Mitarbeiterseite schreibt und die Kundenseite liest (Angebote, Einstellungen …). Der Code bleibt gleich
+(`store_read`/`store_write`/`with_lock`): Die Speicherschicht schreibt innen und legt die Kopie im gemeinsamen Ordner ab
+(`store_kopie`), die Kundenseite liest die Kopie und kann nicht schreiben (`StoreKeinZugang`). Ein Dokument, das die Kundenseite
+selbst schreibt (Zähler, Sitzungen, Bestellwünsche …), darf nie `veroeffentlicht` sein – die Gruppe `datentrennung` zeigt das.
+
+**Protokoll (Trennstufe 4, ADR-007 Stufe 2d):** Einträge immer über `audit()` schreiben und über `protokoll_monat($monat)` /
+`protokoll_monate()` lesen – nie `store_read('protokoll/…')` direkt: Ab Stufe 4 liegt das Protokoll der Mitarbeiterseite innen, das
+der Kundenseite in `kundenprotokoll/*`; die Funktionen führen beide zusammen.
+
+**Je Seite (Trennstufe 5, ADR-007 Stufe 2e):** `bereich = "je_seite"` für Dokumente, die beide Seiten für sich schreiben (Zähler,
+Anmeldeversuche, Live-Verkehr). Jede Seite liest und schreibt ihr eigenes; für Übersichten der Mitarbeiterseite beide lesen:
+`store_aussen_lesen($name)` (Beispiele `fw_verkehr_alle()`, `logins_alle()`), ändern nur über `store_aussen_aendern($name, $fn)`.
+
 **Sperren und Transaktionen:**
 
 - Dateien: `with_lock` sperrt `$DATA/.<name>.lock` mit `flock(LOCK_EX)`. Verschachtelt derselbe Name → keine zweite

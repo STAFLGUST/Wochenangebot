@@ -4,7 +4,10 @@
 # die Kundenseite (app) sieht sie danach nicht mehr. Welche Dokumente die Kundenseite braucht: regeln/datenverantwortung.toml.
 # Trennstufe 1 (Stufe 2a): interne Dokumente. Trennstufe 2 (Stufe 2b): zusätzlich Bestand, Stammdaten, Postfächer, Vorlage und
 # Benachrichtigungen innen, Kundendokument geteilt (Anschrift, E-Mail, Warenwirtschaft → kundenstamm), Empfänger der Bestellwünsche
-# innen. `trennen` bringt die Daten auf die höchste Stufe des eingespielten Stands – auch von Stufe 1 auf 2.
+# innen. Trennstufe 3 (Stufe 2c): Veröffentlichtes (Angebote, Sicherheit, Firewall, Wartung …) maßgeblich innen, außen nur eine Kopie.
+# Trennstufe 4 (Stufe 2d): Protokoll der Mitarbeiterseite innen, die Kundenseite schreibt kundenprotokoll/*.
+# Trennstufe 5 (Stufe 2e): Anmeldeversuche, Zähler und Live-Verkehr je Seite (die Kundenseite beginnt mit leeren Zählern).
+# `trennen` bringt die Daten auf die höchste Stufe des eingespielten Stands – auch von Stufe 1 auf 5.
 # Nur mit Freigabe des Inhabers, im Wartungsfenster (die Anwendung steht kurz). Im Installationsordner als root:
 #
 #   sh deploy/daten-trennen.sh status            # Zustand, Stufe und Plan (ändert nichts, Anwendung läuft weiter)

@@ -46,6 +46,16 @@ def interne_im_gemeinsamen_ordner():
     return out
 
 
+def roh_v(ordner, name):
+    """Dokument direkt aus einem Ordner (je Seite getrennte Dokumente liegen in beiden)"""
+    if os.path.isfile(ordner + '/.sqlite-active'):
+        with sqlite3.connect(ordner + '/.sqlite/store.sqlite') as c:
+            r = c.execute('SELECT payload FROM documents WHERE name=?', (name,)).fetchone()
+        return json.loads(r[0]) if r else None
+    p = ordner + '/' + name + '.php'
+    return json.loads(open(p, encoding='utf-8').read().split('?>\n', 1)[-1]) if os.path.isfile(p) else None
+
+
 def spur():
     with open(LOG, encoding='utf-8', errors='replace') as f:
         return [z.strip() for z in f if '[speicher]' in z]
@@ -133,7 +143,12 @@ try:
     check('Kundenseite: Falle für Angriffswerkzeuge (404)', Client('203.0.113.41').call('waf_probe&p=wp-login.php')[0] == 404)
     monat = time.strftime('%Y-%m', time.gmtime())
     check('Kundenseite: Protokoll wird weiter geschrieben (Anmeldung, Bestellwunsch, Abmeldung)', {'kunde_login', 'kunde_login_fail', 'bestellung', 'kunde_abmeldung'}
-          <= {e.get('a') for e in (doc('protokoll/' + monat) or [])}, sorted({e.get('a') for e in (doc('protokoll/' + monat) or [])}))
+          <= {e.get('a') for e in (doc('kundenprotokoll/' + monat) or [])}, sorted({e.get('a') for e in (doc('kundenprotokoll/' + monat) or [])}))
+    check('Stufe 4: Protokoll der Kundenseite ohne Einträge der Mitarbeiterseite; deren Protokoll liegt innen', not any(e.get('r') not in ('kunde', '') or e.get('a') in ('user', 'customers', 'login')
+          for e in (doc('kundenprotokoll/' + monat) or [])) and any(e.get('a') == 'customers' for e in (doc('protokoll/' + monat) or []))
+          and not os.path.exists(DATA + '/protokoll'), sorted({(e.get('a'), e.get('r')) for e in (doc('kundenprotokoll/' + monat) or [])}))
+    lg = A.call('log&month=' + monat)[1]
+    check('Mitarbeiterseite zeigt beide Protokolle zusammen', {'kunde_login', 'bestellung', 'customers', 'user'} <= {e.get('a') for e in lg.get('entries', [])}, sorted({e.get('a') for e in lg.get('entries', [])}))
     neu = spur()[vorher:]
     check('Kundenseite: keine einzige Anfrage nach internen Dokumenten (Serverprotokoll)', not neu, neu[:8])
     check('Kundenseite: nichts Internes in den gemeinsamen Ordner geschrieben', not interne_im_gemeinsamen_ordner(), interne_im_gemeinsamen_ordner()[:5])
@@ -144,7 +159,12 @@ try:
     check('Versandprotokoll im internen Ordner', any(x.get('by') == 'Postausgang' for x in (doc('mailversand') or [])) and not os.path.exists(DATA + '/mailversand.php'))
 
     # ---------- Stufe 2: Teilung, Empfänger und Inhalt nur von innen ----------
-    check('Trennstufe 2 im Kennzeichen', open(DATA + '/.daten-getrennt').read().strip() == '2')
+    check('höchste Trennstufe im Kennzeichen (5)', open(DATA + '/.daten-getrennt').read().strip() == '5')
+    aussen_v, innen_v = roh_v(DATA, 'verkehr') or [], roh_v(INTERN, 'verkehr') or []
+    check('Stufe 5: Live-Verkehr der Mitarbeiterseite (erfolgreiche Mitarbeiteranmeldung) nur innen, nicht im gemeinsamen Ordner',
+          any(e.get('why') == 'Anmeldung' and 'action=login' in e.get('q', '') for e in innen_v)
+          and not any(e.get('why') == 'Anmeldung' and 'action=login' in e.get('q', '') for e in aussen_v)
+          and any(e.get('why') == 'Anmeldung' and 'kunde_login' in e.get('q', '') for e in aussen_v), (len(aussen_v), len(innen_v)))
     felder = set(daten_trennen.kunden_felder())
     kd = doc('kunden')
     check('gemeinsames Kundendokument nur mit Portalfeldern (keine Adresse, keine Warenwirtschaft)', all(set(c) <= felder for c in kd['customers'])
@@ -206,6 +226,49 @@ try:
     vorher_n = len(smtp.messages); dienst()
     empf = [r for m in smtp.messages[vorher_n:] for r in m['to']]
     check('früherer Empfänger erhält den älteren Auftrag, ein unbekannter nicht', empf == ['orders@example.org'], empf)
+    # Kopie an den Kunden ausgeschaltet: eine noch offene Kopie verwirft der Postausgang; ein im Eingabebereich ausdrücklich
+    # bestätigter Neuversand sendet sie (nur an die Adresse aus den Stammdaten) – wie mit gemeinsamen Daten
+    check('Kopie an den Kunden ausschalten (Mitarbeiterseite)', A.call('bestell_settings_save', {'enabled': True, 'copy': False})[0] == 200)
+    alle = json.loads(storage_raw('bestellungen').split('?>\n', 1)[-1])
+    storage_write('bestellungen', alle + [{**echt, 'nr': 'B-2099-9997', 'requestId': 'kopie-aus-0003', 'outbox': [
+        {'id': 'h1', 'kind': 'bestellung', 'to': 'orders@example.org', 'state': 'sent', 'attempts': 1, 'error': '', 'history': []},
+        {'id': 'h2', 'kind': 'bestellkopie', 'to': 'kantine.dt@example.org', 'state': 'queued', 'attempts': 0, 'error': '', 'history': []}]}])
+    storage_write('postausgang', {'auftraege': [{'id': 'p5', 'art': 'bestellung', 'nr': 'B-2099-9997', 't': '2026-11-04T00:00:00Z', 'faellig': 0, 'versuche': 0}]})
+    vorher_n = len(smtp.messages); dienst()
+    jk = {x['id']: x for x in A.call('bestellung&nr=B-2099-9997')[1].get('order', {}).get('outbox', [])}
+    check('ausgeschaltete Kopie: Postausgang verwirft sie mit Grund', (jk.get('h2') or {}).get('state') == 'failed' and 'ausgeschaltet' in jk['h2'].get('error', '')
+          and len(smtp.messages) == vorher_n, jk)
+    code, r = A.call('bestellung_mail_retry', {'nr': 'B-2099-9997', 'jobId': 'h2', 'attempts': (jk.get('h2') or {}).get('attempts', 0), 'confirm': True})
+    check('ausdrücklich bestätigter Neuversand sendet die Kopie an die Adresse aus den Stammdaten', code == 200
+          and [m['to'] for m in smtp.messages[vorher_n:]] == [['kantine.dt@example.org']], (code, r))
+    A.call('bestell_settings_save', {'enabled': True, 'copy': True})
+
+    # ---------- Stufe 3: Veröffentlichtes maßgeblich innen, außen nur eine Kopie ----------
+    def roh(ordner, name):
+        if os.path.isfile(ordner + '/.sqlite-active'):
+            with sqlite3.connect(ordner + '/.sqlite/store.sqlite') as c:
+                r = c.execute('SELECT payload FROM documents WHERE name=?', (name,)).fetchone()
+            return json.loads(r[0]) if r else None
+        return json.loads(open(ordner + '/' + name + '.php', encoding='utf-8').read().split('?>\n', 1)[-1]) if os.path.isfile(ordner + '/' + name + '.php') else None
+
+    def aussen_schreiben(name, wert):   # wie eine übernommene Kundenseite: direkt im gemeinsamen Ordner, Zeitstempel später
+        if os.path.isfile(DATA + '/.sqlite-active'):
+            with sqlite3.connect(DATA + '/.sqlite/store.sqlite') as c:
+                c.execute('INSERT OR REPLACE INTO documents VALUES(?,?,?)', (name, json.dumps(wert), int(time.time()) + 60))
+        else:
+            open(DATA + '/' + name + '.php', 'w', encoding='utf-8').write('<?php http_response_code(404); exit; ?>\n' + json.dumps(wert))
+            os.utime(DATA + '/' + name + '.php', (time.time() + 60, time.time() + 60))
+    check('Bestell-Einstellungen: maßgeblich innen, Kopie außen gleich', roh(INTERN, 'bestellung') == roh(DATA, 'bestellung') and roh(INTERN, 'bestellung')['enabled'] is True)
+    aussen_schreiben('bestellung', {'enabled': False, 'empfaenger': 0, 'copy': False})
+    aussen_schreiben('sicherheit', {'idleMinutes': 999, 'pwLeak': False})
+    r = A.call('mail_status')[1]
+    check('Mitarbeiterseite liest weiter den internen Stand (Bestellfunktion an)', r.get('orders', {}).get('enabled') is True and r['orders']['to'] == ['neu-team@example.org'], r.get('orders'))
+    code, out = dienst()
+    check('Postausgang stellt veränderte Kopien wieder her', roh(DATA, 'bestellung') == roh(INTERN, 'bestellung') and roh(DATA, 'sicherheit') == roh(INTERN, 'sicherheit'), out)
+    check('und meldet es als Sicherheitsereignis', any(e.get('a') == 'security' and 'Veröffentlichte Daten' in e.get('s', '') and 'bestellung' in e.get('s', '') for e in (doc('protokoll/' + monat) or [])))
+    check('Kundenseite sieht danach wieder die echte Einstellung', Client('198.51.100.60').call('kunde_status')[1].get('bestellfunktion') is True)
+    check('Mitarbeiterseite: Fracht speichern erreicht die Kopie der Kundenseite', A.call('fracht_save', {'aktiv': True, 'staffeln': [{'unter': 100, 'kosten': 25}], 'zusatz': 'Test'})[0] == 200
+          and roh(DATA, 'fracht') == roh(INTERN, 'fracht') and roh(DATA, 'fracht')['zusatz'] == 'Test')
 
     # ---------- Kundenseite: keine Mitarbeiteranmeldung, keine Ersteinrichtung ----------
     S = Client('198.51.100.50')

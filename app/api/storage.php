@@ -12,8 +12,10 @@ require_once __DIR__ . '/lib/datenbereiche-liste.php';   // Speicherbereiche (er
    interne Dokumente nicht: Lesen liefert null, Schreiben bricht ab. */
 final class StoreKeinZugang extends RuntimeException {}
 /* Trennstufe (Inhalt von daten/.daten-getrennt): 0 = nicht getrennt, 1 = interne Dokumente getrennt (Stufe 2a), 2 = zusätzlich
-   Kundendokument geteilt, Bestand/Stammdaten, Postfächer, Vorlagen und Empfänger innen (Stufe 2b). Dokumente aus DATEN_AB_STUFE
-   bleiben bis zu ihrer Stufe im gemeinsamen Ordner – ein Release allein ändert nichts; umgestellt wird mit daten-trennen.sh. */
+   Kundendokument geteilt, Bestand/Stammdaten, Postfächer, Vorlagen und Empfänger innen (Stufe 2b), 3 = Veröffentlichtes maßgeblich
+   innen, außen nur eine Kopie (2c), 4 = Protokoll getrennt (2d), 5 = Zähler, Anmeldeversuche und Live-Verkehr je Seite (2e).
+   Dokumente aus DATEN_AB_STUFE(_PRAEFIX) bleiben bis zu ihrer Stufe im gemeinsamen Ordner – ein Release allein ändert nichts;
+   umgestellt wird mit deploy/daten-trennen.sh trennen (ADR-007). */
 function store_stufe(): int
 {
     global $DATA;
@@ -31,6 +33,11 @@ function store_bereich(string $name): string
 {
     if (!store_getrennt() || in_array($name, STORE_SIDECARS, true) || in_array($name, DATEN_KUNDENSEITE, true)) return 'haupt';
     if (isset(DATEN_AB_STUFE[$name]) && store_stufe() < DATEN_AB_STUFE[$name]) return 'haupt';   // zieht erst mit späterer Stufe um
+    foreach (DATEN_AB_STUFE_PRAEFIX as $p => $st) {   // Muster „name/*“ (auch die Sperre unter dem Namen der Gruppe)
+        if ((strncmp($name, $p, strlen($p)) === 0 || $name . '/' === $p) && store_stufe() < $st) return 'haupt';
+    }
+    if (in_array($name, DATEN_VEROEFFENTLICHT, true)) return store_innen() ? 'intern' : 'haupt';   // Kundenseite: nur die Kopie
+    if (in_array($name, DATEN_JE_SEITE, true)) return store_innen() ? 'intern' : 'haupt';          // jede Seite ihr eigenes
     // Muster „name/*“: auch die Sperre unter dem Namen der Gruppe (z. B. with_lock('protokoll') für protokoll/<Monat>)
     foreach (DATEN_KUNDENSEITE_PRAEFIX as $p) if (strncmp($name, $p, strlen($p)) === 0 || $name . '/' === $p) return 'haupt';
     return 'intern';
@@ -55,6 +62,110 @@ function store_innen(): bool
 {
     if (!store_getrennt()) return true;
     try { store_ordner('intern'); return true; } catch (StoreKeinZugang $e) { return false; }
+}
+/* ---------------- Veröffentlichte Dokumente (ADR-007 Stufe 2c, ab Trennstufe 3) ----------------
+   Angebote, Einstellungen der Sicherheit, Firewall, Wartung, Fracht, Bestellfunktion …: Die Mitarbeiterseite schreibt und liest sie
+   im internen Ordner und legt nach jedem Speichern eine Kopie in den gemeinsamen Ordner (store_kopie). Die Kundenseite liest nur die
+   Kopie und kann sie nicht schreiben (StoreKeinZugang). Verändert sie die Kopie trotzdem (übernommene Kundenseite), merkt das der
+   Postausgang beim nächsten Durchgang, stellt sie aus dem internen Stand wieder her und meldet es (store_kopien_abgleichen).
+   Was die Mitarbeiterseite liest, kann die Kundenseite damit nie verändern. */
+function store_veroeffentlicht(string $name): bool
+{
+    return store_getrennt() && in_array($name, DATEN_VEROEFFENTLICHT, true) && store_stufe() >= (DATEN_AB_STUFE[$name] ?? 1);
+}
+function store_schreibschutz(string $name): void
+{
+    if (store_veroeffentlicht($name) && !store_innen()) throw new StoreKeinZugang('Veröffentlichte Dokumente schreibt nur die Mitarbeiterseite: ' . $name);
+}
+/* Kopie im gemeinsamen Ordner auf den internen Stand bringen – in einer laufenden Transaktion erst nach deren Abschluss (dann
+   mit dem Stand nach dem Abschluss, so gewinnt bei gleichzeitigen Änderungen immer der neueste) */
+function store_kopie(string $name): void
+{
+    if (!empty($GLOBALS['store_tx']['intern'])) { $GLOBALS['store_kopien'][$name] = true; return; }
+    $roh = store_roh($name, 'intern');
+    store_roh_schreiben($name, 'haupt', $roh[0]);
+}
+function store_kopien_schreiben(): void
+{
+    $offen = array_keys($GLOBALS['store_kopien'] ?? []);
+    $GLOBALS['store_kopien'] = [];
+    foreach ($offen as $n) store_kopie($n);
+}
+/* Gespeicherter Inhalt (JSON-Text) und Zeitstempel eines Dokuments in einem bestimmten Bereich – ohne Einteilung nach Seite */
+function store_roh(string $name, string $bereich): array
+{
+    $dir = store_ordner($bereich);
+    if (store_mode($bereich) === 'sqlite') {
+        $q = store_db($bereich)->prepare('SELECT payload, mtime FROM documents WHERE name = ?'); $q->execute([$name]);
+        $r = $q->fetch(PDO::FETCH_NUM);
+        return $r === false ? [null, null] : [(string)$r[0], (int)$r[1]];
+    }
+    $p = $dir . '/' . $name . '.php';
+    if (!is_file($p)) return [null, null];
+    $raw = (string)file_get_contents($p);
+    return [strncmp($raw, GUARD, strlen(GUARD)) === 0 ? substr($raw, strlen(GUARD)) : $raw, (int)filemtime($p)];
+}
+function store_roh_schreiben(string $name, string $bereich, ?string $json): void
+{
+    $dir = store_ordner($bereich);
+    if (store_mode($bereich) === 'sqlite') {
+        if ($json === null) { store_db($bereich)->prepare('DELETE FROM documents WHERE name=?')->execute([$name]); return; }
+        store_db($bereich)->prepare('INSERT INTO documents(name,payload,mtime) VALUES(?,?,?) ON CONFLICT(name) DO UPDATE SET payload=excluded.payload,mtime=excluded.mtime')->execute([$name, $json, time()]);
+        return;
+    }
+    $p = $dir . '/' . $name . '.php';
+    if ($json === null) { if (is_file($p)) @unlink($p); return; }
+    $tmp = $p . '.' . bin2hex(random_bytes(4)) . '.tmp';
+    if (file_put_contents($tmp, GUARD . $json, LOCK_EX) === false) throw new RuntimeException('Cannot write data');
+    if (!rename($tmp, $p)) { @unlink($tmp); throw new RuntimeException('Cannot replace data'); }
+}
+/* Postausgang (und Mitarbeiterseite): alle Kopien mit dem internen Stand vergleichen und abweichende wiederherstellen. Rückgabe:
+   wiederhergestellte Dokumente [Name => verändert durch jemand anderen?] – nachträglich geändert (Zeitstempel der Kopie deutlich
+   nach dem internen Stand) heißt: nicht von der Mitarbeiterseite geschrieben. */
+function store_kopien_abgleichen(): array
+{
+    $out = [];
+    if (!store_innen() || store_stufe() < 1) return $out;
+    foreach (DATEN_VEROEFFENTLICHT as $n) {
+        if (!store_veroeffentlicht($n)) continue;
+        $x = with_lock($n, function () use ($n) {
+            [$innen, $ti] = store_roh($n, 'intern');
+            [$aussen, $ta] = store_roh($n, 'haupt');
+            if ($innen === $aussen || ($innen !== null && $aussen !== null && json_decode($innen, true) === json_decode($aussen, true))) return null;
+            store_roh_schreiben($n, 'haupt', $innen);
+            return $aussen !== null && ($innen === null || (int)$ta > (int)$ti + 5);
+        });
+        if ($x !== null) $out[$n] = $x;
+    }
+    return $out;
+}
+/* ---------------- Je Seite getrennte Dokumente (ADR-007 Stufe 2e, ab Trennstufe 5) ----------------
+   Zähler, Anmeldeversuche, Live-Verkehr: Jede Seite schreibt ihr eigenes Dokument gleichen Namens (Kundenseite im gemeinsamen
+   Ordner, Mitarbeiterseite und Postausgang innen) – store_read/store_write/with_lock wählen es selbst. Die Mitarbeiterseite liest
+   das der Kundenseite zusätzlich (store_aussen_lesen, z. B. für die Übersichten der Sicherheit) und ändert es nur für das Aufheben
+   einer Sperre (store_aussen_aendern). Die Kundenseite sieht die Dokumente der Mitarbeiterseite nie. */
+function store_je_seite(string $name): bool
+{
+    return store_getrennt() && in_array($name, DATEN_JE_SEITE, true) && store_stufe() >= (DATEN_AB_STUFE[$name] ?? 1) && store_innen();
+}
+/* Mitarbeiterseite: Dokument der Kundenseite (null bis Trennstufe 5 – dann gibt es nur eines, das store_read schon liefert) */
+function store_aussen_lesen(string $name): ?array
+{
+    if (!store_je_seite($name)) return null;
+    $roh = store_roh($name, 'haupt')[0];
+    $d = $roh === null ? null : json_decode($roh, true);
+    return is_array($d) ? $d : null;
+}
+/* Mitarbeiterseite: Dokument der Kundenseite unter deren Sperre ändern ($fn bekommt den Inhalt und liefert den neuen) */
+function store_aussen_aendern(string $name, callable $fn): void
+{
+    if (!store_je_seite($name)) return;
+    with_lock_in('haupt', $name, function () use ($name, $fn) {
+        $roh = store_roh($name, 'haupt')[0];
+        $alt = $roh === null ? [] : (json_decode($roh, true) ?: []);
+        $neu = $fn($alt);
+        if ($neu !== $alt) store_roh_schreiben($name, 'haupt', json_encode($neu, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_THROW_ON_ERROR));
+    });
 }
 /* Kann dieser Server das Dokument lesen? (Kundenseite: nur Dokumente im gemeinsamen Ordner – je nach Trennstufe) */
 function store_sichtbar(string $name): bool { return store_bereich($name) === 'haupt' || store_innen(); }
@@ -122,20 +233,26 @@ function store_read(string $name)
 function store_write(string $name, array $data): void
 {
     $json = json_encode($data, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_THROW_ON_ERROR);
+    store_schreibschutz($name);
     if (store_sql($name)) {
         $q = store_db(store_bereich($name))->prepare('INSERT INTO documents(name,payload,mtime) VALUES(?,?,?) ON CONFLICT(name) DO UPDATE SET payload=excluded.payload,mtime=excluded.mtime');
-        $q->execute([$name, $json, time()]); return;
+        $q->execute([$name, $json, time()]);
+        if (store_veroeffentlicht($name)) store_kopie($name);
+        return;
     }
     $dir = dirname(store_path($name));
     if (!is_dir($dir) && !mkdir($dir, 0775, true)) throw new RuntimeException('Cannot create storage directory');
     $tmp = store_path($name) . '.' . bin2hex(random_bytes(4)) . '.tmp';
     if (file_put_contents($tmp, GUARD . $json, LOCK_EX) === false) throw new RuntimeException('Cannot write data');
     if (!rename($tmp, store_path($name))) { @unlink($tmp); throw new RuntimeException('Cannot replace data'); }
+    if (store_veroeffentlicht($name)) store_kopie($name);
 }
 function store_delete(string $name): void
 {
+    store_schreibschutz($name);
     if (store_sql($name)) { $q = store_db(store_bereich($name))->prepare('DELETE FROM documents WHERE name=?'); $q->execute([$name]); }
     else { $p = store_path($name); if (is_file($p) && !unlink($p)) throw new RuntimeException('Cannot delete data'); }
+    if (store_veroeffentlicht($name)) store_kopie($name);
 }
 function store_mtime(string $name): ?int
 {
@@ -166,6 +283,7 @@ function store_commit(?string $bereich = null): void
     foreach (array_keys($GLOBALS['store_tx'] ?? []) as $b) {
         if ($bereich !== null && $b !== $bereich) continue;
         store_db($b)->exec('COMMIT'); unset($GLOBALS['store_tx'][$b]);
+        if ($b === 'intern' && !empty($GLOBALS['store_kopien'])) store_kopien_schreiben();   // Kopien veröffentlichter Dokumente
     }
 }
 function store_rollback(?string $bereich = null): void
@@ -173,25 +291,32 @@ function store_rollback(?string $bereich = null): void
     foreach (array_keys($GLOBALS['store_tx'] ?? []) as $b) {
         if ($bereich !== null && $b !== $bereich) continue;
         store_db($b)->exec('ROLLBACK'); unset($GLOBALS['store_tx'][$b]);
+        if ($b === 'intern') $GLOBALS['store_kopien'] = [];
     }
     $GLOBALS['notify_queue'] = [];   // vorgemerkte Benachrichtigungen gehören zu verworfenen Änderungen
 }
 function with_lock(string $name, callable $fn)
 {
-    if (store_sql($name)) {
-        $b = store_bereich($name);
+    store_schreibschutz($name);   // Kundenseite sperrt (und schreibt) veröffentlichte Dokumente nie
+    store_path($name);            // Name prüfen (und Prüfhilfe)
+    return with_lock_in(store_bereich($name), $name, $fn);
+}
+/* Sperre bzw. Transaktion eines Dokuments in einem bestimmten Bereich (with_lock wählt den Bereich nach der Einteilung) */
+function with_lock_in(string $b, string $name, callable $fn)
+{
+    if (!in_array($name, STORE_SIDECARS, true) && store_mode($b) === 'sqlite') {
         if (!empty($GLOBALS['store_tx'][$b])) return $fn();
         store_db($b)->exec('BEGIN IMMEDIATE'); $GLOBALS['store_tx'][$b] = true;
         try { $result = $fn(); store_commit($b); return $result; }
         catch (Throwable $e) { store_rollback($b); throw $e; }
     }
     static $held = [];
-    if (!empty($held[$name])) return $fn();
-    $lp = store_ordner(store_bereich($name)) . '/.' . $name . '.lock';
+    if (!empty($held[$b . '|' . $name])) return $fn();
+    $lp = store_ordner($b) . '/.' . $name . '.lock';
     $fh = @fopen($lp, 'c') ?: (is_file($lp) ? @fopen($lp, 'r') : false);   // nur echte Sperrdatei, nie z. B. ein Verzeichnis
     if (!$fh || !flock($fh, LOCK_EX)) throw new RuntimeException('Cannot lock data');
-    $held[$name] = true;
-    try { return $fn(); } finally { unset($held[$name]); flock($fh, LOCK_UN); fclose($fh); }
+    $held[$b . '|' . $name] = true;
+    try { return $fn(); } finally { unset($held[$b . '|' . $name]); flock($fh, LOCK_UN); fclose($fh); }
 }
 
 /* Kennzahlen für die Übersicht im Eingabebereich (beide Bereiche, soweit diese Seite sie sieht) */

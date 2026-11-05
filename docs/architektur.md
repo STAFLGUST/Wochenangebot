@@ -41,7 +41,11 @@ welchem Modul gehört, steht in `regeln/` (`python3 werkzeuge/regeln.py modul <i
   Trennstufe 2 (Stufe 2b, Inhalt von `daten/.daten-getrennt`): zusätzlich Bestand, Stammdaten, Postfächer, Signatur,
   Benachrichtigungen und Empfänger der Bestellwünsche innen; `kunden` außen nur mit Portalfeldern (Rest in `kundenstamm`, Mitarbeiterseite
   liest zusammengeführt); Kundenseite liest statt Bestand/Stammdaten den `artikelauszug`; der Postausgang bestimmt Empfänger und
-  Inhalt der Bestellwunsch-Mails selbst.
+  Inhalt der Bestellwunsch-Mails selbst. Trennstufe 3 (Stufe 2c): veröffentlichte Dokumente (Angebote, Sicherheit, Firewall,
+  Wartung, Notfallmodus, Fracht, Bestellfunktion …) maßgeblich innen, im gemeinsamen Ordner nur eine Kopie, die die Kundenseite
+  nicht schreiben kann; der Postausgang stellt veränderte Kopien wieder her und meldet sie. Trennstufe 4 (Stufe 2d): Protokoll der
+  Mitarbeiterseite (`protokoll/*`) innen, die Kundenseite schreibt `kundenprotokoll/*`; die Mitarbeiterseite liest beide zusammen.
+  Trennstufe 5 (Stufe 2e): Anmeldeversuche, Zähler und Live-Verkehr je Seite (`je_seite`: gleicher Name, außen bzw. innen).
 
 ## Server (`app/api/`)
 
@@ -59,7 +63,7 @@ welchem Modul gehört, steht in `regeln/` (`python3 werkzeuge/regeln.py modul <i
 | `lib/protokoll.php` | Protokoll (`audit`, Kundendaten-Vorgänge `LOG_KUNDENDATEN`), Änderungstexte, Anmeldeversuche (IPv6 je /64), Besucher-IP `client_ip` – `X-Forwarded-For` nur von `WA_TRUSTED_PROXIES` (Docker: `caddy`; ohne Angabe jede private Adresse) |
 | `lib/passkey.php`, `aktionen/passkey.php` | Passkeys (WebAuthn) ohne Fremdbibliothek: kleiner CBOR-Leser, COSE-Schlüssel (ES256/RS256) → PEM, Prüfung von clientDataJSON (Art, Challenge, Herkunft = aufgerufener Host) und Authenticator-Daten (rpIdHash, UP+UV, Zähler), Signatur mit `openssl_verify`; gespeichert im optionalen Nutzerfeld `passkeys`; `has_second_factor` (App oder Passkey) für Zwei-Faktor-Pflicht und Anmeldung. Aktionen `passkey_list`, `passkey_begin`, `passkey_register`, `passkey_rename`, `passkey_delete` (eigene Passkeys, Passwort wie bei der Authenticator-App), `passkey_login_begin`, `passkey_login` (ohne Benutzername oder mit `second` als zweiter Schritt; nicht in der App) |
 | `lib/geraete.php` | Vertraute Geräte: Cookie `__Host-WA_GERAET` (über HTTP ohne Präfix; zufällige Kennung, eine vorhandene nur für den eigenen Zugang weiterverwendet), beim Zugang (`geraete`: Prüfsumme, Name, seit, zuletzt, Fehlerzähler `f`, höchstens 10, Verfall 180 Tage). `geraet_vertraut` (während einer Sperre normale Prüfung, Fehler je Gerät), `geraet_merken` nach jeder erfolgreichen Anmeldung (Passwort, Code, Passkey, Kunde), `geraete_zuruecksetzen` bei Passwortwechsel, `geraet_neu_melden` (Sicherheitsereignis bei Administrator-Anmeldung von neuem Gerät) |
-| `lib/protokoll.php` | Protokoll (`audit`), Änderungstexte, Anmeldeversuche |
+| `lib/protokoll.php` | Protokoll (`audit`), Änderungstexte, Anmeldeversuche; ab Trennstufe 4 getrennt (`protokoll_monat` liest Mitarbeiter- und Kundenprotokoll zusammen) |
 | `lib/angebote.php` | Angebote, Kundenpreise (`variants`, Schlüssel immer als Text – auch ältere Angebote mit Zahlen-ID), Empfehlungen (`sale`: mit Preis Sonderposten, ohne Preis `mark` = nur hervorheben; `empfehlung_fuer`, `sale_for`), Werbung je Angebot mit bis zu zwei Blöcken (`clean_werbung`, `werbung_bloecke`), `offer_resolve` (eigene Artikelliste je Angebot: Regel `hidden` liefert nur Artikel mit eigenem Eintrag, auch Sonderposten nur dann; `standard` folgt dem Wochenangebot), Datenmodell `clean_model` (Gruppe optional mit VK-Gruppe `vk`, nie an Kunden), Entwurfsrevisionen; neue Angebots-IDs dürfen nicht mit `e-` beginnen (Einzelangebote) und nicht nur aus Ziffern bestehen |
 | `lib/kunden.php` | Kundenstammdaten, Kunden-Sitzung; freigeschaltete Angebote `customer_offers` = direkt (`customer_offers_direct`) + über die Kundengruppe (`customer_offers_gruppe`: Angebot mit der Gruppe in `gruppen` – je Gruppe höchstens eines –, sonst automatisch das Wochenangebot); ab Trennstufe 2 geteilt: `customers_load` (zusammengeführt, Kundenseite nur Portalfelder), `customers_save` (geteilt in `kunden`/`kundenstamm`), `kunde_schnappschuss`, `kunden_email_maske` |
 | `lib/kundenmail.php` | E-Mails an Kunden (Vorlagen, Abmelden, Einmal-Links, Versand, Protokoll), Bestellwunsch-Vorlage |

@@ -82,8 +82,9 @@ function order_outbox_vorbereiten(string $nr): void
 /* Darf dieser Auftrag jetzt verschickt werden? null = ja, sonst der Grund (Auftrag wird verworfen, nicht wiederholt).
    Bis Trennstufe 2 teilen sich beide Seiten ohnehin alle Daten – dort gilt wie bisher der gespeicherte Originalstand. Ab Stufe 2: an
    das Team nur an heutige oder frühere Empfänger der Bestellfunktion (so bleibt der Originalempfänger beim Nachsenden), die Kopie nur
-   an die heutige Adresse aus den Stammdaten des Kunden. */
-function order_outbox_pruefen(array $o, array $j): ?string
+   an die heutige Adresse aus den Stammdaten des Kunden – automatisch nur bei eingeschalteter Kopie; ein ausdrücklich bestätigter
+   Neuversand im Eingabebereich ($ausdruecklich) darf eine noch offene Kopie auch danach senden (wie bis Stufe 2). */
+function order_outbox_pruefen(array $o, array $j, bool $ausdruecklich = false): ?string
 {
     if (!kunden_geteilt()) return null;
     $to = mb_strtolower(trim((string)($j['to'] ?? '')));
@@ -94,7 +95,7 @@ function order_outbox_pruefen(array $o, array $j): ?string
         return null;
     }
     if (($j['kind'] ?? '') === 'bestellkopie') {
-        if (!order_settings()['copy']) return 'Versand verworfen: Kopie an den Kunden ist ausgeschaltet';
+        if (!$ausdruecklich && !order_settings()['copy']) return 'Versand verworfen: Kopie an den Kunden ist ausgeschaltet';
         $mail = order_kunden_email((string)($o['kid'] ?? ''));
         if ($mail === null || mb_strtolower($mail) !== $to) return 'Versand verworfen: Adresse stimmt nicht mit den Stammdaten des Kunden überein';
         if (order_tageszahl((string)($o['kid'] ?? ''), 'bestellkopie', $to) >= ORDER_MAIL_TAG) return 'Versand verworfen: mehr als ' . ORDER_MAIL_TAG . ' Kopien an diesen Kunden in 24 Stunden';
@@ -133,8 +134,9 @@ function order_outbox_cleanup_locks(string $own): void
     foreach (glob($DATA . '/.order-mail-*.lock') ?: [] as $f) if ($f !== $own && @filemtime($f) < time() - 172800) @unlink($f);
 }
 /* No SQLite transaction spans SMTP. A separate nonblocking process lock protects a retry
-   even if the previous HTTP request is still running. Process death releases it. */
-function order_outbox_send(string $nr, ?string $jobId = null, ?int $expected = null, string $by = 'Kunde'): array
+   even if the previous HTTP request is still running. Process death releases it.
+   $ausdruecklich: Neuversand eines bestimmten Auftrags, vom Team im Eingabebereich bestätigt (bestellung_mail_retry). */
+function order_outbox_send(string $nr, ?string $jobId = null, ?int $expected = null, string $by = 'Kunde', bool $ausdruecklich = false): array
 {
     global $DATA;
     $lp = $DATA . '/.order-mail-' . hash('sha256', $nr) . '.lock';
@@ -177,7 +179,7 @@ function order_outbox_send(string $nr, ?string $jobId = null, ?int $expected = n
             });
             if (!$claimed) continue;
             $j = $claimed['job']; $o = $claimed['order'];
-            $verworfen = order_outbox_pruefen($o, $j);
+            $verworfen = order_outbox_pruefen($o, $j, $ausdruecklich && $jobId !== null);
             try {
                 if ($verworfen !== null) throw new RuntimeException($verworfen);
                 $cfg = $j['kind'] === 'bestellung' ? mail_cfg_intern() : mail_cfg();   // an das Team: internes Postfach; Kopie an den Kunden: Kunden-Postfach

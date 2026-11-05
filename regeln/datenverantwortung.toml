@@ -17,6 +17,10 @@
 # bereich: wo das Dokument liegt, sobald die Daten getrennt sind (ADR-007 Stufe 2, deploy/daten-trennen.sh):
 #          kundenseite – braucht die Kundenseite (angebot-stafl.de): bleibt im gemeinsamen Ordner daten/
 #          intern      – nur Mitarbeiterseite und Postausgang: Ordner daten-intern/, den die Kundenseite nicht sieht
+#          veroeffentlicht – schreibt nur die Mitarbeiterseite (innen); die Kundenseite liest eine Kopie im gemeinsamen Ordner, die sie
+#                      nicht schreiben kann – verändert sie die Kopie doch, stellt der Postausgang sie wieder her und meldet es (Stufe 2c)
+#          je_seite    – jede Seite schreibt ihr eigenes Dokument gleichen Namens (Kundenseite außen, Mitarbeiterseite innen), z. B.
+#                      Zähler und Live-Verkehr; die Mitarbeiterseite liest beide zusammen (Stufe 2e)
 #          Neue Dokumente sind intern, außer die Kundenseite liest oder schreibt sie nachweislich (Testgruppe datentrennung).
 #          Erzeugt app/api/lib/datenbereiche-liste.php (`python3 werkzeuge/regeln.py erzeugen`).
 # trennstufe = n: internes Dokument, das erst mit Trennstufe n umzieht (bis dahin im gemeinsamen Ordner, damit ein Release
@@ -31,7 +35,8 @@ schema = 1
 [[dokument]]
 name = "angebot"
 eigentuemer = "angebot"
-bereich = "kundenseite"
+bereich = "veroeffentlicht"
+trennstufe = 3   # Mitarbeiterseite liest innen, Kundenseite nur die Kopie (ADR-007 Stufe 2c)
 leser = ["bestand", "plattform"]
 schutz = "oeffentlich"
 beschreibung = "Veröffentlichtes Wochenangebot; öffentlich nur gefiltert über offer_resolve (GR-001, GR-002)"
@@ -40,7 +45,8 @@ historie = "Jede Veröffentlichung legt eine Version an (versionen/*) und den Pr
 [[dokument]]
 name = "angebote"
 eigentuemer = "angebot"
-bereich = "kundenseite"
+bereich = "veroeffentlicht"
+trennstufe = 3   # Mitarbeiterseite liest innen, Kundenseite nur die Kopie (ADR-007 Stufe 2c)
 leser = ["crm"]   # nur Namen der für einen Kunden freigeschalteten Angebote (customer_offers, offer_def) – nie Preise
 schutz = "vertraulich"
 beschreibung = "Kundenangebote mit Kundenpreisen (variants), Sichtbarkeit und Sonderpreisen"
@@ -95,7 +101,8 @@ beschreibung = "Bewusst gelöschte Wochen des Preisverlaufs"
 [[dokument]]
 name = "einzelangebote"
 eigentuemer = "angebot"
-bereich = "kundenseite"
+bereich = "veroeffentlicht"
+trennstufe = 3   # Mitarbeiterseite liest innen, Kundenseite nur die Kopie (ADR-007 Stufe 2c)
 leser = ["crm"]       # nur über die Funktionen des Angebots (lib/einzelangebote.php): Einzelangebote eines Kunden im Kunden-Pop-up
 schreiber = ["crm"]   # ebenso nur über einzel_speichern/einzel_status_setzen/einzel_loeschen/einzel_mail – Rechte einzelangebote.* wie im Eingabebereich
 schutz = "vertraulich"
@@ -113,7 +120,8 @@ historie = "Positionen, Preise, Firma und Angebotswoche werden beim Absenden als
 [[dokument]]
 name = "bestellung"
 eigentuemer = "angebot"
-bereich = "kundenseite"
+bereich = "veroeffentlicht"
+trennstufe = 3   # Mitarbeiterseite liest innen, Kundenseite nur die Kopie (ADR-007 Stufe 2c)
 schreiber = ["plattform"]   # Altbestand: E-Mail-Einstellungen (aktionen/mail.php)
 schutz = "intern"
 beschreibung = "Einstellungen der Bestellfunktion (an/aus, Kopie an den Kunden); ab Trennstufe 2 nur die Anzahl der Empfänger – die Adressen stehen in bestellung-empfaenger"
@@ -130,7 +138,8 @@ beschreibung = "Empfänger der Bestellwünsche (ab Trennstufe 2, ADR-007 Stufe 2
 [[dokument]]
 name = "fracht"
 eigentuemer = "angebot"
-bereich = "kundenseite"
+bereich = "veroeffentlicht"
+trennstufe = 3   # Mitarbeiterseite liest innen, Kundenseite nur die Kopie (ADR-007 Stufe 2c)
 schutz = "intern"
 beschreibung = "Frachtregel (Staffeln, Hinweis unter dem Angebot)"
 
@@ -172,7 +181,8 @@ beschreibung = "Bestandsliste: Partien, Mengen, MHD, Einkaufspreise, erwartete Z
 [[dokument]]
 name = "artikelauszug"
 eigentuemer = "bestand"
-bereich = "kundenseite"
+bereich = "veroeffentlicht"
+trennstufe = 3   # Mitarbeiterseite liest innen, Kundenseite nur die Kopie (ADR-007 Stufe 2c)
 leser = ["angebot"]   # ausverkaufte Sonderposten (stock_codes) und Merkmale im Einzelangebot (einzel_model)
 schutz = "oeffentlich"
 beschreibung = "Auszug aus Bestand und Stammdaten für die Kundenseite (ab Trennstufe 2, ADR-007 Stufe 2b): Artikelnummern mit Lagerbestand ohne Mengen, Fleischart/Herkunft/Zustand je Artikel – nie Mengen, Partien, MHD oder Einkaufspreise (GR-001, GR-008)"
@@ -546,7 +556,8 @@ beschreibung = "Altformat des ersten Administratorzugangs (wird beim Lesen in �
 [[dokument]]
 name = "anmeldenamen"
 eigentuemer = "plattform"
-bereich = "kundenseite"
+bereich = "je_seite"
+trennstufe = 5   # jede Seite schreibt ihr eigenes (ADR-007 Stufe 2e)
 schutz = "intern"
 beschreibung = "Vergebene Benutzernamen"
 
@@ -581,7 +592,8 @@ beschreibung = "Kennungen der Keycloak-Konten gelöschter Mitarbeiter → Zeitpu
 [[dokument]]
 name = "logins"
 eigentuemer = "plattform"
-bereich = "kundenseite"
+bereich = "je_seite"
+trennstufe = 5   # jede Seite schreibt ihr eigenes (ADR-007 Stufe 2e)
 schutz = "intern"
 beschreibung = "Fehlversuche und Sperren bei der Anmeldung"
 
@@ -609,7 +621,8 @@ beschreibung = "Eigene Rollen (Name, Beschreibung, Rechte) und Namen der Standar
 [[dokument]]
 name = "sicherheit"
 eigentuemer = "plattform"
-bereich = "kundenseite"
+bereich = "veroeffentlicht"
+trennstufe = 3   # Mitarbeiterseite liest innen, Kundenseite nur die Kopie (ADR-007 Stufe 2c)
 schutz = "intern"
 beschreibung = "Sicherheitseinstellungen (Zwei-Faktor-Pflicht, IP-/Ländersperre, Passwortbestätigungen)"
 
@@ -623,7 +636,8 @@ beschreibung = "Statistik der Länder-/IP-Sperre"
 [[dokument]]
 name = "sicherheit-notfall"
 eigentuemer = "plattform"
-bereich = "kundenseite"
+bereich = "veroeffentlicht"
+trennstufe = 3   # Mitarbeiterseite liest innen, Kundenseite nur die Kopie (ADR-007 Stufe 2c)
 schutz = "intern"
 beschreibung = "Notfallmodus (Modul Sicherheit): Zustand, Grund, Kundenhinweis, Wirkung, gesicherte Sicherheits- und Firewall-Einstellungen, Verlauf"
 
@@ -638,7 +652,8 @@ historie = "Probealarme (letzte 20) und abgehakte Leitfäden je Notfall (letzte 
 [[dokument]]
 name = "wartung"
 eigentuemer = "plattform"
-bereich = "kundenseite"
+bereich = "veroeffentlicht"
+trennstufe = 3   # Mitarbeiterseite liest innen, Kundenseite nur die Kopie (ADR-007 Stufe 2c)
 schutz = "intern"
 beschreibung = "Heutiger globaler Wartungsmodus der Angebotsseite (nur Kundenfunktionen)"
 
@@ -654,7 +669,8 @@ historie = "Verlauf der letzten 100 Änderungen (wer, wann, Bereich, alt, neu, G
 [[dokument]]
 name = "firewall"
 eigentuemer = "plattform"
-bereich = "kundenseite"
+bereich = "veroeffentlicht"
+trennstufe = 3   # Mitarbeiterseite liest innen, Kundenseite nur die Kopie (ADR-007 Stufe 2c)
 schutz = "intern"
 beschreibung = "Firewall-Einstellungen der Schutzzentrale"
 
@@ -668,21 +684,24 @@ beschreibung = "Gesperrte Adressen"
 [[dokument]]
 name = "bedrohungsliste"
 eigentuemer = "plattform"
-bereich = "kundenseite"
+bereich = "veroeffentlicht"
+trennstufe = 3   # Mitarbeiterseite liest innen, Kundenseite nur die Kopie (ADR-007 Stufe 2c)
 schutz = "intern"
 beschreibung = "Externe Bedrohungsliste (Spamhaus DROP) mit Suchindex"
 
 [[dokument]]
 name = "fw_zaehler"
 eigentuemer = "plattform"
-bereich = "kundenseite"
+bereich = "je_seite"
+trennstufe = 5   # jede Seite schreibt ihr eigenes (ADR-007 Stufe 2e)
 schutz = "intern"
 beschreibung = "Zähler der Firewall"
 
 [[dokument]]
 name = "verkehr"
 eigentuemer = "plattform"
-bereich = "kundenseite"
+bereich = "je_seite"
+trennstufe = 5   # jede Seite schreibt ihr eigenes (ADR-007 Stufe 2e)
 schutz = "intern"
 beschreibung = "Live-Verkehr (Ringpuffer) der Schutzzentrale"
 
@@ -696,10 +715,19 @@ beschreibung = "Ergebnisse der Dateiprüfung"
 [[dokument]]
 name = "protokoll/*"
 eigentuemer = "plattform"
+bereich = "intern"
+trennstufe = 4   # ab Stufe 2d schreibt die Kundenseite in kundenprotokoll/* (ADR-007)
+schutz = "vertraulich"
+beschreibung = "Änderungsprotokoll je Monat (audit); ab Trennstufe 4 nur noch Einträge der Mitarbeiterseite und des Postausgangs"
+historie = "Nur anhängen; Einträge werden nicht geändert. Aufbewahrung: laufender Monat und 6 Monate davor – ältere Monatsdokumente löscht audit() (PROTOKOLL_MONATE, lib/protokoll.php)"
+
+[[dokument]]
+name = "kundenprotokoll/*"
+eigentuemer = "plattform"
 bereich = "kundenseite"
 schutz = "vertraulich"
-beschreibung = "Änderungsprotokoll je Monat (audit)"
-historie = "Nur anhängen; Einträge werden nicht geändert. Aufbewahrung: laufender Monat und 6 Monate davor – ältere Monatsdokumente löscht audit() (PROTOKOLL_MONATE, lib/protokoll.php)"
+beschreibung = "Protokoll der Kundenseite je Monat (ab Trennstufe 4, ADR-007 Stufe 2d): Anmeldungen, Bestellwünsche, Abmeldungen, Passwörter der Kunden – die Mitarbeiterseite zeigt es zusammen mit protokoll/*"
+historie = "Nur anhängen; Aufbewahrung wie protokoll/* (audit() löscht ältere Monate)"
 
 [[dokument]]
 name = "benachrichtigungen"
@@ -727,7 +755,8 @@ historie = "Kurzlebig: der Dienst postausgang entnimmt fällige Aufträge; höch
 [[dokument]]
 name = "postausgang-stand"
 eigentuemer = "plattform"
-bereich = "kundenseite"
+bereich = "veroeffentlicht"
+trennstufe = 3   # Mitarbeiterseite liest innen, Kundenseite nur die Kopie (ADR-007 Stufe 2c)
 schutz = "intern"
 beschreibung = "Lebenszeichen des Dienstes postausgang und ob ein Postfach eingerichtet ist (die Kundenseite prüft damit die Bestellfunktion)"
 

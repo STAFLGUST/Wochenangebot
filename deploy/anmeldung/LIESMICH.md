@@ -179,7 +179,10 @@ sh deploy/daten-trennen.sh trennen           # Sicherung → Stopp → trennen �
 Trennstufe 1 (Stufe 2a, seit 04.11.2026): Die Kundenseite sieht Personal, Mitarbeiterkonten, CRM, Controlling, QS-Dokumente
 usw. nicht mehr. Trennstufe 2 (Stufe 2b): zusätzlich Bestand, Stammdaten, Postfach-Zugänge, Signatur, Benachrichtigungen,
 Empfänger der Bestellwünsche und vom Kundendokument alles außer den Portalfeldern (Anschrift, E-Mail, Telefon, Warenwirtschaft);
-der Postausgang verschickt nur noch an Empfänger aus den internen Daten. Sicherungen enthalten zusätzlich `intern-<Zeit>.tar.gz`.
+der Postausgang verschickt nur noch an Empfänger aus den internen Daten. Trennstufe 3 (Stufe 2c): Angebote und Einstellungen
+(Sicherheit, Firewall, Wartung, Notfallmodus …) maßgeblich innen, die Kundenseite liest nur eine Kopie, die sie nicht verändern
+kann. Trennstufe 4 (Stufe 2d): das Protokoll der Mitarbeiterseite liegt innen, die Kundenseite schreibt ein eigenes. Trennstufe 5
+(Stufe 2e): Anmeldeversuche, Zähler und Live-Verkehr je Seite. Sicherungen enthalten zusätzlich `intern-<Zeit>.tar.gz`.
 Vor einem Rückfall auf ein Release mit niedrigerer Stufe: `sh deploy/daten-trennen.sh zusammenfuehren`, danach mit dem älteren
 Release gegebenenfalls erneut `trennen`.
 

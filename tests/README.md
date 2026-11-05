@@ -22,16 +22,17 @@ geprüft hat (`docs/release-freigabe.md`, „Keine Doppelprüfung nach dem Merge
 
 ### Aufteilung der Ende-zu-Ende-Tests in der CI
 
-Die CI führt die Gruppen je Speicherart in **3 Aufträgen** aus („Ende-zu-Ende-Tests (files, Teil 1/3)“ …, zusammen
-6 Aufträge, je 4 Gruppen parallel). `tests/run_e2e.py` verteilt mit `WA_TEIL=k/n` deterministisch: Gruppen nach
+Die CI führt die Gruppen je Speicherart in **3 Aufträgen** aus („Ende-zu-Ende-Tests (files, Teil 1/3)“ …) und noch einmal
+in SQLite mit getrennten Daten wie auf dem Server („Ende-zu-Ende-Tests (sqlite, getrennt, Teil 1/3)“ …, `WA_TEST_TRENNUNG=1`) –
+zusammen 9 Aufträge, je 4 Gruppen parallel. `tests/run_e2e.py` verteilt mit `WA_TEIL=k/n` deterministisch: Gruppen nach
 geschätzter Laufzeit (`GEWICHT`, Sekunden aus den CI-Protokollen; neue Gruppen zählen 15 s) absteigend, jede in den
 Teil mit der bisher kleinsten Summe. Die Verteilung hängt nicht davon ab, ob ein optionaler Build vorliegt. Ohne
 `WA_TEIL` läuft lokal alles wie bisher (nur die Startreihenfolge richtet sich jetzt nach `GEWICHT`).
 
 - Lokal einen Teil nachstellen: `WA_TEIL=2/3 python3 tests/run_e2e.py` (die Liste der Gruppen steht in der ersten Zeile).
-- Der Pflicht-Check „Ende-zu-Ende-Tests“ ist nur grün, wenn **alle** Teile beider Speicherarten grün sind.
-- Artefakte bei Fehlern: `e2e-ergebnisse-<speicherart>-teil<k>`.
-- Mehr oder weniger Teile: in `ci.yml` die Liste `teil: [1, 2, 3]` **und** den Nenner in `WA_TEIL` ändern –
+- Der Pflicht-Check „Ende-zu-Ende-Tests“ ist nur grün, wenn **alle** Teile beider Speicherarten und mit getrennten Daten grün sind.
+- Artefakte bei Fehlern: `e2e-ergebnisse-<speicherart>-teil<k>` bzw. `e2e-ergebnisse-sqlite-getrennt-teil<k>`.
+- Mehr oder weniger Teile: in `ci.yml` die Liste `teil: [1, 2, 3]`, die Einträge unter `include` (getrennte Daten) **und** den Nenner in `WA_TEIL` ändern –
   `tests/unit/test_run_e2e_teile.py` prüft, dass beides zusammenpasst (sonst bliebe ein Teil ungeprüft).
 - Gewichte erneuern, wenn sich Laufzeiten deutlich ändern: Zeilen „[gruppe] … bestanden in N s“ der CI-Protokolle.
   Die längste Gruppe (`sicherheit_freigaben`, ~2 Min.) bestimmt die Mindestdauer eines Teils.
@@ -47,10 +48,13 @@ Zusätzliche Unit-Tests: `node tests/unit/stock_prices.test.js` und `php tests/u
 Der Parser-Test prüft auch „erfasst“ in J und Ankunft in M sowie reine Zugangsdateien.
 
 Getrennte Daten (ADR-007 Stufe 2, höchste Trennstufe): `WA_TEST_TRENNUNG=1 python3 tests/run_e2e.py …` trennt die Testdaten jeder Gruppe vor dem
-Start mit `deploy/daten_trennen.py`; der Testserver ist dann die Mitarbeiterseite (`WA_DATEN_INTERN`), und `WA_SPUR_INTERN=1`
-schreibt jeden Zugriff einer öffentlichen Aktion auf ein internes Dokument ins Serverprotokoll (`[speicher] …`). Prüfmodus für
-Umbauten an der Einteilung – Gruppen, die Datendateien direkt über `UDATA` anfassen statt über `umgebung.storage_*`, scheitern
-dort erwartungsgemäß. Die Gruppe `datentrennung` läuft immer getrennt.
+Start mit `deploy/daten_trennen.py` (eine frühere Stufe mit `WA_TEST_TRENNSTUFE=n`, z. B. `1` = Stand nach dem Einspielen und vor dem Serverschritt); der Testserver ist dann die Mitarbeiterseite (`WA_DATEN_INTERN`), und `WA_SPUR_INTERN=1`
+schreibt jeden Zugriff einer öffentlichen Aktion auf ein internes Dokument ins Serverprotokoll (`[speicher] …`). Die volle Suite
+muss auch so grün sein. Die Hilfen in `tests/e2e/umgebung.py` lesen und schreiben dabei wie der Testserver: `storage_raw('kunden')`
+liefert das geteilte Kundendokument zusammengesetzt (Portalfelder aus `kunden`, übrige aus `kundenstamm`), `storage_write('kunden', …)`
+teilt es wieder auf; veröffentlichte und je Seite getrennte Dokumente liegen für die Mitarbeiterseite innen. Tests fassen Dateien
+deshalb nie direkt über `UDATA` an, sondern über `datenordner(name)` (Ordner eines Dokuments), `ablageordner()` (Dateiablage
+`dateien/`) und `trennstufe()` (0 = nicht getrennt). Die Gruppe `datentrennung` läuft immer getrennt (Testserver = Kundenseite).
 
 Windows: Der Teststarter beendet PHP-Prozesse plattformgerecht und erzeugt frische SQLite-Testdaten
 direkt mit dem vorhandenen Schema. Dies prüft **nicht** die Linux-Produktionsmigration (weiterhin
@@ -114,7 +118,7 @@ nicht fest eingetragen. **Echte Angebots-, Bestands- oder Nutzerdaten gehören n
 | benachrichtigung | 55 | Benachrichtigungen: nur Administrator, Prüfung der Adressen, Sicherheitsereignis mit Wer/IP, Bündelung mit Zähler, Anmeldesperre, Abmeldehinweis an eingestellte bzw. Antwortadresse, ausgeschaltet = keine E-Mail, Test-Knopf, Oberfläche |
 | mail_intern | 39 | Postfach für interne E-Mails (z. B. verwaltung@…): ohne eigenes gilt das Kunden-Postfach; einrichten nur Administrator, Prüfungen wie beim Kunden-Postfach, Passwort nur verschlüsselt (eigenes Dokument), nie in Antworten oder Protokoll; Zugangsdaten an Mitarbeiter, Benachrichtigungen, Testmail „intern“ und Bestellwunsch an das Team über das interne Postfach, Bestellkopie an den Kunden und Standard-Testmail über das Kunden-Postfach; Oberfläche mit zwei Postfächern, gespeicherte Verschlüsselung bleibt, 1440/390 px; Entfernen → zurück zum Kunden-Postfach |
 | postausgang | 54 | Postausgang von innen (ADR-007): Testserver als Kundenseite ohne Postfach (`WA_POSTAUSGANG=warteschlange`), zweiter Server als Mitarbeiterseite, Dienst `api/postausgang.php` wie im Container – Bestellfunktion nur mit Lebenszeichen des Dienstes, Bestellwunsch nur abgelegt (Quittung „eingegangen“, keine Mail von der Kundenseite, keine Postfachdaten im Auftrag), Versand durch den Dienst, Wiederholung nach 1/5/30 Minuten nur bei sicher nicht zugestellten Mails (unklarer Ausgang nie automatisch), Kopie erst nach der Team-Mail, danach Nachsenden im Eingabebereich, Durchsicht liegengebliebener Aufträge, Anmeldesperre und Abmeldehinweis nur als Auftrag, Schlüssel des hinterlegten Postfach-Passworts nur in `WA_GEHEIM_DIR`, Passwort an Server und Benutzer gebunden (v2: ausgetauschter Server bekommt nichts), Rückweg `--entbinden` auf v1 und `--umschluesseln`, Skript nie über den Webserver; Quittung im Kundenportal (Desktop und 390 px) |
-| datentrennung | 50 | Getrennte Daten wie im Betrieb (ADR-007 Stufe 2a/2b, Trennstufe 2, Daten vorher mit `deploy/daten_trennen.py` getrennt): Testserver = Kundenseite ohne internen Ordner, zweiter Server = Mitarbeiterseite mit `WA_DATEN_INTERN` – Kennzeichen, keine internen Dokumente im gemeinsamen Ordner; Mitarbeiterseite: Anmeldung, Nutzer und Kunden speichern, Postausgang; Kundenseite: Status, Angebot, Anmeldung (auch Fehlversuch), Merkliste, Bestellwunsch, eigene Bestellungen, Passwort, Abmelden, Abmeldelink, App-Grunddaten, Passwort-Link, Falle – ohne eine einzige Anfrage nach internen Dokumenten, Protokoll wird weiter geschrieben; keine Mitarbeiteranmeldung oder Ersteinrichtung auf der Kundenseite; Trennstufe 2: Kundendokument außen nur mit Portalfeldern, Kundenstamm/Empfänger/Bestand innen, Quittung mit gekürzter Adresse, offener Auftrag der Kundenseite, Postausgang bestimmt Empfänger und Inhalt, Auszug ohne Mengen, gefälschte Aufträge (fremde Empfänger, fremder Inhalt, Abmeldehinweis, Benachrichtigung) gehen nicht hinaus, Originalempfänger nach Änderung |
+| datentrennung | 59 | Getrennte Daten wie im Betrieb (ADR-007 Stufe 2a–2e, höchste Trennstufe, Daten vorher mit `deploy/daten_trennen.py` getrennt): Testserver = Kundenseite ohne internen Ordner, zweiter Server = Mitarbeiterseite mit `WA_DATEN_INTERN` – Kennzeichen, keine internen Dokumente im gemeinsamen Ordner; Mitarbeiterseite: Anmeldung, Nutzer und Kunden speichern, Postausgang; Kundenseite: Status, Angebot, Anmeldung (auch Fehlversuch), Merkliste, Bestellwunsch, eigene Bestellungen, Passwort, Abmelden, Abmeldelink, App-Grunddaten, Passwort-Link, Falle – ohne eine einzige Anfrage nach internen Dokumenten, Protokoll wird weiter geschrieben; keine Mitarbeiteranmeldung oder Ersteinrichtung auf der Kundenseite; Trennstufe 2: Kundendokument außen nur mit Portalfeldern, Kundenstamm/Empfänger/Bestand innen, Quittung mit gekürzter Adresse, offener Auftrag der Kundenseite, Postausgang bestimmt Empfänger und Inhalt, Auszug ohne Mengen, gefälschte Aufträge (fremde Empfänger, fremder Inhalt, Abmeldehinweis, Benachrichtigung) gehen nicht hinaus, Originalempfänger nach Änderung; Trennstufe 3: veränderte Kopien veröffentlichter Einstellungen – Mitarbeiterseite unbeirrt, Postausgang stellt her und meldet; Trennstufe 4: Kundenprotokoll ohne Einträge der Mitarbeiterseite, Protokollansicht zeigt beide; Trennstufe 5: Anmeldung der Mitarbeiter nur im internen Live-Verkehr |
 | order_management | 41 | Bestellverwaltung (API): Rechte, Statusübergänge, Revision, Kundenansicht ohne interne Felder („Bestätigt“ erscheint Kunden als „In Bearbeitung“), Wiederholungsschutz per requestId, Mailausfall |
 | order_management_ui | 12 | Bestellverwaltung im Eingabebereich (Artikelnummer ohne Kreis-Abzeichen, Summenzeilen auf dem Handy mit Beschriftung) und „Meine Bestellwünsche“ für Kunden (inkl. Mobil, sichere Darstellung) |
 | order_outbox | 40 | Dauerhafte Versandaufträge, Teilfehler, SMTP-Ausfall, verlorene Bestätigung, Sperren, Rechte und gezielter Neuversand |

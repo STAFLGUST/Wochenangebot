@@ -64,7 +64,7 @@ function orders_action(string $action): bool
     if ($action === 'bestellung_mail_retry') {
         $b = body();
         if (!is_string($b['nr'] ?? null) || !is_string($b['jobId'] ?? null) || !is_int($b['attempts'] ?? null) || ($b['confirm'] ?? false) !== true) fail('Versandauftrag und ausdrückliche Bestätigung erforderlich.', 422);
-        $o = order_outbox_send($b['nr'], $b['jobId'], $b['attempts'], $me['name']);
+        $o = order_outbox_send($b['nr'], $b['jobId'], $b['attempts'], $me['name'], true);
         audit('bestellung', 'E-Mail-Versand geprüft/erneut versucht: ' . $o['nr']);
         respond(['ok'=>true, 'order'=>order_view($o, true)]);
     }

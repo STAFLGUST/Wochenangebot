@@ -6,7 +6,9 @@
 umgesetzt und eingespielt (PR #286, Schlüssel umgezogen am 04.11.2026); **Stufe 2a** (interne Daten in eigenen Ordner)
 umgesetzt und eingespielt (PR #287, Daten getrennt am 04.11.2026); **Stufe 2b** (Trennstufe 2: Kundendokument geteilt, Bestand,
 Stammdaten, Postfächer und Empfänger innen, Postausgang prüft Versandaufträge) umgesetzt – wirksam erst mit dem Serverschritt
-`deploy/daten-trennen.sh trennen` nach dem Release (Freigabe des Inhabers); eigene Protokolle und Zähler der Kundenseite offen.
+`deploy/daten-trennen.sh trennen` nach dem Release (Freigabe des Inhabers); **Stufe 2c** (Trennstufe 3: Veröffentlichtes
+maßgeblich innen, Kundenseite nur eine nicht beschreibbare Kopie), **Stufe 2d** (Trennstufe 4: Protokoll getrennt) und **Stufe 2e**
+(Trennstufe 5: Anmeldeversuche, Zähler und Live-Verkehr je Seite) umgesetzt – ebenfalls erst mit `trennen`.
 **Anlass:** Sicherheitsdurchsicht vom 26.10.2026, Befund 5, und Durchsicht aus Kundensicht vom 04.11.2026 (ohne Befund,
 aber mit diesem Restrisiko). Umsetzung der Vorgabe aus [ADR-003](adr-003-domains-anmeldung.md): Trennung
 Kunden/Mitarbeiter; eine kompromittierte Anwendung darf nicht automatisch andere Fachbereiche öffnen.
@@ -216,7 +218,8 @@ verschickt, und enthält keine Daten, die sie nicht braucht.**
   nur einen offenen Auftrag ohne Empfänger an; der Postausgang bestimmt die Empfänger (Bestellfunktion, Adresse aus `kundenstamm`),
   ergänzt den Schnappschuss des Kunden einmalig aus den Stammdaten (GR-106) und erzeugt den Inhalt beim Versand selbst. An das Team
   gehen E-Mails nur an heutige oder frühere Empfänger (so bleibt beim Nachsenden der Originalempfänger), die Kopie nur an die
-  heutige Adresse des Kunden; je Kunde höchstens 30 am Tag. Andere Aufträge werden verworfen, stehen mit Grund beim Vorgang und
+  heutige Adresse des Kunden und automatisch nur bei eingeschalteter Kopie (eine noch offene Kopie kann das Team im Eingabebereich
+  ausdrücklich bestätigt trotzdem senden – wie mit gemeinsamen Daten); je Kunde höchstens 30 am Tag. Andere Aufträge werden verworfen, stehen mit Grund beim Vorgang und
   gehen als Sicherheitsereignis ins Protokoll. Abmeldehinweise enthalten nur noch die Kennung des Kunden (Firma und Adresse liest
   der Dienst selbst, nur wenn die Änderung gespeichert ist, höchstens 10 je Kunde und Tag); Benachrichtigungen der Kundenseite nimmt
   der Dienst nur als Sicherheitsereignis an. Bis Trennstufe 2 gilt wie bisher der gespeicherte Originalstand.
@@ -238,13 +241,73 @@ verschickt, und enthält keine Daten, die sie nicht braucht.**
   gefälschter Abmeldehinweis, fremde Benachrichtigung – gehen nicht hinaus; Originalempfänger nach einer Änderung; Auszug ohne
   Mengen), `postausgang`, `order_outbox` und die übrige Suite auf Stufe 0.
 - **Offen (eigene Schritte):**
-  - Protokoll, Anmeldeversuche, Firewall-Zähler und Live-Verkehr enthalten auch Einträge der Mitarbeiterseite und liegen außen →
-    eigene Dokumente der Kundenseite, die Oberflächen führen beide zusammen.
-  - Veröffentlichte Einstellungen, die auch die Mitarbeiterseite liest (`sicherheit`, `firewall`, `sperrliste`, `wartung`,
-    `angebote`, `angebot`, `fracht` …), liegen im gemeinsamen Ordner und wären für eine übernommene Kundenseite beschreibbar
-    (z. B. Sicherheitseinstellungen abschwächen, Angebotsnamen in der Wochenangebots-Mail). Abhilfe: Veröffentlichtes in einen
-    Bereich, den die Kundenseite nur lesen kann (eigener Ordner, nur lesbar eingebunden), bzw. PostgreSQL (Zielarchitektur §5) mit
-    eigenen Datenbanknutzern und Rechten je Bereich – Entscheidung des Inhabers.
+  - Protokoll: erledigt mit Stufe 2d (Trennstufe 4); Anmeldeversuche, Zähler und Live-Verkehr: erledigt mit Stufe 2e (Trennstufe 5).
+    Gemeinsam bleiben bewusst die Sperrliste (`sperrliste`: eine von der Kundenseite gesperrte Angreifer-Adresse soll überall gesperrt
+    sein), die Länderzählung und die Anmeldeorte der Kunden.
+  - Veröffentlichte Einstellungen, die auch die Mitarbeiterseite liest (`sicherheit`, `firewall`, `wartung`, `angebote`, `angebot`,
+    `fracht` …), lagen beschreibbar im gemeinsamen Ordner – erledigt mit Stufe 2c (Trennstufe 3, nächster Abschnitt). Zähler und
+    Listen, die die Kundenseite selbst schreibt (`sperrliste`, `laendersperre`, `anmeldenamen` …), bleiben gemeinsam.
+
+### Stufe 2c – Trennstufe 3: Veröffentlichtes kann die Kundenseite nicht verändern (umgesetzt, Serverschritt mit Freigabe)
+
+Nach Stufe 2b lagen Dokumente, die die Mitarbeiterseite veröffentlicht und selbst wieder liest, nur im gemeinsamen Ordner:
+Angebote und Einzelangebote, Einstellungen der Sicherheit, Firewall, Bedrohungsliste, Notfallmodus, Wartung, Fracht, Bestellfunktion,
+der Artikelauszug und das Lebenszeichen des Postausgangs. Eine übernommene Kundenseite hätte sie verändern können – etwa
+Sicherheitseinstellungen abschwächen, die Wartung oder den Notfallmodus beenden oder Angebotsnamen ändern, die in Mails stehen.
+
+- **Bereich `veroeffentlicht`** (`regeln/datenverantwortung.toml`, `trennstufe = 3`, erzeugt `DATEN_VEROEFFENTLICHT`): Die
+  Mitarbeiterseite und der Postausgang schreiben und lesen diese Dokumente im internen Ordner (maßgeblicher Stand) und legen nach
+  jedem Speichern eine Kopie in den gemeinsamen Ordner (`store_kopie`; in einer Transaktion erst nach deren Abschluss, mit dem
+  dann aktuellen Stand – eine zurückgesetzte Änderung erreicht die Kopie nie). Die Kundenseite liest nur die Kopie; schreiben,
+  sperren oder löschen bricht ab (`StoreKeinZugang`). Gemessen: Keine Kundenaktion schreibt eines dieser Dokumente.
+- **Abgleich:** Der Postausgang vergleicht bei jedem Durchgang (alle 5 Sekunden) jede Kopie mit dem internen Stand
+  (`store_kopien_abgleichen`). Weicht sie ab, stellt er sie wieder her; ist sie deutlich nach dem internen Stand geschrieben worden
+  (also nicht von der Mitarbeiterseite), meldet er das als Sicherheitsereignis („Veröffentlichte Daten im gemeinsamen Ordner
+  verändert …“, Benachrichtigung „Sicherheitsereignisse“).
+- **Wirkung:** Was die Mitarbeiterseite und der Postausgang lesen, kann die Kundenseite nicht mehr beeinflussen. Was sie Kunden
+  anzeigt, kann eine übernommene Kundenseite ohnehin bestimmen – dauerhaft verändert bleibt davon nichts.
+- **Serverschritt:** wie bisher `sh deploy/daten-trennen.sh trennen` (kopiert die veröffentlichten Dokumente nach innen; die Kopie
+  bleibt). Von Stufe 1 aus geht es in einem Schritt auf Stufe 3.
+- **Rückfall:** `sh deploy/daten-trennen.sh zusammenfuehren` – der interne Stand ersetzt dabei die Kopie im gemeinsamen Ordner.
+- **Geprüft:** `tests/deploy/test_daten_trennen.py` (Stufe 2→3 in Dateien und SQLite: Kopie und interner Stand, Transaktion
+  zurückgesetzt, Löschen, Kundenseite kann nicht schreiben/sperren/löschen, veränderte und gelöschte Kopie wiederhergestellt und
+  erkannt, Zusammenführen mit internem Stand), `tests/regeln/test_regeln.py`, E2E-Gruppe `datentrennung` auf Stufe 3 (veränderte
+  Bestell- und Sicherheitseinstellungen im gemeinsamen Ordner: Mitarbeiterseite unbeirrt, Postausgang stellt her und meldet,
+  Kundenseite sieht danach die echte Einstellung; Fracht speichern erreicht die Kopie).
+
+### Stufe 2d – Trennstufe 4: Protokoll der Mitarbeiterseite innen (umgesetzt, Serverschritt mit Freigabe)
+
+Das Änderungsprotokoll (`protokoll/<Monat>`) enthielt Einträge beider Seiten – auch Änderungen an Kunden (vorher → nachher, z. B.
+E-Mail und Anschrift), Nutzern, Rechten und Personal sowie Namen und Adressen der Mitarbeiter. Die Kundenseite konnte es lesen.
+
+- Ab Trennstufe 4 liegt `protokoll/*` innen (`trennstufe = 4`). Die Kundenseite schreibt ihre eigenen Einträge (Anmeldungen,
+  Fehlversuche, Bestellwünsche, Abmeldungen, Passwörter der Kunden) in `kundenprotokoll/<Monat>` im gemeinsamen Ordner und sieht das
+  Protokoll der Mitarbeiterseite nicht mehr.
+- Die Mitarbeiterseite liest beide zusammen, zeitlich sortiert (`protokoll_monat`, `protokoll_monate`) – Protokollansicht,
+  Sicherheitsübersicht und Diagnose zeigen wie bisher alles. Die Aufbewahrung (laufender Monat und sechs davor) gilt für beide.
+- Neu: Präfix-Stufen im Regelwerk (`DATEN_AB_STUFE_PRAEFIX`) für Muster wie `protokoll/*`.
+- **Serverschritt:** `sh deploy/daten-trennen.sh trennen` (verschiebt `protokoll/*` nach innen). **Rückfall:** `zusammenfuehren`
+  vereint beide Protokolle wieder zu `protokoll/*` (zeitlich sortiert; ein wiederholter Lauf fügt nichts doppelt hinzu).
+- **Geprüft:** `tests/deploy/test_daten_trennen.py` (Stufe 3→4 in Dateien und SQLite: Umzug, Kundenseite schreibt und sieht nur das
+  eigene Protokoll, Mitarbeiterseite liest beide, Aufbewahrung, Zusammenführen), E2E-Gruppe `datentrennung` auf Stufe 4
+  (Kundenprotokoll ohne Einträge der Mitarbeiterseite, Protokollansicht zeigt beide).
+
+### Stufe 2e – Trennstufe 5: Anmeldeversuche, Zähler und Live-Verkehr je Seite (umgesetzt, Serverschritt mit Freigabe)
+
+`logins` (Fehlversuche und Sperren je Adresse), `anmeldenamen` (Fehlversuche je Benutzername), `fw_zaehler` (Firewall-Zähler je
+Adresse) und `verkehr` (Live-Verkehr: Adresse, aufgerufene Aktion, Benutzername des Mitarbeiters) schrieben beide Seiten in dasselbe
+Dokument im gemeinsamen Ordner – die Kundenseite konnte Adressen und Aktionen der Mitarbeiter lesen.
+
+- Ab Trennstufe 5: Bereich `je_seite` – jede Seite schreibt ihr eigenes Dokument gleichen Namens (Kundenseite außen,
+  Mitarbeiterseite und Postausgang innen); `store_read`/`store_write`/`with_lock` wählen es selbst, Fachcode unverändert. Die
+  Mitarbeiterseite liest das der Kundenseite zusätzlich (`store_aussen_lesen`: Live-Verkehr, Lagebild, Sperren in der Übersicht,
+  Diagnose) und ändert es nur beim Aufheben einer Sperre (`store_aussen_aendern`). Jede Seite bremst ihre eigenen Fehlversuche.
+- **Serverschritt:** `trennen` verschiebt die bisherigen (gemischten) Dokumente nach innen; die Kundenseite beginnt mit leeren
+  Zählern. **Rückfall:** `zusammenfuehren` vereint beide Fassungen (Listen zeitlich, sonst je Schlüssel).
+- **Geprüft:** `tests/deploy/test_daten_trennen.py` (Stufe 4→5 in Dateien und SQLite: Umzug, jede Seite liest/schreibt nur ihre
+  Fassung, Mitarbeiterseite sieht beide und hebt Sperren der Kundenseite auf, Zusammenführen), E2E-Gruppe `datentrennung` auf Stufe 5
+  (Anmeldung der Mitarbeiter nur im internen Live-Verkehr), `schutz`, `anmeldebremse`, `sicherheit_*`. Dazu wie im Betrieb: von
+  Stufe 1 in einem Schritt auf Stufe 5 und mit `zusammenfuehren` zurück – alle Dokumente danach wie vorher (Dateien und SQLite).
 
 ## Wirkung
 
@@ -252,7 +315,9 @@ verschickt, und enthält keine Daten, die sie nicht braucht.**
 | --- | --- | --- | --- |
 | Personaldaten, Mitarbeiterkonten, CRM, Controlling, QS-Dokumente lesen | ja | ja (gemeinsamer Datenordner) | nein (2a) |
 | Kunden-Warenwirtschaftszahlen, Anschriften, Bestand, Einkaufspreise lesen | ja | ja | ja nach 2a, nein nach 2b |
-| Protokoll und Anmeldeversuche der Mitarbeiter lesen | ja | ja | ja (eigener Schritt offen) |
+| Sicherheits-, Firewall-, Wartungs- und Notfalleinstellungen oder Angebote dauerhaft verändern | ja | ja | nein nach 2c (Kopie wird wiederhergestellt und gemeldet) |
+| Protokoll der Mitarbeiterseite lesen (Änderungen an Kunden, Nutzern, Personal) | ja | ja | nein nach 2d |
+| Anmeldeversuche, Zähler und Live-Verkehr der Mitarbeiterseite lesen | ja | ja | nein nach 2e |
 | Mitarbeiterkonten in Keycloak übernehmen | ja | nein (kein Geheimnis, kein Netzweg) | nein |
 | Anmelde-Geheimnisse der Mitarbeiter-Hosts | ja | nein | nein |
 | Postfach-Passwort | ja | ja – nein seit dem Postausgang von innen (nach `postfach-schluessel.sh umziehen`) | nein |
@@ -289,6 +354,9 @@ niemand (Stufe 1b).
   getrennten Daten erst `daten-trennen.sh zusammenfuehren` (Stufe 2a).
 - **Daten trennen:** `sh deploy/daten-trennen.sh status` (Stufe und Plan, ändert nichts), `trennen` (auf die höchste Stufe des
   eingespielten Stands), `zusammenfuehren` – Abschnitte Stufe 2a und 2b.
+- **Prüfung in der CI:** Die volle E2E-Suite läuft zusätzlich mit getrennten Daten (SQLite wie auf dem Server, höchste
+  Trennstufe des Stands, `WA_TEST_TRENNUNG=1`, Aufträge „Ende-zu-Ende-Tests (sqlite, getrennt, Teil k/3)“). So fällt vor dem
+  Merge auf, wenn neuer Code Daten am falschen Ort erwartet oder die Kundenseite interne Dokumente braucht.
 - **Postausgang:** `docker compose ps postausgang` (Zustand „healthy“ = Lebenszeichen frisch), `docker compose logs postausgang`
   (je Durchgang mit Versand eine Zeile). Steht der Dienst länger als 15 Minuten, nimmt das Portal keine Bestellwünsche an.
   Einführung: Release einspielen (erstellt den Dienst), danach einmal `sh deploy/postfach-schluessel.sh umziehen`.

@@ -10,7 +10,11 @@ app/api/lib/datenbereiche-liste.php. Führt nie PHP aus.
 
 Trennstufen (Inhalt von daten/.daten-getrennt): 1 = interne Dokumente getrennt (Stufe 2a); 2 = zusätzlich Bestand, Stammdaten,
 Postfächer, Vorlage und Benachrichtigungen innen, Kundendokument geteilt (Portalfelder bleiben in kunden, alle übrigen Felder in
-kundenstamm) und Empfänger der Bestellwünsche innen (bestellung-empfaenger) – Stufe 2b.
+kundenstamm) und Empfänger der Bestellwünsche innen (bestellung-empfaenger) – Stufe 2b; 3 = veröffentlichte Dokumente (Angebote,
+Sicherheit, Firewall, Wartung …) maßgeblich innen, im gemeinsamen Ordner nur eine Kopie für die Kundenseite – Stufe 2c; 4 = Protokoll
+getrennt: protokoll/* (Mitarbeiterseite) innen, die Kundenseite schreibt in kundenprotokoll/* – Stufe 2d (beim Zusammenführen
+werden beide wieder zu protokoll/* vereint); 5 = Zähler, Anmeldeversuche und Live-Verkehr je Seite (logins, anmeldenamen, fw_zaehler,
+verkehr): die bisherigen ziehen nach innen, die Kundenseite beginnt neu – Stufe 2e (beim Zusammenführen vereint).
 
 Ablauf beim Trennen: interne Dokumente (Dateien bzw. Zeilen der SQLite-Datenbank), die Dateiablage dateien/ und die neuen internen
 Dokumente der Umstellung nach daten-intern kopieren und vergleichen, dann die Kennzeichen setzen (daten-intern/.daten-intern, zuletzt
@@ -37,7 +41,7 @@ import datenbank as db  # noqa: E402  GUARD, SIDECARS, SCHEMA, document_path, va
 MARKER_HAUPT = '.daten-getrennt'
 MARKER_INTERN = '.daten-intern'
 REGELN = Path(__file__).resolve().parent.parent / 'regeln' / 'datenverantwortung.toml'
-ZIELSTUFE = 2   # höchste Trennstufe dieses Stands (wie TRENNSTUFE_MAX in werkzeuge/regeln.py, DATEN_TRENNSTUFE in PHP)
+ZIELSTUFE = 5   # höchste Trennstufe dieses Stands (wie TRENNSTUFE_MAX in werkzeuge/regeln.py, DATEN_TRENNSTUFE in PHP)
 # Neue interne Dokumente der Stufe 2: entstehen beim Trennen aus kunden bzw. bestellung und gehen beim Zusammenführen dort wieder auf
 GETEILT = ('kundenstamm', 'bestellung-empfaenger')
 AUSZUG = 'artikelauszug'   # Auszug für die Kundenseite (erzeugt die Anwendung ab Stufe 2); beim Zusammenführen entfernt
@@ -52,7 +56,8 @@ def kundenseite(regeln=REGELN, stufe=ZIELSTUFE):
     """Dokumente im gemeinsamen Ordner bei dieser Trennstufe: (Namen, Präfixe aus Mustern „name/*“) – alle anderen sind intern."""
     namen, praefixe = set(), []
     for d in regeln_laden(regeln):
-        if d.get('bereich') == 'kundenseite' or (d.get('bereich') == 'intern' and d.get('trennstufe', 1) > stufe):
+        # veröffentlichte Dokumente bleiben immer (als Kopie) im gemeinsamen Ordner
+        if d.get('bereich') in ('kundenseite', 'veroeffentlicht', 'je_seite') or (d.get('bereich') == 'intern' and d.get('trennstufe', 1) > stufe):
             n = d['name']
             if n.endswith('/*'):
                 praefixe.append(n[:-1])
@@ -61,6 +66,24 @@ def kundenseite(regeln=REGELN, stufe=ZIELSTUFE):
     if not namen:
         raise ValueError('Keine Dokumente der Kundenseite in ' + str(regeln) + ' – Feld bereich fehlt?')
     return namen, praefixe
+
+
+def veroeffentlicht(regeln=REGELN, stufe=ZIELSTUFE):
+    """Veröffentlichte Dokumente dieser Stufe: maßgeblich innen, im gemeinsamen Ordner eine Kopie (wie DATEN_VEROEFFENTLICHT)."""
+    return sorted(d['name'] for d in regeln_laden(regeln) if d.get('bereich') == 'veroeffentlicht' and d.get('trennstufe', 1) <= stufe)
+
+
+def je_seite(regeln=REGELN, stufe=ZIELSTUFE):
+    """Je Seite getrennte Dokumente dieser Stufe (wie DATEN_JE_SEITE): außen die der Kundenseite, innen die der Mitarbeiterseite."""
+    return sorted(d['name'] for d in regeln_laden(regeln) if d.get('bereich') == 'je_seite' and d.get('trennstufe', 1) <= stufe)
+
+
+def je_seite_vereinen(a, b):
+    """Beide Fassungen eines je Seite getrennten Dokuments zusammen: Listen zeitlich (höchstens 500, wie der Ringpuffer), sonst Schlüssel."""
+    a, b = a or None, b or None   # leer aus PHP ([]) zählt nicht
+    if isinstance(a, list) or isinstance(b, list):
+        return sorted((a if isinstance(a, list) else []) + (b if isinstance(b, list) else []), key=lambda e: e.get('t', 0) if isinstance(e, dict) else 0)[-500:]
+    return {**(a or {}), **(b or {})}
 
 
 def kunden_felder(regeln=REGELN):
@@ -128,6 +151,30 @@ def dok_schreiben(root, name, wert):
         tmp.unlink()
         raise ValueError('Vergleich nach dem Schreiben fehlgeschlagen: ' + name)
     tmp.replace(p)
+
+
+def dok_namen(root, praefix):
+    """Dokumente unter einem Präfix (z. B. kundenprotokoll/) in beiden Speicherarten"""
+    if sqlite_aktiv(root):
+        with db.connect(root) as c:
+            return [n for (n,) in c.execute('SELECT name FROM documents WHERE substr(name,1,?)=? ORDER BY name', (len(praefix), praefix))]
+    d = root / praefix.rstrip('/')
+    return sorted(praefix + p.stem for p in d.glob('*.php')) if d.is_dir() else []
+
+
+def protokoll_vereinen(alt, neu):
+    """Einträge beider Protokolle eines Monats zeitlich sortiert. Einträge der Kundenseite, die schon im Protokoll stehen (wiederholter
+    Lauf nach einem Abbruch), kommen nicht noch einmal hinzu – gleiche Einträge innerhalb eines Protokolls bleiben erhalten."""
+    from collections import Counter
+    vorhanden = Counter(json_text(e) for e in (alt or []))
+    dazu = []
+    for e in neu or []:
+        k = json_text(e)
+        if vorhanden[k] > 0:
+            vorhanden[k] -= 1
+        else:
+            dazu.append(e)
+    return sorted((alt or []) + dazu, key=lambda x: str(x.get('t', '')) if isinstance(x, dict) else '')
 
 
 def dok_loeschen(root, name):
@@ -296,11 +343,22 @@ def kennzeichen(p, stufe):
     t.write_text(f'{stufe}\n'); t.replace(p)
 
 
-def umstellung_planen(haupt, intern, regeln, stufe):
-    """Neue interne Dokumente der Stufe 2 aus dem gemeinsamen Ordner: {Name: Inhalt}. Nur beim Überschreiten der Stufe 2 –
-    bis dahin gilt der gemeinsame Ordner (frühere Reste eines Abbruchs in daten-intern werden überschrieben)."""
+def umstellung_planen(haupt, intern, regeln, stufe, ziel=ZIELSTUFE):
+    """Neue interne Dokumente aus dem gemeinsamen Ordner: {Name: Inhalt}. Nur beim Überschreiten einer Stufe – bis dahin gilt
+    der gemeinsame Ordner (frühere Reste eines Abbruchs in daten-intern werden überschrieben). Stufe 2: kundenstamm und
+    bestellung-empfaenger; Stufe 3: maßgebliche Stände der veröffentlichten Dokumente (die Kopie bleibt im gemeinsamen Ordner)."""
     neu = {}
-    if stufe >= 2:
+    if stufe < 5 <= ziel:   # Zähler und Verkehr bisher (beide Seiten gemischt): nach innen, die Kundenseite beginnt neu
+        for n in je_seite(regeln, ziel):
+            v = dok_lesen(haupt, n)
+            if v is not None:
+                neu[n] = v
+    if stufe < 3 <= ziel:
+        for n in veroeffentlicht(regeln, ziel):
+            v = dok_lesen(haupt, n)
+            if v is not None:
+                neu[n] = v
+    if stufe >= 2 or ziel < 2:
         return neu
     kunden = dok_lesen(haupt, 'kunden')
     if isinstance(kunden, dict) and isinstance(kunden.get('customers'), list):
@@ -323,7 +381,7 @@ def plan(haupt, intern, regeln, ziel=ZIELSTUFE):
     dateien = interne_dateien(haupt, ks)
     zeilen = interne_zeilen(haupt, ks)
     ablage = ablage_dateien(haupt)
-    neu = umstellung_planen(haupt, intern, regeln, stufe) if ziel >= 2 else {}
+    neu = umstellung_planen(haupt, intern, regeln, stufe, ziel)
     bereinigen = ziel >= 2 and bereinigung_noetig(haupt, regeln)
     zustand = 'gemeinsam' if stufe == 0 else f'getrennt, Stufe {stufe}'
     print(f"Zustand: {zustand}; Ziel dieses Stands: Stufe {ziel}; Speicher: {'SQLite' if sqlite_aktiv(haupt) else 'Dateien'}")
@@ -334,8 +392,9 @@ def plan(haupt, intern, regeln, ziel=ZIELSTUFE):
         print('  ' + str(rel))
     if stufe < ziel:
         print(f'  Trennstufe {stufe} → {ziel}')
+    erklaerung = {'kundenstamm': ' (Anschrift, E-Mail, Telefon, Notiz, Vertreter, Warenwirtschaft der Kunden)', 'bestellung-empfaenger': ' (Empfänger der Bestellwünsche)'}
     for n in sorted(neu):
-        print(f'  neu in daten-intern: {n}' + (' (Anschrift, E-Mail, Telefon, Notiz, Vertreter, Warenwirtschaft der Kunden)' if n == 'kundenstamm' else ' (Empfänger der Bestellwünsche)'))
+        print(f'  neu in daten-intern: {n}' + erklaerung.get(n, ' (veröffentlicht: maßgeblich innen, Kopie bleibt für die Kundenseite)'))
     if bereinigen:
         print('  im gemeinsamen Ordner kürzen: kunden auf die Portalfelder, bestellung ohne Empfängeradressen')
     return stufe, ks, dateien, zeilen, ablage, neu
@@ -372,6 +431,11 @@ def trennen(haupt, intern, regeln, ziel=ZIELSTUFE):
                 dok_schreiben(intern, n, v)
         for rel in dateien + ablage:
             kopieren(haupt, intern, rel)
+        # Zähler und Verkehr (Stufe 5): außen leeren – die Kundenseite beginnt neu (vor dem Umschalten; ein Abbruch kostet nur Zähler)
+        if stufe < 5 <= ziel:
+            for n in je_seite(regeln, ziel):
+                if n in neu:
+                    dok_loeschen(haupt, n)
         # 2. umschalten: erst der interne Ordner, zuletzt der gemeinsame (ab hier liest die Anwendung mit der neuen Stufe)
         kennzeichen(intern / MARKER_INTERN, ziel)
         kennzeichen(haupt / MARKER_HAUPT, ziel)
@@ -436,17 +500,29 @@ def zusammenfuehren(haupt, intern, regeln):
     stufe = stufe_lesen(haupt)
     if stufe > ZIELSTUFE:
         raise ValueError(f'Daten sind weiter getrennt (Stufe {stufe}), als dieser Stand kennt – mit dem neueren Stand zusammenführen')
+    veroeff = set(veroeffentlicht(regeln, ZIELSTUFE))   # innen maßgeblich, außen eine Kopie: Kopie wird ersetzt, kein Vergleich
+    seiten = set(je_seite(regeln, ZIELSTUFE))            # je Seite: beide Fassungen werden vereint
+    ohne = set(GETEILT) | veroeff | seiten
     dateien = [p.relative_to(intern) for p in sorted(intern.rglob('*.php'))
                if not any(part.startswith('.') for part in p.relative_to(intern).parts) and p.relative_to(intern).parts[0] != 'dateien'
-               and str(p.relative_to(intern).with_suffix('')) not in GETEILT]
+               and str(p.relative_to(intern).with_suffix('')) not in ohne]
     ablage = ablage_dateien(intern)
     zeilen = []
     if sqlite_aktiv(intern):
         with db.connect(intern) as c:
-            zeilen = [r for r in db.validate(c) if r[0] not in GETEILT]
+            zeilen = [r for r in db.validate(c) if r[0] not in ohne]
     for rel in dateien + ablage:
         if (haupt / rel).exists() and (haupt / rel).read_bytes() != (intern / rel).read_bytes():
             raise ValueError('Datei gibt es in beiden Ordnern mit verschiedenem Inhalt: ' + str(rel))
+    # 0. veröffentlichte Dokumente: der interne Stand ersetzt die Kopie im gemeinsamen Ordner (die Kundenseite konnte sie verändern)
+    for n in sorted(veroeff):
+        v = dok_lesen(intern, n)
+        if v is not None and dok_lesen(haupt, n) != v:
+            dok_schreiben(haupt, n, v)
+    for n in sorted(seiten):
+        v = dok_lesen(intern, n)
+        if v is not None:
+            dok_schreiben(haupt, n, je_seite_vereinen(v, dok_lesen(haupt, n)))
     # 1. geteilte Dokumente im gemeinsamen Ordner wieder vollständig machen (bei Stufe 2 gelten dort nur die Portalfelder –
     #    die zusätzlichen Felder stören die laufende Stufe nicht, ein Abbruch hier lässt alles lesbar)
     if stufe >= 2:
@@ -458,6 +534,16 @@ def zusammenfuehren(haupt, intern, regeln):
         emp = dok_lesen(intern, 'bestellung-empfaenger')
         if isinstance(best, dict) and isinstance(emp, dict):
             dok_schreiben(haupt, 'bestellung', {**{k: v for k, v in best.items() if k != 'empfaenger'}, 'to': emp.get('to', [])})
+    # 1b. Protokoll der Kundenseite (ab Stufe 4) in das Protokoll innen übernehmen – das kommt gleich zurück nach daten/
+    kprot = dok_namen(haupt, 'kundenprotokoll/')
+    for n in kprot:
+        m = 'protokoll/' + n.split('/', 1)[1]
+        dok_schreiben(intern, m, protokoll_vereinen(dok_lesen(intern, m), dok_lesen(haupt, n)))
+    if kprot and sqlite_aktiv(intern):
+        with db.connect(intern) as c:
+            zeilen = [r for r in db.validate(c) if r[0] not in ohne]
+    if kprot and not sqlite_aktiv(intern):
+        dateien = sorted(set(dateien) | {Path(('protokoll/' + n.split('/', 1)[1]) + '.php') for n in kprot})
     # 2. zurückkopieren und vergleichen
     if zeilen:
         with db.connect(haupt) as c:
@@ -480,10 +566,14 @@ def zusammenfuehren(haupt, intern, regeln):
         (intern / '.sqlite-active').unlink()
     for rel in dateien + ablage:
         (intern / rel).unlink()
-    for n in GETEILT:
+    for n in sorted(ohne):
         if (intern / (n + '.php')).is_file():
             (intern / (n + '.php')).unlink()
     dok_loeschen(haupt, AUSZUG)
+    for n in kprot:
+        dok_loeschen(haupt, n)
+    if (haupt / 'kundenprotokoll').is_dir() and not any((haupt / 'kundenprotokoll').iterdir()):
+        (haupt / 'kundenprotokoll').rmdir()
     ordner_aufraeumen(intern, dateien + ablage)
     if (intern / 'dateien').is_dir() and not any((intern / 'dateien').iterdir()):
         (intern / 'dateien').rmdir()

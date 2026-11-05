@@ -68,6 +68,8 @@ Eine **Gruppe** ist eine Testdatei `tests/e2e/test_<gruppe>.py` mit einem Eintra
 | `WA_TEST_STORAGE=sqlite` | Testdaten in SQLite statt Dateien | Dateien |
 | `WA_TEIL=k/n` | nur Teil *k* von *n* (Aufteilung nach `GEWICHT`, siehe unten) | alle Gruppen |
 | `WA_RETRY=0` | fehlgeschlagene Gruppen nicht wiederholen | Wiederholung an |
+| `WA_TEST_TRENNUNG=1` | Testdaten jeder Gruppe vorher getrennt (ADR-007, höchste Trennstufe), Testserver = Mitarbeiterseite; die volle Suite muss auch so grün sein (`tests/README.md`) | gemeinsame Daten |
+| `WA_TEST_TRENNSTUFE=n` | mit `WA_TEST_TRENNUNG=1`: auf Stufe *n* statt der höchsten trennen (z. B. `1` = Server nach dem Einspielen, vor `daten-trennen.sh trennen`) | höchste Stufe |
 | `WA_SHOTS` | Ordner für Bildschirmfotos | `tests/.ergebnisse/` |
 
 **`GEWICHT`:** geschätzte Laufzeit je Gruppe in Sekunden (Median aus CI-Protokollen). Bestimmt nur die
@@ -81,13 +83,13 @@ Eintrag. Lokal nachstellen, was ein CI-Teil ausführt: `WA_TEIL=2/3 python3 test
   `test-<gruppe>-fehlversuch.log`). Nie zwei Testläufe gleichzeitig im selben Arbeitsordner; parallele Agenten arbeiten
   je in ihrem Worktree und mit eigenem `WA_PORT_BASE`.
 - `tests/.ergebnisse/` – Bildschirmfotos der Oberflächentests. In der CI bei Fehlern als Artefakt
-  `e2e-ergebnisse-<speicherart>-teil<k>` (7 Tage).
+  `e2e-ergebnisse-<speicherart>-teil<k>` bzw. `e2e-ergebnisse-sqlite-getrennt-teil<k>` (7 Tage).
 
 ### Hilfsmodule in `tests/e2e/`
 
 | Modul | Zweck |
 | --- | --- |
-| `umgebung.py` | einzige Quelle für Adressen und Pfade: `BASE`, `SMTP_PORT`, `SMTP_PORT2`, `AUX_PORT`, `SH` (Bildschirmfotos), `FIX`, `WORK`, `XL44` (Test-Angebotsliste); Speicherzugriff unabhängig von der Speicherart (`storage_raw`, `storage_write`, `storage_docs`, `storage_sqlite`, `storage_lock`); Warten ohne feste Zeiten (`wait_text`, `until`); `shot()` für Bildschirmfotos |
+| `umgebung.py` | einzige Quelle für Adressen und Pfade: `BASE`, `SMTP_PORT`, `SMTP_PORT2`, `AUX_PORT`, `SH` (Bildschirmfotos), `FIX`, `WORK`, `XL44` (Test-Angebotsliste); Speicherzugriff unabhängig von der Speicherart und von getrennten Daten (`storage_raw`, `storage_write`, `storage_docs`, `storage_sqlite`, `storage_lock`; Ordner nur über `datenordner(name)` und `ablageordner()`, nie direkt `UDATA`; `trennstufe()`); Warten ohne feste Zeiten (`wait_text`, `until`); `shot()` für Bildschirmfotos |
 | `kunden_hilfe.py` | `Client` – HTTP-Client mit eigener Cookie-Sitzung für API-Tests. `call(aktion, daten)` liefert `(status, json)` (mit `raw=True` zusätzlich den Text), übernimmt das CSRF-Token aus Antworten und setzt `X-Forwarded-For` auf die IP des Clients (Standard `198.51.100.1`); zusätzliche Kopfzeilen über `client.headers`. Außerdem `B` (= `BASE`) |
 | `auth_helpers.py` | eigener `Client` mit `login()` und `expire()`; `expire_session()` setzt eine Passwortbestätigung in der Sitzungsablage zurück (ohne Testendpunkt in der Anwendung); Nutzerdaten lesen/ändern |
 | `smtp_test.py` | `TestSmtp(port, …)` – Test-Mailserver im Speicher (EHLO, optional STARTTLS/TLS, AUTH, `messages`); Empfänger `abgelehnt@…` werden mit 550 abgewiesen |
@@ -319,7 +321,7 @@ Bei jedem Pull Request und jedem Commit auf `main` läuft `.github/workflows/ci.
 - Auf `main` werden die schweren Aufträge übersprungen, wenn der PR genau denselben Inhalt schon vollständig geprüft hat
   ([`docs/release-freigabe.md`](../release-freigabe.md), „Keine Doppelprüfung nach dem Merge“).
 
-Bei Fehlern: Artefakte `e2e-ergebnisse-<speicherart>-teil<k>`, `oidc-ergebnisse` bzw. `app-ergebnisse` herunterladen (Protokolle und
+Bei Fehlern: Artefakte `e2e-ergebnisse-<speicherart>-teil<k>` (mit getrennten Daten `…-sqlite-getrennt-teil<k>`), `oidc-ergebnisse` bzw. `app-ergebnisse` herunterladen (Protokolle und
 Bildschirmfotos), Gruppe lokal mit `WA_JOBS=1 python3 tests/run_e2e.py <gruppe>` nachstellen.
 
 Stand: 2026-10-24
