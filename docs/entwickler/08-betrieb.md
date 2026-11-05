@@ -61,7 +61,7 @@ den Release vorlegt.
 10. Prüfliste der Dateiprüfung (`werkzeuge/integritaet.py`)
 11. Tests ohne fest eingetragene Ports (`127.0.0.1:<Port>` in `tests/e2e/` nur in `umgebung.py`)
 12. Unit-Tests: Bestands-Parser, Bestandswochen und Preisvergleich (PHP und JavaScript), gemeinsames Bearbeiten
-13. Unit-Tests der CI-Werkzeuge (`test_run_e2e_teile.py`, `test_ci_nachweis.py`, `test_apt_vorrat.py`)
+13. Unit-Tests der CI-Werkzeuge (`test_run_e2e_teile.py`, `test_ci_nachweis.py`, `test_apt_vorrat.py`, `test_images_aktualisieren.py`)
 14. Workflows prüfen (`actionlint`, Version und Prüfsumme fest)
 
 **Keine Doppelprüfung nach dem Merge:** Die PR-CI prüft den Stand nach dem Zusammenführen (`refs/pull/N/merge`). Ist der
@@ -75,6 +75,7 @@ Sicherheitsprüfungen laufen trotzdem. Bei jedem Zweifel läuft die volle CI. Ei
 | --- | --- | --- | --- |
 | Release | `.github/workflows/release.yml` | von Hand oder durch `release_vorlegen` | wartet auf Freigabe in `produktion`, prüft (`.github/scripts/release-pruefen.sh schutz`, `aktuell`, `ci`) und legt den Tag `release-<JJJJMMTT-HHMMSS>` mit Freigebendem und Grund an; nur vom Branch `main`; ein neuer Lauf beendet einen älteren wartenden |
 | Zwischenspeicher | `.github/workflows/zwischenspeicher.yml` | Push auf `main`, montags (Zeitplan), von Hand, PR nur bei Änderungen am Ablauf | füllt Paketvorrat (`testumgebung.sh vorrat`) und Keycloak/Caddy-Downloads (`tests/oidc/umgebung.sh laden`) für E2E und Keycloak; übernommen werden Pakete nur mit passender Prüfsumme (`.github/scripts/apt_vorrat.py`) |
+| Sicherheitsupdates | `.github/workflows/sicherheitsupdates.yml` | montags 04:41 UTC, von Hand | `werkzeuge/images_aktualisieren.py`: neue Digests derselben Image-Fassungen (vom Herausgeber neu gebaut, meist Betriebssystem-Korrekturen) überall gleich eintragen, Branch `plattform/sicherheitsupdates-…`, Pull Request (ersetzt einen älteren offenen), CI für den Branch starten; neuere Fassungen nur als Hinweis. Merge/Release wie immer durch den Inhaber. Digests stehen deshalb nie in Workflow-Dateien (das GITHUB_TOKEN darf sie nicht ändern; `tests/deploy/test_images.py` prüft das) |
 | CI-Nachweis (Trockenlauf) | `.github/workflows/ci-nachweis.yml` | von Hand | zeigt, ob ein `main`-Commit die PR-Prüfung übernehmen würde und warum (nicht); ändert nichts, zählt nicht als CI |
 
 Die App `mobile/` prüft die CI im Auftrag „App prüfen (iOS, Android, Web)“ (Typprüfung, Unit-Tests, Bundles, `app_web`).

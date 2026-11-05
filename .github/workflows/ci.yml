@@ -137,12 +137,13 @@ jobs:
           python3 -m venv /tmp/adressen
           /tmp/adressen/bin/pip install -q --no-deps --only-binary=:all: --require-hashes -r deploy/karte/requirements.txt
           /tmp/adressen/bin/python tests/unit/test_adressen.py
-      - name: Unit-Tests CI-Werkzeuge (Aufteilung der Testgruppen, Nachweis nach dem Merge, Paketvorrat, Entwickler-Doku)
+      - name: Unit-Tests CI-Werkzeuge (Aufteilung der Testgruppen, Nachweis nach dem Merge, Paketvorrat, Entwickler-Doku, Image-Updates)
         run: |
           python3 tests/unit/test_run_e2e_teile.py
           python3 tests/unit/test_ci_nachweis.py
           python3 tests/unit/test_apt_vorrat.py
           python3 tests/unit/test_doku.py
+          python3 tests/unit/test_images_aktualisieren.py
       - name: Workflows prüfen (actionlint)
         run: |
           curl -sSLf -o /tmp/al.tgz "https://github.com/rhysd/actionlint/releases/download/v${ACTIONLINT_VERSION}/actionlint_${ACTIONLINT_VERSION}_linux_amd64.tar.gz"
@@ -204,9 +205,12 @@ jobs:
       - name: Image bauen und mit dem Grundimage vergleichen
         run: bash deploy/image/pruefen.sh
       - name: Betriebskonfiguration der zentralen Anmeldung prüfen (deploy/anmeldung)
+        # Images genau in der Fassung der Compose-Datei (Digests stehen nur dort – der wöchentliche Lauf „Sicherheitsupdates“
+        # darf keine Workflow-Dateien ändern)
         run: |
-          docker pull -q quay.io/keycloak/keycloak:26.8.1@sha256:79c623a22abacf3fe6c00a5fb30f5b7843d717b234033b80995891c06116d244 >/dev/null
-          docker pull -q postgres:17-alpine@sha256:b0f9560a2de083e2cc7382e75f808c7381a32852a7ec49117deedb300e552b24 >/dev/null
+          grep -hE '^\s*image:' deploy/anmeldung/docker-compose.anmeldung.yml | awk '{print $2}' | grep -v '^stafl-app:' | sort -u | while read -r img; do
+            docker pull -q "$img" >/dev/null
+          done
           bash deploy/anmeldung/pruefen.sh
       - name: Trivy installieren
         run: |
