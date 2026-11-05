@@ -524,7 +524,7 @@ function renderTable(list, grouped) {
    Die Gruppen werden in Leserichtung (spaltenweise) auf gleich hohe Spalten verteilt; nur eine Gruppe, die nicht
    sinnvoll in den Rest einer Spalte passt, wird geteilt (Kopf mit „Forts.“ wiederholt). Bildschirm und Druck nutzen dasselbe Verfahren. */
 const plPrice = (p) => (p.status === 'value' ? fmtNum.format(p.value) : p.status === 'request' ? 'a. Anfr.' : '—');
-const plTitle = () => { const m = DATA.meta || {}; return m.title || (m.week ? `Freibleibendes Angebot für die KW ${m.week}${m.year ? '/' + m.year : ''}` : 'Angebot'); };
+const plTitle = () => window.OfferCore.titelMitKw(DATA.meta);   // immer die KW des Angebots, nicht die des früheren Imports
 /* Text in Anführungszeichen (z. B. „Fleischmeister“) hervorheben wie in der Druckliste */
 const plGroupName = (n) => esc(n).replace(/(&quot;|„|“|”)([^&„“”]{2,40}?)(&quot;|“|”)/g, '<em class="al-brand">„$2“</em>');
 /* Preisspalten einer Gruppe: Zusatzpreise links, Hauptpreis rechts – wie in der Druckliste (Flugware | Schiffsware) */

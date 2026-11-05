@@ -584,18 +584,39 @@
     return s || src;
   }
 
-  /* Bezeichnung und Herkunft vereinheitlichen:
-     – „frisch“ nur im Zustand
+  /* Überschrift der Angebotsliste (Bildschirm und Druck): Titel der früher importierten Excel-Liste, aber immer mit der
+     Kalenderwoche des Angebots – der Titel wurde beim Wechsel der Woche nicht nachgezogen („KW 43“ im Angebot der KW 45,
+     gemeldet 05.11.2026). Ohne Titel: „Freibleibendes Angebot für die KW 45/2026“. */
+  const KW_IM_TITEL = /\bKW\s*\d{1,2}(?:(\s*[-/]\s*)\d{4})?/i;
+  function titelMitKw(meta) {
+    const m = meta || {};
+    const t = clean(m.title || '');
+    if (t && m.week && KW_IM_TITEL.test(t)) return t.replace(KW_IM_TITEL, (x, sep) => `KW ${m.week}${sep && m.year ? sep + m.year : ''}`);
+    if (t) return t;
+    return m.week ? `Freibleibendes Angebot für die KW ${m.week}${m.year ? '/' + m.year : ''}` : 'Angebot';
+  }
+
+  /* Vorschlag für die Bezeichnung eines neu aufgenommenen Artikels (z. B. aus der Bestandsliste der Warenwirtschaft):
+     – „frisch“ gehört in den Zustand („frisch/gefr.“ bleibt)
      – Eigenmarke „Fleischmeister“ (Gruppe/Bereich) steht in der Bezeichnung
-     – Herkunft als Kürzel; von Hand gesetzte Kürzel bleiben */
+     Nur ein Vorschlag beim Anlegen – von Hand eingegebene Bezeichnungen ändert das System nicht (Inhaber 05.11.2026). */
+  function nameVorschlag(name, group) {
+    const g = group || {};
+    let n = stripFrisch(name);
+    if (/fleischmeister/i.test(`${g.name || ''} ${g.section || ''}`) && !/fleischmeister/i.test(n)) n = n.replace(/^([^,]+?)(\s*,|$)/, '$1 Fleischmeister$2');
+    return n;
+  }
+
+  /* Merkmale vereinheitlichen (beim Laden des Entwurfs, Wiederherstellen einer Version, Stammdaten):
+     – Herkunft als Kürzel; von Hand gesetzte Kürzel bleiben
+     – unbekannter Zustand wird „frisch“, wenn die Bezeichnung „frisch“ nennt
+     Die Bezeichnung selbst bleibt unverändert – sie wird ohne Einschränkung von Hand gepflegt (Inhaber 05.11.2026;
+     vorher wurden „frisch“ entfernt und „Fleischmeister“ ergänzt, auch in von Hand geänderten Bezeichnungen). */
   function normalizeItem(it, group) {
     const g = group || {};
     let changed = false;
     const n0 = it.name;
-    let name = stripFrisch(n0);
-    if (name !== n0 && it.condition === 'unbekannt') { it.condition = 'frisch'; }
-    if (/fleischmeister/i.test(`${g.name || ''} ${g.section || ''}`) && !/fleischmeister/i.test(name)) name = name.replace(/^([^,]+?)(\s*,|$)/, '$1 Fleischmeister$2');
-    if (name !== n0) { it.name = name; changed = true; }
+    if (it.condition === 'unbekannt' && stripFrisch(n0) !== n0) { it.condition = 'frisch'; changed = true; }
     if (!it.origin || ORIGIN_LONG[it.origin] !== undefined) {
       const o = originFrom(low(n0)) || originFrom(low(g.name || '')) || ORIGIN_LONG[it.origin] || it.origin || null;
       if ((o || null) !== (it.origin || null)) { it.origin = o; changed = true; }
@@ -700,7 +721,7 @@
   const api = {
     CATEGORY_ORDER, CONDITIONS, CONDITION_LABELS, PRICE_STATUS_LABELS,
     xlsxReadWorkbook, parseOfferWorkbook, parseOfferGrid, parsePrice, suggestAttributes,
-    enrichOffer, isoWeekRange, diffOffers, validateModel, clean, stripFrisch, normalizeItem, ORIGIN_CODES, mergeModels, sameModel: same, saleFor, empfehlungFor,
+    enrichOffer, isoWeekRange, diffOffers, validateModel, clean, stripFrisch, nameVorschlag, titelMitKw, normalizeItem, ORIGIN_CODES, mergeModels, sameModel: same, saleFor, empfehlungFor,
   };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   else root.OfferCore = api;

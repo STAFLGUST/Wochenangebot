@@ -86,7 +86,11 @@ with sync_playwright() as p:
     new = a.locator(f'tr[data-id]:has(input[data-f="code"][value="{code}"])')
     check('article added with price + stock', new.count() == 1 and new.locator('input[data-f=price]').input_value() == '9,99' and new.locator('td.e-stock').inner_text().strip() != '—', code)
     exp = re.sub(r'[\s,]*\bfrisch\b\.?[\s,.]*$', '', name, flags=re.I).strip() or name
-    check('name taken from stock list (without frisch)', new.locator('input[data-f=name]').input_value() == exp, (new.locator('input[data-f=name]').input_value(), exp))
+    # Vorschlag beim Anlegen: ohne „frisch“, in Gruppen der Eigenmarke mit „Fleischmeister“ (vorher erst beim nächsten Laden ergänzt)
+    gk = new.evaluate("r => { const s = r.closest('section.gcard'); return s ? [...s.querySelectorAll('.ghead .g-name, .ghead .g-sec')].map((e) => e.value).join(' | ') : '' }")
+    if re.search('fleischmeister', gk, re.I) and not re.search('fleischmeister', exp, re.I):
+        exp = re.sub(r'^([^,]+?)(\s*,|$)', r'\1 Fleischmeister\2', exp, count=1)
+    check('name taken from stock list (without frisch, Marke in Fleischmeister-Gruppen)', new.locator('input[data-f=name]').input_value() == exp, (new.locator('input[data-f=name]').input_value(), exp, gk[:80]))
     # Preis auf Vorwochenpreis → Differenz verschwindet
     pi = row.locator('input[data-f=price]'); pi.fill(de(round(preis('10601') - 0.4, 2))); pi.press('Tab'); a.wait_for_timeout(800)
     row = a.locator('tr[data-id]:has(input[data-f="code"][value="10601"])').first
@@ -94,6 +98,10 @@ with sync_playwright() as p:
     # Woche ändern → Vorwoche neu
     a.fill('#m-week', '42'); a.press('#m-week', 'Tab'); a.wait_for_timeout(1200)
     check('week change reloads Vorwoche (none before KW42 → column hidden)', not a.locator('tr[data-id] td.e-prev').first.is_visible())
+    # Titel aus dem früheren Import zieht die Woche mit (gemeldet 05.11.2026: Kundenseite zeigte „KW 43“ im Angebot der KW 45)
+    from umgebung import until as _until   # gespeicherten Entwurf abwarten (Python-seitig)
+    _dm = _until(lambda: (lambda m: m if m and m.get('week') == 42 else None)(a.evaluate("async () => ((await (await fetch('../api/?action=draft')).json()).draft || {}).meta")), timeout=10) or {}
+    check('week change: imported title follows the week', 'KW 42' in (_dm.get('title') or '') and 'KW 43' not in (_dm.get('title') or ''), _dm.get('title'))
     a.fill('#m-week', '43'); a.press('#m-week', 'Tab'); a.wait_for_timeout(1200)
     check('back to KW 43 shows Vorwoche again', a.locator('tr[data-id] td.e-prev').first.is_visible())
     # Mobil
