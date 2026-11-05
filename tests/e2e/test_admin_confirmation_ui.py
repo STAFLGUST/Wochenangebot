@@ -3,10 +3,14 @@
 Geprüft im Modul Sicherheit (Einstellungen → Anmeldung und Passwörter, Dialog auf 390 px): Die Bestätigung legt sich im selben
 Dialog über das Formular (kein zweiter Dialog); Abbrechen kehrt mit allen Eingaben zum Formular zurück, ohne die Änderung erneut
 zu senden; ein falsches Passwort lässt den Schritt offen und leert das Feld; nach richtiger Bestätigung wird die Änderung genau
-einmal wiederholt. Nur synthetische Testdaten."""
+einmal wiederholt.
+
+Dazu die Bestätigung im eigenen Fenster (Keycloak-Hosts, hier nachgestellt): Kommt aus dem Anmeldefenster keine Meldung an,
+genügt sein Schließen – die Anfrage wird wiederholt; ob bestätigt ist, entscheidet weiter der Server. Nur synthetische Testdaten."""
 import json
+import re
 import sys
-from umgebung import BASE, storage_raw  # Testserver je Gruppe (parallel)
+from umgebung import BASE, SH, storage_raw  # Testserver je Gruppe (parallel)
 from playwright.sync_api import sync_playwright
 from auth_helpers import expire_session, PW
 results = []
@@ -57,6 +61,56 @@ with sync_playwright() as p:
     check('Einstellung gespeichert', sicherheit().get('pwMin') == 12, sicherheit())
     page.keyboard.press('Escape')
     check('keine Skriptfehler', not errors, errors)
+
+    # Bestätigung im eigenen Fenster (zentrale Anmeldung; Server-Antwort und Anmeldefenster hier nachgestellt): Das Fenster
+    # schließt sich, ohne eine der drei Meldungen zu senden (BroadcastChannel, postMessage, localStorage) – der Eingabebereich
+    # wiederholt die Anfrage trotzdem, sobald es zu ist. Lehnt der Server erneut ab, bleibt alles offen (nichts umgangen).
+    ctx = browser.new_context(viewport={'width': 1280, 'height': 900})
+    pg = ctx.new_page(); fehler = []
+    pg.on('pageerror', lambda e: fehler.append(str(e)))
+    ablehnen = {'n': 1}; versuche = []
+    def kunde_save(route):
+        versuche.append(route.request.method)
+        if len(versuche) <= ablehnen['n']:
+            route.fulfill(status=403, content_type='application/json', body=json.dumps({
+                'ok': False, 'code': 'reauth_required', 'anmelden': '/oidc/callback?iss=test&target_link_uri=', 'error': 'Bitte bestätigen.'}))
+        else:
+            route.continue_()
+    ctx.route(re.compile(r'/api/\?action=kunde_save(&|$)'), kunde_save)
+    ctx.route('**/oidc/callback*', lambda r: r.fulfill(status=200, content_type='text/html',
+                                                      body='<!doctype html><title>Anmeldung</title><script>window.close()</script>'))
+    pg.goto(BASE + '/admin/'); pg.wait_for_selector('#screen-auth:not([hidden])')
+    pg.fill('#au-user', 'admin'); pg.fill('#pw1', PW); pg.click('#auth-submit')
+    pg.wait_for_selector('#screen-editor:not([hidden])')
+    pg.click('#vt-kunden'); pg.wait_for_selector('#view-kunden #k-add')
+
+    def kunde_anlegen(firma):
+        pg.click('#k-add'); pg.wait_for_selector('#dlg-kunde[open] [name="firma"]')
+        pg.fill('#kunde-body [name="firma"]', firma)
+        pg.click('#kunde-body [data-kact=gen]')   # Startpasswort vorschlagen (Pflicht für den Zugang)
+        pg.click('#kunde-body [type="submit"]'); pg.wait_for_selector('#dlg-reauth-kc[open]')
+        with ctx.expect_page() as neu:
+            pg.click('#rkc-auf')
+        return neu.value
+
+    fenster = kunde_anlegen('Gasthaus Fensterrückfall')
+    pg.wait_for_function("!document.querySelector('#dlg-kunde').open", timeout=10000)
+    check('eigenes Fenster ohne Meldung: nach dem Schließen genau einmal wiederholt und gespeichert', versuche == ['POST', 'POST']
+          and fenster.is_closed() and pg.locator('#dlg-reauth-kc[open]').count() == 0, versuche)
+    pg.wait_for_selector('#view-kunden tr[data-kid]:has-text("Gasthaus Fensterrückfall")')
+    check('… Kunde angelegt', '"Gasthaus Fensterrückfall"' in (storage_raw('kunden') or ''))
+
+    ablehnen['n'] = 2; versuche.clear()
+    kunde_anlegen('Gasthaus Nicht Bestätigt')
+    pg.wait_for_selector('#dlg-reauth-kc[open] #rkc-status.st-warn')
+    check('Server lehnt nach dem Schließen erneut ab: Hinweis „noch nicht angekommen“, Eingaben bleiben',
+          'noch nicht angekommen' in pg.inner_text('#rkc-status') and pg.locator('#dlg-kunde[open]').count() == 1
+          and pg.input_value('#kunde-body [name="firma"]') == 'Gasthaus Nicht Bestätigt' and versuche == ['POST', 'POST'], versuche)
+    pg.screenshot(path=SH + '/bestaetigung-fenster-rueckfall-1280.png')
+    pg.click('#dlg-reauth-kc [data-close].btn:not(.icon)'); pg.wait_for_selector('#dlg-reauth-kc', state='hidden')
+    check('… Abbrechen: nichts gespeichert', '"Gasthaus Nicht Bestätigt"' not in (storage_raw('kunden') or '') and versuche == ['POST', 'POST'], versuche)
+    check('… keine Skriptfehler', not fehler, fehler)
+    ctx.close()
     browser.close()
 print(f'{sum(results)}/{len(results)} passed')
 sys.exit(0 if all(results) else 1)

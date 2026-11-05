@@ -2,7 +2,7 @@
 
 <!-- ERZEUGT von `python3 werkzeuge/doku.py erzeugen` – nicht von Hand ändern. Quelle: Funktionen und Kommentare im Code. Die CI prüft, dass diese Datei zum Code passt. -->
 
-108 Dateien, 1054 Funktionen – in der Reihenfolge der Datei, **fett** die Abschnitte. Text = erste Aussage des Kommentars direkt über der Funktion (Python: Docstring). Übersicht aller Module: [README.md](README.md).
+108 Dateien, 1056 Funktionen – in der Reihenfolge der Datei, **fett** die Abschnitte. Text = erste Aussage des Kommentars direkt über der Funktion (Python: Docstring). Übersicht aller Module: [README.md](README.md).
 
 ## `.github/scripts/apt_vorrat.py`
 
@@ -1050,6 +1050,8 @@ _Abgelaufene Admin-Freigabe im Browser_
 
 - `check(name, value, info)`
 - `sicherheit()`
+- `kunde_save(route)`
+- `kunde_anlegen(firma)`
 
 ## `tests/e2e/test_aktionsregister.py`
 

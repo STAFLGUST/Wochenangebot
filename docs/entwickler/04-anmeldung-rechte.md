@@ -153,7 +153,8 @@ beginnen, und hängen die aktuelle Seite als `target_link_uri` an; mod_auth_open
 eigenen Hosts (`OIDCRedirectURLsAllowed`). Nach der Rückkehr ist `auth_time` neuer als `authAt`; `oidc_nutzer()` setzt
 damit `adminConfirmedAt` neu (Protokoll `reauth`). Im Eingabebereich (`admin.js`) laufen **schreibende** Anfragen über ein
 eigenes Fenster: Rücksprungziel ist `admin/bestaetigt.html` (meldet „bestätigt“ und schließt sich), danach wiederholt
-`api()` die Anfrage – der Server entscheidet erneut, ob bestätigt ist. So gehen offene Dialoge (z. B. Kunde mit neuem
+`api()` die Anfrage – der Server entscheidet erneut, ob bestätigt ist. Kommt keine Meldung an, genügt das Schließen des
+Fensters (der Eingabebereich prüft alle 0,5 s, ob es noch offen ist). So gehen offene Dialoge (z. B. Kunde mit neuem
 Passwort, Mitarbeiterkonto) nicht verloren; vorher wurde die Seite gewechselt und die Änderung nie ausgeführt.
 
 **Abmelden:** Aktion `logout` verlangt bei bestehender Sitzung das CSRF-Token (ohne Sitzung geht sie immer), entfernt den Eintrag im Sitzungsregister, zerstört die PHP-Sitzung und liefert auf
