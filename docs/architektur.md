@@ -38,7 +38,7 @@ welchem Modul gehört, steht in `regeln/` (`python3 werkzeuge/regeln.py modul <i
 - **Daten:** Dokumente über `app/api/storage.php` – Dateien (`daten/*.php`) oder SQLite (`daten/.sqlite/store.sqlite`,
   aktiv mit `daten/.sqlite-active`, siehe `docs/datenbank.md`). Sicherung: `deploy/sichern.sh`. Nach der Datentrennung
   (ADR-007 Stufe 2a, `deploy/daten-trennen.sh`) liegen interne Dokumente in `daten-intern/` – nur Mitarbeiterseite und Postausgang.
-  Trennstufe 2 (Stufe 2b, Inhalt von `daten/.daten-getrennt`): zusätzlich Bestand, Stammdaten, Postfächer, Signatur,
+  Trennstufe 2 (Stufe 2b, Inhalt von `daten-intern/.daten-intern`, außen gespiegelt in `daten/.daten-getrennt`): zusätzlich Bestand, Stammdaten, Postfächer, Signatur,
   Benachrichtigungen und Empfänger der Bestellwünsche innen; `kunden` außen nur mit Portalfeldern (Rest in `kundenstamm`, Mitarbeiterseite
   liest zusammengeführt); Kundenseite liest statt Bestand/Stammdaten den `artikelauszug`; der Postausgang bestimmt Empfänger und
   Inhalt der Bestellwunsch-Mails selbst. Trennstufe 3 (Stufe 2c): veröffentlichte Dokumente (Angebote, Sicherheit, Firewall,

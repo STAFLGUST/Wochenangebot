@@ -104,7 +104,10 @@ schaltet erst nach erfolgreichem Vergleich auf Dateien zurück. Erst anschließe
 Release-Rückfall durchführen. Die Release-Skripte verhindern den direkten Rückfall auf Code ohne
 Speicherschicht, solange SQLite aktiv ist. Nicht über ein manuelles `git reset` umgehen.
 Die inaktive Datenbank bleibt zur Untersuchung erhalten; vor einer späteren erneuten Migration
-muss `.sqlite` im gestoppten Zustand separat archiviert/umbenannt werden.
+muss `.sqlite` im gestoppten Zustand separat archiviert/umbenannt werden. Dasselbe gilt vor der Datentrennung
+(ADR-007 Stufe 2): `sh deploy/daten-trennen.sh trennen` bricht ab, solange die inaktive Datenbank im gemeinsamen Ordner
+liegt – sie enthält den vollen früheren Datenbestand (Nutzer, Bestand, Kundenstamm) und wäre dort für die Kundenseite
+lesbar. `status` nennt sie als Rest des Speicher-Umbaus, ebenso liegen gebliebene Datendateien.
 
 ## Webschutz und Tests
 

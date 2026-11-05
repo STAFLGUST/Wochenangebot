@@ -132,6 +132,11 @@ for ART in dateien sqlite; do
     ok "getrennt ($ART): Personaldaten nur in der internen Datenbank" 'python3 -c "import sqlite3,sys; a=sqlite3.connect(sys.argv[1]); b=sqlite3.connect(sys.argv[2]); n=lambda c: {r[0] for r in c.execute(\"SELECT name FROM documents\")}; sys.exit(0 if \"hr-personal\" in n(b) and \"hr-personal\" not in n(a) and \"angebot\" in n(a) else 1)" "$U/r1/.sqlite/store.sqlite" "$U/r2/.sqlite/store.sqlite"'
   fi
   ok "getrennt ($ART): Datensätze beider Bereiche gezählt" '[ "$(su datensaetze)" -ge 2 ] && [ "$(stat -c %a "$U"/sicherungen/intern-*.tar.gz)" = 600 ]'
+  rm -f "$U/daten/.daten-getrennt"; sleep 1
+  sh "$U/deploy/sichern.sh" --jetzt >/dev/null 2>&1 && R=0 || R=$?
+  ok "getrennt ($ART): Kennzeichen in daten/ entfernt → Fehler statt Sicherung ohne interne Daten" '[ "$R" = 1 ] && [ "$(su ok)" = False ] \
+    && grep -q "Kennzeichen" "$U/daten/sicherung.php" && [ "$(ls "$U"/sicherungen/intern-*.tar.gz | wc -l)" = 1 ]'
+  printf '%s\n' "$(cat "$U/daten-intern/.daten-intern")" > "$U/daten/.daten-getrennt"
   mv "$U/daten-intern" "$U/weg"; sleep 1
   sh "$U/deploy/sichern.sh" --jetzt >/dev/null 2>&1 && R=0 || R=$?
   ok "getrennt ($ART): daten-intern fehlt → Fehler statt Sicherung ohne interne Daten" '[ "$R" = 1 ] && [ "$(su ok)" = False ] && grep -q "daten-intern" "$U/daten/sicherung.php"'

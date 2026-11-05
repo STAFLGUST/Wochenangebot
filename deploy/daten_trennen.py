@@ -145,8 +145,10 @@ def dok_schreiben(root, name, wert):
         return
     p = root / (name + '.php')
     p.parent.mkdir(parents=True, exist_ok=True)
+    # Zwischendatei nie über einen untergeschobenen Verweis schreiben (daten/ ist im Container beschreibbar); das
+    # abschließende Umbenennen ersetzt einen Verweis unter dem Zielnamen, statt ihm zu folgen – db.write_nofollow().
     tmp = p.with_name(p.name + '.neu')
-    tmp.write_text(db.GUARD + json_text(wert))
+    db.write_nofollow(tmp, (db.GUARD + json_text(wert)).encode(), 0o644)
     if json.loads(tmp.read_text()[len(db.GUARD):]) != wert:
         tmp.unlink()
         raise ValueError('Vergleich nach dem Schreiben fehlgeschlagen: ' + name)
@@ -240,6 +242,35 @@ def hat_interne_felder(kunden, felder):
 
 # ─────────────── Plan ───────────────
 
+def altbestand(haupt, ks):
+    """Reste des Speicher-Umbaus im gemeinsamen Ordner (ADR-007 Stufe 2b: dort liegt nichts, was die Kundenseite nicht braucht):
+    frühere Datendateien äußerer Dokumente, die der Umstieg auf SQLite absichtlich liegen lässt (datenbank.py migrate,
+    „originals retained“), und eine inaktive Datenbank nach einem Rückfall. Die Altdateien interner Dokumente nimmt das Trennen
+    selbst mit (interne_dateien); die Altdateien der gekürzten Dokumente entfernt bereinigen()."""
+    rest = []
+    if sqlite_aktiv(haupt):
+        for p in sorted(haupt.rglob('*.php')):
+            rel = p.relative_to(haupt)
+            if rel.parts[0] == 'dateien' or not db.document_path(rel):
+                continue
+            if not ist_intern(str(rel.with_suffix('')), ks):
+                rest.append(str(rel))
+    elif (haupt / '.sqlite').exists():
+        rest.append('.sqlite/store.sqlite')
+    return rest
+
+
+def altdatei_entfernen(root, name):
+    """Im SQLite-Betrieb blieb die frühere Datendatei beim Umschalten liegen. Wird das Dokument hier gekürzt, hielte sie weiter den
+    vollen Stand im Ordner der Kundenseite. Gelesen wird sie nie, und ein Rückfall auf Dateien schreibt sie aus der Datenbank neu
+    (datenbank.py rollback) – sie darf also weg."""
+    if not sqlite_aktiv(root):
+        return
+    p = root / (name + '.php')
+    if p.is_symlink() or p.exists():
+        p.unlink()
+
+
 def interne_dateien(root, ks):
     """Datendateien (*.php) interner Dokumente im Ordner – im SQLite-Modus auch übrig gebliebene alte Dateien."""
     out = []
@@ -288,12 +319,17 @@ def leer(intern):
 
 def kopieren(quelle, ziel, rel):
     s, z = quelle / rel, ziel / rel
+    if s.is_symlink() or not s.is_file():
+        raise ValueError('Unerwarteter Eintrag (Verweis oder Sonderdatei): ' + str(rel))
     z.parent.mkdir(parents=True, exist_ok=True)
+    # wie dok_schreiben: die Zwischendatei entsteht ohne einem Verweis zu folgen, Rechte und Zeiten danach wie die Quelle
     tmp = z.with_name(z.name + '.kopie')
-    shutil.copy2(s, tmp)
-    if tmp.read_bytes() != s.read_bytes():
+    inhalt = s.read_bytes()
+    db.write_nofollow(tmp, inhalt)
+    if tmp.read_bytes() != inhalt:
         tmp.unlink()
         raise ValueError('Kopie weicht ab: ' + str(rel))
+    shutil.copystat(s, tmp)
     tmp.replace(z)
 
 
@@ -321,7 +357,7 @@ def db_anlegen(ziel, zeilen):
         os.chmod(stage / 'store.sqlite', 0o600)
         stage.rename(ziel / '.sqlite')
         m = ziel / '.sqlite-active.tmp'
-        m.write_text('1\n'); m.replace(ziel / '.sqlite-active')
+        db.write_nofollow(m, b'1\n', 0o644); m.replace(ziel / '.sqlite-active')
     finally:
         if stage.exists():
             shutil.rmtree(stage)
@@ -340,7 +376,7 @@ def db_ergaenzen(ziel, zeilen):
 
 def kennzeichen(p, stufe):
     t = p.with_name(p.name + '.tmp')
-    t.write_text(f'{stufe}\n'); t.replace(p)
+    db.write_nofollow(t, f'{stufe}\n'.encode(), 0o644); t.replace(p)
 
 
 def umstellung_planen(haupt, intern, regeln, stufe, ziel=ZIELSTUFE):
@@ -400,6 +436,9 @@ def plan(haupt, intern, regeln, ziel=ZIELSTUFE):
         print(f'  neu in daten-intern: {n}' + erklaerung.get(n, art))
     if bereinigen:
         print('  im gemeinsamen Ordner kürzen: kunden auf die Portalfelder, bestellung ohne Empfängeradressen')
+    rest = altbestand(haupt, ks)
+    if rest:
+        print('Hinweis: Reste des Speicher-Umbaus im gemeinsamen Ordner (nicht für die Kundenseite gedacht): ' + ', '.join(rest[:8]))
     return stufe, ks, dateien, zeilen, ablage, neu
 
 
@@ -407,6 +446,9 @@ def plan(haupt, intern, regeln, ziel=ZIELSTUFE):
 
 def trennen(haupt, intern, regeln, ziel=ZIELSTUFE):
     stufe, ks, dateien, zeilen, ablage, neu = plan(haupt, intern, regeln, ziel)
+    if not sqlite_aktiv(haupt) and (haupt / '.sqlite').exists():
+        raise ValueError('Im gemeinsamen Ordner liegt noch eine inaktive Datenbank (daten/.sqlite) mit dem vollen früheren '
+                         'Datenbestand – erst archivieren oder entfernen (docs/datenbank.md), dann trennen')
     if stufe > ziel:
         raise ValueError(f'Daten sind schon weiter getrennt (Stufe {stufe}) als dieser Stand (Stufe {ziel}) – mit dem neueren Stand zusammenführen')
     if stufe == 0:
@@ -478,6 +520,10 @@ def bereinigen(haupt, intern, regeln):
     """Ab Stufe 2: kunden auf die Portalfelder kürzen, bestellung ohne Adressen. Fehlt ein Eintrag in kundenstamm bzw.
     bestellung-empfaenger (Rest eines Abbruchs), entsteht er vorher aus den gekürzten Feldern – nichts geht verloren."""
     felder = kunden_felder(regeln)
+    # Reste des Speicher-Umbaus: die gleichnamigen Altdateien hielten weiter den vollen Stand im Ordner der Kundenseite –
+    # auch bei einem erneuten Lauf, wenn das Dokument selbst schon gekürzt ist
+    for n in ('kunden', 'bestellung'):
+        altdatei_entfernen(haupt, n)
     kunden = dok_lesen(haupt, 'kunden')
     if isinstance(kunden, dict) and isinstance(kunden.get('customers'), list) and hat_interne_felder(kunden, felder):
         alt = dok_lesen(intern, 'kundenstamm')
