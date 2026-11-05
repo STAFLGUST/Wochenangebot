@@ -8,7 +8,7 @@ import sys
 from playwright.sync_api import sync_playwright
 from kunden_hilfe import Client, B
 from smtp_test import TestSmtp
-from umgebung import SH, SMTP_PORT, shot, until, storage_raw, storage_write
+from umgebung import SH, SMTP_PORT, shot, trennstufe, until, storage_raw, storage_write
 
 PW = 'Sicheres-Passwort-1'
 res = []
@@ -54,8 +54,12 @@ code, r = A.call('benachrichtigung_save', {'events': {
     'abmeldung': {'on': True, 'to': 'verkauf@example.org'}}})
 ev = {e['key']: e for e in r.get('notify', {}).get('events', [])}
 check('settings saved', code == 200 and ev['sicherheit']['on'] and ev['sicherheit']['to'] == ['it@example.org'] and ev['abmeldung']['to'] == ['verkauf@example.org'], r)
-check('order recipients deduplicated and stored with the order function', r['orders']['to'] == ['bestellung@example.org', 'Verkauf@example.org'] and (doc('bestellung') or {}).get('to') == ['bestellung@example.org', 'Verkauf@example.org'])
-check('order recipients readable by older versions (same field)', 'to' in (doc('bestellung') or {}))
+ORT = 'bestellung-empfaenger' if trennstufe() >= 2 else 'bestellung'   # getrennte Daten ab Stufe 2: Adressen nur innen (ADR-007)
+check('order recipients deduplicated and stored with the order function', r['orders']['to'] == ['bestellung@example.org', 'Verkauf@example.org'] and (doc(ORT) or {}).get('to') == ['bestellung@example.org', 'Verkauf@example.org'])
+if trennstufe() >= 2:
+    check('order recipients not in the shared document (only their number)', 'to' not in (doc('bestellung') or {}) and (doc('bestellung') or {}).get('empfaenger') == 2, doc('bestellung'))
+else:
+    check('order recipients readable by older versions (same field)', 'to' in (doc('bestellung') or {}))
 check('order function still off', r['orders']['enabled'] is False)
 code, r = A.call('bestell_settings_save', {'enabled': True, 'copy': False})
 check('order form without recipients keeps them and can switch on', code == 200 and r['orders']['enabled'] and r['orders']['to'] == ['bestellung@example.org', 'Verkauf@example.org'], r)

@@ -7,7 +7,7 @@ from pathlib import Path
 import sys
 import time
 from auth_helpers import Client, PW, read_users, expire_confirmation_lock
-from umgebung import storage_docs, storage_lock, storage_sqlite
+from umgebung import datenordner, storage_docs, storage_lock, storage_sqlite
 
 results = []
 def check(name, condition):
@@ -26,7 +26,7 @@ check('fresh login permits admin action', a.call('user_save', viewer_body)[0] ==
 v = Client('192.0.2.3'); v.login('viewer', 'Leser-Geheimnis-123')
 check('viewer cannot reauthenticate as admin', v.call('reauth', {'password': 'Leser-Geheimnis-123'})[0] == 403)
 a.expire(); b.expire()
-data_dir = Path(os.environ['UDATA'])
+data_dir = Path(datenordner('nutzer'))   # Sperrdatei der Nutzerliste (nach der Datentrennung innen)
 def snapshot():
     return {k: v for k, v in storage_docs().items() if k != 'sitzungen'}
 before = snapshot()

@@ -186,12 +186,12 @@ _Versandaufträge eines Bestellwunschs: je Empfänger ein Auftrag im selben Doku
 - `order_kopie_name(o)`
 - `order_kunden_email(kid)` – Adresse eines Kunden aus den Stammdaten (null: unbekannt, inaktiv oder ohne gültige Adresse) – nie aus dem Vorgang
 - `order_outbox_vorbereiten(nr)` – Offenen Auftrag der Kundenseite ausführen (unter der Versandsperre des Vorgangs): Schnappschuss ergänzen, Aufträge je Empfänger anlegen.
-- `order_outbox_pruefen(o, j)` – Darf dieser Auftrag jetzt verschickt werden? null = ja, sonst der Grund (Auftrag wird verworfen, nicht wiederholt).
+- `order_outbox_pruefen(o, j, ausdruecklich)` – Darf dieser Auftrag jetzt verschickt werden? null = ja, sonst der Grund (Auftrag wird verworfen, nicht wiederholt).
 - `order_tageszahl(kid, typ, to)` – Zugestellte E-Mails dieser Art an diese Adresse für diesen Kunden in den letzten 24 Stunden (Versandprotokoll)
 - `order_outbox_summary(o)`
 - `order_outbox_view(o)`
 - `order_outbox_cleanup_locks(own)` – Sperrdateien abgeschlossener Vorgänge gelegentlich entfernen (älter als 2 Tage, nicht die eigene).
-- `order_outbox_send(nr, jobId, expected, by)` – No SQLite transaction spans SMTP.
+- `order_outbox_send(nr, jobId, expected, by, ausdruecklich)` – No SQLite transaction spans SMTP.
 
 ## `app/api/orders.php`
 

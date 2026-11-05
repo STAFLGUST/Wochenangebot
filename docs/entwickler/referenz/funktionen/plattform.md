@@ -2,7 +2,7 @@
 
 <!-- ERZEUGT von `python3 werkzeuge/doku.py erzeugen` – nicht von Hand ändern. Quelle: Funktionen und Kommentare im Code. Die CI prüft, dass diese Datei zum Code passt. -->
 
-108 Dateien, 1082 Funktionen – in der Reihenfolge der Datei, **fett** die Abschnitte. Text = erste Aussage des Kommentars direkt über der Funktion (Python: Docstring). Übersicht aller Module: [README.md](README.md).
+108 Dateien, 1088 Funktionen – in der Reihenfolge der Datei, **fett** die Abschnitte. Text = erste Aussage des Kommentars direkt über der Funktion (Python: Docstring). Übersicht aller Module: [README.md](README.md).
 
 ## `.github/scripts/apt_vorrat.py`
 
@@ -1524,7 +1524,7 @@ _Alter Eingabebereich stillgelegt (WA_EIGENE_ANMELDUNG=aus, lib/oidc.php): auf d
 _Publication persists consistently; injected storage failures never report success._
 
 - `check(name, condition)`
-- `state(db)`
+- `state()`
 
 ## `tests/e2e/test_testumgebung.py`
 
@@ -1562,8 +1562,14 @@ _Erwartungswerte aus den anonymisierten Testdaten (tests/fixtures) – statt fes
 
 _Gemeinsame Pfade für die Ende-zu-Ende-Tests (gesetzt vom Testlauf tests/run_e2e.py)._
 
-- `datenordner(name)` – Ordner eines Dokuments: nach der Datentrennung (ADR-007 Stufe 2, WA_TEST_TRENNUNG) liegen interne Dokumente in UINTERN
+- `_trennung()` – (Modul deploy/daten_trennen.py, Trennstufe aus dem Kennzeichen) bei getrennten Testdaten, sonst None
+- `datenordner(name)` – Ordner eines Dokuments: nach der Datentrennung liegen interne Dokumente in UINTERN; veröffentlichte (Stufe 3) und je Seite getrennte (Stufe 5) liest die …
+- `trennstufe()` – Trennstufe der Testdaten (0 = nicht getrennt)
+- `ablageordner()` – Ordner mit der Dateiablage dateien/ (QS-Dateien): nach der Datentrennung immer innen
+- `_kunden_geteilt()` – Kundendokument geteilt (ab Stufe 2: Portalfelder in kunden, übrige in kundenstamm) und der Testserver sieht beide Teile
+- `_json(raw)`
 - `storage_raw(name)` – Inspect actual persisted state, without going through the application API.
+- `_storage_raw(data, name)`
 - `storage_sqlite()`
 - `storage_write(name, value)` – Gespeichertes Dokument direkt ändern (Testvorbereitung, z. B. Zeitablauf simulieren).
 - `_storage_write(data, name, value)`
