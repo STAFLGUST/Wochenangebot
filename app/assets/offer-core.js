@@ -584,10 +584,10 @@
     return s || src;
   }
 
+  const KW_IM_TITEL = /\bKW\s*\d{1,2}(?:(\s*[-/]\s*)\d{4})?/i;
   /* Überschrift der Angebotsliste (Bildschirm und Druck): Titel der früher importierten Excel-Liste, aber immer mit der
      Kalenderwoche des Angebots – der Titel wurde beim Wechsel der Woche nicht nachgezogen („KW 43“ im Angebot der KW 45,
      gemeldet 05.11.2026). Ohne Titel: „Freibleibendes Angebot für die KW 45/2026“. */
-  const KW_IM_TITEL = /\bKW\s*\d{1,2}(?:(\s*[-/]\s*)\d{4})?/i;
   function titelMitKw(meta) {
     const m = meta || {};
     const t = clean(m.title || '');

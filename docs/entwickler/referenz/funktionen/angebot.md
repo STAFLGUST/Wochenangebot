@@ -2,7 +2,7 @@
 
 <!-- ERZEUGT von `python3 werkzeuge/doku.py erzeugen` – nicht von Hand ändern. Quelle: Funktionen und Kommentare im Code. Die CI prüft, dass diese Datei zum Code passt. -->
 
-42 Dateien, 634 Funktionen – in der Reihenfolge der Datei, **fett** die Abschnitte. Text = erste Aussage des Kommentars direkt über der Funktion (Python: Docstring). Übersicht aller Module: [README.md](README.md).
+42 Dateien, 635 Funktionen – in der Reihenfolge der Datei, **fett** die Abschnitte. Text = erste Aussage des Kommentars direkt über der Funktion (Python: Docstring). Übersicht aller Module: [README.md](README.md).
 
 ## `app/api/lib/angebote.php`
 
@@ -135,6 +135,7 @@ _E-Mails an Kunden, Abmelden, Bestellwunsch-Vorlagen, Einmal-Links, Versand_
 - `mail_send_many(cfg, jobs)` – Mehrere Nachrichten über eine Verbindung; Ergebnis je Auftrag
 - `mail_record(entries, wk)` – Versand an Kunden vermerken (letzte E-Mail, Wochenversand) und ins Versandprotokoll schreiben
 - `mail_job_for(c, typ, note, wk)`
+- `ksess_begrenzen(r, kid)` – Register auf die Obergrenzen kürzen: erst je Zugang, dann insgesamt (die zuletzt benutzten bleiben)
 - `kunde_sign_in(c, via)` – Kunde anmelden (nach Passwortprüfung oder Einmal-Link)
 
 ## `app/api/lib/preisverlauf.php`
@@ -825,7 +826,7 @@ _Wochenangebot – gemeinsamer Kern für Frontend und Eingabebereich - Excel-Les
 - `diffOffers(oldM, newM)`
 - `validateModel(m)` – Prüft ein Modell vor dem Speichern/Veröffentlichen
 - `stripFrisch(name)` – „frisch“ gehört in den Zustand, nicht in die Bezeichnung.
-- `titelMitKw(meta)`
+- `titelMitKw(meta)` – Überschrift der Angebotsliste (Bildschirm und Druck): Titel der früher importierten Excel-Liste, aber immer mit der Kalenderwoche des Angebots – der Titel …
 - `nameVorschlag(name, group)` – Vorschlag für die Bezeichnung eines neu aufgenommenen Artikels (z. B. aus der Bestandsliste der Warenwirtschaft): – „frisch“ gehört in den Zustand …
 - `normalizeItem(it, group)` – Merkmale vereinheitlichen (beim Laden des Entwurfs, Wiederherstellen einer Version, Stammdaten): – Herkunft als Kürzel; von Hand gesetzte Kürzel bleiben – …
 
