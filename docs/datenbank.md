@@ -92,7 +92,8 @@ Zeitpunkt: `daten-<Zeit>.tar.gz` (nach `daten/`) und `intern-<Zeit>.tar.gz` (nac
 SQLite-Betrieb). Beide gehören zusammen; nie Archive verschiedener Zeitpunkte mischen. Umschalten (`datenbank-umschalten.sh`)
 und Altdateien (`altdateien.sh`) brechen bei getrennten Daten ab: erst `daten-trennen.sh zusammenfuehren`, danach wieder
 `trennen`. Ab Trennstufe 2 (Stufe 2b) gehören auch Kundenstamm (`kundenstamm`), Bestand, Stammdaten und Postfach-Zugänge zum
-Archiv `intern-…`; `daten-…` enthält vom Kundendokument nur die Portalfelder – beide Archive zusammen ergeben den vollständigen Stand.
+Archiv `intern-…`; `daten-…` enthält vom Kundendokument nur die Portalfelder – beide Archive zusammen ergeben den vollständigen Stand. Ab Trennstufe 3
+stehen veröffentlichte Dokumente (Angebote, Einstellungen) in beiden Archiven; maßgeblich ist der Stand in `intern-…`.
 
 ## Rückfall ohne Verlust neuer Daten
 

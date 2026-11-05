@@ -41,7 +41,9 @@ welchem Modul gehört, steht in `regeln/` (`python3 werkzeuge/regeln.py modul <i
   Trennstufe 2 (Stufe 2b, Inhalt von `daten/.daten-getrennt`): zusätzlich Bestand, Stammdaten, Postfächer, Signatur,
   Benachrichtigungen und Empfänger der Bestellwünsche innen; `kunden` außen nur mit Portalfeldern (Rest in `kundenstamm`, Mitarbeiterseite
   liest zusammengeführt); Kundenseite liest statt Bestand/Stammdaten den `artikelauszug`; der Postausgang bestimmt Empfänger und
-  Inhalt der Bestellwunsch-Mails selbst.
+  Inhalt der Bestellwunsch-Mails selbst. Trennstufe 3 (Stufe 2c): veröffentlichte Dokumente (Angebote, Sicherheit, Firewall,
+  Wartung, Notfallmodus, Fracht, Bestellfunktion …) maßgeblich innen, im gemeinsamen Ordner nur eine Kopie, die die Kundenseite
+  nicht schreiben kann; der Postausgang stellt veränderte Kopien wieder her und meldet sie.
 
 ## Server (`app/api/`)
 

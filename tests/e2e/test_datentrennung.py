@@ -144,7 +144,7 @@ try:
     check('Versandprotokoll im internen Ordner', any(x.get('by') == 'Postausgang' for x in (doc('mailversand') or [])) and not os.path.exists(DATA + '/mailversand.php'))
 
     # ---------- Stufe 2: Teilung, Empfänger und Inhalt nur von innen ----------
-    check('Trennstufe 2 im Kennzeichen', open(DATA + '/.daten-getrennt').read().strip() == '2')
+    check('höchste Trennstufe im Kennzeichen (3)', open(DATA + '/.daten-getrennt').read().strip() == '3')
     felder = set(daten_trennen.kunden_felder())
     kd = doc('kunden')
     check('gemeinsames Kundendokument nur mit Portalfeldern (keine Adresse, keine Warenwirtschaft)', all(set(c) <= felder for c in kd['customers'])
@@ -206,6 +206,33 @@ try:
     vorher_n = len(smtp.messages); dienst()
     empf = [r for m in smtp.messages[vorher_n:] for r in m['to']]
     check('früherer Empfänger erhält den älteren Auftrag, ein unbekannter nicht', empf == ['orders@example.org'], empf)
+
+    # ---------- Stufe 3: Veröffentlichtes maßgeblich innen, außen nur eine Kopie ----------
+    def roh(ordner, name):
+        if os.path.isfile(ordner + '/.sqlite-active'):
+            with sqlite3.connect(ordner + '/.sqlite/store.sqlite') as c:
+                r = c.execute('SELECT payload FROM documents WHERE name=?', (name,)).fetchone()
+            return json.loads(r[0]) if r else None
+        return json.loads(open(ordner + '/' + name + '.php', encoding='utf-8').read().split('?>\n', 1)[-1]) if os.path.isfile(ordner + '/' + name + '.php') else None
+
+    def aussen_schreiben(name, wert):   # wie eine übernommene Kundenseite: direkt im gemeinsamen Ordner, Zeitstempel später
+        if os.path.isfile(DATA + '/.sqlite-active'):
+            with sqlite3.connect(DATA + '/.sqlite/store.sqlite') as c:
+                c.execute('INSERT OR REPLACE INTO documents VALUES(?,?,?)', (name, json.dumps(wert), int(time.time()) + 60))
+        else:
+            open(DATA + '/' + name + '.php', 'w', encoding='utf-8').write('<?php http_response_code(404); exit; ?>\n' + json.dumps(wert))
+            os.utime(DATA + '/' + name + '.php', (time.time() + 60, time.time() + 60))
+    check('Bestell-Einstellungen: maßgeblich innen, Kopie außen gleich', roh(INTERN, 'bestellung') == roh(DATA, 'bestellung') and roh(INTERN, 'bestellung')['enabled'] is True)
+    aussen_schreiben('bestellung', {'enabled': False, 'empfaenger': 0, 'copy': False})
+    aussen_schreiben('sicherheit', {'idleMinutes': 999, 'pwLeak': False})
+    r = A.call('mail_status')[1]
+    check('Mitarbeiterseite liest weiter den internen Stand (Bestellfunktion an)', r.get('orders', {}).get('enabled') is True and r['orders']['to'] == ['neu-team@example.org'], r.get('orders'))
+    code, out = dienst()
+    check('Postausgang stellt veränderte Kopien wieder her', roh(DATA, 'bestellung') == roh(INTERN, 'bestellung') and roh(DATA, 'sicherheit') == roh(INTERN, 'sicherheit'), out)
+    check('und meldet es als Sicherheitsereignis', any(e.get('a') == 'security' and 'Veröffentlichte Daten' in e.get('s', '') and 'bestellung' in e.get('s', '') for e in (doc('protokoll/' + monat) or [])))
+    check('Kundenseite sieht danach wieder die echte Einstellung', Client('198.51.100.60').call('kunde_status')[1].get('bestellfunktion') is True)
+    check('Mitarbeiterseite: Fracht speichern erreicht die Kopie der Kundenseite', A.call('fracht_save', {'aktiv': True, 'staffeln': [{'unter': 100, 'kosten': 25}], 'zusatz': 'Test'})[0] == 200
+          and roh(DATA, 'fracht') == roh(INTERN, 'fracht') and roh(DATA, 'fracht')['zusatz'] == 'Test')
 
     # ---------- Kundenseite: keine Mitarbeiteranmeldung, keine Ersteinrichtung ----------
     S = Client('198.51.100.50')

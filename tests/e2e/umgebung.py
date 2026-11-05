@@ -50,11 +50,23 @@ def storage_sqlite():
 
 
 def storage_write(name, value):
-    """Gespeichertes Dokument direkt ändern (Testvorbereitung, z. B. Zeitablauf simulieren)."""
+    """Gespeichertes Dokument direkt ändern (Testvorbereitung, z. B. Zeitablauf simulieren). Veröffentlichte Dokumente (ab
+    Trennstufe 3) wie die Mitarbeiterseite: maßgeblich innen und als Kopie im gemeinsamen Ordner."""
+    import sys
+    data = os.environ['UDATA']
+    if os.path.isfile(data + '/.daten-getrennt'):
+        sys.path.insert(0, os.path.join(REPO, 'deploy'))
+        import daten_trennen
+        from pathlib import Path
+        if name in daten_trennen.veroeffentlicht(stufe=daten_trennen.stufe_lesen(Path(data))):
+            _storage_write(os.environ['UINTERN'], name, value)
+    _storage_write(datenordner(name), name, value)
+
+
+def _storage_write(data, name, value):
     import json
     import sqlite3
     import time
-    data = datenordner(name)
     raw = json.dumps(value, ensure_ascii=False, separators=(',', ':'))
     if os.path.isfile(data + '/.sqlite-active'):
         with sqlite3.connect(data + '/.sqlite/store.sqlite') as db:

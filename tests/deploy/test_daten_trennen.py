@@ -1,7 +1,7 @@
 """Test von deploy/daten_trennen.py (ADR-007 Stufe 2: interne Dokumente aus dem gemeinsamen Datenordner) – in Wegwerf-Ordnern,
 für Dateien und SQLite: Trennen, Wiederholen nach Abbruch, Schutz vor Überschreiben, Zusammenführen ohne Verlust – und dass die
 Speicherschicht (app/api/storage.php) danach auf beiden Seiten richtig liest: Mitarbeiterseite alles, Kundenseite nichts Internes."""
-import json, os, shutil, sqlite3, subprocess, sys, tempfile
+import json, os, shutil, sqlite3, subprocess, sys, tempfile, time
 from pathlib import Path
 
 REPO = Path(__file__).resolve().parents[2]
@@ -90,7 +90,7 @@ for art in ('dateien', 'sqlite'):
                   and (d / 'angebot.php').is_file() and (d / 'protokoll/2026-11.php').is_file() and (d / 'sicherung.php').is_file() and (d / 'geo/laender.dat.php').is_file())
             check(f'{art}: Inhalt unverändert', (i / 'hr-personal.php').read_bytes() == vorher['hr-personal.php'])
         else:
-            check(f'{art}: Datenbank geteilt – interne Zeilen nur in daten-intern', set(zeilen(i)) == {'hr-personal', 'nutzer', 'versionen/v1', 'crm-kunden', 'kundenstamm'}
+            check(f'{art}: Datenbank geteilt – interne Zeilen nur in daten-intern', set(zeilen(i)) == {'hr-personal', 'nutzer', 'versionen/v1', 'crm-kunden', 'kundenstamm', 'angebot'}
                   and not ({'hr-personal', 'nutzer', 'crm-kunden'} & set(zeilen(d))) and {'angebot', 'kunden', 'protokoll/2026-11'} <= set(zeilen(d))
                   and (i / '.sqlite-active').is_file(), (sorted(zeilen(i)), sorted(zeilen(d))))
             check(f'{art}: alte interne Datendateien ebenfalls aus dem gemeinsamen Ordner', not (d / 'hr-personal.php').exists() and (i / 'hr-personal.php').is_file())
@@ -109,7 +109,7 @@ for art in ('dateien', 'sqlite'):
         r = php("echo json_encode(store_stats());", d, i)
         check(f'{art}: Kennzahlen zählen beide Bereiche', json.loads(r or '{}').get('getrennt') is True and json.loads(r)['documents'] >= 7, r)
         r = php("echo json_encode(store_read('hr-personal'));", d, t / 'falsch')
-        r2 = php("echo store_read('angebot') === null ? 'leer' : 'ok';", d, t / 'falsch')
+        r2 = php("echo store_read('protokoll/2026-11') === null ? 'leer' : 'ok';", d, t / 'falsch')
         check(f'{art}: WA_DATEN_INTERN ohne Kennzeichen → Fehler statt leerer interner Daten (gemeinsame lesbar)', 'nicht eingerichtet' in r and 'null' not in r and r2 == 'ok', (r, r2))
         # Wiederholung nach Abbruch: Kopie liegt noch im gemeinsamen Ordner → erneutes trennen entfernt sie (nur bei gleichem Inhalt)
         if art == 'dateien':
@@ -159,20 +159,20 @@ def php_lib(code, daten, intern=None):
     return p.stdout.strip() + p.stderr.strip()
 
 
-ks1, ks2 = dt.kundenseite(stufe=1), dt.kundenseite(stufe=2)
+ks1, ks2, ks3 = dt.kundenseite(stufe=1), dt.kundenseite(stufe=2), dt.kundenseite(stufe=3)
 check('Stufe 2: Bestand, Stammdaten, Postfächer, Vorlage, Benachrichtigungen erst ab Stufe 2 intern',
       all(not dt.ist_intern(n, ks1) and dt.ist_intern(n, ks2) for n in ('bestand', 'stammdaten', 'mailkonto', 'mailkonto-intern', 'mailvorlage', 'benachrichtigungen'))
       and not dt.ist_intern('kunden', ks2) and not dt.ist_intern('artikelauszug', ks2) and dt.ist_intern('kundenstamm', ks2) and dt.ist_intern('bestellung-empfaenger', ks2))
-for stufe, ksx in ((1, ks1), (2, ks2)):
+for stufe, ksx in ((1, ks1), (2, ks2), (3, ks3)):
     with tempfile.TemporaryDirectory() as t:
         t = Path(t); (t / 'd').mkdir(); (t / 'd' / '.daten-getrennt').write_text(f'{stufe}\n')
         aus_php = json.loads(php(f"echo json_encode(array_map('store_bereich', {json.dumps(namen)}));", t / 'd') or '[]')
     check(f'Stufe {stufe}: Einteilung in PHP und Python identisch', aus_php == ['intern' if dt.ist_intern(n, ksx) else 'haupt' for n in namen],
           [n for n, b in zip(namen, aus_php) if (b == 'intern') != dt.ist_intern(n, ksx)][:5])
 php_stufe = php("echo DATEN_TRENNSTUFE;", REPO / 'app')
-check('Höchste Stufe gleich in Python, PHP und Regelwerk', php_stufe == str(dt.ZIELSTUFE) == '2', php_stufe)
+check('Höchste Stufe gleich in Python, PHP und Regelwerk', php_stufe == str(dt.ZIELSTUFE) == '3', php_stufe)
 with tempfile.TemporaryDirectory() as t:
-    t = Path(t); (t / 'd').mkdir(); (t / 'd' / '.daten-getrennt').write_text('3\n')
+    t = Path(t); (t / 'd').mkdir(); (t / 'd' / '.daten-getrennt').write_text('4\n')
     r = php("try { store_bereich('kunden'); echo 'gelesen'; } catch (RuntimeException $e) { echo $e->getMessage(); }", t / 'd')
 check('Kennzeichen einer neueren Stufe → Fehler statt falscher Einteilung', 'zusammenfuehren' in r, r)
 
@@ -212,9 +212,9 @@ for art in ('dateien', 'sqlite'):
                 r = php_lib("echo json_encode([customers_load()['customers'][0]['email'] ?? null, order_settings()['to'], stock_codes()]);", d)
                 check(f'{w}: auf Stufe 1 arbeitet auch die Kundenseite wie bisher (alle Kundenfelder, Empfänger, Bestand)',
                       json.loads(r or 'null') == ['einkauf@test.invalid', ['team@test.invalid', 'chef@test.invalid'], {'100': True}], r)
-            code, out = lauf('pruefen', str(d), str(i))
+            code, out = lauf('pruefen', str(d), str(i), '--stufe', '2')
             check(f'{w}: pruefen nennt die Umstellung', code == 0 and 'Trennstufe' in out and 'kundenstamm' in out and 'kürzen' in out, out)
-            code, out = lauf('trennen', str(d), str(i), '--offline')
+            code, out = lauf('trennen', str(d), str(i), '--offline', '--stufe', '2')
             check(f'{w}: trennen auf Stufe 2', code == 0 and 'Stufe 2' in out and (d / '.daten-getrennt').read_text() == '2\n' and (i / '.daten-intern').read_text() == '2\n', out)
             k = dt.dok_lesen(d, 'kunden')
             check(f'{w}: gemeinsames Kundendokument nur mit Portalfeldern und gekürzter Adresse', k['rev'] == 5 and k['customers'] == [portal(KUNDE), portal(KUNDE2)]
@@ -257,11 +257,11 @@ for art in ('dateien', 'sqlite'):
             # Rest eines Abbruchs: interne Felder wieder im gemeinsamen Ordner, ein Kunde fehlt in kundenstamm → erneutes trennen bereinigt ohne Verlust
             kk = dt.dok_lesen(d, 'kunden'); kk['customers'].append({'id': 'kcccccccccccc', 'firma': 'Rest KG', 'email': 'rest@test.invalid', 'notiz': 'aus Abbruch'})
             dt.dok_schreiben(d, 'kunden', kk)
-            code, out = lauf('trennen', str(d), str(i), '--offline')
+            code, out = lauf('trennen', str(d), str(i), '--offline', '--stufe', '2')
             st = dt.dok_lesen(i, 'kundenstamm')['customers']
             check(f'{w}: erneutes trennen bereinigt Reste ohne Verlust', code == 0 and st.get('kcccccccccccc') == {'email': 'rest@test.invalid', 'notiz': 'aus Abbruch'}
                   and dt.dok_lesen(d, 'kunden')['customers'][2] == {'id': 'kcccccccccccc', 'firma': 'Rest KG', 'emailMaske': 'r•••@test.invalid'}, (out, st))
-            code, out = lauf('pruefen', str(d), str(i))
+            code, out = lauf('pruefen', str(d), str(i), '--stufe', '2')
             check(f'{w}: danach nichts mehr zu tun', code == 0 and not [z for z in out.splitlines() if z.startswith('  ')], out)
             # Zusammenführen: alles wieder in einem Dokument und Ordner wie vor der Trennung (mit den Änderungen von eben)
             code, out = lauf('zusammenfuehren', str(d), str(i), '--offline')
@@ -273,6 +273,64 @@ for art in ('dateien', 'sqlite'):
                   and dt.dok_lesen(d, 'kundenstamm') is None and dt.leer(i) and not (d / '.daten-getrennt').exists())
             r = php_lib("echo json_encode([customers_load()['customers'][0]['wawi'], order_settings()['to'], stock_codes()]);", d)
             check(f'{w}: danach liest die Anwendung wieder alles aus einem Ordner', json.loads(r or 'null') == [KUNDE['wawi'], ['neu@team.invalid'], {'100': True}], r)
+
+# ─────────────── Trennstufe 3 (ADR-007 Stufe 2c): Veröffentlichtes maßgeblich innen, Kundenseite nur eine Kopie ───────────────
+VER = dt.veroeffentlicht()
+check('Stufe 3: Angebote, Sicherheit, Firewall, Wartung, Fracht, Bestellfunktion veröffentlicht; Kunden und Protokoll nicht',
+      {'angebot', 'angebote', 'einzelangebote', 'sicherheit', 'firewall', 'wartung', 'fracht', 'bestellung', 'artikelauszug', 'postausgang-stand'} <= set(VER)
+      and 'kunden' not in VER and 'logins' not in VER and dt.veroeffentlicht(stufe=2) == [] and not any(dt.ist_intern(n, ks3) for n in VER))
+for art in ('dateien', 'sqlite'):
+    with tempfile.TemporaryDirectory() as t:
+        t = Path(t); d = aufbau2(t); i = t / 'daten-intern'; w = f'{art} 2→3'
+        doc(d, 'sicherheit', {'idleMinutes': 30, 'pwMin': 12}); doc(d, 'firewall', {'aktiv': True})
+        if art == 'sqlite':
+            subprocess.run([sys.executable, str(DB), 'migrate', str(d), '--offline'], check=True, capture_output=True)
+        code, out = lauf('trennen', str(d), str(i), '--offline', '--stufe', '2')
+        code, out = lauf('pruefen', str(d), str(i))
+        check(f'{w}: pruefen nennt die veröffentlichten Dokumente', code == 0 and 'Trennstufe 2 → 3' in out and 'sicherheit' in out and 'veröffentlicht' in out, out)
+        code, out = lauf('trennen', str(d), str(i), '--offline')
+        check(f'{w}: trennen auf Stufe 3: maßgeblicher Stand innen, Kopie bleibt außen', code == 0 and (d / '.daten-getrennt').read_text() == '3\n'
+              and dt.dok_lesen(i, 'sicherheit') == dt.dok_lesen(d, 'sicherheit') == {'idleMinutes': 30, 'pwMin': 12}
+              and dt.dok_lesen(i, 'angebot') == dt.dok_lesen(d, 'angebot') == {'items': [1]} and dt.dok_lesen(i, 'kunden') is None, out)
+        code, out = lauf('pruefen', str(d), str(i))
+        check(f'{w}: danach nichts mehr zu tun', code == 0 and not [z for z in out.splitlines() if z.startswith('  ')], out)
+        # Mitarbeiterseite schreibt innen und legt die Kopie ab – in Transaktionen erst nach deren Abschluss, nie bei Rücksetzen
+        r = php_lib("with_lock('sicherheit', function () { store_write('sicherheit', ['idleMinutes' => 20, 'pwMin' => 14]); }); echo json_encode(store_read('sicherheit'));", d, i)
+        check(f'{w}: Mitarbeiterseite schreibt innen, Kopie außen gleich', json.loads(r or 'null') == {'idleMinutes': 20, 'pwMin': 14}
+              and dt.dok_lesen(i, 'sicherheit') == dt.dok_lesen(d, 'sicherheit') == {'idleMinutes': 20, 'pwMin': 14}, r)
+        r = php_lib("try { with_lock('sicherheit', function () { store_write('sicherheit', ['idleMinutes' => 1]); throw new RuntimeException('Abbruch'); }); } catch (RuntimeException $e) { echo $e->getMessage(); }", d, i)
+        if art == 'sqlite':
+            check(f'{w}: abgebrochene Änderung erreicht weder innen noch die Kopie', 'Abbruch' in r and dt.dok_lesen(d, 'sicherheit') == dt.dok_lesen(i, 'sicherheit') == {'idleMinutes': 20, 'pwMin': 14}, r)
+        else:   # Dateien kennen keine Transaktion: Stand innen und Kopie bleiben gleich
+            check(f'{w}: ohne Transaktion (Dateien) bleiben Stand innen und Kopie gleich', 'Abbruch' in r and dt.dok_lesen(d, 'sicherheit') == dt.dok_lesen(i, 'sicherheit') == {'idleMinutes': 1}, r)
+        if art == 'dateien':   # ohne Transaktion (Dateien): die Änderung bleibt innen – die Kopie folgt beim Abgleich
+            php_lib("store_write('sicherheit', ['idleMinutes' => 20, 'pwMin' => 14]); echo 1;", d, i)
+        r = php_lib("store_write('wartung', ['aktiv' => false]); store_delete('wartung'); echo json_encode([store_read('wartung'), store_read('firewall')]);", d, i)
+        check(f'{w}: Löschen entfernt auch die Kopie', json.loads(r or 'null') == [None, {'aktiv': True}] and dt.dok_lesen(d, 'wartung') is None and dt.dok_lesen(i, 'wartung') is None, r)
+        # Kundenseite: liest die Kopie, schreiben und sperren abgelehnt
+        r = php_lib("echo json_encode(store_read('sicherheit'));", d)
+        check(f'{w}: Kundenseite liest die Kopie', json.loads(r or 'null') == {'idleMinutes': 20, 'pwMin': 14}, r)
+        r = php_lib("$x = []; foreach (['store_write' => fn() => store_write('sicherheit', ['pwMin' => 1]), 'with_lock' => fn() => with_lock('firewall', fn() => 1), 'store_delete' => fn() => store_delete('angebot')] as $k => $f) { try { $f(); $x[$k] = 'erlaubt'; } catch (StoreKeinZugang $e) { $x[$k] = 'abgelehnt'; } } echo json_encode($x);", d)
+        check(f'{w}: Kundenseite kann Veröffentlichtes nicht schreiben, sperren oder löschen', json.loads(r or 'null') == {'store_write': 'abgelehnt', 'with_lock': 'abgelehnt', 'store_delete': 'abgelehnt'}
+              and dt.dok_lesen(d, 'angebot') == {'items': [1]}, r)
+        # übernommene Kundenseite verändert die Kopie direkt: Mitarbeiterseite liest weiter innen, der Abgleich stellt her und meldet
+        dt.dok_schreiben(d, 'sicherheit', {'idleMinutes': 999, 'pwMin': 1})
+        if art == 'dateien':
+            os.utime(d / 'sicherheit.php', (time.time() + 60, time.time() + 60))
+        else:
+            with sqlite3.connect(d / '.sqlite/store.sqlite') as c: c.execute("UPDATE documents SET mtime=mtime+60 WHERE name='sicherheit'")
+        r = php_lib("echo json_encode(store_read('sicherheit'));", d, i)
+        check(f'{w}: Mitarbeiterseite liest unbeirrt den internen Stand', json.loads(r or 'null') == {'idleMinutes': 20, 'pwMin': 14}, r)
+        r = php_lib("echo json_encode(store_kopien_abgleichen()); echo json_encode(store_kopien_abgleichen());", d, i)
+        check(f'{w}: Abgleich stellt die Kopie wieder her und erkennt die fremde Änderung', r == '{"sicherheit":true}[]' and dt.dok_lesen(d, 'sicherheit') == {'idleMinutes': 20, 'pwMin': 14}, r)
+        dt.dok_loeschen(d, 'firewall')
+        r = php_lib("echo json_encode(store_kopien_abgleichen());", d, i)
+        check(f'{w}: gelöschte Kopie wird ebenfalls wiederhergestellt', r == '{"firewall":false}' and dt.dok_lesen(d, 'firewall') == {'aktiv': True}, r)
+        # Zusammenführen: der interne Stand ersetzt die (ggf. veränderte) Kopie
+        dt.dok_schreiben(d, 'sicherheit', {'idleMinutes': 999})
+        code, out = lauf('zusammenfuehren', str(d), str(i), '--offline')
+        check(f'{w}: zusammenführen von Stufe 3: interner Stand gilt, daten-intern leer', code == 0 and dt.dok_lesen(d, 'sicherheit') == {'idleMinutes': 20, 'pwMin': 14}
+              and dt.dok_lesen(d, 'angebot') == {'items': [1]} and dt.leer(i) and dt.dok_lesen(d, 'kunden')['customers'][0]['email'] == KUNDE['email'], out)
 
 print(f'{ok_n}/{ok_n + fail_n} passed')
 sys.exit(0 if fail_n == 0 else 1)

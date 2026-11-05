@@ -99,6 +99,16 @@ function postausgang_lauf(?int $jetzt = null): array
         }
         $stand['durchsicht'] = $jetzt;
     }
+    // Kopien veröffentlichter Dokumente (ab Trennstufe 3, ADR-007 Stufe 2c): eine fremde Änderung im gemeinsamen Ordner wird aus dem
+    // internen Stand wiederhergestellt und als Sicherheitsereignis gemeldet
+    try {
+        $fremd = array_keys(array_filter(store_kopien_abgleichen()));
+        if ($fremd) {
+            error_log('[postausgang] Veröffentlichte Daten im gemeinsamen Ordner verändert, wiederhergestellt: ' . implode(', ', $fremd));
+            audit('security', 'Veröffentlichte Daten im gemeinsamen Ordner verändert – aus dem internen Stand wiederhergestellt: ' . implode(', ', $fremd), [],
+                  ['username' => 'postausgang', 'name' => 'Postausgang', 'role' => 'system']);
+        }
+    } catch (Throwable $e) { store_rollback(); error_log('[postausgang] Abgleich der Kopien: ' . $e->getMessage()); }
     // Auszug aus Bestand und Stammdaten für die Kundenseite (ab Trennstufe 2): bei jedem Durchgang nach Zeitstempel, bei der
     // Durchsicht vollständig – falls eine Änderung den Auszug nicht neu geschrieben hat (z. B. Abbruch dazwischen)
     try { artikelauszug_aktualisieren(isset($stand['durchsicht']) && $stand['durchsicht'] === $jetzt); }
