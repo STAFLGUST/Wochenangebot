@@ -933,6 +933,10 @@
   }
 
   async function openEditor() {
+    // Erst wenn alle Skripte geladen sind: Ansichten der übrigen Skripte (z. B. Importzentrale, admin-import.js) melden sich
+    // beim Laden an – kam die Antwort des Servers schneller, fehlten sie bei Rechten und Startansicht (Befund CI 05.11.2026:
+    // …/import/ nach erstmaliger Anmeldung landete im Angebot statt in der Importzentrale)
+    await seiteGeladen();
     if (window.STAFL_THEME && me) window.STAFL_THEME.konto(me, csrf, '../api/');   // Hell/Dunkel am Konto (theme.js) – gilt auf jedem Host
     if (me && me.modulzugang === false) { zeigeKeinZugang(me.modulName || ''); return; }   // Rolle ohne Zugang zu diesem Bereich
     refreshWartung();
