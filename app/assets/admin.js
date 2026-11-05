@@ -829,7 +829,7 @@
     c.items.forEach((i) => { i.altPrices = i.altPrices || []; });
     return c;
   }
-  /* Bezeichnungen/Herkunft vereinheitlichen: „frisch“ nur im Zustand, Marke „Fleischmeister“ in der Bezeichnung, Herkunft als Kürzel */
+  /* Merkmale vereinheitlichen: Herkunft als Kürzel, unbekannter Zustand aus „frisch“ in der Bezeichnung – die Bezeichnung bleibt unverändert */
   function normalizeNames(m) {
     const gb = new Map(m.groups.map((g) => [g.id, g]));
     let n = 0;
@@ -900,7 +900,7 @@
     if (ro) loadMaster().catch(() => {});
     if (!ro) {
       const n = normalizeNames(model);
-      if (n) { saveNote = { type: 'cleanup', count: n }; changed({ render: true }); toast(`${plural(n, 'Artikel', 'Artikel')} vereinheitlicht (ohne „frisch“, Marke Fleischmeister, Herkunft als Kürzel). Zum Übernehmen veröffentlichen.`, 7000); }
+      if (n) { saveNote = { type: 'cleanup', count: n }; changed({ render: true }); toast(`${plural(n, 'Artikel', 'Artikel')} vereinheitlicht (Herkunft als Kürzel, Zustand „frisch“). Zum Übernehmen veröffentlichen.`, 7000); }
       loadMaster().then(() => migrateMaster()).catch(() => {});
     }
     const start = startAnsicht();
@@ -1352,8 +1352,9 @@
     else if (f === 'name') {
       const typed = C.clean(v);
       if (!typed) { el.value = it.name; toast('Die Bezeichnung darf nicht leer sein.'); return false; }
-      const n = C.stripFrisch(typed);
-      if (n !== typed) { el.value = n; if (it.condition !== 'frisch-gefroren') it.condition = 'frisch'; toast('„frisch“ steht im Zustand, nicht in der Bezeichnung.'); }
+      const n = typed;   // Bezeichnung ohne Einschränkung, auch mit „frisch“ (Inhaber 05.11.2026) – der Zustand bleibt eigenes Feld
+      el.value = n;
+      if (it.condition === 'unbekannt' && C.stripFrisch(n) !== n) it.condition = 'frisch';
       it.name = n;
       delete it.nameRaw;
       if (autoAttr.has(it.id)) { const g = gById(it.groupId); Object.assign(it, C.suggestAttributes(n, g ? g.name : '', g ? g.section : '')); }
@@ -1509,7 +1510,10 @@
     $(id).addEventListener('change', (e) => {
       pushUndo();
       if (f === 'notice') model.meta.notice = C.clean(e.target.value);
-      else { const n = parseInt(e.target.value, 10); model.meta[f] = Number.isInteger(n) ? n : null; }
+      else {
+        const n = parseInt(e.target.value, 10); model.meta[f] = Number.isInteger(n) ? n : null;
+        if (model.meta.title) model.meta.title = C.titelMitKw(model.meta);   // Titel aus dem Import nennt sonst die alte KW
+      }
       changed();
     });
   }
@@ -3861,7 +3865,8 @@
       if (vorh) { empfehlungNichtUebernehmen(vorh, curOffer); aufnehmen(vorh, curOffer, p); ids.set(K(a.code), vorh.id); continue; }   // steht schon in einem anderen Angebot
       const g = zielGruppe(a, true);
       const m = masterOf(a.code);
-      const name = C.stripFrisch(C.clean((m && m.name) || a.name || a.code));
+      // gepflegte Stammdaten-Bezeichnung unverändert, sonst Vorschlag aus der Bestandsliste (ohne „frisch“, Marke Fleischmeister)
+      const name = m && C.clean(m.name) ? C.clean(m.name) : C.nameVorschlag(C.clean(a.name || a.code), g);
       const it = { id: uid('n'), code: a.code, name, ...C.suggestAttributes(name, g.name, g.section || ''), groupId: g.id, price: std && p ? p : { status: 'none' }, altPrices: [] };
       const quelle = m || a;
       if (C.CATEGORY_ORDER.includes(quelle.category)) it.category = quelle.category;
@@ -3952,16 +3957,16 @@
           preis: sv != null ? 'Empfehlung ' + fmtNum.format(sv) + ' €/kg' : p ? priceShort(p) : '' };
       });
   }
-  /* Artikelauswahl für die Werbung (gemeinsames Fenster admin-artikelwahl.js): Filter „nur in diesem Angebot“ voreingestellt,
-     Bestand sichtbar, aber ohne Filter; beworbene Artikel vorausgewählt. Artikel, die noch nicht im Angebot stehen
+  /* Artikelauswahl für die Werbung (gemeinsames Fenster admin-artikelwahl.js): Filter „nur in diesem Angebot“ nicht
+     vorausgewählt (Inhaber 05.11.2026), Bestand sichtbar, aber ohne Filter; beworbene Artikel vorausgewählt. Artikel, die noch nicht im Angebot stehen
      (Filter aus), werden mit Preis aufgenommen wie bei „Artikel hinzufügen“. fertig(ids, artikel) gibt die Auswahl zurück. */
-  const werbZustand = { grp: '*', nurBestand: false, nurAngebot: true };
+  const werbZustand = { grp: '*', nurBestand: false, nurAngebot: false };
   async function werbungAuswahl(oid, ids, fertig) {
     if (ro || oid !== curOffer) return;
     let d;
     try { d = await ladeArtikelwahl(); } catch (ex) { toast(ex.message, 6000); return; }
     awFest = null;
-    Object.assign(werbZustand, { grp: '*', nurAngebot: true, nurBestand: false });   // jedes Mal: alle Gruppen, nur dieses Angebot, Bestand ohne Filter
+    Object.assign(werbZustand, { grp: '*', nurAngebot: false, nurBestand: false });   // jedes Mal: alle Gruppen, ohne Filter („nur in …“ nicht vorausgewählt)
     const K = window.WA.artikelwahl.key, std = oid === OSTD;
     const pool = poolByCode();
     const ohneNr = (it) => '~' + it.id;   // Positionen ohne Artikelnummer: eigener Schlüssel, ohne angezeigte Nummer
@@ -4321,7 +4326,7 @@
     for (const [k, list] of by) {
       if (list.length !== 1 || masterOf(k)) continue;
       const it = list[0];
-      const e = { code: it.code, name: C.stripFrisch(it.name), category: it.category, origin: it.origin || null, condition: it.condition };
+      const e = { code: it.code, name: it.name, category: it.category, origin: it.origin || null, condition: it.condition };
       const nm = namenBekannt(it.namen);
       if (nm) e.namen = nm;
       master.articles.push(e);
@@ -4550,9 +4555,8 @@
     err.textContent = '';
     const typed = C.clean(f.name.value);
     if (!typed) { err.textContent = 'Die Angebotsbezeichnung darf nicht leer sein.'; f.name.focus(); return; }
-    const name = C.stripFrisch(typed);
-    let condition = f.condition.value;
-    if (name !== typed && condition !== 'frisch-gefroren') condition = 'frisch';   // „frisch“ steht im Zustand
+    const name = typed;   // Bezeichnung ohne Einschränkung (auch mit „frisch“); der Zustand ist das eigene Feld
+    const condition = f.condition.value;
     const vk = f.vkGruppe.value.trim();
     if (vk && (!/^[0-9A-Za-z._-]{1,10}$/.test(vk) || (vkg.length && !vkgMap.has(vk)))) { err.textContent = `Die VK-Gruppe „${vk}“ gibt es nicht. Bitte unter Stammdaten → VK-Gruppen anlegen.`; f.vkGruppe.focus(); return; }
     const neu = { ...e, name, category: f.category.value, origin: C.clean(f.origin.value) || null, condition };
@@ -4632,9 +4636,12 @@
   }
   function masterNeuAus(r) {
     const sug = C.suggestAttributes(r.name, [vkName(r.vkGruppe), r.name2].filter(Boolean).join(' '), '');
-    const e = { code: r.code, name: r.name, category: sug.category, origin: sug.origin || null, condition: sug.condition };
-    C.normalizeItem(e);
-    e.nameWawi = r.name;   // Original (Bezeichnung1), bevor „frisch“ in den Zustand wandert   // „frisch“ aus der Bezeichnung in den Zustand, Herkunft vereinheitlichen
+    // Import aus der Warenwirtschaft: Bezeichnung als Vorschlag ohne „frisch“ (steht im Zustand) – von Hand bleibt sie danach frei
+    const name = C.nameVorschlag(r.name);
+    const e = { code: r.code, name, category: sug.category, origin: sug.origin || null, condition: sug.condition };
+    if (name !== r.name && e.condition === 'unbekannt') e.condition = 'frisch';
+    C.normalizeItem(e);   // Herkunft vereinheitlichen
+    e.nameWawi = r.name;   // Original (Bezeichnung1), bevor „frisch“ in den Zustand wandert
     const kurz = e.name.replace(/[\s,]+(?:fri|fr)\.?$/, '');   // abgekürztes „frisch“ der Warenwirtschaft („…,Hac.Horiz.,fri“)
     if (kurz !== e.name && kurz.length > 2) { e.name = kurz; if (e.condition === 'unbekannt') e.condition = 'frisch'; }
     if (r.vkGruppe) e.vkGruppe = r.vkGruppe;
@@ -4743,8 +4750,8 @@
     if (masterOf(code)) { err.textContent = `Für ${code} gibt es bereits Stammdaten.`; return; }
     const typed = C.clean(f.name.value);
     if (!typed) { err.textContent = 'Bitte eine Bezeichnung angeben.'; return; }
-    const name = C.stripFrisch(typed);
-    master.articles.push({ code, name, category: f.category.value, origin: C.clean(f.origin.value) || null, condition: name !== typed && f.condition.value !== 'frisch-gefroren' ? 'frisch' : f.condition.value });
+    const name = typed;   // wie eingegeben (Vorschlag aus der Bestandsliste steht schon ohne „frisch“ im Feld)
+    master.articles.push({ code, name, category: f.category.value, origin: C.clean(f.origin.value) || null, condition: f.condition.value });
     master.articles.sort((x, y) => x.code.localeCompare(y.code, 'de', { numeric: true }));
     dlgMN.close();
     saveMaster();
@@ -4758,7 +4765,7 @@
     if (roMaster || !it.code) return;
     try { await loadMaster(); } catch (e) { toast(e.message); return; }
     const ent = masterOf(it.code);
-    const rec = { code: ent ? ent.code : it.code, name: C.stripFrisch(it.name), category: it.category, origin: it.origin || null, condition: it.condition };
+    const rec = { code: ent ? ent.code : it.code, name: it.name, category: it.category, origin: it.origin || null, condition: it.condition };
     const nm = namenBekannt(it.namen);   // Bezeichnungen je Angebot gehören dazu
     if (nm) rec.namen = nm; else if (ent) delete ent.namen;
     if (ent) Object.assign(ent, rec); else { master.articles.push(rec); master.articles.sort((x, y) => x.code.localeCompare(y.code, 'de', { numeric: true })); }
