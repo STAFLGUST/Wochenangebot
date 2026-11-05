@@ -6,9 +6,12 @@
 # nur der Inhaber. Neuere Fassungen (z. B. Keycloak 26.8.2) meldet der Lauf nur – ein Fassungswechsel betrifft auch die
 # Downloads und Prüfsummen der CI (tests/oidc/umgebung.sh) und wird von Hand gemacht.
 #
-# Pull Requests, die mit dem GITHUB_TOKEN angelegt werden, starten keine CI von selbst – daher startet dieser Lauf die CI
-# für den Branch ausdrücklich (workflow_dispatch). Darf GitHub Actions keine Pull Requests anlegen (Einstellung
-# „Allow GitHub Actions to create and approve pull requests“), entsteht stattdessen ein Issue mit Bericht und Branch.
+# Die CI läuft als normale Pull-Request-Prüfung (nur sie zählt für die Pflicht-Prüfungen des Hauptbranch-Schutzes).
+# GitHub behandelt den Autor github-actions[bot] als Erstbeitragenden und hält sie an, bis der Inhaber im Pull Request
+# „Approve workflows to run“ klickt (Einstellung „Require approval for first-time contributors“) – der PR-Text sagt das.
+# Ein zusätzlicher CI-Start für den Branch (workflow_dispatch) zählt nicht für den Pull Request und entfällt daher.
+# Darf GitHub Actions keine Pull Requests anlegen (Einstellung „Allow GitHub Actions to create and approve pull
+# requests“), entsteht stattdessen ein Issue mit Bericht und Branch; nur dann startet dieser Lauf die CI für den Branch.
 name: Sicherheitsupdates
 
 on:
@@ -31,7 +34,7 @@ jobs:
     permissions:
       contents: write        # Branch mit den neuen Digests
       pull-requests: write   # Pull Request anlegen, ältere ersetzen
-      actions: write         # CI für den Branch starten
+      actions: write         # Rückfall ohne Pull Request: CI für den Branch starten
       issues: write          # Rückfall: Bericht als Issue
     steps:
       - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
@@ -73,7 +76,8 @@ jobs:
             cat "$RUNNER_TEMP/bericht.md"
             echo
             echo "## Prüfen und einspielen"
-            echo "- Die CI läuft für diesen Branch (von diesem Lauf gestartet) – grün heißt: Image gebaut, mit dem Grundimage verglichen, Trivy-Scan ohne kritische Lücke mit Korrektur, alle Tests."
+            echo '- Zeigt GitHub unten "1 workflow awaiting approval": auf "Approve workflows to run" klicken (GitHub behandelt den Bot als Erstbeitragenden; geändert sind nur die Digest-Zeilen oben, keine Workflow-Datei).'
+            echo "- Grüne CI heißt: Image gebaut, mit dem Grundimage verglichen, Trivy-Scan ohne kritische Lücke mit Korrektur, alle Tests."
             echo "- Danach mergen und wie immer ein Release freigeben. Neue Images für Caddy, Keycloak oder PostgreSQL starten diese Container dabei neu (Keycloak: rund eine Minute keine neue Mitarbeiteranmeldung)."
             echo "- Rückfall: Release zurücknehmen (alte Digests)."
             echo
@@ -91,5 +95,5 @@ jobs:
             echo 'Pull Request konnte nicht angelegt werden (Einstellung: Allow GitHub Actions to create and approve pull requests?) – Issue statt dessen.' >> "$GITHUB_STEP_SUMMARY"
             { echo "Branch: \`$branch\` – bitte daraus einen Pull Request nach \`main\` anlegen."; echo; cat "$RUNNER_TEMP/pr.md"; } > "$RUNNER_TEMP/issue.md"
             gh issue create --title "Sicherheitsupdates der Container-Images (KW $kw)" --body-file "$RUNNER_TEMP/issue.md"
+            gh workflow run ci.yml --ref "$branch"   # ohne Pull Request gibt es keine PR-Prüfung – CI für den Branch
           fi
-          gh workflow run ci.yml --ref "$branch"
