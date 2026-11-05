@@ -838,6 +838,14 @@ body.is-test::after { content: "TESTUMGEBUNG · nur Testdaten · E-Mails nur im 
 .al h2 { margin: 0; font-size: 17px; font-weight: 650; letter-spacing: -.01em; text-transform: none; }
 .al-ht > span { font-size: 13px; color: var(--text-2); }
 .al-sec { margin: 0 0 18px; }
+/* Zeile („Band“) der Angebotsliste: k gleich breite Spalten; ein Abschnitt belegt --c davon, kleine Abschnitte stehen nebeneinander */
+.al-band { display: grid; grid-template-columns: repeat(var(--k, 3), minmax(0, 1fr)); margin: 0 0 18px; }
+.al-band > .al-sec { grid-column: span var(--c, 1); min-width: 0; margin: 0; }
+.al-band > .al-sec + .al-sec > .al-st { margin-left: 16px; }
+.al-band > .al-sec:not(:last-child) > .al-st { margin-right: 16px; }
+.al-band > .al-sec + .al-sec .al-col:first-child { padding-left: 16px; }
+.al-band > .al-sec:not(:last-child) .al-col:last-child { padding-right: 16px; }
+.al-st.al-st-leer { visibility: hidden; }
 .al-st { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; margin: 0 0 12px; padding: 7px 12px; background: var(--surface-3); border-radius: 7px; }
 .al-st h3 { margin: 0; font-size: 15px; font-weight: 650; letter-spacing: -.005em; text-transform: none; }
 .al-st > span { font-size: 12px; color: var(--muted); white-space: nowrap; }

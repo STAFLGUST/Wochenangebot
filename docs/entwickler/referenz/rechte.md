@@ -33,6 +33,7 @@ Für jedes Modul mit Kachel entsteht `<modul>.zugang` (lib/rechte.php, `perms_ka
 | `angebot.veroeffentlichen` | Angebot | Angebot | bearbeiten | Angebot veröffentlichen | Bearbeiter | – |
 | `angebote.verwalten` | Angebot | Angebot | bearbeiten | Kundenangebote anlegen und umbenennen | Bearbeiter | – |
 | `angebote.loeschen` | Angebot | Angebot | bearbeiten | Kundenangebote löschen, Wochenangebot nur für Kunden sichtbar machen | – | `angebote.verwalten` |
+| `angebot.winab_export` | Angebot | Angebot | bearbeiten | Wochenangebot als CSV für WinAB exportieren (Artikelnummer und Preis des veröffentlichten Angebots) | – | – |
 | `preisverlauf.sehen` | Angebot | Preisverlauf | sehen | Preisverlauf ansehen | Nur ansehen, Bearbeiter | – |
 | `preisverlauf.bearbeiten` | Angebot | Preisverlauf | bearbeiten | Alte Angebotslisten hochladen und löschen | Bearbeiter | `preisverlauf.sehen` |
 | `bestand.sehen` | Bestand | Bestand | sehen | Bestand mit Mengen und MHD ansehen | Nur ansehen, Bearbeiter | – |

@@ -2,7 +2,7 @@
 
 <!-- ERZEUGT von `python3 werkzeuge/doku.py erzeugen` – nicht von Hand ändern. Quelle: Funktionen und Kommentare im Code. Die CI prüft, dass diese Datei zum Code passt. -->
 
-42 Dateien, 635 Funktionen – in der Reihenfolge der Datei, **fett** die Abschnitte. Text = erste Aussage des Kommentars direkt über der Funktion (Python: Docstring). Übersicht aller Module: [README.md](README.md).
+43 Dateien, 643 Funktionen – in der Reihenfolge der Datei, **fett** die Abschnitte. Text = erste Aussage des Kommentars direkt über der Funktion (Python: Docstring). Übersicht aller Module: [README.md](README.md).
 
 ## `app/api/lib/angebote.php`
 
@@ -176,6 +176,14 @@ _Importvertrag des Moduls Angebot – Schnittstelle zur Importzentrale (docs/pla
 - `preisverlauf_import_wochen(e)` – Wochen der Dateien prüfen: gültige Woche, Artikel; doppelte Woche → die spätere Datei zählt (wie im Preisverlauf)
 - `preisverlauf_import_vorschau(e, me)`
 - `preisverlauf_import_uebernehmen(e, me)`
+
+## `app/api/module/angebot/winab-export.php`
+
+_Export des Wochenangebots für WinAB (Auftrag des Inhabers 05.11.2026)_
+
+- `winab_preis(v)` – Preis für WinAB: 26,1 → „26,10“, 12.345 → „12,345“
+- `winab_zeilen(pub)` – Zeilen [Artikelnummer, Preis] aus einem veröffentlichten Angebotsmodell (höchster Preis je Nummer) und Zählung
+- `winab_export()` – Datei für den Download: Name, Inhalt und Zahlen; 422 ohne veröffentlichtes Angebot oder ohne Preise
 
 ## `app/api/order_outbox.php`
 
@@ -661,8 +669,10 @@ _Wochenangebot – öffentliches Frontend_
 - `plName(it)` – „Fleischmeister“ in der Bezeichnung weglassen, wenn Gruppe oder Abschnitt die Marke schon nennen (dort ist sie Überschrift)
 - `plLabels(items)`
 - `plCells(it, labels)`
-- `plFill(units, k, H)` – Verteilung auf k Spalten. units: [{key, items, weight(i), head}]; cap = feste Spaltenhöhe (Druck) oder null (ausgleichen)
-- `plBalance(units, k)`
+- `plFill(units, k, H)` – Druck: Spalten fester Höhe H nacheinander füllen.
+- `plOhneTeilen(units, c)` – Blöcke in fester Reihenfolge ohne Teilen auf c Spalten: die höchste Spalte so niedrig wie möglich (lineare Aufteilung).
+- `plGleichTeilen(u, k)` – Sortierte Gesamtliste (ohne Gruppen) ist ein einziger Block: er wird gleichmäßig auf die k Spalten verteilt (ab der zweiten Spalte mit „Forts.“) – sonst …
+- `plBaender(secs, k)`
 - `plUnits(list, grouped, charsPerLine)`
 - `plSections(units)`
 - `plBlockHTML(b, mode)` – Ein Block: Nummer \| Bezeichnung \| Preis(e) \| [Merken].
@@ -910,6 +920,7 @@ _Mehrere Angebote: Kundenangebote mit eigenen Preisen, eigene Artikelliste je An
 _Angebotsliste (Standardansicht der Angebotsseite)_
 
 - `check(n, c, i)`
+- `art(n, gid, nr)`
 
 ## `tests/e2e/test_bestellung.py`
 
@@ -941,6 +952,11 @@ _Testgruppe editor_aux_
 - `login(pg, user, pw)`
 - `post(pg, action, body)`
 - `treffer(q)`
+
+**Export für WinAB (Recht angebot.winab_export): veröffentlichtes Wochenangebot, je Nummer der höchste Preis**
+
+- `art(src, nid, **f)`
+- `wb(v)`
 
 ## `tests/e2e/test_einzelangebote.py`
 

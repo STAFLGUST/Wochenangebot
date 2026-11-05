@@ -12,6 +12,7 @@ if (!defined('WA_API')) { http_response_code(404); exit; }   // nur über api/in
 const AKTIONEN = [
     'abmelden1' => ['modul' => 'angebot', 'oberflaeche' => 'angebot.kunden', 'schreibend' => false, 'oeffentlich' => true, 'kunden_wartung' => false, 'wartung_frei' => false, 'fremde_herkunft' => true, 'lokale_anmeldung' => false],
     'angebot_artikel' => ['modul' => 'angebot', 'oberflaeche' => 'angebot.eingabe', 'schreibend' => false, 'oeffentlich' => false, 'kunden_wartung' => false, 'wartung_frei' => false, 'fremde_herkunft' => false, 'lokale_anmeldung' => false],
+    'angebot_winab_export' => ['modul' => 'angebot', 'oberflaeche' => 'angebot.eingabe', 'schreibend' => true, 'oeffentlich' => false, 'kunden_wartung' => false, 'wartung_frei' => false, 'fremde_herkunft' => false, 'lokale_anmeldung' => false],
     'anmeldekonto' => ['modul' => 'plattform', 'oberflaeche' => 'angebot.eingabe', 'schreibend' => false, 'oeffentlich' => false, 'kunden_wartung' => false, 'wartung_frei' => false, 'fremde_herkunft' => false, 'lokale_anmeldung' => false],
     'anmeldekonto_aendern' => ['modul' => 'plattform', 'oberflaeche' => 'angebot.eingabe', 'schreibend' => true, 'oeffentlich' => false, 'kunden_wartung' => false, 'wartung_frei' => false, 'fremde_herkunft' => false, 'lokale_anmeldung' => false],
     'anmeldung_pruefen' => ['modul' => 'plattform', 'oberflaeche' => 'plattform.anmeldung', 'schreibend' => false, 'oeffentlich' => false, 'kunden_wartung' => false, 'wartung_frei' => true, 'fremde_herkunft' => false, 'lokale_anmeldung' => false],
