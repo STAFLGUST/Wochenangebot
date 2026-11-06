@@ -599,3 +599,28 @@ button.qm-kpi{font:inherit;text-align:left;color:inherit;cursor:pointer}
 }
 /* Handy: auch mittlere und große Fenster als Blatt über die volle Breite (die Breitenregeln oben stehen nach der Handy-Regel) */
 @media(max-width:560px){.qm-dialog.qm-dialog-mittel,.qm-dialog.qm-dialog-gross{width:100vw;max-width:100vw}}
+
+/* ── Rahmen „C2“ (gemeinsame Seitenleiste ../../assets/rahmen.css und rahmen.js, Entwurf freigegeben 06.11.2026) ──
+   Aufbau, Reiter und Abläufe der Seite bleiben unverändert. Neu: ruhige deckende Flächen mit feinen Linien statt Glas,
+   keine Farbflächen im Hintergrund; Logo und Nutzer stehen in der Seitenleiste, der Kopf behält „Start“, Modulname und
+   die Knöpfe der Seite. Farben kommen aus den --r-* des Rahmens (hell und dunkel); :root erhöht die Gewichtung, damit
+   die Werte auch die dunklen Angaben oben ersetzen. */
+:root body.qm.r {
+  --qm-bg: var(--r-grund); --qm-text: var(--r-text); --qm-glass: var(--r-flaeche); --qm-kopf: var(--r-grund); --qm-card: var(--r-flaeche);
+  --qm-border: var(--r-linie-2); --qm-line: var(--r-linie); --qm-gloss: transparent; --qm-shadow: var(--r-schatten);
+}
+:root body.qm.r .qm-bg { display: none; }
+body.qm.r .qm-glas { -webkit-backdrop-filter: none; backdrop-filter: none; box-shadow: var(--r-schatten); }
+body.qm.r .qm-seite { flex: 1; width: 100%; min-height: 0; box-sizing: border-box; padding: 24px 24px 40px; }
+body.qm.r .qm-kopf { position: static; padding: 0; border: 0; border-radius: 0; background: none; box-shadow: none; }
+body.qm.r :is(.qm-marke, .qm-user) { display: none; }
+body.qm.r .qm-modul { padding-left: 0; border-left: 0; font-size: 22px; font-weight: 700; letter-spacing: -.01em; }
+body.qm.r .qm-modul .i { width: 22px; height: 22px; }
+body.qm.r .qm-rund { background: var(--r-flaeche); border: 1px solid var(--r-linie-2); color: var(--r-text); }
+body.qm.r .qm-rund:hover { background: var(--r-flaeche-2); }
+@media (max-width: 900px) {
+  body.qm.r .qm-seite { padding: 16px 16px 32px; }
+  body.qm.r .qm-modul { font-size: 18px; }
+}
+/* Druck im Rahmen: die Seite liegt jetzt in .r-app (nicht mehr direkt unter body) – wie oben für .qm-seite freigeben */
+@media print { body.qm.r > .r-app:not(#print-root) { display: block !important; } body.qm.r .r-inhalt { display: block; } }
