@@ -564,6 +564,13 @@ dialog.modal.st-vk { width: min(1100px, calc(100vw - 32px)); }
 .pdelta.up { color: var(--accent); } .pdelta.down { color: var(--c-fresh); }
 .mhd-dot { display: inline-block !important; width: 9px; height: 9px; padding: 0 !important; border-radius: 50% !important; margin-right: 6px; vertical-align: 0; }
 #groups.no-stock .e-stock, #groups.no-prev .e-prev { display: none; }
+/* Artikelkarte des Bestands im Angebot: Bestandswert als Knopf, freie Fläche der Artikelzeile klickbar (admin.js openBestandKarte) */
+.etab .e-bst { border: 0; background: transparent; color: inherit; font: inherit; padding: 3px 6px; margin: -3px -6px; border-radius: 6px; cursor: pointer; white-space: nowrap; }
+.etab .e-bst:hover { background: var(--surface-3); color: var(--text); }
+.etab .e-bst:focus-visible { box-shadow: var(--focus); outline: none; }
+.etab .e-bst .nostock { cursor: pointer; }
+#groups .etab tr.e-karte > td:not(.e-price):not(.e-act) { cursor: pointer; }
+#groups .etab tr.e-karte > td :is(input, select, textarea) { cursor: auto; }
 /* Leistung: Gruppenkarten außerhalb des Bildschirms rendert der Browser nicht (Stil, Layout, Zeichnen werden
    übersprungen, ~12 000 Elemente im Editor). „auto“ merkt sich die zuletzt gemessene Höhe, die Bildlaufleiste bleibt ruhig. */
 #groups > .gcard { content-visibility: auto; contain-intrinsic-size: auto 640px; }

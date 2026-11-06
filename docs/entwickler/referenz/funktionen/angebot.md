@@ -2,7 +2,7 @@
 
 <!-- ERZEUGT von `python3 werkzeuge/doku.py erzeugen` – nicht von Hand ändern. Quelle: Funktionen und Kommentare im Code. Die CI prüft, dass diese Datei zum Code passt. -->
 
-43 Dateien, 648 Funktionen – in der Reihenfolge der Datei, **fett** die Abschnitte. Text = erste Aussage des Kommentars direkt über der Funktion (Python: Docstring). Übersicht aller Module: [README.md](README.md).
+43 Dateien, 654 Funktionen – in der Reihenfolge der Datei, **fett** die Abschnitte. Text = erste Aussage des Kommentars direkt über der Funktion (Python: Docstring). Übersicht aller Module: [README.md](README.md).
 
 ## `app/api/lib/angebote.php`
 
@@ -507,6 +507,7 @@ _Wochenangebot – Eingabebereich Bearbeitet einen Entwurf auf dem Server (autom
 - `loadStock(force)`
 - `offerPriceMap()` – Verkaufspreise der Angebotswoche (aktueller Entwurf) je Artikelnummer
 - `stockItems()`
+- `stockZeile(a, idx, m)` – Eine Zeile der Bestandsliste (auch für die Artikelkarte im Angebot): Preise, Angebot, Zugänge, Summen
 - `naechsteEta(list)` – Nächste ETA der erfassten Zugänge: frühestes Ankunftsdatum ab heute; liegen alle in der Vergangenheit, das späteste (überfällig).
 - `colCompare(a, b)`
 - `stockResult(q)`
@@ -531,6 +532,9 @@ _Wochenangebot – Eingabebereich Bearbeitet einen Entwurf auf dem Server (autom
 - `openStockIncoming(idx)`
 - `lotTableHTML(lots, zugang, marke)` – zugang = erwartete Zugänge (Status „erfasst“): dieselbe Tabelle, Datumsspalte „ETA“ (auch am Handy sichtbar), fehlendes MHD als „—“ (meist noch nicht …
 - `openStockItem(idx)`
+- `zeigeStockKarte(a)` – Artikelkarte des Bestands – aus der Bestandsliste und aus dem Angebot (openBestandKarte)
+- `bestandKarteMoeglich(it)` – Dieselbe Karte im Angebot (Wunsch Inhaber 06.11.2026): Klick auf den Bestand oder eine freie Fläche der Artikelzeile.
+- `openBestandKarte(it)`
 - `fillItemStock(it)` – Bestand im Artikel-Dialog des Angebots
 - `stockAusDatei(file)` – Bestandsliste lesen (Leser des Moduls Bestand: stock-core.js) – hier und in der Importzentrale
 - `stockImportFile(file)`
@@ -959,6 +963,11 @@ _Testgruppe editor_aux_
 - `check(n, c, i)`
 - `login(pg, user, pw)`
 - `post(pg, action, body)`
+
+**Artikelkarte des Bestands im Angebot (Wunsch Inhaber 06.11.2026)**
+
+- `karte_zu(pg)`
+- `frei(zeile)`
 - `treffer(q)`
 
 **Export für WinAB (Recht angebot.winab_export): veröffentlichtes Wochenangebot, je Nummer der höchste Preis**
