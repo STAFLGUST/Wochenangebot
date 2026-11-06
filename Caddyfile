@@ -102,6 +102,28 @@
 	}
 }
 
+# Relais der Datenleck-Prüfung für die Kundenseite (ADR-007, Härtung des Kundencontainers): Der Container app liegt im Netz
+# „kunde“ ohne Ausgang ins Internet. Die Prüfung der Kundenpasswörter (lib/nutzer.php, k-Anonymität: übertragen werden nur die
+# ersten 5 Zeichen des SHA-1-Prüfwerts) geht über diesen Block – nur GET /range/<5 Hex-Zeichen> an api.pwnedpasswords.com,
+# alles andere 404. Port 8081 ist nicht veröffentlicht (nur in den Docker-Netzen von Caddy erreichbar), Besucher kommen hier nie
+# an – deshalb ohne den Abschnitt „cdn“. Geprüft mit tests/deploy/test_kundencontainer.sh und tests/deploy/test_cdn.py.
+http://:8081 {
+	@range {
+		method GET
+		path_regexp ^/range/[0-9A-F]{5}$
+	}
+	handle @range {
+		reverse_proxy https://api.pwnedpasswords.com {
+			header_up Host api.pwnedpasswords.com
+			header_up -Cookie
+			header_up -Authorization
+		}
+	}
+	handle {
+		respond 404
+	}
+}
+
 # Testumgebung: test.<Domain> → Container „app-test“ (Ordner /opt/wochenangebot-test, deploy/testumgebung.sh).
 # Nur Testdaten, Zugang zusätzlich per Passwort (Apache im Test-Container), keine Suchmaschinen.
 # Läuft der Test-Container nicht, antwortet nur diese Adresse mit einem Fehler – der Echtbetrieb ist unberührt.

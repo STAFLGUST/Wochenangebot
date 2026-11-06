@@ -19,8 +19,9 @@
 services:
   app:
     # Kundenseite angebot-stafl.de (ADR-007): dasselbe Anwendungs-Image wie app-mitarbeiter (deploy/image, in der CI gebaut und
-    # mit php:8.3-apache verglichen), aber ohne Keycloak-Hosts in Apache, ohne Dashboard und ohne Anmelde-Geheimnisse. Bleibt
-    # im Netz „default“ (Caddy) – Keycloak und app-mitarbeiter liegen im Netz „intern“ und sind von hier nicht erreichbar.
+    # mit php:8.3-apache verglichen), aber ohne Keycloak-Hosts in Apache, ohne Dashboard und ohne Anmelde-Geheimnisse. Allein mit
+    # Caddy im Netz „kunde“ (ohne Ausgang ins Internet) – Keycloak und app-mitarbeiter liegen im Netz „intern“ und sind von hier
+    # nicht erreichbar. Härtung: ADR-007, Abschnitt „Härtung des Kundencontainers“; geprüft mit tests/deploy/test_kundencontainer.sh.
     image: stafl-app:${STAFL_APP_VERSION:-lokal}
     build: ./deploy/image                                  # baut das gemeinsame Image (auch für app-mitarbeiter)
     environment:
@@ -39,12 +40,29 @@ services:
       MAIL_FROM: ""
       MAIL_FROM_NAME: ""
       MAIL_REPLY_TO: ""
-    # Härtung (ADR-007): Dateisystem nur lesbar (Anwendung ist ohnehin nur lesend eingebunden, Daten im Datenordner); Apache
-    # und PHP schreiben nur in /tmp (Sitzungen) und /run (PID, Sperren). Keine Rechteausweitung über setuid-Programme.
+      # PHP-Härtung nur für die Kundenseite (zusätzlich zu den Einstellungen des Images): keine Programme starten, keine
+      # Uploads, Dateizugriff nur auf Anwendung, Datenordner und /tmp – deploy/anmeldung/kunde-php.ini
+      PHP_INI_SCAN_DIR: ":/usr/local/etc/php/kunde.d"
+      # Datenleck-Prüfung der Kundenpasswörter (lib/nutzer.php) über das Relais in Caddy – der einzige Weg nach außen
+      WA_PWNED_URL: "http://caddy:8081/range/%s"
+    volumes:
+      - ./deploy/anmeldung/kunde-php.ini:/usr/local/etc/php/kunde.d/zz-kunde.ini:ro
+      - ./deploy/anmeldung/kunde-apache.conf:/etc/apache2/conf-enabled/zz-kunde.conf:ro
+    # Härtung (ADR-007):
+    # – läuft vollständig als www-data (auch der Apache-Hauptprozess) und ohne jede Linux-Sonderberechtigung; Port 80 öffnet
+    #   Apache dank der Einstellung des eigenen Netz-Namensraums (ip_unprivileged_port_start) ohne Root-Rechte
+    # – Dateisystem nur lesbar (Anwendung ohnehin nur lesend eingebunden, Daten im Datenordner); Apache und PHP schreiben nur in
+    #   /tmp (Sitzungen) und /run (PID, Sperren) – dort lässt sich nichts ausführen (noexec)
+    # – keine Rechteausweitung über setuid-Programme; Standardprofil seccomp (und AppArmor, wo der Server es hat)
+    user: "33:33"
+    cap_drop:
+      - ALL
+    sysctls:
+      net.ipv4.ip_unprivileged_port_start: 0
     read_only: true
     tmpfs:
-      - /tmp:mode=1777,size=256m
-      - /run:mode=755,size=16m
+      - /tmp:mode=1777,size=256m,noexec,nosuid,nodev
+      - /run:mode=1777,size=16m,noexec,nosuid,nodev
     security_opt:
       - no-new-privileges:true
     # Grenzen: Überlast auf der öffentlichen Seite bremst die Mitarbeiter-Hosts nicht aus (Server: Hostinger KVM 8,
@@ -52,6 +70,8 @@ services:
     cpus: ${KUNDEN_CPUS:-3}
     mem_limit: ${KUNDEN_SPEICHER:-4g}
     pids_limit: 1024
+    networks:
+      kunde:                                               # nur Caddy; ersetzt „default“ (kein Ausgang ins Internet)
 
   app-mitarbeiter:
     # Mitarbeiter-Hosts (ADR-003, ADR-007): dashboard-stafl.de, angebot./verwaltung./bestand./hr./crm./marketing./sicherheit./
@@ -192,6 +212,7 @@ services:
   caddy:
     networks:
       intern:                                              # zusätzlich zu default und edge: Ziele app-mitarbeiter und keycloak
+      kunde:                                               # Ziel app (Kundenseite); Relais der Datenleck-Prüfung (Port 8081)
 
   keycloak:
     image: quay.io/keycloak/keycloak:26.8.1@sha256:3f3c5f8e03c614774b4bd9173b88391fefa4153bfc010d8012d59ad825377332
@@ -264,6 +285,10 @@ networks:
     internal: true
   # Dienst postausgang allein: Ausgang zum Postfach (SMTP), sonst nichts
   postausgang:
+  # Kundenseite (app) und Caddy – ohne Ausgang ins Internet (ADR-007, Härtung): eine übernommene Kundenseite kann weder
+  # Werkzeuge nachladen noch Daten an fremde Server schicken. Einziger Weg nach außen: Caddy-Relais zu api.pwnedpasswords.com.
+  kunde:
+    internal: true
 
 volumes:
   keycloak_db:

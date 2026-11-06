@@ -172,14 +172,24 @@ ziele = lambda x: {v['target'] for v in x.get('volumes', [])}
 if was == 'kunden-geheimnisse':
     assert not [k for k in app['environment'] if k.startswith('OIDC_') or k.startswith('WA_KONTEN')], app['environment'].keys()
 elif was == 'kunden-dateien':
-    assert ziele(app) == {'/var/www/html', '/var/www/html/data'}, ziele(app)
+    # Anwendung, Datenordner und die beiden Härtungsdateien (nur lesend) – kein Dashboard, keine Keycloak-Hosts, keine Geheimnisse
+    assert ziele(app) == {'/var/www/html', '/var/www/html/data', '/usr/local/etc/php/kunde.d/zz-kunde.ini',
+                          '/etc/apache2/conf-enabled/zz-kunde.conf'}, ziele(app)
+    assert all(v.get('read_only') for v in app['volumes'] if v['target'] != '/var/www/html/data'), app['volumes']
 elif was == 'kunden-netz':
-    assert set(app['networks']) == {'default'} and set(ma['networks']) == {'intern'}
-    assert set(s['keycloak']['networks']) == {'intern', 'anmeldung'} and {'default', 'edge', 'intern'} <= set(s['caddy']['networks'])
+    assert set(app['networks']) == {'kunde'} and set(ma['networks']) == {'intern'}   # Kundenseite nicht mehr in „default“
+    assert d['networks']['kunde'].get('internal') is True   # Kundenseite ohne Ausgang ins Internet (Härtung)
+    assert set(s['keycloak']['networks']) == {'intern', 'anmeldung'} and {'default', 'edge', 'intern', 'kunde'} <= set(s['caddy']['networks'])
     assert d['networks']['intern'].get('internal') is not True   # Ausgang (Postfach, Keycloak-Metadaten) bleibt möglich
 elif was == 'kunden-haertung':
-    assert app.get('read_only') is True and 'no-new-privileges:true' in app.get('security_opt', [])
-    assert {t.split(':')[0] for t in app.get('tmpfs', [])} == {'/tmp', '/run'}
+    assert app.get('read_only') is True and app.get('security_opt') == ['no-new-privileges:true'] and not app.get('privileged')
+    assert app.get('user') == '33:33' and app.get('cap_drop') == ['ALL'] and not app.get('cap_add') and not app.get('ports')
+    assert str(app.get('sysctls', {}).get('net.ipv4.ip_unprivileged_port_start')) == '0', app.get('sysctls')
+    t = {x.split(':')[0]: x.split(':', 1)[1].split(',') for x in app.get('tmpfs', [])}
+    assert set(t) == {'/tmp', '/run'} and all({'noexec', 'nosuid', 'nodev'} <= set(o) for o in t.values()), t
+    e = app['environment']
+    assert e.get('PHP_INI_SCAN_DIR') == ':/usr/local/etc/php/kunde.d' and e.get('WA_PWNED_URL') == 'http://caddy:8081/range/%s'
+    assert 'PHP_INI_SCAN_DIR' not in ma['environment'] and 'PHP_INI_SCAN_DIR' not in s['postausgang']['environment']   # nur die Kundenseite
     assert float(app['cpus']) > 0 and int(app['mem_limit']) > 0 and int(app['pids_limit']) > 0
 elif was == 'mitarbeiter-vollstaendig':
     assert ma['image'] == app['image'] and ma.get('pull_policy') == 'never' and app.get('build') and not ma.get('build')
@@ -216,8 +226,8 @@ PY
 }
 pruefe_json kunden-geheimnisse && ok "Kundenseite (app): keine Anmelde-Geheimnisse, kein Konten-Dienstkonto (ADR-007)" || nein "Kundenseite enthält Anmelde-Geheimnisse"
 pruefe_json kunden-dateien && ok "Kundenseite (app): nur Anwendung und Datenordner, kein Dashboard, keine Keycloak-Hosts" || nein "Kundenseite: zusätzliche Dateien eingebunden"
-pruefe_json kunden-netz && ok "Netze: Kundenseite nur mit Caddy (default); Mitarbeiter-Hosts und Keycloak im Netz intern" || nein "Netze der Container-Trennung"
-pruefe_json kunden-haertung && ok "Kundenseite gehärtet: nur lesbar, /tmp und /run im Speicher, no-new-privileges, Grenzen für CPU/Speicher/Prozesse" || nein "Härtung der Kundenseite"
+pruefe_json kunden-netz && ok "Netze: Kundenseite nur mit Caddy im Netz kunde (ohne Ausgang); Mitarbeiter-Hosts und Keycloak im Netz intern" || nein "Netze der Container-Trennung"
+pruefe_json kunden-haertung && ok "Kundenseite gehärtet: www-data ohne Sonderrechte, nur lesbar, /tmp und /run ohne Ausführung, no-new-privileges, PHP-Härtung nur dort, Grenzen für CPU/Speicher/Prozesse" || nein "Härtung der Kundenseite"
 pruefe_json mitarbeiter-vollstaendig && ok "app-mitarbeiter: gleiches Image, alles aus docker-compose.yml plus Anmeldung, Dashboard, Karte" || nein "app-mitarbeiter unvollständig"
 pruefe_json postausgang-kunde && ok "Postausgang: Kundenseite ohne Postfach-Werte und ohne Schlüsselordner, legt nur ab (ADR-007)" || nein "Postausgang: Kundenseite kennt das Postfach"
 pruefe_json datentrennung && ok "Datentrennung: daten-intern nur in app-mitarbeiter und postausgang (außerhalb der Webwurzel), nie in der Kundenseite" || nein "Datentrennung: Einbindung von daten-intern"
@@ -335,7 +345,7 @@ app2_ende() {
   rm -rf "$APP2" 2>/dev/null || true
 }
 mkdir -p "$APP2/deploy/anmeldung" "$APP2/daten" "$APP2/daten-karte" "$APP2/daten-geheim" "$APP2/daten-intern"
-cp "$REPO/docker-compose.yml" "$APP2/"; cp "$HIER/docker-compose.anmeldung.yml" "$HIER/apache-oidc.conf" "$APP2/deploy/anmeldung/"
+cp "$REPO/docker-compose.yml" "$APP2/"; cp "$HIER/docker-compose.anmeldung.yml" "$HIER/apache-oidc.conf" "$HIER/kunde-php.ini" "$HIER/kunde-apache.conf" "$APP2/deploy/anmeldung/"
 cp -r "$REPO/deploy/image" "$APP2/deploy/"; cp -r "$REPO/app" "$REPO/dashboard" "$APP2/"
 cp -r "$REPO/tests/fixtures/data-seed/." "$APP2/daten/"; chmod -R a+rwX "$APP2/daten" "$APP2/daten-geheim" "$APP2/daten-intern"; chmod -R a+rX "$APP2/app" "$APP2/dashboard" "$APP2/deploy"
 { cat "$ENV"; printf 'STAFL_APP_VERSION=pruefung\nKUNDEN_CPUS=1\nKUNDEN_SPEICHER=512m\nNOTZUGANG_PORT=18192\n'; } > "$APP2/.env"
@@ -354,7 +364,7 @@ if dc2 up -d --no-build app app-mitarbeiter postausgang >/tmp/app2-start.txt 2>&
   case "$(abruf app angebot-stafl.de '/api/?action=users')" in 410*) ok "app: Mitarbeiter-Aktionen nicht ausführbar (410)";; *) nein "app: Mitarbeiter-Aktion" "$(abruf app angebot-stafl.de '/api/?action=users')";; esac
   ! dc2 exec -T app apache2ctl -S 2>/dev/null | grep -q dashboard-stafl.de && ok "app: keine Keycloak-Hosts in Apache" || nein "app kennt Keycloak-Hosts"
   [ "$(dc2 exec -T app env | grep -cE '^(OIDC_|WA_KONTEN)')" = 0 ] && ok "app: keine Anmelde-Geheimnisse in der Umgebung" || nein "app: Anmelde-Geheimnisse in der Umgebung"
-  ! dc2 exec -T app sh -c 'touch /usr/local/probe' 2>/dev/null && ! dc2 exec -T -u www-data app sh -c 'touch /var/www/html/probe' 2>/dev/null \
+  ! dc2 exec -T -u 0 app sh -c 'touch /usr/local/probe' 2>/dev/null && ! dc2 exec -T -u www-data app sh -c 'touch /var/www/html/probe' 2>/dev/null \
     && ok "app: Dateisystem und Anwendung nicht beschreibbar (auch nicht für root)" || nein "app: Dateisystem beschreibbar"
   dc2 exec -T -u www-data app sh -c 'touch /var/www/html/data/.probe && rm /var/www/html/data/.probe && touch /tmp/.probe' 2>/dev/null \
     && ok "app: Datenordner und /tmp beschreibbar" || nein "app: Datenordner oder /tmp nicht beschreibbar"

@@ -108,7 +108,8 @@ Eintrag. Lokal nachstellen, was ein CI-Teil ausführt: `WA_TEIL=2/3 python3 test
   GitHub-API-Ersatz `github_stub.py` und PHP-Testserver als Live-Seite), `test_sichern.sh`, `test_release_pruefen.sh`,
   `test_testumgebung.sh`, `test_notzugang.sh`, `test_cdn_netzsperre.sh`, `test_konten_pruefen.sh`, `test_anmeldung_einrichten.sh`,
   `test_datenbank.py` (Migration, Parallelzugriffe, Wiederherstellung), `test_dashboard_domains.py`, `test_images.py` (Images fest über Digest),
-  `test_zwischenspeichern.py` (Browser-Zwischenspeicher mit echtem Caddy, braucht Docker), `test_cdn_netzsperre.py` (Netzsperre mit
+  `test_zwischenspeichern.py` (Browser-Zwischenspeicher mit echtem Caddy, braucht Docker), `test_kundencontainer.sh` (gehärteter
+  Kundencontainer mit den Compose-Einstellungen des Betriebs, braucht Docker und `stafl-app:pruefung`), `test_cdn_netzsperre.py` (Netzsperre mit
   echtem nftables in Netz-Namensräumen über `unshare -rn` bzw. `sudo -n unshare -n`; braucht `nft` und `ip`, sonst übersprungen –
   in der CI Pflicht über `WA_NETZ_PFLICHT=1`).
   `test_sqlite_http.sh` braucht Docker (echtes `php:8.3-apache`).
