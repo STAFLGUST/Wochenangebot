@@ -357,7 +357,7 @@ Jede Code-Datei beginnt mit einem Kopfkommentar; dessen erste Aussage steht hier
 | `crm.css` | crm | STAFL-Plattform · CRM · Vertrieb – Gestaltung wie Dashboard und HR („Liquid Glass“): heller Grund mit weichen Farbflächen, Glasflächen für Kopf, Karten und Tabellen. |
 | `crm.js` | crm | STAFL-Plattform · CRM · Vertrieb Cockpit, Kunden, Wiedervorlagen (Anruf-Rhythmus), Pipeline, Karte und Auswertung – nach der Vertriebs-CRM-Musterdatei. |
 | `einzelangebot.js` | crm | STAFL-Plattform · CRM · Einzelangebot beim Kunden (Kunden-Pop-up, Reiter „Angebote“; Auftrag des Inhabers 01.11.2026) Wie in der Angebotsübersicht des Eingabebereichs |
-| `index.html` | crm | Kunden-Pop-up: Übersicht (cockpit.js), Kundenblatt, Verlauf |
+| `index.html` | crm | Seite „STAFL-Plattform · CRM · Vertrieb“ |
 | `mhd-ware.js` | crm | STAFL-Plattform · CRM · Reiter „MHD-Ware“ (Auftrag des Inhabers 01.11.2026): links die Artikel kurz vor Ablauf aus der MHD-Liste des Bestands – in denselben Farben wie dort (abgelaufen, 0–4, 5–7, 8–14 Tage) –, rechts … |
 
 ## `app/module/hr/`
@@ -382,7 +382,7 @@ Jede Code-Datei beginnt mit einem Kopfkommentar; dessen erste Aussage steht hier
 
 | Datei | Modul | Inhalt |
 | --- | --- | --- |
-| `index.html` | marketing | Beitrag |
+| `index.html` | marketing | Seite „STAFL-Plattform · Marketing · Redaktionsplan“ |
 | `marketing.css` | marketing | STAFL-Plattform · Marketing · Redaktionsplan – Gestaltung wie Dashboard, HR und CRM („Liquid Glass“): heller Grund mit weichen Farbflächen, Glasflächen für Kopf, Karten, Kalender und Board. |
 | `marketing.js` | marketing | STAFL-Plattform · Marketing · Redaktionsplan Social-Media-Inhalte planen, produzieren, freigeben und veröffentlichen |
 
