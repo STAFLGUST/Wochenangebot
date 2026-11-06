@@ -832,13 +832,12 @@
     return { quelle: 'csv', datei: String(datei || '').slice(0, 120), dateiVon, bis, kunden, lieferanten, belege: mitWirkung, info };
   }
   /* Was an den Server geht: CSV ab „Übernehmen ab“ (Belege davor nur gezählt), Bericht (.XLS) unverändert */
-  function winabAnfrage(w, ab, zuordnung) {
+  function winabAnfrage(w, ab, zuordnung, aeltere = false) {
     if (w.quelle !== 'csv') return { bericht: w.bericht, kunden: w.kunden, belege: w.belege };
     const von = ab < w.dateiVon ? w.dateiVon : ab;
-    // Lieferantenbelege ab dem frühesten „WinAB-Belege ab“ der Lieferantenkonten (z. B. Bochumer ab 2025), höchstens ab „von“
-    const frueh = S.d.partner.filter((p) => (p.lieferantNr || (p.lieferantNrWeitere || []).length) && p.winabAb).map((p) => p.winabAb).sort()[0] || von;
-    const lfVon = frueh < von ? (frueh < w.dateiVon ? w.dateiVon : frueh) : von;
-    return { bericht: { datei: w.datei, von, bis: w.bis, datum: w.bis, dateiVon: w.dateiVon, lfVon, quelle: 'csv' },
+    // Lieferantenbelege der ganzen Datei: ab wann sie je Konto zählen („WinAB-Belege ab“, Ende der Excel-Liste, sonst „von“), entscheidet der Server
+    const lfVon = w.dateiVon;
+    return { bericht: { datei: w.datei, von, bis: w.bis, datum: w.bis, dateiVon: w.dateiVon, lfVon, quelle: 'csv', aeltereStornieren: !!aeltere },
       kunden: [...w.kunden].map(([nr, k]) => ({ nr, ersteLieferung: k.ersteLieferung, letzteLieferung: k.letzteLieferung, letzteRueckgabe: k.letzteRueckgabe })),
       lieferanten: [...w.lieferanten].map(([nr, x]) => ({ nr, lieferscheine: x.ls.size })),
       belege: w.belege.filter((b) => b.datum >= (b.kd ? von : lfVon)), zuordnung };
@@ -856,7 +855,7 @@
       anz(inf.ohnePartner, 'Zeile ohne Kunde und Lieferant', 'Zeilen ohne Kunde und Lieferant'),
       anz(inf.ohneWirkung, 'Beleg ohne Wirkung', 'Belege ohne Wirkung') + (inf.ohneWirkung ? ' (gleich viel abgegeben wie zurückgenommen)' : '')].filter(Boolean);
     const unb = Object.entries(inf.unbekannt);
-    const req = winabAnfrage(w, st.ab, st.zuordnung);
+    const req = winabAnfrage(w, st.ab, st.zuordnung, st.aeltere);
     const kacheln = [['kunden', req.kunden.length, csv ? 'Kunden in der Datei' : 'Kunden im Bericht'], ['belege', req.belege.length, 'Belege zum Abgleich'],
       ['neuKd', z.kunden, 'Neue Kundenkonten'], ['neu', z.neu, 'Neue Belege'], ['gleich', z.gleich, 'Unverändert'], ['geaendert', z.geaendert, 'Geändert'], ['ausgeglichen', z.ausgeglichen, 'Ausgeglichen']];
     const vorher = winabVorher(w, req.bericht.von);
@@ -875,23 +874,42 @@
         ${x.belege && !wahl ? `<span class="lg-sub">${mengen(x.saldo, { leer: '' })} – nicht gebucht</span>` : ''}</td></tr>`;
     };
     $('#lg-w-vorschau').innerHTML = `${csv ? `<div class="lg-w-ab"><label>Übernehmen ab<input type="date" class="lg-eingabe" id="lg-w-ab" min="${esc(w.dateiVon)}" max="${esc(w.bis)}" value="${esc(req.bericht.von)}"></label>
-        <span class="lg-hilfe">Datei vom ${esc(datum(w.dateiVon))} bis ${esc(datum(w.bis))}. Salden der Konten beginnen mit diesem Tag; Lieferung und Rückgabe je Kunde gelten aus der ganzen Datei.</span></div>` : ''}
+        <span class="lg-hilfe">Datei vom ${esc(datum(w.dateiVon))} bis ${esc(datum(w.bis))}. Salden der Konten beginnen mit diesem Tag; Lieferung und Rückgabe je Kunde gelten aus der ganzen Datei. Konten mit Excel-Liste beginnen nach deren letzter Buchung, Konten mit „WinAB-Belege ab“ an diesem Tag.</span></div>
+        <label class="lg-check lg-w-aeltere"><input type="checkbox" id="lg-w-aeltere"${st.aeltere ? ' checked' : ''}> Schon gebuchte WinAB-Belege vor „Übernehmen ab“ stornieren (Konten ohne Excel-Liste und ohne eigenes „WinAB-Belege ab“)</label>` : ''}
       <div class="lg-vorschau">${kacheln.map(([k, n, t]) => `<div data-z="${k}"><b>${zahl(n)}</b><span>${t}</span></div>`).join('')}</div>
       <p class="lg-hinweis">${csv ? `WinAB-Datei bis ${esc(datum(w.bis))}` : `Bericht vom ${esc(datum(w.bericht.datum || w.bericht.bis))}`} · übernommen wird der Zeitraum ${esc(datum(req.bericht.von))} bis ${esc(datum(req.bericht.bis))}.${weg.length ? ' Weggelassen: ' + esc(weg.join(', ')) + '.' : ''}${inf.korrektur ? ` ${esc(anz(inf.korrektur, 'Korrekturzeile', 'Korrekturzeilen'))} mit Minus verrechnet.` : ''}</p>
       ${vorher.n ? `<p class="lg-hinweis" id="lg-w-vorher">Vor dem ${esc(datum(req.bericht.von))}: ${anz(vorher.n, 'Kundenbeleg', 'Kundenbelege')} mit Wirkung (${mengen(vorher.saldo, { leer: 'ausgeglichen' })}) – nicht übernommen. Für die ganze Geschichte „Übernehmen ab“ auf den ${esc(datum(w.dateiVon))} setzen.</p>` : ''}
       ${unb.length ? `<p class="lg-meldung">Nicht übernommen, weil das Lademittel im Modul fehlt: ${esc(unb.map(([n, c]) => `${n} (${zahl(c)} Zeilen)`).join(', '))}. Unter „Lademittel“ anlegen und die Datei erneut wählen.</p>` : ''}
+      ${z.vorBeginnStorniert ? `<p class="lg-meldung" id="lg-w-vorbeginn">${zahl(z.vorBeginnStorniert)} schon ${z.vorBeginnStorniert === 1 ? 'gebuchter WinAB-Beleg liegt' : 'gebuchte WinAB-Belege liegen'} vor dem Beginn ${z.vorBeginnStorniert === 1 ? 'seines' : 'ihres'} Kontos (Ende der Excel-Liste, „WinAB-Belege ab“${st.aeltere ? ' bzw. „Übernehmen ab“' : ''}) und ${z.vorBeginnStorniert === 1 ? 'wird' : 'werden'} storniert.</p>` : ''}
       ${z.geaendert || z.ausgeglichen ? `<p class="lg-meldung">${zahl(z.geaendert + z.ausgeglichen)} schon übernommene Belege werden storniert${z.geaendert ? ' und neu gebucht' : ''}, weil WinAB sie geändert hat oder sie nicht mehr in der Datei stehen. Die Datei deshalb immer für alle Lademittel ziehen.</p>` : ''}
       ${z.daten ? `<p class="lg-hinweis">Letzte Lieferung und Rückgabe laut WinAB (auch aus reinem Tausch) für ${zahl(z.daten)} ${z.daten === 1 ? 'Kundenkonto' : 'Kundenkonten'} aktualisiert.</p>` : ''}
       <p class="lg-wsumme">Saldo aller Kundenkonten aus WinAB danach (${zahl(z.konten)} mit Saldo): ${mengen(r.summe, { leer: 'ausgeglichen' })}</p>
+      ${excelAbgleich(z, r.abweichend || [])}
       ${lief.length ? `<h3 class="lg-w-titel">Lieferanten aus WinAB</h3>
         <p class="lg-hilfe">Lieferantenbelege (Zeilen ohne Kunde, z. B. Wareneingänge) werden nur auf zugeordnete Konten gebucht. Die Nummer bleibt am Konto – künftige Dateien ordnen von selbst zu. Namen und Versandart aus Verwaltung → Stammdaten → Lieferanten. Beim Wareneingang zählt der Zugang: WinAB bucht dort fast immer einen Tausch, die Warenannahme tauscht aber nicht (am Konto änderbar: „Tausch laut WinAB zählt“).</p>
         ${z.tausch ? `<p class="lg-hinweis" id="lg-w-tausch">${zahl(z.tausch)} ${z.tausch === 1 ? 'Wareneingang' : 'Wareneingänge'} mit Tausch laut WinAB – gezählt wird der Zugang.</p>` : ''}
-        ${z.vorStart ? `<p class="lg-hinweis">${zahl(z.vorStart)} ${z.vorStart === 1 ? 'Lieferantenbeleg liegt' : 'Lieferantenbelege liegen'} vor „WinAB-Belege ab“ des Kontos – nicht gebucht.</p>` : ''}
+        ${z.vorStart ? `<p class="lg-hinweis">${zahl(z.vorStart)} ${z.vorStart === 1 ? 'Beleg liegt' : 'Belege liegen'} vor dem Beginn ${z.vorStart === 1 ? 'seines' : 'ihres'} Kontos („WinAB-Belege ab“, Ende der Excel-Liste bzw. „Übernehmen ab“) – nicht gebucht.</p>` : ''}
         <div class="lg-tabelle-wrap"><table class="lg-tabelle lg-karten" id="lg-w-lief"><thead><tr><th>Lieferant</th><th>Versandart</th><th class="lg-zahl">Lieferscheine mit Leergut (Datei)</th><th class="lg-zahl">Belege mit Wirkung</th><th>Konto</th></tr></thead>
         <tbody>${lief.map(zuordnungZeile).join('')}</tbody></table></div>
         ${z.ohneKonto ? `<p class="lg-meldung">${zahl(z.ohneKonto)} ${z.ohneKonto === 1 ? 'Lieferantenbeleg wird' : 'Lieferantenbelege werden'} nicht gebucht, weil kein Konto zugeordnet ist.</p>` : ''}
         ${leerMap(r.summeLieferanten) ? '' : `<p class="lg-wsumme">Saldo der zugeordneten Lieferantenkonten danach: ${mengen(r.summeLieferanten)}</p>`}` : ''}
       ${inf.sammelwert.length ? `<p class="lg-hinweis">Nur zur Information – Gesamtwert oben im WinAB-Bericht (WinAB-Vorzeichen, Minus = mehr an Kunden abgegeben als zurückgenommen): ${esc(inf.sammelwert.map((x) => `${x.name} ${vz(x.wert)}`).join(' · '))}</p>` : ''}`;
+  }
+  /* Abgleich mit der Excel-Liste: bis zur letzten Excel-Buchung eines Kontos gilt die Excel-Liste. WinAB-Belege, die dort schon
+     stehen, werden nicht doppelt gebucht (früher doppelt gebuchte storniert); am selben Tag mit anderer Menge: nicht gebucht, zum Prüfen gelistet */
+  function excelAbgleich(z, abw) {
+    if (!z.inExcel && !z.abweichend && !z.nurWinab) return '';
+    return `<h3 class="lg-w-titel">Abgleich mit der Excel-Liste</h3>
+      <p class="lg-hilfe">Konten, deren „WinAB-Belege ab“ vor dem Ende ihrer Excel-Liste liegt: WinAB-Belege aus dieser Zeit werden nur gebucht, wenn sie in der Excel-Liste fehlen.</p>
+      <ul class="lg-w-excel" id="lg-w-excel">
+        ${z.inExcel ? `<li><b>${zahl(z.inExcel)}</b> ${z.inExcel === 1 ? 'Beleg steht' : 'Belege stehen'} schon in der Excel-Liste (gleiche Menge, höchstens 3 Tage auseinander) – nicht doppelt gebucht.</li>` : ''}
+        ${z.doppeltStorniert ? `<li><b>${zahl(z.doppeltStorniert)}</b> früher doppelt ${z.doppeltStorniert === 1 ? 'gebuchter Beleg wird' : 'gebuchte Belege werden'} storniert.</li>` : ''}
+        ${z.nurWinab ? `<li><b>${zahl(z.nurWinab)}</b> ${z.nurWinab === 1 ? 'Beleg fehlt' : 'Belege fehlen'} in der Excel-Liste – ${z.nurWinab === 1 ? 'wird' : 'werden'} gebucht („fehlt in der Excel-Liste“).</li>` : ''}
+        ${z.abweichend ? `<li><b>${zahl(z.abweichend)}</b> ${z.abweichend === 1 ? 'Beleg weicht' : 'Belege weichen'} am selben Tag von der Excel-Liste ab – nicht gebucht, bitte prüfen (Unterschied bei Bedarf als Korrektur buchen):</li>` : ''}
+      </ul>
+      ${abw.length ? `<div class="lg-tabelle-wrap"><table class="lg-tabelle lg-karten" id="lg-w-abweichend"><thead><tr><th>Konto</th><th>Datum</th><th>WinAB-Beleg</th><th>laut WinAB</th><th>laut Excel-Liste</th></tr></thead>
+        <tbody>${abw.map((x) => `<tr><td data-label="Konto">${esc(x.name)}</td><td data-label="Datum">${esc(datum(x.datum))}</td><td data-label="WinAB-Beleg">${esc(x.beleg)}</td>
+          <td data-label="laut WinAB">${mengen(x.winab, { leer: '0' })}</td><td data-label="laut Excel-Liste">${mengen(x.excel, { leer: '0' })}${x.excelBeleg ? `<span class="lg-sub">${esc(x.excelBeleg)}</span>` : ''}</td></tr>`).join('')}</tbody></table></div>` : ''}`;
   }
   /* Vorschau beim Server anfragen (Abgleich ohne Speichern) – nach Dateiwahl, „Übernehmen ab“ und Zuordnung */
   async function winabPruefen(fokus) {
@@ -899,7 +917,7 @@
     if (!st) return;
     $('#lg-w-knoepfe').hidden = true;
     m.className = 'lg-meldung ok'; m.textContent = 'Abgleich wird geprüft …';
-    const r = await api('leergut_winab_import', { ...winabAnfrage(st.w, st.ab, st.zuordnung), vorschau: true });
+    const r = await api('leergut_winab_import', { ...winabAnfrage(st.w, st.ab, st.zuordnung, st.aeltere), vorschau: true });
     if (S.winabStand !== st) return;
     if (r.status === 401) { zeigeAnmeldung(); return; }
     m.className = 'lg-meldung'; m.textContent = '';
@@ -911,7 +929,7 @@
     zeigeWinabVorschau(st, r.data);
     if (fokus) $(fokus)?.focus();
     const z = r.data.zahlen;
-    if (!z.kunden && !z.lieferantenNeu && !z.neu && !z.geaendert && !z.ausgeglichen && !z.daten && !Object.keys(st.zuordnung).length) {
+    if (!z.kunden && !z.lieferantenNeu && !z.neu && !z.geaendert && !z.ausgeglichen && !z.doppeltStorniert && !z.vorBeginnStorniert && !z.daten && !Object.keys(st.zuordnung).length) {
       m.className = 'lg-meldung ok'; m.textContent = 'Alles schon übernommen – es gibt nichts Neues.'; return;
     }
     $('#lg-w-knoepfe').hidden = false;
@@ -920,6 +938,7 @@
     const st = S.winabStand;
     if (!st) return;
     if (ev.target.id === 'lg-w-ab') { if (/^\d{4}-\d{2}-\d{2}$/.test(ev.target.value)) { st.ab = ev.target.value; winabPruefen('#lg-w-ab'); } return; }
+    if (ev.target.id === 'lg-w-aeltere') { st.aeltere = ev.target.checked; winabPruefen('#lg-w-aeltere'); return; }
     const lf = ev.target.dataset.lf;
     if (lf === undefined) return;
     if (ev.target.value) st.zuordnung[lf] = ev.target.value; else delete st.zuordnung[lf];
@@ -950,14 +969,14 @@
     const st = S.winabStand, m = $('#lg-w-meldung');
     if (!st) return;
     ev.target.disabled = true;
-    const r = await api('leergut_winab_import', winabAnfrage(st.w, st.ab, st.zuordnung));
+    const r = await api('leergut_winab_import', winabAnfrage(st.w, st.ab, st.zuordnung, st.aeltere));
     ev.target.disabled = false;
     if (r.status === 401) { zeigeAnmeldung(); return; }
     if (r.status !== 200 || !r.data.ok) { m.className = 'lg-meldung'; m.textContent = fehlerText(r, 'Übernehmen fehlgeschlagen'); return; }
     S.winabStand = null; $('#lg-w-knoepfe').hidden = true; $('#lg-w-vorschau').innerHTML = ''; $('#lg-w-dateiname').textContent = 'Keine Datei gewählt';
     const z = r.data.zahlen;
     m.className = 'lg-meldung ok';
-    m.textContent = `Übernommen: ${zahl(z.kunden)} neue Kundenkonten${z.lieferantenNeu ? `, ${zahl(z.lieferantenNeu)} ${z.lieferantenNeu === 1 ? 'neues Lieferantenkonto' : 'neue Lieferantenkonten'}` : ''}, ${zahl(z.neu)} neue Belege, ${zahl(z.geaendert)} geändert, ${zahl(z.ausgeglichen)} ausgeglichen.`;
+    m.textContent = `Übernommen: ${zahl(z.kunden)} neue Kundenkonten${z.lieferantenNeu ? `, ${zahl(z.lieferantenNeu)} ${z.lieferantenNeu === 1 ? 'neues Lieferantenkonto' : 'neue Lieferantenkonten'}` : ''}, ${zahl(z.neu)} neue Belege, ${zahl(z.geaendert)} geändert, ${zahl(z.ausgeglichen)} ausgeglichen${z.doppeltStorniert ? `, ${zahl(z.doppeltStorniert)} doppelte storniert` : ''}${z.vorBeginnStorniert ? `, ${zahl(z.vorBeginnStorniert)} vor dem Beginn des Kontos storniert` : ''}.`;
     toast('WinAB-Lademittelbewegungen übernommen');
     await neuLaden();
   });

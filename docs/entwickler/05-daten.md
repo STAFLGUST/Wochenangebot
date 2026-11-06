@@ -490,7 +490,11 @@ Genannten; geänderte Belege werden storniert und neu gebucht, fehlende stornier
 `lieferanten` (Nr., Name und Versandart aus den Lieferanten-Stammdaten, Belege mit Wirkung, Saldo ohne Konto, zugeordneter Partner, `vorschlag` =
 Konto ohne Nummer mit passendem Namen) und `summeLieferanten`; `zaehler` nennt `tausch` (Wareneingänge mit nicht gezähltem Tausch) und `vorStart`
 (Belege vor „WinAB-Belege ab“). `leergut_start` liefert dazu `versand` (Versandart je Partner) und `winabBestand` (je Partner `[[WinAB-Nr., Stück], …]` aus
-`lademittelbestand` des Lieferanten- bzw. Kundenstamms – nur Anzeige, `lg_partner_stamm`). `lfVon` (Standard `von`, nicht vor `dateiVon`) gilt für Lieferantenbelege; die Seite setzt es auf das früheste
+`lademittelbestand` des Lieferanten- bzw. Kundenstamms – nur Anzeige, `lg_partner_stamm`). Beginn je Konto (`lg_winab_beginn`): `winabAb`, sonst Tag nach der letzten Buchung mit `quelle: "import"` (Excel-Liste, `lg_excel_index`), sonst `von`;
+gebuchte WinAB-Belege davor werden storniert (`zaehler.vorBeginnStorniert`; bei `von` nur mit `bericht.aeltereStornieren`). Liegt `winabAb` vor dem Ende
+der Excel-Liste, werden WinAB-Belege dort nur gebucht, wenn sie fehlen (`lg_excel_passt`: gleiche Wirkung ±3 Tage = schon da, gleicher Tag und Richtung
+mit anderer Menge = abweichend, beides nicht gebucht; früher gebuchte storniert). `zaehler` dazu: `inExcel`, `abweichend`, `nurWinab`, `doppeltStorniert`; Antwort `abweichend`
+(je Beleg Konto, Datum, Beleg, Wirkung laut WinAB und laut Excel, Excel-Beleg). `lfVon` (die Seite schickt `dateiVon`, also alle Lieferantenbelege der Datei) gilt für Lieferantenbelege; die Seite setzt es auf das früheste
 `winabAb` der Konten. Wareneingang = Lieferschein eines Lieferanten: gebucht wird der Zugang, als Abgang nur `max(0, Abgang − Zugang)`
 (außer `wareneingangTausch`). Zeilen mit Kunde sind Kundenbelege,
 auch wenn WinAB dort zusätzlich eine Lieferantennummer nennt (die zählt dort nicht). Die Datei bleibt im Browser;

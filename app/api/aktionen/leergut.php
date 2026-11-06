@@ -300,7 +300,8 @@ switch ($action) {
                     lg_schreiben('leergut-bewegungen', $doc);
                 }
                 return ['fehler' => [], 'zahlen' => $z, 'neueKunden' => array_slice($neu, 0, 50), 'summe' => $summe, 'bericht' => $w['bericht'],
-                        'lieferanten' => array_slice($lief['liste'], 0, 200), 'lieferantenNeu' => $lief['neu'], 'summeLieferanten' => $lief['summe']];
+                        'lieferanten' => array_slice($lief['liste'], 0, 200), 'lieferantenNeu' => $lief['neu'], 'summeLieferanten' => $lief['summe'],
+                        'abweichend' => $lief['abweichend']];   // WinAB-Belege, die am selben Tag anders in der Excel-Liste stehen (nicht gebucht)
             });
             if ($erg['fehler']) {
                 if ($vorschau) respond(['ok' => true, 'fehler' => $erg['fehler']]);
@@ -310,7 +311,8 @@ switch ($action) {
                 $z = $erg['zahlen']; $ber = $erg['bericht'];
                 audit('leergut', 'Leergut: WinAB-Lademittelbewegungen ' . $ber['von'] . ' bis ' . $ber['bis'] . ' abgeglichen – ' . $z['kunden'] . ($z['kunden'] === 1 ? ' neues Kundenkonto, ' : ' neue Kundenkonten, ')
                     . ($z['lieferantenNeu'] ? $z['lieferantenNeu'] . ($z['lieferantenNeu'] === 1 ? ' neues Lieferantenkonto, ' : ' neue Lieferantenkonten, ') : '') . $z['neu'] . ' neue Belege, ' . $z['geaendert'] . ' geändert, '
-                    . $z['ausgeglichen'] . ' ausgeglichen' . ($z['ohneKonto'] ? ', ' . $z['ohneKonto'] . ' Lieferantenbelege ohne Konto' : ''));
+                    . $z['ausgeglichen'] . ' ausgeglichen' . ($z['ohneKonto'] ? ', ' . $z['ohneKonto'] . ' Lieferantenbelege ohne Konto' : '')
+                    . ($z['inExcel'] + $z['abweichend'] ? ', ' . ($z['inExcel'] + $z['abweichend']) . ' schon in der Excel-Liste (' . $z['doppeltStorniert'] . ' doppelte storniert)' : ''));
             }
             respond(['ok' => true] + $erg);
         }
