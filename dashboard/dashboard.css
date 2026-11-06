@@ -1,234 +1,91 @@
-/* STAFL-Plattform · Dashboard – Gestaltung „Liquid Glass“ (vom Inhaber freigegebener Entwurf)
-   Ruhiger heller Grund mit drei weichen Farbflächen, Glasflächen für Kopfzeile und Kacheln. Schrift und Grundregeln
-   kommen aus ../assets/app.css (Geist, lokal eingebunden); alle Farben dieser Seite stehen als --db-* hier. */
+/* STAFL-Plattform · Dashboard (Startseite) – Gestaltung „C2“ (Entwurf vom Inhaber freigegeben 06.11.2026)
+   Rahmen, Seitenleiste und alle Farben kommen aus ../assets/rahmen.css (--r-*), Schrift Geist aus ../assets/app.css.
+   Hier nur, was es nur auf der Startseite gibt: Anmeldehinweis, Begrüßung, kompakte Kacheln ohne Unterzeile (Name genügt;
+   eine zweite Zeile nur bei besonderem Stand wie Wartung), Notfallhinweis. */
 
-body.db {
-  --db-bg: #f4f1ee;
-  --db-text: #1c1a19;
-  --db-muted: #6b6560;
-  --db-glass: rgba(255, 255, 255, .52);
-  --db-deckend: #fbfaf8;                       /* Fläche ohne Glas (kein backdrop-filter, weniger Transparenz) */
-  --db-rand: rgba(255, 255, 255, .78);
-  --db-glanz: rgba(255, 255, 255, .95);
-  --db-schatten: 0 10px 40px rgba(60, 30, 25, .10);
-  --db-blob-a: #8fa7c4;                        /* Blaugrau */
-  --db-blob-b: #e2a54a;                        /* Bernstein */
-  --db-blob-c: #3f7a5a;                        /* Salbeigrün */
-  --db-off: .55;
-  --db-ok: #186a3b;                            /* Vorlage #1f7a45, etwas dunkler für 4,5:1 auf der Pille */
-  --db-ok-bg: rgba(31, 122, 69, .12);
-  --db-warn: #7f4d00;
-  --db-warn-bg: rgba(226, 165, 74, .22);
-  --db-neutral-bg: rgba(28, 26, 25, .07);
-  --db-aus: rgba(28, 26, 25, .08);
-  --db-aus-hover: rgba(28, 26, 25, .13);
-  --db-akzent: #8c1d2c;                        /* Bordeaux (Initialen, Hauptknopf) */
-  --db-akzent-ink: #8c1d2c;                    /* Bordeaux als Text-/Symbolfarbe */
-  --db-fokus: 0 0 0 3px rgba(140, 29, 44, .38);
-  --db-fehler: #8c1d2c;
-  --db-fehler-bg: rgba(140, 29, 44, .09);
-  --db-band: #efe5c8;                          /* Absperrband: blasses Sandgelb, tritt wie die gesperrte Kachel zurück */
-  --db-band-ink: #5f5852;                      /* Schrift im Band (≥ 4,5:1 auf --db-band) */
-  --db-band-gelb: rgba(229, 190, 80, .34);
-  --db-band-streifen: rgba(28, 26, 25, .14);
-  --db-linie: rgba(28, 26, 25, .12);
-  margin: 0; min-height: 100vh; min-height: 100dvh;
-  background: var(--db-bg); color: var(--db-text); font-family: var(--font);
-}
-@media screen and (prefers-color-scheme: dark) {
-  :root:not([data-theme="light"]) body.db {
-    --db-bg: #121011; --db-text: #f5f1ee; --db-muted: #a59d97;
-    --db-glass: rgba(40, 36, 36, .48); --db-deckend: #211d1d;
-    --db-rand: rgba(255, 255, 255, .14); --db-glanz: rgba(255, 255, 255, .22); --db-schatten: 0 12px 44px rgba(0, 0, 0, .45);
-    --db-blob-a: #3b5573; --db-blob-b: #9a6a24; --db-blob-c: #245a40; --db-off: .5;
-    --db-ok: #5fd08f; --db-ok-bg: rgba(95, 208, 143, .14); --db-warn: #f3c98a; --db-warn-bg: rgba(224, 144, 31, .16);
-    --db-neutral-bg: rgba(255, 255, 255, .08); --db-aus: rgba(255, 255, 255, .08); --db-aus-hover: rgba(255, 255, 255, .14);
-    --db-akzent-ink: #f0a3ae; --db-fokus: 0 0 0 3px rgba(224, 129, 144, .55); --db-fehler: #f0a3ae; --db-fehler-bg: rgba(224, 129, 144, .12);
-    --db-band: #3a3426; --db-band-ink: #c9bfae; --db-band-gelb: rgba(200, 160, 60, .22); --db-band-streifen: rgba(255, 255, 255, .09); --db-linie: rgba(255, 255, 255, .12);
-  }
-}
-@media screen {
-  :root[data-theme="dark"] body.db {
-    --db-bg: #121011; --db-text: #f5f1ee; --db-muted: #a59d97;
-    --db-glass: rgba(40, 36, 36, .48); --db-deckend: #211d1d;
-    --db-rand: rgba(255, 255, 255, .14); --db-glanz: rgba(255, 255, 255, .22); --db-schatten: 0 12px 44px rgba(0, 0, 0, .45);
-    --db-blob-a: #3b5573; --db-blob-b: #9a6a24; --db-blob-c: #245a40; --db-off: .5;
-    --db-ok: #5fd08f; --db-ok-bg: rgba(95, 208, 143, .14); --db-warn: #f3c98a; --db-warn-bg: rgba(224, 144, 31, .16);
-    --db-neutral-bg: rgba(255, 255, 255, .08); --db-aus: rgba(255, 255, 255, .08); --db-aus-hover: rgba(255, 255, 255, .14);
-    --db-akzent-ink: #f0a3ae; --db-fokus: 0 0 0 3px rgba(224, 129, 144, .55); --db-fehler: #f0a3ae; --db-fehler-bg: rgba(224, 129, 144, .12);
-    --db-band: #3a3426; --db-band-ink: #c9bfae; --db-band-gelb: rgba(200, 160, 60, .22); --db-band-streifen: rgba(255, 255, 255, .09); --db-linie: rgba(255, 255, 255, .12);
-  }
-}
-
-/* ── Hintergrund: drei sehr weiche Farbflächen (kein Rot) ── */
-.db-bg { position: fixed; inset: 0; z-index: 0; overflow: hidden; pointer-events: none; }
-.db-bg span { position: absolute; border-radius: 50%; filter: blur(140px); }
-.db-bg span:nth-child(1) { width: 640px; height: 640px; left: -160px; top: -220px; background: var(--db-blob-a); opacity: .22; }
-.db-bg span:nth-child(2) { width: 560px; height: 560px; right: -120px; top: 120px; background: var(--db-blob-b); opacity: .18; filter: blur(150px); }
-.db-bg span:nth-child(3) { width: 620px; height: 620px; left: 32%; bottom: -320px; background: var(--db-blob-c); opacity: .16; filter: blur(150px); }
-
-/* ── Glas ── */
-.db-glas {
-  background: var(--db-glass); border: 1px solid var(--db-rand);
-  box-shadow: inset 0 1px 0 var(--db-glanz), var(--db-schatten);
-  -webkit-backdrop-filter: blur(28px) saturate(180%); backdrop-filter: blur(28px) saturate(180%);
-}
-/* Ohne backdrop-filter oder bei „Transparenz reduzieren“: deckende Flächen statt Glas */
-@supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
-  .db-glas { background: var(--db-deckend); }
-}
-@media (prefers-reduced-transparency: reduce) {
-  .db-glas { background: var(--db-deckend); -webkit-backdrop-filter: none; backdrop-filter: none; }
-  .db-bg { display: none; }
-}
-
-/* ── Seite ── */
-.db-seite { position: relative; z-index: 1; max-width: 1240px; margin: 0 auto; padding: 24px 24px 48px; display: flex; flex-direction: column; gap: 40px; min-height: 100vh; min-height: 100dvh; }
+body.db { line-height: 1.45; }
 .db-main { flex: 1; }
-.db .i { width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width: 1.9; stroke-linecap: round; stroke-linejoin: round; }
-.db :focus-visible { outline: none; box-shadow: var(--db-fokus); }
+.db .r-i { width: 18px; height: 18px; }
 
-/* ── Kopfzeile: schwebende Glaskapsel ── */
-.db-kopf { position: sticky; top: 16px; z-index: 5; display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 10px 12px 10px 20px; border-radius: 999px; }
-.db-marke { display: flex; align-items: center; gap: 16px; min-width: 0; }
-body.db .db-kopf .brand-logo { height: 28px; width: auto; object-fit: initial; }
-.db-actions { display: flex; align-items: center; gap: 8px; min-width: 0; }
-.db-rund { width: 40px; height: 40px; flex: none; border-radius: 50%; border: 0; display: grid; place-items: center; background: var(--db-aus); color: var(--db-text); cursor: pointer; transition: background .15s; }
-.db-rund:hover, .db-abmelden:hover { background: var(--db-aus-hover); }
-.db-rund[aria-pressed="true"] { background: var(--db-akzent); color: #fff; }   /* einfache Darstellung an */
-.db-darstellung-hinweis { margin: 6px 0 0; font-size: 14px; color: var(--db-muted); }
-.db-darstellung-hinweis[hidden] { display: none; }
-.db-user { display: flex; align-items: center; gap: 10px; height: 40px; min-width: 0; padding: 0 14px 0 4px; border-radius: 999px; background: var(--db-aus); font-size: 14px; font-weight: 500; }
-.db-user[hidden] { display: none; }
-.db-initialen { width: 32px; height: 32px; flex: none; border-radius: 50%; display: grid; place-items: center; background: var(--db-akzent); color: #fff; font-size: 13px; font-weight: 600; letter-spacing: .02em; }
-.db-user-name { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 200px; }
-.db-abmelden { display: inline-flex; align-items: center; gap: 8px; height: 40px; padding: 0 16px 0 13px; border: 0; border-radius: 999px; background: var(--db-aus); color: var(--db-text); font-size: 14px; font-weight: 500; cursor: pointer; transition: background .15s; }
-.db-abmelden[hidden] { display: none; }
+/* ── Anmeldehinweis, Fehler (ohne Seitenleiste) ── */
+.db-login { box-sizing: border-box; width: 100%; max-width: 420px; margin: 10vh auto 0; padding: 32px 28px; text-align: center;
+  background: var(--r-flaeche); border: 1px solid var(--r-linie); border-radius: 16px; box-shadow: var(--r-schatten); }
+.db-login[hidden] { display: none; }
+.db-login .r-logo { height: 28px; margin: 0 auto 22px; }
+.db .db-login-i { width: 28px; height: 28px; color: var(--r-akzent-text); }
+.db-login h1 { margin: 10px 0 6px; font-size: 22px; font-weight: 700; letter-spacing: -.02em; }
+.db-login p { margin: 0 0 20px; color: var(--r-text-2); font-size: 14px; }
+.db-login .btn.primary { display: inline-flex; align-items: center; height: 40px; padding: 0 18px; border-radius: 10px; text-decoration: none;
+  background: var(--r-akzent); border: 1px solid var(--r-akzent); color: var(--r-akzent-ink); font-weight: 600; }
+.db-login .btn.primary:hover { background: var(--r-akzent-hover); border-color: var(--r-akzent-hover); }
+.db-err { max-width: 640px; margin: 10vh auto 0; padding: 12px 16px; border-radius: 12px; background: var(--r-flaeche); border: 1px solid var(--r-linie-2);
+  color: var(--r-akzent-text); }
+.db-err[hidden] { display: none; }
 
 /* ── Begrüßung ── */
-.db-gruss { display: flex; flex-direction: column; gap: 6px; padding: 0 8px; margin-bottom: 40px; }
-.db-datum { margin: 0; font-size: 15px; font-weight: 500; color: var(--db-muted); }
-.db-gruss h1 { margin: 0; font-size: 44px; line-height: 1.08; font-weight: 700; letter-spacing: -.035em; }
-.db-sub { margin: 4px 0 0; font-size: 17px; color: var(--db-muted); }
-/* Notfallmodus (Modul Sicherheit): roter Hinweis über den Kacheln */
-.db-notfall { margin: 0 0 22px; padding: 14px 18px; border-radius: 18px; background: linear-gradient(120deg, #c41e34, #8c1424); color: #fff; font-size: 15px; line-height: 1.45;
-  box-shadow: 0 10px 30px rgba(140, 20, 36, .28); }
+#db-bereich { display: flex; flex-direction: column; gap: 28px; }
+#db-bereich[hidden] { display: none; }
+.db-darstellung-hinweis { margin: 6px 0 0; font-size: 13px; color: var(--r-leise); }
+.db-darstellung-hinweis[hidden] { display: none; }
+/* Notfallmodus (Modul Sicherheit): deutlicher Hinweis über den Kacheln */
+.db-notfall { margin: 0; padding: 12px 16px; border-radius: 12px; background: var(--r-notfall); color: var(--r-notfall-text); font-size: 14px; line-height: 1.45; }
 .db-notfall[hidden] { display: none; }
 
 /* ── Kacheln ── */
-.db-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 20px; }
-.db-tile { position: relative; overflow: hidden; display: flex; flex-direction: column; gap: 14px; min-height: 196px; padding: 22px; border-radius: 28px; color: inherit; text-decoration: none; transition: transform .2s ease, box-shadow .2s ease; }
-a.db-tile:hover { transform: translateY(-2px); color: inherit; }
-a.db-tile:focus-visible { box-shadow: inset 0 1px 0 var(--db-glanz), var(--db-schatten), var(--db-fokus); }
-.db-tile.off { box-shadow: inset 0 1px 0 var(--db-glanz); cursor: default; }
-.db-ico { --ico-a: #7a7570; --ico-b: #4a4643; width: 52px; height: 52px; flex: none; border-radius: 15px; display: grid; place-items: center; color: #fff; background: linear-gradient(160deg, var(--ico-a), var(--ico-b)); box-shadow: inset 0 1px 0 rgba(255, 255, 255, .35); }
-.db-ico .i { width: 26px; height: 26px; stroke-width: 2; }
-/* Farbe je Symbol des Modulregisters (icon), nicht je Modul – neue Module erhalten ohne Änderung das neutrale Grau */
-.db-ico[data-symbol="tag"] { --ico-a: #b3263a; --ico-b: #7a1624; }
-.db-ico[data-symbol="settings"] { --ico-a: #5b5f68; --ico-b: #2f3238; }
-.db-ico[data-symbol="boxes"] { --ico-a: #3f7a5a; --ico-b: #23503a; }
-.db-ico[data-symbol="truck"] { --ico-a: #c98a2b; --ico-b: #94601a; }
-.db-ico[data-symbol="users"] { --ico-a: #3d6fa8; --ico-b: #234873; }
-.db-ico[data-symbol="store"] { --ico-a: #c2414f; --ico-b: #8e2532; }
-.db-ico[data-symbol="shield-check"] { --ico-a: #2f8a86; --ico-b: #1b5d5a; }
-.db-ico[data-symbol="upload"] { --ico-a: #6a5fa8; --ico-b: #463d7a; }
-.db-ico[data-symbol="calendar"] { --ico-a: #8e4fa0; --ico-b: #5f2f70; }
-.db-ico[data-symbol="megaphone"] { --ico-a: #e06a3a; --ico-b: #a8481f; }
-.db-ico[data-symbol="chart"] { --ico-a: #6b8a3a; --ico-b: #43601f; }
-.db-ico[data-symbol="crate"] { --ico-a: #8a7560; --ico-b: #5c4b3b; }
-.db-ico[data-symbol="container"] { --ico-a: #2a7f9e; --ico-b: #165570; }
-.db-text { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+.db-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); gap: 12px; }
+.db-tile { position: relative; box-sizing: border-box; display: flex; align-items: flex-start; gap: 12px; min-width: 0; min-height: 66px; padding: 14px 16px;
+  background: var(--r-flaeche); border: 1px solid var(--r-linie); border-radius: 14px; box-shadow: var(--r-schatten); color: var(--r-text); text-decoration: none;
+  transition: border-color .15s, box-shadow .15s; }
+a.db-tile:hover { color: var(--r-text); border-color: var(--r-linie-2); box-shadow: 0 2px 10px rgba(29, 27, 26, .07); }
+.db-ico { flex: none; width: 36px; height: 36px; border-radius: 10px; display: grid; place-items: center; background: var(--r-m); color: #fff; }
+.db-text { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; padding-top: 8px; }   /* Name auf Höhe der Symbolmitte */
 /* Namen nie mitten im Wort trennen: dashboard.js verkleinert die Schrift langer Namen, bis das längste Wort passt
    (namenEinpassen); nur wenn auch die kleinste Stufe nicht reicht, darf ein Wort als Notlösung umbrechen. */
-.db-name { margin: 0; font-size: 19px; font-weight: 600; letter-spacing: -.015em; hyphens: manual; overflow-wrap: normal; word-break: normal; }
+.db-name { display: block; font-size: 15px; font-weight: 600; line-height: 1.3; letter-spacing: -.005em; hyphens: manual; overflow-wrap: normal; word-break: normal; }
 .db-name.db-name-umbruch { hyphens: auto; overflow-wrap: anywhere; }
-.db-desc { margin: 0; font-size: 14px; line-height: 1.45; color: var(--db-muted); }
-.db-hint { margin: 0; font-size: 13px; line-height: 1.4; color: var(--db-warn); overflow-wrap: anywhere; }   /* freier Text, z. B. lange Adressen */
-.db-leer { grid-column: 1 / -1; margin: 0; padding: 28px 20px; text-align: center; font-size: 15px; color: var(--db-muted, inherit); }
-.db-foot { margin-top: auto; display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
-/* Lange Pillen („Wartung – Zugang für Administratoren“) brechen als abgerundetes Feld um; einzeilig unverändert rund */
-.db-badge { display: inline-flex; align-items: flex-start; gap: 6px; min-height: 26px; padding: 4px 11px; border-radius: 13px; font-size: 13px; line-height: 1.35; font-weight: 600; background: var(--db-neutral-bg); color: var(--db-muted); }
-.db-badge::before { content: ""; width: 7px; height: 7px; flex: none; margin-top: calc((1.35em - 7px) / 2); border-radius: 50%; background: currentColor; }
-.db-badge.ok { background: var(--db-ok-bg); color: var(--db-ok); }
-.db-badge.warn { background: var(--db-warn-bg); color: var(--db-warn); }
-/* Nicht nutzbar: Inhalt blass; Wartung behält Pille und Hinweis in voller Stärke */
-.db-tile.off .db-ico, .db-tile.off .db-text { opacity: var(--db-off); }
-.db-tile.gesperrt .db-foot { opacity: var(--db-off); }
+/* Stand nur, wenn er etwas sagt (Wartung, Testbetrieb, Entwicklungsstand …); „Verfügbar“ steht nur für Screenreader da */
+.db-badge { align-self: flex-start; display: inline-block; padding: 1px 8px; border-radius: 6px; font-size: 12px; font-weight: 600; line-height: 1.5;
+  background: var(--r-neutral-bg); color: var(--r-neutral); }
+.db-badge.warn { background: var(--r-warn-bg); color: var(--r-warn); }
+.db-badge.ok { background: var(--r-ok-bg); color: var(--r-ok); }
+.db-badge.sr-only { padding: 0; }
+.db-hint { margin: 2px 0 0; font-size: 12.5px; line-height: 1.4; color: var(--r-warn); overflow-wrap: anywhere; }   /* freier Text, z. B. lange Adressen */
+.db-leer { grid-column: 1 / -1; margin: 0; padding: 24px 20px; text-align: center; font-size: 14px; color: var(--r-leise);
+  background: var(--r-flaeche); border: 1px dashed var(--r-linie-2); border-radius: 14px; }
+/* Noch nicht nutzbar: zurückgenommen, mit Klebeband „Bald“ (nur Anzeige – die Sperre setzt der Server durch) */
+.db-tile.off { box-shadow: none; cursor: default; }
+.db-tile.gesperrt { background: transparent; border-style: dashed; border-color: var(--r-linie-2); }
+.db-tile.off .db-ico { background: var(--r-neutral-bg); color: var(--r-zart); }
+.db-tile.gesperrt .db-name { color: var(--r-leise); }
+.db-tile.gesperrt .db-badge { background: none; padding: 0; font-weight: 500; color: var(--r-leise); }
+.db-tile .r-bald { align-self: flex-start; margin-top: 9px; }
 
-/* Absperrband „Im Bau · Bald verfügbar“ (nur Anzeige, die Sperre setzt der Server durch). Die Höhe der Mittellinie
-   setzt dashboard.js je Kachel (--db-band-y) mittig zwischen Name und Status-Pille, damit das gedrehte Band beide frei
-   lässt; ohne Skript bzw. vor der Messung 54 %. */
-.db-band { position: absolute; left: -30%; right: -30%; top: var(--db-band-y, 54%); transform: translateY(-50%) rotate(-11deg);
-  background: repeating-linear-gradient(135deg, var(--db-band-streifen) 0 12px, var(--db-band-gelb) 12px 24px); padding: 3px 0; pointer-events: none; }
-.db-band > span { display: block; overflow: hidden; white-space: nowrap; text-align: center; background: var(--db-band); color: var(--db-band-ink);
-  font-size: 12px; font-weight: 700; line-height: 26px; letter-spacing: .18em; text-transform: uppercase; }
+/* ── Fuß ── */
+.db-fuss { box-sizing: border-box; width: 100%; max-width: 1120px; margin: 0 auto; padding: 0 40px 24px; font-size: 12.5px; color: var(--r-leise); }
 
-/* ── Bereich „Verwaltung & Daten“ (Registerfeld dashboard_gruppe): abgesetzt unter den Anwendungen, breite Kacheln ── */
-.db-gruppe { margin-top: 48px; display: flex; flex-direction: column; gap: 16px; }
-.db-gruppe[hidden] { display: none; }
-.db-gruppe-kopf { display: flex; align-items: center; gap: 14px; padding: 0 8px; }
-.db-gruppe-kopf h2 { margin: 0; font-size: 13px; font-weight: 600; letter-spacing: .08em; text-transform: uppercase; color: var(--db-muted); }
-.db-gruppe-kopf::after { content: ""; flex: 1; height: 1px; background: var(--db-linie); }
-.db-grid-breit { grid-template-columns: repeat(auto-fill, minmax(420px, 1fr)); }
-.db-tile.db-breit { flex-direction: row; align-items: center; gap: 18px; min-height: 0; padding: 20px 22px; }
-.db-breit .db-text { flex: 1; }
-.db-breit .db-foot { margin-top: 0; }
-.db-pfeil { display: none; color: var(--db-muted); }
-.db-pfeil .i { width: 18px; height: 18px; stroke-width: 2; }
-
-/* ── Anmeldung, Fehler, Fuß ── */
-.db-login { max-width: 440px; margin: 8vh auto 0; padding: 32px 28px; text-align: center; border-radius: 28px; }
-.db-login h1 { margin: 12px 0 6px; font-size: 24px; font-weight: 700; letter-spacing: -.02em; }
-.db-login p { margin: 0 0 20px; color: var(--db-muted); font-size: 15px; }
-.db .db-login-i { width: 30px; height: 30px; color: var(--db-akzent-ink); }
-.db-login .btn.primary { text-decoration: none; height: 42px; padding: 0 20px; border-radius: 999px; background: var(--db-akzent); border-color: var(--db-akzent); color: #fff; }
-.db-login .btn.primary:hover { background: #6e1622; border-color: #6e1622; }
-.db-err { max-width: 640px; margin: 0 auto; padding: 12px 16px; border-radius: 16px; background: var(--db-fehler-bg); border: 1px solid var(--db-fehler-bg); color: var(--db-fehler); }
-.db-fuss { padding: 0 8px; font-size: 13px; color: var(--db-muted); }
-
-/* ── Bewegung ── */
-@media (prefers-reduced-motion: reduce) {
-  .db-tile, .db-rund, .db-abmelden { transition: none; }
-  a.db-tile:hover { transform: none; }
+/* ── Dunkel: Symbolfeld zurückhaltend, Farbe am Symbol ── */
+@media screen and (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) .db-tile:not(.off) .db-ico { background: rgba(255, 255, 255, .07); color: var(--r-m); }
+  :root:not([data-theme="light"]) a.db-tile:hover { box-shadow: none; }
+}
+@media screen {
+  :root[data-theme="dark"] .db-tile:not(.off) .db-ico { background: rgba(255, 255, 255, .07); color: var(--r-m); }
+  :root[data-theme="dark"] a.db-tile:hover { box-shadow: none; }
 }
 
-/* ── Tablet und Handy ── */
-@media (max-width: 760px) {
-  .db-user-name { max-width: 120px; }
+@media (prefers-reduced-motion: reduce) {
+  .db-tile { transition: none; }
+}
+
+/* ── Handy: zwei Spalten, Symbol über dem Namen ── */
+@media (max-width: 900px) {
+  .db-fuss { padding: 0 16px 20px; }
+  #db-bereich { gap: 22px; }
 }
 @media (max-width: 560px) {
-  .db-seite { padding: 16px 16px 40px; gap: 22px; }
-  .db-kopf { top: 10px; gap: 8px; padding: 8px 8px 8px 16px; }
-  body.db .db-kopf .brand-logo { height: 22px; width: auto; }
-  .db-user { padding: 0; background: none; }
-  .db-user-name { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
-  .db-initialen { width: 40px; height: 40px; border: 1px solid var(--db-rand); }
-  .db-abmelden { width: 40px; padding: 0; justify-content: center; }
-  .db-abmelden span { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
-  .db-gruss { gap: 4px; padding: 0 4px; margin-bottom: 22px; }
-  .db-datum { font-size: 14px; }
-  .db-gruss h1 { font-size: 34px; line-height: 1.1; letter-spacing: -.03em; }
-  .db-sub { margin-top: 2px; font-size: 15px; }
-  .db-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
-  .db-tile { gap: 10px; min-height: 150px; padding: 16px; border-radius: 24px; }
-  .db-ico { width: 44px; height: 44px; border-radius: 13px; }
-  .db-ico .i { width: 22px; height: 22px; }
-  .db-name { font-size: 16px; letter-spacing: -.01em; }
-  .db-desc { display: none; }
-  .db-badge { min-height: 24px; padding: 4px 10px; border-radius: 12px; font-size: 12px; }
-  .db-badge::before { width: 6px; height: 6px; margin-top: calc((1.35em - 6px) / 2); }
-  /* Handy: Pille gesperrter Kacheln nur für Screenreader (wie im Entwurf), Band tiefer – der Name bleibt lesbar */
-  .db-tile.gesperrt { padding-bottom: 60px; }
-  .db-tile.gesperrt .db-foot { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
-  .db-band { left: -35%; right: -35%; top: auto; bottom: 12px; padding: 3px 0; transform: rotate(-14deg); background: repeating-linear-gradient(135deg, var(--db-band-streifen) 0 10px, var(--db-band-gelb) 10px 20px); }
-  .db-band > span { font-size: 10px; line-height: 20px; letter-spacing: .16em; }
-  .db-gruppe { margin-top: 30px; gap: 12px; }
-  .db-gruppe-kopf { padding: 0 4px; }
-  .db-gruppe-kopf h2 { font-size: 12px; }
-  .db-grid-breit { grid-template-columns: minmax(0, 1fr); }
-  .db-tile.db-breit { gap: 14px; min-height: 0; padding: 14px 16px; }
-  .db-breit .db-desc { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; font-size: 13px; line-height: 1.35; }
-  /* Handy: verfügbare Verwaltungs-Kacheln mit Pfeil; die grüne Pille bleibt für Screenreader im Text */
-  a.db-breit .db-foot { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
-  .db-pfeil { display: grid; place-items: center; }
+  .db-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+  .db-tile { flex-direction: column; align-items: flex-start; gap: 10px; min-height: 104px; padding: 14px; }
+  .db-text { width: 100%; padding-top: 0; }
+  .db-tile .r-bald { position: absolute; top: 12px; right: 12px; margin-top: 0; }
+  .db-login { margin-top: 6vh; padding: 28px 20px; }
 }

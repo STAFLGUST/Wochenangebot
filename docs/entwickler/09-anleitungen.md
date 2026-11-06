@@ -103,8 +103,9 @@ Abschnitt „Koordination“.
    `dashboard = true`, `agent`, `abhaengigkeiten`, `testgruppen`, `pfade` (bzw. `pfade_geplant`), `hinweise` und
    `[[modul.oberflaeche]]` (`id`, `name`, `art` intern/extern, `adresse`, `entwicklung` = `geplant`, `freigabe` =
    `keine`, `sperrbar`). Optional `dashboard_gruppe = "verwaltung"`: Kachel im abgesetzten Bereich „Verwaltung & Daten“
-   (Standard `anwendungen`). Neues Symbol: `<symbol id="i-…">` in `dashboard/index.html`, Name in `ICON` (`dashboard.js`)
-   und Farbe `.db-ico[data-symbol="…"]` (`dashboard.css`). `python3 werkzeuge/regeln.py erzeugen`.
+   (Standard `anwendungen`). Neues Symbol: Form in `PFADE` (`app/assets/rahmen.js`, Schlüssel = `icon` des Registers),
+   Farbe als `--r-m-<icon>` hell und dunkel plus `[data-symbol="<icon>"]` (`app/assets/rahmen.css`) – gilt für Kachel und
+   Seitenleiste; ohne Eintrag Raster-Symbol in neutralem Grau. `python3 werkzeuge/regeln.py erzeugen`.
    Ohne DNS-Eintrag `dns = false` an der Oberfläche; steht der Eintrag, kommt die Adresse in den 503-Platzhalter.
 2. Damit entstehen automatisch die Kachel (Stand „geplant“) und das Recht `<modul>.zugang` (Standard: beide
    Standardrollen). Die Adresse des Moduls muss im `Caddyfile` als 503-Platzhalter stehen, bis es freigegeben ist
