@@ -10,13 +10,17 @@
 <script src="../../assets/theme.js"></script>
 <script src="../../assets/format.js"></script>
 <link rel="stylesheet" href="../../assets/app.css">
+<link rel="stylesheet" href="../../assets/rahmen.css">
 <link rel="stylesheet" href="leergut.css">
 </head>
-<body class="lg">
+<body class="lg r" data-rahmen="leergut">
 <div class="lg-bg" aria-hidden="true"><span></span><span></span><span></span></div>
+<div class="r-app">
+<nav class="r-leiste" id="r-leiste" aria-label="Hauptnavigation" hidden></nav>
+<div class="r-inhalt">
 <div class="lg-seite">
   <header class="lg-kopf lg-glas">
-    <a class="stafl-zurueck" id="lg-zurueck" href="../../dashboard/" title="Zurück zum Dashboard" aria-label="Zurück zum Dashboard"><svg class="i" aria-hidden="true"><use href="#i-back"/></svg><span class="lbl">Dashboard</span></a>
+    <a class="stafl-zurueck" id="lg-zurueck" href="../../dashboard/" title="Zur Startseite" aria-label="Zur Startseite"><svg class="i" aria-hidden="true"><use href="#i-back"/></svg><span class="lbl">Start</span></a>
     <span class="lg-marke"><img class="brand-logo" src="../../assets/logo-standard-fleisch-kopf.png" width="428" height="96" alt="Standard-Fleisch"></span>
     <span class="lg-modul"><svg class="i" aria-hidden="true"><use href="#i-kiste"/></svg>Leergut</span>
     <div class="lg-aktionen">
@@ -199,6 +203,8 @@
   </main>
   <footer class="lg-fuss">STAFL-Plattform · Standard-Fleisch</footer>
 </div>
+</div>
+</div>
 <div class="lg-toast" id="lg-toast" role="status" aria-live="polite"></div>
 
 <!-- Eingabemaske: Bewegung buchen -->
@@ -352,6 +358,7 @@
   <symbol id="i-mail" viewBox="0 0 24 24"><rect x="3" y="5.5" width="18" height="13" rx="2"/><path d="m3.5 7 8.5 6 8.5-6"/></symbol>
   <symbol id="i-stift" viewBox="0 0 24 24"><path d="M4 20h4L19 9a2.8 2.8 0 0 0-4-4L4 16z"/><path d="m13.5 6.5 4 4"/></symbol>
 </svg>
+<script src="../../assets/rahmen.js"></script>
 <script src="../../assets/stock-core.js"></script>
 <script src="leergut.js"></script>
 </body>
