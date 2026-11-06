@@ -85,6 +85,12 @@ ABGESCHNITTEN = r'''() => {
 # Logo: im dunklen Design ohne helle Fläche dahinter und weiß gefärbt (Filter oder weiße Datei)
 LOGO = r'''() => [...document.querySelectorAll('img[src*="logo-standard-fleisch"]')].filter((e) => e.getBoundingClientRect().width > 0).map((e) => {
   const s = getComputedStyle(e); return { bg: s.backgroundColor, filter: s.filter, src: e.getAttribute('src').split('/').pop() }; })'''
+# Rahmen „C2“: Zustand der Seitenleiste und Glasflächen (backdrop-filter) auf der Seite – Hinweise (Toasts) ausgenommen
+RAHMEN = r'''() => { const n = document.querySelector('#r-leiste'), k = document.querySelector('.r-mobilkopf');
+  return { aktiv: [...n.querySelectorAll('[aria-current="page"]')].map((e) => e.dataset.modul), breite: Math.round(n.getBoundingClientRect().width),
+           zu: getComputedStyle(n).visibility === 'hidden', kopf: !!k && k.getBoundingClientRect().height > 0, start: n.querySelector('[data-modul="start"]').getAttribute('href'),
+           glas: [...document.querySelectorAll('body *')].filter((e) => { const s = getComputedStyle(e); return s.backdropFilter && s.backdropFilter !== 'none' && !/toast/.test(e.id + ' ' + e.className); })
+             .map((e) => e.id || String(e.className)).slice(0, 5) }; }'''
 ZURUECK = r'''() => { const e = document.querySelector('.stafl-zurueck'); if (!e || !e.offsetParent) return null; const s = getComputedStyle(e), r = e.getBoundingClientRect();
   return { h: Math.round(r.height), radius: s.borderTopLeftRadius, font: s.fontSize + ' ' + s.fontWeight, text: e.textContent.trim(), href: e.getAttribute('href'),
            icon: !!e.querySelector('svg use[href="#i-back"]'), pad: s.paddingLeft + ' ' + s.paddingRight, farbe: s.color }; }'''
@@ -130,6 +136,15 @@ with sync_playwright() as pw:
             for name, bereich, pfad, warte, ansichten in SEITEN:
                 if bereich: als_bereich(pg, bereich)
                 pg.goto(B + pfad); pg.wait_for_selector(warte, timeout=20000)
+                if name != 'dashboard':   # Rahmen „C2“ (06.11.2026): gemeinsame Seitenleiste auf jeder Mitarbeiterseite
+                    pg.wait_for_selector('.r-app.r-bereit', timeout=20000)
+                    rh = pg.evaluate(RAHMEN)
+                    breit = 60 if bereich else (208 if breite >= 1440 else 60)   # Eingabebereich immer schmal, Module erst unter 1440 px
+                    if breite > 900:
+                        check(f'{name} {tag}: Seitenleiste ({breit} px), eigenes Modul aktiv, Start zum Dashboard, kein Glas', rh['aktiv'] == [name] and rh['breite'] == breit
+                              and rh['start'].rstrip('/').endswith('dashboard') and not rh['glas'] and not rh['kopf'], rh)
+                    else:
+                        check(f'{name} {tag}: Seitenleiste als Menü (zu), Kopfzeile mit Menüknopf, eigenes Modul aktiv', rh['aktiv'] == [name] and rh['zu'] and rh['kopf'] and not rh['glas'], rh)
                 for v in (ansichten or [None]):
                     if v:
                         pg.evaluate("v => { const b = document.querySelector('#vt-' + v); if (b && !b.hidden) b.click(); }", v)
