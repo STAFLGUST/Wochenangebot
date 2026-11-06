@@ -358,7 +358,7 @@
     notfallHinweis(r.data.notfall);
     hinweiseZeigen();
     // Platzhalter, bis die Favoriten am Konto bekannt sind (kein Springen von der Standardauswahl zur eigenen)
-    $('#db-grid').innerHTML = '<div class="db-tile db-platzhalter" aria-hidden="true"></div>'.repeat(FAV_STANDARD);
+    $('#db-grid').innerHTML = '<div class="db-platzhalter" aria-hidden="true"></div>'.repeat(FAV_STANDARD);
     const h = await heute;
     S.heute = h.status === 200 && h.data.ok ? h.data : null;
     if (S.heute) S.favoriten = S.heute.favoriten;

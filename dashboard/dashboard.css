@@ -66,7 +66,8 @@ a.db-tile:hover { color: var(--r-text); border-color: var(--r-linie-2); box-shad
 .db-zahl { flex: none; align-self: flex-start; margin-top: 7px; min-width: 22px; height: 22px; padding: 0 6px; box-sizing: border-box; border-radius: 11px;
   display: inline-grid; place-items: center; font-size: 12px; font-weight: 600; font-variant-numeric: tabular-nums; background: var(--r-neutral-bg); color: var(--r-text-2); }
 .db-zahl.rot { background: var(--r-rot-flaeche); color: var(--r-rot-ink); }
-.db-tile.db-platzhalter { background: var(--r-flaeche); box-shadow: none; opacity: .55; }
+.db-platzhalter { min-height: 66px; border: 1px solid var(--r-linie); border-radius: 14px; background: var(--r-flaeche); opacity: .55; }
+@media (max-width: 560px) { .db-platzhalter { min-height: 104px; } }
 
 /* ── Hinweise (Wartung): gelber Streifen, schließbar ── */
 .db-hinweise { display: flex; flex-direction: column; gap: 8px; }

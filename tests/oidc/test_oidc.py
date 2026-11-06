@@ -851,17 +851,22 @@ with sync_playwright() as pw:
     check('nach der Anmeldung: Dashboard auf dashboard.stafl.test', pg.url.startswith(D + '/dashboard/'), pg.url)
     pg.wait_for_selector('#r-leiste .r-eintrag')   # Seitenleiste des Rahmens „C2“ (06.11.2026) mit Name und Abmelden
     check('Dashboard zeigt den Namen aus unserem Mitarbeiterkonto (Seitenleiste)', 'Erika Editor' in pg.text_content('#r-nutzer-name'), pg.text_content('#r-nutzer-name'))
-    # Controlling: Modulzugang standardmäßig niemand (Finanzdaten, 28.10.2026) – die Kachel fehlt ohne Zugang
-    check('zwölf Kacheln (ohne Controlling), Angebot verfügbar', pg.locator('#db-bereich .db-tile').count() == 12 and pg.text_content('[data-modul="angebot"] .db-badge') == 'Verfügbar'
-          and pg.locator('[data-modul="controlling"]').count() == 0)
-    check('Kachel Verwaltung verfügbar (freigegeben)', pg.text_content('[data-modul="verwaltung"] .db-badge') == 'Verfügbar'
-          and pg.get_attribute('[data-modul="verwaltung"]', 'href') is not None, pg.text_content('[data-modul="verwaltung"] .db-badge'))
-    check('Kacheln Bestand, Import, HR, CRM, Marketing, Leergut, REWE und Qualitätssicherung verfügbar (freigegeben), 10 von 12', all(pg.text_content(f'[data-modul="{m}"] .db-badge') == 'Verfügbar'
-          and pg.get_attribute(f'[data-modul="{m}"]', 'href') for m in ('bestand', 'import', 'hr', 'crm', 'marketing', 'leergut', 'rewe', 'qs')) and '10 von 12' in pg.text_content('#db-sub'), pg.text_content('#db-sub'))
-    check('Kachel HR führt zur Urlaubsverwaltung (Testserver: Pfad /module/hr/)', pg.get_attribute('[data-modul="hr"]', 'href') == '/module/hr/', pg.get_attribute('[data-modul="hr"]', 'href'))
-    check('Kachel CRM führt zum CRM (Testserver: Pfad /module/crm/)', pg.get_attribute('[data-modul="crm"]', 'href') == '/module/crm/', pg.get_attribute('[data-modul="crm"]', 'href'))
-    check('Kachel Marketing führt zum Redaktionsplan (Testserver: Pfad /module/marketing/)', pg.get_attribute('[data-modul="marketing"]', 'href') == '/module/marketing/',
-          pg.get_attribute('[data-modul="marketing"]', 'href'))
+    # Startseite „C2“ (06.11.2026): Anwendungen in der Seitenleiste, Favoriten als Kacheln, „Heute für Sie“ aus start_heute –
+    # diese Aktion gibt es nur auf dem Dashboard-Host (GR-109); hier läuft sie mit echter Anmeldung auf genau diesem Host
+    pg.wait_for_selector('#db-heute-liste[aria-busy="false"]'); pg.wait_for_selector('#db-grid .db-tile')
+    _lz = {m: (tag_, href) for m, tag_, href in pg.eval_on_selector_all('#r-leiste .r-eintrag[data-modul]', 'els => els.map(e => [e.dataset.modul, e.tagName, e.getAttribute("href")])')}
+    # Controlling: Modulzugang standardmäßig niemand (Finanzdaten, 28.10.2026) – der Eintrag fehlt ohne Zugang
+    check('Seitenleiste: Start und zwölf Anwendungen (ohne Controlling), Angebot verfügbar', len(_lz) == 13 and 'controlling' not in _lz and _lz['angebot'][0] == 'A', sorted(_lz))
+    check('Verwaltung verfügbar (freigegeben, Verweis)', _lz['verwaltung'][0] == 'A' and _lz['verwaltung'][1], _lz.get('verwaltung'))
+    check('Bestand, Import, HR, CRM, Marketing, Leergut, REWE und Qualitätssicherung verfügbar (Verweise)', all(_lz[m][0] == 'A' and _lz[m][1]
+          for m in ('bestand', 'import', 'hr', 'crm', 'marketing', 'leergut', 'rewe', 'qs')), _lz)
+    check('HR führt zur Urlaubsverwaltung (Testserver: Pfad /module/hr/)', _lz['hr'][1] == '/module/hr/', _lz['hr'])
+    check('CRM führt zum CRM (Testserver: Pfad /module/crm/)', _lz['crm'][1] == '/module/crm/', _lz['crm'])
+    check('Favoriten: die ersten vier Anwendungen als Kacheln, Angebot verfügbar', pg.eval_on_selector_all('#db-grid .db-tile', 'els => els.map(e => e.dataset.modul)')
+          == ['angebot', 'bestand', 'leergut', 'crm'] and pg.text_content('#db-grid [data-modul="angebot"] .db-badge') == 'Verfügbar')
+    check('„Heute für Sie“ auf dem Dashboard-Host geladen (start_heute), für Erika nichts offen', pg.locator('#db-heute-liste .db-erledigt').count() == 1
+          and pg.text_content('#db-sub') == 'keine offenen Punkte', (pg.text_content('#db-heute-liste'), pg.text_content('#db-sub')))
+    check('Marketing führt zum Redaktionsplan (Testserver: Pfad /module/marketing/)', _lz['marketing'][1] == '/module/marketing/', _lz['marketing'])
     pg.screenshot(path=os.path.join(SH, 'oidc_dashboard_1280.png'), full_page=True)
     k = kekse(ctx, f'dashboard.stafl.test')
     check('Cookies des Dashboards nur mit __Host-Präfix (Secure, Pfad /, ohne Domain)',
