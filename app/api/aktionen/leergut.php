@@ -43,6 +43,7 @@ switch ($action) {
                      'rechte' => ['bearbeiten' => may($me, 'leergut.bearbeiten'), 'verwalten' => may($me, 'leergut.verwalten')],
                      'mandanten' => LG_MANDANTEN, 'arten' => LG_ARTEN, 'typen' => LG_TYPEN, 'abstStatus' => LG_ABST_STATUS, 'abschrStatus' => LG_ABSCHR_STATUS,
                      'lademittel' => $stamm['lademittel'], 'partner' => $stamm['partner'], 'konten' => lg_konten($stamm, $bew, $abst, $heute),
+                     'versand' => (object)lg_partner_versand($stamm['partner']),   // Versandart je Partner laut Lieferanten- bzw. Kundenstamm (nur Anzeige)
                      'abstimmungen' => array_map(function ($a) use ($np, $heute) { return lg_abstimmung_aus($a, $np, $heute); }, $abst),
                      'abschreibungen' => lg_doc('leergut-abschreibungen')['liste'], 'inventur' => lg_doc('leergut-inventur')['liste'],
                      'leer' => !$stamm['partner'] && !$bew]);

@@ -279,7 +279,7 @@
     const art = $('#lg-k-art').value, firma = $('#lg-k-firma').value, inaktiv = $('#lg-k-inaktiv').checked, nachWert = $('#lg-k-sort').value === 'wert';
     const wert = (p) => euroVon(obj(S.kmap.get(p.id)?.saldo)).betrag;
     const liste = S.d.partner.filter((p) => (inaktiv || p.aktiv) && (!art || p.art === art) && (!firma || p.mandant === firma)
-      && (!q || [p.name, p.kontoNr, p.kundenNr, p.lieferantNr, p.lieferanten, p.ansprechpartner].join(' ').toLocaleLowerCase('de-DE').includes(q)))
+      && (!q || [p.name, p.kontoNr, p.kundenNr, p.lieferantNr, ...(p.lieferantNrWeitere || []), p.lieferanten, p.ansprechpartner].join(' ').toLocaleLowerCase('de-DE').includes(q)))
       .sort((a, b) => (nachWert ? wert(b) - wert(a) : 0) || nachName(a, b));
     $('#lg-k-liste').innerHTML = liste.length ? liste.map((p) => {
       const k = S.kmap.get(p.id) || {};
@@ -316,7 +316,9 @@
     const p = k.partner, ko = S.kmap.get(id) || {}, lms = kontoLms(p, k.bewegungen);
     const best = ko.bestaetigt, la = ko.letzteAbstimmung;
     const meta = [`<span class="lg-chip">${esc(S.d.arten[p.art] || p.art)}</span>`, `<span class="lg-chip firma">${esc(S.d.mandanten[p.mandant] || p.mandant)}</span>`,
-      p.aktiv ? '' : '<span class="lg-chip">inaktiv</span>', p.kontoNr ? `<span>Konto-Nr. ${esc(p.kontoNr)}</span>` : '', p.kundenNr ? `<span>WinAB-Kd. ${esc(p.kundenNr)}</span>` : '', p.lieferantNr ? `<span>WinAB-Lief. ${esc(p.lieferantNr)}</span>` : '',
+      p.aktiv ? '' : '<span class="lg-chip">inaktiv</span>', p.kontoNr ? `<span>Konto-Nr. ${esc(p.kontoNr)}</span>` : '', p.kundenNr ? `<span>WinAB-Kd. ${esc(p.kundenNr)}</span>` : '',
+      p.lieferantNr || (p.lieferantNrWeitere || []).length ? `<span>WinAB-Lief. ${esc([p.lieferantNr, ...(p.lieferantNrWeitere || [])].filter(Boolean).join(', '))}${p.winabAb ? ` ab ${esc(datum(p.winabAb))}` : ''}${p.wareneingangTausch ? ' · Tausch zählt' : ''}</span>` : '',
+      obj(S.d.versand)[p.id] ? `<span>Versandart ${esc(obj(S.d.versand)[p.id])}</span>` : '',
       p.fristTage ? `<span>Widerspruch binnen ${zahl(p.fristTage)} Tagen</span>` : '<span>ohne Widerspruchsfrist</span>',
       p.ansprechpartner ? `<span>${esc(p.ansprechpartner)}</span>` : '',
       p.email ? `<a href="mailto:${esc(p.email.replace(/\s/g, ''))}">${esc(p.email)}</a>` : ''].filter(Boolean).join('');
@@ -732,8 +734,9 @@
      zählt dort nicht), Zeilen nur mit Lieferant sind Lieferantenbelege (z. B. Wareneingänge).
      Je Beleg (Kunde bzw. Lieferant, Belegart, Belegnr.) und Lademittel werden die Mengen mit Vorzeichen summiert –
      Korrekturzeilen mit Minus (WinAB bis 2023) heben sich so auf; was danach auf einer Seite negativ ist, zählt zur anderen.
-     Gesendet werden alle Kunden und Lieferanten der Datei (Kunden für Lieferung und Rückgabe) und die Belege mit Wirkung
-     auf den Saldo ab „Übernehmen ab“. */
+     Gesendet werden alle Kunden und Lieferanten der Datei (Kunden für Lieferung und Rückgabe), die Kundenbelege mit Wirkung
+     auf den Saldo ab „Übernehmen ab“ und die Lieferantenbelege mit Leergut (auch reiner Tausch – ob der WinAB-Tausch beim
+     Wareneingang zählt, entscheidet der Server je Konto) ab dem frühesten „WinAB-Belege ab“ der Lieferantenkonten. */
   function csvZeilen(text) {
     const out = [];
     let zeile = [], feld = '', inQ = false;
@@ -814,7 +817,7 @@
         if (ab) { if (!k.ersteLieferung || b.datum < k.ersteLieferung) k.ersteLieferung = b.datum; if (b.datum > k.letzteLieferung) k.letzteLieferung = b.datum; }
         if (zu && b.datum > k.letzteRueckgabe) k.letzteRueckgabe = b.datum;
       }
-      if (leerMap(delta(x))) info.ohneWirkung++; else mitWirkung.push(x);
+      if (b.kd ? leerMap(delta(x)) : leerMap(abgang) && leerMap(zugang)) info.ohneWirkung++; else mitWirkung.push(x);
     }
     return { quelle: 'csv', datei: String(datei || '').slice(0, 120), dateiVon, bis, kunden, lieferanten, belege: mitWirkung, info };
   }
@@ -822,10 +825,13 @@
   function winabAnfrage(w, ab, zuordnung) {
     if (w.quelle !== 'csv') return { bericht: w.bericht, kunden: w.kunden, belege: w.belege };
     const von = ab < w.dateiVon ? w.dateiVon : ab;
-    return { bericht: { datei: w.datei, von, bis: w.bis, datum: w.bis, dateiVon: w.dateiVon, quelle: 'csv' },
+    // Lieferantenbelege ab dem frühesten „WinAB-Belege ab“ der Lieferantenkonten (z. B. Bochumer ab 2025), höchstens ab „von“
+    const frueh = S.d.partner.filter((p) => (p.lieferantNr || (p.lieferantNrWeitere || []).length) && p.winabAb).map((p) => p.winabAb).sort()[0] || von;
+    const lfVon = frueh < von ? (frueh < w.dateiVon ? w.dateiVon : frueh) : von;
+    return { bericht: { datei: w.datei, von, bis: w.bis, datum: w.bis, dateiVon: w.dateiVon, lfVon, quelle: 'csv' },
       kunden: [...w.kunden].map(([nr, k]) => ({ nr, ersteLieferung: k.ersteLieferung, letzteLieferung: k.letzteLieferung, letzteRueckgabe: k.letzteRueckgabe })),
       lieferanten: [...w.lieferanten].map(([nr, x]) => ({ nr, lieferscheine: x.ls.size })),
-      belege: w.belege.filter((b) => b.datum >= von), zuordnung };
+      belege: w.belege.filter((b) => b.datum >= (b.kd ? von : lfVon)), zuordnung };
   }
   function winabVorher(w, ab) {   // Belege mit Wirkung vor „Übernehmen ab“ (nur CSV): Anzahl und Saldo der Kunden
     const s = {}; let n = 0;
@@ -841,19 +847,21 @@
       anz(inf.ohneWirkung, 'Beleg ohne Wirkung', 'Belege ohne Wirkung') + (inf.ohneWirkung ? ' (gleich viel abgegeben wie zurückgenommen)' : '')].filter(Boolean);
     const unb = Object.entries(inf.unbekannt);
     const req = winabAnfrage(w, st.ab, st.zuordnung);
-    const kacheln = [['kunden', req.kunden.length, csv ? 'Kunden in der Datei' : 'Kunden im Bericht'], ['belege', req.belege.length, 'Belege mit Wirkung'],
+    const kacheln = [['kunden', req.kunden.length, csv ? 'Kunden in der Datei' : 'Kunden im Bericht'], ['belege', req.belege.length, 'Belege zum Abgleich'],
       ['neuKd', z.kunden, 'Neue Kundenkonten'], ['neu', z.neu, 'Neue Belege'], ['gleich', z.gleich, 'Unverändert'], ['geaendert', z.geaendert, 'Geändert'], ['ausgeglichen', z.ausgeglichen, 'Ausgeglichen']];
     const vorher = winabVorher(w, req.bericht.von);
     const lief = r.lieferanten || [];
-    const partnerWahl = S.d.partner.filter((p) => p.art !== 'kunde' && !p.lieferantNr).sort(nachName);
+    const partnerWahl = S.d.partner.filter((p) => p.art !== 'kunde' && !p.lieferantNr && !(p.lieferantNrWeitere || []).length).sort(nachName);
     const zuordnungZeile = (x) => {
-      const kopf = `<td data-label="Lieferanten-Nr."><b>${esc(x.nr)}</b></td>
+      const kopf = `<td data-label="Lieferanten-Nr."><b>${esc(x.nr)}</b>${x.name ? `<span class="lg-sub">${esc(x.name)}</span>` : ''}</td>
+        <td data-label="Versandart">${x.versandart ? esc(x.versandart) : '<span class="lg-hilfe">—</span>'}</td>
         <td class="lg-zahl" data-label="Lieferscheine mit Leergut">${zahl(x.lieferscheine)}</td><td class="lg-zahl" data-label="Belege mit Wirkung">${x.belege ? zahl(x.belege) : '—'}</td>`;
       const wahl = st.zuordnung[x.nr] || '';
       if (x.partner && !wahl) return `<tr data-lf-zeile="${esc(x.nr)}">${kopf}<td data-label="Konto">${esc(x.partner.name)}</td></tr>`;
+      const vor = x.vorschlag ? partnerWahl.find((p) => p.id === x.vorschlag) : null;   // Name passt zum Lieferantenstamm
       return `<tr data-lf-zeile="${esc(x.nr)}">${kopf}<td data-label="Konto"><select class="lg-eingabe" data-lf="${esc(x.nr)}" aria-label="Konto für WinAB-Nr. ${esc(x.nr)}">
-        <option value="">nicht übernehmen</option><option value="neu"${wahl === 'neu' ? ' selected' : ''}>Neues Konto anlegen</option>
-        ${partnerWahl.map((p) => `<option value="${esc(p.id)}"${wahl === p.id ? ' selected' : ''}>${esc(p.name)}</option>`).join('')}</select>
+        <option value="">nicht übernehmen</option>${vor ? `<option value="${esc(vor.id)}"${wahl === vor.id ? ' selected' : ''}>${esc(vor.name)} (Vorschlag)</option>` : ''}<option value="neu"${wahl === 'neu' ? ' selected' : ''}>Neues Konto anlegen${x.name ? ` („${esc(x.name)}“)` : ''}</option>
+        ${partnerWahl.filter((p) => p !== vor).map((p) => `<option value="${esc(p.id)}"${wahl === p.id ? ' selected' : ''}>${esc(p.name)}</option>`).join('')}</select>
         ${x.belege && !wahl ? `<span class="lg-sub">${mengen(x.saldo, { leer: '' })} – nicht gebucht</span>` : ''}</td></tr>`;
     };
     $('#lg-w-vorschau').innerHTML = `${csv ? `<div class="lg-w-ab"><label>Übernehmen ab<input type="date" class="lg-eingabe" id="lg-w-ab" min="${esc(w.dateiVon)}" max="${esc(w.bis)}" value="${esc(req.bericht.von)}"></label>
@@ -866,8 +874,10 @@
       ${z.daten ? `<p class="lg-hinweis">Letzte Lieferung und Rückgabe laut WinAB (auch aus reinem Tausch) für ${zahl(z.daten)} ${z.daten === 1 ? 'Kundenkonto' : 'Kundenkonten'} aktualisiert.</p>` : ''}
       <p class="lg-wsumme">Saldo aller Kundenkonten aus WinAB danach (${zahl(z.konten)} mit Saldo): ${mengen(r.summe, { leer: 'ausgeglichen' })}</p>
       ${lief.length ? `<h3 class="lg-w-titel">Lieferanten aus WinAB</h3>
-        <p class="lg-hilfe">Lieferantenbelege (Zeilen ohne Kunde, z. B. Wareneingänge) werden nur auf zugeordnete Konten gebucht. Die Nummer bleibt am Konto – künftige Dateien ordnen von selbst zu.</p>
-        <div class="lg-tabelle-wrap"><table class="lg-tabelle lg-karten" id="lg-w-lief"><thead><tr><th>Lieferanten-Nr.</th><th class="lg-zahl">Lieferscheine mit Leergut (Datei)</th><th class="lg-zahl">Belege mit Wirkung</th><th>Konto</th></tr></thead>
+        <p class="lg-hilfe">Lieferantenbelege (Zeilen ohne Kunde, z. B. Wareneingänge) werden nur auf zugeordnete Konten gebucht. Die Nummer bleibt am Konto – künftige Dateien ordnen von selbst zu. Namen und Versandart aus Verwaltung → Stammdaten → Lieferanten. Beim Wareneingang zählt der Zugang: WinAB bucht dort fast immer einen Tausch, die Warenannahme tauscht aber nicht (am Konto änderbar: „Tausch laut WinAB zählt“).</p>
+        ${z.tausch ? `<p class="lg-hinweis" id="lg-w-tausch">${zahl(z.tausch)} ${z.tausch === 1 ? 'Wareneingang' : 'Wareneingänge'} mit Tausch laut WinAB – gezählt wird der Zugang.</p>` : ''}
+        ${z.vorStart ? `<p class="lg-hinweis">${zahl(z.vorStart)} ${z.vorStart === 1 ? 'Lieferantenbeleg liegt' : 'Lieferantenbelege liegen'} vor „WinAB-Belege ab“ des Kontos – nicht gebucht.</p>` : ''}
+        <div class="lg-tabelle-wrap"><table class="lg-tabelle lg-karten" id="lg-w-lief"><thead><tr><th>Lieferant</th><th>Versandart</th><th class="lg-zahl">Lieferscheine mit Leergut (Datei)</th><th class="lg-zahl">Belege mit Wirkung</th><th>Konto</th></tr></thead>
         <tbody>${lief.map(zuordnungZeile).join('')}</tbody></table></div>
         ${z.ohneKonto ? `<p class="lg-meldung">${zahl(z.ohneKonto)} ${z.ohneKonto === 1 ? 'Lieferantenbeleg wird' : 'Lieferantenbelege werden'} nicht gebucht, weil kein Konto zugeordnet ist.</p>` : ''}
         ${leerMap(r.summeLieferanten) ? '' : `<p class="lg-wsumme">Saldo der zugeordneten Lieferantenkonten danach: ${mengen(r.summeLieferanten)}</p>`}` : ''}
@@ -1200,6 +1210,7 @@
     $('#pa-konto').value = p ? p.kontoNr : ''; $('#pa-kdnr').value = p ? (p.kundenNr || '') : ''; $('#pa-lfnr').value = p ? (p.lieferantNr || '') : ''; $('#pa-frist').value = p ? (p.fristTage || '') : '14';
     $('#pa-email').value = p ? p.email : ''; $('#pa-ansprech').value = p ? p.ansprechpartner : ''; $('#pa-lieferanten').value = p ? p.lieferanten : '';
     $('#pa-notiz').value = p ? p.notiz : ''; $('#pa-aktiv').checked = p ? !!p.aktiv : true;
+    $('#pa-lfweitere').value = p ? (p.lieferantNrWeitere || []).join(', ') : ''; $('#pa-winab-ab').value = p ? (p.winabAb || '') : ''; $('#pa-tausch').checked = p ? !!p.wareneingangTausch : false;
     const gewaehlt = new Set(p ? p.lademittel : ['e2', 'h1']);
     $('#pa-lm').innerHTML = S.d.lademittel.filter((l) => l.aktiv !== false || gewaehlt.has(l.id)).map((l) => `<label class="lg-check"><input type="checkbox" value="${esc(l.id)}"${gewaehlt.has(l.id) ? ' checked' : ''}> ${esc(l.name)}</label>`).join('');
     oeffne($('#dlg-partner'));
@@ -1210,7 +1221,8 @@
     const p = S.edit.partner;
     const body = { name: $('#pa-name').value, art: $('#pa-art').value, mandant: $('#pa-firma').value, kontoNr: $('#pa-konto').value, kundenNr: $('#pa-kdnr').value.trim(), lieferantNr: $('#pa-lfnr').value.trim(), fristTage: $('#pa-frist').value.trim(),
       email: $('#pa-email').value, ansprechpartner: $('#pa-ansprech').value, lieferanten: $('#pa-lieferanten').value, notiz: $('#pa-notiz').value,
-      lademittel: $$('#pa-lm input:checked').map((x) => x.value), aktiv: $('#pa-aktiv').checked };
+      lademittel: $$('#pa-lm input:checked').map((x) => x.value), aktiv: $('#pa-aktiv').checked,
+      lieferantNrWeitere: $('#pa-lfweitere').value, winabAb: $('#pa-winab-ab').value, wareneingangTausch: $('#pa-tausch').checked };
     if (p) { body.id = p.id; body.rev = p.rev; }
     const d = await senden(ev.target, 'leergut_partner_save', body);
     if (!d) return;

@@ -1,0 +1,6 @@
+"Alpha";"Nummer";"Name1";"Gruppe";"Konto";"Telefon";"PLZ";"Ort";"Strasse";"Kondition";"UmsatzJahr";"Vertreter";"Vertreter.Name";"Land";"KWUmsatzLfdJahr";"KWUmsatzVorjahr";"LandIntrastat";"Versandart";"GLN";"Lademittelbestände";"AngelegtAm"
+;"4000099";;;;;;;;;;;;"DE";;;;;;;"04.08.2023"
+"MUSTER";"2550077";"Musterfleisch GmbH & Co. KG";"1";"79999";"0400 000000";"20095";"Hamburg";"Teststraße 1";"56";"12.345,67 €";"15";"Tina Testerin";"DE";"12.345,67 €";"23.456,78 €";;"1";;"-12";"03.11.2021"
+"KÜHL TEST";"2150099";"Kühlhaus Test GmbH";"2";;"0400 111111";"24000";"Kiel";"Hafenweg 2";"54";;;;"DE";;;;"1";"4000000 00000 1";"7";
+"SPED NORD";"4000098";"Spedition Nordtest";"5";;;;;;;;;;"DE";;;;"24";;;"01.01.2020"
+"***ALT";"2999901";"***Altlieferant Beispiel";"1";;;;"Bremen";;"56";;;;"DE";;;;;;;"05.05.2010"

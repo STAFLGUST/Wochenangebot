@@ -89,7 +89,7 @@ Jede Code-Datei beginnt mit einem Kopfkommentar; dessen erste Aussage steht hier
 | `hr.php` | hr | Aktionen: HR · Urlaubsverwaltung (Oberfläche hr.intern, Logik in app/api/module/hr/) Rechte (GR-103): hr.antrag – eigener Urlaub und Gleittage, Anträge (nur wenn in Verwaltung → Urlaub eingeschaltet; Gleittage nur … |
 | `importzentrale.php` | verwaltung | Aktionen: Importzentrale (Verwaltung → Import; Ablauf und Prüfungen: module/verwaltung/importzentrale.php) GET import_arten Importarten, für die der angemeldete Nutzer das Recht hat (Anzeige ist keine Berechtigung) … |
 | `integritaet.php` | plattform | Aktion: Dateiprüfung (lib/integritaet.php) – nur Administratoren. |
-| `kundengruppen.php` | verwaltung | Aktionen: Listen der Stammdaten – Kundengruppen, VK-Gruppen, Vertreter (Beschreibung: lib/kunden.php) und Angebotskategorien (module/verwaltung/angebotskategorien.php). |
+| `kundengruppen.php` | verwaltung | Aktionen: Listen der Stammdaten – Kundengruppen, VK-Gruppen, Vertreter, Versandarten, Lieferanten (Beschreibung: lib/kunden.php) und Angebotskategorien (module/verwaltung/angebotskategorien.php). |
 | `kundenportal.php` | angebot | Aktionen: Kunden auf der Angebotsseite |
 | `kundenverwaltung.php` | verwaltung | Aktionen: Kundenstammdaten (Administrator) Wird von api/index.php im globalen Gültigkeitsbereich eingebunden; jede Aktion endet mit respond()/fail(). |
 | `leergut.php` | leergut | Aktionen: Leergut · Leergutkonten und Abstimmung (Oberfläche leergut.intern, Daten und Regeln in app/api/module/leergut/leergut.php) Rechte (GR-103): leergut.sehen – Übersicht, Konten mit Bewegungen, Abstimmungen, … |
@@ -750,6 +750,7 @@ Jede Code-Datei beginnt mit einem Kopfkommentar; dessen erste Aussage steht hier
 | `test_kundenimport.py` | verwaltung | Stammdaten → Angebote mit Kundengruppen (Freischaltung über die Gruppe), Import der Kundenstammdaten aus der Warenwirtschaft (CSV, alle Spalten, Aktiv-Regel 18 Monate) und Passwort-Auswahl im Kunden-Dialog. |
 | `test_leergut.py` | leergut | Leergut (Modul leergut, Oberfläche leergut.intern unter /module/leergut/) – Leergutkonten und Abstimmung. |
 | `test_legal_pages.py` | angebot | Öffentlich erreichbar, Navigation ohne JavaScript und mobile Darstellung. |
+| `test_lieferanten.py` | verwaltung | Stammdaten → Lieferanten und Versandarten (Wunsch des Inhabers 06.11.2026): vollständiger Lieferanten-Export der Warenwirtschaft (alle Spalten, Name darf fehlen, Umsätze nur für Bearbeiter), Versandarten (Nummer, … |
 | `test_mail_intern.py` | plattform | Postfach für interne E-Mails (z. |
 | `test_marketing.py` | marketing | Marketing · Redaktionsplan (Modul marketing, Oberfläche marketing.intern unter /module/marketing/). |
 | `test_master.py` | verwaltung | Testgruppe master: Artikelstammdaten und Bezeichnungsregeln (Fleischart, Herkunft, Zustand, VK-Gruppe). |

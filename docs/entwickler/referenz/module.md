@@ -126,7 +126,7 @@ Agent: `controlling` · hängt ab von `plattform`, `verwaltung`, `bestand` · Te
 
 Stammdaten, Import, Benutzer, Berechtigungen, Geschäftsregeln, E-Mail, Protokoll
 
-Agent: `verwaltung` · hängt ab von `plattform` · Testgruppen: `kunden`, `kundengruppen`, `vkgruppen`, `angebotskategorien`, `vertreter`, `kundenimport`, `auswertung`, `master`, `importzentrale`
+Agent: `verwaltung` · hängt ab von `plattform` · Testgruppen: `kunden`, `kundengruppen`, `vkgruppen`, `angebotskategorien`, `vertreter`, `lieferanten`, `kundenimport`, `auswertung`, `master`, `importzentrale`
 
 | Oberfläche | Art | Adresse | Entwicklung | Freigabe |
 | --- | --- | --- | --- | --- |

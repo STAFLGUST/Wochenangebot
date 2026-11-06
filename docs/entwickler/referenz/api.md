@@ -6,7 +6,7 @@ Aufruf: `/api/?action=<aktion>` (GET lesend, POST mit JSON und `X-CSRF-Token` sc
 
 Spalten: **Art** – lesend, schreibend (nur POST) oder post (GET liest, POST schreibt); **Kennzeichen** – öffentlich (ohne Mitarbeiteranmeldung), Kunden-Wartung, wartungsfrei, fremde Herkunft, eigene Anmeldung (siehe [regeln/aktionen/LIESMICH.md](../../../regeln/aktionen/LIESMICH.md)).
 
-270 Aktionen in 14 Modulen.
+274 Aktionen in 14 Modulen.
 
 ## Angebot (`angebot`)
 
@@ -246,11 +246,15 @@ Spalten: **Art** – lesend, schreibend (nur POST) oder post (GET liest, POST sc
 | `kunden_import` | `angebot.eingabe` | schreibend | – | Recht kunden.bearbeiten + Bestätigung, Recht kunden.bearbeiten | `app/api/aktionen/kundenverwaltung.php` |
 | `kundengruppen` | `angebot.eingabe` | lesend | – | – | `app/api/aktionen/kundengruppen.php` |
 | `kundengruppen_save` | `angebot.eingabe` | schreibend | – | – | `app/api/aktionen/kundengruppen.php` |
+| `lieferanten` | `angebot.eingabe` | lesend | – | angemeldet | `app/api/aktionen/kundengruppen.php` |
+| `lieferanten_save` | `angebot.eingabe` | schreibend | – | Recht stammdaten.bearbeiten | `app/api/aktionen/kundengruppen.php` |
 | `master` | `angebot.eingabe` | lesend | – | Recht stammdaten.sehen | `app/api/aktionen/bestand.php` |
 | `master_save` | `angebot.eingabe` | schreibend | – | Recht stammdaten.bearbeiten | `app/api/aktionen/bestand.php` |
 | `ort_update` | `angebot.eingabe` | schreibend | – | Administrator + Bestätigung | `app/api/aktionen/auswertung.php` |
-| `vertreter` | `angebot.eingabe` | lesend | – | angemeldet | `app/api/aktionen/kundengruppen.php` |
-| `vertreter_save` | `angebot.eingabe` | schreibend | – | Recht stammdaten.bearbeiten | `app/api/aktionen/kundengruppen.php` |
+| `versandarten` | `angebot.eingabe` | lesend | – | – | `app/api/aktionen/kundengruppen.php` |
+| `versandarten_save` | `angebot.eingabe` | schreibend | – | – | `app/api/aktionen/kundengruppen.php` |
+| `vertreter` | `angebot.eingabe` | lesend | – | – | `app/api/aktionen/kundengruppen.php` |
+| `vertreter_save` | `angebot.eingabe` | schreibend | – | – | `app/api/aktionen/kundengruppen.php` |
 | `vkgruppen` | `angebot.eingabe` | lesend | – | – | `app/api/aktionen/kundengruppen.php` |
 | `vkgruppen_save` | `angebot.eingabe` | schreibend | – | – | `app/api/aktionen/kundengruppen.php` |
 

@@ -21,7 +21,12 @@ declare(strict_types=1);
      leergut-inventur       Eigener Bestand zum Stichtag (z. B. Lager gefüllt, Kisten unbenutzt, Abholer) für die Bilanz
    Lademittel tragen die Nummer und Kurzbezeichnung aus den WinAB-Stammdaten („Lademittel suchen“: 1 E2, 2 H1, 3 Kübel,
    4 Euro-Palette, 5 Karton, 6 Eurohaken, 7 WK2); fehlende WinAB-Lademittel ergänzt lg_stamm beim Lesen (Karton inaktiv –
-   kein Leergut, solange niemand es aktiviert). Partner tragen die WinAB-Kunden- bzw. -Lieferantennummer (kundenNr, lieferantNr).
+   kein Leergut, solange niemand es aktiviert). Partner tragen die WinAB-Kunden- bzw. -Lieferantennummer (kundenNr, lieferantNr),
+   Sammelkonten weitere Lieferantennummern (lieferantNrWeitere) und „WinAB ab“ (winabAb: Belege erst ab diesem Tag, z. B. nach
+   der letzten Buchung aus der Excel-Liste oder ab Beginn eines Sammelkontos); „wareneingangTausch“ = der von WinAB gebuchte
+   Tausch auf Lieferscheinen des Wareneingangs zählt (sonst nur der Zugang – die Warenannahme tauscht nicht).
+   Namen und Versandart der WinAB-Lieferanten liest das Modul aus den Stammdaten der Verwaltung (lieferanten_kurz,
+   versandarten_namen), die Versandart der Kunden aus dem Kundenstamm – nur lesend (regeln/datenverantwortung.toml).
    Kundenkonten aus WinAB: den Bericht „Lademittelbewegungen Kunden“ liest die Oberfläche im Browser und schickt nur die
    Belege, die den Saldo eines Kunden ändern; lg_winab_pruefen/lg_winab_abgleich gleichen sie je Beleg ab (Partner mit
    WinAB-Kundennummer „kundenNr“, Bewegungen mit Herkunft „winab“; geänderte und ausgeglichene Belege werden storniert).
@@ -266,6 +271,30 @@ function lg_partner_pruefen(array $b, ?array $alt, array $stamm): array
         foreach ($stamm['partner'] as $p) if ($nr !== '' && ($alt === null || $p['id'] !== $alt['id']) && (string)($p['lieferantNr'] ?? '') === $nr)
             throw new InvalidArgumentException("Die WinAB-Lieferantennummer $nr gehört schon zu „{$p['name']}“.");
         $row['lieferantNr'] = $nr;
+    }
+    // Sammelkonto: weitere WinAB-Lieferantennummern; „WinAB ab“ – Belege dieses Kontos erst ab dem Tag (leer = ganzer Zeitraum)
+    if (array_key_exists('lieferantNrWeitere', $b) || !isset($row['lieferantNrWeitere'])) {
+        $roh = $b['lieferantNrWeitere'] ?? [];
+        $liste = is_array($roh) ? $roh : preg_split('/[\s,;]+/', lg_text($roh, 600, 'Weitere WinAB-Lieferantennummern'), -1, PREG_SPLIT_NO_EMPTY);
+        $weitere = [];
+        foreach ($liste as $x) {
+            $x = is_int($x) ? (string)$x : (is_string($x) ? trim($x) : '');
+            if (!preg_match('/^\d{1,12}$/', $x)) throw new InvalidArgumentException('Weitere WinAB-Lieferantennummern: bitte nur Nummern aus Ziffern, getrennt durch Komma.');
+            if ($x !== ($row['lieferantNr'] ?? '') && !in_array($x, $weitere, true)) $weitere[] = $x;
+        }
+        if (count($weitere) > 50) throw new InvalidArgumentException('Höchstens 50 weitere WinAB-Lieferantennummern.');
+        $row['lieferantNrWeitere'] = $weitere;
+    }
+    if (array_key_exists('winabAb', $b) || !isset($row['winabAb'])) $row['winabAb'] = lg_datum($b['winabAb'] ?? '', 'WinAB ab', false);
+    if (array_key_exists('wareneingangTausch', $b) || !isset($row['wareneingangTausch'])) $row['wareneingangTausch'] = !empty($b['wareneingangTausch']);
+    // dieselbe Nummer auf zwei Konten nur mit verschiedenem „WinAB ab“ (sonst wäre unklar, wohin ein Beleg gehört)
+    $meine = array_filter(array_merge([(string)($row['lieferantNr'] ?? '')], $row['lieferantNrWeitere']), 'strlen');
+    foreach ($stamm['partner'] as $p) {
+        if ($alt !== null && $p['id'] === $alt['id']) continue;
+        if ((string)($p['winabAb'] ?? '') !== $row['winabAb']) continue;
+        $seine = array_filter(array_merge([(string)($p['lieferantNr'] ?? '')], is_array($p['lieferantNrWeitere'] ?? null) ? $p['lieferantNrWeitere'] : []), 'strlen');
+        $doppelt = array_values(array_intersect($meine, $seine));
+        if ($doppelt) throw new InvalidArgumentException("Die WinAB-Lieferantennummer {$doppelt[0]} gehört schon zu „{$p['name']}“" . ($row['winabAb'] !== '' ? ' (gleiches „WinAB ab“)' : '') . '. Für ein Sammelkonto „WinAB ab“ setzen.');
     }
     $frist = $b['fristTage'] ?? LG_FRIST_STANDARD;
     $row['fristTage'] = ($frist === '' || $frist === null) ? 0 : lg_ganz($frist, 'Frist', false);
@@ -623,8 +652,11 @@ function lg_paket_pruefen($p, array $me): array
    ab „von“ (Übernehmen ab). Vorzeichen wie im Modul: Abgang = an den Partner, Zugang = vom Partner zurück. Korrekturzeilen
    mit Minus (WinAB bis 2023) rechnet der Browser gegen, je Seite bleibt eine Menge ab 0.
    Kunden: WinAB-Kundennummer (kundenNr) – Zeilen mit Kunde gehören dem Kunden (Kundenbeleg), auch wenn WinAB dort zusätzlich
-   eine Lieferantennummer nennt. Lieferanten (Zeilen ohne Kunde, z. B. Wareneingänge): WinAB-Lieferantennummer (lieferantNr) –
-   gebucht nur bei zugeordneten Partnern (Zuordnung in der Vorschau oder im Partner), sonst nur gezählt.
+   eine Lieferantennummer nennt. Lieferanten (Zeilen ohne Kunde, z. B. Wareneingänge): WinAB-Lieferantennummer (lieferantNr
+   oder lieferantNrWeitere eines Sammelkontos) – gebucht nur bei zugeordneten Partnern (Zuordnung in der Vorschau oder im
+   Partner), sonst nur gezählt; je Beleg das Konto, dessen „WinAB ab“ (winabAb) am Belegdatum erreicht ist (mehrere: das mit dem
+   spätesten Beginn). Lieferantenbelege kommen ab „lfVon“ (frühestes „WinAB ab“ der Konten, höchstens „von“), auch reiner Tausch:
+   Auf Lieferscheinen des Wareneingangs zählt der WinAB-Tausch nur bei Konten mit „wareneingangTausch“ (lg_wareneingang).
    Kundennamen für neue Konten aus dem Kundenstamm der Verwaltung (nur lesend über customers_load, Firma je Kd.-Nr.).
    „dateiVon“: erster Tag der Datei – Lieferung und Rückgabe je Kunde gelten auch vor „von“. */
 function lg_winab_nr($v, string $was): string
@@ -641,8 +673,10 @@ function lg_winab_pruefen($b, array $stamm): array
     if ($bis < $von) throw new InvalidArgumentException('Zeitraum: „bis“ liegt vor „von“.');
     $dateiVon = lg_datum($ber['dateiVon'] ?? '', 'Beginn der Datei', false);
     $dateiVon = $dateiVon !== '' && $dateiVon < $von ? $dateiVon : $von;
+    $lfVon = lg_datum($ber['lfVon'] ?? '', 'Lieferantenbelege ab', false);   // frühestes „WinAB ab“ der Lieferantenkonten (ältere Oberflächen: „von“)
+    $lfVon = $lfVon === '' || $lfVon > $von ? $von : max($lfVon, $dateiVon);
     $quelle = ($ber['quelle'] ?? '') === 'csv' ? 'csv' : 'xls';
-    $bericht = ['datei' => lg_text($ber['datei'] ?? '', 120, 'Datei'), 'von' => $von, 'bis' => $bis, 'dateiVon' => $dateiVon, 'quelle' => $quelle];
+    $bericht = ['datei' => lg_text($ber['datei'] ?? '', 120, 'Datei'), 'von' => $von, 'bis' => $bis, 'dateiVon' => $dateiVon, 'lfVon' => $lfVon, 'quelle' => $quelle];
     $kunden = []; $daten = [];
     $kl = $b['kunden'] ?? [];
     if (!is_array($kl) || count($kl) > LG_MAX_WINAB_KUNDEN) throw new InvalidArgumentException('Kundenliste fehlt oder ist zu lang.');
@@ -680,10 +714,11 @@ function lg_winab_pruefen($b, array $stamm): array
             $nr = lg_text(is_scalar($x['beleg'] ?? null) ? (string)$x['beleg'] : '', 30, 'Belegnr.');
             if ($nr === '') throw new InvalidArgumentException('Belegnr. fehlt');
             $datum = lg_datum($x['datum'] ?? '', 'Datum');
-            if ($datum < $von || $datum > $bis) throw new InvalidArgumentException("Datum $datum liegt außerhalb des Zeitraums");
+            if ($datum < ($kd !== '' ? $von : $lfVon) || $datum > $bis) throw new InvalidArgumentException("Datum $datum liegt außerhalb des Zeitraums");
             $ab = lg_mengen($x['abgang'] ?? [], $lm, 'Abgang', false);
             $zu = lg_mengen($x['zugang'] ?? [], $lm, 'Zugang', false);
-            if (!lg_ohne_null(lg_delta(['abgang' => $ab, 'zugang' => $zu]))) { $ohneWirkung++; continue; }
+            // Kunden: nur Belege mit Wirkung; Lieferanten: auch reiner Tausch (ob er zählt, entscheidet das Konto, lg_wareneingang)
+            if ($kd !== '' ? !lg_ohne_null(lg_delta(['abgang' => $ab, 'zugang' => $zu])) : !lg_ohne_null($ab + []) && !lg_ohne_null($zu + [])) { $ohneWirkung++; continue; }
             $key = $kd !== '' ? "$kd|$art|$nr" : "L:$lf|$art|$nr";   // Kundenbelege wie bisher, Lieferanten getrennt
             if (isset($belege[$key])) throw new InvalidArgumentException("$art $nr ist doppelt");
             $belege[$key] = ($kd !== '' ? ['kd' => $kd] : ['lf' => $lf]) + ['art' => $art, 'beleg' => $nr, 'datum' => $datum, 'abgang' => $ab, 'zugang' => $zu];
@@ -709,6 +744,73 @@ function lg_kundenstamm_namen(): array
     }
     return $n;
 }
+/* Konten je WinAB-Lieferantennummer: Nummer => [[Index, „WinAB ab“], …] (lieferantNr und lieferantNrWeitere) */
+function lg_lf_index(array $partner): array
+{
+    $idx = [];
+    foreach ($partner as $i => $p) {
+        $nrs = array_filter(array_merge([(string)($p['lieferantNr'] ?? '')], is_array($p['lieferantNrWeitere'] ?? null) ? $p['lieferantNrWeitere'] : []), 'strlen');
+        foreach (array_unique($nrs) as $nr) $idx[(string)$nr][] = [$i, (string)($p['winabAb'] ?? '')];
+    }
+    return $idx;
+}
+/* Konto eines Lieferantenbelegs: unter den Konten mit der Nummer das, dessen „WinAB ab“ am Datum erreicht ist – bei mehreren
+   das mit dem spätesten Beginn (Sammelkonto ab 01.05. vor dem bisherigen Konto). Liegt das Datum vor jedem Beginn, gilt das
+   Konto mit dem frühesten Beginn (der Beleg fällt dort unter „vor WinAB ab“). */
+function lg_lf_konto(array $idx, string $nr, string $datum): ?int
+{
+    if (!isset($idx[$nr])) return null;
+    $best = null; $bestAb = '';
+    foreach ($idx[$nr] as [$i, $ab]) if ($ab <= $datum && ($best === null || $ab > $bestAb)) { $best = $i; $bestAb = $ab; }
+    if ($best !== null) return $best;
+    foreach ($idx[$nr] as [$i, $ab]) if ($best === null || $ab < $bestAb) { $best = $i; $bestAb = $ab; }
+    return $best;
+}
+/* Wareneingang (Lieferschein eines Lieferanten): WinAB bucht dort fast immer einen Tausch (Abgang = Zugang; bei allen
+   Lieferanten 9.620 von 9.668 Lieferscheinen bis 11/2026), die Warenannahme tauscht aber nicht (Bestandsaufnahme Leergut).
+   Ohne „wareneingangTausch“ am Konto zählt deshalb der ganze Zugang und vom Abgang nur, was über den Zugang hinausgeht (echte
+   Rückgabe). Liefert [Beleg, nicht gezählter Tausch je Lademittel]. */
+function lg_wareneingang(array $b, bool $tausch): array
+{
+    if ($tausch || ($b['art'] ?? '') !== 'Lieferschein' || !isset($b['lf'])) return [$b, []];
+    $ab = []; $weg = [];
+    foreach ($b['abgang'] as $l => $n) {
+        $t = min($n, (int)($b['zugang'][$l] ?? 0));
+        if ($t > 0) $weg[$l] = $t;
+        if ($n - $t > 0) $ab[$l] = $n - $t;
+    }
+    $b['abgang'] = $ab;
+    return [$b, $weg];
+}
+/* Namensteile für den Vorschlag „Konto für WinAB-Lieferant“ (ohne Rechtsform) */
+function lg_namensteile(string $n): array
+{
+    $n = strtr(mb_strtolower($n), ['ä' => 'a', 'ö' => 'o', 'ü' => 'u', 'ß' => 'ss', 'é' => 'e', 'è' => 'e']);
+    $t = preg_split('/[^a-z0-9]+/', $n, -1, PREG_SPLIT_NO_EMPTY);
+    return array_values(array_diff($t, ['gmbh', 'co', 'kg', 'ag', 'mbh', 'und', 'ltd', 'sa', 'bv', 'b', 'v', 'sp', 'z', 'o', 'e', 'k', 'uab', 'aps', 'as', 'spa', 'srl', 'the']));
+}
+/* Name und Versandart der WinAB-Lieferanten aus den Stammdaten der Verwaltung (nur lesend: lieferanten_kurz, versandarten_namen) */
+function lg_lieferantenstamm(): array
+{
+    try { return [lieferanten_kurz(), versandarten_namen()]; } catch (Throwable $e) { return [[], []]; }
+}
+function lg_versand_text(string $nr, array $va): string { return $nr === '' ? '' : $nr . (($va[$nr] ?? '') !== '' ? ' · ' . $va[$nr] : ''); }
+/* Versandart je Partner (Anzeige): Lieferanten laut Lieferantenstamm (Hauptnummer), Kunden laut Kundenstamm */
+function lg_partner_versand(array $partner): array
+{
+    [$lst, $va] = lg_lieferantenstamm();
+    $kd = [];
+    if (array_filter($partner, function ($p) { return (string)($p['kundenNr'] ?? '') !== ''; }))
+        foreach (customers_load()['customers'] as $c) if (is_array($c) && ($c['nr'] ?? '') !== '' && ($c['versandart'] ?? '') !== '') $kd[(string)$c['nr']] = (string)$c['versandart'];
+    $out = [];
+    foreach ($partner as $p) {
+        $lf = (string)($p['lieferantNr'] ?? ''); $k = (string)($p['kundenNr'] ?? '');
+        $v = $lf !== '' ? (string)($lst[$lf]['versandart'] ?? '') : ($k !== '' ? ($kd[$k] ?? '') : '');
+        if ($v !== '') $out[$p['id']] = lg_versand_text($v, $va);
+    }
+    return $out;
+}
+
 /* Abgleich je Beleg im Zeitraum (von–bis): neu → buchen, gleich → nichts, geändert → alten stornieren und neu buchen, nicht
    mehr in der Datei (ausgeglichen) → stornieren. Bewegungen außerhalb des Zeitraums, von Kunden bzw. Lieferanten, die die
    Datei nicht nennt, von nicht zugeordneten Lieferanten und von Hand gebuchte bleiben unberührt. Kunden ohne Konto bekommen
@@ -716,11 +818,10 @@ function lg_kundenstamm_namen(): array
 function lg_winab_abgleich(array $w, array $stamm, array $bew, array $me): array
 {
     $heute = date('d.m.Y');
-    $nachNr = []; $nachLf = [];
-    foreach ($stamm['partner'] as $i => $p) {
-        if ((string)($p['kundenNr'] ?? '') !== '') $nachNr[(string)$p['kundenNr']] = $i;
-        if ((string)($p['lieferantNr'] ?? '') !== '') $nachLf[(string)$p['lieferantNr']] = $i;
-    }
+    $nachNr = [];
+    foreach ($stamm['partner'] as $i => $p) if ((string)($p['kundenNr'] ?? '') !== '') $nachNr[(string)$p['kundenNr']] = $i;
+    $lfIdx = lg_lf_index($stamm['partner']);
+    [$lst, $va] = lg_lieferantenstamm();
     $namen = [];
     foreach ($stamm['partner'] as $p) $namen[mb_strtolower((string)$p['name'])] = true;
     $eindeutig = function (string $name) use (&$namen) {
@@ -739,14 +840,16 @@ function lg_winab_abgleich(array $w, array $stamm, array $bew, array $me): array
     $neuLief = [];
     foreach ($w['zuordnung'] as $lf => $ziel) {
         $lf = (string)$lf;
-        if (isset($nachLf[$lf])) continue;   // schon zugeordnet
+        if (isset($lfIdx[$lf])) continue;   // schon zugeordnet
         if ($ziel === 'neu') {
-            $stamm['partner'][] = ['id' => lg_id('p'), 'name' => $eindeutig('Lieferant ' . $lf . ' (WinAB)'), 'art' => 'lieferant',
-                'mandant' => 'standard', 'kontoNr' => '', 'kundenNr' => '', 'lieferantNr' => $lf, 'fristTage' => LG_FRIST_STANDARD, 'email' => '', 'ansprechpartner' => '',
+            $nm = rtrim(mb_substr((string)(($lst[$lf]['name'] ?? '') ?: ($lst[$lf]['kurz'] ?? '')), 0, 84));   // Name aus dem Lieferantenstamm
+            $stamm['partner'][] = ['id' => lg_id('p'), 'name' => $eindeutig($nm !== '' ? "$nm ($lf)" : 'Lieferant ' . $lf . ' (WinAB)'), 'art' => 'lieferant',
+                'mandant' => 'standard', 'kontoNr' => '', 'kundenNr' => '', 'lieferantNr' => $lf, 'lieferantNrWeitere' => [], 'winabAb' => '', 'wareneingangTausch' => false,
+                'fristTage' => LG_FRIST_STANDARD, 'email' => '', 'ansprechpartner' => '',
                 'lieferanten' => '', 'lademittel' => $lmsFuer('L:' . $lf), 'aktiv' => true, 'quelle' => 'winab',
-                'notiz' => "Aus $herkunft angelegt (WinAB-Lieferantennummer $lf). Bitte den Namen eintragen.", 'erstellt' => lg_wer($me), 'rev' => 1, 'geaendert' => lg_wer($me)];
-            $nachLf[$lf] = count($stamm['partner']) - 1;
-            $neuLief[] = $stamm['partner'][$nachLf[$lf]]['name'];
+                'notiz' => "Aus $herkunft angelegt (WinAB-Lieferantennummer $lf)." . ($nm === '' ? ' Bitte den Namen eintragen.' : ''), 'erstellt' => lg_wer($me), 'rev' => 1, 'geaendert' => lg_wer($me)];
+            $lfIdx[$lf] = [[count($stamm['partner']) - 1, '']];
+            $neuLief[] = $stamm['partner'][count($stamm['partner']) - 1]['name'];
             continue;
         }
         $i = null;
@@ -758,7 +861,7 @@ function lg_winab_abgleich(array $w, array $stamm, array $bew, array $me): array
         $stamm['partner'][$i]['lieferantNr'] = $lf;
         $stamm['partner'][$i]['rev'] = (int)($p['rev'] ?? 0) + 1;
         $stamm['partner'][$i]['geaendert'] = lg_wer($me);
-        $nachLf[$lf] = $i;
+        $lfIdx[$lf] = [[$i, (string)($p['winabAb'] ?? '')]];
     }
     // Kundenkonten für Kunden mit Belegen ohne Konto
     $stammNamen = null;
@@ -781,9 +884,9 @@ function lg_winab_abgleich(array $w, array $stamm, array $bew, array $me): array
     foreach ($bew as $i => $b) {
         $k = $b['winab'] ?? null;
         if (($b['quelle'] ?? '') !== 'winab' || !empty($b['storno']) || !is_array($k)) continue;
-        if ($b['datum'] < $w['bericht']['von'] || $b['datum'] > $w['bericht']['bis']) continue;
+        if ($b['datum'] > $w['bericht']['bis'] || $b['datum'] < (isset($k['lf']) ? $w['bericht']['lfVon'] : $w['bericht']['von'])) continue;
         if (isset($k['lf'])) {
-            if (!isset($w['lieferanten'][(string)$k['lf']]) || !isset($nachLf[(string)$k['lf']])) continue;   // nicht in der Datei oder nicht zugeordnet
+            if (!isset($w['lieferanten'][(string)$k['lf']]) || !isset($lfIdx[(string)$k['lf']])) continue;   // nicht in der Datei oder nicht zugeordnet
             $alt['L:' . $k['lf'] . '|' . $k['art'] . '|' . $k['beleg']] = $i;
         } else {
             if (!isset($w['kunden'][(string)$k['kd']])) continue;   // Kunde nicht in der Datei (z. B. auf einzelne Kunden gefiltert): nicht anfassen
@@ -791,19 +894,32 @@ function lg_winab_abgleich(array $w, array $stamm, array $bew, array $me): array
         }
     }
     $z = ['kunden' => count($neuKunden), 'lieferantenNeu' => count($neuLief), 'neu' => 0, 'gleich' => 0, 'geaendert' => 0, 'ausgeglichen' => 0,
-          'ohneWirkung' => $w['ohneWirkung'], 'ohneKonto' => 0];
+          'ohneWirkung' => $w['ohneWirkung'], 'ohneKonto' => 0, 'vorStart' => 0, 'tausch' => 0];
+    $proLf = [];   // je Lieferantennummer: Belege mit Wirkung (gebucht oder nur gezählt) – für die Vorschau
+    $lmKurz = [];
+    foreach ($stamm['lademittel'] as $l) $lmKurz[(string)$l['id']] = (string)(($l['kurz'] ?? '') ?: $l['name']);
     $offenAb = date('Y-m-d', strtotime($w['bericht']['bis'] . ' 12:00:00 UTC') - 3 * 86400);
     $ohneKonto = [];   // Lieferanten mit Belegen, aber ohne Partner: nur gezählt (Vorschau zeigt sie zur Zuordnung)
     foreach ($w['belege'] as $key => $b) {
         $istLf = isset($b['lf']);
-        if ($istLf && !isset($nachLf[$b['lf']])) {
-            $z['ohneKonto']++;
-            $o = $ohneKonto[$b['lf']] ?? ['belege' => 0, 'saldo' => []];
-            $o['belege']++; lg_addiere($o['saldo'], lg_delta($b));
-            $ohneKonto[$b['lf']] = $o;
-            continue;
+        $weg = [];
+        if ($istLf) {
+            $pi = lg_lf_konto($lfIdx, $b['lf'], $b['datum']);
+            [$b, $weg] = lg_wareneingang($b, $pi !== null && !empty($stamm['partner'][$pi]['wareneingangTausch']));
+            if ($pi === null && $b['datum'] < $w['bericht']['von']) continue;   // vor „von“ zählen nur zugeordnete Konten
+            if ($pi !== null && $b['datum'] < ((string)($stamm['partner'][$pi]['winabAb'] ?? '') ?: $w['bericht']['von'])) { $z['vorStart']++; continue; }
+            if (!lg_ohne_null(lg_delta($b))) { $z['ohneWirkung']++; continue; }
+            $proLf[$b['lf']] = ($proLf[$b['lf']] ?? 0) + 1;
+            if ($weg) $z['tausch']++;
+            if ($pi === null) {
+                $z['ohneKonto']++;
+                $o = $ohneKonto[$b['lf']] ?? ['belege' => 0, 'saldo' => []];
+                $o['belege']++; lg_addiere($o['saldo'], lg_delta($b));
+                $ohneKonto[$b['lf']] = $o;
+                continue;
+            }
         }
-        $pid = $stamm['partner'][$istLf ? $nachLf[$b['lf']] : $nachNr[$b['kd']]]['id'];
+        $pid = $stamm['partner'][$istLf ? $pi : $nachNr[$b['kd']]]['id'];
         if (isset($alt[$key])) {
             $i = $alt[$key]; unset($alt[$key]);
             $a = $bew[$i];
@@ -814,6 +930,7 @@ function lg_winab_abgleich(array $w, array $stamm, array $bew, array $me): array
         $text = $w['bericht']['quelle'] === 'csv' ? 'Aus WinAB („Lademittelbewegungen“' : 'Aus WinAB („Lademittelbewegungen Kunden“';
         $text .= ($w['bericht']['datei'] !== '' ? ', ' . $w['bericht']['datei'] : '') . ')';
         if ($b['datum'] >= $offenAb && !$b['zugang']) $text .= ' – zum Stand der Datei noch nicht zurück';
+        if ($weg) $text .= ' – Tausch laut WinAB nicht gezählt (' . implode(', ', array_map(function ($l, $n) use ($lmKurz) { return $n . ' ' . ($lmKurz[$l] ?? $l); }, array_keys($weg), $weg)) . '): die Warenannahme tauscht nicht';
         $herk = $istLf ? ['lf' => $b['lf'], 'art' => $b['art'], 'beleg' => $b['beleg']] : ['kd' => $b['kd'], 'art' => $b['art'], 'beleg' => $b['beleg']];
         $bew[] = ['id' => lg_id('b'), 'partner' => $pid, 'datum' => $b['datum'], 'typ' => $b['art'] === 'Gutschrift' ? 'abholung' : 'bewegung',
                   'abgang' => $b['abgang'], 'zugang' => $b['zugang'], 'beleg' => $b['art'] . ' ' . $b['beleg'], 'text' => mb_substr($text, 0, 300),
@@ -843,7 +960,7 @@ function lg_winab_abgleich(array $w, array $stamm, array $bew, array $me): array
     $art = [];
     foreach ($stamm['partner'] as $p) {
         if ((string)($p['kundenNr'] ?? '') !== '') $art[$p['id']] = 'k';
-        elseif ((string)($p['lieferantNr'] ?? '') !== '') $art[$p['id']] = 'l';
+        elseif ((string)($p['lieferantNr'] ?? '') !== '' || !empty($p['lieferantNrWeitere'])) $art[$p['id']] = 'l';
     }
     $summe = []; $summeLf = []; $mitSaldo = 0;
     foreach (lg_nach_partner($bew) as $pid => $l) {
@@ -854,13 +971,25 @@ function lg_winab_abgleich(array $w, array $stamm, array $bew, array $me): array
     }
     $z['konten'] = $mitSaldo;
     // Lieferantennummern der Datei für die Vorschau: zugeordnet (Partner), Belege mit Wirkung im Zeitraum
+    // Vorschlag für nicht zugeordnete Nummern: Lieferantenkonto ohne Nummer, dessen Name im Namen laut Lieferantenstamm steckt
+    $frei = [];
+    foreach ($stamm['partner'] as $p) if ($p['art'] !== 'kunde' && (string)($p['lieferantNr'] ?? '') === '' && empty($p['lieferantNrWeitere'])) { $t = lg_namensteile((string)$p['name']); if ($t) $frei[] = [$p, $t]; }
     $liste = [];
     foreach ($w['lieferanten'] as $nr => $info) {
         $o = $ohneKonto[$nr] ?? null; $nr = (string)$nr;
-        $mit = 0; foreach ($w['belege'] as $b) if (($b['lf'] ?? null) === $nr) $mit++;
-        if (!$mit && !isset($nachLf[$nr])) continue;   // reiner Tausch ohne Zuordnung: nur gezählt
-        $liste[] = ['nr' => $nr, 'lieferscheine' => $info['lieferscheine'], 'belege' => $mit, 'saldo' => $o ? lg_ohne_null($o['saldo']) : [],
-                    'partner' => isset($nachLf[$nr]) ? ['id' => $stamm['partner'][$nachLf[$nr]]['id'], 'name' => $stamm['partner'][$nachLf[$nr]]['name']] : null];
+        $mit = $proLf[$nr] ?? 0;
+        if (!$mit && !isset($lfIdx[$nr])) continue;   // ohne Wirkung und ohne Zuordnung: nur gezählt
+        $pi = lg_lf_konto($lfIdx, $nr, $w['bericht']['bis']);
+        $sn = (string)(($lst[$nr]['name'] ?? '') ?: ($lst[$nr]['kurz'] ?? ''));
+        $vorschlag = null;
+        if ($pi === null && $sn !== '') {
+            $st = array_flip(array_merge(lg_namensteile($sn), lg_namensteile((string)($lst[$nr]['kurz'] ?? ''))));
+            $best = 0;
+            foreach ($frei as [$p, $t]) if (count($t) > $best && !array_diff($t, array_keys($st))) { $vorschlag = $p['id']; $best = count($t); }
+        }
+        $liste[] = ['nr' => $nr, 'name' => $sn, 'versandart' => lg_versand_text((string)($lst[$nr]['versandart'] ?? ''), $va),
+                    'lieferscheine' => $info['lieferscheine'], 'belege' => $mit, 'saldo' => $o ? lg_ohne_null($o['saldo']) : [], 'vorschlag' => $vorschlag,
+                    'partner' => $pi !== null ? ['id' => $stamm['partner'][$pi]['id'], 'name' => $stamm['partner'][$pi]['name']] : null];
     }
     usort($liste, function ($a, $b) { return [$b['belege'], $b['lieferscheine']] <=> [$a['belege'], $a['lieferscheine']] ?: strcmp($a['nr'], $b['nr']); });
     return [$stamm, $bew, $z, $neuKunden, lg_ohne_null($summe), ['neu' => $neuLief, 'liste' => $liste, 'summe' => lg_ohne_null($summeLf)]];

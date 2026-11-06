@@ -75,7 +75,7 @@ ids = lambda cl: sorted(a['id'] for a in cl.call('import_arten')[1].get('arten',
 # ---------- Registrierung: jede Importart gehört dem Daten-Eigentümer ----------
 st, r = A.call('import_arten')
 arten = {a['id']: a for a in r.get('arten', [])}
-ALLE = ['angebot_preise', 'bestand', 'kunden', 'kundengruppen', 'preisverlauf', 'stammdaten', 'umsatzdaten', 'vertreter', 'vkgruppen', 'zeitbericht', 'zeiterfassung']
+ALLE = ['angebot_preise', 'bestand', 'kunden', 'kundengruppen', 'lieferanten', 'preisverlauf', 'stammdaten', 'umsatzdaten', 'versandarten', 'vertreter', 'vkgruppen', 'zeitbericht', 'zeiterfassung']
 check('Administrator sieht alle heutigen Importe', st == 200 and sorted(arten) == ALLE, sorted(arten))
 EIG = {'kunden': 'verwaltung', 'kundengruppen': 'verwaltung', 'vkgruppen': 'verwaltung', 'vertreter': 'verwaltung', 'stammdaten': 'verwaltung',
        'bestand': 'bestand', 'preisverlauf': 'angebot', 'angebot_preise': 'angebot', 'zeiterfassung': 'hr',
@@ -228,7 +228,7 @@ with sync_playwright() as p:
     a.click('#vt-importe'); a.wait_for_selector('#view-importe .imp-art[data-art="kunden"]')
     gruppen = a.eval_on_selector_all('#view-importe .imp-gruppe', 'gs => gs.map((g) => [g.querySelector("h2").textContent, [...g.querySelectorAll(".imp-art")].map((x) => x.dataset.art)])')
     check('Liste: alle Importarten, nach Bereich gruppiert', a.locator('#view-importe .imp-art').count() == len(ALLE) and [g for g, _ in gruppen] == ['Stammdaten', 'Angebot und Bestand', 'Personal', 'Controlling']
-          and dict(gruppen)['Stammdaten'] == ['kunden', 'kundengruppen', 'vertreter', 'stammdaten', 'vkgruppen'] and 'bestand' in dict(gruppen)['Angebot und Bestand'], gruppen)
+          and dict(gruppen)['Stammdaten'] == ['kunden', 'kundengruppen', 'vertreter', 'stammdaten', 'vkgruppen', 'versandarten', 'lieferanten'] and 'bestand' in dict(gruppen)['Angebot und Bestand'], gruppen)
     zb = a.inner_text('#view-importe .imp-art[data-art="bestand"]')
     check('Zeile: Name, Kurztext (ganze Beschreibung im Hinweis), Dateiart, Knopf', 'Bestandsliste aus WinAB' in zb and a.text_content('.imp-art[data-art="bestand"] .imp-format') == 'CSV / Excel'
           and a.text_content('.imp-art[data-art="kunden"] .imp-format') == 'CSV' and 'WinAB' in (a.get_attribute('.imp-art[data-art="bestand"] p', 'title') or '')
@@ -457,7 +457,7 @@ with sync_playwright() as p:
     check('Leser: kein Menüpunkt Import (keine Importart)', not lp.locator('#vt-importe').is_visible())
     ep = sicht('eddi')
     ep.click('#vt-importe'); ep.wait_for_selector('#view-importe .imp-art')
-    check('Bearbeiter: Import sichtbar, ohne Kunden', ep.locator('#view-importe .imp-art').count() == 7 and ep.locator('.imp-art[data-art="kunden"]').count() == 0
+    check('Bearbeiter: Import sichtbar, ohne Kunden', ep.locator('#view-importe .imp-art').count() == 9 and ep.locator('.imp-art[data-art="kunden"]').count() == 0
           and ep.locator('.imp-art[data-art="angebot_preise"]').count() == 1)
     kp = sicht('kai')
     kp.click('#vt-importe'); kp.wait_for_selector('#view-importe .imp-art')

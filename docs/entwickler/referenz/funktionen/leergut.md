@@ -2,7 +2,7 @@
 
 <!-- ERZEUGT von `python3 werkzeuge/doku.py erzeugen` – nicht von Hand ändern. Quelle: Funktionen und Kommentare im Code. Die CI prüft, dass diese Datei zum Code passt. -->
 
-4 Dateien, 115 Funktionen – in der Reihenfolge der Datei, **fett** die Abschnitte. Text = erste Aussage des Kommentars direkt über der Funktion (Python: Docstring). Übersicht aller Module: [README.md](README.md).
+4 Dateien, 122 Funktionen – in der Reihenfolge der Datei, **fett** die Abschnitte. Text = erste Aussage des Kommentars direkt über der Funktion (Python: Docstring). Übersicht aller Module: [README.md](README.md).
 
 ## `app/api/aktionen/leergut.php`
 
@@ -96,6 +96,13 @@ _Leergut · Leergutkonten und Abstimmung_
 - `lg_winab_nr(v, was)`
 - `lg_winab_pruefen(b, stamm)`
 - `lg_kundenstamm_namen()` – Firma je WinAB-Kundennummer aus dem Kundenstamm der Verwaltung (nur lesend, regeln/datenverantwortung.toml)
+- `lg_lf_index(partner)` – Konten je WinAB-Lieferantennummer: Nummer => [[Index, „WinAB ab“], …] (lieferantNr und lieferantNrWeitere)
+- `lg_lf_konto(idx, nr, datum)` – Konto eines Lieferantenbelegs: unter den Konten mit der Nummer das, dessen „WinAB ab“ am Datum erreicht ist – bei mehreren das mit dem spätesten Beginn …
+- `lg_wareneingang(b, tausch)` – Wareneingang (Lieferschein eines Lieferanten): WinAB bucht dort fast immer einen Tausch (Abgang = Zugang; bei allen Lieferanten 9.620 von 9.668 …
+- `lg_namensteile(n)` – Namensteile für den Vorschlag „Konto für WinAB-Lieferant“ (ohne Rechtsform)
+- `lg_lieferantenstamm()` – Name und Versandart der WinAB-Lieferanten aus den Stammdaten der Verwaltung (nur lesend: lieferanten_kurz, versandarten_namen)
+- `lg_versand_text(nr, va)`
+- `lg_partner_versand(partner)` – Versandart je Partner (Anzeige): Lieferanten laut Lieferantenstamm (Hauptnummer), Kunden laut Kundenstamm
 - `lg_winab_abgleich(w, stamm, bew, me)` – Abgleich je Beleg im Zeitraum (von–bis): neu → buchen, gleich → nichts, geändert → alten stornieren und neu buchen, nicht mehr in der Datei (ausgeglichen) → …
 
 **Dachser-Liste „Unterkonto-Vorspediteur“ (Mail „Infos von Fa. DACHSER“)**

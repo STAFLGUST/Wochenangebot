@@ -1,7 +1,7 @@
 <?php
 declare(strict_types=1);
 /* Importvertrag der Verwaltung – Schnittstelle zur Importzentrale (docs/plattform/schnittstellen/import.md).
-   Daten der Verwaltung: Kunden, Kundengruppen, VK-Gruppen, Vertreter und Artikelstammdaten.
+   Daten der Verwaltung: Kunden, Kundengruppen, VK-Gruppen, Vertreter, Versandarten, Lieferanten und Artikelstammdaten.
 
    Die Datei liest der Leser des Eigentümers im Browser (CSV: admin-verwaltung.js, Artikelstammdaten: admin.js) und
    schickt die gelesenen Zeilen. Hier prüft der Server sie, vergleicht sie mit dem gespeicherten Stand (Vorschau) und
@@ -31,6 +31,8 @@ function import_arten_verwaltung(): array
             'recht' => ['stammdaten.bearbeiten'], 'aktion' => 'master_save', 'ansicht' => 'master',
             'vorschau' => 'stammdaten_import_vorschau', 'uebernahme' => 'stammdaten_import_uebernehmen'],
         'vkgruppen' => $liste('vkgruppen', 'VK-Gruppen', 'Liste der VK-Gruppen aus der Warenwirtschaft: Nummer, Bezeichnung, Klasse, Kategorie.', 'vkgruppen', 'Nummer, Bezeichnung, Klasse, Kategorie'),
+        'versandarten' => $liste('versandarten', 'Versandarten', 'Stammdaten „Versandarten“ der Warenwirtschaft: Nummer, Text. Kunden und Lieferanten verweisen über ihre Versandart darauf.', 'versandarten', 'Nummer, Text'),
+        'lieferanten' => $liste('lieferanten', 'Lieferanten', 'Lieferanten-Export der Warenwirtschaft (Stammdatenimport Lieferanten): Alpha, Nummer, Name1, Gruppe, Konto, Telefon, Adresse, Kondition, Umsätze, Vertreter, Land, Versandart, GLN, Lademittelbestände, angelegt am – alle Spalten.', 'lieferanten', 'Nummer, Name, Versandart, Adresse, Umsätze'),
     ];
 }
 
@@ -117,7 +119,7 @@ function kunden_import_lauf(array $b, bool $pruefen, bool $details = false): arr
     if (count($rows) > 10000) fail('Zu viele Zeilen (höchstens 10.000).', 422);
     $anlegen = !array_key_exists('anlegen', $b) || !empty($b['anlegen']);
     $quelle = s($b['quelle'] ?? '', 120) ?? '';
-    $FELDER = ['nr', 'firma', 'strasse', 'plz', 'ort', 'land', 'telefon', 'email', 'gruppe', 'vertreter', 'vertreter2'];
+    $FELDER = ['nr', 'firma', 'strasse', 'plz', 'ort', 'land', 'telefon', 'email', 'gruppe', 'vertreter', 'vertreter2', 'versandart'];
     $wawiFelder = array_values(array_intersect(array_keys(KUNDEN_WAWI_FELDER), array_filter(is_array($b['wawiFelder'] ?? null) ? $b['wawiFelder'] : [], 'is_string')));
     $regelGewuenscht = !empty($b['aktivRegel']);
     $regel = $regelGewuenscht && in_array('letzteRechnung', $wawiFelder, true);
@@ -184,9 +186,9 @@ function kunden_import_lauf(array $b, bool $pruefen, bool $details = false): arr
             }
             $c = $d['customers'][$idx];
             $neu = $c; $diff = [];
-            foreach (['nr', 'gruppe', 'vertreter', 'vertreter2', 'strasse', 'plz', 'ort', 'land', 'telefon'] as $f) if ($x[$f] !== '' && (string)($c[$f] ?? '') !== $x[$f]) $neu[$f] = $x[$f];   // Warenwirtschaft führt Adresse, Gruppe, Vertreter
+            foreach (['nr', 'gruppe', 'vertreter', 'vertreter2', 'versandart', 'strasse', 'plz', 'ort', 'land', 'telefon'] as $f) if ($x[$f] !== '' && (string)($c[$f] ?? '') !== $x[$f]) $neu[$f] = $x[$f];   // Warenwirtschaft führt Adresse, Gruppe, Vertreter, Versandart
             foreach (['firma', 'email'] as $f) if ($x[$f] !== '' && (string)($c[$f] ?? '') === '') $neu[$f] = $x[$f];                                     // nur ergänzen
-            foreach (array_merge(['firma', 'email'], ['nr', 'gruppe', 'vertreter', 'vertreter2', 'strasse', 'plz', 'ort', 'land', 'telefon']) as $f) if ((string)($c[$f] ?? '') !== (string)($neu[$f] ?? '')) $diff[$f] = [(string)($c[$f] ?? ''), (string)$neu[$f]];
+            foreach (array_merge(['firma', 'email'], ['nr', 'gruppe', 'vertreter', 'vertreter2', 'versandart', 'strasse', 'plz', 'ort', 'land', 'telefon']) as $f) if ((string)($c[$f] ?? '') !== (string)($neu[$f] ?? '')) $diff[$f] = [(string)($c[$f] ?? ''), (string)$neu[$f]];
             // Daten der Warenwirtschaft: Vergleich ohne Stand (Typen je Feld fest, daher reicht ==)
             $wawiNeu = $w != array_diff_key($wAlt, ['stand' => true]);
             if ($wawiNeu) { if ($w) $neu['wawi'] = $w + ['stand' => now()]; else unset($neu['wawi']); }
@@ -295,12 +297,19 @@ function kunden_import_zentrale(array $e, bool $pruefen): array
             'zeilen' => $r['zeilen'], 'hinweise' => $h, 'stand' => $r['rev']];
 }
 
-/* ---------------- Listen der Stammdaten: Kundengruppen, VK-Gruppen, Vertreter ---------------- */
+/* ---------------- Listen der Stammdaten: Kundengruppen, VK-Gruppen, Vertreter, Versandarten, Lieferanten ---------------- */
 
-/* Anzahl zugeordneter Kunden (Kundengruppen, Vertreter) bzw. Artikel (VK-Gruppen) je Nummer */
+/* Anzahl zugeordneter Kunden (Kundengruppen, Vertreter) bzw. Artikel (VK-Gruppen) je Nummer; Versandarten: Kunden und
+   Lieferanten zusammen; Lieferanten: keine Zuordnung */
 function gruppen_zuordnungen(string $liste): array
 {
     $n = [];
+    if ($liste === 'lieferanten') return $n;
+    if ($liste === 'versandarten') {
+        foreach (customers_load()['customers'] as $c) if (($c['versandart'] ?? '') !== '') $n[$c['versandart']] = ($n[$c['versandart']] ?? 0) + 1;
+        foreach (gruppen_load('lieferanten')['groups'] as $g) if (($g['versandart'] ?? '') !== '') $n[$g['versandart']] = ($n[$g['versandart']] ?? 0) + 1;
+        return $n;
+    }
     if ($liste === 'vkgruppen') {
         foreach ((store_read('stammdaten')['articles'] ?? []) as $a) if (($a['vkGruppe'] ?? '') !== '') $n[$a['vkGruppe']] = ($n[$a['vkGruppe']] ?? 0) + 1;
         return $n;
@@ -353,8 +362,11 @@ function gruppen_import_vorschau(array $e, array $me): array
     $cur = gruppen_load($liste);
     $alt = []; foreach ($cur['groups'] as $g) $alt[$g['nr']] = $g;
     $groups = gruppen_clean($liste, $roh, $alt);
-    $LABEL = ['name' => $liste === 'vertreter' ? 'Name' : 'Bezeichnung', 'kurz' => 'Kurzname', 'klasse' => 'Klasse', 'kategorie' => 'Kategorie',
-              'telefon' => 'Telefon', 'plz' => 'PLZ', 'ort' => 'Ort', 'land' => 'Land'];
+    $LABEL = ['name' => in_array($liste, ['vertreter', 'lieferanten'], true) ? 'Name' : ($liste === 'versandarten' ? 'Text' : 'Bezeichnung'), 'kurz' => 'Kurzname', 'klasse' => 'Klasse', 'kategorie' => 'Kategorie',
+              'telefon' => 'Telefon', 'plz' => 'PLZ', 'ort' => 'Ort', 'land' => 'Land', 'strasse' => 'Straße', 'landIntrastat' => 'Land Intrastat', 'gruppe' => 'Gruppe',
+              'konto' => 'Konto', 'kondition' => 'Kondition', 'vertreter' => 'Vertreter', 'vertreterName' => 'Vertreter (Name)', 'versandart' => 'Versandart',
+              'gln' => 'GLN', 'lademittelbestand' => 'Lademittelbestände', 'umsatzJahr' => 'Umsatz Jahr', 'kwUmsatzLfdJahr' => 'Umsatz lfd. Jahr',
+              'kwUmsatzVorjahr' => 'Umsatz Vorjahr', 'angelegtAm' => 'angelegt am'];
     $z = []; $n = ['neu' => 0, 'geaendert' => 0, 'entfaellt' => 0, 'unveraendert' => 0, 'fehler' => 0];
     foreach ($groups as $g) {
         $nr = $g['nr'];
@@ -377,9 +389,9 @@ function gruppen_import_vorschau(array $e, array $me): array
         $n['entfaellt']++;
         $k = $zahl[$nr] ?? 0;
         if ($k) $mit++;
-        $z[] = ['art' => 'entfaellt', 'zeile' => null, 'schluessel' => (string)$nr, 'name' => $a['name'], 'text' => 'nicht mehr in der Datei – wird entfernt' . ($k && $zaehlt ? " ($k " . ($liste === 'vkgruppen' ? 'Artikel' : ($k === 1 ? 'Kunde' : 'Kunden')) . ' zugeordnet)' : '')];
+        $z[] = ['art' => 'entfaellt', 'zeile' => null, 'schluessel' => (string)$nr, 'name' => $a['name'], 'text' => 'nicht mehr in der Datei – wird entfernt' . ($k && $zaehlt ? " ($k " . ($liste === 'vkgruppen' ? 'Artikel' : ($liste === 'versandarten' ? 'Kunden und Lieferanten' : ($k === 1 ? 'Kunde' : 'Kunden'))) . ' zugeordnet)' : '')];
     }
-    if ($mit) $h[] = ['stufe' => 'warn', 'text' => "$mit entfallende " . ($mit === 1 ? 'Eintrag hat' : 'Einträge haben') . ' zugeordnete ' . ($liste === 'vkgruppen' ? 'Artikel' : 'Kunden') . '; diese behalten die Nummer, bis eine andere gewählt wird.'];
+    if ($mit) $h[] = ['stufe' => 'warn', 'text' => "$mit entfallende " . ($mit === 1 ? 'Eintrag hat' : 'Einträge haben') . ' zugeordnete ' . ($liste === 'vkgruppen' ? 'Artikel' : ($liste === 'versandarten' ? 'Kunden oder Lieferanten' : 'Kunden')) . '; diese behalten die Nummer, bis eine andere gewählt wird.'];
     $h[] = ['stufe' => 'info', 'text' => "Gespeichert wird die ganze Liste: {$L['viele']}, die nicht in der Datei stehen, werden entfernt."];
     return ['zahlen' => $n, 'zeilen' => $z, 'hinweise' => $h, 'stand' => $cur['rev']];
 }

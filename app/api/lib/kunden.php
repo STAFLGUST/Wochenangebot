@@ -162,21 +162,31 @@ function kunde_payload(array $c): array
     return ['firma' => $c['firma'], 'ansprechpartner' => $c['ansprechpartner'] ?? '', 'username' => $c['login']['username'],
             'mustChange' => !empty($c['login']['mustChange']), 'mustChangeGrund' => !empty($c['login']['mustChange']) ? (string)($c['login']['mustChangeGrund'] ?? '') : '', 'angebote' => $names];
 }
-const CUSTOMER_FIELDS = ['nr' => 30, 'gruppe' => 10, 'vertreter' => 10, 'vertreter2' => 10, 'firma' => 120, 'ansprechpartner' => 120, 'strasse' => 120, 'plz' => 10, 'ort' => 80, 'land' => 60, 'email' => 160, 'telefon' => 40, 'notiz' => 500];
-const CUSTOMER_LABELS = ['mailAngebot' => 'Wochenangebot per E-Mail', 'nr' => 'Kundennummer', 'gruppe' => 'Kundengruppe', 'vertreter' => 'Vertreter', 'vertreter2' => 'Vertreter 2', 'firma' => 'Firma', 'ansprechpartner' => 'Ansprechpartner', 'strasse' => 'Straße', 'plz' => 'PLZ', 'ort' => 'Ort',
+const CUSTOMER_FIELDS = ['nr' => 30, 'gruppe' => 10, 'vertreter' => 10, 'vertreter2' => 10, 'versandart' => 10, 'firma' => 120, 'ansprechpartner' => 120, 'strasse' => 120, 'plz' => 10, 'ort' => 80, 'land' => 60, 'email' => 160, 'telefon' => 40, 'notiz' => 500];
+const CUSTOMER_LABELS = ['mailAngebot' => 'Wochenangebot per E-Mail', 'nr' => 'Kundennummer', 'gruppe' => 'Kundengruppe', 'vertreter' => 'Vertreter', 'vertreter2' => 'Vertreter 2', 'versandart' => 'Versandart', 'firma' => 'Firma', 'ansprechpartner' => 'Ansprechpartner', 'strasse' => 'Straße', 'plz' => 'PLZ', 'ort' => 'Ort',
                          'land' => 'Land', 'email' => 'E-Mail', 'telefon' => 'Telefon', 'notiz' => 'Notiz', 'angebote' => 'Angebote', 'active' => 'Kunde aktiv'];
 
-/* ---------------- Listen der Stammdaten (Kundengruppen, VK-Gruppen, Vertreter) ----------------
+/* ---------------- Listen der Stammdaten (Kundengruppen, VK-Gruppen, Vertreter, Versandarten, Lieferanten) ----------------
    Dokument je Liste (Name wie die Liste): { rev, groups: [{ nr, name, …Felder der Liste }], updatedAt, updatedBy }.
-   Kunden verweisen über „gruppe“ auf eine Kundengruppe und über „vertreter“/„vertreter2“ auf Vertreter,
-   Artikel (Stammdaten) über „vkGruppe“ auf eine VK-Gruppe. Felder: Name => [Länge, Pflicht]. */
+   Kunden verweisen über „gruppe“ auf eine Kundengruppe, über „vertreter“/„vertreter2“ auf Vertreter und über „versandart“
+   auf eine Versandart, Artikel (Stammdaten) über „vkGruppe“ auf eine VK-Gruppe, Lieferanten über „versandart“ auf eine
+   Versandart. Lieferanten (Wunsch des Inhabers 06.11.2026): vollständiger Lieferanten-Export der Warenwirtschaft; „name“
+   (Name1) darf fehlen – angezeigt wird dann der Kurzname (Alpha). Umsatzfelder liefert die Aktion „lieferanten“ nur an
+   Nutzer mit „stammdaten.bearbeiten“ aus (LIEFERANTEN_UMSATZ). Felder: Name => [Länge, Pflicht]. */
 const GRUPPEN_MAX = 2000;
 const GRUPPEN_FELDER = ['name' => [120, true], 'klasse' => [20, false], 'kategorie' => [20, false]];
 const GRUPPEN_LISTEN = [
     'kundengruppen' => ['eine' => 'Kundengruppe', 'viele' => 'Kundengruppen', 'felder' => GRUPPEN_FELDER],
     'vkgruppen' => ['eine' => 'VK-Gruppe', 'viele' => 'VK-Gruppen', 'felder' => GRUPPEN_FELDER],
     'vertreter' => ['eine' => 'Vertreter', 'viele' => 'Vertreter', 'felder' => ['name' => [120, true], 'kurz' => [40, false], 'telefon' => [40, false], 'plz' => [10, false], 'ort' => [80, false], 'land' => [60, false]]],
+    'versandarten' => ['eine' => 'Versandart', 'viele' => 'Versandarten', 'felder' => ['name' => [120, true]]],
+    'lieferanten' => ['eine' => 'Lieferant', 'viele' => 'Lieferanten', 'felder' => [
+        'name' => [120, false], 'kurz' => [40, false], 'strasse' => [120, false], 'plz' => [10, false], 'ort' => [80, false], 'land' => [60, false],
+        'landIntrastat' => [10, false], 'telefon' => [40, false], 'gruppe' => [10, false], 'konto' => [20, false], 'kondition' => [10, false],
+        'vertreter' => [10, false], 'vertreterName' => [120, false], 'versandart' => [10, false], 'gln' => [20, false], 'lademittelbestand' => [20, false],
+        'umsatzJahr' => [30, false], 'kwUmsatzLfdJahr' => [30, false], 'kwUmsatzVorjahr' => [30, false], 'angelegtAm' => [10, false]]],
 ];
+const LIEFERANTEN_UMSATZ = ['umsatzJahr', 'kwUmsatzLfdJahr', 'kwUmsatzVorjahr'];
 function gruppen_load(string $liste): array
 {
     $d = store_read($liste);
@@ -212,3 +222,18 @@ function gruppen_clean(string $liste, $list, array $alt = []): array
 function kundengruppen_load(): array { return gruppen_load('kundengruppen'); }
 function kundengruppen_clean($list): array { return gruppen_clean('kundengruppen', $list); }
 function vertreter_load(): array { return gruppen_load('vertreter'); }
+/* Schnittstelle der Verwaltung für andere Module (Leergut, regeln/datenverantwortung.toml): nur Nummer, Name, Kurzname und
+   Versandart der Lieferanten bzw. Nummer und Text der Versandarten – keine Umsätze, Konten oder Konditionen. */
+function lieferanten_kurz(): array
+{
+    $out = [];
+    foreach (gruppen_load('lieferanten')['groups'] as $g) if (is_array($g) && isset($g['nr']))
+        $out[(string)$g['nr']] = ['nr' => (string)$g['nr'], 'name' => (string)($g['name'] ?? ''), 'kurz' => (string)($g['kurz'] ?? ''), 'versandart' => (string)($g['versandart'] ?? '')];
+    return $out;
+}
+function versandarten_namen(): array
+{
+    $out = [];
+    foreach (gruppen_load('versandarten')['groups'] as $g) if (is_array($g) && isset($g['nr'])) $out[(string)$g['nr']] = (string)($g['name'] ?? '');
+    return $out;
+}
