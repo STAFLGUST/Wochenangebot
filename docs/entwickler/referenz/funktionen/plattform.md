@@ -2,7 +2,7 @@
 
 <!-- ERZEUGT von `python3 werkzeuge/doku.py erzeugen` – nicht von Hand ändern. Quelle: Funktionen und Kommentare im Code. Die CI prüft, dass diese Datei zum Code passt. -->
 
-110 Dateien, 1112 Funktionen – in der Reihenfolge der Datei, **fett** die Abschnitte. Text = erste Aussage des Kommentars direkt über der Funktion (Python: Docstring). Übersicht aller Module: [README.md](README.md).
+112 Dateien, 1133 Funktionen – in der Reihenfolge der Datei, **fett** die Abschnitte. Text = erste Aussage des Kommentars direkt über der Funktion (Python: Docstring). Übersicht aller Module: [README.md](README.md).
 
 ## `.github/scripts/apt_vorrat.py`
 
@@ -877,6 +877,29 @@ _Bereitstellung eines Stands_
 - `zusatz_verzeichnis(app)` – Im Testlauf unter app/dashboard/ eingeblendetes Dashboard (tests/run_e2e.py, ZUSATZ) wie auf dem Server stempeln.
 - `main(argv)`
 
+## `deploy/cdn_netzsperre.py`
+
+_Netzsperre am Server_
+
+- `erlaubt(a)`
+- `jetzt()`
+- `zeit(text)`
+- `iso(t)`
+- `pruefe_liste(roh, familie)` – Antwort von bunny (JSON-Liste) → sortierte gültige öffentliche Adressen der Familie 4 oder 6. ValueError bei kaputter Antwort.
+- `zusammenfuehren(bisher, neu, t, haltetage)` – bisher {Adresse: zuletzt gesehen} + neue Adressen → (Ergebnis, Anzahl neu, Anzahl entfallen).
+- `netze(adressen)` – Adressen → zusammengefasste Netze (für die nft-Menge mit flags interval).
+- `lesen(pfad)`
+- `schreiben(pfad, d)`
+- `holen(url)`
+- `nutzbar(d)`
+- `abrufen(pfad, quelle4, quelle6)`
+- `faellig(pfad, stunden)`
+- `menge(name, typ, eintraege)`
+- `regelwerk(modus, schnittstelle, netze4, netze6)`
+- `regelwerk_aus_liste(pfad, modus, schnittstelle)`
+- `bericht(pfad, zeilen)`
+- `main(argv)`
+
 ## `deploy/daten_trennen.py`
 
 _Daten trennen (ADR-007 Stufe 2): interne Dokumente aus daten/ in daten-intern/ verschieben – bzw. zurückführen._
@@ -989,6 +1012,14 @@ _bunny.net vor dem Server (Caddyfile, Abschnitt „cdn“) mit echtem Caddy in d
 - `ip(name)`
 - `abruf(ziel, pfad, kopf)` – Abruf aus dem Besucher-Container (öffentliche Adresse): (Status, Antwortköpfe, Inhalt).
 - `vom_server(kopf)`
+
+## `tests/deploy/test_cdn_netzsperre.py`
+
+_Netzsperre für bunny.net (deploy/cdn_netzsperre.py)_
+
+- `check(name, ok, info)`
+- `doku4(n, start)` – n verschiedene IPv4-Adressen aus den drei Dokumentationsnetzen.
+- `laeufer()`
 
 ## `tests/deploy/test_dashboard_domains.py`
 
