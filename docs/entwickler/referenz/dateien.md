@@ -432,6 +432,8 @@ Jede Code-Datei beginnt mit einem Kopfkommentar; dessen erste Aussage steht hier
 | `aktualisieren.sh` | plattform | Holt neue Versionen aus GitHub und spielt sie ein (läuft alle 2 Minuten per systemd-Timer). .env und daten/ werden nie verändert (außer der Statusdatei daten/sicherung.php der Datensicherung). |
 | `altdateien.sh` | plattform | Alte Datendateien aufräumen |
 | `bereitstellen.py` | plattform | Bereitstellung eines Stands |
+| `cdn-netzsperre.sh` | plattform | Netzsperre am Server |
+| `cdn_netzsperre.py` | plattform | Netzsperre am Server |
 | `daten-trennen.sh` | plattform | Daten trennen (ADR-007 Stufe 2): interne Dokumente (Personal, Nutzer, CRM, Controlling, QS, Dateiablage …) aus dem gemeinsamen Ordner daten/ in daten-intern/ verschieben, den nur die Mitarbeiterseite … |
 | `daten_trennen.py` | plattform | Daten trennen (ADR-007 Stufe 2): interne Dokumente aus daten/ in daten-intern/ verschieben – bzw. zurückführen. |
 | `datenbank-umschalten.sh` | plattform | Speicher umschalten: Dateien → SQLite (migrate) oder zurück (rollback), im Wartungsfenster durch den Betreiber. |
@@ -675,6 +677,8 @@ Jede Code-Datei beginnt mit einem Kopfkommentar; dessen erste Aussage steht hier
 | `test_altdateien.sh` | plattform | Test von deploy/altdateien.sh (Altdateien nach der Umschaltung auf SQLite) – echtes deploy/datenbank.py in einem Wegwerf-Ordner mit synthetischen Datensätzen, Platzhalter nur für die Sicherung (keine echten Daten, … |
 | `test_anmeldung_einrichten.sh` | plattform | Test von deploy/anmeldung/einrichten.sh (Schritt 2 der Inbetriebnahme) – in einem Wegwerf-Ordner, ohne Docker. |
 | `test_cdn.py` | plattform | bunny.net vor dem Server (Caddyfile, Abschnitt „cdn“) mit echtem Caddy in der Fassung des Betriebs. |
+| `test_cdn_netzsperre.py` | plattform | Netzsperre für bunny.net (deploy/cdn_netzsperre.py) |
+| `test_cdn_netzsperre.sh` | plattform | Test von deploy/cdn-netzsperre.sh (Netzsperre für bunny.net) – mit Platzhaltern für nft, systemctl, ip, journalctl und curl, Liste aus Dateien mit Dokumentationsadressen (WA_TESTNETZE=1), in einem Wegwerf-Ordner. |
 | `test_dashboard_domains.py` | plattform | Dashboard-Hosts: Modul-Hosts bleiben 503-Platzhalter bis zur Freigabe (GR-105); die Hosts der zentralen Anmeldung (ADR-003, Inbetriebnahme Schritt 6) führen nur zu Zielen, die es ausschließlich mit der … |
 | `test_daten_trennen.py` | plattform | Test von deploy/daten_trennen.py (ADR-007 Stufe 2: interne Dokumente aus dem gemeinsamen Datenordner) – in Wegwerf-Ordnern, für Dateien und SQLite |
 | `test_daten_trennen.sh` | plattform | Test von deploy/daten-trennen.sh (ADR-007 Stufe 2) – mit Platzhaltern für docker, sichern.sh und chown in einem Wegwerf-Ordner; die eigentliche Trennung macht das echte deploy/daten_trennen.py (eigene Tests: … |

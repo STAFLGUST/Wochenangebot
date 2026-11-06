@@ -191,6 +191,7 @@ Auftragsverarbeitung mit bunny sind offen (Inhaber).
 - **Länderangabe:** bunny schickt `CDN-RequestCountryCode`. Die Anwendung nutzt weiter ihre eigene Ländersperre mit der
   Besucher-IP.
 - Die Server-IP ist aus früheren DNS-Einträgen bekannt. Deshalb ist die Sperre (Schritt 7) nötig; ohne sie ließe sich bunny umgehen.
+  Die Netzsperre (Abschnitt 7) hält solche Verbindungen schon vor Caddy auf.
 - **Detailkarte (CRM-Karte, Verwaltung → Auswertung):** Die Karte liest die Kartendatei `/karte/karte.pmtiles` (rund 6 GB)
   in kleinen Abschnitten (Range-Anfragen, Antwort 206). Die Datei ist nur mit Anmeldung abrufbar und wird von bunny nicht
   gespeichert („private“). Befund 04.11.2026: Über bunny kam auf die Abschnitts-Anfrage die ganze Datei zurück (Status 200
@@ -202,3 +203,58 @@ Auftragsverarbeitung mit bunny sind offen (Inhaber).
   dieselbe Einstellung. Kommt trotzdem einmal die ganze Datei, bricht die Seite den Abruf sofort ab
   (`app/assets/detailkarte.js`, Hinweis in der Browser-Konsole). **Rückfall:** Einstellung ausschalten – die Seiten zeigen
   dann wieder die Übersichtskarte.
+
+## 7. Hostinger-Firewall und Netzsperre am Server
+
+Zwei Schichten vor Caddy, beide unabhängig von der Anwendung:
+
+**Hostinger-Firewall** (hPanel → VPS → Firewall, Gruppe „Wochenangebot“; filtert im Netz von Hostinger, bevor etwas den
+Server erreicht, alles ohne Regel wird verworfen). Seit 06.11.2026 (Auftrag des Inhabers) gibt es nur noch eine Regel:
+**TCP 443 von überall**. TCP 80 und UDP 443 (HTTP/3) sind entfernt: bunny erreicht den Server nur über HTTPS (Origin
+`https://<Server-IP>`), die Umleitung von http auf https und die Zertifikatsprüfungen von Let's Encrypt laufen über bunny
+(Abschnitt 1). Geprüft am 06.11.2026: alle 20 Adressen antworten über bunny wie vorher. Die Hostinger-Browserkonsole ist
+davon nicht betroffen. Rückweg: Regel im hPanel wieder anlegen und „Synchronisieren“ (wirkt in etwa 2 Minuten).
+
+Eine Liste der bunny-Adressen passt nicht in die Hostinger-Firewall: bunny hat rund 590 IPv4- und 320 IPv6-Adressen, und
+die Liste ändert sich. Deshalb prüft der Server selbst:
+
+**Netzsperre am Server** (`deploy/cdn-netzsperre.sh`, nftables, ab dem Release mit diesem Skript). Port 80 und 443 nehmen
+neue Verbindungen nur noch von den Edge-Servern von bunny an. Wer bunny umgeht, erreicht Caddy gar nicht erst; die Sperre per
+Schlüssel (`CDN_PFLICHT=1`) bleibt die zweite Schicht.
+
+- **Liste:** `api.bunny.net/system/edgeserverlist` (IPv4) und `…/ipv6`, geprüft (nur öffentliche Adressen, eine Antwort mit
+  weniger als 100 IPv4-Adressen oder vielen ungültigen Einträgen wird verworfen) und mit der bisherigen zusammengeführt: Eine
+  Adresse bleibt 14 Tage nach ihrem letzten Erscheinen. Fällt die Abfrage aus, bleibt die bisherige Liste. Abgerufen höchstens
+  alle 6 Stunden (Timer `wochenangebot-netzsperre`, alle 30 Minuten; setzt die Regeln auch nach einem Neustart).
+- **Regeln:** eigene Tabelle `inet stafl_netzsperre` neben den Regeln von Docker, atomar ersetzt. Gilt nur für neue
+  Verbindungen über die Schnittstelle der Standardroute an Port 80/443 – über die Docker-Weiterleitung (ursprünglicher
+  Zielport) und an Dienste des Hosts (Docker-Proxy, IPv6). Abrufe vom Server selbst (Healthcheck über 127.0.0.1),
+  Verbindungen nach außen, andere Ports und die Hostinger-Browserkonsole bleiben unberührt. Fremde Versuche landen im
+  Kernel-Protokoll (höchstens 6 je Minute, Präfix `stafl-netzsperre:`).
+- **Voraussetzung:** alle Adressen über bunny und `CDN_PFLICHT=1` mit gültigem `CDN_SCHLUESSEL` – sonst bricht das Skript ab.
+  Root-Dateien im Installationsordner (nie in `daten/`): `.cdn-netzsperre` (Modus), `.cdn-netzsperre-liste.json`,
+  `.cdn-netzsperre-regeln`.
+- Geprüft mit echtem nftables in Netz-Namensräumen (`tests/deploy/test_cdn_netzsperre.py`: Weiterleitung wie Docker, Host,
+  IPv6, andere Ports) und mit Platzhaltern (`tests/deploy/test_cdn_netzsperre.sh`). Das volle Regelwerk mit der echten
+  bunny-Liste (906 Adressen) nahm nft am 06.11.2026 an.
+
+**Einschalten** (Hostinger-Browserkonsole, nach dem Release, nur mit Freigabe des Inhabers):
+
+```sh
+cd /opt/wochenangebot
+command -v nft || apt-get install -y nftables     # nft-Befehl (Docker nutzt nftables bereits im Kernel)
+sh deploy/cdn-netzsperre.sh beobachten           # Regeln, die nur zählen und protokollieren – nichts wird verworfen
+# 1–2 Tage später:
+sh deploy/cdn-netzsperre.sh status               # Liste, Zähler, fremde Adressen der letzten 24 Stunden
+sh deploy/cdn-netzsperre.sh an                   # fremde Verbindungen verwerfen
+```
+
+`status` zeigt die zehn häufigsten fremden Adressen. Steht dort „inzwischen in der bunny-Liste“, war es ein Edge-Server, den
+die Liste noch nicht kannte (dann wäre er im Modus „an“ abgewiesen worden). Erwartet sind nur vereinzelte Scanner. `an` ruft
+danach `https://<DOMAIN>/api/?action=status` über bunny ab; scheitert das dreimal, schaltet das Skript selbst auf `beobachten`
+zurück.
+
+**Notfall und Rückweg:** `sh deploy/cdn-netzsperre.sh aus` entfernt Regeln und Timer sofort (braucht weder Netz noch `.env`).
+Vor einem Rückfall auf einen Release ohne dieses Skript ebenfalls zuerst `aus` – sonst blieben die Regeln bis zum nächsten
+Neustart mit einer Liste stehen, die niemand mehr aktualisiert. Ein `nft flush ruleset` (z. B. durch den Dienst `nftables`)
+entfernt auch diese Tabelle; der Timer setzt sie innerhalb von 30 Minuten wieder.
