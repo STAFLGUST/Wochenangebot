@@ -268,7 +268,7 @@ function pw_datenleck(string $pw): ?int
     if (is_array($st) && empty($st['ok']) && (int)($st['t'] ?? 0) > time() - 600) return $cache[$h] = null;   // nach einem Ausfall 10 Minuten Pause
     $ctx = stream_context_create(['http' => ['timeout' => 3, 'ignore_errors' => false, 'user_agent' => 'Wochenangebot',
                                              'header' => "Add-Padding: true\r\n"], 'ssl' => ['verify_peer' => true]]);
-    $url = sprintf(getenv('WA_PWNED_URL') ?: PW_LEAK_URL, substr($h, 0, 5));   // WA_PWNED_URL nur in den Tests
+    $url = sprintf(getenv('WA_PWNED_URL') ?: PW_LEAK_URL, substr($h, 0, 5));   // WA_PWNED_URL: Tests bzw. Kundenseite (Relais in Caddy, ADR-007)
     $t0 = microtime(true);
     $body = @file_get_contents($url, false, $ctx, 0, 2 * 1024 * 1024);
     $ok = is_string($body) && $body !== '';

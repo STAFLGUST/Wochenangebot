@@ -470,6 +470,8 @@ Jede Code-Datei beginnt mit einem Kopfkommentar; dessen erste Aussage steht hier
 | `docker-compose.anmeldung.yml` | plattform | STAFL-Plattform – zentrale Anmeldung im Betrieb (ADR-003, Roadmap |
 | `einrichten.sh` | plattform | Zentrale Anmeldung – Schritt 2 der Inbetriebnahme (docs/plattform/inbetriebnahme-anmeldung.md) |
 | `konten.sh` | plattform | Zentrale Anmeldung – Konten in Keycloak über die Serverkonsole verwalten (ohne Browser und ohne SSH-Tunnel). |
+| `kunde-apache.conf` | plattform | Apache-Härtung der Kundenseite angebot-stafl.de (Container app, ADR-007 „Härtung des Kundencontainers“) – nur dort eingebunden (deploy/anmeldung/docker-compose.anmeldung.yml). |
+| `kunde-php.ini` | plattform | – |
 | `pruefen.sh` | plattform | Prüft die vorbereitete Betriebskonfiguration der zentralen Anmeldung (deploy/anmeldung) – lokal mit Docker und in der CI. |
 | `ruecksicherung-probe.sh` | plattform | Rücksicherung der Keycloak-Datenbank üben – ohne Eingriff in den Betrieb (Schritt 7 der Inbetriebnahme). |
 
@@ -688,6 +690,7 @@ Jede Code-Datei beginnt mit einem Kopfkommentar; dessen erste Aussage steht hier
 | `test_images.py` | plattform | Container-Images fest über Digest (Sicherheitsdurchsicht 26.10.2026, Befund 12): jedes fremde Image in den Compose-Dateien und im Dockerfile ist mit @sha256 festgelegt – ein Release holt so nie unbemerkt eine andere … |
 | `test_karte_laden.sh` | plattform | Test von deploy/karte-laden.sh – mit Platzhaltern für docker und curl, in einem Wegwerf-Ordner (lädt nichts herunter). |
 | `test_konten_pruefen.sh` | plattform | Test von „konten.sh pruefen“ (Anmeldeprobleme erkennen) – mit Platzhalter für kcadm und einer lokalen Zeitquelle, ohne Docker. |
+| `test_kundencontainer.sh` | plattform | Gehärteter Kundencontainer (ADR-007, „Härtung des Kundencontainers“) mit echtem Docker – Einstellungen genau aus docker-compose.yml und deploy/anmeldung/docker-compose.anmeldung.yml (Dienst app), Image … |
 | `test_notfallwerkzeuge.sh` | plattform | Test der Notfallwerkzeuge (wartung-aus, ip-freigabe-aus, notfall-aus, passwort-zuruecksetzen) |
 | `test_notzugang.sh` | plattform | Test von deploy/notzugang.sh (Notzugang über einen SSH-Tunnel, ADR-007 Regel 6) – mit Platzhalter für docker compose, in einem Wegwerf-Ordner. |
 | `test_postfach_schluessel.sh` | plattform | Test von deploy/postfach-schluessel.sh (Schlüssel des Postfach-Passworts aus dem gemeinsamen Datenordner, ADR-007) – in einem Wegwerf-Ordner, ohne root (Besitzer wird nur versucht zu setzen) – und dass die Anwendung … |
