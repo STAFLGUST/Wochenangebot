@@ -45,7 +45,7 @@
 /* Dunkel (Wahl am Konto oder Systemeinstellung): nur andere Werte, gleicher Aufbau */
 @media screen and (prefers-color-scheme: dark) {
   :root:not([data-theme="light"]) {
-    --r-grund: #131211; --r-leiste: #1b1a19; --r-flaeche: #201f1d; --r-flaeche-2: #252321;
+    --r-grund: #121011; --r-leiste: #1b1a19; --r-flaeche: #201f1d; --r-flaeche-2: #252321;
     --r-text: #f2efec; --r-text-2: #c9c3bd; --r-leise: #a59d96; --r-zart: #6f6863;
     --r-linie: rgba(255, 255, 255, .08); --r-linie-2: rgba(255, 255, 255, .13); --r-aktiv: #2a2826; --r-hover: rgba(255, 255, 255, .05);
     --r-akzent: #b23a4b; --r-akzent-hover: #c64d5e; --r-akzent-text: #f0a3ae; --r-fokus: 0 0 0 3px rgba(224, 129, 144, .5);
@@ -61,7 +61,7 @@
 }
 @media screen {
   :root[data-theme="dark"] {
-    --r-grund: #131211; --r-leiste: #1b1a19; --r-flaeche: #201f1d; --r-flaeche-2: #252321;
+    --r-grund: #121011; --r-leiste: #1b1a19; --r-flaeche: #201f1d; --r-flaeche-2: #252321;
     --r-text: #f2efec; --r-text-2: #c9c3bd; --r-leise: #a59d96; --r-zart: #6f6863;
     --r-linie: rgba(255, 255, 255, .08); --r-linie-2: rgba(255, 255, 255, .13); --r-aktiv: #2a2826; --r-hover: rgba(255, 255, 255, .05);
     --r-akzent: #b23a4b; --r-akzent-hover: #c64d5e; --r-akzent-text: #f0a3ae; --r-fokus: 0 0 0 3px rgba(224, 129, 144, .5);
