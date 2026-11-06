@@ -601,3 +601,28 @@ button.lf-marke:hover { background: var(--sic-bad-bg); }
 @media (max-width: 480px) { body.sic .sic-kopf .brand-logo { width: 30px; height: 28px; object-fit: cover; object-position: left center; }
   #sic-neu { display: none; } .sic-kopf .sic-rund { width: 36px; height: 36px; } .sic-aktionen { gap: 6px; } }
 @media (pointer: coarse) { .sic .btn.sm { height: 36px; } }
+
+/* ── Rahmen „C2“ (gemeinsame Seitenleiste ../../assets/rahmen.css und rahmen.js, Entwurf freigegeben 06.11.2026) ──
+   Aufbau, Reiter und Abläufe der Seite bleiben unverändert. Neu: ruhige deckende Flächen mit feinen Linien statt Glas,
+   keine Farbflächen im Hintergrund; Logo und Nutzer stehen in der Seitenleiste, der Kopf behält „Start“, Modulname und
+   die Knöpfe der Seite. Farben kommen aus den --r-* des Rahmens (hell und dunkel); :root erhöht die Gewichtung, damit
+   die Werte auch die dunklen Angaben oben ersetzen. */
+:root body.sic.r {
+  --sic-glow-a: transparent; --sic-glow-b: transparent;   /* Leitstand ohne farbigen Schein im Rahmen */
+  --sic-bg: var(--r-grund); --sic-text: var(--r-text); --sic-glass: var(--r-flaeche); --sic-kopf-glas: var(--r-grund); --sic-deckend: var(--r-flaeche);
+  --sic-rand: var(--r-linie); --sic-glanz: transparent; --sic-schatten: var(--r-schatten); --sic-linie: var(--r-linie); --sic-reiter-aktiv: var(--r-flaeche);
+}
+:root body.sic.r .sic-bg { display: none; }
+body.sic.r .sic-glas { -webkit-backdrop-filter: none; backdrop-filter: none; box-shadow: var(--r-schatten); }
+body.sic.r .sic-karte { -webkit-backdrop-filter: none; backdrop-filter: none; }   /* Kennzahl-Karten des Lagebilds: ebenfalls ohne Unschärfe */
+body.sic.r .sic-seite { flex: 1; width: 100%; min-height: 0; box-sizing: border-box; padding: 24px 24px 40px; }
+body.sic.r .sic-kopf { position: static; padding: 0; border: 0; border-radius: 0; background: none; box-shadow: none; }
+body.sic.r :is(.sic-marke, .sic-user) { display: none; }
+body.sic.r .sic-modul { padding-left: 0; border-left: 0; font-size: 22px; font-weight: 700; letter-spacing: -.01em; }
+body.sic.r .sic-modul .i { width: 22px; height: 22px; }
+body.sic.r .sic-rund { background: var(--r-flaeche); border: 1px solid var(--r-linie-2); color: var(--r-text); }
+body.sic.r .sic-rund:hover { background: var(--r-flaeche-2); }
+@media (max-width: 900px) {
+  body.sic.r .sic-seite { padding: 16px 16px 32px; }
+  body.sic.r .sic-modul { font-size: 18px; }
+}
