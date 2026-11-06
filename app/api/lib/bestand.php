@@ -220,6 +220,27 @@ function artikelauszug(): ?array
 
 /* ---------------- Stammdaten ---------------- */
 
+/* Startseite des Dashboards („Heute für Sie“, lib/startseite.php): Artikel der MHD-Liste (dieselbe Liste wie die Suche „MHD“
+   und die MHD-Mail, mhd_liste_ohne_preise) für Mitarbeiter, die die MHD-Liste verantworten (bestand.mhd_senden): abgelaufen =
+   überfällig, MHD in höchstens 4 Tagen = heute (rot in der Liste), in 5–7 Tagen = demnächst. Nur Anzahlen, keine Mengen. */
+function bestand_startseite(array $me): array
+{
+    if (!may($me, 'bestand.sehen') || !may($me, 'bestand.mhd_senden')) return [];
+    require_once __DIR__ . '/bestand-mhd.php';
+    $l = mhd_liste_ohne_preise();
+    $n = ['abgelaufen' => [], '0-4' => [], '5-7' => []];
+    foreach ($l['zeilen'] as $z) if (isset($n[$z['stufe']])) $n[$z['stufe']][] = (string)$z['mhd'];
+    $text = function (int $k, string $rest) { return ($k === 1 ? '1 Artikel' : "$k Artikel") . ' ' . $rest; };
+    $out = [];
+    if ($n['abgelaufen']) $out[] = ['art' => 'ueberfaellig', 'titel' => $text(count($n['abgelaufen']), 'mit abgelaufenem MHD'), 'detail' => 'noch im Bestand',
+                                     'datum' => min($n['abgelaufen']), 'ziel' => 'stock', 'anzahl' => count($n['abgelaufen'])];
+    if ($n['0-4']) $out[] = ['art' => 'heute', 'titel' => $text(count($n['0-4']), 'mit MHD in höchstens 4 Tagen'), 'detail' => 'frühestes MHD ' . startseite_de(min($n['0-4'])),
+                             'ziel' => 'stock', 'anzahl' => count($n['0-4'])];
+    if ($n['5-7']) $out[] = ['art' => 'demnaechst', 'titel' => $text(count($n['5-7']), 'mit MHD in 5–7 Tagen'), 'detail' => 'frühestes MHD ' . startseite_de(min($n['5-7'])),
+                             'datum' => min($n['5-7']), 'ziel' => 'stock', 'anzahl' => count($n['5-7'])];
+    return $out;
+}
+
 function code_key(string $c): string { return ctype_digit($c) ? (ltrim($c, '0') === '' ? '0' : ltrim($c, '0')) : strtoupper($c); }
 function clean_master($list): array
 {

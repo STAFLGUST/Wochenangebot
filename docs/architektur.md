@@ -195,17 +195,21 @@ links eine feste Seitenleiste (208 px) mit Start, „Anwendungen“, „In Entwi
 „Verwaltung & Daten“, unten Name, Rolle und Abmelden; sie entsteht aus derselben Liste von `module_status` wie die
 Kacheln (`STAFL_RAHMEN.zeichnen`), Module ohne Modulzugang der Rolle fehlen. Unter 900 px wird sie zum Menü (Kopfzeile
 mit Menüknopf); für Module mit eigener Navigation gibt es eine schmale Leiste (60 px, nur Symbole). Oben in der Leiste
-das Suchfeld (Strg K bzw. ⌘ K, Dialog `#r-palette`: Anwendungen und – auf dem Dashboard – Schnellaktionen; nur Sprünge).
+das Suchfeld (Strg K bzw. ⌘ K, Dialog `#r-palette`: Anwendungen und – auf dem Dashboard – Schnellaktionen; nur Sprünge;
+schließt mit Escape oder Kreuz, nicht per Klick daneben).
 **Startseite** (Entwurf „C2“, Ausbau 06.11.2026): Begrüßung nach Tageszeit mit Vornamen, Datum und „9 offene Punkte, 3 davon
 überfällig“; Knöpfe Schnellzugriff (Blitz, öffnet die Suche), „Einfache Darstellung“ (Bildschirm) und Hell/Dunkel. Darunter
 gelbe Hinweise zu geplanten und laufenden Wartungen der eigenen Anwendungen (aus `module_status`, je Gerät schließbar),
 **Favoriten** (kompakte Kacheln, Standard die ersten vier Anwendungen; „Bearbeiten“ wählt bis zu acht, gespeichert am Konto
 im neuen optionalen Feld `favoriten` über `start_favoriten_save`), **Heute für Sie** (Gruppen Überfällig / Heute /
 Demnächst, je drei Punkte, „Alle offenen Punkte“ zeigt den Rest; jeder Punkt führt in den Reiter des Moduls),
-rechts **Schnellaktionen** (feste Sprünge in Module, nur mit Recht) und **Zuletzt bearbeitet** (eigene letzte Änderungen
+rechts **Schnellaktionen** (feste Sprünge in Module, nur mit Recht; „Kundenangebot erstellen“, „Interessent anlegen“ und
+„Beitrag anlegen“ öffnen im Modul gleich das Fenster bzw. die Ansicht zum Anlegen – Adresse `#<reiter>/neu`, das Modul kürzt
+sie danach auf den Reiter) und **Zuletzt bearbeitet** (eigene letzte Änderungen
 aus dem Protokoll, maskiert wie in der Protokollansicht). Zahlen offener Punkte stehen an den Kacheln und in der
 Seitenleiste (`STAFL_RAHMEN.zahlen`, rot bei Überfälligem). Die Punkte liefert jedes Modul selbst über
-`<präfix>_startseite($me)` mit eigener Rechteprüfung (HR: Anträge und Korrekturmeldungen nur als Anzahl; QS: eigene
+`<präfix>_startseite($me)` mit eigener Rechteprüfung (Angebot: neue und mir zugewiesene Bestellwünsche; Bestand: Artikel der
+MHD-Liste nach Stufe, nur mit „MHD-Liste senden“; HR: Anträge und Korrekturmeldungen nur als Anzahl; QS: eigene
 Prüfungen und Maßnahmen; Leergut: Auszüge mit Frist; REWE: Märkte der eigenen Liste ohne Antwort; Marketing: Beiträge zur
 Freigabe und eigene Termine; CRM: Wiedervorlagen der eigenen Kunden); `app/api/lib/startseite.php` fragt nur Module mit
 nutzbarer Kachel (Modulzugang, Freigabe, Wartung). Kacheln: kompakt (Symbol und Name, keine Beschreibung), eine zweite

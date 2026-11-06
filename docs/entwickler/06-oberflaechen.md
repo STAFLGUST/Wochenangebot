@@ -415,6 +415,10 @@ Funktion `<präfix>_startseite(array $me): array` mit eigener Rechteprüfung (`m
 (`app/api/lib/startseite.php`) eintragen; Tage und Gruppe über `startseite_tage()`/`startseite_art()`. Nur Texte liefern,
 die der Mitarbeiter im Modul ohnehin sieht – Personal- und Gesundheitsdaten höchstens als Anzahl (Beispiel `hr_startseite`).
 Favoriten speichert `start_favoriten_save {favoriten: [Modul-IDs] | null}` (höchstens acht, nur Module mit Kachel).
+Schnellaktionen (`STARTSEITE_AKTIONEN`) führen auf `#<reiter>` oder `#<reiter>/neu`; wer „Anlegen“ anbietet, wertet im Modul
+beim Start den zweiten Teil aus, öffnet nur mit passendem Recht das vorhandene Fenster und lässt die Adresse von seiner
+Reiterwahl auf `#<reiter>` kürzen (Beispiele: CRM `#kunden/neu`, Marketing `#kalender/neu`). Eigene Anbieter haben heute
+Angebot (`angebot_startseite`, Bestellwünsche), Bestand (`bestand_startseite`, MHD-Liste), HR, QS, Leergut, REWE, Marketing und CRM.
 
 **Hell/Dunkel:** `app/assets/theme.js` setzt vor dem ersten Zeichnen `data-theme` aus `localStorage`
 `wochenangebot.theme` (ohne Inline-Skript). Weil jeder Host eigenen Browser-Speicher hat (GR-108), steht die Wahl am
@@ -479,7 +483,8 @@ Glas; Modulfarben nur an den Symbolen.
   `zahlen({modul: {offen, ueberfaellig}})` (Zahl am Eintrag, rot bei Überfälligem, auch in `aria-label`; schmale Leiste:
   Punkt am Symbol), `suche([{titel, href, symbol, gruppe}])` (weitere Ziele der Suche) und `sucheOeffnen()`.
 - **Suche:** Feld `#r-suche` oben in der Leiste öffnet den Dialog `#r-palette` (`<dialog>` mit `showModal`, Eingabe als
-  `combobox` mit `aria-activedescendant`, Treffer als `listbox`; ↑ ↓ Enter, Escape, Klick daneben); Strg K bzw. ⌘ K von
+  `combobox` mit `aria-activedescendant`, Treffer als `listbox`; ↑ ↓ Enter; Escape oder Kreuz schließen, ein Klick daneben
+  nicht – wie alle Fenster der Plattform); Strg K bzw. ⌘ K von
   jeder Seite mit Leiste. Ziele: freie Anwendungen der Leiste plus `suche()`; Umlaute und ß werden beim Vergleich
   vereinheitlicht. Nur Sprünge – Rechte prüft das Ziel.
 - **Aufbau einer Seite:** `<body class="… r">`, darin `<div class="r-app"><nav class="r-leiste" id="r-leiste"

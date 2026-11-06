@@ -16,8 +16,8 @@ declare(strict_types=1);
    optional, GR-006); ohne Wahl zeigt das Dashboard die ersten nutzbaren Anwendungen. */
 if (!defined('WA_API')) { http_response_code(404); exit; }   // nur über api/index.php nutzbar
 
-const STARTSEITE_ANBIETER = ['hr' => 'hr_startseite', 'crm' => 'crm_startseite', 'qs' => 'qs_startseite', 'leergut' => 'lg_startseite',
-    'rewe' => 'rw_startseite', 'marketing' => 'mkt_startseite'];
+const STARTSEITE_ANBIETER = ['angebot' => 'angebot_startseite', 'bestand' => 'bestand_startseite', 'hr' => 'hr_startseite', 'crm' => 'crm_startseite',
+    'qs' => 'qs_startseite', 'leergut' => 'lg_startseite', 'rewe' => 'rw_startseite', 'marketing' => 'mkt_startseite'];
 const STARTSEITE_ARTEN = ['ueberfaellig' => 0, 'heute' => 1, 'demnaechst' => 2];
 const STARTSEITE_JE_MODUL = 8;        // Punkte je Modul in der Liste (gezählt werden alle)
 const STARTSEITE_VORLAUF = 3;         // „Demnächst“: Fälligkeit in höchstens so vielen Tagen (Module können eigene Fristen nutzen)
@@ -27,16 +27,19 @@ const STARTSEITE_FAVORITEN_MAX = 8;
 const STARTSEITE_PROTOKOLL_MODUL = ['draft' => 'angebot', 'publish' => 'angebot', 'discard' => 'angebot', 'offers' => 'angebot', 'import' => 'angebot',
     'bestellung' => 'angebot', 'history' => 'angebot', 'einzelangebot' => 'crm', 'stock' => 'bestand', 'master' => 'verwaltung', 'customers' => 'verwaltung',
     'hr' => 'hr', 'qs' => 'qs', 'leergut' => 'leergut', 'rewe' => 'rewe', 'marketing' => 'marketing', 'crm' => 'crm', 'controlling' => 'controlling'];
-/* Schnellaktionen in fester Reihenfolge: Modul, nötiges Recht ('' = Modulzugang genügt), Text, Reiter; neu = legt etwas an (Plus) */
+/* Schnellaktionen in fester Reihenfolge (die ersten vier wie im Entwurf „C2“): Modul, nötiges Recht ('' = Modulzugang genügt),
+   Text, Ziel im Modul (Reiter bzw. „<reiter>/neu“ – das Modul öffnet dann gleich das Fenster zum Anlegen); neu = Plus-Symbol */
 const STARTSEITE_AKTIONEN = [
-    ['modul' => 'angebot', 'recht' => 'angebot.bearbeiten', 'titel' => 'Wochenangebot bearbeiten', 'ziel' => '', 'neu' => false],
+    ['modul' => 'angebot', 'recht' => 'einzelangebote.bearbeiten', 'titel' => 'Kundenangebot erstellen', 'ziel' => 'einzel', 'neu' => true],
     ['modul' => 'hr', 'recht' => 'hr.antrag', 'titel' => 'Urlaub beantragen', 'ziel' => 'mein', 'neu' => true],
-    ['modul' => 'crm', 'recht' => 'crm.sehen', 'titel' => 'Wiedervorlagen ansehen', 'ziel' => 'wiedervorlagen', 'neu' => false],
+    ['modul' => 'crm', 'recht' => 'crm.bearbeiten', 'titel' => 'Interessent anlegen', 'ziel' => 'kunden/neu', 'neu' => true],
     ['modul' => 'import', 'recht' => '', 'titel' => 'Daten importieren', 'ziel' => '', 'neu' => true],
+    ['modul' => 'angebot', 'recht' => 'angebot.bearbeiten', 'titel' => 'Wochenangebot bearbeiten', 'ziel' => '', 'neu' => false],
+    ['modul' => 'marketing', 'recht' => 'marketing.bearbeiten', 'titel' => 'Beitrag anlegen', 'ziel' => 'kalender/neu', 'neu' => true],
     ['modul' => 'qs', 'recht' => 'qs.nachweis', 'titel' => 'Prüfnachweis erfassen', 'ziel' => 'pruefplan', 'neu' => true],
+    ['modul' => 'crm', 'recht' => 'crm.sehen', 'titel' => 'Wiedervorlagen ansehen', 'ziel' => 'wiedervorlagen', 'neu' => false],
     ['modul' => 'rewe', 'recht' => 'rewe.bearbeiten', 'titel' => 'REWE-Wochenabfrage', 'ziel' => 'woche', 'neu' => false],
     ['modul' => 'leergut', 'recht' => 'leergut.bearbeiten', 'titel' => 'Leergut abstimmen', 'ziel' => 'abstimmungen', 'neu' => false],
-    ['modul' => 'marketing', 'recht' => 'marketing.bearbeiten', 'titel' => 'Redaktionsplan', 'ziel' => 'kalender', 'neu' => false],
 ];
 
 /* Hilfen für die Anbieter der Module: Tage von heute bis zu einem Datum und die Gruppe eines Punkts */

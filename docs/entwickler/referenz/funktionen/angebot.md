@@ -2,7 +2,7 @@
 
 <!-- ERZEUGT von `python3 werkzeuge/doku.py erzeugen` – nicht von Hand ändern. Quelle: Funktionen und Kommentare im Code. Die CI prüft, dass diese Datei zum Code passt. -->
 
-43 Dateien, 654 Funktionen – in der Reihenfolge der Datei, **fett** die Abschnitte. Text = erste Aussage des Kommentars direkt über der Funktion (Python: Docstring). Übersicht aller Module: [README.md](README.md).
+43 Dateien, 655 Funktionen – in der Reihenfolge der Datei, **fett** die Abschnitte. Text = erste Aussage des Kommentars direkt über der Funktion (Python: Docstring). Übersicht aller Module: [README.md](README.md).
 
 ## `app/api/lib/angebote.php`
 
@@ -207,6 +207,7 @@ _Versandaufträge eines Bestellwunschs: je Empfänger ein Auftrag im selben Doku
 _Shared order operations for the website and future app clients._
 
 - `order_request_hash(body)`
+- `angebot_startseite(me)` – Startseite des Dashboards („Heute für Sie“, lib/startseite.php): für Mitarbeiter, die Bestellwünsche bearbeiten dürfen, die neuen (noch nicht angenommenen) …
 - `order_state(o, staff)` – „Bestätigt“ ist eine interne Kennzeichnung und keine Auftragsbestätigung – Kunden sehen dort weiter „In Bearbeitung“.
 - `order_view(o, staff)`
 - `order_receipt(o, replayed)`

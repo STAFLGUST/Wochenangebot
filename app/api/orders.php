@@ -10,6 +10,28 @@ function order_request_hash(array $body): string
     };
     return hash('sha256', json_encode($canonical(array_intersect_key($body, array_flip(['angebot','publishedAt','termin','referenz','bemerkung','positions'])))));
 }
+/* Startseite des Dashboards („Heute für Sie“, lib/startseite.php): für Mitarbeiter, die Bestellwünsche bearbeiten dürfen,
+   die neuen (noch nicht angenommenen) und die ihnen zugewiesenen in Bearbeitung – nur Anzahlen, keine Kundendaten. */
+function angebot_startseite(array $me): array
+{
+    if (!may($me, 'bestellungen.sehen') || !may($me, 'bestellungen.bearbeiten')) return [];
+    $neu = []; $meine = 0;
+    foreach (store_read('bestellungen') ?? [] as $o) {
+        $w = $o['workflow'] ?? 'neu';
+        if ($w === 'neu') $neu[] = substr((string)($o['t'] ?? ''), 0, 10);
+        elseif (in_array($w, ['in_bearbeitung', 'bestaetigt'], true) && (string)($o['assignee'] ?? '') === (string)$me['id']) $meine++;
+    }
+    $out = [];
+    if ($neu) {
+        $n = count($neu); $erster = min($neu);
+        $out[] = ['art' => 'heute', 'titel' => $n === 1 ? 'Neuer Bestellwunsch' : "$n neue Bestellwünsche", 'detail' => 'ältester vom ' . startseite_de($erster),
+                  'ziel' => 'orders', 'anzahl' => $n];
+    }
+    if ($meine) $out[] = ['art' => 'heute', 'titel' => $meine === 1 ? 'Bestellwunsch bei Ihnen in Bearbeitung' : "$meine Bestellwünsche bei Ihnen in Bearbeitung",
+                          'detail' => 'Ihnen zugewiesen', 'ziel' => 'orders', 'anzahl' => $meine];
+    return $out;
+}
+
 /* „Bestätigt“ ist eine interne Kennzeichnung und keine Auftragsbestätigung – Kunden sehen dort weiter „In Bearbeitung“. */
 function order_state(array $o, bool $staff): string
 {

@@ -846,7 +846,7 @@ _STAFL-Plattform · Gemeinsamer Rahmen_
 - `holen(action, body, csrf)`
 - `selbst(wunsch)`
 - `zahlen(z)` – Zahlen offener Punkte je Anwendung an den Einträgen der Leiste (nur Dashboard): {crm: {offen: 3, ueberfaellig: 1}, …}. Rot, wenn etwas überfällig ist; in der …
-- `suche(liste)` – Suche: Dialog mit Eingabefeld und Trefferliste (Tastatur: ↑ ↓ Enter, Escape schließt).
+- `suche(liste)` – Suche: Dialog mit Eingabefeld und Trefferliste (Tastatur: ↑ ↓ Enter; Escape oder Kreuz schließt, ein Klick daneben nicht).
 - `sucheDialog()`
 - `sucheZeigen()`
 - `sucheOeffnen()`
