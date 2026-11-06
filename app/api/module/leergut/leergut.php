@@ -916,6 +916,13 @@ function lg_winab_abgleich(array $w, array $stamm, array $bew, array $me): array
     $lmKurz = [];
     foreach ($stamm['lademittel'] as $l) $lmKurz[(string)$l['id']] = (string)(($l['kurz'] ?? '') ?: $l['name']);
     $offenAb = date('Y-m-d', strtotime($w['bericht']['bis'] . ' 12:00:00 UTC') - 3 * 86400);
+    // Excel-Liste (Datenpaket, Quelle „import“) – bis zu ihrer letzten Buchung je Konto maßgeblich (lg_excel_index, lg_excel_passt)
+    [$excel, $excelBis] = lg_excel_index($bew);
+    $z['inExcel'] = 0; $z['abweichend'] = 0; $z['nurWinab'] = 0; $z['doppeltStorniert'] = 0;
+    $abweichend = [];
+    $pname = [];
+    foreach ($stamm['partner'] as $p) $pname[$p['id']] = (string)$p['name'];
+    uasort($w['belege'], function ($a, $b) { return strcmp($a['datum'], $b['datum']); });   // Excel-Gegenstücke der Reihe nach vergeben
     $ohneKonto = [];   // Lieferanten mit Belegen, aber ohne Partner: nur gezählt (Vorschau zeigt sie zur Zuordnung)
     foreach ($w['belege'] as $key => $b) {
         $istLf = isset($b['lf']);
@@ -937,6 +944,27 @@ function lg_winab_abgleich(array $w, array $stamm, array $bew, array $me): array
             }
         }
         $pid = $stamm['partner'][$istLf ? $pi : $nachNr[$b['kd']]]['id'];
+        $imExcelZeitraum = isset($excelBis[$pid]) && $b['datum'] <= $excelBis[$pid];
+        if ($imExcelZeitraum) {
+            [$ex, $j] = lg_excel_passt($excel[$pid] ?? [], $b['datum'], lg_delta($b));
+            if ($ex !== '') {
+                $excel[$pid][$j]['frei'] = false;
+                $e = $bew[$excel[$pid][$j]['i']];
+                if ($ex === 'gleich') $z['inExcel']++;
+                else {
+                    $z['abweichend']++;
+                    if (count($abweichend) < 300) $abweichend[] = ['partner' => $pid, 'name' => $pname[$pid] ?? '', 'datum' => $b['datum'], 'beleg' => $b['art'] . ' ' . $b['beleg'],
+                        'winab' => (object)lg_ohne_null(lg_delta($b)), 'excel' => (object)lg_ohne_null(lg_delta($e)), 'excelDatum' => (string)$e['datum'], 'excelBeleg' => (string)($e['beleg'] ?? '')];
+                }
+                if (isset($alt[$key])) {   // früher doppelt gebucht: stornieren
+                    $bew[$alt[$key]]['storno'] = lg_wer($me) + ['grund' => "WinAB-Abgleich vom $heute: " . ($ex === 'gleich' ? 'steht schon in der Excel-Liste' : 'weicht von der Excel-Liste ab – nicht doppelt gebucht')];
+                    unset($alt[$key]);
+                    $z['doppeltStorniert']++;
+                }
+                continue;
+            }
+            $z['nurWinab']++;
+        }
         if (isset($alt[$key])) {
             $i = $alt[$key]; unset($alt[$key]);
             $a = $bew[$i];
@@ -947,6 +975,7 @@ function lg_winab_abgleich(array $w, array $stamm, array $bew, array $me): array
         $text = $w['bericht']['quelle'] === 'csv' ? 'Aus WinAB („Lademittelbewegungen“' : 'Aus WinAB („Lademittelbewegungen Kunden“';
         $text .= ($w['bericht']['datei'] !== '' ? ', ' . $w['bericht']['datei'] : '') . ')';
         if ($b['datum'] >= $offenAb && !$b['zugang']) $text .= ' – zum Stand der Datei noch nicht zurück';
+        if ($imExcelZeitraum) $text .= ' – fehlt in der Excel-Liste';
         if ($weg) $text .= ' – Tausch laut WinAB nicht gezählt (' . implode(', ', array_map(function ($l, $n) use ($lmKurz) { return $n . ' ' . ($lmKurz[$l] ?? $l); }, array_keys($weg), $weg)) . '): die Warenannahme tauscht nicht';
         $herk = $istLf ? ['lf' => $b['lf'], 'art' => $b['art'], 'beleg' => $b['beleg']] : ['kd' => $b['kd'], 'art' => $b['art'], 'beleg' => $b['beleg']];
         $bew[] = ['id' => lg_id('b'), 'partner' => $pid, 'datum' => $b['datum'], 'typ' => $b['art'] === 'Gutschrift' ? 'abholung' : 'bewegung',
@@ -1009,7 +1038,42 @@ function lg_winab_abgleich(array $w, array $stamm, array $bew, array $me): array
                     'partner' => $pi !== null ? ['id' => $stamm['partner'][$pi]['id'], 'name' => $stamm['partner'][$pi]['name']] : null];
     }
     usort($liste, function ($a, $b) { return [$b['belege'], $b['lieferscheine']] <=> [$a['belege'], $a['lieferscheine']] ?: strcmp($a['nr'], $b['nr']); });
-    return [$stamm, $bew, $z, $neuKunden, lg_ohne_null($summe), ['neu' => $neuLief, 'liste' => $liste, 'summe' => lg_ohne_null($summeLf)]];
+    return [$stamm, $bew, $z, $neuKunden, lg_ohne_null($summe), ['neu' => $neuLief, 'liste' => $liste, 'summe' => lg_ohne_null($summeLf), 'abweichend' => $abweichend]];
+}
+
+/* Excel-Liste je Konto (Buchungen aus dem Datenpaket, Quelle „import“, nicht storniert): [Konto => [[i, datum, delta, frei], …]
+   ohne Anfangsbestände, Konto => Datum der letzten Excel-Buchung]. Bis zu diesem Tag ist die Excel-Liste für das Konto maßgeblich. */
+function lg_excel_index(array $bew): array
+{
+    $excel = []; $bis = [];
+    foreach ($bew as $i => $b) {
+        if (($b['quelle'] ?? '') !== 'import' || !empty($b['storno'])) continue;
+        $pid = (string)$b['partner'];
+        $bis[$pid] = max($bis[$pid] ?? '', (string)$b['datum']);
+        if (($b['typ'] ?? '') === 'anfangsbestand') continue;
+        $excel[$pid][] = ['i' => $i, 'datum' => (string)$b['datum'], 'delta' => lg_ohne_null(lg_delta($b)), 'frei' => true];
+    }
+    return [$excel, $bis];
+}
+/* Gegenstück eines WinAB-Belegs in der Excel-Liste des Kontos: ['gleich', j] = noch freie Excel-Buchung mit gleicher Wirkung
+   je Lademittel höchstens 3 Tage entfernt (die nächste), ['abweichend', j] = am selben Tag eine freie Excel-Buchung in dieselbe
+   Richtung (wir geben bzw. erhalten), aber mit anderer Menge, ['', null] = keins (fehlt in der Excel-Liste) */
+function lg_excel_passt(array $liste, string $datum, array $delta): array
+{
+    $d = lg_ohne_null($delta);
+    $t = strtotime($datum . ' 12:00:00 UTC');
+    $best = null; $abst = 4;
+    foreach ($liste as $j => $e) {
+        if (!$e['frei'] || $e['delta'] != $d) continue;
+        $a = abs(strtotime($e['datum'] . ' 12:00:00 UTC') - $t) / 86400;
+        if ($a < $abst) { $best = $j; $abst = $a; }
+    }
+    if ($best !== null) return ['gleich', $best];
+    foreach ($liste as $j => $e) {
+        if (!$e['frei'] || $e['datum'] !== $datum) continue;
+        foreach ($d as $k => $n) if (($e['delta'][$k] ?? 0) * $n > 0) return ['abweichend', $j];
+    }
+    return ['', null];
 }
 
 /* ---------- Dachser-Liste „Unterkonto-Vorspediteur“ (Mail „Infos von Fa. DACHSER“) ----------

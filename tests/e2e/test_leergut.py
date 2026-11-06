@@ -32,7 +32,7 @@ import time
 from playwright.sync_api import sync_playwright
 
 from kunden_hilfe import Client, B
-from umgebung import SH, storage_write
+from umgebung import SH, storage_raw, storage_write
 
 PW = 'Sicheres-Passwort-1'
 HIER = os.path.dirname(os.path.abspath(__file__))
@@ -638,6 +638,51 @@ st, r = V.call('leergut_winab_import', wl(bericht={**WL['bericht'], 'lfVon': '20
 check('„WinAB ab“ später gesetzt: ältere Belege des Kontos werden storniert und nicht mehr gebucht', st == 200 and r['zahlen']['vorStart'] == 2 and r['zahlen']['ausgeglichen'] == 2
       and konto(must['id']) == [], (r.get('zahlen'), konto(must['id'])))
 
+# ── Excel-Liste und WinAB: keine doppelten Buchungen (Wunsch des Inhabers 06.11.2026, Bochumer doppelt) ──
+# Bis zur letzten Excel-Buchung eines Kontos gilt die Excel-Liste: WinAB-Belege mit gleicher Menge (±3 Tage) nicht buchen,
+# am selben Tag mit anderer Menge nicht buchen und zeigen, ohne Gegenstück buchen („fehlt in der Excel-Liste“); früher doppelt gebuchte stornieren.
+st, r = V.call('leergut_partner_save', {'name': 'Excel-Testlieferant', 'art': 'lieferant', 'lademittel': ['e2', 'h1'], 'lieferantNr': '2660001', 'winabAb': '2025-06-01'})
+xl = r.get('partner', {})
+ls = lambda nr, dt, zu: {'lf': '2660001', 'art': 'Lieferschein', 'beleg': nr, 'datum': dt, 'abgang': dict(zu), 'zugang': dict(zu)}   # Tausch laut WinAB
+XW = {'bericht': {'datei': 'Lademittelbewegungen_Excel.csv', 'von': '2026-01-01', 'bis': '2026-10-20', 'datum': '2026-10-20', 'dateiVon': '2025-01-02', 'lfVon': '2025-06-01', 'quelle': 'csv'},
+      'kunden': [], 'lieferanten': [{'nr': '2660001', 'lieferscheine': 6}],
+      'belege': [ls('41330', '2025-07-04', {'e2': 27, 'h1': 1}), ls('41356', '2025-07-09', {'e2': 32, 'h1': 1}), ls('41400', '2025-07-15', {'e2': 10}),
+                 ls('41500', '2025-07-20', {'e2': 5}), ls('41600', '2025-09-01', {'e2': 7})]}
+st, r = V.call('leergut_winab_import', XW)
+check('Excel-Abgleich: ohne Excel-Liste alle 5 Wareneingänge gebucht (Stand vor der Bereinigung)', st == 200 and r['zahlen']['neu'] == 5 and r['zahlen']['inExcel'] == 0, r.get('zahlen'))
+# Excel-Liste des Kontos (wie aus dem Datenpaket, Quelle „import“): 04.07. ohne H1, 09.07. gleich, 14.07. (WinAB 15.07.), Rückgabe 01.08.
+roh = storage_raw('leergut-bewegungen')
+bd = json.loads(roh.split('\n', 1)[1] if roh.startswith('<?php') else roh)
+xe = lambda i, dt, typ, ab, zu, beleg: {'id': 'bxl' + i, 'partner': xl['id'], 'datum': dt, 'typ': typ, 'abgang': ab, 'zugang': zu, 'beleg': beleg, 'text': 'Excel-Zeile ' + i,
+                                         'quelle': 'import', 'erfasst': {'t': '2026-10-29T08:00:00Z', 'von': 'Test', 'vonId': 'u0'}, 'storno': None}
+bd['liste'] += [xe('13', '2025-07-04', 'bewegung', {}, {'e2': 27}, '126717'), xe('14', '2025-07-09', 'bewegung', {}, {'e2': 32, 'h1': 1}, '126835'),
+                xe('15', '2025-07-14', 'bewegung', {}, {'e2': 10}, '126900'), xe('16', '2025-08-01', 'abholung', {'e2': 50}, {}, 'Abholung')]
+bd['rev'] = bd.get('rev', 0) + 1
+storage_write('leergut-bewegungen', bd)
+XW2 = {**XW, 'belege': XW['belege'] + [ls('41550', '2025-07-25', {'e2': 3})]}
+st, r = V.call('leergut_winab_import', {**XW2, 'vorschau': True})
+zz = r.get('zahlen', {})
+check('Excel-Abgleich (Vorschau): 2 schon in der Excel-Liste (09.07. gleich, 15.07. ±1 Tag), 1 abweichend (04.07. ohne H1), 2 fehlen, 3 doppelte werden storniert',
+      st == 200 and zz.get('inExcel') == 2 and zz.get('abweichend') == 1 and zz.get('nurWinab') == 2 and zz.get('doppeltStorniert') == 3 and zz.get('neu') == 1 and zz.get('gleich') == 2, zz)
+ab = r.get('abweichend') or [{}]
+check('Excel-Abgleich (Vorschau): abweichender Beleg mit beiden Mengen und Excel-Beleg', len(r.get('abweichend', [])) == 1 and ab[0].get('beleg') == 'Lieferschein 41330'
+      and ab[0].get('winab') == {'e2': -27, 'h1': -1} and ab[0].get('excel') == {'e2': -27} and ab[0].get('excelBeleg') == '126717' and ab[0].get('name') == 'Excel-Testlieferant', ab)
+st, r = V.call('leergut_winab_import', XW2)
+kb = V.call('leergut_konto&partner=' + xl['id'])[1]['bewegungen']
+aktiv = {b['beleg']: b for b in kb if b.get('quelle') == 'winab' and not b.get('storno')}
+weg = {b['beleg']: b['storno']['grund'] for b in kb if b.get('quelle') == 'winab' and b.get('storno')}
+sal = {x['id']: x['saldo'] for x in V.call('leergut_start')[1]['konten']}
+check('Excel-Abgleich: doppelte storniert mit Grund, fehlende und spätere gebucht', st == 200 and set(aktiv) == {'Lieferschein 41500', 'Lieferschein 41550', 'Lieferschein 41600'}
+      and 'steht schon in der Excel-Liste' in weg.get('Lieferschein 41356', '') and 'weicht von der Excel-Liste ab' in weg.get('Lieferschein 41330', '')
+      and 'steht schon in der Excel-Liste' in weg.get('Lieferschein 41400', ''), (sorted(aktiv), weg))
+check('Excel-Abgleich: Text „fehlt in der Excel-Liste“ nur im Excel-Zeitraum', 'fehlt in der Excel-Liste' in aktiv['Lieferschein 41550']['text'] and 'fehlt in der Excel-Liste' not in aktiv['Lieferschein 41600']['text'])
+check('Excel-Abgleich: Saldo = Excel-Liste + fehlende + spätere WinAB-Belege (E2 −27 −32 −10 +50 −5 −3 −7 = −34, H1 −1)', sal.get(xl['id']) == {'e2': -34, 'h1': -1}, sal.get(xl['id']))
+check('Excel-Abgleich: Excel-Buchungen bleiben unverändert', sum(1 for b in kb if b.get('quelle') == 'import' and not b.get('storno')) == 4)
+st, r = V.call('leergut_winab_import', XW2)
+zz = r.get('zahlen', {})
+check('Excel-Abgleich: erneut dieselbe Datei – nichts mehr zu tun', st == 200 and zz.get('doppeltStorniert') == 0 and zz.get('neu') == 0 and zz.get('ausgeglichen') == 0 and zz.get('gleich') == 3 and zz.get('inExcel') == 2, zz)
+check('Protokoll: Abgleich nennt die Excel-Liste', 'schon in der Excel-Liste (0 doppelte storniert)' in json.dumps(A.call('log')[1], ensure_ascii=False))
+
 # ── Dachser-Liste „Unterkonto-Vorspediteur“ (Mail „Infos von Fa. DACHSER“) ──
 # Erfundene Liste im Aufbau der Dachser-Mail: Seitenkopf mit Anschrift, je Fall drei Zeilen, Saldo „zu Gunsten DA“.
 def dachser_liste(faelle, per='31.10.26', saldo=None, seiten=2):
@@ -1102,12 +1147,26 @@ with sync_playwright() as p:
     pg.click('#lg-tabs [data-tab="einstellungen"]'); pg.wait_for_selector('#lg-e-lm tr[data-id="wk2"]')
     check('390px verwalten: Einstellungen mit WinAB-Nr. ohne waagerechtes Scrollen', pg.evaluate('document.documentElement.scrollWidth <= window.innerWidth + 1'))
     pg.screenshot(path=os.path.join(SH, 'leergut_einstellungen_390_dark.png'), full_page=True)
+    # Excel-Liste der Spedition bis 06.09.2026 mit anderer Menge als WinAB-Beleg 44021 (Lieferant 2300004) → Abgleich in der Vorschau
+    roh = storage_raw('leergut-bewegungen')
+    bd_alt = json.loads(roh.split('\n', 1)[1] if roh.startswith('<?php') else roh)
+    bd = json.loads(json.dumps(bd_alt))
+    bd['liste'].append({'id': 'bxlui1', 'partner': SP, 'datum': '2026-09-06', 'typ': 'bewegung', 'abgang': {'e2': 6}, 'zugang': {}, 'beleg': 'LS-Excel-7', 'text': 'Excel-Zeile 99',
+                        'quelle': 'import', 'erfasst': {'t': '2026-10-29T08:00:00Z', 'von': 'Test', 'vonId': 'u0'}, 'storno': None})
+    bd['rev'] = bd_alt.get('rev', 0) + 1
+    storage_write('leergut-bewegungen', bd)
     with open(csvd, 'wb') as f:
         f.write(winab_csv(WCSV + [(1, '08.09.2026', '', '2222222', 3, 'Abgang', '44400', 'Lieferschein', 'E2 Kisten')]))
     pg.set_input_files('#lg-w-datei', csvd)
     pg.wait_for_selector('#lg-w-lief [data-lf="2222222"]')
-    check('390px: CSV-Vorschau mit Zuordnung ohne waagerechtes Scrollen', pg.evaluate('document.documentElement.scrollWidth <= window.innerWidth + 1'))
+    exc = text(pg, '#lg-w-excel')
+    check('CSV-Vorschau: Abgleich mit der Excel-Liste – abweichender Beleg nicht gebucht, früher gebuchter wird storniert, Tabelle mit beiden Mengen',
+          '1 Beleg weicht am selben Tag von der Excel-Liste ab' in exc and '1 früher doppelt gebuchter Beleg wird storniert' in exc
+          and 'Lieferschein 44021' in text(pg, '#lg-w-abweichend') and 'LS-Excel-7' in text(pg, '#lg-w-abweichend') and '+6' in text(pg, '#lg-w-abweichend'), (exc, text(pg, '#lg-w-abweichend')))
+    check('390px: CSV-Vorschau mit Zuordnung und Excel-Abgleich ohne waagerechtes Scrollen', pg.evaluate('document.documentElement.scrollWidth <= window.innerWidth + 1'))
     pg.locator('#lg-w-vorschau').screenshot(path=os.path.join(SH, 'leergut_winab_csv_390_dark.png'))
+    bd_alt['rev'] = bd['rev'] + 1
+    storage_write('leergut-bewegungen', bd_alt)   # nur Vorschau: Stand von vorher wiederherstellen
     ctx.close()
 
     # Buchen am Handy: Abschreibungen mit beiden Knöpfen, Dachser-Dialog

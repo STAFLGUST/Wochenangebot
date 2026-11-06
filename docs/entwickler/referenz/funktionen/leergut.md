@@ -2,7 +2,7 @@
 
 <!-- ERZEUGT von `python3 werkzeuge/doku.py erzeugen` – nicht von Hand ändern. Quelle: Funktionen und Kommentare im Code. Die CI prüft, dass diese Datei zum Code passt. -->
 
-4 Dateien, 124 Funktionen – in der Reihenfolge der Datei, **fett** die Abschnitte. Text = erste Aussage des Kommentars direkt über der Funktion (Python: Docstring). Übersicht aller Module: [README.md](README.md).
+4 Dateien, 127 Funktionen – in der Reihenfolge der Datei, **fett** die Abschnitte. Text = erste Aussage des Kommentars direkt über der Funktion (Python: Docstring). Übersicht aller Module: [README.md](README.md).
 
 ## `app/api/aktionen/leergut.php`
 
@@ -106,6 +106,8 @@ _Leergut · Leergutkonten und Abstimmung_
 - `lg_winab_zahl(v)` – Lademittelbestand laut WinAB-Stammdaten als ganze Zahl; null = keiner (leer oder unlesbar)
 - `lg_partner_stamm(partner)` – Angaben der Stammdaten der Verwaltung je Partner (nur Anzeige, nur lesend): [Versandart je Partner-ID, WinAB-Lademittelbestand je Partner-ID als [[Nummer, …
 - `lg_winab_abgleich(w, stamm, bew, me)` – Abgleich je Beleg im Zeitraum (von–bis): neu → buchen, gleich → nichts, geändert → alten stornieren und neu buchen, nicht mehr in der Datei (ausgeglichen) → …
+- `lg_excel_index(bew)` – Excel-Liste je Konto (Buchungen aus dem Datenpaket, Quelle „import“, nicht storniert): [Konto => [[i, datum, delta, frei], …] ohne Anfangsbestände, Konto => …
+- `lg_excel_passt(liste, datum, delta)` – Gegenstück eines WinAB-Belegs in der Excel-Liste des Kontos: ['gleich', j] = noch freie Excel-Buchung mit gleicher Wirkung je Lademittel höchstens 3 Tage …
 
 **Dachser-Liste „Unterkonto-Vorspediteur“ (Mail „Infos von Fa. DACHSER“)**
 
@@ -194,6 +196,7 @@ _STAFL-Plattform · Leergut – Oberfläche der Leergutkonten_
 - `winabAnfrage(w, ab, zuordnung)` – Was an den Server geht: CSV ab „Übernehmen ab“ (Belege davor nur gezählt), Bericht (.XLS) unverändert
 - `winabVorher(w, ab)`
 - `zeigeWinabVorschau(st, r)`
+- `excelAbgleich(z, abw)` – Abgleich mit der Excel-Liste: bis zur letzten Excel-Buchung eines Kontos gilt die Excel-Liste.
 - `winabPruefen(fokus)` – Vorschau beim Server anfragen (Abgleich ohne Speichern) – nach Dateiwahl, „Übernehmen ab“ und Zuordnung
 
 **Eingabemasken: gemeinsame Hilfen**
