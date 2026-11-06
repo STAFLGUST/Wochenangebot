@@ -10,13 +10,17 @@
 <script src="../../assets/theme.js"></script>
 <script src="../../assets/format.js"></script>
 <link rel="stylesheet" href="../../assets/app.css">
+<link rel="stylesheet" href="../../assets/rahmen.css">
 <link rel="stylesheet" href="controlling.css">
 </head>
-<body class="ctl">
+<body class="ctl r" data-rahmen="controlling">
 <div class="ctl-bg" aria-hidden="true"><span></span><span></span><span></span></div>
+<div class="r-app">
+<nav class="r-leiste" id="r-leiste" aria-label="Hauptnavigation" hidden></nav>
+<div class="r-inhalt">
 <div class="ctl-seite">
   <header class="ctl-kopf ctl-glas">
-    <a class="stafl-zurueck" id="ctl-zurueck" href="../../dashboard/" title="Zurück zum Dashboard" aria-label="Zurück zum Dashboard"><svg class="i" aria-hidden="true"><use href="#i-back"/></svg><span class="lbl">Dashboard</span></a>
+    <a class="stafl-zurueck" id="ctl-zurueck" href="../../dashboard/" title="Zur Startseite" aria-label="Zur Startseite"><svg class="i" aria-hidden="true"><use href="#i-back"/></svg><span class="lbl">Start</span></a>
     <span class="ctl-marke"><img class="brand-logo" src="../../assets/logo-standard-fleisch-kopf.png" width="428" height="96" alt="Standard-Fleisch"></span>
     <span class="ctl-modul"><svg class="i" aria-hidden="true"><use href="#i-chart"/></svg>Controlling</span>
     <div class="ctl-aktionen">
@@ -43,6 +47,8 @@
   </main>
   <footer class="ctl-fuss">STAFL-Plattform · Standard-Fleisch</footer>
 </div>
+</div>
+</div>
 <div class="ctl-toast" id="ctl-toast" role="status" aria-live="polite"></div>
 
 <svg class="ctl-symbole" aria-hidden="true">
@@ -52,6 +58,7 @@
   <symbol id="i-moon" viewBox="0 0 24 24"><path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z"/></symbol>
   <symbol id="i-sun" viewBox="0 0 24 24"><circle cx="12" cy="12" r="4"/><path d="M12 2.5v2M12 19.5v2M4.6 4.6 6 6M18 18l1.4 1.4M2.5 12h2M19.5 12h2M4.6 19.4 6 18M18 6l1.4-1.4"/></symbol>
 </svg>
+<script src="../../assets/rahmen.js"></script>
 <script src="controlling.js"></script>
 <script src="umsatz-auswertung.js"></script>
 <script src="umsatz-details.js"></script>
