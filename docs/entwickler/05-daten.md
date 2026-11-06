@@ -261,7 +261,7 @@ Bestellwünsche (`bestellungen`) und Einzelangebote (`einzelangebote`): [bestell
 **`kunden`**: `{"rev": 7, "customers": [ … ], "updatedAt": "…"}`.
 
 ```json
-{"id": "k0123456789ab", "nr": "10001", "gruppe": "10", "vertreter": "3", "vertreter2": "",
+{"id": "k0123456789ab", "nr": "10001", "gruppe": "10", "vertreter": "3", "vertreter2": "", "versandart": "2",
  "firma": "Testfirma GmbH", "ansprechpartner": "Erika Beispiel", "strasse": "Musterweg 1", "plz": "20000",
  "ort": "Hamburg", "land": "Deutschland", "email": "einkauf@example.invalid", "telefon": "", "notiz": "",
  "angebote": ["std", "kunde-a"], "active": true, "mailAngebot": true, "created": "…", "changed": "…",
@@ -284,12 +284,16 @@ Aus dem Kundenimport (Kundendaten-Export der Warenwirtschaft, `kunden_import_lau
          "letzterLieferschein": "2026-09-12", "angelegtAm": "2019-02-03", "angelegtUm": "09:05", "angelegtVon": "TST",
          "kreditlimit": 3000, "umsatzMonat": 1234.5, "rohgewinnMonat": -12.3, "umsatzJahr": 12345.67, "gln": "4000000000017",
          "rgSperre": false, "abgabeCitti": true, "dfb": false, "mailAB": "ab@example.invalid", "weitereEmails": "…",
+         "name2": "- Fleischtheke -", "name3": "…", "winabAngebot": "ANGEBOT 1", "verband": "4", "steuernummer": "…",
+         "hermesId": "0070000001", "hermesDeckung": 25000, "lademittelbestand": -12, "abPerMail": true,
+         "partnerName": "…", "partner1": "…", "partner2": "…", "partnerAbteilung": "…", "partnerEmail": "…", "partnerTelefon": "…", "partnerTelefax": "…",
          "stand": "2026-10-28T12:00:00Z"},
 "autoInaktiv": {"seit": "…", "grund": "keine Rechnung seit 18 Monaten (letzte 12.03.2024)"},
 "aktivVonHand": "…"
 ```
 
-- `wawi`: alle weiteren Spalten des Exports (Felder und Typen: `KUNDEN_WAWI_FELDER`), nur nicht leere, gültige Werte;
+- `wawi`: alle weiteren Spalten des Exports (Felder und Typen: `KUNDEN_WAWI_FELDER`; seit 06.11.2026 auch die Spalten des Exports
+  „Kundenstammdaten komplett“, `lademittelbestand` als ganze Zahl = Zähler der Warenwirtschaft über alle Lademittel), nur nicht leere, gültige Werte;
   `stand` = letzte Änderung durch einen Import. Ein Import setzt bzw. leert nur die Felder, deren Spalte die Datei enthält
   (`wawiFelder`). Ausgeliefert nur an Nutzer mit `kunden.bearbeiten` (`customer_public($c, true)`), nie an CRM, Kunden,
   E-Mail-Antworten oder ins Protokoll (dort nur die Anzahl).
@@ -301,9 +305,12 @@ Aus dem Kundenimport (Kundendaten-Export der Warenwirtschaft, `kunden_import_lau
   dann nicht erneut, bis er von Hand deaktiviert wird. Kunden mit aktivem Zugang und Anmeldung in den 18 Monaten
   bleiben ebenfalls aktiv.
 
-**`kundengruppen`**, **`vkgruppen`**, **`vertreter`**: je Liste `{"rev": 2, "groups": [{"nr": "10", "name": "…", …}], "updatedAt": "…", "updatedBy": "…"}`;
+**`kundengruppen`**, **`vkgruppen`**, **`vertreter`**, **`versandarten`**, **`lieferanten`**: je Liste `{"rev": 2, "groups": [{"nr": "10", "name": "…", …}], "updatedAt": "…", "updatedBy": "…"}`;
 Felder je Liste in `GRUPPEN_LISTEN` (`lib/kunden.php`): Kunden- und VK-Gruppen `name`, `klasse`, `kategorie`;
-Vertreter `name`, `kurz`, `telefon`, `plz`, `ort`, `land`. Nummer `^[0-9A-Za-z._-]{1,10}$`, höchstens 2000.
+Vertreter `name`, `kurz`, `telefon`, `plz`, `ort`, `land`; Versandarten `name` (Text); Lieferanten `name` (Name1, darf fehlen), `kurz`,
+`strasse`, `plz`, `ort`, `land`, `landIntrastat`, `telefon`, `gruppe`, `konto`, `kondition`, `vertreter`, `vertreterName`, `versandart`, `gln`,
+`lademittelbestand`, `umsatzJahr`, `kwUmsatzLfdJahr`, `kwUmsatzVorjahr`, `angelegtAm` (Texte wie im Export; die drei Umsatzfelder gibt
+`lieferanten` nur mit `stammdaten.bearbeiten` aus – `LIEFERANTEN_UMSATZ`). Nummer `^[0-9A-Za-z._-]{1,10}$`, höchstens 2000.
 Gespeichert wird immer die ganze Liste (fehlende Nummern entfallen); je Eintrag bleiben nicht gesendete Felder und
 unbekannte Felder der gespeicherten Fassung erhalten (`gruppen_clean` mit `$alt`), ebenso weitere Felder des Dokuments.
 
@@ -441,8 +448,11 @@ Mengen sind Zuordnungen Lademittel → ganze Stückzahl (`{"e2": 40, "h1": 2}`),
   "partner": [{"id": "p…", "name": "…", "art": "spedition", "mandant": "standard", "kontoNr": "", "kundenNr": "", "fristTage": 14, "email": "",
   "ansprechpartner": "", "lieferanten": "", "notiz": "", "lademittel": ["e2", "h1"], "aktiv": true, "rev": 2, "erstellt": {…}, "geaendert": {…},
   "quelle": "import|winab"?}]}`. `kundenNr` = WinAB-Kundennummer (nur Ziffern, eindeutig; ohne Angabe beim Ändern bleibt sie), `quelle: "winab"` =
-  beim WinAB-Import angelegt (Kunde „Firma (Kd.-Nr.)“, Lieferant „Lieferant <Nr.> (WinAB)“). `lieferantNr` = WinAB-Lieferantennummer
-  (Lieferanten, Speditionen; nur Ziffern, eindeutig). Lademittel tragen `winabNr` und `kurz` (WinAB-Stammdaten). `winab` (nach einer WinAB-Datei):
+  beim WinAB-Import angelegt (Kunde „Firma (Kd.-Nr.)“, Lieferant siehe unten). `lieferantNr` = WinAB-Lieferantennummer
+  (Lieferanten, Speditionen; nur Ziffern), `lieferantNrWeitere` = weitere Nummern desselben Kontos (Text, durch Komma/Leerzeichen getrennt,
+  höchstens 50), `winabAb` = „WinAB-Belege ab“ (Datum, leer = alle), `wareneingangTausch` (bool, Standard aus: Wareneingänge zählen nur den Zugang).
+  Eine Nummer darf an mehreren Konten stehen, wenn deren `winabAb` verschieden ist (Wechsel des Kontoinhabers); neue Lieferantenkonten heißen
+  „Name1 (Nr.)“ aus den Lieferanten-Stammdaten der Verwaltung (sonst „Lieferant <Nr.> (WinAB)“). Lademittel tragen `winabNr` und `kurz` (WinAB-Stammdaten). `winab` (nach einer WinAB-Datei):
   `{"ersteLieferung": "…", "letzteLieferung": "…", "letzteRueckgabe": "…", "bis": "<Stand der Datei>"}` – laut WinAB, auch aus reinem Tausch
   (Belege ohne Wirkung auf den Saldo werden nicht gebucht); spätere Berichte führen es fort (erste = früheste, letzte = späteste Angabe).
   Ohne Dokument gelten die Grundwerte `lg_grund_lademittel()` (E2 5,50 €, H1 36,00 €, übrige ohne Wert). Lademittel werden nie
@@ -469,7 +479,7 @@ Datenpaket (`leergut_import`, nur mit `leergut.verwalten`): `{"format": "stafl-l
 nur mit `ersetzen`. Echte Pakete liegen nie im Repository (GR-007); Beispiel: `tests/fixtures/leergut/datenpaket.json`.
 
 WinAB-Datei (`leergut_winab_import`, nur mit `leergut.verwalten`, `vorschau: true` schreibt nichts): `{"bericht": {"datei": "…", "von": "<Übernehmen ab>",
-"bis": "<Stand>", "dateiVon": "<Beginn der Datei>"?, "quelle": "csv"?}, "kunden": [{"nr": "9100001", "name": "…"?}],
+"bis": "<Stand>", "dateiVon": "<Beginn der Datei>"?, "lfVon": "<Lieferantenbelege ab>"?, "quelle": "csv"?}, "kunden": [{"nr": "9100001", "name": "…"?}],
 "lieferanten": [{"nr": "2850008", "lieferscheine": 12}]?, "belege": [{"kd": "9100001" | "lf": "2850008",
 "art": "Lieferschein|Gutschrift|Rechnung", "beleg": "500001", "datum": "…", "abgang": {"e2": 21}, "zugang": {"e2": 20}}],
 "zuordnung": {"2850008": "<Partner-ID>|neu"}?}` – `kunden`/`lieferanten` nennen alle der Datei (je Kunde optional `ersteLieferung`,
@@ -477,7 +487,12 @@ WinAB-Datei (`leergut_winab_import`, nur mit `leergut.verwalten`, `vorschau: tru
 nur lesend). Lieferantenbelege werden nur bei Partnern mit `lieferantNr` gebucht; `zuordnung` setzt die Nummer an einem bestehenden Partner
 (kein Kundenkonto, noch ohne Nummer) oder legt ein Konto an. Abgleich je Kunde bzw. Lieferant, Belegart und Belegnr. nur im Zeitraum und für die
 Genannten; geänderte Belege werden storniert und neu gebucht, fehlende storniert (Grund „WinAB-Abgleich vom …“). Antwort zusätzlich
-`lieferanten` (Nr., Belege mit Wirkung, Saldo ohne Konto, zugeordneter Partner) und `summeLieferanten`. Zeilen mit Kunde sind Kundenbelege,
+`lieferanten` (Nr., Name und Versandart aus den Lieferanten-Stammdaten, Belege mit Wirkung, Saldo ohne Konto, zugeordneter Partner, `vorschlag` =
+Konto ohne Nummer mit passendem Namen) und `summeLieferanten`; `zaehler` nennt `tausch` (Wareneingänge mit nicht gezähltem Tausch) und `vorStart`
+(Belege vor „WinAB-Belege ab“). `leergut_start` liefert dazu `versand` (Versandart je Partner) und `winabBestand` (je Partner `[[WinAB-Nr., Stück], …]` aus
+`lademittelbestand` des Lieferanten- bzw. Kundenstamms – nur Anzeige, `lg_partner_stamm`). `lfVon` (Standard `von`, nicht vor `dateiVon`) gilt für Lieferantenbelege; die Seite setzt es auf das früheste
+`winabAb` der Konten. Wareneingang = Lieferschein eines Lieferanten: gebucht wird der Zugang, als Abgang nur `max(0, Abgang − Zugang)`
+(außer `wareneingangTausch`). Zeilen mit Kunde sind Kundenbelege,
 auch wenn WinAB dort zusätzlich eine Lieferantennummer nennt (die zählt dort nicht). Die Datei bleibt im Browser;
 gespeichert werden nur die Buchungen.
 

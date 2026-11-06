@@ -82,6 +82,7 @@ SUITES['vkgruppen'] = (8790, 'data-seed', True)
 SUITES['angebotskategorien'] = (8790, 'data-seed', True)   # Stammdaten Angebotskategorien und Aufbau des Angebots danach
 SUITES['kundenimport'] = SUITES['bestellung']
 SUITES['vertreter'] = SUITES['bestellung']
+SUITES['lieferanten'] = SUITES['bestellung']   # Stammdaten Lieferanten und Versandarten, Versandart am Kunden
 SUITES['sicherheit_freigaben'] = SUITES['bestellung']
 SUITES['schutz'] = SUITES['bestellung']
 SUITES['nutzer_anlegen'] = SUITES['bestellung']
@@ -178,6 +179,7 @@ GEWICHT = {
     'qs_bericht': 20,   # geschätzt (Oktober 2026), noch ohne CI-Median
     'protokoll': 6,   # geschätzt (Oktober 2026), noch ohne CI-Median
     'angebotskategorien': 12,   # geschätzt (November 2026), noch ohne CI-Median
+    'lieferanten': 12,   # geschätzt (November 2026), noch ohne CI-Median
     'rollen': 20, 'rollen_host': 8, 'einheit': 90,   # geschätzt (Oktober 2026), noch ohne CI-Median
 }
 

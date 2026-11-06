@@ -561,6 +561,83 @@ st, _, raw = L.call('leergut_export', {'liste': 'kunden'}, raw=True)
 zeile6 = next((z for z in raw.split('\r\n') if '9100006' in z), '')
 check('Abholliste: Kundenkonto aus der Datei mit ganzer Geschichte (+17 E2)', '"17"' in zeile6 and zeile6.startswith('"Fleischerei Beispiel (9100006)"'), zeile6)
 
+# ── Lieferantenstamm der Verwaltung, Wareneingang ohne Tausch, Sammelkonto mit „WinAB ab“ (Wunsch des Inhabers 06.11.2026) ──
+# Erfundene Stammdaten: Name und Versandart je WinAB-Lieferant (Verwaltung → Lieferanten / Versandarten)
+storage_write('versandarten', {'rev': 1, 'groups': [{'nr': '1', 'name': 'Direktlieferung'}]})
+storage_write('lieferanten', {'rev': 1, 'groups': [{'nr': '2550077', 'name': 'Musterfleisch GmbH & Co. KG', 'kurz': 'MUSTER', 'versandart': '1', 'umsatzJahr': '1,00 €'},
+                                                   {'nr': '2550078', 'name': '', 'kurz': 'NURKURZ', 'versandart': ''}]})
+st, r = V.call('leergut_partner_save', {'name': 'Musterfleisch', 'art': 'lieferant', 'lademittel': ['e2', 'h1']})
+must = r.get('partner', {})
+WL = {'bericht': {'datei': 'Lademittelbewegungen_Lief.csv', 'von': '2026-01-01', 'bis': '2026-10-20', 'datum': '2026-10-20', 'dateiVon': '2025-01-02', 'quelle': 'csv'},
+      'kunden': [], 'lieferanten': [{'nr': '2550077', 'lieferscheine': 3}, {'nr': '2550078', 'lieferscheine': 1}],
+      'belege': [{'lf': '2550077', 'art': 'Lieferschein', 'beleg': '45001', 'datum': '2026-08-04', 'abgang': {'e2': 5, 'h1': 1}, 'zugang': {'e2': 5, 'h1': 1}},   # Tausch laut WinAB
+                 {'lf': '2550077', 'art': 'Lieferschein', 'beleg': '45002', 'datum': '2026-09-05', 'abgang': {}, 'zugang': {'e2': 3}},
+                 {'lf': '2550077', 'art': 'Lieferschein', 'beleg': '45003', 'datum': '2026-09-10', 'abgang': {'e2': 9}, 'zugang': {'e2': 4}},                   # 4 getauscht, 5 zurück
+                 {'lf': '2550078', 'art': 'Lieferschein', 'beleg': '45010', 'datum': '2026-09-11', 'abgang': {'e2': 2}, 'zugang': {'e2': 2}}]}
+wl = lambda **aend: {**json.loads(json.dumps(WL)), **aend}
+st, r = V.call('leergut_winab_import', wl(vorschau=True))
+lz = {x['nr']: x for x in r.get('lieferanten', [])}
+check('Lieferantenstamm: Name, Versandart und Vorschlag (Konto mit passendem Namen) in der Vorschau – ohne Umsätze',
+      st == 200 and lz['2550077']['name'] == 'Musterfleisch GmbH & Co. KG' and lz['2550077']['versandart'] == '1 · Direktlieferung' and lz['2550077']['vorschlag'] == must.get('id')
+      and lz['2550078']['name'] == 'NURKURZ' and lz['2550078']['vorschlag'] is None and 'umsatz' not in json.dumps(r).lower(), lz)
+check('Wareneingang: Tausch laut WinAB zählt nicht – Zugang bleibt (−5/−1, −3, Rückgabe +5 −4), reiner Tausch eines anderen Lieferanten −2',
+      lz['2550077']['saldo'] == {'e2': -7, 'h1': -1} and lz['2550077']['belege'] == 3 and lz['2550078']['saldo'] == {'e2': -2} and r['zahlen']['tausch'] == 3, (lz, r.get('zahlen')))
+st, r = V.call('leergut_winab_import', wl(zuordnung={'2550077': must['id'], '2550078': 'neu'}))
+s = V.call('leergut_start')[1]
+pz = {p.get('lieferantNr'): p for p in s['partner'] if p.get('lieferantNr')}
+sal = {x['id']: x['saldo'] for x in s['konten']}
+check('Zugeordnet: Konto „Musterfleisch“ mit Nummer, neues Konto mit Namen aus dem Stamm', st == 200 and pz['2550077']['id'] == must['id'] and pz['2550078']['name'] == 'NURKURZ (2550078)'
+      and sal[must['id']] == {'e2': -7, 'h1': -1} and r['lieferantenNeu'] == ['NURKURZ (2550078)'], (r.get('zahlen'), r.get('lieferantenNeu')))
+mb = [b for b in V.call('leergut_konto&partner=' + must['id'])[1]['bewegungen'] if b.get('quelle') == 'winab']
+check('Buchungstext nennt den nicht gezählten Tausch', len(mb) == 3 and 'Tausch laut WinAB nicht gezählt (5 E2, 1 H1)' in mb[0]['text'] and mb[0]['abgang'] in ({}, []) and mb[0]['zugang'] == {'e2': 5, 'h1': 1}
+      and mb[2]['abgang'] == {'e2': 5} and 'Tausch' not in mb[1]['text'], [(b['beleg'], b['abgang'], b['zugang'], b['text'][-80:]) for b in mb])
+check('Versandart am Konto (Start): laut Lieferantenstamm', s.get('versand', {}).get(must['id']) == '1 · Direktlieferung', s.get('versand'))
+# Lademittelbestand laut WinAB-Stammdaten (Zähler der Warenwirtschaft) je Konto: Lieferanten- bzw. Kundenstamm, nur zur Anzeige
+storage_write('lieferanten', {'rev': 2, 'groups': [{'nr': '2550077', 'name': 'Musterfleisch GmbH & Co. KG', 'kurz': 'MUSTER', 'versandart': '1', 'lademittelbestand': '-1.234'},
+                                                   {'nr': '2550078', 'name': '', 'kurz': 'NURKURZ', 'versandart': '', 'lademittelbestand': 'unlesbar'}]})
+storage_write('kunden', {'rev': 2, 'customers': [{'id': 'klg000000001', 'nr': '9100006', 'firma': 'Fleischerei Beispiel', 'active': True, 'versandart': '1', 'wawi': {'lademittelbestand': 17}}]})
+s = V.call('leergut_start')[1]
+p6 = next(p for p in s['partner'] if p.get('kundenNr') == '9100006')
+wb = s.get('winabBestand', {})
+check('WinAB-Lademittelbestand je Konto: Lieferant aus dem Lieferantenstamm (-1.234), Kunde aus dem Kundenstamm, unlesbar → keiner',
+      wb.get(must['id']) == [['2550077', -1234]] and wb.get(p6['id']) == [['9100006', 17]] and pz['2550078']['id'] not in wb
+      and s['versand'].get(p6['id']) == '1 · Direktlieferung', (wb, s.get('versand')))
+check('WinAB-Lademittelbestand: Leser sieht ihn auch (nur Anzeige, keine Umsätze)', L.call('leergut_start')[1].get('winabBestand', {}).get(must['id']) == [['2550077', -1234]])
+# Konto mit „Tausch laut WinAB zählt“: der reine Tausch fällt weg, der gebuchte Beleg wird storniert
+mp = next(p for p in s['partner'] if p['id'] == must['id'])
+st, r = V.call('leergut_partner_save', {'id': mp['id'], 'rev': mp['rev'], 'name': mp['name'], 'art': 'lieferant', 'lademittel': ['e2', 'h1'], 'wareneingangTausch': True})
+check('Partner: „Tausch laut WinAB zählt“ gespeichert', st == 200 and r['partner']['wareneingangTausch'] is True and r['partner']['lieferantNr'] == '2550077', r)
+st, r = V.call('leergut_winab_import', wl())
+sal = {x['id']: x['saldo'] for x in V.call('leergut_start')[1]['konten']}
+check('Tausch zählt: reiner Tausch ausgeglichen (storniert), teilweiser Tausch geändert (9 ab, 4 zu: +5)', st == 200 and r['zahlen']['ausgeglichen'] == 1 and r['zahlen']['geaendert'] == 1
+      and r['zahlen']['gleich'] == 2 and sal[must['id']] == {'e2': 2}, (r.get('zahlen'), sal.get(must['id'])))
+mp = next(p for p in V.call('leergut_start')[1]['partner'] if p['id'] == must['id'])
+V.call('leergut_partner_save', {'id': mp['id'], 'rev': mp['rev'], 'name': mp['name'], 'art': 'lieferant', 'lademittel': ['e2', 'h1'], 'wareneingangTausch': False})
+# Sammelkonto: weitere Nummer ab einem Tag – Belege ab dann dort, davor beim bisherigen Konto
+st, r = V.call('leergut_partner_save', {'name': 'Sammelkonto Test', 'art': 'spedition', 'lademittel': ['e2', 'h1'], 'lieferantNrWeitere': '2550077, 2550077', 'winabAb': '2026-09-01'})
+sk = r.get('partner', {})
+check('Sammelkonto: weitere Nummer und „WinAB ab“ gespeichert (doppelte entfällt)', st == 200 and sk.get('lieferantNrWeitere') == ['2550077'] and sk.get('winabAb') == '2026-09-01', r)
+st, r = V.call('leergut_partner_save', {'name': 'Sammelkonto Doppelt', 'art': 'spedition', 'lademittel': ['e2'], 'lieferantNrWeitere': '2550077', 'winabAb': '2026-09-01'})
+check('Sammelkonto: gleiche Nummer mit gleichem „WinAB ab“ → 422', st == 422 and 'Sammelkonto Test' in r.get('error', ''), r)
+check('Sammelkonto: Nummer nur aus Ziffern (422)', V.call('leergut_partner_save', {'name': 'Sammelkonto X', 'art': 'spedition', 'lademittel': ['e2'], 'lieferantNrWeitere': '25-5'})[0] == 422)
+st, r = V.call('leergut_winab_import', wl())
+konto = lambda pid: [b['beleg'] for b in V.call('leergut_konto&partner=' + pid)[1]['bewegungen'] if b.get('quelle') == 'winab' and not b.get('storno')]
+check('Sammelkonto: Belege ab 01.09. umgebucht (storniert und neu), August bleibt beim bisherigen Konto',
+      st == 200 and r['zahlen']['geaendert'] == 2 and konto(sk['id']) == ['Lieferschein 45002', 'Lieferschein 45003'] and konto(must['id']) == ['Lieferschein 45001'], (r.get('zahlen'), konto(sk['id']), konto(must['id'])))
+# „WinAB ab“ vor dem Zeitraum: Lieferantenbelege ab diesem Tag (z. B. Bochumer 2025), Kunden weiter ab „von“
+mp = next(p for p in V.call('leergut_start')[1]['partner'] if p['id'] == must['id'])
+st, r = V.call('leergut_partner_save', {'id': mp['id'], 'rev': mp['rev'], 'name': mp['name'], 'art': 'lieferant', 'lademittel': ['e2', 'h1'], 'winabAb': '2025-11-01'})
+alt25 = {'lf': '2550077', 'art': 'Lieferschein', 'beleg': '44001', 'datum': '2025-11-12', 'abgang': {'e2': 7}, 'zugang': {'e2': 7}}
+check('Lieferantenbeleg vor „von“ ohne „lfVon“ (ältere Oberfläche) → Fehler', V.call('leergut_winab_import', wl(belege=WL['belege'] + [alt25], vorschau=True))[1].get('fehler'))
+st, r = V.call('leergut_winab_import', wl(bericht={**WL['bericht'], 'lfVon': '2025-11-01'}, belege=WL['belege'] + [alt25]))
+check('Sammelkonto: WinAB-Lademittelbestand der weiteren Nummer', V.call('leergut_start')[1]['winabBestand'].get(sk['id']) == [['2550077', -1234]])
+check('„WinAB ab“ 01.11.2025: Wareneingang vom 12.11.2025 gebucht', st == 200 and r['zahlen']['neu'] == 1 and konto(must['id']) == ['Lieferschein 44001', 'Lieferschein 45001'], (r.get('zahlen'), konto(must['id'])))
+mp = next(p for p in V.call('leergut_start')[1]['partner'] if p['id'] == must['id'])
+V.call('leergut_partner_save', {'id': mp['id'], 'rev': mp['rev'], 'name': mp['name'], 'art': 'lieferant', 'lademittel': ['e2', 'h1'], 'winabAb': '2026-08-10'})
+st, r = V.call('leergut_winab_import', wl(bericht={**WL['bericht'], 'lfVon': '2025-11-01'}, belege=WL['belege'] + [alt25]))
+check('„WinAB ab“ später gesetzt: ältere Belege des Kontos werden storniert und nicht mehr gebucht', st == 200 and r['zahlen']['vorStart'] == 2 and r['zahlen']['ausgeglichen'] == 2
+      and konto(must['id']) == [], (r.get('zahlen'), konto(must['id'])))
+
 # ── Dachser-Liste „Unterkonto-Vorspediteur“ (Mail „Infos von Fa. DACHSER“) ──
 # Erfundene Liste im Aufbau der Dachser-Mail: Seitenkopf mit Anschrift, je Fall drei Zeilen, Saldo „zu Gunsten DA“.
 def dachser_liste(faelle, per='31.10.26', saldo=None, seiten=2):
@@ -849,10 +926,12 @@ with sync_playwright() as p:
     pg.fill('#pa-name', 'UI-Kühlhaus'); pg.select_option('#pa-art', 'kuehlhaus'); pg.fill('#pa-email', 'kein-at')
     pg.click('#pa-form [type="submit"]'); pg.wait_for_selector('#pa-meldung:not(:empty)')
     check('Partner: Fehler des Servers im Dialog', 'E-Mail' in text(pg, '#pa-meldung'))
-    pg.fill('#pa-email', 'ui@example.invalid'); pg.fill('#pa-lfnr', '2300004'); pg.click('#pa-form [type="submit"]'); zu(pg, '#dlg-partner')
+    check('Partner: Felder für Sammelkonto, „WinAB-Belege ab“ und Tausch beim Wareneingang (aus)', pg.input_value('#pa-lfweitere') == '' and pg.input_value('#pa-winab-ab') == '' and not pg.is_checked('#pa-tausch'))
+    pg.fill('#pa-email', 'ui@example.invalid'); pg.fill('#pa-lfnr', '2300004'); pg.fill('#pa-lfweitere', '2550091; 2550092'); pg.fill('#pa-winab-ab', '2021-01-01')
+    pg.click('#pa-form [type="submit"]'); zu(pg, '#dlg-partner')
     pa = [x for x in V.call('leergut_start')[1]['partner'] if x['name'] == 'UI-Kühlhaus']
-    check('Oberfläche: Partner angelegt (mit WinAB-Lieferantennummer)', len(pa) == 1 and pa[0]['art'] == 'kuehlhaus' and pa[0]['fristTage'] == 14 and pa[0]['lademittel'] == ['e2', 'h1']
-          and pa[0]['lieferantNr'] == '2300004', pa)
+    check('Oberfläche: Partner angelegt (mit WinAB-Lieferantennummer, weiteren Nummern und „WinAB-Belege ab“)', len(pa) == 1 and pa[0]['art'] == 'kuehlhaus' and pa[0]['fristTage'] == 14 and pa[0]['lademittel'] == ['e2', 'h1']
+          and pa[0]['lieferantNr'] == '2300004' and pa[0]['lieferantNrWeitere'] == ['2550091', '2550092'] and pa[0]['winabAb'] == '2021-01-01' and pa[0]['wareneingangTausch'] is False, pa)
     pg.wait_for_function("(document.querySelector('#lg-e-partner')?.textContent || '').includes('UI-Kühlhaus')")
     check('Partnerliste zeigt die WinAB-Lieferantennummer', 'WinAB-Lief. 2300004' in text(pg, '#lg-e-partner'))
     check('Lademittel: WinAB-Nr. und Kurzbezeichnung je Zeile (WK2-Kiste 7, Karton 5 inaktiv)',
@@ -860,8 +939,8 @@ with sync_playwright() as p:
           and pg.input_value('#lg-e-lm tr[data-id="karton"] [data-f="winabNr"]') == '5' and not pg.is_checked('#lg-e-lm tr[data-id="karton"] [data-f="aktiv"]'))
     pg.screenshot(path=os.path.join(SH, 'leergut_einstellungen_1280.png'), full_page=True)
     pg.fill('#lg-e-lm tr[data-id="e2"] [data-f="wert"]', '6,25'); pg.click('#lg-e-lm-form [type="submit"]')
-    pg.wait_for_function("(document.querySelector('#lg-e-lm tr[data-id=\"e2\"] [data-f=\"wert\"]')?.value || '') === '6,25'")
-    check('Oberfläche: Wert E2 geändert (6,25 €)', V.call('leergut_start')[1]['lademittel'][0]['wert'] == 6.25)
+    from umgebung import until as _until   # gespeicherten Stand abwarten (das Feld zeigt den Wert schon vor dem Speichern)
+    check('Oberfläche: Wert E2 geändert (6,25 €)', _until(lambda: V.call('leergut_start')[1]['lademittel'][0]['wert'] == 6.25, timeout=10))
     pg.set_input_files('#lg-e-datei', PAKET_DATEI)
     pg.wait_for_selector('#lg-e-import-knoepfe:not([hidden])')
     vor = text(pg, '#lg-e-vorschau')
@@ -889,6 +968,9 @@ with sync_playwright() as p:
           and '2 Belege ohne Wirkung' in vor and '(3 mit Saldo)' in vor and 'E2 Kisten −12 · Karton +348' in vor, vor)
     check('WinAB-Vorschau schreibt nichts', len(V.call('leergut_start')[1]['partner']) == n_p)
     pg.screenshot(path=os.path.join(SH, 'leergut_winab_1280.png'), full_page=True)
+    # Kundenstamm der Verwaltung mit Versandart und Lademittelbestand laut WinAB (Anzeige im Kontokopf)
+    storage_write('kunden', {'rev': 3, 'customers': [{'id': 'klg000000001', 'nr': '9100006', 'firma': 'Fleischerei Beispiel', 'active': True},
+                                                     {'id': 'klg000000002', 'nr': '9100003', 'firma': 'Testkunde Nord GmbH', 'active': True, 'versandart': '1', 'wawi': {'lademittelbestand': -6}}]})
     pg.click('#lg-w-uebernehmen')
     pg.wait_for_function("(document.querySelector('#lg-w-meldung')?.textContent || '').startsWith('Übernommen')")
     check('WinAB aus der Oberfläche übernommen', 'Übernommen: 3 neue Kundenkonten, 4 neue Belege, 0 geändert, 0 ausgeglichen.' in text(pg, '#lg-w-meldung'), text(pg, '#lg-w-meldung'))
@@ -949,6 +1031,9 @@ with sync_playwright() as p:
     pg.click(f'#lg-k-liste [data-konto="{wk["9100003"]["id"]}"]'); pg.wait_for_selector('.lg-saldo')
     pg.wait_for_function("(document.querySelector('#lg-k-detail')?.textContent || '').includes('WinAB-Kd. 9100003')")
     check('Konto: WinAB-Kundennummer und Herkunft der Buchung', 'Lieferschein 500010' in text(pg, '#lg-k-detail') and 'noch nicht zurück' in text(pg, '#lg-k-detail'))
+    kopf = text(pg, '#lg-k-detail .lg-winab-bestand')
+    check('Kontokopf: Versandart und WinAB-Lademittelbestand laut Kundenstamm neben der Summe des Kontos', 'WinAB-Lademittelbestand −6 · Konto zusammen' in kopf
+          and 'Versandart 1 · Direktlieferung' in text(pg, '#lg-k-detail'), kopf)
     pg.screenshot(path=os.path.join(SH, 'leergut_winab_konto_1280.png'), full_page=True)
     pg.fill('#lg-k-suche', '')
     pg.click('#lg-tabs [data-tab="einstellungen"]')
@@ -968,6 +1053,7 @@ with sync_playwright() as p:
     check('Bilanz: Kunden aus WinAB in einer Zeile (CSV bleibt je Konto)', bil_ok, text(pg, '#lg-b-tabelle'))
 
     # WinAB-Datei „Lademittelbewegungen komplett“ (.CSV) – Kunden, Lieferanten, „Übernehmen ab“
+    storage_write('lieferanten', {'rev': 2, 'groups': [{'nr': '2930028', 'name': 'Testgeflügel GmbH', 'kurz': 'TESTGEFL', 'versandart': '1'}]})   # Name und Versandart in der Vorschau
     csvd = os.path.join(os.path.dirname(xls), 'Lademittelbewegungen_komplett_.csv')
     with open(csvd, 'wb') as f:
         f.write(winab_csv())
@@ -975,25 +1061,27 @@ with sync_playwright() as p:
     pg.set_input_files('#lg-w-datei', csvd)
     pg.wait_for_selector('#lg-w-knoepfe:not([hidden])')
     vor = text(pg, '#lg-w-vorschau')
-    check('CSV-Vorschau: Übernehmen ab 01.01.2026 (Datei ab 05.06.2021), 3 Kunden, 5 Belege mit Wirkung, 2 neue Kundenkonten, 3 neue Belege',
-          pg.input_value('#lg-w-ab') == '2026-01-01' and pg.get_attribute('#lg-w-ab', 'min') == '2021-06-05' and [kachel(k) for k in ('kunden', 'belege', 'neuKd', 'neu')] == ['3', '5', '2', '3'], vor)
-    check('CSV-Vorschau: weggelassen (Sammelrechnung, Karton, Offerte, ohne Wirkung), Korrekturen verrechnet, älterer Beleg genannt',
-          '1 Zeile aus Sammelrechnungen' in vor and '1 Kartonzeile' in vor and '1 × Offerte' in vor and '2 Belege ohne Wirkung' in vor and '2 Korrekturzeilen mit Minus verrechnet' in vor
-          and 'Vor dem 01.01.2026: 1 Kundenbeleg mit Wirkung' in vor and '+9' in text(pg, '#lg-w-vorher'), vor)
+    check('CSV-Vorschau: Übernehmen ab 01.01.2026 (Datei ab 05.06.2021), 3 Kunden, 6 Belege zum Abgleich (auch Wareneingang mit Tausch), 2 neue Kundenkonten, 3 neue Belege',
+          pg.input_value('#lg-w-ab') == '2026-01-01' and pg.get_attribute('#lg-w-ab', 'min') == '2021-06-05' and [kachel(k) for k in ('kunden', 'belege', 'neuKd', 'neu')] == ['3', '6', '2', '3'], vor)
+    check('CSV-Vorschau: weggelassen (Sammelrechnung, Karton, Offerte, ohne Wirkung), Korrekturen verrechnet, älterer Beleg genannt, Wareneingang mit Tausch',
+          '1 Zeile aus Sammelrechnungen' in vor and '1 Kartonzeile' in vor and '1 × Offerte' in vor and '1 Beleg ohne Wirkung' in vor and '2 Korrekturzeilen mit Minus verrechnet' in vor
+          and 'Vor dem 01.01.2026: 1 Kundenbeleg mit Wirkung' in vor and '+9' in text(pg, '#lg-w-vorher') and '1 Wareneingang mit Tausch laut WinAB – gezählt wird der Zugang' in vor, vor)
     lief_t = text(pg, '#lg-w-lief')
-    check('CSV-Vorschau: Lieferanten ohne Konto (Saldo nicht gebucht) zur Zuordnung; reiner Tausch und Lieferantennummer an Kundenzeilen fehlen',
-          '2930028' in lief_t and '2300004' in lief_t and '4000017' not in lief_t and '2850008' not in lief_t and '−15' in lief_t and 'nicht gebucht' in lief_t
-          and pg.input_value('[data-lf="2930028"]') == '' and '2 Lieferantenbelege werden nicht gebucht' in vor, lief_t)
+    check('CSV-Vorschau: Lieferanten ohne Konto (Saldo nicht gebucht) zur Zuordnung – Wareneingang mit Tausch zählt den Zugang (−5); Lieferantennummer an Kundenzeilen fehlt',
+          '2930028' in lief_t and '2300004' in lief_t and '4000017' not in lief_t and '2850008' in lief_t and '−15' in lief_t and '−5' in lief_t and 'nicht gebucht' in lief_t
+          and pg.input_value('[data-lf="2930028"]') == '' and '3 Lieferantenbelege werden nicht gebucht' in vor, lief_t)
+    check('CSV-Vorschau: Name und Versandart aus dem Lieferantenstamm, neues Konto mit dem Namen',
+          'Testgeflügel GmbH' in lief_t and '1 · Direktlieferung' in lief_t and 'Neues Konto anlegen („Testgeflügel GmbH“)' in text(pg, '[data-lf="2930028"]'), lief_t)
     pg.screenshot(path=os.path.join(SH, 'leergut_winab_csv_1280.png'), full_page=True)
     pg.select_option('[data-lf="2930028"]', 'neu')
-    pg.wait_for_function("(document.querySelector('#lg-w-vorschau')?.textContent || '').includes('1 Lieferantenbeleg wird nicht gebucht') && !document.querySelector('#lg-w-knoepfe').hidden")
+    pg.wait_for_function("(document.querySelector('#lg-w-vorschau')?.textContent || '').includes('2 Lieferantenbelege werden nicht gebucht') && !document.querySelector('#lg-w-knoepfe').hidden")
     check('CSV-Vorschau: Zuordnung „neues Konto“ – Lieferantensaldo danach, Auswahl behält den Fokus', 'Saldo der zugeordneten Lieferantenkonten danach' in text(pg, '#lg-w-vorschau')
           and pg.evaluate("document.activeElement?.dataset?.lf") == '2930028', text(pg, '#lg-w-vorschau'))
     pg.select_option('[data-lf="2300004"]', SP)
-    pg.wait_for_function("!(document.querySelector('#lg-w-vorschau')?.textContent || '').includes('nicht gebucht, weil') && !document.querySelector('#lg-w-knoepfe').hidden")
+    pg.wait_for_function("(document.querySelector('#lg-w-vorschau')?.textContent || '').includes('1 Lieferantenbeleg wird nicht gebucht') && !document.querySelector('#lg-w-knoepfe').hidden")
     pg.fill('#lg-w-ab', '2021-06-05'); pg.dispatch_event('#lg-w-ab', 'change')
-    pg.wait_for_function("(document.querySelector('#lg-w-vorschau [data-z=\"belege\"] b')?.textContent || '') === '6'")
-    check('CSV-Vorschau: ganze Geschichte – älterer Beleg dabei, Hinweis entfällt', [kachel(k) for k in ('belege', 'neuKd', 'neu')] == ['6', '3', '6'] and pg.locator('#lg-w-vorher').count() == 0)
+    pg.wait_for_function("(document.querySelector('#lg-w-vorschau [data-z=\"belege\"] b')?.textContent || '') === '7'")
+    check('CSV-Vorschau: ganze Geschichte – älterer Beleg dabei, Hinweis entfällt', [kachel(k) for k in ('belege', 'neuKd', 'neu')] == ['7', '3', '6'] and pg.locator('#lg-w-vorher').count() == 0)
     pg.click('#lg-w-uebernehmen')
     pg.wait_for_function("(document.querySelector('#lg-w-meldung')?.textContent || '').startsWith('Übernommen')")
     check('CSV übernommen aus der Oberfläche', 'Übernommen: 3 neue Kundenkonten, 1 neues Lieferantenkonto, 6 neue Belege, 0 geändert, 0 ausgeglichen.' in text(pg, '#lg-w-meldung'), text(pg, '#lg-w-meldung'))

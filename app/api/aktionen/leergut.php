@@ -39,10 +39,13 @@ switch ($action) {
             $heute = date('Y-m-d');
             $stamm = lg_stamm(); $bew = lg_doc('leergut-bewegungen')['liste']; $abst = lg_doc('leergut-abstimmungen')['liste'];
             $np = lg_nach_partner($bew);
+            $lgStamm = lg_partner_stamm($stamm['partner']);
             respond(['ok' => true, 'heute' => $heute, 'name' => $me['name'],
                      'rechte' => ['bearbeiten' => may($me, 'leergut.bearbeiten'), 'verwalten' => may($me, 'leergut.verwalten')],
                      'mandanten' => LG_MANDANTEN, 'arten' => LG_ARTEN, 'typen' => LG_TYPEN, 'abstStatus' => LG_ABST_STATUS, 'abschrStatus' => LG_ABSCHR_STATUS,
                      'lademittel' => $stamm['lademittel'], 'partner' => $stamm['partner'], 'konten' => lg_konten($stamm, $bew, $abst, $heute),
+                     'versand' => (object)$lgStamm[0],        // Versandart je Partner laut Lieferanten- bzw. Kundenstamm (nur Anzeige)
+                     'winabBestand' => (object)$lgStamm[1],   // Lademittelbestand laut WinAB-Stammdaten je Partner: [[Nr., Stück], …] (nur Anzeige)
                      'abstimmungen' => array_map(function ($a) use ($np, $heute) { return lg_abstimmung_aus($a, $np, $heute); }, $abst),
                      'abschreibungen' => lg_doc('leergut-abschreibungen')['liste'], 'inventur' => lg_doc('leergut-inventur')['liste'],
                      'leer' => !$stamm['partner'] && !$bew]);

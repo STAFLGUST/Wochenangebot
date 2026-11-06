@@ -315,6 +315,9 @@
       <label class="lg-breit">E-Mail für die Abstimmung<input class="lg-eingabe" id="pa-email" maxlength="300" placeholder="mehrere mit Komma"></label>
       <label class="lg-breit">Ansprechpartner<input class="lg-eingabe" id="pa-ansprech" maxlength="200"></label>
       <label class="lg-breit">Lieferanten über dieses Konto<input class="lg-eingabe" id="pa-lieferanten" maxlength="300" placeholder="z. B. bei Speditionen: Lieferanten, deren Ware sie bringen"></label>
+      <label class="lg-breit">Weitere WinAB-Lieferantennummern (Sammelkonto)<input class="lg-eingabe" id="pa-lfweitere" maxlength="600" inputmode="numeric" placeholder="z. B. 2150026, 2150039 – deren Wareneingänge buchen auf dieses Konto"></label>
+      <label>WinAB-Belege ab<input class="lg-eingabe" id="pa-winab-ab" type="date"><span class="lg-hilfe">leer = ganzer übernommener Zeitraum; z. B. Tag nach der letzten Buchung aus der Excel-Liste oder Beginn des Sammelkontos</span></label>
+      <label class="lg-check lg-breit"><input type="checkbox" id="pa-tausch"> Wareneingang: Tausch laut WinAB zählt <span class="lg-hilfe">nur ankreuzen, wenn beim Wareneingang dieses Partners wirklich getauscht wird – sonst zählt der Zugang</span></label>
     </div>
     <fieldset class="lg-lmwahl"><legend>Lademittel</legend><div id="pa-lm"></div></fieldset>
     <label>Notiz<textarea class="lg-eingabe" id="pa-notiz" rows="3" maxlength="2000" placeholder="Besonderheiten, z. B. Abholzeiten, was nicht geprüft werden muss"></textarea></label>

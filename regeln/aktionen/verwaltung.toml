@@ -1,4 +1,4 @@
-# Aktionen des Moduls „verwaltung“: Stammdaten (Artikel, Kunden, Gruppen, Vertreter), Kundenimport, Importzentrale, Auswertung.
+# Aktionen des Moduls „verwaltung“: Stammdaten (Artikel, Kunden, Gruppen, Vertreter, Versandarten, Lieferanten), Kundenimport, Importzentrale, Auswertung.
 # Erklärung der Felder: regeln/aktionen/LIESMICH.md · nach Änderungen: python3 werkzeuge/regeln.py erzeugen
 
 schema = 1
@@ -62,6 +62,21 @@ oberflaeche = "angebot.eingabe"
 schreibend = true
 
 [aktion.ort_update]
+oberflaeche = "angebot.eingabe"
+schreibend = true
+
+# Lieferanten (vollständiger Lieferanten-Export der Warenwirtschaft, Wunsch des Inhabers 06.11.2026) und Versandarten
+[aktion.lieferanten]
+oberflaeche = "angebot.eingabe"
+
+[aktion.lieferanten_save]
+oberflaeche = "angebot.eingabe"
+schreibend = true
+
+[aktion.versandarten]
+oberflaeche = "angebot.eingabe"
+
+[aktion.versandarten_save]
 oberflaeche = "angebot.eingabe"
 schreibend = true
 

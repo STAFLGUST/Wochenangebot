@@ -152,7 +152,7 @@ eingebunden werden und darf `W.views` nur ergänzen. `setView` ruft Ansichten nu
 
 ```js
 const BEREICH_VIEWS = {
-  'verwaltung.verwaltung': ['master', 'vkgruppen', 'kategorien', 'kunden', 'gruppen', 'vertreter', 'importe', 'auswertung', 'mail', 'users', 'rollen', 'urlaub', 'log'],
+  'verwaltung.verwaltung': ['master', 'vkgruppen', 'kategorien', 'kunden', 'gruppen', 'vertreter', 'lieferanten', 'versandarten', 'importe', 'auswertung', 'mail', 'users', 'rollen', 'urlaub', 'log'],
   'angebot.eingabe': ['orders', 'edit', 'einzel', 'hist', 'einkauf', 'angebote'],
   'bestand.intern': ['stock'],
   'verwaltung.import': ['importe'],
@@ -162,7 +162,7 @@ const BEREICH_VIEWS = {
 `bereich()` macht aus `verwaltung.verwaltung` den Bereich `verwaltung.import`, wenn die Adresse `?nur=import` trägt
 oder die Rolle nur `import.zugang` (ohne `verwaltung.zugang`) hat – die Adresse kann den Bereich nur einschränken.
 `viewAllowed(v)` prüft in dieser Reihenfolge: Bereich → Administrator-Ansichten (`can('admin')`) → Sonderfälle
-(`users`: auch `hr.verwalten`; `gruppen`/`vertreter`: `stammdaten.sehen` oder `kunden.sehen`; `importe`:
+(`users`: auch `hr.verwalten`; `gruppen`/`vertreter`/`versandarten`: `stammdaten.sehen` oder `kunden.sehen`; `importe`:
 `W.importSichtbar()`) → `VIEW_PERM`.
 
 - `can(role)` vergleicht die Rolle (`viewer` < `editor` < `admin`), `may(perm)` ein Einzelrecht (Administrator: alle).
