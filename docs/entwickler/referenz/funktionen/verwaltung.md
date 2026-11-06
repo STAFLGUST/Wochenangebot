@@ -2,7 +2,7 @@
 
 <!-- ERZEUGT von `python3 werkzeuge/doku.py erzeugen` – nicht von Hand ändern. Quelle: Funktionen und Kommentare im Code. Die CI prüft, dass diese Datei zum Code passt. -->
 
-20 Dateien, 224 Funktionen – in der Reihenfolge der Datei, **fett** die Abschnitte. Text = erste Aussage des Kommentars direkt über der Funktion (Python: Docstring). Übersicht aller Module: [README.md](README.md).
+21 Dateien, 228 Funktionen – in der Reihenfolge der Datei, **fett** die Abschnitte. Text = erste Aussage des Kommentars direkt über der Funktion (Python: Docstring). Übersicht aller Module: [README.md](README.md).
 
 ## `app/api/lib/auswertung.php`
 
@@ -39,13 +39,15 @@ _Kundenstammdaten und Kunden-Sitzung_
 - `require_customer_csrf()`
 - `kunde_payload(c)`
 
-**Listen der Stammdaten (Kundengruppen, VK-Gruppen, Vertreter)**
+**Listen der Stammdaten (Kundengruppen, VK-Gruppen, Vertreter, Versandarten, Lieferanten)**
 
 - `gruppen_load(liste)`
 - `gruppen_clean(liste, list, alt)` – $alt: gespeicherte Einträge nach Nummer – Felder, die ein Eintrag der Anfrage nicht enthält, und Felder, die dieser Stand nicht kennt (neuere Fassung), …
 - `kundengruppen_load()`
 - `kundengruppen_clean(list)`
 - `vertreter_load()`
+- `lieferanten_kurz()` – Schnittstelle der Verwaltung für andere Module (Leergut, regeln/datenverantwortung.toml): nur Nummer, Name, Kurzname und Versandart der Lieferanten bzw. …
+- `versandarten_namen()`
 
 ## `app/api/module/verwaltung/angebotskategorien.php`
 
@@ -75,9 +77,9 @@ _Importvertrag der Verwaltung – Schnittstelle zur Importzentrale (docs/plattfo
 - `kunden_import_uebernehmen(e, me)`
 - `kunden_import_zentrale(e, pruefen)`
 
-**Listen der Stammdaten: Kundengruppen, VK-Gruppen, Vertreter**
+**Listen der Stammdaten: Kundengruppen, VK-Gruppen, Vertreter, Versandarten, Lieferanten**
 
-- `gruppen_zuordnungen(liste)` – Anzahl zugeordneter Kunden (Kundengruppen, Vertreter) bzw. Artikel (VK-Gruppen) je Nummer
+- `gruppen_zuordnungen(liste)` – Anzahl zugeordneter Kunden (Kundengruppen, Vertreter) bzw. Artikel (VK-Gruppen) je Nummer; Versandarten: Kunden und Lieferanten zusammen; Lieferanten: keine …
 - `gruppen_speichern(liste, groups, rev, me, quelle)` – Ganze Liste speichern (Revision, Protokoll) – Aktionen kundengruppen_save/vkgruppen_save/vertreter_save und Importzentrale
 - `gruppen_import_liste(e)` – Liste der Importart (Registrierung: kundengruppen, vkgruppen, vertreter)
 - `gruppen_import_vorschau(e, me)` – Vorschau: neu / geändert / entfällt gegenüber der gespeicherten Liste (gespeichert wird immer die ganze Liste)
@@ -378,6 +380,13 @@ _Stammdaten → Angebote mit Kundengruppen (Freischaltung über die Gruppe), Imp
 
 - `importiere(rows, felder, quelle)`
 - `speichern(nr, aktiv)`
+
+## `tests/e2e/test_lieferanten.py`
+
+_Stammdaten → Lieferanten und Versandarten (Wunsch des Inhabers 06.11.2026): vollständiger Lieferanten-Export der Warenwirtschaft (alle Spalten, Name darf fehlen, Umsätze nur für Bearbeiter), Versandarten (Nummer, …_
+
+- `check(n, c, i)`
+- `doc(name)`
 
 ## `tests/e2e/test_master.py`
 

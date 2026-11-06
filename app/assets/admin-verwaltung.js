@@ -639,7 +639,7 @@
     const host = $('#view-kunden');
     if (!kunden) host.innerHTML = '<div class="loading" style="justify-content:center;padding:48px 0"><div class="spinner"></div>Kunden werden geladen …</div>';
     try {
-      const [r, m] = await Promise.all([api('kunden'), mailInfo(), W.offers.length ? null : loadOffers(), loadKGruppen().catch(() => null), VT.load().catch(() => null)]);
+      const [r, m] = await Promise.all([api('kunden'), mailInfo(), W.offers.length ? null : loadOffers(), loadKGruppen().catch(() => null), VT.load().catch(() => null), VA.load().catch(() => null)]);
       kunden = r.customers; kundenRev = r.rev; mailSt = m;
     } catch (e) { host.innerHTML = `<div class="err-box">${esc(e.message)}</div>`; return; }
     host.innerHTML = `
@@ -735,6 +735,7 @@
           ${fld('nr', 'Kundennummer', 30, ' placeholder="optional"')}
           <label class="fld"><span>Kundengruppe</span><select name="gruppe"><option value="">– keine –</option>${(KG.groups() || []).map((g) => `<option value="${esc(g.nr)}"${c && c.gruppe === g.nr ? ' selected' : ''}>${esc(g.nr)} · ${esc(g.name)}</option>`).join('')}${c && c.gruppe && !(KG.groups() || []).some((g) => g.nr === c.gruppe) ? `<option value="${esc(c.gruppe)}" selected>${esc(c.gruppe)} (nicht mehr vorhanden)</option>` : ''}</select></label>
           ${['vertreter', 'vertreter2'].map((f, k) => `<label class="fld"><span>${k ? 'Vertreter 2' : 'Vertreter'}</span><select name="${f}"><option value="">– keiner –</option>${(VT.groups() || []).map((g) => `<option value="${esc(g.nr)}"${c && c[f] === g.nr ? ' selected' : ''}>${esc(g.name)}${g.kurz && g.kurz !== g.name ? ` (${esc(g.kurz)})` : ''} · ${esc(g.nr)}</option>`).join('')}${c && c[f] && !(VT.groups() || []).some((g) => g.nr === c[f]) ? `<option value="${esc(c[f])}" selected>${esc(c[f])} (nicht mehr vorhanden)</option>` : ''}</select></label>`).join('')}
+          <label class="fld"><span>Versandart</span><select name="versandart"><option value="">– keine –</option>${(VA.groups() || []).map((g) => `<option value="${esc(g.nr)}"${c && c.versandart === g.nr ? ' selected' : ''}>${esc(g.nr)} · ${esc(g.name)}</option>`).join('')}${c && c.versandart && !(VA.groups() || []).some((g) => g.nr === c.versandart) ? `<option value="${esc(c.versandart)}" selected>${esc(c.versandart)} (nicht in der Liste)</option>` : ''}</select></label>
           ${fld('ansprechpartner', 'Ansprechpartner', 120, ' placeholder="z. B. Frau Beispiel"', 'span2')}
           ${fld('strasse', 'Straße und Hausnummer', 120, '', 'span2')}
           ${fld('plz', 'PLZ', 10, ' inputmode="numeric"')}
@@ -795,7 +796,11 @@
   const fmtEur = { format: (x) => F.euro(x) };
   const WAWI_ANZEIGE = [['alpha', 'Suchname'], ['konto', 'Konto'], ['rgEmpf', 'Rechnungsempfänger'], ['kondition', 'Kondition'], ['letzteRechnung', 'Letzte Rechnung', 'd'],
     ['letzterLieferschein', 'Letzter Lieferschein', 'd'], ['angelegtAm', 'Angelegt', 'anlage'], ['kreditlimit', 'Kreditlimit', 'eur'], ['rgSperre', 'Rechnungssperre', 'b'], ['gln', 'GLN'],
-    ['abgabeCitti', 'Abgabe CITTI', 'b'], ['dfb', 'DFB', 'b'], ['mailAB', 'E-Mail Auftragsbestätigung'], ['mailLS', 'E-Mail Lieferschein'], ['mailERechnung', 'E-Mail E-Rechnung'], ['weitereEmails', 'Weitere E-Mail-Adressen']];
+    ['abgabeCitti', 'Abgabe CITTI', 'b'], ['dfb', 'DFB', 'b'], ['mailAB', 'E-Mail Auftragsbestätigung'], ['mailLS', 'E-Mail Lieferschein'], ['mailERechnung', 'E-Mail E-Rechnung'], ['weitereEmails', 'Weitere E-Mail-Adressen'],
+    ['name2', 'Name 2'], ['name3', 'Name 3'], ['winabAngebot', 'Angebot (WinAB)'], ['verband', 'Verband'], ['steuernummer', 'Steuernummer'], ['hermesId', 'Hermes-ID'],
+    ['hermesDeckung', 'Hermes-Deckung', 'eur'], ['lademittelbestand', 'Lademittelbestand (WinAB)', 'n'], ['abPerMail', 'AB per Mail', 'b'], ['partnerName', 'Ansprechpartner (WinAB)'],
+    ['partner1', 'Partner 1'], ['partner2', 'Partner 2'], ['partnerAbteilung', 'Abteilung'], ['partnerEmail', 'E-Mail Ansprechpartner'], ['partnerTelefon', 'Telefon Ansprechpartner'],
+    ['partnerTelefax', 'Telefax Ansprechpartner']];
   const WAWI_UMSATZ = [['Monat', 'umsatzMonat', 'rohgewinnMonat'], ['Voriger Monat', 'umsatzVorigerMonat', 'rohgewinnVorigerMonat'], ['Jahr', 'umsatzJahr', 'rohgewinnJahr'],
     ['Voriges Jahr', 'umsatzVorigesJahr', 'rohgewinnVorigesJahr'], ['Vorjahr', 'umsatzVorjahr', ''], ['Vorvorjahr', 'umsatzVorvorjahr', '']];
   function kundeWawi(w) {
@@ -804,6 +809,7 @@
       if (art === 'd') return dmyIso(x);
       if (art === 'eur') return fmtEur.format(x);
       if (art === 'b') return x ? 'ja' : 'nein';
+      if (art === 'n') return typeof x === 'number' ? x.toLocaleString('de-DE') : String(x);
       if (art === 'anlage') return [dmyIso(x) + (w.angelegtUm ? `, ${w.angelegtUm}` : ''), w.angelegtVon ? `von ${w.angelegtVon}` : ''].filter(Boolean).join(' ');   // 04.05.2020, 14:05 von …
       return String(x);
     };
@@ -858,7 +864,7 @@
     const invite = !!(f.pwmode && [...f.querySelectorAll('[name="pwmode"]')].find((x) => x.checked && x.value === 'invite'));
     if (c && c.abgemeldet && c.mailAngebot === false && body.mailAngebot
       && !(await confirmBox('Wochenangebot wieder einschalten?', `„${esc(c.firma)}“ hat sich am ${esc(dateTime(c.abgemeldet.t))} selbst abgemeldet. Bitte nur wieder einschalten, wenn der Kunde ausdrücklich zugestimmt hat.`, 'Kunde hat zugestimmt'))) return;
-    for (const k of ['firma', 'nr', 'gruppe', 'vertreter', 'vertreter2', 'ansprechpartner', 'strasse', 'plz', 'ort', 'land', 'email', 'telefon', 'notiz']) body[k] = f[k].value.trim();
+    for (const k of ['firma', 'nr', 'gruppe', 'vertreter', 'vertreter2', 'versandart', 'ansprechpartner', 'strasse', 'plz', 'ort', 'land', 'email', 'telefon', 'notiz']) body[k] = f[k].value.trim();
     const pw = invite ? '' : f.password.value.trim();
     if (f.hasLogin.checked) {
       if (pw && pw.length < 10) { err.textContent = 'Das Passwort muss mindestens 10 Zeichen lang sein.'; return; }
@@ -900,6 +906,7 @@
   const wJaNein = (s) => (/^(ja|j|x|1)$/i.test(s) ? true : /^(nein|n|0)$/i.test(s) ? false : '');
   const wMails = (s) => [...new Set(s.split(/[;,\s]+/).filter((m) => MAIL_RE.test(m)))].join(', ');
   const wText = (s) => s;
+  const wGanz = (s) => (/^-?\d{1,9}$/.test(s.replace(/\./g, '')) ? Number(s.replace(/\./g, '')) : '');   // „-1.234“ → -1234
   // Daten der Warenwirtschaft: Feld, Spaltenköpfe (klein, ohne Sonderzeichen), Leser
   const KUNDE_WAWI = [
     ['alpha', ['alpha', 'suchname', 'kurzname'], wText], ['konto', ['konto'], wText], ['rgEmpf', ['rgempf', 'rechnungsempfanger'], wText],
@@ -911,6 +918,11 @@
     ['abgabeCitti', ['abgabecitti'], wJaNein], ['umsatzVorjahr', ['umsatzvorjahr'], wBetrag], ['umsatzVorvorjahr', ['umsatzvorvorjahr'], wBetrag],
     ['gln', ['gln'], (s) => s.replace(/\s/g, '')], ['dfb', ['dfb'], wJaNein], ['angelegtAm', ['angelegtam'], wDatum], ['angelegtUm', ['angelegtum'], wZeit],
     ['angelegtVon', ['angelegtvon'], wText], ['rgSperre', ['rgsperre', 'rechnungssperre'], wJaNein], ['mailERechnung', ['emailerechnung'], wMails],
+    // Export „Kundenstammdaten komplett“
+    ['name2', ['name2'], wText], ['name3', ['name3'], wText], ['winabAngebot', ['angebot'], wText], ['verband', ['verband'], wText], ['steuernummer', ['steuernummer'], wText],
+    ['hermesId', ['hermesid'], wText], ['hermesDeckung', ['hermesdeckung'], wBetrag], ['lademittelbestand', ['lademittelbestande', 'lademittelbestand'], wGanz],
+    ['abPerMail', ['abpermail'], wJaNein], ['partnerName', ['partnername'], wText], ['partner1', ['partner1'], wText], ['partner2', ['partner2'], wText],
+    ['partnerAbteilung', ['partnerabteilung'], wText], ['partnerEmail', ['partneremail'], wMails], ['partnerTelefon', ['partnertelefon'], wText], ['partnerTelefax', ['partnertelefax'], wText],
   ];
   function kAusCsv(buf) {
     const rows = csvZeilen(csvText(buf));
@@ -918,10 +930,11 @@
     const kopf = rows[0].map((c) => fold(c).replace(/[^a-z0-9]/g, ''));
     const sp = (...n) => kopf.findIndex((k) => n.includes(k));
     const i = { nr: sp('nummer', 'kundennummer', 'kdnr'), alpha: sp('alpha', 'suchname', 'kurzname'), firma: sp('name1', 'firma', 'name'), strasse: sp('strasse'), plz: sp('plz'), ort: sp('ort'),
-      land: sp('land'), telefon: sp('telefon', 'tel'), email: sp('email', 'mail'), gruppe: sp('gruppe', 'kundengruppe'), vertreter: sp('vertreter', 'vertreter1'), vertreter2: sp('vertreter2') };
+      land: sp('land'), telefon: sp('telefon', 'tel'), email: sp('email', 'mail'), gruppe: sp('gruppe', 'kundengruppe'), vertreter: sp('vertreter', 'vertreter1'), vertreter2: sp('vertreter2'), versandart: sp('versandart') };
     if (i.nr < 0 || (i.firma < 0 && i.alpha < 0)) throw new Error('Spalten „Nummer“ und „Name1“ nicht gefunden. Erwartet wird der Kundendaten-Export der Warenwirtschaft (Semikolon getrennt).');
     if (i.strasse < 0 && i.email < 0 && i.gruppe < 0) throw new Error('Das ist vermutlich der Vertreter-Export. Bitte unter Stammdaten → Vertreter importieren; hier wird der Kundendaten-Export erwartet.');
     if (kopf.includes('bezeichnung1') || kopf.includes('vgrp')) throw new Error('Das ist der Artikelstammdaten-Export. Bitte unter Stammdaten → Artikelstammdaten importieren.');
+    if (kopf.includes('landintrastat') || kopf.includes('kwumsatzlfdjahr')) throw new Error('Das ist der Lieferanten-Export. Bitte unter Stammdaten → Lieferanten importieren.');
     const zelle = (r, j) => (j >= 0 ? (r[j] || '').trim().replace(/\s{2,}/g, ' ') : '');
     const v = (r, k) => zelle(r, i[k]);
     const iw = KUNDE_WAWI.map(([k, n, f]) => [k, sp(...n), f]).filter(([, j]) => j >= 0);
@@ -935,7 +948,7 @@
       for (const [k, j, f] of iw) { const w = f(zelle(r, j)); if (w !== '') wawi[k] = w; }
       if (mails.length > 1) wawi.weitereEmails = mails.slice(1).join(', ');
       const x = { nr: v(r, 'nr'), firma: v(r, 'firma') || alpha.replace(/^\*\s*/, ''), strasse: v(r, 'strasse'), plz: v(r, 'plz'), ort: v(r, 'ort'), land: landName(v(r, 'land')),
-        telefon: v(r, 'telefon'), email: mails[0] || (v(r, 'email') && !v(r, 'email').includes('@') ? '' : v(r, 'email')), gruppe: v(r, 'gruppe'), vertreter: v(r, 'vertreter'), vertreter2: v(r, 'vertreter2'), stern: alpha.startsWith('*') || v(r, 'firma').startsWith('*'),
+        telefon: v(r, 'telefon'), email: mails[0] || (v(r, 'email') && !v(r, 'email').includes('@') ? '' : v(r, 'email')), gruppe: v(r, 'gruppe'), vertreter: v(r, 'vertreter'), vertreter2: v(r, 'vertreter2'), versandart: v(r, 'versandart'), stern: alpha.startsWith('*') || v(r, 'firma').startsWith('*'),
         wawi, zeile: n + 2 };   // Zeile in der Datei (Kopfzeile = 1) – Anzeige in der Vorschau der Importzentrale
       if (!x.nr && !x.firma) continue;
       out.push(x);
@@ -1516,11 +1529,12 @@
       groups = r.groups; rev = r.rev; zahl = r[cfg.zaehler] || null; meta = { at: r.updatedAt, by: r.updatedBy };
       return groups;
     }
-    const name = (nr) => { const g = (groups || []).find((x) => x.nr === nr); return g ? g.name : ''; };
+    const titel = (g) => g.name || g.kurz || `${eine} ${g.nr}`;   // Lieferanten: Name1 darf fehlen – dann Kurzname (Alpha)
+    const name = (nr) => { const g = (groups || []).find((x) => x.nr === nr); return g ? g.name || g.kurz || '' : ''; };
     const anzahl = (nr) => (zahl ? zahl[nr] || 0 : 0);
     async function render() {
       if (!groups) host.innerHTML = `<div class="loading" style="justify-content:center;padding:48px 0"><div class="spinner"></div>${esc(viele)} werden geladen …</div>`;
-      try { await load(); } catch (e) { host.innerHTML = `<div class="err-box">${esc(e.message)}</div>`; return; }
+      try { if (cfg.vorher) await cfg.vorher(); await load(); } catch (e) { host.innerHTML = `<div class="err-box">${esc(e.message)}</div>`; return; }
       const edit = may('stammdaten.bearbeiten');
       host.innerHTML = `
         <div class="ed-toolbar">
@@ -1542,7 +1556,7 @@
       if (!list.length) { el.innerHTML = '<div class="ed-empty"><h3>Keine Treffer</h3><p>Suchbegriff anpassen.</p></div>'; return; }
       const edit = may('stammdaten.bearbeiten');
       el.innerHTML = `<div class="gcard"><table class="etab kgtab"><thead><tr><th class="kg-nr">Nummer</th>${F.filter((f) => !f.versteckt).map((f) => `<th${f.cls ? ` class="${f.cls}"` : ''}>${esc(f.label)}</th>`).join('')}${zahl ? `<th class="kg-n">${esc(cfg.zaehlerSpalte)}</th>` : ''}${edit ? '<th class="u-act"><span class="sr-only">Aktion</span></th>' : ''}</tr></thead><tbody>${list.map((g) => `
-        <tr data-kg="${esc(g.nr)}"${edit ? ' tabindex="0"' : ''}><td class="kg-nr">${esc(g.nr)}</td>${F.filter((f) => !f.versteckt).map((f) => `<td${f.cls ? ` class="${f.cls}"` : ''}>${esc(g[f.k] || '')}</td>`).join('')}${zahl ? `<td class="kg-n">${zahl[g.nr] ? esc(String(zahl[g.nr])) : '<span class="muted">—</span>'}</td>` : ''}${edit ? `<td class="u-act"><button type="button" class="btn sm" data-kgedit="${esc(g.nr)}">Bearbeiten</button></td>` : ''}</tr>`).join('')}</tbody></table></div>`;
+        <tr data-kg="${esc(g.nr)}"${edit ? ' tabindex="0"' : ''}><td class="kg-nr">${esc(g.nr)}</td>${F.filter((f) => !f.versteckt).map((f) => `<td${f.cls ? ` class="${f.cls}"` : ''}>${esc(f.anzeige ? f.anzeige(g) : g[f.k] || '')}</td>`).join('')}${zahl ? `<td class="kg-n">${zahl[g.nr] ? esc(String(zahl[g.nr])) : '<span class="muted">—</span>'}</td>` : ''}${edit ? `<td class="u-act"><button type="button" class="btn sm" data-kgedit="${esc(g.nr)}">Bearbeiten</button></td>` : ''}</tr>`).join('')}</tbody></table></div>`;
     }
     async function save(list, quelle) {
       const r = await api(liste + '_save', { body: { rev, groups: list, quelle: quelle || '' } });
@@ -1553,7 +1567,7 @@
       const g = nr ? groups.find((x) => x.nr === nr) : null;
       const n = g ? anzahl(g.nr) : 0;
       body.innerHTML = `
-        <div class="dlg-head"><div><h2 id="${p}-title">${g ? esc(g.name) : esc(eine) + ' anlegen'}</h2><p>${g ? `Nummer ${esc(g.nr)}${n ? ` · ${plural(n, cfg.zEine, cfg.zViele)} zugeordnet` : ''}` : 'Nummer wie in der Warenwirtschaft.'}</p></div>
+        <div class="dlg-head"><div><h2 id="${p}-title">${g ? esc(titel(g)) : esc(eine) + ' anlegen'}</h2><p>${g ? `Nummer ${esc(g.nr)}${n ? ` · ${plural(n, cfg.zEine, cfg.zViele)} zugeordnet` : ''}` : 'Nummer wie in der Warenwirtschaft.'}</p></div>
           <button class="btn icon ghost" type="button" data-close aria-label="Schließen">${icon('x')}</button></div>
         <div class="dlg-body"><div class="form-grid two">
           <label class="fld"><span>Nummer</span><input name="nr" value="${esc(g ? g.nr : '')}" maxlength="10" required${g ? ' readonly' : ''} inputmode="numeric"></label>
@@ -1571,7 +1585,7 @@
       for (const x of F) row[x.k] = f.elements[x.k].value.trim();
       if (!nr && groups.some((x) => x.nr === row.nr)) { $(`#${p}-err`).textContent = `Die Nummer ${row.nr} ist bereits vergeben.`; return; }
       const list = nr ? groups.map((x) => (x.nr === nr ? row : x)) : [...groups, row];
-      try { await save(list); dlg.close(); toast(nr ? `${eine} „${row.name}“ gespeichert.` : `${eine} „${row.name}“ angelegt.`); render(); }
+      try { await save(list); dlg.close(); toast(nr ? `${eine} „${titel(row)}“ gespeichert.` : `${eine} „${titel(row)}“ angelegt.`); render(); }
       catch (ex) { $(`#${p}-err`).textContent = ex.message; }
     });
     body.addEventListener('click', async (e) => {
@@ -1579,8 +1593,8 @@
       if (!e.target.closest('[data-kg-del]')) return;
       const nr = body.dataset.nr, g = groups.find((x) => x.nr === nr);
       const n = anzahl(nr);
-      if (!(await confirmBox(`${eine} löschen?`, `„${esc(g.name)}“ (${esc(nr)}) wird gelöscht.${n ? ` ${plural(n, cfg.zEine, cfg.zViele)} ${n === 1 ? 'behält' : 'behalten'} die Nummer, bis ${andereText}.` : ''}`, 'Löschen', true))) return;
-      try { await save(groups.filter((x) => x.nr !== nr)); dlg.close(); toast(`${eine} „${g.name}“ gelöscht.`); render(); }
+      if (!(await confirmBox(`${eine} löschen?`, `„${esc(titel(g))}“ (${esc(nr)}) wird gelöscht.${n ? ` ${plural(n, cfg.zEine, cfg.zViele)} ${n === 1 ? 'behält' : 'behalten'} die Nummer, bis ${andereText}.` : ''}`, 'Löschen', true))) return;
+      try { await save(groups.filter((x) => x.nr !== nr)); dlg.close(); toast(`${eine} „${titel(g)}“ gelöscht.`); render(); }
       catch (ex) { $(`#${p}-err`).textContent = ex.message; }
     });
     function ausCsv(buf) {
@@ -1591,7 +1605,7 @@
       const kopfZ = rows[0].map((c) => fold(c).replace(/[^a-z0-9]/g, ''));
       const iNr = sp('nummer', 'nr', ...cfg.nrSpalten), idx = Object.fromEntries(F.map((f) => [f.k, kopfZ.findIndex((k) => f.csv.includes(k))]));
       if (kopf.includes('bezeichnung1') || kopf.includes('gtin') || kopfZ.includes('bezeichnung1')) throw new Error(`Das ist der Artikelstammdaten-Export. Bitte unter Stammdaten → Artikelstammdaten importieren; hier wird die Liste „${viele}“ erwartet.`);
-      if (kopfZ.includes('rgempf') || (kopfZ.includes('vertreter') && kopfZ.includes('gruppe'))) throw new Error(`Das ist der Kundendaten-Export. Bitte unter Stammdaten → Kunden importieren; hier wird die Liste „${viele}“ erwartet.`);
+      if (kopfZ.includes('rgempf') || (!cfg.kundenspalten && kopfZ.includes('vertreter') && kopfZ.includes('gruppe'))) throw new Error(`Das ist der Kundendaten-Export. Bitte unter Stammdaten → Kunden importieren; hier wird die Liste „${viele}“ erwartet.`);
       const fehlt = cfg.pruefeKopf ? cfg.pruefeKopf(kopfZ) : '';
       if (fehlt) throw new Error(fehlt);
       if (iNr < 0 || idx.name < 0) throw new Error(`Spalten „Nummer“ und „${FN.label}“ nicht gefunden. Erwartet wird die Liste „${viele}“ aus der Warenwirtschaft (${cfg.csvText || spaltenText}).`);
@@ -1600,7 +1614,7 @@
         const g = { nr: (r[iNr] || '').trim() };
         for (const f of F) g[f.k] = idx[f.k] >= 0 ? (r[idx[f.k]] || '').trim().replace(/\s{2,}/g, ' ') : '';
         if (!g.nr && !g.name) return;
-        if (!/^[0-9A-Za-z._-]{1,10}$/.test(g.nr) || !g.name) { fehler.push(`Zeile ${i + 2}`); fehlerZeilen.push({ zeile: i + 2, schluessel: g.nr, text: `Nummer oder ${FN.label} fehlt/ungültig – übersprungen` }); return; }
+        if (!/^[0-9A-Za-z._-]{1,10}$/.test(g.nr) || (FN.req && !g.name)) { fehler.push(`Zeile ${i + 2}`); fehlerZeilen.push({ zeile: i + 2, schluessel: g.nr, text: `Nummer oder ${FN.label} fehlt/ungültig – übersprungen` }); return; }
         zeileVon.set(g, i + 2);
         out.push(g);
       });
@@ -1619,7 +1633,7 @@
       const nrs = new Set(res.groups.map((g) => g.nr));
       const weg = groups.filter((g) => !nrs.has(g.nr));
       const wegMit = weg.filter((g) => anzahl(g.nr));
-      const liste = (l) => l.slice(0, 8).map((g) => `<li><span class="muted">${esc(g.nr)}</span> ${esc(g.name)}</li>`).join('') + (l.length > 8 ? `<li class="muted">… und ${l.length - 8} weitere</li>` : '');
+      const liste = (l) => l.slice(0, 8).map((g) => `<li><span class="muted">${esc(g.nr)}</span> ${esc(titel(g))}</li>`).join('') + (l.length > 8 ? `<li class="muted">… und ${l.length - 8} weitere</li>` : '');
       const nix = !neu.length && !geaendert.length && !weg.length;
       bodyI.innerHTML = `
         <div class="dlg-head"><div><h2 id="${p}i-title">${esc(viele)} importieren</h2><p>${esc(file.name)} · ${plural(res.groups.length, eine, viele)}</p></div>
@@ -1678,6 +1692,45 @@
     csvText: 'Nummer; Alpha; Name1; Land; PLZ; Ort; Telefon', neuText: 'Vertreter anlegen', loeschText: 'Vertreter löschen', andereText: 'ein anderer Vertreter gewählt wird',
     pruefeKopf: (k) => (k.includes('bezeichnung') && !k.includes('name1') ? 'Das ist eine Gruppenliste. Vertreter bitte mit dem Vertreter-Export der Warenwirtschaft (Nummer; Alpha; Name1 …) importieren.' : ''),
     zaehler: 'kunden', zaehlerSpalte: 'Kunden', zEine: 'Kunde', zViele: 'Kunden', hinweis: 'Vertreter werden den Kunden zugeordnet (Kunde bearbeiten → Vertreter und Vertreter 2; beim Kundenimport aus den Spalten „Vertreter“ und „Vertreter2“).' });
+  /* Versandarten (Nummer, Text) und Lieferanten (vollständiger Lieferanten-Export der Warenwirtschaft) – Wunsch des Inhabers
+     06.11.2026. Kunden und Lieferanten verweisen über „versandart“ auf die Versandarten; das Leergut-Modul liest Name und
+     Versandart der Lieferanten (lieferanten_kurz). Umsätze liefert der Server nur an Bearbeiter der Stammdaten. */
+  const VA = gruppenListe({ liste: 'versandarten', p: 'va', view: '#view-versandarten', eine: 'Versandart', viele: 'Versandarten', nrSpalten: ['versandart', 'versandartnr'],
+    felder: [{ k: 'name', label: 'Text', max: 120, req: true, csv: ['text', 'bezeichnung', 'name'], span2: true }],
+    csvText: 'Nummer; Text', neuText: 'Versandart anlegen', loeschText: 'Versandart löschen', andereText: 'eine andere Versandart gewählt wird',
+    pruefeKopf: (k) => (k.includes('name1') ? 'Das ist ein Kunden- oder Lieferanten-Export. Versandarten bitte mit der Liste „Versandarten“ der Warenwirtschaft (Nummer; Text) importieren.' : ''),
+    zaehler: 'zuordnung', zaehlerSpalte: 'Kunden und Lieferanten', zEine: 'Kunde oder Lieferant', zViele: 'Kunden und Lieferanten',
+    hinweis: 'Kunden und Lieferanten verweisen über ihre Versandart auf diese Liste (beim Import der Kunden und Lieferanten aus der Spalte „Versandart“).' });
+  const vaText = (nr) => (nr ? `${nr}${VA.name(nr) ? ' · ' + VA.name(nr) : ''}` : '');
+  const LF = gruppenListe({ liste: 'lieferanten', p: 'lf', view: '#view-lieferanten', eine: 'Lieferant', viele: 'Lieferanten', nrSpalten: ['lieferantennummer', 'lieferant'],
+    felder: [
+      { k: 'name', label: 'Name', max: 120, csv: ['name1', 'name'], span2: true },
+      { k: 'kurz', label: 'Kurzname', max: 40, csv: ['alpha', 'kurzname', 'suchname'], cls: 'kg-k' },
+      { k: 'versandart', label: 'Versandart', max: 10, csv: ['versandart'], cls: 'kg-k', anzeige: (g) => vaText(g.versandart) },
+      { k: 'ort', label: 'Ort', max: 80, csv: ['ort'], cls: 'kg-k' },
+      { k: 'telefon', label: 'Telefon', max: 40, csv: ['telefon', 'tel'], cls: 'kg-k' },
+      { k: 'strasse', label: 'Straße', max: 120, csv: ['strasse'], versteckt: true },
+      { k: 'plz', label: 'PLZ', max: 10, csv: ['plz'], versteckt: true },
+      { k: 'land', label: 'Land', max: 60, csv: ['land'], versteckt: true },
+      { k: 'landIntrastat', label: 'Land Intrastat', max: 10, csv: ['landintrastat'], versteckt: true },
+      { k: 'gruppe', label: 'Gruppe', max: 10, csv: ['gruppe'], versteckt: true },
+      { k: 'konto', label: 'Konto', max: 20, csv: ['konto'], versteckt: true },
+      { k: 'kondition', label: 'Kondition', max: 10, csv: ['kondition'], versteckt: true },
+      { k: 'vertreter', label: 'Vertreter', max: 10, csv: ['vertreter'], versteckt: true },
+      { k: 'vertreterName', label: 'Vertreter (Name)', max: 120, csv: ['vertretername'], versteckt: true },
+      { k: 'gln', label: 'GLN', max: 20, csv: ['gln'], versteckt: true },
+      { k: 'lademittelbestand', label: 'Lademittelbestände (WinAB)', max: 20, csv: ['lademittelbestande', 'lademittelbestaende', 'lademittelbestand'], versteckt: true },
+      { k: 'umsatzJahr', label: 'Umsatz Jahr', max: 30, csv: ['umsatzjahr'], versteckt: true },
+      { k: 'kwUmsatzLfdJahr', label: 'Umsatz lfd. Jahr', max: 30, csv: ['kwumsatzlfdjahr'], versteckt: true },
+      { k: 'kwUmsatzVorjahr', label: 'Umsatz Vorjahr', max: 30, csv: ['kwumsatzvorjahr'], versteckt: true },
+      { k: 'angelegtAm', label: 'angelegt am', max: 10, csv: ['angelegtam'], versteckt: true },
+    ],
+    kundenspalten: true, vorher: () => (VA.groups() ? null : VA.load().catch(() => null)),
+    csvText: 'Alpha; Nummer; Name1; Gruppe; Konto; Telefon; PLZ; Ort; Strasse; Kondition; UmsatzJahr; Vertreter; Vertreter.Name; Land; KWUmsatzLfdJahr; KWUmsatzVorjahr; LandIntrastat; Versandart; GLN; Lademittelbestände; AngelegtAm',
+    neuText: 'Lieferant anlegen', loeschText: 'Lieferant löschen', andereText: 'ein anderer Lieferant gewählt wird',
+    pruefeKopf: (k) => (k.includes('rgempf') ? 'Das ist der Kundendaten-Export. Bitte unter Stammdaten → Kunden importieren; hier wird der Lieferanten-Export erwartet.'
+      : !k.includes('name1') && !k.includes('alpha') ? 'Spalten „Nummer“ und „Name1“ nicht gefunden. Erwartet wird der Lieferanten-Export der Warenwirtschaft (Stammdatenimport Lieferanten).' : ''),
+    hinweis: 'Lieferanten aus dem Lieferanten-Export der Warenwirtschaft (alle Spalten; Umsätze sehen nur Bearbeiter der Stammdaten). Das Leergut-Modul nutzt Name und Versandart für die WinAB-Lademittelbewegungen.' });
   const loadKGruppen = KG.load, kgName = KG.name;
   /* Leser der Verwaltung für die Importzentrale (admin-import.js, docs/plattform/schnittstellen/import.md) */
   Object.assign(W.importLeser, {
@@ -1688,9 +1741,10 @@
       },
       nachher() { kunden = null; },
     },
-    kundengruppen: KG.importLeser, vkgruppen: VG.importLeser, vertreter: VT.importLeser,
+    kundengruppen: KG.importLeser, vkgruppen: VG.importLeser, vertreter: VT.importLeser, versandarten: VA.importLeser, lieferanten: LF.importLeser,
   });
   const vtName = (nr) => VT.name(nr);
 
-  W.views = { users: renderUsersView, orders: renderOrdersView, einkauf: renderEinkaufView, kunden: renderKundenView, gruppen: KG.render, vkgruppen: VG.render, vertreter: VT.render, mail: renderMailView, log: renderLogView };
+  W.views = { users: renderUsersView, orders: renderOrdersView, einkauf: renderEinkaufView, kunden: renderKundenView, gruppen: KG.render, vkgruppen: VG.render, vertreter: VT.render,
+    versandarten: VA.render, lieferanten: LF.render, mail: renderMailView, log: renderLogView };
 })();

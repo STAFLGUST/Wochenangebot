@@ -99,7 +99,9 @@ Gelesen und geschrieben über `app/api/storage.php` (`store_read`, `store_write`
 | `kundengruppen*` | Verwaltung | intern | angebot, crm, controlling | – | Kundengruppen (GRUPPEN_LISTEN in lib/kunden.php) |
 | `kundensitzungen` | Verwaltung | geheim | – | angebot | Sitzungen der Kunden im Portal; Ziel: zentraler Identitätsdienst (Phase 6) |
 | `kundenstamm` | Verwaltung | vertraulich | angebot, crm, rewe, controlling, plattform, leergut | – | Ab Trennstufe 2 (ADR-007 Stufe 2b): alle Kundenfelder außer den Portalfeldern – Anschrift, E-Mail, Telefon, Notiz, Vertreter, Daten der Warenwirtschaft |
+| `lieferanten*` | Verwaltung | vertraulich | leergut | – | Lieferanten aus dem Lieferanten-Export der Warenwirtschaft (Adresse, Konto, Kondition, Umsätze, Versandart, GLN) |
 | `stammdaten` | Verwaltung | intern | angebot, bestand, controlling | – | Artikelstammdaten (Bezeichnung, Fleischart, Herkunft, Zustand, VK-Gruppe, GTIN) |
+| `versandarten*` | Verwaltung | intern | leergut | – | Versandarten der Warenwirtschaft (Kunden und Lieferanten verweisen darauf) |
 | `vertreter*` | Verwaltung | vertraulich | crm, controlling | – | Vertreter mit Kontaktdaten |
 | `vkgruppen*` | Verwaltung | intern | angebot, bestand, controlling | – | VK-Gruppen der Artikel |
 

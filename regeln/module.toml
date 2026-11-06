@@ -427,7 +427,7 @@ dashboard = true
 dashboard_gruppe = "verwaltung"   # Dashboard: eigener Bereich „Verwaltung & Daten“ unter den Anwendungen
 agent = "verwaltung"
 abhaengigkeiten = ["plattform"]
-testgruppen = ["kunden", "kundengruppen", "vkgruppen", "angebotskategorien", "vertreter", "kundenimport", "auswertung", "master", "importzentrale"]
+testgruppen = ["kunden", "kundengruppen", "vkgruppen", "angebotskategorien", "vertreter", "lieferanten", "kundenimport", "auswertung", "master", "importzentrale"]
 pfade = [
   "regeln/aktionen/verwaltung.toml",
   "app/api/lib/kunden.php", "app/api/lib/auswertung.php", "app/api/ort.php",
@@ -436,10 +436,10 @@ pfade = [
   "app/assets/admin-verwaltung.js", "app/assets/admin-auswertung.js", "app/assets/karte.json",
   "app/assets/admin-import.js", "app/assets/admin-import.css",
   "werkzeuge/karte_bauen.py",
-  "tests/e2e/test_kunden.py", "tests/e2e/test_kundengruppen.py", "tests/e2e/test_vkgruppen.py", "tests/e2e/test_angebotskategorien.py",
+  "tests/e2e/test_kunden.py", "tests/e2e/test_kundengruppen.py", "tests/e2e/test_vkgruppen.py", "tests/e2e/test_angebotskategorien.py", "tests/e2e/test_lieferanten.py",
   "tests/e2e/test_vertreter.py", "tests/e2e/test_kundenimport.py", "tests/e2e/test_auswertung.py",
   "tests/e2e/test_master.py", "tests/e2e/test_importzentrale.py",
-  "tests/fixtures/kunden/**", "tests/fixtures/kundengruppen/**", "tests/fixtures/stammdaten/**",
+  "tests/fixtures/kunden/**", "tests/fixtures/kundengruppen/**", "tests/fixtures/lieferanten/**", "tests/fixtures/stammdaten/**",
 ]
 pfade_geplant = ["app/api/module/verwaltung/**", "app/module/verwaltung/**"]
 hinweise = [

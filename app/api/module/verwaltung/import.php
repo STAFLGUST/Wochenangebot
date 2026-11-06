@@ -1,7 +1,7 @@
 <?php
 declare(strict_types=1);
 /* Importvertrag der Verwaltung – Schnittstelle zur Importzentrale (docs/plattform/schnittstellen/import.md).
-   Daten der Verwaltung: Kunden, Kundengruppen, VK-Gruppen, Vertreter und Artikelstammdaten.
+   Daten der Verwaltung: Kunden, Kundengruppen, VK-Gruppen, Vertreter, Versandarten, Lieferanten und Artikelstammdaten.
 
    Die Datei liest der Leser des Eigentümers im Browser (CSV: admin-verwaltung.js, Artikelstammdaten: admin.js) und
    schickt die gelesenen Zeilen. Hier prüft der Server sie, vergleicht sie mit dem gespeicherten Stand (Vorschau) und
@@ -19,7 +19,7 @@ function import_arten_verwaltung(): array
                        'ansicht' => $ansicht, 'vorschau' => 'gruppen_import_vorschau', 'uebernahme' => 'gruppen_import_uebernehmen'];
     };
     return [
-        'kunden' => $csv + ['name' => 'Kunden', 'kurz' => 'Kundendaten-Export der Warenwirtschaft', 'beschreibung' => 'Kundendaten-Export der Warenwirtschaft: Nummer, Name1, Adresse, Telefon, E-Mail, Kundengruppe, Vertreter und alle weiteren Spalten (Umsätze, Kreditlimit, letzte Rechnung …).',
+        'kunden' => $csv + ['name' => 'Kunden', 'kurz' => 'Kundendaten-Export der Warenwirtschaft', 'beschreibung' => 'Kundendaten-Export der Warenwirtschaft (auch „Kundenstammdaten komplett“): Nummer, Name1, Adresse, Telefon, E-Mail, Kundengruppe, Vertreter, Versandart und alle weiteren Spalten (Umsätze, Kreditlimit, letzte Rechnung, Name 2/3, Hermes, Lademittelbestand, Ansprechpartner …).',
             'recht' => ['kunden.bearbeiten'], 'aktion' => 'kunden_import', 'bestaetigung' => 'kunden_import', 'ansicht' => 'kunden',
             'vorschau' => 'kunden_import_vorschau', 'uebernahme' => 'kunden_import_uebernehmen',
             'optionen' => [['id' => 'ohneStern', 'typ' => 'schalter', 'label' => 'Mit „*“ markierte Kunden überspringen (in der Warenwirtschaft nicht mehr aktiv)', 'standard' => true],
@@ -31,6 +31,8 @@ function import_arten_verwaltung(): array
             'recht' => ['stammdaten.bearbeiten'], 'aktion' => 'master_save', 'ansicht' => 'master',
             'vorschau' => 'stammdaten_import_vorschau', 'uebernahme' => 'stammdaten_import_uebernehmen'],
         'vkgruppen' => $liste('vkgruppen', 'VK-Gruppen', 'Liste der VK-Gruppen aus der Warenwirtschaft: Nummer, Bezeichnung, Klasse, Kategorie.', 'vkgruppen', 'Nummer, Bezeichnung, Klasse, Kategorie'),
+        'versandarten' => $liste('versandarten', 'Versandarten', 'Stammdaten „Versandarten“ der Warenwirtschaft: Nummer, Text. Kunden und Lieferanten verweisen über ihre Versandart darauf.', 'versandarten', 'Nummer, Text'),
+        'lieferanten' => $liste('lieferanten', 'Lieferanten', 'Lieferanten-Export der Warenwirtschaft (Stammdatenimport Lieferanten): Alpha, Nummer, Name1, Gruppe, Konto, Telefon, Adresse, Kondition, Umsätze, Vertreter, Land, Versandart, GLN, Lademittelbestände, angelegt am – alle Spalten.', 'lieferanten', 'Nummer, Name, Versandart, Adresse, Umsätze'),
     ];
 }
 
@@ -55,6 +57,12 @@ const KUNDEN_WAWI_FELDER = [
     'umsatzVorjahr' => ['betrag', 0], 'umsatzVorvorjahr' => ['betrag', 0],
     'mailAB' => ['mails', 400], 'mailLS' => ['mails', 400], 'mailERechnung' => ['mails', 400], 'weitereEmails' => ['mails', 400],
     'abgabeCitti' => ['janein', 0], 'dfb' => ['janein', 0], 'rgSperre' => ['janein', 0],
+    // Export „Kundenstammdaten komplett“ (06.11.2026): weitere Namen, Angebot und Verband laut WinAB, Kreditversicherung,
+    // Lademittelbestand (Zähler der Warenwirtschaft, Stück aller Lademittel), Ansprechpartner der Warenwirtschaft
+    'name2' => ['text', 80], 'name3' => ['text', 80], 'winabAngebot' => ['text', 40], 'verband' => ['text', 20], 'steuernummer' => ['text', 30],
+    'hermesId' => ['text', 20], 'hermesDeckung' => ['betrag', 0], 'lademittelbestand' => ['ganzzahl', 0], 'abPerMail' => ['janein', 0],
+    'partnerName' => ['text', 120], 'partner1' => ['text', 120], 'partner2' => ['text', 120], 'partnerAbteilung' => ['text', 80],
+    'partnerEmail' => ['mails', 400], 'partnerTelefon' => ['text', 60], 'partnerTelefax' => ['text', 60],
 ];
 /* Aktiv-Regel des Imports: ohne Rechnung, Lieferschein und Neuanlage in diesem Zeitraum wird ein Kunde inaktiv */
 const KUNDEN_AKTIV_MONATE = 18;
@@ -66,6 +74,7 @@ function kunden_wawi_wert(array $typ, $v)
     if ($v === null || $v === '') return null;
     switch ($art) {
         case 'janein': return is_bool($v) ? $v : null;
+        case 'ganzzahl': return is_int($v) && abs($v) < 1000000000 ? $v : null;
         case 'betrag': return (is_int($v) || is_float($v)) && is_finite((float)$v) && abs((float)$v) < 1e12 ? round((float)$v, 2) : null;
         case 'datum': return is_string($v) && preg_match('/^(\d{4})-(\d{2})-(\d{2})$/', $v, $m) && (int)$m[1] >= 1900 && (int)$m[1] <= 2100 && checkdate((int)$m[2], (int)$m[3], (int)$m[1]) ? $v : null;
         case 'uhrzeit': return is_string($v) && preg_match('/^([01]\d|2[0-3]):[0-5]\d$/', $v) ? $v : null;
@@ -117,7 +126,7 @@ function kunden_import_lauf(array $b, bool $pruefen, bool $details = false): arr
     if (count($rows) > 10000) fail('Zu viele Zeilen (höchstens 10.000).', 422);
     $anlegen = !array_key_exists('anlegen', $b) || !empty($b['anlegen']);
     $quelle = s($b['quelle'] ?? '', 120) ?? '';
-    $FELDER = ['nr', 'firma', 'strasse', 'plz', 'ort', 'land', 'telefon', 'email', 'gruppe', 'vertreter', 'vertreter2'];
+    $FELDER = ['nr', 'firma', 'strasse', 'plz', 'ort', 'land', 'telefon', 'email', 'gruppe', 'vertreter', 'vertreter2', 'versandart'];
     $wawiFelder = array_values(array_intersect(array_keys(KUNDEN_WAWI_FELDER), array_filter(is_array($b['wawiFelder'] ?? null) ? $b['wawiFelder'] : [], 'is_string')));
     $regelGewuenscht = !empty($b['aktivRegel']);
     $regel = $regelGewuenscht && in_array('letzteRechnung', $wawiFelder, true);
@@ -184,9 +193,9 @@ function kunden_import_lauf(array $b, bool $pruefen, bool $details = false): arr
             }
             $c = $d['customers'][$idx];
             $neu = $c; $diff = [];
-            foreach (['nr', 'gruppe', 'vertreter', 'vertreter2', 'strasse', 'plz', 'ort', 'land', 'telefon'] as $f) if ($x[$f] !== '' && (string)($c[$f] ?? '') !== $x[$f]) $neu[$f] = $x[$f];   // Warenwirtschaft führt Adresse, Gruppe, Vertreter
+            foreach (['nr', 'gruppe', 'vertreter', 'vertreter2', 'versandart', 'strasse', 'plz', 'ort', 'land', 'telefon'] as $f) if ($x[$f] !== '' && (string)($c[$f] ?? '') !== $x[$f]) $neu[$f] = $x[$f];   // Warenwirtschaft führt Adresse, Gruppe, Vertreter, Versandart
             foreach (['firma', 'email'] as $f) if ($x[$f] !== '' && (string)($c[$f] ?? '') === '') $neu[$f] = $x[$f];                                     // nur ergänzen
-            foreach (array_merge(['firma', 'email'], ['nr', 'gruppe', 'vertreter', 'vertreter2', 'strasse', 'plz', 'ort', 'land', 'telefon']) as $f) if ((string)($c[$f] ?? '') !== (string)($neu[$f] ?? '')) $diff[$f] = [(string)($c[$f] ?? ''), (string)$neu[$f]];
+            foreach (array_merge(['firma', 'email'], ['nr', 'gruppe', 'vertreter', 'vertreter2', 'versandart', 'strasse', 'plz', 'ort', 'land', 'telefon']) as $f) if ((string)($c[$f] ?? '') !== (string)($neu[$f] ?? '')) $diff[$f] = [(string)($c[$f] ?? ''), (string)$neu[$f]];
             // Daten der Warenwirtschaft: Vergleich ohne Stand (Typen je Feld fest, daher reicht ==)
             $wawiNeu = $w != array_diff_key($wAlt, ['stand' => true]);
             if ($wawiNeu) { if ($w) $neu['wawi'] = $w + ['stand' => now()]; else unset($neu['wawi']); }
@@ -261,7 +270,7 @@ function kunden_import_lauf(array $b, bool $pruefen, bool $details = false): arr
         if ($s['bleibtAktivHand']) $h[] = ['stufe' => 'info', 'text' => $anz($s['bleibtAktivHand'], 'von Hand aktivierter Kunde ohne Rechnung bleibt', 'von Hand aktivierte Kunden ohne Rechnung bleiben') . ' aktiv.'];
         if ($s['bleibtInaktiv']) $h[] = ['stufe' => 'info', 'text' => $anz($s['bleibtInaktiv'], 'von Hand deaktivierter Kunde hat', 'von Hand deaktivierte Kunden haben') . ' wieder Rechnungen und ' . ($s['bleibtInaktiv'] === 1 ? 'bleibt' : 'bleiben') . ' trotzdem inaktiv (bei Bedarf im Kunden-Dialog aktivieren).'];
     }
-    if ($wawiFelder) $h[] = ['stufe' => 'info', 'text' => 'Weitere Spalten (Konto, Rechnungsempfänger, Kreditlimit, Kondition, Umsätze und Rohgewinne, letzte Rechnung und Lieferschein, Anlage, GLN, E-Mail-Adressen für AB, Lieferschein und E-Rechnung, Rechnungssperre, CITTI, DFB) werden als Daten der Warenwirtschaft beim Kunden gespeichert'
+    if ($wawiFelder) $h[] = ['stufe' => 'info', 'text' => 'Weitere Spalten (Konto, Rechnungsempfänger, Kreditlimit, Kondition, Umsätze und Rohgewinne, letzte Rechnung und Lieferschein, Anlage, GLN, E-Mail-Adressen für AB, Lieferschein und E-Rechnung, Rechnungssperre, CITTI, DFB, Name 2 und 3, Angebot und Verband laut WinAB, Steuernummer, Hermes, Lademittelbestand, Ansprechpartner der Warenwirtschaft) werden als Daten der Warenwirtschaft beim Kunden gespeichert'
         . ($s['wawi'] ? ' – bei ' . $anz($s['wawi'], 'bestehendem Kunden', 'bestehenden Kunden') . ' geändert' : '') . '. Sichtbar nur mit dem Recht „Kunden bearbeiten“.'];
     return ['rev' => $rev, 'regel' => $regel, 'stichtag' => $stichtag, 'hinweise' => $h] + $out;
 }
@@ -295,12 +304,19 @@ function kunden_import_zentrale(array $e, bool $pruefen): array
             'zeilen' => $r['zeilen'], 'hinweise' => $h, 'stand' => $r['rev']];
 }
 
-/* ---------------- Listen der Stammdaten: Kundengruppen, VK-Gruppen, Vertreter ---------------- */
+/* ---------------- Listen der Stammdaten: Kundengruppen, VK-Gruppen, Vertreter, Versandarten, Lieferanten ---------------- */
 
-/* Anzahl zugeordneter Kunden (Kundengruppen, Vertreter) bzw. Artikel (VK-Gruppen) je Nummer */
+/* Anzahl zugeordneter Kunden (Kundengruppen, Vertreter) bzw. Artikel (VK-Gruppen) je Nummer; Versandarten: Kunden und
+   Lieferanten zusammen; Lieferanten: keine Zuordnung */
 function gruppen_zuordnungen(string $liste): array
 {
     $n = [];
+    if ($liste === 'lieferanten') return $n;
+    if ($liste === 'versandarten') {
+        foreach (customers_load()['customers'] as $c) if (($c['versandart'] ?? '') !== '') $n[$c['versandart']] = ($n[$c['versandart']] ?? 0) + 1;
+        foreach (gruppen_load('lieferanten')['groups'] as $g) if (($g['versandart'] ?? '') !== '') $n[$g['versandart']] = ($n[$g['versandart']] ?? 0) + 1;
+        return $n;
+    }
     if ($liste === 'vkgruppen') {
         foreach ((store_read('stammdaten')['articles'] ?? []) as $a) if (($a['vkGruppe'] ?? '') !== '') $n[$a['vkGruppe']] = ($n[$a['vkGruppe']] ?? 0) + 1;
         return $n;
@@ -353,8 +369,11 @@ function gruppen_import_vorschau(array $e, array $me): array
     $cur = gruppen_load($liste);
     $alt = []; foreach ($cur['groups'] as $g) $alt[$g['nr']] = $g;
     $groups = gruppen_clean($liste, $roh, $alt);
-    $LABEL = ['name' => $liste === 'vertreter' ? 'Name' : 'Bezeichnung', 'kurz' => 'Kurzname', 'klasse' => 'Klasse', 'kategorie' => 'Kategorie',
-              'telefon' => 'Telefon', 'plz' => 'PLZ', 'ort' => 'Ort', 'land' => 'Land'];
+    $LABEL = ['name' => in_array($liste, ['vertreter', 'lieferanten'], true) ? 'Name' : ($liste === 'versandarten' ? 'Text' : 'Bezeichnung'), 'kurz' => 'Kurzname', 'klasse' => 'Klasse', 'kategorie' => 'Kategorie',
+              'telefon' => 'Telefon', 'plz' => 'PLZ', 'ort' => 'Ort', 'land' => 'Land', 'strasse' => 'Straße', 'landIntrastat' => 'Land Intrastat', 'gruppe' => 'Gruppe',
+              'konto' => 'Konto', 'kondition' => 'Kondition', 'vertreter' => 'Vertreter', 'vertreterName' => 'Vertreter (Name)', 'versandart' => 'Versandart',
+              'gln' => 'GLN', 'lademittelbestand' => 'Lademittelbestände', 'umsatzJahr' => 'Umsatz Jahr', 'kwUmsatzLfdJahr' => 'Umsatz lfd. Jahr',
+              'kwUmsatzVorjahr' => 'Umsatz Vorjahr', 'angelegtAm' => 'angelegt am'];
     $z = []; $n = ['neu' => 0, 'geaendert' => 0, 'entfaellt' => 0, 'unveraendert' => 0, 'fehler' => 0];
     foreach ($groups as $g) {
         $nr = $g['nr'];
@@ -377,9 +396,9 @@ function gruppen_import_vorschau(array $e, array $me): array
         $n['entfaellt']++;
         $k = $zahl[$nr] ?? 0;
         if ($k) $mit++;
-        $z[] = ['art' => 'entfaellt', 'zeile' => null, 'schluessel' => (string)$nr, 'name' => $a['name'], 'text' => 'nicht mehr in der Datei – wird entfernt' . ($k && $zaehlt ? " ($k " . ($liste === 'vkgruppen' ? 'Artikel' : ($k === 1 ? 'Kunde' : 'Kunden')) . ' zugeordnet)' : '')];
+        $z[] = ['art' => 'entfaellt', 'zeile' => null, 'schluessel' => (string)$nr, 'name' => $a['name'], 'text' => 'nicht mehr in der Datei – wird entfernt' . ($k && $zaehlt ? " ($k " . ($liste === 'vkgruppen' ? 'Artikel' : ($liste === 'versandarten' ? 'Kunden und Lieferanten' : ($k === 1 ? 'Kunde' : 'Kunden'))) . ' zugeordnet)' : '')];
     }
-    if ($mit) $h[] = ['stufe' => 'warn', 'text' => "$mit entfallende " . ($mit === 1 ? 'Eintrag hat' : 'Einträge haben') . ' zugeordnete ' . ($liste === 'vkgruppen' ? 'Artikel' : 'Kunden') . '; diese behalten die Nummer, bis eine andere gewählt wird.'];
+    if ($mit) $h[] = ['stufe' => 'warn', 'text' => "$mit entfallende " . ($mit === 1 ? 'Eintrag hat' : 'Einträge haben') . ' zugeordnete ' . ($liste === 'vkgruppen' ? 'Artikel' : ($liste === 'versandarten' ? 'Kunden oder Lieferanten' : 'Kunden')) . '; diese behalten die Nummer, bis eine andere gewählt wird.'];
     $h[] = ['stufe' => 'info', 'text' => "Gespeichert wird die ganze Liste: {$L['viele']}, die nicht in der Datei stehen, werden entfernt."];
     return ['zahlen' => $n, 'zeilen' => $z, 'hinweise' => $h, 'stand' => $cur['rev']];
 }
