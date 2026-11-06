@@ -304,6 +304,8 @@ textarea.lg-eingabe{height:auto;padding:8px 10px;resize:vertical;line-height:1.4
 .lg-w-ab input{width:170px}
 .lg-w-ab .lg-hilfe{flex:1 1 260px}
 .lg-w-titel{margin:14px 0 4px;font-size:14px}
+.lg-w-aeltere{display:flex;align-items:flex-start;margin:8px 0 2px;line-height:1.4}
+.lg-w-aeltere input{margin-top:2px}
 .lg-w-excel{margin:6px 0 8px;padding-left:18px;font-size:13px;line-height:1.5}
 #lg-w-lief select{min-width:200px;max-width:100%}
 #lg-w-lief .lg-sub{display:block;margin-top:3px}

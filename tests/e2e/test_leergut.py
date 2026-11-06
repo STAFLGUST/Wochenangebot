@@ -635,8 +635,10 @@ check('„WinAB ab“ 01.11.2025: Wareneingang vom 12.11.2025 gebucht', st == 20
 mp = next(p for p in V.call('leergut_start')[1]['partner'] if p['id'] == must['id'])
 V.call('leergut_partner_save', {'id': mp['id'], 'rev': mp['rev'], 'name': mp['name'], 'art': 'lieferant', 'lademittel': ['e2', 'h1'], 'winabAb': '2026-08-10'})
 st, r = V.call('leergut_winab_import', wl(bericht={**WL['bericht'], 'lfVon': '2025-11-01'}, belege=WL['belege'] + [alt25]))
-check('„WinAB ab“ später gesetzt: ältere Belege des Kontos werden storniert und nicht mehr gebucht', st == 200 and r['zahlen']['vorStart'] == 2 and r['zahlen']['ausgeglichen'] == 2
-      and konto(must['id']) == [], (r.get('zahlen'), konto(must['id'])))
+check('„WinAB ab“ später gesetzt: ältere Belege des Kontos werden storniert und nicht mehr gebucht', st == 200 and r['zahlen']['vorStart'] == 2 and r['zahlen']['vorBeginnStorniert'] == 2
+      and r['zahlen']['ausgeglichen'] == 0 and konto(must['id']) == [], (r.get('zahlen'), konto(must['id'])))
+grd = [b['storno']['grund'] for b in V.call('leergut_konto&partner=' + must['id'])[1]['bewegungen'] if b.get('quelle') == 'winab' and b.get('storno')]
+check('„WinAB ab“ später gesetzt: Grund der Stornierung', any('vor „WinAB-Belege ab“ des Kontos' in g for g in grd), grd)
 
 # ── Excel-Liste und WinAB: keine doppelten Buchungen (Wunsch des Inhabers 06.11.2026, Bochumer doppelt) ──
 # Bis zur letzten Excel-Buchung eines Kontos gilt die Excel-Liste: WinAB-Belege mit gleicher Menge (±3 Tage) nicht buchen,
@@ -682,6 +684,34 @@ st, r = V.call('leergut_winab_import', XW2)
 zz = r.get('zahlen', {})
 check('Excel-Abgleich: erneut dieselbe Datei – nichts mehr zu tun', st == 200 and zz.get('doppeltStorniert') == 0 and zz.get('neu') == 0 and zz.get('ausgeglichen') == 0 and zz.get('gleich') == 3 and zz.get('inExcel') == 2, zz)
 check('Protokoll: Abgleich nennt die Excel-Liste', 'schon in der Excel-Liste (0 doppelte storniert)' in json.dumps(A.call('log')[1], ensure_ascii=False))
+# Ohne eigenes „WinAB-Belege ab“: WinAB zählt erst nach der letzten Buchung der Excel-Liste (01.08.2025) – frühere WinAB-Buchungen werden storniert
+xp = next(p for p in V.call('leergut_start')[1]['partner'] if p['id'] == xl['id'])
+V.call('leergut_partner_save', {'id': xp['id'], 'rev': xp['rev'], 'name': xp['name'], 'art': 'lieferant', 'lademittel': ['e2', 'h1'], 'winabAb': ''})
+st, r = V.call('leergut_winab_import', XW2)
+zz = r.get('zahlen', {})
+kb = V.call('leergut_konto&partner=' + xl['id'])[1]['bewegungen']
+aktiv = sorted(b['beleg'] for b in kb if b.get('quelle') == 'winab' and not b.get('storno'))
+sal = {x['id']: x['saldo'] for x in V.call('leergut_start')[1]['konten']}
+check('Excel-Konto ohne „WinAB ab“: Belege bis zum Ende der Excel-Liste storniert (Grund), nur der spätere bleibt, Excel unverändert',
+      st == 200 and zz.get('vorBeginnStorniert') == 2 and zz.get('vorStart') == 5 and aktiv == ['Lieferschein 41600'] and sal.get(xl['id']) == {'e2': -26, 'h1': -1}
+      and any('vor dem Ende der Excel-Liste' in (b.get('storno') or {}).get('grund', '') for b in kb)
+      and sum(1 for b in kb if b.get('quelle') == 'import' and not b.get('storno')) == 4, (zz, aktiv, sal.get(xl['id'])))
+# Konto ohne Excel-Liste und ohne „WinAB ab“: ältere Buchungen vor „Übernehmen ab“ bleiben – nur mit „aeltereStornieren“ storniert
+st, r = V.call('leergut_partner_save', {'name': 'Altlieferant Test', 'art': 'lieferant', 'lademittel': ['e2'], 'lieferantNr': '2660002', 'winabAb': '2025-03-01'})
+al = r.get('partner', {})
+AW = {'bericht': {**XW['bericht'], 'lfVon': '2025-01-02'}, 'kunden': [], 'lieferanten': [{'nr': '2660002', 'lieferscheine': 2}],
+      'belege': [{**ls('47001', '2025-03-10', {'e2': 4}), 'lf': '2660002'}, {**ls('47002', '2026-02-10', {'e2': 6}), 'lf': '2660002'}]}
+V.call('leergut_winab_import', AW)
+ap = next(p for p in V.call('leergut_start')[1]['partner'] if p['id'] == al['id'])
+V.call('leergut_partner_save', {'id': ap['id'], 'rev': ap['rev'], 'name': ap['name'], 'art': 'lieferant', 'lademittel': ['e2'], 'winabAb': ''})
+st, r = V.call('leergut_winab_import', AW)
+ak = lambda: sorted(b['beleg'] for b in V.call('leergut_konto&partner=' + al['id'])[1]['bewegungen'] if b.get('quelle') == 'winab' and not b.get('storno'))
+check('Ohne Excel und „WinAB ab“: Buchung vor „Übernehmen ab“ bleibt ohne Option (nicht ausgeglichen)', st == 200 and r['zahlen']['vorBeginnStorniert'] == 0 and r['zahlen']['ausgeglichen'] == 0
+      and ak() == ['Lieferschein 47001', 'Lieferschein 47002'], (r.get('zahlen'), ak()))
+st, r = V.call('leergut_winab_import', {**AW, 'bericht': {**AW['bericht'], 'aeltereStornieren': True}, 'vorschau': True})
+check('„Ältere stornieren“ (Vorschau): zählt die Buchung, schreibt nichts', st == 200 and r['zahlen']['vorBeginnStorniert'] >= 1 and ak() == ['Lieferschein 47001', 'Lieferschein 47002'], r.get('zahlen'))
+st, r = V.call('leergut_winab_import', {**AW, 'bericht': {**AW['bericht'], 'aeltereStornieren': True}})
+check('„Ältere stornieren“: Buchung vor „Übernehmen ab“ storniert, spätere bleibt', st == 200 and r['zahlen']['vorBeginnStorniert'] >= 1 and ak() == ['Lieferschein 47002'], (r.get('zahlen'), ak()))
 
 # ── Dachser-Liste „Unterkonto-Vorspediteur“ (Mail „Infos von Fa. DACHSER“) ──
 # Erfundene Liste im Aufbau der Dachser-Mail: Seitenkopf mit Anschrift, je Fall drei Zeilen, Saldo „zu Gunsten DA“.
@@ -1155,6 +1185,12 @@ with sync_playwright() as p:
                         'quelle': 'import', 'erfasst': {'t': '2026-10-29T08:00:00Z', 'von': 'Test', 'vonId': 'u0'}, 'storno': None})
     bd['rev'] = bd_alt.get('rev', 0) + 1
     storage_write('leergut-bewegungen', bd)
+    roh = storage_raw('leergut-stamm')
+    sd_alt = json.loads(roh.split('\n', 1)[1] if roh.startswith('<?php') else roh)
+    sd = json.loads(json.dumps(sd_alt))
+    next(p for p in sd['partner'] if p['id'] == SP)['winabAb'] = '2026-01-01'   # WinAB ergänzt die Excel-Liste ab 2026
+    sd['rev'] = sd_alt.get('rev', 0) + 1
+    storage_write('leergut-stamm', sd)
     with open(csvd, 'wb') as f:
         f.write(winab_csv(WCSV + [(1, '08.09.2026', '', '2222222', 3, 'Abgang', '44400', 'Lieferschein', 'E2 Kisten')]))
     pg.set_input_files('#lg-w-datei', csvd)
@@ -1164,9 +1200,12 @@ with sync_playwright() as p:
           '1 Beleg weicht am selben Tag von der Excel-Liste ab' in exc and '1 früher doppelt gebuchter Beleg wird storniert' in exc
           and 'Lieferschein 44021' in text(pg, '#lg-w-abweichend') and 'LS-Excel-7' in text(pg, '#lg-w-abweichend') and '+6' in text(pg, '#lg-w-abweichend'), (exc, text(pg, '#lg-w-abweichend')))
     check('390px: CSV-Vorschau mit Zuordnung und Excel-Abgleich ohne waagerechtes Scrollen', pg.evaluate('document.documentElement.scrollWidth <= window.innerWidth + 1'))
+    check('CSV-Vorschau: Option „ältere WinAB-Belege stornieren“ vorhanden, standardmäßig aus', pg.locator('#lg-w-aeltere').count() == 1 and not pg.is_checked('#lg-w-aeltere'))
     pg.locator('#lg-w-vorschau').screenshot(path=os.path.join(SH, 'leergut_winab_csv_390_dark.png'))
     bd_alt['rev'] = bd['rev'] + 1
     storage_write('leergut-bewegungen', bd_alt)   # nur Vorschau: Stand von vorher wiederherstellen
+    sd_alt['rev'] = sd['rev'] + 1
+    storage_write('leergut-stamm', sd_alt)
     ctx.close()
 
     # Buchen am Handy: Abschreibungen mit beiden Knöpfen, Dachser-Dialog

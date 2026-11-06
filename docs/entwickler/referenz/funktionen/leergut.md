@@ -2,7 +2,7 @@
 
 <!-- ERZEUGT von `python3 werkzeuge/doku.py erzeugen` – nicht von Hand ändern. Quelle: Funktionen und Kommentare im Code. Die CI prüft, dass diese Datei zum Code passt. -->
 
-4 Dateien, 127 Funktionen – in der Reihenfolge der Datei, **fett** die Abschnitte. Text = erste Aussage des Kommentars direkt über der Funktion (Python: Docstring). Übersicht aller Module: [README.md](README.md).
+4 Dateien, 128 Funktionen – in der Reihenfolge der Datei, **fett** die Abschnitte. Text = erste Aussage des Kommentars direkt über der Funktion (Python: Docstring). Übersicht aller Module: [README.md](README.md).
 
 ## `app/api/aktionen/leergut.php`
 
@@ -107,7 +107,8 @@ _Leergut · Leergutkonten und Abstimmung_
 - `lg_partner_stamm(partner)` – Angaben der Stammdaten der Verwaltung je Partner (nur Anzeige, nur lesend): [Versandart je Partner-ID, WinAB-Lademittelbestand je Partner-ID als [[Nummer, …
 - `lg_winab_abgleich(w, stamm, bew, me)` – Abgleich je Beleg im Zeitraum (von–bis): neu → buchen, gleich → nichts, geändert → alten stornieren und neu buchen, nicht mehr in der Datei (ausgeglichen) → …
 - `lg_excel_index(bew)` – Excel-Liste je Konto (Buchungen aus dem Datenpaket, Quelle „import“, nicht storniert): [Konto => [[i, datum, delta, frei], …] ohne Anfangsbestände, Konto => …
-- `lg_excel_passt(liste, datum, delta)` – Gegenstück eines WinAB-Belegs in der Excel-Liste des Kontos: ['gleich', j] = noch freie Excel-Buchung mit gleicher Wirkung je Lademittel höchstens 3 Tage …
+- `lg_winab_beginn(p, excelBis, von)` – Erster Tag, ab dem WinAB-Belege für ein Konto zählen, mit Grund: ['JJJJ-MM-TT', 'ab'] eigenes „WinAB-Belege ab“, ['…', 'excel'] Tag nach der letzten Buchung …
+- `lg_excel_passt(liste, datum, delta)` – Gegenstück eines WinAB-Belegs in der Excel-Liste des Kontos (nur wenn „WinAB-Belege ab“ vor dem Ende der Excel-Liste liegt): ['gleich', j] = noch freie …
 
 **Dachser-Liste „Unterkonto-Vorspediteur“ (Mail „Infos von Fa. DACHSER“)**
 
@@ -193,7 +194,7 @@ _STAFL-Plattform · Leergut – Oberfläche der Leergutkonten_
 
 - `csvZeilen(text)`
 - `leseWinabCsv(buf, datei)`
-- `winabAnfrage(w, ab, zuordnung)` – Was an den Server geht: CSV ab „Übernehmen ab“ (Belege davor nur gezählt), Bericht (.XLS) unverändert
+- `winabAnfrage(w, ab, zuordnung, aeltere)` – Was an den Server geht: CSV ab „Übernehmen ab“ (Belege davor nur gezählt), Bericht (.XLS) unverändert
 - `winabVorher(w, ab)`
 - `zeigeWinabVorschau(st, r)`
 - `excelAbgleich(z, abw)` – Abgleich mit der Excel-Liste: bis zur letzten Excel-Buchung eines Kontos gilt die Excel-Liste.
