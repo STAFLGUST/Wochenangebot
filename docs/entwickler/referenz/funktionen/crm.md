@@ -2,7 +2,7 @@
 
 <!-- ERZEUGT von `python3 werkzeuge/doku.py erzeugen` – nicht von Hand ändern. Quelle: Funktionen und Kommentare im Code. Die CI prüft, dass diese Datei zum Code passt. -->
 
-9 Dateien, 176 Funktionen – in der Reihenfolge der Datei, **fett** die Abschnitte. Text = erste Aussage des Kommentars direkt über der Funktion (Python: Docstring). Übersicht aller Module: [README.md](README.md).
+9 Dateien, 177 Funktionen – in der Reihenfolge der Datei, **fett** die Abschnitte. Text = erste Aussage des Kommentars direkt über der Funktion (Python: Docstring). Übersicht aller Module: [README.md](README.md).
 
 ## `app/api/aktionen/crm.php`
 
@@ -67,6 +67,7 @@ _CRM · Vertrieb: Daten und Regeln des Moduls „crm“ (Oberfläche crm.intern,
 **Liste für die Oberfläche**
 
 - `crm_liste()` – Kunden der Verwaltung und Interessenten mit Kundenblatt; Angebote nur als Namen (Schnittstelle des Angebots)
+- `crm_startseite(me)` – Startseite des Dashboards („Heute für Sie“, lib/startseite.php): Wiedervorlagen der eigenen Kunden und Interessenten (wie „Mein Cockpit“: Vertreter oder …
 - `crm_karte_punkte()` – Karte: Koordinaten der Anschriften aus dem Adressverzeichnis des Servers (lib/adressen.php) – je Kunde bzw. Interessent [Breite, Länge, 'h' \| 's'] …
 - `crm_aktivitaet_aus(a)` – Aktivität für die Oberfläche (ohne interne Kennungen der Person)
 - `crm_protokoll_aenderungen(key, nr, alt, neu)` – Protokolleintrag (GR-106 unberührt): ohne Kontaktdaten und Notizen – nur Kundennummer, Feld und bei Auswahlfeldern der Wert

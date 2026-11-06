@@ -601,6 +601,24 @@ function rw_woche(string $kw, array $me, string $wer): array
             'werName' => $person === '*' ? 'Alle Listen' : ($namen[$person] ?? ''), 'gruppen' => $aus, 'ruhend' => $ruhendAus, 'zahlen' => $z,
             'abschluss' => $abschluss ? ['exportiert' => $abschluss['exportiert'] ?? null, 'erfasst' => $abschluss['erfasst'] ?? null] : null];
 }
+/* Startseite des Dashboards („Heute für Sie“, lib/startseite.php): Märkte der eigenen Liste in der laufenden Wochenabfrage, die
+   noch keine Antwort haben – gezählt wie der Filter „Offen“ der Wochenliste (rewe.js erledigt(): beantwortet oder
+   Dauerauftrag in dieser Woche nicht fällig). „Heute“ ab dem Tag vor dem Bestellschluss (Freitag früh), sonst „Demnächst“. */
+function rw_startseite(array $me): array
+{
+    if (!may($me, 'rewe.sehen') || !may($me, 'rewe.bearbeiten')) return [];
+    $w = rw_woche(rw_kw_abfrage(), $me, '');
+    $offen = 0;
+    foreach ($w['gruppen'] as $g) foreach ($g['maerkte'] as $m) {
+        $nichtFaellig = empty($m['dauerFaellig']) && ($m['dauer']['rhythmus'] ?? 0) > 0 && ($m['dauerNaechste'] ?? '') !== '';
+        if (empty($m['antwort']) && !$nichtFaellig) $offen++;
+    }
+    if (!$offen) return [];
+    $schluss = rw_kw_montag(rw_kw_abschluss())->modify('+4 days')->format('Y-m-d');
+    return [['art' => startseite_tage($schluss) <= 1 ? 'heute' : 'demnaechst', 'titel' => $offen === 1 ? '1 Markt ohne Antwort' : "$offen Märkte ohne Antwort",
+             'detail' => 'Wochenabfrage ' . $w['kwText'] . ' · Bestellschluss ' . startseite_de($schluss), 'datum' => $schluss, 'ziel' => 'woche', 'anzahl' => $offen]];
+}
+
 /* Fällige Daueraufträge einer KW als Bestellung übernehmen (eigene Märkte bzw. mit „alle“ die gewählte Liste) */
 function rw_dauer_uebernehmen(string $kw, array $me, string $wer, array $nurIds): array
 {

@@ -30,23 +30,49 @@
         <header class="r-seitenkopf">
           <div>
             <h1 id="db-titel">Willkommen</h1>
-            <p class="r-unterzeile"><span id="db-datum"></span><span aria-hidden="true"> · </span><span id="db-sub"></span></p>
+            <p class="r-unterzeile"><span id="db-datum"></span><span id="db-sub-trenner" aria-hidden="true" hidden> · </span><span id="db-sub" aria-live="polite"></span></p>
             <p class="db-darstellung-hinweis" id="db-darstellung-hinweis" role="status" hidden></p>
           </div>
           <div class="r-aktionen">
-            <button class="r-rund" id="db-darstellung" type="button" aria-pressed="false" aria-label="Einfache Darstellung einschalten (für Remote-Desktop)" title="Einfache Darstellung für Remote-Desktop"><svg class="r-i" aria-hidden="true"><use href="#i-schnell"/></svg></button>
+            <button class="r-rund r-rund-akzent" id="db-schnell" type="button" aria-haspopup="dialog" aria-label="Schnellzugriff: Anwendung oder Aktion suchen" title="Schnellzugriff"><svg class="r-i" aria-hidden="true"><use href="#i-schnell"/></svg></button>
+            <button class="r-rund" id="db-darstellung" type="button" aria-pressed="false" aria-label="Einfache Darstellung einschalten (für Remote-Desktop)" title="Einfache Darstellung für Remote-Desktop"><svg class="r-i" aria-hidden="true"><use href="#i-bildschirm"/></svg></button>
             <button class="r-rund" id="db-theme" type="button" aria-label="Dunkles Design einschalten" title="Hell / Dunkel"><svg class="r-i" aria-hidden="true"><use href="#i-moon"/></svg></button>
           </div>
         </header>
+        <div class="db-hinweise" id="db-hinweise"></div>
         <p class="db-notfall" id="db-notfall" role="status" hidden></p>
-        <section class="r-abschnitt" aria-labelledby="db-apps-titel">
-          <h2 id="db-apps-titel">Anwendungen</h2>
-          <div class="db-grid" id="db-grid" role="list" aria-labelledby="db-apps-titel"></div>
+        <section class="r-abschnitt" id="db-favoriten" aria-labelledby="db-fav-titel">
+          <div class="r-abschnitt-kopf">
+            <h2 id="db-fav-titel">Favoriten</h2>
+            <button class="db-link" id="db-fav-bearbeiten" type="button" aria-expanded="false" aria-controls="db-fav-wahl">Bearbeiten</button>
+          </div>
+          <div class="db-grid" id="db-grid" role="list" aria-labelledby="db-fav-titel"></div>
+          <div class="r-karte db-fav-wahl" id="db-fav-wahl" hidden>
+            <p class="db-fav-text" id="db-fav-text">Wählen Sie bis zu acht Anwendungen für den schnellen Zugriff.</p>
+            <div class="db-fav-auswahl" id="db-fav-auswahl" role="group" aria-labelledby="db-fav-text"></div>
+            <p class="db-fehler" id="db-fav-fehler" role="alert" hidden></p>
+            <div class="db-fav-knoepfe"><button class="db-knopf" id="db-fav-abbrechen" type="button">Abbrechen</button><button class="db-knopf primaer" id="db-fav-speichern" type="button">Speichern</button></div>
+          </div>
         </section>
-        <section class="r-abschnitt db-gruppe" id="db-verwaltung" aria-labelledby="db-verwaltung-titel" hidden>
-          <h2 id="db-verwaltung-titel">Verwaltung &amp; Daten</h2>
-          <div class="db-grid" id="db-grid-verwaltung" role="list" aria-labelledby="db-verwaltung-titel"></div>
-        </section>
+        <div class="db-spalten">
+          <section class="r-abschnitt db-heute" id="db-heute" aria-labelledby="db-heute-titel">
+            <div class="r-abschnitt-kopf">
+              <h2 id="db-heute-titel">Heute für Sie <span class="db-pille" id="db-heute-zahl" hidden></span></h2>
+            </div>
+            <div class="r-karte db-liste" id="db-heute-liste" aria-busy="true"><p class="db-leer-zeile">Offene Punkte werden geladen …</p></div>
+            <button class="db-link db-alle" id="db-heute-alle" type="button" aria-expanded="false" aria-controls="db-heute-liste" hidden>Alle offenen Punkte</button>
+          </section>
+          <div class="db-seite">
+            <section class="r-abschnitt" id="db-aktionen" aria-labelledby="db-aktionen-titel" hidden>
+              <h2 id="db-aktionen-titel">Schnellaktionen</h2>
+              <ul class="r-karte db-liste" id="db-aktionen-liste"></ul>
+            </section>
+            <section class="r-abschnitt" id="db-zuletzt" aria-labelledby="db-zuletzt-titel" hidden>
+              <h2 id="db-zuletzt-titel">Zuletzt bearbeitet</h2>
+              <ul class="r-karte db-liste" id="db-zuletzt-liste"></ul>
+            </section>
+          </div>
+        </div>
       </section>
     </main>
     <footer class="db-fuss">STAFL-Plattform · Standard-Fleisch</footer>
@@ -54,6 +80,10 @@
 </div>
 <svg width="0" height="0" style="position:absolute" aria-hidden="true">
   <symbol id="i-schnell" viewBox="0 0 24 24"><path d="M13 2.5 5 13.5h6l-1 8 8-11h-6z"/></symbol>
+  <symbol id="i-bildschirm" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="12.5" rx="2"/><path d="M8.5 20.5h7M12 16.5v4"/></symbol>
+  <symbol id="i-x" viewBox="0 0 24 24"><path d="M6 6l12 12M18 6 6 18"/></symbol>
+  <symbol id="i-warn" viewBox="0 0 24 24"><path d="M12 3.5 2.5 20h19z"/><path d="M12 10v4.5"/><circle cx="12" cy="17.2" r=".6" fill="currentColor"/></symbol>
+  <symbol id="i-check" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="m8 12.3 2.7 2.7L16 9.6"/></symbol>
   <symbol id="i-moon" viewBox="0 0 24 24"><path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z"/></symbol>
   <symbol id="i-sun" viewBox="0 0 24 24"><circle cx="12" cy="12" r="4"/><path d="M12 2.5v2M12 19.5v2M4.6 4.6 6 6M18 18l1.4 1.4M2.5 12h2M19.5 12h2M4.6 19.4 6 18M18 6l1.4-1.4"/></symbol>
   <symbol id="i-lock" viewBox="0 0 24 24"><rect x="5" y="10.5" width="14" height="9.5" rx="2"/><path d="M8 10.5V8a4 4 0 0 1 8 0v2.5"/></symbol>

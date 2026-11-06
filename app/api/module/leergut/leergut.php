@@ -387,11 +387,35 @@ function lg_abstimmung_aus(array $a, array $nachPartner, string $heute): array
     $a['differenz'] = lg_minus((array)$a['saldo'], $eigen);
     $a['ampel'] = '';
     if ($a['status'] === 'offen' && $a['fristBis'] !== '') {
-        $tage = (int)floor((strtotime($a['fristBis'] . ' 12:00:00 UTC') - strtotime($heute . ' 12:00:00 UTC')) / 86400);
+        $tage = lg_frist_tage($a['fristBis'], $heute);
         $a['restTage'] = $tage;
         $a['ampel'] = $tage < 0 ? 'rot' : ($tage <= 3 ? 'gelb' : 'gruen');
     }
     return $a;
+}
+
+/* Tage bis zur Frist eines Auszugs (negativ = abgelaufen) */
+function lg_frist_tage(string $fristBis, string $heute): int
+{
+    return (int)floor((strtotime($fristBis . ' 12:00:00 UTC') - strtotime($heute . ' 12:00:00 UTC')) / 86400);
+}
+
+/* Startseite des Dashboards („Heute für Sie“, lib/startseite.php): offene Auszüge mit Frist für Mitarbeiter, die abstimmen
+   dürfen (leergut.bearbeiten) – abgelaufen, heute oder in höchstens drei Tagen (gleiche Grenze wie die Ampel gelb). */
+function lg_startseite(array $me): array
+{
+    if (!may($me, 'leergut.sehen') || !may($me, 'leergut.bearbeiten')) return [];
+    $heute = date('Y-m-d'); $namen = []; $out = [];
+    foreach (lg_stamm()['partner'] as $p) $namen[(string)$p['id']] = (string)$p['name'];
+    foreach (lg_doc('leergut-abstimmungen')['liste'] as $a) {
+        $frist = (string)($a['fristBis'] ?? '');
+        if (($a['status'] ?? 'offen') !== 'offen' || $frist === '') continue;
+        $art = startseite_art(lg_frist_tage($frist, $heute), 3);
+        if ($art === '') continue;
+        $out[] = ['art' => $art, 'titel' => 'Auszug abstimmen: ' . ($namen[(string)$a['partner']] ?? 'Partner'),
+                  'detail' => ($art === 'ueberfaellig' ? 'Frist abgelaufen am ' : 'Frist bis ') . startseite_de($frist), 'datum' => $frist, 'ziel' => 'abstimmungen'];
+    }
+    return $out;
 }
 
 /* ---------- Konten (Übersicht je Partner) ---------- */

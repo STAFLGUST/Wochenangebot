@@ -9,12 +9,18 @@
    Ziele der Einträge wie bisher die Kacheln: unter dashboard-stafl.de die Adressen der zentralen Anmeldung, in Test- und
    Entwicklungsumgebungen derselbe Pfad auf dem aktuellen Server (nie die Produktion).
    Modulseiten binden den Rahmen ohne eigenes Skript ein: <body data-rahmen="<modul-id>"> (siehe selbst() unten).
+   Suche (Feld „Suchen“ oben in der Leiste, Strg K bzw. ⌘ K): springt zu einer Anwendung; Seiten können weitere Ziele
+   ergänzen (STAFL_RAHMEN.suche, Dashboard: Schnellaktionen). Zahlen offener Punkte je Anwendung setzt nur das Dashboard
+   (STAFL_RAHMEN.zahlen – Daten der Aktion start_heute, die es nur auf dem Dashboard-Host gibt, GR-109).
    Kein Inline-Skript (Content-Security-Policy); fremde Texte (Namen aus Register und Konto) nur maskiert. */
 'use strict';
 (() => {
   const QUELLE = document.currentScript ? document.currentScript.src : location.href;
   const LOGO = new URL('logo-standard-fleisch-kopf.png', QUELLE).href;
   const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+  /* Suche (siehe sucheOeffnen unten): Tastenkürzel je System, Ziele und Zustand des Dialogs */
+  const TASTE = /Mac|iPhone|iPad/.test(navigator.platform || navigator.userAgent || '') ? '⌘ K' : 'Strg K';
+  const such = { module: [], extra: [], treffer: [], wahl: 0, dlg: null, zurueck: null };
 
   /* Symbole je Registersymbol (icon), gleiche Formen wie bisher auf dem Dashboard; unbekannt → Raster */
   const PFADE = {
@@ -36,6 +42,10 @@
     raster: '<rect x="3" y="3" width="7" height="7" rx="2"/><rect x="14" y="3" width="7" height="7" rx="2"/><rect x="3" y="14" width="7" height="7" rx="2"/><rect x="14" y="14" width="7" height="7" rx="2"/>',
     abmelden: '<path d="M14 4.5H6.5a2 2 0 0 0-2 2v11a2 2 0 0 0 2 2H14M10 12h10M16.5 8.5 20 12l-3.5 3.5"/>',
     menue: '<path d="M4 7h16M4 12h16M4 17h16"/>',
+    suche: '<circle cx="10.5" cy="10.5" r="6.5"/><path d="m15.5 15.5 5 5"/>',
+    plus: '<path d="M12 5v14M5 12h14"/>',
+    pfeil: '<path d="m9 5.5 6.5 6.5L9 18.5"/>',
+    schliessen: '<path d="M6 6l12 12M18 6 6 18"/>',
   };
   const symbol = (name, cls = 'r-i') => `<svg class="${cls}" viewBox="0 0 24 24" aria-hidden="true" focusable="false">${PFADE[name] || PFADE.raster}</svg>`;
 
@@ -146,6 +156,8 @@
     const zeile = (m) => eintrag(m, alle, host, aktiv);
     const n = o.nutzer || {}, name = n.name || n.username || '';
     nav.innerHTML = `<a class="r-marke" href="${esc(start)}"><img class="r-logo" src="${esc(LOGO)}" width="428" height="96" alt="Standard-Fleisch – Start"></a>`
+      + `<button class="r-suche" id="r-suche" type="button" aria-haspopup="dialog" aria-label="Suchen (${esc(TASTE)})" title="Suchen · ${esc(TASTE)}">${symbol('suche')}`
+      + `<span class="r-text">Suchen</span><kbd class="r-taste" aria-hidden="true">${esc(TASTE)}</kbd></button>`
       + `<ul class="r-liste"><li><a class="r-eintrag" href="${esc(start)}" data-modul="start" data-symbol="start" title="Start" aria-label="Start"${aktiv === 'start' ? ' aria-current="page"' : ''}>${symbol('start')}<span class="r-text">Start</span></a></li></ul>`
       + gruppe('Anwendungen', apps.map(zeile).join(''))
       + gruppe('In Entwicklung', bald.map(zeile).join(''))
@@ -156,6 +168,8 @@
       + (n.rollenName ? `<span class="r-rolle" id="r-rolle">${esc(n.rollenName)}</span>` : '') + '</span>'
       + (o.abmelden ? `<button class="r-abmelden" id="r-abmelden" type="button" aria-label="Abmelden" title="Abmelden">${symbol('abmelden')}</button>` : '') + '</div>';
     if (o.abmelden) nav.querySelector('#r-abmelden').addEventListener('click', o.abmelden);
+    nav.querySelector('#r-suche').addEventListener('click', () => sucheOeffnen());
+    such.module = [...apps, ...verw].map((m) => ({ titel: m.name, href: ziel(m.kachel, alle, host), symbol: m.icon, gruppe: 'Anwendungen' }));
     nav.hidden = false;
     app.classList.add('r-bereit');
     app.classList.toggle('r-schmal', !!o.schmal);
@@ -167,6 +181,7 @@
     const nav = document.getElementById('r-leiste');
     if (!nav) return;
     menue(false, false);
+    if (such.dlg && such.dlg.open) such.dlg.close();
     nav.hidden = true; nav.innerHTML = '';
     const a = nav.closest('.r-app');
     if (a) { a.classList.remove('r-bereit', 'r-schmal', 'r-auto-schmal'); const k = a.querySelector('.r-mobilkopf'); if (k) k.hidden = true; }
@@ -224,5 +239,92 @@
     pruefen();
   } else if (wunsch) selbst(wunsch).catch(() => { /* ohne Leiste weiter */ });
 
-  window.STAFL_RAHMEN = { zeichnen, entfernen, ziel, initialen, sichtbar, art, symbol };
+  /* Zahlen offener Punkte je Anwendung an den Einträgen der Leiste (nur Dashboard): {crm: {offen: 3, ueberfaellig: 1}, …}.
+     Rot, wenn etwas überfällig ist; in der schmalen Leiste als Punkt am Symbol. Die Zahl steht auch in der Beschriftung. */
+  function zahlen(z) {
+    for (const e of document.querySelectorAll('#r-leiste .r-eintrag[data-modul]')) {
+      const alt = e.querySelector('.r-zahl');
+      if (alt) alt.remove();
+      if (!e.dataset.label) e.dataset.label = e.getAttribute('aria-label') || '';
+      const n = z && z[e.dataset.modul];
+      e.setAttribute('aria-label', e.dataset.label + (n && n.offen ? `, ${n.offen} offen${n.ueberfaellig ? `, davon ${n.ueberfaellig} überfällig` : ''}` : ''));
+      if (!n || !n.offen) continue;
+      const s = document.createElement('span');
+      s.className = 'r-zahl' + (n.ueberfaellig ? ' r-zahl-rot' : '');
+      s.setAttribute('aria-hidden', 'true');
+      s.textContent = n.offen > 99 ? '99+' : String(n.offen);
+      e.append(s);
+    }
+  }
+
+  /* Suche: Dialog mit Eingabefeld und Trefferliste (Tastatur: ↑ ↓ Enter, Escape schließt). Ziele: freie Anwendungen der Leiste
+     und was die Seite ergänzt (suche([{titel, href, symbol, gruppe}])). Nur Sprünge – Rechte prüft das Ziel selbst. */
+  function suche(liste) { such.extra = Array.isArray(liste) ? liste : []; }
+  const norm = (s) => String(s || '').toLocaleLowerCase('de-DE').normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/ß/g, 'ss');
+  function sucheDialog() {
+    if (such.dlg) return such.dlg;
+    const d = document.createElement('dialog');
+    d.className = 'r-palette'; d.id = 'r-palette'; d.setAttribute('aria-label', 'Suchen');
+    d.innerHTML = `<div class="r-palette-feld">${symbol('suche')}<input id="r-palette-eingabe" type="text" role="combobox" aria-expanded="true" aria-controls="r-palette-liste"`
+      + ` aria-autocomplete="list" autocomplete="off" spellcheck="false" placeholder="Anwendung oder Aktion suchen …" aria-label="Suchbegriff">`
+      + `<button class="r-palette-zu" type="button" aria-label="Suche schließen">${symbol('schliessen')}</button></div>`
+      + '<div class="r-palette-liste" id="r-palette-liste" role="listbox" aria-label="Treffer"></div>'
+      + '<p class="r-palette-fuss" aria-hidden="true"><kbd>↑</kbd><kbd>↓</kbd> auswählen · <kbd>Enter</kbd> öffnen · <kbd>Esc</kbd> schließen</p>';
+    document.body.append(d);
+    const ein = d.querySelector('input');
+    ein.addEventListener('input', () => { such.wahl = 0; sucheZeigen(); });
+    ein.addEventListener('keydown', (e) => {
+      if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+        e.preventDefault();
+        if (such.treffer.length) { such.wahl = (such.wahl + (e.key === 'ArrowDown' ? 1 : -1) + such.treffer.length) % such.treffer.length; sucheZeigen(); }
+      } else if (e.key === 'Enter') {
+        e.preventDefault();
+        const z = such.treffer[such.wahl];
+        if (z) location.assign(z.href);
+      }
+    });
+    d.querySelector('.r-palette-zu').addEventListener('click', () => d.close());
+    d.addEventListener('click', (e) => { if (e.target === d) d.close(); });   // Klick auf den Hintergrund
+    d.addEventListener('close', () => {   // Fokus zurück; lag er im inzwischen geschlossenen Menü (Handy), auf den Menüknopf
+      const z = such.zurueck;
+      if (z && z.isConnected && z.getClientRects().length && getComputedStyle(z).visibility !== 'hidden' && !(z.closest('#r-leiste') && knopf && knopf.offsetParent)) z.focus();
+      else if (knopf && knopf.offsetParent) knopf.focus();
+    });
+    such.dlg = d;
+    return d;
+  }
+  function sucheZeigen() {
+    const d = sucheDialog(), q = norm(d.querySelector('input').value.trim());
+    const alle = [...such.module, ...such.extra];
+    such.treffer = q ? alle.filter((z) => norm(z.titel + ' ' + (z.stichworte || '')).includes(q)) : alle;
+    if (such.wahl >= such.treffer.length) such.wahl = 0;
+    let gruppe = '';
+    const zeilen = such.treffer.map((z, i) => {
+      const kopf = z.gruppe !== gruppe ? `<p class="r-palette-gruppe" role="presentation">${esc(gruppe = z.gruppe)}</p>` : '';
+      return kopf + `<a class="r-palette-treffer" id="r-palette-${i}" role="option" aria-selected="${i === such.wahl}" href="${esc(z.href)}" data-symbol="${esc(z.symbol || '')}">`
+        + `${symbol(z.symbol in PFADE ? z.symbol : 'raster')}<span>${esc(z.titel)}</span>${symbol('pfeil', 'r-i r-palette-pfeil')}</a>`;
+    });
+    const liste = d.querySelector('.r-palette-liste');
+    liste.innerHTML = zeilen.join('') || '<p class="r-palette-leer">Nichts gefunden.</p>';
+    const ein = d.querySelector('input');
+    if (such.treffer.length) ein.setAttribute('aria-activedescendant', 'r-palette-' + such.wahl); else ein.removeAttribute('aria-activedescendant');
+    const aktiv = liste.querySelector('[aria-selected="true"]');
+    if (aktiv) aktiv.scrollIntoView({ block: 'nearest' });
+  }
+  function sucheOeffnen() {
+    if (!document.getElementById('r-suche')) return;   // ohne Leiste (nicht angemeldet) keine Suche
+    menue(false, false);
+    const d = sucheDialog();
+    if (d.open) return;
+    such.zurueck = document.activeElement;
+    d.querySelector('input').value = ''; such.wahl = 0;
+    sucheZeigen();
+    d.showModal();
+    d.querySelector('input').focus();
+  }
+  document.addEventListener('keydown', (e) => {
+    if ((e.ctrlKey || e.metaKey) && !e.altKey && !e.shiftKey && e.key.toLowerCase() === 'k' && document.getElementById('r-suche')) { e.preventDefault(); sucheOeffnen(); }
+  });
+
+  window.STAFL_RAHMEN = { zeichnen, entfernen, ziel, initialen, sichtbar, art, symbol, zahlen, suche, sucheOeffnen };
 })();

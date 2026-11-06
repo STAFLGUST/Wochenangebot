@@ -145,7 +145,7 @@ Agent: `sicherheit` · hängt ab von `plattform` · Testgruppen: `sicherheit_mod
 
 ## Dashboard (`dashboard`)
 
-Zentraler Einstieg: Anmeldung, Kacheln aus dem Modulregister, Modulstatus, Abmeldung
+Zentraler Einstieg: Anmeldung, Startseite (Favoriten, Heute für Sie, Schnellaktionen, Zuletzt bearbeitet), Modulstatus, Abmeldung
 
 Agent: `dashboard` · hängt ab von `plattform` · Testgruppen: `dashboard`
 

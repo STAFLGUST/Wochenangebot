@@ -1,7 +1,8 @@
 /* STAFL-Plattform · Dashboard (Startseite) – Gestaltung „C2“ (Entwurf vom Inhaber freigegeben 06.11.2026)
    Rahmen, Seitenleiste und alle Farben kommen aus ../assets/rahmen.css (--r-*), Schrift Geist aus ../assets/app.css.
-   Hier nur, was es nur auf der Startseite gibt: Anmeldehinweis, Begrüßung, kompakte Kacheln ohne Unterzeile (Name genügt;
-   eine zweite Zeile nur bei besonderem Stand wie Wartung), Notfallhinweis. */
+   Hier nur, was es nur auf der Startseite gibt: Anmeldehinweis, Begrüßung, Hinweise (Wartung, Notfall), Favoriten als kompakte
+   Kacheln ohne Unterzeile (Name genügt; eine zweite Zeile nur bei besonderem Stand wie Wartung), „Heute für Sie“,
+   Schnellaktionen und „Zuletzt bearbeitet“ als ruhige Listen in Karten. */
 
 body.db { line-height: 1.45; }
 .db-main { flex: 1; }
@@ -32,7 +33,8 @@ body.db { line-height: 1.45; }
 .db-notfall[hidden] { display: none; }
 
 /* ── Kacheln ── */
-.db-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); gap: 12px; }
+.db-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 12px; }
+.db-grid[hidden] { display: none; }
 .db-tile { position: relative; box-sizing: border-box; display: flex; align-items: flex-start; gap: 12px; min-width: 0; min-height: 66px; padding: 14px 16px;
   background: var(--r-flaeche); border: 1px solid var(--r-linie); border-radius: 14px; box-shadow: var(--r-schatten); color: var(--r-text); text-decoration: none;
   transition: border-color .15s, box-shadow .15s; }
@@ -60,6 +62,83 @@ a.db-tile:hover { color: var(--r-text); border-color: var(--r-linie-2); box-shad
 .db-tile.gesperrt .db-badge { background: none; padding: 0; font-weight: 500; color: var(--r-leise); }
 .db-tile .r-bald { align-self: flex-start; margin-top: 9px; }
 
+/* Zahl offener Punkte an der Kachel (aus start_heute) und Platzhalter, bis die Favoriten bekannt sind */
+.db-zahl { flex: none; align-self: flex-start; margin-top: 7px; min-width: 22px; height: 22px; padding: 0 6px; box-sizing: border-box; border-radius: 11px;
+  display: inline-grid; place-items: center; font-size: 12px; font-weight: 600; font-variant-numeric: tabular-nums; background: var(--r-neutral-bg); color: var(--r-text-2); }
+.db-zahl.rot { background: var(--r-rot-flaeche); color: var(--r-rot-ink); }
+.db-platzhalter { min-height: 66px; border: 1px solid var(--r-linie); border-radius: 14px; background: var(--r-flaeche); opacity: .55; }
+@media (max-width: 560px) { .db-platzhalter { min-height: 104px; } }
+
+/* ── Hinweise (Wartung): gelber Streifen, schließbar ── */
+.db-hinweise { display: flex; flex-direction: column; gap: 8px; }
+.db-hinweise:empty { display: none; }
+.db-hinweis { display: flex; align-items: flex-start; gap: 10px; padding: 10px 8px 10px 14px; border-radius: 12px; background: var(--r-warn-bg); color: var(--r-warn);
+  border: 1px solid color-mix(in srgb, var(--r-warn) 18%, transparent); font-size: 14px; line-height: 1.45; }
+.db-hinweis > .r-i { margin-top: 2px; }
+.db-hinweis p { flex: 1; min-width: 0; margin: 0; overflow-wrap: anywhere; color: var(--r-text); }
+.db-hinweis strong { color: var(--r-warn); font-weight: 600; }
+.db-hinweis-zu { flex: none; width: 28px; height: 28px; margin: -3px 0; border: 0; border-radius: 8px; display: grid; place-items: center; background: transparent; color: var(--r-warn); cursor: pointer; }
+.db-hinweis-zu:hover { background: color-mix(in srgb, var(--r-warn) 12%, transparent); }
+
+/* ── Abschnittsköpfe: Textknöpfe („Bearbeiten“, „Alle offenen Punkte“), Zahl neben „Heute für Sie“ ── */
+.db-link { flex: none; padding: 4px 2px; border: 0; background: none; color: var(--r-akzent-text); font: inherit; font-size: 13px; font-weight: 600; cursor: pointer; border-radius: 6px; }
+.db-link:hover { text-decoration: underline; text-underline-offset: 3px; }
+.db-link[hidden] { display: none; }
+.db-alle { align-self: flex-start; }
+.db-pille { display: inline-grid; place-items: center; min-width: 22px; height: 20px; margin-left: 6px; padding: 0 7px; box-sizing: border-box; border-radius: 10px;
+  vertical-align: 1px; font-size: 12px; font-weight: 600; font-variant-numeric: tabular-nums; background: var(--r-neutral-bg); color: var(--r-text-2); }
+.db-pille.rot { background: var(--r-rot-flaeche); color: var(--r-rot-ink); }
+.db-pille[hidden] { display: none; }
+
+/* ── Favoriten bearbeiten ── */
+.db-fav-wahl { display: flex; flex-direction: column; gap: 14px; padding: 16px; }
+.db-fav-wahl[hidden] { display: none; }
+.db-fav-text { margin: 0; font-size: 14px; color: var(--r-text-2); }
+.db-fav-auswahl { display: flex; flex-wrap: wrap; gap: 8px; }
+.db-fav-chip { display: inline-flex; align-items: center; gap: 8px; min-height: 40px; padding: 0 12px 0 6px; border: 1px solid var(--r-linie-2); border-radius: 10px;
+  background: var(--r-flaeche); color: var(--r-text); font: inherit; font-size: 14px; font-weight: 500; cursor: pointer; }
+.db-fav-chip:hover { border-color: var(--r-zart); }
+.db-fav-chip[aria-pressed="true"] { border-color: var(--r-akzent); box-shadow: inset 0 0 0 1px var(--r-akzent); background: var(--r-flaeche-2); font-weight: 600; }
+.db-fav-chip:disabled { opacity: .5; cursor: not-allowed; }
+.db-fav-knoepfe { display: flex; justify-content: flex-end; gap: 8px; }
+.db-knopf { height: 38px; padding: 0 16px; border: 1px solid var(--r-linie-2); border-radius: 10px; background: var(--r-flaeche); color: var(--r-text); font: inherit; font-size: 14px; font-weight: 600; cursor: pointer; }
+.db-knopf:hover { background: var(--r-flaeche-2); }
+.db-knopf.primaer { background: var(--r-akzent); border-color: var(--r-akzent); color: var(--r-akzent-ink); }
+.db-knopf.primaer:hover { background: var(--r-akzent-hover); border-color: var(--r-akzent-hover); }
+.db-knopf:disabled { opacity: .6; cursor: progress; }
+.db-fehler { margin: 0; font-size: 13.5px; color: var(--r-rot); }
+.db-fehler[hidden] { display: none; }
+
+/* ── Heute für Sie, Schnellaktionen, Zuletzt bearbeitet: Listen in Karten ── */
+.db-spalten { display: grid; grid-template-columns: minmax(0, 1fr); gap: 28px; align-items: start; }
+.db-seite { display: flex; flex-direction: column; gap: 28px; min-width: 0; }
+.db-seite:not(:has(> :not([hidden]))) { display: none; }
+@media (min-width: 1180px) { .db-spalten { grid-template-columns: minmax(0, 1fr) 320px; } }
+.db-liste { margin: 0; padding: 4px 0; list-style: none; overflow: hidden; }
+.db-liste ul { margin: 0; padding: 0; list-style: none; }
+.db-gruppe + .db-gruppe { border-top: 1px solid var(--r-linie); }
+.db-gruppe-titel { margin: 0; padding: 12px 16px 4px; font-size: 11px; font-weight: 600; letter-spacing: .06em; text-transform: uppercase; color: var(--r-leise); }
+.db-gruppe.ueberfaellig .db-gruppe-titel { color: var(--r-rot); }
+.db-zeile { display: flex; align-items: center; gap: 12px; min-height: 52px; padding: 8px 16px; box-sizing: border-box; color: var(--r-text); text-decoration: none; }
+a.db-zeile:hover { background: var(--r-hover); color: var(--r-text); }
+a.db-zeile:focus-visible { box-shadow: inset var(--r-fokus); }
+.db-liste li + li > .db-zeile { border-top: 1px solid var(--r-linie); }
+.db-ico.klein { width: 30px; height: 30px; border-radius: 8px; background: color-mix(in srgb, var(--r-m) 13%, transparent); color: var(--r-m); }
+.db-ico.klein .r-i { width: 16px; height: 16px; }
+.db-zeile-text { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 1px; }
+.db-zeile-titel { font-size: 14px; font-weight: 600; line-height: 1.35; overflow-wrap: anywhere; }
+.db-zeile-meta { font-size: 12.5px; color: var(--r-leise); line-height: 1.4; overflow-wrap: anywhere; }
+.db-zweizeilig { font-weight: 500; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; line-clamp: 2; overflow: hidden; }
+.db-zeile-datum { flex: none; font-size: 12.5px; color: var(--r-leise); font-variant-numeric: tabular-nums; white-space: nowrap; }
+.db-zeile-datum.ueberfaellig { color: var(--r-rot); font-weight: 600; }
+.db-zeile-datum.heute { color: var(--r-text); font-weight: 600; }
+.db-plus { color: var(--r-leise); }
+a.db-zeile:hover .db-plus { color: var(--r-akzent-text); }
+.db-leer-zeile { margin: 0; padding: 16px; font-size: 14px; color: var(--r-leise); }
+.db-erledigt { display: flex; align-items: center; gap: 10px; color: var(--r-text-2); }
+.db-erledigt .r-i { width: 22px; height: 22px; color: var(--r-ok); }
+.db-teilfehler { padding-top: 0; font-size: 12.5px; }
+
 /* ── Fuß ── */
 .db-fuss { box-sizing: border-box; width: 100%; max-width: 1120px; margin: 0 auto; padding: 0 40px 24px; font-size: 12.5px; color: var(--r-leise); }
 
@@ -81,11 +160,16 @@ a.db-tile:hover { color: var(--r-text); border-color: var(--r-linie-2); box-shad
 @media (max-width: 900px) {
   .db-fuss { padding: 0 16px 20px; }
   #db-bereich { gap: 22px; }
+  .db-spalten, .db-seite { gap: 22px; }
 }
 @media (max-width: 560px) {
   .db-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
   .db-tile { flex-direction: column; align-items: flex-start; gap: 10px; min-height: 104px; padding: 14px; }
   .db-text { width: 100%; padding-top: 0; }
   .db-tile .r-bald { position: absolute; top: 12px; right: 12px; margin-top: 0; }
+  .db-zahl { position: absolute; top: 12px; right: 12px; margin-top: 0; }
+  .db-tile .db-zahl ~ .r-bald { top: 40px; }
+  .db-zeile { padding: 8px 14px; gap: 10px; }
+  .db-fav-knoepfe .db-knopf { flex: 1; }
   .db-login { margin-top: 6vh; padding: 28px 20px; }
 }

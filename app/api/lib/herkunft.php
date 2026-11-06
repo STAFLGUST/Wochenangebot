@@ -39,7 +39,8 @@ function herkunft_pruefen(?array $aktion, string $method): void
 
 /* Aktion ↔ Host (GR-109, ADR-003 §3): Auf einem Keycloak-Host meldet der Webserver seine Oberfläche (SetEnv
    WA_OBERFLAECHE, nie aus Kopfzeilen). Aktionen einer Oberfläche mit eigener Seite – jede Oberfläche außer dem gemeinsamen
-   Eingabebereich angebot.*, für die das Aktionsregister Aktionen führt (heute hr.intern, crm.intern, marketing.intern, sicherheit.intern, controlling.intern, leergut.intern, rewe.intern, qs.intern, plattform.anmeldung) – beantwortet nur ihr eigener
+   Eingabebereich angebot.*, für die das Aktionsregister Aktionen führt (heute hr.intern, crm.intern, marketing.intern, sicherheit.intern, controlling.intern, leergut.intern, rewe.intern, qs.intern, plattform.anmeldung,
+   dashboard.start mit den Aktionen der Startseite) – beantwortet nur ihr eigener
    Host. Auf einem solchen Host gibt es außer ihnen nur die Grundaktionen der Plattform, die auch während einer Wartung
    erreichbar bleiben (Status, Abmelden, Modulübersicht) – ebenso auf dem Dashboard-Host (host_nur_grundaktionen).
    Angebot, Verwaltung und Bestand teilen sich weiter den Eingabebereich (Aktionen unter angebot.eingabe). Ohne Angabe des Webservers (angebot-stafl.de, App, Testserver) gilt
@@ -54,7 +55,8 @@ function host_eigene_seite(string $oberflaeche): bool
     return $oberflaeche !== '' && strpos($oberflaeche, 'angebot.') !== 0 && isset($mitAktionen[$oberflaeche]);
 }
 
-/* Hosts ohne Fachaktionen: das Dashboard (dashboard-stafl.de) braucht nur Status, Modulübersicht, Darstellung und Abmelden.
+/* Hosts ohne Fachaktionen: das Dashboard (dashboard-stafl.de) braucht nur Status, Modulübersicht, Darstellung und Abmelden –
+   dazu seine eigenen Aktionen der Startseite (start_heute, start_favoriten_save; über host_eigene_seite nur dort).
    Ohne diese Regel nähme es jede Aktion des gemeinsamen Eingabebereichs an – und dort verlangt kein Modulzugang etwas
    (Modul „dashboard“ hat keinen eigenen Zugang): Wem „angebot.zugang“ entzogen war, der hätte Entwurf, Bestellungen und
    Kunden über die Dashboard-Adresse weiter abrufen können (Einzelrechte vorausgesetzt). */

@@ -405,6 +405,17 @@ Kacheln und Seitenleiste des Dashboards kommen ausschließlich aus `module_statu
 `STAFL_RAHMEN.ziel()` (`rahmen.js`, für die Tests weiter als `window.STAFL_KACHEL_ZIEL`); Stand und Klebeband „Bald“
 sind nur Anzeige (GR-102, GR-103).
 
+**Startseite des Dashboards** (`dashboard.js`): parallel zu `module_status` holt sie `start_heute` (nur Dashboard-Host,
+GR-109) und zeichnet daraus Favoriten (bis dahin Platzhalter, kein Springen von der Standardauswahl), „Heute für Sie“,
+Schnellaktionen, „Zuletzt bearbeitet“, die Unterzeile und die Zahlen der Seitenleiste (`STAFL_RAHMEN.zahlen`). Antwort:
+`punkte` (je `modul`, `art` = `ueberfaellig` | `heute` | `demnaechst`, `titel`, `detail`, `datum`, `ziel` = Reiter des
+Moduls, `anzahl`), `zahlen` je Modul (`offen`, `ueberfaellig`), `gesamt`, `aktionen`, `zuletzt`, `favoriten` (`null` =
+Standard), `fehler` (Module, deren Punkte gerade nicht abrufbar waren). **Neues Modul anschließen:** im eigenen Code eine
+Funktion `<präfix>_startseite(array $me): array` mit eigener Rechteprüfung (`may`) und in `STARTSEITE_ANBIETER`
+(`app/api/lib/startseite.php`) eintragen; Tage und Gruppe über `startseite_tage()`/`startseite_art()`. Nur Texte liefern,
+die der Mitarbeiter im Modul ohnehin sieht – Personal- und Gesundheitsdaten höchstens als Anzahl (Beispiel `hr_startseite`).
+Favoriten speichert `start_favoriten_save {favoriten: [Modul-IDs] | null}` (höchstens acht, nur Module mit Kachel).
+
 **Hell/Dunkel:** `app/assets/theme.js` setzt vor dem ersten Zeichnen `data-theme` aus `localStorage`
 `wochenangebot.theme` (ohne Inline-Skript). Weil jeder Host eigenen Browser-Speicher hat (GR-108), steht die Wahl am
 **Konto**: `window.STAFL_THEME = { konto(user, csrf, api), setzen(wert) }`. Jede Seite ruft nach dem Status
@@ -464,7 +475,13 @@ Glas; Modulfarben nur an den Symbolen.
   Verweis, Klebeband „Bald“), „Verwaltung & Daten“ (`dashboard_gruppe`), unten Name, Rolle (`rollenName`) und Abmelden.
   Module mit `kachel.recht === false` fehlen. Die Seite lädt `status` und `module_status` selbst und übergibt die
   Daten (keine doppelte Abfrage). Weitere Funktionen: `ziel()` (Ziel eines Eintrags, wie bisher `kachelZiel`),
-  `sichtbar()`, `art()` (`frei`/`aus`/`bald`), `initialen()`, `symbol()` (Symbole je Registersymbol), `entfernen()`.
+  `sichtbar()`, `art()` (`frei`/`aus`/`bald`), `initialen()`, `symbol()` (Symbole je Registersymbol), `entfernen()`,
+  `zahlen({modul: {offen, ueberfaellig}})` (Zahl am Eintrag, rot bei Überfälligem, auch in `aria-label`; schmale Leiste:
+  Punkt am Symbol), `suche([{titel, href, symbol, gruppe}])` (weitere Ziele der Suche) und `sucheOeffnen()`.
+- **Suche:** Feld `#r-suche` oben in der Leiste öffnet den Dialog `#r-palette` (`<dialog>` mit `showModal`, Eingabe als
+  `combobox` mit `aria-activedescendant`, Treffer als `listbox`; ↑ ↓ Enter, Escape, Klick daneben); Strg K bzw. ⌘ K von
+  jeder Seite mit Leiste. Ziele: freie Anwendungen der Leiste plus `suche()`; Umlaute und ß werden beim Vergleich
+  vereinheitlicht. Nur Sprünge – Rechte prüft das Ziel.
 - **Aufbau einer Seite:** `<body class="… r">`, darin `<div class="r-app"><nav class="r-leiste" id="r-leiste"
   aria-label="Hauptnavigation" hidden></nav><div class="r-inhalt">…</div></div>`; Inhalt in `.r-seite` (max. 1120 px),
   Kopf als `.r-seitenkopf` mit `h1`, `.r-unterzeile` und `.r-aktionen` (runde Knöpfe `.r-rund`).

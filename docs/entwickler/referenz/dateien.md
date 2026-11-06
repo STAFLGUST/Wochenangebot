@@ -147,6 +147,7 @@ Jede Code-Datei beginnt mit einem Kopfkommentar; dessen erste Aussage steht hier
 | `rechte.php` | plattform | Nutzerrechte: was eine Rolle bzw. ein einzelner Nutzer im Eingabebereich sehen und tun darf. |
 | `sicherheit.php` | plattform | Sicherheitseinstellungen, Länder-/IP-Sperre, Zwei-Faktor, Sitzungsregister, Wartungsmodus |
 | `sitzung.php` | plattform | Mitarbeiter-Sitzung, Rollen, Passwortbestätigung, CSRF |
+| `startseite.php` | plattform | Startseite des Dashboards (Gestaltung „C2“) |
 
 ## `app/api/module/angebot/`
 
@@ -423,7 +424,7 @@ Jede Code-Datei beginnt mit einem Kopfkommentar; dessen erste Aussage steht hier
 | --- | --- | --- |
 | `abgemeldet.html` | dashboard | Seite „STAFL-Plattform · Abgemeldet“ |
 | `dashboard.css` | dashboard | STAFL-Plattform · Dashboard (Startseite) – Gestaltung „C2“ (Entwurf vom Inhaber freigegeben 06.11.2026) Rahmen, Seitenleiste und alle Farben kommen aus ../assets/rahmen.css (--r-*), Schrift Geist aus ../assets/app.css. |
-| `dashboard.js` | dashboard | STAFL-Plattform · Dashboard (Startseite, Gestaltung „C2“) Kacheln und Seitenleiste kommen ausschließlich aus dem Modulregister (Aktion module_status, regeln/module.toml) – keine fest programmierte Liste. |
+| `dashboard.js` | dashboard | STAFL-Plattform · Dashboard (Startseite, Gestaltung „C2“) Aufbau |
 | `index.html` | dashboard | Seite „STAFL-Plattform · Dashboard“ |
 
 ## `deploy/`
@@ -654,6 +655,7 @@ Jede Code-Datei beginnt mit einem Kopfkommentar; dessen erste Aussage steht hier
 | `bestand.toml` | bestand | Aktionen des Moduls „bestand“ |
 | `controlling.toml` | controlling | Aktionen des Moduls „controlling“: gemeinsamer Start und je Bereich eigene Aktionen controlling_<bereich>_… (heute Umsatzstatistik; geplant OP-Konten, Liquidität). |
 | `crm.toml` | crm | Aktionen des Moduls „crm“ |
+| `dashboard.toml` | dashboard | Aktionen des Moduls „dashboard“ |
 | `einkauf.toml` | einkauf | Aktionen des Moduls „einkauf“ |
 | `hr.toml` | hr | Aktionen des Moduls „hr“ |
 | `leergut.toml` | leergut | Aktionen des Moduls „leergut“ |

@@ -2,7 +2,7 @@
 
 <!-- ERZEUGT von `python3 werkzeuge/doku.py erzeugen` – nicht von Hand ändern. Quelle: Funktionen und Kommentare im Code. Die CI prüft, dass diese Datei zum Code passt. -->
 
-9 Dateien, 249 Funktionen – in der Reihenfolge der Datei, **fett** die Abschnitte. Text = erste Aussage des Kommentars direkt über der Funktion (Python: Docstring). Übersicht aller Module: [README.md](README.md).
+9 Dateien, 250 Funktionen – in der Reihenfolge der Datei, **fett** die Abschnitte. Text = erste Aussage des Kommentars direkt über der Funktion (Python: Docstring). Übersicht aller Module: [README.md](README.md).
 
 ## `app/api/aktionen/qs.php`
 
@@ -139,6 +139,7 @@ _Qualitätssicherung · QM-System (IFS Wholesale)_
 **Übersicht für die Oberfläche**
 
 - `qs_pruefungen_aus(plan, nachweise, heute)`
+- `qs_startseite(me)` – Startseite des Dashboards („Heute für Sie“, lib/startseite.php): eigene Prüfungen (eingeteilt wie in „Ihre Aufgaben“ der Übersicht, qs_pruefung_meine) mit …
 
 **CSV (Excel)**
 

@@ -250,6 +250,26 @@ function crm_liste(): array
     return $out;
 }
 
+/* Startseite des Dashboards („Heute für Sie“, lib/startseite.php): Wiedervorlagen der eigenen Kunden und Interessenten (wie
+   „Mein Cockpit“: Vertreter oder Vertreter 2 = Vertreter des Mitarbeiters) mit nächstem Schritt – überfällig, heute oder in
+   höchstens drei Tagen. Ohne Vertreternummer am Konto keine Punkte. */
+function crm_startseite(array $me): array
+{
+    $v = (string)($me['vertreter'] ?? '');
+    if (!may($me, 'crm.sehen') || $v === '') return [];
+    $heute = date('Y-m-d'); $out = [];
+    foreach (crm_liste() as $k) {
+        if (($k['vertreter'] ?? '') !== $v && ($k['vertreter2'] ?? '') !== $v) continue;
+        $c = $k['crm'];
+        if ((string)$c['naechsterSchritt'] === '' || (string)$c['wiedervorlage'] === '') continue;
+        $art = startseite_art(startseite_tage((string)$c['wiedervorlage'], $heute));
+        if ($art === '') continue;
+        $out[] = ['art' => $art, 'titel' => 'Wiedervorlage: ' . ($k['firma'] !== '' ? $k['firma'] : 'ohne Namen'),
+                  'detail' => mb_strimwidth((string)$c['naechsterSchritt'], 0, 90, '…'), 'datum' => (string)$c['wiedervorlage'], 'ziel' => 'wiedervorlagen'];
+    }
+    return $out;
+}
+
 /* Karte: Koordinaten der Anschriften aus dem Adressverzeichnis des Servers (lib/adressen.php) – je Kunde bzw. Interessent
    [Breite, Länge, 'h' | 's'] (Hausnummer bzw. Straße). Ohne Treffer, ohne Straße, im Ausland oder ohne Verzeichnis fehlt der
    Eintrag – die Karte nimmt dann wie bisher den Mittelpunkt der Postleitzahl. Nichts wird gespeichert. */

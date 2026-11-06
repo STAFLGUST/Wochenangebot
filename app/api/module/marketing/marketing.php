@@ -88,6 +88,34 @@ function mkt_id(string $praefix): string { return $praefix . bin2hex(random_byte
 function mkt_ids(array $liste): array { return array_values(array_map(function ($x) { return (string)$x['id']; }, $liste)); }
 
 /* Mitarbeiter, die Beiträge bearbeiten dürfen (wählbar als Verantwortliche) – Schnittstelle der Plattform (users_load) */
+/* Startseite des Dashboards („Heute für Sie“, lib/startseite.php): mit marketing.freigeben die Beiträge „Zur Freigabe“
+   (ein Sammelpunkt), dazu eigene Beiträge (verantwortlich), deren Veröffentlichung ansteht oder schon vorbei ist, solange sie
+   noch nicht veröffentlicht sind (In Planung, In Produktion, Freigegeben & geplant). */
+function mkt_startseite(array $me): array
+{
+    if (!may($me, 'marketing.sehen')) return [];
+    $heute = date('Y-m-d'); $id = (string)$me['id']; $out = [];
+    $liste = mkt_beitraege_doc()['liste'];
+    if (may($me, 'marketing.freigeben')) {
+        $zf = array_filter($liste, function ($e) { return ($e['status'] ?? '') === 'freigabe'; });
+        if ($zf) {
+            $n = count($zf);
+            $termine = array_filter(array_map(function ($e) { return substr((string)($e['veroeffentlichung'] ?? ''), 0, 10); }, $zf));
+            $erster = $termine ? min($termine) : '';
+            $out[] = ['art' => $erster !== '' && $erster < $heute ? 'ueberfaellig' : 'heute', 'titel' => $n === 1 ? 'Beitrag freigeben' : "$n Beiträge freigeben",
+                      'detail' => $erster !== '' ? 'erste Veröffentlichung ' . startseite_de($erster) : 'Zur Freigabe', 'datum' => $erster, 'ziel' => 'board', 'anzahl' => $n];
+        }
+    }
+    foreach ($liste as $e) {
+        if ((string)($e['verantwortlich'] ?? '') !== $id || !in_array($e['status'] ?? 'idee', ['planung', 'produktion', 'geplant'], true)) continue;
+        $t = substr((string)($e['veroeffentlichung'] ?? ''), 0, 10);
+        if ($t === '' || ($art = startseite_art(startseite_tage($t, $heute))) === '') continue;
+        $out[] = ['art' => $art, 'titel' => 'Beitrag: ' . (string)($e['titel'] ?? ''), 'detail' => MKT_STATUS[$e['status']] . ' · Veröffentlichung ' . startseite_de($t),
+                  'datum' => $t, 'ziel' => 'kalender'];
+    }
+    return $out;
+}
+
 function mkt_team(): array
 {
     $out = [];

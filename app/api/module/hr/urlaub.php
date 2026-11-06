@@ -931,5 +931,30 @@ function hr_monat(int $jahr, int $monat, array $me, bool $voll): array
             'sperren' => $einst['sperren'], 'ferien' => $einst['ferien']];
 }
 
+/* Startseite des Dashboards („Heute für Sie“, lib/startseite.php): was dieser Mitarbeiter in HR entscheiden kann – dieselben
+   Zahlen wie am Reiter „Anträge“ (hr_start: offene Anträge ohne eigene, Korrekturmeldungen der Personalstelle). Bewusst nur
+   Anzahlen und das früheste Datum, keine Namen oder Arten (Abwesenheiten sind Personaldaten, Krankheit Gesundheitsdaten). */
+function hr_startseite(array $me): array
+{
+    $genehmigen = may($me, 'hr.genehmigen'); $verwalten = may($me, 'hr.verwalten');
+    if (!$genehmigen && !$verwalten) return [];
+    $heute = hr_heute(); $personal = hr_personal(); $out = [];
+    $offen = array_filter(hr_abwesenheiten()['eintraege'], function ($e) use ($genehmigen, $personal, $me) {
+        return $e['status'] === 'beantragt' && (!$genehmigen || !hr_eigen($personal, $me, $e));
+    });
+    if ($offen) {
+        $n = count($offen); $ab = min(array_column($offen, 'von'));
+        $out[] = ['art' => $ab < $heute ? 'ueberfaellig' : 'heute', 'titel' => $n === 1 ? 'Antrag entscheiden' : "$n Anträge entscheiden",
+                  'detail' => ($ab < $heute ? 'Beginn schon vorbei: ' : 'frühester Beginn ') . startseite_de($ab), 'datum' => $ab < $heute ? $ab : '', 'ziel' => 'antraege', 'anzahl' => $n];
+    }
+    if ($verwalten) {
+        $eigene = hr_eigene_ids($personal, $me);
+        $n = count(array_filter(hr_korrekturen()['meldungen'], function ($m) use ($eigene) { return $m['status'] === 'offen' && !isset($eigene[$m['person']]); }));
+        if ($n) $out[] = ['art' => 'heute', 'titel' => $n === 1 ? 'Korrekturmeldung bearbeiten' : "$n Korrekturmeldungen bearbeiten", 'detail' => 'Personalstelle',
+                          'ziel' => 'antraege', 'anzahl' => $n];
+    }
+    return $out;
+}
+
 require_once __DIR__ . '/mail.php';   // E-Mails der Urlaubsverwaltung (Erinnerung, Monatsübersicht, Steuerberater)
 require_once __DIR__ . '/planung.php';   // Jahresplanung (Vorplanung des nächsten Jahres, Konflikte, Jahresübersicht)
