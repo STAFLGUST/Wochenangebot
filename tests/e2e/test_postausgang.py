@@ -190,7 +190,11 @@ try:
             ctx = br.new_context(viewport={'width': breite, 'height': 900}); c = ctx.new_page(); errs = []
             c.on('pageerror', lambda e: errs.append(str(e)))
             c.goto(BASE + '/'); c.wait_for_selector('#btn-kunde-login'); c.click('#btn-kunde-login')
-            c.fill('#kl-form [name=username]', 'kantine.post'); c.fill('#kl-form [name=password]', 'Kantine-Kennwort-5'); c.click('#kl-form [type=submit]')
+            c.fill('#kl-form [name=username]', 'kantine.post'); c.fill('#kl-form [name=password]', 'Kantine-Kennwort-5')
+            # Die Anmeldung lädt die Seite neu (location.reload): erst das Neuladen abwarten – „bereit“ der alten Seite gilt
+            # nicht (Befund CI 06.11.2026: der Klick auf #modebar traf die neue Seite vor dem Binden, Ansicht blieb „Angebot“)
+            with c.expect_navigation():
+                c.click('#kl-form [type=submit]')
             # #modebar steht fest im HTML; der Klick wirkt erst, wenn die Seite ihre Bedienelemente gebunden hat
             c.wait_for_selector('html[data-bereit]')
             c.click('#modebar [data-mode=liste]'); c.wait_for_selector('tr.row .qty')
