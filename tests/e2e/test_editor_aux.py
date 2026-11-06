@@ -1,6 +1,7 @@
 """Testgruppe editor_aux: Hilfen im Angebotseditor – Vergleich mit der Vorwoche, Bestand im Editor und Suche in
 „Artikel hinzufügen“ (ohne Vorauswahl „nur mit Bestand“; die frühere Leiste „Bestand ohne Preis“ ist entfallen) sowie
-„Export für WinAB“ (Recht angebot.winab_export: CSV des veröffentlichten Wochenangebots, je Nummer der höchste Preis)."""
+„Export für WinAB“ (Recht angebot.winab_export: CSV des veröffentlichten Wochenangebots, je Nummer der höchste Preis)
+sowie die Artikelkarte des Bestands im Angebot (Klick auf den Bestand oder eine freie Fläche der Artikelzeile)."""
 import sys
 from umgebung import BASE  # Testserver je Gruppe (parallel)
 import json, re
@@ -20,6 +21,11 @@ priced = {norm(i['code']) for i in offer['items'] if i['code'] and i['price']['s
 in_offer_none = {norm(i['code']) for i in offer['items'] if i['code']} - priced
 exp_np = [a for a in master if norm(a[0]) not in priced]
 articles = [{'code': a[0].lstrip('0') or '0', 'name': a[1], 'kg': a[2], 'mhd': a[3], 'mhdKg': a[4], 'lots': []} for a in master]
+# Artikelkarte: 10601 mit zwei Partien (EK) und einem erwarteten Zugang – Summe der Partien unabhängig vom gemeldeten Bestand
+LOTS_10601 = [{'lot': '900001', 'marke': 'Testmarke A', 'arrival': '2026-09-15', 'mhd': '2026-11-04', 'kolli': 6, 'kg': 8.94, 'ek': 20.0},
+              {'lot': '900002', 'marke': 'Testmarke B', 'arrival': '2026-10-02', 'mhd': '2026-12-01', 'kolli': 3, 'kg': 19.1, 'ek': 19.4}]
+next(x for x in articles if x['code'] == '10601')['lots'] = LOTS_10601
+ZUGANG_10601 = [{'code': '10601', 'name': 'Zugang Test', 'kg': 50.0, 'arrival': '2026-10-28', 'lot': '900099', 'kolli': 4, 'marke': 'Testmarke C'}]
 
 def login(pg, user, pw):
     pg.goto(B + '/admin/'); pg.wait_for_selector('#screen-auth:not([hidden])')
@@ -42,7 +48,7 @@ with sync_playwright() as p:
         if it['code'] == '10601' and pr['status'] == 'value': pr['value'] = round(pr['value'] - 0.4, 2)
         hist.append({'code': it['code'], 'name': it['name'], 'group': gn[it['groupId']], 'category': it['category'], 'price': pr})
     r = post(a, 'history_import', {'week': 42, 'year': 2026, 'source': 'test', 'items': hist}); check('history KW42 stored', r[0] == 200, r[0])
-    r = post(a, 'stock_import', {'date': '2026-10-16', 'source': 'Bestand_16.10.26.XLS', 'articles': articles}); check('stock stored', r[0] == 200, r[1] if r[0] != 200 else '')
+    r = post(a, 'stock_import', {'date': '2026-10-16', 'source': 'Bestand_16.10.26.XLS', 'articles': articles, 'incoming': ZUGANG_10601}); check('stock stored', r[0] == 200, r[1] if r[0] != 200 else '')
     a.reload(); a.wait_for_selector('tr[data-id]')
     a.wait_for_function("document.querySelector('#groups:not(.no-stock):not(.no-prev)') && document.querySelector('#mhd-panel:not([hidden])')", timeout=10000)
     # Kopfzeile wird nach dem Laden von Bestand/Vorwoche nachgezogen – auf den fertigen Stand warten
@@ -58,6 +64,45 @@ with sync_playwright() as p:
     check('Leiste „Bestand ohne Preis“ entfallen, „Kurzes MHD“ beim Öffnen zugeklappt', a.locator('#noprice-panel').count() == 0
           and a.locator('#mhd-panel .np-card:not(.open)').count() == 1 and 'Bestand ohne Preis' not in a.inner_text('#view-edit'))
     a.screenshot(path=SH + '/editor-aux.png')
+    # ---------- Artikelkarte des Bestands im Angebot (Wunsch Inhaber 06.11.2026) ----------
+    karte = '#dlg-stock-item'
+    def karte_zu(pg):
+        pg.click(karte + ' .dlg-head [data-close]'); pg.wait_for_selector(karte + ':not([open])', state='attached')
+    def frei(zeile):   # freie Fläche der Artikelzeile: rechte untere Ecke der Bezeichnungsspalte (neben den Merkmalen)
+        td = zeile.locator('td.e-name'); bx = td.bounding_box(); td.click(position={'x': bx['width'] - 4, 'y': bx['height'] - 3})
+    btn = row.locator('td.e-stock button.e-bst')
+    check('Karte: Bestandswert ist ein Knopf (Tastatur) mit Bestand als Text', btn.count() == 1 and btn.inner_text().strip() == de(bestand_kg('10601'))
+          and 'Partien und Zugänge' in (btn.get_attribute('aria-label') or ''), btn.count())
+    btn.click(); a.wait_for_selector(karte + '[open] .lottab')
+    kt = a.inner_text(karte)
+    check('Karte aus dem Angebot: Kopf mit Art.-Nr. und Stand, Kennzahlen wie im Bestand', 'Art.-Nr. 10601' in kt and 'Bestand vom 16.10.2026' in kt
+          and a.locator(karte + ' .cmp-stats > div').count() == 7 and de(bestand_kg('10601')) + ' kg' in a.inner_text(karte + ' .cmp-stats > div:first-child'), kt[:200])
+    lz = a.locator(karte + ' .lottab tbody tr'); zz = a.locator(karte + ' .zutab tbody tr')
+    check('Karte: zwei Partien mit Marke und EK (Administrator), ein erwarteter Zugang', lz.count() == 2 and zz.count() == 1 and 'Testmarke A' in lz.first.inner_text()
+          and '900002' in lz.nth(1).inner_text() and a.locator(karte + ' .lottab th:text-is("EK-Preis")').count() == 1 and '900099' in zz.first.inner_text(), (lz.count(), zz.count()))
+    check('Karte: Summe der Partien (9 Kolli, 28,04 kg)', a.locator(karte + ' .lottab tfoot').inner_text().replace('\n', ' ').count('28,04 kg') == 1
+          and '\t9\t' in a.locator(karte + ' .lottab tfoot tr').inner_text(), a.locator(karte + ' .lottab tfoot').inner_text())
+    kx = a.text_content(karte)
+    check('Karte: Abschnitt „Im Angebot (Entwurf KW 43)“ mit Preis', 'Im Angebot (Entwurf KW 43)' in kx and de(preis('10601')) in kx.split('Im Angebot')[1], kx.split('Im Angebot')[-1][:120])
+    a.locator(karte).screenshot(path=SH + '/artikelkarte-angebot.png')
+    karte_zu(a)
+    frei(row); a.wait_for_selector(karte + '[open] .lottab')
+    check('Karte: Klick auf eine freie Fläche der Artikelzeile öffnet sie ebenso', a.locator(karte + ' .lottab tbody tr').count() == 2)
+    karte_zu(a)
+    row.locator('input[data-f=name]').click()
+    offen = a.evaluate("() => new Promise((r) => setTimeout(() => r(document.querySelector('#dlg-stock-item').open), 400))")
+    check('Karte: Klick in die Bezeichnung bearbeitet sie weiter (keine Karte)', not offen and a.evaluate("document.activeElement.dataset.f") == 'name')
+    row.locator('td.e-price').click(position={'x': 4, 'y': 4})
+    offen = a.evaluate("() => new Promise((r) => setTimeout(() => r(document.querySelector('#dlg-stock-item').open), 400))")
+    check('Karte: Klick in die Preisspalte öffnet sie nicht', not offen)
+    leer = a.locator('tr[data-id]:has(td.e-stock.none button.e-bst)').first
+    lc = leer.locator('input[data-f=code]').input_value()
+    leer.locator('td.e-stock button.e-bst').click(); a.wait_for_selector(karte + '[open] .cmp-stats')
+    kt = a.text_content(karte)
+    check('Karte: Artikel ohne Bestand – leere Werte, „keine eingelagerten Partien“', f'Art.-Nr. {lc}' in kt and 'keine eingelagerten Partien' in kt and a.locator(karte + ' .lottab').count() == 0
+          and a.inner_text(karte + ' .cmp-stats > div:first-child').strip().endswith('—'), (lc, kt[:160]))
+    karte_zu(a)
+    check('Karte: ohne Artikelnummer kein Knopf', a.locator('tr[data-id] td.e-stock.none:not(:has(button))').count() == a.locator('tr[data-id]:has(input[data-f=code][value=""])').count())
     # Artikel hinzufügen: „nur mit Bestand“ nicht vorausgewählt, Suche mit Nummer (auch mit führenden Nullen), Bezeichnung
     # zusammengeschrieben bzw. mit ue statt ü, Zustand ausgeschrieben
     np = next(x for x in exp_np if len(x[0].lstrip('0')) >= 4 and norm(x[0]) not in in_offer_none)   # Bestand, nicht im Angebot
@@ -142,6 +187,11 @@ with sync_playwright() as p:
     check('WinAB: beim Kundenangebot ausgeblendet', not w.locator('#btn-winab').is_visible())
     w.locator('#offer-bar [data-offer="std"]').click(); w.wait_for_selector('#btn-winab:not([hidden])')
     shot_box = w.locator('.ed-toolbar'); shot_box.screenshot(path=SH + '/winab-export-knopf.png')
+    w.wait_for_selector('#groups:not(.no-stock) tr[data-id]:has(input[data-f="code"][value="10601"]) button.e-bst')
+    w.locator('tr[data-id]:has(input[data-f="code"][value="10601"]) button.e-bst').first.click(); w.wait_for_selector('#dlg-stock-item[open] .lottab')
+    check('Karte (Leserolle mit bestand.sehen): Partien ohne EK-Spalte, auch in der Nur-Ansicht', w.locator('#dlg-stock-item .lottab tbody tr').count() == 2
+          and w.locator('#dlg-stock-item th:text-is("EK-Preis")').count() == 0 and '20,00' not in w.inner_text('#dlg-stock-item .lottab'))
+    w.click('#dlg-stock-item .dlg-head [data-close]'); w.wait_for_selector('#dlg-stock-item:not([open])', state='attached')
     with w.expect_download() as dl:
         w.click('#btn-winab')
     d = dl.value; inhalt = open(d.path(), 'rb').read()
@@ -153,6 +203,14 @@ with sync_playwright() as p:
     check('WinAB: Rückmeldung mit Anzahl, doppelten und ausgelassenen Artikeln', '4 Artikel' in t and 'KW 45/2026' in t and '2× doppelt' in t and '1 Artikel ohne Preis' in t, t)
     r = post(w, 'angebot_winab_export', {})
     check('WinAB: Schnittstelle liefert Zahlen (4 Zeilen, 2 doppelt, 1 ohne Preis)', r[0] == 200 and r[1]['anzahl'] == 4 and r[1]['doppelt'] == 2 and r[1]['ohnePreis'] == 1, {k: v for k, v in (r[1] or {}).items() if k != 'csv'})
+    post(a, 'user_save', {'name': 'Nobe', 'username': 'nobe', 'role': 'editor', 'active': True, 'password': 'Ohne-Bestand-Zugang-1', 'mustChange': False, 'deny': ['bestand.sehen']})
+    nb = br.new_page(viewport={'width': 1440, 'height': 950}); nb.on('pageerror', lambda x: errs.append('nobe: ' + str(x))); login(nb, 'nobe', 'Ohne-Bestand-Zugang-1')
+    nr = nb.locator('tr[data-id]:has(input[data-f="code"][value="10601"])').first
+    td = nr.locator('td.e-name'); bx = td.bounding_box(); td.click(position={'x': bx['width'] - 4, 'y': bx['height'] - 3})
+    offen = nb.evaluate("() => new Promise((r) => setTimeout(() => r(document.querySelector('#dlg-stock-item').open), 400))")
+    check('Karte ohne „bestand.sehen“: kein Knopf, Zeile nicht klickbar, Bestand 403', not offen and nb.locator('button.e-bst').count() == 0
+          and nb.locator('tr.e-karte').count() == 0 and nb.evaluate("async () => (await fetch('../api/?action=stock')).status") == 403)
+    nb.close()
     e = br.new_page(viewport={'width': 1440, 'height': 950}); login(e, 'eddi', 'Bearbeiter-Zugang-1')
     check('WinAB: ohne Recht kein Knopf (auch nicht als Bearbeiter) und 403', not e.locator('#btn-winab').is_visible() and post(e, 'angebot_winab_export', {})[0] == 403)
     anon = br.new_page(); anon.goto(B + '/admin/'); anon.wait_for_selector('#screen-auth:not([hidden])')
@@ -167,6 +225,12 @@ with sync_playwright() as p:
     login(m, 'admin', 'Sicheres-Passwort-1'); m.wait_for_selector('#mhd-panel:not([hidden])'); m.wait_for_timeout(300)
     m.screenshot(path=SH + '/editor-aux-mobile.png')
     sw = m.evaluate('document.documentElement.scrollWidth'); check('mobile no h-scroll', sw <= 390, sw)
+    mb = m.locator('tr[data-id]:has(input[data-f="code"][value="10601"]) button.e-bst').first
+    mb.scroll_into_view_if_needed(); mb.click(); m.wait_for_selector('#dlg-stock-item[open] .lottab')
+    m.screenshot(path=SH + '/artikelkarte-angebot-mobil.png')
+    check('mobil: Artikelkarte öffnet aus dem Angebot, ohne seitliches Scrollen der Seite', m.evaluate('document.documentElement.scrollWidth') <= 390
+          and m.locator('#dlg-stock-item .lottab tbody tr').count() == 2)
+    m.click('#dlg-stock-item .dlg-head [data-close]'); m.wait_for_selector('#dlg-stock-item:not([open])', state='attached')
     m.wait_for_selector('#btn-winab:not([hidden])')
     check('mobile: „Export für WinAB“ in der Werkzeugleiste ohne seitliches Scrollen', m.locator('#btn-winab').is_visible() and m.evaluate('document.documentElement.scrollWidth') <= 390)
     # Ohne Artikel mit Preis: keine Datei (422)

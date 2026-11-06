@@ -847,6 +847,7 @@
   async function kategorienLaden(opts = {}) {
     let r;
     try { r = await api('angebotskategorien'); } catch { return false; }   // ohne Recht oder bei Fehler: Reihenfolge bleibt von Hand
+    const warAktiv = kategorienAktiv();
     kategorien = Array.isArray(r.kategorien) ? r.kategorien : [];
     kategorienVk = Array.isArray(r.vk) ? r.vk : [];
     if (ro || !model) return false;
@@ -856,7 +857,9 @@
       if (!opts.still) toast('Angebot nach den Angebotskategorien geordnet (Stammdaten). Zum Übernehmen veröffentlichen.', 6000);
       return true;
     }
-    if (currentView === 'edit') renderGroups();
+    // Gruppenköpfe nur neu zeichnen, wenn Kategorien gelten oder galten (Auswahl der VK-Gruppe statt „Bereich“) – sonst
+    // ändert sich nichts, und ein Neuzeichnen bei jedem Öffnen kostete Zeit (Gruppen mit content-visibility: auto)
+    if (currentView === 'edit' && (warAktiv || kategorienAktiv())) renderGroups();
     return false;
   }
   /* VK-Gruppe einer Angebotsgruppe wählen (Gruppenkopf, nur mit Angebotskategorien): Nummer · Name → Kategorie */
@@ -1268,7 +1271,7 @@
     const nameFeld = kd
       ? `<input class="in e-nm${eig ? ' e-nm-eigen' : ''}" data-f="oname" value="${esc(eig || it.name)}" placeholder="${esc(it.name)}" aria-label="Bezeichnung in ${esc(offerShort(curOffer))}" title="${eig ? `Eigene Bezeichnung in „${esc(offerShort(curOffer))}“ – Basiswert: ${esc(it.name)}. Leeren = Basiswert.` : `Bezeichnung nur in „${esc(offerShort(curOffer))}“ ändern – die anderen Angebote bleiben unverändert.`}" maxlength="200">${eig ? `<span class="e-eigen" title="Eigene Bezeichnung in „${esc(offerShort(curOffer))}“ – Basiswert: ${esc(it.name)}">eigene</span>` : ''}`
       : `<input class="in e-nm" data-f="name" value="${esc(it.name)}" aria-label="Bezeichnung" maxlength="200">`;
-    return `<tr data-id="${esc(it.id)}" class="${st}${werb ? ' e-werb' : ''}${matchesFilter(it) ? '' : ' hidden-row'}">
+    return `<tr data-id="${esc(it.id)}" class="${st}${werb ? ' e-werb' : ''}${bestandKarteMoeglich(it) ? ' e-karte' : ''}${matchesFilter(it) ? '' : ' hidden-row'}">
       <td class="e-code"><input class="in mono" data-f="code" value="${esc(it.code || '')}" placeholder="—" aria-label="Artikelnummer" maxlength="20"></td>
       <td class="e-name"><div class="e-nmrow">${nameFeld}${st === 'is-new' ? '<span class="newtag">neu</span>' : ''}${werb ? `<button type="button" class="werbtag" data-act="werbung" title="Wird auf der Angebotsseite oben beworben – Werbung bearbeiten">${icon('megaphone', 'sm')}Werbung</button>` : ''}</div>
         <div class="e-attr">${it.code ? `<span class="e-codem">${esc(it.code)}</span>` : ''}<select class="in chip" data-f="category" aria-label="Fleischart">${CAT_OPTS(it.category)}</select><input class="in chip" data-f="origin" value="${esc(it.origin || '')}" list="dl-origins" placeholder="Herkunft" aria-label="Herkunft" maxlength="60" size="${Math.max(6, Math.min(16, (it.origin || 'Herkunft').length + 1))}"><select class="in chip" data-f="condition" aria-label="Zustand">${COND_OPTS(it.condition)}</select>${auch.length ? `<span class="e-auch" title="Steht auch in: ${esc(auch.map(offerShort).join(', '))} – Merkmale und Gruppe gelten dort ebenso, die Bezeichnung lässt sich je Angebot anpassen">auch in ${auch.length === 1 ? esc(offerShort(auch[0])) : auch.length + ' weiteren'}</span>` : ''}</div></td>
@@ -1529,12 +1532,17 @@
 
   $('#groups').addEventListener('click', async (e) => {
     const b = e.target.closest('[data-act]');
-    if (!b) return;
+    if (!b) {   // freie Fläche einer Artikelzeile (nicht in Feldern, Knöpfen, Preis- und Aktionsspalte, kein markierter Text): Artikelkarte des Bestands
+      const zeile = e.target.closest('tr[data-id]');
+      if (zeile && !e.target.closest('input, select, textarea, button, a, label, .e-price, .e-act') && !String(window.getSelection() || '')) openBestandKarte(iById(zeile.dataset.id));
+      return;
+    }
     const act = b.dataset.act;
     const gcard = b.closest('[data-gid]');
     const g = gcard && gById(gcard.dataset.gid);
     const tr = b.closest('tr[data-id]');
     if (act === 'item' && tr) { openItem(tr.dataset.id); return; }
+    if (act === 'bestand' && tr) { openBestandKarte(iById(tr.dataset.id)); return; }
     if (act === 'werbung') { openWerbung(); return; }
     if (ro) return;
     if (act === 'sale' && tr) { openSale(tr.dataset.id); return; }
@@ -3077,20 +3085,22 @@
   /* Originalbezeichnung der Warenwirtschaft (MHD-Liste; Server: bestand_originalname()) */
   const stockOrigName = (a) => a.nameOrig || a.name;
   function stockItems() {
-    const prices = S.weekPriceMap(stockPrices?.current), previous = S.weekPriceMap(stockPrices?.previous);
-    const offers = offerPriceMap();
+    const m = stockMaps();
     const rows = new Map(stock.articles.map((a) => [S.normCode(a.code), { ...a, incoming: [] }]));
     for (const delivery of (stock.incoming || [])) {
       const key = S.normCode(delivery.code);
       if (!rows.has(key)) rows.set(key, { code: delivery.code, name: delivery.name, merkmale: delivery.merkmale, kg: null, mhd: null, mhdKg: null, lots: [], incoming: [] });
       rows.get(key).incoming.push(delivery);
     }
-    return [...rows.values()].map((a, idx) => {
-      const key = S.normCode(a.code), price = prices.get(key), prevPrice = previous.get(key);
-      a.incoming.sort((x, y) => (x.arrival || '9999').localeCompare(y.arrival || '9999'));
-      return { ...a, idx, wg: S.warengruppe(a.code), offer: offers.get(key) || [], price, prevPrice, nextEta: naechsteEta(a.incoming),
-        incomingKg: sum(a.incoming, 'kg'), totalKg: (a.kg ?? 0) + sum(a.incoming, 'kg'), cls: mhdClass(a.mhd), _hay: fold(`${a.code} ${a.name} ${a.nameImport || ''} ${a.nameOrig || ''} ${a.merkmale || ''}`) };
-    });
+    return [...rows.values()].map((a, idx) => stockZeile(a, idx, m));
+  }
+  const stockMaps = () => ({ prices: S.weekPriceMap(stockPrices?.current), previous: S.weekPriceMap(stockPrices?.previous), offers: offerPriceMap() });
+  /* Eine Zeile der Bestandsliste (auch für die Artikelkarte im Angebot): Preise, Angebot, Zugänge, Summen */
+  function stockZeile(a, idx, m) {
+    const key = S.normCode(a.code), price = m.prices.get(key), prevPrice = m.previous.get(key);
+    a.incoming.sort((x, y) => (x.arrival || '9999').localeCompare(y.arrival || '9999'));
+    return { ...a, idx, wg: S.warengruppe(a.code), offer: m.offers.get(key) || [], price, prevPrice, nextEta: naechsteEta(a.incoming),
+      incomingKg: sum(a.incoming, 'kg'), totalKg: (a.kg ?? 0) + sum(a.incoming, 'kg'), cls: mhdClass(a.mhd), _hay: fold(`${a.code} ${a.name} ${a.nameImport || ''} ${a.nameOrig || ''} ${a.merkmale || ''}`) };
   }
   const stockPriceNumber = new Intl.NumberFormat('de-DE', { minimumFractionDigits: 2, maximumFractionDigits: 4 });
   const stockWeekLabel = (which) => stockPrices?.[which] ? `KW ${stockPrices[which].week}/${stockPrices[which].year}` : 'KW unbekannt';
@@ -3496,7 +3506,10 @@
   }
   function openStockItem(idx) {
     const a = stockItems()[idx];
-    if (!a) return;
+    if (a) zeigeStockKarte(a);
+  }
+  /* Artikelkarte des Bestands – aus der Bestandsliste und aus dem Angebot (openBestandKarte) */
+  function zeigeStockKarte(a) {
     const gname = (id) => (model.groups.find((g) => g.id === id) || {}).name || '';
     const marke = a.lots.some((l) => l.marke) || a.incoming.some((d) => d.marke);   // gleiche Spalten in beiden Tabellen
     const offerTxt = a.offer.length
@@ -3517,11 +3530,24 @@
         <h3 class="d-h"><span>Erwartete Zugänge (Status „erfasst“)</span><span>${plural(a.incoming.length, 'Lieferung', 'Lieferungen')}</span></h3>
         ${a.incoming.length ? lotTableHTML(a.incoming, true, marke) : '<p class="muted" style="margin:0">keine erwarteten Zugänge</p>'}
         <h3 class="d-h"><span>Eingelagerte Partien</span><span>${plural(a.lots.length, 'Partie', 'Partien')}</span></h3>
-        ${lotTableHTML(a.lots, false, marke)}
+        ${a.lots.length ? lotTableHTML(a.lots, false, marke) : '<p class="muted" style="margin:0">keine eingelagerten Partien</p>'}
         <h3 class="d-h"><span>Im Angebot (Entwurf KW ${esc(model.meta.week || '?')})</span></h3>
         <p style="margin:0">${offerTxt}</p>
       </div>`;
-    dlgSA.showModal();
+    if (!dlgSA.open) dlgSA.showModal();
+  }
+  /* Dieselbe Karte im Angebot (Wunsch Inhaber 06.11.2026): Klick auf den Bestand oder eine freie Fläche der Artikelzeile.
+     Nur mit „bestand.sehen“ (der Server prüft es beim Laden ebenso, EK-Preise nur mit „bestand.einkaufspreise“).
+     Artikel ohne Bestand und ohne erwartete Zugänge zeigen die Karte mit leeren Werten. */
+  function bestandKarteMoeglich(it) { return !!(it && it.code && may('bestand.sehen')); }
+  async function openBestandKarte(it) {
+    if (!bestandKarteMoeglich(it)) return;
+    try { await loadStock(); } catch (e) { toast(e.message || 'Bestand konnte nicht geladen werden.', 'err'); return; }
+    if (!stock) { toast('Es ist noch kein Bestand übernommen.'); return; }
+    const key = S.normCode(it.code);
+    const a = stockItems().find((x) => S.normCode(x.code) === key)
+      || stockZeile({ code: it.code, name: (masterOf(it.code) || {}).name || it.name, merkmale: '', kg: null, mhd: null, mhdKg: null, lots: [], incoming: [] }, -1, stockMaps());
+    zeigeStockKarte(a);
   }
 
   /* Bestand im Artikel-Dialog des Angebots */
@@ -3820,11 +3846,15 @@
   }
   function stockCellHTML(it) {
     const a = stockOf(it.code);
-    if (!a) return it.code
-      ? `<td class="e-stock none"><span class="nostock" title="Kein verfügbarer Bestand${stock && stock.date ? ' (Bestand vom ' + esc(dmy(stock.date)) + ')' : ''}" aria-label="Kein verfügbarer Bestand">0,00</span></td>`
-      : '<td class="e-stock none" title="Ohne Artikelnummer kein Bestandsabgleich">—</td>';
+    if (!a && !it.code) return '<td class="e-stock none" title="Ohne Artikelnummer kein Bestandsabgleich">—</td>';
+    // Wert als Knopf: öffnet die Artikelkarte des Bestands (Partien, MHD, erwartete Zugänge)
+    const karte = (inhalt, title, aria) => (bestandKarteMoeglich(it)
+      ? `<button type="button" class="e-bst" data-act="bestand" title="${esc(title)} – Partien und Zugänge anzeigen" aria-label="${esc(aria)}, Partien und Zugänge von ${esc(it.name)} anzeigen">${inhalt}</button>`
+      : `<span title="${esc(title)}">${inhalt}</span>`);
+    if (!a) return `<td class="e-stock none">${karte('<span class="nostock">0,00</span>', `Kein verfügbarer Bestand${stock && stock.date ? ' (Bestand vom ' + dmy(stock.date) + ')' : ''}`, 'Kein verfügbarer Bestand')}</td>`;
     const cls = mhdClass(a.mhd);
-    return `<td class="e-stock" title="${esc(`${kgText(a.kg)} verfügbar · kürz. MHD ${mhdShort(a.mhd)}${a.mhdKg != null ? ' (' + kgText(a.mhdKg) + ')' : ''}`)}">${cls ? `<span class="mhd-dot ${cls}" aria-label="MHD ${esc(mhdShort(a.mhd))}"></span>` : ''}${esc(fmtKg.format(a.kg))}</td>`;
+    const title = `${kgText(a.kg)} verfügbar · kürz. MHD ${mhdShort(a.mhd)}${a.mhdKg != null ? ' (' + kgText(a.mhdKg) + ')' : ''}`;
+    return `<td class="e-stock">${karte(`${cls ? `<span class="mhd-dot ${cls}" aria-hidden="true"></span>` : ''}${esc(fmtKg.format(a.kg))}`, title, `Bestand ${kgText(a.kg)}, kürzestes MHD ${mhdShort(a.mhd)}`)}</td>`;
   }
   /* Spalten nach dem Laden von Bestand/Vorwoche aktualisieren, ohne Eingabefelder neu zu zeichnen */
   function refreshAux() {
