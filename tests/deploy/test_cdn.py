@@ -52,6 +52,16 @@ pruefabruf = next((z for z in einspielen.splitlines() if z.startswith("pruefabru
 check("Prüfung nach dem Einspielen: alle Abrufe mit dem Schlüssel aus .env, nicht in der Prozessliste (curl -K -)",
       "CDN_KEY=$(envwert CDN_SCHLUESSEL)" in einspielen and "curl -K -" in pruefabruf
       and not re.search(r'curl -f?sS -m 5 --resolve "\$HEALTH_HOST"', einspielen) and einspielen.count('pruefabruf -') >= 4)
+# Relais der Datenleck-Prüfung (Kundenseite ohne Ausgang ins Internet, ADR-007): kein Besucherverkehr, deshalb ohne Abschnitt
+# „cdn“ – eng begrenzt und nicht veröffentlicht; sonst gelten alle Prüfungen für die übrigen Blöcke
+relais = re.search(r"^http://:8081 \{\n.*?^\}\n", caddy, re.MULTILINE | re.DOTALL)
+relais = relais.group(0) if relais else ""
+check("Relais der Datenleck-Prüfung: nur GET /range/<5 Hex-Zeichen> an api.pwnedpasswords.com, sonst 404",
+      relais.count("reverse_proxy ") == 1 and "reverse_proxy https://api.pwnedpasswords.com {" in relais
+      and "path_regexp ^/range/[0-9A-F]{5}$" in relais and "method GET" in relais and "header_up Host api.pwnedpasswords.com" in relais
+      and "header_up -Cookie" in relais and "respond 404" in relais)
+check("Relais: Port 8081 nirgends veröffentlicht", all("8081" not in z for z in re.findall(r"^\s*- \"[^\n]*\"", compose, re.MULTILINE)))
+caddy = caddy.replace(relais, "")
 sites = {m.group(1): m.group(2) for m in re.finditer(r"^([^\s#(][^\n]*?) \{\n(.*?)^\}", caddy, re.MULTILINE | re.DOTALL)}
 check("jeder Site-Block bindet den Abschnitt zuerst ein", sites and all(inhalt.startswith("\timport cdn\n") for inhalt in sites.values()),
       [k for k, v in sites.items() if not v.startswith("\timport cdn\n")])

@@ -204,6 +204,8 @@ jobs:
           persist-credentials: false
       - name: Image bauen und mit dem Grundimage vergleichen
         run: bash deploy/image/pruefen.sh
+      - name: Gehärteter Kundencontainer (ADR-007) – Compose-Einstellungen des Betriebs mit echtem Docker
+        run: bash tests/deploy/test_kundencontainer.sh
       - name: Betriebskonfiguration der zentralen Anmeldung prüfen (deploy/anmeldung)
         # Images genau in der Fassung der Compose-Datei (Digests stehen nur dort – der wöchentliche Lauf „Sicherheitsupdates“
         # darf keine Workflow-Dateien ändern)

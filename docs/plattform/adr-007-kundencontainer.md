@@ -9,6 +9,8 @@ Stammdaten, Postfächer und Empfänger innen, Postausgang prüft Versandaufträg
 `deploy/daten-trennen.sh trennen` nach dem Release (Freigabe des Inhabers); **Stufe 2c** (Trennstufe 3: Veröffentlichtes
 maßgeblich innen, Kundenseite nur eine nicht beschreibbare Kopie), **Stufe 2d** (Trennstufe 4: Protokoll getrennt) und **Stufe 2e**
 (Trennstufe 5: Anmeldeversuche, Zähler und Live-Verkehr je Seite) umgesetzt – ebenfalls erst mit `trennen`.
+**Härtung des Kundencontainers** (Auftrag des Inhabers 06.11.2026: „maximal gehärtet“) umgesetzt – wirksam mit dem Release,
+ohne Konsolenschritt (Abschnitt „Härtung des Kundencontainers“).
 **Anlass:** Sicherheitsdurchsicht vom 26.10.2026, Befund 5, und Durchsicht aus Kundensicht vom 04.11.2026 (ohne Befund,
 aber mit diesem Restrisiko). Umsetzung der Vorgabe aus [ADR-003](adr-003-domains-anmeldung.md): Trennung
 Kunden/Mitarbeiter; eine kompromittierte Anwendung darf nicht automatisch andere Fachbereiche öffnen.
@@ -331,6 +333,38 @@ Dokument im gemeinsamen Ordner – die Kundenseite konnte Adressen und Aktionen 
   (Anmeldung der Mitarbeiter nur im internen Live-Verkehr), `schutz`, `anmeldebremse`, `sicherheit_*`. Dazu wie im Betrieb: von
   Stufe 1 in einem Schritt auf Stufe 5 und mit `zusammenfuehren` zurück – alle Dokumente danach wie vorher (Dateien und SQLite).
 
+### Härtung des Kundencontainers (umgesetzt 06.11.2026, wirksam mit dem Release)
+
+Stufe 1 und 2 regeln, **was** die Kundenseite sieht. Die Härtung regelt, was ein Angreifer **tun** könnte, der Code im Prozess
+der Kundenseite ausführt: Er soll weder root sein noch Sonderrechte haben, nichts nachladen oder starten und keine
+Verbindung nach außen aufbauen können – und so möglichst nichts in der Hand haben, um aus dem Container auszubrechen.
+
+| | vorher | jetzt |
+| --- | --- | --- |
+| Benutzer | Apache-Hauptprozess root, Arbeitsprozesse `www-data` | alle Prozesse `www-data` (`user: "33:33"`) |
+| Linux-Sonderrechte (Capabilities) | Docker-Standard (14, u. a. `CHOWN`, `SETUID`, `NET_RAW`) | keine (`cap_drop: ALL`); Port 80 über die Einstellung des eigenen Netz-Namensraums (`net.ipv4.ip_unprivileged_port_start=0`) |
+| Rechteausweitung | `no-new-privileges` | unverändert; dazu Standardprofil seccomp (und AppArmor, wo der Server es hat) |
+| Dateisystem | nur lesbar; `/tmp`, `/run` im Speicher | dazu `/tmp` und `/run` mit `noexec,nosuid,nodev` – dort abgelegte Programme lassen sich nicht starten |
+| Netz | `default` mit Caddy, Ausgang ins Internet | `kunde` (`internal: true`) nur mit Caddy: kein Ausgang, kein DNS nach außen, Mitarbeiterseite, Keycloak und Postausgang nicht auffindbar |
+| Weg nach außen | beliebig | nur das Relais in Caddy (`http://:8081`, nicht veröffentlicht): `GET /range/<5 Hex-Zeichen>` an `api.pwnedpasswords.com` für die Datenleck-Prüfung der Kundenpasswörter (`WA_PWNED_URL`), alles andere 404 |
+| PHP (nur Kundenseite, `deploy/anmeldung/kunde-php.ini` über `PHP_INI_SCAN_DIR`) | Image-Standard | keine Programme (`exec`, `system`, `proc_open`, `popen` …), kein `mail()`, `putenv`, `symlink`, `phpinfo`; Dateien nur unter `/var/www/html` und `/tmp` (`open_basedir`); keine Uploads; `expose_php`, `display_errors` aus |
+| Apache (nur Kundenseite, `deploy/anmeldung/kunde-apache.conf`) | `ServerTokens OS`, Signatur an | ohne Version und Signatur, kein `TRACE` |
+
+- **Unverändert:** Code und Logik (die Anwendung nutzt keine der gesperrten Funktionen und kein `$_FILES`), der Datenordner
+  (PHP schrieb schon bisher als `www-data`), die Mitarbeiterseite und der Postausgang. Die Datenleck-Prüfung läuft weiter –
+  fällt das Relais aus, wird sie wie bisher übersprungen und blockiert keine Anmeldung.
+- **Bewusst nicht:** `userns-remap` bzw. Docker ohne root – das ist eine Einstellung des ganzen Docker-Dienstes (alle Container,
+  Volumes und Rechte im Datenordner) und bringt wenig, solange der Prozess ohnehin nicht root ist. Gegen eine Lücke im Kernel
+  selbst schützt nur ein eigener Server für die Kundenseite (offen, Entscheidung des Inhabers).
+- **Betrieb:** kein Konsolenschritt. Der Release ändert die Ergänzungsdatei und das Caddyfile, der Release-Modus erstellt alle
+  Container neu (dabei entsteht das Netz `kunde`) und prüft die Kundenseite; schlägt das fehl, geht er automatisch zurück. Nach
+  einem Rückfall auf einen Stand davor bleibt das Netz `kunde` ungenutzt stehen (ohne Wirkung, entfernen mit
+  `docker network prune`). `deploy/datenbank-umschalten.sh` und die Notfallwerkzeuge (`-u www-data`) arbeiten unverändert.
+- **Geprüft:** `tests/deploy/test_kundencontainer.sh` (CI, Auftrag „Anwendungs-Image prüfen“: Compose-Einstellungen, Prozesse,
+  Sonderrechte, nur lesbar, `noexec`, kein Ausgang, Relais nur für `/range/`, PHP- und Apache-Einstellungen, Kundenseite arbeitet:
+  Startseite, Status, Angebot, Kundenanmeldung mit Sitzung und Schreiben im Datenordner, keine Fehler im Protokoll),
+  `deploy/anmeldung/pruefen.sh` (Start wie im Betrieb), `tests/deploy/test_cdn.py` (Relais im Caddyfile, Port nicht veröffentlicht).
+
 ## Wirkung
 
 | Wenn die Kundenseite geknackt würde | vorher | nach Stufe 1 | nach Stufe 2 |
@@ -346,6 +380,9 @@ Dokument im gemeinsamen Ordner – die Kundenseite konnte Adressen und Aktionen 
 | E-Mails über das Firmenpostfach an beliebige Empfänger, mit beliebigem Inhalt | ja | ja – auch mit Postausgang, über gefälschte Aufträge im gemeinsamen Datenordner | nein (2b): nur Bestellwünsche im Namen eines Kunden an Team und dessen hinterlegte Adresse, höchstens 30 am Tag |
 | Dateien der Anwendung verändern | nein (nur lesend) | nein | nein |
 | Mitarbeiter-Hosts durch Überlast ausbremsen | ja | nein (Grenzen) | nein |
+| Als root arbeiten oder Linux-Sonderrechte nutzen (Grundlage vieler Ausbrüche aus dem Container) | ja | ja | nein seit der Härtung |
+| Programme starten, Werkzeuge nachladen und ausführen | ja | ja | nein seit der Härtung (PHP ohne `exec` & Co., `/tmp` ohne Ausführung) |
+| Daten direkt an fremde Server schicken oder von dort holen | ja | ja | nein seit der Härtung (Netz ohne Ausgang, nur das Relais der Datenleck-Prüfung) |
 
 Unabhängig von der Kundenseite – mit erbeutetem Geheimnis des Dienstkontos `konten`: vor Stufe 1b jedes Konto des Realms
 `mitarbeiter` übernehmbar, danach nur noch Konten ohne Administratorrolle; als Administrator anmelden kann sich damit
