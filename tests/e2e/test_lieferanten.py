@@ -73,8 +73,6 @@ kid = r['customer']['id']
 rows = [{'nr': 'VS-1', 'firma': 'egal', 'versandart': '1'}, {'nr': 'VS-2', 'firma': 'Neu mit Versandart', 'versandart': '24'}]
 st, r = A.call('kunden_import', {'pruefen': True, 'rows': rows})
 st, r = A.call('kunden_import', {'rev': r['rev'], 'rows': rows})
-cs = {c['nr']: c for c in doc('kunden')['customers'] if c.get('nr', '').startswith('VS-')}
-cs.update({c['nr']: {**cs.get(c['nr'], {}), **c} for c in (doc('kundenstamm') or {}).get('customers', []) if c.get('nr', '').startswith('VS-')} if isinstance(doc('kundenstamm'), dict) else {})
 kd = {c['nr']: c for c in A.call('kunden')[1]['customers'] if c.get('nr', '').startswith('VS-')}
 check('Kundenimport: Versandart aus der Datei (neu und geändert)', st == 200 and kd['VS-1'].get('versandart') == '1' and kd['VS-2'].get('versandart') == '24', {k: v.get('versandart') for k, v in kd.items()})
 check('Versandarten: Anzahl Kunden und Lieferanten je Versandart', A.call('versandarten')[1].get('zuordnung') == {'1': 2, '24': 1}, A.call('versandarten')[1].get('zuordnung'))
