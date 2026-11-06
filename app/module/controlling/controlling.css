@@ -388,3 +388,26 @@ button.ctl-az-zeile{cursor:pointer}button.ctl-az-zeile:hover{background:var(--ct
 }
 #ctl-az-inhalt{display:flex;flex-direction:column;gap:12px;min-width:0}   /* Kennzahlen, „Je Monat“ und „Übersicht“ mit demselben Abstand wie in den anderen Reitern */
 #ctl-az-inhalt>.ctl-kpis{margin-bottom:0}
+
+/* ── Rahmen „C2“ (gemeinsame Seitenleiste ../../assets/rahmen.css und rahmen.js, Entwurf freigegeben 06.11.2026) ──
+   Aufbau, Reiter und Abläufe der Seite bleiben unverändert. Neu: ruhige deckende Flächen mit feinen Linien statt Glas,
+   keine Farbflächen im Hintergrund; Logo und Nutzer stehen in der Seitenleiste, der Kopf behält „Start“, Modulname und
+   die Knöpfe der Seite. Farben kommen aus den --r-* des Rahmens (hell und dunkel); :root erhöht die Gewichtung, damit
+   die Werte auch die dunklen Angaben oben ersetzen. */
+:root body.ctl.r {
+  --ctl-bg: var(--r-grund); --ctl-text: var(--r-text); --ctl-glass: var(--r-flaeche); --ctl-kopf: var(--r-grund); --ctl-card: var(--r-flaeche);
+  --ctl-border: var(--r-linie-2); --ctl-line: var(--r-linie); --ctl-gloss: transparent; --ctl-shadow: var(--r-schatten);
+}
+:root body.ctl.r .ctl-bg { display: none; }
+body.ctl.r .ctl-glas { -webkit-backdrop-filter: none; backdrop-filter: none; box-shadow: var(--r-schatten); }
+body.ctl.r .ctl-seite { flex: 1; width: 100%; min-height: 0; box-sizing: border-box; padding: 24px 24px 40px; }
+body.ctl.r .ctl-kopf { position: static; padding: 0; border: 0; border-radius: 0; background: none; box-shadow: none; }
+body.ctl.r :is(.ctl-marke, .ctl-user) { display: none; }
+body.ctl.r .ctl-modul { padding-left: 0; border-left: 0; font-size: 22px; font-weight: 700; letter-spacing: -.01em; }
+body.ctl.r .ctl-modul .i { width: 22px; height: 22px; }
+body.ctl.r .ctl-rund { background: var(--r-flaeche); border: 1px solid var(--r-linie-2); color: var(--r-text); }
+body.ctl.r .ctl-rund:hover { background: var(--r-flaeche-2); }
+@media (max-width: 900px) {
+  body.ctl.r .ctl-seite { padding: 16px 16px 32px; }
+  body.ctl.r .ctl-modul { font-size: 18px; }
+}

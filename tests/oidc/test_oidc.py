@@ -953,8 +953,8 @@ with sync_playwright() as pw:
     check('Angebot: Kopfzeile unverändert (Veröffentlichen sichtbar)', pa.is_visible('#btn-publish') and pa.text_content('#topbar h1') == 'Eingabebereich')
     # Rückweg zum Dashboard in der Kopfzeile (Adresse vom Webserver: WA_DASHBOARD, sonst https://dashboard-stafl.de/)
     for name, seite in (('Angebot', pa), ('Verwaltung', pv)):
-        check(f'{name}: Knopf „Dashboard“ oben sichtbar, führt zum Dashboard-Host', seite.is_visible('#btn-dashboard')
-              and seite.get_attribute('#btn-dashboard', 'href') == D + '/' and seite.text_content('#btn-dashboard').strip() == 'Dashboard',
+        check(f'{name}: Knopf „Start“ oben sichtbar, führt zum Dashboard-Host', seite.is_visible('#btn-dashboard')
+              and seite.get_attribute('#btn-dashboard', 'href') == D + '/' and seite.text_content('#btn-dashboard').strip() == 'Start',
               (seite.is_visible('#btn-dashboard'), seite.get_attribute('#btn-dashboard', 'href')))
     check('Angebot: Adresse des Dashboards kommt vom Server', sta['user'].get('dashboard') == D + '/', sta['user'].get('dashboard'))
     pz = eigene_seite(ctx.new_page())

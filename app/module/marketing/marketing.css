@@ -521,3 +521,26 @@ body.mkt .mkt-kopf .brand-logo { height: 28px; width: auto; }
 /* Avatar im dunklen Design: dunkle Schrift auf dem hellen Modulrosa (weiß wäre nur 2,3:1) */
 @media screen and (prefers-color-scheme: dark) { :root:not([data-theme="light"]) .mkt-avatar { color: #1a0b0e; } }
 @media screen { :root[data-theme="dark"] .mkt-avatar { color: #1a0b0e; } }
+
+/* ── Rahmen „C2“ (gemeinsame Seitenleiste ../../assets/rahmen.css und rahmen.js, Entwurf freigegeben 06.11.2026) ──
+   Aufbau, Reiter und Abläufe der Seite bleiben unverändert. Neu: ruhige deckende Flächen mit feinen Linien statt Glas,
+   keine Farbflächen im Hintergrund; Logo und Nutzer stehen in der Seitenleiste, der Kopf behält „Start“, Modulname und
+   die Knöpfe der Seite. Farben kommen aus den --r-* des Rahmens (hell und dunkel); :root erhöht die Gewichtung, damit
+   die Werte auch die dunklen Angaben oben ersetzen. */
+:root body.mkt.r {
+  --mkt-bg: var(--r-grund); --mkt-text: var(--r-text); --mkt-glass: var(--r-flaeche); --mkt-kopf-glas: var(--r-grund); --mkt-deckend: var(--r-flaeche);
+  --mkt-rand: var(--r-linie); --mkt-glanz: transparent; --mkt-schatten: var(--r-schatten); --mkt-linie: var(--r-linie); --mkt-reiter-aktiv: var(--r-flaeche);
+}
+:root body.mkt.r .mkt-bg { display: none; }
+body.mkt.r .mkt-glas { -webkit-backdrop-filter: none; backdrop-filter: none; box-shadow: var(--r-schatten); }
+body.mkt.r .mkt-seite { flex: 1; width: 100%; min-height: 0; box-sizing: border-box; padding: 24px 24px 40px; }
+body.mkt.r .mkt-kopf { position: static; padding: 0; border: 0; border-radius: 0; background: none; box-shadow: none; }
+body.mkt.r :is(.mkt-marke, .mkt-user) { display: none; }
+body.mkt.r .mkt-modul { padding-left: 0; border-left: 0; font-size: 22px; font-weight: 700; letter-spacing: -.01em; }
+body.mkt.r .mkt-modul .i { width: 22px; height: 22px; }
+body.mkt.r .mkt-rund { background: var(--r-flaeche); border: 1px solid var(--r-linie-2); color: var(--r-text); }
+body.mkt.r .mkt-rund:hover { background: var(--r-flaeche-2); }
+@media (max-width: 900px) {
+  body.mkt.r .mkt-seite { padding: 16px 16px 32px; }
+  body.mkt.r .mkt-modul { font-size: 18px; }
+}

@@ -10,13 +10,14 @@
 <script src="../assets/theme.js"></script>
 <script src="../assets/format.js"></script>
 <link rel="stylesheet" href="../assets/app.css">
+<link rel="stylesheet" href="../assets/rahmen.css">
 <link rel="stylesheet" href="../assets/admin.css">
 <link rel="stylesheet" href="../assets/admin-import.css">
 <link rel="stylesheet" href="../module/hr/verwaltung-hr.css">
 <link rel="stylesheet" href="../module/angebot/preisimport.css">
 <link rel="stylesheet" href="../module/verwaltung/angebotskategorien.css">
 </head>
-<body class="adm">
+<body class="adm r" data-rahmen="auto" data-rahmen-schmal data-rahmen-nach="#screen-editor">
 
 <!-- Anmeldung / Ersteinrichtung -->
 <main class="auth" id="screen-auth" hidden>
@@ -50,10 +51,13 @@
 
 <!-- Editor -->
 <div id="screen-editor" hidden>
+<div class="r-app">
+<nav class="r-leiste" id="r-leiste" aria-label="Hauptnavigation" hidden></nav>
+<div class="r-inhalt">
   <header class="topbar" id="topbar">
     <div class="topbar-inner adm-top">
       <div class="brand">
-        <a class="stafl-zurueck" id="btn-dashboard" href="https://dashboard-stafl.de/" hidden title="Zurück zum Dashboard" aria-label="Zurück zum Dashboard"><svg class="i" aria-hidden="true"><use href="#i-back"/></svg><span class="lbl">Dashboard</span></a>
+        <a class="stafl-zurueck" id="btn-dashboard" href="https://dashboard-stafl.de/" hidden title="Zur Startseite" aria-label="Zur Startseite"><svg class="i" aria-hidden="true"><use href="#i-back"/></svg><span class="lbl">Start</span></a>
         <img class="brand-logo" src="../assets/logo-standard-fleisch-kopf.png" width="428" height="96" alt="Standard-Fleisch">
         <div><div class="brand-company" data-company></div><h1>Eingabebereich</h1></div>
       </div>
@@ -181,6 +185,8 @@
     <div id="view-log" hidden></div>
   </main>
   </div>
+</div>
+</div>
 </div>
 
 <!-- Artikel-Details -->
@@ -324,6 +330,7 @@
   <symbol id="i-copy" viewBox="0 0 24 24"><rect x="8.5" y="8.5" width="11" height="11" rx="2"/><path d="M15.5 8.5v-2a2 2 0 0 0-2-2h-7a2 2 0 0 0-2 2v7a2 2 0 0 0 2 2h2"/></symbol>
 </svg>
 
+<script src="../assets/rahmen.js"></script>
 <script src="../assets/offer-core.js"></script>
 <script src="../assets/vendor/qrcode.js"></script>
 <script src="../assets/stock-core.js"></script>

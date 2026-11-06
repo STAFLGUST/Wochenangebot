@@ -10,13 +10,17 @@
 <script src="../../assets/theme.js"></script>
 <script src="../../assets/format.js"></script>
 <link rel="stylesheet" href="../../assets/app.css">
+<link rel="stylesheet" href="../../assets/rahmen.css">
 <link rel="stylesheet" href="hr.css">
 </head>
-<body class="hr">
+<body class="hr r" data-rahmen="hr">
 <div class="hr-bg" aria-hidden="true"><span></span><span></span><span></span></div>
+<div class="r-app">
+<nav class="r-leiste" id="r-leiste" aria-label="Hauptnavigation" hidden></nav>
+<div class="r-inhalt">
 <div class="hr-seite">
   <header class="hr-kopf hr-glas">
-    <a class="stafl-zurueck" id="hr-zurueck" href="../../dashboard/" title="Zurück zum Dashboard" aria-label="Zurück zum Dashboard"><svg class="i" aria-hidden="true"><use href="#i-back"/></svg><span class="lbl">Dashboard</span></a>
+    <a class="stafl-zurueck" id="hr-zurueck" href="../../dashboard/" title="Zur Startseite" aria-label="Zur Startseite"><svg class="i" aria-hidden="true"><use href="#i-back"/></svg><span class="lbl">Start</span></a>
     <span class="hr-marke"><img class="brand-logo" src="../../assets/logo-standard-fleisch-kopf.png" width="428" height="96" alt="Standard-Fleisch"></span>
     <span class="hr-modul"><svg class="i" aria-hidden="true"><use href="#i-calendar"/></svg>HR · Urlaub</span>
     <div class="hr-aktionen">
@@ -200,6 +204,8 @@
   </main>
   <footer class="hr-fuss">STAFL-Plattform · Standard-Fleisch</footer>
 </div>
+</div>
+</div>
 
 <!-- Abwesenheit eintragen / ändern (Personalstelle) -->
 <dialog class="hr-dialog" id="dlg-eintrag" aria-labelledby="dlg-eintrag-titel">
@@ -301,6 +307,7 @@
   <symbol id="i-rechts" viewBox="0 0 24 24"><path d="m9.5 6 6 6-6 6"/></symbol>
   <symbol id="i-download" viewBox="0 0 24 24"><path d="M12 3v12M7 10l5 5 5-5M4 15v4a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-4"/></symbol>
 </svg>
+<script src="../../assets/rahmen.js"></script>
 <script src="hr.js"></script>
 </body>
 </html>

@@ -10,13 +10,17 @@
 <script src="../../assets/theme.js"></script>
 <script src="../../assets/format.js"></script>
 <link rel="stylesheet" href="../../assets/app.css">
+<link rel="stylesheet" href="../../assets/rahmen.css">
 <link rel="stylesheet" href="rewe.css">
 </head>
-<body class="rw">
+<body class="rw r" data-rahmen="rewe">
 <div class="rw-bg" aria-hidden="true"><span></span><span></span><span></span></div>
+<div class="r-app">
+<nav class="r-leiste" id="r-leiste" aria-label="Hauptnavigation" hidden></nav>
+<div class="r-inhalt">
 <div class="rw-seite">
   <header class="rw-kopf rw-glas">
-    <a class="stafl-zurueck" id="rw-zurueck" href="../../dashboard/" title="Zurück zum Dashboard" aria-label="Zurück zum Dashboard"><svg class="i" aria-hidden="true"><use href="#i-back"/></svg><span class="lbl">Dashboard</span></a>
+    <a class="stafl-zurueck" id="rw-zurueck" href="../../dashboard/" title="Zur Startseite" aria-label="Zur Startseite"><svg class="i" aria-hidden="true"><use href="#i-back"/></svg><span class="lbl">Start</span></a>
     <span class="rw-marke"><img class="brand-logo" src="../../assets/logo-standard-fleisch-kopf.png" width="428" height="96" alt="Standard-Fleisch"></span>
     <span class="rw-modul"><svg class="i" aria-hidden="true"><use href="#i-store"/></svg>REWE</span>
     <div class="rw-aktionen">
@@ -193,6 +197,8 @@
   </main>
   <p class="rw-fuss">REWE · Vordisposition Dry Aged · Antworten werden sofort gespeichert und mit Name und Zeit protokolliert.</p>
 </div>
+</div>
+</div>
 <div class="rw-toast" id="rw-toast" role="status" aria-live="polite"></div>
 
 <!-- Marktkarte: Klick auf Name oder Adresse eines Marktes (Hinweis, Ansprechpartner, Dauerauftrag, Notizen, Verlauf, Wiedervorlagen) -->
@@ -277,6 +283,7 @@
   <symbol id="i-telefon" viewBox="0 0 24 24"><path d="M22 16.9v3a2 2 0 0 1-2.2 2 19.8 19.8 0 0 1-8.6-3.1 19.5 19.5 0 0 1-6-6A19.8 19.8 0 0 1 2.1 4.2 2 2 0 0 1 4.1 2h3a2 2 0 0 1 2 1.7c.1.9.4 1.8.7 2.7a2 2 0 0 1-.5 2.1L8 9.8a16 16 0 0 0 6 6l1.3-1.3a2 2 0 0 1 2.1-.4c.9.3 1.8.6 2.7.7a2 2 0 0 1 1.7 2z"/></symbol>
   <symbol id="i-notiz" viewBox="0 0 24 24"><path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"/><path d="M14 3v5h5M9 13h6M9 17h6"/></symbol>
 </svg>
+<script src="../../assets/rahmen.js"></script>
 <script src="rewe.js"></script>
 </body>
 </html>

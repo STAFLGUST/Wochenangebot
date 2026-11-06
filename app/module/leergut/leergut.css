@@ -316,3 +316,26 @@ textarea.lg-eingabe{height:auto;padding:8px 10px;resize:vertical;line-height:1.4
 .lg-kontoliste .lg-filterzeile .lg-check{min-width:0}
 /* Dachser-Liste: Text der Mail in fester Breite */
 textarea.lg-mono{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:11.5px;white-space:pre;overflow-wrap:normal;overflow-x:auto}
+
+/* ── Rahmen „C2“ (gemeinsame Seitenleiste ../../assets/rahmen.css und rahmen.js, Entwurf freigegeben 06.11.2026) ──
+   Aufbau, Reiter und Abläufe der Seite bleiben unverändert. Neu: ruhige deckende Flächen mit feinen Linien statt Glas,
+   keine Farbflächen im Hintergrund; Logo und Nutzer stehen in der Seitenleiste, der Kopf behält „Start“, Modulname und
+   die Knöpfe der Seite. Farben kommen aus den --r-* des Rahmens (hell und dunkel); :root erhöht die Gewichtung, damit
+   die Werte auch die dunklen Angaben oben ersetzen. */
+:root body.lg.r {
+  --lg-bg: var(--r-grund); --lg-text: var(--r-text); --lg-glass: var(--r-flaeche); --lg-kopf: var(--r-grund); --lg-card: var(--r-flaeche);
+  --lg-border: var(--r-linie-2); --lg-line: var(--r-linie); --lg-gloss: transparent; --lg-shadow: var(--r-schatten);
+}
+:root body.lg.r .lg-bg { display: none; }
+body.lg.r .lg-glas { -webkit-backdrop-filter: none; backdrop-filter: none; box-shadow: var(--r-schatten); }
+body.lg.r .lg-seite { flex: 1; width: 100%; min-height: 0; box-sizing: border-box; padding: 24px 24px 40px; }
+body.lg.r .lg-kopf { position: static; padding: 0; border: 0; border-radius: 0; background: none; box-shadow: none; }
+body.lg.r :is(.lg-marke, .lg-user) { display: none; }
+body.lg.r .lg-modul { padding-left: 0; border-left: 0; font-size: 22px; font-weight: 700; letter-spacing: -.01em; }
+body.lg.r .lg-modul .i { width: 22px; height: 22px; }
+body.lg.r .lg-rund { background: var(--r-flaeche); border: 1px solid var(--r-linie-2); color: var(--r-text); }
+body.lg.r .lg-rund:hover { background: var(--r-flaeche-2); }
+@media (max-width: 900px) {
+  body.lg.r .lg-seite { padding: 16px 16px 32px; }
+  body.lg.r .lg-modul { font-size: 18px; }
+}
