@@ -175,7 +175,7 @@ Merklisten-Schlüssel identisch sind. Aufbau und Veröffentlichung: [mobile/LIES
 
 ## Dashboard (`dashboard/`)
 
-Mitarbeiter-Dashboard der STAFL-Plattform (Roadmap PR 6): `index.html`, `dashboard.css`, `dashboard.js`, ohne Inline-Skript.
+Mitarbeiter-Dashboard der STAFL-Plattform (Roadmap PR 6): `index.html`, `dashboard.css`, `dashboard.js` (dazu `../assets/rahmen.css` und `rahmen.js`), ohne Inline-Skript.
 Liest `status` und `module_status` und zeigt die Kacheln (derzeit dreizehn; HR und CRM seit 23.10.2026, Marketing seit 25.10.2026, Controlling seit 28.10.2026, Leergut seit 29.10.2026, REWE und Qualitätssicherung seit 30.10.2026 freigegeben, Container-Import geplant) in der Reihenfolge des Modulregisters – keine fest
 programmierte Liste. Status je Kachel (Verfügbar, Wartung, Entwicklungsstand …) kommt aus `modul_zustand`; die Kachel ist
 nur Anzeige, gesperrt wird serverseitig (GR-102, GR-103). Liegt **außerhalb** von `app/`: ausgeliefert wird es nur über die
@@ -183,19 +183,24 @@ zentrale Anmeldung – `deploy/anmeldung/docker-compose.anmeldung.yml` bindet de
 `Alias /dashboard` auf den Keycloak-Hosts bereit (`dashboard-stafl.de/` → `/dashboard/`, produktiv seit der
 Inbetriebnahme der Anmeldung). Der Testlauf blendet den Ordner nur in den Gruppen mit Eintrag in `ZUSATZ`
 (`tests/run_e2e.py`) unter `/dashboard/` ein, `werkzeuge/lokal.py` ebenso. Hell/Dunkel mit demselben Speicherschlüssel wie die Angebotsseite.
-Gestaltung „Liquid Glass“ (eigene Farbwerte `--db-*` in `dashboard.css`, Schrift Geist aus `app.css`): Kopfzeile als
-Glaskapsel (Logo, Hell/Dunkel, Nutzer-Chip mit Initialen, Abmelden), Begrüßung nach Tageszeit mit Datum, Kacheln als
-Glasflächen; Symbolfarbe hängt am Registersymbol (`icon`), nicht am Modul. Nicht nutzbare Kacheln sind blass und tragen
-ein zurückhaltendes Absperrband „Im Bau · Bald verfügbar“ (blasses Sandgelb ohne Schatten, nur Anzeige); Wartung und
-abgeschaltete Module ohne Band, mit eigener Pille. Zwei Bereiche nach dem Registerfeld `dashboard_gruppe`: oben die
-Anwendungen (`#db-grid`), darunter abgesetzt „Verwaltung & Daten“ (`#db-grid-verwaltung`, Import und Verwaltung) mit
-breiten Kacheln (Symbol links; am Handy einspaltig mit Pfeil, die Pille bleibt für Screenreader).
-Ohne `backdrop-filter` oder bei „Transparenz reduzieren“ deckende Flächen, bei „Bewegung reduzieren“ keine Übergänge.
+Gestaltung „C2“ (Entwurf vom Inhaber freigegeben 06.11.2026) im gemeinsamen Rahmen `app/assets/rahmen.css` und
+`app/assets/rahmen.js` (Plattformkern, für alle Mitarbeiterseiten gedacht; die Module folgen mit unveränderter Struktur):
+links eine feste Seitenleiste (208 px) mit Start, „Anwendungen“, „In Entwicklung“ (Klebeband „Bald“, ohne Verweis) und
+„Verwaltung & Daten“, unten Name, Rolle und Abmelden; sie entsteht aus derselben Liste von `module_status` wie die
+Kacheln (`STAFL_RAHMEN.zeichnen`), Module ohne Modulzugang der Rolle fehlen. Unter 900 px wird sie zum Menü (Kopfzeile
+mit Menüknopf); für Module mit eigener Navigation gibt es eine schmale Leiste (60 px, nur Symbole). Rechts Begrüßung nach
+Tageszeit mit Vornamen und Datum, Knöpfe „Einfache Darstellung“ und Hell/Dunkel, darunter die Kacheln: kompakt (Symbol
+und Name, keine Beschreibung), eine zweite Zeile nur bei besonderem Stand (Wartung mit Hinweis, Testbetrieb,
+Entwicklungsstand); „Verfügbar“ steht nur für Screenreader da. Noch nicht freigegebene Anwendungen sind zurückgenommen
+(gestrichelter Rand, leiser Name) mit Klebeband „Bald“ wie in der Seitenleiste. Ruhige deckende Flächen mit feinen
+Linien, kein Glas; Modulfarbe hängt am Registersymbol (`icon`, `--r-m-<icon>`). Alle Farben stehen als `--r-*` in
+`rahmen.css` (hell und dunkel – Grundlage für spätere Farbkonzepte je Nutzer); `dashboard.css` enthält nur noch, was es
+nur auf der Startseite gibt. Bei „Bewegung reduzieren“ keine Übergänge.
 Kachelnamen werden nie automatisch getrennt (`hyphens: manual`): `dashboard.js` (`namenEinpassen`) verkleinert die Schrift
-langer Namen (auch bei Bindestrich wie „Container-Import“, den der Browser sonst trennt) in halben Pixeln bis höchstens drei Viertel, erst dann bricht ein Wort als Notlösung um. `baenderLegen` legt das
-gedrehte Band je gesperrter Kachel mittig zwischen Name und Status-Pille (`--db-band-y`) und macht die Kachel nur so viel
-höher wie nötig; beides neu bei Breitenänderung (ResizeObserver) und nach dem Laden der Schrift. Lange Pillen brechen als
-abgerundetes Feld um, Wartungshinweise brechen auch in langen Adressen um.
+langer Namen (auch bei Bindestrich wie „Container-Import“, den der Browser sonst trennt) in halben Pixeln bis höchstens
+drei Viertel, erst dann bricht ein Wort als Notlösung um; neu bei Breitenänderung (ResizeObserver) und nach dem Laden der
+Schrift. Lange Stand-Pillen brechen als abgerundetes Feld um, Wartungshinweise brechen auch in langen Adressen um.
+Die Abmeldeseite `abgemeldet.html` nutzt denselben Rahmen ohne Seitenleiste.
 
 ## Tests
 

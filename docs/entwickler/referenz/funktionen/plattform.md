@@ -2,7 +2,7 @@
 
 <!-- ERZEUGT von `python3 werkzeuge/doku.py erzeugen` – nicht von Hand ändern. Quelle: Funktionen und Kommentare im Code. Die CI prüft, dass diese Datei zum Code passt. -->
 
-112 Dateien, 1133 Funktionen – in der Reihenfolge der Datei, **fett** die Abschnitte. Text = erste Aussage des Kommentars direkt über der Funktion (Python: Docstring). Übersicht aller Module: [README.md](README.md).
+113 Dateien, 1143 Funktionen – in der Reihenfolge der Datei, **fett** die Abschnitte. Text = erste Aussage des Kommentars direkt über der Funktion (Python: Docstring). Übersicht aller Module: [README.md](README.md).
 
 ## `.github/scripts/apt_vorrat.py`
 
@@ -813,6 +813,21 @@ _Zahlen, Beträge, Mengen, Prozente und Datum – EIN Format für alle Seiten de
 - `datum(d)`
 - `datumZeit(d)`
 - `kw(woche, jahr)`
+
+## `app/assets/rahmen.js`
+
+_STAFL-Plattform · Gemeinsamer Rahmen_
+
+- `ziel(k, alle, host)` – Ziel eines Eintrags bzw. einer Kachel.
+- `art(m)` – frei = nutzbar (Verweis); aus = Wartung oder abgeschaltet ohne Zugang; bald = noch nicht freigegeben
+- `sichtbar(module)` – Sichtbare Module in der Reihenfolge des Registers (wie die Kacheln des Dashboards)
+- `initialen(name)` – Initialen: erste Buchstaben der ersten beiden Namensteile („Erika Editor“ → „EE“)
+- `eintrag(m, alle, host, aktiv)`
+- `gruppe(titel, liste)`
+- `menue(auf, fokus)`
+- `mobilkopf(start)` – Kopfzeile am Handy (nur unter 900 px sichtbar): Menüknopf und Logo; einmal je Seite
+- `zeichnen(o)` – Leiste zeichnen. o.module Liste aus module_status (data.module) o.aktiv 'start' oder die Modul-ID der Seite o.nutzer Konto aus status (name, rollenName) …
+- `entfernen()` – Leiste entfernen (z. B. nach dem Abmelden): Seite wieder ohne Rahmen
 
 ## `app/assets/theme.js`
 

@@ -256,7 +256,7 @@ with sync_playwright() as pw:
                                  extra_http_headers={'X-Forwarded-For': '198.51.100.41'}, locale='de-DE')
             pg = ctx.new_page(); pg.on('pageerror', lambda e: fehler.append(f'{pg.url}: {e}'))
             tag = f'{"dunkel" if dunkel else "hell"}-{breite}'
-            for name, pfad, warte in (('abgemeldet', '/dashboard/abgemeldet.html', 'img.brand-logo'), ('kundenseite', '/', '.brand-logo'),
+            for name, pfad, warte in (('abgemeldet', '/dashboard/abgemeldet.html', 'img.r-logo'), ('kundenseite', '/', '.brand-logo'),
                                       ('kontakt', '/kontakt/', '.legal-logo')):
                 pg.goto(B + pfad); pg.wait_for_selector(warte)
                 pg.evaluate('document.fonts.ready.then(() => true)')
@@ -294,16 +294,17 @@ with sync_playwright() as pw:
     OHNE_GLAS = "() => [...document.querySelectorAll('*')].filter((e) => { const s = getComputedStyle(e); return s.backdropFilter && s.backdropFilter !== 'none'; }).length"
     ctx, pg = neue_seite(1280, False)
     pg.goto(B + '/dashboard/'); pg.wait_for_selector('#db-grid .db-tile')
-    check('Einfache Darstellung: unter Automatisierung keine Erkennung – Glas wie bisher', pg.get_attribute('html', 'data-darstellung') is None
-          and pg.evaluate(OHNE_GLAS) > 0 and pg.get_attribute('#db-darstellung', 'aria-pressed') == 'false' and pg.is_hidden('#db-darstellung-hinweis'))
+    # Dashboard im Rahmen „C2“ (06.11.2026): ohne Glas – Effekte dort sind nur noch Übergänge
+    BEWEGT = "getComputedStyle(document.querySelector('a.db-tile')).transitionDuration !== '0s'"
+    check('Einfache Darstellung: unter Automatisierung keine Erkennung – Effekte (Übergänge) wie bisher', pg.get_attribute('html', 'data-darstellung') is None
+          and pg.evaluate(BEWEGT) and pg.get_attribute('#db-darstellung', 'aria-pressed') == 'false' and pg.is_hidden('#db-darstellung-hinweis'))
     with pg.expect_response(lambda r: 'action=theme_save' in r.url) as antwort:
         pg.click('#db-darstellung')
     st = A.call('status')[1]['user']
     check('Dashboard: Knopf schaltet die einfache Darstellung ein und speichert sie am Konto (Hell/Dunkel bleibt)', antwort.value.status == 200
           and pg.get_attribute('html', 'data-darstellung') == 'einfach' and pg.get_attribute('#db-darstellung', 'aria-pressed') == 'true'
           and st.get('darstellung') == 'einfach' and st.get('theme') == 'light', st)
-    check('Einfach: keine Unschärfe, keine Farbflächen, keine Übergänge, Hinweis „Ihre Wahl“', pg.evaluate(OHNE_GLAS) == 0
-          and pg.evaluate("getComputedStyle(document.querySelector('.db-bg')).display") == 'none'
+    check('Einfach: keine Unschärfe, keine Übergänge, Hinweis „Ihre Wahl“', pg.evaluate(OHNE_GLAS) == 0
           and pg.evaluate("getComputedStyle(document.querySelector('.db-tile')).transitionDuration") == '0s' and 'Ihre Wahl' in pg.inner_text('#db-darstellung-hinweis'))
     pg.screenshot(path=f'{SH}/einheit-dashboard-einfach-1280.png')
     ctx.close()
@@ -330,7 +331,7 @@ with sync_playwright() as pw:
     with pg.expect_response(lambda r: 'action=theme_save' in r.url):
         pg.click('#db-darstellung')
     check('Automatisch erkannt, aber ausgeschaltet → „Effekte“ am Konto', pg.get_attribute('html', 'data-darstellung') is None
-          and A.call('status')[1]['user'].get('darstellung') == 'effekte' and pg.evaluate(OHNE_GLAS) > 0)
+          and A.call('status')[1]['user'].get('darstellung') == 'effekte' and pg.evaluate(BEWEGT))
     ctx.close()
     check('Einfache Darstellung: ungültiger Wert und leere Anfrage abgewiesen', A.call('theme_save', {'darstellung': 'bunt'})[0] == 422 and A.call('theme_save', {})[0] == 422)
     check('Zurück auf „automatisch“', A.call('theme_save', {'darstellung': ''})[0] == 200 and A.call('status')[1]['user'].get('darstellung') == '')

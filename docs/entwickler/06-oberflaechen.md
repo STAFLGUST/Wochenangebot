@@ -24,7 +24,7 @@ Voraussetzungen und Abgrenzung:
 | Web-App | `app/manifest.json`, `app/sw.js` | `webapp.js` registriert `sw.js` (nur im sicheren Kontext) | – |
 | Rechtsseiten | `app/kontakt/`, `app/impressum/`, `app/datenschutz/` (je `index.html`) | `/assets/theme.js` | `legal.css` (ohne `app.css`, Systemschrift) |
 | Eingabebereich | `app/admin/index.html` | `theme.js`, dann am Ende: `offer-core.js`, `vendor/qrcode.js`, `stock-core.js`, `admin.js`, `admin-verwaltung.js`, `admin-rollen-vorschau.js`, `admin-rollen.js`, `admin-import.js`, `../module/hr/verwaltung-hr.js`, `admin-artikelwahl.js`, `admin-werbung.js`, `admin-einzel.js`, `admin-auswertung.js` | `app.css`, `admin.css`, `admin-import.css`, `../module/hr/verwaltung-hr.css` |
-| Dashboard | `dashboard/index.html`, `dashboard/abgemeldet.html` | `../assets/theme.js`, `dashboard.js` | `../assets/app.css`, `dashboard.css` |
+| Dashboard | `dashboard/index.html`, `dashboard/abgemeldet.html` | `../assets/theme.js`, `../assets/format.js`, `../assets/rahmen.js`, `dashboard.js` | `../assets/app.css`, `../assets/rahmen.css`, `dashboard.css` |
 | HR · Urlaub | `app/module/hr/index.html` | `../../assets/theme.js`, `hr.js` | `../../assets/app.css`, `hr.css` |
 | CRM · Vertrieb | `app/module/crm/index.html` | `../../assets/theme.js`, `mhd-ware.js` (Reiter MHD-Ware, `window.STAFL_CRM_MHD`, von `crm.js` mit dessen Hilfsfunktionen aufgerufen), `cockpit.js` (Mein Cockpit, Master-Cockpit und Reiter „Übersicht“ im Kunden-Pop-up, `window.STAFL_CRM_COCKPIT`, ebenso von `crm.js` aufgerufen), `einzelangebot.js` (Reiter „Angebote“ im Kunden-Pop-up: Einzelangebote des Kunden, `window.STAFL_CRM_EINZEL`, von `crm.js` aufgerufen), `crm.js` | `../../assets/app.css`, `crm.css` |
 | Marketing · Redaktionsplan | `app/module/marketing/index.html` | `../../assets/theme.js`, `marketing.js` | `../../assets/app.css`, `marketing.css` |
@@ -374,8 +374,10 @@ Leiste senkrecht, schmal ist sie eine waagerechte Spur. Mit `body.bereich-import
 
 Alle drei Seiten haben denselben Aufbau – eine eigenständige IIFE ohne `window.WA`:
 
-1. **Glas-Kopf** `<header class="db-kopf db-glas">` (HR: `hr-kopf hr-glas`, CRM: `crm-kopf crm-glas`): Logo, Modulname,
-   Hell/Dunkel-Knopf (`#…-theme`), Nutzer-Chip mit Initialen; dahinter `<div class="…-bg">` mit drei Farbflächen.
+1. **Kopf:** Dashboard seit 06.11.2026 im gemeinsamen Rahmen „C2“ (Seitenleiste links, Seitenkopf mit Begrüßung,
+   siehe [6.5 Rahmen „C2“](#rahmen-c2-seitenleiste)); HR und CRM bis zu ihrer Umstellung mit Glas-Kopf `hr-kopf hr-glas`
+   bzw. `crm-kopf crm-glas`: Logo, Modulname, Hell/Dunkel-Knopf (`#…-theme`), Nutzer-Chip mit Initialen; dahinter
+   `<div class="…-bg">` mit drei Farbflächen.
 2. **Eigene `api()`**, die nicht wirft, sondern `{ status, data, json }` liefert:
    ```js
    async function api(action, body, query = '') {
@@ -399,8 +401,9 @@ Alle drei Seiten haben denselben Aufbau – eine eigenständige IIFE ohne `windo
    `https://dashboard-stafl.de/`). Pfeil `#i-back` + „Dashboard“, 36 px, rund; ≤ 560 px oder mit Klasse `kompakt` nur
    der Pfeil; im Eingabebereich mit Angebotsaktionen bis 1600 px nur der Pfeil (Platz in der Kopfzeile).
 
-Kacheln des Dashboards kommen ausschließlich aus `module_status` (Modulregister), Ziele über `kachelZiel()`; Status-Pille
-und Absperrband sind nur Anzeige (GR-102, GR-103).
+Kacheln und Seitenleiste des Dashboards kommen ausschließlich aus `module_status` (Modulregister), Ziele über
+`STAFL_RAHMEN.ziel()` (`rahmen.js`, für die Tests weiter als `window.STAFL_KACHEL_ZIEL`); Stand und Klebeband „Bald“
+sind nur Anzeige (GR-102, GR-103).
 
 **Hell/Dunkel:** `app/assets/theme.js` setzt vor dem ersten Zeichnen `data-theme` aus `localStorage`
 `wochenangebot.theme` (ohne Inline-Skript). Weil jeder Host eigenen Browser-Speicher hat (GR-108), steht die Wahl am
@@ -427,7 +430,8 @@ Knopf der Seite mit (Aktion `theme_save`, Feld `theme` am Mitarbeiter); die Knö
 | `app/assets/admin.css` | nur Eingabebereich | ergänzt `app.css`; Abschnitt „Liquid Glass“ am Ende, nur `@media screen`, alles unter `body.adm`; Druck der geöffneten Ansicht/des offenen Fensters |
 | `app/assets/admin-import.css` | Eingabebereich | nur die Importzentrale |
 | `app/module/hr/verwaltung-hr.css` | Eingabebereich | HR-Teile der Verwaltung (Farben aus `admin.css`) |
-| `dashboard/dashboard.css` | Dashboard, Abmeldeseite | eigene Tokens `--db-*` unter `body.db` |
+| `app/assets/rahmen.css` | Seiten im Rahmen „C2“ (bisher Dashboard und Abmeldeseite) | Farben `--r-*` auf `:root` (hell, dunkel), Seitenleiste, Kopfzeile am Handy, Bausteine `.r-seite`, `.r-seitenkopf`, `.r-rund`, `.r-karte` |
+| `dashboard/dashboard.css` | Dashboard, Abmeldeseite | nur Startseite: Anmeldehinweis, Begrüßung, kompakte Kacheln; Farben aus `rahmen.css` |
 | `app/module/hr/hr.css`, `app/module/crm/crm.css` | Modulseiten | eigene Tokens `--hr-*` bzw. `--crm-*` (CRM mit den Grundwerten von HR) |
 | `app/assets/legal.css` | Rechtsseiten | eigenständig, ohne `app.css`, hell/dunkel nach Systemeinstellung |
 
@@ -441,16 +445,40 @@ Bordeaux `#8c1d2c`, `--focus`, Fleischarten `--cat-*`, Zustände `--c-*`, Radien
 Body-Klasse der Seite. Dunkel wird **immer doppelt** definiert und nur für den Bildschirm:
 
 ```css
-@media screen and (prefers-color-scheme: dark) { :root:not([data-theme="light"]) body.db { --db-bg: #121011; /* … */ } }
-@media screen { :root[data-theme="dark"] body.db { --db-bg: #121011; /* … */ } }
+@media screen and (prefers-color-scheme: dark) { :root:not([data-theme="light"]) body.hr { --hr-bg: #121011; /* … */ } }
+@media screen { :root[data-theme="dark"] body.hr { --hr-bg: #121011; /* … */ } }
 ```
 
 Damit folgt die Seite dem Gerät, bis jemand umschaltet; der Druck bleibt hell. Neue Farben nie direkt in Regeln
 schreiben, sondern als Token mit hellem und dunklem Wert.
 
+### Rahmen „C2“ (Seitenleiste)
+
+Neue Gestaltung der Mitarbeiterseiten (Entwurf vom Inhaber freigegeben 06.11.2026; Umstellung läuft – zuerst Dashboard und
+Abmeldeseite, die Module folgen mit unveränderter Struktur): feste Seitenleiste mit allen Anwendungen, ruhige Flächen mit
+feinen Linien, wenig Schatten, kein Glas; Modulfarben nur an den Symbolen.
+
+- **`app/assets/rahmen.js`** (`window.STAFL_RAHMEN`): `zeichnen({ module, aktiv, nutzer, start, schmal, abmelden })`
+  baut die Leiste aus der Liste von `module_status` – Start, „Anwendungen“, „In Entwicklung“ (nicht freigegeben, ohne
+  Verweis, Klebeband „Bald“), „Verwaltung & Daten“ (`dashboard_gruppe`), unten Name, Rolle (`rollenName`) und Abmelden.
+  Module mit `kachel.recht === false` fehlen. Die Seite lädt `status` und `module_status` selbst und übergibt die
+  Daten (keine doppelte Abfrage). Weitere Funktionen: `ziel()` (Ziel eines Eintrags, wie bisher `kachelZiel`),
+  `sichtbar()`, `art()` (`frei`/`aus`/`bald`), `initialen()`, `symbol()` (Symbole je Registersymbol), `entfernen()`.
+- **Aufbau einer Seite:** `<body class="… r">`, darin `<div class="r-app"><nav class="r-leiste" id="r-leiste"
+  aria-label="Hauptnavigation" hidden></nav><div class="r-inhalt">…</div></div>`; Inhalt in `.r-seite` (max. 1120 px),
+  Kopf als `.r-seitenkopf` mit `h1`, `.r-unterzeile` und `.r-aktionen` (runde Knöpfe `.r-rund`).
+- **Schmale Leiste** (`schmal: true`, 60 px, nur Symbole, Namen als `aria-label`/Tooltip) für Module mit eigener Navigation
+  (Eingabebereich).
+- **Unter 900 px** setzt `rahmen.js` eine Kopfzeile mit Menüknopf (`#r-menue`, `aria-expanded`) vor den Inhalt; die
+  Leiste wird zum Menü (unsichtbar und nicht per Tab erreichbar, solange zu). Escape, Klick daneben oder Tab aus dem
+  Menü schließt es; bewegt wird sie nur beim Öffnen/Schließen (`r-bewegung`), nicht beim Wechsel der Fensterbreite.
+- **Farben** nur als `--r-*` auf `:root` (Grund, Leiste, Flächen, Text, Linien, Akzent, Zustände, Klebeband, Modulfarben
+  `--r-m-<symbol>`), hell und dunkel doppelt definiert wie oben. Diese Werte sind die Grundlage für spätere Farbkonzepte
+  je Nutzer (Stufe 2): ein Farbkonzept überschreibt nur sie.
+
 ### „Liquid Glass“
 
-Mitarbeiterseiten (Eingabebereich, Dashboard, HR, CRM) nutzen dasselbe Muster: ruhiger warmer Grund, drei weiche
+Mitarbeiterseiten (Eingabebereich, HR, CRM und die übrigen Modulseiten bis zu ihrer Umstellung auf den Rahmen „C2“) nutzen dasselbe Muster: ruhiger warmer Grund, drei weiche
 Farbflächen fest dahinter (`body.adm::before` bzw. `.db-bg`/`.hr-bg`/`.crm-bg`), Glasflächen mit
 `backdrop-filter: blur(…) saturate(…)` und einem deckenden Ersatzwert:
 

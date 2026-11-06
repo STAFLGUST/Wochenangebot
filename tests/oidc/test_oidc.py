@@ -849,7 +849,8 @@ with sync_playwright() as pw:
     check('… mit dem nächsten Code und der Eingabetaste angemeldet', _p2.url.startswith(D + '/dashboard/'), _p2.url)
     _c2.close()
     check('nach der Anmeldung: Dashboard auf dashboard.stafl.test', pg.url.startswith(D + '/dashboard/'), pg.url)
-    check('Dashboard zeigt den Namen aus unserem Mitarbeiterkonto', 'Erika Editor' in pg.text_content('#db-user'), pg.text_content('#db-user'))
+    pg.wait_for_selector('#r-leiste .r-eintrag')   # Seitenleiste des Rahmens „C2“ (06.11.2026) mit Name und Abmelden
+    check('Dashboard zeigt den Namen aus unserem Mitarbeiterkonto (Seitenleiste)', 'Erika Editor' in pg.text_content('#r-nutzer-name'), pg.text_content('#r-nutzer-name'))
     # Controlling: Modulzugang standardmäßig niemand (Finanzdaten, 28.10.2026) – die Kachel fehlt ohne Zugang
     check('zwölf Kacheln (ohne Controlling), Angebot verfügbar', pg.locator('#db-bereich .db-tile').count() == 12 and pg.text_content('[data-modul="angebot"] .db-badge') == 'Verfügbar'
           and pg.locator('[data-modul="controlling"]').count() == 0)
@@ -1194,7 +1195,7 @@ with sync_playwright() as pw:
     pg.set_viewport_size({'width': 1280, 'height': 900})
 
     # ── Abmelden: beendet die Anmeldung für alle Anwendungen ──
-    pg.click('#db-logout'); pg.wait_for_url('**/dashboard/abgemeldet.html')
+    pg.click('#r-abmelden'); pg.wait_for_url('**/dashboard/abgemeldet.html')
     check('Abmelden führt über Keycloak zur Abmeldeseite', pg.url == D + '/dashboard/abgemeldet.html', pg.url)
     pg.screenshot(path=os.path.join(SH, 'oidc_abgemeldet.png'))
     code = pg.evaluate("fetch('/api/?action=status').then(r => r.status)")
@@ -1465,7 +1466,7 @@ with sync_playwright() as pw:
     _, _, text = anfrage(f"{KC}/admin/realms/mitarbeiter/users/{kc_erika['id']}/credentials", kopf={'Authorization': 'Bearer ' + kc_token()})
     arten = sorted(c['type'] for c in json.loads(text))
     check('Passkey bei Keycloak gespeichert (neben Passwort und Einmalcode)', 'webauthn' in arten, arten)
-    pg.click('#db-logout'); pg.wait_for_url('**/dashboard/abgemeldet.html')
+    pg.click('#r-abmelden'); pg.wait_for_url('**/dashboard/abgemeldet.html')
     pg.goto(D + '/'); pg.wait_for_selector('#username'); pg.fill('#username', 'erika'); pg.fill('#password', NUTZER['erika'][0]); pg.click('#kc-login')
     pg.wait_for_selector('#authenticateWebAuthnButton')
     check('mit Passkey: zweiter Faktor per Passkey, kein Einmalcode verlangt', pg.locator('#otp').count() == 0)
@@ -2196,7 +2197,7 @@ with sync_playwright() as pw:
     pg.on('dialog', lambda d: d.accept('Testschlüssel'))
     pg.goto(D + '/'); pg.wait_for_selector('#username'); pg.fill('#username', 'eva.einladung'); pg.fill('#password', EVA_NEU); pg.click('#kc-login')
     pg.wait_for_selector('#registerWebAuthn'); pg.click('#registerWebAuthn'); pg.wait_for_selector('#db-grid .db-tile')
-    pg.click('#db-logout'); pg.wait_for_url('**/dashboard/abgemeldet.html')
+    pg.click('#r-abmelden'); pg.wait_for_url('**/dashboard/abgemeldet.html')
     vorher_eva = len(pf.an('eva@stafl.test'))
     vergessen_anfordern(pg, 'eva.einladung')
     link = link_aus(warte_mail('eva@stafl.test', vorher_eva + 1))

@@ -251,6 +251,8 @@ Jede Code-Datei beginnt mit einem Kopfkommentar; dessen erste Aussage steht hier
 | `frontend.js` | angebot | Wochenangebot – öffentliches Frontend |
 | `legal.css` | angebot | Gestaltung der Rechtsseiten (Kontakt, Impressum, Datenschutz): eigenes kleines Stylesheet ohne app.css, hell/dunkel nach Systemeinstellung. |
 | `offer-core.js` | angebot | Wochenangebot – gemeinsamer Kern für Frontend und Eingabebereich - Excel-Leser (ohne externe Bibliothek) - Parser der Angebotsliste → editierbares Datenmodell - Anreicherung (Merkmale, Teilstück, Merklisten-Schlüssel … |
+| `rahmen.css` | plattform | STAFL-Plattform · Gemeinsamer Rahmen (Gestaltung „C2“, Entwurf vom Inhaber freigegeben 06.11.2026) Feste Seitenleiste mit allen Anwendungen (rahmen.js zeichnet sie aus dem Modulregister), ruhige Flächen mit feinen … |
+| `rahmen.js` | plattform | STAFL-Plattform · Gemeinsamer Rahmen |
 | `stock-core.js` | bestand | Bestand – Einlesen der WinAB-Bestandsliste („Partieliste … verfügbar“) Liest die CSV-Ausgabe (Semikolon, Windows-1252 oder UTF-8; Spalten „Art. |
 | `theme.js` | plattform | Hell/Dunkel-Einstellung vor dem ersten Zeichnen anwenden (ohne Inline-Skript, wegen Content-Security-Policy) |
 | `webapp.js` | angebot | Web-App: Offline-Speicher (sw.js) anmelden und Hinweis „Als App auf den Home-Bildschirm“. |
@@ -420,8 +422,8 @@ Jede Code-Datei beginnt mit einem Kopfkommentar; dessen erste Aussage steht hier
 | Datei | Modul | Inhalt |
 | --- | --- | --- |
 | `abgemeldet.html` | dashboard | Seite „STAFL-Plattform · Abgemeldet“ |
-| `dashboard.css` | dashboard | STAFL-Plattform · Dashboard – Gestaltung „Liquid Glass“ (vom Inhaber freigegebener Entwurf) Ruhiger heller Grund mit drei weichen Farbflächen, Glasflächen für Kopfzeile und Kacheln. |
-| `dashboard.js` | dashboard | STAFL-Plattform · Dashboard Kacheln kommen ausschließlich aus dem Modulregister (Aktion module_status, regeln/module.toml) – keine fest programmierte Liste. |
+| `dashboard.css` | dashboard | STAFL-Plattform · Dashboard (Startseite) – Gestaltung „C2“ (Entwurf vom Inhaber freigegeben 06.11.2026) Rahmen, Seitenleiste und alle Farben kommen aus ../assets/rahmen.css (--r-*), Schrift Geist aus ../assets/app.css. |
+| `dashboard.js` | dashboard | STAFL-Plattform · Dashboard (Startseite, Gestaltung „C2“) Kacheln und Seitenleiste kommen ausschließlich aus dem Modulregister (Aktion module_status, regeln/module.toml) – keine fest programmierte Liste. |
 | `index.html` | dashboard | Seite „STAFL-Plattform · Dashboard“ |
 
 ## `deploy/`
@@ -728,7 +730,7 @@ Jede Code-Datei beginnt mit einem Kopfkommentar; dessen erste Aussage steht hier
 | `test_controlling.py` | controlling | Controlling (Modul controlling, Oberfläche controlling.intern unter /module/controlling/) – Bereich Umsatzstatistik, Reiter Monatsmeldung |
 | `test_controlling_umsatzdaten.py` | controlling | Controlling · Umsatzdaten der Warenwirtschaft |
 | `test_crm.py` | crm | CRM · Vertrieb (Modul crm, Oberfläche crm.intern unter /module/crm/). |
-| `test_dashboard.py` | dashboard | Mitarbeiter-Dashboard (dashboard/, Roadmap PR 6) |
+| `test_dashboard.py` | dashboard | Mitarbeiter-Dashboard (dashboard/, Roadmap PR 6) im gemeinsamen Rahmen „C2“ (app/assets/rahmen.css, rahmen.js) |
 | `test_datentrennung.py` | plattform | Testgruppe datentrennung (ADR-007 Stufe 2): getrennte Daten wie im Betrieb. |
 | `test_design.py` | angebot | Gestaltung der Angebotsseite („Klar“ mit dem Design „Liquid Glass“: schwebende Glas-Kopfzeile, Kapseln, Liste als Glaskarte): lokale Schriften (keine fremden Server), Kopf, Filterleiste mit Aufklappmenüs (Desktop) bzw. |
 | `test_editor_aux.py` | angebot | Testgruppe editor_aux |
