@@ -3851,7 +3851,10 @@
     const karte = (inhalt, title, aria) => (bestandKarteMoeglich(it)
       ? `<button type="button" class="e-bst" data-act="bestand" title="${esc(title)} – Partien und Zugänge anzeigen" aria-label="${esc(aria)}, Partien und Zugänge von ${esc(it.name)} anzeigen">${inhalt}</button>`
       : `<span title="${esc(title)}">${inhalt}</span>`);
-    if (!a) return `<td class="e-stock none">${karte('<span class="nostock">0,00</span>', `Kein verfügbarer Bestand${stock && stock.date ? ' (Bestand vom ' + dmy(stock.date) + ')' : ''}`, 'Kein verfügbarer Bestand')}</td>`;
+    if (!a) {
+      const t = `Kein verfügbarer Bestand${stock && stock.date ? ' (Bestand vom ' + dmy(stock.date) + ')' : ''}`;
+      return `<td class="e-stock none">${karte(`<span class="nostock" title="${esc(t)}" aria-label="Kein verfügbarer Bestand">0,00</span>`, t, 'Kein verfügbarer Bestand')}</td>`;
+    }
     const cls = mhdClass(a.mhd);
     const title = `${kgText(a.kg)} verfügbar · kürz. MHD ${mhdShort(a.mhd)}${a.mhdKg != null ? ' (' + kgText(a.mhdKg) + ')' : ''}`;
     return `<td class="e-stock">${karte(`${cls ? `<span class="mhd-dot ${cls}" aria-hidden="true"></span>` : ''}${esc(fmtKg.format(a.kg))}`, title, `Bestand ${kgText(a.kg)}, kürzestes MHD ${mhdShort(a.mhd)}`)}</td>`;
