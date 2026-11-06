@@ -796,7 +796,11 @@
   const fmtEur = { format: (x) => F.euro(x) };
   const WAWI_ANZEIGE = [['alpha', 'Suchname'], ['konto', 'Konto'], ['rgEmpf', 'Rechnungsempfänger'], ['kondition', 'Kondition'], ['letzteRechnung', 'Letzte Rechnung', 'd'],
     ['letzterLieferschein', 'Letzter Lieferschein', 'd'], ['angelegtAm', 'Angelegt', 'anlage'], ['kreditlimit', 'Kreditlimit', 'eur'], ['rgSperre', 'Rechnungssperre', 'b'], ['gln', 'GLN'],
-    ['abgabeCitti', 'Abgabe CITTI', 'b'], ['dfb', 'DFB', 'b'], ['mailAB', 'E-Mail Auftragsbestätigung'], ['mailLS', 'E-Mail Lieferschein'], ['mailERechnung', 'E-Mail E-Rechnung'], ['weitereEmails', 'Weitere E-Mail-Adressen']];
+    ['abgabeCitti', 'Abgabe CITTI', 'b'], ['dfb', 'DFB', 'b'], ['mailAB', 'E-Mail Auftragsbestätigung'], ['mailLS', 'E-Mail Lieferschein'], ['mailERechnung', 'E-Mail E-Rechnung'], ['weitereEmails', 'Weitere E-Mail-Adressen'],
+    ['name2', 'Name 2'], ['name3', 'Name 3'], ['winabAngebot', 'Angebot (WinAB)'], ['verband', 'Verband'], ['steuernummer', 'Steuernummer'], ['hermesId', 'Hermes-ID'],
+    ['hermesDeckung', 'Hermes-Deckung', 'eur'], ['lademittelbestand', 'Lademittelbestand (WinAB)', 'n'], ['abPerMail', 'AB per Mail', 'b'], ['partnerName', 'Ansprechpartner (WinAB)'],
+    ['partner1', 'Partner 1'], ['partner2', 'Partner 2'], ['partnerAbteilung', 'Abteilung'], ['partnerEmail', 'E-Mail Ansprechpartner'], ['partnerTelefon', 'Telefon Ansprechpartner'],
+    ['partnerTelefax', 'Telefax Ansprechpartner']];
   const WAWI_UMSATZ = [['Monat', 'umsatzMonat', 'rohgewinnMonat'], ['Voriger Monat', 'umsatzVorigerMonat', 'rohgewinnVorigerMonat'], ['Jahr', 'umsatzJahr', 'rohgewinnJahr'],
     ['Voriges Jahr', 'umsatzVorigesJahr', 'rohgewinnVorigesJahr'], ['Vorjahr', 'umsatzVorjahr', ''], ['Vorvorjahr', 'umsatzVorvorjahr', '']];
   function kundeWawi(w) {
@@ -805,6 +809,7 @@
       if (art === 'd') return dmyIso(x);
       if (art === 'eur') return fmtEur.format(x);
       if (art === 'b') return x ? 'ja' : 'nein';
+      if (art === 'n') return typeof x === 'number' ? x.toLocaleString('de-DE') : String(x);
       if (art === 'anlage') return [dmyIso(x) + (w.angelegtUm ? `, ${w.angelegtUm}` : ''), w.angelegtVon ? `von ${w.angelegtVon}` : ''].filter(Boolean).join(' ');   // 04.05.2020, 14:05 von …
       return String(x);
     };
@@ -901,6 +906,7 @@
   const wJaNein = (s) => (/^(ja|j|x|1)$/i.test(s) ? true : /^(nein|n|0)$/i.test(s) ? false : '');
   const wMails = (s) => [...new Set(s.split(/[;,\s]+/).filter((m) => MAIL_RE.test(m)))].join(', ');
   const wText = (s) => s;
+  const wGanz = (s) => (/^-?\d{1,9}$/.test(s.replace(/\./g, '')) ? Number(s.replace(/\./g, '')) : '');   // „-1.234“ → -1234
   // Daten der Warenwirtschaft: Feld, Spaltenköpfe (klein, ohne Sonderzeichen), Leser
   const KUNDE_WAWI = [
     ['alpha', ['alpha', 'suchname', 'kurzname'], wText], ['konto', ['konto'], wText], ['rgEmpf', ['rgempf', 'rechnungsempfanger'], wText],
@@ -912,6 +918,11 @@
     ['abgabeCitti', ['abgabecitti'], wJaNein], ['umsatzVorjahr', ['umsatzvorjahr'], wBetrag], ['umsatzVorvorjahr', ['umsatzvorvorjahr'], wBetrag],
     ['gln', ['gln'], (s) => s.replace(/\s/g, '')], ['dfb', ['dfb'], wJaNein], ['angelegtAm', ['angelegtam'], wDatum], ['angelegtUm', ['angelegtum'], wZeit],
     ['angelegtVon', ['angelegtvon'], wText], ['rgSperre', ['rgsperre', 'rechnungssperre'], wJaNein], ['mailERechnung', ['emailerechnung'], wMails],
+    // Export „Kundenstammdaten komplett“
+    ['name2', ['name2'], wText], ['name3', ['name3'], wText], ['winabAngebot', ['angebot'], wText], ['verband', ['verband'], wText], ['steuernummer', ['steuernummer'], wText],
+    ['hermesId', ['hermesid'], wText], ['hermesDeckung', ['hermesdeckung'], wBetrag], ['lademittelbestand', ['lademittelbestande', 'lademittelbestand'], wGanz],
+    ['abPerMail', ['abpermail'], wJaNein], ['partnerName', ['partnername'], wText], ['partner1', ['partner1'], wText], ['partner2', ['partner2'], wText],
+    ['partnerAbteilung', ['partnerabteilung'], wText], ['partnerEmail', ['partneremail'], wMails], ['partnerTelefon', ['partnertelefon'], wText], ['partnerTelefax', ['partnertelefax'], wText],
   ];
   function kAusCsv(buf) {
     const rows = csvZeilen(csvText(buf));
@@ -923,6 +934,7 @@
     if (i.nr < 0 || (i.firma < 0 && i.alpha < 0)) throw new Error('Spalten „Nummer“ und „Name1“ nicht gefunden. Erwartet wird der Kundendaten-Export der Warenwirtschaft (Semikolon getrennt).');
     if (i.strasse < 0 && i.email < 0 && i.gruppe < 0) throw new Error('Das ist vermutlich der Vertreter-Export. Bitte unter Stammdaten → Vertreter importieren; hier wird der Kundendaten-Export erwartet.');
     if (kopf.includes('bezeichnung1') || kopf.includes('vgrp')) throw new Error('Das ist der Artikelstammdaten-Export. Bitte unter Stammdaten → Artikelstammdaten importieren.');
+    if (kopf.includes('landintrastat') || kopf.includes('kwumsatzlfdjahr')) throw new Error('Das ist der Lieferanten-Export. Bitte unter Stammdaten → Lieferanten importieren.');
     const zelle = (r, j) => (j >= 0 ? (r[j] || '').trim().replace(/\s{2,}/g, ' ') : '');
     const v = (r, k) => zelle(r, i[k]);
     const iw = KUNDE_WAWI.map(([k, n, f]) => [k, sp(...n), f]).filter(([, j]) => j >= 0);

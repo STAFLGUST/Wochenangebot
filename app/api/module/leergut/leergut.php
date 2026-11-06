@@ -796,19 +796,36 @@ function lg_lieferantenstamm(): array
 }
 function lg_versand_text(string $nr, array $va): string { return $nr === '' ? '' : $nr . (($va[$nr] ?? '') !== '' ? ' · ' . $va[$nr] : ''); }
 /* Versandart je Partner (Anzeige): Lieferanten laut Lieferantenstamm (Hauptnummer), Kunden laut Kundenstamm */
-function lg_partner_versand(array $partner): array
+function lg_partner_versand(array $partner): array { return lg_partner_stamm($partner)[0]; }
+/* Lademittelbestand laut WinAB-Stammdaten als ganze Zahl; null = keiner (leer oder unlesbar) */
+function lg_winab_zahl($v): ?int
+{
+    if (is_int($v)) return $v;
+    $s = str_replace(['.', ' '], '', trim((string)$v));
+    return preg_match('/^-?\d{1,9}$/', $s) ? (int)$s : null;
+}
+/* Angaben der Stammdaten der Verwaltung je Partner (nur Anzeige, nur lesend): [Versandart je Partner-ID,
+   WinAB-Lademittelbestand je Partner-ID als [[Nummer, Stück], …] – Zähler der Warenwirtschaft über alle Lademittel und die
+   ganze WinAB-Geschichte; Lieferanten je WinAB-Lieferantennummer (Haupt- und weitere), Kunden über die Kd.-Nr.] */
+function lg_partner_stamm(array $partner): array
 {
     [$lst, $va] = lg_lieferantenstamm();
     $kd = [];
     if (array_filter($partner, function ($p) { return (string)($p['kundenNr'] ?? '') !== ''; }))
-        foreach (customers_load()['customers'] as $c) if (is_array($c) && ($c['nr'] ?? '') !== '' && ($c['versandart'] ?? '') !== '') $kd[(string)$c['nr']] = (string)$c['versandart'];
-    $out = [];
+        foreach (customers_load()['customers'] as $c) if (is_array($c) && ($c['nr'] ?? '') !== '')
+            $kd[(string)$c['nr']] = ['versandart' => (string)($c['versandart'] ?? ''), 'bestand' => lg_winab_zahl(is_array($c['wawi'] ?? null) ? ($c['wawi']['lademittelbestand'] ?? null) : null)];
+    $versand = []; $bestand = [];
     foreach ($partner as $p) {
         $lf = (string)($p['lieferantNr'] ?? ''); $k = (string)($p['kundenNr'] ?? '');
-        $v = $lf !== '' ? (string)($lst[$lf]['versandart'] ?? '') : ($k !== '' ? ($kd[$k] ?? '') : '');
-        if ($v !== '') $out[$p['id']] = lg_versand_text($v, $va);
+        $v = $lf !== '' ? (string)($lst[$lf]['versandart'] ?? '') : ($k !== '' ? ($kd[$k]['versandart'] ?? '') : '');
+        if ($v !== '') $versand[$p['id']] = lg_versand_text($v, $va);
+        $b = [];
+        if ($k !== '' && isset($kd[$k]['bestand'])) $b[] = [$k, $kd[$k]['bestand']];
+        foreach (array_unique(array_filter(array_merge([$lf], is_array($p['lieferantNrWeitere'] ?? null) ? $p['lieferantNrWeitere'] : []), 'strlen')) as $nr)
+            if (($z = lg_winab_zahl($lst[$nr]['lademittelbestand'] ?? null)) !== null) $b[] = [$nr, $z];
+        if ($b) $bestand[$p['id']] = $b;
     }
-    return $out;
+    return [$versand, $bestand];
 }
 
 /* Abgleich je Beleg im Zeitraum (von–bis): neu → buchen, gleich → nichts, geändert → alten stornieren und neu buchen, nicht

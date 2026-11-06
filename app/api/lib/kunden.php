@@ -228,7 +228,8 @@ function lieferanten_kurz(): array
 {
     $out = [];
     foreach (gruppen_load('lieferanten')['groups'] as $g) if (is_array($g) && isset($g['nr']))
-        $out[(string)$g['nr']] = ['nr' => (string)$g['nr'], 'name' => (string)($g['name'] ?? ''), 'kurz' => (string)($g['kurz'] ?? ''), 'versandart' => (string)($g['versandart'] ?? '')];
+        $out[(string)$g['nr']] = ['nr' => (string)$g['nr'], 'name' => (string)($g['name'] ?? ''), 'kurz' => (string)($g['kurz'] ?? ''), 'versandart' => (string)($g['versandart'] ?? ''),
+            'lademittelbestand' => (string)($g['lademittelbestand'] ?? '')];
     return $out;
 }
 function versandarten_namen(): array

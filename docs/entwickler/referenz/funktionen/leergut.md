@@ -2,7 +2,7 @@
 
 <!-- ERZEUGT von `python3 werkzeuge/doku.py erzeugen` – nicht von Hand ändern. Quelle: Funktionen und Kommentare im Code. Die CI prüft, dass diese Datei zum Code passt. -->
 
-4 Dateien, 122 Funktionen – in der Reihenfolge der Datei, **fett** die Abschnitte. Text = erste Aussage des Kommentars direkt über der Funktion (Python: Docstring). Übersicht aller Module: [README.md](README.md).
+4 Dateien, 124 Funktionen – in der Reihenfolge der Datei, **fett** die Abschnitte. Text = erste Aussage des Kommentars direkt über der Funktion (Python: Docstring). Übersicht aller Module: [README.md](README.md).
 
 ## `app/api/aktionen/leergut.php`
 
@@ -103,6 +103,8 @@ _Leergut · Leergutkonten und Abstimmung_
 - `lg_lieferantenstamm()` – Name und Versandart der WinAB-Lieferanten aus den Stammdaten der Verwaltung (nur lesend: lieferanten_kurz, versandarten_namen)
 - `lg_versand_text(nr, va)`
 - `lg_partner_versand(partner)` – Versandart je Partner (Anzeige): Lieferanten laut Lieferantenstamm (Hauptnummer), Kunden laut Kundenstamm
+- `lg_winab_zahl(v)` – Lademittelbestand laut WinAB-Stammdaten als ganze Zahl; null = keiner (leer oder unlesbar)
+- `lg_partner_stamm(partner)` – Angaben der Stammdaten der Verwaltung je Partner (nur Anzeige, nur lesend): [Versandart je Partner-ID, WinAB-Lademittelbestand je Partner-ID als [[Nummer, …
 - `lg_winab_abgleich(w, stamm, bew, me)` – Abgleich je Beleg im Zeitraum (von–bis): neu → buchen, gleich → nichts, geändert → alten stornieren und neu buchen, nicht mehr in der Datei (ausgeglichen) → …
 
 **Dachser-Liste „Unterkonto-Vorspediteur“ (Mail „Infos von Fa. DACHSER“)**

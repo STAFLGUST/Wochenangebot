@@ -303,6 +303,15 @@
     (bewegungen || []).forEach((b) => Object.keys(delta(b)).forEach((k) => ids.add(k)));
     return sortiertLm(ids);
   };
+  /* Lademittelbestand laut WinAB-Stammdaten (Zähler der Warenwirtschaft, Stück aller Lademittel, ganze WinAB-Geschichte) neben der
+     Summe des Kontos – nur zum Vergleich: weicht ab, wenn das Konto auch Buchungen vor WinAB bzw. ein „WinAB-Belege ab“ hat oder in WinAB korrigiert wurde */
+  const winabBestand = (pid, ko) => {
+    const b = obj(S.d.winabBestand)[pid];
+    if (!Array.isArray(b) || !b.length) return '';
+    const summe = Object.values(obj(ko.saldo)).reduce((a, x) => a + (Number(x) || 0), 0);
+    const werte = b.length === 1 ? vz(b[0][1]) : b.map(([nr, z]) => `${esc(nr)}: ${vz(z)}`).join(' · ');
+    return `<span class="lg-winab-bestand" title="Zähler der Warenwirtschaft (Stammdaten): Stück aller Lademittel über die ganze WinAB-Geschichte – nur zum Vergleich">WinAB-Lademittelbestand ${werte} · Konto zusammen ${vz(summe)}</span>`;
+  };
   async function zeigeKonto(id, hash = true) {
     if (!S.pmap.has(id)) return;
     if (S.kontoId !== id) S.alleBew = false;
@@ -319,6 +328,7 @@
       p.aktiv ? '' : '<span class="lg-chip">inaktiv</span>', p.kontoNr ? `<span>Konto-Nr. ${esc(p.kontoNr)}</span>` : '', p.kundenNr ? `<span>WinAB-Kd. ${esc(p.kundenNr)}</span>` : '',
       p.lieferantNr || (p.lieferantNrWeitere || []).length ? `<span>WinAB-Lief. ${esc([p.lieferantNr, ...(p.lieferantNrWeitere || [])].filter(Boolean).join(', '))}${p.winabAb ? ` ab ${esc(datum(p.winabAb))}` : ''}${p.wareneingangTausch ? ' · Tausch zählt' : ''}</span>` : '',
       obj(S.d.versand)[p.id] ? `<span>Versandart ${esc(obj(S.d.versand)[p.id])}</span>` : '',
+      winabBestand(p.id, ko),
       p.fristTage ? `<span>Widerspruch binnen ${zahl(p.fristTage)} Tagen</span>` : '<span>ohne Widerspruchsfrist</span>',
       p.ansprechpartner ? `<span>${esc(p.ansprechpartner)}</span>` : '',
       p.email ? `<a href="mailto:${esc(p.email.replace(/\s/g, ''))}">${esc(p.email)}</a>` : ''].filter(Boolean).join('');

@@ -478,7 +478,7 @@ beschreibung = "Artikelstammdaten (Bezeichnung, Fleischart, Herkunft, Zustand, V
 name = "kunden"
 eigentuemer = "verwaltung"
 bereich = "kundenseite"
-leser = ["angebot", "crm", "rewe", "controlling", "leergut"]   # CRM, REWE, Controlling und Leergut: nur lesend über customers_load (E-1); REWE-Märkte sind WinAB-Kunden (Name, Anschrift über die Kd.-Nr.); Controlling: Firma, Ort, Vertreter, Kundengruppe der Umsatzauswertung; Leergut: Firma je Kd.-Nr. für neue Kundenkonten aus der WinAB-Datei und Versandart (Anzeige)
+leser = ["angebot", "crm", "rewe", "controlling", "leergut"]   # CRM, REWE, Controlling und Leergut: nur lesend über customers_load (E-1); REWE-Märkte sind WinAB-Kunden (Name, Anschrift über die Kd.-Nr.); Controlling: Firma, Ort, Vertreter, Kundengruppe der Umsatzauswertung; Leergut: Firma je Kd.-Nr. für neue Kundenkonten aus der WinAB-Datei, Versandart und Lademittelbestand laut WinAB (Anzeige)
 schreiber = ["angebot", "plattform"]   # Altbestand: Kundenportal (Passwort, Abmelden), Kunden-E-Mails
 schutz = "vertraulich"
 beschreibung = "Kundenzugänge des Portals (Passwort nur als Hash, GR-003); bis Trennstufe 2 auch alle Stammdaten, danach nur die Felder unter felder_kundenseite"
@@ -489,7 +489,7 @@ felder_kundenseite = ["id", "nr", "firma", "ansprechpartner", "gruppe", "angebot
 name = "kundenstamm"
 eigentuemer = "verwaltung"
 bereich = "intern"
-leser = ["angebot", "crm", "rewe", "controlling", "plattform", "leergut"]   # nur über customers_load (zusammengeführt mit kunden); Postausgang: E-Mail-Adresse der Kopie; Leergut: nur Firma und Versandart
+leser = ["angebot", "crm", "rewe", "controlling", "plattform", "leergut"]   # nur über customers_load (zusammengeführt mit kunden); Postausgang: E-Mail-Adresse der Kopie; Leergut: nur Firma, Versandart und wawi.lademittelbestand
 schutz = "vertraulich"
 beschreibung = "Ab Trennstufe 2 (ADR-007 Stufe 2b): alle Kundenfelder außer den Portalfeldern – Anschrift, E-Mail, Telefon, Notiz, Vertreter, Daten der Warenwirtschaft"
 

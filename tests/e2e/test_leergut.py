@@ -592,6 +592,17 @@ mb = [b for b in V.call('leergut_konto&partner=' + must['id'])[1]['bewegungen'] 
 check('Buchungstext nennt den nicht gezählten Tausch', len(mb) == 3 and 'Tausch laut WinAB nicht gezählt (5 E2, 1 H1)' in mb[0]['text'] and mb[0]['abgang'] in ({}, []) and mb[0]['zugang'] == {'e2': 5, 'h1': 1}
       and mb[2]['abgang'] == {'e2': 5} and 'Tausch' not in mb[1]['text'], [(b['beleg'], b['abgang'], b['zugang'], b['text'][-80:]) for b in mb])
 check('Versandart am Konto (Start): laut Lieferantenstamm', s.get('versand', {}).get(must['id']) == '1 · Direktlieferung', s.get('versand'))
+# Lademittelbestand laut WinAB-Stammdaten (Zähler der Warenwirtschaft) je Konto: Lieferanten- bzw. Kundenstamm, nur zur Anzeige
+storage_write('lieferanten', {'rev': 2, 'groups': [{'nr': '2550077', 'name': 'Musterfleisch GmbH & Co. KG', 'kurz': 'MUSTER', 'versandart': '1', 'lademittelbestand': '-1.234'},
+                                                   {'nr': '2550078', 'name': '', 'kurz': 'NURKURZ', 'versandart': '', 'lademittelbestand': 'unlesbar'}]})
+storage_write('kunden', {'rev': 2, 'customers': [{'id': 'klg000000001', 'nr': '9100006', 'firma': 'Fleischerei Beispiel', 'active': True, 'versandart': '1', 'wawi': {'lademittelbestand': 17}}]})
+s = V.call('leergut_start')[1]
+p6 = next(p for p in s['partner'] if p.get('kundenNr') == '9100006')
+wb = s.get('winabBestand', {})
+check('WinAB-Lademittelbestand je Konto: Lieferant aus dem Lieferantenstamm (-1.234), Kunde aus dem Kundenstamm, unlesbar → keiner',
+      wb.get(must['id']) == [['2550077', -1234]] and wb.get(p6['id']) == [['9100006', 17]] and pz['2550078']['id'] not in wb
+      and s['versand'].get(p6['id']) == '1 · Direktlieferung', (wb, s.get('versand')))
+check('WinAB-Lademittelbestand: Leser sieht ihn auch (nur Anzeige, keine Umsätze)', L.call('leergut_start')[1].get('winabBestand', {}).get(must['id']) == [['2550077', -1234]])
 # Konto mit „Tausch laut WinAB zählt“: der reine Tausch fällt weg, der gebuchte Beleg wird storniert
 mp = next(p for p in s['partner'] if p['id'] == must['id'])
 st, r = V.call('leergut_partner_save', {'id': mp['id'], 'rev': mp['rev'], 'name': mp['name'], 'art': 'lieferant', 'lademittel': ['e2', 'h1'], 'wareneingangTausch': True})
@@ -619,6 +630,7 @@ st, r = V.call('leergut_partner_save', {'id': mp['id'], 'rev': mp['rev'], 'name'
 alt25 = {'lf': '2550077', 'art': 'Lieferschein', 'beleg': '44001', 'datum': '2025-11-12', 'abgang': {'e2': 7}, 'zugang': {'e2': 7}}
 check('Lieferantenbeleg vor „von“ ohne „lfVon“ (ältere Oberfläche) → Fehler', V.call('leergut_winab_import', wl(belege=WL['belege'] + [alt25], vorschau=True))[1].get('fehler'))
 st, r = V.call('leergut_winab_import', wl(bericht={**WL['bericht'], 'lfVon': '2025-11-01'}, belege=WL['belege'] + [alt25]))
+check('Sammelkonto: WinAB-Lademittelbestand der weiteren Nummer', V.call('leergut_start')[1]['winabBestand'].get(sk['id']) == [['2550077', -1234]])
 check('„WinAB ab“ 01.11.2025: Wareneingang vom 12.11.2025 gebucht', st == 200 and r['zahlen']['neu'] == 1 and konto(must['id']) == ['Lieferschein 44001', 'Lieferschein 45001'], (r.get('zahlen'), konto(must['id'])))
 mp = next(p for p in V.call('leergut_start')[1]['partner'] if p['id'] == must['id'])
 V.call('leergut_partner_save', {'id': mp['id'], 'rev': mp['rev'], 'name': mp['name'], 'art': 'lieferant', 'lademittel': ['e2', 'h1'], 'winabAb': '2026-08-10'})
@@ -956,6 +968,9 @@ with sync_playwright() as p:
           and '2 Belege ohne Wirkung' in vor and '(3 mit Saldo)' in vor and 'E2 Kisten −12 · Karton +348' in vor, vor)
     check('WinAB-Vorschau schreibt nichts', len(V.call('leergut_start')[1]['partner']) == n_p)
     pg.screenshot(path=os.path.join(SH, 'leergut_winab_1280.png'), full_page=True)
+    # Kundenstamm der Verwaltung mit Versandart und Lademittelbestand laut WinAB (Anzeige im Kontokopf)
+    storage_write('kunden', {'rev': 3, 'customers': [{'id': 'klg000000001', 'nr': '9100006', 'firma': 'Fleischerei Beispiel', 'active': True},
+                                                     {'id': 'klg000000002', 'nr': '9100003', 'firma': 'Testkunde Nord GmbH', 'active': True, 'versandart': '1', 'wawi': {'lademittelbestand': -6}}]})
     pg.click('#lg-w-uebernehmen')
     pg.wait_for_function("(document.querySelector('#lg-w-meldung')?.textContent || '').startsWith('Übernommen')")
     check('WinAB aus der Oberfläche übernommen', 'Übernommen: 3 neue Kundenkonten, 4 neue Belege, 0 geändert, 0 ausgeglichen.' in text(pg, '#lg-w-meldung'), text(pg, '#lg-w-meldung'))
@@ -1016,6 +1031,9 @@ with sync_playwright() as p:
     pg.click(f'#lg-k-liste [data-konto="{wk["9100003"]["id"]}"]'); pg.wait_for_selector('.lg-saldo')
     pg.wait_for_function("(document.querySelector('#lg-k-detail')?.textContent || '').includes('WinAB-Kd. 9100003')")
     check('Konto: WinAB-Kundennummer und Herkunft der Buchung', 'Lieferschein 500010' in text(pg, '#lg-k-detail') and 'noch nicht zurück' in text(pg, '#lg-k-detail'))
+    kopf = text(pg, '#lg-k-detail .lg-winab-bestand')
+    check('Kontokopf: Versandart und WinAB-Lademittelbestand laut Kundenstamm neben der Summe des Kontos', 'WinAB-Lademittelbestand −6 · Konto zusammen' in kopf
+          and 'Versandart 1 · Direktlieferung' in text(pg, '#lg-k-detail'), kopf)
     pg.screenshot(path=os.path.join(SH, 'leergut_winab_konto_1280.png'), full_page=True)
     pg.fill('#lg-k-suche', '')
     pg.click('#lg-tabs [data-tab="einstellungen"]')

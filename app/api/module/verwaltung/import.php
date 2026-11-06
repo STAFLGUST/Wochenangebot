@@ -19,7 +19,7 @@ function import_arten_verwaltung(): array
                        'ansicht' => $ansicht, 'vorschau' => 'gruppen_import_vorschau', 'uebernahme' => 'gruppen_import_uebernehmen'];
     };
     return [
-        'kunden' => $csv + ['name' => 'Kunden', 'kurz' => 'Kundendaten-Export der Warenwirtschaft', 'beschreibung' => 'Kundendaten-Export der Warenwirtschaft: Nummer, Name1, Adresse, Telefon, E-Mail, Kundengruppe, Vertreter und alle weiteren Spalten (Umsätze, Kreditlimit, letzte Rechnung …).',
+        'kunden' => $csv + ['name' => 'Kunden', 'kurz' => 'Kundendaten-Export der Warenwirtschaft', 'beschreibung' => 'Kundendaten-Export der Warenwirtschaft (auch „Kundenstammdaten komplett“): Nummer, Name1, Adresse, Telefon, E-Mail, Kundengruppe, Vertreter, Versandart und alle weiteren Spalten (Umsätze, Kreditlimit, letzte Rechnung, Name 2/3, Hermes, Lademittelbestand, Ansprechpartner …).',
             'recht' => ['kunden.bearbeiten'], 'aktion' => 'kunden_import', 'bestaetigung' => 'kunden_import', 'ansicht' => 'kunden',
             'vorschau' => 'kunden_import_vorschau', 'uebernahme' => 'kunden_import_uebernehmen',
             'optionen' => [['id' => 'ohneStern', 'typ' => 'schalter', 'label' => 'Mit „*“ markierte Kunden überspringen (in der Warenwirtschaft nicht mehr aktiv)', 'standard' => true],
@@ -57,6 +57,12 @@ const KUNDEN_WAWI_FELDER = [
     'umsatzVorjahr' => ['betrag', 0], 'umsatzVorvorjahr' => ['betrag', 0],
     'mailAB' => ['mails', 400], 'mailLS' => ['mails', 400], 'mailERechnung' => ['mails', 400], 'weitereEmails' => ['mails', 400],
     'abgabeCitti' => ['janein', 0], 'dfb' => ['janein', 0], 'rgSperre' => ['janein', 0],
+    // Export „Kundenstammdaten komplett“ (06.11.2026): weitere Namen, Angebot und Verband laut WinAB, Kreditversicherung,
+    // Lademittelbestand (Zähler der Warenwirtschaft, Stück aller Lademittel), Ansprechpartner der Warenwirtschaft
+    'name2' => ['text', 80], 'name3' => ['text', 80], 'winabAngebot' => ['text', 40], 'verband' => ['text', 20], 'steuernummer' => ['text', 30],
+    'hermesId' => ['text', 20], 'hermesDeckung' => ['betrag', 0], 'lademittelbestand' => ['ganzzahl', 0], 'abPerMail' => ['janein', 0],
+    'partnerName' => ['text', 120], 'partner1' => ['text', 120], 'partner2' => ['text', 120], 'partnerAbteilung' => ['text', 80],
+    'partnerEmail' => ['mails', 400], 'partnerTelefon' => ['text', 60], 'partnerTelefax' => ['text', 60],
 ];
 /* Aktiv-Regel des Imports: ohne Rechnung, Lieferschein und Neuanlage in diesem Zeitraum wird ein Kunde inaktiv */
 const KUNDEN_AKTIV_MONATE = 18;
@@ -68,6 +74,7 @@ function kunden_wawi_wert(array $typ, $v)
     if ($v === null || $v === '') return null;
     switch ($art) {
         case 'janein': return is_bool($v) ? $v : null;
+        case 'ganzzahl': return is_int($v) && abs($v) < 1000000000 ? $v : null;
         case 'betrag': return (is_int($v) || is_float($v)) && is_finite((float)$v) && abs((float)$v) < 1e12 ? round((float)$v, 2) : null;
         case 'datum': return is_string($v) && preg_match('/^(\d{4})-(\d{2})-(\d{2})$/', $v, $m) && (int)$m[1] >= 1900 && (int)$m[1] <= 2100 && checkdate((int)$m[2], (int)$m[3], (int)$m[1]) ? $v : null;
         case 'uhrzeit': return is_string($v) && preg_match('/^([01]\d|2[0-3]):[0-5]\d$/', $v) ? $v : null;
@@ -263,7 +270,7 @@ function kunden_import_lauf(array $b, bool $pruefen, bool $details = false): arr
         if ($s['bleibtAktivHand']) $h[] = ['stufe' => 'info', 'text' => $anz($s['bleibtAktivHand'], 'von Hand aktivierter Kunde ohne Rechnung bleibt', 'von Hand aktivierte Kunden ohne Rechnung bleiben') . ' aktiv.'];
         if ($s['bleibtInaktiv']) $h[] = ['stufe' => 'info', 'text' => $anz($s['bleibtInaktiv'], 'von Hand deaktivierter Kunde hat', 'von Hand deaktivierte Kunden haben') . ' wieder Rechnungen und ' . ($s['bleibtInaktiv'] === 1 ? 'bleibt' : 'bleiben') . ' trotzdem inaktiv (bei Bedarf im Kunden-Dialog aktivieren).'];
     }
-    if ($wawiFelder) $h[] = ['stufe' => 'info', 'text' => 'Weitere Spalten (Konto, Rechnungsempfänger, Kreditlimit, Kondition, Umsätze und Rohgewinne, letzte Rechnung und Lieferschein, Anlage, GLN, E-Mail-Adressen für AB, Lieferschein und E-Rechnung, Rechnungssperre, CITTI, DFB) werden als Daten der Warenwirtschaft beim Kunden gespeichert'
+    if ($wawiFelder) $h[] = ['stufe' => 'info', 'text' => 'Weitere Spalten (Konto, Rechnungsempfänger, Kreditlimit, Kondition, Umsätze und Rohgewinne, letzte Rechnung und Lieferschein, Anlage, GLN, E-Mail-Adressen für AB, Lieferschein und E-Rechnung, Rechnungssperre, CITTI, DFB, Name 2 und 3, Angebot und Verband laut WinAB, Steuernummer, Hermes, Lademittelbestand, Ansprechpartner der Warenwirtschaft) werden als Daten der Warenwirtschaft beim Kunden gespeichert'
         . ($s['wawi'] ? ' – bei ' . $anz($s['wawi'], 'bestehendem Kunden', 'bestehenden Kunden') . ' geändert' : '') . '. Sichtbar nur mit dem Recht „Kunden bearbeiten“.'];
     return ['rev' => $rev, 'regel' => $regel, 'stichtag' => $stichtag, 'hinweise' => $h] + $out;
 }

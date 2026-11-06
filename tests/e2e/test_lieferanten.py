@@ -1,7 +1,9 @@
 """Stammdaten → Lieferanten und Versandarten (Wunsch des Inhabers 06.11.2026): vollständiger Lieferanten-Export der
 Warenwirtschaft (alle Spalten, Name darf fehlen, Umsätze nur für Bearbeiter), Versandarten (Nummer, Text), Versandart am
 Kunden (Kundenimport und Kunden-Dialog), Anzahl Kunden und Lieferanten je Versandart, Rechte, Revision, CSV-Import in
-Windows-1252 über die Ansicht und die Importzentrale, Protokoll, Anzeige, 390 px. Nur Testdaten (tests/fixtures/lieferanten)."""
+Windows-1252 über die Ansicht und die Importzentrale, Protokoll, Anzeige, 390 px. Kundenimport mit dem Export „Kundenstammdaten
+komplett“ (alle 60 Spalten: Name 2/3, Angebot und Verband laut WinAB, Hermes, Lademittelbestand, Ansprechpartner der Warenwirtschaft).
+Nur Testdaten (tests/fixtures/lieferanten, tests/fixtures/kunden)."""
 import json
 import sys
 
@@ -14,6 +16,7 @@ PW = 'Sicheres-Passwort-1'
 LF_CSV = FIX + '/lieferanten/lieferanten.csv'
 VA_CSV = FIX + '/lieferanten/versandarten.csv'
 KD_CSV = FIX + '/kunden/kundendaten.csv'
+KS_CSV = FIX + '/kunden/kundenstamm-komplett.csv'
 res = []
 
 
@@ -147,6 +150,32 @@ with sync_playwright() as p:
     a.select_option('#kunde-body [name="versandart"]', '2'); a.click('#kunde-body [type=submit]')
     a.wait_for_function("!document.querySelector('#dlg-kunde').open", timeout=10000)
     check('Kunden-Dialog: Versandart gespeichert', next(c for c in A.call('kunden')[1]['customers'] if c['id'] == kid).get('versandart') == '2')
+
+    # ---------- Kundenimport: Export „Kundenstammdaten komplett“ (alle Spalten) ----------
+    a.set_input_files('#k-file', LF_CSV); a.wait_for_selector('#toast.show:has-text("Lieferanten-Export")')
+    check('Kundenimport: Lieferanten-Export wird erkannt', not a.locator('#dlg-k-import').evaluate('d => d.open'))
+    a.set_input_files('#k-file', KS_CSV); a.wait_for_selector('#dlg-k-import[open] #ki-neu')
+    check('Kundenstamm komplett: Vorschau 2 neu', a.inner_text('#ki-neu') == '2', a.inner_text('#k-import-body'))
+    check('Kundenstamm komplett: Hinweis nennt die weiteren Spalten', 'Hermes, Lademittelbestand, Ansprechpartner der Warenwirtschaft' in a.inner_text('#k-import-body'))
+    a.click('#k-import-body [data-ki="ok"]'); a.wait_for_selector('#toast.show:has-text("Kunden übernommen")', timeout=15000)
+    kd = {c.get('nr'): c for c in A.call('kunden')[1]['customers']}
+    w1, w2 = kd.get('1000201', {}).get('wawi', {}), kd.get('1000202', {}).get('wawi', {})
+    check('Kundenstamm komplett: alle weiteren Spalten als Daten der Warenwirtschaft', w1.get('lademittelbestand') == 37 and w1.get('hermesDeckung') == 25000 and w1.get('hermesId') == '0070000001'
+          and w1.get('name2') == '- Fleischtheke -' and w1.get('name3') == 'Lager Teststadt' and w1.get('winabAngebot') == 'ANGEBOT 1' and w1.get('verband') == '4'
+          and w1.get('steuernummer') == '12/345/67890' and w1.get('partnerName') == 'Herr Probe' and w1.get('partner2') == 'Frau Muster (Buchhaltung)' and w1.get('partnerAbteilung') == 'Einkauf'
+          and w1.get('partnerEmail') == 'probe@komplett.example' and w1.get('partnerTelefon') == '040-208' and w1.get('partnerTelefax') == '040-209' and w1.get('abPerMail') is True
+          and kd['1000201'].get('versandart') == '1' and kd['1000201'].get('firma') == 'Komplett Testmarkt GmbH', w1)
+    check('Kundenstamm komplett: negativer Lademittelbestand mit Tausenderpunkt, Angebot ohne Leerzeichen, Versandart', w2.get('lademittelbestand') == -1250 and w2.get('winabAngebot') == 'KEIN Angebot'
+          and w2.get('abPerMail') is False and 'hermesId' not in w2 and kd['1000202'].get('versandart') == '24' and kd['1000202'].get('land') == 'Österreich', (w2, kd.get('1000202', {}).get('land')))
+    check('Kundenstamm komplett: Leser sieht keine Daten der Warenwirtschaft', all('wawi' not in c for c in L.call('kunden')[1].get('customers', [])) if L.call('kunden')[0] == 200 else True)
+    a.fill('#k-q', '1000201'); a.wait_for_selector('#k-list tr[data-kid]:has-text("Komplett Testmarkt")')
+    a.click('#k-list tr[data-kid]:has-text("Komplett Testmarkt")'); a.wait_for_selector('#dlg-kunde[open]')
+    ww = a.locator('#kunde-body .k-wawi').text_content()
+    check('Kunden-Dialog: Daten der Warenwirtschaft mit Lademittelbestand, Hermes, Name 2 und Ansprechpartner', all(t in ww for t in ('Lademittelbestand (WinAB)37', 'Hermes-ID0070000001', 'Name 2- Fleischtheke -',
+          'Ansprechpartner (WinAB)Herr Probe', 'Angebot (WinAB)ANGEBOT 1', 'AB per Mailja')) and 'Hermes-Deckung25.000,00' in ww.replace('\u00a0', ' ').replace(' €', ''), ww)
+    a.locator('#kunde-body [data-close]').first.click()
+    a.wait_for_function("!document.querySelector('#dlg-kunde').open")
+    a.fill('#k-q', '')
     a.set_viewport_size({'width': 390, 'height': 820})
     a.click('#vt-lieferanten'); a.wait_for_selector('#view-lieferanten tr[data-kg]')
     over = a.evaluate('document.documentElement.scrollWidth - document.documentElement.clientWidth')

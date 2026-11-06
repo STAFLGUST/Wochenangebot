@@ -284,12 +284,16 @@ Aus dem Kundenimport (Kundendaten-Export der Warenwirtschaft, `kunden_import_lau
          "letzterLieferschein": "2026-09-12", "angelegtAm": "2019-02-03", "angelegtUm": "09:05", "angelegtVon": "TST",
          "kreditlimit": 3000, "umsatzMonat": 1234.5, "rohgewinnMonat": -12.3, "umsatzJahr": 12345.67, "gln": "4000000000017",
          "rgSperre": false, "abgabeCitti": true, "dfb": false, "mailAB": "ab@example.invalid", "weitereEmails": "…",
+         "name2": "- Fleischtheke -", "name3": "…", "winabAngebot": "ANGEBOT 1", "verband": "4", "steuernummer": "…",
+         "hermesId": "0070000001", "hermesDeckung": 25000, "lademittelbestand": -12, "abPerMail": true,
+         "partnerName": "…", "partner1": "…", "partner2": "…", "partnerAbteilung": "…", "partnerEmail": "…", "partnerTelefon": "…", "partnerTelefax": "…",
          "stand": "2026-10-28T12:00:00Z"},
 "autoInaktiv": {"seit": "…", "grund": "keine Rechnung seit 18 Monaten (letzte 12.03.2024)"},
 "aktivVonHand": "…"
 ```
 
-- `wawi`: alle weiteren Spalten des Exports (Felder und Typen: `KUNDEN_WAWI_FELDER`), nur nicht leere, gültige Werte;
+- `wawi`: alle weiteren Spalten des Exports (Felder und Typen: `KUNDEN_WAWI_FELDER`; seit 06.11.2026 auch die Spalten des Exports
+  „Kundenstammdaten komplett“, `lademittelbestand` als ganze Zahl = Zähler der Warenwirtschaft über alle Lademittel), nur nicht leere, gültige Werte;
   `stand` = letzte Änderung durch einen Import. Ein Import setzt bzw. leert nur die Felder, deren Spalte die Datei enthält
   (`wawiFelder`). Ausgeliefert nur an Nutzer mit `kunden.bearbeiten` (`customer_public($c, true)`), nie an CRM, Kunden,
   E-Mail-Antworten oder ins Protokoll (dort nur die Anzahl).
@@ -485,7 +489,8 @@ nur lesend). Lieferantenbelege werden nur bei Partnern mit `lieferantNr` gebucht
 Genannten; geänderte Belege werden storniert und neu gebucht, fehlende storniert (Grund „WinAB-Abgleich vom …“). Antwort zusätzlich
 `lieferanten` (Nr., Name und Versandart aus den Lieferanten-Stammdaten, Belege mit Wirkung, Saldo ohne Konto, zugeordneter Partner, `vorschlag` =
 Konto ohne Nummer mit passendem Namen) und `summeLieferanten`; `zaehler` nennt `tausch` (Wareneingänge mit nicht gezähltem Tausch) und `vorStart`
-(Belege vor „WinAB-Belege ab“). `lfVon` (Standard `von`, nicht vor `dateiVon`) gilt für Lieferantenbelege; die Seite setzt es auf das früheste
+(Belege vor „WinAB-Belege ab“). `leergut_start` liefert dazu `versand` (Versandart je Partner) und `winabBestand` (je Partner `[[WinAB-Nr., Stück], …]` aus
+`lademittelbestand` des Lieferanten- bzw. Kundenstamms – nur Anzeige, `lg_partner_stamm`). `lfVon` (Standard `von`, nicht vor `dateiVon`) gilt für Lieferantenbelege; die Seite setzt es auf das früheste
 `winabAb` der Konten. Wareneingang = Lieferschein eines Lieferanten: gebucht wird der Zugang, als Abgang nur `max(0, Abgang − Zugang)`
 (außer `wareneingangTausch`). Zeilen mit Kunde sind Kundenbelege,
 auch wenn WinAB dort zusätzlich eine Lieferantennummer nennt (die zählt dort nicht). Die Datei bleibt im Browser;
