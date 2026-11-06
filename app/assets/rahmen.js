@@ -8,6 +8,7 @@
    daneben oder das Verlassen des Menüs mit der Tabulatortaste schließt es.
    Ziele der Einträge wie bisher die Kacheln: unter dashboard-stafl.de die Adressen der zentralen Anmeldung, in Test- und
    Entwicklungsumgebungen derselbe Pfad auf dem aktuellen Server (nie die Produktion).
+   Modulseiten binden den Rahmen ohne eigenes Skript ein: <body data-rahmen="<modul-id>"> (siehe selbst() unten).
    Kein Inline-Skript (Content-Security-Policy); fremde Texte (Namen aus Register und Konto) nur maskiert. */
 'use strict';
 (() => {
@@ -168,8 +169,60 @@
     menue(false, false);
     nav.hidden = true; nav.innerHTML = '';
     const a = nav.closest('.r-app');
-    if (a) { a.classList.remove('r-bereit', 'r-schmal'); const k = a.querySelector('.r-mobilkopf'); if (k) k.hidden = true; }
+    if (a) { a.classList.remove('r-bereit', 'r-schmal', 'r-auto-schmal'); const k = a.querySelector('.r-mobilkopf'); if (k) k.hidden = true; }
   }
+
+  /* Modulseiten: <body … data-rahmen="<modul-id>"> (Eingabebereich: data-rahmen="auto" = Modul des Hosts, dazu
+     data-rahmen-schmal für die schmale Leiste) – der Rahmen holt status und module_status selbst, damit das Skript des
+     Moduls unverändert bleibt. Ohne Anmeldung oder bei einem Fehler bleibt die Seite ohne Leiste (das Modul zeigt seinen
+     Hinweis wie bisher). Abmelden: wie auf dem Dashboard, danach lädt die Seite neu (zeigt den Anmeldehinweis). */
+  const API = new URL('../api/', QUELLE).pathname;
+  const ECHT = /(^|\.)dashboard-stafl\.de$/.test(location.hostname);
+  async function holen(action, body, csrf) {
+    const r = await fetch(API + '?action=' + action, { method: body ? 'POST' : 'GET', credentials: 'same-origin', cache: 'no-store',
+      headers: body ? { 'Content-Type': 'application/json', 'X-CSRF-Token': csrf || '' } : {}, body: body ? JSON.stringify(body) : undefined });
+    let d = null;
+    try { d = await r.json(); } catch { /* keine JSON-Antwort */ }
+    return { status: r.status, data: d || {} };
+  }
+  async function selbst(wunsch) {
+    const st = await holen('status');
+    if (st.status !== 200 || !st.data.loggedIn) return false;
+    const nutzer = st.data.user || {}, csrf = st.data.csrf || '';
+    const ms = await holen('module_status');
+    if (ms.status !== 200 || !ms.data.ok) return false;
+    const module = ms.data.module || [];
+    let aktiv = wunsch;
+    if (wunsch === 'auto') {   // Eingabebereich: Oberfläche dieses Hosts (z. B. bestand.intern) → Modul, dessen Kachel dorthin führt
+      const bereich = nutzer.bereich || 'angebot.eingabe';
+      const treffer = module.find((m) => m.kachel && m.kachel.ziel === bereich);
+      aktiv = treffer ? treffer.id : bereich.split('.')[0];
+    }
+    const start = ECHT ? (nutzer.dashboard && /^https:/.test(nutzer.dashboard) ? nutzer.dashboard : 'https://dashboard-stafl.de/') : new URL('../dashboard/', QUELLE).pathname;
+    const schmal = document.body.hasAttribute('data-rahmen-schmal');
+    zeichnen({ module, aktiv, nutzer, start, schmal, abmelden: async () => {
+      const r = await holen('logout', {}, csrf);
+      if (typeof r.data.abmelden === 'string' && r.data.abmelden.startsWith('/oidc/')) { location.replace(r.data.abmelden); return; }
+      location.reload();
+    } });
+    if (!schmal && app) app.classList.add('r-auto-schmal');   // Modulseiten: unter 1440 px schmale Leiste (rahmen.css)
+    return true;
+  }
+  /* data-rahmen-nach="<Selektor>": erst zeichnen, wenn dieser Bereich sichtbar ist (Eingabebereich: nach der Anmeldung im
+     selben Fenster, ohne Neuladen), und wieder entfernen, wenn er verschwindet */
+  const wunsch = document.body && document.body.dataset.rahmen;
+  const nach = wunsch && document.body.dataset.rahmenNach ? document.querySelector(document.body.dataset.rahmenNach) : null;
+  if (wunsch && nach) {
+    let gezeichnet = false, laeuft = false;
+    const pruefen = () => {
+      if (!nach.hidden && !gezeichnet && !laeuft) {
+        laeuft = true;
+        selbst(wunsch).then((ok) => { gezeichnet = ok; }, () => { /* ohne Leiste weiter */ }).finally(() => { laeuft = false; });
+      } else if (nach.hidden && gezeichnet) { entfernen(); gezeichnet = false; }
+    };
+    new MutationObserver(pruefen).observe(nach, { attributes: true, attributeFilter: ['hidden'] });
+    pruefen();
+  } else if (wunsch) selbst(wunsch).catch(() => { /* ohne Leiste weiter */ });
 
   window.STAFL_RAHMEN = { zeichnen, entfernen, ziel, initialen, sichtbar, art, symbol };
 })();

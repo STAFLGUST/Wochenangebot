@@ -10,13 +10,17 @@
 <script src="../../assets/theme.js"></script>
 <script src="../../assets/format.js"></script>
 <link rel="stylesheet" href="../../assets/app.css">
+<link rel="stylesheet" href="../../assets/rahmen.css">
 <link rel="stylesheet" href="sicherheit.css">
 </head>
-<body class="sic">
+<body class="sic r" data-rahmen="sicherheit">
 <div class="sic-bg" aria-hidden="true"><span></span><span></span><span></span></div>
+<div class="r-app">
+<nav class="r-leiste" id="r-leiste" aria-label="Hauptnavigation" hidden></nav>
+<div class="r-inhalt">
 <div class="sic-seite">
   <header class="sic-kopf sic-glas">
-    <a class="stafl-zurueck" id="sic-zurueck" href="../../dashboard/" title="Zurück zum Dashboard" aria-label="Zurück zum Dashboard"><svg class="i" aria-hidden="true"><use href="#i-back"/></svg><span class="lbl">Dashboard</span></a>
+    <a class="stafl-zurueck" id="sic-zurueck" href="../../dashboard/" title="Zur Startseite" aria-label="Zur Startseite"><svg class="i" aria-hidden="true"><use href="#i-back"/></svg><span class="lbl">Start</span></a>
     <span class="sic-marke"><img class="brand-logo" src="../../assets/logo-standard-fleisch-kopf.png" width="428" height="96" alt="Standard-Fleisch"></span>
     <span class="sic-modul"><svg class="i" aria-hidden="true"><use href="#i-schild"/></svg>Sicherheit<span class="sic-modul-zusatz">· Leitstand</span></span>
     <div class="sic-aktionen">
@@ -64,6 +68,8 @@
   </main>
   <footer class="sic-fuss">STAFL-Plattform · Standard-Fleisch · Sicherheitszentrale</footer>
 </div>
+</div>
+</div>
 
 <!-- Ein Dialog für Details, Bearbeiten und Bestätigungen (nie verschachtelt; Inhalt je Vorgang, auf dem Handy als Blatt von unten) -->
 <dialog class="sic-dialog" id="sic-dlg" aria-labelledby="sic-dlg-titel"></dialog>
@@ -102,6 +108,7 @@
   <symbol id="i-hoch" viewBox="0 0 24 24"><path d="m6 14.5 6-6 6 6"/></symbol>
   <symbol id="i-extern" viewBox="0 0 24 24"><path d="M14 4h6v6M20 4l-9 9M18 14v5a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V7a1 1 0 0 1 1-1h5"/></symbol>
 </svg>
+<script src="../../assets/rahmen.js"></script>
 <script src="sicherheit.js"></script>
 </body>
 </html>

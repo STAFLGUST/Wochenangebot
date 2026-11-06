@@ -44,44 +44,48 @@ with sync_playwright() as p:
         m.screenshot(path=SH + f'/sidenav-{w}.png')
         sw = m.evaluate('document.documentElement.scrollWidth'); check(f'{w}px no h-scroll', sw <= w, sw)
         check(f'{w}px top bar: name, save state and buttons do not overlap', not m.evaluate(overlap_js))
-    # Design „Liquid Glass“ (nur Eingabebereich, admin.css): Glas, dunkles Design, Fallbacks, Druck, Kundenseite unberührt
+    # Rahmen „C2“ (06.11.2026, rahmen.css + Abschnitt am Ende von admin.css): schmale Seitenleiste vor der eigenen Navigation,
+    # ruhige deckende Flächen statt Glas, flache Kopfzeile; Druck hell; Kundenseite unberührt
     g = br.new_page(viewport={'width': 1440, 'height': 900}); g.on('pageerror', lambda x: errs.append(str(x)))
     login(g, 'admin', 'Sicheres-Passwort-1')
+    g.wait_for_selector('.r-app.r-bereit')
     css = lambda sel, prop, pseudo='': g.evaluate('([s, p, ps]) => getComputedStyle(document.querySelector(s), ps || null)[p]', [sel, prop, pseudo])
-    check('glass: warm ground', css('body', 'backgroundColor') == 'rgb(244, 241, 238)', css('body', 'backgroundColor'))
-    blobs = g.evaluate("(() => { const c = getComputedStyle(document.body, '::before'); return [c.position, c.pointerEvents, c.zIndex, c.backgroundImage]; })()")
-    check('glass: three soft colour fields fixed behind the content, no red', blobs[0] == 'fixed' and blobs[1] == 'none' and blobs[2] == '-1'
-          and blobs[3].count('radial-gradient') == 3 and '143, 167, 196' in blobs[3] and '226, 165, 74' in blobs[3] and '63, 122, 90' in blobs[3], blobs)
-    bf = css('#topbar .topbar-inner', 'backdropFilter', '::before')
-    check('glass: top bar capsule blurs the page behind it', 'blur(30px)' in bf and 'saturate(1.8)' in bf, bf)
-    check('glass: top bar is a rounded capsule, header itself transparent', css('#topbar .topbar-inner', 'borderTopLeftRadius') == '30px'
-          and css('#topbar', 'backgroundColor') == 'rgba(0, 0, 0, 0)', (css('#topbar .topbar-inner', 'borderTopLeftRadius'), css('#topbar', 'backgroundColor')))
-    check('glass: side navigation is a glass card', 'blur(30px)' in css('.side-nav', 'backdropFilter') and css('.side-nav', 'borderTopLeftRadius') == '28px')
-    check('glass: active nav entry 44 px with 14 px radius', g.locator('#vt-edit').bounding_box()['height'] == 44 and css('#vt-edit', 'borderTopLeftRadius') == '14px')
-    check('glass: Veröffentlichen is the coloured button (bordeaux gradient)', 'linear-gradient' in css('#btn-publish', 'backgroundImage')
+    alpha = lambda c: float(c.split(',')[3].strip(' )')) if c.startswith('rgba') else 1.0   # noqa: E731
+    check('Rahmen: ruhiger Grund ohne Farbflächen', css('body', 'backgroundColor') == 'rgb(246, 244, 241)' and css('body', 'display', '::before') == 'none', css('body', 'backgroundColor'))
+    leiste = g.evaluate("""(() => { const n = document.querySelector('#r-leiste'), r = n.getBoundingClientRect(), s = document.querySelector('.side-nav').getBoundingClientRect();
+        return [Math.round(r.width), [...n.querySelectorAll('[aria-current="page"]')].map(e => e.dataset.modul), r.right <= s.left, !!n.querySelector('a.r-eintrag[data-modul="crm"][aria-label]')]; })()""")
+    check('Rahmen: schmale Seitenleiste (60 px) links vor der eigenen Navigation, Angebot aktiv, Einträge beschriftet', leiste == [60, ['angebot'], True, True], leiste)
+    check('Rahmen: Kopfzeile flach (keine Kapsel, keine Unschärfe, feine Linie unten), Logo in der Seitenleiste', css('#topbar .topbar-inner', 'borderTopLeftRadius') == '0px'
+          and css('#topbar .topbar-inner', 'backdropFilter', '::before') == 'none' and css('#topbar .topbar-inner', 'borderBottomWidth', '::before') == '1px'
+          and not g.locator('#topbar .brand-logo').is_visible(), (css('#topbar .topbar-inner', 'borderTopLeftRadius'), css('#topbar .topbar-inner', 'backdropFilter', '::before')))
+    check('Rahmen: eigene Navigation als deckende Karte ohne Unschärfe', css('.side-nav', 'backdropFilter') == 'none' and css('.side-nav', 'backgroundColor') == 'rgb(255, 255, 255)'
+          and css('.side-nav', 'borderTopLeftRadius') == '28px')
+    check('active nav entry 44 px with 14 px radius', g.locator('#vt-edit').bounding_box()['height'] == 44 and css('#vt-edit', 'borderTopLeftRadius') == '14px')
+    check('Veröffentlichen is the coloured button (bordeaux gradient)', 'linear-gradient' in css('#btn-publish', 'backgroundImage')
           and '163, 32, 47' in css('#btn-publish', 'backgroundImage') and css('#btn-publish', 'borderTopLeftRadius') == '999px')
-    check('glass: other top bar buttons are neutral pills', css('#btn-preview', 'backgroundImage') == 'none' and css('#btn-preview', 'borderTopLeftRadius') == '999px')
-    check('glass: group cards 28 px, offer list inside the side navigation card (no card of its own) with the active offer as glass entry', css('#groups .gcard', 'borderTopLeftRadius') == '28px'
+    check('other top bar buttons are neutral pills', css('#btn-preview', 'backgroundImage') == 'none' and css('#btn-preview', 'borderTopLeftRadius') == '999px')
+    check('group cards 28 px, offer list inside the side navigation card (no card of its own) with the active offer as entry', css('#groups .gcard', 'borderTopLeftRadius') == '28px'
           and g.evaluate("document.querySelector('#offer-bar').parentElement.classList.contains('side-nav')") and css('#offer-bar', 'borderTopLeftRadius') == '0px' and css('#offer-bar', 'backdropFilter') in ('none', '')
           and css('#offer-bar .ob-o[aria-selected="true"]', 'borderTopLeftRadius') == '14px' and g.locator('#offer-bar .ob-o[aria-selected="true"]').bounding_box()['height'] >= 44)
-    check('glass: dense table cards stay mostly opaque', float(css('#groups .gcard', 'backgroundColor').split(',')[-1].strip(' )')) >= .7, css('#groups .gcard', 'backgroundColor'))
-    check('glass: price fields 10 px radius', css('#groups tr[data-id] .e-price .in.num', 'borderTopLeftRadius') == '10px')
+    check('Rahmen: Tabellenkarten deckend', css('#groups .gcard', 'backgroundColor') == 'rgb(255, 255, 255)' and css('#groups .gcard', 'backdropFilter') == 'none', css('#groups .gcard', 'backgroundColor'))
+    check('price fields 10 px radius', css('#groups tr[data-id] .e-price .in.num', 'borderTopLeftRadius') == '10px')
     sticky = g.evaluate("(() => { const t = document.querySelector('#view-edit .ed-toolbar'); return [getComputedStyle(t).position, getComputedStyle(t).backgroundColor]; })()")
-    check('glass: sticky bars dense enough to read without blur', sticky[0] == 'sticky' and float(sticky[1].split(',')[-1].strip(' )')) >= .85, sticky)
+    check('sticky bars opaque enough to read', sticky[0] == 'sticky' and alpha(sticky[1]) >= .85, sticky)
     g.click('#btn-more'); g.wait_for_selector('#menu-more:not([hidden])')
-    check('glass: menu is glass of its own (not nested in the capsule blur)', 'blur(30px)' in css('#menu-more', 'backdropFilter') and css('#topbar .topbar-inner', 'backdropFilter') == 'none')
+    check('Rahmen: Menü deckend ohne Unschärfe', css('#menu-more', 'backdropFilter') == 'none' and alpha(css('#menu-more', 'backgroundColor')) == 1, css('#menu-more', 'backgroundColor'))
     g.keyboard.press('Escape')
     g.evaluate("document.documentElement.dataset.theme = 'dark'")
-    check('glass: dark theme via switch', css('body', 'backgroundColor') == 'rgb(18, 16, 17)' and 'blur(30px)' in css('.side-nav', 'backdropFilter'), css('body', 'backgroundColor'))
+    check('Rahmen: dunkles Design per Umschalter (gleicher Grund wie alle Seiten, ohne Unschärfe)', css('body', 'backgroundColor') == 'rgb(18, 16, 17)' and css('.side-nav', 'backdropFilter') == 'none'
+          and css('#r-leiste', 'backgroundColor') == 'rgb(27, 26, 25)', css('body', 'backgroundColor'))
     g.evaluate("document.documentElement.dataset.theme = 'light'")
     cdp = g.context.new_cdp_session(g)
     cdp.send('Emulation.setEmulatedMedia', {'features': [{'name': 'prefers-reduced-transparency', 'value': 'reduce'}]})
     g.wait_for_function("matchMedia('(prefers-reduced-transparency: reduce)').matches")
     check('reduced transparency: no blur, opaque surfaces', css('#topbar .topbar-inner', 'backdropFilter', '::before') == 'none'
-          and css('.side-nav', 'backdropFilter') == 'none' and css('#topbar .topbar-inner', 'backgroundColor', '::before') == 'rgb(255, 255, 255)'
+          and css('.side-nav', 'backdropFilter') == 'none' and alpha(css('#topbar .topbar-inner', 'backgroundColor', '::before')) == 1
           and css('#groups .gcard', 'backgroundColor') == 'rgb(255, 255, 255)', (css('#topbar .topbar-inner', 'backgroundColor', '::before'), css('#groups .gcard', 'backgroundColor')))
     g.evaluate("document.documentElement.dataset.theme = 'dark'")
-    check('reduced transparency also in the dark theme', css('#groups .gcard', 'backgroundColor') == 'rgb(29, 26, 26)', css('#groups .gcard', 'backgroundColor'))
+    check('reduced transparency also in the dark theme (Fläche des Rahmens)', css('#groups .gcard', 'backgroundColor') == 'rgb(32, 31, 29)', css('#groups .gcard', 'backgroundColor'))
     g.evaluate("document.documentElement.dataset.theme = 'light'")
     cdp.send('Emulation.setEmulatedMedia', {'features': []})
     g.emulate_media(media='print')
@@ -110,16 +114,19 @@ with sync_playwright() as p:
         if w <= 480:
             # Handy: Zurück-Knopf und sechs Aktionen füllen die Zeile – ohne Logo, das sonst unter „Rückgängig“ läge (admin.css)
             ab = z.evaluate("[...document.querySelectorAll('#topbar .actions .btn, #topbar .actions .ibtn')].filter((e) => e.offsetParent).map((e) => e.getBoundingClientRect().left)")
-            check(f'{w}px zentrale Anmeldung: Knopf „Dashboard“ links, kein verdecktes Logo, Ziel vom Server', z.get_attribute('#btn-dashboard', 'href') == 'https://dashboard-stafl.de/'
+            check(f'{w}px zentrale Anmeldung: Knopf „Start“ links, kein verdecktes Logo, Ziel vom Server', z.get_attribute('#btn-dashboard', 'href') == 'https://dashboard-stafl.de/'
                   and lb is None and ab and zb['x'] + zb['width'] <= min(ab) + 1, (zb, lb, ab))
         else:
-            check(f'{w}px zentrale Anmeldung: Knopf „Dashboard“ links vor dem Logo, Ziel vom Server', z.get_attribute('#btn-dashboard', 'href') == 'https://dashboard-stafl.de/'
-                  and zb['x'] + zb['width'] <= lb['x'] + 1 and abs((zb['y'] + zb['height'] / 2) - (lb['y'] + lb['height'] / 2)) < 4, (zb, lb))
+            # Rahmen „C2“: das Logo steht in der Seitenleiste – in der Kopfzeile steht „Start“ ganz links
+            tb = z.locator('#topbar .topbar-inner').bounding_box()
+            check(f'{w}px zentrale Anmeldung: Knopf „Start“ links in der Kopfzeile, Logo nur in der Seitenleiste, Ziel vom Server', z.get_attribute('#btn-dashboard', 'href') == 'https://dashboard-stafl.de/'
+                  and lb is None and zb['x'] - tb['x'] <= 40, (zb, lb, tb))
         lbl = z.locator('#btn-dashboard .lbl').bounding_box()
         if w > 1600:
-            check(f'{w}px breit: Pfeil und Beschriftung „Dashboard“ sichtbar', lbl['width'] > 40 and z.locator('#btn-dashboard svg use[href="#i-back"]').is_visible(), lbl)
+            check(f'{w}px breit: Pfeil und Beschriftung „Start“ sichtbar', lbl['width'] > 20 and z.locator('#btn-dashboard .lbl').inner_text() == 'Start'
+                  and z.locator('#btn-dashboard svg use[href="#i-back"]').is_visible(), lbl)
         else:
-            check(f'{w}px Beschriftung „Dashboard“ nur für Screenreader, Pfeil (wie auf allen Modulseiten), Fläche ≥ 36 px', lbl['width'] <= 1 and zb['width'] >= 36 and zb['height'] >= 36
+            check(f'{w}px Beschriftung „Start“ nur für Screenreader, Pfeil (wie auf allen Modulseiten), Fläche ≥ 36 px', lbl['width'] <= 1 and zb['width'] >= 36 and zb['height'] >= 36
                   and z.locator('#btn-dashboard svg use[href="#i-back"]').is_visible(), (lbl, zb))
         check(f'{w}px mit Knopf: Kopfzeile ohne Überlappung, kein waagerechtes Scrollen', not z.evaluate(overlap_js)
               and z.evaluate('document.documentElement.scrollWidth') <= w)
@@ -130,6 +137,7 @@ with sync_playwright() as p:
         z.route('**/api/?action=status*', lambda route: zentral(route, 'javascript:alert(1)'))
         z.reload(); z.wait_for_function("document.querySelector('#menu-user').textContent.includes('admin')")
         check(f'{w}px ungültige Dashboard-Adresse: Knopf bleibt verborgen', z.locator('#btn-dashboard').is_hidden())
+        z.unroute_all(behavior='ignoreErrors')   # die Seitenleiste fragt den Status selbst ab – laufende Anfragen beim Schließen ignorieren
         z.close()
     # Darstellungsfehler des Eingabebereichs (Prüfung aller Ansichten, PR „layout-eingabebereich“)
     KONTRAST = '''(sel) => { const el = document.querySelector(sel); if (!el) return null;

@@ -374,10 +374,10 @@ Leiste senkrecht, schmal ist sie eine waagerechte Spur. Mit `body.bereich-import
 
 Alle drei Seiten haben denselben Aufbau – eine eigenständige IIFE ohne `window.WA`:
 
-1. **Kopf:** Dashboard seit 06.11.2026 im gemeinsamen Rahmen „C2“ (Seitenleiste links, Seitenkopf mit Begrüßung,
-   siehe [6.5 Rahmen „C2“](#rahmen-c2-seitenleiste)); HR und CRM bis zu ihrer Umstellung mit Glas-Kopf `hr-kopf hr-glas`
-   bzw. `crm-kopf crm-glas`: Logo, Modulname, Hell/Dunkel-Knopf (`#…-theme`), Nutzer-Chip mit Initialen; dahinter
-   `<div class="…-bg">` mit drei Farbflächen.
+1. **Rahmen und Kopf:** alle Seiten im gemeinsamen Rahmen „C2“ (Seitenleiste links, siehe
+   [6.5 Rahmen „C2“](#rahmen-c2-seitenleiste)). Dashboard: Seitenkopf mit Begrüßung. HR und CRM (wie alle Modulseiten):
+   Kopf `hr-kopf` bzw. `crm-kopf` mit „Start“, Modulname und Knöpfen der Seite (Hell/Dunkel `#…-theme`); Logo und
+   Nutzer-Chip stehen noch im HTML, werden im Rahmen aber ausgeblendet (Name und Abmelden in der Seitenleiste).
 2. **Eigene `api()`**, die nicht wirft, sondern `{ status, data, json }` liefert:
    ```js
    async function api(action, body, query = '') {
@@ -396,9 +396,9 @@ Alle drei Seiten haben denselben Aufbau – eine eigenständige IIFE ohne `windo
    Startaktion des Moduls rufen (`module_status`, `hr_start` über `ladeStart()`, `crm_start`). Das CRM übersetzt
    404/503/403 der Startaktion in eigene Hinweise („noch nicht freigegeben“, Wartung, fehlendes Recht).
 4. **Reiter** über `location.hash` (`#kalender`, `#cockpit` …), nur wenn der Knopf existiert und sichtbar ist.
-5. **Zurück zum Dashboard:** gemeinsamer Knopf `.stafl-zurueck` (`app.css`) links vor dem Logo – `#btn-dashboard` im
+5. **Zurück zur Startseite:** gemeinsamer Knopf `.stafl-zurueck` (`app.css`) links im Kopf – `#btn-dashboard` im
    Eingabebereich, `#hr-zurueck`, `#crm-zurueck` auf den Modulseiten (`../../dashboard/`, auf `*.dashboard-stafl.de`
-   `https://dashboard-stafl.de/`). Pfeil `#i-back` + „Dashboard“, 36 px, rund; ≤ 560 px oder mit Klasse `kompakt` nur
+   `https://dashboard-stafl.de/`). Pfeil `#i-back` + „Start“ (seit 06.11.2026, wie der Eintrag der Seitenleiste), 36 px, rund; ≤ 560 px oder mit Klasse `kompakt` nur
    der Pfeil; im Eingabebereich mit Angebotsaktionen bis 1600 px nur der Pfeil (Platz in der Kopfzeile).
 
 Kacheln und Seitenleiste des Dashboards kommen ausschließlich aus `module_status` (Modulregister), Ziele über
@@ -454,9 +454,10 @@ schreiben, sondern als Token mit hellem und dunklem Wert.
 
 ### Rahmen „C2“ (Seitenleiste)
 
-Neue Gestaltung der Mitarbeiterseiten (Entwurf vom Inhaber freigegeben 06.11.2026; Umstellung läuft – zuerst Dashboard und
-Abmeldeseite, die Module folgen mit unveränderter Struktur): feste Seitenleiste mit allen Anwendungen, ruhige Flächen mit
-feinen Linien, wenig Schatten, kein Glas; Modulfarben nur an den Symbolen.
+Gestaltung aller Mitarbeiterseiten (Entwurf vom Inhaber freigegeben 06.11.2026): Dashboard, Abmeldeseite, Eingabebereich und
+alle Modulseiten (HR, CRM, Leergut, REWE, Qualitätssicherung, Marketing, Controlling, Sicherheit) – Aufbau, Reiter und Abläufe
+der Module unverändert. Feste Seitenleiste mit allen Anwendungen, ruhige Flächen mit feinen Linien, wenig Schatten, kein
+Glas; Modulfarben nur an den Symbolen.
 
 - **`app/assets/rahmen.js`** (`window.STAFL_RAHMEN`): `zeichnen({ module, aktiv, nutzer, start, schmal, abmelden })`
   baut die Leiste aus der Liste von `module_status` – Start, „Anwendungen“, „In Entwicklung“ (nicht freigegeben, ohne
@@ -467,8 +468,25 @@ feinen Linien, wenig Schatten, kein Glas; Modulfarben nur an den Symbolen.
 - **Aufbau einer Seite:** `<body class="… r">`, darin `<div class="r-app"><nav class="r-leiste" id="r-leiste"
   aria-label="Hauptnavigation" hidden></nav><div class="r-inhalt">…</div></div>`; Inhalt in `.r-seite` (max. 1120 px),
   Kopf als `.r-seitenkopf` mit `h1`, `.r-unterzeile` und `.r-aktionen` (runde Knöpfe `.r-rund`).
-- **Schmale Leiste** (`schmal: true`, 60 px, nur Symbole, Namen als `aria-label`/Tooltip) für Module mit eigener Navigation
-  (Eingabebereich).
+- **Modulseiten ohne eigenes Skript:** `<body class="<präfix> r" data-rahmen="<modul-id>">` – `rahmen.js` holt dann `status`
+  und `module_status` selbst (beide auf jedem Modul-Host erlaubt, GR-109: `wartung_frei` des Plattformkerns), zeichnet die
+  Leiste mit dem eigenen Modul als aktiv, Start = `user.dashboard` (nur `https:`) bzw. `/dashboard/` außerhalb von
+  `dashboard-stafl.de`, Abmelden wie auf dem Dashboard (danach lädt die Seite neu). Ohne Anmeldung oder bei einem Fehler
+  bleibt die Seite ohne Leiste. Eingabebereich: `data-rahmen="auto"` (Modul des Hosts aus `user.bereich`, z. B.
+  `bestand.intern` → Bestand), `data-rahmen-schmal` und `data-rahmen-nach="#screen-editor"` (erst zeichnen, wenn der Editor
+  sichtbar ist – Anmeldung ohne Neuladen; die Leiste liegt in `#screen-editor`, damit Anmelde- und Wartungsseite ohne Rahmen
+  bleiben).
+- **Anpassung je Modul** im eigenen Stylesheet (Abschnitt „Rahmen „C2““ am Ende von `hr.css`, `crm.css`, …, `admin.css`):
+  Glas-Werte des Moduls (`--hr-glass`, `--lg-card` …) auf die `--r-*` des Rahmens, `:root body.<präfix>.r` (Gewichtung über
+  den dunklen Angaben), Farbflächen und Unschärfe aus, Kopf flach (Logo und Nutzer stehen in der Leiste; „Start“,
+  Modulname und Knöpfe der Seite bleiben). QS-Druck: `.r-app` wie zuvor `.qm-seite` freigeben. Eingabebereich ohne Glas:
+  Scrollbereiche (`.gcard`, `.st-card` …) bekommen `position: relative`, sonst ragten unsichtbare Beschriftungen
+  (`.sr-only`) über den Rand (früher bildete `backdrop-filter` diesen Bezugsrahmen).
+- **Schmale Leiste** (60 px, nur Symbole, Namen als `aria-label`/Tooltip): `schmal: true` bzw. `data-rahmen-schmal` immer
+  (Eingabebereich mit eigener Navigation); Modulseiten erhalten `r-auto-schmal` und sind zwischen 901 und 1439 px schmal,
+  damit Tabellen auf Laptops fast ihre bisherige Breite behalten. Das Dashboard bleibt ab 901 px breit.
+- **„Start“** (gemeinsamer Knopf `.stafl-zurueck`, Beschriftung „Start“) bleibt im Kopf jeder Modulseite; im Rahmen ruhig mit
+  feiner Linie (36 px).
 - **Unter 900 px** setzt `rahmen.js` eine Kopfzeile mit Menüknopf (`#r-menue`, `aria-expanded`) vor den Inhalt; die
   Leiste wird zum Menü (unsichtbar und nicht per Tab erreichbar, solange zu). Escape, Klick daneben oder Tab aus dem
   Menü schließt es; bewegt wird sie nur beim Öffnen/Schließen (`r-bewegung`), nicht beim Wechsel der Fensterbreite.
@@ -478,7 +496,9 @@ feinen Linien, wenig Schatten, kein Glas; Modulfarben nur an den Symbolen.
 
 ### „Liquid Glass“
 
-Mitarbeiterseiten (Eingabebereich, HR, CRM und die übrigen Modulseiten bis zu ihrer Umstellung auf den Rahmen „C2“) nutzen dasselbe Muster: ruhiger warmer Grund, drei weiche
+Bis 06.11.2026 nutzten die Mitarbeiterseiten (Eingabebereich, HR, CRM und die übrigen Modulseiten) dieses Muster; im Rahmen „C2“
+überschreibt der Abschnitt am Ende jedes Stylesheets die Glas-Werte (siehe oben). Die Regeln bleiben für Seiten ohne Rahmen
+(Kundenseite, Anmeldemaske) und als Rückfall erhalten: ruhiger warmer Grund, drei weiche
 Farbflächen fest dahinter (`body.adm::before` bzw. `.db-bg`/`.hr-bg`/`.crm-bg`), Glasflächen mit
 `backdrop-filter: blur(…) saturate(…)` und einem deckenden Ersatzwert:
 

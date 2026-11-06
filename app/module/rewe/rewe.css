@@ -570,3 +570,26 @@ textarea.rw-khinweis{min-height:180px;background:var(--rw-gelb-soft);border-colo
 .rw-dvorschau{margin:0;padding:10px 12px;border-radius:12px;background:var(--rw-green-soft);color:var(--rw-green);font-size:13px;font-weight:600}
 .rw-tabelle tbody tr.rw-gewaehlt td{background:var(--rw-total-bg)}
 @media(max-width:1000px){.rw-draster.mit-edit{grid-template-columns:minmax(0,1fr)}.rw-dedit{position:static}}
+
+/* ── Rahmen „C2“ (gemeinsame Seitenleiste ../../assets/rahmen.css und rahmen.js, Entwurf freigegeben 06.11.2026) ──
+   Aufbau, Reiter und Abläufe der Seite bleiben unverändert. Neu: ruhige deckende Flächen mit feinen Linien statt Glas,
+   keine Farbflächen im Hintergrund; Logo und Nutzer stehen in der Seitenleiste, der Kopf behält „Start“, Modulname und
+   die Knöpfe der Seite. Farben kommen aus den --r-* des Rahmens (hell und dunkel); :root erhöht die Gewichtung, damit
+   die Werte auch die dunklen Angaben oben ersetzen. */
+:root body.rw.r {
+  --rw-bg: var(--r-grund); --rw-text: var(--r-text); --rw-glass: var(--r-flaeche); --rw-kopf: var(--r-grund); --rw-card: var(--r-flaeche);
+  --rw-border: var(--r-linie-2); --rw-line: var(--r-linie); --rw-gloss: transparent; --rw-shadow: var(--r-schatten);
+}
+:root body.rw.r .rw-bg { display: none; }
+body.rw.r .rw-glas { -webkit-backdrop-filter: none; backdrop-filter: none; box-shadow: var(--r-schatten); }
+body.rw.r .rw-seite { flex: 1; width: 100%; min-height: 0; box-sizing: border-box; padding: 24px 24px 40px; }
+body.rw.r .rw-kopf { position: static; padding: 0; border: 0; border-radius: 0; background: none; box-shadow: none; }
+body.rw.r :is(.rw-marke, .rw-user) { display: none; }
+body.rw.r .rw-modul { padding-left: 0; border-left: 0; font-size: 22px; font-weight: 700; letter-spacing: -.01em; }
+body.rw.r .rw-modul .i { width: 22px; height: 22px; }
+body.rw.r .rw-rund { background: var(--r-flaeche); border: 1px solid var(--r-linie-2); color: var(--r-text); }
+body.rw.r .rw-rund:hover { background: var(--r-flaeche-2); }
+@media (max-width: 900px) {
+  body.rw.r .rw-seite { padding: 16px 16px 32px; }
+  body.rw.r .rw-modul { font-size: 18px; }
+}

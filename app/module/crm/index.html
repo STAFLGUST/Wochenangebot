@@ -10,13 +10,17 @@
 <script src="../../assets/theme.js"></script>
 <script src="../../assets/format.js"></script>
 <link rel="stylesheet" href="../../assets/app.css">
+<link rel="stylesheet" href="../../assets/rahmen.css">
 <link rel="stylesheet" href="crm.css">
 </head>
-<body class="crm">
+<body class="crm r" data-rahmen="crm">
 <div class="crm-bg" aria-hidden="true"><span></span><span></span><span></span></div>
+<div class="r-app">
+<nav class="r-leiste" id="r-leiste" aria-label="Hauptnavigation" hidden></nav>
+<div class="r-inhalt">
 <div class="crm-seite">
   <header class="crm-kopf crm-glas">
-    <a class="stafl-zurueck" id="crm-zurueck" href="../../dashboard/" title="Zurück zum Dashboard" aria-label="Zurück zum Dashboard"><svg class="i" aria-hidden="true"><use href="#i-back"/></svg><span class="lbl">Dashboard</span></a>
+    <a class="stafl-zurueck" id="crm-zurueck" href="../../dashboard/" title="Zur Startseite" aria-label="Zur Startseite"><svg class="i" aria-hidden="true"><use href="#i-back"/></svg><span class="lbl">Start</span></a>
     <span class="crm-marke"><img class="brand-logo" src="../../assets/logo-standard-fleisch-kopf.png" width="428" height="96" alt="Standard-Fleisch"></span>
     <span class="crm-modul"><svg class="i" aria-hidden="true"><use href="#i-users"/></svg>CRM · Vertrieb</span>
     <div class="crm-aktionen">
@@ -55,6 +59,8 @@
     </section>
   </main>
   <footer class="crm-fuss">STAFL-Plattform · Standard-Fleisch · Kundenstammdaten aus der Verwaltung</footer>
+</div>
+</div>
 </div>
 
 <!-- Kunden-Pop-up: Übersicht (cockpit.js), Kundenblatt, Verlauf -->
@@ -114,6 +120,7 @@
   <symbol id="i-fit" viewBox="0 0 24 24"><path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5"/></symbol>
   <symbol id="i-extern" viewBox="0 0 24 24"><path d="M14 4h6v6M20 4l-9 9M18 14v5a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V7a1 1 0 0 1 1-1h5"/></symbol>
 </svg>
+<script src="../../assets/rahmen.js"></script>
 <script src="../../assets/detailkarte.js"></script>
 <script src="mhd-ware.js"></script>
 <script src="cockpit.js"></script>

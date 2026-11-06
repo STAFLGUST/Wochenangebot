@@ -2431,3 +2431,28 @@ dialog.modal.pv { width: min(1480px, calc(100vw - 32px)); height: calc(100dvh - 
 #dlg-reauth-kc .dlg-foot { flex-wrap: wrap; }
 #dlg-reauth-kc #rkc-hier { margin-right: auto; }
 .bst-karte h1 { font-size: 19px; margin: 0; font-weight: 650; letter-spacing: -.015em; }
+
+/* ==========================================================================
+   Rahmen „C2“ (gemeinsame Seitenleiste ../assets/rahmen.css und rahmen.js, Entwurf freigegeben 06.11.2026)
+   Der Eingabebereich behält seine Navigation links (Bereiche, Angebote) und alle Ansichten; davor steht die schmale
+   Leiste des Rahmens (nur Symbole). Neu: ruhige deckende Flächen statt Glas, keine Farbflächen im Grund, Kopfzeile als
+   flache Leiste statt schwebender Kapsel; das Logo steht in der Seitenleiste. Farben aus den --r-* des Rahmens (hell und
+   dunkel); :root und die doppelte Klasse heben die Gewichtung über die dunklen Angaben und „weniger Transparenz“ oben.
+   ========================================================================== */
+@media screen {
+  :root body.adm.adm.r {
+    --bg: var(--r-grund);
+    --glas: var(--r-flaeche); --glas-kopf: var(--r-grund); --glas-karte: var(--r-flaeche); --glas-stark: var(--r-flaeche); --glas-fenster: var(--r-flaeche);
+    --glas-rand: var(--r-linie); --glas-glanz: transparent; --glas-schatten: var(--r-schatten); --glas-filter: none;
+  }
+  body.adm.r::before { display: none; }
+  body.adm.r .topbar { padding: 0; }
+  body.adm.r .topbar-inner { max-width: none; border-radius: 0; padding: 12px 24px; }
+  body.adm.r .topbar-inner::before { border-radius: 0; border: 0; border-bottom: 1px solid var(--r-linie); box-shadow: none; }
+  body.adm.r .topbar .brand-logo { display: none; }
+  /* Ohne Glas fehlt der Bezugsrahmen, den backdrop-filter bisher bildete: Bereiche mit eigenem Scrollen halten unsichtbare
+     Beschriftungen (.sr-only, absolut) bei sich – sonst ragten sie über den Bildschirmrand (wie schon bei #view-schutz) */
+  body.adm.r :is(.gcard, .st-card, .lot-scroll, .vk-scroll) { position: relative; }
+  /* Handy: die Kopfzeile des Rahmens (Menü, Logo) läuft mit; angeheftet bleibt die Leiste des Eingabebereichs */
+  body.adm.r .r-mobilkopf { position: static; }
+}

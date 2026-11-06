@@ -131,7 +131,10 @@ Dunkle Farben (`prefers-color-scheme: dark`, `data-theme="dark"`) gelten nur fü
 
 Angebotsseite im Design „Liquid Glass“ (Abschnitt am Ende von `app.css`, nur `@media screen`, alle Regeln unter `body.kseite`, nur `index.html` trägt die Klasse): schwebende Glas-Kopfzeile, Umschalter als Segment, Kapseln für Fleischarten, Filter und Sortierung, Angebotsliste als Glaskarte mit abgerundeten Zeilen, Fenster als Glas; Inhalt, Aufbau und Druck unverändert.
 
-Eingabebereich im Design „Liquid Glass“ (Abschnitt am Ende von `admin.css`, nur `@media screen`, alle Regeln unter `body.adm`):
+Eingabebereich seit 06.11.2026 im gemeinsamen Rahmen „C2“ (schmale Seitenleiste vor der eigenen Navigation, Abschnitt
+„Rahmen „C2““ ganz am Ende von `admin.css`: Glas-Werte auf die ruhigen Flächen des Rahmens, keine Farbflächen, Kopfzeile flach,
+Logo in der Seitenleiste). Darunter unverändert die bisherige Gestaltung, deren Werte der Rahmen überschreibt –
+Design „Liquid Glass“ (Abschnitt am Ende von `admin.css`, nur `@media screen`, alle Regeln unter `body.adm`):
 eigene Farbwerte für Grund, Glas und Felder (`--glas`, `--glas-kopf`, `--glas-karte`, `--glas-stark`, `--glas-fenster`, `--aus`, `--feld` …),
 drei weiche Farbflächen fest hinter dem Inhalt (`body.adm::before`), Glas mit `backdrop-filter` (Kopfzeilen-Kapsel über
 `.topbar-inner::before`, damit das Menü darin eigenes Glas bleibt), Seitenleiste als Glaskarte, Karten 28 px, Angebotsliste links
@@ -184,7 +187,8 @@ zentrale Anmeldung – `deploy/anmeldung/docker-compose.anmeldung.yml` bindet de
 Inbetriebnahme der Anmeldung). Der Testlauf blendet den Ordner nur in den Gruppen mit Eintrag in `ZUSATZ`
 (`tests/run_e2e.py`) unter `/dashboard/` ein, `werkzeuge/lokal.py` ebenso. Hell/Dunkel mit demselben Speicherschlüssel wie die Angebotsseite.
 Gestaltung „C2“ (Entwurf vom Inhaber freigegeben 06.11.2026) im gemeinsamen Rahmen `app/assets/rahmen.css` und
-`app/assets/rahmen.js` (Plattformkern, für alle Mitarbeiterseiten gedacht; die Module folgen mit unveränderter Struktur):
+`app/assets/rahmen.js` (Plattformkern, gemeinsam für alle Mitarbeiterseiten – Eingabebereich und Modulseiten binden ihn mit
+`data-rahmen` am `body` ein und behalten Aufbau, Reiter und Abläufe; Einzelheiten `docs/entwickler/06-oberflaechen.md`):
 links eine feste Seitenleiste (208 px) mit Start, „Anwendungen“, „In Entwicklung“ (Klebeband „Bald“, ohne Verweis) und
 „Verwaltung & Daten“, unten Name, Rolle und Abmelden; sie entsteht aus derselben Liste von `module_status` wie die
 Kacheln (`STAFL_RAHMEN.zeichnen`), Module ohne Modulzugang der Rolle fehlen. Unter 900 px wird sie zum Menü (Kopfzeile
