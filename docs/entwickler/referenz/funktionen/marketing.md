@@ -2,7 +2,7 @@
 
 <!-- ERZEUGT von `python3 werkzeuge/doku.py erzeugen` – nicht von Hand ändern. Quelle: Funktionen und Kommentare im Code. Die CI prüft, dass diese Datei zum Code passt. -->
 
-4 Dateien, 76 Funktionen – in der Reihenfolge der Datei, **fett** die Abschnitte. Text = erste Aussage des Kommentars direkt über der Funktion (Python: Docstring). Übersicht aller Module: [README.md](README.md).
+4 Dateien, 77 Funktionen – in der Reihenfolge der Datei, **fett** die Abschnitte. Text = erste Aussage des Kommentars direkt über der Funktion (Python: Docstring). Übersicht aller Module: [README.md](README.md).
 
 ## `app/api/aktionen/marketing.php`
 
@@ -26,7 +26,8 @@ _Marketing · Redaktionsplan_
 - `mkt_schreiben(name, doc)`
 - `mkt_id(praefix)`
 - `mkt_ids(liste)`
-- `mkt_team()` – Mitarbeiter, die Beiträge bearbeiten dürfen (wählbar als Verantwortliche) – Schnittstelle der Plattform (users_load)
+- `mkt_startseite(me)` – Startseite des Dashboards („Heute für Sie“, lib/startseite.php): mit marketing.freigeben die Beiträge „Zur Freigabe“ (ein Sammelpunkt), dazu eigene Beiträge …
+- `mkt_team()`
 
 **Prüfen der Eingaben**
 

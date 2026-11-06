@@ -746,6 +746,44 @@ function qs_pruefungen_aus(array $plan, array $nachweise, string $heute): array
     return array_map(function ($p) use ($np, $heute) { return $p + ['faellig' => qs_faelligkeit($p, $np[$p['id']] ?? [], $heute)]; }, $plan);
 }
 
+/* Startseite des Dashboards („Heute für Sie“, lib/startseite.php): eigene Prüfungen (eingeteilt wie in „Ihre Aufgaben“ der
+   Übersicht, qs_pruefung_meine) mit offener Fälligkeit nach qs_faelligkeit_kern – rot = überfällig bzw. zuletzt versäumt,
+   heute fällig, gelb = demnächst – und eigene Maßnahmen (Kürzel unter „Zuständig“) mit Frist. Nur mit qs.sehen. */
+function qs_startseite(array $me): array
+{
+    if (!may($me, 'qs.sehen')) return [];
+    $heute = qs_heute(); $stamm = qs_stamm(); $id = (string)$me['id']; $out = [];
+    if (may($me, 'qs.nachweis') || may($me, 'qs.bearbeiten')) {
+        $np = qs_nachweise_nach_pruefung(qs_doc('qs-nachweise')['liste']);
+        foreach (qs_doc('qs-pruefplan')['liste'] as $p) {
+            if (empty($p['aktiv']) || ($p['intervall'] ?? '') === 'anlass' || !qs_pruefung_meine($p, $stamm, $id)) continue;
+            $f = qs_faelligkeit_kern($p, $np[(string)$p['id']] ?? [], $heute);
+            if ($f['ampel'] === 'rot') $art = 'ueberfaellig';
+            elseif ($f['offen'] && $f['restTage'] === 0) $art = 'heute';
+            elseif ($f['offen'] && $f['ampel'] === 'gelb') $art = 'demnaechst';
+            else continue;
+            $n = (int)$f['versaeumtAnzahl'];
+            $detail = $art === 'heute' ? 'heute fällig'
+                : ($art === 'demnaechst' ? 'fällig bis ' . startseite_de($f['naechste'])
+                : ($f['restTage'] !== null && $f['restTage'] < 0 ? -$f['restTage'] . ($f['restTage'] === -1 ? ' Tag' : ' Tage') . ' überfällig'
+                : ($n ? $n . '× versäumt' . ($f['offen'] && $f['restTage'] === 0 ? ' · heute fällig' : '') : 'fällig')));
+            $out[] = ['art' => $art, 'titel' => 'Prüfung: ' . $p['titel'], 'detail' => $detail, 'datum' => $f['naechste'], 'ziel' => 'pruefplan'];
+        }
+    }
+    $kuerzel = qs_kuerzel_von($stamm, $id);
+    if ($kuerzel) foreach (qs_doc('qs-massnahmen')['liste'] as $m) {
+        $frist = (string)($m['frist'] ?? '');
+        if (!in_array($m['status'] ?? 'offen', ['offen', 'in_arbeit'], true) || $frist === '') continue;
+        if (!array_intersect($kuerzel, preg_split('/[\s\/,;]+/', (string)($m['zustaendig'] ?? '')))) continue;
+        $art = startseite_art(qs_tage_bis($heute, $frist), 7);
+        if ($art === '') continue;
+        $was = trim((string)($m['massnahme'] ?? '')) !== '' ? (string)$m['massnahme'] : (string)($m['feststellung'] ?? '');
+        $out[] = ['art' => $art, 'titel' => 'Maßnahme ' . ($m['nr'] ?? '') . ': ' . mb_strimwidth(preg_replace('/\s+/', ' ', $was), 0, 70, '…'),
+                  'detail' => ($art === 'ueberfaellig' ? 'Frist abgelaufen am ' : 'Frist ') . startseite_de($frist), 'datum' => $frist, 'ziel' => 'massnahmen'];
+    }
+    return $out;
+}
+
 /* ---------- CSV (Excel) ---------- */
 function qs_csv_zelle($v): string
 {

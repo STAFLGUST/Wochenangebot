@@ -2,7 +2,7 @@
 
 <!-- ERZEUGT von `python3 werkzeuge/doku.py erzeugen` – nicht von Hand ändern. Quelle: Funktionen und Kommentare im Code. Die CI prüft, dass diese Datei zum Code passt. -->
 
-4 Dateien, 128 Funktionen – in der Reihenfolge der Datei, **fett** die Abschnitte. Text = erste Aussage des Kommentars direkt über der Funktion (Python: Docstring). Übersicht aller Module: [README.md](README.md).
+4 Dateien, 130 Funktionen – in der Reihenfolge der Datei, **fett** die Abschnitte. Text = erste Aussage des Kommentars direkt über der Funktion (Python: Docstring). Übersicht aller Module: [README.md](README.md).
 
 ## `app/api/aktionen/leergut.php`
 
@@ -63,6 +63,8 @@ _Leergut · Leergutkonten und Abstimmung_
 
 - `lg_abstimmung_pruefen(b, alt, stamm)`
 - `lg_abstimmung_aus(a, nachPartner, heute)` – Abstimmung für die Oberfläche: unser Saldo zum Stichtag (heute gerechnet), Differenz, Fristampel
+- `lg_frist_tage(fristBis, heute)` – Tage bis zur Frist eines Auszugs (negativ = abgelaufen)
+- `lg_startseite(me)` – Startseite des Dashboards („Heute für Sie“, lib/startseite.php): offene Auszüge mit Frist für Mitarbeiter, die abstimmen dürfen (leergut.bearbeiten) – …
 
 **Konten (Übersicht je Partner)**
 

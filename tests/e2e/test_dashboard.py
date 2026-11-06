@@ -1,20 +1,22 @@
 """Mitarbeiter-Dashboard (dashboard/, Roadmap PR 6) im gemeinsamen Rahmen „C2“ (app/assets/rahmen.css, rahmen.js):
-Kacheln und Seitenleiste aus dem Modulregister, Stand, Wartung, Abmeldung, Begrüßung, kompakte Kacheln ohne Unterzeile,
-Klebeband „Bald“ für nicht freigegebene Anwendungen, schmale Leiste, Menü am Handy, hell/dunkel, 390 px.
+Startseite mit Favoriten (kompakte Kacheln, „Bearbeiten“ am Konto), „Heute für Sie“ (offene Punkte der Module nach Rechten,
+Aktion start_heute), Schnellaktionen, „Zuletzt bearbeitet“, Hinweisen zu Wartungen; Seitenleiste aus dem Modulregister mit
+Suche (Strg K) und Zahlen je Anwendung, Stand, Wartung, Abmeldung, Begrüßung, Klebeband „Bald“, schmale Leiste, Menü am Handy,
+hell/dunkel, 390 px.
 
-Das Dashboard liegt außerhalb der Dokumentwurzel; der Testlauf blendet es nur für diese Gruppe unter /dashboard/ ein. Kachel
-und Eintrag der Seitenleiste sind nur Anzeige – die Sperre setzt der Server durch (GR-102, GR-103).
+Das Dashboard liegt außerhalb der Dokumentwurzel; der Testlauf blendet es nur für diese Gruppe unter /dashboard/ ein. Kachel,
+offener Punkt und Eintrag der Seitenleiste sind nur Anzeige – die Sperre setzt der Server durch (GR-102, GR-103).
 """
 import json
 import os
 import sys
-from datetime import datetime
+from datetime import date, datetime, timedelta
 from zoneinfo import ZoneInfo
 
 from playwright.sync_api import sync_playwright
 
 from kunden_hilfe import Client, B
-from umgebung import SH
+from umgebung import SH, storage_write
 
 PW = 'Sicheres-Passwort-1'
 res = []
@@ -27,8 +29,126 @@ def check(n, c, i=''):
 A = Client('198.51.100.2')
 check('Administrator angemeldet', A.call('login', {'username': 'admin', 'password': PW})[0] == 200)
 A.call('user_save', {'id': '', 'name': 'Erika Editor', 'username': 'erika', 'role': 'editor', 'active': True, 'password': 'Editor-Zugang-77', 'mustChange': False})
-# Anwendungen in der Reihenfolge des Registers, danach der Bereich „Verwaltung & Daten“ (dashboard_gruppe)
-REIHE = ['angebot', 'bestand', 'leergut', 'crm', 'rewe', 'qs', 'einkauf', 'containerimport', 'hr', 'marketing', 'controlling', 'import', 'verwaltung', 'sicherheit']
+storage_write('vertreter', {'rev': 1, 'groups': [{'nr': '11', 'name': 'Vera Vertrieb', 'kurz': 'VV', 'telefon': '', 'plz': '', 'ort': '', 'land': ''}]})
+A.call('user_save', {'id': '', 'name': 'Fritz Freigabe', 'username': 'fritz', 'role': 'editor', 'active': True, 'password': 'Freigabe-Zugang-77', 'mustChange': False,
+                     'grant': ['marketing.sehen', 'marketing.bearbeiten', 'marketing.freigeben']})
+A.call('user_save', {'id': '', 'name': 'Vera Vertrieb', 'username': 'vera', 'role': 'editor', 'active': True, 'password': 'Vertrieb-Zugang-77', 'mustChange': False,
+                     'grant': ['crm.sehen'], 'vertreter': '11'})
+IDS = {u['username']: u['id'] for u in A.call('users')[1]['users']}
+ADMIN = IDS['admin']
+HEUTE = date.today()
+
+
+def tag(n):
+    return (HEUTE + timedelta(days=n)).isoformat()
+
+
+# ── Testdaten für „Heute für Sie“: je Modul ein offener Punkt (nur über die Schnittstellen der Module) ──
+# HR: Antrag von Erika (nächstes Jahr), zu entscheiden vom Administrator
+rev = A.call('mitarbeiter_hr')[1]['rev']
+check('HR: Urlaubsanspruch für Erika gesetzt', A.call('mitarbeiter_hr_save', {'nutzer': IDS['erika'], 'rev': rev, 'jahr': HEUTE.year + 1, 'anspruch': 30})[0] == 200)
+E = Client('198.51.100.3'); E.call('login', {'username': 'erika', 'password': 'Editor-Zugang-77'})
+FEB = date(HEUTE.year + 1, 2, 1)
+while FEB.weekday() != 0:
+    FEB += timedelta(days=1)
+st, r = E.call('hr_antrag', {'von': FEB.isoformat(), 'bis': (FEB + timedelta(days=4)).isoformat(), 'vertretung': ADMIN})
+check('HR: Urlaubsantrag von Erika gestellt', st == 200, (st, r))
+# QS: Kapitel, Kürzel des Administrators, tägliche Prüfung (heute fällig), jährliche Prüfung (2 Tage überfällig), Maßnahme über der Frist
+check('QS: Kapitel und Kürzel', A.call('qs_stamm_save', {'kapitel': [{'id': '1.1', 'titel': 'Managementsystem'}, {'id': '4.2', 'titel': 'Hygiene'}],
+                                                        'personen': [{'id': 'AD', 'name': 'Administrator', 'mitarbeiter': ADMIN}]})[0] == 200)
+PRUEF = {'beschreibung': 'laut Plan', 'sollwert': 'in Ordnung', 'massnahme': 'melden', 'womit': 'Liste', 'zustaendig': 'AD', 'vertreter': ''}
+check('QS: Prüfungen angelegt', A.call('qs_pruefung_save', {**PRUEF, 'kapitel': '4.2', 'titel': 'Temperatur Kühlraum 2', 'intervall': 'taeglich', 'start': tag(0)})[0] == 200
+      and A.call('qs_pruefung_save', {**PRUEF, 'kapitel': '1.1', 'titel': 'Kalibrierung Waagen', 'intervall': 'jaehrlich', 'start': tag(-2)})[0] == 200)
+st, r = A.call('qs_massnahme_save', {'quelle': 'intern', 'bezug': 'Audit', 'kapitel': '1.1', 'anforderung': '4.8.2', 'bewertung': 'B', 'feststellung': 'Thermometer nicht kalibriert',
+                                     'massnahme': 'Kalibrierplan erstellen', 'zustaendig': 'AD', 'frist': tag(-2), 'status': 'offen'})
+check('QS: Maßnahme mit abgelaufener Frist', st == 200, (st, r))
+# Leergut: Auszug mit abgelaufener Frist (Eingang vor 16 Tagen, Frist 14 Tage)
+st, r = A.call('leergut_partner_save', {'name': 'Spedition Nord', 'art': 'spedition', 'mandant': 'standard', 'kontoNr': '4711', 'fristTage': 14,
+                                        'email': 'leergut@example.invalid', 'lademittel': ['e2', 'eu']})
+check('Leergut: Auszug mit abgelaufener Frist', st == 200 and A.call('leergut_abstimmung_save', {'partner': r['partner']['id'], 'stichtag': tag(-30), 'eingang': tag(-16),
+                                                                                                    'saldo': {'e2': 8}, 'quelle': 'Mail', 'notiz': ''})[0] == 200, r)
+# REWE: zwei Märkte in der eigenen Liste, noch ohne Antwort
+LW = A.call('rewe_start')[1]['lieferwege'][0]['id']
+for i in range(2):
+    st, r = A.call('rewe_markt_save', {'name': f'REWE Testmarkt {i}', 'kdNr': f'17990{i}9', 'strasse': 'Marktweg 1', 'plz': '20001', 'ort': 'Musterstadt', 'lieferweg': LW, 'zustaendig': ADMIN})
+    check(f'REWE: Markt {i} angelegt', st == 200, (st, r))
+# Marketing: Beitrag zur Freigabe (morgen) und eigener Beitrag in Produktion (übermorgen)
+check('Marketing: Beiträge angelegt', A.call('marketing_beitrag_save', {'felder': {'titel': 'Herbstaktion Rinderbraten', 'veroeffentlichung': tag(1)}, 'status': 'freigabe'})[0] == 200
+      and A.call('marketing_beitrag_save', {'felder': {'titel': 'Rezept-Video Gulasch', 'veroeffentlichung': tag(2), 'verantwortlich': ADMIN}, 'status': 'produktion'})[0] == 200)
+# CRM: Interessent von Vera (Vertreter 11) mit Wiedervorlage in zwei Tagen
+st, r = A.call('crm_interessent_save', {'firma': 'Grillhaus am Hafen', 'plz': '22765', 'ort': 'Hamburg', 'vertreter': '11'})
+check('CRM: Interessent angelegt', st == 200, (st, r))
+check('CRM: Wiedervorlage gesetzt', A.call('crm_kunde_save', {'key': r['kunde']['key'], 'felder': {'wiedervorlage': tag(2), 'naechsterSchritt': 'Probepaket nachfassen'}})[0] == 200)
+
+# ── Schnittstelle start_heute: Punkte nach Rechten und Modulzugang (GR-103), Zahlen, Schnellaktionen, Zuletzt, Favoriten ──
+st, H = A.call('start_heute')
+check('start_heute: Administrator 200', st == 200 and H.get('ok'), (st, H))
+PUNKTE = H.get('punkte', [])
+mod = lambda liste: sorted({p['modul'] for p in liste})
+check('Administrator: offene Punkte aus HR, Leergut, Marketing, QS und REWE (CRM nur mit Vertreternummer)', mod(PUNKTE) == ['hr', 'leergut', 'marketing', 'qs', 'rewe'], PUNKTE)
+arten = [p['art'] for p in PUNKTE]
+check('Reihenfolge: überfällig vor heute vor demnächst', arten == sorted(arten, key=['ueberfaellig', 'heute', 'demnaechst'].index), arten)
+p_ = {(p['modul'], p['titel']): p for p in PUNKTE}
+check('Leergut: Auszug mit abgelaufener Frist überfällig, Ziel Reiter „Abstimmungen“', (lambda x: x and x['art'] == 'ueberfaellig' and x['datum'] == tag(-2)
+      and x['ziel'] == 'abstimmungen')(p_.get(('leergut', 'Auszug abstimmen: Spedition Nord'))), PUNKTE)
+massn = [p for p in PUNKTE if p['modul'] == 'qs' and p['titel'].startswith('Maßnahme ') and p['titel'].endswith(': Kalibrierplan erstellen')]
+check('QS: eigene Prüfungen (überfällig bzw. heute fällig) und eigene Maßnahme über der Frist',
+      p_.get(('qs', 'Prüfung: Kalibrierung Waagen'), {}).get('art') == 'ueberfaellig' and p_.get(('qs', 'Prüfung: Kalibrierung Waagen'), {}).get('detail') == '2 Tage überfällig'
+      and p_.get(('qs', 'Prüfung: Temperatur Kühlraum 2'), {}).get('art') == 'heute' and len(massn) == 1 and massn[0]['art'] == 'ueberfaellig'
+      and massn[0]['ziel'] == 'massnahmen', PUNKTE)
+hr_p = p_.get(('hr', 'Antrag entscheiden'), {})
+check('HR: Sammelpunkt „Antrag entscheiden“ ohne Namen und Art (Personaldaten)', hr_p.get('art') == 'heute' and hr_p.get('anzahl') == 1 and hr_p.get('ziel') == 'antraege'
+      and 'Erika' not in json.dumps(hr_p) and 'Urlaub' not in json.dumps(hr_p), hr_p)
+check('Marketing: Freigabe (heute) und eigener Beitrag (demnächst)', p_.get(('marketing', 'Beitrag freigeben'), {}).get('art') == 'heute'
+      and p_.get(('marketing', 'Beitrag: Rezept-Video Gulasch'), {}).get('art') == 'demnaechst', PUNKTE)
+rw = p_.get(('rewe', '2 Märkte ohne Antwort'), {})
+check('REWE: Märkte der eigenen Liste ohne Antwort als Sammelpunkt', rw.get('anzahl') == 2 and rw.get('ziel') == 'woche' and rw.get('art') in ('heute', 'demnaechst'), rw)
+Z = H.get('zahlen', {})
+check('Zahlen je Modul (für die Seitenleiste) und gesamt', Z.get('qs') == {'offen': 3, 'ueberfaellig': 2} and Z.get('leergut') == {'offen': 1, 'ueberfaellig': 1}
+      and Z.get('rewe') == {'offen': 2, 'ueberfaellig': 0} and H.get('gesamt') == {'offen': 9, 'ueberfaellig': 3}, (Z, H.get('gesamt')))
+check('Schnellaktionen des Administrators in fester Reihenfolge', [a['titel'] for a in H.get('aktionen', [])] == ['Wochenangebot bearbeiten', 'Urlaub beantragen',
+      'Wiedervorlagen ansehen', 'Daten importieren', 'Prüfnachweis erfassen', 'REWE-Wochenabfrage', 'Leergut abstimmen', 'Redaktionsplan'], H.get('aktionen'))
+zl = H.get('zuletzt', [])
+check('Zuletzt bearbeitet: eigene Änderungen, neueste zuerst, ohne Vorsatz des Moduls, höchstens sechs',
+      0 < len(zl) <= 6 and zl[0]['modul'] == 'crm' and all(not x['text'].startswith(('CRM:', 'REWE:', 'Marketing:')) for x in zl) and zl == sorted(zl, key=lambda x: x['zeit'], reverse=True), zl)
+check('Zuletzt bearbeitet: keine Einträge anderer Mitarbeiter', all('Antrag' not in x['text'] for x in zl), zl)
+check('Favoriten noch nicht gewählt (Standard)', H.get('favoriten') is None, H.get('favoriten'))
+
+st, he = E.call('start_heute')
+check('Bearbeiter: keine Punkte aus Modulen ohne Recht (kein Genehmigen, nicht in QS eingeteilt, kein Leergut, keine REWE-Liste)', st == 200 and he['punkte'] == []
+      and he['gesamt'] == {'offen': 0, 'ueberfaellig': 0}, he.get('punkte'))
+check('Bearbeiter: nur Schnellaktionen mit Recht', [a['titel'] for a in he['aktionen']] == ['Wochenangebot bearbeiten', 'Urlaub beantragen', 'Daten importieren'], he['aktionen'])
+check('Bearbeiter: eigener Urlaubsantrag unter „Zuletzt bearbeitet“, maskiert (ohne Recht „HR verwalten“)', any(x['modul'] == 'hr' and x['text'] == 'Vorgang der Urlaubsverwaltung'
+      for x in he['zuletzt']), he['zuletzt'])
+V = Client('198.51.100.4'); V.call('login', {'username': 'vera', 'password': 'Vertrieb-Zugang-77'})
+st, hv = V.call('start_heute')
+check('Vertrieb: Wiedervorlage des eigenen Interessenten (Vertreter 11), demnächst', st == 200 and [(p['modul'], p['art'], p['titel'], p['detail'], p['ziel']) for p in hv['punkte']]
+      == [('crm', 'demnaechst', 'Wiedervorlage: Grillhaus am Hafen', 'Probepaket nachfassen', 'wiedervorlagen')], hv.get('punkte'))
+F = Client('198.51.100.5'); F.call('login', {'username': 'fritz', 'password': 'Freigabe-Zugang-77'})
+check('Freigabe Marketing: Beitrag zur Freigabe sichtbar', [p['titel'] for p in F.call('start_heute')[1]['punkte']] == ['Beitrag freigeben'])
+st, r = A.call('modul_wartung_save', {'bereich': 'marketing.intern', 'active': True, 'grund': 'Test Startseite', 'message': 'Gleich zurück.'})
+st2, hf = F.call('start_heute')
+check('Marketing in Wartung: keine Punkte aus Marketing für Mitarbeiter (nur Module mit nutzbarer Kachel), Startseite antwortet weiter', st == 200 and st2 == 200
+      and hf['punkte'] == [] and not [a for a in hf['aktionen'] if a['modul'] == 'marketing'], hf)
+check('Wartung Marketing beendet', A.call('modul_wartung_save', {'bereich': 'marketing.intern', 'active': False, 'grund': 'fertig'})[0] == 200)
+
+# Favoriten am Konto: nur Anwendungen mit Kachel, ohne Doppelte, höchstens acht, nur mit Sicherheitsprüfung
+check('Favoriten: ohne Anmeldung 401', Client('198.51.100.6').call('start_heute')[0] == 401 and Client('198.51.100.6').call('start_favoriten_save', {'favoriten': []})[0] in (401, 403))
+for name, b in (('unbekannte Anwendung', {'favoriten': ['gibtsnicht']}), ('Bereich ohne Kachel', {'favoriten': ['plattform']}), ('keine Liste', {'favoriten': 'crm'}),
+                ('mehr als acht', {'favoriten': ['angebot', 'bestand', 'leergut', 'crm', 'rewe', 'qs', 'hr', 'marketing', 'controlling']}), ('Zahl statt Kennung', {'favoriten': [1]})):
+    check(f'Favoriten: {name} → 422', E.call('start_favoriten_save', b)[0] == 422)
+check('Favoriten: nur per POST', E.call('start_favoriten_save')[0] == 405)
+check('Favoriten: ohne Angabe → 422', E.call('start_favoriten_save', {})[0] == 422)
+csrf, E.csrf = E.csrf, ''
+check('Favoriten: ohne Sicherheitsprüfung (CSRF) 403', E.call('start_favoriten_save', {'favoriten': ['hr']})[0] == 403)
+E.csrf = csrf
+st, r = E.call('start_favoriten_save', {'favoriten': ['hr', 'crm', 'hr']})
+E2 = Client('198.51.100.7')
+check('Favoriten gespeichert (ohne Doppelte), am Konto (auch in einer neuen Sitzung)', st == 200 and r['favoriten'] == ['hr', 'crm']
+      and E2.call('login', {'username': 'erika', 'password': 'Editor-Zugang-77'})[0] == 200 and E2.call('start_heute')[1]['favoriten'] == ['hr', 'crm'], r)
+check('Favoriten: leere Liste erlaubt (bewusst keine)', E.call('start_favoriten_save', {'favoriten': []})[1].get('favoriten') == [] and E2.call('start_heute')[1]['favoriten'] == [])
+check('Favoriten: null = zurück zum Standard', E.call('start_favoriten_save', {'favoriten': None})[0] == 200 and E2.call('start_heute')[1]['favoriten'] is None)
+# Freigegebene Anwendungen in der Reihenfolge des Registers (Seitenleiste „Anwendungen“)
 FREI = ['angebot', 'bestand', 'leergut', 'crm', 'rewe', 'qs', 'hr', 'marketing', 'controlling']
 fehler = []
 
@@ -45,12 +165,16 @@ def anmelden(br, user, pw, ip, breite=1280, dunkel=False, uhr=None):
     pg.wait_for_selector('#screen-auth', state='hidden')
     if uhr:   # feste Uhrzeit nur für das Dashboard (Begrüßung, Datum); Zeitgeber laufen weiter
         pg.clock.set_fixed_time(uhr)
-    pg.goto(B + '/dashboard/'); pg.wait_for_selector('#db-grid .db-tile')
+    pg.goto(B + '/dashboard/'); bereit(pg)
     return ctx, pg
 
 
+def bereit(pg):   # Seite fertig: Favoriten am Konto bekannt, offene Punkte geladen
+    pg.wait_for_selector('#db-heute-liste[aria-busy="false"]'); pg.wait_for_selector('#db-grid .db-tile[data-modul], #db-grid .db-leer')
+
+
 def kacheln(pg):
-    return pg.eval_on_selector_all('#db-bereich .db-tile', '''els => els.map(e => ({id: e.dataset.modul, tag: e.tagName, href: e.getAttribute('href'),
+    return pg.eval_on_selector_all('#db-grid .db-tile[data-modul]', '''els => els.map(e => ({id: e.dataset.modul, tag: e.tagName, href: e.getAttribute('href'),
         name: e.querySelector('.db-name').textContent, badge: e.querySelector('.db-badge').textContent, badgeCls: e.querySelector('.db-badge').className,
         badgeSichtbar: e.querySelector('.db-badge').getBoundingClientRect().width > 2,
         bald: (e.querySelector('.r-bald') || {}).textContent || '', baldVersteckt: (e.querySelector('.r-bald') || {getAttribute: () => null}).getAttribute('aria-hidden'),
@@ -80,14 +204,16 @@ KONTRAST = '''(sels) => {
     const g = grund(el), t = ueber(rgba(getComputedStyle(el).color), g), [h, d] = [lum(t), lum(g)].sort((x, y) => y - x);
     return [s, Math.round((h + .05) / (d + .05) * 100) / 100]; });
 }'''
-TEXTE = ['#db-datum', '#db-titel', '#db-sub', '#db-apps-titel', '#db-grid [data-modul="angebot"] .db-name', '#db-grid [data-modul="containerimport"] .db-name',
-         '#db-grid [data-modul="containerimport"] .db-badge', '#db-grid .r-bald', '#r-leiste .r-gruppe-titel', '#r-leiste [data-modul="angebot"] .r-text',
+TEXTE = ['#db-datum', '#db-titel', '#db-sub', '#db-fav-titel', '#db-fav-bearbeiten', '#db-grid [data-modul="angebot"] .db-name', '#db-grid .db-zahl',
+         '#db-heute-titel', '#db-heute-zahl', '.db-gruppe.ueberfaellig .db-gruppe-titel', '.db-gruppe.heute .db-gruppe-titel', '.db-zeile-titel', '.db-zeile-meta',
+         '.db-zeile-datum.ueberfaellig', '.db-zeile-datum.heute', '#db-heute-alle', '#db-aktionen-liste .db-zeile-titel', '#db-zuletzt-liste .db-zeile-meta',
+         '#r-leiste .r-bald', '#r-leiste .r-gruppe-titel', '#r-leiste [data-modul="angebot"] .r-text', '#r-leiste .r-zahl', '#r-leiste .r-zahl-rot', '#r-suche .r-text',
          '#r-leiste [data-modul="einkauf"] .r-text', '#r-leiste [data-modul="start"] .r-text', '#r-initialen', '#r-nutzer-name', '#r-rolle', '.db-fuss']
 
 
 def kontrast_ok(pg, name):
     werte = pg.evaluate(KONTRAST, TEXTE)
-    check(f'{name}: Textkontrast mindestens 4,5:1 (Seite, Kacheln, Seitenleiste)', all(w >= 4.5 for _, w in werte), werte)
+    check(f'{name}: Textkontrast mindestens 4,5:1 (Seite, Kacheln, Listen, Seitenleiste)', all(w >= 4.5 for _, w in werte), werte)
 
 
 # Wörter, die über eine Zeile hinaus umbrechen (mitten im Wort getrennt), je Kachelname; Notlösung (db-name-umbruch) getrennt
@@ -96,7 +222,7 @@ WORT_GETRENNT = """[...document.querySelectorAll('#db-bereich .db-name')].map(e 
   for (const m of text.matchAll(/\\S+/g)) { const r = document.createRange(); r.setStart(t, m.index); r.setEnd(t, m.index + m[0].length);
     if (new Set([...r.getClientRects()].map(q => Math.round(q.top))).size > 1) getrennt.push(m[0]); }
   return [e.textContent, getrennt, e.classList.contains('db-name-umbruch'), parseFloat(getComputedStyle(e).fontSize), getComputedStyle(e).hyphens]; })"""
-UEBERLAUF = "[...document.querySelectorAll('.db-name, #r-leiste .r-text')].filter(e => e.offsetParent && e.scrollWidth > e.clientWidth + 1).map(e => e.textContent)"
+UEBERLAUF = "[...document.querySelectorAll('.db-name, #r-leiste .r-text, .db-zeile-titel, .db-zeile-meta')].filter(e => e.offsetParent && e.scrollWidth > e.clientWidth + 1).map(e => e.textContent)"
 
 
 def bilder(pg):   # auf zwei Bilder warten: ResizeObserver und Neuberechnung nach einer Größenänderung
@@ -110,100 +236,71 @@ with sync_playwright() as pw:
     ctx = br.new_context(viewport={'width': 1280, 'height': 900}, extra_http_headers={'X-Forwarded-For': '198.51.100.40'})
     pg = ctx.new_page(); pg.on('pageerror', lambda e: fehler.append(str(e)))
     pg.goto(B + '/dashboard/'); pg.wait_for_selector('#db-login:not([hidden])')
-    check('ohne Anmeldung: Anmeldehinweis sichtbar, Kachelbereich und Seitenleiste verborgen', pg.is_hidden('#db-bereich') and pg.is_hidden('#r-leiste')
+    check('ohne Anmeldung: Anmeldehinweis sichtbar, Startseite und Seitenleiste verborgen', pg.is_hidden('#db-bereich') and pg.is_hidden('#r-leiste')
           and not pg.evaluate("document.querySelector('.r-app').classList.contains('r-bereit')"))
     check('Anmeldehinweis führt zur Mitarbeiter-Anmeldung', (pg.get_attribute('#db-login a', 'href') or '').endswith('/admin/'), pg.get_attribute('#db-login a', 'href'))
-    check('keine Kacheln und keine Einträge ohne Anmeldung', pg.locator('#db-grid .db-tile').count() == 0 and pg.locator('#r-leiste .r-eintrag').count() == 0)
+    check('keine Kacheln und keine Einträge ohne Anmeldung', pg.locator('#db-grid .db-tile[data-modul]').count() == 0 and pg.locator('#r-leiste .r-eintrag').count() == 0)
     knopf = pg.evaluate("[document.querySelector('.db-login-i').getBoundingClientRect().width, getComputedStyle(document.querySelector('#db-login a')).textDecorationLine, !!document.querySelector('#db-login img.r-logo')]")
     check('Anmeldehinweis: Logo, Schloss-Symbol 28 px, Knopf ohne Unterstreichung', knopf == [28, 'none', True], knopf)
+    pg.keyboard.press('Control+k')
+    check('ohne Anmeldung: keine Suche (Strg K tut nichts)', pg.locator('#r-palette[open]').count() == 0)
     ctx.close()
 
-    # ── Administrator: vierzehn Kacheln und die Seitenleiste aus dem Register ──
+    # ── Administrator: Favoriten (Standard), Heute für Sie, Schnellaktionen, Zuletzt bearbeitet, Seitenleiste ──
     ctx, pg = anmelden(br, 'admin', PW, '198.51.100.41')
     k = kacheln(pg)
-    check('vierzehn Kacheln in der Reihenfolge des Modulregisters, Verwaltung & Daten zuletzt', [x['id'] for x in k] == REIHE, [x['id'] for x in k])
-    bereiche = pg.evaluate("""[[...document.querySelectorAll('#db-grid .db-tile')].map(t => t.dataset.modul),
-        [...document.querySelectorAll('#db-grid-verwaltung .db-tile')].map(t => t.dataset.modul), document.querySelector('#db-verwaltung-titel').textContent,
-        document.querySelector('#db-verwaltung').getBoundingClientRect().top > Math.max(...[...document.querySelectorAll('#db-grid .db-tile')].map(t => t.getBoundingClientRect().bottom)),
-        [...document.querySelectorAll('#db-bereich .db-tile')].every(t => getComputedStyle(t).flexDirection === 'row' && t.querySelector('.db-ico').getBoundingClientRect().right <= t.querySelector('.db-name').getBoundingClientRect().left)]""")
-    check('Import, Verwaltung und Sicherheit im eigenen Bereich „Verwaltung & Daten“ unter den Anwendungen; kompakte Kacheln (Symbol links, Name rechts)',
-          bereiche[0] == REIHE[:-3] and bereiche[1] == ['import', 'verwaltung', 'sicherheit'] and bereiche[2] == 'Verwaltung & Daten' and bereiche[3] and bereiche[4], bereiche)
-    check('Kachelnamen aus dem Register', [x['name'] for x in k][:2] == ['Angebot', 'Bestand'], [x['name'] for x in k])
-    unter = pg.evaluate("[...document.querySelectorAll('#db-bereich a.db-tile')].map(t => [t.dataset.modul, [...t.querySelectorAll('.db-text > *')].filter(e => e.getBoundingClientRect().width > 2).length])")
-    check('keine Unterzeile unter verfügbaren Kacheln (nur der Name ist sichtbar, keine Beschreibung)', unter and all(n == 1 for _, n in unter)
-          and pg.locator('#db-bereich .db-desc').count() == 0, unter)
-    ang = k[0]
-    check('Angebot: verfügbar, als Verweis auf die Mitarbeiter-Eingabe (Testserver: gleicher Host)', ang['tag'] == 'A' and ang['href'] == '/admin/' and ang['badge'] == 'Verfügbar', ang)
+    check('Favoriten ohne eigene Wahl: die ersten vier Anwendungen des Registers (ohne Verwaltung & Daten)', [x['id'] for x in k] == ['angebot', 'bestand', 'leergut', 'crm'], [x['id'] for x in k])
+    check('Favoriten: kompakte Kacheln (Symbol links, Name rechts), Namen aus dem Register', pg.evaluate("""[...document.querySelectorAll('#db-grid .db-tile')].every(t => getComputedStyle(t).flexDirection === 'row'
+          && t.querySelector('.db-ico').getBoundingClientRect().right <= t.querySelector('.db-name').getBoundingClientRect().left)""") and [x['name'] for x in k] == ['Angebot', 'Bestand', 'Leergut', 'CRM'])
+    check('Favoriten: vier nebeneinander (1280 px)', len({round(pg.evaluate(f"document.querySelectorAll('#db-grid .db-tile')[{i}].getBoundingClientRect().top")) for i in range(4)}) == 1)
+    unter = pg.evaluate("[...document.querySelectorAll('#db-grid a.db-tile')].map(t => [t.dataset.modul, [...t.querySelectorAll('.db-text > *')].filter(e => e.getBoundingClientRect().width > 2).length])")
+    check('keine Unterzeile unter verfügbaren Kacheln (nur der Name ist sichtbar, keine Beschreibung)', unter and all(n == 1 for _, n in unter) and pg.locator('.db-desc').count() == 0, unter)
     kid = {x['id']: x for x in k}
-    verw = kid['verwaltung']
-    check('Verwaltung: freigegeben (Roadmap 10a), Verweis auf den Eingabebereich (Testserver: gleicher Host, Pfad /admin/)',
-          verw['tag'] == 'A' and verw['href'] == '/admin/' and verw['badge'] == 'Verfügbar', verw)
-    best = kid['bestand']
-    check('Bestand: freigegeben (Phase 1), Verweis auf den Eingabebereich (Testserver: gleicher Host, Pfad /admin/)',
-          best['tag'] == 'A' and best['href'] == '/admin/' and best['badge'] == 'Verfügbar', best)
-    imp = kid['import']
-    check('Import: freigegeben, Verweis auf /import/ (Testserver: gleicher Host)', imp['tag'] == 'A' and imp['href'] == '/import/' and imp['badge'] == 'Verfügbar', imp)
-    hr = kid['hr']
-    check('HR: freigegeben (Inhaber 23.10.2026), Verweis auf die Urlaubsverwaltung (Testserver: gleicher Host, Pfad /module/hr/)',
-          hr['tag'] == 'A' and hr['href'] == '/module/hr/' and hr['badge'] == 'Verfügbar', hr)
-    crm = kid['crm']
-    check('CRM: freigegeben (Inhaber 23.10.2026), Verweis auf das CRM (Testserver: gleicher Host, Pfad /module/crm/)',
-          crm['tag'] == 'A' and crm['href'] == '/module/crm/' and crm['badge'] == 'Verfügbar', crm)
-    mkt = kid['marketing']
-    check('Marketing: freigegeben (Inhaber 25.10.2026), Verweis auf den Redaktionsplan (Testserver: gleicher Host, Pfad /module/marketing/)',
-          mkt['tag'] == 'A' and mkt['href'] == '/module/marketing/' and mkt['badge'] == 'Verfügbar', mkt)
-    neu2 = [kid[m] for m in ('leergut', 'containerimport')]
-    check('Kacheln Leergut (freigegeben, Auftrag des Inhabers 29.10.2026 – führt zu /module/leergut/) und Container-Import (geplant, gesperrt): Name aus dem Register, eigene Symbole',
-          [x['name'] for x in neu2] == ['Leergut', 'Container-Import'] and [x['badge'] for x in neu2] == ['Verfügbar', 'Geplant']
-          and neu2[0]['tag'] == 'A' and neu2[0]['href'] == '/module/leergut/' and neu2[1]['tag'] == 'DIV' and neu2[1]['gesperrt']
-          and [x['symbol'] for x in neu2] == ['crate', 'container'] and all(x['svg'] for x in neu2), neu2)
-    rw = kid['rewe']
-    check('REWE: freigegeben (Auftrag des Inhabers 30.10.2026), Verweis auf das REWE-Modul (Testserver: Pfad /module/rewe/)',
-          rw['tag'] == 'A' and rw['href'] == '/module/rewe/' and rw['badge'] == 'Verfügbar', rw)
-    qs = kid['qs']
-    check('Qualitätssicherung: freigegeben (Entscheidung des Inhabers 30.10.2026), Verweis auf das QM-System (Testserver: Pfad /module/qs/)',
-          qs['tag'] == 'A' and qs['href'] == '/module/qs/' and qs['badge'] == 'Verfügbar', qs)
-    offen = [kid[m] for m in ('einkauf', 'containerimport')]
-    gesperrt = [x for x in offen if x['tag'] != 'DIV' or x['href']]
-    check('alle anderen Kacheln ohne Verweis (nicht freigegeben)', not gesperrt, gesperrt)
-    check('nicht freigegebene Module zeigen ihren Entwicklungsstand (sichtbar unter dem Namen)',
-          all(x['badge'] in ('Geplant', 'In Entwicklung', 'In Prüfung', 'In Vorbereitung') and x['badgeSichtbar'] for x in offen), [(x['badge'], x['badgeSichtbar']) for x in offen])
-    check('gesperrte Kacheln als deaktiviert gekennzeichnet', pg.locator('#db-grid .db-tile.off[aria-disabled="true"]').count() == 2)
-    check('Zähler: 12 von 14', '12 von 14' in pg.text_content('#db-sub'), pg.text_content('#db-sub'))
-    sic = kid['sicherheit']
-    check('Sicherheit: freigegeben (Inhaber 26.10.2026), rechts neben der Verwaltung, Verweis auf die Sicherheitszentrale, eigenes Symbol',
-          sic['tag'] == 'A' and sic['href'] == '/module/sicherheit/' and sic['badge'] == 'Verfügbar' and sic['symbol'] == 'shield-lock' and sic['svg'], sic)
-    neu = [kid[m] for m in ('hr', 'marketing', 'controlling')]
-    check('Module HR, Marketing, Controlling: Name aus dem Register, verfügbar; Controlling (Inhaber 28.10.2026) führt zu /module/controlling/',
-          [x['name'] for x in neu] == ['HR', 'Marketing', 'Controlling'] and neu[2]['tag'] == 'A' and neu[2]['href'] == '/module/controlling/'
-          and [x['badge'] for x in neu] == ['Verfügbar', 'Verfügbar', 'Verfügbar'], neu)
-    check('eigene Symbole (Kalender, Megafon, Diagramm) aus dem gemeinsamen Rahmen', [x['symbol'] for x in neu] == ['calendar', 'megaphone', 'chart'] and all(x['svg'] for x in neu), neu)
-    gesperrt = [x for x in k if x['tag'] == 'DIV']
-    check('Klebeband „Bald“ auf jeder nicht freigegebenen Kachel (nur Anzeige, für Screenreader der genaue Stand)',
-          len(gesperrt) == 2 and all(x['gesperrt'] and x['bald'] == 'Bald' and x['baldVersteckt'] == 'true' for x in gesperrt), gesperrt)
-    check('kein Klebeband auf verfügbaren Kacheln', all(not x['bald'] and not x['gesperrt'] for x in k if x['tag'] == 'A'))
-    check('„Verfügbar“ nur für Screenreader (keine sichtbare Pille), grün markiert', all('ok' in x['badgeCls'] and 'sr-only' in x['badgeCls'] and not x['badgeSichtbar']
-                                                                                  for x in k if x['badge'] == 'Verfügbar'))
-    band = pg.evaluate("""(() => { const s = getComputedStyle(document.querySelector('#db-grid .r-bald'));
-        return [s.textTransform, s.backgroundImage.includes('repeating-linear-gradient'), s.boxShadow]; })()""")
-    check('Klebeband gestreift, Großbuchstaben, ohne Schatten (wie in der Seitenleiste)', band == ['uppercase', True, 'none'], band)
-    blass = pg.evaluate("[getComputedStyle(document.querySelector('.gesperrt .db-name')).color, getComputedStyle(document.querySelector('a.db-tile .db-name')).color, getComputedStyle(document.querySelector('.gesperrt')).borderTopStyle]")
-    check('gesperrte Kacheln zurückgenommen (leiser Name, gestrichelter Rand), verfügbare in voller Stärke', blass == ['rgb(106, 100, 95)', 'rgb(29, 27, 26)', 'dashed'], blass)
-    check('Symbolfarbe je Registersymbol (Angebot: tag, Verwaltung: settings)', k[0]['symbol'] == 'tag' and kid['verwaltung']['symbol'] == 'settings'
-          and pg.evaluate("getComputedStyle(document.querySelector('#db-grid [data-modul=\"angebot\"] .db-ico')).backgroundColor") == 'rgb(155, 35, 53)', [x['symbol'] for x in k])
-    ruhig = pg.evaluate("""[...document.querySelectorAll('a.db-tile, #r-leiste')].map(e => { const s = getComputedStyle(e);
-        return [s.backdropFilter, s.backgroundColor, e.classList.contains('db-tile') ? s.borderTopWidth : '1px']; })""")
-    check('ruhige Flächen: kein Glas (keine Unschärfe), Kacheln weiß mit feiner Linie', ruhig and all(b == 'none' and c.startswith('rgb(') and w == '1px' for b, c, w in ruhig), ruhig[:3])
+    check('Angebot: verfügbar, als Verweis auf die Mitarbeiter-Eingabe (Testserver: gleicher Host)', kid['angebot']['tag'] == 'A' and kid['angebot']['href'] == '/admin/' and kid['angebot']['badge'] == 'Verfügbar', kid['angebot'])
+    check('„Verfügbar“ nur für Screenreader (keine sichtbare Pille), grün markiert', all('ok' in x['badgeCls'] and 'sr-only' in x['badgeCls'] and not x['badgeSichtbar'] for x in k))
+    check('Kachel Leergut: Zahl der offenen Punkte, rot (überfällig)', pg.evaluate("[document.querySelector('#db-grid [data-modul=\"leergut\"] .db-zahl')?.textContent, document.querySelector('#db-grid [data-modul=\"leergut\"] .db-zahl')?.classList.contains('rot')]") == ['1 offen', True])
+    check('Symbolfarbe je Registersymbol (Angebot: tag)', k[0]['symbol'] == 'tag' and pg.evaluate("getComputedStyle(document.querySelector('#db-grid [data-modul=\"angebot\"] .db-ico')).backgroundColor") == 'rgb(155, 35, 53)')
+    ruhig = pg.evaluate("""[...document.querySelectorAll('a.db-tile, #r-leiste, .db-liste')].map(e => { const s = getComputedStyle(e);
+        return [s.backdropFilter, s.backgroundColor, e.id === 'r-leiste' ? '1px' : s.borderTopWidth]; })""")
+    check('ruhige Flächen: kein Glas (keine Unschärfe), Kacheln und Listen weiß mit feiner Linie', ruhig and all(b == 'none' and c.startswith('rgb(') and w == '1px' for b, c, w in ruhig), ruhig[:3])
     form = pg.evaluate("[getComputedStyle(document.querySelector('.db-tile')).borderTopLeftRadius, Math.round(document.querySelector('#r-leiste').getBoundingClientRect().width), getComputedStyle(document.querySelector('#r-leiste')).position]")
     check('Kacheln mit 14 px Radius, Seitenleiste 208 px breit und fest (sticky)', form == ['14px', 208, 'sticky'], form)
     hg = pg.evaluate("[getComputedStyle(document.body).backgroundColor, getComputedStyle(document.querySelector('#r-leiste')).backgroundColor]")
     check('heller Grund #f6f4f1, Seitenleiste #eeebe7', hg == ['rgb(246, 244, 241)', 'rgb(238, 235, 231)'], hg)
-    ueberlauf = pg.evaluate(UEBERLAUF)
-    check('Namen passen in Kachel und Seitenleiste', not ueberlauf, ueberlauf)
     check('Schrift Geist (selbst gehostet)', 'Geist' in pg.evaluate("getComputedStyle(document.querySelector('#db-titel')).fontFamily"))
     check('Desktop: keine Kopfzeile fürs Handy, kein Menüknopf sichtbar', pg.evaluate("getComputedStyle(document.querySelector('.r-mobilkopf')).display") == 'none')
 
-    # Seitenleiste: dieselben Module, Gruppen wie im Entwurf, Ziele wie die Kacheln
+    # Unterzeile und „Heute für Sie“
+    check('Unterzeile: Datum und „9 offene Punkte, 3 davon überfällig“', pg.text_content('#db-sub') == '9 offene Punkte, 3 davon überfällig' and pg.is_visible('#db-sub-trenner'), pg.text_content('#db-sub'))
+    check('„Heute für Sie“ mit Zahl (rot, weil etwas überfällig ist)', pg.text_content('#db-heute-zahl') == '9' and 'rot' in pg.get_attribute('#db-heute-zahl', 'class'))
+    gr = pg.evaluate("[...document.querySelectorAll('#db-heute-liste .db-gruppe')].map(g => [g.querySelector('.db-gruppe-titel').textContent, g.querySelectorAll('.db-zeile').length])")
+    je = {}
+    for p in PUNKTE: je[p['art']] = je.get(p['art'], 0) + 1
+    erwartet = [[n, min(3, je[a])] for a, n in (('ueberfaellig', 'Überfällig'), ('heute', 'Heute'), ('demnaechst', 'Demnächst')) if je.get(a)]
+    check('Gruppen Überfällig, Heute, Demnächst – je höchstens drei Punkte', gr == erwartet, (gr, erwartet))
+    zeile = pg.evaluate("""(() => { const z = [...document.querySelectorAll('#db-heute-liste a.db-zeile')].find(a => a.textContent.includes('Spedition Nord'));
+        return z && [z.getAttribute('href'), z.querySelector('.db-zeile-meta').textContent, z.querySelector('.db-zeile-datum').className, getComputedStyle(z.querySelector('.db-zeile-datum')).color]; })()""")
+    check('Punkt: Verweis auf den Reiter des Moduls, Modul und Einzelheit darunter, Datum rot (überfällig)', zeile and zeile[0] == '/module/leergut/#abstimmungen'
+          and zeile[1].startswith('Leergut · Frist abgelaufen am') and 'ueberfaellig' in zeile[2] and zeile[3] == 'rgb(163, 25, 44)', zeile)
+    texte = pg.evaluate("[...document.querySelectorAll('#db-heute-liste .db-zeile-titel')].map(e => e.textContent)")
+    check('Texte der Module nur als Text (keine Auszeichnung)', pg.locator('#db-heute-liste img, #db-heute-liste script').count() == 0 and texte, texte)
+    mehr = len(PUNKTE) > sum(n for _, n in erwartet)
+    check('„Alle offenen Punkte“ nur, wenn eine Gruppe mehr als drei Punkte hat', pg.is_visible('#db-heute-alle') == mehr)
+    if mehr:
+        pg.click('#db-heute-alle'); pg.wait_for_function(f"document.querySelectorAll('#db-heute-liste .db-zeile').length === {len(PUNKTE)}")
+        check('„Alle offenen Punkte“ zeigt alle, „Weniger anzeigen“ klappt zurück', pg.get_attribute('#db-heute-alle', 'aria-expanded') == 'true')
+        pg.click('#db-heute-alle')
+    # Schnellaktionen und Zuletzt bearbeitet
+    akt = pg.evaluate("[...document.querySelectorAll('#db-aktionen-liste a')].map(a => [a.textContent.trim(), a.getAttribute('href')])")
+    check('Schnellaktionen: die ersten vier mit Verweis (Reiter des Moduls)', akt == [['Wochenangebot bearbeiten', '/admin/'], ['Urlaub beantragen', '/module/hr/#mein'],
+          ['Wiedervorlagen ansehen', '/module/crm/#wiedervorlagen'], ['Daten importieren', '/import/']], akt)
+    zl_ui = pg.evaluate("[...document.querySelectorAll('#db-zuletzt-liste .db-zeile')].map(z => [z.dataset.modul, z.querySelector('.db-zeile-titel').textContent, z.querySelector('.db-zeile-meta').textContent])")
+    check('Zuletzt bearbeitet: Text, Modul und Zeit („gerade eben“ / „vor … Min.“)', len(zl_ui) == len(zl) and zl_ui[0][0] == 'crm' and zl_ui[0][2].startswith('CRM · ')
+          and all(('gerade eben' in m or 'vor ' in m or 'Uhr' in m) for _, _t, m in zl_ui), zl_ui)
+    spalten = pg.evaluate("[document.querySelector('#db-heute').getBoundingClientRect().right < document.querySelector('#db-aktionen').getBoundingClientRect().left, Math.round(document.querySelector('#db-aktionen').getBoundingClientRect().width)]")
+    check('1280 px: Heute für Sie links, Schnellaktionen und Zuletzt rechts (320 px)', spalten == [True, 320], spalten)
+
+    # Seitenleiste: dieselben Module, Gruppen wie im Entwurf, Zahlen offener Punkte, Ziele wie die Kacheln
     L = leiste(pg)
     check('Seitenleiste: Start (aktiv), Anwendungen, In Entwicklung, Verwaltung & Daten', list(L) == ['', 'Anwendungen', 'In Entwicklung', 'Verwaltung & Daten']
           and L[''][0]['id'] == 'start' and L[''][0]['aktiv'] == 'page' and L[''][0]['href'] == './', list(L))
@@ -214,37 +311,96 @@ with sync_playwright() as pw:
           and e['bald'] == 'Bald' and 'bald verfügbar' in e['label'] for e in L['In Entwicklung']), L['In Entwicklung'])
     check('Seitenleiste: Import, Verwaltung, Sicherheit unten unter „Verwaltung & Daten“', [e['id'] for e in L['Verwaltung & Daten']] == ['import', 'verwaltung', 'sicherheit'])
     ziele = {e['id']: e['href'] for g in L.values() for e in g}
+    check('Ziele im Testserver (gleicher Host): Eingabebereich, Import und Modulseiten', {m: ziele[m] for m in ('angebot', 'bestand', 'verwaltung', 'import', 'hr', 'crm', 'marketing', 'leergut', 'rewe', 'qs', 'controlling', 'sicherheit')}
+          == {'angebot': '/admin/', 'bestand': '/admin/', 'verwaltung': '/admin/', 'import': '/import/', 'hr': '/module/hr/', 'crm': '/module/crm/', 'marketing': '/module/marketing/',
+              'leergut': '/module/leergut/', 'rewe': '/module/rewe/', 'qs': '/module/qs/', 'controlling': '/module/controlling/', 'sicherheit': '/module/sicherheit/'}, ziele)
     check('Seitenleiste: gleiche Ziele wie die Kacheln', all(ziele[x['id']] == x['href'] for x in k if x['tag'] == 'A'), ziele)
+    zahlen = pg.evaluate("""Object.fromEntries([...document.querySelectorAll('#r-leiste .r-eintrag')].filter(e => e.querySelector('.r-zahl'))
+        .map(e => [e.dataset.modul, [e.querySelector('.r-zahl').textContent, e.querySelector('.r-zahl').classList.contains('r-zahl-rot'), e.getAttribute('aria-label')]]))""")
+    check('Seitenleiste: Zahl offener Punkte je Anwendung, rot bei Überfälligem, auch in der Beschriftung', zahlen.get('qs') == ['3', True, 'Qualitätssicherung, 3 offen, davon 2 überfällig']
+          and zahlen.get('hr') == ['1', False, 'HR, 1 offen'] and zahlen.get('rewe', [''])[0] == '2' and 'crm' not in zahlen and 'angebot' not in zahlen, zahlen)
     check('Seitenleiste: Symbolfarbe je Registersymbol', pg.evaluate("getComputedStyle(document.querySelector('#r-leiste [data-modul=\"crm\"] svg')).color") == 'rgb(46, 94, 158)')
     check('Seitenleiste: Name des angemeldeten Nutzers, Rolle und Initialen im Fuß', pg.text_content('#r-nutzer-name') == 'Administrator' and 'Angemeldet als' in pg.text_content('.r-person')
           and pg.text_content('#r-rolle') == 'Administrator' and pg.text_content('#r-initialen') == 'AD', pg.text_content('.r-fuss'))
     check('Seitenleiste: Abmelden als Knopf mit Beschriftung', pg.get_attribute('#r-abmelden', 'aria-label') == 'Abmelden')
+    check('Seitenleiste: Suchfeld mit Tastenkürzel (Strg K)', pg.text_content('#r-suche .r-taste') == 'Strg K' and pg.get_attribute('#r-suche', 'aria-haspopup') == 'dialog')
+    ueberlauf = pg.evaluate(UEBERLAUF)
+    check('Namen und Texte passen in Kachel, Liste und Seitenleiste', not ueberlauf, ueberlauf)
     kontrast_ok(pg, 'hell')
     pg.screenshot(path=os.path.join(SH, 'dashboard_1280.png'), full_page=True)
 
-    # Schmale Leiste (Module mit eigener Navigation): nur Symbole, Namen als Beschriftung, aktiver Eintrag markiert
-    pg.evaluate("""Promise.all([fetch('../api/?action=module_status').then(r => r.json()), fetch('../api/?action=status').then(r => r.json())])
-        .then(([d, s]) => STAFL_RAHMEN.zeichnen({ module: d.module, aktiv: 'crm', nutzer: s.user, start: './', schmal: true, abmelden() {} }))""")
+    # ── Suche (Strg K) und Schnellzugriff (Blitz) ──
+    pg.keyboard.press('Control+k'); pg.wait_for_selector('#r-palette[open]')
+    check('Strg K öffnet die Suche, Fokus im Suchfeld, alle Anwendungen und Schnellaktionen', pg.evaluate("document.activeElement.id") == 'r-palette-eingabe'
+          and pg.locator('#r-palette [role="option"]').count() == len(FREI) + 3 + len(H['aktionen']))
+    pg.keyboard.type('qualit')
+    tr = pg.evaluate("[...document.querySelectorAll('#r-palette [role=\"option\"]')].map(o => [o.textContent.trim(), o.getAttribute('href'), o.getAttribute('aria-selected')])")
+    check('Suche „qualit“: Qualitätssicherung (ohne Umlaut-Probleme), erster Treffer gewählt', tr == [['Qualitätssicherung', '/module/qs/', 'true']], tr)
+    pg.screenshot(path=os.path.join(SH, 'dashboard_1280_suche.png'))
+    pg.fill('#r-palette-eingabe', 'urlaub')
+    tr = pg.evaluate("[...document.querySelectorAll('#r-palette [role=\"option\"]')].map(o => [o.textContent.trim(), o.getAttribute('href')])")
+    check('Suche findet Schnellaktionen („Urlaub beantragen“ → HR, Reiter „Mein Urlaub“)', tr == [['Urlaub beantragen', '/module/hr/#mein']], tr)
+    pg.fill('#r-palette-eingabe', 'gibt es nicht')
+    check('Suche ohne Treffer: Hinweis', pg.text_content('#r-palette-liste') == 'Nichts gefunden.')
+    pg.keyboard.press('Escape'); pg.wait_for_selector('#r-palette', state='hidden')
+    check('Escape schließt die Suche', pg.locator('#r-palette[open]').count() == 0)
+    pg.click('#db-schnell'); pg.wait_for_selector('#r-palette[open]')
+    pg.keyboard.type('rew'); pg.keyboard.press('ArrowDown')
+    sel = pg.evaluate("[...document.querySelectorAll('#r-palette [role=\"option\"]')].map(o => [o.textContent.trim(), o.getAttribute('aria-selected')])")
+    check('Blitz öffnet die Suche; Pfeiltasten wählen (REWE, REWE-Wochenabfrage)', sel == [['REWE', 'false'], ['REWE-Wochenabfrage', 'true']]
+          and pg.get_attribute('#r-palette-eingabe', 'aria-activedescendant') == 'r-palette-1', sel)
+    pg.keyboard.press('Enter'); pg.wait_for_url(lambda u: '/module/rewe/' in u)
+    check('Enter öffnet den gewählten Treffer (REWE, Reiter „Woche“)', '/module/rewe/#woche' in pg.url, pg.url)
+    pg.goto(B + '/dashboard/'); bereit(pg)
+    pg.click('#r-suche'); pg.wait_for_selector('#r-palette[open]'); pg.click('.r-palette-zu'); pg.wait_for_selector('#r-palette', state='hidden')
+    check('Suchfeld der Leiste öffnet die Suche; Schließen gibt den Fokus zurück', pg.evaluate("document.activeElement.id") == 'r-suche')
+
+    # ── Favoriten bearbeiten (am Konto) ──
+    pg.click('#db-fav-bearbeiten'); pg.wait_for_selector('#db-fav-wahl:not([hidden])')
+    chips = pg.evaluate("[...document.querySelectorAll('.db-fav-chip')].map(b => [b.dataset.modul, b.getAttribute('aria-pressed')])")
+    check('Bearbeiten: alle nutzbaren Anwendungen (ohne „Bald“) als Schalter, Favoriten gedrückt', [c for c, _ in chips] == FREI + ['import', 'verwaltung', 'sicherheit']
+          and [c for c, p in chips if p == 'true'] == ['angebot', 'bestand', 'leergut', 'crm'] and pg.is_hidden('#db-grid') and pg.is_hidden('#db-fav-bearbeiten'), chips)
+    pg.click('.db-fav-chip[data-modul="crm"]'); pg.click('.db-fav-chip[data-modul="qs"]')
+    check('Zähler in der Erklärung (4 von 8)', '(4 von 8)' in pg.text_content('#db-fav-text'))
+    pg.screenshot(path=os.path.join(SH, 'dashboard_1280_favoriten.png'))
+    pg.click('#db-fav-speichern'); pg.wait_for_selector('#db-fav-wahl', state='hidden')
+    check('Gespeichert: Favoriten in der Reihenfolge des Registers', [x['id'] for x in kacheln(pg)] == ['angebot', 'bestand', 'leergut', 'qs']
+          and A.call('start_heute')[1]['favoriten'] == ['angebot', 'bestand', 'leergut', 'qs'] and pg.evaluate("document.activeElement.id") == 'db-fav-bearbeiten')
+    pg.reload(); bereit(pg)
+    check('nach dem Neuladen: eigene Favoriten (kein Springen von der Standardauswahl)', [x['id'] for x in kacheln(pg)] == ['angebot', 'bestand', 'leergut', 'qs'])
+    pg.click('#db-fav-bearbeiten'); pg.wait_for_selector('#db-fav-wahl:not([hidden])')
+    for m in ('crm', 'rewe', 'hr', 'marketing'):
+        pg.click(f'.db-fav-chip[data-modul="{m}"]')
+    voll = pg.evaluate("[...document.querySelectorAll('.db-fav-chip')].filter(b => b.disabled).map(b => b.dataset.modul)")
+    check('höchstens acht: weitere Schalter gesperrt', voll and all(m not in voll for m in ('crm', 'rewe', 'hr', 'marketing')) and '(8 von 8)' in pg.text_content('#db-fav-text'), voll)
+    pg.click('#db-fav-abbrechen'); pg.wait_for_selector('#db-fav-wahl', state='hidden')
+    check('Abbrechen verwirft die Auswahl', [x['id'] for x in kacheln(pg)] == ['angebot', 'bestand', 'leergut', 'qs'])
+
+    # Schmale Leiste (Module mit eigener Navigation): nur Symbole, Namen als Beschriftung, aktiver Eintrag markiert, Zahl als Punkt
+    pg.evaluate("""Promise.all([fetch('../api/?action=module_status').then(r => r.json()), fetch('../api/?action=status').then(r => r.json()), fetch('../api/?action=start_heute').then(r => r.json())])
+        .then(([d, s, h]) => { STAFL_RAHMEN.zeichnen({ module: d.module, aktiv: 'crm', nutzer: s.user, start: './', schmal: true, abmelden() {} }); STAFL_RAHMEN.zahlen(h.zahlen); })""")
     pg.wait_for_selector('.r-app.r-schmal'); bilder(pg)
     schmal = pg.evaluate("""(() => { const n = document.querySelector('#r-leiste');
-        return { breite: Math.round(n.getBoundingClientRect().width), texte: [...n.querySelectorAll('.r-text, .r-gruppe-titel, .r-person, .r-bald')].every(e => getComputedStyle(e).display === 'none'),
+        return { breite: Math.round(n.getBoundingClientRect().width), texte: [...n.querySelectorAll('.r-text, .r-gruppe-titel, .r-person, .r-bald, .r-taste')].every(e => getComputedStyle(e).display === 'none'),
                  namen: [...n.querySelectorAll('a.r-eintrag')].every(e => e.getAttribute('aria-label') && e.title), aktiv: [...n.querySelectorAll('[aria-current="page"]')].map(e => e.dataset.modul),
-                 trenner: [...n.querySelectorAll('.r-trenner')].filter(e => getComputedStyle(e).display === 'block').length, band: getComputedStyle(document.querySelector('#db-grid .r-bald')).display,
-                 abmelden: document.querySelector('#r-abmelden').getBoundingClientRect().width > 0 }; })()""")
-    check('schmale Leiste: 60 px, nur Symbole, jeder Eintrag beschriftet (Tooltip), CRM aktiv, Trenner statt Überschriften, Abmelden erreichbar',
-          schmal['breite'] == 60 and schmal['texte'] and schmal['namen'] and schmal['aktiv'] == ['crm'] and schmal['trenner'] == 3 and schmal['abmelden'], schmal)
-    check('schmale Leiste: Klebeband der Kacheln bleibt sichtbar', schmal['band'] != 'none', schmal['band'])
+                 trenner: [...n.querySelectorAll('.r-trenner')].filter(e => getComputedStyle(e).display === 'block').length,
+                 abmelden: document.querySelector('#r-abmelden').getBoundingClientRect().width > 0, suche: document.querySelector('#r-suche').getBoundingClientRect().width,
+                 punkt: (() => { const z = n.querySelector('[data-modul="qs"] .r-zahl').getBoundingClientRect(); return [Math.round(z.width), Math.round(z.height)]; })() }; })()""")
+    check('schmale Leiste: 60 px, nur Symbole, jeder Eintrag beschriftet (Tooltip), CRM aktiv, Trenner statt Überschriften, Abmelden und Suche erreichbar, Zahl als Punkt',
+          schmal['breite'] == 60 and schmal['texte'] and schmal['namen'] and schmal['aktiv'] == ['crm'] and schmal['trenner'] == 3 and schmal['abmelden']
+          and 0 < schmal['suche'] <= 44 and schmal['punkt'] == [8, 8], schmal)
     pg.screenshot(path=os.path.join(SH, 'dashboard_1280_schmal.png'))
-    pg.reload(); pg.wait_for_selector('#db-grid .db-tile')
+    pg.reload(); bereit(pg)
 
     # Gemeldet: „Qualitätssicherungskon-zept“ – Namen werden nicht mehr automatisch getrennt
     for breite in (1920, 1280, 1024, 768, 575, 390, 360):
         pg.set_viewport_size({'width': breite, 'height': 900}); bilder(pg)
         namen = pg.evaluate(WORT_GETRENNT)
-        check(f'{breite} px: Registernamen ohne Silbentrennung und ohne Umbruch im Wort (auch „Qualitätssicherung“, „Container-Import“)',
+        check(f'{breite} px: Registernamen ohne Silbentrennung und ohne Umbruch im Wort (auch „Qualitätssicherung“)',
               all(not g and not u and h != 'auto' for _, g, u, _f, h in namen), namen)
         ueber = pg.evaluate(UEBERLAUF)
-        check(f'{breite} px: kein Name ragt aus Kachel oder Seitenleiste', not ueber, ueber)
+        check(f'{breite} px: kein Name ragt aus Kachel, Liste oder Seitenleiste', not ueber, ueber)
+        check(f'{breite} px: kein waagerechtes Scrollen', not pg.evaluate('document.documentElement.scrollWidth > window.innerWidth'))
     pg.set_viewport_size({'width': 1280, 'height': 900}); bilder(pg)
     echt = pg.evaluate("""fetch('../api/?action=module_status').then(r => r.json()).then(d => {
         const alle = Object.fromEntries(d.module.map((m) => [m.id, m]));
@@ -256,12 +412,13 @@ with sync_playwright() as pw:
                    ['https://hr.dashboard-stafl.de/module/hr/', '/module/hr/']], echt)
     pg.click('#r-leiste a[data-modul="crm"]'); pg.wait_for_url('**/module/crm/')
     check('Klick auf CRM in der Seitenleiste öffnet das CRM', pg.url.endswith('/module/crm/'))
-    pg.goto(B + '/dashboard/'); pg.wait_for_selector('#db-grid .db-tile')
+    pg.goto(B + '/dashboard/'); bereit(pg)
     pg.click('#db-grid a[data-modul="angebot"]'); pg.wait_for_url('**/admin/')
     check('Klick auf die Kachel Angebot öffnet die Mitarbeiter-Eingabe', pg.url.endswith('/admin/'))
     ctx.close()
 
     # ── Überlange Registernamen (nachgestellte Antwort): erst kleinere Schrift, Trennung nur als Notlösung ──
+    check('Favoriten für den Test der langen Namen', A.call('start_favoriten_save', {'favoriten': ['angebot', 'crm', 'rewe', 'qs']})[0] == 200)
     ctx, pg = anmelden(br, 'admin', PW, '198.51.100.47')
     def lange_namen(route):
         r = route.fetch(); d = r.json()
@@ -269,7 +426,7 @@ with sync_playwright() as pw:
             if m['id'] == 'qs': m['name'] = 'Qualitätssicherungskonzept'
             if m['id'] == 'crm': m['name'] = 'Kundenbeziehungsmanagement'
         route.fulfill(response=r, body=json.dumps(d))
-    pg.route('**/api/?action=module_status', lange_namen); pg.reload(); pg.wait_for_selector('#db-grid .db-tile')
+    pg.route('**/api/?action=module_status', lange_namen); pg.reload(); bereit(pg)
     for breite in (1280, 1024, 575, 390):
         pg.set_viewport_size({'width': breite, 'height': 900}); bilder(pg)
         namen = pg.evaluate(WORT_GETRENNT)
@@ -285,6 +442,7 @@ with sync_playwright() as pw:
     for h in hoehen: reihen.setdefault(h.split(':')[0], set()).add(h.split(':')[1])
     check('Kacheln einer Reihe gleich hoch (auch wenn ein Name umbricht)', all(len(v) == 1 for v in reihen.values()), hoehen)
     ctx.close()
+    check('Favoriten zurück auf Standard', A.call('start_favoriten_save', {'favoriten': None})[0] == 200)
 
     # ── Begrüßung nach Tageszeit mit Vornamen und Datum (feste Uhr, Europe/Berlin), dunkles Design am Desktop ──
     ctx, pg = anmelden(br, 'admin', PW, '198.51.100.46', dunkel=True, uhr=datetime(2026, 10, 22, 19, 30, tzinfo=BERLIN))
@@ -295,17 +453,19 @@ with sync_playwright() as pw:
     check('Begrüßung: Grenzen 5/11/18 Uhr', grenzen == ['Guten Abend', 'Guten Abend', 'Guten Morgen', 'Guten Morgen', 'Guten Tag', 'Guten Tag', 'Guten Abend', 'Guten Abend'], grenzen)
     hg = pg.evaluate("[getComputedStyle(document.body).backgroundColor, getComputedStyle(document.querySelector('#r-leiste')).backgroundColor]")
     check('dunkles Design folgt der Systemeinstellung (Grund #121011, Seitenleiste #1b1a19)', hg == ['rgb(18, 16, 17)', 'rgb(27, 26, 25)'], hg)
-    aus = pg.evaluate("getComputedStyle(document.querySelector('#db-grid [data-modul=\"einkauf\"] .db-ico')).color")
-    check('dunkel: Symbol gesperrter Kacheln bleibt zurückgenommen (keine Modulfarbe)', aus == 'rgb(111, 104, 99)', aus)
+    aus = pg.evaluate("getComputedStyle(document.querySelector('#r-leiste [data-modul=\"einkauf\"] svg')).color")
+    check('dunkel: Symbol nicht freigegebener Anwendungen bleibt zurückgenommen (keine Modulfarbe)', aus == 'rgb(111, 104, 99)', aus)
+    rot = pg.evaluate("[getComputedStyle(document.querySelector('#r-leiste .r-zahl-rot')).backgroundColor, getComputedStyle(document.querySelector('#r-leiste .r-zahl-rot')).color]")
+    check('dunkel: rote Zahl hell mit dunkler Schrift (lesbar)', rot == ['rgb(243, 160, 170)', 'rgb(42, 16, 20)'], rot)
     kontrast_ok(pg, 'dunkel')
     pg.screenshot(path=os.path.join(SH, 'dashboard_1280_dunkel.png'), full_page=True)
-    pg.clock.set_fixed_time(datetime(2026, 10, 23, 8, 15, tzinfo=BERLIN)); pg.reload(); pg.wait_for_selector('#db-grid .db-tile')
+    pg.clock.set_fixed_time(datetime(2026, 10, 23, 8, 15, tzinfo=BERLIN)); pg.reload(); bereit(pg)
     check('morgens: „Guten Morgen, <Vorname>“, Datum des Tages', pg.text_content('#db-titel') == 'Guten Morgen, Administrator' and pg.text_content('#db-datum') == 'Freitag, 23. Oktober',
           (pg.text_content('#db-titel'), pg.text_content('#db-datum')))
     # Weniger Transparenz und weniger Bewegung (Systemeinstellungen)
     cdp = ctx.new_cdp_session(pg)
     cdp.send('Emulation.setEmulatedMedia', {'features': [{'name': 'prefers-reduced-transparency', 'value': 'reduce'}]})
-    deckend = pg.evaluate("[...document.querySelectorAll('#r-leiste, .db-tile:not(.gesperrt)')].map(e => getComputedStyle(e).backgroundColor)")
+    deckend = pg.evaluate("[...document.querySelectorAll('#r-leiste, .db-tile, .db-liste')].map(e => getComputedStyle(e).backgroundColor)")
     check('deckende Flächen (auch bei „Transparenz reduzieren“ kein Glas nötig)', all(c.startswith('rgb(') for c in deckend), deckend)
     cdp.send('Emulation.setEmulatedMedia', {'features': [{'name': 'prefers-reduced-motion', 'value': 'reduce'}]})
     pg.wait_for_function("getComputedStyle(document.querySelector('a.db-tile')).transitionDuration === '0s'")
@@ -323,58 +483,96 @@ with sync_playwright() as pw:
     pg.click('#r-menue'); pg.wait_for_function("Math.round(document.querySelector('#r-leiste').getBoundingClientRect().left) === 0")
     menue = pg.evaluate("""(() => { const n = document.querySelector('#r-leiste').getBoundingClientRect();
         return [document.querySelector('#r-menue').getAttribute('aria-expanded'), document.activeElement.closest('#r-leiste') !== null, Math.round(n.left), n.right <= innerWidth,
-                ['#r-abmelden', '#r-initialen', '#r-leiste a[data-modul="crm"]'].every(s => document.querySelector(s).getBoundingClientRect().width > 0)]; })()""")
-    check('390 px: Menü öffnet die Seitenleiste (Fokus darin, ganz im Bild), Abmelden und Anwendungen erreichbar', menue == ['true', True, 0, True, True], menue)
+                ['#r-abmelden', '#r-initialen', '#r-suche', '#r-leiste a[data-modul="crm"]'].every(s => document.querySelector(s).getBoundingClientRect().width > 0),
+                getComputedStyle(document.querySelector('#r-suche .r-taste')).display]; })()""")
+    check('390 px: Menü öffnet die Seitenleiste (Fokus darin, ganz im Bild), Suche, Abmelden und Anwendungen erreichbar, ohne Tastenkürzel', menue == ['true', True, 0, True, True, 'none'], menue)
     pg.screenshot(path=os.path.join(SH, 'dashboard_390_menue_dunkel.png'))
     pg.keyboard.press('Escape'); pg.wait_for_function("getComputedStyle(document.querySelector('#r-leiste')).visibility === 'hidden'")
     check('390 px: Escape schließt das Menü, Fokus zurück auf den Menüknopf', pg.evaluate("[document.querySelector('#r-menue').getAttribute('aria-expanded'), document.activeElement.id]") == ['false', 'r-menue'])
     pg.click('#r-menue'); pg.wait_for_function("getComputedStyle(document.querySelector('#r-leiste')).visibility === 'visible'")
     pg.mouse.click(370, 450); pg.wait_for_function("getComputedStyle(document.querySelector('#r-leiste')).visibility === 'hidden'")
     check('390 px: Klick neben das Menü schließt es', pg.get_attribute('#r-menue', 'aria-expanded') == 'false')
-    sichtbar = pg.evaluate("['#db-theme', '#db-darstellung'].map((s) => document.querySelector(s).getBoundingClientRect().width > 0)")
-    check('390 px: Hell/Dunkel und einfache Darstellung erreichbar', all(sichtbar), sichtbar)
-    spalten = pg.evaluate("[...document.querySelectorAll('#db-grid, #db-grid-verwaltung')].map(g => getComputedStyle(g).gridTemplateColumns.split(' ').length)")
-    check('390 px: zwei Kachelspalten (Anwendungen und Verwaltung & Daten)', spalten == [2, 2], spalten)
-    senkrecht = pg.evaluate("[...document.querySelectorAll('#db-bereich .db-tile')].every(t => getComputedStyle(t).flexDirection === 'column')")
+    pg.click('#r-menue'); pg.wait_for_function("getComputedStyle(document.querySelector('#r-leiste')).visibility === 'visible'")
+    pg.click('#r-suche'); pg.wait_for_selector('#r-palette[open]')
+    pg.wait_for_function("getComputedStyle(document.querySelector('#r-leiste')).visibility === 'hidden'")
+    lage = pg.evaluate("(() => { const d = document.querySelector('#r-palette').getBoundingClientRect(); return [d.left >= 0, d.right <= innerWidth, getComputedStyle(document.querySelector('#r-leiste')).visibility]; })()")
+    check('390 px: Suche aus dem Menü – Dialog im Bild, Menü geschlossen', lage == [True, True, 'hidden'], lage)
+    pg.screenshot(path=os.path.join(SH, 'dashboard_390_suche_dunkel.png'))
+    pg.keyboard.press('Escape'); pg.wait_for_selector('#r-palette', state='hidden')
+    try:   # das Ereignis „close“ des Dialogs folgt dem Schließen etwas später
+        pg.wait_for_function("document.activeElement && document.activeElement.id === 'r-menue'", timeout=3000)
+    except Exception:
+        pass
+    check('390 px: nach dem Schließen der Suche Fokus auf dem Menüknopf (Menü ist zu)', pg.evaluate("document.activeElement.id") == 'r-menue', pg.evaluate("document.activeElement.id"))
+    sichtbar = pg.evaluate("['#db-schnell', '#db-theme', '#db-darstellung'].map((s) => document.querySelector(s).getBoundingClientRect().width > 0)")
+    check('390 px: Schnellzugriff, Hell/Dunkel und einfache Darstellung erreichbar', all(sichtbar), sichtbar)
+    spalten = pg.evaluate("getComputedStyle(document.querySelector('#db-grid')).gridTemplateColumns.split(' ').length")
+    check('390 px: zwei Kachelspalten', spalten == 2, spalten)
+    senkrecht = pg.evaluate("[...document.querySelectorAll('#db-grid .db-tile')].every(t => getComputedStyle(t).flexDirection === 'column')")
     check('390 px: Symbol über dem Namen', senkrecht)
+    reihe = pg.evaluate("['#db-favoriten', '#db-heute', '#db-aktionen', '#db-zuletzt'].map(s => Math.round(document.querySelector(s).getBoundingClientRect().top))")
+    check('390 px: Favoriten, Heute für Sie, Schnellaktionen, Zuletzt bearbeitet untereinander', reihe == sorted(reihe), reihe)
+    zahl = pg.evaluate("""(() => { const t = document.querySelector('#db-grid [data-modul="leergut"]'), z = t.querySelector('.db-zahl').getBoundingClientRect(), n = t.querySelector('.db-name').getBoundingClientRect(),
+        i = t.querySelector('.db-ico').getBoundingClientRect(), k = t.getBoundingClientRect(); return [z.left >= i.right, z.bottom <= n.top, z.right <= k.right]; })()""")
+    check('390 px: Zahl an der Kachel oben rechts, verdeckt weder Namen noch Symbol', zahl == [True, True, True], zahl)
     gross = pg.evaluate("parseFloat(getComputedStyle(document.querySelector('#db-titel')).fontSize)")
     check('390 px: Überschrift 26 px', gross == 26, gross)
     ueberlauf = pg.evaluate(UEBERLAUF)
-    check('390 px: Kachelnamen passen in die Kachel', not ueberlauf, ueberlauf)
-    frei = pg.evaluate("""[...document.querySelectorAll('.gesperrt')].map(t => { const b = t.querySelector('.r-bald').getBoundingClientRect(), n = t.querySelector('.db-name').getBoundingClientRect(),
-        i = t.querySelector('.db-ico').getBoundingClientRect(), k = t.getBoundingClientRect();
-        return [t.dataset.modul, b.bottom <= n.top || b.left >= n.right, b.left >= i.right, b.right <= k.right]; })""")
-    check('390 px: Klebeband oben rechts, verdeckt weder Namen noch Symbol', frei and all(all(x[1:]) for x in frei), frei)
-    check('390 px: Stand gesperrter Kacheln bleibt im Text', all(x['badge'] for x in kacheln(pg)))
+    check('390 px: Namen und Texte passen', not ueberlauf, ueberlauf)
     hg = pg.evaluate("getComputedStyle(document.body).backgroundColor")
     check('dunkles Design folgt der Systemeinstellung', hg == 'rgb(18, 16, 17)', hg)
     pg.screenshot(path=os.path.join(SH, 'dashboard_390_dunkel.png'), full_page=True)
     pg.click('#db-theme'); pg.wait_for_function("document.documentElement.getAttribute('data-theme') === 'light'")
     gespeichert = pg.evaluate("localStorage.getItem('wochenangebot.theme')")
     check('Umschalter speichert das Design wie die Angebotsseite', json.loads(gespeichert or 'null') == 'light', gespeichert)
-    pg.reload(); pg.wait_for_selector('#db-grid .db-tile')
+    pg.reload(); bereit(pg)
     check('gewähltes Design bleibt nach dem Neuladen', pg.evaluate("document.documentElement.getAttribute('data-theme')") == 'light')
     check('helles Design trotz dunkler Systemeinstellung', pg.evaluate("getComputedStyle(document.body).backgroundColor") == 'rgb(246, 244, 241)')
     pg.screenshot(path=os.path.join(SH, 'dashboard_390_hell.png'), full_page=True)
     ctx.close()
 
-    # ── Wartung des Eingabebereichs: Bearbeiter gesperrt, Administrator mit Hinweis ──
+    # ── Geplante Wartung: gelber Hinweis mit Zeitraum, schließbar (bleibt geschlossen) ──
+    morgen = datetime.now() + timedelta(days=1)
+    ab, bis = morgen.strftime('%Y-%m-%dT22:00'), morgen.strftime('%Y-%m-%dT23:00')
+    st, r = A.call('modul_wartung_save', {'bereich': 'crm.intern', 'active': True, 'grund': 'Test Hinweis', 'message': 'Das CRM ist in dieser Zeit kurz nicht erreichbar.', 'ab': ab, 'until': bis})
+    check('Wartung des CRM für morgen 22–23 Uhr geplant', st == 200, (st, r))
+    ctx, pg = anmelden(br, 'admin', PW, '198.51.100.48')
+    hw = pg.evaluate("[...document.querySelectorAll('#db-hinweise .db-hinweis')].map(h => h.textContent.trim())")
+    tag_text = morgen.strftime('%-d')
+    check('Hinweis: „Wartung am <Wochentag>, <Tag>. <Monat>, 22:00–23:00 Uhr · CRM. <Text>“', len(hw) == 1 and hw[0].startswith('Wartung am ') and f', {tag_text}. ' in hw[0]
+          and '22:00–23:00 Uhr · CRM. Das CRM ist in dieser Zeit kurz nicht erreichbar.' in hw[0], hw)
+    check('Hinweis: gelb (Warnfarbe), Kontrast der Schrift ausreichend', pg.evaluate(KONTRAST, ['.db-hinweis p', '.db-hinweis strong'])[0][1] >= 4.5
+          and pg.evaluate("getComputedStyle(document.querySelector('.db-hinweis')).backgroundColor") == 'rgb(251, 239, 217)')
+    pg.screenshot(path=os.path.join(SH, 'dashboard_wartung_geplant.png'))
+    pg.click('.db-hinweis-zu'); pg.wait_for_selector('.db-hinweis', state='detached')
+    pg.reload(); bereit(pg)
+    check('geschlossener Hinweis bleibt geschlossen (dieses Gerät)', pg.locator('.db-hinweis').count() == 0)
+    ctx.close()
+    check('geplante Wartung aufgehoben', A.call('modul_wartung_save', {'bereich': 'crm.intern', 'active': False, 'grund': 'Test beendet'})[0] == 200)
+
+    # ── Laufende Wartung des Eingabebereichs: Bearbeiter gesperrt, Administrator mit Hinweis ──
     st, r = A.call('modul_wartung_save', {'bereich': 'angebot.eingabe', 'active': True, 'grund': 'Test Dashboard',
                                           'message': 'Kurz weg <img src=x onerror="window.__xss=1"> Infos: https://angebot-stafl.de/hinweise/wartungsfenster-oktober-2026'})
     check('Wartung des Eingabebereichs gestartet', st == 200 and r.get('aktiv') is True, (st, r))
     ctx, pg = anmelden(br, 'erika', 'Editor-Zugang-77', '198.51.100.43')
     a = kacheln(pg)[0]
-    check('Bearbeiter: Angebot in Wartung, ohne Verweis', a['tag'] == 'DIV' and not a['href'] and a['badge'] == 'Wartung', a)
+    check('Bearbeiter: Favorit Angebot in Wartung, ohne Verweis', a['id'] == 'angebot' and a['tag'] == 'DIV' and not a['href'] and a['badge'] == 'Wartung', a)
     check('Wartung bleibt eigener Zustand: sichtbare Wartungs-Pille, kein Klebeband', 'warn' in a['badgeCls'] and a['badgeSichtbar'] and not a['bald'] and not a['gesperrt'], a)
     check('Bearbeiter: Initialen „EE“, Vorname in der Begrüßung', pg.text_content('#r-initialen') == 'EE' and pg.text_content('#db-titel').endswith(', Erika'),
           (pg.text_content('#r-initialen'), pg.text_content('#db-titel')))
-    check('Bearbeiter: Wartungshinweis als Text (kein HTML)', 'Kurz weg <img' in a['hint'] and a['bilder'] == 0 and not pg.evaluate('window.__xss'), a)
-    # Controlling: Modulzugang standardmäßig niemand (Finanzdaten, 28.10.2026) – Kachel und Eintrag fehlen Bearbeitern ganz
-    check('Bearbeiter: Bestand, Import, HR, CRM, Marketing, Leergut, REWE, Qualitätssicherung und Verwaltung weiter verfügbar (9 von 12, ohne Controlling)', '9 von 12' in pg.text_content('#db-sub'), pg.text_content('#db-sub'))
+    check('Bearbeiter: Wartungshinweis in Kachel und gelbem Hinweis als Text (kein HTML)', 'Kurz weg <img' in a['hint'] and a['bilder'] == 0 and not pg.evaluate('window.__xss')
+          and pg.locator('#db-hinweise img').count() == 0 and 'Wartung läuft · Angebot. Kurz weg <img' in pg.text_content('#db-hinweise'), (a, pg.text_content('#db-hinweise')))
+    check('Bearbeiter: keine offenen Punkte – „Alles erledigt“', pg.locator('#db-heute-liste .db-erledigt').count() == 1 and pg.is_hidden('#db-heute-zahl')
+          and pg.text_content('#db-sub') == 'keine offenen Punkte', pg.text_content('#db-sub'))
+    check('Bearbeiter: Schnellaktionen nur mit Recht und nutzbarem Modul (Angebot in Wartung fehlt)', pg.evaluate("[...document.querySelectorAll('#db-aktionen-liste a')].map(a => a.textContent.trim())")
+          == ['Urlaub beantragen', 'Daten importieren'])
+    # Controlling: Modulzugang standardmäßig niemand (Finanzdaten, 28.10.2026) – Eintrag fehlt Bearbeitern ganz
     L = leiste(pg)
     ang = next(e for e in L['Anwendungen'] if e['id'] == 'angebot')
     check('Bearbeiter: Seitenleiste ohne Controlling; Angebot ohne Verweis mit Stand „Wartung“', 'controlling' not in [e['id'] for g in L.values() for e in g]
           and ang['tag'] == 'SPAN' and ang['aus'] == 'true' and ang['stand'] == 'Wartung' and '(Wartung)' in ang['label'], ang)
+    check('Bearbeiter: Bestand, Leergut, CRM, REWE, Qualitätssicherung, HR, Marketing verfügbar, Import und Verwaltung unten', [e['id'] for e in L['Anwendungen'] if e['tag'] == 'A']
+          == ['bestand', 'leergut', 'crm', 'rewe', 'qs', 'hr', 'marketing'] and [e['id'] for e in L['Verwaltung & Daten']] == ['import', 'verwaltung'], L)
     pg.screenshot(path=os.path.join(SH, 'dashboard_wartung_bearbeiter.png'), full_page=True)
     ctx.close()
     ctx, pg = anmelden(br, 'admin', PW, '198.51.100.44')
@@ -392,6 +590,7 @@ with sync_playwright() as pw:
                 zeilen: Math.round(pr.height / parseFloat(s.lineHeight)), radius: parseFloat(s.borderTopLeftRadius)}; })()""")
     check('360 px: langer Wartungshinweis (Adresse) bricht innerhalb der Kachel um', lage['hinweis'], lage)
     check('360 px: lange Pille „Wartung – Zugang für Administratoren“ bleibt in der Kachel, mehrzeilig als abgerundetes Feld', lage['pille'] and lage['zeilen'] >= 2 and lage['radius'] <= 13, lage)
+    check('360 px: kein waagerechtes Scrollen (auch mit langem Hinweis)', not pg.evaluate('document.documentElement.scrollWidth > window.innerWidth'))
     pg.screenshot(path=os.path.join(SH, 'dashboard_wartung_admin_360.png'), full_page=True)
     ctx.close()
     st, r = A.call('modul_wartung_save', {'bereich': 'angebot.eingabe', 'active': False, 'grund': 'Test beendet'})
@@ -399,11 +598,13 @@ with sync_playwright() as pw:
 
     # ── Abmelden (Knopf in der Seitenleiste) beendet die Sitzung serverseitig ──
     ctx, pg = anmelden(br, 'erika', 'Editor-Zugang-77', '198.51.100.45')
-    check('nach der Wartung wieder verfügbar', kacheln(pg)[0]['badge'] == 'Verfügbar')
+    check('nach der Wartung wieder verfügbar', kacheln(pg)[0]['badge'] == 'Verfügbar' and pg.locator('.db-hinweis').count() == 0)
     pg.click('#r-abmelden'); pg.wait_for_selector('#db-login:not([hidden])')
     angemeldet = pg.evaluate("fetch('../api/?action=status', {credentials: 'same-origin'}).then(r => r.json()).then(j => j.loggedIn)")
     check('Abmelden: Anmeldehinweis, Seitenleiste entfernt, Sitzung beendet', angemeldet is False and pg.is_hidden('#db-bereich') and pg.is_hidden('#r-leiste')
           and pg.locator('#r-leiste .r-eintrag').count() == 0, angemeldet)
+    pg.keyboard.press('Control+k')
+    check('nach dem Abmelden: keine Suche mehr', pg.locator('#r-palette[open]').count() == 0)
     pg.reload(); pg.wait_for_selector('#db-login:not([hidden])')
     check('nach dem Neuladen weiter abgemeldet', pg.is_hidden('#db-bereich'))
     check('Anmeldehinweis als deckende Karte mit echtem Link', pg.evaluate("getComputedStyle(document.querySelector('#db-login')).backgroundColor") == 'rgb(255, 255, 255)'

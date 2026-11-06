@@ -1,0 +1,14 @@
+# Aktionen des Moduls „dashboard“: Startseite (Gestaltung „C2“) – „Heute für Sie“, Schnellaktionen, Zuletzt bearbeitet, Favoriten.
+# Nur auf dem Dashboard-Host (dashboard-stafl.de, WA_OBERFLAECHE=dashboard.start, GR-109); Code im Plattformkern
+# (app/api/aktionen/module.php, app/api/lib/startseite.php), die offenen Punkte liefern die Module selbst (<präfix>_startseite).
+# Erklärung der Felder: regeln/aktionen/LIESMICH.md · nach Änderungen: python3 werkzeuge/regeln.py erzeugen
+
+schema = 1
+modul = "dashboard"
+
+[aktion.start_heute]
+oberflaeche = "dashboard.start"
+
+[aktion.start_favoriten_save]
+oberflaeche = "dashboard.start"
+schreibend = true

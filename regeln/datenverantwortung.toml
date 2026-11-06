@@ -571,7 +571,7 @@ bereich = "intern"
 leser = ["angebot", "hr", "marketing", "qs"]   # qs: Mitarbeiter für Kürzel und Zuweisung von Prüfungen (Kennung, Name, Zugang); marketing: wählbare Verantwortliche (Kennung, Name, Recht marketing.bearbeiten); angebot: Bearbeiter von Bestellwünschen (orders.php, nur Kennung/Name/Recht); hr: Mitarbeiter = Nutzer (hr_personal über users_load)
 schreiber = ["hr"]   # nur über mitarbeiter_ohne_zugang_anlegen (lib/nutzer.php): Mitarbeiter ohne Anmeldung (zugang: false) für den Urlaubsplan
 schutz = "geheim"
-beschreibung = "Mitarbeiterzugänge, Rollen, Rechte-Ausnahmen, Zwei-Faktor, Passkeys, vertraute Geräte"
+beschreibung = "Mitarbeiterzugänge, Rollen, Rechte-Ausnahmen, Zwei-Faktor, Passkeys, vertraute Geräte, Anzeige-Einstellungen (Design, Darstellung, Favoriten der Startseite)"
 
 [[dokument]]
 name = "admin"

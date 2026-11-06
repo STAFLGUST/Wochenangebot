@@ -48,6 +48,10 @@ for a, b in (('crm_start', None), ('crm_kunde_save', {'key': 'kx', 'felder': {'s
 for a, b in (('marketing_start', None), ('marketing_beitrag_save', {'felder': {'titel': 'x'}}), ('marketing_export', {})):
     code, r = P.call(a, b)
     check(f'Marketing-Aktion auf fremdem Host: {a} → 404', code == 404 and 'Adresse' in r.get('error', ''), (code, r))
+# Startseite des Dashboards (dashboard.start) nur auf dem Dashboard-Host – hier 404 noch vor der Anmeldeprüfung
+for a, b in (('start_heute', None), ('start_favoriten_save', {'favoriten': []})):
+    code, r = P.call(a, b)
+    check(f'Dashboard-Aktion auf fremdem Host: {a} → 404', code == 404 and 'Adresse' in r.get('error', ''), (code, r))
 code, r = P.call('anmeldung_pruefen')
 check('Prüfung vor der Anmeldeseite nur auf deren Host: hier 404', code == 404 and 'Adresse' in r.get('error', ''), (code, r))
 check('Aktionen des Eingabebereichs hier weiter wie bisher (status 200, users 401)', P.call('status')[0] == 200 and P.call('users')[0] == 401)

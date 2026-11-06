@@ -505,14 +505,14 @@ hinweise = [
 [[modul]]
 id = "dashboard"
 name = "Dashboard"
-beschreibung = "Zentraler Einstieg: Anmeldung, Kacheln aus dem Modulregister, Modulstatus, Abmeldung"
+beschreibung = "Zentraler Einstieg: Anmeldung, Startseite (Favoriten, Heute für Sie, Schnellaktionen, Zuletzt bearbeitet), Modulstatus, Abmeldung"
 icon = "layout-grid"
 dashboard = false
 agent = "dashboard"
 abhaengigkeiten = ["plattform"]
 testgruppen = ["dashboard"]
-pfade = ["dashboard/**", "tests/e2e/test_dashboard.py"]
-pfade_geplant = ["regeln/aktionen/dashboard.toml"]
+pfade = ["dashboard/**", "regeln/aktionen/dashboard.toml", "tests/e2e/test_dashboard.py"]
+pfade_geplant = []
 hinweise = ["Kacheln kommen ausschließlich aus dem Modulregister – keine fest programmierte Liste."]
 
   [[modul.oberflaeche]]
