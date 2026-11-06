@@ -507,30 +507,10 @@ switch ($action) {
             $month = (string)($_GET['month'] ?? '');
             if (!preg_match('/^\d{4}-\d{2}$/', $month) || $month < protokoll_grenze()) $month = $months[0] ?? gmdate('Y-m');
             $entries = array_reverse(protokoll_monat($month));   // ab Trennstufe 4 mit dem Protokoll der Kundenseite
-            // Ohne Recht „Kunden ansehen“: Einträge mit Kundendaten (Adressen, E-Mails, Bestellungen, Kunden-IP) nur als Vorgang zeigen
-            if (!may($me, 'kunden.sehen')) {
-                foreach ($entries as &$e) {
-                    if (($e['r'] ?? '') === 'kunde' || in_array($e['a'] ?? '', LOG_KUNDENDATEN, true)) {
-                        $e['s'] = LOG_KUNDENDATEN_TEXT[$e['a']] ?? 'Vorgang mit Kundendaten';
-                        unset($e['d']);
-                        $e['ip'] = '';
-                        if (($e['r'] ?? '') === 'kunde') { $e['u'] = 'kunde'; $e['n'] = 'Kunde'; }
-                        $e['masked'] = true;
-                    }
-                }
-                unset($e);
-            }
-            // Ohne Recht „HR verwalten“: Vorgänge der Urlaubsverwaltung (Namen, Zeiträume von Abwesenheiten) nur als Vorgang zeigen –
-            // aus Name und Zeitraum ließe sich auf Krankheit schließen (Gesundheitsdaten)
-            if (!may($me, 'hr.verwalten')) {
-                foreach ($entries as &$e) {
-                    if (($e['a'] ?? '') !== 'hr') continue;
-                    $e['s'] = 'Vorgang der Urlaubsverwaltung';
-                    unset($e['d']);
-                    $e['masked'] = true;
-                }
-                unset($e);
-            }
+            // Ohne Recht „Kunden ansehen“ Einträge mit Kundendaten (Adressen, E-Mails, Bestellungen, Kunden-IP) und ohne Recht
+            // „HR verwalten“ Vorgänge der Urlaubsverwaltung nur als Vorgang zeigen – dieselbe Maskierung wie im Modul Sicherheit
+            // (protokoll_maskieren in lib/protokoll.php, eine Quelle für alle Leser)
+            $entries = protokoll_maskieren($entries, $me);
             respond(['ok' => true, 'month' => $month, 'months' => $months, 'aufbewahrung' => PROTOKOLL_MONATE, 'entries' => $entries]);
         }
 }

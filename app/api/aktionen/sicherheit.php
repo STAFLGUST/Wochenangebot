@@ -53,7 +53,8 @@ switch ($action) {
         if (!in_array($tage, [1, 7, 30, 90], true)) fail('Ungültiger Zeitraum.', 422);
         $art = (string)($_GET['art'] ?? '');
         if ($art !== '' && !isset(SEC_EREIGNIS_ARTEN[$art])) fail('Unbekannte Art.', 422);
-        respond(['ok' => true] + sec_ereignisse($tage, $art, mb_substr((string)($_GET['q'] ?? ''), 0, 80)));
+        // $me mitgeben: ohne das Recht „Kunden ansehen“ zeigt die Liste Vorgänge mit Kundendaten nur als Vorgang (lib/protokoll.php)
+        respond(['ok' => true] + sec_ereignisse($tage, $art, mb_substr((string)($_GET['q'] ?? ''), 0, 80), 300, $me));
     }
 
     case 'sicherheit_konten': {

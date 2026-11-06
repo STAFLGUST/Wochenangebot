@@ -191,7 +191,9 @@ try:
             c.on('pageerror', lambda e: errs.append(str(e)))
             c.goto(BASE + '/'); c.wait_for_selector('#btn-kunde-login'); c.click('#btn-kunde-login')
             c.fill('#kl-form [name=username]', 'kantine.post'); c.fill('#kl-form [name=password]', 'Kantine-Kennwort-5'); c.click('#kl-form [type=submit]')
-            c.wait_for_selector('#modebar [data-mode=liste]'); c.click('#modebar [data-mode=liste]'); c.wait_for_selector('tr.row .qty')
+            # #modebar steht fest im HTML; der Klick wirkt erst, wenn die Seite ihre Bedienelemente gebunden hat
+            c.wait_for_selector('html[data-bereit]')
+            c.click('#modebar [data-mode=liste]'); c.wait_for_selector('tr.row .qty')
             q = c.locator(f'#list .qty[data-qty="{item["id"]}"]'); q.fill('2'); q.press('Tab'); c.wait_for_selector('#orderbar:not([hidden])')
             c.click('#orderbar [data-order=open]'); c.wait_for_selector('#dlg-order[open]')
             c.click('#order-body [data-order=send]'); c.wait_for_selector('#order-body .o-done', timeout=10000)

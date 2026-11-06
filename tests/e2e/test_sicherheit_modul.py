@@ -263,8 +263,14 @@ with sync_playwright() as p:
     check('Dashboard: Hinweis „Notfallmodus aktiv“ für Administratoren', 'Notfallmodus aktiv' in pd.inner_text('#db-notfall'))
     ctx2.close()
     pg.click('#nf-aus'); pg.wait_for_selector('#sic-dlg[open] #nf-notiz')
+    check('Beenden-Dialog nennt den feldbezogenen Rückweg und die unberührten Listen',
+          'bleibt so, wie Sie es eingestellt haben' in pg.inner_text('#sic-dlg') and 'nie sperren' in pg.inner_text('#sic-dlg'),
+          pg.inner_text('#sic-dlg')[:300])
+    pg.screenshot(path=f'{SH}/sicherheit_notfall_ende_dialog_1440.png')
     pg.fill('#nf-notiz', 'Probe beendet'); pg.click('#sic-dlg .sic-dfuss [type=submit]'); pg.wait_for_selector('#sic-dlg h2:has-text("Notfall beendet")')
     check('Notfall beendet, Einstellungen wiederhergestellt', 'wie vor dem Notfall' in pg.inner_text('#sic-dlg') and doc('sicherheit-notfall').get('aktiv') is False)
+    check('Zusammenfassung nennt die zurückgenommenen Felder', 'Zurückgenommen' in pg.inner_text('#sic-dlg'), pg.inner_text('#sic-dlg')[:300])
+    pg.screenshot(path=f'{SH}/sicherheit_notfall_beendet_1440.png')
     dialog_zu(pg)
     pg.wait_for_selector('#tab-notfall .sic-held:not(.aktiv)')
     check('Verlauf zeigt den Notfall', 'Probe über die Oberfläche' in pg.inner_text('#tab-notfall'))
@@ -290,6 +296,17 @@ with sync_playwright() as p:
     box = pg.eval_on_selector('#sic-dlg', 'd => { const r = d.getBoundingClientRect(); return [r.left, r.width, Math.round(r.bottom), innerHeight]; }')
     check('390 px: Dialog als Blatt von unten (volle Breite, unten angelegt)', box[0] == 0 and box[1] == 390 and abs(box[2] - box[3]) <= 1, box)
     pg.screenshot(path=f'{SH}/sicherheit_notfall_dialog_390.png')
+    # Beenden-Dialog auch auf dem Handy: der Hinweis zum feldbezogenen Rückweg ist länger als der beim Auslösen
+    pg.fill('#nf-grund', 'Probe auf dem Handy')
+    halten(pg)
+    pg.click('#sic-dlg .sic-dfuss [data-d="zu"]'); pg.wait_for_selector('#sic-dlg', state='hidden')
+    pg.click('#nf-aus'); pg.wait_for_selector('#sic-dlg[open] #nf-notiz')
+    check('390 px: Beenden-Dialog ohne waagerechte Scrollleiste',
+          pg.evaluate("(() => { const d = document.querySelector('#sic-dlg'); return d.scrollWidth <= d.clientWidth + 1; })()"))
+    pg.screenshot(path=f'{SH}/sicherheit_notfall_ende_dialog_390.png')
+    pg.click('#sic-dlg .sic-dfuss [type=submit]'); pg.wait_for_selector('#sic-dlg h2:has-text("Notfall beendet")')
+    check('390 px: Notfall über die Oberfläche beendet', doc('sicherheit-notfall').get('aktiv') is False)
+    pg.screenshot(path=f'{SH}/sicherheit_notfall_beendet_390.png')
     dialog_zu(pg)
     pg.click('#sic-tabs [data-tab="einstellungen"]'); pg.click('[data-e="e-anmeldung"]'); pg.wait_for_selector('#sic-dlg[open] #sec-form')
     check('390 px: Dialog „Anmeldung und Passwörter“ mit Hinweis ohne waagerechte Scrollleiste',
