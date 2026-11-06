@@ -33,6 +33,8 @@
   --r-warn: #7a4a00; --r-warn-bg: #fbefd9;
   --r-neutral: #5f5a56; --r-neutral-bg: rgba(29, 27, 26, .06);
   --r-notfall: #a3192c; --r-notfall-text: #ffffff;
+  --r-rot: #a3192c; --r-rot-bg: #fbe9eb;   /* überfällig (Startseite, Zahlen der Seitenleiste) */
+  --r-rot-flaeche: #a3192c; --r-rot-ink: #ffffff;   /* gefüllte Zahl „überfällig“ */
   --r-bald-a: #ead9a8; --r-bald-b: #f3e7c2; --r-bald-text: #5a4a1e;   /* Klebeband „Bald“ */
   --r-schleier: rgba(29, 27, 26, .32);
   /* Modulfarben je Registersymbol (icon) – neue Module erhalten ohne Änderung das neutrale Grau */
@@ -51,6 +53,7 @@
     --r-akzent: #b23a4b; --r-akzent-hover: #c64d5e; --r-akzent-text: #f0a3ae; --r-fokus: 0 0 0 3px rgba(224, 129, 144, .5);
     --r-schatten: none; --r-schatten-aktiv: none; --r-schatten-menue: 0 12px 40px rgba(0, 0, 0, .55);
     --r-ok: #7fd3a0; --r-ok-bg: rgba(127, 211, 160, .12); --r-warn: #f1c27d; --r-warn-bg: rgba(241, 194, 125, .13);
+    --r-rot: #f3a0aa; --r-rot-bg: rgba(243, 160, 170, .14); --r-rot-flaeche: #f3a0aa; --r-rot-ink: #2a1014;
     --r-neutral: #c9c3bd; --r-neutral-bg: rgba(255, 255, 255, .08);
     --r-bald-a: #4a4128; --r-bald-b: #3a3322; --r-bald-text: #e6d6a8; --r-schleier: rgba(0, 0, 0, .55);
     --r-m-tag: #e07b8a; --r-m-boxes: #74c08f; --r-m-crate: #c4a185; --r-m-users: #82aee6; --r-m-store: #ec8590;
@@ -67,6 +70,7 @@
     --r-akzent: #b23a4b; --r-akzent-hover: #c64d5e; --r-akzent-text: #f0a3ae; --r-fokus: 0 0 0 3px rgba(224, 129, 144, .5);
     --r-schatten: none; --r-schatten-aktiv: none; --r-schatten-menue: 0 12px 40px rgba(0, 0, 0, .55);
     --r-ok: #7fd3a0; --r-ok-bg: rgba(127, 211, 160, .12); --r-warn: #f1c27d; --r-warn-bg: rgba(241, 194, 125, .13);
+    --r-rot: #f3a0aa; --r-rot-bg: rgba(243, 160, 170, .14); --r-rot-flaeche: #f3a0aa; --r-rot-ink: #2a1014;
     --r-neutral: #c9c3bd; --r-neutral-bg: rgba(255, 255, 255, .08);
     --r-bald-a: #4a4128; --r-bald-b: #3a3322; --r-bald-text: #e6d6a8; --r-schleier: rgba(0, 0, 0, .55);
     --r-m-tag: #e07b8a; --r-m-boxes: #74c08f; --r-m-crate: #c4a185; --r-m-users: #82aee6; --r-m-store: #ec8590;
@@ -100,6 +104,9 @@ body.r { margin: 0; min-height: 100vh; min-height: 100dvh; background: var(--r-g
 .r-app { display: grid; grid-template-columns: minmax(0, 1fr); min-height: 100vh; min-height: 100dvh; }
 .r-app.r-bereit { grid-template-columns: var(--r-breite) minmax(0, 1fr); }
 .r-app.r-schmal { --r-breite: 60px; }
+@media (min-width: 901px) {
+  .r-app.r-bereit { background: linear-gradient(to right, var(--r-leiste) calc(var(--r-breite) - 1px), var(--r-linie) calc(var(--r-breite) - 1px) var(--r-breite), transparent var(--r-breite)); }
+}
 .r-inhalt { min-width: 0; display: flex; flex-direction: column; }
 .r-i { width: 16px; height: 16px; flex: none; fill: none; stroke: currentColor; stroke-width: 1.9; stroke-linecap: round; stroke-linejoin: round; }
 
@@ -133,6 +140,15 @@ a.r-eintrag[aria-current="page"] { background: var(--r-aktiv); box-shadow: var(-
 .r-rolle { font-size: 11px; color: var(--r-leise); overflow-wrap: anywhere; }
 .r-abmelden { flex: none; width: 34px; height: 34px; border: 0; border-radius: 9px; display: grid; place-items: center; background: transparent; color: var(--r-text-2); cursor: pointer; }
 .r-abmelden:hover { background: var(--r-hover); color: var(--r-text); }
+/* Suchfeld oben in der Leiste (öffnet die Suche, Strg K) und Zahlen offener Punkte (nur Dashboard) */
+.r-suche { display: flex; align-items: center; gap: 8px; min-height: 34px; margin: 0; padding: 0 8px; border: 1px solid var(--r-linie-2); border-radius: 9px;
+  background: var(--r-flaeche); color: var(--r-leise); font: inherit; font-size: 13px; text-align: left; cursor: pointer; }
+.r-suche:hover { color: var(--r-text); border-color: var(--r-zart); }
+.r-suche .r-text { flex: 1; }
+.r-taste { flex: none; padding: 1px 5px; border: 1px solid var(--r-linie-2); border-radius: 5px; font: inherit; font-size: 10.5px; font-weight: 500; color: var(--r-leise); background: var(--r-grund); }
+.r-zahl { flex: none; min-width: 18px; height: 18px; padding: 0 5px; box-sizing: border-box; border-radius: 9px; display: inline-grid; place-items: center;
+  font-size: 11px; font-weight: 600; line-height: 1; font-variant-numeric: tabular-nums; background: var(--r-neutral-bg); color: var(--r-text-2); }
+.r-zahl.r-zahl-rot { background: var(--r-rot-flaeche); color: var(--r-rot-ink); }
 
 /* Schmale Leiste (nur Symbole, Namen als Tooltip) – nur am Desktop; das Menü am Handy zeigt immer die Namen.
    r-schmal: immer (Eingabebereich mit eigener Navigation). r-auto-schmal (Modulseiten, setzt rahmen.js): unter 1440 px,
@@ -145,6 +161,10 @@ a.r-eintrag[aria-current="page"] { background: var(--r-aktiv); box-shadow: var(-
   .r-schmal .r-leiste .r-trenner { display: block; }
   .r-schmal .r-leiste .r-eintrag { justify-content: center; padding: 0; }
   .r-schmal .r-leiste .r-fuss { flex-direction: column; padding: 10px 0 0; }
+  .r-schmal .r-leiste .r-suche { justify-content: center; padding: 0; }
+  .r-schmal .r-leiste .r-suche :is(.r-text, .r-taste) { display: none; }
+  .r-schmal .r-leiste .r-zahl { position: absolute; top: 4px; right: 6px; min-width: 8px; width: 8px; height: 8px; padding: 0; font-size: 0; background: var(--r-text-2); }
+  .r-schmal .r-leiste .r-zahl.r-zahl-rot { background: var(--r-rot-flaeche); }
 }
 @media (min-width: 901px) and (max-width: 1439px) {
   .r-app.r-auto-schmal { --r-breite: 60px; }
@@ -155,6 +175,10 @@ a.r-eintrag[aria-current="page"] { background: var(--r-aktiv); box-shadow: var(-
   .r-auto-schmal .r-leiste .r-trenner { display: block; }
   .r-auto-schmal .r-leiste .r-eintrag { justify-content: center; padding: 0; }
   .r-auto-schmal .r-leiste .r-fuss { flex-direction: column; padding: 10px 0 0; }
+  .r-auto-schmal .r-leiste .r-suche { justify-content: center; padding: 0; }
+  .r-auto-schmal .r-leiste .r-suche :is(.r-text, .r-taste) { display: none; }
+  .r-auto-schmal .r-leiste .r-zahl { position: absolute; top: 4px; right: 6px; min-width: 8px; width: 8px; height: 8px; padding: 0; font-size: 0; background: var(--r-text-2); }
+  .r-auto-schmal .r-leiste .r-zahl.r-zahl-rot { background: var(--r-rot-flaeche); }
 }
 
 /* ── Kopfzeile am Handy und Menü ── */
@@ -176,7 +200,34 @@ a.r-eintrag[aria-current="page"] { background: var(--r-aktiv); box-shadow: var(-
   .r-app.r-bewegung.r-offen .r-leiste { transition: transform .2s ease; }
   .r-app.r-offen .r-schleier { display: block; position: fixed; inset: 0; z-index: 40; background: var(--r-schleier); }
   .r-eintrag { min-height: 40px; font-size: 14px; }
+  .r-suche { min-height: 40px; font-size: 14px; }
+  .r-taste { display: none; }
 }
+
+/* ── Suche (Dialog) ── */
+.r-palette { box-sizing: border-box; width: min(560px, calc(100vw - 32px)); max-height: min(520px, calc(100dvh - 120px)); margin: 12vh auto auto; padding: 0;
+  border: 1px solid var(--r-linie-2); border-radius: 16px; background: var(--r-flaeche); color: var(--r-text); box-shadow: var(--r-schatten-menue); font-family: var(--font); }
+.r-palette[open] { display: flex; flex-direction: column; }
+.r-palette::backdrop { background: var(--r-schleier); -webkit-backdrop-filter: none; backdrop-filter: none; }   /* kein Glas (C2) */
+.r-palette-feld { display: flex; align-items: center; gap: 10px; padding: 12px 12px 12px 16px; border-bottom: 1px solid var(--r-linie); color: var(--r-leise); }
+.r-palette-feld .r-i { width: 18px; height: 18px; }
+.r-palette-feld input { flex: 1; min-width: 0; height: 32px; border: 0; outline: 0; background: transparent; color: var(--r-text); font: inherit; font-size: 16px; }
+.r-palette-feld input:focus-visible { box-shadow: none; }
+.r-palette-zu { flex: none; width: 32px; height: 32px; border: 0; border-radius: 8px; display: grid; place-items: center; background: transparent; color: var(--r-leise); cursor: pointer; }
+.r-palette-zu:hover { background: var(--r-hover); color: var(--r-text); }
+.r-palette-liste { flex: 1; overflow-y: auto; overscroll-behavior: contain; padding: 6px 8px 8px; }
+.r-palette-gruppe { margin: 8px 8px 4px; font-size: 10px; font-weight: 600; letter-spacing: .06em; text-transform: uppercase; color: var(--r-leise); }
+.r-palette-treffer { display: flex; align-items: center; gap: 10px; min-height: 40px; padding: 0 10px; border-radius: 9px; color: var(--r-text); font-size: 14px; font-weight: 500; text-decoration: none; }
+.r-palette-treffer .r-i { color: var(--r-m, var(--r-text-2)); }
+.r-palette-treffer span { flex: 1; min-width: 0; overflow-wrap: anywhere; }
+.r-palette-treffer .r-palette-pfeil { color: var(--r-zart); opacity: 0; }
+.r-palette-treffer:hover { background: var(--r-hover); color: var(--r-text); }
+.r-palette-treffer[aria-selected="true"] { background: var(--r-aktiv); box-shadow: inset 0 0 0 1px var(--r-linie-2); }
+.r-palette-treffer[aria-selected="true"] .r-palette-pfeil { opacity: 1; }
+.r-palette-leer { margin: 16px; text-align: center; font-size: 14px; color: var(--r-leise); }
+.r-palette-fuss { margin: 0; padding: 8px 16px; border-top: 1px solid var(--r-linie); font-size: 11.5px; color: var(--r-leise); }
+.r-palette-fuss kbd { display: inline-block; min-width: 14px; padding: 0 4px; margin-right: 2px; border: 1px solid var(--r-linie-2); border-radius: 4px; font: inherit; font-size: 10.5px; text-align: center; }
+@media (max-width: 560px) { .r-palette { margin-top: 16px; } .r-palette-fuss { display: none; } }
 
 /* ── Zur Startseite: gemeinsamer Knopf .stafl-zurueck (app.css) auf Seiten im Rahmen ruhig wie die runden Knöpfe ── */
 body.r .stafl-zurueck { height: 36px; padding: 0 12px 0 8px; border: 1px solid var(--r-linie-2); background: var(--r-flaeche); color: var(--r-text-2);
@@ -195,9 +246,12 @@ body.r .stafl-zurueck.kompakt { width: 36px; padding: 0; }
   background: var(--r-flaeche); color: var(--r-text); cursor: pointer; transition: background .15s; }
 .r-rund:hover { background: var(--r-flaeche-2); }
 .r-rund[aria-pressed="true"] { background: var(--r-akzent); border-color: var(--r-akzent); color: var(--r-akzent-ink); }
+.r-rund.r-rund-akzent { background: var(--r-akzent); border-color: var(--r-akzent); color: var(--r-akzent-ink); }
+.r-rund.r-rund-akzent:hover { background: var(--r-akzent-hover); border-color: var(--r-akzent-hover); }
 .r-rund .r-i { width: 17px; height: 17px; }
 .r-abschnitt { display: flex; flex-direction: column; gap: 12px; }
 .r-abschnitt > h2, .r-abschnitt-kopf h2 { margin: 0; font-size: 15px; font-weight: 600; }
+.r-abschnitt-kopf { display: flex; align-items: center; justify-content: space-between; gap: 12px; min-height: 24px; }
 .r-karte { background: var(--r-flaeche); border: 1px solid var(--r-linie); border-radius: 16px; box-shadow: var(--r-schatten); }
 @media (max-width: 900px) {
   .r-seite { padding: 22px 16px 40px; gap: 22px; }

@@ -1,7 +1,8 @@
 """Dashboard-Host (dashboard-stafl.de): nur Grundaktionen (lib/herkunft.php, host_nur_grundaktionen, GR-109).
 
 Der Testserver meldet sich wie das Dashboard (WA_OIDC=1, WA_OBERFLAECHE=dashboard.start), ohne Keycloak – es gibt also
-keine geprüfte Identität. Das Dashboard braucht nur Status, Modulübersicht, Darstellung (Hell/Dunkel) und Abmelden.
+keine geprüfte Identität. Das Dashboard braucht nur Status, Modulübersicht, Darstellung (Hell/Dunkel) und Abmelden – dazu
+seine eigenen Aktionen der Startseite (start_heute, start_favoriten_save), die es nur auf diesem Host gibt.
 Aktionen des gemeinsamen Eingabebereichs (Angebot, Bestand, Verwaltung) und der Modulseiten gibt es dort nicht (404,
 noch vor der Anmeldeprüfung): Das Modul „dashboard“ hat keinen eigenen Zugang, über diese Adresse ließe sich sonst ein
 entzogener Modulzugang umgehen. Den Ablauf mit echter Anmeldung prüft tests/oidc/test_oidc.py.
@@ -23,6 +24,9 @@ check('Status erreichbar (nicht angemeldet)', code == 200 and r.get('loggedIn') 
 check('Modulübersicht: Anmeldung verlangt (401, nicht 404)', P.call('module_status')[0] == 401)
 check('Darstellung speichern: Anmeldung verlangt (nicht 404)', P.call('theme_save', {'theme': 'dark'})[0] in (401, 403))
 check('Abmelden möglich', P.call('logout', {})[0] == 200)
+# Startseite (Gestaltung „C2“): eigene Aktionen des Dashboards gibt es nur hier – sie verlangen die Anmeldung (nicht 404)
+check('Startseite „Heute für Sie“: Anmeldung verlangt (401, nicht 404)', P.call('start_heute')[0] == 401)
+check('Favoriten speichern: Anmeldung verlangt (nicht 404)', P.call('start_favoriten_save', {'favoriten': []})[0] in (401, 403))
 for a, b in (('draft', None), ('bestellungen', None), ('kunden', None), ('stock', None), ('history_list', None), ('master', None),
              ('users', None), ('security_status', None), ('auswertung', None), ('save_draft', {'model': {}}), ('kunde_save', {'id': ''}),
              ('stock_import', {'date': '2026-10-16', 'articles': []}), ('mitarbeiter_hr', None), ('hr_start', None), ('crm_start', None),

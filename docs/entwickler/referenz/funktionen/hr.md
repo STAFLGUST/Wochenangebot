@@ -2,7 +2,7 @@
 
 <!-- ERZEUGT von `python3 werkzeuge/doku.py erzeugen` – nicht von Hand ändern. Quelle: Funktionen und Kommentare im Code. Die CI prüft, dass diese Datei zum Code passt. -->
 
-11 Dateien, 233 Funktionen – in der Reihenfolge der Datei, **fett** die Abschnitte. Text = erste Aussage des Kommentars direkt über der Funktion (Python: Docstring). Übersicht aller Module: [README.md](README.md).
+11 Dateien, 234 Funktionen – in der Reihenfolge der Datei, **fett** die Abschnitte. Text = erste Aussage des Kommentars direkt über der Funktion (Python: Docstring). Übersicht aller Module: [README.md](README.md).
 
 ## `app/api/aktionen/hr.php`
 
@@ -219,6 +219,7 @@ _Modul HR · Urlaubsverwaltung – Fachlogik (Daten, Feiertage, Urlaubskonto, An
 - `hr_monatstage(jahr, monat, einst)` – Tageskopf eines Monats: Wochentag, Wochenende, Feiertag, Ferien, Urlaubssperre
 - `hr_zeile(p, eintraege, tage, sicht)` – Kürzel je Person und Tag eines Monats.
 - `hr_monat(jahr, monat, me, voll)` – Monatsplan: alle aktiven Mitarbeiter, gruppiert nach Abteilung (Reihenfolge laut Position)
+- `hr_startseite(me)` – Startseite des Dashboards („Heute für Sie“, lib/startseite.php): was dieser Mitarbeiter in HR entscheiden kann – dieselben Zahlen wie am Reiter „Anträge“ …
 
 ## `app/api/module/hr/zeiterfassung.php`
 

@@ -2,7 +2,7 @@
 
 <!-- ERZEUGT von `python3 werkzeuge/doku.py erzeugen` – nicht von Hand ändern. Quelle: Funktionen und Kommentare im Code. Die CI prüft, dass diese Datei zum Code passt. -->
 
-113 Dateien, 1145 Funktionen – in der Reihenfolge der Datei, **fett** die Abschnitte. Text = erste Aussage des Kommentars direkt über der Funktion (Python: Docstring). Übersicht aller Module: [README.md](README.md).
+114 Dateien, 1160 Funktionen – in der Reihenfolge der Datei, **fett** die Abschnitte. Text = erste Aussage des Kommentars direkt über der Funktion (Python: Docstring). Übersicht aller Module: [README.md](README.md).
 
 ## `.github/scripts/apt_vorrat.py`
 
@@ -277,7 +277,7 @@ _Herkunftsprüfung im API-Einstieg (GR-109, ADR-003 §1)_
 - `herkunft_fremd(aktion, method)` – Grund der Abweisung oder null, wenn die Anfrage von der eigenen Seite stammt
 - `herkunft_pruefen(aktion, method)` – Abweisen, ohne die Firewall zu belasten: eine fremde Seite darf ihre Besucher nicht sperren lassen (vgl. fw_fremd)
 - `host_eigene_seite(oberflaeche)` – Aktion ↔ Host (GR-109, ADR-003 §3): Auf einem Keycloak-Host meldet der Webserver seine Oberfläche (SetEnv WA_OBERFLAECHE, nie aus Kopfzeilen).
-- `host_nur_grundaktionen(host)` – Hosts ohne Fachaktionen: das Dashboard (dashboard-stafl.de) braucht nur Status, Modulübersicht, Darstellung und Abmelden.
+- `host_nur_grundaktionen(host)` – Hosts ohne Fachaktionen: das Dashboard (dashboard-stafl.de) braucht nur Status, Modulübersicht, Darstellung und Abmelden – dazu seine eigenen Aktionen der …
 - `host_fremd(aktion)` – true, wenn die Aktion auf diesem Host nicht angeboten wird
 - `host_pruefen(aktion)`
 
@@ -652,6 +652,21 @@ _Mitarbeiter-Sitzung, Rollen, Passwortbestätigung, CSRF_
 - `keep_current_session(u)` – Nach Änderungen am zweiten Faktor nur die bestätigende Sitzung behalten.
 - `require_csrf()`
 
+## `app/api/lib/startseite.php`
+
+_Startseite des Dashboards (Gestaltung „C2“)_
+
+- `startseite_tage(datum, heute)` – Hilfen für die Anbieter der Module: Tage von heute bis zu einem Datum und die Gruppe eines Punkts
+- `startseite_art(tage, vorlauf)` – '' = (noch) kein Punkt für die Startseite
+- `startseite_de(datum)` – Kurzform eines Datums für Texte: „06.11.“
+- `startseite_module(me)` – Module mit nutzbarer Kachel (wie die Kacheln des Dashboards: Modulzugang, Freigabe, Wartung)
+- `startseite_punkt(p, modul)`
+- `startseite_heute(me)`
+- `startseite_vergleich(a, b)` – Überfällig vor heute vor demnächst; innerhalb nach Datum (ohne Datum zuletzt), dann Reihenfolge der Module
+- `startseite_zuletzt(me, module)` – Eigene letzte Änderungen aus dem Protokoll (laufender und vorheriger Monat), je Text nur die neueste
+- `startseite_aktionen(me, module)`
+- `startseite_favoriten_pruefen(liste)` – Favoriten prüfen: nur Module mit Kachel, ohne Doppelte, höchstens STARTSEITE_FAVORITEN_MAX; null = zurück zum Standard
+
 ## `app/api/mail.php`
 
 _E-Mail-Versand über einen SMTP-Server (z._
@@ -830,6 +845,11 @@ _STAFL-Plattform · Gemeinsamer Rahmen_
 - `entfernen()` – Leiste entfernen (z. B. nach dem Abmelden): Seite wieder ohne Rahmen
 - `holen(action, body, csrf)`
 - `selbst(wunsch)`
+- `zahlen(z)` – Zahlen offener Punkte je Anwendung an den Einträgen der Leiste (nur Dashboard): {crm: {offen: 3, ueberfaellig: 1}, …}. Rot, wenn etwas überfällig ist; in der …
+- `suche(liste)` – Suche: Dialog mit Eingabefeld und Trefferliste (Tastatur: ↑ ↓ Enter, Escape schließt).
+- `sucheDialog()`
+- `sucheZeigen()`
+- `sucheOeffnen()`
 
 ## `app/assets/theme.js`
 

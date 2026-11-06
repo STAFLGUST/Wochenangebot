@@ -2,7 +2,7 @@
 
 <!-- ERZEUGT von `python3 werkzeuge/doku.py erzeugen` – nicht von Hand ändern. Quelle: Funktionen und Kommentare im Code. Die CI prüft, dass diese Datei zum Code passt. -->
 
-5 Dateien, 139 Funktionen – in der Reihenfolge der Datei, **fett** die Abschnitte. Text = erste Aussage des Kommentars direkt über der Funktion (Python: Docstring). Übersicht aller Module: [README.md](README.md).
+5 Dateien, 140 Funktionen – in der Reihenfolge der Datei, **fett** die Abschnitte. Text = erste Aussage des Kommentars direkt über der Funktion (Python: Docstring). Übersicht aller Module: [README.md](README.md).
 
 ## `app/api/aktionen/rewe.php`
 
@@ -137,6 +137,7 @@ _REWE · Vordisposition Dry Aged_
 **Wochenabfrage**
 
 - `rw_woche(kw, me, wer)` – $wer: '' = eigene Liste, Nutzer-ID = Liste dieser Person (nur mit „alle“), '*' = alle Listen (nur mit „alle“)
+- `rw_startseite(me)` – Startseite des Dashboards („Heute für Sie“, lib/startseite.php): Märkte der eigenen Liste in der laufenden Wochenabfrage, die noch keine Antwort haben – …
 - `rw_dauer_uebernehmen(kw, me, wer, nurIds)` – Fällige Daueraufträge einer KW als Bestellung übernehmen (eigene Märkte bzw. mit „alle“ die gewählte Liste)
 - `rw_letzte_bestellungen()` – Letzte Bestellung je Markt über alle Jahre (Märkteübersicht, ruhende Märkte)
 
