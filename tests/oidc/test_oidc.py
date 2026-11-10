@@ -244,7 +244,7 @@ for cid in ('dashboard', 'angebot', 'verwaltung', 'bestand', 'hr', 'crm', 'marke
           (c.get('attributes', {}).get('minimum.acr.value'), [m.get('protocolMapper') for m in c.get('protocolMappers', [])]))
 check('Realm: eigener Anmeldeablauf mit Stufen (Passwort, zweiter Faktor)', realm.get('browserFlow') == 'mitarbeiter-browser', realm.get('browserFlow'))
 _log = open(os.path.join(WORK, 'realm-aktualisieren.log'), encoding='utf-8').read()
-check('Realm auf aktuellem Stand (realm-aktualisieren beim Start, Protokoll)', 'Realm aktuell (Stand 16' in _log, _log[-300:])
+check('Realm auf aktuellem Stand (realm-aktualisieren beim Start, Protokoll)', 'Realm aktuell (Stand 17' in _log, _log[-300:])
 # Stand 15: Passwortregeln aus der Anwendung – beim Start ist sie hier nicht über APP_PHP erreichbar: Hinweis, nichts geändert, kein Abbruch
 check('Stand 15: ohne lesbare Anwendung Hinweis statt Abbruch, Passwortregeln unverändert',
       'Einstellungen der Anwendung nicht lesbar' in _log and 'konten.sh richtlinien' in _log and realm.get('failureFactor') == 5, _log[-500:])
@@ -320,6 +320,8 @@ check('Client „konten“: vertraulich, nur Service-Account (kein Anmeldeablauf
       _k.get('publicClient') is False and _k.get('serviceAccountsEnabled') is True and _k.get('standardFlowEnabled') is False
       and _k.get('directAccessGrantsEnabled') is False and _k.get('implicitFlowEnabled') is False and not _k.get('redirectUris')
       and 'minimum.acr.value' not in _k.get('attributes', {}) and _k.get('secret') not in (None, '@GEHEIM_KONTEN@'), _k)
+_ks = [x.get('name') for x in json.loads(anfrage(f"{KC}/admin/realms/mitarbeiter/clients/{_k.get('id')}/default-client-scopes", kopf={'Authorization': 'Bearer ' + tok})[2] or '[]')]
+check('Stand 17: Client „konten“ mit Scope kc-admin-api (Verwaltungsschnittstelle ab Keycloak 26.8.2 nur mit diesem Scope)', 'kc-admin-api' in _ks, _ks)
 _sa = json.loads(anfrage(f"{KC}/admin/realms/mitarbeiter/clients/{_k.get('id')}/service-account-user", kopf={'Authorization': 'Bearer ' + tok})[2])
 _rm = clients.get('realm-management', {}).get('id')
 _rollen = sorted(x['name'] for x in json.loads(anfrage(f"{KC}/admin/realms/mitarbeiter/users/{_sa.get('id')}/role-mappings/clients/{_rm}", kopf={'Authorization': 'Bearer ' + tok})[2]))

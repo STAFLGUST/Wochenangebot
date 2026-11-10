@@ -514,6 +514,17 @@ konten_rechte() {
   [ -n "$cid" ] || return 0
   sa=$(kc get "clients/$cid/service-account-user" -r "$REALM" --fields id --format csv --noquotes | head -1)
   [ -n "$sa" ] || abbruch "Client konten ohne Service-Account – Realm-Datei prüfen."
+  # Stand 17 (Keycloak ab 26.8.2, CVE-2026-19688): die Verwaltungsschnittstelle nimmt nur noch Tokens mit dem Scope
+  # kc-admin-api an (sonst 401). Keycloak gibt ihn nur admin-cli und der Admin-Konsole – dem Client konten hier dazu.
+  # Ältere Keycloak-Fassungen kennen den Scope nicht: dann nichts zu tun.
+  sid=$(kc get client-scopes -r "$REALM" --fields id,name --format csv --noquotes | grep ',kc-admin-api$' | cut -d, -f1 | head -1)
+  if [ -n "$sid" ]; then
+    case " $(kc get "clients/$cid/default-client-scopes" -r "$REALM" --fields name --format csv --noquotes | tr '\n' ' ') " in
+      *" kc-admin-api "*) ;;
+      *) kc update "clients/$cid/default-client-scopes/$sid" -r "$REALM" >/dev/null
+         echo "gesetzt:   Scope kc-admin-api für den Client konten (Verwaltungsschnittstelle ab Keycloak 26.8.2)" ;;
+    esac
+  fi
   # Erst die Gruppe mit ihren Rechten, dann abgleichen, zuletzt manage-users entfernen – keine Lücke für die Verwaltung
   konten_feinrechte "$cid"
   rc=0; gruppe_abgleichen || rc=$?
@@ -610,7 +621,7 @@ for c in json.load(sys.stdin):
   done
   konten_rechte
   richtlinien_setzen
-  echo "Realm aktuell (Stand 16: Anwendung verwaltet nur Konten der Gruppe anwendungskonten, nie Administratoren; Stand 15: Passwortregeln und Kontosperre aus den Einstellungen der Anwendung; Stand 14: kein Passwort-Grant am Token-Endpunkt; Qualitätssicherung unter eigener Adresse; REWE unter eigener Adresse; Leergut unter eigener Adresse; Controlling unter eigener Adresse; Sicherheit unter eigener Adresse; Mitarbeiterkonten aus der Verwaltung; Marketing, CRM, HR, Bestand und Verwaltung unter eigener Adresse; zweiter Faktor nur für Pflicht-Konten, Leerlauf 4 Stunden)."
+  echo "Realm aktuell (Stand 17: Client konten mit Scope kc-admin-api (Keycloak ab 26.8.2); Stand 16: Anwendung verwaltet nur Konten der Gruppe anwendungskonten, nie Administratoren; Stand 15: Passwortregeln und Kontosperre aus den Einstellungen der Anwendung; Stand 14: kein Passwort-Grant am Token-Endpunkt; Qualitätssicherung unter eigener Adresse; REWE unter eigener Adresse; Leergut unter eigener Adresse; Controlling unter eigener Adresse; Sicherheit unter eigener Adresse; Mitarbeiterkonten aus der Verwaltung; Marketing, CRM, HR, Bestand und Verwaltung unter eigener Adresse; zweiter Faktor nur für Pflicht-Konten, Leerlauf 4 Stunden)."
   if [ "$ENV_NEU" = 1 ]; then echo "Neue Werte in .env – die Anwendung liest sie nach: docker compose up -d app-mitarbeiter"; fi
 }
 

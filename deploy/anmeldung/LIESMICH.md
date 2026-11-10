@@ -118,6 +118,12 @@ spricht Keycloak im internen Netz an (`WA_KONTEN_URL=http://keycloak:8080`, nich
 Verwaltung „noch nicht eingerichtet“ – sonst ändert sich nichts. Rückweg: Client `konten` in Keycloak deaktivieren oder die
 Zeile `OIDC_SECRET_KONTEN` aus `.env` entfernen und `docker compose up -d app-mitarbeiter`.
 
+Stand 17 (10.11.2026, Keycloak 26.8.2): Keycloak nimmt an der Verwaltungsschnittstelle nur noch Tokens mit dem Scope
+`kc-admin-api` an (CVE-2026-19688, sonst 401). `realm-aktualisieren` gibt ihn dem Client `konten` als Standard-Scope;
+ältere Keycloak-Fassungen kennen ihn nicht (dann nichts zu tun). **Nach dem Release mit Keycloak 26.8.2 einmal**
+`sh deploy/anmeldung/konten.sh realm-aktualisieren` – bis dahin kann die Verwaltung keine Konten der zentralen Anmeldung
+ändern, und die erste Anmeldung eines Administrators meldet „Die zentrale Anmeldung ist gerade nicht erreichbar“.
+
 Stand 16 (04.11.2026, ADR-007 Stufe 1b): Die Verwaltung der Anwendung ändert nur noch Konten der Gruppe
 `anwendungskonten` – das sind die Konten der Mitarbeiter **ohne** Administratorrolle. Administratoren, Konten mit
 Verwaltungsrollen von Keycloak und Service-Accounts stehen nie darin. `realm-aktualisieren` legt Gruppe, Regel
