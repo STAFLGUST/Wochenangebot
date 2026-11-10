@@ -33,7 +33,7 @@ function hr_einstellungen_aus(array $einst): array
     return ['sperren' => $einst['sperrenEigene'], 'regelSperren' => $einst['regelSperren'], 'schliesstage' => $einst['schliesstage'],
             'sperrenAuto' => array_merge(hr_regel_sperren($j, $einst['schliesstage']), hr_regel_sperren($j + 1, $einst['schliesstage'])),
             'ferien' => $einst['ferien'], 'regeln' => $einst['regeln'], 'regelnStandard' => HR_REGELN_STANDARD, 'verfallAb' => $einst['verfallAb'],
-            'planung' => array_diff_key(hr_planung_einst(), ['abschluss' => true])];
+            'planung' => array_diff_key(hr_planung_einst(), ['abschluss' => true]), 'ueberziehenMax' => $einst['ueberziehenMax']];
 }
 
 switch ($action) {
@@ -76,6 +76,9 @@ switch ($action) {
                      'antraege' => $einst['antraege'], 'regeln' => $einst['regeln'],
                      // Jahresplanung: Stand des Mitarbeiters nur in der Planungsphase; Vertretung Pflicht bei Urlaubsanträgen
                      'planung' => hr_planung_ich($ich, $abw['eintraege']), 'vertretungPflicht' => hr_planung_einst()['vertretungPflicht'],
+                     // feste Vertretung aus den Stammdaten (im Antrag gesperrt) und wen der Mitarbeiter vertritt („Sie vertreten“)
+                     'festeVertretung' => $ich && ($fv = hr_feste_vertretung($ich, $personal)) ? ['id' => $fv['id'], 'name' => hr_name($fv)] : null,
+                     'vertretungen' => $ich ? hr_meine_vertretungen($ich, $personal, $abw['eintraege']) : [],
                      // Vorplanung (Schalter bei „Urlaub beantragen“): Jahr, Stichtag und Grenze der einzelnen Urlaubstage
                      'vorplanung' => (function () { $pe = hr_planung_einst(); $j = hr_planung_jahr();
                          return ['jahr' => $j, 'stichtag' => hr_planung_daten($pe, $j)['stichtag'], 'prozent' => $pe['prozent'], 'einzeltageMax' => $pe['einzeltageMax'], 'max' => HR_VORPLANUNG_MAX]; })()]);
@@ -119,23 +122,31 @@ switch ($action) {
                 $ich = hr_ich($personal, $me);
                 if (!$ich) fail('Ihr Konto ist noch keinem Mitarbeiter zugeordnet. Bitte an die Personalstelle wenden.', 409);
                 // gemeinsame Prüfung mit Vorplanung und Vorschau – auch ob die Vertretung da ist (Inhaber 10.11.2026)
-                $z = hr_antrag_zeitraum($ich, $personal, $abw['eintraege'], $einst, $art, $von, $bis, $b['vertretung'] ?? null);
+                // feste Vertretung (Stammdaten) und optionale zusätzliche – beide müssen da sein (Inhaber 10.11.2026)
+                $z = hr_antrag_zeitraum($ich, $personal, $abw['eintraege'], $einst, $art, $von, $bis, $b['vertretung'] ?? null, [], $b['vertretung2'] ?? null);
                 if ($z['fehler'] !== null) fail($z['fehler'], $z['code']);
-                $vert = $z['vertretung']['id'] ?? null;
+                // genug Urlaubstage? Über der Grenze der Personalstelle: abgelehnt; darunter nur mit Bestätigung (Inhaber 10.11.2026)
+                $ue = $art === 'U' ? hr_ueberzug($ich, $abw['eintraege'], [['art' => 'U', 'von' => $von, 'bis' => $bis]]) : ['tage' => 0.0];
+                if ($ue['tage'] > $einst['ueberziehenMax']) fail(hr_ueberzug_text($ue, $einst['ueberziehenMax']), 409);
+                if ($ue['tage'] > 0 && ($b['ueberziehen'] ?? false) !== true) return ['bestaetigen' => $ue + ['max' => $einst['ueberziehenMax'], 'text' => hr_ueberzug_text($ue, $einst['ueberziehenMax'])]];
                 $e = ['id' => hr_neue_id('a'), 'person' => $ich['id'], 'art' => $art, 'von' => $von, 'bis' => $bis, 'status' => 'beantragt', 'notiz' => $notiz,
-                      'vertretung' => $vert, 'quelle' => 'antrag', 'erfasst' => ['t' => now(), 'by' => $me['name'], 'byId' => $me['id']]];
+                      'vertretung' => $z['vertretung']['id'] ?? null, 'quelle' => 'antrag', 'erfasst' => ['t' => now(), 'by' => $me['name'], 'byId' => $me['id']]]
+                    + (isset($z['vertretung2']['id']) ? ['vertretung2' => $z['vertretung2']['id']] : []);
                 $abw['eintraege'][] = $e;
                 hr_abwesenheiten_schreiben($abw);
                 $jahr = (int)substr($von, 0, 4);
                 return [$e, $ich, $z, hr_konto($ich, $abw['eintraege'], $jahr), hr_freie_tage($abw['eintraege'], $ich['id']), hr_gleit_konto($ich, $abw['eintraege'], $jahr),
-                        hr_einzeltage_hinweis($ich, $abw['eintraege'], $e)];
+                        hr_einzeltage_hinweis($ich, $abw['eintraege'], $e), $personal, $abw['eintraege'], $ue];
             });
-            [$e, $ich, $z, $konto, $frei, $gleit, $einzelHinweis] = $res;
-            audit('hr', 'HR: ' . ($e['art'] === 'G' ? 'Gleittag' : 'Urlaub') . ' beantragt ' . hr_zeitraum_text($e['von'], $e['bis']) . ' (' . hr_zahl_text($z['tage']) . ' Arbeitstage)');
+            if (isset($res['bestaetigen'])) respond(['ok' => false, 'error' => $res['bestaetigen']['text'], 'bestaetigen' => $res['bestaetigen']], 409);
+            [$e, $ich, $z, $konto, $frei, $gleit, $einzelHinweis, $personal, $alle, $ue] = $res;
+            $vertHinweis = hr_vertretung_benachrichtigen($ich, [$e], $personal, $alle, $me);   // E-Mail an die Vertretung(en) nach der Antwort
+            audit('hr', 'HR: ' . ($e['art'] === 'G' ? 'Gleittag' : 'Urlaub') . ' beantragt ' . hr_zeitraum_text($e['von'], $e['bis']) . ' (' . hr_zahl_text($z['tage']) . ' Arbeitstage'
+                . ($ue['tage'] > 0 ? ', ' . hr_zahl_text($ue['tage']) . ' über den verfügbaren Tagen – bestätigt' : '') . ')');
             // Hinweise (der Antrag gilt trotzdem): über dem Resturlaub; Vertretung arbeitet an Tagen nicht; mehr Einzeltage als vorgesehen
             $hinweise = [];
             if ($e['art'] === 'U' && $konto['verfuegbar'] < 0) $hinweise[] = 'Der Antrag übersteigt Ihren Resturlaub um ' . hr_zahl_text(-$konto['verfuegbar']) . ' Tage – die Personalstelle entscheidet.';
-            $hinweise = array_merge($hinweise, $z['hinweise'], $einzelHinweis ? [$einzelHinweis] : []);
+            $hinweise = array_merge($hinweise, $z['hinweise'], $einzelHinweis ? [$einzelHinweis] : [], $vertHinweis ? [$vertHinweis] : []);
             respond(['ok' => true, 'eintrag' => hr_eintrag_aus($e, $ich, $frei), 'konto' => $konto, 'gleitKonto' => $gleit, 'hinweis' => $hinweise ? implode(' ', $hinweise) : null]);
         }
 
@@ -161,11 +172,21 @@ switch ($action) {
                 $stand = hr_planung_person($ich, $abw['eintraege'], $jahr, $pe, $gut);
                 $konto = hr_konto($ich, $abw['eintraege'], $jahr);
                 $neu = array_sum(array_map(function ($e) { return $e['fehler'] === null ? $e['tage'] : 0; }, $erg));
+                $ue = hr_ueberzug($ich, $abw['eintraege'], array_map(function ($z) { return ['art' => 'U', 'von' => $z['von'], 'bis' => $z['bis']]; }, $gut));
                 respond(['ok' => true, 'jahr' => $jahr, 'zeitraeume' => $erg, 'stand' => $stand + ['jahr' => $jahr, 'prozent' => $pe['prozent'], 'stichtag' => hr_planung_daten($pe, $jahr)['stichtag']],
-                         'verfuegbarDanach' => $konto['verfuegbar'] - $neu]);
+                         'verfuegbarDanach' => $konto['verfuegbar'] - $neu, 'ueberzug' => $ue['tage'], 'ueberziehenMax' => $einst['ueberziehenMax'],
+                         'ueberzugText' => $ue['tage'] > 0 ? hr_ueberzug_text($ue, $einst['ueberziehenMax']) : null]);
             }
             if (count($zr) !== 1) fail('Bitte einen Zeitraum angeben.', 422);
-            respond(['ok' => true, 'zeitraeume' => [hr_antrag_zeitraum($ich, $personal, $abw['eintraege'], $einst, $art, $zr[0]['von'], $zr[0]['bis'], $zr[0]['vertretung'])]]);
+            $z = hr_antrag_zeitraum($ich, $personal, $abw['eintraege'], $einst, $art, $zr[0]['von'], $zr[0]['bis'], $zr[0]['vertretung'], [], $zr[0]['vertretung2']);
+            // genug Urlaubstage? über der Grenze: Ablehnungsgrund; darunter: Rückfrage beim Absenden (Inhaber 10.11.2026)
+            $ue = $art === 'U' ? hr_ueberzug($ich, $abw['eintraege'], [['art' => 'U', 'von' => $zr[0]['von'], 'bis' => $zr[0]['bis']]]) : ['tage' => 0.0];
+            $z['ueberzug'] = $ue['tage']; $z['ueberziehenMax'] = $einst['ueberziehenMax'];
+            if ($ue['tage'] > 0) {
+                $z['ueberzugText'] = hr_ueberzug_text($ue, $einst['ueberziehenMax']);
+                if ($ue['tage'] > $einst['ueberziehenMax'] && $z['fehler'] === null) { $z['fehler'] = $z['ueberzugText']; $z['code'] = 409; }
+            }
+            respond(['ok' => true, 'zeitraeume' => [$z]]);
         }
 
         /* Vorplanung (Inhaber 10.11.2026): mehrere Urlaubszeiträume des nächsten Jahres auf einmal beantragen – jeder geprüft wie
@@ -175,7 +196,8 @@ switch ($action) {
             $b = body();
             try { $zr = hr_zeitraeume_anfrage($b['zeitraeume'] ?? null); } catch (InvalidArgumentException $ex) { fail($ex->getMessage(), 422); }
             $notiz = s($b['notiz'] ?? '', 300) ?? '';
-            $res = with_lock('hr-abwesenheiten', function () use ($me, $zr, $notiz) {
+            $bestaetigt = ($b['ueberziehen'] ?? false) === true;
+            $res = with_lock('hr-abwesenheiten', function () use ($me, $zr, $notiz, $bestaetigt) {
                 $personal = hr_personal(); $abw = hr_abwesenheiten(); $einst = hr_einstellungen();
                 if (!$einst['antraege']) fail('Urlaubsanträge werden derzeit nicht über die Plattform gestellt. Bitte an die Personalstelle wenden.', 409);
                 $ich = hr_ich($personal, $me);
@@ -183,17 +205,24 @@ switch ($action) {
                 $jahr = hr_planung_jahr();
                 [$erg, $gut] = hr_vorplanung_pruefen($ich, $personal, $abw['eintraege'], $einst, $zr, $jahr);
                 if (count($gut) !== count($zr)) return ['fehler' => true, 'zeitraeume' => $erg];
+                // genug Urlaubstage für alle Zeilen zusammen? (wie beim einzelnen Antrag, Inhaber 10.11.2026)
+                $ue = hr_ueberzug($ich, $abw['eintraege'], array_map(function ($z) { return ['art' => 'U', 'von' => $z['von'], 'bis' => $z['bis']]; }, $zr));
+                if ($ue['tage'] > $einst['ueberziehenMax']) return ['fehler' => true, 'zeitraeume' => $erg, 'ueberzug' => hr_ueberzug_text($ue, $einst['ueberziehenMax']) . ' Es wurde nichts beantragt.'];
+                if ($ue['tage'] > 0 && $bestaetigt !== true) return ['bestaetigen' => $ue + ['max' => $einst['ueberziehenMax'], 'text' => hr_ueberzug_text($ue, $einst['ueberziehenMax'])]];
                 $neu = [];
                 foreach ($zr as $i => $z) {
                     $neu[] = $abw['eintraege'][] = ['id' => hr_neue_id('a'), 'person' => $ich['id'], 'art' => 'U', 'von' => $z['von'], 'bis' => $z['bis'], 'status' => 'beantragt',
-                        'notiz' => $notiz, 'vertretung' => $erg[$i]['vertretung']['id'] ?? null, 'quelle' => 'vorplanung', 'erfasst' => ['t' => now(), 'by' => $me['name'], 'byId' => $me['id']]];
+                        'notiz' => $notiz, 'vertretung' => $erg[$i]['vertretung']['id'] ?? null, 'quelle' => 'vorplanung', 'erfasst' => ['t' => now(), 'by' => $me['name'], 'byId' => $me['id']]]
+                        + (isset($erg[$i]['vertretung2']['id']) ? ['vertretung2' => $erg[$i]['vertretung2']['id']] : []);
                 }
                 hr_abwesenheiten_schreiben($abw);
                 $pe = hr_planung_einst();
-                return ['fehler' => false, 'zeitraeume' => $erg, 'neu' => $neu, 'jahr' => $jahr, 'ich' => $ich,
+                return ['fehler' => false, 'zeitraeume' => $erg, 'neu' => $neu, 'jahr' => $jahr, 'ich' => $ich, 'personal' => $personal, 'alle' => $abw['eintraege'],
                         'stand' => hr_planung_person($ich, $abw['eintraege'], $jahr, $pe) + ['jahr' => $jahr, 'prozent' => $pe['prozent'], 'stichtag' => hr_planung_daten($pe, $jahr)['stichtag']],
                         'konto' => hr_konto($ich, $abw['eintraege'], $jahr)];
             });
+            if (isset($res['bestaetigen'])) respond(['ok' => false, 'error' => $res['bestaetigen']['text'], 'bestaetigen' => $res['bestaetigen']], 409);
+            if ($res['fehler'] && isset($res['ueberzug'])) respond(['ok' => false, 'error' => $res['ueberzug'], 'zeitraeume' => $res['zeitraeume']], 409);
             if ($res['fehler']) {
                 $n = count(array_filter($res['zeitraeume'], function ($e) { return $e['fehler'] !== null; }));
                 respond(['ok' => false, 'error' => $n === 1 ? 'Ein Zeitraum ist nicht in Ordnung – es wurde nichts beantragt.' : "$n Zeiträume sind nicht in Ordnung – es wurde nichts beantragt.",
@@ -207,7 +236,8 @@ switch ($action) {
             $st = $res['stand'];
             if ($st['einzeltageMax'] > 0 && count($st['einzeltage']) > $st['einzeltageMax'])
                 $hinweise[] = 'Sie haben ' . count($st['einzeltage']) . ' einzelne Urlaubstage geplant – vorgesehen sind höchstens ' . $st['einzeltageMax'] . '. Die Personalstelle prüft sie einzeln.';
-            if ($res['konto']['verfuegbar'] < 0) $hinweise[] = 'Die Planung übersteigt Ihren Resturlaub um ' . hr_zahl_text(-$res['konto']['verfuegbar']) . ' Tage – die Personalstelle entscheidet.';
+            if ($res['konto']['verfuegbar'] < 0) $hinweise[] = 'Die Planung übersteigt Ihre verfügbaren Urlaubstage um ' . hr_zahl_text(-$res['konto']['verfuegbar']) . ' – die Personalstelle entscheidet.';
+            if ($vh = hr_vertretung_benachrichtigen($res['ich'], $res['neu'], $res['personal'], $res['alle'], $me)) $hinweise[] = $vh;   // E-Mail an die Vertretungen
             respond(['ok' => true, 'eintraege' => array_map(function ($e) use ($res) { return hr_eintrag_aus($e, $res['ich']); }, $res['neu']), 'zeitraeume' => $res['zeitraeume'],
                      'stand' => $st, 'hinweis' => $hinweise ? implode(' ', $hinweise) : null]);
         }
@@ -482,6 +512,12 @@ switch ($action) {
                 if ($nr !== '' && !preg_match('/^[A-Za-z0-9._\/-]{1,20}$/', $nr)) fail('Personalnummer: bitte nur Ziffern, Buchstaben, Punkt, Bindestrich oder Schrägstrich.', 422);
                 $werte['personalnummer'] = $nr;
             }
+            if (array_key_exists('vertretung', $b)) {
+                // feste Vertretung (Inhaber 10.11.2026): steht in jedem Antrag des Mitarbeiters fest und muss da sein; leer = frei wählbar
+                $v = $b['vertretung'];
+                if ($v !== null && !is_string($v)) fail('Vertretung: bitte einen Mitarbeiter wählen oder leer lassen.', 422);
+                $werte['vertretung'] = $v === null || $v === '' ? null : $v;
+            }
             if (array_key_exists('arbeitstage', $b)) {
                 $at = is_array($b['arbeitstage']) ? array_values(array_unique(array_map('intval', $b['arbeitstage']))) : [];
                 if (!$at || array_filter($at, function ($w) { return $w < 1 || $w > 7; })) fail('Bitte mindestens einen Arbeitstag wählen.', 422);
@@ -498,17 +534,25 @@ switch ($action) {
                 };
                 $jv = ['anspruch' => $zahl($b['anspruch'] ?? null, 'Urlaubsanspruch', 0), 'uebertrag' => $zahl($b['uebertrag'] ?? null, 'Übertrag', -100)];
             }
-            $verfallVorher = null;
-            $p = with_lock('hr-personal', function () use ($b, $uid, $users, $ui, &$werte, &$jahr, &$jv, $me, &$verfallVorher) {
+            $verfallVorher = null; $vertretungVorher = null;
+            $p = with_lock('hr-personal', function () use ($b, $uid, $users, $ui, &$werte, &$jahr, &$jv, $me, &$verfallVorher, &$vertretungVorher) {
                 $roh = hr_personal_roh();
                 $verfallVorher = true;
-                foreach ($roh['personen'] as $e) if ($e['nutzer'] === $uid) $verfallVorher = $e['verfall'];
+                foreach ($roh['personen'] as $e) if ($e['nutzer'] === $uid) { $verfallVorher = $e['verfall']; $vertretungVorher = $e['vertretung']; }
                 if ((int)($b['rev'] ?? -1) !== $roh['rev']) fail('Die Mitarbeiterliste wurde inzwischen geändert. Bitte neu laden.', 409);
                 // Vier-Augen-Prinzip: die eigenen Urlaubsangaben (Anspruch, Übertrag, Verfall, Arbeitstage, im Urlaubsplan, Personalnummer –
                 // sie bestimmt die Zuordnung beim Import) ändert eine andere Person der Personalstelle. Abteilung und Position
                 // (Reihenfolge im Plan) sind ohne Einfluss auf das Urlaubskonto und bleiben erlaubt. Unveränderte Werte (der
                 // Dialog schickt immer alle Felder) werden still übergangen, damit z. B. der eigene Name änderbar bleibt.
                 if ($uid === (string)$me['id']) hr_eigene_angaben_pruefen($werte, $jahr, $jv, $uid, $users[$ui]);
+                if (($werte['vertretung'] ?? null) !== null) {
+                    $idx = hr_personen_index(hr_personal());
+                    $vp = $idx[$werte['vertretung']] ?? null;
+                    $selbst = null;
+                    foreach (hr_personal()['personen'] as $x) if ($x['nutzer'] === $uid) $selbst = $x['id'];
+                    if (!$vp || !$vp['aktiv'] || !empty($vp['altbestand'])) fail('Vertretung: bitte einen Mitarbeiter im Urlaubsplan wählen.', 422);
+                    if ($vp['id'] === ($selbst ?? $uid)) fail('Vertretung: ein Mitarbeiter kann sich nicht selbst vertreten.', 422);
+                }
                 if (($werte['personalnummer'] ?? '') !== '') {
                     foreach (hr_personal()['personen'] as $x) {
                         if ($x['nutzer'] !== $uid && ($x['personalnummer'] ?? '') === $werte['personalnummer']) fail('Die Personalnummer ' . $werte['personalnummer'] . ' hat schon ' . hr_name($x)
@@ -525,8 +569,10 @@ switch ($action) {
                 hr_personal_schreiben($roh);
                 return $p;
             });
+            $vtIdx = hr_personen_index(hr_personal());
             audit('hr', 'HR: Angaben von ' . $users[$ui]['name'] . ' geändert'
-                . ($p['verfall'] !== $verfallVorher ? ($p['verfall'] ? ' (Resturlaub verfällt wieder am Verfallstag)' : ' (Resturlaub verfällt nicht mehr)') : ''));
+                . ($p['verfall'] !== $verfallVorher ? ($p['verfall'] ? ' (Resturlaub verfällt wieder am Verfallstag)' : ' (Resturlaub verfällt nicht mehr)') : '')
+                . ($p['vertretung'] !== $vertretungVorher ? ($p['vertretung'] ? ' (feste Vertretung: ' . (isset($vtIdx[$p['vertretung']]) ? hr_name($vtIdx[$p['vertretung']]) : $p['vertretung']) . ')' : ' (keine feste Vertretung mehr)') : ''));
             $personal = hr_personal(); $abw = hr_abwesenheiten();
             foreach ($personal['personen'] as $x) if ($x['nutzer'] === $uid) respond(['ok' => true, 'rev' => $personal['rev'], 'person' => hr_person_aus($x, $abw['eintraege'], $jahr ?? (int)date('Y'))]);
             respond(['ok' => true, 'rev' => $personal['rev']]);
@@ -584,6 +630,12 @@ switch ($action) {
                 $zusatz['schliesstage'] = $b['schliesstage'];
             }
             if (array_key_exists('regeln', $b)) $zusatz['regeln'] = hr_regeln_pruefen($b['regeln']);
+            if (array_key_exists('ueberziehenMax', $b)) {
+                // Resturlaub überziehen: höchstens so viele Tage (mit Bestätigung), darüber immer abgelehnt
+                $u = hr_ueberziehen_norm($b['ueberziehenMax']);
+                if ($u === null) fail('Resturlaub überziehen: bitte 0 bis 30 Tage in ganzen oder halben Tagen angeben (0 = nie).', 422);
+                $zusatz['ueberziehenMax'] = $u;
+            }
             // Jahresplanung (optional): Beginn, Stichtag, Anteil, Vertretung Pflicht – der Abschluss bleibt
             $planung = null;
             if (array_key_exists('planung', $b)) { try { $planung = hr_planung_einst_pruefen($b['planung']); } catch (InvalidArgumentException $ex) { fail($ex->getMessage(), 422); } }
@@ -615,7 +667,9 @@ switch ($action) {
             if ($bis !== null && $bis !== $vorher) audit('hr', 'HR: Verfallstag Resturlaub auf ' . substr($bis, 3, 2) . '.' . substr($bis, 0, 2) . '. geändert (vorher ' . substr($vorher, 3, 2) . '.' . substr($vorher, 0, 2) . '.)');
             if (isset($zusatz['regelSperren']) && $zusatz['regelSperren'] !== $alt['regelSperren']) audit('hr', 'HR: Sperren aus den Urlaubsregeln ' . ($zusatz['regelSperren'] ? 'eingeschaltet' : 'ausgeschaltet'));
             if (isset($zusatz['schliesstage']) && $zusatz['schliesstage'] !== $alt['schliesstage']) audit('hr', 'HR: Sonderregelung Dezember (24.12./31.12. je ½ Urlaubstag) ' . ($zusatz['schliesstage'] ? 'eingeschaltet' : 'ausgeschaltet'));
-            if (isset($zusatz['regeln']) && hr_regeln_text($zusatz['regeln']) !== $alt['regeln']) audit('hr', 'HR: Urlaubsregeln geändert');   // verglichen wird, was Mitarbeiter sehen
+            if (isset($zusatz['regeln']) && hr_regeln_text($zusatz['regeln']) !== $alt['regeln']) audit('hr', 'HR: Urlaubsregeln geändert');
+            if (isset($zusatz['ueberziehenMax']) && $zusatz['ueberziehenMax'] !== $alt['ueberziehenMax'])
+                audit('hr', 'HR: Resturlaub überziehen höchstens ' . hr_tage_text($zusatz['ueberziehenMax']) . ' (vorher ' . hr_tage_text($alt['ueberziehenMax']) . ')');   // verglichen wird, was Mitarbeiter sehen
             if (array_key_exists('verfallAb', $zusatz) && $zusatz['verfallAb'] !== $alt['verfallAb']) {
                 $tag = substr(hr_einstellungen()['uebertragBis'], 3, 2) . '.' . substr(hr_einstellungen()['uebertragBis'], 0, 2) . '.';
                 audit('hr', $zusatz['verfallAb'] === null ? 'HR: Resturlaub verfällt jedes Jahr (keine Übergangsregel mehr)'

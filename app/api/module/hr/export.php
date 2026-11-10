@@ -117,7 +117,7 @@ function hr_xl_blatt(array $m, HrStile $st): string
     // Sonderregelung Dezember (Inhaber 10.11.2026): Schließtage zählen bei Urlaub und Gleittag je ½ (auch in den Summenformeln)
     $halb = [];
     foreach ($m['tage'] as $i => $t) if (!empty($t['schliesstag'])) $halb[$i] = true;
-    if ($halb) $setz(5, 10, '24.12. und 31.12.: Betrieb geschlossen – Urlaub und Gleittag zählen je ½ Tag', $st->id(['fett' => true]));
+    if ($halb) $setz(5, 10, '24.12. und 31.12.: Betrieb geschlossen – je ½ Urlaubstag für alle (automatisch)', $st->id(['fett' => true]));
     for ($z = 2; $z <= 3; $z++) for ($sp = 10; $sp <= 20; $sp++) if ($z !== 2 || $sp !== 10) $setz($z, $sp, '', $st->id(['fill' => HR_XL_TITEL]));
     $merge[] = 'K2:U3';
 
@@ -271,7 +271,10 @@ function hr_export_monat(int $jahr, int $monat): array
     $zeilen = [];
     foreach (hr_nach_abteilung($personal['personen']) as $p) {
         if (!$p['aktiv'] && !isset($imMonat[$p['id']])) continue;
-        $zeilen[] = ['id' => $p['id'], 'name' => hr_name($p), 'abteilung' => $p['abteilung'], 'tage' => hr_zeile($p, $genehmigt, $tage, 'voll')];
+        $z = hr_zeile($p, $genehmigt, $tage, 'voll');
+        // Betriebsurlaub 24.12./31.12. (verpflichtend, automatisch): U, zählt ½ Tag
+        foreach (hr_betriebsurlaub($p, $abw['eintraege'], $jahr) as $d) if ((int)substr($d, 5, 2) === $monat) $z[(int)substr($d, 8, 2)] = 'U';
+        $zeilen[] = ['id' => $p['id'], 'name' => hr_name($p), 'abteilung' => $p['abteilung'], 'tage' => $z];
     }
     return ['jahr' => $jahr, 'monat' => $monat, 'name' => HR_MONATE[$monat], 'tage' => $tage, 'personen' => $zeilen];
 }

@@ -115,10 +115,18 @@ st, r, raw = U.call('hr_uebersicht&jahr=' + str(Y), raw=True)
 z = {x['id']: x for x in r['zeilen']}
 check('nur Mitarbeiter im Urlaubsplan', set(z) == {PL, PA}, sorted(z))
 lz = z.get(PL, {})
-check('Lena: Anspruch 30, geplant 3, beantragt 2, Rest 27', (lz.get('anspruch'), lz.get('geplant'), lz.get('beantragt'), lz.get('genommen'), lz.get('rest')) == (30, 3, 2, 0, 27), lz)
+# Betriebsurlaub 24./31.12. (verpflichtend, Inhaber 10.11.2026): automatisch je ½ Tag an Arbeitstagen – nicht, wenn krank
+def bu(arbeitstage, krank=()):
+    return 0.5 * sum(1 for d in (dt.date(Y, 12, 24), dt.date(Y, 12, 31)) if d.weekday() + 1 in arbeitstage and d not in krank)
+
+
+bu_l = bu([1, 2, 3, 4, 5], krank=[weih + dt.timedelta(days=i) for i in range(7)])
+check(f'Lena: Anspruch 30, geplant 3 + {bu_l:g} Betriebsurlaub (am 24.12. krank: zählt nicht), beantragt 2, Rest {27 - bu_l:g}',
+      (lz.get('anspruch'), lz.get('geplant'), lz.get('beantragt'), lz.get('genommen'), lz.get('rest')) == (30, 3 + bu_l, 2, 0, 27 - bu_l), lz)
 check(f'Lena: Krank 2 + {erw_weih} über Weihnachten (ohne Wochenende und Feiertage), Gleittage 1', lz.get('krank') == 2 + erw_weih and lz.get('gleittage') == 1, lz)
 az = z.get(PA, {})
-check('Andre (4-Tage-Woche): Krank Mo–Fr = 4, stornierter Gleittag zählt nicht', az.get('krank') == 4 and az.get('gleittage') == 0 and az.get('anspruch') == 24 and az.get('rest') == 24, az)
+check('Andre (4-Tage-Woche): Krank Mo–Fr = 4, stornierter Gleittag zählt nicht, Betriebsurlaub nur an seinen Arbeitstagen', az.get('krank') == 4 and az.get('gleittage') == 0
+      and az.get('anspruch') == 24 and az.get('rest') == 24 - bu([1, 2, 3, 4]), az)
 check('Reihenfolge nach Abteilung/Position', [x['id'] for x in r['zeilen']] == [PL, PA], [x['name'] for x in r['zeilen']])
 check('Datenschutz: keine Zeiträume, Notizen, Gründe oder Entscheidungen in der Antwort',
       'Notiz' not in raw and not re.search(r'\d{4}-\d{2}-\d{2}', raw.replace('"heute":"' + r['heute'] + '"', '')) and 'entscheidung' not in raw

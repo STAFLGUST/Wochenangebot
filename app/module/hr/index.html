@@ -64,6 +64,11 @@
           <div class="hr-gleit hr-glas" id="mein-gleit" hidden></div>
           <p class="hr-hinweis" id="antrag-aus" hidden>Urlaubsanträge werden derzeit nicht über die Plattform gestellt. Bitte wenden Sie sich an die Personalstelle.
             <a data-verwalten hidden data-verwaltung-link="urlaub" href="../../admin/#urlaub">Einschalten in Verwaltung → Urlaub</a></p>
+          <!-- Sie vertreten (Inhaber 10.11.2026): Anträge anderer, in denen man Vertretung ist – nur Name, Zeitraum, Status -->
+          <section class="hr-karte hr-glas hr-vertreten" id="mein-vertreten" aria-labelledby="vertreten-titel" hidden>
+            <h2 id="vertreten-titel">Sie vertreten</h2>
+            <ul class="hr-vertreten-liste" id="vertreten-liste"></ul>
+          </section>
           <div class="hr-spalten" id="mein-spalten">
             <form class="hr-karte hr-glas" id="antrag" novalidate>
               <div class="hr-antrag-kopf">
@@ -80,7 +85,17 @@
                   <label><span data-antrag-bis>Letzter Urlaubstag</span><input type="date" id="antrag-bis" required></label>
                 </div>
                 <p class="hr-rechnung" id="antrag-tage" aria-live="polite"></p>
-                <label><span>Vertretung <span class="opt" id="antrag-vertretung-opt">(optional)</span></span><select id="antrag-vertretung"><option value="">– keine –</option></select></label>
+                <label id="antrag-vertretung-l"><span>Vertretung <span class="opt" id="antrag-vertretung-opt">(optional)</span></span><select id="antrag-vertretung"><option value="">– keine –</option></select></label>
+                <!-- feste Vertretung aus den Stammdaten (Verwaltung → Mitarbeiter): nicht änderbar, muss da sein -->
+                <div class="hr-vt-fest" id="antrag-vt-fest" hidden><span class="lbl">Vertretung</span>
+                  <span class="wert"><svg class="i" aria-hidden="true"><use href="#i-lock"/></svg><b id="antrag-vt-fest-name"></b><small>fest hinterlegt</small></span></div>
+                <!-- zusätzliche Vertretung: kein Pflichtfeld; gewählt muss sie ebenfalls da sein -->
+                <button type="button" class="hr-zusatz" id="antrag-vt2-plus"><svg class="i" aria-hidden="true"><use href="#i-plus"/></svg>Zusätzliche Vertretung</button>
+                <div class="hr-vt2" id="antrag-vt2" hidden>
+                  <label for="antrag-vertretung2"><span>Zusätzliche Vertretung <span class="opt">(optional)</span></span></label>
+                  <div class="hr-vt2-zeile"><select id="antrag-vertretung2"><option value="">– keine –</option></select>
+                    <button type="button" class="hr-rund klein" id="antrag-vt2-weg" aria-label="Zusätzliche Vertretung entfernen" title="Entfernen"><svg class="i" aria-hidden="true"><use href="#i-x"/></svg></button></div>
+                </div>
                 <!-- Vertretungsprüfung schon vor dem Absenden (hr_antrag_pruefen): da, abwesend oder arbeitet an Tagen nicht -->
                 <p class="hr-vt-status" id="antrag-pruefung" aria-live="polite" hidden></p>
               </div>
@@ -91,7 +106,6 @@
                 <ol class="hr-vp-liste" id="vp-liste"></ol>
                 <div class="hr-vp-knoepfe">
                   <button type="button" class="btn" id="vp-plus"><svg class="i" aria-hidden="true"><use href="#i-plus"/></svg>Zeitraum</button>
-                  <button type="button" class="btn" id="vp-schliess" hidden>24.12. und 31.12. einplanen</button>
                 </div>
               </div>
               <label><span>Notiz zum Antrag <span class="opt">(optional)</span></span><input type="text" id="antrag-notiz" maxlength="300"></label>
@@ -105,8 +119,10 @@
             </div>
           </div>
           <!-- Urlaubsregeln der Personalstelle (Verwaltung → Urlaub): für alle sichtbar beim Urlaubsantrag -->
-          <details class="hr-karte hr-glas hr-regeln" id="regeln" open hidden>
-            <summary><h2>Urlaubsregeln</h2><span class="hr-klein">gelten für jeden Urlaubsantrag</span></summary>
+          <!-- immer zugeklappt beim Laden (Inhaber 10.11.2026), Aufklappen über den deutlich sichtbaren Knopf rechts -->
+          <details class="hr-karte hr-glas hr-regeln" id="regeln" hidden>
+            <summary><span class="hr-regeln-titel"><h2>Urlaubsregeln</h2><span class="hr-klein">gelten für jeden Urlaubsantrag</span></span>
+              <span class="hr-regeln-knopf" aria-hidden="true"><span class="zu">Regeln anzeigen</span><span class="auf">Ausblenden</span><svg class="i"><use href="#i-rechts"/></svg></span></summary>
             <div class="hr-regeln-text" id="regeln-text"></div>
           </details>
           <!-- Jahresübersicht aller eigenen Abwesenheiten (auch Krank, Gleittag, freie Tage) und „Korrektur melden“ -->

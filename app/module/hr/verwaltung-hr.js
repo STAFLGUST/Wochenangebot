@@ -49,15 +49,24 @@
     const at = p ? p.arbeitstage : [1, 2, 3, 4, 5];
     const jv = (p && p.jahre[String(JAHR)]) || {};
     const maxPos = Math.max(0, ...(daten ? daten.personen.map((x) => x.pos || 0) : [0]));
+    // feste Vertretung (Inhaber 10.11.2026): Mitarbeiter im Urlaubsplan außer der Person selbst
+    const vertreter = (daten ? daten.personen : []).filter((x) => x.aktiv && !x.altbestand && x.nutzer !== uid).sort((a, b) => a.name.localeCompare(b.name, 'de'));
+    if (p && p.vertretung && !vertreter.some((x) => x.id === p.vertretung)) {   // gespeicherte, aber nicht mehr aktive Vertretung bleibt sichtbar
+      const alt = (daten.personen || []).find((x) => x.id === p.vertretung);
+      vertreter.unshift({ id: p.vertretung, name: `${alt ? alt.name : p.vertretung} (nicht im Urlaubsplan – gilt nicht)` });
+    }
     // eigene Person: Urlaubsangaben ändert eine andere Person der Personalstelle (Vier-Augen-Prinzip, der Server prüft das)
     const eigen = !!(uid && W.me && W.me.id === uid);
     const aus = eigen ? ' disabled' : '';
     return `<fieldset class="span2 hr-teil${eigen ? ' hr-eigen' : ''}" id="hr-teil" data-uid="${esc(uid || '')}"><legend>Urlaubsverwaltung</legend>
-      ${eigen ? `<p class="hr-eigen-hinweis">${icon('lock', 'sm')}<span>Ihre eigenen Urlaubsangaben (Anspruch, Übertrag, Verfall, Arbeitstage, Urlaubsplan, Personalnummer) ändert eine andere Person der Personalstelle (Vier-Augen-Prinzip). Abteilung und Position können Sie selbst ändern.</span></p>` : ''}
+      ${eigen ? `<p class="hr-eigen-hinweis">${icon('lock', 'sm')}<span>Ihre eigenen Urlaubsangaben (Anspruch, Übertrag, Verfall, Arbeitstage, Urlaubsplan, Personalnummer, Vertretung) ändert eine andere Person der Personalstelle (Vier-Augen-Prinzip). Abteilung und Position können Sie selbst ändern.</span></p>` : ''}
       <div class="form-grid two">
         <label class="fld span2"><span>Abteilung</span><input name="hr_abteilung" value="${esc(p ? p.abteilung : '')}" maxlength="40" list="hr-abteilungen" autocomplete="off"></label>
         <label class="fld"><span>Personalnummer <small class="muted">(Zeiterfassung)</small></span><input name="hr_personalnummer" value="${esc(p ? p.personalnummer || '' : '')}" maxlength="20" autocomplete="off" inputmode="numeric"${aus}></label>
         <label class="fld"><span>Position <small class="muted">(Reihenfolge im Plan)</small></span><input name="hr_pos" type="number" min="0" max="9999" value="${esc(p ? p.pos || '' : maxPos + 1)}"></label>
+        <label class="fld span2"><span>Feste Vertretung <small class="muted">(optional)</small></span>
+          <select name="hr_vertretung"${aus} aria-describedby="hr-vertretung-hint"><option value="">– keine feste Vertretung –</option>${vertreter.map((x) => `<option value="${esc(x.id)}"${p && p.vertretung === x.id ? ' selected' : ''}>${esc(x.name)}</option>`).join('')}</select>
+          <small class="hr-fld-hint" id="hr-vertretung-hint">Steht in jedem Urlaubsantrag fest und muss im Zeitraum da sein – der Mitarbeiter kann sie nicht ändern, aber eine zusätzliche Vertretung wählen. Leer: wählt selbst.</small></label>
         <div class="span2 hr-tage-feld"><span class="hr-lbl">Arbeitstage</span><div class="hr-tage">${WT.map((w, i) => `<label class="check"><input type="checkbox" name="hr_tag" value="${i + 1}"${at.includes(i + 1) ? ' checked' : ''}${aus}> ${w}</label>`).join('')}</div></div>
         <label class="fld"><span>Urlaubsanspruch ${JAHR}</span><input name="hr_anspruch" type="number" min="0" max="100" step="0.5" value="${esc(jv.anspruch ?? (p && p.konto.anspruch ? p.konto.anspruch : ''))}"${aus}></label>
         <label class="fld"><span>Übertrag aus ${JAHR - 1}</span><input name="hr_uebertrag" type="number" min="-100" max="100" step="0.5" value="${esc(jv.uebertrag ?? '')}" placeholder="${p ? 'automatisch (' + esc(zahl(p.konto.uebertrag)) + ')' : 'automatisch'}"${aus}></label>
@@ -77,7 +86,8 @@
     const wert = (n) => form.querySelector(`[name="${n}"]`).value;
     const body = { nutzer: uid, rev: daten.rev, abteilung: wert('hr_abteilung'), personalnummer: wert('hr_personalnummer').trim(), pos: Number(wert('hr_pos') || 0),
       arbeitstage: [...form.querySelectorAll('[name="hr_tag"]:checked')].map((x) => Number(x.value)),
-      aktiv: form.querySelector('[name="hr_aktiv"]').checked, verfall: form.querySelector('[name="hr_verfall"]').checked, jahr: JAHR, anspruch: wert('hr_anspruch'), uebertrag: wert('hr_uebertrag') };
+      aktiv: form.querySelector('[name="hr_aktiv"]').checked, verfall: form.querySelector('[name="hr_verfall"]').checked, jahr: JAHR, anspruch: wert('hr_anspruch'), uebertrag: wert('hr_uebertrag'),
+      vertretung: wert('hr_vertretung') || null };
     let r;
     try { r = await api('mitarbeiter_hr_save', { body }); }
     catch (ex) { if (ex.status !== 409) throw ex; await laden(); r = await api('mitarbeiter_hr_save', { body: { ...body, rev: daten.rev } }); }
@@ -230,7 +240,7 @@
         <small class="muted">Ostergeschäft (zwei Wochen vor Karfreitag) und Weihnachtsgeschäft (letzte Novemberwoche bis ${daten.schliesstage !== false ? '23.12.' : '24.12.'})</small></span></label>
       <ul class="hr-autosperren" id="hr-autosperren">${(daten.sperrenAuto || []).map((z) => `<li><span>${esc(z.text)} ${esc(z.von.slice(0, 4))}</span><span>${esc(datumDe(z.von))} – ${esc(datumDe(z.bis))}</span></li>`).join('')}</ul>
       <label class="check hr-regelsperren"><input type="checkbox" id="hr-schliesstage"${daten.schliesstage !== false ? ' checked' : ''}> <span>Sonderregelung Dezember: 24.12. und 31.12. Betrieb geschlossen
-        <small class="muted">Ab 2026: Urlaub und Gleittage zählen an beiden Tagen je ½ Tag (zusammen 1 Urlaubstag), keine Vertretung nötig; Mitarbeiter planen die Tage selbst ein. Die Weihnachtssperre endet dann am 23.12.</small></span></label>
+        <small class="muted">Ab 2026, verpflichtend für alle: jedem Mitarbeiter im Urlaubsplan wird an beiden Tagen automatisch je ½ Urlaubstag angerechnet (zusammen 1 Tag) – nicht bei Krankheit oder an freien Tagen; ein Antrag ist nicht nötig. Die Weihnachtssperre endet dann am 23.12.</small></span></label>
       <p class="hint hr-eigene-sperren">Weitere Sperren:</p>
       <div id="hr-sperren">${daten.sperren.map(zeile).join('')}</div><button type="button" class="btn sm" data-plus="hr-sperren">${icon('plus', 'sm')}Sperre</button>
       <h3 class="sec-h">Ferien</h3><p class="hint">Nur zur Anzeige im Kalender und im Excel-Export (grün).</p>
@@ -242,6 +252,10 @@
         <label class="fld hr-verfall"><span>Verfällt erstmals</span><select id="hr-verfall-ab"><option value="">jedes Jahr</option>${[...new Set([JAHR - 1, JAHR, JAHR + 1, JAHR + 2, JAHR + 3, daten.verfallAb].filter(Boolean))].sort().map((j) => `<option value="${j}"${daten.verfallAb === j ? ' selected' : ''}>${j}</option>`).join('')}</select></label>
       </div>
       <p class="hint" id="hr-uebertrag-anzeige">Aktuell: verfällt ${esc(verfallText(daten))}${daten.verfallAb ? ` – Resturlaub aus ${daten.verfallAb - 2} bleibt ${daten.verfallAb - 1} ganz erhalten` : ''}</p>
+      <div class="hr-verfall-felder">
+        <label class="fld hr-verfall"><span>Resturlaub überziehen: höchstens</span><input type="number" id="hr-ueberziehen" min="0" max="30" step="0.5" inputmode="decimal" value="${esc(String(daten.ueberziehenMax ?? 4))}" required aria-describedby="hr-ueberziehen-hint"></label>
+      </div>
+      <p class="hint" id="hr-ueberziehen-hint">Reicht der Urlaub für einen Antrag nicht, fragt die Seite „Trotzdem absenden?“ – bis zu so vielen Tagen über die verfügbaren Tage (Rest minus offene Anträge). Mehr lehnt der Server immer ab; 0 = nie überziehen. Die Personalstelle selbst kann weiter eintragen.</p>
       ${planungFelder()}
       <h3 class="sec-h">Urlaubsregeln</h3><p class="hint">Stehen für alle Mitarbeiter beim Urlaubsantrag. Eine Zeile wie „1. Urlaubsanspruch“ wird zur Überschrift; leer = keine Regeln anzeigen.</p>
       <label class="fld hr-regeln-feld"><span class="sr-only">Text der Urlaubsregeln</span><textarea id="hr-regeln" rows="14" maxlength="6000">${esc(daten.regeln || '')}</textarea></label>
@@ -362,10 +376,12 @@
         einzeltageMax: Number($('#hr-plan-einzeltage').value) };
       if (!planung.start || !planung.stichtag) { $('#hr-einst-err').textContent = 'Jahresplanung: bitte „Hinweis ab“ und Stichtag wählen.'; return; }
       if (!Number.isInteger(planung.prozent) || planung.prozent < 10 || planung.prozent > 100) { $('#hr-einst-err').textContent = 'Jahresplanung: Anteil bitte als ganze Zahl zwischen 10 und 100 Prozent.'; return; }
+      const ueberziehenMax = Number($('#hr-ueberziehen').value);
+      if ($('#hr-ueberziehen').value === '' || !(ueberziehenMax >= 0 && ueberziehenMax <= 30) || (ueberziehenMax * 2) % 1) { $('#hr-einst-err').textContent = 'Resturlaub überziehen: bitte 0 bis 30 Tage in ganzen oder halben Tagen (0 = nie).'; return; }
       if ($('#hr-plan-einzeltage').value === '' || !Number.isInteger(planung.einzeltageMax) || planung.einzeltageMax < 0 || planung.einzeltageMax > 50) { $('#hr-einst-err').textContent = 'Jahresplanung: einzelne Urlaubstage bitte als ganze Zahl zwischen 0 (keine Prüfung) und 50.'; return; }
       const r = await api('hr_einstellungen_save', { body: { sperren: liste('hr-sperren'), ferien: liste('hr-ferien'), uebertragBis: bis,
-        verfallAb: ab ? Number(ab) : null, regelSperren: $('#hr-regelsperren').checked, schliesstage: $('#hr-schliesstage').checked, regeln: $('#hr-regeln').value, planung } });
-      Object.assign(daten, { sperren: r.sperren, ferien: r.ferien, uebertragBis: r.uebertragBis, verfallAb: r.verfallAb, regelSperren: r.regelSperren, schliesstage: r.schliesstage, sperrenAuto: r.sperrenAuto, regeln: r.regeln, planung: r.planung });
+        verfallAb: ab ? Number(ab) : null, regelSperren: $('#hr-regelsperren').checked, schliesstage: $('#hr-schliesstage').checked, ueberziehenMax, regeln: $('#hr-regeln').value, planung } });
+      Object.assign(daten, { sperren: r.sperren, ferien: r.ferien, uebertragBis: r.uebertragBis, verfallAb: r.verfallAb, regelSperren: r.regelSperren, schliesstage: r.schliesstage, ueberziehenMax: r.ueberziehenMax, sperrenAuto: r.sperrenAuto, regeln: r.regeln, planung: r.planung });
       toast('Urlaubseinstellungen gespeichert.');
       renderUrlaub();
     } catch (ex) { $('#hr-einst-err').textContent = ex.message; }

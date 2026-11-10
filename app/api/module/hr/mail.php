@@ -10,6 +10,9 @@ declare(strict_types=1);
    - Unentschuldigtes Fehlen (Art F, Inhaber 03.11.2026): beim Eintragen durch die Personalstelle (abwählbar) eine E-Mail an den
      Mitarbeiter mit seiner Urlaubsübersicht des Jahres und der Bitte um eine unverzügliche Erklärung per E-Mail; Antworten
      gehen an die Adresse der eintragenden Person (Reply-To), sonst an die Antwortadresse des Postfachs.
+   - Vertretung (Inhaber 10.11.2026): beim Einreichen eines Antrags oder einer Vorplanung bekommt jede eingetragene Vertretung
+     (auch die zusätzliche) eine E-Mail mit Name und Zeiträumen – ohne Art, Notiz oder Grund; Versand nach der Antwort, nur im
+     Protokoll (nicht im Verlauf der Versände, der sonst nur noch aus Antragsmails bestünde).
    - Testmodus: alle HR-E-Mails gehen nur an die Testadresse (Betreff mit „[Test …]“), z. B. zum Ausprobieren.
    Der automatische Versand wird von HR-Aufrufen angestoßen (hr_mail_anstossen: Urlaubsseite, Kalender, Verwaltung) und läuft
    nach der Antwort – kein Zeitplan auf dem Server nötig; der Monat wird vorher unter Sperre vermerkt (genau ein Versand).
@@ -164,8 +167,9 @@ function hr_mail_jahr_monate(array $p, array $eintraege, int $jahr, ?string $heu
     $m = array_fill(1, 12, ['genommen' => 0, 'geplant' => 0]);
     foreach ($eintraege as $e) {
         if ($e['person'] !== $p['id'] || $e['art'] !== 'U' || $e['status'] !== 'genehmigt') continue;
-        foreach (hr_tage($p, $e['von'], $e['bis'], "$jahr-01-01", "$jahr-12-31", $frei) as $d) $m[(int)substr($d, 5, 2)][$d <= $heute ? 'genommen' : 'geplant'] += hr_tag_wert($d);   // 24.12./31.12. je ½
+        foreach (hr_tage($p, $e['von'], $e['bis'], "$jahr-01-01", "$jahr-12-31", $frei) as $d) $m[(int)substr($d, 5, 2)][$d <= $heute ? 'genommen' : 'geplant'] += hr_tag_wert($d);   // Schließtage: Betriebsurlaub (unten)
     }
+    foreach (hr_betriebsurlaub($p, $eintraege, $jahr) as $d) $m[(int)substr($d, 5, 2)][$d <= $heute ? 'genommen' : 'geplant'] += HR_BETRIEBSURLAUB_WERT;
     return $m;
 }
 const HR_MONATE_KURZ = [1 => 'Jan', 'Feb', 'Mär', 'Apr', 'Mai', 'Jun', 'Jul', 'Aug', 'Sep', 'Okt', 'Nov', 'Dez'];
@@ -201,11 +205,15 @@ function hr_mail_zeitraeume(array $p, array $eintraege, string $von, string $bis
     foreach ($eintraege as $e) {
         if ($e['person'] !== $p['id'] || $e['art'] !== 'U' || $e['bis'] < $von || $e['von'] > $bis) continue;
         if ($e['status'] !== 'genehmigt' && !($beantragt && $e['status'] === 'beantragt')) continue;
-        $n = hr_tage_summe(hr_tage($p, $e['von'], $e['bis'], $von, $bis, $frei));   // Schließtage je ½
+        $n = hr_tage_summe(hr_tage($p, $e['von'], $e['bis'], $von, $bis, $frei));   // Schließtage zählen hier nicht (Betriebsurlaub)
         if ($n) $z[] = [max($e['von'], $von), min($e['bis'], $bis), $n, $e['status'] === 'beantragt'];
     }
+    // Betriebsurlaub 24.12./31.12. (automatisch, je ½ Tag) als eigene Zeile
+    $bu = [];
+    for ($j = (int)substr($von, 0, 4); $j <= (int)substr($bis, 0, 4); $j++) foreach (hr_betriebsurlaub($p, $eintraege, $j) as $d) if ($d >= $von && $d <= $bis) $bu[] = $d;
+    if ($bu) $z[] = [$bu[0], $bu[count($bu) - 1], count($bu) * HR_BETRIEBSURLAUB_WERT, false, implode(' und ', array_map(function ($d) { return substr($d, 8, 2) . '.' . substr($d, 5, 2) . '.'; }, $bu)) . ' Betrieb geschlossen'];
     usort($z, function ($a, $b) { return $a[0] <=> $b[0]; });
-    return array_map(function ($x) { return [hr_zeitraum_text($x[0], $x[1]) . ($x[3] ? ' (beantragt)' : ''), hr_tage_text((float)$x[2]), $x[2]]; }, $z);
+    return array_map(function ($x) { return [($x[4] ?? hr_zeitraum_text($x[0], $x[1])) . ($x[3] ? ' (beantragt)' : ''), hr_tage_text((float)$x[2]), $x[2]]; }, $z);
 }
 function hr_mail_vorname(array $p): string { return trim($p['vorname']) !== '' ? $p['vorname'] : hr_name($p); }
 function hr_mail_verfall_satz(array $k): string
@@ -261,7 +269,7 @@ function hr_mail_erinnerung_inhalt(array $p, array $k): array
 }
 
 /* Versand: Jobs senden, Verlauf und Protokoll schreiben. Rückgabe: Zusammenfassung */
-function hr_mail_versenden(array $jobs, string $art, string $wie, ?array $me, array $zusatz = [], string $antwortAn = ''): array
+function hr_mail_versenden(array $jobs, string $art, string $wie, ?array $me, array $zusatz = [], string $antwortAn = '', bool $verlauf = true): array
 {
     $cfg = mail_cfg_intern();
     if (!$cfg) throw new RuntimeException('Der E-Mail-Versand ist noch nicht eingerichtet (Zugangsdaten des Postfachs in .env auf dem Server).');
@@ -270,7 +278,8 @@ function hr_mail_versenden(array $jobs, string $art, string $wie, ?array $me, ar
     $ok = 0; $fehler = [];
     foreach ($jobs as $k => $j) { if (!empty($res[$k]['ok'])) $ok++; else $fehler[] = $j['to'] . ': ' . ($res[$k]['error'] ?? 'Versandfehler'); }
     $eintrag = ['t' => now(), 'art' => $art, 'wie' => $wie, 'gesendet' => $ok, 'fehler' => count($fehler), 'by' => $me ? (string)$me['name'] : 'automatisch'] + $zusatz;
-    with_lock('hr-einstellungen', function () use ($eintrag) {
+    // E-Mails an Vertretungen kommen mit jedem Antrag – sie stehen nur im Protokoll, nicht im Verlauf der Versände
+    if ($verlauf) with_lock('hr-einstellungen', function () use ($eintrag) {
         $d = store_read('hr-einstellungen') ?? [];
         $v = is_array($d['mailVerlauf'] ?? null) ? $d['mailVerlauf'] : [];
         array_unshift($v, $eintrag);
@@ -279,7 +288,8 @@ function hr_mail_versenden(array $jobs, string $art, string $wie, ?array $me, ar
     });
     $namen = ['monat' => 'Monatsübersicht', 'erinnerung' => 'Erinnerung „Resturlaub verfällt“', 'steuerberater' => 'Übersicht an den Steuerberater',
               'fehlen' => 'E-Mail zur Abwesenheit' . (isset($zusatz['name']) ? ' an ' . $zusatz['name'] : '') . ' (Bitte um Erklärung)',
-              'planung' => 'Erinnerung Jahresplanung ' . ($zusatz['jahr'] ?? ''), 'jahresuebersicht' => 'Jahresübersicht ' . ($zusatz['jahr'] ?? '')];
+              'planung' => 'Erinnerung Jahresplanung ' . ($zusatz['jahr'] ?? ''), 'jahresuebersicht' => 'Jahresübersicht ' . ($zusatz['jahr'] ?? ''),
+              'vertretung' => 'E-Mail an die Vertretung' . (isset($zusatz['name']) ? ' (Antrag von ' . $zusatz['name'] . ')' : '')];
     audit('hr', 'HR: ' . ($namen[$art] ?? $art) . ($wie === 'automatisch' ? ' (automatisch)' : '') . (!empty($zusatz['test']) ? ' (Testmodus)' : '') . ': ' . $ok . ' gesendet'
         . ($fehler ? ', ' . count($fehler) . ' nicht zugestellt' : ''), [], $me ?? ['username' => 'system', 'name' => 'System (automatisch)', 'role' => '']);
     return $eintrag + ['fehlerText' => array_slice($fehler, 0, 5)];
@@ -370,6 +380,74 @@ function hr_fehlen_mail(array $p, array $e, array $eintraege, array $me): array
                                ['name' => hr_name($p), 'test' => $m['test']['an']], hr_mail_adresse($me['email'] ?? ''));
     } catch (RuntimeException $ex) { return ['gesendet' => false, 'an' => $to, 'grund' => $ex->getMessage()]; }
     return ['gesendet' => $r['gesendet'] === 1, 'an' => $to, 'test' => $m['test']['an'], 'grund' => $r['gesendet'] === 1 ? '' : ($r['fehlerText'][0] ?? 'Versandfehler')];
+}
+
+/* E-Mail an die Vertretung: wer nicht da ist, wann (Zeiträume mit Arbeitstagen des Antragstellers) und in welcher Rolle –
+   ohne Art, Notiz oder Grund. Rolle „Vertretung“ geht vor „zusätzliche Vertretung“. */
+function hr_mail_vertretung_inhalt(array $ich, array $vp, array $zeitraeume, array $eintraege, bool $haupt): array
+{
+    $wer = hr_name($ich); $vor = hr_mail_vorname($vp);
+    $rolle = $haupt ? 'Vertretung' : 'zusätzliche Vertretung';
+    usort($zeitraeume, function ($a, $b) { return $a['von'] <=> $b['von']; });
+    $frei = hr_freie_tage($eintraege, $ich['id']);
+    $zeilen = array_map(function ($e) use ($ich, $frei) {
+        return [hr_zeitraum_text($e['von'], $e['bis']), hr_tage_text(hr_tage_summe(hr_tage($ich, $e['von'], $e['bis'], null, null, $frei), $e['art']))];
+    }, $zeitraeume);
+    $n = count($zeitraeume);
+    $betreff = "Vertretung für $wer: " . ($n === 1 ? hr_zeitraum_text($zeitraeume[0]['von'], $zeitraeume[0]['bis']) : "$n Zeiträume");
+    $satz = "$wer ist an " . ($n === 1 ? 'diesen Tagen' : 'den folgenden Tagen') . " nicht da und hat Sie als $rolle eingetragen.";
+    $info = 'Der Antrag ist gestellt; genehmigt wird er von der Personalstelle. Bitte stimmen Sie die Übergabe rechtzeitig ab. '
+        . 'Alle Zeiten, in denen Sie vertreten, stehen im Urlaubsportal unter „Mein Urlaub“ → „Sie vertreten“.';
+    [$lt, $lh] = hr_mail_knopf();
+    $text = "Hallo $vor,\n\n$satz\n\n" . hr_mail_tabelle_text($zeilen) . "\n\n$info$lt";
+    $html = '<p style="margin:0 0 6px;">Hallo ' . mail_h($vor) . ',</p><p style="margin:0;">' . mail_h($satz) . '</p>'
+        . hr_mail_h2($n === 1 ? 'Zeitraum' : 'Zeiträume') . hr_mail_tabelle($zeilen)
+        . '<p style="margin:16px 0 0;color:#4a443e;">' . mail_h($info) . '</p>' . $lh;
+    return hr_mail_rahmen($betreff, $text, $html, 'Sie vertreten ' . $wer);
+}
+
+/* Vertretung benachrichtigen (Inhaber 10.11.2026): nach einem Antrag oder einer Vorplanung bekommt jede eingetragene
+   Vertretung – auch die zusätzliche – eine E-Mail (Testmodus beachtet, Verlauf „vertretung“). Versendet wird nach der
+   Antwort (der Antrag wartet nicht auf das Postfach). Ohne Adresse oder Postfach geht nichts hinaus – dann ein Hinweis an
+   den Antragsteller; „Sie vertreten“ unter „Mein Urlaub“ zeigt es der Vertretung in jedem Fall.
+   $neu: die neuen Einträge; Rückgabe: Hinweis für den Antragsteller oder null */
+function hr_vertretung_benachrichtigen(array $ich, array $neu, array $personal, array $eintraege, ?array $me): ?string
+{
+    $idx = hr_personen_index($personal);
+    $je = [];
+    foreach ($neu as $e) foreach (['vertretung' => true, 'vertretung2' => false] as $feld => $haupt) {
+        $id = $e[$feld] ?? null;
+        if (!$id || !isset($idx[$id])) continue;
+        $je[$id]['haupt'] = ($je[$id]['haupt'] ?? false) || $haupt;
+        $je[$id]['zeitraeume'][$e['id']] = $e;
+    }
+    if (!$je) return null;
+    $adr = [];
+    foreach (users_load() as $u) $adr[(string)$u['id']] = hr_mail_adresse($u['email'] ?? '');
+    $m = hr_mail_einst(); $postfach = (bool)mail_cfg_intern();
+    $ohne = []; $jobs = [];
+    foreach ($je as $id => $x) {
+        $vp = $idx[$id];
+        $an = $vp['nutzer'] !== null ? ($adr[$vp['nutzer']] ?? '') : '';
+        if ($an === '' || !$postfach) { $ohne[] = hr_name($vp); continue; }
+        [$betreff, $text, $html] = hr_mail_vertretung_inhalt($ich, $vp, array_values($x['zeitraeume']), $eintraege, $x['haupt']);
+        [$to, $name, $betreff] = hr_mail_ziel($m, $an, hr_name($vp), $betreff);
+        $jobs[] = ['to' => $to, 'name' => $name, 'subject' => $betreff, 'text' => $text, 'html' => $html];
+    }
+    if ($jobs) register_shutdown_function(function () use ($jobs, $me, $ich, $m) {
+        try {
+            if (!empty($GLOBALS['store_tx'])) return;
+            if (function_exists('fastcgi_finish_request')) fastcgi_finish_request();
+            ignore_user_abort(true);
+            @set_time_limit(120);
+            hr_mail_versenden($jobs, 'vertretung', 'automatisch', $me, ['name' => hr_name($ich), 'test' => $m['test']['an']], '', false);
+        } catch (Throwable $ex) {
+            error_log('[wochenangebot] HR-Mail an die Vertretung: ' . $ex->getMessage());
+        }
+    });
+    if (!$ohne) return null;
+    return (count($ohne) === 1 ? 'Ihre Vertretung ' . $ohne[0] . ' bekommt keine E-Mail' : 'Ihre Vertretungen ' . implode(' und ', $ohne) . ' bekommen keine E-Mail')
+        . ($postfach ? ' (keine Adresse hinterlegt)' : '') . ' – bitte geben Sie selbst Bescheid.';
 }
 
 /* Excel-Übersicht des Vormonats und des laufenden Monats an den Steuerberater */

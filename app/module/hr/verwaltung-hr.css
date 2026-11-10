@@ -54,6 +54,7 @@
 .hr-verfall-check small { display: block; margin-top: 2px; font-size: 12px; }
 .hr-regelsperren { align-items: flex-start; margin: 4px 0 8px; }
 .hr-regelsperren small { display: block; margin-top: 2px; font-size: 12px; }
+.hr-fld-hint { font-size: 12px; line-height: 1.4; color: var(--muted); }   /* Erklärung unter einem Feld (nicht in Großbuchstaben) */
 .hr-autosperren { list-style: none; margin: 0 0 10px 28px; padding: 0; display: grid; gap: 4px; font-size: 13px; max-width: 420px; }
 .hr-autosperren li { display: flex; justify-content: space-between; gap: 12px; color: var(--text-2); font-variant-numeric: tabular-nums; }
 .hr-autosperren:empty, .hr-regelsperren:has(input:not(:checked)) + .hr-autosperren { display: none; }
