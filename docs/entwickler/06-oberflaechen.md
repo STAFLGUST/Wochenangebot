@@ -33,6 +33,10 @@ Voraussetzungen und Abgrenzung:
 | REWE · Vordisposition | `app/module/rewe/index.html` | `../../assets/theme.js`, `rewe.js` | `../../assets/app.css`, `rewe.css` (Gestaltung wie Leergut, Präfix `rw-`) |
 | Qualitätssicherung · QM-System | `app/module/qs/index.html` | `../../assets/theme.js`, `qs.js` | `../../assets/app.css`, `qs.css` (Gestaltung „Liquid Glass“ nach dem Designvorschlag, Präfix `qm-`; Dokument-Seitenleiste unter 1100 px als Blatt von unten, Prüfplan unter 760 px als Liste) |
 
+Jede dieser Seiten (außer Web-App und Rechtsseiten) lädt im `<head>` nach `theme.js` zusätzlich `format.js` (Zahlen und
+Einheiten, `window.STAFL_FORMAT`) und `suche.js` (Suchregel aller Suchfelder, `window.STAFL_SUCHE`,
+[10 Konventionen](10-konventionen.md#suche)).
+
 Alle Pfade sind relativ zur Seite (Rechtsseiten: absolut ab `/`). Damit funktionieren dieselben Dateien auf dem
 Testserver (`tests/run_e2e.py`), in der Testumgebung und auf jedem Produktions-Host.
 

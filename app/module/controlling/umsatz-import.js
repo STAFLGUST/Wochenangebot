@@ -2,6 +2,7 @@
    Liest die Kundenumsatztabelle der Warenwirtschaft (CSV, Semikolon, Spalten Kunde, Datum, Artikel, Kolli, Menge, Preis,
    Gesamtbetrag, EKPreis – Reihenfolge egal) und fasst sie je Kunde, Artikel und Tag zusammen, getrennt nach berechnet
    (mit Gesamtbetrag) und ohne Berechnung (z. B. Leergut). Zeilen ohne Artikel (Belegköpfe) zählen nur für den Zeitraum.
+   Einkaufspreis hat eine Position nur mit EKPreis über 0 (leer oder 0 = „ohne Einkaufspreis“, zählt nicht in DB und Spanne).
    Ergebnis: Zusammenfassung je Monat mit Prüfsumme (daten) und je Monat ein Teil mit den Zeilen (teile) – die
    Importzentrale schickt nur die Teile, die der Server für die Übernahme verlangt (geänderte Monate).
    Zeile: [Tag, Kunde, Artikel, Kolli, Menge (Tausendstel), Umsatz (Cent), EK-Wert (Cent), Umsatz mit EK (Cent), Positionen,
@@ -78,7 +79,7 @@
     const text = dekodieren(await dateien[0].arrayBuffer());
     let pos = 0, nr = 0, kopf = null;
     const fehler = [], summen = new Map(), kunden = new Set(), artikel = new Set();
-    let von = null, bis = null, zeilen = 0, ohneArtikel = 0, leer = 0, mitEk = false;
+    let von = null, bis = null, zeilen = 0, ohneArtikel = 0, leer = 0, mitEk = false, ohneEkNull = 0;
     const fehlerhaft = (zeile, schluessel, t) => { fehler.push({ zeile, schluessel, text: t }); };
     while (pos < text.length) {
       let ende = text.indexOf('\n', pos);
@@ -115,7 +116,10 @@
       s[0] += kolli || 0; s[1] += menge || 0; s[5]++;
       if (ber) {
         s[2] += betrag;
-        if (ek !== null) { s[3] += Math.round(((menge || 0) * ek) / 100000); s[4] += betrag; }   // Menge (10^-3) × EK (10^-4) → Cent
+        // Nur ein EK-Preis über 0 ist ein Einkaufspreis: „0,00“ steht in der Warenwirtschaft für „kein Preis hinterlegt“ – sonst
+        // zählte der ganze Betrag als Deckungsbeitrag (Spanne 100 %). Solche Positionen gehören zum Umsatz ohne Einkaufspreis.
+        if (ek !== null && ek > 0) { s[3] += Math.round(((menge || 0) * ek) / 100000); s[4] += betrag; }   // Menge (10^-3) × EK (10^-4) → Cent
+        else if (ek !== null) ohneEkNull++;
       }
       zeilen++; kunden.add(kunde); artikel.add(art);
     }
@@ -140,6 +144,7 @@
       teile[m] = { monat: m, hash, zeilen: z };
     }
     const hinweise = mitEk ? [] : [{ stufe: 'warn', text: 'Die Datei hat keine Spalte EKPreis – Deckungsbeitrag, Spanne und DB-Anteil bleiben für diesen Zeitraum leer.' }];
+    if (ohneEkNull) hinweise.push({ stufe: 'info', text: `${ohneEkNull.toLocaleString('de-DE')} berechnete ${ohneEkNull === 1 ? 'Position hat' : 'Positionen haben'} den EK-Preis 0 – sie zählen als „ohne Einkaufspreis“ (nicht in Deckungsbeitrag und Spanne).` });
     return { daten, teile, zeilen, fehler, hinweise };
   }
 

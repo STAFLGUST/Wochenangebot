@@ -9,7 +9,7 @@
   'use strict';
   const W = window.WA;
   const F = window.STAFL_FORMAT;   // Zahlen und Einheiten wie auf allen Seiten (app/assets/format.js)
-  const { $, $$, api, esc, icon, toast, confirmBox, dateTime, timeOnly, plural, fold, fmtNum, fmtInt, csvCell, ROLE_LABEL, offerName, offerShort, loadOffers, pendingCount, setView, OSTD, may } = W;
+  const { $, $$, api, esc, icon, toast, confirmBox, dateTime, timeOnly, plural, fold, SU, fmtNum, fmtInt, csvCell, ROLE_LABEL, offerName, offerShort, loadOffers, pendingCount, setView, OSTD, may } = W;
   const isAdmin = () => W.me && W.me.role === 'admin';
   // Vertraute Geräte (Browser, auf denen sich der Zugang angemeldet hat; kommen auch bei einer fremd ausgelösten Sperre durch)
   const geraeteText = (g) => `${plural(g.length, 'Gerät', 'Geräte')}: ${g.slice(0, 3).map((x) => `${x.name}, zuletzt ${dateTime(x.zuletzt)}`).join(' · ')}${g.length > 3 ? ' …' : ''}`;
@@ -659,12 +659,12 @@
     renderKundenList();
   }
   function renderKundenList() {
-    const toks = fold(kundenQ).split(/\s+/).filter(Boolean);
+    const toks = SU.woerter(kundenQ);
     const list = kunden.filter((c) => {
       if (kundenG && (kundenG === '-' ? c.gruppe : c.gruppe !== kundenG)) return false;
       if (kundenV && (kundenV === '-' ? (c.vertreter || c.vertreter2) : c.vertreter !== kundenV && c.vertreter2 !== kundenV)) return false;
       if (kundenS && (kundenS === 'aktiv') !== !!c.active) return false;
-      const hay = fold([c.nr, c.firma, c.ansprechpartner, c.ort, c.plz, c.email, c.login && c.login.username, c.gruppe ? kgName(c.gruppe) : '', vtName(c.vertreter), vtName(c.vertreter2)].join(' ')); return toks.every((t) => hay.includes(t));
+      return SU.passt(toks, SU.heu(c.nr, c.firma, c.ansprechpartner, c.strasse, c.plz, c.ort, c.telefon, c.email, c.login && c.login.username, c.gruppe ? kgName(c.gruppe) : '', vtName(c.vertreter), vtName(c.vertreter2)));
     });
     $('#k-count').textContent = plural(list.length, 'Kunde', 'Kunden') + (list.length !== kunden.length ? ` von ${fmtInt.format(kunden.length)}` : '') + (list.length > K_MAX ? ` – die ersten ${fmtInt.format(K_MAX)} angezeigt, Suche oder Gruppe eingrenzen` : '');
     const host = $('#k-list');
@@ -1409,13 +1409,12 @@
     renderLogList();
   }
   function logFiltered() {
-    const toks = fold(logQ).split(/\s+/).filter(Boolean);
+    const toks = SU.woerter(logQ);
     return logData.entries.filter((e) => {
       if (logUser && e.u !== logUser) return false;
       if (logType && typeOf(e.a) !== logType) return false;
       if (!toks.length) return true;
-      const hay = fold([e.u, e.n, entryText(e), ...(e.d || []).map((c) => [c.code, c.name, c.f, c.from, c.to].join(' '))].join(' '));
-      return toks.every((t) => hay.includes(t));
+      return SU.passt(toks, SU.heu(e.u, e.n, entryText(e), (e.d || []).map((c) => [c.code, c.name, c.f, c.from, c.to])));
     });
   }
   function changesTable(d) {
@@ -1551,8 +1550,8 @@
       renderList();
     }
     function renderList() {
-      const toks = fold(q).split(/\s+/).filter(Boolean);
-      const list = groups.filter((g) => { const hay = fold([g.nr, ...F.map((f) => g[f.k])].join(' ')); return toks.every((t) => hay.includes(t)); });
+      const toks = SU.woerter(q);
+      const list = groups.filter((g) => SU.passt(toks, SU.heu(g.nr, F.map((f) => g[f.k]))));
       $(`#${p}-count`).textContent = plural(list.length, eine, viele) + (list.length !== groups.length ? ` von ${groups.length}` : '');
       const el = $(`#${p}-list`);
       if (!groups.length) { el.innerHTML = `<div class="ed-empty"><h3>Noch keine ${esc(viele)}</h3><p>${cfg.leerText ? esc(cfg.leerText(may('stammdaten.bearbeiten'))) : may('stammdaten.bearbeiten') ? `Importieren Sie die Liste als CSV aus der Warenwirtschaft (Spalten ${esc(cfg.csvText || spaltenText)}) oder legen Sie Einträge einzeln an.` : 'Ein Bearbeiter kann die Liste importieren.'}</p></div>`; return; }

@@ -12,7 +12,7 @@
 (function () {
   'use strict';
   const W = window.WA;
-  const { $, esc, icon, plural, fold } = W;
+  const { $, esc, icon, plural } = W;
   const dlg = $('#dlg-ez-pick');
   const fmt2 = new Intl.NumberFormat('de-DE', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
   const F = window.STAFL_FORMAT;   // Zahlen und Einheiten wie auf allen Seiten (app/assets/format.js)
@@ -26,8 +26,8 @@
   const OHNE_VK = '–';         // Gruppe „ohne VK-Gruppe“
   const ALLE = '*';            // alle Gruppen
   const MAX_ZEILEN = 400;
-  /* Suche: wie fold, dazu ae/oe/ue/ss wie ä/ö/ü/ß; kompakt = ohne Leer- und Satzzeichen („Lammfilet“ findet „Lamm Filet“) */
-  const such = (s) => fold(s).replace(/ae/g, 'a').replace(/oe/g, 'o').replace(/ue/g, 'u').replace(/ss/g, 's');
+  /* Suche: gemeinsame Regel (assets/suche.js: Umlaute auch ausgeschrieben); kompakt = ohne Leer- und Satzzeichen („Lammfilet“ findet „Lamm Filet“) */
+  const such = W.SU.norm;
   const kompakt = (s) => s.replace(/[^a-z0-9]/g, '');
   const SYN_HERKUNFT = { NZ: 'neuseeland nzl', ARG: 'argentinien', UY: 'uruguay', PY: 'paraguay', BR: 'brasilien', AUS: 'australien', IRL: 'irland',
     DK: 'danemark', SCO: 'schottland', CA: 'kanada', USA: 'usa amerika', ES: 'spanien', D: 'deutschland', '4xD': 'deutschland', '3xD': 'deutschland', EG: 'eu europa' };
@@ -163,7 +163,7 @@
     const ek = cfg.meta.ek;
     const lots = a.lots || [], inc = a.incoming || [];
     const lotsHTML = lots.length ? `<div class="ez-dtw"><table class="ez-dt"><thead><tr><th>Partie</th><th>Eingang</th><th>MHD</th><th class="num">Kolli</th><th class="num">kg</th>${ek ? '<th class="num">EK €/kg</th>' : ''}</tr></thead><tbody>
-        ${lots.map((l) => `<tr><td>${esc(l.lot || '—')}</td><td>${esc(dmy(l.arrival)) || '—'}</td><td>${esc(dmy(l.mhd)) || '—'}</td><td class="num">${l.kolli != null ? esc(F.zahl(l.kolli, 0, 0)) : '—'}</td><td class="num">${esc(fmtKg(l.kg))}</td>${ek ? `<td class="num">${l.ek != null ? esc(fmt2.format(l.ek)) : '—'}</td>` : ''}</tr>`).join('')}</tbody></table></div>`
+        ${lots.map((l) => `<tr><td>${esc(l.lot || '—')}</td><td>${esc(dmy(l.arrival)) || '—'}</td><td>${esc(dmy(l.mhd)) || '—'}</td><td class="num">${l.kolli != null ? esc(F.zahl(l.kolli, 0, 0)) : '—'}</td><td class="num">${esc(fmtKg(l.kg))}</td>${ek ? `<td class="num">${l.ek != null && l.ek > 0 ? esc(fmt2.format(l.ek)) : '—'}</td>` : ''}</tr>`).join('')}</tbody></table></div>`
       : `<p class="hint">${a.kg > 0 ? 'Keine Partiedaten in der Bestandsliste.' : 'Kein eingelagerter Bestand.'}</p>`;
     const incHTML = inc.length ? `<div class="ez-dtw"><table class="ez-dt"><thead><tr><th>Partie</th><th>Ankunft (ETA)</th><th class="num">kg</th></tr></thead><tbody>
         ${inc.map((x) => `<tr><td>${esc(x.lot || '—')}</td><td>${x.arrival ? esc(dmy(x.arrival)) : '<span class="muted">ETA unbekannt</span>'}</td><td class="num">${esc(fmtKg(x.kg))}</td></tr>`).join('')}</tbody></table></div>`

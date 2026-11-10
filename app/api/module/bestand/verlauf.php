@@ -22,7 +22,7 @@ function bestand_verlauf_stand(array $articles, array $incoming): array
         $code = (string)$a['code'];
         $ekWert = 0.0; $ekKg = 0.0;
         foreach ($a['lots'] ?? [] as $l) {
-            if (!isset($l['ek']) || $l['ek'] === null) continue;
+            if (!isset($l['ek']) || $l['ek'] === null || (float)$l['ek'] <= 0) continue;   // ohne Einkaufspreis (auch 0 aus älteren Listen)
             $ekWert += (float)$l['kg'] * (float)$l['ek'];
             $ekKg += (float)$l['kg'];
         }

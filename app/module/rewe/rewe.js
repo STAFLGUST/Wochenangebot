@@ -13,6 +13,7 @@
   const API = '../../api/';
   const $ = (s, el = document) => el.querySelector(s);
   const $$ = (s, el = document) => [...el.querySelectorAll(s)];
+  const SU = window.STAFL_SUCHE;   // gemeinsame Suchregel (assets/suche.js): Umlaute auch ausgeschrieben, mehrere Wörter, Nummern
   const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
   const TABS = ['woche', 'dauer', 'maerkte', 'zuweisung', 'abschluss', 'einstellungen'];
   const S = {
@@ -91,7 +92,7 @@
   const lwOptionen = (alle, nurAktiv = true) => (alle ? `<option value="">${esc(alle)}</option>` : '') + S.d.lieferwege.filter((l) => !nurAktiv || l.aktiv).map((l) => `<option value="${esc(l.id)}">${esc(l.name)}</option>`).join('');
   const kaufOptionen = (alle) => (alle ? `<option value="">${esc(alle)}</option>` : '') + Object.entries(S.d.kauf).map(([k, v]) => `<option value="${esc(k)}">${esc(v)}</option>`).join('');
   const personOptionen = (vorne = '') => vorne + S.d.personen.map((p) => `<option value="${esc(p.id)}">${esc(p.name)}</option>`).join('');
-  const passt = (m, q) => !q || [m.ort, m.strasse, m.name, m.kdNr, m.reweNr, m.plz].some((x) => String(x || '').toLocaleLowerCase('de-DE').includes(q));
+  const passt = (m, q) => SU.passt(q, SU.heu(m.name, m.strasse, m.plz, m.ort, m.kdNr, m.reweNr));   // q = SU.woerter(Eingabe)
 
   /* Rückweg zum Dashboard auf der echten Adresse */
   if (/(^|\.)dashboard-stafl\.de$/.test(location.hostname)) $('#rw-zurueck').href = 'https://dashboard-stafl.de/';
@@ -172,7 +173,7 @@
       <div class="rw-kpi${wv.length ? ' warn' : ''}"><span>Wiedervorlagen fällig</span><b>${wv.length}</b><small>${esc(wv.slice(0, 3).map((m) => m.ort).join(' · ') || '—')}</small></div>`;
     bestelltHtml(w, best, mengen);
     $$('#rw-w-filter button').forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.f === S.filter)));
-    const q = S.suche.trim().toLocaleLowerCase('de-DE');
+    const q = SU.woerter(S.suche);
     const html = w.gruppen.map((g) => {
       const zeilen = g.maerkte.filter((m) => passt(m, q) && zeigen(m));
       const offen = g.maerkte.filter((m) => !erledigt(m)).length;
@@ -403,7 +404,7 @@
   }
   function renderMaerkte() {
     if (!S.maerkte) return;
-    const q = S.mSuche.trim().toLocaleLowerCase('de-DE');
+    const q = SU.woerter(S.mSuche);
     const z = S.maerkte.filter((m) => passt(m, q) && (!S.mLw || m.lieferweg === S.mLw) && (!S.mKauf || m.kauf === S.mKauf));
     $('#rw-m-anzahl').textContent = `${z.length} von ${S.maerkte.length}`;
     $('#rw-m-neu').hidden = !darf('verwalten');
@@ -753,7 +754,7 @@
   function renderDauer() {
     if (!S.maerkte) return;
     const alle = S.maerkte.filter(dauerAktiv);
-    const q = S.dSuche.trim().toLocaleLowerCase('de-DE');
+    const q = SU.woerter(S.dSuche);
     const z = alle.filter((m) => passt(m, q) && (!S.dRh || String(m.dauer.rhythmus) === S.dRh) && (!S.dLw || m.lieferweg === S.dLw)
       && (!S.dStatus || (S.dStatus === 'pause' ? dauerPause(m) : S.dStatus === 'faellig' ? m.dauerNaechste === S.d.abfrage : !dauerPause(m))));
     const pausiert = alle.filter(dauerPause).length, faellig = alle.filter((m) => m.dauerNaechste === S.d.abfrage).length;
@@ -853,7 +854,7 @@
     $('#rw-z-fwer').innerHTML = personOptionen('<option value="">alle Mitarbeiter</option><option value="-">ohne Zuständigkeit</option>'); $('#rw-z-fwer').value = S.zWer;
     $('#rw-z-flw').innerHTML = lwOptionen('alle Lieferwege', false); $('#rw-z-flw').value = S.zLw;
     $('#rw-z-fkauf').innerHTML = kaufOptionen('alle Märkte'); $('#rw-z-fkauf').value = S.zKauf;
-    const q = S.zSuche.trim().toLocaleLowerCase('de-DE');
+    const q = SU.woerter(S.zSuche);
     const z = S.maerkte.filter((m) => passt(m, q) && (!S.zWer || (S.zWer === '-' ? !m.zustaendig : m.zustaendig === S.zWer)) && (!S.zLw || m.lieferweg === S.zLw) && (!S.zKauf || m.kauf === S.zKauf));
     const alleGewaehlt = z.length && z.every((m) => S.zAuswahl.has(m.id));
     $('#rw-z-tabelle').innerHTML = `<thead><tr><th><input type="checkbox" id="rw-z-alle" aria-label="alle gezeigten auswählen"${alleGewaehlt ? ' checked' : ''}></th><th>Markt</th><th>Kd.-Nr.</th><th>Lieferweg</th><th>Zuständig</th><th>Kaufbereitschaft</th><th>Zuletzt</th></tr></thead><tbody>

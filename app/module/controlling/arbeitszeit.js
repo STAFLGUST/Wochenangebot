@@ -103,7 +103,7 @@
       <p class="ctl-hilfe">Saldo bereinigt (Ist + Abwesenheit − Soll an Tagen ohne Stempelfehler), daneben Soll und Ist in Stunden.</p></div></div>
       <ol class="ctl-az-monate-liste">${zeilen}</ol></section>`;
   }
-  const suchtreffer = (z) => { const q = S.suche.trim().toLocaleLowerCase('de-DE'); return !q || z.name.toLocaleLowerCase('de-DE').includes(q) || String(z.nr || '').toLocaleLowerCase('de-DE').includes(q); };
+  const suchtreffer = (z) => window.STAFL_SUCHE.findet(S.suche, z.name, z.nr);   // gemeinsame Suchregel (assets/suche.js)
   function sortiert(liste) {
     const [, wert, auf, text] = SORT[S.sort] || SORT.name;
     return liste.slice().sort((a, b) => (text ? a.name.localeCompare(b.name, 'de') : (auf ? wert(a) - wert(b) : wert(b) - wert(a)) || a.name.localeCompare(b.name, 'de')));

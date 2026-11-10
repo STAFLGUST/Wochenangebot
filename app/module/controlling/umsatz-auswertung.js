@@ -36,7 +36,7 @@
   const quote = (a, b) => (b ? a / b : null);
   const preis = (w) => (w && w.menge ? euro(Math.round((w.umsatz / w.menge) * 1000)) + '/kg' : '—');   // € je kg
   const db = (w) => (w && 'ek' in w ? w.umsatzEk - w.ek : null);
-  const spanne = (w) => (w && 'ek' in w ? quote(w.umsatzEk - w.ek, w.umsatzEk) : null);
+  const spanne = (w) => (w && 'ek' in w && w.umsatzEk > 0 ? (w.umsatzEk - w.ek) / w.umsatzEk : null);   // wie der Server (umsatz_rang_wert): nur bei positivem Umsatz mit EK
   const MONATSNAMEN = ['Januar', 'Februar', 'März', 'April', 'Mai', 'Juni', 'Juli', 'August', 'September', 'Oktober', 'November', 'Dezember'];
   const monatsname = (m, kurz = false) => { const n = MONATSNAMEN[Number(m.slice(5, 7)) - 1]; return `${kurz ? n.slice(0, 3) : n} ${kurz ? m.slice(2, 4) : m.slice(0, 4)}`; };
   const tag = (d) => (d ? `${d.slice(8, 10)}.${d.slice(5, 7)}.${d.slice(0, 4)}` : '');
@@ -230,10 +230,10 @@
   function zeichneEntwurf() {
     const dlg = $('#ctl-ua-filterdialog', S.box);
     FILTER.forEach((f) => {
-      const gew = S.entwurf[f.id], q = S.fsuche[f.id].trim().toLocaleLowerCase('de-DE');
+      const gew = S.entwurf[f.id], q = S.fsuche[f.id].trim();
       if (f.suche) {
         $(`[data-tokens="${f.id}"]`, dlg).innerHTML = [...gew].map((nr) => `<span class="ctl-ua-tok">${esc(optionName(f, nr))}<button type="button" data-tokweg="${f.id}" data-wert="${esc(nr)}" aria-label="${esc(optionName(f, nr))} entfernen">×</button></span>`).join('');
-        const treffer = q ? optionen(f).filter((o) => !gew.has(o.nr) && o.name.toLocaleLowerCase('de-DE').includes(q)).slice(0, 8) : [];
+        const treffer = q ? optionen(f).filter((o) => !gew.has(o.nr) && window.STAFL_SUCHE.findet(q, o.name, o.nr)).slice(0, 8) : [];
         $(`[data-ftreffer="${f.id}"]`, dlg).innerHTML = treffer.map((o) => `<button type="button" data-tokdazu="${f.id}" data-wert="${esc(o.nr)}">${esc(o.name)}</button>`).join('')
           + (q && !treffer.length ? '<p class="ctl-hilfe">Keine Treffer.</p>' : '');
       } else {
@@ -280,13 +280,13 @@
 
   /* ---------- Suche: Kunde, Artikel, Vertreter, Kundengruppe, Artikelgruppe → Pop-up ---------- */
   function suchen(text) {
-    const q = text.trim().toLocaleLowerCase('de-DE'), box = $('#ctl-ua-treffer', S.box), feld = $('#ctl-ua-suche', S.box);
+    const q = text.trim(), box = $('#ctl-ua-treffer', S.box), feld = $('#ctl-ua-suche', S.box);
     S.treffer = []; S.aktiv = -1;
     if (q.length >= 2 || /^\d+$/.test(q)) {
-      const passt = (s) => s.toLocaleLowerCase('de-DE').includes(q);
+      const w = window.STAFL_SUCHE.woerter(q);   // gemeinsame Suchregel (assets/suche.js)
       const art = [['kunden', 'kunde', 'Kunde', 8], ['artikel', 'artikel', 'Artikel', 8], ['vertreter', 'vertreter', 'Vertreter', 3], ['kundengruppen', 'kundengruppe', 'Kundengruppe', 3], ['vkgruppen', 'vkgruppe', 'Artikelgruppe', 3]];
       art.forEach(([liste, dim, name, max]) => {
-        (S.g.optionen[liste] || []).filter((o) => passt(o.name) || passt(o.nr)).slice(0, max).forEach((o) => S.treffer.push({ dim, nr: o.nr, name: o.name, art: name }));
+        (S.g.optionen[liste] || []).filter((o) => window.STAFL_SUCHE.passt(w, window.STAFL_SUCHE.heu(o.name, o.nr))).slice(0, max).forEach((o) => S.treffer.push({ dim, nr: o.nr, name: o.name, art: name }));
       });
     }
     box.innerHTML = S.treffer.map((t, i) => `<button type="button" role="option" id="ctl-ua-tr-${i}" aria-selected="false" data-treffer="${i}"><span><b>${esc(t.name)}</b> <small>${esc(t.nr)}</small></span><small>${esc(t.art)}</small></button>`).join('')

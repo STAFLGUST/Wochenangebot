@@ -11,6 +11,7 @@
   const API = '../../api/';
   const $ = (s, el = document) => el.querySelector(s);
   const $$ = (s, el = document) => [...el.querySelectorAll(s)];
+  const SU = window.STAFL_SUCHE;   // gemeinsame Suchregel (assets/suche.js): Umlaute auch ausgeschrieben, mehrere Wörter, Nummern
   const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
   // Dateipfad mit Umbruchstellen nach „/“ (am Handy sonst Zeichen für Zeichen umbrochen)
   const pfadText = (p) => esc(p).replace(/\//g, '/<wbr>');
@@ -1323,7 +1324,7 @@
       return `<label class="geo-opt geo-iphit"><input type="checkbox" data-geo-cc="${esc(c)}"${g.sel.has(c) ? ' checked' : ''}> <span><span class="mono-s">${esc(g.ip.ip)}</span> → ${esc(land(c))}</span><span class="sub">${esc(c)}</span></label>`;
     }
     const q = g.q.toLowerCase();
-    const passt = (c) => !q || c.toLowerCase() === q || land(c).toLowerCase().includes(q);
+    const passt = (c) => !q || c.toLowerCase() === q || SU.findet(q, land(c));   // „Osterreich“ und „Oesterreich“ finden „Österreich“
     const opt = (c) => `<label class="geo-opt"><input type="checkbox" data-geo-cc="${esc(c)}"${g.sel.has(c) ? ' checked' : ''}><span class="geo-name" title="${esc(land(c))}">${esc(land(c))}</span><span class="sub">${esc(c)}</span></label>`;
     const bekannt = S.sec.geoCountries || [];
     // nach Kontinenten gegliedert; Länder ohne Zuordnung (neuere Länderliste des Servers) unter „Weitere“

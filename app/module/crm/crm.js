@@ -15,6 +15,7 @@
   const API = '../../api/';
   const $ = (s, el = document) => el.querySelector(s);
   const $$ = (s, el = document) => [...el.querySelectorAll(s)];
+  const SU = window.STAFL_SUCHE;   // gemeinsame Suchregel (assets/suche.js): Umlaute auch ausgeschrieben, mehrere Wörter, Nummern
   const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
   const icon = (n) => `<svg class="i" aria-hidden="true"><use href="#i-${n}"/></svg>`;
   const OFFEN_PHASEN = ['Interessent', 'Erstkontakt', 'Muster/Probe', 'Angebot', 'Verhandlung'];
@@ -167,21 +168,20 @@
   /* ---------- Kunden ---------- */
   const aktivPasst = (k) => !((S.kunden.aktiv === 'ja' && !k.aktiv) || (S.kunden.aktiv === 'nein' && k.aktiv));
   function kundenListe() {
-    const f = S.kunden, q = f.q.toLocaleLowerCase('de').trim(), sig = f.signal ? signalListe() : null;
+    const f = S.kunden, q = SU.woerter(f.q), sig = f.signal ? signalListe() : null;
     return S.d.kunden.filter((k) => {
       if (!aktivPasst(k)) return false;
       if (sig && !sig.has(k.key)) return false;
       if (f.segment && k.crm.segment !== f.segment) return false;
       if (f.phase && k.crm.phase !== f.phase) return false;
       if (f.vertreter && k.vertreter !== f.vertreter && k.vertreter2 !== f.vertreter) return false;
-      if (!q) return true;
-      return suchText(k).includes(q);
+      return SU.passt(q, suchText(k));
     });
   }
   /* Durchsuchbarer Text eines Kunden (Kundenliste und Kartensuche), zwischengespeichert bis zum nächsten Laden */
   function suchText(k) {
-    if (!k._suche) k._suche = [k.firma, k.nr, k.gruppe, k.gruppeNr ? 'KG ' + k.gruppeNr : '', k.ort, k.plz, k.email, k.telefon, k.ansprechpartner, vName(k.vertreter), vName(k.vertreter2),
-      ...k.crm.kontakte.flatMap((p) => [p.name, p.funktion, p.telefon, p.email])].join(' ').toLocaleLowerCase('de');
+    if (!k._suche) k._suche = SU.heu(k.firma, k.nr, k.gruppe, k.gruppeNr ? 'KG ' + k.gruppeNr : '', k.plz, k.ort, k.email, k.telefon, k.ansprechpartner, vName(k.vertreter), vName(k.vertreter2),
+      k.crm.kontakte.flatMap((p) => [p.name, p.funktion, p.telefon, p.email]));
     return k._suche;
   }
   function kunden() {
@@ -238,7 +238,7 @@
     if (!S.wv.reihenfolge) wvReihenfolge();
     const bekannt = new Set(S.wv.reihenfolge);
     for (const k of S.d.kunden) if (!bekannt.has(k.key)) S.wv.reihenfolge.push(k.key);
-    const f = S.wv, q = f.q.toLocaleLowerCase('de').trim();
+    const f = S.wv, q = SU.woerter(f.q);
     return S.wv.reihenfolge.map((key) => S.byKey.get(key)).filter((k) => {
       if (!k) return false;
       if (f.vertreter && k.vertreter !== f.vertreter && k.vertreter2 !== f.vertreter) return false;
@@ -249,8 +249,7 @@
       if (f.termin === 'ueber' && !(hat && t < 0)) return false;
       if (f.termin === 'wv-heute' && !(hat && t === 0)) return false;
       if (f.termin === 'kuenftig' && !(hat && t > 0)) return false;
-      if (!q) return true;
-      return [k.firma, k.nr, k.ort, ...namen(k), ...telefone(k)].join(' ').toLocaleLowerCase('de').includes(q);
+      return SU.passt(q, SU.heu(k.firma, k.nr, k.ort, namen(k), telefone(k)));
     });
   }
   function wiedervorlagen(nurTabelle = false) {
@@ -575,9 +574,9 @@
   /* ---------- Kundensuche auf der Karte ---------- */
   function suchTreffer(zeigen = true) {
     const box = $('#km-treffer'); if (!box) return;
-    const q = S.karte.suche.trim().toLocaleLowerCase('de');
-    if (q.length < 2) { box.hidden = true; box.innerHTML = ''; return; }
-    const liste = S.d.kunden.filter((k) => suchText(k).includes(q)).slice(0, 8);
+    const q = SU.woerter(S.karte.suche);
+    if (S.karte.suche.trim().length < 2) { box.hidden = true; box.innerHTML = ''; return; }
+    const liste = S.d.kunden.filter((k) => SU.passt(q, suchText(k))).slice(0, 8);
     box.innerHTML = liste.length ? liste.map((k) => `<button type="button" role="option" class="km-treffer-zeile" data-km-kunde="${esc(k.key)}"><b>${esc(k.firma)}</b><small>${[k.nr ? 'KN ' + k.nr : '', [k.plz, k.ort].filter(Boolean).join(' '), k.art === 'interessent' ? 'Interessent' : '', k.aktiv ? '' : 'inaktiv'].filter(Boolean).map(esc).join(' · ')}</small></button>`).join('')
       : '<p class="crm-leer">Kein Kunde gefunden.</p>';
     box.hidden = !zeigen;

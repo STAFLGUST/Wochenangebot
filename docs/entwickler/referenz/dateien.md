@@ -255,6 +255,7 @@ Jede Code-Datei beginnt mit einem Kopfkommentar; dessen erste Aussage steht hier
 | `rahmen.css` | plattform | STAFL-Plattform · Gemeinsamer Rahmen (Gestaltung „C2“, Entwurf vom Inhaber freigegeben 06.11.2026) Feste Seitenleiste mit allen Anwendungen (rahmen.js zeichnet sie aus dem Modulregister), ruhige Flächen mit feinen … |
 | `rahmen.js` | plattform | STAFL-Plattform · Gemeinsamer Rahmen |
 | `stock-core.js` | bestand | Bestand – Einlesen der WinAB-Bestandsliste („Partieliste … verfügbar“) Liest die CSV-Ausgabe (Semikolon, Windows-1252 oder UTF-8; Spalten „Art. |
+| `suche.js` | plattform | Textsuche – EINE Regel für alle Suchfelder der Plattform (Prüfung der Suchfunktionen, Auftrag des Inhabers 10.11.2026). |
 | `theme.js` | plattform | Hell/Dunkel-Einstellung vor dem ersten Zeichnen anwenden (ohne Inline-Skript, wegen Content-Security-Policy) |
 | `webapp.js` | angebot | Web-App: Offline-Speicher (sw.js) anmelden und Hinweis „Als App auf den Home-Bildschirm“. |
 

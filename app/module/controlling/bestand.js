@@ -183,8 +183,8 @@
       <div class="ctl-b-legende"><span><i class="linie"></i>${S.wert === 'ekWert' ? 'Lagerwert (€)' : 'Bestand (kg)'}</span><span><i class="punkt"></i>Tag mit Bestandsliste</span>${S.d.absatzReihe.length && S.wert === 'kg' ? '<span><i class="balken"></i>Absatz je Tag (kg, aus den Umsatzdaten)</span>' : ''}</div></section>`;
   }
   function sichtbareZeilen() {
-    const q = S.suche.trim().toLocaleLowerCase('de-DE');
-    let z = S.d.zeilen.filter((x) => (!S.nur || x.hinweis) && (!q || x.name.toLocaleLowerCase('de-DE').includes(q) || String(x.sub || '').toLocaleLowerCase('de-DE').includes(q) || String(x.key).toLocaleLowerCase('de-DE').includes(q)));
+    const q = window.STAFL_SUCHE.woerter(S.suche);   // gemeinsame Suchregel (assets/suche.js)
+    let z = S.d.zeilen.filter((x) => (!S.nur || x.hinweis) && window.STAFL_SUCHE.passt(q, window.STAFL_SUCHE.heu(x.name, x.sub, x.key)));
     const [, wert, auf] = SORT[S.sort] || SORT.kg;
     z = z.slice().sort((a, b) => {
       const x = wert(a), y = wert(b);

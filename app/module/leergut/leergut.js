@@ -15,6 +15,7 @@
   const API = '../../api/';
   const $ = (s, el = document) => el.querySelector(s);
   const $$ = (s, el = document) => [...el.querySelectorAll(s)];
+  const SU = window.STAFL_SUCHE;   // gemeinsame Suchregel (assets/suche.js): Umlaute auch ausgeschrieben, mehrere Wörter, Nummern
   const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
   const TABS = ['uebersicht', 'konten', 'abstimmungen', 'abschreibungen', 'bilanz', 'einstellungen'];
   const KURZ = { e2: 'E2', h1: 'H1', eu: 'EUR', haken: 'Haken', e1: 'E1', be2: 'Blaue E2', kuebel: 'Kübel' };
@@ -275,11 +276,11 @@
   }
   function renderKontoliste() {
     fuelleFilter();
-    const q = $('#lg-k-suche').value.trim().toLocaleLowerCase('de-DE');
+    const q = SU.woerter($('#lg-k-suche').value);
     const art = $('#lg-k-art').value, firma = $('#lg-k-firma').value, inaktiv = $('#lg-k-inaktiv').checked, nachWert = $('#lg-k-sort').value === 'wert';
     const wert = (p) => euroVon(obj(S.kmap.get(p.id)?.saldo)).betrag;
     const liste = S.d.partner.filter((p) => (inaktiv || p.aktiv) && (!art || p.art === art) && (!firma || p.mandant === firma)
-      && (!q || [p.name, p.kontoNr, p.kundenNr, p.lieferantNr, ...(p.lieferantNrWeitere || []), p.lieferanten, p.ansprechpartner].join(' ').toLocaleLowerCase('de-DE').includes(q)))
+      && SU.passt(q, SU.heu(p.name, p.kontoNr, p.kundenNr, p.lieferantNr, p.lieferantNrWeitere || [], p.lieferanten, p.ansprechpartner)))
       .sort((a, b) => (nachWert ? wert(b) - wert(a) : 0) || nachName(a, b));
     $('#lg-k-liste').innerHTML = liste.length ? liste.map((p) => {
       const k = S.kmap.get(p.id) || {};
@@ -420,13 +421,13 @@
   /* ---------- Abschreibungen ---------- */
   const abWert = (m) => { let e = 0, voll = true; for (const [k, n] of Object.entries(obj(m))) { const w = lm(k).wert; if (w === null || w === undefined) voll = false; else e += n * w; } return { e, voll }; };
   function renderAbschreibungen() {
-    const st = $('#lg-d-status').value, q = $('#lg-d-suche').value.trim().toLocaleLowerCase('de-DE');
+    const st = $('#lg-d-status').value, q = SU.woerter($('#lg-d-suche').value);
     const basis = S.d.abschreibungen.filter((x) => !st || x.status === st);
     const jeKunde = new Map(); basis.forEach((x) => jeKunde.set(x.empfaenger, (jeKunde.get(x.empfaenger) || 0) + 1));
     if (S.kunde && !jeKunde.has(S.kunde)) S.kunde = '';
     const kunden = [...jeKunde.entries()].sort((a, b) => b[1] - a[1]);
     $('#lg-d-kunden').innerHTML = kunden.length > 1 ? `<div class="lg-kunden" role="group" aria-label="Nach Kunde filtern">${kunden.slice(0, 14).map(([k, n]) => `<button type="button" data-kunde="${esc(k)}" aria-pressed="${k === S.kunde}">${esc(k)} <b>${zahl(n)}</b></button>`).join('')}</div>` : '';
-    const liste = basis.filter((x) => (!S.kunde || x.empfaenger === S.kunde) && (!q || [x.empfaenger, x.empfaengerNr, x.ort, x.sendung, x.rechnung, x.notiz].join(' ').toLocaleLowerCase('de-DE').includes(q)))
+    const liste = basis.filter((x) => (!S.kunde || x.empfaenger === S.kunde) && SU.passt(q, SU.heu(x.empfaenger, x.empfaengerNr, x.ort, x.sendung, x.rechnung, x.notiz)))
       .sort((a, b) => String(b.zugestellt).localeCompare(a.zugestellt));
     const summe = {}; liste.forEach((x) => { for (const [k, n] of Object.entries(obj(x.menge))) summe[k] = (summe[k] || 0) + n; });
     const sw = abWert(summe);

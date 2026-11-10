@@ -34,7 +34,8 @@
   const dateTime = (iso) => (iso ? new Date(iso).toLocaleString('de-DE', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' }) : '');
   const timeOnly = (iso) => (iso ? new Date(iso).toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' }) : '');
   const FOLD = { 'ä': 'a', 'ö': 'o', 'ü': 'u', 'ß': 's', 'é': 'e', 'è': 'e', 'ê': 'e', 'á': 'a', 'à': 'a', 'ó': 'o', 'ô': 'o', 'í': 'i', 'ú': 'u', 'ç': 'c', 'ñ': 'n', 'œ': 'o' };
-  const fold = (s) => String(s ?? '').toLowerCase().replace(/[^\u0000-\u007f]/g, (c) => FOLD[c] ?? c);
+  const fold = (s) => String(s ?? '').toLowerCase().replace(/[^\u0000-\u007f]/g, (c) => FOLD[c] ?? c);   // Vergleich von Namen und Spaltenköpfen
+  const SU = window.STAFL_SUCHE;   // alle Suchfelder: eine Regel (assets/suche.js) – Umlaute auch ausgeschrieben, mehrere Wörter, Nummern
   const store = {
     get(k, d) { try { const v = localStorage.getItem('wochenangebot.' + k); return v == null ? d : JSON.parse(v); } catch { return d; } },
     set(k, v) { try { localStorage.setItem('wochenangebot.' + k, JSON.stringify(v)); } catch { /* ignore */ } },
@@ -1247,8 +1248,7 @@
   function matchesFilter(it) {
     if (onlyChanges && !rowState(it)) return false;
     if (!filterQ) return true;
-    const hay = fold([it.code, it.name, ...Object.values(it.namen || {}), it.origin, it.category, C.CONDITION_LABELS[it.condition]].join(' '));
-    return fold(filterQ).split(/\s+/).filter(Boolean).every((t) => hay.includes(t));
+    return SU.findet(filterQ, it.code, it.name, Object.values(it.namen || {}), it.origin, it.category, C.CONDITION_LABELS[it.condition]);
   }
   function wasHTML(it, st, before = diff.before[it.id]) {
     return st === 'is-price' && before ? `<span class="was" title="Veröffentlichter Preis">bisher <s>${esc(priceShort(before.price))}</s></span>` : '';
@@ -1809,7 +1809,7 @@
     const tab = (id) => {
       const n = memberCount(id), sel = id === curOffer;
       const sub = id === OSTD ? (stdPublic ? 'Angebotsseite für alle' : 'nur nach Anmeldung') : followsStd(id) ? 'folgt dem Wochenangebot' : '';
-      return `<button type="button" role="tab" data-offer="${esc(id)}" aria-selected="${sel}" class="ob-o${id === OSTD ? ' std' : ''}${followsStd(id) ? ' folgt' : ''}" data-hay="${esc(fold(offerName(id)))}"><span class="ob-n">${esc(offerShort(id))}${sub ? `<small>${esc(sub)}</small>` : ''}</span><small class="ob-z" title="${esc(plural(n, 'Artikel', 'Artikel'))}">${fmtInt.format(n)}</small></button>`;
+      return `<button type="button" role="tab" data-offer="${esc(id)}" aria-selected="${sel}" class="ob-o${id === OSTD ? ' std' : ''}${followsStd(id) ? ' folgt' : ''}" data-hay="${esc(SU.heu(offerName(id)))}"><span class="ob-n">${esc(offerShort(id))}${sub ? `<small>${esc(sub)}</small>` : ''}</span><small class="ob-z" title="${esc(plural(n, 'Artikel', 'Artikel'))}">${fmtInt.format(n)}</small></button>`;
     };
     host.innerHTML = `<button type="button" class="ob-cur" data-ob="toggle" aria-expanded="${obOpen}"><span class="ob-n"><small>${curOffer === OSTD ? 'Öffentliches Angebot' : 'Kundenangebot'}</small>${esc(offerShort(curOffer))}</span><small class="ob-z">${fmtInt.format(memberCount(curOffer))}</small>${icon('chev', 'ob-chev')}</button>
       <div class="ob-list${obOpen ? ' open' : ''}">
@@ -1837,8 +1837,8 @@
   obLinks.addEventListener('change', offerBarPlatzieren);
   offerBarPlatzieren();
   function obFilter() {
-    const toks = fold(obQ).split(/\s+/).filter(Boolean);
-    for (const b of $$('#offer-bar .ob-o')) b.hidden = toks.length > 0 && !toks.every((t) => b.dataset.hay.includes(t));
+    const toks = SU.woerter(obQ);
+    for (const b of $$('#offer-bar .ob-o')) b.hidden = !SU.passt(toks, b.dataset.hay);
   }
   /* Kopf des gewählten Angebots: Art, Name, Artikelliste, Anzahl, Aktionen; Hinweis bei „folgt dem Wochenangebot“ */
   function renderOfferHead() {
@@ -1990,7 +1990,7 @@
       <div class="dlg-body">
         ${ofKg.length ? `<div class="search">${icon('search')}<input id="ofg-q" type="search" autocomplete="off" placeholder="Gruppe finden: Nummer, Bezeichnung …" aria-label="Kundengruppen suchen"></div>
         <div class="ofg-bar"><span class="sub" id="ofg-n"></span><button type="button" class="link-btn" data-ofg="none">Keine</button></div>
-        <ul class="ofg-list">${[...ofKg, ...fremd.map((nr) => ({ nr, name: 'nicht mehr vorhanden', fremd: true }))].map((g) => `<li data-hay="${esc(fold(g.nr + ' ' + g.name))}"${belegt(g.nr) ? ' class="belegt"' : ''}><label class="check"><input type="checkbox" value="${esc(g.nr)}"${ofPick.sel.has(g.nr) ? ' checked' : ''}${belegt(g.nr) ? ' disabled' : ''}> <span class="muted">${esc(g.nr)}</span> ${esc(g.name)}${nKunden(g.nr) ? ` <small class="muted">· ${plural(nKunden(g.nr), 'Kunde', 'Kunden')}</small>` : ''}${belegt(g.nr) ? ` <small class="ofg-bei">bei „${esc(belegt(g.nr).name)}“</small>` : ''}</label></li>`).join('')}</ul>`
+        <ul class="ofg-list">${[...ofKg, ...fremd.map((nr) => ({ nr, name: 'nicht mehr vorhanden', fremd: true }))].map((g) => `<li data-hay="${esc(SU.heu(g.nr, g.name))}"${belegt(g.nr) ? ' class="belegt"' : ''}><label class="check"><input type="checkbox" value="${esc(g.nr)}"${ofPick.sel.has(g.nr) ? ' checked' : ''}${belegt(g.nr) ? ' disabled' : ''}> <span class="muted">${esc(g.nr)}</span> ${esc(g.name)}${nKunden(g.nr) ? ` <small class="muted">· ${plural(nKunden(g.nr), 'Kunde', 'Kunden')}</small>` : ''}${belegt(g.nr) ? ` <small class="ofg-bei">bei „${esc(belegt(g.nr).name)}“</small>` : ''}</label></li>`).join('')}</ul>`
           : '<p class="hint">Noch keine Kundengruppen angelegt – bitte zuerst unter Stammdaten → Kundengruppen importieren.</p>'}
       </div>
       <div class="dlg-foot"><button type="button" class="btn" data-close>Abbrechen</button><button type="button" class="btn primary" data-ofg="ok"${ofKg.length ? '' : ' disabled'}>${icon('check')}Übernehmen</button></div>`;
@@ -2001,8 +2001,8 @@
   function ofgCount() { const n = $('#ofg-n'); if (n) n.textContent = `${plural(ofPick.sel.size, 'Gruppe', 'Gruppen')} gewählt`; }
   $('#of-gruppen-body').addEventListener('input', (e) => {
     if (e.target.id !== 'ofg-q') return;
-    const toks = fold(e.target.value).split(/\s+/).filter(Boolean);
-    for (const li of $$('#of-gruppen-body .ofg-list li')) li.hidden = !toks.every((t) => li.dataset.hay.includes(t));
+    const toks = SU.woerter(e.target.value);
+    for (const li of $$('#of-gruppen-body .ofg-list li')) li.hidden = !SU.passt(toks, li.dataset.hay);
   });
   $('#of-gruppen-body').addEventListener('change', (e) => {
     if (e.target.type !== 'checkbox') return;
@@ -2579,7 +2579,7 @@
       let changes = 0, last = null;
       for (const v of s.vals) { if (v == null) continue; if (last != null && v !== last) changes++; last = v; }
       s.changes = changes;
-      s.hay = nk([s.code, s.name, s.group, s.category].join(' '));
+      s.hay = SU.heu(s.code, s.name, s.group, s.category);
       return s;
     });
     return { weeks, series, dup };
@@ -2722,12 +2722,12 @@
     const host = $('#hist-list');
     if (!host) return;
     if (!H.weeks.length) { host.innerHTML = ''; $('#hist-count').textContent = ''; return; }
-    const toks = nk(histQ) ? histQ.toLowerCase().split(/\s+/).map(nk).filter(Boolean) : [];
+    const toks = SU.woerter(histQ);
     const idx = rangeIdx(H);
     const st = new Map(H.series.map((s) => [s, statsFor(s, idx)]));
     let list = H.series.filter((s) => {
       const x = st.get(s);
-      return x.weeksCount > 0 && (!histOnlyChanged || x.changes > 0) && toks.every((t) => s.hay.includes(t));
+      return x.weeksCount > 0 && (!histOnlyChanged || x.changes > 0) && SU.passt(toks, s.hay);
     });
     const L = H.weeks.length - 1;
     const by = {
@@ -3103,7 +3103,7 @@
     const key = S.normCode(a.code), price = m.prices.get(key), prevPrice = m.previous.get(key);
     a.incoming.sort((x, y) => (x.arrival || '9999').localeCompare(y.arrival || '9999'));
     return { ...a, idx, wg: S.warengruppe(a.code), offer: m.offers.get(key) || [], price, prevPrice, nextEta: naechsteEta(a.incoming),
-      incomingKg: sum(a.incoming, 'kg'), totalKg: (a.kg ?? 0) + sum(a.incoming, 'kg'), cls: mhdClass(a.mhd), _hay: fold(`${a.code} ${a.name} ${a.nameImport || ''} ${a.nameOrig || ''} ${a.merkmale || ''}`) };
+      incomingKg: sum(a.incoming, 'kg'), totalKg: (a.kg ?? 0) + sum(a.incoming, 'kg'), cls: mhdClass(a.mhd), _hay: SU.heu(a.code, a.name, a.nameImport, a.nameOrig, a.merkmale) };
   }
   const stockPriceNumber = new Intl.NumberFormat('de-DE', { minimumFractionDigits: 2, maximumFractionDigits: 4 });
   const stockWeekLabel = (which) => stockPrices?.[which] ? `KW ${stockPrices[which].week}/${stockPrices[which].year}` : 'KW unbekannt';
@@ -3144,8 +3144,8 @@
       const list = all.filter((a) => a.mhd && a.mhd <= lim).sort((a, b) => a.mhd.localeCompare(b.mhd) || byCode(a, b));
       return { flat: true, list, groups: null };
     }
-    const toks = fold(q).split(/\s+/).filter(Boolean);
-    const list = all.filter((a) => toks.every((t) => a._hay.includes(t)));
+    const toks = SU.woerter(q);
+    const list = all.filter((a) => SU.passt(toks, a._hay));
     const rank = (a) => (a.cls ? 0 : 1);
     // Warengruppe → MHD-markierte zuerst (früheste oben) → gewählte Spalte → Artikelnummer
     list.sort((a, b) => a.wg.order - b.wg.order || rank(a) - rank(b) || (rank(a) === 0 ? a.mhd.localeCompare(b.mhd) : 0) || colCompare(a, b) || byCode(a, b));
@@ -3178,7 +3178,7 @@
   function filterPasst(a) {
     for (const [k, f] of Object.entries(stockFilter)) {
       const typ = ST_SPK[k].typ, v = fWert[k](a);
-      if (typ === 'text') { const h = fold(String(v)); if (!fold(f.q).split(/\s+/).filter(Boolean).every((t) => h.includes(t))) return false; }
+      if (typ === 'text' && !SU.findet(f.q, String(v))) return false;
       if (typ === 'zahl' && !imBereich(v == null || !Number.isFinite(v) ? null : kg2(v), f)) return false;
       if (typ === 'preis') { const n = preisZahl(v); if ((f.art === 'mit' && n == null) || (f.art === 'ohne' && n != null) || !imBereich(n, f)) return false; }
       if (typ === 'mhd') {
@@ -3497,15 +3497,16 @@
     const ohneMhd = zugang ? '<span class="muted">—</span>' : '<span class="muted">ohne MHD</span>';
     const datum = (l) => (l.arrival ? esc(dmy(l.arrival)) : zugang ? '<span class="muted">ETA unbekannt</span>' : '—');
     const kolli = lots.filter((l) => Number.isFinite(l.kolli));
-    const ekLots = lots.filter((l) => Number.isFinite(l.ek) && Number.isFinite(l.kg) && l.kg > 0);
+    const ekLots = lots.filter((l) => Number.isFinite(l.ek) && l.ek > 0 && Number.isFinite(l.kg) && l.kg > 0);   // 0 = kein Preis hinterlegt
     const ekKg = ekLots.reduce((t, l) => t + Math.round(l.kg * 1000), 0);
     const ekAvg = ekKg ? ekLots.reduce((t, l) => t + l.ek * Math.round(l.kg * 1000), 0) / ekKg : null;
     const mitMarke = marke ?? lots.some((l) => l.marke);   // Bestand vor der Marken-Spalte: Spalte weglassen; im Detail für beide Tabellen gleich
-    const row = (l) => `<tr>${mitMarke ? `<td class="lot-marke">${l.marke ? esc(l.marke) : '<span class="muted">—</span>'}</td>` : ''}<td class="ch-code">${esc(l.lot || '—')}${mitMarke && l.marke ? `<small class="lot-marke-sub">${esc(l.marke)}</small>` : ''}</td><td class="${dCls}">${datum(l)}</td><td class="${mhdClass(l.mhd)}">${l.mhd ? esc(dmy(l.mhd)) : ohneMhd}</td><td class="num">${l.kolli == null ? '—' : esc(fmtInt.format(l.kolli))}</td><td class="num">${esc(kgText(l.kg))}</td>${mitEk ? `<td class="num lot-ek">${Number.isFinite(l.ek) ? esc(eur(l.ek)) : '<span class="muted">—</span>'}</td>` : ''}</tr>`;
+    const row = (l) => `<tr>${mitMarke ? `<td class="lot-marke">${l.marke ? esc(l.marke) : '<span class="muted">—</span>'}</td>` : ''}<td class="ch-code">${esc(l.lot || '—')}${mitMarke && l.marke ? `<small class="lot-marke-sub">${esc(l.marke)}</small>` : ''}</td><td class="${dCls}">${datum(l)}</td><td class="${mhdClass(l.mhd)}">${l.mhd ? esc(dmy(l.mhd)) : ohneMhd}</td><td class="num">${l.kolli == null ? '—' : esc(fmtInt.format(l.kolli))}</td><td class="num">${esc(kgText(l.kg))}</td>${mitEk ? `<td class="num lot-ek">${Number.isFinite(l.ek) && l.ek > 0 ? esc(eur(l.ek)) : '<span class="muted">—</span>'}</td>` : ''}</tr>`;
     return `<div class="lot-scroll"><table class="etab ${zugang ? 'zutab' : 'lottab'}"><thead><tr>${mitMarke ? '<th class="lot-marke">Marke</th>' : ''}<th>Partie</th><th class="${dCls}">${zugang ? 'ETA' : 'Ankunft'}</th><th>MHD</th><th class="num">Kolli</th><th class="num">Netto</th>${mitEk ? '<th class="num" title="Einkaufspreis je kg">EK-Preis</th>' : ''}</tr></thead><tbody>
           ${lots.map(row).join('')}
         </tbody>${lots.length ? `<tfoot><tr class="lot-sum">${mitMarke ? '<td class="lot-marke"></td>' : ''}<td>Summe</td><td class="${dCls}"></td><td></td><td class="num">${kolli.length ? esc(fmtInt.format(sum(kolli, 'kolli'))) : '—'}</td><td class="num">${esc(kgText(sum(lots, 'kg')))}</td>${mitEk ? `<td class="num lot-ek" title="nach kg gewichteter Durchschnitt">${ekAvg == null ? '<span class="muted">—</span>' : 'Ø ' + esc(eur(ekAvg))}</td>` : ''}</tr></tfoot>` : ''}</table></div>
-        ${mitEk && lots.length && !ekLots.length && !zugang ? '<p class="hint" style="margin:6px 0 0">EK-Preise erscheinen ab der nächsten hochgeladenen Bestandsliste (Spalte „Preis“/„EKPreis“).</p>' : ''}`;
+        ${mitEk && lots.length && !ekLots.length && !zugang ? '<p class="hint" style="margin:6px 0 0">EK-Preise erscheinen ab der nächsten hochgeladenen Bestandsliste (Spalte „Preis“/„EKPreis“).</p>' : ''}
+        ${mitEk && ekLots.length && ekLots.length < lots.length ? `<p class="hint lot-ek-hinweis" style="margin:6px 0 0">Ø EK-Preis aus ${ekLots.length} von ${plural(lots.length, 'Partie', 'Partien')} – ${plural(lots.length - ekLots.length, 'Partie', 'Partien')} ohne Einkaufspreis ${lots.length - ekLots.length === 1 ? 'zählt' : 'zählen'} nicht mit.</p>` : ''}`;
   }
   function openStockItem(idx) {
     const a = stockItems()[idx];
@@ -3600,9 +3601,9 @@
           </div>
           <label class="fld" style="max-width:220px"><span>Bestandsdatum</span><input type="date" id="si-date" value="${esc(r.date || isoToday())}" required></label>
           <ul class="issues">
-            <li class="info"><span class="lvl">Info</span><span>Berücksichtigt: ${fmtInt.format(r.stats.stored)} Partien mit Status „eingelagert“ und ${fmtInt.format(r.stats.expected)} erwartete Zugänge mit Status „erfasst“ (separat, nicht im Bestand).${other ? ` Nicht berücksichtigt: ${other}.` : ''}</span></li>
-            ${r.stats.skipped ? `<li class="info"><span class="lvl">Info</span><span>${fmtInt.format(r.stats.skipped)} Zeilen ohne gültige Artikelnummer oder Menge übersprungen (z. B. „Etiketten“).</span></li>` : ''}
-            ${r.stats.noMhd ? `<li class="info"><span class="lvl">Info</span><span>${fmtInt.format(r.stats.noMhd)} eingelagerte Partien ohne MHD – zählen zur verfügbaren Menge, nicht zum kürzesten MHD.</span></li>` : ''}
+            <li class="info"><span class="lvl">Info</span><span>Berücksichtigt: ${plural(r.stats.stored, 'Partie', 'Partien')} mit Status „eingelagert“ und ${plural(r.stats.expected, 'erwarteter Zugang', 'erwartete Zugänge')} mit Status „erfasst“ (separat, nicht im Bestand).${other ? ` Nicht berücksichtigt: ${other}.` : ''}</span></li>
+            ${r.stats.skipped ? `<li class="info"><span class="lvl">Info</span><span>${plural(r.stats.skipped, 'Zeile', 'Zeilen')} ohne gültige Artikelnummer oder Menge übersprungen (z. B. „Etiketten“).</span></li>` : ''}
+            ${r.stats.noMhd ? `<li class="info"><span class="lvl">Info</span><span>${plural(r.stats.noMhd, 'eingelagerte Partie', 'eingelagerte Partien')} ohne MHD – ${r.stats.noMhd === 1 ? 'zählt' : 'zählen'} zur verfügbaren Menge, nicht zum kürzesten MHD.</span></li>` : ''}
             ${!r.date ? '<li class="info"><span class="lvl">Info</span><span>Bestandsdatum: heute – die Liste gilt für den Tag des Hochladens (die Datei enthält kein Datum).</span></li>' : ''}
             ${stock ? `<li class="info"><span class="lvl">Info</span><span>Ersetzt den bisherigen Bestand vom ${stock.date ? esc(dmy(stock.date)) : '?'} (${fmtInt.format(stock.articles.length)} Artikel).</span></li>` : ''}
           </ul>
@@ -4246,8 +4247,8 @@
     if (!host) return;
     if (!stock || !model) { host.hidden = true; return; }
     const all = mhdList();
-    const toks = fold(filterQ).split(/\s+/).filter(Boolean);
-    const list = toks.length ? all.filter((x) => { const h = fold(x.a.code + ' ' + x.a.name + ' ' + x.items.map((i) => i.name).join(' ')); return toks.every((t) => h.includes(t)); }) : all;
+    const toks = SU.woerter(filterQ);
+    const list = toks.length ? all.filter((x) => SU.passt(toks, SU.heu(x.a.code, x.a.name, x.items.map((i) => i.name)))) : all;
     const withSale = all.filter((x) => x.items.some((i) => C.empfehlungFor(i, curOffer))).length;
     host.hidden = false;
     const rows = list.map((x) => {
@@ -4531,12 +4532,11 @@
   function renderMasterList() {
     const host = $('#ms-list');
     if (!host || !master) return;
-    const toks = fold(masterQ).split(/\s+/).filter(Boolean);
+    const toks = SU.woerter(masterQ);
     const list = master.articles.filter((e) => {
       if (masterVk && (masterVk === '-' ? e.vkGruppe : e.vkGruppe !== masterVk)) return false;
       if (!toks.length) return true;
-      const h = fold([e.code, e.name, masterOrig(e).text, ...Object.values(e.namen || {}), e.origin, e.category, C.CONDITION_LABELS[e.condition], e.vkGruppe, vkName(e.vkGruppe), e.gtin].join(' '));
-      return toks.every((t) => h.includes(t));
+      return SU.passt(toks, SU.heu(e.code, e.name, masterOrig(e).text, Object.values(e.namen || {}), e.origin, e.category, C.CONDITION_LABELS[e.condition], e.vkGruppe, vkName(e.vkGruppe), e.gtin));
     });
     $('#ms-count').textContent = `${fmtInt.format(list.length)} von ${plural(master.articles.length, 'Artikel', 'Artikeln')}${list.length > 1500 ? ' – die ersten 1.500 angezeigt, Suche oder VK-Gruppe eingrenzen' : ''}`;
     const by = draftByCode();
@@ -4906,8 +4906,8 @@
         const hinweise = [];
         if (!r.date) hinweise.push({ stufe: 'info', text: 'Bestandsdatum: heute – die Liste gilt für den Tag des Hochladens (die Datei enthält kein Datum).' });
         if (other) hinweise.push({ stufe: 'info', text: `Nicht berücksichtigt (anderer Status): ${other}.` });
-        if (r.stats.skipped) hinweise.push({ stufe: 'info', text: `${fmtInt.format(r.stats.skipped)} Zeilen ohne gültige Artikelnummer oder Menge übersprungen (z. B. „Etiketten“).` });
-        if (r.stats.noMhd) hinweise.push({ stufe: 'info', text: `${fmtInt.format(r.stats.noMhd)} eingelagerte Partien ohne MHD – zählen zur verfügbaren Menge, nicht zum kürzesten MHD.` });
+        if (r.stats.skipped) hinweise.push({ stufe: 'info', text: `${plural(r.stats.skipped, 'Zeile', 'Zeilen')} ohne gültige Artikelnummer oder Menge übersprungen (z. B. „Etiketten“).` });
+        if (r.stats.noMhd) hinweise.push({ stufe: 'info', text: `${plural(r.stats.noMhd, 'eingelagerte Partie', 'eingelagerte Partien')} ohne MHD – ${r.stats.noMhd === 1 ? 'zählt' : 'zählen'} zur verfügbaren Menge, nicht zum kürzesten MHD.` });
         return { daten: { articles: r.articles, incoming: r.incoming }, zeilen: r.stats.rows, fehler: [], hinweise, optionen: { datum: r.date || isoToday() } };
       },
       async nachher() { try { await loadStock(true); stockIdxFor = null; refreshAux(); } catch { /* wird beim nächsten Öffnen geladen */ } },
@@ -4937,7 +4937,7 @@
 
   window.WA = {
     importLeser: IMPORT_LESER,
-    $, $$, api, esc, icon, toast, confirmBox, dateTime, timeOnly, plural, fold, fmtNum, fmtInt, csvCell, ROLE_LABEL, offerName, offerShort,
+    $, $$, api, esc, icon, toast, confirmBox, dateTime, timeOnly, plural, fold, SU, fmtNum, fmtInt, csvCell, ROLE_LABEL, offerName, offerShort,
     loadOffers, pendingCount, setView, renderWartungBanner, wartungBis, OSTD, may,
     get me() { return me; }, get offers() { return offers; }, get stdPublic() { return stdPublic; },
     get wartungSt() { return wartungSt; }, set wartungSt(v) { wartungSt = v; },

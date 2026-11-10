@@ -10,6 +10,7 @@
   const API = '../../api/';
   const $ = (s, el = document) => el.querySelector(s);
   const $$ = (s, el = document) => [...el.querySelectorAll(s)];
+  const SU = window.STAFL_SUCHE;   // gemeinsame Suchregel (assets/suche.js): Umlaute auch ausgeschrieben, mehrere Wörter, Nummern
   const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
   const icon = (n) => `<svg class="i" aria-hidden="true"><use href="#i-${n}"/></svg>`;
   const ABLAUF = ['idee', 'planung', 'produktion', 'freigabe', 'geplant', 'veroeffentlicht'];
@@ -106,10 +107,7 @@
     if (f.kampagne && e.kampagne !== f.kampagne) return false;
     if (f.meine && e.verantwortlich !== S.d.ich) return false;
     if (!ohneStatus && f.status && e.status !== f.status) return false;
-    if (f.q) {
-      const q = f.q.toLowerCase();
-      if (![e.titel, e.hook, e.text, e.hashtags, e.notizen].some((t) => String(t || '').toLowerCase().includes(q))) return false;
-    }
+    if (f.q && !SU.findet(f.q, e.titel, e.hook, e.text, e.hashtags, e.notizen)) return false;
     return true;
   }
   function filterLeiste(mitStatus = false) {

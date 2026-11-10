@@ -18,6 +18,8 @@ Hinweis „Kein Zugang“): je hell/dunkel und 1440/390 px
   vereinbart (docs/entwickler/10-konventionen.md).
 - Fingerbedienung am Handy (10.11.2026): mit pointer: coarse auf jeder Seite Eingabefelder ≥ 16 px Schrift (kein
   Hineinzoomen am iPhone), kleine Knöpfe (.btn.sm) antippbar, kein waagerechtes Scrollen.
+- Suche (10.11.2026): jede Seite lädt app/assets/suche.js; alle Suchfelder folgen einer Regel (Umlaute auch ausgeschrieben,
+  mehrere Wörter, gegliederte Nummern).
 Bildschirmfotos: tests/.ergebnisse/einheit-*.png (Bestandsaufnahme für die Durchsicht).
 """
 import glob
@@ -168,6 +170,7 @@ with sync_playwright() as pw:
                         check(f'{teil} {tag}: Logo weiß ohne helle Fläche', (lg or ohne_logo) and all(x['bg'] in ('rgba(0, 0, 0, 0)', 'transparent') and ('invert' in x['filter'] or 'weiss' in x['src']) for x in lg), lg)
                 if breite == 1440 and not dunkel:
                     check(f'{name}: gemeinsames Zahlenformat geladen (format.js)', pg.evaluate("!!(window.STAFL_FORMAT && window.STAFL_FORMAT.euro)"))
+                    check(f'{name}: gemeinsame Suchregel geladen (suche.js)', pg.evaluate("!!(window.STAFL_SUCHE && window.STAFL_SUCHE.findet)"))
                 zr = pg.evaluate(ZURUECK)
                 if name != 'dashboard':
                     zurueck.setdefault(breite, {})[name] = zr
@@ -288,6 +291,15 @@ with sync_playwright() as pw:
                 'diff': '+0,50 €/kg', 'datum': '02.11.2026', 'zeit': '02.11.2026, 14:05', 'kw': 'KW 45/2026'}
     abw = {k: (FORMATE.get(k), v) for k, v in ERWARTET.items() if FORMATE.get(k) != v}
     check('Zahlenformat: Beträge, kg, €/kg, Prozent, Datum und KW wie vereinbart', not abw, abw)
+    # Suchregel (10.11.2026): eine Regel für alle Suchfelder (app/assets/suche.js, serverseitig such_passt in lib/kern.php)
+    SUCHE = pg.evaluate('''() => { const S = window.STAFL_SUCHE; return {
+      umlaut: S.findet('muller', 'Müller GmbH'), ausgeschrieben: S.findet('Mueller', 'Müller GmbH') && S.findet('faerse', 'Färse HV') && S.findet('müller', 'Mueller KG'),
+      eszett: S.findet('Strasse', 'Hauptstraße 3') && S.findet('straße', 'Hauptstrasse 3'), akzent: S.findet('cafe', 'Café Crème'), gross: S.findet('RIND', 'Rinderfilet'),
+      woerter: S.findet('filet rind', 'Rinderfilet 4/5 lbs.') && S.findet('eiche  hamburg ', 'Gasthaus Eiche', '20095', 'Hamburg'), nichtAlle: !S.findet('eiche berlin', 'Gasthaus Eiche', 'Hamburg'),
+      nummer: S.findet('0401234567', '040 12 34-567') && S.findet('040/1234567', '040 1234567'), feldgrenze: !S.findet('0012', '900001', '20095') && !S.findet('eichehamburg', 'Eiche', 'Hamburg'),
+      leer: S.findet('   ', 'x') && S.findet('', null), leereFelder: S.findet('a', null, undefined, '', 'a'), zahlFeld: S.findet('123', 123),
+      vorbereitet: S.passt(S.woerter('nord fleisch'), S.heu('Musterfleischerei Nord GmbH')) }; }''')
+    check('Suchregel: Umlaute (auch ausgeschrieben), ß/ss, Akzente, mehrere Wörter, gegliederte Nummern, nie über Feldgrenzen, leere Suche', all(SUCHE.values()), SUCHE)
     ctx.close()
     # Seiten ohne Mitarbeiteranmeldung: Abmeldeseite, Kundenseite, Rechtsseiten – Logo im Dunkeln weiß, nichts abgeschnitten
     for breite in (1440, 390):

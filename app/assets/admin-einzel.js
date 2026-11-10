@@ -11,7 +11,7 @@
 (function () {
   'use strict';
   const W = window.WA;
-  const { $, $$, api, esc, icon, toast, confirmBox, dateTime, plural, fold, may } = W;
+  const { $, $$, api, esc, icon, toast, confirmBox, dateTime, plural, fold, SU, may } = W;
   const host = $('#view-einzel');
   const dlgMail = $('#dlg-einzel-mail');
   const fmt2 = new Intl.NumberFormat('de-DE', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
@@ -76,8 +76,8 @@
   /* ---------- Übersicht ---------- */
   function renderListe() {
     koerper();
-    const toks = fold(listQ).split(/\s+/).filter(Boolean);
-    const l = liste.filter((e) => { const hay = fold([e.nr, e.firma, e.kundeNr, e.titel, STATUS[e.status]].join(' ')); return toks.every((t) => hay.includes(t)); });
+    const toks = SU.woerter(listQ);
+    const l = liste.filter((e) => SU.passt(toks, SU.heu(e.nr, e.firma, e.kundeNr, e.titel, STATUS[e.status])));
     host.innerHTML = `
       <div class="ed-toolbar">
         <div class="search">${icon('search')}<input id="ez-lq" type="search" autocomplete="off" placeholder="Einzelangebote finden: Nummer, Kunde, Titel …" aria-label="Einzelangebote suchen" value="${esc(listQ)}"></div>
@@ -112,13 +112,12 @@
   const kLabel = (c) => (c ? c.firma + (c.nr ? ' · ' + c.nr : '') + (c.ort ? ' · ' + c.ort : '') : '');
   /* Treffer: alle Suchwörter in Firma, Nummer, Ort, PLZ, Ansprechpartner, E-Mail, Straße; Nummer genau > Firma beginnt > Wortanfang > enthalten */
   function kundenTreffer(text) {
-    const toks = fold(text).split(/\s+/).filter(Boolean);
+    const toks = SU.woerter(text);
     const l = [];
     for (const c of kunden.values()) {
-      const hay = fold([c.firma, c.nr, c.plz, c.ort, c.ansprechpartner, c.email, c.strasse, c.gruppe].join(' '));
-      if (!toks.every((t) => hay.includes(t))) continue;
-      const f = fold(c.firma), t0 = toks[0] || '';
-      const rang = !t0 ? 3 : fold(c.nr) === t0 ? 0 : f.startsWith(t0) ? 1 : (' ' + f).includes(' ' + t0) ? 2 : 3;
+      if (!SU.passt(toks, SU.heu(c.firma, c.nr, c.plz, c.ort, c.ansprechpartner, c.email, c.strasse, c.gruppe))) continue;
+      const f = SU.norm(c.firma), t0 = toks[0] || '';
+      const rang = !t0 ? 3 : SU.norm(c.nr) === t0 ? 0 : f.startsWith(t0) ? 1 : (' ' + f).includes(' ' + t0) ? 2 : 3;
       l.push({ c, rang });
     }
     return l.sort((a, b) => a.rang - b.rang || (a.c.active === false) - (b.c.active === false) || a.c.firma.localeCompare(b.c.firma, 'de')).map((x) => x.c);

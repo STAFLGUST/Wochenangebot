@@ -19,7 +19,7 @@ Testdaten: Vertreter V1 Vera Vertrieb, V2 Viktor Verkauf; Kundengruppen 10 Gastr
 und Kalb, 200 Schwein. Kunden 2000001 Gasthaus Eiche (V1, 10), 2000002 Handel Nord (V1, 20), 2000003 Kantine Süd (V2, 10),
 2000004 Imbiss Ohne (ohne Vertreter und Gruppe), 2000005 ohne Stammsatz; Artikel 40100 Rinderhüfte, 40200 Schweinenacken,
 40300 Kalbsrücken, 40400 ohne Stammsatz, 1 E2-Kiste (Leergut, ohne Berechnung). Positionen zufällig mit festem Startwert
-(positionen(): rund 4 % Gutschriften, 15 % ohne EK, 2 % doppelt). Importe nacheinander: POS_A 02.01.2025–30.10.2026; POS_B
+(positionen(): rund 4 % Gutschriften, 15 % ohne EK – in der Datei abwechselnd leer und „0,00“ –, 2 % doppelt). Importe nacheinander: POS_A 02.01.2025–30.10.2026; POS_B
 ersetzt 10.–20.10.2026 (Menge ×2, ohne 2000005); POS_C ersetzt März 2025 durch ein Drittel, April 2025 entfällt; POS_E ersetzt
 Juni 2026 (2000004 nur eine Gutschrift = verloren, 2000003 nur jede vierte Position); im Browser POS_D 01.09.–30.10.2026
 (Menge ×1,5). POS_JETZT ist jeweils der gespeicherte Stand – Grundlage aller unabhängigen Rechnungen (erwartet(), letzte(),
@@ -110,12 +110,17 @@ def positionen(von, bis, faktor=1.0, ohne_kunden=()):
 def csv_text(pos, kaputt=0):
     """Kundenumsatztabelle wie aus der Warenwirtschaft (Belegköpfe, Leerzeile, kaputt = Zeilen mit ungültigem Datum)."""
     z = ['"Kunde";"Datum";"Artikel";"Kolli";"Menge";"Preis";"Gesamtbetrag";"EKPreis"']
+    ohne = 0
     for d, k, a, ko, m, p, b, ek in pos:
         datum = d.strftime('%d.%m.%Y')
+        ek_text = '' if ek is None else de(ek, 2)
+        if ek is None and b is not None:                                         # ohne EK: abwechselnd leer und „0,00“ (kein Preis hinterlegt)
+            ohne += 1
+            ek_text = '0,00' if ohne % 2 else ''
         if rnd.random() < 0.3:
             z.append(f'"{k}";"{datum}";;;;;;')                                   # Belegkopf ohne Artikel
         z.append(';'.join(f'"{x}"' if x != '' else '' for x in (k, datum, a, '' if ko is None else str(ko), de(m, 3), '' if p is None else de(p, 2),
-                                                                  '' if b is None else de(b, 2), '' if ek is None else de(ek, 2))))
+                                                                  '' if b is None else de(b, 2), ek_text)))
     for i in range(kaputt):
         z.insert(3 + i, '"2000001";"31.02.2026";"40100";"1";"1,000";"1,00";"1,00";"1,00"')
     z.insert(5, '')                                                              # Leerzeile
@@ -701,6 +706,7 @@ with sync_playwright() as p:
     t = pg.inner_text('#view-importe')
     check('Browser-Vorschau: September und Oktober geändert, eine fehlerhafte Zeile (Datum)', pg.inner_text('#imp-geaendert') == '2' and pg.inner_text('#imp-fehler') == '1'
           and 'Ungültiges Datum' in t and 'Belegköpfe' in t, t[:600])
+    check('Browser-Vorschau: Hinweis auf Positionen mit EK-Preis 0 (zählen als „ohne Einkaufspreis“, nicht als 100 % Spanne)', 'EK-Preis 0' in t and 'ohne Einkaufspreis' in t, t[:900])
     pg.screenshot(path=SH + '/controlling-umsatzdaten-import-vorschau.png', full_page=True)
     pg.click('#imp-ok')
     pg.wait_for_selector('#imp-ergebnis')
