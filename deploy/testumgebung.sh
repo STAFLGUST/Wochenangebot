@@ -14,7 +14,7 @@ set -eu
 PROD=$(cd "$(dirname "$0")/.." && pwd)
 ZIEL=${WA_TEST_DIR:-/opt/wochenangebot-test}
 REPO_URL=${WA_TEST_REPO:-https://github.com/STAFLGUST/Wochenangebot.git}
-PHP_IMAGE=php:8.3-apache@sha256:3614314e50a9b17a0c317dfd100c6346d8881d6565e713556b7a4e8eb3ec4505   # wie docker-compose.yml (tests/deploy/test_images.py)
+PHP_IMAGE=php:8.3-apache@sha256:a800bbd2c0aa322702259ed475556b2cbc311076a8d3c4bba9bfe96838745472   # wie docker-compose.yml (tests/deploy/test_images.py)
 
 fehler() { echo "FEHLER: $*" >&2; exit 1; }
 dc() { docker compose --project-directory "$ZIEL" -f "$ZIEL/docker-compose.yml" "$@"; }
