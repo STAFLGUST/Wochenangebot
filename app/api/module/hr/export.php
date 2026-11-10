@@ -93,7 +93,7 @@ function hr_xl_blatt(array $m, HrStile $st): string
     $zellen = [];   // [zeile][spalte] = XML der Zelle
     $setz = function (int $z, int $sp, $wert, int $stil, ?string $formel = null) use (&$zellen) {
         $r = hr_xl_spalte($sp) . $z;
-        if ($formel !== null) $x = '<c r="' . $r . '" s="' . $stil . '"><f>' . hr_xl_text($formel) . '</f><v>' . (int)$wert . '</v></c>';
+        if ($formel !== null) $x = '<c r="' . $r . '" s="' . $stil . '"><f>' . hr_xl_text($formel) . '</f><v>' . (is_float($wert) ? rtrim(rtrim(sprintf('%.1F', $wert), '0'), '.') : (int)$wert) . '</v></c>';
         elseif ($wert === null || $wert === '') $x = '<c r="' . $r . '" s="' . $stil . '"/>';
         elseif (is_int($wert) || is_float($wert)) $x = '<c r="' . $r . '" s="' . $stil . '"><v>' . $wert . '</v></c>';
         else $x = '<c r="' . $r . '" s="' . $stil . '" t="inlineStr"><is><t xml:space="preserve">' . hr_xl_text((string)$wert) . '</t></is></c>';
@@ -114,6 +114,10 @@ function hr_xl_blatt(array $m, HrStile $st): string
     $setz(5, 5, '', $st->id($box + ['fill' => HR_XL_FEIERTAG])); $setz(5, 6, 'Feiertag', $st->id([]));
     // Monatstitel K2:U3
     $setz(2, 10, $m['name'] . ' ' . $m['jahr'], $st->id(['fett' => true, 'gr' => 22, 'h' => 'center', 'v' => 'center', 'fill' => HR_XL_TITEL]));
+    // Sonderregelung Dezember (Inhaber 10.11.2026): Schließtage zählen bei Urlaub und Gleittag je ½ (auch in den Summenformeln)
+    $halb = [];
+    foreach ($m['tage'] as $i => $t) if (!empty($t['schliesstag'])) $halb[$i] = true;
+    if ($halb) $setz(5, 10, '24.12. und 31.12.: Betrieb geschlossen – Urlaub und Gleittag zählen je ½ Tag', $st->id(['fett' => true]));
     for ($z = 2; $z <= 3; $z++) for ($sp = 10; $sp <= 20; $sp++) if ($z !== 2 || $sp !== 10) $setz($z, $sp, '', $st->id(['fill' => HR_XL_TITEL]));
     $merge[] = 'K2:U3';
 
@@ -160,12 +164,13 @@ function hr_xl_blatt(array $m, HrStile $st): string
         $anz = ['U' => 0, 'K' => 0, 'G' => 0, 'F' => 0];
         foreach ($tage as $i => $t) {
             $k = (string)(((array)$p['tage'])[$t['tag']] ?? '');
-            if (isset($anz[$k])) $anz[$k]++;
+            if (isset($anz[$k])) $anz[$k] += isset($halb[$i]) && ($k === 'U' || $k === 'G') ? 0.5 : 1;
             $f = $farbe($t);
             $setz($z, $erste + $i, $k, $st->id(['fett' => true, 'h' => 'center', 'v' => 'center', 'rand' => $D] + ($f ? ['fill' => $f] : [])));
         }
         foreach ([[$sU, 'U'], [$sK, 'K'], [$sG, 'G'], [$sF, 'F']] as [$sp, $k]) {
-            $setz($z, $sp, $anz[$k], $st->id($rot + ['rand' => ['thin', 'thin', '', 'thin']]), 'COUNTIF(' . $L . $z . ':' . $R . $z . ',"' . $k . '")');
+            $abzug = $k === 'U' || $k === 'G' ? implode('', array_map(function ($i) use ($erste, $z, $k) { return '-0.5*COUNTIF(' . hr_xl_spalte($erste + $i) . $z . ',"' . $k . '")'; }, array_keys($halb))) : '';
+            $setz($z, $sp, $anz[$k], $st->id($rot + ['rand' => ['thin', 'thin', '', 'thin']]), 'COUNTIF(' . $L . $z . ':' . $R . $z . ',"' . $k . '")' . $abzug);
         }
         $z++;
     }
@@ -179,8 +184,12 @@ function hr_xl_blatt(array $m, HrStile $st): string
     $merge[] = hr_xl_spalte($letzte - 2) . $sz . ':' . hr_xl_spalte($letzte) . $sz;
     foreach ([$sU, $sK, $sG, $sF] as $j => $sp) {
         $c = hr_xl_spalte($sp);
-        $summe = 0;
-        foreach ($m['personen'] as $p) foreach ((array)$p['tage'] as $k) if ($k === ['U', 'K', 'G', 'F'][$j]) $summe++;
+        $summe = 0; $art = ['U', 'K', 'G', 'F'][$j];
+        foreach ($m['personen'] as $p) foreach ((array)$p['tage'] as $tag => $k) {
+            if ($k !== $art) continue;
+            $i = array_search((int)$tag, array_column($tage, 'tag'), true);
+            $summe += $i !== false && isset($halb[$i]) && ($art === 'U' || $art === 'G') ? 0.5 : 1;
+        }
         $setz($sz, $sp, $summe, $st->id($rot + ['fill' => HR_XL_SUMME, 'rand' => $D]), $ende >= $start ? "SUM({$c}{$start}:{$c}{$ende})" : '0');
     }
 

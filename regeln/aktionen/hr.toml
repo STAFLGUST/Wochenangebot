@@ -20,6 +20,17 @@ oberflaeche = "hr.intern"
 oberflaeche = "hr.intern"
 schreibend = true
 
+# Vorschau eines Antrags bzw. einer Vorplanung (Tage, Ablehnungsgrund, ob die Vertretung da ist, Stand) – speichert nichts,
+# per POST (mehrere Zeiträume als JSON, CSRF wie beim Antrag)
+[aktion.hr_antrag_pruefen]
+oberflaeche = "hr.intern"
+schreibend = true
+
+# Vorplanung (Inhaber 10.11.2026): mehrere Urlaubszeiträume des nächsten Jahres auf einmal – alle oder keiner
+[aktion.hr_vorplanung]
+oberflaeche = "hr.intern"
+schreibend = true
+
 [aktion.hr_antrag_zurueckziehen]
 oberflaeche = "hr.intern"
 schreibend = true

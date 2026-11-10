@@ -7,7 +7,11 @@
    Urlaubsübersicht (Recht hr.uebersicht, auch Personalstelle): alle Mitarbeiter mit Summen (Konto, Krank-, Gleittage).
    Urlaub genehmigen (Recht hr.genehmigen): offene Anträge genehmigen/ablehnen – nie den eigenen.
    Jahresplanung (03.11.2026): Mitarbeiter sehen in der Planungsphase den Stand ihrer Vorplanung des nächsten Jahres
-   (Ziel: Anteil des Anspruchs bis zum Stichtag), Vertretung ist bei Urlaubsanträgen Pflicht (abschaltbar). Reiter
+   (Ziel: Anteil des Anspruchs bis zum Stichtag), Vertretung ist bei Urlaubsanträgen Pflicht (abschaltbar).
+   Vorplanung (10.11.2026): Schalter „Vorplanung“ in „Urlaub beantragen“ – mehrere Zeiträume des nächsten Jahres auf einmal,
+   jede Zeile sofort geprüft (hr_antrag_pruefen: Tage, Sperre, Überschneidung, ob die Vertretung da ist), Stand mit Ziel,
+   einzelnen Urlaubstagen und 24./31.12.; „Alle beantragen“ (hr_vorplanung) – alle oder keiner. Auch der einzelne Antrag
+   zeigt vor dem Absenden, ob die Vertretung da ist. 24.12./31.12.: Betrieb geschlossen, je ½ Urlaubstag (Kalender markiert). Reiter
    „Jahresplanung“ (nur Personalstelle; gesammelt genehmigen mit „Urlaub genehmigen“): Stand je Mitarbeiter, Zeitleiste mit Konflikten, Anträge
    mit Konflikten genehmigen/ablehnen, konfliktfreie gesammelt genehmigen, Erinnerung, Abschluss mit Jahresübersicht.
    Personalstelle (Recht hr.verwalten): Korrekturmeldungen erledigen (mit Antwort, nie die eigene), Abwesenheiten eintragen (U, K, G, freier Tag; nicht für sich selbst),
@@ -26,7 +30,7 @@
   const ART = { U: 'Urlaub', K: 'Krank', G: 'Gleittag', X: 'Freier Tag', F: 'Unentschuldigt' };
   const STATUS = { beantragt: 'beantragt', genehmigt: 'genehmigt', abgelehnt: 'abgelehnt', zurueckgezogen: 'zurückgezogen', storniert: 'storniert' };
   let csrf = '';
-  const S = { art: 'U', gleit: null, offen: [], ueb: null, ujahr: new Date().getFullYear(), start: null, jahr: new Date().getFullYear(), kal: { jahr: new Date().getFullYear(), monat: new Date().getMonth() + 1 }, verw: null, tab: 'mein', pjahr: null, jp: null, jpFilter: 'alle' };
+  const S = { art: 'U', vp: false, vpZeilen: [], gleit: null, offen: [], ueb: null, ujahr: new Date().getFullYear(), start: null, jahr: new Date().getFullYear(), kal: { jahr: new Date().getFullYear(), monat: new Date().getMonth() + 1 }, verw: null, tab: 'mein', pjahr: null, jp: null, jpFilter: 'alle' };
 
   async function api(action, body, query = '') {
     let res;
@@ -143,6 +147,7 @@
     sel.innerHTML = '<option value="">– keine –</option>' + d.kollegen.map((p) => `<option value="${esc(p.id)}">${esc(p.name)}</option>`).join('');
     sel.value = alt;
     vertretungFeld();
+    vpBereit();
     // Liste: Urlaub, Gleittage und Anträge – Krank und freie Tage stehen im Mini-Kalender „Mein Jahr“
     const liste = d.eintraege.filter((e) => (e.art === 'U' || e.art === 'G') && e.von <= `${d.jahr}-12-31` && e.bis >= `${d.jahr}-01-01`);
     $('#mein-liste').innerHTML = liste.length ? liste.map((e) => {
@@ -166,7 +171,7 @@
     const d = S.start, g = d.gleitKonto, box = $('#mein-gleit');
     const aktiv = !!(g && g.aktiv);
     box.hidden = !aktiv;
-    $('#antrag-art').hidden = !aktiv;
+    $('#antrag-art').hidden = !aktiv || S.vp;
     if (!aktiv) { if (S.art === 'G') S.art = 'U'; return; }
     const gew = (d.gleittage || []).filter((x) => !x.storniert).slice(0, 5);
     box.innerHTML = `<div class="hr-gleit-kopf"><span>Gleittage ${esc(String(g.jahr))}</span><b class="${g.rest < 0 ? 'minus' : ''}">${esc(tageText(g.rest))} Rest</b>
@@ -175,7 +180,7 @@
   }
   function artSetzen(art) {
     const g = S.start && S.start.gleitKonto;
-    S.art = art === 'G' && g && g.aktiv ? 'G' : 'U';
+    S.art = art === 'G' && g && g.aktiv && !S.vp ? 'G' : 'U';   // die Vorplanung gilt für Urlaub
     $$('#antrag-art [data-art]').forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.art === S.art)));
     $('#antrag-titel').textContent = S.art === 'G' ? 'Gleittag beantragen' : 'Urlaub beantragen';
     $('[data-antrag-von]').textContent = S.art === 'G' ? 'Erster Gleittag' : 'Erster Urlaubstag';
@@ -216,6 +221,7 @@
         </div>
         <p class="hr-mp-zahl" id="mp-stand">${esc(stand)}</p>
         <p class="hr-mp-legende"><span><i class="gen"></i>genehmigt ${esc(zahl(p.genehmigt))}</span><span><i class="bea"></i>beantragt ${esc(zahl(p.beantragt))}</span><span><i class="ziel"></i>Ziel ${esc(zahl(p.ziel))}</span></p>
+        ${vpRegelZeilen(p)}
       </div>
       ${S.start.antraege !== false ? `<button type="button" class="btn primary" id="mp-planen">Urlaub ${esc(String(p.jahr))} planen</button>` : ''}`;
   }
@@ -224,9 +230,9 @@
     const p = S.start.planung;
     if (S.jahr !== p.jahr) { S.jahr = p.jahr; await ladeStart(); }
     zeigeTab('mein');
-    artSetzen('U');
-    $('#antrag').scrollIntoView({ behavior: 'smooth', block: 'center' });
-    $('#antrag-von').focus();
+    vpSchalten(true);   // „Urlaub planen“ öffnet die Vorplanung (mehrere Zeiträume auf einmal)
+    $('#antrag').scrollIntoView({ behavior: 'smooth', block: 'start' });
+    const erste = $('#vp-liste .vp-von'); if (erste) erste.focus();
   });
   $('#antrag-art').addEventListener('click', (e) => { const b = e.target.closest('[data-art]'); if (b) { artSetzen(b.dataset.art); antragTage(); } });
 
@@ -235,7 +241,7 @@
      an jedem Tag des Zeitraums. Beantragt = umrandet. Tage mit Eintrag sind Knöpfe: Klick öffnet „Korrektur melden“. */
   const WT_JS = [7, 1, 2, 3, 4, 5, 6];   // Date.getDay() → ISO-Wochentag
   function zeigeMiniKalender() {
-    const d = S.start, jahr = d.jahr, ft = d.feiertage || {}, arbeit = new Set((d.ich && d.ich.arbeitstage) || [1, 2, 3, 4, 5]);
+    const d = S.start, jahr = d.jahr, ft = d.feiertage || {}, sl = d.schliesstage || {}, arbeit = new Set((d.ich && d.ich.arbeitstage) || [1, 2, 3, 4, 5]);
     const tag = {};   // Datum → { art, offen, id }
     const aktiv = d.eintraege.filter((e) => e.status === 'genehmigt' || e.status === 'beantragt');
     const jeden = (e, f) => { for (let x = ausIso(e.von), ende = ausIso(e.bis); x <= ende; x.setDate(x.getDate() + 1)) { const s = iso(x); if (s.startsWith(String(jahr))) f(s, x); } };
@@ -249,14 +255,15 @@
     $('#mini-legende').innerHTML = leg('background:var(--hr-u-bg)', 'Urlaub') + leg('background:var(--hr-k-bg)', 'Krank') + leg('background:var(--hr-g-bg)', 'Gleittag')
       + leg('background:var(--hr-x-bg)', 'freier Tag') + (aktiv.some((e) => e.art === 'F') ? leg('background:var(--hr-f-bg)', 'unentschuldigt') : '')
       + leg('box-shadow:inset 0 0 0 1.5px var(--hr-u)', 'beantragt')
-      + leg('background:var(--hr-feiertag)', 'Feiertag') + leg('background:var(--hr-wochenende)', 'Wochenende');
+      + leg('background:var(--hr-feiertag)', 'Feiertag') + leg('background:var(--hr-wochenende)', 'Wochenende')
+      + (Object.keys(sl).some((s) => s.startsWith(String(jahr))) ? leg('background:var(--hr-schliess)', 'Betrieb geschlossen (½ Urlaubstag)') : '');
     $('#mini-kalender').innerHTML = MONATE.map((mn, m) => {
       const erster = new Date(jahr, m, 1), tage = new Date(jahr, m + 1, 0).getDate();
       let h = WT.map((w) => `<span class="wt" aria-hidden="true">${w[0]}</span>`).join('') + '<span></span>'.repeat(WT_JS[erster.getDay()] - 1);
       for (let t = 1; t <= tage; t++) {
         const dt = new Date(jahr, m, t), s = iso(dt), x = tag[s], we = WT_JS[dt.getDay()] > 5;
-        const cls = ['t', we ? 'we' : '', ft[s] ? 'ft' : '', x ? x.art : '', x && x.offen ? 'offen' : '', s === d.heute ? 'heute' : ''].filter(Boolean).join(' ');
-        const info = [de(s), ft[s] || '', x ? titel[x.art] + (x.offen ? ' (beantragt)' : '') : ''].filter(Boolean).join(' · ');
+        const cls = ['t', we ? 'we' : '', ft[s] ? 'ft' : '', sl[s] && !we ? 'sl' : '', x ? x.art : '', x && x.offen ? 'offen' : '', s === d.heute ? 'heute' : ''].filter(Boolean).join(' ');
+        const info = [de(s), ft[s] || '', sl[s] ? sl[s] + ' (½ Urlaubstag)' : '', x ? titel[x.art] + (x.offen ? ' (beantragt)' : '') : ''].filter(Boolean).join(' · ');
         h += x ? `<button type="button" class="${cls}" data-korr-tag="${s}" data-korr-eintrag="${esc(x.id)}" title="${esc(info)} – Korrektur melden" aria-label="${esc(info)}, Korrektur melden">${t}</button>`
           : `<span class="${cls}" title="${esc(info)}">${t}</span>`;
       }
@@ -315,12 +322,13 @@
     const von = $('#antrag-von').value, bis = $('#antrag-bis').value, d = S.start;
     const out = $('#antrag-tage');
     meldung($('#antrag-meldung'), '');   // eine Meldung zum vorigen Absenden gilt nach einer Änderung der Daten nicht mehr
+    antragPruefen();                       // Vertretung da? (Server; ohne gültigen Zeitraum ausgeblendet)
     if (!von || !bis || !d || !d.ich) { out.textContent = ''; return; }
     if (bis < von) { out.textContent = 'Das Ende liegt vor dem Beginn.'; return; }
     let n = 0;
-    for (let t = ausIso(von); iso(t) <= bis && n < 400; t.setDate(t.getDate() + 1)) {
+    for (let t = ausIso(von), i = 0; iso(t) <= bis && i < 400; t.setDate(t.getDate() + 1), i++) {
       const w = ((t.getDay() + 6) % 7) + 1;
-      if (d.ich.arbeitstage.includes(w) && !(d.feiertage || {})[iso(t)]) n++;
+      if (d.ich.arbeitstage.includes(w) && !(d.feiertage || {})[iso(t)]) n += (d.schliesstage || {})[iso(t)] ? 0.5 : 1;   // 24.12./31.12. je ½
     }
     const g = d.gleitKonto;
     if (n && S.art === 'G') {
@@ -332,9 +340,29 @@
   }
   $('#antrag-von').addEventListener('change', () => { if (!$('#antrag-bis').value || $('#antrag-bis').value < $('#antrag-von').value) $('#antrag-bis').value = $('#antrag-von').value; antragTage(); });
   $('#antrag-bis').addEventListener('change', antragTage);
+  $('#antrag-vertretung').addEventListener('change', antragPruefen);
+
+  /* Vertretungsprüfung im einzelnen Antrag (Inhaber 10.11.2026): schon vor dem Absenden fragt die Seite den Server, ob die
+     Vertretung im Zeitraum da ist (nur Genehmigtes anderer, wie im Kalender). Abwesend: der Server lehnt den Antrag ab. */
+  let pruefNr = 0;
+  async function antragPruefen() {
+    const out = $('#antrag-pruefung'), von = $('#antrag-von').value, bis = $('#antrag-bis').value, vt = $('#antrag-vertretung').value;
+    const nr = ++pruefNr;
+    if (S.vp || !von || !bis || bis < von || !S.start || !S.start.ich) { out.hidden = true; out.textContent = ''; return; }
+    const r = await api('hr_antrag_pruefen', { art: S.art, zeitraeume: [{ von, bis, vertretung: vt }] });
+    if (nr !== pruefNr || r.status !== 200) { if (nr === pruefNr) out.hidden = true; return; }
+    const z = r.data.zeitraeume[0], v = z.vertretung;
+    let text = '', art = '';
+    if (v && v.status === 'abwesend') { text = v.text; art = 'fehler'; }
+    else if (z.fehler && vt) { text = z.fehler; art = 'fehler'; }
+    else if (v && v.status === 'frei') { text = v.text; art = 'warn'; }
+    else if (v && v.status === 'da') { text = `Vertretung ${v.text}`; art = 'ok'; }
+    out.hidden = !text; out.textContent = text; out.className = 'hr-vt-status' + (art ? ' ' + art : '');
+  }
 
   $('#antrag').addEventListener('submit', async (e) => {
     e.preventDefault();
+    if (S.vp) { vpSenden(); return; }
     const m = $('#antrag-meldung');
     const b = { art: S.art, von: $('#antrag-von').value, bis: $('#antrag-bis').value, vertretung: $('#antrag-vertretung').value, notiz: $('#antrag-notiz').value };
     if (!b.von || !b.bis) { meldung(m, S.art === 'G' ? 'Bitte ersten und letzten Gleittag angeben.' : 'Bitte ersten und letzten Urlaubstag angeben.'); return; }
@@ -348,6 +376,161 @@
     S.art = 'U';
     await ladeStart();
     meldung($('#antrag-meldung'), r.data.hinweis ? 'Antrag gestellt. ' + r.data.hinweis : 'Antrag gestellt – er wird jetzt geprüft.', r.data.hinweis ? 'warn' : 'ok');
+  });
+
+  /* ---------- Vorplanung (Inhaber 10.11.2026): mehrere Zeiträume des nächsten Jahres auf einmal ----------
+     Schalter „Vorplanung“ oben in „Urlaub beantragen“. Jede Zeile (von, bis, Vertretung) prüft der Server sofort wie einen
+     einzelnen Antrag (hr_antrag_pruefen, speichert nichts); oben der Stand des Jahres mit diesen Zeiträumen: Ziel (Anteil
+     des Anspruchs), einzelne Urlaubstage (höchstens einzeltageMax), noch nicht eingeplante Schließtage 24./31.12.
+     „Alle beantragen“ (hr_vorplanung): ist eine Zeile nicht in Ordnung, wird nichts beantragt und die Zeile markiert. */
+  const vpd = () => (S.start && S.start.vorplanung) || null;
+  function vpBereit() {
+    const v = vpd(), an = S.start && S.start.antraege !== false;
+    $('#vp-schalter-l').hidden = !v || !an;
+    if (!v) return;
+    $('#vp-info').textContent = `Vorplanung ${v.jahr}: mehrere Zeiträume auf einmal beantragen – jeder wird wie ein einzelner Antrag geprüft, auch ob Ihre Vertretung da ist. `
+      + `Bitte bis zum ${de(v.stichtag)} mindestens ${v.prozent} % planen${v.einzeltageMax ? `, höchstens ${v.einzeltageMax} einzelne Urlaubstage` : ''}.`;
+    for (const s of $$('#vp-liste .vp-vertretung')) { const w = s.value; s.innerHTML = vpOptionen(); s.value = w; }
+    if (S.vp) vpPruefen();
+  }
+  const vpOptionen = () => '<option value="">– bitte wählen –</option>' + (S.start.kollegen || []).map((p) => `<option value="${esc(p.id)}">${esc(p.name)}</option>`).join('');
+  function vpSchalten(an) {
+    if (an && !vpd()) return;
+    S.vp = !!an;
+    $('#vp-schalter').checked = S.vp;
+    $('#antrag').classList.toggle('vorplanung', S.vp);
+    $('#vp').hidden = !S.vp; $('#antrag-einzeln').hidden = S.vp;
+    for (const el of $$('#antrag-einzeln input, #antrag-einzeln select')) el.disabled = S.vp;   // ausgeblendete Pflichtfelder nicht prüfen
+    if (S.vp) { artSetzen('U'); $('#antrag-art').hidden = true; } else zeigeGleitMein();
+    $('#antrag-titel').textContent = S.vp ? `Urlaub ${vpd().jahr} vorplanen` : (S.art === 'G' ? 'Gleittag beantragen' : 'Urlaub beantragen');
+    meldung($('#antrag-meldung'), '');
+    if (S.vp && !$$('#vp-liste .hr-vp-zeile').length) vpZeile();
+    vpKnopf();
+    if (S.vp) vpPruefen(); else antragPruefen();
+  }
+  function vpZeile(von = '', bis = '', vertretung) {
+    const v = vpd(), li = document.createElement('li');
+    const vorher = $$('#vp-liste .vp-vertretung').pop();
+    li.className = 'hr-vp-zeile';
+    li.innerHTML = `<div class="hr-vp-felder">
+        <label><span>Erster Tag</span><input type="date" class="vp-von" min="${v.jahr}-01-01" max="${v.jahr}-12-31" value="${esc(von)}"></label>
+        <label><span>Letzter Tag</span><input type="date" class="vp-bis" min="${v.jahr}-01-01" max="${v.jahr}-12-31" value="${esc(bis)}"></label>
+        <label class="vt"><span>Vertretung</span><select class="vp-vertretung">${vpOptionen()}</select></label>
+        <button type="button" class="hr-rund klein" data-vp-weg aria-label="Zeitraum entfernen" title="Zeitraum entfernen">${icon('x')}</button>
+      </div><p class="hr-vp-status" aria-live="polite"></p>`;
+    $('#vp-liste').append(li);
+    $('select', li).value = vertretung !== undefined ? vertretung : (vorher ? vorher.value : '');
+    vpNummern();
+    return li;
+  }
+  function vpNummern() {
+    $$('#vp-liste .hr-vp-zeile').forEach((li, i) => { li.dataset.nr = String(i + 1); $('[data-vp-weg]', li).setAttribute('aria-label', `Zeitraum ${i + 1} entfernen`); });
+    $('#vp-plus').disabled = $$('#vp-liste .hr-vp-zeile').length >= (vpd() ? vpd().max : 20);
+    vpKnopf();
+  }
+  const vpDaten = () => $$('#vp-liste .hr-vp-zeile').map((li) => ({ li, von: $('.vp-von', li).value, bis: $('.vp-bis', li).value, vertretung: $('.vp-vertretung', li).value }));
+  function vpKnopf() {
+    const n = vpDaten().filter((z) => z.von && z.bis).length;
+    $('#antrag-senden').textContent = S.vp ? (n > 1 ? `Alle ${n} Zeiträume beantragen` : 'Zeitraum beantragen') : 'Antrag stellen';
+  }
+  let vpUhr = 0, vpNr = 0;
+  function vpPruefen(sofort) {
+    clearTimeout(vpUhr);
+    vpUhr = setTimeout(vpPruefenJetzt, sofort ? 0 : 250);
+  }
+  async function vpPruefenJetzt() {
+    const alle = vpDaten(), voll = alle.filter((z) => z.von && z.bis && z.bis >= z.von), nr = ++vpNr;
+    for (const z of alle) if (!(z.von && z.bis)) vpStatus(z.li, null);
+    for (const z of alle) if (z.von && z.bis && z.bis < z.von) vpStatus(z.li, { fehler: 'Das Ende liegt vor dem Beginn.' });
+    vpKnopf();
+    const r = await api('hr_antrag_pruefen', { vorplanung: true, zeitraeume: voll.map(({ von, bis, vertretung }) => ({ von, bis, vertretung })) });
+    if (nr !== vpNr || r.status !== 200) return;
+    voll.forEach((z, i) => vpStatus(z.li, r.data.zeitraeume[i]));
+    vpStand(r.data.stand, r.data.verfuegbarDanach);
+  }
+  function vpStatus(li, z) {
+    const out = $('.hr-vp-status', li);
+    li.classList.toggle('fehler', !!(z && z.fehler));
+    if (!z) { out.textContent = ''; out.className = 'hr-vp-status'; return; }
+    const teile = [];
+    if (z.tage !== undefined) teile.push(tageText(z.tage));
+    if (z.fehler) teile.push(z.fehler);
+    else if (z.vertretung && z.vertretung.status === 'da') teile.push(`Vertretung ${z.vertretung.text}`);
+    for (const h of z.hinweise || []) teile.push(h);
+    out.textContent = teile.join(' · ');
+    out.className = 'hr-vp-status ' + (z.fehler ? 'fehler' : (z.hinweise || []).length ? 'warn' : 'ok');
+  }
+  /* Regeln der Vorplanung als kurze Zeilen (Stand beim Mitarbeiter und in der Vorplanung) */
+  function vpRegelZeilen(st) {
+    const z = [];
+    if (st.einzeltageMax) {
+      const n = (st.einzeltage || []).length, zu = n > st.einzeltageMax;
+      z.push(`<p class="hr-vp-regel${zu ? ' warn' : ''}">Einzelne Urlaubstage: <b>${n}</b> von höchstens ${st.einzeltageMax}${zu ? ' – bitte den übrigen Urlaub zusammenhängend planen' : ''}</p>`);
+    }
+    if ((st.schliesstageOffen || []).length) z.push(`<p class="hr-vp-regel warn">${esc(st.schliesstageOffen.map((s) => s.slice(8, 10) + '.' + s.slice(5, 7) + '.').join(' und '))} noch nicht eingeplant – Betrieb geschlossen, zählt zusammen 1 Urlaubstag</p>`);
+    return z.join('');
+  }
+  function vpStand(st, danach) {
+    if (!st) { $('#vp-stand').innerHTML = ''; return; }
+    const proz = (n) => (st.anspruch > 0 ? Math.min(100, (n / st.anspruch) * 100) : 0);
+    $('#vp-stand').innerHTML = st.anspruch > 0
+      ? `<div class="hr-mp-balken" role="img" aria-label="${esc(`${zahl(st.geplant)} von ${zahl(st.anspruch)} Tagen geplant, Ziel ${zahl(st.ziel)}`)}">
+          <i class="gen" style="width:${proz(st.genehmigt).toFixed(2)}%"></i><i class="bea" style="width:${proz(st.beantragt).toFixed(2)}%"></i>
+          <b class="ziel" style="left:${proz(st.ziel).toFixed(2)}%"></b></div>
+        <p class="hr-vp-zahl">${esc(st.erreicht ? `Ziel erreicht – ${tageText(st.geplant)} geplant (mit diesen Zeiträumen)` : `${zahl(st.geplant)} von ${zahl(st.ziel)} Tagen geplant (mit diesen Zeiträumen) · noch ${tageText(st.fehlt)}`)}</p>
+        ${vpRegelZeilen(st)}${danach < 0 ? `<p class="hr-vp-regel warn">Übersteigt Ihren Resturlaub um ${esc(tageText(-danach))} – die Personalstelle entscheidet.</p>` : ''}`
+      : `<p class="hr-vp-regel">Für ${st.jahr} ist noch kein Urlaubsanspruch eingetragen – bitte an die Personalstelle wenden.</p>${vpRegelZeilen(st)}`;
+    $('#vp-schliess').hidden = !(st.schliesstageOffen || []).length;
+    $('#vp-schliess').dataset.tage = (st.schliesstageOffen || []).join(',');
+  }
+  async function vpSenden() {
+    const m = $('#antrag-meldung'), alle = vpDaten();
+    const leer = alle.filter((z) => !z.von || !z.bis);
+    if (!alle.length || leer.length === alle.length) { meldung(m, 'Bitte mindestens einen Zeitraum mit erstem und letztem Tag angeben.'); return; }
+    if (leer.length) { meldung(m, `Zeitraum ${leer[0].li.dataset.nr}: bitte ersten und letzten Tag angeben – oder die Zeile entfernen.`); $(leer[0].von ? '.vp-bis' : '.vp-von', leer[0].li).focus(); return; }
+    if (S.start.vertretungPflicht) {
+      const ohne = alle.find((z) => !z.vertretung && !(z.von === z.bis && (S.start.schliesstage || {})[z.von]));
+      if (ohne) { meldung(m, `Zeitraum ${ohne.li.dataset.nr}: bitte eine Vertretung wählen.`); $('.vp-vertretung', ohne.li).focus(); return; }
+    }
+    $('#antrag-senden').disabled = true;
+    const r = await api('hr_vorplanung', { zeitraeume: alle.map(({ von, bis, vertretung }) => ({ von, bis, vertretung })), notiz: $('#antrag-notiz').value });
+    $('#antrag-senden').disabled = false;
+    if (r.status !== 200) {
+      if (r.data.zeitraeume) { alle.forEach((z, i) => vpStatus(z.li, r.data.zeitraeume[i])); const f = alle.find((z) => z.li.classList.contains('fehler')); if (f) $('.vp-von', f.li).focus(); }
+      meldung(m, fehlerText(r, 'Die Vorplanung konnte nicht beantragt werden'));
+      return;
+    }
+    const n = r.data.eintraege.length;
+    $('#vp-liste').innerHTML = ''; $('#antrag-notiz').value = '';
+    await ladeStart();
+    vpZeile();
+    vpPruefen(true);
+    meldung($('#antrag-meldung'), `${n === 1 ? '1 Zeitraum' : `${n} Zeiträume`} beantragt – die Personalstelle prüft die Vorplanung.` + (r.data.hinweis ? ' ' + r.data.hinweis : ''), r.data.hinweis ? 'warn' : 'ok');
+  }
+  $('#vp-schalter').addEventListener('change', (e) => vpSchalten(e.target.checked));
+  $('#vp-plus').addEventListener('click', () => { const li = vpZeile(); $('.vp-von', li).focus(); });
+  $('#vp-schliess').addEventListener('click', () => {
+    for (const s of ($('#vp-schliess').dataset.tage || '').split(',').filter(Boolean)) {
+      const frei = vpDaten().find((z) => !z.von && !z.bis);
+      if (frei) { $('.vp-von', frei.li).value = s; $('.vp-bis', frei.li).value = s; } else vpZeile(s, s);
+    }
+    vpPruefen(true);
+  });
+  $('#vp-liste').addEventListener('click', (e) => {
+    const weg = e.target.closest('[data-vp-weg]');
+    if (!weg) return;
+    const li = weg.closest('.hr-vp-zeile'), nach = li.nextElementSibling || li.previousElementSibling;
+    li.remove();
+    if (!$$('#vp-liste .hr-vp-zeile').length) vpZeile();
+    vpNummern();
+    const ziel = nach && nach.isConnected ? $('.vp-von', nach) : $('#vp-plus'); if (ziel) ziel.focus();
+    vpPruefen();
+  });
+  $('#vp-liste').addEventListener('change', (e) => {
+    if (e.target.matches('.vp-von')) { const b = $('.vp-bis', e.target.closest('.hr-vp-zeile')); if (!b.value || b.value < e.target.value) b.value = e.target.value; }
+    meldung($('#antrag-meldung'), '');
+    vpKnopf();
+    vpPruefen();
   });
 
   /* Rückfrage im eigenen Fenster: Escape oder „Abbrechen“ = nein, der Fokus liegt auf „Abbrechen“ */
@@ -391,6 +574,7 @@
       + '<span><b class="hr-art U offen">U?</b>beantragt</span>' : art('A', 'abwesend'))
       + f('', 'Wochenende', 'background:var(--hr-wochenende)') + f('', 'Feiertag', 'background:var(--hr-feiertag)')
       + f('', 'Ferien', 'background:var(--hr-ferien)') + f('', 'Urlaubssperre', 'background:var(--hr-sperre)')
+      + (S.monat && S.monat.tage.some((x) => x.schliesstag) ? f('', 'Betrieb geschlossen (½ Urlaubstag)', 'background:var(--hr-schliess)') : '')
       + f('', 'Heute', 'background:var(--hr-heute);box-shadow:inset 2px 0 0 var(--hr-akzent-ink),inset -2px 0 0 var(--hr-akzent-ink)');
   }
   /* Spalte „heute“ in den sichtbaren Bereich holen (am Handy scrollt die Tabelle waagerecht): nur wenn sie verdeckt ist,
@@ -477,10 +661,10 @@
     for (const a of [...S.kal.abt]) if (!alle.includes(a)) S.kal.abt.delete(a);   // entfallene Abteilungen vergessen
     kalFilter(alle);
     const personen = m.personen.filter((p) => !S.kal.abt.size || S.kal.abt.has(p.abteilung));
-    const kl = (t) => (t.feiertag ? 'ft' : t.wochenende ? 'we' : t.ferien ? 'fe' : '');
+    const kl = (t) => (t.feiertag ? 'ft' : t.wochenende ? 'we' : t.schliesstag ? 'sl' : t.ferien ? 'fe' : '');
     const neuerMonat = (t, i) => zeitraum && i > 0 && t.tag === 1;   // Monatswechsel im Zeitraum: Trennlinie und „1.11.“
     let html = '<thead><tr><th class="name" scope="col">Mitarbeiter</th>' + m.tage.map((t, i) =>
-      `<th scope="col" class="${kl(t)}${t.sperre ? ' sp' : ''}${t.datum === heute ? ' heute' : ''}${neuerMonat(t, i) ? ' mstart' : ''}" title="${esc([de(t.datum), t.datum === heute ? 'heute' : '', t.feiertag, t.sperre ? 'Urlaubssperre' : ''].filter(Boolean).join(' · '))}"${t.datum === heute ? ' aria-current="date"' : ''}>`
+      `<th scope="col" class="${kl(t)}${t.sperre ? ' sp' : ''}${t.datum === heute ? ' heute' : ''}${neuerMonat(t, i) ? ' mstart' : ''}" title="${esc([de(t.datum), t.datum === heute ? 'heute' : '', t.feiertag, t.schliesstag ? t.schliesstag + ' (½ Urlaubstag)' : '', t.sperre ? 'Urlaubssperre' : ''].filter(Boolean).join(' · '))}"${t.datum === heute ? ' aria-current="date"' : ''}>`
       + (t.datum === heute ? `<small>Heute</small><span class="hr-heute-tag">${neuerMonat(t, i) ? `1.${t.datum.slice(5, 7)}.` : t.tag}</span>` : `<small>${t.wt}</small>${neuerMonat(t, i) ? `1.${t.datum.slice(5, 7)}.` : t.tag}`) + '</th>').join('') + '</tr></thead><tbody>';
     const heuteSpalte = m.tage.findIndex((t) => t.datum === heute);
     let abt = null;
@@ -610,7 +794,7 @@
     $('#eintraege-tabelle').innerHTML = '<thead><tr><th>Mitarbeiter</th><th>Art</th><th>Zeitraum</th><th class="zahl">Tage</th><th>Status</th><th>Notiz / Entscheidung</th><th></th></tr></thead><tbody>'
       + (l.length ? l.map((e) => `<tr><td>${esc(e.name)}${ehemalig.has(e.person) ? ' <span class="gedaempft">(ehemalig)</span>' : ''}</td><td><span class="hr-art ${esc(e.art)}">${esc(e.art === 'X' ? 'x' : e.art)}</span> ${esc(e.artText)}</td>
         <td>${esc(zeitraum(e.von, e.bis))}</td><td class="zahl">${esc(zahl(e.tage))}</td><td><span class="hr-pille ${esc(e.status)}">${esc(STATUS[e.status] || e.status)}</span></td>
-        <td class="gedaempft">${esc([e.notiz, e.entscheidung && e.entscheidung.grund, e.urlaubAbzug ? 'in der Zeiterfassung vom Urlaub abgezogen (zählt hier nicht)' : '', e.quelle === 'import' ? 'aus Excel übernommen' : '', e.quelle === 'zeiterfassung' ? 'aus der Zeiterfassung' : ''].filter(Boolean).join(' · '))}</td>
+        <td class="gedaempft">${esc([e.notiz, e.entscheidung && e.entscheidung.grund, e.urlaubAbzug ? 'in der Zeiterfassung vom Urlaub abgezogen (zählt hier nicht)' : '', e.quelle === 'import' ? 'aus Excel übernommen' : '', e.quelle === 'zeiterfassung' ? 'aus der Zeiterfassung' : '', e.quelle === 'vorplanung' ? 'Vorplanung' : ''].filter(Boolean).join(' · '))}</td>
         <td>${e.status === 'genehmigt' && !e.eigen ? `<button type="button" class="btn" data-bearbeiten="${esc(e.id)}">Ändern</button>` : ''}</td></tr>`).join('')
         : '<tr><td colspan="7" class="gedaempft">Keine Einträge.</td></tr>') + '</tbody>';
   }
@@ -881,7 +1065,7 @@
   /* ---------- Jahresplanung (nur Personalstelle; gesammelt genehmigen zusätzlich mit „Urlaub genehmigen“) ----------
      Server: hr_planung (Zusammenfassung), hr_entscheiden (einzeln), hr_planung_freigeben (konfliktfreie gesammelt),
      hr_planung_erinnern, hr_planung_abschluss, hr_planung_uebersicht_senden. Knöpfe nur als Anzeige – Rechte prüft der Server. */
-  const KONFLIKT_ART = { vertretung: 'Vertretung', abteilung: 'Abteilung', sperre: 'Urlaubssperre', rest: 'Resturlaub' };
+  const KONFLIKT_ART = { vertretung: 'Vertretung', abteilung: 'Abteilung', sperre: 'Urlaubssperre', rest: 'Resturlaub', einzeltage: 'Einzeltage' };
   async function ladePlanung() {
     const r = await api('hr_planung', null, S.pjahr ? '&jahr=' + S.pjahr : '');
     if (r.status !== 200) {
@@ -899,7 +1083,8 @@
     const d = S.jp, z = d.zahlen, j = d.jahr;
     $('#jp-titel').textContent = `Jahresplanung ${j}`;
     $('#jp-info').textContent = [`Stichtag ${de(d.stichtag)}`, `Ziel: ${d.prozent} % des Anspruchs`, d.vertretungPflicht ? 'Vertretung Pflicht' : 'Vertretung freiwillig',
-      d.abschluss ? `abgeschlossen am ${window.STAFL_FORMAT.datum(d.abschluss.t)}${d.abschluss.by ? ' von ' + d.abschluss.by : ''}` : `Hinweis für Mitarbeiter ab ${de(d.start)}`].join(' · ');
+      d.einzeltageMax ? `höchstens ${d.einzeltageMax} einzelne Urlaubstage` : '',
+      d.abschluss ? `abgeschlossen am ${window.STAFL_FORMAT.datum(d.abschluss.t)}${d.abschluss.by ? ' von ' + d.abschluss.by : ''}` : `Hinweis für Mitarbeiter ab ${de(d.start)}`].filter(Boolean).join(' · ');
     const kachel = (titel, wert, cls = '', zusatz = '') => `<div class="hr-wert hr-glas ${cls}"><span>${esc(titel)}</span><b>${esc(wert)}</b>${zusatz ? `<small>${esc(zusatz)}</small>` : ''}</div>`;
     $('#jp-zahlen').innerHTML = kachel('Ziel erreicht', `${z.erreicht} / ${z.personen}`, 'haupt', z.personen - z.erreicht ? `${z.personen - z.erreicht} noch offen` : 'alle Mitarbeiter')
       + kachel('Offene Anträge', String(z.offen)) + kachel('Konfliktfrei', String(z.frei), 'ok') + kachel('Mit Konflikt', String(z.konflikte), z.konflikte ? 'konflikt' : '');
@@ -938,9 +1123,13 @@
       const stand = p.anspruch > 0
         ? `<span class="mini"><i style="width:${ant.toFixed(1)}%"></i><b style="left:${Math.min(100, p.ziel / p.anspruch * 100).toFixed(1)}%"></b></span><small>${esc(zahl(p.geplant))}/${esc(zahl(p.ziel))}</small>`
         : '<small class="ohne">kein Anspruch</small>';
+      // Regeln der Vorplanung (10.11.2026): zu viele einzelne Urlaubstage, 24./31.12. noch nicht eingeplant
+      const nE = (p.einzeltage || []).length, zuViele = p.einzeltageMax > 0 && nE > p.einzeltageMax, offenS = (p.schliesstageOffen || []).length;
+      const marken = (zuViele ? `<small class="mk warn" title="${esc(`${nE} einzelne Urlaubstage in der Vorplanung (höchstens ${p.einzeltageMax})`)}">${nE} Einzeltage</small>` : '')
+        + (offenS && p.anspruch > 0 ? `<small class="mk" title="${esc(`${p.schliesstageOffen.map(de).join(' und ')} noch nicht eingeplant (Betrieb geschlossen)`)}">24./31.12.</small>` : '');
       html += `<div class="hr-jp-zeile${p.erreicht && p.anspruch > 0 ? ' erreicht' : ''}" data-jp-person="${esc(p.id)}">
         <div class="hr-jp-name" title="${esc(p.anspruch > 0 ? `${p.name}: ${zahl(p.geplant)} von ${zahl(p.ziel)} Tagen (Ziel), Anspruch ${zahl(p.anspruch)}` : `${p.name}: kein Urlaubsanspruch für ${j} eingetragen`)}"><span class="nm">${esc(p.name)}</span>
-          <span class="stand">${stand}</span></div>
+          <span class="stand">${stand}${marken}</span></div>
         <div class="hr-jp-spur">${balken}</div></div>`;
     }
     if (!d.personen.length) html = '<p class="hr-klein hr-jp-leer">Keine Mitarbeiter im Urlaubsplan.</p>';

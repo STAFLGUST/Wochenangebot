@@ -196,18 +196,21 @@
     <input type="text" value="${esc(z.text || '')}" maxlength="80" placeholder="Bezeichnung" aria-label="Bezeichnung"><button type="button" class="btn icon ghost" data-weg aria-label="Entfernen">${icon('x')}</button></div>`;
   /* Jahresplanung (03.11.2026): Mitarbeiter planen bis zum Stichtag einen Anteil ihres Urlaubs des nächsten Jahres vor;
      Hinweis in der Urlaubsverwaltung ab dem Beginn; Vertretung bei Urlaubsanträgen Pflicht (abschaltbar). Gespeichert als
-     hr-einstellungen.planung über hr_einstellungen_save (nur Tag und Monat der Daten). */
+     hr-einstellungen.planung über hr_einstellungen_save (nur Tag und Monat der Daten). Seit 10.11.2026: Stichtag 31.12.,
+     höchstens einzeltageMax einzelne Urlaubstage in der Vorplanung (0 = keine Prüfung; Hinweis und Konflikt, keine Sperre). */
   function planungFelder() {
-    const p = Object.assign({ start: '10-01', stichtag: '12-01', prozent: 90, vertretungPflicht: true }, daten.planung || {});
+    const p = Object.assign({ start: '10-01', stichtag: '12-31', prozent: 90, vertretungPflicht: true, einzeltageMax: 4 }, daten.planung || {});
     return `<h3 class="sec-h">Jahresplanung</h3><p class="hint">Jeder Mitarbeiter plant bis zum Stichtag mindestens diesen Anteil seines Urlaubsanspruchs für das nächste Jahr mit Urlaubsanträgen vor.
         Ab „Hinweis ab“ zeigt die Urlaubsverwaltung jedem seinen Stand; Prüfen, Erinnern und Abschließen in HR → Jahresplanung (nur Personalstelle). Gespeichert werden nur Tag und Monat – beide liegen immer im Jahr vor dem geplanten Jahr (für ${JAHR + 1}: ${esc(tagMonat(p.start))}${JAHR} bis ${esc(tagMonat(p.stichtag))}${JAHR}).</p>
       <div class="hr-verfall-felder hr-plan-felder">
         <label class="fld hr-verfall"><span>Hinweis ab</span><input type="date" id="hr-plan-start" value="${esc(`${JAHR}-${p.start}`)}" required></label>
         <label class="fld hr-verfall"><span>Stichtag</span><input type="date" id="hr-plan-stichtag" value="${esc(`${JAHR}-${p.stichtag}`)}" required></label>
         <label class="fld hr-verfall"><span>Anteil in %</span><input type="number" id="hr-plan-prozent" min="10" max="100" step="1" inputmode="numeric" value="${esc(String(p.prozent))}" required></label>
+        <label class="fld hr-verfall"><span>Einzeltage höchstens</span><input type="number" id="hr-plan-einzeltage" min="0" max="50" step="1" inputmode="numeric" value="${esc(String(p.einzeltageMax))}" required aria-describedby="hr-plan-einzeltage-hint"></label>
       </div>
+      <p class="hint" id="hr-plan-einzeltage-hint">Einzelne Urlaubstage: so viele einzelne Tage darf die Vorplanung enthalten, der übrige Urlaub soll zusammenhängend sein (Freitag und Montag gelten als zusammenhängend, 24.12./31.12. zählen nicht). Mehr ist möglich, erscheint aber als Hinweis beim Mitarbeiter und als Konflikt in der Jahresplanung. 0 = keine Prüfung.</p>
       <label class="check hr-regelsperren"><input type="checkbox" id="hr-plan-vertretung"${p.vertretungPflicht ? ' checked' : ''}> <span>Vertretung bei Urlaubsanträgen Pflicht
-        <small class="muted">Mitarbeiter wählen für jeden Urlaubsantrag eine Vertretung (Regel 6 der Urlaubsregeln); bei Gleittagen freiwillig</small></span></label>`;
+        <small class="muted">Mitarbeiter wählen für jeden Urlaubsantrag eine Vertretung (Regel 8 der Urlaubsregeln); bei Gleittagen freiwillig. Ist die Vertretung selbst genehmigt abwesend, wird der Antrag abgelehnt.</small></span></label>`;
   }
   async function renderUrlaub() {
     const host = $('#view-urlaub');
@@ -224,8 +227,10 @@
     <form class="gcard hr-einst" id="hr-einst">
       <h3 class="sec-h">Urlaubssperren</h3><p class="hint">In diesen Zeiträumen können Mitarbeiter keinen Urlaub beantragen; die Personalstelle kann weiter eintragen.</p>
       <label class="check hr-regelsperren"><input type="checkbox" id="hr-regelsperren"${daten.regelSperren !== false ? ' checked' : ''}> <span>Sperren aus den Urlaubsregeln jedes Jahr automatisch
-        <small class="muted">Ostergeschäft (zwei Wochen vor Karfreitag) und Weihnachtsgeschäft (letzte Novemberwoche bis 24.12.)</small></span></label>
+        <small class="muted">Ostergeschäft (zwei Wochen vor Karfreitag) und Weihnachtsgeschäft (letzte Novemberwoche bis ${daten.schliesstage !== false ? '23.12.' : '24.12.'})</small></span></label>
       <ul class="hr-autosperren" id="hr-autosperren">${(daten.sperrenAuto || []).map((z) => `<li><span>${esc(z.text)} ${esc(z.von.slice(0, 4))}</span><span>${esc(datumDe(z.von))} – ${esc(datumDe(z.bis))}</span></li>`).join('')}</ul>
+      <label class="check hr-regelsperren"><input type="checkbox" id="hr-schliesstage"${daten.schliesstage !== false ? ' checked' : ''}> <span>Sonderregelung Dezember: 24.12. und 31.12. Betrieb geschlossen
+        <small class="muted">Ab 2026: Urlaub und Gleittage zählen an beiden Tagen je ½ Tag (zusammen 1 Urlaubstag), keine Vertretung nötig; Mitarbeiter planen die Tage selbst ein. Die Weihnachtssperre endet dann am 23.12.</small></span></label>
       <p class="hint hr-eigene-sperren">Weitere Sperren:</p>
       <div id="hr-sperren">${daten.sperren.map(zeile).join('')}</div><button type="button" class="btn sm" data-plus="hr-sperren">${icon('plus', 'sm')}Sperre</button>
       <h3 class="sec-h">Ferien</h3><p class="hint">Nur zur Anzeige im Kalender und im Excel-Export (grün).</p>
@@ -353,12 +358,14 @@
       const bis = $('#hr-uebertrag-bis').value;
       if (!bis) { $('#hr-einst-err').textContent = 'Bitte den Verfallstag des Resturlaubs wählen.'; return; }
       const ab = $('#hr-verfall-ab').value;
-      const planung = { start: $('#hr-plan-start').value, stichtag: $('#hr-plan-stichtag').value, prozent: Number($('#hr-plan-prozent').value), vertretungPflicht: $('#hr-plan-vertretung').checked };
+      const planung = { start: $('#hr-plan-start').value, stichtag: $('#hr-plan-stichtag').value, prozent: Number($('#hr-plan-prozent').value), vertretungPflicht: $('#hr-plan-vertretung').checked,
+        einzeltageMax: Number($('#hr-plan-einzeltage').value) };
       if (!planung.start || !planung.stichtag) { $('#hr-einst-err').textContent = 'Jahresplanung: bitte „Hinweis ab“ und Stichtag wählen.'; return; }
       if (!Number.isInteger(planung.prozent) || planung.prozent < 10 || planung.prozent > 100) { $('#hr-einst-err').textContent = 'Jahresplanung: Anteil bitte als ganze Zahl zwischen 10 und 100 Prozent.'; return; }
+      if ($('#hr-plan-einzeltage').value === '' || !Number.isInteger(planung.einzeltageMax) || planung.einzeltageMax < 0 || planung.einzeltageMax > 50) { $('#hr-einst-err').textContent = 'Jahresplanung: einzelne Urlaubstage bitte als ganze Zahl zwischen 0 (keine Prüfung) und 50.'; return; }
       const r = await api('hr_einstellungen_save', { body: { sperren: liste('hr-sperren'), ferien: liste('hr-ferien'), uebertragBis: bis,
-        verfallAb: ab ? Number(ab) : null, regelSperren: $('#hr-regelsperren').checked, regeln: $('#hr-regeln').value, planung } });
-      Object.assign(daten, { sperren: r.sperren, ferien: r.ferien, uebertragBis: r.uebertragBis, verfallAb: r.verfallAb, regelSperren: r.regelSperren, sperrenAuto: r.sperrenAuto, regeln: r.regeln, planung: r.planung });
+        verfallAb: ab ? Number(ab) : null, regelSperren: $('#hr-regelsperren').checked, schliesstage: $('#hr-schliesstage').checked, regeln: $('#hr-regeln').value, planung } });
+      Object.assign(daten, { sperren: r.sperren, ferien: r.ferien, uebertragBis: r.uebertragBis, verfallAb: r.verfallAb, regelSperren: r.regelSperren, schliesstage: r.schliesstage, sperrenAuto: r.sperrenAuto, regeln: r.regeln, planung: r.planung });
       toast('Urlaubseinstellungen gespeichert.');
       renderUrlaub();
     } catch (ex) { $('#hr-einst-err').textContent = ex.message; }

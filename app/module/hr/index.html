@@ -66,16 +66,34 @@
             <a data-verwalten hidden data-verwaltung-link="urlaub" href="../../admin/#urlaub">Einschalten in Verwaltung → Urlaub</a></p>
           <div class="hr-spalten" id="mein-spalten">
             <form class="hr-karte hr-glas" id="antrag" novalidate>
-              <h2 id="antrag-titel">Urlaub beantragen</h2>
+              <div class="hr-antrag-kopf">
+                <h2 id="antrag-titel">Urlaub beantragen</h2>
+                <!-- Vorplanung (Inhaber 10.11.2026): mehrere Zeiträume des nächsten Jahres auf einmal -->
+                <label class="hr-schalter" id="vp-schalter-l"><input type="checkbox" role="switch" id="vp-schalter" aria-describedby="vp-info"><span>Vorplanung</span></label>
+              </div>
               <div class="hr-seg" id="antrag-art" role="group" aria-label="Art des Antrags" hidden>
                 <button type="button" data-art="U" aria-pressed="true">Urlaub</button><button type="button" data-art="G" aria-pressed="false">Gleittag</button>
               </div>
-              <div class="hr-felder zwei">
-                <label><span data-antrag-von>Erster Urlaubstag</span><input type="date" id="antrag-von" required></label>
-                <label><span data-antrag-bis>Letzter Urlaubstag</span><input type="date" id="antrag-bis" required></label>
+              <div id="antrag-einzeln">
+                <div class="hr-felder zwei">
+                  <label><span data-antrag-von>Erster Urlaubstag</span><input type="date" id="antrag-von" required></label>
+                  <label><span data-antrag-bis>Letzter Urlaubstag</span><input type="date" id="antrag-bis" required></label>
+                </div>
+                <p class="hr-rechnung" id="antrag-tage" aria-live="polite"></p>
+                <label><span>Vertretung <span class="opt" id="antrag-vertretung-opt">(optional)</span></span><select id="antrag-vertretung"><option value="">– keine –</option></select></label>
+                <!-- Vertretungsprüfung schon vor dem Absenden (hr_antrag_pruefen): da, abwesend oder arbeitet an Tagen nicht -->
+                <p class="hr-vt-status" id="antrag-pruefung" aria-live="polite" hidden></p>
               </div>
-              <p class="hr-rechnung" id="antrag-tage" aria-live="polite"></p>
-              <label><span>Vertretung <span class="opt" id="antrag-vertretung-opt">(optional)</span></span><select id="antrag-vertretung"><option value="">– keine –</option></select></label>
+              <!-- Vorplanung: Stand des Jahres mit diesen Zeiträumen, je Zeile von–bis und Vertretung, sofort geprüft -->
+              <div class="hr-vp" id="vp" hidden>
+                <p class="hr-klein" id="vp-info"></p>
+                <div class="hr-vp-stand" id="vp-stand" aria-live="polite"></div>
+                <ol class="hr-vp-liste" id="vp-liste"></ol>
+                <div class="hr-vp-knoepfe">
+                  <button type="button" class="btn" id="vp-plus"><svg class="i" aria-hidden="true"><use href="#i-plus"/></svg>Zeitraum</button>
+                  <button type="button" class="btn" id="vp-schliess" hidden>24.12. und 31.12. einplanen</button>
+                </div>
+              </div>
               <label><span>Notiz zum Antrag <span class="opt">(optional)</span></span><input type="text" id="antrag-notiz" maxlength="300"></label>
               <p class="hr-klein hr-regeln-link" id="antrag-regeln" hidden>Bitte beachten Sie die <a href="#regeln" data-regeln-zeigen>Urlaubsregeln</a>.</p>
               <p class="hr-meldung" id="antrag-meldung" role="status"></p>
@@ -305,6 +323,8 @@
   <symbol id="i-lock" viewBox="0 0 24 24"><rect x="5" y="10.5" width="14" height="9.5" rx="2"/><path d="M8 10.5V8a4 4 0 0 1 8 0v2.5"/></symbol>
   <symbol id="i-links" viewBox="0 0 24 24"><path d="m14.5 6-6 6 6 6"/></symbol>
   <symbol id="i-rechts" viewBox="0 0 24 24"><path d="m9.5 6 6 6-6 6"/></symbol>
+  <symbol id="i-plus" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></symbol>
+  <symbol id="i-x" viewBox="0 0 24 24"><path d="M6 6l12 12M18 6 6 18"/></symbol>
   <symbol id="i-download" viewBox="0 0 24 24"><path d="M12 3v12M7 10l5 5 5-5M4 15v4a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-4"/></symbol>
 </svg>
 <script src="../../assets/rahmen.js"></script>

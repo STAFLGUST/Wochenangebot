@@ -34,6 +34,10 @@ declare(strict_types=1);
    - Urlaubssperren aus den Regeln jedes Jahr automatisch (Inhaber 03.11.2026, hr-einstellungen „regelSperren“, Standard an):
      Ostergeschäft (die zwei Wochen vor Karfreitag) und Weihnachtsgeschäft (Montag der letzten Novemberwoche bis 24.12.).
      Sie gelten wie eingetragene Sperren (hr_einstellungen „sperren“ enthält beide; „sperrenEigene“ nur die eingetragenen).
+   - Sonderregelung Dezember (Inhaber 10.11.2026): am 24.12. und 31.12. ist der Betrieb geschlossen; Urlaub (und Gleittage)
+     zählt an beiden Tagen je einen halben Tag – zusammen 1 Urlaubstag (hr_schliesstag, hr_tag_wert). Ab 2026; abschaltbar in
+     Verwaltung → Urlaub (hr-einstellungen „schliesstage“, Standard an). Die Weihnachtssperre endet deshalb am 23.12.
+     An Schließtagen braucht niemand eine Vertretung, und gleichzeitig weg ist dort jeder (keine Konflikte).
    - Krankheit zählt nie gegen den Urlaub (Inhaber 30.10.2026) – auch nicht „Krank ohne AU“, das die Zeiterfassung vom
      Urlaub abzieht (urlaubAbzug bleibt gespeichert und ist für die Personalstelle nur ein Hinweis). Das Urlaubskonto
      zählt nur Urlaub (U).
@@ -113,6 +117,43 @@ function hr_freie_tage(array $eintraege, string $person): array
         for ($d = $e['von']; $d <= $e['bis']; $d = hr_plus($d, 1)) $out[$d] = true;
     }
     return $out;
+}
+
+/* ---------------- Sonderregelung Dezember: Schließtage (Inhaber 10.11.2026) ----------------
+   24.12. und 31.12.: Betrieb geschlossen, Urlaub zählt je einen halben Tag (beide zusammen 1 Urlaubstag). Erst ab 2026 –
+   frühere Jahre bleiben unverändert (das Konto wird berechnet; ein anderer Rest 2025 änderte sonst den Übertrag nach 2026).
+   Gleiches Gewicht für Gleittage (ebenfalls ein Tag weniger Arbeit); Krank, freie Tage und Fehlen zählen ganze Tage. */
+const HR_SCHLIESSTAGE = ['12-24' => 'Heiligabend – Betrieb geschlossen', '12-31' => 'Silvester – Betrieb geschlossen'];
+const HR_SCHLIESSTAGE_AB = 2026;
+function hr_schliesstage_an(bool $neu = false): bool
+{
+    static $an = null;
+    if ($an === null || $neu) $an = hr_einstellungen()['schliesstage'];
+    return $an;
+}
+/* Schließtag? Text oder null */
+function hr_schliesstag(string $d): ?string
+{
+    if ((int)substr($d, 0, 4) < HR_SCHLIESSTAGE_AB || !isset(HR_SCHLIESSTAGE[substr($d, 5)]) || !hr_schliesstage_an()) return null;
+    return HR_SCHLIESSTAGE[substr($d, 5)];
+}
+/* Schließtage eines Jahres: Datum → Text (für Kalender und Vorplanung) */
+function hr_schliesstage(int $j): array
+{
+    $o = [];
+    foreach (HR_SCHLIESSTAGE as $md => $txt) if (hr_schliesstag("$j-$md") !== null) $o["$j-$md"] = $txt;
+    return $o;
+}
+/* Gewicht eines Tages: Urlaub und Gleittag an einem Schließtag ½, sonst 1 */
+function hr_tag_wert(string $d, string $art = 'U'): float { return ($art === 'U' || $art === 'G') && hr_schliesstag($d) !== null ? 0.5 : 1.0; }
+/* Summe der Gewichte einer Liste von Tagen (hr_tage) */
+function hr_tage_summe(array $tage, string $art = 'U'): float { $n = 0.0; foreach ($tage as $d) $n += hr_tag_wert($d, $art); return $n; }
+/* Tage im Schnitt zweier Zeiträume ohne Schließtage (Kalendertage) – an Schließtagen ist ohnehin jeder weg */
+function hr_schnitt_ohne_schliesstage(array $a, array $b): array
+{
+    $o = [];
+    for ($d = max($a['von'], $b['von']), $ende = min($a['bis'], $b['bis']); $d <= $ende; $d = hr_plus($d, 1)) if (hr_schliesstag($d) === null) $o[] = $d;
+    return $o;
 }
 
 /* ---------------- Daten lesen und prüfen ---------------- */
@@ -238,8 +279,9 @@ function hr_einstellungen(): array
     $eigene = $z($d['sperren'] ?? []);
     // Sperren aus den Urlaubsregeln: nur ein ausdrückliches false schaltet sie aus (fehlt das Feld: an – GR-006)
     $regelSperren = ($d['regelSperren'] ?? true) !== false;
+    $schliess = ($d['schliesstage'] ?? true) !== false;
     $alle = $eigene;
-    if ($regelSperren) { $j = (int)date('Y'); for ($y = $j - 1; $y <= $j + 3; $y++) $alle = array_merge($alle, hr_regel_sperren($y)); }
+    if ($regelSperren) { $j = (int)date('Y'); for ($y = $j - 1; $y <= $j + 3; $y++) $alle = array_merge($alle, hr_regel_sperren($y, $schliess)); }
     usort($alle, function ($a, $b) { return [$a['von'], $a['bis']] <=> [$b['von'], $b['bis']]; });
     return ['rev' => (int)($d['rev'] ?? 0), 'sperren' => $alle, 'sperrenEigene' => $eigene, 'regelSperren' => $regelSperren, 'ferien' => $z($d['ferien'] ?? []),
             'uebertragBis' => hr_uebertrag_bis_norm($d['uebertragBis'] ?? null) ?? HR_UEBERTRAG_BIS,
@@ -247,6 +289,8 @@ function hr_einstellungen(): array
             'verfallAb' => hr_verfall_ab_norm($d['verfallAb'] ?? null),
             // Urlaubsanträge über die Plattform: nur ein ausdrückliches false schaltet sie aus (fehlt das Feld: an – GR-006)
             'antraege' => ($d['antraege'] ?? true) !== false,
+            // Sonderregelung Dezember (24.12./31.12. je ½ Urlaubstag): nur ein ausdrückliches false schaltet sie aus (GR-006)
+            'schliesstage' => ($d['schliesstage'] ?? true) !== false,
             // Urlaubsregeln: gespeicherter Text (auch leer = keine Regeln anzeigen), ohne Feld die Vorlage
             'regeln' => hr_regeln_text($d['regeln'] ?? null)];
 }
@@ -255,6 +299,26 @@ function hr_einstellungen(): array
 const HR_REGELN_MAX = 6000;   // Zeichen
 /* Vorlage (Inhaber 03.11.2026: kompakt und einfach) – eine Zeile „1. Überschrift“, darunter der Text, Absätze durch Leerzeilen */
 const HR_REGELN_STANDARD = "1. Urlaubsanspruch\n"
+    . "Wie viele Urlaubstage Sie haben, steht in Ihrem Arbeitsvertrag.\n\n"
+    . "2. Vorplanung\n"
+    . "Bitte planen Sie bis zum 31.12. mindestens 90 % Ihres Urlaubs für das nächste Jahr vor (Schalter „Vorplanung“ bei „Urlaub beantragen“) – so können alle fair planen.\n\n"
+    . "3. Einzelne Urlaubstage\n"
+    . "In der Vorplanung höchstens 4 einzelne Urlaubstage. Den übrigen Urlaub planen Sie bitte möglichst zusammenhängend.\n\n"
+    . "4. Urlaubsdauer\n"
+    . "Am Stück sind bis zu 15 Arbeitstage Urlaub möglich (gesetzlich zugesichert: 10).\n\n"
+    . "5. Urlaubssperre\n"
+    . "Kein Urlaub im Ostergeschäft (zwei Wochen vor den Osterfeiertagen) und im Weihnachtsgeschäft (letzte Novemberwoche bis 23.12.).\n\n"
+    . "6. Sonderregelung Dezember\n"
+    . "Am 24.12. und 31.12. bleibt der Betrieb geschlossen. Für beide Tage zusammen ist nur 1 Urlaubstag einzusetzen.\n\n"
+    . "7. Resturlaub\n"
+    . "Urlaub muss im laufenden Jahr genommen werden. Ging das wegen Urlaubssperre, viel Arbeit oder Krankheit nicht, haben Sie bis zum 31.03. des Folgejahres Zeit – danach verfällt der Rest in der Regel (§ 7 Abs. 3 BUrlG).\n\n"
+    . "8. Vertretung\n"
+    . "Ihr Urlaub darf sich nicht mit dem Ihrer Vertretung überschneiden. Wer Sie vertritt, steht im Vertretungsplan.";
+/* Frühere Vorlagen: wurde eine davon unverändert gespeichert (Verwaltung → Urlaub speichert den Text immer mit), gilt die
+   aktuelle Vorlage – eigene Texte der Personalstelle bleiben unberührt; gespeichert wird dabei nichts (GR-006). */
+const HR_REGELN_FRUEHER = [
+    // 03.11.–10.11.2026: kompakte Vorlage ohne Vorplanung, Einzeltage und Sonderregelung Dezember
+    "1. Urlaubsanspruch\n"
     . "Wie viele Urlaubstage Sie haben, steht in Ihrem Arbeitsvertrag.\n\n"
     . "2. Planung\n"
     . "Bitte reichen Sie Ihre Urlaubsplanung für das ganze Jahr bis zum 31.03. ein – so können alle fair planen.\n\n"
@@ -265,10 +329,7 @@ const HR_REGELN_STANDARD = "1. Urlaubsanspruch\n"
     . "5. Resturlaub\n"
     . "Urlaub muss im laufenden Jahr genommen werden. Ging das wegen Urlaubssperre, viel Arbeit oder Krankheit nicht, haben Sie bis zum 31.03. des Folgejahres Zeit – danach verfällt der Rest in der Regel (§ 7 Abs. 3 BUrlG).\n\n"
     . "6. Vertretung\n"
-    . "Ihr Urlaub darf sich nicht mit dem Ihrer Vertretung überschneiden. Wer Sie vertritt, steht im Vertretungsplan.";
-/* Frühere Vorlagen: wurde eine davon unverändert gespeichert (Verwaltung → Urlaub speichert den Text immer mit), gilt die
-   aktuelle Vorlage – eigene Texte der Personalstelle bleiben unberührt; gespeichert wird dabei nichts (GR-006). */
-const HR_REGELN_FRUEHER = [
+    . "Ihr Urlaub darf sich nicht mit dem Ihrer Vertretung überschneiden. Wer Sie vertritt, steht im Vertretungsplan.",
     // bis 03.11.2026: ausführlicher Wortlaut
     "1. Urlaubsanspruch\n"
         . "Der Urlaubsanspruch jedes Arbeitnehmers ist individuell über den Arbeitsvertrag geregelt.\n\n"
@@ -303,13 +364,15 @@ function hr_regeln_pruefen($t): string
 }
 
 /* Sperren aus den Urlaubsregeln für ein Jahr: Ostergeschäft = die zwei Wochen vor Karfreitag (Karfreitag − 14 bis
-   Gründonnerstag), Weihnachtsgeschäft = Montag der letzten Novemberwoche (Woche mit dem 30.11.) bis 24.12. */
-function hr_regel_sperren(int $j): array
+   Gründonnerstag), Weihnachtsgeschäft = Montag der letzten Novemberwoche (Woche mit dem 30.11.) bis 23.12. – am 24.12. ist
+   der Betrieb geschlossen (Sonderregelung Dezember ab 2026, $schliess); ohne sie wie früher bis einschließlich 24.12. */
+function hr_regel_sperren(int $j, bool $schliess = true): array
 {
     $karfreitag = hr_plus(hr_ostern($j), -2);
     $nov30 = sprintf('%04d-11-30', $j);
+    $ende = $schliess && $j >= HR_SCHLIESSTAGE_AB ? '12-23' : '12-24';
     return [['von' => hr_plus($karfreitag, -14), 'bis' => hr_plus($karfreitag, -1), 'text' => 'Ostergeschäft', 'auto' => true],
-            ['von' => hr_plus($nov30, 1 - hr_wochentag($nov30)), 'bis' => sprintf('%04d-12-24', $j), 'text' => 'Weihnachtsgeschäft', 'auto' => true]];
+            ['von' => hr_plus($nov30, 1 - hr_wochentag($nov30)), 'bis' => sprintf('%04d-%s', $j, $ende), 'text' => 'Weihnachtsgeschäft', 'auto' => true]];
 }
 
 /* ---------------- Verfallstag des Resturlaubs aus dem Vorjahr ----------------
@@ -513,7 +576,7 @@ function hr_ich(array $personal, array $me): ?array
    Grundlage des Vier-Augen-Prinzips: eigene Anträge entscheidet und eigene Abwesenheiten trägt eine andere Person ein. */
 function hr_eigen(array $personal, array $me, array $e): bool
 {
-    if ((string)($e['erfasst']['byId'] ?? '') !== '' && ($e['quelle'] ?? '') === 'antrag' && (string)$e['erfasst']['byId'] === (string)$me['id']) return true;
+    if ((string)($e['erfasst']['byId'] ?? '') !== '' && in_array($e['quelle'] ?? '', ['antrag', 'vorplanung'], true) && (string)$e['erfasst']['byId'] === (string)$me['id']) return true;
     return hr_eigene_person($personal, $me, (string)($e['person'] ?? ''));
 }
 /* Eigene HR-Angaben (mitarbeiter_hr_save für sich selbst): Felder mit Einfluss auf das Urlaubskonto dürfen sich nicht
@@ -567,14 +630,15 @@ function hr_offene_antraege(array $personal, array $abw, array $me): array
         $aus['konto'] = hr_konto($p, $abw['eintraege'], $kj);
         if ($e['art'] === 'G') $aus['gleitKonto'] = hr_gleit_konto($p, $abw['eintraege'], $kj);   // Gleittag-Antrag: Rest des Gleittage-Kontos
         // Tage des Antrags im Jahr des Kontos (über den Jahreswechsel zählt der Rest im Folgejahr)
-        $aus['tageImJahr'] = count(hr_tage($p, $e['von'], $e['bis'], "$kj-01-01", "$kj-12-31", $freiJe[$e['person']]));
+        $aus['tageImJahr'] = hr_tage_summe(hr_tage($p, $e['von'], $e['bis'], "$kj-01-01", "$kj-12-31", $freiJe[$e['person']]), $e['art']);
         $aus['vertretungName'] = $e['vertretung'] && isset($idx[$e['vertretung']]) ? hr_name($idx[$e['vertretung']]) : null;
         $aus['eigen'] = hr_eigen($personal, $me, $e);
         $aus['kollegen'] = [];
         foreach ($abw['eintraege'] as $o) {
             if ($o['id'] === $e['id'] || $o['person'] === $e['person'] || !in_array($o['status'], HR_AKTIV, true) || $o['bis'] < $e['von'] || $o['von'] > $e['bis']) continue;
             $op = $idx[$o['person']] ?? null;
-            if ($op && $op['abteilung'] === $p['abteilung']) $aus['kollegen'][] = hr_name($op) . ' (' . hr_zeitraum_text(max($o['von'], $e['von']), min($o['bis'], $e['bis'])) . ')';
+            $gem = hr_schnitt_ohne_schliesstage($o, $e);   // nur am 24.12./31.12. zusammen weg: Betrieb ohnehin geschlossen
+            if ($op && $op['abteilung'] === $p['abteilung'] && $gem) $aus['kollegen'][] = hr_name($op) . ' (' . hr_zeitraum_text($gem[0], $gem[count($gem) - 1]) . ')';
         }
         $offen[] = $aus;
     }
@@ -624,9 +688,10 @@ function hr_konto(array $p, array $eintraege, int $jahr, ?string $heute = null, 
         // nur Urlaub – Krankheit nie, auch nicht mit urlaubAbzug aus der Zeiterfassung (Inhaber 30.10.2026)
         if ($e['art'] !== 'U' || !in_array($e['status'], HR_AKTIV, true)) continue;
         foreach (hr_tage($p, $e['von'], $e['bis'], "$jahr-01-01", "$jahr-12-31", $frei) as $d) {
-            if ($e['status'] === 'beantragt') { $u['beantragt']++; continue; }
-            $u[$d <= $heute ? 'genommen' : 'geplant']++;
-            if ($d <= $frist) $u['bis_frist']++;
+            $w = hr_tag_wert($d);   // Schließtage 24.12./31.12. je ½
+            if ($e['status'] === 'beantragt') { $u['beantragt'] += $w; continue; }
+            $u[$d <= $heute ? 'genommen' : 'geplant'] += $w;
+            if ($d <= $frist) $u['bis_frist'] += $w;
         }
     }
     $anspruch = hr_anspruch($p, $jahr);
@@ -696,8 +761,9 @@ function hr_gleit_konto(array $p, array $eintraege, int $jahr, ?string $heute = 
         foreach ($eintraege as $e) {
             if ($e['person'] !== $p['id'] || ($e['art'] ?? '') !== 'G' || !in_array($e['status'], HR_AKTIV, true)) continue;
             foreach (hr_tage($p, $e['von'], $e['bis'], $ab, "$j-12-31", $frei) as $d) {
-                if ($e['status'] === 'beantragt') $k['beantragt']++;
-                else $k[$d <= $heute ? 'genommen' : 'geplant']++;
+                $w = hr_tag_wert($d, 'G');   // Schließtage je ½
+                if ($e['status'] === 'beantragt') $k['beantragt'] += $w;
+                else $k[$d <= $heute ? 'genommen' : 'geplant'] += $w;
             }
         }
         $rest = $k['uebertrag'] + $k['gewaehrt'] - $k['genommen'] - $k['geplant'];
@@ -776,7 +842,7 @@ function hr_tage_je_art(array $p, array $eintraege, int $jahr): array
     $frei = hr_freie_tage($eintraege, $p['id']);
     foreach ($eintraege as $e) {
         if ($e['person'] !== $p['id'] || $e['status'] !== 'genehmigt' || !isset($n[$e['art']])) continue;
-        $n[$e['art']] += count(hr_tage($p, $e['von'], $e['bis'], "$jahr-01-01", "$jahr-12-31", $frei));
+        $n[$e['art']] += hr_tage_summe(hr_tage($p, $e['von'], $e['bis'], "$jahr-01-01", "$jahr-12-31", $frei), $e['art']);   // Gleittag am Schließtag ½
     }
     return $n;
 }
@@ -806,7 +872,7 @@ function hr_uebersicht(int $jahr): array
 function hr_eintrag_aus(array $e, array $p, array $frei = []): array
 {
     return ['id' => $e['id'], 'person' => $e['person'], 'name' => hr_name($p), 'art' => $e['art'], 'artText' => HR_ARTEN[$e['art']] ?? $e['art'],
-            'von' => $e['von'], 'bis' => $e['bis'], 'tage' => $e['art'] === 'X' ? count(hr_tage($p, $e['von'], $e['bis'])) : count(hr_tage($p, $e['von'], $e['bis'], null, null, $frei)), 'status' => $e['status'],
+            'von' => $e['von'], 'bis' => $e['bis'], 'tage' => $e['art'] === 'X' ? count(hr_tage($p, $e['von'], $e['bis'])) : hr_tage_summe(hr_tage($p, $e['von'], $e['bis'], null, null, $frei), $e['art']), 'status' => $e['status'],
             'notiz' => (string)($e['notiz'] ?? ''), 'vertretung' => $e['vertretung'] ?? null, 'quelle' => (string)($e['quelle'] ?? ''),
             'urlaubAbzug' => !empty($e['urlaubAbzug']), 'erfasst' => $e['erfasst'] ?? null, 'entscheidung' => $e['entscheidung'] ?? null];
 }
@@ -883,7 +949,7 @@ function hr_monatstage(int $jahr, int $monat, array $einst): array
     for ($t = 1; $t <= $n; $t++) {
         $d = sprintf('%04d-%02d-%02d', $jahr, $monat, $t);
         $w = hr_wochentag($d);
-        $out[] = ['tag' => $t, 'datum' => $d, 'wt' => HR_WOCHENTAGE[$w], 'wochenende' => $w >= 6, 'feiertag' => hr_feiertag($d),
+        $out[] = ['tag' => $t, 'datum' => $d, 'wt' => HR_WOCHENTAGE[$w], 'wochenende' => $w >= 6, 'feiertag' => hr_feiertag($d), 'schliesstag' => hr_schliesstag($d),
                   'ferien' => (hr_in_zeitraum($einst['ferien'], $d)['text'] ?? null) !== null, 'sperre' => hr_in_zeitraum($einst['sperren'], $d) !== null];
     }
     return $out;

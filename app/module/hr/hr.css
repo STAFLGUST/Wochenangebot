@@ -26,6 +26,7 @@ body.hr {
   --hr-wochenende: rgba(28, 26, 25, .09);
   --hr-feiertag: rgba(255, 192, 0, .38);
   --hr-ferien: rgba(112, 173, 71, .16);
+  --hr-schliess: repeating-linear-gradient(135deg, rgba(28, 26, 25, .13) 0 3px, transparent 3px 7px);   /* 24.12./31.12.: Betrieb geschlossen */
   --hr-sperre: #d1342f;
   --hr-abt: #e9e3dd;                            /* Abteilungsbalken (deckend) */
   --hr-zeile-hover: rgba(140, 29, 44, .06);     /* Zeile unter dem Mauszeiger */
@@ -49,6 +50,7 @@ body.hr {
     --hr-ok: #5fd08f; --hr-ok-bg: rgba(95, 208, 143, .14); --hr-warn: #f3c98a; --hr-warn-bg: rgba(224, 144, 31, .16);
     --hr-fehler: #f0a3ae; --hr-fehler-bg: rgba(224, 129, 144, .12);
     --hr-wochenende: rgba(255, 255, 255, .07); --hr-feiertag: rgba(255, 192, 0, .22); --hr-ferien: rgba(112, 173, 71, .14); --hr-sperre: #f07a74;
+    --hr-schliess: repeating-linear-gradient(135deg, rgba(255, 255, 255, .16) 0 3px, transparent 3px 7px);
     --hr-abt: #322b2b; --hr-zeile-hover: rgba(255, 255, 255, .06); --hr-heute: rgba(240, 163, 174, .14); --hr-monat: rgba(255, 255, 255, .28);
     --hr-u: #8bb8e8; --hr-u-bg: rgba(139, 184, 232, .16); --hr-k: #f0a3ae; --hr-k-bg: rgba(224, 129, 144, .16);
     --hr-g: #f3c98a; --hr-g-bg: rgba(224, 144, 31, .18); --hr-x: #a59d97; --hr-x-bg: rgba(255, 255, 255, .06);
@@ -65,6 +67,7 @@ body.hr {
     --hr-ok: #5fd08f; --hr-ok-bg: rgba(95, 208, 143, .14); --hr-warn: #f3c98a; --hr-warn-bg: rgba(224, 144, 31, .16);
     --hr-fehler: #f0a3ae; --hr-fehler-bg: rgba(224, 129, 144, .12);
     --hr-wochenende: rgba(255, 255, 255, .07); --hr-feiertag: rgba(255, 192, 0, .22); --hr-ferien: rgba(112, 173, 71, .14); --hr-sperre: #f07a74;
+    --hr-schliess: repeating-linear-gradient(135deg, rgba(255, 255, 255, .16) 0 3px, transparent 3px 7px);
     --hr-abt: #322b2b; --hr-zeile-hover: rgba(255, 255, 255, .06); --hr-heute: rgba(240, 163, 174, .14); --hr-monat: rgba(255, 255, 255, .28);
     --hr-u: #8bb8e8; --hr-u-bg: rgba(139, 184, 232, .16); --hr-k: #f0a3ae; --hr-k-bg: rgba(224, 129, 144, .16);
     --hr-g: #f3c98a; --hr-g-bg: rgba(224, 144, 31, .18); --hr-x: #a59d97; --hr-x-bg: rgba(255, 255, 255, .06);
@@ -221,6 +224,7 @@ body.hr .hr-kopf .brand-logo { height: 28px; width: auto; }
 .hr-mini-tage .t { display: grid; place-items: center; height: 24px; border-radius: 6px; color: var(--hr-text); background: none; border: 0; padding: 0; font: inherit; }
 .hr-mini-tage .t.we { color: var(--hr-muted); background: var(--hr-wochenende); }
 .hr-mini-tage .t.ft { background: var(--hr-feiertag); }
+.hr-mini-tage .t.sl { background: var(--hr-schliess); }
 .hr-mini-tage .t.U { background: var(--hr-u-bg); color: var(--hr-u); font-weight: 700; }
 .hr-mini-tage .t.K { background: var(--hr-k-bg); color: var(--hr-k); font-weight: 700; }
 .hr-mini-tage .t.G { background: var(--hr-g-bg); color: var(--hr-g); font-weight: 700; }
@@ -282,6 +286,7 @@ body.hr .hr-kopf .brand-logo { height: 28px; width: auto; }
 .hr-plan tr.abt th.rest { box-shadow: none; }
 .hr-plan .we { background: var(--hr-wochenende); }
 .hr-plan .ft { background: var(--hr-feiertag); }
+.hr-plan .sl { background: var(--hr-schliess); }
 .hr-plan .fe { background: var(--hr-ferien); }
 .hr-plan thead th.sp { box-shadow: inset 0 -3px 0 var(--hr-sperre); }
 .hr-plan thead th.sp.heute { box-shadow: inset 2px 0 0 var(--hr-akzent-ink), inset -2px 0 0 var(--hr-akzent-ink), inset 0 -3px 0 var(--hr-sperre); }
@@ -502,6 +507,55 @@ body.hr .hr-kopf .brand-logo { height: 28px; width: auto; }
 .hr-mp .btn.primary { align-self: center; white-space: nowrap; }
 #antrag-vertretung-opt:empty { display: none; }
 
+/* ── Vorplanung (Inhaber 10.11.2026): Schalter im Kopf von „Urlaub beantragen“, mehrere Zeiträume ── */
+.hr-antrag-kopf { display: flex; align-items: center; justify-content: space-between; gap: 8px 16px; flex-wrap: wrap; }
+.hr-antrag-kopf h2 { margin: 0; }
+.hr label.hr-schalter { flex-direction: row; align-items: center; gap: 10px; color: var(--hr-text); font-size: 14px; font-weight: 600; cursor: pointer; }
+.hr-schalter input { flex: none; appearance: none; -webkit-appearance: none; position: relative; width: 40px; height: 24px; margin: 0; border: 0; border-radius: 999px; background: var(--hr-aus-hover); cursor: pointer; transition: background .15s; }
+.hr-schalter input::after { content: ''; position: absolute; top: 3px; left: 3px; width: 18px; height: 18px; border-radius: 50%; background: #fff; box-shadow: 0 1px 2px rgba(0, 0, 0, .25); transition: transform .15s; }
+.hr-schalter input:checked { background: var(--hr-akzent); }
+.hr-schalter input:checked::after { transform: translateX(16px); }
+.hr-schalter input:focus-visible { outline: none; box-shadow: var(--hr-fokus); }
+@media (prefers-reduced-motion: reduce) { .hr-schalter input, .hr-schalter input::after { transition: none; } }
+/* Vertretung im einzelnen Antrag: da / abwesend / arbeitet nicht (vor dem Absenden geprüft) */
+.hr-vt-status { margin: -4px 0 0; font-size: 13px; font-weight: 600; color: var(--hr-muted); }
+.hr-vt-status.ok { color: var(--hr-ok); }
+.hr-vt-status.warn { color: var(--hr-warn); }
+.hr-vt-status.fehler { color: var(--hr-fehler); }
+.hr-vp { display: flex; flex-direction: column; gap: 12px; }
+.hr-vp[hidden] { display: none; }
+.hr-vp-stand { display: flex; flex-direction: column; gap: 6px; padding: 12px 14px; border-radius: 16px; background: var(--hr-aus); }
+.hr-vp-stand:empty { display: none; }
+.hr-vp-zahl { font-size: 14px; font-weight: 650; font-variant-numeric: tabular-nums; }
+.hr-vp-regel { font-size: 13px; color: var(--hr-muted); }
+.hr-vp-regel.warn { color: var(--hr-warn); font-weight: 600; }
+.hr-mp .hr-vp-regel { margin-top: 2px; }
+.hr-vp-liste { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 10px; counter-reset: vp; }
+.hr-vp-zeile { position: relative; display: flex; flex-direction: column; gap: 4px; padding: 10px 12px 10px 40px; border-radius: 16px; border: 1px solid var(--hr-linie); counter-increment: vp; }
+.hr-vp-zeile::before { content: counter(vp); position: absolute; left: 12px; top: 37px; display: grid; place-items: center; width: 20px; height: 20px; border-radius: 50%;
+  background: var(--hr-aus); color: var(--hr-muted); font-size: 11.5px; font-weight: 700; font-variant-numeric: tabular-nums; }
+.hr-vp-zeile.fehler { border-color: var(--hr-fehler); }
+.hr-vp-zeile.fehler::before { background: var(--hr-fehler-bg); color: var(--hr-fehler); }
+/* Daten nebeneinander, Vertretung darunter (die Antragskarte ist schmal – drei Felder in einer Reihe schnitten das Datum ab) */
+.hr-vp-felder { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) auto; gap: 10px; align-items: end; }
+.hr-vp-felder .vt { grid-column: 1 / 3; grid-row: 2; }
+.hr-vp-felder .hr-rund { grid-column: 3; grid-row: 1; margin-bottom: 4px; }
+.hr-vp-status { min-height: 18px; font-size: 13px; font-weight: 600; color: var(--hr-muted); overflow-wrap: anywhere; }
+.hr-vp-status:empty { min-height: 0; }
+.hr-vp-status.ok { color: var(--hr-ok); }
+.hr-vp-status.warn { color: var(--hr-warn); }
+.hr-vp-status.fehler { color: var(--hr-fehler); }
+.hr-vp-knoepfe { display: flex; flex-wrap: wrap; gap: 8px; }
+.hr-vp-knoepfe .btn { display: inline-flex; align-items: center; gap: 6px; }
+#vp-info { margin: 0; }
+@media (max-width: 560px) {
+  .hr-vp-zeile { padding: 10px; }
+  .hr-vp-zeile::before { position: static; margin-bottom: 2px; }
+  .hr-vp-felder { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); }
+  .hr-vp-felder .vt { grid-column: 1 / -1; }
+  .hr-vp-felder .hr-rund { position: absolute; top: 6px; right: 6px; margin: 0; }
+}
+
 .hr-jp-zahlen { display: grid; grid-template-columns: 1.4fr repeat(3, 1fr); gap: 12px; margin-bottom: 16px; }
 .hr-jp-zahlen .hr-wert.ok b { color: var(--hr-ok); }
 .hr-jp-zahlen .hr-wert.konflikt b { color: var(--hr-fehler); }
@@ -537,6 +591,8 @@ body.hr .hr-kopf .brand-logo { height: 28px; width: auto; }
 .hr-jp-zeile.erreicht .mini i { background: var(--hr-ok); }
 .hr-jp-zeile.erreicht .stand small { color: var(--hr-ok); font-weight: 700; }
 .hr-jp-name .stand small.ohne { font-style: italic; }
+.hr-jp-name .stand small.mk, .hr-jp-zeile.erreicht .stand small.mk { flex: none; padding: 0 6px; border-radius: 999px; background: var(--hr-aus); color: var(--hr-muted); font-size: 10.5px; font-weight: 650; line-height: 17px; white-space: nowrap; }
+.hr-jp-name .stand small.mk.warn, .hr-jp-zeile.erreicht .stand small.mk.warn { background: var(--hr-warn-bg); color: var(--hr-warn); }
 .hr-jp-spur { position: relative; min-width: 0; }
 .hr-jp-kopf { min-height: 34px; }
 .hr-jp-kopf .hr-jp-name { font-size: 12px; font-weight: 650; letter-spacing: .04em; text-transform: uppercase; color: var(--hr-muted); }

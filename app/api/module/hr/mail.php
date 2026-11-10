@@ -164,7 +164,7 @@ function hr_mail_jahr_monate(array $p, array $eintraege, int $jahr, ?string $heu
     $m = array_fill(1, 12, ['genommen' => 0, 'geplant' => 0]);
     foreach ($eintraege as $e) {
         if ($e['person'] !== $p['id'] || $e['art'] !== 'U' || $e['status'] !== 'genehmigt') continue;
-        foreach (hr_tage($p, $e['von'], $e['bis'], "$jahr-01-01", "$jahr-12-31", $frei) as $d) $m[(int)substr($d, 5, 2)][$d <= $heute ? 'genommen' : 'geplant']++;
+        foreach (hr_tage($p, $e['von'], $e['bis'], "$jahr-01-01", "$jahr-12-31", $frei) as $d) $m[(int)substr($d, 5, 2)][$d <= $heute ? 'genommen' : 'geplant'] += hr_tag_wert($d);   // 24.12./31.12. je ½
     }
     return $m;
 }
@@ -201,7 +201,7 @@ function hr_mail_zeitraeume(array $p, array $eintraege, string $von, string $bis
     foreach ($eintraege as $e) {
         if ($e['person'] !== $p['id'] || $e['art'] !== 'U' || $e['bis'] < $von || $e['von'] > $bis) continue;
         if ($e['status'] !== 'genehmigt' && !($beantragt && $e['status'] === 'beantragt')) continue;
-        $n = count(hr_tage($p, $e['von'], $e['bis'], $von, $bis, $frei));
+        $n = hr_tage_summe(hr_tage($p, $e['von'], $e['bis'], $von, $bis, $frei));   // Schließtage je ½
         if ($n) $z[] = [max($e['von'], $von), min($e['bis'], $bis), $n, $e['status'] === 'beantragt'];
     }
     usort($z, function ($a, $b) { return $a[0] <=> $b[0]; });
