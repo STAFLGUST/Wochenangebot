@@ -11,7 +11,9 @@ die Plattform“ (Verwaltung → Urlaub, Standard an; aus: Server lehnt Anträge
 Excel-Planung entfällt (Auftrag des Inhabers 02.11.2026: nicht mehr nötig – Importart und Aktionen fehlen, frühere Einträge
 bleiben), Abwesenheiten aus der Zeiterfassung (Importvorlage, tests/fixtures/hr/Abwesenheitsbericht_Muster.xlsx: Personalnummer, Schreibweisen, vom Urlaub
 abgezogene Krankheit – zählt hier nie gegen den Urlaub –, Ersetzen, veralteter Stand), Korrektur melden (Mitarbeiter → Personalstelle,
-nie die eigene erledigen), Mini-Kalender „Mein Jahr“ und die Oberflächen
+nie die eigene erledigen), Vorplanung (Inhaber 10.11.2026: mehrere Zeiträume auf einmal, Vorschau je Zeile, alle oder keiner,
+höchstens einzeltageMax einzelne Urlaubstage, Vertretung genehmigt abwesend → abgelehnt), Sonderregelung Dezember (24.12./31.12.
+je ½ Urlaubstag, ohne Vertretung, Weihnachtssperre bis 23.12., Excel), Mini-Kalender „Mein Jahr“ und die Oberflächen
 (HR-Seite, Verwaltung → Mitarbeiter und Urlaub; Desktop, 390 px).
 """
 import datetime as dt
@@ -142,7 +144,8 @@ check('Namen kommen aus dem Mitarbeiter (Verwaltung → Mitarbeiter)', {p_['id']
 #    Antragstests bis zum Abschnitt „Jahresplanung“ unten ausgeschaltet (dort und in der Oberfläche geprüft) ──
 v_ = P.call('mitarbeiter_hr')[1]
 PLAN_STD = v_['planung']
-check('Jahresplanung: Standard Beginn 01.10., Stichtag 01.12., 90 %, Vertretung Pflicht', PLAN_STD == {'start': '10-01', 'stichtag': '12-01', 'prozent': 90, 'vertretungPflicht': True}, PLAN_STD)
+check('Jahresplanung: Standard Beginn 01.10., Stichtag 31.12. (Inhaber 10.11.2026), 90 %, Vertretung Pflicht, höchstens 4 einzelne Urlaubstage',
+      PLAN_STD == {'start': '10-01', 'stichtag': '12-31', 'prozent': 90, 'vertretungPflicht': True, 'einzeltageMax': 4}, PLAN_STD)
 st, r = E.call('hr_antrag', {'von': iso(FEB), 'bis': iso(FEB)})
 check('… Urlaubsantrag ohne Vertretung: 422 mit Hinweis', st == 422 and 'Vertretung' in r.get('error', ''), (st, r))
 assert P.call('hr_einstellungen_save', {'sperren': v_['sperren'], 'ferien': v_['ferien'], 'planung': {**PLAN_STD, 'vertretungPflicht': False}})[0] == 200
@@ -179,13 +182,14 @@ def ostern(j):
     l_ = (32 + 2 * e + 2 * i - h - k) % 7
     m_ = (a + 11 * h + 22 * l_) // 451
     return dt.date(j, (h + l_ - 7 * m_ + 114) // 31, (h + l_ - 7 * m_ + 114) % 31 + 1)
-def regel_sperren(j):
+def regel_sperren(j):   # Weihnachtsgeschäft ab 2026 bis 23.12. (24.12. Betrieb geschlossen, Sonderregelung Dezember)
     kf, n30 = ostern(j) - dt.timedelta(days=2), dt.date(j, 11, 30)
-    return [('Ostergeschäft', iso(kf - dt.timedelta(days=14)), iso(kf - dt.timedelta(days=1))), ('Weihnachtsgeschäft', iso(n30 - dt.timedelta(days=n30.weekday())), f'{j}-12-24')]
+    return [('Ostergeschäft', iso(kf - dt.timedelta(days=14)), iso(kf - dt.timedelta(days=1))),
+            ('Weihnachtsgeschäft', iso(n30 - dt.timedelta(days=n30.weekday())), f'{j}-12-23' if j >= 2026 else f'{j}-12-24')]
 KF = ostern(Y) - dt.timedelta(days=2)
 v = P.call('mitarbeiter_hr')[1]
 J0 = dt.date.today().year
-check('Standard: Sperren aus den Urlaubsregeln an; Vorschau dieses und nächstes Jahr (Karfreitag − 14 bis Gründonnerstag, Montag der letzten Novemberwoche bis 24.12.)',
+check('Standard: Sperren aus den Urlaubsregeln an; Vorschau dieses und nächstes Jahr (Karfreitag − 14 bis Gründonnerstag, Montag der letzten Novemberwoche bis 23.12.)',
       v['regelSperren'] is True and [(z['text'], z['von'], z['bis']) for z in v['sperrenAuto']] == regel_sperren(J0) + regel_sperren(J0 + 1)
       and all(z['auto'] for z in v['sperrenAuto']) and len(v['sperren']) == 1, v.get('sperrenAuto'))
 sp = E.call(f'hr_start&jahr={Y}')[1]['sperren']
@@ -206,9 +210,19 @@ if st == 200: E.call('hr_antrag_zurueckziehen', {'id': r['eintrag']['id']})
 check('… Speichern ohne Angabe lässt den Schalter', P.call('hr_einstellungen_save', base)[0] == 200 and P.call('mitarbeiter_hr')[1]['regelSperren'] is False)
 check('… wieder eingeschaltet', P.call('hr_einstellungen_save', {**base, 'regelSperren': True})[1]['regelSperren'] is True)
 d0 = E.call('hr_start')[1]
-check('Urlaubsregeln: kompakte Vorlage mit 6 Punkten für jeden Mitarbeiter (Planung bis 31.03.)', d0['regeln'].startswith('1. Urlaubsanspruch') and d0['regeln'].count('\n\n') == 5
-      and 'bis zum 31.03. ein' in d0['regeln'] and '31.02' not in d0['regeln'] and v['regelnStandard'] == d0['regeln']
-      and len(d0['regeln']) < 1000 and all(len(a.split('\n', 1)[1]) <= 220 for a in d0['regeln'].split('\n\n')), d0['regeln'])
+check('Urlaubsregeln: kompakte Vorlage mit 8 Punkten (Vorplanung bis 31.12., Einzeltage, Sperre bis 23.12., Sonderregelung Dezember)', d0['regeln'].startswith('1. Urlaubsanspruch')
+      and d0['regeln'].count('\n\n') == 7 and 'bis zum 31.12. mindestens 90 %' in d0['regeln'] and 'höchstens 4 einzelne Urlaubstage' in d0['regeln']
+      and 'bis 23.12.' in d0['regeln'] and '6. Sonderregelung Dezember' in d0['regeln'] and 'nur 1 Urlaubstag' in d0['regeln'] and v['regelnStandard'] == d0['regeln']
+      and len(d0['regeln']) < 1400 and all(len(a.split('\n', 1)[1]) <= 220 for a in d0['regeln'].split('\n\n')), d0['regeln'])
+# kompakte Vorlage vom 03.11.2026 (ohne Vorplanung) – unverändert gespeichert, zeigt sie die aktuelle Vorlage
+REGELN_0311 = ('1. Urlaubsanspruch\nWie viele Urlaubstage Sie haben, steht in Ihrem Arbeitsvertrag.\n\n2. Planung\n'
+               'Bitte reichen Sie Ihre Urlaubsplanung für das ganze Jahr bis zum 31.03. ein – so können alle fair planen.\n\n3. Urlaubsdauer\n'
+               'Am Stück sind bis zu 15 Arbeitstage Urlaub möglich (gesetzlich zugesichert: 10).\n\n4. Urlaubssperre\n'
+               'Kein Urlaub im Ostergeschäft (zwei Wochen vor den Osterfeiertagen) und im Weihnachtsgeschäft (letzte Novemberwoche bis 24.12.).\n\n5. Resturlaub\n'
+               'Urlaub muss im laufenden Jahr genommen werden. Ging das wegen Urlaubssperre, viel Arbeit oder Krankheit nicht, haben Sie bis zum 31.03. des Folgejahres Zeit – danach verfällt der Rest in der Regel (§ 7 Abs. 3 BUrlG).\n\n'
+               '6. Vertretung\nIhr Urlaub darf sich nicht mit dem Ihrer Vertretung überschneiden. Wer Sie vertritt, steht im Vertretungsplan.')
+st, r = P.call('hr_einstellungen_save', {**base, 'regeln': REGELN_0311})
+check('Vorlage vom 03.11.2026 unverändert gespeichert: alle sehen die neue Vorlage', st == 200 and r['regeln'] == d0['regeln'] and E.call('hr_start')[1]['regeln'] == d0['regeln'], (st, r.get('regeln', '')[:60]))
 # frühere (ausführliche) Vorlage bis 03.11.2026 – unverändert gespeichert, zeigt sie die aktuelle Vorlage
 REGELN_FRUEHER = ('1. Urlaubsanspruch\n'
               'Der Urlaubsanspruch jedes Arbeitnehmers ist individuell über den Arbeitsvertrag geregelt.\n'
@@ -1060,9 +1074,9 @@ check('Jahresplanung einstellen: 422 bei Beginn nach Stichtag, Anteil 5 % oder k
 check('… ohne Personalrecht 403', L.call('hr_einstellungen_save', {**EINST_, 'planung': PLAN_STD})[0] == 403)
 PLAN_T = {'start': '01-01', 'stichtag': '12-31', 'prozent': 90, 'vertretungPflicht': True}   # Hinweis an jedem Tag des Jahres sichtbar
 st, r = P.call('hr_einstellungen_save', {**EINST_, 'planung': PLAN_T})
-check('… gespeichert (Antwort und Verwaltung), Protokoll', st == 200 and r['planung'] == PLAN_T and P.call('mitarbeiter_hr')[1]['planung'] == PLAN_T
+check('… gespeichert (Antwort und Verwaltung), Protokoll', st == 200 and r['planung'] == {**PLAN_T, 'einzeltageMax': 4} and P.call('mitarbeiter_hr')[1]['planung'] == {**PLAN_T, 'einzeltageMax': 4}
       and 'Jahresplanung eingestellt (ab 01.01., Stichtag 31.12., 90 %, Vertretung Pflicht)' in json.dumps(A.call('log')[1], ensure_ascii=False), r.get('planung'))
-check('… Speichern ohne Angabe lässt sie unverändert', P.call('hr_einstellungen_save', EINST_)[1]['planung'] == PLAN_T)
+check('… Speichern ohne Angabe lässt sie unverändert', P.call('hr_einstellungen_save', EINST_)[1]['planung'] == {**PLAN_T, 'einzeltageMax': 4})
 st, r = E.call('hr_start')
 pl_ = r.get('planung') or {}
 check(f'Mitarbeiter: Hinweis Jahresplanung {Y} – Ziel 90 % des Anspruchs (27 von 30), Stichtag, Stand aus Anträgen', st == 200 and pl_.get('jahr') == Y and pl_.get('ziel') == 27
@@ -1079,14 +1093,24 @@ st, r = E.call('hr_antrag', {'von': iso(N1), 'bis': iso(N1 + dt.timedelta(days=1
 PB_ = r['eintrag']['id'] if st == 200 else None   # b) Erika, Vertretung Lena – Lena ist dann selbst weg
 st, r = P.call('hr_eintrag_save', {'person': PL, 'art': 'U', 'von': iso(N1 + dt.timedelta(days=1)), 'bis': iso(N1 + dt.timedelta(days=1))})
 PC_ = r['eintrag']['id'] if st == 200 else None
+st, r = F.call('hr_antrag', {'von': iso(N3 + dt.timedelta(days=2)), 'bis': iso(N3 + dt.timedelta(days=2)), 'vertretung': PA})
+PE_ = r['eintrag']['id'] if st == 200 else None   # e) Fritz, Vertretung Andre – Andre ist danach selbst weg (Eintrag folgt)
 st, r = P.call('hr_eintrag_save', {'person': PA, 'art': 'U', 'von': iso(N3), 'bis': iso(N3 + dt.timedelta(days=4))})
 PD0_ = r['eintrag']['id'] if st == 200 else None
 st, r = F.call('hr_antrag', {'von': iso(N3), 'bis': iso(N3 + dt.timedelta(days=1)), 'vertretung': PE})
 PD_ = r['eintrag']['id'] if st == 200 else None   # d) Fritz, Vertretung Erika – Andre (gleiche Abteilung) ist weg
-st, r = F.call('hr_antrag', {'von': iso(N3 + dt.timedelta(days=2)), 'bis': iso(N3 + dt.timedelta(days=2)), 'vertretung': PA})
-PE_ = r['eintrag']['id'] if st == 200 else None   # e) Fritz, Vertretung Andre – Andre ist selbst weg
-check('Vertretung selbst abwesend: Antrag gestellt, Hinweis ohne Grund', st == 200 and 'Andre Vierzig ist in dieser Zeit selbst abwesend' in (r.get('hinweis') or '')
-      and 'Urlaub' not in (r.get('hinweis') or '').split('abwesend')[1], r.get('hinweis'))
+# Vertretungsprüfung (Inhaber 10.11.2026): ist die Vertretung nachweislich weg (genehmigt), wird der Antrag abgelehnt – ohne Grund
+st, r = F.call('hr_antrag', {'von': iso(N3 + dt.timedelta(days=3)), 'bis': iso(N3 + dt.timedelta(days=3)), 'vertretung': PA})
+check('Vertretung selbst abwesend: Antrag abgelehnt (409), Bitte um andere Vertretung, ohne Grund der Abwesenheit', st == 409
+      and f'Andre Vierzig ist in dieser Zeit selbst abwesend ({(N3 + dt.timedelta(days=3)):%d.%m.%Y})' in r.get('error', '') and 'andere Vertretung' in r.get('error', '')
+      and 'Urlaub' not in r.get('error', '').split('abwesend')[1], (st, r))
+st, r = F.call('hr_antrag_pruefen', {'zeitraeume': [{'von': iso(N3 + dt.timedelta(days=3)), 'bis': iso(N3 + dt.timedelta(days=3)), 'vertretung': PA}]})
+z_ = (r.get('zeitraeume') or [{}])[0]
+check('… Vorschau (speichert nichts): Vertretung „abwesend“, derselbe Grund', st == 200 and (z_.get('vertretung') or {}).get('status') == 'abwesend' and z_.get('code') == 409
+      and 'selbst abwesend' in (z_.get('fehler') or ''), (st, r))
+st, r = F.call('hr_antrag_pruefen', {'zeitraeume': [{'von': iso(N1 + dt.timedelta(days=14 + 7)), 'bis': iso(N1 + dt.timedelta(days=14 + 7)), 'vertretung': PE}]})
+z_ = (r.get('zeitraeume') or [{}])[0]
+check('… Vorschau: Vertretung da', st == 200 and (z_.get('vertretung') or {}).get('status') == 'da' and z_.get('fehler') is None and z_.get('tage') == 1, (st, r))
 st, r = E.call('hr_antrag', {'von': iso(N1 + dt.timedelta(days=7)), 'bis': iso(N1 + dt.timedelta(days=7)), 'vertretung': PL})
 PH_ = r['eintrag']['id'] if st == 200 else None   # Erika beantragt (offen)
 st, r = F.call('hr_antrag', {'von': iso(N1 + dt.timedelta(days=7)), 'bis': iso(N1 + dt.timedelta(days=7)), 'vertretung': PE})
@@ -1180,6 +1204,124 @@ check('Protokoll und Verlauf: Erinnerung, Abschluss, Jahresübersicht, wieder ge
 for id_ in (PA_, PB_, PC_, PD0_, PD_, PE_, PH_, PI_, PJ_):
     if id_: P.call('hr_eintrag_save', {'id': id_, 'stornieren': True})
 assert P.call('hr_einstellungen_save', {**EINST_, 'planung': {**PLAN_STD, 'vertretungPflicht': False}})[0] == 200   # spätere Antragstests ohne Vertretung
+
+# ── Vorplanung (Inhaber 10.11.2026): Schalter „Vorplanung“ – mehrere Zeiträume auf einmal, jede Zeile wie ein Antrag geprüft,
+#    alle oder keiner; höchstens einzeltageMax einzelne Urlaubstage (Hinweis und Konflikt, keine Sperre; Fr + Mo zusammenhängend);
+#    Sonderregelung Dezember: 24.12./31.12. Betrieb geschlossen, je ½ Urlaubstag, ohne Vertretung, kein „gleichzeitig weg“ ──
+SP_EIGEN = [s_ for s_ in EINST_['sperren'] if not (s_['von'] <= f'{Y + 1}-12-31' and s_['bis'] >= f'{Y}-12-24')]   # eigene Dezember-Sperren der Tests weg
+EINST_VP = {'sperren': SP_EIGEN, 'ferien': EINST_['ferien']}
+falsch_ = [P.call('hr_einstellungen_save', {**EINST_VP, 'planung': {**PLAN_T, 'einzeltageMax': w_}})[0] for w_ in (-1, 51, 2.5, '4', None)]
+check('Einzelne Urlaubstage einstellen: 422 bei -1, 51, 2,5, Text, leer', falsch_ == [422] * 5, falsch_)
+st, r = P.call('hr_einstellungen_save', {**EINST_VP, 'planung': {**PLAN_T, 'einzeltageMax': 2}})
+check('… höchstens 2 gespeichert, Protokoll', st == 200 and r['planung']['einzeltageMax'] == 2 and 'höchstens 2 einzelne Urlaubstage' in json.dumps(A.call('log')[1], ensure_ascii=False), r.get('planung'))
+st, r = F.call('hr_start')
+check('Mitarbeiter: Angaben zur Vorplanung (Jahr, Stichtag, Ziel, Einzeltage, höchstens 20 Zeiträume) und Schließtage', st == 200
+      and r['vorplanung'] == {'jahr': Y, 'stichtag': f'{Y - 1}-12-31', 'prozent': 90, 'einzeltageMax': 2, 'max': 20}
+      and {f'{Y}-12-24', f'{Y}-12-31'} <= set(r['schliesstage']) and 'Betrieb geschlossen' in r['schliesstage'][f'{Y}-12-24'], (r.get('vorplanung'), r.get('schliesstage')))
+SL = [d_ for d_ in (dt.date(Y, 12, 24), dt.date(Y, 12, 31)) if d_.weekday() < 5]   # 24.12. und 31.12. fallen auf denselben Wochentag
+st, r = F.call('hr_antrag_pruefen', {'vorplanung': True, 'zeitraeume': []})
+st0 = r.get('stand') or {}
+check('Vorschau ohne Zeitraum: nur der Stand (Ziel, Einzeltage, 24./31.12. noch nicht eingeplant)', st == 200 and r['zeitraeume'] == [] and st0.get('jahr') == Y
+      and st0.get('ziel') == 18 and st0.get('einzeltageMax') == 2 and st0.get('schliesstageOffen') == [iso(d_) for d_ in SL], (st, r))
+W2, W3, W4 = montag(Y, 7, 2), montag(Y, 7, 3), montag(Y, 7, 4)
+VP_WOCHE = {'von': iso(W2), 'bis': iso(W2 + dt.timedelta(days=4)), 'vertretung': PE}                     # 5 Tage am Stück
+VP_FR, VP_MO = ({'von': iso(W3 + dt.timedelta(days=4)), 'bis': iso(W3 + dt.timedelta(days=4)), 'vertretung': PE},
+                {'von': iso(W4), 'bis': iso(W4), 'vertretung': PE})                                       # Freitag + Montag = zusammenhängend
+VP_EIN = [{'von': iso(d_), 'bis': iso(d_), 'vertretung': PE} for d_ in (W3 + dt.timedelta(days=1), W4 + dt.timedelta(days=2), montag(Y, 7, 1) + dt.timedelta(days=2))]
+VP_SL = [{'von': iso(d_), 'bis': iso(d_)} for d_ in SL]                                                   # ohne Vertretung
+st, r = P.call('hr_eintrag_save', {'person': PA, 'art': 'U', 'von': iso(W4 + dt.timedelta(days=1)), 'bis': iso(W4 + dt.timedelta(days=1))})
+VP_ANDRE = r['eintrag']['id'] if st == 200 else None   # Andre genehmigt abwesend (Dienstag Woche 4 – an keinem Tag der Vorplanung unten)
+n_vor = len(F.call(f'hr_start&jahr={Y}')[1]['eintraege'])
+schlecht_ = [VP_WOCHE, {**VP_WOCHE, 'von': iso(W2 + dt.timedelta(days=2)), 'bis': iso(W2 + dt.timedelta(days=2))},   # überschneidet Zeile 1
+             {'von': f'{Y + 1}-01-12', 'bis': f'{Y + 1}-01-12', 'vertretung': PE},                                        # Folgejahr
+             {'von': iso(W3 + dt.timedelta(days=2)), 'bis': iso(W3 + dt.timedelta(days=2))},                              # ohne Vertretung
+             {'von': iso(W4 + dt.timedelta(days=1)), 'bis': iso(W4 + dt.timedelta(days=1)), 'vertretung': PA}]            # Vertretung abwesend
+st, r = F.call('hr_antrag_pruefen', {'vorplanung': True, 'zeitraeume': schlecht_})
+z_ = r.get('zeitraeume') or [{}] * 5
+check('Vorschau Vorplanung: je Zeile Tage und Prüfung (gültig, Überschneidung, Folgejahr, ohne Vertretung, Vertretung abwesend)', st == 200
+      and z_[0]['fehler'] is None and z_[0]['tage'] == 5 and z_[0]['vertretung']['status'] == 'da'
+      and 'Überschneidet sich' in (z_[1]['fehler'] or '') and f'Die Vorplanung gilt für {Y}' in (z_[2]['fehler'] or '')
+      and 'Vertretung' in (z_[3]['fehler'] or '') and z_[4]['vertretung']['status'] == 'abwesend' and 'selbst abwesend' in (z_[4]['fehler'] or ''), z_)
+check('… Stand zählt nur gültige Zeilen, gespeichert wird nichts', r['stand']['geplant'] == st0['geplant'] + 5 and len(F.call(f'hr_start&jahr={Y}')[1]['eintraege']) == n_vor,
+      (r.get('stand'), st0))
+falsch_ = [F.call('hr_antrag_pruefen', {'vorplanung': True, 'zeitraeume': [VP_WOCHE] * 21})[0], F.call('hr_antrag_pruefen', {'zeitraeume': [VP_WOCHE, VP_FR]})[0],
+           F.call('hr_antrag_pruefen', {'vorplanung': True, 'zeitraeume': 'x'})[0], F.call('hr_antrag_pruefen', {'art': 'G', 'vorplanung': True, 'zeitraeume': [VP_WOCHE]})[0],
+           F.call('hr_vorplanung', {'zeitraeume': []})[0], F.call('hr_vorplanung', {'zeitraeume': [{'von': iso(W2), 'bis': iso(W2 - dt.timedelta(days=1))}]})[0]]
+check('… Grenzen: mehr als 20 Zeiträume, mehrere ohne Vorplanung, kein Liste, Gleittage, leer, Ende vor Beginn (alle 422)', falsch_ == [422] * 6, falsch_)
+check('… ohne Anmeldung 401, nicht im Urlaubsplan 409', N.call('hr_vorplanung', {'zeitraeume': [VP_WOCHE]})[0] == 401
+      and O.call('hr_vorplanung', {'zeitraeume': [VP_WOCHE]})[0] == 409 and O.call('hr_antrag_pruefen', {'vorplanung': True, 'zeitraeume': []})[0] == 409)
+st, r = F.call('hr_vorplanung', {'zeitraeume': schlecht_})
+check('Vorplanung mit fehlerhaften Zeilen: 422 „… es wurde nichts beantragt“ mit Ergebnis je Zeile, nichts gespeichert', st == 422
+      and r.get('error') == '4 Zeiträume sind nicht in Ordnung – es wurde nichts beantragt.' and len(r.get('zeitraeume', [])) == 5
+      and len(F.call(f'hr_start&jahr={Y}')[1]['eintraege']) == n_vor, (st, r.get('error')))
+assert P.call('hr_antraege_save', {'an': False})[0] == 200
+check('Vorplanung bei ausgeschalteten Urlaubsanträgen: 409', F.call('hr_vorplanung', {'zeitraeume': [VP_WOCHE]})[0] == 409)
+assert P.call('hr_antraege_save', {'an': True})[0] == 200
+ALLE_VP = [VP_WOCHE, VP_FR, VP_MO, *VP_EIN, *VP_SL]
+st, r = F.call('hr_vorplanung', {'zeitraeume': ALLE_VP, 'notiz': 'Vorplanung'})
+VP_IDS = [e_['id'] for e_ in r.get('eintraege', [])]
+check(f'Vorplanung: {len(ALLE_VP)} Zeiträume auf einmal beantragt (offen, Quelle Vorplanung), 24./31.12. ohne Vertretung und je ½ Tag', st == 200 and len(VP_IDS) == len(ALLE_VP)
+      and all(e_['status'] == 'beantragt' for e_ in r['eintraege']) and [e_['tage'] for e_ in r['eintraege']] == [5, 1, 1, 1, 1, 1] + [0.5] * len(SL)
+      and all(e_.get('quelle') == 'vorplanung' for e_ in r['eintraege'] if 'quelle' in e_), (st, r.get('error'), [e_.get('tage') for e_ in r.get('eintraege', [])]))
+stv_ = r.get('stand') or {}
+check('… Einzeltage: nur die drei einzelnen Tage (nicht Fr + Mo, nicht 24./31.12.), Hinweis über der Grenze; 24./31.12. eingeplant', sorted(stv_.get('einzeltage', [])) == sorted(z_['von'] for z_ in VP_EIN)
+      and stv_.get('schliesstageOffen') == [] and 'Sie haben 3 einzelne Urlaubstage geplant – vorgesehen sind höchstens 2' in (r.get('hinweis') or '')
+      and stv_.get('geplant') == st0['geplant'] + 10 + 0.5 * len(SL), (stv_, r.get('hinweis')))
+check('… Protokoll mit Zahl und Zeiträumen', f'Vorplanung {Y} beantragt – {len(ALLE_VP)} Zeiträume' in json.dumps(A.call('log')[1], ensure_ascii=False))
+k_ = F.call(f'hr_start&jahr={Y}')[1]['konto']
+check('Konto: 24./31.12. zählen je ½ Tag (beantragt)', k_['beantragt'] == 10 + 0.5 * len(SL), k_)
+st, r = F.call('hr_antrag', {'von': iso(montag(Y, 7, 1)), 'bis': iso(montag(Y, 7, 1)), 'vertretung': PE})   # Montag vor dem einzelnen Mittwoch
+VP_NOCH = r['eintrag']['id'] if st == 200 else None
+check('Einzelner Antrag danach: Hinweis „… 4 einzelne Urlaubstage … höchstens 2“ (kein Fehler)', st == 200 and 'sind damit 4 einzelne Urlaubstage geplant' in (r.get('hinweis') or ''), (st, r))
+pl_ = P.call(f'hr_planung&jahr={Y}')[1]
+an_ = {a_['id']: a_ for a_ in pl_['antraege']}
+arten_ = lambda i: [k_['art'] for k_ in an_.get(i, {}).get('konflikte', [])]   # noqa: E731
+pf_ = next(p_ for p_ in pl_['personen'] if p_['id'] == PF)
+check('Jahresplanung: Konflikt „Einzeltage“ nur an den einzelnen Tagen, Stand der Person mit Einzeltagen', pl_['einzeltageMax'] == 2 and len(pf_['einzeltage']) == 4
+      and arten_(VP_IDS[0]) == []
+      and all('einzeltage' in arten_(i_) for i_ in VP_IDS[3:6] + [VP_NOCH]) and not any('einzeltage' in arten_(i_) for i_ in VP_IDS[:3] + VP_IDS[6:])
+      and 'Einzelner Urlaubstag – in der Vorplanung 4 einzelne Tage (höchstens 2' in ' '.join(k_['text'] for k_ in an_[VP_IDS[3]]['konflikte']),
+      ([arten_(i_) for i_ in VP_IDS + [VP_NOCH]], pf_.get('einzeltage')))
+check('… 24./31.12. ohne Vertretung: kein Konflikt „Keine Vertretung“', all(arten_(i_) == [] for i_ in VP_IDS[6:]), [an_.get(i_, {}).get('konflikte') for i_ in VP_IDS[6:]])
+if SL:
+    # Erika und Lena (beide Verwaltung) am 24.12.: kein „gleichzeitig weg“ – der Betrieb ist ohnehin geschlossen
+    st, r = P.call('hr_eintrag_save', {'person': PL, 'art': 'U', 'von': iso(SL[0]), 'bis': iso(SL[0])})
+    VP_LENA = r['eintrag']['id'] if st == 200 else None
+    st, r = E.call('hr_antrag', {'von': iso(SL[0]), 'bis': iso(SL[0])})
+    VP_ERIKA = r['eintrag']['id'] if st == 200 else None
+    an_ = {a_['id']: a_ for a_ in P.call(f'hr_planung&jahr={Y}')[1]['antraege']}
+    check('Schließtag: Antrag ohne Vertretung trotz Pflicht (½ Tag), kein „gleichzeitig weg“ mit Kollegin der Abteilung', st == 200 and r['eintrag']['tage'] == 0.5
+          and an_.get(VP_ERIKA, {}).get('konflikte') == [], (st, r.get('error'), an_.get(VP_ERIKA)))
+    for id_ in (VP_LENA, VP_ERIKA):
+        if id_: P.call('hr_eintrag_save', {'id': id_, 'stornieren': True})
+    # Excel-Export: 24./31.12. genehmigt → je ½ Tag, Hinweis in der Legende
+    assert P.call('hr_entscheiden', {'id': VP_IDS[6], 'entscheidung': 'genehmigt'})[0] == 200
+    req = urllib.request.Request(B + '/api/?action=hr_export', data=json.dumps({'jahr': Y, 'monate': [12]}).encode(),
+                                 headers={'Content-Type': 'application/json', 'X-CSRF-Token': P.csrf, 'X-Forwarded-For': P.ip})
+    xl_ = P.http.open(req).read()
+    wsf_ = openpyxl.load_workbook(io.BytesIO(xl_))[f'Dezember {Y}']
+    wsw_ = openpyxl.load_workbook(io.BytesIO(xl_), data_only=True)[f'Dezember {Y}']
+    zf_ = next(z for z in range(9, 40) if wsw_.cell(z, 3).value == 'Fritz Frist')
+    spU_ = 3 + 31 + 1
+    check('Export Dezember: 24.12. als U, Summe ½ Tag (Formel zieht ½ ab), Hinweis „Betrieb geschlossen“ in der Legende', wsw_.cell(zf_, 3 + SL[0].day).value == 'U'
+          and wsw_.cell(zf_, spU_).value == 0.5 and '-0.5*COUNTIF(' in str(wsf_.cell(zf_, spU_).value) and 'Betrieb geschlossen' in str(wsw_['K5'].value),
+          (wsw_.cell(zf_, spU_).value, wsf_.cell(zf_, spU_).value, wsw_['K5'].value))
+    gk_ = F.call(f'hr_start&jahr={Y}')[1]['konto']
+    check('Konto: genehmigter 24.12. zählt ½ Tag als geplant', gk_['geplant'] - k_['geplant'] == 0.5 and gk_['beantragt'] == k_['beantragt'] - 0.5 + 1, (k_, gk_))
+# Sonderregelung abschaltbar (Verwaltung → Urlaub): dann ganze Tage, Weihnachtssperre bis 24.12.
+falsch_ = P.call('hr_einstellungen_save', {**EINST_VP, 'schliesstage': 'ja'})
+check('Sonderregelung Dezember: nur ja/nein (422)', falsch_[0] == 422, falsch_)
+st, r = P.call('hr_einstellungen_save', {**EINST_VP, 'schliesstage': False})
+check('… ausgeschaltet: Weihnachtssperre bis 24.12., keine Schließtage, Einträge zählen ganz, Protokoll', st == 200 and r['schliesstage'] is False
+      and any(s_['bis'] == f'{Y}-12-24' for s_ in r['sperrenAuto']) and F.call('hr_start')[1]['schliesstage'] == {}
+      and all(e_['tage'] == 1 for e_ in F.call(f'hr_start&jahr={Y}')[1]['eintraege'] if e_['id'] in VP_IDS[6:])
+      and 'Sonderregelung Dezember (24.12./31.12. je ½ Urlaubstag) ausgeschaltet' in json.dumps(A.call('log')[1], ensure_ascii=False), r.get('sperrenAuto'))
+st, r = P.call('hr_einstellungen_save', {**EINST_VP, 'schliesstage': True})
+check('… wieder eingeschaltet: Weihnachtssperre bis 23.12., Schließtage wieder je ½', st == 200 and r['schliesstage'] is True and any(s_['bis'] == f'{Y}-12-23' for s_ in r['sperrenAuto'])
+      and all(e_['tage'] == 0.5 for e_ in F.call(f'hr_start&jahr={Y}')[1]['eintraege'] if e_['id'] in VP_IDS[6:]), r.get('sperrenAuto'))
+for id_ in (*VP_IDS, VP_NOCH, VP_ANDRE):
+    if id_: P.call('hr_eintrag_save', {'id': id_, 'stornieren': True})
+assert P.call('hr_einstellungen_save', {**EINST_, 'planung': {**PLAN_STD, 'vertretungPflicht': False}})[0] == 200
 
 for id_ in (U_VOR, K_VOR, F1, F2, F3, F4):
     if id_: P.call('hr_eintrag_save', {'id': id_, 'stornieren': True})
@@ -1684,12 +1826,15 @@ with sync_playwright() as p:
     plan_setzen(start='01-01', stichtag='12-31', prozent=90, vertretungPflicht=True)   # Hinweis an jedem Tag sichtbar, Planungsjahr = Y
     planung = lambda: P.call(f'hr_planung&jahr={Y}')[1]   # noqa: E731
     JP1, JP2 = montag(Y, 11, 1), montag(Y, 11, 2)          # erste zwei Novemberwochen (Weihnachtssperre erst in der letzten)
-    # Erika (Personalstelle trägt ein, genehmigt) in Woche 2 am Dienstag; Lena beantragt Woche 2 mit Erika als Vertretung → Konflikt
+    # Lena beantragt Woche 2 mit Erika als Vertretung; danach trägt die Personalstelle Erika am Dienstag ein (genehmigt) → Konflikt
+    # (umgekehrt lehnte der Server Lenas Antrag ab: Vertretung nachweislich abwesend, Inhaber 10.11.2026)
+    st, r_l = L.call('hr_antrag', {'von': iso(JP2), 'bis': iso(JP2 + dt.timedelta(days=2)), 'vertretung': PE})
+    JP_L = r_l['eintrag']['id'] if st == 200 else None
     st, r = P.call('hr_eintrag_save', {'person': PE, 'art': 'U', 'von': iso(JP2 + dt.timedelta(days=1)), 'bis': iso(JP2 + dt.timedelta(days=1))})
     JP_E = r['eintrag']['id'] if st == 200 else None
-    st, r = L.call('hr_antrag', {'von': iso(JP2), 'bis': iso(JP2 + dt.timedelta(days=2)), 'vertretung': PE})
-    JP_L = r['eintrag']['id'] if st == 200 else None
-    check('Jahresplanung: Daten für die Oberfläche (Eintrag Erika, Antrag Lena mit Vertretung)', JP_E and JP_L, r)
+    st, r = P.call('hr_eintrag_save', {'person': PA, 'art': 'U', 'von': iso(JP2 + dt.timedelta(days=3)), 'bis': iso(JP2 + dt.timedelta(days=3))})
+    JP_V = r['eintrag']['id'] if st == 200 else None   # Andre genehmigt abwesend (Donnerstag Woche 2) – Vertretungsprüfung in der Oberfläche
+    check('Jahresplanung: Daten für die Oberfläche (Antrag Lena mit Vertretung, Eintrag Erika, Andre abwesend)', JP_E and JP_L and JP_V, (r_l, r))
     vor_ = E.call('hr_start')[1]['planung']
     for breite in (1280, 390):
         ctx, pg = anmelden('erika', 'Editor-Zugang-77', '198.51.100.3', breite)
@@ -1703,23 +1848,74 @@ with sync_playwright() as p:
         check(f'{breite}px Mitarbeiter: Reiter „Jahresplanung“ nicht sichtbar (ohne Personal- oder Genehmigungsrecht)', not pg.is_visible('[data-tab="planung"]'))
         check(f'{breite}px Mitarbeiter: Seite ohne waagerechtes Scrollen', pg.evaluate('document.documentElement.scrollWidth <= window.innerWidth + 1'))
         pg.screenshot(path=os.path.join(SH, f'hr_mein_planung_{breite}.png'), full_page=False)
+        zeile = lambda i: pg.locator('#vp-liste .hr-vp-zeile').nth(i)   # noqa: E731
+
+        def zr_setzen(i, von, bis):
+            zeile(i).locator('.vp-von').fill(iso(von)); zeile(i).locator('.vp-von').dispatch_event('change')
+            zeile(i).locator('.vp-bis').fill(iso(bis)); zeile(i).locator('.vp-bis').dispatch_event('change')
         if breite == 1280:
+            # Vorplanung (Inhaber 10.11.2026): „Urlaub planen“ öffnet den Schalter „Vorplanung“ – mehrere Zeiträume, jede Zeile sofort geprüft
             pg.click('#mp-planen')
-            pg.wait_for_function(f"document.querySelector('#mein-titel').textContent.includes('{Y}') && document.activeElement && document.activeElement.id === 'antrag-von'")
-            check('„Urlaub planen“: Ansicht des Planungsjahres, Fokus im Antrag; Vertretung ist Pflicht (ohne „optional“)', pg.text_content('#antrag-vertretung-opt') == ''
-                  and pg.evaluate("document.querySelector('#antrag-vertretung').required") and 'bitte wählen' in pg.text_content('#antrag-vertretung option'))
-            pg.fill('#antrag-von', iso(JP1)); pg.dispatch_event('#antrag-von', 'change')
-            pg.fill('#antrag-bis', iso(JP1 + dt.timedelta(days=1))); pg.dispatch_event('#antrag-bis', 'change')
+            pg.wait_for_function(f"document.querySelector('#mein-titel').textContent.includes('{Y}') && document.activeElement && document.activeElement.classList.contains('vp-von')")
+            check('„Urlaub planen“ öffnet die Vorplanung: Schalter an, eine Zeile, Fokus im ersten Tag, Hinweis mit Stichtag und Einzeltagen', pg.is_checked('#vp-schalter')
+                  and pg.is_visible('#vp') and pg.is_hidden('#antrag-einzeln') and pg.is_hidden('#antrag-art') and pg.locator('#vp-liste .hr-vp-zeile').count() == 1
+                  and pg.text_content('#antrag-titel') == f'Urlaub {Y} vorplanen' and f'31.12.{Y - 1}' in pg.text_content('#vp-info')
+                  and 'höchstens 4 einzelne Urlaubstage' in pg.text_content('#vp-info'), (pg.text_content('#antrag-titel'), pg.text_content('#vp-info')))
+            zr_setzen(0, JP1, JP1 + dt.timedelta(days=1))
             pg.click('#antrag-senden'); pg.wait_for_selector('#antrag-meldung.fehler')
-            check('ohne Vertretung: Hinweis im Formular, nichts gesendet', 'Vertretung' in pg.text_content('#antrag-meldung')
+            check('Vorplanung ohne Vertretung: „Zeitraum 1: bitte eine Vertretung wählen“, nichts gesendet', 'Zeitraum 1: bitte eine Vertretung wählen' in pg.text_content('#antrag-meldung')
                   and E.call('hr_start')[1]['planung']['geplant'] == vor_['geplant'], pg.text_content('#antrag-meldung'))
-            pg.select_option('#antrag-vertretung', PA)
+            zeile(0).locator('.vp-vertretung').select_option(PA)
+            pg.wait_for_function("document.querySelector('#vp-liste .hr-vp-status').classList.contains('ok')")
+            check('Zeile sofort geprüft: 2 Tage, „Andre Vierzig ist in dieser Zeit da.“', 'Andre Vierzig ist in dieser Zeit da' in zeile(0).locator('.hr-vp-status').text_content()
+                  and '2 Tage' in zeile(0).locator('.hr-vp-status').text_content(), zeile(0).locator('.hr-vp-status').text_content())
+            pg.click('#vp-plus'); pg.wait_for_function("document.querySelectorAll('#vp-liste .hr-vp-zeile').length === 2")
+            check('„Zeitraum“ hinzufügen: zweite Zeile, Vertretung aus der vorigen Zeile übernommen', zeile(1).locator('.vp-vertretung').input_value() == PA)
+            zr_setzen(1, JP2 + dt.timedelta(days=3), JP2 + dt.timedelta(days=3))
+            pg.wait_for_selector('#vp-liste .hr-vp-zeile.fehler')
+            st2_ = zeile(1).locator('.hr-vp-status').text_content()
+            check('Vertretung abwesend: Zeile rot mit Bitte um andere Vertretung (vor dem Absenden, ohne Grund)', 'selbst abwesend' in st2_ and 'andere Vertretung' in st2_ and 'Urlaub' not in st2_, st2_)
+            pg.wait_for_function(f"document.querySelector('#vp-stand').textContent.includes('{vor_['geplant'] + 2:g}'.replace('.', ','))")
+            check('Stand mit diesen Zeiträumen: zählt nur die gültige Zeile; Knopf „Alle 2 Zeiträume beantragen“', pg.is_visible('#vp-stand .hr-mp-balken')
+                  and pg.text_content('#antrag-senden') == 'Alle 2 Zeiträume beantragen', (pg.text_content('#vp-stand'), pg.text_content('#antrag-senden')))
+            pg.locator('#antrag').screenshot(path=os.path.join(SH, 'hr_vorplanung_1280.png'))
+            pg.click('#antrag-senden'); pg.wait_for_function("document.querySelector('#antrag-meldung').textContent.includes('nichts beantragt')")
+            check('Absenden mit einer fehlerhaften Zeile: nichts beantragt (alle oder keiner)', E.call('hr_start')[1]['planung']['geplant'] == vor_['geplant']
+                  and pg.locator('#vp-liste .hr-vp-zeile.fehler').count() == 1, pg.text_content('#antrag-meldung'))
+            zeile(1).locator('[data-vp-weg]').click(); pg.wait_for_function("document.querySelectorAll('#vp-liste .hr-vp-zeile').length === 1")
+            check('Zeile entfernt: Knopf „Zeitraum beantragen“', pg.text_content('#antrag-senden') == 'Zeitraum beantragen', pg.text_content('#antrag-senden'))
             pg.click('#antrag-senden'); pg.wait_for_selector('#antrag-meldung.ok, #antrag-meldung.warn')
             nach_ = E.call('hr_start')[1]['planung']
             JP_A = next((e_['id'] for e_ in E.call(f'hr_start&jahr={Y}')[1]['eintraege'] if e_['von'] == iso(JP1) and e_['status'] == 'beantragt'), None)
             pg.wait_for_function(f"document.querySelector('#mp-stand') && document.querySelector('#mp-stand').textContent.includes('{nach_['geplant']:g}'.replace('.', ','))")
-            check('Antrag mit Vertretung gestellt: Stand der Planung zählt die beantragten Tage mit', JP_A and nach_['beantragt'] == vor_['beantragt'] + 2 and nach_['geplant'] == vor_['geplant'] + 2,
-                  (vor_, nach_))
+            check('Vorplanung beantragt: Meldung, Stand zählt die beantragten Tage mit, wieder eine leere Zeile', JP_A and nach_['beantragt'] == vor_['beantragt'] + 2
+                  and nach_['geplant'] == vor_['geplant'] + 2 and '1 Zeitraum beantragt' in pg.text_content('#antrag-meldung')
+                  and pg.locator('#vp-liste .hr-vp-zeile').count() == 1 and zeile(0).locator('.vp-von').input_value() == '', (vor_, nach_, pg.text_content('#antrag-meldung')))
+            pg.click('#vp-schalter'); pg.wait_for_selector('#antrag-einzeln:not([hidden])')
+            check('Schalter aus: einzelner Antrag, Vertretung ist Pflicht (ohne „optional“)', pg.is_hidden('#vp') and pg.text_content('#antrag-titel') == 'Urlaub beantragen'
+                  and pg.text_content('#antrag-vertretung-opt') == '' and pg.evaluate("document.querySelector('#antrag-vertretung').required")
+                  and 'bitte wählen' in pg.text_content('#antrag-vertretung option'))
+        else:
+            pg.click('#vp-schalter'); pg.wait_for_selector('#vp:not([hidden]) .hr-vp-zeile')
+            zr_setzen(0, JP1 + dt.timedelta(days=2), JP1 + dt.timedelta(days=3))
+            zeile(0).locator('.vp-vertretung').select_option(PA)
+            pg.wait_for_function("document.querySelector('#vp-liste .hr-vp-status').classList.contains('ok')")
+            check('390px Vorplanung: Zeile mit Prüfung, ohne waagerechtes Scrollen', pg.evaluate('document.documentElement.scrollWidth <= window.innerWidth + 1')
+                  and pg.is_visible('#vp-liste [data-vp-weg]'))
+            pg.locator('#antrag').screenshot(path=os.path.join(SH, 'hr_vorplanung_390.png'))
+            pg.click('#vp-schalter'); pg.wait_for_selector('#antrag-einzeln:not([hidden])')
+            # einzelner Antrag: Vertretungsprüfung vor dem Absenden (Inhaber 10.11.2026)
+            for f_, d_ in (('#antrag-von', JP2 + dt.timedelta(days=3)), ('#antrag-bis', JP2 + dt.timedelta(days=3))):
+                pg.fill(f_, iso(d_)); pg.dispatch_event(f_, 'change')
+            pg.select_option('#antrag-vertretung', PA)
+            pg.wait_for_selector('#antrag-pruefung.fehler')
+            check('390px einzelner Antrag: Vertretung abwesend – Hinweis vor dem Absenden', 'Andre Vierzig ist in dieser Zeit selbst abwesend' in pg.text_content('#antrag-pruefung'),
+                  pg.text_content('#antrag-pruefung'))
+            pg.screenshot(path=os.path.join(SH, 'hr_antrag_vertretung_390.png'), full_page=False)
+            for f_ in ('#antrag-von', '#antrag-bis'):
+                pg.fill(f_, iso(JP1 + dt.timedelta(days=2))); pg.dispatch_event(f_, 'change')
+            pg.wait_for_selector('#antrag-pruefung.ok')
+            check('… anderer Tag: „Vertretung Andre Vierzig ist in dieser Zeit da.“', 'ist in dieser Zeit da' in pg.text_content('#antrag-pruefung'), pg.text_content('#antrag-pruefung'))
         ctx.close()
     pl_ = planung()
     a_ = {a['id']: a for a in pl_['antraege']}
@@ -1740,6 +1936,10 @@ with sync_playwright() as p:
           and pg.locator(f'#jp-zeitleiste .hr-jp-balken.konflikt[data-jp-antrag="{JP_A}"]').count() == 0 and pg.locator('#jp-zeitleiste .hr-jp-kopf .hr-jp-spur span').count() == 12,
           (pg.locator('#jp-zeitleiste .hr-jp-balken').count(), len(pl_['antraege'])))
     check('Aktionen der Personalstelle: Erinnerung, konfliktfreie genehmigen, abschließen', all(pg.locator(f'#jp-aktionen [data-jp="{k}"]').count() == 1 for k in ('erinnern', 'freigeben', 'abschliessen')))
+    n_mk = sum(1 for p_ in pl_['personen'] if p_['anspruch'] > 0 and p_['schliesstageOffen'])
+    check('Zeitleiste: Hinweis „24./31.12.“ bei allen, die die Schließtage noch nicht eingeplant haben; Infozeile nennt die Einzeltage-Grenze',
+          pg.locator('#jp-zeitleiste .hr-jp-name .mk:not(.warn)').count() == n_mk and 'höchstens 4 einzelne Urlaubstage' in pg.text_content('#jp-info'),
+          (pg.locator('#jp-zeitleiste .hr-jp-name .mk').count(), n_mk, pg.text_content('#jp-info')))
     pg.screenshot(path=os.path.join(SH, 'hr_planung_1280.png'), full_page=True)
     pg.click(f'#jp-zeitleiste .hr-jp-balken[data-jp-antrag="{JP_L}"]'); pg.wait_for_selector(f'#jp-a-{JP_L}.hervor')
     check('Klick auf einen Balken: Antrag in der Liste hervorgehoben, Konflikt als Hinweis', 'selbst abwesend' in pg.text_content(f'#jp-a-{JP_L}') and pg.is_visible(f'#jp-a-{JP_L}'))
@@ -1818,7 +2018,7 @@ with sync_playwright() as p:
     ctx.close()
     check('Jahresplanung: keine JavaScript-Fehler', not fehler, fehler)
     # Aufräumen: eigene Einträge stornieren, Planung zurück (Vertretung freiwillig für die folgenden Antragstests)
-    for id_ in (JP_A, JP_E):
+    for id_ in (JP_A, JP_E, JP_V):
         if id_: P.call('hr_eintrag_save', {'id': id_, 'stornieren': True})
     plan_setzen(start=PLAN_ALT['start'], stichtag=PLAN_ALT['stichtag'], prozent=PLAN_ALT['prozent'], vertretungPflicht=False)
 
@@ -1862,11 +2062,12 @@ with sync_playwright() as p:
         ctx, pg = anmelden('erika', 'Editor-Zugang-77', '198.51.100.3', breite)
         pg.goto(B + '/module/hr/'); pg.wait_for_selector('#mein-konto .hr-wert')
         check(f'{breite}px: Personalbereiche ausgeblendet', not pg.is_visible('[data-tab="antraege"]') and not pg.is_visible('[data-tab="export"]'))
-        check(f'{breite}px: Urlaubsregeln beim Antrag (6 Punkte mit Überschrift, Hinweis im Formular)', pg.is_visible('#regeln-text') and pg.locator('#regeln-text h3').count() == 6
-              and '31.03.' in pg.text_content('#regeln-text') and pg.is_visible('#antrag-regeln'))
+        check(f'{breite}px: Urlaubsregeln beim Antrag (8 Punkte mit Überschrift, Hinweis im Formular)', pg.is_visible('#regeln-text') and pg.locator('#regeln-text h3').count() == 8
+              and '31.03.' in pg.text_content('#regeln-text') and 'Am 24.12. und 31.12. bleibt der Betrieb geschlossen' in pg.text_content('#regeln-text')
+              and pg.is_visible('#antrag-regeln') and pg.is_visible('#vp-schalter-l') and not pg.is_checked('#vp-schalter'))
         spalten = pg.evaluate("getComputedStyle(document.querySelector('#regeln-text')).gridTemplateColumns.split(' ').length")
         check(f'{breite}px: Urlaubsregeln kompakt – Nummer als Kreis, {3 if breite > 900 else 1} Spalte(n)', spalten == (3 if breite > 900 else 1)
-              and [pg.locator('#regeln-text .hr-regel-nr').nth(i).text_content() for i in range(6)] == ['1', '2', '3', '4', '5', '6']
+              and [pg.locator('#regeln-text .hr-regel-nr').nth(i).text_content() for i in range(8)] == ['1', '2', '3', '4', '5', '6', '7', '8']
               and pg.locator('#regeln-text h3').first.text_content().strip() == '1 Urlaubsanspruch', spalten)
         if breite == 1280:
             pg.click('#regeln > summary'); pg.wait_for_function("!document.querySelector('#regeln').open && localStorage.getItem('hr-regeln-zu') === '1'")
@@ -1895,6 +2096,9 @@ with sync_playwright() as p:
             check('Oberfläche: Antrag gestellt, in der Liste', 'beantragt' in pg.text_content('#mein-liste'))
             # Liste nur Urlaub; Krank steht im Mini-Kalender „Mein Jahr“
             check('Liste „Mein Urlaub und Anträge“: nur Urlaub, keine Krankheit', pg.locator('#mein-liste .hr-art.K').count() == 0 and pg.locator('#mein-liste .hr-art.U').count() > 0)
+            n_sl = sum(1 for d_ in (dt.date(Y, 12, 24), dt.date(Y, 12, 31)) if d_.weekday() < 5)
+            check('Mini-Kalender: 24.12./31.12. als „Betrieb geschlossen (½ Urlaubstag)“ markiert', pg.locator('#mini-kalender .t.sl').count() == n_sl
+                  and (n_sl == 0 or 'Betrieb geschlossen' in pg.text_content('#mini-legende')), pg.locator('#mini-kalender .t.sl').count())
             check('Mini-Kalender: 12 Monate, Krank-Tage und beantragter Urlaub markiert', pg.locator('#mini-kalender .hr-mini-monat').count() == 12
                   and pg.locator(f'#mini-kalender button.t.K[data-korr-tag="{iso(KRANK_UI)}"]').count() == 1
                   and pg.locator(f'#mini-kalender button.t.U.offen[data-korr-tag="{iso(tag_)}"]').count() == 1)

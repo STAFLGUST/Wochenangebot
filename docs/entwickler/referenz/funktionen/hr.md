@@ -2,7 +2,7 @@
 
 <!-- ERZEUGT von `python3 werkzeuge/doku.py erzeugen` – nicht von Hand ändern. Quelle: Funktionen und Kommentare im Code. Die CI prüft, dass diese Datei zum Code passt. -->
 
-11 Dateien, 234 Funktionen – in der Reihenfolge der Datei, **fett** die Abschnitte. Text = erste Aussage des Kommentars direkt über der Funktion (Python: Docstring). Übersicht aller Module: [README.md](README.md).
+11 Dateien, 259 Funktionen – in der Reihenfolge der Datei, **fett** die Abschnitte. Text = erste Aussage des Kommentars direkt über der Funktion (Python: Docstring). Übersicht aller Module: [README.md](README.md).
 
 ## `app/api/aktionen/hr.php`
 
@@ -86,18 +86,24 @@ _Modul HR · E-Mails der Urlaubsverwaltung (Inhaber 03.11.2026)._
 
 ## `app/api/module/hr/planung.php`
 
-_Modul HR · Jahresplanung des Urlaubs (Inhaber 03.11.2026)._
+_Modul HR · Jahresplanung des Urlaubs (Inhaber 03.11.2026, Vorplanung und Einzeltage 10.11.2026)._
 
 - `hr_planung_einst(d)` – Einstellungen der Jahresplanung (fehlende oder ungültige Felder: Standard)
-- `hr_planung_einst_pruefen(b)` – Einstellungen aus der Verwaltung prüfen (hr_einstellungen_save, Feld „planung“): {start, stichtag, prozent, vertretungPflicht}
+- `hr_planung_einst_pruefen(b)` – Einstellungen aus der Verwaltung prüfen (hr_einstellungen_save, Feld „planung“): {start, stichtag, prozent, vertretungPflicht, einzeltageMax (optional – ohne …
 - `hr_planung_jahr(heute)` – Das Jahr, das geplant wird: das nächste Kalenderjahr
 - `hr_planung_daten(pe, jahr)` – Stichtag und Beginn als Datum (im Jahr vor dem Planungsjahr)
-- `hr_planung_person(p, eintraege, jahr, pe)` – Stand einer Person: Anspruch, Ziel (Anteil des Anspruchs, auf halbe Tage aufgerundet), geplant = beantragt + genehmigt
+- `hr_planung_person(p, eintraege, jahr, pe, zusatz)` – Stand einer Person: Anspruch, Ziel (Anteil des Anspruchs, auf halbe Tage aufgerundet), geplant = beantragt + genehmigt (Schließtage je ½), einzelne …
+- `hr_vorplanung_eintrag(e, jahr, pe)` – Entstand der Eintrag in der Vorplanung des Jahres? = bis zum Stichtag erfasst (UTC-Zeit, ohne Erfassungszeit: nein)
+- `hr_einzeltage_hinweis(p, eintraege, e)` – Hinweis beim einzelnen Antrag (hr_antrag): liegt er in der Vorplanung seines Jahres und sind es damit mehr einzelne Urlaubstage als vorgesehen?
+- `hr_einzeltage(p, eintraege, jahr, pe, zusatz)` – Einzelne Urlaubstage der Vorplanung eines Jahres (Inhaber 10.11.2026: höchstens einzeltageMax, der übrige Urlaub möglichst zusammenhängend).
 - `hr_planung_ich(ich, eintraege, heute)` – Hinweis auf der Urlaubsseite des Mitarbeiters: nur in der Planungsphase (ab Beginn, bis die Planung abgeschlossen ist)
 - `hr_planung_schnitt(a, b)` – Überschneidung zweier Zeiträume
 - `hr_vertretung_luecken(e, p, vp, eintraege, nurGenehmigt)` – Wann ist die Vertretung im Zeitraum eines Antrags nicht da? Arbeitstage des Antragstellers, an denen die Vertretung abwesend ist (jede Abwesenheit außer …
+- `hr_antrag_zeitraum(ich, personal, eintraege, einst, art, von, bis, vertretung, andere)` – Prüfung eines Zeitraums für einen eigenen Antrag – gemeinsam für hr_antrag, hr_vorplanung und die Vorschau hr_antrag_pruefen.
+- `hr_zeitraeume_anfrage(l)` – Zeiträume aus der Anfrage (Vorplanung und Vorschau): [{von, bis, vertretung}] – höchstens HR_VORPLANUNG_MAX
+- `hr_vorplanung_pruefen(ich, personal, eintraege, einst, zr, jahr)` – Vorplanung prüfen (ohne zu speichern): jeder Zeitraum wie ein Antrag (hr_antrag_zeitraum), nur im Vorplanungsjahr.
 - `hr_daten_text(daten)` – Daten als kurze Zeiträume (aufeinanderfolgende Kalendertage zusammengefasst, höchstens vier, dann „…“)
-- `hr_planung_konflikte(e, p, idx, eintraege, sperren, pe, verfuegbar)` – Konflikte eines Urlaubsantrags in der Jahresplanung.
+- `hr_planung_konflikte(e, p, idx, eintraege, sperren, pe, verfuegbar, einzel)` – Konflikte eines Urlaubsantrags in der Jahresplanung.
 - `hr_planung(jahr, me)` – Zusammenfassung eines Jahres für die Personalstelle und „Urlaub genehmigen“: Mitarbeiter im Urlaubsplan mit Stand, alle Urlaubsanträge des Jahres (beantragt, …
 - `hr_planung_freigeben(jahr, ids, me)` – Konfliktfreie Anträge gesammelt genehmigen (unter der Sperre hr-abwesenheiten): jeder Antrag wird neu geprüft; eigene, bereits entschiedene und solche mit …
 
@@ -130,6 +136,15 @@ _Modul HR · Urlaubsverwaltung – Fachlogik (Daten, Feiertage, Urlaubskonto, An
 - `hr_tage(p, von, bis, ab, bis2, frei)` – Arbeitstage einer Person im Zeitraum (optional nur innerhalb [$ab, $bis2]; ohne freie Tage aus $frei: Datum → true)
 - `hr_freie_tage(eintraege, person)` – Einzeln eingetragene freie Tage („x“) einer Person: Datum → true
 
+**Sonderregelung Dezember: Schließtage (Inhaber 10.11.2026)**
+
+- `hr_schliesstage_an(neu)`
+- `hr_schliesstag(d)` – Schließtag?
+- `hr_schliesstage(j)` – Schließtage eines Jahres: Datum → Text (für Kalender und Vorplanung)
+- `hr_tag_wert(d, art)` – Gewicht eines Tages: Urlaub und Gleittag an einem Schließtag ½, sonst 1
+- `hr_tage_summe(tage, art)` – Summe der Gewichte einer Liste von Tagen (hr_tage)
+- `hr_schnitt_ohne_schliesstage(a, b)` – Tage im Schnitt zweier Zeiträume ohne Schließtage (Kalendertage) – an Schließtagen ist ohnehin jeder weg
+
 **Daten lesen und prüfen**
 
 - `hr_person_norm(p)`
@@ -149,7 +164,7 @@ _Modul HR · Urlaubsverwaltung – Fachlogik (Daten, Feiertage, Urlaubskonto, An
 
 - `hr_regeln_text(t)` – Gespeicherter Text der Urlaubsregeln für die Anzeige: ohne Feld oder als unveränderte frühere Vorlage die aktuelle Vorlage
 - `hr_regeln_pruefen(t)` – Text der Urlaubsregeln prüfen: Zeichenkette, höchstens HR_REGELN_MAX Zeichen, ohne Steuerzeichen (Zeilenumbrüche bleiben)
-- `hr_regel_sperren(j)` – Sperren aus den Urlaubsregeln für ein Jahr: Ostergeschäft = die zwei Wochen vor Karfreitag (Karfreitag − 14 bis Gründonnerstag), Weihnachtsgeschäft = Montag …
+- `hr_regel_sperren(j, schliess)` – Sperren aus den Urlaubsregeln für ein Jahr: Ostergeschäft = die zwei Wochen vor Karfreitag (Karfreitag − 14 bis Gründonnerstag), Weihnachtsgeschäft = Montag …
 
 **Verfallstag des Resturlaubs aus dem Vorjahr**
 
@@ -279,6 +294,21 @@ _STAFL-Plattform · HR · Urlaub Gleittage-Konto (02.11.2026)_
 - `korrekturDialog(v)`
 - `zeigeKorrekturen()`
 - `antragTage()` – Arbeitstage des Antrags (Vorschau im Browser; verbindlich rechnet der Server)
+- `antragPruefen()`
+
+**Vorplanung (Inhaber 10.11.2026): mehrere Zeiträume des nächsten Jahres auf einmal**
+
+- `vpBereit()`
+- `vpSchalten(an)`
+- `vpZeile(von, bis, vertretung)`
+- `vpNummern()`
+- `vpKnopf()`
+- `vpPruefen(sofort)`
+- `vpPruefenJetzt()`
+- `vpStatus(li, z)`
+- `vpRegelZeilen(st)` – Regeln der Vorplanung als kurze Zeilen (Stand beim Mitarbeiter und in der Vorplanung)
+- `vpStand(st, danach)`
+- `vpSenden()`
 - `frage(titel, text, ja)` – Rückfrage im eigenen Fenster: Escape oder „Abbrechen“ = nein, der Fokus liegt auf „Abbrechen“
 
 **Kalender / Monatsplan**
@@ -398,6 +428,7 @@ _HR · Urlaubsverwaltung (Modul hr, Oberfläche hr.intern unter /module/hr/)._
 - `anmelden(user, pw, ip, breite, verfall_hinweis)`
 - `zeit(cl, uebernehmen, stand, **opt)`
 - `plan_setzen(**w)`
+- `zr_setzen(i, von, bis)`
 
 ## `tests/e2e/test_hr_uebersicht.py`
 

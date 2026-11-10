@@ -361,24 +361,31 @@ Mitarbeiter sind die Nutzer der Plattform (`users_load()`); HR speichert nur eig
   `vertretung` (Person) ist bei Urlaubsanträgen Pflicht, solange `hr-einstellungen.planung.vertretungPflicht` nicht `false` ist. `art`: `U` Urlaub, `K` Krank, `G` Gleittag, `X` freier Tag, `F` unentschuldigt (seit 03.11.2026, nur Personalstelle; zählt nicht
   gegen den Urlaub, beim Eintragen E-Mail an den Mitarbeiter über `hr_fehlen_mail`). `status`: `beantragt`, `genehmigt`, `abgelehnt`,
   `zurueckgezogen`, `storniert` – Einträge werden nie gelöscht, nur der Status ändert sich (mit
-  `entscheidung: {t, by, grund}`). `quelle`: `antrag`, `personalstelle`, `zeiterfassung`; optional `geaendert`,
+  `entscheidung: {t, by, grund}`). `quelle`: `antrag`, `vorplanung` (seit 10.11.2026: mehrere Zeiträume auf einmal über
+  `hr_vorplanung`, sonst wie `antrag`), `personalstelle`, `zeiterfassung`; optional `geaendert`,
   `urlaubAbzug` (in der Zeiterfassung vom Urlaub abgezogene Krankheit – nur Hinweis für die Personalstelle; Krankheit
   zählt in `hr_konto` nie gegen den Urlaub, Inhaber 30.10.2026). Überschneidungen (`hr_kollision`) gelten nur zwischen aktiven
   Einträgen derselben Gruppe: Abwesenheiten (U/K/G/F) untereinander und freie Tage (X) untereinander – ein freier Tag in
   einer Urlaubswoche zählt dort nur nicht mit.
 - **`hr-einstellungen`**: `{"rev": 1, "sperren": [{"von": "…", "bis": "…", "text": "Inventur"}], "ferien": [ … ], "uebertragBis": "03-31", "antraege": true}` – `uebertragBis` (Verfallstag des Resturlaubs, Monat-Tag) ist optional; fehlt es, gilt der 31.03. `antraege` (Schalter „Urlaubsanträge über die Plattform“, Verwaltung → Urlaub, Aktion `hr_antraege_save`) ist optional; nur `false` schaltet Anträge aus, fehlt es, sind sie eingeschaltet.
   Seit 03.11.2026 zusätzlich optional: `regelSperren` (Sperren aus den Urlaubsregeln – Ostergeschäft: zwei Wochen vor
-  Karfreitag, Weihnachtsgeschäft: Montag der letzten Novemberwoche bis 24.12. – jedes Jahr berechnet, nicht gespeichert;
-  nur `false` schaltet sie aus) und `regeln` (Text der Urlaubsregeln beim Urlaubsantrag; fehlt das Feld, gilt die Vorlage
+  Karfreitag, Weihnachtsgeschäft: Montag der letzten Novemberwoche bis 23.12., ohne Sonderregelung Dezember bis 24.12. –
+  jedes Jahr berechnet, nicht gespeichert; nur `false` schaltet sie aus) und `regeln` (Text der Urlaubsregeln beim Urlaubsantrag; fehlt das Feld, gilt die Vorlage
   `HR_REGELN_STANDARD`, leer = keine Regeln; steht dort unverändert eine frühere Vorlage aus `HR_REGELN_FRUEHER`, gilt
   ebenfalls die aktuelle Vorlage – nur beim Lesen, gespeichert wird nichts). `sperren` enthält nur die eingetragenen Sperren.
   `verfallAb` (seit 03.11.2026, optional, Jahreszahl 2000–2100 oder `null`): Übergangsregel – Resturlaub verfällt erstmals am
   Verfallstag dieses Jahres; in den Jahren davor verfällt bei niemandem etwas (`hr_verfall_ab()`, `hr_konto`). Fehlt das Feld
   oder ist es `null`, verfällt Resturlaub jedes Jahr.
   `planung` (seit 03.11.2026, optional, `module/hr/planung.php`): Jahresplanung des nächsten Jahres –
-  `{"start": "10-01", "stichtag": "12-01", "prozent": 90, "vertretungPflicht": true, "abschluss": {"2027": {"t": "…", "by": "…", "byId": "u…"}}}`.
-  Fehlende Felder gelten als Standard (Beginn 01.10., Stichtag 01.12., 90 %, Vertretung Pflicht); `abschluss` je Jahr setzt
-  `hr_planung_abschluss` (Verwaltung → Urlaub speichert ihn nie mit). `mailVerlauf` kennt dazu die Arten `planung` und
+  `{"start": "10-01", "stichtag": "12-31", "prozent": 90, "vertretungPflicht": true, "einzeltageMax": 4, "abschluss": {"2027": {"t": "…", "by": "…", "byId": "u…"}}}`.
+  Fehlende Felder gelten als Standard (Beginn 01.10., Stichtag 31.12. – bis 10.11.2026: 01.12., ein gespeicherter Stichtag
+  bleibt –, 90 %, Vertretung Pflicht, höchstens 4 einzelne Urlaubstage in der Vorplanung; `einzeltageMax` 0–50, 0 = keine
+  Prüfung, seit 10.11.2026); `abschluss` je Jahr setzt `hr_planung_abschluss` (Verwaltung → Urlaub speichert ihn nie mit).
+  Vorplanung = Urlaub des Planungsjahres, erfasst bis zum Stichtag (`hr_vorplanung_eintrag`); Einzeltage berechnet
+  `hr_einzeltage` (Blöcke über Wochenende, Feiertage, freie Tage, Gleittage und Schließtage hinweg).
+  `schliesstage` (seit 10.11.2026, optional, nur `false` schaltet ab): Sonderregelung Dezember – 24.12. und 31.12. (ab 2026)
+  Betrieb geschlossen: Urlaub und Gleittage zählen dort je ½ Tag (`hr_tag_wert`, gerechnet, nichts gespeichert), keine
+  Vertretung nötig, kein „gleichzeitig weg“, Weihnachtssperre bis 23.12. `mailVerlauf` kennt dazu die Arten `planung` und
   `jahresuebersicht` (mit `jahr`).
   E-Mails der Urlaubsverwaltung (`module/hr/mail.php`, optional): `mail` = `{"monat": {"an": false, "stand": "2026-10"},
   "test": {"an": false, "adresse": ""}, "steuerberater": {"an": false, "adresse": "", "tag": 5, "stand": "2026-11"}}` –
