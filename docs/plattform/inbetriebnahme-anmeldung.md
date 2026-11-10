@@ -98,8 +98,8 @@ Mitarbeiteranmeldung dort abschalten (Roadmap 8); HSTS der Kundendomain auf ein 
   Handy oder Passkey verloren: nach persönlicher Prüfung `konten.sh zuruecksetzen <name>` (löscht Einmalcode und
   Passkeys, meldet überall ab, neues Startpasswort). Konten nie löschen und neu anlegen – die Verknüpfung mit dem
   Mitarbeiterkonto hängt an der Keycloak-Kennung.
-- **Design der Anmeldeseite** (seit 22.10.2026): Theme `stafl` in `deploy/anmeldung/theme/` (Plattform-Design „Liquid
-  Glass“, STAFL-Logo, deutsche Texte), per Volume in Keycloak. Aktiv mit `sh deploy/anmeldung/konten.sh design-setzen`
+- **Design der Anmeldeseite** (seit 22.10.2026): Theme `stafl` in `deploy/anmeldung/theme/` (Plattform-Design „C2“ seit
+  10.11.2026 – vorher „Liquid Glass“ –, STAFL-Logo, Schrift Geist, deutsche Texte), per Volume in Keycloak. Aktiv mit `sh deploy/anmeldung/konten.sh design-setzen`
   (idempotent, ändert nur `loginTheme` und – seit 27.10.2026 – `emailTheme`: Einladungsmails im STAFL-Design); Rückfall
   `konten.sh design-setzen standard`. Spätere Änderungen am Theme wirken mit dem Release ohne Neustart von Keycloak
   (Theme-Cache aus, Browser fragen stündlich neu).

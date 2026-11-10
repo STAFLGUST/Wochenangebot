@@ -522,7 +522,7 @@ Jede Code-Datei beginnt mit einem Kopfkommentar; dessen erste Aussage steht hier
 
 | Datei | Modul | Inhalt |
 | --- | --- | --- |
-| `stafl.css` | plattform | STAFL-Plattform · Anmeldeseite (Keycloak) – Gestaltung „Liquid Glass“ Farben und Formen aus dashboard/dashboard.css und dem Eingabebereich (app/assets/admin.css, body.adm): ruhiger warmer Grund mit drei weichen … |
+| `stafl.css` | plattform | STAFL-Plattform · Anmeldeseite (Keycloak) – Gestaltung „C2“ wie Dashboard und Module (Entwurf freigegeben 06.11.2026, Anmeldeseite angepasst 10.11.2026): ruhiger Grund, eine weiße Karte mit feiner Linie und kaum … |
 
 ## `deploy/anmeldung/theme/stafl/login/resources/js/`
 

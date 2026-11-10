@@ -400,6 +400,19 @@ jobs:
       - name: Umgebung beenden
         if: always()
         run: bash tests/oidc/umgebung.sh stop
+      - name: Bildschirmfotos der Anmeldeseite sichern (zur Durchsicht des Designs, auch ohne Fehler)
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: oidc-anmeldeseite
+          # ohne die Einrichtung des Einmalcodes (QR-Code mit dem Schlüssel des Testkontos)
+          path: |
+            tests/.ergebnisse/oidc_anmeldung_*.png
+            tests/.ergebnisse/oidc_einmalcode_1280.png
+            tests/.ergebnisse/oidc_einmalcode_fehler_1280.png
+            tests/.ergebnisse/oidc_einmalcode_doppelt_390.png
+          if-no-files-found: ignore
+          retention-days: 7
       - name: Protokolle bei Fehler sichern
         if: failure()
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2

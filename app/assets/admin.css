@@ -2456,3 +2456,31 @@ dialog.modal.pv { width: min(1480px, calc(100vw - 32px)); height: calc(100dvh - 
   /* Handy: die Kopfzeile des Rahmens (Menü, Logo) läuft mit; angeheftet bleibt die Leiste des Eingabebereichs */
   body.adm.r .r-mobilkopf { position: static; }
 }
+/* Anmeldung des Eingabebereichs (Notzugang, abgelaufene Sitzung) wie die Anmeldeseite der zentralen Anmeldung
+   (deploy/anmeldung/theme/stafl, 10.11.2026): Karte mit feiner Linie, Logo und Titel mittig, Beschriftungen in normaler
+   Schreibweise, flache Knöpfe mit Radius 10, keine Farbflächen hinter dem Fenster */
+@media screen {
+  body.adm.r .auth.overlay { background: var(--r-grund); }
+  body.adm.r .auth { align-items: start; padding: max(10vh, 32px) 24px 24px; box-sizing: border-box; }
+  body.adm.r .auth-card { width: min(420px, 100%); box-sizing: border-box; padding: 32px 28px 28px; gap: 18px;
+    border-radius: 16px; background: var(--r-flaeche); border: 1px solid var(--r-linie); box-shadow: var(--r-schatten); }
+  body.adm.r .auth-card .brand { flex-direction: column; align-items: center; gap: 22px; }
+  body.adm.r .auth-card .brand-logo { display: block; height: 28px; width: auto; }
+  body.adm.r .auth-card .brand h1 { font-size: 22px; font-weight: 700; line-height: 1.25; letter-spacing: -.02em; text-align: center; }
+  body.adm.r .auth-intro { margin-top: -4px; text-align: center; font-size: 14px; color: var(--r-text-2); }
+  body.adm.r .auth-card .fld { gap: 6px; }
+  body.adm.r .auth-card .fld > span { font-size: 13.5px; font-weight: 600; letter-spacing: 0; text-transform: none; color: var(--r-text); }
+  body.adm.r .auth-card .fld input { height: 42px; border-radius: 10px; border-color: var(--r-linie-2); background-color: var(--r-flaeche); font-size: 16px; }
+  body.adm.r .auth-card .fld input:hover { border-color: var(--r-zart); }
+  body.adm.r .auth-card .fld input:focus { border-color: var(--r-akzent); box-shadow: var(--r-fokus); }
+  body.adm.r .auth-card .btn { height: 42px; border-radius: 10px; font-size: 15px; box-shadow: none; }
+  body.adm.r .auth-card .btn.primary { background: var(--r-akzent); color: var(--r-akzent-ink); border: 0; }
+  body.adm.r .auth-card .btn.primary:hover:not(:disabled) { background: var(--r-akzent-hover); }
+  body.adm.r .auth-card .btn:not(.primary) { background: var(--r-flaeche); border: 1px solid var(--r-linie-2); color: var(--r-text); }
+  body.adm.r .auth-card .btn:not(.primary):hover:not(:disabled) { background: var(--r-flaeche-2); }
+}
+@media screen and (max-width: 560px) {
+  body.adm.r .auth { padding: 24px 16px 16px; }
+  body.adm.r .auth-card { padding: 24px 20px 22px; }
+  body.adm.r .auth-card :is(.btn, .fld input) { height: 44px; }   /* Tippflächen mindestens 44 px */
+}

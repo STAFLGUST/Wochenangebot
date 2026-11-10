@@ -22,7 +22,8 @@ welchem Modul gehört, steht in `regeln/` (`python3 werkzeuge/regeln.py modul <i
 - **Zentrale Anmeldung (vorbereitet, nicht aktiv):** `deploy/anmeldung/` – Compose-Ergänzung (App mit Anwendungs-Image,
   Keycloak 26.8.2, eigene PostgreSQL; nur `127.0.0.1` bzw. internes Netz), Apache-Hosts, Caddy-Teil, Realm (erzeugt von
   `werkzeuge/realm_produktion.py` aus dem Test-Realm), Design der Anmeldeseite (`deploy/anmeldung/theme/stafl`, erbt von
-  `keycloak.v2`, aktiv mit `konten.sh design-setzen`). Geprüft in der CI (`deploy/anmeldung/pruefen.sh`); Ablaufplan mit
+  `keycloak.v2`, aktiv mit `konten.sh design-setzen`; Gestaltung „C2“ mit den Farben der `--r-*` aus `rahmen.css` und eigener
+  Kopie der Schrift Geist – `tests/oidc/test_oidc.py` prüft die Übereinstimmung). Geprüft in der CI (`deploy/anmeldung/pruefen.sh`); Ablaufplan mit
   Freigaben: `docs/plattform/inbetriebnahme-anmeldung.md`. Geheimnisse und Realm-Import nur auf dem Server (`daten-anmeldung/`).
 - **Auslieferung:** nur über Release: nach grüner CI auf `main` wartet der Release-Lauf auf die Freigabe des
   Inhabers (Umgebung `produktion`, `docs/release-freigabe.md`); der Server spielt per Timer ein
@@ -133,7 +134,7 @@ Angebotsseite im Design „Liquid Glass“ (Abschnitt am Ende von `app.css`, nur
 
 Eingabebereich seit 06.11.2026 im gemeinsamen Rahmen „C2“ (Seitenleiste vor der eigenen Navigation, Abschnitt
 „Rahmen „C2““ ganz am Ende von `admin.css`: Glas-Werte auf die ruhigen Flächen des Rahmens, keine Farbflächen, Kopfzeile flach,
-Logo in der Seitenleiste). Darunter unverändert die bisherige Gestaltung, deren Werte der Rahmen überschreibt –
+Logo in der Seitenleiste; die Anmeldekarte `.auth-card` wie die Anmeldeseite von Keycloak). Darunter unverändert die bisherige Gestaltung, deren Werte der Rahmen überschreibt –
 Design „Liquid Glass“ (Abschnitt am Ende von `admin.css`, nur `@media screen`, alle Regeln unter `body.adm`):
 eigene Farbwerte für Grund, Glas und Felder (`--glas`, `--glas-kopf`, `--glas-karte`, `--glas-stark`, `--glas-fenster`, `--aus`, `--feld` …),
 drei weiche Farbflächen fest hinter dem Inhalt (`body.adm::before`), Glas mit `backdrop-filter` (Kopfzeilen-Kapsel über
