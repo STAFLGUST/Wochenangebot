@@ -451,6 +451,22 @@ dialog .st-incoming small, .dlg-body .st-incoming small { font-size: 14px; margi
 /* Zugänge und Partien untereinander mit denselben Spaltenbreiten (Desktop; am Handy fehlt bei den Partien die Ankunft) */
 @media (min-width: 561px) { #dlg-stock-item .lottab, #dlg-stock-item .zutab { table-layout: fixed; width: 100%; } }
 .item-stock { font-size: 13.5px; }
+/* Laptop-Breiten (Prüfung 10.11.2026): bei 1280–1560 px ragten die drei rechten Spalten (Erfasst, Gesamt, Zugänge) aus der
+   Karte und waren nur über seitliches Scrollen erreichbar. Dort engere Abstände, etwas kleinere Schrift und die Bezeichnung
+   darf umbrechen – alle zehn Spalten bleiben sichtbar (darunter scrollt die Karte weiter in sich). */
+@media screen and (min-width: 701px) and (max-width: 1640px) {
+  .st-card { width: auto; }
+  .stab { width: 100%; font-size: 13px; }
+  .stab th { padding: 9px 3px 7px; font-size: 11px; }
+  .stab td { padding: 6px 5px; }
+  .stab .s-code { font-size: 12px; }
+  .stab .s-name { white-space: normal; min-width: 130px; }
+  .stab td.s-name { padding-right: 6px; }
+  .stab tr.st-total td { font-size: 13px; }
+  .stab .mhd-skull { margin-right: 2px; }
+  .stab td.s-incoming .btn.sm { height: 28px; padding: 0 8px; font-size: 12px; }
+}
+@media screen and (min-width: 701px) and (max-width: 1340px) { .stab td { padding: 6px 4px; } .stab th { padding: 9px 2px 7px; } }
 @media (max-width: 700px) {
   .stab thead { display: none; }
   .stab tr.srow { display: grid; grid-template-columns: auto 1fr; gap: 2px 10px; padding: 9px 12px; border-bottom: 1px solid var(--line); }

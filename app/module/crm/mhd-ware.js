@@ -44,8 +44,8 @@
   function zeichneListe() {
     const c = M.c, box = M.host.querySelector('#mhd-liste');
     if (!box) return;
-    const q = M.suche.trim().toLocaleLowerCase('de-DE');
-    const treffer = q.length >= 2 || /^\d+$/.test(q) ? M.d.alle.filter((a) => a.name.toLocaleLowerCase('de-DE').includes(q) || a.nr.toLocaleLowerCase('de-DE').includes(q)).slice(0, 12) : [];
+    const q = M.suche.trim(), SU = window.STAFL_SUCHE;
+    const treffer = q.length >= 2 || /^\d+$/.test(q) ? M.d.alle.filter((a) => SU.findet(q, a.nr, a.name)).slice(0, 12) : [];
     box.innerHTML = (M.d.artikel.length ? M.d.artikel.map((a) => `<li><button type="button" class="crm-mhd-artikel ${STUFE[a.stufe] ? STUFE[a.stufe][0] : ''}" data-mhd-artikel="${c.esc(a.code)}" aria-pressed="${a.code === M.wahl}">
         <span class="crm-mhd-name"><b>${c.esc(a.name)}</b><small>${c.esc(a.code)} · ${c.esc(kgZahl(a.mhdKg))} mit kürzestem MHD</small></span>
         <span class="crm-mhd-rechts">${marke(a, c)}<small>${a.kaeufer === 1 ? '1 Käufer' : `${a.kaeufer} Käufer`}</small></span></button></li>`).join('')

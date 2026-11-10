@@ -125,10 +125,10 @@ function orders_action(string $action): bool
         foreach ($all as $o) if ($o['nr'] === (string)($_GET['nr'] ?? '')) respond(['ok'=>true,'apiVersion'=>1,'order'=>order_view($o, !$customer)]);
         fail('Bestellwunsch nicht gefunden.', 404);
     }
-    $q = mb_strtolower(mb_substr(trim((string)($_GET['q'] ?? '')), 0, 100));
+    $q = mb_substr(trim((string)($_GET['q'] ?? '')), 0, 100);   // Suchregel der Plattform (such_passt, lib/kern.php)
     $state = (string)($_GET['workflow'] ?? '');
     if ($state !== '' && !in_array($state, ORDER_STATES, true)) fail('Ungültiger Status.', 422);
-    $all = array_values(array_filter(array_reverse($all), fn($o) => ($state === '' || order_state($o, !$customer) === $state) && ($q === '' || mb_strpos(mb_strtolower($o['nr'] . ' ' . $o['firma'] . ' ' . ($o['referenz'] ?? '')), $q) !== false)));
+    $all = array_values(array_filter(array_reverse($all), fn($o) => ($state === '' || order_state($o, !$customer) === $state) && such_passt($q, [$o['nr'], $o['firma'], $o['referenz'] ?? '', $o['kunde']['nr'] ?? ''])));
     $offset = max(0, min(1000000, (int)($_GET['offset'] ?? 0))); $limit = max(1, min(100, (int)($_GET['limit'] ?? 25)));
     $rows = array_map(fn($o) => order_view($o, !$customer), array_slice($all, $offset, $limit));
     // List responses omit position arrays; detail endpoint delivers the immutable snapshot.

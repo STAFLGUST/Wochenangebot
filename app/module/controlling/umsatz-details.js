@@ -66,7 +66,7 @@
     }
     return `<div class="ctl-ud-kpis${k.length > 4 ? ' fuenf' : ''}">${k.join('')}</div>`;
   }
-  const passt = (z) => { const q = D.suche.trim().toLocaleLowerCase('de-DE'); return !q || z.name.toLocaleLowerCase('de-DE').includes(q) || z.nr.toLocaleLowerCase('de-DE').includes(q); };
+  const passt = (z) => window.STAFL_SUCHE.findet(D.suche, z.name, z.nr);   // gemeinsame Suchregel (assets/suche.js)
   const suchfeld = (platzhalter) => `<label class="ctl-ud-suche">${F.ICON.suche}<input type="search" data-ud-suche value="${esc(D.suche)}" placeholder="${esc(platzhalter)}" aria-label="${esc(platzhalter)}"></label>`;
 
   /* Sortierung der Listen: Kennzahl (DB nur mit EK-Werten) und Richtung */

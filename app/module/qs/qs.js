@@ -16,6 +16,7 @@
   const API = '../../api/';
   const $ = (s, el = document) => el.querySelector(s);
   const $$ = (s, el = document) => [...el.querySelectorAll(s)];
+  const SU = window.STAFL_SUCHE;   // gemeinsame Suchregel (assets/suche.js): Umlaute auch ausgeschrieben, mehrere Wörter, Nummern
   const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
   const TABS = ['uebersicht', 'dokumente', 'handbuch', 'pruefplan', 'massnahmen', 'bericht', 'einstellungen'];
   const MONATE = ['Jan', 'Feb', 'Mär', 'Apr', 'Mai', 'Jun', 'Jul', 'Aug', 'Sep', 'Okt', 'Nov', 'Dez'];
@@ -262,8 +263,8 @@
     return x.zustand === z;
   }
   function renderDokumente() {
-    const q = $('#qm-d-suche').value.trim().toLocaleLowerCase('de-DE'), kap = $('#qm-d-kapitel').value, art = $('#qm-d-art').value;
-    const basis = S.d.dokumente.filter((x) => (!kap || x.kapitel === kap) && (!art || x.art === art) && (!q || `${x.nr} ${x.titel}`.toLocaleLowerCase('de-DE').includes(q)));
+    const q = SU.woerter($('#qm-d-suche').value), kap = $('#qm-d-kapitel').value, art = $('#qm-d-art').value;
+    const basis = S.d.dokumente.filter((x) => (!kap || x.kapitel === kap) && (!art || x.art === art) && SU.passt(q, SU.heu(x.nr, x.titel)));
     $('#qm-d-zustand').innerHTML = ZUSTAENDE.map(([z, n, f]) => { const c = basis.filter((x) => passtZustand(x, z)).length; return (z && !c && S.zustand !== z) ? '' : `<button type="button" data-zustand="${z}" aria-pressed="${S.zustand === z}" class="${f || ''}">${esc(n)} <b>${zahl(c)}</b></button>`; }).join('');
     const liste = basis.filter((x) => passtZustand(x, S.zustand))
       .sort((a, b) => natCmp(a.kapitel, b.kapitel) || (istGelenkt(a) === istGelenkt(b) ? 0 : istGelenkt(a) ? -1 : 1) || natCmp(a.nr, b.nr) || natCmp(a.titel, b.titel));
@@ -915,10 +916,11 @@
 
   /* ---------- Handbuch ---------- */
   function abschnitteSichtbar() {
-    const q = $('#qm-h-suche').value.trim().toLocaleLowerCase('de-DE'), alle = $('#qm-h-entfallen').checked;
-    return S.d.handbuch.filter((a) => (alle || !a.entfallen) && (!q || [a.nr, a.titel, a.text, ...(a.verweise || []), a.ifs].join(' ').toLocaleLowerCase('de-DE').includes(q)));
+    const q = SU.woerter($('#qm-h-suche').value), alle = $('#qm-h-entfallen').checked;
+    return S.d.handbuch.filter((a) => (alle || !a.entfallen) && SU.passt(q, SU.heu(a.nr, a.titel, a.text, a.verweise || [], a.ifs)));
   }
-  const markiere = (text, q) => { const t = esc(text); if (!q) return t; const e = esc(q).replace(/[.*+?^${}()|[\]\\]/g, '\\$&'); return t.replace(new RegExp(e, 'gi'), (m) => `<mark>${m}</mark>`); };
+  /* Suchwörter im Text hervorheben (jedes Wort der Eingabe; die Suche selbst folgt assets/suche.js und findet auch „ae“ für „ä“) */
+  const markiere = (text, q) => { const t = esc(text), w = String(q || '').trim().split(/\s+/).filter(Boolean).map((x) => esc(x).replace(/[.*+?^${}()|[\]\\]/g, '\\$&')); if (!w.length) return t; return t.replace(new RegExp(w.join('|'), 'gi'), (m) => `<mark>${m}</mark>`); };
   /* Verweis „1.3-L02 HACCP-Analyse“ → Dokument, wenn die Dokumenten-Nr. vorne steht */
   function verweisDok(text) {
     const t = text.toLocaleLowerCase('de-DE').replace(/\s+/g, ' ');
@@ -1084,8 +1086,8 @@
     }
   });
   function maWahl(gewaehlt) {
-    const q = $('#pf-ma-suche').value.trim().toLocaleLowerCase('de-DE');
-    $('#pf-ausfuehrende').innerHTML = S.d.mitarbeiter.filter((m) => gewaehlt.has(m.id) || !q || m.name.toLocaleLowerCase('de-DE').includes(q))
+    const q = SU.woerter($('#pf-ma-suche').value);
+    $('#pf-ausfuehrende').innerHTML = S.d.mitarbeiter.filter((m) => gewaehlt.has(m.id) || SU.passt(q, SU.heu(m.name)))
       .map((m) => `<label class="qm-check"><input type="checkbox" value="${esc(m.id)}"${gewaehlt.has(m.id) ? ' checked' : ''}> ${esc(m.name)}${m.zugang ? '' : ' <small>(ohne Anmeldung)</small>'}</label>`).join('') || '<span class="qm-hilfe">Keine Mitarbeiter gefunden.</span>';
   }
   $('#pf-ma-suche').addEventListener('input', () => maWahl(new Set($$('#pf-ausfuehrende input:checked').map((x) => x.value))));
@@ -1161,8 +1163,8 @@
   }
   const SPALTEN = [['offen', 'Offen', 'var(--qm-gelb)'], ['in_arbeit', 'In Arbeit', 'var(--qm-blau)'], ['umgesetzt', 'Umgesetzt · Wirksamkeit prüfen', 'var(--qm-green)'], ['wirksam', 'Wirksam', '#8d857f']];
   function renderMassnahmen() {
-    const st = $('#qm-m-status').value, bz = $('#qm-m-bezug').value, q = $('#qm-m-suche').value.trim().toLocaleLowerCase('de-DE');
-    const basis = S.d.massnahmen.filter((m) => (!bz || m.bezug === bz) && (!q || [m.nr, m.feststellung, m.bezug, m.massnahme, m.korrektur, m.ursache, m.zustaendig, m.anforderung].join(' ').toLocaleLowerCase('de-DE').includes(q)));
+    const st = $('#qm-m-status').value, bz = $('#qm-m-bezug').value, q = SU.woerter($('#qm-m-suche').value);
+    const basis = S.d.massnahmen.filter((m) => (!bz || m.bezug === bz) && SU.passt(q, SU.heu(m.nr, m.feststellung, m.bezug, m.massnahme, m.korrektur, m.ursache, m.zustaendig, m.anforderung)));
     $$('.qm-segment[aria-label="Ansicht"] [data-ansicht]').forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.ansicht === S.ansicht)));
     $('#qm-m-status').hidden = S.ansicht === 'tafel';
     if (!basis.length) { $('#qm-m-liste').innerHTML = `<p class="qm-leer-text qm-glas">${S.d.massnahmen.length ? 'Keine passenden Maßnahmen.' : 'Noch keine Maßnahmen.'}</p>`; return; }

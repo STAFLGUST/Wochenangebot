@@ -2,7 +2,7 @@
 
 <!-- ERZEUGT von `python3 werkzeuge/doku.py erzeugen` – nicht von Hand ändern. Quelle: Funktionen und Kommentare im Code. Die CI prüft, dass diese Datei zum Code passt. -->
 
-114 Dateien, 1164 Funktionen – in der Reihenfolge der Datei, **fett** die Abschnitte. Text = erste Aussage des Kommentars direkt über der Funktion (Python: Docstring). Übersicht aller Module: [README.md](README.md).
+115 Dateien, 1167 Funktionen – in der Reihenfolge der Datei, **fett** die Abschnitte. Text = erste Aussage des Kommentars direkt über der Funktion (Python: Docstring). Übersicht aller Module: [README.md](README.md).
 
 ## `.github/scripts/apt_vorrat.py`
 
@@ -309,6 +309,11 @@ _Antworten, Eingaben, Datenprüfung_
 - `body()`
 - `now()`
 - `utc_monat(versatz, t)` – Monat (UTC, „JJJJ-MM“) relativ zum aktuellen bzw. zu $t – unabhängig von der eingestellten Zeitzone (Monatsdateien des Protokolls sind nach UTC benannt; …
+
+**Textsuche**
+
+- `such_norm(t)` – Suchregel der Plattform – dieselbe wie im Browser (app/assets/suche.js, dort beschrieben): Groß-/Kleinschreibung und Akzente zählen nicht, Umlaute und ß auch …
+- `such_passt(eingabe, felder)` – true, wenn jedes Wort der Eingabe in den Feldern vorkommt (leere Eingabe passt immer)
 
 **Datenprüfung**
 
@@ -853,6 +858,12 @@ _STAFL-Plattform · Gemeinsamer Rahmen_
 - `sucheDialog()`
 - `sucheZeigen()`
 - `sucheOeffnen()`
+
+## `app/assets/suche.js`
+
+_Textsuche – EINE Regel für alle Suchfelder der Plattform (Prüfung der Suchfunktionen, Auftrag des Inhabers 10.11.2026)._
+
+- `passt(suche, text)`
 
 ## `app/assets/theme.js`
 

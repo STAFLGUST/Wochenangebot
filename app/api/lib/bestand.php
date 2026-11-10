@@ -72,7 +72,7 @@ function clean_incoming($rows): array
         $kolli = $row['kolli'] ?? null;
         if ((is_int($kolli) || is_float($kolli)) && abs($kolli) < 1000000) $z['kolli'] = round((float)$kolli, 2);
         $ek = $row['ek'] ?? null;
-        if ((is_int($ek) || is_float($ek)) && $ek >= 0 && $ek < 100000) $z['ek'] = round((float)$ek, 3);
+        if ((is_int($ek) || is_float($ek)) && $ek > 0 && $ek < 100000) $z['ek'] = round((float)$ek, 3);   // 0 = kein Preis hinterlegt
         $out[] = $z;
     }
     return $out;
@@ -98,7 +98,7 @@ function clean_stock($b, bool $allowEmpty = false): array
             $ek = $l['ek'] ?? null;   // Einkaufspreis € je kg – nur für Berechtigte ausgeliefert (stock_ohne_ek)
             $lots[] = ['lot' => s($l['lot'] ?? '', 20) ?? '', 'marke' => s($l['marke'] ?? '', 40) ?? '', 'arrival' => clean_date($l['arrival'] ?? null), 'mhd' => clean_date($l['mhd'] ?? null),
                        'kolli' => (is_int($kolli) || is_float($kolli)) && abs($kolli) < 1000000 ? round((float)$kolli, 2) : null, 'kg' => clean_kg($l['kg'] ?? null, $code),
-                       'ek' => (is_int($ek) || is_float($ek)) && $ek >= 0 && $ek < 100000 ? round((float)$ek, 3) : null];
+                       'ek' => (is_int($ek) || is_float($ek)) && $ek > 0 && $ek < 100000 ? round((float)$ek, 3) : null];   // 0 = kein Preis hinterlegt
         }
         $kg = clean_kg($a['kg'] ?? null, $code);
         if ($kg <= 0) continue;

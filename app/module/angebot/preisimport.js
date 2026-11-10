@@ -13,7 +13,6 @@
   const W = window.WA;
   if (!W) return;
   const { esc, fmtInt } = W;
-  const fold = W.fold || ((s) => String(s).toLowerCase());
   const euro = new Intl.NumberFormat('de-DE', { minimumFractionDigits: 2, maximumFractionDigits: 4 });
   const proz = new Intl.NumberFormat('de-DE', { minimumFractionDigits: 1, maximumFractionDigits: 1 });
   const SEITE = 300;   // Preiszeilen je Schritt („Weitere anzeigen“) – die Liste bleibt auch bei großen Dateien flüssig
@@ -93,7 +92,7 @@
 
   /* ---------- Preisänderungen je Angebot ---------- */
   function listeHTML(d, z) {
-    const q = fold(z.suche.trim());
+    const q = W.SU.woerter(z.suche);
     let rest = z.anzahl, mehr = 0, treffer = 0;
     const teile = [];
     for (const a of d.angebote) {
@@ -101,7 +100,7 @@
       const rows = [];
       for (const r of a.zeilen) {
         const x = zeile(r);
-        if (!passt(x, z.filter) || (q && !fold(x.code).includes(q) && !fold(x.name).includes(q))) continue;
+        if (!passt(x, z.filter) || !W.SU.findet(q, x.code, x.name)) continue;
         treffer++;
         if (rest-- > 0) rows.push(x); else mehr++;
       }

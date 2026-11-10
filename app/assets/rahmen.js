@@ -314,7 +314,6 @@
      Ziele: freie Anwendungen der Leiste
      und was die Seite ergänzt (suche([{titel, href, symbol, gruppe}])). Nur Sprünge – Rechte prüft das Ziel selbst. */
   function suche(liste) { such.extra = Array.isArray(liste) ? liste : []; }
-  const norm = (s) => String(s || '').toLocaleLowerCase('de-DE').normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/ß/g, 'ss');
   function sucheDialog() {
     if (such.dlg) return such.dlg;
     const d = document.createElement('dialog');
@@ -348,9 +347,9 @@
     return d;
   }
   function sucheZeigen() {
-    const d = sucheDialog(), q = norm(d.querySelector('input').value.trim());
+    const d = sucheDialog(), q = d.querySelector('input').value.trim(), SU = window.STAFL_SUCHE;   // Suchregel aller Seiten (assets/suche.js)
     const alle = [...such.module, ...such.extra];
-    such.treffer = q ? alle.filter((z) => norm(z.titel + ' ' + (z.stichworte || '')).includes(q)) : alle;
+    such.treffer = q ? alle.filter((z) => SU.findet(q, z.titel, z.stichworte)) : alle;
     if (such.wahl >= such.treffer.length) such.wahl = 0;
     let gruppe = '';
     const zeilen = such.treffer.map((z, i) => {

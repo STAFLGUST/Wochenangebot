@@ -21,6 +21,8 @@
   const summe = (werte) => { const a = werte.filter(ist).map(Number); return a.length ? a.reduce((x, y) => x + y, 0) : null; };
   const schnitt = (werte) => { const a = werte.filter(ist).map(Number); return a.length ? a.reduce((x, y) => x + y, 0) / a.length : null; };
   const quote = (teil, ganz) => ist(teil) && ist(ganz) && Number(ganz) !== 0 ? Number(teil) / Number(ganz) : null;
+  /* DB-Anteil am Umsatz: nur bei positivem Umsatz (bei Gutschriften-Überhang ergäbe Minus durch Minus einen Scheinwert) */
+  const dbAnteil = (db, umsatz) => (ist(db) && ist(umsatz) && Number(umsatz) > 0 ? Number(db) / Number(umsatz) : null);
   const KENNZAHL = { umsatz: 'Umsatz', db: 'DB', kg: 'Menge', spanne: 'DB-Anteil am Umsatz' };
 
   const S = { box: null, d: null, rechte: {}, jahr: String(new Date().getFullYear()), monate: new Set(), vertreter: new Set(), kennzahl: 'umsatz', tab: 'uebersicht' };
@@ -32,7 +34,7 @@
   const monatsdaten = (jahr, monat) => (S.d && S.d.jahre && S.d.jahre[jahr] && S.d.jahre[jahr][monat]) || {};
   const wert = (monat, nr, k) => { const r = monatsdaten(S.jahr, monat)[nr]; return r && ist(r[k]) ? Number(r[k]) : null; };
   const summeAus = (monate, auswahl, k) => summe(monate.flatMap((m) => auswahl.map((r) => wert(m, r.nr, k))));
-  const gesamt = (monate, auswahl) => { const kg = summeAus(monate, auswahl, 'kg'), umsatz = summeAus(monate, auswahl, 'umsatz'), db = summeAus(monate, auswahl, 'db'); return { kg, umsatz, db, spanne: quote(db, umsatz) }; };
+  const gesamt = (monate, auswahl) => { const kg = summeAus(monate, auswahl, 'kg'), umsatz = summeAus(monate, auswahl, 'umsatz'), db = summeAus(monate, auswahl, 'db'); return { kg, umsatz, db, spanne: dbAnteil(db, umsatz) }; };
   const zeitraumText = (monate) => monate.length === MONATE().length ? `Jahr ${S.jahr}` : monate.length === 1 ? `${monatsname(monate[0])} ${S.jahr}` : monate.length ? `${monate.length} ausgewählte Monate ${S.jahr}` : 'Keine Monate ausgewählt';
   const anzeige = (k, v) => k === 'umsatz' || k === 'db' ? euro(v) : k === 'kg' ? (ist(v) ? `${kg(v)} kg` : '—') : pct(v);
 
@@ -160,7 +162,10 @@
     let html = monate.length ? summen.map((t) => { const st = monatsstatus(t.monat, auswahl); return zeile(`${monatsname(t.monat)} ${S.jahr}`, t, st, st === 'Daten vorhanden' ? '' : 'ctl-ohne-daten'); }).join('') : '<tr><td colspan="6" class="ctl-empty">Bitte Monate auswählen.</td></tr>';
     if (monate.length > 1) {
       html += zeile(monate.length === MONATE().length ? 'Jahr gesamt' : 'Zeitraum gesamt', gesamt(monate, auswahl), '', 'ctl-total');
-      html += zeile('Durchschnitt je Monat', { kg: schnitt(summen.map((x) => x.kg)), umsatz: schnitt(summen.map((x) => x.umsatz)), db: schnitt(summen.map((x) => x.db)), spanne: schnitt(summen.map((x) => x.spanne)) }, 'Monate mit Werten', 'ctl-total');
+      // DB-Anteil der Durchschnittszeile = Ø DB ÷ Ø Umsatz (passt zu den Werten der Zeile und zum Zeitraum gesamt) – nicht der
+      // Mittelwert der Monatsanteile, der kleine und große Monate gleich gewichtet
+      const oUmsatz = schnitt(summen.map((x) => x.umsatz)), oDb = schnitt(summen.filter((x) => ist(x.umsatz)).map((x) => x.db));
+      html += zeile('Durchschnitt je Monat', { kg: schnitt(summen.map((x) => x.kg)), umsatz: oUmsatz, db: oDb, spanne: dbAnteil(oDb, oUmsatz) }, 'Monate mit Werten', 'ctl-total');
     }
     $('#ctl-u-monatszeilen').innerHTML = html;
   }

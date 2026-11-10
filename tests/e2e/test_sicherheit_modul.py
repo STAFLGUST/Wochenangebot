@@ -84,6 +84,9 @@ check('Ereignisse: Standard 7 Tage, Arten mit Zahlen', st == 200 and r['tage'] =
 check('Ereignisse: Fehlanmeldung als Warnung', any(e['a'] == 'login_fail' and e['stufe'] == 'warn' and e['ip'] == '203.0.113.77' for e in r['ereignisse']))
 st, r2 = A.call('sicherheit_ereignisse&art=konten&q=nele&tage=30')
 check('Ereignisse: Filter Art und Suche', st == 200 and r2['ereignisse'] and all(e['art'] == 'konten' for e in r2['ereignisse']) and all('nele' in json.dumps(e, ensure_ascii=False).lower() for e in r2['ereignisse']), r2.get('ereignisse', [])[:2])
+st, r3 = A.call('sicherheit_ereignisse&art=konten&q=NELE%20gibtesnicht&tage=30')
+check('Ereignisse: Suche nach der Regel der Plattform – Groß/klein egal, jedes Wort muss vorkommen', st == 200 and not r3['ereignisse']
+      and A.call('sicherheit_ereignisse&art=konten&q=%20NELE%20&tage=30')[1]['ereignisse'] == r2['ereignisse'], r3.get('ereignisse', [])[:1])
 check('Ereignisse: ungültiger Zeitraum bzw. Art 422', A.call('sicherheit_ereignisse&tage=5')[0] == 422 and A.call('sicherheit_ereignisse&art=x')[0] == 422)
 check('Ansehen-Recht: Ereignisse lesbar', Si.call('sicherheit_ereignisse')[0] == 200)
 st, r = A.call('sicherheit_konten')

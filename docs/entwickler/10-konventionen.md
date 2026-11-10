@@ -40,7 +40,29 @@ Alle Seiten formatieren über **`window.STAFL_FORMAT`** aus `app/assets/format.j
 - Kennzahlen mit eigener Bedeutung behalten ihren Namen: **Spanne** = DB ÷ Umsatz mit Einkaufspreis (Auswertung,
   Details); **DB-Anteil am Umsatz** = DB ÷ gesamter Umsatz (Monatsmeldung). Zwei Rechnungen nie unter demselben Namen
   (Entscheidung des Inhabers 03.11.2026).
+- **Deckungsbeitrag (DB)** – eine Rechnung für alle Stellen (Prüfung 10.11.2026): DB = Umsatz mit Einkaufspreis − EK-Wert
+  (Menge × EK-Preis je Position). **Einkaufspreis hat eine Position nur mit EK-Preis über 0** – leer oder „0,00“ heißt
+  „kein Preis hinterlegt“; solche Positionen zählen zum Umsatz, aber nicht zu DB und Spanne (sonst gälte der ganze Betrag
+  als DB). Dasselbe im Bestand: Partien mit EK 0 zählen nicht zum Lagerwert und nicht zum Ø EK. Spanne und DB-Anteil gibt
+  es nur bei positivem Nenner (Gutschriften-Überhang: „—“ statt Minus durch Minus). Durchschnittszeilen rechnen Ø DB ÷
+  Ø Umsatz, nie den Mittelwert von Prozentwerten.
 - **CSV und Excel** bleiben maschinenlesbar: Zahl ohne Tausenderpunkt und ohne Einheit, die Einheit im Spaltenkopf.
+
+## Suche
+
+Alle Suchfelder folgen **einer** Regel – im Browser `window.STAFL_SUCHE` (`app/assets/suche.js`, jede Seite lädt die Datei
+nach `format.js`), auf dem Server `such_passt()` (`app/api/lib/kern.php`); die Testgruppe `einheit` prüft sie:
+
+- Groß-/Kleinschreibung und Akzente zählen nicht; Umlaute und ß auch ausgeschrieben („Mueller“, „Faerse“, „Strasse“).
+- Mehrere Wörter: jedes muss vorkommen, Reihenfolge und Feld egal („eiche hamburg“ findet Firma und Ort).
+- Reine Ziffernfolgen ab vier Stellen finden auch gegliederte Nummern („0401234567“ findet „040 12 34-567“) – nie über
+  Feldgrenzen hinweg.
+- Leere Suche passt auf alles; Leerzeichen am Rand zählen nicht.
+
+Neue Suchfelder: `SU.findet(eingabe, feld1, feld2, …)` bzw. bei langen Listen je Zeile `SU.heu(…)` vorbereiten und mit
+`SU.passt(SU.woerter(eingabe), text)` vergleichen – keine eigenen `toLowerCase().includes()`-Vergleiche. Welche Felder
+ein Suchfeld durchsucht, steht in seinem Platzhalter. Zusätze einzelner Felder bleiben erlaubt (Artikelauswahl:
+Herkunfts-Kürzel und „Lammfilet“ = „Lamm Filet“; Bestand: „MHD“ zeigt die MHD-Liste).
 
 ## Namen
 

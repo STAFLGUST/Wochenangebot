@@ -240,7 +240,7 @@ function sec_ereignis_art(string $a): string
 function sec_ereignisse(int $tage, string $art = '', string $q = '', int $max = 300, ?array $me = null): array
 {
     $me = $me ?? (current_user() ?? ['role' => '']);
-    $q = mb_strtolower(trim($q));
+    $q = trim($q);   // Suchregel der Plattform (such_passt, lib/kern.php)
     $alle = array_reverse(array_values(array_filter(protokoll_maskieren(sec_log_entries($tage), $me), function ($e) { return in_array($e['a'] ?? '', SEC_LOG_TYPES, true); })));
     $zahlen = array_fill_keys(array_keys(SEC_EREIGNIS_ARTEN), 0);
     $out = [];
@@ -248,7 +248,7 @@ function sec_ereignisse(int $tage, string $art = '', string $q = '', int $max = 
         $k = sec_ereignis_art((string)$e['a']);
         $zahlen[$k]++;
         if ($art !== '' && $k !== $art) continue;
-        if ($q !== '' && strpos(mb_strtolower(implode(' ', [$e['s'] ?? '', $e['u'] ?? '', $e['n'] ?? '', $e['ip'] ?? ''])), $q) === false) continue;
+        if (!such_passt($q, [$e['s'] ?? '', $e['u'] ?? '', $e['n'] ?? '', $e['ip'] ?? ''])) continue;
         if (count($out) >= $max) continue;
         $stufe = in_array($e['a'], ['login_fail', 'kunde_login_fail', 'reauth_fail', 'oidc_stufe'], true) ? 'warn' : ($e['a'] === 'notfall' ? 'bad' : 'info');
         $out[] = ['t' => $e['t'], 'a' => $e['a'], 'art' => $k, 'stufe' => $stufe, 'u' => (string)($e['u'] ?? ''), 'n' => (string)($e['n'] ?? ''), 'r' => (string)($e['r'] ?? ''),

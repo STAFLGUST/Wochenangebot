@@ -11,7 +11,7 @@
   'use strict';
   const W = window.WA;
   if (!W) return;
-  const { $, api, esc, icon, toast, confirmBox, dateTime, plural, fold, may } = W;
+  const { $, api, esc, icon, toast, confirmBox, dateTime, plural, fold, SU, may } = W;
   let daten = null;          // Stand des Servers: { rev, kategorien, vk, updatedAt, updatedBy }
   let entwurf = null;        // bearbeitete Kopie: [{ id, name, vk: [] }]
   let geaendert = false;
@@ -78,8 +78,8 @@
     </section>`;
   }
   function freiHTML(f, edit) {
-    const toks = fold(q).split(/\s+/).filter(Boolean);
-    const liste = f.filter((g) => { const hay = fold(g.nr + ' ' + g.name); return toks.every((t) => hay.includes(t)); });
+    const toks = SU.woerter(q);
+    const liste = f.filter((g) => SU.passt(toks, SU.heu(g.nr, g.name)));
     if (!daten.vk.length) return '<li class="ak-leer">Die VK-Gruppen-Liste ist leer – zuerst unter Stammdaten → VK-Gruppen importieren.</li>';
     if (!f.length) return '<li class="ak-leer">Alle VK-Gruppen sind einer Kategorie zugeordnet.</li>';
     if (!liste.length) return '<li class="ak-leer">Keine Treffer.</li>';

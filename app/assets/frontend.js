@@ -57,6 +57,7 @@ const dmy = (iso) => { const [y, m, d] = iso.split('-'); return `${d}.${m}.${y}`
 const dm = (iso) => { const [, m, d] = iso.split('-'); return `${d}.${m}.`; };
 const today = () => new Date().toLocaleDateString('de-DE', { day: '2-digit', month: '2-digit', year: 'numeric' });
 
+const SU = window.STAFL_SUCHE;   // gemeinsame Suchregel aller Seiten (assets/suche.js)
 const FOLD = { 'ä': 'a', 'ö': 'o', 'ü': 'u', 'ß': 's', 'é': 'e', 'è': 'e', 'ê': 'e', 'ë': 'e', 'á': 'a', 'à': 'a', 'â': 'a', 'ó': 'o', 'ò': 'o', 'ô': 'o', 'í': 'i', 'ì': 'i', 'î': 'i', 'ï': 'i', 'ú': 'u', 'ù': 'u', 'û': 'u', 'ç': 'c', 'ñ': 'n', 'œ': 'o', 'æ': 'a' };
 /* Zeichenweise, längenerhaltende Normalisierung (für Suche und Hervorhebung) */
 function fold(s) {
@@ -112,7 +113,7 @@ function prepare(raw) {
     const priceTerms = [p, ...it.altPrices].map((x) => x.status === 'value' ? fmtNum.format(x.value) : x.status === 'request' ? 'auf anfrage' : 'ohne preis').join(' ');
     /* Suche nur über Nummer, Bezeichnung und echte Artikelmerkmale – nicht über Gruppennamen,
        damit z. B. „Roastbeef“ keine anderen Teilstücke aus der Gruppe „Roastbeef am Knochen“ zeigt */
-    o._hay = fold([it.code, it.name, it.nameRaw, it.category, SYN_CAT[it.category], it.origin, SYN_ORIGIN[it.origin],
+    o._hay = SU.norm([it.code, it.name, it.nameRaw, it.category, SYN_CAT[it.category], it.origin, SYN_ORIGIN[it.origin],
       COND_LABEL[it.condition], SYN_COND[it.condition], o.features.join(' '), it.sale ? 'sonderpreis restposten empfehlung' : '', it.empfehlung ? 'empfehlung' : '', it.brand, priceTerms]
       .filter(Boolean).join(' ¦ '));
     o._cmp = it.category + '|' + it.cut;
@@ -182,7 +183,8 @@ const state = {
 };
 let favs = new Set(store.get('merkliste', []));
 let current = [];
-let tokens = [];
+let tokens = [];   // Suchwörter für die Hervorhebung (zeichengenau)
+let suchW = [];    // Suchwörter für den Vergleich (assets/suche.js: Umlaute auch ausgeschrieben, Nummern)
 let printPrepared = false;
 
 function optionLabel(f, v) {
@@ -209,7 +211,7 @@ const hasFilters = () => activeFilterCount() > 0 || !!state.q.trim();
 /* ---------- Filtern & Sortieren ---------- */
 function passes(it, skip) {
   if (state.tab === 'fav' && !favs.has(it.key)) return false;
-  if (skip !== 'q') for (const t of tokens) if (!it._hay.includes(t)) return false;
+  if (skip !== 'q' && !SU.passt(suchW, it._hay)) return false;
   for (const f of FACETS) {
     if (f.id === skip) continue;
     const sel = state[f.set];
@@ -241,6 +243,7 @@ function sortItems(list, key = state.sortKey, dir = state.sortDir) {
 }
 function compute() {
   tokens = fold(state.q).split(/\s+/).filter(Boolean);
+  suchW = SU.woerter(state.q);
   current = sortItems(DATA.items.filter((i) => passes(i)));
 }
 
@@ -250,7 +253,8 @@ function hl(text, toks = tokens) {
   if (!toks.length) return esc(text);
   const f = fold(text);
   const on = new Uint8Array(text.length);
-  for (const t of toks) for (let i = f.indexOf(t); i !== -1; i = f.indexOf(t, i + 1)) on.fill(1, i, i + t.length);
+  const markiere = (t) => { let n = 0; for (let i = f.indexOf(t); i !== -1; i = f.indexOf(t, i + 1)) { on.fill(1, i, i + t.length); n++; } return n; };
+  for (const t of toks) if (!markiere(t)) { const u = SU.norm(t); if (u && u !== t) markiere(u); }   // „faerse“ markiert „Färse“
   let out = '', open = false;
   for (let i = 0; i < text.length; i++) {
     if (on[i] && !open) { out += '<mark>'; open = true; }

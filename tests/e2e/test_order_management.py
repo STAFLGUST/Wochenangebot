@@ -54,6 +54,8 @@ body['revision']=r[1]['order']['revision'];body['workflow']='neu'
 check('completed order cannot reopen silently',e.call('bestellung_save',body)[0]==422)
 check('status filter works',a.call('bestellungen&workflow=neu')[1]['total']==0)
 check('search works',a.call('bestellungen&q=Testreferenz')[1]['total']==1)
+# Suchregel der Plattform (such_passt, lib/kern.php): Groß/klein egal, jedes Wort muss vorkommen, Feld egal
+check('search: case-insensitive, several words across fields, every word required',a.call('bestellungen&q=testreferenz%20'+nr)[1]['total']==1 and a.call('bestellungen&q=%20%20TESTREFERENZ%20')[1]['total']==1 and a.call('bestellungen&q=Testreferenz%20gibtesnicht')[1]['total']==0)
 check('limit capped',a.call('bestellungen&limit=9999')[1]['limit']==100)
 check('internal updates send no emails',len(smtp.messages)==count)
 check('contact snapshot preserved',o['kunde']['firma']=='Kantine <Test>')

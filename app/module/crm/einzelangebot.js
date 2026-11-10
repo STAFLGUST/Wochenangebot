@@ -26,7 +26,6 @@
   const preisText = (v) => (v == null || Number.isNaN(v) ? '' : (Math.round(v * 100) / 100).toFixed(2).replace('.', ','));   // Preise immer mit zwei Stellen
   const euro = (v) => NF2.format(v) + ' €';
   const plus = (tage) => { const d = new Date(); d.setDate(d.getDate() + tage); return d.toLocaleDateString('sv-SE'); };
-  const fold = (s) => String(s || '').toLocaleLowerCase('de').normalize('NFD').replace(/[̀-ͯ]/g, '');
   const kurz = (code) => { const s = String(code || '').trim(); return /^\d+$/.test(s) ? (s.replace(/^0+/, '') || '0') : s.toUpperCase(); };
   const darf = () => !!(E.daten && E.daten.bearbeiten);
   function statusPille(a) {
@@ -148,9 +147,9 @@
   function suchTreffer() {
     const box = $('#ez-treffer'), feld = $('#ez-suche');
     if (!box || !feld) return;
-    const q = fold(feld.value.trim());
+    const q = feld.value.trim();
     if (q.length < 2 || !E.artikel) { box.hidden = true; box.innerHTML = ''; return; }
-    E.treffer = E.artikel.filter((a) => fold(a.code + ' ' + a.name).includes(q)).slice(0, 8);
+    E.treffer = E.artikel.filter((a) => window.STAFL_SUCHE.findet(q, a.code, a.name)).slice(0, 8);
     box.innerHTML = E.treffer.length ? E.treffer.map((a, i) => `<button type="button" role="option" data-ez-treffer="${i}"><b>${E.c.esc(a.name || 'Artikel ' + a.code)}</b>
       <small>${[a.code, a.stdPrice && a.stdPrice.status === 'value' ? 'Wochenpreis ' + F.euroKg(a.stdPrice.value) : a.inOffer ? 'im Wochenangebot' : '', a.totalKg !== undefined ? `Bestand ${NFKG.format(a.totalKg)} kg` : ''].filter(Boolean).map(E.c.esc).join(' · ')}</small></button>`).join('')
       : '<p class="crm-leer">Kein Artikel gefunden.</p>';

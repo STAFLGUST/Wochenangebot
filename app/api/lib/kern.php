@@ -43,6 +43,35 @@ function now(): string { return gmdate('Y-m-d\TH:i:s\Z'); }
    Protokolls sind nach UTC benannt; strtotime('first day of …') rechnet dagegen in Ortszeit) */
 function utc_monat(int $versatz = 0, ?int $t = null): string { $t ??= time(); return gmdate('Y-m', gmmktime(0, 0, 0, (int)gmdate('n', $t) + $versatz, 1, (int)gmdate('Y', $t))); }
 
+/* ---------------- Textsuche ---------------- */
+
+/* Suchregel der Plattform – dieselbe wie im Browser (app/assets/suche.js, dort beschrieben): Groß-/Kleinschreibung und Akzente
+   zählen nicht, Umlaute und ß auch ausgeschrieben (ae/oe/ue/ss), jedes Wort der Eingabe muss in einem der Felder vorkommen,
+   reine Ziffernfolgen ab vier Stellen finden auch gegliedert geschriebene Nummern (nie über Feldgrenzen). */
+function such_norm(string $t): string
+{
+    static $ZEICHEN = ['ä' => 'a', 'ö' => 'o', 'ü' => 'u', 'ß' => 'ss', 'œ' => 'oe', 'æ' => 'ae', 'ø' => 'o', 'é' => 'e', 'è' => 'e', 'ê' => 'e', 'ë' => 'e',
+        'á' => 'a', 'à' => 'a', 'â' => 'a', 'ã' => 'a', 'å' => 'a', 'ó' => 'o', 'ò' => 'o', 'ô' => 'o', 'õ' => 'o', 'í' => 'i', 'ì' => 'i', 'î' => 'i', 'ï' => 'i',
+        'ú' => 'u', 'ù' => 'u', 'û' => 'u', 'ç' => 'c', 'ñ' => 'n', 'ý' => 'y', 'š' => 's', 'ž' => 'z', 'č' => 'c', 'ł' => 'l'];
+    return str_replace(['ae', 'oe', 'ue', 'ss'], ['a', 'o', 'u', 's'], strtr(mb_strtolower($t), $ZEICHEN));
+}
+/* true, wenn jedes Wort der Eingabe in den Feldern vorkommt (leere Eingabe passt immer) */
+function such_passt(string $eingabe, array $felder): bool
+{
+    $w = preg_split('/\s+/u', such_norm($eingabe), -1, PREG_SPLIT_NO_EMPTY) ?: [];
+    if (!$w) return true;
+    $h = such_norm(implode(' │ ', array_filter(array_map('strval', $felder), fn($f) => $f !== '')));
+    $k = null;
+    foreach ($w as $t) {
+        if (str_contains($h, $t)) continue;
+        $z = str_replace(['.', '/', '(', ')', '-'], '', $t);
+        if (!preg_match('/^\d{4,}$/', $z)) return false;
+        $k ??= preg_replace('#(\d)[\s./()\-]+(?=\d)#u', '$1', $h) ?? $h;
+        if (!str_contains($k, $z)) return false;
+    }
+    return true;
+}
+
 /* ---------------- Datenprüfung ---------------- */
 
 function s($v, int $max, bool $allowEmpty = true): ?string

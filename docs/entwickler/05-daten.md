@@ -451,7 +451,9 @@ Aktionen `controlling_<bereich>_…`. Geplant sind weitere Bereiche (OP-Konten, 
   Beträge in Cent, Mengen in Tausendstel; höchstens 50 Einträge im Importverlauf.
 - **`controlling-umsatzdaten/<JJJJ-MM>`** (vertraulich): `{"monat": "2026-10", "hash": "…", "zeilen": [[Tag, "Kunde", "Artikel", Kolli, Menge,
   Umsatz, EK-Wert, Umsatz mit EK, Positionen, berechnet], …]}` – je Kunde, Artikel und Tag eine Zeile, getrennt nach berechnet (mit
-  Gesamtbetrag) und ohne Berechnung (z. B. Leergut; zählt nicht zu Menge und Umsatz). Sortiert nach Tag, Kunde, Artikel, berechnet;
+  Gesamtbetrag) und ohne Berechnung (z. B. Leergut; zählt nicht zu Menge und Umsatz). „Umsatz mit EK“ und EK-Wert zählen nur
+  Positionen mit EK-Preis über 0 (leer oder 0 = ohne Einkaufspreis, seit 10.11.2026; ältere Monate behalten ihre Werte bis zum
+  nächsten Import dieses Monats). Sortiert nach Tag, Kunde, Artikel, berechnet;
   `hash` = SHA-256 von JSON der Zeilen (gleich im Browser), Grundlage des Vergleichs beim nächsten Import.
 - **`controlling-umsatzteile/<Kennung>-<JJJJ-MM>`** (vertraulich): Zwischenablage eines Imports bis zur Übernahme (mit Mitarbeiter
   und Prüfsumme); gelöscht mit der Übernahme bzw. nach einem Tag.

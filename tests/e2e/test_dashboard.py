@@ -10,6 +10,7 @@ offener Punkt und Eintrag der Seitenleiste sind nur Anzeige – die Sperre setzt
 """
 import json
 import os
+import re
 import sys
 from datetime import date, datetime, timedelta
 from zoneinfo import ZoneInfo
@@ -486,8 +487,9 @@ with sync_playwright() as pw:
           echt == [['https://angebot.dashboard-stafl.de/', '/admin/'], ['https://verwaltung.dashboard-stafl.de/admin/', '/admin/'],
                    ['https://bestand.dashboard-stafl.de/admin/', '/admin/'], ['https://verwaltung.dashboard-stafl.de/import/', '/import/'],
                    ['https://hr.dashboard-stafl.de/module/hr/', '/module/hr/']], echt)
-    pg.click('#r-leiste a[data-modul="crm"]'); pg.wait_for_url('**/module/crm/')
-    check('Klick auf CRM in der Seitenleiste öffnet das CRM', pg.url.endswith('/module/crm/'))
+    # das CRM hängt nach dem Laden seinen Reiter an die Adresse („#cockpit“) – je nach Reihenfolge schon vor dem Ladeereignis
+    pg.click('#r-leiste a[data-modul="crm"]'); pg.wait_for_url(re.compile(r'/module/crm/(#.*)?$'))
+    check('Klick auf CRM in der Seitenleiste öffnet das CRM', pg.url.split('#')[0].endswith('/module/crm/'), pg.url)
     pg.goto(B + '/dashboard/'); bereit(pg)
     pg.click('#db-grid a[data-modul="angebot"]'); pg.wait_for_url('**/admin/')
     check('Klick auf die Kachel Angebot öffnet die Mitarbeiter-Eingabe', pg.url.endswith('/admin/'))
