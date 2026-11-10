@@ -1,7 +1,8 @@
 /* STAFL-Plattform · HR im Eingabebereich der Verwaltung
    - Verwaltung → Mitarbeiter: HR-Angaben je Mitarbeiter (Abteilung, Position, Arbeitstage, im Urlaubsplan, Urlaubsanspruch
      und Übertrag je Jahr, ob der Resturlaub verfällt) – im Dialog des Mitarbeiters (Administratoren) bzw. als eigene Liste (Personalstelle ohne
-     Administratorrechte). Mitarbeiter = Nutzer der Plattform; auch Kollegen ohne Anmeldung sind Mitarbeiter.
+     Administratorrechte). Mitarbeiter = Nutzer der Plattform; auch Kollegen ohne Anmeldung sind Mitarbeiter. Abteilung als
+     Auswahl aus Stammdaten → Abteilungen (ohne Liste: freier Text); dafür liefert W.hr Namen und Anzahl je Abteilung.
    - Verwaltung → Urlaub: Schalter „Urlaubsanträge über die Plattform“, Urlaubssperren (eigene und automatisch aus den
      Urlaubsregeln), Ferien, Verfallstag des Resturlaubs, Text der Urlaubsregeln (steht beim Urlaubsantrag), E-Mails
      (Erinnerung „Resturlaub verfällt“, Monatsübersicht an die Mitarbeiter, Übersicht an den Steuerberater, Testmodus).
@@ -46,6 +47,16 @@
     if (!may('hr.verwalten')) return '';
     const p = uid ? person(uid) : null;
     const abt = [...new Set((daten ? daten.personen : []).map((x) => x.abteilung).filter(Boolean))].sort((a, b) => a.localeCompare(b, 'de'));
+    // Abteilungen aus den Stammdaten (Stammdaten → Abteilungen, Inhaber 10.11.2026): Auswahl statt freiem Text. Eine Abteilung
+    // ohne Eintrag dort (vorher als Text gespeichert oder dort gelöscht) bleibt wählbar und unverändert („=“).
+    const abtL = (daten && daten.abteilungen) || [];
+    const abtNr = p ? p.abteilungNr || null : null;
+    const abtFremd = !!(p && p.abteilung && !abtL.some((a) => a.nr === abtNr));
+    const abtFeld = abtL.length
+      ? `<label class="fld span2"><span>Abteilung</span><select name="hr_abteilungNr"><option value="">– keine Abteilung –</option>${abtFremd ? `<option value="=" selected>${esc(p.abteilung)} (nicht in den Stammdaten)</option>` : ''}${abtL.map((a) => `<option value="${esc(a.nr)}"${a.nr === abtNr ? ' selected' : ''}>${esc(a.name)}</option>`).join('')}</select>
+          <small class="hr-fld-hint">Liste unter Stammdaten → Abteilungen – Umbenennen wirkt bei allen Mitarbeitern.</small></label>`
+      : `<label class="fld span2"><span>Abteilung</span><input name="hr_abteilung" value="${esc(p ? p.abteilung : '')}" maxlength="40" list="hr-abteilungen" autocomplete="off" aria-describedby="hr-abteilung-hint">
+          <small class="hr-fld-hint" id="hr-abteilung-hint">Freier Text. Mit einer Liste unter Stammdaten → Abteilungen wird hier ausgewählt.</small></label>`;
     const at = p ? p.arbeitstage : [1, 2, 3, 4, 5];
     const jv = (p && p.jahre[String(JAHR)]) || {};
     const maxPos = Math.max(0, ...(daten ? daten.personen.map((x) => x.pos || 0) : [0]));
@@ -61,7 +72,7 @@
     return `<fieldset class="span2 hr-teil${eigen ? ' hr-eigen' : ''}" id="hr-teil" data-uid="${esc(uid || '')}"><legend>Urlaubsverwaltung</legend>
       ${eigen ? `<p class="hr-eigen-hinweis">${icon('lock', 'sm')}<span>Ihre eigenen Urlaubsangaben (Anspruch, Übertrag, Verfall, Arbeitstage, Urlaubsplan, Personalnummer, Vertretung) ändert eine andere Person der Personalstelle (Vier-Augen-Prinzip). Abteilung und Position können Sie selbst ändern.</span></p>` : ''}
       <div class="form-grid two">
-        <label class="fld span2"><span>Abteilung</span><input name="hr_abteilung" value="${esc(p ? p.abteilung : '')}" maxlength="40" list="hr-abteilungen" autocomplete="off"></label>
+        ${abtFeld}
         <label class="fld"><span>Personalnummer <small class="muted">(Zeiterfassung)</small></span><input name="hr_personalnummer" value="${esc(p ? p.personalnummer || '' : '')}" maxlength="20" autocomplete="off" inputmode="numeric"${aus}></label>
         <label class="fld"><span>Position <small class="muted">(Reihenfolge im Plan)</small></span><input name="hr_pos" type="number" min="0" max="9999" value="${esc(p ? p.pos || '' : maxPos + 1)}"></label>
         <label class="fld span2"><span>Feste Vertretung <small class="muted">(optional)</small></span>
@@ -73,7 +84,7 @@
         <label class="check span2 hr-verfall-check"><input type="checkbox" name="hr_verfall"${!p || p.verfall !== false ? ' checked' : ''}${aus}> <span>Resturlaub aus dem Vorjahr verfällt am ${esc(tagMonat(daten && daten.uebertragBis))}${daten && daten.verfallAb > JAHR ? ` (erstmals ${esc(tagMonat(daten.uebertragBis))}${daten.verfallAb})` : ''}<small class="muted">Ohne Haken bleibt der Übertrag das ganze Jahr erhalten.${daten && daten.verfallAb > JAHR ? ` Bis ${daten.verfallAb - 1} verfällt bei niemandem etwas (Verwaltung → Urlaub).` : ''}</small></span></label>
         <label class="check span2"><input type="checkbox" name="hr_aktiv"${!p || p.aktiv ? ' checked' : ''}${aus}> im Urlaubsplan (Kalender, Export für den Steuerberater)</label>
       </div>
-      <datalist id="hr-abteilungen">${abt.map((a) => `<option value="${esc(a)}">`).join('')}</datalist>
+      ${abtL.length ? '' : `<datalist id="hr-abteilungen">${abt.map((a) => `<option value="${esc(a)}">`).join('')}</datalist>`}
       ${p && p.aktiv ? `<p class="hint" style="margin:0">Urlaub ${JAHR}: ${esc(zahl(p.konto.rest))} Tage Rest · ${esc(zahl(p.konto.genommen))} genommen · ${esc(zahl(p.konto.geplant))} geplant${p.konto.verfaellt > 0 ? ` · ${esc(zahl(p.konto.verfaellt))} Tage Übertrag verfallen nach dem ${esc(tagMonat((p.konto.frist || '').slice(5)))}` : ''}${p.gleitKonto && p.gleitKonto.aktiv ? ` · Gleittage: ${esc(zahl(p.gleitKonto.rest))} Rest (gewähren in HR → Übersicht)` : ''}</p>` : ''}
     </fieldset>`;
   }
@@ -84,10 +95,13 @@
     if (!teil || !may('hr.verwalten')) return;
     if (!daten) await laden();
     const wert = (n) => form.querySelector(`[name="${n}"]`).value;
-    const body = { nutzer: uid, rev: daten.rev, abteilung: wert('hr_abteilung'), personalnummer: wert('hr_personalnummer').trim(), pos: Number(wert('hr_pos') || 0),
+    const body = { nutzer: uid, rev: daten.rev, personalnummer: wert('hr_personalnummer').trim(), pos: Number(wert('hr_pos') || 0),
       arbeitstage: [...form.querySelectorAll('[name="hr_tag"]:checked')].map((x) => Number(x.value)),
       aktiv: form.querySelector('[name="hr_aktiv"]').checked, verfall: form.querySelector('[name="hr_verfall"]').checked, jahr: JAHR, anspruch: wert('hr_anspruch'), uebertrag: wert('hr_uebertrag'),
       vertretung: wert('hr_vertretung') || null };
+    // Abteilung: Nummer aus den Stammdaten („=“ = bisherige Angabe ohne Eintrag dort, bleibt unverändert) oder freier Text
+    const abtSel = form.querySelector('[name="hr_abteilungNr"]');
+    if (abtSel) { if (abtSel.value !== '=') body.abteilungNr = abtSel.value; } else body.abteilung = wert('hr_abteilung');
     let r;
     try { r = await api('mitarbeiter_hr_save', { body }); }
     catch (ex) { if (ex.status !== 409) throw ex; await laden(); r = await api('mitarbeiter_hr_save', { body: { ...body, rev: daten.rev } }); }
@@ -421,5 +435,21 @@
     nachher() { daten = null; },
   };
 
-  W.hr = { laden, zelle, formular, speichern, altbestand, renderNurHr, get daten() { return daten; } };
+  /* Für Stammdaten → Abteilungen (admin-verwaltung.js): Abteilungen aus den Mitarbeiterangaben (Reihenfolge wie im
+     Urlaubsplan) und Anzahl der Mitarbeiter je Abteilung (Nummer) – nur mit „hr.verwalten“, sonst null */
+  async function abteilungenAusAngaben() {
+    if (!may('hr.verwalten')) return null;
+    await laden();
+    const namen = new Map();
+    for (const p of daten.personen) if (!p.altbestand && p.abteilung && !namen.has(p.abteilung.toLowerCase())) namen.set(p.abteilung.toLowerCase(), p.abteilung);
+    return [...namen.values()];
+  }
+  async function abteilungZahlen() {
+    if (!may('hr.verwalten')) return null;
+    await laden();
+    const n = {};
+    for (const p of daten.personen) if (!p.altbestand && p.abteilungNr) n[p.abteilungNr] = (n[p.abteilungNr] || 0) + 1;
+    return n;
+  }
+  W.hr = { laden, zelle, formular, speichern, altbestand, renderNurHr, abteilungenAusAngaben, abteilungZahlen, get daten() { return daten; } };
 })();

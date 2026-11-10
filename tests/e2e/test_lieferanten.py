@@ -145,8 +145,11 @@ with sync_playwright() as p:
     a.fill('#k-q', 'Versandtest'); a.wait_for_selector('#k-list tr[data-kid]:has-text("Versandtest")')
     a.click('#k-list tr[data-kid]:has-text("Versandtest")'); a.wait_for_selector('#dlg-kunde[open]')
     check('Kunden-Dialog: Versandart mit Text, gespeicherter Wert gewählt', '1 · Direktlieferung' in a.inner_text('#kunde-body [name="versandart"]') and a.input_value('#kunde-body [name="versandart"]') == '1')
-    a.select_option('#kunde-body [name="versandart"]', '2'); a.click('#kunde-body [type=submit]')
+    a.select_option('#kunde-body [name="versandart"]', '2')
+    a.evaluate("document.querySelector('#k-file').dataset.alt = '1'")   # nach dem Speichern zeichnet die Ansicht neu – erst danach importieren
+    a.click('#kunde-body [type=submit]')
     a.wait_for_function("!document.querySelector('#dlg-kunde').open", timeout=10000)
+    a.wait_for_function("document.querySelector('#k-file') && !document.querySelector('#k-file').dataset.alt")
     check('Kunden-Dialog: Versandart gespeichert', next(c for c in A.call('kunden')[1]['customers'] if c['id'] == kid).get('versandart') == '2')
 
     # ---------- Kundenimport: Export „Kundenstammdaten komplett“ (alle Spalten) ----------

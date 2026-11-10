@@ -11,6 +11,8 @@ if (!defined('WA_API')) { http_response_code(404); exit; }   // nur über api/in
 
 const AKTIONEN = [
     'abmelden1' => ['modul' => 'angebot', 'oberflaeche' => 'angebot.kunden', 'schreibend' => false, 'oeffentlich' => true, 'kunden_wartung' => false, 'wartung_frei' => false, 'fremde_herkunft' => true, 'lokale_anmeldung' => false],
+    'abteilungen' => ['modul' => 'verwaltung', 'oberflaeche' => 'angebot.eingabe', 'schreibend' => false, 'oeffentlich' => false, 'kunden_wartung' => false, 'wartung_frei' => false, 'fremde_herkunft' => false, 'lokale_anmeldung' => false],
+    'abteilungen_save' => ['modul' => 'verwaltung', 'oberflaeche' => 'angebot.eingabe', 'schreibend' => true, 'oeffentlich' => false, 'kunden_wartung' => false, 'wartung_frei' => false, 'fremde_herkunft' => false, 'lokale_anmeldung' => false],
     'angebot_artikel' => ['modul' => 'angebot', 'oberflaeche' => 'angebot.eingabe', 'schreibend' => false, 'oeffentlich' => false, 'kunden_wartung' => false, 'wartung_frei' => false, 'fremde_herkunft' => false, 'lokale_anmeldung' => false],
     'angebot_winab_export' => ['modul' => 'angebot', 'oberflaeche' => 'angebot.eingabe', 'schreibend' => true, 'oeffentlich' => false, 'kunden_wartung' => false, 'wartung_frei' => false, 'fremde_herkunft' => false, 'lokale_anmeldung' => false],
     'angebotskategorien' => ['modul' => 'verwaltung', 'oberflaeche' => 'angebot.eingabe', 'schreibend' => false, 'oeffentlich' => false, 'kunden_wartung' => false, 'wartung_frei' => false, 'fremde_herkunft' => false, 'lokale_anmeldung' => false],

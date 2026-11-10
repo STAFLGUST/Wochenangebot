@@ -547,6 +547,15 @@ dynamisch = true
 beschreibung = "Versandarten der Warenwirtschaft (Kunden und Lieferanten verweisen darauf)"
 
 [[dokument]]
+name = "abteilungen"
+eigentuemer = "verwaltung"
+bereich = "intern"
+leser = ["hr"]   # Nummer, Bezeichnung und frühere Bezeichnungen über abteilungen_liste (Abteilung der Mitarbeiter, Inhaber 10.11.2026)
+schutz = "intern"
+dynamisch = true
+beschreibung = "Abteilungen des Betriebs (Nummer, Bezeichnung); die HR-Angaben der Mitarbeiter verweisen über abteilungNr darauf"
+
+[[dokument]]
 name = "lieferanten"
 eigentuemer = "verwaltung"
 bereich = "intern"

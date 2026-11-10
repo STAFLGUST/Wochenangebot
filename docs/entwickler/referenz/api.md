@@ -6,7 +6,7 @@ Aufruf: `/api/?action=<aktion>` (GET lesend, POST mit JSON und `X-CSRF-Token` sc
 
 Spalten: **Art** – lesend, schreibend (nur POST) oder post (GET liest, POST schreibt); **Kennzeichen** – öffentlich (ohne Mitarbeiteranmeldung), Kunden-Wartung, wartungsfrei, fremde Herkunft, eigene Anmeldung (siehe [regeln/aktionen/LIESMICH.md](../../../regeln/aktionen/LIESMICH.md)).
 
-278 Aktionen in 15 Modulen.
+280 Aktionen in 15 Modulen.
 
 ## Angebot (`angebot`)
 
@@ -235,6 +235,8 @@ Spalten: **Art** – lesend, schreibend (nur POST) oder post (GET liest, POST sc
 
 | Aktion | Oberfläche | Art | Kennzeichen | Prüfung im Code | Datei |
 | --- | --- | --- | --- | --- | --- |
+| `abteilungen` | `angebot.eingabe` | lesend | – | angemeldet | `app/api/aktionen/kundengruppen.php` |
+| `abteilungen_save` | `angebot.eingabe` | schreibend | – | Recht stammdaten.bearbeiten | `app/api/aktionen/kundengruppen.php` |
 | `angebotskategorien` | `angebot.eingabe` | lesend | – | angemeldet | `app/api/aktionen/kundengruppen.php` |
 | `angebotskategorien_save` | `angebot.eingabe` | schreibend | – | Recht stammdaten.bearbeiten | `app/api/aktionen/kundengruppen.php` |
 | `auswertung` | `angebot.eingabe` | lesend | – | Recht auswertung.sehen | `app/api/aktionen/auswertung.php` |
@@ -248,8 +250,8 @@ Spalten: **Art** – lesend, schreibend (nur POST) oder post (GET liest, POST sc
 | `kunden_import` | `angebot.eingabe` | schreibend | – | Recht kunden.bearbeiten + Bestätigung, Recht kunden.bearbeiten | `app/api/aktionen/kundenverwaltung.php` |
 | `kundengruppen` | `angebot.eingabe` | lesend | – | – | `app/api/aktionen/kundengruppen.php` |
 | `kundengruppen_save` | `angebot.eingabe` | schreibend | – | – | `app/api/aktionen/kundengruppen.php` |
-| `lieferanten` | `angebot.eingabe` | lesend | – | angemeldet | `app/api/aktionen/kundengruppen.php` |
-| `lieferanten_save` | `angebot.eingabe` | schreibend | – | Recht stammdaten.bearbeiten | `app/api/aktionen/kundengruppen.php` |
+| `lieferanten` | `angebot.eingabe` | lesend | – | – | `app/api/aktionen/kundengruppen.php` |
+| `lieferanten_save` | `angebot.eingabe` | schreibend | – | – | `app/api/aktionen/kundengruppen.php` |
 | `master` | `angebot.eingabe` | lesend | – | Recht stammdaten.sehen | `app/api/aktionen/bestand.php` |
 | `master_save` | `angebot.eingabe` | schreibend | – | Recht stammdaten.bearbeiten | `app/api/aktionen/bestand.php` |
 | `ort_update` | `angebot.eingabe` | schreibend | – | Administrator + Bestätigung | `app/api/aktionen/auswertung.php` |

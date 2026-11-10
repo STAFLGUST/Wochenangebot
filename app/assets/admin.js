@@ -412,13 +412,13 @@
   let me = null;                                   // angemeldeter Nutzer
   const can = (role) => !!me && ROLE_RANK[me.role] >= ROLE_RANK[role];
   /* Bereiche und das Recht, das sie sichtbar macht (ohne Eintrag: alle; ADMIN_VIEWS: nur Administratoren) */
-  const VIEW_PERM = { einzel: 'einzelangebote.sehen', hist: 'preisverlauf.sehen', stock: 'bestand.sehen', einkauf: 'einkauf.sehen', master: 'stammdaten.sehen', orders: 'bestellungen.sehen', kunden: 'kunden.sehen', gruppen: 'stammdaten.sehen', vkgruppen: 'stammdaten.sehen', kategorien: 'stammdaten.sehen', angebote: 'angebote.verwalten', vertreter: 'stammdaten.sehen', versandarten: 'stammdaten.sehen', lieferanten: 'stammdaten.sehen', auswertung: 'auswertung.sehen', log: 'protokoll.sehen', mail: '', users: '', rollen: '', importe: '', urlaub: 'hr.verwalten' };
+  const VIEW_PERM = { einzel: 'einzelangebote.sehen', hist: 'preisverlauf.sehen', stock: 'bestand.sehen', einkauf: 'einkauf.sehen', master: 'stammdaten.sehen', orders: 'bestellungen.sehen', kunden: 'kunden.sehen', gruppen: 'stammdaten.sehen', vkgruppen: 'stammdaten.sehen', kategorien: 'stammdaten.sehen', angebote: 'angebote.verwalten', vertreter: 'stammdaten.sehen', versandarten: 'stammdaten.sehen', lieferanten: 'stammdaten.sehen', abteilungen: 'stammdaten.sehen', auswertung: 'auswertung.sehen', log: 'protokoll.sehen', mail: '', users: '', rollen: '', importe: '', urlaub: 'hr.verwalten' };
   /* Verwaltung unter eigener Adresse (verwaltung.dashboard-stafl.de): nur ihre Bereiche – Anzeige, die Rechte prüft der Server */
   /* Angebot unter der zentralen Anmeldung (angebot.dashboard-stafl.de): Angebotsbereiche ohne Verwaltung und ohne die
      Bestandsliste (die Bestandsdaten im Angebotseditor bleiben). Bestand (bestand.dashboard-stafl.de): nur die Bestandsliste
      mit Bestandsimport. Ohne Bereich (bisheriger Zugang angebot-stafl.de/admin/) bleibt alles sichtbar. */
   const BEREICH_VIEWS = {
-    'verwaltung.verwaltung': ['master', 'vkgruppen', 'kategorien', 'kunden', 'gruppen', 'vertreter', 'versandarten', 'lieferanten', 'importe', 'auswertung', 'mail', 'users', 'rollen', 'urlaub', 'log'],
+    'verwaltung.verwaltung': ['master', 'vkgruppen', 'kategorien', 'kunden', 'gruppen', 'vertreter', 'versandarten', 'lieferanten', 'abteilungen', 'importe', 'auswertung', 'mail', 'users', 'rollen', 'urlaub', 'log'],
     'angebot.eingabe': ['orders', 'edit', 'einzel', 'hist', 'einkauf', 'angebote'],
     'bestand.intern': ['stock'],
     'verwaltung.import': ['importe'],
@@ -800,7 +800,7 @@
     $('#btn-publish').hidden = !may('angebot.veroeffentlichen');
     if (!may('wochenangebot.senden')) $('#send-hint').hidden = true;
     $('#side-admin').hidden = !['importe', 'auswertung', 'mail', 'users', 'rollen', 'urlaub', 'log'].some(viewAllowed);
-    $('#side-stamm').hidden = !['master', 'vkgruppen', 'kategorien', 'angebote', 'kunden', 'gruppen', 'vertreter', 'versandarten', 'lieferanten'].some(viewAllowed);
+    $('#side-stamm').hidden = !['master', 'vkgruppen', 'kategorien', 'angebote', 'kunden', 'gruppen', 'vertreter', 'versandarten', 'lieferanten', 'abteilungen'].some(viewAllowed);
     $('#menu-user').innerHTML = me ? `<strong>${esc(me.name)}</strong><span>${esc(me.username)} · ${esc(me.rollenName || ROLE_LABEL[me.role] || '')}</span>` : '';
     if (!viewAllowed(currentView)) setView(VIEWS.find(viewAllowed) || 'edit');
   }
@@ -2639,7 +2639,7 @@
   }
 
   /* Ansicht umschalten */
-  const VIEWS = ['orders', 'edit', 'einzel', 'hist', 'stock', 'einkauf', 'master', 'vkgruppen', 'kategorien', 'angebote', 'kunden', 'gruppen', 'vertreter', 'versandarten', 'lieferanten', 'importe', 'auswertung', 'mail', 'users', 'rollen', 'urlaub', 'log'];
+  const VIEWS = ['orders', 'edit', 'einzel', 'hist', 'stock', 'einkauf', 'master', 'vkgruppen', 'kategorien', 'angebote', 'kunden', 'gruppen', 'vertreter', 'versandarten', 'lieferanten', 'abteilungen', 'importe', 'auswertung', 'mail', 'users', 'rollen', 'urlaub', 'log'];
   const ADMIN_VIEWS = ['mail', 'users', 'rollen'];
   /* Aktiven Eintrag in der Seitenleiste sichtbar halten: am Computer scrollt die Leiste senkrecht (mehr Einträge als
      Bildschirmhöhe), schmal ist sie eine waagerechte Spur. Nur die Leiste selbst wird verschoben, nie die Seite. */
@@ -2686,6 +2686,7 @@
     if (v === 'vertreter' && window.WA.views.vertreter) window.WA.views.vertreter();
     if (v === 'versandarten' && window.WA.views.versandarten) window.WA.views.versandarten();   // Versandarten und Lieferanten (admin-verwaltung.js)
     if (v === 'lieferanten' && window.WA.views.lieferanten) window.WA.views.lieferanten();
+    if (v === 'abteilungen' && window.WA.views.abteilungen) window.WA.views.abteilungen();   // Abteilungen (admin-verwaltung.js)
     if (v === 'einzel' && window.WA.views.einzel) window.WA.views.einzel();
     if (v === 'importe' && window.WA.views.importe) window.WA.views.importe();   // Importzentrale (admin-import.js)
     if (v === 'auswertung' && window.WA.views.auswertung) window.WA.views.auswertung();
