@@ -2,7 +2,7 @@
 
 <!-- ERZEUGT von `python3 werkzeuge/doku.py erzeugen` – nicht von Hand ändern. Quelle: Funktionen und Kommentare im Code. Die CI prüft, dass diese Datei zum Code passt. -->
 
-11 Dateien, 275 Funktionen – in der Reihenfolge der Datei, **fett** die Abschnitte. Text = erste Aussage des Kommentars direkt über der Funktion (Python: Docstring). Übersicht aller Module: [README.md](README.md).
+11 Dateien, 280 Funktionen – in der Reihenfolge der Datei, **fett** die Abschnitte. Text = erste Aussage des Kommentars direkt über der Funktion (Python: Docstring). Übersicht aller Module: [README.md](README.md).
 
 ## `app/api/aktionen/hr.php`
 
@@ -155,6 +155,12 @@ _Modul HR · Urlaubsverwaltung – Fachlogik (Daten, Feiertage, Urlaubskonto, An
 
 - `hr_person_norm(p)`
 - `hr_name(p)`
+
+**Abteilungen**
+
+- `hr_abteilungen()`
+- `hr_abteilung_aufloesen(p, liste)`
+- `hr_abteilung_werte(nr, liste)` – Werte zum Speichern aus einer Nummer der Stammdaten ('' = keine Abteilung); unbekannte Nummer → Fehler
 
 **Mitarbeiter = Nutzer**
 
@@ -420,6 +426,13 @@ _STAFL-Plattform · HR im Eingabebereich der Verwaltung - Verwaltung → Mitarbe
 
 - `mailKarte()`
 - `mailNeu(m)`
+
+**Importzentrale**
+
+**Importzentrale: Leser „Abwesenheiten aus der Zeiterfassung“ (Abwesenheitsbericht)**
+
+- `abteilungenAusAngaben()` – Für Stammdaten → Abteilungen (admin-verwaltung.js): Abteilungen aus den Mitarbeiterangaben (Reihenfolge wie im Urlaubsplan) und Anzahl der Mitarbeiter je …
+- `abteilungZahlen()`
 
 ## `tests/e2e/test_hr.py`
 

@@ -308,9 +308,11 @@ Aus dem Kundenimport (Kundendaten-Export der Warenwirtschaft, `kunden_import_lau
   dann nicht erneut, bis er von Hand deaktiviert wird. Kunden mit aktivem Zugang und Anmeldung in den 18 Monaten
   bleiben ebenfalls aktiv.
 
-**`kundengruppen`**, **`vkgruppen`**, **`vertreter`**, **`versandarten`**, **`lieferanten`**: je Liste `{"rev": 2, "groups": [{"nr": "10", "name": "…", …}], "updatedAt": "…", "updatedBy": "…"}`;
+**`kundengruppen`**, **`vkgruppen`**, **`vertreter`**, **`versandarten`**, **`lieferanten`**, **`abteilungen`**: je Liste `{"rev": 2, "groups": [{"nr": "10", "name": "…", …}], "updatedAt": "…", "updatedBy": "…"}`;
 Felder je Liste in `GRUPPEN_LISTEN` (`lib/kunden.php`): Kunden- und VK-Gruppen `name`, `klasse`, `kategorie`;
-Vertreter `name`, `kurz`, `telefon`, `plz`, `ort`, `land`; Versandarten `name` (Text); Lieferanten `name` (Name1, darf fehlen), `kurz`,
+Vertreter `name`, `kurz`, `telefon`, `plz`, `ort`, `land`; Versandarten `name` (Text); Abteilungen `name` (bis 40 Zeichen,
+eindeutig ohne Groß-/Kleinschreibung) und `frueher` (frühere Bezeichnungen, höchstens 10, nur vom Server beim Umbenennen
+gepflegt – `abteilungen_pruefen`; HR liest die Liste über `abteilungen_liste`/`abteilung_nach_name`); Lieferanten `name` (Name1, darf fehlen), `kurz`,
 `strasse`, `plz`, `ort`, `land`, `landIntrastat`, `telefon`, `gruppe`, `konto`, `kondition`, `vertreter`, `vertreterName`, `versandart`, `gln`,
 `lademittelbestand`, `umsatzJahr`, `kwUmsatzLfdJahr`, `kwUmsatzVorjahr`, `angelegtAm` (Texte wie im Export; die drei Umsatzfelder gibt
 `lieferanten` nur mit `stammdaten.bearbeiten` aus – `LIEFERANTEN_UMSATZ`). Nummer `^[0-9A-Za-z._-]{1,10}$`, höchstens 2000.
@@ -359,6 +361,9 @@ Mitarbeiter sind die Nutzer der Plattform (`users_load()`); HR speichert nur eig
   das Feld oder ist es `true`, verfällt er am Verfallstag (`hr-einstellungen.uebertragBis`).
   `vertretung` (seit 10.11.2026, optional, Personenkennung oder `null`): feste Vertretung – steht in jedem Antrag der Person
   fest und muss im Zeitraum da sein (`hr_feste_vertretung`; ist sie nicht mehr im Urlaubsplan, wählt die Person wieder selbst).
+  `abteilungNr` (seit 10.11.2026, optional, Nummer in `abteilungen` oder `null`): Abteilung aus den Stammdaten; `abteilung`
+  bleibt als Name gespeichert (Vorversion). Beim Lesen (`hr_personal` → `hr_abteilung_aufloesen`) gilt der Name aus den
+  Stammdaten – über die Nummer, sonst über den Namen bzw. eine frühere Bezeichnung; ohne Treffer der gespeicherte Name.
 - **`hr-abwesenheiten`**: `{"rev": 9, "eintraege": [{"id": "a0123456789ab", "person": "u…", "art": "U", "von": "2026-03-02", "bis": "2026-03-06", "status": "beantragt", "notiz": "", "vertretung": null, "quelle": "antrag", "erfasst": {"t": "…", "by": "…", "byId": "u…"}}]}`.
   `vertretung` (Person) ist bei Urlaubsanträgen Pflicht, solange `hr-einstellungen.planung.vertretungPflicht` nicht `false` ist. `art`: `U` Urlaub, `K` Krank, `G` Gleittag, `X` freier Tag, `F` unentschuldigt (seit 03.11.2026, nur Personalstelle; zählt nicht
   gegen den Urlaub, beim Eintragen E-Mail an den Mitarbeiter über `hr_fehlen_mail`). `status`: `beantragt`, `genehmigt`, `abgelehnt`,

@@ -8,7 +8,8 @@ declare(strict_types=1);
    Urlaubsanspruch zählt Krankheit hier nie (Inhaber 30.10.2026, hr_konto).
 
    Zuordnung: zuerst über die Personalnummer (HR-Angabe „personalnummer“), sonst über den Namen; unbekannte Namen werden
-   Mitarbeiter ohne Anmeldung (mit Personalnummer und Abteilung). Erneute Übernahme ersetzt die zuvor aus der
+   Mitarbeiter ohne Anmeldung (mit Personalnummer und Abteilung). Gibt es Stammdaten „Abteilungen“ (Verwaltung), wird nur
+   eine dort bekannte Abteilung übernommen (auch über eine frühere Bezeichnung), sonst ein Hinweis. Erneute Übernahme ersetzt die zuvor aus der
    Zeiterfassung übernommenen Einträge im Zeitraum des Berichts. Tage, für die im System schon ein Eintrag steht
    (Antrag, Personalstelle, Excel-Planung), bleiben unverändert; abweichende Arten erscheinen in der Vorschau.
    Form von Vorschau/Übernahme wie im Importvertrag (docs/plattform/schnittstellen/import.md). */
@@ -126,14 +127,25 @@ function hr_zeit_planen(array $e, ?array $me = null): array
     $users = []; foreach (users_load() as $u) $users[(string)$u['id']] = $u;
     [$zu, $neu, $mehrdeutig, $aehnlich] = hr_zeit_zuordnen($l, $personal, $users);
     $abteilungen = !empty($e['optionen']['abteilungen']);
+    // Abteilung aus dem Bericht: ohne Stammdaten wie im Bericht, mit Stammdaten nur eine dort bekannte (sonst Hinweis)
+    $abtListe = hr_abteilungen(); $abtFremd = [];
+    $abtWert = function (string $name) use ($abtListe, &$abtFremd): ?array {
+        if ($name === '') return null;
+        if (!$abtListe) return ['abteilung' => $name, 'abteilungNr' => null];
+        $a = abteilung_nach_name($abtListe, $name);
+        if (!$a) { $abtFremd[$name] = true; return null; }
+        return ['abteilung' => $a['name'], 'abteilungNr' => $a['nr']];
+    };
     $aend = []; $eigeneZeilen = [];
     foreach ($zu as $wer => $p) if (isset($eigen[$p['id']])) { $eigeneZeilen[$wer] = $l['personen'][$wer]['name']; unset($zu[$wer]); }
     foreach ($zu as $wer => $p) {
         $x = $l['personen'][$wer]; $w = [];
         if ($x['nr'] !== '' && ($p['personalnummer'] ?? '') !== $x['nr']) $w['personalnummer'] = $x['nr'];
-        if ($abteilungen && $x['abteilung'] !== '' && $p['abteilung'] !== $x['abteilung']) $w['abteilung'] = $x['abteilung'];
+        if ($abteilungen && ($v = $abtWert($x['abteilung'])) && ($p['abteilung'] !== $v['abteilung'] || ($p['abteilungNr'] ?? null) !== $v['abteilungNr'])) $w += $v;
         if ($w) $aend[$p['id']] = $w;
     }
+    $neuAbt = [];
+    foreach ($neu as $wer => $x) $neuAbt[$wer] = $abtWert($x['abteilung']) ?? ['abteilung' => '', 'abteilungNr' => null];
     // zuvor aus der Zeiterfassung übernommene Einträge im Zeitraum des Berichts werden ersetzt
     $rv = $l['von']; $rb = $l['bis'];
     $alt = $rv === null ? [] : array_values(array_filter($abw['eintraege'], function ($x) use ($rv, $rb, $eigen) {
@@ -169,7 +181,7 @@ function hr_zeit_planen(array $e, ?array $me = null): array
                        'notiz' => '', 'quelle' => 'zeiterfassung'] + (str_ends_with($z['art'], '!') ? ['urlaubAbzug' => true] : []);
         }
     }
-    return ['lesen' => $l, 'zu' => $zu, 'neu' => $neu, 'mehrdeutig' => $mehrdeutig, 'eigen' => $eigeneZeilen, 'aehnlich' => $aehnlich, 'aend' => $aend, 'alt' => $alt, 'bleibt' => $bleibt,
+    return ['lesen' => $l, 'zu' => $zu, 'neu' => $neu, 'neuAbt' => $neuAbt, 'abtFremd' => array_keys($abtFremd), 'mehrdeutig' => $mehrdeutig, 'eigen' => $eigeneZeilen, 'aehnlich' => $aehnlich, 'aend' => $aend, 'alt' => $alt, 'bleibt' => $bleibt,
             'neuE' => $neuE, 'gleich' => $gleich, 'abweichend' => $abweichend, 'personen' => hr_personen_index($personal),
             'stand' => hr_import_stand($personal, $abw, count($users))];
 }
@@ -184,7 +196,7 @@ function hr_zeit_vorschau(array $e, array $me): array
         $n['neu']++;
         $hinweis = isset($pl['aehnlich'][$wer]) ? ' – ähnlich: ' . implode(', ', $pl['aehnlich'][$wer]) . ' (gleiche Person? Dort die Personalnummer ' . ($x['nr'] ?: '–') . ' eintragen und erneut prüfen)' : '';
         $z[] = ['art' => 'neu', 'zeile' => $x['zeile'], 'schluessel' => $x['nr'] !== '' ? 'Nr. ' . $x['nr'] : 'Mitarbeiter', 'name' => $x['name'],
-                'text' => 'neuer Mitarbeiter ohne Anmeldung' . ($x['abteilung'] !== '' ? ' (' . $x['abteilung'] . ')' : '') . $hinweis];
+                'text' => 'neuer Mitarbeiter ohne Anmeldung' . ($pl['neuAbt'][$wer]['abteilung'] !== '' ? ' (' . $pl['neuAbt'][$wer]['abteilung'] . ')' : '') . $hinweis];
     }
     foreach ($pl['eigen'] as $wer => $name) { $n['fehler']++; $z[] = ['art' => 'fehler', 'zeile' => $l['personen'][$wer]['zeile'], 'schluessel' => 'Mitarbeiter', 'name' => $name, 'text' => 'nicht übernommen – eigene Person: bitte durch eine andere Person der Personalstelle übernehmen lassen']; }
     foreach ($pl['mehrdeutig'] as $wer => $name) { $n['fehler']++; $z[] = ['art' => 'fehler', 'zeile' => $l['personen'][$wer]['zeile'], 'schluessel' => 'Mitarbeiter', 'name' => $name, 'text' => 'nicht übernommen: Name/Personalnummer gibt es mehrfach unter den Mitarbeitern']; }
@@ -216,6 +228,8 @@ function hr_zeit_vorschau(array $e, array $me): array
     foreach ($l['fehler'] as $f) { $n['fehler']++; $z[] = ['art' => 'fehler', 'zeile' => $f['zeile'], 'schluessel' => $f['schluessel'], 'name' => '', 'text' => $f['text']]; }
     $h = [['stufe' => 'info', 'text' => 'Abwesenheitsbericht ' . ($l['von'] ? hr_de($l['von']) . '–' . hr_de($l['bis']) : '') . ': ' . count($l['personen']) . ' Mitarbeiter, ' . count($l['eintraege']) . ' Abwesenheiten (ohne Feiertage).']];
     if ($pl['gleich']) $h[] = ['stufe' => 'info', 'text' => $pl['gleich'] . ' Tage sind schon gleich eingetragen (Antrag, Personalstelle oder Excel-Planung) und bleiben, wie sie sind.'];
+    if ($pl['abtFremd']) $h[] = ['stufe' => 'warn', 'text' => 'Nicht in den Stammdaten (Stammdaten → Abteilungen), daher nicht übernommen: Abteilung '
+        . implode(', ', array_map(function ($a) { return "„{$a}“"; }, $pl['abtFremd'])) . '. Bitte dort anlegen oder im Mitarbeiter wählen.'];
     if ($l['unbekannt']) $h[] = ['stufe' => 'warn', 'text' => 'Nicht übernommen (unbekannte Arten): ' . implode(', ', array_map(function ($k, $v) { return "„{$k}“ ({$v}×)"; }, array_keys($l['unbekannt']), $l['unbekannt'])) . '.'];
     $h[] = ['stufe' => 'info', 'text' => 'Übernommene Einträge gelten als genehmigt. „Krank ohne AU“ mit „Abgezogen vom Urlaub“ zählt wie in der Zeiterfassung gegen den Urlaubsanspruch.'];
     return ['zahlen' => $n, 'zeilen' => array_slice($z, 0, 500), 'hinweise' => $h, 'stand' => $pl['stand']];
@@ -241,7 +255,7 @@ function hr_zeit_uebernehmen(array $e, array $me): array
             $personId = [];
             foreach ($pl['neu'] as $wer => $x) {
                 $u = $neuNutzer[$wer];
-                $personId['neu:' . $wer] = hr_angaben_setzen($roh, (string)$u['id'], ['abteilung' => $x['abteilung'], 'personalnummer' => $x['nr'], 'aktiv' => true], $u)['id'];
+                $personId['neu:' . $wer] = hr_angaben_setzen($roh, (string)$u['id'], $pl['neuAbt'][$wer] + ['personalnummer' => $x['nr'], 'aktiv' => true], $u)['id'];
             }
             hr_personal_schreiben($roh);
             $jetzt = ['t' => now(), 'by' => $me['name'], 'byId' => $me['id']];

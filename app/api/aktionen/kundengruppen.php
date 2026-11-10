@@ -1,11 +1,11 @@
 <?php
 declare(strict_types=1);
-/* Aktionen: Listen der Stammdaten – Kundengruppen, VK-Gruppen, Vertreter, Versandarten, Lieferanten (Beschreibung:
-   lib/kunden.php) und Angebotskategorien (module/verwaltung/angebotskategorien.php).
-   Kundengruppen, Vertreter und Versandarten ansehen mit „stammdaten.sehen“ oder „kunden.sehen“, VK-Gruppen und Lieferanten
-   mit „stammdaten.sehen“ (Umsätze der Lieferanten nur mit „stammdaten.bearbeiten“); Ändern und CSV-Import mit
-   „stammdaten.bearbeiten“. Kunden verweisen über „gruppe“, „vertreter“/„vertreter2“ und „versandart“, Artikel über
-   „vkGruppe“, Lieferanten über „versandart“ auf die Nummer.
+/* Aktionen: Listen der Stammdaten – Kundengruppen, VK-Gruppen, Vertreter, Versandarten, Lieferanten, Abteilungen
+   (Beschreibung: lib/kunden.php) und Angebotskategorien (module/verwaltung/angebotskategorien.php).
+   Kundengruppen, Vertreter und Versandarten ansehen mit „stammdaten.sehen“ oder „kunden.sehen“, VK-Gruppen, Lieferanten
+   und Abteilungen mit „stammdaten.sehen“ (Umsätze der Lieferanten nur mit „stammdaten.bearbeiten“); Ändern und CSV-Import
+   mit „stammdaten.bearbeiten“. Kunden verweisen über „gruppe“, „vertreter“/„vertreter2“ und „versandart“, Artikel über
+   „vkGruppe“, Lieferanten über „versandart“, die HR-Angaben der Mitarbeiter über „abteilungNr“ auf die Nummer.
    Wird von api/index.php im globalen Gültigkeitsbereich eingebunden; jede Aktion endet mit respond()/fail(). */
 if (!defined('WA_API')) { http_response_code(404); exit; }   // nur über api/index.php nutzbar
 
@@ -31,9 +31,10 @@ switch ($action) {
         case 'vkgruppen':
         case 'vertreter':
         case 'versandarten':
-        case 'lieferanten': {
+        case 'lieferanten':
+        case 'abteilungen': {
             $me = require_auth();
-            $nurStamm = $action === 'vkgruppen' || $action === 'lieferanten';
+            $nurStamm = in_array($action, ['vkgruppen', 'lieferanten', 'abteilungen'], true);
             if (!may($me, 'stammdaten.sehen') && ($nurStamm || !may($me, 'kunden.sehen'))) fail('Dafür fehlt Ihnen die Berechtigung. Bitte an einen Administrator wenden.', 403);
             header('Cache-Control: no-store');
             $d = gruppen_load($action);
@@ -45,7 +46,7 @@ switch ($action) {
             // Anzahl zugeordneter Artikel (VK-Gruppen) bzw. Kunden (nur für Berechtigte) – gruppen_zuordnungen() in module/verwaltung/import.php
             if ($action === 'vkgruppen') $out['artikel'] = (object)gruppen_zuordnungen($action);
             elseif ($action === 'versandarten') { if (may($me, 'kunden.sehen')) $out['zuordnung'] = (object)gruppen_zuordnungen($action); }
-            elseif ($action !== 'lieferanten' && may($me, 'kunden.sehen')) $out['kunden'] = (object)gruppen_zuordnungen($action);
+            elseif ($action !== 'lieferanten' && $action !== 'abteilungen' && may($me, 'kunden.sehen')) $out['kunden'] = (object)gruppen_zuordnungen($action);
             respond($out);
         }
 
@@ -53,7 +54,8 @@ switch ($action) {
         case 'vkgruppen_save':
         case 'vertreter_save':
         case 'versandarten_save':
-        case 'lieferanten_save': {
+        case 'lieferanten_save':
+        case 'abteilungen_save': {
             $me = require_perm('stammdaten.bearbeiten', true);
             $b = body();
             // Prüfen, Revision, Speichern und Protokoll: gruppen_speichern() (module/verwaltung/import.php, auch für die Importzentrale)

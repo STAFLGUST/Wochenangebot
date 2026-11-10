@@ -189,15 +189,42 @@ function hr_person_norm(array $p): array
     ksort($jahre);
     return ['id' => (string)($p['id'] ?? ''), 'vorname' => (string)($p['vorname'] ?? ''), 'nachname' => (string)($p['nachname'] ?? ''),
             'abteilung' => (string)($p['abteilung'] ?? ''), 'pos' => (int)($p['pos'] ?? 0), 'nutzer' => isset($p['nutzer']) && $p['nutzer'] !== '' ? (string)$p['nutzer'] : null,
+            // Nummer der Abteilung in den Stammdaten der Verwaltung (Inhaber 10.11.2026); „abteilung“ bleibt als Name gespeichert (GR-006)
+            'abteilungNr' => isset($p['abteilungNr']) && is_scalar($p['abteilungNr']) && (string)$p['abteilungNr'] !== '' ? (string)$p['abteilungNr'] : null,
             'arbeitstage' => $at ?: [1, 2, 3, 4, 5], 'aktiv' => !array_key_exists('aktiv', $p) || (bool)$p['aktiv'], 'jahre' => $jahre,
             'personalnummer' => trim((string)($p['personalnummer'] ?? '')), 'gleittage' => hr_gleit_norm($p['gleittage'] ?? []),
             // Resturlaub verfällt am Verfallstag – nur ein ausdrückliches false schaltet das ab (fehlt das Feld: verfällt, GR-006)
             'verfall' => ($p['verfall'] ?? true) !== false,
             // feste Vertretung (Personenkennung, Inhaber 10.11.2026) – fehlt das Feld: keine, der Mitarbeiter wählt selbst
             'vertretung' => isset($p['vertretung']) && is_string($p['vertretung']) && $p['vertretung'] !== '' ? $p['vertretung'] : null,
-            'geaendert' => $p['geaendert'] ?? null] + array_diff_key($p, array_flip(['id', 'vorname', 'nachname', 'abteilung', 'pos', 'nutzer', 'arbeitstage', 'aktiv', 'jahre', 'personalnummer', 'gleittage', 'verfall', 'vertretung', 'geaendert']));
+            'geaendert' => $p['geaendert'] ?? null] + array_diff_key($p, array_flip(['id', 'vorname', 'nachname', 'abteilung', 'abteilungNr', 'pos', 'nutzer', 'arbeitstage', 'aktiv', 'jahre', 'personalnummer', 'gleittage', 'verfall', 'vertretung', 'geaendert']));
 }
 function hr_name(array $p): string { return trim($p['vorname'] . ' ' . $p['nachname']); }
+
+/* ---------------- Abteilungen ----------------
+   Die Abteilungen sind Stammdaten der Verwaltung (Stammdaten → Abteilungen, gelesen über abteilungen_liste). Die HR-Angaben
+   verweisen über „abteilungNr“ darauf und tragen den Namen zusätzlich in „abteilung“ (Vorversion und Rückfall lesen ihn).
+   Beim Lesen gilt der Name aus den Stammdaten – ein Umbenennen wirkt so überall. Angaben ohne Nummer (vor den Stammdaten
+   gespeichert) finden ihre Abteilung über den Namen bzw. einen früheren Namen. Ohne Stammdaten bleibt der freie Text. */
+function hr_abteilungen(): array
+{
+    try { return function_exists('abteilungen_liste') ? abteilungen_liste() : []; } catch (Throwable $e) { return []; }
+}
+function hr_abteilung_aufloesen(array $p, array $liste): array
+{
+    if (!$liste) return $p;
+    $a = null;
+    if (($p['abteilungNr'] ?? null) !== null) foreach ($liste as $x) if ($x['nr'] === $p['abteilungNr']) { $a = $x; break; }
+    if (!$a) $a = abteilung_nach_name($liste, (string)$p['abteilung']);
+    return $a ? array_merge($p, ['abteilung' => $a['name'], 'abteilungNr' => $a['nr']]) : $p;
+}
+/* Werte zum Speichern aus einer Nummer der Stammdaten ('' = keine Abteilung); unbekannte Nummer → Fehler */
+function hr_abteilung_werte(string $nr, array $liste): array
+{
+    if ($nr === '') return ['abteilung' => '', 'abteilungNr' => null];
+    foreach ($liste as $a) if ($a['nr'] === $nr) return ['abteilung' => $a['name'], 'abteilungNr' => $a['nr']];
+    throw new InvalidArgumentException('Abteilung: bitte eine Abteilung aus den Stammdaten wählen.');
+}
 
 /* ---------------- Mitarbeiter = Nutzer ----------------
    Die Mitarbeiter der Urlaubsverwaltung sind die Mitarbeiter der Plattform (Verwaltung → Mitarbeiter, Dokument „nutzer“
@@ -248,12 +275,15 @@ function hr_personal(): array
         $ps[] = array_merge($e, ['nutzer' => null, 'gespeichert' => true, 'zugang' => false, 'kontoAktiv' => false, 'username' => '', 'altbestand' => true,
                                  'ehemalig' => true, 'aktiv' => false]);
     }
+    $abt = hr_abteilungen();
+    if ($abt) foreach ($ps as &$p) $p = hr_abteilung_aufloesen($p, $abt);
+    unset($p);
     usort($ps, function ($a, $b) { return [$a['pos'] ?: 9999, hr_name($a)] <=> [$b['pos'] ?: 9999, hr_name($b)]; });
     return ['rev' => $roh['rev'], 'personen' => $ps];
 }
 
 /* HR-Angaben eines Mitarbeiters speichern (anlegen oder ändern; unter der Sperre „hr-personal“ aufrufen).
-   $werte: abteilung, pos, arbeitstage, aktiv, jahre – nur die übergebenen Felder ändern sich. */
+   $werte: abteilung (mit abteilungNr), pos, arbeitstage, aktiv, jahre – nur die übergebenen Felder ändern sich. */
 function hr_angaben_setzen(array &$roh, string $uid, array $werte, array $u): array
 {
     [$vor, $nach] = hr_nutzer_namen($u);

@@ -1527,6 +1527,7 @@
     async function load() {
       const r = await api(liste);
       groups = r.groups; rev = r.rev; zahl = r[cfg.zaehler] || null; meta = { at: r.updatedAt, by: r.updatedBy };
+      if (cfg.zahlen) zahl = await cfg.zahlen().catch(() => null);   // Anzahl aus einem anderen Modul (Abteilungen: Mitarbeiter, HR)
       return groups;
     }
     const titel = (g) => g.name || g.kurz || `${eine} ${g.nr}`;   // Lieferanten: Name1 darf fehlen – dann Kurzname (Alpha)
@@ -1536,12 +1537,14 @@
       if (!groups) host.innerHTML = `<div class="loading" style="justify-content:center;padding:48px 0"><div class="spinner"></div>${esc(viele)} werden geladen …</div>`;
       try { if (cfg.vorher) await cfg.vorher(); await load(); } catch (e) { host.innerHTML = `<div class="err-box">${esc(e.message)}</div>`; return; }
       const edit = may('stammdaten.bearbeiten');
+      const uebern = edit && cfg.uebernehmen && cfg.uebernehmen.sichtbar();
       host.innerHTML = `
         <div class="ed-toolbar">
           <div class="search">${icon('search')}<input id="${p}-q" type="search" autocomplete="off" placeholder="${esc(eine)} finden: Nummer, ${esc(FN.label)} …" aria-label="${esc(viele)} suchen" value="${esc(q)}"></div>
           <span class="ed-hint" id="${p}-count"></span>
-          ${edit ? `<button type="button" class="btn" id="${p}-import">${icon('upload')}CSV importieren</button><input type="file" id="${p}-file" accept=".csv,text/csv,text/plain" hidden>
-          <button type="button" class="btn primary" id="${p}-add">${icon('plus')}${esc(neuText)}</button>` : ''}
+          ${edit && !cfg.ohneCsv ? `<button type="button" class="btn" id="${p}-import">${icon('upload')}CSV importieren</button><input type="file" id="${p}-file" accept=".csv,text/csv,text/plain" hidden>` : ''}
+          ${uebern ? `<button type="button" class="btn" id="${p}-uebern">${icon('download')}${esc(cfg.uebernehmen.text)}</button>` : ''}
+          ${edit ? `<button type="button" class="btn primary" id="${p}-add">${icon('plus')}${esc(neuText)}</button>` : ''}
         </div>
         <div id="${p}-list"></div>
         <p class="hint">${esc(cfg.hinweis)} ${meta && meta.at ? `Zuletzt geändert ${esc(dateTime(meta.at))}${meta.by ? ' von ' + esc(meta.by) : ''}.` : ''}</p>`;
@@ -1552,7 +1555,7 @@
       const list = groups.filter((g) => { const hay = fold([g.nr, ...F.map((f) => g[f.k])].join(' ')); return toks.every((t) => hay.includes(t)); });
       $(`#${p}-count`).textContent = plural(list.length, eine, viele) + (list.length !== groups.length ? ` von ${groups.length}` : '');
       const el = $(`#${p}-list`);
-      if (!groups.length) { el.innerHTML = `<div class="ed-empty"><h3>Noch keine ${esc(viele)}</h3><p>${may('stammdaten.bearbeiten') ? `Importieren Sie die Liste als CSV aus der Warenwirtschaft (Spalten ${esc(cfg.csvText || spaltenText)}) oder legen Sie Einträge einzeln an.` : 'Ein Bearbeiter kann die Liste importieren.'}</p></div>`; return; }
+      if (!groups.length) { el.innerHTML = `<div class="ed-empty"><h3>Noch keine ${esc(viele)}</h3><p>${cfg.leerText ? esc(cfg.leerText(may('stammdaten.bearbeiten'))) : may('stammdaten.bearbeiten') ? `Importieren Sie die Liste als CSV aus der Warenwirtschaft (Spalten ${esc(cfg.csvText || spaltenText)}) oder legen Sie Einträge einzeln an.` : 'Ein Bearbeiter kann die Liste importieren.'}</p></div>`; return; }
       if (!list.length) { el.innerHTML = '<div class="ed-empty"><h3>Keine Treffer</h3><p>Suchbegriff anpassen.</p></div>'; return; }
       const edit = may('stammdaten.bearbeiten');
       el.innerHTML = `<div class="gcard"><table class="etab kgtab"><thead><tr><th class="kg-nr">Nummer</th>${F.filter((f) => !f.versteckt).map((f) => `<th${f.cls ? ` class="${f.cls}"` : ''}>${esc(f.label)}</th>`).join('')}${zahl ? `<th class="kg-n">${esc(cfg.zaehlerSpalte)}</th>` : ''}${edit ? '<th class="u-act"><span class="sr-only">Aktion</span></th>' : ''}</tr></thead><tbody>${list.map((g) => `
@@ -1563,20 +1566,23 @@
       groups = r.groups; rev = r.rev;
       return r;
     }
+    // nächste freie Nummer in Zehnerschritten (Abteilungen: die Nummer bestimmt die Reihenfolge)
+    const naechsteNr = () => String((Math.floor(Math.max(0, ...(groups || []).map((x) => (/^\d+$/.test(x.nr) ? Number(x.nr) : 0))) / 10) + 1) * 10);
     function open(nr) {
       const g = nr ? groups.find((x) => x.nr === nr) : null;
       const n = g ? anzahl(g.nr) : 0;
+      const frueher = g && Array.isArray(g.frueher) && g.frueher.length ? ` · früher ${g.frueher.map((x) => `„${esc(x)}“`).join(', ')}` : '';
       body.innerHTML = `
-        <div class="dlg-head"><div><h2 id="${p}-title">${g ? esc(titel(g)) : esc(eine) + ' anlegen'}</h2><p>${g ? `Nummer ${esc(g.nr)}${n ? ` · ${plural(n, cfg.zEine, cfg.zViele)} zugeordnet` : ''}` : 'Nummer wie in der Warenwirtschaft.'}</p></div>
+        <div class="dlg-head"><div><h2 id="${p}-title">${g ? esc(titel(g)) : esc(eine) + ' anlegen'}</h2><p>${g ? `Nummer ${esc(g.nr)}${n ? ` · ${plural(n, cfg.zEine, cfg.zViele)} zugeordnet` : ''}${frueher}` : esc(cfg.nrText || 'Nummer wie in der Warenwirtschaft.')}</p></div>
           <button class="btn icon ghost" type="button" data-close aria-label="Schließen">${icon('x')}</button></div>
         <div class="dlg-body"><div class="form-grid two">
-          <label class="fld"><span>Nummer</span><input name="nr" value="${esc(g ? g.nr : '')}" maxlength="10" required${g ? ' readonly' : ''} inputmode="numeric"></label>
+          <label class="fld"><span>Nummer</span><input name="nr" value="${esc(g ? g.nr : cfg.nrVorschlag ? naechsteNr() : '')}" maxlength="10" required${g ? ' readonly' : ''} inputmode="numeric"></label>
           ${F.map((f) => `<label class="fld${f.span2 ? ' span2' : ''}"><span>${esc(f.label)}</span><input name="${f.k}" value="${esc(g ? g[f.k] || '' : '')}" maxlength="${f.max}"${f.req ? ' required' : ' placeholder="optional"'}></label>`).join('')}
         </div><p class="kerr" id="${p}-err" role="alert"></p></div>
         <div class="dlg-foot"><span class="left">${g ? `<button type="button" class="btn sm ghost" data-kg-del style="color:var(--accent)">${icon('trash', 'sm')}${esc(loeschText)}</button>` : ''}</span><button type="button" class="btn" data-close>Abbrechen</button><button type="submit" class="btn primary">${icon('check')}Speichern</button></div>`;
       body.dataset.nr = nr || '';
       dlg.showModal();
-      body.querySelector('[name="' + (g ? 'name' : 'nr') + '"]').focus();
+      body.querySelector('[name="' + (g || cfg.nrVorschlag ? 'name' : 'nr') + '"]').focus();
     }
     body.addEventListener('submit', async (e) => {
       e.preventDefault();
@@ -1626,6 +1632,10 @@
     async function importDatei(file) {
       let res;
       try { res = ausCsv(await file.arrayBuffer()); } catch (ex) { toast(ex.message, 8000); return; }
+      vorschau(res, file.name);
+    }
+    /* Vorschau neu/geändert/entfallen und Übernehmen der ganzen Liste (CSV-Import und cfg.uebernehmen) */
+    function vorschau(res, quelle, titelText) {
       const alt = new Map(groups.map((g) => [g.nr, g]));
       const neu = res.groups.filter((g) => !alt.has(g.nr));
       const werte = (g) => JSON.stringify(F.map((f) => g[f.k] || ''));
@@ -1636,7 +1646,7 @@
       const liste = (l) => l.slice(0, 8).map((g) => `<li><span class="muted">${esc(g.nr)}</span> ${esc(titel(g))}</li>`).join('') + (l.length > 8 ? `<li class="muted">… und ${l.length - 8} weitere</li>` : '');
       const nix = !neu.length && !geaendert.length && !weg.length;
       bodyI.innerHTML = `
-        <div class="dlg-head"><div><h2 id="${p}i-title">${esc(viele)} importieren</h2><p>${esc(file.name)} · ${plural(res.groups.length, eine, viele)}</p></div>
+        <div class="dlg-head"><div><h2 id="${p}i-title">${esc(titelText || viele + ' importieren')}</h2><p>${esc(quelle)} · ${plural(res.groups.length, eine, viele)}</p></div>
           <button class="btn icon ghost" type="button" data-close aria-label="Schließen">${icon('x')}</button></div>
         <div class="dlg-body">
           <div class="cmp-stats"><div><span>Neu</span><strong id="${p}i-neu">${neu.length}</strong></div><div><span>Geändert</span><strong id="${p}i-geaendert">${geaendert.length}</strong></div><div><span>Entfallen</span><strong id="${p}i-weg">${weg.length}</strong></div></div>
@@ -1652,7 +1662,7 @@
       dlgI.showModal();
       $(`#${p}i-ok`).onclick = async () => {
         $(`#${p}i-ok`).disabled = true;
-        try { const r = await save(res.groups, file.name); dlgI.close(); toast(`${viele} übernommen: ${r.neu} neu, ${r.geaendert} geändert, ${r.entfernt} entfernt.`, 5000); render(); }
+        try { const r = await save(res.groups, quelle); dlgI.close(); toast(`${viele} übernommen: ${r.neu} neu, ${r.geaendert} geändert, ${r.entfernt} entfernt.`, 5000); render(); }
         catch (ex) { $(`#${p}i-err`).textContent = ex.message; $(`#${p}i-ok`).disabled = false; }
       };
     }
@@ -1661,11 +1671,32 @@
     host.addEventListener('change', (e) => { if (e.target.id === `${p}-file` && e.target.files[0]) { const f = e.target.files[0]; e.target.value = ''; importDatei(f); } });
     host.addEventListener('click', (e) => {
       if (e.target.closest(`#${p}-import`)) { $(`#${p}-file`).click(); return; }
+      if (e.target.closest(`#${p}-uebern`)) { uebernehmen(e.target.closest(`#${p}-uebern`)); return; }
       if (e.target.closest(`#${p}-add`)) { open(null); return; }
       const tr = e.target.closest('tr[data-kg]');
       if (tr && may('stammdaten.bearbeiten')) open(tr.dataset.kg);
     });
     host.addEventListener('keydown', (e) => { if (e.key === 'Enter' && e.target.matches('tr[data-kg]') && may('stammdaten.bearbeiten')) open(e.target.dataset.kg); });
+    /* Einträge aus einer anderen Quelle ergänzen (Abteilungen: aus den Mitarbeiterangaben der Personalstelle) – nur neue
+       Bezeichnungen mit den nächsten freien Nummern, nichts wird entfernt; gespeichert wird erst mit „Übernehmen“ */
+    async function uebernehmen(btn) {
+      btn.disabled = true;
+      let namen;
+      try { namen = await cfg.uebernehmen.namen(); } catch (ex) { toast(ex.message, 6000); btn.disabled = false; return; }
+      btn.disabled = false;
+      const k = (x) => String(x || '').trim().toLowerCase();
+      const da = new Set(groups.flatMap((g) => [k(g.name), ...(Array.isArray(g.frueher) ? g.frueher.map(k) : [])]));
+      let nr = Number(naechsteNr());
+      const neu = [];
+      for (const n of namen || []) {
+        if (!n || da.has(k(n))) continue;
+        da.add(k(n));
+        while (groups.some((g) => g.nr === String(nr))) nr += 10;
+        neu.push({ nr: String(nr), name: String(n).slice(0, FN.max) });
+        nr += 10;
+      }
+      vorschau({ groups: [...groups, ...neu], fehler: [] }, cfg.uebernehmen.quelle, cfg.uebernehmen.titel);
+    }
     /* Leser für die Importzentrale: dieselbe CSV-Prüfung wie hier; Vergleich und Speichern macht der Server */
     const importLeser = {
       async lesen([file]) {
@@ -1702,6 +1733,18 @@
     zaehler: 'zuordnung', zaehlerSpalte: 'Kunden und Lieferanten', zEine: 'Kunde oder Lieferant', zViele: 'Kunden und Lieferanten',
     hinweis: 'Kunden und Lieferanten verweisen über ihre Versandart auf diese Liste (beim Import der Kunden und Lieferanten aus der Spalte „Versandart“).' });
   const vaText = (nr) => (nr ? `${nr}${VA.name(nr) ? ' · ' + VA.name(nr) : ''}` : '');
+  /* Abteilungen (Inhaber 10.11.2026): Nummer und Bezeichnung, von Hand gepflegt (kein CSV). Die HR-Angaben der Mitarbeiter
+     verweisen über die Nummer darauf (Verwaltung → Mitarbeiter → Bearbeiten, app/module/hr/verwaltung-hr.js); Umbenennen
+     wirkt überall. Mit „hr.verwalten“: Anzahl Mitarbeiter je Abteilung und Übernahme der Abteilungen aus den Mitarbeiterangaben. */
+  const hrDa = () => !!(W.hr && may('hr.verwalten'));
+  const AB = gruppenListe({ liste: 'abteilungen', p: 'ab', view: '#view-abteilungen', eine: 'Abteilung', viele: 'Abteilungen', nrSpalten: ['abteilungnr'],
+    felder: [{ k: 'name', label: 'Bezeichnung', max: 40, req: true, csv: ['bezeichnung', 'name', 'abteilung'], span2: true }],
+    ohneCsv: true, nrVorschlag: true, nrText: 'Die Nummer bestimmt die Reihenfolge der Liste.',
+    neuText: 'Abteilung anlegen', loeschText: 'Abteilung löschen', andereText: 'eine andere Abteilung gewählt wird',
+    zahlen: () => (hrDa() ? W.hr.abteilungZahlen() : Promise.resolve(null)), zaehlerSpalte: 'Mitarbeiter', zEine: 'Mitarbeiter', zViele: 'Mitarbeiter',
+    uebernehmen: { text: 'Aus Mitarbeiterangaben übernehmen', titel: 'Abteilungen aus den Mitarbeiterangaben', quelle: 'Mitarbeiterangaben', sichtbar: hrDa, namen: () => W.hr.abteilungenAusAngaben() },
+    leerText: (edit) => (edit ? `Legen Sie die Abteilungen an${hrDa() ? ' oder übernehmen Sie die bisher bei den Mitarbeitern eingetragenen' : ''}. Danach wählen Sie die Abteilung im Mitarbeiter aus (Verwaltung → Mitarbeiter).` : 'Ein Bearbeiter der Stammdaten legt die Abteilungen an.'),
+    hinweis: 'Die Mitarbeiter verweisen über ihre Abteilung auf diese Liste (Verwaltung → Mitarbeiter → Bearbeiten). Umbenennen wirkt überall – Urlaubsplan, Mitarbeiterliste und Export.' });
   const LF = gruppenListe({ liste: 'lieferanten', p: 'lf', view: '#view-lieferanten', eine: 'Lieferant', viele: 'Lieferanten', nrSpalten: ['lieferantennummer', 'lieferant'],
     felder: [
       { k: 'name', label: 'Name', max: 120, csv: ['name1', 'name'], span2: true },
@@ -1746,5 +1789,5 @@
   const vtName = (nr) => VT.name(nr);
 
   W.views = { users: renderUsersView, orders: renderOrdersView, einkauf: renderEinkaufView, kunden: renderKundenView, gruppen: KG.render, vkgruppen: VG.render, vertreter: VT.render,
-    versandarten: VA.render, lieferanten: LF.render, mail: renderMailView, log: renderLogView };
+    versandarten: VA.render, lieferanten: LF.render, abteilungen: AB.render, mail: renderMailView, log: renderLogView };
 })();

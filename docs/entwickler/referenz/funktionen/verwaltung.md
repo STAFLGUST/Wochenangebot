@@ -2,7 +2,7 @@
 
 <!-- ERZEUGT von `python3 werkzeuge/doku.py erzeugen` – nicht von Hand ändern. Quelle: Funktionen und Kommentare im Code. Die CI prüft, dass diese Datei zum Code passt. -->
 
-21 Dateien, 228 Funktionen – in der Reihenfolge der Datei, **fett** die Abschnitte. Text = erste Aussage des Kommentars direkt über der Funktion (Python: Docstring). Übersicht aller Module: [README.md](README.md).
+22 Dateien, 237 Funktionen – in der Reihenfolge der Datei, **fett** die Abschnitte. Text = erste Aussage des Kommentars direkt über der Funktion (Python: Docstring). Übersicht aller Module: [README.md](README.md).
 
 ## `app/api/lib/auswertung.php`
 
@@ -39,15 +39,18 @@ _Kundenstammdaten und Kunden-Sitzung_
 - `require_customer_csrf()`
 - `kunde_payload(c)`
 
-**Listen der Stammdaten (Kundengruppen, VK-Gruppen, Vertreter, Versandarten, Lieferanten)**
+**Listen der Stammdaten (Kundengruppen, VK-Gruppen, Vertreter, Versandarten, Lieferanten, Abteilungen)**
 
 - `gruppen_load(liste)`
 - `gruppen_clean(liste, list, alt)` – $alt: gespeicherte Einträge nach Nummer – Felder, die ein Eintrag der Anfrage nicht enthält, und Felder, die dieser Stand nicht kennt (neuere Fassung), …
+- `abteilungen_pruefen(out, alt)` – Abteilungen: Bezeichnungen eindeutig (ohne Groß-/Kleinschreibung).
 - `kundengruppen_load()`
 - `kundengruppen_clean(list)`
 - `vertreter_load()`
 - `lieferanten_kurz()` – Schnittstelle der Verwaltung für andere Module (Leergut, regeln/datenverantwortung.toml): nur Nummer, Name, Kurzname und Versandart der Lieferanten bzw. …
 - `versandarten_namen()`
+- `abteilungen_liste()` – Schnittstelle der Verwaltung für die Personalverwaltung (HR, regeln/datenverantwortung.toml): Abteilungen in der Reihenfolge der Nummern mit Nummer, …
+- `abteilung_nach_name(liste, name)` – Abteilung zu einer Bezeichnung (ohne Groß-/Kleinschreibung; aktuelle vor früheren Bezeichnungen) oder null
 
 ## `app/api/module/verwaltung/angebotskategorien.php`
 
@@ -79,7 +82,7 @@ _Importvertrag der Verwaltung – Schnittstelle zur Importzentrale (docs/plattfo
 
 **Listen der Stammdaten: Kundengruppen, VK-Gruppen, Vertreter, Versandarten, Lieferanten**
 
-- `gruppen_zuordnungen(liste)` – Anzahl zugeordneter Kunden (Kundengruppen, Vertreter) bzw. Artikel (VK-Gruppen) je Nummer; Versandarten: Kunden und Lieferanten zusammen; Lieferanten: keine …
+- `gruppen_zuordnungen(liste)` – Anzahl zugeordneter Kunden (Kundengruppen, Vertreter) bzw. Artikel (VK-Gruppen) je Nummer; Versandarten: Kunden und Lieferanten zusammen; Lieferanten und …
 - `gruppen_speichern(liste, groups, rev, me, quelle)` – Ganze Liste speichern (Revision, Protokoll) – Aktionen kundengruppen_save/vkgruppen_save/vertreter_save und Importzentrale
 - `gruppen_import_liste(e)` – Liste der Importart (Registrierung: kundengruppen, vkgruppen, vertreter)
 - `gruppen_import_vorschau(e, me)` – Vorschau: neu / geändert / entfällt gegenüber der gespeicherten Liste (gespeichert wird immer die ganze Liste)
@@ -271,6 +274,24 @@ _Verwaltung → Angebotskategorien (Stammdaten, Inhaber 05.11.2026) Angebotskate
 - `freiHTML(f, edit)`
 - `neuerName()`
 - `speichern()`
+
+## `tests/e2e/test_abteilungen.py`
+
+_Stammdaten → Abteilungen (Auftrag des Inhabers 10.11.2026)_
+
+- `check(n, c, i)`
+- `doc(name)`
+- `personen()`
+- `hr(name, **werte)`
+- `roh(name)`
+
+**vor den Stammdaten: freier Text wie bisher**
+
+**Schnittstelle der Liste**
+
+**Oberfläche: leere Liste, Übernahme aus den Mitarbeiterangaben**
+
+- `anmelden(user, pw, ip, breite)`
 
 ## `tests/e2e/test_angebotskategorien.py`
 

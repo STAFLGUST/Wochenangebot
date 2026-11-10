@@ -485,11 +485,14 @@ switch ($action) {
             $personal = hr_personal(); $abw = hr_abwesenheiten(); $einst = hr_einstellungen();
             respond(['ok' => true, 'jahr' => $jahr, 'rev' => $personal['rev'], 'uebertragBis' => $einst['uebertragBis'], 'antraege' => $einst['antraege'],
                      'personen' => array_map(function ($p) use ($abw, $jahr) { return hr_person_aus($p, $abw['eintraege'], $jahr); }, $personal['personen']),
+                     // Auswahl im Dialog (Stammdaten → Abteilungen); leer = freier Text wie bisher
+                     'abteilungen' => array_map(function ($a) { return ['nr' => $a['nr'], 'name' => $a['name']]; }, hr_abteilungen()),
                      'mail' => hr_mail_aus()] + hr_einstellungen_aus($einst));
         }
 
         /* HR-Angaben eines Mitarbeiters: Abteilung, Position, Arbeitstage, im Urlaubsplan, Verfall des Resturlaubs (ja/nein),
-           Anspruch und Übertrag eines Jahres */
+           Anspruch und Übertrag eines Jahres. Abteilung: „abteilungNr“ aus den Stammdaten (Stammdaten → Abteilungen, '' = keine);
+           „abteilung“ als Text (ältere Oberfläche, ohne Stammdaten) – mit Stammdaten wird ein bekannter Name zur Nummer. */
         case 'mitarbeiter_hr_save': {
             $me = require_perm('hr.verwalten', true);
             $b = body();
@@ -498,7 +501,16 @@ switch ($action) {
             $ui = user_find($users, $uid);
             if ($ui === null) fail('Mitarbeiter nicht gefunden.', 404);
             $werte = [];
-            if (array_key_exists('abteilung', $b)) $werte['abteilung'] = s($b['abteilung'], 40) ?? '';
+            $abtListe = hr_abteilungen();
+            if (array_key_exists('abteilungNr', $b)) {
+                if (!$abtListe) fail('Abteilung: Es sind noch keine Abteilungen angelegt (Stammdaten → Abteilungen).', 422);
+                if ($b['abteilungNr'] !== null && !is_scalar($b['abteilungNr'])) fail('Abteilung: bitte eine Abteilung aus den Stammdaten wählen.', 422);
+                $werte += hr_abteilung_werte((string)($b['abteilungNr'] ?? ''), $abtListe);
+            } elseif (array_key_exists('abteilung', $b)) {
+                $t = s($b['abteilung'], 40) ?? '';
+                $a = $abtListe ? abteilung_nach_name($abtListe, $t) : null;
+                $werte += $a ? ['abteilung' => $a['name'], 'abteilungNr' => $a['nr']] : ['abteilung' => $t, 'abteilungNr' => null];
+            }
             if (array_key_exists('pos', $b)) $werte['pos'] = max(0, min(9999, (int)$b['pos']));
             if (array_key_exists('aktiv', $b)) $werte['aktiv'] = (bool)$b['aktiv'];
             if (array_key_exists('verfall', $b)) {

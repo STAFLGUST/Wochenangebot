@@ -307,11 +307,11 @@ function kunden_import_zentrale(array $e, bool $pruefen): array
 /* ---------------- Listen der Stammdaten: Kundengruppen, VK-Gruppen, Vertreter, Versandarten, Lieferanten ---------------- */
 
 /* Anzahl zugeordneter Kunden (Kundengruppen, Vertreter) bzw. Artikel (VK-Gruppen) je Nummer; Versandarten: Kunden und
-   Lieferanten zusammen; Lieferanten: keine Zuordnung */
+   Lieferanten zusammen; Lieferanten und Abteilungen: keine Zuordnung (Mitarbeiter je Abteilung zählt die Oberfläche der Personalstelle) */
 function gruppen_zuordnungen(string $liste): array
 {
     $n = [];
-    if ($liste === 'lieferanten') return $n;
+    if ($liste === 'lieferanten' || $liste === 'abteilungen') return $n;
     if ($liste === 'versandarten') {
         foreach (customers_load()['customers'] as $c) if (($c['versandart'] ?? '') !== '') $n[$c['versandart']] = ($n[$c['versandart']] ?? 0) + 1;
         foreach (gruppen_load('lieferanten')['groups'] as $g) if (($g['versandart'] ?? '') !== '') $n[$g['versandart']] = ($n[$g['versandart']] ?? 0) + 1;

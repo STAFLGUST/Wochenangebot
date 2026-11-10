@@ -166,13 +166,14 @@ const CUSTOMER_FIELDS = ['nr' => 30, 'gruppe' => 10, 'vertreter' => 10, 'vertret
 const CUSTOMER_LABELS = ['mailAngebot' => 'Wochenangebot per E-Mail', 'nr' => 'Kundennummer', 'gruppe' => 'Kundengruppe', 'vertreter' => 'Vertreter', 'vertreter2' => 'Vertreter 2', 'versandart' => 'Versandart', 'firma' => 'Firma', 'ansprechpartner' => 'Ansprechpartner', 'strasse' => 'Straße', 'plz' => 'PLZ', 'ort' => 'Ort',
                          'land' => 'Land', 'email' => 'E-Mail', 'telefon' => 'Telefon', 'notiz' => 'Notiz', 'angebote' => 'Angebote', 'active' => 'Kunde aktiv'];
 
-/* ---------------- Listen der Stammdaten (Kundengruppen, VK-Gruppen, Vertreter, Versandarten, Lieferanten) ----------------
+/* ---------------- Listen der Stammdaten (Kundengruppen, VK-Gruppen, Vertreter, Versandarten, Lieferanten, Abteilungen) ----------------
    Dokument je Liste (Name wie die Liste): { rev, groups: [{ nr, name, …Felder der Liste }], updatedAt, updatedBy }.
    Kunden verweisen über „gruppe“ auf eine Kundengruppe, über „vertreter“/„vertreter2“ auf Vertreter und über „versandart“
    auf eine Versandart, Artikel (Stammdaten) über „vkGruppe“ auf eine VK-Gruppe, Lieferanten über „versandart“ auf eine
    Versandart. Lieferanten (Wunsch des Inhabers 06.11.2026): vollständiger Lieferanten-Export der Warenwirtschaft; „name“
    (Name1) darf fehlen – angezeigt wird dann der Kurzname (Alpha). Umsatzfelder liefert die Aktion „lieferanten“ nur an
-   Nutzer mit „stammdaten.bearbeiten“ aus (LIEFERANTEN_UMSATZ). Felder: Name => [Länge, Pflicht]. */
+   Nutzer mit „stammdaten.bearbeiten“ aus (LIEFERANTEN_UMSATZ). Abteilungen (Inhaber 10.11.2026): Nummer und Bezeichnung
+   (eindeutig); die HR-Angaben der Mitarbeiter verweisen über „abteilungNr“ darauf (abteilungen_liste). Felder: Name => [Länge, Pflicht]. */
 const GRUPPEN_MAX = 2000;
 const GRUPPEN_FELDER = ['name' => [120, true], 'klasse' => [20, false], 'kategorie' => [20, false]];
 const GRUPPEN_LISTEN = [
@@ -180,6 +181,7 @@ const GRUPPEN_LISTEN = [
     'vkgruppen' => ['eine' => 'VK-Gruppe', 'viele' => 'VK-Gruppen', 'felder' => GRUPPEN_FELDER],
     'vertreter' => ['eine' => 'Vertreter', 'viele' => 'Vertreter', 'felder' => ['name' => [120, true], 'kurz' => [40, false], 'telefon' => [40, false], 'plz' => [10, false], 'ort' => [80, false], 'land' => [60, false]]],
     'versandarten' => ['eine' => 'Versandart', 'viele' => 'Versandarten', 'felder' => ['name' => [120, true]]],
+    'abteilungen' => ['eine' => 'Abteilung', 'viele' => 'Abteilungen', 'felder' => ['name' => [40, true]]],
     'lieferanten' => ['eine' => 'Lieferant', 'viele' => 'Lieferanten', 'felder' => [
         'name' => [120, false], 'kurz' => [40, false], 'strasse' => [120, false], 'plz' => [10, false], 'ort' => [80, false], 'land' => [60, false],
         'landIntrastat' => [10, false], 'telefon' => [40, false], 'gruppe' => [10, false], 'konto' => [20, false], 'kondition' => [10, false],
@@ -216,7 +218,32 @@ function gruppen_clean(string $liste, $list, array $alt = []): array
         }
         $out[] = $row + $vorher;
     }
+    if ($liste === 'abteilungen') $out = abteilungen_pruefen($out, $alt);
     usort($out, function ($a, $b) { return strnatcasecmp($a['nr'], $b['nr']); });
+    return $out;
+}
+
+/* Abteilungen: Bezeichnungen eindeutig (ohne Groß-/Kleinschreibung). Beim Umbenennen merkt sich der Eintrag die bisherige
+   Bezeichnung in „frueher“ (höchstens 10, nur vom Server gepflegt) – HR-Angaben, die noch nur den Namen tragen (vor den
+   Stammdaten gespeichert), finden ihre Abteilung so weiter (abteilung_nach_name). Trägt ein Eintrag eine frühere
+   Bezeichnung eines anderen als Namen, gilt sie nur noch für ihn. */
+function abteilungen_pruefen(array $out, array $alt): array
+{
+    $k = function (string $s): string { return mb_strtolower(trim($s)); };
+    $namen = [];
+    foreach ($out as $g) {
+        if (isset($namen[$k($g['name'])])) throw new InvalidArgumentException("Die Abteilung „{$g['name']}“ gibt es doppelt.");
+        $namen[$k($g['name'])] = true;
+    }
+    foreach ($out as &$g) {
+        $fr = is_array($g['frueher'] ?? null) ? array_values(array_filter($g['frueher'], 'is_string')) : [];
+        $vorher = $alt[$g['nr']]['name'] ?? null;
+        if (is_string($vorher) && $k($vorher) !== $k($g['name'])) $fr[] = $vorher;
+        $neu = [];
+        foreach ($fr as $f) { $f = trim(mb_substr($f, 0, 40)); if ($f !== '' && !isset($namen[$k($f)])) { unset($neu[$k($f)]); $neu[$k($f)] = $f; } }
+        if ($neu) $g['frueher'] = array_slice(array_values($neu), -10); else unset($g['frueher']);
+    }
+    unset($g);
     return $out;
 }
 function kundengruppen_load(): array { return gruppen_load('kundengruppen'); }
@@ -237,4 +264,25 @@ function versandarten_namen(): array
     $out = [];
     foreach (gruppen_load('versandarten')['groups'] as $g) if (is_array($g) && isset($g['nr'])) $out[(string)$g['nr']] = (string)($g['name'] ?? '');
     return $out;
+}
+/* Schnittstelle der Verwaltung für die Personalverwaltung (HR, regeln/datenverantwortung.toml): Abteilungen in der
+   Reihenfolge der Nummern mit Nummer, Bezeichnung und früheren Bezeichnungen */
+function abteilungen_liste(): array
+{
+    $out = [];
+    foreach (gruppen_load('abteilungen')['groups'] as $g) {
+        if (!is_array($g) || !isset($g['nr']) || trim((string)($g['name'] ?? '')) === '') continue;
+        $out[] = ['nr' => (string)$g['nr'], 'name' => (string)$g['name'],
+                  'frueher' => is_array($g['frueher'] ?? null) ? array_values(array_filter($g['frueher'], function ($f) { return is_string($f) && $f !== ''; })) : []];
+    }
+    return $out;
+}
+/* Abteilung zu einer Bezeichnung (ohne Groß-/Kleinschreibung; aktuelle vor früheren Bezeichnungen) oder null */
+function abteilung_nach_name(array $liste, string $name): ?array
+{
+    $k = mb_strtolower(trim($name));
+    if ($k === '') return null;
+    foreach ($liste as $a) if (mb_strtolower($a['name']) === $k) return $a;
+    foreach ($liste as $a) foreach ($a['frueher'] as $f) if (mb_strtolower($f) === $k) return $a;
+    return null;
 }
