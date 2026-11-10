@@ -357,12 +357,15 @@ Mitarbeiter sind die Nutzer der Plattform (`users_load()`); HR speichert nur eig
   Ohne gespeicherte Angaben gelten Standardwerte; Einträge ohne Mitarbeiter bleiben als Altbestand lesbar.
   `verfall` (seit 03.11.2026, optional): `false` = der Resturlaub aus dem Vorjahr verfällt für diese Person nicht; fehlt
   das Feld oder ist es `true`, verfällt er am Verfallstag (`hr-einstellungen.uebertragBis`).
+  `vertretung` (seit 10.11.2026, optional, Personenkennung oder `null`): feste Vertretung – steht in jedem Antrag der Person
+  fest und muss im Zeitraum da sein (`hr_feste_vertretung`; ist sie nicht mehr im Urlaubsplan, wählt die Person wieder selbst).
 - **`hr-abwesenheiten`**: `{"rev": 9, "eintraege": [{"id": "a0123456789ab", "person": "u…", "art": "U", "von": "2026-03-02", "bis": "2026-03-06", "status": "beantragt", "notiz": "", "vertretung": null, "quelle": "antrag", "erfasst": {"t": "…", "by": "…", "byId": "u…"}}]}`.
   `vertretung` (Person) ist bei Urlaubsanträgen Pflicht, solange `hr-einstellungen.planung.vertretungPflicht` nicht `false` ist. `art`: `U` Urlaub, `K` Krank, `G` Gleittag, `X` freier Tag, `F` unentschuldigt (seit 03.11.2026, nur Personalstelle; zählt nicht
   gegen den Urlaub, beim Eintragen E-Mail an den Mitarbeiter über `hr_fehlen_mail`). `status`: `beantragt`, `genehmigt`, `abgelehnt`,
   `zurueckgezogen`, `storniert` – Einträge werden nie gelöscht, nur der Status ändert sich (mit
   `entscheidung: {t, by, grund}`). `quelle`: `antrag`, `vorplanung` (seit 10.11.2026: mehrere Zeiträume auf einmal über
-  `hr_vorplanung`, sonst wie `antrag`), `personalstelle`, `zeiterfassung`; optional `geaendert`,
+  `hr_vorplanung`, sonst wie `antrag`), `personalstelle`, `zeiterfassung`; optional `vertretung2` (zusätzliche Vertretung,
+  seit 10.11.2026 – fehlt das Feld: keine), `geaendert`,
   `urlaubAbzug` (in der Zeiterfassung vom Urlaub abgezogene Krankheit – nur Hinweis für die Personalstelle; Krankheit
   zählt in `hr_konto` nie gegen den Urlaub, Inhaber 30.10.2026). Überschneidungen (`hr_kollision`) gelten nur zwischen aktiven
   Einträgen derselben Gruppe: Abwesenheiten (U/K/G/F) untereinander und freie Tage (X) untereinander – ein freier Tag in
@@ -384,9 +387,12 @@ Mitarbeiter sind die Nutzer der Plattform (`users_load()`); HR speichert nur eig
   Vorplanung = Urlaub des Planungsjahres, erfasst bis zum Stichtag (`hr_vorplanung_eintrag`); Einzeltage berechnet
   `hr_einzeltage` (Blöcke über Wochenende, Feiertage, freie Tage, Gleittage und Schließtage hinweg).
   `schliesstage` (seit 10.11.2026, optional, nur `false` schaltet ab): Sonderregelung Dezember – 24.12. und 31.12. (ab 2026)
-  Betrieb geschlossen: Urlaub und Gleittage zählen dort je ½ Tag (`hr_tag_wert`, gerechnet, nichts gespeichert), keine
-  Vertretung nötig, kein „gleichzeitig weg“, Weihnachtssperre bis 23.12. `mailVerlauf` kennt dazu die Arten `planung` und
-  `jahresuebersicht` (mit `jahr`).
+  Betrieb geschlossen, verpflichtender Betriebsurlaub: jedem Mitarbeiter im Urlaubsplan wird je ½ Tag angerechnet
+  (`hr_betriebsurlaub`, gerechnet, nichts gespeichert; nicht bei K/F/X), Einträge zählen dort nicht (`hr_tag_wert` = 0), ein
+  Antrag nur für diese Tage wird abgelehnt; kein „gleichzeitig weg“, Weihnachtssperre bis 23.12.
+  `ueberziehenMax` (seit 10.11.2026, optional, 0–30 in halben Tagen, Standard 4): so viele Tage darf ein Urlaubsantrag bzw. eine
+  Vorplanung über die verfügbaren Tage gehen – nur mit Bestätigung (`ueberziehen: true`), darüber immer abgelehnt.
+  `mailVerlauf` kennt dazu die Arten `planung` und `jahresuebersicht` (mit `jahr`); E-Mails an Vertretungen stehen nur im Protokoll.
   E-Mails der Urlaubsverwaltung (`module/hr/mail.php`, optional): `mail` = `{"monat": {"an": false, "stand": "2026-10"},
   "test": {"an": false, "adresse": ""}, "steuerberater": {"an": false, "adresse": "", "tag": 5, "stand": "2026-11"}}` –
   `stand` ist der zuletzt automatisch versendete Monat (Monatsübersicht: Vormonat; Steuerberater: Versandmonat);

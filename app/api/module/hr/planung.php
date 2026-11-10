@@ -11,7 +11,8 @@ declare(strict_types=1);
    Abschluss bekommt jeder Mitarbeiter seine Jahresübersicht per E-Mail.
    Vorplanung (Inhaber 10.11.2026): mit dem Schalter „Vorplanung“ beantragt ein Mitarbeiter mehrere Zeiträume des nächsten
    Jahres auf einmal (hr_vorplanung – alle oder keiner); jeder Zeitraum wird wie ein einzelner Antrag geprüft, auch ob die
-   Vertretung da ist (hr_antrag_zeitraum, Vorschau: hr_antrag_pruefen). In der Vorplanung höchstens einzeltageMax (Standard
+   Vertretung da ist (hr_antrag_zeitraum, Vorschau: hr_antrag_pruefen). Feste Vertretung aus den Stammdaten (hr-personal.vertretung,
+   nicht änderbar) und optional eine zusätzliche Vertretung (Eintrag vertretung2) – beide müssen da sein (Inhaber 10.11.2026). In der Vorplanung höchstens einzeltageMax (Standard
    4) einzelne Urlaubstage, der übrige Urlaub möglichst zusammenhängend: darüber Hinweis an den Mitarbeiter und Konflikt
    „einzeltage“ in der Jahresplanung (die Personalstelle entscheidet einzeln). Vorplanung = bis zum Stichtag erfasst.
    Gespeichert im eigenen Dokument hr-einstellungen, Feld „planung“ (nur erweitert – GR-006): {start, stichtag (MM-TT),
@@ -67,33 +68,27 @@ function hr_planung_jahr(?string $heute = null): int { return (int)substr($heute
 function hr_planung_daten(array $pe, int $jahr): array { return ['start' => ($jahr - 1) . '-' . $pe['start'], 'stichtag' => ($jahr - 1) . '-' . $pe['stichtag']]; }
 
 /* Stand einer Person: Anspruch, Ziel (Anteil des Anspruchs, auf halbe Tage aufgerundet), geplant = beantragt + genehmigt
-   (Schließtage je ½), einzelne Urlaubstage der Vorplanung und noch nicht eingeplante Schließtage (24.12./31.12.).
+   (dazu der Betriebsurlaub 24.12./31.12. als genehmigt – verpflichtend, automatisch), einzelne Urlaubstage der Vorplanung.
    $zusatz: noch nicht gespeicherte Zeiträume ([{von, bis}], Vorschau der Vorplanung) – zählen wie beantragt. */
 function hr_planung_person(array $p, array $eintraege, int $jahr, array $pe, array $zusatz = []): array
 {
     $frei = hr_freie_tage($eintraege, $p['id']);
-    $gen = 0.0; $bea = 0.0; $belegt = [];
+    $gen = 0.0; $bea = 0.0;
     $jv = "$jahr-01-01"; $jb = "$jahr-12-31";
     foreach ($eintraege as $e) {
-        if ($e['person'] !== $p['id'] || !in_array($e['status'], HR_AKTIV, true) || $e['bis'] < $jv || $e['von'] > $jb) continue;
-        foreach (HR_SCHLIESSTAGE as $md => $_) if ($e['von'] <= "$jahr-$md" && "$jahr-$md" <= $e['bis']) $belegt["$jahr-$md"] = true;
-        if ($e['art'] !== 'U') continue;
+        if ($e['person'] !== $p['id'] || !in_array($e['status'], HR_AKTIV, true) || $e['bis'] < $jv || $e['von'] > $jb || $e['art'] !== 'U') continue;
         $n = hr_tage_summe(hr_tage($p, $e['von'], $e['bis'], $jv, $jb, $frei));
         if ($e['status'] === 'genehmigt') $gen += $n; else $bea += $n;
     }
-    foreach ($zusatz as $z) {
-        $bea += hr_tage_summe(hr_tage($p, $z['von'], $z['bis'], $jv, $jb, $frei));
-        foreach (HR_SCHLIESSTAGE as $md => $_) if ($z['von'] <= "$jahr-$md" && "$jahr-$md" <= $z['bis']) $belegt["$jahr-$md"] = true;
-    }
+    foreach ($zusatz as $z) $bea += hr_tage_summe(hr_tage($p, $z['von'], $z['bis'], $jv, $jb, $frei));
+    $betrieb = count(hr_betriebsurlaub($p, $eintraege, $jahr)) * HR_BETRIEBSURLAUB_WERT;
+    $gen += $betrieb;
     $anspruch = hr_anspruch($p, $jahr);
     $ziel = ceil($anspruch * $pe['prozent'] / 100 * 2) / 2;
     $geplant = $gen + $bea;
-    // Schließtage, an denen die Person arbeiten würde und noch nichts eingetragen ist (Urlaub, Gleittag, Krank, freier Tag)
-    $offen = [];
-    foreach (hr_schliesstage($jahr) as $d => $_) if (hr_arbeitstag($p, $d) && !isset($frei[$d]) && !isset($belegt[$d])) $offen[] = $d;
-    return ['anspruch' => $anspruch, 'ziel' => $ziel, 'genehmigt' => $gen, 'beantragt' => $bea, 'geplant' => $geplant,
+    return ['anspruch' => $anspruch, 'ziel' => $ziel, 'genehmigt' => $gen, 'beantragt' => $bea, 'geplant' => $geplant, 'betriebsurlaub' => $betrieb,
             'fehlt' => max(0.0, $ziel - $geplant), 'erreicht' => $geplant >= $ziel, 'anteil' => $anspruch > 0 ? (int)round($geplant / $anspruch * 100) : 100,
-            'einzeltage' => hr_einzeltage($p, $eintraege, $jahr, $pe, $zusatz), 'einzeltageMax' => $pe['einzeltageMax'], 'schliesstageOffen' => $offen];
+            'einzeltage' => hr_einzeltage($p, $eintraege, $jahr, $pe, $zusatz), 'einzeltageMax' => $pe['einzeltageMax']];
 }
 
 /* Entstand der Eintrag in der Vorplanung des Jahres? = bis zum Stichtag erfasst (UTC-Zeit, ohne Erfassungszeit: nein) */
@@ -189,10 +184,11 @@ function hr_vertretung_luecken(array $e, array $p, array $vp, array $eintraege, 
    Teilzeit), bleibt es ein Hinweis. Schließtage (24.12./31.12.) brauchen keine Vertretung; ein Zeitraum nur aus
    Schließtagen auch ohne Vertretung. $andere: weitere Zeiträume derselben Vorplanung (keine Überschneidung untereinander).
    Rückgabe: {von, bis, tage (Schließtage je ½), fehler (erster Grund zur Ablehnung) und code, hinweise[],
-   vertretung: null|{id, name, status da|abwesend|frei, text}} */
-function hr_antrag_zeitraum(array $ich, array $personal, array $eintraege, array $einst, string $art, string $von, string $bis, $vertretung, array $andere = []): array
+   vertretung und vertretung2: null|{id, name, fest, status da|abwesend|frei, text}}. Ist eine feste Vertretung hinterlegt
+   (hr_feste_vertretung), gilt sie statt $vertretung; $vertretung2 ist die optionale zusätzliche Vertretung (Inhaber 10.11.2026). */
+function hr_antrag_zeitraum(array $ich, array $personal, array $eintraege, array $einst, string $art, string $von, string $bis, $vertretung, array $andere = [], $vertretung2 = null): array
 {
-    $r = ['von' => $von, 'bis' => $bis, 'tage' => 0.0, 'fehler' => null, 'code' => 200, 'hinweise' => [], 'vertretung' => null];
+    $r = ['von' => $von, 'bis' => $bis, 'tage' => 0.0, 'fehler' => null, 'code' => 200, 'hinweise' => [], 'vertretung' => null, 'vertretung2' => null];
     $f = function (string $text, int $code) use (&$r) { if ($r['fehler'] === null) { $r['fehler'] = $text; $r['code'] = $code; } };
     if ($von < hr_heute()) $f('Urlaub kann nur für heute oder später beantragt werden. Vergangene Tage trägt die Personalstelle ein.', 422);
     $tage = hr_tage($ich, $von, $bis, null, null, hr_freie_tage($eintraege, $ich['id']));
@@ -207,22 +203,78 @@ function hr_antrag_zeitraum(array $ich, array $personal, array $eintraege, array
     if ($k = hr_kollision($eintraege, $ich['id'], $von, $bis, null, 'U')) $f('Für ' . hr_zeitraum_text($k['von'], $k['bis']) . ' gibt es bereits einen Eintrag.', 409);
     foreach ($andere as $o) if ($o['von'] <= $bis && $von <= $o['bis']) { $f('Überschneidet sich mit ' . hr_zeitraum_text($o['von'], $o['bis']) . ' in dieser Vorplanung.', 422); break; }
     $nurSchliess = $tage && !array_filter($tage, function ($d) { return hr_schliesstag($d) === null; });
-    if ($vertretung !== null && $vertretung !== '') {
-        $vp = hr_personen_index($personal)[(string)$vertretung] ?? null;
-        if (!$vp || !$vp['aktiv'] || $vp['id'] === $ich['id']) { $f('Bitte eine gültige Vertretung wählen.', 422); return $r; }
+    if ($nurSchliess) $f('Am 24.12. und 31.12. ist der Betrieb geschlossen – dafür wird automatisch je ½ Urlaubstag angerechnet, ein Antrag ist nicht nötig.', 422);
+    $leer = function ($v) { return $v === null || $v === ''; };
+    // Feste Vertretung aus den Stammdaten (Inhaber 10.11.2026): nicht änderbar – was der Browser schickt, zählt dann nicht
+    $fest = hr_feste_vertretung($ich, $personal);
+    if ($fest) $vertretung = $fest['id'];
+    elseif ($leer($vertretung) && !$leer($vertretung2)) { $vertretung = $vertretung2; $vertretung2 = null; }   // nur die zusätzliche gewählt: sie ist die Vertretung
+    if (!$leer($vertretung2) && (string)$vertretung2 === (string)$vertretung) $vertretung2 = null;          // doppelt gewählt: einmal genügt
+    $idx = hr_personen_index($personal);
+    // Ist die Vertretung im Zeitraum da? Nur Genehmigtes anderer (wie im Kalender); abwesend = Ablehnung, arbeitet nicht = Hinweis
+    $pruefe = function ($vid, bool $zusatz) use ($idx, $ich, $von, $bis, $eintraege, $fest, $f, &$r): bool {
+        $vp = $idx[(string)$vid] ?? null;
+        $wer = $zusatz ? 'zusätzliche Vertretung' : 'Vertretung';
+        if (!$vp || !$vp['aktiv'] || $vp['id'] === $ich['id']) { $f('Bitte eine gültige ' . $wer . ' wählen.', 422); return false; }
         $l = hr_vertretung_luecken(['von' => $von, 'bis' => $bis], $ich, $vp, $eintraege, true);
         $n = hr_name($vp);
+        $v = ['id' => $vp['id'], 'name' => $n, 'fest' => !$zusatz && $fest !== null];
         if ($l['abwesend']) {
-            $text = "Ihre Vertretung $n ist in dieser Zeit selbst abwesend (" . hr_daten_text($l['abwesend']) . ') – bitte wählen Sie eine andere Vertretung.';
-            $r['vertretung'] = ['id' => $vp['id'], 'name' => $n, 'status' => 'abwesend', 'text' => $text];
+            $text = "Ihre $wer $n ist in dieser Zeit selbst abwesend (" . hr_daten_text($l['abwesend']) . ') – '
+                . ($zusatz ? 'bitte wählen Sie eine andere oder lassen Sie das Feld leer.'
+                           : ($v['fest'] ? 'sie ist für Sie fest hinterlegt. Bitte wählen Sie einen anderen Zeitraum oder wenden Sie sich an die Personalstelle.'
+                                         : 'bitte wählen Sie eine andere Vertretung.'));
+            $v += ['status' => 'abwesend', 'text' => $text];
             $f($text, 409);
         } elseif ($l['frei']) {
-            $text = "Ihre Vertretung $n arbeitet an diesen Tagen nicht (" . hr_daten_text($l['frei']) . ') – bitte mit der Personalstelle klären.';
-            $r['vertretung'] = ['id' => $vp['id'], 'name' => $n, 'status' => 'frei', 'text' => $text];
+            $text = "Ihre $wer $n arbeitet an diesen Tagen nicht (" . hr_daten_text($l['frei']) . ') – bitte mit der Personalstelle klären.';
+            $v += ['status' => 'frei', 'text' => $text];
             $r['hinweise'][] = $text;
-        } else $r['vertretung'] = ['id' => $vp['id'], 'name' => $n, 'status' => 'da', 'text' => "$n ist in dieser Zeit da."];
+        } else $v += ['status' => 'da', 'text' => "$n ist in dieser Zeit da."];
+        $r[$zusatz ? 'vertretung2' : 'vertretung'] = $v;
+        return true;
+    };
+    if (!$leer($vertretung)) {
+        if ($pruefe($vertretung, false) && !$leer($vertretung2)) $pruefe($vertretung2, true);
     } elseif ($art === 'U' && !$nurSchliess && hr_planung_einst()['vertretungPflicht']) $f('Bitte wählen Sie eine Vertretung für die Zeit Ihres Urlaubs aus.', 422);
     return $r;
+}
+
+/* Feste Vertretung eines Mitarbeiters aus den Stammdaten (hr-personal.vertretung, Verwaltung → Mitarbeiter; Inhaber
+   10.11.2026): steht im Antrag fest und muss im Zeitraum da sein. Nur eine aktive Person im Urlaubsplan zählt – ist sie
+   ausgeschieden, wählt der Mitarbeiter wieder selbst. */
+function hr_feste_vertretung(array $ich, array $personal): ?array
+{
+    $id = $ich['vertretung'] ?? null;
+    if (!$id) return null;
+    $vp = hr_personen_index($personal)[$id] ?? null;
+    return $vp && $vp['aktiv'] && $vp['id'] !== $ich['id'] ? $vp : null;
+}
+
+/* Vertretungen eines Eintrags als Text: „A“, „A, zusätzlich B“ oder '' */
+function hr_vertretung_text(array $e, array $idx): string
+{
+    $n = function ($id) use ($idx) { return $id && isset($idx[$id]) ? hr_name($idx[$id]) : ''; };
+    $a = $n($e['vertretung'] ?? null); $b = $n($e['vertretung2'] ?? null);
+    return $a !== '' && $b !== '' ? "$a, zusätzlich $b" : ($a !== '' ? $a : $b);
+}
+
+/* Wen vertritt der Mitarbeiter? Laufende und kommende Urlaubs- und Gleittag-Anträge anderer (offen oder genehmigt), in denen
+   er Vertretung oder zusätzliche Vertretung ist – für „Sie vertreten“ unter „Mein Urlaub“. Nur Name, Zeitraum, Status und
+   Rolle; nie Art, Notiz oder Gründe. */
+function hr_meine_vertretungen(array $ich, array $personal, array $eintraege): array
+{
+    $idx = hr_personen_index($personal); $heute = hr_heute(); $out = [];
+    foreach ($eintraege as $e) {
+        if (!in_array($e['art'], ['U', 'G'], true) || !in_array($e['status'], HR_AKTIV, true) || $e['bis'] < $heute || $e['person'] === $ich['id']) continue;
+        $haupt = ($e['vertretung'] ?? null) === $ich['id']; $zusatz = ($e['vertretung2'] ?? null) === $ich['id'];
+        if (!$haupt && !$zusatz) continue;
+        $p = $idx[$e['person']] ?? null;
+        if (!$p) continue;
+        $out[] = ['name' => hr_name($p), 'von' => $e['von'], 'bis' => $e['bis'], 'status' => $e['status'], 'rolle' => $haupt ? 'vertretung' : 'zusatz'];
+    }
+    usort($out, function ($a, $b) { return [$a['von'], $a['name']] <=> [$b['von'], $b['name']]; });
+    return array_slice($out, 0, 30);
 }
 
 /* Zeiträume aus der Anfrage (Vorplanung und Vorschau): [{von, bis, vertretung}] – höchstens HR_VORPLANUNG_MAX */
@@ -234,8 +286,8 @@ function hr_zeitraeume_anfrage($l): array
     foreach ($l as $i => $x) {
         if (!is_array($x)) throw new InvalidArgumentException('Zeitraum ' . ($i + 1) . ': ungültige Angaben.');
         try { [$von, $bis] = hr_zeitraum_pruefen($x); } catch (InvalidArgumentException $ex) { throw new InvalidArgumentException('Zeitraum ' . ($i + 1) . ': ' . $ex->getMessage()); }
-        $v = $x['vertretung'] ?? null;
-        $out[] = ['von' => $von, 'bis' => $bis, 'vertretung' => is_string($v) && $v !== '' ? $v : null];
+        $v = $x['vertretung'] ?? null; $v2 = $x['vertretung2'] ?? null;
+        $out[] = ['von' => $von, 'bis' => $bis, 'vertretung' => is_string($v) && $v !== '' ? $v : null, 'vertretung2' => is_string($v2) && $v2 !== '' ? $v2 : null];
     }
     return $out;
 }
@@ -247,7 +299,7 @@ function hr_vorplanung_pruefen(array $ich, array $personal, array $eintraege, ar
     $erg = []; $gut = [];
     foreach ($zr as $i => $z) {
         $andere = array_slice($zr, 0, $i);   // nur frühere Zeilen: die erste bleibt gültig, die überschneidende wird markiert
-        $e = hr_antrag_zeitraum($ich, $personal, $eintraege, $einst, 'U', $z['von'], $z['bis'], $z['vertretung'], $andere);
+        $e = hr_antrag_zeitraum($ich, $personal, $eintraege, $einst, 'U', $z['von'], $z['bis'], $z['vertretung'], $andere, $z['vertretung2'] ?? null);
         if (substr($z['von'], 0, 4) !== (string)$jahr || substr($z['bis'], 0, 4) !== (string)$jahr) { $e['fehler'] = "Die Vorplanung gilt für $jahr – bitte nur Tage in $jahr."; $e['code'] = 422; }
         $erg[] = $e;
         if ($e['fehler'] === null) $gut[] = $z;
@@ -285,8 +337,18 @@ function hr_planung_konflikte(array $e, array $p, array $idx, array $eintraege, 
             if ($l['frei']) $k[] = ['art' => 'vertretung', 'text' => 'Vertretung ' . hr_name($vp) . ' arbeitet an diesen Tagen nicht (' . hr_daten_text($l['frei']) . ')'];
         }
     }
+    // zusätzliche Vertretung (optional, Inhaber 10.11.2026): gleiche Prüfung, eigener Text
+    if ($v2 = $e['vertretung2'] ?? null) {
+        $vp2 = $idx[$v2] ?? null;
+        if (!$vp2 || !$vp2['aktiv']) $k[] = ['art' => 'vertretung', 'text' => 'Zusätzliche Vertretung nicht mehr im Urlaubsplan'];
+        else {
+            $l = hr_vertretung_luecken($e, $p, $vp2, $eintraege);
+            if ($l['abwesend']) $k[] = ['art' => 'vertretung', 'text' => 'Zusätzliche Vertretung ' . hr_name($vp2) . ' ist selbst abwesend (' . hr_daten_text($l['abwesend']) . ')'];
+            if ($l['frei']) $k[] = ['art' => 'vertretung', 'text' => 'Zusätzliche Vertretung ' . hr_name($vp2) . ' arbeitet an diesen Tagen nicht (' . hr_daten_text($l['frei']) . ')'];
+        }
+    }
     if (trim((string)$p['abteilung']) !== '') foreach ($eintraege as $o) {
-        if ($o['id'] === $e['id'] || $o['person'] === $e['person'] || $o['person'] === $v || $o['art'] === 'X' || !in_array($o['status'], HR_AKTIV, true) || !hr_planung_schnitt($o, $e)) continue;
+        if ($o['id'] === $e['id'] || $o['person'] === $e['person'] || $o['person'] === $v || $o['person'] === ($e['vertretung2'] ?? null) || $o['art'] === 'X' || !in_array($o['status'], HR_AKTIV, true) || !hr_planung_schnitt($o, $e)) continue;
         $op = $idx[$o['person']] ?? null;
         $gem = hr_schnitt_ohne_schliesstage($o, $e);   // nur am 24.12./31.12. zusammen weg: Betrieb ohnehin geschlossen
         if ($op && $op['aktiv'] && $op['abteilung'] === $p['abteilung'] && $gem) $k[] = ['art' => 'abteilung', 'text' => 'Gleichzeitig weg: ' . hr_name($op) . ' (' . hr_zeitraum_text($gem[0], $gem[count($gem) - 1]) . ')'];
@@ -325,9 +387,10 @@ function hr_planung(int $jahr, array $me): array
         $eigen = hr_eigen($personal, $me, $e);
         if ($kon) $personen[$p['id']]['konflikte']++;
         $vp = ($e['vertretung'] ?? null) ? ($idx[$e['vertretung']] ?? null) : null;
+        $vp2 = ($e['vertretung2'] ?? null) ? ($idx[$e['vertretung2']] ?? null) : null;
         $antraege[] = ['id' => $e['id'], 'person' => $p['id'], 'name' => hr_name($p), 'abteilung' => $p['abteilung'], 'von' => $e['von'], 'bis' => $e['bis'],
                        'tage' => hr_tage_summe(hr_tage($p, $e['von'], $e['bis'], $jv, $jb, $freiJe[$p['id']] ??= hr_freie_tage($eintraege, $p['id']))),
-                       'status' => $e['status'], 'vertretung' => $vp ? hr_name($vp) : null, 'notiz' => (string)($e['notiz'] ?? ''),
+                       'status' => $e['status'], 'vertretung' => $vp ? hr_name($vp) : null, 'vertretung2' => $vp2 ? hr_name($vp2) : null, 'notiz' => (string)($e['notiz'] ?? ''),
                        'eigen' => $eigen, 'konflikte' => $kon, 'frei' => $e['status'] === 'beantragt' && !$kon && !$eigen];
     }
     usort($antraege, function ($a, $b) { return [$a['von'], $a['name']] <=> [$b['von'], $b['name']]; });
@@ -389,10 +452,13 @@ function hr_planung_mail_zeilen(array $p, array $eintraege, int $jahr, array $id
         if ($e['person'] !== $p['id'] || $e['art'] !== 'U' || !in_array($e['status'], HR_AKTIV, true) || $e['bis'] < "$jahr-01-01" || $e['von'] > "$jahr-12-31") continue;
         $n = hr_tage_summe(hr_tage($p, $e['von'], $e['bis'], "$jahr-01-01", "$jahr-12-31", $frei));
         if (!$n) continue;
-        $vp = ($e['vertretung'] ?? null) ? ($idx[$e['vertretung']] ?? null) : null;
+        $vt = hr_vertretung_text($e, $idx);
         $z[] = [$e['von'], hr_zeitraum_text($e['von'], $e['bis']) . ($e['status'] === 'beantragt' ? ' (beantragt)' : ''), hr_tage_text((float)$n), false,
-                'Vertretung: ' . ($vp ? hr_name($vp) : '–')];
+                'Vertretung: ' . ($vt !== '' ? $vt : '–')];
     }
+    // Betriebsurlaub 24.12./31.12. (verpflichtend, automatisch)
+    if ($bu = hr_betriebsurlaub($p, $eintraege, $jahr))
+        $z[] = [$bu[0], implode(' und ', array_map(function ($d) { return substr($d, 8, 2) . '.' . substr($d, 5, 2) . '.'; }, $bu)) . ' Betrieb geschlossen', hr_tage_text(count($bu) * HR_BETRIEBSURLAUB_WERT), false, 'automatisch'];
     usort($z, function ($a, $b) { return $a[0] <=> $b[0]; });
     return array_map(function ($x) { return array_slice($x, 1); }, $z);
 }

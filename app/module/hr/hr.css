@@ -147,13 +147,23 @@ body.hr .hr-kopf .brand-logo { height: 28px; width: auto; }
 .hr-karte.schmal { max-width: 620px; }
 /* Urlaubsregeln (Text der Personalstelle) unter dem Antrag: aufklappbar, für alle sichtbar */
 .hr-regeln { display: block; margin-top: 20px; }
-.hr-regeln > summary { display: flex; align-items: baseline; gap: 12px; flex-wrap: wrap; cursor: pointer; list-style: none; }
+.hr-regeln > summary { display: flex; align-items: center; justify-content: space-between; gap: 10px 16px; flex-wrap: wrap; cursor: pointer; list-style: none; }
 .hr-regeln > summary::-webkit-details-marker { display: none; }
-.hr-regeln > summary::before { content: '▸'; color: var(--hr-muted); font-size: 14px; transition: transform .15s; }
-.hr-regeln[open] > summary::before { transform: rotate(90deg); }
+.hr-regeln-titel { display: flex; align-items: baseline; gap: 4px 12px; flex-wrap: wrap; min-width: 0; }
 .hr-regeln > summary h2 { margin: 0; }
 .hr-regeln > summary .hr-klein { margin: 0; }
-.hr-regeln > summary:focus-visible { outline: 2px solid var(--hr-akzent); outline-offset: 4px; border-radius: 6px; }
+.hr-regeln > summary:focus-visible { outline: none; }
+.hr-regeln > summary:focus-visible .hr-regeln-knopf { box-shadow: var(--hr-fokus); }
+/* Aufklappen deutlich sichtbar (Inhaber 10.11.2026): Knopf „Regeln anzeigen“ mit Pfeil, offen „Ausblenden“ */
+.hr-regeln-knopf { display: inline-flex; align-items: center; gap: 8px; flex: none; min-height: 40px; padding: 0 14px 0 18px; border-radius: 999px;
+  border: 1.5px solid var(--hr-akzent-ink); color: var(--hr-akzent-ink); font-size: 14px; font-weight: 650; white-space: nowrap; transition: background .15s; }
+.hr-regeln-knopf .i { width: 16px; height: 16px; transform: rotate(90deg); transition: transform .15s; }
+.hr-regeln > summary:hover .hr-regeln-knopf { background: var(--hr-zeile-hover); }
+.hr-regeln-knopf .auf, .hr-regeln[open] .hr-regeln-knopf .zu { display: none; }
+.hr-regeln[open] .hr-regeln-knopf .auf { display: inline; }
+.hr-regeln[open] .hr-regeln-knopf { border-color: var(--hr-linie); color: var(--hr-text); }
+.hr-regeln[open] .hr-regeln-knopf .i { transform: rotate(-90deg); }
+@media (prefers-reduced-motion: reduce) { .hr-regeln-knopf, .hr-regeln-knopf .i { transition: none; } }
 /* kompakt (Inhaber 03.11.2026): höchstens drei Spalten (6 Regeln = 2 Zeilen), schmaler zwei, auf dem Handy eine */
 .hr-regeln-text { margin-top: 12px; display: grid; gap: 14px 28px;
   grid-template-columns: repeat(auto-fit, minmax(min(100%, max(240px, calc((100% - 56px) / 3))), 1fr)); }
@@ -507,6 +517,42 @@ body.hr .hr-kopf .brand-logo { height: 28px; width: auto; }
 .hr-mp .btn.primary { align-self: center; white-space: nowrap; }
 #antrag-vertretung-opt:empty { display: none; }
 
+/* ── Vertretung (Inhaber 10.11.2026): feste aus den Stammdaten (gesperrt), zusätzliche als Zusatz, „Sie vertreten“ ── */
+.hr-vt-fest { display: flex; flex-direction: column; gap: 6px; font-size: 13px; font-weight: 600; color: var(--hr-muted); }
+.hr-vt-fest[hidden] { display: none; }
+.hr-vt-fest .wert { display: flex; align-items: center; gap: 8px; min-height: 42px; padding: 0 12px; border-radius: 12px; border: 1px dashed var(--hr-linie);
+  background: var(--hr-aus); color: var(--hr-text); font-size: 15px; font-weight: 600; box-sizing: border-box; min-width: 0; }
+.hr-vt-fest .wert b { font-weight: 650; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.hr-vt-fest .wert small { margin-left: auto; flex: none; font-size: 12px; font-weight: 500; color: var(--hr-muted); }
+.hr-vt-fest .wert .i { width: 16px; height: 16px; color: var(--hr-muted); }
+.hr-zusatz { align-self: flex-start; display: inline-flex; align-items: center; gap: 6px; min-height: 36px; padding: 0 14px 0 10px; border-radius: 999px;
+  border: 1px dashed var(--hr-linie); background: none; color: var(--hr-text); font: inherit; font-size: 13.5px; font-weight: 600; cursor: pointer; }
+.hr-zusatz:hover { background: var(--hr-aus); }
+.hr-zusatz:focus-visible { outline: none; box-shadow: var(--hr-fokus); }
+.hr-zusatz .i { width: 16px; height: 16px; }
+.hr-zusatz[hidden], .hr-vt2[hidden] { display: none; }
+.hr-vt2 { display: flex; flex-direction: column; gap: 6px; }
+.hr-vt2 > label, .hr-vt2 label > span:first-child { font-size: 13px; font-weight: 600; color: var(--hr-muted); }
+.hr-vt2-zeile { display: flex; gap: 8px; align-items: center; min-width: 0; }
+.hr-vt2-zeile select { flex: 1 1 auto; }
+.hr-vp-zeile .hr-zusatz { margin-top: 2px; }
+.hr-vertreten { margin-bottom: 20px; }
+.hr-vertreten h2 { margin: 0; }
+.hr-vertreten-liste { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; }
+.hr-vertreten-liste li { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 12px; padding: 10px 0; border-top: 1px solid var(--hr-linie); font-size: 14.5px; }
+.hr-vertreten-liste li:first-child { border-top: 0; padding-top: 2px; }
+.hr-vertreten-liste .wer { font-weight: 650; }
+.hr-vertreten-liste .zeitraum { font-variant-numeric: tabular-nums; }
+.hr-vertreten-liste small { color: var(--hr-muted); font-size: 12.5px; }
+.hr-vp-regel.fehler { color: var(--hr-fehler); font-weight: 600; }
+
+/* Handy (Prüfung 10.11.2026): Eingaben mit 16 px – iOS vergrößert sonst beim Antippen die ganze Seite; Tippflächen ≥ 40 px */
+@media (max-width: 640px), (pointer: coarse) {
+  .hr input[type="date"], .hr input[type="text"], .hr input[type="number"], .hr input[type="email"], .hr select, .hr textarea { font-size: 16px; }
+  .hr-rund.klein { width: 40px; height: 40px; }
+  .hr-zusatz { min-height: 40px; }
+}
+
 /* ── Vorplanung (Inhaber 10.11.2026): Schalter im Kopf von „Urlaub beantragen“, mehrere Zeiträume ── */
 .hr-antrag-kopf { display: flex; align-items: center; justify-content: space-between; gap: 8px 16px; flex-wrap: wrap; }
 .hr-antrag-kopf h2 { margin: 0; }
@@ -529,7 +575,7 @@ body.hr .hr-kopf .brand-logo { height: 28px; width: auto; }
 .hr-vp-zahl { font-size: 14px; font-weight: 650; font-variant-numeric: tabular-nums; }
 .hr-vp-regel { font-size: 13px; color: var(--hr-muted); }
 .hr-vp-regel.warn { color: var(--hr-warn); font-weight: 600; }
-.hr-mp .hr-vp-regel { margin-top: 2px; }
+.hr-vp-regeln { display: flex; flex-direction: column; gap: 4px; }
 .hr-vp-liste { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 10px; counter-reset: vp; }
 .hr-vp-zeile { position: relative; display: flex; flex-direction: column; gap: 4px; padding: 10px 12px 10px 40px; border-radius: 16px; border: 1px solid var(--hr-linie); counter-increment: vp; }
 .hr-vp-zeile::before { content: counter(vp); position: absolute; left: 12px; top: 37px; display: grid; place-items: center; width: 20px; height: 20px; border-radius: 50%;
