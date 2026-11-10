@@ -65,7 +65,7 @@
   function zeichneKaeufer() {
     const c = M.c, box = M.host.querySelector('#mhd-kaeufer');
     if (!box) return;
-    if (!M.wahl) { box.innerHTML = '<p class="crm-leer">Bitte links einen Artikel wählen.</p>'; return; }
+    if (!M.wahl) { box.innerHTML = '<p class="crm-leer">Bitte einen Artikel aus der Liste wählen.</p>'; return; }
     if (!M.k) { box.innerHTML = '<p class="crm-leer">Käufer werden gesucht …</p>'; return; }
     if (M.k.fehler) { box.innerHTML = `<p class="crm-meldung fehler" role="alert">${c.esc(M.k.fehler)}</p>`; return; }
     const a = M.k.artikel, zeilen = kaeuferZeilen(), alle = M.k.kaeufer, bearbeiten = c.daten().rechte.bearbeiten;

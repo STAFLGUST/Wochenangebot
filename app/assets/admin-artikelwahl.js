@@ -183,7 +183,7 @@
     const el = $('#ezp-list');
     const zeilen = pickZeilen(basis);
     if (!zeilen) {
-      el.innerHTML = `<div class="ezp-start">${icon('tag')}<h3>Zuerst eine VK-Gruppe wählen</h3><p>Links die VK-Gruppe anklicken (oder darüber suchen), dann die Artikel markieren und gesammelt hinzufügen. Das Suchfeld oben sucht in der gewählten Gruppe – ohne gewählte Gruppe in allen Gruppen.</p></div>`;
+      el.innerHTML = `<div class="ezp-start">${icon('tag')}<h3>Zuerst eine VK-Gruppe wählen</h3><p>Die VK-Gruppe in der Liste anklicken (oder darüber suchen), dann die Artikel markieren und gesammelt hinzufügen. Das Suchfeld oben sucht in der gewählten Gruppe – ohne gewählte Gruppe in allen Gruppen.</p></div>`;
       return;
     }
     const drin = drinSet();

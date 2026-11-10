@@ -12,6 +12,8 @@
   const $ = (s, el = document) => el.querySelector(s);
   const $$ = (s, el = document) => [...el.querySelectorAll(s)];
   const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+  // Dateipfad mit Umbruchstellen nach „/“ (am Handy sonst Zeichen für Zeichen umbrochen)
+  const pfadText = (p) => esc(p).replace(/\//g, '/<wbr>');
   const icon = (n, k = '') => `<svg class="i${k ? ' ' + k : ''}" aria-hidden="true"><use href="#i-${n}"/></svg>`;
   const fmtInt = new Intl.NumberFormat('de-DE');
   const zahl = (n) => fmtInt.format(+n || 0);
@@ -1024,7 +1026,7 @@
     const knopf = `<button type="button" class="btn primary" data-ip="run">${icon('check')}Jetzt prüfen</button>`;
     if (!r) { host.innerHTML = `<section class="sic-held sic-glas"><div class="sic-held-icon">${icon('datei', 'gross')}</div><div class="sic-held-text"><h2>Noch keine Dateiprüfung</h2><p>Vergleicht alle Programmdateien mit der freigegebenen Fassung und sucht nach Schadcode-Mustern.</p></div><div class="sic-held-knopf">${knopf}</div></section>`; return; }
     const c = r.counts, l = c.critical ? 'bad' : c.warnings ? 'warn' : 'ok';
-    const befunde = r.items.slice(0, 200).map((x, i) => `<tr class="sic-klick" data-befund="${i}" tabindex="0"><td>${punkt(IP_STUFE[x.stufe] || 'info')}</td><td class="mono-s sic-pfad">${esc(x.path)}</td><td>${esc(IP_ART[x.art] || x.art)}</td><td>${esc(x.text)}${x.signatur ? ` <strong>Muster: ${esc(x.signatur)}</strong>` : ''}</td></tr>`).join('');
+    const befunde = r.items.slice(0, 200).map((x, i) => `<tr class="sic-klick" data-befund="${i}" tabindex="0"><td>${punkt(IP_STUFE[x.stufe] || 'info')}</td><td class="mono-s sic-pfad">${pfadText(x.path)}</td><td>${esc(IP_ART[x.art] || x.art)}</td><td>${esc(x.text)}${x.signatur ? ` <strong>Muster: ${esc(x.signatur)}</strong>` : ''}</td></tr>`).join('');
     const mehr = r.items.length - 200 + (r.truncated || 0);
     const komp = (r.components || []).map((x) => `<tr><td>${punkt(IP_STUFE[x.stufe] || 'info')}</td><td><span class="sic-nm">${esc(x.name)}</span> <span class="mono-s">${esc(x.version)}</span></td><td>${esc(x.text)}</td></tr>`).join('');
     const hist = (S.datei.history || []).slice(0, 8).map((h) => `<li>${punkt(h.counts.critical ? 'bad' : h.counts.warnings ? 'warn' : 'ok')}${esc(zeit(h.ranAt))} Uhr · ${zahl(h.counts.critical)} kritisch · ${zahl(h.counts.warnings)} Warnungen <span class="sub">${h.auto ? 'automatisch' : esc(h.by || '')}</span></li>`).join('');
@@ -1056,7 +1058,7 @@
       verdaechtig: 'Typisches Muster von Schadcode gefunden. Sofort prüfen – im Zweifel Notfallmodus auslösen und den Server untersuchen lassen.',
       daten: 'Auffälligkeit im Datenordner. Herkunft prüfen.' };
     dialog(`${dKopf('Befund der Dateiprüfung', esc(IP_ART[x.art] || x.art))}<div class="sic-dinhalt"><dl class="sic-dl">
-      <dt>Datei</dt><dd class="mono-s sic-pfad">${esc(x.path)}</dd><dt>Stufe</dt><dd>${punkt(IP_STUFE[x.stufe] || 'info')} ${esc(x.stufe)}</dd><dt>Befund</dt><dd>${esc(x.text)}</dd>
+      <dt>Datei</dt><dd class="mono-s sic-pfad">${pfadText(x.path)}</dd><dt>Stufe</dt><dd>${punkt(IP_STUFE[x.stufe] || 'info')} ${esc(x.stufe)}</dd><dt>Befund</dt><dd>${esc(x.text)}</dd>
       ${x.signatur ? `<dt>Muster</dt><dd><strong>${esc(x.signatur)}</strong></dd>` : ''}</dl><p class="sic-hinweis">${esc(RAT[x.art] || '')}</p></div>${dFuss('<button type="button" class="btn" data-d="zu">Schließen</button>')}`);
   }
 

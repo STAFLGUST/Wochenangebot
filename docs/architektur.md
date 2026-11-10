@@ -201,6 +201,8 @@ rückt daneben). Die Wahl steht am Konto (`leiste: 'fest'`, Aktion `theme_save`,
 jedem Host. Oben in der Leiste
 das Suchfeld (Strg K bzw. ⌘ K, Dialog `#r-palette`: Anwendungen und – auf dem Dashboard – Schnellaktionen; nur Sprünge;
 schließt mit Escape oder Kreuz, nicht per Klick daneben).
+Fingerbedienung im Rahmen (`rahmen.css`, `pointer: coarse`, seit 10.11.2026): Eingabefelder mindestens 16 px Schrift (kein
+Hineinzoomen am iPhone), `.btn.sm` 36 px hoch; kleine Bedienelemente der Module vergrößern die Modul-Stylesheets.
 **Startseite** (Entwurf „C2“, Ausbau 06.11.2026): Begrüßung nach Tageszeit mit Vornamen, Datum und „9 offene Punkte, 3 davon
 überfällig“; Knöpfe „Einfache Darstellung“ (Bildschirm, rot = an) und Hell/Dunkel (die Suche steht in der Seitenleiste;
 der frühere Blitz-Knopf entfiel am 10.11.2026). Darunter

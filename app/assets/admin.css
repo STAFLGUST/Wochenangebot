@@ -17,6 +17,7 @@
 /* Formularfelder */
 .fld { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
 .fld > span { font-size: 11.5px; font-weight: 600; letter-spacing: .04em; text-transform: uppercase; color: var(--muted); }
+.fld > span small { font-size: 11px; text-transform: none; letter-spacing: 0; font-weight: 500; }   /* Zusatz im Feldnamen gut lesbar (nicht 83 % von 11,5 px) */
 .fld input, .fld select, .st-pop :is(input:not([type=checkbox]):not([type=radio]), select), .st-falle :is(input:not([type=checkbox]):not([type=radio]), select), #vk-sort {
   height: 38px; border: 1px solid var(--line); border-radius: 10px; padding: 0 12px; background: var(--surface);
   outline: none; width: 100%; font-variant-numeric: tabular-nums; appearance: none; -webkit-appearance: none;
@@ -1297,6 +1298,7 @@ body.ro .sale-tag { cursor: default; }
 .rl-filter { display: flex; gap: 3px; padding: 3px; border-radius: 10px; background: var(--surface-3); }
 .rl-filter button { height: 30px; padding: 0 11px; border: 0; border-radius: 8px; background: none; color: var(--text-2); font: inherit; font-size: 12.5px; font-weight: 500; white-space: nowrap; cursor: pointer; }
 .rl-filter button[aria-pressed="true"] { background: var(--surface); color: var(--text); font-weight: 650; box-shadow: 0 1px 2px rgba(0, 0, 0, .12); }
+@media (pointer: coarse) { .rl-filter button { height: 36px; } .rl-link { min-height: 32px; } .ur-box > summary { padding: 9px 0; } }   /* Fingerbedienung (Prüfung 10.11.2026) */
 .rl-legende { margin: 0; font-size: 12.5px; color: var(--text-2); }
 .rl-legende .i { width: 12px; height: 12px; vertical-align: -1px; }
 .rl-zeilen { list-style: none; margin: 0; padding: 0; background: var(--surface); border: 1px solid var(--line); border-radius: var(--r-lg); box-shadow: var(--shadow); overflow: hidden; }

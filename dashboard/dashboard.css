@@ -173,3 +173,5 @@ a.db-zeile:hover .db-plus { color: var(--r-akzent-text); }
   .db-fav-knoepfe .db-knopf { flex: 1; }
   .db-login { margin-top: 6vh; padding: 28px 20px; }
 }
+/* Fingerbedienung (Prüfung am Handy 10.11.2026): „Bearbeiten“ bei den Favoriten mit Tippfläche ≥ 36 px */
+@media (pointer: coarse) { .db-link { min-height: 36px; padding: 0 6px; } }

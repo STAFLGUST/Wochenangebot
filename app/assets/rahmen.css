@@ -262,3 +262,12 @@ body.r .stafl-zurueck.kompakt { width: 36px; padding: 0; }
   .r-app.r-bereit { grid-template-columns: minmax(0, 1fr); }
   .r-leiste, .r-mobilkopf, .r-schleier { display: none !important; }
 }
+
+/* ── Fingerbedienung (Handy, Tablet) für alle Seiten im Rahmen (Prüfung am Handy, 10.11.2026) ──
+   Eingaben unter 16 px vergrößert iOS beim Antippen die ganze Seite: Felder, Auswahllisten und Textfelder auf
+   Touch-Geräten daher mindestens 16 px – mit Vorrang vor den kleineren Schriften der Module. Kleine Knöpfe (.btn.sm)
+   werden 36 px hoch, damit sie sich mit dem Finger sicher treffen lassen. */
+@media (pointer: coarse) {
+  body.r :is(input:not([type=checkbox]):not([type=radio]):not([type=range]):not([type=color]):not([type=file]):not([type=button]):not([type=submit]):not([type=reset]), select, textarea) { font-size: 16px !important; }
+  body.r .btn.sm { height: 36px; }
+}
