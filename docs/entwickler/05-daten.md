@@ -112,6 +112,9 @@ unter Sperre als Nutzer „admin“ ins Dokument `nutzer` und löscht `admin`.
 Hell/Dunkel: optionales Feld `theme` (`'light'` | `'dark'`; fehlt = wie das Gerät) am Mitarbeiter, gesetzt über die
 Aktion `theme_save` (nur der eigene Datensatz), ausgeliefert im Status (`user.theme`); jede Seite übernimmt es mit
 `STAFL_THEME.konto` (`app/assets/theme.js`), der Browser merkt es sich zusätzlich unter `wochenangebot.theme`.
+Über dieselbe Aktion: `darstellung` (`'einfach'` | `'effekte'`; fehlt = automatisch) und `leiste` (`'fest'`; fehlt =
+schmal, klappt bei Bedarf auf – Pin der Seitenleiste, `rahmen.js`, seit 10.11.2026). Alle drei Felder sind optional;
+ältere Versionen ignorieren sie.
 
 **Wann ist eine Migration nötig?** Wenn alter Code die neuen Daten nicht mehr richtig lesen kann: Feld umbenennen oder
 Typ ändern, Bedeutung eines Werts ändern, Dokument aufteilen oder zusammenlegen, Pflichtfeld einführen. Dann gilt:

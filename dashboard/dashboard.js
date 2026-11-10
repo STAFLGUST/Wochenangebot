@@ -6,8 +6,8 @@
    Punkte liefern die Module nach ihren Rechten, Schnellaktionen, eigene letzte Änderungen, Favoriten am Konto). Was eine Kachel
    oder ein Punkt zeigt, ist nur Anzeige; ob eine Anwendung nutzbar ist und welche Rechte gelten, entscheidet der Server bei
    jeder Aktion (GR-102, GR-103). Kein Inline-Skript (Content-Security-Policy); fremde Texte nur maskiert.
-   Knöpfe oben rechts: Schnellzugriff (Blitz, öffnet die Suche), einfache Darstellung für Remote-Desktop (Bildschirm; Wahl am
-   Konto, sonst automatisch erkannt, theme.js), Hell/Dunkel. */
+   Knöpfe oben rechts: einfache Darstellung für Remote-Desktop (Bildschirm; rot = an; Wahl am Konto, sonst automatisch
+   erkannt, theme.js) und Hell/Dunkel. Die Suche (Strg K) steht in der Seitenleiste des Rahmens, kein eigener Knopf hier. */
 'use strict';
 (() => {
   const API = '../api/';
@@ -353,7 +353,7 @@
     S.module = r.data.module || [];
     S.alle = Object.fromEntries(S.module.map((m) => [m.id, m]));
     $('#db-login').hidden = true; $('#db-bereich').hidden = false;
-    R.zeichnen({ module: S.module, aktiv: 'start', nutzer, start: './', abmelden });
+    R.zeichnen({ module: S.module, aktiv: 'start', nutzer, start: './', csrf, abmelden });   // csrf: Pin der Seitenleiste am Konto
     begruessung(nutzer.name || nutzer.username || '');
     notfallHinweis(r.data.notfall);
     hinweiseZeigen();
@@ -380,9 +380,6 @@
       ? `<strong>Notfallmodus aktiv</strong> seit ${esc(seit)} Uhr${n.von ? ` · ausgelöst von ${esc(n.von)}` : ''}. Kunden sehen Wartung, Mitarbeiter ohne Administratorrolle sind gesperrt.`
       : '<strong>Anwendungen vorübergehend gesperrt.</strong> Wegen einer Sicherheitsmaßnahme ist der Zugriff gerade nicht möglich. Bitte wenden Sie sich an einen Administrator.';
   }
-
-  /* Schnellzugriff (Blitz): öffnet die Suche des Rahmens – Anwendungen und Schnellaktionen */
-  $('#db-schnell').addEventListener('click', () => R.sucheOeffnen());
 
   /* Hell/Dunkel wie auf der Angebotsseite (gleicher Speicherschlüssel, theme.js setzt es vor dem ersten Zeichnen) */
   const dunkel = () => document.documentElement.getAttribute('data-theme') === 'dark'

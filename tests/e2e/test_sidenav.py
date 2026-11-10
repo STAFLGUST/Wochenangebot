@@ -55,6 +55,22 @@ with sync_playwright() as p:
     leiste = g.evaluate("""(() => { const n = document.querySelector('#r-leiste'), r = n.getBoundingClientRect(), s = document.querySelector('.side-nav').getBoundingClientRect();
         return [Math.round(r.width), [...n.querySelectorAll('[aria-current="page"]')].map(e => e.dataset.modul), r.right <= s.left, !!n.querySelector('a.r-eintrag[data-modul="crm"][aria-label]')]; })()""")
     check('Rahmen: schmale Seitenleiste (60 px) links vor der eigenen Navigation, Angebot aktiv, Einträge beschriftet', leiste == [60, ['angebot'], True, True], leiste)
+    # Pin (10.11.2026): festgestellt ist die Leiste auch hier 208 px breit – die eigene Navigation rückt daneben, nichts überlappt
+    g.hover('#r-leiste a[data-modul="crm"]'); g.wait_for_function("document.querySelector('.r-app').classList.contains('r-auf')")
+    auf = g.evaluate("(() => { const n = document.querySelector('#r-leiste').getBoundingClientRect(), s = document.querySelector('.side-nav').getBoundingClientRect(); return [Math.round(n.width), n.right > s.left, Math.round(s.left)]; })()")
+    check('Rahmen: Mauszeiger klappt die Leiste über der eigenen Navigation auf (208 px, eigene Navigation bleibt stehen)', auf[0] == 208 and auf[1], auf)
+    g.click('#r-pin'); g.wait_for_function("document.querySelector('.r-app').classList.contains('r-fest')")
+    g.mouse.move(1200, 700)
+    for w in (1440, 1280):
+        g.set_viewport_size({'width': w, 'height': 900})
+        g.wait_for_function("new Promise(r => requestAnimationFrame(() => requestAnimationFrame(() => r(true))))")
+        fest = g.evaluate("(() => { const n = document.querySelector('#r-leiste').getBoundingClientRect(), s = document.querySelector('.side-nav').getBoundingClientRect(); return [Math.round(n.width), n.right <= s.left + 1, document.documentElement.scrollWidth <= innerWidth]; })()")
+        check(f'Rahmen {w} px: festgestellte Leiste (208 px) links neben der eigenen Navigation, kein waagerechtes Scrollen', fest == [208, True, True], fest)
+        g.screenshot(path=SH + f'/sidenav-rahmen-fest-{w}.png')
+    g.set_viewport_size({'width': 1440, 'height': 900})
+    g.hover('#r-pin'); g.click('#r-pin'); g.wait_for_function("!document.querySelector('.r-app').classList.contains('r-fest')")
+    g.mouse.move(1200, 700); g.wait_for_function("!document.querySelector('.r-app').classList.contains('r-auf')")
+    check('Rahmen: Pin gelöst – wieder schmal (60 px)', round(g.evaluate("document.querySelector('#r-leiste').getBoundingClientRect().width")) == 60)
     check('Rahmen: Kopfzeile flach (keine Kapsel, keine Unschärfe, feine Linie unten), Logo in der Seitenleiste', css('#topbar .topbar-inner', 'borderTopLeftRadius') == '0px'
           and css('#topbar .topbar-inner', 'backdropFilter', '::before') == 'none' and css('#topbar .topbar-inner', 'borderBottomWidth', '::before') == '1px'
           and not g.locator('#topbar .brand-logo').is_visible(), (css('#topbar .topbar-inner', 'borderTopLeftRadius'), css('#topbar .topbar-inner', 'backdropFilter', '::before')))

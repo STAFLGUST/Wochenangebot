@@ -139,7 +139,7 @@ with sync_playwright() as pw:
                 if name != 'dashboard':   # Rahmen „C2“ (06.11.2026): gemeinsame Seitenleiste auf jeder Mitarbeiterseite
                     pg.wait_for_selector('.r-app.r-bereit', timeout=20000)
                     rh = pg.evaluate(RAHMEN)
-                    breit = 60 if bereich else (208 if breite >= 1440 else 60)   # Eingabebereich immer schmal, Module erst unter 1440 px
+                    breit = 60   # seit 10.11.2026 überall gleich: schmal, bis man sie mit dem Pin feststellt (Testnutzer ohne eigene Wahl)
                     if breite > 900:
                         check(f'{name} {tag}: Seitenleiste ({breit} px), eigenes Modul aktiv, Start zum Dashboard, kein Glas', rh['aktiv'] == [name] and rh['breite'] == breit
                               and rh['start'].rstrip('/').endswith('dashboard') and not rh['glas'] and not rh['kopf'], rh)
