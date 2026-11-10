@@ -1,7 +1,8 @@
 """Mitarbeiter-Dashboard (dashboard/, Roadmap PR 6) im gemeinsamen Rahmen „C2“ (app/assets/rahmen.css, rahmen.js):
 Startseite mit Favoriten (kompakte Kacheln, „Bearbeiten“ am Konto), „Heute für Sie“ (offene Punkte der Module nach Rechten,
 Aktion start_heute), Schnellaktionen, „Zuletzt bearbeitet“, Hinweisen zu Wartungen; Seitenleiste aus dem Modulregister mit
-Suche (Strg K) und Zahlen je Anwendung, Stand, Wartung, Abmeldung, Begrüßung, Klebeband „Bald“, schmale Leiste, Menü am Handy,
+Suche (Strg K) und Zahlen je Anwendung, Stand, Wartung, Abmeldung, Begrüßung, Klebeband „Bald“, schmale Leiste (klappt mit Maus
+oder Tastatur auf, Pin stellt sie am Konto fest), Menü am Handy,
 hell/dunkel, 390 px.
 
 Das Dashboard liegt außerhalb der Dokumentwurzel; der Testlauf blendet es nur für diese Gruppe unter /dashboard/ ein. Kachel,
@@ -249,6 +250,63 @@ with sync_playwright() as pw:
     check('ohne Anmeldung: keine Suche (Strg K tut nichts)', pg.locator('#r-palette[open]').count() == 0)
     ctx.close()
 
+    # ── Seitenleiste (10.11.2026): auf jeder Seite schmal, klappt mit Maus oder Tastatur über dem Inhalt auf, Pin stellt sie fest ──
+    ctx, pg = anmelden(br, 'admin', PW, '198.51.100.49')
+    LAGE = """(() => { const n = document.querySelector('#r-leiste'), a = document.querySelector('.r-app');
+        return { breite: Math.round(n.getBoundingClientRect().width), inhalt: Math.round(document.querySelector('.r-inhalt').getBoundingClientRect().left),
+                 fest: a.classList.contains('r-fest'), auf: a.classList.contains('r-auf'), pin: document.querySelector('#r-pin').getAttribute('aria-pressed'),
+                 texte: getComputedStyle(n.querySelector('[data-modul="crm"] .r-text')).display !== 'none' }; })()"""
+    st = A.call('status')[1]['user']
+    check('Seitenleiste: ohne eigene Wahl nicht festgestellt (Status leiste leer)', st.get('leiste') == '', st.get('leiste'))
+    lg = pg.evaluate(LAGE)
+    check('Seitenleiste schmal (60 px, nur Symbole), Inhalt daneben, Pin sichtbar und nicht gedrückt',
+          lg == {'breite': 60, 'inhalt': 60, 'fest': False, 'auf': False, 'pin': 'false', 'texte': False} and pg.locator('#r-pin').is_visible(), lg)
+    pg.hover('#r-leiste a[data-modul="crm"]'); pg.wait_for_function("document.querySelector('.r-app').classList.contains('r-auf')")
+    lg = pg.evaluate(LAGE)
+    check('Mauszeiger auf der Leiste: klappt auf 208 px auf, liegt über dem Inhalt (Inhalt springt nicht), Namen sichtbar',
+          lg['breite'] == 208 and lg['inhalt'] == 60 and lg['texte'] and not lg['fest'], lg)
+    pg.screenshot(path=os.path.join(SH, 'dashboard_1280_leiste_aufgeklappt.png'))
+    pg.mouse.move(900, 600); pg.wait_for_function("!document.querySelector('.r-app').classList.contains('r-auf')")
+    check('Mauszeiger weg: klappt wieder ein', pg.evaluate(LAGE)['breite'] == 60)
+    pg.mouse.move(30, 300); pg.mouse.move(400, 300)   # nur kurz darüber: klappt nicht auf (Verzögerung)
+    pg.wait_for_function("new Promise(r => setTimeout(() => r(true), 400))")
+    check('nur kurz überfahren: bleibt schmal', not pg.evaluate(LAGE)['auf'])
+    pg.evaluate("document.activeElement && document.activeElement.blur()")
+    for _ in range(4):
+        pg.keyboard.press('Tab')
+        if pg.evaluate("!!document.activeElement.closest('#r-leiste')"):
+            break
+    pg.wait_for_function("document.querySelector('.r-app').classList.contains('r-auf')")
+    check('Tastatur: Fokus in der Leiste klappt sie auf', pg.evaluate(LAGE)['breite'] == 208)
+    pg.keyboard.press('Escape'); pg.wait_for_function("!document.querySelector('.r-app').classList.contains('r-auf')")
+    check('Escape klappt sie wieder ein', pg.evaluate(LAGE)['breite'] == 60)
+    pg.hover('#r-leiste a[data-modul="crm"]'); pg.wait_for_function("document.querySelector('.r-app').classList.contains('r-auf')")
+    pg.click('#r-pin'); pg.wait_for_function("document.querySelector('.r-app').classList.contains('r-fest')")
+    pg.mouse.move(900, 600)
+    pg.wait_for_function("(() => fetch('../api/?action=status').then(r => r.json()).then(d => d.user.leiste === 'fest'))()")
+    lg = pg.evaluate(LAGE)
+    check('Pin: festgestellt, immer 208 px, Inhalt rückt daneben (208 px), Pin gedrückt, am Konto gespeichert',
+          lg == {'breite': 208, 'inhalt': 208, 'fest': True, 'auf': False, 'pin': 'true', 'texte': True}
+          and 'lösen' in pg.get_attribute('#r-pin', 'aria-label') and A.call('status')[1]['user']['leiste'] == 'fest', lg)
+    pg.screenshot(path=os.path.join(SH, 'dashboard_1280_leiste_fest.png'))
+    pg.reload(); bereit(pg)
+    check('nach dem Neuladen weiter festgestellt (Wahl am Konto)', pg.evaluate(LAGE)['fest'] and pg.evaluate(LAGE)['breite'] == 208)
+    pg.goto(B + '/module/crm/'); pg.wait_for_selector('.r-app.r-bereit')
+    lg = pg.evaluate(LAGE)
+    check('Modulseite (CRM): dieselbe Wahl – festgestellt, 208 px, Pin gedrückt', lg['fest'] and lg['breite'] == 208 and lg['pin'] == 'true', lg)
+    pg.click('#r-pin'); pg.wait_for_function("!document.querySelector('.r-app').classList.contains('r-fest')")
+    pg.mouse.move(900, 600); pg.wait_for_function("!document.querySelector('.r-app').classList.contains('r-auf')")
+    pg.wait_for_function("(() => fetch('../../api/?action=status').then(r => r.json()).then(d => d.user.leiste === ''))()")
+    lg = pg.evaluate(LAGE)
+    check('Modulseite: Pin lösen – wieder schmal (60 px), am Konto gespeichert', lg['breite'] == 60 and lg['inhalt'] == 60 and lg['pin'] == 'false'
+          and A.call('status')[1]['user']['leiste'] == '', lg)
+    check('ungültiger Wert für die Leiste: 422', A.call('theme_save', {'leiste': 'quer'})[0] == 422)
+    check('Leiste mit Hell/Dunkel zusammen speicherbar, Hell/Dunkel bleibt erhalten', A.call('theme_save', {'leiste': 'fest', 'theme': ''})[0] == 200
+          and A.call('status')[1]['user']['leiste'] == 'fest')
+    ctx.close()
+    # Für die folgenden Prüfungen der breiten Leiste bleibt der Administrator festgestellt; die schmale Leiste prüft der
+    # Abschnitt „Schmale Leiste“ unten, die anderen Testnutzer haben keine eigene Wahl.
+
     # ── Administrator: Favoriten (Standard), Heute für Sie, Schnellaktionen, Zuletzt bearbeitet, Seitenleiste ──
     ctx, pg = anmelden(br, 'admin', PW, '198.51.100.41')
     k = kacheln(pg)
@@ -332,7 +390,7 @@ with sync_playwright() as pw:
     kontrast_ok(pg, 'hell')
     pg.screenshot(path=os.path.join(SH, 'dashboard_1280.png'), full_page=True)
 
-    # ── Suche (Strg K) und Schnellzugriff (Blitz) ──
+    # ── Suche (Strg K, Feld in der Seitenleiste; kein eigener Knopf mehr auf der Startseite) ──
     pg.keyboard.press('Control+k'); pg.wait_for_selector('#r-palette[open]')
     check('Strg K öffnet die Suche, Fokus im Suchfeld, alle Anwendungen und Schnellaktionen', pg.evaluate("document.activeElement.id") == 'r-palette-eingabe'
           and pg.locator('#r-palette [role="option"]').count() == len(FREI) + 3 + len(H['aktionen']))
@@ -349,10 +407,12 @@ with sync_playwright() as pw:
     check('Klick neben die Suche schließt sie nicht', pg.locator('#r-palette[open]').count() == 1)
     pg.keyboard.press('Escape'); pg.wait_for_selector('#r-palette', state='hidden')
     check('Escape schließt die Suche', pg.locator('#r-palette[open]').count() == 0)
-    pg.click('#db-schnell'); pg.wait_for_selector('#r-palette[open]')
+    check('kein Blitz-Knopf mehr im Kopf der Startseite (Suche steht in der Seitenleiste)', pg.locator('#db-schnell').count() == 0
+          and pg.locator('.r-seitenkopf .r-aktionen .r-rund').count() == 2)
+    pg.click('#r-suche'); pg.wait_for_selector('#r-palette[open]')
     pg.keyboard.type('rew'); pg.keyboard.press('ArrowDown')
     sel = pg.evaluate("[...document.querySelectorAll('#r-palette [role=\"option\"]')].map(o => [o.textContent.trim(), o.getAttribute('aria-selected')])")
-    check('Blitz öffnet die Suche; Pfeiltasten wählen (REWE, REWE-Wochenabfrage)', sel == [['REWE', 'false'], ['REWE-Wochenabfrage', 'true']]
+    check('Suchfeld der Leiste öffnet die Suche; Pfeiltasten wählen (REWE, REWE-Wochenabfrage)', sel == [['REWE', 'false'], ['REWE-Wochenabfrage', 'true']]
           and pg.get_attribute('#r-palette-eingabe', 'aria-activedescendant') == 'r-palette-1', sel)
     pg.keyboard.press('Enter'); pg.wait_for_url(lambda u: '/module/rewe/' in u)
     check('Enter öffnet den gewählten Treffer (REWE, Reiter „Woche“)', '/module/rewe/#woche' in pg.url, pg.url)
@@ -391,10 +451,11 @@ with sync_playwright() as pw:
     pg.click('#db-fav-abbrechen'); pg.wait_for_selector('#db-fav-wahl', state='hidden')
     check('Abbrechen verwirft die Auswahl', [x['id'] for x in kacheln(pg)] == ['angebot', 'bestand', 'leergut', 'qs'])
 
-    # Schmale Leiste (Module mit eigener Navigation): nur Symbole, Namen als Beschriftung, aktiver Eintrag markiert, Zahl als Punkt
+    # Schmale Leiste (nicht festgestellt): nur Symbole, Namen als Beschriftung, aktiver Eintrag markiert, Zahl als Punkt
+    pg.mouse.move(900, 600)
     pg.evaluate("""Promise.all([fetch('../api/?action=module_status').then(r => r.json()), fetch('../api/?action=status').then(r => r.json()), fetch('../api/?action=start_heute').then(r => r.json())])
-        .then(([d, s, h]) => { STAFL_RAHMEN.zeichnen({ module: d.module, aktiv: 'crm', nutzer: s.user, start: './', schmal: true, abmelden() {} }); STAFL_RAHMEN.zahlen(h.zahlen); })""")
-    pg.wait_for_selector('.r-app.r-schmal'); bilder(pg)
+        .then(([d, s, h]) => { STAFL_RAHMEN.zeichnen({ module: d.module, aktiv: 'crm', nutzer: Object.assign({}, s.user, { leiste: '' }), start: './', abmelden() {} }); STAFL_RAHMEN.zahlen(h.zahlen); })""")
+    pg.wait_for_selector('.r-app.r-bereit:not(.r-fest):not(.r-auf)'); bilder(pg)
     schmal = pg.evaluate("""(() => { const n = document.querySelector('#r-leiste');
         return { breite: Math.round(n.getBoundingClientRect().width), texte: [...n.querySelectorAll('.r-text, .r-gruppe-titel, .r-person, .r-bald, .r-taste')].every(e => getComputedStyle(e).display === 'none'),
                  namen: [...n.querySelectorAll('a.r-eintrag')].every(e => e.getAttribute('aria-label') && e.title), aktiv: [...n.querySelectorAll('[aria-current="page"]')].map(e => e.dataset.modul),
@@ -501,6 +562,8 @@ with sync_playwright() as pw:
                 ['#r-abmelden', '#r-initialen', '#r-suche', '#r-leiste a[data-modul="crm"]'].every(s => document.querySelector(s).getBoundingClientRect().width > 0),
                 getComputedStyle(document.querySelector('#r-suche .r-taste')).display]; })()""")
     check('390 px: Menü öffnet die Seitenleiste (Fokus darin, ganz im Bild), Suche, Abmelden und Anwendungen erreichbar, ohne Tastenkürzel', menue == ['true', True, 0, True, True, 'none'], menue)
+    check('390 px: im Menü kein Pin (das Menü ist ohnehin breit), Namen sichtbar', pg.evaluate("getComputedStyle(document.querySelector('#r-pin')).display") == 'none'
+          and pg.evaluate("getComputedStyle(document.querySelector('#r-leiste [data-modul=\"crm\"] .r-text')).display") != 'none')
     pg.screenshot(path=os.path.join(SH, 'dashboard_390_menue_dunkel.png'))
     pg.keyboard.press('Escape'); pg.wait_for_function("getComputedStyle(document.querySelector('#r-leiste')).visibility === 'hidden'")
     check('390 px: Escape schließt das Menü, Fokus zurück auf den Menüknopf', pg.evaluate("[document.querySelector('#r-menue').getAttribute('aria-expanded'), document.activeElement.id]") == ['false', 'r-menue'])
@@ -519,8 +582,8 @@ with sync_playwright() as pw:
     except Exception:
         pass
     check('390 px: nach dem Schließen der Suche Fokus auf dem Menüknopf (Menü ist zu)', pg.evaluate("document.activeElement.id") == 'r-menue', pg.evaluate("document.activeElement.id"))
-    sichtbar = pg.evaluate("['#db-schnell', '#db-theme', '#db-darstellung'].map((s) => document.querySelector(s).getBoundingClientRect().width > 0)")
-    check('390 px: Schnellzugriff, Hell/Dunkel und einfache Darstellung erreichbar', all(sichtbar), sichtbar)
+    sichtbar = pg.evaluate("['#db-theme', '#db-darstellung'].map((s) => document.querySelector(s).getBoundingClientRect().width > 0)")
+    check('390 px: Hell/Dunkel und einfache Darstellung erreichbar', all(sichtbar), sichtbar)
     spalten = pg.evaluate("getComputedStyle(document.querySelector('#db-grid')).gridTemplateColumns.split(' ').length")
     check('390 px: zwei Kachelspalten', spalten == 2, spalten)
     senkrecht = pg.evaluate("[...document.querySelectorAll('#db-grid .db-tile')].every(t => getComputedStyle(t).flexDirection === 'column')")

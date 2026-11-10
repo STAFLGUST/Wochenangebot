@@ -6,6 +6,9 @@
    Aufbau der Seite: <div class="r-app"><nav class="r-leiste" id="r-leiste" aria-label="Hauptnavigation" hidden></nav>
    <div class="r-inhalt">…</div></div>. Unter 900 px setzt rahmen.js eine Kopfzeile mit Menüknopf davor; Escape, ein Klick
    daneben oder das Verlassen des Menüs mit der Tabulatortaste schließt es.
+   Breite am Desktop (10.11.2026, auf jeder Seite gleich): schmal mit Symbolen; mit dem Mauszeiger (kurz verzögert) oder der
+   Tastatur klappt die Leiste über dem Inhalt auf, Escape oder Verlassen klappt sie wieder ein. Der Pin oben stellt sie fest
+   (immer breit). Die Wahl gilt am Konto auf jedem Host (Status user.leiste, gespeichert mit theme_save).
    Ziele der Einträge wie bisher die Kacheln: unter dashboard-stafl.de die Adressen der zentralen Anmeldung, in Test- und
    Entwicklungsumgebungen derselbe Pfad auf dem aktuellen Server (nie die Produktion).
    Modulseiten binden den Rahmen ohne eigenes Skript ein: <body data-rahmen="<modul-id>"> (siehe selbst() unten).
@@ -19,6 +22,7 @@
   const LOGO = new URL('logo-standard-fleisch-kopf.png', QUELLE).href;
   const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
   /* Suche (siehe sucheOeffnen unten): Tastenkürzel je System, Ziele und Zustand des Dialogs */
+  const API = new URL('../api/', QUELLE).pathname;   // Schnittstelle des eigenen Hosts (GR-109)
   const TASTE = /Mac|iPhone|iPad/.test(navigator.platform || navigator.userAgent || '') ? '⌘ K' : 'Strg K';
   const such = { module: [], extra: [], treffer: [], wahl: 0, dlg: null, zurueck: null };
 
@@ -46,6 +50,7 @@
     plus: '<path d="M12 5v14M5 12h14"/>',
     pfeil: '<path d="m9 5.5 6.5 6.5L9 18.5"/>',
     schliessen: '<path d="M6 6l12 12M18 6 6 18"/>',
+    pin: '<path d="M9 3.5h6l-.8 6 3.3 3v1.5h-11V12.5l3.3-3z"/><path d="M12 14v6.5"/>',
   };
   const symbol = (name, cls = 'r-i') => `<svg class="${cls}" viewBox="0 0 24 24" aria-hidden="true" focusable="false">${PFADE[name] || PFADE.raster}</svg>`;
 
@@ -112,6 +117,50 @@
     if (!auf && fokus) knopf.focus();
   }
 
+  /* Breite am Desktop: r-fest (Pin, am Konto) = immer breit; sonst schmal und r-auf, solange Mauszeiger oder Tastatur auf der
+     Leiste sind. Aufklappen kurz verzögert (kein Aufspringen beim Überfahren), Zuklappen etwas später (kein Flackern). */
+  const DESKTOP = '(min-width: 901px)', AUF_MS = 150, ZU_MS = 300;
+  const leiste = { fest: false, csrf: '', nutzer: null, uhr: 0 };
+  function aufklappen(auf, sofort) {
+    clearTimeout(leiste.uhr);
+    if (!app) return;
+    if (auf && (leiste.fest || !matchMedia(DESKTOP).matches)) return;
+    const tun = () => app.classList.toggle('r-auf', auf);
+    if (sofort) tun(); else leiste.uhr = setTimeout(tun, auf ? AUF_MS : ZU_MS);
+  }
+  function feststellen(fest, merken) {
+    leiste.fest = !!fest;
+    if (!app) return;
+    app.classList.toggle('r-fest', leiste.fest);
+    const p = document.getElementById('r-pin');
+    if (p) {
+      p.setAttribute('aria-pressed', String(leiste.fest));
+      const text = leiste.fest ? 'Seitenleiste lösen (schmal, klappt bei Bedarf auf)' : 'Seitenleiste feststellen (immer breit)';
+      p.setAttribute('aria-label', text); p.title = text;
+    }
+    if (!merken) return;
+    if (leiste.nutzer) leiste.nutzer.leiste = leiste.fest ? 'fest' : '';
+    if (!leiste.csrf) return;   // ohne Anmeldung nur auf dieser Seite
+    fetch(API + '?action=theme_save', { method: 'POST', credentials: 'same-origin', cache: 'no-store',
+      headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': leiste.csrf }, body: JSON.stringify({ leiste: leiste.fest ? 'fest' : '' }) })
+      .catch(() => { /* gilt auf dieser Seite; gespeichert beim nächsten Wechsel */ });
+  }
+  /* Ereignisse einmal je Leiste (zeichnen() kann mehrfach laufen) */
+  function leisteBinden(nav) {
+    if (nav.dataset.gebunden) return;
+    nav.dataset.gebunden = '1';
+    nav.addEventListener('mouseenter', () => aufklappen(true));
+    nav.addEventListener('mouseleave', () => { if (!nav.contains(document.activeElement) || !document.activeElement.matches(':focus-visible')) aufklappen(false); });
+    nav.addEventListener('focusin', (e) => { if (e.target.matches(':focus-visible')) aufklappen(true, true); });
+    nav.addEventListener('focusout', (e) => { if (!e.relatedTarget || !nav.contains(e.relatedTarget)) aufklappen(false, true); });
+    nav.addEventListener('keydown', (e) => { if (e.key === 'Escape' && app && app.classList.contains('r-auf')) { e.preventDefault(); aufklappen(false, true); } });
+    nav.addEventListener('click', (e) => {
+      if (!e.target.closest('#r-pin')) return;
+      feststellen(!leiste.fest, true);
+      aufklappen(!leiste.fest && nav.matches(':hover'), true);   // gelöst und Zeiger noch darauf: bleibt aufgeklappt bis zum Verlassen
+    });
+  }
+
   /* Kopfzeile am Handy (nur unter 900 px sichtbar): Menüknopf und Logo; einmal je Seite */
   function mobilkopf(start) {
     const inhalt = app.querySelector('.r-inhalt');
@@ -142,8 +191,10 @@
      o.aktiv    'start' oder die Modul-ID der Seite
      o.nutzer   Konto aus status (name, rollenName)
      o.start    Adresse der Startseite (Dashboard)
-     o.schmal   true = schmale Leiste (nur Symbole) für Module mit eigener Navigation
-     o.abmelden Funktion für den Knopf „Abmelden“ (ohne: Knopf entfällt) */
+     o.csrf     CSRF-Token der Sitzung (zum Speichern des Pins am Konto; ohne: Pin gilt nur auf dieser Seite)
+     o.abmelden Funktion für den Knopf „Abmelden“ (ohne: Knopf entfällt)
+     Feststellen: o.nutzer.leiste === 'fest' (Status). o.schmal gibt es nicht mehr (seit 10.11.2026 auf jeder Seite gleich),
+     wird aber weiter angenommen und übergangen. */
   function zeichnen(o) {
     const nav = document.getElementById('r-leiste');
     if (!nav) return;
@@ -155,7 +206,8 @@
     const verw = liste.filter((m) => m.gruppe === 'verwaltung' && art(m) !== 'bald');
     const zeile = (m) => eintrag(m, alle, host, aktiv);
     const n = o.nutzer || {}, name = n.name || n.username || '';
-    nav.innerHTML = `<a class="r-marke" href="${esc(start)}"><img class="r-logo" src="${esc(LOGO)}" width="428" height="96" alt="Standard-Fleisch – Start"></a>`
+    nav.innerHTML = `<div class="r-kopf"><a class="r-marke" href="${esc(start)}"><img class="r-logo" src="${esc(LOGO)}" width="428" height="96" alt="Standard-Fleisch – Start"></a>`
+      + `<button class="r-pin" id="r-pin" type="button" aria-pressed="false">${symbol('pin')}</button></div>`
       + `<button class="r-suche" id="r-suche" type="button" aria-haspopup="dialog" aria-label="Suchen (${esc(TASTE)})" title="Suchen · ${esc(TASTE)}">${symbol('suche')}`
       + `<span class="r-text">Suchen</span><kbd class="r-taste" aria-hidden="true">${esc(TASTE)}</kbd></button>`
       + `<ul class="r-liste"><li><a class="r-eintrag" href="${esc(start)}" data-modul="start" data-symbol="start" title="Start" aria-label="Start"${aktiv === 'start' ? ' aria-current="page"' : ''}>${symbol('start')}<span class="r-text">Start</span></a></li></ul>`
@@ -172,7 +224,10 @@
     such.module = [...apps, ...verw].map((m) => ({ titel: m.name, href: ziel(m.kachel, alle, host), symbol: m.icon, gruppe: 'Anwendungen' }));
     nav.hidden = false;
     app.classList.add('r-bereit');
-    app.classList.toggle('r-schmal', !!o.schmal);
+    leiste.nutzer = o.nutzer || null; leiste.csrf = o.csrf || '';
+    feststellen(n.leiste === 'fest', false);
+    aufklappen(false, true);
+    leisteBinden(nav);
     mobilkopf(start);
   }
 
@@ -184,14 +239,14 @@
     if (such.dlg && such.dlg.open) such.dlg.close();
     nav.hidden = true; nav.innerHTML = '';
     const a = nav.closest('.r-app');
-    if (a) { a.classList.remove('r-bereit', 'r-schmal', 'r-auto-schmal'); const k = a.querySelector('.r-mobilkopf'); if (k) k.hidden = true; }
+    clearTimeout(leiste.uhr);
+    if (a) { a.classList.remove('r-bereit', 'r-fest', 'r-auf'); const k = a.querySelector('.r-mobilkopf'); if (k) k.hidden = true; }
   }
 
-  /* Modulseiten: <body … data-rahmen="<modul-id>"> (Eingabebereich: data-rahmen="auto" = Modul des Hosts, dazu
-     data-rahmen-schmal für die schmale Leiste) – der Rahmen holt status und module_status selbst, damit das Skript des
+  /* Modulseiten: <body … data-rahmen="<modul-id>"> (Eingabebereich: data-rahmen="auto" = Modul des Hosts) – der Rahmen
+     holt status und module_status selbst, damit das Skript des
      Moduls unverändert bleibt. Ohne Anmeldung oder bei einem Fehler bleibt die Seite ohne Leiste (das Modul zeigt seinen
      Hinweis wie bisher). Abmelden: wie auf dem Dashboard, danach lädt die Seite neu (zeigt den Anmeldehinweis). */
-  const API = new URL('../api/', QUELLE).pathname;
   const ECHT = /(^|\.)dashboard-stafl\.de$/.test(location.hostname);
   async function holen(action, body, csrf) {
     const r = await fetch(API + '?action=' + action, { method: body ? 'POST' : 'GET', credentials: 'same-origin', cache: 'no-store',
@@ -214,13 +269,11 @@
       aktiv = treffer ? treffer.id : bereich.split('.')[0];
     }
     const start = ECHT ? (nutzer.dashboard && /^https:/.test(nutzer.dashboard) ? nutzer.dashboard : 'https://dashboard-stafl.de/') : new URL('../dashboard/', QUELLE).pathname;
-    const schmal = document.body.hasAttribute('data-rahmen-schmal');
-    zeichnen({ module, aktiv, nutzer, start, schmal, abmelden: async () => {
+    zeichnen({ module, aktiv, nutzer, start, csrf, abmelden: async () => {
       const r = await holen('logout', {}, csrf);
       if (typeof r.data.abmelden === 'string' && r.data.abmelden.startsWith('/oidc/')) { location.replace(r.data.abmelden); return; }
       location.reload();
     } });
-    if (!schmal && app) app.classList.add('r-auto-schmal');   // Modulseiten: unter 1440 px schmale Leiste (rahmen.css)
     return true;
   }
   /* data-rahmen-nach="<Selektor>": erst zeichnen, wenn dieser Bereich sichtbar ist (Eingabebereich: nach der Anmeldung im

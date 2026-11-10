@@ -2,7 +2,7 @@
 
 <!-- ERZEUGT von `python3 werkzeuge/doku.py erzeugen` – nicht von Hand ändern. Quelle: Funktionen und Kommentare im Code. Die CI prüft, dass diese Datei zum Code passt. -->
 
-114 Dateien, 1160 Funktionen – in der Reihenfolge der Datei, **fett** die Abschnitte. Text = erste Aussage des Kommentars direkt über der Funktion (Python: Docstring). Übersicht aller Module: [README.md](README.md).
+114 Dateien, 1163 Funktionen – in der Reihenfolge der Datei, **fett** die Abschnitte. Text = erste Aussage des Kommentars direkt über der Funktion (Python: Docstring). Übersicht aller Module: [README.md](README.md).
 
 ## `.github/scripts/apt_vorrat.py`
 
@@ -840,6 +840,9 @@ _STAFL-Plattform · Gemeinsamer Rahmen_
 - `eintrag(m, alle, host, aktiv)`
 - `gruppe(titel, liste)`
 - `menue(auf, fokus)`
+- `aufklappen(auf, sofort)`
+- `feststellen(fest, merken)`
+- `leisteBinden(nav)` – Ereignisse einmal je Leiste (zeichnen() kann mehrfach laufen)
 - `mobilkopf(start)` – Kopfzeile am Handy (nur unter 900 px sichtbar): Menüknopf und Logo; einmal je Seite
 - `zeichnen(o)` – Leiste zeichnen. o.module Liste aus module_status (data.module) o.aktiv 'start' oder die Modul-ID der Seite o.nutzer Konto aus status (name, rollenName) …
 - `entfernen()` – Leiste entfernen (z. B. nach dem Abmelden): Seite wieder ohne Rahmen

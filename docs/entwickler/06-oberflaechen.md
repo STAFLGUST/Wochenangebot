@@ -474,7 +474,7 @@ alle Modulseiten (HR, CRM, Leergut, REWE, Qualitätssicherung, Marketing, Contro
 der Module unverändert. Feste Seitenleiste mit allen Anwendungen, ruhige Flächen mit feinen Linien, wenig Schatten, kein
 Glas; Modulfarben nur an den Symbolen.
 
-- **`app/assets/rahmen.js`** (`window.STAFL_RAHMEN`): `zeichnen({ module, aktiv, nutzer, start, schmal, abmelden })`
+- **`app/assets/rahmen.js`** (`window.STAFL_RAHMEN`): `zeichnen({ module, aktiv, nutzer, start, csrf, abmelden })`
   baut die Leiste aus der Liste von `module_status` – Start, „Anwendungen“, „In Entwicklung“ (nicht freigegeben, ohne
   Verweis, Klebeband „Bald“), „Verwaltung & Daten“ (`dashboard_gruppe`), unten Name, Rolle (`rollenName`) und Abmelden.
   Module mit `kachel.recht === false` fehlen. Die Seite lädt `status` und `module_status` selbst und übergibt die
@@ -495,7 +495,7 @@ Glas; Modulfarben nur an den Symbolen.
   Leiste mit dem eigenen Modul als aktiv, Start = `user.dashboard` (nur `https:`) bzw. `/dashboard/` außerhalb von
   `dashboard-stafl.de`, Abmelden wie auf dem Dashboard (danach lädt die Seite neu). Ohne Anmeldung oder bei einem Fehler
   bleibt die Seite ohne Leiste. Eingabebereich: `data-rahmen="auto"` (Modul des Hosts aus `user.bereich`, z. B.
-  `bestand.intern` → Bestand), `data-rahmen-schmal` und `data-rahmen-nach="#screen-editor"` (erst zeichnen, wenn der Editor
+  `bestand.intern` → Bestand) und `data-rahmen-nach="#screen-editor"` (erst zeichnen, wenn der Editor
   sichtbar ist – Anmeldung ohne Neuladen; die Leiste liegt in `#screen-editor`, damit Anmelde- und Wartungsseite ohne Rahmen
   bleiben).
 - **Anpassung je Modul** im eigenen Stylesheet (Abschnitt „Rahmen „C2““ am Ende von `hr.css`, `crm.css`, …, `admin.css`):
@@ -504,9 +504,14 @@ Glas; Modulfarben nur an den Symbolen.
   Modulname und Knöpfe der Seite bleiben). QS-Druck: `.r-app` wie zuvor `.qm-seite` freigeben. Eingabebereich ohne Glas:
   Scrollbereiche (`.gcard`, `.st-card` …) bekommen `position: relative`, sonst ragten unsichtbare Beschriftungen
   (`.sr-only`) über den Rand (früher bildete `backdrop-filter` diesen Bezugsrahmen).
-- **Schmale Leiste** (60 px, nur Symbole, Namen als `aria-label`/Tooltip): `schmal: true` bzw. `data-rahmen-schmal` immer
-  (Eingabebereich mit eigener Navigation); Modulseiten erhalten `r-auto-schmal` und sind zwischen 901 und 1439 px schmal,
-  damit Tabellen auf Laptops fast ihre bisherige Breite behalten. Das Dashboard bleibt ab 901 px breit.
+- **Breite der Leiste** (10.11.2026, auf jeder Seite gleich, ab 901 px): schmal (Spalte `--r-breite` 60 px, nur Symbole,
+  Namen als `aria-label`/Tooltip). Mauszeiger (150 ms verzögert) oder Tastaturfokus (`:focus-visible`) setzen `r-auf` an
+  `.r-app`: die Leiste wird 208 px (`--r-breite-offen`) breit und liegt über dem Inhalt (Spalte bleibt 60 px, nichts
+  springt); Verlassen (300 ms), Escape oder Fokus außerhalb klappen sie ein. Der Pin `#r-pin` (`aria-pressed`) setzt
+  `r-fest`: Spalte 208 px, Inhalt rückt daneben. Gespeichert am Konto (`leiste: 'fest' | ''`, Aktion `theme_save`, im
+  Status `user.leiste`), damit die Wahl auf jedem Host gilt (eigener Browserspeicher je Subdomain, GR-108); ohne `csrf`
+  gilt sie nur auf der Seite. Im Menü am Handy entfällt der Pin. `schmal`/`data-rahmen-schmal` sind seitdem ohne
+  Wirkung (werden übergangen).
 - **„Start“** (gemeinsamer Knopf `.stafl-zurueck`, Beschriftung „Start“) bleibt im Kopf jeder Modulseite; im Rahmen ruhig mit
   feiner Linie (36 px).
 - **Unter 900 px** setzt `rahmen.js` eine Kopfzeile mit Menüknopf (`#r-menue`, `aria-expanded`) vor den Inhalt; die

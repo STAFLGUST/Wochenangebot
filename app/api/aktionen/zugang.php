@@ -344,8 +344,9 @@ switch ($action) {
 
         /* Anzeige-Einstellungen am eigenen Konto: gelten auf jedem Host der Plattform, weil jede Seite sie nach der Anmeldung
            aus dem Status übernimmt (theme.js). „theme“: Hell/Dunkel ('' = wie das Gerät); „darstellung“ (02.11.2026): einfache
-           Darstellung für Remote-Desktop ('einfach', 'effekte', '' = automatisch erkennen). Je Aufruf eines oder beide Felder.
-           Nur der eigene Datensatz, kein Protokoll nötig. */
+           Darstellung für Remote-Desktop ('einfach', 'effekte', '' = automatisch erkennen); „leiste“ (10.11.2026): Seitenleiste
+           des Rahmens festgestellt ('fest' = immer breit, '' = schmal, bei Mauszeiger oder Tastatur breit, rahmen.js).
+           Je Aufruf ein oder mehrere Felder. Nur der eigene Datensatz, kein Protokoll nötig. */
         case 'theme_save': {
             $me = require_auth(true);
             $b = body();
@@ -357,6 +358,10 @@ switch ($action) {
             if (array_key_exists('darstellung', $b)) {
                 if (!is_string($b['darstellung']) || !in_array($b['darstellung'], ['einfach', 'effekte', ''], true)) fail('Ungültige Darstellung.', 422);
                 $felder['darstellung'] = $b['darstellung'];
+            }
+            if (array_key_exists('leiste', $b)) {
+                if (!is_string($b['leiste']) || !in_array($b['leiste'], ['fest', ''], true)) fail('Ungültige Darstellung.', 422);
+                $felder['leiste'] = $b['leiste'];
             }
             if (!$felder) fail('Ungültige Darstellung.', 422);
             with_lock('nutzer', function () use ($me, $felder) {

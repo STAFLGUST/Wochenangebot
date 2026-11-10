@@ -1,8 +1,10 @@
 /* STAFL-Plattform · Gemeinsamer Rahmen (Gestaltung „C2“, Entwurf vom Inhaber freigegeben 06.11.2026)
    Feste Seitenleiste mit allen Anwendungen (rahmen.js zeichnet sie aus dem Modulregister), ruhige Flächen mit feinen Linien,
    wenig Schatten, kein Glas; Modulfarben nur an den Symbolen. Die Struktur der Module bleibt, nur Rahmen und Aussehen
-   kommen von hier. Breite: 208 px, als schmale Leiste (60 px, nur Symbole) für Module mit eigener Navigation.
-   Unter 900 px wird die Leiste zum Menü (Knopf in der Kopfzeile, Escape oder Klick daneben schließt).
+   kommen von hier. Seitenleiste auf jeder Seite gleich (10.11.2026): schmal (60 px, nur Symbole); mit dem Mauszeiger oder
+   der Tastatur klappt sie auf 208 px auf und liegt dabei über dem Inhalt; mit dem Pin oben wird sie festgestellt und ist
+   dann immer 208 px breit (Wahl am Konto, rahmen.js). Unter 900 px wird die Leiste zum Menü (Knopf in der Kopfzeile,
+   Escape oder Klick daneben schließt).
 
    Alle Farben stehen als --r-* an einer Stelle (:root). Sie sind die Grundlage für spätere Farbkonzepte je Nutzer
    (Stufe 2, Vorauswahl): ein Farbkonzept überschreibt nur diese Werte. Hell/Dunkel des Kontos (theme.js) bleibt bis dahin
@@ -42,7 +44,8 @@
   --r-m-shield-check: #1f6f6a; --r-m-truck: #8a6420; --r-m-container: #2a6f8a; --r-m-calendar: #7a3e9d;
   --r-m-megaphone: #c9502a; --r-m-chart: #55732b; --r-m-upload: #5f5a56; --r-m-settings: #5f5a56; --r-m-shield-lock: #5f5a56;
   --r-m-start: #8c1d2c; --r-m-sonst: #6a645f;
-  --r-breite: 208px;
+  --r-breite: 60px;              /* Spalte der Seitenleiste: schmal; festgestellt --r-breite-offen */
+  --r-breite-offen: 208px;
 }
 /* Dunkel (Wahl am Konto oder Systemeinstellung): nur andere Werte, gleicher Aufbau */
 @media screen and (prefers-color-scheme: dark) {
@@ -103,7 +106,7 @@ body.r { margin: 0; min-height: 100vh; min-height: 100dvh; background: var(--r-g
 .r :focus-visible { outline: none; box-shadow: var(--r-fokus); }
 .r-app { display: grid; grid-template-columns: minmax(0, 1fr); min-height: 100vh; min-height: 100dvh; }
 .r-app.r-bereit { grid-template-columns: var(--r-breite) minmax(0, 1fr); }
-.r-app.r-schmal { --r-breite: 60px; }
+.r-app.r-fest { --r-breite: var(--r-breite-offen); }
 @media (min-width: 901px) {
   .r-app.r-bereit { background: linear-gradient(to right, var(--r-leiste) calc(var(--r-breite) - 1px), var(--r-linie) calc(var(--r-breite) - 1px) var(--r-breite), transparent var(--r-breite)); }
 }
@@ -111,10 +114,17 @@ body.r { margin: 0; min-height: 100vh; min-height: 100dvh; background: var(--r-g
 .r-i { width: 16px; height: 16px; flex: none; fill: none; stroke: currentColor; stroke-width: 1.9; stroke-linecap: round; stroke-linejoin: round; }
 
 /* ── Seitenleiste ── */
-.r-leiste { position: sticky; top: 0; height: 100vh; height: 100dvh; overflow-y: auto; overscroll-behavior: contain; box-sizing: border-box;
+.r-leiste { position: sticky; top: 0; height: 100vh; height: 100dvh; overflow-x: hidden; overflow-y: auto; overscroll-behavior: contain; box-sizing: border-box;
   display: flex; flex-direction: column; gap: 14px; padding: 16px 8px 12px; background: var(--r-leiste); border-right: 1px solid var(--r-linie); }
 .r-leiste[hidden] { display: none; }
-.r-marke { display: flex; align-items: center; min-height: 32px; padding: 0 10px; border-radius: 9px; text-decoration: none; }
+.r-kopf { display: flex; align-items: center; gap: 4px; }
+.r-marke { flex: 1; min-width: 0; display: flex; align-items: center; min-height: 32px; padding: 0 10px; border-radius: 9px; text-decoration: none; }
+/* Pin: Leiste feststellen (immer breit) bzw. lösen (schmal, klappt bei Bedarf auf) */
+.r-pin { flex: none; width: 28px; height: 28px; margin: 0; padding: 0; border: 0; border-radius: 8px; display: grid; place-items: center;
+  background: transparent; color: var(--r-zart); cursor: pointer; }
+.r-pin:hover { background: var(--r-hover); color: var(--r-text); }
+.r-pin[aria-pressed="true"] { color: var(--r-akzent-text); }
+.r-pin[aria-pressed="true"] .r-i { fill: currentColor; }
 .r-logo { display: block; height: 24px; width: auto; max-width: 100%; }
 .r-gruppe { display: flex; flex-direction: column; gap: 4px; }
 .r-gruppe-titel { margin: 0; padding: 0 8px; font-size: 10px; font-weight: 600; letter-spacing: .06em; text-transform: uppercase; color: var(--r-leise); }
@@ -151,34 +161,21 @@ a.r-eintrag[aria-current="page"] { background: var(--r-aktiv); box-shadow: var(-
 .r-zahl.r-zahl-rot { background: var(--r-rot-flaeche); color: var(--r-rot-ink); }
 
 /* Schmale Leiste (nur Symbole, Namen als Tooltip) – nur am Desktop; das Menü am Handy zeigt immer die Namen.
-   r-schmal: immer (Eingabebereich mit eigener Navigation). r-auto-schmal (Modulseiten, setzt rahmen.js): unter 1440 px,
-   damit Tabellen und Bedienzeilen der Module auf Laptops fast ihre bisherige Breite behalten; das Dashboard bleibt breit. */
+   Schmal ist sie, solange sie weder festgestellt (r-fest) noch aufgeklappt (r-auf: Mauszeiger oder Tastatur darauf,
+   setzt rahmen.js) ist. Aufgeklappt liegt sie über dem Inhalt (die Spalte bleibt 60 px), damit nichts springt. */
 @media (min-width: 901px) {
-  .r-schmal .r-leiste { padding: 16px 8px 12px; align-items: stretch; }
-  .r-schmal .r-leiste .r-marke { justify-content: center; padding: 0; }
-  .r-schmal .r-leiste .r-logo { width: 30px; height: 26px; object-fit: cover; object-position: left center; }
-  .r-schmal .r-leiste :is(.r-text, .r-gruppe-titel, .r-person, .r-bald, .r-stand) { display: none; }
-  .r-schmal .r-leiste .r-trenner { display: block; }
-  .r-schmal .r-leiste .r-eintrag { justify-content: center; padding: 0; }
-  .r-schmal .r-leiste .r-fuss { flex-direction: column; padding: 10px 0 0; }
-  .r-schmal .r-leiste .r-suche { justify-content: center; padding: 0; }
-  .r-schmal .r-leiste .r-suche :is(.r-text, .r-taste) { display: none; }
-  .r-schmal .r-leiste .r-zahl { position: absolute; top: 4px; right: 6px; min-width: 8px; width: 8px; height: 8px; padding: 0; font-size: 0; background: var(--r-text-2); }
-  .r-schmal .r-leiste .r-zahl.r-zahl-rot { background: var(--r-rot-flaeche); }
-}
-@media (min-width: 901px) and (max-width: 1439px) {
-  .r-app.r-auto-schmal { --r-breite: 60px; }
-  .r-auto-schmal .r-leiste { padding: 16px 8px 12px; align-items: stretch; }
-  .r-auto-schmal .r-leiste .r-marke { justify-content: center; padding: 0; }
-  .r-auto-schmal .r-leiste .r-logo { width: 30px; height: 26px; object-fit: cover; object-position: left center; }
-  .r-auto-schmal .r-leiste :is(.r-text, .r-gruppe-titel, .r-person, .r-bald, .r-stand) { display: none; }
-  .r-auto-schmal .r-leiste .r-trenner { display: block; }
-  .r-auto-schmal .r-leiste .r-eintrag { justify-content: center; padding: 0; }
-  .r-auto-schmal .r-leiste .r-fuss { flex-direction: column; padding: 10px 0 0; }
-  .r-auto-schmal .r-leiste .r-suche { justify-content: center; padding: 0; }
-  .r-auto-schmal .r-leiste .r-suche :is(.r-text, .r-taste) { display: none; }
-  .r-auto-schmal .r-leiste .r-zahl { position: absolute; top: 4px; right: 6px; min-width: 8px; width: 8px; height: 8px; padding: 0; font-size: 0; background: var(--r-text-2); }
-  .r-auto-schmal .r-leiste .r-zahl.r-zahl-rot { background: var(--r-rot-flaeche); }
+  .r-app.r-bereit:not(.r-fest):not(.r-auf) .r-leiste .r-kopf { flex-direction: column; gap: 6px; }
+  .r-app.r-bereit:not(.r-fest):not(.r-auf) .r-leiste .r-marke { flex: none; justify-content: center; padding: 0; }
+  .r-app.r-bereit:not(.r-fest):not(.r-auf) .r-leiste .r-logo { width: 30px; height: 26px; object-fit: cover; object-position: left center; }
+  .r-app.r-bereit:not(.r-fest):not(.r-auf) .r-leiste :is(.r-text, .r-gruppe-titel, .r-person, .r-bald, .r-stand) { display: none; }
+  .r-app.r-bereit:not(.r-fest):not(.r-auf) .r-leiste .r-trenner { display: block; }
+  .r-app.r-bereit:not(.r-fest):not(.r-auf) .r-leiste .r-eintrag { justify-content: center; padding: 0; }
+  .r-app.r-bereit:not(.r-fest):not(.r-auf) .r-leiste .r-fuss { flex-direction: column; padding: 10px 0 0; }
+  .r-app.r-bereit:not(.r-fest):not(.r-auf) .r-leiste .r-suche { justify-content: center; padding: 0; }
+  .r-app.r-bereit:not(.r-fest):not(.r-auf) .r-leiste .r-suche :is(.r-text, .r-taste) { display: none; }
+  .r-app.r-bereit:not(.r-fest):not(.r-auf) .r-leiste .r-zahl { position: absolute; top: 4px; right: 6px; min-width: 8px; width: 8px; height: 8px; padding: 0; font-size: 0; background: var(--r-text-2); }
+  .r-app.r-bereit:not(.r-fest):not(.r-auf) .r-leiste .r-zahl.r-zahl-rot { background: var(--r-rot-flaeche); }
+  .r-app.r-auf:not(.r-fest) .r-leiste { position: sticky; z-index: 45; width: var(--r-breite-offen); box-shadow: var(--r-schatten-menue); }
 }
 
 /* ── Kopfzeile am Handy und Menü ── */
@@ -202,6 +199,7 @@ a.r-eintrag[aria-current="page"] { background: var(--r-aktiv); box-shadow: var(-
   .r-eintrag { min-height: 40px; font-size: 14px; }
   .r-suche { min-height: 40px; font-size: 14px; }
   .r-taste { display: none; }
+  .r-pin { display: none; }   /* das Menü ist ohnehin voll breit */
 }
 
 /* ── Suche (Dialog) ── */

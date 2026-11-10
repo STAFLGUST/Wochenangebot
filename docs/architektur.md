@@ -131,7 +131,7 @@ Dunkle Farben (`prefers-color-scheme: dark`, `data-theme="dark"`) gelten nur fü
 
 Angebotsseite im Design „Liquid Glass“ (Abschnitt am Ende von `app.css`, nur `@media screen`, alle Regeln unter `body.kseite`, nur `index.html` trägt die Klasse): schwebende Glas-Kopfzeile, Umschalter als Segment, Kapseln für Fleischarten, Filter und Sortierung, Angebotsliste als Glaskarte mit abgerundeten Zeilen, Fenster als Glas; Inhalt, Aufbau und Druck unverändert.
 
-Eingabebereich seit 06.11.2026 im gemeinsamen Rahmen „C2“ (schmale Seitenleiste vor der eigenen Navigation, Abschnitt
+Eingabebereich seit 06.11.2026 im gemeinsamen Rahmen „C2“ (Seitenleiste vor der eigenen Navigation, Abschnitt
 „Rahmen „C2““ ganz am Ende von `admin.css`: Glas-Werte auf die ruhigen Flächen des Rahmens, keine Farbflächen, Kopfzeile flach,
 Logo in der Seitenleiste). Darunter unverändert die bisherige Gestaltung, deren Werte der Rahmen überschreibt –
 Design „Liquid Glass“ (Abschnitt am Ende von `admin.css`, nur `@media screen`, alle Regeln unter `body.adm`):
@@ -164,7 +164,7 @@ oder der Browser ohne Grafikkarte zeichnet (WebGL fehlt, nur mit großem Leistun
 Ergebnis je Host 7 Tage im Browser, unter Automatisierung keine Erkennung). `app.css` schaltet dann für alle Seiten
 Unschärfe (`backdrop-filter`), Hintergrund-Farbflächen (`.db-bg`, `.ctl-bg` …, `body.kseite::before`), Übergänge und
 Animationen ab, `admin.css` macht das Glas des Eingabebereichs deckend. Schnittstelle: `STAFL_DARSTELLUNG` (einfach,
-automatisch, wahl, konto, setzen), Umschalten mit Speichern über `STAFL_THEME.darstellung(einfach)`; Knopf (Blitz) im Dashboard.
+automatisch, wahl, konto, setzen), Umschalten mit Speichern über `STAFL_THEME.darstellung(einfach)`; Knopf (Bildschirm, rot = an) im Dashboard.
 Neue Seiten mit eigener Hintergrund-Farbfläche tragen deren Klasse in die Liste in `app.css` ein.
 
 Schriften liegen in `app/assets/fonts/` (Geist, Geist Mono; Lizenz daneben), eingebunden in `app.css`. Kein Build-Schritt. Skripte und Stylesheets werden in den HTML-Seiten **ohne** `?v=` eingebunden; Versionsnummern und Prüfliste der Dateiprüfung erzeugt der Server beim Einspielen (`deploy/bereitstellen.py`). Die CI prüft, dass alle Einbindungen existieren und keine Nummern bzw. keine Prüfliste im Repository stehen (`werkzeuge/asset_versionen.py`, `werkzeuge/integritaet.py`); `--zeigen` zeigt, was der Server erzeugen würde.
@@ -191,14 +191,18 @@ Inbetriebnahme der Anmeldung). Der Testlauf blendet den Ordner nur in den Gruppe
 Gestaltung „C2“ (Entwurf vom Inhaber freigegeben 06.11.2026) im gemeinsamen Rahmen `app/assets/rahmen.css` und
 `app/assets/rahmen.js` (Plattformkern, gemeinsam für alle Mitarbeiterseiten – Eingabebereich und Modulseiten binden ihn mit
 `data-rahmen` am `body` ein und behalten Aufbau, Reiter und Abläufe; Einzelheiten `docs/entwickler/06-oberflaechen.md`):
-links eine feste Seitenleiste (208 px) mit Start, „Anwendungen“, „In Entwicklung“ (Klebeband „Bald“, ohne Verweis) und
+links eine feste Seitenleiste mit Start, „Anwendungen“, „In Entwicklung“ (Klebeband „Bald“, ohne Verweis) und
 „Verwaltung & Daten“, unten Name, Rolle und Abmelden; sie entsteht aus derselben Liste von `module_status` wie die
 Kacheln (`STAFL_RAHMEN.zeichnen`), Module ohne Modulzugang der Rolle fehlen. Unter 900 px wird sie zum Menü (Kopfzeile
-mit Menüknopf); für Module mit eigener Navigation gibt es eine schmale Leiste (60 px, nur Symbole). Oben in der Leiste
+mit Menüknopf). Am Desktop ist sie auf jeder Seite gleich (10.11.2026): schmal (60 px, nur Symbole), mit Mauszeiger (kurz
+verzögert) oder Tastatur klappt sie über dem Inhalt auf 208 px auf; der Pin oben stellt sie fest (immer 208 px, Inhalt
+rückt daneben). Die Wahl steht am Konto (`leiste: 'fest'`, Aktion `theme_save`, Status `user.leiste`) und gilt damit auf
+jedem Host. Oben in der Leiste
 das Suchfeld (Strg K bzw. ⌘ K, Dialog `#r-palette`: Anwendungen und – auf dem Dashboard – Schnellaktionen; nur Sprünge;
 schließt mit Escape oder Kreuz, nicht per Klick daneben).
 **Startseite** (Entwurf „C2“, Ausbau 06.11.2026): Begrüßung nach Tageszeit mit Vornamen, Datum und „9 offene Punkte, 3 davon
-überfällig“; Knöpfe Schnellzugriff (Blitz, öffnet die Suche), „Einfache Darstellung“ (Bildschirm) und Hell/Dunkel. Darunter
+überfällig“; Knöpfe „Einfache Darstellung“ (Bildschirm, rot = an) und Hell/Dunkel (die Suche steht in der Seitenleiste;
+der frühere Blitz-Knopf entfiel am 10.11.2026). Darunter
 gelbe Hinweise zu geplanten und laufenden Wartungen der eigenen Anwendungen (aus `module_status`, je Gerät schließbar),
 **Favoriten** (kompakte Kacheln, Standard die ersten vier Anwendungen; „Bearbeiten“ wählt bis zu acht, gespeichert am Konto
 im neuen optionalen Feld `favoriten` über `start_favoriten_save`), **Heute für Sie** (Gruppen Überfällig / Heute /

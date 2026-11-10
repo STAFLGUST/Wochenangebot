@@ -138,6 +138,7 @@ function me_payload(array $u): array
                 'perms' => function_exists('user_perms') ? user_perms($u) : [], 'rollenName' => rollen_text($u),
                 'theme' => in_array($u['theme'] ?? '', ['light', 'dark'], true) ? $u['theme'] : '',   // Hell/Dunkel am Konto (theme.js)
                 'darstellung' => in_array($u['darstellung'] ?? '', ['einfach', 'effekte'], true) ? $u['darstellung'] : '',   // einfache Darstellung (theme.js)
+                'leiste' => ($u['leiste'] ?? '') === 'fest' ? 'fest' : '',   // Seitenleiste festgestellt (rahmen.js)
                 // Modulzugang für die Oberfläche dieses Hosts (lib/rechte.php) – die Sperre setzt der Server je Aktion durch
                 'modulzugang' => modul_host_frei($u, $hm = explode('.', oidc_einstellung('WA_OBERFLAECHE') ?: 'angebot.eingabe', 2)[0]),
                 'modulName' => MODULE[$hm]['name'] ?? ''];
@@ -149,6 +150,7 @@ function me_payload(array $u): array
             'perms' => function_exists('user_perms') ? user_perms($u) : [], 'rollenName' => rollen_text($u),
                 'theme' => in_array($u['theme'] ?? '', ['light', 'dark'], true) ? $u['theme'] : '',   // Hell/Dunkel am Konto (theme.js)
                 'darstellung' => in_array($u['darstellung'] ?? '', ['einfach', 'effekte'], true) ? $u['darstellung'] : '',   // einfache Darstellung (theme.js)
+                'leiste' => ($u['leiste'] ?? '') === 'fest' ? 'fest' : '',   // Seitenleiste festgestellt (rahmen.js)
             'modulzugang' => ($m = anfrage_modul(null)) === null || modul_host_frei($u, $m), 'modulName' => $m !== null ? (MODULE[$m]['name'] ?? '') : ''];
 }
 /* Nutzer innerhalb der Sperre ändern und speichern */
