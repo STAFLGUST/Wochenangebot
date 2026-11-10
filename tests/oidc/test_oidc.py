@@ -468,16 +468,34 @@ check('Anmeldeseite liefert das STAFL-Stylesheet und das Skript für den Einmalc
       code == 200 and bool(_css) and re.search(r'src="/resources/[^"]+/login/stafl/js/stafl-otp\.js"', text) and 'lang="de"' in text
       and 'class="stafl-sr"' in text and '>Plattform<' not in text and 'Anmelden' in text, text[:300])
 code, kopf, css = anfrage(L + _css.group(1)) if _css else (0, {}, '')
-check('Stylesheet: Farben des Plattform-Designs (Grund, Bordeaux, Farbflächen ohne Rot, Glas, dunkel)',
-      code == 200 and all(x in css for x in ('#f4f1ee', '#121011', '#8c1d2c', '#a3202f', 'rgba(143, 167, 196', 'rgba(226, 165, 74', 'rgba(63, 122, 90',
-                                            '--st-filter: blur(30px) saturate(180%)', 'backdrop-filter: var(--st-filter)', 'prefers-color-scheme: dark', '28px', '-apple-system')), code)
+check('Stylesheet: Gestaltung C2 (Grund, Bordeaux hell und dunkel, Schrift Geist, kein Glas, keine Farbflächen)',
+      code == 200 and all(x in css for x in ('#f6f4f1', '#121011', '#8c1d2c', '#b23a4b', '"Geist"', 'prefers-color-scheme: dark', 'border-radius: 16px'))
+      and 'backdrop-filter' not in css and 'blur(' not in css and 'radial-gradient' not in css, code)
+
+
+def _r_werte(text, dunkel):
+    # --r-* einer Stylesheet-Datei: hell aus dem ersten :root, dunkel aus dem Block für prefers-color-scheme: dark
+    teile = re.split(r'@media[^{]*prefers-color-scheme: dark[^{]*\{', text, maxsplit=1)
+    block = teile[1].split('}', 1)[0] if dunkel and len(teile) > 1 else text.split(':root {', 1)[1].split('}', 1)[0]
+    return {m.group(1): ' '.join(m.group(2).split()) for m in re.finditer(r'(--r-[a-z0-9-]+):\s*([^;]+);', block)}
+
+
+_rahmen = open(os.path.join(REPO, 'app', 'assets', 'rahmen.css'), encoding='utf-8').read()
+_theme = open(os.path.join(THEME, 'resources', 'css', 'stafl.css'), encoding='utf-8').read()
+for _dunkel in (False, True):
+    _soll, _ist = _r_werte(_rahmen, _dunkel), _r_werte(_theme, _dunkel)
+    _abw = {k: (v, _soll.get(k)) for k, v in _ist.items() if _soll.get(k) != v}
+    check(f'Stylesheet: Farben ({"dunkel" if _dunkel else "hell"}) gleich wie --r-* in app/assets/rahmen.css', len(_ist) >= 20 and not _abw, _abw or len(_ist))
 check('Stylesheet: Browser fragen spätestens nach einer Stunde neu (Änderungen am Design kommen an)', 'max-age=3600' in (kopf.get('Cache-Control') or ''), kopf.get('Cache-Control'))
 _res = _css.group(1).rsplit('/css/', 1)[0] if _css else ''
-for _quelle, _ziel in (('app/assets/logo-standard-fleisch-kopf.png', '/img/logo-standard-fleisch-kopf.png'), ('app/assets/icons/favicon-32.png', '/img/favicon.ico')):
+for _quelle, _ziel in (('app/assets/logo-standard-fleisch-kopf.png', '/img/logo-standard-fleisch-kopf.png'), ('app/assets/icons/favicon-32.png', '/img/favicon.ico'),
+                       ('app/assets/fonts/geist-latin-wght-normal.woff2', '/fonts/geist-latin-wght-normal.woff2'),
+                       ('app/assets/fonts/geist-latin-ext-wght-normal.woff2', '/fonts/geist-latin-ext-wght-normal.woff2'),
+                       ('app/assets/fonts/geist-mono-latin-wght-normal.woff2', '/fonts/geist-mono-latin-wght-normal.woff2')):
     _req = urllib.request.Request(L + _res + _ziel)
     with urllib.request.urlopen(_req, context=TLS, timeout=30) as _antwort:
         _bild = _antwort.read()
-    check(f'Logo/Symbol der Anmeldeseite ist dieselbe Datei wie im Dashboard ({_quelle})', _bild == open(os.path.join(REPO, _quelle), 'rb').read() and len(_bild) > 500)
+    check(f'Logo, Symbol und Schrift der Anmeldeseite sind dieselbe Datei wie im Dashboard ({_quelle})', _bild == open(os.path.join(REPO, _quelle), 'rb').read() and len(_bild) > 500)
 _kc_version = re.search(r'^KC_VERSION=(\S+)', open(os.path.join(REPO, 'tests', 'oidc', 'umgebung.sh'), encoding='utf-8').read(), re.M).group(1)
 check('eigene Vorlagen beruhen auf der verwendeten Keycloak-Version (bei Updates mit der neuen Fassung vergleichen)',
       all(f'keycloak.v2 aus Keycloak {_kc_version}' in open(os.path.join(THEME, f), encoding='utf-8').read() for f in ('login-otp.ftl', 'login-config-totp.ftl'))
@@ -774,18 +792,23 @@ with sync_playwright() as pw:
 
     # ── Anmeldeseite im Plattform-Design: hell und dunkel, 390 px, keine JavaScript-Fehler ──
     login_fehler = []
-    for _schema, _grund in (('light', 'rgb(244, 241, 238)'), ('dark', 'rgb(18, 16, 17)')):
+    for _schema, _grund, _akzent in (('light', 'rgb(246, 244, 241)', 'rgb(140, 29, 44)'), ('dark', 'rgb(18, 16, 17)', 'rgb(178, 58, 75)')):
         _ctx = br.new_context(ignore_https_errors=True, viewport={'width': 390, 'height': 844}, color_scheme=_schema)
         _pg = _ctx.new_page(); _pg.on('pageerror', lambda e: login_fehler.append(str(e)))
         _pg.on('console', lambda m: login_fehler.append(m.text) if m.type == 'error' else None)
         _pg.goto(D + '/'); _pg.wait_for_selector('#username')
-        _stil = _pg.evaluate("""() => { const k = getComputedStyle(document.querySelector('.pf-v5-c-login__main')); return {
-            grund: getComputedStyle(document.body).backgroundColor, radius: k.borderTopLeftRadius, filter: k.backdropFilter || k.webkitBackdropFilter,
-            logo: getComputedStyle(document.querySelector('#kc-header-wrapper'), '::before').backgroundImage,
-            knopf: getComputedStyle(document.querySelector('#kc-login')).backgroundImage, breit: document.documentElement.scrollWidth > innerWidth }; }""")
-        check(f'Anmeldeseite {_schema}, 390 px: Grund, Glaskarte, Logo, Bordeaux-Knopf, kein waagerechtes Scrollen',
-              _stil['grund'] == _grund and _stil['radius'] in ('24px', '28px') and 'blur' in (_stil['filter'] or '') and 'logo-standard-fleisch-kopf.png' in _stil['logo']
-              and 'rgb(163, 32, 47)' in _stil['knopf'] and not _stil['breit'], _stil)
+        _pg.evaluate('document.fonts.ready.then(() => true)')
+        _stil = _pg.evaluate("""() => { const k = getComputedStyle(document.querySelector('.pf-v5-c-login__container')), b = getComputedStyle(document.querySelector('#kc-login'));
+            const r = document.querySelector('.pf-v5-c-login__container').getBoundingClientRect(); return {
+            grund: getComputedStyle(document.body).backgroundColor, karte: k.backgroundColor, radius: k.borderTopLeftRadius, rand: k.borderTopWidth,
+            filter: k.backdropFilter || k.webkitBackdropFilter || 'none', logo: getComputedStyle(document.querySelector('#kc-header-wrapper'), '::before').backgroundImage,
+            knopf: b.backgroundColor, verlauf: b.backgroundImage, knopfRadius: b.borderTopLeftRadius, schrift: getComputedStyle(document.body).fontFamily,
+            geist: [...document.fonts].some((f) => f.family.replace(/"/g, '') === 'Geist' && f.status === 'loaded'), feld: document.querySelector('#username').parentElement.getBoundingClientRect().height,
+            links: r.left, rechts: innerWidth - r.right, breit: document.documentElement.scrollWidth > innerWidth }; }""")
+        check(f'Anmeldeseite {_schema}, 390 px: Gestaltung C2 – Grund, Karte mit feiner Linie ohne Glas, Logo, flacher Bordeaux-Knopf, Geist, kein waagerechtes Scrollen',
+              _stil['grund'] == _grund and _stil['radius'] == '16px' and _stil['rand'] == '1px' and _stil['filter'] == 'none' and _stil['karte'] != _grund
+              and 'logo-standard-fleisch-kopf.png' in _stil['logo'] and _stil['knopf'] == _akzent and _stil['verlauf'] == 'none' and _stil['knopfRadius'] == '10px'
+              and _stil['schrift'].startswith('Geist') and _stil['geist'] and _stil['feld'] >= 44 and _stil['links'] >= 15 and _stil['rechts'] >= 15 and not _stil['breit'], _stil)
         _pg.screenshot(path=os.path.join(SH, f'oidc_anmeldung_{_schema}_390.png'), full_page=True)
         _ctx.close()
 

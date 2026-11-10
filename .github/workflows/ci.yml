@@ -341,6 +341,7 @@ jobs:
           path: |
             tests/.ergebnisse/
             tests/.arbeit/*.log
+          include-hidden-files: true   # tests/.ergebnisse und tests/.arbeit beginnen mit einem Punkt
           retention-days: 7
 
   e2e_required:
@@ -400,6 +401,20 @@ jobs:
       - name: Umgebung beenden
         if: always()
         run: bash tests/oidc/umgebung.sh stop
+      - name: Bildschirmfotos der Anmeldeseite sichern (zur Durchsicht des Designs, auch ohne Fehler)
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: oidc-anmeldeseite
+          # ohne die Einrichtung des Einmalcodes (QR-Code mit dem Schlüssel des Testkontos)
+          path: |
+            tests/.ergebnisse/oidc_anmeldung_*.png
+            tests/.ergebnisse/oidc_einmalcode_1280.png
+            tests/.ergebnisse/oidc_einmalcode_fehler_1280.png
+            tests/.ergebnisse/oidc_einmalcode_doppelt_390.png
+          if-no-files-found: ignore
+          include-hidden-files: true   # die Ordner beginnen mit einem Punkt – ohne diese Angabe lädt upload-artifact nichts hoch
+          retention-days: 7
       - name: Protokolle bei Fehler sichern
         if: failure()
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
@@ -409,6 +424,7 @@ jobs:
             tests/.ergebnisse/oidc_*
             tests/.arbeit/oidc/*.log
             tests/.arbeit/oidc/apache/*.log
+          include-hidden-files: true   # tests/.ergebnisse und tests/.arbeit beginnen mit einem Punkt
           retention-days: 7
 
   app:
@@ -472,6 +488,7 @@ jobs:
           path: |
             tests/.ergebnisse/
             tests/.arbeit/*.log
+          include-hidden-files: true   # tests/.ergebnisse und tests/.arbeit beginnen mit einem Punkt
           retention-days: 7
 
   vollstaendig:

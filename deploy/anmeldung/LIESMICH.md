@@ -20,7 +20,7 @@ sie. Postfach-Zugangsdaten und den Schlüssel des hinterlegten Postfach-Passwort
 | `app-abfrage.php` | von `konten.sh` im App-Container ausgeführt: Postfach der Anwendung (für den Mailversand von Keycloak) und ob es ein Mitarbeiterkonto gibt |
 | `ruecksicherung-probe.sh` | Schritt 7: Rücksicherung der Keycloak-Sicherung in eine Probedatenbank üben (Konten zählen, danach löschen) |
 | `konten.sh` | Schritt 4 und Betrieb: Konten in der Serverkonsole verwalten (Verwaltungskonto, anlegen, Startpasswort, zweiten Faktor zurücksetzen, Passkey, sperren, Liste, „Passwort vergessen“ ein/aus) |
-| `theme/stafl/login/` | Design der Anmeldeseite („Liquid Glass“ wie Dashboard und Eingabebereich, Logo aus `app/assets/`): erbt von `keycloak.v2`; eigen sind `stafl.css`, `stafl-otp.js` (Einmalcode-Felder), `messages_de.properties` und zwei Vorlagen (`login-otp.ftl`, `login-config-totp.ftl`, Grundlage Keycloak 26.8.2). Per Volume nur lesend in Keycloak |
+| `theme/stafl/login/` | Design der Anmeldeseite („C2“ wie Dashboard und Module seit 10.11.2026: Farben wie `--r-*` in `app/assets/rahmen.css`, Schrift Geist, Logo und Schriften aus `app/assets/`): erbt von `keycloak.v2`; eigen sind `stafl.css`, `resources/fonts/` (Geist), `stafl-otp.js` (Einmalcode-Felder), `messages_de.properties` und zwei Vorlagen (`login-otp.ftl`, `login-config-totp.ftl`, Grundlage Keycloak 26.8.2). Per Volume nur lesend in Keycloak |
 
 **Releases:** Ändert ein Release `deploy/image/` (z. B. neuer Digest des Basis-Images), baut `deploy/freigabe-einspielen.sh`
 das Image vor dem Einspielen neu (`docker compose build --pull app`) und erstellt die App neu – nur solange `COMPOSE_FILE`
