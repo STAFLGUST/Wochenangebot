@@ -5,7 +5,7 @@
 <#import "qr-code.ftl" as qr>
 <@layout.registrationLayout displayRequiredFields=false displayMessage=!messagesPerField.existsError('totp','userLabel'); section>
 <!-- template: login-config-totp.ftl -->
-<#-- STAFL: Grundlage keycloak.v2 aus Keycloak 26.8.1; geändert nur Hinweis auf alte Einträge, Name des Eintrags und das Code-Feld (bei Keycloak-Updates mit der neuen Fassung vergleichen) -->
+<#-- STAFL: Grundlage keycloak.v2 aus Keycloak 26.8.2; geändert nur Hinweis auf alte Einträge, Name des Eintrags und das Code-Feld (bei Keycloak-Updates mit der neuen Fassung vergleichen) -->
 
     <#if section = "header">
         ${msg("loginTotpTitle")}

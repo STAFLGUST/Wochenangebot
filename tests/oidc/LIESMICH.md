@@ -4,7 +4,7 @@ Bildet die geplante Mitarbeiteranmeldung aus ADR-003 vollständig nach – **nur
 (GR-111). Nichts hiervon ändert `angebot-stafl.de`: ohne `WA_OIDC=1` im Webserver verhält sich die Anwendung wie bisher.
 
 ```text
-Browser ──TLS──▶ Caddy (Test-CA) ─┬─ login.stafl.test      ─▶ Keycloak 26.8.1 (Realm „mitarbeiter“) ─▶ PostgreSQL (nur Keycloak)
+Browser ──TLS──▶ Caddy (Test-CA) ─┬─ login.stafl.test      ─▶ Keycloak 26.8.2 (Realm „mitarbeiter“) ─▶ PostgreSQL (nur Keycloak)
                                   ├─ dashboard.stafl.test  ─▶ Apache + mod_auth_openidc (Client „dashboard“) ─▶ app/ + dashboard/
                                   ├─ angebot.stafl.test    ─▶ Apache + mod_auth_openidc (Client „angebot“)   ─▶ app/
                                   ├─ verwaltung.stafl.test ─▶ Apache + mod_auth_openidc (Client „verwaltung“, angelegt von realm-aktualisieren) ─▶ app/

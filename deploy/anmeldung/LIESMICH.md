@@ -12,7 +12,7 @@ sie. Postfach-Zugangsdaten und den Schlüssel des hinterlegten Postfach-Passwort
 
 | Datei | Inhalt |
 | --- | --- |
-| `docker-compose.anmeldung.yml` | Ergänzung zu `docker-compose.yml`: App mit dem Image aus `deploy/image` (mod_auth_openidc), Keycloak 26.8.1 und eigene PostgreSQL 17 – fest über Digest; Keycloak nur auf `127.0.0.1:8180`, Datenbank nur im internen Netz |
+| `docker-compose.anmeldung.yml` | Ergänzung zu `docker-compose.yml`: App mit dem Image aus `deploy/image` (mod_auth_openidc), Keycloak 26.8.2 und eigene PostgreSQL 17 – fest über Digest; Keycloak nur auf `127.0.0.1:8180`, Datenbank nur im internen Netz |
 | `apache-oidc.conf` | Keycloak-Hosts `dashboard-stafl.de`, `angebot.dashboard-stafl.de`, `verwaltung.dashboard-stafl.de` (dort `/import/` → Importzentrale), `bestand.dashboard-stafl.de`, `hr.dashboard-stafl.de`, `sicherheit.dashboard-stafl.de` (`/` und `/admin/` → `/module/sicherheit/`), `controlling.dashboard-stafl.de` (`/` und `/admin/` → `/module/controlling/`), `leergut.dashboard-stafl.de` (`/` und `/admin/` → `/module/leergut/`), `rewe.dashboard-stafl.de` (`/` und `/admin/` → `/module/rewe/`), `qs.dashboard-stafl.de` (`/` und `/admin/` → `/module/qs/`) (`/` und `/admin/` → `/module/hr/`) , `crm.dashboard-stafl.de` (`/` und `/admin/` → `/module/crm/`) und `marketing.dashboard-stafl.de` (`/` und `/admin/` → `/module/marketing/`) (wie `tests/oidc/apache.conf`); je Host eigener Client, eigene Sitzung und `WA_OBERFLAECHE`; als `sites-enabled/zz-…` eingebunden, damit `angebot-stafl.de` Standard-Host bleibt |
 | `realm-mitarbeiter.json` | Realm für den Betrieb, **erzeugt** von `werkzeuge/realm_produktion.py` aus dem Test-Realm (ohne Testnutzer, Geheimnisse als Platzhalter) – nicht von Hand ändern |
 | `pruefen.sh` | Prüfung mit Docker (CI-Auftrag „Anwendungs-Image prüfen“) |
@@ -20,7 +20,7 @@ sie. Postfach-Zugangsdaten und den Schlüssel des hinterlegten Postfach-Passwort
 | `app-abfrage.php` | von `konten.sh` im App-Container ausgeführt: Postfach der Anwendung (für den Mailversand von Keycloak) und ob es ein Mitarbeiterkonto gibt |
 | `ruecksicherung-probe.sh` | Schritt 7: Rücksicherung der Keycloak-Sicherung in eine Probedatenbank üben (Konten zählen, danach löschen) |
 | `konten.sh` | Schritt 4 und Betrieb: Konten in der Serverkonsole verwalten (Verwaltungskonto, anlegen, Startpasswort, zweiten Faktor zurücksetzen, Passkey, sperren, Liste, „Passwort vergessen“ ein/aus) |
-| `theme/stafl/login/` | Design der Anmeldeseite („Liquid Glass“ wie Dashboard und Eingabebereich, Logo aus `app/assets/`): erbt von `keycloak.v2`; eigen sind `stafl.css`, `stafl-otp.js` (Einmalcode-Felder), `messages_de.properties` und zwei Vorlagen (`login-otp.ftl`, `login-config-totp.ftl`, Grundlage Keycloak 26.8.1). Per Volume nur lesend in Keycloak |
+| `theme/stafl/login/` | Design der Anmeldeseite („Liquid Glass“ wie Dashboard und Eingabebereich, Logo aus `app/assets/`): erbt von `keycloak.v2`; eigen sind `stafl.css`, `stafl-otp.js` (Einmalcode-Felder), `messages_de.properties` und zwei Vorlagen (`login-otp.ftl`, `login-config-totp.ftl`, Grundlage Keycloak 26.8.2). Per Volume nur lesend in Keycloak |
 
 **Releases:** Ändert ein Release `deploy/image/` (z. B. neuer Digest des Basis-Images), baut `deploy/freigabe-einspielen.sh`
 das Image vor dem Einspielen neu (`docker compose build --pull app`) und erstellt die App neu – nur solange `COMPOSE_FILE`

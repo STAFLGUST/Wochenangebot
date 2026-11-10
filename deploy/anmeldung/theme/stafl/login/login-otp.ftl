@@ -3,7 +3,7 @@
 <#import "buttons.ftl" as buttons>
 <@layout.registrationLayout displayMessage=!messagesPerField.existsError('totp'); section>
 <!-- template: login-otp.ftl -->
-<#-- STAFL: Grundlage keycloak.v2 aus Keycloak 26.8.1; geändert nur das Einmalcode-Feld (bei Keycloak-Updates mit der neuen Fassung vergleichen) -->
+<#-- STAFL: Grundlage keycloak.v2 aus Keycloak 26.8.2; geändert nur das Einmalcode-Feld (bei Keycloak-Updates mit der neuen Fassung vergleichen) -->
 
     <#if section="header">
         ${msg("doLogIn")}
@@ -28,7 +28,7 @@
                 </div>
             </#if>
 
-            <#-- STAFL: statt field.input ein eigenes Feld mit pattern und Hinweis (Aufbau wie field.input, Keycloak 26.8.1) -->
+            <#-- STAFL: statt field.input ein eigenes Feld mit pattern und Hinweis (Aufbau wie field.input, Keycloak 26.8.2) -->
             <#assign otpFehler = messagesPerField.get("totp")>
             <@field.group name="otp" label=msg("loginOtpOneTime") error=otpFehler>
                 <span class="${properties.kcInputClass} <#if otpFehler?has_content>${properties.kcError}</#if>">

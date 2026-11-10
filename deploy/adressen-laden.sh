@@ -18,7 +18,7 @@
 set -eu
 DOCKER=${DOCKER:-docker}
 CURL=${CURL:-curl}
-WERKZEUG=${ADRESSEN_WERKZEUG:-python:3.12.14-bookworm@sha256:dbbe4ceb97851e2e5fa83798b239811f871cb743b259ba3563737349f6bcfaa0}
+WERKZEUG=${ADRESSEN_WERKZEUG:-python:3.12.16-bookworm@sha256:4209fae09a3e20afd863e528bfddc235da5fd5977983e1996cd54cc9a72e6267}
 QUELLE=${ADRESSEN_QUELLE:-https://download.geofabrik.de/europe/germany-latest.osm.pbf}
 MIN_ADRESSEN=${ADRESSEN_MIN:-1000000}        # weniger = Quelle unvollständig (Deutschland: viele Millionen)
 PLATZ_GB=${ADRESSEN_PLATZ_GB:-12}            # Quelle (ca. 4,5 GB) + Arbeitsdatei + neue und alte Zieldatei
