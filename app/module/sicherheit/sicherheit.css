@@ -219,7 +219,9 @@ button.sic-karte:hover { transform: translateY(-1px); box-shadow: inset 0 1px 0 
 .sic-tabelle.vorschau tr.neu td { background: var(--sic-warn-bg); }
 .cftab:not(.alle) tr.cf-ok { display: none; }
 .sic .nur-schmal { display: none; }
-.sic-pfad { word-break: break-all; }
+/* Dateipfade brechen an „/“ um (pfadText setzt <wbr>), nie Zeichen für Zeichen */
+.sic-pfad { overflow-wrap: anywhere; }
+td.sic-pfad { overflow-wrap: normal; }   /* in der Tabelle Dateinamen am Stück (Rahmen scrollt notfalls seitlich) */
 .fw-row.bad td:first-child { box-shadow: inset 3px 0 0 var(--sic-rot); }
 .fw-row.warn td:first-child { box-shadow: inset 3px 0 0 var(--sic-warn-hell); }
 .sic-st { display: inline-block; min-width: 30px; padding: 0 5px; border-radius: 6px; background: var(--sic-aus); font-family: var(--mono); font-size: 11.5px; text-align: center; }

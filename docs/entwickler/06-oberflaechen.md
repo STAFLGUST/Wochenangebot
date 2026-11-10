@@ -567,6 +567,13 @@ Registersymbole (`icon` in `regeln/module.toml`) über `ICON` in `dashboard.js` 
   Kästchen `.check`/`.opt` 20 px in einer mindestens 36 px hohen Zeile. Nie waagerechtes Scrollen der Seite – breite
   Tabellen scrollen in ihrer Karte; Auswahlfelder, deren Text sonst abgeschnitten würde, bekommen auf schmalen
   Bildschirmen eine eigene Zeile (Sortierung der Kundenseite ≤ 480 px).
+- **Fingerbedienung auf allen Seiten im Rahmen** (`rahmen.css`, Prüfung am Handy 10.11.2026): Eingabefelder, Auswahlen
+  und Textfelder haben bei `pointer: coarse` mindestens 16 px Schrift (sonst zoomt iOS beim Antippen hinein; Kundenseite
+  ebenso in `app.css`), `.btn.sm` ist 36 px hoch. Module ergänzen eigene kleine Knöpfe (Chips, Segmente, Sortierköpfe,
+  Namen-Links, Telefonnummern, `summary`) in ihrem Stylesheet auf ≥ 32–36 px. Kennzahlen-Beschriftungen am Handy ≥ 11 px,
+  Fußnoten ≥ 11,5 px. In Karten-Tabellen (`tr` als Raster) laufen Hinweiszeilen mit `colspan` über die ganze Breite
+  (`td[colspan] { grid-column: 1 / -1 }`).
+  Texte nennen keine Richtung („links“, „rechts“), die am Handy nicht stimmt – stattdessen „aus der Liste“.
 - Kontrast ≥ 4,5:1 hell und dunkel (u. a. Gruppen `design`, `sidenav`, `dashboard` messen das).
 - Fokus: `:focus-visible { outline: none; box-shadow: var(--focus); }` aus `app.css`; Modulseiten mit eigenem
   `--…-fokus`. Fokus nie ersatzlos entfernen.

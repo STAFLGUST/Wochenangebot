@@ -16,6 +16,8 @@ Hinweis „Kein Zugang“): je hell/dunkel und 1440/390 px
   ausgenommen reine Rückfragen (Ja/Abbrechen).
 - Zahlen und Einheiten (02.11.2026): jede Seite lädt app/assets/format.js; Beträge, kg, €/kg, Prozent, Datum und KW wie
   vereinbart (docs/entwickler/10-konventionen.md).
+- Fingerbedienung am Handy (10.11.2026): mit pointer: coarse auf jeder Seite Eingabefelder ≥ 16 px Schrift (kein
+  Hineinzoomen am iPhone), kleine Knöpfe (.btn.sm) antippbar, kein waagerechtes Scrollen.
 Bildschirmfotos: tests/.ergebnisse/einheit-*.png (Bestandsaufnahme für die Durchsicht).
 """
 import glob
@@ -171,6 +173,29 @@ with sync_playwright() as pw:
                     zurueck.setdefault(breite, {})[name] = zr
                     check(f'{name} {tag}: Zurück-Knopf zum Dashboard sichtbar', zr is not None and zr['icon'] and zr['href'] and (zr['href'].rstrip('/').endswith('dashboard') or zr['href'] == 'https://dashboard-stafl.de/'), zr)
             ctx.close()
+    # Fingerbedienung (Prüfung am Handy 10.11.2026): mit Finger (pointer: coarse) haben Eingabefelder, Auswahlen und Textfelder
+    # auf jeder Seite mindestens 16 px Schrift (sonst zoomt iOS beim Antippen hinein) und kleine Knöpfe (.btn.sm) sind sicher
+    # antippbar (rahmen.css); kein waagerechtes Scrollen.
+    FINGER = r'''() => { const sicht = (e) => { const r = e.getBoundingClientRect(); return r.width > 0 && r.height > 0 && getComputedStyle(e).visibility !== 'hidden'; };
+      const n = (e) => (e.id || e.name || e.className || e.tagName) + ' ' + getComputedStyle(e).fontSize;
+      return { finger: matchMedia('(pointer: coarse)').matches,
+        eingabe: [...document.querySelectorAll('input:not([type=checkbox]):not([type=radio]):not([type=range]):not([type=color]):not([type=file]):not([type=hidden]), select, textarea')]
+          .filter((e) => sicht(e) && parseFloat(getComputedStyle(e).fontSize) < 16).map(n).slice(0, 6),
+        knopf: [...document.querySelectorAll('.btn.sm')].filter((e) => sicht(e) && e.getBoundingClientRect().height < 32)
+          .map((e) => (e.id || e.textContent.trim().slice(0, 20)) + ' ' + Math.round(e.getBoundingClientRect().height)).slice(0, 6) }; }'''
+    fctx = br.new_context(viewport={'width': 390, 'height': 844}, is_mobile=True, has_touch=True, locale='de-DE', timezone_id='Europe/Berlin',
+                          extra_http_headers={'X-Forwarded-For': '198.51.100.40'})
+    fp = fctx.new_page(); fp.on('pageerror', lambda e: fehler.append(f'{fp.url}: {e}'))
+    fp.goto(B + '/admin/'); fp.wait_for_selector('#screen-auth:not([hidden])')
+    fp.fill('#au-user', 'admin'); fp.fill('#pw1', PW); fp.click('#auth-submit'); fp.wait_for_selector('#screen-auth', state='hidden')
+    for name, bereich, pfad, warte, _ in SEITEN:
+        if bereich: als_bereich(fp, bereich)
+        fp.goto(B + pfad); fp.wait_for_selector(warte, timeout=20000)
+        fp.evaluate('document.fonts.ready.then(() => true)')
+        fi = fp.evaluate(FINGER)
+        check(f'{name} Handy mit Finger: Eingaben ≥ 16 px (kein Hineinzoomen), kleine Knöpfe antippbar', fi['finger'] and not fi['eingabe'] and not fi['knopf'], fi)
+        check(f'{name} Handy mit Finger: kein waagerechtes Scrollen', fp.evaluate('document.documentElement.scrollWidth') <= 390)
+    fctx.close()
     # Fenster (Vorgabe des Inhabers 02.11.2026): auf jeder Seite schließt ein Klick neben ein <dialog> es nie, Escape schließt.
     # Jedes Fenster der Seite wird direkt geöffnet (Inhalt egal – geprüft wird das gemeinsame Verhalten), dann wird an einer
     # Stelle außerhalb geklickt (am Handy füllen manche Fenster den Bildschirm – dann nur Escape).

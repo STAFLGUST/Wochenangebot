@@ -551,6 +551,12 @@ body.hr .hr-kopf .brand-logo { height: 28px; width: auto; }
   .hr input[type="date"], .hr input[type="text"], .hr input[type="number"], .hr input[type="email"], .hr select, .hr textarea { font-size: 16px; }
   .hr-rund.klein { width: 40px; height: 40px; }
   .hr-zusatz { min-height: 40px; }
+  .hr-chip, .hr-modus button { height: 36px; }   /* Abteilungen, Monat / ± 2 Wochen */
+  details > summary { min-height: 36px; display: flex; align-items: center; }
+}
+/* Blättern (Jahr, Monat): Titel schmaler, damit „Weiter“ neben dem Titel bleibt statt allein in die nächste Zeile zu rutschen */
+@media (max-width: 560px) {
+  .hr-jahr h1, .hr-jahr h2 { font-size: 22px; max-width: calc(100% - 104px); }
 }
 
 /* ── Vorplanung (Inhaber 10.11.2026): Schalter im Kopf von „Urlaub beantragen“, mehrere Zeiträume ── */

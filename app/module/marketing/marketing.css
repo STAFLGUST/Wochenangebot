@@ -423,6 +423,7 @@ body.mkt .mkt-kopf .brand-logo { height: 28px; width: auto; }
 .mkt-zaehler:empty { display: none; }
 .mkt-check, .mkt-links { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 2px; }
 .mkt-check li, .mkt-links li { display: flex; align-items: center; gap: 8px; min-height: 36px; }
+.mkt-links li > a { align-self: stretch; }   /* ganze Zeilenhöhe antippbar */
 .mkt-check li label { flex: 1; }
 .mkt-links a { flex: 1; min-width: 0; display: inline-flex; align-items: center; gap: 6px; color: var(--mkt-akzent-ink); text-decoration: none; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 14px; }
 .mkt-links a:hover { text-decoration: underline; }
@@ -543,4 +544,12 @@ body.mkt.r .mkt-rund:hover { background: var(--r-flaeche-2); }
 @media (max-width: 900px) {
   body.mkt.r .mkt-seite { padding: 16px 16px 32px; }
   body.mkt.r .mkt-modul { font-size: 18px; }
+}
+/* Fingerbedienung (Prüfung am Handy 10.11.2026): Beiträge im Kalender, Titel in Listen und Sortierköpfe sicher antippbar */
+@media (pointer: coarse) {
+  .mkt-chip { min-height: 34px; }
+  .mkt-titelknopf { min-height: 32px; }
+  .mkt-sort { min-height: 32px; }
+  .mkt-chipknopf { height: 36px; border-radius: 18px; }
+  .mkt-verlauf-box summary { padding: 8px 0; }
 }

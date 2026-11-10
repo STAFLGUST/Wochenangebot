@@ -90,7 +90,7 @@ textarea.rw-eingabe{height:auto;padding:8px 10px;resize:vertical;line-height:1.4
 .rw-tabelle-wrap{width:100%;overflow-x:auto}
 .rw-tabelle{width:100%;border-collapse:collapse}
 .rw-tabelle th{padding:9px 8px;background:var(--rw-head-bg);color:var(--rw-head-text);text-align:left;font-size:10px;font-weight:750;letter-spacing:.055em;text-transform:uppercase;border-bottom:1px solid var(--rw-border);white-space:nowrap;vertical-align:bottom}
-.rw-tabelle th small{display:block;font-size:9px;font-weight:600;letter-spacing:0;text-transform:none;opacity:.85}
+.rw-tabelle th small{display:block;font-size:10.5px;font-weight:600;letter-spacing:0;text-transform:none;opacity:.85}
 .rw-tabelle td{padding:9px 8px;border-bottom:1px solid var(--rw-line);font-size:12.5px;vertical-align:middle}
 .rw-tabelle tbody tr.rw-klick{cursor:pointer}
 .rw-tabelle tbody tr.rw-klick:hover{background:var(--rw-total-bg)}
@@ -236,6 +236,7 @@ textarea.rw-eingabe{height:auto;padding:8px 10px;resize:vertical;line-height:1.4
   .rw-karten td[data-label]::before{content:attr(data-label);display:block;color:var(--rw-muted);font-size:9.5px;font-weight:750;letter-spacing:.05em;text-transform:uppercase}
   .rw-karten td.rw-voll{grid-column:1/-1}
   .rw-karten td.rw-voll::before{display:none}
+  .rw-karten td[colspan]{grid-column:1/-1}   /* Hinweiszeilen („Keine Märkte …“) über die ganze Karte */
   .rw-karten td:empty{display:none}
   .rw-karten tfoot tr,.rw-karten tr.rw-summe{background:var(--rw-total-bg);border-radius:10px}
   .rw-mengentabelle td.rw-zahl input.rw-eingabe{margin-left:0;max-width:none}
@@ -253,7 +254,7 @@ textarea.rw-eingabe{height:auto;padding:8px 10px;resize:vertical;line-height:1.4
   .rw-tabs button{height:36px;padding:0 13px;font-size:13px}
   .rw-schnell{width:100%;display:grid;grid-template-columns:1fr 1fr}
   .rw-schnell .btn{justify-content:center}
-  .rw-kpis{gap:7px}.rw-kpi{padding:10px;border-radius:14px}.rw-kpi b{font-size:19px}.rw-kpi span{font-size:9px}
+  .rw-kpis{gap:7px}.rw-kpi{padding:10px;border-radius:14px}.rw-kpi b{font-size:19px}.rw-kpi span{font-size:11px}
   .rw-panel{padding:11px;border-radius:16px}
   .rw-panelkopf h2{font-size:15px}
   .rw-filterzeile{display:grid;grid-template-columns:1fr 1fr;width:100%}
@@ -501,7 +502,7 @@ button.rw-zw:hover .rw-z.frei,button.rw-zw:focus-visible .rw-z{border-color:var(
   .rw-bulk{position:static}
 }
 @media(max-width:560px){
-  .rw-kwnav h1{font-size:23px}
+  .rw-kwnav h1{font-size:21px;max-width:calc(100% - 100px)}   /* Pfeile bleiben neben dem Titel (Prüfung 10.11.2026) */
   .rw-seg.antwort{display:grid;grid-template-columns:1fr 1fr;width:100%}
   .rw-seg.antwort button{height:44px}
   .rw-filter{width:100%}

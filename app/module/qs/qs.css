@@ -90,7 +90,7 @@ textarea.qm-eingabe{height:auto;padding:8px 10px;resize:vertical;line-height:1.4
 .qm-tabelle-wrap{width:100%;overflow-x:auto}
 .qm-tabelle{width:100%;border-collapse:collapse}
 .qm-tabelle th{padding:9px 8px;background:var(--qm-head-bg);color:var(--qm-head-text);text-align:left;font-size:10px;font-weight:750;letter-spacing:.055em;text-transform:uppercase;border-bottom:1px solid var(--qm-border);white-space:nowrap;vertical-align:bottom}
-.qm-tabelle th small{display:block;font-size:9px;font-weight:600;letter-spacing:0;text-transform:none;opacity:.85}
+.qm-tabelle th small{display:block;font-size:10.5px;font-weight:600;letter-spacing:0;text-transform:none;opacity:.85}
 .qm-tabelle td{padding:9px 8px;border-bottom:1px solid var(--qm-line);font-size:12.5px;vertical-align:middle}
 .qm-tabelle tbody tr.qm-klick{cursor:pointer}
 .qm-tabelle tbody tr.qm-klick:hover{background:var(--qm-total-bg)}
@@ -176,6 +176,7 @@ textarea.qm-eingabe{height:auto;padding:8px 10px;resize:vertical;line-height:1.4
   .qm-karten thead{display:none}
   .qm-karten,.qm-karten tbody,.qm-karten tfoot{display:block}
   .qm-karten tr{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:2px 10px;padding:9px 6px;border-bottom:1px solid var(--qm-line)}
+  .qm-karten td[colspan]{grid-column:1/-1}   /* Hinweiszeilen über die ganze Karte */
   .qm-karten td{display:block;padding:3px 0;border:0;min-width:0;text-align:left!important;white-space:normal}
   .qm-karten td[data-label]::before{content:attr(data-label);display:block;color:var(--qm-muted);font-size:9.5px;font-weight:750;letter-spacing:.05em;text-transform:uppercase}
   .qm-karten td.qm-voll{grid-column:1/-1}
@@ -195,7 +196,7 @@ textarea.qm-eingabe{height:auto;padding:8px 10px;resize:vertical;line-height:1.4
   .qm-tabs button{height:36px;padding:0 13px;font-size:13px}
   .qm-schnell{width:100%;display:grid;grid-template-columns:1fr 1fr}
   .qm-schnell .btn{justify-content:center}
-  .qm-kpis{gap:7px}.qm-kpi{padding:10px;border-radius:14px}.qm-kpi b{font-size:19px}.qm-kpi span{font-size:9px}
+  .qm-kpis{gap:7px}.qm-kpi{padding:10px;border-radius:14px}.qm-kpi b{font-size:19px}.qm-kpi span{font-size:11px}
   .qm-panel{padding:11px;border-radius:16px}
   .qm-panelkopf h2{font-size:15px}
   .qm-filterzeile{display:grid;grid-template-columns:1fr 1fr;width:100%}
@@ -278,7 +279,7 @@ mark{background:var(--qm-gelb-soft);color:inherit;border-radius:3px}
 .qm-wahl .qm-check{color:var(--qm-text)}
 .qm-dialog label>.qm-hilfe{font-weight:500}
 .qm-edit td{padding:5px 6px}
-.qm-edit input.qm-eingabe{width:100%;min-width:0}
+.qm-edit :is(input,select).qm-eingabe{width:100%;min-width:0}   /* auch Auswahllisten: am Handy sonst breiter als die Karte */
 .qm-edit td.qm-eng{width:96px}
 #nw-massn-z{display:flex;flex-direction:column;gap:8px;padding:10px 12px;border-radius:12px;background:var(--qm-rot-soft)}
 #nw-massn-z[hidden]{display:none}
@@ -624,3 +625,5 @@ body.qm.r .qm-rund:hover { background: var(--r-flaeche-2); }
 }
 /* Druck im Rahmen: die Seite liegt jetzt in .r-app (nicht mehr direkt unter body) – wie oben für .qm-seite freigeben */
 @media print { body.qm.r > .r-app:not(#print-root) { display: block !important; } body.qm.r .r-inhalt { display: block; } }
+/* Fingerbedienung (Prüfung am Handy 10.11.2026): Verweise auf Dokumente mit Tippfläche ≥ 32 px */
+@media(pointer:coarse){.qm-verweis{min-height:32px}.qm-details summary{padding:8px 0}}

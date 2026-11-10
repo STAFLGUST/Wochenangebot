@@ -121,7 +121,10 @@ body.crm .crm-kopf .brand-logo { height: 28px; width: auto; }
 .crm-karte { padding: 20px 22px; border-radius: 26px; display: flex; flex-direction: column; gap: 10px; min-width: 0; }
 .crm-karte-kopf { display: flex; align-items: center; gap: 10px; justify-content: space-between; margin-bottom: 2px; }
 .crm-karte-kopf .btn { height: 30px; font-size: 13px; }
-@media (pointer: coarse) { .crm-karte-kopf .btn, .crm-mehrfach .optionen .btn { height: 36px; } }   /* Fingerbedienung: Tippflächen ≥ 36 px */
+@media (pointer: coarse) {
+  .crm-karte-kopf .btn, .crm-mehrfach .optionen .btn, .crm-tabelle .btn { height: 36px; }
+  body.crm a[href^="tel:"]:not(.btn):not(.crm-rund), body.crm a[href^="mailto:"]:not(.btn):not(.crm-rund) { display: inline-flex; align-items: center; min-height: 32px; }   /* Telefonnummern am Handy sicher antippen */
+}   /* Fingerbedienung: Tippflächen ≥ 36 px */
 .crm-zeilen { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; }
 .crm-zeilen li { display: flex; align-items: center; gap: 12px; padding: 10px 0; border-top: 1px solid var(--crm-linie); min-width: 0; }
 .crm-zeilen li:first-child { border-top: 0; }
@@ -537,7 +540,7 @@ a.crm-ck-tel { color: var(--crm-text); }
 .crm-ku-auff div b { display: block; font-size: 14px; }
 .crm-ku-auff div small { color: var(--crm-muted); font-size: 12.5px; }
 #ku-schritt { gap: 6px; }
-.crm-ku-schritt { font-size: 15px; }
+.crm-ku-schritt { font-size: 15px; min-width: 0; overflow-wrap: anywhere; }   /* lange Wörter brechen um statt über den Fensterrand */
 .crm-ku-teil > div:not(.crm-knoepfe):not(.crm-ku-verschieben):not(.crm-ku-auff):not(.crm-ku-teilkopf):not(.crm-tabelle-rahmen) { display: flex; justify-content: space-between; gap: 10px; padding: 7px 0; border-top: 1px solid var(--crm-linie); font-size: 14px; }
 .crm-ku-teil > div a { color: inherit; white-space: nowrap; }
 .crm-ku-verschieben { display: flex; gap: 8px; align-items: flex-end; flex-wrap: wrap; }
@@ -585,6 +588,7 @@ a.crm-ck-tel { color: var(--crm-text); }
   .crm-ck-karten tr { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 6px 10px; padding: 10px 12px; border-bottom: 1px solid var(--crm-linie); }
   .crm-ck-karten td { display: block; padding: 0 !important; border: 0 !important; text-align: left !important; min-width: 0; white-space: normal; }
   .crm-ck-karten td.name, .crm-ck-karten td.knopf { grid-column: 1 / -1; }
+  .crm-ck-karten td[colspan] { grid-column: 1 / -1; }   /* Hinweiszeilen („Keine Vertreter …“) über die ganze Karte */
   .crm-ck-vergleich .crm-ck-karten tr { grid-template-columns: repeat(4, minmax(0, 1fr)); }
   .crm-ck-karten td.knopf .btn { width: 100%; }
   .crm-ck-karten td[data-label]::before { content: attr(data-label); display: block; color: var(--crm-muted); font-size: 10px; font-weight: 700; letter-spacing: .05em; text-transform: uppercase; }
@@ -685,4 +689,9 @@ body.crm.r .crm-rund:hover { background: var(--r-flaeche-2); }
 @media (max-width: 900px) {
   body.crm.r .crm-seite { padding: 16px 16px 32px; }
   body.crm.r .crm-modul { font-size: 18px; }
+}
+/* Fingerbedienung (Prüfung am Handy 10.11.2026): Firmennamen in Listen mit Tippfläche ≥ 32 px */
+@media (pointer: coarse) {
+  .crm-firma { min-height: 32px; }
+  .crm-zeilen .was > .crm-firma { line-height: 32px; }
 }
