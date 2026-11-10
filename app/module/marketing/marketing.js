@@ -3,6 +3,7 @@
    Ziehen), Board (Spalten je Status), Liste mit Filtern, Kampagnen, Einstellungen (Marken, Kanäle, Formate, Content-Säulen)
    und der Beitrag mit Inhalt, Planung, Checkliste, Material, Ablauf, Kennzahlen und Kommentaren.
    Alle Rechte und Ablaufregeln prüft der Server bei jeder Aktion (GR-103) – ausgeblendete Knöpfe sind nur Anzeige.
+   Adresse „#<reiter>“ wählt den Reiter, „#<reiter>/neu“ öffnet zusätzlich einen neuen Beitrag (Schnellaktion der Startseite).
    Kein Inline-Skript (Content-Security-Policy); Texte vom Server immer über esc(). */
 'use strict';
 (() => {
@@ -791,9 +792,12 @@
     setzeDaten(r.data);
     S.kal.warSchmal = schmal();
     $('#mkt-login').hidden = true; $('#mkt-app').hidden = false;
-    const tab = location.hash.slice(1);
+    const [tab, aktion] = location.hash.slice(1).split('/');
     const knopf = $(`#mkt-tabs button[data-tab="${CSS.escape(tab)}"]`);
     zeigeTab(knopf && !knopf.hidden ? tab : 'uebersicht');
+    // Schnellaktion der Startseite („…/#kalender/neu“): neuen Beitrag gleich öffnen – nur mit Recht zum Bearbeiten
+    // (Anzeige; beim Speichern prüft der Server). zeigeTab hat die Adresse schon auf den Reiter gekürzt.
+    if (aktion === 'neu' && !$('#mkt-neu').hidden) oeffne(null, {});
   }
   themaKnopf();
   laden().catch(() => fehler('Keine Verbindung zum Server.'));

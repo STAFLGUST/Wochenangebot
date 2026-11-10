@@ -5,7 +5,8 @@
    Reiter „MHD-Ware“ (Artikel kurz vor Ablauf und ihre Käufer, Recht crm.mhd_ware) in mhd-ware.js; Cockpit (Mein Cockpit,
    Master-Cockpit) und der Reiter „Übersicht“ im Kunden-Pop-up mit Umsätzen und Signalen in cockpit.js; Reiter „Angebote“
    (Einzelangebot beim Kunden, Rechte einzelangebote.*) in einzelangebot.js.
-   Alle Rechte prüft der Server bei jeder Aktion (GR-103) – ausgeblendete Knöpfe sind nur Anzeige.
+   Alle Rechte prüft der Server bei jeder Aktion (GR-103) – ausgeblendete Knöpfe sind nur Anzeige. Adresse „#<reiter>“ wählt
+   den Reiter, „#kunden/neu“ öffnet zusätzlich „Neuer Interessent“ (Schnellaktion der Startseite des Dashboards).
    Kein Inline-Skript (Content-Security-Policy), keine fremden Kartendienste: Detailkarte mit Straßen und Gebäuden vom
    eigenen Server (../../assets/detailkarte.js, OpenStreetMap), sonst zeichnet die Seite selbst (Umrisse
    ../../assets/karte.json); PLZ-Mittelpunkte plz.json, Nielsen-Gebiete nielsen.json (werkzeuge/nielsen_gebiete.py). */
@@ -1022,8 +1023,11 @@
     setzeDaten(r.data);
     if (r.data.ich) S.kunden.vertreter = r.data.ich;   // Verkäufer: Kundenliste zuerst mit seinen Kunden (Auswahl „Alle“ daneben)
     $('#crm-login').hidden = true; $('#crm-app').hidden = false;
-    const tab = location.hash.slice(1);
+    const [tab, aktion] = location.hash.slice(1).split('/');
     zeigeTab($(`#crm-tabs button[data-tab="${CSS.escape(tab)}"]:not([hidden])`) ? tab : 'cockpit');
+    // Schnellaktion der Startseite („…/#kunden/neu“): Fenster „Neuer Interessent“ gleich öffnen – nur mit Recht zum
+    // Bearbeiten (Anzeige; beim Speichern prüft der Server). zeigeTab hat die Adresse schon auf „#kunden“ gekürzt.
+    if (aktion === 'neu' && darf()) interessentDialog();
     // Zurück von der Bestätigung bei Keycloak (E-Mail eines Einzelangebots): Kunden-Pop-up mit dem Angebot wieder öffnen
     const weiter = window.STAFL_CRM_EINZEL && window.STAFL_CRM_EINZEL.fortsetzen();
     if (weiter && S.byKey.has(weiter)) oeffne(weiter, 'angebote');

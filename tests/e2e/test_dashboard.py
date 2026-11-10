@@ -106,8 +106,11 @@ check('REWE: Märkte der eigenen Liste ohne Antwort als Sammelpunkt', rw.get('an
 Z = H.get('zahlen', {})
 check('Zahlen je Modul (für die Seitenleiste) und gesamt', Z.get('qs') == {'offen': 3, 'ueberfaellig': 2} and Z.get('leergut') == {'offen': 1, 'ueberfaellig': 1}
       and Z.get('rewe') == {'offen': 2, 'ueberfaellig': 0} and H.get('gesamt') == {'offen': 9, 'ueberfaellig': 3}, (Z, H.get('gesamt')))
-check('Schnellaktionen des Administrators in fester Reihenfolge', [a['titel'] for a in H.get('aktionen', [])] == ['Wochenangebot bearbeiten', 'Urlaub beantragen',
-      'Wiedervorlagen ansehen', 'Daten importieren', 'Prüfnachweis erfassen', 'REWE-Wochenabfrage', 'Leergut abstimmen', 'Redaktionsplan'], H.get('aktionen'))
+AKT = [(a['titel'], a['ziel']) for a in H.get('aktionen', [])]
+check('Schnellaktionen des Administrators in fester Reihenfolge (die ersten vier wie im Entwurf), Fenster zum Anlegen über „<reiter>/neu“', AKT == [
+      ('Kundenangebot erstellen', 'einzel'), ('Urlaub beantragen', 'mein'), ('Interessent anlegen', 'kunden/neu'), ('Daten importieren', ''), ('Wochenangebot bearbeiten', ''),
+      ('Beitrag anlegen', 'kalender/neu'), ('Prüfnachweis erfassen', 'pruefplan'), ('Wiedervorlagen ansehen', 'wiedervorlagen'), ('REWE-Wochenabfrage', 'woche'),
+      ('Leergut abstimmen', 'abstimmungen')], AKT)
 zl = H.get('zuletzt', [])
 check('Zuletzt bearbeitet: eigene Änderungen, neueste zuerst, ohne Vorsatz des Moduls, höchstens sechs',
       0 < len(zl) <= 6 and zl[0]['modul'] == 'crm' and all(not x['text'].startswith(('CRM:', 'REWE:', 'Marketing:')) for x in zl) and zl == sorted(zl, key=lambda x: x['zeit'], reverse=True), zl)
@@ -117,7 +120,7 @@ check('Favoriten noch nicht gewählt (Standard)', H.get('favoriten') is None, H.
 st, he = E.call('start_heute')
 check('Bearbeiter: keine Punkte aus Modulen ohne Recht (kein Genehmigen, nicht in QS eingeteilt, kein Leergut, keine REWE-Liste)', st == 200 and he['punkte'] == []
       and he['gesamt'] == {'offen': 0, 'ueberfaellig': 0}, he.get('punkte'))
-check('Bearbeiter: nur Schnellaktionen mit Recht', [a['titel'] for a in he['aktionen']] == ['Wochenangebot bearbeiten', 'Urlaub beantragen', 'Daten importieren'], he['aktionen'])
+check('Bearbeiter: nur Schnellaktionen mit Recht (kein Kundenangebot, kein CRM)', [a['titel'] for a in he['aktionen']] == ['Urlaub beantragen', 'Daten importieren', 'Wochenangebot bearbeiten'], he['aktionen'])
 check('Bearbeiter: eigener Urlaubsantrag unter „Zuletzt bearbeitet“, maskiert (ohne Recht „HR verwalten“)', any(x['modul'] == 'hr' and x['text'] == 'Vorgang der Urlaubsverwaltung'
       for x in he['zuletzt']), he['zuletzt'])
 V = Client('198.51.100.4'); V.call('login', {'username': 'vera', 'password': 'Dritter-Zugang-4712'})
@@ -292,8 +295,8 @@ with sync_playwright() as pw:
         pg.click('#db-heute-alle')
     # Schnellaktionen und Zuletzt bearbeitet
     akt = pg.evaluate("[...document.querySelectorAll('#db-aktionen-liste a')].map(a => [a.textContent.trim(), a.getAttribute('href')])")
-    check('Schnellaktionen: die ersten vier mit Verweis (Reiter des Moduls)', akt == [['Wochenangebot bearbeiten', '/admin/'], ['Urlaub beantragen', '/module/hr/#mein'],
-          ['Wiedervorlagen ansehen', '/module/crm/#wiedervorlagen'], ['Daten importieren', '/import/']], akt)
+    check('Schnellaktionen: die ersten vier wie im Entwurf, mit Verweis (Reiter bzw. Fenster zum Anlegen)', akt == [['Kundenangebot erstellen', '/admin/#einzel'],
+          ['Urlaub beantragen', '/module/hr/#mein'], ['Interessent anlegen', '/module/crm/#kunden/neu'], ['Daten importieren', '/import/']], akt)
     zl_ui = pg.evaluate("[...document.querySelectorAll('#db-zuletzt-liste .db-zeile')].map(z => [z.dataset.modul, z.querySelector('.db-zeile-titel').textContent, z.querySelector('.db-zeile-meta').textContent])")
     check('Zuletzt bearbeitet: Text, Modul und Zeit („gerade eben“ / „vor … Min.“)', len(zl_ui) == len(zl) and zl_ui[0][0] == 'crm' and zl_ui[0][2].startswith('CRM · ')
           and all(('gerade eben' in m or 'vor ' in m or 'Uhr' in m) for _, _t, m in zl_ui), zl_ui)
@@ -342,6 +345,8 @@ with sync_playwright() as pw:
     check('Suche findet Schnellaktionen („Urlaub beantragen“ → HR, Reiter „Mein Urlaub“)', tr == [['Urlaub beantragen', '/module/hr/#mein']], tr)
     pg.fill('#r-palette-eingabe', 'gibt es nicht')
     check('Suche ohne Treffer: Hinweis', pg.text_content('#r-palette-liste') == 'Nichts gefunden.')
+    pg.mouse.click(20, 860)   # Klick daneben (Hintergrund) – Fenster schließen nur mit Escape oder Kreuz (Vorgabe 02.11.2026)
+    check('Klick neben die Suche schließt sie nicht', pg.locator('#r-palette[open]').count() == 1)
     pg.keyboard.press('Escape'); pg.wait_for_selector('#r-palette', state='hidden')
     check('Escape schließt die Suche', pg.locator('#r-palette[open]').count() == 0)
     pg.click('#db-schnell'); pg.wait_for_selector('#r-palette[open]')
@@ -354,6 +359,16 @@ with sync_playwright() as pw:
     pg.goto(B + '/dashboard/'); bereit(pg)
     pg.click('#r-suche'); pg.wait_for_selector('#r-palette[open]'); pg.click('.r-palette-zu'); pg.wait_for_selector('#r-palette', state='hidden')
     check('Suchfeld der Leiste öffnet die Suche; Schließen gibt den Fokus zurück', pg.evaluate("document.activeElement.id") == 'r-suche')
+
+    # ── Schnellaktionen mit Fenster: „<reiter>/neu“ öffnet im Modul gleich das Fenster zum Anlegen ──
+    pg.click('#db-aktionen-liste a[href$="#kunden/neu"]'); pg.wait_for_selector('#dlg-interessent[open]')
+    check('„Interessent anlegen“: CRM öffnet „Neuer Interessent“, Adresse auf den Reiter gekürzt (Neuladen öffnet nicht erneut)',
+          pg.text_content('#interessent-titel') == 'Neuer Interessent' and pg.evaluate('location.hash') == '#kunden'
+          and pg.get_attribute('#crm-tabs button[data-tab="kunden"]', 'aria-selected') == 'true', pg.evaluate('location.hash'))
+    pg.keyboard.press('Escape'); pg.wait_for_selector('#dlg-interessent', state='hidden')
+    pg.goto(B + '/module/marketing/#kalender/neu'); pg.wait_for_selector('#dlg-beitrag[open]')
+    check('„Beitrag anlegen“: Marketing öffnet einen neuen Beitrag im Redaktionsplan', pg.evaluate('location.hash') == '#kalender' and pg.input_value('#bt-titel') == '')
+    pg.goto(B + '/dashboard/'); bereit(pg)
 
     # ── Favoriten bearbeiten (am Konto) ──
     pg.click('#db-fav-bearbeiten'); pg.wait_for_selector('#db-fav-wahl:not([hidden])')
@@ -616,6 +631,37 @@ with sync_playwright() as pw:
     check('Abmeldeseite: Knopf „Erneut anmelden“ ohne Unterstreichung', pg.evaluate("getComputedStyle(document.querySelector('#db-abgemeldet a')).textDecorationLine") == 'none')
     ctx.close()
     br.close()
+
+# ── Weitere Quellen für „Heute für Sie“: Bestand (MHD-Liste) und Bestellwünsche (Angebot) ──
+storage_write('bestand', {'date': tag(0), 'source': 'test', 'importedAt': tag(0) + 'T08:00:00+01:00', 'importedBy': 'Test', 'incoming': [], 'articles': [
+    {'code': '1001', 'name': 'Rinderhüfte', 'kg': 50.0, 'mhd': tag(-1), 'mhdKg': 10.0, 'lots': []},
+    {'code': '1002', 'name': 'Schweinenacken', 'kg': 40.0, 'mhd': tag(2), 'mhdKg': 5.0, 'lots': []},
+    {'code': '1003', 'name': 'Kalbsrücken', 'kg': 30.0, 'mhd': tag(3), 'mhdKg': 5.0, 'lots': []},
+    {'code': '1004', 'name': 'Lammkeule', 'kg': 20.0, 'mhd': tag(6), 'mhdKg': 4.0, 'lots': []},
+    {'code': '1005', 'name': 'Putenbrust', 'kg': 10.0, 'mhd': tag(30), 'mhdKg': 2.0, 'lots': []}]})
+storage_write('bestellungen', [
+    {'nr': 'B-TEST-1', 't': tag(-1) + 'T09:00:00+01:00', 'firma': 'Kantine Test', 'workflow': 'neu', 'positions': [], 'total': 0, 'totalQty': 0},
+    {'nr': 'B-TEST-2', 't': tag(0) + 'T07:00:00+01:00', 'firma': 'Kantine Test', 'workflow': 'neu', 'positions': [], 'total': 0, 'totalQty': 0},
+    {'nr': 'B-TEST-3', 't': tag(-2) + 'T07:00:00+01:00', 'firma': 'Andere Firma', 'workflow': 'in_bearbeitung', 'assignee': ADMIN, 'positions': [], 'total': 0, 'totalQty': 0},
+    {'nr': 'B-TEST-4', 't': tag(-3) + 'T07:00:00+01:00', 'firma': 'Andere Firma', 'workflow': 'erledigt', 'assignee': ADMIN, 'positions': [], 'total': 0, 'totalQty': 0}])
+st, H2 = A.call('start_heute')
+q = {(p['modul'], p['titel']): p for p in H2.get('punkte', []) if p['modul'] in ('bestand', 'angebot')}
+check('Bestand: abgelaufenes MHD überfällig, MHD in höchstens 4 Tagen heute, in 5–7 Tagen demnächst (wie die Stufen der MHD-Liste), Ziel Bestandsliste',
+      st == 200 and q.get(('bestand', '1 Artikel mit abgelaufenem MHD'), {}).get('art') == 'ueberfaellig' and q.get(('bestand', '2 Artikel mit MHD in höchstens 4 Tagen'), {}).get('art') == 'heute'
+      and q.get(('bestand', '1 Artikel mit MHD in 5–7 Tagen'), {}).get('art') == 'demnaechst' and all(p['ziel'] == 'stock' for k, p in q.items() if k[0] == 'bestand')
+      and H2['zahlen'].get('bestand') == {'offen': 4, 'ueberfaellig': 1}, q)
+check('Bestand: nur Anzahlen, keine Artikel, Mengen oder Preise', not any(w in json.dumps(list(q.values()), ensure_ascii=False) for w in ('Rinderhüfte', 'kg', '€')), q)
+check('Bestellwünsche: neue (Sammelpunkt) und die mir zugewiesenen in Bearbeitung, ohne Kundendaten, Ziel „Bestellwünsche“',
+      q.get(('angebot', '2 neue Bestellwünsche'), {}).get('anzahl') == 2 and q.get(('angebot', 'Bestellwunsch bei Ihnen in Bearbeitung'), {}).get('ziel') == 'orders'
+      and 'Kantine' not in json.dumps(list(q.values()), ensure_ascii=False) and H2['zahlen'].get('angebot') == {'offen': 3, 'ueberfaellig': 0}, q)
+st, he2 = E.call('start_heute')
+qe = {(p['modul'], p['titel']) for p in he2.get('punkte', [])}
+check('Bearbeiter (Recht „MHD-Liste senden“ und „Bestellwünsche bearbeiten“ als Standard): MHD-Punkte und neue Bestellwünsche, nicht die des Administrators',
+      ('bestand', '1 Artikel mit abgelaufenem MHD') in qe and ('angebot', '2 neue Bestellwünsche') in qe and ('angebot', 'Bestellwunsch bei Ihnen in Bearbeitung') not in qe, qe)
+check('Vertrieb: Rechte „MHD-Liste senden“ und „Bestellwünsche bearbeiten“ entzogen', A.call('user_save', {'id': IDS['vera'], 'name': 'Vera Vertrieb', 'role': 'editor', 'active': True,
+      'vertreter': '11', 'grant': ['crm.sehen'], 'deny': ['bestand.mhd_senden', 'bestellungen.bearbeiten']})[0] == 200)
+V = Client('198.51.100.8'); V.call('login', {'username': 'vera', 'password': 'Dritter-Zugang-4712'})
+check('ohne diese Rechte: keine Punkte aus Bestand und Bestellwünschen (eigene Rechteprüfung der Module)', [p['modul'] for p in V.call('start_heute')[1]['punkte']] == ['crm'])
 
 check('keine JavaScript-Fehler', not fehler, fehler)
 ok = sum(res)

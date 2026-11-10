@@ -257,7 +257,8 @@
     }
   }
 
-  /* Suche: Dialog mit Eingabefeld und Trefferliste (Tastatur: ↑ ↓ Enter, Escape schließt). Ziele: freie Anwendungen der Leiste
+  /* Suche: Dialog mit Eingabefeld und Trefferliste (Tastatur: ↑ ↓ Enter; Escape oder Kreuz schließt, ein Klick daneben nicht).
+     Ziele: freie Anwendungen der Leiste
      und was die Seite ergänzt (suche([{titel, href, symbol, gruppe}])). Nur Sprünge – Rechte prüft das Ziel selbst. */
   function suche(liste) { such.extra = Array.isArray(liste) ? liste : []; }
   const norm = (s) => String(s || '').toLocaleLowerCase('de-DE').normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/ß/g, 'ss');
@@ -284,7 +285,7 @@
       }
     });
     d.querySelector('.r-palette-zu').addEventListener('click', () => d.close());
-    d.addEventListener('click', (e) => { if (e.target === d) d.close(); });   // Klick auf den Hintergrund
+    // Kein Schließen per Klick daneben (Vorgabe 02.11.2026: Fenster nur mit Escape oder Kreuz schließen)
     d.addEventListener('close', () => {   // Fokus zurück; lag er im inzwischen geschlossenen Menü (Handy), auf den Menüknopf
       const z = such.zurueck;
       if (z && z.isConnected && z.getClientRects().length && getComputedStyle(z).visibility !== 'hidden' && !(z.closest('#r-leiste') && knopf && knopf.offsetParent)) z.focus();

@@ -2,7 +2,7 @@
 
 <!-- ERZEUGT von `python3 werkzeuge/doku.py erzeugen` – nicht von Hand ändern. Quelle: Funktionen und Kommentare im Code. Die CI prüft, dass diese Datei zum Code passt. -->
 
-9 Dateien, 64 Funktionen – in der Reihenfolge der Datei, **fett** die Abschnitte. Text = erste Aussage des Kommentars direkt über der Funktion (Python: Docstring). Übersicht aller Module: [README.md](README.md).
+9 Dateien, 65 Funktionen – in der Reihenfolge der Datei, **fett** die Abschnitte. Text = erste Aussage des Kommentars direkt über der Funktion (Python: Docstring). Übersicht aller Module: [README.md](README.md).
 
 ## `app/api/lib/bestand-pdf.php`
 
@@ -37,6 +37,7 @@ _Bestandsliste und Stammdaten_
 
 **Stammdaten**
 
+- `bestand_startseite(me)` – Startseite des Dashboards („Heute für Sie“, lib/startseite.php): Artikel der MHD-Liste (dieselbe Liste wie die Suche „MHD“ und die MHD-Mail, …
 - `code_key(c)`
 - `clean_master(list)`
 - `angebotsnamen_clean(v, wo, known)` – Eigene Bezeichnungen je Angebot (Stammsatz und Artikel des Angebots): Angebots-ID → Text, höchstens OFFER_MAX Einträge.
