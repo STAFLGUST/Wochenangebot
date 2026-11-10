@@ -54,7 +54,8 @@ def lauf(*args):
 echt = w.fundstellen(REPO)
 namen = {f'{n}:{t}' for n, t in echt}
 ok('Fundstellen: PHP, Caddy, Keycloak, PostgreSQL und Hilfsimages gefunden',
-   {'php:8.3-apache', 'caddy:2.11.7', 'postgres:17-alpine'} <= namen and any(n.startswith('quay.io/keycloak/keycloak:') for n in namen), sorted(namen))
+   {'php:8.3-apache', 'postgres:17-alpine'} <= namen
+   and all(any(n.startswith(p) for n in namen) for p in ('caddy:2.', 'quay.io/keycloak/keycloak:')), sorted(namen))
 ok('Fundstellen: PHP-Grundimage an vier Stellen (Kundenseite, Testumgebung, Skript, Dockerfile)',
    len(next(v for (n, t), v in echt.items() if n == 'php').popitem()[1]) == 4)
 ok('Fundstellen: erzeugte Doku und Testarbeitsordner werden ausgelassen',

@@ -72,7 +72,7 @@ AUS=$(sh "$REPO/deploy/adressen-laden.sh") && CODE=0 || CODE=$?
 ok "laden: Probe, Prüfsumme geprüft, Verzeichnis an seinem Platz, Stand vermerkt" '[ $CODE = 0 ] && echo "$AUS" | grep -q "Probe:" && echo "$AUS" | grep -q "Prüfsumme (MD5) stimmt" && echo "$AUS" | grep -q "6 Adressen" && [ -s daten-karte/adressen.sqlite ] && [ "$(cat daten-karte/adressen-stand.txt)" = "Mon, 26 Oct 2026 20:21:00 GMT" ]'
 ok "laden: Quelldatei und Zwischenstände danach gelöscht" '[ ! -e daten-karte/adressen-quelle.osm.pbf ] && [ ! -e daten-karte/adressen-probe.sqlite ] && [ ! -e daten-karte/adressen.neu.sqlite ] && [ ! -e daten-karte/adressen.neu.sqlite.arbeit ]'
 ok "laden: Datei für den Webserver lesbar (644)" '[ "$(stat -c %a daten-karte/adressen.sqlite)" = 644 ]'
-ok "laden: volles Python-Image (libexpat für pyosmium) mit fester Fassung, pyosmium nur über Prüfsummen, ohne Abhängigkeiten" 'grep -q "python:3.12.14-bookworm@sha256:" "$T/aufrufe" && ! grep -q "slim" "$T/aufrufe" && grep -q -- "--require-hashes -r /werkzeug/requirements.txt" "$T/aufrufe" && grep -q -- "--no-deps --only-binary=:all:" "$T/aufrufe" && grep -q "deploy/karte:/werkzeug:ro" "$T/aufrufe"'
+ok "laden: volles Python-Image (libexpat für pyosmium) mit fester Fassung, pyosmium nur über Prüfsummen, ohne Abhängigkeiten" 'grep -q "python:3.12.16-bookworm@sha256:" "$T/aufrufe" && ! grep -q "slim" "$T/aufrufe" && grep -q -- "--require-hashes -r /werkzeug/requirements.txt" "$T/aufrufe" && grep -q -- "--no-deps --only-binary=:all:" "$T/aufrufe" && grep -q "deploy/karte:/werkzeug:ro" "$T/aufrufe"'
 ok "laden: Quelle Deutschland von Geofabrik samt Prüfsumme" 'grep -q "https://download.geofabrik.de/europe/germany-latest.osm.pbf.md5" "$T/aufrufe"'
 
 AUS=$(sh "$REPO/deploy/adressen-laden.sh") && CODE=0 || CODE=$?

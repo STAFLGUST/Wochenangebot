@@ -17,10 +17,10 @@ LADEN="${OIDC_DOWNLOADS:-$REPO/tests/.arbeit/downloads}"
 export OIDC_PORT=8443 OIDC_HTTP_PORT="${OIDC_HTTP_PORT:-8081}" KC_PORT="${KC_PORT:-8180}" KC_MGMT_PORT="${KC_MGMT_PORT:-9180}"
 export APACHE_PORT="${APACHE_PORT:-8280}" PG_PORT="${PG_PORT:-5433}" NOTZUGANG_PORT="${NOTZUGANG_PORT:-8290}"
 
-KC_VERSION=26.8.1
-KC_SHA256=4e2740b181faa2ea623a1c2ecf00855935311e546046e2f857615a47ed24cbe8
-CADDY_VERSION=2.10.2
-CADDY_SHA512=747df7ee74de188485157a383633a1a963fd9233b71fbb4a69ddcbcc589ce4e2cc82dacf5dbbe136cb51d17e14c59daeb5d9bc92487610b0f3b93680b2646546
+KC_VERSION=26.8.2
+KC_SHA256=dd124787283918bc597628887168333465ee2a811a389e0003569e52be7e487f
+CADDY_VERSION=2.11.9
+CADDY_SHA512=0e85544340290a16ce4bfb76fe7d65e9de1bf3a6e67f5ccfff30b30d27ea4c73e078077b7bf3e58ae60b6b12e44327705287059c775bca5782e8ee85ea7edd75
 HOSTS="login.stafl.test dashboard.stafl.test angebot.stafl.test verwaltung.stafl.test bestand.stafl.test hr.stafl.test crm.stafl.test marketing.stafl.test sicherheit.stafl.test controlling.stafl.test leergut.stafl.test rewe.stafl.test qs.stafl.test legacy.stafl.test"
 # Testhosts nie über einen Proxy (lokal und in der CI)
 export no_proxy="${no_proxy:+$no_proxy,}.stafl.test" NO_PROXY="${NO_PROXY:+$NO_PROXY,}.stafl.test"
