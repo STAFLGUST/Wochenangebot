@@ -2,7 +2,7 @@
 
 <!-- ERZEUGT von `python3 werkzeuge/doku.py erzeugen` – nicht von Hand ändern. Quelle: Funktionen und Kommentare im Code. Die CI prüft, dass diese Datei zum Code passt. -->
 
-11 Dateien, 283 Funktionen – in der Reihenfolge der Datei, **fett** die Abschnitte. Text = erste Aussage des Kommentars direkt über der Funktion (Python: Docstring). Übersicht aller Module: [README.md](README.md).
+11 Dateien, 286 Funktionen – in der Reihenfolge der Datei, **fett** die Abschnitte. Text = erste Aussage des Kommentars direkt über der Funktion (Python: Docstring). Übersicht aller Module: [README.md](README.md).
 
 ## `app/api/aktionen/hr.php`
 
@@ -110,7 +110,7 @@ _Modul HR · Jahresplanung des Urlaubs (Inhaber 03.11.2026, Vorplanung und Einze
 - `hr_zeitraeume_anfrage(l)` – Zeiträume aus der Anfrage (Vorplanung und Vorschau): [{von, bis, vertretung}] – höchstens HR_VORPLANUNG_MAX
 - `hr_vorplanung_pruefen(ich, personal, eintraege, einst, zr, jahr)` – Vorplanung prüfen (ohne zu speichern): jeder Zeitraum wie ein Antrag (hr_antrag_zeitraum), nur im Vorplanungsjahr.
 - `hr_daten_text(daten)` – Daten als kurze Zeiträume (aufeinanderfolgende Kalendertage zusammengefasst, höchstens vier, dann „…“)
-- `hr_planung_konflikte(e, p, idx, eintraege, sperren, pe, verfuegbar, einzel)` – Konflikte eines Urlaubsantrags in der Jahresplanung.
+- `hr_planung_konflikte(e, p, idx, eintraege, sperren, pe, verfuegbar, einzel, amStueck)` – Konflikte eines Urlaubsantrags in der Jahresplanung.
 - `hr_planung(jahr, me)` – Zusammenfassung eines Jahres für die Personalstelle und „Urlaub genehmigen“: Mitarbeiter im Urlaubsplan mit Stand, alle Urlaubsanträge des Jahres (beantragt, …
 - `hr_planung_freigeben(jahr, ids, me)` – Konfliktfreie Anträge gesammelt genehmigen (unter der Sperre hr-abwesenheiten): jeder Antrag wird neu geprüft; eigene, bereits entschiedene und solche mit …
 
@@ -174,6 +174,12 @@ _Modul HR · Urlaubsverwaltung – Fachlogik (Daten, Feiertage, Urlaubskonto, An
 - `hr_abwesenheiten()`
 - `hr_einstellungen()`
 - `hr_ueberziehen_norm(v)`
+
+**Urlaub am Stück (Inhaber 11.11.2026: „15 Tage ist das Maximum“)**
+
+- `hr_am_stueck_norm(v)`
+- `hr_am_stueck_block(p, eintraege, neu)` – Längster Urlaubsblock, der einen der Zeiträume $neu ([{von, bis}], noch nicht gespeichert oder schon eingetragen) berührt – mit den beantragten und …
+- `hr_am_stueck_text(blk, max, allein)` – Text, wenn ein Block zu lang wäre; $allein: der Zeitraum ist schon allein zu lang
 - `hr_ueberzug(p, eintraege, neu)` – Überzug eines Urlaubsantrags (Inhaber 10.11.2026): um wie viele Tage gehen die verfügbaren Tage (Rest − offene Anträge) mit den neuen Einträgen ins Minus?
 - `hr_ueberzug_text(u, max)` – Text zum Überzug für Antragsteller: über der Grenze (abgelehnt) oder darunter (Rückfrage „Trotzdem absenden“)
 

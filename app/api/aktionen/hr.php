@@ -33,7 +33,7 @@ function hr_einstellungen_aus(array $einst): array
     return ['sperren' => $einst['sperrenEigene'], 'regelSperren' => $einst['regelSperren'], 'schliesstage' => $einst['schliesstage'],
             'sperrenAuto' => array_merge(hr_regel_sperren($j, $einst['schliesstage']), hr_regel_sperren($j + 1, $einst['schliesstage'])),
             'ferien' => $einst['ferien'], 'regeln' => $einst['regeln'], 'regelnStandard' => HR_REGELN_STANDARD, 'verfallAb' => $einst['verfallAb'],
-            'planung' => array_diff_key(hr_planung_einst(), ['abschluss' => true]), 'ueberziehenMax' => $einst['ueberziehenMax']];
+            'planung' => array_diff_key(hr_planung_einst(), ['abschluss' => true]), 'ueberziehenMax' => $einst['ueberziehenMax'], 'amStueckMax' => $einst['amStueckMax']];
 }
 
 switch ($action) {
@@ -79,7 +79,9 @@ switch ($action) {
                      // feste Vertretung aus den Stammdaten (im Antrag gesperrt) und wen der Mitarbeiter vertritt („Sie vertreten“)
                      'festeVertretung' => $ich && ($fv = hr_feste_vertretung($ich, $personal)) ? ['id' => $fv['id'], 'name' => hr_name($fv)] : null,
                      'vertretungen' => $ich ? hr_meine_vertretungen($ich, $personal, $abw['eintraege']) : [],
-                     // Vorplanung (Schalter bei „Urlaub beantragen“): Jahr, Stichtag, höchstens unverplante Tage, Grenze der einzelnen Urlaubstage
+                     // Vorplanung (Schalter bei „Urlaub beantragen“): Jahr, Stichtag, höchstens unverplante Tage, Grenze der einzelnen
+                     // Urlaubstage; Urlaub am Stück höchstens (gilt für jeden Urlaubsantrag)
+                     'amStueckMax' => $einst['amStueckMax'],
                      'vorplanung' => (function () { $pe = hr_planung_einst(); $j = hr_planung_jahr(null, $pe);
                          return ['jahr' => $j, 'stichtag' => hr_planung_daten($pe, $j)['stichtag'], 'unverplantMax' => $pe['unverplantMax'], 'einzeltageMax' => $pe['einzeltageMax'], 'max' => HR_VORPLANUNG_MAX]; })()]);
         }
@@ -648,6 +650,12 @@ switch ($action) {
                 if ($u === null) fail('Resturlaub überziehen: bitte 0 bis 30 Tage in ganzen oder halben Tagen angeben (0 = nie).', 422);
                 $zusatz['ueberziehenMax'] = $u;
             }
+            // Urlaub am Stück höchstens (Arbeitstage, 0 = keine Prüfung; optional – ohne Angabe bleibt der gespeicherte Wert)
+            if (array_key_exists('amStueckMax', $b)) {
+                $am = hr_am_stueck_norm($b['amStueckMax']);
+                if ($am === null) fail('Urlaub am Stück: bitte eine ganze Zahl von 0 bis ' . HR_AM_STUECK_GRENZE . ' Arbeitstagen angeben (0 = keine Prüfung).', 422);
+                $zusatz['amStueckMax'] = $am;
+            }
             // Jahresplanung (optional): Beginn, Stichtag, höchstens unverplante Tage, Vertretung Pflicht, Einzeltage – der Abschluss bleibt
             $planung = null;
             if (array_key_exists('planung', $b)) { try { $planung = hr_planung_einst_pruefen($b['planung']); } catch (InvalidArgumentException $ex) { fail($ex->getMessage(), 422); } }
@@ -682,6 +690,8 @@ switch ($action) {
             if (isset($zusatz['regelSperren']) && $zusatz['regelSperren'] !== $alt['regelSperren']) audit('hr', 'HR: Sperren aus den Urlaubsregeln ' . ($zusatz['regelSperren'] ? 'eingeschaltet' : 'ausgeschaltet'));
             if (isset($zusatz['schliesstage']) && $zusatz['schliesstage'] !== $alt['schliesstage']) audit('hr', 'HR: Sonderregelung Dezember (24.12./31.12. je ½ Urlaubstag) ' . ($zusatz['schliesstage'] ? 'eingeschaltet' : 'ausgeschaltet'));
             if (isset($zusatz['regeln']) && hr_regeln_text($zusatz['regeln']) !== $alt['regeln']) audit('hr', 'HR: Urlaubsregeln geändert');
+            if (isset($zusatz['amStueckMax']) && $zusatz['amStueckMax'] !== $alt['amStueckMax'])
+                audit('hr', 'HR: Urlaub am Stück höchstens ' . ($zusatz['amStueckMax'] ? $zusatz['amStueckMax'] . ' Arbeitstage' : 'ohne Grenze') . ' (vorher ' . ($alt['amStueckMax'] ? $alt['amStueckMax'] . ' Arbeitstage' : 'ohne Grenze') . ')');
             if (isset($zusatz['ueberziehenMax']) && $zusatz['ueberziehenMax'] !== $alt['ueberziehenMax'])
                 audit('hr', 'HR: Resturlaub überziehen höchstens ' . hr_tage_text($zusatz['ueberziehenMax']) . ' (vorher ' . hr_tage_text($alt['ueberziehenMax']) . ')');   // verglichen wird, was Mitarbeiter sehen
             if (array_key_exists('verfallAb', $zusatz) && $zusatz['verfallAb'] !== $alt['verfallAb']) {
