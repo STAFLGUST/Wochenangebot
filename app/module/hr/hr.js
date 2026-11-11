@@ -433,7 +433,8 @@
     $('#vp-schalter-l').hidden = !v || !an;
     if (!v) return;
     $('#vp-info').textContent = `Vorplanung ${v.jahr}: mehrere Zeiträume auf einmal beantragen – jeder wird wie ein einzelner Antrag geprüft, auch ob Ihre Vertretung da ist. `
-      + `Bitte bis zum ${de(v.stichtag)} planen – ${unverplantText(v.unverplantMax)}${v.einzeltageMax ? `, höchstens ${v.einzeltageMax} einzelne Urlaubstage` : ''}.`;
+      + `Bitte bis zum ${de(v.stichtag)} planen – ${unverplantText(v.unverplantMax)}${v.einzeltageMax ? `, höchstens ${v.einzeltageMax} einzelne Urlaubstage` : ''}`
+      + `${S.start.amStueckMax ? `, am Stück höchstens ${S.start.amStueckMax} Arbeitstage` : ''}.`;
     for (const s of $$('#vp-liste .vp-vertretung')) { const w = s.value; s.innerHTML = vpOptionen(); s.value = w; }
     for (const s of $$('#vp-liste .vp-vertretung2')) { const w = s.value; s.innerHTML = vpOptionen(true); s.value = w; }
     if (S.vp) vpPruefen();
@@ -1126,7 +1127,7 @@
   /* ---------- Jahresplanung (nur Personalstelle; gesammelt genehmigen zusätzlich mit „Urlaub genehmigen“) ----------
      Server: hr_planung (Zusammenfassung), hr_entscheiden (einzeln), hr_planung_freigeben (konfliktfreie gesammelt),
      hr_planung_erinnern, hr_planung_abschluss, hr_planung_uebersicht_senden. Knöpfe nur als Anzeige – Rechte prüft der Server. */
-  const KONFLIKT_ART = { vertretung: 'Vertretung', abteilung: 'Abteilung', sperre: 'Urlaubssperre', rest: 'Resturlaub', einzeltage: 'Einzeltage' };
+  const KONFLIKT_ART = { vertretung: 'Vertretung', abteilung: 'Abteilung', sperre: 'Urlaubssperre', rest: 'Resturlaub', einzeltage: 'Einzeltage', dauer: 'Am Stück' };
   async function ladePlanung() {
     const r = await api('hr_planung', null, S.pjahr ? '&jahr=' + S.pjahr : '');
     if (r.status !== 200) {
@@ -1144,7 +1145,7 @@
     const d = S.jp, z = d.zahlen, j = d.jahr;
     $('#jp-titel').textContent = `Jahresplanung ${j}`;
     $('#jp-info').textContent = [`Stichtag ${de(d.stichtag)}`, d.unverplantMax > 0 ? `Ziel: höchstens ${tageText(d.unverplantMax)} unverplant` : 'Ziel: ganzer Urlaub verplant', d.vertretungPflicht ? 'Vertretung Pflicht' : 'Vertretung freiwillig',
-      d.einzeltageMax ? `höchstens ${d.einzeltageMax} einzelne Urlaubstage` : '',
+      d.einzeltageMax ? `höchstens ${d.einzeltageMax} einzelne Urlaubstage` : '', d.amStueckMax ? `am Stück höchstens ${d.amStueckMax} Arbeitstage` : '',
       d.abschluss ? `abgeschlossen am ${window.STAFL_FORMAT.datum(d.abschluss.t)}${d.abschluss.by ? ' von ' + d.abschluss.by : ''}` : `Hinweis für Mitarbeiter ab ${de(d.start)}`].filter(Boolean).join(' · ');
     const kachel = (titel, wert, cls = '', zusatz = '') => `<div class="hr-wert hr-glas ${cls}"><span>${esc(titel)}</span><b>${esc(wert)}</b>${zusatz ? `<small>${esc(zusatz)}</small>` : ''}</div>`;
     $('#jp-zahlen').innerHTML = kachel('Ziel erreicht', `${z.erreicht} / ${z.personen}`, 'haupt', z.personen - z.erreicht ? `${z.personen - z.erreicht} noch offen` : 'alle Mitarbeiter')

@@ -346,6 +346,8 @@ function hr_einstellungen(): array
             // Resturlaub überziehen (Inhaber 10.11.2026): so viele Tage darf ein Antrag über die verfügbaren Tage gehen – mit
             // Bestätigung „Trotzdem absenden“; darüber lehnt der Server immer ab. Fehlt das Feld: Standard (GR-006)
             'ueberziehenMax' => hr_ueberziehen_norm($d['ueberziehenMax'] ?? null) ?? HR_UEBERZIEHEN_STANDARD,
+            // Urlaub am Stück (Inhaber 11.11.2026): höchstens so viele Arbeitstage in einem Block, 0 = keine Prüfung (fehlt: Standard)
+            'amStueckMax' => hr_am_stueck_norm($d['amStueckMax'] ?? null) ?? HR_AM_STUECK_STANDARD,
             // Urlaubsregeln: gespeicherter Text (auch leer = keine Regeln anzeigen), ohne Feld die Vorlage
             'regeln' => hr_regeln_text($d['regeln'] ?? null)];
 }
@@ -357,6 +359,56 @@ function hr_ueberziehen_norm($v): ?float
     if (!is_int($v) && !is_float($v)) return null;
     $v = (float)$v;
     return $v >= 0 && $v <= 30 && fmod($v * 2, 1.0) == 0.0 ? $v : null;
+}
+
+/* ---------------- Urlaub am Stück (Inhaber 11.11.2026: „15 Tage ist das Maximum“) ----------------
+   Ein Mitarbeiter kann höchstens amStueckMax Arbeitstage Urlaub am Stück beantragen (hr-einstellungen, Standard 15, 0 = keine
+   Prüfung). Ein Block sind Urlaubstage, die nur durch Tage ohne Arbeit (Wochenende, Feiertag, eigener freier Tag, Schließtag
+   24.12./31.12.) oder durch Gleittage getrennt sind: Freitag plus ab dem Montag danach 15 Tage sind 16 am Stück. Gezählt werden
+   Arbeitstage mit Urlaub (Schließtage und Gleittage verbinden nur). Krankheit und andere Arbeitstage trennen. Geprüft wird beim
+   Antrag und in der Vorplanung (hr_antrag_zeitraum, mit den übrigen Zeilen); die Personalstelle trägt weiter frei ein, die
+   Jahresplanung zeigt längere Blöcke als Konflikt „dauer“. */
+const HR_AM_STUECK_STANDARD = 15;
+const HR_AM_STUECK_GRENZE = 60;   // höchster einstellbarer Wert
+function hr_am_stueck_norm($v): ?int { return is_int($v) && $v >= 0 && $v <= HR_AM_STUECK_GRENZE ? $v : null; }
+/* Längster Urlaubsblock, der einen der Zeiträume $neu ([{von, bis}], noch nicht gespeichert oder schon eingetragen) berührt –
+   mit den beantragten und genehmigten Einträgen der Person. Rückgabe ['tage' => Arbeitstage, 'von' => erster, 'bis' => letzter
+   Urlaubstag] oder null (kein Urlaubstag). */
+function hr_am_stueck_block(array $p, array $eintraege, array $neu): ?array
+{
+    if (!$neu) return null;
+    $min = min(array_column($neu, 'von')); $max = max(array_column($neu, 'bis'));
+    $u = []; $g = []; $liste = $neu;
+    foreach ($eintraege as $e) {
+        if ($e['person'] !== $p['id'] || !in_array($e['status'], HR_AKTIV, true) || $e['bis'] < hr_plus($min, -400) || $e['von'] > hr_plus($max, 400)) continue;
+        if ($e['art'] === 'U') $liste[] = $e;
+        elseif ($e['art'] === 'G') for ($d = $e['von']; $d <= $e['bis']; $d = hr_plus($d, 1)) $g[$d] = true;
+    }
+    foreach ($liste as $e) for ($d = $e['von']; $d <= $e['bis']; $d = hr_plus($d, 1)) $u[$d] = true;
+    $frei = hr_freie_tage($eintraege, $p['id']);
+    // 1 = Urlaubstag (zählt), 0 = verbindet (kein Arbeitstag, freier Tag, Schließtag, Gleittag), -1 = trennt
+    $art = function (string $d) use ($p, $u, $g, $frei): int {
+        if (!hr_arbeitstag($p, $d) || isset($frei[$d]) || hr_schliesstag($d) !== null) return 0;
+        return isset($u[$d]) ? 1 : (isset($g[$d]) ? 0 : -1);
+    };
+    $best = null;
+    foreach ($neu as $z) {
+        $a = $z['von']; $b = $z['bis'];
+        for ($d = hr_plus($a, -1), $i = 0; $i < 370 && ($t = $art($d)) >= 0; $d = hr_plus($d, -1), $i++) if ($t > 0) $a = $d;
+        for ($d = hr_plus($b, 1), $i = 0; $i < 370 && ($t = $art($d)) >= 0; $d = hr_plus($d, 1), $i++) if ($t > 0) $b = $d;
+        $n = 0; $erst = null; $letzt = null;
+        for ($d = $a; $d <= $b; $d = hr_plus($d, 1)) if ($art($d) > 0) { $n++; $erst = $erst ?? $d; $letzt = $d; }
+        if ($n > 0 && (!$best || $n > $best['tage'])) $best = ['tage' => $n, 'von' => $erst, 'bis' => $letzt];
+    }
+    return $best;
+}
+/* Text, wenn ein Block zu lang wäre; $allein: der Zeitraum ist schon allein zu lang */
+function hr_am_stueck_text(array $blk, int $max, bool $allein): string
+{
+    return "Am Stück sind höchstens $max Arbeitstage Urlaub möglich – " . ($allein
+        ? 'dieser Zeitraum hat ' . $blk['tage'] . ' Arbeitstage.'
+        : 'zusammen mit Ihrem Urlaub direkt davor oder danach wären es ' . $blk['tage'] . ' Arbeitstage am Stück (' . hr_zeitraum_text($blk['von'], $blk['bis'])
+          . '). Wochenenden, Feiertage und Gleittage dazwischen unterbrechen den Urlaub nicht.');
 }
 
 /* Überzug eines Urlaubsantrags (Inhaber 10.11.2026): um wie viele Tage gehen die verfügbaren Tage (Rest − offene Anträge)
@@ -386,9 +438,32 @@ function hr_ueberzug_text(array $u, float $max): string
 
 /* ---------------- Urlaubsregeln und Sperren aus den Regeln (Inhaber 03.11.2026) ---------------- */
 const HR_REGELN_MAX = 6000;   // Zeichen
-/* Vorlage (Inhaber 03.11.2026: kompakt und einfach; Wortlaut 11.11.2026 wie „Urlaubsregeln kompakt“ der Mitarbeiter-Mail) – eine
+/* Vorlage (Inhaber 03.11.2026: kompakt und einfach; Wortlaut 11.11.2026 wie „Urlaubsregeln kompakt“ der Mitarbeiter-Mail, dazu
+   „Urlaubsdauer“ – höchstens 15 Arbeitstage am Stück, Inhaber 11.11.2026) – eine
    Zeile „1. Überschrift“, darunter der Text, Absätze durch Leerzeilen */
 const HR_REGELN_STANDARD = "1. Urlaubsanspruch\n"
+    . "Wie viele Urlaubstage Sie haben, steht in Ihrem Arbeitsvertrag.\n\n"
+    . "2. Planung\n"
+    . "Urlaub ist grundsätzlich im laufenden Kalenderjahr zu nehmen.\n\n"
+    . "3. Vorplanung\n"
+    . "Planen Sie Ihren Jahresurlaub bis zum 31.01. vor (Schalter „Vorplanung“ bei „Urlaub beantragen“). Höchstens 5 Urlaubstage dürfen unverplant bleiben. Liegt keine Planung vor, plant die Personalstelle Ihren Urlaub.\n\n"
+    . "4. Einzelne Urlaubstage\n"
+    . "In der Vorplanung höchstens 4 einzelne Urlaubstage. Den übrigen Urlaub planen Sie bitte zusammenhängend.\n\n"
+    . "5. Urlaubsdauer\n"
+    . "Am Stück höchstens 15 Arbeitstage Urlaub. Wochenenden, Feiertage und Gleittage dazwischen zählen durch: Freitag plus ab Montag 15 Tage wären 16.\n\n"
+    . "6. Urlaubssperre\n"
+    . "Grundsätzlich kein Urlaub im Ostergeschäft (2 Wochen vor Ostern) und im Weihnachtsgeschäft (30.11.–24.12.).\n\n"
+    . "7. Resturlaub\n"
+    . "Resturlaub ist grundsätzlich bis zum 31.03. des Folgejahres zu nehmen, sonst verfällt er.\n\n"
+    . "8. Vertretung\n"
+    . "Stimmen Sie Ihren Urlaub mit Ihrer Urlaubsvertretung ab. Sie muss während Ihres ganzen Urlaubs anwesend sein – Überschneidungen sind nicht erlaubt.\n\n"
+    . "9. Sonderregelung Dezember\n"
+    . "Am 24.12. und 31.12. bleibt der Betrieb geschlossen. Für beide Tage zusammen wird 1 Urlaubstag angerechnet – automatisch, ein Antrag ist nicht nötig.";
+/* Frühere Vorlagen: wurde eine davon unverändert gespeichert (Verwaltung → Urlaub speichert den Text immer mit), gilt die
+   aktuelle Vorlage – eigene Texte der Personalstelle bleiben unberührt; gespeichert wird dabei nichts (GR-006). */
+const HR_REGELN_FRUEHER = [
+    // 11.11.2026 (PR #332): acht Punkte wie die Mitarbeiter-Mail, noch ohne Urlaubsdauer
+    "1. Urlaubsanspruch\n"
     . "Wie viele Urlaubstage Sie haben, steht in Ihrem Arbeitsvertrag.\n\n"
     . "2. Planung\n"
     . "Urlaub ist grundsätzlich im laufenden Kalenderjahr zu nehmen.\n\n"
@@ -403,10 +478,7 @@ const HR_REGELN_STANDARD = "1. Urlaubsanspruch\n"
     . "7. Vertretung\n"
     . "Stimmen Sie Ihren Urlaub mit Ihrer Urlaubsvertretung ab. Sie muss während Ihres ganzen Urlaubs anwesend sein – Überschneidungen sind nicht erlaubt.\n\n"
     . "8. Sonderregelung Dezember\n"
-    . "Am 24.12. und 31.12. bleibt der Betrieb geschlossen. Für beide Tage zusammen wird 1 Urlaubstag angerechnet – automatisch, ein Antrag ist nicht nötig.";
-/* Frühere Vorlagen: wurde eine davon unverändert gespeichert (Verwaltung → Urlaub speichert den Text immer mit), gilt die
-   aktuelle Vorlage – eigene Texte der Personalstelle bleiben unberührt; gespeichert wird dabei nichts (GR-006). */
-const HR_REGELN_FRUEHER = [
+    . "Am 24.12. und 31.12. bleibt der Betrieb geschlossen. Für beide Tage zusammen wird 1 Urlaubstag angerechnet – automatisch, ein Antrag ist nicht nötig.",
     // 10.11.–11.11.2026 (PR #325): Vorplanung bis 31.12. mit 90 %, Urlaubsdauer 15 Tage, Weihnachtsgeschäft ab der letzten Novemberwoche
     "1. Urlaubsanspruch\n"
     . "Wie viele Urlaubstage Sie haben, steht in Ihrem Arbeitsvertrag.\n\n"

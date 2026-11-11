@@ -397,6 +397,10 @@ Mitarbeiter sind die Nutzer der Plattform (`users_load()`); HR speichert nur eig
   `abschluss` je Jahr setzt `hr_planung_abschluss` (Verwaltung → Urlaub speichert ihn nie mit).
   Vorplanung = Urlaub des Planungsjahres, erfasst bis zum Stichtag (`hr_vorplanung_eintrag`); Einzeltage berechnet
   `hr_einzeltage` (Blöcke über Wochenende, Feiertage, freie Tage, Gleittage und Schließtage hinweg).
+  `amStueckMax` (seit 11.11.2026, optional, ganze Zahl 0–60, Standard 15, 0 = keine Prüfung): höchstens so viele Arbeitstage
+  Urlaub am Stück je Antrag bzw. Vorplanung (`hr_am_stueck_block`) – Wochenenden, Feiertage, freie Tage, Schließtage und
+  Gleittage verbinden, gezählt werden Arbeitstage mit Urlaub (Freitag plus ab Montag 15 Tage = 16); die Personalstelle trägt
+  frei ein, die Jahresplanung zeigt längere Blöcke als Konflikt `dauer`.
   `schliesstage` (seit 10.11.2026, optional, nur `false` schaltet ab): Sonderregelung Dezember – 24.12. und 31.12. (ab 2026)
   Betrieb geschlossen, verpflichtender Betriebsurlaub: jedem Mitarbeiter im Urlaubsplan wird je ½ Tag angerechnet
   (`hr_betriebsurlaub`, gerechnet, nichts gespeichert; nicht bei K/F/X), Einträge zählen dort nicht (`hr_tag_wert` = 0), ein

@@ -25,7 +25,7 @@
 .hr-einst .hint { margin: 0; }
 .hr-einst > .btn { align-self: flex-start; }
 .hr-einst .hr-verfall { max-width: 220px; }   /* Verfallstag des Resturlaubs */
-.hr-verfall-felder { display: flex; flex-wrap: wrap; gap: 10px 16px; }
+.hr-verfall-felder { display: flex; flex-wrap: wrap; gap: 10px 16px; align-items: flex-end; }   /* zweizeilige Beschriftung: Felder auf einer Linie */
 .hr-verfall-felder .hr-verfall { flex: 1 1 160px; margin: 0; }
 .hr-verfall-felder select { width: 100%; }
 /* Eigene Urlaubsangaben (Vier-Augen-Prinzip): gesperrte Felder sichtbar gesperrt, Hinweis oben */

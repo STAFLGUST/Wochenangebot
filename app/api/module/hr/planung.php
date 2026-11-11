@@ -240,6 +240,12 @@ function hr_antrag_zeitraum(array $ich, array $personal, array $eintraege, array
     if ($s = hr_ueberschneidung($einst['sperren'], $von, $bis)) $f('Im Zeitraum ' . hr_zeitraum_text($s['von'], $s['bis']) . ' gilt eine Urlaubssperre' . ($s['text'] !== '' ? ' (' . $s['text'] . ')' : '') . '.', 422);
     if ($k = hr_kollision($eintraege, $ich['id'], $von, $bis, null, 'U')) $f('Für ' . hr_zeitraum_text($k['von'], $k['bis']) . ' gibt es bereits einen Eintrag.', 409);
     foreach ($andere as $o) if ($o['von'] <= $bis && $von <= $o['bis']) { $f('Überschneidet sich mit ' . hr_zeitraum_text($o['von'], $o['bis']) . ' in dieser Vorplanung.', 422); break; }
+    // Urlaub am Stück (Inhaber 11.11.2026): mit eigenem Urlaub davor/danach und den übrigen Zeilen der Vorplanung
+    if ($art === 'U' && $tage && ($max = (int)($einst['amStueckMax'] ?? HR_AM_STUECK_STANDARD)) > 0) {
+        $allein = hr_am_stueck_block($ich, [], [['von' => $von, 'bis' => $bis]]);
+        $blk = hr_am_stueck_block($ich, $eintraege, array_merge([['von' => $von, 'bis' => $bis]], array_map(function ($o) { return ['von' => $o['von'], 'bis' => $o['bis']]; }, $andere)));
+        if ($blk && $blk['tage'] > $max) $f(hr_am_stueck_text($blk, $max, $allein !== null && $allein['tage'] > $max), 422);
+    }
     $nurSchliess = $tage && !array_filter($tage, function ($d) { return hr_schliesstag($d) === null; });
     if ($nurSchliess) $f('Am 24.12. und 31.12. ist der Betrieb geschlossen – dafür wird automatisch je ½ Urlaubstag angerechnet, ein Antrag ist nicht nötig.', 422);
     $leer = function ($v) { return $v === null || $v === ''; };
@@ -356,7 +362,7 @@ function hr_daten_text(array $daten): string
 /* Konflikte eines Urlaubsantrags in der Jahresplanung. Nur Namen und Zeiträume, nie Gründe anderer Abwesenheiten.
    Arten: vertretung (fehlt, nicht im Urlaubsplan, selbst abwesend), abteilung (gleichzeitig weg – nicht an Schließtagen),
    sperre, rest, einzeltage ($einzel: Einzeltage der Vorplanung der Person, hr_einzeltage – mehr als einzeltageMax) */
-function hr_planung_konflikte(array $e, array $p, array $idx, array $eintraege, array $sperren, array $pe, float $verfuegbar, array $einzel = []): array
+function hr_planung_konflikte(array $e, array $p, array $idx, array $eintraege, array $sperren, array $pe, float $verfuegbar, array $einzel = [], int $amStueck = 0): array
 {
     $k = [];
     $v = $e['vertretung'] ?? null;
@@ -396,6 +402,9 @@ function hr_planung_konflikte(array $e, array $p, array $idx, array $eintraege, 
     $max = $pe['einzeltageMax'];
     if ($max > 0 && count($einzel) > $max && array_intersect($einzel, hr_tage($p, $e['von'], $e['bis'])))
         $k[] = ['art' => 'einzeltage', 'text' => 'Einzelner Urlaubstag – in der Vorplanung ' . count($einzel) . ' einzelne Tage (höchstens ' . $max . ', übriger Urlaub möglichst zusammenhängend)'];
+    // Urlaub am Stück (Inhaber 11.11.2026): Block mit diesem Antrag länger als erlaubt (z. B. vor der Prüfung beantragt oder von der Personalstelle eingetragen)
+    if ($amStueck > 0 && $e['art'] === 'U' && ($blk = hr_am_stueck_block($p, $eintraege, [$e])) && $blk['tage'] > $amStueck)
+        $k[] = ['art' => 'dauer', 'text' => $blk['tage'] . ' Arbeitstage Urlaub am Stück (' . hr_zeitraum_text($blk['von'], $blk['bis']) . ', höchstens ' . $amStueck . ')'];
     return $k;
 }
 
@@ -421,7 +430,7 @@ function hr_planung(int $jahr, array $me): array
     foreach ($eintraege as $e) {
         if ($e['art'] !== 'U' || !in_array($e['status'], HR_AKTIV, true) || $e['bis'] < $jv || $e['von'] > $jb || !isset($personen[$e['person']])) continue;
         $p = $idx[$e['person']];
-        $kon = hr_planung_konflikte($e, $p, $idx, $eintraege, $einst['sperren'], $pe, $verf[$p['id']], $personen[$p['id']]['einzeltage']);
+        $kon = hr_planung_konflikte($e, $p, $idx, $eintraege, $einst['sperren'], $pe, $verf[$p['id']], $personen[$p['id']]['einzeltage'], $einst['amStueckMax']);
         $eigen = hr_eigen($personal, $me, $e);
         if ($kon) $personen[$p['id']]['konflikte']++;
         $vp = ($e['vertretung'] ?? null) ? ($idx[$e['vertretung']] ?? null) : null;
@@ -436,7 +445,7 @@ function hr_planung(int $jahr, array $me): array
     $pl = array_values($personen);
     $abschluss = $pe['abschluss'][(string)$jahr] ?? null;
     $mail = hr_mail_einst();
-    return ['jahr' => $jahr, 'heute' => hr_heute(), 'start' => $dt['start'], 'stichtag' => $dt['stichtag'], 'unverplantMax' => $pe['unverplantMax'],
+    return ['jahr' => $jahr, 'heute' => hr_heute(), 'start' => $dt['start'], 'stichtag' => $dt['stichtag'], 'unverplantMax' => $pe['unverplantMax'], 'amStueckMax' => $einst['amStueckMax'],
             'testmodus' => $mail['test']['an'], 'postfach' => (bool)mail_cfg_intern(),
             'vertretungPflicht' => $pe['vertretungPflicht'], 'einzeltageMax' => $pe['einzeltageMax'], 'schliesstage' => (object)hr_schliesstage($jahr),
             'abschluss' => $abschluss ? ['t' => $abschluss['t'] ?? null, 'by' => (string)($abschluss['by'] ?? '')] : null,
@@ -468,7 +477,7 @@ function hr_planung_freigeben(int $jahr, array $ids, array $me): array
             if (hr_eigen($personal, $me, $e)) { $weg[] = ['id' => $e['id'], 'grund' => 'eigener Antrag']; continue; }
             $verf = (float)hr_konto($p, $abw['eintraege'], $jahr)['verfuegbar'];   // wie in der Ansicht (hr_planung): Konto des Planungsjahres
             $einzel = hr_einzeltage($p, $abw['eintraege'], $jahr, $pe);
-            if (hr_planung_konflikte($e, $p, $idx, $abw['eintraege'], $sperren, $pe, $verf, $einzel)) { $weg[] = ['id' => $e['id'], 'grund' => 'Konflikt']; continue; }
+            if (hr_planung_konflikte($e, $p, $idx, $abw['eintraege'], $sperren, $pe, $verf, $einzel, $einst['amStueckMax'])) { $weg[] = ['id' => $e['id'], 'grund' => 'Konflikt']; continue; }
             $abw['eintraege'][$i]['status'] = 'genehmigt';
             $abw['eintraege'][$i]['entscheidung'] = ['t' => now(), 'by' => $me['name'], 'grund' => 'Jahresplanung ' . $jahr];
             $ok[] = $e['id'];

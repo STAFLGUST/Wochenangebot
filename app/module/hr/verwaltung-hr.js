@@ -272,8 +272,10 @@
       <p class="hint" id="hr-uebertrag-anzeige">Aktuell: verfällt ${esc(verfallText(daten))}${daten.verfallAb ? ` – Resturlaub aus ${daten.verfallAb - 2} bleibt ${daten.verfallAb - 1} ganz erhalten` : ''}</p>
       <div class="hr-verfall-felder">
         <label class="fld hr-verfall"><span>Resturlaub überziehen: höchstens</span><input type="number" id="hr-ueberziehen" min="0" max="30" step="0.5" inputmode="decimal" value="${esc(String(daten.ueberziehenMax ?? 4))}" required aria-describedby="hr-ueberziehen-hint"></label>
+        <label class="fld hr-verfall"><span>Urlaub am Stück: höchstens</span><input type="number" id="hr-am-stueck" min="0" max="60" step="1" inputmode="numeric" value="${esc(String(daten.amStueckMax ?? 15))}" required aria-describedby="hr-ueberziehen-hint"></label>
       </div>
-      <p class="hint" id="hr-ueberziehen-hint">Reicht der Urlaub für einen Antrag nicht, fragt die Seite „Trotzdem absenden?“ – bis zu so vielen Tagen über die verfügbaren Tage (Rest minus offene Anträge). Mehr lehnt der Server immer ab; 0 = nie überziehen. Die Personalstelle selbst kann weiter eintragen.</p>
+      <p class="hint" id="hr-ueberziehen-hint">Reicht der Urlaub für einen Antrag nicht, fragt die Seite „Trotzdem absenden?“ – bis zu so vielen Tagen über die verfügbaren Tage (Rest minus offene Anträge). Mehr lehnt der Server immer ab; 0 = nie überziehen.
+        Urlaub am Stück: so viele Arbeitstage Urlaub darf ein Block höchstens haben – Wochenenden, Feiertage und Gleittage dazwischen zählen durch (Freitag plus ab Montag 15 Tage = 16). Längere Anträge lehnt der Server ab; 0 = keine Prüfung. Die Personalstelle selbst kann weiter eintragen.</p>
       ${planungFelder()}
       <h3 class="sec-h">Urlaubsregeln</h3><p class="hint">Stehen für alle Mitarbeiter beim Urlaubsantrag. Eine Zeile wie „1. Urlaubsanspruch“ wird zur Überschrift; leer = keine Regeln anzeigen.</p>
       <label class="fld hr-regeln-feld"><span class="sr-only">Text der Urlaubsregeln</span><textarea id="hr-regeln" rows="14" maxlength="6000">${esc(daten.regeln || '')}</textarea></label>
@@ -401,12 +403,13 @@
       if (!planung.start || !planung.stichtag) { $('#hr-einst-err').textContent = 'Jahresplanung: bitte „Hinweis ab“ und Stichtag wählen.'; return; }
       if (planung.start.slice(5) === planung.stichtag.slice(5)) { $('#hr-einst-err').textContent = 'Jahresplanung: Beginn und Stichtag dürfen nicht derselbe Tag sein.'; return; }
       if ($('#hr-plan-unverplant').value === '' || !Number.isInteger(planung.unverplantMax) || planung.unverplantMax < 0 || planung.unverplantMax > 50) { $('#hr-einst-err').textContent = 'Jahresplanung: unverplante Urlaubstage bitte als ganze Zahl zwischen 0 und 50.'; return; }
-      const ueberziehenMax = Number($('#hr-ueberziehen').value);
+      const ueberziehenMax = Number($('#hr-ueberziehen').value), amStueckMax = Number($('#hr-am-stueck').value);
+      if ($('#hr-am-stueck').value === '' || !Number.isInteger(amStueckMax) || amStueckMax < 0 || amStueckMax > 60) { $('#hr-einst-err').textContent = 'Urlaub am Stück: bitte eine ganze Zahl von 0 bis 60 Arbeitstagen (0 = keine Prüfung).'; return; }
       if ($('#hr-ueberziehen').value === '' || !(ueberziehenMax >= 0 && ueberziehenMax <= 30) || (ueberziehenMax * 2) % 1) { $('#hr-einst-err').textContent = 'Resturlaub überziehen: bitte 0 bis 30 Tage in ganzen oder halben Tagen (0 = nie).'; return; }
       if ($('#hr-plan-einzeltage').value === '' || !Number.isInteger(planung.einzeltageMax) || planung.einzeltageMax < 0 || planung.einzeltageMax > 50) { $('#hr-einst-err').textContent = 'Jahresplanung: einzelne Urlaubstage bitte als ganze Zahl zwischen 0 (keine Prüfung) und 50.'; return; }
       const r = await api('hr_einstellungen_save', { body: { sperren: liste('hr-sperren'), ferien: liste('hr-ferien'), uebertragBis: bis,
-        verfallAb: ab ? Number(ab) : null, regelSperren: $('#hr-regelsperren').checked, schliesstage: $('#hr-schliesstage').checked, ueberziehenMax, regeln: $('#hr-regeln').value, planung } });
-      Object.assign(daten, { sperren: r.sperren, ferien: r.ferien, uebertragBis: r.uebertragBis, verfallAb: r.verfallAb, regelSperren: r.regelSperren, schliesstage: r.schliesstage, ueberziehenMax: r.ueberziehenMax, sperrenAuto: r.sperrenAuto, regeln: r.regeln, planung: r.planung });
+        verfallAb: ab ? Number(ab) : null, regelSperren: $('#hr-regelsperren').checked, schliesstage: $('#hr-schliesstage').checked, ueberziehenMax, amStueckMax, regeln: $('#hr-regeln').value, planung } });
+      Object.assign(daten, { sperren: r.sperren, ferien: r.ferien, uebertragBis: r.uebertragBis, verfallAb: r.verfallAb, regelSperren: r.regelSperren, schliesstage: r.schliesstage, ueberziehenMax: r.ueberziehenMax, amStueckMax: r.amStueckMax, sperrenAuto: r.sperrenAuto, regeln: r.regeln, planung: r.planung });
       toast('Urlaubseinstellungen gespeichert.');
       renderUrlaub();
     } catch (ex) { $('#hr-einst-err').textContent = ex.message; }
