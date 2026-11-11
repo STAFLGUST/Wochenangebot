@@ -81,6 +81,37 @@ Escape und Schließen schließen ihn. CSV und Druck enthalten weiterhin die Lief
   - Die VK-Gruppe und die Namen der verwendeten Gruppen liefert `GET stock` (`vk` je Artikel, `vkgruppen`). Das Recht
     „Stammdaten ansehen“ ist dafür nicht nötig; der Bestand liest Stammdaten und VK-Gruppen nur (`regeln/datenverantwortung.toml`).
 
+## Summenzeile über der Liste (seit 11.11.2026)
+
+Wunsch des Inhabers („Gesamtbestand in kg und EUR, aber nicht zu groß“, gewählt: Variante B): eine schlanke Textzeile
+zwischen Werkzeugleiste und Tabelle, ohne Karte und Rahmen, 13 px, Ziffern gleich breit, darf umbrechen (am Handy
+untereinander):
+
+`Gesamt verfügbar 51.731 kg · 334.420 € EK | eingelagert … kg · … €  erfasst … kg · … €  MHD bis 4 Tage … kg · … €   folgt Suche und Filter`
+
+- **Was summiert wird:** genau die gerade angezeigten Artikelzeilen (Suche, auch die MHD-Abfrage, und Spaltenfilter; das
+  Fenster „VK-Gruppen“ zeigt dieselbe Auswahl). Warengruppen-Köpfe und -Summen zählen nicht mit. Ohne Treffer keine Zeile.
+  - **Gesamt verfügbar** = Summe der Spalte „Gesamt verfügbar“ (eingelagert + erfasst), kg fett in Bordeaux.
+  - **eingelagert** = Summe „Eingelagerter Bestand“.
+  - **erfasst** = Summe „Erfasster Bestand“ (Status „erfasst“: Ware noch nicht eingetroffen). Der Designvorschlag nannte
+    das „unterwegs“; die Zeile verwendet den Begriff der Liste, der Hinweis an der Zahl erklärt ihn.
+  - **MHD bis 4 Tage** = Summe „Menge kürz. MHD“ der Zeilen, deren kürzestes MHD abgelaufen ist oder in höchstens 4 Tagen
+    erreicht wird – dieselbe Abgrenzung wie die Markierungen „abgelaufen“ und „heute – 4 Tage“, in deren Rot.
+    Weitere Partien eines Artikels mit späterem MHD (auch innerhalb der 4 Tage) zählen wie in der Spalte nicht mit.
+- **Euro = Einkaufswert der Partien (EK-Preis × Menge)**, nur mit dem Recht `bestand.einkaufspreise` (GR-008). Ohne das
+  Recht zeigt die Zeile nur kg – kein €, kein „EK“; der Server liefert solchen Nutzern ohnehin keine EK-Preise
+  (`stock_ohne_ek`). Grundlage sind `lots[].ek` (eingelagert, bei „MHD bis 4 Tage“ nur die Partien mit dem kürzesten MHD)
+  und `incoming[].ek` (erfasst, wenn die Bestandsliste beim Zugang einen EK-Preis hat). Partien ohne EK-Preis (oder 0)
+  zählen bei kg mit, beim € nicht; dann nennt der Hinweis am €-Wert den Anteil („Einkaufswert der Partien mit EK-Preis
+  (94 % der Menge)“, abgerundet, gepunktet unterstrichen). Hat kein Teil der Menge einen EK-Preis, steht „– €“.
+- **Gerundet** auf ganze kg und € (die Tabelle zeigt weiter zwei Nachkommastellen); Mengen werden in ganzen Gramm summiert
+  wie die Summen der Tabelle.
+- **Code:** Berechnung und Markup an einer Stelle in `app/assets/stock-core.js` (`StockCore.bestandSummen`,
+  `StockCore.summenZeileHTML`), Stile in `app/module/bestand/bestandsliste.css`; `admin.js` ruft beides nur in
+  `renderStockList` auf. Drucken, PDF und CSV bleiben unverändert (sie haben eigene Gesamtsummen; PDF und CSV enthalten
+  bewusst keine Einkaufswerte).
+- **Rückfall:** reine Anzeige, keine Daten- oder Schnittstellenänderung – die Vorversion einspielen genügt.
+
 ## Schnittstelle und Rechte
 
 `GET stock` bleibt nur mit `bestand.sehen` verfügbar. Das zusätzliche Antwortfeld `prices` enthält
@@ -114,8 +145,9 @@ durch diesen PR. Merge/Release nur über den bestehenden Freigabeprozess.
 
 `stock` prüft den echten XLS-Import und unveränderte eingelagerte Summen. `stock_overview` prüft
 Wochenpreise, fehlende Historie, getrennte Mengen und Gesamtsummen, mehrere Lieferungen, unbekannte ETA, reine Zugänge, Validierung,
-Rechte, keine öffentliche Auslieferung, CSV, Druck und Desktop/Mobil in hell/dunkel.
-Unit-Tests prüfen außerdem J/M-Zuordnung, Kalendergrenzen, Historienlücken und mehrdeutige Preise.
+Rechte, keine öffentliche Auslieferung, CSV, Druck und Desktop/Mobil in hell/dunkel, dazu die Summenzeile
+(`fixtures/bestand/summen.json`: Summen, Suche/Filter, € nur mit EK-Recht, 390 px).
+Unit-Tests prüfen außerdem J/M-Zuordnung, Kalendergrenzen, Historienlücken, mehrdeutige Preise und die Summenzeile.
 
 ## EK-Preis je Partie
 

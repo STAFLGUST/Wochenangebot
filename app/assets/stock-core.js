@@ -5,6 +5,8 @@
    sowie wie bisher .xls (BIFF2–BIFF8, auch im OLE-Container) und .xlsx.
    Berücksichtigt werden nur Zeilen mit Status „eingelagert“.
    Je Artikel: verfügbare Menge (Summe netto), frühestes MHD, Menge zum frühesten MHD.
+   Dazu Hilfen der Bestandsliste im Eingabebereich: Wochenpreise vergleichen und die Summenzeile über der Tabelle
+   (bestandSummen, summenZeileHTML – Mengen und, nur mit Recht „bestand.einkaufspreise“, Einkaufswert).
    ========================================================================== */
 (function (root) {
   'use strict';
@@ -449,5 +451,58 @@
     return { kind: delta > 0 ? 'up' : delta < 0 ? 'down' : 'same', delta, text: delta === 0 ? 'unverändert' : '' };
   }
 
-  root.StockCore = { WARENGRUPPEN, warengruppe, normCode, readStockWorkbook, parseStockWorkbook, toDate, weekPriceMap, priceComparison };
+  /* ======================= Summenzeile der Bestandsliste ======================= */
+  const MHD_KURZ = ['mhd-past', 'mhd-0-4'];
+  const gramm = (v) => (Number.isFinite(v) ? Math.round(v * 1000) : 0);
+  const mitEkPreis = (l) => Number.isFinite(l.ek) && l.ek > 0 && Number.isFinite(l.kg) && l.kg > 0;   // 0 = kein Preis hinterlegt
+  /* Summen der gerade angezeigten Zeilen (Suche und Filter; Variante B, Wunsch Inhaber 11.11.2026). Erwartet die
+     Artikelzeilen der Liste (admin.js stockZeile: kg, mhd, mhdKg, cls, lots, incoming) – nie Warengruppen-Köpfe oder
+     Summenzeilen, so zählt nichts doppelt. Mengen exakt in ganzen Gramm wie die Summen der Tabelle.
+     eingelagert = Spalte „Eingelagerter Bestand“, erfasst = „Erfasster Bestand“ (Status „erfasst“, noch nicht eingetroffen),
+     gesamt = „Gesamt verfügbar“ (beides), mhd = „Menge kürz. MHD“ der Zeilen mit den Farbstufen „abgelaufen“ und
+     „heute – 4 Tage“ (cls mhd-past, mhd-0-4). Einkaufswert ek = EK-Preis × Menge, nur für Partien und Zugänge mit EK-Preis
+     (bei „mhd“ die Partien mit genau dem kürzesten MHD); ekKg = deren Menge, anteil = ekKg ÷ kg (null ohne Menge).
+     Ohne Recht „bestand.einkaufspreise“ liefert der Server keine EK-Preise (stock_ohne_ek) – dann ist ek 0. */
+  function bestandSummen(zeilen) {
+    const neu = () => ({ g: 0, ekG: 0, ek: 0 });
+    const t = { eingelagert: neu(), erfasst: neu(), mhd: neu() };
+    const ekDazu = (z, liste) => { for (const l of liste) if (mitEkPreis(l)) { z.ekG += gramm(l.kg); z.ek += l.ek * l.kg; } };
+    for (const a of zeilen || []) {
+      const lots = a.lots || [], inc = a.incoming || [];
+      t.eingelagert.g += gramm(a.kg);
+      ekDazu(t.eingelagert, lots);
+      for (const d of inc) t.erfasst.g += gramm(d.kg);
+      ekDazu(t.erfasst, inc);
+      if (a.mhd && MHD_KURZ.includes(a.cls)) { t.mhd.g += gramm(a.mhdKg); ekDazu(t.mhd, lots.filter((l) => l.mhd === a.mhd)); }
+    }
+    const gesamt = { g: t.eingelagert.g + t.erfasst.g, ekG: t.eingelagert.ekG + t.erfasst.ekG, ek: t.eingelagert.ek + t.erfasst.ek };
+    const fertig = (z) => ({ kg: z.g / 1000, ekKg: z.ekG / 1000, ek: Math.round(z.ek * 100) / 100, anteil: z.g > 0 ? Math.min(1, z.ekG / z.g) : null });
+    return { gesamt: fertig(gesamt), eingelagert: fertig(t.eingelagert), erfasst: fertig(t.erfasst), mhd: fertig(t.mhd) };
+  }
+  const ganz = new Intl.NumberFormat('de-DE', { maximumFractionDigits: 0 });
+  /* Schlanke Textzeile zwischen Werkzeugleiste und Tabelle (Stile: app/module/bestand/bestandsliste.css): ganze kg und €,
+     „Gesamt verfügbar“ vorn, dann eingelagert, erfasst und „MHD bis 4 Tage“. € und „EK“ nur mit mitEk (Recht
+     „bestand.einkaufspreise“) – ohne Recht enthält die Zeile weder € noch EK. Deckt der EK-Preis nicht die ganze Menge,
+     nennt der Hinweis am €-Wert den Anteil; ganz ohne EK-Preis steht „– €“. Enthält nur Zahlen und feste Texte. */
+  function summenZeileHTML(s, mitEk) {
+    const kg = (z) => `<span class="st-s-kg">${ganz.format(z.kg)} kg</span>`;
+    const eur = (z, zusatz = '', tag = 'span') => {
+      if (!mitEk) return '';
+      if (z.kg > 0 && !(z.ekKg > 0)) return ` · <${tag} class="st-s-eur st-s-ohne" title="ohne EK-Preis in der Bestandsliste">– €${zusatz}</${tag}>`;
+      const teil = z.anteil != null && z.anteil < 1;
+      const pz = teil ? Math.floor(z.anteil * 100) : 100;
+      const titel = teil ? `Einkaufswert der Partien mit EK-Preis (${pz < 1 ? 'unter 1' : pz} % der Menge)` : 'Einkaufswert der Partien (EK-Preis × Menge)';
+      return ` · <${tag} class="st-s-eur${teil ? ' teil' : ''}" title="${titel}">${ganz.format(z.ek)} €${zusatz}</${tag}>`;
+    };
+    const g = s.gesamt;
+    return `<div class="st-summe" id="st-summe">`
+      + `<span class="st-summe-haupt" data-summe="gesamt">Gesamt verfügbar <b class="st-s-kg">${ganz.format(g.kg)} kg</b>${eur(g, ' EK', 'b')}</span>`
+      + `<span class="st-summe-teile">`
+      + `<span data-summe="eingelagert">eingelagert ${kg(s.eingelagert)}${eur(s.eingelagert, '')}</span>`
+      + `<span data-summe="erfasst" title="Erfasster Bestand: Status „erfasst“, noch nicht eingetroffen">erfasst ${kg(s.erfasst)}${eur(s.erfasst, '')}</span>`
+      + `<span class="st-summe-mhd" data-summe="mhd" title="Menge zum kürzesten MHD der Artikel mit MHD abgelaufen oder in höchstens 4 Tagen (Markierungen „abgelaufen“ und „heute – 4 Tage“)">MHD bis 4 Tage ${kg(s.mhd)}${eur(s.mhd, '')}</span>`
+      + `</span><small class="st-summe-hinweis">folgt Suche und Filter</small></div>`;
+  }
+
+  root.StockCore = { WARENGRUPPEN, warengruppe, normCode, readStockWorkbook, parseStockWorkbook, toDate, weekPriceMap, priceComparison, bestandSummen, summenZeileHTML };
 })(typeof window !== 'undefined' ? window : globalThis);

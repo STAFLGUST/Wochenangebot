@@ -3434,7 +3434,9 @@
       ? `<strong>${fmtInt.format(res.list.length)}</strong> Artikel mit MHD bis ${esc(dmy(isoToday(14)))} (früheste zuerst)${nf ? ' · gefiltert' : ''}`
       : `<strong>${fmtInt.format(res.list.length)}</strong> von ${fmtInt.format(stockItems().length)} Artikeln${nf ? ' · gefiltert' : stockQ ? '' : ' · Tipp: „MHD“ eingeben'}`;
     const fz = $('#st-fzahl'); if (fz) fz.textContent = nf ? String(nf) : '';
-    host.innerHTML = filterLeiste() + (res.list.length ? `<div class="gcard st-card">${stockTableHTML(res)}</div>`
+    // Summenzeile der angezeigten Artikel (Modul Bestand: StockCore.bestandSummen; € nur mit EK-Recht, der Server liefert sonst keinen EK)
+    const summe = res.list.length ? S.summenZeileHTML(S.bestandSummen(res.list), may('bestand.einkaufspreise')) : '';
+    host.innerHTML = summe + filterLeiste() + (res.list.length ? `<div class="gcard st-card">${stockTableHTML(res)}</div>`
       : `<div class="ed-empty"><h3>Keine Treffer</h3><p>${nf ? 'Kein Artikel passt zu Suche und Filtern.' : mq ? 'Kein Artikel mit MHD in den nächsten 14 Tagen oder bereits abgelaufen.' : 'Kein Artikel, dessen Nummer oder Bezeichnung zum Suchbegriff passt.'}</p></div>`);
   }
   $('#view-stock').addEventListener('input', (e) => {

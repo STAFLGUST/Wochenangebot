@@ -336,6 +336,12 @@ Jede Code-Datei beginnt mit einem Kopfkommentar; dessen erste Aussage steht hier
 | `preisimport.js` | angebot | STAFL-Plattform · Angebot · Darstellung der Vorschau „Artikelpreise (CSV)“ in der Importzentrale (Verwaltung → Import). |
 | `winab-export.js` | angebot | STAFL-Plattform · Angebot · Knopf „Export für WinAB“ in der Werkzeugleiste des Wochenangebots (Auftrag des Inhabers 05.11.2026). |
 
+## `app/module/bestand/`
+
+| Datei | Modul | Inhalt |
+| --- | --- | --- |
+| `bestandsliste.css` | bestand | Bestand – Stile der Bestandsliste im Eingabebereich, die das Modul Bestand selbst pflegt (eingebunden in app/admin/index.html). |
+
 ## `app/module/controlling/`
 
 | Datei | Modul | Inhalt |
@@ -801,7 +807,7 @@ Jede Code-Datei beginnt mit einem Kopfkommentar; dessen erste Aussage steht hier
 | `test_sitzung_cookie.py` | plattform | Sitzungs-Cookie mit Präfix __Host- über HTTPS (GR-108, ADR-003 Befund B-1). |
 | `test_stilllegung.py` | plattform | Alter Eingabebereich stillgelegt (WA_EIGENE_ANMELDUNG=aus, lib/oidc.php): auf dem Host ohne zentrale Anmeldung (angebot-stafl.de) gibt es keine Mitarbeiteranmeldung und keine Mitarbeiteraktionen mehr; die Kundenseite … |
 | `test_stock.py` | bestand | Summen exakt (Dezimal) und kaufmännisch gerundet wie die Anzeige – Gleitkomma-Summen kippen sonst bei ,xx5 je nach Datum |
-| `test_stock_overview.py` | bestand | Exakte Wochenpreise, separate erfasste Zugänge, Validierung, Rechte und Anzeige. |
+| `test_stock_overview.py` | bestand | Exakte Wochenpreise, separate erfasste Zugänge, Validierung, Rechte und Anzeige; Summenzeile über der Liste. |
 | `test_storage.py` | plattform | Publication persists consistently; injected storage failures never report success. |
 | `test_sys.py` | angebot | Setup |
 | `test_testumgebung.py` | plattform | Testumgebung (WA_TESTUMGEBUNG=1) |
@@ -840,7 +846,7 @@ Jede Code-Datei beginnt mit einem Kopfkommentar; dessen erste Aussage steht hier
 | `bestand_parser.test.js` | bestand | Unit-Test: Der Bestands-Parser der App (stock-core.js) liefert für die Test-Bestandsliste exakt dieselben Summen wie die unabhängige Referenzauswertung (tests/fixtures/bestand/master_stock.json). |
 | `merge.test.js` | angebot | Unit-Test: Drei-Wege-Abgleich beim gemeinsamen Bearbeiten des Entwurfs (OfferCore.mergeModels). |
 | `stock_prices.php` | bestand | Isolated calendar/history selection tests, no server or production storage. |
-| `stock_prices.test.js` | bestand | Unit-Test: Preisvergleich und Wochenpreise der Bestandsliste (StockCore aus app/assets/stock-core.js). |
+| `stock_prices.test.js` | bestand | Unit-Test: Preisvergleich, Wochenpreise und Summenzeile der Bestandsliste (StockCore aus app/assets/stock-core.js). |
 | `test_adressen.py` | plattform | Adressverzeichnis der CRM-Karte |
 | `test_apt_vorrat.py` | plattform | Paketvorrat der CI (.github/scripts/apt_vorrat.py) mit nachgebautem apt-cache. python3 tests/unit/test_apt_vorrat.py Prüft: nur Pakete mit passender SHA-256 aus der (signierten) Paketliste werden übernommen; … |
 | `test_ci_nachweis.py` | plattform | Nachweis „schon im Pull Request vollständig geprüft“ (.github/scripts/ci_nachweis.py) mit nachgebauter GitHub-API. python3 tests/unit/test_ci_nachweis.py Prüft |

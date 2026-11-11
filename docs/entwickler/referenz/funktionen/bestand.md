@@ -2,7 +2,7 @@
 
 <!-- ERZEUGT von `python3 werkzeuge/doku.py erzeugen` – nicht von Hand ändern. Quelle: Funktionen und Kommentare im Code. Die CI prüft, dass diese Datei zum Code passt. -->
 
-9 Dateien, 65 Funktionen – in der Reihenfolge der Datei, **fett** die Abschnitte. Text = erste Aussage des Kommentars direkt über der Funktion (Python: Docstring). Übersicht aller Module: [README.md](README.md).
+9 Dateien, 72 Funktionen – in der Reihenfolge der Datei, **fett** die Abschnitte. Text = erste Aussage des Kommentars direkt über der Funktion (Python: Docstring). Übersicht aller Module: [README.md](README.md).
 
 ## `app/api/lib/bestand-pdf.php`
 
@@ -102,6 +102,11 @@ _Bestand – Einlesen der WinAB-Bestandsliste („Partieliste … verfügbar“)
 - `weekPriceMap(week)` – Mehrdeutige Artikelnummern nie mit einem zufällig gewählten Preis vergleichen.
 - `priceComparison(current, previous)`
 
+**Summenzeile der Bestandsliste**
+
+- `bestandSummen(zeilen)` – Summen der gerade angezeigten Zeilen (Suche und Filter; Variante B, Wunsch Inhaber 11.11.2026).
+- `summenZeileHTML(s, mitEk)` – Schlanke Textzeile zwischen Werkzeugleiste und Tabelle (Stile: app/module/bestand/bestandsliste.css): ganze kg und €, „Gesamt verfügbar“ vorn, dann …
+
 ## `tests/e2e/test_bestand_pdf.py`
 
 _Bestand: Marke je Partie (Spalte E der WinAB-Liste, Überschrift „Marke“ eine Spalte rechts davon), dezente MHD-Farben (hell/dunkel) und PDF ohne Preise, erfassten Bestand, Gesamt verfügbar und erwartete Zugänge._
@@ -128,10 +133,20 @@ _Summen exakt (Dezimal) und kaufmännisch gerundet wie die Anzeige – Gleitkomm
 
 ## `tests/e2e/test_stock_overview.py`
 
-_Exakte Wochenpreise, separate erfasste Zugänge, Validierung, Rechte und Anzeige._
+_Exakte Wochenpreise, separate erfasste Zugänge, Validierung, Rechte und Anzeige; Summenzeile über der Liste._
+
+> Testdaten: tests/fixtures/bestand/overview.json (Wochenpreise, Zugänge) und tests/fixtures/bestand/summen.json (Summenzeile: Partien mit und ohne EK-Preis, MHD abgelaufen / in 3 und 5 Tagen / ohne, Zugang mit und ohne EK, Artikel nur mit Zugang; Seitenuhr fest auf den 23.10.2026).
 
 - `check(name, ok, info)`
 - `row(code)`
+
+**Summenzeile über der Liste (Variante B): Summen der angezeigten Zeilen, € nur mit Recht bestand.einkaufspreise**
+
+- `erwartung(codes)` – Unabhängige Referenz in Dezimalzahlen: Summen der Zeilen (Artikelnummern) wie die Spalten der Liste.
+- `ek_dazu(t, liste)`
+- `soll(e, mit_ek)`
+- `zeile(pg)`
+- `anmelden(user, pw)`
 
 ## `tests/unit/stock_prices.php`
 

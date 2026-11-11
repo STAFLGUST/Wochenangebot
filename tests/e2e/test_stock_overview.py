@@ -1,8 +1,15 @@
-"""Exakte Wochenpreise, separate erfasste Zugänge, Validierung, Rechte und Anzeige."""
+"""Exakte Wochenpreise, separate erfasste Zugänge, Validierung, Rechte und Anzeige; Summenzeile über der Liste.
+
+Testdaten: tests/fixtures/bestand/overview.json (Wochenpreise, Zugänge) und tests/fixtures/bestand/summen.json
+(Summenzeile: Partien mit und ohne EK-Preis, MHD abgelaufen / in 3 und 5 Tagen / ohne, Zugang mit und ohne EK, Artikel nur
+mit Zugang; Seitenuhr fest auf den 23.10.2026).
+"""
 import copy
+import datetime
 import json
 import os
 import sys
+from decimal import Decimal, ROUND_HALF_UP
 from playwright.sync_api import sync_playwright
 from kunden_hilfe import Client, B
 from umgebung import FIX, SH, storage_docs
@@ -122,6 +129,109 @@ with sync_playwright() as pw:
     e = spaet.locator('.stab tr.srow').filter(has=spaet.locator('td.s-code', has_text='900001')).locator('.s-eta')
     check('all ETAs past: latest shown and marked overdue', e.inner_text() == 'ETA 24.10.2026' and 'alt' in e.get_attribute('class') and 'überschritten' in e.get_attribute('title'))
     spaet.close()
+
+    # ---------- Summenzeile über der Liste (Variante B): Summen der angezeigten Zeilen, € nur mit Recht bestand.einkaufspreise ----------
+    with open(os.path.join(FIX, 'bestand', 'summen.json'), encoding='utf-8') as f:
+        SUM = json.load(f)
+    check('Summenzeile: Testbestand übernommen', A.call('stock_import', SUM)[0] == 200)
+    HEUTE = datetime.date(2026, 10, 23)
+    D = lambda v: Decimal(str(v))   # noqa: E731
+
+    def erwartung(codes=None):
+        """Unabhängige Referenz in Dezimalzahlen: Summen der Zeilen (Artikelnummern) wie die Spalten der Liste."""
+        arts = [a for a in SUM['articles'] if codes is None or a['code'] in codes]
+        incs = [z for z in SUM['incoming'] if codes is None or z['code'] in codes]
+        e = {k: {'kg': D(0), 'ek': D(0), 'ekKg': D(0)} for k in ('eingelagert', 'erfasst', 'mhd')}
+        def ek_dazu(t, liste):
+            for p in liste:
+                if (p.get('ek') or 0) > 0 and p['kg'] > 0:
+                    t['ek'] += D(p['ek']) * D(p['kg']); t['ekKg'] += D(p['kg'])
+        for a in arts:
+            e['eingelagert']['kg'] += D(a['kg']); ek_dazu(e['eingelagert'], a['lots'])
+            if a['mhd'] and (datetime.date.fromisoformat(a['mhd']) - HEUTE).days <= 4:   # Farbstufen „abgelaufen“ und „heute – 4 Tage“
+                e['mhd']['kg'] += D(a['mhdKg']); ek_dazu(e['mhd'], [p for p in a['lots'] if p['mhd'] == a['mhd']])
+        for z in incs:
+            e['erfasst']['kg'] += D(z['kg']); ek_dazu(e['erfasst'], [z])
+        e['gesamt'] = {k: e['eingelagert'][k] + e['erfasst'][k] for k in ('kg', 'ek', 'ekKg')}
+        return e
+    ganz = lambda v: f'{v.quantize(Decimal(1), ROUND_HALF_UP):,}'.replace(',', '.')   # noqa: E731 – „1.234“ wie die Anzeige
+
+    def soll(e, mit_ek=True):
+        eur = lambda k, v: (('– €' if v['kg'] > 0 and v['ekKg'] == 0 else ganz(v['ek']) + ' €') + (' EK' if k == 'gesamt' else '')) if mit_ek else None   # noqa: E731
+        return {k: {'kg': ganz(v['kg']) + ' kg', 'eur': eur(k, v)} for k, v in e.items()}
+
+    def zeile(pg):
+        return pg.eval_on_selector_all('#st-summe [data-summe]', """els => Object.fromEntries(els.map((e) => [e.dataset.summe,
+            { kg: e.querySelector('.st-s-kg')?.textContent ?? null, eur: e.querySelector('.st-s-eur')?.textContent ?? null }]))""")
+    titel = lambda pg, k: pg.get_attribute(f'#st-summe [data-summe="{k}"] .st-s-eur', 'title')   # noqa: E731
+    anteil = lambda v: int(v['ekKg'] * 100 / v['kg'])   # noqa: E731 – abgerundet wie die Anzeige
+
+    def anmelden(user, pw):
+        pg = browser.new_page(viewport={'width': 1440, 'height': 1000})
+        pg.clock.set_fixed_time('2026-10-23T12:00:00+02:00')
+        pg.on('pageerror', lambda e: errors.append(user + ': ' + str(e)))
+        pg.goto(B + '/admin/'); pg.fill('#au-user', user); pg.fill('#pw1', pw); pg.click('#auth-submit')
+        pg.wait_for_selector('#screen-editor:not([hidden]) tr[data-id]'); pg.click('#vt-stock')
+        pg.wait_for_function("document.querySelectorAll('.stab tr.srow').length === 5 && document.querySelector('#st-summe')")
+        return pg
+
+    thema = lambda pg, t: pg.evaluate('(t) => document.documentElement.dataset.theme = t', t)   # noqa: E731
+    su = anmelden('admin', 'Sicheres-Passwort-1')
+    alle = erwartung()
+    check('Summenzeile: Summen aller Zeilen (Gesamt verfügbar, eingelagert, erfasst, MHD bis 4 Tage) in kg und €', zeile(su) == soll(alle), (zeile(su), soll(alle)))
+    lage = su.evaluate("""(() => { const r = (s) => document.querySelector(s).getBoundingClientRect();
+        return [r('#view-stock .ed-toolbar').bottom <= r('#st-summe').top + 1, r('#st-summe').bottom <= r('#st-list .st-card').top + 1,
+                document.querySelector('#st-summe').closest('.gcard') === null]; })()""")
+    check('Summenzeile: zwischen Werkzeugleiste und Tabelle, ohne Karte', all(lage), lage)
+    stil = su.evaluate("""(() => { const z = document.querySelector('#st-summe'), cs = getComputedStyle(z), farbe = (v) => { const t = document.createElement('span');
+          t.style.color = v; document.body.append(t); const c = getComputedStyle(t).color; t.remove(); return c; };
+        return { px: cs.fontSize, ziffern: cs.fontVariantNumeric, rahmen: cs.borderTopWidth, grund: cs.backgroundColor,
+          kg: getComputedStyle(z.querySelector('[data-summe=gesamt] .st-s-kg')).color === farbe('var(--accent)'),
+          mhd: getComputedStyle(z.querySelector('[data-summe=mhd]')).color === getComputedStyle(document.querySelector('.mhd-legend .mhd-0-4')).color }; })()""")
+    check('Summenzeile: 13 px, Ziffern gleich breit, ohne Rahmen und Hintergrund, kg in Akzentfarbe, „MHD bis 4 Tage“ im Rot der Stufe „heute – 4 Tage“',
+          stil['px'] == '13px' and 'tabular-nums' in stil['ziffern'] and stil['rahmen'] == '0px' and stil['grund'] in ('rgba(0, 0, 0, 0)', 'transparent') and stil['kg'] and stil['mhd'], stil)
+    check('Summenzeile: Hinweis am €-Wert nennt den Anteil der Menge mit EK-Preis (unter 100 %)',
+          titel(su, 'gesamt') == f'Einkaufswert der Partien mit EK-Preis ({anteil(alle["gesamt"])} % der Menge)' and anteil(alle['gesamt']) < 100
+          and titel(su, 'erfasst') == f'Einkaufswert der Partien mit EK-Preis ({anteil(alle["erfasst"])} % der Menge)'
+          and titel(su, 'mhd') == 'Einkaufswert der Partien (EK-Preis × Menge)' and su.locator('#st-summe [data-summe=mhd] .st-s-eur.teil').count() == 0,
+          [titel(su, k) for k in ('gesamt', 'erfasst', 'mhd')])
+    tf = Decimal(su.inner_text('.stab tfoot .s-total-kg').replace(' kg', '').replace('.', '').replace(',', '.'))
+    check('Summenzeile: keine Doppelzählung der Warengruppen-Summen (= Gesamtsumme der Tabelle)', su.locator('.stab tr.wg-sum').count() >= 2
+          and zeile(su)['gesamt']['kg'] == ganz(tf) + ' kg' and tf == alle['gesamt']['kg'], (zeile(su)['gesamt'], str(tf)))
+    thema(su, 'light'); su.screenshot(path=os.path.join(SH, 'stock-summenzeile.png'), animations='disabled')
+    thema(su, 'dark'); su.screenshot(path=os.path.join(SH, 'stock-summenzeile-dunkel.png'), animations='disabled'); thema(su, 'light')
+    # folgt der Suche …
+    su.fill('#st-q', '10901'); su.wait_for_function("document.querySelectorAll('.stab tr.srow').length === 1")
+    check('Summenzeile folgt der Suche (Artikel mit Partien und Zugang)', zeile(su) == soll(erwartung({'10901'})), zeile(su))
+    su.fill('#st-q', 'gibt es nicht'); su.wait_for_selector('#st-list .ed-empty')
+    check('Summenzeile: ohne Treffer keine Zeile', su.locator('#st-summe').count() == 0)
+    su.fill('#st-q', 'mhd'); su.wait_for_function("document.querySelector('.stab.flat') && document.querySelectorAll('.stab tr.srow').length === 3")
+    check('Summenzeile folgt der MHD-Abfrage (MHD bis heute + 14 Tage)', zeile(su) == soll(erwartung({'10901', '10902', '20901'})), zeile(su))
+    su.fill('#st-q', ''); su.wait_for_function("document.querySelectorAll('.stab tr.srow').length === 5")
+    # … und dem Filter (Bezeichnung enthält „Schwein“: Zugang ohne EK-Preis → „– €“, kein Artikel mit MHD bis 4 Tage → 0 kg · 0 €)
+    su.click('.stab th [data-sfilter=name]'); su.fill('#st-pop input[data-ff=q]', 'Schwein')
+    su.wait_for_function("document.querySelectorAll('.stab tr.srow').length === 2"); su.keyboard.press('Escape')
+    schwein = soll(erwartung({'20901', '20902'}))
+    check('Summenzeile folgt dem Filter; Zugang ohne EK-Preis „– €“', zeile(su) == schwein and schwein['erfasst']['eur'] == '– €' and schwein['mhd'] == {'kg': '0 kg', 'eur': '0 €'}, (zeile(su), schwein))
+    su.click('.st-fleiste [data-fweg="*"]'); su.wait_for_function("document.querySelectorAll('.stab tr.srow').length === 5")
+    check('Summenzeile: nach „Alle Filter entfernen“ wieder alle Zeilen', zeile(su) == soll(alle))
+    # Handy (390 px): untereinander, ohne waagerechtes Scrollen
+    su.set_viewport_size({'width': 390, 'height': 844}); su.wait_for_function("getComputedStyle(document.querySelector('.st-summe-teile')).flexDirection === 'column'")
+    mob = su.evaluate("""(() => { const z = document.querySelector('#st-summe'), t = (k) => z.querySelector(`[data-summe=${k}]`).getBoundingClientRect();
+        return { breite: document.documentElement.scrollWidth, rechts: Math.max(...[...z.querySelectorAll('*')].map((e) => e.getBoundingClientRect().right)),
+          unter: t('gesamt').bottom <= t('eingelagert').top + 1 && t('eingelagert').bottom <= t('erfasst').top + 1 && t('erfasst').bottom <= t('mhd').top + 1 }; })()""")
+    check('Summenzeile am Handy (390 px): untereinander, ohne waagerechtes Scrollen', mob['breite'] <= 390 and mob['rechts'] <= 390 and mob['unter'], mob)
+    su.screenshot(path=os.path.join(SH, 'stock-summenzeile-390.png'), animations='disabled')
+    thema(su, 'dark'); su.screenshot(path=os.path.join(SH, 'stock-summenzeile-390-dunkel.png'), animations='disabled'); thema(su, 'light')
+    su.close()
+    # Ohne Recht bestand.einkaufspreise (Rolle viewer): nur kg, kein €, kein „EK“ – und keine EK-Preise in der Antwort (stock_ohne_ek)
+    le = anmelden('stockreader', 'Leserin-Zugang-1')
+    roh = le.evaluate("fetch('../api/?action=stock').then((r) => r.text())")
+    html = le.inner_html('#st-summe')
+    check('Summenzeile ohne EK-Recht: nur kg, weder € noch „EK“ noch Einkaufswert; Antwort ohne EK-Preise',
+          zeile(le) == soll(alle, mit_ek=False) and not any(w in html for w in ('€', 'EK', 'Einkauf')) and '"ek"' not in roh and '"lots"' in roh, (zeile(le), html[:300]))
+    le.screenshot(path=os.path.join(SH, 'stock-summenzeile-ohne-ek.png'), animations='disabled')
+    le.close()
     check('no JavaScript errors', not errors, errors)
     browser.close()
 
