@@ -11,11 +11,13 @@ Gewährung, Rest unbegrenzt ins Folgejahr, genehmigte/beantragte Gleittage zähl
 Kalenderjahr, Zurückziehen; Personalstelle trägt auch darüber hinaus ein (Hinweis); Übersicht mit Gleittage-Rest; Gründe nur für
 Person und Personalstelle, Protokoll ohne Grund; Oberfläche (Streifen „Gleittage“, Umschalter im Antrag, Dialog „Gleittage
 gewähren“, Spalte in der Übersicht).
-Urlaubskalender (Recht hr.kalender, Inhaber 11.11.2026): im Kalender bei Kollegen genehmigter Urlaub „U“ und Gleittag „G“, alles
-andere „A“ (Krank, Unentschuldigt, freie Tage), keine offenen oder stornierten Einträge, keine Gründe/Notizen/Konten; keine
-Übersicht, Jahresplanung, Verwaltung oder Export (403); Katalog (sensibel, ohne Standardrollen, setzt hr.antrag voraus); über
-eine eigene Rolle vergeben und wieder entzogen; ohne hr.antrag wirkungslos; ohne Recht und mit hr.uebersicht weiter nur „A“;
-Personalstelle unverändert; Oberfläche (Legende U/G/abwesend, Desktop und 390 px). Nur Testdaten.
+Urlaubskalender (Recht hr.kalender, Inhaber 11.11.2026): im Kalender bei Kollegen der eigenen Abteilung genehmigter Urlaub „U“
+und Gleittag „G“, alles andere „A“ (Krank, Unentschuldigt, freie Tage, andere Abteilungen – nicht ausgeblendet), keine offenen
+oder stornierten Einträge, keine Gründe/Notizen/Konten; ohne eigene Person im Urlaubsplan oder ohne Abteilung bei niemandem;
+Abteilung als Text (Groß-/Kleinschreibung egal) und aus den Stammdaten (Nummer, umbenannt, gelöscht); keine Übersicht,
+Jahresplanung, Verwaltung oder Export (403); Katalog (sensibel, ohne Standardrollen, setzt hr.antrag voraus); über eine eigene
+Rolle vergeben und wieder entzogen; ohne hr.antrag wirkungslos; ohne Recht und mit hr.uebersicht weiter nur „A“; Personalstelle
+unverändert; Oberfläche (Legende U/G mit Abteilung, Desktop und 390 px). Nur Testdaten.
 """
 import datetime as dt
 import json
@@ -78,8 +80,9 @@ rev = P.call('mitarbeiter_hr')[1]['rev']
 
 def hr(uid, **werte):
     global rev
+    rev = P.call('mitarbeiter_hr')[1]['rev']   # aktueller Stand (Gleittage gewähren ändert die Mitarbeiterliste auch)
     # eigene Urlaubsangaben ändert eine andere Person der Personalstelle (Vier-Augen-Prinzip) – für Paul der Administrator
-    st, r = (A if uid == ids['paul'] else P).call('mitarbeiter_hr_save', {'nutzer': uid, 'rev': rev, **werte})
+    st, r =(A if uid == ids['paul'] else P).call('mitarbeiter_hr_save', {'nutzer': uid, 'rev': rev, **werte})
     assert st == 200, r
     rev = r['rev']
 
@@ -164,10 +167,10 @@ check('anderes Jahr: Konto ohne Einträge', all(x['krank'] == 0 and x['geplant']
 log = json.dumps(A.call('log')[1], ensure_ascii=False)
 check('Protokoll ohne Art der Abwesenheit (Krankheit)', not re.search(r'HR:[^"]*Krank', log) and 'Arztbesuch' not in log)
 
-# ── Urlaubskalender (hr.kalender, Inhaber 11.11.2026): Urlaub aller sehen, aber keine Tage/Konten ──
+# ── Urlaubskalender (hr.kalender, Inhaber 11.11.2026): Urlaub der Kollegen der eigenen Abteilung, keine Tage/Konten ──
 NOV = montag(Y, 11)
-NOV_IDS = [eintrag(PA, 'U', NOV, NOV + dt.timedelta(days=2), 'Urlaub-Notiz'),                                        # Andre Mo–Mi Urlaub
-           eintrag(PL, 'X', NOV + dt.timedelta(days=1), NOV + dt.timedelta(days=1))]                                   # Lena freier Tag
+NOV_IDS = [eintrag(PA, 'U', NOV, NOV + dt.timedelta(days=2), 'Urlaub-Notiz'),                                        # Andre (Lager) Mo–Mi Urlaub
+           eintrag(PL, 'X', NOV + dt.timedelta(days=1), NOV + dt.timedelta(days=1))]                                   # Lena (Verwaltung) freier Tag
 st, r = P.call('hr_eintrag_save', {'person': PL, 'art': 'F', 'von': iso(NOV + dt.timedelta(days=3)), 'bis': iso(NOV + dt.timedelta(days=3)), 'mail': False})
 assert st == 200, r                                                                                                    # Lena unentschuldigt (Do)
 NOV_IDS.append(r['eintrag']['id'])
@@ -180,41 +183,75 @@ def monat(c, m):
 
 
 st, r, raw, z = monat(K, 2)
-check('hr.kalender: Sicht „urlaub“ (nicht voll)', st == 200 and r.get('sicht') == 'urlaub' and r.get('voll') is False, (st, r.get('sicht'), r.get('voll')))
-check('… genehmigter Urlaub anderer als „U“', [z[PL].get(tg(FEB + dt.timedelta(days=i))) for i in range(3)] == ['U'] * 3, z[PL])
+check('hr.kalender ohne eigene Person im Urlaubsplan: bei niemandem „U“/„G“ (Sicht „kollege“)', st == 200 and r.get('sicht') == 'kollege'
+      and r.get('urlaubAbteilung') is None and z[PL].get(tg(FEB)) == 'A' and '"U"' not in json.dumps(r['personen']), (st, r.get('sicht'), z.get(PL)))
+hr(ids['kai'], aktiv=True, abteilung='verwaltung', pos=3)   # Kai im Urlaubsplan, Abteilung wie Lena (andere Schreibweise); Andre: Lager
+st, r, raw, z = monat(K, 2)
+check('hr.kalender mit eigener Abteilung: Sicht „urlaub“ (nicht voll), Abteilung genannt', st == 200 and r.get('sicht') == 'urlaub' and r.get('voll') is False
+      and r.get('urlaubAbteilung') == 'verwaltung', (st, r.get('sicht'), r.get('voll'), r.get('urlaubAbteilung')))
+check('… gleiche Abteilung (Groß-/Kleinschreibung egal): genehmigter Urlaub als „U“', [z[PL].get(tg(FEB + dt.timedelta(days=i))) for i in range(3)] == ['U'] * 3, z[PL])
 check('… Krankheit nur als „A“, nie Art, Grund oder Notiz', [z[PL].get(tg(FEB + dt.timedelta(days=i))) for i in (7, 8)] == ['A', 'A']
       and '"K"' not in raw and 'Krank' not in raw and 'Arzt' not in raw and 'otiz' not in raw, raw[:300])
 _, ru, _, zu = monat(U, 2)
-check('… Antwort wie bei Kollegen (nur „sicht“ anders): keine Konten, Tage oder Zahlen je Person', set(r) == set(ru) and ru.get('sicht') == 'kollege'
-      and all(set(x) == {'id', 'name', 'abteilung', 'ich', 'tage'} for x in r['personen']) and not {'konto', 'gleitKonto', 'zeilen', 'eintraege', 'offen'} & set(r), sorted(r))
+check('… Antwort wie bei Kollegen (nur „sicht“/„urlaubAbteilung“ anders): keine Konten, Tage oder Zahlen je Person', set(r) == set(ru) and ru.get('sicht') == 'kollege'
+      and ru.get('urlaubAbteilung') is None and all(set(x) == {'id', 'name', 'abteilung', 'ich', 'tage'} for x in r['personen'])
+      and not {'konto', 'gleitKonto', 'zeilen', 'eintraege', 'offen'} & set(r), sorted(r))
 check('ohne hr.kalender (nur hr.uebersicht): Urlaub weiter nur „A“', zu[PL].get(tg(FEB)) == 'A' and '"U"' not in json.dumps(ru), zu[PL])
 _, r, _, z = monat(K, 3)
-check('hr.kalender: genehmigter Gleittag als „G“', z[PL].get(tg(MRZ)) == 'G', z[PL])
+check('hr.kalender: genehmigter Gleittag der eigenen Abteilung als „G“', z[PL].get(tg(MRZ)) == 'G', z[PL])
 st, r, raw, z = monat(K, 8)
-check('… offener Urlaubsantrag anderer unsichtbar (kein „U?“)', tg(AUG) not in z[PL] and tg(AUG + dt.timedelta(days=1)) not in z[PL] and '?' not in json.dumps(r['personen'])
-      and 'Sommerreise' not in raw, z[PL])
-check('… Krankheit „A“, freier Wochentag (4-Tage-Woche) „A“, stornierter Gleittag unsichtbar', z[PA].get(tg(AUG)) == 'A' and z[PA].get(tg(AUG + dt.timedelta(days=4))) == 'A'
-      and tg(AUG + dt.timedelta(days=7)) not in z[PA], z[PA])
+check('… offener Urlaubsantrag der eigenen Abteilung unsichtbar (kein „U?“)', tg(AUG) not in z[PL] and tg(AUG + dt.timedelta(days=1)) not in z[PL]
+      and '?' not in json.dumps(r['personen']) and 'Sommerreise' not in raw, z[PL])
+check('… andere Abteilung: Krankheit „A“, freier Wochentag (4-Tage-Woche) „A“, stornierter Gleittag unsichtbar', z[PA].get(tg(AUG)) == 'A'
+      and z[PA].get(tg(AUG + dt.timedelta(days=4))) == 'A' and tg(AUG + dt.timedelta(days=7)) not in z[PA], z[PA])
 st, r, raw, z = monat(K, 11)
-check('… Urlaub „U“, freier Tag (X) und Unentschuldigt (F) nur „A“', [z[PA].get(tg(NOV + dt.timedelta(days=i))) for i in range(3)] == ['U'] * 3
-      and z[PL].get(tg(NOV + dt.timedelta(days=1))) == 'A' and z[PL].get(tg(NOV + dt.timedelta(days=3))) == 'A' and '"F"' not in raw and '"x"' not in raw
-      and 'Urlaub-Notiz' not in raw, (z[PL], z[PA]))
+check('… andere Abteilung (Lager): Urlaub nur „A“, Kollege bleibt sichtbar', PA in z and [z[PA].get(tg(NOV + dt.timedelta(days=i))) for i in range(3)] == ['A'] * 3
+      and '"U"' not in raw and 'Urlaub-Notiz' not in raw, z.get(PA))
+check('… eigene Abteilung: freier Tag (X) und Unentschuldigt (F) nur „A“', z[PL].get(tg(NOV + dt.timedelta(days=1))) == 'A' and z[PL].get(tg(NOV + dt.timedelta(days=3))) == 'A'
+      and '"F"' not in raw and '"x"' not in raw, z[PL])
 _, r, _, z = monat(L, 11)
 check('nur hr.antrag (Lena): Urlaub des Kollegen nur „A“, eigene Zeile voll (x, F)', r.get('sicht') == 'kollege' and z[PA].get(tg(NOV)) == 'A'
       and z[PL].get(tg(NOV + dt.timedelta(days=1))) == 'x' and z[PL].get(tg(NOV + dt.timedelta(days=3))) == 'F', (z[PA], z[PL]))
 _, r, _, z = monat(P, 11)
 _, r2, _, z2 = monat(P, 8)
-check('Personalstelle unverändert: Sicht „voll“ mit Art, freien Tagen und offenen Anträgen', r.get('sicht') == 'voll' and r.get('voll') is True
-      and z[PA].get(tg(NOV)) == 'U' and z[PL].get(tg(NOV + dt.timedelta(days=1))) == 'x' and z[PL].get(tg(NOV + dt.timedelta(days=3))) == 'F'
-      and z2[PL].get(tg(AUG)) == 'U?' and z2[PA].get(tg(AUG)) == 'K', (z[PL], z2[PL]))
+check('Personalstelle unverändert: Sicht „voll“ mit Art, freien Tagen und offenen Anträgen aller Abteilungen', r.get('sicht') == 'voll' and r.get('voll') is True
+      and r.get('urlaubAbteilung') is None and z[PA].get(tg(NOV)) == 'U' and z[PL].get(tg(NOV + dt.timedelta(days=1))) == 'x'
+      and z[PL].get(tg(NOV + dt.timedelta(days=3))) == 'F' and z2[PL].get(tg(AUG)) == 'U?' and z2[PA].get(tg(AUG)) == 'K', (z[PL], z2[PL]))
 check('Administrator: Sicht „voll“', A.call(f'hr_monat&jahr={Y}&monat=2')[1].get('sicht') == 'voll')
 check('hr.kalender: ungültiger Monat 422', K.call(f'hr_monat&jahr={Y}&monat=13')[0] == 422 and K.call('hr_monat&jahr=1800&monat=1')[0] >= 400)
+# Abteilung wechseln: dann gilt die andere (Schreibweise egal)
+hr(ids['kai'], abteilung='LAGER')
+_, r, _, z = monat(K, 11)
+_, r2, _, z2 = monat(K, 2)
+check('Kai im Lager: jetzt Andres Urlaub „U“, Lenas (Verwaltung) nur „A“', r.get('urlaubAbteilung') == 'LAGER' and z[PA].get(tg(NOV)) == 'U'
+      and z2[PL].get(tg(FEB)) == 'A', (z.get(PA), z2.get(PL)))
+# ohne Abteilung: bei niemandem – auch nicht bei Kollegen ohne Abteilung
+hr(ids['kai'], abteilung=''); hr(PA, abteilung='')
+_, r, _, z = monat(K, 11)
+check('ohne eigene Abteilung: kein „U“, auch nicht bei Kollegen ohne Abteilung (Sicht „kollege“)', r.get('sicht') == 'kollege' and r.get('urlaubAbteilung') is None
+      and z[PA].get(tg(NOV)) == 'A', (r.get('sicht'), z.get(PA)))
+hr(PA, abteilung='Lager'); hr(ids['kai'], abteilung='verwaltung')
+# Abteilungen aus den Stammdaten: Vergleich über die Nummer – auch nach dem Umbenennen (frühere Namen) und nach dem Löschen (Name)
+rv = A.call('abteilungen')[1]['rev']
+st, r_ = A.call('abteilungen_save', {'rev': rv, 'groups': [{'nr': '10', 'name': 'Verwaltung'}, {'nr': '20', 'name': 'Lager'}]})
+_, r, _, z = monat(K, 2)
+check('Stammdaten: „verwaltung“ und „Verwaltung“ = Nummer 10 → „U“', st == 200 and r.get('urlaubAbteilung') == 'Verwaltung' and z[PL].get(tg(FEB)) == 'U', (st, r.get('urlaubAbteilung'), z.get(PL)))
+st, r_ = A.call('abteilungen_save', {'rev': r_['rev'], 'groups': [{'nr': '10', 'name': 'Büro'}, {'nr': '20', 'name': 'Lager'}]})
+_, r, _, z = monat(K, 2)
+_, r2, _, z2 = monat(K, 11)
+check('… umbenannt in „Büro“: weiter gleiche Abteilung („U“), Lager weiter „A“', st == 200 and r.get('urlaubAbteilung') == 'Büro' and z[PL].get(tg(FEB)) == 'U'
+      and z2[PA].get(tg(NOV)) == 'A', (r.get('urlaubAbteilung'), z.get(PL), z2.get(PA)))
+st, r_ = A.call('abteilungen_save', {'rev': r_['rev'], 'groups': []})
+_, r, _, z = monat(K, 2)
+check('… Stammdaten wieder leer: Vergleich über den Namen („U“)', st == 200 and r.get('urlaubAbteilung') == 'verwaltung' and z[PL].get(tg(FEB)) == 'U', (st, r.get('urlaubAbteilung')))
 # über die Rolle vergeben und wieder entzogen – wirkt sofort (Rechte je Anfrage)
+hr(ids['sina'], aktiv=True, abteilung='Verwaltung', pos=4)
 _, r, _, z = monat(S, 2)
 check('Rolle „Schichtleitung“ mit hr.kalender: Sicht „urlaub“', r.get('sicht') == 'urlaub' and z[PL].get(tg(FEB)) == 'U', (r.get('sicht'), z.get(PL)))
 st, r_ = A.call('rolle_save', {'id': SL, 'name': 'Schichtleitung Test', 'beschreibung': 'Urlaubskalender', 'rechte': ['hr.zugang', 'hr.antrag']})
 _, r, _, z = monat(S, 2)
 check('… Recht aus der Rolle genommen: wieder nur „A“', st == 200 and r.get('sicht') == 'kollege' and z[PL].get(tg(FEB)) == 'A', (st, r.get('sicht'), z.get(PL)))
+hr(ids['sina'], aktiv=False)
 # Grenzfall: hr.kalender ohne hr.antrag (verboten) – wirkungslos, kein Kalender
 st, r_ = A.call('user_save', {'id': ids['kai'], 'name': 'Kai Kalender', 'role': 'viewer', 'active': True, 'grant': ['hr.kalender'], 'deny': ['hr.antrag']})
 check('hr.kalender ohne hr.antrag: Recht entfällt, Kalender 403', st == 200 and 'hr.kalender' not in K.call('status')[1]['user']['perms']
@@ -266,8 +303,9 @@ st, r = L.call('hr_antrag', {'art': 'G', 'von': iso(G1), 'bis': iso(G1)})
 GA = r.get('eintrag', {}).get('id')
 check('Gleittag beantragt: Art G, beantragt, verfügbar 0', st == 200 and r['eintrag']['art'] == 'G' and r['eintrag']['status'] == 'beantragt' and r['gleitKonto']['beantragt'] == 1
       and r['gleitKonto']['verfuegbar'] == 0 and r['hinweis'] is None, r)
-check('hr.kalender: offener Gleittag-Antrag anderer unsichtbar (Personalstelle sieht „G?“)', str(G1.day) not in monat(K, G1.month)[3][PL]
+check('hr.kalender: offener Gleittag-Antrag der eigenen Abteilung unsichtbar (Personalstelle sieht „G?“)', str(G1.day) not in monat(K, G1.month)[3][PL]
       and monat(P, G1.month)[3][PL].get(str(G1.day)) == 'G?')
+hr(ids['kai'], aktiv=False)   # Kai wieder aus dem Urlaubsplan (Summen der Übersicht unten: 2 Mitarbeiter)
 check('weiterer Gleittag: 409 (Rest schon beantragt)', L.call('hr_antrag', {'art': 'G', 'von': iso(G1 + dt.timedelta(days=1)), 'bis': iso(G1 + dt.timedelta(days=1))})[0] == 409)
 offen = [a for a in P.call('hr_verwaltung&jahr=' + str(Y))[1]['offen'] if a['id'] == GA]
 check('Personalstelle/Genehmiger sehen den Gleittage-Rest am Antrag', offen and offen[0]['art'] == 'G' and offen[0]['gleitKonto']['rest'] == 1, offen)
@@ -325,6 +363,7 @@ with sync_playwright() as p:
         ctx.close()
     # Urlaubskalender (hr.kalender): Legende U/G/abwesend, Urlaub der Kollegen sichtbar, Krankheit nur „abwesend“; keine Übersicht,
     # Jahresplanung, Anträge oder Export
+    hr(ids['kai'], aktiv=True, abteilung='Verwaltung')
     for breite in (1280, 390):
         ctx, pg = anmelden('kai', 'Personal-Zugang-77', '198.51.100.8', breite)
         pg.goto(B + '/module/hr/#kalender'); pg.wait_for_selector('#kal-plan tbody tr')
@@ -339,12 +378,14 @@ with sync_playwright() as p:
         leg = pg.text_content('#kal-legende')
         check(f'{breite}px: hr.kalender – Lena mit 3 Tagen Urlaub (U) und 2 Tagen „abwesend“, nirgends Krank', zl == {'u': 3, 'a': 2, 'titel': 'Urlaub'}
               and pg.locator('#kal-plan .hr-art.K').count() == 0, zl)
-        check(f'{breite}px: Legende Urlaub, Gleittag, abwesend – ohne Krank und beantragt', all(x in leg for x in ('Urlaub', 'Gleittag', 'abwesend'))
-              and 'Krank' not in leg and 'beantragt' not in leg, leg)
+        check(f'{breite}px: Legende Urlaub, Gleittag (nur Abteilung Verwaltung), abwesend – ohne Krank und beantragt',
+              all(x in leg for x in ('Urlaub', 'Gleittag', 'nur Abteilung Verwaltung', 'abwesend')) and 'Krank' not in leg and 'beantragt' not in leg, leg)
+        check(f'{breite}px: andere Abteilung (Lager) bleibt sichtbar', pg.locator('#kal-plan th.name', has_text='Andre Vierzig').count() == 1)
         check(f'{breite}px: Reiter Übersicht, Jahresplanung, Anträge und Export ausgeblendet', not any(pg.is_visible(f'[data-tab="{t}"]') for t in ('uebersicht', 'planung', 'antraege', 'export')))
         check(f'{breite}px: kein waagerechtes Scrollen der Seite (Kalender)', pg.evaluate('document.documentElement.scrollWidth <= window.innerWidth + 1'))
         pg.screenshot(path=os.path.join(SH, f'hr_kalender_urlaub_{breite}.png'), full_page=True)
         ctx.close()
+    hr(ids['kai'], aktiv=False)
     ctx, pg = anmelden('lena', 'Leser-Zugang-77', '198.51.100.4')
     pg.goto(B + '/module/hr/#uebersicht'); pg.wait_for_selector('#mein-konto .hr-wert')
     check('ohne Recht: Reiter ausgeblendet, Adresse #uebersicht führt zu „Mein Urlaub“', not pg.is_visible('[data-tab="uebersicht"]') and pg.is_visible('#tab-mein'))
