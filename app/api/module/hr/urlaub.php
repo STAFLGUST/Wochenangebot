@@ -22,7 +22,8 @@ declare(strict_types=1);
      Urlaub, hr_uebertrag_bis), soweit er bis dahin nicht genommen ist. Je Mitarbeiter abschaltbar (Inhaber 03.11.2026,
      Verwaltung → Mitarbeiter, hr-personal „verfall“, Standard an): ohne Verfall bleibt der Übertrag ganz erhalten und geht
      mit dem Rest ins Folgejahr. Gilt wie der Verfallstag für alle Jahre (das Konto wird berechnet, nicht gespeichert).
-   - Kalender: alle sehen, wer abwesend ist – nie den Grund. Gründe, Notizen und Konten nur für die Person selbst
+   - Kalender: alle sehen, wer abwesend ist – nie den Grund. Mitarbeiter sehen nur die Kollegen ihrer eigenen Abteilung
+     (Inhaber 11.11.2026, hr_monat); Personalstelle (hr.verwalten) und Urlaubsübersicht (hr.uebersicht) sehen alle. Gründe, Notizen und Konten nur für die Person selbst
      und die Personalstelle. Mit dem Recht hr.kalender (Inhaber 11.11.2026, sensibel, einzeln vergeben) zusätzlich
      genehmigten Urlaub und Gleittage der Kollegen der eigenen Abteilung – nie Krankheit, Notizen, offene Anträge, Tage
      oder Konten (hr_zeile 'urlaub', hr_gleiche_abteilung).
@@ -1214,8 +1215,9 @@ function hr_monatstage(int $jahr, int $monat, array $einst): array
     return $out;
 }
 
-/* Arten, die die Sicht 'urlaub' (Recht hr.kalender) bei Kollegen mit ihrem Kürzel zeigt – alles andere bleibt „A“ */
-const HR_KALENDER_ARTEN = ['U', 'G'];
+/* Art → Kürzel, das die Sicht 'urlaub' (Recht hr.kalender) bei Kollegen der eigenen Abteilung zeigt – alles andere bleibt „A“.
+   Gleittage als „U+“ (Entscheidung des Inhabers 11.11.2026); Personalstelle und eigene Zeile zeigen weiter „G“. */
+const HR_KALENDER_ARTEN = ['U' => 'U', 'G' => 'U+'];
 
 /* Gleiche Abteilung (Sicht 'urlaub' nur für Kollegen der eigenen Abteilung, Inhaber 11.11.2026): über die Nummer der
    Stammdaten (abteilungNr, nach hr_personal auch für Angaben, die nur den – auch früheren – Namen tragen), sonst über den
@@ -1231,7 +1233,7 @@ function hr_gleiche_abteilung(array $a, array $b): bool
    $sicht: 'voll' (Personalstelle: Art, auch beantragt mit „?“), 'eigen' (eigene Zeile wie voll), 'kollege' (nur „A“ =
    abwesend, nur genehmigt, nie der Grund; freie Tage einer verkürzten Woche ebenfalls „A“), 'urlaub' (Recht hr.kalender,
    Inhaber 11.11.2026, nur für Kollegen der eigenen Abteilung – hr_monat: wie 'kollege', aber genehmigter Urlaub „U“ und
-   Gleittag „G“ mit Kürzel – Krank, Unentschuldigt und freie Tage bleiben „A“, offene Anträge unsichtbar). */
+   Gleittag „U+“ (HR_KALENDER_ARTEN) – Krank, Unentschuldigt und freie Tage bleiben „A“, offene Anträge unsichtbar). */
 function hr_zeile(array $p, array $eintraege, array $tage, string $sicht): array
 {
     $kollege = $sicht === 'kollege' || $sicht === 'urlaub';   // fremde Zeile: nur genehmigt, freie Tage nur „A“
@@ -1249,7 +1251,7 @@ function hr_zeile(array $p, array $eintraege, array $tage, string $sicht): array
             if ($d < $e['von'] || $d > $e['bis'] || $t['wochenende'] || $t['feiertag'] !== null) continue;
             if ($e['art'] === 'X') { $out[$t['tag']] = $kollege ? 'A' : 'x'; continue; }
             if (!in_array(hr_wochentag($d), $p['arbeitstage'], true)) continue;
-            $out[$t['tag']] = $sicht === 'urlaub' ? (in_array($e['art'], HR_KALENDER_ARTEN, true) ? $e['art'] : 'A')
+            $out[$t['tag']] = $sicht === 'urlaub' ? (HR_KALENDER_ARTEN[$e['art']] ?? 'A')
                 : ($kollege ? 'A' : $e['art'] . ($e['status'] === 'beantragt' ? '?' : ''));
         }
     }
@@ -1259,9 +1261,12 @@ function hr_zeile(array $p, array $eintraege, array $tage, string $sicht): array
 /* Monatsplan: alle aktiven Mitarbeiter, gruppiert nach Abteilung (Reihenfolge laut Position).
    $kollegen: Sicht auf fremde Zeilen ohne $voll – 'kollege' (Standard, nur „A“) oder 'urlaub' (Recht hr.kalender). 'urlaub'
    gilt je Zeile nur für Kollegen der eigenen Abteilung (Inhaber 11.11.2026); andere Abteilungen wie 'kollege'. Ohne eigene
-   Person im Urlaubsplan oder ohne Abteilung bei niemandem. Antwort: „sicht“ (voll | urlaub | kollege – wirksame Sicht) und
-   „urlaubAbteilung“ (Name der eigenen Abteilung bei 'urlaub', sonst null). */
-function hr_monat(int $jahr, int $monat, array $me, bool $voll, string $kollegen = 'kollege'): array
+   Person im Urlaubsplan oder ohne Abteilung bei niemandem.
+   $alleAbteilungen (Inhaber 11.11.2026): false = nur die Zeilen der eigenen Abteilung (hr_gleiche_abteilung) und die eigene –
+   ohne eigene Person im Urlaubsplan keine, ohne Abteilung nur die eigene. Der Server liefert die übrigen gar nicht aus.
+   Antwort: „sicht“ (voll | urlaub | kollege – wirksame Sicht), „urlaubAbteilung“ (Name der eigenen Abteilung bei 'urlaub',
+   sonst null) und „alleAbteilungen“. */
+function hr_monat(int $jahr, int $monat, array $me, bool $voll, string $kollegen = 'kollege', bool $alleAbteilungen = true): array
 {
     if (!in_array($kollegen, ['kollege', 'urlaub'], true)) $kollegen = 'kollege';
     $personal = hr_personal(); $abw = hr_abwesenheiten(); $einst = hr_einstellungen();
@@ -1272,13 +1277,15 @@ function hr_monat(int $jahr, int $monat, array $me, bool $voll, string $kollegen
     foreach (hr_nach_abteilung($personal['personen']) as $p) {
         if (!$p['aktiv']) continue;
         $eigen = $ich !== null && $ich['id'] === $p['id'];
+        if (!$alleAbteilungen && !$eigen && ($ich === null || !hr_gleiche_abteilung($ich, $p))) continue;   // nur die eigene Abteilung
         $sicht = $voll || $eigen ? 'voll' : ($urlaub && hr_gleiche_abteilung($ich, $p) ? 'urlaub' : 'kollege');
         $zeilen[] = ['id' => $p['id'], 'name' => hr_name($p), 'abteilung' => $p['abteilung'], 'ich' => $eigen,
                      'tage' => (object)hr_zeile($p, $abw['eintraege'], $tage, $sicht)];
     }
     return ['jahr' => $jahr, 'monat' => $monat, 'name' => HR_MONATE[$monat], 'tage' => $tage, 'personen' => $zeilen,
             'sperren' => $einst['sperren'], 'ferien' => $einst['ferien'],
-            'sicht' => $voll ? 'voll' : ($urlaub ? 'urlaub' : 'kollege'), 'urlaubAbteilung' => $urlaub ? $ich['abteilung'] : null];
+            'sicht' => $voll ? 'voll' : ($urlaub ? 'urlaub' : 'kollege'), 'urlaubAbteilung' => $urlaub ? $ich['abteilung'] : null,
+            'alleAbteilungen' => $alleAbteilungen];
 }
 
 /* Startseite des Dashboards („Heute für Sie“, lib/startseite.php): was dieser Mitarbeiter in HR entscheiden kann – dieselben
