@@ -421,9 +421,9 @@ die der Mitarbeiter im Modul ohnehin sieht – Personal- und Gesundheitsdaten h�
 
 **Dashboard als Startseite in Firefox** (Inhaber 11.11.2026, `startseiteFragen()` in `dashboard.js`, Dialog `#db-sp` in
 `index.html`): einmal nach der Anmeldung, nur in Firefox am Computer (Erkennung über den User-Agent). Eine Webseite darf die
-Startseite nicht selbst setzen; der Dialog bietet einen ziehbaren Link für das Haus-Symbol (Firefox fragt dann selbst) und
-„Adresse kopieren“ für Einstellungen → Startseite. Gemerkt nur im Browser (`localStorage` „stafl.startseite“: `{erledigt}`
-oder `{spaeter: Zeitstempel}`, „Später erinnern“/Esc = 7 Tage); ohne Speicher fragt die Seite nicht. Kein Serverzugriff.
+Startseite nicht selbst setzen; das Fenster hat deshalb einen Knopf: „Adresse kopieren“ (Zwischenablage, sonst markiert),
+danach eine Zeile, wo sie in Firefox hingehört, und der Knopf heißt „Fertig“. Gemerkt nur im Browser (`localStorage`
+„stafl.startseite“: `{erledigt}` oder `{spaeter: Zeitstempel}`; Kreuz/Esc = 7 Tage); ohne Speicher fragt die Seite nicht. Kein Serverzugriff.
 Favoriten speichert `start_favoriten_save {favoriten: [Modul-IDs] | null}` (höchstens acht, nur Module mit Kachel).
 Schnellaktionen (`STARTSEITE_AKTIONEN`) führen auf `#<reiter>` oder `#<reiter>/neu`; wer „Anlegen“ anbietet, wertet im Modul
 beim Start den zweiten Teil aus, öffnet nur mit passendem Recht das vorhandene Fenster und lässt die Adresse von seiner

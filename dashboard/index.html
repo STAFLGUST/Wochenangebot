@@ -77,23 +77,13 @@
     </main>
     <footer class="db-fuss">STAFL-Plattform · Standard-Fleisch</footer>
     <!-- Einmal nach der Anmeldung (nur Firefox am Computer): Dashboard als Startseite. Eine Webseite darf die Startseite nicht
-         selbst setzen – deshalb Ziehen auf das Haus-Symbol (Firefox fragt dann selbst) oder Adresse kopieren und einfügen. -->
-    <dialog class="db-sp" id="db-sp" aria-labelledby="db-sp-titel">
+         selbst setzen – deshalb ein Knopf: Adresse kopieren, danach steht in einer Zeile, wo man sie in Firefox einfügt. -->
+    <dialog class="db-sp" id="db-sp" aria-labelledby="db-sp-titel" aria-describedby="db-sp-text">
       <button class="db-sp-zu" id="db-sp-zu" type="button" aria-label="Später erinnern"><svg class="r-i" aria-hidden="true"><use href="#i-x"/></svg></button>
       <h2 id="db-sp-titel">Dashboard als Startseite?</h2>
-      <p class="db-sp-text">Dann öffnet Firefox beim Start direkt das Dashboard. Eine Webseite darf das nicht selbst einstellen – mit einem Handgriff geht es aber:</p>
-      <div class="db-sp-weg">
-        <p class="db-sp-nr">1</p>
-        <div><p><strong>Mit dem Haus-Symbol:</strong> Ziehen Sie diesen Knopf auf das Haus-Symbol oben in der Firefox-Leiste und bestätigen Sie mit „Ja“.</p>
-          <a class="db-sp-ziehen" id="db-sp-ziehen" href="./" draggable="true"><svg class="r-i" aria-hidden="true"><use href="#i-haus"/></svg>STAFL-Dashboard</a></div>
-      </div>
-      <div class="db-sp-weg">
-        <p class="db-sp-nr">2</p>
-        <div><p><strong>Ohne Haus-Symbol:</strong> Adresse kopieren, dann Firefox-Menü ☰ → Einstellungen → Startseite → bei „Startseite und neue Fenster“ „Benutzerdefinierte Adressen“ wählen und die Adresse einfügen.</p>
-          <p class="db-sp-adresse"><code id="db-sp-url"></code><button class="db-knopf" id="db-sp-kopieren" type="button">Adresse kopieren</button></p>
-          <p class="db-sp-meldung" id="db-sp-meldung" role="status"></p></div>
-      </div>
-      <div class="db-sp-knoepfe"><button class="db-knopf" id="db-sp-spaeter" type="button">Später erinnern</button><button class="db-knopf primaer" id="db-sp-fertig" type="button">Erledigt</button></div>
+      <p class="db-sp-text" id="db-sp-text">Adresse kopieren und in Firefox unter ☰ → Einstellungen → Startseite einfügen.</p>
+      <p class="db-sp-url" id="db-sp-url"></p>
+      <button class="db-knopf primaer db-sp-knopf" id="db-sp-knopf" type="button">Adresse kopieren</button>
     </dialog>
   </div>
 </div>
@@ -104,7 +94,6 @@
   <symbol id="i-check" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="m8 12.3 2.7 2.7L16 9.6"/></symbol>
   <symbol id="i-moon" viewBox="0 0 24 24"><path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z"/></symbol>
   <symbol id="i-sun" viewBox="0 0 24 24"><circle cx="12" cy="12" r="4"/><path d="M12 2.5v2M12 19.5v2M4.6 4.6 6 6M18 18l1.4 1.4M2.5 12h2M19.5 12h2M4.6 19.4 6 18M18 6l1.4-1.4"/></symbol>
-  <symbol id="i-haus" viewBox="0 0 24 24"><path d="M3.5 11 12 4l8.5 7"/><path d="M5.5 9.5V20h13V9.5"/><path d="M10 20v-5.5h4V20"/></symbol>
   <symbol id="i-lock" viewBox="0 0 24 24"><rect x="5" y="10.5" width="14" height="9.5" rx="2"/><path d="M8 10.5V8a4 4 0 0 1 8 0v2.5"/></symbol>
 </svg>
 <script src="../assets/rahmen.js"></script>

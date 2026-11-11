@@ -372,10 +372,10 @@
     startseiteFragen();
   }
 
-  /* Dashboard als Startseite in Firefox (Inhaber 11.11.2026): einmal nach der Anmeldung, nur Firefox am Computer. Eine Webseite
-     darf die Startseite nicht setzen – der Dialog bietet das Ziehen auf das Haus-Symbol (Firefox fragt dann selbst „Ja“) und das
-     Kopieren der Adresse. „Erledigt“ fragt in diesem Browser nie wieder, „Später erinnern“ (auch Kreuz und Esc) nach 7 Tagen.
-     Gemerkt nur im Browser (localStorage, wie die Startseite selbst je Browser); ohne Speicher wird nicht gefragt. */
+  /* Dashboard als Startseite in Firefox (Inhaber 11.11.2026: „Fenster mit nur einem Knopf“): einmal nach der Anmeldung, nur
+     Firefox am Computer. Eine Webseite darf die Startseite nicht setzen – der Knopf kopiert die Adresse und zeigt in einer Zeile,
+     wo sie hingehört; danach heißt er „Fertig“ (nie wieder fragen). Kreuz und Esc: in 7 Tagen wieder. Gemerkt nur im Browser
+     (localStorage, wie die Startseite selbst je Browser); ohne Speicher wird nicht gefragt. */
   const SP_SCHLUESSEL = 'stafl.startseite';
   const SP_PAUSE_TAGE = 7;
   const istFirefoxComputer = () => /firefox\//i.test(navigator.userAgent) && !/android|mobile|tablet|fxios/i.test(navigator.userAgent);
@@ -386,31 +386,31 @@
     if (!d || typeof d.showModal !== 'function' || !istFirefoxComputer()) return;
     const st = spLesen();
     if (st === false || (st && st.erledigt) || (st && st.spaeter && Date.now() < st.spaeter)) return;
-    const url = new URL('./', location.href).href;
-    $('#db-sp-url').textContent = url;
-    $('#db-sp-ziehen').href = url;
-    $('#db-sp-meldung').textContent = '';
+    $('#db-sp-url').textContent = new URL('./', location.href).href;
+    const k = $('#db-sp-knopf'); k.textContent = 'Adresse kopieren'; k.dataset.schritt = 'kopieren';
     d.showModal();
-    $('#db-sp-fertig').focus();
+    k.focus();
   }
   function spSchliessen(erledigt) {
     spMerken(erledigt ? { erledigt: true } : { spaeter: Date.now() + SP_PAUSE_TAGE * 864e5 });
     const d = $('#db-sp');
     if (d.open) d.close();
   }
-  $('#db-sp-fertig').addEventListener('click', () => spSchliessen(true));
-  $('#db-sp-spaeter').addEventListener('click', () => spSchliessen(false));
   $('#db-sp-zu').addEventListener('click', () => spSchliessen(false));
   $('#db-sp').addEventListener('cancel', (e) => { e.preventDefault(); spSchliessen(false); });   // Esc = später
-  $('#db-sp-ziehen').addEventListener('click', (e) => e.preventDefault());   // nur zum Ziehen gedacht
-  $('#db-sp-kopieren').addEventListener('click', async () => {
-    const url = $('#db-sp-url').textContent, m = $('#db-sp-meldung');
-    try { await navigator.clipboard.writeText(url); m.textContent = 'Adresse kopiert – jetzt in den Firefox-Einstellungen einfügen.'; }
-    catch {
+  $('#db-sp-knopf').addEventListener('click', async () => {
+    const k = $('#db-sp-knopf');
+    if (k.dataset.schritt === 'fertig') { spSchliessen(true); return; }
+    const url = $('#db-sp-url').textContent;
+    let kopiert = true;
+    try { await navigator.clipboard.writeText(url); } catch {
+      kopiert = false;   // ohne Zwischenablage: Adresse markieren, Strg+C genügt
       const r = document.createRange(); r.selectNodeContents($('#db-sp-url'));
       const sel = getSelection(); sel.removeAllRanges(); sel.addRange(r);
-      m.textContent = 'Adresse markiert – bitte mit Strg+C kopieren.';
     }
+    $('#db-sp-text').textContent = (kopiert ? 'Kopiert. ' : 'Adresse markiert – mit Strg+C kopieren. ')
+      + 'Jetzt in Firefox: ☰ → Einstellungen → Startseite → bei „Startseite und neue Fenster“ „Benutzerdefinierte Adressen“ wählen und einfügen.';
+    k.textContent = 'Fertig'; k.dataset.schritt = 'fertig';
   });
 
   /* Notfallmodus (Modul Sicherheit): Hinweis über den Kacheln – Einzelheiten nur für Administratoren und Berechtigte */
