@@ -41,7 +41,8 @@ const ohne = S.summenZeileHTML(s, false);
 ok(() => assert.ok(!/€|EK|Einkauf/.test(ohne), ohne));
 ok(() => assert.match(ohne, /Gesamt verfügbar <b class="st-s-kg">230 kg<\/b><\/span>/));
 ok(() => assert.match(ohne, /eingelagert <span class="st-s-kg">185 kg<\/span><\/span>/));
-ok(() => assert.match(ohne, /erfasst <span class="st-s-kg">45 kg<\/span><\/span>/));
+ok(() => assert.match(ohne, /data-summe="erfasst" title="Ware unterwegs \(in WinAB erfasst, noch nicht eingetroffen\)[^"]*">unterwegs <span class="st-s-kg">45 kg<\/span><\/span>/));   // Beschriftung „unterwegs“ (Inhaber 11.11.2026)
+ok(() => assert.ok(!/>erfasst </.test(ohne) && !/>erfasst </.test(S.summenZeileHTML(s, true))));
 ok(() => assert.match(ohne, /MHD bis 4 Tage <span class="st-s-kg">60 kg<\/span><\/span>/));
 // Mit EK-Recht: €-Werte, „€ EK“ vorn fett, Anteil im Hinweis, wenn nicht die ganze Menge einen EK-Preis hat
 const mit = S.summenZeileHTML(s, true);
@@ -51,7 +52,7 @@ ok(() => assert.match(mit, /MHD bis 4 Tage <span class="st-s-kg">60 kg<\/span> �
 // ganz ohne EK-Preis: „– €“ statt 0 €; ohne Menge: 0 € ohne Hinweis auf einen Anteil
 const leer = S.summenZeileHTML(S.bestandSummen([{ kg: 5, lots: [{ kg: 5 }], incoming: [] }]), true);
 ok(() => assert.match(leer, /eingelagert <span class="st-s-kg">5 kg<\/span> · <span class="st-s-eur st-s-ohne"[^>]*>– €<\/span>/));
-ok(() => assert.match(leer, /erfasst <span class="st-s-kg">0 kg<\/span> · <span class="st-s-eur" title="Einkaufswert der Partien \(EK-Preis × Menge\)">0 €<\/span>/));
+ok(() => assert.match(leer, /unterwegs <span class="st-s-kg">0 kg<\/span> · <span class="st-s-eur" title="Einkaufswert der Partien \(EK-Preis × Menge\)">0 €<\/span>/));
 // sehr kleiner Anteil: „unter 1 %“ statt „0 %“
 ok(() => assert.match(S.summenZeileHTML(S.bestandSummen([{ kg: 1000, lots: [{ kg: 1, ek: 5 }, { kg: 999 }], incoming: [] }]), true), /unter 1 % der Menge/));
 console.log(`${n}/${n} passed`);

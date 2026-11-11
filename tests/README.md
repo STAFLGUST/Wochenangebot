@@ -44,7 +44,7 @@ Historie, Bestand und mehrere erwartete Lieferungen, fehlendes ETA, nächste ETA
 (feste Uhr der Seite: kommende bzw. überschrittene ETA), Marke/Partie fett im Fenster, Rechte, Validierung,
 CSV/Druck, Desktop und 390 px in hell/dunkel. Synthetische Daten: `fixtures/bestand/overview.json`.
 Dazu die Summenzeile über der Liste (`fixtures/bestand/summen.json`, feste Uhr 23.10.2026): Gesamt verfügbar, eingelagert,
-erfasst und „MHD bis 4 Tage“ in kg und € aus einer unabhängigen Dezimal-Rechnung, Lage zwischen Werkzeugleiste und
+unterwegs (= erfasster Bestand, Beschriftung und Hinweis) und „MHD bis 4 Tage“ in kg und € aus einer unabhängigen Dezimal-Rechnung, Lage zwischen Werkzeugleiste und
 Tabelle, Schrift/Farben, Hinweis mit EK-Anteil unter 100 %, keine Doppelzählung der Warengruppen, folgt Suche, MHD-Abfrage
 und Filter („– €“ bei Zugang ohne EK-Preis), ohne Treffer keine Zeile, 390 px untereinander ohne Querscrollen; Leser ohne
 `bestand.einkaufspreise`: nur kg, kein €/„EK“ im DOM, keine EK-Preise in der Antwort.

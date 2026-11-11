@@ -481,7 +481,8 @@
   }
   const ganz = new Intl.NumberFormat('de-DE', { maximumFractionDigits: 0 });
   /* Schlanke Textzeile zwischen Werkzeugleiste und Tabelle (Stile: app/module/bestand/bestandsliste.css): ganze kg und €,
-     „Gesamt verfügbar“ vorn, dann eingelagert, erfasst und „MHD bis 4 Tage“. € und „EK“ nur mit mitEk (Recht
+     „Gesamt verfügbar“ vorn, dann eingelagert, unterwegs (= erfasst, Inhaber 11.11.2026: „erfasst ist unterwegs“; Schlüssel
+     bleibt erfasst) und „MHD bis 4 Tage“. € und „EK“ nur mit mitEk (Recht
      „bestand.einkaufspreise“) – ohne Recht enthält die Zeile weder € noch EK. Deckt der EK-Preis nicht die ganze Menge,
      nennt der Hinweis am €-Wert den Anteil; ganz ohne EK-Preis steht „– €“. Enthält nur Zahlen und feste Texte. */
   function summenZeileHTML(s, mitEk) {
@@ -499,7 +500,7 @@
       + `<span class="st-summe-haupt" data-summe="gesamt">Gesamt verfügbar <b class="st-s-kg">${ganz.format(g.kg)} kg</b>${eur(g, ' EK', 'b')}</span>`
       + `<span class="st-summe-teile">`
       + `<span data-summe="eingelagert">eingelagert ${kg(s.eingelagert)}${eur(s.eingelagert, '')}</span>`
-      + `<span data-summe="erfasst" title="Erfasster Bestand: Status „erfasst“, noch nicht eingetroffen">erfasst ${kg(s.erfasst)}${eur(s.erfasst, '')}</span>`
+      + `<span data-summe="erfasst" title="Ware unterwegs (in WinAB erfasst, noch nicht eingetroffen) – Spalte „Erfasster Bestand“">unterwegs ${kg(s.erfasst)}${eur(s.erfasst, '')}</span>`
       + `<span class="st-summe-mhd" data-summe="mhd" title="Menge zum kürzesten MHD der Artikel mit MHD abgelaufen oder in höchstens 4 Tagen (Markierungen „abgelaufen“ und „heute – 4 Tage“)">MHD bis 4 Tage ${kg(s.mhd)}${eur(s.mhd, '')}</span>`
       + `</span><small class="st-summe-hinweis">folgt Suche und Filter</small></div>`;
   }

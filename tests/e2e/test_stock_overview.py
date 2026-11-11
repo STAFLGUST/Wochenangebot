@@ -178,7 +178,11 @@ with sync_playwright() as pw:
     thema = lambda pg, t: pg.evaluate('(t) => document.documentElement.dataset.theme = t', t)   # noqa: E731
     su = anmelden('admin', 'Sicheres-Passwort-1')
     alle = erwartung()
-    check('Summenzeile: Summen aller Zeilen (Gesamt verfügbar, eingelagert, erfasst, MHD bis 4 Tage) in kg und €', zeile(su) == soll(alle), (zeile(su), soll(alle)))
+    check('Summenzeile: Summen aller Zeilen (Gesamt verfügbar, eingelagert, unterwegs, MHD bis 4 Tage) in kg und €', zeile(su) == soll(alle), (zeile(su), soll(alle)))
+    beschr = su.eval_on_selector('#st-summe [data-summe=erfasst]', "e => [e.firstChild.textContent.trim(), e.title]")
+    check('Summenzeile: erfasster Bestand heißt „unterwegs“ (Inhaber 11.11.2026), Hinweis erklärt den Status; Tabellenspalte bleibt „Erfasster Bestand“',
+          beschr[0] == 'unterwegs' and beschr[1].startswith('Ware unterwegs (in WinAB erfasst, noch nicht eingetroffen)')
+          and 'Erfasster' in su.inner_text('.stab thead th.s-registered'), beschr)
     lage = su.evaluate("""(() => { const r = (s) => document.querySelector(s).getBoundingClientRect();
         return [r('#view-stock .ed-toolbar').bottom <= r('#st-summe').top + 1, r('#st-summe').bottom <= r('#st-list .st-card').top + 1,
                 document.querySelector('#st-summe').closest('.gcard') === null]; })()""")
@@ -215,6 +219,10 @@ with sync_playwright() as pw:
     check('Summenzeile folgt dem Filter; Zugang ohne EK-Preis „– €“', zeile(su) == schwein and schwein['erfasst']['eur'] == '– €' and schwein['mhd'] == {'kg': '0 kg', 'eur': '0 €'}, (zeile(su), schwein))
     su.click('.st-fleiste [data-fweg="*"]'); su.wait_for_function("document.querySelectorAll('.stab tr.srow').length === 5")
     check('Summenzeile: nach „Alle Filter entfernen“ wieder alle Zeilen', zeile(su) == soll(alle))
+    # Laptop (1280 px): eine Zeile darf umbrechen, die Seite scrollt nicht seitlich
+    su.set_viewport_size({'width': 1280, 'height': 1000}); su.wait_for_function('document.documentElement.clientWidth === 1280')
+    check('Summenzeile bei 1280 px ohne waagerechtes Scrollen', su.evaluate('document.documentElement.scrollWidth') <= 1280)
+    su.screenshot(path=os.path.join(SH, 'stock-summenzeile-1280.png'), animations='disabled')
     # Handy (390 px): untereinander, ohne waagerechtes Scrollen
     su.set_viewport_size({'width': 390, 'height': 844}); su.wait_for_function("getComputedStyle(document.querySelector('.st-summe-teile')).flexDirection === 'column'")
     mob = su.evaluate("""(() => { const z = document.querySelector('#st-summe'), t = (k) => z.querySelector(`[data-summe=${k}]`).getBoundingClientRect();
@@ -229,7 +237,8 @@ with sync_playwright() as pw:
     roh = le.evaluate("fetch('../api/?action=stock').then((r) => r.text())")
     html = le.inner_html('#st-summe')
     check('Summenzeile ohne EK-Recht: nur kg, weder € noch „EK“ noch Einkaufswert; Antwort ohne EK-Preise',
-          zeile(le) == soll(alle, mit_ek=False) and not any(w in html for w in ('€', 'EK', 'Einkauf')) and '"ek"' not in roh and '"lots"' in roh, (zeile(le), html[:300]))
+          zeile(le) == soll(alle, mit_ek=False) and not any(w in html for w in ('€', 'EK', 'Einkauf')) and '"ek"' not in roh and '"lots"' in roh
+          and le.inner_text('#st-summe [data-summe=erfasst]').startswith('unterwegs'), (zeile(le), html[:300]))
     le.screenshot(path=os.path.join(SH, 'stock-summenzeile-ohne-ek.png'), animations='disabled')
     le.close()
     check('no JavaScript errors', not errors, errors)
