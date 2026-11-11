@@ -161,9 +161,9 @@ fehler = []
 BERLIN = ZoneInfo('Europe/Berlin')
 
 
-def anmelden(br, user, pw, ip, breite=1280, dunkel=False, uhr=None):
+def anmelden(br, user, pw, ip, breite=1280, dunkel=False, uhr=None, ua=None):
     ctx = br.new_context(viewport={'width': breite, 'height': 900}, color_scheme='dark' if dunkel else 'light',
-                         extra_http_headers={'X-Forwarded-For': ip}, timezone_id='Europe/Berlin', locale='de-DE')
+                         extra_http_headers={'X-Forwarded-For': ip}, timezone_id='Europe/Berlin', locale='de-DE', **({'user_agent': ua} if ua else {}))
     pg = ctx.new_page(); pg.on('pageerror', lambda e: fehler.append(str(e)))
     pg.goto(B + '/admin/'); pg.wait_for_selector('#screen-auth:not([hidden])')
     pg.fill('#au-user', user); pg.fill('#pw1', pw); pg.click('#auth-submit')
@@ -675,6 +675,58 @@ with sync_playwright() as pw:
     ctx.close()
     st, r = A.call('modul_wartung_save', {'bereich': 'angebot.eingabe', 'active': False, 'grund': 'Test beendet'})
     check('Wartung beendet', st == 200 and r.get('aktiv') is False, (st, r))
+
+    # ── Dashboard als Startseite in Firefox (Inhaber 11.11.2026: Fenster mit nur einem Knopf): einmal nach der Anmeldung, nur
+    #    Firefox am Computer; „Adresse kopieren“ → Hinweis, wo einfügen → „Fertig“ (nie wieder); Kreuz/Esc = in 7 Tagen ──
+    FF = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:133.0) Gecko/20100101 Firefox/133.0'
+    FF_HANDY = 'Mozilla/5.0 (Android 14; Mobile; rv:133.0) Gecko/133.0 Firefox/133.0'
+    sp_stand = "JSON.parse(localStorage.getItem('stafl.startseite') || 'null')"
+    ctx, pg = anmelden(br, 'erika', 'Editor-Zugang-77', '198.51.100.46')
+    check('Startseiten-Hinweis: in anderen Browsern (hier Chromium) nie', pg.locator('#db-sp[open]').count() == 0 and pg.evaluate(sp_stand) is None)
+    ctx.close()
+    ctx, pg = anmelden(br, 'erika', 'Editor-Zugang-77', '198.51.100.46', ua=FF_HANDY)
+    check('… und nicht in Firefox auf dem Handy', pg.locator('#db-sp[open]').count() == 0)
+    ctx.close()
+    ctx, pg = anmelden(br, 'erika', 'Editor-Zugang-77', '198.51.100.46', ua=FF)
+    ctx.grant_permissions(['clipboard-read', 'clipboard-write'])
+    pg.wait_for_selector('#db-sp[open]')
+    ziel_ = B + '/dashboard/'
+    check('Firefox am Computer: Fenster nach der Anmeldung – ein Satz, die Adresse, genau ein Knopf „Adresse kopieren“ (Fokus darauf)',
+          pg.text_content('#db-sp-titel') == 'Dashboard als Startseite?' and pg.text_content('#db-sp-url') == ziel_
+          and pg.locator('#db-sp button.db-knopf').count() == 1 and pg.text_content('#db-sp-knopf') == 'Adresse kopieren'
+          and pg.evaluate("document.activeElement.id") == 'db-sp-knopf', pg.text_content('#db-sp'))
+    pg.screenshot(path=os.path.join(SH, 'dashboard_startseite_firefox_1280.png'))
+    pg.click('#db-sp-knopf'); pg.wait_for_function("document.querySelector('#db-sp-knopf').textContent === 'Fertig'")
+    ablage_ = pg.evaluate("navigator.clipboard.readText().catch(() => '')")
+    check('„Adresse kopieren“: Adresse in der Zwischenablage (oder markiert), eine Zeile, wo einfügen; Knopf heißt jetzt „Fertig“',
+          (ablage_ == ziel_ or 'markiert' in pg.text_content('#db-sp-text')) and 'Einstellungen → Startseite' in pg.text_content('#db-sp-text')
+          and 'Benutzerdefinierte Adressen' in pg.text_content('#db-sp-text'), (ablage_, pg.text_content('#db-sp-text')))
+    pg.screenshot(path=os.path.join(SH, 'dashboard_startseite_firefox_1280_kopiert.png'))
+    pg.click('#db-sp-zu'); pg.wait_for_selector('#db-sp', state='hidden')
+    st_ = pg.evaluate(sp_stand) or {}
+    check('Kreuz: Fenster zu, in 7 Tagen wieder', abs(st_.get('spaeter', 0) / 1000 - datetime.now().timestamp() - 7 * 86400) < 600, st_)
+    pg.reload(); bereit(pg)
+    check('… beim nächsten Aufruf nicht wieder', pg.locator('#db-sp[open]').count() == 0)
+    pg.evaluate("localStorage.setItem('stafl.startseite', JSON.stringify({spaeter: Date.now() - 1000}))")
+    pg.reload(); bereit(pg); pg.wait_for_selector('#db-sp[open]')
+    pg.keyboard.press('Escape'); pg.wait_for_selector('#db-sp', state='hidden')
+    check('nach den 7 Tagen wieder da; Esc = in 7 Tagen wieder', (pg.evaluate(sp_stand) or {}).get('spaeter', 0) > datetime.now().timestamp() * 1000)
+    pg.evaluate("localStorage.setItem('stafl.startseite', JSON.stringify({spaeter: Date.now() - 1000}))")
+    pg.reload(); bereit(pg); pg.wait_for_selector('#db-sp[open]')
+    check('… wieder mit „Adresse kopieren“', pg.text_content('#db-sp-knopf') == 'Adresse kopieren')
+    pg.click('#db-sp-knopf'); pg.wait_for_function("document.querySelector('#db-sp-knopf').textContent === 'Fertig'")
+    pg.click('#db-sp-knopf'); pg.wait_for_selector('#db-sp', state='hidden')
+    pg.reload(); bereit(pg)
+    check('„Fertig“: in diesem Browser nie wieder', pg.evaluate(sp_stand) == {'erledigt': True} and pg.locator('#db-sp[open]').count() == 0)
+    ctx.close()
+    for breite_, dunkel_ in ((390, False), (1280, True)):
+        ctx, pg = anmelden(br, 'erika', 'Editor-Zugang-77', '198.51.100.46', breite=breite_, dunkel=dunkel_, ua=FF)
+        pg.wait_for_selector('#db-sp[open]')
+        box_ = pg.evaluate("(() => { const r = document.querySelector('#db-sp').getBoundingClientRect(); return [r.left, r.right, innerWidth, document.documentElement.scrollWidth]; })()")
+        check(f'{breite_}px{" dunkel" if dunkel_ else ""}: Fenster ganz sichtbar, ohne waagerechtes Scrollen, Knopf sichtbar', box_[0] >= 0 and box_[1] <= box_[2] and box_[3] <= box_[2] + 1
+              and pg.is_visible('#db-sp-knopf'), box_)
+        pg.screenshot(path=os.path.join(SH, f'dashboard_startseite_firefox_{breite_}{"_dunkel" if dunkel_ else ""}.png'))
+        ctx.close()
 
     # ── Abmelden (Knopf in der Seitenleiste) beendet die Sitzung serverseitig ──
     ctx, pg = anmelden(br, 'erika', 'Editor-Zugang-77', '198.51.100.45')

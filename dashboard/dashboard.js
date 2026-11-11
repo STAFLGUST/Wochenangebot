@@ -6,6 +6,7 @@
    Punkte liefern die Module nach ihren Rechten, Schnellaktionen, eigene letzte Änderungen, Favoriten am Konto). Was eine Kachel
    oder ein Punkt zeigt, ist nur Anzeige; ob eine Anwendung nutzbar ist und welche Rechte gelten, entscheidet der Server bei
    jeder Aktion (GR-102, GR-103). Kein Inline-Skript (Content-Security-Policy); fremde Texte nur maskiert.
+   Einmal nach der Anmeldung in Firefox am Computer: Dialog „Dashboard als Startseite?“ (startseiteFragen, Inhaber 11.11.2026).
    Knöpfe oben rechts: einfache Darstellung für Remote-Desktop (Bildschirm; rot = an; Wahl am Konto, sonst automatisch
    erkannt, theme.js) und Hell/Dunkel. Die Suche (Strg K) steht in der Seitenleiste des Rahmens, kein eigener Knopf hier. */
 'use strict';
@@ -368,7 +369,49 @@
     heuteZeigen();
     aktionenZeigen();
     zuletztZeigen();
+    startseiteFragen();
   }
+
+  /* Dashboard als Startseite in Firefox (Inhaber 11.11.2026: „Fenster mit nur einem Knopf“): einmal nach der Anmeldung, nur
+     Firefox am Computer. Eine Webseite darf die Startseite nicht setzen – der Knopf kopiert die Adresse und zeigt in einer Zeile,
+     wo sie hingehört; danach heißt er „Fertig“ (nie wieder fragen). Kreuz und Esc: in 7 Tagen wieder. Gemerkt nur im Browser
+     (localStorage, wie die Startseite selbst je Browser); ohne Speicher wird nicht gefragt. */
+  const SP_SCHLUESSEL = 'stafl.startseite';
+  const SP_PAUSE_TAGE = 7;
+  const istFirefoxComputer = () => /firefox\//i.test(navigator.userAgent) && !/android|mobile|tablet|fxios/i.test(navigator.userAgent);
+  function spLesen() { try { return JSON.parse(localStorage.getItem(SP_SCHLUESSEL) || 'null'); } catch { return false; } }
+  function spMerken(wert) { try { localStorage.setItem(SP_SCHLUESSEL, JSON.stringify(wert)); } catch { /* ohne Speicher */ } }
+  function startseiteFragen() {
+    const d = $('#db-sp');
+    if (!d || typeof d.showModal !== 'function' || !istFirefoxComputer()) return;
+    const st = spLesen();
+    if (st === false || (st && st.erledigt) || (st && st.spaeter && Date.now() < st.spaeter)) return;
+    $('#db-sp-url').textContent = new URL('./', location.href).href;
+    const k = $('#db-sp-knopf'); k.textContent = 'Adresse kopieren'; k.dataset.schritt = 'kopieren';
+    d.showModal();
+    k.focus();
+  }
+  function spSchliessen(erledigt) {
+    spMerken(erledigt ? { erledigt: true } : { spaeter: Date.now() + SP_PAUSE_TAGE * 864e5 });
+    const d = $('#db-sp');
+    if (d.open) d.close();
+  }
+  $('#db-sp-zu').addEventListener('click', () => spSchliessen(false));
+  $('#db-sp').addEventListener('cancel', (e) => { e.preventDefault(); spSchliessen(false); });   // Esc = später
+  $('#db-sp-knopf').addEventListener('click', async () => {
+    const k = $('#db-sp-knopf');
+    if (k.dataset.schritt === 'fertig') { spSchliessen(true); return; }
+    const url = $('#db-sp-url').textContent;
+    let kopiert = true;
+    try { await navigator.clipboard.writeText(url); } catch {
+      kopiert = false;   // ohne Zwischenablage: Adresse markieren, Strg+C genügt
+      const r = document.createRange(); r.selectNodeContents($('#db-sp-url'));
+      const sel = getSelection(); sel.removeAllRanges(); sel.addRange(r);
+    }
+    $('#db-sp-text').textContent = (kopiert ? 'Kopiert. ' : 'Adresse markiert – mit Strg+C kopieren. ')
+      + 'Jetzt in Firefox: ☰ → Einstellungen → Startseite → bei „Startseite und neue Fenster“ „Benutzerdefinierte Adressen“ wählen und einfügen.';
+    k.textContent = 'Fertig'; k.dataset.schritt = 'fertig';
+  });
 
   /* Notfallmodus (Modul Sicherheit): Hinweis über den Kacheln – Einzelheiten nur für Administratoren und Berechtigte */
   function notfallHinweis(n) {
