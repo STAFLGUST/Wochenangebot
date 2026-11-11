@@ -76,6 +76,15 @@
       </section>
     </main>
     <footer class="db-fuss">STAFL-Plattform · Standard-Fleisch</footer>
+    <!-- Einmal nach der Anmeldung (nur Firefox am Computer): Dashboard als Startseite. Eine Webseite darf die Startseite nicht
+         selbst setzen – deshalb ein Knopf: Adresse kopieren, danach steht in einer Zeile, wo man sie in Firefox einfügt. -->
+    <dialog class="db-sp" id="db-sp" aria-labelledby="db-sp-titel" aria-describedby="db-sp-text">
+      <button class="db-sp-zu" id="db-sp-zu" type="button" aria-label="Später erinnern"><svg class="r-i" aria-hidden="true"><use href="#i-x"/></svg></button>
+      <h2 id="db-sp-titel">Dashboard als Startseite?</h2>
+      <p class="db-sp-text" id="db-sp-text">Adresse kopieren und in Firefox unter ☰ → Einstellungen → Startseite einfügen.</p>
+      <p class="db-sp-url" id="db-sp-url"></p>
+      <button class="db-knopf primaer db-sp-knopf" id="db-sp-knopf" type="button">Adresse kopieren</button>
+    </dialog>
   </div>
 </div>
 <svg width="0" height="0" style="position:absolute" aria-hidden="true">
