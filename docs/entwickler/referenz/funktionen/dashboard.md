@@ -2,7 +2,7 @@
 
 <!-- ERZEUGT von `python3 werkzeuge/doku.py erzeugen` – nicht von Hand ändern. Quelle: Funktionen und Kommentare im Code. Die CI prüft, dass diese Datei zum Code passt. -->
 
-2 Dateien, 41 Funktionen – in der Reihenfolge der Datei, **fett** die Abschnitte. Text = erste Aussage des Kommentars direkt über der Funktion (Python: Docstring). Übersicht aller Module: [README.md](README.md).
+2 Dateien, 45 Funktionen – in der Reihenfolge der Datei, **fett** die Abschnitte. Text = erste Aussage des Kommentars direkt über der Funktion (Python: Docstring). Übersicht aller Module: [README.md](README.md).
 
 ## `dashboard/dashboard.js`
 
@@ -37,6 +37,10 @@ _STAFL-Plattform · Dashboard (Startseite, Gestaltung „C2“) Aufbau_
 - `zeigeAnmeldung(ziel)`
 - `abmelden()`
 - `laden()`
+- `spLesen()`
+- `spMerken(wert)`
+- `startseiteFragen()`
+- `spSchliessen(erledigt)`
 - `notfallHinweis(n)` – Notfallmodus (Modul Sicherheit): Hinweis über den Kacheln – Einzelheiten nur für Administratoren und Berechtigte
 - `themaKnopf()`
 - `darstellungKnopf()` – Einfache Darstellung (theme.js): an/aus, gespeichert am Konto; Hinweis unter der Begrüßung, solange sie an ist
@@ -47,7 +51,7 @@ _Mitarbeiter-Dashboard (dashboard/, Roadmap PR 6) im gemeinsamen Rahmen „C2“
 
 - `check(n, c, i)`
 - `tag(n)`
-- `anmelden(br, user, pw, ip, breite, dunkel, uhr)`
+- `anmelden(br, user, pw, ip, breite, dunkel, uhr, ua)`
 - `bereit(pg)`
 - `kacheln(pg)`
 - `leiste(pg)`

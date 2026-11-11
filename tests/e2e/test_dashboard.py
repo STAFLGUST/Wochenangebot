@@ -161,9 +161,9 @@ fehler = []
 BERLIN = ZoneInfo('Europe/Berlin')
 
 
-def anmelden(br, user, pw, ip, breite=1280, dunkel=False, uhr=None):
+def anmelden(br, user, pw, ip, breite=1280, dunkel=False, uhr=None, ua=None):
     ctx = br.new_context(viewport={'width': breite, 'height': 900}, color_scheme='dark' if dunkel else 'light',
-                         extra_http_headers={'X-Forwarded-For': ip}, timezone_id='Europe/Berlin', locale='de-DE')
+                         extra_http_headers={'X-Forwarded-For': ip}, timezone_id='Europe/Berlin', locale='de-DE', **({'user_agent': ua} if ua else {}))
     pg = ctx.new_page(); pg.on('pageerror', lambda e: fehler.append(str(e)))
     pg.goto(B + '/admin/'); pg.wait_for_selector('#screen-auth:not([hidden])')
     pg.fill('#au-user', user); pg.fill('#pw1', pw); pg.click('#auth-submit')
@@ -675,6 +675,52 @@ with sync_playwright() as pw:
     ctx.close()
     st, r = A.call('modul_wartung_save', {'bereich': 'angebot.eingabe', 'active': False, 'grund': 'Test beendet'})
     check('Wartung beendet', st == 200 and r.get('aktiv') is False, (st, r))
+
+    # ── Dashboard als Startseite in Firefox (Inhaber 11.11.2026): einmal nach der Anmeldung, nur Firefox am Computer;
+    #    „Später erinnern“ (auch Esc) nach 7 Tagen, „Erledigt“ nie wieder – gemerkt im Browser ──
+    FF = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:133.0) Gecko/20100101 Firefox/133.0'
+    FF_HANDY = 'Mozilla/5.0 (Android 14; Mobile; rv:133.0) Gecko/133.0 Firefox/133.0'
+    sp_stand = "JSON.parse(localStorage.getItem('stafl.startseite') || 'null')"
+    ctx, pg = anmelden(br, 'erika', 'Editor-Zugang-77', '198.51.100.46')
+    check('Startseiten-Hinweis: in anderen Browsern (hier Chromium) nie', pg.locator('#db-sp[open]').count() == 0 and pg.evaluate(sp_stand) is None)
+    ctx.close()
+    ctx, pg = anmelden(br, 'erika', 'Editor-Zugang-77', '198.51.100.46', ua=FF_HANDY)
+    check('… und nicht in Firefox auf dem Handy', pg.locator('#db-sp[open]').count() == 0)
+    ctx.close()
+    ctx, pg = anmelden(br, 'erika', 'Editor-Zugang-77', '198.51.100.46', ua=FF)
+    pg.wait_for_selector('#db-sp[open]')
+    ziel_ = B + '/dashboard/'
+    check('Firefox am Computer: Dialog nach der Anmeldung – Haus-Symbol zum Ziehen und Adresse zum Kopieren, Fokus auf „Erledigt“',
+          pg.text_content('#db-sp-titel') == 'Dashboard als Startseite?' and pg.text_content('#db-sp-url') == ziel_
+          and pg.get_attribute('#db-sp-ziehen', 'href') == ziel_ and pg.get_attribute('#db-sp-ziehen', 'draggable') == 'true'
+          and 'Haus-Symbol' in pg.text_content('#db-sp') and 'Benutzerdefinierte Adressen' in pg.text_content('#db-sp')
+          and pg.evaluate("document.activeElement.id") == 'db-sp-fertig', pg.text_content('#db-sp-url'))
+    pg.screenshot(path=os.path.join(SH, 'dashboard_startseite_firefox_1280.png'))
+    pg.click('#db-sp-kopieren'); pg.wait_for_function("document.querySelector('#db-sp-meldung').textContent !== ''")
+    check('„Adresse kopieren“: Rückmeldung (kopiert oder markiert)', re.search('kopiert|markiert', pg.text_content('#db-sp-meldung')) is not None, pg.text_content('#db-sp-meldung'))
+    pg.click('#db-sp-spaeter'); pg.wait_for_selector('#db-sp', state='hidden')
+    st_ = pg.evaluate(sp_stand) or {}
+    check('„Später erinnern“: Dialog zu, gemerkt für 7 Tage', abs(st_.get('spaeter', 0) / 1000 - datetime.now().timestamp() - 7 * 86400) < 600, st_)
+    pg.reload(); bereit(pg)
+    check('… beim nächsten Aufruf nicht wieder', pg.locator('#db-sp[open]').count() == 0)
+    pg.evaluate("localStorage.setItem('stafl.startseite', JSON.stringify({spaeter: Date.now() - 1000}))")
+    pg.reload(); bereit(pg); pg.wait_for_selector('#db-sp[open]')
+    pg.keyboard.press('Escape'); pg.wait_for_selector('#db-sp', state='hidden')
+    check('nach den 7 Tagen wieder da; Esc = später erinnern', (pg.evaluate(sp_stand) or {}).get('spaeter', 0) > datetime.now().timestamp() * 1000)
+    pg.evaluate("localStorage.setItem('stafl.startseite', JSON.stringify({spaeter: Date.now() - 1000}))")
+    pg.reload(); bereit(pg); pg.wait_for_selector('#db-sp[open]')
+    pg.click('#db-sp-fertig'); pg.wait_for_selector('#db-sp', state='hidden')
+    pg.reload(); bereit(pg)
+    check('„Erledigt“: in diesem Browser nie wieder', pg.evaluate(sp_stand) == {'erledigt': True} and pg.locator('#db-sp[open]').count() == 0)
+    ctx.close()
+    for breite_, dunkel_ in ((390, False), (1280, True)):
+        ctx, pg = anmelden(br, 'erika', 'Editor-Zugang-77', '198.51.100.46', breite=breite_, dunkel=dunkel_, ua=FF)
+        pg.wait_for_selector('#db-sp[open]')
+        box_ = pg.evaluate("(() => { const r = document.querySelector('#db-sp').getBoundingClientRect(); return [r.left, r.right, innerWidth, document.documentElement.scrollWidth]; })()")
+        check(f'{breite_}px{" dunkel" if dunkel_ else ""}: Dialog ganz sichtbar, ohne waagerechtes Scrollen, Knöpfe sichtbar', box_[0] >= 0 and box_[1] <= box_[2] and box_[3] <= box_[2] + 1
+              and pg.is_visible('#db-sp-fertig') and pg.is_visible('#db-sp-spaeter'), box_)
+        pg.screenshot(path=os.path.join(SH, f'dashboard_startseite_firefox_{breite_}{"_dunkel" if dunkel_ else ""}.png'))
+        ctx.close()
 
     # ── Abmelden (Knopf in der Seitenleiste) beendet die Sitzung serverseitig ──
     ctx, pg = anmelden(br, 'erika', 'Editor-Zugang-77', '198.51.100.45')
