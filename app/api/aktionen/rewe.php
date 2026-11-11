@@ -10,6 +10,9 @@ declare(strict_types=1);
                                      und Artikel, Datenpaket der Excel-Listen übernehmen;
                     rewe.exportieren – Wochenabschluss aller Listen, Excel für WinAB, „in WinAB erfasst“ abhaken.
    „Alle Listen“ und „Wochenabschluss“ lassen sich zusätzlich im Team des Moduls zuweisen (rw_alle, rw_export).
+   Team des Moduls (nur rewe.verwalten): Mitarbeiter mit Modulzugang ergänzen – sie sehen, fragen ab und pflegen dann ihre
+   eigenen Märkte wie mit rewe.sehen + rewe.bearbeiten (rw_require_perm statt require_perm für „ansehen“ und „bearbeiten“) –
+   und entfernen (nur ohne Märkte ab der Abfragewoche, sonst 422; Rollen-Inhaber werden nur ausgeblendet).
    „Eigene Märkte“ prüft der Server je Markt über die Zuständigkeit der Kalenderwoche; fremde Märkte ohne „alle“ → 404.
    Gleichzeitiges Bearbeiten: Märkte tragen „rev“, Antworten „r“; ein veralteter Stand bekommt 409.
    Wird von api/index.php im globalen Gültigkeitsbereich eingebunden; jede Aktion endet mit respond()/fail(). */
@@ -17,7 +20,7 @@ if (!defined('WA_API')) { http_response_code(404); exit; }   // nur über api/in
 
 function rw_rechte(array $me): array
 {
-    return ['bearbeiten' => may($me, 'rewe.bearbeiten'), 'alle' => rw_alle($me), 'verwalten' => may($me, 'rewe.verwalten'), 'exportieren' => rw_export($me)];
+    return ['bearbeiten' => rw_bearbeiten($me), 'alle' => rw_alle($me), 'verwalten' => may($me, 'rewe.verwalten'), 'exportieren' => rw_export($me)];
 }
 function rw_kw_param(string $standard): string
 {
@@ -26,7 +29,7 @@ function rw_kw_param(string $standard): string
 }
 function rw_export_pruefen(bool $schreibend = false): array
 {
-    $me = require_perm('rewe.sehen', $schreibend);
+    $me = rw_require_perm('rewe.sehen', $schreibend);
     if (!rw_export($me)) fail('Den Wochenabschluss sehen nur Mitarbeiter mit „REWE-Wochenabschluss“ (Recht oder Team).', 403);
     return $me;
 }
@@ -44,7 +47,7 @@ function rw_xlsx_senden(string $inhalt, string $datei): void
 switch ($action) {
         /* Start: Rechte, Stammdaten, Auswahllisten, Mitarbeiter (für „alle Listen“ und Verwaltung) */
         case 'rewe_start': {
-            $me = require_perm('rewe.sehen');
+            $me = rw_require_perm('rewe.sehen');
             header('Cache-Control: no-store');
             $r = rw_rechte($me);
             $stamm = rw_stamm();
@@ -52,12 +55,13 @@ switch ($action) {
                      'datum' => date('Y-m-d'), 'rechte' => $r, 'stammRev' => $stamm['rev'], 'lieferwege' => $stamm['lieferwege'], 'artikel' => $stamm['artikel'], 'antworten' => RW_ANTWORTEN, 'kauf' => RW_KAUF, 'kaufAbfrage' => RW_KAUF_ABFRAGE,
                      'notizArten' => RW_NOTIZ_ARTEN, 'lwArten' => RW_LW_ARTEN, 'tage' => RW_TAGE, 'rhythmen' => RW_RHYTHMEN,
                      'personen' => $r['alle'] || $r['verwalten'] || $r['exportieren'] ? rw_personen() : [],
+                     'kandidaten' => $r['verwalten'] ? rw_kandidaten() : [],   // „Mitarbeiter hinzufügen“ (nur verwalten)
                      'leer' => $r['verwalten'] ? rw_leer() : null]);
         }
 
         /* Wochenabfrage einer KW: eigene Liste (mit „alle“: ?wer=<Nutzer-ID> oder * für alle Listen) */
         case 'rewe_woche': {
-            $me = require_perm('rewe.sehen');
+            $me = rw_require_perm('rewe.sehen');
             header('Cache-Control: no-store');
             $kw = rw_kw_param(rw_kw_abfrage());
             $wer = is_string($_GET['wer'] ?? null) ? trim($_GET['wer']) : '';
@@ -67,7 +71,7 @@ switch ($action) {
 
         /* Märkte (Übersicht): sichtbare Märkte mit Lieferweg, Zuständigkeit, Kaufbereitschaft und letzter Bestellung */
         case 'rewe_maerkte': {
-            $me = require_perm('rewe.sehen');
+            $me = rw_require_perm('rewe.sehen');
             header('Cache-Control: no-store');
             $kw = rw_kw_abfrage(); $stamm = rw_stamm(); $namen = rw_namen();
             $jahr = (int)substr(rw_kw_heute(), 0, 4);
@@ -90,7 +94,7 @@ switch ($action) {
 
         /* Marktakte: Markt, alle Wochen, Notizen und Verlauf, Kennzahlen je Jahr */
         case 'rewe_markt': {
-            $me = require_perm('rewe.sehen');
+            $me = rw_require_perm('rewe.sehen');
             header('Cache-Control: no-store');
             $m = rw_markt_finden(rw_maerkte_doc(), $_GET['id'] ?? '', $me);
             respond(['ok' => true] + rw_akte($m, $me));
@@ -98,7 +102,7 @@ switch ($action) {
 
         /* Antwort einer KW setzen oder zurücknehmen (status leer) */
         case 'rewe_antwort': {
-            $me = require_perm('rewe.bearbeiten', true);
+            $me = rw_require_perm('rewe.bearbeiten', true);
             $b = body();
             $erg = with_lock('rewe-maerkte', function () use ($b, $me) { return rw_antwort_setzen($b, $me, rw_stamm()); });
             $a = $erg['antwort'];
@@ -109,7 +113,7 @@ switch ($action) {
 
         /* Fällige Daueraufträge der KW als Bestellung übernehmen (nur Märkte ohne Antwort) */
         case 'rewe_dauer_uebernehmen': {
-            $me = require_perm('rewe.bearbeiten', true);
+            $me = rw_require_perm('rewe.bearbeiten', true);
             $b = body();
             $kw = rw_kw($b['kw'] ?? '');
             $wer = is_string($b['wer'] ?? null) ? trim($b['wer']) : '';
@@ -122,7 +126,7 @@ switch ($action) {
 
         /* Markt anlegen (verwalten) oder ändern: Pflegefelder an eigenen Märkten (bearbeiten), Stammfelder nur mit „verwalten“ */
         case 'rewe_markt_save': {
-            $me = require_perm('rewe.bearbeiten', true);
+            $me = rw_require_perm('rewe.bearbeiten', true);
             $b = body();
             $markt = with_lock('rewe-maerkte', function () use ($b, $me) {
                 $stamm = rw_stamm(); $doc = rw_maerkte_doc(); $kw = rw_kw_abfrage();
@@ -167,7 +171,7 @@ switch ($action) {
 
         /* Notiz, Telefonat, Wiedervorlage anlegen ({markt, art, text, wiedervorlage}) oder Wiedervorlage erledigen ({id, erledigt}) */
         case 'rewe_notiz_save': {
-            $me = require_perm('rewe.bearbeiten', true);
+            $me = rw_require_perm('rewe.bearbeiten', true);
             $b = body();
             $n = with_lock('rewe-maerkte', function () use ($b, $me) {
                 $doc = rw_verlauf_doc(); $maerkte = rw_maerkte_doc();
@@ -245,6 +249,24 @@ switch ($action) {
             audit('rewe', 'REWE: Team geändert – ' . count(array_filter($team, function ($t) { return $t['alle']; })) . ' mit allen Listen, '
                 . count(array_filter($team, function ($t) { return $t['export']; })) . ' mit Wochenabschluss');
             respond(['ok' => true]);
+        }
+
+        /* Team: Mitarbeiter hinzufügen ({nutzer}) – aktiv, mit Modulzugang, noch nicht im Team; hebt ein Ausblenden auf */
+        case 'rewe_team_ergaenzen': {
+            $me = require_perm('rewe.verwalten', true);
+            $b = body();
+            $u = with_lock('rewe-maerkte', function () use ($b) { return rw_mitglied_ergaenzen($b['nutzer'] ?? null); });
+            audit('rewe', 'REWE: ' . rw_name($u) . ' ins Team aufgenommen' . (may($u, 'rewe.sehen') ? ' (wieder eingeblendet)' : ' (eigene Märkte ansehen und bearbeiten)'));
+            respond(['ok' => true, 'personen' => rw_personen(), 'kandidaten' => rw_kandidaten()]);
+        }
+
+        /* Team: Mitarbeiter entfernen ({nutzer}) – nur ohne Märkte ab der Abfragewoche (sonst 422); Rollenrechte bleiben */
+        case 'rewe_team_entfernen': {
+            $me = require_perm('rewe.verwalten', true);
+            $b = body();
+            $u = with_lock('rewe-maerkte', function () use ($b) { return rw_mitglied_entfernen($b['nutzer'] ?? null); });
+            audit('rewe', 'REWE: ' . rw_name($u) . ' aus dem Team entfernt' . (may($u, 'rewe.sehen') ? ' (ausgeblendet, Rechte der Rolle bleiben)' : ''));
+            respond(['ok' => true, 'personen' => rw_personen(), 'kandidaten' => rw_kandidaten()]);
         }
 
         /* Wochenabschluss einer KW über alle Listen */

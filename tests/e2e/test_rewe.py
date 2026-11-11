@@ -26,7 +26,7 @@ from openpyxl import load_workbook
 from playwright.sync_api import sync_playwright
 
 from kunden_hilfe import Client, B
-from umgebung import SH
+from umgebung import SH, storage_raw, storage_write
 
 PW = 'Sicheres-Passwort-1'
 HIER = os.path.dirname(os.path.abspath(__file__))
@@ -60,7 +60,10 @@ NUTZER = (('lena', 'Lena Leitung', 'editor', 'Leitung-Konto-11', {'grant': ['rew
           ('lea', 'Lea Lesen', 'viewer', 'Leserin-Konto-44', {'grant': ['rewe.sehen']}),
           ('sabi', 'Sabi Summe', 'editor', 'Summe-Konto-55', {'grant': ['rewe.bearbeiten']}),
           ('otto', 'Otto Ohne', 'editor', 'Ohne-Konto-66', {}),
-          ('nina', 'Nina Neu', 'editor', 'Nicht-Konto-77', {'grant': ['rewe.bearbeiten']}))
+          ('nina', 'Nina Neu', 'editor', 'Nicht-Konto-77', {'grant': ['rewe.bearbeiten']}),
+          ('pia', 'Pia Plus', 'editor', 'Plus-Konto-88', {}),                          # ohne REWE-Recht, wird im Modul ergänzt
+          ('udo', 'Udo Ohnezugang', 'editor', 'Zugang-Konto-99', {'deny': ['rewe.zugang']}),   # ohne Modulzugang
+          ('vera', 'Vera Verbot', 'editor', 'Verbot-Konto-98', {'deny': ['rewe.sehen']}))      # „REWE ansehen“ verboten
 for u, n, r, p, extra in NUTZER:
     st, r_ = A.call('user_save', {'id': '', 'name': n, 'username': u, 'role': r, 'active': True, 'password': p, 'mustChange': False, **extra})
     assert st == 200, r_
@@ -68,7 +71,7 @@ ids = {u['username']: u['id'] for u in A.call('users')[1]['users']}
 K = {}
 for i, (u, _, _, p, _) in enumerate(NUTZER):
     K[u] = Client(f'198.51.100.{10 + i}'); K[u].call('login', {'username': u, 'password': p})
-LE, M, E, L, SA, O, NI, N = K['lena'], K['mark'], K['evi'], K['lea'], K['sabi'], K['otto'], K['nina'], Client('198.51.100.30')
+LE, M, E, L, SA, O, NI, PI, N = K['lena'], K['mark'], K['evi'], K['lea'], K['sabi'], K['otto'], K['nina'], K['pia'], Client('198.51.100.30')
 
 # ── Register und Freigabe ──
 mod = {m['id']: m for m in A.call('module_status')[1]['module']}['rewe']
@@ -337,6 +340,104 @@ check('Protokoll: Antworten, Dauerauftrag, Zuweisung, Excel, erfasst', all(t in 
       'REWE: Excel für WinAB erstellt – ' + kw_text + ', 2 Einzelaufträge, 4 Positionen', 'als in WinAB erfasst markiert')), prot[:400])
 check('Protokoll ohne Notizen', 'SUMME' not in prot and 'Möchte ab nächster Woche' not in prot)
 
+# ── Team: Mitarbeiter hinzufügen und entfernen (Wunsch des Inhabers 11.11.2026) ──
+def namen(liste):
+    return {p['name'] for p in liste}
+
+
+def person(name, liste=None):
+    return next((p for p in (liste if liste is not None else LE.call('rewe_start')[1]['personen']) if p['name'] == name), {})
+
+
+def stamm_roh():
+    return json.loads(storage_raw('rewe-stamm').split('?>\n', 1)[-1])
+
+
+st, d = LE.call('rewe_start')
+check('Hinzufügen: Auswahl = aktive Mitarbeiter mit Modulzugang, noch nicht im Team (ohne Modulzugang oder mit Verbot nicht)',
+      st == 200 and {'Otto Ohne', 'Pia Plus'} <= namen(d['kandidaten']) and not ({'Udo Ohnezugang', 'Vera Verbot', 'Mark Markt', 'Lena Leitung'} & namen(d['kandidaten']))
+      and 'Pia Plus' not in namen(d['personen']), (namen(d['kandidaten']), namen(d['personen'])))
+check('Auswahl nur mit „verwalten“', M.call('rewe_start')[1]['kandidaten'] == [] and L.call('rewe_start')[1]['kandidaten'] == [])
+check('Hinzufügen/Entfernen ohne „verwalten“ → 403', M.call('rewe_team_ergaenzen', {'nutzer': ids['pia']})[0] == 403 and L.call('rewe_team_ergaenzen', {'nutzer': ids['pia']})[0] == 403
+      and PI.call('rewe_team_ergaenzen', {'nutzer': ids['pia']})[0] == 403 and M.call('rewe_team_entfernen', {'nutzer': ids['sabi']})[0] == 403)
+csrf = LE.csrf; LE.csrf = ''
+check('Hinzufügen ohne CSRF: 403', LE.call('rewe_team_ergaenzen', {'nutzer': ids['pia']})[0] == 403)
+LE.csrf = csrf
+check('Hinzufügen/Entfernen per GET: 405', LE.call('rewe_team_ergaenzen')[0] == 405 and LE.call('rewe_team_entfernen')[0] == 405)
+check('vor dem Hinzufügen: Pia ohne REWE-Recht 403, Zuweisen an Pia 422 (nicht im Team)', PI.call('rewe_start')[0] == 403
+      and LE.call('rewe_zuweisen', {'maerkte': [m3['id']], 'ab': ABFRAGE, 'nutzer': ids['pia']})[0] == 422)
+for name, b in (('unbekannt', {'nutzer': 'uzzz'}), ('ohne Angabe', {}), ('ohne Modulzugang', {'nutzer': ids['udo']}), ('Verbot „REWE ansehen“', {'nutzer': ids['vera']}),
+                ('schon im Team', {'nutzer': ids['mark']})):
+    st, r = LE.call('rewe_team_ergaenzen', b)
+    check(f'Hinzufügen: {name} → 422', st == 422 and r.get('error'), (st, r))
+st, r = LE.call('rewe_team_ergaenzen', {'nutzer': ids['pia']})
+pia = person('Pia Plus', r.get('personen', []))
+check('Pia hinzugefügt: in der Liste (ergänzt, bearbeiten, ohne Rollenrecht, 0 Märkte), nicht mehr in der Auswahl', st == 200 and pia.get('ergaenzt') is True
+      and pia['bearbeiten'] is True and pia['rechtSehen'] is False and pia['maerkte'] == 0 and pia['alle'] is False and 'Pia Plus' not in namen(r['kandidaten']), r)
+check('Pia: Start mit „bearbeiten“, keine weiteren Rechte, andere Listen 403', PI.call('rewe_start')[1]['rechte'] == {'bearbeiten': True, 'alle': False, 'verwalten': False, 'exportieren': False}
+      and PI.call('rewe_woche&wer=*')[0] == 403 and PI.call('rewe_abschluss')[0] == 403)
+st, r = LE.call('rewe_zuweisen', {'maerkte': [m3['id']], 'ab': ABFRAGE, 'nutzer': ids['pia']})
+check('Markt 3 ab Abfragewoche an Pia (jetzt in der Personenauswahl)', st == 200 and r['geaendert'] == 1, r)
+w = PI.call('rewe_woche')[1]['woche']
+check('Pia sieht ihren Markt (Woche, Märkte, Akte) und darf antworten; fremde Märkte wie nicht vorhanden (404)', [x['id'] for g in w['gruppen'] for x in g['maerkte']] == [m3['id']]
+      and w['gruppen'][0]['maerkte'][0]['darfAntworten'] is True and [m['id'] for m in PI.call('rewe_maerkte')[1]['maerkte']] == [m3['id']]
+      and PI.call('rewe_markt&id=' + m3['id'])[0] == 200 and PI.call('rewe_markt&id=' + m1['id'])[0] == 404, w.get('gruppen'))
+KW1 = kw_plus(ABFRAGE, 1)
+st, r = PI.call('rewe_antwort', {'markt': m3['id'], 'kw': KW1, 'status': 'bestellt', 'mengen': {'rb': 1}})
+check('Pia speichert eine Antwort (Schnappschuss Zuständig Pia)', st == 200 and r['antwort']['zustaendig'] == 'Pia Plus' and r['antwort']['von'] == 'Pia Plus', r)
+check('Pia: fremder Markt → 404; Notiz und Abfragetag am eigenen Markt ok, Stammfelder 403',
+      PI.call('rewe_antwort', {'markt': m2['id'], 'kw': KW1, 'status': 'kein'})[0] == 404 and PI.call('rewe_notiz_save', {'markt': m3['id'], 'art': 'telefonat', 'text': 'Rückruf am Montag'})[0] == 200
+      and PI.call('rewe_markt_save', {'id': m3['id'], 'abfragetag': 'di'})[0] == 200 and PI.call('rewe_markt_save', {'id': m3['id'], 'ort': 'Woanders'})[0] == 403)
+st, r = LE.call('rewe_team_entfernen', {'nutzer': ids['pia']})
+check('Entfernen mit Markt → 422 „erst den Markt umverteilen“', st == 422 and 'erst den Markt umverteilen' in r.get('error', ''), (st, r))
+mk = person('Mark Markt')
+st, r = LE.call('rewe_team_entfernen', {'nutzer': ids['mark']})
+check('Mark mit 2 Märkten → 422 „erst die 2 Märkte umverteilen“, bleibt im Team', st == 422 and mk['maerkte'] == 2 and 'erst die 2 Märkte umverteilen' in r.get('error', '')
+      and person('Mark Markt'), (mk.get('maerkte'), r))
+LE.call('rewe_zuweisen', {'maerkte': [m3['id']], 'ab': KW1, 'nutzer': ids['mark']})
+check('Markt ab KW+1 zurück an Mark: Pia ist in der Abfragewoche noch zuständig → 422', LE.call('rewe_team_entfernen', {'nutzer': ids['pia']})[0] == 422)
+LE.call('rewe_zuweisen', {'maerkte': [m3['id']], 'ab': ABFRAGE, 'nutzer': ids['mark']})
+LE.call('rewe_zuweisen', {'maerkte': [m2['id']], 'ab': kw_plus(ABFRAGE, 3), 'nutzer': ids['pia']})
+check('künftige Zuständigkeit (ab KW+3) zählt mit → 422, Zahl 1', LE.call('rewe_team_entfernen', {'nutzer': ids['pia']})[0] == 422 and person('Pia Plus')['maerkte'] == 1)
+LE.call('rewe_zuweisen', {'maerkte': [m2['id']], 'ab': kw_plus(ABFRAGE, 3), 'nutzer': ids['evi']})
+st, r = LE.call('rewe_team_entfernen', {'nutzer': ids['pia']})
+check('Pia ohne Märkte entfernt: nicht mehr in der Liste, wieder in der Auswahl', st == 200 and 'Pia Plus' not in namen(r['personen']) and 'Pia Plus' in namen(r['kandidaten']), r)
+check('ehemals Ergänzte ohne Recht verliert den Inhaltszugang (403)', PI.call('rewe_start')[0] == 403 and PI.call('rewe_woche')[0] == 403 and PI.call('rewe_markt&id=' + m3['id'])[0] == 403
+      and PI.call('rewe_antwort', {'markt': m3['id'], 'kw': KW1, 'status': 'kein'})[0] == 403)
+check('Zuweisen an die Entfernte → 422', LE.call('rewe_zuweisen', {'maerkte': [m3['id']], 'ab': ABFRAGE, 'nutzer': ids['pia']})[0] == 422)
+akte = LE.call('rewe_markt&id=' + m3['id'])[1]
+aw = next(x for g in M.call(f'rewe_woche&kw={KW1}')[1]['woche']['gruppen'] for x in g['maerkte'] if x['id'] == m3['id'])['antwort']
+check('Schnappschuss und Verlauf bleiben (GR-106): Antwort KW+1 von Pia mit Zuständig Pia, Zuweisung im Verlauf', aw['von'] == 'Pia Plus' and aw['zustaendig'] == 'Pia Plus'
+      and akte['wochen'][KW1]['von'] == 'Pia Plus' and any('Mark Markt → Pia Plus' in n['text'] for n in akte['notizen']), (aw, akte['wochen'].get(KW1)))
+# Rollen-Inhaberin („REWE ansehen“ über die Rolle) wird nur ausgeblendet; erneutes Hinzufügen hebt das auf
+st, r = LE.call('rewe_team_entfernen', {'nutzer': ids['lea']})
+check('Lea (Recht über die Rolle) ausgeblendet: nicht in der Liste, in der Auswahl', st == 200 and 'Lea Lesen' not in namen(r['personen'])
+      and person('Lea Lesen', r['kandidaten']).get('rechtSehen') is True, r)
+check('… Rechte der Rolle bleiben (Start 200), Team „alle Listen“ entfällt, Zuweisen und Team speichern 422', L.call('rewe_start')[0] == 200 and L.call('rewe_start')[1]['rechte']['alle'] is False
+      and L.call('rewe_woche&wer=*')[0] == 403 and LE.call('rewe_zuweisen', {'maerkte': [m3['id']], 'ab': ABFRAGE, 'nutzer': ids['lea']})[0] == 422
+      and LE.call('rewe_team_save', {'team': {ids['lea']: {'alle': True}}})[0] == 422)
+st, r = LE.call('rewe_team_ergaenzen', {'nutzer': ids['lea']})
+lea = person('Lea Lesen', r.get('personen', []))
+check('Lea erneut hinzugefügt: wieder in der Liste, nicht „ergänzt“ (Recht der Rolle), bleibt bei „nur ansehen“', st == 200 and lea.get('ergaenzt') is False and lea['bearbeiten'] is False
+      and lea['rechtSehen'] is True and L.call('rewe_start')[1]['rechte']['bearbeiten'] is False, r)
+st, r = LE.call('rewe_team_ergaenzen', {'nutzer': ids['pia']})
+roh = stamm_roh()
+check('Pia erneut hinzugefügt; gespeichert als Listen von Nutzer-IDs (mitglieder, ausgeblendet)', st == 200 and roh['mitglieder'] == [ids['pia']] and roh['ausgeblendet'] == []
+      and PI.call('rewe_start')[0] == 200, roh)
+# Rückfall: Daten ohne die neuen Felder (wie vor dieser Fassung) werden gelesen – Ergänzte fehlen dann, alles andere bleibt
+storage_write('rewe-stamm', {k: v for k, v in roh.items() if k not in ('mitglieder', 'ausgeblendet')})
+d = LE.call('rewe_start')[1]
+check('alte Daten ohne mitglieder/ausgeblendet: Start ok, Rollen-Inhaber und Team wie bisher, Ergänzte nicht im Team (403)', 'Pia Plus' not in namen(d['personen'])
+      and {'Mark Markt', 'Lea Lesen', 'Sabi Summe'} <= namen(d['personen']) and person('Sabi Summe', d['personen'])['teamExport'] is True
+      and 'Pia Plus' in namen(d['kandidaten']) and PI.call('rewe_start')[0] == 403, namen(d['personen']))
+storage_write('rewe-stamm', roh)
+st, r = LE.call('rewe_team_save', {'team': {ids['sabi']: {'export': True}, ids['lea']: {'alle': True}}})
+check('Team speichern behält die neuen Felder; Pia wieder im Team', st == 200 and stamm_roh()['mitglieder'] == [ids['pia']] and PI.call('rewe_start')[0] == 200
+      and person('Lea Lesen')['teamAlle'] is True, stamm_roh())
+prot = json.dumps(A.call('log')[1], ensure_ascii=False)
+check('Protokoll: Hinzufügen und Entfernen mit Namen', all(t in prot for t in ('REWE: Pia Plus ins Team aufgenommen (eigene Märkte ansehen und bearbeiten)', 'REWE: Pia Plus aus dem Team entfernt',
+      'REWE: Lea Lesen aus dem Team entfernt (ausgeblendet, Rechte der Rolle bleiben)', 'REWE: Lea Lesen ins Team aufgenommen (wieder eingeblendet)')), prot[:300])
+
 # ── Datenpaket ──
 check('Datenpaket nur mit „verwalten“ (403)', M.call('rewe_import', {'paket': PAKET, 'vorschau': True})[0] == 403)
 st, r = LE.call('rewe_import', {'paket': {'format': 'falsch'}, 'vorschau': True})
@@ -355,12 +456,14 @@ check('Vorschau: Zahlen, Listen, nicht leer', st == 200 and r['zahlen']['maerkte
       and r['zahlen']['stueck'] == 8 and r['zahlen']['dauerauftraege'] == 1 and r['listen'] == {'Liste A': 2, 'Liste B': 2, 'Liste C': 1} and r['leer'] is False and not r['fehler'], r)
 check('Vorschau schreibt nichts', len(LE.call('rewe_maerkte')[1]['maerkte']) == 4)
 check('Liste einem Mitarbeiter ohne „REWE ansehen“ zuordnen → Fehler', LE.call('rewe_import', {'paket': PAKET, 'zuordnung': {'Liste A': ids['otto']}, 'vorschau': True})[1]['fehler'])
+check('Liste einer im Modul ergänzten Mitarbeiterin zuordnen → ohne Fehler', LE.call('rewe_import', {'paket': PAKET, 'zuordnung': {'Liste A': ids['pia']}, 'vorschau': True})[1]['fehler'] == [])
 check('nicht leer ohne „ersetzen“ → 409', LE.call('rewe_import', {'paket': PAKET, 'zuordnung': zu})[0] == 409)
 st, r = LE.call('rewe_import', {'paket': PAKET, 'zuordnung': zu, 'ersetzen': True})
 check('Datenpaket übernommen (ersetzt)', st == 200 and r['zahlen']['maerkte'] == 4, r)
 d = LE.call('rewe_start')[1]
 check('Lieferwege aus dem Paket (mit Direkt), Team bleibt', [x['id'] for x in d['lieferwege']] == ['nordlager', 'suedlager', 'direkt']
       and next(p for p in d['personen'] if p['name'] == 'Sabi Summe')['teamExport'] is True, d['lieferwege'])
+check('Datenpaket „ersetzen“ behält ergänzte Mitarbeiter (Pia im Team)', person('Pia Plus', d['personen']).get('ergaenzt') is True and stamm_roh()['mitglieder'] == [ids['pia']])
 maerkte = {m['ort']: m for m in LE.call('rewe_maerkte')[1]['maerkte']}
 check('Märkte: Zuständigkeit aus den Listen (Liste C → niemand), Kaufbereitschaft, Name fehlt → „REWE <Ort>“', maerkte['Beispielstadt']['zustaendigName'] == 'Mark Markt'
       and maerkte['Neustadt']['zustaendigName'] == '' and maerkte['Stillhausen']['kauf'] == 'ruhend' and maerkte['Musterdorf']['name'] == 'REWE Musterdorf',
@@ -563,6 +666,22 @@ with sync_playwright() as p:
     pg.wait_for_selector('#rw-z-tabelle tr:has-text("Neustadt"):has-text("Evi Eins")')
     check('Zuweisung über die Oberfläche: Neustadt → Evi', any(m['ort'] == 'Neustadt' and m['zustaendigName'] == 'Evi Eins' for m in LE.call('rewe_maerkte')[1]['maerkte']))
     pg.screenshot(path=os.path.join(SH, 'rewe_zuweisung_1280.png'), full_page=True)
+    # Team: Entfernen mit Märkten nur Hinweis, sonst zweiter Klick; Hinzufügen über die Auswahl
+    karte, mark_knopf = f'#rw-z-personen [data-person="{ids["pia"]}"]', f'#rw-z-personen [data-person="{ids["mark"]}"] [data-entfernen]'
+    check('Zuweisung: Karte „Mitarbeiter hinzufügen“, Pia „im Modul ergänzt“, Mark mit Märkten nicht entfernbar', pg.is_visible('#rw-z-kandidat') and pg.is_visible('#rw-z-ergaenzen')
+          and 'im Modul ergänzt' in text(pg, karte) and pg.get_attribute(mark_knopf, 'aria-disabled') == 'true', text(pg, '#rw-z-personen'))
+    pg.click(mark_knopf, force=True); pg.wait_for_selector('#rw-toast.zeigen.fehler')
+    check('Entfernen mit Märkten: Hinweis „erst … umverteilen“, Mark bleibt', 'umverteilen' in text(pg, '#rw-toast') and pg.is_visible(mark_knopf), text(pg, '#rw-toast'))
+    pg.click(f'{karte} [data-entfernen]'); pg.wait_for_selector(f'{karte} [data-entfernen].frage')
+    check('Entfernen fragt erst nach (im Seitenstil, kein Browser-Dialog)', 'Wirklich entfernen?' in text(pg, f'{karte} [data-entfernen]') and 'keine REWE-Listen mehr' in text(pg, karte))
+    pg.screenshot(path=os.path.join(SH, 'rewe_team_entfernen_1280.png'))
+    pg.click(f'{karte} [data-entfernen]'); pg.wait_for_selector(karte, state='detached')
+    check('Pia entfernt: Karte weg, in der Auswahl „Mitarbeiter hinzufügen“, nicht mehr in der Personenauswahl', pg.locator(f'#rw-z-kandidat option[value="{ids["pia"]}"]').count() == 1
+          and pg.locator(f'#rw-z-nutzer option[value="{ids["pia"]}"]').count() == 0 and 'Pia Plus' not in namen(LE.call('rewe_start')[1]['personen']))
+    pg.select_option('#rw-z-kandidat', ids['pia']); pg.click('#rw-z-ergaenzen'); pg.wait_for_selector(karte)
+    check('Pia wieder hinzugefügt (Karte, Personenauswahl der Zuweisung, Hinweis)', 'Pia Plus' in pg.text_content(karte) and pg.locator(f'#rw-z-nutzer option[value="{ids["pia"]}"]').count() == 1
+          and 'ist jetzt im Team' in text(pg, '#rw-toast') and person('Pia Plus').get('ergaenzt') is True)
+    pg.screenshot(path=os.path.join(SH, 'rewe_team_1280.png'), full_page=True)
     pg.goto(B + f'/module/rewe/#abschluss/{WOCHE}'); pg.wait_for_selector('.rw-schritte')
     check('Wochenabschluss: Schritte, Vorschau mit Aufträgen', pg.locator('.rw-schritte li').count() == 4 and 'Vorschau Excel für WinAB' in text(pg, '#rw-a-inhalt'))
     with pg.expect_download() as dl:
@@ -604,6 +723,19 @@ with sync_playwright() as p:
         if thema == 'dark':
             check(f'{breite}px: dunkler Grund', pg.evaluate('getComputedStyle(document.body).backgroundColor') == 'rgb(18, 16, 17)')
         ctx.close()
+
+    for thema in ('light', 'dark'):
+        ctx, pg = anmelden('lena', 'Leitung-Konto-11', '198.51.100.10', 390, thema, 844, pfad='/module/rewe/#zuweisung', ziel='#rw-z-tabelle tbody tr [data-wahl]')
+        pg.wait_for_selector('#rw-z-kandidat')
+        check(f'390px {thema}: Zuweisung mit Team-Karten ohne waagerechtes Scrollen', pg.evaluate('document.documentElement.scrollWidth <= window.innerWidth + 1')
+              and pg.is_visible(f'#rw-z-personen [data-person="{ids["pia"]}"] [data-entfernen]'))
+        pg.screenshot(path=os.path.join(SH, f'rewe_zuweisung_390_{thema}.png'), full_page=True)
+        ctx.close()
+
+    ctx, pg = anmelden('pia', 'Plus-Konto-88', '198.51.100.17', ziel='#rw-w-gruppen .rw-leer')
+    check('im Modul ergänzt (ohne Rollenrecht): Seite mit eigener Woche, ohne Zuweisung', pg.is_visible('#rw-app') and pg.is_hidden('#rw-tabs [data-tab="zuweisung"]')
+          and 'Keine Märkte in dieser Liste' in text(pg, '#rw-w-gruppen'))
+    ctx.close()
 
     ctx, pg = anmelden('otto', 'Ohne-Konto-66', '198.51.100.15', ziel='#rw-err:not([hidden])')
     check('ohne REWE-Recht: Hinweis statt Inhalt', 'Berechtigung' in text(pg, '#rw-err') and pg.is_hidden('#rw-app'))

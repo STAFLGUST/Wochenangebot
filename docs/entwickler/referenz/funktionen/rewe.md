@@ -2,7 +2,7 @@
 
 <!-- ERZEUGT von `python3 werkzeuge/doku.py erzeugen` – nicht von Hand ändern. Quelle: Funktionen und Kommentare im Code. Die CI prüft, dass diese Datei zum Code passt. -->
 
-5 Dateien, 140 Funktionen – in der Reihenfolge der Datei, **fett** die Abschnitte. Text = erste Aussage des Kommentars direkt über der Funktion (Python: Docstring). Übersicht aller Module: [README.md](README.md).
+5 Dateien, 162 Funktionen – in der Reihenfolge der Datei, **fett** die Abschnitte. Text = erste Aussage des Kommentars direkt über der Funktion (Python: Docstring). Übersicht aller Module: [README.md](README.md).
 
 ## `app/api/aktionen/rewe.php`
 
@@ -42,6 +42,7 @@ _REWE · Vordisposition Dry Aged_
 **Laden und Schreiben**
 
 - `rw_stamm()`
+- `rw_id_liste(v)` – Liste von Nutzer-IDs: nur nicht leere Texte, jede einmal (fehlende oder fremde Werte → leere Liste)
 - `rw_maerkte_doc()`
 - `rw_verlauf_doc()`
 - `rw_wochen_doc(jahr)` – Wochen eines ISO-Jahres: maerkte[<Markt-ID>][<WW>] = Antwort, abschluss[<WW>] = Wochenabschluss
@@ -77,8 +78,15 @@ _REWE · Vordisposition Dry Aged_
 **Mitarbeiter (Verwaltung, nur lesend)**
 
 - `rw_namen()` – Alle Mitarbeiter: ID → Name (auch gesperrte, damit alte Zuweisungen lesbar bleiben)
-- `rw_personen()` – Mitarbeiter, denen Märkte zugewiesen werden können: aktiv, mit Zugang und „REWE ansehen“
-- `rw_team_pruefen(v)` – Team speichern: {Nutzer-ID: {alle, export}} – nur Mitarbeiter mit „REWE ansehen“
+- `rw_personen()` – Mitarbeiter, denen Märkte zugewiesen werden können (Team des Moduls, rw_im_team) – dieselbe Liste für die Karten der Zuweisung, die Personenauswahl, die …
+- `rw_kandidaten()` – Mitarbeiter, die sich ins Team aufnehmen lassen: aktiv, mit Zugang und Modulzugang „rewe.zugang“, noch nicht im Team (auch ausgeblendete Rollen-Inhaber), …
+- `rw_aufnehmbar(u)`
+- `rw_zustaendig_zahlen(doc)` – Zuständige Märkte je Mitarbeiter in der Abfragewoche und danach (aktuelle und künftige Einträge der „ab KW“-Historie)
+- `rw_mitglied_ergaenzen(nutzer)` – Mitarbeiter ins Team aufnehmen (Aufruf unter der Sperre): hebt ein Ausblenden auf; ohne „REWE ansehen“ aus den Rollen wird er ausdrücklich ergänzt (mitglieder).
+- `rw_mitglied_entfernen(nutzer)` – Mitarbeiter aus dem Team entfernen (Aufruf unter der Sperre): nur ohne Märkte ab der Abfragewoche (sonst 422).
+- `rw_nutzer(v)`
+- `rw_name(u)`
+- `rw_team_pruefen(v)` – Team speichern: {Nutzer-ID: {alle, export}} – nur Mitarbeiter im Team (rw_personen)
 
 **Kundenstamm der Verwaltung (nur lesend, customers_load): WinAB-Kd.-Nr. → Kunde**
 
@@ -93,9 +101,17 @@ _REWE · Vordisposition Dry Aged_
 - `rw_zustaendig(m, kw)`
 - `rw_lw(m, kw)`
 
-**Sichtbarkeit (GR-103, serverseitig je Markt)**
+**Team und Sichtbarkeit (GR-103, serverseitig je Markt)**
 
-- `rw_team(me)` – Alle Listen / Wochenabschluss: Recht der Plattform oder Zuweisung im Team des Moduls (nur mit „REWE ansehen“)
+- `rw_team_daten(neu)`
+- `rw_verboten(u, recht)`
+- `rw_ausgeblendet(u)`
+- `rw_ergaenzt(u)`
+- `rw_sehen(u)`
+- `rw_bearbeiten(u)`
+- `rw_im_team(u)`
+- `rw_require_perm(recht, schreibend)` – Wie require_perm für die Aktionen des Moduls: „rewe.sehen“ und „rewe.bearbeiten“ gelten auch für im Team ergänzte Mitarbeiter (rw_sehen, rw_bearbeiten), alle …
+- `rw_team(me)` – Alle Listen / Wochenabschluss: Recht der Plattform oder Zuweisung im Team des Moduls (nur im Team, nicht ausgeblendet)
 - `rw_alle(me)`
 - `rw_export(me)`
 - `rw_eigen(m, me, kw)`
@@ -235,7 +251,10 @@ _STAFL-Plattform · REWE – Oberfläche der Vordisposition Dry Aged_
 
 **Zuweisung und Team**
 
+- `personKarte(p, anzahl)`
+- `neuKarte()`
 - `renderZuweisung()`
+- `teamGeaendert(r, text)` – Team ändern: Mitarbeiter hinzufügen/entfernen liefern das neue Team; danach Start neu laden (Listenwahl, Auswahlfelder)
 
 **Wochenabschluss**
 
@@ -263,5 +282,8 @@ _REWE (Modul rewe, Oberfläche rewe.intern unter /module/rewe/) – Vordispositi
 - `check(n, c, i)`
 - `kw_von(d)`
 - `kw_plus(kw, n)`
+- `namen(liste)` – ── Team: Mitarbeiter hinzufügen und entfernen (Wunsch des Inhabers 11.11.2026) ──
+- `person(name, liste)`
+- `stamm_roh()`
 - `text(pg, sel)`
 - `anmelden(user, pw, ip, breite, thema, hoehe, ziel, pfad)`

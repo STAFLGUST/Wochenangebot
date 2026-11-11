@@ -6,7 +6,7 @@ Aufruf: `/api/?action=<aktion>` (GET lesend, POST mit JSON und `X-CSRF-Token` sc
 
 Spalten: **Art** – lesend, schreibend (nur POST) oder post (GET liest, POST schreibt); **Kennzeichen** – öffentlich (ohne Mitarbeiteranmeldung), Kunden-Wartung, wartungsfrei, fremde Herkunft, eigene Anmeldung (siehe [regeln/aktionen/LIESMICH.md](../../../regeln/aktionen/LIESMICH.md)).
 
-280 Aktionen in 15 Modulen.
+282 Aktionen in 15 Modulen.
 
 ## Angebot (`angebot`)
 
@@ -133,6 +133,8 @@ Spalten: **Art** – lesend, schreibend (nur POST) oder post (GET liest, POST sc
 | `rewe_notiz_save` | `rewe.intern` | schreibend | – | Recht rewe.bearbeiten | `app/api/aktionen/rewe.php` |
 | `rewe_stamm_save` | `rewe.intern` | schreibend | – | Recht rewe.verwalten | `app/api/aktionen/rewe.php` |
 | `rewe_start` | `rewe.intern` | lesend | – | Recht rewe.sehen | `app/api/aktionen/rewe.php` |
+| `rewe_team_entfernen` | `rewe.intern` | schreibend | – | Recht rewe.verwalten | `app/api/aktionen/rewe.php` |
+| `rewe_team_ergaenzen` | `rewe.intern` | schreibend | – | Recht rewe.verwalten | `app/api/aktionen/rewe.php` |
 | `rewe_team_save` | `rewe.intern` | schreibend | – | Recht rewe.verwalten | `app/api/aktionen/rewe.php` |
 | `rewe_woche` | `rewe.intern` | lesend | – | Recht rewe.sehen | `app/api/aktionen/rewe.php` |
 | `rewe_zuweisen` | `rewe.intern` | schreibend | – | Recht rewe.verwalten | `app/api/aktionen/rewe.php` |
