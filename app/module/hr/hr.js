@@ -227,19 +227,21 @@
   }
 
   /* ---------- Jahresplanung: Stand der Vorplanung des nächsten Jahres (Mitarbeiter) ----------
-     Nur in der Planungsphase (Server: hr_start.planung). Balken: genehmigt dunkel, beantragt heller, Strich beim Ziel. */
+     Nur in der Planungsphase (Server: hr_start.planung). Balken: genehmigt dunkel, beantragt heller, Strich beim Ziel.
+     Ziel (Inhaber 11.11.2026): höchstens unverplantMax Urlaubstage dürfen unverplant bleiben (vorher ein Anteil in %). */
+  const unverplantText = (u) => (u > 0 ? `höchstens ${tageText(u)} dürfen unverplant bleiben` : 'der ganze Urlaub');
   function zeigePlanungMein() {
     const box = $('#mein-planung'), p = S.start && S.start.planung;
     box.hidden = !p;
     if (!p) { box.innerHTML = ''; return; }
     const proz = (n) => (p.anspruch > 0 ? Math.min(100, (n / p.anspruch) * 100) : 0);
     const zustand = p.erreicht ? 'erreicht' : p.vorbei ? 'vorbei' : '';
-    const zielText = `${zahl(p.ziel)} von ${zahl(p.anspruch)} ${p.anspruch === 1 ? 'Tag' : 'Tagen'}`;
+    const zielText = `${unverplantText(p.unverplantMax)}, also mindestens ${zahl(p.ziel)} von ${zahl(p.anspruch)} ${p.anspruch === 1 ? 'Tag' : 'Tagen'}`;
     const stand = p.erreicht ? `Ziel erreicht – ${tageText(p.geplant)} geplant`
       : `${zahl(p.geplant)} von ${zahl(p.ziel)} ${p.ziel === 1 ? 'Tag' : 'Tagen'} geplant · noch ${tageText(p.fehlt)}`;
     const satz = p.vorbei && !p.erreicht
-      ? `Der Stichtag ${de(p.stichtag)} ist vorbei. Bitte planen Sie jetzt mindestens ${p.prozent} % Ihres Urlaubs ${p.jahr} – ${zielText}.`
-      : `Bitte planen Sie bis zum ${de(p.stichtag)} mindestens ${p.prozent} % Ihres Urlaubs ${p.jahr} vor – ${zielText}.`;
+      ? `Der Stichtag ${de(p.stichtag)} ist vorbei. Bitte planen Sie jetzt Ihren Urlaub ${p.jahr}: ${zielText}. Sonst plant die Personalstelle Ihren Urlaub.`
+      : `Bitte planen Sie Ihren Urlaub ${p.jahr} bis zum ${de(p.stichtag)} vor: ${zielText}.`;
     box.className = 'hr-mp hr-glas' + (zustand ? ' ' + zustand : '');
     box.innerHTML = `<div class="hr-mp-text"><h2 id="mp-titel">Urlaubsplanung ${esc(String(p.jahr))}</h2><p>${esc(satz)}
         ${S.start.vertretungPflicht ? ' Für jeden Zeitraum wählen Sie eine Vertretung aus.' : ''}</p></div>
@@ -431,7 +433,7 @@
     $('#vp-schalter-l').hidden = !v || !an;
     if (!v) return;
     $('#vp-info').textContent = `Vorplanung ${v.jahr}: mehrere Zeiträume auf einmal beantragen – jeder wird wie ein einzelner Antrag geprüft, auch ob Ihre Vertretung da ist. `
-      + `Bitte bis zum ${de(v.stichtag)} mindestens ${v.prozent} % planen${v.einzeltageMax ? `, höchstens ${v.einzeltageMax} einzelne Urlaubstage` : ''}.`;
+      + `Bitte bis zum ${de(v.stichtag)} planen – ${unverplantText(v.unverplantMax)}${v.einzeltageMax ? `, höchstens ${v.einzeltageMax} einzelne Urlaubstage` : ''}.`;
     for (const s of $$('#vp-liste .vp-vertretung')) { const w = s.value; s.innerHTML = vpOptionen(); s.value = w; }
     for (const s of $$('#vp-liste .vp-vertretung2')) { const w = s.value; s.innerHTML = vpOptionen(true); s.value = w; }
     if (S.vp) vpPruefen();
@@ -1141,7 +1143,7 @@
   function zeigePlanung() {
     const d = S.jp, z = d.zahlen, j = d.jahr;
     $('#jp-titel').textContent = `Jahresplanung ${j}`;
-    $('#jp-info').textContent = [`Stichtag ${de(d.stichtag)}`, `Ziel: ${d.prozent} % des Anspruchs`, d.vertretungPflicht ? 'Vertretung Pflicht' : 'Vertretung freiwillig',
+    $('#jp-info').textContent = [`Stichtag ${de(d.stichtag)}`, d.unverplantMax > 0 ? `Ziel: höchstens ${tageText(d.unverplantMax)} unverplant` : 'Ziel: ganzer Urlaub verplant', d.vertretungPflicht ? 'Vertretung Pflicht' : 'Vertretung freiwillig',
       d.einzeltageMax ? `höchstens ${d.einzeltageMax} einzelne Urlaubstage` : '',
       d.abschluss ? `abgeschlossen am ${window.STAFL_FORMAT.datum(d.abschluss.t)}${d.abschluss.by ? ' von ' + d.abschluss.by : ''}` : `Hinweis für Mitarbeiter ab ${de(d.start)}`].filter(Boolean).join(' · ');
     const kachel = (titel, wert, cls = '', zusatz = '') => `<div class="hr-wert hr-glas ${cls}"><span>${esc(titel)}</span><b>${esc(wert)}</b>${zusatz ? `<small>${esc(zusatz)}</small>` : ''}</div>`;
@@ -1213,7 +1215,7 @@
   }
   $('#tab-planung').addEventListener('click', async (e) => {
     const jb = e.target.closest('[data-pjahr]');
-    if (jb) { S.pjahr = (S.pjahr || new Date().getFullYear() + 1) + Number(jb.dataset.pjahr); meldung($('#jp-meldung'), ''); ladePlanung(); return; }
+    if (jb) { S.pjahr = (S.pjahr || (S.jp && S.jp.jahr) || new Date().getFullYear() + 1) + Number(jb.dataset.pjahr); meldung($('#jp-meldung'), ''); ladePlanung(); return; }
     const fb = e.target.closest('[data-jp-filter]');
     if (fb) { S.jpFilter = fb.dataset.jpFilter; zeigePlanungListe(); return; }
     const balken = e.target.closest('[data-jp-antrag]');
@@ -1257,7 +1259,7 @@
     const gesendet = (r) => (r ? `${r.gesendet} ${r.gesendet === 1 ? 'E-Mail' : 'E-Mails'} gesendet${r.fehler ? `, ${r.fehler} nicht zugestellt` : ''}${r.ohneAdresse ? `, ${r.ohneAdresse} ohne E-Mail-Adresse` : ''}${test(r)}` : 'keine E-Mail gesendet');
     let r;
     if (was === 'erinnern') {
-      if (!(await frage(`Erinnerung zur Urlaubsplanung ${j} senden?`, `${d.zahlen.erinnern} Mitarbeiter mit E-Mail-Adresse, die ihr Ziel (${d.prozent} % bis ${de(d.stichtag)}) noch nicht erreicht haben, bekommen eine E-Mail mit ihrem Stand.`, 'Erinnerung senden'))) return;
+      if (!(await frage(`Erinnerung zur Urlaubsplanung ${j} senden?`, `${d.zahlen.erinnern} Mitarbeiter mit E-Mail-Adresse, die ihr Ziel (${d.unverplantMax > 0 ? `höchstens ${tageText(d.unverplantMax)} unverplant` : 'ganzer Urlaub'} bis ${de(d.stichtag)}) noch nicht erreicht haben, bekommen eine E-Mail mit ihrem Stand.`, 'Erinnerung senden'))) return;
       knopf.disabled = true;
       r = await api('hr_planung_erinnern', { jahr: j });
       if (r.status !== 200) { knopf.disabled = false; meldung(m, fehlerText(r, 'Erinnerung nicht gesendet')); return; }

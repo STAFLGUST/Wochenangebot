@@ -79,9 +79,9 @@ switch ($action) {
                      // feste Vertretung aus den Stammdaten (im Antrag gesperrt) und wen der Mitarbeiter vertritt („Sie vertreten“)
                      'festeVertretung' => $ich && ($fv = hr_feste_vertretung($ich, $personal)) ? ['id' => $fv['id'], 'name' => hr_name($fv)] : null,
                      'vertretungen' => $ich ? hr_meine_vertretungen($ich, $personal, $abw['eintraege']) : [],
-                     // Vorplanung (Schalter bei „Urlaub beantragen“): Jahr, Stichtag und Grenze der einzelnen Urlaubstage
-                     'vorplanung' => (function () { $pe = hr_planung_einst(); $j = hr_planung_jahr();
-                         return ['jahr' => $j, 'stichtag' => hr_planung_daten($pe, $j)['stichtag'], 'prozent' => $pe['prozent'], 'einzeltageMax' => $pe['einzeltageMax'], 'max' => HR_VORPLANUNG_MAX]; })()]);
+                     // Vorplanung (Schalter bei „Urlaub beantragen“): Jahr, Stichtag, höchstens unverplante Tage, Grenze der einzelnen Urlaubstage
+                     'vorplanung' => (function () { $pe = hr_planung_einst(); $j = hr_planung_jahr(null, $pe);
+                         return ['jahr' => $j, 'stichtag' => hr_planung_daten($pe, $j)['stichtag'], 'unverplantMax' => $pe['unverplantMax'], 'einzeltageMax' => $pe['einzeltageMax'], 'max' => HR_VORPLANUNG_MAX]; })()]);
         }
 
         /* Urlaubsübersicht: alle Mitarbeiter im Urlaubsplan mit Summen eines Jahres (Recht hr.uebersicht oder hr.verwalten).
@@ -167,13 +167,13 @@ switch ($action) {
             if (!$ich) fail('Ihr Konto ist noch keinem Mitarbeiter zugeordnet. Bitte an die Personalstelle wenden.', 409);
             if ($vor) {
                 if ($art !== 'U') fail('Die Vorplanung gilt für Urlaub.', 422);
-                $jahr = hr_planung_jahr(); $pe = hr_planung_einst();
+                $pe = hr_planung_einst(); $jahr = hr_planung_jahr(null, $pe);
                 [$erg, $gut] = hr_vorplanung_pruefen($ich, $personal, $abw['eintraege'], $einst, $zr, $jahr);
                 $stand = hr_planung_person($ich, $abw['eintraege'], $jahr, $pe, $gut);
                 $konto = hr_konto($ich, $abw['eintraege'], $jahr);
                 $neu = array_sum(array_map(function ($e) { return $e['fehler'] === null ? $e['tage'] : 0; }, $erg));
                 $ue = hr_ueberzug($ich, $abw['eintraege'], array_map(function ($z) { return ['art' => 'U', 'von' => $z['von'], 'bis' => $z['bis']]; }, $gut));
-                respond(['ok' => true, 'jahr' => $jahr, 'zeitraeume' => $erg, 'stand' => $stand + ['jahr' => $jahr, 'prozent' => $pe['prozent'], 'stichtag' => hr_planung_daten($pe, $jahr)['stichtag']],
+                respond(['ok' => true, 'jahr' => $jahr, 'zeitraeume' => $erg, 'stand' => $stand + ['jahr' => $jahr, 'stichtag' => hr_planung_daten($pe, $jahr)['stichtag']],
                          'verfuegbarDanach' => $konto['verfuegbar'] - $neu, 'ueberzug' => $ue['tage'], 'ueberziehenMax' => $einst['ueberziehenMax'],
                          'ueberzugText' => $ue['tage'] > 0 ? hr_ueberzug_text($ue, $einst['ueberziehenMax']) : null]);
             }
@@ -218,7 +218,7 @@ switch ($action) {
                 hr_abwesenheiten_schreiben($abw);
                 $pe = hr_planung_einst();
                 return ['fehler' => false, 'zeitraeume' => $erg, 'neu' => $neu, 'jahr' => $jahr, 'ich' => $ich, 'personal' => $personal, 'alle' => $abw['eintraege'],
-                        'stand' => hr_planung_person($ich, $abw['eintraege'], $jahr, $pe) + ['jahr' => $jahr, 'prozent' => $pe['prozent'], 'stichtag' => hr_planung_daten($pe, $jahr)['stichtag']],
+                        'stand' => hr_planung_person($ich, $abw['eintraege'], $jahr, $pe) + ['jahr' => $jahr, 'stichtag' => hr_planung_daten($pe, $jahr)['stichtag']],
                         'konto' => hr_konto($ich, $abw['eintraege'], $jahr)];
             });
             if (isset($res['bestaetigen'])) respond(['ok' => false, 'error' => $res['bestaetigen']['text'], 'bestaetigen' => $res['bestaetigen']], 409);
@@ -648,7 +648,7 @@ switch ($action) {
                 if ($u === null) fail('Resturlaub überziehen: bitte 0 bis 30 Tage in ganzen oder halben Tagen angeben (0 = nie).', 422);
                 $zusatz['ueberziehenMax'] = $u;
             }
-            // Jahresplanung (optional): Beginn, Stichtag, Anteil, Vertretung Pflicht – der Abschluss bleibt
+            // Jahresplanung (optional): Beginn, Stichtag, höchstens unverplante Tage, Vertretung Pflicht, Einzeltage – der Abschluss bleibt
             $planung = null;
             if (array_key_exists('planung', $b)) { try { $planung = hr_planung_einst_pruefen($b['planung']); } catch (InvalidArgumentException $ex) { fail($ex->getMessage(), 422); } }
             // Übergangsregel: erstes Jahr mit Verfall (Jahreszahl) oder null = jedes Jahr
@@ -672,8 +672,10 @@ switch ($action) {
             });
             if ($planung !== null && array_diff_assoc($planung, array_intersect_key($planungVorher, $planung))) {
                 $tm = function ($v) { return substr($v, 3, 2) . '.' . substr($v, 0, 2) . '.'; };
-                audit('hr', 'HR: Jahresplanung eingestellt (ab ' . $tm($planung['start']) . ', Stichtag ' . $tm($planung['stichtag']) . ', ' . $planung['prozent'] . ' %, Vertretung '
-                    . ($planung['vertretungPflicht'] ? 'Pflicht' : 'freiwillig') . (isset($planung['einzeltageMax']) ? ', höchstens ' . $planung['einzeltageMax'] . ' einzelne Urlaubstage' : '') . ')');
+                $pn = hr_planung_einst();   // gespeicherter Stand (auch Werte ohne Angabe)
+                audit('hr', 'HR: Jahresplanung eingestellt (ab ' . $tm($pn['start']) . ', Stichtag ' . $tm($pn['stichtag']) . (hr_stichtag_im_jahr($pn) ? ' im geplanten Jahr' : '')
+                    . ', höchstens ' . hr_tage_text((float)$pn['unverplantMax']) . ' unverplant, Vertretung ' . ($pn['vertretungPflicht'] ? 'Pflicht' : 'freiwillig')
+                    . ', höchstens ' . $pn['einzeltageMax'] . ' einzelne Urlaubstage)');
             }
             audit('hr', 'HR: Urlaubssperren und Ferien gespeichert (' . count($sperren) . ' Sperren, ' . count($ferien) . ' Ferienzeiträume)');
             if ($bis !== null && $bis !== $vorher) audit('hr', 'HR: Verfallstag Resturlaub auf ' . substr($bis, 3, 2) . '.' . substr($bis, 0, 2) . '. geändert (vorher ' . substr($vorher, 3, 2) . '.' . substr($vorher, 0, 2) . '.)');

@@ -32,7 +32,8 @@ declare(strict_types=1);
      den jeder Mitarbeiter beim Urlaubsantrag sieht; änderbar in Verwaltung → Urlaub. Eine unverändert gespeicherte frühere
      Vorlage (HR_REGELN_FRUEHER) zeigt die aktuelle – kompakte – Vorlage.
    - Urlaubssperren aus den Regeln jedes Jahr automatisch (Inhaber 03.11.2026, hr-einstellungen „regelSperren“, Standard an):
-     Ostergeschäft (die zwei Wochen vor Karfreitag) und Weihnachtsgeschäft (Montag der letzten Novemberwoche bis 24.12.).
+     Ostergeschäft (die zwei Wochen vor Karfreitag) und Weihnachtsgeschäft (30.11. bis 24.12.; bis 11.11.2026 ab dem Montag der
+     letzten Novemberwoche).
      Sie gelten wie eingetragene Sperren (hr_einstellungen „sperren“ enthält beide; „sperrenEigene“ nur die eingetragenen).
    - Sonderregelung Dezember (Inhaber 10.11.2026): am 24.12. und 31.12. ist der Betrieb geschlossen. Verpflichtend für alle,
      nicht je Mitarbeiter wählbar: jeder Mitarbeiter im Urlaubsplan bekommt an beiden Tagen automatisch je ½ Urlaubstag
@@ -385,8 +386,29 @@ function hr_ueberzug_text(array $u, float $max): string
 
 /* ---------------- Urlaubsregeln und Sperren aus den Regeln (Inhaber 03.11.2026) ---------------- */
 const HR_REGELN_MAX = 6000;   // Zeichen
-/* Vorlage (Inhaber 03.11.2026: kompakt und einfach) – eine Zeile „1. Überschrift“, darunter der Text, Absätze durch Leerzeilen */
+/* Vorlage (Inhaber 03.11.2026: kompakt und einfach; Wortlaut 11.11.2026 wie „Urlaubsregeln kompakt“ der Mitarbeiter-Mail) – eine
+   Zeile „1. Überschrift“, darunter der Text, Absätze durch Leerzeilen */
 const HR_REGELN_STANDARD = "1. Urlaubsanspruch\n"
+    . "Wie viele Urlaubstage Sie haben, steht in Ihrem Arbeitsvertrag.\n\n"
+    . "2. Planung\n"
+    . "Urlaub ist grundsätzlich im laufenden Kalenderjahr zu nehmen.\n\n"
+    . "3. Vorplanung\n"
+    . "Planen Sie Ihren Jahresurlaub bis zum 31.01. vor (Schalter „Vorplanung“ bei „Urlaub beantragen“). Höchstens 5 Urlaubstage dürfen unverplant bleiben. Liegt keine Planung vor, plant die Personalstelle Ihren Urlaub.\n\n"
+    . "4. Einzelne Urlaubstage\n"
+    . "In der Vorplanung höchstens 4 einzelne Urlaubstage. Den übrigen Urlaub planen Sie bitte zusammenhängend.\n\n"
+    . "5. Urlaubssperre\n"
+    . "Grundsätzlich kein Urlaub im Ostergeschäft (2 Wochen vor Ostern) und im Weihnachtsgeschäft (30.11.–24.12.).\n\n"
+    . "6. Resturlaub\n"
+    . "Resturlaub ist grundsätzlich bis zum 31.03. des Folgejahres zu nehmen, sonst verfällt er.\n\n"
+    . "7. Vertretung\n"
+    . "Stimmen Sie Ihren Urlaub mit Ihrer Urlaubsvertretung ab. Sie muss während Ihres ganzen Urlaubs anwesend sein – Überschneidungen sind nicht erlaubt.\n\n"
+    . "8. Sonderregelung Dezember\n"
+    . "Am 24.12. und 31.12. bleibt der Betrieb geschlossen. Für beide Tage zusammen wird 1 Urlaubstag angerechnet – automatisch, ein Antrag ist nicht nötig.";
+/* Frühere Vorlagen: wurde eine davon unverändert gespeichert (Verwaltung → Urlaub speichert den Text immer mit), gilt die
+   aktuelle Vorlage – eigene Texte der Personalstelle bleiben unberührt; gespeichert wird dabei nichts (GR-006). */
+const HR_REGELN_FRUEHER = [
+    // 10.11.–11.11.2026 (PR #325): Vorplanung bis 31.12. mit 90 %, Urlaubsdauer 15 Tage, Weihnachtsgeschäft ab der letzten Novemberwoche
+    "1. Urlaubsanspruch\n"
     . "Wie viele Urlaubstage Sie haben, steht in Ihrem Arbeitsvertrag.\n\n"
     . "2. Vorplanung\n"
     . "Bitte planen Sie bis zum 31.12. mindestens 90 % Ihres Urlaubs für das nächste Jahr vor (Schalter „Vorplanung“ bei „Urlaub beantragen“) – so können alle fair planen.\n\n"
@@ -401,10 +423,7 @@ const HR_REGELN_STANDARD = "1. Urlaubsanspruch\n"
     . "7. Resturlaub\n"
     . "Urlaub muss im laufenden Jahr genommen werden. Ging das wegen Urlaubssperre, viel Arbeit oder Krankheit nicht, haben Sie bis zum 31.03. des Folgejahres Zeit – danach verfällt der Rest in der Regel (§ 7 Abs. 3 BUrlG).\n\n"
     . "8. Vertretung\n"
-    . "Ihr Urlaub darf sich nicht mit dem Ihrer Vertretung überschneiden. Wer Sie vertritt, steht im Vertretungsplan.";
-/* Frühere Vorlagen: wurde eine davon unverändert gespeichert (Verwaltung → Urlaub speichert den Text immer mit), gilt die
-   aktuelle Vorlage – eigene Texte der Personalstelle bleiben unberührt; gespeichert wird dabei nichts (GR-006). */
-const HR_REGELN_FRUEHER = [
+    . "Ihr Urlaub darf sich nicht mit dem Ihrer Vertretung überschneiden. Wer Sie vertritt, steht im Vertretungsplan.",
     // 10.11.2026 (PR #324): acht Punkte, Sonderregelung Dezember noch zum Selbst-Einplanen
     "1. Urlaubsanspruch\n"
     . "Wie viele Urlaubstage Sie haben, steht in Ihrem Arbeitsvertrag.\n\n"
@@ -469,15 +488,15 @@ function hr_regeln_pruefen($t): string
 }
 
 /* Sperren aus den Urlaubsregeln für ein Jahr: Ostergeschäft = die zwei Wochen vor Karfreitag (Karfreitag − 14 bis
-   Gründonnerstag), Weihnachtsgeschäft = Montag der letzten Novemberwoche (Woche mit dem 30.11.) bis 23.12. – am 24.12. ist
-   der Betrieb geschlossen (Sonderregelung Dezember ab 2026, $schliess); ohne sie wie früher bis einschließlich 24.12. */
+   Gründonnerstag), Weihnachtsgeschäft = 30.11. bis 23.12. (Inhaber 11.11.2026, „30.11.–24.12.“; vorher ab dem Montag der
+   letzten Novemberwoche) – am 24.12. ist der Betrieb geschlossen (Sonderregelung Dezember ab 2026, $schliess); ohne sie bis
+   einschließlich 24.12. */
 function hr_regel_sperren(int $j, bool $schliess = true): array
 {
     $karfreitag = hr_plus(hr_ostern($j), -2);
-    $nov30 = sprintf('%04d-11-30', $j);
     $ende = $schliess && $j >= HR_SCHLIESSTAGE_AB ? '12-23' : '12-24';
     return [['von' => hr_plus($karfreitag, -14), 'bis' => hr_plus($karfreitag, -1), 'text' => 'Ostergeschäft', 'auto' => true],
-            ['von' => hr_plus($nov30, 1 - hr_wochentag($nov30)), 'bis' => sprintf('%04d-%s', $j, $ende), 'text' => 'Weihnachtsgeschäft', 'auto' => true]];
+            ['von' => sprintf('%04d-11-30', $j), 'bis' => sprintf('%04d-%s', $j, $ende), 'text' => 'Weihnachtsgeschäft', 'auto' => true]];
 }
 
 /* ---------------- Verfallstag des Resturlaubs aus dem Vorjahr ----------------

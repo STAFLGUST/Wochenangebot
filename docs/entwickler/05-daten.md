@@ -377,7 +377,8 @@ Mitarbeiter sind die Nutzer der Plattform (`users_load()`); HR speichert nur eig
   einer Urlaubswoche zählt dort nur nicht mit.
 - **`hr-einstellungen`**: `{"rev": 1, "sperren": [{"von": "…", "bis": "…", "text": "Inventur"}], "ferien": [ … ], "uebertragBis": "03-31", "antraege": true}` – `uebertragBis` (Verfallstag des Resturlaubs, Monat-Tag) ist optional; fehlt es, gilt der 31.03. `antraege` (Schalter „Urlaubsanträge über die Plattform“, Verwaltung → Urlaub, Aktion `hr_antraege_save`) ist optional; nur `false` schaltet Anträge aus, fehlt es, sind sie eingeschaltet.
   Seit 03.11.2026 zusätzlich optional: `regelSperren` (Sperren aus den Urlaubsregeln – Ostergeschäft: zwei Wochen vor
-  Karfreitag, Weihnachtsgeschäft: Montag der letzten Novemberwoche bis 23.12., ohne Sonderregelung Dezember bis 24.12. –
+  Karfreitag, Weihnachtsgeschäft: 30.11. bis 23.12. (seit 11.11.2026; vorher ab dem Montag der letzten Novemberwoche), ohne
+  Sonderregelung Dezember bis 24.12. –
   jedes Jahr berechnet, nicht gespeichert; nur `false` schaltet sie aus) und `regeln` (Text der Urlaubsregeln beim Urlaubsantrag; fehlt das Feld, gilt die Vorlage
   `HR_REGELN_STANDARD`, leer = keine Regeln; steht dort unverändert eine frühere Vorlage aus `HR_REGELN_FRUEHER`, gilt
   ebenfalls die aktuelle Vorlage – nur beim Lesen, gespeichert wird nichts). `sperren` enthält nur die eingetragenen Sperren.
@@ -385,10 +386,15 @@ Mitarbeiter sind die Nutzer der Plattform (`users_load()`); HR speichert nur eig
   Verfallstag dieses Jahres; in den Jahren davor verfällt bei niemandem etwas (`hr_verfall_ab()`, `hr_konto`). Fehlt das Feld
   oder ist es `null`, verfällt Resturlaub jedes Jahr.
   `planung` (seit 03.11.2026, optional, `module/hr/planung.php`): Jahresplanung des nächsten Jahres –
-  `{"start": "10-01", "stichtag": "12-31", "prozent": 90, "vertretungPflicht": true, "einzeltageMax": 4, "abschluss": {"2027": {"t": "…", "by": "…", "byId": "u…"}}}`.
-  Fehlende Felder gelten als Standard (Beginn 01.10., Stichtag 31.12. – bis 10.11.2026: 01.12., ein gespeicherter Stichtag
-  bleibt –, 90 %, Vertretung Pflicht, höchstens 4 einzelne Urlaubstage in der Vorplanung; `einzeltageMax` 0–50, 0 = keine
-  Prüfung, seit 10.11.2026); `abschluss` je Jahr setzt `hr_planung_abschluss` (Verwaltung → Urlaub speichert ihn nie mit).
+  `{"start": "10-01", "stichtag": "01-31", "unverplantMax": 5, "vertretungPflicht": true, "einzeltageMax": 4, "abschluss": {"2027": {"t": "…", "by": "…", "byId": "u…"}}}`.
+  Fehlende Felder gelten als Standard (Beginn 01.10., Stichtag 31.01. – seit 11.11.2026, vorher 31.12. bzw. 01.12.; ein
+  gespeicherter Stichtag bleibt –, höchstens 5 Urlaubstage unverplant, Vertretung Pflicht, höchstens 4 einzelne Urlaubstage
+  in der Vorplanung; `einzeltageMax` 0–50, 0 = keine Prüfung, seit 10.11.2026). `unverplantMax` (seit 11.11.2026, 0–50):
+  Ziel je Mitarbeiter = Anspruch minus diese Tage (nie unter 0) – ersetzt den Anteil `prozent` (bis 11.11.2026, Standard 90 %);
+  ein gespeichertes `prozent` bleibt stehen und gilt nur noch in der Vorversion. Liegt der Stichtag im Kalender vor dem
+  Beginn, gilt er im geplanten Jahr selbst (`hr_planung_daten`: 01.10.2026 bis 31.01.2027 für 2027) und das laufende Jahr
+  bleibt bis zum nächsten Beginn das Planungsjahr (`hr_planung_jahr`); sonst liegt der Stichtag wie bisher im Jahr davor.
+  `abschluss` je Jahr setzt `hr_planung_abschluss` (Verwaltung → Urlaub speichert ihn nie mit).
   Vorplanung = Urlaub des Planungsjahres, erfasst bis zum Stichtag (`hr_vorplanung_eintrag`); Einzeltage berechnet
   `hr_einzeltage` (Blöcke über Wochenende, Feiertage, freie Tage, Gleittage und Schließtage hinweg).
   `schliesstage` (seit 10.11.2026, optional, nur `false` schaltet ab): Sonderregelung Dezember – 24.12. und 31.12. (ab 2026)
