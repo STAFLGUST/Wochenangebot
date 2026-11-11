@@ -72,6 +72,11 @@ switch ($action) {
                 } elseif ($note && ($note['type'] ?? '') === 'master') {
                     $d = changes_between($before, $model);
                     if ($d) audit('draft', 'Stammdaten auf den Entwurf angewendet', array_slice($d, 0, 2000));
+                } elseif ($note && ($note['type'] ?? '') === 'aufbau') {
+                    // Knopf „Editor“ im Angebot: Reihenfolge der Gruppen (gilt für alle Angebote), dabei ggf. Bereiche geändert
+                    $d = changes_between($before, $model);
+                    $nb = count(array_filter($d, function ($c) { return str_ends_with((string)$c['k'], '|section'); }));
+                    audit('draft', 'Aufbau des Angebots geändert (Reihenfolge der Bereiche und Gruppen' . ($nb ? ', Bereich bei ' . $nb . ($nb === 1 ? ' Gruppe' : ' Gruppen') . ' neu' : '') . ')', array_slice($d, 0, 2000));
                 } elseif ($note && ($note['type'] ?? '') === 'version') {
                     audit('import', 'Frühere Veröffentlichung als Entwurf geladen (KW ' . ($model['meta']['week'] ?? '?') . '/' . ($model['meta']['year'] ?? '?') . ')', array_slice(changes_between($before, $model), 0, 2000));
                 } else {

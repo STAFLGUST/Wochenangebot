@@ -215,6 +215,23 @@
     const a = (published.meta && published.meta.werbung) || {}, b = model.meta.werbung || {};
     return [...new Set([...Object.keys(a), ...Object.keys(b)])].filter((oid) => knownOffer(oid) && !C.sameModel(a[oid], b[oid]));
   };
+  /* Weicht der Aufbau (Reihenfolge der Gruppen, Bereich je Gruppe; gilt für alle Angebote) von der veröffentlichten Fassung ab?
+     Verglichen werden nur Gruppen mit Artikeln, die es veröffentlicht und im Entwurf mit gleichem Namen gibt. */
+  function aufbauGeaendert() {
+    if (!published || !model) return false;
+    const pg = new Map(published.groups.map((g) => [g.id, g.name])), used = new Set(model.items.map((i) => i.groupId));
+    const mg = new Map(model.groups.filter((g) => used.has(g.id)).map((g) => [g.id, g.name]));
+    const sig = (gs, other) => gs.filter((g) => other.get(g.id) === g.name).map((g) => g.id + '\u0001' + (g.section || '')).join('\u0002');
+    return sig(published.groups, mg) !== sig(model.groups.filter((g) => used.has(g.id)), pg);
+  }
+  /* Gruppen neu ordnen: „anker“ (IDs) kommen in die Reihenfolge „reihe“; jede andere Gruppe bleibt hinter ihrem Anker davor
+     (Gruppen, die im gewählten Angebot nicht vorkommen, wandern mit ihrem Vorgänger) */
+  function gruppenOrdnen(anker, reihe) {
+    const vor = [], kette = new Map();
+    let k = null;
+    for (const g of model.groups) { if (anker.has(g.id)) kette.set(g.id, (k = [g])); else if (k) k.push(g); else vor.push(g); }
+    return [...vor, ...reihe.flatMap((id) => kette.get(id) || [])];
+  }
 
   /* ---------- API ---------- */
   async function api(action, opts = {}) {
@@ -1220,9 +1237,10 @@
     if (vh.length) parts.push(`${vh.length} im Wochenangebot hinzugefügt/entfernt`);
     if (sc.length) parts.push(`${sc.length} Empfehlung${sc.length === 1 ? '' : 'en'} geändert`);
     if (wChanges().length) parts.push('Werbung geändert');
-    b.title = parts.length ? 'Unveröffentlichte Änderungen: ' + parts.join(' · ') : 'Keine unveröffentlichten Änderungen';
+    if (aufbauGeaendert()) parts.push('Aufbau geändert');
+    b.title =parts.length ? 'Unveröffentlichte Änderungen: ' + parts.join(' · ') : 'Keine unveröffentlichten Änderungen';
   }
-  const pendingCount = () => (!model ? 0 : !published ? model.items.length : diff.added.length + diff.removed.length + diff.priceChanged.length + diff.changed.length + vChanges().length + sChanges().length + wChanges().length + (metaChanged() ? 1 : 0));
+  const pendingCount = () => (!model ? 0 : !published ? model.items.length : diff.added.length + diff.removed.length + diff.priceChanged.length + diff.changed.length + vChanges().length + sChanges().length + wChanges().length + (metaChanged() ? 1 : 0) + (aufbauGeaendert() ? 1 : 0));
   function updatePublishBtn() {
     const b = $('#btn-publish');
     const n = pendingCount();
@@ -1335,6 +1353,7 @@
     n.textContent = e ? String(werbArtikelZahl(e)) + (werbBloecke(e).length > 1 ? ' · 2×' : '') : '';
     $('#btn-werbung').classList.toggle('on', !!e);
     $('#btn-winab').hidden = !(may('angebot.winab_export') && curOffer === OSTD);   // Export für WinAB (module/angebot/winab-export.js)
+    aufbauKnopf();
   }
   function renderGroups() {
     renderWerbungBtn();
@@ -2241,7 +2260,9 @@
       if (sc.length) body += sec(`Empfehlungen (${sc.length})`, `<ul class="plist">${sc.slice(0, 80).map((c) => { const it = byId.get(c.id); return it ? `<li><span>${esc(it.code || '—')} · ${esc(it.name)}</span><span>${esc(saleText(c.from))} → <strong>${esc(saleText(c.to))}</strong></span>${rv('sale', c.id)}</li>` : ''; }).join('')}</ul>`);
       const wc = wChanges();
       if (wc.length) body += sec(`Werbung (${wc.length})`, `<ul class="plist">${wc.map((oid) => { const w = werbungVon(oid); return `<li><span><b class="ob-tag">${esc(offerShort(oid))}</b> ${w ? esc(werbBloecke(w).map((b, i) => b.titel || (i ? window.WA.werbung.TITEL2 : window.WA.werbung.TITEL)).join(' · ')) : 'Werbung beendet'}</span><span>${w ? esc(plural(werbArtikelZahl(w), 'Artikel', 'Artikel')) : ''}</span>${rv('werbung', oid)}</li>`; }).join('')}</ul>`);
-      if (!metaChanged() && !diff.priceChanged.length && !diff.added.length && !diff.changed.length && !diff.removed.length && !vc.length && !sc.length && !wc.length) body += '<p class="notice">Keine Änderungen gegenüber der veröffentlichten Fassung.</p>';
+      const ab = aufbauGeaendert();   // Reihenfolge/Bereiche (Knopf „Editor“, ↑/↓); mit Angebotskategorien ordnen die Stammdaten
+      if (ab) body += sec('Aufbau', `<ul class="plist"><li><span>Reihenfolge der Bereiche und Gruppen geändert</span><span>gilt für alle Angebote</span>${kategorienAktiv() ? '' : rv('aufbau', 'aufbau')}</li></ul>`);
+      if (!metaChanged() && !diff.priceChanged.length && !diff.added.length && !diff.changed.length && !diff.removed.length && !vc.length && !sc.length && !wc.length && !ab) body += '<p class="notice">Keine Änderungen gegenüber der veröffentlichten Fassung.</p>';
     }
     if (v.warnings.length) body += `<p class="hint">${v.warnings.map(esc).join('<br>')}</p>`;
     const can = !v.errors.length;
@@ -2258,6 +2279,13 @@
   }
   /* Eine einzelne Änderung gegenüber der veröffentlichten Fassung zurücknehmen */
   function revertChange(kind, id) {
+    if (kind === 'aufbau') {   // gemeinsame Gruppen wieder in veröffentlichter Reihenfolge und mit ihrem Bereich, neue bleiben hinter ihrem Vorgänger
+      const pub = published.groups.filter((g) => model.groups.some((x) => x.id === g.id && x.name === g.name));
+      const ordnung = gruppenOrdnen(new Set(pub.map((g) => g.id)), pub.map((g) => g.id));
+      model.groups.splice(0, model.groups.length, ...ordnung);
+      for (const g of pub) gById(g.id).section = g.section || '';
+      return;
+    }
     if (kind === 'meta') { const w = model.meta.werbung; model.meta = clone(published.meta); if (w) model.meta.werbung = w; else delete model.meta.werbung; return; }   // Werbung getrennt
     if (kind === 'werbung') {
       const p = werbungVon(id, published), w = model.meta.werbung = model.meta.werbung || {};
@@ -2319,6 +2347,7 @@
     const it = model.items.find((x) => x.id === id) || published.items.find((x) => x.id === id);
     const nm = it ? `„${esc(it.code ? it.code + ' · ' : '')}${esc(it.name)}“` : '';
     const o = diff.before[id];
+    if (kind === 'aufbau') return ['Aufbau zurücknehmen?', 'Reihenfolge und Bereiche der Gruppen werden wieder auf den veröffentlichten Stand gesetzt (gilt für alle Angebote).'];
     if (kind === 'werbung') return ['Werbung zurücknehmen?', `Die Werbung im Angebot <strong>${esc(offerName(id))}</strong> wird wieder auf den veröffentlichten Stand gesetzt.`];
     if (kind === 'meta') return ['Kopfdaten zurücksetzen?', `Kalenderwoche und Hinweis werden wieder auf den veröffentlichten Stand gesetzt (KW ${esc(published.meta.week)}/${esc(published.meta.year)}).`];
     if (kind === 'price') return ['Preisänderung zurücknehmen?', `Der Preis von ${nm} wird von <strong>${esc(priceShort(it.price))}</strong> wieder auf <strong>${esc(priceShort(o.price))}</strong> gesetzt.`];
@@ -4152,6 +4181,62 @@
   }
   $('#btn-werbung').addEventListener('click', openWerbung);
 
+  /* ======================= Aufbau des Angebots (Knopf „Editor“, Fenster app/module/angebot/aufbau.js) =======================
+     Reihenfolge der Gruppen und ihr Bereich (g.section) gelten für alle Angebote – wie bei ↑/↓ an den Gruppen. Gespeichert
+     wird über den Entwurf (save_draft mit Revision, Recht angebot.bearbeiten auf dem Server). Ohne eigenen Aufbau (Kundenangebot
+     „folgt dem Wochenangebot“, Angebotskategorien der Stammdaten) zeigt das Fenster den Aufbau nur an. */
+  function aufbauSperre() {
+    if (kategorienAktiv()) return { art: 'kategorien', text: 'Die Reihenfolge kommt aus den Angebotskategorien der Stammdaten. Ändern Sie sie unter Verwaltung → Angebotskategorien.' };
+    if (followsStd(curOffer)) return { art: 'folgt', text: `„${offerName(curOffer)}“ folgt dem Wochenangebot und übernimmt dessen Aufbau. Ändern Sie die Reihenfolge im Wochenangebot.` };
+    return null;
+  }
+  /* Knopf „Editor“: nur mit Bearbeitungsrecht; ohne eigenen Aufbau gekennzeichnet (Fenster nur zum Ansehen) */
+  function aufbauKnopf() {
+    const b = $('#btn-aufbau'), s = !ro && model ? aufbauSperre() : null;
+    if (!b) return;
+    b.hidden = ro || !model;   // nur wer das Angebot bearbeiten darf (der Server prüft beim Speichern dasselbe Recht)
+    b.classList.toggle('gesperrt', !!s);
+    b.title = s ? 'Nur ansehen: ' + s.text : 'Aufbau des Angebots: Reihenfolge der Bereiche und Gruppen festlegen';
+  }
+  /* Gruppen des gewählten Angebots in Angebotsreihenfolge; stand = Reihenfolge und Bereiche (Vergleich beim Übernehmen) */
+  function aufbauDaten() {
+    const n = new Map();
+    for (const i of model.items) if (inOffer(i, curOffer)) n.set(i.groupId, (n.get(i.groupId) || 0) + 1);
+    const gruppen = sichtbareGruppen().map((g) => ({ id: g.id, name: g.name, bereich: g.section || '', n: n.get(g.id) || 0 }));
+    return { angebot: offerName(curOffer), std: curOffer === OSTD, sperre: aufbauSperre(), gruppen, stand: JSON.stringify(gruppen.map((g) => [g.id, g.bereich])) };
+  }
+  /* neu = [{id, bereich}] in der gewünschten Reihenfolge (alle Gruppen des Angebots); stand = aufbauDaten().stand beim Öffnen.
+     Erst eigene Speicherungen abwarten und den Stand des Servers holen: hat jemand anderes den Aufbau inzwischen geändert,
+     wird nichts übernommen ({konflikt, wer, daten}). Sonst wie jede Änderung: Rückgängig, Entwurf sofort speichern. */
+  async function aufbauUebernehmen(neu, stand) {
+    if (ro || !model) return { fehler: 'Sie dürfen dieses Angebot nicht bearbeiten.' };
+    let wer = '';
+    try {
+      clearTimeout(saveTimer);
+      if (!saving && savePending()) await saveNow();
+      for (let i = 0; i < 150 && (saving || queued || pulling); i++) await new Promise((r) => setTimeout(r, 100));
+      const d = await api('draft_ping', { body: {} });
+      wer = d.savedBy || '';
+      if (d.revision !== revision) await pullRemote();
+    } catch (e) { return { fehler: e.message || String(e) }; }
+    if (saveError) return { fehler: 'Der Entwurf ist nicht gespeichert: ' + saveError };
+    const jetzt = aufbauDaten();
+    if (jetzt.sperre || jetzt.stand !== stand) return { konflikt: true, wer, daten: jetzt };
+    const ids = new Set(jetzt.gruppen.map((g) => g.id)), reihe = (neu || []).map((x) => x && x.id);
+    if (reihe.length !== ids.size || new Set(reihe).size !== ids.size || !reihe.every((id) => ids.has(id))) return { fehler: 'Die Reihenfolge ist unvollständig – bitte das Fenster neu öffnen.' };
+    const vorher = JSON.stringify(model.groups.map((g) => [g.id, g.section || '']));
+    const ordnung = gruppenOrdnen(ids, reihe);
+    const bereich = new Map(neu.map((x) => [x.id, C.clean(x.bereich || '')]));
+    if (JSON.stringify(ordnung.map((g) => [g.id, bereich.has(g.id) ? bereich.get(g.id) : g.section || ''])) === vorher) return { ok: true, unveraendert: true };
+    pushUndo();
+    model.groups.splice(0, model.groups.length, ...ordnung);
+    for (const g of model.groups) if (bereich.has(g.id)) g.section = bereich.get(g.id);
+    saveNote = { type: 'aufbau' };
+    changed({ render: true });
+    await saveNow();
+    return { ok: true, gespeichert: !saveError };
+  }
+
   /* ======================= Empfehlung (früher „Sonderpreis“; mit Preis: Sonderposten solange der Vorrat reicht) =======================
      Empfehlung je Artikel: Grundwert (Empfehlungspreis oder ohne Preisänderung) für die Angebote, je Angebot änderbar
      (wie oben / eigener Preis / ohne Preisänderung / keine). Neu gesetzt gilt sie nur im gerade bearbeiteten Angebot –
@@ -4946,7 +5031,9 @@
     get wartungEingabe() { return wartungEingabe; }, set wartungEingabe(v) { wartungEingabe = v; },
     views: {},
     // Angebotskategorien (app/module/verwaltung/angebotskategorien.js): Vorschlag aus dem Angebot; nach dem Speichern neu ordnen
-    angebot: { kategorienVorschlag, kategorienGeaendert: () => kategorienLaden({ still: true }) },
+    angebot: { kategorienVorschlag, kategorienGeaendert: () => kategorienLaden({ still: true }),
+      // Aufbau des Angebots (app/module/angebot/aufbau.js): Daten fürs Fenster, Übernehmen über den Entwurf
+      aufbau: { daten: () => (model ? aufbauDaten() : null), uebernehmen: aufbauUebernehmen } },
   };
 
   /* Höhe der Kopfleiste für die links angeheftete Navigation */
