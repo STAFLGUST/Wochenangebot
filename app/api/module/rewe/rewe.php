@@ -25,11 +25,15 @@ declare(strict_types=1);
    Kundenstamm, die eigenen Felder des Marktes gelten nur, solange die Nummer dort fehlt. Notizen und Ansprechpartner
    bleiben im REWE-Modul (nicht im CRM sichtbar, Entscheidung des Inhabers 30.10.2026).
    Team (rewe-stamm.team): je Mitarbeiter „alle Listen“ und „Wochenabschluss“ als eigene Zuweisung im Modul – wirkt
-   zusätzlich zu den Rechten rewe.alle und rewe.exportieren (rw_alle, rw_export). Ruhende Märkte stehen nicht in der
-   Wochenabfrage, sondern in einer eigenen Liste darunter (wieder aufnehmen = Kaufbereitschaft ändern).
+   zusätzlich zu den Rechten rewe.alle und rewe.exportieren (rw_alle, rw_export). Mitarbeiter lassen sich im Modul ergänzen
+   (rewe-stamm.mitglieder: wie „REWE ansehen“ + „REWE bearbeiten“ für die eigenen Märkte, rw_sehen/rw_bearbeiten) und
+   entfernen (rewe-stamm.ausgeblendet, nur ohne Märkte ab der Abfragewoche); wer im Team ist, entscheidet rw_im_team.
+   Ruhende Märkte stehen nicht in der Wochenabfrage, sondern in einer eigenen Liste darunter (wieder aufnehmen =
+   Kaufbereitschaft ändern).
    Gespeicherte Felder, die diese Fassung nicht kennt, bleiben erhalten (GR-006).
    Rechte (GR-103): rewe.sehen (eigene Märkte), rewe.bearbeiten (eigene Märkte abfragen und pflegen), rewe.alle (alle
-   Listen), rewe.verwalten (Märkte, Zuweisung, Team, Lieferwege, Artikel, Datenpaket), rewe.exportieren (Wochenabschluss). */
+   Listen), rewe.verwalten (Märkte, Zuweisung, Team, Lieferwege, Artikel, Datenpaket), rewe.exportieren (Wochenabschluss);
+   „ansehen“ und „bearbeiten“ prüfen die Aktionen mit rw_require_perm (rw_sehen/rw_bearbeiten: Recht oder im Modul ergänzt). */
 if (!defined('WA_API')) { http_response_code(404); exit; }   // nur über api/index.php nutzbar
 
 const RW_ANTWORTEN = ['bestellt' => 'Bestellt', 'kein' => 'Kein Bedarf', 'ne' => 'Nicht erreicht', 'pause' => 'Pause'];
@@ -73,7 +77,15 @@ function rw_stamm(): array
     $out['lieferwege'] = is_array($d['lieferwege'] ?? null) && $d['lieferwege'] ? array_values($d['lieferwege']) : rw_grund_lieferwege();
     $out['artikel'] = is_array($d['artikel'] ?? null) && $d['artikel'] ? array_values($d['artikel']) : rw_grund_artikel();
     $out['team'] = is_array($d['team'] ?? null) ? $d['team'] : [];   // Nutzer-ID → {alle: bool, export: bool}
+    $out['mitglieder'] = rw_id_liste($d['mitglieder'] ?? null);       // ausdrücklich ergänzt (Nutzer-IDs, seit 11.11.2026; fehlt = keine)
+    $out['ausgeblendet'] = rw_id_liste($d['ausgeblendet'] ?? null);   // ausdrücklich entfernt (Nutzer-IDs, seit 11.11.2026; fehlt = keine)
     return $out + $d;
+}
+/* Liste von Nutzer-IDs: nur nicht leere Texte, jede einmal (fehlende oder fremde Werte → leere Liste) */
+function rw_id_liste($v): array
+{
+    if (!is_array($v)) return [];
+    return array_values(array_unique(array_filter(array_map(function ($x) { return is_string($x) || is_int($x) ? trim((string)$x) : ''; }, $v), 'strlen')));
 }
 function rw_maerkte_doc(): array
 {
@@ -217,21 +229,91 @@ function rw_namen(): array
     foreach (users_load() as $u) $n[(string)$u['id']] = (string)($u['name'] ?: $u['username']);
     return $n;
 }
-/* Mitarbeiter, denen Märkte zugewiesen werden können: aktiv, mit Zugang und „REWE ansehen“ */
+/* Mitarbeiter, denen Märkte zugewiesen werden können (Team des Moduls, rw_im_team) – dieselbe Liste für die Karten der
+   Zuweisung, die Personenauswahl, die Filter, „Liste von …“ und die Zuordnung des Datenpakets.
+   maerkte = Märkte, für die der Mitarbeiter ab der Abfragewoche zuständig ist oder später zuständig wird (rw_zustaendig_zahlen) */
 function rw_personen(): array
 {
     $out = [];
+    $zahlen = rw_zustaendig_zahlen();
     foreach (users_load() as $u) {
-        if (empty($u['active']) || !nutzer_hat_zugang($u) || !may($u, 'rewe.sehen')) continue;
-        $t = rw_team($u);
-        $out[] = ['id' => (string)$u['id'], 'name' => (string)($u['name'] ?: $u['username']), 'bearbeiten' => may($u, 'rewe.bearbeiten'),
+        if (!rw_im_team($u)) continue;
+        $t = rw_team($u); $id = (string)$u['id'];
+        $out[] = ['id' => $id, 'name' => (string)($u['name'] ?: $u['username']), 'bearbeiten' => rw_bearbeiten($u),
                   'alle' => rw_alle($u), 'export' => rw_export($u), 'teamAlle' => $t['alle'], 'teamExport' => $t['export'],
-                  'rechtAlle' => may($u, 'rewe.alle'), 'rechtExport' => may($u, 'rewe.exportieren')];
+                  'rechtAlle' => may($u, 'rewe.alle'), 'rechtExport' => may($u, 'rewe.exportieren'),
+                  'rechtSehen' => may($u, 'rewe.sehen'), 'ergaenzt' => rw_ergaenzt($u), 'maerkte' => $zahlen[$id] ?? 0];
     }
     usort($out, function ($a, $b) { return strcasecmp($a['name'], $b['name']); });
     return $out;
 }
-/* Team speichern: {Nutzer-ID: {alle, export}} – nur Mitarbeiter mit „REWE ansehen“ */
+/* Mitarbeiter, die sich ins Team aufnehmen lassen: aktiv, mit Zugang und Modulzugang „rewe.zugang“, noch nicht im Team
+   (auch ausgeblendete Rollen-Inhaber), ohne Verbot „REWE ansehen“ am Konto */
+function rw_kandidaten(): array
+{
+    $out = [];
+    foreach (users_load() as $u) {
+        if (!rw_aufnehmbar($u) || rw_im_team($u)) continue;
+        $out[] = ['id' => (string)$u['id'], 'name' => (string)($u['name'] ?: $u['username']), 'rechtSehen' => may($u, 'rewe.sehen')];
+    }
+    usort($out, function ($a, $b) { return strcasecmp($a['name'], $b['name']); });
+    return $out;
+}
+function rw_aufnehmbar(array $u): bool
+{
+    return !empty($u['active']) && nutzer_hat_zugang($u) && modul_zugang_frei($u, 'rewe') && !rw_verboten($u, 'rewe.sehen');
+}
+/* Zuständige Märkte je Mitarbeiter in der Abfragewoche und danach (aktuelle und künftige Einträge der „ab KW“-Historie) */
+function rw_zustaendig_zahlen(?array $doc = null): array
+{
+    $kw = rw_kw_abfrage(); $n = [];
+    foreach (($doc ?? rw_maerkte_doc())['liste'] as $m) {
+        $wer = [rw_zustaendig($m, $kw) => true];
+        foreach ($m['zustaendig'] ?? [] as $h) if (($h['ab'] ?? '') > $kw) $wer[(string)($h['nutzer'] ?? '')] = true;
+        foreach (array_keys($wer) as $id) if ((string)$id !== '') $n[(string)$id] = ($n[(string)$id] ?? 0) + 1;
+    }
+    return $n;
+}
+/* Mitarbeiter ins Team aufnehmen (Aufruf unter der Sperre): hebt ein Ausblenden auf; ohne „REWE ansehen“ aus den Rollen
+   wird er ausdrücklich ergänzt (mitglieder). Liefert den Nutzer. */
+function rw_mitglied_ergaenzen($nutzer): array
+{
+    $u = rw_nutzer($nutzer);
+    if (!rw_aufnehmbar($u)) throw new InvalidArgumentException('Mitarbeiter hinzufügen: nur aktive Mitarbeiter mit Zugang zum Modul REWE.');
+    if (rw_im_team($u)) throw new InvalidArgumentException('Mitarbeiter hinzufügen: ' . rw_name($u) . ' ist schon im Team.');
+    $s = rw_stamm(); $id = (string)$u['id'];
+    $s['ausgeblendet'] = array_values(array_diff($s['ausgeblendet'], [$id]));
+    if (!may($u, 'rewe.sehen') && !in_array($id, $s['mitglieder'], true)) $s['mitglieder'][] = $id;
+    rw_schreiben('rewe-stamm', $s);
+    rw_team_daten(true);
+    return $u;
+}
+/* Mitarbeiter aus dem Team entfernen (Aufruf unter der Sperre): nur ohne Märkte ab der Abfragewoche (sonst 422). Nimmt die
+   Ergänzung und „alle Listen“/„Wochenabschluss“ des Teams zurück und blendet ihn aus; Rechte aus den Rollen und frühere
+   Zuständigkeiten, Antworten und Schnappschüsse bleiben unverändert (GR-106). Liefert den Nutzer. */
+function rw_mitglied_entfernen($nutzer): array
+{
+    $u = rw_nutzer($nutzer); $id = (string)$u['id'];
+    if (!rw_im_team($u)) throw new InvalidArgumentException('Entfernen: ' . rw_name($u) . ' ist nicht im Team.');
+    $n = rw_zustaendig_zahlen()[$id] ?? 0;
+    if ($n > 0) fail(rw_name($u) . ' ist noch für ' . ($n === 1 ? '1 Markt' : "$n Märkte") . ' zuständig (ab ' . rw_kw_text(rw_kw_abfrage())
+        . ' oder später) – erst ' . ($n === 1 ? 'den Markt' : "die $n Märkte") . ' umverteilen.', 422);
+    $s = rw_stamm();
+    $s['mitglieder'] = array_values(array_diff($s['mitglieder'], [$id]));
+    if (!in_array($id, $s['ausgeblendet'], true)) $s['ausgeblendet'][] = $id;
+    unset($s['team'][$id]);
+    rw_schreiben('rewe-stamm', $s);
+    rw_team_daten(true);
+    return $u;
+}
+function rw_nutzer($v): array
+{
+    $id = is_string($v) ? trim($v) : '';
+    if ($id !== '') foreach (users_load() as $u) if ((string)$u['id'] === $id) return $u;
+    throw new InvalidArgumentException('Unbekannter Mitarbeiter.');
+}
+function rw_name(array $u): string { return (string)(($u['name'] ?? '') ?: ($u['username'] ?? '')); }
+/* Team speichern: {Nutzer-ID: {alle, export}} – nur Mitarbeiter im Team (rw_personen) */
 function rw_team_pruefen($v): array
 {
     if (!is_array($v)) throw new InvalidArgumentException('Team: ungültige Angaben.');
@@ -239,7 +321,7 @@ function rw_team_pruefen($v): array
     $out = [];
     foreach ($v as $id => $t) {
         $id = (string)$id;
-        if (!isset($erlaubt[$id])) throw new InvalidArgumentException('Team: unbekannter Mitarbeiter oder ohne „REWE ansehen“.');
+        if (!isset($erlaubt[$id])) throw new InvalidArgumentException('Team: unbekannter Mitarbeiter oder nicht im Team.');
         if (!is_array($t)) throw new InvalidArgumentException('Team: ungültige Angaben.');
         if (!empty($t['alle']) || !empty($t['export'])) $out[$id] = ['alle' => !empty($t['alle']), 'export' => !empty($t['export'])];
     }
@@ -274,6 +356,7 @@ function rw_person_pruefen($v): string
     if ($id === '') return '';
     foreach (users_load() as $u) if ((string)$u['id'] === $id) {
         if (empty($u['active']) || !nutzer_hat_zugang($u)) throw new InvalidArgumentException('Zuständig: Der Mitarbeiter ist gesperrt.');
+        if (!rw_im_team($u)) throw new InvalidArgumentException('Zuständig: ' . rw_name($u) . ' ist nicht im Team (Zuweisung → Mitarbeiter hinzufügen).');
         return $id;
     }
     throw new InvalidArgumentException('Zuständig: unbekannter Mitarbeiter.');
@@ -299,17 +382,51 @@ function rw_ab_setzen(array $hist, string $kw, string $feld, string $wert): arra
 function rw_zustaendig(array $m, string $kw): string { return rw_ab($m['zustaendig'] ?? [], $kw, 'nutzer'); }
 function rw_lw(array $m, string $kw): string { return rw_ab($m['lieferweg'] ?? [], $kw, 'id'); }
 
-/* ---------- Sichtbarkeit (GR-103, serverseitig je Markt) ---------- */
-/* Alle Listen / Wochenabschluss: Recht der Plattform oder Zuweisung im Team des Moduls (nur mit „REWE ansehen“) */
+/* ---------- Team und Sichtbarkeit (GR-103, serverseitig je Markt) ----------
+   Team des Moduls (rewe-stamm): team = „alle Listen“/„Wochenabschluss“ je Mitarbeiter, mitglieder = ausdrücklich ergänzt,
+   ausgeblendet = ausdrücklich entfernt. Wer im Team ist, entscheidet nur rw_im_team: aktiv, mit Zugang und nicht ausgeblendet,
+   dazu „REWE ansehen“ über die Rollen oder ausdrücklich ergänzt (mit Modulzugang „rewe.zugang“). Ergänzte haben im Modul
+   dieselben Möglichkeiten wie Verkäufer mit „REWE ansehen“ und „REWE bearbeiten“: eigene Märkte sehen, abfragen und pflegen
+   (rw_sehen, rw_bearbeiten, rw_require_perm – überall statt der beiden Rechte). Alles Weitere bleibt Sache der Rechte bzw.
+   des Teams („alle Listen“, „Wochenabschluss“).
+   Ein ausdrückliches Verbot am Konto (deny) geht vor. */
+function rw_team_daten(bool $neu = false): array
+{
+    static $d = null;
+    if ($d === null || $neu) { $s = rw_stamm(); $d = ['team' => $s['team'], 'mitglieder' => $s['mitglieder'], 'ausgeblendet' => $s['ausgeblendet']]; }
+    return $d;
+}
+function rw_verboten(array $u, string $recht): bool { return in_array($recht, rights_clean((array)($u['deny'] ?? [])), true); }
+function rw_ausgeblendet(array $u): bool { return in_array((string)($u['id'] ?? ''), rw_team_daten()['ausgeblendet'], true); }
+function rw_ergaenzt(array $u): bool
+{
+    $id = (string)($u['id'] ?? '');
+    return $id !== '' && in_array($id, rw_team_daten()['mitglieder'], true) && !rw_ausgeblendet($u)
+        && !rw_verboten($u, 'rewe.sehen') && modul_zugang_frei($u, 'rewe');
+}
+function rw_sehen(array $u): bool { return may($u, 'rewe.sehen') || rw_ergaenzt($u); }
+function rw_bearbeiten(array $u): bool { return may($u, 'rewe.bearbeiten') || (rw_ergaenzt($u) && !rw_verboten($u, 'rewe.bearbeiten')); }
+function rw_im_team(array $u): bool
+{
+    return !empty($u['active']) && nutzer_hat_zugang($u) && !rw_ausgeblendet($u) && rw_sehen($u);
+}
+/* Wie require_perm für die Aktionen des Moduls: „rewe.sehen“ und „rewe.bearbeiten“ gelten auch für im Team ergänzte
+   Mitarbeiter (rw_sehen, rw_bearbeiten), alle anderen Rechte unverändert über may() – sonst 403 */
+function rw_require_perm(string $recht, bool $schreibend = false): array
+{
+    $me = require_auth($schreibend);
+    $ok = $recht === 'rewe.sehen' ? rw_sehen($me) : ($recht === 'rewe.bearbeiten' ? rw_bearbeiten($me) : may($me, $recht));
+    if (!$ok) fail('Dafür fehlt Ihnen die Berechtigung. Bitte an einen Administrator wenden.', 403);
+    return $me;
+}
+/* Alle Listen / Wochenabschluss: Recht der Plattform oder Zuweisung im Team des Moduls (nur im Team, nicht ausgeblendet) */
 function rw_team(array $me): array
 {
-    static $team = null;
-    if ($team === null) $team = rw_stamm()['team'];
-    $t = $team[(string)$me['id']] ?? [];
+    $t = rw_ausgeblendet($me) ? [] : (rw_team_daten()['team'][(string)$me['id']] ?? []);
     return ['alle' => !empty($t['alle']), 'export' => !empty($t['export'])];
 }
-function rw_alle(array $me): bool { return may($me, 'rewe.alle') || (may($me, 'rewe.sehen') && rw_team($me)['alle']); }
-function rw_export(array $me): bool { return may($me, 'rewe.exportieren') || (may($me, 'rewe.sehen') && rw_team($me)['export']); }
+function rw_alle(array $me): bool { return may($me, 'rewe.alle') || (rw_team($me)['alle'] && rw_sehen($me)); }
+function rw_export(array $me): bool { return may($me, 'rewe.exportieren') || (rw_team($me)['export'] && rw_sehen($me)); }
 function rw_eigen(array $m, array $me, string $kw): bool { return rw_zustaendig($m, $kw) === (string)$me['id']; }
 function rw_darf_sehen(array $m, array $me, string $kw = ''): bool
 {
@@ -317,7 +434,7 @@ function rw_darf_sehen(array $m, array $me, string $kw = ''): bool
 }
 function rw_darf_pflegen(array $m, array $me, string $kw = ''): bool
 {
-    return may($me, 'rewe.bearbeiten') && rw_darf_sehen($m, $me, $kw);
+    return rw_bearbeiten($me) && rw_darf_sehen($m, $me, $kw);
 }
 function rw_markt_index(array $doc, $id): int
 {
@@ -396,7 +513,7 @@ function rw_antwort_setzen(array $b, array $me, array $stamm, string $quelle = '
     if (rw_kw_abstand(rw_kw_heute(), $kw) > 12) throw new InvalidArgumentException('Kalenderwoche: höchstens zwölf Wochen im Voraus.');
     $doc = rw_maerkte_doc();
     $m = rw_markt_finden($doc, $b['markt'] ?? '', $me, $kw);
-    if (!may($me, 'rewe.bearbeiten') || (!rw_alle($me) && !rw_eigen($m, $me, $kw))) fail('Dieser Markt gehört in der Woche nicht zu Ihrer Liste.', 403);
+    if (!rw_bearbeiten($me) || (!rw_alle($me) && !rw_eigen($m, $me, $kw))) fail('Dieser Markt gehört in der Woche nicht zu Ihrer Liste.', 403);
     $status = is_string($b['status'] ?? null) ? trim($b['status']) : '';
     if ($status !== '') rw_wahl($status, array_keys(RW_ANTWORTEN), 'Antwort');
     $mengen = $status === 'bestellt' ? rw_mengen($b['mengen'] ?? [], $stamm) : [];
@@ -534,7 +651,7 @@ function rw_markt_aus(array $m, array $stamm, array $namen, string $kw): array
 function rw_woche(string $kw, array $me, string $wer): array
 {
     $stamm = rw_stamm(); $namen = rw_namen(); $heute = date('Y-m-d');
-    $alle = rw_alle($me);
+    $alle = rw_alle($me); $bearbeiten = rw_bearbeiten($me);
     $person = $wer === '' || !$alle ? (string)$me['id'] : $wer;
     $cache = [];
     $vdoc = rw_verlauf_doc();
@@ -564,7 +681,7 @@ function rw_woche(string $kw, array $me, string $wer): array
         $naechste = rw_dauer_naechste($m, $kw);
         $eintrag = rw_markt_aus($m, $stamm, $namen, $kw) + ['antwort' => rw_antwort_aus($antwort), 'verlauf' => $verlauf, 'vorschau' => $vorschau, 'notizen' => $nz[$m['id']] ?? 0,
             'dauerFaellig' => $faellig, 'dauerNaechste' => $naechste, 'dauerText' => rw_dauer_text($m, $stamm),
-            'wiedervorlagen' => $wv[$m['id']] ?? [], 'darfAntworten' => may($me, 'rewe.bearbeiten') && ($alle || rw_eigen($m, $me, $kw))];
+            'wiedervorlagen' => $wv[$m['id']] ?? [], 'darfAntworten' => $bearbeiten && ($alle || rw_eigen($m, $me, $kw))];
         $gruppen[$lwId === '' ? '_' : $lwId][] = $eintrag;
         $z['gesamt']++;
         if ($antwort) $z['beantwortet']++;
@@ -606,7 +723,7 @@ function rw_woche(string $kw, array $me, string $wer): array
    Dauerauftrag in dieser Woche nicht fällig). „Heute“ ab dem Tag vor dem Bestellschluss (Freitag früh), sonst „Demnächst“. */
 function rw_startseite(array $me): array
 {
-    if (!may($me, 'rewe.sehen') || !may($me, 'rewe.bearbeiten')) return [];
+    if (!rw_sehen($me) || !rw_bearbeiten($me)) return [];   // Recht oder Team des Moduls (rw_bearbeiten)
     $w = rw_woche(rw_kw_abfrage(), $me, '');
     $offen = 0;
     foreach ($w['gruppen'] as $g) foreach ($g['maerkte'] as $m) {
@@ -800,7 +917,7 @@ function rw_paket_pruefen($paket, $zuordnung, array $me): array
                 $liste = rw_text($h['liste'] ?? '', 60, 'Liste');
                 $listen[$liste] = ($listen[$liste] ?? 0) + 1;
                 $nutzer = is_string($zuordnung[$liste] ?? null) ? $zuordnung[$liste] : '';
-                if ($nutzer !== '' && !isset($personen[$nutzer])) throw new InvalidArgumentException('Liste „' . $liste . '“: Mitarbeiter ohne „REWE ansehen“ oder unbekannt');
+                if ($nutzer !== '' && !isset($personen[$nutzer])) throw new InvalidArgumentException('Liste „' . $liste . '“: Mitarbeiter nicht im Team oder unbekannt');
                 $zu[] = ['ab' => rw_kw($h['ab'] ?? '', 'Zuständig ab'), 'nutzer' => $nutzer];
             }
             $lwh = [];
@@ -855,7 +972,8 @@ function rw_paket_uebernehmen(array $erg, bool $ersetzen): void
     if (!rw_leer() && !$ersetzen) fail('Im Modul sind schon Daten. Zum Ersetzen „Vorhandene Daten ersetzen“ wählen.', 409);
     foreach (rw_wochen_jahre() as $j) store_delete('rewe-wochen/' . $j);
     $alt = rw_stamm();
-    rw_schreiben('rewe-stamm', ['rev' => $alt['rev'], 'lieferwege' => $erg['stamm']['lieferwege'], 'artikel' => $erg['stamm']['artikel'], 'team' => $alt['team']]);
+    // Team (team, mitglieder, ausgeblendet) und unbekannte Felder bleiben (GR-006)
+    rw_schreiben('rewe-stamm', ['lieferwege' => $erg['stamm']['lieferwege'], 'artikel' => $erg['stamm']['artikel']] + $alt);
     rw_schreiben('rewe-maerkte', ['rev' => rw_maerkte_doc()['rev'], 'liste' => $erg['maerkte']]);
     rw_schreiben('rewe-verlauf', ['rev' => rw_verlauf_doc()['rev'], 'liste' => $erg['notizen']]);
     foreach ($erg['wochen'] as $j => $maerkte) rw_wochen_schreiben((int)$j, ['rev' => 0, 'maerkte' => $maerkte, 'abschluss' => []]);

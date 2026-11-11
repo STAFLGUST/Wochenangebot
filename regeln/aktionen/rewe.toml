@@ -60,3 +60,11 @@ schreibend = true
 [aktion.rewe_team_save]
 oberflaeche = "rewe.intern"
 schreibend = true
+
+[aktion.rewe_team_ergaenzen]
+oberflaeche = "rewe.intern"
+schreibend = true
+
+[aktion.rewe_team_entfernen]
+oberflaeche = "rewe.intern"
+schreibend = true
