@@ -1613,6 +1613,66 @@ for id_ in (AM_BLOCK, AM_PFR):
     if id_: P.call('hr_eintrag_save', {'id': id_, 'stornieren': True})
 assert P.call('hr_einstellungen_save', {**EINST_AM, 'planung': PLAN_AM})[0] == 200
 
+# ── Eintritt (Inhaber 11.11.2026): im Eintrittsjahr anteiliger Urlaubsanspruch – 1/12 je vollem Monat ab dem Eintrittstag,
+#    Bruchteile ab ½ auf volle Tage, sonst auf ½; Eintritt vor dem 01.07.: mindestens der gesetzliche Mindesturlaub ──
+def konto_pa(jahr):
+    return next(p_ for p_ in P.call(f'mitarbeiter_hr&jahr={jahr}')[1]['personen'] if p_['id'] == PA)['konto']
+rev = P.call('mitarbeiter_hr')[1]['rev']
+falsch_ = []
+for w_ in ('2027-02-30', '01.02.2027', 12, '1960-01-01', [f'{Y}-03-01'], f'{Y + 4}-01-01'):
+    st, r = P.call('mitarbeiter_hr_save', {'nutzer': ids['andre-vierzig'], 'rev': rev, 'eintritt': w_})
+    falsch_.append(st)
+check('Eintritt: 422 bei ungültigem Datum, falschem Format, Zahl, vor 1970, Liste, mehr als drei Jahre voraus', falsch_ == [422] * 6, falsch_)
+st_l, _ = L.call('mitarbeiter_hr_save', {'nutzer': ids['andre-vierzig'], 'rev': rev, 'eintritt': f'{Y}-03-01'})
+st_n, _ = N.call('mitarbeiter_hr_save', {'nutzer': ids['andre-vierzig'], 'rev': rev, 'eintritt': f'{Y}-03-01'})
+check('Eintritt setzen: ohne Personalrecht 403, ohne Anmeldung 401 – nichts gespeichert', (st_l, st_n) == (403, 401)
+      and next(p_ for p_ in P.call('mitarbeiter_hr')[1]['personen'] if p_['id'] == PA).get('eintritt') is None, (st_l, st_n))
+k0 = konto_pa(Y)
+check('ohne Eintritt: voller Anspruch (Andre, 4-Tage-Woche, 24 Tage), nicht anteilig', k0['anspruch'] == 24 and k0['anspruchVoll'] == 24 and k0['anteilig'] is None, k0)
+ein_ = {}
+for tag_ in ('03-01', '06-15', '08-01', '11-20'):
+    hr(ids['andre-vierzig'], eintritt=f'{Y}-{tag_}')
+    k_ = konto_pa(Y)
+    ein_[tag_] = (k_['anspruch'], k_['anteilig']['monate'], k_['anteilig']['mindest'])
+check('Eintritt im Jahr: 01.03. → 10 Monate = 20; 15.06. → 6 Monate = 12, aber Mindesturlaub 16 (4 × 4 Tage, vor dem 01.07.); 01.08. → 5 Monate = 10; 20.11. → 1 Monat = 2',
+      ein_ == {'03-01': (20, 10, False), '06-15': (16, 6, True), '08-01': (10, 5, False), '11-20': (2, 1, False)}, ein_)
+hr(ids['andre-vierzig'], eintritt=f'{Y}-03-01')
+kv_, kn_ = konto_pa(Y - 1), konto_pa(Y + 1)
+check('vor dem Eintrittsjahr kein Anspruch und kein Betriebsurlaub, im Folgejahr voll; Anspruch-Feld bleibt der volle Jahreswert', kv_['anspruch'] == 0 and kv_['betriebsurlaub'] == 0
+      and kn_['anspruch'] == 24 and kn_['anteilig'] is None and konto_pa(Y)['anspruchVoll'] == 24, (kv_.get('anspruch'), kv_.get('betriebsurlaub'), kn_.get('anspruch')))
+check('Protokoll nennt den Eintritt', f'(Eintritt 01.03.{Y})' in json.dumps(A.call('log')[1], ensure_ascii=False))
+st, r = P.call('mitarbeiter_hr_save', {'nutzer': ids['paul'], 'rev': P.call('mitarbeiter_hr')[1]['rev'], 'eintritt': f'{Y}-03-01'})
+check('eigener Eintritt: nur eine andere Person der Personalstelle (Vier-Augen-Prinzip, 403)', st == 403 and 'Eintritt' in r.get('error', ''), (st, r))
+hr(ids['andre-vierzig'], eintritt=f'{Y + 1}-02-01')
+kf_ = konto_pa(Y)
+check('Eintritt erst im Folgejahr: in diesem Jahr kein Anspruch und kein Betriebsurlaub', kf_['anspruch'] == 0 and kf_['betriebsurlaub'] == 0
+      and kf_['anteilig'] == {'monate': 0, 'mindest': False, 'eintritt': f'{Y + 1}-02-01'}, kf_)
+hr(ids['andre-vierzig'], eintritt='1995-04-01')
+kl_ = konto_pa(Y); pa_ = next(p_ for p_ in P.call('mitarbeiter_hr')[1]['personen'] if p_['id'] == PA)
+check('Eintritt vor 2000 (langjähriger Mitarbeiter): gespeichert, voller Anspruch', pa_['eintritt'] == '1995-04-01' and kl_['anspruch'] == 24 and kl_['anteilig'] is None, (pa_.get('eintritt'), kl_))
+hr(ids['andre-vierzig'], eintritt='')
+pa_ = next(p_ for p_ in P.call('mitarbeiter_hr')[1]['personen'] if p_['id'] == PA)
+check('Eintritt mit leerem Feld entfernt: kein Datum, wieder voller Anspruch, Protokoll', pa_['eintritt'] is None and konto_pa(Y)['anspruch'] == 24 and konto_pa(Y)['anteilig'] is None
+      and 'kein Eintrittsdatum mehr' in json.dumps(A.call('log')[1], ensure_ascii=False), pa_.get('eintritt'))
+hr(ids['andre-vierzig'], eintritt=f'{Y}-03-01')
+hr(ids['andre-vierzig'], eintritt=None)
+check('Eintritt mit null entfernt: wieder voller Anspruch', konto_pa(Y)['anspruch'] == 24 and konto_pa(Y)['anteilig'] is None)
+PHP_ANTEIL = ("define('WA_API', true); require $argv[1]; $o = [];"
+              "foreach (json_decode($argv[2], true) as [$e, $v, $at]) $o[] = hr_anspruch_info(['eintritt' => $e, 'arbeitstage' => $at, 'jahre' => ['2026' => ['anspruch' => $v, 'uebertrag' => null]]], (int)substr($e, 0, 4));"
+              "echo json_encode($o);")
+fall_ = [['2027-02-01', 30, [1, 2, 3, 4, 5]], ['2027-02-15', 30, [1, 2, 3, 4, 5]], ['2027-06-30', 30, [1, 2, 3, 4, 5]], ['2027-07-01', 30, [1, 2, 3, 4, 5]],
+         ['2027-11-10', 25, [1, 2, 3, 4, 5]], ['2027-01-31', 30, [1, 2, 3, 4, 5]], ['2027-01-01', 30, [1, 2, 3, 4, 5]],
+         ['2027-03-15', 18, [1, 3, 5]], ['2027-05-20', 18, [1, 3, 5]], ['2028-01-30', 30, [1, 2, 3, 4, 5]], ['2027-12-31', 30, [1, 2, 3, 4, 5]]]
+# wie im Betrieb (php:8.3-apache ohne Erweiterung „calendar“): Kalenderfunktionen abgeschaltet
+OHNE_CAL = 'cal_days_in_month,cal_from_jd,cal_info,cal_to_jd,easter_date,easter_days,gregoriantojd,jddayofweek,jdmonthname,jdtogregorian,jdtojulian,jdtounix,juliantojd,unixtojd'
+an_ = [[x_['tage'], x_['monate'], x_['mindest']] for x_ in json.loads(subprocess.run(['php', '-d', 'disable_functions=' + OHNE_CAL, '-r', PHP_ANTEIL, HR_PHP, json.dumps(fall_)],
+                                                                                      check=True, capture_output=True, text=True).stdout)]
+check('Anteil (PHP direkt, ohne „calendar“): 01.02. → 27,5 → 28; 15.02. → 10 Monate = 25; 30.06. → 15, Mindesturlaub 20; 01.07. → 15 (Wartezeit erst am 31.12., BAG 9 AZR 179/15); '
+      '10.11. bei 25 → 2,08 → 2,5; 31.01. → 11 Monate (Februar endet am Monatsletzten); 01.01. → 30; Teilzeit 3 Tage, 18 Tage: 15.03. → 13,5 → 14, 20.05. → 10,5 → 11, '
+      'aber Mindesturlaub 12; 30.01. im Schaltjahr → 11 Monate; 31.12. → 0',
+      an_ == [[28, 11, False], [25, 10, False], [20, 6, True], [15, 6, False], [2.5, 1, False], [28, 11, False], [30, 12, False],
+              [14, 9, False], [12, 7, True], [28, 11, False], [0, 0, False]], an_)
+
 with sync_playwright() as p:
     br = p.chromium.launch()
 
@@ -1855,6 +1915,40 @@ with sync_playwright() as p:
               and pg.evaluate('document.documentElement.scrollWidth <= window.innerWidth + 1'))
         pg.screenshot(path=os.path.join(SH, f'hr_mein_antraege_aus_{breite}.png'), full_page=True)
         ctx.close()
+    # Eintritt im Jahr: „Mein Urlaub“ zeigt den anteiligen Anspruch mit Hinweis (Erika: 30 Tage, Eintritt 01.03. → 10 Monate = 25)
+    rev = P.call('mitarbeiter_hr')[1]['rev']
+    hr(ids['erika'], eintritt=f'{Y}-03-01')
+    for breite in (1280, 390):
+        ctx, pg = anmelden('erika', 'Editor-Zugang-77', '198.51.100.3', breite)
+        pg.goto(B + '/module/hr/'); pg.wait_for_selector('#mein-konto .hr-wert')
+        if Y != dt.date.today().year:
+            pg.click('#tab-mein [data-jahr="1"]'); pg.wait_for_function(f'document.querySelector("#mein-titel").textContent === "Mein Urlaub {Y}"')
+        pg.wait_for_selector('#mein-konto :text("anteilig ab Eintritt")')
+        txt_ = pg.evaluate("(() => { const w = [...document.querySelectorAll('#mein-konto .hr-wert')].find((x) => x.querySelector('span').textContent === 'Anspruch');"
+                           " return w ? [w.querySelector('b').textContent, (w.querySelector('small') || {}).textContent || ''] : null; })()")
+        check(f'{breite}px: Mein Urlaub – Anspruch anteilig ab Eintritt 01.03.{Y} (25 von 30 Tagen), ohne waagerechtes Scrollen',
+              txt_ == ['25', f'anteilig ab Eintritt 01.03.{Y}'] and pg.evaluate('document.documentElement.scrollWidth <= window.innerWidth + 1'), txt_)
+        pg.screenshot(path=os.path.join(SH, f'hr_mein_eintritt_{breite}.png'), full_page=True)
+        ctx.close()
+    # Verwaltung → Mitarbeiter: Dialog mit Eintritt im laufenden Jahr zeigt das Ergebnis (volle Monate, x von y Tagen)
+    JE = dt.date.today().year
+    hr(ids['erika'], eintritt=f'{JE}-03-01')
+    ke_ = next(p_ for p_ in P.call(f'mitarbeiter_hr&jahr={JE}')[1]['personen'] if p_['id'] == PE)['konto']
+    tz_ = lambda x: str(int(x)) if float(x) == int(x) else str(x).replace('.', ',')
+    for breite in (1280, 390):
+        ctx, pg = anmelden('paul', 'Personal-Zugang-77', '198.51.100.5', breite)
+        pg.goto(B + '/admin/#users'); pg.wait_for_selector(f'#view-users tr[data-hr-uid="{ids["erika"]}"]')
+        pg.click(f'#view-users tr[data-hr-uid="{ids["erika"]}"]'); pg.wait_for_selector('#dlg-hr-person[open] [name="hr_eintritt"]')
+        hint_ = pg.text_content('#dlg-hr-person #hr-eintritt-hint')
+        check(f'{breite}px Mitarbeiter-Dialog: Eintritt {JE} vorbelegt, Hinweis mit vollen Monaten und anteiligem Anspruch, Anspruch-Feld = voller Jahreswert',
+              pg.input_value('#dlg-hr-person [name="hr_eintritt"]') == f'{JE}-03-01' and ke_['anteilig']['monate'] == 10
+              and f'Eintritt 01.03.{JE}: {JE} anteilig – 10 volle Monate, {tz_(ke_["anspruch"])} von {tz_(ke_["anspruchVoll"])} Tagen' in hint_
+              and pg.input_value('#dlg-hr-person [name="hr_anspruch"]') == tz_(ke_['anspruchVoll'])
+              and pg.evaluate('document.documentElement.scrollWidth <= window.innerWidth + 1'), (hint_, ke_))
+        pg.locator('#dlg-hr-person #hr-eintritt-hint').scroll_into_view_if_needed()
+        pg.screenshot(path=os.path.join(SH, f'hr_verwaltung_eintritt_dialog_{breite}.png'))
+        ctx.close()
+    hr(ids['erika'], eintritt=None)
     ctx, pg = anmelden('paul', 'Personal-Zugang-77', '198.51.100.5', 390)
     pg.goto(B + '/admin/#urlaub'); pg.wait_for_selector('#hr-uebertrag-bis')
     check('390px Verwaltung → Urlaub: Verfallstag und Schalter ohne waagerechtes Scrollen', pg.evaluate('document.documentElement.scrollWidth <= window.innerWidth + 1')
@@ -1865,7 +1959,8 @@ with sync_playwright() as p:
     check('Oberfläche: Urlaubsanträge wieder eingeschaltet', P.call('mitarbeiter_hr')[1]['antraege'] is True and pg.is_checked('#hr-antraege'))
     pg.goto(B + '/admin/#users'); pg.wait_for_selector(f'#view-users tr[data-hr-uid="{ids["erika"]}"]')
     pg.click(f'#view-users tr[data-hr-uid="{ids["erika"]}"]'); pg.wait_for_selector('#dlg-hr-person[open] [name="hr_verfall"]')
-    check('390px Mitarbeiter-Dialog: „Resturlaub verfällt“ sichtbar, ohne waagerechtes Scrollen', pg.is_visible('#dlg-hr-person [name="hr_verfall"]')
+    check('390px Mitarbeiter-Dialog: „Resturlaub verfällt“ und „Eintritt“ mit Hinweis sichtbar, ohne waagerechtes Scrollen', pg.is_visible('#dlg-hr-person [name="hr_verfall"]')
+          and pg.is_visible('#dlg-hr-person [name="hr_eintritt"]') and 'anteilig' in pg.text_content('#dlg-hr-person #hr-eintritt-hint')
           and pg.evaluate("(() => { const d = document.querySelector('#dlg-hr-person'); return d.scrollWidth <= d.clientWidth + 1 && document.documentElement.scrollWidth <= window.innerWidth + 1; })()"))
     pg.locator('#dlg-hr-person').screenshot(path=os.path.join(SH, 'hr_verwaltung_verfall_dialog_390.png'))
     pg.keyboard.press('Escape'); pg.wait_for_selector('#dlg-hr-person[open]', state='hidden')
