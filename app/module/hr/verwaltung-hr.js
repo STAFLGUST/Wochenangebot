@@ -1,5 +1,5 @@
 /* STAFL-Plattform · HR im Eingabebereich der Verwaltung
-   - Verwaltung → Mitarbeiter: HR-Angaben je Mitarbeiter (Abteilung, Position, Arbeitstage, im Urlaubsplan, Urlaubsanspruch
+   - Verwaltung → Mitarbeiter: HR-Angaben je Mitarbeiter (Abteilung, Position, Eintritt, Arbeitstage, im Urlaubsplan, Urlaubsanspruch
      und Übertrag je Jahr, ob der Resturlaub verfällt) – im Dialog des Mitarbeiters (Administratoren) bzw. als eigene Liste (Personalstelle ohne
      Administratorrechte). Mitarbeiter = Nutzer der Plattform; auch Kollegen ohne Anmeldung sind Mitarbeiter. Abteilung als
      Auswahl aus Stammdaten → Abteilungen (ohne Liste: freier Text); dafür liefert W.hr Namen und Anzahl je Abteilung.
@@ -70,23 +70,37 @@
     const eigen = !!(uid && W.me && W.me.id === uid);
     const aus = eigen ? ' disabled' : '';
     return `<fieldset class="span2 hr-teil${eigen ? ' hr-eigen' : ''}" id="hr-teil" data-uid="${esc(uid || '')}"><legend>Urlaubsverwaltung</legend>
-      ${eigen ? `<p class="hr-eigen-hinweis">${icon('lock', 'sm')}<span>Ihre eigenen Urlaubsangaben (Anspruch, Übertrag, Verfall, Arbeitstage, Urlaubsplan, Personalnummer, Vertretung) ändert eine andere Person der Personalstelle (Vier-Augen-Prinzip). Abteilung und Position können Sie selbst ändern.</span></p>` : ''}
+      ${eigen ? `<p class="hr-eigen-hinweis">${icon('lock', 'sm')}<span>Ihre eigenen Urlaubsangaben (Anspruch, Übertrag, Verfall, Arbeitstage, Urlaubsplan, Personalnummer, Vertretung, Eintritt) ändert eine andere Person der Personalstelle (Vier-Augen-Prinzip). Abteilung und Position können Sie selbst ändern.</span></p>` : ''}
       <div class="form-grid two">
         ${abtFeld}
         <label class="fld"><span>Personalnummer <small class="muted">(Zeiterfassung)</small></span><input name="hr_personalnummer" value="${esc(p ? p.personalnummer || '' : '')}" maxlength="20" autocomplete="off" inputmode="numeric"${aus}></label>
         <label class="fld"><span>Position <small class="muted">(Reihenfolge im Plan)</small></span><input name="hr_pos" type="number" min="0" max="9999" value="${esc(p ? p.pos || '' : maxPos + 1)}"></label>
+        <label class="fld"><span>Eintritt <small class="muted">(erster Arbeitstag)</small></span><input name="hr_eintritt" type="date" value="${esc(p && p.eintritt ? p.eintritt : '')}" aria-describedby="hr-eintritt-hint"${aus}></label>
         <label class="fld span2"><span>Feste Vertretung <small class="muted">(optional)</small></span>
           <select name="hr_vertretung"${aus} aria-describedby="hr-vertretung-hint"><option value="">– keine feste Vertretung –</option>${vertreter.map((x) => `<option value="${esc(x.id)}"${p && p.vertretung === x.id ? ' selected' : ''}>${esc(x.name)}</option>`).join('')}</select>
           <small class="hr-fld-hint" id="hr-vertretung-hint">Steht in jedem Urlaubsantrag fest und muss im Zeitraum da sein – der Mitarbeiter kann sie nicht ändern, aber eine zusätzliche Vertretung wählen. Leer: wählt selbst.</small></label>
         <div class="span2 hr-tage-feld"><span class="hr-lbl">Arbeitstage</span><div class="hr-tage">${WT.map((w, i) => `<label class="check"><input type="checkbox" name="hr_tag" value="${i + 1}"${at.includes(i + 1) ? ' checked' : ''}${aus}> ${w}</label>`).join('')}</div></div>
-        <label class="fld"><span>Urlaubsanspruch ${JAHR}</span><input name="hr_anspruch" type="number" min="0" max="100" step="0.5" value="${esc(jv.anspruch ?? (p && p.konto.anspruch ? p.konto.anspruch : ''))}"${aus}></label>
+        <label class="fld"><span>Urlaubsanspruch ${JAHR} <small class="muted">(volles Jahr laut Vertrag)</small></span><input name="hr_anspruch" type="number" min="0" max="100" step="0.5" value="${esc(jv.anspruch ?? (p && (p.konto.anspruchVoll ?? p.konto.anspruch) ? (p.konto.anspruchVoll ?? p.konto.anspruch) : ''))}" aria-describedby="hr-eintritt-hint"${aus}></label>
         <label class="fld"><span>Übertrag aus ${JAHR - 1}</span><input name="hr_uebertrag" type="number" min="-100" max="100" step="0.5" value="${esc(jv.uebertrag ?? '')}" placeholder="${p ? 'automatisch (' + esc(zahl(p.konto.uebertrag)) + ')' : 'automatisch'}"${aus}></label>
+        <small class="hr-fld-hint span2" id="hr-eintritt-hint">${esc(eintrittText(p))}</small>
         <label class="check span2 hr-verfall-check"><input type="checkbox" name="hr_verfall"${!p || p.verfall !== false ? ' checked' : ''}${aus}> <span>Resturlaub aus dem Vorjahr verfällt am ${esc(tagMonat(daten && daten.uebertragBis))}${daten && daten.verfallAb > JAHR ? ` (erstmals ${esc(tagMonat(daten.uebertragBis))}${daten.verfallAb})` : ''}<small class="muted">Ohne Haken bleibt der Übertrag das ganze Jahr erhalten.${daten && daten.verfallAb > JAHR ? ` Bis ${daten.verfallAb - 1} verfällt bei niemandem etwas (Verwaltung → Urlaub).` : ''}</small></span></label>
         <label class="check span2"><input type="checkbox" name="hr_aktiv"${!p || p.aktiv ? ' checked' : ''}${aus}> im Urlaubsplan (Kalender, Export für den Steuerberater)</label>
       </div>
       ${abtL.length ? '' : `<datalist id="hr-abteilungen">${abt.map((a) => `<option value="${esc(a)}">`).join('')}</datalist>`}
       ${p && p.aktiv ? `<p class="hint" style="margin:0">Urlaub ${JAHR}: ${esc(zahl(p.konto.rest))} Tage Rest · ${esc(zahl(p.konto.genommen))} genommen · ${esc(zahl(p.konto.geplant))} geplant${p.konto.verfaellt > 0 ? ` · ${esc(zahl(p.konto.verfaellt))} Tage Übertrag verfallen nach dem ${esc(tagMonat((p.konto.frist || '').slice(5)))}` : ''}${p.gleitKonto && p.gleitKonto.aktiv ? ` · Gleittage: ${esc(zahl(p.gleitKonto.rest))} Rest (gewähren in HR → Übersicht)` : ''}</p>` : ''}
     </fieldset>`;
+  }
+
+  /* Eintritt (Inhaber 11.11.2026): im Eintrittsjahr rechnet der Server den Anspruch anteilig (1/12 je vollem Monat, gesetzlicher
+     Mindesturlaub bei Eintritt vor dem 01.07.) – der Hinweis zeigt das Ergebnis für ${JAHR} aus dem Konto (nach dem Speichern aktuell). */
+  function eintrittText(p) {
+    const ohne = 'Der Anspruch ist der volle Jahresurlaub laut Vertrag. Mit Eintrittsdatum rechnet das System im Eintrittsjahr anteilig (1/12 je vollem Monat).';
+    if (!p || !p.eintritt) return ohne;
+    const ej = Number(p.eintritt.slice(0, 4)), de = p.eintritt.split('-').reverse().join('.'), k = p.konto || {}, a = k.anteilig;
+    if (ej > JAHR) return `Eintritt ${de}: ${JAHR} noch kein Anspruch, ${ej} anteilig (1/12 je vollem Monat).`;
+    if (ej < JAHR || !a) return `Eintritt ${de}: ${JAHR} voller Anspruch; im Eintrittsjahr ${ej} anteilig.`;
+    return `Eintritt ${de}: ${JAHR} anteilig – ${a.monate} volle ${a.monate === 1 ? 'Monat' : 'Monate'}, ${zahl(k.anspruch)} von ${zahl(k.anspruchVoll)} Tagen`
+      + (a.mindest ? ' (gesetzlicher Mindesturlaub, weil vor dem 01.07. eingetreten).' : '.');
   }
 
   /* HR-Angaben aus dem Formular speichern (nach dem Speichern des Mitarbeiters, mit dessen Kennung) */
@@ -98,7 +112,7 @@
     const body = { nutzer: uid, rev: daten.rev, personalnummer: wert('hr_personalnummer').trim(), pos: Number(wert('hr_pos') || 0),
       arbeitstage: [...form.querySelectorAll('[name="hr_tag"]:checked')].map((x) => Number(x.value)),
       aktiv: form.querySelector('[name="hr_aktiv"]').checked, verfall: form.querySelector('[name="hr_verfall"]').checked, jahr: JAHR, anspruch: wert('hr_anspruch'), uebertrag: wert('hr_uebertrag'),
-      vertretung: wert('hr_vertretung') || null };
+      vertretung: wert('hr_vertretung') || null, eintritt: wert('hr_eintritt') || null };
     // Abteilung: Nummer aus den Stammdaten („=“ = bisherige Angabe ohne Eintrag dort, bleibt unverändert) oder freier Text
     const abtSel = form.querySelector('[name="hr_abteilungNr"]');
     if (abtSel) { if (abtSel.value !== '=') body.abteilungNr = abtSel.value; } else body.abteilung = wert('hr_abteilung');
