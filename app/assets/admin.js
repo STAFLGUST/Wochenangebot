@@ -215,8 +215,8 @@
     const a = (published.meta && published.meta.werbung) || {}, b = model.meta.werbung || {};
     return [...new Set([...Object.keys(a), ...Object.keys(b)])].filter((oid) => knownOffer(oid) && !C.sameModel(a[oid], b[oid]));
   };
-  /* Aufbau (Reihenfolge der Gruppen, Bereich je Gruppe) gilt für alle Angebote. Verglichen werden nur Gruppen mit Artikeln,
-     die es veröffentlicht und im Entwurf mit gleichem Namen gibt (neue/umbenannte Gruppen zeigen „Neu“/„Bearbeitet“). */
+  /* Weicht der Aufbau (Reihenfolge der Gruppen, Bereich je Gruppe; gilt für alle Angebote) von der veröffentlichten Fassung ab?
+     Verglichen werden nur Gruppen mit Artikeln, die es veröffentlicht und im Entwurf mit gleichem Namen gibt. */
   function aufbauGeaendert() {
     if (!published || !model) return false;
     const pg = new Map(published.groups.map((g) => [g.id, g.name])), used = new Set(model.items.map((i) => i.groupId));
@@ -4190,6 +4190,7 @@
     if (followsStd(curOffer)) return { art: 'folgt', text: `„${offerName(curOffer)}“ folgt dem Wochenangebot und übernimmt dessen Aufbau. Ändern Sie die Reihenfolge im Wochenangebot.` };
     return null;
   }
+  /* Knopf „Editor“: nur mit Bearbeitungsrecht; ohne eigenen Aufbau gekennzeichnet (Fenster nur zum Ansehen) */
   function aufbauKnopf() {
     const b = $('#btn-aufbau'), s = !ro && model ? aufbauSperre() : null;
     if (!b) return;

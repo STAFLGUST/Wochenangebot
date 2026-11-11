@@ -6,7 +6,7 @@ Karte für Entwickler und Agenten: Abschnitte und Funktionen jeder Code-Datei (P
 
 | Modul | Kennung | Dateien | Funktionen |
 | --- | --- | --- | --- |
-| [Angebot](angebot.md) | `angebot` | 43 | 655 |
+| [Angebot](angebot.md) | `angebot` | 45 | 690 |
 | [Bestand](bestand.md) | `bestand` | 9 | 72 |
 | [Leergut](leergut.md) | `leergut` | 4 | 130 |
 | [CRM](crm.md) | `crm` | 9 | 177 |

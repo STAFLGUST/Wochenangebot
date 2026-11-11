@@ -251,6 +251,30 @@ Hälfte der Spalten der Liste; bei nur einer Spalte `.werb-stapel` untereinander
 Empfehlungen ohne Preisänderung (`it.empfehlung`) tragen `.werb-an` (dezent hinterlegt) und den Hinweis (sonst
 „Empfehlung“) als Kennzeichen.
 
+### Aufbau des Angebots (Knopf „Editor“)
+
+Hellblauer Knopf „Editor“ (`#btn-aufbau`) rechts neben „Werbung“ (Wunsch des Inhabers 11.11.2026): sichtbar nur mit
+`angebot.bearbeiten` (`aufbauKnopf()` aus `renderWerbungBtn()`, `admin.js`); Farben `--abf*` in
+`app/module/angebot/aufbau.css` aus dem Blauton von `--c-frozen` (Kennzeichen „eigene“), hell und dunkel. Das Fenster
+`#dlg-aufbau` baut `app/module/angebot/aufbau.js` aus `WA.angebot.aufbau.daten()`: Gruppen des gewählten Angebots
+(`sichtbareGruppen()`) mit Artikelzahl; aufeinanderfolgende Gruppen mit gleichem `section` bilden einen Block (wie die
+Überschriften im Editor), Gruppen ohne Bereich den Block „ohne Bereich“. Pfeile verschieben Blöcke und Gruppen im Block,
+Ziehen am Griff (Pointer Events über `window`, Maus und Touch, `touch-action: none`, Rollen am Rand) auch Gruppen in einen
+anderen Block – sie bekommen dessen Bereich (Kennzeichen „Bereich neu“). Leere Blöcke fallen weg, gleiche Nachbarn werden
+zusammengefasst. Mit Änderungen setzt das Fenster `data-geaendert` (erstes Escape warnt, `theme.js`).
+
+„Übernehmen“ ruft `WA.angebot.aufbau.uebernehmen(neu, stand)` (`aufbauUebernehmen()`): eigene Speicherungen abwarten,
+`draft_ping`, bei neuer Revision `pullRemote()`; weicht dann die Reihenfolge/Bereiche der Gruppen des Angebots vom Stand beim
+Öffnen ab (`stand`), wird nichts übernommen (`{konflikt, wer, daten}` – das Fenster zeigt den neuen Stand). Sonst ordnet
+`gruppenOrdnen(anker, reihe)` `model.groups` neu – Gruppen, die im gewählten Angebot nicht vorkommen, bleiben hinter
+ihrer Vorgängergruppe –, setzt `section`, `pushUndo()`, `saveNote = {type: 'aufbau'}` (Protokoll „Aufbau des Angebots
+geändert …“ in `save_draft`) und speichert sofort (`saveNow()`). Kein eigener Speicherweg, kein neues Datenfeld: die
+Reihenfolge gilt wie bei ↑/↓ für alle Angebote und wirkt überall, wo `model.groups` die Reihenfolge bestimmt
+(`OfferCore.enrichOffer`: Angebotsseite, Liste, Tabelle, Druck/PDF, Vorschau; `offer_resolve`; App). Nur ansehen
+(`aufbauSperre()`): Kundenangebot „folgt dem Wochenangebot“ und aktive Angebotskategorien (dann ordnen die Stammdaten).
+`aufbauGeaendert()` vergleicht Reihenfolge und Bereiche der gemeinsamen Gruppen mit der veröffentlichten Fassung: Zahl am
+Knopf „Veröffentlichen“, Abschnitt „Aufbau“ im Dialog mit Rücknahme (`revertChange('aufbau')`). Tests: Gruppe `aufbau`.
+
 ### Empfehlung (früher „Sonderpreis“)
 
 Etikett in der Preiszelle (`saleBtnHTML`/`saleTagHTML`) und Leiste „Kurzes MHD“ öffnen `openSale()` (`#dlg-sale`):

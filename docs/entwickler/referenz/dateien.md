@@ -332,6 +332,8 @@ Jede Code-Datei beginnt mit einem Kopfkommentar; dessen erste Aussage steht hier
 
 | Datei | Modul | Inhalt |
 | --- | --- | --- |
+| `aufbau.css` | angebot | STAFL-Plattform · Angebot · Knopf „Editor“ in der Werkzeugleiste von „Angebot bearbeiten“ und Fenster „Aufbau des Angebots“ (app/module/angebot/aufbau.js): hellblau im Blauton des Kennzeichens „eigene“ (--c-frozen … |
+| `aufbau.js` | angebot | STAFL-Plattform · Angebot · Fenster „Aufbau des Angebots“ (Knopf „Editor“ in der Werkzeugleiste von „Angebot bearbeiten“, Wunsch des Inhabers 11.11.2026). |
 | `preisimport.css` | angebot | STAFL-Plattform · Angebot · Vorschau „Artikelpreise (CSV)“ in der Importzentrale (preisimport.js). |
 | `preisimport.js` | angebot | STAFL-Plattform · Angebot · Darstellung der Vorschau „Artikelpreise (CSV)“ in der Importzentrale (Verwaltung → Import). |
 | `winab-export.js` | angebot | STAFL-Plattform · Angebot · Knopf „Export für WinAB“ in der Werkzeugleiste des Wochenangebots (Auftrag des Inhabers 05.11.2026). |
@@ -731,6 +733,7 @@ Jede Code-Datei beginnt mit einem Kopfkommentar; dessen erste Aussage steht hier
 | `test_anmeldeseite.py` | plattform | Testgruppe anmeldeseite |
 | `test_app_api.py` | mobile | Schnittstelle für die App (docs/app-api.md) |
 | `test_app_web.py` | mobile | App (mobile/) als Web-Build gegen den echten Testserver |
+| `test_aufbau.py` | angebot | Aufbau des Angebots (Knopf „Editor“ in „Angebot bearbeiten“, Wunsch des Inhabers 11.11.2026) |
 | `test_auswertung.py` | verwaltung | Auswertung: Karte der Kunden-Anmeldungen. |
 | `test_auth_hardening.py` | plattform | Direkte HTTP-Regressionen |
 | `test_benachrichtigung.py` | plattform | Benachrichtigungen an Mitarbeiter |

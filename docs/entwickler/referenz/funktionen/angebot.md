@@ -2,7 +2,7 @@
 
 <!-- ERZEUGT von `python3 werkzeuge/doku.py erzeugen` – nicht von Hand ändern. Quelle: Funktionen und Kommentare im Code. Die CI prüft, dass diese Datei zum Code passt. -->
 
-43 Dateien, 655 Funktionen – in der Reihenfolge der Datei, **fett** die Abschnitte. Text = erste Aussage des Kommentars direkt über der Funktion (Python: Docstring). Übersicht aller Module: [README.md](README.md).
+45 Dateien, 690 Funktionen – in der Reihenfolge der Datei, **fett** die Abschnitte. Text = erste Aussage des Kommentars direkt über der Funktion (Python: Docstring). Übersicht aller Module: [README.md](README.md).
 
 ## `app/api/lib/angebote.php`
 
@@ -317,6 +317,8 @@ _Wochenangebot – Eingabebereich Bearbeitet einen Entwurf auf dem Server (autom
 - `namenBekannt(n)` – nur Einträge bestehender Kundenangebote; null, wenn keiner
 - `setzeName(x, oid, text)` – eigene Bezeichnung setzen; leer oder gleich dem Basiswert = keine eigene
 - `werbungBereinigen()` – Artikel, die nicht mehr im Angebot stehen, fallen aus dessen Werbung (unbekannte Angebote prüft der Server)
+- `aufbauGeaendert()` – Weicht der Aufbau (Reihenfolge der Gruppen, Bereich je Gruppe; gilt für alle Angebote) von der veröffentlichten Fassung ab? Verglichen werden nur Gruppen mit …
+- `gruppenOrdnen(anker, reihe)` – Gruppen neu ordnen: „anker“ (IDs) kommen in die Reihenfolge „reihe“; jede andere Gruppe bleibt hinter ihrem Anker davor (Gruppen, die im gewählten Angebot …
 
 **API**
 
@@ -570,6 +572,13 @@ _Wochenangebot – Eingabebereich Bearbeitet einen Entwurf auf dem Server (autom
 - `werbKandidaten(oid)` – Artikel eines Angebots für das Fenster „Werbung schalten“ (Reihenfolge wie im Editor)
 - `werbungAuswahl(oid, ids, fertig)`
 - `openWerbung()`
+
+**Aufbau des Angebots (Knopf „Editor“, Fenster app/module/angebot/aufbau.js)**
+
+- `aufbauSperre()`
+- `aufbauKnopf()` – Knopf „Editor“: nur mit Bearbeitungsrecht; ohne eigenen Aufbau gekennzeichnet (Fenster nur zum Ansehen)
+- `aufbauDaten()` – Gruppen des gewählten Angebots in Angebotsreihenfolge; stand = Reihenfolge und Bereiche (Vergleich beim Übernehmen)
+- `aufbauUebernehmen(neu, stand)` – neu = [{id, bereich}] in der gewünschten Reihenfolge (alle Gruppen des Angebots); stand = aufbauDaten().stand beim Öffnen.
 
 **Empfehlung (früher „Sonderpreis“; mit Preis: Sonderposten solange der Vorrat reicht)**
 
@@ -868,6 +877,31 @@ _Web-App: Offline-Speicher (sw.js) anmelden und Hinweis „Als App auf den Home-
 
 - `zeigen(inhalt)`
 
+## `app/module/angebot/aufbau.js`
+
+_STAFL-Plattform · Angebot · Fenster „Aufbau des Angebots“ (Knopf „Editor“ in der Werkzeugleiste von „Angebot bearbeiten“, Wunsch des Inhabers 11.11.2026)._
+
+- `bloecke(gruppen)` – Aufeinanderfolgende Gruppen mit gleichem Bereich bilden einen Block (wie die Überschriften im Editor und auf der Seite)
+- `normalisieren()` – leere Blöcke entfernen, benachbarte mit gleichem Bereich zusammenfassen
+- `listeHTML()`
+- `standZeigen()` – Stand unten links; mit Änderungen schützt data-geaendert vor versehentlichem Escape (theme.js)
+- `fokussieren(f)` – Fokus nach einem Pfeil: derselbe Knopf an der neuen Stelle, am Rand der andere Pfeil
+- `zeichnen(fokus)`
+- `fehler(t)`
+- `laden(daten)`
+- `oeffnen()`
+- `uebernehmen()`
+
+**Pfeile**
+
+**Ziehen (Maus und Touch)**
+
+- `rollbar(el)`
+- `platzieren()`
+- `rollen()`
+- `bewegen(e)`
+- `loslassen(e)`
+
 ## `app/module/angebot/preisimport.js`
 
 _STAFL-Plattform · Angebot · Darstellung der Vorschau „Artikelpreise (CSV)“ in der Importzentrale (Verwaltung → Import)._
@@ -934,6 +968,25 @@ _Angebotsliste (Standardansicht der Angebotsseite)_
 
 - `check(n, c, i)`
 - `art(n, gid, nr)`
+
+## `tests/e2e/test_aufbau.py`
+
+_Aufbau des Angebots (Knopf „Editor“ in „Angebot bearbeiten“, Wunsch des Inhabers 11.11.2026)_
+
+- `check(n, c, i)`
+- `entwurf(cl)`
+- `im_angebot(it, oid)`
+- `bloecke(m, oid)` – Erwarteter Aufbau: [(Bereich, [Gruppen-IDs])] der Gruppen mit Artikeln des Angebots, aufeinanderfolgend gleicher Bereich
+- `fenster(pg)`
+- `editor(pg)` – Editor: Gruppen-IDs in Reihenfolge und Bereichsüberschriften
+- `quoten(t)`
+- `flach(bl)`
+- `gruppen_reihe(model)`
+- `ziehen(pg, quelle, ziel, oben, steps)` – Am Griff „quelle“ ziehen und über dem Element „ziel“ loslassen (obere bzw. untere Hälfte)
+- `touch_ziehen(pg, cdp, quelle, ziel)`
+- `login(pg, user, pw)`
+- `gespeichert(pg)`
+- `oeffnen(pg)`
 
 ## `tests/e2e/test_bestellung.py`
 
