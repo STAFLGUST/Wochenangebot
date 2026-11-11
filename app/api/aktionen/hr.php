@@ -532,6 +532,13 @@ switch ($action) {
                 if ($v !== null && !is_string($v)) fail('Vertretung: bitte einen Mitarbeiter wählen oder leer lassen.', 422);
                 $werte['vertretung'] = $v === null || $v === '' ? null : $v;
             }
+            if (array_key_exists('eintritt', $b)) {
+                // Eintritt (Inhaber 11.11.2026): im Eintrittsjahr anteiliger Urlaubsanspruch; leer = kein Datum (voller Anspruch)
+                $e = $b['eintritt'];
+                if ($e === null || $e === '') $werte['eintritt'] = null;
+                elseif (($d = hr_eintritt_datum($e)) === null || $d > hr_plus(hr_heute(), 3 * 366)) fail('Eintritt: bitte ein gültiges Datum wählen oder leer lassen.', 422);
+                else $werte['eintritt'] = $d;
+            }
             if (array_key_exists('arbeitstage', $b)) {
                 $at = is_array($b['arbeitstage']) ? array_values(array_unique(array_map('intval', $b['arbeitstage']))) : [];
                 if (!$at || array_filter($at, function ($w) { return $w < 1 || $w > 7; })) fail('Bitte mindestens einen Arbeitstag wählen.', 422);
@@ -548,11 +555,11 @@ switch ($action) {
                 };
                 $jv = ['anspruch' => $zahl($b['anspruch'] ?? null, 'Urlaubsanspruch', 0), 'uebertrag' => $zahl($b['uebertrag'] ?? null, 'Übertrag', -100)];
             }
-            $verfallVorher = null; $vertretungVorher = null;
-            $p = with_lock('hr-personal', function () use ($b, $uid, $users, $ui, &$werte, &$jahr, &$jv, $me, &$verfallVorher, &$vertretungVorher) {
+            $verfallVorher = null; $vertretungVorher = null; $eintrittVorher = null;
+            $p = with_lock('hr-personal', function () use ($b, $uid, $users, $ui, &$werte, &$jahr, &$jv, $me, &$verfallVorher, &$vertretungVorher, &$eintrittVorher) {
                 $roh = hr_personal_roh();
                 $verfallVorher = true;
-                foreach ($roh['personen'] as $e) if ($e['nutzer'] === $uid) { $verfallVorher = $e['verfall']; $vertretungVorher = $e['vertretung']; }
+                foreach ($roh['personen'] as $e) if ($e['nutzer'] === $uid) { $verfallVorher = $e['verfall']; $vertretungVorher = $e['vertretung']; $eintrittVorher = $e['eintritt'] ?? null; }
                 if ((int)($b['rev'] ?? -1) !== $roh['rev']) fail('Die Mitarbeiterliste wurde inzwischen geändert. Bitte neu laden.', 409);
                 // Vier-Augen-Prinzip: die eigenen Urlaubsangaben (Anspruch, Übertrag, Verfall, Arbeitstage, im Urlaubsplan, Personalnummer –
                 // sie bestimmt die Zuordnung beim Import) ändert eine andere Person der Personalstelle. Abteilung und Position
@@ -586,7 +593,8 @@ switch ($action) {
             $vtIdx = hr_personen_index(hr_personal());
             audit('hr', 'HR: Angaben von ' . $users[$ui]['name'] . ' geändert'
                 . ($p['verfall'] !== $verfallVorher ? ($p['verfall'] ? ' (Resturlaub verfällt wieder am Verfallstag)' : ' (Resturlaub verfällt nicht mehr)') : '')
-                . ($p['vertretung'] !== $vertretungVorher ? ($p['vertretung'] ? ' (feste Vertretung: ' . (isset($vtIdx[$p['vertretung']]) ? hr_name($vtIdx[$p['vertretung']]) : $p['vertretung']) . ')' : ' (keine feste Vertretung mehr)') : ''));
+                . ($p['vertretung'] !== $vertretungVorher ? ($p['vertretung'] ? ' (feste Vertretung: ' . (isset($vtIdx[$p['vertretung']]) ? hr_name($vtIdx[$p['vertretung']]) : $p['vertretung']) . ')' : ' (keine feste Vertretung mehr)') : '')
+                . (($p['eintritt'] ?? null) !== $eintrittVorher ? (($p['eintritt'] ?? null) ? ' (Eintritt ' . hr_de($p['eintritt']) . ')' : ' (kein Eintrittsdatum mehr)') : ''));
             $personal = hr_personal(); $abw = hr_abwesenheiten();
             foreach ($personal['personen'] as $x) if ($x['nutzer'] === $uid) respond(['ok' => true, 'rev' => $personal['rev'], 'person' => hr_person_aus($x, $abw['eintraege'], $jahr ?? (int)date('Y'))]);
             respond(['ok' => true, 'rev' => $personal['rev']]);

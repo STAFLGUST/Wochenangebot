@@ -135,7 +135,7 @@
     const buKommt = Object.keys(d.schliesstage || {}).some((s) => s.startsWith(String(d.jahr)) && s > d.heute);
     $('#mein-konto').innerHTML =
       wert('Resturlaub', k.rest, 'haupt' + (k.rest < 0 ? ' minus' : ''), k.beantragt ? `davon ${tageText(k.beantragt)} beantragt` : '')
-      + wert('Anspruch', k.anspruch)
+      + wert('Anspruch', k.anspruch, '', k.anteilig && k.anteilig.monate ? `anteilig ab Eintritt ${de(k.anteilig.eintritt)}` : '')
       + wert('Übertrag Vorjahr', k.uebertrag, '', k.verfaellt > 0 ? `${tageText(k.verfaellt)} verfallen nach ${de(k.frist)}` : (k.verfallen > 0 ? `${tageText(k.verfallen)} verfallen` : (k.verfall === false && k.uebertrag > 0 ? 'verfällt nicht' : '')))
       + wert('Genommen', k.genommen, '', k.betriebsurlaub && !buKommt ? `inkl. ${tageText(k.betriebsurlaub)} 24./31.12.` : '')
       + wert('Geplant', k.geplant, '', k.betriebsurlaub && buKommt ? `inkl. ${tageText(k.betriebsurlaub)} 24./31.12.` : '')

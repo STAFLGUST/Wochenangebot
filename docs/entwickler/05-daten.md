@@ -359,6 +359,13 @@ Mitarbeiter sind die Nutzer der Plattform (`users_load()`); HR speichert nur eig
   Ohne gespeicherte Angaben gelten Standardwerte; Einträge ohne Mitarbeiter bleiben als Altbestand lesbar.
   `verfall` (seit 03.11.2026, optional): `false` = der Resturlaub aus dem Vorjahr verfällt für diese Person nicht; fehlt
   das Feld oder ist es `true`, verfällt er am Verfallstag (`hr-einstellungen.uebertragBis`).
+  `eintritt` (seit 11.11.2026, optional, `JJJJ-MM-TT` oder `null`): erster Arbeitstag. `jahre.*.anspruch` ist der volle
+  Jahresurlaub laut Vertrag; vor dem Eintrittsjahr zählt kein Anspruch (und kein Betriebsurlaub vor dem Eintritt), im
+  Eintrittsjahr 1/12 je vollem Monat ab dem Eintrittstag (§ 5 BUrlG, Bruchteile ab ½ auf volle Tage, sonst auf ½), bei
+  Eintritt vor dem 01.07. mindestens der gesetzliche Mindesturlaub (4 Tage je Wochenarbeitstag, höchstens der volle Anspruch;
+  `hr_anspruch_info`). Das Konto nennt `anspruchVoll` und `anteilig` (`monate`, `mindest`, `eintritt`). Gespeichert werden
+  Daten ab 1970 bis heute + 3 Jahre (`hr_eintritt_datum`); `''`/`null` entfernt das Datum. Ohne Feld (Vorversion) gilt der
+  volle Anspruch – die Vorversion ignoriert das Feld, keine Migration nötig.
   `vertretung` (seit 10.11.2026, optional, Personenkennung oder `null`): feste Vertretung – steht in jedem Antrag der Person
   fest und muss im Zeitraum da sein (`hr_feste_vertretung`; ist sie nicht mehr im Urlaubsplan, wählt die Person wieder selbst).
   `abteilungNr` (seit 10.11.2026, optional, Nummer in `abteilungen` oder `null`): Abteilung aus den Stammdaten; `abteilung`
