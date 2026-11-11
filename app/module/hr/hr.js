@@ -3,8 +3,8 @@
    Gewährungen und beantragen Gleittage wie Urlaub (nur soweit der Rest reicht), Genehmiger sehen den Gleittage-Rest.
    Mitarbeiter: eigenes Urlaubskonto (nur Urlaub, nie Krankheit), Urlaubsantrag (ausblendbar: Verwaltung → Urlaub, Schalter
    „Urlaubsanträge über die Plattform“), Liste „Mein Urlaub und Anträge“ (nur Urlaub), Mini-Kalender „Mein Jahr“ mit allen
-   eigenen Abwesenheiten und „Korrektur melden“ (geht an die Personalstelle), Abwesenheitskalender (Kollegen nur „abwesend“;
-   mit dem Recht hr.kalender bei Kollegen der eigenen Abteilung zusätzlich genehmigter Urlaub „U“ und Gleittag „G“ – Sicht
+   eigenen Abwesenheiten und „Korrektur melden“ (geht an die Personalstelle), Abwesenheitskalender (nur die eigene Abteilung, Personalstelle und Urlaubsübersicht alle – Server, hr_monat; Kollegen nur „abwesend“;
+   mit dem Recht hr.kalender bei Kollegen der eigenen Abteilung zusätzlich genehmigter Urlaub „U“ und Gleittag „U+“ – Sicht
    „urlaub“ aus hr_monat, je Zeile vom Server entschieden).
    Urlaubsübersicht (Recht hr.uebersicht, auch Personalstelle): alle Mitarbeiter mit Summen (Konto, Krank-, Gleittage).
    Urlaub genehmigen (Recht hr.genehmigen): offene Anträge genehmigen/ablehnen – nie den eigenen.
@@ -632,12 +632,15 @@
   /* ---------- Kalender / Monatsplan ---------- */
   /* Legende je Sicht (hr_monat.sicht): voll = Personalstelle, urlaub = Recht hr.kalender (Urlaub/Gleittag der eigenen
      Abteilung „abt“, sonst „abwesend“), kollege = nur „abwesend“ */
+  /* CSS-Klasse und Titel eines Kürzels: „U+“ (Gleittag in der Sicht „urlaub“) bekommt die Klasse „Uplus“ – ein „+“ gehört nicht
+     in Klassennamen und Selektoren */
+  const kalKlasse = (code) => (code === 'U+' ? 'Uplus' : code);
   function kalLegende(sicht, abt) {
     const f = (cls, text, stil) => `<span><i class="${cls}" style="${stil || ''}"></i>${esc(text)}</span>`;
-    const art = (k, t) => `<span><b class="hr-art ${k}">${k === 'X' ? 'x' : k}</b>${esc(t)}</span>`;
+    const art = (k, t) => `<span><b class="hr-art ${kalKlasse(k)}">${k === 'X' ? 'x' : esc(k)}</b>${esc(t)}</span>`;
     $('#kal-legende').innerHTML = (sicht === 'voll' ? art('U', 'Urlaub') + art('K', 'Krank') + art('G', 'Gleittag') + art('X', 'freier Tag') + art('F', 'unentschuldigt')
       + '<span><b class="hr-art U offen">U?</b>beantragt</span>'
-      : sicht === 'urlaub' ? art('U', 'Urlaub') + art('G', 'Gleittag') + `<span>nur Abteilung ${esc(abt || '')}</span>` + art('A', 'abwesend') : art('A', 'abwesend'))
+      : sicht === 'urlaub' ? art('U', 'Urlaub') + art('U+', 'Gleittag') + `<span>nur Abteilung ${esc(abt || '')}</span>` + art('A', 'abwesend') : art('A', 'abwesend'))
       + f('', 'Wochenende', 'background:var(--hr-wochenende)') + f('', 'Feiertag', 'background:var(--hr-feiertag)')
       + f('', 'Ferien', 'background:var(--hr-ferien)') + f('', 'Urlaubssperre', 'background:var(--hr-sperre)')
       + (S.monat && S.monat.tage.some((x) => x.schliesstag) ? f('', 'Betrieb geschlossen (½ Urlaubstag)', 'background:var(--hr-schliess)') : '')
@@ -684,7 +687,8 @@
       }
     }
     const voll = !!daten[0].voll;
-    return { voll, sicht: daten[0].sicht || (voll ? 'voll' : 'kollege'), abt: daten[0].urlaubAbteilung || '', tage, personen: [...gruppen.values()].flat() };
+    return { voll, sicht: daten[0].sicht || (voll ? 'voll' : 'kollege'), abt: daten[0].urlaubAbteilung || '', alle: daten[0].alleAbteilungen !== false,
+             tage, personen: [...gruppen.values()].flat() };
   }
   async function ladeKalender() {
     const k = S.kal, zeitraum = k.modus === 'zeitraum';
@@ -740,13 +744,14 @@
       html += `<tr class="${p.ich ? 'ich' : ''}"><th class="name" scope="row" title="${esc(p.name)}">${esc(p.name)}</th>` + m.tage.map((t, i) => {
         const k = p.tage[t.datum] || '';
         const offen = k.endsWith('?'), code = offen ? k.slice(0, -1) : k;
-        const titel = code === 'A' ? 'abwesend' : code === 'x' ? 'freier Tag' : (ART[code] || '') + (offen ? ' (beantragt)' : '');
-        const inhalt = code ? `<span class="hr-art ${esc(code)}${offen ? ' offen' : ''}" title="${esc(titel)}">${esc(code === 'A' ? '•' : code)}</span>` : '';
+        const titel = code === 'A' ? 'abwesend' : code === 'x' ? 'freier Tag' : code === 'U+' ? ART.G : (ART[code] || '') + (offen ? ' (beantragt)' : '');
+        const inhalt = code ? `<span class="hr-art ${esc(kalKlasse(code))}${offen ? ' offen' : ''}" title="${esc(titel)}">${esc(code === 'A' ? '•' : code)}</span>` : '';
         const klick = m.voll && !p.ich && !t.wochenende && !t.feiertag;   // eigene Abwesenheiten trägt eine andere Person ein
         return `<td class="${kl(t)}${t.datum === heute ? ' heute' : ''}${neuerMonat(t, i) ? ' mstart' : ''}${klick ? ' klick' : ''}"${klick ? ` data-person="${esc(p.id)}" data-datum="${t.datum}"` : ''}>${inhalt}</td>`;
       }).join('') + '</tr>';
     }
-    if (!m.personen.length) html += `<tr><td class="name" colspan="${m.tage.length + 1}">Noch keine Mitarbeiter angelegt.</td></tr>`;
+    // nur eigene Abteilung (Server, hr_monat): ohne Zuordnung im Urlaubsplan kommt keine Zeile
+    if (!m.personen.length) html += `<tr><td class="name" colspan="${m.tage.length + 1}">${m.alle ? 'Noch keine Mitarbeiter angelegt.' : 'Ihr Konto ist noch keinem Mitarbeiter im Urlaubsplan zugeordnet.'}</td></tr>`;
     $('#kal-plan').innerHTML = html + '</tbody>';
     heuteSichtbar();
   }

@@ -211,7 +211,7 @@ body.hr .hr-kopf .brand-logo { height: 28px; width: auto; }
 .hr-pille.beantragt { background: var(--hr-warn-bg); color: var(--hr-warn); }
 .hr-pille.abgelehnt { background: var(--hr-fehler-bg); color: var(--hr-fehler); }
 .hr-art { display: inline-grid; place-items: center; min-width: 24px; height: 24px; padding: 0 4px; border-radius: 7px; font-size: 12px; font-weight: 700; box-sizing: border-box; }
-.hr-art.U { background: var(--hr-u-bg); color: var(--hr-u); }
+.hr-art.U, .hr-art.Uplus { background: var(--hr-u-bg); color: var(--hr-u); }   /* „U+“ = Gleittag in der Sicht „urlaub“ (hr.kalender) */
 .hr-art.K { background: var(--hr-k-bg); color: var(--hr-k); }
 .hr-art.G { background: var(--hr-g-bg); color: var(--hr-g); }
 .hr-art.X, .hr-art.x { background: var(--hr-x-bg); color: var(--hr-x); }
@@ -318,6 +318,7 @@ body.hr .hr-kopf .brand-logo { height: 28px; width: auto; }
 .hr-plan td.klick { cursor: pointer; }
 .hr-plan td.klick:hover { box-shadow: inset 0 0 0 2px var(--hr-akzent); }
 .hr-plan td .hr-art { min-width: 22px; height: 22px; }
+.hr-plan td .hr-art.Uplus { padding: 0 2px; letter-spacing: -.03em; }   /* zweistellig, passt in die 30-px-Spalte */
 .hr-plan td .offen { background: repeating-linear-gradient(135deg, var(--hr-warn-bg) 0 4px, transparent 4px 8px); color: var(--hr-warn); outline: 1px dashed var(--hr-warn); }
 
 /* ── Tabellen ── */
