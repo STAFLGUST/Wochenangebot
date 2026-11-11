@@ -264,7 +264,7 @@ _Modul HR · Urlaubsverwaltung – Fachlogik (Daten, Feiertage, Urlaubskonto, An
 - `hr_monatstage(jahr, monat, einst)` – Tageskopf eines Monats: Wochentag, Wochenende, Feiertag, Ferien, Urlaubssperre
 - `hr_gleiche_abteilung(a, b)` – Gleiche Abteilung (Sicht 'urlaub' nur für Kollegen der eigenen Abteilung, Inhaber 11.11.2026): über die Nummer der Stammdaten (abteilungNr, nach hr_personal …
 - `hr_zeile(p, eintraege, tage, sicht)` – Kürzel je Person und Tag eines Monats.
-- `hr_monat(jahr, monat, me, voll, kollegen)` – Monatsplan: alle aktiven Mitarbeiter, gruppiert nach Abteilung (Reihenfolge laut Position).
+- `hr_monat(jahr, monat, me, voll, kollegen, alleAbteilungen)` – Monatsplan: alle aktiven Mitarbeiter, gruppiert nach Abteilung (Reihenfolge laut Position).
 - `hr_startseite(me)` – Startseite des Dashboards („Heute für Sie“, lib/startseite.php): was dieser Mitarbeiter in HR entscheiden kann – dieselben Zahlen wie am Reiter „Anträge“ …
 
 ## `app/api/module/hr/zeiterfassung.php`
@@ -346,7 +346,7 @@ _STAFL-Plattform · HR · Urlaub Gleittage-Konto (02.11.2026)_
 
 **Kalender / Monatsplan**
 
-- `kalLegende(sicht, abt)` – Legende je Sicht (hr_monat.sicht): voll = Personalstelle, urlaub = Recht hr.kalender (Urlaub/Gleittag der eigenen Abteilung „abt“, sonst „abwesend“), kollege …
+- `kalLegende(sicht, abt)`
 - `heuteSichtbar()` – Spalte „heute“ in den sichtbaren Bereich holen (am Handy scrollt die Tabelle waagerecht): nur wenn sie verdeckt ist, dann mittig rechts neben die festen Namen
 - `kalZusammen(daten, von, bis)` – Monatsdaten zu einem Plan zusammenführen: Tage im Zeitraum, Mitarbeiter je Abteilung in der Reihenfolge des Servers, Kürzel je Datum (der Server liefert je …
 - `ladeKalender()`

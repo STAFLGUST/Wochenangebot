@@ -2,9 +2,10 @@
 declare(strict_types=1);
 /* Aktionen: HR · Urlaubsverwaltung (Oberfläche hr.intern, Logik in app/api/module/hr/)
    Rechte (GR-103): hr.antrag – eigener Urlaub und Gleittage, Anträge (nur wenn in Verwaltung → Urlaub eingeschaltet; Gleittage nur mit Rest
-                    auf dem Gleittage-Konto), Abwesenheitskalender (nur „abwesend“);
+                    auf dem Gleittage-Konto), Abwesenheitskalender (nur „abwesend“, nur die eigene Abteilung);
                     hr.genehmigen – Urlaubsanträge genehmigen/ablehnen, nie die eigenen (zuweisbar, z. B. eigene Rolle);
                     hr.uebersicht – Urlaubsübersicht aller Mitarbeiter, nur Summen inkl. Krank-/Gleittage (hr.verwalten sieht sie auch);
+                    im Kalender alle Abteilungen (nur „abwesend“);
                     hr.kalender – Kalender (hr_monat) mit genehmigtem Urlaub/Gleittag der eigenen Abteilung, sonst „abwesend“; keine Tage, Konten,
                     Übersicht, Jahresplanung oder Export (sensibel: Krankheitstage ableitbar, nur einzeln vergeben);
                     hr.verwalten – Personalstelle: Einträge K/G/U/freie Tage (nicht für sich selbst), Mitarbeiter, Gleittage gewähren
@@ -101,7 +102,9 @@ switch ($action) {
 
         /* Monatsplan / Abwesenheitskalender: Kollegen nur „abwesend“, mit hr.kalender bei Kollegen der eigenen Abteilung
            zusätzlich Urlaub/Gleittag (Sicht „urlaub“), Personalstelle mit Kürzeln. „sicht“ (voll | urlaub | kollege, wirksame
-           Sicht aus hr_monat) und „urlaubAbteilung“ ergänzen „voll“ (ältere Oberflächen). */
+           Sicht aus hr_monat), „urlaubAbteilung“ und „alleAbteilungen“ ergänzen „voll“ (ältere Oberflächen).
+           Mitarbeiter bekommen nur die Zeilen ihrer eigenen Abteilung (Inhaber 11.11.2026); Personalstelle (hr.verwalten) und
+           Urlaubsübersicht (hr.uebersicht) alle. Auch „± 2 Wochen“ lädt die Monate über diese Aktion. */
         case 'hr_monat': {
             $me = require_perm('hr.antrag');
             hr_mail_anstossen();
@@ -110,7 +113,8 @@ switch ($action) {
             $monat = (int)($_GET['monat'] ?? date('n'));
             if ($monat < 1 || $monat > 12) fail('Ungültiger Monat.', 422);
             $voll = may($me, 'hr.verwalten');
-            respond(['ok' => true, 'voll' => $voll] + hr_monat($jahr, $monat, $me, $voll, !$voll && may($me, 'hr.kalender') ? 'urlaub' : 'kollege'));
+            respond(['ok' => true, 'voll' => $voll] + hr_monat($jahr, $monat, $me, $voll, !$voll && may($me, 'hr.kalender') ? 'urlaub' : 'kollege',
+                                                                 $voll || may($me, 'hr.uebersicht')));
         }
 
         /* Antrag stellen (eigene Person): Urlaub (art U, Standard) oder Gleittag (art G, nur soweit das Gleittage-Konto reicht) */

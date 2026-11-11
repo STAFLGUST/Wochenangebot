@@ -382,12 +382,16 @@ Mitarbeiter sind die Nutzer der Plattform (`users_load()`); HR speichert nur eig
   zählt in `hr_konto` nie gegen den Urlaub, Inhaber 30.10.2026). Überschneidungen (`hr_kollision`) gelten nur zwischen aktiven
   Einträgen derselben Gruppe: Abwesenheiten (U/K/G/F) untereinander und freie Tage (X) untereinander – ein freier Tag in
   einer Urlaubswoche zählt dort nur nicht mit.
+  Zeilen im Kalender (`hr_monat`, Inhaber 11.11.2026): Mitarbeiter bekommen nur die Personen ihrer eigenen Abteilung
+  (`hr_gleiche_abteilung`) und sich selbst – ohne eigene Person im Urlaubsplan keine, ohne Abteilung nur die eigene;
+  `hr.verwalten` und `hr.uebersicht` bekommen alle (Antwortfeld `alleAbteilungen`). Die Vertretungsprüfung und andere
+  serverseitige Prüfungen nutzen weiter alle Abwesenheiten.
   Sichtbarkeit im Kalender (`hr_monat` → `hr_zeile`, Antwortfeld `sicht`, seit 11.11.2026; `voll` bleibt für ältere Seiten):
   `voll` = Personalstelle (Art, offene Anträge mit „?“, freie Tage „x“; die eigene Zeile sieht jeder so), `kollege` = nur „A“
   (nur genehmigt, nie der Grund), `urlaub` = Recht `hr.kalender` (sensibel, einzeln vergeben), je Zeile nur für Kollegen der
   eigenen Abteilung (`hr_gleiche_abteilung`: `abteilungNr`, sonst Name ohne Groß-/Kleinschreibung; leer nie gleich; ohne
-  eigene Person im Urlaubsplan oder ohne Abteilung bei niemandem): genehmigter Urlaub „U“ und Gleittag „G“
-  (`HR_KALENDER_ARTEN`), alles andere „A“ – nie offene Anträge, Notizen, Tage oder Konten. Andere Abteilungen sieht man wie
+  eigene Person im Urlaubsplan oder ohne Abteilung bei niemandem): genehmigter Urlaub „U“ und Gleittag „U+“
+  (`HR_KALENDER_ARTEN`: Art → Kürzel, seit 11.11.2026; in der Oberfläche CSS-Klasse `Uplus`), alles andere „A“ – nie offene Anträge, Notizen, Tage oder Konten. Andere Abteilungen sieht man wie
   `kollege`. Antwortfeld `sicht` = wirksame Sicht, `urlaubAbteilung` = Name der eigenen Abteilung (sonst `null`). Wer „U“
   von „A“ unterscheiden kann, kann Krankheitstage ableiten; deshalb kein Standardrecht.
 - **`hr-einstellungen`**: `{"rev": 1, "sperren": [{"von": "…", "bis": "…", "text": "Inventur"}], "ferien": [ … ], "uebertragBis": "03-31", "antraege": true}` – `uebertragBis` (Verfallstag des Resturlaubs, Monat-Tag) ist optional; fehlt es, gilt der 31.03. `antraege` (Schalter „Urlaubsanträge über die Plattform“, Verwaltung → Urlaub, Aktion `hr_antraege_save`) ist optional; nur `false` schaltet Anträge aus, fehlt es, sind sie eingeschaltet.

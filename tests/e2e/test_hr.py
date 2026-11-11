@@ -419,7 +419,9 @@ zp = {p['id']: p['tage'] for p in P.call(f'hr_monat&jahr={Y}&monat=8')[1]['perso
 fr = str((AUG + dt.timedelta(days=4)).day)
 check('… Freitag als freier Tag „x“', zp[PA].get(fr) == 'x' and zp[PA].get(str(AUG.day)) == 'U', zp[PA])
 zl = {p['id']: p['tage'] for p in L.call(f'hr_monat&jahr={Y}&monat=8')[1]['personen']}
-check('… für Kollegen nur „abwesend“', zl[PA].get(fr) == 'A' and zl[PA].get(str(AUG.day)) == 'A', zl[PA])
+# Mitarbeiter sehen nur die eigene Abteilung (Inhaber 11.11.2026): Lena (Verwaltung) bekommt Andre (Lager) gar nicht – „A“ für
+# Kollegen und freie Wochentage prüft die Gruppe hr_uebersicht
+check('… andere Abteilung (Lager) wird Lena (Verwaltung) nicht ausgeliefert', PA not in zl and PL in zl and PE in zl, sorted(zl))
 check('Eintrag nur an freiem Tag (U): 422', P.call('hr_eintrag_save', {'person': PA, 'art': 'U', 'von': iso(AUG + dt.timedelta(days=11)), 'bis': iso(AUG + dt.timedelta(days=11))})[0] == 422)
 
 # Eingetragener freier Tag („X“) sperrt keine Abwesenheit: er zählt nur nicht mit
@@ -1062,8 +1064,8 @@ kn_ = next(p_ for p_ in P.call(f'mitarbeiter_hr&jahr={Y}')[1]['personen'] if p_[
 check('… zählt nicht gegen den Urlaub', (kn_['genommen'], kn_['geplant'], kn_['rest']) == (kv_['genommen'], kv_['geplant'], kv_['rest']))
 mon_ = {p_['id']: p_ for p_ in E.call(f'hr_monat&jahr={Y}&monat={FT.month}')[1]['personen']}
 monp_ = {p_['id']: p_ for p_ in P.call(f'hr_monat&jahr={Y}&monat={FT.month}')[1]['personen']}
-check('… Kollegen sehen nur „abwesend“, die Personalstelle „F“', mon_[PF]['tage'].get(str(FT.day)) == 'A' and monp_[PF]['tage'].get(str(FT.day)) == 'F',
-      (mon_[PF]['tage'].get(str(FT.day)), monp_[PF]['tage'].get(str(FT.day))))
+check('… Personalstelle sieht „F“; Erika (Verwaltung) bekommt Fritz (Lager) nicht (nur eigene Abteilung)', PF not in mon_ and monp_[PF]['tage'].get(str(FT.day)) == 'F',
+      (sorted(mon_), monp_[PF]['tage'].get(str(FT.day))))
 ub_ = {z['id']: z for z in P.call(f'hr_uebersicht&jahr={Y}')[1]['zeilen']}
 check('… Übersicht: Spalte „unentschuldigt“', ub_[PF]['unentschuldigt'] == 1 and ub_[PE]['unentschuldigt'] == 0, ub_[PF].get('unentschuldigt'))
 req = urllib.request.Request(B + '/api/?action=hr_export', data=json.dumps({'jahr': Y, 'monate': [FT.month]}).encode(),
@@ -2520,8 +2522,10 @@ with sync_playwright() as p:
           const n = document.querySelector('#kal-plan thead th.name').getBoundingClientRect(), r = th.getBoundingClientRect(), b = box.getBoundingClientRect();
           return r.left >= n.right - 1 && r.right <= b.right + 1; }''')
         check(f'{breite}px: Spalte „heute“ ohne Wischen sichtbar (rechts neben den Namen)', sichtbar)
-        check(f'{breite}px: ± 2 Wochen und Filter auch für Mitarbeiter, Seite ohne waagerechtes Scrollen', pg.locator('#kal-filter [data-abt]').count() > 1
-              and pg.evaluate('document.documentElement.scrollWidth <= window.innerWidth + 1'))
+        check(f'{breite}px: ± 2 Wochen auch für Mitarbeiter – nur die eigene Abteilung (ein Balken, keine Abteilungs-Auswahl), Seite ohne waagerechtes Scrollen',
+              pg.locator('#kal-filter [data-abt]').count() == 0 and pg.locator('#kal-plan tr.abt').count() == 1
+              and pg.evaluate('document.documentElement.scrollWidth <= window.innerWidth + 1'),
+              (pg.locator('#kal-filter [data-abt]').all_inner_texts(), pg.locator('#kal-plan tr.abt th > span').all_inner_texts()))
         pg.screenshot(path=os.path.join(SH, f'hr_kalender_mitarbeiter_2wochen_{breite}.png'), full_page=True)
         ctx.close()
 
