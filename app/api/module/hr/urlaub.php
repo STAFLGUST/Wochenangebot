@@ -23,7 +23,8 @@ declare(strict_types=1);
      Verwaltung → Mitarbeiter, hr-personal „verfall“, Standard an): ohne Verfall bleibt der Übertrag ganz erhalten und geht
      mit dem Rest ins Folgejahr. Gilt wie der Verfallstag für alle Jahre (das Konto wird berechnet, nicht gespeichert).
    - Kalender: alle sehen, wer abwesend ist – nie den Grund. Gründe, Notizen und Konten nur für die Person selbst
-     und die Personalstelle.
+     und die Personalstelle. Mit dem Recht hr.kalender (Inhaber 11.11.2026, sensibel, einzeln vergeben) zusätzlich
+     genehmigten Urlaub und Gleittage aller – nie Krankheit, Notizen, offene Anträge, Tage oder Konten (hr_zeile 'urlaub').
    - Freie Tage einer verkürzten Woche (z. B. 4-Tage-Woche) ergeben sich aus den Arbeitstagen der Person (Excel: „x“).
    - Urlaubsanträge über die Plattform lassen sich ein- und ausschalten (Inhaber 30.10.2026, Verwaltung → Urlaub,
      hr-einstellungen.antraege, Standard an). Ausgeschaltet lehnt der Server neue Anträge ab; Kalender, Urlaubskonto,
@@ -156,7 +157,8 @@ const HR_BETRIEBSURLAUB_WERT = 0.5;   // je Schließtag (24.12./31.12.) – zusa
 function hr_betriebsurlaub(array $p, array $eintraege, int $jahr): array
 {
     if (empty($p['aktiv']) || !empty($p['altbestand'])) return [];
-    $tage = array_values(array_filter(array_keys(hr_schliesstage($jahr)), function ($d) use ($p) { return hr_arbeitstag($p, $d); }));
+    // erst ab dem Eintritt (Inhaber 11.11.2026)
+    $tage = array_values(array_filter(array_keys(hr_schliesstage($jahr)), function ($d) use ($p) { return hr_arbeitstag($p, $d) && ($p['eintritt'] ?? '') <= $d; }));
     if (!$tage) return [];
     $weg = hr_freie_tage($eintraege, $p['id']);
     foreach ($eintraege as $e) {
@@ -198,7 +200,9 @@ function hr_person_norm(array $p): array
             'verfall' => ($p['verfall'] ?? true) !== false,
             // feste Vertretung (Personenkennung, Inhaber 10.11.2026) – fehlt das Feld: keine, der Mitarbeiter wählt selbst
             'vertretung' => isset($p['vertretung']) && is_string($p['vertretung']) && $p['vertretung'] !== '' ? $p['vertretung'] : null,
-            'geaendert' => $p['geaendert'] ?? null] + array_diff_key($p, array_flip(['id', 'vorname', 'nachname', 'abteilung', 'abteilungNr', 'pos', 'nutzer', 'arbeitstage', 'aktiv', 'jahre', 'personalnummer', 'gleittage', 'verfall', 'vertretung', 'geaendert']));
+            // Eintritt (Inhaber 11.11.2026): im Eintrittsjahr anteiliger Urlaubsanspruch (hr_anspruch_info); fehlt: wie bisher
+            'eintritt' => hr_eintritt_datum($p['eintritt'] ?? null),
+            'geaendert' => $p['geaendert'] ?? null] + array_diff_key($p, array_flip(['id', 'vorname', 'nachname', 'abteilung', 'abteilungNr', 'pos', 'nutzer', 'arbeitstage', 'aktiv', 'jahre', 'personalnummer', 'gleittage', 'verfall', 'vertretung', 'eintritt', 'geaendert']));
 }
 function hr_name(array $p): string { return trim($p['vorname'] . ' ' . $p['nachname']); }
 
@@ -783,8 +787,8 @@ function hr_eigene_angaben_pruefen(array &$werte, ?int &$jahr, ?array &$jv, stri
     $ist = null;
     foreach (hr_personal()['personen'] as $x) if ($x['nutzer'] === $uid) { $ist = $x; break; }
     $ist = $ist ?? hr_person_norm(['id' => $uid, 'nutzer' => $uid, 'aktiv' => !nutzer_hat_zugang($u) || !empty($u['active'])]);
-    $nein = 'Ihre eigenen Urlaubsangaben (Anspruch, Übertrag, Verfall, Arbeitstage, Urlaubsplan, Personalnummer, Vertretung) ändert eine andere Person der Personalstelle.';
-    foreach (['aktiv', 'arbeitstage', 'personalnummer', 'verfall', 'vertretung'] as $f) {
+    $nein = 'Ihre eigenen Urlaubsangaben (Anspruch, Übertrag, Verfall, Arbeitstage, Urlaubsplan, Personalnummer, Vertretung, Eintritt) ändert eine andere Person der Personalstelle.';
+    foreach (['aktiv', 'arbeitstage', 'personalnummer', 'verfall', 'vertretung', 'eintritt'] as $f) {
         if (!array_key_exists($f, $werte)) continue;
         if ($werte[$f] !== $ist[$f]) fail($nein, 403);
         unset($werte[$f]);
@@ -792,7 +796,7 @@ function hr_eigene_angaben_pruefen(array &$werte, ?int &$jahr, ?array &$jv, stri
     if ($jahr !== null) {
         $alt = $ist['jahre'][(string)$jahr] ?? ['anspruch' => null, 'uebertrag' => null];
         // Anspruch: gespeicherter Wert des Jahres oder (Dialog-Vorbelegung) der geltende aus einem früheren Jahr
-        $anspruchGleich = $jv['anspruch'] === null ? $alt['anspruch'] === null : ((float)$jv['anspruch'] === (float)($alt['anspruch'] ?? hr_anspruch($ist, $jahr)));
+        $anspruchGleich = $jv['anspruch'] === null ? $alt['anspruch'] === null : ((float)$jv['anspruch'] === (float)($alt['anspruch'] ?? hr_anspruch_voll($ist, $jahr)));
         $uebertragGleich = $jv['uebertrag'] === null ? $alt['uebertrag'] === null : ($alt['uebertrag'] !== null && (float)$jv['uebertrag'] === (float)$alt['uebertrag']);
         if (!$anspruchGleich || !$uebertragGleich) fail($nein, 403);
         $jahr = null; $jv = null;
@@ -864,12 +868,58 @@ function hr_ueberschneidung(array $liste, string $von, string $bis): ?array { fo
 /* ---------------- Urlaubskonto ---------------- */
 
 /* Anspruch eines Jahres: Eintrag des Jahres, sonst der letzte frühere Eintrag (gleichbleibender Anspruch) */
-function hr_anspruch(array $p, int $jahr): float
+function hr_anspruch_voll(array $p, int $jahr): float
 {
     $wert = 0.0;
     foreach ($p['jahre'] as $j => $v) if ((int)$j <= $jahr && $v['anspruch'] !== null) $wert = $v['anspruch'];
     return $wert;
 }
+/* ---------------- Eintritt: anteiliger Urlaubsanspruch im Eintrittsjahr (Inhaber 11.11.2026) ----------------
+   hr-personal „eintritt“ (JJJJ-MM-TT, optional, nur erweitert – GR-006). Der gespeicherte Anspruch ist der volle Jahresurlaub
+   laut Arbeitsvertrag. Vor dem Eintrittsjahr: kein Anspruch. Im Eintrittsjahr: 1/12 je vollem Beschäftigungsmonat, gezählt ab
+   dem Eintrittstag (§ 5 Abs. 1 BUrlG; fehlt der Tag im Monat, endet der Monat am Monatsletzten – § 188 Abs. 3 BGB). Bruchteile
+   ab einem halben Tag werden auf volle Tage aufgerundet (§ 5 Abs. 2 BUrlG), kleinere auf einen halben Tag (nie abgerundet).
+   Untergrenze: Beginnt das Arbeitsverhältnis vor dem 01.07., ist die Wartezeit von sechs Monaten im Jahr erfüllt und der
+   gesetzliche Mindesturlaub steht voll zu (§§ 3, 4 BUrlG: 24 Werktage = 4 Tage je Wochenarbeitstag, bei fünf Tagen 20; ein
+   Eintritt am 01.07. reicht nicht, BAG 17.11.2015 – 9 AZR 179/15) – höchstens der volle Jahresanspruch. Die Zwölftelung des
+   Mehrurlaubs über dem Mindesturlaub setzt eine entsprechende Regel im Arbeitsvertrag voraus (übliche Klausel).
+   Rückgabe: ['tage', 'voll', 'monate' (null = nicht anteilig), 'mindest']. Ohne PHP-Erweiterung „calendar“ (fehlt im Image). */
+function hr_eintritt_datum($v): ?string
+{
+    // eigenes Format: auch langjährige Mitarbeiter (vor 2000) – hr_datum lässt nur 2000–2100 zu
+    if (!is_string($v) || !preg_match('/^(\d{4})-(\d{2})-(\d{2})$/', $v, $m)) return null;
+    return checkdate((int)$m[2], (int)$m[3], (int)$m[1]) && (int)$m[1] >= 1970 && (int)$m[1] <= 2100 ? $v : null;
+}
+function hr_eintritt_monate(string $eintritt, int $jahr): int
+{
+    [$y, $m, $d] = array_map('intval', explode('-', $eintritt));
+    $ende = "$jahr-12-31"; $n = 0;
+    for ($k = 1; $k <= 12; $k++) {
+        $mm = $m + $k; $yy = $y + intdiv($mm - 1, 12); $mm = ($mm - 1) % 12 + 1;
+        $letzter = (int)gmdate('t', gmmktime(0, 0, 0, $mm, 1, $yy));
+        $bis = $d <= $letzter ? hr_plus(sprintf('%04d-%02d-%02d', $yy, $mm, $d), -1) : sprintf('%04d-%02d-%02d', $yy, $mm, $letzter);
+        if ($bis > $ende) break;
+        $n = $k;
+    }
+    return $n;
+}
+function hr_anspruch_info(array $p, int $jahr): array
+{
+    $voll = hr_anspruch_voll($p, $jahr);
+    $e = $p['eintritt'] ?? null;
+    $ej = $e ? (int)substr($e, 0, 4) : null;
+    if ($ej === null || $jahr > $ej) return ['tage' => $voll, 'voll' => $voll, 'monate' => null, 'mindest' => false];
+    if ($jahr < $ej) return ['tage' => 0.0, 'voll' => $voll, 'monate' => 0, 'mindest' => false];
+    $monate = hr_eintritt_monate($e, $jahr);
+    $anteil = $voll * $monate / 12;
+    $ganz = floor($anteil + 1e-9); $rest = $anteil - $ganz;
+    $tage = $rest >= 0.5 - 1e-9 ? $ganz + 1 : ($rest > 1e-9 ? $ganz + 0.5 : $ganz);
+    $mindest = 0.0;
+    if ($e < "$jahr-07-01") $mindest = min($voll, 4.0 * count($p['arbeitstage'] ?? [1, 2, 3, 4, 5]));
+    return ['tage' => max($tage, $mindest), 'voll' => $voll, 'monate' => $monate, 'mindest' => $mindest > $tage];
+}
+/* Anspruch eines Jahres, wie er im Konto zählt (im Eintrittsjahr anteilig) */
+function hr_anspruch(array $p, int $jahr): float { return hr_anspruch_info($p, $jahr)['tage']; }
 
 /* Urlaubskonto einer Person für ein Jahr. Übertrag: von Hand gesetzt (z. B. erstes Jahr im System) oder Rest des
    Vorjahres. Der Übertrag wird zuerst verbraucht; was davon bis zum Verfallstag (hr_uebertrag_bis, Standard 31.03.)
@@ -899,7 +949,8 @@ function hr_konto(array $p, array $eintraege, int $jahr, ?string $heute = null, 
         if ($d <= $frist) $u['bis_frist'] += HR_BETRIEBSURLAUB_WERT;
         $betrieb += HR_BETRIEBSURLAUB_WERT;
     }
-    $anspruch = hr_anspruch($p, $jahr);
+    $ai = hr_anspruch_info($p, $jahr);
+    $anspruch = $ai['tage'];
     $manuell = $p['jahre'][(string)$jahr]['uebertrag'] ?? null;
     if ($manuell !== null) $uebertrag = $manuell;
     else {
@@ -915,6 +966,8 @@ function hr_konto(array $p, array $eintraege, int $jahr, ?string $heute = null, 
     // Rest zum Jahresende (für den Übertrag ins Folgejahr): Verfall gilt dann in jedem Fall
     $restEnde = $anspruch + $uebertrag - $offen - $u['genommen'] - $u['geplant'];
     return ['jahr' => $jahr, 'anspruch' => $anspruch, 'uebertrag' => $uebertrag, 'uebertrag_manuell' => $manuell !== null,
+            // voller Jahresanspruch laut Vertrag; im Eintrittsjahr: volle Monate und ob der gesetzliche Mindesturlaub greift
+            'anspruchVoll' => $ai['voll'], 'anteilig' => $ai['monate'] === null ? null : ['monate' => $ai['monate'], 'mindest' => $ai['mindest'], 'eintritt' => $p['eintritt']],
             'frist' => $frist, 'verfall' => $verfall, 'verfaellt' => $heute <= $frist ? $offen : 0.0, 'verfallen' => $verfallen,
             'genommen' => $u['genommen'], 'geplant' => $u['geplant'], 'beantragt' => $u['beantragt'], 'betriebsurlaub' => $betrieb,
             'rest' => $rest, 'verfuegbar' => $rest - $u['beantragt'], 'rest_jahresende' => $restEnde];
@@ -1160,34 +1213,43 @@ function hr_monatstage(int $jahr, int $monat, array $einst): array
     return $out;
 }
 
+/* Arten, die die Sicht 'urlaub' (Recht hr.kalender) bei Kollegen mit ihrem Kürzel zeigt – alles andere bleibt „A“ */
+const HR_KALENDER_ARTEN = ['U', 'G'];
+
 /* Kürzel je Person und Tag eines Monats.
    $sicht: 'voll' (Personalstelle: Art, auch beantragt mit „?“), 'eigen' (eigene Zeile wie voll), 'kollege' (nur „A“ =
-   abwesend, nur genehmigt, nie der Grund; freie Tage einer verkürzten Woche ebenfalls „A“). */
+   abwesend, nur genehmigt, nie der Grund; freie Tage einer verkürzten Woche ebenfalls „A“), 'urlaub' (Recht hr.kalender,
+   Inhaber 11.11.2026: wie 'kollege', aber genehmigter Urlaub „U“ und Gleittag „G“ mit Kürzel – Krank, Unentschuldigt und
+   freie Tage bleiben „A“, offene Anträge unsichtbar). */
 function hr_zeile(array $p, array $eintraege, array $tage, string $sicht): array
 {
+    $kollege = $sicht === 'kollege' || $sicht === 'urlaub';   // fremde Zeile: nur genehmigt, freie Tage nur „A“
     $out = [];
     foreach ($tage as $t) {
         if ($t['wochenende'] || $t['feiertag'] !== null) continue;
-        if (!in_array(hr_wochentag($t['datum']), $p['arbeitstage'], true)) $out[$t['tag']] = $sicht === 'kollege' ? 'A' : 'x';
+        if (!in_array(hr_wochentag($t['datum']), $p['arbeitstage'], true)) $out[$t['tag']] = $kollege ? 'A' : 'x';
     }
     $erster = $tage[0]['datum']; $letzter = $tage[count($tage) - 1]['datum'];
     foreach ($eintraege as $e) {
         if ($e['person'] !== $p['id'] || !in_array($e['status'], HR_AKTIV, true) || $e['bis'] < $erster || $e['von'] > $letzter) continue;
-        if ($sicht === 'kollege' && $e['status'] !== 'genehmigt') continue;
+        if ($kollege && $e['status'] !== 'genehmigt') continue;
         foreach ($tage as $t) {
             $d = $t['datum'];
             if ($d < $e['von'] || $d > $e['bis'] || $t['wochenende'] || $t['feiertag'] !== null) continue;
-            if ($e['art'] === 'X') { $out[$t['tag']] = $sicht === 'kollege' ? 'A' : 'x'; continue; }
+            if ($e['art'] === 'X') { $out[$t['tag']] = $kollege ? 'A' : 'x'; continue; }
             if (!in_array(hr_wochentag($d), $p['arbeitstage'], true)) continue;
-            $out[$t['tag']] = $sicht === 'kollege' ? 'A' : $e['art'] . ($e['status'] === 'beantragt' ? '?' : '');
+            $out[$t['tag']] = $sicht === 'urlaub' ? (in_array($e['art'], HR_KALENDER_ARTEN, true) ? $e['art'] : 'A')
+                : ($kollege ? 'A' : $e['art'] . ($e['status'] === 'beantragt' ? '?' : ''));
         }
     }
     return $out;
 }
 
-/* Monatsplan: alle aktiven Mitarbeiter, gruppiert nach Abteilung (Reihenfolge laut Position) */
-function hr_monat(int $jahr, int $monat, array $me, bool $voll): array
+/* Monatsplan: alle aktiven Mitarbeiter, gruppiert nach Abteilung (Reihenfolge laut Position).
+   $kollegen: Sicht auf fremde Zeilen ohne $voll – 'kollege' (Standard, nur „A“) oder 'urlaub' (Recht hr.kalender). */
+function hr_monat(int $jahr, int $monat, array $me, bool $voll, string $kollegen = 'kollege'): array
 {
+    if (!in_array($kollegen, ['kollege', 'urlaub'], true)) $kollegen = 'kollege';
     $personal = hr_personal(); $abw = hr_abwesenheiten(); $einst = hr_einstellungen();
     $tage = hr_monatstage($jahr, $monat, $einst);
     $ich = hr_ich($personal, $me);
@@ -1196,7 +1258,7 @@ function hr_monat(int $jahr, int $monat, array $me, bool $voll): array
         if (!$p['aktiv']) continue;
         $eigen = $ich !== null && $ich['id'] === $p['id'];
         $zeilen[] = ['id' => $p['id'], 'name' => hr_name($p), 'abteilung' => $p['abteilung'], 'ich' => $eigen,
-                     'tage' => (object)hr_zeile($p, $abw['eintraege'], $tage, $voll || $eigen ? 'voll' : 'kollege')];
+                     'tage' => (object)hr_zeile($p, $abw['eintraege'], $tage, $voll || $eigen ? 'voll' : $kollegen)];
     }
     return ['jahr' => $jahr, 'monat' => $monat, 'name' => HR_MONATE[$monat], 'tage' => $tage, 'personen' => $zeilen,
             'sperren' => $einst['sperren'], 'ferien' => $einst['ferien']];

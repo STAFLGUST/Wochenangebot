@@ -5,6 +5,8 @@ declare(strict_types=1);
                     auf dem Gleittage-Konto), Abwesenheitskalender (nur „abwesend“);
                     hr.genehmigen – Urlaubsanträge genehmigen/ablehnen, nie die eigenen (zuweisbar, z. B. eigene Rolle);
                     hr.uebersicht – Urlaubsübersicht aller Mitarbeiter, nur Summen inkl. Krank-/Gleittage (hr.verwalten sieht sie auch);
+                    hr.kalender – Kalender (hr_monat) mit genehmigtem Urlaub/Gleittag aller, sonst „abwesend“; keine Tage, Konten,
+                    Übersicht, Jahresplanung oder Export (sensibel: Krankheitstage ableitbar, nur einzeln vergeben);
                     hr.verwalten – Personalstelle: Einträge K/G/U/freie Tage (nicht für sich selbst), Mitarbeiter, Gleittage gewähren
                     (hr_gleittage_save, nicht für sich selbst), Export, Übernahme.
    Wird von api/index.php im globalen Gültigkeitsbereich eingebunden; jede Aktion endet mit respond()/fail(). */
@@ -97,7 +99,8 @@ switch ($action) {
             respond(['ok' => true, 'jahr' => $jahr, 'heute' => hr_heute(), 'uebertragBis' => hr_uebertrag_bis(), 'zeilen' => hr_uebersicht($jahr)]);
         }
 
-        /* Monatsplan / Abwesenheitskalender: Kollegen nur „abwesend“, Personalstelle mit Kürzeln */
+        /* Monatsplan / Abwesenheitskalender: Kollegen nur „abwesend“, mit hr.kalender zusätzlich Urlaub/Gleittag (Sicht
+           „urlaub“), Personalstelle mit Kürzeln. „sicht“ (voll | urlaub | kollege) ergänzt „voll“ (ältere Oberflächen). */
         case 'hr_monat': {
             $me = require_perm('hr.antrag');
             hr_mail_anstossen();
@@ -105,7 +108,9 @@ switch ($action) {
             $jahr = hr_jahr_param($_GET['jahr'] ?? null);
             $monat = (int)($_GET['monat'] ?? date('n'));
             if ($monat < 1 || $monat > 12) fail('Ungültiger Monat.', 422);
-            respond(['ok' => true, 'voll' => may($me, 'hr.verwalten')] + hr_monat($jahr, $monat, $me, may($me, 'hr.verwalten')));
+            $voll = may($me, 'hr.verwalten');
+            $sicht = $voll ? 'voll' : (may($me, 'hr.kalender') ? 'urlaub' : 'kollege');
+            respond(['ok' => true, 'voll' => $voll, 'sicht' => $sicht] + hr_monat($jahr, $monat, $me, $voll, $voll ? 'kollege' : $sicht));
         }
 
         /* Antrag stellen (eigene Person): Urlaub (art U, Standard) oder Gleittag (art G, nur soweit das Gleittage-Konto reicht) */
@@ -532,6 +537,13 @@ switch ($action) {
                 if ($v !== null && !is_string($v)) fail('Vertretung: bitte einen Mitarbeiter wählen oder leer lassen.', 422);
                 $werte['vertretung'] = $v === null || $v === '' ? null : $v;
             }
+            if (array_key_exists('eintritt', $b)) {
+                // Eintritt (Inhaber 11.11.2026): im Eintrittsjahr anteiliger Urlaubsanspruch; leer = kein Datum (voller Anspruch)
+                $e = $b['eintritt'];
+                if ($e === null || $e === '') $werte['eintritt'] = null;
+                elseif (($d = hr_eintritt_datum($e)) === null || $d > hr_plus(hr_heute(), 3 * 366)) fail('Eintritt: bitte ein gültiges Datum wählen oder leer lassen.', 422);
+                else $werte['eintritt'] = $d;
+            }
             if (array_key_exists('arbeitstage', $b)) {
                 $at = is_array($b['arbeitstage']) ? array_values(array_unique(array_map('intval', $b['arbeitstage']))) : [];
                 if (!$at || array_filter($at, function ($w) { return $w < 1 || $w > 7; })) fail('Bitte mindestens einen Arbeitstag wählen.', 422);
@@ -548,11 +560,11 @@ switch ($action) {
                 };
                 $jv = ['anspruch' => $zahl($b['anspruch'] ?? null, 'Urlaubsanspruch', 0), 'uebertrag' => $zahl($b['uebertrag'] ?? null, 'Übertrag', -100)];
             }
-            $verfallVorher = null; $vertretungVorher = null;
-            $p = with_lock('hr-personal', function () use ($b, $uid, $users, $ui, &$werte, &$jahr, &$jv, $me, &$verfallVorher, &$vertretungVorher) {
+            $verfallVorher = null; $vertretungVorher = null; $eintrittVorher = null;
+            $p = with_lock('hr-personal', function () use ($b, $uid, $users, $ui, &$werte, &$jahr, &$jv, $me, &$verfallVorher, &$vertretungVorher, &$eintrittVorher) {
                 $roh = hr_personal_roh();
                 $verfallVorher = true;
-                foreach ($roh['personen'] as $e) if ($e['nutzer'] === $uid) { $verfallVorher = $e['verfall']; $vertretungVorher = $e['vertretung']; }
+                foreach ($roh['personen'] as $e) if ($e['nutzer'] === $uid) { $verfallVorher = $e['verfall']; $vertretungVorher = $e['vertretung']; $eintrittVorher = $e['eintritt'] ?? null; }
                 if ((int)($b['rev'] ?? -1) !== $roh['rev']) fail('Die Mitarbeiterliste wurde inzwischen geändert. Bitte neu laden.', 409);
                 // Vier-Augen-Prinzip: die eigenen Urlaubsangaben (Anspruch, Übertrag, Verfall, Arbeitstage, im Urlaubsplan, Personalnummer –
                 // sie bestimmt die Zuordnung beim Import) ändert eine andere Person der Personalstelle. Abteilung und Position
@@ -586,7 +598,8 @@ switch ($action) {
             $vtIdx = hr_personen_index(hr_personal());
             audit('hr', 'HR: Angaben von ' . $users[$ui]['name'] . ' geändert'
                 . ($p['verfall'] !== $verfallVorher ? ($p['verfall'] ? ' (Resturlaub verfällt wieder am Verfallstag)' : ' (Resturlaub verfällt nicht mehr)') : '')
-                . ($p['vertretung'] !== $vertretungVorher ? ($p['vertretung'] ? ' (feste Vertretung: ' . (isset($vtIdx[$p['vertretung']]) ? hr_name($vtIdx[$p['vertretung']]) : $p['vertretung']) . ')' : ' (keine feste Vertretung mehr)') : ''));
+                . ($p['vertretung'] !== $vertretungVorher ? ($p['vertretung'] ? ' (feste Vertretung: ' . (isset($vtIdx[$p['vertretung']]) ? hr_name($vtIdx[$p['vertretung']]) : $p['vertretung']) . ')' : ' (keine feste Vertretung mehr)') : '')
+                . (($p['eintritt'] ?? null) !== $eintrittVorher ? (($p['eintritt'] ?? null) ? ' (Eintritt ' . hr_de($p['eintritt']) . ')' : ' (kein Eintrittsdatum mehr)') : ''));
             $personal = hr_personal(); $abw = hr_abwesenheiten();
             foreach ($personal['personen'] as $x) if ($x['nutzer'] === $uid) respond(['ok' => true, 'rev' => $personal['rev'], 'person' => hr_person_aus($x, $abw['eintraege'], $jahr ?? (int)date('Y'))]);
             respond(['ok' => true, 'rev' => $personal['rev']]);

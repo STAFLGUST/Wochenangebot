@@ -48,6 +48,7 @@ Für jedes Modul mit Kachel entsteht `<modul>.zugang` (lib/rechte.php, `perms_ka
 | `hr.verwalten` | HR | HR | bearbeiten | Personalstelle: Urlaubsverwaltung pflegen | – | – |
 | `hr.genehmigen` | HR | HR | bearbeiten | Anträge genehmigen oder ablehnen | – | – |
 | `hr.uebersicht` | HR | HR | sehen | Urlaubsübersicht aller Mitarbeiter ansehen (nur Zahlen) | – | – |
+| `hr.kalender` | HR | HR | sehen | Urlaubskalender: Urlaub aller Mitarbeiter sehen (ohne Tage und Konten) | – | – |
 | `crm.sehen` | CRM | CRM | sehen | CRM ansehen: Kunden mit Ansprechpartnern, Wiedervorlagen, Pipeline, Aktivitäten, Auswertung | – | – |
 | `crm.bearbeiten` | CRM | CRM | bearbeiten | CRM bearbeiten: Kundenblätter, Ansprechpartner, Interessenten, Aktivitäten erfassen | – | `crm.sehen` |
 | `crm.exportieren` | CRM | CRM | bearbeiten | CRM-Liste mit Kontaktdaten als CSV herunterladen | – | `crm.sehen` |

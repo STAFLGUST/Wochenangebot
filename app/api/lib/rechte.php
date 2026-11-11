@@ -35,6 +35,10 @@ const PERMS = [
                                    'h' => 'Für Vorgesetzte. Sieht offene Urlaubs- und Gleittag-Anträge mit dem Rest des Mitarbeiters, der Vertretung und wer aus der Abteilung gleichzeitig fehlt – und genehmigt oder lehnt ab. Nie den eigenen Antrag. Krankheiten sieht er nicht.'],
     'hr.uebersicht'            => ['g' => 'HR', 'l' => 'Urlaubsübersicht aller Mitarbeiter ansehen (nur Zahlen)', 'k' => 'sehen', 'd' => [], 'r' => ['hr.antrag'],
                                    'h' => 'Nur ansehen. Je Mitarbeiter und Jahr die Zahlen: Urlaub (Anspruch, genommen, geplant, Rest), Anzahl der Krank- und Gleittage und der Gleittage-Rest. Keine Zeiträume, Gründe oder Notizen.'],
+    // Urlaubskalender (Auftrag des Inhabers 11.11.2026): Kalender mit Urlaub aller, aber ohne Tage/Konten/Übersicht. Sensibel
+    // (einzeln freigeben, PERMS_SENSIBEL): aus „Urlaub“ und „abwesend“ lassen sich Krankheitstage ableiten.
+    'hr.kalender'              => ['g' => 'HR', 'l' => 'Urlaubskalender: Urlaub aller Mitarbeiter sehen (ohne Tage und Konten)', 'k' => 'sehen', 'd' => [], 'r' => ['hr.antrag'],
+                                   'h' => 'Für Vorgesetzte oder Schichtleitung. Sieht im Kalender bei allen Kollegen genehmigten Urlaub („U“) und Gleittage („G“); alles andere nur als „abwesend“ – nie Krankheit, Gründe, Notizen oder offene Anträge. Keine Tage, kein Urlaubskonto, keine Übersicht. Datenschutz: Wer Urlaub von „abwesend“ unterscheiden kann, kann daraus Krankheitstage ableiten – nur an Personen vergeben, die das sehen dürfen.'],
     'crm.sehen'                => ['g' => 'CRM', 'l' => 'CRM ansehen: Kunden mit Ansprechpartnern, Wiedervorlagen, Pipeline, Aktivitäten, Auswertung', 'k' => 'sehen', 'd' => [], 'r' => []],
     'crm.bearbeiten'           => ['g' => 'CRM', 'l' => 'CRM bearbeiten: Kundenblätter, Ansprechpartner, Interessenten, Aktivitäten erfassen', 'k' => 'machen', 'd' => [], 'r' => ['crm.sehen']],
     'crm.exportieren'          => ['g' => 'CRM', 'l' => 'CRM-Liste mit Kontaktdaten als CSV herunterladen', 'k' => 'machen', 'd' => [], 'r' => ['crm.sehen']],
@@ -103,7 +107,7 @@ const PERMS_STUFE_VOLL = ['angebot.veroeffentlichen', 'angebote.loeschen', 'woch
     'crm.master', 'rewe.alle', 'rewe.verwalten', 'rewe.exportieren', 'qs.freigeben', 'qs.verwalten', 'hr.genehmigen', 'hr.uebersicht',
     'marketing.freigeben', 'marketing.verwalten'];
 const PERMS_SENSIBEL = ['bestand.einkaufspreise', 'crm.exportieren', 'controlling.umsatz_ek', 'controlling.bestand_ek', 'controlling.arbeitszeit_sehen',
-    'controlling.arbeitszeit_importieren', 'hr.verwalten',
+    'controlling.arbeitszeit_importieren', 'hr.verwalten', 'hr.kalender',
     'kunden.bearbeiten', 'sicherheit.notfall'];
 const PERMS_VORSCHAU = ['bestand.sehen' => 'bestand', 'bestand.einkaufspreise' => 'ek', 'bestand.importieren' => 'import', 'bestand.mhd_senden' => 'mhd',
     'angebot.veroeffentlichen' => 'veroeffentlichen', 'crm.umsatz_euro' => 'umsatz', 'crm.exportieren' => 'export', 'controlling.umsatz_ek' => 'spanne',
