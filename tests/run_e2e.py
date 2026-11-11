@@ -80,6 +80,7 @@ SUITES['kundengruppen'] = (8790, 'data-seed', True)
 SUITES['einzelangebote'] = SUITES['bestellung']
 SUITES['vkgruppen'] = (8790, 'data-seed', True)
 SUITES['angebotskategorien'] = (8790, 'data-seed', True)   # Stammdaten Angebotskategorien und Aufbau des Angebots danach
+SUITES['aufbau'] = (8790, 'data-seed', True)   # Angebot: Knopf „Editor“, Reihenfolge der Bereiche und Gruppen (app/module/angebot/aufbau.js)
 SUITES['kundenimport'] = SUITES['bestellung']
 SUITES['vertreter'] = SUITES['bestellung']
 SUITES['lieferanten'] = SUITES['bestellung']   # Stammdaten Lieferanten und Versandarten, Versandart am Kunden
