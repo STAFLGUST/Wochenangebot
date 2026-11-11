@@ -4,7 +4,8 @@
    Mitarbeiter: eigenes Urlaubskonto (nur Urlaub, nie Krankheit), Urlaubsantrag (ausblendbar: Verwaltung → Urlaub, Schalter
    „Urlaubsanträge über die Plattform“), Liste „Mein Urlaub und Anträge“ (nur Urlaub), Mini-Kalender „Mein Jahr“ mit allen
    eigenen Abwesenheiten und „Korrektur melden“ (geht an die Personalstelle), Abwesenheitskalender (Kollegen nur „abwesend“;
-   mit dem Recht hr.kalender zusätzlich genehmigter Urlaub „U“ und Gleittag „G“ – Sicht „urlaub“ aus hr_monat).
+   mit dem Recht hr.kalender bei Kollegen der eigenen Abteilung zusätzlich genehmigter Urlaub „U“ und Gleittag „G“ – Sicht
+   „urlaub“ aus hr_monat, je Zeile vom Server entschieden).
    Urlaubsübersicht (Recht hr.uebersicht, auch Personalstelle): alle Mitarbeiter mit Summen (Konto, Krank-, Gleittage).
    Urlaub genehmigen (Recht hr.genehmigen): offene Anträge genehmigen/ablehnen – nie den eigenen.
    Jahresplanung (03.11.2026): Mitarbeiter sehen in der Planungsphase den Stand ihrer Vorplanung des nächsten Jahres
@@ -629,14 +630,14 @@
   });
 
   /* ---------- Kalender / Monatsplan ---------- */
-  /* Legende je Sicht (hr_monat.sicht): voll = Personalstelle, urlaub = Recht hr.kalender (Urlaub/Gleittag, sonst „abwesend“),
-     kollege = nur „abwesend“ */
-  function kalLegende(sicht) {
+  /* Legende je Sicht (hr_monat.sicht): voll = Personalstelle, urlaub = Recht hr.kalender (Urlaub/Gleittag der eigenen
+     Abteilung „abt“, sonst „abwesend“), kollege = nur „abwesend“ */
+  function kalLegende(sicht, abt) {
     const f = (cls, text, stil) => `<span><i class="${cls}" style="${stil || ''}"></i>${esc(text)}</span>`;
     const art = (k, t) => `<span><b class="hr-art ${k}">${k === 'X' ? 'x' : k}</b>${esc(t)}</span>`;
     $('#kal-legende').innerHTML = (sicht === 'voll' ? art('U', 'Urlaub') + art('K', 'Krank') + art('G', 'Gleittag') + art('X', 'freier Tag') + art('F', 'unentschuldigt')
       + '<span><b class="hr-art U offen">U?</b>beantragt</span>'
-      : sicht === 'urlaub' ? art('U', 'Urlaub') + art('G', 'Gleittag') + art('A', 'abwesend') : art('A', 'abwesend'))
+      : sicht === 'urlaub' ? art('U', 'Urlaub') + art('G', 'Gleittag') + `<span>nur Abteilung ${esc(abt || '')}</span>` + art('A', 'abwesend') : art('A', 'abwesend'))
       + f('', 'Wochenende', 'background:var(--hr-wochenende)') + f('', 'Feiertag', 'background:var(--hr-feiertag)')
       + f('', 'Ferien', 'background:var(--hr-ferien)') + f('', 'Urlaubssperre', 'background:var(--hr-sperre)')
       + (S.monat && S.monat.tage.some((x) => x.schliesstag) ? f('', 'Betrieb geschlossen (½ Urlaubstag)', 'background:var(--hr-schliess)') : '')
@@ -683,7 +684,7 @@
       }
     }
     const voll = !!daten[0].voll;
-    return { voll, sicht: daten[0].sicht || (voll ? 'voll' : 'kollege'), tage, personen: [...gruppen.values()].flat() };
+    return { voll, sicht: daten[0].sicht || (voll ? 'voll' : 'kollege'), abt: daten[0].urlaubAbteilung || '', tage, personen: [...gruppen.values()].flat() };
   }
   async function ladeKalender() {
     const k = S.kal, zeitraum = k.modus === 'zeitraum';
@@ -722,7 +723,7 @@
   }
   function zeigeKalender() {
     const m = S.monat, heute = heuteIso(), zeitraum = S.kal.modus === 'zeitraum';
-    kalLegende(m.sicht);
+    kalLegende(m.sicht, m.abt);
     const alle = [...new Set(m.personen.map((p) => p.abteilung))];
     for (const a of [...S.kal.abt]) if (!alle.includes(a)) S.kal.abt.delete(a);   // entfallene Abteilungen vergessen
     kalFilter(alle);
