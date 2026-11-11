@@ -2,7 +2,7 @@
 
 <!-- ERZEUGT von `python3 werkzeuge/doku.py erzeugen` – nicht von Hand ändern. Quelle: Funktionen und Kommentare im Code. Die CI prüft, dass diese Datei zum Code passt. -->
 
-11 Dateien, 293 Funktionen – in der Reihenfolge der Datei, **fett** die Abschnitte. Text = erste Aussage des Kommentars direkt über der Funktion (Python: Docstring). Übersicht aller Module: [README.md](README.md).
+11 Dateien, 294 Funktionen – in der Reihenfolge der Datei, **fett** die Abschnitte. Text = erste Aussage des Kommentars direkt über der Funktion (Python: Docstring). Übersicht aller Module: [README.md](README.md).
 
 ## `app/api/aktionen/hr.php`
 
@@ -262,6 +262,7 @@ _Modul HR · Urlaubsverwaltung – Fachlogik (Daten, Feiertage, Urlaubskonto, An
 **Monatsplan und Kalender**
 
 - `hr_monatstage(jahr, monat, einst)` – Tageskopf eines Monats: Wochentag, Wochenende, Feiertag, Ferien, Urlaubssperre
+- `hr_gleiche_abteilung(a, b)` – Gleiche Abteilung (Sicht 'urlaub' nur für Kollegen der eigenen Abteilung, Inhaber 11.11.2026): über die Nummer der Stammdaten (abteilungNr, nach hr_personal …
 - `hr_zeile(p, eintraege, tage, sicht)` – Kürzel je Person und Tag eines Monats.
 - `hr_monat(jahr, monat, me, voll, kollegen)` – Monatsplan: alle aktiven Mitarbeiter, gruppiert nach Abteilung (Reihenfolge laut Position).
 - `hr_startseite(me)` – Startseite des Dashboards („Heute für Sie“, lib/startseite.php): was dieser Mitarbeiter in HR entscheiden kann – dieselben Zahlen wie am Reiter „Anträge“ …
@@ -345,7 +346,7 @@ _STAFL-Plattform · HR · Urlaub Gleittage-Konto (02.11.2026)_
 
 **Kalender / Monatsplan**
 
-- `kalLegende(sicht)` – Legende je Sicht (hr_monat.sicht): voll = Personalstelle, urlaub = Recht hr.kalender (Urlaub/Gleittag, sonst „abwesend“), kollege = nur „abwesend“
+- `kalLegende(sicht, abt)` – Legende je Sicht (hr_monat.sicht): voll = Personalstelle, urlaub = Recht hr.kalender (Urlaub/Gleittag der eigenen Abteilung „abt“, sonst „abwesend“), kollege …
 - `heuteSichtbar()` – Spalte „heute“ in den sichtbaren Bereich holen (am Handy scrollt die Tabelle waagerecht): nur wenn sie verdeckt ist, dann mittig rechts neben die festen Namen
 - `kalZusammen(daten, von, bis)` – Monatsdaten zu einem Plan zusammenführen: Tage im Zeitraum, Mitarbeiter je Abteilung in der Reihenfolge des Servers, Kürzel je Datum (der Server liefert je …
 - `ladeKalender()`
