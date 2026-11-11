@@ -1,0 +1,20 @@
+{
+  "date": "2026-10-22",
+  "source": "Synthetische Testdaten Summenzeile",
+  "articles": [
+    {"code": "10901", "name": "Summe Rind Hüfte", "kg": 100, "mhd": "2026-10-22", "mhdKg": 40, "lots": [
+      {"lot": "S-001", "marke": "", "arrival": "2026-10-01", "mhd": "2026-10-22", "kolli": 4, "kg": 40, "ek": 10},
+      {"lot": "S-002", "marke": "", "arrival": "2026-10-05", "mhd": "2026-11-20", "kolli": 6, "kg": 60, "ek": 12}]},
+    {"code": "10902", "name": "Summe Rind Keule", "kg": 50, "mhd": "2026-10-26", "mhdKg": 20, "lots": [
+      {"lot": "S-003", "marke": "", "arrival": "2026-10-02", "mhd": "2026-10-26", "kolli": 2, "kg": 20, "ek": 8.5},
+      {"lot": "S-004", "marke": "", "arrival": "2026-10-03", "mhd": "2026-10-30", "kolli": 3, "kg": 30, "ek": null}]},
+    {"code": "20901", "name": "Summe Schwein Nacken", "kg": 25.4, "mhd": "2026-10-28", "mhdKg": 25.4, "lots": [
+      {"lot": "S-005", "marke": "", "arrival": "2026-10-04", "mhd": "2026-10-28", "kolli": 2, "kg": 25.4, "ek": 4}]},
+    {"code": "60901", "name": "Summe Rind gefroren", "kg": 10, "mhd": null, "mhdKg": null, "lots": [
+      {"lot": "S-006", "marke": "", "arrival": "2026-09-30", "mhd": null, "kolli": 1, "kg": 10, "ek": 5}]}
+  ],
+  "incoming": [
+    {"code": "10901", "name": "Summe Rind Hüfte", "kg": 30, "arrival": "2026-10-25", "lot": "S-Z01", "ek": 11},
+    {"code": "20902", "name": "Summe Schwein Zugang", "kg": 15, "arrival": null, "lot": "S-Z02"}
+  ]
+}

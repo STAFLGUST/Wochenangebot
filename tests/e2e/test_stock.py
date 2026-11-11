@@ -50,6 +50,12 @@ with sync_playwright() as p:
     check('groups in range order, first Rind frisch, last Weitere', heads[0] == 'Rindfleisch, frisch' and 'Weitere Artikel' in heads and 'Rindfleisch, gefroren' in heads, heads)
     check('subtotal per group + gaps', a.locator('.stab tr.wg-sum').count() == len(heads) and a.locator('.stab tr.wg-gap').count() == len(heads) - 1)
     tot = a.inner_text('.stab tfoot .s-kg'); check('grand total kg', tot == fmt(exp_total) + ' kg', (tot, fmt(exp_total)))
+    # Summenzeile über der Tabelle: eingelagert = Summe aller Artikel (ohne Warengruppen-Summen), € = EK × Menge der Partien
+    ganz = lambda v: f'{v.quantize(Decimal(1), ROUND_HALF_UP):,}'.replace(',', '.')   # noqa: E731
+    alle_lots = [p for x in a.evaluate("fetch('../api/?action=stock').then(r => r.json()).then(j => j.stock.articles)") for p in x['lots']]
+    ek_wert = sum((Decimal(str(p['ek'])) * Decimal(str(p['kg'])) for p in alle_lots if (p.get('ek') or 0) > 0 and p['kg'] > 0), Decimal(0))
+    ein = a.eval_on_selector('#st-summe [data-summe=eingelagert]', "e => [e.querySelector('.st-s-kg').textContent, e.querySelector('.st-s-eur').textContent]")
+    check('Summenzeile (283 Artikel): eingelagert kg und Einkaufswert der Partien', ein == [ganz(exp_total) + ' kg', ganz(ek_wert) + ' €'] and ek_wert > 0, (ein, ganz(exp_total), ganz(ek_wert)))
     check('headers', 'Eingelagerter' in a.locator('.stab thead').inner_text() and 'Erwartete Zugänge' in ' '.join(a.locator('.stab thead').inner_text().split()))
     # Sortierung im ersten Block: markierte zuerst, früheste oben
     first = a.locator('.stab tbody.wg').first
