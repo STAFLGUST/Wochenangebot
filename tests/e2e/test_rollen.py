@@ -60,14 +60,14 @@ check('Übersicht: Rollen, Module und Katalog', code == 200 and [r['id'] for r i
       and {m['id'] for m in rr['module']} >= {'angebot', 'bestand', 'hr', 'verwaltung', 'import'}, code)
 ZUGANG = {p['key'] for p in rr['catalog'] if p['kind'] == 'zugang'}
 KAT = {p['key']: p for p in rr['catalog']}
-check('Katalog: Erklärung je Recht (HR), sonst leer – Bezeichnungen in Alltagssprache', all(len(KAT[k]['hilfe']) > 80 for k in ('hr.antrag', 'hr.verwalten', 'hr.genehmigen', 'hr.uebersicht'))
+check('Katalog: Erklärung je Recht (HR), sonst leer – Bezeichnungen in Alltagssprache', all(len(KAT[k]['hilfe']) > 80 for k in ('hr.antrag', 'hr.verwalten', 'hr.genehmigen', 'hr.uebersicht', 'hr.kalender'))
       and KAT['bestand.sehen']['hilfe'] == '' and KAT['hr.verwalten']['label'] == 'Personalstelle: Urlaubsverwaltung pflegen'
       and 'nie für sich selbst' in KAT['hr.verwalten']['hilfe'] and 'nie den Grund' in KAT['hr.antrag']['hilfe'], {k: KAT[k]['label'] for k in KAT if k.startswith('hr.')})
 STUFEN_ERWARTET = {'voll': {'angebot.veroeffentlichen', 'angebote.loeschen', 'wochenangebot.senden', 'sonderposten.senden', 'leergut.verwalten', 'crm.master',
                               'rewe.alle', 'rewe.verwalten', 'rewe.exportieren', 'qs.freigeben', 'qs.verwalten', 'hr.genehmigen', 'hr.uebersicht',
                               'marketing.freigeben', 'marketing.verwalten'},
                    'sensibel': {'bestand.einkaufspreise', 'crm.exportieren', 'controlling.umsatz_ek', 'controlling.bestand_ek', 'controlling.arbeitszeit_sehen',
-                                'controlling.arbeitszeit_importieren', 'hr.verwalten',
+                                'controlling.arbeitszeit_importieren', 'hr.verwalten', 'hr.kalender',
                                 'kunden.bearbeiten', 'sicherheit.notfall'}}
 check('Katalog: Stufe je Recht für die Darstellung (Zugang, Art „sehen“ → Ansehen, „machen“ → Bearbeiten, Voll, Sensibel)',
       all(p['stufe'] == ('zugang' if p['kind'] == 'zugang' else 'sensibel' if p['key'] in STUFEN_ERWARTET['sensibel'] else 'voll' if p['key'] in STUFEN_ERWARTET['voll']
@@ -289,10 +289,12 @@ with sync_playwright() as pw:
     # HR: Erklärungen, keine Stufe „Ansehen“
     a.click('.rl-zeile[data-rl-modul="hr"] .rl-z-kopf'); a.wait_for_selector('#rl-detail [data-rl-key="hr.antrag"]')
     hr_text = a.inner_text('#rl-detail')
-    check('UI: HR-Rechte mit Erklärung und Voraussetzung, andere Module unverändert', a.locator('#rl-detail .rl-hilfe').count() == 4
+    check('UI: HR-Rechte mit Erklärung und Voraussetzung, andere Module unverändert', a.locator('#rl-detail .rl-hilfe').count() == 5
           and 'sieht die Gründe' in hr_text and 'Setzt „Eigenen Urlaub und Gleittage beantragen“ voraus' in hr_text, hr_text[:300])
     check('UI: HR ohne Stufe „Ansehen“, Personalstelle unter „Sensibel“', a.locator('[data-rl-stufe="hr:ansehen"]').count() == 0
           and a.locator('#rl-detail .rl-abschn.sens [data-rl-key="hr.verwalten"]').count() == 1)
+    check('UI: Urlaubskalender (hr.kalender) unter „Sensibel“ mit Datenschutz-Hinweis', a.locator('#rl-detail .rl-abschn.sens [data-rl-key="hr.kalender"]').count() == 1
+          and 'Krankheitstage ableiten' in hr_text, hr_text[:600])
     a.locator('#rl-detail').screenshot(path=SH + '/rollen-hr-erklaerung.png')
     check('UI: „Auf einen Blick“: Einkauf „Bearbeiten“, HR ohne Zugang, Zahlen', 'Bearbeiten' in a.inner_text('.rl-kachel[data-rl-oeffnen="einkauf"]')
           and 'kein zugang' in a.inner_text('.rl-kachel[data-rl-oeffnen="hr"]').lower() and 'von %d Modulen' % len(ZUGANG) in a.inner_text('.rl-blick'))

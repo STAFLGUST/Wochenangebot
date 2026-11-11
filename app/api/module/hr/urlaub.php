@@ -23,7 +23,8 @@ declare(strict_types=1);
      Verwaltung → Mitarbeiter, hr-personal „verfall“, Standard an): ohne Verfall bleibt der Übertrag ganz erhalten und geht
      mit dem Rest ins Folgejahr. Gilt wie der Verfallstag für alle Jahre (das Konto wird berechnet, nicht gespeichert).
    - Kalender: alle sehen, wer abwesend ist – nie den Grund. Gründe, Notizen und Konten nur für die Person selbst
-     und die Personalstelle.
+     und die Personalstelle. Mit dem Recht hr.kalender (Inhaber 11.11.2026, sensibel, einzeln vergeben) zusätzlich
+     genehmigten Urlaub und Gleittage aller – nie Krankheit, Notizen, offene Anträge, Tage oder Konten (hr_zeile 'urlaub').
    - Freie Tage einer verkürzten Woche (z. B. 4-Tage-Woche) ergeben sich aus den Arbeitstagen der Person (Excel: „x“).
    - Urlaubsanträge über die Plattform lassen sich ein- und ausschalten (Inhaber 30.10.2026, Verwaltung → Urlaub,
      hr-einstellungen.antraege, Standard an). Ausgeschaltet lehnt der Server neue Anträge ab; Kalender, Urlaubskonto,
@@ -1160,34 +1161,43 @@ function hr_monatstage(int $jahr, int $monat, array $einst): array
     return $out;
 }
 
+/* Arten, die die Sicht 'urlaub' (Recht hr.kalender) bei Kollegen mit ihrem Kürzel zeigt – alles andere bleibt „A“ */
+const HR_KALENDER_ARTEN = ['U', 'G'];
+
 /* Kürzel je Person und Tag eines Monats.
    $sicht: 'voll' (Personalstelle: Art, auch beantragt mit „?“), 'eigen' (eigene Zeile wie voll), 'kollege' (nur „A“ =
-   abwesend, nur genehmigt, nie der Grund; freie Tage einer verkürzten Woche ebenfalls „A“). */
+   abwesend, nur genehmigt, nie der Grund; freie Tage einer verkürzten Woche ebenfalls „A“), 'urlaub' (Recht hr.kalender,
+   Inhaber 11.11.2026: wie 'kollege', aber genehmigter Urlaub „U“ und Gleittag „G“ mit Kürzel – Krank, Unentschuldigt und
+   freie Tage bleiben „A“, offene Anträge unsichtbar). */
 function hr_zeile(array $p, array $eintraege, array $tage, string $sicht): array
 {
+    $kollege = $sicht === 'kollege' || $sicht === 'urlaub';   // fremde Zeile: nur genehmigt, freie Tage nur „A“
     $out = [];
     foreach ($tage as $t) {
         if ($t['wochenende'] || $t['feiertag'] !== null) continue;
-        if (!in_array(hr_wochentag($t['datum']), $p['arbeitstage'], true)) $out[$t['tag']] = $sicht === 'kollege' ? 'A' : 'x';
+        if (!in_array(hr_wochentag($t['datum']), $p['arbeitstage'], true)) $out[$t['tag']] = $kollege ? 'A' : 'x';
     }
     $erster = $tage[0]['datum']; $letzter = $tage[count($tage) - 1]['datum'];
     foreach ($eintraege as $e) {
         if ($e['person'] !== $p['id'] || !in_array($e['status'], HR_AKTIV, true) || $e['bis'] < $erster || $e['von'] > $letzter) continue;
-        if ($sicht === 'kollege' && $e['status'] !== 'genehmigt') continue;
+        if ($kollege && $e['status'] !== 'genehmigt') continue;
         foreach ($tage as $t) {
             $d = $t['datum'];
             if ($d < $e['von'] || $d > $e['bis'] || $t['wochenende'] || $t['feiertag'] !== null) continue;
-            if ($e['art'] === 'X') { $out[$t['tag']] = $sicht === 'kollege' ? 'A' : 'x'; continue; }
+            if ($e['art'] === 'X') { $out[$t['tag']] = $kollege ? 'A' : 'x'; continue; }
             if (!in_array(hr_wochentag($d), $p['arbeitstage'], true)) continue;
-            $out[$t['tag']] = $sicht === 'kollege' ? 'A' : $e['art'] . ($e['status'] === 'beantragt' ? '?' : '');
+            $out[$t['tag']] = $sicht === 'urlaub' ? (in_array($e['art'], HR_KALENDER_ARTEN, true) ? $e['art'] : 'A')
+                : ($kollege ? 'A' : $e['art'] . ($e['status'] === 'beantragt' ? '?' : ''));
         }
     }
     return $out;
 }
 
-/* Monatsplan: alle aktiven Mitarbeiter, gruppiert nach Abteilung (Reihenfolge laut Position) */
-function hr_monat(int $jahr, int $monat, array $me, bool $voll): array
+/* Monatsplan: alle aktiven Mitarbeiter, gruppiert nach Abteilung (Reihenfolge laut Position).
+   $kollegen: Sicht auf fremde Zeilen ohne $voll – 'kollege' (Standard, nur „A“) oder 'urlaub' (Recht hr.kalender). */
+function hr_monat(int $jahr, int $monat, array $me, bool $voll, string $kollegen = 'kollege'): array
 {
+    if (!in_array($kollegen, ['kollege', 'urlaub'], true)) $kollegen = 'kollege';
     $personal = hr_personal(); $abw = hr_abwesenheiten(); $einst = hr_einstellungen();
     $tage = hr_monatstage($jahr, $monat, $einst);
     $ich = hr_ich($personal, $me);
@@ -1196,7 +1206,7 @@ function hr_monat(int $jahr, int $monat, array $me, bool $voll): array
         if (!$p['aktiv']) continue;
         $eigen = $ich !== null && $ich['id'] === $p['id'];
         $zeilen[] = ['id' => $p['id'], 'name' => hr_name($p), 'abteilung' => $p['abteilung'], 'ich' => $eigen,
-                     'tage' => (object)hr_zeile($p, $abw['eintraege'], $tage, $voll || $eigen ? 'voll' : 'kollege')];
+                     'tage' => (object)hr_zeile($p, $abw['eintraege'], $tage, $voll || $eigen ? 'voll' : $kollegen)];
     }
     return ['jahr' => $jahr, 'monat' => $monat, 'name' => HR_MONATE[$monat], 'tage' => $tage, 'personen' => $zeilen,
             'sperren' => $einst['sperren'], 'ferien' => $einst['ferien']];
