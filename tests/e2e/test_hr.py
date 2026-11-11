@@ -230,14 +230,18 @@ if st == 200: E.call('hr_antrag_zurueckziehen', {'id': r['eintrag']['id']})
 check('… Speichern ohne Angabe lässt den Schalter', P.call('hr_einstellungen_save', base)[0] == 200 and P.call('mitarbeiter_hr')[1]['regelSperren'] is False)
 check('… wieder eingeschaltet', P.call('hr_einstellungen_save', {**base, 'regelSperren': True})[1]['regelSperren'] is True)
 d0 = E.call('hr_start')[1]
-check('Urlaubsregeln: Vorlage wie „Urlaubsregeln kompakt“ (Inhaber 11.11.2026) – 8 Punkte, Vorplanung bis 31.01. mit höchstens 5 unverplanten Tagen, Einzeltage, Sperre 30.11.–24.12., Sonderregelung Dezember',
+check('Urlaubsregeln: Vorlage wie „Urlaubsregeln kompakt“ (Inhaber 11.11.2026) und Urlaubsdauer – 9 Punkte, Vorplanung bis 31.01. mit höchstens 5 unverplanten Tagen, Einzeltage, 15 Arbeitstage am Stück, Sperre 30.11.–24.12., Sonderregelung Dezember',
       d0['regeln'].startswith('1. Urlaubsanspruch')
-      and d0['regeln'].count('\n\n') == 7 and 'bis zum 31.01.' in d0['regeln'] and 'Höchstens 5 Urlaubstage dürfen unverplant bleiben' in d0['regeln']
+      and d0['regeln'].count('\n\n') == 8 and 'bis zum 31.01.' in d0['regeln'] and 'Höchstens 5 Urlaubstage dürfen unverplant bleiben' in d0['regeln']
       and 'plant die Personalstelle Ihren Urlaub' in d0['regeln'] and 'höchstens 4 einzelne Urlaubstage' in d0['regeln'] and '90 %' not in d0['regeln']
-      and '(30.11.–24.12.)' in d0['regeln'] and '2 Wochen vor Ostern' in d0['regeln'] and '8. Sonderregelung Dezember' in d0['regeln'] and '1 Urlaubstag angerechnet' in d0['regeln']
-      and 'Urlaubsdauer' not in d0['regeln'] and 'während Ihres ganzen Urlaubs anwesend' in d0['regeln']
+      and '(30.11.–24.12.)' in d0['regeln'] and '2 Wochen vor Ostern' in d0['regeln'] and '9. Sonderregelung Dezember' in d0['regeln'] and '1 Urlaubstag angerechnet' in d0['regeln']
+      and '5. Urlaubsdauer\nAm Stück höchstens 15 Arbeitstage Urlaub' in d0['regeln'] and 'ab Montag 15 Tage wären 16' in d0['regeln'] and 'während Ihres ganzen Urlaubs anwesend' in d0['regeln']
       and 'ein Antrag ist nicht nötig' in d0['regeln'] and v['regelnStandard'] == d0['regeln']
       and len(d0['regeln']) < 1400 and all(len(a.split('\n', 1)[1]) <= 220 for a in d0['regeln'].split('\n\n')), d0['regeln'])
+# Vorlage vom 11.11.2026 (acht Punkte wie die Mail, ohne Urlaubsdauer) – unverändert gespeichert, zeigt sie die aktuelle Vorlage
+REGELN_1111 = '1. Urlaubsanspruch\nWie viele Urlaubstage Sie haben, steht in Ihrem Arbeitsvertrag.\n\n2. Planung\nUrlaub ist grundsätzlich im laufenden Kalenderjahr zu nehmen.\n\n3. Vorplanung\nPlanen Sie Ihren Jahresurlaub bis zum 31.01. vor (Schalter „Vorplanung“ bei „Urlaub beantragen“). Höchstens 5 Urlaubstage dürfen unverplant bleiben. Liegt keine Planung vor, plant die Personalstelle Ihren Urlaub.\n\n4. Einzelne Urlaubstage\nIn der Vorplanung höchstens 4 einzelne Urlaubstage. Den übrigen Urlaub planen Sie bitte zusammenhängend.\n\n5. Urlaubssperre\nGrundsätzlich kein Urlaub im Ostergeschäft (2 Wochen vor Ostern) und im Weihnachtsgeschäft (30.11.–24.12.).\n\n6. Resturlaub\nResturlaub ist grundsätzlich bis zum 31.03. des Folgejahres zu nehmen, sonst verfällt er.\n\n7. Vertretung\nStimmen Sie Ihren Urlaub mit Ihrer Urlaubsvertretung ab. Sie muss während Ihres ganzen Urlaubs anwesend sein – Überschneidungen sind nicht erlaubt.\n\n8. Sonderregelung Dezember\nAm 24.12. und 31.12. bleibt der Betrieb geschlossen. Für beide Tage zusammen wird 1 Urlaubstag angerechnet – automatisch, ein Antrag ist nicht nötig.'
+st, r = P.call('hr_einstellungen_save', {**base, 'regeln': REGELN_1111})
+check('Vorlage vom 11.11.2026 (ohne Urlaubsdauer) unverändert gespeichert: alle sehen die neue Vorlage', st == 200 and r['regeln'] == d0['regeln'] and E.call('hr_start')[1]['regeln'] == d0['regeln'], (st, r.get('regeln', '')[:60]))
 # Vorlage vom 10.11.2026 (Vorplanung mit 90 %) – unverändert gespeichert, zeigt sie die aktuelle Vorlage
 REGELN_1011 = ('1. Urlaubsanspruch\nWie viele Urlaubstage Sie haben, steht in Ihrem Arbeitsvertrag.\n\n2. Vorplanung\n'
                'Bitte planen Sie bis zum 31.12. mindestens 90 % Ihres Urlaubs für das nächste Jahr vor (Schalter „Vorplanung“ bei „Urlaub beantragen“) – so können alle fair planen.\n\n'
@@ -1549,6 +1553,66 @@ for id_ in (U_VOR, K_VOR, F1, F2, F3, F4):
     if id_: P.call('hr_eintrag_save', {'id': id_, 'stornieren': True})
 rev = P.call('mitarbeiter_hr')[1]['rev']; hr(ids['fritz'], aktiv=F_AKTIV)
 
+# ── Urlaub am Stück (Inhaber 11.11.2026: „15 Tage ist das Maximum“): höchstens 15 Arbeitstage Urlaub in einem Block –
+#    Wochenenden, Feiertage und Gleittage dazwischen zählen durch (Freitag plus ab Montag 15 Tage = 16); Personalstelle frei ──
+v_am = P.call('mitarbeiter_hr')[1]
+EINST_AM = {'sperren': v_am['sperren'], 'ferien': v_am['ferien']}
+PLAN_AM = v_am['planung']
+check('Urlaub am Stück: Standard höchstens 15 Arbeitstage', v_am.get('amStueckMax') == 15, v_am.get('amStueckMax'))
+falsch_ = [P.call('hr_einstellungen_save', {**EINST_AM, 'amStueckMax': w_})[0] for w_ in (-1, 61, 2.5, '15', None)]
+check('… einstellen: 422 bei -1, 61, 2,5, Text, leer; ohne Personalrecht 403', falsch_ == [422] * 5
+      and L.call('hr_einstellungen_save', {**EINST_AM, 'amStueckMax': 10})[0] == 403, falsch_)
+assert P.call('hr_einstellungen_save', {**EINST_AM, 'planung': {**PLAN_AM, 'vertretungPflicht': False}})[0] == 200
+AM1 = montag(Y + 1, 9, 1); AM_FR = AM1 - dt.timedelta(days=3); AM3 = AM1 + dt.timedelta(days=18)   # Mo Woche 1 bis Fr Woche 3 = 15 Arbeitstage
+st, r = P.call('hr_eintrag_save', {'person': PE, 'art': 'U', 'von': iso(AM1), 'bis': iso(AM3)})
+AM_BLOCK = r['eintrag']['id'] if st == 200 else None
+check('Personalstelle trägt 15 Arbeitstage am Stück für Erika ein', AM_BLOCK is not None and r['eintrag']['tage'] == 15, (st, r))
+st, r = E.call('hr_antrag', {'von': iso(AM_FR), 'bis': iso(AM_FR)})
+check('Freitag davor: abgelehnt (422) – zusammen 16 Arbeitstage am Stück, mit Zeitraum', st == 422 and 'höchstens 15 Arbeitstage' in r.get('error', '')
+      and '16 Arbeitstage am Stück' in r.get('error', '') and AM_FR.strftime('%d.%m.') in r.get('error', ''), (st, r))
+z_ = E.call('hr_antrag_pruefen', {'zeitraeume': [{'von': iso(AM_FR), 'bis': iso(AM_FR)}]})[1]['zeitraeume'][0]
+check('… die Vorschau zeigt es schon vor dem Absenden', z_.get('code') == 422 and '16 Arbeitstage am Stück' in (z_.get('fehler') or ''), z_)
+st, r = E.call('hr_antrag', {'von': iso(AM3 + dt.timedelta(days=3)), 'bis': iso(AM3 + dt.timedelta(days=3))})
+check('… ebenso der Montag danach', st == 422 and '16 Arbeitstage am Stück' in r.get('error', ''), (st, r))
+st, r = E.call('hr_antrag', {'von': iso(AM_FR - dt.timedelta(days=1)), 'bis': iso(AM_FR - dt.timedelta(days=1))})
+check('Donnerstag davor (Freitag dazwischen gearbeitet): möglich', st == 200, (st, r))
+if st == 200: E.call('hr_antrag_zurueckziehen', {'id': r['eintrag']['id']})
+st, r = P.call('hr_eintrag_save', {'person': PE, 'art': 'G', 'von': iso(AM3 + dt.timedelta(days=3)), 'bis': iso(AM3 + dt.timedelta(days=3))})
+AM_G = r['eintrag']['id'] if st == 200 else None
+st, r = E.call('hr_antrag', {'von': iso(AM3 + dt.timedelta(days=4)), 'bis': iso(AM3 + dt.timedelta(days=4))})
+check('Gleittag dazwischen verbindet: Dienstag nach dem Gleittag-Montag abgelehnt', AM_G is not None and st == 422 and '16 Arbeitstage am Stück' in r.get('error', ''), (AM_G, st, r))
+if AM_G: P.call('hr_eintrag_save', {'id': AM_G, 'stornieren': True})
+AM_JUL = montag(Y + 1, 7, 1)   # Juli: keine Feiertage – Montag Woche 1 bis Montag Woche 4 = 16 Arbeitstage
+st, r = E.call('hr_antrag', {'von': iso(AM_JUL), 'bis': iso(AM_JUL + dt.timedelta(days=21))})
+check('Ein Antrag mit 16 Arbeitstagen: abgelehnt – „dieser Zeitraum hat 16 Arbeitstage“', st == 422 and 'dieser Zeitraum hat 16 Arbeitstage' in r.get('error', ''), (st, r))
+st, r = E.call('hr_antrag', {'von': iso(AM_JUL), 'bis': iso(AM_JUL + dt.timedelta(days=18))})
+check('… 15 Arbeitstage (Mo bis Fr der dritten Woche): möglich', st == 200, (st, r))
+if st == 200: E.call('hr_antrag_zurueckziehen', {'id': r['eintrag']['id']})
+VP_AM = montag(Y, 9, 2)
+st, r = E.call('hr_antrag_pruefen', {'vorplanung': True, 'zeitraeume': [{'von': iso(VP_AM - dt.timedelta(days=3)), 'bis': iso(VP_AM - dt.timedelta(days=3))},
+                                                                         {'von': iso(VP_AM), 'bis': iso(VP_AM + dt.timedelta(days=18))}]})
+zr_ = r.get('zeitraeume') or [{}, {}]
+check('Vorplanung: Freitag und ab Montag drei Wochen in zwei Zeilen – die zweite Zeile zeigt 16 Arbeitstage am Stück', st == 200
+      and '16 Arbeitstage am Stück' in (zr_[1].get('fehler') or '') and 'am Stück' not in (zr_[0].get('fehler') or ''), zr_)
+assert P.call('hr_einstellungen_save', {**EINST_AM, 'amStueckMax': 0})[0] == 200
+st, r = E.call('hr_antrag', {'von': iso(AM_FR), 'bis': iso(AM_FR)})
+check('Einstellung 0 = keine Prüfung: Freitag davor dann möglich; Protokoll', st == 200
+      and 'Urlaub am Stück höchstens ohne Grenze (vorher 15 Arbeitstage)' in json.dumps(A.call('log')[1], ensure_ascii=False), (st, r))
+if st == 200: E.call('hr_antrag_zurueckziehen', {'id': r['eintrag']['id']})
+st, r = P.call('hr_einstellungen_save', {**EINST_AM, 'amStueckMax': 15})
+check('… wieder 15 (Antwort)', st == 200 and r.get('amStueckMax') == 15, r.get('amStueckMax'))
+st, r = P.call('hr_eintrag_save', {'person': PE, 'art': 'U', 'von': iso(AM_FR), 'bis': iso(AM_FR)})
+AM_PFR = r['eintrag']['id'] if st == 200 else None
+jp_ = P.call(f'hr_planung&jahr={Y + 1}')[1]
+an_ = {a_['id']: a_ for a_ in jp_.get('antraege', [])}
+check('Personalstelle darf trotzdem eintragen; Jahresplanung zeigt den Konflikt „dauer“ an beiden Einträgen, Grenze in der Antwort', AM_PFR is not None
+      and jp_.get('amStueckMax') == 15 and all(any(k_['art'] == 'dauer' and '16 Arbeitstage Urlaub am Stück' in k_['text'] for k_ in an_.get(i_, {}).get('konflikte', []))
+                                               for i_ in (AM_BLOCK, AM_PFR)), [an_.get(i_, {}).get('konflikte') for i_ in (AM_BLOCK, AM_PFR)])
+check('Mitarbeiter sieht die Grenze (hr_start)', E.call('hr_start')[1].get('amStueckMax') == 15)
+for id_ in (AM_BLOCK, AM_PFR):
+    if id_: P.call('hr_eintrag_save', {'id': id_, 'stornieren': True})
+assert P.call('hr_einstellungen_save', {**EINST_AM, 'planung': PLAN_AM})[0] == 200
+
 with sync_playwright() as p:
     br = p.chromium.launch()
 
@@ -2298,7 +2362,7 @@ with sync_playwright() as p:
               and pg.evaluate("document.querySelector('#regeln .hr-regeln-knopf').getBoundingClientRect().height") >= 40)
         pg.click('#regeln .hr-regeln-knopf'); pg.wait_for_function("document.querySelector('#regeln').open")
         check(f'{breite}px: aufgeklappt – Knopf heißt „Ausblenden“', 'Ausblenden' in pg.evaluate("document.querySelector('#regeln .hr-regeln-knopf').innerText"))
-        check(f'{breite}px: Urlaubsregeln beim Antrag (8 Punkte mit Überschrift, Hinweis im Formular)', pg.is_visible('#regeln-text') and pg.locator('#regeln-text h3').count() == 8
+        check(f'{breite}px: Urlaubsregeln beim Antrag (9 Punkte mit Überschrift, Hinweis im Formular)', pg.is_visible('#regeln-text') and pg.locator('#regeln-text h3').count() == 9
               and '31.03.' in pg.text_content('#regeln-text') and '1 Urlaubstag angerechnet' in pg.text_content('#regeln-text')
               and pg.is_visible('#antrag-regeln') and pg.is_visible('#vp-schalter-l') and not pg.is_checked('#vp-schalter'))
         spalten = pg.evaluate("getComputedStyle(document.querySelector('#regeln-text')).gridTemplateColumns.split(' ').length")
