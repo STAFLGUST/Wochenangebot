@@ -87,21 +87,23 @@ Wunsch des Inhabers („Gesamtbestand in kg und EUR, aber nicht zu groß“, gew
 zwischen Werkzeugleiste und Tabelle, ohne Karte und Rahmen, 13 px, Ziffern gleich breit, darf umbrechen (am Handy
 untereinander):
 
-`Gesamt verfügbar 51.731 kg · 334.420 € EK | eingelagert … kg · … €  erfasst … kg · … €  MHD bis 4 Tage … kg · … €   folgt Suche und Filter`
+`Gesamt verfügbar … kg · … € EK | eingelagert … kg · … €  unterwegs … kg · … €  MHD bis 4 Tage … kg · … €   folgt Suche und Filter`
 
 - **Was summiert wird:** genau die gerade angezeigten Artikelzeilen (Suche, auch die MHD-Abfrage, und Spaltenfilter; das
   Fenster „VK-Gruppen“ zeigt dieselbe Auswahl). Warengruppen-Köpfe und -Summen zählen nicht mit. Ohne Treffer keine Zeile.
   - **Gesamt verfügbar** = Summe der Spalte „Gesamt verfügbar“ (eingelagert + erfasst), kg fett in Bordeaux.
   - **eingelagert** = Summe „Eingelagerter Bestand“.
-  - **erfasst** = Summe „Erfasster Bestand“ (Status „erfasst“: Ware noch nicht eingetroffen). Der Designvorschlag nannte
-    das „unterwegs“; die Zeile verwendet den Begriff der Liste, der Hinweis an der Zahl erklärt ihn.
+  - **unterwegs** = Summe „Erfasster Bestand“ (Status „erfasst“ in WinAB: Ware noch nicht eingetroffen). Entscheidung
+    Inhaber 11.11.2026: „erfasst ist unterwegs“ – die Summenzeile heißt deshalb „unterwegs“, der Hinweis an der Zahl
+    nennt den Status („Ware unterwegs (in WinAB erfasst, noch nicht eingetroffen)“). Die Tabellenspalte „Erfasster
+    Bestand“, Druck, PDF und CSV bleiben unverändert; im Code bleibt der Schlüssel `erfasst`.
   - **MHD bis 4 Tage** = Summe „Menge kürz. MHD“ der Zeilen, deren kürzestes MHD abgelaufen ist oder in höchstens 4 Tagen
     erreicht wird – dieselbe Abgrenzung wie die Markierungen „abgelaufen“ und „heute – 4 Tage“, in deren Rot.
     Weitere Partien eines Artikels mit späterem MHD (auch innerhalb der 4 Tage) zählen wie in der Spalte nicht mit.
 - **Euro = Einkaufswert der Partien (EK-Preis × Menge)**, nur mit dem Recht `bestand.einkaufspreise` (GR-008). Ohne das
   Recht zeigt die Zeile nur kg – kein €, kein „EK“; der Server liefert solchen Nutzern ohnehin keine EK-Preise
   (`stock_ohne_ek`). Grundlage sind `lots[].ek` (eingelagert, bei „MHD bis 4 Tage“ nur die Partien mit dem kürzesten MHD)
-  und `incoming[].ek` (erfasst, wenn die Bestandsliste beim Zugang einen EK-Preis hat). Partien ohne EK-Preis (oder 0)
+  und `incoming[].ek` (unterwegs, wenn die Bestandsliste beim Zugang einen EK-Preis hat). Partien ohne EK-Preis (oder 0)
   zählen bei kg mit, beim € nicht; dann nennt der Hinweis am €-Wert den Anteil („Einkaufswert der Partien mit EK-Preis
   (94 % der Menge)“, abgerundet, gepunktet unterstrichen). Hat kein Teil der Menge einen EK-Preis, steht „– €“.
 - **Gerundet** auf ganze kg und € (die Tabelle zeigt weiter zwei Nachkommastellen); Mengen werden in ganzen Gramm summiert
