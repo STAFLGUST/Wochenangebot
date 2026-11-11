@@ -5,6 +5,8 @@ declare(strict_types=1);
                     auf dem Gleittage-Konto), Abwesenheitskalender (nur „abwesend“);
                     hr.genehmigen – Urlaubsanträge genehmigen/ablehnen, nie die eigenen (zuweisbar, z. B. eigene Rolle);
                     hr.uebersicht – Urlaubsübersicht aller Mitarbeiter, nur Summen inkl. Krank-/Gleittage (hr.verwalten sieht sie auch);
+                    hr.kalender – Kalender (hr_monat) mit genehmigtem Urlaub/Gleittag aller, sonst „abwesend“; keine Tage, Konten,
+                    Übersicht, Jahresplanung oder Export (sensibel: Krankheitstage ableitbar, nur einzeln vergeben);
                     hr.verwalten – Personalstelle: Einträge K/G/U/freie Tage (nicht für sich selbst), Mitarbeiter, Gleittage gewähren
                     (hr_gleittage_save, nicht für sich selbst), Export, Übernahme.
    Wird von api/index.php im globalen Gültigkeitsbereich eingebunden; jede Aktion endet mit respond()/fail(). */
@@ -97,7 +99,8 @@ switch ($action) {
             respond(['ok' => true, 'jahr' => $jahr, 'heute' => hr_heute(), 'uebertragBis' => hr_uebertrag_bis(), 'zeilen' => hr_uebersicht($jahr)]);
         }
 
-        /* Monatsplan / Abwesenheitskalender: Kollegen nur „abwesend“, Personalstelle mit Kürzeln */
+        /* Monatsplan / Abwesenheitskalender: Kollegen nur „abwesend“, mit hr.kalender zusätzlich Urlaub/Gleittag (Sicht
+           „urlaub“), Personalstelle mit Kürzeln. „sicht“ (voll | urlaub | kollege) ergänzt „voll“ (ältere Oberflächen). */
         case 'hr_monat': {
             $me = require_perm('hr.antrag');
             hr_mail_anstossen();
@@ -105,7 +108,9 @@ switch ($action) {
             $jahr = hr_jahr_param($_GET['jahr'] ?? null);
             $monat = (int)($_GET['monat'] ?? date('n'));
             if ($monat < 1 || $monat > 12) fail('Ungültiger Monat.', 422);
-            respond(['ok' => true, 'voll' => may($me, 'hr.verwalten')] + hr_monat($jahr, $monat, $me, may($me, 'hr.verwalten')));
+            $voll = may($me, 'hr.verwalten');
+            $sicht = $voll ? 'voll' : (may($me, 'hr.kalender') ? 'urlaub' : 'kollege');
+            respond(['ok' => true, 'voll' => $voll, 'sicht' => $sicht] + hr_monat($jahr, $monat, $me, $voll, $voll ? 'kollege' : $sicht));
         }
 
         /* Antrag stellen (eigene Person): Urlaub (art U, Standard) oder Gleittag (art G, nur soweit das Gleittage-Konto reicht) */

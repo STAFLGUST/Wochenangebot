@@ -10,7 +10,12 @@ sich selbst, nicht für Mitarbeiter außerhalb des Urlaubsplans), halbe Tage, Ko
 Gewährung, Rest unbegrenzt ins Folgejahr, genehmigte/beantragte Gleittage zählen; Antrag nur bis zum verfügbaren Rest und je
 Kalenderjahr, Zurückziehen; Personalstelle trägt auch darüber hinaus ein (Hinweis); Übersicht mit Gleittage-Rest; Gründe nur für
 Person und Personalstelle, Protokoll ohne Grund; Oberfläche (Streifen „Gleittage“, Umschalter im Antrag, Dialog „Gleittage
-gewähren“, Spalte in der Übersicht). Nur Testdaten.
+gewähren“, Spalte in der Übersicht).
+Urlaubskalender (Recht hr.kalender, Inhaber 11.11.2026): im Kalender bei Kollegen genehmigter Urlaub „U“ und Gleittag „G“, alles
+andere „A“ (Krank, Unentschuldigt, freie Tage), keine offenen oder stornierten Einträge, keine Gründe/Notizen/Konten; keine
+Übersicht, Jahresplanung, Verwaltung oder Export (403); Katalog (sensibel, ohne Standardrollen, setzt hr.antrag voraus); über
+eine eigene Rolle vergeben und wieder entzogen; ohne hr.antrag wirkungslos; ohne Recht und mit hr.uebersicht weiter nur „A“;
+Personalstelle unverändert; Oberfläche (Legende U/G/abwesend, Desktop und 390 px). Nur Testdaten.
 """
 import datetime as dt
 import json
@@ -47,8 +52,15 @@ AUG = montag(Y, 8, 2)
 
 A = Client('198.51.100.2')
 check('Administrator angemeldet', A.call('login', {'username': 'admin', 'password': PW})[0] == 200)
+# Urlaubskalender als Einstellung über die Rollen: eigene Rolle (z. B. Schichtleitung) mit hr.kalender
+st, r_ = A.call('rolle_save', {'name': 'Schichtleitung Test', 'beschreibung': 'Urlaubskalender', 'rechte': ['hr.zugang', 'hr.kalender']})
+assert st == 200, r_
+SL = r_['id']
+check('Rolle mit hr.kalender: Voraussetzung hr.antrag ergänzt', set(next(x for x in r_['rollen'] if x['id'] == SL)['rechte']) == {'hr.zugang', 'hr.kalender', 'hr.antrag'}, r_['rollen'])
 for u, n, r, p, extra in (('lena', 'Lena Leser', 'viewer', 'Leser-Zugang-77', {}), ('paul', 'Paul Personal', 'viewer', 'Personal-Zugang-77', {'grant': ['hr.verwalten']}),
-                          ('uwe', 'Uwe Uebersicht', 'viewer', 'Personal-Zugang-77', {'grant': ['hr.uebersicht']})):
+                          ('uwe', 'Uwe Uebersicht', 'viewer', 'Personal-Zugang-77', {'grant': ['hr.uebersicht']}),
+                          ('kai', 'Kai Kalender', 'viewer', 'Personal-Zugang-77', {'grant': ['hr.kalender']}),
+                          ('sina', 'Sina Schicht', SL, 'Personal-Zugang-77', {'rollen': [SL]})):
     st, r_ = A.call('user_save', {'id': '', 'name': n, 'username': u, 'role': r, 'active': True, 'password': p, 'mustChange': False, **extra})
     assert st == 200, r_
 st, r_ = A.call('user_save', {'id': '', 'vorname': 'Andre', 'nachname': 'Vierzig', 'role': 'viewer', 'active': True, 'zugang': False})
@@ -58,6 +70,8 @@ L = Client('198.51.100.4'); L.call('login', {'username': 'lena', 'password': 'Le
 P = Client('198.51.100.5'); P.call('login', {'username': 'paul', 'password': 'Personal-Zugang-77'})
 U = Client('198.51.100.6'); U.call('login', {'username': 'uwe', 'password': 'Personal-Zugang-77'})
 N = Client('198.51.100.7')
+K = Client('198.51.100.8'); K.call('login', {'username': 'kai', 'password': 'Personal-Zugang-77'})
+S = Client('198.51.100.9'); S.call('login', {'username': 'sina', 'password': 'Personal-Zugang-77'})
 
 rev = P.call('mitarbeiter_hr')[1]['rev']
 
@@ -72,7 +86,7 @@ def hr(uid, **werte):
 
 hr(ids['lena'], abteilung='Verwaltung', pos=1, jahr=Y, anspruch=30)
 hr(ids['andre-vierzig'], abteilung='Lager', pos=2, arbeitstage=[1, 2, 3, 4], jahr=Y, anspruch=24)
-for x in ('admin', 'paul', 'uwe'):
+for x in ('admin', 'paul', 'uwe', 'kai', 'sina'):
     hr(ids[x], aktiv=False)
 PL, PA = ids['lena'], ids['andre-vierzig']
 
@@ -90,6 +104,21 @@ check('hr.uebersicht öffnet keine Personalstelle (hr_verwaltung, Export, Eintr�
 check('hr_start meldet die Übersicht nur mit Recht', U.call('hr_start')[1].get('uebersicht') is True and P.call('hr_start')[1].get('uebersicht') is True
       and L.call('hr_start')[1].get('uebersicht') is False)
 check('ungültiges Jahr: 400er-Antwort', U.call('hr_uebersicht&jahr=1800')[0] >= 400)
+# Urlaubskalender (hr.kalender): sensibel, ohne Standardrollen, nur Kalender – keine Zahlen, Konten oder Personalstelle (GR-103)
+kk = kat.get('hr.kalender', {})
+check('hr.kalender im Katalog: Gruppe HR, keine Standardrollen, setzt hr.antrag voraus, sensibel (einzeln freigeben)', kk.get('default') == [] and kk.get('requires') == ['hr.antrag']
+      and kk.get('group') == 'HR' and kk.get('kind') == 'sehen' and kk.get('stufe') == 'sensibel' and kk.get('sensibel') is True, kk)
+check('… Erklärung nennt den Datenschutz (Krankheitstage ableitbar)', 'Krankheitstage' in kk.get('hilfe', '') and 'nur an Personen vergeben' in kk.get('hilfe', ''), kk.get('hilfe'))
+std = {x['id']: set(x['rechte']) for x in A.call('rechte')[1]['rollen']}
+check('… Standardrollen ohne hr.kalender, Lena (nur Standardrolle) ohne', 'hr.kalender' not in std['viewer'] | std['editor']
+      and 'hr.kalender' not in L.call('status')[1]['user']['perms'] and 'hr.kalender' in K.call('status')[1]['user']['perms'])
+st, r = K.call('hr_start')
+check('hr.kalender: Start ohne Übersicht, Genehmigen oder Personalstelle', st == 200 and r['uebersicht'] is False and r['genehmigen'] is False and r['verwalten'] is False, (st, r.get('uebersicht')))
+kein = {a_: K.call(a_, b_)[0] for a_, b_ in (('hr_uebersicht', None), (f'hr_uebersicht&jahr={Y}', None), ('hr_planung', None), (f'hr_planung&jahr={Y}', None),
+                                              ('hr_verwaltung', None), ('hr_offen', None), ('mitarbeiter_hr', None), ('hr_export', {'jahr': Y, 'monate': [2]}),
+                                              ('hr_planung_freigeben', {'jahr': Y, 'ids': ['a1']}), ('hr_eintrag_save', {'person': ids['lena'], 'art': 'U', 'von': iso(FEB), 'bis': iso(FEB)}))}
+check('hr.kalender öffnet keine Zahlen, Konten oder Personalstelle: Übersicht, Jahresplanung, Verwaltung, Anträge, Export, Einträge 403', set(kein.values()) == {403}, kein)
+check('Kalender ohne Anmeldung: 401', N.call(f'hr_monat&jahr={Y}&monat=2')[0] == 401)
 
 # ── Daten (Personalstelle trägt ein, Lena beantragt) ──
 def eintrag(person, art, von, bis, notiz=''):
@@ -135,6 +164,66 @@ check('anderes Jahr: Konto ohne Einträge', all(x['krank'] == 0 and x['geplant']
 log = json.dumps(A.call('log')[1], ensure_ascii=False)
 check('Protokoll ohne Art der Abwesenheit (Krankheit)', not re.search(r'HR:[^"]*Krank', log) and 'Arztbesuch' not in log)
 
+# ── Urlaubskalender (hr.kalender, Inhaber 11.11.2026): Urlaub aller sehen, aber keine Tage/Konten ──
+NOV = montag(Y, 11)
+NOV_IDS = [eintrag(PA, 'U', NOV, NOV + dt.timedelta(days=2), 'Urlaub-Notiz'),                                        # Andre Mo–Mi Urlaub
+           eintrag(PL, 'X', NOV + dt.timedelta(days=1), NOV + dt.timedelta(days=1))]                                   # Lena freier Tag
+st, r = P.call('hr_eintrag_save', {'person': PL, 'art': 'F', 'von': iso(NOV + dt.timedelta(days=3)), 'bis': iso(NOV + dt.timedelta(days=3)), 'mail': False})
+assert st == 200, r                                                                                                    # Lena unentschuldigt (Do)
+NOV_IDS.append(r['eintrag']['id'])
+tg = lambda d: str(d.day)   # noqa: E731 – Schlüssel je Tag im Monatsplan
+
+
+def monat(c, m):
+    st_, r_, raw_ = c.call(f'hr_monat&jahr={Y}&monat={m}', raw=True)
+    return st_, r_, raw_, {x['id']: x['tage'] for x in r_.get('personen', [])}
+
+
+st, r, raw, z = monat(K, 2)
+check('hr.kalender: Sicht „urlaub“ (nicht voll)', st == 200 and r.get('sicht') == 'urlaub' and r.get('voll') is False, (st, r.get('sicht'), r.get('voll')))
+check('… genehmigter Urlaub anderer als „U“', [z[PL].get(tg(FEB + dt.timedelta(days=i))) for i in range(3)] == ['U'] * 3, z[PL])
+check('… Krankheit nur als „A“, nie Art, Grund oder Notiz', [z[PL].get(tg(FEB + dt.timedelta(days=i))) for i in (7, 8)] == ['A', 'A']
+      and '"K"' not in raw and 'Krank' not in raw and 'Arzt' not in raw and 'otiz' not in raw, raw[:300])
+_, ru, _, zu = monat(U, 2)
+check('… Antwort wie bei Kollegen (nur „sicht“ anders): keine Konten, Tage oder Zahlen je Person', set(r) == set(ru) and ru.get('sicht') == 'kollege'
+      and all(set(x) == {'id', 'name', 'abteilung', 'ich', 'tage'} for x in r['personen']) and not {'konto', 'gleitKonto', 'zeilen', 'eintraege', 'offen'} & set(r), sorted(r))
+check('ohne hr.kalender (nur hr.uebersicht): Urlaub weiter nur „A“', zu[PL].get(tg(FEB)) == 'A' and '"U"' not in json.dumps(ru), zu[PL])
+_, r, _, z = monat(K, 3)
+check('hr.kalender: genehmigter Gleittag als „G“', z[PL].get(tg(MRZ)) == 'G', z[PL])
+st, r, raw, z = monat(K, 8)
+check('… offener Urlaubsantrag anderer unsichtbar (kein „U?“)', tg(AUG) not in z[PL] and tg(AUG + dt.timedelta(days=1)) not in z[PL] and '?' not in json.dumps(r['personen'])
+      and 'Sommerreise' not in raw, z[PL])
+check('… Krankheit „A“, freier Wochentag (4-Tage-Woche) „A“, stornierter Gleittag unsichtbar', z[PA].get(tg(AUG)) == 'A' and z[PA].get(tg(AUG + dt.timedelta(days=4))) == 'A'
+      and tg(AUG + dt.timedelta(days=7)) not in z[PA], z[PA])
+st, r, raw, z = monat(K, 11)
+check('… Urlaub „U“, freier Tag (X) und Unentschuldigt (F) nur „A“', [z[PA].get(tg(NOV + dt.timedelta(days=i))) for i in range(3)] == ['U'] * 3
+      and z[PL].get(tg(NOV + dt.timedelta(days=1))) == 'A' and z[PL].get(tg(NOV + dt.timedelta(days=3))) == 'A' and '"F"' not in raw and '"x"' not in raw
+      and 'Urlaub-Notiz' not in raw, (z[PL], z[PA]))
+_, r, _, z = monat(L, 11)
+check('nur hr.antrag (Lena): Urlaub des Kollegen nur „A“, eigene Zeile voll (x, F)', r.get('sicht') == 'kollege' and z[PA].get(tg(NOV)) == 'A'
+      and z[PL].get(tg(NOV + dt.timedelta(days=1))) == 'x' and z[PL].get(tg(NOV + dt.timedelta(days=3))) == 'F', (z[PA], z[PL]))
+_, r, _, z = monat(P, 11)
+_, r2, _, z2 = monat(P, 8)
+check('Personalstelle unverändert: Sicht „voll“ mit Art, freien Tagen und offenen Anträgen', r.get('sicht') == 'voll' and r.get('voll') is True
+      and z[PA].get(tg(NOV)) == 'U' and z[PL].get(tg(NOV + dt.timedelta(days=1))) == 'x' and z[PL].get(tg(NOV + dt.timedelta(days=3))) == 'F'
+      and z2[PL].get(tg(AUG)) == 'U?' and z2[PA].get(tg(AUG)) == 'K', (z[PL], z2[PL]))
+check('Administrator: Sicht „voll“', A.call(f'hr_monat&jahr={Y}&monat=2')[1].get('sicht') == 'voll')
+check('hr.kalender: ungültiger Monat 422', K.call(f'hr_monat&jahr={Y}&monat=13')[0] == 422 and K.call('hr_monat&jahr=1800&monat=1')[0] >= 400)
+# über die Rolle vergeben und wieder entzogen – wirkt sofort (Rechte je Anfrage)
+_, r, _, z = monat(S, 2)
+check('Rolle „Schichtleitung“ mit hr.kalender: Sicht „urlaub“', r.get('sicht') == 'urlaub' and z[PL].get(tg(FEB)) == 'U', (r.get('sicht'), z.get(PL)))
+st, r_ = A.call('rolle_save', {'id': SL, 'name': 'Schichtleitung Test', 'beschreibung': 'Urlaubskalender', 'rechte': ['hr.zugang', 'hr.antrag']})
+_, r, _, z = monat(S, 2)
+check('… Recht aus der Rolle genommen: wieder nur „A“', st == 200 and r.get('sicht') == 'kollege' and z[PL].get(tg(FEB)) == 'A', (st, r.get('sicht'), z.get(PL)))
+# Grenzfall: hr.kalender ohne hr.antrag (verboten) – wirkungslos, kein Kalender
+st, r_ = A.call('user_save', {'id': ids['kai'], 'name': 'Kai Kalender', 'role': 'viewer', 'active': True, 'grant': ['hr.kalender'], 'deny': ['hr.antrag']})
+check('hr.kalender ohne hr.antrag: Recht entfällt, Kalender 403', st == 200 and 'hr.kalender' not in K.call('status')[1]['user']['perms']
+      and K.call(f'hr_monat&jahr={Y}&monat=2')[0] == 403, (st, r_))
+assert A.call('user_save', {'id': ids['kai'], 'name': 'Kai Kalender', 'role': 'viewer', 'active': True, 'grant': ['hr.kalender'], 'deny': []})[0] == 200
+check('… wieder erlaubt: Sicht „urlaub“', K.call(f'hr_monat&jahr={Y}&monat=2')[1].get('sicht') == 'urlaub')
+for x in NOV_IDS:
+    assert P.call('hr_eintrag_save', {'id': x, 'stornieren': True})[0] == 200
+
 # ── Gleittage-Konto (Inhaber 02.11.2026) ──
 J0 = dt.date.today().year
 check('ohne Gewährung: kein Gleittage-Konto in der Übersicht', all(x['gleitRest'] is None and x['gleitGewaehrt'] is None for x in U.call('hr_uebersicht&jahr=' + str(Y))[1]['zeilen']))
@@ -177,6 +266,8 @@ st, r = L.call('hr_antrag', {'art': 'G', 'von': iso(G1), 'bis': iso(G1)})
 GA = r.get('eintrag', {}).get('id')
 check('Gleittag beantragt: Art G, beantragt, verfügbar 0', st == 200 and r['eintrag']['art'] == 'G' and r['eintrag']['status'] == 'beantragt' and r['gleitKonto']['beantragt'] == 1
       and r['gleitKonto']['verfuegbar'] == 0 and r['hinweis'] is None, r)
+check('hr.kalender: offener Gleittag-Antrag anderer unsichtbar (Personalstelle sieht „G?“)', str(G1.day) not in monat(K, G1.month)[3][PL]
+      and monat(P, G1.month)[3][PL].get(str(G1.day)) == 'G?')
 check('weiterer Gleittag: 409 (Rest schon beantragt)', L.call('hr_antrag', {'art': 'G', 'von': iso(G1 + dt.timedelta(days=1)), 'bis': iso(G1 + dt.timedelta(days=1))})[0] == 409)
 offen = [a for a in P.call('hr_verwaltung&jahr=' + str(Y))[1]['offen'] if a['id'] == GA]
 check('Personalstelle/Genehmiger sehen den Gleittage-Rest am Antrag', offen and offen[0]['art'] == 'G' and offen[0]['gleitKonto']['rest'] == 1, offen)
@@ -231,6 +322,28 @@ with sync_playwright() as p:
             pg.select_option('#ueb-abteilung', '')
             pg.emulate_media(color_scheme='dark')
             pg.screenshot(path=os.path.join(SH, 'hr_uebersicht_1280_dunkel.png'), full_page=True)
+        ctx.close()
+    # Urlaubskalender (hr.kalender): Legende U/G/abwesend, Urlaub der Kollegen sichtbar, Krankheit nur „abwesend“; keine Übersicht,
+    # Jahresplanung, Anträge oder Export
+    for breite in (1280, 390):
+        ctx, pg = anmelden('kai', 'Personal-Zugang-77', '198.51.100.8', breite)
+        pg.goto(B + '/module/hr/#kalender'); pg.wait_for_selector('#kal-plan tbody tr')
+        for _ in range(24):   # Monatsansicht bis Februar des Testjahres weiterblättern
+            alt_ = pg.text_content('#kal-titel')
+            if alt_ == f'Februar {Y}': break
+            pg.click('#tab-kalender [data-monat="1"]'); pg.wait_for_function(f"document.querySelector('#kal-titel').textContent !== {json.dumps(alt_)}")
+        LENA_ZEILE = "[...document.querySelectorAll('#kal-plan tbody tr')].find((tr) => tr.querySelector('th.name')?.textContent === 'Lena Leser')"
+        pg.wait_for_function(f"document.querySelector('#kal-plan thead th:nth-child(2)').title.startsWith('01.02.{Y}') && ({LENA_ZEILE})?.querySelector('.hr-art.U')")
+        zl = pg.evaluate(f"(() => {{ const tr = {LENA_ZEILE}; return {{ u: tr.querySelectorAll('.hr-art.U').length, a: tr.querySelectorAll('.hr-art.A').length, "
+                         "titel: tr.querySelector('.hr-art.U').title }; })()")
+        leg = pg.text_content('#kal-legende')
+        check(f'{breite}px: hr.kalender – Lena mit 3 Tagen Urlaub (U) und 2 Tagen „abwesend“, nirgends Krank', zl == {'u': 3, 'a': 2, 'titel': 'Urlaub'}
+              and pg.locator('#kal-plan .hr-art.K').count() == 0, zl)
+        check(f'{breite}px: Legende Urlaub, Gleittag, abwesend – ohne Krank und beantragt', all(x in leg for x in ('Urlaub', 'Gleittag', 'abwesend'))
+              and 'Krank' not in leg and 'beantragt' not in leg, leg)
+        check(f'{breite}px: Reiter Übersicht, Jahresplanung, Anträge und Export ausgeblendet', not any(pg.is_visible(f'[data-tab="{t}"]') for t in ('uebersicht', 'planung', 'antraege', 'export')))
+        check(f'{breite}px: kein waagerechtes Scrollen der Seite (Kalender)', pg.evaluate('document.documentElement.scrollWidth <= window.innerWidth + 1'))
+        pg.screenshot(path=os.path.join(SH, f'hr_kalender_urlaub_{breite}.png'), full_page=True)
         ctx.close()
     ctx, pg = anmelden('lena', 'Leser-Zugang-77', '198.51.100.4')
     pg.goto(B + '/module/hr/#uebersicht'); pg.wait_for_selector('#mein-konto .hr-wert')
