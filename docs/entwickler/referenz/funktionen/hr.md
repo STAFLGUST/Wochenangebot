@@ -2,7 +2,7 @@
 
 <!-- ERZEUGT von `python3 werkzeuge/doku.py erzeugen` – nicht von Hand ändern. Quelle: Funktionen und Kommentare im Code. Die CI prüft, dass diese Datei zum Code passt. -->
 
-11 Dateien, 288 Funktionen – in der Reihenfolge der Datei, **fett** die Abschnitte. Text = erste Aussage des Kommentars direkt über der Funktion (Python: Docstring). Übersicht aller Module: [README.md](README.md).
+11 Dateien, 294 Funktionen – in der Reihenfolge der Datei, **fett** die Abschnitte. Text = erste Aussage des Kommentars direkt über der Funktion (Python: Docstring). Übersicht aller Module: [README.md](README.md).
 
 ## `app/api/aktionen/hr.php`
 
@@ -219,7 +219,14 @@ _Modul HR · Urlaubsverwaltung – Fachlogik (Daten, Feiertage, Urlaubskonto, An
 
 **Urlaubskonto**
 
-- `hr_anspruch(p, jahr)` – Anspruch eines Jahres: Eintrag des Jahres, sonst der letzte frühere Eintrag (gleichbleibender Anspruch)
+- `hr_anspruch_voll(p, jahr)` – Anspruch eines Jahres: Eintrag des Jahres, sonst der letzte frühere Eintrag (gleichbleibender Anspruch)
+
+**Eintritt: anteiliger Urlaubsanspruch im Eintrittsjahr (Inhaber 11.11.2026)**
+
+- `hr_eintritt_datum(v)`
+- `hr_eintritt_monate(eintritt, jahr)`
+- `hr_anspruch_info(p, jahr)`
+- `hr_anspruch(p, jahr)` – Anspruch eines Jahres, wie er im Konto zählt (im Eintrittsjahr anteilig)
 - `hr_konto(p, eintraege, jahr, heute, tiefe)` – Urlaubskonto einer Person für ein Jahr.
 
 **Gleittage-Konto (Inhaber 02.11.2026)**
@@ -414,6 +421,7 @@ _STAFL-Plattform · HR im Eingabebereich der Verwaltung - Verwaltung → Mitarbe
 **HR-Teil im Dialog**
 
 - `formular(uid)`
+- `eintrittText(p)` – Eintritt (Inhaber 11.11.2026): im Eintrittsjahr rechnet der Server den Anspruch anteilig (1/12 je vollem Monat, gesetzlicher Mindesturlaub bei Eintritt vor …
 - `speichern(uid, form)` – HR-Angaben aus dem Formular speichern (nach dem Speichern des Mitarbeiters, mit dessen Kennung)
 - `altbestand()` – Hinweis: Einträge der Urlaubsliste ohne Mitarbeiter (Altbestand) übernehmen
 - `vorschlag(e, ps)`
@@ -462,6 +470,7 @@ _HR · Urlaubsverwaltung (Modul hr, Oberfläche hr.intern unter /module/hr/)._
 - `planjahr(pe, tage)`
 - `freie_wochen(ab, wochen, *clients)` – Erster Montag ab „ab“, an dem die Personen der Clients in den nächsten Wochen nichts eingetragen haben.
 - `neue_offen(vorher)`
+- `konto_pa(jahr)` – ── Eintritt (Inhaber 11.11.2026): im Eintrittsjahr anteiliger Urlaubsanspruch – 1/12 je vollem Monat ab dem Eintrittstag, Bruchteile ab ½ auf volle Tage, …
 - `anmelden(user, pw, ip, breite, verfall_hinweis)`
 - `zeit(cl, uebernehmen, stand, **opt)`
 - `plan_setzen(**w)`
