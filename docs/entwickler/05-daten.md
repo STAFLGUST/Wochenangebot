@@ -552,9 +552,17 @@ Kalenderwochen sind ISO-Wochen „JJJJ-WW“ und meinen die **Lieferwoche**. Men
 
 - **`rewe-stamm`**: `{"rev": 2, "lieferwege": [{"id": "l…|direkt", "name": "…", "art": "lager|direkt", "bestellschluss": "Freitag früh der Vorwoche",
   "aktiv": true}], "artikel": [{"id": "rb", "name": "Roastbeef Dry Aged", "einheit": "Stück", "nr": "<WinAB-Artikelnummer>", "aktiv": true}],
-  "team": {"u…": {"alle": true, "export": false}}}`. Ohne Dokument gelten Direktbelieferung und die Artikel Roastbeef, Filetkopf, Vac. Set.
-  Lieferwege und Artikel werden nie entfernt, nur deaktiviert. `team` ist die Zuweisung im Modul („alle Listen“, „Wochenabschluss“)
-  und wirkt zusätzlich zu den Rechten `rewe.alle` und `rewe.exportieren`.
+  "team": {"u…": {"alle": true, "export": false}}, "mitglieder": ["u…"], "ausgeblendet": ["u…"]}`. Ohne Dokument gelten Direktbelieferung
+  und die Artikel Roastbeef, Filetkopf, Vac. Set. Lieferwege und Artikel werden nie entfernt, nur deaktiviert. `team` ist die Zuweisung
+  im Modul („alle Listen“, „Wochenabschluss“) und wirkt zusätzlich zu den Rechten `rewe.alle` und `rewe.exportieren`.
+  `mitglieder` und `ausgeblendet` (seit 11.11.2026, fehlen = leere Listen) sind das Team der Zuweisung: wer im Team ist, entscheidet nur
+  `rw_im_team()` – aktiv, mit Zugang, nicht in `ausgeblendet` und entweder „REWE ansehen“ über die Rollen oder in `mitglieder`
+  (ausdrücklich ergänzt, mit Modulzugang `rewe.zugang`, ohne Verbot am Konto). Ergänzte sehen, fragen ab und pflegen ihre eigenen
+  Märkte wie mit `rewe.sehen` + `rewe.bearbeiten` (`rw_sehen()`, `rw_bearbeiten()`; die Aktionen prüfen mit `rw_require_perm('rewe.sehen'|'rewe.bearbeiten')` statt `require_perm`).
+  `rewe_team_ergaenzen` nimmt die ID aus `ausgeblendet` und – ohne Rollenrecht – in `mitglieder` auf; `rewe_team_entfernen`
+  (nur ohne Märkte ab der Abfragewoche, sonst 422) nimmt sie aus `mitglieder` und `team` und setzt sie auf `ausgeblendet`.
+  Rollenrechte, frühere Zuständigkeiten und Schnappschüsse bleiben. Die Vorversion ignoriert beide Felder (Ergänzte ohne Recht
+  sehen dann nichts); Team speichern, Lieferwege/Artikel und das Datenpaket („ersetzen“) behalten sie.
 - **`rewe-maerkte`**: `{"rev": 5, "liste": [{"id": "m…", "rev": 3, "kdNr": "<WinAB-Kd.-Nr.>", "reweNr": "", "name": "…", "strasse": "", "plz": "",
   "ort": "…", "region": "", "telefon": "", "kauf": "regelmaessig|gelegentlich|interessiert|kein_interesse|ruhend|ausgelistet",
   "zustaendig": [{"ab": "2026-01", "nutzer": "u…|"}], "lieferweg": [{"ab": "2026-01", "id": "l…"}], "dauer": {"rhythmus": 0-4,
@@ -574,7 +582,8 @@ Kalenderwochen sind ISO-Wochen „JJJJ-WW“ und meinen die **Lieferwoche**. Men
 Datenpaket (`rewe_import`, nur mit `rewe.verwalten`, `vorschau: true` schreibt nichts): `{"format": "stafl-rewe", "version": 1,
 "lieferwege": [{"id", "name", "art", "bestellschluss"?}], "artikel"?: […], "maerkte": [{"kdNr", "name", …, "zustaendig": [{"ab", "liste"}],
 "lieferweg": [{"ab", "id"}], "wochen": {"JJJJ-WW": {"s", "m", "n"}}, "notizen": [{"art", "text"}]}]}` plus `zuordnung` (Listenname →
-Nutzer-ID). Mit Fehlern wird nichts übernommen, in ein Modul mit Daten nur mit `ersetzen` (das Team bleibt). Echte Pakete liegen nie
+Nutzer-ID, nur Mitarbeiter im Team). Mit Fehlern wird nichts übernommen, in ein Modul mit Daten nur mit `ersetzen` (das Team mit
+`team`, `mitglieder` und `ausgeblendet` bleibt). Echte Pakete liegen nie
 im Repository (GR-007); Beispiel: `tests/fixtures/rewe/datenpaket.json`.
 
 ### Qualitätssicherung · QM-System (`module/qs/qs.php`, produktiv seit 30.10.2026)

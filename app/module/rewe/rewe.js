@@ -5,8 +5,9 @@
    nächsten Wochen; Klick auf Name oder Adresse öffnet die Marktkarte mit Hinweis, Notizen, Verlauf und Wiedervorlagen),
    Daueraufträge (alle sichtbaren Daueraufträge, bearbeiten, neu anlegen), Märkte mit Marktakte
    (Wochenverlauf je Jahr, Notizen und Wiedervorlagen, Zuständigkeit und Lieferweg mit Historie, Ansprechpartner),
-   Zuweisung (Märkte und Lieferweg ab KW, Team „alle Listen“ und „Wochenabschluss“), Wochenabschluss (Summen, Hinweise,
-   Excel für WinAB als Einzelaufträge, „in WinAB erfasst“), Einstellungen (Lieferwege, Artikel, Datenpaket der Excel-Listen).
+   Zuweisung (Märkte und Lieferweg ab KW, Team „alle Listen“ und „Wochenabschluss“, Mitarbeiter hinzufügen und entfernen),
+   Wochenabschluss (Summen, Hinweise, Excel für WinAB als Einzelaufträge, „in WinAB erfasst“), Einstellungen (Lieferwege,
+   Artikel, Datenpaket der Excel-Listen).
    Rechte prüft der Server bei jeder Aktion (GR-103); ausgeblendete Knöpfe sind nur Anzeige. Kein Inline-Skript (CSP). */
 'use strict';
 (() => {
@@ -20,7 +21,7 @@
     csrf: '', d: null, tab: 'woche', kw: '', wer: '', filter: 'offen', suche: '', woche: null, offenSeg: new Set(), busy: new Set(), sichtbar: new Set(), bestelltZu: true, zeigeNach: '',
     dSuche: '', dRh: '', dLw: '', dStatus: '', dEdit: null, dOffen: '', zurueckFrage: '', zurueckTimer: 0,
     maerkte: null, mSuche: '', mLw: '', mKauf: '', akteId: '', akte: null, aKw: '', abschluss: null,
-    zAuswahl: new Set(), zSuche: '', zWer: '', zLw: '', zKauf: '', paket: null, edit: null, notizMarkt: '', toast: 0,
+    zAuswahl: new Set(), zSuche: '', zWer: '', zLw: '', zKauf: '', zEntfernen: '', zEntfernenTimer: 0, paket: null, edit: null, notizMarkt: '', toast: 0,
   };
 
   /* ---------- Aufruf der API: wirft nie, liefert { status, data, json } ---------- */
@@ -842,15 +843,45 @@
     else if (t.dataset.dMzahl) { const n = parseInt(t.value.replace(/\D/g, ''), 10); e.mengen[t.dataset.dMzahl] = Number.isFinite(n) && n > 0 ? Math.min(n, 999) : 0; renderDauerEdit(); }
   });
 
-  /* ================= Zuweisung und Team ================= */
+  /* ================= Zuweisung und Team =================
+     Karten je Mitarbeiter im Team (S.d.personen = rw_personen) mit „alle Listen“, „Wochenabschluss“ und „Entfernen“
+     (zweiter Klick bestätigt; nur ohne Märkte ab der Abfragewoche – sonst Hinweis), dazu „Mitarbeiter hinzufügen“
+     (S.d.kandidaten: aktive Mitarbeiter mit Modulzugang, die noch nicht im Team sind). Der Server prüft alles selbst. */
+  const maerkteText = (n) => `${n === 1 ? 'den Markt' : `die ${n} Märkte`}`;
+  function personKarte(p, anzahl) {
+    const frage = S.zEntfernen === p.id;
+    const knopf = p.maerkte > 0
+      ? `<button type="button" class="rw-entfernen" data-entfernen="${esc(p.id)}" aria-disabled="true" title="Erst ${esc(maerkteText(p.maerkte))} umverteilen">Entfernen</button>`
+      : `<button type="button" class="rw-entfernen${frage ? ' frage' : ''}" data-entfernen="${esc(p.id)}" aria-label="${esc(p.name)} aus dem Team entfernen">${frage ? 'Wirklich entfernen?' : 'Entfernen'}</button>`;
+    const hinweis = frage ? `<p class="rw-phinweis">${p.rechtSehen ? 'Wird nur ausgeblendet – „REWE ansehen“ kommt über die Rolle (Verwaltung → Rollen).' : 'Sieht danach keine REWE-Listen mehr.'}</p>`
+      : p.ergaenzt ? '<p class="rw-phinweis">im Modul ergänzt</p>' : '';
+    return `<div class="rw-kpi rw-person" data-person="${esc(p.id)}"><span>${esc(p.name)}</span><div class="rw-pzeile"><b>${anzahl} <small>${anzahl === 1 ? 'Markt' : 'Märkte'}</small></b>${knopf}</div>
+        <label class="rw-check"><input type="checkbox" data-team="alle"${p.teamAlle || p.rechtAlle ? ' checked' : ''}${p.rechtAlle ? ' disabled title="über die Rolle"' : ''}> alle Listen</label>
+        <label class="rw-check"><input type="checkbox" data-team="export"${p.teamExport || p.rechtExport ? ' checked' : ''}${p.rechtExport ? ' disabled title="über die Rolle"' : ''}> Wochenabschluss</label>${hinweis}</div>`;
+  }
+  function neuKarte() {
+    const k = S.d.kandidaten || [];
+    return `<div class="rw-kpi rw-person rw-neu"><span>Mitarbeiter hinzufügen</span>
+        <label class="sr-only" for="rw-z-kandidat">Mitarbeiter</label>
+        <div class="rw-nreihe"><select class="rw-eingabe" id="rw-z-kandidat"${k.length ? '' : ' disabled'}>${k.length ? '<option value="">Name wählen</option>' + k.map((p) => `<option value="${esc(p.id)}">${esc(p.name)}</option>`).join('') : '<option value="">alle mit Modulzugang sind im Team</option>'}</select>
+        <button class="btn sm" type="button" id="rw-z-ergaenzen"${k.length ? '' : ' disabled'}><svg class="i" aria-hidden="true"><use href="#i-plus"/></svg>Hinzufügen</button></div>
+        <p class="rw-phinweis">sieht und bearbeitet dann die eigenen Märkte</p></div>`;
+  }
   function renderZuweisung() {
     if (!S.maerkte) return;
     const anzahl = (id) => S.maerkte.filter((m) => m.zustaendig === id).length;
     const ohne = S.maerkte.filter((m) => !m.zustaendig).length;
-    $('#rw-z-personen').innerHTML = S.d.personen.map((p) => `<div class="rw-kpi" data-person="${esc(p.id)}"><span>${esc(p.name)}</span><b>${anzahl(p.id)} <small>${anzahl(p.id) === 1 ? 'Markt' : 'Märkte'}</small></b>
-        <label class="rw-check"><input type="checkbox" data-team="alle"${p.teamAlle || p.rechtAlle ? ' checked' : ''}${p.rechtAlle ? ' disabled title="über die Rolle"' : ''}> alle Listen</label>
-        <label class="rw-check"><input type="checkbox" data-team="export"${p.teamExport || p.rechtExport ? ' checked' : ''}${p.rechtExport ? ' disabled title="über die Rolle"' : ''}> Wochenabschluss</label></div>`).join('')
+    const kandidat = $('#rw-z-kandidat') ? $('#rw-z-kandidat').value : '';
+    const haken = {};   // noch nicht gespeicherte Häkchen bleiben beim Neuzeichnen (Filter, Auswahl, Hinzufügen) erhalten
+    $$('#rw-z-personen [data-person]').forEach((k) => { haken[k.dataset.person] = { alle: $('[data-team="alle"]', k).checked, export: $('[data-team="export"]', k).checked }; });
+    $('#rw-z-personen').innerHTML = S.d.personen.map((p) => personKarte(p, anzahl(p.id))).join('') + neuKarte()
       + `<div class="rw-kpi"><span>Ohne Zuständigkeit</span><b>${ohne} <small>${ohne === 1 ? 'Markt' : 'Märkte'}</small></b><button class="btn sm" type="button" id="rw-team-speichern">Team speichern</button></div>`;
+    $$('#rw-z-personen [data-person]').forEach((k) => {
+      const h = haken[k.dataset.person];
+      if (h) $$('[data-team]', k).forEach((c) => { if (!c.disabled) c.checked = h[c.dataset.team]; });
+    });
+    if (kandidat && (S.d.kandidaten || []).some((p) => p.id === kandidat)) $('#rw-z-kandidat').value = kandidat;
+    if (S.zWer && S.zWer !== '-' && !S.d.personen.some((p) => p.id === S.zWer)) S.zWer = '';
     $('#rw-z-fwer').innerHTML = personOptionen('<option value="">alle Mitarbeiter</option><option value="-">ohne Zuständigkeit</option>'); $('#rw-z-fwer').value = S.zWer;
     $('#rw-z-flw').innerHTML = lwOptionen('alle Lieferwege', false); $('#rw-z-flw').value = S.zLw;
     $('#rw-z-fkauf').innerHTML = kaufOptionen('alle Märkte'); $('#rw-z-fkauf').value = S.zKauf;
@@ -865,8 +896,10 @@
     const n = S.zAuswahl.size;
     $('#rw-z-bulk').hidden = !n;
     $('#rw-z-anzahl').textContent = `${n} ${n === 1 ? 'Markt' : 'Märkte'} ausgewählt`;
-    if (!$('#rw-z-nutzer').options.length) {
-      $('#rw-z-nutzer').innerHTML = personOptionen('<option value="=">unverändert</option><option value="">niemand</option>');
+    const nutzer = $('#rw-z-nutzer'), war = nutzer.options.length ? nutzer.value : '=';   // Team kann sich geändert haben
+    nutzer.innerHTML = personOptionen('<option value="=">unverändert</option><option value="">niemand</option>');
+    nutzer.value = [...nutzer.options].some((o) => o.value === war) ? war : '=';
+    if (!$('#rw-z-lw').options.length) {
       $('#rw-z-lw').innerHTML = '<option value="">unverändert</option>' + lwOptionen('');
       $('#rw-z-ab').value = S.d.abfrage;
     }
@@ -887,13 +920,43 @@
     const r = await api('rewe_zuweisen', body);
     if (r.status !== 200 || !r.data.ok) { toast(fehlerText(r, 'Zuweisen fehlgeschlagen'), true); return; }
     toast(`${r.data.geaendert} ${r.data.geaendert === 1 ? 'Markt' : 'Märkte'} ab ${kwText(body.ab)} geändert`);
-    S.zAuswahl.clear(); ladeMaerkte();
+    S.zAuswahl.clear(); await neuStart(); ladeMaerkte();   // neu: Zahl der Märkte je Mitarbeiter (Entfernen erst bei 0)
   });
+  /* Team ändern: Mitarbeiter hinzufügen/entfernen liefern das neue Team; danach Start neu laden (Listenwahl, Auswahlfelder) */
+  async function teamGeaendert(r, text) {
+    if (r.status === 401) { zeigeAnmeldung(); return; }
+    if (r.status !== 200 || !r.data.ok) { toast(fehlerText(r, 'Speichern fehlgeschlagen'), true); renderZuweisung(); return; }
+    S.d.personen = r.data.personen; S.d.kandidaten = r.data.kandidaten;
+    toast(text); await neuStart(); renderZuweisung();
+  }
   $('#rw-z-personen').addEventListener('click', async (ev) => {
+    const weg = ev.target.closest('[data-entfernen]');
+    if (weg) {   // Entfernen: mit Märkten nur Hinweis, sonst erst nachfragen – zweiter Klick entfernt
+      const p = S.d.personen.find((x) => x.id === weg.dataset.entfernen);
+      if (!p) return;
+      if (p.maerkte > 0) { toast(`${p.name} ist noch für ${maerkte(p.maerkte)} zuständig – erst ${maerkteText(p.maerkte)} umverteilen.`, true); return; }
+      clearTimeout(S.zEntfernenTimer);
+      if (S.zEntfernen !== p.id) {
+        S.zEntfernen = p.id; renderZuweisung();
+        S.zEntfernenTimer = setTimeout(() => { if (S.zEntfernen === p.id) { S.zEntfernen = ''; renderZuweisung(); } }, 6000);
+        return;
+      }
+      S.zEntfernen = '';
+      await teamGeaendert(await api('rewe_team_entfernen', { nutzer: p.id }), `${p.name} aus dem Team entfernt`);
+      return;
+    }
+    if (ev.target.closest('#rw-z-ergaenzen')) {
+      const id = $('#rw-z-kandidat').value;
+      if (!id) { toast('Bitte einen Mitarbeiter wählen.', true); $('#rw-z-kandidat').focus(); return; }
+      const name = (S.d.kandidaten.find((x) => x.id === id) || { name: '' }).name;
+      await teamGeaendert(await api('rewe_team_ergaenzen', { nutzer: id }), `${name} ist jetzt im Team`);
+      return;
+    }
     if (!ev.target.closest('#rw-team-speichern')) return;
     const team = {};
-    $$('[data-person]').forEach((k) => {
+    $$('#rw-z-personen [data-person]').forEach((k) => {
       const p = S.d.personen.find((x) => x.id === k.dataset.person);
+      if (!p) return;
       const alle = $('[data-team="alle"]', k), ex = $('[data-team="export"]', k);
       team[p.id] = { alle: alle.checked && !alle.disabled, export: ex.checked && !ex.disabled };
     });
