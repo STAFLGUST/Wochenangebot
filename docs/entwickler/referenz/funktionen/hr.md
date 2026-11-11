@@ -2,7 +2,7 @@
 
 <!-- ERZEUGT von `python3 werkzeuge/doku.py erzeugen` – nicht von Hand ändern. Quelle: Funktionen und Kommentare im Code. Die CI prüft, dass diese Datei zum Code passt. -->
 
-11 Dateien, 280 Funktionen – in der Reihenfolge der Datei, **fett** die Abschnitte. Text = erste Aussage des Kommentars direkt über der Funktion (Python: Docstring). Übersicht aller Module: [README.md](README.md).
+11 Dateien, 283 Funktionen – in der Reihenfolge der Datei, **fett** die Abschnitte. Text = erste Aussage des Kommentars direkt über der Funktion (Python: Docstring). Übersicht aller Module: [README.md](README.md).
 
 ## `app/api/aktionen/hr.php`
 
@@ -88,17 +88,19 @@ _Modul HR · E-Mails der Urlaubsverwaltung (Inhaber 03.11.2026)._
 
 ## `app/api/module/hr/planung.php`
 
-_Modul HR · Jahresplanung des Urlaubs (Inhaber 03.11.2026, Vorplanung und Einzeltage 10.11.2026)._
+_Modul HR · Jahresplanung des Urlaubs (Inhaber 03.11.2026, Vorplanung und Einzeltage 10.11.2026, Ziel in Tagen 11.11.2026)._
 
 - `hr_planung_einst(d)` – Einstellungen der Jahresplanung (fehlende oder ungültige Felder: Standard)
-- `hr_planung_einst_pruefen(b)` – Einstellungen aus der Verwaltung prüfen (hr_einstellungen_save, Feld „planung“): {start, stichtag, prozent, vertretungPflicht, einzeltageMax (optional – ohne …
-- `hr_planung_jahr(heute)` – Das Jahr, das geplant wird: das nächste Kalenderjahr
-- `hr_planung_daten(pe, jahr)` – Stichtag und Beginn als Datum (im Jahr vor dem Planungsjahr)
-- `hr_planung_person(p, eintraege, jahr, pe, zusatz)` – Stand einer Person: Anspruch, Ziel (Anteil des Anspruchs, auf halbe Tage aufgerundet), geplant = beantragt + genehmigt (dazu der Betriebsurlaub 24.12./31.12. …
+- `hr_planung_einst_pruefen(b)` – Einstellungen aus der Verwaltung prüfen (hr_einstellungen_save, Feld „planung“): {start, stichtag, vertretungPflicht, unverplantMax und einzeltageMax …
+- `hr_stichtag_im_jahr(pe)` – Liegt der Stichtag im geplanten Jahr selbst?
+- `hr_planung_jahr(heute, pe)` – Das Jahr, das geplant wird: ab dem Beginn das nächste Kalenderjahr.
+- `hr_planung_daten(pe, jahr)` – Beginn (im Jahr vor dem Planungsjahr) und Stichtag (im Jahr davor oder im Planungsjahr) als Datum
+- `hr_planung_ziel_text(st)` – Ziel in Worten (Mail): höchstens N Urlaubstage unverplant, also mindestens X von Y Tagen
+- `hr_planung_person(p, eintraege, jahr, pe, zusatz)` – Stand einer Person: Anspruch, Ziel (Anspruch weniger der höchstens unverplanten Tage, nie unter 0), geplant = beantragt + genehmigt (dazu der Betriebsurlaub …
 - `hr_vorplanung_eintrag(e, jahr, pe)` – Entstand der Eintrag in der Vorplanung des Jahres? = bis zum Stichtag erfasst (UTC-Zeit, ohne Erfassungszeit: nein)
 - `hr_einzeltage_hinweis(p, eintraege, e)` – Hinweis beim einzelnen Antrag (hr_antrag): liegt er in der Vorplanung seines Jahres und sind es damit mehr einzelne Urlaubstage als vorgesehen?
 - `hr_einzeltage(p, eintraege, jahr, pe, zusatz)` – Einzelne Urlaubstage der Vorplanung eines Jahres (Inhaber 10.11.2026: höchstens einzeltageMax, der übrige Urlaub möglichst zusammenhängend).
-- `hr_planung_ich(ich, eintraege, heute)` – Hinweis auf der Urlaubsseite des Mitarbeiters: nur in der Planungsphase (ab Beginn, bis die Planung abgeschlossen ist)
+- `hr_planung_ich(ich, eintraege, heute)` – Hinweis auf der Urlaubsseite des Mitarbeiters: nur in der Planungsphase (ab Beginn, bis die Planung abgeschlossen ist); nach dem Stichtag nur noch für alle, …
 - `hr_planung_schnitt(a, b)` – Überschneidung zweier Zeiträume
 - `hr_vertretung_luecken(e, p, vp, eintraege, nurGenehmigt)` – Wann ist die Vertretung im Zeitraum eines Antrags nicht da? Arbeitstage des Antragstellers, an denen die Vertretung abwesend ist (jede Abwesenheit außer …
 - `hr_antrag_zeitraum(ich, personal, eintraege, einst, art, von, bis, vertretung, andere, vertretung2)` – Prüfung eines Zeitraums für einen eigenen Antrag – gemeinsam für hr_antrag, hr_vorplanung und die Vorschau hr_antrag_pruefen.
@@ -179,7 +181,7 @@ _Modul HR · Urlaubsverwaltung – Fachlogik (Daten, Feiertage, Urlaubskonto, An
 
 - `hr_regeln_text(t)` – Gespeicherter Text der Urlaubsregeln für die Anzeige: ohne Feld oder als unveränderte frühere Vorlage die aktuelle Vorlage
 - `hr_regeln_pruefen(t)` – Text der Urlaubsregeln prüfen: Zeichenkette, höchstens HR_REGELN_MAX Zeichen, ohne Steuerzeichen (Zeilenumbrüche bleiben)
-- `hr_regel_sperren(j, schliess)` – Sperren aus den Urlaubsregeln für ein Jahr: Ostergeschäft = die zwei Wochen vor Karfreitag (Karfreitag − 14 bis Gründonnerstag), Weihnachtsgeschäft = Montag …
+- `hr_regel_sperren(j, schliess)` – Sperren aus den Urlaubsregeln für ein Jahr: Ostergeschäft = die zwei Wochen vor Karfreitag (Karfreitag − 14 bis Gründonnerstag), Weihnachtsgeschäft = 30.11. …
 
 **Verfallstag des Resturlaubs aus dem Vorjahr**
 
@@ -419,7 +421,7 @@ _STAFL-Plattform · HR im Eingabebereich der Verwaltung - Verwaltung → Mitarbe
 
 **Verwaltung → Urlaub: Urlaubssperren und Ferien**
 
-- `planungFelder()` – Jahresplanung (03.11.2026): Mitarbeiter planen bis zum Stichtag einen Anteil ihres Urlaubs des nächsten Jahres vor; Hinweis in der Urlaubsverwaltung ab dem …
+- `planungFelder()` – Jahresplanung (03.11.2026): Mitarbeiter planen bis zum Stichtag ihren Urlaub des nächsten Jahres vor; Hinweis in der Urlaubsverwaltung ab dem Beginn; …
 - `renderUrlaub()`
 
 **Verwaltung → Urlaub: E-Mails (Server: module/hr/mail.php)**
@@ -450,6 +452,7 @@ _HR · Urlaubsverwaltung (Modul hr, Oberfläche hr.intern unter /module/hr/)._
 - `urlaub(d1, d2)`
 - `zimp(cl, uebernehmen, stand)`
 - `mail_html(m_)`
+- `planjahr(pe, tage)`
 - `freie_wochen(ab, wochen, *clients)` – Erster Montag ab „ab“, an dem die Personen der Clients in den nächsten Wochen nichts eingetragen haben.
 - `neue_offen(vorher)`
 - `anmelden(user, pw, ip, breite, verfall_hinweis)`

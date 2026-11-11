@@ -1,9 +1,12 @@
 <?php
 declare(strict_types=1);
-/* Modul HR · Jahresplanung des Urlaubs (Inhaber 03.11.2026, Vorplanung und Einzeltage 10.11.2026).
-   Jeder Mitarbeiter plant bis zum Stichtag (Standard 31.12., bis 10.11.2026: 01.12.) mindestens einen Anteil (Standard 90 %) seines Urlaubsanspruchs
-   des nächsten Jahres vor – mit normalen Urlaubsanträgen und einer Vertretung je Zeitraum. Ab dem Planungsbeginn (Standard
-   01.10.) zeigt die Urlaubsseite den Stand; die Personalstelle erinnert per E-Mail an alle, die das Ziel noch nicht erreicht
+/* Modul HR · Jahresplanung des Urlaubs (Inhaber 03.11.2026, Vorplanung und Einzeltage 10.11.2026, Ziel in Tagen 11.11.2026).
+   Jeder Mitarbeiter plant seinen Urlaubsanspruch des nächsten Jahres bis zum Stichtag (Standard 31.01. des geplanten Jahres;
+   10.–11.11.2026: 31.12., davor 01.12.) so weit vor, dass höchstens unverplantMax Urlaubstage (Standard 5) unverplant bleiben
+   (Inhaber 11.11.2026, vorher ein Anteil von 90 %) – mit normalen Urlaubsanträgen und einer Vertretung je Zeitraum. Liegt der
+   Stichtag im Kalender vor dem Planungsbeginn, gilt er im geplanten Jahr selbst (01.10.2026 bis 31.01.2027 für 2027); dann
+   bleibt bis zum nächsten Planungsbeginn das laufende Jahr das Planungsjahr – nach dem Stichtag plant die Personalstelle für
+   alle, die nicht geplant haben. Ab dem Planungsbeginn (Standard 01.10.) zeigt die Urlaubsseite den Stand; die Personalstelle erinnert per E-Mail an alle, die das Ziel noch nicht erreicht
    haben. Die Ansicht „Jahresplanung“ (nur Personalstelle – sie enthält alle Urlaubszeiträume; zusammen mit dem Kalender
    ließen sich sonst Krankheitstage ableiten, unabhängige Prüfung 03.11.2026) fasst alles zusammen: Stand je Mitarbeiter,
    Zeitleiste, Konflikte je Antrag (Vertretung fehlt oder ist selbst abwesend, Überschneidung in der Abteilung, Urlaubssperre,
@@ -16,14 +19,16 @@ declare(strict_types=1);
    4) einzelne Urlaubstage, der übrige Urlaub möglichst zusammenhängend: darüber Hinweis an den Mitarbeiter und Konflikt
    „einzeltage“ in der Jahresplanung (die Personalstelle entscheidet einzeln). Vorplanung = bis zum Stichtag erfasst.
    Gespeichert im eigenen Dokument hr-einstellungen, Feld „planung“ (nur erweitert – GR-006): {start, stichtag (MM-TT),
-   prozent, vertretungPflicht, einzeltageMax, abschluss: {"JJJJ": {t, by, byId}}}. Fehlende Felder: Standardwerte. Anträge selbst stehen
+   unverplantMax, vertretungPflicht, einzeltageMax, abschluss: {"JJJJ": {t, by, byId}}}; ein früher gespeichertes „prozent“
+   bleibt stehen, gilt aber nicht mehr (Rückfall auf die Vorversion: dort gilt es wieder). Fehlende Felder: Standardwerte. Anträge selbst stehen
    wie immer in hr-abwesenheiten. Gründe anderer Abwesenheiten (z. B. Krankheit) erscheinen nie – nur „abwesend“.
    Eingebunden von module/hr/urlaub.php. */
 if (!defined('WA_API')) { http_response_code(404); exit; }
 
 const HR_PLANUNG_START = '10-01';
-const HR_PLANUNG_STICHTAG = '12-31';   // Inhaber 10.11.2026 („bis zum 31.12. einreichen“; vorher 01.12.)
-const HR_PLANUNG_PROZENT = 90;
+const HR_PLANUNG_STICHTAG = '01-31';   // Inhaber 11.11.2026 („bis spätestens 31.01.2027“ – im geplanten Jahr; vorher 31.12., davor 01.12.)
+const HR_PLANUNG_UNVERPLANT = 5;       // Inhaber 11.11.2026: höchstens so viele Urlaubstage dürfen unverplant bleiben (vorher Ziel 90 %)
+const HR_PLANUNG_UNVERPLANT_MAX = 50;  // Obergrenze der Einstellung
 const HR_PLANUNG_EINZELTAGE = 4;       // höchstens so viele einzelne Urlaubstage in der Vorplanung (0 = keine Prüfung)
 const HR_VORPLANUNG_MAX = 20;          // Zeiträume je Vorplanung (ein Absenden)
 
@@ -32,29 +37,38 @@ function hr_planung_einst(?array $d = null): array
 {
     $d = $d ?? (store_read('hr-einstellungen') ?? []);
     $p = is_array($d['planung'] ?? null) ? $d['planung'] : [];
-    $proz = $p['prozent'] ?? HR_PLANUNG_PROZENT;
+    $unv = $p['unverplantMax'] ?? HR_PLANUNG_UNVERPLANT;
     $abschluss = [];
     foreach ((array)($p['abschluss'] ?? []) as $j => $a) if (preg_match('/^\d{4}$/', (string)$j) && is_array($a)) $abschluss[(string)$j] = $a;
     return ['start' => hr_uebertrag_bis_norm($p['start'] ?? null) ?? HR_PLANUNG_START, 'stichtag' => hr_uebertrag_bis_norm($p['stichtag'] ?? null) ?? HR_PLANUNG_STICHTAG,
-            'prozent' => is_int($proz) && $proz >= 10 && $proz <= 100 ? $proz : HR_PLANUNG_PROZENT,
-            // Vertretung bei Urlaubsanträgen Pflicht (Regel 6 der Urlaubsregeln); nur ein ausdrückliches false schaltet sie ab
+            'unverplantMax' => is_int($unv) && $unv >= 0 && $unv <= HR_PLANUNG_UNVERPLANT_MAX ? $unv : HR_PLANUNG_UNVERPLANT,
+            // Vertretung bei Urlaubsanträgen Pflicht (Urlaubsregel „Vertretung“); nur ein ausdrückliches false schaltet sie ab
             'vertretungPflicht' => ($p['vertretungPflicht'] ?? true) !== false,
             'einzeltageMax' => is_int($p['einzeltageMax'] ?? null) && $p['einzeltageMax'] >= 0 && $p['einzeltageMax'] <= 50 ? $p['einzeltageMax'] : HR_PLANUNG_EINZELTAGE,
             'abschluss' => $abschluss];
 }
-/* Einstellungen aus der Verwaltung prüfen (hr_einstellungen_save, Feld „planung“): {start, stichtag, prozent, vertretungPflicht,
-   einzeltageMax (optional – ohne Angabe bleibt der gespeicherte Wert)} */
+/* Einstellungen aus der Verwaltung prüfen (hr_einstellungen_save, Feld „planung“): {start, stichtag, vertretungPflicht,
+   unverplantMax und einzeltageMax (optional – ohne Angabe bleibt der gespeicherte Wert), prozent (nur noch von der Vorversion
+   gesendet: wird geprüft und gespeichert, gilt aber nicht)}. Stichtag vor dem Beginn = Stichtag im geplanten Jahr. */
 function hr_planung_einst_pruefen($b): array
 {
     if (!is_array($b)) throw new InvalidArgumentException('Jahresplanung: Angaben fehlen.');
     $start = hr_uebertrag_bis_norm($b['start'] ?? null);
     $stich = hr_uebertrag_bis_norm($b['stichtag'] ?? null);
     if ($start === null || $stich === null) throw new InvalidArgumentException('Jahresplanung: bitte Beginn und Stichtag als gültiges Datum wählen (der 29.02. ist nicht möglich).');
-    if ($start >= $stich) throw new InvalidArgumentException('Jahresplanung: der Beginn muss vor dem Stichtag liegen.');
-    $proz = $b['prozent'] ?? null;
-    if (!is_int($proz) || $proz < 10 || $proz > 100) throw new InvalidArgumentException('Jahresplanung: Anteil bitte als ganze Zahl zwischen 10 und 100 Prozent.');
+    if ($start === $stich) throw new InvalidArgumentException('Jahresplanung: Beginn und Stichtag dürfen nicht derselbe Tag sein.');
     if (!is_bool($b['vertretungPflicht'] ?? null)) throw new InvalidArgumentException('Jahresplanung: Vertretung Pflicht bitte ja oder nein.');
-    $out = ['start' => $start, 'stichtag' => $stich, 'prozent' => $proz, 'vertretungPflicht' => $b['vertretungPflicht']];
+    $out = ['start' => $start, 'stichtag' => $stich, 'vertretungPflicht' => $b['vertretungPflicht']];
+    if (array_key_exists('unverplantMax', $b)) {
+        $u = $b['unverplantMax'];
+        if (!is_int($u) || $u < 0 || $u > HR_PLANUNG_UNVERPLANT_MAX) throw new InvalidArgumentException('Jahresplanung: unverplante Urlaubstage bitte als ganze Zahl zwischen 0 und ' . HR_PLANUNG_UNVERPLANT_MAX . '.');
+        $out['unverplantMax'] = $u;
+    }
+    if (array_key_exists('prozent', $b)) {
+        $proz = $b['prozent'];
+        if (!is_int($proz) || $proz < 10 || $proz > 100) throw new InvalidArgumentException('Jahresplanung: Anteil bitte als ganze Zahl zwischen 10 und 100 Prozent.');
+        $out['prozent'] = $proz;
+    }
     if (array_key_exists('einzeltageMax', $b)) {
         $e = $b['einzeltageMax'];
         if (!is_int($e) || $e < 0 || $e > 50) throw new InvalidArgumentException('Jahresplanung: einzelne Urlaubstage bitte als ganze Zahl zwischen 0 (keine Prüfung) und 50.');
@@ -62,12 +76,33 @@ function hr_planung_einst_pruefen($b): array
     }
     return $out;
 }
-/* Das Jahr, das geplant wird: das nächste Kalenderjahr */
-function hr_planung_jahr(?string $heute = null): int { return (int)substr($heute ?? hr_heute(), 0, 4) + 1; }
-/* Stichtag und Beginn als Datum (im Jahr vor dem Planungsjahr) */
-function hr_planung_daten(array $pe, int $jahr): array { return ['start' => ($jahr - 1) . '-' . $pe['start'], 'stichtag' => ($jahr - 1) . '-' . $pe['stichtag']]; }
+/* Liegt der Stichtag im geplanten Jahr selbst? (im Kalender vor dem Beginn, z. B. Beginn 01.10., Stichtag 31.01.) */
+function hr_stichtag_im_jahr(array $pe): bool { return $pe['stichtag'] < $pe['start']; }
+/* Das Jahr, das geplant wird: ab dem Beginn das nächste Kalenderjahr. Liegt der Stichtag im geplanten Jahr, bleibt bis zum
+   nächsten Beginn das laufende Jahr das Planungsjahr (nach dem Stichtag: Erinnern, Planen durch die Personalstelle, Abschluss);
+   sonst wie bisher immer das nächste Jahr. */
+function hr_planung_jahr(?string $heute = null, ?array $pe = null): int
+{
+    $heute = $heute ?? hr_heute();
+    $pe = $pe ?? hr_planung_einst();
+    $j = (int)substr($heute, 0, 4);
+    return hr_stichtag_im_jahr($pe) && substr($heute, 5) < $pe['start'] ? $j : $j + 1;
+}
+/* Beginn (im Jahr vor dem Planungsjahr) und Stichtag (im Jahr davor oder im Planungsjahr) als Datum */
+function hr_planung_daten(array $pe, int $jahr): array
+{
+    return ['start' => ($jahr - 1) . '-' . $pe['start'], 'stichtag' => (hr_stichtag_im_jahr($pe) ? $jahr : $jahr - 1) . '-' . $pe['stichtag']];
+}
+/* Ziel in Worten (Mail): höchstens N Urlaubstage unverplant, also mindestens X von Y Tagen */
+function hr_planung_ziel_text(array $st): string
+{
+    return $st['unverplantMax'] > 0
+        ? 'höchstens ' . hr_tage_text((float)$st['unverplantMax']) . ' dürfen unverplant bleiben, also mindestens ' . hr_zahl_text((float)$st['ziel']) . ' von '
+          . hr_zahl_text((float)$st['anspruch']) . ((float)$st['anspruch'] == 1.0 ? ' Tag' : ' Tagen')
+        : 'Ihren ganzen Urlaub (' . hr_tage_text((float)$st['anspruch']) . ')';
+}
 
-/* Stand einer Person: Anspruch, Ziel (Anteil des Anspruchs, auf halbe Tage aufgerundet), geplant = beantragt + genehmigt
+/* Stand einer Person: Anspruch, Ziel (Anspruch weniger der höchstens unverplanten Tage, nie unter 0), geplant = beantragt + genehmigt
    (dazu der Betriebsurlaub 24.12./31.12. als genehmigt – verpflichtend, automatisch), einzelne Urlaubstage der Vorplanung.
    $zusatz: noch nicht gespeicherte Zeiträume ([{von, bis}], Vorschau der Vorplanung) – zählen wie beantragt. */
 function hr_planung_person(array $p, array $eintraege, int $jahr, array $pe, array $zusatz = []): array
@@ -84,9 +119,9 @@ function hr_planung_person(array $p, array $eintraege, int $jahr, array $pe, arr
     $betrieb = count(hr_betriebsurlaub($p, $eintraege, $jahr)) * HR_BETRIEBSURLAUB_WERT;
     $gen += $betrieb;
     $anspruch = hr_anspruch($p, $jahr);
-    $ziel = ceil($anspruch * $pe['prozent'] / 100 * 2) / 2;
+    $ziel = max(0.0, $anspruch - $pe['unverplantMax']);
     $geplant = $gen + $bea;
-    return ['anspruch' => $anspruch, 'ziel' => $ziel, 'genehmigt' => $gen, 'beantragt' => $bea, 'geplant' => $geplant, 'betriebsurlaub' => $betrieb,
+    return ['anspruch' => $anspruch, 'ziel' => $ziel, 'unverplantMax' => $pe['unverplantMax'], 'genehmigt' => $gen, 'beantragt' => $bea, 'geplant' => $geplant, 'betriebsurlaub' => $betrieb,
             'fehlt' => max(0.0, $ziel - $geplant), 'erreicht' => $geplant >= $ziel, 'anteil' => $anspruch > 0 ? (int)round($geplant / $anspruch * 100) : 100,
             'einzeltage' => hr_einzeltage($p, $eintraege, $jahr, $pe, $zusatz), 'einzeltageMax' => $pe['einzeltageMax']];
 }
@@ -144,14 +179,17 @@ function hr_einzeltage(array $p, array $eintraege, int $jahr, array $pe, array $
     return $einzel;
 }
 
-/* Hinweis auf der Urlaubsseite des Mitarbeiters: nur in der Planungsphase (ab Beginn, bis die Planung abgeschlossen ist) */
+/* Hinweis auf der Urlaubsseite des Mitarbeiters: nur in der Planungsphase (ab Beginn, bis die Planung abgeschlossen ist);
+   nach dem Stichtag nur noch für alle, die ihr Ziel nicht erreicht haben */
 function hr_planung_ich(?array $ich, array $eintraege, ?string $heute = null): ?array
 {
     if (!$ich || !$ich['aktiv']) return null;
     $heute = $heute ?? hr_heute();
-    $pe = hr_planung_einst(); $j = hr_planung_jahr($heute); $dt = hr_planung_daten($pe, $j);
+    $pe = hr_planung_einst(); $j = hr_planung_jahr($heute, $pe); $dt = hr_planung_daten($pe, $j);
     if ($heute < $dt['start'] || isset($pe['abschluss'][(string)$j]) || hr_anspruch($ich, $j) <= 0) return null;   // ohne Anspruch nichts zu planen
-    return ['jahr' => $j, 'stichtag' => $dt['stichtag'], 'prozent' => $pe['prozent'], 'vorbei' => $heute > $dt['stichtag']] + hr_planung_person($ich, $eintraege, $j, $pe);
+    $st = hr_planung_person($ich, $eintraege, $j, $pe); $vorbei = $heute > $dt['stichtag'];
+    if ($vorbei && $st['erreicht']) return null;
+    return ['jahr' => $j, 'stichtag' => $dt['stichtag'], 'vorbei' => $vorbei] + $st;
 }
 
 /* Überschneidung zweier Zeiträume */
@@ -398,7 +436,7 @@ function hr_planung(int $jahr, array $me): array
     $pl = array_values($personen);
     $abschluss = $pe['abschluss'][(string)$jahr] ?? null;
     $mail = hr_mail_einst();
-    return ['jahr' => $jahr, 'heute' => hr_heute(), 'start' => $dt['start'], 'stichtag' => $dt['stichtag'], 'prozent' => $pe['prozent'],
+    return ['jahr' => $jahr, 'heute' => hr_heute(), 'start' => $dt['start'], 'stichtag' => $dt['stichtag'], 'unverplantMax' => $pe['unverplantMax'],
             'testmodus' => $mail['test']['an'], 'postfach' => (bool)mail_cfg_intern(),
             'vertretungPflicht' => $pe['vertretungPflicht'], 'einzeltageMax' => $pe['einzeltageMax'], 'schliesstage' => (object)hr_schliesstage($jahr),
             'abschluss' => $abschluss ? ['t' => $abschluss['t'] ?? null, 'by' => (string)($abschluss['by'] ?? '')] : null,
@@ -471,12 +509,12 @@ function hr_planung_erinnerung_inhalt(array $p, array $eintraege, int $jahr, arr
     $vor = hr_mail_vorname($p);
     $betreff = hr_heute() > $dt['stichtag'] ? "Bitte planen Sie Ihren Urlaub $jahr jetzt" : "Bitte planen Sie Ihren Urlaub $jahr bis zum " . hr_de($dt['stichtag']);
     $vorbei = hr_heute() > $dt['stichtag'];
-    $satz = ($vorbei ? 'der Stichtag ' . hr_de($dt['stichtag']) . " ist vorbei – bitte planen Sie jetzt mindestens {$pe['prozent']} % Ihres Urlaubs $jahr"
-                     : 'bitte planen Sie bis zum ' . hr_de($dt['stichtag']) . " mindestens {$pe['prozent']} % Ihres Urlaubs $jahr")
-        . ' – das sind ' . hr_tage_text($st['ziel']) . ' von ' . hr_tage_text($st['anspruch']) . '.';
+    $satz = ($vorbei ? 'der Stichtag ' . hr_de($dt['stichtag']) . " ist vorbei – bitte planen Sie jetzt Ihren Urlaub $jahr"
+                     : "bitte planen Sie Ihren Urlaub $jahr bis zum " . hr_de($dt['stichtag']) . ' vor')
+        . ': ' . hr_planung_ziel_text($st) . '.';
     $box = 'Bisher geplant: ' . hr_tage_text($st['geplant']) . ' – es fehlen noch ' . hr_tage_text($st['fehlt']) . '.';
     $wie = 'Stellen Sie dazu im Urlaubsportal Urlaubsanträge für ' . $jahr . ($pe['vertretungPflicht'] ? ' und wählen Sie für jeden Zeitraum eine Vertretung aus' : '')
-        . '. Die Personalstelle prüft die Planung und gibt sie frei.';
+        . '. Die Personalstelle prüft die Planung und gibt sie frei. Liegt keine Planung vor, plant die Personalstelle Ihren Urlaub.';
     $zeilen = hr_planung_mail_zeilen($p, $eintraege, $jahr, $idx);
     [$lt, $lh] = hr_mail_knopf();
     $text = "Hallo $vor,\n\n$satz\n$box\n$wie" . ($zeilen ? "\n\nIhr Urlaub $jahr bisher\n" . hr_mail_tabelle_text(array_map(function ($z) { return [$z[0] . ' – ' . $z[3], $z[1]]; }, $zeilen)) : '') . $lt;
