@@ -626,4 +626,6 @@ body.rw.r .rw-rund:hover { background: var(--r-flaeche-2); }
   .rw-wfilter{flex-wrap:wrap}
   .rw-suche{flex:1 1 100%;order:-1}
   .rw-wfilter select.rw-eingabe{flex:1 1 140px;max-width:none}
+  /* Handy: bei aktiver Suche Kennzahlen und „Bestellungen KW …“ ausblenden – Treffer direkt unter dem Suchfeld (12.11.2026) */
+  .rw-tab.rw-sucht>.rw-kpis,.rw-tab.rw-sucht .rw-bestellt{display:none}
 }
