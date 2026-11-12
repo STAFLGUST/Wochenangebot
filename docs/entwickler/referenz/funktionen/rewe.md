@@ -2,7 +2,7 @@
 
 <!-- ERZEUGT von `python3 werkzeuge/doku.py erzeugen` – nicht von Hand ändern. Quelle: Funktionen und Kommentare im Code. Die CI prüft, dass diese Datei zum Code passt. -->
 
-5 Dateien, 184 Funktionen – in der Reihenfolge der Datei, **fett** die Abschnitte. Text = erste Aussage des Kommentars direkt über der Funktion (Python: Docstring). Übersicht aller Module: [README.md](README.md).
+5 Dateien, 185 Funktionen – in der Reihenfolge der Datei, **fett** die Abschnitte. Text = erste Aussage des Kommentars direkt über der Funktion (Python: Docstring). Übersicht aller Module: [README.md](README.md).
 
 ## `app/api/aktionen/rewe.php`
 
@@ -311,4 +311,5 @@ _REWE (Modul rewe, Oberfläche rewe.intern unter /module/rewe/) – Vordispositi
 - `stamm_roh()`
 - `text(pg, sel)`
 - `warte_auf(pg, js, ms)`
+- `tabelle_buendig(pg, sel)` – Zeilen einer Tabelle, deren Zellen nicht bündig sind: jede Zelle bleibt Tabellenzelle (display: table-cell), Ober- und Unterkante aller Zellen einer Zeile …
 - `anmelden(user, pw, ip, breite, thema, hoehe, ziel, pfad)`
