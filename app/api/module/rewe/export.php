@@ -2,7 +2,8 @@
 declare(strict_types=1);
 /* REWE · Wochenabschluss und Excel für die Warenwirtschaft (Aktionen rewe_abschluss, rewe_export, rewe_erfasst).
    rw_abschluss: alle Bestellungen einer KW über alle Listen – Zeilen je Markt und Artikel, Summen je Lieferweg, je
-   Mitarbeiter und je Artikel, offene Märkte (in der Abfrage ohne Antwort), Hinweise (fällige Daueraufträge ohne Antwort,
+   Mitarbeiter und je Artikel, offene Märkte (in der Abfrage ohne Antwort), Hinweise (fällige Daueraufträge ohne Antwort – vor
+   dem Bestellschluss „geplant“, danach sind sie automatisch bestellt und als „auto“ markiert, rw_dauer_automatisch –,
    Artikel ohne WinAB-Nummer, Nachträge nach dem Export) und den Stand des Abschlusses (exportiert, in WinAB erfasst).
    In WinAB wird von Hand erfasst, immer als Einzelauftrag je Markt (Inhaber 30.10.2026): jede Zeile trägt die Nummer ihres
    Auftrags (ein Auftrag = ein Markt der Woche, Positionen = Artikel).
@@ -17,13 +18,17 @@ function rw_abschluss(string $kw): array
     $jahr = (int)substr($kw, 0, 4); $ww = substr($kw, 5, 2);
     $w = rw_wochen_doc($jahr);
     $zeilen = []; $jeLw = []; $jePerson = []; $jeArtikel = []; $offen = []; $dauerOffen = []; $nachtraege = 0;
+    $geplant = $kw > rw_kw_abschluss();   // Bestellschluss noch nicht erreicht: fällige Daueraufträge werden dann automatisch bestellt
     $lwName = function ($id) use ($stamm) { $l = rw_lieferweg($stamm, $id); return $l ? $l['name'] : 'Ohne Lieferweg'; };
     foreach (rw_maerkte_doc()['liste'] as $m) {
         $e = rw_antwort($w, $m['id'], $kw);
         if (!$e) {
             $faellig = rw_dauer_faellig($m, $kw);
             $an = rw_anzeige($m);
-            if ($faellig) $dauerOffen[] = ['id' => $m['id'], 'name' => $an['name'], 'ort' => $an['ort'], 'zustaendig' => $namen[rw_zustaendig($m, $kw)] ?? ''];
+            // art: geplant = wird zum Bestellschluss automatisch bestellt; ohne = nicht automatisch (ruhend/ausgelistet, Woche vor der
+            // Umstellung 12.11.2026 oder schon exportiert) – steht nicht im Export
+            if ($faellig) $dauerOffen[] = ['id' => $m['id'], 'name' => $an['name'], 'ort' => $an['ort'], 'zustaendig' => $namen[rw_zustaendig($m, $kw)] ?? '',
+                                           'art' => $geplant && rw_dauer_auto($m, $kw) ? 'geplant' : 'ohne'];
             // Dauerauftrag in dieser Woche nicht fällig: keine Lieferung vorgesehen, also nicht offen (wie in „Meine Woche“)
             elseif (in_array($m['kauf'] ?? 'regelmaessig', RW_KAUF_ABFRAGE, true) && rw_dauer_naechste($m, $kw) === '')
                 $offen[] = ['id' => $m['id'], 'name' => $an['name'], 'ort' => $an['ort'], 'zustaendig' => $namen[rw_zustaendig($m, $kw)] ?? '', 'lieferweg' => $lwName(rw_lw($m, $kw))];
@@ -41,7 +46,7 @@ function rw_abschluss(string $kw): array
             $zeilen[] = ['lieferweg' => $lwName($lw), 'lieferwegId' => $lw, 'kdNr' => (string)($m['kdNr'] ?? ''), 'reweNr' => (string)($m['reweNr'] ?? ''), 'markt' => $an['name'],
                          'plz' => $an['plz'], 'ort' => $an['ort'], 'strasse' => $an['strasse'], 'winab' => $an['winab'], 'artikel' => $a['name'], 'artikelId' => $a['id'],
                          'nr' => (string)$a['nr'], 'menge' => $n, 'einheit' => (string)$a['einheit'], 'ohneBerechnung' => !empty($e['ob']), 'zustaendig' => $person,
-                         'notiz' => (string)($e['n'] ?? ''), 'quelle' => (string)($e['q'] ?? 'hand'), 'nachtrag' => !empty($e['nachtrag']), 'marktId' => $m['id']];
+                         'notiz' => (string)($e['n'] ?? ''), 'quelle' => (string)($e['q'] ?? 'hand'), 'auto' => !empty($e['auto']), 'nachtrag' => !empty($e['nachtrag']), 'marktId' => $m['id']];
             $jeLw[$lw]['mengen'][$a['id']] = ($jeLw[$lw]['mengen'][$a['id']] ?? 0) + $n;
             $jePerson[$person]['mengen'][$a['id']] = ($jePerson[$person]['mengen'][$a['id']] ?? 0) + $n;
             $jeArtikel[$a['id']] = ($jeArtikel[$a['id']] ?? 0) + $n;
@@ -65,7 +70,8 @@ function rw_abschluss(string $kw): array
     return ['kw' => $kw, 'kwText' => rw_kw_text($kw), 'zeitraum' => rw_kw_zeitraum($kw), 'zeilen' => $zeilen, 'lieferwege' => $lwListe, 'personen' => $pListe,
             'artikel' => (object)$jeArtikel, 'maerkte' => count(array_unique(array_column($zeilen, 'marktId'))), 'offen' => $offen, 'dauerOffen' => $dauerOffen,
             'ohneStamm' => count(array_unique(array_column(array_filter($zeilen, function ($r) { return !$r['winab']; }), 'marktId'))),
-            'ohneNr' => $ohneNr, 'nachtraege' => $nachtraege, 'exportiert' => $ab['exportiert'] ?? null, 'erfasst' => $ab['erfasst'] ?? null];
+            'ohneNr' => $ohneNr, 'nachtraege' => $nachtraege, 'exportiert' => $ab['exportiert'] ?? null, 'erfasst' => $ab['erfasst'] ?? null,
+            'auto' => count(array_unique(array_column(array_filter($zeilen, function ($r) { return $r['auto']; }), 'marktId'))), 'bestellschluss' => !$geplant];
 }
 
 /* Wochenabschluss vermerken (unter der Sperre): exportiert bzw. in WinAB erfasst */
@@ -191,17 +197,17 @@ function rw_export_xlsx(array $a, array $stamm, string $wer): string
     $zeitraum = date('d.m.Y', strtotime($a['zeitraum']['von'])) . '–' . date('d.m.Y', strtotime($a['zeitraum']['bis']));
     $titel = 'REWE Dry Aged – Erfassung in WinAB · ' . $a['kwText'];
     $kopf = ['Auftrag', 'Lieferweg', 'Liefer-KW', 'Kd.-Nr. (WinAB)', 'REWE-Markt-Nr.', 'Markt', 'PLZ', 'Ort', 'Straße', 'WinAB-Art.-Nr.', 'Artikel', 'Menge', 'Einheit',
-             'Ohne Berechnung', 'Erfasst von', 'Notiz', 'Nachtrag'];
+             'Ohne Berechnung', 'Erfasst von', 'Notiz', 'Nachtrag', 'Dauerauftrag'];   // Spalte „Dauerauftrag“ seit 12.11.2026 (am Ende, ältere Spalten unverändert)
     $z = [[[$titel, 2]], [['Lieferwoche ' . $zeitraum . ' · erstellt ' . date('d.m.Y H:i') . ' von ' . $wer . ' · ' . $a['maerkte'] . ' Einzelaufträge (je Markt einer), ' . count($a['zeilen']) . ' Positionen', 3]], [], $kopf];
     foreach ($a['zeilen'] as $r) {
         $z[] = [$r['auftrag'], $r['lieferweg'], $a['kwText'], ctype_digit($r['kdNr']) && $r['kdNr'] !== '' ? (int)$r['kdNr'] : $r['kdNr'], ctype_digit($r['reweNr']) && $r['reweNr'] !== '' ? (int)$r['reweNr'] : $r['reweNr'],
                 $r['markt'], $r['plz'], $r['ort'], $r['strasse'], $r['nr'], $r['artikel'], $r['menge'], $r['einheit'], $r['ohneBerechnung'] ? 'ja' : 'nein',
-                $r['zustaendig'], $r['notiz'], $r['nachtrag'] ? 'ja' : ''];
+                $r['zustaendig'], $r['notiz'], $r['nachtrag'] ? 'ja' : '', $r['auto'] ? 'automatisch' : ($r['quelle'] === 'dauer' ? 'ja' : '')];
     }
     $summe = array_sum(array_column($a['zeilen'], 'menge'));
     $z[] = [];
     $z[] = ['', '', '', '', '', ['Summe', 4], '', '', '', '', '', [$summe, 4]];
-    $blaetter = [['WinAB-Erfassung', rw_xl_blatt($z, [9, 20, 12, 15, 15, 26, 8, 22, 28, 14, 20, 8, 9, 13, 16, 30, 10], 4)]];
+    $blaetter = [['WinAB-Erfassung', rw_xl_blatt($z, [9, 20, 12, 15, 15, 26, 8, 22, 28, 14, 20, 8, 9, 13, 16, 30, 10, 14], 4)]];
     foreach ([['Je Lieferweg', 'Lieferweg', $a['lieferwege']], ['Je Mitarbeiter', 'Mitarbeiter', $a['personen']]] as [$blatt, $spalte, $liste]) {
         $art = array_values(array_filter($stamm['artikel'], function ($x) use ($a) { return !empty(((array)$a['artikel'])[$x['id']]); }));
         $s = [[[$a['kwText'] . ' · ' . $blatt, 2]], [], array_merge([$spalte, 'Märkte'], array_column($art, 'name'))];

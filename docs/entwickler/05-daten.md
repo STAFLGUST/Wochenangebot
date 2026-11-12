@@ -572,16 +572,26 @@ Kalenderwochen sind ISO-Wochen „JJJJ-WW“ und meinen die **Lieferwoche**. Men
   sehen dann nichts); Team speichern, Lieferwege/Artikel und das Datenpaket („ersetzen“) behalten sie.
 - **`rewe-maerkte`**: `{"rev": 5, "liste": [{"id": "m…", "rev": 3, "kdNr": "<WinAB-Kd.-Nr.>", "reweNr": "", "name": "…", "strasse": "", "plz": "",
   "ort": "…", "region": "", "telefon": "", "kauf": "regelmaessig|gelegentlich|interessiert|kein_interesse|ruhend|ausgelistet",
-  "zustaendig": [{"ab": "2026-01", "nutzer": "u…|"}], "lieferweg": [{"ab": "2026-01", "id": "l…"}], "dauer": {"rhythmus": 0-4,
-  "mengen": {…}, "ab": "JJJJ-WW", "pauseBis": ""}, "abfragetag": "mo…fr|", "ansprechpartner": [{"name": "…", "rolle": "", "telefon": "",
+  "zustaendig": [{"ab": "2026-01", "nutzer": "u…|"}], "lieferweg": [{"ab": "2026-01", "id": "l…"}], "dauer": {"rhythmus": 0-4|6|8,
+  "mengen": {…}, "ab": "JJJJ-WW", "pauseBis": "", "pauseVon"?: "JJJJ-WW", "bis"?: "JJJJ-WW"}, "abfragetag": "mo…fr|", "ansprechpartner": [{"name": "…", "rolle": "", "telefon": "",
   "email": ""}], "hinweis": "", "erstellt": {…}, "geaendert": {…}}]}`. `zustaendig` und `lieferweg` sind „ab KW“-Historien (gilt der
   letzte Eintrag mit `ab` ≤ KW). Steht die Kd.-Nr. im Kundenstamm der Verwaltung, kommen Name, Anschrift und Telefon von dort.
   `hinweis` bis 4.000 Zeichen (seit 03.11.2026, vorher 1.000; mehrzeilig).
+  **Dauerauftrag** (`rw_dauer*`, Überarbeitung 12.11.2026): `rhythmus` = Abstand in Wochen (1–4, 6, 8; 0 = keiner), `ab` setzt den
+  Takt (erste Lieferung), Pause von `pauseVon` bis einschließlich `pauseBis` (ohne `pauseVon` gilt sie sofort – so wie vorher),
+  `bis` = läuft bis einschließlich dieser KW. `pauseVon` und `bis` stehen nur im Speicher, wenn sie gesetzt sind (GR-006); fehlen sie,
+  liest der Code leere Werte. Die Oberfläche rechnet die Lieferwochen mit derselben Regel wie `rw_dauer_naechste`.
 - **`rewe-wochen/<Jahr>`** (ein Dokument je ISO-Jahr): `{"rev": 9, "maerkte": {"m…": {"45": {"s": "bestellt|kein|ne|pause", "m": {"rb": 2},
   "ob": true?, "n": "<Notiz>"?, "lw": "l…", "zu": "u…", "zuName": "…", "q": "hand|dauer|excel", "r": 2, "t": "…", "von": "…", "vonId": "u…",
-  "nachtrag": true?}}}, "abschluss": {"45": {"exportiert": {"t", "von", "vonId", "zeilen", "stueck"}, "erfasst": {"t", "von", "vonId"}}}}`.
+  "nachtrag": true?, "auto": true?}}}, "abschluss": {"45": {"exportiert": {"t", "von", "vonId", "zeilen", "stueck"}, "erfasst": {"t", "von", "vonId"}}}}`.
   `lw`, `zu` und `zuName` sind der Schnappschuss beim Antworten (GR-106); `r` schützt vor gleichzeitigem Überschreiben (409);
-  `nachtrag` = nach dem Excel-Export geändert.
+  `nachtrag` = nach dem Excel-Export geändert. `auto` (seit 12.11.2026, fehlt = nein): **zum Bestellschluss automatisch aus dem
+  Dauerauftrag bestellt** (`rw_dauer_automatisch`, `q` = `dauer`, `von` = „automatisch (Dauerauftrag)“, Schnappschuss wie oben).
+  Geschrieben wird beim Lesen der Woche bzw. des Wochenabschlusses nach dem Bestellschluss (KW ≤ `rw_kw_abschluss()`) und spätestens
+  beim Excel-Export – nur für die laufende und die vorige Abschlusswoche, nur solange die Woche noch nicht exportiert ist, nur für
+  Märkte mit Kaufbereitschaft der Abfrage und nur ohne vorhandene Antwort (idempotent, nie über „Diese Woche anders“). Ältere
+  Wochen bleiben, wie sie waren. In „Meine Woche“ zählt ein fälliger Dauerauftrag, der automatisch bestellt wird, als erledigt.
+  Antwortschlüssel bleiben; `pause` heißt in der Oberfläche seit 12.11.2026 „Markt pausiert“.
 - **`rewe-verlauf`**: `{"rev": 4, "liste": [{"id": "n…", "markt": "m…", "art": "notiz|telefonat|besuch|reklamation|ohne_berechnung|system",
   "text": "…", "wv": "JJJJ-MM-TT|", "erledigt": {"t", "von"}|null, "q": "hand|datenpaket", "t": "…", "von": "…", "vonId": "u…"}]}` – `system`
   schreibt nur der Server (Anlage, Kaufbereitschaft, Dauerauftrag, Zuweisung).
