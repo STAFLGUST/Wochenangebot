@@ -393,7 +393,7 @@
       <div class="rw-tabelle-wrap"><table class="rw-tabelle rw-karten"><thead><tr><th>Markt</th><th>Lieferweg</th><th>Zuletzt bestellt</th><th>Hinweis</th><th></th></tr></thead><tbody>
       ${z.map((m) => `<tr><td data-label="Markt"><button type="button" class="rw-mname" data-karte="${esc(m.id)}" title="Marktkarte öffnen">${esc(m.ort)}</button><span class="rw-sub">${esc([m.strasse, m.kdNr ? 'Kd. ' + m.kdNr : ''].filter(Boolean).join(' · '))}</span></td>
         <td data-label="Lieferweg">${esc(m.lieferwegName)}</td><td data-label="Zuletzt bestellt">${esc(m.letzte ? kwText(m.letzte) : 'nie')}</td>
-        <td data-label="Hinweis" class="rw-sub">${esc((m.hinweis || '').slice(0, 80))}</td>
+        <td data-label="Hinweis">${m.hinweis ? `<span class="rw-sub">${esc(m.hinweis.slice(0, 80))}</span>` : '—'}</td>
         <td class="rw-voll"><a class="btn sm ghost" href="#markt/${esc(m.id)}" data-gehe="markt/${esc(m.id)}">Akte</a>${m.darfPflegen ? ` <button class="btn sm" type="button" data-wieder="${esc(m.id)}">Wieder abfragen</button>` : ''}</td></tr>`).join('')}
       </tbody></table></div></details>`;
   }
@@ -511,7 +511,7 @@
         <td data-label="Markt" class="rw-voll"><span class="rw-name">${esc(m.ort)}</span><span class="rw-sub">${esc([m.strasse, m.name].filter(Boolean).join(' · '))}</span></td>
         <td data-label="Kd.-Nr.">${esc(m.kdNr)}${m.kdNr && !m.winab ? ' <span class="rw-chip akzent" title="nicht im WinAB-Kundenstamm">?</span>' : ''}</td>
         <td data-label="Lieferweg">${esc(m.lieferwegName)}</td><td data-label="Zuständig">${esc(m.zustaendigName || '—')}</td>
-        <td data-label="Kaufbereitschaft">${kaufChip(m.kauf)}</td><td data-label="Dauerauftrag" class="rw-sub">${esc((m.dauerText || '').replace('Dauerauftrag ', ''))}</td>
+        <td data-label="Kaufbereitschaft">${kaufChip(m.kauf)}</td><td data-label="Dauerauftrag">${m.dauerText ? `<span class="rw-sub">${esc(m.dauerText.replace('Dauerauftrag ', ''))}</span>` : '—'}</td>
         <td data-label="Bestellungen ${esc(jahr)}" class="rw-zahl">${m.anzahlJahr || ''}</td><td data-label="Zuletzt">${esc(m.letzte ? kwText(m.letzte) : '—')}</td></tr>`).join('')
         || '<tr><td colspan="8" class="rw-leerzeile">Keine Märkte für diesen Filter.</td></tr>'}</tbody>`;
   }
