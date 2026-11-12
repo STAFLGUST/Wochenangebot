@@ -2,7 +2,7 @@
 
 <!-- ERZEUGT von `python3 werkzeuge/doku.py erzeugen` – nicht von Hand ändern. Quelle: Funktionen und Kommentare im Code. Die CI prüft, dass diese Datei zum Code passt. -->
 
-5 Dateien, 183 Funktionen – in der Reihenfolge der Datei, **fett** die Abschnitte. Text = erste Aussage des Kommentars direkt über der Funktion (Python: Docstring). Übersicht aller Module: [README.md](README.md).
+5 Dateien, 184 Funktionen – in der Reihenfolge der Datei, **fett** die Abschnitte. Text = erste Aussage des Kommentars direkt über der Funktion (Python: Docstring). Übersicht aller Module: [README.md](README.md).
 
 ## `app/api/aktionen/rewe.php`
 
@@ -98,6 +98,7 @@ _REWE · Vordisposition Dry Aged_
 
 - `rw_kunden()`
 - `rw_anzeige(m)` – Anzeige eines Marktes: Kundenstamm vor eigenen Feldern (nur leere Stammfelder füllt der Markt auf)
+- `rw_telefone(m)` – Telefonnummern für die Marktzeile in „Meine Woche“ (Inhaber 12.11.2026): zuerst die der Marktakte (Telefon des Marktes, dann die der Ansprechpartner), nur …
 - `rw_person_pruefen(v)`
 
 **Historie „ab KW“ (Zuständigkeit, Lieferweg)**
@@ -225,7 +226,7 @@ _STAFL-Plattform · REWE – Oberfläche der Vordisposition Dry Aged_
 - `renderWoche()`
 - `kompaktHtml(liste)` – Märkte, bei denen der Dauerauftrag diese Woche nicht liefert: eine ruhige Zeile je Lager; Klick auf den Markt = trotzdem abfragen
 - `bestelltHtml(w, best, mengen)` – Übersicht der Bestellungen dieser Woche (eigene bzw. gewählte Liste): Markt, Lieferweg, Mengen – Klick zeigt die Zeile
-- `zelleHtml(v, art, m)` – Verlauf: acht Wochen davor, diese Woche (Rahmen) und drei Wochen danach (Vorbestellungen), die KW darunter.
+- `zelleHtml(v, art, m)` – Verlauf (kompakt seit 12.11.2026): die letzten drei Wochen, diese Woche (Rahmen) und drei Wochen danach (Vorbestellungen), die KW darunter; der Text darunter …
 - `verlaufText(m)`
 - `zeileHtml(m)`
 - `ruhendHtml(liste, q, suche)`

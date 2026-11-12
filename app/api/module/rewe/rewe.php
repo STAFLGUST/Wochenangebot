@@ -383,6 +383,23 @@ function rw_anzeige(array $m): array
     return ['name' => $f('firma', 'name'), 'strasse' => $f('strasse', 'strasse'), 'plz' => $f('plz', 'plz'), 'ort' => $f('ort', 'ort'),
             'telefon' => $f('telefon', 'telefon'), 'winab' => $k !== null, 'winabAktiv' => $k ? $k['aktiv'] : null];
 }
+/* Telefonnummern für die Marktzeile in „Meine Woche“ (Inhaber 12.11.2026): zuerst die der Marktakte (Telefon des Marktes, dann die
+   der Ansprechpartner), nur ohne solche die aus dem Kundenstamm der Verwaltung (rw_kunden, nur lesend). Mehrere Nummern in einem Feld
+   (getrennt mit „,“, „;“ oder „ / “) zählen einzeln, jede Nummer nur einmal; Einträge mit weniger als drei Ziffern zählen nicht. */
+function rw_telefone(array $m): array
+{
+    $liste = [];
+    $dazu = function ($text) use (&$liste) {
+        foreach (preg_split('/\s*[;,]\s*|\s+\/\s+/u', trim((string)$text)) ?: [] as $n) {
+            $n = trim($n); $k = preg_replace('/[^\d+]/', '', $n);
+            if (strlen(preg_replace('/\D/', '', $n)) >= 3 && !isset($liste[$k])) $liste[$k] = $n;
+        }
+    };
+    $dazu($m['telefon'] ?? '');
+    foreach (is_array($m['ansprechpartner'] ?? null) ? $m['ansprechpartner'] : [] as $k) if (is_array($k)) $dazu($k['telefon'] ?? '');
+    if (!$liste) $dazu(rw_kunden()[(string)($m['kdNr'] ?? '')]['telefon'] ?? '');
+    return array_values($liste);
+}
 function rw_person_pruefen($v): string
 {
     $id = is_string($v) ? trim($v) : '';
@@ -732,7 +749,7 @@ function rw_markt_aus(array $m, array $stamm, array $namen, string $kw): array
     $zu = rw_zustaendig($m, $kw);
     $a = rw_anzeige($m);
     return ['id' => $m['id'], 'rev' => (int)($m['rev'] ?? 0), 'kdNr' => (string)($m['kdNr'] ?? ''), 'reweNr' => (string)($m['reweNr'] ?? ''),
-            'name' => $a['name'], 'strasse' => $a['strasse'], 'plz' => $a['plz'], 'ort' => $a['ort'], 'telefon' => $a['telefon'], 'winab' => $a['winab'],
+            'name' => $a['name'], 'strasse' => $a['strasse'], 'plz' => $a['plz'], 'ort' => $a['ort'], 'telefon' => $a['telefon'], 'telefone' => rw_telefone($m), 'winab' => $a['winab'],
             'eigen' => ['name' => (string)($m['name'] ?? ''), 'strasse' => (string)($m['strasse'] ?? ''), 'plz' => (string)($m['plz'] ?? ''), 'ort' => (string)($m['ort'] ?? ''), 'telefon' => (string)($m['telefon'] ?? '')],
             'region' => (string)($m['region'] ?? ''), 'kauf' => (string)($m['kauf'] ?? 'regelmaessig'),
             'dauer' => rw_dauer($m), 'abfragetag' => (string)($m['abfragetag'] ?? ''), 'ansprechpartner' => is_array($m['ansprechpartner'] ?? null) ? $m['ansprechpartner'] : [],

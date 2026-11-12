@@ -1,8 +1,9 @@
 /* STAFL-Plattform · REWE – Oberfläche der Vordisposition Dry Aged: Anmeldung über den Status, Stammdaten aus rewe_start,
    Reiter über location.hash („#woche/2026-45“, „#markt/<id>“, „#abschluss/2026-45“), Hell/Dunkel am Konto (theme.js).
    Ansichten: Meine Woche (eigene Liste der Lieferwoche, gruppiert nach Zentrallager und Direktbelieferung; Antwort je Markt
-   mit einem Klick, Mengen, fällige Daueraufträge bestätigen, ruhende Märkte als eigene Liste; Verlauf mit Vorbestellungen der
-   nächsten Wochen; Klick auf Name oder Adresse öffnet die Marktkarte mit Hinweis, Notizen, Verlauf und Wiedervorlagen;
+   mit einem Klick, Mengen („Filetkopf extra“ mit Hinweis), fällige Daueraufträge automatisch, ruhende Märkte als eigene Liste;
+   kompakte Marktzeile mit Telefon als Link, Verlauf drei Wochen zurück mit Vorbestellungen der nächsten Wochen; Klick auf Name
+   oder Adresse öffnet die Marktkarte mit Hinweis, Notizen, Verlauf und Wiedervorlagen;
    Suche immer über alle sichtbaren Listen und ohne Status-Filter, nur Lager mit Treffern),
    Daueraufträge (alle sichtbaren Daueraufträge, bearbeiten, neu anlegen), Märkte mit Marktakte
    (Wochenverlauf je Jahr, Notizen und Wiedervorlagen, Zuständigkeit und Lieferweg mit Historie, Ansprechpartner),
@@ -86,6 +87,7 @@
   /* Bezeichnung in Texten: „Filetkopf extra“ (anzeige/extra/extraHinweis löst der Server auf, rw_artikel_aus) – nur Beschriftung,
      die Mengen bleiben, wie sie gespeichert sind (der bei jedem Roastbeef enthaltene Filetkopf wird nirgends dazugerechnet) */
   const artAnzeige = (a) => a.anzeige || a.name;
+  const VERLAUF_ZEIGEN = 3;   // Marktzeile in „Meine Woche“: so viele vergangene Wochen (Inhaber 12.11.2026, vorher 8)
   const artName = (id) => artAnzeige(S.d.artikel.find((a) => a.id === id) || { name: id });
   // Beschriftung an der Mengeneingabe (Wochenantwort/Vorbestellung, Fenster „Dauerauftrag“) mit Hinweis bei Extra-Artikeln
   const artMarke = (a) => `<span>${esc(artAnzeige(a))}${a.extra ? `<small class="rw-mextra">zusätzlich${a.extraHinweis ? ` – ${esc(a.extraHinweis)}` : ''}</small>` : ''}</span>`;
@@ -252,7 +254,7 @@
           <span class="rw-gsymbol${g.art === 'direkt' ? ' direkt' : ''}"><svg class="i" aria-hidden="true"><use href="#i-${g.art === 'direkt' ? 'lkw' : 'lager'}"/></svg></span>
           <div><h2>${esc(g.name)}</h2><p class="rw-sub">${esc(g.art === 'lager' ? 'REWE-Zentrallager' : g.art === 'direkt' ? 'Lieferung direkt an den Markt' : 'Lieferweg fehlt')} · <span class="rw-gzahl">${zahl}</span>${g.bestellschluss ? ' · Bestellschluss ' + esc(g.bestellschluss) : ''}</p></div>
         </div>
-        ${zeilen.length ? `<div class="rw-zkopf" aria-hidden="true"><span>Markt</span><span>Verlauf ${esc(kwKurz(kwPlus(w.kw, -8)))}–${esc(kwKurz(kwPlus(w.kw, -1)).slice(3))} · diese Woche · voraus bis ${esc(kwKurz(kwPlus(w.kw, 3)))}</span><span>Antwort ${esc(kwKurz(w.kw))}</span><span></span></div>` : ''}
+        ${zeilen.length ? `<div class="rw-zkopf" aria-hidden="true"><span>Markt</span><span>Verlauf ${esc(kwKurz(kwPlus(w.kw, -VERLAUF_ZEIGEN)))}–${esc(kwKurz(kwPlus(w.kw, -1)).slice(3))} · diese Woche · voraus bis ${esc(kwKurz(kwPlus(w.kw, 3)))}</span><span>Antwort ${esc(kwKurz(w.kw))}</span><span></span></div>` : ''}
         ${zeilen.map(zeileHtml).join('') || (kompakt.length ? '' : `<p class="rw-gfuss">${S.filter === 'offen' ? 'Alle Märkte dieser Gruppe sind erledigt.' : 'Keine Märkte für diesen Filter.'}</p>`)}
         ${kompaktHtml(kompakt)}
       </section>`;
@@ -305,8 +307,9 @@
     const z = $(`.rw-zeile[data-id="${CSS.escape(id)}"]`);
     if (z) { z.scrollIntoView({ behavior: 'smooth', block: 'center' }); z.classList.add('blink'); setTimeout(() => z.classList.remove('blink'), 1600); }
   });
-  /* Verlauf: acht Wochen davor, diese Woche (Rahmen) und drei Wochen danach (Vorbestellungen), die KW darunter.
-     Künftige Wochen sind Knöpfe: ein Klick öffnet diese Woche mit der Zeile des Marktes – dort wird die Vorbestellung eingetragen. */
+  /* Verlauf (kompakt seit 12.11.2026): die letzten drei Wochen, diese Woche (Rahmen) und drei Wochen danach (Vorbestellungen),
+     die KW darunter; der Text darunter fasst die acht Wochen zusammen, die der Server liefert. Künftige Wochen sind Knöpfe: ein
+     Klick öffnet diese Woche mit der Zeile des Marktes – dort wird die Vorbestellung eingetragen (VERLAUF_ZEIGEN oben). */
   function zelleHtml(v, art, m) {
     const leer = v.dauer ? `Lieferung nach Dauerauftrag (${v.dauer})` : art === 'vor' ? 'keine Vorbestellung' : art === 'jetzt' ? 'noch offen' : 'nicht abgefragt';
     const t = `${kwKurz(v.kw)}: ${v.status ? S.d.antworten[v.status] + (v.menge ? ' ' + v.menge : '') : leer}`;
@@ -320,9 +323,11 @@
   function verlaufText(m) {
     const best = m.verlauf.filter((v) => v.status === 'bestellt'), letzte = best[best.length - 1];
     const vor = (m.vorschau || []).filter((v) => v.status === 'bestellt');
-    return [`Bestellt in ${best.length} von ${m.verlauf.length} Wochen`, letzte ? `zuletzt ${kwKurz(letzte.kw)}` : '',
+    return [`letzte ${m.verlauf.length} Wochen: ${best.length ? `${best.length}× bestellt` : 'nicht bestellt'}`, letzte ? `zuletzt ${kwKurz(letzte.kw)}` : '',
       vor.length ? `vorbestellt ${vor.map((v) => `${kwKurz(v.kw)}: ${v.menge}`).join(', ')}` : ''].filter(Boolean).join(' · ');
   }
+  // Marktakte: Telefon des Marktes und aus dem Kundenstamm (je einmal); die Nummern der Ansprechpartner stehen bei ihnen
+  const akteTel = (m) => [...new Set([m.eigen && m.eigen.telefon, m.telefon].map((n) => (n || '').trim()).filter(Boolean))];
   const adresse = (m) => [m.strasse, [m.plz, m.ort].filter(Boolean).join(' ')].filter(Boolean).join(', ');
   function zeileHtml(m) {
     const a = m.antwort, w = sicht() || S.woche, bus = S.busy.has(m.id);   // bei der Suche ggf. alle Listen (Zuständig-Chip)
@@ -335,8 +340,13 @@
     m.wiedervorlagen.slice(0, 2).forEach((v) => chips.push(`<span class="rw-chip gelb" title="${esc(v.text)}">Wiedervorlage: ${esc(v.text.slice(0, 32))}${v.text.length > 32 ? '…' : ''}</span>`));
     if (!m.winab && m.kdNr) chips.push('<span class="rw-chip akzent" title="Die Kd.-Nr. fehlt im WinAB-Kundenstamm der Verwaltung">nicht im Kundenstamm</span>');
     const nz = m.notizen || 0, nzText = nz ? `${nz} ${nz === 1 ? 'Notiz' : 'Notizen'}` : '';
-    const hinweis = m.hinweis || nz ? `<button type="button" class="rw-mhinweis" data-karte="${esc(m.id)}"${m.hinweis ? ` title="${esc(m.hinweis)}"` : ''}>
-        <svg class="i" aria-hidden="true"><use href="#i-info"/></svg><span>${m.hinweis ? esc(m.hinweis.replace(/\s*\n\s*/g, ' · ')) : ''}${nz ? `${m.hinweis ? ' ' : ''}<b>${esc(nzText)}</b>` : ''}</span></button>` : '';
+    // Hinweis einzeilig mit „…“ in der Zeile der Chips; voller Text im title, Klick öffnet die Marktkarte
+    const hinweis = m.hinweis || nz ? `<button type="button" class="rw-mhinweis" data-karte="${esc(m.id)}" title="${esc([m.hinweis, nzText].filter(Boolean).join('\n'))} – Marktkarte öffnen">
+        <svg class="i" aria-hidden="true"><use href="#i-info"/></svg>${m.hinweis ? `<span>${esc(m.hinweis.replace(/\s*\n\s*/g, ' · '))}</span>` : ''}${nz ? `<b>${esc(nzText)}</b>` : ''}</button>` : '';
+    // Telefon (Inhaber 12.11.2026): erste Nummer als Link zum Anrufen, weitere als „+n“ (alle in der Marktakte); ohne Nummer nichts
+    const tels = m.telefone || [];
+    const tel = tels.length ? `<span class="rw-mtelw"><a class="rw-mtel" href="tel:${esc(tels[0].replace(/[^\d+]/g, ''))}" title="Anrufen: ${esc(tels[0])}"><svg class="i" aria-hidden="true"><use href="#i-telefon"/></svg>${esc(tels[0])}</a>${tels.length > 1
+      ? `<a class="rw-mtelmehr" href="#markt/${esc(m.id)}" data-gehe="markt/${esc(m.id)}" title="Weitere Nummern: ${esc(tels.slice(1).join(' · '))} – Marktakte öffnen">+${tels.length - 1}</a>` : ''}</span>` : '';
     let antwort = '';
     const dis = !m.darfAntworten || bus ? ' disabled' : '';
     if (!a && m.dauerFaellig && !S.offenSeg.has(m.id)) {
@@ -366,11 +376,10 @@
     return `<div class="rw-zeile${erledigt(m) ? ' erledigt' : ''}${S.sichtbar.has(m.id) && S.filter === 'offen' && erledigt(m) ? ' gerade' : ''}" data-id="${esc(m.id)}">
       <div class="rw-c-markt">
         <button type="button" class="rw-mname" data-karte="${esc(m.id)}" title="Marktkarte öffnen">${esc(m.ort)}</button>
-        ${adr ? `<button type="button" class="rw-madresse" data-karte="${esc(m.id)}" title="Marktkarte öffnen">${esc(adr)}</button>` : ''}
-        ${m.kdNr ? `<span class="rw-mkd">Kd. ${esc(m.kdNr)}</span>` : ''}
-        ${chips.length ? `<div class="rw-hinweise">${chips.join('')}</div>` : ''}${hinweis}
+        ${adr || m.kdNr || tel ? `<div class="rw-mdaten">${adr ? `<button type="button" class="rw-madresse" data-karte="${esc(m.id)}" title="Marktkarte öffnen">${esc(adr)}</button>` : ''}${m.kdNr ? `<span class="rw-mkd">Kd. ${esc(m.kdNr)}</span>` : ''}${tel}</div>` : ''}
+        ${chips.length || hinweis ? `<div class="rw-hinweise">${chips.join('')}${hinweis}</div>` : ''}
       </div>
-      <div class="rw-c-verlauf"><div class="rw-zellen" role="group" aria-label="Verlauf ${esc(m.ort)}">${m.verlauf.map((v) => zelleHtml(v, '', m)).join('')}${zelleHtml(jetzt, 'jetzt', m)}${(m.vorschau || []).map((v) => zelleHtml(v, 'vor', m)).join('')}</div>
+      <div class="rw-c-verlauf"><div class="rw-zellen" role="group" aria-label="Verlauf ${esc(m.ort)}">${m.verlauf.slice(-VERLAUF_ZEIGEN).map((v) => zelleHtml(v, '', m)).join('')}${zelleHtml(jetzt, 'jetzt', m)}${(m.vorschau || []).map((v) => zelleHtml(v, 'vor', m)).join('')}</div>
         <p class="rw-vtext">${esc(verlaufText(m))}</p></div>
       <div class="rw-c-antwort rw-antwort">${meta}${antwort}</div>
       <a class="rw-c-akte rw-akte-link" href="#markt/${esc(m.id)}" data-gehe="markt/${esc(m.id)}" aria-label="Marktakte ${esc(m.ort)} öffnen"><svg class="i" aria-hidden="true"><use href="#i-rechts"/></svg></a>
@@ -594,7 +603,7 @@
               <dt>Abfragetag</dt><dd>${esc(S.d.tage[m.abfragetag] || '—')}</dd>
               <dt>Dauerauftrag</dt><dd>${m.dauer.rhythmus ? esc(`${rhythmusText(m.dauer.rhythmus)}: ${mengenText(m.dauer.mengen)} ab ${kwText(m.dauer.ab)}${dauerZusatz(m.dauer)}${naechste}`) : 'keiner'}
                 ${A.darfPflegen ? `<button class="btn sm" type="button" id="rw-a-dauer">${m.dauer.rhythmus ? 'Dauerauftrag ändern' : 'Dauerauftrag anlegen'}</button>` : ''}</dd>
-              ${m.telefon ? `<dt>Telefon</dt><dd>${esc(m.telefon)}</dd>` : ''}</dl></section>
+              ${akteTel(m).length ? `<dt>Telefon</dt><dd>${akteTel(m).map((n) => `<a class="rw-link" href="tel:${esc(n.replace(/[^\d+]/g, ''))}">${esc(n)}</a>`).join('<br>')}</dd>` : ''}</dl></section>
           ${m.hinweis ? `<section class="rw-panel rw-glas"><div class="rw-panelkopf"><h2>Hinweis</h2></div><p class="rw-notiz" style="margin:0">${esc(m.hinweis)}</p></section>` : ''}
           <section class="rw-panel rw-glas"><div class="rw-panelkopf"><h2>Ansprechpartner</h2></div>
             ${kontakte.map((k) => `<div class="rw-kontakt"><span class="rw-av" aria-hidden="true">${esc(initialen(k.name))}</span><div><b>${esc(k.name)}</b><span class="rw-sub">${esc([k.rolle, k.telefon, k.email].filter(Boolean).join(' · '))}</span></div></div>`).join('') || '<p class="rw-hilfe" style="margin:0">Noch keine Ansprechpartner.</p>'}

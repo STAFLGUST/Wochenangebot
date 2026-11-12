@@ -586,6 +586,13 @@ Kalenderwochen sind ISO-Wochen „JJJJ-WW“ und meinen die **Lieferwoche**. Men
   "email": ""}], "hinweis": "", "erstellt": {…}, "geaendert": {…}}]}`. `zustaendig` und `lieferweg` sind „ab KW“-Historien (gilt der
   letzte Eintrag mit `ab` ≤ KW). Steht die Kd.-Nr. im Kundenstamm der Verwaltung, kommen Name, Anschrift und Telefon von dort.
   `hinweis` bis 4.000 Zeichen (seit 03.11.2026, vorher 1.000; mehrzeilig).
+  **Telefon in der Marktzeile** (seit 12.11.2026, kein neues Speicherfeld): Die Antworten mit Märkten (`rw_markt_aus`, z. B.
+  `rewe_woche`, `rewe_maerkte`, `rewe_markt`) enthalten zusätzlich `telefone` (`rw_telefone()`): zuerst die Nummern der Marktakte
+  (`telefon` des Marktes, dann die der Ansprechpartner; mehrere in einem Feld getrennt mit „,“, „;“ oder „ / “), nur ohne solche
+  die Nummer aus dem Kundenstamm der Verwaltung (nur lesend über `customers_load`, laut `regeln/datenverantwortung.toml` erlaubt);
+  jede Nummer einmal. Ausgeliefert wie die übrigen Marktdaten nur an Mitarbeiter mit Zugriff auf den Markt. „Meine Woche“ zeigt die
+  erste als `tel:`-Link und weitere als „+n“ (Link zur Marktakte); der Verlauf der Zeile zeigt drei Wochen zurück (`rewe_woche`
+  liefert weiter acht, `RW_VERLAUF_WOCHEN`, für „letzte 8 Wochen: n× bestellt“).
   **Dauerauftrag** (`rw_dauer*`, Überarbeitung 12.11.2026): `rhythmus` = Abstand in Wochen (1–4, 6, 8; 0 = keiner), `ab` setzt den
   Takt (erste Lieferung), Pause von `pauseVon` bis einschließlich `pauseBis` (ohne `pauseVon` gilt sie sofort – so wie vorher),
   `bis` = läuft bis einschließlich dieser KW. `pauseVon` und `bis` stehen nur im Speicher, wenn sie gesetzt sind (GR-006); fehlen sie,

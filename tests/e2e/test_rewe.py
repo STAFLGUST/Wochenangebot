@@ -175,6 +175,20 @@ m4 = r.get('markt', {})
 check('Markt 4 (Direkt) mit Dauerauftrag alle 2 Wochen 1 Roastbeef + 1 Filetkopf, Abfragetag, Ansprechpartner', st == 200 and m4['dauer'] == {'rhythmus': 2, 'mengen': {'rb': 1, 'fk': 1}, 'ab': ABFRAGE, 'pauseBis': '', 'pauseVon': '', 'bis': ''}
       and m4['ansprechpartner'][0]['email'] == 'dauer@example.org' and m4['abfragetag'] == 'do', r)
 
+# ── Telefon in der Marktzeile (Inhaber 12.11.2026): Marktakte vor Kundenstamm, mehrere Nummern, ohne Nummer nichts ──
+check('Telefon: ohne Nummer leer (Markt 1), nur Kundenstamm → dessen Nummer (Markt 3), Ansprechpartner (Markt 4)',
+      m1['telefone'] == [] and m3['telefone'] == ['040 333'] and m4['telefone'] == ['040 4'], (m1['telefone'], m3['telefone'], m4['telefone']))
+st, r = LE.call('rewe_markt_save', {'id': m3['id'], 'telefon': '040 3000'})
+check('Telefon: Nummer der Marktakte hat Vorrang vor dem Kundenstamm (Anzeige des Stamms bleibt)', st == 200 and r['markt']['telefone'] == ['040 3000']
+      and r['markt']['telefon'] == '040 333', r.get('markt', {}).get('telefone'))
+st, r = LE.call('rewe_markt_save', {'id': m4['id'], 'telefon': '040 4444; 040 4'})
+w4 = next(x for g in M.call('rewe_woche')[1]['woche']['gruppen'] for x in g['maerkte'] if x['id'] == m4['id'])
+check('Telefon: mehrere Nummern in Reihenfolge Markt, Ansprechpartner – jede einmal; auch in der Wochenabfrage', st == 200 and r['markt']['telefone'] == ['040 4444', '040 4']
+      and w4['telefone'] == ['040 4444', '040 4'], (r.get('markt', {}).get('telefone'), w4.get('telefone')))
+check('Telefon nur mit Zugriff auf den Markt: fremder Markt (Evi → Markt 4) 404, ohne REWE-Recht 403',
+      E.call('rewe_markt&id=' + m4['id'])[0] == 404 and O.call('rewe_woche')[0] == 403)
+LE.call('rewe_markt_save', {'id': m3['id'], 'telefon': ''}); LE.call('rewe_markt_save', {'id': m4['id'], 'telefon': ''})
+
 # ── Wochenabfrage ──
 st, r = M.call('rewe_woche')
 w = r.get('woche', {})
@@ -615,7 +629,16 @@ check('Abschluss: ohne Antwort nur abzufragende Märkte (ruhend und nicht fälli
       and 'Beispielstadt' not in [x['ort'] for x in a44['offen']], ([x['ort'] for x in a43['offen']], a43['dauerOffen'], a44['dauerOffen']))
 check('ohne Zuständigkeit: niemandem außer „alle“ sichtbar', LE.call('rewe_markt&id=' + maerkte['Neustadt']['id'])[0] == 200 and M.call('rewe_markt&id=' + maerkte['Neustadt']['id'])[0] == 404)
 
+bsp_m = LE.call('rewe_markt&id=' + maerkte['Beispielstadt']['id'])[1]['markt']
+kontakte = [{k: (v or '') for k, v in x.items()} for x in bsp_m['ansprechpartner']]
+kontakte[0]['telefon'] = '0400 000002'
+st, r = LE.call('rewe_markt_save', {'id': bsp_m['id'], 'ansprechpartner': kontakte})
+check('Telefon Beispielstadt: eigene Nummer zuerst, dann die des Ansprechpartners', st == 200 and r['markt']['telefone'] == ['0400 000001', '0400 000002'], r.get('markt', {}).get('telefone'))
+
 # ── Oberfläche ──
+# Kompakte Marktzeilen (Inhaber 12.11.2026), gemessen mit diesen Testdaten: offener Markt bei 1280 px vorher 132 px, jetzt 98;
+# bei 390 px Beispielstadt vorher 440 px, jetzt 351, Musterdorf (bestellt mit Mengen und Notiz) vorher 711 px, jetzt 574
+HOEHE_GRENZE, HOEHE_VORHER, HOEHE390_GRENZE = 110, 132, {'Beispielstadt': 380, 'Musterdorf': 610}
 with sync_playwright() as p:
     br = p.chromium.launch()
 
@@ -649,6 +672,11 @@ with sync_playwright() as p:
     # Filter „Offen“ (Standard): nach „Bestellt“ bleibt die Zeile mit den Mengen stehen; Übersicht der Bestellungen
     zeile = '.rw-zeile:has-text("Musterdorf")'
     check('Filter „Offen“: nur offene Märkte (Musterdorf), keine Bestellübersicht', pg.locator('.rw-zeile').count() == 1 and pg.is_visible(zeile) and pg.is_hidden('#rw-w-bestellt'))
+    # Kompakte Marktzeile (Inhaber 12.11.2026): offener Markt mit Antwortknöpfen; vorher (8 Wochen Verlauf, große Abstände) 132 px
+    hz = pg.evaluate("(() => { const z = [...document.querySelectorAll('.rw-zeile')].find(x => x.textContent.includes('Musterdorf')); const k = z.querySelector('.rw-seg.antwort button');"
+                     " return [Math.round(z.getBoundingClientRect().height), Math.round(k.getBoundingClientRect().height), parseFloat(getComputedStyle(z).paddingTop)]; })()")
+    check(f'Marktzeile kompakt (1280 px): höchstens {HOEHE_GRENZE} px hoch (vorher {HOEHE_VORHER}), Innenabstand ≤ 10 px, Antwortknöpfe mind. 40 px', hz[0] <= HOEHE_GRENZE and hz[2] <= 10 and hz[1] >= 40, hz)
+    check('Ohne Telefonnummer (Musterdorf): kein Telefon in der Zeile', pg.locator(f'{zeile} .rw-mtel').count() == 0)
     pg.click(f'{zeile} [data-s="bestellt"]'); pg.wait_for_selector(f'{zeile} [data-menge="rb"]')
     check('„Bestellt“ im Filter „Offen“: Zeile bleibt mit Mengen stehen (markiert), 1 Roastbeef vorgeschlagen',
           pg.is_visible(f'{zeile}.gerade') and pg.locator(f'{zeile} .rw-mzahl').first.input_value() == '1')
@@ -706,9 +734,14 @@ with sync_playwright() as p:
     aw = next(x for g in M.call(f'rewe_woche&kw={WOCHE}')[1]['woche']['gruppen'] for x in g['maerkte'] if x['ort'] == 'Musterdorf')['antwort']
     check('„Rückgängig“: wieder bestellt, 2 Roastbeef, Notiz erhalten', aw['status'] == 'bestellt' and aw['mengen'] == {'rb': 2} and aw['notiz'] == 'Kunde ruft zurück', aw)
     kws = pg.locator(f'{zeile} .rw-zw span').all_inner_texts()
-    check('Verlauf: acht Wochen, diese Woche (Ring) und drei Wochen voraus mit KW-Zahlen, Legende', pg.locator(f'{zeile} .rw-z').count() == 12
-          and kws == [str(i) for i in range(35, 47)] and pg.locator(f'{zeile} .rw-z.jetzt').count() == 1 and pg.locator(f'{zeile} button[data-vor]').count() == 3
+    check('Verlauf: drei Wochen zurück, diese Woche (Ring) und drei Wochen voraus mit KW-Zahlen, Legende', pg.locator(f'{zeile} .rw-z').count() == 7
+          and kws == [str(i) for i in range(40, 47)] and pg.locator(f'{zeile} .rw-z.jetzt').count() == 1 and pg.locator(f'{zeile} button[data-vor]').count() == 3
           and pg.is_visible('.rw-legende'), kws)
+    groesse = pg.evaluate("(() => { const z = [...document.querySelectorAll('.rw-zeile')].find(x => x.textContent.includes('Musterdorf')); const c = z.querySelector('.rw-z').getBoundingClientRect();"
+                          " return [Math.round(c.width), Math.round(c.height), parseFloat(getComputedStyle(z.querySelector('.rw-zw span')).fontSize), parseFloat(getComputedStyle(z.querySelector('.rw-z')).fontSize)]; })()")
+    check('Verlauf größer und lesbarer: Kästchen ≥ 34 px (vorher 30), KW-Zahlen ≥ 12 px (vorher 10,5), Zahl im Kästchen ≥ 14 px; Kopf „Verlauf KW 40–42 · diese Woche · voraus bis KW 46“, Text über 8 Wochen',
+          groesse[0] >= 34 and groesse[1] >= 34 and groesse[2] >= 12 and groesse[3] >= 14 and 'VERLAUF KW 40–42 · DIESE WOCHE · VORAUS BIS KW 46' in text(pg, '.rw-zkopf').upper()
+          and text(pg, f'{zeile} .rw-vtext').startswith('letzte 8 Wochen: '), (groesse, text(pg, '.rw-zkopf'), text(pg, f'{zeile} .rw-vtext')))
     check('Markt groß: Name, Adresse und Kd.-Nr. (Schrift ≥ 14 px)', pg.evaluate(f"(() => {{ const z = [...document.querySelectorAll('.rw-zeile')].find(x => x.textContent.includes('Musterdorf')); return parseFloat(getComputedStyle(z.querySelector('.rw-mname')).fontSize) >= 18 && parseFloat(getComputedStyle(z.querySelector('.rw-madresse') || z.querySelector('.rw-mkd')).fontSize) >= 14; }})()"))
     # Marktkarte: Klick auf den Namen; Hinweis speichert von selbst, Notiz mit Art, Escape schließt
     pg.click(f'{zeile} .rw-mname'); pg.wait_for_selector('#dlg-karte[open] #kt-hinweis')
@@ -761,6 +794,14 @@ with sync_playwright() as p:
         pg.click(f'.rw-dkompakt [data-offen="{bsp["id"]}"]')
     pg.wait_for_selector('.rw-zeile:has-text("Beispielstadt") [data-s="bestellt"]')
     check('„Diese Woche anders“ bzw. „trotzdem abfragen“: normale Antworten, „Markt pausiert“ statt „Pause“', 'Markt pausiert' in text(pg, '.rw-zeile:has-text("Beispielstadt") [data-s="pause"]'))
+    bz = '.rw-zeile:has-text("Beispielstadt")'
+    check('Telefon in der Zeile (Beispielstadt): erste Nummer als Link zum Anrufen, „+1“ für die weitere Nummer (Marktakte)',
+          pg.locator(f'{bz} .rw-mtel').count() == 1 and pg.locator(f'{bz} .rw-mtelmehr').count() == 1
+          and text(pg, f'{bz} .rw-mtel') == '0400 000001' and pg.get_attribute(f'{bz} .rw-mtel', 'href') == 'tel:0400000001'
+          and text(pg, f'{bz} .rw-mtelmehr') == '+1' and '0400 000002' in pg.get_attribute(f'{bz} .rw-mtelmehr', 'title')
+          and pg.get_attribute(f'{bz} .rw-mtelmehr', 'href') == '#markt/' + maerkte['Beispielstadt']['id'], text(pg, f'{bz} .rw-c-markt'))
+    zeilen_daten = pg.evaluate("[...document.querySelectorAll('.rw-zeile .rw-mdaten')].map(d => { const lh = parseFloat(getComputedStyle(d).lineHeight); return Math.round(d.getBoundingClientRect().height / lh * 10) / 10; })")
+    check('Adresse, Kd.-Nr. und Telefon in höchstens zwei Zeilen', bool(zeilen_daten) and max(zeilen_daten) <= 2.2, zeilen_daten)
     # Pop-up „Dauerauftrag“ aus „Meine Woche“ (Chip am Markt): schließt nur über × oder Abbrechen
     pg.click('.rw-zeile:has-text("Beispielstadt") [data-dauer-dlg]'); pg.wait_for_selector('#dlg-dauer[open] #dd-titel:has-text("Beispielstadt")')
     pg.mouse.click(5, 5)
@@ -1001,6 +1042,14 @@ with sync_playwright() as p:
             if breite == 390:
                 pg.screenshot(path=os.path.join(SH, f'rewe_{ziel.split("/")[0][1:]}_{breite}_{thema}.png'), full_page=True)
         check(f'{breite}px {thema}: kein waagerechtes Scrollen', not breit, breit)
+        if breite == 390:   # kompakte Marktzeilen am Handy (Inhaber 12.11.2026); vorher Beispielstadt 440 px, Musterdorf 711 px
+            pg.goto(B + f'/module/rewe/#woche/{WOCHE}'); pg.wait_for_selector('.rw-gruppe')
+            pg.click('#rw-w-filter [data-f="alle"]'); pg.wait_for_selector('.rw-zeile:has-text("Musterdorf")')
+            h390 = pg.evaluate("[...document.querySelectorAll('.rw-zeile')].map(z => [z.querySelector('.rw-mname').textContent, Math.round(z.getBoundingClientRect().height), Math.round(Math.min(...[...z.querySelectorAll('.rw-seg.antwort button')].map(k => k.getBoundingClientRect().height), 99))])")
+            check(f'{breite}px {thema}: Marktzeilen kompakt (höchstens {HOEHE390_GRENZE} px, vorher 440/711), Antwortknöpfe mind. 40 px, ohne waagerechtes Scrollen',
+                  {n for n, _, _ in h390} == set(HOEHE390_GRENZE) and all(h <= HOEHE390_GRENZE[n] for n, h, _ in h390) and min(k for _, _, k in h390) >= 40 and pg.evaluate('document.documentElement.scrollWidth <= window.innerWidth + 1'), h390)
+            pg.screenshot(path=os.path.join(SH, f'rewe_woche_kompakt_{breite}_{thema}.png'))
+            pg.click('#rw-w-filter [data-f="offen"]')
         pg.goto(B + '/module/rewe/#dauer'); pg.wait_for_selector('#rw-d-liste [data-dauer]')
         pg.click('#rw-d-liste [data-dauer] >> nth=0'); pg.wait_for_selector('#dlg-dauer[open] [data-dd-rh]')
         lage = pg.evaluate("(() => { const d = document.querySelector('#dlg-dauer'), r = d.getBoundingClientRect(); return [d.scrollWidth - d.clientWidth, Math.round(r.left), Math.round(r.right), Math.round(r.bottom), innerWidth, innerHeight]; })()")
