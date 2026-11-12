@@ -91,6 +91,9 @@ Für jedes Modul mit Kachel entsteht `<modul>.zugang` (lib/rechte.php, `perms_ka
 | `qs.bearbeiten` | Qualitätssicherung | Qualitätssicherung | bearbeiten | QM-System bearbeiten: Dokumente anlegen und überarbeiten (Entwurf, zur Prüfung geben), Nachweise aller Prüfungen erfassen und stornieren, Maßnahmen erfassen | – | `qs.nachweis` |
 | `qs.freigeben` | Qualitätssicherung | Qualitätssicherung | bearbeiten | QM-System prüfen und freigeben (QMB, Geschäftsführung): Dokumente prüfen, freigeben, einziehen, als überprüft vermerken (nie eigene Entwürfe prüfen), Handbuch und Prüfplan ändern, Maßnahmen als wirksam abschließen | – | `qs.bearbeiten` |
 | `qs.verwalten` | Qualitätssicherung | Qualitätssicherung | bearbeiten | QM-System verwalten: Kapitel, Personen (Kürzel und Verknüpfung mit Mitarbeitern) und Einstellungen pflegen, Datenpaket übernehmen | – | `qs.bearbeiten` |
+| `qs.verfahren_sehen` | Qualitätssicherung | Qualitätssicherung | sehen | Verfahrensdokumentation (GoBD) ansehen und exportieren | – | – |
+| `qs.verfahren_bearbeiten` | Qualitätssicherung | Qualitätssicherung | bearbeiten | Verfahrensdokumentation (GoBD) pflegen: Abschnitte und IT-Systeme | – | – |
+| `qs.verfahren_freigeben` | Qualitätssicherung | Qualitätssicherung | bearbeiten | Verfahrensdokumentation (GoBD) freigeben (Geschäftsführung) | – | – |
 | `auswertung.sehen` | Verwaltung | Verwaltung | sehen | Auswertung: Karte der Kunden-Anmeldungen ansehen | – | `kunden.sehen` |
 
 ## Nur Administratoren

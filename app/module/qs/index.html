@@ -49,6 +49,7 @@
           <button type="button" role="tab" data-tab="pruefplan" aria-selected="false">Prüfplan</button>
           <button type="button" role="tab" data-tab="massnahmen" aria-selected="false">Maßnahmen</button>
           <button type="button" role="tab" data-tab="bericht" aria-selected="false">Audit</button>
+          <button type="button" role="tab" data-tab="verfahren" aria-selected="false" hidden>Verfahrensdoku</button>
           <button type="button" role="tab" data-tab="einstellungen" aria-selected="false" hidden>Einstellungen</button>
         </nav>
       </div>
@@ -183,6 +184,43 @@
           <p class="qm-meldung" id="qm-b-meldung" role="alert"></p>
         </section>
         <article class="qm-bericht" id="qm-b-bericht" aria-live="polite"></article>
+      </section>
+
+      <!-- Verfahrensdokumentation nach GoBD (verfahren.js) -->
+      <section class="qm-tab" id="qm-t-verfahren" data-tab="verfahren" hidden>
+        <div class="qm-leer qm-glas" id="vf-leer" hidden>
+          <h2>Verfahrensdokumentation nach GoBD</h2>
+          <p>Hier beschreibt das Unternehmen, wie Belege entstehen, verarbeitet, gebucht und aufbewahrt werden – in fünf Teilen, mit Verweis auf die vorhandenen QM-Dokumente. Freigegebene Fassungen bleiben unverändert erhalten und lassen sich für eine Prüfung exportieren.</p>
+          <button class="btn primary" type="button" id="vf-anlegen" hidden><svg class="i" aria-hidden="true"><use href="#i-plus"/></svg>Dokumentation anlegen</button>
+          <p class="qm-hilfe" id="vf-leer-hinweis" hidden>Es ist noch keine Dokumentation angelegt.</p>
+        </div>
+        <div id="vf-inhalt" hidden>
+          <div class="qm-panel qm-glas vf-kopf">
+            <div class="vf-kopfzeile">
+              <div class="vf-kopftitel"><span class="qm-ueber">Verfahrensdokumentation · GoBD</span><h2 id="vf-titel"></h2><p class="qm-hilfe" id="vf-meta"></p></div>
+              <div class="qm-filterzeile">
+                <select class="qm-eingabe" id="vf-wahl" aria-label="Dokumentation wählen" hidden></select>
+                <button class="btn sm" type="button" id="vf-kopf-aendern" hidden><svg class="i" aria-hidden="true"><use href="#i-stift"/></svg>Angaben</button>
+                <button class="btn sm" type="button" id="vf-entwurf"><svg class="i" aria-hidden="true"><use href="#i-dokument"/></svg>Entwurf als PDF</button>
+                <button class="btn sm" type="button" id="vf-export"><svg class="i" aria-hidden="true"><use href="#i-download"/></svg>Export für Prüfung</button>
+                <button class="btn sm primary" type="button" id="vf-freigeben" hidden><svg class="i" aria-hidden="true"><use href="#i-haken"/></svg><span id="vf-freigeben-text">Freigeben</span></button>
+              </div>
+            </div>
+            <div class="qm-chips" id="vf-status"></div>
+            <ul class="vf-zeilen" id="vf-offen"></ul>
+          </div>
+          <div id="vf-teile"></div>
+          <section class="qm-panel qm-glas">
+            <div class="qm-panelkopf"><h2>IT-Systeme</h2><button class="btn sm" type="button" id="vf-system-neu" hidden><svg class="i" aria-hidden="true"><use href="#i-plus"/></svg>System</button></div>
+            <p class="qm-hinweis">Alle Systeme, in denen Belege oder Buchungsdaten entstehen, verarbeitet oder aufbewahrt werden – auch Vorsysteme wie Warenwirtschaft, Bank oder Zeiterfassung. Abgelöste Systeme bleiben stehen und werden „außer Betrieb“ gesetzt.</p>
+            <div class="vf-systeme" id="vf-systeme"></div>
+          </section>
+          <section class="qm-panel qm-glas">
+            <div class="qm-panelkopf"><h2>Fassungen</h2></div>
+            <div class="vf-fassungen" id="vf-fassungen"></div>
+          </section>
+          <p class="qm-hinweis vf-recht">Grundlage: GoBD, Rz. 151–155 (Verfahrensdokumentation) und Rz. 100–102 (internes Kontrollsystem). Eine Gliederung ist nicht vorgeschrieben. Das Programm sichert die Form – unveränderliche Fassungen mit Datum, Freigabe und Änderungsliste. Ob die Inhalte vollständig sind und dem gelebten Ablauf entsprechen, verantwortet das Unternehmen; bitte mit dem Steuerberater abstimmen.</p>
+        </div>
       </section>
 
       <section class="qm-tab" id="qm-t-einstellungen" data-tab="einstellungen" hidden>
@@ -430,6 +468,95 @@
   </form>
 </dialog>
 
+<!-- Verfahrensdokumentation: allgemeine Angaben (anlegen, ändern, löschen ohne Fassung) -->
+<dialog class="qm-dialog qm-dialog-mittel" id="dlg-vf-kopf" aria-labelledby="vk-titel">
+  <form id="vk-form" novalidate>
+    <div class="qm-dialogkopf"><h2 id="vk-titel">Dokumentation</h2><button class="qm-dialog-schliessen" type="button" data-schliessen aria-label="Schließen">×</button></div>
+    <div class="qm-formraster">
+      <label class="qm-breit">Bezeichnung<input class="qm-eingabe" id="vk-titel-in" maxlength="200" required placeholder="z. B. Verfahrensdokumentation Buchführung"></label>
+      <label class="qm-breit">Unternehmen<input class="qm-eingabe" id="vk-gesellschaft" maxlength="200" placeholder="Firma mit Rechtsform"></label>
+      <label>Verantwortlich<input class="qm-eingabe" id="vk-verantwortlich" maxlength="40" list="qm-kuerzel"></label>
+      <label class="qm-check" id="vk-muster-z"><input type="checkbox" id="vk-muster" checked> mit Mustergliederung (13 Abschnitte mit Fragen)</label>
+    </div>
+    <p class="qm-meldung" id="vk-meldung" role="alert"></p>
+    <div class="qm-knopfreihe"><button class="btn vf-entfernen" type="button" id="vk-loeschen" hidden>Löschen</button><button class="btn" type="button" data-schliessen>Abbrechen</button><button class="btn primary" type="submit">Speichern</button></div>
+  </form>
+</dialog>
+
+<!-- Verfahrensdokumentation: Abschnitt -->
+<dialog class="qm-dialog" id="dlg-vf-abschnitt" aria-labelledby="va-titel">
+  <form id="va-form" novalidate>
+    <div class="qm-dialogkopf"><h2 id="va-titel">Abschnitt</h2><button class="qm-dialog-schliessen" type="button" data-schliessen aria-label="Schließen">×</button></div>
+    <p class="vf-frage" id="va-hinweis" hidden></p>
+    <div class="qm-formraster">
+      <label>Teil<select class="qm-eingabe" id="va-teil" required></select></label>
+      <label>Zuständig<input class="qm-eingabe" id="va-zust" maxlength="40" list="qm-kuerzel"></label>
+      <label class="qm-breit">Überschrift<input class="qm-eingabe" id="va-titel-in" maxlength="200" required></label>
+      <label class="qm-breit">Beschreibung <span class="qm-hilfe">(so, wie es im Betrieb tatsächlich abläuft – kurz genügt, wenn ein QM-Dokument den Ablauf regelt)</span><textarea class="qm-eingabe" id="va-text" rows="9" maxlength="20000"></textarea></label>
+      <label class="qm-breit">QM-Dokumente <span class="qm-hilfe">(je Zeile ein Verweis; festgehalten wird die jeweils gültige Version)</span><textarea class="qm-eingabe" id="va-verweise" rows="3" maxlength="6000"></textarea></label>
+      <label class="qm-breit">QM-Dokument hinzufügen<select class="qm-eingabe" id="va-dok"></select></label>
+      <fieldset class="qm-abschnittfeld qm-breit" id="va-systeme-z"><legend>IT-Systeme in diesem Ablauf</legend><div class="vf-wahl" id="va-systeme"></div></fieldset>
+      <label class="qm-check qm-breit"><input type="checkbox" id="va-fertig"> fertig – kann in die nächste Fassung</label>
+    </div>
+    <p class="qm-meldung" id="va-meldung" role="alert"></p>
+    <div class="qm-knopfreihe"><button class="btn vf-entfernen" type="button" id="va-loeschen" hidden>Entfernen</button><button class="btn" type="button" data-schliessen>Abbrechen</button><button class="btn primary" type="submit">Speichern</button></div>
+  </form>
+</dialog>
+
+<!-- Verfahrensdokumentation: IT-System -->
+<dialog class="qm-dialog" id="dlg-vf-system" aria-labelledby="vs-titel">
+  <form id="vs-form" novalidate>
+    <div class="qm-dialogkopf"><h2 id="vs-titel">IT-System</h2><button class="qm-dialog-schliessen" type="button" data-schliessen aria-label="Schließen">×</button></div>
+    <div class="qm-formraster">
+      <label>Name<input class="qm-eingabe" id="vs-name" maxlength="120" required placeholder="z. B. Warenwirtschaft"></label>
+      <label>Art<select class="qm-eingabe" id="vs-art"></select></label>
+      <label class="qm-breit">Zweck und Daten <span class="qm-hilfe">(wofür, welche Belege und Daten)</span><textarea class="qm-eingabe" id="vs-zweck" rows="3" maxlength="2000"></textarea></label>
+      <label>Anbieter / Version<input class="qm-eingabe" id="vs-anbieter" maxlength="200"></label>
+      <label>Zuständig<input class="qm-eingabe" id="vs-zust" maxlength="40" list="qm-kuerzel"></label>
+      <label>Betrieb<select class="qm-eingabe" id="vs-betrieb"></select></label>
+      <label>Speicherort der Daten<input class="qm-eingabe" id="vs-ort" maxlength="300" placeholder="z. B. Server im Haus, Rechenzentrum in Deutschland"></label>
+      <label class="qm-breit">Sicherung und Aufbewahrung<textarea class="qm-eingabe" id="vs-sicherung" rows="2" maxlength="2000"></textarea></label>
+      <label class="qm-breit">Schnittstellen <span class="qm-hilfe">(woher kommen Daten, wohin gehen sie)</span><textarea class="qm-eingabe" id="vs-schnittstellen" rows="2" maxlength="2000"></textarea></label>
+      <label>Im Einsatz seit<input class="qm-eingabe" id="vs-seit" type="date"></label>
+      <label>Außer Betrieb seit<input class="qm-eingabe" id="vs-bis" type="date"></label>
+    </div>
+    <p class="qm-meldung" id="vs-meldung" role="alert"></p>
+    <div class="qm-knopfreihe"><button class="btn vf-entfernen" type="button" id="vs-loeschen" hidden>Entfernen</button><button class="btn" type="button" data-schliessen>Abbrechen</button><button class="btn primary" type="submit">Speichern</button></div>
+  </form>
+</dialog>
+
+<!-- Verfahrensdokumentation: Fassung freigeben oder „ohne Änderung überprüft“ -->
+<dialog class="qm-dialog qm-dialog-mittel" id="dlg-vf-freigabe" aria-labelledby="vg-titel">
+  <form id="vg-form" novalidate>
+    <div class="qm-dialogkopf"><h2 id="vg-titel">Fassung freigeben</h2><button class="qm-dialog-schliessen" type="button" data-schliessen aria-label="Schließen">×</button></div>
+    <p id="vg-text"></p>
+    <ul class="vf-zeilen" id="vg-zeilen"></ul>
+    <div class="qm-formraster" id="vg-fassung">
+      <label class="qm-breit">Anlass<input class="qm-eingabe" id="vg-grund" maxlength="1000" placeholder="z. B. Erstfassung, neues Archivsystem, geänderte Rechnungsfreigabe"></label>
+      <label>Gültig ab<input class="qm-eingabe" id="vg-ab" type="date" required></label>
+    </div>
+    <label id="vg-notiz-z">Bemerkung <span class="qm-hilfe">(freiwillig)</span><input class="qm-eingabe" id="vg-notiz" maxlength="500" placeholder="z. B. mit dem Steuerberater durchgesehen"></label>
+    <p class="qm-meldung" id="vg-meldung" role="alert"></p>
+    <div class="qm-knopfreihe"><button class="btn" type="button" data-schliessen>Abbrechen</button><button class="btn primary" type="submit" id="vg-ok">Freigeben</button></div>
+  </form>
+</dialog>
+
+<!-- Verfahrensdokumentation: Export für Prüfungen -->
+<dialog class="qm-dialog qm-dialog-mittel" id="dlg-vf-export" aria-labelledby="ve-titel">
+  <form id="ve-form" novalidate>
+    <div class="qm-dialogkopf"><h2 id="ve-titel">Export für Prüfung</h2><button class="qm-dialog-schliessen" type="button" data-schliessen aria-label="Schließen">×</button></div>
+    <p class="qm-hinweis">Ein PDF mit Deckblatt, der Übersicht aller Fassungen samt Änderungen und dem vollen Inhalt jeder Fassung, die im Prüfungszeitraum galt.</p>
+    <div class="qm-formraster">
+      <label>Prüfungszeitraum von<input class="qm-eingabe" id="ve-von" type="date" required></label>
+      <label>bis<input class="qm-eingabe" id="ve-bis" type="date" required></label>
+      <label class="qm-check qm-breit"><input type="checkbox" id="ve-dokumente"> verknüpfte QM-Dokumente beilegen (ZIP, in der Version der jeweiligen Fassung)</label>
+    </div>
+    <p class="qm-hilfe" id="ve-enthalten"></p>
+    <p class="qm-meldung" id="ve-meldung" role="alert"></p>
+    <div class="qm-knopfreihe"><button class="btn" type="button" data-schliessen>Abbrechen</button><button class="btn primary" type="submit"><svg class="i" aria-hidden="true"><use href="#i-download"/></svg>Herunterladen</button></div>
+  </form>
+</dialog>
+
 <svg class="qm-symbole" aria-hidden="true">
   <symbol id="i-back" viewBox="0 0 24 24"><path d="m14.5 5.5-6.5 6.5 6.5 6.5"/></symbol>
   <symbol id="i-schild" viewBox="0 0 24 24"><path d="M12 3 5 6v5.5c0 4.3 2.9 8.1 7 9.5 4.1-1.4 7-5.2 7-9.5V6z"/><path d="m9 12 2.2 2.2L15.5 10"/></symbol>
@@ -450,5 +577,6 @@
 </svg>
 <script src="../../assets/rahmen.js"></script>
 <script src="qs.js"></script>
+<script src="verfahren.js"></script>
 </body>
 </html>

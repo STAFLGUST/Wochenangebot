@@ -6,7 +6,7 @@ Aufruf: `/api/?action=<aktion>` (GET lesend, POST mit JSON und `X-CSRF-Token` sc
 
 Spalten: **Art** – lesend, schreibend (nur POST) oder post (GET liest, POST schreibt); **Kennzeichen** – öffentlich (ohne Mitarbeiteranmeldung), Kunden-Wartung, wartungsfrei, fremde Herkunft, eigene Anmeldung (siehe [regeln/aktionen/LIESMICH.md](../../../regeln/aktionen/LIESMICH.md)).
 
-282 Aktionen in 15 Modulen.
+289 Aktionen in 15 Modulen.
 
 ## Angebot (`angebot`)
 
@@ -159,6 +159,13 @@ Spalten: **Art** – lesend, schreibend (nur POST) oder post (GET liest, POST sc
 | `qs_pruefung_save` | `qs.intern` | schreibend | – | Recht qs.freigeben | `app/api/aktionen/qs.php` |
 | `qs_stamm_save` | `qs.intern` | schreibend | – | Recht qs.verwalten | `app/api/aktionen/qs.php` |
 | `qs_start` | `qs.intern` | lesend | – | Recht qs.sehen | `app/api/aktionen/qs.php` |
+| `qs_verfahren` | `qs.intern` | lesend | – | Recht qs.verfahren_sehen | `app/api/aktionen/qs.php` |
+| `qs_verfahren_abschnitt_save` | `qs.intern` | schreibend | – | Recht qs.verfahren_bearbeiten | `app/api/aktionen/qs.php` |
+| `qs_verfahren_export` | `qs.intern` | lesend | – | Recht qs.verfahren_sehen | `app/api/aktionen/qs.php` |
+| `qs_verfahren_freigeben` | `qs.intern` | schreibend | – | Recht qs.verfahren_freigeben | `app/api/aktionen/qs.php` |
+| `qs_verfahren_ordnen` | `qs.intern` | schreibend | – | Recht qs.verfahren_bearbeiten | `app/api/aktionen/qs.php` |
+| `qs_verfahren_save` | `qs.intern` | schreibend | – | Recht qs.verfahren_bearbeiten | `app/api/aktionen/qs.php` |
+| `qs_verfahren_system_save` | `qs.intern` | schreibend | – | Recht qs.verfahren_bearbeiten | `app/api/aktionen/qs.php` |
 | `qs_version_save` | `qs.intern` | schreibend | – | Recht qs.bearbeiten | `app/api/aktionen/qs.php` |
 | `qs_version_schritt` | `qs.intern` | schreibend | – | Recht qs.bearbeiten | `app/api/aktionen/qs.php` |
 
