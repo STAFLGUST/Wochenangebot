@@ -701,6 +701,67 @@ with sync_playwright() as p:
     pg.screenshot(path=os.path.join(SH, 'rewe_einstellungen_1280.png'), full_page=True)
     ctx.close()
 
+    # ── Suche in „Meine Woche“ (Wunsch des Inhabers 12.11.2026): groß, immer über alle Listen, nur Lager mit Treffern ──
+    wa = {x['ort']: x for g in LE.call(f'rewe_woche&kw={ABFRAGE}&wer=*')[1]['woche']['gruppen'] for x in g['maerkte']}
+    check('Suche – Ausgangslage: Beispielstadt (Mark, Nordheim) beantwortet = erledigt, Neustadt (Evi) direkt', wa['Beispielstadt']['antwort'] is not None
+          and wa['Beispielstadt']['lieferweg'] == 'nordlager' and wa['Neustadt']['lieferweg'] == 'direkt' and wa['Neustadt']['zustaendigName'] == 'Evi Eins', {o: x['zustaendigName'] for o, x in wa.items()})
+    gruppen = lambda pg: pg.eval_on_selector_all('#rw-w-gruppen .rw-gruppe', 'els => els.map(e => e.dataset.gruppe)')
+    zeilen = lambda pg: pg.eval_on_selector_all('#rw-w-gruppen .rw-zeile .rw-mname', 'els => els.map(e => e.textContent.trim())')
+    ctx, pg = anmelden('lena', 'Leitung-Konto-11', '198.51.100.10', pfad=f'/module/rewe/#woche/{ABFRAGE}', ziel='#rw-w-gruppen .rw-leer')
+    breite_suche = pg.evaluate("document.querySelector('#rw-w-suche').getBoundingClientRect().width")
+    check('Suchfeld groß (≥ 500 px bei 1280), mit Lupe, × erst mit Text, Hinweis verborgen', breite_suche >= 500 and pg.is_visible('.rw-suche > .i')
+          and pg.is_hidden('#rw-w-suche-leeren') and pg.is_hidden('#rw-w-suchinfo') and 'Keine Märkte in dieser Liste' in text(pg, '#rw-w-gruppen'), breite_suche)
+    pg.fill('#rw-w-suche', 'beispielstadt'); pg.wait_for_selector('.rw-zeile:has-text("Beispielstadt")')
+    check('Leitung (eigene Liste leer): Suche findet Marks Markt in allen Listen – nur das Lager mit Treffer, „1 Treffer“, Zuständig sichtbar',
+          gruppen(pg) == ['nordlager'] and zeilen(pg) == ['Beispielstadt'] and '1 Treffer' in text(pg, '.rw-gruppe .rw-gzahl')
+          and 'Suche in allen Listen · 1 Treffer' in text(pg, '#rw-w-suchinfo') and 'Mark Markt' in text(pg, '.rw-zeile:has-text("Beispielstadt") .rw-hinweise'), (gruppen(pg), zeilen(pg)))
+    check('… erledigter Markt trotz Filter „Offen“ gefunden, Filter ruht, × sichtbar', pg.is_visible('.rw-zeile.erledigt:has-text("Beispielstadt")')
+          and pg.get_attribute('#rw-w-filter [data-f="offen"]', 'aria-pressed') == 'true' and 'ruht' in pg.get_attribute('#rw-w-filter', 'class')
+          and pg.is_visible('#rw-w-suche-leeren') and 'Alle Märkte dieser Gruppe' not in text(pg, '#rw-w-gruppen'))
+    pg.screenshot(path=os.path.join(SH, 'rewe_suche_1280.png'), full_page=True)
+    pg.fill('#rw-w-suche', 'Neustadt'); pg.wait_for_function("document.querySelector('#rw-w-suchinfo').textContent.includes('1 Treffer') && !!document.querySelector('.rw-zeile[data-id] .rw-mname') && document.querySelector('.rw-zeile .rw-mname').textContent.includes('Neustadt')")
+    check('Suche „Neustadt“: nur Direktbelieferung, Lager Nordheim ausgeblendet', gruppen(pg) == ['direkt'] and zeilen(pg) == ['Neustadt'], (gruppen(pg), zeilen(pg)))
+    pg.fill('#rw-w-suche', '40000001'); pg.wait_for_function("[...document.querySelectorAll('.rw-zeile .rw-mname')].map(e => e.textContent.trim()).join() === 'Beispielstadt'")
+    check('Suche nach der REWE-Marktnummer findet den Markt', gruppen(pg) == ['nordlager'])
+    pg.fill('#rw-w-suche', 'Stillhausen'); pg.wait_for_selector('#rw-ruhend[open] .rw-mname:has-text("Stillhausen")')
+    check('ruhender Markt: nur „Ruhende Märkte“ (aufgeklappt, 1 Treffer), keine Lager', gruppen(pg) == [] and '1 Treffer' in text(pg, '#rw-ruhend summary'))
+    pg.fill('#rw-w-suche', 'Gibtsnichtdorf'); pg.wait_for_selector('#rw-w-keintreffer')
+    check('kein Treffer: Hinweis „Kein Markt gefunden“, keine Lager', 'Kein Markt gefunden' in text(pg, '#rw-w-keintreffer') and gruppen(pg) == [] and pg.locator('#rw-ruhend').count() == 0
+          and 'Suche in allen Listen · 0 Treffer' in text(pg, '#rw-w-suchinfo'))
+    pg.click('#rw-w-suche-leeren'); pg.wait_for_selector('#rw-w-suchinfo', state='hidden')
+    check('× leert: eigene (leere) Liste wieder, Filter wieder aktiv, Fokus im Feld', pg.input_value('#rw-w-suche') == '' and 'Keine Märkte in dieser Liste' in text(pg, '#rw-w-gruppen')
+          and 'ruht' not in pg.get_attribute('#rw-w-filter', 'class') and pg.evaluate("document.activeElement.id") == 'rw-w-suche' and pg.is_hidden('#rw-w-suche-leeren'))
+    pg.select_option('#rw-w-wer', ids['mark']); pg.wait_for_function("document.querySelector('#rw-w-titel').textContent.startsWith('Mark Markt')")
+    pg.wait_for_selector('.rw-gruppe')
+    vor = zeilen(pg)
+    pg.fill('#rw-w-suche', 'neustadt'); pg.wait_for_function("[...document.querySelectorAll('.rw-zeile .rw-mname')].map(e => e.textContent.trim()).join() === 'Neustadt'")
+    check('Liste von Mark gewählt: Suche findet trotzdem Evis Markt (alle Listen)', gruppen(pg) == ['direkt'] and 'Mark Markt' in text(pg, '#rw-w-titel'))
+    pg.fill('#rw-w-suche', ''); pg.wait_for_selector('#rw-w-suchinfo', state='hidden')
+    check('Suchfeld geleert: Liste von Mark mit Filter „Offen“ wie vorher (erledigte Beispielstadt nicht sichtbar)', zeilen(pg) == vor and 'Beispielstadt' not in vor
+          and gruppen(pg) == ['nordlager'], (vor, zeilen(pg)))
+    ctx.close()
+
+    ctx, pg = anmelden('mark', 'Laden-Konto-22', '198.51.100.11', pfad=f'/module/rewe/#woche/{ABFRAGE}', ziel='.rw-gruppe')
+    anfragen = []
+    pg.on('request', lambda r: anfragen.append(r.url) if 'rewe_woche' in r.url else None)
+    pg.fill('#rw-w-suche', 'Neustadt'); pg.wait_for_selector('#rw-w-keintreffer')
+    check('ohne „alle Listen“: Suche nur in den eigenen Märkten – Evis Markt nicht gefunden, kein Abruf anderer Listen',
+          'Suche in Ihren Märkten · 0 Treffer' in text(pg, '#rw-w-suchinfo') and not any('wer=' in u for u in anfragen), anfragen)
+    pg.fill('#rw-w-suche', 'Beispielstadt'); pg.wait_for_selector('.rw-zeile.erledigt:has-text("Beispielstadt")')
+    check('ohne „alle Listen“: eigener erledigter Markt trotz „Offen“ gefunden', zeilen(pg) == ['Beispielstadt'] and gruppen(pg) == ['nordlager'])
+    pg.keyboard.press('Escape'); pg.wait_for_selector('#rw-w-suchinfo', state='hidden')
+    check('Escape leert die Suche, Filter „Offen“ gilt wieder', 'Beispielstadt' not in zeilen(pg) and pg.input_value('#rw-w-suche') == '')
+    ctx.close()
+
+    for thema in ('light', 'dark'):
+        ctx, pg = anmelden('lena', 'Leitung-Konto-11', '198.51.100.10', 390, thema, 844, pfad=f'/module/rewe/#woche/{ABFRAGE}', ziel='#rw-w-gruppen .rw-leer')
+        pg.fill('#rw-w-suche', 'Beispielstadt'); pg.wait_for_selector('.rw-zeile:has-text("Beispielstadt")')
+        r_ = pg.evaluate("(() => { const r = document.querySelector('#rw-w-suche').getBoundingClientRect(); return [r.width, r.left, innerWidth]; })()")
+        check(f'390px {thema}: Suchfeld in voller Breite, Treffer ohne waagerechtes Scrollen', r_[0] >= r_[2] - 2 * 16 - 2 and r_[1] <= 17
+              and pg.evaluate('document.documentElement.scrollWidth <= window.innerWidth + 1'), r_)
+        pg.screenshot(path=os.path.join(SH, f'rewe_suche_390_{thema}.png'), full_page=True)
+        ctx.close()
+
     for breite, thema in ((390, 'light'), (390, 'dark'), (1280, 'dark')):
         ctx, pg = anmelden('mark', 'Laden-Konto-22', '198.51.100.11', breite, thema, 844 if breite < 500 else 900, pfad=f'/module/rewe/#woche/{WOCHE}')
         pg.wait_for_selector('.rw-gruppe')

@@ -608,3 +608,22 @@ body.rw.r .rw-rund:hover { background: var(--r-flaeche-2); }
 .rw-neu .rw-nreihe{display:flex;flex-wrap:wrap;gap:6px}
 .rw-neu select{flex:1 1 130px;height:34px}
 .rw-neu .rw-phinweis{margin:0}
+
+/* Meine Woche: Suche groß (Wunsch des Inhabers 12.11.2026) – eigene Zeile, das Suchfeld füllt den Platz, Listenwahl und
+   Filter bleiben kompakt; Lupe links, × zum Leeren rechts; bei aktiver Suche ruht der Filter (blass) */
+.rw-wfilter{flex:1 1 100%;flex-wrap:nowrap}
+.rw-wfilter select.rw-eingabe{flex:0 1 auto;min-width:0;max-width:240px;height:42px}
+.rw-wfilter .rw-seg{flex:none}
+.rw-suche{position:relative;flex:1 1 auto;min-width:0;display:flex;align-items:center}
+.rw-suche>.i{position:absolute;left:13px;color:var(--rw-muted);pointer-events:none}
+.rw-filter .rw-suche .rw-eingabe{width:100%;min-width:0;height:42px;padding:0 44px 0 40px;font-size:15px;border-radius:12px}
+.rw-suche input::-webkit-search-cancel-button{-webkit-appearance:none;appearance:none}
+.rw-suche-leeren{position:absolute;right:5px;width:32px;height:32px;border:0;border-radius:50%;background:var(--rw-chip);color:var(--rw-text);font:inherit;font-size:20px;line-height:1;cursor:pointer}
+.rw-suche-leeren:hover{color:var(--rw-accent)}
+.rw-seg.ruht{opacity:.5}
+.rw-suchinfo{flex:1 1 100%;margin:-6px 0 0;color:var(--rw-muted);font-size:12.5px;font-weight:600}
+@media(max-width:560px){
+  .rw-wfilter{flex-wrap:wrap}
+  .rw-suche{flex:1 1 100%;order:-1}
+  .rw-wfilter select.rw-eingabe{flex:1 1 140px;max-width:none}
+}
