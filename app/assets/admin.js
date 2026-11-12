@@ -215,14 +215,49 @@
     const a = (published.meta && published.meta.werbung) || {}, b = model.meta.werbung || {};
     return [...new Set([...Object.keys(a), ...Object.keys(b)])].filter((oid) => knownOffer(oid) && !C.sameModel(a[oid], b[oid]));
   };
-  /* Weicht der Aufbau (Reihenfolge der Gruppen, Bereich je Gruppe; gilt für alle Angebote) von der veröffentlichten Fassung ab?
-     Verglichen werden nur Gruppen mit Artikeln, die es veröffentlicht und im Entwurf mit gleichem Namen gibt. */
+  /* Weicht der Aufbau (Reihenfolge der Gruppen, Bereich je Gruppe, Gruppe und Reihenfolge der Artikel; gilt für alle Angebote)
+     von der veröffentlichten Fassung ab? Verglichen werden nur Gruppen mit Artikeln, die es veröffentlicht und im Entwurf mit
+     gleichem Namen gibt, und Artikel, die es in beiden gibt (neue/entfernte zeigen „Neu“/„Entfernt“). */
   function aufbauGeaendert() {
     if (!published || !model) return false;
     const pg = new Map(published.groups.map((g) => [g.id, g.name])), used = new Set(model.items.map((i) => i.groupId));
     const mg = new Map(model.groups.filter((g) => used.has(g.id)).map((g) => [g.id, g.name]));
     const sig = (gs, other) => gs.filter((g) => other.get(g.id) === g.name).map((g) => g.id + '\u0001' + (g.section || '')).join('\u0002');
-    return sig(published.groups, mg) !== sig(model.groups.filter((g) => used.has(g.id)), pg);
+    if (sig(published.groups, mg) !== sig(model.groups.filter((g) => used.has(g.id)), pg)) return true;
+    // Artikel in Angebotsreihenfolge (Gruppe, dann Stelle – wie OfferCore.enrichOffer)
+    const reihe = (m, other) => {
+      const gi = new Map(m.groups.map((g, i) => [g.id, i]));
+      return m.items.map((it, i) => ({ it, i })).filter((x) => other.has(x.it.id))
+        .sort((a, b) => (gi.get(a.it.groupId) ?? 1e9) - (gi.get(b.it.groupId) ?? 1e9) || a.i - b.i).map((x) => x.it.id + '@' + x.it.groupId).join('\u0002');
+    };
+    return reihe(published, new Set(model.items.map((i) => i.id))) !== reihe(model, new Set(published.items.map((i) => i.id)));
+  }
+  /* Artikel neu ordnen: ziel = Map(Gruppen-ID → Artikel-IDs in gewünschter Reihenfolge) für die „Anker“ (z. B. alle Artikel des
+     gewählten Angebots); jeder Anker kommt in die Gruppe aus ziel. Andere Artikel bleiben in ihrer Gruppe hinter dem letzten Anker
+     davor, der dort bleibt. Geändert werden nur die Plätze der Artikel dieser Gruppen in model.items (je Gruppe zählt nur die
+     Reihenfolge, OfferCore.enrichOffer). Rückgabe: false, wenn ziel nicht aufgeht (dann bleibt alles unverändert). */
+  function artikelOrdnen(ziel) {
+    const zu = new Map(), byId = new Map(model.items.map((it) => [it.id, it]));
+    for (const [g, ids] of ziel) for (const id of ids) { if (!byId.has(id) || zu.has(id)) return false; zu.set(id, g); }
+    const kette = new Map(), vorn = new Map(), letzter = new Map();
+    for (const it of model.items) {
+      if (zu.has(it.id)) { if (zu.get(it.id) === it.groupId) letzter.set(it.groupId, it.id); continue; }
+      const a = letzter.get(it.groupId), m = a ? kette : vorn, k = a || it.groupId;
+      if (!m.has(k)) m.set(k, []);
+      m.get(k).push(it);
+    }
+    const gruppe = (it) => (zu.has(it.id) ? zu.get(it.id) : it.groupId);
+    const neu = model.items.slice();
+    for (const [g, ids] of ziel) {
+      const plaetze = [];
+      model.items.forEach((it, i) => { if (gruppe(it) === g) plaetze.push(i); });
+      const folge = [...(vorn.get(g) || []), ...ids.flatMap((id) => [byId.get(id), ...(kette.get(id) || [])])];
+      if (folge.length !== plaetze.length) return false;
+      plaetze.forEach((p, k) => { neu[p] = folge[k]; });
+    }
+    for (const [id, g] of zu) byId.get(id).groupId = g;
+    model.items.splice(0, model.items.length, ...neu);
+    return true;
   }
   /* Gruppen neu ordnen: „anker“ (IDs) kommen in die Reihenfolge „reihe“; jede andere Gruppe bleibt hinter ihrem Anker davor
      (Gruppen, die im gewählten Angebot nicht vorkommen, wandern mit ihrem Vorgänger) */
@@ -2261,7 +2296,7 @@
       const wc = wChanges();
       if (wc.length) body += sec(`Werbung (${wc.length})`, `<ul class="plist">${wc.map((oid) => { const w = werbungVon(oid); return `<li><span><b class="ob-tag">${esc(offerShort(oid))}</b> ${w ? esc(werbBloecke(w).map((b, i) => b.titel || (i ? window.WA.werbung.TITEL2 : window.WA.werbung.TITEL)).join(' · ')) : 'Werbung beendet'}</span><span>${w ? esc(plural(werbArtikelZahl(w), 'Artikel', 'Artikel')) : ''}</span>${rv('werbung', oid)}</li>`; }).join('')}</ul>`);
       const ab = aufbauGeaendert();   // Reihenfolge/Bereiche (Knopf „Editor“, ↑/↓); mit Angebotskategorien ordnen die Stammdaten
-      if (ab) body += sec('Aufbau', `<ul class="plist"><li><span>Reihenfolge der Bereiche und Gruppen geändert</span><span>gilt für alle Angebote</span>${kategorienAktiv() ? '' : rv('aufbau', 'aufbau')}</li></ul>`);
+      if (ab) body += sec('Aufbau', `<ul class="plist"><li><span>Reihenfolge der Bereiche, Gruppen oder Artikel geändert</span><span>gilt für alle Angebote</span>${kategorienAktiv() ? '' : rv('aufbau', 'aufbau')}</li></ul>`);
       if (!metaChanged() && !diff.priceChanged.length && !diff.added.length && !diff.changed.length && !diff.removed.length && !vc.length && !sc.length && !wc.length && !ab) body += '<p class="notice">Keine Änderungen gegenüber der veröffentlichten Fassung.</p>';
     }
     if (v.warnings.length) body += `<p class="hint">${v.warnings.map(esc).join('<br>')}</p>`;
@@ -2284,6 +2319,10 @@
       const ordnung = gruppenOrdnen(new Set(pub.map((g) => g.id)), pub.map((g) => g.id));
       model.groups.splice(0, model.groups.length, ...ordnung);
       for (const g of pub) gById(g.id).section = g.section || '';
+      // Artikel, die es in beiden gibt: wieder in ihrer veröffentlichten Gruppe (falls vorhanden) und Reihenfolge
+      const da = new Set(model.items.map((i) => i.id)), ziel = new Map();
+      for (const it of published.items) if (da.has(it.id) && gById(it.groupId)) { if (!ziel.has(it.groupId)) ziel.set(it.groupId, []); ziel.get(it.groupId).push(it.id); }
+      artikelOrdnen(ziel);
       return;
     }
     if (kind === 'meta') { const w = model.meta.werbung; model.meta = clone(published.meta); if (w) model.meta.werbung = w; else delete model.meta.werbung; return; }   // Werbung getrennt
@@ -2347,7 +2386,7 @@
     const it = model.items.find((x) => x.id === id) || published.items.find((x) => x.id === id);
     const nm = it ? `„${esc(it.code ? it.code + ' · ' : '')}${esc(it.name)}“` : '';
     const o = diff.before[id];
-    if (kind === 'aufbau') return ['Aufbau zurücknehmen?', 'Reihenfolge und Bereiche der Gruppen werden wieder auf den veröffentlichten Stand gesetzt (gilt für alle Angebote).'];
+    if (kind === 'aufbau') return ['Aufbau zurücknehmen?', 'Reihenfolge und Bereiche der Gruppen sowie Gruppe und Reihenfolge der Artikel werden wieder auf den veröffentlichten Stand gesetzt (gilt für alle Angebote).'];
     if (kind === 'werbung') return ['Werbung zurücknehmen?', `Die Werbung im Angebot <strong>${esc(offerName(id))}</strong> wird wieder auf den veröffentlichten Stand gesetzt.`];
     if (kind === 'meta') return ['Kopfdaten zurücksetzen?', `Kalenderwoche und Hinweis werden wieder auf den veröffentlichten Stand gesetzt (KW ${esc(published.meta.week)}/${esc(published.meta.year)}).`];
     if (kind === 'price') return ['Preisänderung zurücknehmen?', `Der Preis von ${nm} wird von <strong>${esc(priceShort(it.price))}</strong> wieder auf <strong>${esc(priceShort(o.price))}</strong> gesetzt.`];
@@ -4182,12 +4221,13 @@
   $('#btn-werbung').addEventListener('click', openWerbung);
 
   /* ======================= Aufbau des Angebots (Knopf „Editor“, Fenster app/module/angebot/aufbau.js) =======================
-     Reihenfolge der Gruppen und ihr Bereich (g.section) gelten für alle Angebote – wie bei ↑/↓ an den Gruppen. Gespeichert
-     wird über den Entwurf (save_draft mit Revision, Recht angebot.bearbeiten auf dem Server). Ohne eigenen Aufbau (Kundenangebot
-     „folgt dem Wochenangebot“, Angebotskategorien der Stammdaten) zeigt das Fenster den Aufbau nur an. */
+     Reihenfolge der Gruppen und ihr Bereich (g.section) sowie Gruppe (it.groupId) und Reihenfolge der Artikel (Stelle in
+     model.items) gelten für alle Angebote – wie ↑/↓ an den Gruppen und „Angebotsgruppe“/„Nach oben“ im Artikelfenster.
+     Gespeichert wird über den Entwurf (save_draft mit Revision, Recht angebot.bearbeiten auf dem Server). Kundenangebot „folgt
+     dem Wochenangebot“: nur ansehen; mit Angebotskategorien ordnen die Stammdaten Bereiche und Gruppen, Artikel bleiben änderbar. */
   function aufbauSperre() {
-    if (kategorienAktiv()) return { art: 'kategorien', text: 'Die Reihenfolge kommt aus den Angebotskategorien der Stammdaten. Ändern Sie sie unter Verwaltung → Angebotskategorien.' };
     if (followsStd(curOffer)) return { art: 'folgt', text: `„${offerName(curOffer)}“ folgt dem Wochenangebot und übernimmt dessen Aufbau. Ändern Sie die Reihenfolge im Wochenangebot.` };
+    if (kategorienAktiv()) return { art: 'kategorien', text: 'Bereiche und Gruppen ordnen die Angebotskategorien der Stammdaten (Verwaltung → Angebotskategorien). Die Artikel lassen sich hier verschieben.' };
     return null;
   }
   /* Knopf „Editor“: nur mit Bearbeitungsrecht; ohne eigenen Aufbau gekennzeichnet (Fenster nur zum Ansehen) */
@@ -4195,19 +4235,22 @@
     const b = $('#btn-aufbau'), s = !ro && model ? aufbauSperre() : null;
     if (!b) return;
     b.hidden = ro || !model;   // nur wer das Angebot bearbeiten darf (der Server prüft beim Speichern dasselbe Recht)
-    b.classList.toggle('gesperrt', !!s);
-    b.title = s ? 'Nur ansehen: ' + s.text : 'Aufbau des Angebots: Reihenfolge der Bereiche und Gruppen festlegen';
+    b.classList.toggle('gesperrt', !!s && s.art === 'folgt');
+    b.title = s ? (s.art === 'folgt' ? 'Nur ansehen: ' : '') + s.text : 'Aufbau des Angebots: Reihenfolge der Bereiche, Gruppen und Artikel festlegen';
   }
-  /* Gruppen des gewählten Angebots in Angebotsreihenfolge; stand = Reihenfolge und Bereiche (Vergleich beim Übernehmen) */
+  /* Gruppen des gewählten Angebots in Angebotsreihenfolge mit ihren Artikeln (nur die dieses Angebots); stand = Reihenfolge,
+     Bereiche und Artikel je Gruppe (Vergleich beim Übernehmen) */
   function aufbauDaten() {
-    const n = new Map();
-    for (const i of model.items) if (inOffer(i, curOffer)) n.set(i.groupId, (n.get(i.groupId) || 0) + 1);
-    const gruppen = sichtbareGruppen().map((g) => ({ id: g.id, name: g.name, bereich: g.section || '', n: n.get(g.id) || 0 }));
-    return { angebot: offerName(curOffer), std: curOffer === OSTD, sperre: aufbauSperre(), gruppen, stand: JSON.stringify(gruppen.map((g) => [g.id, g.bereich])) };
+    const art = new Map();
+    for (const it of model.items) if (inOffer(it, curOffer)) { if (!art.has(it.groupId)) art.set(it.groupId, []); art.get(it.groupId).push({ id: it.id, code: it.code || '', name: nameIn(it, curOffer) }); }
+    const gruppen = sichtbareGruppen().map((g) => ({ id: g.id, name: g.name, bereich: g.section || '', n: (art.get(g.id) || []).length, artikel: art.get(g.id) || [] }));
+    return { angebot: offerName(curOffer), std: curOffer === OSTD, sperre: aufbauSperre(), gruppen,
+      stand: JSON.stringify(gruppen.map((g) => [g.id, g.bereich, g.artikel.map((a) => a.id)])) };
   }
-  /* neu = [{id, bereich}] in der gewünschten Reihenfolge (alle Gruppen des Angebots); stand = aufbauDaten().stand beim Öffnen.
-     Erst eigene Speicherungen abwarten und den Stand des Servers holen: hat jemand anderes den Aufbau inzwischen geändert,
-     wird nichts übernommen ({konflikt, wer, daten}). Sonst wie jede Änderung: Rückgängig, Entwurf sofort speichern. */
+  /* neu = [{id, bereich, artikel: [Artikel-IDs]}] in der gewünschten Reihenfolge (alle Gruppen und Artikel des Angebots);
+     stand = aufbauDaten().stand beim Öffnen. Erst eigene Speicherungen abwarten und den Stand des Servers holen: hat jemand
+     anderes den Aufbau inzwischen geändert, wird nichts übernommen ({konflikt, wer, daten}). Sonst wie jede Änderung:
+     Rückgängig, Entwurf sofort speichern (Notiz „aufbau“ fürs Protokoll). */
   async function aufbauUebernehmen(neu, stand) {
     if (ro || !model) return { fehler: 'Sie dürfen dieses Angebot nicht bearbeiten.' };
     let wer = '';
@@ -4220,15 +4263,27 @@
       if (d.revision !== revision) await pullRemote();
     } catch (e) { return { fehler: e.message || String(e) }; }
     if (saveError) return { fehler: 'Der Entwurf ist nicht gespeichert: ' + saveError };
-    const jetzt = aufbauDaten();
-    if (jetzt.sperre || jetzt.stand !== stand) return { konflikt: true, wer, daten: jetzt };
-    const ids = new Set(jetzt.gruppen.map((g) => g.id)), reihe = (neu || []).map((x) => x && x.id);
-    if (reihe.length !== ids.size || new Set(reihe).size !== ids.size || !reihe.every((id) => ids.has(id))) return { fehler: 'Die Reihenfolge ist unvollständig – bitte das Fenster neu öffnen.' };
-    const vorher = JSON.stringify(model.groups.map((g) => [g.id, g.section || '']));
-    const ordnung = gruppenOrdnen(ids, reihe);
+    const jetzt = aufbauDaten(), sp = jetzt.sperre;
+    if (sp && sp.art === 'folgt') return { konflikt: true, grund: 'folgt', daten: jetzt };
+    if (jetzt.stand !== stand) return { konflikt: true, grund: 'stand', wer, daten: jetzt };
+    neu = Array.isArray(neu) ? neu : [];
+    const ids = new Set(jetzt.gruppen.map((g) => g.id)), reihe = neu.map((x) => x && x.id);
+    const alleArt = new Set(jetzt.gruppen.flatMap((g) => g.artikel.map((a) => a.id))), artNeu = neu.flatMap((x) => (Array.isArray(x.artikel) ? x.artikel : []));
+    if (reihe.length !== ids.size || new Set(reihe).size !== ids.size || !reihe.every((id) => ids.has(id))
+      || artNeu.length !== alleArt.size || new Set(artNeu).size !== alleArt.size || !artNeu.every((id) => alleArt.has(id))) return { fehler: 'Der Aufbau ist unvollständig – bitte das Fenster neu öffnen.' };
     const bereich = new Map(neu.map((x) => [x.id, C.clean(x.bereich || '')]));
-    if (JSON.stringify(ordnung.map((g) => [g.id, bereich.has(g.id) ? bereich.get(g.id) : g.section || ''])) === vorher) return { ok: true, unveraendert: true };
-    pushUndo();
+    const ordnung = gruppenOrdnen(ids, reihe);
+    const gruppenNeu = JSON.stringify(ordnung.map((g) => [g.id, bereich.has(g.id) ? bereich.get(g.id) : g.section || '']));
+    const gruppenAlt = JSON.stringify(model.groups.map((g) => [g.id, g.section || '']));
+    if (sp && sp.art === 'kategorien' && gruppenNeu !== gruppenAlt) return { konflikt: true, grund: 'kategorien', daten: jetzt };   // Gruppen ordnen dann die Stammdaten
+    const artAlt = new Map(jetzt.gruppen.map((g) => [g.id, JSON.stringify(g.artikel.map((a) => a.id))]));
+    const artGeaendert = neu.some((x) => JSON.stringify(x.artikel) !== artAlt.get(x.id));
+    if (gruppenNeu === gruppenAlt && !artGeaendert) return { ok: true, unveraendert: true };
+    const vorher = JSON.stringify(model);
+    if (artGeaendert && !artikelOrdnen(new Map(neu.map((x) => [x.id, x.artikel])))) return { fehler: 'Die Artikel ließen sich nicht ordnen – bitte das Fenster neu öffnen.' };
+    undoStack.push(vorher);
+    if (undoStack.length > 50) undoStack.shift();
+    $('#btn-undo').disabled = false;
     model.groups.splice(0, model.groups.length, ...ordnung);
     for (const g of model.groups) if (bereich.has(g.id)) g.section = bereich.get(g.id);
     saveNote = { type: 'aufbau' };

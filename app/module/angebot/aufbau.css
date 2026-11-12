@@ -1,6 +1,7 @@
 /* STAFL-Plattform · Angebot · Knopf „Editor“ in der Werkzeugleiste von „Angebot bearbeiten“ und Fenster „Aufbau des
    Angebots“ (app/module/angebot/aufbau.js): hellblau im Blauton des Kennzeichens „eigene“ (--c-frozen aus app.css), hell und
-   dunkel; Liste der Bereiche mit eingerückten Gruppen, Griff zum Ziehen, Pfeile ↑/↓ (am Handy 36 px Tippfläche). */
+   dunkel; Liste der Bereiche mit eingerückten Gruppen, aufklappbar mit ihren Artikeln, Griff zum Ziehen, Pfeile ↑/↓ und Auswahl
+   „In Gruppe …“ (am Handy 36 px Tippfläche, Auswahl in eigener Zeile). */
 :root { --abf: var(--c-frozen); --abf-bg: var(--c-frozen-bg); --abf-line: #a9c4e0; --abf-bg-2: #d9e6f4; }
 @media screen and (prefers-color-scheme: dark) { :root:not([data-theme="light"]) { --abf-line: rgba(138, 184, 228, .42); --abf-bg-2: rgba(138, 184, 228, .22); } }
 @media screen { :root[data-theme="dark"] { --abf-line: rgba(138, 184, 228, .42); --abf-bg-2: rgba(138, 184, 228, .22); } }
@@ -33,29 +34,56 @@
 .abf-ber.ohne .abf-bk { background: var(--surface-2); border-bottom-color: var(--line); }
 .abf-ber.ohne .abf-bt b { color: var(--text-2); font-style: italic; text-transform: none; letter-spacing: 0; font-size: 13.5px; }
 .abf-gr { padding: 2px 0; min-height: 10px; }
-.abf-g { display: flex; align-items: center; gap: 6px; min-height: 44px; padding: 2px 6px 2px 26px; background: var(--surface); }
-.abf-liste.nur-ansehen .abf-g { padding-left: 34px; }
+.abf-g { background: var(--surface); }
+.abf-gk { display: flex; align-items: center; gap: 6px; min-height: 44px; padding: 2px 6px 2px 26px; }
+.abf-liste.nur-ansehen .abf-gk { padding-left: 34px; }
 .abf-g + .abf-g { border-top: 1px solid var(--line); }
+.abf-auf { flex: 1 1 auto; min-width: 0; display: flex; align-items: center; gap: 6px; min-height: 40px; padding: 2px 4px; border: 0; border-radius: 8px;
+  background: none; color: inherit; font: inherit; text-align: left; cursor: pointer; }
+.abf-auf:hover { background: var(--surface-2); }
+.abf-auf:focus-visible { outline: none; box-shadow: var(--focus); }
+.abf-chev { flex: none; color: var(--muted); transform: rotate(-90deg); transition: transform .15s; }
+.abf-g.offen .abf-chev { transform: none; color: var(--abf); }
 .abf-gt { flex: 1 1 auto; min-width: 0; display: flex; align-items: baseline; justify-content: space-between; gap: 4px 12px; }
 .abf-gn { min-width: 0; font-size: 14px; line-height: 1.35; overflow-wrap: anywhere; }
 .abf-z { flex: none; font-size: 12.5px; color: var(--muted); font-variant-numeric: tabular-nums; }
 .abf-neu { display: inline-block; margin-left: 8px; padding: 0 7px; border: 1px solid var(--abf-line); border-radius: 99px; background: var(--abf-bg); color: var(--abf);
   font-size: 10.5px; font-weight: 700; letter-spacing: .04em; text-transform: uppercase; white-space: nowrap; vertical-align: 1px; }
 .abf-btns { flex: none; display: inline-flex; gap: 2px; }
+/* Artikel einer aufgeklappten Gruppe */
+.abf-art { list-style: none; margin: 0 8px 8px 60px; padding: 0; border-left: 2px solid var(--abf-line); }
+.abf-liste.nur-ansehen .abf-art { margin-left: 44px; }
+.abf-a { display: flex; align-items: center; gap: 6px; min-height: 40px; padding: 2px 4px 2px 6px; background: var(--surface); }
+.abf-a + .abf-a { border-top: 1px dashed var(--line); }
+.abf-a.abf-leer { color: var(--muted); font-size: 13px; font-style: italic; padding-left: 12px; }
+.abf-an { flex: 1 1 auto; min-width: 0; display: flex; align-items: baseline; flex-wrap: wrap; gap: 2px 10px; font-size: 13.5px; line-height: 1.35; }
+.abf-nr { flex: none; min-width: 44px; font-family: var(--mono); font-size: 12px; color: var(--text-2); font-variant-numeric: tabular-nums; }
+.abf-ab { min-width: 0; overflow-wrap: anywhere; }
+.abf-zu { flex: none; width: 150px; min-width: 0; max-width: 100%; height: 32px; padding: 0 6px; border: 1px solid var(--line); border-radius: 8px; background: var(--surface);
+  color: var(--text-2); font: inherit; font-size: 12.5px; cursor: pointer; }
+.abf-zu:hover { border-color: var(--line-strong); }
+.abf-zu:focus-visible { outline: none; border-color: var(--abf); box-shadow: var(--focus); }
+.abf-werkzeug { display: flex; justify-content: flex-end; margin: -4px 0 8px; }
+.abf-g.abf-ziel > .abf-gk { background: var(--abf-bg-2); box-shadow: inset 0 0 0 2px var(--abf); border-radius: 10px; }
+.abf-a.zieht { border-radius: 8px; }
 #dlg-aufbau .abf-btns .ibtn { width: 36px; height: 36px; }
 .abf-griff { flex: none; display: grid; place-items: center; width: 28px; height: 36px; border-radius: 8px; color: var(--muted); cursor: grab; touch-action: none; user-select: none; -webkit-user-select: none; }
 .abf-griff:hover { background: var(--surface-3); color: var(--text); }
 .abf-liste.beim-ziehen { user-select: none; -webkit-user-select: none; cursor: grabbing; }
 .abf-liste.beim-ziehen .abf-griff { cursor: grabbing; }
-.abf-ber.zieht, .abf-g.zieht { position: relative; z-index: 1; box-shadow: 0 8px 24px rgba(0, 0, 0, .18); outline: 2px solid var(--abf); outline-offset: -2px; }
+.abf-ber.zieht, .abf-g.zieht, .abf-a.zieht { position: relative; z-index: 1; box-shadow: 0 8px 24px rgba(0, 0, 0, .18); outline: 2px solid var(--abf); outline-offset: -2px; }
 .abf-g.zieht { border-radius: 10px; }
-.abf-gezogen, .abf-gezogen > .abf-bk { animation: abf-blink 1.5s ease-out; }
+.abf-gezogen, .abf-gezogen > .abf-bk, .abf-gezogen > .abf-gk { animation: abf-blink 1.5s ease-out; }
 @keyframes abf-blink { from { background: var(--abf-bg-2); } }
-.abf-stand { font-size: 13px; color: var(--muted); }
+.abf-stand { flex: 1 1 0; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 13px; color: var(--muted); }
 .abf-stand.geaendert { color: var(--abf); font-weight: 600; }
 @media (max-width: 640px) {
-  .abf-g { padding-left: 14px; }
+  .abf-gk { padding-left: 10px; }
   .abf-gt { flex-direction: column; align-items: flex-start; }
+  .abf-art { margin-left: 22px; margin-right: 4px; }
+  .abf-a { flex-wrap: wrap; padding: 4px 2px 6px 4px; }
+  .abf-an { flex-basis: calc(100% - 120px); }
+  .abf-a .abf-zu { order: 3; flex: 0 0 calc(100% - 40px); width: auto; height: 36px; margin-left: 34px; }
   .abf-stand { display: none; }
 }
-@media (prefers-reduced-motion: reduce) { .abf-gezogen, .abf-gezogen > .abf-bk { animation: none; } }
+@media (prefers-reduced-motion: reduce) { .abf-gezogen, .abf-gezogen > .abf-bk, .abf-gezogen > .abf-gk { animation: none; } .abf-chev { transition: none; } }
