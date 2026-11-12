@@ -652,6 +652,15 @@ with sync_playwright() as p:
         except Exception:
             return False
 
+    def tabelle_buendig(pg, sel):
+        """Zeilen einer Tabelle, deren Zellen nicht bündig sind: jede Zelle bleibt Tabellenzelle (display: table-cell),
+        Ober- und Unterkante aller Zellen einer Zeile liegen gleich (± 1 px) – sonst läuft die Trennlinie versetzt."""
+        return pg.evaluate("""(sel) => [...document.querySelectorAll(sel + ' tbody tr')].filter(tr => tr.offsetParent).map((tr, i) => {
+            const z = [...tr.children], r = z.map(td => td.getBoundingClientRect());
+            const unten = r.map(x => x.bottom), oben = r.map(x => x.top);
+            return [i, Math.round(Math.max(...unten) - Math.min(...unten)), Math.round(Math.max(...oben) - Math.min(...oben)), z.filter(td => getComputedStyle(td).display !== 'table-cell').length];
+          }).filter(([, u, o, n]) => u > 1 || o > 1 || n > 0)""", sel)
+
     def anmelden(user, pw, ip, breite=1280, thema='light', hoehe=900, ziel='#rw-app:not([hidden])', pfad='/module/rewe/'):
         ctx = br.new_context(viewport={'width': breite, 'height': hoehe}, extra_http_headers={'X-Forwarded-For': ip}, locale='de-DE', timezone_id='Europe/Berlin',
                              color_scheme=thema, accept_downloads=True)
@@ -822,6 +831,9 @@ with sync_playwright() as p:
     # Marktakte mit Notiz
     pg.click('#rw-tabs [data-tab="maerkte"]'); pg.wait_for_selector('#rw-m-tabelle tbody tr')
     check('Märkte: nur eigene (2)', pg.locator('#rw-m-tabelle tbody tr').count() == 2 and pg.is_hidden('#rw-m-neu'))
+    check('Märkte-Tabelle (1280 px): Zeilentrenner bündig – alle Zellen Tabellenzellen, gleiche Ober- und Unterkante (mit und ohne Dauerauftrag)',
+          tabelle_buendig(pg, '#rw-m-tabelle') == [] and 'alle 2 Wochen' in text(pg, '#rw-m-tabelle tr:has-text("Beispielstadt") td[data-label="Dauerauftrag"]')
+          and text(pg, '#rw-m-tabelle tr:has-text("Musterdorf") td[data-label="Dauerauftrag"]') == '—', tabelle_buendig(pg, '#rw-m-tabelle'))
     pg.click('#rw-m-tabelle tr:has-text("Beispielstadt")'); pg.wait_for_selector('.rw-heat')
     check('Marktakte: Adresse #markt/<id>, Jahre im Verlauf, Kennzahlen, Ansprechpartner', '#markt/' in pg.url and pg.locator('.rw-heat .jahr').count() >= 2
           and 'Frau Test' in text(pg, '#rw-akte') and 'Nur gereifte Ware' in text(pg, '#rw-akte'))
@@ -913,6 +925,7 @@ with sync_playwright() as p:
     check('Leitung: alle Reiter, Listenwahl', pg.is_visible('#rw-tabs [data-tab="zuweisung"]') and pg.is_visible('#rw-tabs [data-tab="abschluss"]') and pg.is_visible('#rw-w-wer'))
     pg.select_option('#rw-w-wer', '*'); pg.wait_for_function("document.querySelector('#rw-w-titel').textContent.startsWith('Alle Listen')")
     pg.click('#rw-tabs [data-tab="zuweisung"]'); pg.wait_for_selector('#rw-z-tabelle tbody tr [data-wahl]')
+    check('Zuweisung: Tabelle mit bündigen Zeilentrennern', tabelle_buendig(pg, '#rw-z-tabelle') == [], tabelle_buendig(pg, '#rw-z-tabelle'))
     check('Zuweisung: Team-Karten, alle Märkte', pg.locator('#rw-z-personen [data-person]').count() >= 4 and pg.locator('#rw-z-tabelle [data-wahl]').count() == 4)
     pg.check('#rw-z-tabelle tr:has-text("Neustadt") [data-wahl]'); pg.wait_for_selector('#rw-z-bulk:not([hidden])')
     pg.select_option('#rw-z-nutzer', ids['evi']); pg.fill('#rw-z-ab', ABFRAGE); pg.click('#rw-z-los')
@@ -936,6 +949,7 @@ with sync_playwright() as p:
           and 'ist jetzt im Team' in text(pg, '#rw-toast') and person('Pia Plus').get('ergaenzt') is True)
     pg.screenshot(path=os.path.join(SH, 'rewe_team_1280.png'), full_page=True)
     pg.goto(B + f'/module/rewe/#abschluss/{WOCHE}'); pg.wait_for_selector('.rw-schritte')
+    check('Wochenabschluss: Vorschau-Tabelle mit bündigen Zeilentrennern', tabelle_buendig(pg, '#rw-a-inhalt .rw-tabelle') == [], tabelle_buendig(pg, '#rw-a-inhalt .rw-tabelle'))
     check('Wochenabschluss: Schritte, Vorschau mit Aufträgen', pg.locator('.rw-schritte li').count() == 4 and 'Vorschau Excel für WinAB' in text(pg, '#rw-a-inhalt'))
     with pg.expect_download() as dl:
         pg.click('#rw-a-export')
@@ -994,6 +1008,7 @@ with sync_playwright() as p:
     check('Suche nach der REWE-Marktnummer findet den Markt', gruppen(pg) == ['nordlager'])
     pg.fill('#rw-w-suche', 'Stillhausen'); pg.wait_for_selector('#rw-ruhend[open] .rw-mname:has-text("Stillhausen")')
     check('ruhender Markt: nur „Ruhende Märkte“ (aufgeklappt, 1 Treffer), keine Lager', gruppen(pg) == [] and '1 Treffer' in text(pg, '#rw-ruhend summary'))
+    check('Ruhende Märkte: Tabelle mit bündigen Zeilentrennern (Hinweis-Spalte)', tabelle_buendig(pg, '#rw-ruhend table') == [], tabelle_buendig(pg, '#rw-ruhend table'))
     pg.fill('#rw-w-suche', 'Gibtsnichtdorf'); pg.wait_for_selector('#rw-w-keintreffer')
     check('kein Treffer: Hinweis „Kein Markt gefunden“, keine Lager', 'Kein Markt gefunden' in text(pg, '#rw-w-keintreffer') and gruppen(pg) == [] and pg.locator('#rw-ruhend').count() == 0
           and 'Suche in allen Listen · 0 Treffer' in text(pg, '#rw-w-suchinfo'))
