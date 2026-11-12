@@ -773,6 +773,19 @@ with sync_playwright() as p:
             if breite == 390:
                 pg.screenshot(path=os.path.join(SH, f'rewe_{ziel.split("/")[0][1:]}_{breite}_{thema}.png'), full_page=True)
         check(f'{breite}px {thema}: kein waagerechtes Scrollen', not breit, breit)
+        # Suche: am Handy (≤ 560 px) Kennzahlen und „Bestellungen KW …“ aus, damit die Treffer direkt unter dem Feld stehen
+        pg.goto(B + f'/module/rewe/#woche/{WOCHE}'); pg.wait_for_selector('#rw-w-bestellt .rw-bestellt')
+        handy, sichtbar_ = breite <= 560, lambda: (pg.is_visible('#rw-w-kpis'), pg.is_visible('#rw-w-bestellt .rw-bestellt'))
+        vorher_ = sichtbar_()
+        pg.fill('#rw-w-suche', 'Musterdorf'); pg.wait_for_selector('#rw-w-suchinfo:not([hidden])'); pg.wait_for_selector('.rw-zeile:has-text("Musterdorf")')
+        waehrend = sichtbar_()
+        abstand = pg.evaluate("document.querySelector('.rw-gruppe').getBoundingClientRect().top - document.querySelector('#rw-w-suche').getBoundingClientRect().bottom")
+        if handy:
+            pg.screenshot(path=os.path.join(SH, f'rewe_suche_handy_{breite}_{thema}.png'))
+        pg.click('#rw-w-suche-leeren'); pg.wait_for_selector('#rw-w-suchinfo', state='hidden')
+        check(f'{breite}px {thema}: Kennzahlen und „Bestellungen“ ' + ('während der Suche aus, Treffer direkt unter dem Feld' if handy else 'auch während der Suche sichtbar (wie #344)') + ', nach dem Leeren wieder da',
+              vorher_ == (True, True) and waehrend == ((False, False) if handy else (True, True)) and sichtbar_() == (True, True) and (abstand < 120 if handy else abstand > 150),
+              (vorher_, waehrend, sichtbar_(), abstand))
         pg.goto(B + f'/module/rewe/#woche/{WOCHE}'); pg.wait_for_selector('.rw-gruppe')
         pg.click('#rw-w-filter [data-f="alle"]'); pg.wait_for_selector('.rw-zeile .rw-mname')
         pg.click('.rw-zeile .rw-mname >> nth=0'); pg.wait_for_selector('#dlg-karte[open] #kt-hinweis')

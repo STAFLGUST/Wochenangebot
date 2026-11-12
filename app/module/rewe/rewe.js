@@ -154,7 +154,8 @@
      Mitarbeiter sehen darf, und unabhängig vom Filter Alle/Offen/Erledigt. Mit „alle Listen“ (Recht oder Team) lädt sie
      dafür die Woche aller Listen über denselben Weg wie die Listenwahl (rewe_woche&wer=*, Rechteprüfung im Server);
      ohne „alle Listen“ bleibt es bei den eigenen Märkten. Leeres Feld: Listenwahl und Filter gelten wieder.
-     Kennzahlen und „Bestellungen“ zeigen weiter die gewählte Liste der Woche, nicht die Suche. */
+     Kennzahlen und „Bestellungen“ zeigen weiter die gewählte Liste der Woche, nicht die Suche; am Handy (≤ 560 px) sind sie
+     während der Suche ausgeblendet, damit die Treffer direkt unter dem Suchfeld stehen (Inhaber 12.11.2026). */
   const sucheAktiv = () => SU.woerter(S.suche).length > 0;
   const brauchtAlle = () => sucheAktiv() && darf('alle') && !!S.woche && S.woche.wer !== '*';
   const sicht = () => (brauchtAlle() ? S.alle : S.woche);   // null = Woche aller Listen wird gerade geladen
@@ -206,6 +207,7 @@
     const such = sucheAktiv(), quelle = sicht(), q = SU.woerter(S.suche);
     $$('#rw-w-filter button').forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.f === S.filter)));
     $('#rw-w-filter').classList.toggle('ruht', such);   // gilt während der Suche nicht
+    $('#rw-t-woche').classList.toggle('rw-sucht', such);   // am Handy: Kennzahlen und „Bestellungen“ während der Suche aus (rewe.css)
     $('#rw-w-filter').title = such ? 'Während der Suche werden alle Märkte durchsucht – der Filter gilt wieder, sobald das Suchfeld leer ist.' : '';
     $('#rw-w-suche-leeren').hidden = !S.suche;
     const info = $('#rw-w-suchinfo'), wo = darf('alle') ? 'Suche in allen Listen' : 'Suche in Ihren Märkten';
