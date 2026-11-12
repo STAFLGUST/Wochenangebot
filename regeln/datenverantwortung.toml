@@ -463,6 +463,15 @@ dynamisch = true   # gelesen und geschrieben über qs_doc()/qs_schreiben() in mo
 beschreibung = "Maßnahmen im Aufbau des IFS-Maßnahmenplans: Nummer je Jahr, Quelle (Audit, Prüfung, Reklamation …), Bezug, Kapitel, IFS-Anforderung und Bewertung, Feststellung, Korrektur (verantwortlich, Frist, erledigt, Nachweis), Ursache, Korrekturmaßnahme, Zuständig, Frist, umgesetzt am, Status, Freigabe durch den Auditor, Wirksamkeitsprüfung, Verlauf"
 historie = "Statuswechsel im Verlauf mit Name; Abschluss als wirksam mit Datum, Name und Notiz"
 
+[[dokument]]
+name = "qs-verfahren"
+eigentuemer = "qs"
+bereich = "intern"
+schutz = "intern"
+dynamisch = true   # gelesen und geschrieben über qs_doc()/qs_schreiben() (module/qs/verfahren.php, Konstante QS_VF_DOKUMENT)
+beschreibung = "Verfahrensdokumentation nach GoBD je Unternehmen: Abschnitte in fünf Teilen (Text, verknüpfte QM-Dokumente, IT-Systeme, Zuständig, fertig), IT-Systeme, freigegebene Fassungen als unveränderliche Schnappschüsse (Inhalt, Namen zu den Kürzeln, Version jedes verknüpften QM-Dokuments), Vermerke „ohne Änderung überprüft“"
+historie = "Fassungen mit Nummer, Freigabedatum, gültig ab, Anlass, Name und der Liste der Änderungen gegenüber der vorigen Fassung; nie geändert oder gelöscht (GR-106, Aufbewahrung nach GoBD Rz. 154)"
+
 # ───────────── Verwaltung: zentrale Stammdaten ─────────────
 
 [[dokument]]

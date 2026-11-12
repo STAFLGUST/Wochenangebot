@@ -8,7 +8,8 @@
    offen → in Arbeit → umgesetzt → wirksam oder Liste; Eingabemaske im Aufbau des IFS-Maßnahmenplans), Audit (Bericht eines
    Zeitraums für das IFS-Audit aus qs_bericht: Prüfplan je Monat, Versäumnisse und Fristen, Abweichungen, Maßnahmen,
    Dokumentenlenkung, Handbuch-Änderungen; Drucken/PDF über den Browser, Excel aus qs_bericht_excel), Einstellungen
-   (Personen mit Kürzel und Mitarbeiter, Kapitel, Überprüfungsfrist, Datenpaket).
+   (Personen mit Kürzel und Mitarbeiter, Kapitel, Überprüfungsfrist, Datenpaket). Der Reiter „Verfahrensdoku“ (GoBD) liegt in
+   verfahren.js und nutzt die Brücke window.STAFL_QS am Ende dieser Datei.
    Rechte und 4-Augen-Prinzip prüft der Server bei jeder Aktion (GR-103); ausgeblendete Knöpfe sind nur Anzeige.
    Kein Inline-Skript (CSP). */
 'use strict';
@@ -18,7 +19,7 @@
   const $$ = (s, el = document) => [...el.querySelectorAll(s)];
   const SU = window.STAFL_SUCHE;   // gemeinsame Suchregel (assets/suche.js): Umlaute auch ausgeschrieben, mehrere Wörter, Nummern
   const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
-  const TABS = ['uebersicht', 'dokumente', 'handbuch', 'pruefplan', 'massnahmen', 'bericht', 'einstellungen'];
+  const TABS = ['uebersicht', 'dokumente', 'handbuch', 'pruefplan', 'massnahmen', 'bericht', 'verfahren', 'einstellungen'];
   const MONATE = ['Jan', 'Feb', 'Mär', 'Apr', 'Mai', 'Jun', 'Jul', 'Aug', 'Sep', 'Okt', 'Nov', 'Dez'];
   const S = { csrf: '', d: null, tab: 'uebersicht', kap: '', zustand: '', ansicht: 'tafel', toast: 0, paket: null, dok: '', pruefung: '', edit: {}, grund: null, laden: null, wahl: null,
     sammel: { eintraege: [], filter: '', laeuft: false, abbrechen: false }, bericht: null, berichtLaeuft: false };
@@ -86,12 +87,13 @@
 
   /* ---------- Reiter ---------- */
   function zeigeTab(tab) {
-    if (!TABS.includes(tab) || (tab === 'einstellungen' && !darf('verwalten'))) tab = 'uebersicht';
+    if (!TABS.includes(tab) || (tab === 'einstellungen' && !darf('verwalten')) || (tab === 'verfahren' && !darf('verfahren'))) tab = 'uebersicht';
     S.tab = tab;
     $$('#qm-tabs [role="tab"]').forEach((b) => b.setAttribute('aria-selected', String(b.dataset.tab === tab)));
     $$('.qm-tab').forEach((x) => { x.hidden = x.dataset.tab !== tab; });
     history.replaceState(null, '', '#' + tab);
     if (tab === 'bericht' && !S.bericht && !S.berichtLaeuft) erstelleBericht();
+    if (tab === 'verfahren' && window.STAFL_QS.verfahren) window.STAFL_QS.verfahren.zeigen();   // eigener Reiter in verfahren.js, lädt bei jedem Öffnen frisch
   }
   $('#qm-tabs').addEventListener('click', (ev) => { const b = ev.target.closest('[role="tab"]'); if (b) zeigeTab(b.dataset.tab); });
   window.addEventListener('hashchange', () => { if (S.d) { const t = location.hash.slice(1).split('/')[0]; if (t !== S.tab) zeigeTab(t || 'uebersicht'); } });
@@ -101,6 +103,7 @@
     S.d = d;
     $('#qm-kuerzel').innerHTML = d.personen.filter((p) => p.aktiv !== false).map((p) => `<option value="${esc(p.id)}">${esc(p.name)}</option>`).join('');
     $('#qm-tabs [data-tab="einstellungen"]').hidden = !darf('verwalten');
+    $('#qm-tabs [data-tab="verfahren"]').hidden = !darf('verfahren');
     $('#qm-d-neu').hidden = !darf('bearbeiten');
     $('#qm-d-sammel').hidden = !darf('bearbeiten');
     $('#qm-m-neu').hidden = !darf('bearbeiten');
@@ -1502,6 +1505,10 @@
     renderAlles();
     zeigeTab(location.hash.slice(1).split('/')[0] || 'uebersicht');
   }
+  /* Brücke für weitere Dateien des Moduls (verfahren.js): dieselben Hilfen und derselbe Zustand, keine zweite Kopie.
+     verfahren.js trägt sich als STAFL_QS.verfahren ein; zeigeTab ruft dann zeigen() auf. */
+  window.STAFL_QS = { $, $$, S, esc, api, senden, oeffne, toast, fehlerText, zeigeAnmeldung, datum, wer, werName, icon, chip, optionen, natCmp,
+    verweisDok, gueltige, oeffneDok, speichereDatei, verfahren: null };
   themaKnopf();
   document.addEventListener('DOMContentLoaded', () => { laden().catch(() => fehler('Keine Verbindung zum Server.')); });
 })();

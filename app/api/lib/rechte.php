@@ -95,12 +95,20 @@ const PERMS = [
     'qs.bearbeiten'            => ['g' => 'Qualitätssicherung', 'l' => 'QM-System bearbeiten: Dokumente anlegen und überarbeiten (Entwurf, zur Prüfung geben), Nachweise aller Prüfungen erfassen und stornieren, Maßnahmen erfassen', 'k' => 'machen', 'd' => [], 'r' => ['qs.nachweis']],
     'qs.freigeben'             => ['g' => 'Qualitätssicherung', 'l' => 'QM-System prüfen und freigeben (QMB, Geschäftsführung): Dokumente prüfen, freigeben, einziehen, als überprüft vermerken (nie eigene Entwürfe prüfen), Handbuch und Prüfplan ändern, Maßnahmen als wirksam abschließen', 'k' => 'machen', 'd' => [], 'r' => ['qs.bearbeiten']],
     'qs.verwalten'             => ['g' => 'Qualitätssicherung', 'l' => 'QM-System verwalten: Kapitel, Personen (Kürzel und Verknüpfung mit Mitarbeitern) und Einstellungen pflegen, Datenpaket übernehmen', 'k' => 'machen', 'd' => [], 'r' => ['qs.bearbeiten']],
+    // Verfahrensdokumentation nach GoBD im QM-System (12.11.2026): beschreibt Buchführung, Zugriffsschutz und Kontrollen –
+    // sensibel (PERMS_SENSIBEL), gehört zu keiner Stufe und wird einzeln freigegeben
+    'qs.verfahren_sehen'       => ['g' => 'Qualitätssicherung', 'l' => 'Verfahrensdokumentation (GoBD) ansehen und exportieren', 'k' => 'sehen', 'd' => [], 'r' => ['qs.sehen'],
+                                   'h' => 'Sieht den Reiter „Verfahrensdoku“ im QM-System: alle Abschnitte, IT-Systeme und Fassungen, und darf sie als PDF oder als Export für Prüfungen herunterladen. Ändert nichts.'],
+    'qs.verfahren_bearbeiten'  => ['g' => 'Qualitätssicherung', 'l' => 'Verfahrensdokumentation (GoBD) pflegen: Abschnitte und IT-Systeme', 'k' => 'machen', 'd' => [], 'r' => ['qs.verfahren_sehen'],
+                                   'h' => 'Schreibt am Arbeitsstand der Verfahrensdokumentation: Abschnitte, verknüpfte QM-Dokumente, IT-Systeme. Freigegebene Fassungen bleiben unverändert; freigeben darf nur, wer das Recht dazu hat.'],
+    'qs.verfahren_freigeben'   => ['g' => 'Qualitätssicherung', 'l' => 'Verfahrensdokumentation (GoBD) freigeben (Geschäftsführung)', 'k' => 'machen', 'd' => [], 'r' => ['qs.verfahren_bearbeiten'],
+                                   'h' => 'Gibt den Arbeitsstand als neue, unveränderliche Fassung frei (mit Anlass und „gültig ab“) und vermerkt die jährliche Überprüfung ohne Änderung.'],
     'auswertung.sehen'         => ['g' => 'Verwaltung', 'l' => 'Auswertung: Karte der Kunden-Anmeldungen ansehen', 'k' => 'sehen', 'd' => [], 'r' => ['kunden.sehen']],
 ];
 /* Darstellung in Verwaltung → Rollen und Rechte (nur Anzeige, keine Prüfung – durchgesetzt wird weiter je Aktion mit
    require_perm, GR-103). Die Oberfläche fasst die Rechte eines Moduls zu Stufen zusammen: Ansehen (Art „sehen“),
    Bearbeiten (Art „machen“), Voll (zusätzlich freigeben, verwalten, löschen: PERMS_STUFE_VOLL). Sensible Rechte
-   (PERMS_SENSIBEL: Einkaufswerte, Kontaktdaten-Export, Personaldaten, Kundenzugänge, Notfall) gehören zu keiner Stufe und
+   (PERMS_SENSIBEL: Einkaufswerte, Kontaktdaten-Export, Personaldaten, Kundenzugänge, Notfall, Verfahrensdokumentation) gehören zu keiner Stufe und
    werden einzeln freigegeben. PERMS_VORSCHAU: Vorschau-Bild je Recht (admin-rollen-vorschau.js, nur Beispieldaten);
    der Modulzugang zeigt immer die Kachel. Gespeichert wird weiter nur die Liste der Rechte – Stufen sind nicht gespeichert
    (GR-006, keine Migration). Neue Rechte ohne Eintrag erscheinen nach ihrer Art (Auftrag des Inhabers 02.11.2026). */
@@ -109,7 +117,7 @@ const PERMS_STUFE_VOLL = ['angebot.veroeffentlichen', 'angebote.loeschen', 'woch
     'marketing.freigeben', 'marketing.verwalten'];
 const PERMS_SENSIBEL = ['bestand.einkaufspreise', 'crm.exportieren', 'controlling.umsatz_ek', 'controlling.bestand_ek', 'controlling.arbeitszeit_sehen',
     'controlling.arbeitszeit_importieren', 'hr.verwalten', 'hr.kalender',
-    'kunden.bearbeiten', 'sicherheit.notfall'];
+    'kunden.bearbeiten', 'sicherheit.notfall', 'qs.verfahren_sehen', 'qs.verfahren_bearbeiten', 'qs.verfahren_freigeben'];
 const PERMS_VORSCHAU = ['bestand.sehen' => 'bestand', 'bestand.einkaufspreise' => 'ek', 'bestand.importieren' => 'import', 'bestand.mhd_senden' => 'mhd',
     'angebot.veroeffentlichen' => 'veroeffentlichen', 'crm.umsatz_euro' => 'umsatz', 'crm.exportieren' => 'export', 'controlling.umsatz_ek' => 'spanne',
     'controlling.bestand_ek' => 'lagerwert', 'hr.genehmigen' => 'genehmigen', 'kunden.bearbeiten' => 'kundenzugang', 'sicherheit.notfall' => 'notfall'];

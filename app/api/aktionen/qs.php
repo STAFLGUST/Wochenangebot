@@ -13,6 +13,9 @@ declare(strict_types=1);
                                    verwerfen oder wieder öffnen;
                     qs.verwalten – Kapitel, Personen (Kürzel, Verknüpfung mit Mitarbeitern) und Einstellungen pflegen,
                                    Datenpaket übernehmen.
+                    qs.verfahren_sehen / _bearbeiten / _freigeben – Verfahrensdokumentation nach GoBD (eigene, sensible
+                                   Rechte): ansehen und exportieren / Abschnitte und IT-Systeme pflegen / Fassung freigeben,
+                                   „ohne Änderung überprüft“ vermerken.
    Dokumentenablage (lib/dateiablage.php): Dateien herunterladen und als ZIP exportieren mit qs.sehen; im Entwurf und an
    Ordnern/externen Dokumenten ablegen und entfernen mit qs.bearbeiten; zu freigegebenen Versionen nachtragen und entfernen
    (nur vermerkt, mit Grund) mit qs.freigeben – Regeln in qs_ablage_stelle().
@@ -60,7 +63,8 @@ switch ($action) {
             $dokumente = qs_doc('qs-dokumente')['liste'];
             $monate = (int)$stamm['einstellungen']['ueberpruefungMonate'];
             respond(['ok' => true, 'heute' => $heute, 'ich' => ['id' => (string)$me['id'], 'name' => (string)$me['name'], 'kuerzel' => qs_kuerzel_von($stamm, (string)$me['id'])],
-                     'rechte' => ['nachweis' => may($me, 'qs.nachweis'), 'bearbeiten' => may($me, 'qs.bearbeiten'), 'freigeben' => may($me, 'qs.freigeben'), 'verwalten' => may($me, 'qs.verwalten')],
+                     'rechte' => ['nachweis' => may($me, 'qs.nachweis'), 'bearbeiten' => may($me, 'qs.bearbeiten'), 'freigeben' => may($me, 'qs.freigeben'), 'verwalten' => may($me, 'qs.verwalten'),
+                                  'verfahren' => may($me, 'qs.verfahren_sehen')],
                      'arten' => QS_ARTEN, 'gelenkt' => QS_GELENKT, 'verStatus' => QS_VER_STATUS, 'intervalle' => QS_INTERVALLE, 'ergebnisse' => QS_ERGEBNIS,
                      'quellen' => QS_QUELLEN, 'bewertungen' => QS_BEWERTUNG, 'massnStatus' => QS_MASSN_STATUS,
                      'kapitel' => $stamm['kapitel'], 'personen' => $stamm['personen'], 'einstellungen' => $stamm['einstellungen'], 'mitarbeiter' => qs_mitarbeiter(),
@@ -638,5 +642,176 @@ switch ($action) {
             audit('qs', 'QM-System: Datenpaket übernommen' . ($leer ? '' : ' (vorhandene Daten ersetzt)') . ' – ' . $z['kapitel'] . ' Kapitel, ' . $z['dokumente'] . ' Dokumente mit '
                 . $z['versionen'] . ' Versionen, ' . $z['handbuch'] . ' Handbuch-Abschnitte, ' . $z['pruefungen'] . ' Prüfungen, ' . $z['massnahmen'] . ' Maßnahmen');
             respond(['ok' => true, 'zahlen' => $z]);
+        }
+
+        /* ---------- Verfahrensdokumentation nach GoBD (module/qs/verfahren.php, Export module/qs/verfahren-export.php) ----------
+           Eigene, sensible Rechte: qs.verfahren_sehen, qs.verfahren_bearbeiten, qs.verfahren_freigeben. */
+        /* Alle Dokumentationen: Abschnitte, IT-Systeme, Fassungen (ohne Inhalt), Abweichung seit der letzten Fassung, eigene Rechte */
+        case 'qs_verfahren': {
+            $me = require_perm('qs.verfahren_sehen');
+            header('Cache-Control: no-store');
+            require_once __DIR__ . '/../module/qs/verfahren.php';
+            $heute = qs_heute(); $stamm = qs_stamm(); $dokumente = qs_doc('qs-dokumente')['liste'];
+            respond(['ok' => true, 'heute' => $heute, 'teile' => QS_VF_TEILE, 'systemArten' => QS_VF_SYSTEM_ART, 'betrieb' => QS_VF_BETRIEB,
+                     'ueberpruefungMonate' => QS_VF_UEBERPRUEFUNG_MONATE,
+                     'rechte' => ['bearbeiten' => may($me, 'qs.verfahren_bearbeiten'), 'freigeben' => may($me, 'qs.verfahren_freigeben')],
+                     'dokus' => array_map(function ($d) use ($dokumente, $stamm, $heute) { return qs_vf_aus($d, $dokumente, $stamm, $heute); }, qs_doc(QS_VF_DOKUMENT)['liste'])]);
+        }
+
+        /* Dokumentation anlegen (muster: mit Mustergliederung), allgemeine Angaben ändern oder – nur ohne Fassung – löschen */
+        case 'qs_verfahren_save': {
+            $me = require_perm('qs.verfahren_bearbeiten', true);
+            $b = body();
+            require_once __DIR__ . '/../module/qs/verfahren.php';
+            [$d, $was] = with_lock('qs-dokumente', function () use ($b, $me) {
+                if ((string)($b['id'] ?? '') === '') {
+                    $doc = qs_doc(QS_VF_DOKUMENT);
+                    if (count($doc['liste']) >= QS_VF_MAX_DOKUS) fail('Zu viele Dokumentationen.', 422);
+                    $d = ['id' => qs_id('v')] + qs_vf_kopf_felder($b) + ['kopfRev' => 1, 'erstellt' => qs_wer($me), 'abschnitte' => [], 'systeme' => [], 'fassungen' => [], 'pruefungen' => []];
+                    $pos = [];
+                    if (!empty($b['muster'])) foreach (qs_vf_muster() as [$teil, $titel, $hinweis]) {
+                        $pos[$teil] = ($pos[$teil] ?? 0) + 1;
+                        $d['abschnitte'][] = ['id' => qs_id('a'), 'teil' => $teil, 'pos' => $pos[$teil], 'titel' => $titel, 'text' => '', 'hinweis' => $hinweis,
+                                              'systeme' => [], 'verweise' => [], 'zustaendig' => '', 'fertig' => false, 'rev' => 1];
+                    }
+                    $doc['liste'][] = $d;
+                    return [qs_vf_ablegen($doc, count($doc['liste']) - 1, $d, $me), 'angelegt' . ($pos ? ' (mit Mustergliederung)' : '')];
+                }
+                [$doc, $i, $d] = qs_vf_laden($b['id']);
+                if (array_key_exists('kopfRev', $b) && (int)$b['kopfRev'] !== (int)($d['kopfRev'] ?? 0))
+                    respond(['ok' => false, 'code' => 'konflikt', 'error' => 'Die Angaben wurden inzwischen von ' . ($d['geaendert']['von'] ?? 'jemand anderem') . ' geändert. Bitte neu laden.'], 409);
+                if (!empty($b['loeschen'])) {
+                    if ($d['fassungen']) fail('Eine Dokumentation mit freigegebener Fassung wird aufbewahrt und kann nicht gelöscht werden.', 409);
+                    array_splice($doc['liste'], $i, 1);
+                    qs_schreiben(QS_VF_DOKUMENT, $doc);
+                    return [$d, 'gelöscht'];
+                }
+                $d = qs_vf_kopf_felder($b) + $d;
+                $d['kopfRev'] = (int)($d['kopfRev'] ?? 0) + 1;
+                return [qs_vf_ablegen($doc, $i, $d, $me), 'allgemeine Angaben geändert'];
+            });
+            audit('qs', 'QM-System: Verfahrensdokumentation „' . $d['titel'] . '“ ' . $was);
+            if ($was === 'gelöscht') respond(['ok' => true, 'geloescht' => true]);
+            qs_vf_antworten($d);
+        }
+
+        /* Abschnitt anlegen, ändern oder entfernen (der Arbeitsstand ist frei änderbar; Fassungen bleiben unberührt) */
+        case 'qs_verfahren_abschnitt_save': {
+            $me = require_perm('qs.verfahren_bearbeiten', true);
+            $b = body();
+            require_once __DIR__ . '/../module/qs/verfahren.php';
+            [$d, $was] = with_lock('qs-dokumente', function () use ($b, $me) {
+                [$doc, $i, $d] = qs_vf_laden($b['doku'] ?? '');
+                $j = null; $alt = null;
+                if ((string)($b['id'] ?? '') !== '') { $j = qs_vf_index($d['abschnitte'], $b['id'], 'Abschnitt'); $alt = $d['abschnitte'][$j]; qs_rev_pruefen($b, $alt, 'Der Abschnitt'); }
+                elseif (count($d['abschnitte']) >= QS_VF_MAX_ABSCHNITTE) fail('Zu viele Abschnitte.', 422);
+                if ($alt !== null && !empty($b['loeschen'])) {
+                    array_splice($d['abschnitte'], $j, 1);
+                    return [qs_vf_ablegen($doc, $i, $d, $me), 'Abschnitt „' . $alt['titel'] . '“ entfernt'];
+                }
+                $felder = qs_vf_abschnitt_felder($b, $d);
+                if ($alt === null) $a = ['id' => qs_id('a')] + $felder + ['pos' => qs_vf_naechste_pos($d['abschnitte'], $felder['teil']), 'hinweis' => ''];
+                else {
+                    $a = $felder + $alt;
+                    if ($alt['teil'] !== $a['teil']) $a['pos'] = qs_vf_naechste_pos($d['abschnitte'], $a['teil']);
+                }
+                $a['rev'] = (int)($a['rev'] ?? 0) + 1;
+                $a['geaendert'] = qs_wer($me);
+                if ($j === null) $d['abschnitte'][] = $a; else $d['abschnitte'][$j] = $a;
+                return [qs_vf_ablegen($doc, $i, $d, $me), 'Abschnitt „' . $a['titel'] . '“ ' . ($alt === null ? 'angelegt' : 'geändert')];
+            });
+            audit('qs', 'QM-System: Verfahrensdokumentation „' . $d['titel'] . '“ – ' . $was);
+            qs_vf_antworten($d);
+        }
+
+        /* Abschnitt innerhalb seines Teils eine Stelle nach oben oder unten setzen (richtung: auf | ab) */
+        case 'qs_verfahren_ordnen': {
+            $me = require_perm('qs.verfahren_bearbeiten', true);
+            $b = body();
+            require_once __DIR__ . '/../module/qs/verfahren.php';
+            $d = with_lock('qs-dokumente', function () use ($b, $me) {
+                [$doc, $i, $d] = qs_vf_laden($b['doku'] ?? '');
+                $j = qs_vf_index($d['abschnitte'], $b['id'] ?? '', 'Abschnitt');
+                $richtung = qs_wahl($b['richtung'] ?? '', ['auf', 'ab'], 'Richtung');
+                $teil = $d['abschnitte'][$j]['teil'];
+                $reihe = [];
+                foreach ($d['abschnitte'] as $k => $x) if ($x['teil'] === $teil) $reihe[] = $k;
+                usort($reihe, function ($x, $y) use ($d) { return (int)($d['abschnitte'][$x]['pos'] ?? 0) <=> (int)($d['abschnitte'][$y]['pos'] ?? 0); });
+                $p = (int)array_search($j, $reihe, true);
+                $q = $p + ($richtung === 'auf' ? -1 : 1);
+                if (!isset($reihe[$q])) return $d;   // steht schon am Rand
+                [$reihe[$p], $reihe[$q]] = [$reihe[$q], $reihe[$p]];
+                foreach ($reihe as $n => $k) $d['abschnitte'][$k]['pos'] = $n + 1;
+                return qs_vf_ablegen($doc, $i, $d, $me);
+            });
+            qs_vf_antworten($d);
+        }
+
+        /* IT-System anlegen, ändern oder entfernen; steht es in einer Fassung, wird es nur „außer Betrieb“ gesetzt */
+        case 'qs_verfahren_system_save': {
+            $me = require_perm('qs.verfahren_bearbeiten', true);
+            $b = body();
+            require_once __DIR__ . '/../module/qs/verfahren.php';
+            [$d, $was] = with_lock('qs-dokumente', function () use ($b, $me) {
+                [$doc, $i, $d] = qs_vf_laden($b['doku'] ?? '');
+                $j = null; $alt = null;
+                if ((string)($b['id'] ?? '') !== '') { $j = qs_vf_index($d['systeme'], $b['id'], 'IT-System'); $alt = $d['systeme'][$j]; qs_rev_pruefen($b, $alt, 'Das IT-System'); }
+                elseif (count($d['systeme']) >= QS_VF_MAX_SYSTEME) fail('Zu viele IT-Systeme.', 422);
+                if ($alt !== null && !empty($b['loeschen'])) {
+                    if (qs_vf_system_in_fassung($d, (string)$alt['id'])) fail('Das System steht in einer freigegebenen Fassung und bleibt dokumentiert. Bitte „Außer Betrieb seit“ eintragen.', 409);
+                    array_splice($d['systeme'], $j, 1);
+                    foreach ($d['abschnitte'] as &$a) $a['systeme'] = array_values(array_diff($a['systeme'], [(string)$alt['id']]));
+                    unset($a);
+                    return [qs_vf_ablegen($doc, $i, $d, $me), 'IT-System „' . $alt['name'] . '“ entfernt'];
+                }
+                $s = qs_vf_system_felder($b) + ($alt ?? ['id' => qs_id('s')]);
+                $s['rev'] = (int)($s['rev'] ?? 0) + 1;
+                $s['geaendert'] = qs_wer($me);
+                if ($j === null) $d['systeme'][] = $s; else $d['systeme'][$j] = $s;
+                return [qs_vf_ablegen($doc, $i, $d, $me), 'IT-System „' . $s['name'] . '“ ' . ($alt === null ? 'angelegt' : 'geändert')];
+            });
+            audit('qs', 'QM-System: Verfahrensdokumentation „' . $d['titel'] . '“ – ' . $was);
+            qs_vf_antworten($d);
+        }
+
+        /* Neue Fassung freigeben (grund = Anlass, gueltigAb) oder – ohneAenderung – „ohne Änderung überprüft“ vermerken */
+        case 'qs_verfahren_freigeben': {
+            $me = require_perm('qs.verfahren_freigeben', true);
+            $b = body();
+            require_once __DIR__ . '/../module/qs/verfahren.php';
+            [$d, $was] = with_lock('qs-dokumente', function () use ($b, $me) {
+                [$doc, $i, $d] = qs_vf_laden($b['doku'] ?? '');
+                qs_rev_pruefen($b, $d, 'Die Verfahrensdokumentation');
+                $heute = qs_heute(); $stamm = qs_stamm(); $dokumente = qs_doc('qs-dokumente')['liste'];
+                if (!empty($b['ohneAenderung'])) {
+                    $letzte = $d['fassungen'] ? $d['fassungen'][count($d['fassungen']) - 1] : null;
+                    if ($letzte === null) throw new InvalidArgumentException('Es gibt noch keine freigegebene Fassung.');
+                    if (qs_vf_abweichung(qs_vf_inhalt($d, $dokumente, $stamm), is_array($letzte['inhalt'] ?? null) ? $letzte['inhalt'] : [])['offen'])
+                        throw new InvalidArgumentException('Der Arbeitsstand weicht von der Fassung ' . (int)$letzte['nr'] . ' ab – bitte als neue Fassung freigeben.');
+                    if (count($d['pruefungen']) >= QS_VF_MAX_PRUEFUNGEN) fail('Zu viele Vermerke.', 422);
+                    $d['pruefungen'][] = ['datum' => $heute, 'fassung' => (int)$letzte['nr'], 'notiz' => qs_text($b['notiz'] ?? '', 500, 'Bemerkung')] + qs_wer($me);
+                    return [qs_vf_ablegen($doc, $i, $d, $me), 'ohne Änderung überprüft (Fassung ' . (int)$letzte['nr'] . ')'];
+                }
+                $grund = qs_text($b['grund'] ?? '', 1000, 'Anlass');
+                if ($grund === '') throw new InvalidArgumentException('Bitte den Anlass der Fassung angeben, z. B. „Erstfassung“ oder „Neues Archivsystem“.');
+                $ab = qs_datum($b['gueltigAb'] ?? $heute, 'Gültig ab');
+                $f = qs_vf_fassung_bilden($d, $dokumente, $stamm, $me, $grund, $ab, $heute);
+                $d['fassungen'][] = $f;
+                return [qs_vf_ablegen($doc, $i, $d, $me), 'Fassung ' . $f['nr'] . ' freigegeben (gültig ab ' . qs_de($ab) . ', Anlass: ' . mb_substr($grund, 0, 120) . ')'];
+            });
+            audit('qs', 'QM-System: Verfahrensdokumentation „' . $d['titel'] . '“ – ' . $was);
+            qs_vf_antworten($d);
+        }
+
+        /* Export (GET doku): fassung=N als PDF (0 = Arbeitsstand als Entwurf) oder Export für Prüfungen von/bis – als PDF,
+           mit dokumente=1 als ZIP samt verknüpfter QM-Dokumente in der damaligen Version. Nur lesen, im Protokoll vermerkt. */
+        case 'qs_verfahren_export': {
+            $me = require_perm('qs.verfahren_sehen');
+            header('Cache-Control: no-store');
+            require_once __DIR__ . '/../lib/dateiablage.php';
+            require_once __DIR__ . '/../module/qs/verfahren.php';
+            require_once __DIR__ . '/../module/qs/verfahren-export.php';
+            [, , $d] = qs_vf_laden($_GET['doku'] ?? '');
+            qs_vf_export($d, $_GET, $me, qs_doc('qs-dokumente')['liste'], qs_stamm());
         }
 }

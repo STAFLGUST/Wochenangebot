@@ -627,3 +627,55 @@ body.qm.r .qm-rund:hover { background: var(--r-flaeche-2); }
 @media print { body.qm.r > .r-app:not(#print-root) { display: block !important; } body.qm.r .r-inhalt { display: block; } }
 /* Fingerbedienung (Prüfung am Handy 10.11.2026): Verweise auf Dokumente mit Tippfläche ≥ 32 px */
 @media(pointer:coarse){.qm-verweis{min-height:32px}.qm-details summary{padding:8px 0}}
+
+/* ---------- Verfahrensdokumentation nach GoBD (Reiter „Verfahrensdoku“, verfahren.js) ---------- */
+.vf-kopf{display:flex;flex-direction:column;gap:10px}
+.vf-kopfzeile{display:flex;justify-content:space-between;align-items:flex-start;gap:12px;flex-wrap:wrap}
+.vf-kopftitel{min-width:0;flex:1 1 260px}
+.vf-kopftitel h2{margin:0 0 3px;font-size:20px;letter-spacing:-.02em;overflow-wrap:anywhere}
+.vf-kopftitel p{margin:0}
+.vf-zeilen{list-style:none;margin:0;padding:0;display:grid;gap:3px;font-size:12.5px;color:var(--qm-muted)}
+.vf-zeilen:empty{display:none}
+.vf-zeilen li{padding-left:14px;position:relative;overflow-wrap:anywhere}
+.vf-zeilen li::before{content:"";position:absolute;left:3px;top:.62em;width:5px;height:5px;border-radius:50%;background:var(--qm-gelb)}
+.vf-teil .qm-panelkopf h2 .vf-nr,.vf-abschnitt .vf-nr{color:var(--qm-muted);font-variant-numeric:tabular-nums;margin-right:6px}
+.vf-abschnitt{border-top:1px solid var(--qm-line)}
+.vf-abschnitt summary{display:flex;align-items:center;gap:10px;padding:10px 2px;cursor:pointer;list-style:none;min-height:44px}
+.vf-abschnitt summary::-webkit-details-marker{display:none}
+.vf-abschnitt summary:hover .vf-name{text-decoration:underline}
+.vf-abschnitt .vf-name{flex:1 1 0;min-width:0;font-size:14px;font-weight:650;overflow-wrap:anywhere}
+.vf-abschnitt .vf-nr{flex:none;min-width:26px;font-weight:650}
+.vf-abschnitt .qm-chips{flex:none;justify-content:flex-end}
+.vf-abschnitt .qm-chips:empty{display:none}
+.vf-stand{flex:none;width:18px;height:18px;border-radius:50%;border:2px solid var(--qm-border);display:grid;place-items:center;color:transparent}
+.vf-stand.fertig{border-color:var(--qm-green);background:var(--qm-green);color:#fff}
+.vf-stand svg{width:12px;height:12px;stroke-width:3}
+.vf-koerper{padding:0 2px 14px 30px;display:grid;gap:10px}
+.vf-koerper .qm-text{margin:0;font-size:14px;line-height:1.6;white-space:pre-line;overflow-wrap:anywhere}
+.vf-frage{margin:0;padding:10px 12px;border-radius:12px;background:var(--qm-total-bg);color:var(--qm-muted);font-size:12.5px;line-height:1.5}
+.vf-frage b{color:var(--qm-text);font-weight:650}
+.vf-koerper .qm-verweise{margin:0}
+.vf-knoepfe{display:flex;flex-wrap:wrap;gap:6px}
+.vf-systeme,.vf-fassungen{display:grid;gap:8px}
+.vf-systeme{grid-template-columns:repeat(auto-fill,minmax(260px,1fr))}
+.vf-system{display:grid;gap:4px;padding:12px 14px;border:1px solid var(--qm-border);border-radius:14px;background:var(--qm-card);color:inherit;font:inherit;text-align:left;cursor:pointer;min-width:0}
+.vf-system:hover{border-color:var(--qm-accent)}
+.vf-system b{font-size:14px;overflow-wrap:anywhere}
+.vf-system span{color:var(--qm-muted);font-size:12px;overflow-wrap:anywhere}
+.vf-system.aus{opacity:.65}
+.vf-fassung{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:4px 12px;align-items:start;padding:12px 14px;border:1px solid var(--qm-border);border-radius:14px;background:var(--qm-card)}
+.vf-fassung b{font-size:14px}
+.vf-fassung p{margin:0;color:var(--qm-muted);font-size:12.5px;overflow-wrap:anywhere}
+.vf-fassung .qm-details{grid-column:1/-1}
+.vf-wahl{display:flex;flex-wrap:wrap;gap:6px 16px}
+.vf-entfernen{color:var(--qm-rot);margin-right:auto}
+.vf-recht{margin:4px 4px 0}
+#vg-text{font-size:13.5px;line-height:1.5}
+@media(max-width:560px){
+  .vf-koerper{padding-left:2px}
+  .vf-abschnitt summary{flex-wrap:wrap}
+  .vf-abschnitt .qm-chips{flex:1 1 100%;justify-content:flex-start;padding-left:28px}
+  .vf-kopfzeile .qm-filterzeile{width:100%}
+  .vf-kopfzeile .qm-filterzeile .btn{flex:1 1 auto;justify-content:center}
+  .vf-fassung{grid-template-columns:minmax(0,1fr)}
+}

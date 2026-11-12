@@ -100,7 +100,7 @@ check('produktiv ohne Tester-Eintrag: Administrator und Mitarbeiter mit QM-Recht
 check('ohne Anmeldung: kein Zugang (401/404)', N.call('qs_start')[0] in (401, 404))
 check('ohne QM-Recht (nur Modulzugang der Rolle): 403', O.call('qs_start')[0] == 403)
 st, r = L.call('qs_start')
-check('Ansehen: Start ok, ohne weitere Rechte, leer, eigene Kennung ohne Kürzel', st == 200 and r['rechte'] == {'nachweis': False, 'bearbeiten': False, 'freigeben': False, 'verwalten': False}
+check('Ansehen: Start ok, ohne weitere Rechte, leer, eigene Kennung ohne Kürzel', st == 200 and r['rechte'] == {'nachweis': False, 'bearbeiten': False, 'freigeben': False, 'verwalten': False, 'verfahren': False}
       and r['leer'] is True and r['ich']['id'] == ids['lisa'] and r['ich']['kuerzel'] == [], r)
 check('Auswahllisten: Arten, Intervalle (arbeitstäglich … bei Bedarf), Quellen, Bewertungen, Status', list(r['arten']) == ['A', 'F', 'L', 'E', 'V', 'X', 'O'] and r['gelenkt'] == ['A', 'F', 'L', 'E', 'V']
       and list(r['intervalle'])[0] == 'arbeitstaeglich' and list(r['intervalle'])[-1] == 'anlass' and 'laufend' not in r['intervalle'] and 'extern' in r['quellen']
@@ -108,10 +108,10 @@ check('Auswahllisten: Arten, Intervalle (arbeitstäglich … bei Bedarf), Quelle
 check('Einstellungen: Überprüfung nach 36 Monaten (Standard)', r['einstellungen'] == {'ueberpruefungMonate': 36}, r['einstellungen'])
 mnamen = {m['name']: m for m in r['mitarbeiter']}
 check('Mitarbeiterliste für Zuweisungen (Name, Kennung, mit Anmeldung)', 'Kai Kontrolle' in mnamen and mnamen['Kai Kontrolle']['id'] == ids['kai'] and mnamen['Kai Kontrolle']['zugang'] is True, r['mitarbeiter'])
-check('Kontrollen durchführen: nur Nachweise', KA.call('qs_start')[1]['rechte'] == {'nachweis': True, 'bearbeiten': False, 'freigeben': False, 'verwalten': False})
-check('Bearbeiten: Nachweise und bearbeiten', Be.call('qs_start')[1]['rechte'] == {'nachweis': True, 'bearbeiten': True, 'freigeben': False, 'verwalten': False})
-check('Freigeben: bearbeiten und freigeben', Q.call('qs_start')[1]['rechte'] == {'nachweis': True, 'bearbeiten': True, 'freigeben': True, 'verwalten': False})
-check('Verwalten: bearbeiten und verwalten (nicht freigeben)', V.call('qs_start')[1]['rechte'] == {'nachweis': True, 'bearbeiten': True, 'freigeben': False, 'verwalten': True})
+check('Kontrollen durchführen: nur Nachweise', KA.call('qs_start')[1]['rechte'] == {'nachweis': True, 'bearbeiten': False, 'freigeben': False, 'verwalten': False, 'verfahren': False})
+check('Bearbeiten: Nachweise und bearbeiten', Be.call('qs_start')[1]['rechte'] == {'nachweis': True, 'bearbeiten': True, 'freigeben': False, 'verwalten': False, 'verfahren': False})
+check('Freigeben: bearbeiten und freigeben (die Verfahrensdokumentation ist ein eigenes Recht)', Q.call('qs_start')[1]['rechte'] == {'nachweis': True, 'bearbeiten': True, 'freigeben': True, 'verwalten': False, 'verfahren': False})
+check('Verwalten: bearbeiten und verwalten (nicht freigeben)', V.call('qs_start')[1]['rechte'] == {'nachweis': True, 'bearbeiten': True, 'freigeben': False, 'verwalten': True, 'verfahren': False})
 
 # ── Kapitel, Personen, Einstellungen ──
 KAP = [{'id': '1.1', 'titel': 'Managementsystem', 'zustaendig': 'QB', 'vertreter': 'QV'}, {'id': '1.4.', 'titel': 'Qualitätssicherung', 'zustaendig': 'QB'},

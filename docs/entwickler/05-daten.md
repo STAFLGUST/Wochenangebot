@@ -675,6 +675,29 @@ Stichtag `bis` vorbei ist oder schon einen Nachweis hat; Nachweise nach dem Stic
 (`eingehalten|verspaetet|ueberfaellig|offen|nie`), Abweichungen mit Maßnahme, Maßnahmen (bis zum Stichtag erfasst, im Zeitraum offen oder
 abgeschlossen; Status Stand heute), Freigaben/Überprüfungen/Einziehungen und Handbuch-Änderungen im Zeitraum. Excel ohne Formeln.
 
+Verfahrensdokumentation nach GoBD (`module/qs/verfahren.php`, Aktionen `qs_verfahren*`, eigene sensible Rechte `qs.verfahren_sehen` →
+`_bearbeiten` → `_freigeben`):
+
+- **`qs-verfahren`**: `{"rev", "liste": [Dokumentation]}`, je Unternehmen eine: `{"id": "v…", "titel", "gesellschaft", "verantwortlich", "rev",
+  "kopfRev", "abschnitte": [{"id": "a…", "teil": "allgemein|anwender|technik|betrieb|iks", "pos", "titel", "text", "hinweis", "systeme": ["s…"],
+  "verweise": ["2.5-A01 Rechnungsbearbeitung"], "zustaendig", "fertig", "rev"}], "systeme": [{"id": "s…", "name",
+  "art": "haupt|vor|neben|archiv", "zweck", "anbieter", "betrieb": "lokal|rz|cloud", "ort", "zustaendig", "sicherung", "schnittstellen", "seit",
+  "bis", "rev"}], "fassungen": [{"nr", "datum", "gueltigAb", "grund", "freigegeben": {"t", "von", "vonId"}, "inhalt", "aenderungen": ["…"]}],
+  "pruefungen": [{"datum", "fassung", "notiz", "t", "von", "vonId"}]}`.
+- Der Arbeitsstand (Abschnitte, Systeme, Kopf) ist frei änderbar; **Fassungen sind unveränderliche Schnappschüsse** (GR-106): `inhalt` hält
+  Kopf, Abschnitte mit Nummer, IT-Systeme, die Namen zu den Kürzeln und zu jedem Verweis die an diesem Tag gültige Version des QM-Dokuments
+  (`dok`, `nr`, `titel`, `version`, `datum`). Sie werden nie geändert oder gelöscht; eine Dokumentation mit Fassung lässt sich nicht löschen,
+  ein IT-System aus einer Fassung nur „außer Betrieb“ setzen.
+- Freigabe (`qs_verfahren_freigeben`, `grund`, `gueltigAb`): alle Abschnitte `fertig` mit Inhalt, „gültig ab“ nie vor der vorigen Fassung, und
+  es muss sich etwas geändert haben – `qs_vf_abweichung` vergleicht den Arbeitsstand mit der letzten Fassung (auch eine neue Version eines
+  verknüpften QM-Dokuments zählt) und liefert die Änderungsliste in Worten; sie wird als `aenderungen` gespeichert. Ohne Abweichung statt
+  dessen `ohneAenderung: true` („ohne Änderung überprüft“, Frist 12 Monate).
+- Antwort (`qs_vf_aus`): Fassungen ohne `inhalt`, dazu `gueltigBis`, `seitFassung` (Abweichung) und `ueberpruefung`; den Inhalt einer Fassung
+  liefert nur der Export.
+- Export (`qs_verfahren_export`, GET `doku`; `module/qs/verfahren-export.php`, PDF über `lib/pdf.php`): `fassung=N` (0 = Arbeitsstand, auf jeder
+  Seite als Entwurf gekennzeichnet) oder `von`/`bis` = Export für Prüfungen mit allen Fassungen, die im Zeitraum galten, und der Historie aller
+  Fassungen; `dokumente=1` liefert ein ZIP mit den Dateien der verknüpften QM-Dokumente in der Version der jeweiligen Fassung.
+
 Datenpaket (`qs_import`, nur mit `qs.verwalten`, `vorschau: true` schreibt nichts): `{"format": "stafl-qs", "version": 1, "kapitel", "personen",
 "dokumente": [{… , "versionen": [{"nr", "datum", "aenderungen", "grund", "erstellt", "geprueft", "freigegeben"}]}], "handbuch", "pruefungen",
 "massnahmen"}` – die höchste Version gilt, ältere sind `ersetzt`; Verknüpfungen mit Mitarbeitern und Zuweisungen enthält das Paket nicht.

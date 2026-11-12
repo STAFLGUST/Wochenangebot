@@ -2,7 +2,7 @@
 
 <!-- ERZEUGT von `python3 werkzeuge/doku.py erzeugen` – nicht von Hand ändern. Quelle: Funktionen und Kommentare im Code. Die CI prüft, dass diese Datei zum Code passt. -->
 
-9 Dateien, 250 Funktionen – in der Reihenfolge der Datei, **fett** die Abschnitte. Text = erste Aussage des Kommentars direkt über der Funktion (Python: Docstring). Übersicht aller Module: [README.md](README.md).
+13 Dateien, 315 Funktionen – in der Reihenfolge der Datei, **fett** die Abschnitte. Text = erste Aussage des Kommentars direkt über der Funktion (Python: Docstring). Übersicht aller Module: [README.md](README.md).
 
 ## `app/api/aktionen/qs.php`
 
@@ -153,6 +153,70 @@ _Qualitätssicherung · QM-System (IFS Wholesale)_
 **Datenpaket (bisherige Excel „QM-System“ und Maßnahmenpläne)**
 
 - `qs_paket_pruefen(p, me)`
+
+## `app/api/module/qs/verfahren-export.php`
+
+_QM-System · Verfahrensdokumentation_
+
+- `__construct(fuss, gesamt, marke)`
+- `rahmen()`
+- `seiten()`
+- `neueSeite()`
+- `platz(h)` – Platz für $h Punkt sichern (sonst neue Seite)
+- `abstand(h)`
+- `linie()`
+- `text(t, size, bold, farbe, einzug, vor)` – Text mit Zeilenumbrüchen und Umbruch nach Wörtern; $einzug in Punkt, $vor = Zeichen vor der ersten Zeile (z. B. „•“)
+- `paar(k, v)` – „Bezeichnung Wert“ (Wert mit Umbruch); leere Werte werden ausgelassen
+- `qs_vf_pdf_name(inhalt, kuerzel)`
+- `qs_vf_pdf_gueltig(ab, bis)`
+- `qs_vf_pdf_inhalt(s, inhalt)` – Inhalt einer Fassung (oder des Arbeitsstands) setzen
+- `qs_vf_pdf_lauf(doku, teile, alle, k, gesamt)` – Ein Durchlauf.
+- `qs_vf_pdf(doku, teile, alle, k)`
+- `qs_vf_export_dateien(teile, dokumente, wurzel)` – Dateien der verknüpften QM-Dokumente in den Versionen, die die Fassungen festgehalten haben (für das ZIP)
+- `qs_vf_export(doku, q, me, dokumente, stamm)` – Export ausführen und senden (endet immer).
+- `qs_vf_pdf_senden(pdf, name, inline)`
+
+## `app/api/module/qs/verfahren.php`
+
+_QM-System · Verfahrensdokumentation nach GoBD (Reiter „Verfahrensdoku“ der Oberfläche qs.intern, Aktionen qs_verfahren* in app/api/aktionen/qs.php; wird nur von diesen Aktionen geladen)._
+
+- `qs_vf_muster()` – Mustergliederung: [Teil, Überschrift, Frage].
+
+**Lesen und Ordnen**
+
+- `qs_vf_normal(d)` – Gespeicherte Dokumentation mit allen Listen und Feldern (unvollständige Einträge bleiben lesbar, GR-006)
+- `qs_vf_sortieren(abschnitte)`
+- `qs_vf_nummern(sortiert)` – Nummern „<Teil>.<lfd.
+- `qs_vf_naechste_pos(abschnitte, teil)`
+- `qs_vf_index(liste, id, was)` – Index eines Eintrags (Abschnitt, System) in einer Liste der Dokumentation oder 404
+- `qs_vf_system_in_fassung(doku, id)` – Steht das IT-System in einer freigegebenen Fassung?
+
+**Prüfen der Eingaben**
+
+- `qs_vf_zeile(v, max, was)`
+- `qs_vf_kopf_felder(b)`
+- `qs_vf_abschnitt_felder(b, doku)`
+- `qs_vf_system_felder(b)`
+
+**Verknüpfte QM-Dokumente**
+
+- `qs_vf_dok_finden(dokumente, verweis)` – Verweis „2.5-A01 Rechnungsbearbeitung“ → Dokument, wenn die Dokumenten-Nr. vorne steht (wie verweisDok() in qs.js)
+- `qs_vf_dok_stand(d)` – Stand eines verknüpften Dokuments: gültige Version mit Datum (leer, wenn keine gilt oder kein Dokument gefunden wurde)
+
+**Schnappschuss, Abweichung, Überprüfung**
+
+- `qs_vf_inhalt(doku, dokumente, stamm)` – Inhalt, wie er in eine Fassung eingeht: Kopf, Abschnitte mit Nummer und dem Stand der verknüpften QM-Dokumente, IT-Systeme, Liste der verknüpften …
+- `qs_vf_abweichung(neu, alt)` – Was hat sich gegenüber einer Fassung geändert?
+- `qs_vf_ueberpruefung(doku, heute)` – Überprüfung: seit (letzte Fassung oder „ohne Änderung überprüft“), fällig ab (+ 12 Monate).
+- `qs_vf_gueltig_bis(fassungen, i)` – Letzter Tag, an dem die Fassung mit dem Index $i galt (Tag vor „gültig ab“ der nächsten); leer = gilt noch
+- `qs_vf_fassung_bilden(doku, dokumente, stamm, me, grund, gueltigAb, heute)` – Neue Fassung bilden (prüft alle Voraussetzungen, schreibt nicht)
+
+**Antwort für die Oberfläche**
+
+- `qs_vf_aus(doku, dokumente, stamm, heute)` – Dokumentation für die Oberfläche: Abschnitte sortiert mit Nummer, Fassungen ohne Inhalt (den liefert der Export als PDF), Abweichung seit der letzten …
+- `qs_vf_laden(id)` – Dokumentation für eine Änderung laden (unter der Sperre): [Speicher-Dokument, Index, Dokumentation] oder 404
+- `qs_vf_antworten(doku)`
+- `qs_vf_ablegen(doc, i, doku, me)` – Dokumentation nach einer Änderung speichern: Stand hochzählen, „geändert“ setzen
 
 ## `app/api/module/qs/vorlagen.php`
 
@@ -331,6 +395,49 @@ _STAFL-Plattform · Qualitätssicherung (QM-System) – Oberfläche nach dem Des
 
 - `laden()`
 
+## `app/module/qs/verfahren.js`
+
+_STAFL-Plattform · Qualitätssicherung – Reiter „Verfahrensdoku“_
+
+**Laden und Übernehmen**
+
+- `zeigen()`
+- `setze(dk)`
+
+**Ansicht**
+
+- `render()`
+- `verweisHtml(d, v)`
+- `renderTeile(d, b)`
+- `renderSysteme(d, b)`
+- `renderFassungen(d)`
+
+**Export (PDF bzw. ZIP): lädt über fetch, damit Fehler als Text erscheinen**
+
+- `lade(query)`
+- `ladePdf(nr)`
+
+**Dialog: allgemeine Angaben**
+
+- `oeffneKopf(neu)`
+
+**Dialog: Abschnitt**
+
+- `oeffneAbschnitt(id, teil)`
+
+**Dialog: IT-System**
+
+- `oeffneSystem(id)`
+
+**Dialog: Fassung freigeben oder „ohne Änderung überprüft“**
+
+- `oeffneFreigabe()`
+
+**Dialog: Export für Prüfungen**
+
+- `enthalten()`
+- `oeffneExport()`
+
 ## `tests/e2e/test_qs.py`
 
 _Qualitätssicherung (Modul qs, Oberfläche qs.intern unter /module/qs/) – QM-System_
@@ -384,6 +491,22 @@ _Qualitätssicherung – Audit-Bericht (app/api/module/qs/bericht.php, Aktionen 
 - `zeitraum(von, bis)`
 - `anmelden(user, pw_, ip, breite, thema, hoehe)`
 - `text(pg, sel)`
+
+## `tests/e2e/test_qs_verfahren.py`
+
+_Qualitätssicherung – Verfahrensdokumentation nach GoBD (app/api/module/qs/verfahren.php und verfahren-export.php, Aktionen qs_verfahren*, Reiter „Verfahrensdoku“ in app/module/qs/verfahren.js)._
+
+- `check(n, c, i)`
+- `tag(n)`
+- `de(iso)`
+- `roh(cli, query)` – GET ohne JSON-Auswertung: (Status, Kopfzeilen, Inhalt)
+- `pdf_text(raw)` – Text aus den (komprimierten) Seiteninhalten des PDF-Erzeugers: (…) Tj, WinAnsi – je Seite eine Liste von Zeilen
+- `fehlertext(inhalt)`
+- `hochladen(cli, dok, ver, name, inhalt)`
+- `doku(cli, did)`
+- `abschnitt(nr)`
+- `speichern(cli, a, **neu)`
+- `anmelden(user, pw_, ip, breite, thema, hoehe, ziel)`
 
 ## `tests/e2e/test_qs_vorlagen.py`
 

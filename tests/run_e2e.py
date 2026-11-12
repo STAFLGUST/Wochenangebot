@@ -140,6 +140,7 @@ SUITES['qs'] = (8790, 'data-seed', True)   # QM-System (app/module/qs/, Oberflä
 SUITES['qs_ablage'] = (8790, 'data-seed', True)   # QM-System: Dokumentenablage (lib/dateiablage.php) mit Hochladen in Teilen, Download und ZIP-Export
 SUITES['qs_vorlagen'] = (8790, 'data-seed', True)   # QM-System: Dokumente aus Word-/Excel-Vorlagen, Nummernstruktur, Lenkungsangaben bei der Freigabe
 SUITES['qs_bericht'] = (8790, 'data-seed', True)   # QM-System: Audit-Bericht eines Zeitraums (Ansicht, Excel, Druck)
+SUITES['qs_verfahren'] = (8790, 'data-seed', True)   # QM-System: Verfahrensdokumentation nach GoBD (Fassungen, Export für Prüfungen als PDF/ZIP)
 SUITES['sicherheit_modul'] = SUITES['bestellung']   # Modul Sicherheit (app/module/sicherheit/, Oberfläche sicherheit.intern); Test-Mailserver
 SUITES['notfall'] = SUITES['bestellung']   # Notfallmodus (lib/notfall.php): Kunden-Wartung, Aussperren, Sitzungen, Mailsperre, Firewall
 SUITES['sicherheit_bereitschaft'] = SUITES['bestellung']   # Leitfaden, Probealarm, Wochenbericht, ungenutzte Zugänge (lib/bereitschaft.php); Test-Mailserver
@@ -179,6 +180,7 @@ GEWICHT = {
     'qs_ablage': 25,   # geschätzt (Oktober 2026), noch ohne CI-Median
     'qs_vorlagen': 25,   # geschätzt (Oktober 2026), noch ohne CI-Median
     'qs_bericht': 20,   # geschätzt (Oktober 2026), noch ohne CI-Median
+    'qs_verfahren': 30,   # geschätzt (November 2026), noch ohne CI-Median
     'protokoll': 6,   # geschätzt (Oktober 2026), noch ohne CI-Median
     'angebotskategorien': 12,   # geschätzt (November 2026), noch ohne CI-Median
     'aufbau': 30,   # geschätzt (November 2026, lokal 34–47 s), noch ohne CI-Median
