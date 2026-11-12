@@ -2,7 +2,7 @@
 
 <!-- ERZEUGT von `python3 werkzeuge/doku.py erzeugen` – nicht von Hand ändern. Quelle: Funktionen und Kommentare im Code. Die CI prüft, dass diese Datei zum Code passt. -->
 
-5 Dateien, 177 Funktionen – in der Reihenfolge der Datei, **fett** die Abschnitte. Text = erste Aussage des Kommentars direkt über der Funktion (Python: Docstring). Übersicht aller Module: [README.md](README.md).
+5 Dateien, 184 Funktionen – in der Reihenfolge der Datei, **fett** die Abschnitte. Text = erste Aussage des Kommentars direkt über der Funktion (Python: Docstring). Übersicht aller Module: [README.md](README.md).
 
 ## `app/api/aktionen/rewe.php`
 
@@ -39,6 +39,11 @@ _REWE · Vordisposition Dry Aged_
 
 - `rw_grund_lieferwege()`
 - `rw_grund_artikel()`
+- `rw_artikel_filetkopf(a)`
+- `rw_artikel_extra(a)`
+- `rw_artikel_hinweis(a)` – Hinweis bei der Mengeneingabe (gezeigt nur bei extra; bleibt beim Abwählen gespeichert, damit er beim erneuten Setzen wieder da ist)
+- `rw_artikel_anzeige(a)` – Bezeichnung in Texten, Zusammenfassungen und im Excel: „Filetkopf extra“ (kein doppeltes „extra“, wenn der Name es schon trägt)
+- `rw_artikel_aus(stamm)` – Artikel für die Oberfläche: gespeicherte Felder plus aufgelöste Werte (extra, extraHinweis, anzeige)
 
 **Laden und Schreiben**
 
@@ -93,6 +98,7 @@ _REWE · Vordisposition Dry Aged_
 
 - `rw_kunden()`
 - `rw_anzeige(m)` – Anzeige eines Marktes: Kundenstamm vor eigenen Feldern (nur leere Stammfelder füllt der Markt auf)
+- `rw_telefone(m)` – Telefonnummern für die Marktzeile in „Meine Woche“ (Inhaber 12.11.2026): zuerst die der Marktakte (Telefon des Marktes, dann die der Ansprechpartner), nur …
 - `rw_person_pruefen(v)`
 
 **Historie „ab KW“ (Zuständigkeit, Lieferweg)**
@@ -220,7 +226,7 @@ _STAFL-Plattform · REWE – Oberfläche der Vordisposition Dry Aged_
 - `renderWoche()`
 - `kompaktHtml(liste)` – Märkte, bei denen der Dauerauftrag diese Woche nicht liefert: eine ruhige Zeile je Lager; Klick auf den Markt = trotzdem abfragen
 - `bestelltHtml(w, best, mengen)` – Übersicht der Bestellungen dieser Woche (eigene bzw. gewählte Liste): Markt, Lieferweg, Mengen – Klick zeigt die Zeile
-- `zelleHtml(v, art, m)` – Verlauf: acht Wochen davor, diese Woche (Rahmen) und drei Wochen danach (Vorbestellungen), die KW darunter.
+- `zelleHtml(v, art, m)` – Verlauf (kompakt seit 12.11.2026): die letzten drei Wochen, diese Woche (Rahmen) und drei Wochen danach (Vorbestellungen), die KW darunter; der Text darunter …
 - `verlaufText(m)`
 - `zeileHtml(m)`
 - `ruhendHtml(liste, q, suche)`
@@ -304,4 +310,5 @@ _REWE (Modul rewe, Oberfläche rewe.intern unter /module/rewe/) – Vordispositi
 - `person(name, liste)`
 - `stamm_roh()`
 - `text(pg, sel)`
+- `warte_auf(pg, js, ms)`
 - `anmelden(user, pw, ip, breite, thema, hoehe, ziel, pfad)`

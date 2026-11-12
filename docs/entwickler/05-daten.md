@@ -558,10 +558,19 @@ Kalenderwochen sind ISO-Wochen „JJJJ-WW“ und meinen die **Lieferwoche**. Men
 (`{"rb": 2, "fk": 1}`, 1 Stück = 1 Kolli). Alle Schreibvorgänge laufen unter der Sperre `rewe-maerkte`.
 
 - **`rewe-stamm`**: `{"rev": 2, "lieferwege": [{"id": "l…|direkt", "name": "…", "art": "lager|direkt", "bestellschluss": "Freitag früh der Vorwoche",
-  "aktiv": true}], "artikel": [{"id": "rb", "name": "Roastbeef Dry Aged", "einheit": "Stück", "nr": "<WinAB-Artikelnummer>", "aktiv": true}],
+  "aktiv": true}], "artikel": [{"id": "rb", "name": "Roastbeef Dry Aged", "einheit": "Stück", "nr": "<WinAB-Artikelnummer>", "aktiv": true,
+  "extra"?: true, "extraHinweis"?: "…"}],
   "team": {"u…": {"alle": true, "export": false}}, "mitglieder": ["u…"], "ausgeblendet": ["u…"]}`. Ohne Dokument gelten Direktbelieferung
   und die Artikel Roastbeef, Filetkopf, Vac. Set. Lieferwege und Artikel werden nie entfernt, nur deaktiviert. `team` ist die Zuweisung
   im Modul („alle Listen“, „Wochenabschluss“) und wirkt zusätzlich zu den Rechten `rewe.alle` und `rewe.exportieren`.
+  **Extra-Artikel** (seit 12.11.2026, Inhaber: „bei jedem Roastbeef Dry Aged ist schon ein Filetkopf dabei“): `extra` und
+  `extraHinweis` sind optional und stehen nur im Speicher, wenn sie in den Einstellungen gesetzt wurden. Fehlt `extra`, gilt es für den
+  Filetkopf (Kennung `fk` oder Name „Filetkopf“) mit dem Hinweis „1 Filetkopf ist bei jedem Roastbeef Dry Aged schon dabei“ – so auch
+  für bestehende Daten (`rw_artikel_extra()`, `rw_artikel_hinweis()`). Ein Extra-Artikel heißt in allen Texten, Zusammenfassungen und im
+  Excel „<Name> extra“ (`rw_artikel_anzeige()`; kein doppeltes „extra“), an der Mengeneingabe steht „zusätzlich – <Hinweis>“. Nur
+  Beschriftung: die Mengen bleiben genau wie gespeichert, der enthaltene Filetkopf wird nirgends dazugerechnet. `rewe_start` und
+  `rewe_stamm_save` liefern je Artikel zusätzlich `extra`, `extraHinweis` und `anzeige` aufgelöst (`rw_artikel_aus()`). Ältere
+  Fassungen ignorieren die Felder (dann wieder „Filetkopf“ ohne Hinweis); ältere Oberflächen schicken sie nicht mit, gespeicherte Werte bleiben.
   `mitglieder` und `ausgeblendet` (seit 11.11.2026, fehlen = leere Listen) sind das Team der Zuweisung: wer im Team ist, entscheidet nur
   `rw_im_team()` – aktiv, mit Zugang, nicht in `ausgeblendet` und entweder „REWE ansehen“ über die Rollen oder in `mitglieder`
   (ausdrücklich ergänzt, mit Modulzugang `rewe.zugang`, ohne Verbot am Konto). Ergänzte sehen, fragen ab und pflegen ihre eigenen
@@ -577,6 +586,13 @@ Kalenderwochen sind ISO-Wochen „JJJJ-WW“ und meinen die **Lieferwoche**. Men
   "email": ""}], "hinweis": "", "erstellt": {…}, "geaendert": {…}}]}`. `zustaendig` und `lieferweg` sind „ab KW“-Historien (gilt der
   letzte Eintrag mit `ab` ≤ KW). Steht die Kd.-Nr. im Kundenstamm der Verwaltung, kommen Name, Anschrift und Telefon von dort.
   `hinweis` bis 4.000 Zeichen (seit 03.11.2026, vorher 1.000; mehrzeilig).
+  **Telefon in der Marktzeile** (seit 12.11.2026, kein neues Speicherfeld): Die Antworten mit Märkten (`rw_markt_aus`, z. B.
+  `rewe_woche`, `rewe_maerkte`, `rewe_markt`) enthalten zusätzlich `telefone` (`rw_telefone()`): zuerst die Nummern der Marktakte
+  (`telefon` des Marktes, dann die der Ansprechpartner; mehrere in einem Feld getrennt mit „,“, „;“ oder „ / “), nur ohne solche
+  die Nummer aus dem Kundenstamm der Verwaltung (nur lesend über `customers_load`, laut `regeln/datenverantwortung.toml` erlaubt);
+  jede Nummer einmal. Ausgeliefert wie die übrigen Marktdaten nur an Mitarbeiter mit Zugriff auf den Markt. „Meine Woche“ zeigt die
+  erste als `tel:`-Link und weitere als „+n“ (Link zur Marktakte); der Verlauf der Zeile zeigt drei Wochen zurück (`rewe_woche`
+  liefert weiter acht, `RW_VERLAUF_WOCHEN`, für „letzte 8 Wochen: n× bestellt“).
   **Dauerauftrag** (`rw_dauer*`, Überarbeitung 12.11.2026): `rhythmus` = Abstand in Wochen (1–4, 6, 8; 0 = keiner), `ab` setzt den
   Takt (erste Lieferung), Pause von `pauseVon` bis einschließlich `pauseBis` (ohne `pauseVon` gilt sie sofort – so wie vorher),
   `bis` = läuft bis einschließlich dieser KW. `pauseVon` und `bis` stehen nur im Speicher, wenn sie gesetzt sind (GR-006); fehlen sie,

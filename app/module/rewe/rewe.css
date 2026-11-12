@@ -234,7 +234,7 @@ textarea.rw-eingabe{height:auto;padding:8px 10px;resize:vertical;line-height:1.4
   .rw-karten tr{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:2px 10px;padding:9px 6px;border-bottom:1px solid var(--rw-line)}
   .rw-karten td{display:block;padding:3px 0;border:0;min-width:0;text-align:left!important;white-space:normal}
   .rw-karten td[data-label]::before{content:attr(data-label);display:block;color:var(--rw-muted);font-size:9.5px;font-weight:750;letter-spacing:.05em;text-transform:uppercase}
-  .rw-karten td.rw-voll{grid-column:1/-1}
+  .rw-karten td.rw-voll,.rw-karten td.rw-ehinweis{grid-column:1/-1}
   .rw-karten td.rw-voll::before{display:none}
   .rw-karten td[colspan]{grid-column:1/-1}   /* Hinweiszeilen („Keine Märkte …“) über die ganze Karte */
   .rw-karten td:empty{display:none}
@@ -335,8 +335,9 @@ body.rw{--rw-blau:#3a5280;--rw-blau-soft:rgba(115,132,167,.2)}
 .rw-gsymbol{width:40px;height:40px;border-radius:12px;display:grid;place-items:center;background:var(--rw-blau-soft);color:var(--rw-blau);flex:none}
 .rw-gsymbol.direkt{background:var(--rw-minus-soft);color:var(--rw-minus)}
 .rw-gkopf .rw-rechts{margin-left:auto;display:flex;gap:8px;flex-wrap:wrap}
-.rw-zkopf,.rw-zeile{display:grid;grid-template-columns:minmax(230px,1fr) 404px minmax(360px,1.35fr) 40px;gap:18px;align-items:start;padding:16px 18px}
-.rw-zkopf{align-items:center;padding:9px 18px}
+/* Marktzeile kompakt (Inhaber 12.11.2026): weniger Innenabstand, Verlauf nur drei Wochen zurück – dafür größere Kästchen */
+.rw-zkopf,.rw-zeile{display:grid;grid-template-columns:minmax(250px,1.15fr) 318px minmax(340px,1.2fr) 38px;gap:16px;align-items:start;padding:10px 16px}
+.rw-zkopf{align-items:center;padding:8px 16px}
 .rw-zeile+.rw-zeile{border-top:1px solid var(--rw-line)}
 .rw-zkopf{background:var(--rw-head-bg);color:var(--rw-head-text);font-size:10px;font-weight:750;letter-spacing:.055em;text-transform:uppercase}
 .rw-zeile{;background:var(--rw-card)}
@@ -363,53 +364,63 @@ body.rw{--rw-blau:#3a5280;--rw-blau-soft:rgba(115,132,167,.2)}
   .rw-beintrag>.rw-sub{grid-column:1/-1;grid-row:2}
   .rw-bmenge{text-align:right}
 }
-/* Markt (03.11.2026): Name, Adresse und Kd.-Nr. groß; Klick öffnet die Marktkarte; Hinweis darunter */
-.rw-c-markt{display:flex;flex-direction:column;align-items:flex-start;gap:3px;min-width:0}
+/* Markt (03.11.2026, kompakt 12.11.2026): Name groß; Adresse, Kd.-Nr. und Telefon in höchstens zwei Zeilen; Chips und Hinweis
+   in einer Zeile (Hinweis einzeilig mit „…“, voller Text im title); Klick auf Name/Adresse/Hinweis öffnet die Marktkarte */
+.rw-c-markt{display:flex;flex-direction:column;align-items:flex-start;gap:2px;min-width:0}
+.rw-mdaten{display:flex;flex-wrap:wrap;align-items:baseline;gap:0 12px;max-width:100%;font-size:14.5px;line-height:1.35}
+.rw-mtelw{display:inline-flex;align-items:baseline;gap:6px;white-space:nowrap}
+.rw-mtel{display:inline-flex;align-items:center;gap:5px;color:var(--rw-text);font-weight:650;text-decoration:none;font-variant-numeric:tabular-nums}
+.rw-mtel .i{width:15px;height:15px;color:var(--rw-green);align-self:center}
+.rw-mtel:hover,.rw-mtel:focus-visible{color:var(--rw-accent);text-decoration:underline;text-underline-offset:3px}
+.rw-mtelmehr{padding:0 6px;border-radius:999px;background:var(--rw-chip);color:var(--rw-muted);font-size:12px;font-weight:700;line-height:18px;text-decoration:none}
+.rw-mtelmehr:hover{color:var(--rw-accent)}
 .rw-mname,.rw-madresse{padding:0;border:0;background:none;color:var(--rw-text);font:inherit;text-align:left;cursor:pointer;overflow-wrap:anywhere}
 .rw-mname{font-size:18px;font-weight:750;letter-spacing:-.01em;line-height:1.25}
 .rw-madresse{font-size:14.5px;line-height:1.35}
 .rw-mname:hover,.rw-madresse:hover{color:var(--rw-accent);text-decoration:underline;text-underline-offset:3px}
 .rw-mkd{font-size:14.5px;font-weight:650;font-variant-numeric:tabular-nums}
-.rw-c-markt .rw-hinweise{margin-top:5px}
-.rw-mhinweis{display:flex;gap:8px;align-items:flex-start;max-width:100%;margin-top:6px;padding:8px 10px;border:0;border-radius:10px;background:var(--rw-gelb-soft);color:var(--rw-text);font:inherit;font-size:13px;line-height:1.4;text-align:left;cursor:pointer}
+.rw-c-markt .rw-hinweise{margin-top:4px;width:100%}
+.rw-mhinweis{display:flex;gap:6px;align-items:center;flex:1 1 150px;min-width:0;max-width:100%;height:22px;padding:0 8px;border:0;border-radius:999px;background:var(--rw-gelb-soft);color:var(--rw-text);font:inherit;font-size:12.5px;line-height:22px;text-align:left;cursor:pointer}
 .rw-mhinweis:hover{box-shadow:inset 0 0 0 1px var(--rw-gelb)}
-.rw-mhinweis .i{width:16px;height:16px;margin-top:1px;color:var(--rw-gelb)}
-.rw-mhinweis span{display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;overflow-wrap:anywhere}
-.rw-mhinweis b{color:var(--rw-gelb);white-space:nowrap}
+.rw-mhinweis .i{width:14px;height:14px;flex:none;color:var(--rw-gelb)}
+.rw-mhinweis span{flex:0 1 auto;min-width:0;overflow:hidden;white-space:nowrap;text-overflow:ellipsis}
+.rw-mhinweis b{flex:none;color:var(--rw-gelb);white-space:nowrap}
 .rw-zeile .rw-sub{font-size:12px}
 .rw-zeile .rw-mname{font-size:18px}
 .rw-tabelle .rw-mname{font-size:14px;font-weight:700}
 .rw-hinweise{display:flex;gap:5px;flex-wrap:wrap;min-width:0}
 .rw-hinweise .rw-chip{display:inline-block;max-width:100%;overflow:hidden;text-overflow:ellipsis;line-height:22px}   /* lange Hinweise mit „…“, voller Text im title */
-/* Verlauf: acht Wochen, diese Woche (Ring), drei Wochen voraus (Vorbestellungen, Klick öffnet die Woche); KW darunter */
-.rw-c-verlauf{display:flex;flex-direction:column;gap:6px;min-width:0}
-.rw-zellen{display:flex;gap:4px}
-.rw-zw{display:flex;flex-direction:column;align-items:center;gap:3px;padding:0;border:0;background:none;color:inherit;font:inherit;min-width:0}
+/* Verlauf: drei Wochen zurück, diese Woche (Ring), drei Wochen voraus (Vorbestellungen, Klick öffnet die Woche); KW darunter */
+.rw-c-verlauf{display:flex;flex-direction:column;gap:5px;min-width:0}
+.rw-zellen{display:flex;gap:6px}
+.rw-zw{display:flex;flex-direction:column;align-items:center;gap:2px;padding:0;border:0;background:none;color:inherit;font:inherit;min-width:0}
 button.rw-zw{cursor:pointer}
-.rw-zw span{font-size:10.5px;color:var(--rw-muted);font-variant-numeric:tabular-nums}
-.rw-z{width:30px;height:30px;box-sizing:border-box;flex:none;border-radius:8px;display:grid;place-items:center;font-size:12px;font-weight:700;font-style:normal;font-variant-numeric:tabular-nums;background:var(--rw-chip);color:var(--rw-muted)}
+.rw-zw span{font-size:12px;font-weight:600;color:var(--rw-muted);font-variant-numeric:tabular-nums}
+.rw-z{width:36px;height:34px;box-sizing:border-box;flex:none;border-radius:9px;display:grid;place-items:center;font-size:14px;font-weight:750;font-style:normal;font-variant-numeric:tabular-nums;background:var(--rw-chip);color:var(--rw-muted)}
 .rw-z.b{background:var(--rw-green);color:#fff}
 .rw-z.jetzt{box-shadow:0 0 0 2px var(--rw-card),0 0 0 4px var(--rw-accent)}
 .rw-z.o.jetzt{box-shadow:inset 0 0 0 2px var(--rw-accent)}
 .rw-z.frei{background:transparent;border:1.5px dashed var(--rw-border);color:var(--rw-muted);font-weight:500}
 .rw-z.b.vor{background:var(--rw-green-soft);color:var(--rw-green);box-shadow:inset 0 0 0 1.5px var(--rw-green)}
 button.rw-zw:hover .rw-z.frei,button.rw-zw:focus-visible .rw-z{border-color:var(--rw-green);color:var(--rw-green)}
-.rw-vtext{margin:0;font-size:12px;color:var(--rw-muted)}
+.rw-vtext{margin:0;font-size:12.5px;color:var(--rw-muted)}
 .rw-z.n{background:var(--rw-gelb-soft);color:var(--rw-gelb)}
 .rw-z.p{background:var(--rw-blau-soft);color:var(--rw-blau)}
 .rw-z.o{background:transparent;box-shadow:inset 0 0 0 1px var(--rw-border);color:transparent}
 /* Antwort: wer und wann oben, vier große Knöpfe, Mengen mit großem Plus und Minus (Zahl auch eintippbar), Notiz */
-.rw-antwort{display:flex;flex-direction:column;gap:10px;min-width:0}
+.rw-antwort{display:flex;flex-direction:column;gap:8px;min-width:0}
 .rw-ameta{display:flex;gap:6px;align-items:center;flex-wrap:wrap;font-size:12px;color:var(--rw-muted)}
 .rw-zuruecksetzen{margin-left:auto;padding:3px 8px;border:0;border-radius:8px;background:transparent;color:var(--rw-muted);font:inherit;font-size:12px;font-weight:600;cursor:pointer;text-decoration:underline;text-underline-offset:2px}
 .rw-zuruecksetzen:hover{color:var(--rw-accent)}
 .rw-zuruecksetzen.frage{background:var(--rw-rot-soft);color:var(--rw-rot);text-decoration:none}
 .rw-seg.antwort{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));width:100%;padding:4px;border-radius:14px}
-.rw-seg.antwort button{height:42px;padding:0 6px;font-size:13.5px;white-space:normal;line-height:1.15}   /* „Markt pausiert“ darf umbrechen */
+.rw-seg.antwort button{height:40px;padding:0 6px;font-size:13.5px;white-space:normal;line-height:1.15}   /* „Markt pausiert“ darf umbrechen; mind. 40 px hoch */
 .rw-mengen-eingabe{display:grid;grid-template-columns:repeat(auto-fill,minmax(132px,1fr));gap:8px}
 .rw-menge{display:flex;flex-direction:column;align-items:stretch;gap:4px;padding:8px 8px 6px 10px;border-radius:12px;border:1px solid var(--rw-border);background:var(--rw-card)}
 .rw-menge>span:first-child{font-size:12.5px;font-weight:650;line-height:1.25;min-width:0;overflow-wrap:break-word}
-.rw-menge .rw-stepper{justify-content:space-between}
+.rw-menge .rw-stepper{justify-content:space-between;margin-top:auto}
+/* Extra-Artikel (Filetkopf extra): kurzer Hinweis unter dem Namen */
+.rw-mextra{display:block;margin-top:2px;font-size:11.5px;font-weight:500;line-height:1.3;color:var(--rw-muted)}
 .rw-stepper{display:inline-flex;align-items:center;gap:4px;flex:none}
 .rw-stepper button{width:38px;height:38px;border-radius:10px;border:1px solid var(--rw-border);background:var(--rw-bg);color:var(--rw-text);font:inherit;font-size:19px;font-weight:700;cursor:pointer;line-height:1}
 .rw-stepper button:disabled{opacity:.5;cursor:default}
@@ -417,7 +428,7 @@ button.rw-zw:hover .rw-z.frei,button.rw-zw:focus-visible .rw-z{border-color:var(
 .rw-mzahl:focus{background:var(--rw-chip)}
 .rw-azeile{display:flex;gap:8px 12px;align-items:center;flex-wrap:wrap}
 .rw-azeile .rw-notizfeld{flex:1 1 220px}
-.rw-dauerbox{display:flex;align-items:center;gap:8px;flex-wrap:wrap;padding:7px 10px;border-radius:12px;border:1px dashed var(--rw-green);background:var(--rw-green-soft)}
+.rw-dauerbox{display:flex;align-items:center;gap:6px 8px;flex-wrap:wrap;padding:6px 10px;border-radius:12px;border:1px dashed var(--rw-green);background:var(--rw-green-soft)}
 .rw-dauerbox>span{color:var(--rw-green);font-size:13px;font-weight:600}
 .rw-dauerbox .rw-knopfreihe{margin:0;gap:6px;flex-wrap:wrap}
 .rw-dauerbox.warn{border-color:var(--rw-gelb);background:var(--rw-gelb-soft)}
@@ -490,7 +501,7 @@ button.rw-zw:hover .rw-z.frei,button.rw-zw:focus-visible .rw-z{border-color:var(
 
 @media(max-width:1180px){
   .rw-zkopf{display:none}
-  .rw-zeile{grid-template-columns:minmax(0,1fr) auto;grid-template-areas:"markt akte" "verlauf verlauf" "antwort antwort";gap:12px}
+  .rw-zeile{grid-template-columns:minmax(0,1fr) auto;grid-template-areas:"markt akte" "verlauf verlauf" "antwort antwort";gap:8px 12px}
   .rw-zeile>.rw-c-markt{grid-area:markt}.rw-zeile>.rw-c-akte{grid-area:akte}
   .rw-zeile>.rw-c-verlauf{grid-area:verlauf}.rw-zeile>.rw-c-antwort{grid-area:antwort}
   .rw-akte{grid-template-columns:1fr}
@@ -503,14 +514,21 @@ button.rw-zw:hover .rw-z.frei,button.rw-zw:focus-visible .rw-z{border-color:var(
 }
 @media(max-width:560px){
   .rw-kwnav h1{font-size:21px;max-width:calc(100% - 100px)}   /* Pfeile bleiben neben dem Titel (Prüfung 10.11.2026) */
-  .rw-seg.antwort{display:grid;grid-template-columns:1fr 1fr;width:100%}
-  .rw-seg.antwort button{height:44px}
+  .rw-seg.antwort{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));width:100%;padding:3px}   /* kompakt: vier Knöpfe in einer Reihe, je mind. 40 px hoch */
+  .rw-seg.antwort button{height:40px;padding:0 3px;font-size:12.5px}
+  .rw-dauerbox>span{font-size:12.5px}
+  /* Chips und Hinweis am Handy in einer wischbaren Zeile, der Hinweis vorn (einzeilig mit „…“) */
+  .rw-c-markt .rw-hinweise{flex-wrap:nowrap;overflow-x:auto;scrollbar-width:none;-webkit-mask-image:linear-gradient(to right,#000 88%,transparent);mask-image:linear-gradient(to right,#000 88%,transparent)}
+  .rw-c-markt .rw-hinweise::-webkit-scrollbar{display:none}
+  .rw-c-markt .rw-hinweise>.rw-chip{flex:none;max-width:none}
+  .rw-c-markt .rw-mhinweis{order:-1;flex:0 0 auto;min-width:0;max-width:72%}
   .rw-filter{width:100%}
   .rw-filter .rw-eingabe{flex:1 1 140px;min-width:0}
-  .rw-zellen{gap:3px}.rw-zw{flex:1 1 0}.rw-zellen .rw-z{width:100%;height:26px;font-size:11px}
-  .rw-zeile{padding:14px 12px}
+  .rw-zellen{gap:4px}.rw-zw{flex:1 1 0}.rw-zellen .rw-z{width:100%;height:32px;font-size:14px}
+  .rw-zeile{padding:10px 12px}
   .rw-mengen-eingabe{grid-template-columns:1fr}
   .rw-menge{flex-direction:row;align-items:center;justify-content:space-between;gap:10px;padding:5px 6px 5px 12px}
+  .rw-menge .rw-stepper{margin-top:0}
   .rw-menge>span:first-child{font-size:13.5px}
   .rw-verlaufsliste li{grid-template-columns:30px minmax(0,1fr)}
   .rw-verlaufsliste time{grid-column:2;padding:0}

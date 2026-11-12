@@ -60,7 +60,7 @@ switch ($action) {
             $r = rw_rechte($me);
             $stamm = rw_stamm();
             respond(['ok' => true, 'name' => $me['name'], 'ich' => (string)$me['id'], 'heute' => rw_kw_heute(), 'abfrage' => rw_kw_abfrage(), 'abschlussKw' => rw_kw_abschluss(),
-                     'datum' => date('Y-m-d'), 'rechte' => $r, 'stammRev' => $stamm['rev'], 'lieferwege' => $stamm['lieferwege'], 'artikel' => $stamm['artikel'], 'antworten' => RW_ANTWORTEN, 'kauf' => RW_KAUF, 'kaufAbfrage' => RW_KAUF_ABFRAGE,
+                     'datum' => date('Y-m-d'), 'rechte' => $r, 'stammRev' => $stamm['rev'], 'lieferwege' => $stamm['lieferwege'], 'artikel' => rw_artikel_aus($stamm), 'antworten' => RW_ANTWORTEN, 'kauf' => RW_KAUF, 'kaufAbfrage' => RW_KAUF_ABFRAGE,
                      'notizArten' => RW_NOTIZ_ARTEN, 'lwArten' => RW_LW_ARTEN, 'tage' => RW_TAGE, 'rhythmen' => RW_RHYTHMEN,
                      'personen' => $r['alle'] || $r['verwalten'] || $r['exportieren'] ? rw_personen() : [],
                      'kandidaten' => $r['verwalten'] ? rw_kandidaten() : [],   // „Mitarbeiter hinzufügen“ (nur verwalten)
@@ -246,7 +246,7 @@ switch ($action) {
                 return rw_stamm();
             });
             audit('rewe', 'REWE: Lieferwege und Artikel geändert');
-            respond(['ok' => true, 'rev' => $stamm['rev'], 'lieferwege' => $stamm['lieferwege'], 'artikel' => $stamm['artikel']]);
+            respond(['ok' => true, 'rev' => $stamm['rev'], 'lieferwege' => $stamm['lieferwege'], 'artikel' => rw_artikel_aus($stamm)]);
         }
 
         /* Team: „alle Listen“ und „Wochenabschluss“ je Mitarbeiter (Zuweisung im Modul, zusätzlich zu den Rechten) */

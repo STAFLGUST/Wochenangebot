@@ -116,6 +116,30 @@ check('Lieferwege und Artikel gespeichert (neue Kennungen, Bestellschluss Standa
       and r['lieferwege'][1]['bestellschluss'] == 'Freitag früh der Vorwoche' and r['lieferwege'][2]['bestellschluss'] == 'Donnerstag 12 Uhr' and r['artikel'][0]['nr'] == '10001', r)
 NORD, SUED = lw['Zentrallager Nord'], lw['Zentrallager Süd']
 
+# ── Filetkopf extra (Inhaber 12.11.2026: bei jedem Roastbeef ist schon ein Filetkopf dabei – bestellte sind zusätzlich) ──
+HINWEIS_FK = '1 Filetkopf ist bei jedem Roastbeef Dry Aged schon dabei'
+art = {a['id']: a for a in r['artikel']}
+roh_art = {a['id']: a for a in json.loads(storage_raw('rewe-stamm').split('?>\n', 1)[-1])['artikel']}
+check('Filetkopf extra als Vorgabe für bestehende Daten: extra und Hinweis aufgelöst, gespeichert unverändert ohne neue Felder (GR-006)',
+      [(a['id'], a['extra'], a['anzeige']) for a in r['artikel']] == [('rb', False, 'Roastbeef Dry Aged'), ('fk', True, 'Filetkopf extra'), ('set', False, 'Vac. Set')]
+      and art['fk']['extraHinweis'] == HINWEIS_FK and art['fk']['name'] == 'Filetkopf'
+      and not any(k in a for a in roh_art.values() for k in ('extra', 'extraHinweis', 'anzeige')), (r['artikel'], roh_art))
+ART = [{'id': 'rb', 'name': 'Roastbeef Dry Aged', 'einheit': 'Stück', 'nr': '10001'}, {'id': 'fk', 'name': 'Filetkopf', 'einheit': 'Stück'}, {'id': 'set', 'name': 'Vac. Set', 'einheit': 'Stück'}]
+st, r = LE.call('rewe_stamm_save', {'artikel': [ART[0], {**ART[1], 'extraHinweis': 'x' * 121}, ART[2]]})
+check('Filetkopf extra: Hinweis über 120 Zeichen → 422', st == 422 and '120' in r.get('error', ''), (st, r))
+st, r = LE.call('rewe_stamm_save', {'artikel': [ART[0], {**ART[1], 'extra': False}, {**ART[2], 'extra': True, 'extraHinweis': 'Testhinweis'}]})
+art = {a['id']: a for a in r.get('artikel', [])}
+check('Merkmal extra pflegbar: Filetkopf abgewählt → „Filetkopf“, Hinweis bleibt gespeichert; Vac. Set → „Vac. Set extra“ mit eigenem Hinweis',
+      st == 200 and art['fk']['extra'] is False and art['fk']['anzeige'] == 'Filetkopf' and art['set']['anzeige'] == 'Vac. Set extra'
+      and art['set']['extraHinweis'] == 'Testhinweis' and LE.call('rewe_start')[1]['artikel'][2]['anzeige'] == 'Vac. Set extra', r)
+st, r = LE.call('rewe_stamm_save', {'artikel': [ART[0], {**ART[1], 'name': 'Filetkopf Extra', 'extra': True}, {**ART[2], 'extra': False}]})
+check('Name trägt schon „Extra“: kein doppeltes „extra“', st == 200 and r['artikel'][1]['anzeige'] == 'Filetkopf Extra', r.get('artikel'))
+st, r = LE.call('rewe_stamm_save', {'artikel': [ART[0], {**ART[1], 'extra': True, 'extraHinweis': HINWEIS_FK}, ART[2]]})
+art = {a['id']: a for a in r.get('artikel', [])}
+check('Ohne Angabe bleibt gespeichert (ältere Oberfläche): Filetkopf wieder „Filetkopf extra“, Vac. Set ohne extra',
+      st == 200 and art['fk']['anzeige'] == 'Filetkopf extra' and art['fk']['extraHinweis'] == HINWEIS_FK and art['set']['anzeige'] == 'Vac. Set'
+      and LE.call('rewe_stamm_save', {'artikel': ART})[1]['artikel'][1]['anzeige'] == 'Filetkopf extra', r.get('artikel'))
+
 # ── Kundenstamm der Verwaltung ──
 rev = A.call('kunden')[1]['rev']
 st, r = A.call('kunde_save', {'id': '', 'rev': rev, 'firma': 'REWE Markt GmbH', 'nr': '1799003', 'strasse': 'Stammstraße 3', 'plz': '20095', 'ort': 'Stammstadt',
@@ -150,6 +174,20 @@ st, r = LE.call('rewe_markt_save', {'kdNr': '1799004', 'name': 'REWE Dauerdorf',
 m4 = r.get('markt', {})
 check('Markt 4 (Direkt) mit Dauerauftrag alle 2 Wochen 1 Roastbeef + 1 Filetkopf, Abfragetag, Ansprechpartner', st == 200 and m4['dauer'] == {'rhythmus': 2, 'mengen': {'rb': 1, 'fk': 1}, 'ab': ABFRAGE, 'pauseBis': '', 'pauseVon': '', 'bis': ''}
       and m4['ansprechpartner'][0]['email'] == 'dauer@example.org' and m4['abfragetag'] == 'do', r)
+
+# ── Telefon in der Marktzeile (Inhaber 12.11.2026): Marktakte vor Kundenstamm, mehrere Nummern, ohne Nummer nichts ──
+check('Telefon: ohne Nummer leer (Markt 1), nur Kundenstamm → dessen Nummer (Markt 3), Ansprechpartner (Markt 4)',
+      m1['telefone'] == [] and m3['telefone'] == ['040 333'] and m4['telefone'] == ['040 4'], (m1['telefone'], m3['telefone'], m4['telefone']))
+st, r = LE.call('rewe_markt_save', {'id': m3['id'], 'telefon': '040 3000'})
+check('Telefon: Nummer der Marktakte hat Vorrang vor dem Kundenstamm (Anzeige des Stamms bleibt)', st == 200 and r['markt']['telefone'] == ['040 3000']
+      and r['markt']['telefon'] == '040 333', r.get('markt', {}).get('telefone'))
+st, r = LE.call('rewe_markt_save', {'id': m4['id'], 'telefon': '040 4444; 040 4'})
+w4 = next(x for g in M.call('rewe_woche')[1]['woche']['gruppen'] for x in g['maerkte'] if x['id'] == m4['id'])
+check('Telefon: mehrere Nummern in Reihenfolge Markt, Ansprechpartner – jede einmal; auch in der Wochenabfrage', st == 200 and r['markt']['telefone'] == ['040 4444', '040 4']
+      and w4['telefone'] == ['040 4444', '040 4'], (r.get('markt', {}).get('telefone'), w4.get('telefone')))
+check('Telefon nur mit Zugriff auf den Markt: fremder Markt (Evi → Markt 4) 404, ohne REWE-Recht 403',
+      E.call('rewe_markt&id=' + m4['id'])[0] == 404 and O.call('rewe_woche')[0] == 403)
+LE.call('rewe_markt_save', {'id': m3['id'], 'telefon': ''}); LE.call('rewe_markt_save', {'id': m4['id'], 'telefon': ''})
 
 # ── Wochenabfrage ──
 st, r = M.call('rewe_woche')
@@ -209,6 +247,8 @@ st, r = M.call('rewe_dauer_uebernehmen', {'kw': ABFRAGE})
 check('fällige Daueraufträge übernommen (1)', st == 200 and r['uebernommen'] == 1, r)
 x4 = next(x for g in M.call('rewe_woche')[1]['woche']['gruppen'] for x in g['maerkte'] if x['id'] == m4['id'])
 check('Dauerauftrag als Bestellung: 1 Roastbeef + 1 Filetkopf, Herkunft Dauerauftrag', x4['antwort']['mengen'] == {'rb': 1, 'fk': 1} and x4['antwort']['quelle'] == 'dauer', x4['antwort'])
+check('Texte mit „Filetkopf extra“ (Dauerauftrag), gespeicherte Mengen unverändert (1 Filetkopf, nichts dazugerechnet)',
+      x4['dauerText'] == 'Dauerauftrag alle 2 Wochen · 1 Roastbeef Dry Aged + 1 Filetkopf extra' and x4['dauer']['mengen'] == {'rb': 1, 'fk': 1}, (x4['dauerText'], x4['dauer']))
 check('zweites Übernehmen ändert nichts (nur ohne Antwort)', M.call('rewe_dauer_uebernehmen', {'kw': ABFRAGE})[1]['uebernommen'] == 0)
 x4n = next(x for g in M.call(f'rewe_woche&kw={kw_plus(ABFRAGE, 1)}')[1]['woche']['gruppen'] for x in g['maerkte'] if x['id'] == m4['id'])
 check('Folgewoche: nicht fällig, nächste Lieferung in zwei Wochen', x4n['dauerFaellig'] is False and x4n['dauerNaechste'] == kw_plus(ABFRAGE, 2), x4n)
@@ -304,10 +344,10 @@ check('Mitarbeiterliste zeigt Team und Rechte getrennt', pers['Sabi Summe']['tea
 st, r = SA.call(f'rewe_abschluss&kw={ABFRAGE}')
 ab = r.get('abschluss', {})
 pos = [(z['auftrag'], z['lieferweg'], z['kdNr'], z['artikel'], z['menge']) for z in ab.get('zeilen', [])]
-check('Abschluss: Einzelaufträge je Markt, Zentrallager vor Direkt, Artikel in Reihenfolge', pos == [(1, 'Zentrallager Nord', '1799001', 'Roastbeef Dry Aged', 2), (1, 'Zentrallager Nord', '1799001', 'Vac. Set', 1),
-                                                                                              (2, 'Direktbelieferung', '1799004', 'Roastbeef Dry Aged', 1), (2, 'Direktbelieferung', '1799004', 'Filetkopf', 1)], pos)
+check('Abschluss: Einzelaufträge je Markt, Zentrallager vor Direkt, Artikel in Reihenfolge, „Filetkopf extra“ mit der gespeicherten Menge', pos == [(1, 'Zentrallager Nord', '1799001', 'Roastbeef Dry Aged', 2), (1, 'Zentrallager Nord', '1799001', 'Vac. Set', 1),
+                                                                                              (2, 'Direktbelieferung', '1799004', 'Roastbeef Dry Aged', 1), (2, 'Direktbelieferung', '1799004', 'Filetkopf extra', 1)], pos)
 check('Abschluss: Summen je Lieferweg und Mitarbeiter, Artikel ohne WinAB-Nummer, ohne Kundenstamm', ab['maerkte'] == 2 and [x['name'] for x in ab['lieferwege']] == ['Zentrallager Nord', 'Direktbelieferung']
-      and [(x['name'], x['maerkte']) for x in ab['personen']] == [('Mark Markt', 2)] and ab['ohneNr'] == ['Filetkopf', 'Vac. Set'] and ab['ohneStamm'] == 2
+      and [(x['name'], x['maerkte']) for x in ab['personen']] == [('Mark Markt', 2)] and ab['ohneNr'] == ['Filetkopf extra', 'Vac. Set'] and ab['ohneStamm'] == 2
       and ab['zeilen'][0]['ohneBerechnung'] is True and ab['exportiert'] is None, ab)
 check('Abschluss: „in WinAB erfasst“ erst nach dem Excel (422)', SA.call('rewe_erfasst', {'kw': ABFRAGE, 'erfasst': True})[0] == 422)
 check('Excel: Woche ohne Bestellung (und ohne fälligen Dauerauftrag) → 422', SA.call('rewe_export', {'kw': kw_plus(ABFRAGE, 9)})[0] == 422)
@@ -326,7 +366,11 @@ kopf = [c.value for c in ws[4]]
 zeilen = [[c.value for c in row] for row in ws.iter_rows(min_row=5, max_row=8)]
 check('Excel: Blätter und Kopfzeile', wb.sheetnames == ['WinAB-Erfassung', 'Je Lieferweg', 'Je Mitarbeiter'] and kopf[:6] == ['Auftrag', 'Lieferweg', 'Liefer-KW', 'Kd.-Nr. (WinAB)', 'REWE-Markt-Nr.', 'Markt'], kopf)
 check('Excel: vier Positionen in zwei Aufträgen, Kd.-Nr. als Zahl, WinAB-Nummer, Menge, ohne Berechnung', [z[0] for z in zeilen] == [1, 1, 2, 2] and zeilen[0][3] == 1799001
-      and zeilen[0][9] == '10001' and zeilen[0][11] == 2 and zeilen[0][13] == 'ja' and zeilen[3][10] == 'Filetkopf', zeilen)
+      and zeilen[0][9] == '10001' and zeilen[0][11] == 2 and zeilen[0][13] == 'ja' and zeilen[3][10] == 'Filetkopf extra' and zeilen[3][11] == 1, zeilen)
+lw_kopf = [c.value for c in wb['Je Lieferweg'][3]][:6]
+check('Excel: Spaltenköpfe „Je Lieferweg“ mit „Filetkopf extra“, Mengen wie gespeichert (kein enthaltener Filetkopf dazugerechnet)',
+      lw_kopf == ['Lieferweg', 'Märkte', 'Roastbeef Dry Aged', 'Filetkopf extra', 'Vac. Set', None][:len(lw_kopf)]
+      and [c.value for c in wb['Je Lieferweg'][5]][:5] == ['Direktbelieferung', 1, 1, 1, 0], (lw_kopf, [[c.value for c in r] for r in wb['Je Lieferweg'].iter_rows(min_row=4, max_row=6)]))
 notiz = ws.cell(row=5, column=16)
 check('Excel: Notiz „=SUMME(A1)“ bleibt Text (keine Formel)', notiz.value == '=SUMME(A1)' and notiz.data_type == 's', (notiz.value, notiz.data_type))
 summen = {row[0].value: row[1].value for row in wb['Je Lieferweg'].iter_rows(min_row=4) if row[0].value}
@@ -585,12 +629,28 @@ check('Abschluss: ohne Antwort nur abzufragende Märkte (ruhend und nicht fälli
       and 'Beispielstadt' not in [x['ort'] for x in a44['offen']], ([x['ort'] for x in a43['offen']], a43['dauerOffen'], a44['dauerOffen']))
 check('ohne Zuständigkeit: niemandem außer „alle“ sichtbar', LE.call('rewe_markt&id=' + maerkte['Neustadt']['id'])[0] == 200 and M.call('rewe_markt&id=' + maerkte['Neustadt']['id'])[0] == 404)
 
+bsp_m = LE.call('rewe_markt&id=' + maerkte['Beispielstadt']['id'])[1]['markt']
+kontakte = [{k: (v or '') for k, v in x.items()} for x in bsp_m['ansprechpartner']]
+kontakte[0]['telefon'] = '0400 000002'
+st, r = LE.call('rewe_markt_save', {'id': bsp_m['id'], 'ansprechpartner': kontakte})
+check('Telefon Beispielstadt: eigene Nummer zuerst, dann die des Ansprechpartners', st == 200 and r['markt']['telefone'] == ['0400 000001', '0400 000002'], r.get('markt', {}).get('telefone'))
+
 # ── Oberfläche ──
+# Kompakte Marktzeilen (Inhaber 12.11.2026), gemessen mit diesen Testdaten: offener Markt bei 1280 px vorher 132 px, jetzt 98;
+# bei 390 px Beispielstadt vorher 440 px, jetzt 351, Musterdorf (bestellt mit Mengen und Notiz) vorher 711 px, jetzt 574
+HOEHE_GRENZE, HOEHE_VORHER, HOEHE390_GRENZE = 110, 132, {'Beispielstadt': 380, 'Musterdorf': 610}
 with sync_playwright() as p:
     br = p.chromium.launch()
 
     def text(pg, sel):
         return pg.inner_text(sel).replace('\xa0', ' ')
+
+    def warte_auf(pg, js, ms=8000):   # auf einen Zustand warten; False statt Abbruch, damit die Prüfung den Fehler meldet
+        try:
+            pg.wait_for_function(js, timeout=ms)
+            return True
+        except Exception:
+            return False
 
     def anmelden(user, pw, ip, breite=1280, thema='light', hoehe=900, ziel='#rw-app:not([hidden])', pfad='/module/rewe/'):
         ctx = br.new_context(viewport={'width': breite, 'height': hoehe}, extra_http_headers={'X-Forwarded-For': ip}, locale='de-DE', timezone_id='Europe/Berlin',
@@ -612,12 +672,31 @@ with sync_playwright() as p:
     # Filter „Offen“ (Standard): nach „Bestellt“ bleibt die Zeile mit den Mengen stehen; Übersicht der Bestellungen
     zeile = '.rw-zeile:has-text("Musterdorf")'
     check('Filter „Offen“: nur offene Märkte (Musterdorf), keine Bestellübersicht', pg.locator('.rw-zeile').count() == 1 and pg.is_visible(zeile) and pg.is_hidden('#rw-w-bestellt'))
+    # Kompakte Marktzeile (Inhaber 12.11.2026): offener Markt mit Antwortknöpfen; vorher (8 Wochen Verlauf, große Abstände) 132 px
+    hz = pg.evaluate("(() => { const z = [...document.querySelectorAll('.rw-zeile')].find(x => x.textContent.includes('Musterdorf')); const k = z.querySelector('.rw-seg.antwort button');"
+                     " return [Math.round(z.getBoundingClientRect().height), Math.round(k.getBoundingClientRect().height), parseFloat(getComputedStyle(z).paddingTop)]; })()")
+    check(f'Marktzeile kompakt (1280 px): höchstens {HOEHE_GRENZE} px hoch (vorher {HOEHE_VORHER}), Innenabstand ≤ 10 px, Antwortknöpfe mind. 40 px', hz[0] <= HOEHE_GRENZE and hz[2] <= 10 and hz[1] >= 40, hz)
+    check('Ohne Telefonnummer (Musterdorf): kein Telefon in der Zeile', pg.locator(f'{zeile} .rw-mtel').count() == 0)
     pg.click(f'{zeile} [data-s="bestellt"]'); pg.wait_for_selector(f'{zeile} [data-menge="rb"]')
     check('„Bestellt“ im Filter „Offen“: Zeile bleibt mit Mengen stehen (markiert), 1 Roastbeef vorgeschlagen',
           pg.is_visible(f'{zeile}.gerade') and pg.locator(f'{zeile} .rw-mzahl').first.input_value() == '1')
     pg.click(f'{zeile} [data-menge="rb"][data-d="1"]')
     pg.wait_for_function("[...document.querySelectorAll('.rw-zeile')].some(z => z.textContent.includes('Musterdorf') && z.querySelector('.rw-mzahl').value === '2' && !z.querySelector('[data-s][disabled]'))")
     check('Menge erhöht, Zeile weiter sichtbar', pg.is_visible(zeile))
+    # Filetkopf extra: Beschriftung und Hinweis an der Mengeneingabe, Texte mit „Filetkopf extra“, Mengen wie eingegeben
+    fk = f'{zeile} .rw-menge.extra'
+    check('Mengeneingabe: „Filetkopf extra“ mit Hinweis „zusätzlich – 1 Filetkopf ist bei jedem Roastbeef Dry Aged schon dabei“ (nur dort)',
+          pg.locator(fk).count() == 1 and 'Filetkopf extra' in text(pg, fk) and 'zusätzlich – 1 Filetkopf ist bei jedem Roastbeef Dry Aged schon dabei' in text(pg, fk)
+          and pg.locator(f'{zeile} .rw-mextra').count() == 1 and pg.get_attribute(f'{fk} .rw-mzahl', 'aria-label') == 'Filetkopf extra: Menge', text(pg, f'{zeile} .rw-mengen-eingabe'))
+    pg.click(f'{zeile} [data-menge="fk"][data-d="1"]')
+    pg.wait_for_function("[...document.querySelectorAll('.rw-zeile')].some(z => z.textContent.includes('Musterdorf') && z.querySelector('[data-mzahl=\"fk\"]') && z.querySelector('[data-mzahl=\"fk\"]').value === '1' && !z.querySelector('[data-s][disabled]'))")
+    warte_auf(pg, "document.querySelector('#rw-w-kpis').innerText.includes('Filetkopf extra') && !!document.querySelector('#rw-w-bestellt summary')")
+    aw = next(x for g in M.call(f'rewe_woche&kw={WOCHE}')[1]['woche']['gruppen'] for x in g['maerkte'] if x['ort'] == 'Musterdorf')['antwort']
+    check('Kennzahl „Bestellt“ und „Bestellungen KW 43“: „2 Roastbeef Dry Aged + 1 Filetkopf extra“; gespeichert genau 1 Filetkopf (nichts dazugerechnet)',
+          '2 Roastbeef Dry Aged + 1 Filetkopf extra' in text(pg, '#rw-w-kpis') and '2 Roastbeef Dry Aged + 1 Filetkopf extra' in text(pg, '#rw-w-bestellt summary')
+          and aw['mengen'] == {'rb': 2, 'fk': 1}, (text(pg, '#rw-w-kpis'), aw))
+    pg.click(f'{zeile} [data-menge="fk"][data-d="-1"]')
+    pg.wait_for_function("[...document.querySelectorAll('.rw-zeile')].some(z => z.textContent.includes('Musterdorf') && z.querySelector('[data-mzahl=\"fk\"]') && z.querySelector('[data-mzahl=\"fk\"]').value === '0' && !z.querySelector('[data-s][disabled]'))")
     pg.wait_for_selector('#rw-w-bestellt summary')
     check('Übersicht „Bestellungen“ ist zugeklappt (Voreinstellung)', not pg.evaluate("document.querySelector('#rw-w-bestellt details').open") and pg.is_hidden('#rw-w-bestellt .rw-beintrag'))
     pg.click('#rw-w-bestellt summary'); pg.wait_for_selector('#rw-w-bestellt .rw-beintrag')
@@ -655,9 +734,14 @@ with sync_playwright() as p:
     aw = next(x for g in M.call(f'rewe_woche&kw={WOCHE}')[1]['woche']['gruppen'] for x in g['maerkte'] if x['ort'] == 'Musterdorf')['antwort']
     check('„Rückgängig“: wieder bestellt, 2 Roastbeef, Notiz erhalten', aw['status'] == 'bestellt' and aw['mengen'] == {'rb': 2} and aw['notiz'] == 'Kunde ruft zurück', aw)
     kws = pg.locator(f'{zeile} .rw-zw span').all_inner_texts()
-    check('Verlauf: acht Wochen, diese Woche (Ring) und drei Wochen voraus mit KW-Zahlen, Legende', pg.locator(f'{zeile} .rw-z').count() == 12
-          and kws == [str(i) for i in range(35, 47)] and pg.locator(f'{zeile} .rw-z.jetzt').count() == 1 and pg.locator(f'{zeile} button[data-vor]').count() == 3
+    check('Verlauf: drei Wochen zurück, diese Woche (Ring) und drei Wochen voraus mit KW-Zahlen, Legende', pg.locator(f'{zeile} .rw-z').count() == 7
+          and kws == [str(i) for i in range(40, 47)] and pg.locator(f'{zeile} .rw-z.jetzt').count() == 1 and pg.locator(f'{zeile} button[data-vor]').count() == 3
           and pg.is_visible('.rw-legende'), kws)
+    groesse = pg.evaluate("(() => { const z = [...document.querySelectorAll('.rw-zeile')].find(x => x.textContent.includes('Musterdorf')); const c = z.querySelector('.rw-z').getBoundingClientRect();"
+                          " return [Math.round(c.width), Math.round(c.height), parseFloat(getComputedStyle(z.querySelector('.rw-zw span')).fontSize), parseFloat(getComputedStyle(z.querySelector('.rw-z')).fontSize)]; })()")
+    check('Verlauf größer und lesbarer: Kästchen ≥ 34 px (vorher 30), KW-Zahlen ≥ 12 px (vorher 10,5), Zahl im Kästchen ≥ 14 px; Kopf „Verlauf KW 40–42 · diese Woche · voraus bis KW 46“, Text über 8 Wochen',
+          groesse[0] >= 34 and groesse[1] >= 34 and groesse[2] >= 12 and groesse[3] >= 14 and 'VERLAUF KW 40–42 · DIESE WOCHE · VORAUS BIS KW 46' in text(pg, '.rw-zkopf').upper()
+          and text(pg, f'{zeile} .rw-vtext').startswith('letzte 8 Wochen: '), (groesse, text(pg, '.rw-zkopf'), text(pg, f'{zeile} .rw-vtext')))
     check('Markt groß: Name, Adresse und Kd.-Nr. (Schrift ≥ 14 px)', pg.evaluate(f"(() => {{ const z = [...document.querySelectorAll('.rw-zeile')].find(x => x.textContent.includes('Musterdorf')); return parseFloat(getComputedStyle(z.querySelector('.rw-mname')).fontSize) >= 18 && parseFloat(getComputedStyle(z.querySelector('.rw-madresse') || z.querySelector('.rw-mkd')).fontSize) >= 14; }})()"))
     # Marktkarte: Klick auf den Namen; Hinweis speichert von selbst, Notiz mit Art, Escape schließt
     pg.click(f'{zeile} .rw-mname'); pg.wait_for_selector('#dlg-karte[open] #kt-hinweis')
@@ -710,6 +794,14 @@ with sync_playwright() as p:
         pg.click(f'.rw-dkompakt [data-offen="{bsp["id"]}"]')
     pg.wait_for_selector('.rw-zeile:has-text("Beispielstadt") [data-s="bestellt"]')
     check('„Diese Woche anders“ bzw. „trotzdem abfragen“: normale Antworten, „Markt pausiert“ statt „Pause“', 'Markt pausiert' in text(pg, '.rw-zeile:has-text("Beispielstadt") [data-s="pause"]'))
+    bz = '.rw-zeile:has-text("Beispielstadt")'
+    check('Telefon in der Zeile (Beispielstadt): erste Nummer als Link zum Anrufen, „+1“ für die weitere Nummer (Marktakte)',
+          pg.locator(f'{bz} .rw-mtel').count() == 1 and pg.locator(f'{bz} .rw-mtelmehr').count() == 1
+          and text(pg, f'{bz} .rw-mtel') == '0400 000001' and pg.get_attribute(f'{bz} .rw-mtel', 'href') == 'tel:0400000001'
+          and text(pg, f'{bz} .rw-mtelmehr') == '+1' and '0400 000002' in pg.get_attribute(f'{bz} .rw-mtelmehr', 'title')
+          and pg.get_attribute(f'{bz} .rw-mtelmehr', 'href') == '#markt/' + maerkte['Beispielstadt']['id'], text(pg, f'{bz} .rw-c-markt'))
+    zeilen_daten = pg.evaluate("[...document.querySelectorAll('.rw-zeile .rw-mdaten')].map(d => { const lh = parseFloat(getComputedStyle(d).lineHeight); return Math.round(d.getBoundingClientRect().height / lh * 10) / 10; })")
+    check('Adresse, Kd.-Nr. und Telefon in höchstens zwei Zeilen', bool(zeilen_daten) and max(zeilen_daten) <= 2.2, zeilen_daten)
     # Pop-up „Dauerauftrag“ aus „Meine Woche“ (Chip am Markt): schließt nur über × oder Abbrechen
     pg.click('.rw-zeile:has-text("Beispielstadt") [data-dauer-dlg]'); pg.wait_for_selector('#dlg-dauer[open] #dd-titel:has-text("Beispielstadt")')
     pg.mouse.click(5, 5)
@@ -742,6 +834,8 @@ with sync_playwright() as p:
     pg.select_option('#mk-tag', 'mi'); pg.click('#mk-form button[type="submit"]'); pg.wait_for_selector('#dlg-markt[open]', state='hidden')
     pg.wait_for_selector('.rw-kv:has-text("Mittwoch")')
     check('Abfragetag geändert', 'Mittwoch' in text(pg, '.rw-kv'))
+    check('Marktakte: Dauerauftrag „… + 1 Filetkopf extra“, Wochenverlauf KW 2 „Bestellt 1 Roastbeef Dry Aged + 1 Filetkopf extra“',
+          '1 Roastbeef Dry Aged + 1 Filetkopf extra' in text(pg, '.rw-kv') and pg.locator('.rw-heat i[title="KW 2: Bestellt 1 Roastbeef Dry Aged + 1 Filetkopf extra"]').count() == 1, text(pg, '.rw-kv'))
     pg.screenshot(path=os.path.join(SH, 'rewe_akte_1280.png'), full_page=True)
     pg.click('#rw-a-dauer'); pg.wait_for_selector('#dlg-dauer[open] #dd-titel:has-text("Beispielstadt")')
     check('Pop-up aus der Marktakte: „Dauerauftrag · Beispielstadt“', 'Dauerauftrag · Beispielstadt' in text(pg, '#dd-titel'))
@@ -749,11 +843,15 @@ with sync_playwright() as p:
     # Reiter „Daueraufträge“: ruhige Liste mit Wochenleiste, Pop-up zum Ändern, Anlegen mit Marktsuche, Pause von–bis, Ende, beenden
     pg.click('#rw-tabs [data-tab="dauer"]'); pg.wait_for_selector('#rw-d-liste [data-dauer]')
     check('Daueraufträge: Beispielstadt alle 2 Wochen, Menge, Wochenleiste mit 8 Wochen, Zusammenfassung, Filter „KW n fällig“', pg.locator('#rw-d-liste [data-dauer]').count() == 1
-          and 'alle 2 Wochen' in text(pg, '#rw-d-liste') and '1 Roastbeef Dry Aged + 1 Filetkopf' in text(pg, '#rw-d-liste') and pg.locator('#rw-d-liste [data-dauer] .rw-dwz').count() == 8
+          and 'alle 2 Wochen' in text(pg, '#rw-d-liste') and '1 Roastbeef Dry Aged + 1 Filetkopf extra' in text(pg, '#rw-d-liste') and pg.locator('#rw-d-liste [data-dauer] .rw-dwz').count() == 8
           and 'aktiv' in text(pg, '#rw-d-sub') and '#dauer' in pg.url and f'KW {int(ABFRAGE[5:])} fällig' in text(pg, '#rw-d-filter'), text(pg, '#rw-d-liste'))
     pg.click('#rw-d-liste [data-dauer]:has-text("Beispielstadt")'); pg.wait_for_selector('#dlg-dauer[open] [data-dd-rh]')
     check('Pop-up „Dauerauftrag“: Titel, sechs Rhythmen (1–4, 6, 8 Wochen), Lieferwochen, Vorschau', 'Beispielstadt' in text(pg, '#dd-titel') and pg.locator('#dlg-dauer [data-dd-rh]').count() == 6
           and 'alle 8 Wochen' in text(pg, '#dlg-dauer .rw-ddrh') and pg.locator('#dlg-dauer [data-dd-ab]').count() == 12 and 'Nächste Lieferungen' in text(pg, '#dd-vorschau'))
+    dfk = '#dlg-dauer .rw-menge.extra'
+    check('Pop-up: Mengeneingabe „Filetkopf extra“ mit Hinweis (nur dort), Menge wie gespeichert (1)', pg.locator(dfk).count() == 1 and 'Filetkopf extra' in text(pg, dfk)
+          and 'zusätzlich – 1 Filetkopf ist bei jedem Roastbeef Dry Aged schon dabei' in text(pg, dfk) and pg.locator('#dlg-dauer .rw-mextra').count() == 1
+          and pg.input_value('#dlg-dauer [data-dd-mzahl="fk"]') == '1' and pg.get_attribute('#dlg-dauer [data-dd-mzahl="fk"]', 'aria-label') == 'Filetkopf extra: Menge', text(pg, '#dlg-dauer .rw-mengen-eingabe'))
     pg.mouse.click(5, 5)
     check('Pop-up: ein Klick daneben schließt nicht (Escape schließt wie überall, Prüfung „einheit“)', pg.is_visible('#dlg-dauer[open]'))
     pg.click('#dlg-dauer [data-dd-rh="1"]'); pg.wait_for_selector('#dlg-dauer [data-dd-rh="1"][aria-pressed="true"]')
@@ -763,6 +861,9 @@ with sync_playwright() as p:
     pg.wait_for_selector('#rw-d-liste [data-dauer]:has-text("Beispielstadt"):has-text("jede Woche")')
     bd = next(m for m in M.call('rewe_maerkte')[1]['maerkte'] if m['ort'] == 'Beispielstadt')['dauer']
     check('Dauerauftrag geändert: jede Woche, 2 Roastbeef + 1 Filetkopf', bd['rhythmus'] == 1 and bd['mengen'] == {'rb': 2, 'fk': 1}, bd)
+    bsp_id = next(m for m in M.call('rewe_maerkte')[1]['maerkte'] if m['ort'] == 'Beispielstadt')['id']
+    check('Verlauf der Marktakte: „Dauerauftrag jede Woche · 2 Roastbeef Dry Aged + 1 Filetkopf extra“',
+          any('jede Woche · 2 Roastbeef Dry Aged + 1 Filetkopf extra' in n['text'] for n in M.call('rewe_markt&id=' + bsp_id)[1]['notizen']))
     pg.click('#rw-d-neu'); pg.wait_for_selector('#dlg-dauer[open] #dd-suche')
     check('Anlegen: Speichern erst nach der Marktwahl', pg.is_disabled('#dlg-dauer [data-dd-speichern]'))
     pg.fill('#dd-suche', 'muster'); pg.wait_for_selector('#dd-maerkte [data-dd-markt]')
@@ -801,6 +902,7 @@ with sync_playwright() as p:
           pg.get_attribute('#rw-w-kpis [data-kpi-dauer]', 'aria-pressed') == 'true' and pg.locator('.rw-zeile').count() == 1
           and 'Dauerauftrag KW' in text(pg, '.rw-dauerbox') and 'wird zum Bestellschluss automatisch bestellt' in text(pg, '.rw-dauerbox')
           and pg.is_visible('.rw-dauerbox [data-offen]') and pg.locator('.rw-zeile:has-text("Beispielstadt") .rw-z.d.jetzt').count() == 1)
+    check('Dauerauftrag-Kasten: „2 Roastbeef Dry Aged + 1 Filetkopf extra“', '2 Roastbeef Dry Aged + 1 Filetkopf extra' in text(pg, '.rw-dauerbox'), text(pg, '.rw-dauerbox'))
     pg.screenshot(path=os.path.join(SH, 'rewe_dauer_woche_1280.png'), full_page=True)
     pg.click('#rw-w-kpis [data-kpi-dauer]'); pg.wait_for_selector('#rw-w-filter [data-f="offen"][aria-pressed="true"]')
     check('erneuter Klick: wieder Filter „Offen“', pg.get_attribute('#rw-w-kpis [data-kpi-dauer]', 'aria-pressed') == 'false')
@@ -848,7 +950,15 @@ with sync_playwright() as p:
         pass
     check('Wochenabschluss vor dem Bestellschluss: Daueraufträge „werden automatisch bestellt“, Excel trotzdem möglich (bestellt sie dabei)',
           'werden automatisch bestellt' in text(pg, '#rw-a-inhalt') and pg.is_enabled('#rw-a-export'), text(pg, '#rw-a-inhalt')[:300])
+    pg.goto(B + '/module/rewe/#abschluss/2026-02')   # KW 2: Bestellung aus dem Datenpaket (1 Roastbeef + 1 Filetkopf)
+    ok = warte_auf(pg, "document.querySelector('#rw-a-inhalt').innerText.includes('Filetkopf extra') && !!document.querySelector('#rw-a-inhalt .rw-tabelle')")
+    check('Wochenabschluss: Vorschau (Spalte Artikel) und Kennzahl „Stück gesamt“ mit „Filetkopf extra“, Menge wie gespeichert (1)', ok and 'Filetkopf extra' in text(pg, '#rw-a-inhalt .rw-tabelle')
+          and '1 Filetkopf extra' in text(pg, '#rw-a-inhalt .rw-kpis') and '1 Roastbeef Dry Aged' in text(pg, '#rw-a-inhalt .rw-kpis'), text(pg, '#rw-a-inhalt')[:600])
     pg.click('#rw-tabs [data-tab="einstellungen"]'); pg.wait_for_selector('#rw-e-lw tbody tr')
+    pg.wait_for_selector('#rw-e-art tr[data-art="fk"] [data-f="extra"]')
+    check('Einstellungen: Artikel mit „extra“ und „Hinweis bei der Eingabe“ (Filetkopf vorbelegt)', pg.is_checked('#rw-e-art tr[data-art="fk"] [data-f="extra"]')
+          and not pg.is_checked('#rw-e-art tr[data-art="rb"] [data-f="extra"]')
+          and pg.input_value('#rw-e-art tr[data-art="fk"] [data-f="extraHinweis"]') == '1 Filetkopf ist bei jedem Roastbeef Dry Aged schon dabei')
     namen = json.loads(json.dumps(PAKET).replace('"Liste A"', '"Liste Mark"').replace('"Liste B"', '"Evi"'))
     pg.set_input_files('#rw-e-datei', files=[{'name': 'paket.json', 'mimeType': 'application/json', 'buffer': json.dumps(namen).encode()}])
     pg.wait_for_selector('#rw-e-vorschau .rw-vorschau')
@@ -932,6 +1042,14 @@ with sync_playwright() as p:
             if breite == 390:
                 pg.screenshot(path=os.path.join(SH, f'rewe_{ziel.split("/")[0][1:]}_{breite}_{thema}.png'), full_page=True)
         check(f'{breite}px {thema}: kein waagerechtes Scrollen', not breit, breit)
+        if breite == 390:   # kompakte Marktzeilen am Handy (Inhaber 12.11.2026); vorher Beispielstadt 440 px, Musterdorf 711 px
+            pg.goto(B + f'/module/rewe/#woche/{WOCHE}'); pg.wait_for_selector('.rw-gruppe')
+            pg.click('#rw-w-filter [data-f="alle"]'); pg.wait_for_selector('.rw-zeile:has-text("Musterdorf")')
+            h390 = pg.evaluate("[...document.querySelectorAll('.rw-zeile')].map(z => [z.querySelector('.rw-mname').textContent, Math.round(z.getBoundingClientRect().height), Math.round(Math.min(...[...z.querySelectorAll('.rw-seg.antwort button')].map(k => k.getBoundingClientRect().height), 99))])")
+            check(f'{breite}px {thema}: Marktzeilen kompakt (höchstens {HOEHE390_GRENZE} px, vorher 440/711), Antwortknöpfe mind. 40 px, ohne waagerechtes Scrollen',
+                  {n for n, _, _ in h390} == set(HOEHE390_GRENZE) and all(h <= HOEHE390_GRENZE[n] for n, h, _ in h390) and min(k for _, _, k in h390) >= 40 and pg.evaluate('document.documentElement.scrollWidth <= window.innerWidth + 1'), h390)
+            pg.screenshot(path=os.path.join(SH, f'rewe_woche_kompakt_{breite}_{thema}.png'))
+            pg.click('#rw-w-filter [data-f="offen"]')
         pg.goto(B + '/module/rewe/#dauer'); pg.wait_for_selector('#rw-d-liste [data-dauer]')
         pg.click('#rw-d-liste [data-dauer] >> nth=0'); pg.wait_for_selector('#dlg-dauer[open] [data-dd-rh]')
         lage = pg.evaluate("(() => { const d = document.querySelector('#dlg-dauer'), r = d.getBoundingClientRect(); return [d.scrollWidth - d.clientWidth, Math.round(r.left), Math.round(r.right), Math.round(r.bottom), innerWidth, innerHeight]; })()")
@@ -939,6 +1057,9 @@ with sync_playwright() as p:
               lage[0] <= 1 and lage[2] <= lage[4] + 1 and (breite > 560 or (lage[1] <= 0 and lage[2] >= lage[4] - 1 and lage[3] >= lage[5] - 1)), lage)
         if breite == 390:
             pg.screenshot(path=os.path.join(SH, f'rewe_dauer_popup_{breite}_{thema}.png'))
+            hin = pg.evaluate("(() => { const e = document.querySelector('#dlg-dauer .rw-menge.extra .rw-mextra'); if (!e) return null; const r = e.getBoundingClientRect(); return [Math.round(r.left), Math.round(r.right), Math.round(r.width), innerWidth]; })()")
+            check(f'{breite}px {thema}: „Filetkopf extra“ mit Hinweis im Pop-up sichtbar, nichts ragt heraus', bool(hin) and hin[0] >= 0 and hin[1] <= hin[3] and hin[2] > 0
+                  and pg.is_visible('#dlg-dauer .rw-mextra') and 'Filetkopf extra' in text(pg, '#dlg-dauer .rw-menge.extra'), hin)
         pg.click('#dlg-dauer .rw-dialogkopf [data-dd-zu]'); pg.wait_for_selector('#dlg-dauer', state='hidden')
         # Suche: am Handy (≤ 560 px) Kennzahlen und „Bestellungen KW …“ aus, damit die Treffer direkt unter dem Feld stehen
         pg.goto(B + f'/module/rewe/#woche/{WOCHE}'); pg.wait_for_selector('#rw-w-bestellt .rw-bestellt')
