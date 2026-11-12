@@ -2,13 +2,14 @@
 
 <!-- ERZEUGT von `python3 werkzeuge/doku.py erzeugen` – nicht von Hand ändern. Quelle: Funktionen und Kommentare im Code. Die CI prüft, dass diese Datei zum Code passt. -->
 
-5 Dateien, 164 Funktionen – in der Reihenfolge der Datei, **fett** die Abschnitte. Text = erste Aussage des Kommentars direkt über der Funktion (Python: Docstring). Übersicht aller Module: [README.md](README.md).
+5 Dateien, 177 Funktionen – in der Reihenfolge der Datei, **fett** die Abschnitte. Text = erste Aussage des Kommentars direkt über der Funktion (Python: Docstring). Übersicht aller Module: [README.md](README.md).
 
 ## `app/api/aktionen/rewe.php`
 
 _Aktionen: REWE · Vordisposition Dry Aged (Oberfläche rewe.intern, Daten und Regeln in app/api/module/rewe/rewe.php, Wochenabschluss und Excel in app/api/module/rewe/export.php) Rechte (GR-103): rewe.sehen – eigene …_
 
 - `rw_rechte(me)`
+- `rw_dauer_auto_vermerken(kw, n)` – Protokoll der automatisch bestellten Daueraufträge (rw_dauer_automatisch)
 - `rw_kw_param(standard)`
 - `rw_export_pruefen(schreibend)`
 - `rw_xlsx_senden(inhalt, datei)`
@@ -123,9 +124,13 @@ _REWE · Vordisposition Dry Aged_
 **Dauerauftrag**
 
 - `rw_dauer(m)`
-- `rw_dauer_naechste(m, kw)` – Ist der Dauerauftrag in der KW fällig?
+- `rw_dauer_im_takt(d, start)` – Erste KW ≥ $start im Takt des Auftrags (ab, rhythmus)
+- `rw_dauer_naechste(m, kw)` – Nächste fällige KW (≥ $kw) oder '' (kein, beendeter oder leerer Auftrag)
 - `rw_dauer_faellig(m, kw)`
+- `rw_dauer_auto(m, kw)` – Liefert der fällige Auftrag automatisch (Abfrage-Märkte; ruhende, ausgelistete und ohne Interesse nie automatisch)
 - `rw_dauer_text(m, stamm)`
+- `rw_dauer_zusatz(m)` – Zusatz für Texte und Verlauf: „ · Pause KW 50–51“ bzw. „ · Pause bis einschließlich KW 48“, „ · läuft bis einschließlich KW 53“
+- `rw_dauer_automatisch(kw, sofort)` – Automatisch bestellen (Inhaber 12.11.2026): Zum Bestellschluss gilt ein fälliger Dauerauftrag ohne Antwort als bestellt – Antwort „bestellt“ mit Herkunft …
 - `rw_mengen_text(mengen, stamm)`
 
 **Antworten**
@@ -196,6 +201,8 @@ _STAFL-Plattform · REWE – Oberfläche der Vordisposition Dry Aged_
 **Bezeichnungen**
 
 - `mengenText(m)`
+- `dauerImTakt(d, start)`
+- `dauerNaechste(d, kw)`
 
 **Hell/Dunkel**
 
@@ -211,6 +218,7 @@ _STAFL-Plattform · REWE – Oberfläche der Vordisposition Dry Aged_
 - `ladeAlle()`
 - `setzeSuche(text)`
 - `renderWoche()`
+- `kompaktHtml(liste)` – Märkte, bei denen der Dauerauftrag diese Woche nicht liefert: eine ruhige Zeile je Lager; Klick auf den Markt = trotzdem abfragen
 - `bestelltHtml(w, best, mengen)` – Übersicht der Bestellungen dieser Woche (eigene bzw. gewählte Liste): Markt, Lieferweg, Mengen – Klick zeigt die Zeile
 - `zelleHtml(v, art, m)` – Verlauf: acht Wochen davor, diese Woche (Rahmen) und drei Wochen danach (Vorbestellungen), die KW darunter.
 - `verlaufText(m)`
@@ -242,13 +250,19 @@ _STAFL-Plattform · REWE – Oberfläche der Vordisposition Dry Aged_
 - `renderKarte(hinweisText)`
 - `hinweisSpeichern()` – Hinweis speichern (nach kurzer Pause beim Tippen, beim Verlassen des Feldes und beim Schließen)
 
-**Daueraufträge (alle sichtbaren Märkte mit Dauerauftrag; bearbeiten nur eigene, GR-103 prüft der Server)**
+**Daueraufträge (Überarbeitung 12.11.2026)**
 
-- `naechsteLieferungen(e, n)`
-- `kwWahl(wert, leer)`
+- `kwWahl(wert, von, wochen, leer)`
+- `wochenleiste(dRoh, n)` – Wochenleiste: n Lieferwochen ab der Abfragewoche – Zahl = Stück nach Dauerauftrag, gestrichelt = Pause
+- `dauerChips(m)`
 - `renderDauer()`
-- `dauerBearbeiten(m)`
-- `renderDauerEdit()`
+
+**Pop-up „Dauerauftrag“**
+
+- `oeffneDauer(m)`
+- `ddVorschau()`
+- `renderDauerDlg()`
+- `nachDauer()` – nach dem Speichern: geöffnete Ansichten neu laden (Marktkarte, Woche, Akte, Liste)
 - `dauerSpeichern(ende)`
 
 **Zuweisung und Team**
@@ -284,6 +298,8 @@ _REWE (Modul rewe, Oberfläche rewe.intern unter /module/rewe/) – Vordispositi
 - `check(n, c, i)`
 - `kw_von(d)`
 - `kw_plus(kw, n)`
+- `neuer_markt(ort, kd, dauer, **extra)` – ── Daueraufträge neu (Inhaber 12.11.2026): Rhythmus 6/8, Pause von–bis, Enddatum, Rechte, automatisch zum Bestellschluss ── Eigene Testmärkte bei Nina (nicht …
+- `wochenmarkt(kw, mid, wer)`
 - `namen(liste)` – ── Team: Mitarbeiter hinzufügen und entfernen (Wunsch des Inhabers 11.11.2026) ──
 - `person(name, liste)`
 - `stamm_roh()`

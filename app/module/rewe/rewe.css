@@ -405,13 +405,11 @@ button.rw-zw:hover .rw-z.frei,button.rw-zw:focus-visible .rw-z{border-color:var(
 .rw-zuruecksetzen:hover{color:var(--rw-accent)}
 .rw-zuruecksetzen.frage{background:var(--rw-rot-soft);color:var(--rw-rot);text-decoration:none}
 .rw-seg.antwort{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));width:100%;padding:4px;border-radius:14px}
-.rw-seg.antwort button{height:42px;padding:0 6px;font-size:13.5px}
+.rw-seg.antwort button{height:42px;padding:0 6px;font-size:13.5px;white-space:normal;line-height:1.15}   /* „Markt pausiert“ darf umbrechen */
 .rw-mengen-eingabe{display:grid;grid-template-columns:repeat(auto-fill,minmax(132px,1fr));gap:8px}
 .rw-menge{display:flex;flex-direction:column;align-items:stretch;gap:4px;padding:8px 8px 6px 10px;border-radius:12px;border:1px solid var(--rw-border);background:var(--rw-card)}
 .rw-menge>span:first-child{font-size:12.5px;font-weight:650;line-height:1.25;min-width:0;overflow-wrap:break-word}
 .rw-menge .rw-stepper{justify-content:space-between}
-.rw-dedit .rw-menge{flex-direction:row;align-items:center;justify-content:space-between;gap:10px;padding:5px 6px 5px 12px}
-.rw-dedit .rw-menge>span:first-child{font-size:13.5px}
 .rw-stepper{display:inline-flex;align-items:center;gap:4px;flex:none}
 .rw-stepper button{width:38px;height:38px;border-radius:10px;border:1px solid var(--rw-border);background:var(--rw-bg);color:var(--rw-text);font:inherit;font-size:19px;font-weight:700;cursor:pointer;line-height:1}
 .rw-stepper button:disabled{opacity:.5;cursor:default}
@@ -420,8 +418,10 @@ button.rw-zw:hover .rw-z.frei,button.rw-zw:focus-visible .rw-z{border-color:var(
 .rw-azeile{display:flex;gap:8px 12px;align-items:center;flex-wrap:wrap}
 .rw-azeile .rw-notizfeld{flex:1 1 220px}
 .rw-dauerbox{display:flex;align-items:center;gap:8px;flex-wrap:wrap;padding:7px 10px;border-radius:12px;border:1px dashed var(--rw-green);background:var(--rw-green-soft)}
-.rw-dauerbox span{color:var(--rw-green);font-size:13px;font-weight:650}
-.rw-nichtfaellig{display:flex;align-items:center;gap:8px;flex-wrap:wrap;color:var(--rw-muted);font-size:12.5px}
+.rw-dauerbox>span{color:var(--rw-green);font-size:13px;font-weight:600}
+.rw-dauerbox .rw-knopfreihe{margin:0;gap:6px;flex-wrap:wrap}
+.rw-dauerbox.warn{border-color:var(--rw-gelb);background:var(--rw-gelb-soft)}
+.rw-dauerbox.warn>span{color:var(--rw-gelb)}
 .rw-antwort .rw-notizfeld{height:38px;font-size:13px}
 .rw-akte-link{width:38px;height:38px;border-radius:11px;border:1px solid var(--rw-border);background:var(--rw-card);display:grid;place-items:center;color:var(--rw-text)}
 .rw-gfuss{padding:11px 16px;color:var(--rw-muted);font-size:12px}
@@ -559,18 +559,9 @@ textarea.rw-khinweis{min-height:180px;background:var(--rw-gelb-soft);border-colo
 }
 
 /* Reiter Daueraufträge: Liste, rechts das Bearbeitungsfeld */
-.rw-draster{display:grid;grid-template-columns:minmax(0,1fr);gap:12px;align-items:start}
-.rw-draster.mit-edit{grid-template-columns:minmax(0,1fr) minmax(320px,400px)}
-.rw-draster>.rw-panel{margin-bottom:0}
-.rw-dedit{position:sticky;top:84px;display:flex;flex-direction:column;gap:14px}
-.rw-dedit h2{margin:0;font-size:18px}
 .rw-dkopf{display:flex;flex-direction:column;gap:6px;min-width:0;flex:1}
-.rw-dseg{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));width:100%}
-.rw-dedit .rw-mengen-eingabe{grid-template-columns:1fr}
-.rw-dedit .rw-knopfreihe{margin:0}
 .rw-dvorschau{margin:0;padding:10px 12px;border-radius:12px;background:var(--rw-green-soft);color:var(--rw-green);font-size:13px;font-weight:600}
 .rw-tabelle tbody tr.rw-gewaehlt td{background:var(--rw-total-bg)}
-@media(max-width:1000px){.rw-draster.mit-edit{grid-template-columns:minmax(0,1fr)}.rw-dedit{position:static}}
 
 /* ── Rahmen „C2“ (gemeinsame Seitenleiste ../../assets/rahmen.css und rahmen.js, Entwurf freigegeben 06.11.2026) ──
    Aufbau, Reiter und Abläufe der Seite bleiben unverändert. Neu: ruhige deckende Flächen mit feinen Linien statt Glas,
@@ -628,4 +619,76 @@ body.rw.r .rw-rund:hover { background: var(--r-flaeche-2); }
   .rw-wfilter select.rw-eingabe{flex:1 1 140px;max-width:none}
   /* Handy: bei aktiver Suche Kennzahlen und „Bestellungen KW …“ ausblenden – Treffer direkt unter dem Suchfeld (12.11.2026) */
   .rw-tab.rw-sucht>.rw-kpis,.rw-tab.rw-sucht .rw-bestellt{display:none}
+}
+
+/* Daueraufträge (Überarbeitung 12.11.2026): Lieferung nach Dauerauftrag im Verlauf, Kachel als Filter, kompakte Zeile der
+   nicht fälligen Märkte, ruhige Liste mit Wochenleiste im Reiter und das Pop-up „Dauerauftrag“ */
+.rw-z.d{background:var(--rw-green-soft);color:var(--rw-green);box-shadow:none;outline:1.5px dashed var(--rw-green);outline-offset:-2px}   /* geplant nach Dauerauftrag */
+.rw-z.d.jetzt{box-shadow:inset 0 0 0 2px var(--rw-accent)}
+.rw-kpiknopf{display:block;width:100%;text-align:left;font:inherit;color:inherit;cursor:pointer}
+.rw-kpiknopf:hover{border-color:var(--rw-green)}
+.rw-kpiknopf[aria-pressed="true"]{border-color:var(--rw-green);box-shadow:inset 0 0 0 1.5px var(--rw-green),var(--rw-shadow)}
+.rw-chipknopf{border:0;font:inherit;font-size:11px;font-weight:700;cursor:pointer}
+.rw-chipknopf:hover{text-decoration:underline}
+.rw-dkompakt{margin:0;padding:11px 16px 13px;border-top:1px solid var(--rw-line);color:var(--rw-muted);font-size:12.5px;line-height:1.6}
+.rw-dkompakt>b{color:var(--rw-text)}
+.rw-dkteil{white-space:nowrap}
+.rw-dkm{padding:0;border:0;background:none;color:var(--rw-text);font:inherit;font-weight:700;cursor:pointer;text-decoration:underline;text-underline-offset:2px}
+.rw-dkm:hover{color:var(--rw-accent)}
+/* Reiter: Liste */
+.rw-dpanel{padding:0;overflow:hidden}
+.rw-dpanel .rw-fussnote{padding:10px 16px 14px;margin:0}
+.rw-dliste{list-style:none;margin:0;padding:0}
+.rw-dliste>li{display:grid;grid-template-columns:minmax(0,1.25fr) minmax(0,1.2fr) minmax(0,2fr) 18px;gap:14px;align-items:center;padding:13px 16px;border-bottom:1px solid var(--rw-line)}
+.rw-dliste>li.rw-dlkopf{padding:9px 16px;background:var(--rw-head-bg);color:var(--rw-head-text);font-size:10px;font-weight:750;letter-spacing:.055em;text-transform:uppercase}
+.rw-dliste>li.rw-leerzeile{display:block}
+.rw-dliste>li.rw-klick{cursor:pointer}
+.rw-dliste>li.rw-klick:hover{background:var(--rw-total-bg)}
+.rw-dliste>li.beendet{opacity:.6}
+.rw-dm,.rw-dr{display:flex;flex-direction:column;gap:2px;min-width:0}
+.rw-dm .rw-name{font-size:15px}
+.rw-dw{display:flex;flex-wrap:wrap;align-items:center;gap:8px}
+.rw-dwochen{display:inline-flex;gap:4px}
+.rw-dwz{display:flex;flex-direction:column;align-items:center;gap:2px;color:var(--rw-muted);font-size:10px;font-variant-numeric:tabular-nums}
+.rw-dwz i{width:22px;height:22px;box-sizing:border-box;border-radius:6px;display:grid;place-items:center;box-shadow:inset 0 0 0 1px var(--rw-border);font-style:normal;font-size:11px;font-weight:700}
+.rw-dwz i.d{background:var(--rw-green-soft);color:var(--rw-green);box-shadow:none}
+.rw-dwz i.p{box-shadow:none;border:1.5px dashed var(--rw-border)}
+.rw-dwz i.jetzt{box-shadow:inset 0 0 0 2px var(--rw-accent)}
+.rw-dpfeil{color:var(--rw-muted);font-size:20px;text-align:right}
+/* Pop-up „Dauerauftrag“ */
+.rw-ddinhalt{padding:18px;display:flex;flex-direction:column;gap:14px}
+.rw-ddteil{display:flex;flex-direction:column;gap:14px}
+.rw-ddteil.aus{opacity:.45;pointer-events:none}
+.rw-ddrh{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));width:100%}
+.rw-ddwochen{display:flex;flex-wrap:wrap;gap:6px}
+.rw-ddwochen button{min-width:58px;height:34px;padding:0 8px;border:1px solid var(--rw-border);border-radius:9px;background:var(--rw-card);color:var(--rw-text);font:inherit;font-size:12.5px;font-weight:650;cursor:pointer}
+.rw-ddwochen button.d{background:var(--rw-green-soft);border-color:transparent;color:var(--rw-green)}
+.rw-ddwochen button.p{border-style:dashed;color:var(--rw-muted);text-decoration:line-through}
+.rw-ddwochen button[aria-pressed="true"]{box-shadow:0 0 0 2px var(--rw-accent)}
+.rw-ddzeile{display:flex;flex-wrap:wrap;align-items:flex-end;gap:10px}
+.rw-ddzeile .rw-check{height:38px;color:var(--rw-text);font-weight:650}
+.rw-ddzeile .rw-schmal{flex:1 1 180px;max-width:none}
+.rw-ddfeld{display:flex;flex-direction:column;gap:6px;color:var(--rw-muted);font-size:12px;font-weight:650}
+.rw-ddfeld .rw-hilfe{font-weight:500}
+.rw-ddsuche{margin-top:6px;width:100%}
+.rw-ddsuche .rw-eingabe{width:100%;height:42px;padding:0 12px 0 40px;font-size:15px;border-radius:12px}
+.rw-ddsuche input::-webkit-search-cancel-button{-webkit-appearance:none;appearance:none}
+.rw-dkopf>.rw-ddmaerkte{width:100%}
+.rw-ddmaerkte{list-style:none;margin:0;padding:0;max-height:240px;overflow:auto;display:flex;flex-direction:column;gap:4px}
+.rw-ddmaerkte button{width:100%;display:flex;flex-direction:column;align-items:flex-start;gap:1px;padding:8px 10px;border:1px solid var(--rw-border);border-radius:10px;background:var(--rw-card);color:var(--rw-text);font:inherit;text-align:left;cursor:pointer}
+.rw-ddmaerkte button:hover{border-color:var(--rw-green)}
+.rw-ddfuss{position:sticky;bottom:0;z-index:2;margin:0 -18px -18px;padding:10px 18px 18px;background:var(--rw-card)}
+.rw-ddfuss .rw-ddende{margin-right:auto;color:var(--rw-muted);text-decoration:underline;text-underline-offset:2px}
+.rw-ddfuss .rw-ddende.frage{background:var(--rw-rot-soft);color:var(--rw-rot);text-decoration:none}
+@media(max-width:760px){
+  .rw-dliste>li{grid-template-columns:minmax(0,1fr) 18px;gap:6px 10px}
+  .rw-dliste>li.rw-dlkopf{display:none}
+  .rw-dliste>li>.rw-dr,.rw-dliste>li>.rw-dw{grid-column:1}
+  .rw-dliste>li>.rw-dpfeil{grid-column:2;grid-row:1/span 3}
+}
+@media(max-width:560px){
+  .rw-ddinhalt{padding:15px}
+  .rw-ddrh{grid-template-columns:repeat(2,minmax(0,1fr))}
+  .rw-ddfuss{margin:0 -15px -15px;padding:8px 15px calc(15px + env(safe-area-inset-bottom));flex-wrap:wrap}
+  .rw-dkteil{white-space:normal}
 }

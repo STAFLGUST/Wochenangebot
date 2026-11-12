@@ -14,6 +14,9 @@ declare(strict_types=1);
    eigenen Märkte wie mit rewe.sehen + rewe.bearbeiten (rw_require_perm statt require_perm für „ansehen“ und „bearbeiten“) –
    und entfernen (nur ohne Märkte ab der Abfragewoche, sonst 422; Rollen-Inhaber werden nur ausgeblendet).
    „Eigene Märkte“ prüft der Server je Markt über die Zuständigkeit der Kalenderwoche; fremde Märkte ohne „alle“ → 404.
+   Daueraufträge: fällige gelten zum Bestellschluss automatisch als bestellt – geschrieben beim Lesen der Woche bzw. des
+   Wochenabschlusses nach dem Bestellschluss und spätestens beim Excel-Export (rw_dauer_automatisch, idempotent, nie über
+   eine ausdrückliche Antwort). rewe_dauer_uebernehmen (ausdrücklich bestätigen) bleibt für ältere Oberflächen erhalten.
    Gleichzeitiges Bearbeiten: Märkte tragen „rev“, Antworten „r“; ein veralteter Stand bekommt 409.
    Wird von api/index.php im globalen Gültigkeitsbereich eingebunden; jede Aktion endet mit respond()/fail(). */
 if (!defined('WA_API')) { http_response_code(404); exit; }   // nur über api/index.php nutzbar
@@ -21,6 +24,11 @@ if (!defined('WA_API')) { http_response_code(404); exit; }   // nur über api/in
 function rw_rechte(array $me): array
 {
     return ['bearbeiten' => rw_bearbeiten($me), 'alle' => rw_alle($me), 'verwalten' => may($me, 'rewe.verwalten'), 'exportieren' => rw_export($me)];
+}
+/* Protokoll der automatisch bestellten Daueraufträge (rw_dauer_automatisch) */
+function rw_dauer_auto_vermerken(string $kw, int $n): void
+{
+    if ($n) audit('rewe', 'REWE: ' . ($n === 1 ? '1 Dauerauftrag' : "$n Daueraufträge") . ' für ' . rw_kw_text($kw) . ' automatisch bestellt (Bestellschluss)');
 }
 function rw_kw_param(string $standard): string
 {
@@ -66,6 +74,7 @@ switch ($action) {
             $kw = rw_kw_param(rw_kw_abfrage());
             $wer = is_string($_GET['wer'] ?? null) ? trim($_GET['wer']) : '';
             if ($wer !== '' && !rw_alle($me)) fail('Andere Listen sehen nur Mitarbeiter mit „Alle REWE-Listen“.', 403);
+            rw_dauer_auto_vermerken($kw, rw_dauer_automatisch($kw));   // nach dem Bestellschluss: fällige Daueraufträge bestellen
             respond(['ok' => true, 'woche' => rw_woche($kw, $me, $wer)]);
         }
 
@@ -160,7 +169,7 @@ switch ($action) {
                 rw_schreiben('rewe-maerkte', $doc);
                 $text = [];
                 if (($alt['kauf'] ?? 'regelmaessig') !== ($neu['kauf'] ?? 'regelmaessig')) $text[] = 'Kaufbereitschaft: ' . (RW_KAUF[$alt['kauf'] ?? 'regelmaessig'] ?? '') . ' → ' . RW_KAUF[$neu['kauf']];
-                if (array_key_exists('dauer', $f) && rw_dauer($alt) != rw_dauer($neu)) $text[] = rw_dauer_text($neu, $stamm) ?: 'Dauerauftrag beendet';
+                if (array_key_exists('dauer', $f) && rw_dauer($alt) != rw_dauer($neu)) $text[] = rw_dauer_text($neu, $stamm) ? rw_dauer_text($neu, $stamm) . rw_dauer_zusatz($neu) : 'Dauerauftrag beendet';
                 if ($text) rw_system_notiz($id, implode(' · ', $text), $me);
                 return [$neu, false];
             });
@@ -273,7 +282,9 @@ switch ($action) {
         case 'rewe_abschluss': {
             rw_export_pruefen();
             header('Cache-Control: no-store');
-            respond(['ok' => true, 'abschluss' => rw_abschluss(rw_kw_param(rw_kw_abschluss()))]);
+            $kw = rw_kw_param(rw_kw_abschluss());
+            rw_dauer_auto_vermerken($kw, rw_dauer_automatisch($kw));
+            respond(['ok' => true, 'abschluss' => rw_abschluss($kw)]);
         }
 
         /* Excel für die Erfassung in WinAB; vermerkt „exportiert“ (spätere Änderungen sind Nachträge) */
@@ -281,6 +292,7 @@ switch ($action) {
             $me = rw_export_pruefen(true);
             $b = body();
             $kw = rw_kw($b['kw'] ?? '');
+            rw_dauer_auto_vermerken($kw, rw_dauer_automatisch($kw, true));   // spätestens jetzt: fällige Daueraufträge bestellen
             $a = rw_abschluss($kw);
             if (!$a['zeilen']) fail('In dieser Woche gibt es keine Bestellungen.', 422);
             $datei = rw_export_xlsx($a, rw_stamm(), (string)$me['name']);

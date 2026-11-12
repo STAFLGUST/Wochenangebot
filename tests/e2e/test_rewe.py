@@ -8,13 +8,16 @@ Märkte (anlegen nur verwalten, Pflichtfelder, Kd.-Nr. eindeutig, Name/Anschrift
 verwalten, Stand 409, Ansprechpartner, Kaufbereitschaft und Dauerauftrag mit Verlauf); Wochenabfrage (Standard = nächste Lieferwoche,
 eigene Liste, gruppiert Zentrallager vor Direkt, alle Listen nur mit Recht/Team, ruhende Märkte als eigene Liste); Antworten
 (Fehlerfälle, Mengen je Artikel, Stand 409, zurücknehmen, höchstens zwölf Wochen voraus, Schnappschuss von Lieferweg und
-Zuständigkeit); Daueraufträge (fällig nach Rhythmus und ab-KW, Pause, übernehmen nur ohne Antwort, mit Filetkopf); Zuweisung und
+Zuständigkeit); Daueraufträge (fällig nach Rhythmus und ab-KW, Pause, übernehmen nur ohne Antwort, mit Filetkopf; seit 12.11.2026 Rhythmus 6/8,
+Pause von–bis, Enddatum, Rechte, automatisch zum Bestellschluss – idempotent, nie über eine ausdrückliche Antwort, Schnappschuss, nicht in
+älteren Wochen, Export bestellt spätestens, Excel-Spalte „Dauerauftrag“); Zuweisung und
 Lieferweg ab KW (frühere Wochen unverändert, Verlauf mit Namen); Notizen und Wiedervorlagen; Wochenabschluss (Einzelaufträge je Markt,
 Summen je Lieferweg und Mitarbeiter, offene Märkte, Artikel ohne Nummer, Nachträge nach dem Export, in WinAB erfasst) und Excel
 (Blätter, Kopf, Auftragsnummern, Texte bleiben Text, Protokoll); Datenpaket (Rechte, Fehler je Markt, Vorschau schreibt nichts, nur in
 leeres Modul oder mit „ersetzen“, Listen den Mitarbeitern zugeordnet, Verlauf über mehrere Jahre); Oberfläche (Meine Woche mit Antwort
 per Klick und Mengen, „Rückgängig“ und Zurücksetzen, Bestellungen zugeklappt, Verlauf mit Vorbestellungen, Marktkarte mit Hinweis und Notizen, Reiter
-Daueraufträge (bearbeiten, neu, beenden), Marktakte mit Notiz, Zuweisung, Wochenabschluss mit Excel, Einstellungen mit Datenpaket; 1280 und 390 px, hell
+Daueraufträge (Liste mit Wochenleiste, Pop-up aus Reiter, Marktkarte, Marktakte und Woche – Klick daneben schließt nicht –,
+Marktsuche beim Anlegen, Pause von–bis, Ende, Filter, beenden; automatische Bestellung als erledigt, Kachel als Filter), Marktakte mit Notiz, Zuweisung, Wochenabschluss mit Excel, Einstellungen mit Datenpaket; 1280 und 390 px, hell
 und dunkel, kein waagerechtes Scrollen, keine JavaScript-Fehler). Nur erfundene Testdaten.
 """
 import datetime
@@ -145,7 +148,7 @@ st, r = LE.call('rewe_markt_save', {'kdNr': '1799004', 'name': 'REWE Dauerdorf',
                                     'dauer': {'rhythmus': 2, 'mengen': {'rb': 1, 'fk': 1}, 'ab': ABFRAGE}, 'abfragetag': 'do',
                                     'ansprechpartner': [{'name': 'Frau Dauer', 'rolle': 'Metzgerei', 'telefon': '040 4', 'email': 'dauer@example.org'}]})
 m4 = r.get('markt', {})
-check('Markt 4 (Direkt) mit Dauerauftrag 14-tägig 1 Roastbeef + 1 Filetkopf, Abfragetag, Ansprechpartner', st == 200 and m4['dauer'] == {'rhythmus': 2, 'mengen': {'rb': 1, 'fk': 1}, 'ab': ABFRAGE, 'pauseBis': ''}
+check('Markt 4 (Direkt) mit Dauerauftrag alle 2 Wochen 1 Roastbeef + 1 Filetkopf, Abfragetag, Ansprechpartner', st == 200 and m4['dauer'] == {'rhythmus': 2, 'mengen': {'rb': 1, 'fk': 1}, 'ab': ABFRAGE, 'pauseBis': '', 'pauseVon': '', 'bis': ''}
       and m4['ansprechpartner'][0]['email'] == 'dauer@example.org' and m4['abfragetag'] == 'do', r)
 
 # ── Wochenabfrage ──
@@ -156,7 +159,7 @@ gr = [(g['name'], [x['id'] for x in g['maerkte']]) for g in w.get('gruppen', [])
 check('Woche: nur eigene Märkte, Zentrallager vor Direktbelieferung', gr == [('Zentrallager Nord', sorted([m1['id'], m3['id']], key=lambda i: {m1['id']: 'Musterstadt', m3['id']: 'Stammstadt'}[i])),
                                                                               ('Direktbelieferung', [m4['id']])], gr)
 x4 = w['gruppen'][1]['maerkte'][0]
-check('Woche: Dauerauftrag fällig, Text, Verlauf acht Wochen, darf antworten', x4['dauerFaellig'] is True and 'Dauerauftrag 14-tägig' in x4['dauerText']
+check('Woche: Dauerauftrag fällig, Text, Verlauf acht Wochen, darf antworten', x4['dauerFaellig'] is True and 'Dauerauftrag alle 2 Wochen' in x4['dauerText']
       and len(x4['verlauf']) == 8 and x4['verlauf'][-1]['kw'] == kw_plus(ABFRAGE, -1) and x4['darfAntworten'] is True, x4)
 check('Woche: Vorschau der drei folgenden Wochen (Vorbestellungen), Zahl der Notizen', [v['kw'] for v in x4['vorschau']] == [kw_plus(ABFRAGE, i) for i in (1, 2, 3)]
       and all(v['status'] == '' for v in x4['vorschau']) and x4['notizen'] == 0, (x4.get('vorschau'), x4.get('notizen')))
@@ -241,7 +244,7 @@ check('Woche zählt die Notizen ohne automatische Änderungen (1 Telefonat)', x1
 # Vorbestellung in zwei Wochen erscheint in der Vorschau der Abfragewoche; danach wieder zurückgenommen
 st, r = M.call('rewe_antwort', {'markt': m1['id'], 'kw': kw_plus(ABFRAGE, 2), 'status': 'bestellt', 'mengen': {'rb': 2}})
 v1 = next(x for g in M.call('rewe_woche')[1]['woche']['gruppen'] for x in g['maerkte'] if x['id'] == m1['id'])['vorschau']
-check('Vorbestellung KW+2 in der Vorschau (bestellt, 2 Stück)', st == 200 and v1[1] == {'kw': kw_plus(ABFRAGE, 2), 'status': 'bestellt', 'menge': 2} and v1[0]['status'] == '', v1)
+check('Vorbestellung KW+2 in der Vorschau (bestellt, 2 Stück)', st == 200 and v1[1] == {'kw': kw_plus(ABFRAGE, 2), 'status': 'bestellt', 'menge': 2, 'dauer': 0} and v1[0]['status'] == '', v1)
 check('Vorbestellung zurückgenommen', M.call('rewe_antwort', {'markt': m1['id'], 'kw': kw_plus(ABFRAGE, 2), 'status': '', 'r': r['antwort']['r']})[0] == 200)
 # Hinweis bis 4.000 Zeichen (vorher 1.000)
 akt = M.call('rewe_markt&id=' + m1['id'])[1]['markt']
@@ -307,7 +310,7 @@ check('Abschluss: Summen je Lieferweg und Mitarbeiter, Artikel ohne WinAB-Nummer
       and [(x['name'], x['maerkte']) for x in ab['personen']] == [('Mark Markt', 2)] and ab['ohneNr'] == ['Filetkopf', 'Vac. Set'] and ab['ohneStamm'] == 2
       and ab['zeilen'][0]['ohneBerechnung'] is True and ab['exportiert'] is None, ab)
 check('Abschluss: „in WinAB erfasst“ erst nach dem Excel (422)', SA.call('rewe_erfasst', {'kw': ABFRAGE, 'erfasst': True})[0] == 422)
-check('Excel: Woche ohne Bestellung → 422', SA.call('rewe_export', {'kw': kw_plus(ABFRAGE, 8)})[0] == 422)
+check('Excel: Woche ohne Bestellung (und ohne fälligen Dauerauftrag) → 422', SA.call('rewe_export', {'kw': kw_plus(ABFRAGE, 9)})[0] == 422)
 st, r, roh = SA.call('rewe_export', {'kw': ABFRAGE}, raw=True)
 check('Excel erstellt (200, keine JSON-Antwort)', st == 200 and not r, st)
 import urllib.request  # noqa: E402  (für die Binärantwort)
@@ -339,6 +342,103 @@ prot = json.dumps(A.call('log')[1], ensure_ascii=False)
 check('Protokoll: Antworten, Dauerauftrag, Zuweisung, Excel, erfasst', all(t in prot for t in ('REWE: REWE Musterstadt, ' + kw_text, 'Daueraufträge für', 'Märkte ab', 'neu zugewiesen',
       'REWE: Excel für WinAB erstellt – ' + kw_text + ', 2 Einzelaufträge, 4 Positionen', 'als in WinAB erfasst markiert')), prot[:400])
 check('Protokoll ohne Notizen', 'SUMME' not in prot and 'Möchte ab nächster Woche' not in prot)
+
+# ── Daueraufträge neu (Inhaber 12.11.2026): Rhythmus 6/8, Pause von–bis, Enddatum, Rechte, automatisch zum Bestellschluss ──
+# Eigene Testmärkte bei Nina (nicht bei Mark: dessen Märkte zählt die Team-Prüfung weiter unten)
+def neuer_markt(ort, kd, dauer=None, **extra):
+    b = {'kdNr': kd, 'name': 'REWE ' + ort, 'ort': ort, 'lieferweg': NORD, 'zustaendig': ids['nina'], 'ab': kw_plus(ABSCHLUSS, -3), **extra}
+    if dauer:
+        b['dauer'] = dauer
+    st_, r_ = LE.call('rewe_markt_save', b)
+    assert st_ == 200, r_
+    return r_['markt']
+
+
+def wochenmarkt(kw, mid, wer='*'):
+    return next((x for g in LE.call(f'rewe_woche&kw={kw}&wer={wer}')[1]['woche']['gruppen'] for x in g['maerkte'] if x['id'] == mid), None)
+
+
+for name, d in (('Rhythmus 5', {'rhythmus': 5, 'mengen': {'rb': 1}, 'ab': ABFRAGE}),
+                ('Pause „von“ ohne „bis“', {'rhythmus': 1, 'mengen': {'rb': 1}, 'ab': ABFRAGE, 'pauseVon': kw_plus(ABFRAGE, 1)}),
+                ('Pause „von“ nach „bis“', {'rhythmus': 1, 'mengen': {'rb': 1}, 'ab': ABFRAGE, 'pauseVon': kw_plus(ABFRAGE, 3), 'pauseBis': kw_plus(ABFRAGE, 2)}),
+                ('Ende vor der ersten Lieferung', {'rhythmus': 1, 'mengen': {'rb': 1}, 'ab': ABFRAGE, 'bis': kw_plus(ABFRAGE, -1)})):
+    st, r = LE.call('rewe_markt_save', {'id': m4['id'], 'dauer': d})
+    check(f'Dauerauftrag: {name} → 422', st == 422 and r.get('error'), (st, r))
+takt = neuer_markt('Taktdorf', '1799011', {'rhythmus': 1, 'mengen': {'rb': 1, 'fk': 1}, 'ab': ABFRAGE, 'pauseVon': kw_plus(ABFRAGE, 1),
+                                           'pauseBis': kw_plus(ABFRAGE, 2), 'bis': kw_plus(ABFRAGE, 4)})
+check('Dauerauftrag mit geplanter Pause und Ende gespeichert', takt['dauer'] == {'rhythmus': 1, 'mengen': {'rb': 1, 'fk': 1}, 'ab': ABFRAGE, 'pauseBis': kw_plus(ABFRAGE, 2),
+      'pauseVon': kw_plus(ABFRAGE, 1), 'bis': kw_plus(ABFRAGE, 4)}, takt['dauer'])
+x = wochenmarkt(ABFRAGE, takt['id'])
+check('Pause von–bis: Abfragewoche fällig, KW+1 und +2 Pause, +3 geplant (Verlauf voraus)', x['dauerFaellig'] is True and [v['dauer'] for v in x['vorschau']] == [0, 0, 2], x['vorschau'])
+x1, x4, x5 = (wochenmarkt(kw_plus(ABFRAGE, i), takt['id']) for i in (1, 4, 5))
+check('… in der Pause nicht fällig, nächste Lieferung nach der Pause; Enddatum: KW+4 fällig, danach keine mehr', x1['dauerFaellig'] is False
+      and x1['dauerNaechste'] == kw_plus(ABFRAGE, 3) and x4['dauerFaellig'] is True and (x5 is None or (x5['dauerFaellig'] is False and x5['dauerNaechste'] == '')), (x1['dauerNaechste'], x5 and x5['dauerNaechste']))
+sechs = neuer_markt('Sechsdorf', '1799012', {'rhythmus': 6, 'mengen': {'rb': 2}, 'ab': ABFRAGE})
+check('Rhythmus alle 6 Wochen: Text, fällig in der Abfragewoche und nach 6 Wochen, nicht dazwischen', wochenmarkt(ABFRAGE, sechs['id'])['dauerText'].startswith('Dauerauftrag alle 6 Wochen')
+      and wochenmarkt(kw_plus(ABFRAGE, 6), sechs['id'])['dauerFaellig'] is True and wochenmarkt(kw_plus(ABFRAGE, 3), sechs['id'])['dauerNaechste'] == kw_plus(ABFRAGE, 6))
+st, r = LE.call('rewe_markt_save', {'id': sechs['id'], 'rev': sechs['rev'], 'dauer': {'rhythmus': 8, 'mengen': {'rb': 2}, 'ab': ABFRAGE}})
+check('Rhythmus alle 8 Wochen: nächste Lieferung nach der Abfragewoche in 8 Wochen', st == 200 and r['markt']['dauer']['rhythmus'] == 8
+      and wochenmarkt(kw_plus(ABFRAGE, 1), sechs['id'])['dauerNaechste'] == kw_plus(ABFRAGE, 8), r)
+check('Rhythmen in rewe_start: 1–4, 6, 8 Wochen, einheitliche Begriffe', {k: v for k, v in LE.call('rewe_start')[1]['rhythmen'].items() if k != '0'}
+      == {'1': 'jede Woche', '2': 'alle 2 Wochen', '3': 'alle 3 Wochen', '4': 'alle 4 Wochen', '6': 'alle 6 Wochen', '8': 'alle 8 Wochen'})
+roh_m = {m_['id']: m_ for m_ in json.loads(storage_raw('rewe-maerkte').split('?>\n', 1)[-1])['liste']}
+check('Speicher nur erweitert: neue Felder nur, wenn gesetzt; ältere Aufträge ohne pauseVon/bis werden mit leeren Werten gelesen',
+      set(roh_m[takt['id']]['dauer']) == {'rhythmus', 'mengen', 'ab', 'pauseBis', 'pauseVon', 'bis'} and 'pauseVon' not in roh_m[m4['id']]['dauer']
+      and 'bis' not in roh_m[m4['id']]['dauer'] and l4['dauer']['pauseVon'] == '' and l4['dauer']['bis'] == '', roh_m[m4['id']]['dauer'])
+# Rechte wie bisher: Verkäufer nur eigene Märkte (fremde wie nicht vorhanden), Leitung alle, nur ansehen gar nicht
+DA = {'rhythmus': 1, 'mengen': {'rb': 1}, 'ab': ABFRAGE}
+check('Rechte: Verkäufer Dauerauftrag an fremdem Markt → 404, nur ansehen → 403', M.call('rewe_markt_save', {'id': takt['id'], 'dauer': DA})[0] == 404
+      and L.call('rewe_markt_save', {'id': takt['id'], 'dauer': DA})[0] == 403)
+check('Rechte: Verkäuferin am eigenen Markt (bearbeiten) ok, Leitung an jedem Markt ok', NI.call('rewe_markt_save', {'id': takt['id'], 'dauer': DA})[0] == 200
+      and LE.call('rewe_markt_save', {'id': sechs['id'], 'dauer': DA})[0] == 200)
+
+# Automatisch zum Bestellschluss (KW ≤ Abschlusswoche): nur ohne Antwort, idempotent, mit Schnappschuss
+W1 = {'rhythmus': 1, 'mengen': {'rb': 2}, 'ab': kw_plus(ABSCHLUSS, -3)}
+auto_m = neuer_markt('Autodorf', '1799013', W1)
+anders_m = neuer_markt('Andersdorf', '1799014', {**W1, 'mengen': {'rb': 1}})
+kein_m = neuer_markt('Keindorf', '1799015', W1)
+ruhe_m = neuer_markt('Ruhedorf', '1799016', W1, kauf='ruhend')
+check('vor dem Lesen: „Diese Woche anders“ – Andersdorf 3 Stück, Keindorf Kein Bedarf', NI.call('rewe_antwort', {'markt': anders_m['id'], 'kw': ABSCHLUSS, 'status': 'bestellt', 'mengen': {'rb': 3}})[0] == 200
+      and NI.call('rewe_antwort', {'markt': kein_m['id'], 'kw': ABSCHLUSS, 'status': 'kein'})[0] == 200)
+wa = {x_['id']: x_ for g in LE.call(f'rewe_woche&kw={ABSCHLUSS}&wer=*')[1]['woche']['gruppen'] for x_ in g['maerkte']}
+aa = wa[auto_m['id']]['antwort']
+check('nach dem Bestellschluss: fälliger Dauerauftrag automatisch bestellt (Herkunft dauer, auto, Schnappschuss Lieferweg/Zuständig)', aa and aa['status'] == 'bestellt'
+      and aa['mengen'] == {'rb': 2} and aa['quelle'] == 'dauer' and aa['auto'] is True and aa['von'] == 'automatisch (Dauerauftrag)' and aa['zustaendig'] == 'Nina Neu'
+      and aa['lieferweg'] == NORD and LE.call(f'rewe_woche&kw={ABSCHLUSS}')[1]['woche']['bestellschluss'] is True, aa)
+check('… ausdrückliche Antworten bleiben (3 Stück, Kein Bedarf), ruhender Markt nicht automatisch', wa[anders_m['id']]['antwort']['mengen'] == {'rb': 3}
+      and wa[anders_m['id']]['antwort']['auto'] is False and wa[kein_m['id']]['antwort']['status'] == 'kein' and wa[ruhe_m['id']]['antwort'] is None,
+      {k: wa[v['id']]['antwort'] for k, v in (('anders', anders_m), ('kein', kein_m), ('ruhe', ruhe_m))})
+st, r = SA.call(f'rewe_abschluss&kw={ABSCHLUSS}')
+aa2 = wochenmarkt(ABSCHLUSS, auto_m['id'])['antwort']
+check('idempotent: erneutes Lesen und Wochenabschluss schreiben nichts doppelt (gleicher Stand, gleiche Zeit)', st == 200 and aa2['r'] == aa['r'] == 1 and aa2['t'] == aa['t'])
+prot = json.dumps(A.call('log')[1], ensure_ascii=False)
+check('Protokoll: genau einmal „automatisch bestellt (Bestellschluss)“ für die Woche', prot.count('für ' + f'KW {int(ABSCHLUSS[5:])}/{ABSCHLUSS[:4]}' + ' automatisch bestellt (Bestellschluss)') == 1, prot[:200])
+ab = r['abschluss']
+check('Wochenabschluss: automatische Bestellung als „auto“, ruhender Markt als Dauerauftrag ohne Bestellung', any(z['markt'] == 'REWE Autodorf' and z['auto'] for z in ab['zeilen'])
+      and ab['auto'] >= 1 and [(x_['ort'], x_['art']) for x_ in ab['dauerOffen']] == [('Ruhedorf', 'ohne')] and ab['bestellschluss'] is True, (ab['dauerOffen'], ab['auto']))
+LE.call('rewe_markt_save', {'id': auto_m['id'], 'dauer': {**W1, 'mengen': {'rb': 5}}})
+LE.call('rewe_zuweisen', {'maerkte': [auto_m['id']], 'ab': kw_plus(ABSCHLUSS, -3), 'nutzer': ids['evi']})
+aa3 = wochenmarkt(ABSCHLUSS, auto_m['id'])['antwort']
+check('Schnappschuss (GR-106): spätere Änderung von Menge und Zuständigkeit ändert die abgeschlossene Woche nicht', aa3['mengen'] == {'rb': 2} and aa3['zustaendig'] == 'Nina Neu' and aa3['r'] == 1, aa3)
+alt_w = wochenmarkt(kw_plus(ABSCHLUSS, -2), auto_m['id'])
+check('ältere Wochen (vor der vorigen Abschlusswoche) bleiben, wie sie waren: keine nachträgliche Bestellung', alt_w['antwort'] is None
+      and [x_['art'] for x_ in SA.call(f'rewe_abschluss&kw={kw_plus(ABSCHLUSS, -2)}')[1]['abschluss']['dauerOffen'] if x_['ort'] == 'Autodorf'] == ['ohne'], alt_w['antwort'])
+offen_w = wochenmarkt(ABFRAGE, auto_m['id'])
+check('vor dem Bestellschluss (Abfragewoche): nichts geschrieben, „wird automatisch bestellt“', offen_w['antwort'] is None and offen_w['dauerFaellig'] is True
+      and offen_w['dauerAuto'] is True and LE.call(f'rewe_woche&kw={ABFRAGE}')[1]['woche']['bestellschluss'] is False
+      and [x_['art'] for x_ in SA.call(f'rewe_abschluss&kw={ABFRAGE}')[1]['abschluss']['dauerOffen'] if x_['ort'] == 'Autodorf'] == ['geplant'])
+KW5 = kw_plus(ABFRAGE, 5)
+st, r, roh = SA.call('rewe_export', {'kw': KW5}, raw=True)
+check('Excel-Export vor dem Bestellschluss bestellt fällige Daueraufträge spätestens jetzt', st == 200 and wochenmarkt(KW5, auto_m['id'])['antwort']['auto'] is True)
+req = urllib.request.Request(B + '/api/?action=rewe_export', data=json.dumps({'kw': ABSCHLUSS}).encode(),
+                             headers={'X-Forwarded-For': SA.ip, 'Content-Type': 'application/json', 'X-CSRF-Token': SA.csrf})
+ws = load_workbook(io.BytesIO(SA.http.open(req).read()))['WinAB-Erfassung']
+xl = {(row[5].value, row[17].value) for row in ws.iter_rows(min_row=5) if row[5].value and row[0].value}
+check('Excel enthält die automatischen Bestellungen (Spalte „Dauerauftrag“: automatisch), ausdrückliche ohne Vermerk', ws.cell(row=4, column=18).value == 'Dauerauftrag'
+      and ('REWE Autodorf', 'automatisch') in xl and ('REWE Andersdorf', None) in xl and not any(m_ == 'REWE Ruhedorf' for m_, _ in xl), xl)
+# Testmärkte wieder ohne Dauerauftrag (die folgenden Prüfungen zählen Märkte und Wochen)
+for mm in (takt, sechs, auto_m, anders_m, kein_m, ruhe_m):
+    LE.call('rewe_markt_save', {'id': mm['id'], 'dauer': {'rhythmus': 0}, 'kauf': 'ausgelistet'})
 
 # ── Team: Mitarbeiter hinzufügen und entfernen (Wunsch des Inhabers 11.11.2026) ──
 def namen(liste):
@@ -439,6 +539,7 @@ check('Protokoll: Hinzufügen und Entfernen mit Namen', all(t in prot for t in (
       'REWE: Lea Lesen aus dem Team entfernt (ausgeblendet, Rechte der Rolle bleiben)', 'REWE: Lea Lesen ins Team aufgenommen (wieder eingeblendet)')), prot[:300])
 
 # ── Datenpaket ──
+anzahl_maerkte = len(LE.call('rewe_maerkte')[1]['maerkte'])
 check('Datenpaket nur mit „verwalten“ (403)', M.call('rewe_import', {'paket': PAKET, 'vorschau': True})[0] == 403)
 st, r = LE.call('rewe_import', {'paket': {'format': 'falsch'}, 'vorschau': True})
 check('falsches Format: Fehler', st == 200 and r['fehler'] and not r['zahlen'], r)
@@ -454,7 +555,7 @@ zu = {'Liste A': ids['mark'], 'Liste B': ids['evi']}
 st, r = LE.call('rewe_import', {'paket': PAKET, 'zuordnung': zu, 'vorschau': True})
 check('Vorschau: Zahlen, Listen, nicht leer', st == 200 and r['zahlen']['maerkte'] == 4 and r['zahlen']['antworten'] == 11 and r['zahlen']['bestellungen'] == 6
       and r['zahlen']['stueck'] == 8 and r['zahlen']['dauerauftraege'] == 1 and r['listen'] == {'Liste A': 2, 'Liste B': 2, 'Liste C': 1} and r['leer'] is False and not r['fehler'], r)
-check('Vorschau schreibt nichts', len(LE.call('rewe_maerkte')[1]['maerkte']) == 4)
+check('Vorschau schreibt nichts', len(LE.call('rewe_maerkte')[1]['maerkte']) == anzahl_maerkte)
 check('Liste einem Mitarbeiter ohne „REWE ansehen“ zuordnen → Fehler', LE.call('rewe_import', {'paket': PAKET, 'zuordnung': {'Liste A': ids['otto']}, 'vorschau': True})[1]['fehler'])
 check('Liste einer im Modul ergänzten Mitarbeiterin zuordnen → ohne Fehler', LE.call('rewe_import', {'paket': PAKET, 'zuordnung': {'Liste A': ids['pia']}, 'vorschau': True})[1]['fehler'] == [])
 check('nicht leer ohne „ersetzen“ → 409', LE.call('rewe_import', {'paket': PAKET, 'zuordnung': zu})[0] == 409)
@@ -562,6 +663,9 @@ with sync_playwright() as p:
     pg.click(f'{zeile} .rw-mname'); pg.wait_for_selector('#dlg-karte[open] #kt-hinweis')
     check('Marktkarte: Name, Reiter Notizen/Verlauf/Wiedervorlagen, Hinweis, Ansprechpartner, Dauerauftrag', 'Musterdorf' in text(pg, '#kt-titel')
           and pg.locator('#dlg-karte [data-kreiter]').count() == 3 and pg.is_visible('#kt-ntext') and 'Ansprechpartner' in text(pg, '#dlg-karte') and 'Dauerauftrag' in text(pg, '#dlg-karte'))
+    pg.click('#dlg-karte [data-kdauer]'); pg.wait_for_selector('#dlg-dauer[open] #dd-titel:has-text("Musterdorf")')
+    check('Pop-up aus der Marktkarte: „Neuer Dauerauftrag · Musterdorf“ über der Karte', 'Neuer Dauerauftrag' in text(pg, '#dd-titel') and pg.is_visible('#dlg-karte[open]'))
+    pg.click('#dlg-dauer .rw-ddfuss [data-dd-zu]'); pg.wait_for_selector('#dlg-dauer', state='hidden')
     pg.fill('#kt-hinweis', 'Nur donnerstags anrufen\nAnlieferung über die Rampe')
     pg.wait_for_function("document.querySelector('#kt-hstatus').textContent.includes('gespeichert') && !document.querySelector('#kt-hstatus').textContent.includes('noch nicht')", timeout=8000)
     mid = next(x['id'] for g in M.call(f'rewe_woche&kw={WOCHE}')[1]['woche']['gruppen'] for x in g['maerkte'] if x['ort'] == 'Musterdorf')
@@ -591,15 +695,26 @@ with sync_playwright() as p:
     check('Zurück in KW 43: Vorbestellung KW 44 im Verlauf (3) und im Text', pg.inner_text(f'{zeile} .rw-z.vor') == '3' and f'vorbestellt KW {int(naechste[5:])}: 3' in text(pg, f'{zeile} .rw-vtext'), text(pg, f'{zeile} .rw-vtext'))
     pg.screenshot(path=os.path.join(SH, 'rewe_woche_1280.png'), full_page=True)
     pg.click('#rw-w-heute'); pg.wait_for_function(f"location.hash === '#woche/{ABFRAGE}' && document.querySelector('#rw-w-titel').textContent.includes('KW {int(ABFRAGE[5:])}')")
-    pg.wait_for_selector('.rw-zeile:has-text("Beispielstadt")')
-    faellig = next(x for g in M.call(f'rewe_woche&kw={ABFRAGE}')[1]['woche']['gruppen'] for x in g['maerkte'] if x['ort'] == 'Beispielstadt')['dauerFaellig']
-    box = pg.locator('.rw-zeile:has-text("Beispielstadt")')
-    if faellig:   # Dauerauftrag 14-tägig ab KW 2: in geraden Wochen fällig
-        box.locator('[data-dauer-ok]').click(); pg.wait_for_selector('.rw-zeile:has-text("Beispielstadt") [data-s="bestellt"][aria-pressed="true"]')
-        check('Abfragewoche: Dauerauftrag fällig → bestätigt (Roastbeef + Filetkopf)', [x.input_value() for x in pg.locator('.rw-zeile:has-text("Beispielstadt") .rw-mzahl').all()][:2] == ['1', '1'])
+    bsp = next(x for g in M.call(f'rewe_woche&kw={ABFRAGE}')[1]['woche']['gruppen'] for x in g['maerkte'] if x['ort'] == 'Beispielstadt')
+    if bsp['dauerFaellig']:   # Dauerauftrag alle 2 Wochen ab KW 2: in geraden Wochen fällig
+        pg.wait_for_selector('.rw-zeile:has-text("Beispielstadt") .rw-dauerbox')
+        check('Abfragewoche: Dauerauftrag fällig → „wird zum Bestellschluss automatisch bestellt“, „Diese Woche anders“, „Dauerauftrag ändern“, keine Antwortknöpfe',
+              'wird zum Bestellschluss automatisch bestellt' in text(pg, '.rw-zeile:has-text("Beispielstadt") .rw-dauerbox')
+              and pg.is_visible('.rw-zeile:has-text("Beispielstadt") .rw-dauerbox [data-dauer-dlg]') and pg.locator('.rw-zeile:has-text("Beispielstadt") [data-s]').count() == 0)
+        pg.click('.rw-zeile:has-text("Beispielstadt") .rw-dauerbox [data-offen]')
     else:
-        check('Abfragewoche: Dauerauftrag nicht fällig → „Trotzdem abfragen“', box.locator('.rw-nichtfaellig').count() == 1)
-        box.locator('[data-offen]').click(); pg.wait_for_selector('.rw-zeile:has-text("Beispielstadt") [data-s="bestellt"]')
+        pg.wait_for_selector(f'.rw-dkompakt [data-offen="{bsp["id"]}"]')
+        check('Abfragewoche: Dauerauftrag nicht fällig → kompakt „Diese Woche keine Lieferung nach Dauerauftrag“ mit nächster Lieferung, keine volle Zeile',
+              'Diese Woche keine Lieferung nach Dauerauftrag' in text(pg, '.rw-dkompakt') and f'nächste KW {int(bsp["dauerNaechste"][5:])}' in text(pg, '.rw-dkompakt')
+              and pg.locator('.rw-zeile:has-text("Beispielstadt")').count() == 0, text(pg, '.rw-dkompakt'))
+        pg.click(f'.rw-dkompakt [data-offen="{bsp["id"]}"]')
+    pg.wait_for_selector('.rw-zeile:has-text("Beispielstadt") [data-s="bestellt"]')
+    check('„Diese Woche anders“ bzw. „trotzdem abfragen“: normale Antworten, „Markt pausiert“ statt „Pause“', 'Markt pausiert' in text(pg, '.rw-zeile:has-text("Beispielstadt") [data-s="pause"]'))
+    # Pop-up „Dauerauftrag“ aus „Meine Woche“ (Chip am Markt): schließt nur über × oder Abbrechen
+    pg.click('.rw-zeile:has-text("Beispielstadt") [data-dauer-dlg]'); pg.wait_for_selector('#dlg-dauer[open] #dd-titel:has-text("Beispielstadt")')
+    pg.mouse.click(5, 5)
+    check('Pop-up aus „Meine Woche“: Beispielstadt, ein Klick daneben schließt nicht', pg.is_visible('#dlg-dauer[open]') and 'alle 2 Wochen' in text(pg, '#dlg-dauer [aria-pressed="true"][data-dd-rh]'))
+    pg.click('#dlg-dauer .rw-dialogkopf [data-dd-zu]'); pg.wait_for_selector('#dlg-dauer', state='hidden')
     # Antwort zurücksetzen (wieder offen): erster Klick fragt nach, zweiter setzt zurück; „Rückgängig“ holt sie zurück
     if not pg.locator('.rw-zeile:has-text("Beispielstadt") [data-zurueck]').count():
         pg.click('.rw-zeile:has-text("Beispielstadt") [data-s="kein"]'); pg.wait_for_selector('.rw-zeile:has-text("Beispielstadt") [data-zurueck]')
@@ -623,36 +738,72 @@ with sync_playwright() as p:
     pg.wait_for_selector('#dlg-notiz[open]', state='hidden'); pg.wait_for_selector('.rw-verlaufsliste li:has-text("Vac. Set angeboten")')
     check('Notiz über die Eingabemaske', 'Telefonat' in text(pg, '.rw-verlaufsliste'))
     pg.click('#rw-a-bearbeiten'); pg.wait_for_selector('#dlg-markt[open]')
-    check('Bearbeiten ohne Stammdaten (nur verwalten)', pg.is_hidden('#mk-stamm'))
+    check('Bearbeiten ohne Stammdaten (nur verwalten) und ohne Dauerauftrag (nur noch im Pop-up)', pg.is_hidden('#mk-stamm') and 'Dauerauftrag' not in text(pg, '#dlg-markt'))
     pg.select_option('#mk-tag', 'mi'); pg.click('#mk-form button[type="submit"]'); pg.wait_for_selector('#dlg-markt[open]', state='hidden')
     pg.wait_for_selector('.rw-kv:has-text("Mittwoch")')
     check('Abfragetag geändert', 'Mittwoch' in text(pg, '.rw-kv'))
     pg.screenshot(path=os.path.join(SH, 'rewe_akte_1280.png'), full_page=True)
-    # Reiter „Daueraufträge“: Liste, bearbeiten, neu anlegen, beenden
-    pg.click('#rw-tabs [data-tab="dauer"]'); pg.wait_for_selector('#rw-d-tabelle tbody tr[data-dauer]')
-    check('Daueraufträge: Beispielstadt 14-tägig, 1 Roastbeef + 1 Filetkopf, Zusammenfassung', pg.locator('#rw-d-tabelle tbody tr[data-dauer]').count() == 1
-          and '14-tägig' in text(pg, '#rw-d-tabelle') and '1 Roastbeef Dry Aged + 1 Filetkopf' in text(pg, '#rw-d-tabelle') and 'aktiv' in text(pg, '#rw-d-sub') and '#dauer' in pg.url)
-    pg.click('#rw-d-tabelle tr:has-text("Beispielstadt") [data-dauer-edit]'); pg.wait_for_selector('#rw-d-edit:not([hidden]) [data-d-rh]')
-    pg.click('#rw-d-edit [data-d-rh="1"]'); pg.wait_for_selector('#rw-d-edit [data-d-rh="1"][aria-pressed="true"]')
-    pg.click('#rw-d-edit [data-d-menge="rb"][data-d="1"]'); pg.wait_for_function("document.querySelector('#rw-d-edit [data-d-mzahl=\"rb\"]').value === '2'")
-    check('Bearbeiten: Vorschau der nächsten Lieferungen (wöchentlich)', 'Nächste Lieferungen' in text(pg, '#rw-d-edit .rw-dvorschau'))
-    pg.screenshot(path=os.path.join(SH, 'rewe_dauer_1280.png'), full_page=True)
-    pg.click('#rw-d-edit [data-d-speichern]'); pg.wait_for_selector('#rw-d-edit', state='hidden')
-    pg.wait_for_selector('#rw-d-tabelle tr:has-text("Beispielstadt"):has-text("wöchentlich")')
+    pg.click('#rw-a-dauer'); pg.wait_for_selector('#dlg-dauer[open] #dd-titel:has-text("Beispielstadt")')
+    check('Pop-up aus der Marktakte: „Dauerauftrag · Beispielstadt“', 'Dauerauftrag · Beispielstadt' in text(pg, '#dd-titel'))
+    pg.click('#dlg-dauer .rw-ddfuss [data-dd-zu]'); pg.wait_for_selector('#dlg-dauer', state='hidden')
+    # Reiter „Daueraufträge“: ruhige Liste mit Wochenleiste, Pop-up zum Ändern, Anlegen mit Marktsuche, Pause von–bis, Ende, beenden
+    pg.click('#rw-tabs [data-tab="dauer"]'); pg.wait_for_selector('#rw-d-liste [data-dauer]')
+    check('Daueraufträge: Beispielstadt alle 2 Wochen, Menge, Wochenleiste mit 8 Wochen, Zusammenfassung, Filter „KW n fällig“', pg.locator('#rw-d-liste [data-dauer]').count() == 1
+          and 'alle 2 Wochen' in text(pg, '#rw-d-liste') and '1 Roastbeef Dry Aged + 1 Filetkopf' in text(pg, '#rw-d-liste') and pg.locator('#rw-d-liste [data-dauer] .rw-dwz').count() == 8
+          and 'aktiv' in text(pg, '#rw-d-sub') and '#dauer' in pg.url and f'KW {int(ABFRAGE[5:])} fällig' in text(pg, '#rw-d-filter'), text(pg, '#rw-d-liste'))
+    pg.click('#rw-d-liste [data-dauer]:has-text("Beispielstadt")'); pg.wait_for_selector('#dlg-dauer[open] [data-dd-rh]')
+    check('Pop-up „Dauerauftrag“: Titel, sechs Rhythmen (1–4, 6, 8 Wochen), Lieferwochen, Vorschau', 'Beispielstadt' in text(pg, '#dd-titel') and pg.locator('#dlg-dauer [data-dd-rh]').count() == 6
+          and 'alle 8 Wochen' in text(pg, '#dlg-dauer .rw-ddrh') and pg.locator('#dlg-dauer [data-dd-ab]').count() == 12 and 'Nächste Lieferungen' in text(pg, '#dd-vorschau'))
+    pg.mouse.click(5, 5)
+    check('Pop-up: ein Klick daneben schließt nicht (Escape schließt wie überall, Prüfung „einheit“)', pg.is_visible('#dlg-dauer[open]'))
+    pg.click('#dlg-dauer [data-dd-rh="1"]'); pg.wait_for_selector('#dlg-dauer [data-dd-rh="1"][aria-pressed="true"]')
+    pg.click('#dlg-dauer [data-dd-menge="rb"][data-d="1"]'); pg.wait_for_function("document.querySelector('#dlg-dauer [data-dd-mzahl=\"rb\"]').value === '2'")
+    pg.screenshot(path=os.path.join(SH, 'rewe_dauer_1280.png'))
+    pg.click('#dlg-dauer [data-dd-speichern]'); pg.wait_for_selector('#dlg-dauer', state='hidden')
+    pg.wait_for_selector('#rw-d-liste [data-dauer]:has-text("Beispielstadt"):has-text("jede Woche")')
     bd = next(m for m in M.call('rewe_maerkte')[1]['maerkte'] if m['ort'] == 'Beispielstadt')['dauer']
-    check('Dauerauftrag geändert: wöchentlich, 2 Roastbeef + 1 Filetkopf', bd['rhythmus'] == 1 and bd['mengen'] == {'rb': 2, 'fk': 1}, bd)
-    pg.click('#rw-d-neu'); pg.wait_for_selector('#rw-d-edit:not([hidden]) #rw-d-markt')
-    pg.click('#rw-d-edit [data-d-speichern]'); pg.wait_for_selector('#rw-d-meldung:has-text("Markt wählen")')
-    pg.select_option('#rw-d-markt', label=pg.locator('#rw-d-markt option', has_text='Musterdorf').inner_text())
-    pg.wait_for_selector('#rw-d-edit [data-d-rh="1"][aria-pressed="true"]')
-    pg.click('#rw-d-edit [data-d-rh="4"]'); pg.click('#rw-d-edit [data-d-speichern]')
-    pg.wait_for_selector('#rw-d-tabelle tr:has-text("Musterdorf"):has-text("alle 4 Wochen")')
-    check('Neuer Dauerauftrag: Musterdorf alle 4 Wochen, 1 Roastbeef', next(m for m in M.call('rewe_maerkte')[1]['maerkte'] if m['ort'] == 'Musterdorf')['dauer']['rhythmus'] == 4
-          and pg.locator('#rw-d-tabelle tbody tr[data-dauer]').count() == 2)
-    pg.click('#rw-d-tabelle tr:has-text("Musterdorf")'); pg.wait_for_selector('#rw-d-edit [data-d-ende]')
-    pg.click('#rw-d-edit [data-d-ende]'); pg.wait_for_selector('#rw-d-edit [data-d-ende]:has-text("Wirklich beenden?")')
-    pg.click('#rw-d-edit [data-d-ende]'); pg.wait_for_selector('#rw-d-tabelle tr:has-text("Musterdorf")', state='detached')
+    check('Dauerauftrag geändert: jede Woche, 2 Roastbeef + 1 Filetkopf', bd['rhythmus'] == 1 and bd['mengen'] == {'rb': 2, 'fk': 1}, bd)
+    pg.click('#rw-d-neu'); pg.wait_for_selector('#dlg-dauer[open] #dd-suche')
+    check('Anlegen: Speichern erst nach der Marktwahl', pg.is_disabled('#dlg-dauer [data-dd-speichern]'))
+    pg.fill('#dd-suche', 'muster'); pg.wait_for_selector('#dd-maerkte [data-dd-markt]')
+    check('Marktsuche beim Anlegen: nur eigene Märkte ohne Dauerauftrag (Musterdorf)', pg.locator('#dd-maerkte [data-dd-markt]').count() == 1 and 'Musterdorf' in text(pg, '#dd-maerkte'))
+    pg.click('#dd-maerkte [data-dd-markt]'); pg.wait_for_selector('#dd-titel:has-text("Musterdorf")')
+    pg.click('#dlg-dauer [data-dd-rh="4"]'); pg.wait_for_selector('#dlg-dauer [data-dd-rh="4"][aria-pressed="true"]')
+    pg.check('#dd-pause'); pg.wait_for_selector('#dd-pvon')
+    pg.select_option('#dd-pvon', kw_plus(ABFRAGE, 4)); pg.wait_for_selector('#dd-pbis'); pg.select_option('#dd-pbis', kw_plus(ABFRAGE, 5))
+    pg.check('#dd-ende'); pg.wait_for_selector('#dd-bis'); pg.select_option('#dd-bis', kw_plus(ABFRAGE, 20))
+    pg.wait_for_function("document.querySelector('#dd-vorschau').textContent.includes('Pause') && document.querySelector('#dd-vorschau').textContent.includes('endet nach')")
+    check('Vorschau mit Pause (bis einschließlich) und Ende', 'bis einschließlich' in text(pg, '#dlg-dauer') and 'läuft bis einschließlich' in text(pg, '#dlg-dauer'), text(pg, '#dd-vorschau'))
+    pg.click('#dlg-dauer [data-dd-speichern]'); pg.wait_for_selector('#dlg-dauer', state='hidden')
+    pg.wait_for_selector('#rw-d-liste [data-dauer]:has-text("Musterdorf"):has-text("alle 4 Wochen")')
+    md = next(m for m in M.call('rewe_maerkte')[1]['maerkte'] if m['ort'] == 'Musterdorf')['dauer']
+    check('Neuer Dauerauftrag: Musterdorf alle 4 Wochen, Pause von–bis einschließlich, läuft bis', md['rhythmus'] == 4 and md['pauseVon'] == kw_plus(ABFRAGE, 4)
+          and md['pauseBis'] == kw_plus(ABFRAGE, 5) and md['bis'] == kw_plus(ABFRAGE, 20) and pg.locator('#rw-d-liste [data-dauer]').count() == 2, md)
+    mdm = next(m for m in M.call('rewe_maerkte')[1]['maerkte'] if m['ort'] == 'Musterdorf')
+    check('Verlauf der Marktakte nennt Rhythmus, Pause und Ende', any('alle 4 Wochen' in n['text'] and 'bis einschließlich' in n['text'] and 'läuft bis einschließlich' in n['text']
+          for n in M.call('rewe_markt&id=' + mdm['id'])[1]['notizen']))
+    pg.click('#rw-d-filter [data-df="pause"]'); pg.wait_for_function("document.querySelectorAll('#rw-d-liste [data-dauer]').length === 1")
+    check('Filter „Pausiert“: auch eine geplante Pause (Musterdorf)', 'Musterdorf' in text(pg, '#rw-d-liste') and 'Pause' in text(pg, '#rw-d-liste'))
+    pg.click('#rw-d-filter [data-df=""]'); pg.wait_for_function("document.querySelectorAll('#rw-d-liste [data-dauer]').length === 2")
+    pg.click('#rw-d-liste [data-dauer]:has-text("Musterdorf")'); pg.wait_for_selector('#dlg-dauer[open] [data-dd-ende]')
+    pg.click('#dlg-dauer [data-dd-ende]'); pg.wait_for_selector('#dlg-dauer [data-dd-ende]:has-text("Wirklich beenden?")')
+    pg.click('#dlg-dauer [data-dd-ende]'); pg.wait_for_selector('#rw-d-liste [data-dauer]:has-text("Musterdorf")', state='detached')
     check('Dauerauftrag beendet (Rückfrage mit zweitem Klick)', next(m for m in M.call('rewe_maerkte')[1]['maerkte'] if m['ort'] == 'Musterdorf')['dauer']['rhythmus'] == 0)
+    # Folgewoche: Beispielstadt (jetzt jede Woche) wird automatisch bestellt – zählt als erledigt, Kachel filtert auf diese Märkte
+    KWN = kw_plus(ABFRAGE, 1)
+    pg.goto(B + f'/module/rewe/#woche/{KWN}'); pg.wait_for_selector('#rw-w-kpis [data-kpi-dauer]')
+    pg.click('#rw-w-filter [data-f="offen"]'); pg.wait_for_selector('#rw-w-filter [data-f="offen"][aria-pressed="true"]')
+    check('Folgewoche, Filter „Offen“: automatisch bestellter Dauerauftrag ist erledigt (nicht in der Liste), Kachel „Daueraufträge diese Woche: 1 · automatisch“',
+          pg.locator('.rw-zeile:has-text("Beispielstadt")').count() == 0 and '1' in text(pg, '#rw-w-kpis [data-kpi-dauer] b')
+          and 'automatisch bestellt' in text(pg, '#rw-w-kpis [data-kpi-dauer]'), text(pg, '#rw-w-kpis'))
+    pg.click('#rw-w-kpis [data-kpi-dauer]'); pg.wait_for_selector('.rw-zeile:has-text("Beispielstadt") .rw-dauerbox')
+    check('Klick auf die Kachel: nur Märkte mit Dauerauftrag, Kasten „wird zum Bestellschluss automatisch bestellt“ mit „Diese Woche anders“',
+          pg.get_attribute('#rw-w-kpis [data-kpi-dauer]', 'aria-pressed') == 'true' and pg.locator('.rw-zeile').count() == 1
+          and 'Dauerauftrag KW' in text(pg, '.rw-dauerbox') and 'wird zum Bestellschluss automatisch bestellt' in text(pg, '.rw-dauerbox')
+          and pg.is_visible('.rw-dauerbox [data-offen]') and pg.locator('.rw-zeile:has-text("Beispielstadt") .rw-z.d.jetzt').count() == 1)
+    pg.screenshot(path=os.path.join(SH, 'rewe_dauer_woche_1280.png'), full_page=True)
+    pg.click('#rw-w-kpis [data-kpi-dauer]'); pg.wait_for_selector('#rw-w-filter [data-f="offen"][aria-pressed="true"]')
+    check('erneuter Klick: wieder Filter „Offen“', pg.get_attribute('#rw-w-kpis [data-kpi-dauer]', 'aria-pressed') == 'false')
     ctx.close()
 
     ctx, pg = anmelden('lena', 'Leitung-Konto-11', '198.51.100.10')
@@ -689,6 +840,14 @@ with sync_playwright() as p:
     check('Excel über die Oberfläche (KW 43, Bestellung aus der Oberfläche)', dl.value.suggested_filename == 'REWE_WinAB_2026_KW43.xlsx', dl.value.suggested_filename)
     pg.wait_for_selector('#rw-a-erfasst:not([hidden])')
     pg.screenshot(path=os.path.join(SH, 'rewe_abschluss_1280.png'), full_page=True)
+    pg.goto(B + f'/module/rewe/#abschluss/{kw_plus(ABFRAGE, 1)}'); pg.wait_for_selector('.rw-schritte')
+    pg.wait_for_function(f"document.querySelector('#rw-a-titel').textContent.includes('KW {int(kw_plus(ABFRAGE, 1)[5:])}')")
+    try:   # der Titel steht schon vor dem Laden – auf den Inhalt der neuen Woche warten
+        pg.wait_for_function("document.querySelector('#rw-a-inhalt').innerText.includes('werden automatisch bestellt')", timeout=8000)
+    except Exception:
+        pass
+    check('Wochenabschluss vor dem Bestellschluss: Daueraufträge „werden automatisch bestellt“, Excel trotzdem möglich (bestellt sie dabei)',
+          'werden automatisch bestellt' in text(pg, '#rw-a-inhalt') and pg.is_enabled('#rw-a-export'), text(pg, '#rw-a-inhalt')[:300])
     pg.click('#rw-tabs [data-tab="einstellungen"]'); pg.wait_for_selector('#rw-e-lw tbody tr')
     namen = json.loads(json.dumps(PAKET).replace('"Liste A"', '"Liste Mark"').replace('"Liste B"', '"Evi"'))
     pg.set_input_files('#rw-e-datei', files=[{'name': 'paket.json', 'mimeType': 'application/json', 'buffer': json.dumps(namen).encode()}])
@@ -766,13 +925,21 @@ with sync_playwright() as p:
         ctx, pg = anmelden('mark', 'Laden-Konto-22', '198.51.100.11', breite, thema, 844 if breite < 500 else 900, pfad=f'/module/rewe/#woche/{WOCHE}')
         pg.wait_for_selector('.rw-gruppe')
         breit = []
-        for ziel, warte in ((f'#woche/{WOCHE}', '.rw-gruppe'), ('#dauer', '#rw-d-tabelle tbody tr'), ('#maerkte', '#rw-m-tabelle tbody tr'), ('#markt/' + maerkte['Beispielstadt']['id'], '.rw-heat')):
+        for ziel, warte in ((f'#woche/{WOCHE}', '.rw-gruppe'), ('#dauer', '#rw-d-liste [data-dauer]'), ('#maerkte', '#rw-m-tabelle tbody tr'), ('#markt/' + maerkte['Beispielstadt']['id'], '.rw-heat')):
             pg.goto(B + '/module/rewe/' + ziel); pg.wait_for_selector(warte)
             if not pg.evaluate('document.documentElement.scrollWidth <= window.innerWidth + 1'):
                 breit.append(ziel)
             if breite == 390:
                 pg.screenshot(path=os.path.join(SH, f'rewe_{ziel.split("/")[0][1:]}_{breite}_{thema}.png'), full_page=True)
         check(f'{breite}px {thema}: kein waagerechtes Scrollen', not breit, breit)
+        pg.goto(B + '/module/rewe/#dauer'); pg.wait_for_selector('#rw-d-liste [data-dauer]')
+        pg.click('#rw-d-liste [data-dauer] >> nth=0'); pg.wait_for_selector('#dlg-dauer[open] [data-dd-rh]')
+        lage = pg.evaluate("(() => { const d = document.querySelector('#dlg-dauer'), r = d.getBoundingClientRect(); return [d.scrollWidth - d.clientWidth, Math.round(r.left), Math.round(r.right), Math.round(r.bottom), innerWidth, innerHeight]; })()")
+        check(f'{breite}px {thema}: Pop-up „Dauerauftrag“ ohne seitliches Scrollen' + (', am Handy als Blatt von unten' if breite <= 560 else ''),
+              lage[0] <= 1 and lage[2] <= lage[4] + 1 and (breite > 560 or (lage[1] <= 0 and lage[2] >= lage[4] - 1 and lage[3] >= lage[5] - 1)), lage)
+        if breite == 390:
+            pg.screenshot(path=os.path.join(SH, f'rewe_dauer_popup_{breite}_{thema}.png'))
+        pg.click('#dlg-dauer .rw-dialogkopf [data-dd-zu]'); pg.wait_for_selector('#dlg-dauer', state='hidden')
         # Suche: am Handy (≤ 560 px) Kennzahlen und „Bestellungen KW …“ aus, damit die Treffer direkt unter dem Feld stehen
         pg.goto(B + f'/module/rewe/#woche/{WOCHE}'); pg.wait_for_selector('#rw-w-bestellt .rw-bestellt')
         handy, sichtbar_ = breite <= 560, lambda: (pg.is_visible('#rw-w-kpis'), pg.is_visible('#rw-w-bestellt .rw-bestellt'))

@@ -19,8 +19,8 @@
   const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
   const TABS = ['woche', 'dauer', 'maerkte', 'zuweisung', 'abschluss', 'einstellungen'];
   const S = {
-    csrf: '', d: null, tab: 'woche', kw: '', wer: '', filter: 'offen', suche: '', woche: null, alle: null, alleLaedt: '', offenSeg: new Set(), busy: new Set(), sichtbar: new Set(), bestelltZu: true, zeigeNach: '',
-    dSuche: '', dRh: '', dLw: '', dStatus: '', dEdit: null, dOffen: '', zurueckFrage: '', zurueckTimer: 0,
+    csrf: '', d: null, tab: 'woche', kw: '', wer: '', filter: 'offen', filterVorher: '', suche: '', woche: null, alle: null, alleLaedt: '', offenSeg: new Set(), busy: new Set(), sichtbar: new Set(), bestelltZu: true, zeigeNach: '',
+    dSuche: '', dFilter: '', dOffen: '', zurueckFrage: '', zurueckTimer: 0,
     maerkte: null, mSuche: '', mLw: '', mKauf: '', akteId: '', akte: null, aKw: '', abschluss: null,
     zAuswahl: new Set(), zSuche: '', zWer: '', zLw: '', zKauf: '', zEntfernen: '', zEntfernenTimer: 0, paket: null, edit: null, notizMarkt: '', toast: 0,
   };
@@ -89,6 +89,22 @@
     return e.join(' + ');
   }
   const summe = (m) => Object.values(obj(m)).reduce((a, n) => a + n, 0);
+  /* Dauerauftrag – dieselbe Regel wie rw_dauer_naechste im Server: Takt ab „ab“ im Rhythmus (Wochen), Pause von (fehlt = sofort)
+     bis einschließlich, läuft bis einschließlich „bis“ */
+  const kwAbstand = (a, b) => Math.round((montag(b) - montag(a)) / 604800000);
+  const dauerVon = (d) => ({ rhythmus: +((d || {}).rhythmus) || 0, mengen: obj((d || {}).mengen), ab: (d || {}).ab || '', pauseBis: (d || {}).pauseBis || '', pauseVon: (d || {}).pauseVon || '', bis: (d || {}).bis || '' });
+  function dauerImTakt(d, start) { const r = d.rhythmus, rest = ((kwAbstand(d.ab, start) % r) + r) % r; return rest === 0 ? start : kwPlus(start, r - rest); }
+  const inPause = (d, kw) => !!d.pauseBis && kw <= d.pauseBis && (!d.pauseVon || kw >= d.pauseVon);
+  function dauerNaechste(d, kw) {
+    if (d.rhythmus < 1 || !summe(d.mengen) || !d.ab) return '';
+    let k = dauerImTakt(d, kw < d.ab ? d.ab : kw);
+    if (inPause(d, k)) k = dauerImTakt(d, kwPlus(d.pauseBis, 1));
+    return d.bis && k > d.bis ? '' : k;
+  }
+  const dauerFaelligIn = (d, kw) => dauerNaechste(d, kw) === kw;
+  const rhythmusText = (r) => (S.d.rhythmen && S.d.rhythmen[r]) || `alle ${r} Wochen`;
+  const pauseText = (d) => (d.pauseVon ? `${kwText(d.pauseVon)} bis einschließlich ${kwText(d.pauseBis)}` : `bis einschließlich ${kwText(d.pauseBis)}`);
+  const dauerZusatz = (d) => (d.pauseBis ? `, Pause ${pauseText(d)}` : '') + (d.bis ? `, läuft bis einschließlich ${kwText(d.bis)}` : '');
   const personName = (id) => (S.d.personen.find((p) => p.id === id) || { name: '' }).name;
   const kaufChip = (k) => `<span class="rw-chip ${k === 'regelmaessig' ? 'gruen' : k === 'gelegentlich' || k === 'interessiert' ? 'blau' : ''}">${esc(S.d.kauf[k] || k)}</span>`;
   const lwOptionen = (alle, nurAktiv = true) => (alle ? `<option value="">${esc(alle)}</option>` : '') + S.d.lieferwege.filter((l) => !nurAktiv || l.aktiv).map((l) => `<option value="${esc(l.id)}">${esc(l.name)}</option>`).join('');
@@ -179,10 +195,15 @@
   }
   /* Ein Markt kann in beiden geladenen Wochen stehen (gewählte Liste und alle Listen): Änderungen an beiden nachziehen */
   const jedeZeile = (id, fn) => [S.woche, S.alle].filter(Boolean).forEach((w) => w.gruppen.forEach((g) => g.maerkte.forEach((m) => { if (m.id === id) fn(m); })));
+  /* Daueraufträge in der Woche (Inhaber 12.11.2026): nicht fällig → kompakt in einer Zeile je Lager; fällig ohne Antwort →
+     „wird zum Bestellschluss automatisch bestellt“ (zählt als erledigt: es gibt nichts zu tun); nach dem Bestellschluss hat
+     der Server die Antwort schon geschrieben. „Diese Woche anders“ (offenSeg) zeigt die normalen Antworten. */
   const nichtFaellig = (m) => !m.antwort && !m.dauerFaellig && m.dauer && m.dauer.rhythmus > 0 && m.dauerNaechste && !S.offenSeg.has(m.id);
-  const erledigt = (m) => !!m.antwort || nichtFaellig(m);
-  // Gerade beantwortete Märkte bleiben im Filter „Offen“ stehen (Mengen nachtragen), bis der Filter neu gewählt oder die Woche gewechselt wird
-  const zeigen = (m) => S.filter === 'alle' || (S.filter === 'offen' ? !erledigt(m) || S.sichtbar.has(m.id) : erledigt(m));
+  const autoGeplant = (m) => !m.antwort && m.dauerFaellig && m.dauerAuto && !S.offenSeg.has(m.id) && !(S.woche && S.woche.bestellschluss);
+  const erledigt = (m) => !!m.antwort || nichtFaellig(m) || autoGeplant(m);
+  // Gerade beantwortete Märkte bleiben im Filter „Offen“ stehen (Mengen nachtragen), bis der Filter neu gewählt oder die Woche gewechselt wird;
+  // Filter „dauer“ = Klick auf die Kachel „Daueraufträge diese Woche“
+  const zeigen = (m) => S.filter === 'alle' || (S.filter === 'dauer' ? m.dauerFaellig : S.filter === 'offen' ? !erledigt(m) || S.sichtbar.has(m.id) : erledigt(m));
   const neuAnsehen = () => { S.offenSeg.clear(); S.sichtbar.clear(); };
   function renderWoche() {
     const w = S.woche; if (!w) return;
@@ -195,13 +216,13 @@
     // Kennzahlen aus den Zeilen (nicht fällige Daueraufträge gelten als erledigt)
     const fertig = alleM.filter(erledigt).length, best = alleM.filter((m) => m.antwort && m.antwort.status === 'bestellt');
     const mengen = {}; best.forEach((m) => Object.entries(obj(m.antwort.mengen)).forEach(([k, n]) => { mengen[k] = (mengen[k] || 0) + n; }));
-    const dauerOffen = alleM.filter((m) => !m.antwort && m.dauerFaellig).length;
+    const dauerW = alleM.filter((m) => m.dauerFaellig), dauerAuto = dauerW.filter((m) => m.antwort && m.antwort.auto).length;
     const wv = alleM.filter((m) => m.wiedervorlagen.length);
     const pct = alleM.length ? Math.round(fertig / alleM.length * 100) : 0;
     $('#rw-w-kpis').innerHTML = `
       <div class="rw-kpi"><span>Erledigt</span><b>${fertig} <small>von ${alleM.length}</small></b><div class="rw-fortschritt" aria-hidden="true"><i style="width:${pct}%"></i></div></div>
       <div class="rw-kpi"><span>Bestellt</span><b>${best.length} <small>${best.length === 1 ? 'Markt' : 'Märkte'}</small></b><small>${esc(mengenText(mengen) || 'noch nichts')}</small></div>
-      <div class="rw-kpi"><span>Daueraufträge zu bestätigen</span><b>${dauerOffen}</b><small>fällig nach Rhythmus</small></div>
+      <button type="button" class="rw-kpi rw-kpiknopf" data-kpi-dauer aria-pressed="${S.filter === 'dauer'}" title="Nur diese Märkte zeigen (erneut klicken: alle)"><span>Daueraufträge diese Woche</span><b>${dauerW.length}</b><small>${w.bestellschluss ? `${dauerAuto} automatisch bestellt` : 'werden zum Bestellschluss automatisch bestellt'}</small></button>
       <div class="rw-kpi${wv.length ? ' warn' : ''}"><span>Wiedervorlagen fällig</span><b>${wv.length}</b><small>${esc(wv.slice(0, 3).map((m) => m.ort).join(' · ') || '—')}</small></div>`;
     bestelltHtml(w, best, mengen);
     const such = sucheAktiv(), quelle = sicht(), q = SU.woerter(S.suche);
@@ -215,20 +236,20 @@
     if (such && !quelle) { info.textContent = `${wo} …`; $('#rw-w-gruppen').innerHTML = ''; return; }   // alle Listen werden geladen
     let treffer = 0;
     const html = quelle.gruppen.map((g) => {
-      const zeilen = g.maerkte.filter((m) => passt(m, q) && (such || zeigen(m)));
-      if (such && !zeilen.length) return '';   // bei der Suche nur Lager mit Treffern
-      treffer += such ? zeilen.length : 0;
+      const zeilen = g.maerkte.filter((m) => passt(m, q) && (such || zeigen(m)) && !nichtFaellig(m));
+      const kompakt = (such || S.filter === 'alle' || S.filter === 'erledigt') ? g.maerkte.filter((m) => nichtFaellig(m) && passt(m, q)) : [];
+      if (such && !zeilen.length && !kompakt.length) return '';   // bei der Suche nur Lager mit Treffern
+      treffer += such ? zeilen.length + kompakt.length : 0;
       const offen = g.maerkte.filter((m) => !erledigt(m)).length;
-      const faellig = such ? [] : g.maerkte.filter((m) => !m.antwort && m.dauerFaellig && m.darfAntworten);
-      const zahl = such ? `${zeilen.length} Treffer` : `${maerkte(g.maerkte.length)} · ${offen} offen`;
+      const zahl = such ? `${zeilen.length + kompakt.length} Treffer` : `${maerkte(g.maerkte.length)} · ${offen} offen`;
       return `<section class="rw-gruppe rw-glas" data-gruppe="${esc(g.id)}">
         <div class="rw-gkopf">
           <span class="rw-gsymbol${g.art === 'direkt' ? ' direkt' : ''}"><svg class="i" aria-hidden="true"><use href="#i-${g.art === 'direkt' ? 'lkw' : 'lager'}"/></svg></span>
           <div><h2>${esc(g.name)}</h2><p class="rw-sub">${esc(g.art === 'lager' ? 'REWE-Zentrallager' : g.art === 'direkt' ? 'Lieferung direkt an den Markt' : 'Lieferweg fehlt')} · <span class="rw-gzahl">${zahl}</span>${g.bestellschluss ? ' · Bestellschluss ' + esc(g.bestellschluss) : ''}</p></div>
-          <div class="rw-rechts">${faellig.length ? `<button class="btn sm" type="button" data-gruppe-dauer="${esc(g.id)}"><svg class="i" aria-hidden="true"><use href="#i-check"/></svg>${faellig.length} ${faellig.length === 1 ? 'Dauerauftrag' : 'Daueraufträge'} bestätigen</button>` : ''}</div>
         </div>
         ${zeilen.length ? `<div class="rw-zkopf" aria-hidden="true"><span>Markt</span><span>Verlauf ${esc(kwKurz(kwPlus(w.kw, -8)))}–${esc(kwKurz(kwPlus(w.kw, -1)).slice(3))} · diese Woche · voraus bis ${esc(kwKurz(kwPlus(w.kw, 3)))}</span><span>Antwort ${esc(kwKurz(w.kw))}</span><span></span></div>` : ''}
-        ${zeilen.map(zeileHtml).join('') || `<p class="rw-gfuss">${S.filter === 'offen' ? 'Alle Märkte dieser Gruppe sind erledigt.' : 'Keine Märkte für diesen Filter.'}</p>`}
+        ${zeilen.map(zeileHtml).join('') || (kompakt.length ? '' : `<p class="rw-gfuss">${S.filter === 'offen' ? 'Alle Märkte dieser Gruppe sind erledigt.' : 'Keine Märkte für diesen Filter.'}</p>`)}
+        ${kompaktHtml(kompakt)}
       </section>`;
     }).join('');
     const ruhend = (quelle.ruhend || []).filter((m) => passt(m, q));
@@ -244,6 +265,16 @@
       const z = $(`.rw-zeile[data-id="${CSS.escape(S.zeigeNach)}"]`); S.zeigeNach = '';
       if (z) { z.scrollIntoView({ block: 'center' }); z.classList.add('blink'); setTimeout(() => z.classList.remove('blink'), 1600); }
     }
+  }
+  /* Märkte, bei denen der Dauerauftrag diese Woche nicht liefert: eine ruhige Zeile je Lager; Klick auf den Markt = trotzdem abfragen */
+  function kompaktHtml(liste) {
+    if (!liste.length) return '';
+    const teil = (m) => {
+      const d = dauerVon(m.dauer), pause = inPause(d, S.woche.kw) ? `Pause bis ${kwKurz(d.pauseBis)}, ` : '';
+      const name = m.darfAntworten ? `<button type="button" class="rw-dkm" data-offen="${esc(m.id)}" title="trotzdem abfragen">${esc(m.ort)}</button>` : `<b>${esc(m.ort)}</b>`;
+      return `<span class="rw-dkteil">${name} – ${esc(pause)}nächste ${esc(kwKurz(m.dauerNaechste))}</span>`;
+    };
+    return `<p class="rw-dkompakt"><b>Diese Woche keine Lieferung nach Dauerauftrag (${liste.length}):</b> ${liste.map(teil).join(' · ')}${liste.some((m) => m.darfAntworten) ? ' <span class="rw-sub">· Klick auf den Markt: trotzdem abfragen</span>' : ''}</p>`;
   }
   /* Übersicht der Bestellungen dieser Woche (eigene bzw. gewählte Liste): Markt, Lieferweg, Mengen – Klick zeigt die Zeile */
   function bestelltHtml(w, best, mengen) {
@@ -272,10 +303,10 @@
   /* Verlauf: acht Wochen davor, diese Woche (Rahmen) und drei Wochen danach (Vorbestellungen), die KW darunter.
      Künftige Wochen sind Knöpfe: ein Klick öffnet diese Woche mit der Zeile des Marktes – dort wird die Vorbestellung eingetragen. */
   function zelleHtml(v, art, m) {
-    const leer = art === 'vor' ? 'keine Vorbestellung' : art === 'jetzt' ? 'noch offen' : 'nicht abgefragt';
+    const leer = v.dauer ? `Lieferung nach Dauerauftrag (${v.dauer})` : art === 'vor' ? 'keine Vorbestellung' : art === 'jetzt' ? 'noch offen' : 'nicht abgefragt';
     const t = `${kwKurz(v.kw)}: ${v.status ? S.d.antworten[v.status] + (v.menge ? ' ' + v.menge : '') : leer}`;
     const [cls, inhalt] = v.status === 'bestellt' ? ['b', String(v.menge)] : v.status === 'ne' ? ['n', 'ne'] : v.status === 'pause' ? ['p', 'P']
-      : v.status === 'kein' ? ['', '–'] : art === 'vor' ? ['frei', '+'] : ['o', ''];
+      : v.status === 'kein' ? ['', '–'] : v.dauer ? ['d', String(v.dauer)] : art === 'vor' ? ['frei', '+'] : ['o', ''];   // d = geplant nach Dauerauftrag
     const zelle = `<i class="rw-z ${cls}${art === 'jetzt' ? ' jetzt' : ''}${art === 'vor' && v.status ? ' vor' : ''}">${esc(inhalt)}</i><span>${+v.kw.slice(5)}</span>`;
     return art === 'vor' && m.darfAntworten
       ? `<button type="button" class="rw-zw" data-vor="${esc(v.kw)}" data-markt="${esc(m.id)}" title="${esc(t)} – Woche öffnen" aria-label="${esc(t)} – Woche öffnen">${zelle}</button>`
@@ -292,7 +323,8 @@
     const a = m.antwort, w = sicht() || S.woche, bus = S.busy.has(m.id);   // bei der Suche ggf. alle Listen (Zuständig-Chip)
     const chips = [];
     if (w.wer === '*' && m.zustaendigName) chips.push(`<span class="rw-chip">${esc(m.zustaendigName)}</span>`);
-    if (m.dauerText) chips.push(`<span class="rw-chip gruen" title="${esc(m.dauerText)}">${esc(m.dauerText.replace('Dauerauftrag ', 'Dauer '))}</span>`);
+    if (m.dauer && m.dauer.rhythmus > 0) chips.push(m.darfAntworten ? `<button type="button" class="rw-chip gruen rw-chipknopf" data-dauer-dlg="${esc(m.id)}" title="${esc(m.dauerText)} – ändern">Dauerauftrag ${esc(rhythmusText(m.dauer.rhythmus))}</button>`
+      : `<span class="rw-chip gruen" title="${esc(m.dauerText)}">Dauerauftrag ${esc(rhythmusText(m.dauer.rhythmus))}</span>`);
     if (m.abfragetag) chips.push(`<span class="rw-chip gelb">${esc(S.d.tage[m.abfragetag])} anrufen</span>`);
     if (m.kauf !== 'regelmaessig') chips.push(kaufChip(m.kauf));
     m.wiedervorlagen.slice(0, 2).forEach((v) => chips.push(`<span class="rw-chip gelb" title="${esc(v.text)}">Wiedervorlage: ${esc(v.text.slice(0, 32))}${v.text.length > 32 ? '…' : ''}</span>`));
@@ -303,10 +335,11 @@
     let antwort = '';
     const dis = !m.darfAntworten || bus ? ' disabled' : '';
     if (!a && m.dauerFaellig && !S.offenSeg.has(m.id)) {
-      antwort = `<div class="rw-dauerbox"><span>Dauerauftrag fällig: ${esc(mengenText(m.dauer.mengen))}</span>
-        ${m.darfAntworten ? `<button class="btn sm" type="button" data-dauer-ok="${esc(m.id)}"${dis}>Bestätigen</button><button class="btn sm ghost" type="button" data-offen="${esc(m.id)}">Abweichend</button>` : ''}</div>`;
-    } else if (nichtFaellig(m)) {
-      antwort = `<div class="rw-nichtfaellig">Nicht fällig – nächste Lieferung ${esc(kwKurz(m.dauerNaechste))}${m.darfAntworten ? ` <button class="btn sm ghost" type="button" data-offen="${esc(m.id)}">Trotzdem abfragen</button>` : ''}</div>`;
+      // fällig: vor dem Bestellschluss automatisch; sonst (ruhender Markt, Woche schon abgeschlossen) ausdrücklich bestellen
+      const auto = autoGeplant(m);
+      antwort = `<div class="rw-dauerbox${auto ? '' : ' warn'}"><span><b>Dauerauftrag ${esc(kwKurz(w.kw))}:</b> ${esc(mengenText(m.dauer.mengen))} · ${auto ? 'wird zum Bestellschluss automatisch bestellt' : 'wird nicht automatisch bestellt'}</span>
+        ${m.darfAntworten ? `<div class="rw-knopfreihe">${auto ? '' : `<button class="btn sm primary" type="button" data-dauer-ok="${esc(m.id)}"${dis}>Bestellen</button>`}<button class="btn sm" type="button" data-offen="${esc(m.id)}">Diese Woche anders</button>
+          <button class="btn sm ghost" type="button" data-dauer-dlg="${esc(m.id)}">Dauerauftrag ändern</button></div>` : ''}</div>`;
     } else {
       antwort = `<div class="rw-seg antwort" role="group" aria-label="Antwort ${esc(m.ort)}">${Object.entries(S.d.antworten).map(([k, v]) =>
         `<button type="button" data-s="${k}" data-markt="${esc(m.id)}" aria-pressed="${a && a.status === k}"${dis}>${esc(v)}</button>`).join('')}</div>`;
@@ -321,8 +354,9 @@
         ${a.status === 'bestellt' ? `<label class="rw-check"><input type="checkbox" data-ob="${esc(m.id)}"${a.ohneBerechnung ? ' checked' : ''}${dis}> ohne Berechnung</label>` : ''}</div>`;
     }
     const zurueck = a && m.darfAntworten ? `<button type="button" class="rw-zuruecksetzen${S.zurueckFrage === m.id ? ' frage' : ''}" data-zurueck="${esc(m.id)}"${dis}>${esc(S.zurueckFrage === m.id ? zurueckFrageText() : 'Zurücksetzen')}</button>` : '';
-    const meta = a ? `<div class="rw-ameta">${a.nachtrag ? '<span class="rw-chip akzent">Nachtrag</span>' : ''}<span>Erfasst: ${esc(a.von)}${a.t ? ' · ' + esc(zeitpunkt(a.t)) : ''}</span>${zurueck}</div>` : '';
-    const jetzt = { kw: w.kw, status: a ? a.status : '', menge: a ? summe(a.mengen) : 0 };
+    const meta = a ? `<div class="rw-ameta">${a.nachtrag ? '<span class="rw-chip akzent">Nachtrag</span>' : ''}${a.auto ? '<span class="rw-chip gruen">automatisch</span>' : ''}<span>Erfasst: ${esc(a.von)}${a.t ? ' · ' + esc(zeitpunkt(a.t)) : ''}</span>${zurueck}</div>`
+      : !m.antwort && m.dauerFaellig && S.offenSeg.has(m.id) && m.dauerAuto && !w.bestellschluss ? '<div class="rw-ameta"><span>Ohne Antwort wird zum Bestellschluss der Dauerauftrag bestellt.</span></div>' : '';
+    const jetzt = { kw: w.kw, status: a ? a.status : '', menge: a ? summe(a.mengen) : 0, dauer: !a && m.dauerFaellig ? summe(m.dauer.mengen) : 0 };
     const adr = adresse(m);
     return `<div class="rw-zeile${erledigt(m) ? ' erledigt' : ''}${S.sichtbar.has(m.id) && S.filter === 'offen' && erledigt(m) ? ' gerade' : ''}" data-id="${esc(m.id)}">
       <div class="rw-c-markt">
@@ -411,15 +445,8 @@
     } else if (t.dataset.dauerOk) {
       const m = finde(t.dataset.dauerOk); sende(m.id, { status: 'bestellt', mengen: m.dauer.mengen });
     } else if (t.dataset.offen) { S.offenSeg.add(t.dataset.offen); renderWoche(); }
-    else if (t.dataset.gruppeDauer !== undefined) {
-      const g = S.woche.gruppen.find((x) => x.id === t.dataset.gruppeDauer);
-      const ids = g.maerkte.filter((m) => !m.antwort && m.dauerFaellig && m.darfAntworten).map((m) => m.id);
-      t.disabled = true;
-      const r = await api('rewe_dauer_uebernehmen', { kw: S.woche.kw, wer: S.wer, maerkte: ids });
-      if (r.status !== 200 || !r.data.ok) { toast(fehlerText(r, 'Übernehmen fehlgeschlagen'), true); t.disabled = false; return; }
-      toast(`${r.data.uebernommen} ${r.data.uebernommen === 1 ? 'Dauerauftrag' : 'Daueraufträge'} bestätigt`);
-      ladeWoche();
-    } else if (t.dataset.wieder) {
+    else if (t.dataset.dauerDlg) { const m = finde(t.dataset.dauerDlg); if (m) oeffneDauer(m); }
+    else if (t.dataset.wieder) {
       const r = await api('rewe_markt_save', { id: t.dataset.wieder, kauf: 'gelegentlich' });
       if (r.status !== 200 || !r.data.ok) { toast(fehlerText(r, 'Ändern fehlgeschlagen'), true); return; }
       toast(`${r.data.markt.ort}: wieder in der Abfrage (gelegentlich)`); ladeWoche();
@@ -445,6 +472,10 @@
   $('#rw-w-suche').addEventListener('keydown', (ev) => { if (ev.key === 'Escape' && S.suche) { ev.preventDefault(); setzeSuche(''); } });
   $('#rw-w-suche-leeren').addEventListener('click', () => { setzeSuche(''); $('#rw-w-suche').focus(); });
   $('#rw-w-filter').addEventListener('click', (ev) => { const b = ev.target.closest('[data-f]'); if (b) { S.filter = b.dataset.f; S.sichtbar.clear(); renderWoche(); } });
+  $('#rw-w-kpis').addEventListener('click', (ev) => {   // Kachel „Daueraufträge diese Woche“: nur diese Märkte (erneut: zurück)
+    if (!ev.target.closest('[data-kpi-dauer]')) return;
+    S.filter = S.filter === 'dauer' ? (S.filterVorher || 'offen') : (S.filterVorher = S.filter, 'dauer'); S.sichtbar.clear(); renderWoche();
+  });
 
   /* ================= Märkte und Marktakte ================= */
   async function ladeMaerkte() {
@@ -556,7 +587,8 @@
           <section class="rw-panel rw-glas"><div class="rw-panelkopf"><h2>Zuständig und Lieferweg</h2></div>
             <dl class="rw-kv"><dt>Zuständig</dt><dd>${zuHist || '—'}</dd><dt>Lieferweg</dt><dd>${lwHist || '—'}</dd>
               <dt>Abfragetag</dt><dd>${esc(S.d.tage[m.abfragetag] || '—')}</dd>
-              <dt>Dauerauftrag</dt><dd>${m.dauer.rhythmus ? esc(`${S.d.rhythmen[m.dauer.rhythmus]}: ${mengenText(m.dauer.mengen)} ab ${kwText(m.dauer.ab)}${m.dauer.pauseBis ? ', Pause bis ' + kwText(m.dauer.pauseBis) : ''}${naechste}`) : 'keiner'}</dd>
+              <dt>Dauerauftrag</dt><dd>${m.dauer.rhythmus ? esc(`${rhythmusText(m.dauer.rhythmus)}: ${mengenText(m.dauer.mengen)} ab ${kwText(m.dauer.ab)}${dauerZusatz(m.dauer)}${naechste}`) : 'keiner'}
+                ${A.darfPflegen ? `<button class="btn sm" type="button" id="rw-a-dauer">${m.dauer.rhythmus ? 'Dauerauftrag ändern' : 'Dauerauftrag anlegen'}</button>` : ''}</dd>
               ${m.telefon ? `<dt>Telefon</dt><dd>${esc(m.telefon)}</dd>` : ''}</dl></section>
           ${m.hinweis ? `<section class="rw-panel rw-glas"><div class="rw-panelkopf"><h2>Hinweis</h2></div><p class="rw-notiz" style="margin:0">${esc(m.hinweis)}</p></section>` : ''}
           <section class="rw-panel rw-glas"><div class="rw-panelkopf"><h2>Ansprechpartner</h2></div>
@@ -567,6 +599,7 @@
   }
   $('#rw-akte').addEventListener('click', async (ev) => {
     if (ev.target.closest('#rw-a-bearbeiten')) oeffneMarkt(S.akte.markt);
+    else if (ev.target.closest('#rw-a-dauer')) oeffneDauer(S.akte.markt);
     else if (ev.target.closest('#rw-a-notiz')) oeffneNotiz(S.akte.markt.id);
     else {
       const b = ev.target.closest('[data-wv-erledigt]'); if (!b) return;
@@ -600,10 +633,6 @@
     $('#mk-kauf').innerHTML = kaufOptionen(''); $('#mk-kauf').value = m ? m.kauf : 'regelmaessig';
     $('#mk-tag').innerHTML = Object.entries(S.d.tage).map(([k, v]) => `<option value="${esc(k)}">${esc(k ? v : 'kein fester Tag')}</option>`).join(''); $('#mk-tag').value = m ? m.abfragetag : '';
     $('#mk-telefon').value = e.telefon || ''; $('#mk-telefon').placeholder = m && m.winab && m.telefon ? `Kundenstamm: ${m.telefon}` : '';
-    const d = m ? m.dauer : { rhythmus: 0, mengen: {}, ab: '', pauseBis: '' };
-    $('#mk-rhythmus').innerHTML = Object.entries(S.d.rhythmen).map(([k, v]) => `<option value="${esc(k)}">${esc(v)}</option>`).join(''); $('#mk-rhythmus').value = String(d.rhythmus || 0);
-    $('#mk-dab').value = d.ab || S.d.abfrage; $('#mk-dpause').value = d.pauseBis || '';
-    $('#mk-dmengen').innerHTML = artikel().map((a) => `<label>${esc(a.name)}<input class="rw-eingabe" data-dm="${esc(a.id)}" inputmode="numeric" maxlength="3" value="${obj(d.mengen)[a.id] || ''}"></label>`).join('');
     $('#mk-kontakte').innerHTML = (m ? m.ansprechpartner : []).map(kontaktZeile).join('');
     $('#mk-hinweis').value = m ? m.hinweis : '';
     $('#mk-meldung').textContent = '';
@@ -613,11 +642,9 @@
   $('#mk-kontakte').addEventListener('click', (ev) => { const b = ev.target.closest('[data-k-weg]'); if (b) b.closest('.rw-kontaktzeile').remove(); });
   $('#mk-form').addEventListener('submit', async (ev) => {
     ev.preventDefault();
-    const m = S.edit, rh = +$('#mk-rhythmus').value;
-    const mengen = {}; $$('[data-dm]').forEach((i) => { const n = parseInt(i.value, 10); if (n > 0) mengen[i.dataset.dm] = n; });
-    const body = {
+    const m = S.edit;
+    const body = {   // ohne „dauer“: den Dauerauftrag ändert nur noch das Pop-up „Dauerauftrag“ (der Server lässt ihn dann unverändert)
       kauf: $('#mk-kauf').value, abfragetag: $('#mk-tag').value, telefon: $('#mk-telefon').value.trim(), hinweis: $('#mk-hinweis').value,
-      dauer: rh ? { rhythmus: rh, mengen, ab: $('#mk-dab').value.trim(), pauseBis: $('#mk-dpause').value.trim() } : { rhythmus: 0 },
       ansprechpartner: $$('.rw-kontaktzeile').map((z) => Object.fromEntries($$('[data-k]', z).map((i) => [i.dataset.k, i.value.trim()]))),
     };
     if (darf('verwalten')) Object.assign(body, { name: $('#mk-name').value.trim(), kdNr: $('#mk-kdnr').value.trim(), reweNr: $('#mk-rewenr').value.trim(),
@@ -697,9 +724,9 @@
           ${kontakte.map((k) => `<div class="rw-kontakt"><span class="rw-av" aria-hidden="true">${esc(initialen(k.name))}</span><div><b>${esc(k.name)}</b><span class="rw-sub">${esc([k.rolle, k.telefon, k.email].filter(Boolean).join(' · '))}</span></div></div>`).join('')
             || '<p class="rw-hilfe">Noch keine Ansprechpartner (Marktakte → Bearbeiten).</p>'}</section>
         <section class="rw-ksektion"><h3>Dauerauftrag</h3>
-          ${d.rhythmus ? `<dl class="rw-kv"><dt>Rhythmus</dt><dd>${esc(S.d.rhythmen[d.rhythmus])}</dd><dt>Menge</dt><dd>${esc(mengenText(d.mengen))}</dd>
-            <dt>Nächste Lieferung</dt><dd>${esc(A.naechsteDauer ? kwText(A.naechsteDauer) : '—')}</dd>${d.pauseBis ? `<dt>Pause bis</dt><dd>${esc(kwText(d.pauseBis))}</dd>` : ''}</dl>` : '<p class="rw-hilfe">Kein Dauerauftrag.</p>'}
-          ${darfP ? `<a class="btn sm" href="#dauer/${id}" data-gehe="dauer/${id}" data-karte-zu>${d.rhythmus ? 'Dauerauftrag bearbeiten' : 'Dauerauftrag anlegen'}</a>` : ''}</section>
+          ${d.rhythmus ? `<dl class="rw-kv"><dt>Rhythmus</dt><dd>${esc(rhythmusText(d.rhythmus))}</dd><dt>Menge je Lieferung</dt><dd>${esc(mengenText(d.mengen))}</dd>
+            <dt>Nächste Lieferung</dt><dd>${esc(A.naechsteDauer ? kwText(A.naechsteDauer) : '—')}</dd>${d.pauseBis ? `<dt>Pause</dt><dd>${esc(pauseText(d))}</dd>` : ''}${d.bis ? `<dt>Läuft bis</dt><dd>einschließlich ${esc(kwText(d.bis))}</dd>` : ''}</dl>` : '<p class="rw-hilfe">Kein Dauerauftrag.</p>'}
+          ${darfP ? `<button class="btn sm" type="button" data-kdauer>${d.rhythmus ? 'Dauerauftrag ändern' : 'Dauerauftrag anlegen'}</button>` : ''}</section>
       </div>
       <div class="rw-krechts">
         <div class="rw-seg rw-kreiter" role="tablist" aria-label="Marktkarte">${reiter.map(([k, t]) => `<button type="button" role="tab" data-kreiter="${k}" aria-selected="${K.reiter === k}">${esc(t)}</button>`).join('')}</div>
@@ -755,6 +782,7 @@
   dk.addEventListener('click', async (ev) => {
     const b = ev.target.closest('button, a'); if (!b || b.disabled) return;
     if (b.dataset.karteZu !== undefined) { dk.close(); return; }
+    if (b.dataset.kdauer !== undefined) { if (K.akte) oeffneDauer(K.akte.markt); return; }   // Pop-up über der Marktkarte
     if (b.dataset.kreiter) {
       K.reiter = b.dataset.kreiter;
       $$('[data-kreiter]', dk).forEach((x) => x.setAttribute('aria-selected', String(x === b)));
@@ -785,112 +813,192 @@
     }
   });
 
-  /* ================= Daueraufträge (alle sichtbaren Märkte mit Dauerauftrag; bearbeiten nur eigene, GR-103 prüft der Server) ================= */
+  /* ================= Daueraufträge (Überarbeitung 12.11.2026) =================
+     Reiter: ruhige Liste aller sichtbaren Daueraufträge mit Wochenleiste der nächsten 8 Lieferwochen und Filter Alle /
+     KW n fällig / Pausiert. Anlegen und Ändern immer im selben Pop-up „Dauerauftrag“ (aus Reiter, Marktkarte, Marktakte und
+     „Meine Woche“); es schließt über × oder „Abbrechen“ – ein Klick daneben schließt nie, Escape wie in jedem Fenster der
+     Plattform (Vorgabe 02.11.2026, Prüfung „einheit“). Bearbeiten dürfen
+     Mitarbeiter mit „bearbeiten“ ihre eigenen Märkte, die Leitung alle – der Server prüft das (GR-103). */
   const dauerAktiv = (m) => !!(m.dauer && m.dauer.rhythmus > 0);
-  const dauerPause = (m) => dauerAktiv(m) && !!m.dauer.pauseBis && m.dauer.pauseBis >= S.d.abfrage;
-  const kwAbstand = (a, b) => Math.round((montag(b) - montag(a)) / 604800000);
-  function naechsteLieferungen(e, n = 4) {
-    const out = [];
-    for (let i = 0, k = S.d.abfrage < e.ab ? e.ab : S.d.abfrage; i < 120 && out.length < n; i++, k = kwPlus(k, 1)) {
-      if (e.pauseBis && k <= e.pauseBis) continue;
-      if (kwAbstand(e.ab, k) % e.rhythmus === 0) out.push(k);
-    }
-    return out;
-  }
-  function kwWahl(wert, leer = '') {
-    const liste = []; for (let i = -4; i <= 26; i++) liste.push(kwPlus(S.d.abfrage, i));
+  const dauerBeendet = (m) => { const d = dauerVon(m.dauer); return !!d.bis && d.bis < S.d.abfrage; };
+  const dauerPausiert = (m) => { const d = dauerVon(m.dauer); return dauerAktiv(m) && !!d.pauseBis && d.pauseBis >= S.d.abfrage; };   // jetzt oder geplant
+  function kwWahl(wert, von, wochen, leer = '') {
+    const liste = []; for (let i = 0; i <= wochen; i++) liste.push(kwPlus(von, i));
     if (wert && !liste.includes(wert)) liste.unshift(wert);
     return (leer ? `<option value="">${esc(leer)}</option>` : '') + liste.map((k) => `<option value="${esc(k)}"${k === wert ? ' selected' : ''}>${esc(kwText(k))} · ${esc(zeitraum(k))}</option>`).join('');
   }
+  /* Wochenleiste: n Lieferwochen ab der Abfragewoche – Zahl = Stück nach Dauerauftrag, gestrichelt = Pause */
+  function wochenleiste(dRoh, n = 8) {
+    const d = dauerVon(dRoh), stueck = summe(d.mengen), zellen = [];
+    for (let i = 0; i < n; i++) {
+      const k = kwPlus(S.d.abfrage, i), f = dauerFaelligIn(d, k), p = !f && inPause(d, k) && dauerImTakt(d, k) === k;
+      const t = `${kwKurz(k)}: ${f ? `Lieferung (${stueck})` : p ? 'Pause' : 'keine Lieferung'}`;
+      zellen.push(`<span class="rw-dwz" title="${esc(t)}"><i class="${f ? 'd' : p ? 'p' : ''}${i === 0 ? ' jetzt' : ''}">${f ? stueck : ''}</i>${+k.slice(5)}</span>`);
+    }
+    return `<span class="rw-dwochen" role="img" aria-label="Lieferwochen ab ${esc(kwKurz(S.d.abfrage))}">${zellen.join('')}</span>`;
+  }
+  function dauerChips(m) {
+    const d = dauerVon(m.dauer), A = S.d.abfrage, c = [];
+    if (d.bis && d.bis < A) c.push(`<span class="rw-chip">beendet nach ${esc(kwKurz(d.bis))}</span>`);
+    else {
+      if (m.dauerNaechste === A) c.push(`<span class="rw-chip gelb">${esc(kwKurz(A))} fällig</span>`);
+      if (inPause(d, A)) c.push(`<span class="rw-chip blau">Pause bis ${esc(kwKurz(d.pauseBis))}</span>`);
+      else if (d.pauseBis && d.pauseBis >= A) c.push(`<span class="rw-chip blau">Pause ${esc(kwKurz(d.pauseVon || A))}–${esc(String(+d.pauseBis.slice(5)))}</span>`);
+      if (d.bis) c.push(`<span class="rw-chip">läuft bis ${esc(kwKurz(d.bis))}</span>`);
+    }
+    return c.join(' ');
+  }
   function renderDauer() {
     if (!S.maerkte) return;
-    const alle = S.maerkte.filter(dauerAktiv);
+    const A = S.d.abfrage, alle = S.maerkte.filter(dauerAktiv);
     const q = SU.woerter(S.dSuche);
-    const z = alle.filter((m) => passt(m, q) && (!S.dRh || String(m.dauer.rhythmus) === S.dRh) && (!S.dLw || m.lieferweg === S.dLw)
-      && (!S.dStatus || (S.dStatus === 'pause' ? dauerPause(m) : S.dStatus === 'faellig' ? m.dauerNaechste === S.d.abfrage : !dauerPause(m))));
-    const pausiert = alle.filter(dauerPause).length, faellig = alle.filter((m) => m.dauerNaechste === S.d.abfrage).length;
-    $('#rw-d-sub').textContent = `${alle.length - pausiert} aktiv · ${pausiert} pausiert · ${faellig} in ${kwKurz(S.d.abfrage)} fällig`;
+    const z = alle.filter((m) => passt(m, q) && (!S.dFilter || (S.dFilter === 'faellig' ? m.dauerNaechste === A : dauerPausiert(m))))
+      .sort((a, b) => (dauerBeendet(a) - dauerBeendet(b)) || a.ort.localeCompare(b.ort, 'de'));
+    const beendet = alle.filter(dauerBeendet).length, pausiert = alle.filter((m) => !dauerBeendet(m) && inPause(dauerVon(m.dauer), A)).length;
+    const faellig = alle.filter((m) => m.dauerNaechste === A).length;
+    $('#rw-d-sub').textContent = `${alle.length - beendet - pausiert} aktiv · ${pausiert} pausiert · ${faellig} in ${kwKurz(A)} fällig${beendet ? ` · ${beendet} beendet` : ''}`;
     $('#rw-d-neu').hidden = !S.maerkte.some((m) => m.darfPflegen && !dauerAktiv(m));
-    $('#rw-d-tabelle').innerHTML = `<thead><tr><th>Markt</th><th>Rhythmus</th><th>Menge je Lieferung</th><th>Nächste Lieferung</th><th>Status</th><th></th></tr></thead><tbody>
-      ${z.map((m) => `<tr class="${m.darfPflegen ? 'rw-klick' : ''}${S.dEdit && S.dEdit.id === m.id ? ' rw-gewaehlt' : ''}" data-dauer="${esc(m.id)}"${m.darfPflegen ? ' tabindex="0"' : ''}>
-        <td data-label="Markt" class="rw-voll"><span class="rw-name">${esc(m.ort)}</span><span class="rw-sub">${esc([m.strasse, m.kdNr ? 'Kd. ' + m.kdNr : '', m.lieferwegName].filter(Boolean).join(' · '))}</span></td>
-        <td data-label="Rhythmus">${esc(S.d.rhythmen[m.dauer.rhythmus] || '')}</td><td data-label="Menge je Lieferung">${esc(mengenText(m.dauer.mengen))}</td>
-        <td data-label="Nächste Lieferung">${m.dauerNaechste ? esc(kwText(m.dauerNaechste)) + (m.dauerNaechste === S.d.abfrage ? ' <span class="rw-chip gelb">fällig</span>' : '') : '—'}</td>
-        <td data-label="Status">${dauerPause(m) ? `<span class="rw-chip blau">Pause bis ${esc(kwText(m.dauer.pauseBis))}</span>` : '<span class="rw-chip gruen">aktiv</span>'}</td>
-        <td class="rw-voll">${m.darfPflegen ? `<button class="btn sm" type="button" data-dauer-edit="${esc(m.id)}">Bearbeiten</button>` : ''}</td></tr>`).join('')
-        || `<tr><td colspan="6" class="rw-leerzeile">${alle.length ? 'Keine Daueraufträge für diesen Filter.' : 'Noch keine Daueraufträge.'}</td></tr>`}</tbody>`;
-    if (S.dOffen) { const m = S.maerkte.find((x) => x.id === S.dOffen); S.dOffen = ''; if (m && m.darfPflegen) { dauerBearbeiten(m); return; } }
-    renderDauerEdit();
+    $$('#rw-d-filter [data-df]').forEach((b) => { b.setAttribute('aria-pressed', String(b.dataset.df === S.dFilter)); if (b.dataset.df === 'faellig') b.textContent = `${kwKurz(A)} fällig`; });
+    $('#rw-d-suche-leeren').hidden = !S.dSuche;
+    $('#rw-d-liste').innerHTML = z.length ? `<li class="rw-dlkopf" aria-hidden="true"><span>Markt</span><span>Rhythmus · Menge je Lieferung</span><span>Lieferwochen ${esc(kwKurz(A))}–${esc(String(+kwPlus(A, 7).slice(5)))}</span><span></span></li>`
+      + z.map((m) => `<li class="rw-dzeile${m.darfPflegen ? ' rw-klick' : ''}${dauerBeendet(m) ? ' beendet' : ''}" data-dauer="${esc(m.id)}"${m.darfPflegen ? ` tabindex="0" role="button" aria-label="Dauerauftrag ${esc(m.ort)} öffnen"` : ''}>
+        <span class="rw-dm"><span class="rw-name">${esc(m.ort)}</span><span class="rw-sub">${esc([m.strasse, m.kdNr ? 'Kd. ' + m.kdNr : '', m.lieferwegName].filter(Boolean).join(' · '))}</span></span>
+        <span class="rw-dr"><b>${esc(rhythmusText(m.dauer.rhythmus))}</b><span class="rw-sub">${esc(mengenText(m.dauer.mengen))}</span></span>
+        <span class="rw-dw">${wochenleiste(m.dauer)}${dauerChips(m)}</span>
+        <span class="rw-dpfeil" aria-hidden="true">${m.darfPflegen ? '›' : ''}</span></li>`).join('')
+      : `<li class="rw-leerzeile">${alle.length ? 'Keine Daueraufträge für diesen Filter.' : 'Noch keine Daueraufträge.'}</li>`;
+    if (S.dOffen) { const m = S.maerkte.find((x) => x.id === S.dOffen); S.dOffen = ''; if (m && m.darfPflegen) oeffneDauer(m); }
   }
-  function dauerBearbeiten(m) {
-    const d = m && dauerAktiv(m) ? m.dauer : null;
-    S.dEdit = { id: m ? m.id : '', neu: !d, rev: m ? m.rev : 0, rhythmus: d ? d.rhythmus : 1, mengen: d ? { ...obj(d.mengen) } : { [artikel()[0].id]: 1 },
-      ab: d ? d.ab : S.d.abfrage, pauseBis: d ? d.pauseBis : '', beenden: false };
-    renderDauer();
-    $('#rw-d-edit').scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+  const dauerSuche = (v) => { S.dSuche = v; $('#rw-d-suche').value = v; renderDauer(); };
+  $('#rw-d-suche').addEventListener('input', (ev) => dauerSuche(ev.target.value));
+  $('#rw-d-suche').addEventListener('keydown', (ev) => { if (ev.key === 'Escape' && S.dSuche) { ev.preventDefault(); dauerSuche(''); } });
+  $('#rw-d-suche-leeren').addEventListener('click', () => { dauerSuche(''); $('#rw-d-suche').focus(); });
+  $('#rw-d-filter').addEventListener('click', (ev) => { const b = ev.target.closest('[data-df]'); if (b) { S.dFilter = b.dataset.df; renderDauer(); } });
+  $('#rw-d-neu').addEventListener('click', () => oeffneDauer(null));
+  $('#rw-d-liste').addEventListener('click', (ev) => {
+    const li = ev.target.closest('[data-dauer]'); if (!li) return;
+    const m = S.maerkte.find((x) => x.id === li.dataset.dauer); if (m && m.darfPflegen) oeffneDauer(m);
+  });
+  $('#rw-d-liste').addEventListener('keydown', (ev) => { if ((ev.key === 'Enter' || ev.key === ' ') && ev.target.dataset.dauer) { ev.preventDefault(); ev.target.click(); } });
+
+  /* ---------- Pop-up „Dauerauftrag“ ---------- */
+  const dd = $('#dlg-dauer');
+  const D = { m: null, e: null, suche: '', beenden: false, laeuft: false };
+  function oeffneDauer(m) {
+    const d = m && dauerAktiv(m) ? dauerVon(m.dauer) : null;
+    D.m = m; D.suche = ''; D.beenden = false; D.laeuft = false;
+    D.e = { neu: !d, rhythmus: d ? d.rhythmus : 1, mengen: d ? { ...d.mengen } : { [artikel()[0].id]: 1 }, ab: d ? d.ab : S.d.abfrage,
+      pauseAn: !!(d && d.pauseBis && d.pauseBis >= S.d.abfrage), pauseVon: d ? d.pauseVon : '', pauseBis: d && d.pauseBis >= S.d.abfrage ? d.pauseBis : '',
+      bisAn: !!(d && d.bis), bis: d ? d.bis : '' };
+    if (!m && !S.maerkte) { ladeMaerkte().then(() => renderDauerDlg()); }
+    renderDauerDlg();
+    if (!dd.open) dd.showModal();
   }
-  function renderDauerEdit() {
-    const el = $('#rw-d-edit'), e = S.dEdit;
-    el.hidden = !e; el.parentElement.classList.toggle('mit-edit', !!e);
-    if (!e) { el.innerHTML = ''; return; }
-    const m = e.id ? S.maerkte.find((x) => x.id === e.id) : null;
-    const frei = S.maerkte.filter((x) => x.darfPflegen && (!dauerAktiv(x) || x.id === e.id));
-    const kopf = e.neu ? `<h2>Neuer Dauerauftrag</h2><label class="rw-schmal">Markt<select class="rw-eingabe" id="rw-d-markt"><option value="">Markt wählen …</option>
-        ${frei.map((x) => `<option value="${esc(x.id)}"${x.id === e.id ? ' selected' : ''}>${esc(x.ort)}${x.kdNr ? ' · Kd. ' + esc(x.kdNr) : ''}</option>`).join('')}</select></label>`
-      : `<h2>${esc(m ? m.ort : '')}</h2><p class="rw-sub">${esc(m ? [m.strasse, m.kdNr ? 'Kd. ' + m.kdNr : '', m.lieferwegName].filter(Boolean).join(' · ') : '')}</p>`;
-    const naechste = naechsteLieferungen(e);
-    el.innerHTML = `<div class="rw-dialogkopf"><div class="rw-dkopf">${kopf}</div><button class="rw-dialog-schliessen" type="button" data-d-zu aria-label="Schließen">×</button></div>
-      <div class="rw-schmal"><span>Rhythmus</span><div class="rw-seg rw-dseg" role="group" aria-label="Rhythmus">${[1, 2, 3, 4].map((x) => `<button type="button" data-d-rh="${x}" aria-pressed="${e.rhythmus === x}">${esc(S.d.rhythmen[x])}</button>`).join('')}</div></div>
-      <div class="rw-schmal"><span>Menge je Lieferung</span><div class="rw-mengen-eingabe">${artikel().map((ar) => `<div class="rw-menge"><span>${esc(ar.name)}</span><span class="rw-stepper">
-        <button type="button" data-d-menge="${esc(ar.id)}" data-d="-1" aria-label="${esc(ar.name)} weniger">−</button><input class="rw-mzahl" data-d-mzahl="${esc(ar.id)}" inputmode="numeric" maxlength="3" value="${obj(e.mengen)[ar.id] || 0}" aria-label="${esc(ar.name)}: Menge">
-        <button type="button" data-d-menge="${esc(ar.id)}" data-d="1" aria-label="${esc(ar.name)} mehr">+</button></span></div>`).join('')}</div></div>
-      <div class="rw-formraster"><label>Erste Lieferung<select class="rw-eingabe" id="rw-d-ab">${kwWahl(e.ab)}</select></label>
-        <label>Pause bis<select class="rw-eingabe" id="rw-d-pause">${kwWahl(e.pauseBis, 'keine Pause')}</select></label></div>
-      <p class="rw-dvorschau">${naechste.length ? 'Nächste Lieferungen: ' + esc(naechste.map(kwKurz).join(' · ')) : 'Keine Lieferung geplant.'}</p>
-      <p class="rw-meldung" id="rw-d-meldung" role="alert"></p>
-      <div class="rw-knopfreihe">${!e.neu ? `<button class="btn ghost" type="button" data-d-ende>${e.beenden ? 'Wirklich beenden?' : 'Beenden'}</button>` : ''}
-        <button class="btn" type="button" data-d-zu>Abbrechen</button><button class="btn primary" type="button" data-d-speichern>Speichern</button></div>`;
+  const ddE = () => ({ rhythmus: D.e.rhythmus, mengen: D.e.mengen, ab: D.e.ab, pauseBis: D.e.pauseAn ? D.e.pauseBis : '', pauseVon: D.e.pauseAn ? D.e.pauseVon : '', bis: D.e.bisAn ? D.e.bis : '' });
+  function ddVorschau() {
+    const d = ddE(), A = S.d.abfrage, out = [];
+    if (!summe(d.mengen)) return 'Bitte mindestens eine Menge angeben.';
+    let pauseGezeigt = false;
+    for (let i = 0, k = A; i < 60 && out.length < 6; i++, k = kwPlus(k, 1)) {
+      if (d.bis && k > d.bis) break;
+      if (inPause(d, k) && !pauseGezeigt && dauerImTakt(d, k) === k) { out.push(`(Pause ${kwKurz(d.pauseVon && d.pauseVon > A ? d.pauseVon : A)}–${+d.pauseBis.slice(5)})`); pauseGezeigt = true; }
+      if (dauerFaelligIn(d, k)) out.push(kwKurz(k));
+    }
+    if (!out.some((x) => x.startsWith('KW'))) return 'Keine Lieferung geplant.';
+    return `Nächste Lieferungen: ${out.join(' · ')}${d.bis ? ` – endet nach ${kwKurz(d.bis)}` : ''}`;
+  }
+  function renderDauerDlg() {
+    const m = D.m, e = D.e, A = S.d.abfrage;
+    let kopf;
+    if (m) {
+      const seit = !e.neu && e.ab < A ? ` · läuft seit ${kwText(e.ab)}` : '';
+      kopf = `<h2 id="dd-titel">${e.neu ? 'Neuer Dauerauftrag' : 'Dauerauftrag'} · ${esc(m.ort)}</h2><p class="rw-sub">${esc([m.strasse, m.kdNr ? 'Kd. ' + m.kdNr : '', m.lieferwegName].filter(Boolean).join(' · '))}${esc(seit)}</p>`;
+    } else {
+      const q = SU.woerter(D.suche);
+      const frei = (S.maerkte || []).filter((x) => x.darfPflegen && !dauerAktiv(x) && passt(x, q));
+      kopf = `<h2 id="dd-titel">Neuer Dauerauftrag</h2>
+        <div class="rw-suche rw-ddsuche"><svg class="i" aria-hidden="true"><use href="#i-lupe"/></svg><label class="sr-only" for="dd-suche">Markt suchen</label>
+          <input class="rw-eingabe" id="dd-suche" type="search" autocomplete="off" placeholder="Markt suchen: Ort, Straße, Kd.-Nr. oder Marktnummer" value="${esc(D.suche)}"></div>
+        <ul class="rw-ddmaerkte" id="dd-maerkte">${frei.slice(0, 8).map((x) => `<li><button type="button" data-dd-markt="${esc(x.id)}"><b>${esc(x.ort)}</b><span class="rw-sub">${esc([x.strasse, x.kdNr ? 'Kd. ' + x.kdNr : ''].filter(Boolean).join(' · '))}</span></button></li>`).join('')
+          || `<li class="rw-hilfe">${S.maerkte ? 'Kein passender Markt ohne Dauerauftrag.' : 'Märkte werden geladen …'}</li>`}${frei.length > 8 ? `<li class="rw-hilfe">… ${frei.length - 8} weitere – Suche verfeinern</li>` : ''}</ul>`;
+    }
+    const wochen = []; for (let i = 0; i < 12; i++) wochen.push(kwPlus(A, i));
+    const d = ddE();
+    $('#dd-inhalt').innerHTML = `<div class="rw-dialogkopf"><div class="rw-dkopf">${kopf}</div><button class="rw-dialog-schliessen" type="button" data-dd-zu aria-label="Schließen">×</button></div>
+      <div class="rw-ddteil${m ? '' : ' aus'}">
+      <div class="rw-ddfeld"><span>Rhythmus</span><div class="rw-seg rw-ddrh" role="group" aria-label="Rhythmus">${Object.keys(S.d.rhythmen).map(Number).filter((x) => x > 0)
+        .map((x) => `<button type="button" data-dd-rh="${x}" aria-pressed="${e.rhythmus === x}">${esc(rhythmusText(x))}</button>`).join('')}</div></div>
+      <div class="rw-ddfeld"><span>Menge je Lieferung</span><div class="rw-mengen-eingabe">${artikel().map((ar) => `<div class="rw-menge"><span>${esc(ar.name)}</span><span class="rw-stepper">
+        <button type="button" data-dd-menge="${esc(ar.id)}" data-d="-1" aria-label="${esc(ar.name)} weniger">−</button><input class="rw-mzahl" data-dd-mzahl="${esc(ar.id)}" inputmode="numeric" maxlength="3" value="${obj(e.mengen)[ar.id] || 0}" aria-label="${esc(ar.name)}: Menge">
+        <button type="button" data-dd-menge="${esc(ar.id)}" data-d="1" aria-label="${esc(ar.name)} mehr">+</button></span></div>`).join('')}</div></div>
+      <div class="rw-ddfeld"><span>Nächste Lieferung ab</span><div class="rw-ddwochen" role="group" aria-label="Nächste Lieferung ab">${wochen.map((k) => {
+        const f = dauerFaelligIn(d, k), p = !f && inPause(d, k) && dauerImTakt(d, k) === k;
+        return `<button type="button" data-dd-ab="${esc(k)}" class="${f ? 'd' : p ? 'p' : ''}" aria-pressed="${e.ab === k}" title="${esc(`ab ${kwText(k)} im Rhythmus liefern`)}">${esc(kwKurz(k))}</button>`;
+      }).join('')}</div><small class="rw-hilfe">Klick auf eine Woche: ab dort im Rhythmus liefern. Grün = Lieferung, gestrichelt = Pause.</small></div>
+      <div class="rw-ddzeile"><label class="rw-check"><input type="checkbox" id="dd-pause"${e.pauseAn ? ' checked' : ''}> Pause</label>
+        ${e.pauseAn ? `<label class="rw-schmal">von<select class="rw-eingabe" id="dd-pvon">${kwWahl(e.pauseVon, A, 52, 'ab sofort')}</select></label>
+        <label class="rw-schmal">bis einschließlich<select class="rw-eingabe" id="dd-pbis">${kwWahl(e.pauseBis, A, 52)}</select></label>` : ''}</div>
+      <div class="rw-ddzeile"><label class="rw-check"><input type="checkbox" id="dd-ende"${e.bisAn ? ' checked' : ''}> Enddatum</label>
+        ${e.bisAn ? `<label class="rw-schmal">läuft bis einschließlich<select class="rw-eingabe" id="dd-bis">${kwWahl(e.bis, e.ab > A ? e.ab : A, 104)}</select></label>` : ''}</div>
+      <p class="rw-dvorschau" id="dd-vorschau">${esc(ddVorschau())}</p>
+      </div>
+      <p class="rw-meldung" id="dd-meldung" role="alert"></p>
+      <div class="rw-knopfreihe rw-ddfuss">${!e.neu ? `<button class="btn ghost rw-ddende${D.beenden ? ' frage' : ''}" type="button" data-dd-ende>${D.beenden ? 'Wirklich beenden?' : 'Dauerauftrag beenden'}</button>` : ''}
+        <button class="btn" type="button" data-dd-zu>Abbrechen</button><button class="btn primary" type="button" data-dd-speichern${m ? '' : ' disabled'}>Speichern</button></div>`;
+  }
+  /* nach dem Speichern: geöffnete Ansichten neu laden (Marktkarte, Woche, Akte, Liste) */
+  async function nachDauer() {
+    if (dk.open && K.id) await ladeKarte();
+    if (S.tab === 'woche') ladeWoche(); else if (S.tab === 'maerkte' && S.akteId) ladeAkte(S.akteId); else ladeMaerkte();
   }
   async function dauerSpeichern(ende) {
-    const e = S.dEdit, meld = (t) => { $('#rw-d-meldung').textContent = t; };
-    if (!e.id) { meld('Bitte einen Markt wählen.'); return false; }
+    const m = D.m, e = D.e, meld = (t) => { $('#dd-meldung').textContent = t; };
+    if (!m) { meld('Bitte einen Markt wählen.'); return; }
     const mengen = Object.fromEntries(Object.entries(e.mengen).filter(([, n]) => n > 0));
-    if (!ende && !Object.keys(mengen).length) { meld('Bitte mindestens eine Menge angeben.'); return false; }
-    const r = await api('rewe_markt_save', { id: e.id, rev: e.rev, dauer: ende ? { rhythmus: 0 } : { rhythmus: e.rhythmus, mengen, ab: e.ab, pauseBis: e.pauseBis } });
+    if (!ende && !Object.keys(mengen).length) { meld('Bitte mindestens eine Menge angeben.'); return; }
+    if (!ende && e.pauseAn && !e.pauseBis) { meld('Pause: bitte „bis einschließlich“ wählen.'); return; }
+    const d = ddE();
+    const dauer = ende ? { rhythmus: 0 } : { rhythmus: e.rhythmus, mengen, ab: e.ab, pauseBis: d.pauseBis, pauseVon: d.pauseVon, bis: d.bis };
+    D.laeuft = true;
+    const r = await api('rewe_markt_save', { id: m.id, rev: m.rev, dauer });
+    D.laeuft = false;
+    if (r.status === 401) { dd.close(); zeigeAnmeldung(); return; }
     if (r.status === 409) {
-      const t = (r.data.error || 'Der Markt wurde inzwischen geändert.') + ' Bitte prüfen und erneut speichern.';
-      await ladeMaerkte(); const m = S.maerkte && S.maerkte.find((x) => x.id === e.id); if (m && S.dEdit) S.dEdit.rev = m.rev; meld(t); return false;
+      const f = await api('rewe_markt', null, '&id=' + encodeURIComponent(m.id));
+      if (f.status === 200 && f.data.ok) D.m = { ...m, rev: f.data.markt.rev };
+      meld((r.data.error || 'Der Markt wurde inzwischen geändert.') + ' Bitte prüfen und erneut speichern.'); return;
     }
-    if (r.status !== 200 || !r.data.ok) { meld(fehlerText(r, 'Speichern fehlgeschlagen')); return false; }
+    if (r.status !== 200 || !r.data.ok) { meld(fehlerText(r, 'Speichern fehlgeschlagen')); return; }
+    dd.close();
     toast(`${r.data.markt.ort}: Dauerauftrag ${ende ? 'beendet' : 'gespeichert'}`);
-    S.dEdit = null; await ladeMaerkte();
-    return true;
+    await nachDauer();
   }
-  $('#rw-d-suche').addEventListener('input', (ev) => { S.dSuche = ev.target.value; renderDauer(); });
-  $('#rw-d-rh').addEventListener('change', (ev) => { S.dRh = ev.target.value; renderDauer(); });
-  $('#rw-d-lw').addEventListener('change', (ev) => { S.dLw = ev.target.value; renderDauer(); });
-  $('#rw-d-status').addEventListener('change', (ev) => { S.dStatus = ev.target.value; renderDauer(); });
-  $('#rw-d-neu').addEventListener('click', () => dauerBearbeiten(null));
-  $('#rw-d-tabelle').addEventListener('click', (ev) => {
-    const tr = ev.target.closest('[data-dauer]'); if (!tr) return;
-    const m = S.maerkte.find((x) => x.id === tr.dataset.dauer); if (m && m.darfPflegen) dauerBearbeiten(m);
+  dd.addEventListener('click', async (ev) => {
+    const b = ev.target.closest('button'); if (!b || b.disabled || !D.e || D.laeuft) return;
+    const e = D.e;
+    if (b.dataset.ddZu !== undefined) { dd.close(); return; }
+    if (b.dataset.ddMarkt) { D.m = S.maerkte.find((x) => x.id === b.dataset.ddMarkt) || null; renderDauerDlg(); return; }
+    if (b.dataset.ddRh) { e.rhythmus = +b.dataset.ddRh; D.beenden = false; renderDauerDlg(); return; }
+    if (b.dataset.ddAb) { e.ab = b.dataset.ddAb; renderDauerDlg(); return; }
+    if (b.dataset.ddMenge) { e.mengen[b.dataset.ddMenge] = Math.min(999, Math.max(0, (e.mengen[b.dataset.ddMenge] || 0) + Number(b.dataset.d))); renderDauerDlg(); return; }
+    if (b.dataset.ddEnde !== undefined) { if (!D.beenden) { D.beenden = true; renderDauerDlg(); return; } b.disabled = true; await dauerSpeichern(true); return; }
+    if (b.dataset.ddSpeichern !== undefined) { b.disabled = true; await dauerSpeichern(false); if (dd.open) b.disabled = false; }
   });
-  $('#rw-d-tabelle').addEventListener('keydown', (ev) => { if (ev.key === 'Enter' && ev.target.dataset.dauer) ev.target.click(); });
-  $('#rw-d-edit').addEventListener('click', async (ev) => {
-    const b = ev.target.closest('button'); if (!b || b.disabled || !S.dEdit) return;
-    const e = S.dEdit;
-    if (b.dataset.dZu !== undefined) { S.dEdit = null; renderDauer(); return; }
-    if (b.dataset.dRh) { e.rhythmus = +b.dataset.dRh; e.beenden = false; renderDauerEdit(); return; }
-    if (b.dataset.dMenge) { e.mengen[b.dataset.dMenge] = Math.max(0, (e.mengen[b.dataset.dMenge] || 0) + Number(b.dataset.d)); renderDauerEdit(); return; }
-    if (b.dataset.dEnde !== undefined) { if (!e.beenden) { e.beenden = true; renderDauerEdit(); return; } b.disabled = true; if (!(await dauerSpeichern(true))) b.disabled = false; return; }
-    if (b.dataset.dSpeichern !== undefined) { b.disabled = true; if (!(await dauerSpeichern(false))) b.disabled = false; }
+  dd.addEventListener('input', (ev) => {
+    if (ev.target.id !== 'dd-suche') return;
+    D.suche = ev.target.value; renderDauerDlg();
+    const i = $('#dd-suche'); i.focus(); i.setSelectionRange(i.value.length, i.value.length);
   });
-  $('#rw-d-edit').addEventListener('change', (ev) => {
-    const t = ev.target, e = S.dEdit; if (!e) return;
-    if (t.id === 'rw-d-markt') { const m = S.maerkte.find((x) => x.id === t.value); e.id = t.value; e.rev = m ? m.rev : 0; renderDauer(); }
-    else if (t.id === 'rw-d-ab') { e.ab = t.value; renderDauerEdit(); }
-    else if (t.id === 'rw-d-pause') { e.pauseBis = t.value; renderDauerEdit(); }
-    else if (t.dataset.dMzahl) { const n = parseInt(t.value.replace(/\D/g, ''), 10); e.mengen[t.dataset.dMzahl] = Number.isFinite(n) && n > 0 ? Math.min(n, 999) : 0; renderDauerEdit(); }
+  dd.addEventListener('change', (ev) => {
+    const t = ev.target, e = D.e; if (!e) return;
+    if (t.id === 'dd-pause') { e.pauseAn = t.checked; if (t.checked && !e.pauseBis) e.pauseBis = kwPlus(S.d.abfrage, 1); }
+    else if (t.id === 'dd-pvon') e.pauseVon = t.value;
+    else if (t.id === 'dd-pbis') e.pauseBis = t.value;
+    else if (t.id === 'dd-ende') { e.bisAn = t.checked; if (t.checked && !e.bis) e.bis = kwPlus(e.ab > S.d.abfrage ? e.ab : S.d.abfrage, 11); }
+    else if (t.id === 'dd-bis') e.bis = t.value;
+    else if (t.dataset.ddMzahl) { const n = parseInt(t.value.replace(/\D/g, ''), 10); e.mengen[t.dataset.ddMzahl] = Number.isFinite(n) && n > 0 ? Math.min(n, 999) : 0; }
+    else return;
+    renderDauerDlg();
   });
 
   /* ================= Zuweisung und Team =================
@@ -1031,13 +1139,14 @@
   function renderAbschluss() {
     const a = S.abschluss;
     $('#rw-a-sub').textContent = `Lieferwoche ${zeitraum(a.kw)} · Bestellungen aller Listen · Erfassung in WinAB als Einzelauftrag je Markt`;
-    const offen = a.offen.length + a.dauerOffen.length;
-    const hinweise = (a.dauerOffen.length ? 1 : 0) + (a.ohneNr.length ? 1 : 0) + (a.nachtraege ? 1 : 0) + (a.ohneStamm ? 1 : 0);
+    const dGeplant = a.dauerOffen.filter((m) => m.art === 'geplant'), dOhne = a.dauerOffen.filter((m) => m.art !== 'geplant');
+    const offen = a.offen.length + dOhne.length;   // geplante Daueraufträge werden zum Bestellschluss automatisch bestellt
+    const hinweise = (dOhne.length ? 1 : 0) + (a.ohneNr.length ? 1 : 0) + (a.nachtraege ? 1 : 0) + (a.ohneStamm ? 1 : 0);
     const stueck = a.zeilen.reduce((s, r) => s + r.menge, 0);
     const eb = $('#rw-a-erfasst');
     eb.hidden = !a.exportiert; eb.querySelector('span').textContent = a.erfasst ? 'In WinAB erfasst ✓' : 'Als in WinAB erfasst markieren';
     eb.classList.toggle('primary', false);
-    $('#rw-a-export').disabled = !a.zeilen.length;
+    $('#rw-a-export').disabled = !a.zeilen.length && !a.dauerOffen.some((m) => m.art === 'geplant');   // der Export bestellt geplante Daueraufträge selbst
     const schritte = [
       [offen ? 'warn' : 'ok', '1', 'Abfrage', offen ? `${offen} ohne Antwort` : 'alle beantwortet'],
       [hinweise ? 'warn' : 'ok', '2', 'Prüfen', hinweise ? `${hinweise} ${hinweise === 1 ? 'Hinweis' : 'Hinweise'}` : 'nichts offen'],
@@ -1050,14 +1159,15 @@
       <div class="rw-kpis">
         <div class="rw-kpi"><span>Einzelaufträge</span><b>${a.maerkte}</b><small>ein Auftrag je Markt</small></div>
         <div class="rw-kpi"><span>Stück gesamt</span><b>${zahl(stueck)}</b><small>${esc(artSum || '—')}</small></div>
-        <div class="rw-kpi${offen ? ' warn' : ''}"><span>Ohne Antwort</span><b>${offen}</b><small>${a.dauerOffen.length} Daueraufträge nicht bestätigt</small></div>
+        <div class="rw-kpi${offen ? ' warn' : ''}"><span>Ohne Antwort</span><b>${offen}</b><small>${a.auto ? `${maerkte(a.auto)} automatisch aus Daueraufträgen` : dGeplant.length ? `${dGeplant.length} Daueraufträge folgen zum Bestellschluss` : 'Daueraufträge: keine offen'}</small></div>
         <div class="rw-kpi${a.nachtraege ? ' warn' : ''}"><span>Nachträge</span><b>${a.nachtraege}</b><small>nach dem Export geändert</small></div>
       </div>
       <div class="rw-raster">
         <section class="rw-panel rw-glas"><div class="rw-panelkopf"><h2>Je Lieferweg</h2></div>${balken(a.lieferwege, '')}</section>
         <section class="rw-panel rw-glas"><div class="rw-panelkopf"><h2>Je Mitarbeiter</h2></div>${balken(a.personen, 'person')}</section>
       </div>
-      ${a.dauerOffen.length ? `<div class="rw-hinweisleiste"><span><b>Daueraufträge ohne Bestätigung:</b> ${esc(a.dauerOffen.map((m) => `${m.ort} (${m.zustaendig || 'niemand'})`).join(', '))} – sie stehen erst nach der Bestätigung im Export.</span></div>` : ''}
+      ${dGeplant.length ? `<div class="rw-hinweisleiste grau"><span><b>Daueraufträge zum Bestellschluss (${dGeplant.length}):</b> ${esc(dGeplant.map((m) => m.ort).join(', '))} – werden automatisch bestellt (spätestens beim Excel).</span></div>` : ''}
+      ${dOhne.length ? `<div class="rw-hinweisleiste"><span><b>Daueraufträge ohne Bestellung (${dOhne.length}):</b> ${esc(dOhne.map((m) => `${m.ort} (${m.zustaendig || 'niemand'})`).join(', '))} – nicht automatisch (Markt ruhend oder Woche schon abgeschlossen), nicht im Export.</span></div>` : ''}
       ${a.offen.length ? `<div class="rw-hinweisleiste grau"><span><b>${maerkte(a.offen.length)} ohne Antwort:</b> ${esc(a.offen.slice(0, 12).map((m) => m.ort).join(', '))}${a.offen.length > 12 ? ' …' : ''}</span></div>` : ''}
       ${a.ohneNr.length ? `<div class="rw-hinweisleiste grau"><span><b>Ohne WinAB-Artikelnummer:</b> ${esc(a.ohneNr.join(', '))} – unter Einstellungen eintragen.</span>${darf('verwalten') ? '<a class="btn sm" href="#einstellungen" data-gehe="einstellungen">Einstellungen</a>' : ''}</div>` : ''}
       ${a.ohneStamm ? `<div class="rw-hinweisleiste grau"><span><b>${a.ohneStamm} ${a.ohneStamm === 1 ? 'Markt' : 'Märkte'} nicht im WinAB-Kundenstamm</b> – Name und Anschrift kommen aus der REWE-Liste.</span></div>` : ''}
@@ -1067,7 +1177,7 @@
         ${a.zeilen.map((r) => `<tr><td data-label="Auftrag" class="rw-zahl">${r.auftrag}</td><td data-label="Lieferweg">${esc(r.lieferweg)}</td><td data-label="Kd.-Nr.">${esc(r.kdNr)}</td>
           <td data-label="Markt">${esc([r.ort, r.strasse].filter(Boolean).join(', '))}</td><td data-label="Artikel">${esc(r.artikel)}${r.nr ? ` <span class="rw-sub">${esc(r.nr)}</span>` : ''}</td>
           <td data-label="Menge" class="rw-zahl"><b>${r.menge}</b></td><td data-label="Erfasst von">${esc(r.zustaendig)}</td>
-          <td data-label="Hinweis">${r.nachtrag ? '<span class="rw-chip akzent">Nachtrag</span> ' : ''}${r.ohneBerechnung ? '<span class="rw-chip gelb">ohne Berechnung</span> ' : ''}${esc(r.notiz)}</td></tr>`).join('')
+          <td data-label="Hinweis">${r.auto ? '<span class="rw-chip gruen">automatisch</span> ' : ''}${r.nachtrag ? '<span class="rw-chip akzent">Nachtrag</span> ' : ''}${r.ohneBerechnung ? '<span class="rw-chip gelb">ohne Berechnung</span> ' : ''}${esc(r.notiz)}</td></tr>`).join('')
           || '<tr><td colspan="8" class="rw-leerzeile">In dieser Woche gibt es keine Bestellungen.</td></tr>'}</tbody></table></div></section>`;
   }
   $('#rw-a-zurueck').addEventListener('click', () => { S.aKw = kwPlus(S.aKw, -1); zeigeTab('abschluss', S.aKw); });
@@ -1192,8 +1302,6 @@
     if (darf('alle')) { wer.innerHTML = '<option value="">Meine Liste</option><option value="*">Alle Listen</option>' + S.d.personen.filter((p) => p.id !== S.d.ich).map((p) => `<option value="${esc(p.id)}">Liste von ${esc(p.name)}</option>`).join(''); wer.value = S.wer; }
     $('#rw-m-lw').innerHTML = lwOptionen('alle Lieferwege', false); $('#rw-m-lw').value = S.mLw;
     $('#rw-m-kauf').innerHTML = kaufOptionen('alle Kaufbereitschaften'); $('#rw-m-kauf').value = S.mKauf;
-    $('#rw-d-rh').innerHTML = '<option value="">alle Rhythmen</option>' + [1, 2, 3, 4].map((x) => `<option value="${x}">${esc(d.rhythmen[x])}</option>`).join(''); $('#rw-d-rh').value = S.dRh;
-    $('#rw-d-lw').innerHTML = lwOptionen('alle Lieferwege', false); $('#rw-d-lw').value = S.dLw;
     if (!S.kw) S.kw = d.abfrage;
     if (!S.aKw) S.aKw = d.abschlussKw;
   }

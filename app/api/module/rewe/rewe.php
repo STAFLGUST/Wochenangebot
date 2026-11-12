@@ -3,19 +3,21 @@ declare(strict_types=1);
 /* REWE · Vordisposition Dry Aged: Daten und Regeln des Moduls „rewe“ (Oberfläche rewe.intern, Aktionen in
    app/api/aktionen/rewe.php, Excel für die Warenwirtschaft in app/api/module/rewe/export.php).
    Löst die Excel-Listen „Vordispo Rewe …“ ab: Jede Mitarbeiterin und jeder Mitarbeiter fragt die eigenen REWE-Märkte
-   wöchentlich ab (Bestellt mit Mengen, Kein Bedarf, Nicht erreicht, Pause), gruppiert nach Lieferweg (REWE-Zentrallager
-   oder Direktbelieferung). Jeder Markt hat eine Akte mit Wochenverlauf, Kaufbereitschaft, Dauerauftrag, Ansprechpartnern,
+   wöchentlich ab (Bestellt mit Mengen, Kein Bedarf, Nicht erreicht, Markt pausiert), gruppiert nach Lieferweg (REWE-Zentrallager
+   oder Direktbelieferung); fällige Daueraufträge gelten zum Bestellschluss automatisch als bestellt, außer jemand antwortet
+   anders (rw_dauer_automatisch). Jeder Markt hat eine Akte mit Wochenverlauf, Kaufbereitschaft, Dauerauftrag, Ansprechpartnern,
    Notizen und Wiedervorlagen. Die Leitung weist Märkte zu und ändert Lieferwege jeweils ab einer Kalenderwoche; zum
    Wochenende entsteht die Excel-Datei für die Erfassung in WinAB.
 
    Eigene Dokumente (alle Schreibvorgänge unter der Sperre „rewe-maerkte“):
      rewe-stamm        Lieferwege (Zentrallager/Direkt, Bestellschluss), Artikel (Name, Einheit, WinAB-Artikelnummer), Team
      rewe-maerkte      Märkte: Kd.-Nr. (WinAB), REWE-Marktnummer, Anschrift, Telefon, Kaufbereitschaft, Zuständigkeit und
-                       Lieferweg je mit „ab KW“-Historie, Dauerauftrag (Rhythmus, Mengen, ab KW, Pause bis), Abfragetag,
+                       Lieferweg je mit „ab KW“-Historie, Dauerauftrag (Rhythmus 1–4, 6, 8 Wochen, Mengen, ab KW, Pause von–bis
+                       einschließlich, läuft bis einschließlich), Abfragetag,
                        Ansprechpartner, Hinweis
      rewe-wochen/JJJJ  je ISO-Jahr: Antworten je Markt und KW (Status, Mengen je Artikel, ohne Berechnung, Notiz) mit
-                       Schnappschuss von Lieferweg und Zuständigkeit (GR-106), wer/wann; Wochenabschluss je KW (exportiert,
-                       in WinAB erfasst)
+                       Schnappschuss von Lieferweg und Zuständigkeit (GR-106), wer/wann, Herkunft (auto = zum Bestellschluss
+                       automatisch aus dem Dauerauftrag, rw_dauer_automatisch); Wochenabschluss je KW (exportiert, in WinAB erfasst)
      rewe-verlauf      Notizen, Telefonate, Wiedervorlagen und Änderungen (Kaufbereitschaft, Zuweisung, Dauerauftrag)
    Kalenderwochen als ISO-Woche „JJJJ-WW“ = Lieferwoche; Bestellschluss meist Freitag früh der Vorwoche (je Lieferweg
    hinterlegt). Die Abfrage startet deshalb mit der nächsten Lieferwoche (rw_kw_abfrage), der Wochenabschluss mit der
@@ -36,7 +38,7 @@ declare(strict_types=1);
    „ansehen“ und „bearbeiten“ prüfen die Aktionen mit rw_require_perm (rw_sehen/rw_bearbeiten: Recht oder im Modul ergänzt). */
 if (!defined('WA_API')) { http_response_code(404); exit; }   // nur über api/index.php nutzbar
 
-const RW_ANTWORTEN = ['bestellt' => 'Bestellt', 'kein' => 'Kein Bedarf', 'ne' => 'Nicht erreicht', 'pause' => 'Pause'];
+const RW_ANTWORTEN = ['bestellt' => 'Bestellt', 'kein' => 'Kein Bedarf', 'ne' => 'Nicht erreicht', 'pause' => 'Markt pausiert'];   // Schlüssel bleiben; „Pause“ heißt seit 12.11.2026 „Markt pausiert“ (nur noch der Dauerauftrag hat eine Pause)
 const RW_KAUF = ['regelmaessig' => 'Kauft regelmäßig', 'gelegentlich' => 'Gelegentlich', 'interessiert' => 'Interessiert',
                  'kein_interesse' => 'Kein Interesse', 'ruhend' => 'Ruhend', 'ausgelistet' => 'Ausgelistet'];
 const RW_KAUF_ABFRAGE = ['regelmaessig', 'gelegentlich', 'interessiert'];   // stehen in der Wochenabfrage
@@ -44,7 +46,8 @@ const RW_NOTIZ_ARTEN = ['notiz' => 'Notiz', 'telefonat' => 'Telefonat', 'besuch'
                         'ohne_berechnung' => 'Ware ohne Berechnung', 'system' => 'Änderung'];
 const RW_LW_ARTEN = ['lager' => 'Zentrallager', 'direkt' => 'Direktbelieferung'];
 const RW_TAGE = ['' => '–', 'mo' => 'Montag', 'di' => 'Dienstag', 'mi' => 'Mittwoch', 'do' => 'Donnerstag', 'fr' => 'Freitag'];
-const RW_RHYTHMEN = [0 => 'kein Dauerauftrag', 1 => 'wöchentlich', 2 => '14-tägig', 3 => 'alle 3 Wochen', 4 => 'alle 4 Wochen'];
+const RW_RHYTHMEN = [0 => 'kein Dauerauftrag', 1 => 'jede Woche', 2 => 'alle 2 Wochen', 3 => 'alle 3 Wochen', 4 => 'alle 4 Wochen',
+                     6 => 'alle 6 Wochen', 8 => 'alle 8 Wochen'];   // 6 und 8 seit 12.11.2026 (Inhaber); Zahl = Abstand in Wochen
 const RW_MAX_MAERKTE = 3000;
 const RW_MAX_NOTIZEN = 60000;
 const RW_MAX_MENGE = 999;
@@ -450,30 +453,85 @@ function rw_markt_finden(array $doc, $id, array $me, string $kw = ''): array
     return $m;
 }
 
-/* ---------- Dauerauftrag ---------- */
+/* ---------- Dauerauftrag ----------
+   dauer = {rhythmus (Wochen, 0 = keiner), mengen, ab (KW der ersten Lieferung, setzt den Takt), pauseBis, pauseVon?, bis?}.
+   Pause: Lieferwochen von pauseVon bis einschließlich pauseBis entfallen; ohne pauseVon gilt sie sofort (wie vor 12.11.2026).
+   bis: läuft bis einschließlich dieser KW, danach ist der Auftrag nicht mehr fällig. Fehlende Felder = keine (GR-006). */
 function rw_dauer(array $m): array
 {
     $d = is_array($m['dauer'] ?? null) ? $m['dauer'] : [];
     return ['rhythmus' => (int)($d['rhythmus'] ?? 0), 'mengen' => is_array($d['mengen'] ?? null) ? $d['mengen'] : [],
-            'ab' => (string)($d['ab'] ?? ''), 'pauseBis' => (string)($d['pauseBis'] ?? '')];
+            'ab' => (string)($d['ab'] ?? ''), 'pauseBis' => (string)($d['pauseBis'] ?? ''), 'pauseVon' => (string)($d['pauseVon'] ?? ''), 'bis' => (string)($d['bis'] ?? '')];
 }
-/* Ist der Dauerauftrag in der KW fällig? Liefert die nächste fällige KW (≥ $kw) oder '' */
+/* Erste KW ≥ $start im Takt des Auftrags (ab, rhythmus) */
+function rw_dauer_im_takt(array $d, string $start): string
+{
+    $r = $d['rhythmus'];
+    $rest = ((rw_kw_abstand($d['ab'], $start) % $r) + $r) % $r;
+    return $rest === 0 ? $start : rw_kw_plus($start, $r - $rest);
+}
+/* Nächste fällige KW (≥ $kw) oder '' (kein, beendeter oder leerer Auftrag) */
 function rw_dauer_naechste(array $m, string $kw): string
 {
     $d = rw_dauer($m);
     if ($d['rhythmus'] < 1 || !$d['mengen'] || $d['ab'] === '') return '';
-    $start = $kw < $d['ab'] ? $d['ab'] : $kw;
-    if ($d['pauseBis'] !== '' && $start <= $d['pauseBis']) $start = rw_kw_plus($d['pauseBis'], 1);
-    $diff = rw_kw_abstand($d['ab'], $start);
-    $rest = (($diff % $d['rhythmus']) + $d['rhythmus']) % $d['rhythmus'];
-    return $rest === 0 ? $start : rw_kw_plus($start, $d['rhythmus'] - $rest);
+    $k = rw_dauer_im_takt($d, $kw < $d['ab'] ? $d['ab'] : $kw);
+    if ($d['pauseBis'] !== '' && $k <= $d['pauseBis'] && ($d['pauseVon'] === '' || $k >= $d['pauseVon'])) $k = rw_dauer_im_takt($d, rw_kw_plus($d['pauseBis'], 1));
+    return $d['bis'] !== '' && $k > $d['bis'] ? '' : $k;
 }
 function rw_dauer_faellig(array $m, string $kw): bool { return rw_dauer_naechste($m, $kw) === $kw; }
+/* Liefert der fällige Auftrag automatisch (Abfrage-Märkte; ruhende, ausgelistete und ohne Interesse nie automatisch) */
+function rw_dauer_auto(array $m, string $kw): bool { return rw_dauer_faellig($m, $kw) && in_array($m['kauf'] ?? 'regelmaessig', RW_KAUF_ABFRAGE, true); }
 function rw_dauer_text(array $m, array $stamm): string
 {
     $d = rw_dauer($m);
     if ($d['rhythmus'] < 1 || !$d['mengen']) return '';
-    return 'Dauerauftrag ' . (RW_RHYTHMEN[$d['rhythmus']] ?? '') . ' · ' . rw_mengen_text($d['mengen'], $stamm);
+    return 'Dauerauftrag ' . (RW_RHYTHMEN[$d['rhythmus']] ?? ('alle ' . $d['rhythmus'] . ' Wochen')) . ' · ' . rw_mengen_text($d['mengen'], $stamm);
+}
+/* Zusatz für Texte und Verlauf: „ · Pause KW 50–51“ bzw. „ · Pause bis einschließlich KW 48“, „ · läuft bis einschließlich KW 53“ */
+function rw_dauer_zusatz(array $m): string
+{
+    $d = rw_dauer($m); $t = '';
+    if ($d['pauseBis'] !== '') $t .= ' · Pause ' . ($d['pauseVon'] !== '' ? rw_kw_text($d['pauseVon']) . ' bis einschließlich ' : 'bis einschließlich ') . rw_kw_text($d['pauseBis']);
+    if ($d['bis'] !== '') $t .= ' · läuft bis einschließlich ' . rw_kw_text($d['bis']);
+    return $t;
+}
+/* Automatisch bestellen (Inhaber 12.11.2026): Zum Bestellschluss gilt ein fälliger Dauerauftrag ohne Antwort als bestellt –
+   Antwort „bestellt“ mit Herkunft „dauer“, auto: true und Schnappschuss von Lieferweg und Zuständigkeit (GR-106, wie
+   rw_antwort_setzen). Idempotent: nur Märkte OHNE Antwort; eine ausdrückliche Antwort (andere Menge, Kein Bedarf, Markt
+   pausiert …) wird nie überschrieben, ein zweiter Aufruf schreibt nichts. Geschrieben wird
+     - beim Lesen der Woche nach ihrem Bestellschluss (KW ≤ rw_kw_abschluss, Wochenabfrage und Wochenabschluss) und
+     - beim Excel-Export ($sofort: auch vor dem Bestellschluss – der Export schließt die Woche ab),
+   nur für die laufende und die vorige Abschlusswoche und nur, solange die Woche noch nicht exportiert ist: ältere oder
+   schon abgeschlossene Wochen bleiben, wie sie waren (keine nachträglichen Bestellungen in der Geschichte).
+   Ohne Sperre aufrufen; schreibt selbst unter der Sperre „rewe-maerkte“. Liefert die Zahl neuer Antworten. */
+function rw_dauer_automatisch(string $kw, bool $sofort = false): int
+{
+    $schluss = rw_kw_abschluss();
+    if ($kw < rw_kw_plus($schluss, -1) || (!$sofort && $kw > $schluss)) return 0;
+    $jahr = (int)substr($kw, 0, 4); $ww = substr($kw, 5, 2);
+    $kandidaten = function () use ($kw, $jahr, $ww) {
+        $w = rw_wochen_doc($jahr);
+        if (!empty($w['abschluss'][$ww]['exportiert'])) return [[], $w];
+        $ids = [];
+        foreach (rw_maerkte_doc()['liste'] as $m) if (rw_dauer_auto($m, $kw) && !rw_antwort($w, $m['id'], $kw)) $ids[] = $m;
+        return [$ids, $w];
+    };
+    if (!$kandidaten()[0]) return 0;   // nichts zu tun: ohne Sperre (Lesen der Woche)
+    return with_lock('rewe-maerkte', function () use ($kandidaten, $kw, $jahr, $ww) {
+        [$liste, $w] = $kandidaten();
+        $stamm = rw_stamm(); $namen = rw_namen(); $ids = array_flip(array_column($stamm['artikel'], 'id')); $n = 0;
+        foreach ($liste as $m) {
+            $mengen = array_filter(array_map('intval', array_intersect_key(rw_dauer($m)['mengen'], $ids)), function ($x) { return $x > 0; });
+            if (!$mengen) continue;
+            $zu = rw_zustaendig($m, $kw);
+            $w['maerkte'][$m['id']][$ww] = ['s' => 'bestellt', 'm' => $mengen, 'lw' => rw_lw($m, $kw), 'zu' => $zu, 'zuName' => $namen[$zu] ?? '',
+                                           'q' => 'dauer', 'auto' => true, 'r' => 1, 't' => now(), 'von' => 'automatisch (Dauerauftrag)', 'vonId' => ''];
+            $n++;
+        }
+        if ($n) rw_wochen_schreiben($jahr, $w);
+        return $n;
+    });
 }
 function rw_mengen_text(array $mengen, array $stamm): string
 {
@@ -494,7 +552,8 @@ function rw_antwort_aus(?array $e): ?array
     if (!$e) return null;
     return ['status' => (string)($e['s'] ?? ''), 'mengen' => is_array($e['m'] ?? null) ? $e['m'] : [], 'ohneBerechnung' => !empty($e['ob']),
             'notiz' => (string)($e['n'] ?? ''), 'r' => (int)($e['r'] ?? 0), 'quelle' => (string)($e['q'] ?? 'hand'), 'nachtrag' => !empty($e['nachtrag']),
-            'lieferweg' => (string)($e['lw'] ?? ''), 'zustaendig' => (string)($e['zuName'] ?? ''), 't' => (string)($e['t'] ?? ''), 'von' => (string)($e['von'] ?? '')];
+            'lieferweg' => (string)($e['lw'] ?? ''), 'zustaendig' => (string)($e['zuName'] ?? ''), 't' => (string)($e['t'] ?? ''), 'von' => (string)($e['von'] ?? ''),
+            'auto' => !empty($e['auto'])];   // auto: zum Bestellschluss aus dem Dauerauftrag übernommen (rw_dauer_automatisch)
 }
 /* Wochen mehrerer Jahre auf einmal (Verlauf über den Jahreswechsel) */
 function rw_wochen_cache(array &$cache, int $jahr): array
@@ -594,8 +653,15 @@ function rw_dauer_pruefen($v, array $stamm): array
     $mengen = rw_mengen($v['mengen'] ?? [], $stamm, 'Dauerauftrag');
     if (!$mengen) throw new InvalidArgumentException('Dauerauftrag: bitte eine Menge angeben.');
     $ab = rw_kw($v['ab'] ?? '', 'Dauerauftrag ab');
-    $pause = trim((string)($v['pauseBis'] ?? '')) === '' ? '' : rw_kw($v['pauseBis'], 'Dauerauftrag: Pause bis');
-    return ['rhythmus' => $r, 'mengen' => $mengen, 'ab' => $ab, 'pauseBis' => $pause];
+    $leer = function ($x) { return trim((string)($x ?? '')) === ''; };
+    $pause = $leer($v['pauseBis'] ?? '') ? '' : rw_kw($v['pauseBis'], 'Dauerauftrag: Pause bis einschließlich');
+    $von = $leer($v['pauseVon'] ?? '') ? '' : rw_kw($v['pauseVon'], 'Dauerauftrag: Pause von');
+    if ($von !== '' && $pause === '') throw new InvalidArgumentException('Dauerauftrag: Pause – bitte „bis einschließlich KW“ angeben.');
+    if ($von !== '' && $von > $pause) throw new InvalidArgumentException('Dauerauftrag: Pause – „von“ liegt nach „bis einschließlich“.');
+    $bis = $leer($v['bis'] ?? '') ? '' : rw_kw($v['bis'], 'Dauerauftrag: läuft bis einschließlich');
+    if ($bis !== '' && $bis < $ab) throw new InvalidArgumentException('Dauerauftrag: „läuft bis einschließlich“ liegt vor der ersten Lieferung.');
+    // neue Felder nur, wenn gesetzt (GR-006: ältere Fassungen lesen den Auftrag unverändert)
+    return ['rhythmus' => $r, 'mengen' => $mengen, 'ab' => $ab, 'pauseBis' => $pause] + ($von !== '' ? ['pauseVon' => $von] : []) + ($bis !== '' ? ['bis' => $bis] : []);
 }
 /* Felder, die jeder mit „bearbeiten“ an eigenen Märkten pflegt */
 const RW_FELDER_PFLEGE = ['kauf', 'dauer', 'abfragetag', 'ansprechpartner', 'hinweis', 'telefon'];
@@ -676,11 +742,12 @@ function rw_woche(string $kw, array $me, string $wer): array
         $vorschau = [];   // schon erfasste Antworten (Vorbestellungen) der nächsten Wochen
         for ($i = 1; $i <= RW_VORSCHAU_WOCHEN; $i++) {
             $k = rw_kw_plus($kw, $i); $e = rw_antwort_kw($cache, $m['id'], $k);
-            $vorschau[] = ['kw' => $k, 'status' => $e ? $e['s'] : '', 'menge' => $e && !empty($e['m']) ? array_sum($e['m']) : 0];
+            $vorschau[] = ['kw' => $k, 'status' => $e ? $e['s'] : '', 'menge' => $e && !empty($e['m']) ? array_sum($e['m']) : 0,
+                           'dauer' => rw_dauer_faellig($m, $k) ? (int)array_sum(rw_dauer($m)['mengen']) : 0];   // geplante Lieferung nach Dauerauftrag (Stück)
         }
         $naechste = rw_dauer_naechste($m, $kw);
         $eintrag = rw_markt_aus($m, $stamm, $namen, $kw) + ['antwort' => rw_antwort_aus($antwort), 'verlauf' => $verlauf, 'vorschau' => $vorschau, 'notizen' => $nz[$m['id']] ?? 0,
-            'dauerFaellig' => $faellig, 'dauerNaechste' => $naechste, 'dauerText' => rw_dauer_text($m, $stamm),
+            'dauerFaellig' => $faellig, 'dauerAuto' => rw_dauer_auto($m, $kw), 'dauerNaechste' => $naechste, 'dauerText' => rw_dauer_text($m, $stamm),
             'wiedervorlagen' => $wv[$m['id']] ?? [], 'darfAntworten' => $bearbeiten && ($alle || rw_eigen($m, $me, $kw))];
         $gruppen[$lwId === '' ? '_' : $lwId][] = $eintrag;
         $z['gesamt']++;
@@ -715,12 +782,13 @@ function rw_woche(string $kw, array $me, string $wer): array
         usort($ruhendAus, function ($a, $b) { return [$a['ort'], $a['name']] <=> [$b['ort'], $b['name']]; });
     }
     return ['kw' => $kw, 'kwText' => rw_kw_text($kw), 'zeitraum' => rw_kw_zeitraum($kw), 'heute' => rw_kw_heute(), 'abfrage' => rw_kw_abfrage(), 'wer' => $person === (string)$me['id'] ? '' : $person,
+            'bestellschluss' => $kw <= rw_kw_abschluss(),   // Bestellschluss der Woche erreicht (fällige Daueraufträge sind dann bestellt)
             'werName' => $person === '*' ? 'Alle Listen' : ($namen[$person] ?? ''), 'gruppen' => $aus, 'ruhend' => $ruhendAus, 'zahlen' => $z,
             'abschluss' => $abschluss ? ['exportiert' => $abschluss['exportiert'] ?? null, 'erfasst' => $abschluss['erfasst'] ?? null] : null];
 }
 /* Startseite des Dashboards („Heute für Sie“, lib/startseite.php): Märkte der eigenen Liste in der laufenden Wochenabfrage, die
-   noch keine Antwort haben – gezählt wie der Filter „Offen“ der Wochenliste (rewe.js erledigt(): beantwortet oder
-   Dauerauftrag in dieser Woche nicht fällig). „Heute“ ab dem Tag vor dem Bestellschluss (Freitag früh), sonst „Demnächst“. */
+   noch keine Antwort haben – gezählt wie der Filter „Offen“ der Wochenliste (rewe.js erledigt(): beantwortet, Dauerauftrag
+   in dieser Woche nicht fällig oder fällig und wird automatisch bestellt). „Heute“ ab dem Tag vor dem Bestellschluss (Freitag früh), sonst „Demnächst“. */
 function rw_startseite(array $me): array
 {
     if (!rw_sehen($me) || !rw_bearbeiten($me)) return [];   // Recht oder Team des Moduls (rw_bearbeiten)
@@ -728,7 +796,7 @@ function rw_startseite(array $me): array
     $offen = 0;
     foreach ($w['gruppen'] as $g) foreach ($g['maerkte'] as $m) {
         $nichtFaellig = empty($m['dauerFaellig']) && ($m['dauer']['rhythmus'] ?? 0) > 0 && ($m['dauerNaechste'] ?? '') !== '';
-        if (empty($m['antwort']) && !$nichtFaellig) $offen++;
+        if (empty($m['antwort']) && !$nichtFaellig && empty($m['dauerAuto'])) $offen++;   // fälliger Dauerauftrag wird automatisch bestellt
     }
     if (!$offen) return [];
     $schluss = rw_kw_montag(rw_kw_abschluss())->modify('+4 days')->format('Y-m-d');
@@ -779,7 +847,7 @@ function rw_akte(array $m, array $me): array
         $d = rw_wochen_doc($j);
         foreach ($d['maerkte'][$m['id']] ?? [] as $ww => $e) {
             $wochen[sprintf('%04d-%s', $j, $ww)] = ['status' => (string)($e['s'] ?? ''), 'mengen' => is_array($e['m'] ?? null) ? $e['m'] : [],
-                'notiz' => (string)($e['n'] ?? ''), 'ohneBerechnung' => !empty($e['ob']), 'von' => (string)($e['von'] ?? ''), 'quelle' => (string)($e['q'] ?? 'hand')];
+                'notiz' => (string)($e['n'] ?? ''), 'ohneBerechnung' => !empty($e['ob']), 'von' => (string)($e['von'] ?? ''), 'quelle' => (string)($e['q'] ?? 'hand'), 'auto' => !empty($e['auto'])];
             $jahre[$j] = true;
         }
     }
