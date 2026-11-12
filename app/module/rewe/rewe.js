@@ -83,9 +83,14 @@
 
   /* ---------- Bezeichnungen ---------- */
   const artikel = () => S.d.artikel.filter((a) => a.aktiv);
-  const artName = (id) => (S.d.artikel.find((a) => a.id === id) || { name: id }).name;
+  /* Bezeichnung in Texten: „Filetkopf extra“ (anzeige/extra/extraHinweis löst der Server auf, rw_artikel_aus) – nur Beschriftung,
+     die Mengen bleiben, wie sie gespeichert sind (der bei jedem Roastbeef enthaltene Filetkopf wird nirgends dazugerechnet) */
+  const artAnzeige = (a) => a.anzeige || a.name;
+  const artName = (id) => artAnzeige(S.d.artikel.find((a) => a.id === id) || { name: id });
+  // Beschriftung an der Mengeneingabe (Wochenantwort/Vorbestellung, Fenster „Dauerauftrag“) mit Hinweis bei Extra-Artikeln
+  const artMarke = (a) => `<span>${esc(artAnzeige(a))}${a.extra ? `<small class="rw-mextra">zusätzlich${a.extraHinweis ? ` – ${esc(a.extraHinweis)}` : ''}</small>` : ''}</span>`;
   function mengenText(m) {
-    const e = S.d.artikel.filter((a) => obj(m)[a.id]).map((a) => `${obj(m)[a.id]} ${a.name}`);
+    const e = S.d.artikel.filter((a) => obj(m)[a.id]).map((a) => `${obj(m)[a.id]} ${artAnzeige(a)}`);
     return e.join(' + ');
   }
   const summe = (m) => Object.values(obj(m)).reduce((a, n) => a + n, 0);
@@ -345,10 +350,10 @@
         `<button type="button" data-s="${k}" data-markt="${esc(m.id)}" aria-pressed="${a && a.status === k}"${dis}>${esc(v)}</button>`).join('')}</div>`;
       if (a && a.status === 'bestellt') {
         // Plus und Minus groß; die Zahl lässt sich auch direkt eintippen (Enter oder Feld verlassen speichert)
-        antwort += `<div class="rw-mengen-eingabe">${artikel().map((ar) => `<div class="rw-menge"><span>${esc(ar.name)}</span><span class="rw-stepper">
-          <button type="button" data-menge="${esc(ar.id)}" data-d="-1" data-markt="${esc(m.id)}" aria-label="${esc(ar.name)} weniger"${dis}>−</button>
-          <input class="rw-mzahl" data-mzahl="${esc(ar.id)}" data-markt="${esc(m.id)}" inputmode="numeric" maxlength="3" value="${obj(a.mengen)[ar.id] || 0}" aria-label="${esc(ar.name)}: Menge"${dis}>
-          <button type="button" data-menge="${esc(ar.id)}" data-d="1" data-markt="${esc(m.id)}" aria-label="${esc(ar.name)} mehr"${dis}>+</button></span></div>`).join('')}</div>`;
+        antwort += `<div class="rw-mengen-eingabe">${artikel().map((ar) => `<div class="rw-menge${ar.extra ? ' extra' : ''}">${artMarke(ar)}<span class="rw-stepper">
+          <button type="button" data-menge="${esc(ar.id)}" data-d="-1" data-markt="${esc(m.id)}" aria-label="${esc(artAnzeige(ar))} weniger"${dis}>−</button>
+          <input class="rw-mzahl" data-mzahl="${esc(ar.id)}" data-markt="${esc(m.id)}" inputmode="numeric" maxlength="3" value="${obj(a.mengen)[ar.id] || 0}" aria-label="${esc(artAnzeige(ar))}: Menge"${dis}>
+          <button type="button" data-menge="${esc(ar.id)}" data-d="1" data-markt="${esc(m.id)}" aria-label="${esc(artAnzeige(ar))} mehr"${dis}>+</button></span></div>`).join('')}</div>`;
       }
       if (a) antwort += `<div class="rw-azeile"><input class="rw-eingabe rw-notizfeld" data-notiz="${esc(m.id)}" maxlength="300" value="${esc(a.notiz)}" placeholder="Notiz zur Woche (optional)" aria-label="Notiz zur Woche ${esc(m.ort)}"${dis}>
         ${a.status === 'bestellt' ? `<label class="rw-check"><input type="checkbox" data-ob="${esc(m.id)}"${a.ohneBerechnung ? ' checked' : ''}${dis}> ohne Berechnung</label>` : ''}</div>`;
@@ -928,9 +933,9 @@
       <div class="rw-ddteil${m ? '' : ' aus'}">
       <div class="rw-ddfeld"><span>Rhythmus</span><div class="rw-seg rw-ddrh" role="group" aria-label="Rhythmus">${Object.keys(S.d.rhythmen).map(Number).filter((x) => x > 0)
         .map((x) => `<button type="button" data-dd-rh="${x}" aria-pressed="${e.rhythmus === x}">${esc(rhythmusText(x))}</button>`).join('')}</div></div>
-      <div class="rw-ddfeld"><span>Menge je Lieferung</span><div class="rw-mengen-eingabe">${artikel().map((ar) => `<div class="rw-menge"><span>${esc(ar.name)}</span><span class="rw-stepper">
-        <button type="button" data-dd-menge="${esc(ar.id)}" data-d="-1" aria-label="${esc(ar.name)} weniger">−</button><input class="rw-mzahl" data-dd-mzahl="${esc(ar.id)}" inputmode="numeric" maxlength="3" value="${obj(e.mengen)[ar.id] || 0}" aria-label="${esc(ar.name)}: Menge">
-        <button type="button" data-dd-menge="${esc(ar.id)}" data-d="1" aria-label="${esc(ar.name)} mehr">+</button></span></div>`).join('')}</div></div>
+      <div class="rw-ddfeld"><span>Menge je Lieferung</span><div class="rw-mengen-eingabe">${artikel().map((ar) => `<div class="rw-menge${ar.extra ? ' extra' : ''}">${artMarke(ar)}<span class="rw-stepper">
+        <button type="button" data-dd-menge="${esc(ar.id)}" data-d="-1" aria-label="${esc(artAnzeige(ar))} weniger">−</button><input class="rw-mzahl" data-dd-mzahl="${esc(ar.id)}" inputmode="numeric" maxlength="3" value="${obj(e.mengen)[ar.id] || 0}" aria-label="${esc(artAnzeige(ar))}: Menge">
+        <button type="button" data-dd-menge="${esc(ar.id)}" data-d="1" aria-label="${esc(artAnzeige(ar))} mehr">+</button></span></div>`).join('')}</div></div>
       <div class="rw-ddfeld"><span>Nächste Lieferung ab</span><div class="rw-ddwochen" role="group" aria-label="Nächste Lieferung ab">${wochen.map((k) => {
         const f = dauerFaelligIn(d, k), p = !f && inPause(d, k) && dauerImTakt(d, k) === k;
         return `<button type="button" data-dd-ab="${esc(k)}" class="${f ? 'd' : p ? 'p' : ''}" aria-pressed="${e.ab === k}" title="${esc(`ab ${kwText(k)} im Rhythmus liefern`)}">${esc(kwKurz(k))}</button>`;
@@ -1153,7 +1158,7 @@
       [a.exportiert ? 'ok' : 'jetzt', '3', 'Excel erstellt', a.exportiert ? `${zeitpunkt(a.exportiert.t)}, ${a.exportiert.von}` : 'noch nicht'],
       [a.erfasst ? 'ok' : '', '4', 'In WinAB erfasst', a.erfasst ? `${zeitpunkt(a.erfasst.t)}, ${a.erfasst.von}` : 'Haken nach der Eingabe'],
     ];
-    const artSum = S.d.artikel.filter((x) => obj(a.artikel)[x.id]).map((x) => `${zahl(obj(a.artikel)[x.id])} ${x.name}`).join(' · ');
+    const artSum = S.d.artikel.filter((x) => obj(a.artikel)[x.id]).map((x) => `${zahl(obj(a.artikel)[x.id])} ${artAnzeige(x)}`).join(' · ');
     $('#rw-a-inhalt').innerHTML = `
       <ol class="rw-schritte rw-glas">${schritte.map(([c, n, t, s]) => `<li><span class="nr ${c}">${c === 'ok' ? '✓' : n}</span><div><b>${esc(t)}</b><small>${esc(s)}</small></div></li>`).join('')}</ol>
       <div class="rw-kpis">
@@ -1210,10 +1215,12 @@
       <td data-label="Art"><select class="rw-eingabe" data-f="art" aria-label="Art">${Object.entries(S.d.lwArten).map(([k, v]) => `<option value="${k}"${l.art === k ? ' selected' : ''}>${esc(v)}</option>`).join('')}</select></td>
       <td data-label="Bestellschluss"><input class="rw-eingabe" data-f="bestellschluss" maxlength="40" value="${esc(l.bestellschluss || '')}" aria-label="Bestellschluss"></td>
       <td data-label="aktiv"><input type="checkbox" data-f="aktiv"${l.aktiv ? ' checked' : ''} aria-label="aktiv"></td></tr>`).join('')}</tbody>`;
-    $('#rw-e-art').innerHTML = `<thead><tr><th>Name</th><th>Einheit</th><th>WinAB-Art.-Nr.</th><th>aktiv</th></tr></thead><tbody>${S.d.artikel.map((a) => `<tr data-art="${esc(a.id)}">
+    $('#rw-e-art').innerHTML = `<thead><tr><th>Name</th><th>Einheit</th><th>WinAB-Art.-Nr.</th><th title="Wird zusätzlich bestellt – Beschriftung „… extra“">extra</th><th>Hinweis bei der Eingabe</th><th>aktiv</th></tr></thead><tbody>${S.d.artikel.map((a) => `<tr data-art="${esc(a.id)}">
       <td data-label="Name"><input class="rw-eingabe" data-f="name" maxlength="60" value="${esc(a.name)}" aria-label="Name"></td>
       <td data-label="Einheit"><input class="rw-eingabe" data-f="einheit" maxlength="15" value="${esc(a.einheit)}" aria-label="Einheit"></td>
       <td data-label="WinAB-Art.-Nr."><input class="rw-eingabe" data-f="nr" maxlength="20" value="${esc(a.nr)}" placeholder="fehlt" aria-label="WinAB-Artikelnummer"></td>
+      <td data-label="extra"><input type="checkbox" data-f="extra"${a.extra ? ' checked' : ''} aria-label="extra (zusätzlich bestellt)"></td>
+      <td class="rw-ehinweis" data-label="Hinweis bei der Eingabe"><input class="rw-eingabe" data-f="extraHinweis" maxlength="120" value="${esc(a.extraHinweis || '')}" placeholder="nur bei „extra“" aria-label="Hinweis bei der Eingabe"></td>
       <td data-label="aktiv"><input type="checkbox" data-f="aktiv"${a.aktiv ? ' checked' : ''} aria-label="aktiv"></td></tr>`).join('')}</tbody>`;
     $('#rw-e-meldung').textContent = '';
     renderPaket();
@@ -1227,6 +1234,7 @@
   $('#rw-e-art-neu').addEventListener('click', () => {
     $('#rw-e-art tbody').insertAdjacentHTML('beforeend', `<tr data-art=""><td data-label="Name"><input class="rw-eingabe" data-f="name" maxlength="60" aria-label="Name"></td>
       <td data-label="Einheit"><input class="rw-eingabe" data-f="einheit" maxlength="15" value="Stück" aria-label="Einheit"></td><td data-label="WinAB-Art.-Nr."><input class="rw-eingabe" data-f="nr" maxlength="20" aria-label="WinAB-Artikelnummer"></td>
+      <td data-label="extra"><input type="checkbox" data-f="extra" aria-label="extra (zusätzlich bestellt)"></td><td class="rw-ehinweis" data-label="Hinweis bei der Eingabe"><input class="rw-eingabe" data-f="extraHinweis" maxlength="120" placeholder="nur bei „extra“" aria-label="Hinweis bei der Eingabe"></td>
       <td data-label="aktiv"><input type="checkbox" data-f="aktiv" checked aria-label="aktiv"></td></tr>`);
   });
   $('#rw-e-speichern').addEventListener('click', async () => {

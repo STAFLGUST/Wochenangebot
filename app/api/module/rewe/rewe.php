@@ -10,7 +10,8 @@ declare(strict_types=1);
    Wochenende entsteht die Excel-Datei für die Erfassung in WinAB.
 
    Eigene Dokumente (alle Schreibvorgänge unter der Sperre „rewe-maerkte“):
-     rewe-stamm        Lieferwege (Zentrallager/Direkt, Bestellschluss), Artikel (Name, Einheit, WinAB-Artikelnummer), Team
+     rewe-stamm        Lieferwege (Zentrallager/Direkt, Bestellschluss), Artikel (Name, Einheit, WinAB-Artikelnummer, „extra“
+                       mit Hinweis – Filetkopf extra), Team
      rewe-maerkte      Märkte: Kd.-Nr. (WinAB), REWE-Marktnummer, Anschrift, Telefon, Kaufbereitschaft, Zuständigkeit und
                        Lieferweg je mit „ab KW“-Historie, Dauerauftrag (Rhythmus 1–4, 6, 8 Wochen, Mengen, ab KW, Pause von–bis
                        einschließlich, läuft bis einschließlich), Abfragetag,
@@ -69,6 +70,35 @@ function rw_grund_artikel(): array
     return [['id' => 'rb', 'name' => 'Roastbeef Dry Aged', 'einheit' => 'Stück', 'nr' => '', 'aktiv' => true],   // 1 Stück = 1 Kolli (ganzes Roastbeef)
             ['id' => 'fk', 'name' => 'Filetkopf', 'einheit' => 'Stück', 'nr' => '', 'aktiv' => true],
             ['id' => 'set', 'name' => 'Vac. Set', 'einheit' => 'Stück', 'nr' => '', 'aktiv' => true]];
+}
+/* „Extra“-Artikel (Inhaber 12.11.2026): Bei jedem Roastbeef Dry Aged ist schon ein Filetkopf dabei – bestellte Filetköpfe sind
+   zusätzlich. Merkmal je Artikel: extra (bool) und extraHinweis (Text bei der Mengeneingabe), beide optional (GR-006). Fehlt
+   „extra“, gilt es für den Filetkopf (Kennung fk oder Name „Filetkopf“) – so auch für bestehende Daten. Nur Beschriftung:
+   Mengen bleiben genau wie gespeichert, enthaltene Filetköpfe werden nirgends dazugerechnet. */
+const RW_EXTRA_HINWEIS = '1 Filetkopf ist bei jedem Roastbeef Dry Aged schon dabei';
+function rw_artikel_filetkopf(array $a): bool
+{
+    return ($a['id'] ?? '') === 'fk' || mb_strtolower(trim((string)($a['name'] ?? ''))) === 'filetkopf';
+}
+function rw_artikel_extra(array $a): bool
+{
+    return array_key_exists('extra', $a) ? !empty($a['extra']) : rw_artikel_filetkopf($a);
+}
+/* Hinweis bei der Mengeneingabe (gezeigt nur bei extra; bleibt beim Abwählen gespeichert, damit er beim erneuten Setzen wieder da ist) */
+function rw_artikel_hinweis(array $a): string
+{
+    return array_key_exists('extraHinweis', $a) ? (string)$a['extraHinweis'] : (rw_artikel_filetkopf($a) ? RW_EXTRA_HINWEIS : '');
+}
+/* Bezeichnung in Texten, Zusammenfassungen und im Excel: „Filetkopf extra“ (kein doppeltes „extra“, wenn der Name es schon trägt) */
+function rw_artikel_anzeige(array $a): string
+{
+    $n = (string)($a['name'] ?? '');
+    return rw_artikel_extra($a) && !preg_match('/(^|\s)extra(\s|$)/iu', $n) ? $n . ' extra' : $n;
+}
+/* Artikel für die Oberfläche: gespeicherte Felder plus aufgelöste Werte (extra, extraHinweis, anzeige) */
+function rw_artikel_aus(array $stamm): array
+{
+    return array_map(function ($a) { return ['extra' => rw_artikel_extra($a), 'extraHinweis' => rw_artikel_hinweis($a), 'anzeige' => rw_artikel_anzeige($a)] + $a; }, $stamm['artikel']);
 }
 
 /* ---------- Laden und Schreiben ---------- */
@@ -215,7 +245,7 @@ function rw_mengen($v, array $stamm, string $was = 'Menge'): array
 }
 function rw_artikel_name(array $stamm, string $id): string
 {
-    foreach ($stamm['artikel'] as $a) if ($a['id'] === $id) return (string)$a['name'];
+    foreach ($stamm['artikel'] as $a) if ($a['id'] === $id) return rw_artikel_anzeige($a);
     return $id;
 }
 function rw_lieferweg(array $stamm, string $id): ?array
@@ -536,7 +566,7 @@ function rw_dauer_automatisch(string $kw, bool $sofort = false): int
 function rw_mengen_text(array $mengen, array $stamm): string
 {
     $t = [];
-    foreach ($stamm['artikel'] as $a) if (!empty($mengen[$a['id']])) $t[] = $mengen[$a['id']] . ' ' . $a['name'];
+    foreach ($stamm['artikel'] as $a) if (!empty($mengen[$a['id']])) $t[] = $mengen[$a['id']] . ' ' . rw_artikel_anzeige($a);
     return implode(' + ', $t);
 }
 
@@ -911,7 +941,10 @@ function rw_stamm_pruefen(array $b, array $alt): array
         $neu['artikel'] = rw_stamm_liste($b['artikel'], $alt['artikel'], 'Artikel', function ($x, $w) {
             $nr = rw_text($x['nr'] ?? '', 20, "$w: WinAB-Artikelnummer");
             if ($nr !== '' && !preg_match('/^[A-Za-z0-9.\-\/]+$/', $nr)) throw new InvalidArgumentException("$w: WinAB-Artikelnummer nur aus Ziffern, Buchstaben, . - /");
-            return ['einheit' => rw_text($x['einheit'] ?? '', 15, "$w: Einheit") ?: 'Stück', 'nr' => $nr];
+            // extra/extraHinweis nur, wenn mitgeschickt (ältere Oberflächen und Datenpakete lassen den gespeicherten Wert stehen)
+            return ['einheit' => rw_text($x['einheit'] ?? '', 15, "$w: Einheit") ?: 'Stück', 'nr' => $nr]
+                + (array_key_exists('extra', $x) ? ['extra' => !empty($x['extra'])] : [])
+                + (array_key_exists('extraHinweis', $x) ? ['extraHinweis' => rw_text($x['extraHinweis'] ?? '', 120, "$w: Hinweis bei der Eingabe")] : []);
         }, 'a');
         if (!array_filter($neu['artikel'], function ($a) { return $a['aktiv']; })) throw new InvalidArgumentException('Artikel: mindestens einer muss aktiv sein.');
     }

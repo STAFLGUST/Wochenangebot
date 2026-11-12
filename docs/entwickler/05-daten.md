@@ -558,10 +558,19 @@ Kalenderwochen sind ISO-Wochen „JJJJ-WW“ und meinen die **Lieferwoche**. Men
 (`{"rb": 2, "fk": 1}`, 1 Stück = 1 Kolli). Alle Schreibvorgänge laufen unter der Sperre `rewe-maerkte`.
 
 - **`rewe-stamm`**: `{"rev": 2, "lieferwege": [{"id": "l…|direkt", "name": "…", "art": "lager|direkt", "bestellschluss": "Freitag früh der Vorwoche",
-  "aktiv": true}], "artikel": [{"id": "rb", "name": "Roastbeef Dry Aged", "einheit": "Stück", "nr": "<WinAB-Artikelnummer>", "aktiv": true}],
+  "aktiv": true}], "artikel": [{"id": "rb", "name": "Roastbeef Dry Aged", "einheit": "Stück", "nr": "<WinAB-Artikelnummer>", "aktiv": true,
+  "extra"?: true, "extraHinweis"?: "…"}],
   "team": {"u…": {"alle": true, "export": false}}, "mitglieder": ["u…"], "ausgeblendet": ["u…"]}`. Ohne Dokument gelten Direktbelieferung
   und die Artikel Roastbeef, Filetkopf, Vac. Set. Lieferwege und Artikel werden nie entfernt, nur deaktiviert. `team` ist die Zuweisung
   im Modul („alle Listen“, „Wochenabschluss“) und wirkt zusätzlich zu den Rechten `rewe.alle` und `rewe.exportieren`.
+  **Extra-Artikel** (seit 12.11.2026, Inhaber: „bei jedem Roastbeef Dry Aged ist schon ein Filetkopf dabei“): `extra` und
+  `extraHinweis` sind optional und stehen nur im Speicher, wenn sie in den Einstellungen gesetzt wurden. Fehlt `extra`, gilt es für den
+  Filetkopf (Kennung `fk` oder Name „Filetkopf“) mit dem Hinweis „1 Filetkopf ist bei jedem Roastbeef Dry Aged schon dabei“ – so auch
+  für bestehende Daten (`rw_artikel_extra()`, `rw_artikel_hinweis()`). Ein Extra-Artikel heißt in allen Texten, Zusammenfassungen und im
+  Excel „<Name> extra“ (`rw_artikel_anzeige()`; kein doppeltes „extra“), an der Mengeneingabe steht „zusätzlich – <Hinweis>“. Nur
+  Beschriftung: die Mengen bleiben genau wie gespeichert, der enthaltene Filetkopf wird nirgends dazugerechnet. `rewe_start` und
+  `rewe_stamm_save` liefern je Artikel zusätzlich `extra`, `extraHinweis` und `anzeige` aufgelöst (`rw_artikel_aus()`). Ältere
+  Fassungen ignorieren die Felder (dann wieder „Filetkopf“ ohne Hinweis); ältere Oberflächen schicken sie nicht mit, gespeicherte Werte bleiben.
   `mitglieder` und `ausgeblendet` (seit 11.11.2026, fehlen = leere Listen) sind das Team der Zuweisung: wer im Team ist, entscheidet nur
   `rw_im_team()` – aktiv, mit Zugang, nicht in `ausgeblendet` und entweder „REWE ansehen“ über die Rollen oder in `mitglieder`
   (ausdrücklich ergänzt, mit Modulzugang `rewe.zugang`, ohne Verbot am Konto). Ergänzte sehen, fragen ab und pflegen ihre eigenen

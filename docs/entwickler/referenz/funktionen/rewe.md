@@ -2,7 +2,7 @@
 
 <!-- ERZEUGT von `python3 werkzeuge/doku.py erzeugen` – nicht von Hand ändern. Quelle: Funktionen und Kommentare im Code. Die CI prüft, dass diese Datei zum Code passt. -->
 
-5 Dateien, 177 Funktionen – in der Reihenfolge der Datei, **fett** die Abschnitte. Text = erste Aussage des Kommentars direkt über der Funktion (Python: Docstring). Übersicht aller Module: [README.md](README.md).
+5 Dateien, 183 Funktionen – in der Reihenfolge der Datei, **fett** die Abschnitte. Text = erste Aussage des Kommentars direkt über der Funktion (Python: Docstring). Übersicht aller Module: [README.md](README.md).
 
 ## `app/api/aktionen/rewe.php`
 
@@ -39,6 +39,11 @@ _REWE · Vordisposition Dry Aged_
 
 - `rw_grund_lieferwege()`
 - `rw_grund_artikel()`
+- `rw_artikel_filetkopf(a)`
+- `rw_artikel_extra(a)`
+- `rw_artikel_hinweis(a)` – Hinweis bei der Mengeneingabe (gezeigt nur bei extra; bleibt beim Abwählen gespeichert, damit er beim erneuten Setzen wieder da ist)
+- `rw_artikel_anzeige(a)` – Bezeichnung in Texten, Zusammenfassungen und im Excel: „Filetkopf extra“ (kein doppeltes „extra“, wenn der Name es schon trägt)
+- `rw_artikel_aus(stamm)` – Artikel für die Oberfläche: gespeicherte Felder plus aufgelöste Werte (extra, extraHinweis, anzeige)
 
 **Laden und Schreiben**
 
@@ -304,4 +309,5 @@ _REWE (Modul rewe, Oberfläche rewe.intern unter /module/rewe/) – Vordispositi
 - `person(name, liste)`
 - `stamm_roh()`
 - `text(pg, sel)`
+- `warte_auf(pg, js, ms)`
 - `anmelden(user, pw, ip, breite, thema, hoehe, ziel, pfad)`

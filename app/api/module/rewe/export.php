@@ -44,7 +44,7 @@ function rw_abschluss(string $kw): array
             $n = (int)($e['m'][$a['id']] ?? 0);
             if (!$n) continue;
             $zeilen[] = ['lieferweg' => $lwName($lw), 'lieferwegId' => $lw, 'kdNr' => (string)($m['kdNr'] ?? ''), 'reweNr' => (string)($m['reweNr'] ?? ''), 'markt' => $an['name'],
-                         'plz' => $an['plz'], 'ort' => $an['ort'], 'strasse' => $an['strasse'], 'winab' => $an['winab'], 'artikel' => $a['name'], 'artikelId' => $a['id'],
+                         'plz' => $an['plz'], 'ort' => $an['ort'], 'strasse' => $an['strasse'], 'winab' => $an['winab'], 'artikel' => rw_artikel_anzeige($a), 'artikelId' => $a['id'],
                          'nr' => (string)$a['nr'], 'menge' => $n, 'einheit' => (string)$a['einheit'], 'ohneBerechnung' => !empty($e['ob']), 'zustaendig' => $person,
                          'notiz' => (string)($e['n'] ?? ''), 'quelle' => (string)($e['q'] ?? 'hand'), 'auto' => !empty($e['auto']), 'nachtrag' => !empty($e['nachtrag']), 'marktId' => $m['id']];
             $jeLw[$lw]['mengen'][$a['id']] = ($jeLw[$lw]['mengen'][$a['id']] ?? 0) + $n;
@@ -65,7 +65,7 @@ function rw_abschluss(string $kw): array
     $pListe = [];
     foreach ($jePerson as $name => $x) $pListe[] = ['name' => (string)$name, 'maerkte' => $x['maerkte'], 'mengen' => $x['mengen'] ?? []];
     usort($pListe, function ($a, $b) { return strcasecmp($a['name'], $b['name']); });
-    $ohneNr = array_values(array_map(function ($a) { return $a['name']; }, array_filter($stamm['artikel'], function ($a) use ($jeArtikel) { return !empty($jeArtikel[$a['id']]) && $a['nr'] === ''; })));
+    $ohneNr = array_values(array_map(function ($a) { return rw_artikel_anzeige($a); }, array_filter($stamm['artikel'], function ($a) use ($jeArtikel) { return !empty($jeArtikel[$a['id']]) && $a['nr'] === ''; })));
     $ab = $w['abschluss'][$ww] ?? [];
     return ['kw' => $kw, 'kwText' => rw_kw_text($kw), 'zeitraum' => rw_kw_zeitraum($kw), 'zeilen' => $zeilen, 'lieferwege' => $lwListe, 'personen' => $pListe,
             'artikel' => (object)$jeArtikel, 'maerkte' => count(array_unique(array_column($zeilen, 'marktId'))), 'offen' => $offen, 'dauerOffen' => $dauerOffen,
@@ -210,7 +210,7 @@ function rw_export_xlsx(array $a, array $stamm, string $wer): string
     $blaetter = [['WinAB-Erfassung', rw_xl_blatt($z, [9, 20, 12, 15, 15, 26, 8, 22, 28, 14, 20, 8, 9, 13, 16, 30, 10, 14], 4)]];
     foreach ([['Je Lieferweg', 'Lieferweg', $a['lieferwege']], ['Je Mitarbeiter', 'Mitarbeiter', $a['personen']]] as [$blatt, $spalte, $liste]) {
         $art = array_values(array_filter($stamm['artikel'], function ($x) use ($a) { return !empty(((array)$a['artikel'])[$x['id']]); }));
-        $s = [[[$a['kwText'] . ' · ' . $blatt, 2]], [], array_merge([$spalte, 'Märkte'], array_column($art, 'name'))];
+        $s = [[[$a['kwText'] . ' · ' . $blatt, 2]], [], array_merge([$spalte, 'Märkte'], array_map('rw_artikel_anzeige', $art))];
         foreach ($liste as $x) {
             $s[] = array_merge([$x['name'], $x['maerkte']], array_map(function ($ar) use ($x) { return (int)($x['mengen'][$ar['id']] ?? 0); }, $art));
         }
