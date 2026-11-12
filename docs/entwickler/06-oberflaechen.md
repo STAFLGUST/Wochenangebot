@@ -253,27 +253,39 @@ Empfehlungen ohne Preisänderung (`it.empfehlung`) tragen `.werb-an` (dezent hin
 
 ### Aufbau des Angebots (Knopf „Editor“)
 
-Hellblauer Knopf „Editor“ (`#btn-aufbau`) rechts neben „Werbung“ (Wunsch des Inhabers 11.11.2026): sichtbar nur mit
-`angebot.bearbeiten` (`aufbauKnopf()` aus `renderWerbungBtn()`, `admin.js`); Farben `--abf*` in
+Hellblauer Knopf „Editor“ (`#btn-aufbau`) rechts neben „Werbung“ (Wunsch des Inhabers 11.11.2026, Artikel 12.11.2026):
+sichtbar nur mit `angebot.bearbeiten` (`aufbauKnopf()` aus `renderWerbungBtn()`, `admin.js`); Farben `--abf*` in
 `app/module/angebot/aufbau.css` aus dem Blauton von `--c-frozen` (Kennzeichen „eigene“), hell und dunkel. Das Fenster
 `#dlg-aufbau` baut `app/module/angebot/aufbau.js` aus `WA.angebot.aufbau.daten()`: Gruppen des gewählten Angebots
-(`sichtbareGruppen()`) mit Artikelzahl; aufeinanderfolgende Gruppen mit gleichem `section` bilden einen Block (wie die
-Überschriften im Editor), Gruppen ohne Bereich den Block „ohne Bereich“. Pfeile verschieben Blöcke und Gruppen im Block,
-Ziehen am Griff (Pointer Events über `window`, Maus und Touch, `touch-action: none`, Rollen am Rand) auch Gruppen in einen
-anderen Block – sie bekommen dessen Bereich (Kennzeichen „Bereich neu“). Leere Blöcke fallen weg, gleiche Nachbarn werden
-zusammengefasst. Mit Änderungen setzt das Fenster `data-geaendert` (erstes Escape warnt, `theme.js`).
+(`sichtbareGruppen()`) mit ihren Artikeln dieses Angebots (`inOffer`, Bezeichnung `nameIn`); aufeinanderfolgende Gruppen mit
+gleichem `section` bilden einen Block (wie die Überschriften im Editor), Gruppen ohne Bereich den Block „ohne Bereich“.
+Ein Klick auf die Gruppe (`[data-ab="g-auf"]`, `aria-expanded`) klappt ihre Artikel auf, „Alle Artikel zeigen“ alle.
+Pfeile verschieben Blöcke, Gruppen im Block und Artikel in der Gruppe; Ziehen am Griff (Pointer Events über `window`, Maus
+und Touch, `touch-action: none`, Rollen am Rand) auch Gruppen in einen anderen Block – sie bekommen dessen Bereich („Bereich
+neu“) – und Artikel in eine andere Gruppe: auf eine aufgeklappte an die Stelle, auf eine zugeklappte (`.abf-ziel`) ans Ende.
+Für Handy und Tastatur verschiebt die Auswahl „In Gruppe …“ (`[data-zu]`) einen Artikel ans Ende der gewählten Gruppe
+(„verschoben“, Meldung unten links). Leere Blöcke fallen weg, gleiche Nachbarn werden zusammengefasst. Mit Änderungen setzt
+das Fenster `data-geaendert` (erstes Escape warnt, `theme.js`).
 
-„Übernehmen“ ruft `WA.angebot.aufbau.uebernehmen(neu, stand)` (`aufbauUebernehmen()`): eigene Speicherungen abwarten,
-`draft_ping`, bei neuer Revision `pullRemote()`; weicht dann die Reihenfolge/Bereiche der Gruppen des Angebots vom Stand beim
-Öffnen ab (`stand`), wird nichts übernommen (`{konflikt, wer, daten}` – das Fenster zeigt den neuen Stand). Sonst ordnet
-`gruppenOrdnen(anker, reihe)` `model.groups` neu – Gruppen, die im gewählten Angebot nicht vorkommen, bleiben hinter
-ihrer Vorgängergruppe –, setzt `section`, `pushUndo()`, `saveNote = {type: 'aufbau'}` (Protokoll „Aufbau des Angebots
-geändert …“ in `save_draft`) und speichert sofort (`saveNow()`). Kein eigener Speicherweg, kein neues Datenfeld: die
-Reihenfolge gilt wie bei ↑/↓ für alle Angebote und wirkt überall, wo `model.groups` die Reihenfolge bestimmt
-(`OfferCore.enrichOffer`: Angebotsseite, Liste, Tabelle, Druck/PDF, Vorschau; `offer_resolve`; App). Nur ansehen
-(`aufbauSperre()`): Kundenangebot „folgt dem Wochenangebot“ und aktive Angebotskategorien (dann ordnen die Stammdaten).
-`aufbauGeaendert()` vergleicht Reihenfolge und Bereiche der gemeinsamen Gruppen mit der veröffentlichten Fassung: Zahl am
-Knopf „Veröffentlichen“, Abschnitt „Aufbau“ im Dialog mit Rücknahme (`revertChange('aufbau')`). Tests: Gruppe `aufbau`.
+Woher Gruppe und Reihenfolge eines Artikels kommen: aus dem Entwurf selbst – `it.groupId` und die Stelle in `model.items`
+(je Gruppe zählt nur die Reihenfolge, `OfferCore.enrichOffer`), nicht aus den Stammdaten. Beides ist für alle Angebote
+gemeinsam, wie „Angebotsgruppe“ und „Nach oben/unten“ im Artikelfenster (`openItem`), das dieselben Felder ändert.
+
+„Übernehmen“ ruft `WA.angebot.aufbau.uebernehmen(neu, stand)` (`aufbauUebernehmen()`, `neu` = `[{id, bereich, artikel}]`):
+eigene Speicherungen abwarten, `draft_ping`, bei neuer Revision `pullRemote()`; weichen danach Reihenfolge/Bereiche der
+Gruppen oder die Artikel je Gruppe vom Stand beim Öffnen ab (`stand`), wird nichts übernommen (`{konflikt, grund, wer,
+daten}` – das Fenster zeigt den neuen Stand). Sonst ordnet `gruppenOrdnen(anker, reihe)` `model.groups` neu – Gruppen, die
+im gewählten Angebot nicht vorkommen, bleiben hinter ihrer Vorgängergruppe –, `artikelOrdnen(ziel)` setzt `groupId` der
+Artikel des Angebots und ihre Reihenfolge (Artikel anderer Angebote bleiben in ihrer Gruppe hinter dem Artikel davor; nur
+die Plätze der betroffenen Gruppen in `model.items` ändern sich), dazu `section`, Rückgängig, `saveNote = {type: 'aufbau'}`
+(Protokoll „Aufbau des Angebots geändert …“ mit Zahl der Gruppen mit neuem Bereich und der Artikel mit neuer Gruppe in
+`save_draft`) und sofortiges Speichern (`saveNow()`). Kein eigener Speicherweg, kein neues Datenfeld. Wirkung überall, wo
+`model.groups`/`model.items` die Reihenfolge bestimmen (`OfferCore.enrichOffer`: Angebotsseite, Liste, Tabelle, Druck/PDF,
+Vorschau; `offer_resolve`; App). `aufbauSperre()`: Kundenangebot „folgt dem Wochenangebot“ nur ansehen; mit aktiven
+Angebotskategorien sind Bereiche und Gruppen fest (die Stammdaten ordnen), Artikel bleiben änderbar.
+`aufbauGeaendert()` vergleicht Reihenfolge und Bereiche der gemeinsamen Gruppen und Gruppe/Reihenfolge der gemeinsamen
+Artikel mit der veröffentlichten Fassung: Zahl am Knopf „Veröffentlichen“, Abschnitt „Aufbau“ im Dialog mit Rücknahme
+(`revertChange('aufbau')`). Tests: Gruppe `aufbau`.
 
 ### Empfehlung (früher „Sonderpreis“)
 

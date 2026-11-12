@@ -2,7 +2,7 @@
 
 <!-- ERZEUGT von `python3 werkzeuge/doku.py erzeugen` – nicht von Hand ändern. Quelle: Funktionen und Kommentare im Code. Die CI prüft, dass diese Datei zum Code passt. -->
 
-45 Dateien, 690 Funktionen – in der Reihenfolge der Datei, **fett** die Abschnitte. Text = erste Aussage des Kommentars direkt über der Funktion (Python: Docstring). Übersicht aller Module: [README.md](README.md).
+45 Dateien, 699 Funktionen – in der Reihenfolge der Datei, **fett** die Abschnitte. Text = erste Aussage des Kommentars direkt über der Funktion (Python: Docstring). Übersicht aller Module: [README.md](README.md).
 
 ## `app/api/lib/angebote.php`
 
@@ -317,7 +317,8 @@ _Wochenangebot – Eingabebereich Bearbeitet einen Entwurf auf dem Server (autom
 - `namenBekannt(n)` – nur Einträge bestehender Kundenangebote; null, wenn keiner
 - `setzeName(x, oid, text)` – eigene Bezeichnung setzen; leer oder gleich dem Basiswert = keine eigene
 - `werbungBereinigen()` – Artikel, die nicht mehr im Angebot stehen, fallen aus dessen Werbung (unbekannte Angebote prüft der Server)
-- `aufbauGeaendert()` – Weicht der Aufbau (Reihenfolge der Gruppen, Bereich je Gruppe; gilt für alle Angebote) von der veröffentlichten Fassung ab? Verglichen werden nur Gruppen mit …
+- `aufbauGeaendert()` – Weicht der Aufbau (Reihenfolge der Gruppen, Bereich je Gruppe, Gruppe und Reihenfolge der Artikel; gilt für alle Angebote) von der veröffentlichten Fassung …
+- `artikelOrdnen(ziel)` – Artikel neu ordnen: ziel = Map(Gruppen-ID → Artikel-IDs in gewünschter Reihenfolge) für die „Anker“ (z. B. alle Artikel des gewählten Angebots); jeder Anker …
 - `gruppenOrdnen(anker, reihe)` – Gruppen neu ordnen: „anker“ (IDs) kommen in die Reihenfolge „reihe“; jede andere Gruppe bleibt hinter ihrem Anker davor (Gruppen, die im gewählten Angebot …
 
 **API**
@@ -577,8 +578,8 @@ _Wochenangebot – Eingabebereich Bearbeitet einen Entwurf auf dem Server (autom
 
 - `aufbauSperre()`
 - `aufbauKnopf()` – Knopf „Editor“: nur mit Bearbeitungsrecht; ohne eigenen Aufbau gekennzeichnet (Fenster nur zum Ansehen)
-- `aufbauDaten()` – Gruppen des gewählten Angebots in Angebotsreihenfolge; stand = Reihenfolge und Bereiche (Vergleich beim Übernehmen)
-- `aufbauUebernehmen(neu, stand)` – neu = [{id, bereich}] in der gewünschten Reihenfolge (alle Gruppen des Angebots); stand = aufbauDaten().stand beim Öffnen.
+- `aufbauDaten()` – Gruppen des gewählten Angebots in Angebotsreihenfolge mit ihren Artikeln (nur die dieses Angebots); stand = Reihenfolge, Bereiche und Artikel je Gruppe …
+- `aufbauUebernehmen(neu, stand)` – neu = [{id, bereich, artikel: [Artikel-IDs]}] in der gewünschten Reihenfolge (alle Gruppen und Artikel des Angebots); stand = aufbauDaten().stand beim Öffnen.
 
 **Empfehlung (früher „Sonderpreis“; mit Preis: Sonderposten solange der Vorrat reicht)**
 
@@ -879,24 +880,29 @@ _Web-App: Offline-Speicher (sw.js) anmelden und Hinweis „Als App auf den Home-
 
 ## `app/module/angebot/aufbau.js`
 
-_STAFL-Plattform · Angebot · Fenster „Aufbau des Angebots“ (Knopf „Editor“ in der Werkzeugleiste von „Angebot bearbeiten“, Wunsch des Inhabers 11.11.2026)._
+_STAFL-Plattform · Angebot · Fenster „Aufbau des Angebots“ (Knopf „Editor“ in der Werkzeugleiste von „Angebot bearbeiten“, Wunsch des Inhabers 11.11.2026, Artikel 12.11.2026)._
 
 - `bloecke(gruppen)` – Aufeinanderfolgende Gruppen mit gleichem Bereich bilden einen Block (wie die Überschriften im Editor und auf der Seite)
 - `normalisieren()` – leere Blöcke entfernen, benachbarte mit gleichem Bereich zusammenfassen
+- `zuHTML(aid, gid)` – Auswahl „In Gruppe …“: alle anderen Gruppen des Angebots, nach Bereich gegliedert
+- `artikelHTML(gid)`
 - `listeHTML()`
-- `standZeigen()` – Stand unten links; mit Änderungen schützt data-geaendert vor versehentlichem Escape (theme.js)
-- `fokussieren(f)` – Fokus nach einem Pfeil: derselbe Knopf an der neuen Stelle, am Rand der andere Pfeil
-- `zeichnen(fokus)`
+- `standZeigen(meldung)` – Stand unten links; mit Änderungen schützt data-geaendert vor versehentlichem Escape (theme.js)
+- `fokussieren(f)` – Fokus nach einer Aktion: derselbe Knopf an der neuen Stelle, am Rand der andere Pfeil
+- `zeichnen(fokus, meldung)`
 - `fehler(t)`
+- `aufleuchten(sel)`
 - `laden(daten)`
 - `oeffnen()`
 - `uebernehmen()`
+- `artikelNach(aid, ziel)` – Artikel ans Ende einer anderen Gruppe (Auswahl „In Gruppe …“, Ziehen auf eine zugeklappte Gruppe)
 
-**Pfeile**
+**Pfeile, Aufklappen, Auswahl**
 
 **Ziehen (Maus und Touch)**
 
 - `rollbar(el)`
+- `einfuegen(ol, y)`
 - `platzieren()`
 - `rollen()`
 - `bewegen(e)`
@@ -971,7 +977,7 @@ _Angebotsliste (Standardansicht der Angebotsseite)_
 
 ## `tests/e2e/test_aufbau.py`
 
-_Aufbau des Angebots (Knopf „Editor“ in „Angebot bearbeiten“, Wunsch des Inhabers 11.11.2026)_
+_Aufbau des Angebots (Knopf „Editor“ in „Angebot bearbeiten“, Wunsch des Inhabers 11.11.2026, Artikel 12.11.2026)_
 
 - `check(n, c, i)`
 - `entwurf(cl)`
@@ -980,6 +986,9 @@ _Aufbau des Angebots (Knopf „Editor“ in „Angebot bearbeiten“, Wunsch des
 - `fenster(pg)`
 - `editor(pg)` – Editor: Gruppen-IDs in Reihenfolge und Bereichsüberschriften
 - `quoten(t)`
+- `art_reihe(m, gid, oid)` – Artikel-IDs einer Gruppe im Angebot in Reihenfolge des Entwurfs
+- `angebot_reihe(m, oid)` – Artikel in Angebotsreihenfolge wie OfferCore.enrichOffer (Gruppe, dann Stelle); oid=None: alle Artikel des Modells
+- `dlg_art(pg, gid)`
 - `flach(bl)`
 - `gruppen_reihe(model)`
 - `ziehen(pg, quelle, ziel, oben, steps)` – Am Griff „quelle“ ziehen und über dem Element „ziel“ loslassen (obere bzw. untere Hälfte)

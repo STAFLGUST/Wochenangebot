@@ -1,11 +1,14 @@
-"""Aufbau des Angebots (Knopf „Editor“ in „Angebot bearbeiten“, Wunsch des Inhabers 11.11.2026): Knopf neben „Werbung“
+"""Aufbau des Angebots (Knopf „Editor“ in „Angebot bearbeiten“, Wunsch des Inhabers 11.11.2026, Artikel 12.11.2026): Knopf neben „Werbung“
 (hellblau, gleiche Höhe, hell/dunkel, 390 px), Fenster mit Bereichen und eingerückten Gruppen in Angebotsreihenfolge
 („ohne Bereich“ an seiner Stelle), Verschieben per Pfeil und per Ziehen (Maus und Touch, Bereich als Ganzes, Gruppe im
 Bereich und in einen anderen Bereich), „Abbrechen“ speichert nichts, „Übernehmen“ speichert über den Entwurf (Revision,
 Protokoll, Rückgängig, Veröffentlichen-Dialog „Aufbau“), Wirkung im Editor, in Vorschau, auf der Angebotsseite (Liste,
 Tabelle) und beim Kunden; ältere Versionen unverändert; Revisionskonflikt mit einem zweiten Bearbeiter; Kundenangebot
 „folgt dem Wochenangebot“ nur ansehen, Kundenangebot mit eigener Artikelliste; ohne Bearbeitungsrecht kein Knopf und 403.
-Nur Testdaten (Seed-Angebot)."""
+Artikel: Gruppen aufklappen (einzeln, alle), Artikel per Pfeil und Ziehen umsortieren, per Ziehen in eine aufgeklappte bzw.
+zugeklappte Gruppe und über „In Gruppe …“ verschieben, Zahlen, Abbrechen, Übernehmen (Entwurf, Editor, Protokoll,
+Veröffentlichen, Angebotsseite Liste/Tabelle, Kundenangebot), Konflikt, mit Angebotskategorien nur Artikel änderbar, 390 px
+mit Touch. Nur Testdaten (Seed-Angebot)."""
 import json
 import sys
 
@@ -71,6 +74,22 @@ def editor(pg):
 
 def quoten(t):
     return t.replace('„', '"').replace('“', '"').replace('”', '"').strip().lower()
+
+
+def art_reihe(m, gid, oid='std'):
+    """Artikel-IDs einer Gruppe im Angebot in Reihenfolge des Entwurfs"""
+    return [i['id'] for i in m['items'] if i['groupId'] == gid and im_angebot(i, oid)]
+
+
+def angebot_reihe(m, oid=None):
+    """Artikel in Angebotsreihenfolge wie OfferCore.enrichOffer (Gruppe, dann Stelle); oid=None: alle Artikel des Modells"""
+    gi = {g['id']: k for k, g in enumerate(m['groups'])}
+    its = [(gi.get(i['groupId'], 10 ** 6), k, i['id']) for k, i in enumerate(m['items']) if oid is None or im_angebot(i, oid)]
+    return [x[2] for x in sorted(its)]
+
+
+def dlg_art(pg, gid):
+    return pg.eval_on_selector_all(f'#abf-liste .abf-g[data-gid="{gid}"] .abf-a[data-aid]', 'xs => xs.map(x => x.dataset.aid)')
 
 
 def flach(bl):
@@ -243,7 +262,7 @@ with sync_playwright() as p:
     check('Editor zeigt die neue Reihenfolge mit Bereichsüberschriften', ed[0] == flach(ERW) and ed[1] == [b.lower() for b, _ in ERW if b], ed[1])
     check('Feld „Bereich“ der verschobenen Gruppe gesetzt', a.locator(f'#groups section.gcard[data-gid="{OHNE_G}"] [data-gf="section"]').input_value() == ERW[1][0])
     log = json.dumps(A.call('log')[1], ensure_ascii=False)
-    check('Protokoll: Aufbau des Angebots geändert (Bereich bei 1 Gruppe neu)', 'Aufbau des Angebots geändert (Reihenfolge der Bereiche und Gruppen, Bereich bei 1 Gruppe neu)' in log)
+    check('Protokoll: Aufbau des Angebots geändert (Bereich bei 1 Gruppe neu)', 'Aufbau des Angebots geändert (Reihenfolge der Bereiche, Gruppen und Artikel, Bereich bei 1 Gruppe neu)' in log)
     check('Knopf „Veröffentlichen“ nennt den geänderten Aufbau', 'Aufbau geändert' in (a.get_attribute('#btn-publish', 'title') or ''), a.get_attribute('#btn-publish', 'title'))
     vorschau = A.call('offer&draft=1')[1]['offer']
     check('Vorschau (Entwurf): Gruppen in neuer Reihenfolge', [g['id'] for g in vorschau['groups']] == flach(ERW))
@@ -260,7 +279,7 @@ with sync_playwright() as p:
     # ---------- Veröffentlichen: Dialog nennt den Aufbau; Wirkung auf Seite, Liste, Tabelle; alte Version unverändert ----------
     a.set_viewport_size({'width': 1440, 'height': 950})
     a.click('#btn-publish'); a.wait_for_selector('#dlg-publish[open]')
-    check('Veröffentlichen-Dialog: Abschnitt „Aufbau“ mit Rückgängig', 'Reihenfolge der Bereiche und Gruppen geändert' in a.inner_text('#dlg-publish')
+    check('Veröffentlichen-Dialog: Abschnitt „Aufbau“ mit Rückgängig', 'Reihenfolge der Bereiche, Gruppen oder Artikel geändert' in a.inner_text('#dlg-publish')
           and a.locator('#dlg-publish [data-rv="aufbau"]').count() == 1)
     a.click('[data-ia=publish]'); a.wait_for_function("!document.querySelector('#dlg-publish').open", timeout=15000)
     pub = Client('198.51.100.9').call('offer')[1]['offer']
@@ -325,8 +344,11 @@ with sync_playwright() as p:
     check('folgt dem Wochenangebot: Knopf sichtbar, gekennzeichnet, Hinweis im Titel', a.locator('#btn-aufbau').is_visible() and 'folgt dem Wochenangebot' in (a.get_attribute('#btn-aufbau', 'title') or ''))
     oeffnen(a)
     check('folgt dem Wochenangebot: Fenster nur zum Ansehen mit Hinweis, ohne Pfeile, Griffe und „Übernehmen“',
-          'folgt dem Wochenangebot und übernimmt dessen Aufbau' in a.inner_text('#dlg-aufbau') and a.locator('#abf-liste [data-ab], #abf-liste [data-griff], #abf-ok').count() == 0
+          'folgt dem Wochenangebot und übernimmt dessen Aufbau' in a.inner_text('#dlg-aufbau') and a.locator('#abf-liste [data-griff], #abf-liste [data-ab*="hoch"], #abf-liste [data-ab*="runter"], #abf-ok').count() == 0
           and a.locator('#abf-liste .abf-g').count() > 0)
+    a.locator('#abf-liste .abf-g [data-ab="g-auf"]').first.click()
+    check('folgt dem Wochenangebot: Artikel aufklappbar, aber ohne Griff, Pfeile und „In Gruppe …“', a.locator('#abf-liste .abf-a[data-aid]').count() > 0
+          and a.locator('#abf-liste .abf-a [data-griff], #abf-liste .abf-a select, #abf-liste .abf-a [data-ab]').count() == 0)
     shot(a.locator('#dlg-aufbau'), SH + '/aufbau-folgt.png')
     a.click('#dlg-aufbau .dlg-foot [data-close]'); a.wait_for_selector('#dlg-aufbau', state='hidden')
     a.locator(f'#offer-bar [data-offer="{EIGEN}"]').first.click()
@@ -347,6 +369,116 @@ with sync_playwright() as p:
     a.locator('#offer-bar [data-offer="std"]').first.click()
     a.wait_for_selector('#btn-aufbau:not(.gesperrt)')
     check('keine Skriptfehler (Bearbeiter)', not errors, errors[:3])
+
+    # ---------- Artikel: aufklappen, umsortieren, verschieben ----------
+    m5, rev5 = entwurf(A)
+    F = flach(bloecke(m5))
+    anz = {g: len(art_reihe(m5, g)) for g in F}
+    k = next(i for i in range(1, len(F) - 1) if anz[F[i]] >= 6 and anz[F[i + 1]] >= 3)
+    GA, GB, GZ = F[k], F[k + 1], F[k - 1]   # GZ steht über GA (Ziehen nach oben auf eine zugeklappte Gruppe)
+    GS = next(g for g in reversed(F) if g not in (GA, GB, GZ))
+    gname = {g['id']: g['name'] for g in m5['groups']}
+    oeffnen(a)
+    check('Artikel: Gruppen zugeklappt, keine Artikelzeilen', a.locator('#abf-liste .abf-a').count() == 0
+          and a.locator('#abf-liste .abf-art:not([hidden])').count() == 0 and a.locator('#abf-liste [data-ab="g-auf"][aria-expanded="false"]').count() == len(F))
+    auf = f'#abf-liste .abf-g[data-gid="{GA}"] [data-ab="g-auf"]'
+    a.click(auf)
+    erstes = next(i for i in m5['items'] if i['id'] == art_reihe(m5, GA)[0])
+    zeile = a.locator(f'#abf-liste .abf-a[data-aid="{erstes["id"]}"]')
+    check('Klick auf die Gruppe klappt sie auf: Artikel mit Art.-Nr. und Bezeichnung in Reihenfolge', dlg_art(a, GA) == art_reihe(m5, GA)
+          and a.get_attribute(auf, 'aria-expanded') == 'true' and (erstes['code'] or '') in zeile.inner_text() and erstes['name'] in zeile.inner_text())
+    a.click(auf)
+    check('erneuter Klick klappt zu', a.locator(f'#abf-liste .abf-g[data-gid="{GA}"] .abf-art').is_hidden() and a.get_attribute(auf, 'aria-expanded') == 'false')
+    a.click('#abf-alle')
+    gesamt = sum(anz.values())
+    check('„Alle Artikel zeigen“ klappt alle Gruppen auf', a.locator('#abf-liste .abf-a[data-aid]').count() == gesamt and 'ausblenden' in a.inner_text('#abf-alle'), gesamt)
+    a.click('#abf-alle')
+    check('… und wieder zu', a.locator('#abf-liste .abf-a').count() == 0)
+    a.click(auf)
+    ga = art_reihe(m5, GA)
+    a.click(f'#abf-liste .abf-a[data-aid="{ga[1]}"] [data-ab="a-hoch"]')
+    check('Pfeil: Artikel innerhalb der Gruppe nach oben, Fokus bleibt', dlg_art(a, GA)[:2] == [ga[1], ga[0]]
+          and a.evaluate("document.activeElement.dataset.ab") == 'a-runter' and a.evaluate("document.activeElement.closest('.abf-a').dataset.aid") == ga[1],
+          (dlg_art(a, GA)[:2], a.evaluate("document.activeElement.dataset.ab")))   # ganz oben: Fokus auf den anderen Pfeil
+    a.select_option(f'#abf-liste .abf-a[data-aid="{ga[2]}"] select', GS)
+    check('Auswahl „In Gruppe …“: Artikel ans Ende der gewählten Gruppe, Zahlen aktualisiert, Meldung',
+          ga[2] not in dlg_art(a, GA) and f'{anz[GA] - 1} Artikel' in a.inner_text(f'#abf-liste .abf-g[data-gid="{GA}"] > .abf-gk .abf-z')
+          and f'{anz[GS] + 1} Artikel' in a.inner_text(f'#abf-liste .abf-g[data-gid="{GS}"] > .abf-gk .abf-z') and 'ans Ende von' in a.inner_text('#abf-stand'))
+    a.click(f'#abf-liste .abf-g[data-gid="{GS}"] [data-ab="g-auf"]')
+    check('… dort am Ende, gekennzeichnet „verschoben“', dlg_art(a, GS)[-1] == ga[2] and 'verschoben' in a.inner_text(f'#abf-liste .abf-a[data-aid="{ga[2]}"]').lower())
+    a.click('#dlg-aufbau .dlg-foot [data-close]'); a.wait_for_selector('#dlg-aufbau', state='hidden')
+    check('Abbrechen: Artikel unverändert, nichts gespeichert', entwurf(A)[1] == rev5)
+
+    a.set_viewport_size({'width': 1440, 'height': 3200})   # aufgeklappte Gruppen ganz sichtbar (Ziehen ohne Rollen)
+    oeffnen(a)
+    a.click(f'#abf-liste .abf-g[data-gid="{GA}"] [data-ab="g-auf"]'); a.click(f'#abf-liste .abf-g[data-gid="{GB}"] [data-ab="g-auf"]')
+    ga, gb, gz, gs = art_reihe(m5, GA), art_reihe(m5, GB), art_reihe(m5, GZ), art_reihe(m5, GS)
+    a.click(f'#abf-liste .abf-a[data-aid="{ga[1]}"] [data-ab="a-hoch"]')
+    ea = [ga[1], ga[0]] + ga[2:]
+    ziehen(a, f'#abf-liste .abf-a[data-aid="{ga[4]}"] [data-griff="a"]', f'#abf-liste .abf-a[data-aid="{ea[0]}"]')
+    ea = [ga[4]] + [x for x in ea if x != ga[4]]
+    check('Ziehen: Artikel innerhalb der Gruppe an den Anfang', dlg_art(a, GA) == ea, dlg_art(a, GA)[:5])
+    ziehen(a, f'#abf-liste .abf-a[data-aid="{gb[2]}"] [data-griff="a"]', f'#abf-liste .abf-a[data-aid="{ea[1]}"]')
+    ea = [ea[0], gb[2]] + ea[1:]
+    eb = [x for x in gb if x != gb[2]]
+    check('Ziehen: Artikel in eine andere (aufgeklappte) Gruppe an die Stelle, „verschoben“', dlg_art(a, GA) == ea and dlg_art(a, GB) == eb
+          and 'verschoben' in a.inner_text(f'#abf-liste .abf-a[data-aid="{gb[2]}"]').lower(), (dlg_art(a, GA)[:4], dlg_art(a, GB)[:4]))
+    letzter = ea[-1]
+    ziehen(a, f'#abf-liste .abf-a[data-aid="{letzter}"] [data-griff="a"]', f'#abf-liste .abf-g[data-gid="{GZ}"] > .abf-gk')
+    ea = ea[:-1]
+    ez = gz + [letzter]
+    check('Ziehen auf eine zugeklappte Gruppe: Artikel an deren Ende, Zahl aktualisiert', dlg_art(a, GA) == ea
+          and f'{len(ez)} Artikel' in a.inner_text(f'#abf-liste .abf-g[data-gid="{GZ}"] > .abf-gk .abf-z') and a.locator('#abf-liste .abf-ziel').count() == 0)
+    a.select_option(f'#abf-liste .abf-a[data-aid="{ea[3]}"] select', GS)
+    es = gs + [ea[3]]
+    ea = ea[:3] + ea[4:]
+    shot(a.locator('#dlg-aufbau'), SH + '/artikel-fenster.png')
+    a.click('#abf-ok'); a.wait_for_selector('#dlg-aufbau', state='hidden'); gespeichert(a)
+    m6, rev6 = entwurf(A)
+    check('Übernehmen: Artikelreihenfolge und Gruppen im Entwurf wie im Fenster (eine Speicherung)', rev6 == rev5 + 1 and art_reihe(m6, GA) == ea and art_reihe(m6, GB) == eb
+          and art_reihe(m6, GZ) == ez and art_reihe(m6, GS) == es, (rev5, rev6))
+    vorher = {i['id']: i for i in m5['items']}
+    gew = {gb[2]: GA, letzter: GZ, es[-1]: GS}
+    check('nur die verschobenen Artikel wechseln die Gruppe, Preise und Angebote unverändert',
+          all(i['groupId'] == gew.get(i['id'], vorher[i['id']]['groupId']) and i['price'] == vorher[i['id']]['price']
+              and i.get('variants') == vorher[i['id']].get('variants') for i in m6['items']) and len(m6['items']) == len(m5['items']))
+    check('Gruppenreihenfolge unverändert', gruppen_reihe(m6) == gruppen_reihe(m5))
+    ed = a.eval_on_selector_all(f'#groups section.gcard[data-gid="{GA}"] tr[data-id]', 'xs => xs.map(x => x.dataset.id)')
+    check('Editor zeigt die Artikel in neuer Reihenfolge', ed == ea, ed[:4])
+    check('Protokoll: Gruppe bei 3 Artikeln neu', 'Gruppe bei 3 Artikeln neu' in json.dumps(A.call('log')[1], ensure_ascii=False))
+    a.set_viewport_size({'width': 1440, 'height': 950})
+    a.click('#btn-publish'); a.wait_for_selector('#dlg-publish[open]')
+    check('Veröffentlichen nennt den Aufbau', 'Reihenfolge der Bereiche, Gruppen oder Artikel geändert' in a.inner_text('#dlg-publish'))
+    a.click('[data-ia=publish]'); a.wait_for_function("!document.querySelector('#dlg-publish').open", timeout=15000)
+    m7, _ = entwurf(A)
+    pub = Client('198.51.100.9').call('offer')[1]['offer']
+    check('veröffentlicht: öffentliche Seite liefert die Artikel in neuer Reihenfolge und Gruppe', angebot_reihe(pub) == angebot_reihe(m7, 'std')
+          and next(i for i in pub['items'] if i['id'] == gb[2])['groupId'] == GA)
+    s = br.new_page(viewport={'width': 1440, 'height': 950})
+    s.on('pageerror', lambda e: errors.append(str(e)))
+    s.goto(BASE + '/'); s.wait_for_selector('.al tr.row[data-id]')
+    liste = s.eval_on_selector_all('.al .al-sec:not(.werb-sec) tr.row[data-id]', 'xs => xs.map(x => x.dataset.id)')
+    check('Angebotsseite (Angebotsansicht wie Druck/PDF): Artikel in neuer Reihenfolge', liste == angebot_reihe(m7, 'std'), liste[:5])
+    s.goto(BASE + '/#ansicht=tabelle'); s.reload(); s.wait_for_selector('table.grid tr.row[data-id]')
+    tab = s.eval_on_selector_all('table.grid tr.row[data-id]', 'xs => xs.map(x => x.dataset.id)')
+    check('Angebotsseite (Tabelle): Artikel in neuer Reihenfolge', tab == angebot_reihe(m7, 'std'), tab[:5])
+    s.close()
+    kd = A.call(f'offer&angebot={EIGEN}')[1]['offer']
+    check('Kundenangebot (veröffentlicht): Artikel in Reihenfolge des Aufbaus', angebot_reihe(kd) == angebot_reihe(m7, EIGEN), angebot_reihe(kd))
+    # Konflikt: ein anderer verschiebt inzwischen einen Artikel
+    oeffnen(a)
+    a.click(f'#abf-liste .abf-g[data-gid="{GA}"] [data-ab="g-auf"]')
+    me, mrev = entwurf(E)
+    wandert = art_reihe(me, GA)[-1]
+    next(i for i in me['items'] if i['id'] == wandert)['groupId'] = GB
+    assert E.call('save_draft', {'model': me, 'revision': mrev})[0] == 200
+    E_A = art_reihe(entwurf(A)[0], GA)
+    a.click(f'#abf-liste .abf-a[data-aid="{ea[0]}"] [data-ab="a-runter"]')
+    a.click('#abf-ok'); a.wait_for_selector('#abf-err:has-text("inzwischen geändert")')
+    check('Konflikt bei Artikeln: nichts übernommen, Fenster zeigt den neuen Stand', art_reihe(entwurf(A)[0], GA) == E_A and wandert not in E_A
+          and dlg_art(a, GA) == E_A and a.locator('#dlg-aufbau[open]').count() == 1, (E_A[:3], dlg_art(a, GA)[:3]))
+    a.click('#dlg-aufbau .dlg-foot [data-close]'); a.wait_for_selector('#dlg-aufbau', state='hidden')
+    check('keine Skriptfehler (Artikel)', not errors, errors[:3])
 
     # ---------- Ohne Bearbeitungsrecht: kein Knopf, Server 403 ----------
     lp = br.new_page(viewport={'width': 1440, 'height': 950})
@@ -385,6 +517,16 @@ with sync_playwright() as p:
             touch_ziehen(mp, cdp, f'#abf-liste .abf-g[data-gid="{g[1]}"] [data-griff="g"]', f'#abf-liste .abf-g[data-gid="{g[0]}"]')
             nach = fenster(mp)
             check('Touch: Gruppe am Griff ziehen', nach[0][1][:2] == [g[1], g[0]] and nach[1:] == vor[1:], nach[0][1][:3])
+            g0 = nach[0][1][0]
+            mp.click(f'#abf-liste .abf-g[data-gid="{g0}"] [data-ab="g-auf"]')
+            av = dlg_art(mp, g0)
+            touch_ziehen(mp, cdp, f'#abf-liste .abf-a[data-aid="{av[2]}"] [data-griff="a"]', f'#abf-liste .abf-a[data-aid="{av[0]}"]')
+            check('Touch: Artikel am Griff ziehen', dlg_art(mp, g0)[:3] == [av[2], av[0], av[1]], dlg_art(mp, g0)[:3])
+            ziel = nach[-1][1][-1]
+            mp.select_option(f'#abf-liste .abf-a[data-aid="{av[1]}"] select', ziel)
+            w = mp.evaluate("(() => { const d = document.querySelector('#dlg-aufbau'); const s = [...d.querySelectorAll('#abf-liste .abf-zu')]; return [d.scrollWidth, d.clientWidth, Math.min(...s.map(x => x.getBoundingClientRect().height)), Math.max(...s.map(x => x.getBoundingClientRect().right))]; })()")
+            check('390 px: Auswahl „In Gruppe …“ verschiebt, eigene Zeile mit 36 px, nichts ragt heraus', av[1] not in dlg_art(mp, g0) and w[0] <= w[1] and w[2] >= 36 and w[3] <= 390, w)
+            shot(mp, SH + '/artikel-390.png')
         mp.click('#dlg-aufbau .dlg-foot [data-close]')
         mc.close()
 
@@ -392,12 +534,22 @@ with sync_playwright() as p:
     kr = A.call('angebotskategorien')[1]['rev']
     assert A.call('angebotskategorien_save', {'rev': kr, 'kategorien': [{'name': 'Testkategorie', 'vk': []}]})[0] == 200
     a.reload(); a.wait_for_selector('#screen-editor:not([hidden]) tr[data-id]')
-    a.wait_for_selector('#btn-aufbau.gesperrt')
-    check('Angebotskategorien: Knopf gekennzeichnet, Hinweis im Titel', 'Angebotskategorien' in (a.get_attribute('#btn-aufbau', 'title') or ''))
+    a.wait_for_function("(document.querySelector('#btn-aufbau').title || '').includes('Angebotskategorien')")
+    check('Angebotskategorien: Hinweis im Titel des Knopfs', a.locator('#btn-aufbau.gesperrt').count() == 0)
     oeffnen(a)
-    check('Angebotskategorien: Fenster nur zum Ansehen mit Hinweis auf Verwaltung → Angebotskategorien',
-          'Verwaltung → Angebotskategorien' in a.inner_text('#dlg-aufbau') and a.locator('#abf-liste [data-ab], #abf-liste [data-griff], #abf-ok').count() == 0)
-    a.click('#dlg-aufbau .dlg-foot [data-close]')
+    check('Angebotskategorien: Bereiche und Gruppen fest (Hinweis auf Verwaltung → Angebotskategorien), „Übernehmen“ da',
+          'Verwaltung → Angebotskategorien' in a.inner_text('#dlg-aufbau') and a.locator('#abf-liste [data-griff="b"], #abf-liste [data-griff="g"], #abf-liste [data-ab^="b-"], #abf-liste [data-ab="g-hoch"], #abf-liste [data-ab="g-runter"]').count() == 0
+          and a.locator('#abf-ok').count() == 1)
+    a.wait_for_function("!/pending|saving/.test(document.querySelector('#save-state').className)")   # Ordnen nach Kategorien gespeichert
+    mk, rk = entwurf(A)
+    g0 = fenster(a)[0][1][0]
+    a.click(f'#abf-liste .abf-g[data-gid="{g0}"] [data-ab="g-auf"]')
+    av = dlg_art(a, g0)
+    a.click(f'#abf-liste .abf-a[data-aid="{av[0]}"] [data-ab="a-runter"]')
+    a.click('#abf-ok'); a.wait_for_selector('#dlg-aufbau', state='hidden'); gespeichert(a)
+    mk2, _ = entwurf(A)
+    check('Angebotskategorien: Artikel lassen sich verschieben, Gruppen bleiben in der Reihenfolge der Kategorien',
+          art_reihe(mk2, g0)[:2] == [av[1], av[0]] and gruppen_reihe(mk2) == gruppen_reihe(mk), art_reihe(mk2, g0)[:3])
     check('keine Skriptfehler', not errors, errors[:3])
     br.close()
 

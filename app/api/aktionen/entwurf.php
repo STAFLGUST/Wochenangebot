@@ -73,10 +73,14 @@ switch ($action) {
                     $d = changes_between($before, $model);
                     if ($d) audit('draft', 'Stammdaten auf den Entwurf angewendet', array_slice($d, 0, 2000));
                 } elseif ($note && ($note['type'] ?? '') === 'aufbau') {
-                    // Knopf „Editor“ im Angebot: Reihenfolge der Gruppen (gilt für alle Angebote), dabei ggf. Bereiche geändert
+                    // Knopf „Editor“ im Angebot: Reihenfolge der Gruppen und Artikel (gilt für alle Angebote), dabei ggf. Bereich
+                    // einer Gruppe oder Gruppe eines Artikels geändert
                     $d = changes_between($before, $model);
                     $nb = count(array_filter($d, function ($c) { return str_ends_with((string)$c['k'], '|section'); }));
-                    audit('draft', 'Aufbau des Angebots geändert (Reihenfolge der Bereiche und Gruppen' . ($nb ? ', Bereich bei ' . $nb . ($nb === 1 ? ' Gruppe' : ' Gruppen') . ' neu' : '') . ')', array_slice($d, 0, 2000));
+                    $ng = count(array_filter($d, function ($c) { return str_ends_with((string)$c['k'], '|groupId'); }));
+                    audit('draft', 'Aufbau des Angebots geändert (Reihenfolge der Bereiche, Gruppen und Artikel'
+                        . ($nb ? ', Bereich bei ' . $nb . ($nb === 1 ? ' Gruppe' : ' Gruppen') . ' neu' : '')
+                        . ($ng ? ', Gruppe bei ' . $ng . ($ng === 1 ? ' Artikel' : ' Artikeln') . ' neu' : '') . ')', array_slice($d, 0, 2000));
                 } elseif ($note && ($note['type'] ?? '') === 'version') {
                     audit('import', 'Frühere Veröffentlichung als Entwurf geladen (KW ' . ($model['meta']['week'] ?? '?') . '/' . ($model['meta']['year'] ?? '?') . ')', array_slice(changes_between($before, $model), 0, 2000));
                 } else {
