@@ -2,7 +2,7 @@
 
 <!-- ERZEUGT von `python3 werkzeuge/doku.py erzeugen` – nicht von Hand ändern. Quelle: Funktionen und Kommentare im Code. Die CI prüft, dass diese Datei zum Code passt. -->
 
-5 Dateien, 162 Funktionen – in der Reihenfolge der Datei, **fett** die Abschnitte. Text = erste Aussage des Kommentars direkt über der Funktion (Python: Docstring). Übersicht aller Module: [README.md](README.md).
+5 Dateien, 164 Funktionen – in der Reihenfolge der Datei, **fett** die Abschnitte. Text = erste Aussage des Kommentars direkt über der Funktion (Python: Docstring). Übersicht aller Module: [README.md](README.md).
 
 ## `app/api/aktionen/rewe.php`
 
@@ -208,12 +208,14 @@ _STAFL-Plattform · REWE – Oberfläche der Vordisposition Dry Aged_
 **Meine Woche**
 
 - `ladeWoche()`
+- `ladeAlle()`
+- `setzeSuche(text)`
 - `renderWoche()`
 - `bestelltHtml(w, best, mengen)` – Übersicht der Bestellungen dieser Woche (eigene bzw. gewählte Liste): Markt, Lieferweg, Mengen – Klick zeigt die Zeile
 - `zelleHtml(v, art, m)` – Verlauf: acht Wochen davor, diese Woche (Rahmen) und drei Wochen danach (Vorbestellungen), die KW darunter.
 - `verlaufText(m)`
 - `zeileHtml(m)`
-- `ruhendHtml(liste, q)`
+- `ruhendHtml(liste, q, suche)`
 - `sende(id, teil, mitRueck)` – Antwort senden; bei Erfolg Zeile aktualisieren, bei Konflikt neu laden.
 
 **Märkte und Marktakte**
