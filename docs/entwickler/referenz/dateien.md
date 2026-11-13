@@ -156,6 +156,7 @@ Jede Code-Datei beginnt mit einem Kopfkommentar; dessen erste Aussage steht hier
 | --- | --- | --- |
 | `druck.php` | angebot | Druck der Angebote: Fußzeile des Briefbogens unter jedem gedruckten Angebot (Wunsch des Inhabers 13.11.2026). |
 | `import.php` | angebot | Importvertrag des Moduls Angebot – Schnittstelle zur Importzentrale (docs/plattform/schnittstellen/import.md). - Preisverlauf: frühere Angebotslisten (.xlsx) als Wochen im Preisverlauf. |
+| `kopieren.php` | angebot | Angebot · Kundenangebot kopieren (Entscheidung des Inhabers 13.11.2026): ein Angebot als neues Kundenangebot anlegen und dabei alles außer den Kunden mitnehmen – eigene Preise (variants), eigene Bezeichnungen … |
 | `sonderangebote.php` | angebot | STAFL-Plattform · Angebot · Sonderangebote (Auftrag des Inhabers 13.11.2026): ein Angebot für ganze Kundengruppen mit Gültigkeit – Zeitraum (von–bis, beide Tage eingeschlossen) oder Kalenderwoche (Montag bis Sonntag … |
 | `winab-export.php` | angebot | Export des Wochenangebots für WinAB (Auftrag des Inhabers 05.11.2026) |
 | `wochen.php` | angebot | Angebot · Frühere Wochen ansehen (Wunsch des Inhabers 13.11.2026): das veröffentlichte Angebot einer Kalenderwoche – Wochenangebot oder ein Kundenangebot – nur für Mitarbeiter mit Modulzugang Angebot und nur lesend … |
@@ -352,6 +353,8 @@ Jede Code-Datei beginnt mit einem Kopfkommentar; dessen erste Aussage steht hier
 | `druck.js` | angebot | STAFL-Plattform · Angebot · Drucken aus „Angebot bearbeiten“ und Einstellung „Fußzeile im Druck“ (Wunsch des Inhabers 13.11.2026). |
 | `fruehere-wochen.css` | angebot | STAFL-Plattform · Angebot · Fenster „Frühere Wochen“ (app/module/angebot/fruehere-wochen.js) |
 | `fruehere-wochen.js` | angebot | STAFL-Plattform · Angebot · Fenster „Frühere Wochen“ (Wunsch des Inhabers 13.11.2026): frühere Wochenangebote ansehen und die KW wechseln wie in der REWE-Liste – Pfeile ‹ ›, Titel „<Angebot> · KW 43/2026“, „Diese … |
+| `kopieren.css` | angebot | STAFL-Plattform · Angebot · Fenster „Angebot kopieren“ (app/module/angebot/kopieren.js) |
+| `kopieren.js` | angebot | STAFL-Plattform · Angebot · Fenster „Angebot kopieren“ (Entscheidung des Inhabers 13.11.2026). |
 | `preisimport.css` | angebot | STAFL-Plattform · Angebot · Vorschau „Artikelpreise (CSV)“ in der Importzentrale (preisimport.js). |
 | `preisimport.js` | angebot | STAFL-Plattform · Angebot · Darstellung der Vorschau „Artikelpreise (CSV)“ in der Importzentrale (Verwaltung → Import). |
 | `sonderangebote.css` | angebot | STAFL-Plattform · Angebot · Sonderangebote (app/module/angebot/sonderangebote.js) |
