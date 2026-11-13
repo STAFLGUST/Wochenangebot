@@ -396,6 +396,10 @@ with sync_playwright() as p:
     pin.fill('12,34'); pin.press('Tab'); wait_saved(a)
     check('Preis im Sonderangebot geändert (wie bei Kundenangeboten)', next(i for i in A.call('draft')[1]['draft']['items'] if i['code'] == c1)['variants'][SW]['value'] == 12.34)
     shot(a, SH + '/sonderangebote-editor.png')
+    st, r = A.call('offer&angebot=' + SW + '&draft=1')   # Vorschau und Drucken des Editors lesen den Entwurf so
+    check('Vorschau des Entwurfs: nur die übernommenen Artikel, Kopf mit der KW des Sonderangebots', st == 200 and r.get('preview') is True and len(r['offer']['items']) == 2
+          and r['offer']['meta'].get('sonder') is True and r['offer']['meta']['week'] == kw_naechste[1] and '"variants"' not in json.dumps(r), (st, r.get('offer', {}).get('meta')))
+    check('Vorschau des Entwurfs nur für Mitarbeiter (Kunde 403/401)', K10.call('offer&angebot=' + SW + '&draft=1')[0] in (401, 403) and anon.call('offer&angebot=' + SW + '&draft=1')[0] == 401)
 
     # ---------- Kopf → „Gültigkeit und Gruppen“ ----------
     a.click('#offer-head [data-ob=sonder]'); a.wait_for_selector('#dlg-sonder[open] #so-name')
