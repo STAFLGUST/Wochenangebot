@@ -219,6 +219,18 @@ Artikelpreise kommen über die Importzentrale (Importart `angebot_preise`, Serve
 Vorschau zeigt die eigene Darstellung `app/module/angebot/preisimport.js` (bisher → neu je Angebot, „Bitte prüfen“ ab
 10 %, Kundengruppen ohne Angebot einzeln anhaken – Option `gruppen`), Vertrag in `docs/plattform/schnittstellen/import.md`.
 
+### Sonderangebote
+
+Reiter „Sonderangebote“ (`#vt-sonder`, `#view-sonder`, direkt unter „Einzelangebote“; Skript und Stile
+`app/module/angebot/sonderangebote.js`/`.css`, meldet sich als `WA.views.sonder`). Karten nach Stand (läuft, geplant,
+abgelaufen/beendet zugeklappt), Fenster `#dlg-sonder` mit Name, Kippschalter Zeitraum ↔ Kalenderwoche (`role="switch"`,
+beim Umschalten wird die KW des Beginns bzw. Montag–Sonntag der KW übernommen) und Kundengruppen. Den Stand zeigt der
+Browser nur an; ob ein Kunde etwas sieht, entscheidet der Server. Die Artikel bearbeitet der gewohnte Editor: `admin.js`
+führt Sonderangebote in `offers` (Angebotsleiste: eigener Abschnitt ohne abgelaufene, Kopf mit Gültigkeit und Knopf
+„Gültigkeit und Gruppen“), lässt sie aber aus Stammdaten → Angebote und aus `WA.offers` (Freischaltung beim Kunden) weg.
+Schnittstelle `WA.angebot.sonder` (`uebernehmen`, `oeffnen`, `bearbeiten`, `stand`, `text`). „Aus anderem Angebot“
+(`openCopy`) zeigt die Artikel des Quellangebots zum Anhaken (für Sonderangebote zunächst keiner, sonst alle).
+
 ### Export für WinAB
 
 Knopf „Export für WinAB“ (`#btn-winab`) in der Werkzeugleiste: sichtbar nur mit dem Recht `angebot.winab_export` und nur

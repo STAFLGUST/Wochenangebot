@@ -18,7 +18,7 @@ from smtp_test import TestSmtp
 from umgebung import BASE, SH, SMTP_PORT, shot, storage_raw, storage_write
 
 PW = 'Sicheres-Passwort-1'
-KPW = 'Kunden-Kennwort-7'
+KPW = 'Start-Kennwort-42'   # vorhandenes Test-Passwort (.gitleaks.toml)
 res = []
 
 
