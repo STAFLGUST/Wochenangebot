@@ -5,7 +5,8 @@ declare(strict_types=1);
    angebot_woche in aktionen/entwurf.php; das Fenster app/module/angebot/fruehere-wochen.js zeigt es in der Angebotsseite,
    ?vorschau=1&woche=…).
    Wochenablage angebot-woche/<JJJJ-WW> („je KW dauerhaft“): angebot_veroeffentlichen() (lib/angebote.php) legt bei jeder
-   Veröffentlichung den neuen Stand mit den damaligen Angebotsdefinitionen (ID, Name, Regel der Artikelliste je Angebot) ab
+   Veröffentlichung den neuen Stand mit den damaligen Angebotsdefinitionen (ID, Name, Regel der Artikelliste je Angebot, bei
+   Sonderangeboten Art und Gültigkeit – nie Kundengruppen) ab
    und ersetzt damit den Stand derselben KW – im selben Sperr- und Transaktionsrahmen. Ohne Grenze, nie automatisch gelöscht.
    Wird eine alte Version (versionen/*, höchstens keep_versions) gelöscht, rettet angebot_woche_retten() sie vorher in die
    Ablage, wenn diese KW dort noch keinen neueren Stand hat (Definitionen dann unbekannt) – so geht ab jetzt kein vollständiger
@@ -29,14 +30,20 @@ function angebot_woche_kw($m): ?string
     return is_int($w) && is_int($y) && $y >= 2000 && $y <= 2100 && kw_gueltig($w, $y) ? history_id($w, $y) : null;
 }
 
-/* Angebotsdefinitionen als Schnappschuss (GR-106): ID, Name und Regel der Artikelliste je Kundenangebot – ohne Kundengruppen */
+/* Eine Angebotsdefinition so, wie offer_resolve sie braucht: ID, Name, Regel der Artikelliste, bei Sonderangeboten Art und
+   Gültigkeit (Kopf „gültig von … bis …“, module/angebot/sonderangebote.php) – nie Kundengruppen (gruppen, sonderGruppen) */
+function angebot_woche_definition(array $o): array
+{
+    $d = ['id' => (string)$o['id'], 'name' => (string)($o['name'] ?? $o['id']), 'fallback' => ($o['fallback'] ?? 'standard') === 'hidden' ? 'hidden' : 'standard'];
+    if (is_string($o['art'] ?? null) && $o['art'] !== '') $d['art'] = $o['art'];
+    if (is_array($o['gueltig'] ?? null)) $d['gueltig'] = $o['gueltig'];
+    return $d;
+}
+/* Angebotsdefinitionen als Schnappschuss (GR-106) */
 function angebot_woche_definitionen(): array
 {
     $out = [];
-    foreach (offers_load()['offers'] as $o) {
-        if (!is_array($o) || !isset($o['id'])) continue;
-        $out[] = ['id' => (string)$o['id'], 'name' => (string)($o['name'] ?? $o['id']), 'fallback' => ($o['fallback'] ?? 'standard') === 'hidden' ? 'hidden' : 'standard'];
-    }
+    foreach (offers_load()['offers'] as $o) if (is_array($o) && isset($o['id'])) $out[] = angebot_woche_definition($o);
     return $out;
 }
 
@@ -124,7 +131,7 @@ function angebot_woche(string $woche, string $oid): array
     if (!is_array($modell)) { $modell = null; $quelle = null; }
     // Definition des Angebots: damals (Ablage), sonst heute; gab es das Angebot in dieser Woche nicht, kein Angebot (fehlt)
     $damals = [];
-    foreach (is_array($defs) ? $defs : [] as $d) if (is_array($d) && isset($d['id'])) $damals[(string)$d['id']] = ['id' => (string)$d['id'], 'name' => (string)($d['name'] ?? $d['id']), 'fallback' => ($d['fallback'] ?? 'standard') === 'hidden' ? 'hidden' : 'standard'];
+    foreach (is_array($defs) ? $defs : [] as $d) if (is_array($d) && isset($d['id'])) $damals[(string)$d['id']] = angebot_woche_definition($d);
     $heute = offer_def($oid);
     $fehlt = false; $einstellung = 'heute';
     if ($oid === OFFER_STD) $def = $heute;

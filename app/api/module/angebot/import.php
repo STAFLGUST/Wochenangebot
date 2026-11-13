@@ -74,7 +74,8 @@ function angebot_slug(string $name): string
     $x = strtr($x, ['ä' => 'ae', 'ö' => 'oe', 'ü' => 'ue', 'ß' => 'ss']);
     $x = trim(substr(trim((string)preg_replace('/[^a-z0-9]+/', '-', $x), '-'), 0, 32), '-');
     if ($x === '') $x = 'angebot';
-    return preg_match('/^e-/', $x) || ctype_digit($x) ? substr('angebot-' . $x, 0, 40) : $x;   // „e-…“: Einzelangebote; Ziffern: JSON-Schlüssel
+    // „e-…“: Einzelangebote; „sonder-…“: Sonderangebote; Ziffern: JSON-Schlüssel
+    return preg_match('/^(e|sonder)-/', $x) || ctype_digit($x) ? substr('angebot-' . $x, 0, 40) : $x;
 }
 
 /* Preise eintragen in 2 Nachkommastellen, mehr nur wenn vorhanden */
@@ -136,7 +137,7 @@ function angebot_preise_plan(array $model, array $offers, array $rows, array $ge
     $bei = []; $oname = [OFFER_STD => 'Wochenangebot'];
     foreach ($offers as $o) { $oname[$o['id']] = $o['name']; foreach ($o['gruppen'] ?? [] as $g) if (!isset($bei[(string)$g])) $bei[(string)$g] = $o['id']; }
     $kg = []; foreach (kundengruppen_load()['groups'] as $g) $kg[(string)$g['nr']] = (string)($g['name'] ?? '');
-    $frei = OFFER_MAX - count($offers);
+    $frei = OFFER_MAX - count(sonder_ohne($offers));   // Sonderangebote zählen nicht mit
     $items = [];
     foreach ($model['items'] as $i => $it) if (($it['code'] ?? '') !== '' && $it['code'] !== null) $items[angebot_code_key((string)$it['code'])][] = $i;
     // Kundengruppen ohne Angebot: bekannte (anlegbar) und unbekannte (nie)
@@ -279,7 +280,7 @@ function angebote_fuer_gruppen_anlegen(array $neuName, int $rev, array $me): arr
         $cur = offers_load();
         if ((int)$cur['rev'] !== $rev) fail('Die Angebote wurden inzwischen an anderer Stelle geändert. Die Vorschau wird neu geladen.', 409);
         $offers = $cur['offers'];
-        if (count($offers) + count($neuName) > OFFER_MAX) fail('Höchstens ' . OFFER_MAX . ' Kundenangebote.', 422);
+        if (count(sonder_ohne($offers)) + count($neuName) > OFFER_MAX) fail('Höchstens ' . OFFER_MAX . ' Kundenangebote.', 422);
         $gesperrt = array_values(array_unique(array_merge(array_values(array_filter(is_array($cur['geloescht'] ?? null) ? $cur['geloescht'] : [], 'is_string')),
             angebot_ids_mit_resten(array_column($offers, 'id')))));
         $belegt = array_flip(array_merge(array_column($offers, 'id'), $gesperrt, [OFFER_STD]));

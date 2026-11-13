@@ -11,7 +11,10 @@ if (!defined('WA_API')) { http_response_code(404); exit; }   // nur über api/in
      für sich – Artikel anderer Angebote (auch mit Sonderpreis) erscheinen dort nie.
    – Kundenangebot mit Regel 'standard' (bisheriges Verhalten, „folgt dem Wochenangebot“): alle Artikel, ohne eigenen
      Eintrag mit dem Standardpreis; variants[<id>] = {status: 'hidden'} blendet einen Artikel dort aus.
+   – Sonderangebot (art 'sonder', module/angebot/sonderangebote.php): Kundenangebot mit eigener Artikelliste für ganze
+     Kundengruppen (sonderGruppen) mit Gültigkeit (Zeitraum oder KW); sichtbar nur im Zeitraum und nach Veröffentlichung.
    Kundenpreise verlassen den Server nur aufgelöst und nur für berechtigte Nutzer (offer_resolve). */
+require_once dirname(__DIR__) . '/module/angebot/sonderangebote.php';
 const OFFER_STD = 'std';
 const OFFER_DEFAULTS = [
     ['id' => 'chefs-culinar', 'name' => 'Wochenangebot Chefs Culinar', 'fallback' => 'standard'],
@@ -20,7 +23,7 @@ const OFFER_DEFAULTS = [
     ['id' => 'bela', 'name' => 'Wochenangebot Bela', 'fallback' => 'standard'],
 ];
 const VARIANT_STATUS = ['value', 'request', 'hidden'];
-const OFFER_MAX = 100;   // Kundenangebote (je Kundengruppe höchstens eines)
+const OFFER_MAX = 100;   // Kundenangebote (je Kundengruppe höchstens eines) – Sonderangebote zählen extra (SONDER_MAX)
 function offers_load(): array
 {
     $d = store_read('angebote');
@@ -291,6 +294,7 @@ function offer_resolve(array $m, array $def, bool $ausverkauftAusblenden = true)
     }
     $m['meta']['offerId'] = $def['id'];
     $m['meta']['offerName'] = $def['name'];
+    if (sonder_ist($def)) $m = sonder_meta($m, $def);   // Sonderangebot: Gültigkeit statt der Woche des Wochenangebots
     return $m;
 }
 
@@ -529,7 +533,9 @@ function angebot_aenderungen(?array $pub = null, ?array $dr = null): array
 }
 /* Stand des Angebots für das Modul Versand – nur Zahlen und Namen, keine Preise: veröffentlichter Stand und Entwurf (Woche,
    Zeitpunkt, wer zuletzt gespeichert hat), wer gerade im Eingabebereich arbeitet, und je Angebot Name, Sichtbarkeit,
-   Artikelzahl (Entwurf, sonst veröffentlicht – wie Kunden es nach dem Veröffentlichen sehen) und veröffentlichte Sonderposten. */
+   Artikelzahl (Entwurf, sonst veröffentlicht – wie Kunden es nach dem Veröffentlichen sehen) und veröffentlichte Sonderposten.
+   Sonderangebote nur, wenn sie heute laufen oder ihre Gültigkeit die Woche des Entwurfs bzw. des veröffentlichten Angebots
+   berührt (abgelaufene und spätere bleiben aus der Liste), mit sonder, von, bis und status. */
 function angebot_stand(): array
 {
     $pub = store_read('angebot');
@@ -544,12 +550,27 @@ function angebot_stand(): array
     sort($da);
     $angebote = [];
     $modell = $dr ?: $pub;
+    $wochen = [];   // Montag bis Sonntag der Woche von Entwurf und veröffentlichtem Angebot
+    foreach ([$dr, $pub] as $m) {
+        $w = (int)($m['meta']['week'] ?? 0); $y = (int)($m['meta']['year'] ?? 0);
+        if ($m && $y >= 2000 && kw_gueltig($w, $y)) { $mo = (new DateTimeImmutable('now', sonder_tz()))->setISODate($y, $w); $wochen[] = [$mo->format('Y-m-d'), $mo->modify('+6 days')->format('Y-m-d')]; }
+    }
+    $heute = sonder_heute();
     foreach (array_merge([offer_def(OFFER_STD)], offers_load()['offers']) as $def) {
+        $sonder = null;
+        if (sonder_ist($def)) {
+            $st = sonder_status($def, $heute);
+            $dabei = $st === 'laeuft';
+            foreach ($wochen as [$von, $bis]) if ($st !== 'beendet' && sonder_ueberschneidet($def, $von, $bis)) $dabei = true;
+            if (!$dabei) continue;
+            $z = sonder_zeitraum($def);
+            $sonder = ['sonder' => true, 'von' => $z['von'] ?? null, 'bis' => $z['bis'] ?? null, 'status' => $st];
+        }
         $n = 0; $sp = 0;
         try { if ($modell) $n = count(offer_resolve($modell, $def)['items']); } catch (Throwable $e) { $n = 0; }
         try { if ($pub) $sp = count(restposten_items($def)); } catch (Throwable $e) { $sp = 0; }
         $angebote[] = ['id' => (string)$def['id'], 'name' => (string)$def['name'], 'std' => $def['id'] === OFFER_STD,
-                       'oeffentlich' => $def['id'] === OFFER_STD && std_public(), 'artikel' => $n, 'sonderposten' => $sp];
+                       'oeffentlich' => $def['id'] === OFFER_STD && std_public(), 'artikel' => $n, 'sonderposten' => $sp] + ($sonder ?? []);
     }
     return ['veroeffentlicht' => $pub ? $kopf($pub) + ['publishedAt' => $pub['publishedAt'] ?? null] : null,
             'entwurf' => $dr ? $kopf($dr) + ['savedAt' => $dr['savedAt'] ?? null, 'savedBy' => (string)($dr['savedBy'] ?? '')] : null,

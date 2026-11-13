@@ -55,10 +55,12 @@ function customers_save(array $d): void
     if (store_innen()) with_lock('kundenstamm', function () use ($stamm) { store_write('kundenstamm', ['customers' => (object)$stamm, 'updatedAt' => now()]); });
     store_write('kunden', ['customers' => $portal] + $d);
 }
-/* Freigeschaltete Angebote: direkt beim Kunden eingetragen (angebote) oder über seine Kundengruppe (Stammdaten → Angebote) */
+/* Freigeschaltete Angebote: direkt beim Kunden eingetragen (angebote) oder über seine Kundengruppe (Stammdaten → Angebote).
+   Sonderangebote (Modul Angebot, module/angebot/sonderangebote.php) gelten nur über die Kundengruppe und nur während ihrer
+   Gültigkeit – eine direkte Freischaltung (älterer Client) wirkt für sie nie. */
 function customer_offers_direct(array $c): array
 {
-    $known = array_merge([OFFER_STD], offer_ids());
+    $known = array_diff(array_merge([OFFER_STD], offer_ids()), sonder_ids());
     return array_values(array_filter($c['angebote'] ?? [], function ($o) use ($known) { return in_array($o, $known, true); }));
 }
 /* Über die Kundengruppe: das Angebot, dem die Gruppe zugeordnet ist (Stammdaten → Angebote). Hat die Gruppe kein
@@ -68,12 +70,14 @@ function customer_offers_gruppe(array $c): array
     $g = (string)($c['gruppe'] ?? '');
     if ($g === '') return [];
     $out = [];
-    foreach (offers_load()['offers'] as $o) if (in_array($g, $o['gruppen'] ?? [], true)) $out[] = $o['id'];
+    foreach (offers_load()['offers'] as $o) if (!sonder_ist($o) && in_array($g, $o['gruppen'] ?? [], true)) $out[] = $o['id'];
     return $out ?: [OFFER_STD];
 }
+/* Wirksame Angebote: direkt + Kundengruppe + heute gültige, veröffentlichte Sonderangebote der Kundengruppe (sonder_fuer_kunde,
+   Schnittstelle des Moduls Angebot – erweitert 13.11.2026). Reihenfolge wie in der Angebotsverwaltung. */
 function customer_offers(array $c): array
 {
-    $all = array_unique(array_merge(customer_offers_direct($c), customer_offers_gruppe($c)));
+    $all = array_unique(array_merge(customer_offers_direct($c), customer_offers_gruppe($c), sonder_fuer_kunde($c)));
     $order = array_merge([OFFER_STD], offer_ids());   // Reihenfolge wie in der Angebotsverwaltung
     return array_values(array_filter($order, function ($o) use ($all) { return in_array($o, $all, true); }));
 }
@@ -157,7 +161,12 @@ function require_customer_csrf(): void
 function kunde_payload(array $c): array
 {
     $names = [];
-    foreach (customer_offers($c) as $id) { $d = offer_def($id); if ($d) $names[] = ['id' => $id, 'name' => $d['name']]; }
+    foreach (customer_offers($c) as $id) {
+        $d = offer_def($id);
+        if (!$d) continue;
+        $z = sonder_ist($d) ? sonder_zeitraum($d) : null;   // Sonderangebot: Kennzeichen und letzter Tag (Kundenseite, App)
+        $names[] = ['id' => $id, 'name' => $d['name']] + ($z ? ['sonder' => true, 'gueltigBis' => $z['bis']] : []);
+    }
     foreach (einzel_fuer_kunde($c) as $e) $names[] = ['id' => 'e-' . $e['id'], 'name' => einzel_titel($e), 'einzel' => true, 'gueltigBis' => $e['gueltigBis'] ?? null];
     return ['firma' => $c['firma'], 'ansprechpartner' => $c['ansprechpartner'] ?? '', 'username' => $c['login']['username'],
             'mustChange' => !empty($c['login']['mustChange']), 'mustChangeGrund' => !empty($c['login']['mustChange']) ? (string)($c['login']['mustChangeGrund'] ?? '') : '', 'angebote' => $names];

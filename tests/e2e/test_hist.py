@@ -234,6 +234,27 @@ def wochenablage_pruefen(a):
     a.wait_for_function(RUHE); a.screenshot(path=SH + '/fruehere-wochen-fehlt.png')
     a.select_option('#fw-angebot', 'std'); a.keyboard.press('Escape'); a.wait_for_selector('#dlg-wochen', state='hidden')
 
+    # Sonderangebot: gespeicherte Gültigkeit der Woche (Kopf), nicht die heutige
+    kg = api_get(a, 'kundengruppen')[1]
+    api_post(a, 'kundengruppen_save', {'rev': kg['rev'], 'groups': kg['groups'] + [{'nr': '75', 'name': 'Sondergruppe'}]})
+    lst = api_get(a, 'sonderangebote')[1]
+    r = api_post(a, 'sonderangebot_save', {'name': 'Grillwoche', 'gruppen': ['75'], 'gueltig': {'modus': 'kw', 'jahr': 2026, 'kw': 44}, 'rev': lst['rev']})
+    sid = (r[1] or {}).get('id', '')
+    d = api_get(a, 'draft')[1]
+    m = d['draft'] or d['published']
+    next(x for x in m['items'] if x['code'] == '10601').setdefault('variants', {})[sid] = {'status': 'value', 'value': 9.99}
+    api_post(a, 'save_draft', {'revision': d['revision'], 'model': m})
+    veroeffentlichen(a)
+    defs = {x['id']: x for x in (dok('angebot-woche/2026-44') or {}).get('angebote', [])}
+    check('Sonderangebot: Ablage speichert Art und Gültigkeit, keine Kundengruppen', r[0] == 200 and defs.get(sid, {}).get('gueltig') == {'modus': 'kw', 'jahr': 2026, 'kw': 44}
+          and defs[sid].get('art') == 'sonder' and 'sonderGruppen' not in defs[sid] and all('gruppen' not in x for x in defs.values()), defs.get(sid))
+    lst = api_get(a, 'sonderangebote')[1]
+    r = api_post(a, 'sonderangebot_save', {'id': sid, 'name': 'Grillwoche', 'gruppen': ['75'], 'gueltig': {'modus': 'zeitraum', 'von': '2026-12-01', 'bis': '2026-12-03'}, 'rev': lst['rev']})
+    c, w = woche(a, '2026-44', sid)
+    meta = (w.get('offer') or {}).get('meta', {})
+    check('… frühere Woche zeigt die damalige Gültigkeit (KW 44), nicht die heutige (Dezember)', r[0] == 200 and c == 200 and w.get('einstellung') == 'damals' and meta.get('sonder') is True
+          and meta.get('week') == 44 and meta.get('year') == 2026 and not meta.get('gueltigVon') and preis_von(w, '10601')[0] == 9.99, (r[0], c, meta.get('week'), meta.get('gueltigVon')))
+
     # Alte Versionen: vor dem Löschen (keep_versions = 60) in die Ablage retten, wenn die KW dort keinen neueren Stand hat
     vorhanden = len(api_get(a, 'versions')[1]['versions'])
     weg = vorhanden + 1   # so viele der ältesten Versionen löscht die nächste Veröffentlichung
