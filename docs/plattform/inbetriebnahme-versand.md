@@ -136,7 +136,8 @@ ihre Seite einmal neu.
 - **Daten:** Der Release ändert kein Datenformat und braucht keine Migration. Entwurf, veröffentlichtes Angebot,
   Versionen, Kunden und Protokoll bleiben, wie sie sind. Ein schon vergebener Zugang „Versand“ steht dann als
   unbekanntes Recht in den Rollen; der alte Stand beachtet ihn nicht. Wird im alten Stand eine Rolle gespeichert,
-  fällt der Zugang aus dieser Rolle heraus und muss nach dem nächsten Anlauf neu vergeben werden.
+  fällt der Zugang aus dieser Rolle heraus und muss nach dem nächsten Anlauf neu vergeben werden (abgeleitet aus dem
+  Verhalten „unbekannte Rechte werden verworfen“, für diesen Fall nicht eigens getestet).
 - **Was stehen bleiben darf:** der Keycloak-Client `versand` und die neuen Zeilen in `.env` (ohne Wirkung), der
   Hostname bei bunny. Den DNS-Eintrag `versand` nach einem Rückfall löschen oder als CNAME auf bunny lassen – nie als
   A-Eintrag auf den Server stehen lassen.
@@ -146,7 +147,7 @@ ihre Seite einmal neu.
 
 | Was | Ergebnis |
 |---|---|
-| Modul, Rechte, alte Aktionen nur mit Zugang, Fenster „Veröffentlichen“ und „Senden“, Verlauf, Wartung, 390 px und dunkel | getestet: Testgruppe `versand` und die betroffenen Gruppen, beide Speicherarten (Zahlen im Pull Request) |
+| Modul, Rechte, alte Aktionen nur mit Zugang, Fenster „Veröffentlichen“ und „Senden“, Drucken aus der Liste, Verlauf, Wartung, 390 px und dunkel | getestet: Testgruppe `versand` (104 Prüfungen) und die betroffenen Gruppen, beide Speicherarten (Zahlen im Pull Request) |
 | Caddyfile mit der neuen Adresse | getestet: `caddy validate` mit Caddy 2.11.9 (ohne und mit CDN-Einstellungen), `tests/deploy/test_dashboard_domains.py` |
 | Neue Adresse ohne Zertifikat lehnt Verbindungen ab (Grund für den A-Eintrag) | getestet: lokale Probe mit Caddy 2.11.9 |
 | Geheimnisse für den neuen Client (`einrichten.sh`) | getestet: `tests/deploy/test_anmeldung_einrichten.sh` |
