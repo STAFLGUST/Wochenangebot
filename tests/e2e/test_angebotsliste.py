@@ -120,7 +120,8 @@ with sync_playwright() as pw:
     # Druckfassung (assets/angebot-druck.js): fortlaufend gefüllte Seiten statt einer Seite je Abschnitt, jede Zeile hat genau drei Spalten
     zeilen3 = e.eval_on_selector_all('#print-root .al-band', "bs => bs.map(b => [...b.querySelectorAll(':scope > .al-sec > .al-cols > .al-col')].length)")
     check('export: pages filled continuously (fewer pages than before), three columns in every row', 2 <= pages <= 4 and zeilen3 and all(n == 3 for n in zeilen3), (pages, zeilen3))
-    check('export: logo on the first page', e.locator('#print-root .pl-page').first.locator('img.al-logo').count() == 1 and e.locator('#print-root img.al-logo').count() == 1)
+    check('export: logo on every page (smaller on the following pages)', e.locator('#print-root img.al-logo').count() == pages
+          and all(e.locator('#print-root .pl-page').nth(i).locator('img.al-logo').count() == 1 for i in range(pages)))
     check('export: note on the last page', e.locator('#print-root .pl-page').last.locator('.pl-hinweis').count() == 1 and e.locator('#print-root .pl-hinweis').count() == 1)
     check('export: every article once', e.locator('#print-root tr.row').count() == 276 and e.locator('#print-root .star, #print-root .qty').count() == 0)
     e.emulate_media(media='print')

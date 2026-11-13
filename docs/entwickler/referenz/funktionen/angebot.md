@@ -2,7 +2,7 @@
 
 <!-- ERZEUGT von `python3 werkzeuge/doku.py erzeugen` – nicht von Hand ändern. Quelle: Funktionen und Kommentare im Code. Die CI prüft, dass diese Datei zum Code passt. -->
 
-48 Dateien, 739 Funktionen – in der Reihenfolge der Datei, **fett** die Abschnitte. Text = erste Aussage des Kommentars direkt über der Funktion (Python: Docstring). Übersicht aller Module: [README.md](README.md).
+48 Dateien, 742 Funktionen – in der Reihenfolge der Datei, **fett** die Abschnitte. Text = erste Aussage des Kommentars direkt über der Funktion (Python: Docstring). Übersicht aller Module: [README.md](README.md).
 
 ## `app/api/lib/angebote.php`
 
@@ -181,7 +181,9 @@ _Druck der Angebote: Fußzeile des Briefbogens unter jedem gedruckten Angebot (W
 
 **Fußzeile im PDF des Einzelangebots (lib/pdf.php)**
 
-- `druck_fuss_pdf_hoehe(f)` – Höhe der Fußzeile in pt (0 = keine)
+- `druck_fuss_ordnen(t)` – „ * “ als Trenner → „ · “, kein Leerzeichen vor Doppelpunkt und innerhalb von Klammern (wie ordnen() in angebot-druck.js)
+- `druck_fuss_pdf_satz(f, w)` – Aufbau der Fußzeile für die Breite $w: Spalten (Zeilen je Spalte), umbrochene Registerzeilen, Siegelbreite, Höhen
+- `druck_fuss_pdf_hoehe(f, w)` – Höhe der Fußzeile in pt (0 = keine); $w: Breite wie beim Zeichnen
 - `druck_fuss_pdf(pdf, f, x, y, w)` – Fußzeile zeichnen: $x linker Rand, $y Oberkante (Linie), $w Breite
 
 ## `app/api/module/angebot/import.php`
@@ -658,7 +660,7 @@ _Wochenangebot – Eingabebereich Bearbeitet einen Entwurf auf dem Server (autom
 
 _Angebot · Satz der Druckfassung „Angebotsansicht“ (A4 quer) für die Angebotsseite (frontend.js, Wunsch des Inhabers 13.11.2026)._
 
-- `fussHTML(fuss, hinweis, art)` – Fußzeile des Briefbogens: Siegel, drei Textspalten, zwei Zeilen (Handelsregister); darüber der Hinweis (Mengen, Fracht). art „quer“: alles in einer Reihe …
+- `fussHTML(fuss, hinweis, art)`
 
 **Messen: Bausteine unsichtbar in Druckgröße setzen (eine Stufe)**
 
@@ -778,6 +780,7 @@ _Wochenangebot – öffentliches Frontend_
 - `printPriceCell(p)`
 - `printAltNote(it)`
 - `buildPrint({…})`
+- `bilderBereit(root, ms)` – Bilder der Druckfassung (Logo, Siegel der Fußzeile) erst laden lassen – sonst fehlen sie im Druck, wenn sie noch nicht im Zwischenspeicher sind.
 - `doPrint(opts)`
 - `renderStaticTitle()`
 

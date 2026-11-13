@@ -144,12 +144,13 @@ with sync_playwright() as p:
     pg.evaluate('() => { window.print = () => { window.__printed = (window.__printed||0) + 1; }; }')
     pg.click('#btn-print'); expect(pg.locator('#dlg-print')).to_be_visible()
     pg.screenshot(path=f'{OUT}/print-dialog.png')
-    pg.check('input[name="scope"][value="all"]'); pg.check('input[name="layout"][value="compact"]'); pg.click('#print-go'); pg.wait_for_timeout(200)   # Standard „Angebotsliste“: eigener Test
+    pg.check('input[name="scope"][value="all"]'); pg.check('input[name="layout"][value="compact"]'); pg.click('#print-go')   # Standard „Angebotsliste“: eigener Test
+    pg.wait_for_function('window.__printed >= 1', timeout=8000)   # der Druck wartet, bis Logo und Siegel geladen sind (höchstens 3 s)
     check('print called', pg.evaluate('window.__printed') == 1)
     check('print root: 276 rows', pg.locator('#print-root .p-row').count() == 276, pg.locator('#print-root .p-row').count())
     check('print root: 32 groups, 4 sections', pg.locator('#print-root .p-group').count() == 32 and pg.locator('#print-root .p-section').count() == 4)
     pg.emulate_media(media='print'); pg.pdf(path=f'{OUT}/print-all.pdf', format='A4', prefer_css_page_size=True); pg.emulate_media(media='screen')
-    pg.click('#tab-fav'); pg.click('#btn-print'); pg.check('input[name="layout"][value="table"]'); pg.click('#print-go'); pg.wait_for_timeout(150)
+    pg.click('#tab-fav'); pg.click('#btn-print'); pg.check('input[name="layout"][value="table"]'); pg.click('#print-go'); pg.wait_for_selector('#print-root .p-table', state='attached')   # Druckbereich ist am Bildschirm unsichtbar
     check('print fav table', pg.locator('#print-root .p-table tbody tr:not(.gr):not(.sr)').count() == 4)
     pg.emulate_media(media='print'); pg.pdf(path=f'{OUT}/print-fav.pdf', format='A4', prefer_css_page_size=True); pg.emulate_media(media='screen')
     # Merkliste leeren: Rückfrage im eigenen Fenster (kein Browser-Dialog), Klick daneben schließt nicht, Escape bricht ab
