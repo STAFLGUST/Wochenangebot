@@ -997,7 +997,10 @@ with sync_playwright() as pw:
     check('Verwaltung: erster erlaubter Bereich geöffnet (nicht der Angebotseditor)', pv.is_hidden('#view-edit') and pv.is_visible('#view-master'))
     check('Verwaltung: keine Angebotsaktionen in der Kopfzeile (Veröffentlichen, Entwurfsstand, Angebotsseite)',
           pv.is_hidden('#btn-publish') and pv.is_hidden('#save-state') and pv.is_hidden('#btn-site') and pv.is_hidden('#btn-send'))
-    check('Angebot: Kopfzeile unverändert (Veröffentlichen sichtbar)', pa.is_visible('#btn-publish') and pa.text_content('#topbar h1') == 'Eingabebereich')
+    # Seit 13.11.2026 liegen „Veröffentlichen“ und „An Kunden senden“ im Modul Versand; im Angebot steht an ihrer Stelle „Drucken“
+    check('Angebot: Kopfzeile mit „Drucken“, ohne „Veröffentlichen“/„An Kunden senden“ (Modul Versand)',
+          pa.is_visible('#btn-drucken') and pa.locator('#btn-publish, #btn-send').count() == 0 and pa.text_content('#topbar h1') == 'Eingabebereich',
+          (pa.is_visible('#btn-drucken'), pa.locator('#btn-publish, #btn-send').count(), pa.text_content('#topbar h1')))
     # Rückweg zum Dashboard in der Kopfzeile (Adresse vom Webserver: WA_DASHBOARD, sonst https://dashboard-stafl.de/)
     for name, seite in (('Angebot', pa), ('Verwaltung', pv)):
         check(f'{name}: Knopf „Start“ oben sichtbar, führt zum Dashboard-Host', seite.is_visible('#btn-dashboard')
