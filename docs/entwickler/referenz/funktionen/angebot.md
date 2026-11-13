@@ -2,7 +2,7 @@
 
 <!-- ERZEUGT von `python3 werkzeuge/doku.py erzeugen` – nicht von Hand ändern. Quelle: Funktionen und Kommentare im Code. Die CI prüft, dass diese Datei zum Code passt. -->
 
-51 Dateien, 801 Funktionen – in der Reihenfolge der Datei, **fett** die Abschnitte. Text = erste Aussage des Kommentars direkt über der Funktion (Python: Docstring). Übersicht aller Module: [README.md](README.md).
+53 Dateien, 813 Funktionen – in der Reihenfolge der Datei, **fett** die Abschnitte. Text = erste Aussage des Kommentars direkt über der Funktion (Python: Docstring). Übersicht aller Module: [README.md](README.md).
 
 ## `app/api/lib/angebote.php`
 
@@ -219,6 +219,14 @@ _Importvertrag des Moduls Angebot – Schnittstelle zur Importzentrale (docs/pla
 - `preisverlauf_import_wochen(e)` – Wochen der Dateien prüfen: gültige Woche, Artikel; doppelte Woche → die spätere Datei zählt (wie im Preisverlauf)
 - `preisverlauf_import_vorschau(e, me)`
 - `preisverlauf_import_uebernehmen(e, me)`
+
+## `app/api/module/angebot/kopieren.php`
+
+_Angebot · Kundenangebot kopieren (Entscheidung des Inhabers 13.11.2026): ein Angebot als neues Kundenangebot anlegen und dabei alles außer den Kunden mitnehmen – eigene Preise (variants), eigene Bezeichnungen …_
+
+- `angebot_kopie_enthalten(it, oid, fallback)` – Gehört ein Artikel (Rohdaten des Entwurfs) zum Angebot?
+- `angebot_kopie_modell(m, quelle, neu)` – Inhalte des Angebots $quelle im Modell unter der neuen ID $neu eintragen (ohne zu prüfen; clean_model folgt).
+- `angebot_kopieren(b, me)` – Aktion offer_kopieren: {quelle, name, rev (Stand der Angebotsliste), revision (Stand des Entwurfs)}
 
 ## `app/api/module/angebot/sonderangebote.php`
 
@@ -519,6 +527,9 @@ _Wochenangebot – Eingabebereich Bearbeitet einen Entwurf auf dem Server (autom
 - `setOffer(id)`
 - `obAktion(b)`
 - `umstellen(oid)` – „Folgt dem Wochenangebot“ → eigene Artikelliste (wirkt sofort für die Kunden des Angebots; Recht angebote.verwalten)
+- `kopieOeffnen(oid)`
+- `kopieDaten(oid)`
+- `kopieAusfuehren(oid, name)`
 - `openOffers()`
 - `ofReset()`
 - `renderOffersView()`
@@ -1016,6 +1027,14 @@ _STAFL-Plattform · Angebot · Drucken aus „Angebot bearbeiten“ und Einstell
 - `fussForm()`
 - `fussOeffnen()`
 
+## `app/module/angebot/kopieren.js`
+
+_STAFL-Plattform · Angebot · Fenster „Angebot kopieren“ (Entscheidung des Inhabers 13.11.2026)._
+
+- `vorschlag()` – Vorschlag „Kopie von …“; ist der Name schon vergeben, mit fortlaufender Nummer (höchstens 80 Zeichen wie auf dem Server)
+- `oeffnen(oid)`
+- `fehler(t)`
+
 ## `app/module/angebot/preisimport.js`
 
 _STAFL-Plattform · Angebot · Darstellung der Vorschau „Artikelpreise (CSV)“ in der Importzentrale (Verwaltung → Import)._
@@ -1099,6 +1118,9 @@ _Mehrere Angebote: Kundenangebote mit eigenen Preisen, eigene Artikelliste je An
 - `codes(pg)`
 - `hinzufuegen(pg, q, preise)` – „Artikel hinzufügen“: Suche, markieren, Preis je Artikel, übernehmen
 - `item(offer, code)`
+- `dok(name)` – Gespeichertes Dokument (ohne PHP-Schutzzeile) oder None
+- `ohne_kennung(o)` – Aufgelöstes Angebot ohne Name/ID des Angebots – zum Vergleich Quelle ↔ Kopie
+- `kopieren_pruefen(a, br, v)` – Kundenangebot kopieren (Inhaber 13.11.2026): offer_kopieren nimmt alles außer den Kunden mit – eigene Preise, eigene Bezeichnungen, Empfehlungen je Angebot, …
 
 ## `tests/e2e/test_angebotsliste.py`
 
