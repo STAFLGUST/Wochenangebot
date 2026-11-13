@@ -13,6 +13,7 @@ import json
 import sys
 
 from playwright.sync_api import sync_playwright
+from versand_hilfe import veroeffentlichen
 
 from kunden_hilfe import Client
 from umgebung import BASE, SH, shot, until
@@ -263,7 +264,7 @@ with sync_playwright() as p:
     check('Feld „Bereich“ der verschobenen Gruppe gesetzt', a.locator(f'#groups section.gcard[data-gid="{OHNE_G}"] [data-gf="section"]').input_value() == ERW[1][0])
     log = json.dumps(A.call('log')[1], ensure_ascii=False)
     check('Protokoll: Aufbau des Angebots geändert (Bereich bei 1 Gruppe neu)', 'Aufbau des Angebots geändert (Reihenfolge der Bereiche, Gruppen und Artikel, Bereich bei 1 Gruppe neu)' in log)
-    check('Knopf „Veröffentlichen“ nennt den geänderten Aufbau', 'Aufbau geändert' in (a.get_attribute('#btn-publish', 'title') or ''), a.get_attribute('#btn-publish', 'title'))
+    check('Knopf „Veröffentlichen“ nennt den geänderten Aufbau', 'Aufbau geändert' in (a.get_attribute('#offen-zahl, #offen-liste', 'title') or ''), a.get_attribute('#offen-zahl, #offen-liste', 'title'))
     vorschau = A.call('offer&draft=1')[1]['offer']
     check('Vorschau (Entwurf): Gruppen in neuer Reihenfolge', [g['id'] for g in vorschau['groups']] == flach(ERW))
     check('Öffentliche Seite noch unverändert (erst nach „Veröffentlichen“)', [g['id'] for g in Client('198.51.100.9').call('offer')[1]['offer']['groups']] == PUB0)
@@ -278,10 +279,10 @@ with sync_playwright() as p:
 
     # ---------- Veröffentlichen: Dialog nennt den Aufbau; Wirkung auf Seite, Liste, Tabelle; alte Version unverändert ----------
     a.set_viewport_size({'width': 1440, 'height': 950})
-    a.click('#btn-publish'); a.wait_for_selector('#dlg-publish[open]')
+    a.click('#offen-liste'); a.wait_for_selector('#dlg-publish[open]')
     check('Veröffentlichen-Dialog: Abschnitt „Aufbau“ mit Rückgängig', 'Reihenfolge der Bereiche, Gruppen oder Artikel geändert' in a.inner_text('#dlg-publish')
           and a.locator('#dlg-publish [data-rv="aufbau"]').count() == 1)
-    a.click('[data-ia=publish]'); a.wait_for_function("!document.querySelector('#dlg-publish').open", timeout=15000)
+    a.click('#dlg-publish [data-close]'); veroeffentlichen(a)
     pub = Client('198.51.100.9').call('offer')[1]['offer']
     check('veröffentlicht: öffentliche Seite liefert die Gruppen in neuer Reihenfolge', [g['id'] for g in pub['groups']] == flach(B1)
           and pub['sections'] == [b for b, _ in B1 if b])
@@ -330,7 +331,7 @@ with sync_playwright() as p:
     check('Preisänderung des anderen bleibt erhalten, eigener Aufbau gespeichert', bloecke(m3) == erw2
           and next(i for i in m3['items'] if i['id'] == pid)['price'].get('value') == 77.77, bloecke(m3)[:2])
     # Veröffentlichen-Dialog: „Rückgängig“ beim Aufbau setzt Reihenfolge und Bereiche auf den veröffentlichten Stand
-    a.click('#btn-publish'); a.wait_for_selector('#dlg-publish[open] [data-rv="aufbau"]')
+    a.click('#offen-liste'); a.wait_for_selector('#dlg-publish[open] [data-rv="aufbau"]')
     a.click('#dlg-publish [data-rv="aufbau"]'); a.wait_for_selector('#dlg-confirm[open]')
     check('Rücknahme fragt nach („Aufbau zurücknehmen?“)', 'Aufbau zurücknehmen?' in a.inner_text('#dlg-confirm'))
     a.click('#dlg-confirm [data-v="1"]'); a.wait_for_selector('#toast.show:has-text("Änderung zurückgenommen")'); gespeichert(a)
@@ -447,9 +448,9 @@ with sync_playwright() as p:
     check('Editor zeigt die Artikel in neuer Reihenfolge', ed == ea, ed[:4])
     check('Protokoll: Gruppe bei 3 Artikeln neu', 'Gruppe bei 3 Artikeln neu' in json.dumps(A.call('log')[1], ensure_ascii=False))
     a.set_viewport_size({'width': 1440, 'height': 950})
-    a.click('#btn-publish'); a.wait_for_selector('#dlg-publish[open]')
+    a.click('#offen-liste'); a.wait_for_selector('#dlg-publish[open]')
     check('Veröffentlichen nennt den Aufbau', 'Reihenfolge der Bereiche, Gruppen oder Artikel geändert' in a.inner_text('#dlg-publish'))
-    a.click('[data-ia=publish]'); a.wait_for_function("!document.querySelector('#dlg-publish').open", timeout=15000)
+    a.click('#dlg-publish [data-close]'); veroeffentlichen(a)
     m7, _ = entwurf(A)
     pub = Client('198.51.100.9').call('offer')[1]['offer']
     check('veröffentlicht: öffentliche Seite liefert die Artikel in neuer Reihenfolge und Gruppe', angebot_reihe(pub) == angebot_reihe(m7, 'std')

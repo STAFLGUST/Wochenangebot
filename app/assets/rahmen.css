@@ -42,7 +42,7 @@
   /* Modulfarben je Registersymbol (icon) – neue Module erhalten ohne Änderung das neutrale Grau */
   --r-m-tag: #9b2335; --r-m-boxes: #2f6b45; --r-m-crate: #7a5a45; --r-m-users: #2e5e9e; --r-m-store: #b8323f;
   --r-m-shield-check: #1f6f6a; --r-m-truck: #8a6420; --r-m-container: #2a6f8a; --r-m-calendar: #7a3e9d;
-  --r-m-megaphone: #c9502a; --r-m-chart: #55732b; --r-m-upload: #5f5a56; --r-m-settings: #5f5a56; --r-m-shield-lock: #5f5a56;
+  --r-m-megaphone: #c9502a; --r-m-chart: #55732b; --r-m-upload: #5f5a56; --r-m-settings: #5f5a56; --r-m-shield-lock: #5f5a56; --r-m-send: #8c1d2c;
   --r-m-start: #8c1d2c; --r-m-sonst: #6a645f;
   --r-breite: 60px;              /* Spalte der Seitenleiste: schmal; festgestellt --r-breite-offen */
   --r-breite-offen: 208px;
@@ -61,7 +61,7 @@
     --r-bald-a: #4a4128; --r-bald-b: #3a3322; --r-bald-text: #e6d6a8; --r-schleier: rgba(0, 0, 0, .55);
     --r-m-tag: #e07b8a; --r-m-boxes: #74c08f; --r-m-crate: #c4a185; --r-m-users: #82aee6; --r-m-store: #ec8590;
     --r-m-shield-check: #6cc4bd; --r-m-truck: #d6b06a; --r-m-container: #7cc0dc; --r-m-calendar: #c393e0;
-    --r-m-megaphone: #f0956c; --r-m-chart: #a6c77a; --r-m-upload: #b9b2ac; --r-m-settings: #b9b2ac; --r-m-shield-lock: #b9b2ac;
+    --r-m-megaphone: #f0956c; --r-m-chart: #a6c77a; --r-m-upload: #b9b2ac; --r-m-settings: #b9b2ac; --r-m-shield-lock: #b9b2ac; --r-m-send: #f0a3ae;
     --r-m-start: #f0a3ae; --r-m-sonst: #b9b2ac;
   }
 }
@@ -78,7 +78,7 @@
     --r-bald-a: #4a4128; --r-bald-b: #3a3322; --r-bald-text: #e6d6a8; --r-schleier: rgba(0, 0, 0, .55);
     --r-m-tag: #e07b8a; --r-m-boxes: #74c08f; --r-m-crate: #c4a185; --r-m-users: #82aee6; --r-m-store: #ec8590;
     --r-m-shield-check: #6cc4bd; --r-m-truck: #d6b06a; --r-m-container: #7cc0dc; --r-m-calendar: #c393e0;
-    --r-m-megaphone: #f0956c; --r-m-chart: #a6c77a; --r-m-upload: #b9b2ac; --r-m-settings: #b9b2ac; --r-m-shield-lock: #b9b2ac;
+    --r-m-megaphone: #f0956c; --r-m-chart: #a6c77a; --r-m-upload: #b9b2ac; --r-m-settings: #b9b2ac; --r-m-shield-lock: #b9b2ac; --r-m-send: #f0a3ae;
     --r-m-start: #f0a3ae; --r-m-sonst: #b9b2ac;
   }
 }
@@ -99,6 +99,7 @@
 [data-symbol="upload"] { --r-m: var(--r-m-upload); }
 [data-symbol="settings"] { --r-m: var(--r-m-settings); }
 [data-symbol="shield-lock"] { --r-m: var(--r-m-shield-lock); }
+[data-symbol="send"] { --r-m: var(--r-m-send); }
 [data-symbol="start"] { --r-m: var(--r-m-start); }
 
 /* ── Seite ── */

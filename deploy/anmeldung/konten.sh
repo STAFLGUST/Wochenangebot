@@ -352,7 +352,7 @@ for e in es:
   done
 }
 
-# Client eines neuen Hosts anlegen (Stand 3: verwaltung, Stand 4: bestand, Stand 5: hr, Stand 6: crm, Stand 7: marketing, Stand 9: sicherheit, Stand 10: controlling, Stand 11: leergut, Stand 12: rewe, Stand 13: qs). Definition aus der Realm-Datei, Geheimnisse aus .env – fehlen sie,
+# Client eines neuen Hosts anlegen (Stand 3: verwaltung, Stand 4: bestand, Stand 5: hr, Stand 6: crm, Stand 7: marketing, Stand 9: sicherheit, Stand 10: controlling, Stand 11: leergut, Stand 12: rewe, Stand 13: qs, Stand 18: versand). Definition aus der Realm-Datei, Geheimnisse aus .env – fehlen sie,
 # werden sie wie von einrichten.sh erzeugt (nie angezeigt). Danach liest die Anwendung sie erst nach einem Neustart.
 # Stand 8: Client „konten“ (nur Service-Account, kein Host): die Verwaltung der Anwendung steuert damit die Mitarbeiterkonten
 # (Passwort setzen, entsperren, Link, anlegen – lib/anmeldekonten.php); Geheimnis OIDC_SECRET_KONTEN, kein Sitzungsschlüssel.
@@ -588,9 +588,9 @@ for e in json.load(sys.stdin):
       echo "angepasst: amr '$r' für Ausführung $(printf '%s' "$id" | cut -c1-8)"
     fi
   done
-  # Alle Clients der Realm-Datei (dashboard, angebot, verwaltung, bestand, hr, crm, marketing, sicherheit, controlling, leergut, rewe, qs …): fehlende anlegen, dann einheitlich einstellen.
+  # Alle Clients der Realm-Datei (dashboard, angebot, verwaltung, bestand, hr, crm, marketing, sicherheit, controlling, leergut, rewe, qs, versand …): fehlende anlegen, dann einheitlich einstellen.
   # Ohne Realm-Datei (anderer Ordner) die bekannten Clients – fehlt einer davon, bricht client_anlegen mit Hinweis ab
-  clients="dashboard angebot verwaltung bestand hr crm marketing sicherheit controlling leergut rewe qs konten"
+  clients="dashboard angebot verwaltung bestand hr crm marketing sicherheit controlling leergut rewe qs versand konten"
   [ ! -f "$REALM_DATEI" ] || clients=$(python3 -c '
 import json, re, sys
 ids = [c.get("clientId", "") for c in json.load(open(sys.argv[1], encoding="utf-8")).get("clients", [])]
@@ -621,7 +621,7 @@ for c in json.load(sys.stdin):
   done
   konten_rechte
   richtlinien_setzen
-  echo "Realm aktuell (Stand 17: Client konten mit Scope kc-admin-api (Keycloak ab 26.8.2); Stand 16: Anwendung verwaltet nur Konten der Gruppe anwendungskonten, nie Administratoren; Stand 15: Passwortregeln und Kontosperre aus den Einstellungen der Anwendung; Stand 14: kein Passwort-Grant am Token-Endpunkt; Qualitätssicherung unter eigener Adresse; REWE unter eigener Adresse; Leergut unter eigener Adresse; Controlling unter eigener Adresse; Sicherheit unter eigener Adresse; Mitarbeiterkonten aus der Verwaltung; Marketing, CRM, HR, Bestand und Verwaltung unter eigener Adresse; zweiter Faktor nur für Pflicht-Konten, Leerlauf 4 Stunden)."
+  echo "Realm aktuell (Stand 18: Versand unter eigener Adresse; Stand 17: Client konten mit Scope kc-admin-api (Keycloak ab 26.8.2); Stand 16: Anwendung verwaltet nur Konten der Gruppe anwendungskonten, nie Administratoren; Stand 15: Passwortregeln und Kontosperre aus den Einstellungen der Anwendung; Stand 14: kein Passwort-Grant am Token-Endpunkt; Qualitätssicherung unter eigener Adresse; REWE unter eigener Adresse; Leergut unter eigener Adresse; Controlling unter eigener Adresse; Sicherheit unter eigener Adresse; Mitarbeiterkonten aus der Verwaltung; Marketing, CRM, HR, Bestand und Verwaltung unter eigener Adresse; zweiter Faktor nur für Pflicht-Konten, Leerlauf 4 Stunden)."
   if [ "$ENV_NEU" = 1 ]; then echo "Neue Werte in .env – die Anwendung liest sie nach: docker compose up -d app-mitarbeiter"; fi
 }
 
@@ -644,7 +644,7 @@ pruefen() { # nur lesen: warum klappt die Anmeldung nicht? Konto, Sperre, zweite
   printf ']' >>"$d/konfig"
   # je Anwendung die Mapper einzeln (die Liste der Clients enthält sie nicht zuverlässig)
   printf '[' >"$d/clients"; k=
-  for c in dashboard angebot verwaltung bestand hr crm marketing sicherheit controlling leergut rewe qs; do
+  for c in dashboard angebot verwaltung bestand hr crm marketing sicherheit controlling leergut rewe qs versand; do
     cid=$(kc get clients -r "$REALM" -q clientId="$c" --fields id --format csv --noquotes | head -1)
     [ -n "$cid" ] || continue
     attr=$(kc get "clients/$cid" -r "$REALM" --fields attributes)

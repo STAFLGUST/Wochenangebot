@@ -37,13 +37,14 @@ agent = "angebot"
 abhaengigkeiten = ["plattform", "verwaltung", "bestand"]
 testgruppen = ["sys", "frontend", "design", "hist", "editor_aux", "revert", "gemeinsam", "angebote", "angebotsliste",
   "einzelangebote", "restposten", "bestellung", "order_management", "order_management_ui", "order_outbox",
-  "order_outbox_ui", "versand", "kunden_mail", "web_app", "legal_pages", "wartung", "sidenav", "p0", "fehlerpruefung", "aufbau"]
+  "order_outbox_ui", "kunden_mail", "web_app", "legal_pages", "wartung", "sidenav", "p0", "fehlerpruefung", "aufbau", "druck"]
 pfade = [
   "regeln/aktionen/angebot.toml",
   "app/index.html", "app/manifest.json", "app/sw.js", "app/admin/**",
   "app/datenschutz/**", "app/impressum/**", "app/kontakt/**",
   "app/assets/frontend.js", "app/assets/app.css", "app/assets/legal.css", "app/assets/webapp.js",
   "app/assets/offer-core.js", "app/assets/admin.js", "app/assets/bestaetigt.js", "app/assets/admin-einzel.js", "app/assets/admin-artikelwahl.js", "app/assets/admin-werbung.js",
+  "app/assets/angebot-druck.js", "app/assets/angebot-druck.css", "app/assets/druck-siegel.jpg",
   "app/api/lib/angebote.php", "app/api/lib/einzelangebote.php", "app/api/lib/fracht.php",
   "app/api/lib/preisverlauf.php", "app/api/lib/kundenmail.php",
   "app/api/aktionen/angebote.php", "app/api/aktionen/einzelangebote.php", "app/api/aktionen/entwurf.php",
@@ -54,9 +55,9 @@ pfade = [
   "tests/e2e/test_editor_aux.py", "tests/e2e/test_revert.py", "tests/e2e/test_gemeinsam.py",
   "tests/e2e/test_angebote.py", "tests/e2e/test_angebotsliste.py", "tests/e2e/test_einzelangebote.py",
   "tests/e2e/test_restposten.py", "tests/e2e/test_bestellung.py", "tests/e2e/test_order_*.py",
-  "tests/e2e/order_setup.py", "tests/e2e/test_versand.py", "tests/e2e/test_kunden_mail.py",
+  "tests/e2e/order_setup.py", "tests/e2e/test_kunden_mail.py",
   "tests/e2e/test_web_app.py", "tests/e2e/test_legal_pages.py", "tests/e2e/test_wartung.py",
-  "tests/e2e/test_sidenav.py", "tests/e2e/test_p0.py", "tests/e2e/test_fehlerpruefung.py", "tests/e2e/test_aufbau.py",
+  "tests/e2e/test_sidenav.py", "tests/e2e/test_p0.py", "tests/e2e/test_fehlerpruefung.py", "tests/e2e/test_aufbau.py", "tests/e2e/test_druck.py",
   "tests/unit/merge.test.js", "tests/fixtures/angebote/**",
 ]
 pfade_geplant = ["app/api/module/angebot/**", "app/module/angebot/**"]
@@ -417,6 +418,39 @@ hinweise = [
   adresse = "https://controlling.dashboard-stafl.de/module/controlling/"
   entwicklung = "fertig"
   freigabe = "produktiv"   # Freigabe des Inhabers 28.10.2026 (Keycloak-Client, Caddy, produktiv) mit dem Merge; DNS-Eintrag controlling besteht seit 25.10.2026
+  sperrbar = true
+
+[[modul]]
+id = "versand"
+name = "Versand"
+beschreibung = "Wochenangebot und Kundenangebote veröffentlichen und per E-Mail an Kunden senden (Wochenangebot, Sonderposten), Verlauf"
+icon = "send"
+reihenfolge = 78
+dashboard = true
+dashboard_gruppe = "verwaltung"   # Dashboard und Seitenleiste: Bereich „Verwaltung & Daten“, direkt über der Verwaltung
+zugang_rollen = []   # Modulzugang standardmäßig nur Administratoren; anderen nur ausdrücklich (Rollen/Mitarbeiter) – Auftrag des Inhabers 13.11.2026
+agent = "versand"
+abhaengigkeiten = ["plattform", "angebot", "verwaltung"]   # veröffentlicht und sendet nur über Funktionen des Angebots (lib/angebote.php, lib/kundenmail.php); Kunden über customers_load
+testgruppen = ["versand"]
+pfade = ["regeln/aktionen/versand.toml", "app/api/aktionen/versand.php", "app/api/module/versand/**", "app/module/versand/**", "tests/e2e/test_versand*.py",
+  "docs/plattform/inbetriebnahme-versand.md"]
+pfade_geplant = []
+hinweise = [
+  "Auftrag des Inhabers (13.11.2026): „Veröffentlichen“ und „An Kunden senden“ aus „Angebot bearbeiten“ herausgelöst – eigener Punkt „Versand“ mit eigener Adresse und eigener Berechtigung; an der alten Stelle steht „Drucken“. Auch „Sonderposten senden“ (Angebot) und „Wochenangebot versenden“ (Verwaltung → Kunden) liegen jetzt hier.",
+  "Das Modul ist Oberfläche und Ablauf – Eigentümer der Daten bleibt das Angebot: veröffentlicht wird der gespeicherte Entwurf über angebot_veroeffentlichen(), die Änderungsliste kommt aus angebot_aenderungen(), der Versand läuft über wochenmail_*/sonderposten_* (lib/kundenmail.php). Kein eigenes Dokument: der Verlauf liest die Vorgänge „publish“ und „mail“ aus dem Protokoll des Plattformkerns (protokoll_monat), ohne Kundennamen und Adressen.",
+  "Veröffentlicht wird immer das ganze Angebot der Woche (ein Stand für Wochenangebot und alle Kundenangebote); die Wochen-Mail geht je Kunde mit den Links zu allen seinen Angeboten, Sonderposten je Angebot nur an dessen Kunden (GR-005).",
+  "Rechte (Entscheidung des Inhabers 13.11.2026): neu nur der Modulzugang versand.zugang (keine Standardrolle). Die bestehenden Rechte angebot.veroeffentlichen, wochenangebot.senden und sonderposten.senden bleiben unverändert (GR-103: keine Umbenennung), wirken aber nur noch zusammen mit dem Modulzugang – auch an den bisherigen Aktionen publish, kunden_rundmail, kunden_restposten, restposten_info (require_modulzugang('versand')).",
+  "Änderungsliste mit Preisen nur mit Modulzugang Angebot; Empfänger (Firmen, E-Mail-Adressen) nur mit dem jeweiligen Senden-Recht. Senden verlangt die Bestätigung wie bisher (Katalogschlüssel kunden_rundmail, kunden_restposten).",
+  "Freigegeben mit dem Merge (Entscheidung des Inhabers 13.11.2026: sofort mit dem Release): versand.dashboard-stafl.de mit eigenem Keycloak-Client „versand“ (Stand 18); / und /admin/ führen zu /module/versand/. Aktionen versand_* nur auf diesem Host (GR-109). Ablauf am Release-Tag: docs/plattform/inbetriebnahme-versand.md.",
+]
+
+  [[modul.oberflaeche]]
+  id = "intern"
+  name = "Versand"
+  art = "intern"
+  adresse = "https://versand.dashboard-stafl.de/module/versand/"
+  entwicklung = "fertig"
+  freigabe = "produktiv"   # mit dem Merge dieses PR durch den Inhaber (Entscheidung 13.11.2026); DNS-Eintrag versand vor dem Release (Inbetriebnahme)
   sperrbar = true
 
 [[modul]]

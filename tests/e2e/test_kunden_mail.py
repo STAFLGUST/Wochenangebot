@@ -8,7 +8,7 @@ import sys
 import time
 from playwright.sync_api import sync_playwright
 from smtp_test import TestSmtp
-from umgebung import SH
+from umgebung import SH, until
 from kunden_hilfe import Client, B
 
 PW = 'Sicheres-Passwort-1'
@@ -323,25 +323,32 @@ with sync_playwright() as p:
     check('re-subscribe from confirmation page', next(x for x in A.call('kunden')[1]['customers'] if x['id'] == K_ok)['mailAngebot'] is True)
     c.goto(B + '/?neu=1#zugang=' + tok); c.wait_for_timeout(800)
     check('used link shows clear message', 'abgelaufen' in c.inner_text('#list'))
-    # Wochenversand im Dialog
-    a.click('#k-rund'); a.wait_for_selector('#dlg-rund[open]')
-    t = a.inner_text('#rund-body')
+    # Wochenversand: seit 13.11.2026 im Modul Versand – „Wochenangebot versenden“ (Verwaltung → Kunden) führt dorthin
+    check('Kunden: „Wochenangebot versenden“ verweist auf das Modul Versand', a.get_attribute('#k-rund', 'href') == '../module/versand/' and a.locator('#dlg-rund').count() == 0)
+    v = actx.new_page(); v.on('pageerror', lambda e: errs.append('versand: ' + str(e)))
+    v.goto(B + '/module/versand/'); v.wait_for_selector('#vs-app:not([hidden]) #vs-send:not([disabled])')
+    v.click('#vs-send'); v.wait_for_selector('#dlg-send[open] .vs-empf li')
+    t = v.inner_text('#dlg-send')
     check('send dialog: title with KW, skipped customers explained', 'KW 43/2026' in t and 'nicht berücksichtigt' in t)
-    check('already-sent customers unchecked by default', not a.is_checked('#rund-body tr:has-text("Hotel Seeblick") [data-rsel]') and 'bereits gesendet' in a.inner_text('#rund-body tr:has-text("Hotel Seeblick")'))
-    check('new customer preselected', a.is_checked('#rund-body tr:has-text("Kantine Nord") [data-rsel]'))
-    a.fill('#rd-note', 'Diese Woche: Roastbeef im Angebot.')
-    a.click('#rund-body [data-rd=prev]'); a.wait_for_selector('#rund-body .k-prevwrap:not([hidden])')
-    fr = a.frame_locator('#rd-prev')
+    check('already-sent customers unchecked by default', not v.is_checked('#dlg-send li:has-text("Hotel Seeblick") [data-wahl]') and 'bereits gesendet' in v.inner_text('#dlg-send li:has-text("Hotel Seeblick")'))
+    check('new customer preselected', v.is_checked('#dlg-send li:has-text("Kantine Nord") [data-wahl]'))
+    v.fill('#send-note', 'Diese Woche: Roastbeef im Angebot.')
+    v.click('#send-prev'); v.wait_for_selector('#send-vorschau:not([hidden])')
+    fr = v.frame_locator('#send-frame')
     check('preview shows mail with note', 'Roastbeef im Angebot' in fr.locator('body').inner_text())
-    a.screenshot(path=SH + '/mail-versand.png')
+    v.screenshot(path=SH + '/mail-versand.png')
     n0 = len(smtp.messages)
-    a.click('#rund-body [data-rd=send]'); a.wait_for_selector('#dlg-confirm[open]'); a.click('#dlg-confirm [data-v="1"]')
-    a.wait_for_selector('#rund-body tr:has-text("Kantine Nord") .k-res .st-ok', timeout=10000)
-    check('sent from dialog', len(smtp.messages) == n0 + 1 and smtp.messages[-1]['to'] == ['kantine@example.org'] and 'Roastbeef im Angebot' in smtp.messages[-1]['text'])
-    a.wait_for_selector('#rund-body tr:has-text("Falsche Adresse") .k-res .st-err', timeout=10000)
-    check('failed recipient shows error and stays selected for retry', 'abgelehnt' in a.inner_text('#rund-body tr:has-text("Falsche Adresse") .k-res') and a.is_checked('#rund-body tr:has-text("Falsche Adresse") [data-rsel]') and not a.is_checked('#rund-body tr:has-text("Kantine Nord") [data-rsel]'))
-    check('summary toast reports failures', 'nicht zugestellt' in a.inner_text('#toast'), a.inner_text('#toast'))
-    a.click('#rund-body [data-close]'); a.wait_for_timeout(200)
+    v.click('#send-jetzt')
+    v.wait_for_function("(() => { const m = document.querySelector('#send-meldung'); return m && !m.hidden && !document.querySelector('#dlg-send').dataset.busy; })()", timeout=20000)
+    if v.locator('#send-pw').count():   # Bestätigung mit Passwort, wenn die Anmeldung nicht mehr frisch ist
+        v.fill('#send-pw', PW); v.click('#send-jetzt')
+    v.wait_for_selector('#dlg-send li:has-text("Kantine Nord") .vs-erg.ok', timeout=20000)
+    check('sent from dialog', until(lambda: len(smtp.messages) == n0 + 1, 5) and smtp.messages[-1]['to'] == ['kantine@example.org'] and 'Roastbeef im Angebot' in smtp.messages[-1]['text'])
+    v.wait_for_selector('#dlg-send li:has-text("Falsche Adresse") .vs-erg.bad', timeout=10000)
+    check('failed recipient shows error and stays selected for retry', 'abgelehnt' in v.inner_text('#dlg-send li:has-text("Falsche Adresse") .vs-erg') and v.is_checked('#dlg-send li:has-text("Falsche Adresse") [data-wahl]') and not v.is_checked('#dlg-send li:has-text("Kantine Nord") [data-wahl]'))
+    check('summary in the dialog reports failures', 'nicht zugestellt' in v.inner_text('#send-meldung'), v.inner_text('#send-meldung'))
+    v.click('#dlg-send .dlg-foot [data-close]'); v.wait_for_selector('#dlg-send', state='hidden')
+    v.close()
     # Einstellungen, Testmail
     a.click('#k-mailcfg'); a.wait_for_selector('#view-mail #ml-form')
     check('E-Mail button opens settings view', a.get_attribute('#vt-mail', 'aria-selected') == 'true' and a.is_visible('#vt-mail'))

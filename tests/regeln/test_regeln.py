@@ -374,7 +374,7 @@ class EchtesRegelwerk(unittest.TestCase):
         rw = regeln.laden(WURZEL)
         kacheln = [m["id"] for m in rw.modulliste if m.get("dashboard")]
         # Startumfang (Pflichtmodule) plus die vom Inhaber angelegten Module HR, Marketing, Controlling, Sicherheit
-        self.assertEqual(set(kacheln), {"angebot", "bestand", "leergut", "crm", "rewe", "qs", "einkauf", "containerimport", "import", "verwaltung", "hr", "marketing", "controlling", "sicherheit"})
+        self.assertEqual(set(kacheln), {"angebot", "bestand", "leergut", "crm", "rewe", "qs", "einkauf", "containerimport", "import", "verwaltung", "hr", "marketing", "controlling", "sicherheit", "versand"})
         self.assertTrue(set(rw.module["dashboard"]["pflichtmodule"]) <= set(kacheln))
         # Container-Import: nicht freigegeben; DNS besteht (25.10.2026) → 503-Platzhalter (GR-105)
         o = rw.modul("containerimport")["oberflaeche"][0]
@@ -393,6 +393,12 @@ class EchtesRegelwerk(unittest.TestCase):
         self.assertEqual((oq["intern"]["entwicklung"], oq["intern"]["freigabe"], oq["intern"].get("dns", True), oq["intern"]["adresse"]),
                          ("fertig", "produktiv", True, "https://qs.dashboard-stafl.de/module/qs/"))
         self.assertEqual((oq["portal"]["entwicklung"], oq["portal"]["freigabe"]), ("geplant", "keine"))
+        # Versand: Entscheidung des Inhabers 13.11.2026 „sofort mit dem Release“ (Keycloak-Client, Caddy, produktiv mit dem Merge);
+        # Modulzugang standardmäßig für keine Rolle
+        ov = {x["id"]: x for x in rw.modul("versand")["oberflaeche"]}
+        self.assertEqual((ov["intern"]["entwicklung"], ov["intern"]["freigabe"], ov["intern"].get("dns", True), ov["intern"]["adresse"]),
+                         ("fertig", "produktiv", True, "https://versand.dashboard-stafl.de/module/versand/"))
+        self.assertEqual(rw.modul("versand").get("zugang_rollen"), [])
         # HR: vom Inhaber am 23.10.2026 freigegeben (DNS, Keycloak-Client, Caddy, produktiv) – eigener Host mit DNS
         o = rw.modul("hr")["oberflaeche"][0]
         self.assertEqual((o["entwicklung"], o["freigabe"], o.get("dns", True), o["adresse"]),

@@ -349,7 +349,8 @@ function einzel_artikel(bool $mitBestand, bool $mitEk = false): array
 }
 
 /* ---------- PDF im Design der Angebotsansicht (A4 quer, drei Spalten) ---------- */
-/* Wie die Druckliste der Angebotsseite: Logo und Titel, Blöcke mit Kopfzeile „€/kg“, Zebrastreifen, Seitenzahlen.
+/* Wie die Druckliste der Angebotsseite: Logo und Titel, Blöcke mit Kopfzeile „€/kg“, Zebrastreifen, Seitenzahlen, am
+   Seitenfuß die Fußzeile des Briefbogens (Einstellung „Fußzeile im Druck“).
    Nur Positionen, Preise, Mengen und Hinweise – nie Bestand, Partien oder Einkaufspreise (Regel 7). */
 function einzel_pdf(array $e, ?array $c): string
 {
@@ -394,22 +395,39 @@ function einzel_pdf(array $e, ?array $c): string
     // Spalten füllen: Seite 1 mit Kopf, kurze Angebote nicht künstlich auf drei Spalten verteilen
     $headH = 58;
     $top = fn(int $page) => $MT + ($page === 0 ? $headH : 0);
-    $bottom = $H - $MB;
     $total = array_sum(array_column($rows, 'h'));
     $ziel = max(170, $total / $K + 30);
-    $pages = [[[]]]; $pg = 0; $col = 0; $y = $top(0) + 18;
-    $neueSpalte = function () use (&$pages, &$pg, &$col, &$y, $K, $top) {
-        $col++;
-        if ($col >= $K) { $pages[] = [[]]; $pg++; $col = 0; } else $pages[$pg][$col] = [];
-        $y = $top($pg) + 18;   // Platz für den Blockkopf
+    // Fußzeile des Briefbogens (module/angebot/druck.php) wie im Druck der Angebotsseite: auf jeder Seite oder nur auf der
+    // letzten – der Platz dafür wird freigehalten ($fussAuf sagt, welche Seiten sie tragen)
+    require_once dirname(__DIR__) . '/module/angebot/druck.php';
+    $fuss = druck_fuss();
+    $fussH = druck_fuss_pdf_hoehe($fuss);
+    $setzen = function (int $seiten) use ($rows, $tailH, $K, $top, $H, $MB, $ziel, $fuss, $fussH): array {
+        $bottom = fn(int $page) => $H - $MB - ($fussH > 0 && ($fuss['modus'] === 'jede' || $page >= $seiten - 1) ? $fussH + 6 : 0);
+        $pages = [[[]]]; $pg = 0; $col = 0; $y = $top(0) + 18;
+        $neueSpalte = function () use (&$pages, &$pg, &$col, &$y, $K, $top) {
+            $col++;
+            if ($col >= $K) { $pages[] = [[]]; $pg++; $col = 0; } else $pages[$pg][$col] = [];
+            $y = $top($pg) + 18;   // Platz für den Blockkopf
+        };
+        foreach ($rows as $r) {
+            if ($pages[$pg][$col] && $y + $r['h'] > ($pg === 0 && count($pages) === 1 ? min($bottom(0), $top(0) + 18 + $ziel) : $bottom($pg))) $neueSpalte();
+            $pages[$pg][$col][] = $r + ['y' => $y];
+            $y += $r['h'];
+        }
+        if ($y + $tailH > $bottom($pg)) $neueSpalte();
+        $pages[$pg][$col][] = ['t' => 'tail', 'y' => $y + 8];
+        return $pages;
     };
-    foreach ($rows as $r) {
-        if ($pages[$pg][$col] && $y + $r['h'] > ($pg === 0 && count($pages) === 1 ? min($bottom, $top(0) + 18 + $ziel) : $bottom)) $neueSpalte();
-        $pages[$pg][$col][] = $r + ['y' => $y];
-        $y += $r['h'];
+    // „nur letzte Seite“: welche Seite die letzte ist, steht erst nach dem Satz fest – Seitenzahl annehmen und prüfen.
+    // Passt alles nur ohne Fußzeile auf eine Seite weniger, gilt der vorige Versuch (dessen letzte Seite hält den Platz frei).
+    $pages = null;
+    for ($n = 1; $n <= 200; $n++) {
+        $versuch = $setzen($n);
+        if (count($versuch) < $n && $pages !== null) break;
+        $pages = $versuch;
+        if (count($versuch) === $n) break;
     }
-    if ($y + $tailH > $bottom) $neueSpalte();
-    $pages[$pg][$col][] = ['t' => 'tail', 'y' => $y + 8];
 
     $n = count($pages);
     foreach ($pages as $pi => $cols) {
@@ -450,6 +468,7 @@ function einzel_pdf(array $e, ?array $c): string
                 else $pdf->text($x + $colW - 4, $by, 'auf Anfrage', 7.4, false, '#666666', 'r');
             }
         }
+        if ($fussH > 0 && ($fuss['modus'] === 'jede' || $pi === $n - 1)) druck_fuss_pdf($pdf, $fuss, $ML, $H - $MB - $fussH + 8, $W - 2 * $ML);
         $fy = $H - 16;
         $kopfNr = str_contains($titel, (string)$e['nr']) ? $titel : 'Angebot ' . $e['nr'] . ' · ' . $titel;   // Nummer nur einmal
         $pdf->text($ML, $fy, $fit(($CFG['company'] ?? '') . ' · ' . $kopfNr . ' · Preise in € je kg', 7, $W - 2 * $ML - 70), 7, false, '#777777');

@@ -21,7 +21,7 @@ KC_VERSION=26.8.2
 KC_SHA256=dd124787283918bc597628887168333465ee2a811a389e0003569e52be7e487f
 CADDY_VERSION=2.11.9
 CADDY_SHA512=0e85544340290a16ce4bfb76fe7d65e9de1bf3a6e67f5ccfff30b30d27ea4c73e078077b7bf3e58ae60b6b12e44327705287059c775bca5782e8ee85ea7edd75
-HOSTS="login.stafl.test dashboard.stafl.test angebot.stafl.test verwaltung.stafl.test bestand.stafl.test hr.stafl.test crm.stafl.test marketing.stafl.test sicherheit.stafl.test controlling.stafl.test leergut.stafl.test rewe.stafl.test qs.stafl.test legacy.stafl.test"
+HOSTS="login.stafl.test dashboard.stafl.test angebot.stafl.test verwaltung.stafl.test bestand.stafl.test hr.stafl.test crm.stafl.test marketing.stafl.test sicherheit.stafl.test controlling.stafl.test leergut.stafl.test rewe.stafl.test qs.stafl.test versand.stafl.test legacy.stafl.test"
 # Testhosts nie über einen Proxy (lokal und in der CI)
 export no_proxy="${no_proxy:+$no_proxy,}.stafl.test" NO_PROXY="${NO_PROXY:+$NO_PROXY,}.stafl.test"
 
@@ -97,13 +97,13 @@ EOF
   local kc="$OIDC_WORK/keycloak-$KC_VERSION"
   mkdir -p "$kc/data/import"
   # Wie im Betrieb: der erste Import kannte die Clients „verwaltung“ (Stand 3), „bestand“ (Stand 4), „hr“ (Stand 5), „crm“
-  # (Stand 6), „marketing“ (Stand 7), „konten“ (Stand 8), „sicherheit“ (Stand 9), „controlling“ (Stand 10), „leergut“ (Stand 11), „rewe“ (Stand 12) und „qs“ (Stand 13) noch nicht – sie legt konten.sh realm-aktualisieren an.
+  # (Stand 6), „marketing“ (Stand 7), „konten“ (Stand 8), „sicherheit“ (Stand 9), „controlling“ (Stand 10), „leergut“ (Stand 11), „rewe“ (Stand 12), „qs“ (Stand 13) und „versand“ (Stand 18) noch nicht – sie legt konten.sh realm-aktualisieren an.
   # Ebenso „Passwort vergessen“ (Stand 14: eigener Ablauf, Link-Gültigkeit, resetPasswordAllowed) – das schaltet konten.sh passwort-vergessen an ein
   sed -e "s/@GEHEIM_DASHBOARD@/$OIDC_SECRET_DASHBOARD/" -e "s/@GEHEIM_ANGEBOT@/$OIDC_SECRET_ANGEBOT/" "$HIER/realm-mitarbeiter.json" \
     | python3 -c '
 import json, sys
 r = json.load(sys.stdin)
-r["clients"] = [c for c in r["clients"] if c["clientId"] not in ("verwaltung","bestand","hr","crm","marketing","konten","sicherheit","controlling","leergut","rewe","qs")]
+r["clients"] = [c for c in r["clients"] if c["clientId"] not in ("verwaltung","bestand","hr","crm","marketing","konten","sicherheit","controlling","leergut","rewe","qs","versand")]
 r["resetPasswordAllowed"] = False; r.pop("resetCredentialsFlow", None); r["attributes"].pop("actionTokenGeneratedByUserLifespan.reset-credentials", None)
 r["authenticationFlows"] = [f for f in r["authenticationFlows"] if f["alias"] not in ("mitarbeiter-passwort-vergessen", "mitarbeiter-vergessen-passkey", "mitarbeiter-vergessen-einmalcode")]
 r["authenticatorConfig"] = [c for c in r["authenticatorConfig"] if c["alias"] not in ("amr-hwk-vergessen", "vergessen-ohne-passkey", "amr-otp-vergessen")]
@@ -162,7 +162,7 @@ json.dump(r, sys.stdout, ensure_ascii=False)' \
     sh deploy/anmeldung/konten.sh realm-aktualisieren) > "$OIDC_WORK/realm-aktualisieren.log" 2>&1 \
     || { cat "$OIDC_WORK/realm-aktualisieren.log" >&2; exit 1; }
   # Geheimnisse der neuen Clients hat realm-aktualisieren in .env der Installation erzeugt – wie auf dem Server übernehmen
-  grep -E '^OIDC_(SECRET|CRYPTO)_(VERWALTUNG|BESTAND|HR|CRM|MARKETING|KONTEN|SICHERHEIT|CONTROLLING|LEERGUT|REWE|QS)=' "$OIDC_WORK/installation/.env" >> "$OIDC_WORK/geheim.env"
+  grep -E '^OIDC_(SECRET|CRYPTO)_(VERWALTUNG|BESTAND|HR|CRM|MARKETING|KONTEN|SICHERHEIT|CONTROLLING|LEERGUT|REWE|QS|VERSAND)=' "$OIDC_WORK/installation/.env" >> "$OIDC_WORK/geheim.env"
   # Mitarbeiterkonten aus der Verwaltung (lib/anmeldekonten.php): Keycloak direkt, wie im Betrieb im internen Netz
   echo "WA_KONTEN_URL=http://127.0.0.1:$KC_PORT" >> "$OIDC_WORK/geheim.env"
   set -a; . "$OIDC_WORK/geheim.env"; set +a
@@ -176,6 +176,7 @@ json.dump(r, sys.stdout, ensure_ascii=False)' \
   [ -n "${OIDC_SECRET_LEERGUT:-}" ] && [ -n "${OIDC_CRYPTO_LEERGUT:-}" ] || { echo "realm-aktualisieren hat keine Werte für das Leergut erzeugt" >&2; exit 1; }
   [ -n "${OIDC_SECRET_REWE:-}" ] && [ -n "${OIDC_CRYPTO_REWE:-}" ] || { echo "realm-aktualisieren hat keine Werte für REWE erzeugt" >&2; exit 1; }
   [ -n "${OIDC_SECRET_QS:-}" ] && [ -n "${OIDC_CRYPTO_QS:-}" ] || { echo "realm-aktualisieren hat keine Werte für die Qualitätssicherung erzeugt" >&2; exit 1; }
+  [ -n "${OIDC_SECRET_VERSAND:-}" ] && [ -n "${OIDC_CRYPTO_VERSAND:-}" ] || { echo "realm-aktualisieren hat keine Werte für den Versand erzeugt" >&2; exit 1; }
   [ -n "${OIDC_SECRET_KONTEN:-}" ] && [ -z "${OIDC_CRYPTO_KONTEN:-}" ] || { echo "realm-aktualisieren: Geheimnis für die Mitarbeiterkonten fehlt (oder unnötiger Schlüssel)" >&2; exit 1; }
   zeit "Realm aktualisiert (konten.sh realm-aktualisieren)"
   (cd "$OIDC_WORK/installation" && env KCADM="env -u JAVA_TOOL_OPTIONS -u https_proxy -u HTTPS_PROXY $kc/bin/kcadm.sh" KC_SERVER="http://127.0.0.1:$KC_PORT" \

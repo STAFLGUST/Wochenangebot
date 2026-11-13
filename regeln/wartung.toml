@@ -181,7 +181,7 @@ api = "Jede Aktion ist genau einer Oberfläche zugeordnet; die Prüfung läuft i
 schreibaktionen = "In Wartung abgewiesen (503, no-store), auch für laufende Sitzungen; Lesen nur für Administratoren."
 hintergrund = "Geplante Läufe und Importe des Moduls pausieren und werden protokolliert, nicht verworfen."
 email = "Versandaufträge des Moduls bleiben in der Warteschlange (Dokument mailversand) und gehen nach der Wartung raus."
-veroeffentlichung = "Veröffentlichen ist eine Schreibaktion der Oberfläche angebot.eingabe."
+veroeffentlichung = "Veröffentlichen ist eine Schreibaktion der Oberfläche versand.intern (seit 13.11.2026; die bisherige Aktion publish auf angebot.eingabe bleibt für Tests und alte Fenster)."
 transaktionen = "Wartung beginnt erst, wenn laufende Schreibtransaktionen (with_lock) beendet sind; neue werden abgewiesen."
 gemeinsame_dienste = "Plattformkern, Anmeldung, Dashboard und die Sicherheitszentrale (mit dem Reiter System: Wartung, Module und Freigaben) sind nicht sperrbar (sperrbar = false)."
 getrennt = "Frontend und Backend eines Moduls haben eigene Zustände, z. B. Angebot: Kunden aktiv, Eingabe in Wartung."

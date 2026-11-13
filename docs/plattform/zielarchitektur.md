@@ -19,6 +19,7 @@ Eintrag – das Dashboard liest das Register, es gibt keine fest programmierte L
 | angebot | produktiv | Kunden-Frontend `angebot-stafl.de` (extern) · Mitarbeiter-Eingabe (intern) |
 | bestand, crm, rewe, einkauf | Fachmodule | je `<id>.dashboard-stafl.de` |
 | qs | nur technische Grundlage | intern `qs.dashboard-stafl.de` · extern QS-Portal (Domain offen) |
+| versand (seit 13.11.2026) | Oberfläche und Ablauf ohne eigene Daten: veröffentlicht und sendet über Funktionen des Angebots | `versand.dashboard-stafl.de`; eigener Modulzugang ohne Standardrolle ([Inbetriebnahme](inbetriebnahme-versand.md)) |
 | import | eigene Kachel, **Teil der Verwaltung** | Kachel → `verwaltung.dashboard-stafl.de/import/`; keine eigene Implementierung (CI prüft) |
 | verwaltung | Stammdaten, Benutzer/Rechte (Oberfläche), Module & Wartung | `verwaltung.…/`, `/import/`, `/system/` (nie sperrbar) |
 | dashboard | Einstieg, keine Kachel | `dashboard-stafl.de` (nie sperrbar) |

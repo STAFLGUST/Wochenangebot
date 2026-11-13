@@ -31,6 +31,7 @@ Alle Mitarbeiter-Hosts sind dieselbe PHP-Anwendung. Welcher Bereich ein Host ist
 | `leergut.dashboard-stafl.de` | eigene Seite `/module/leergut/` (`/admin` → dorthin) | `leergut.intern` | Client `leergut` |
 | `rewe.dashboard-stafl.de` | eigene Seite `/module/rewe/` (`/admin` → dorthin) | `rewe.intern` | Client `rewe` |
 | `qs.dashboard-stafl.de` | eigene Seite `/module/qs/` (`/admin` → dorthin) | `qs.intern` | Client `qs` |
+| `versand.dashboard-stafl.de` | eigene Seite `/module/versand/` (`/admin` → dorthin) | `versand.intern` | Client `versand` |
 | `einkauf.`, `container-import.`, `test.dashboard-stafl.de` | nur 503-Platzhalter in Caddy (GR-105) | – | – |
 
 Jeder Mitarbeiter-VirtualHost setzt außerdem `WA_OIDC 1`, `WA_OIDC_ISSUER` (Realm `mitarbeiter`) und
@@ -378,6 +379,18 @@ Entwurf und startet keinen Abgleich. Wer z. B. ohne
 `angebot.zugang`, aber mit `bestand.zugang` und `bestellungen.sehen` den Bestand-Host öffnet, kann Bestellungen über
 die Schnittstelle weiter lesen. Wer Daten eines Moduls nicht sehen soll, dem die **Einzelrechte** entziehen. Der
 Dashboard-Host nimmt keine Fachaktionen an (Schritt 2), dort ließe sich der Modulzugang sonst ganz umgehen.
+
+**Versand (seit 13.11.2026):** Veröffentlichen und Senden liegen im Modul `versand` mit eigenem Modulzugang `versand.zugang`
+(`zugang_rollen = []` – keine Standardrolle, nur Administratoren). Die bestehenden Rechte `angebot.veroeffentlichen`,
+`wochenangebot.senden` und `sonderposten.senden` behalten ihre Schlüssel (gespeicherte Rollenrechte bleiben gültig), stehen im
+Katalog aber beim Modul Versand und wirken **nur zusammen mit dem Zugang**. Auf dem Versand-Host setzt das
+`modul_zugang_durchsetzen()` durch; die bisherigen Aktionen `publish`, `kunden_rundmail`, `restposten_info` und
+`kunden_restposten` (Angebot-Host, für ältere offene Fenster und Tests) rufen zusätzlich `require_modulzugang('versand')` –
+sonst ließe sich der Zugang über die Schnittstelle umgehen. `angebot.veroeffentlichen` hat bewusst keine Voraussetzung `r`
+auf den Zugang: `rights_close` würde ihn sonst jedem Bearbeiter mitgeben. Folge für die Vergabe: Bearbeiter haben
+`angebot.veroeffentlichen` als Standard ihrer Rolle – wer ihnen `versand.zugang` gibt, gibt ihnen das Veröffentlichen; für
+„nur ansehen“ das Recht in der Rolle abwählen oder bei der Person verbieten. Die Änderungsliste mit Preisen
+(`versand_aenderungen`) verlangt zusätzlich `require_modulzugang('angebot')`, Empfänger und Vorschau das jeweilige Senden-Recht.
 
 **Namensregel (GR-103):** Neue Rechte heißen `<modul>.<recht>` (z. B. `crm.exportieren`) und brauchen dann keinen
 Eintrag in `berechtigungen.toml` (Zuordnung über das Präfix, `recht_modul`). Bestehende Schlüssel nie umbenennen – sie

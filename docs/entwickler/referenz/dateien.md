@@ -102,6 +102,7 @@ Jede Code-Datei beginnt mit einem Kopfkommentar; dessen erste Aussage steht hier
 | `rewe.php` | rewe | Aktionen: REWE · Vordisposition Dry Aged (Oberfläche rewe.intern, Daten und Regeln in app/api/module/rewe/rewe.php, Wochenabschluss und Excel in app/api/module/rewe/export.php) Rechte (GR-103): rewe.sehen – eigene … |
 | `schutz.php` | plattform | Schutzzentrale (Verwaltung → Schutz, nur Administratoren) |
 | `sicherheit.php` | sicherheit | Aktionen des Moduls Sicherheit (Oberfläche sicherheit.intern, sicherheit.dashboard-stafl.de; docs/plattform/modul-sicherheit.md) |
+| `versand.php` | versand | Aktionen: Modul Versand – Wochenangebot und Kundenangebote veröffentlichen und per E-Mail an Kunden senden (Oberfläche versand.intern; Funktionen in app/api/module/versand/versand.php, Daten und Regeln beim Angebot: … |
 | `verwaltung.php` | plattform | Aktionen: Sicherheit, Länder-/IP-Sperre, Sitzungen (Oberfläche Modul Sicherheit), Betriebszustand, Nutzer, Protokoll Wird von api/index.php im globalen Gültigkeitsbereich eingebunden; jede Aktion endet mit … |
 | `zugang.php` | plattform | Aktionen: Status, Wartungsmodus, Anmeldung, Zwei-Faktor, Passwort Wird von api/index.php im globalen Gültigkeitsbereich eingebunden; jede Aktion endet mit respond()/fail(). |
 
@@ -153,6 +154,7 @@ Jede Code-Datei beginnt mit einem Kopfkommentar; dessen erste Aussage steht hier
 
 | Datei | Modul | Inhalt |
 | --- | --- | --- |
+| `druck.php` | angebot | Druck der Angebote: Fußzeile des Briefbogens unter jedem gedruckten Angebot (Wunsch des Inhabers 13.11.2026). |
 | `import.php` | angebot | Importvertrag des Moduls Angebot – Schnittstelle zur Importzentrale (docs/plattform/schnittstellen/import.md). - Preisverlauf: frühere Angebotslisten (.xlsx) als Wochen im Preisverlauf. |
 | `winab-export.php` | angebot | Export des Wochenangebots für WinAB (Auftrag des Inhabers 05.11.2026) |
 
@@ -224,6 +226,12 @@ Jede Code-Datei beginnt mit einem Kopfkommentar; dessen erste Aussage steht hier
 | `export.php` | rewe | REWE · Wochenabschluss und Excel für die Warenwirtschaft (Aktionen rewe_abschluss, rewe_export, rewe_erfasst). rw_abschluss: alle Bestellungen einer KW über alle Listen – Zeilen je Markt und Artikel, Summen je … |
 | `rewe.php` | rewe | REWE · Vordisposition Dry Aged |
 
+## `app/api/module/versand/`
+
+| Datei | Modul | Inhalt |
+| --- | --- | --- |
+| `versand.php` | versand | Modul Versand: Wochenangebot und Kundenangebote veröffentlichen und per E-Mail an Kunden senden (Oberfläche versand.intern, Seite app/module/versand/, Aktionen app/api/aktionen/versand.php; Auftrag des Inhabers … |
+
 ## `app/api/module/verwaltung/`
 
 | Datei | Modul | Inhalt |
@@ -247,6 +255,8 @@ Jede Code-Datei beginnt mit einem Kopfkommentar; dessen erste Aussage steht hier
 | `admin-werbung.js` | angebot | Eingabebereich – Fenster „Werbung schalten“ (Angebot bearbeiten, Knopf „Werbung“ in der Werkzeugleiste) Bis zu zwei Werbungen je Angebot (Reiter „Werbung 1“/„Werbung 2“, „Weitere Werbung“ legt die zweite an): je … |
 | `admin.css` | plattform | Eingabebereich – ergänzt app.css |
 | `admin.js` | angebot | Wochenangebot – Eingabebereich Bearbeitet einen Entwurf auf dem Server (automatisch gespeichert). |
+| `angebot-druck.css` | angebot | Angebot · Druckfassung „Angebotsansicht“ (A4 quer) der Angebotsseite – gesetzt von assets/angebot-druck.js. |
+| `angebot-druck.js` | angebot | Angebot · Satz der Druckfassung „Angebotsansicht“ (A4 quer) für die Angebotsseite (frontend.js, Wunsch des Inhabers 13.11.2026). |
 | `app.css` | angebot | Designsystem „Klar“: neutrale Flächen, ein Akzent (Bordeaux), Geist / Geist Mono (lokal eingebunden, SIL Open Font License, assets/fonts/LICENSE-Geist.txt – keine Verbindung zu fremden Servern) |
 | `bestaetigt.js` | angebot | Rücksprungseite der Bestätigung im eigenen Fenster (admin/bestaetigt.html): meldet dem Eingabebereich, dass die erneute Anmeldung bei der STAFL-Anmeldung abgeschlossen ist, und schließt das Fenster. |
 | `detailkarte.js` | plattform | STAFL-Plattform – Detailkarte (Straßen, Gebäude, Ortsnamen) vom eigenen Server Gemeinsame Kartenkomponente für die CRM-Karte und die Auswertung der Verwaltung. |
@@ -336,6 +346,8 @@ Jede Code-Datei beginnt mit einem Kopfkommentar; dessen erste Aussage steht hier
 | --- | --- | --- |
 | `aufbau.css` | angebot | STAFL-Plattform · Angebot · Knopf „Editor“ in der Werkzeugleiste von „Angebot bearbeiten“ und Fenster „Aufbau des Angebots“ (app/module/angebot/aufbau.js): hellblau im Blauton des Kennzeichens „eigene“ (--c-frozen … |
 | `aufbau.js` | angebot | STAFL-Plattform · Angebot · Fenster „Aufbau des Angebots“ (Knopf „Editor“ in der Werkzeugleiste von „Angebot bearbeiten“, Wunsch des Inhabers 11.11.2026, Artikel 12.11.2026). |
+| `druck.css` | angebot | STAFL-Plattform · Angebot · Knopf „Drucken“ in der Kopfleiste von „Angebot bearbeiten“, unsichtbarer Rahmen für die Druckfassung und Fenster „Fußzeile im Druck“ (app/module/angebot/druck.js). |
+| `druck.js` | angebot | STAFL-Plattform · Angebot · Drucken aus „Angebot bearbeiten“ und Einstellung „Fußzeile im Druck“ (Wunsch des Inhabers 13.11.2026). |
 | `preisimport.css` | angebot | STAFL-Plattform · Angebot · Vorschau „Artikelpreise (CSV)“ in der Importzentrale (preisimport.js). |
 | `preisimport.js` | angebot | STAFL-Plattform · Angebot · Darstellung der Vorschau „Artikelpreise (CSV)“ in der Importzentrale (Verwaltung → Import). |
 | `winab-export.js` | angebot | STAFL-Plattform · Angebot · Knopf „Export für WinAB“ in der Werkzeugleiste des Wochenangebots (Auftrag des Inhabers 05.11.2026). |
@@ -422,6 +434,14 @@ Jede Code-Datei beginnt mit einem Kopfkommentar; dessen erste Aussage steht hier
 | `index.html` | sicherheit | Seite „STAFL-Plattform · Sicherheit“ |
 | `sicherheit.css` | sicherheit | STAFL-Plattform · Sicherheit – „Leitstand“ (Entwurf des Inhabers 26.10.2026): dunkel ein Leitstand mit Graphit-Grund, Bordeaux- und Blaulicht, hell dieselbe Gliederung auf warmem Grau; folgt der Hell/Dunkel-Wahl am … |
 | `sicherheit.js` | sicherheit | STAFL-Plattform · Sicherheit (Modul sicherheit, Oberfläche sicherheit.intern; docs/plattform/modul-sicherheit.md) Reiter |
+
+## `app/module/versand/`
+
+| Datei | Modul | Inhalt |
+| --- | --- | --- |
+| `index.html` | versand | Zwei Schritte: 1 Veröffentlichen · 2 An Kunden senden (versand.js zeichnet den Stand) |
+| `versand.css` | versand | STAFL-Plattform · Modul Versand – Gestaltung „C2“ (Designvorschlag vom Inhaber gewählt 13.11.2026, Variante A) Rahmen, Seitenleiste und alle Farben kommen aus ../../assets/rahmen.css (--r-*), Schrift Geist und die … |
+| `versand.js` | versand | STAFL-Plattform · Modul Versand – Wochenangebot und Kundenangebote veröffentlichen und per E-Mail an Kunden senden (Auftrag des Inhabers 13.11.2026; Gestaltung „C2“, Variante A: zwei Schritte oben, Angebote zur … |
 
 ## `app/module/verwaltung/`
 
@@ -626,6 +646,7 @@ Jede Code-Datei beginnt mit einem Kopfkommentar; dessen erste Aussage steht hier
 | `qs.md` | plattform | Funktionen: Qualitätssicherung (`qs`) |
 | `rewe.md` | plattform | Funktionen: REWE (`rewe`) |
 | `sicherheit.md` | plattform | Funktionen: Sicherheit (`sicherheit`) |
+| `versand.md` | plattform | Funktionen: Versand (`versand`) |
 | `verwaltung.md` | plattform | Funktionen: Verwaltung (`verwaltung`) |
 
 ## `docs/plattform/`
@@ -637,6 +658,7 @@ Jede Code-Datei beginnt mit einem Kopfkommentar; dessen erste Aussage steht hier
 | `adr-007-kundencontainer.md` | plattform | ADR-007: Kundenseite in eigenem Container |
 | `bestandsaufnahme.md` | plattform | Bestandsaufnahme (Phase 0) – Stand 21.10.2026 |
 | `inbetriebnahme-anmeldung.md` | plattform | Inbetriebnahme der zentralen Anmeldung (Keycloak) – Ablaufplan |
+| `inbetriebnahme-versand.md` | versand | Inbetriebnahme: Modul „Versand“ (versand.dashboard-stafl.de) |
 | `modul-sicherheit.md` | sicherheit | Modul Sicherheit (sicherheit.dashboard-stafl.de) |
 | `multi-agent.md` | plattform | Entwicklung mit mehreren KI-Agenten |
 | `roadmap.md` | plattform | Roadmap – priorisierte Pull Requests |
@@ -677,6 +699,7 @@ Jede Code-Datei beginnt mit einem Kopfkommentar; dessen erste Aussage steht hier
 | `qs.toml` | qs | Aktionen des Moduls „qs“ (QM-System nach IFS Wholesale): gelenkte Dokumente mit Versionen und Freigabe nach dem 4-Augen-Prinzip, QM-Handbuch (Abschnitte je Kapitel), Prüfplan mit Nachweisen und Fälligkeiten, … |
 | `rewe.toml` | rewe | Aktionen des Moduls „rewe“ |
 | `sicherheit.toml` | sicherheit | Aktionen des Moduls „sicherheit“ |
+| `versand.toml` | versand | Aktionen des Moduls „versand“ |
 | `verwaltung.toml` | verwaltung | Aktionen des Moduls „verwaltung“ |
 
 ## `tests/`
@@ -749,6 +772,7 @@ Jede Code-Datei beginnt mit einem Kopfkommentar; dessen erste Aussage steht hier
 | `test_dashboard.py` | dashboard | Mitarbeiter-Dashboard (dashboard/, Roadmap PR 6) im gemeinsamen Rahmen „C2“ (app/assets/rahmen.css, rahmen.js) |
 | `test_datentrennung.py` | plattform | Testgruppe datentrennung (ADR-007 Stufe 2): getrennte Daten wie im Betrieb. |
 | `test_design.py` | angebot | Gestaltung der Angebotsseite („Klar“ mit dem Design „Liquid Glass“: schwebende Glas-Kopfzeile, Kapseln, Liste als Glaskarte): lokale Schriften (keine fremden Server), Kopf, Filterleiste mit Aufklappmenüs (Desktop) bzw. |
+| `test_druck.py` | angebot | Druck der Angebote (Wunsch des Inhabers 13.11.2026): die Druckfassung „Angebotsansicht“ (A4 quer) zeigt alles, was die Vorschau zeigt – fortlaufend und kompakt. |
 | `test_editor_aux.py` | angebot | Testgruppe editor_aux |
 | `test_einheit.py` | plattform | Einheitliches Erscheinungsbild aller Mitarbeiter-Oberflächen (Dashboard, Eingabebereich auf den Bereichs-Hosts Angebot, Verwaltung, Bestand, alle Modulseiten – HR, CRM, Controlling, Leergut, Marketing, QS, REWE, … |
 | `test_einkauf.py` | einkauf | Einkauf: Fehlmengen aus offenen Bestellwünschen gegenüber dem Bestand, Rechte je Rolle (Ansehen für alle, Kundennamen und Melden ab Bearbeiter), E-Mail an die Empfänger „Einkaufsbedarf“, Status „gemeldet“, Oberfläche. |
@@ -819,13 +843,14 @@ Jede Code-Datei beginnt mit einem Kopfkommentar; dessen erste Aussage steht hier
 | `test_sys.py` | angebot | Setup |
 | `test_testumgebung.py` | plattform | Testumgebung (WA_TESTUMGEBUNG=1) |
 | `test_users.py` | plattform | Testgruppe users: Mitarbeiterzugänge – Rollen, serverseitige Rechte, Protokoll, Sperren und Zwei-Faktor-Pflicht je Nutzer. |
-| `test_versand.py` | angebot | Wochenangebot an Kunden senden |
+| `test_versand.py` | versand | Modul Versand (app/module/versand/, Oberfläche versand.intern, Auftrag des Inhabers 13.11.2026) |
 | `test_vertreter.py` | verwaltung | Stammdaten → Vertreter (Liste aus der Warenwirtschaft) und die Felder „Vertreter“ und „Vertreter 2“ in den Kunden |
 | `test_vkgruppen.py` | verwaltung | Stammdaten → VK-Gruppen und Import der Artikelstammdaten (CSV-Export der Warenwirtschaft) |
 | `test_wartung.py` | angebot | Wartungsmodus und erweiterte Übersicht im Eingabebereich. |
 | `test_web_app.py` | angebot | Web-App (zum Home-Bildschirm) |
 | `testdaten.py` | plattform | Erwartungswerte aus den anonymisierten Testdaten (tests/fixtures) – statt fest eingetragener Zahlen. |
 | `umgebung.py` | plattform | Gemeinsame Pfade für die Ende-zu-Ende-Tests (gesetzt vom Testlauf tests/run_e2e.py). |
+| `versand_hilfe.py` | plattform | Hilfe für Tests des Eingabebereichs: veröffentlichen, seit das Veröffentlichen im Modul Versand liegt (13.11.2026). |
 
 ## `tests/oidc/`
 

@@ -17,7 +17,7 @@ declare(strict_types=1);
 if (!defined('WA_API')) { http_response_code(404); exit; }   // nur über api/index.php nutzbar
 
 const STARTSEITE_ANBIETER = ['angebot' => 'angebot_startseite', 'bestand' => 'bestand_startseite', 'hr' => 'hr_startseite', 'crm' => 'crm_startseite',
-    'qs' => 'qs_startseite', 'leergut' => 'lg_startseite', 'rewe' => 'rw_startseite', 'marketing' => 'mkt_startseite'];
+    'qs' => 'qs_startseite', 'leergut' => 'lg_startseite', 'rewe' => 'rw_startseite', 'marketing' => 'mkt_startseite', 'versand' => 'versand_startseite'];
 const STARTSEITE_ARTEN = ['ueberfaellig' => 0, 'heute' => 1, 'demnaechst' => 2];
 const STARTSEITE_JE_MODUL = 8;        // Punkte je Modul in der Liste (gezählt werden alle)
 const STARTSEITE_VORLAUF = 3;         // „Demnächst“: Fälligkeit in höchstens so vielen Tagen (Module können eigene Fristen nutzen)
@@ -35,6 +35,7 @@ const STARTSEITE_AKTIONEN = [
     ['modul' => 'crm', 'recht' => 'crm.bearbeiten', 'titel' => 'Interessent anlegen', 'ziel' => 'kunden/neu', 'neu' => true],
     ['modul' => 'import', 'recht' => '', 'titel' => 'Daten importieren', 'ziel' => '', 'neu' => true],
     ['modul' => 'angebot', 'recht' => 'angebot.bearbeiten', 'titel' => 'Wochenangebot bearbeiten', 'ziel' => '', 'neu' => false],
+    ['modul' => 'versand', 'recht' => 'angebot.veroeffentlichen', 'titel' => 'Angebot veröffentlichen', 'ziel' => '', 'neu' => false],
     ['modul' => 'marketing', 'recht' => 'marketing.bearbeiten', 'titel' => 'Beitrag anlegen', 'ziel' => 'kalender/neu', 'neu' => true],
     ['modul' => 'qs', 'recht' => 'qs.nachweis', 'titel' => 'Prüfnachweis erfassen', 'ziel' => 'pruefplan', 'neu' => true],
     ['modul' => 'crm', 'recht' => 'crm.sehen', 'titel' => 'Wiedervorlagen ansehen', 'ziel' => 'wiedervorlagen', 'neu' => false],

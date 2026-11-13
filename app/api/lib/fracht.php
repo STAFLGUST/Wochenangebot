@@ -57,8 +57,11 @@ function fracht_hinweis(?array $s = null): array
     foreach (preg_split('/\R/', trim($s['zusatz'])) as $z) if (trim($z) !== '') $l[] = trim($z);
     return $l;
 }
-function fracht_public(): array
+/* $angemeldet: Mitarbeiter oder Kunde – nur dann enthält die Fußzeile geschützte Bankangaben (module/angebot/druck.php) */
+function fracht_public(bool $angemeldet = false): array
 {
     $s = fracht_settings();
-    return ['aktiv' => fracht_frei($s) !== null, 'frei' => fracht_frei($s), 'staffeln' => $s['aktiv'] ? $s['staffeln'] : [], 'hinweis' => fracht_hinweis($s)];
+    require_once dirname(__DIR__) . '/module/angebot/druck.php';   // Fußzeile der Druckfassung (Briefbogen), mit dem Hinweis ausgeliefert
+    return ['aktiv' => fracht_frei($s) !== null, 'frei' => fracht_frei($s), 'staffeln' => $s['aktiv'] ? $s['staffeln'] : [], 'hinweis' => fracht_hinweis($s),
+            'fuss' => druck_fuss_public($angemeldet)];
 }

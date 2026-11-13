@@ -2,7 +2,7 @@
 
 <!-- ERZEUGT von `python3 werkzeuge/doku.py erzeugen` – nicht von Hand ändern. Quelle: Funktionen und Kommentare im Code. Die CI prüft, dass diese Datei zum Code passt. -->
 
-115 Dateien, 1167 Funktionen – in der Reihenfolge der Datei, **fett** die Abschnitte. Text = erste Aussage des Kommentars direkt über der Funktion (Python: Docstring). Übersicht aller Module: [README.md](README.md).
+116 Dateien, 1169 Funktionen – in der Reihenfolge der Datei, **fett** die Abschnitte. Text = erste Aussage des Kommentars direkt über der Funktion (Python: Docstring). Übersicht aller Module: [README.md](README.md).
 
 ## `.github/scripts/apt_vorrat.py`
 
@@ -1674,6 +1674,12 @@ _Gemeinsame Pfade für die Ende-zu-Ende-Tests (gesetzt vom Testlauf tests/run_e2
 - `until(cond, timeout, step)` – Wartet, bis cond() wahr ist (Python-seitig, z. B. Anzahl von Elementen); gibt das letzte Ergebnis zurück.
 - `shot(target, path, tries)` – Bildschirmfoto für die Sichtprüfung; ein gerade neu gezeichnetes Element wird erneut versucht (kein Testfehler).
 
+## `tests/e2e/versand_hilfe.py`
+
+_Hilfe für Tests des Eingabebereichs: veröffentlichen, seit das Veröffentlichen im Modul Versand liegt (13.11.2026)._
+
+- `veroeffentlichen(pg, timeout, warten)` – Entwurf der offenen Seite des Eingabebereichs veröffentlichen; gibt [Status, Antwort] zurück
+
 ## `tests/oidc/postfach.py`
 
 _Kleiner Test-Mailserver für die Keycloak-Prüfungen (nimmt Nachrichten an, hält sie im Speicher)._
@@ -1761,6 +1767,7 @@ _Startet für jede Testgruppe einen frischen PHP-Server mit Testdaten und führt
 - `sqlite_test_seed(data)` – Windows-only fresh test fixture; production migration still runs on Linux/CI.
 - `ports(slot)` – Webserver, Hilfsserver, Test-Mailserver 1 und 2 eines Arbeitsplatzes.
 - `run(name)`
+- `liste_im_angebot_einschalten(app)`
 - `register_anpassen(app, aenderungen)`
 - `run_in(name, slot)`
 - `adressen_test()` – Adressverzeichnis der Tests aus tests/fixtures/karte/adressen.json (deploy/karte/adressen.py, ohne pyosmium).

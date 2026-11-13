@@ -22,6 +22,7 @@ Für jedes Modul mit Kachel entsteht `<modul>.zugang` (lib/rechte.php, `perms_ka
 | `hr.zugang` | HR |
 | `marketing.zugang` | Marketing |
 | `controlling.zugang` | Controlling |
+| `versand.zugang` | Versand |
 | `verwaltung.zugang` | Verwaltung |
 | `sicherheit.zugang` | Sicherheit |
 
@@ -30,7 +31,7 @@ Für jedes Modul mit Kachel entsteht `<modul>.zugang` (lib/rechte.php, `perms_ka
 | Recht | Modul | Bereich | Art | Bezeichnung | Standard | setzt voraus |
 | --- | --- | --- | --- | --- | --- | --- |
 | `angebot.bearbeiten` | Angebot | Angebot | bearbeiten | Entwurf bearbeiten (Preise, Artikel, Preisimport, frühere Version laden) | Bearbeiter | – |
-| `angebot.veroeffentlichen` | Angebot | Angebot | bearbeiten | Angebot veröffentlichen | Bearbeiter | – |
+| `angebot.veroeffentlichen` | Versand | Versand | bearbeiten | Angebot veröffentlichen (Wochenangebot und alle Kundenangebote zusammen) | Bearbeiter | – |
 | `angebote.verwalten` | Angebot | Angebot | bearbeiten | Kundenangebote anlegen und umbenennen | Bearbeiter | – |
 | `angebote.loeschen` | Angebot | Angebot | bearbeiten | Kundenangebote löschen, Wochenangebot nur für Kunden sichtbar machen | – | `angebote.verwalten` |
 | `angebot.winab_export` | Angebot | Angebot | bearbeiten | Wochenangebot als CSV für WinAB exportieren (Artikelnummer und Preis des veröffentlichten Angebots) | – | – |
@@ -66,8 +67,8 @@ Für jedes Modul mit Kachel entsteht `<modul>.zugang` (lib/rechte.php, `perms_ka
 | `einzelangebote.sehen` | Angebot | Kunden | sehen | Einzelangebote für Kunden ansehen | – | `kunden.sehen` |
 | `einzelangebote.bearbeiten` | Angebot | Kunden | bearbeiten | Einzelangebote erstellen, im Portal freigeben und per E-Mail senden | – | `einzelangebote.sehen` |
 | `kunden.bearbeiten` | Verwaltung | Kunden | bearbeiten | Kunden anlegen, ändern, löschen, Zugänge und Einladungen | – | `kunden.sehen` |
-| `wochenangebot.senden` | Angebot | Kunden | bearbeiten | Wochenangebot per E-Mail an Kunden senden | – | `kunden.sehen` |
-| `sonderposten.senden` | Angebot | Kunden | bearbeiten | Sonderposten per E-Mail an Kunden senden | – | `kunden.sehen` |
+| `wochenangebot.senden` | Versand | Versand | bearbeiten | Wochenangebot per E-Mail an Kunden senden | – | – |
+| `sonderposten.senden` | Versand | Versand | bearbeiten | Sonderposten per E-Mail an Kunden senden | – | – |
 | `protokoll.sehen` | Verwaltung | Verwaltung | sehen | Protokoll ansehen | – | – |
 | `sicherheit.sehen` | Sicherheit | Sicherheit | sehen | Lagebild, Sicherheitsereignisse und Notfall-Zustand ansehen (nur lesen, mit IP-Adressen und Benutzernamen) | – | `sicherheit.zugang` |
 | `sicherheit.notfall` | Sicherheit | Sicherheit | bearbeiten | Notfallmodus auslösen (Kunden sehen Wartung, Mitarbeiter ohne Administratorrolle werden ausgesperrt); beenden nur Administratoren | – | `sicherheit.zugang` |

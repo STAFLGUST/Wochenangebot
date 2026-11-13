@@ -12,6 +12,7 @@ zu gefährden.
 | [roadmap.md](roadmap.md) | Priorisierte Schritte als Pull Requests, offene Entscheidungen |
 | [adr-003-domains-anmeldung.md](adr-003-domains-anmeldung.md) | Domain- und Anmeldestruktur: Subdomains, OIDC mit Keycloak, Testumgebung – angenommen |
 | [adr-007-kundencontainer.md](adr-007-kundencontainer.md) | Kundenseite in eigenem Container (Prozesse, Geheimnisse, Netze; später Dienstkonto und Daten) – angenommen |
+| [inbetriebnahme-versand.md](inbetriebnahme-versand.md) | Modul Versand (13.11.2026): Ablauf am Release-Tag für die neue Adresse hinter bunny.net (DNS, Zertifikat, Keycloak-Client, Zugänge), Rückfall |
 
 Maschinenlesbare Quelle aller Festlegungen ist `regeln/` (von der CI geprüft). Diese Dokumente erklären und
 begründen – sie wiederholen keine Listen aus `regeln/`, damit nichts auseinanderläuft.

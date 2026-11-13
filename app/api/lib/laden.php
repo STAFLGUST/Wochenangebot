@@ -72,3 +72,4 @@ require dirname(__DIR__) . '/module/leergut/leergut.php';
 require dirname(__DIR__) . '/module/rewe/rewe.php';
 require dirname(__DIR__) . '/module/rewe/export.php';
 require dirname(__DIR__) . '/module/qs/qs.php';
+require dirname(__DIR__) . '/module/versand/versand.php';

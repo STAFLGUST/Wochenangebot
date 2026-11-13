@@ -8,7 +8,7 @@ Steckbrief eines Moduls mit Pfaden, Daten, Rechten und Regeln: `python3 werkzeug
 
 Wochenangebot, Kundenangebote, Einzelangebote, Kundenportal, Bestellwünsche, Preisverlauf
 
-Agent: `angebot` · hängt ab von `plattform`, `verwaltung`, `bestand` · Testgruppen: `sys`, `frontend`, `design`, `hist`, `editor_aux`, `revert`, `gemeinsam`, `angebote`, `angebotsliste`, `einzelangebote`, `restposten`, `bestellung`, `order_management`, `order_management_ui`, `order_outbox`, `order_outbox_ui`, `versand`, `kunden_mail`, `web_app`, `legal_pages`, `wartung`, `sidenav`, `p0`, `fehlerpruefung`, `aufbau`
+Agent: `angebot` · hängt ab von `plattform`, `verwaltung`, `bestand` · Testgruppen: `sys`, `frontend`, `design`, `hist`, `editor_aux`, `revert`, `gemeinsam`, `angebote`, `angebotsliste`, `einzelangebote`, `restposten`, `bestellung`, `order_management`, `order_management_ui`, `order_outbox`, `order_outbox_ui`, `kunden_mail`, `web_app`, `legal_pages`, `wartung`, `sidenav`, `p0`, `fehlerpruefung`, `aufbau`, `druck`
 
 | Oberfläche | Art | Adresse | Entwicklung | Freigabe |
 | --- | --- | --- | --- | --- |
@@ -121,6 +121,16 @@ Agent: `controlling` · hängt ab von `plattform`, `verwaltung`, `bestand` · Te
 | Oberfläche | Art | Adresse | Entwicklung | Freigabe |
 | --- | --- | --- | --- | --- |
 | `controlling.intern` Controlling | intern | https://controlling.dashboard-stafl.de/module/controlling/ | fertig | produktiv |
+
+## Versand (`versand`)
+
+Wochenangebot und Kundenangebote veröffentlichen und per E-Mail an Kunden senden (Wochenangebot, Sonderposten), Verlauf
+
+Agent: `versand` · hängt ab von `plattform`, `angebot`, `verwaltung` · Testgruppen: `versand`
+
+| Oberfläche | Art | Adresse | Entwicklung | Freigabe |
+| --- | --- | --- | --- | --- |
+| `versand.intern` Versand | intern | https://versand.dashboard-stafl.de/module/versand/ | fertig | produktiv |
 
 ## Verwaltung (`verwaltung`)
 

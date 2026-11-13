@@ -196,6 +196,7 @@ try {
     require __DIR__ . '/aktionen/leergut.php';
     require __DIR__ . '/aktionen/rewe.php';
     require __DIR__ . '/aktionen/qs.php';
+    require __DIR__ . '/aktionen/versand.php';   // Modul Versand: veröffentlichen und an Kunden senden
     fail('Unbekannte Aktion.', 404);
 } catch (InvalidArgumentException $e) {
     store_rollback();

@@ -3,6 +3,7 @@ import sys
 from umgebung import BASE  # Testserver je Gruppe (parallel)
 import glob, re
 from playwright.sync_api import sync_playwright
+from versand_hilfe import veroeffentlichen
 B = BASE
 from umgebung import SH, FIX, REPO, WORK, XL44
 res = []
@@ -100,7 +101,7 @@ with sync_playwright() as p:
     a.click('#item-hist [data-ia="hist-open"]'); a.wait_for_selector('#dlg-series[open]'); check('jump to series from item', 'Roastbeef' in a.inner_text('#ser-title'))
     a.keyboard.press('Escape')
     a.click('#vt-edit'); i = a.locator('tr[data-id]:has(input[data-f="code"][value="10601"]) input[data-f="price"]'); i.fill('25,5'); i.press('Tab'); a.wait_for_timeout(1300)
-    a.click('#btn-publish'); a.click('#dlg-publish [data-ia="publish"]'); a.wait_for_function("!document.querySelector('#dlg-publish').open")
+    veroeffentlichen(a)
     a.click('#vt-hist'); a.wait_for_selector('.htab'); a.fill('#hist-q', '10601'); a.wait_for_timeout(300)
     check('publish updates current week in history', '25,50' in a.inner_text('.htab tbody tr .h-cur'), a.inner_text('.htab tbody tr .h-cur'))
     a.set_viewport_size({'width': 390, 'height': 844}); a.fill('#hist-q', ''); a.wait_for_timeout(300); a.screenshot(path=SH + '/hist-mobile.png')

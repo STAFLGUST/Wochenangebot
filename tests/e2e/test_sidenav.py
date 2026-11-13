@@ -77,8 +77,9 @@ with sync_playwright() as p:
     check('Rahmen: eigene Navigation als deckende Karte ohne Unschärfe', css('.side-nav', 'backdropFilter') == 'none' and css('.side-nav', 'backgroundColor') == 'rgb(255, 255, 255)'
           and css('.side-nav', 'borderTopLeftRadius') == '28px')
     check('active nav entry 44 px with 14 px radius', g.locator('#vt-edit').bounding_box()['height'] == 44 and css('#vt-edit', 'borderTopLeftRadius') == '14px')
-    check('Veröffentlichen is the coloured button (bordeaux gradient)', 'linear-gradient' in css('#btn-publish', 'backgroundImage')
-          and '163, 32, 47' in css('#btn-publish', 'backgroundImage') and css('#btn-publish', 'borderTopLeftRadius') == '999px')
+    # „Veröffentlichen“ (früher der farbige Knopf) liegt seit 13.11.2026 im Modul Versand – in der Kopfleiste nur neutrale Knöpfe
+    check('top bar: no publish/send buttons any more, „Drucken“ is a neutral pill', g.locator('#btn-publish').count() == 0 and g.locator('#btn-send').count() == 0
+          and css('#btn-drucken', 'backgroundImage') == 'none' and css('#btn-drucken', 'borderTopLeftRadius') == '999px')
     check('other top bar buttons are neutral pills', css('#btn-preview', 'backgroundImage') == 'none' and css('#btn-preview', 'borderTopLeftRadius') == '999px')
     check('group cards 28 px, offer list inside the side navigation card (no card of its own) with the active offer as entry', css('#groups .gcard', 'borderTopLeftRadius') == '28px'
           and g.evaluate("document.querySelector('#offer-bar').parentElement.classList.contains('side-nav')") and css('#offer-bar', 'borderTopLeftRadius') == '0px' and css('#offer-bar', 'backdropFilter') in ('none', '')
@@ -250,7 +251,7 @@ with sync_playwright() as p:
         v.wait_for_function("document.title.startsWith('Import')")
         check(f'{w}px Kachel „Import“: nur die Importzentrale (keine Nutzer, Protokoll, Sicherheit, Schutz), ohne Seitenleiste, Titel „Import“',
               v.evaluate(sichtbar_js) == ['importe'] and v.is_hidden('.side-nav') and v.text_content('#topbar h1') == 'Import'
-              and v.is_hidden('#btn-publish'), (v.evaluate(sichtbar_js), v.title()))
+              and v.is_hidden('#btn-drucken'), (v.evaluate(sichtbar_js), v.title()))
         check(f'{w}px Kachel „Import“: kein waagerechtes Scrollen, Kopfzeile ohne Überlappung', v.evaluate('document.documentElement.scrollWidth') <= w and not v.evaluate(overlap_js))
         v.screenshot(path=SH + f'/import-bereich-{w}.png', full_page=True)
         v.evaluate("location.hash = 'users'"); v.wait_for_function("location.hash === '#users'")

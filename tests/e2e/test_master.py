@@ -64,7 +64,7 @@ with sync_playwright() as p:
     check('origins are codes only', origins <= {'', '4xD', '3xD', 'D', 'EG', 'NZ', 'ARG', 'UY', 'PY', 'BR', 'AUS', 'IRL', 'DK', 'ES', 'Südamerika'}, origins)
     r_nz = a.locator('tr[data-id]:has(input[data-f="code"][value="10674"])').first
     check('Neuseeland → NZ, no brand outside Fleischmeister', r_nz.locator('input[data-f=origin]').input_value() == 'NZ' and 'Fleischmeister' not in r_nz.locator('input[data-f=name]').input_value())
-    check('cleanup counts as unpublished change', 'noch nicht veröffentlicht' in a.inner_text('#save-state'))
+    check('cleanup counts as unpublished change', re.search(r'\d+ Änderung(en)? nicht veröffentlicht', a.inner_text('#save-state')), a.inner_text('#save-state'))
     # manuelle Eingabe: ohne Einschränkung, „frisch“ bleibt stehen (vorher entfernt und in den Zustand verschoben)
     ni = row.locator('input[data-f=name]'); ni.fill('Roastbeef Fleischmeister frisch'); ni.press('Tab')
     gesp = until_names(a, 'std', '10601', ['Roastbeef Fleischmeister frisch'])

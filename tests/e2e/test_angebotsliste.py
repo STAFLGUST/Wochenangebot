@@ -81,7 +81,13 @@ with sync_playwright() as pw:
     # Tabelle und Karten über die Auswahl, per Link wiederherstellbar
     pg.click('#modebar [data-mode=liste]'); pg.wait_for_selector('table.grid')
     check('note also in the order view', pg.locator('#list .list-note').count() == 1)
-    check('switch: "Bestellansicht", prominent and active state filled', 'Bestellansicht' in pg.inner_text('#modebar') and pg.evaluate("getComputedStyle(document.querySelector('#modebar [aria-checked=true]')).backgroundColor") not in ('rgba(0, 0, 0, 0)', 'rgb(255, 255, 255)'))
+    # der gewählte Schalter füllt sich mit einem kurzen Übergang (0,12 s): auf den Endzustand warten statt mitten im Übergang zu messen
+    gefuellt = True
+    try:
+        pg.wait_for_function("!['rgba(0, 0, 0, 0)', 'rgb(255, 255, 255)'].includes(getComputedStyle(document.querySelector('#modebar [aria-checked=true]')).backgroundColor) && !document.querySelector('#modebar [aria-checked=true]').getAnimations().length", timeout=5000)
+    except Exception:
+        gefuellt = False
+    check('switch: "Bestellansicht", prominent and active state filled', 'Bestellansicht' in pg.inner_text('#modebar') and gefuellt, pg.evaluate("getComputedStyle(document.querySelector('#modebar [aria-checked=true]')).backgroundColor"))
     check('order view without ordering explains why', pg.is_visible('#order-hint') and len(pg.inner_text('#order-hint')) > 20)
     check('table view still available', pg.is_visible('table.grid thead') and not pg.is_visible('.al') and 'ansicht=tabelle' in pg.url)
     p2 = br.new_page(viewport={'width': 1440, 'height': 900}); p2.goto(pg.url); p2.wait_for_selector('table.grid tr.row')
@@ -111,9 +117,11 @@ with sync_playwright() as pw:
     e.click('#dlg-print [data-close]')
     e.evaluate("window.dispatchEvent(new Event('beforeprint'))")   # wie Strg+P: Standard-Layout
     pages = e.locator('#print-root .pl-page').count()
-    check('export: a page per section at least, three blocks per page', pages >= 4 and all(n == 3 for n in e.eval_on_selector_all('#print-root .al-cols', 'cs => cs.map(c => c.children.length)')), pages)
+    # Druckfassung (assets/angebot-druck.js): fortlaufend gefüllte Seiten statt einer Seite je Abschnitt, jede Zeile hat genau drei Spalten
+    zeilen3 = e.eval_on_selector_all('#print-root .al-band', "bs => bs.map(b => [...b.querySelectorAll(':scope > .al-sec > .al-cols > .al-col')].length)")
+    check('export: pages filled continuously (fewer pages than before), three columns in every row', 2 <= pages <= 4 and zeilen3 and all(n == 3 for n in zeilen3), (pages, zeilen3))
     check('export: logo on the first page', e.locator('#print-root .pl-page').first.locator('img.al-logo').count() == 1 and e.locator('#print-root img.al-logo').count() == 1)
-    check('export: note on the last page', e.locator('#print-root .pl-page').last.locator('.al-note').count() == 1 and e.locator('#print-root .al-note').count() == 1)
+    check('export: note on the last page', e.locator('#print-root .pl-page').last.locator('.pl-hinweis').count() == 1 and e.locator('#print-root .pl-hinweis').count() == 1)
     check('export: every article once', e.locator('#print-root tr.row').count() == 276 and e.locator('#print-root .star, #print-root .qty').count() == 0)
     e.emulate_media(media='print')
     pdf = e.pdf(prefer_css_page_size=True, print_background=True)
@@ -150,7 +158,9 @@ with sync_playwright() as pw:
     check('large offer: at most three columns per row', spalten and max(spalten) <= 3, spalten)
     x.evaluate("window.dispatchEvent(new Event('beforeprint'))")
     pages = x.locator('#print-root .pl-page').count()
-    check('large offer export: section continues on further pages', pages >= 5 and x.locator('#print-root tr.row').count() == total and x.locator('#print-root .al-st .al-cont').count() >= 1, pages)
+    # nur die Gruppe, die allein höher ist als eine Seite, wird im Druck geteilt (Gruppenkopf mit „Forts.“)
+    geteilt = x.eval_on_selector_all('#print-root .al-grp', "gs => gs.filter(g => g.querySelector('.al-cont')).map(g => g.querySelector('.al-gt').firstChild.textContent.trim())")
+    check('large offer export: all articles, only the group taller than a page continues („Forts.“)', pages >= 3 and x.locator('#print-root tr.row').count() == total and len(geteilt) >= 1 and len(set(geteilt)) == 1, (pages, geteilt))
     x.emulate_media(media='print')
     pdf = x.pdf(prefer_css_page_size=True, print_background=True)
     n_pdf = len(_re.findall(rb'/Type\s*/Page[^s]', pdf))

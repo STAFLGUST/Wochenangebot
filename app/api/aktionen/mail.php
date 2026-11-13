@@ -215,90 +215,34 @@ Ausgelöst von: {$me['name']}
             respond(['ok' => true, 'typ' => $typ, 'customer' => customer_public(array_values(array_filter(customers_load()['customers'], function ($x) use ($c) { return $x['id'] === $c['id']; }))[0])]);
         }
 
+        /* Wochenangebot und Sonderposten an Kunden (bisherige Stellen: ältere offene Fenster, Tests). Seit 13.11.2026 liegt der
+           Versand im Modul Versand (versand_senden) – deshalb zusätzlich zum bestehenden Recht der Modulzugang „Versand“
+           (GR-103). Die Arbeit machen wochenmail_senden() / sonderposten_*() in lib/kundenmail.php, wie im Modul Versand. */
         case 'kunden_rundmail': {
             require_perm_confirmed('wochenangebot.senden', 'kunden_rundmail');
+            require_modulzugang('versand', true);
             $cfg = require_mail();
             $b = body();
-            $wk = mail_week();
-            if (!$wk) fail('Es ist noch kein Angebot veröffentlicht.', 409);
-            if ((int)($b['week'] ?? 0) !== $wk['week'] || (int)($b['year'] ?? 0) !== $wk['year']) fail('Inzwischen wurde ein anderes Angebot veröffentlicht. Bitte den Versand neu öffnen.', 409);
-            $ids = array_slice(array_values(array_filter(is_array($b['ids'] ?? null) ? $b['ids'] : [], 'is_string')), 0, 20);
-            $note = mb_substr(trim((string)($b['note'] ?? '')), 0, 1000);
-            $jobs = []; $res = []; $map = [];
-            foreach (customers_load()['customers'] as $c) {
-                if (!in_array($c['id'], $ids, true)) continue;
-                $map[$c['id']] = $c;
-                $why = empty($c['active']) ? 'Kunde inaktiv' : (empty($c['email']) ? 'keine E-Mail-Adresse' : (empty($c['login']['active']) ? 'kein aktiver Zugang' : (!customer_offers($c) ? 'kein Angebot freigeschaltet' : (array_key_exists('mailAngebot', $c) && empty($c['mailAngebot']) ? (!empty($c['abgemeldet']) ? 'hat sich vom Wochenangebot abgemeldet' : 'Wochenangebot per E-Mail nicht gewünscht') : ''))));
-                if ($why !== '') { $res[$c['id']] = ['ok' => false, 'error' => $why, 'skipped' => true]; continue; }
-                $jobs[$c['id']] = mail_job_for($c, 'woche', $note, $wk);
-            }
-            @set_time_limit(180);
-            ignore_user_abort(true);
-            $res = $res + ($jobs ? mail_send_many($cfg, $jobs) : []);
-            $entries = [];
-            foreach ($res as $id => $r) if (empty($r['skipped'])) $entries[] = ['kid' => $id, 'firma' => $map[$id]['firma'], 'to' => $map[$id]['email'], 'typ' => 'woche', 'ok' => $r['ok'], 'error' => $r['error'] ?? ''];
-            if ($entries) mail_record($entries, $wk);
-            $okN = count(array_filter($res, function ($r) { return $r['ok']; }));
-            $bad = array_filter($res, function ($r) { return !$r['ok']; });
-            if ($res) audit('mail', "Wochenangebot KW {$wk['week']}/{$wk['year']} an $okN Kunden versendet" . ($bad ? ' (' . count($bad) . ' nicht zugestellt)' : ''),
-                array_map(function ($id) use ($res, $map) { $r = $res[$id]; return ['k' => "c$id|woche", 'code' => $map[$id]['nr'] ?? '', 'name' => $map[$id]['firma'], 'f' => 'Wochenangebot', 'from' => '', 'to' => ($map[$id]['email'] ?? '') . ($r['ok'] ? '' : ' – ' . $r['error'])]; }, array_keys($res)));
-            $out = [];
-            foreach ($ids as $id) $out[] = ['id' => $id] + ($res[$id] ?? ['ok' => false, 'error' => 'Kunde nicht gefunden']);
-            respond(['ok' => true, 'results' => $out]);
+            respond(['ok' => true, 'results' => wochenmail_senden($cfg, is_array($b['ids'] ?? null) ? $b['ids'] : [], (string)($b['note'] ?? ''), (int)($b['week'] ?? 0), (int)($b['year'] ?? 0))]);
         }
 
         /* ---------- Sonderposten eines Angebots per E-Mail (nur an die Kunden dieses Angebots) ---------- */
         case 'restposten_info': {
             require_perm('sonderposten.senden');
+            require_modulzugang('versand');
             header('Cache-Control: no-store');
             $def = offer_def((string)($_GET['offer'] ?? ''));
             if (!$def) fail('Angebot nicht gefunden.', 404);
-            $pub = store_read('angebot');
-            $items = array_map(function ($it) { return ['id' => $it['id'], 'code' => $it['code'] ?? '', 'name' => $it['name'], 'price' => (float)$it['price']['value'], 'regular' => $it['regular'] ?? null]; }, restposten_items($def));
-            $rec = [];
-            foreach (customers_load()['customers'] as $c) {
-                if (!in_array($def['id'], customer_offers($c), true)) continue;
-                $rec[] = ['id' => $c['id'], 'firma' => $c['firma'], 'nr' => $c['nr'] ?? '', 'email' => $c['email'] ?? '', 'reason' => restposten_reason($c, $def['id'])];
-            }
-            usort($rec, function ($a, $b) { return strcasecmp($a['firma'], $b['firma']); });
-            respond(['ok' => true, 'offer' => ['id' => $def['id'], 'name' => $def['name']], 'publishedAt' => $pub['publishedAt'] ?? null, 'items' => $items, 'recipients' => $rec, 'mailReady' => (bool)mail_cfg() && (bool)mail_base_url()]);
+            respond(['ok' => true] + sonderposten_empfaenger($def) + ['mailReady' => (bool)mail_cfg() && (bool)mail_base_url()]);
         }
 
         case 'kunden_restposten': {
             require_perm_confirmed('sonderposten.senden', 'kunden_restposten');
+            require_modulzugang('versand', true);
             $cfg = require_mail();
             $b = body();
             $def = offer_def((string)($b['offer'] ?? ''));
             if (!$def) fail('Angebot nicht gefunden.', 404);
-            $pub = store_read('angebot');
-            if (!$pub || (string)($b['publishedAt'] ?? '') !== (string)($pub['publishedAt'] ?? '')) fail('Inzwischen wurde neu veröffentlicht. Bitte den Versand neu öffnen und die Sonderposten prüfen.', 409);
-            $items = restposten_items($def);
-            if (!$items) fail('In diesem Angebot sind keine Sonderposten veröffentlicht (oder alle ohne Bestand).', 409);
-            $ids = array_slice(array_values(array_filter(is_array($b['ids'] ?? null) ? $b['ids'] : [], 'is_string')), 0, 200);
-            $note = mb_substr(trim((string)($b['note'] ?? '')), 0, 1000);
-            $jobs = []; $res = []; $map = [];
-            foreach (customers_load()['customers'] as $c) {
-                if (!in_array($c['id'], $ids, true)) continue;
-                $map[$c['id']] = $c;
-                $why = restposten_reason($c, $def['id']);
-                if ($why !== '') { $res[$c['id']] = ['ok' => false, 'error' => $why, 'skipped' => true]; continue; }
-                [$sub, $txt, $html] = mail_tpl_restposten($c, $def, $items, $note);
-                $one = mail_base_url() . '/api/?action=abmelden1&t=' . rawurlencode(abmelde_token($c['id']));
-                $jobs[$c['id']] = ['to' => $c['email'], 'name' => ($c['ansprechpartner'] ?? '') ?: $c['firma'], 'subject' => $sub, 'text' => $txt, 'html' => $html,
-                                   'headers' => ['List-Unsubscribe' => '<' . $one . '>', 'List-Unsubscribe-Post' => 'List-Unsubscribe=One-Click']];
-            }
-            @set_time_limit(300);
-            ignore_user_abort(true);
-            $res = $res + ($jobs ? mail_send_many($cfg, $jobs) : []);
-            $entries = [];
-            foreach ($res as $id => $r) if (empty($r['skipped'])) $entries[] = ['kid' => $id, 'firma' => $map[$id]['firma'], 'to' => $map[$id]['email'], 'typ' => 'restposten', 'ok' => $r['ok'], 'error' => $r['error'] ?? ''];
-            if ($entries) mail_record($entries);
-            $okN = count(array_filter($res, function ($r) { return $r['ok']; }));
-            $bad = array_filter($res, function ($r) { return !$r['ok'] && empty($r['skipped']); });
-            if ($res) audit('mail', "Sonderposten {$def['name']} (" . count($items) . " Artikel) an $okN Kunden versendet" . ($bad ? ' (' . count($bad) . ' nicht zugestellt)' : ''),
-                array_map(function ($id) use ($res, $map) { $r = $res[$id]; return ['k' => "c$id|restposten", 'code' => $map[$id]['nr'] ?? '', 'name' => $map[$id]['firma'], 'f' => 'Sonderposten', 'from' => '', 'to' => ($map[$id]['email'] ?? '') . ($r['ok'] ? '' : ' – ' . $r['error'])]; }, array_keys($res)));
-            $out = [];
-            foreach ($ids as $id) $out[] = ['id' => $id] + ($res[$id] ?? ['ok' => false, 'error' => 'Kunde nicht gefunden']);
-            respond(['ok' => true, 'results' => $out]);
+            respond(['ok' => true, 'results' => sonderposten_senden($cfg, $def, is_array($b['ids'] ?? null) ? $b['ids'] : [], (string)($b['note'] ?? ''), (string)($b['publishedAt'] ?? ''))]);
         }
 }

@@ -12,7 +12,10 @@ if (!defined('WA_API')) { http_response_code(404); exit; }   // nur über api/in
    Die Standards entsprechen dem bisherigen festen Rollenmodell. */
 const PERMS = [
     'angebot.bearbeiten'       => ['g' => 'Angebot', 'l' => 'Entwurf bearbeiten (Preise, Artikel, Preisimport, frühere Version laden)', 'k' => 'machen', 'd' => ['editor'], 'r' => []],
-    'angebot.veroeffentlichen' => ['g' => 'Angebot', 'l' => 'Angebot veröffentlichen', 'k' => 'machen', 'd' => ['editor'], 'r' => []],
+    // Seit 13.11.2026 im Modul Versand (regeln/berechtigungen.toml): wirkt nur zusammen mit dem Modulzugang „versand.zugang“ –
+    // der Schlüssel bleibt (gespeicherte Rollenrechte, GR-103). Bewusst ohne Voraussetzung „r“: sie würde den Zugang mitgeben.
+    'angebot.veroeffentlichen' => ['g' => 'Versand', 'l' => 'Angebot veröffentlichen (Wochenangebot und alle Kundenangebote zusammen)', 'k' => 'machen', 'd' => ['editor'], 'r' => [],
+                                   'h' => 'Macht den gespeicherten Entwurf für Kunden sichtbar – im Modul Versand, nach einem Blick auf die Liste der Änderungen. Wirkt nur zusammen mit dem Zugang zum Modul „Versand“: Wer das Recht hat, aber keinen Zugang, kann nicht veröffentlichen.'],
     'angebote.verwalten'       => ['g' => 'Angebot', 'l' => 'Kundenangebote anlegen und umbenennen', 'k' => 'machen', 'd' => ['editor'], 'r' => []],
     'angebote.loeschen'        => ['g' => 'Angebot', 'l' => 'Kundenangebote löschen, Wochenangebot nur für Kunden sichtbar machen', 'k' => 'machen', 'd' => [], 'r' => ['angebote.verwalten']],
     // Export für WinAB (Auftrag des Inhabers 05.11.2026): ohne Standardrollen, nur wer es ausdrücklich bekommt
@@ -60,8 +63,11 @@ const PERMS = [
     'einzelangebote.sehen'     => ['g' => 'Kunden', 'l' => 'Einzelangebote für Kunden ansehen', 'k' => 'sehen', 'd' => [], 'r' => ['kunden.sehen']],
     'einzelangebote.bearbeiten' => ['g' => 'Kunden', 'l' => 'Einzelangebote erstellen, im Portal freigeben und per E-Mail senden', 'k' => 'machen', 'd' => [], 'r' => ['einzelangebote.sehen']],
     'kunden.bearbeiten'        => ['g' => 'Kunden', 'l' => 'Kunden anlegen, ändern, löschen, Zugänge und Einladungen', 'k' => 'machen', 'd' => [], 'r' => ['kunden.sehen']],
-    'wochenangebot.senden'     => ['g' => 'Kunden', 'l' => 'Wochenangebot per E-Mail an Kunden senden', 'k' => 'machen', 'd' => [], 'r' => ['kunden.sehen']],
-    'sonderposten.senden'      => ['g' => 'Kunden', 'l' => 'Sonderposten per E-Mail an Kunden senden', 'k' => 'machen', 'd' => [], 'r' => ['kunden.sehen']],
+    // Beide seit 13.11.2026 im Modul Versand und nur zusammen mit „versand.zugang“ wirksam (Schlüssel unverändert)
+    'wochenangebot.senden'     => ['g' => 'Versand', 'l' => 'Wochenangebot per E-Mail an Kunden senden', 'k' => 'machen', 'd' => [], 'r' => ['kunden.sehen'],
+                                   'h' => 'Schickt jedem gewählten Kunden eine E-Mail mit den Links zu seinen Angeboten (ohne Preise) – im Modul Versand, mit Bestätigung. Sieht dabei Firmen und E-Mail-Adressen der Empfänger. Wirkt nur zusammen mit dem Zugang zum Modul „Versand“.'],
+    'sonderposten.senden'      => ['g' => 'Versand', 'l' => 'Sonderposten per E-Mail an Kunden senden', 'k' => 'machen', 'd' => [], 'r' => ['kunden.sehen'],
+                                   'h' => 'Schickt die Sonderposten eines Angebots mit Preis an die Kunden genau dieses Angebots – im Modul Versand, mit Bestätigung. Wirkt nur zusammen mit dem Zugang zum Modul „Versand“.'],
     'protokoll.sehen'          => ['g' => 'Verwaltung', 'l' => 'Protokoll ansehen', 'k' => 'sehen', 'd' => [], 'r' => []],
     // Modul Sicherheit (26.10.2026): ohne Standardrollen; Einstellungen, Sperren, Sitzungen und das Beenden des Notfalls bleiben Administratoren vorbehalten
     'sicherheit.sehen'         => ['g' => 'Sicherheit', 'l' => 'Lagebild, Sicherheitsereignisse und Notfall-Zustand ansehen (nur lesen, mit IP-Adressen und Benutzernamen)', 'k' => 'sehen', 'd' => [], 'r' => ['sicherheit.zugang']],
@@ -112,7 +118,7 @@ const PERMS = [
    werden einzeln freigegeben. PERMS_VORSCHAU: Vorschau-Bild je Recht (admin-rollen-vorschau.js, nur Beispieldaten);
    der Modulzugang zeigt immer die Kachel. Gespeichert wird weiter nur die Liste der Rechte – Stufen sind nicht gespeichert
    (GR-006, keine Migration). Neue Rechte ohne Eintrag erscheinen nach ihrer Art (Auftrag des Inhabers 02.11.2026). */
-const PERMS_STUFE_VOLL = ['angebot.veroeffentlichen', 'angebote.loeschen', 'wochenangebot.senden', 'sonderposten.senden', 'leergut.verwalten',
+const PERMS_STUFE_VOLL = ['angebote.loeschen', 'wochenangebot.senden', 'sonderposten.senden', 'leergut.verwalten',
     'crm.master', 'rewe.alle', 'rewe.verwalten', 'rewe.exportieren', 'qs.freigeben', 'qs.verwalten', 'hr.genehmigen', 'hr.uebersicht',
     'marketing.freigeben', 'marketing.verwalten'];
 const PERMS_SENSIBEL = ['bestand.einkaufspreise', 'crm.exportieren', 'controlling.umsatz_ek', 'controlling.bestand_ek', 'controlling.arbeitszeit_sehen',

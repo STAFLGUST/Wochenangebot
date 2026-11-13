@@ -13,7 +13,7 @@ sie. Postfach-Zugangsdaten und den Schlüssel des hinterlegten Postfach-Passwort
 | Datei | Inhalt |
 | --- | --- |
 | `docker-compose.anmeldung.yml` | Ergänzung zu `docker-compose.yml`: App mit dem Image aus `deploy/image` (mod_auth_openidc), Keycloak 26.8.2 und eigene PostgreSQL 17 – fest über Digest; Keycloak nur auf `127.0.0.1:8180`, Datenbank nur im internen Netz |
-| `apache-oidc.conf` | Keycloak-Hosts `dashboard-stafl.de`, `angebot.dashboard-stafl.de`, `verwaltung.dashboard-stafl.de` (dort `/import/` → Importzentrale), `bestand.dashboard-stafl.de`, `hr.dashboard-stafl.de`, `sicherheit.dashboard-stafl.de` (`/` und `/admin/` → `/module/sicherheit/`), `controlling.dashboard-stafl.de` (`/` und `/admin/` → `/module/controlling/`), `leergut.dashboard-stafl.de` (`/` und `/admin/` → `/module/leergut/`), `rewe.dashboard-stafl.de` (`/` und `/admin/` → `/module/rewe/`), `qs.dashboard-stafl.de` (`/` und `/admin/` → `/module/qs/`) (`/` und `/admin/` → `/module/hr/`) , `crm.dashboard-stafl.de` (`/` und `/admin/` → `/module/crm/`) und `marketing.dashboard-stafl.de` (`/` und `/admin/` → `/module/marketing/`) (wie `tests/oidc/apache.conf`); je Host eigener Client, eigene Sitzung und `WA_OBERFLAECHE`; als `sites-enabled/zz-…` eingebunden, damit `angebot-stafl.de` Standard-Host bleibt |
+| `apache-oidc.conf` | Keycloak-Hosts `dashboard-stafl.de`, `angebot.dashboard-stafl.de`, `verwaltung.dashboard-stafl.de` (dort `/import/` → Importzentrale), `bestand.dashboard-stafl.de`, `hr.dashboard-stafl.de`, `sicherheit.dashboard-stafl.de` (`/` und `/admin/` → `/module/sicherheit/`), `controlling.dashboard-stafl.de` (`/` und `/admin/` → `/module/controlling/`), `leergut.dashboard-stafl.de` (`/` und `/admin/` → `/module/leergut/`), `rewe.dashboard-stafl.de` (`/` und `/admin/` → `/module/rewe/`), `qs.dashboard-stafl.de` (`/` und `/admin/` → `/module/qs/`), `versand.dashboard-stafl.de` (`/` und `/admin/` → `/module/versand/`) (`/` und `/admin/` → `/module/hr/`) , `crm.dashboard-stafl.de` (`/` und `/admin/` → `/module/crm/`) und `marketing.dashboard-stafl.de` (`/` und `/admin/` → `/module/marketing/`) (wie `tests/oidc/apache.conf`); je Host eigener Client, eigene Sitzung und `WA_OBERFLAECHE`; als `sites-enabled/zz-…` eingebunden, damit `angebot-stafl.de` Standard-Host bleibt |
 | `realm-mitarbeiter.json` | Realm für den Betrieb, **erzeugt** von `werkzeuge/realm_produktion.py` aus dem Test-Realm (ohne Testnutzer, Geheimnisse als Platzhalter) – nicht von Hand ändern |
 | `pruefen.sh` | Prüfung mit Docker (CI-Auftrag „Anwendungs-Image prüfen“) |
 | `einrichten.sh` | Schritt 2: Geheimnisse in `.env` ergänzen, Realm-Import vorbereiten (startet nichts) |
@@ -123,6 +123,12 @@ Stand 17 (10.11.2026, Keycloak 26.8.2): Keycloak nimmt an der Verwaltungsschnitt
 ältere Keycloak-Fassungen kennen ihn nicht (dann nichts zu tun). **Nach dem Release mit Keycloak 26.8.2 einmal**
 `sh deploy/anmeldung/konten.sh realm-aktualisieren` – bis dahin kann die Verwaltung keine Konten der zentralen Anmeldung
 ändern, und die erste Anmeldung eines Administrators meldet „Die zentrale Anmeldung ist gerade nicht erreichbar“.
+
+Stand 18 (13.11.2026, Auftrag des Inhabers): Client `versand` für `versand.dashboard-stafl.de` (Modul Versand – Angebot
+veröffentlichen und an Kunden senden) – gleiches Vorgehen wie Stand 13 (`OIDC_SECRET_VERSAND`/`OIDC_CRYPTO_VERSAND`, danach
+`docker compose up -d app-mitarbeiter`). Anders als bei den bisherigen Modul-Adressen gab es den DNS-Eintrag `versand` vorher
+nicht, und der Server steht inzwischen hinter bunny.net: Reihenfolge (DNS, Zertifikat, Realm, bunny) in
+[docs/plattform/inbetriebnahme-versand.md](../../docs/plattform/inbetriebnahme-versand.md).
 
 Stand 16 (04.11.2026, ADR-007 Stufe 1b): Die Verwaltung der Anwendung ändert nur noch Konten der Gruppe
 `anwendungskonten` – das sind die Konten der Mitarbeiter **ohne** Administratorrolle. Administratoren, Konten mit

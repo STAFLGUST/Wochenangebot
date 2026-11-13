@@ -410,3 +410,144 @@ function draft_conflict(?array $draft): void
     respond(['ok' => false, 'conflict' => true, 'revision' => draft_rev($draft), 'by' => $by,
              'error' => ($by !== '' ? $by : 'Jemand anderes') . ' hat inzwischen ' . $what . '.'], 409);
 }
+
+/* ---------------- Veröffentlichen und Änderungsliste (Schnittstelle des Angebots) ----------------
+   Eine Stelle für die Aktion publish (Eingabebereich, ältere Fenster, Tests) und das Modul Versand (versand_veroeffentlichen):
+   $modell = null veröffentlicht den gespeicherten Entwurf – das Modul Versand hat das Modell des Editors nicht. $revision
+   (null = ungeprüft) muss zur Revision des Entwurfs passen, sonst 409 (draft_conflict). Rechte prüft der Aufrufer (GR-103). */
+function angebot_veroeffentlichen(?array $modell, $revision): array
+{
+    global $CFG;
+    $keep = (int)$CFG['keep_versions'];
+    return with_lock('entwurf', function () use ($modell, $revision, $keep) {
+        $dr = store_read('entwurf');
+        if ($revision !== null && (int)$revision !== draft_rev($dr)) draft_conflict($dr);
+        if ($modell === null) {
+            if (!$dr) respond(['ok' => false, 'code' => 'nichts_offen', 'revision' => draft_rev($dr),
+                               'error' => 'Es gibt keine offenen Änderungen – veröffentlicht ist bereits der aktuelle Stand.'], 409);
+            $modell = $dr;
+        }
+        $model = clean_model($modell, true);
+        $prev = store_read('angebot');
+        if ($prev) {
+            $id = gmdate('Ymd-His') . '-' . bin2hex(random_bytes(3));
+            store_write('versionen/' . $id, $prev);
+            $list = store_names('versionen');
+            rsort($list);
+            foreach (array_slice($list, $keep) as $old) store_delete($old);
+        }
+        // streng steigend mit Millisekunden (wie einzel_stand): zwei Veröffentlichungen in derselben Sekunde bekommen
+        // verschiedene Stände – ein Bestellwunsch auf der ersten Fassung wird dann nicht mit der zweiten gerechnet
+        $model['publishedAt'] = einzel_stand(is_array($prev) && is_string($prev['publishedAt'] ?? null) ? $prev['publishedAt'] : null);
+        store_write('angebot', $model);
+        $rev = draft_end($dr, 'veröffentlicht');
+        $h = history_from_model($model, 'Veröffentlichung', $model['publishedAt']);
+        if ($h) { $hid = history_id($h['week'], $h['year']); store_write('historie/' . $hid, $h); history_undelete($hid); }
+        $d = $prev ? changes_between($prev, $model) : [];
+        audit('publish', 'KW ' . $model['meta']['week'] . '/' . $model['meta']['year'] . ' veröffentlicht – ' . count($model['items']) . ' Artikel' . ($prev ? ' (' . changes_summary($d) . ')' : ' (erste Veröffentlichung)'), array_slice($d, 0, 2000));
+        return ['publishedAt' => $model['publishedAt'], 'revision' => $rev, 'week' => $model['meta']['week'], 'year' => $model['meta']['year'], 'artikel' => count($model['items'])];
+    });
+}
+/* Weicht der Aufbau (Reihenfolge der Gruppen, Bereich je Gruppe, Gruppe und Reihenfolge der Artikel) vom veröffentlichten Stand
+   ab? Gleiche Regel wie aufbauGeaendert() im Editor (admin.js): nur Gruppen und Artikel, die es in beiden Ständen gibt. */
+function angebot_aufbau_geaendert(array $pub, array $neu): bool
+{
+    $pg = []; foreach ($pub['groups'] ?? [] as $g) $pg[(string)$g['id']] = (string)$g['name'];
+    $used = []; foreach ($neu['items'] ?? [] as $it) $used[(string)$it['groupId']] = true;
+    $neuG = array_values(array_filter($neu['groups'] ?? [], fn($g) => isset($used[(string)$g['id']])));
+    $mg = []; foreach ($neuG as $g) $mg[(string)$g['id']] = (string)$g['name'];
+    $sig = function (array $gs, array $other): string {
+        $o = [];
+        foreach ($gs as $g) if (($other[(string)$g['id']] ?? null) === (string)$g['name']) $o[] = $g['id'] . "\x01" . ($g['section'] ?? '');
+        return implode("\x02", $o);
+    };
+    if ($sig($pub['groups'] ?? [], $mg) !== $sig($neuG, $pg)) return true;
+    $reihe = function (array $m, array $other): string {
+        $gi = []; foreach ($m['groups'] ?? [] as $i => $g) $gi[(string)$g['id']] = $i;
+        $x = [];
+        foreach ($m['items'] ?? [] as $i => $it) if (isset($other[(string)$it['id']])) $x[] = [$gi[(string)$it['groupId']] ?? PHP_INT_MAX, $i, $it['id'] . '@' . $it['groupId']];
+        usort($x, fn($a, $b) => [$a[0], $a[1]] <=> [$b[0], $b[1]]);
+        return implode("\x02", array_column($x, 2));
+    };
+    $idsN = []; foreach ($neu['items'] ?? [] as $it) $idsN[(string)$it['id']] = true;
+    $idsP = []; foreach ($pub['items'] ?? [] as $it) $idsP[(string)$it['id']] = true;
+    return $reihe($pub, $idsN) !== $reihe($neu, $idsP);
+}
+/* Unveröffentlichte Änderungen des Entwurfs als Zeilen für die Liste „Veröffentlichen“ (Modul Versand). Grundlage ist
+   changes_between() – dieselbe Liste, die das Protokoll beim Veröffentlichen festhält. Gezählt wird wie am Knopf des Editors:
+   Kopfdaten einmal, je Artikel eine Preisänderung oder eine Bearbeitung, je Angebot und Artikel ein Angebotspreis, je Artikel
+   eine Empfehlung, je Angebot die Werbung, der Aufbau einmal. „angebot“ = Angebot, das die Zeile betrifft ('' = alle).
+   Rückgabe: erste (noch nichts veröffentlicht), entwurf (bool), revision, anzahl, zeilen [{art, angebot, code, name, von, nach,
+   zusatz}], jeAngebot {Angebots-ID bzw. '' → Anzahl}, arten {art → Anzahl}. Zeilen enthalten Preise – der Aufrufer liefert
+   sie nur mit Modulzugang Angebot aus. */
+function angebot_aenderungen(?array $pub = null, ?array $dr = null): array
+{
+    $pub = $pub ?? store_read('angebot');
+    $dr = $dr ?? store_read('entwurf');
+    $out = ['erste' => !$pub, 'entwurf' => (bool)$dr, 'revision' => draft_rev($dr), 'anzahl' => 0, 'zeilen' => [], 'jeAngebot' => [], 'arten' => []];
+    if (!$dr) return $out;
+    if (!$pub) { $out['anzahl'] = count($dr['items'] ?? []); $out['arten'] = ['neu' => $out['anzahl']]; $out['jeAngebot'] = ['' => $out['anzahl']]; return $out; }
+    $zeilen = []; $kopf = []; $jeArtikel = []; $aufbau = false;
+    foreach (changes_between($pub, $dr) as $c) {
+        [$id, $f] = explode('|', (string)$c['k'], 2) + [1 => ''];
+        $z = ['art' => '', 'angebot' => '', 'code' => (string)$c['code'], 'name' => (string)$c['name'], 'von' => (string)$c['from'], 'nach' => (string)$c['to'], 'zusatz' => ''];
+        if ($id === 'm' && strpos($f, 'w:') === 0) { $z['art'] = 'werbung'; $z['angebot'] = substr($f, 2); $z['name'] = 'Werbung'; $zeilen[] = $z; }
+        elseif ($id === 'm') $kopf[] = $c;
+        elseif ($f === 'groupId' || in_array($c['f'], ['Bereich', 'Gruppenname'], true)) $aufbau = true;   // Gruppe eines Artikels, Bereich oder Name einer Gruppe
+        elseif ($f === '+') { $z['art'] = 'neu'; $zeilen[] = $z; }
+        elseif ($f === '-') { $z['art'] = 'entfernt'; $zeilen[] = $z; }
+        elseif (strpos($f, 'v:') === 0) { $oid = substr($f, 2); $z['art'] = $oid === OFFER_STD ? 'sichtbar' : 'angebotspreis'; $z['angebot'] = $oid; $zeilen[] = $z; }
+        elseif ($f === 'sale') { $z['art'] = 'empfehlung'; $zeilen[] = $z; }
+        else $jeArtikel[$id][] = $c;   // Preis, Preisbezeichnung, Zusatzpreise, Stammfelder, eigene Bezeichnung je Angebot
+    }
+    foreach ($jeArtikel as $liste) {
+        $preis = null; $felder = [];
+        foreach ($liste as $c) {
+            $f = explode('|', (string)$c['k'], 2)[1] ?? '';
+            if ($f === 'price') $preis = $c;
+            else $felder[] = $c['f'] . ': ' . ($c['from'] !== '' ? $c['from'] : '—') . ' → ' . ($c['to'] !== '' ? $c['to'] : '—');
+        }
+        $erste = $preis ?? $liste[0];
+        $zeilen[] = ['art' => $preis ? 'preis' : 'bearbeitet', 'angebot' => '', 'code' => (string)$erste['code'], 'name' => (string)$erste['name'],
+                     'von' => $preis ? (string)$preis['from'] : '', 'nach' => $preis ? (string)$preis['to'] : '', 'zusatz' => mb_substr(implode(' · ', $felder), 0, 400)];
+    }
+    if ($kopf) array_unshift($zeilen, ['art' => 'kopf', 'angebot' => '', 'code' => '', 'name' => implode(' · ', array_map(fn($c) => (string)$c['f'], $kopf)),
+        'von' => implode(' · ', array_map(fn($c) => $c['f'] === 'Kalenderwoche' ? 'KW ' . $c['from'] : (string)$c['from'], $kopf)),
+        'nach' => implode(' · ', array_map(fn($c) => $c['f'] === 'Kalenderwoche' ? 'KW ' . $c['to'] : (string)$c['to'], $kopf)), 'zusatz' => '']);
+    if ($aufbau || angebot_aufbau_geaendert($pub, $dr)) $zeilen[] = ['art' => 'aufbau', 'angebot' => '', 'code' => '', 'name' => 'Reihenfolge der Bereiche, Gruppen oder Artikel geändert', 'von' => '', 'nach' => '', 'zusatz' => 'gilt für alle Angebote'];
+    foreach ($zeilen as $z) {
+        $out['arten'][$z['art']] = ($out['arten'][$z['art']] ?? 0) + 1;
+        $out['jeAngebot'][$z['angebot']] = ($out['jeAngebot'][$z['angebot']] ?? 0) + 1;
+    }
+    $out['anzahl'] = count($zeilen);
+    $out['zeilen'] = array_slice($zeilen, 0, 2000);
+    return $out;
+}
+/* Stand des Angebots für das Modul Versand – nur Zahlen und Namen, keine Preise: veröffentlichter Stand und Entwurf (Woche,
+   Zeitpunkt, wer zuletzt gespeichert hat), wer gerade im Eingabebereich arbeitet, und je Angebot Name, Sichtbarkeit,
+   Artikelzahl (Entwurf, sonst veröffentlicht – wie Kunden es nach dem Veröffentlichen sehen) und veröffentlichte Sonderposten. */
+function angebot_stand(): array
+{
+    $pub = store_read('angebot');
+    $dr = store_read('entwurf');
+    $kopf = function (?array $m): ?array {
+        if (!$m) return null;
+        return ['week' => (int)($m['meta']['week'] ?? 0), 'year' => (int)($m['meta']['year'] ?? 0), 'artikel' => count($m['items'] ?? [])];
+    };
+    $now = time();
+    $da = [];
+    foreach ((array)(store_read('anwesenheit') ?? []) as $v) if (is_array($v) && (int)($v['at'] ?? 0) >= $now - 45) $da[] = (string)($v['name'] ?? '');
+    sort($da);
+    $angebote = [];
+    $modell = $dr ?: $pub;
+    foreach (array_merge([offer_def(OFFER_STD)], offers_load()['offers']) as $def) {
+        $n = 0; $sp = 0;
+        try { if ($modell) $n = count(offer_resolve($modell, $def)['items']); } catch (Throwable $e) { $n = 0; }
+        try { if ($pub) $sp = count(restposten_items($def)); } catch (Throwable $e) { $sp = 0; }
+        $angebote[] = ['id' => (string)$def['id'], 'name' => (string)$def['name'], 'std' => $def['id'] === OFFER_STD,
+                       'oeffentlich' => $def['id'] === OFFER_STD && std_public(), 'artikel' => $n, 'sonderposten' => $sp];
+    }
+    return ['veroeffentlicht' => $pub ? $kopf($pub) + ['publishedAt' => $pub['publishedAt'] ?? null] : null,
+            'entwurf' => $dr ? $kopf($dr) + ['savedAt' => $dr['savedAt'] ?? null, 'savedBy' => (string)($dr['savedBy'] ?? '')] : null,
+            'anwesend' => array_values(array_unique(array_filter($da, 'strlen'))), 'angebote' => $angebote];
+}

@@ -40,6 +40,7 @@ CTL = f'https://controlling.stafl.test:{PORT}'   # Modul Controlling (Stand 10, 
 LG = f'https://leergut.stafl.test:{PORT}'   # Modul Leergut (Stand 11, Auftrag des Inhabers 29.10.2026)
 RW = f'https://rewe.stafl.test:{PORT}'   # Modul REWE (Stand 12, Auftrag des Inhabers 30.10.2026)
 QS = f'https://qs.stafl.test:{PORT}'   # Modul Qualitätssicherung (Stand 13, Auftrag des Inhabers 30.10.2026)
+VS = f'https://versand.stafl.test:{PORT}'   # Modul Versand (Stand 18, Auftrag des Inhabers 13.11.2026)
 LEGACY = f'http://127.0.0.1:{os.environ.get("APACHE_PORT", "8280")}'
 NZ = f'http://127.0.0.1:{os.environ.get("NOTZUGANG_PORT", "8290")}'   # Notzugang über einen SSH-Tunnel (ADR-007 Regel 6)
 KC = f'http://127.0.0.1:{os.environ.get("KC_PORT", "8180")}'
@@ -232,7 +233,7 @@ check('Realm: nur HTTPS, Anmeldesitzung 4 Std. Leerlauf / 10 Std. höchstens',
       realm.get('sslRequired') == 'all' and realm.get('ssoSessionIdleTimeout') == 14400 and realm.get('ssoSessionMaxLifespan') == 36000)
 _, _, text = anfrage(KC + '/admin/realms/mitarbeiter/clients', kopf={'Authorization': 'Bearer ' + tok})
 clients = {c['clientId']: c for c in (json.loads(text) if text.startswith('[') else [])}
-for cid in ('dashboard', 'angebot', 'verwaltung', 'bestand', 'hr', 'crm', 'marketing', 'sicherheit', 'controlling', 'leergut', 'rewe', 'qs'):
+for cid in ('dashboard', 'angebot', 'verwaltung', 'bestand', 'hr', 'crm', 'marketing', 'sicherheit', 'controlling', 'leergut', 'rewe', 'qs', 'versand'):
     c = clients.get(cid, {})
     check(f'Client {cid}: vertraulich, nur Code-Ablauf, PKCE S256, exakte Weiterleitung, kein CORS',
           c.get('publicClient') is False and c.get('directAccessGrantsEnabled') is False and c.get('implicitFlowEnabled') is False
@@ -244,7 +245,7 @@ for cid in ('dashboard', 'angebot', 'verwaltung', 'bestand', 'hr', 'crm', 'marke
           (c.get('attributes', {}).get('minimum.acr.value'), [m.get('protocolMapper') for m in c.get('protocolMappers', [])]))
 check('Realm: eigener Anmeldeablauf mit Stufen (Passwort, zweiter Faktor)', realm.get('browserFlow') == 'mitarbeiter-browser', realm.get('browserFlow'))
 _log = open(os.path.join(WORK, 'realm-aktualisieren.log'), encoding='utf-8').read()
-check('Realm auf aktuellem Stand (realm-aktualisieren beim Start, Protokoll)', 'Realm aktuell (Stand 17' in _log, _log[-300:])
+check('Realm auf aktuellem Stand (realm-aktualisieren beim Start, Protokoll)', 'Realm aktuell (Stand 18' in _log, _log[-300:])
 # Stand 15: Passwortregeln aus der Anwendung – beim Start ist sie hier nicht über APP_PHP erreichbar: Hinweis, nichts geändert, kein Abbruch
 check('Stand 15: ohne lesbare Anwendung Hinweis statt Abbruch, Passwortregeln unverändert',
       'Einstellungen der Anwendung nicht lesbar' in _log and 'konten.sh richtlinien' in _log and realm.get('failureFactor') == 5, _log[-500:])
@@ -305,6 +306,11 @@ check('Stand 13: Client „qs“ nachträglich angelegt, Geheimnisse in .env erz
       and GEHEIM['OIDC_SECRET_QS'] not in _log, _log[-500:])
 check('Client „qs“: Geheimnis aus .env übernommen, kein Platzhalter, Rücksprung nur auf den eigenen Host',
       clients.get('qs', {}).get('secret') not in (None, '@GEHEIM_QS@') and clients.get('qs', {}).get('redirectUris') == [QS + '/oidc/callback'])
+check('Stand 18: Client „versand“ nachträglich angelegt, Geheimnisse in .env erzeugt (ohne Anzeige)',
+      'angelegt:  Client versand' in _log and 'erzeugt:   OIDC_SECRET_VERSAND in .env' in _log and 'erzeugt:   OIDC_CRYPTO_VERSAND in .env' in _log
+      and GEHEIM['OIDC_SECRET_VERSAND'] not in _log, _log[-500:])
+check('Client „versand“: Geheimnis aus .env übernommen, kein Platzhalter, Rücksprung nur auf den eigenen Host',
+      clients.get('versand', {}).get('secret') not in (None, '@GEHEIM_VERSAND@') and clients.get('versand', {}).get('redirectUris') == [VS + '/oidc/callback'])
 check('Stand 8: Client „konten“ (Mitarbeiterkonten aus der Verwaltung) nachträglich angelegt, nur Geheimnis (kein Sitzungsschlüssel), nicht angezeigt',
       'angelegt:  Client konten' in _log and 'erzeugt:   OIDC_SECRET_KONTEN in .env' in _log and 'OIDC_CRYPTO_KONTEN' not in _log
       and GEHEIM['OIDC_SECRET_KONTEN'] not in _log and 'gesetzt:   Recht view-users' in _log and 'manage-users' not in _log, _log[-600:])
@@ -618,7 +624,18 @@ for pfad in ('/', '/admin/', '/admin'):
     check(f'Qualitätssicherung {pfad}: Weiterleitung zum QM-System (/module/qs/), kein Eingabebereich auf dem QS-Host',
           code == 302 and (kopf.get('Location') or '').endswith('/module/qs/'), (code, kopf.get('Location')))
 check('Qualitätssicherung: Stylesheets ohne Anmeldung (Abmeldeseite)', anfrage(QS + '/assets/app.css')[0] == 200 and anfrage(QS + '/dashboard/abgemeldet.html')[0] == 200)
-for h in (D, A, W, B, HR, CRM, MKT, SIC, CTL, LG, RW, QS):
+code, kopf, _ = anfrage(VS + '/module/versand/', kopf=SEITE)
+check('Versand ohne Anmeldung → Keycloak, eigener Client und eigene Rücksprungadresse',
+      code in (302, 303) and urllib.parse.parse_qs(urllib.parse.urlparse(kopf.get('Location') or '').query).get('client_id') == ['versand']
+      and urllib.parse.parse_qs(urllib.parse.urlparse(kopf.get('Location') or '').query).get('redirect_uri') == [VS + '/oidc/callback'], kopf.get('Location'))
+check('Versand: Schnittstelle ohne Anmeldung 401 (auch versand_start, versand_aenderungen, versand_empfaenger, versand_verlauf)',
+      all(anfrage(VS + '/api/?action=' + a)[0] == 401 for a in ('status', 'versand_start', 'versand_aenderungen', 'versand_empfaenger&art=woche', 'versand_verlauf')))
+for pfad in ('/', '/admin/', '/admin'):
+    code, kopf, _ = anfrage(VS + pfad, kopf=SEITE)
+    check(f'Versand {pfad}: Weiterleitung zum Versand (/module/versand/), kein Eingabebereich auf dem Versand-Host',
+          code == 302 and (kopf.get('Location') or '').endswith('/module/versand/'), (code, kopf.get('Location')))
+check('Versand: Stylesheets ohne Anmeldung (Abmeldeseite)', anfrage(VS + '/assets/app.css')[0] == 200 and anfrage(VS + '/dashboard/abgemeldet.html')[0] == 200)
+for h in (D, A, W, B, HR, CRM, MKT, SIC, CTL, LG, RW, QS, VS):
     code, kopf, text = anfrage(h + '/oidc/callback?' + urllib.parse.urlencode({'state': 'abgelaufen-oder-fremder-tab', 'code': 'x'}), kopf=SEITE)
     check(f'Rückkehr von der Anmeldung ohne passenden Zustand ({h.split("//")[1].split(".")[0]}): Weiterleitung zum Host statt „Bad Request“',
           code in (302, 303) and (kopf.get('Location') or '').startswith(h + '/'), (code, kopf.get('Location'), text[:80]))
@@ -880,8 +897,8 @@ with sync_playwright() as pw:
     # diese Aktion gibt es nur auf dem Dashboard-Host (GR-109); hier läuft sie mit echter Anmeldung auf genau diesem Host
     pg.wait_for_selector('#db-heute-liste[aria-busy="false"]'); pg.wait_for_selector('#db-grid .db-tile')
     _lz = {m: (tag_, href) for m, tag_, href in pg.eval_on_selector_all('#r-leiste .r-eintrag[data-modul]', 'els => els.map(e => [e.dataset.modul, e.tagName, e.getAttribute("href")])')}
-    # Controlling: Modulzugang standardmäßig niemand (Finanzdaten, 28.10.2026) – der Eintrag fehlt ohne Zugang
-    check('Seitenleiste: Start und zwölf Anwendungen (ohne Controlling), Angebot verfügbar', len(_lz) == 13 and 'controlling' not in _lz and _lz['angebot'][0] == 'A', sorted(_lz))
+    # Controlling und Versand: Modulzugang standardmäßig niemand (Finanzdaten, 28.10.2026; Versand, 13.11.2026) – der Eintrag fehlt ohne Zugang
+    check('Seitenleiste: Start und zwölf Anwendungen (ohne Controlling und Versand), Angebot verfügbar', len(_lz) == 13 and 'controlling' not in _lz and 'versand' not in _lz and _lz['angebot'][0] == 'A', sorted(_lz))
     check('Verwaltung verfügbar (freigegeben, Verweis)', _lz['verwaltung'][0] == 'A' and _lz['verwaltung'][1], _lz.get('verwaltung'))
     check('Bestand, Import, HR, CRM, Marketing, Leergut, REWE und Qualitätssicherung verfügbar (Verweise)', all(_lz[m][0] == 'A' and _lz[m][1]
           for m in ('bestand', 'import', 'hr', 'crm', 'marketing', 'leergut', 'rewe', 'qs')), _lz)
@@ -980,7 +997,10 @@ with sync_playwright() as pw:
     check('Verwaltung: erster erlaubter Bereich geöffnet (nicht der Angebotseditor)', pv.is_hidden('#view-edit') and pv.is_visible('#view-master'))
     check('Verwaltung: keine Angebotsaktionen in der Kopfzeile (Veröffentlichen, Entwurfsstand, Angebotsseite)',
           pv.is_hidden('#btn-publish') and pv.is_hidden('#save-state') and pv.is_hidden('#btn-site') and pv.is_hidden('#btn-send'))
-    check('Angebot: Kopfzeile unverändert (Veröffentlichen sichtbar)', pa.is_visible('#btn-publish') and pa.text_content('#topbar h1') == 'Eingabebereich')
+    # Seit 13.11.2026 liegen „Veröffentlichen“ und „An Kunden senden“ im Modul Versand; im Angebot steht an ihrer Stelle „Drucken“
+    check('Angebot: Kopfzeile mit „Drucken“, ohne „Veröffentlichen“/„An Kunden senden“ (Modul Versand)',
+          pa.is_visible('#btn-drucken') and pa.locator('#btn-publish, #btn-send').count() == 0 and pa.text_content('#topbar h1') == 'Eingabebereich',
+          (pa.is_visible('#btn-drucken'), pa.locator('#btn-publish, #btn-send').count(), pa.text_content('#topbar h1')))
     # Rückweg zum Dashboard in der Kopfzeile (Adresse vom Webserver: WA_DASHBOARD, sonst https://dashboard-stafl.de/)
     for name, seite in (('Angebot', pa), ('Verwaltung', pv)):
         check(f'{name}: Knopf „Start“ oben sichtbar, führt zum Dashboard-Host', seite.is_visible('#btn-dashboard')

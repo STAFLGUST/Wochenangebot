@@ -1,6 +1,5 @@
 """Mehrere Mitarbeiter bearbeiten den Entwurf gleichzeitig: Abgleich, Konflikte, Anwesenheit, Inaktivität."""
 import os
-import re
 import subprocess
 import sys
 import time
@@ -76,7 +75,10 @@ E.call('draft')
 check('normal request counts as activity', sess_seen(E) > old)
 
 # --- Veröffentlichen/Verwerfen prüfen die Revision; veraltete Fenster legen den Entwurf nicht neu an
+# (seit 13.11.2026 braucht die Aktion publish zusätzlich den Modulzugang „Versand“ – Erika als Bearbeiterin hat ihn nicht)
 code, r = E.call('publish', {'model': m0, 'revision': r0})
+check('publish without access to Versand rejected (403)', code == 403 and 'Versand' in r.get('error', ''), (code, r))
+code, r = A.call('publish', {'model': m0, 'revision': r0})
 check('publish with stale revision rejected', code == 409, code)
 code, r = A.call('publish', {'model': ma, 'revision': r1})
 check('publish with current revision ok', code == 200 and r['revision'] == r1 + 1, (code, r))
@@ -150,25 +152,24 @@ with sync_playwright() as pw:
     check('after leaving field: own and remote change saved', price(srv, I6) == 66.66 and price(srv, I1) == 12.34, (price(srv, I6), price(srv, I1)))
     check('remote change then shown', pin(e, I1).input_value() == '12,34', pin(e, I1).input_value())
 
-    # Veröffentlichen, während jemand anderes noch gespeichert hat
-    # Hintergrundabgleich kurz anhalten, damit der Konflikt sicher beim Veröffentlichen auftritt (nicht vorher per Abgleich)
-    ping = re.compile(r'action=draft_ping')
-    e.route(ping, lambda route: route.abort())
-    e.click('#btn-publish'); e.wait_for_selector('#dlg-publish[open] [data-ia="publish"]')
-    d = A.call('draft')[1]; m = d['draft']; set_price(m, I2, 23.45)
-    A.call('save_draft', {'model': m, 'revision': d['revision']})
-    e.click('#dlg-publish [data-ia="publish"]')
-    e.wait_for_selector('#dlg-publish .err-box', timeout=8000)
-    check('publish conflict explained', ADMIN_NAME in e.inner_text('#dlg-publish .err-box') and 'erneut veröffentlichen' in e.inner_text('#dlg-publish .err-box'), e.inner_text('#dlg-publish .err-box'))
+    # Veröffentlichen (seit 13.11.2026 im Modul Versand), während jemand anderes noch gespeichert hat: Wer veröffentlicht, hat die
+    # Liste der Änderungen zu einem Stand geprüft (Revision). Speichert Erika danach im Eingabebereich, lehnt der Server ab (409)
+    # und nichts wird veröffentlicht; mit dem neuen Stand klappt es. Die Oberfläche dazu prüft die Gruppe „versand“.
+    gesehen = A.call('versand_start')[1]['aenderungen']['revision']
+    pin(e, I2).fill('23,45'); pin(e, I2).press('Enter'); wait_saved(e)
+    code, r = A.call('versand_veroeffentlichen', {'revision': gesehen})
+    check('publish conflict explained', code == 409 and r.get('conflict') and 'Erika Editor' in r.get('error', '') and A.call('draft')[1]['draft'] is not None, (code, r))
     e.screenshot(path=SH + '/gemeinsam-konflikt.png')
-    e.click('#dlg-publish [data-ia="publish"]')
-    e.wait_for_selector('#dlg-publish', state='hidden', timeout=15000)
-    e.unroute(ping)
+    code, r = A.call('versand_veroeffentlichen', {'revision': A.call('versand_start')[1]['aenderungen']['revision']})
+    check('publish with the current revision ok', code == 200, (code, r))
     pub_items = A.call('draft')[1]['published']['items']
     pv = {x['id']: (x.get('price') or {}).get('value') for x in pub_items}
     check('second publish includes everyone\'s changes', pv.get(I2) == 23.45 and pv.get(I6) == 66.66 and pv.get(I4) == 44.44, {k: pv.get(k) for k in (I2, I4, I6)})
-    sync(a)
-    check('other window follows publication (no stale draft)', A.call('draft')[1]['draft'] is None and 'Keine Änderungen' in a.inner_text('#save-state'), a.inner_text('#save-state'))
+    for pg in (a, e):   # offene Fenster des Eingabebereichs übernehmen die Veröffentlichung mit ihrem Abgleich
+        pg.evaluate("document.dispatchEvent(new Event('visibilitychange'))")
+        pg.wait_for_function("/Keine Änderungen gegenüber der veröffentlichten Fassung/.test(document.querySelector('#save-state').textContent)", timeout=15000)
+    check('other windows follow publication (no stale draft)', A.call('draft')[1]['draft'] is None and 'Keine Änderungen' in a.inner_text('#save-state')
+          and 'Keine Änderungen' in e.inner_text('#save-state') and e.locator('a.zum-versand').count() == 0 and a.locator('#save-state a.zum-versand').count() == 1, a.inner_text('#save-state'))
     a.screenshot(path=SH + '/gemeinsam.png')
     check('no page errors', not errs, errs[:3])
     br.close()

@@ -304,7 +304,11 @@ switch ($action) {
             if ($aktiv && !$st) fail('Bitte mindestens eine Staffel angeben oder die Frachtregel ausschalten.', 422);
             $zus = mb_substr(trim(str_replace("\r", '', preg_replace('/[\x00-\x08\x0b-\x1f]/u', '', (string)($b['zusatz'] ?? '')) ?? '')), 0, 600);
             $new = ['aktiv' => $aktiv, 'staffeln' => $st, 'zusatz' => $zus, 'updatedAt' => now(), 'updatedBy' => $me['name']];
-            store_write('fracht', $new);
+            with_lock('fracht', function () use ($new) {
+                $roh = store_read('fracht');
+                // Fußzeile im Druck (module/angebot/druck.php) liegt im selben Dokument und bleibt erhalten
+                store_write('fracht', $new + (is_array($roh) && is_array($roh['druck'] ?? null) ? ['druck' => $roh['druck']] : []));
+            });
             $fmt = fn($s) => implode('; ', array_map(fn($x) => 'unter ' . $x['unter'] . ' kg: ' . de_num($x['kosten']) . ' €', $s['staffeln'])) ?: '–';
             $ch = [];
             if ($old['aktiv'] !== $aktiv) $ch[] = ['k' => 'fr|aktiv', 'code' => '', 'name' => 'Fracht', 'f' => 'Frachtregel', 'from' => $old['aktiv'] ? 'an' : 'aus', 'to' => $aktiv ? 'an' : 'aus'];
@@ -312,6 +316,19 @@ switch ($action) {
             if ($old['zusatz'] !== $zus) $ch[] = ['k' => 'fr|zus', 'code' => '', 'name' => 'Fracht', 'f' => 'Zusatz im Hinweis', 'from' => $old['zusatz'], 'to' => $zus];
             if ($ch) audit('mail', 'Fracht und Hinweis im Angebot geändert', $ch);
             respond(['ok' => true, 'fracht' => fracht_settings(), 'hinweis' => fracht_hinweis()]);
+        }
+
+        /* Fußzeile im Druck der Angebote (module/angebot/druck.php): lesen mit Modulzugang Angebot, ändern nur Administratoren */
+        case 'druck_fuss': {
+            require_modulzugang('angebot');
+            header('Cache-Control: no-store');
+            require_once dirname(__DIR__) . '/module/angebot/druck.php';
+            respond(['ok' => true, 'fuss' => druck_fuss(), 'vorgabe' => DRUCK_FUSS_VORGABE, 'hinweis' => fracht_hinweis()]);
+        }
+        case 'druck_fuss_save': {
+            $me = require_auth(true, 'admin');
+            require_once dirname(__DIR__) . '/module/angebot/druck.php';
+            respond(['ok' => true, 'fuss' => druck_fuss_speichern(body()['fuss'] ?? null, $me)]);
         }
 
         /* ---------- Merkliste je Kunde (geräteübergreifend) ---------- */

@@ -17,6 +17,7 @@
 <link rel="stylesheet" href="../module/hr/verwaltung-hr.css">
 <link rel="stylesheet" href="../module/angebot/preisimport.css">
 <link rel="stylesheet" href="../module/angebot/aufbau.css">
+<link rel="stylesheet" href="../module/angebot/druck.css">
 <link rel="stylesheet" href="../module/verwaltung/angebotskategorien.css">
 <link rel="stylesheet" href="../module/bestand/bestandsliste.css">
 </head>
@@ -71,8 +72,7 @@
         <button class="btn ghost" type="button" id="btn-preview" title="Entwurf des gewählten Angebots so ansehen, wie Kunden ihn nach dem Veröffentlichen sehen"><svg class="i" aria-hidden="true"><use href="#i-eye"/></svg><span class="lbl">Vorschau</span></button>
         <button class="btn" type="button" id="btn-ez-druck" title="Einzelangebot drucken oder als PDF speichern – mit dem Druckdialog der Angebotsseite"><svg class="i" aria-hidden="true"><use href="#i-print"/></svg><span class="lbl">Drucken / PDF</span></button>
         <button class="btn" type="button" id="btn-ez-mail" title="Einzelangebot per E-Mail an den Kunden senden"><svg class="i" aria-hidden="true"><use href="#i-mail"/></svg><span class="lbl">Per E-Mail senden</span></button>
-        <button class="btn" type="button" id="btn-send" hidden title="Veröffentlichtes Wochenangebot per E-Mail an Kunden senden – an jedem Tag möglich"><svg class="i" aria-hidden="true"><use href="#i-mail"/></svg><span class="lbl">An Kunden senden</span></button>
-        <button class="btn primary" type="button" id="btn-publish" title="Entwurf veröffentlichen"><svg class="i" aria-hidden="true"><use href="#i-send"/></svg><span class="lbl">Veröffentlichen</span></button>
+        <button class="btn" type="button" id="btn-drucken" title="Gewähltes Angebot drucken oder als PDF speichern – der Entwurf in der Angebotsansicht, wie in der Vorschau"><svg class="i" aria-hidden="true"><use href="#i-print"/></svg><span class="lbl">Drucken</span></button>
         <div class="menu-wrap">
           <button class="btn icon ghost" id="btn-more" type="button" aria-haspopup="menu" aria-expanded="false" aria-label="Weitere Aktionen"><svg class="i" aria-hidden="true"><use href="#i-more"/></svg></button>
           <div class="menu" id="menu-more" role="menu" hidden>
@@ -80,6 +80,7 @@
             <hr>
             <button role="menuitem" type="button" data-act="versions"><svg class="i" aria-hidden="true"><use href="#i-history"/></svg>Frühere Veröffentlichungen</button>
             <button role="menuitem" type="button" data-act="discard"><svg class="i" aria-hidden="true"><use href="#i-undo"/></svg>Entwurf verwerfen</button>
+            <button role="menuitem" type="button" data-act="druck-fuss" hidden><svg class="i" aria-hidden="true"><use href="#i-print"/></svg>Fußzeile im Druck</button>
             <hr>
             <button role="menuitem" type="button" data-act="open-site"><svg class="i" aria-hidden="true"><use href="#i-link"/></svg>Öffentliche Seite öffnen</button>
             <button role="menuitem" type="button" data-act="twofa"><svg class="i" aria-hidden="true"><use href="#i-shield"/></svg>Zwei-Faktor-Anmeldung</button>
@@ -142,8 +143,6 @@
         <div class="meta-info" id="m-info"></div>
       </div>
     </section>
-
-    <section class="send-hint" id="send-hint" role="status" hidden></section>
 
     <div class="ed-panels one" id="ed-panels">
       <section id="mhd-panel" hidden></section>
@@ -229,7 +228,6 @@
 <dialog class="modal" id="dlg-master-new" aria-labelledby="mn-title"><form class="dlg" id="master-new-body" autocomplete="off"></form></dialog>
 <dialog class="modal wide" id="dlg-master-art" aria-labelledby="ma-title"><form class="dlg" id="master-art-body" autocomplete="off"></form></dialog>
 <dialog class="modal wide" id="dlg-sale" aria-labelledby="sp-title"><form class="dlg" id="sale-body" autocomplete="off"></form></dialog>
-<dialog class="modal wide" id="dlg-rest" aria-labelledby="rp-title"><div class="dlg" id="rest-body"></div></dialog>
 <!-- Mitarbeiter anlegen / bearbeiten -->
 <dialog class="modal" id="dlg-user" aria-labelledby="us-title" data-fest><form class="dlg" id="user-body" autocomplete="off"></form></dialog>
 <!-- Kunde anlegen / bearbeiten -->
@@ -249,7 +247,6 @@
 <dialog class="modal wide" id="dlg-ms-import" aria-labelledby="msi-title"><div class="dlg" id="ms-import-body"></div></dialog>
 <dialog class="modal ez-pick" id="dlg-ez-pick" aria-labelledby="ezp-title"><div class="dlg" id="ez-pick-body"></div></dialog>
 <dialog class="modal" id="dlg-einzel-mail" aria-labelledby="em-title"><form class="dlg" id="einzel-mail-body" autocomplete="off"></form></dialog>
-<dialog class="modal wide" id="dlg-rund" aria-labelledby="rd-title"><div class="dlg" id="rund-body"></div></dialog>
 <!-- Zwei-Faktor-Anmeldung -->
 <dialog class="modal" id="dlg-twofa" aria-labelledby="tf-title"><div class="dlg" id="twofa-body"></div></dialog>
 <!-- Passkeys -->
@@ -283,6 +280,7 @@
 <dialog class="modal pv" id="dlg-vorschau" aria-labelledby="pv-title"><div class="dlg" id="vorschau-body"></div></dialog>
 <dialog class="modal" id="dlg-offer-copy" aria-labelledby="oc-title"><form class="dlg" id="offer-copy-body" autocomplete="off"></form></dialog>
 <dialog class="modal wide" id="dlg-werbung" aria-labelledby="wb-title"><form class="dlg" id="werbung-body" autocomplete="off"></form></dialog>
+<dialog class="modal wide" id="dlg-druck-fuss" aria-labelledby="df-titel" data-fest><form class="dlg" id="druck-fuss-body" autocomplete="off"></form></dialog>
 <dialog class="modal wide" id="dlg-aufbau" aria-labelledby="abf-titel"><div class="dlg" id="aufbau-body"></div></dialog>
 <dialog class="modal" id="dlg-confirm" aria-labelledby="cf-title"><div class="dlg" id="confirm-body"></div></dialog>
 
@@ -359,6 +357,7 @@
 <script src="../assets/admin-artikelwahl.js"></script>
 <script src="../assets/admin-werbung.js"></script>
 <script src="../module/angebot/aufbau.js"></script>
+<script src="../module/angebot/druck.js"></script>
 <script src="../assets/admin-einzel.js"></script>
 <script src="../assets/detailkarte.js"></script>
 <script src="../assets/admin-auswertung.js"></script>

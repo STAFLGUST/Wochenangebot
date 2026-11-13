@@ -1,0 +1,38 @@
+# Aktionen des Moduls „versand“: Wochenangebot und Kundenangebote veröffentlichen und per E-Mail an Kunden senden.
+# Erklärung der Felder: regeln/aktionen/LIESMICH.md · nach Änderungen: python3 werkzeuge/regeln.py erzeugen
+# Alle Aktionen gibt es nur auf dem Host des Moduls (GR-109); der Modulzugang versand.zugang wird im API-Einstieg
+# durchgesetzt, die Einzelrechte prüft jede Aktion selbst (GR-103).
+
+schema = 1
+modul = "versand"
+
+# Stand: Entwurf und veröffentlichtes Angebot, Angebote der Woche, Stand des Versands, eigene Rechte
+[aktion.versand_start]
+oberflaeche = "versand.intern"
+
+# Änderungsliste Entwurf ↔ veröffentlicht (mit Preisen: nur mit Modulzugang Angebot)
+[aktion.versand_aenderungen]
+oberflaeche = "versand.intern"
+
+# Gespeicherten Entwurf veröffentlichen (Recht angebot.veroeffentlichen, Revision des Entwurfs, sonst 409)
+[aktion.versand_veroeffentlichen]
+oberflaeche = "versand.intern"
+schreibend = true
+
+# Empfänger des Wochenangebots bzw. der Sonderposten eines Angebots (mit dem jeweiligen Senden-Recht)
+[aktion.versand_empfaenger]
+oberflaeche = "versand.intern"
+
+# Vorschau der E-Mail (POST wegen Zusatztext)
+[aktion.versand_vorschau]
+oberflaeche = "versand.intern"
+schreibend = true
+
+# Wochenangebot bzw. Sonderposten senden (in Teilen, mit Bestätigung kunden_rundmail / kunden_restposten)
+[aktion.versand_senden]
+oberflaeche = "versand.intern"
+schreibend = true
+
+# Verlauf: Veröffentlichungen und Sendungen aus dem Protokoll (ohne Kundennamen)
+[aktion.versand_verlauf]
+oberflaeche = "versand.intern"

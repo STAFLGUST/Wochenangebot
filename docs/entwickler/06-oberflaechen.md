@@ -32,6 +32,7 @@ Voraussetzungen und Abgrenzung:
 | Leergut | `app/module/leergut/index.html` | `../../assets/theme.js`, `../../assets/stock-core.js` (WinAB-Bericht .XLS lesen; die .CSV liest `leergut.js` selbst), `leergut.js` | `../../assets/app.css`, `leergut.css` |
 | REWE · Vordisposition | `app/module/rewe/index.html` | `../../assets/theme.js`, `rewe.js` | `../../assets/app.css`, `rewe.css` (Gestaltung wie Leergut, Präfix `rw-`) |
 | Qualitätssicherung · QM-System | `app/module/qs/index.html` | `../../assets/theme.js`, `qs.js`, `verfahren.js` (Reiter „Verfahrensdoku“, nutzt `window.STAFL_QS` aus `qs.js`) | `../../assets/app.css`, `qs.css` (Gestaltung „Liquid Glass“ nach dem Designvorschlag, Präfix `qm-`; Dokument-Seitenleiste unter 1100 px als Blatt von unten, Prüfplan unter 760 px als Liste) |
+| Versand | `app/module/versand/index.html` | `../../assets/theme.js`, `versand.js` | `../../assets/app.css`, `versand.css` (Gestaltung „C2“ im gemeinsamen Rahmen, Präfix `vs-`) |
 
 Jede dieser Seiten (außer Web-App und Rechtsseiten) lädt im `<head>` nach `theme.js` zusätzlich `format.js` (Zahlen und
 Einheiten, `window.STAFL_FORMAT`) und `suche.js` (Suchregel aller Suchfelder, `window.STAFL_SUCHE`,
@@ -101,7 +102,7 @@ flowchart TD
 - `boot()` (Ende von `admin.js`) fängt jeden Fehler ab und ersetzt die Seite durch „Eingabebereich nicht erreichbar“.
 - `status` liefert u. a. `loggedIn`, `csrf`, `user`, `company`, `testumgebung` (setzt `body.is-test`),
   `setupRequired`/`setupLocked` und `umgezogen`.
-- `applyRole()` blendet Tabs, Trennüberschriften (`#side-stamm`, `#side-admin`), Knöpfe (`#btn-publish`, `#btn-send`)
+- `applyRole()` blendet Tabs, Trennüberschriften (`#side-stamm`, `#side-admin`)
   und den Dashboard-Knopf `#btn-dashboard` (nur `me.zentral`, Adresse aus `me.dashboard`, nur `https:`) ein und aus und
   setzt die Klassen `ro`, `is-admin`, `bereich-verwaltung`, `bereich-bestand`, `bereich-import` am `<body>`.
 - Startansicht: `?ansicht=<id>` oder `#<id>` (`startAnsicht()`), nur wenn `viewAllowed()` zustimmt; `hashchange`
@@ -241,7 +242,7 @@ nimmt `artikelAufnehmen()` – dieselbe Funktion wie „Artikel hinzufügen“ �
 erscheinen mit eigenem Schlüssel ohne Nummer). Die Artikelauswahl kennt dafür `preis.fest(a)` (Preis als Text statt
 Eingabefeld) und `a.nr` (angezeigte Nummer); `spannen()` passt die colspan der Gruppen-/Detailzeilen an die sichtbaren
 Spalten an (Handy). Gespeichert wird in `model.meta.werbung[<Angebot>]` (zweite Werbung in `weitere`; Hilfen `werbBloecke()`/`werbEintrag()`)
-(Entwurf, sichtbar nach „Veröffentlichen“; Rücknahme je Angebot im Veröffentlichen-Dialog). `werbungBereinigen()` nimmt
+(Entwurf, sichtbar nach dem Veröffentlichen im Modul Versand; Rücknahme je Angebot in der Liste der Änderungen, siehe „Unveröffentlichte Änderungen“). `werbungBereinigen()` nimmt
 bei jeder Änderung Artikel heraus, die nicht mehr im Angebot stehen; `mergeModels` gleicht die Werbung je Angebot ab. Beworbene Zeilen
 tragen `tr.e-werb` und das Kennzeichen „Werbung“. Auf der Angebotsseite (`frontend.js`, `werbungHTML()`) steht oben ein
 eigener Abschnitt im Aufbau der Liste (`.werb-sec`: Band `.werb-st` in der Akzentfarbe mit Überschrift und Text, darunter
@@ -284,8 +285,8 @@ die Plätze der betroffenen Gruppen in `model.items` ändern sich), dazu `sectio
 Vorschau; `offer_resolve`; App). `aufbauSperre()`: Kundenangebot „folgt dem Wochenangebot“ nur ansehen; mit aktiven
 Angebotskategorien sind Bereiche und Gruppen fest (die Stammdaten ordnen), Artikel bleiben änderbar.
 `aufbauGeaendert()` vergleicht Reihenfolge und Bereiche der gemeinsamen Gruppen und Gruppe/Reihenfolge der gemeinsamen
-Artikel mit der veröffentlichten Fassung: Zahl am Knopf „Veröffentlichen“, Abschnitt „Aufbau“ im Dialog mit Rücknahme
-(`revertChange('aufbau')`). Tests: Gruppe `aufbau`.
+Artikel mit der veröffentlichten Fassung: zählt in der Statuszeile als eine Änderung, Abschnitt „Aufbau“ in der Liste der
+Änderungen mit Rücknahme (`revertChange('aufbau')`). Tests: Gruppe `aufbau`.
 
 ### Empfehlung (früher „Sonderpreis“)
 
@@ -301,6 +302,26 @@ Artikel später kommt („Artikel hinzufügen“, „Aus anderem Angebot“), eb
 `offerBarPlatzieren()` hängt `#offer-bar` ab 901 px (`matchMedia`) in die `.side-nav` unter die Bereiche, schmaler zurück
 in `.ed-layout` (Auswahl über dem Angebot); `body.ob-links` steuert das Layout, `body.in-other` blendet die Liste in
 anderen Bereichen aus. Inhalt und Ereignisse bleiben dieselben (`renderOfferBar`).
+
+### Unveröffentlichte Änderungen, Verweis zum Versand
+
+Veröffentlicht und gesendet wird seit 13.11.2026 im Modul Versand (`app/module/versand/`, Abschnitt 6.4) – im Eingabebereich
+gibt es die Knöpfe `#btn-publish` und `#btn-send`, den Hinweis `#send-hint` und die Fenster `#dlg-rund`/`#dlg-rest` nicht mehr;
+an der Stelle der Knöpfe steht `#btn-drucken` (`app/module/angebot/druck.js`). Geblieben ist die Statuszeile `#save-state`:
+`offenHTML()` zeigt „n Änderungen nicht veröffentlicht“ (`#offen-zahl`, Zählung `pendingCount()`, Aufstellung aus
+`renderChanges()` als `title`) und – nur mit `versand.zugang` – den Verweis `a.zum-versand` (`zumVersand()`; unter
+`*.dashboard-stafl.de` die Adresse des Versand-Hosts, sonst `../module/versand/`). Derselbe Verweis steht im Fuß der Vorschau
+(`#pv-versand`), „Sonderposten senden“ im Kopf eines Angebots und „Wochenangebot versenden“ unter Verwaltung → Kunden sind
+ebenfalls nur noch Verweise. Solange ein Preis nicht lesbar ist (`invalid`), hält der Verweis mit einem Toast an: Im
+gespeicherten Entwurf steht dann noch der bisherige Preis, und der Versand veröffentlicht den gespeicherten Entwurf.
+Ein offener Eingabebereich übernimmt eine Veröffentlichung über den Abgleich (`pullOnce`: `published` neu, Preisverlauf
+`hist` verworfen, sobald sich `publishedAt` ändert).
+
+Die frühere Liste der Änderungen mit „Rückgängig“ je Zeile (`openPublish()`, `revertChange()`, Fenster `#dlg-publish` –
+ohne „Jetzt veröffentlichen“) ist weiter vorhanden, aber über `AENDERUNGSLISTE_IM_ANGEBOT = false` ausgeschaltet
+(Entscheidung des Inhabers 13.11.2026 offen). Eingeschaltet wird die Zahl zum Knopf `#offen-liste`. Die Testgruppen `revert`,
+`angebote`, `aufbau` und `sys` schalten den Schalter in ihrer App-Kopie ein (`LISTE_IM_ANGEBOT` in `tests/run_e2e.py`) und
+halten die Liste damit lauffähig; den ausgelieferten Stand prüft die Gruppe `versand`.
 
 ### Vorschau
 
@@ -401,8 +422,29 @@ Leiste senkrecht, schmal ist sie eine waagerechte Spur. Mit `body.bereich-import
 - **Bestellwunsch:** Mengen je Kunde und Angebot im Browser, Leiste `#orderbar`, Dialog `#dlg-order`, Senden mit
   `kunde_bestellung` und `requestId` (Wiederholung ohne Doppelbestellung). Angezeigte Summen sind „ca.“ – Preise und
   Summen rechnet nur der Server (GR-004). „Meine Bestellwünsche“: `#dlg-customer-orders`.
-- **Druck/PDF:** `openPrint()` → `#dlg-print` (Umfang: alles, gefiltert, Merkliste) → Inhalt in `#print-root`, Druckregeln
-  in `app.css`. `?drucken=1` öffnet den Dialog sofort (aus den Einzelangeboten); der Parameter wird danach entfernt.
+- **Druck/PDF:** `openPrint()` → `#dlg-print` (Umfang: alles, gefiltert, Merkliste) → Inhalt in `#print-root`. `?drucken=1`
+  öffnet den Dialog sofort (aus den Einzelangeboten), `?drucken=liste` druckt ohne Auswahl die Angebotsansicht (Knopf
+  „Drucken“ im Eingabebereich, `app/module/angebot/druck.js`); der Parameter wird danach entfernt. Strg+P ohne Dialog
+  druckt ebenfalls die Angebotsansicht (`beforeprint`).
+  - **Angebotsansicht, A4 quer** (Vorgabe; Wochenangebot, Kundenangebote, Einzelangebote – ein Weg): `buildPrintListe()`
+    übergibt fertige HTML-Bausteine (Kopf, Werbung, Balken je Bereich, Block je Gruppe) an `AngebotDruck.liste()` in
+    `assets/angebot-druck.js`; Regeln in `assets/angebot-druck.css`. Der Satz misst die Bausteine unsichtbar in
+    Druckgröße und verteilt sie rechnerisch auf Seiten fester Höhe (`.pl-page`, 279 × 193 mm):
+    immer drei Spalten; ein Block wird nie geteilt; jede Seite nimmt so viele Blöcke auf wie möglich; ein Bereich beginnt
+    auf der laufenden Seite, sobald sein Balken und ein ganzer Block Platz haben, und wird nur zwischen Blöcken umbrochen
+    (Balken auf der nächsten Seite mit „Forts.“); kleine Bereiche stehen nebeneinander. Ausnahmen: eine Gruppe, die allein
+    höher ist als eine Seite, und ein einzelner Block (Einzelangebot ab 9 Positionen, sortierte Liste ohne Gruppen) werden
+    in gleich hohe Teile zerlegt (Gruppenkopf mit „Forts.“). Ein Bereich ohne Namen trägt eine Linie statt des Balkens.
+  - **Dichte:** drei Stufen (`STUFEN`: normal 8,3 pt, kompakt 7,9 pt, eng 7,5 pt; Zeilenhöhe und Abstände je Stufe als
+    Variablen `--zeile`, `--ab-…` an `.pl-doc` in `angebot-druck.css` – nur dort). Der Satz rechnet alle Stufen und nimmt
+    die größte Schrift, mit der es nicht mehr Seiten werden als mit der kleinsten. `?stufe=normal|kompakt|eng` legt die
+    Stufe zum Vergleich fest. Am Satz stehen `data-stufe`, `data-seiten`, je Seite `data-fuell` (genutzte Höhe in %).
+  - **Fußzeile:** Hinweis (Mengen, Fracht) und Fußzeile des Briefbogens (`fracht.fuss` aus `module/angebot/druck.php`) am
+    Fuß der letzten Seite (Vorgabe) oder jeder Seite (Einstellung „Fußzeile im Druck“, zum Vergleich `?fuss=jede|letzte`).
+  - **Vorsicht beim Ändern:** die Satzfläche wird per `transform` verkleinert; `.pl-page` braucht `contain: size`, sonst
+    verschiebt der Seitenumbruch von Chromium Blöcke aus dem unteren Teil der Seite aufs nächste Blatt, wo sie fehlen – am
+    Bildschirm sieht man das nicht. `tests/e2e/test_druck.py` liest deshalb den Text aus dem gedruckten PDF.
+  - **Hochformat** („Kompakt“, „Tabelle“): Regeln in `app.css`, Fußzeile einmal am Ende (`AngebotDruck.fussHTML`).
 - **Wartung:** Kunden und Besucher sehen nur `renderWartung()`; angemeldete Mitarbeiter (`staff`) sehen das Angebot mit
   Banner (GR-009).
 - **Web-App:** `sw.js` speichert nur Startseite, `/assets/`, `manifest.json` und das öffentliche Wochenangebot, immer
@@ -464,7 +506,19 @@ Favoriten speichert `start_favoriten_save {favoriten: [Modul-IDs] | null}` (höc
 Schnellaktionen (`STARTSEITE_AKTIONEN`) führen auf `#<reiter>` oder `#<reiter>/neu`; wer „Anlegen“ anbietet, wertet im Modul
 beim Start den zweiten Teil aus, öffnet nur mit passendem Recht das vorhandene Fenster und lässt die Adresse von seiner
 Reiterwahl auf `#<reiter>` kürzen (Beispiele: CRM `#kunden/neu`, Marketing `#kalender/neu`). Eigene Anbieter haben heute
-Angebot (`angebot_startseite`, Bestellwünsche), Bestand (`bestand_startseite`, MHD-Liste), HR, QS, Leergut, REWE, Marketing und CRM.
+Angebot (`angebot_startseite`, Bestellwünsche), Bestand (`bestand_startseite`, MHD-Liste), HR, QS, Leergut, REWE, Marketing, CRM und
+Versand (`versand_startseite`: unveröffentlichte Änderungen, noch nicht versendetes Wochenangebot – nur für den, der es erledigen darf).
+
+**Versand** (`app/module/versand/versand.js`, seit 13.11.2026): eine Seite ohne Reiter. `laden()` holt `versand_start` (nur Zahlen
+und Namen) und zeichnet zwei Schritte – `#vs-s1` „Veröffentlichen“ (`#vs-pub`) und `#vs-s2` „An Kunden senden“ (`#vs-send`) –,
+die Liste „Angebote dieser Woche“ (`#vs-angebote`, je Angebot Änderungen, Kunden, letzter Versand, „Sonderposten“, Vorschau und
+Drucken über die Angebotsseite des Angebot-Hosts in neuem Tab) und den Verlauf (`versand_verlauf`). Fenster: `#dlg-pub`
+(Liste aus `versand_aenderungen` nach Art und mit Filter je Angebot; `#pub-jetzt` schickt die Revision der gezeigten Liste –
+bei 409 wird die Liste neu geladen und erst dann erneut bestätigt), `#dlg-fertig` („KW … ist online“, mit Senden-Recht
+„Senden …“) und `#dlg-send` (Wochenangebot oder Sonderposten eines Angebots: Empfänger mit Filter, Zusatztext, Vorschau der
+E-Mail, Versand in Teilen zu zehn mit Ergebnis je Zeile). Bestätigung beim Senden wie überall: unter der zentralen Anmeldung
+`reauth_required` (Rücksprung, Auswahl in `sessionStorage`), sonst Passwortfeld im Fenster (`confirmation_required`).
+Knöpfe ohne Recht sind gesperrt und sagen im `title`, was fehlt – Anzeige, nie Prüfung (GR-103). Tests: Gruppe `versand`.
 
 **Hell/Dunkel:** `app/assets/theme.js` setzt vor dem ersten Zeichnen `data-theme` aus `localStorage`
 `wochenangebot.theme` (ohne Inline-Skript). Weil jeder Host eigenen Browser-Speicher hat (GR-108), steht die Wahl am

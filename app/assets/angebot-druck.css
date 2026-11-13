@@ -1,0 +1,111 @@
+/* Angebot · Druckfassung „Angebotsansicht“ (A4 quer) der Angebotsseite – gesetzt von assets/angebot-druck.js.
+   Aussehen wie die Vorschau (Angebotsansicht am Bildschirm, Regeln „body.kseite .al …“ in app.css): Kopf mit Logo und Titel,
+   Bereiche als abgerundete graue Balken, Gruppenkopf mit „€/kg“ und Linie, abgerundete gestreifte Zeilen, Marke kursiv rot,
+   Werbung und Sonderposten wie dort. Die Maße sind die der Bildschirmansicht in px (hier ausdrücklich gesetzt, weil die
+   Bildschirmregeln nur für „screen“ gelten und am Handy andere Maße haben); gesetzt wird auf einer Fläche fester Breite
+   (.pl-in), die für den Satzspiegel 279 × 193 mm verkleinert wird (--z, von angebot-druck.js gesetzt).
+   Dichte in drei Stufen (angebot-druck.js wählt die größte Schrift, mit der es nicht mehr Seiten werden):
+     .pl-normal  Satzbreite 1240 px, 13 px Schrift ≙ 8,3 pt     .pl-kompakt  1310 px ≙ 7,9 pt     .pl-eng  1370 px ≙ 7,5 pt
+   Zeilenhöhe und Abstände je Stufe stehen als Variablen an .pl-doc (--zeile, --ab-…); angebot-druck.js liest --ab-gruppe
+   und --ab-band von hier und misst alles andere – die Werte stehen also nur an dieser Stelle.
+   Farben auch dann, wenn „Hintergrundgrafiken“ im Druckdialog aus ist (print-color-adjust); feste helle Farben, unabhängig
+   vom Dunkelmodus. Die Messung in angebot-druck.js (#print-root.pl-messen, unsichtbar) nutzt dieselben Regeln. */
+#print-root.pl-messen { display: block !important; position: absolute; left: -4000px; top: 0; visibility: hidden; pointer-events: none; contain: layout style; }
+#print-root .pl-m { display: flow-root; }
+#print-root .pl-mb { width: calc(var(--c) * (100% - 2 * var(--ab-spalte)) / 3 + (var(--c) - 1) * var(--ab-spalte)); }   /* Balken über c Spalten */
+#print-root .pl-mcol { width: calc((100% - 2 * var(--ab-spalte)) / 3); display: flex; flex-direction: column; }   /* eine Spalte */
+#print-root .pl-doc, #print-root .pl-doc * { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+#print-root .pl-doc { --z: .85039; width: 279mm; margin: 0; border: 0; border-radius: 0; box-shadow: none; padding: 0; background: #fff; color: #0b0b0b; font-family: var(--font); font-variant-numeric: tabular-nums;
+  -webkit-backdrop-filter: none; backdrop-filter: none;
+  --text: #0b0b0b; --text-2: #4d4648; --muted: #6d6669; --accent: #8c1d2c; --accent-soft: #f9eeef; --accent-line: #ebc6cb; --sale: #c2410c; --sale-bg: #fff1e6;
+  --aus: #f0efef; --zebra: #f7f6f6; --regel: #d4d3d3;
+  /* Stufe „normal“: Zeilenhöhe, Abstand zwischen Blöcken / unter dem Balken / zwischen Zeilen von Bereichen / zwischen Spalten / unter dem Kopf, Polster des Balkens */
+  --zeile: 24px; --ab-gruppe: 12px; --ab-balken: 8px; --ab-band: 14px; --ab-spalte: 30px; --ab-kopf: 14px; --p-balken: 6px; --logo: 54px; }
+#print-root .pl-doc.pl-kompakt { --zeile: 23px; --ab-gruppe: 10px; --ab-balken: 7px; --ab-band: 12px; --ab-spalte: 28px; --ab-kopf: 12px; --p-balken: 5px; --logo: 52px; }
+#print-root .pl-doc.pl-eng { --zeile: 22px; --ab-gruppe: 9px; --ab-balken: 6px; --ab-band: 10px; --ab-spalte: 26px; --ab-kopf: 10px; --p-balken: 4px; --logo: 50px; }
+/* Eine Seite ist ein fester Kasten. „contain: size“ macht ihn für den Seitenumbruch des Browsers unteilbar: sonst rechnet
+   Chromium mit der unverkleinerten Satzfläche (höher als das Blatt) und verschiebt Blöcke im unteren Teil der Seite auf das
+   nächste Blatt, wo sie abgeschnitten wären – am Bildschirm unsichtbar, im PDF fehlten Zeilen (geprüft in test_druck.py). */
+#print-root .pl-page { position: relative; box-sizing: border-box; width: 279mm; height: 193mm; overflow: hidden; contain: size layout paint; break-after: page; break-inside: avoid; }
+#print-root .pl-page:last-child { break-after: auto; }
+/* Satzfläche in den Maßen der Bildschirmansicht, verkleinert auf die Seite */
+#print-root .pl-in { position: relative; box-sizing: border-box; width: calc(279mm / var(--z)); font-size: 13px; line-height: 1.3; }
+#print-root .pl-page > .pl-in { position: absolute; left: 0; top: 0; height: calc(193mm / var(--z)); transform: scale(var(--z)); transform-origin: 0 0; }
+
+/* Kopf: erste Seite wie die Vorschau (Logo links, Titel rechts), Folgeseiten eine Zeile */
+#print-root .pl-ph { display: flex; flex-wrap: nowrap; align-items: flex-end; justify-content: space-between; gap: 10px 24px; margin: 0 0 var(--ab-kopf); }
+#print-root .pl-ph .al-logo { display: block; height: var(--logo); width: auto; flex: none; background: none; padding: 0; filter: none; }
+#print-root .pl-pt { display: flex; flex-direction: column; align-items: flex-end; gap: 3px; text-align: right; min-width: 0; }
+#print-root .pl-ph h1 { margin: 0; font-size: 21px; font-weight: 650; line-height: 1.2; letter-spacing: -.015em; text-wrap: balance; }
+#print-root .pl-pt > span { font-size: 13px; color: var(--text-2); }
+#print-root .pl-sz { font-weight: 600; color: var(--text); white-space: nowrap; }
+#print-root .pl-entwurf { font-weight: 650; letter-spacing: .06em; text-transform: uppercase; color: var(--accent); }   /* Vermerk im Kopf, einschaltbar: DRUCK_ENTWURF_VERMERK in frontend.js */
+#print-root .pl-ph2 { align-items: baseline; padding-bottom: 6px; border-bottom: 1px solid var(--regel); }
+#print-root .pl-ph2 > strong { font-size: 14px; font-weight: 650; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+#print-root .pl-ph2 > span { flex: none; font-size: 12px; color: var(--text-2); white-space: nowrap; }
+
+/* Bereiche: Zeilen aus drei Spalten, ein Bereich über die Spalten seiner Gruppen, Balken abgerundet */
+#print-root .pl-doc .al-band { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); column-gap: var(--ab-spalte); align-items: start; margin: 0 0 var(--ab-band); }
+#print-root .pl-doc .al-band > .al-sec { grid-column: span var(--c, 1); min-width: 0; margin: 0; }
+#print-root .pl-doc .al-st { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; margin: 0 0 var(--ab-balken); padding: var(--p-balken) 14px; background: var(--aus); border-radius: 14px; box-shadow: none; visibility: visible; }
+#print-root .pl-doc .al-st.pl-trenn { background: linear-gradient(var(--regel), var(--regel)) center / 100% 2px no-repeat; border-radius: 0; }   /* Bereich ohne Namen: Linie in der Höhe eines Balkens (gehört zu keinem Nachbarbereich) */
+#print-root .pl-doc .al-st h3 { margin: 0; font-size: 15px; font-weight: 650; line-height: 1.25; letter-spacing: -.005em; text-transform: none; }
+#print-root .pl-doc .al-st > span { flex: none; font-size: 12px; color: #68685f; white-space: nowrap; }
+#print-root .pl-doc .al-cols { display: grid; grid-template-columns: repeat(var(--k, 3), minmax(0, 1fr)); column-gap: var(--ab-spalte); align-items: start; }
+#print-root .pl-doc .al-col { min-width: 0; padding: 0; border: 0; display: flex; flex-direction: column; gap: var(--ab-gruppe); container-type: normal; }
+
+/* Gruppen: Tabellen wie in der Vorschau */
+#print-root .pl-doc .al-tab { --w-code: 58px; --w-price: 62px; --w-fav: 0px; width: 100%; table-layout: fixed; border-collapse: separate; border-spacing: 0; font-size: 13px; line-height: 1.3; }
+#print-root .pl-doc .al-tab.hat-was { --w-price: 86px; }   /* Gruppe mit Sonderposten und bisherigem Preis (frontend.js): beide Preise in der Spalte, nichts ragt heraus */
+#print-root .pl-doc .al-h th { padding: 0 0 4px 10px; border-bottom: 1px solid var(--regel); font-size: 13px; font-weight: 650; text-align: left; vertical-align: bottom; text-transform: none; letter-spacing: normal; }
+#print-root .pl-doc .al-hin { display: flex; align-items: flex-end; }
+#print-root .pl-doc .al-gt { flex: 1; min-width: 0; padding-right: 8px; }
+#print-root .pl-doc .al-hin .al-eh { flex: none; box-sizing: border-box; width: var(--w-price); padding-right: 6px; font-size: 13px; text-align: right; white-space: nowrap; }
+#print-root .pl-doc .al-sub th { padding: 2px 6px 1px; font-size: 11px; font-weight: 600; font-style: italic; color: var(--text-2); text-align: right; white-space: nowrap; }
+#print-root .pl-doc .al-brand { color: var(--accent); font-style: italic; }
+#print-root .pl-doc .al-cont { font-size: 11px; font-weight: 500; font-style: normal; color: var(--muted); }
+#print-root .pl-doc .al-tab td { height: var(--zeile); padding: 1px 6px; vertical-align: middle; font-size: 13px; }
+#print-root .pl-doc .al-tab td:first-child { border-radius: 8px 0 0 8px; }
+#print-root .pl-doc .al-tab td:last-child { border-radius: 0 8px 8px 0; }
+#print-root .pl-doc .al-tab tbody tr:nth-child(odd) td { background: var(--zebra); }
+#print-root .pl-doc .al-tab tbody tr.row.werb-an td { background: var(--accent-soft); }
+#print-root .pl-doc .al-tab td.c-code { display: table-cell; padding: 1px 4px 1px 10px; font-family: inherit; font-size: 13px; font-weight: 400; color: var(--text); white-space: nowrap; overflow: hidden; text-overflow: clip; }
+#print-root .pl-doc .al-tab td.c-name { overflow-wrap: break-word; hyphens: auto; }
+#print-root .pl-doc .al-tab td.c-price { width: auto; text-align: right; font-weight: 650; white-space: nowrap; }
+#print-root .pl-doc .al-tab td.c-price.al-np { font-weight: 500; color: var(--muted); font-size: 12px; }
+#print-root .pl-doc .al-sale { color: var(--sale); }
+#print-root .pl-doc .al-tab .al-was { display: inline; margin: 0 6px 0 0; font-weight: 400; color: var(--muted); font-size: 11.5px; }
+#print-root .pl-doc .al-tab .al-tag { display: inline-block; margin-left: 6px; padding: 0 7px; border-radius: 999px; font-size: 10.5px; font-weight: 600; letter-spacing: .02em; vertical-align: 1px; white-space: nowrap; }
+#print-root .pl-doc .tag.sale { background: var(--sale-bg); color: var(--sale); }
+#print-root .pl-doc .tag.werb-tag { background: var(--accent-soft); color: var(--accent); }
+
+/* Werbung oben auf der ersten Seite, wie in der Vorschau (Band in der Akzentfarbe, zwei Werbungen nebeneinander) */
+#print-root .pl-doc .werb-sec { margin: 0 0 var(--ab-band); min-width: 0; }
+#print-root .pl-doc .werb-duo { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0 var(--ab-spalte); align-items: start; }
+#print-root .pl-doc .al-st.werb-st { justify-content: flex-start; flex-wrap: wrap; gap: 2px 14px; background: var(--accent-soft); box-shadow: inset 0 0 0 1px var(--accent-line); }
+#print-root .pl-doc .werb-st h3 { display: inline-flex; align-items: center; gap: 7px; color: var(--accent); }
+#print-root .pl-doc .werb-st h3 > .i { width: 16px; height: 16px; flex: none; }
+#print-root .pl-doc .al-st.werb-st > .werb-txt { font-size: 12.5px; color: var(--text-2); white-space: normal; }
+
+/* Seitenfuß: Hinweis (Mengen, Fracht) wie der Hinweis der Vorschau, darunter die Fußzeile des Briefbogens über die ganze Breite */
+#print-root .pl-fuss { color: #111; }
+#print-root .pl-fuss-quer { padding-top: 10px; background: #fff; }
+#print-root .pl-in > .pl-fuss { position: absolute; left: 0; right: 0; bottom: 0; }
+#print-root .pl-fuss-quer .pl-hinweis { margin: 0 0 8px; padding: 7px 16px; border: 0; border-radius: 14px; background: var(--aus); font-size: 12px; line-height: 1.4; color: var(--text-2); text-align: center; text-wrap: balance; }
+#print-root .pl-hinweis .lead { font-weight: 600; color: #111; }
+#print-root .pl-fuss-quer .pl-brief { display: flex; align-items: center; justify-content: space-between; gap: 24px; padding-top: 7px; border-top: 1px solid #111; font-size: 10.4px; line-height: 1.3; color: #111; }
+#print-root .pl-fuss-quer .pl-siegel { flex: none; height: 58px; width: auto; }
+#print-root .pl-brief p { margin: 0; }
+#print-root .pl-bs { flex: 0 1 auto; white-space: nowrap; }
+#print-root .pl-fuss-quer .pl-bz { flex: 0 1 320px; min-width: 0; }
+#print-root .pl-bz > span { display: block; }
+#print-root .pl-bz > span + span { margin-top: 2px; }
+/* Hochformat (Layouts „Kompakt“ und „Tabelle“): wie im Briefbogen – Spalten nebeneinander, Registerzeilen darunter */
+#print-root .pl-fuss-hoch { margin-top: 6mm; break-inside: avoid; }
+#print-root .pl-fuss-hoch .pl-brief { display: flex; flex-wrap: wrap; align-items: center; justify-content: flex-start; gap: 1mm 7mm; padding-top: 1.5mm; border-top: .25mm solid #111; font-size: 7pt; line-height: 1.28; }
+#print-root .pl-fuss-hoch .pl-siegel { flex: none; height: 14mm; width: auto; }
+#print-root .pl-fuss-hoch .pl-bz { flex: 1 1 100%; }
+
+@media print {
+  #print-root.pl-messen { position: static; visibility: visible; }   /* falls während einer Messung gedruckt wird */
+}

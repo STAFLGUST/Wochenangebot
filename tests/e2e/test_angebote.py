@@ -8,6 +8,7 @@ from umgebung import shot
 from umgebung import BASE  # Testserver je Gruppe (parallel)
 import json, re
 from playwright.sync_api import sync_playwright
+from versand_hilfe import veroeffentlichen
 from umgebung import SH, storage_raw, storage_write
 from testdaten import de, preis
 B = BASE
@@ -61,7 +62,7 @@ with sync_playwright() as p:
     login(a, 'admin', 'Sicheres-Passwort-1')
     a.wait_for_timeout(600); wait_saved(a)
     # sauberer Ausgangspunkt
-    a.click('#btn-publish'); a.wait_for_selector('#dlg-publish[open]'); a.click('[data-ia=publish]'); a.wait_for_function("!document.querySelector('#dlg-publish').open", timeout=15000)
+    veroeffentlichen(a)
     ids0 = a.locator('#offer-bar [data-offer]').evaluate_all('e => e.map(x => x.dataset.offer)')
     check('Angebotsliste links: Wochenangebot + 4 Kundenangebote', ids0 == ['std', 'chefs-culinar', 'handelshof-efs', 'edeka', 'bela'], ids0)
     check('standard selected by default', a.get_attribute('#offer-bar [data-offer="std"]', 'aria-selected') == 'true')
@@ -83,7 +84,7 @@ with sync_playwright() as p:
     vi.fill('22'); vi.press('Tab'); wait_saved(a)
     check('own price saved + formatted', row(a, '10601').locator('input[data-f=vprice]').input_value() == '22,00')
     check('row marked as price change', 'is-price' in row(a, '10601').get_attribute('class'))
-    check('Knopf „Veröffentlichen“ nennt den Angebotspreis', '1 Angebotspreis geändert' in (a.get_attribute('#btn-publish', 'title') or ''), a.get_attribute('#btn-publish', 'title'))
+    check('Knopf „Veröffentlichen“ nennt den Angebotspreis', '1 Angebotspreis geändert' in (a.get_attribute('#offen-zahl, #offen-liste', 'title') or ''), a.get_attribute('#offen-zahl, #offen-liste', 'title'))
     check('Kopf: Angebot „folgt dem Wochenangebot“ mit Hinweis zur Umstellung', 'Folgt dem Wochenangebot' in a.inner_text('#offer-head') and a.locator('#offer-head [data-ob=umstellen]').count() == 1)
     row(a, '10823').locator('[data-act=remove]').click(); wait_saved(a)
     check('✕ entfernt nur aus diesem Angebot', row(a, '10823').count() == 0 and zahl(a, 'Edeka') == n_std - 1 and zahl(a, 'Wochenangebot') == n_std)
@@ -95,13 +96,13 @@ with sync_playwright() as p:
     tab(a, 'Wochenangebot').click(); a.wait_for_timeout(200)
     check('standard price untouched', row(a, '10601').locator('input[data-f=price]').input_value() == de(P10601))
     # Veröffentlichen mit Einzel-Rücknahme
-    a.click('#btn-publish'); a.wait_for_selector('#dlg-publish[open]')
+    a.click('#offen-liste'); a.wait_for_selector('#dlg-publish[open]')
     t = a.inner_text('#publish-body').lower()
     check('publish dialog lists offer prices', 'angebotspreise (2)' in t and 'edeka' in t, t[:300])
     a.click('#publish-body li:has-text("10823") [data-rv=variant]')
     a.wait_for_selector('#dlg-confirm[open]'); check('confirm names offer', 'Edeka' in a.inner_text('#dlg-confirm')); a.click('#dlg-confirm [data-v="1"]'); a.wait_for_timeout(300)
     check('revert removes hidden flag', 'angebotspreise (1)' in a.inner_text('#publish-body').lower())
-    a.click('[data-ia=publish]'); a.wait_for_function("!document.querySelector('#dlg-publish').open", timeout=15000)
+    a.click('#dlg-publish [data-close]'); veroeffentlichen(a)
     # Auslieferung
     pub = br.new_page()
     pub.goto(B + '/'); pub.wait_for_selector('tr.row')
@@ -209,7 +210,7 @@ with sync_playwright() as p:
     check('copy toast', 'übernommen' in a.inner_text('#toast'), a.inner_text('#toast'))
     a.click('#btn-undo'); a.wait_for_timeout(300)
     check('copy undoable', row(a, '10823').locator('input[data-f=vprice]').input_value() == '')
-    a.click('#btn-publish'); a.wait_for_selector('#dlg-publish[open]'); a.click('[data-ia=publish]'); a.wait_for_function("!document.querySelector('#dlg-publish').open", timeout=15000)
+    veroeffentlichen(a)
     ids = {x['id']: x['name'] for x in get(a, 'offers')[1]['offers']}
     metro = next(k for k, v in ids.items() if 'Metro' in v)
     r = get(a, f'offer&angebot={metro}')
@@ -259,7 +260,7 @@ with sync_playwright() as p:
     a.click('#dlg-werbung [data-wa=ok]'); a.wait_for_selector('#dlg-werbung', state='hidden'); wait_saved(a)
     check('übernommen: Zahl am Knopf, beworbene Zeilen gekennzeichnet', a.inner_text('#werb-n') == '2' and 'e-werb' in (row(a, '10601').get_attribute('class') or '').split()
           and row(a, '10601').locator('.werbtag').count() == 1 and row(a, '10701').locator('.werbtag').count() == 0)
-    check('Knopf „Veröffentlichen“ nennt die Werbung', 'Werbung geändert' in (a.get_attribute('#btn-publish', 'title') or ''), a.get_attribute('#btn-publish', 'title'))
+    check('Knopf „Veröffentlichen“ nennt die Werbung', 'Werbung geändert' in (a.get_attribute('#offen-zahl, #offen-liste', 'title') or ''), a.get_attribute('#offen-zahl, #offen-liste', 'title'))
     a.screenshot(path=SH + '/werbung-editor.png')
     tab(a, 'Edeka').click(); a.wait_for_selector('#offer-head:has-text("Edeka")')
     a.click('#btn-werbung'); a.click('#wb-auswahl'); a.wait_for_selector('#dlg-ez-pick[open] #ezp-list tr[data-code="10601"]')
@@ -296,13 +297,13 @@ with sync_playwright() as p:
           and nur_metro not in json.dumps(vo) and 'Bela-Aktion' not in json.dumps(vo) and 'Werbung-XYZ' not in json.dumps(vo)
           and [x['id'] for x in ve['meta'].get('werbung', {}).get('artikel', [])] == [id01] and 'Aktion der Woche' not in json.dumps(ve), (vo['meta'].get('werbung'), ve['meta'].get('werbung')))
     a.reload(); a.wait_for_selector('#screen-editor:not([hidden]) #offer-bar:not([hidden])'); a.wait_for_selector('#groups tr[data-id]'); wait_saved(a)
-    a.click('#btn-publish'); a.wait_for_selector('#dlg-publish[open]')
+    a.click('#offen-liste'); a.wait_for_selector('#dlg-publish[open]')
     t = a.inner_text('#publish-body').lower()
     check('Veröffentlichen-Dialog: Werbung je Angebot', 'werbung (3)' in t and 'aktion der woche' in t and 'bela-aktion' in t, t[:400])
     a.click('#publish-body li:has-text("Bela-Aktion") [data-rv=werbung]'); a.wait_for_selector('#dlg-confirm[open]')
     check('Rücknahme nennt das Angebot', 'Bela' in a.inner_text('#dlg-confirm')); a.click('#dlg-confirm [data-v="1"]')
     a.wait_for_function("document.querySelector('#publish-body').textContent.toLowerCase().includes('werbung (2)')")
-    a.click('[data-ia=publish]'); a.wait_for_function("!document.querySelector('#dlg-publish').open", timeout=15000)
+    a.click('#dlg-publish [data-close]'); veroeffentlichen(a)
     po = get(pub, 'offer')[1]['offer']
     pw = po['meta'].get('werbung', {})
     check('öffentlich: nur die eigene Werbung, nur ausgelieferte Artikel', pw.get('titel') == 'Aktion der Woche' and [x['id'] for x in pw.get('artikel', [])] == [id01, id23]
@@ -363,9 +364,9 @@ with sync_playwright() as p:
     vo = get(a, 'offer&draft=1')[1]['offer']['meta'].get('werbung', {})
     check('Auslieferung (Vorschau): zweite Werbung in „weitere“', [x['id'] for x in (vo.get('weitere') or [{}])[0].get('artikel', [])] == [id701] and 'Edeka 2' not in json.dumps(vo), vo)
     a.reload(); a.wait_for_selector('#screen-editor:not([hidden]) #offer-bar:not([hidden])'); a.wait_for_selector('#groups tr[data-id]'); wait_saved(a)
-    a.click('#btn-publish'); a.wait_for_selector('#dlg-publish[open]')
+    a.click('#offen-liste'); a.wait_for_selector('#dlg-publish[open]')
     check('Veröffentlichen-Dialog nennt beide Werbungen', 'Zweite Aktion' in a.inner_text('#publish-body'))
-    a.click('[data-ia=publish]'); a.wait_for_function("!document.querySelector('#dlg-publish').open", timeout=15000)
+    a.click('#dlg-publish [data-close]'); veroeffentlichen(a)
     pub.goto(B + '/'); pub.wait_for_selector('#list .werb-duo .werb-sec tr.row')
     bx = pub.evaluate("[...document.querySelectorAll('#list .werb-duo > .werb-sec')].map((e) => { const r = e.getBoundingClientRect(); return [r.left, r.top, r.width, e.querySelector('h3').textContent]; })")
     check('Angebotsseite: zweite Werbung rechts neben der ersten', len(bx) == 2 and bx[1][0] > bx[0][0] + bx[0][2] - 1 and abs(bx[0][1] - bx[1][1]) < 2 and bx[1][3] == 'Zweite Aktion'

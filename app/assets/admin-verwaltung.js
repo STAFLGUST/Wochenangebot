@@ -651,7 +651,7 @@
         <span class="ed-hint" id="k-count"></span>
         ${may('kunden.bearbeiten') ? `<button type="button" class="btn" id="k-import" title="Kundenstammdaten-Export der Warenwirtschaft (CSV) einlesen">${icon('upload')}CSV importieren</button><input type="file" id="k-file" accept=".csv,text/csv,text/plain" hidden>` : ''}
         <button type="button" class="btn" id="k-mailcfg"${isAdmin() ? '' : ' hidden'} title="E-Mail-Versand: Einstellungen, Signatur, Testmail">${icon('mail')}E-Mail${mailSt.configured ? '' : ' <span class="k-warn">nicht eingerichtet</span>'}</button>
-        ${may('wochenangebot.senden') ? `<button type="button" class="btn" id="k-rund">${icon('send')}Wochenangebot versenden</button>` : ''}
+        ${may('wochenangebot.senden') && may('versand.zugang') ? `<a class="btn" id="k-rund" href="${VERSAND}" title="Wochenangebot per E-Mail an Kunden senden – im Modul Versand">${icon('send')}Wochenangebot versenden</a>` : ''}
         ${may('kunden.bearbeiten') ? `<button type="button" class="btn primary" id="k-add">${icon('plus')}Kunde anlegen</button>` : ''}
       </div>
       <div id="k-list"></div>
@@ -696,6 +696,8 @@
     if (e.target.id === 'k-file' && e.target.files[0]) { const f = e.target.files[0]; e.target.value = ''; kImportDatei(f); }
   });
   const dmyTs = (ts) => new Date(ts * 1000).toLocaleDateString('de-DE', { day: '2-digit', month: '2-digit', year: 'numeric' });
+  /* Wochenangebot versenden liegt seit 13.11.2026 im Modul Versand (app/module/versand/) – hier nur noch der Verweis */
+  const VERSAND = /(^|\.)dashboard-stafl\.de$/.test(location.hostname) ? 'https://versand.dashboard-stafl.de/' : '../module/versand/';
   const wkCur = () => (mailSt && mailSt.week) || null;
   const sentThisWeek = (c) => { const w = wkCur(); return !!(w && c.weekly && c.weekly.week === w.week && c.weekly.year === w.year); };
   function mailLine(c) {
@@ -710,7 +712,6 @@
     if (e.target.closest('#k-add')) { openKunde(null); return; }
     if (e.target.closest('#k-import')) { $('#k-file').click(); return; }
     if (e.target.closest('#k-mailcfg')) { openMailCfg(); return; }
-    if (e.target.closest('#k-rund')) { openRund(); return; }
     const tr = e.target.closest('tr[data-kid]');
     if (tr) openKunde(tr.dataset.kid);
   });
@@ -1270,91 +1271,6 @@
     } catch (ex) { err.textContent = ex.message; } finally { b.disabled = false; }
   });
 
-  /* Wochenangebot an Kunden versenden */
-  const dlgRund = $('#dlg-rund');
-  let rundSel = new Set(), rundBusy = false;
-  const rundWhy = (c) => (!c.active ? 'Kunde inaktiv' : !c.email ? 'keine E-Mail-Adresse' : !c.login || !c.login.active ? 'kein aktiver Zugang' : !c.angebote.length ? 'kein Angebot freigeschaltet' : c.mailAngebot === false ? (c.abgemeldet ? 'hat sich vom Wochenangebot abgemeldet' : 'möchte kein Wochenangebot per E-Mail') : '');
-  async function openRund() {
-    try { const [m, k] = await Promise.all([mailInfo(), api('kunden')]); mailSt = m; kunden = k.customers; kundenRev = k.rev; } catch (ex) { toast(ex.message); return; }
-    if (!mailSt.configured) { toast('Bitte zuerst das Postfach für den E-Mail-Versand einrichten.', 5000); openMailCfg(); return; }
-    const w = wkCur();
-    const ok = kunden.filter((c) => !rundWhy(c)), no = kunden.filter((c) => rundWhy(c));
-    rundSel = new Set(ok.filter((c) => c.login.hasPassword && !sentThisWeek(c)).map((c) => c.id));
-    const pend = pendingCount();
-    $('#rund-body').innerHTML = `<div class="dlg-head"><div><h2 id="rd-title">${w ? `Wochenangebot KW ${w.week}/${w.year} versenden` : 'Wochenangebot versenden'}</h2><p>${w ? `Angebotswoche ${esc(w.from)} – ${esc(w.to)}. Jeder Kunde erhält eine eigene E-Mail mit Links zu seinen freigeschalteten Angeboten (ohne Preise in der E-Mail).` : ''}</p></div><button class="btn icon ghost" type="button" data-close aria-label="Schließen">${icon('x')}</button></div>
-      <div class="dlg-body">
-        ${!w ? '<div class="err-box">Es ist noch kein Angebot veröffentlicht.</div>' : ''}
-        ${w && pend ? `<div class="notice k-pend">${icon('info', 'sm')}<span>Es gibt ${plural(pend, 'unveröffentlichte Änderung', 'unveröffentlichte Änderungen')} im Entwurf. Kunden sehen den <strong>veröffentlichten</strong> Stand – bei Bedarf zuerst veröffentlichen.</span></div>` : ''}
-        ${ok.length ? `<div class="k-rlist"><label class="check k-rall"><input type="checkbox" id="rd-all"> Alle auswählen</label>
-          <table class="etab ktab k-rtab"><tbody>${ok.map((c) => `<tr data-rid="${esc(c.id)}"><td class="k-rchk"><input type="checkbox" data-rsel="${esc(c.id)}"${rundSel.has(c.id) ? ' checked' : ''} aria-label="${esc(c.firma)} auswählen"></td>
-            <td><div class="nm">${esc(c.firma)}</div><div class="sub">${esc(c.email)}</div></td><td class="k-offers">${c.angebote.map(offerChip).join(' ')}</td>
-            <td class="k-rst">${sentThisWeek(c) ? `<span class="st-warn">KW ${w.week} bereits gesendet ${esc(dateTime(c.weekly.t))}</span>` : !c.login.hasPassword ? '<span class="st-warn">noch kein Passwort festgelegt</span>' : ''}<span class="k-res"></span></td></tr>`).join('')}</tbody></table></div>` : '<p class="hint">Keine Kunden mit E-Mail-Adresse, aktivem Zugang und freigeschaltetem Angebot.</p>'}
-        ${no.length ? `<details class="k-no"><summary>${plural(no.length, 'Kunde', 'Kunden')} nicht berücksichtigt</summary><ul>${no.map((c) => `<li>${esc(c.firma)} – ${esc(rundWhy(c))}</li>`).join('')}</ul></details>` : ''}
-        <label class="fld"><span>Zusatztext <small class="muted">(optional, erscheint in jeder E-Mail)</small></span><textarea id="rd-note" rows="3" maxlength="1000" placeholder="z. B. Diese Woche besonders günstig: Roastbeef aus Uruguay."></textarea></label>
-        <div class="k-prevwrap" hidden><iframe id="rd-prev" sandbox="" title="Vorschau der E-Mail"></iframe></div>
-        <p class="form-err" id="rd-err" role="alert"></p>
-      </div>
-      <div class="dlg-foot"><span class="left"><button type="button" class="btn sm ghost" data-rd="prev"${ok.length ? '' : ' disabled'}>${icon('eye', 'sm')}Vorschau</button></span><button type="button" class="btn" data-close>Schließen</button><button type="button" class="btn primary" data-rd="send"${w ? '' : ' disabled'}>${icon('send')}<span id="rd-n"></span></button></div>`;
-    rundCount();
-    dlgRund.showModal();
-  }
-  function rundCount() {
-    const n = rundSel.size;
-    $('#rd-n').textContent = n ? `An ${plural(n, 'Kunden', 'Kunden')} senden` : 'Kunden auswählen';
-    $('#rund-body [data-rd="send"]').disabled = !n || rundBusy || !wkCur();
-    const all = $('#rd-all'), boxes = $$('#rund-body [data-rsel]');
-    if (all) { all.checked = boxes.length && boxes.every((b) => b.checked); all.indeterminate = !all.checked && boxes.some((b) => b.checked); }
-  }
-  dlgRund.addEventListener('cancel', (e) => { if (rundBusy) e.preventDefault(); });
-  dlgRund.addEventListener('change', (e) => {
-    if (e.target.id === 'rd-all') { for (const b of $$('#rund-body [data-rsel]')) { b.checked = e.target.checked; b.checked ? rundSel.add(b.dataset.rsel) : rundSel.delete(b.dataset.rsel); } }
-    if (e.target.dataset.rsel) e.target.checked ? rundSel.add(e.target.dataset.rsel) : rundSel.delete(e.target.dataset.rsel);
-    rundCount();
-  });
-  dlgRund.addEventListener('click', async (e) => {
-    const a = e.target.closest('[data-rd]')?.dataset.rd;
-    if (a === 'prev') {
-      const id = [...rundSel][0] || ($('#rund-body [data-rsel]') || {}).dataset?.rsel || '';
-      try {
-        const r = await api('kunden_mail_vorschau', { body: { id, type: 'woche', note: $('#rd-note').value } });
-        $('#rund-body .k-prevwrap').hidden = false;
-        $('#rd-prev').srcdoc = r.html;
-        $('#rd-prev').title = `Vorschau: ${r.subject} (an ${r.to})`;
-      } catch (ex) { $('#rd-err').textContent = ex.message; }
-    }
-    if (a === 'send') {
-      const w = wkCur(), ids = [...rundSel];
-      const again = ids.filter((id) => sentThisWeek(kunden.find((c) => c.id === id))).length;
-      if (!(await confirmBox('Wochenangebot versenden?', `Das Wochenangebot KW ${w.week}/${w.year} geht jetzt per E-Mail an ${plural(ids.length, 'Kunden', 'Kunden')}.${again ? ` <strong>${again} davon haben es diese Woche schon erhalten.</strong>` : ''}`, 'Jetzt senden'))) return;
-      rundBusy = true; dlgRund.dataset.busy = '1'; rundCount();
-      const note = $('#rd-note').value;
-      let okN = 0, badN = 0;
-      $('#rd-err').textContent = '';
-      for (let i = 0; i < ids.length; i += 10) {
-        const part = ids.slice(i, i + 10);
-        for (const id of part) $(`#rund-body tr[data-rid="${CSS.escape(id)}"] .k-res`).innerHTML = '<span class="spinner sm"></span>';
-        $('#rd-n').textContent = `Wird gesendet … ${i}/${ids.length}`;
-        try {
-          const r = await api('kunden_rundmail', { body: { ids: part, note, week: w.week, year: w.year } });
-          for (const x of r.results) {
-            const cell = $(`#rund-body tr[data-rid="${CSS.escape(x.id)}"] .k-res`);
-            if (x.ok) { okN++; rundSel.delete(x.id); const cb = $(`#rund-body [data-rsel="${CSS.escape(x.id)}"]`); if (cb) cb.checked = false; }
-            else badN++;
-            if (cell) cell.innerHTML = x.ok ? `<span class="st-ok">${icon('check', 'sm')}gesendet</span>` : `<span class="st-err">${esc(x.error)}</span>`;
-          }
-        } catch (ex) {
-          badN += part.length;
-          for (const id of part) $(`#rund-body tr[data-rid="${CSS.escape(id)}"] .k-res`).innerHTML = `<span class="st-err">${esc(ex.message)}</span>`;
-          if (ex.status === 409 || ex.status === 401 || ex.status === 403) { $('#rd-err').textContent = ex.message; break; }
-        }
-      }
-      rundBusy = false; delete dlgRund.dataset.busy;
-      rundCount();
-      toast(badN ? `${okN} gesendet, ${badN} nicht zugestellt – Details in der Liste.` : `Wochenangebot an ${plural(okN, 'Kunden', 'Kunden')} gesendet.`, 6000);
-      try { const r = await api('kunden'); kunden = r.customers; kundenRev = r.rev; renderKundenList(); } catch { /* Liste später */ }
-    }
-  });
-
   /* ======================= Protokoll (Administrator) ======================= */
   let logData = null, logMonth = '', logUser = '', logType = '', logQ = '';
   const logOpen = new Set();
@@ -1483,7 +1399,6 @@
     setTimeout(() => URL.revokeObjectURL(a.href), 2000);
   }
 
-  W.openRund = openRund;
 
   /* ======================= Stammdaten → Gruppenlisten (Kundengruppen, VK-Gruppen) ======================= */
   /* Liste aus der Warenwirtschaft (Nummer, Bezeichnung, Klasse, Kategorie). CSV-Import im Browser (Semikolon, Windows-1252
