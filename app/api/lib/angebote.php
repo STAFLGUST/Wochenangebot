@@ -434,17 +434,20 @@ function angebot_veroeffentlichen(?array $modell, $revision): array
         }
         $model = clean_model($modell, true);
         $prev = store_read('angebot');
+        require_once dirname(__DIR__) . '/module/angebot/wochen.php';   // Wochenablage angebot-woche/<JJJJ-WW>
         if ($prev) {
             $id = gmdate('Ymd-His') . '-' . bin2hex(random_bytes(3));
             store_write('versionen/' . $id, $prev);
             $list = store_names('versionen');
             rsort($list);
-            foreach (array_slice($list, $keep) as $old) store_delete($old);
+            // vor dem Löschen in die Wochenablage retten, wenn diese KW dort keinen neueren Stand hat (module/angebot/wochen.php)
+            foreach (array_slice($list, $keep) as $old) { angebot_woche_retten(store_read($old)); store_delete($old); }
         }
         // streng steigend mit Millisekunden (wie einzel_stand): zwei Veröffentlichungen in derselben Sekunde bekommen
         // verschiedene Stände – ein Bestellwunsch auf der ersten Fassung wird dann nicht mit der zweiten gerechnet
         $model['publishedAt'] = einzel_stand(is_array($prev) && is_string($prev['publishedAt'] ?? null) ? $prev['publishedAt'] : null);
         store_write('angebot', $model);
+        angebot_woche_ablegen($model);   // je KW dauerhaft: ersetzt den Stand derselben KW (im selben Sperr- und Transaktionsrahmen)
         $rev = draft_end($dr, 'veröffentlicht');
         $h = history_from_model($model, 'Veröffentlichung', $model['publishedAt']);
         if ($h) { $hid = history_id($h['week'], $h['year']); store_write('historie/' . $hid, $h); history_undelete($hid); }

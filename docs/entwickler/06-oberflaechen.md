@@ -331,9 +331,12 @@ Ladeanzeige) zeigt oben ‹ Titel › (`<Angebot> · KW 43/2026`, darunter Zeitr
 Woche“ und die Auswahl des Angebots (gemerkt in `localStorage`, ohne Speicher Wochenangebot). Jede Woche fragt
 `angebot_woche` (Kopf, Hinweise, vorige/nächste gespeicherte Woche) und lädt dann die Angebotsseite im Rahmen mit
 `?vorschau=1&eingebettet=1&woche=JJJJ-WW[&angebot=…]` – `frontend.js` holt in diesem Fall `angebot_woche` statt
-`offer&draft=1`, sonst bleibt die Seite unverändert. Ohne gespeicherten Stand: Fläche „Für KW … ist kein Angebot
-gespeichert“ mit Sprung zur letzten gespeicherten Woche. Hinweisleiste: nur Preisstand (Preisverlauf, ohne Werbung,
-Bereiche, eigene Bezeichnungen, Empfehlungen) bzw. bei Kundenangeboten „Artikel nach der heutigen Einstellung“. Die Adresse
+`offer&draft=1`, sonst bleibt die Seite unverändert. Quelle je KW: Wochenablage `angebot-woche/<JJJJ-WW>` (mit den
+damaligen Angebotsdefinitionen), aktuelles Angebot oder `versionen/*` – der späteste Stand –, sonst der Preisverlauf.
+Ohne gespeicherten Stand: Fläche „Für KW … ist kein Angebot gespeichert“ mit Sprung zur letzten gespeicherten Woche; gab es
+das gewählte Kundenangebot in der Woche nicht (`fehlt`): „… gab es in KW … noch nicht“. Hinweisleiste: nur Preisstand
+(Preisverlauf, ohne Werbung, Bereiche, eigene Bezeichnungen, Empfehlungen) bzw. bei Kundenangeboten ohne gespeicherte
+Definition (`einstellung: heute`) „Artikel nach der heutigen Einstellung“. Die Adresse
 folgt der KW (`history.replaceState`), Schließen entfernt `#woche/…`. Server: `app/api/module/angebot/wochen.php`.
 Tests: Gruppe `hist` (`fruehere_wochen_pruefen`).
 

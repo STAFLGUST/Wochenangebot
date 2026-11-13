@@ -1,18 +1,26 @@
 <?php
 declare(strict_types=1);
-/* Angebot · Frühere Wochen ansehen (Wunsch des Inhabers 13.11.2026): das veröffentlichte Angebot einer Kalenderwoche –
-   Wochenangebot oder ein Kundenangebot – nur für Mitarbeiter mit Modulzugang Angebot und nur lesend (Aktion angebot_woche in
-   aktionen/entwurf.php; das Fenster app/module/angebot/fruehere-wochen.js zeigt es in der Angebotsseite, ?vorschau=1&woche=…).
-   Quelle je KW (angebot_wochen_verzeichnis): das aktuell veröffentlichte Angebot, wenn es diese KW hat; sonst unter
-   versionen/* (vor jeder Veröffentlichung das ganze bisherige Angebot, höchstens keep_versions) der zuletzt veröffentlichte
-   Stand dieser KW (spätestes publishedAt); sonst der Preisstand im Preisverlauf (historie/<JJJJ-WW>, ohne Grenze, nur Artikel
-   und Preise mit Kundenpreisen – ohne Werbung, Bereiche, eigene Bezeichnungen, Empfehlungen), als einfache Liste nach
-   Angebotsgruppen. Aufgelöst wird immer auf dem Server mit offer_resolve (GR-002/GR-005): nur die Preise des gewählten
-   Angebots, nie Kundenpreise oder Werbung anderer Angebote. Sonderposten bleiben sichtbar, auch wenn sie heute ausverkauft
-   sind (der Bestand von damals ist nicht bekannt). Die Regel eines Kundenangebots (eigene Artikelliste / folgt dem
-   Wochenangebot) gilt nach heutigem Stand – frühere Einstellungen sind nicht gespeichert.
-   Wird von der Aktion bei Bedarf geladen; liest nur eigene Dokumente (angebot, angebote, versionen/*, historie/*), schreibt nichts. */
+/* Angebot · Frühere Wochen ansehen und Wochenablage (Wünsche des Inhabers 13.11.2026): das veröffentlichte Angebot einer
+   Kalenderwoche – Wochenangebot oder ein Kundenangebot – nur für Mitarbeiter mit Modulzugang Angebot und nur lesend (Aktion
+   angebot_woche in aktionen/entwurf.php; das Fenster app/module/angebot/fruehere-wochen.js zeigt es in der Angebotsseite,
+   ?vorschau=1&woche=…).
+   Wochenablage angebot-woche/<JJJJ-WW> („je KW dauerhaft“): angebot_veroeffentlichen() (lib/angebote.php) legt bei jeder
+   Veröffentlichung den neuen Stand mit den damaligen Angebotsdefinitionen (ID, Name, Regel der Artikelliste je Angebot, bei
+   Sonderangeboten Art und Gültigkeit – nie Kundengruppen) ab
+   und ersetzt damit den Stand derselben KW – im selben Sperr- und Transaktionsrahmen. Ohne Grenze, nie automatisch gelöscht.
+   Wird eine alte Version (versionen/*, höchstens keep_versions) gelöscht, rettet angebot_woche_retten() sie vorher in die
+   Ablage, wenn diese KW dort noch keinen neueren Stand hat (Definitionen dann unbekannt) – so geht ab jetzt kein vollständiger
+   Wochenstand mehr verloren, auch nicht aus der Zeit vor der Ablage; ein Nachfüllen beim Lesen gibt es nicht.
+   Quelle je KW (angebot_woche): der Stand mit dem spätesten publishedAt aus Ablage, aktuellem Angebot und versionen/*
+   (gleich alt: die Ablage, sie kennt die Definitionen); sonst der Preisstand im Preisverlauf (historie/<JJJJ-WW>, nur Artikel
+   und Preise – ohne Werbung, Bereiche, eigene Bezeichnungen, Empfehlungen) als einfache Liste nach Angebotsgruppen.
+   Aufgelöst wird immer auf dem Server mit offer_resolve (GR-002/GR-005): nur das gewählte Angebot, mit seiner damaligen
+   Definition, wenn die Ablage sie kennt, sonst mit der heutigen. Sonderposten bleiben sichtbar, auch wenn sie heute
+   ausverkauft sind (der Bestand von damals ist nicht bekannt).
+   Die Ablage ist intern (regeln/datenverantwortung.toml): die Kundenseite liest sie nie. Ältere Fassungen ignorieren sie.
+   Schreibt nur eigene Dokumente (angebot-woche/*), liest angebot, angebote, versionen/*, historie/*. */
 if (!defined('WA_API')) { http_response_code(404); exit; }   // nur über api/index.php nutzbar
+
 
 /* KW eines gespeicherten Angebots als „JJJJ-WW“ (nur gültige ISO-Wochen), sonst null */
 function angebot_woche_kw($m): ?string
@@ -22,27 +30,66 @@ function angebot_woche_kw($m): ?string
     return is_int($w) && is_int($y) && $y >= 2000 && $y <= 2100 && kw_gueltig($w, $y) ? history_id($w, $y) : null;
 }
 
-/* Gespeicherte Wochen: 'JJJJ-WW' => ['art' => veroeffentlicht|version|historie, 'id' => Versions-ID, 'stand' => publishedAt] –
-   je KW der zuletzt veröffentlichte Stand, aufsteigend sortiert */
+/* Eine Angebotsdefinition so, wie offer_resolve sie braucht: ID, Name, Regel der Artikelliste, bei Sonderangeboten Art und
+   Gültigkeit (Kopf „gültig von … bis …“, module/angebot/sonderangebote.php) – nie Kundengruppen (gruppen, sonderGruppen) */
+function angebot_woche_definition(array $o): array
+{
+    $d = ['id' => (string)$o['id'], 'name' => (string)($o['name'] ?? $o['id']), 'fallback' => ($o['fallback'] ?? 'standard') === 'hidden' ? 'hidden' : 'standard'];
+    if (is_string($o['art'] ?? null) && $o['art'] !== '') $d['art'] = $o['art'];
+    if (is_array($o['gueltig'] ?? null)) $d['gueltig'] = $o['gueltig'];
+    return $d;
+}
+/* Angebotsdefinitionen als Schnappschuss (GR-106) */
+function angebot_woche_definitionen(): array
+{
+    $out = [];
+    foreach (offers_load()['offers'] as $o) if (is_array($o) && isset($o['id'])) $out[] = angebot_woche_definition($o);
+    return $out;
+}
+
+/* Beim Veröffentlichen (angebot_veroeffentlichen, unter der Sperre „entwurf“): neuen Stand je KW ablegen, ersetzt dieselbe KW */
+function angebot_woche_ablegen(array $model): void
+{
+    $k = angebot_woche_kw($model);
+    if (!$k) return;
+    store_write('angebot-woche/' . $k, ['format' => 1, 'woche' => $k, 'stand' => (string)($model['publishedAt'] ?? ''), 'abgelegt' => now(),
+                                    'quelle' => 'veroeffentlichung', 'angebote' => angebot_woche_definitionen(), 'modell' => $model]);
+}
+
+/* Vor dem Löschen einer alten Version (keep_versions): in die Ablage retten, wenn diese KW dort keinen neueren Stand hat */
+function angebot_woche_retten($v): void
+{
+    $k = angebot_woche_kw($v);
+    if (!$k) return;
+    $stand = is_string($v['publishedAt'] ?? null) ? $v['publishedAt'] : '';
+    $alt = store_read('angebot-woche/' . $k);
+    if (is_array($alt) && strcmp((string)($alt['stand'] ?? ''), $stand) >= 0) return;
+    store_write('angebot-woche/' . $k, ['format' => 1, 'woche' => $k, 'stand' => $stand, 'abgelegt' => now(), 'quelle' => 'version', 'angebote' => null, 'modell' => $v]);
+}
+
+/* Gespeicherte Wochen (aufsteigend) und je KW der späteste Stand aus aktuellem Angebot und versionen/*:
+   [Wochen => true, 'JJJJ-WW' => ['art' => veroeffentlicht|version, 'id' => Versions-ID, 'stand' => publishedAt]] */
 function angebot_wochen_verzeichnis(): array
 {
-    $v = [];
+    $v = []; $wochen = [];
     $pub = store_read('angebot');
-    if ($k = angebot_woche_kw($pub)) $v[$k] = ['art' => 'veroeffentlicht', 'id' => null, 'stand' => (string)($pub['publishedAt'] ?? '')];
+    if ($k = angebot_woche_kw($pub)) { $v[$k] = ['art' => 'veroeffentlicht', 'id' => null, 'stand' => (string)($pub['publishedAt'] ?? '')]; $wochen[$k] = true; }
     foreach (store_names('versionen') as $f) {
         $id = basename($f);
         if (!preg_match('/^[0-9]{8}-[0-9]{6}-[0-9a-f]{6}$/', $id)) continue;
         $d = store_read('versionen/' . $id);
         if (!($k = angebot_woche_kw($d))) continue;
+        $wochen[$k] = true;
         $stand = is_string($d['publishedAt'] ?? null) ? $d['publishedAt'] : '';
         $alt = $v[$k] ?? null;
-        // das aktuelle Angebot ist immer der neueste Stand; unter den Versionen gewinnt das späteste publishedAt (dann die ID)
-        if ($alt && ($alt['art'] === 'veroeffentlicht' || strcmp($alt['stand'] . '|' . $alt['id'], $stand . '|' . $id) >= 0)) continue;
+        // späteres publishedAt gewinnt (gleich: das aktuelle Angebot, dann die größere ID)
+        if ($alt && strcmp($alt['stand'] . '|' . ($alt['art'] === 'veroeffentlicht' ? '~' : $alt['id']), $stand . '|' . $id) >= 0) continue;
         $v[$k] = ['art' => 'version', 'id' => $id, 'stand' => $stand];
     }
-    foreach (history_ids() as $h) if (!isset($v[$h])) $v[$h] = ['art' => 'historie', 'id' => null, 'stand' => ''];
-    ksort($v);
-    return $v;
+    foreach (store_names('angebot-woche') as $f) { $k = basename($f); if (preg_match('/^\d{4}-\d{2}$/', $k)) $wochen[$k] = true; }
+    foreach (history_ids() as $h) $wochen[$h] = true;
+    ksort($wochen);
+    return ['wochen' => array_keys($wochen), 'je' => $v];
 }
 
 /* Preisstand des Preisverlaufs als Angebotsmodell für offer_resolve: Angebotsgruppen aus den gespeicherten Gruppennamen
@@ -71,21 +118,35 @@ function angebot_woche(string $woche, string $oid): array
 {
     if (!preg_match('/^(\d{4})-(\d{2})$/', $woche, $m) || (int)$m[1] < 2000 || (int)$m[1] > 2100 || !kw_gueltig((int)$m[2], (int)$m[1])) fail('Ungültige Kalenderwoche.', 422);
     if (!preg_match('/^[a-z0-9-]{1,40}$/', $oid) || strncmp($oid, 'e-', 2) === 0) fail('Unbekanntes Angebot.', 404);
-    $def = offer_def($oid);
-    if (!$def) fail('Unbekanntes Angebot.', 404);
     $verz = angebot_wochen_verzeichnis();
-    $e = $verz[$woche] ?? null;
-    $modell = null;
-    if ($e && $e['art'] === 'veroeffentlicht') $modell = store_read('angebot');
-    elseif ($e && $e['art'] === 'version') $modell = store_read('versionen/' . $e['id']);
-    elseif ($e) { $h = store_read('historie/' . $woche); $modell = is_array($h) ? angebot_woche_aus_historie($h) : null; }
-    $offer = is_array($modell) ? offer_resolve($modell, $def, false) : null;
-    $keys = array_keys($verz);
+    // Quelle: spätester Stand aus Ablage, aktuellem Angebot und Versionen; sonst Preisverlauf
+    $kandidat = $verz['je'][$woche] ?? null;
+    $ablage = store_read('angebot-woche/' . $woche);
+    $modell = null; $quelle = null; $defs = null;
+    if (is_array($ablage) && is_array($ablage['modell'] ?? null) && (!$kandidat || strcmp((string)($ablage['stand'] ?? ''), $kandidat['stand']) >= 0)) {
+        $modell = $ablage['modell']; $quelle = 'ablage'; $defs = is_array($ablage['angebote'] ?? null) ? $ablage['angebote'] : null;
+    } elseif ($kandidat && $kandidat['art'] === 'veroeffentlicht') { $modell = store_read('angebot'); $quelle = 'veroeffentlicht'; }
+    elseif ($kandidat) { $modell = store_read('versionen/' . $kandidat['id']); $quelle = 'version'; }
+    elseif (in_array($woche, $verz['wochen'], true)) { $h = store_read('historie/' . $woche); $modell = is_array($h) ? angebot_woche_aus_historie($h) : null; $quelle = 'historie'; }
+    if (!is_array($modell)) { $modell = null; $quelle = null; }
+    // Definition des Angebots: damals (Ablage), sonst heute; gab es das Angebot in dieser Woche nicht, kein Angebot (fehlt)
+    $damals = [];
+    foreach (is_array($defs) ? $defs : [] as $d) if (is_array($d) && isset($d['id'])) $damals[(string)$d['id']] = angebot_woche_definition($d);
+    $heute = offer_def($oid);
+    $fehlt = false; $einstellung = 'heute';
+    if ($oid === OFFER_STD) $def = $heute;
+    elseif (isset($damals[$oid])) { $def = $damals[$oid]; $einstellung = 'damals'; }
+    elseif ($heute) { $def = $heute; $fehlt = is_array($defs) && $quelle === 'ablage'; }
+    else fail('Unbekanntes Angebot.', 404);
+    $offer = $modell && !$fehlt ? offer_resolve($modell, $def, false) : null;
     $vorige = null; $naechste = null;
-    foreach ($keys as $k) { if ($k < $woche) $vorige = $k; elseif ($k > $woche && $naechste === null) $naechste = $k; }
-    $angebote = [['id' => OFFER_STD, 'name' => 'Wochenangebot']];
-    foreach (offers_load()['offers'] as $o) $angebote[] = ['id' => (string)$o['id'], 'name' => (string)$o['name']];
+    foreach ($verz['wochen'] as $k) { if ($k < $woche) $vorige = $k; elseif ($k > $woche && $naechste === null) $naechste = $k; }
+    // Auswahl: Wochenangebot, die Angebote dieser Woche (damalige Namen), dazu die heutigen, die es damals nicht gab
+    $angebote = [['id' => OFFER_STD, 'name' => 'Wochenangebot']]; $drin = [OFFER_STD => true];
+    foreach ($damals as $d) { $angebote[] = ['id' => $d['id'], 'name' => $d['name']]; $drin[$d['id']] = true; }
+    foreach (offers_load()['offers'] as $o) if (!isset($drin[(string)$o['id']])) $angebote[] = ['id' => (string)$o['id'], 'name' => (string)$o['name']];
     return ['woche' => $woche, 'kw' => (int)$m[2], 'jahr' => (int)$m[1], 'angebot' => ['id' => (string)$def['id'], 'name' => (string)$def['name']],
-            'quelle' => $offer ? $e['art'] : null, 'stand' => $offer ? ($offer['publishedAt'] ?? null) : null, 'artikel' => $offer ? count($offer['items']) : 0,
-            'offer' => $offer, 'vorige' => $vorige, 'naechste' => $naechste, 'erste' => $keys[0] ?? null, 'angebote' => $angebote];
+            'quelle' => $offer ? $quelle : null, 'stand' => $offer ? ($offer['publishedAt'] ?? null) : null, 'artikel' => $offer ? count($offer['items']) : 0,
+            'einstellung' => $einstellung, 'fehlt' => $fehlt, 'offer' => $offer, 'vorige' => $vorige, 'naechste' => $naechste, 'erste' => $verz['wochen'][0] ?? null,
+            'angebote' => $angebote];
 }

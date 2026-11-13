@@ -8,6 +8,7 @@ Gelesen und geschrieben über `app/api/storage.php` (`store_read`, `store_write`
 | --- | --- | --- | --- | --- | --- |
 | `abmelde-schluessel` | Angebot | geheim | – | – | Schlüssel für Abmelde-Links in Kunden-E-Mails |
 | `angebot` | Angebot | oeffentlich | bestand, plattform | – | Veröffentlichtes Wochenangebot; öffentlich nur gefiltert über offer_resolve (GR-001, GR-002) – Historie: Jede Veröffentlichung legt eine Version an (versionen/*) und den Preisverlauf (historie/*) |
+| `angebot-woche/*` | Angebot | vertraulich | – | – | Wochenablage: je Kalenderwoche der zuletzt veröffentlichte Stand mit den damaligen Angebotsdefinitionen (Name, Artikelliste je Angebot) – Historie: Schnappschuss je KW beim Veröffentlichen (GR-106), ersetzt nur den Stand derselben KW; dauerhaft, ohne Grenze und ohne automatisches Löschen |
 | `angebote` | Angebot | vertraulich | crm | – | Kundenangebote mit Kundenpreisen (variants), Sichtbarkeit und Sonderpreisen |
 | `anwesenheit` | Angebot | intern | – | – | Wer bearbeitet gerade den Entwurf (gemeinsames Bearbeiten) |
 | `bestellung` | Angebot | intern | – | plattform | Einstellungen der Bestellfunktion (an/aus, Kopie an den Kunden); ab Trennstufe 2 nur die Anzahl der Empfänger – die Adressen stehen in bestellung-empfaenger |
