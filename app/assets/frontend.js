@@ -55,6 +55,12 @@ const store = {
 const F = window.STAFL_FORMAT;
 const fmtNum = { format: (v) => F.zahl(v, 2, 2) };
 const fmtInt = new Intl.NumberFormat('de-DE');
+/* Angebotene Partie einer Position im Einzelangebot (nur dort liefert der Server it.partie = { lot, mhd, kg }: Charge, MHD und
+   angebotene Menge als Schnappschuss – Ausnahme von GR-001 nach Entscheidung des Inhabers 13.11.2026; nie Bestand oder EK) */
+const partieTeile = (it) => (it.partie ? [`Charge ${it.partie.lot}`, it.partie.mhd ? 'MHD ' + String(it.partie.mhd).split('-').reverse().join('.') : '', `${F.zahl(it.partie.kg, 2, 2)} kg`].filter(Boolean) : []);
+const partieText = (it) => partieTeile(it).join(' · ');
+/* Teile bleiben je für sich auf einer Zeile („MHD 04.12.2026“ nie getrennt), umbrochen wird nur zwischen den Teilen */
+const partieHTML = (cls) => (it) => (it.partie ? `<span class="partie ${cls}">${partieTeile(it).map((t) => `<span>${esc(t)}</span>`).join(' · ')}</span>` : '');
 const collator = new Intl.Collator('de', { numeric: true, sensitivity: 'base' });
 const dmy = (iso) => { const [y, m, d] = iso.split('-'); return `${d}.${m}.${y}`; };
 const dm = (iso) => { const [, m, d] = iso.split('-'); return `${d}.${m}.`; };
@@ -117,7 +123,7 @@ function prepare(raw) {
     /* Suche nur über Nummer, Bezeichnung und echte Artikelmerkmale – nicht über Gruppennamen,
        damit z. B. „Roastbeef“ keine anderen Teilstücke aus der Gruppe „Roastbeef am Knochen“ zeigt */
     o._hay = SU.norm([it.code, it.name, it.nameRaw, it.category, SYN_CAT[it.category], it.origin, SYN_ORIGIN[it.origin],
-      COND_LABEL[it.condition], SYN_COND[it.condition], o.features.join(' '), it.sale ? 'sonderpreis restposten empfehlung' : '', it.empfehlung ? 'empfehlung' : '', it.brand, priceTerms]
+      COND_LABEL[it.condition], SYN_COND[it.condition], o.features.join(' '), it.sale ? 'sonderpreis restposten empfehlung' : '', it.empfehlung ? 'empfehlung' : '', it.brand, priceTerms, it.partie ? 'charge partie ' + it.partie.lot : '']
       .filter(Boolean).join(' ¦ '));
     o._cmp = it.category + '|' + it.cut;
     return o;
@@ -520,7 +526,7 @@ function renderTable(list, grouped) {
       <td class="c-fav">${starHTML(it)}</td>
       <td class="c-code">${it.code ? hl(it.code) : '<span class="muted" title="Ohne Artikelnummer">—</span>'}</td>
       <td class="c-name"><button type="button" class="name-btn" data-open="${it.id}" title="Details und Preisvergleich anzeigen">${hl(it.name)}</button>
-        <div class="m-meta">${esc([it.code, it.category, it.origin, COND_LABEL[it.condition]].filter(Boolean).join(' · '))}</div>${werbTagHTML(it, 'm-werb')}${tagHTML(it, !grouped)}</td>
+        <div class="m-meta">${esc([it.code, it.category, it.origin, COND_LABEL[it.condition]].filter(Boolean).join(' · '))}</div>${partieHTML('t-partie')(it)}${werbTagHTML(it, 'm-werb')}${tagHTML(it, !grouped)}</td>
       <td class="c-cat"><span class="cat-cell">${monoHTML(it.category)}${esc(it.category)}</span></td>
       <td class="c-origin">${it.origin ? hl(it.origin) : '<span class="muted" title="In der Liste nicht angegeben">—</span>'}${grouped ? '' : `<div class="sub">${esc(it.group)}</div>`}</td>
       <td class="c-cond">${condBadge(it.condition)}</td>
@@ -621,7 +627,7 @@ function plBaender(secs, k) {
   return out;
 }
 function plUnits(list, grouped, charsPerLine) {
-  const weight = (i) => 1 + (plName(i).length + (i.sale ? 14 : 0) > charsPerLine ? 0.85 : 0);
+  const weight = (i) => 1 + (plName(i).length + (i.sale ? 14 : 0) > charsPerLine ? 0.85 : 0) + (i.partie ? 0.7 : 0);   // Partiezeile darunter
   const nach = { price: 'Preis', name: 'Bezeichnung', code: 'Artikelnummer', cat: 'Fleischart', origin: 'Herkunft', cond: 'Zustand' }[state.sortKey];
   if (!grouped) return [{ key: 'all', title: nach ? `Alle Artikel, sortiert nach ${esc(nach)}` : 'Alle Artikel', items: list, labels: plLabels(list), head: 1.8, weight, section: '' }];
   const units = [];
@@ -647,7 +653,7 @@ function plBlockHTML(b, mode) {
   const span = 2 + cols + (screen ? 1 : 0);
   const row = (it) => `<tr class="row${empfAn(it) && !werb ? ' werb-an' : ''}" data-id="${it.id}">
     <td class="c-code">${it.code ? hl(it.code) : ''}</td>
-    <td class="c-name">${screen ? `<button type="button" class="name-btn" data-open="${it.id}" title="Details und Preisvergleich anzeigen">${hl(plName(it))}</button>` : esc(plName(it))}${werbTagHTML(it, 'al-tag', werb)}${it.sale ? '<span class="tag sale al-tag" title="Sonderpreis, solange der Vorrat reicht">Sonderposten</span>' : ''}</td>
+    <td class="c-name">${screen ? `<button type="button" class="name-btn" data-open="${it.id}" title="Details und Preisvergleich anzeigen">${hl(plName(it))}</button>` : esc(plName(it))}${werbTagHTML(it, 'al-tag', werb)}${it.sale ? '<span class="tag sale al-tag" title="Sonderpreis, solange der Vorrat reicht">Sonderposten</span>' : ''}${partieHTML('al-partie')(it)}</td>
     ${plCells(it, labels).map((p) => `<td class="c-price${p && p.status !== 'value' ? ' al-np' : ''}">${p ? (it.sale && p === it.price ? `${it.regular != null ? `<s class="p-was al-was">${fmtNum.format(it.regular)}</s>` : ''}<span class="al-sale" title="Sonderposten – solange der Vorrat reicht">${plPrice(p)}</span>` : plPrice(p)) : ''}</td>`).join('')}${screen ? `<td class="c-fav">${starHTML(it)}</td>` : ''}</tr>`;
   const cg = `<colgroup><col class="w-code"><col>${labels.map(() => '<col class="w-price">').join('')}${screen ? '<col class="w-fav">' : ''}</colgroup>`;
   const was = u.items.some((it) => it.sale && it.regular != null) ? ' hat-was' : '';   // ganze Gruppe (auch ihre Teile im Druck): Preisspalte breit genug für „bisher“ und Sonderpreis
@@ -727,7 +733,7 @@ function cardHTML(it, grouped) {
   return `<article class="card${empfAn(it) ? ' werb-an' : ''}" data-id="${it.id}">
     <div class="card-top">${monoHTML(it.category)}<span class="code">${it.code ? 'Art.-Nr. ' + hl(it.code) : 'ohne Art.-Nr.'}</span>${starHTML(it)}</div>
     <h3 class="card-name"><button type="button" class="name-btn" data-open="${it.id}" title="Details und Preisvergleich anzeigen">${hl(it.name)}</button></h3>
-    <p class="card-meta">${esc(it.category)}${it.origin ? ' · ' + hl(it.origin) : ''}</p>
+    <p class="card-meta">${esc(it.category)}${it.origin ? ' · ' + hl(it.origin) : ''}</p>${it.partie ? partieHTML('card-partie')(it) : ''}
     <div class="card-tags">${werbTagHTML(it, '')}${condBadge(it.condition)}${!grouped && it.brand ? `<span class="tag brand">${esc(it.brand)}</span>` : ''}${feats}</div>
     ${grouped ? '' : `<p class="card-group">${esc(it.group)}</p>`}
     <div class="card-price">${priceHTML(it)}</div>
@@ -933,6 +939,7 @@ function openDetail(id) {
     <div class="dlg-body">
       <div class="d-price">${prices}<p class="note">${esc(m.notice || 'Angebot')} · ${esc(kwKurz(m))} · Preis in € je kg</p></div>
       <dl class="d-list">
+        ${it.partie ? dd('Charge', esc(it.partie.lot)) + (it.partie.mhd ? dd('MHD', esc(String(it.partie.mhd).split('-').reverse().join('.'))) : '') + dd('Menge', esc(F.zahl(it.partie.kg, 2, 2) + ' kg')) : ''}
         ${dd('Fleischart', esc(it.category))}
         ${dd('Herkunft', it.origin ? esc(it.origin) : '<span class="muted">In der Liste nicht angegeben</span>')}
         ${dd('Zustand', condBadge(it.condition))}
@@ -1021,6 +1028,7 @@ function printPriceCell(p) {
   return '<span class="p-p none">—</span>';
 }
 function printAltNote(it) {
+  if (it.partie) return `<small>${esc(partieText(it))}</small>`;   // Einzelangebot: angebotene Partie (dort keine Zusatzpreise)
   if (!it.altPrices.length && !it.price.label) return '';
   return `<small>${[it.price, ...it.altPrices].map((p) => `${esc(p.label || 'Preis')}: ${esc(priceShort(p))}`).join(' · ')}</small>`;
 }
@@ -1109,7 +1117,9 @@ function csvCell(v) {
 function exportCSV(list, suffix) {
   if (!list.length) { toast('Keine Artikel zum Exportieren.'); return; }
   const m = DATA.meta;
-  const head = ['Artikelnummer', 'Bezeichnung', 'Fleischart', 'Herkunft', 'Angebotsgruppe', 'Bereich', 'Zustand', 'Merkmale', 'Preis €/kg', 'Preisangabe', 'Weitere Preise', mitGueltigkeit(m) ? 'Gültig bis' : 'Kalenderwoche'];
+  const mitPartie = list.some((it) => it.partie);   // Einzelangebot mit angebotenen Partien: Charge, MHD, Menge als eigene Spalten
+  const head = ['Artikelnummer', 'Bezeichnung', 'Fleischart', 'Herkunft', 'Angebotsgruppe', 'Bereich', 'Zustand', 'Merkmale', 'Preis €/kg', 'Preisangabe', 'Weitere Preise', mitGueltigkeit(m) ? 'Gültig bis' : 'Kalenderwoche',
+    ...(mitPartie ? ['Charge', 'MHD', 'Menge kg'] : [])];
   const lines = [head.map(csvCell).join(';')];
   for (const it of list) {
     const p = it.price;
@@ -1119,6 +1129,7 @@ function exportCSV(list, suffix) {
       (p.label ? p.label + ': ' : '') + PRICE_STATUS_LABELS[p.status],
       it.altPrices.map((a) => `${a.label}: ${priceShort(a)}`).join(' | '),
       mitGueltigkeit(m) ? (m.gueltigBis ? String(m.gueltigBis).split('-').reverse().join('.') : '') : m.week ? `KW ${m.week}/${m.year ?? ''}` : '',
+      ...(mitPartie ? (it.partie ? [it.partie.lot, it.partie.mhd ? String(it.partie.mhd).split('-').reverse().join('.') : '', String(it.partie.kg).replace('.', ',')] : ['', '', '']) : []),
     ].map(csvCell).join(';'));
   }
   download(`${offerTitle().replace(/[^A-Za-z0-9ÄÖÜäöüß]+/g, '_')}_${m.einzel ? (m.nr || 'Einzelangebot').replace(/[^A-Za-z0-9-]+/g, '_') : mitGueltigkeit(m) ? `bis_${m.gueltigBis}` : `KW${m.week ?? ''}_${m.year ?? ''}`}_${suffix}.csv`, '\ufeff' + lines.join('\r\n'), 'text/csv;charset=utf-8');

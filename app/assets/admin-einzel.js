@@ -4,6 +4,9 @@
    „Artikel hinzufügen“ (admin-artikelwahl.js): VK-Gruppen links, Artikel mit Bestand, ETA, MHD und Wochenpreis rechts,
    Suche über alle Gruppen, mehrere markierte Artikel auf einmal übernehmen.
    Abweichung des eigenen Preises vom Wochenpreis als farbiger Punkt.
+   Partien (Inhaber 13.11.2026): mit „Bestand ansehen“ je Position eine eingelagerte Partie wählen (Charge, MHD, kg); weitere
+   Partien desselben Artikels als eigene Positionen („+ Partie“). Den Kunden zeigt das Angebot Charge, MHD und Menge – die
+   Werte übernimmt der Server beim Speichern als Schnappschuss aus dem Bestand (nie EK). Ohne das Recht nur Anzeige.
    Drucken / PDF öffnet das Einzelangebot auf der Angebotsseite mit deren Druckdialog (wie für Kunden).
    E-Mail wahlweise mit den Positionen als Liste oder mit dem Angebot als PDF im Anhang (Design der Angebotsansicht).
    Server: app/api/aktionen/einzelangebote.php
@@ -48,6 +51,66 @@
     return `<span class="ez-abw ${cls}" title="${esc(txt)}" data-abw="${r}"><i></i>${Math.abs(p) < 1 ? '±0,0 %' : window.STAFL_FORMAT.veraenderung(p / 100)}</span>`;
   }
   const { stdText, bestandHTML } = W.artikelwahl;   // Wochenpreis- und Bestandsanzeige wie im Auswahlfenster
+
+  /* ---------- Partien ---------- */
+  /* Eingelagerte Partien eines Artikels (nur mit Nummer und Menge; gleiche Nummer zusammengefasst wie auf dem Server),
+     frühestes MHD zuerst */
+  function partienVon(a) {
+    const m = new Map();
+    for (const l of (a && a.lots) || []) {
+      if (!l.lot) continue;
+      const x = m.get(l.lot);
+      if (!x) m.set(l.lot, { lot: l.lot, mhd: l.mhd || null, kg: Number(l.kg) || 0 });
+      else { x.kg = Math.round((x.kg + (Number(l.kg) || 0)) * 1000) / 1000; if (l.mhd && (!x.mhd || l.mhd < x.mhd)) x.mhd = l.mhd; }
+    }
+    return [...m.values()].filter((l) => l.kg > 0).sort((x, y) => (x.mhd || '9999').localeCompare(y.mhd || '9999') || x.lot.localeCompare(y.lot, 'de', { numeric: true }));
+  }
+  const partieText = (l) => [l.lot, l.mhd ? 'MHD ' + dmy(l.mhd) : '', fmtKg(l.kg) + ' kg'].filter(Boolean).join(' · ');
+  const mitPartien = () => !!(idxMeta && idxMeta.bestand);   // Partien wählen nur mit „Bestand ansehen“ (Server prüft es ebenfalls)
+  /* Partien desselben Artikels, die schon in anderen Positionen stehen: Partienummer → Positionsnummer (1-basiert) */
+  function belegt(code, ausser) {
+    const m = new Map();
+    ed.positions.forEach((q, j) => { if (j !== ausser && q.partie && key(q.code) === key(code)) m.set(q.partie.lot, j + 1); });
+    return m;
+  }
+  function partieHTML(p, i, a, ro) {
+    if (!p.code) return '';
+    const lots = partienVon(a);
+    if (ro || !mitPartien()) return p.partie ? `<div class="ez-partie"><span class="ez-partie-t">Partie ${esc(partieText(p.partie))}</span></div>` : '';
+    if (!lots.length && !p.partie) return '';
+    const b = belegt(p.code, i);
+    const akt = p.partie ? lots.find((l) => l.lot === p.partie.lot) : null;
+    const opts = lots.map((l) => {
+      const sel = p.partie && p.partie.lot === l.lot;
+      return `<option value="${esc(l.lot)}"${sel ? ' selected' : ''}${b.has(l.lot) ? ' disabled' : ''}>${esc(partieText(sel ? p.partie : l))}${b.has(l.lot) ? ` (Position ${b.get(l.lot)})` : ''}</option>`;
+    });
+    if (p.partie && !akt) opts.push(`<option value="${esc(p.partie.lot)}" selected>${esc(partieText(p.partie))} – nicht mehr im Bestand</option>`);
+    const frei = lots.filter((l) => !b.has(l.lot) && !(p.partie && p.partie.lot === l.lot));
+    const heute = akt && p.partie.kg != null && Math.abs(akt.kg - p.partie.kg) > 0.0005 ? `<span class="ez-partie-h">Bestand heute ${esc(fmtKg(akt.kg))} kg</span>` : '';
+    return `<div class="ez-partie"><label><span>Partie</span><select data-f="partie" aria-label="Partie für ${esc(p.name)}"><option value="">ohne Partie</option>${opts.join('')}</select></label>
+      ${p.partie && frei.length ? `<button type="button" class="btn sm ghost" data-partie-plus="${i}" title="Weitere Partie dieses Artikels als eigene Position anbieten">${icon('plus', 'sm')}Partie</button>` : ''}${heute}</div>`;
+  }
+  function partieWaehlen(i, lot) {
+    const p = ed.positions[i];
+    const a = p.code ? idx && idx.get(key(p.code)) : null;
+    const l = lot ? partienVon(a).find((x) => x.lot === lot) : null;
+    p.partie = l ? { ...l } : null;
+    if (l && p.qty == null) p.qty = ganz(l);   // ohne Menge: die ganze Partie anbieten (änderbar)
+    markDirty(); renderPos();
+    const s = $(`#ez-pos tr[data-i="${i}"] [data-f="partie"]`); if (s) s.focus();
+  }
+  function weiterePartie(i) {
+    const p = ed.positions[i];
+    const a = p.code ? idx && idx.get(key(p.code)) : null;
+    const b = belegt(p.code, -1);
+    const l = partienVon(a).find((x) => !b.has(x.lot));
+    if (!l || ed.positions.length >= MAX_POS) return;
+    ed.positions.splice(i + 1, 0, { code: p.code, name: p.name, qty: ganz(l), price: p.price, notiz: '', partie: { ...l } });
+    markDirty(); renderPos();
+    const s = $(`#ez-pos tr[data-i="${i + 1}"] [data-f="partie"]`); if (s) s.focus();
+  }
+  const zuViel = (p) => p.partie && p.qty != null && !Number.isNaN(p.qty) && p.qty > p.partie.kg + 1e-9;
+  const ganz = (l) => Math.floor(l.kg * 100 + 1e-6) / 100;   // ganze Partie als Menge, auf 2 Stellen abgerundet (15,005 kg → 15,00 – nie mehr als die Partie)
 
   async function laden() {
     const [l, k] = await Promise.all([api('einzel_liste'), kunden ? null : api('kunden')]);
@@ -191,18 +254,21 @@
     el.innerHTML = `<table class="etab ezpos"><thead><tr><th>Art.-Nr.</th><th>Artikel</th><th class="ez-b">Verfügbar</th><th class="num">Wochenpreis</th><th class="num">Preis €/kg</th><th class="ez-a">Abw.</th><th class="num">Menge kg</th>${ro ? '' : '<th></th>'}</tr></thead><tbody>
       ${ed.positions.map((p, i) => { const a = p.code ? idx && idx.get(key(p.code)) : null; return `<tr data-i="${i}">
         <td class="ez-code">${esc(p.code || '—')}</td>
-        <td class="ez-name">${ro ? esc(p.name) : `<input class="ez-in-name" data-f="name" value="${esc(p.name)}" maxlength="200" aria-label="Bezeichnung">`}${ro ? (p.notiz ? `<div class="sub">${esc(p.notiz)}</div>` : '') : `<input class="ez-in-notiz" data-f="notiz" value="${esc(p.notiz || '')}" maxlength="200" placeholder="Notiz (optional)" aria-label="Notiz">`}</td>
+        <td class="ez-name">${ro ? esc(p.name) : `<input class="ez-in-name" data-f="name" value="${esc(p.name)}" maxlength="200" aria-label="Bezeichnung">`}${ro ? (p.notiz ? `<div class="sub">${esc(p.notiz)}</div>` : '') : `<input class="ez-in-notiz" data-f="notiz" value="${esc(p.notiz || '')}" maxlength="200" placeholder="Notiz (optional)" aria-label="Notiz">`}${partieHTML(p, i, a, ro)}</td>
         <td class="ez-b" data-l="Verfügbar">${bestandHTML(a, true)}</td>
         <td class="num ez-std" data-l="Wochenpreis">${a ? stdText(a.stdPrice) : '<span class="muted">—</span>'}</td>
         <td class="num" data-l="Preis €/kg">${ro ? (p.price != null ? esc(fmt2.format(p.price)) : 'auf Anfrage') : `<input class="ez-in-num" data-f="price" inputmode="decimal" value="${esc(pText(p.price))}" placeholder="a. Anfr." aria-label="Preis je kg">`}</td>
         <td class="ez-a" data-l="Abweichung" data-abw-cell>${abw(p.price, a && a.stdPrice)}</td>
-        <td class="num" data-l="Menge kg">${ro ? (p.qty != null ? esc(fmtKg(p.qty)) : '') : `<input class="ez-in-num" data-f="qty" inputmode="decimal" value="${esc(zText(p.qty))}" placeholder="—" aria-label="Menge in kg">`}</td>
+        <td class="num" data-l="Menge kg">${ro ? (p.qty != null ? esc(fmtKg(p.qty)) : '') : `<input class="ez-in-num${zuViel(p) ? ' invalid' : ''}" data-f="qty" inputmode="decimal" value="${esc(zText(p.qty))}" placeholder="${p.partie ? esc(zText(p.partie.kg)) : '—'}" aria-label="Menge in kg"${zuViel(p) ? ` title="mehr als die Partie (${esc(fmtKg(p.partie.kg))} kg)"` : ''}>`}</td>
         ${ro ? '' : `<td class="ez-x"><button type="button" class="ibtn danger" data-del="${i}" aria-label="Position entfernen" title="Entfernen">${icon('x', 'sm')}</button></td>`}</tr>`; }).join('')}
       </tbody><tfoot><tr><td colspan="2">${plural(ed.positions.length, 'Position', 'Positionen')}</td><td class="ez-b"></td><td></td><td class="num" colspan="3" id="ez-summe">${summeHTML()}</td>${ro ? '' : '<td></td>'}</tr></tfoot></table>`;
   }
   function summen() {
     let kg = 0, sum = 0;
-    for (const p of ed.positions) if (p.qty != null && !Number.isNaN(p.qty)) { kg += p.qty; if (p.price != null && !Number.isNaN(p.price)) sum += Math.round(Math.round(p.price * 100) * p.qty) / 100; }
+    for (const p of ed.positions) {
+      const q = p.qty != null ? p.qty : p.partie ? ganz(p.partie) : null;   // Partie ohne Menge: ganze Partie (wie der Server)
+      if (q != null && !Number.isNaN(q)) { kg += q; if (p.price != null && !Number.isNaN(p.price)) sum += Math.round(Math.round(p.price * 100) * q) / 100; }
+    }
     return { kg, sum };
   }
   function summeHTML() { const { kg, sum } = summen(); return kg ? `${esc(fmtKg(kg))} kg · Warenwert ca. <strong>${esc(fmt2.format(sum))} €</strong>` : '<span class="muted">Mengen optional</span>'; }
@@ -240,10 +306,13 @@
     kopfLesen();
     const bad = ed.positions.find((p) => Number.isNaN(p.price) || Number.isNaN(p.qty));
     if (bad) { toast(`Bitte Preis bzw. Menge bei „${bad.name}“ prüfen.`); return false; }
+    const viel = ed.positions.find(zuViel);
+    if (viel) { toast(`Die Menge bei „${viel.name}“ ist größer als die Partie ${viel.partie.lot} (${fmtKg(viel.partie.kg)} kg).`, 6000); return false; }
     busy = true;
     try {
+      // Partie: nur die Nummer – MHD und Menge übernimmt der Server aus dem Bestand bzw. dem gespeicherten Schnappschuss
       const r = await api('einzel_save', { body: { id: ed.id, revision: ed.revision, kid: ed.kid, titel: ed.titel, gueltigBis: ed.gueltigBis, hinweis: ed.hinweis,
-        positions: ed.positions.map((p) => ({ code: p.code, name: p.name, qty: p.qty, price: p.price, notiz: p.notiz || '' })) } });
+        positions: ed.positions.map((p) => ({ code: p.code, name: p.name, qty: p.qty, price: p.price, notiz: p.notiz || '', ...(p.partie ? { partie: { lot: p.partie.lot } } : {}) })) } });
       const fr = ed.fracht;
       ed = r.angebot; ed.fracht = fr; dirty = false;
       liste = null;
@@ -319,13 +388,14 @@
     if (t.id === 'ez-kunde') { kq = t.value; kAkt = 0; renderKundenListe(); return; }
     if (['ez-titel', 'ez-bis', 'ez-hinweis'].includes(t.id)) { kopfLesen(); markDirty(); return; }   // sofort übernehmen, sonst gehen Eingaben beim Neuzeichnen verloren
     const tr = t.closest('tr[data-i]');
+    if (tr && t.dataset.f === 'partie') { partieWaehlen(+tr.dataset.i, t.value); return; }
     if (tr && t.dataset.f) {
       const p = ed.positions[+tr.dataset.i];
       if (t.dataset.f === 'name' || t.dataset.f === 'notiz') p[t.dataset.f] = t.value;
       else {
         const v = zahl(t.value, t.dataset.f);
         p[t.dataset.f] = v;
-        t.classList.toggle('invalid', Number.isNaN(v) || (v != null && (v < 0 || (t.dataset.f === 'qty' && (v === 0 || v > 99999)))));
+        t.classList.toggle('invalid', Number.isNaN(v) || (v != null && (v < 0 || (t.dataset.f === 'qty' && (v === 0 || v > 99999)))) || (t.dataset.f === 'qty' && zuViel(p)));
         if (t.dataset.f === 'price') { const a = p.code ? idx && idx.get(key(p.code)) : null; tr.querySelector('[data-abw-cell]').innerHTML = abw(v, a && a.stdPrice); }
         const su = $('#ez-summe'); if (su) su.innerHTML = summeHTML();
       }
@@ -349,6 +419,8 @@
       const inp = $(`#ez-pos tr[data-i="${ed.positions.length - 1}"] [data-f="name"]`); if (inp) { inp.focus(); inp.select(); }
       return;
     }
+    const plus = t.closest('[data-partie-plus]');
+    if (plus) { kopfLesen(); weiterePartie(+plus.dataset.partiePlus); return; }
     const del = t.closest('[data-del]');
     if (del) { kopfLesen(); ed.positions.splice(+del.dataset.del, 1); markDirty(); renderPos(); return; }
     if (t.closest('#ez-save')) { speichern(); return; }

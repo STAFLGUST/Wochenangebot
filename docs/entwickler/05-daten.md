@@ -273,7 +273,9 @@ nicht mit `sonder-` beginnen. Höchstens `SONDER_MAX` (500) Sonderangebote, sie 
 bleiben gespeichert, gelöschte IDs kommen in `geloescht`.
 
 Bestellwünsche (`bestellungen`) und Einzelangebote (`einzelangebote`): [bestell-api-v1.md](../bestell-api-v1.md),
-[architektur.md](../architektur.md).
+[architektur.md](../architektur.md). Positionen eines Einzelangebots haben seit 13.11.2026 optional `partie: {lot, mhd, kg}`
+(angebotene Partie; Schnappschuss aus dem Bestand beim Zuordnen, GR-106; nie EK). Ältere Positionen ohne das Feld bleiben
+gültig; eine Vorversion ignoriert es und verliert beim erneuten Speichern nur die Partie (GR-006).
 
 ### Verwaltung
 

@@ -2,7 +2,7 @@
 
 <!-- ERZEUGT von `python3 werkzeuge/doku.py erzeugen` – nicht von Hand ändern. Quelle: Funktionen und Kommentare im Code. Die CI prüft, dass diese Datei zum Code passt. -->
 
-51 Dateien, 789 Funktionen – in der Reihenfolge der Datei, **fett** die Abschnitte. Text = erste Aussage des Kommentars direkt über der Funktion (Python: Docstring). Übersicht aller Module: [README.md](README.md).
+51 Dateien, 801 Funktionen – in der Reihenfolge der Datei, **fett** die Abschnitte. Text = erste Aussage des Kommentars direkt über der Funktion (Python: Docstring). Übersicht aller Module: [README.md](README.md).
 
 ## `app/api/lib/angebote.php`
 
@@ -55,7 +55,15 @@ _Einzelangebote: ein Angebot für genau einen Kunden (Angebot bearbeiten → Ein
 - `einzel_sichtbar(e)`
 - `einzel_stand(prev)` – Stand der Freigabe (Millisekunden, immer später als der vorige): Bestellwünsche auf einen älteren Stand werden abgewiesen
 - `einzel_clean(b)` – Eingaben prüfen (Kopf und Positionen)
-- `einzel_summe(e)` – Summen (Positionen mit Menge und Preis)
+
+**Partien (Entscheidung des Inhabers 13.11.2026, GR-001 Version 2)**
+
+- `einzel_bestand_partien()`
+- `einzel_partien_aufloesen(pos, alt, me)` – Partien der Positionen auflösen ($alt: bisher gespeichertes Einzelangebot oder null).
+- `einzel_partie_menge(p)` – Für den Kunden angebotene Menge einer Partie-Position: eingetragene Menge, sonst die ganze Partie (Schnappschuss, auf zwei Stellen abgerundet – angezeigt …
+- `einzel_partie_teile(p, mitMenge)` – Partieangaben für Kunde, Druck, PDF und E-Mail: „Charge P-0002 · MHD 04.12.2026 · 25,00 kg“
+- `einzel_partie_text(p, mitMenge)`
+- `einzel_summe(e)` – Summen (Positionen mit Menge und Preis; Partie ohne eingetragene Menge zählt mit der ganzen Partie)
 - `einzel_view(e, kunden)` – Ansicht für den Eingabebereich (mit Kundenname)
 - `einzel_kunden_map()`
 
@@ -73,7 +81,7 @@ _Einzelangebote: ein Angebot für genau einen Kunden (Angebot bearbeiten → Ein
 
 - `einzel_fuer_kunde(c)` – Für den Kunden sichtbare Einzelangebote (freigegeben, noch gültig)
 - `einzel_von_kennung(oid)`
-- `einzel_model(e)` – Angebotsmodell wie offer_resolve() – nur Name, Merkmale und Preis, kein Bestand
+- `einzel_model(e)` – Angebotsmodell wie offer_resolve() – nur Name, Merkmale und Preis, kein Bestand.
 
 **Artikelsuche im Eingabebereich**
 
@@ -303,6 +311,14 @@ _Eingabebereich – Fenster „Artikel hinzufügen“ (gemeinsam für „Angebot
 _Wochenangebot – Eingabebereich, Einzelangebote (Angebot je Kunde) Kunde über eine Suche wählen (Firma, Kundennummer, Ort, Ansprechpartner …)._
 
 - `abw(price, std)` – Abweichung vom Wochenangebotspreis: Punkt + Prozent
+
+**Partien**
+
+- `partienVon(a)` – Eingelagerte Partien eines Artikels (nur mit Nummer und Menge; gleiche Nummer zusammengefasst wie auf dem Server), frühestes MHD zuerst
+- `belegt(code, ausser)` – Partien desselben Artikels, die schon in anderen Positionen stehen: Partienummer → Positionsnummer (1-basiert)
+- `partieHTML(p, i, a, ro)`
+- `partieWaehlen(i, lot)`
+- `weiterePartie(i)`
 - `laden()`
 - `ladeIndex()`
 - `koerper()`
@@ -1220,6 +1236,11 @@ _Einzelangebote (Angebot bearbeiten → Einzelangebote)_
 - `hole(cl, action)`
 
 **Zurückziehen, Ablauf, Löschen**
+
+**Partien im Einzelangebot (Entscheidung des Inhabers 13.11.2026, GR-001 Version 2)**
+
+- `ps(**kw)`
+- `anzahl()`
 
 **Oberfläche**
 
