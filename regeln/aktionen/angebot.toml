@@ -221,6 +221,18 @@ oberflaeche = "angebot.eingabe"
 oberflaeche = "angebot.eingabe"
 schreibend = true
 
+# Sonderangebote (module/angebot/sonderangebote.php): Angebot für Kundengruppen mit Gültigkeit
+[aktion.sonderangebote]
+oberflaeche = "angebot.eingabe"
+
+[aktion.sonderangebot_save]
+oberflaeche = "angebot.eingabe"
+schreibend = true
+
+[aktion.sonderangebot_loeschen]
+oberflaeche = "angebot.eingabe"
+schreibend = true
+
 [aktion.version]
 oberflaeche = "angebot.eingabe"
 

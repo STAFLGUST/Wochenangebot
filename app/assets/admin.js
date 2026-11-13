@@ -82,6 +82,32 @@
   const offerName = (id) => (id === OSTD ? 'Wochenangebot' : (offerDef(id) || {}).name || id);
   const offerShort = (id) => (id === OSTD ? 'Wochenangebot' : offerName(id).replace(/^Wochenangebot[\s–-]*/i, '') || offerName(id));
   const knownOffer = (id) => id === OSTD || !!offerDef(id);
+  /* Sonderangebote (Reiter „Sonderangebote“, app/module/angebot/sonderangebote.js; Server module/angebot/sonderangebote.php):
+     Angebote mit eigener Artikelliste für Kundengruppen mit Gültigkeit – im Editor wie Kundenangebote, aber nicht unter
+     Stammdaten → Angebote und nie direkt beim Kunden. Stand heute wie sonder_status auf dem Server (Anzeige; maßgeblich ist der Server). */
+  const istSonder = (id) => (offerDef(id) || {}).art === 'sonder';
+  const kundenAngebote = () => offers.filter((o) => o.art !== 'sonder');
+  function sonderZeitraum(o) {
+    const g = (o && o.gueltig) || {};
+    if (g.modus === 'kw' && g.kw && g.jahr) { const r = C.isoWeekRange(g.kw, g.jahr); return { von: r.start, bis: r.end }; }
+    return g.modus === 'zeitraum' && g.von && g.bis ? { von: g.von, bis: g.bis } : null;
+  }
+  function sonderStand(o) {
+    const z = sonderZeitraum(o), heute = new Date().toLocaleDateString('sv-SE');
+    if (!z) return 'abgelaufen';
+    if (o.beendet) return 'beendet';
+    return heute < z.von ? 'geplant' : heute > z.bis ? 'abgelaufen' : 'laeuft';
+  }
+  const SONDER_STAND = { laeuft: 'läuft', geplant: 'geplant', beendet: 'beendet', abgelaufen: 'abgelaufen' };
+  /* Gültigkeit kurz: „KW 48/2026“ bzw. „17.11.–21.11.2026“ */
+  function sonderText(o) {
+    const z = sonderZeitraum(o), g = (o && o.gueltig) || {};
+    if (!z) return '';
+    if (g.modus === 'kw') return `KW ${g.kw}/${g.jahr}`;
+    return (z.von.slice(0, 4) === z.bis.slice(0, 4) ? dmy(z.von).slice(0, 6) : dmy(z.von)) + '–' + dmy(z.bis);
+  }
+  /* In Auswahllisten (Angebotsleiste, Übernehmen, Vorschau): alle außer abgelaufenen/beendeten Sonderangeboten – das gewählte immer */
+  const angebotZeigen = (o) => o.art !== 'sonder' || o.id === curOffer || ['laeuft', 'geplant'].includes(sonderStand(o));
   /* Wirksamer Preis eines Artikels in einem Angebot; null = dort ausgeblendet */
   /* Ausgeblendet in einem Angebot (Auge) – auch im Wochenangebot (variants.std = {status: 'hidden'}) */
   const isHid = (it, oid) => !!(it && it.variants && it.variants[oid] && it.variants[oid].status === 'hidden');
@@ -466,14 +492,14 @@
   let me = null;                                   // angemeldeter Nutzer
   const can = (role) => !!me && ROLE_RANK[me.role] >= ROLE_RANK[role];
   /* Bereiche und das Recht, das sie sichtbar macht (ohne Eintrag: alle; ADMIN_VIEWS: nur Administratoren) */
-  const VIEW_PERM = { einzel: 'einzelangebote.sehen', hist: 'preisverlauf.sehen', stock: 'bestand.sehen', einkauf: 'einkauf.sehen', master: 'stammdaten.sehen', orders: 'bestellungen.sehen', kunden: 'kunden.sehen', gruppen: 'stammdaten.sehen', vkgruppen: 'stammdaten.sehen', kategorien: 'stammdaten.sehen', angebote: 'angebote.verwalten', vertreter: 'stammdaten.sehen', versandarten: 'stammdaten.sehen', lieferanten: 'stammdaten.sehen', abteilungen: 'stammdaten.sehen', auswertung: 'auswertung.sehen', log: 'protokoll.sehen', mail: '', users: '', rollen: '', importe: '', urlaub: 'hr.verwalten' };
+  const VIEW_PERM = { einzel: 'einzelangebote.sehen', sonder: 'angebot.zugang', hist: 'preisverlauf.sehen', stock: 'bestand.sehen', einkauf: 'einkauf.sehen', master: 'stammdaten.sehen', orders: 'bestellungen.sehen', kunden: 'kunden.sehen', gruppen: 'stammdaten.sehen', vkgruppen: 'stammdaten.sehen', kategorien: 'stammdaten.sehen', angebote: 'angebote.verwalten', vertreter: 'stammdaten.sehen', versandarten: 'stammdaten.sehen', lieferanten: 'stammdaten.sehen', abteilungen: 'stammdaten.sehen', auswertung: 'auswertung.sehen', log: 'protokoll.sehen', mail: '', users: '', rollen: '', importe: '', urlaub: 'hr.verwalten' };
   /* Verwaltung unter eigener Adresse (verwaltung.dashboard-stafl.de): nur ihre Bereiche – Anzeige, die Rechte prüft der Server */
   /* Angebot unter der zentralen Anmeldung (angebot.dashboard-stafl.de): Angebotsbereiche ohne Verwaltung und ohne die
      Bestandsliste (die Bestandsdaten im Angebotseditor bleiben). Bestand (bestand.dashboard-stafl.de): nur die Bestandsliste
      mit Bestandsimport. Ohne Bereich (bisheriger Zugang angebot-stafl.de/admin/) bleibt alles sichtbar. */
   const BEREICH_VIEWS = {
     'verwaltung.verwaltung': ['master', 'vkgruppen', 'kategorien', 'kunden', 'gruppen', 'vertreter', 'versandarten', 'lieferanten', 'abteilungen', 'importe', 'auswertung', 'mail', 'users', 'rollen', 'urlaub', 'log'],
-    'angebot.eingabe': ['orders', 'edit', 'einzel', 'hist', 'einkauf', 'angebote'],
+    'angebot.eingabe': ['orders', 'edit', 'einzel', 'sonder', 'hist', 'einkauf', 'angebote'],
     'bestand.intern': ['stock'],
     'verwaltung.import': ['importe'],
   };
@@ -1878,16 +1904,19 @@
     host.hidden = false;
     const tab = (id) => {
       const n = memberCount(id), sel = id === curOffer;
-      const sub = id === OSTD ? (stdPublic ? 'Angebotsseite für alle' : 'nur nach Anmeldung') : followsStd(id) ? 'folgt dem Wochenangebot' : '';
-      return `<button type="button" role="tab" data-offer="${esc(id)}" aria-selected="${sel}" class="ob-o${id === OSTD ? ' std' : ''}${followsStd(id) ? ' folgt' : ''}" data-hay="${esc(SU.heu(offerName(id)))}"><span class="ob-n">${esc(offerShort(id))}${sub ? `<small>${esc(sub)}</small>` : ''}</span><small class="ob-z" title="${esc(plural(n, 'Artikel', 'Artikel'))}">${fmtInt.format(n)}</small></button>`;
+      const sub = id === OSTD ? (stdPublic ? 'Angebotsseite für alle' : 'nur nach Anmeldung') : followsStd(id) ? 'folgt dem Wochenangebot'
+        : istSonder(id) ? `${sonderText(offerDef(id))} · ${SONDER_STAND[sonderStand(offerDef(id))]}` : '';
+      return `<button type="button" role="tab" data-offer="${esc(id)}" aria-selected="${sel}" class="ob-o${id === OSTD ? ' std' : ''}${followsStd(id) ? ' folgt' : ''}${istSonder(id) ? ' sonder st-' + sonderStand(offerDef(id)) : ''}" data-hay="${esc(SU.heu(offerName(id)))}"><span class="ob-n">${esc(offerShort(id))}${sub ? `<small>${esc(sub)}</small>` : ''}</span><small class="ob-z" title="${esc(plural(n, 'Artikel', 'Artikel'))}">${fmtInt.format(n)}</small></button>`;
     };
-    host.innerHTML = `<button type="button" class="ob-cur" data-ob="toggle" aria-expanded="${obOpen}"><span class="ob-n"><small>${curOffer === OSTD ? 'Öffentliches Angebot' : 'Kundenangebot'}</small>${esc(offerShort(curOffer))}</span><small class="ob-z">${fmtInt.format(memberCount(curOffer))}</small>${icon('chev', 'ob-chev')}</button>
+    const kund = kundenAngebote(), sonder = offers.filter((o) => o.art === 'sonder' && angebotZeigen(o));
+    host.innerHTML = `<button type="button" class="ob-cur" data-ob="toggle" aria-expanded="${obOpen}"><span class="ob-n"><small>${curOffer === OSTD ? 'Öffentliches Angebot' : istSonder(curOffer) ? 'Sonderangebot' : 'Kundenangebot'}</small>${esc(offerShort(curOffer))}</span><small class="ob-z">${fmtInt.format(memberCount(curOffer))}</small>${icon('chev', 'ob-chev')}</button>
       <div class="ob-list${obOpen ? ' open' : ''}">
-        <div class="ob-h"><span>Angebote</span><small>${fmtInt.format(offers.length + 1)}</small></div>
-        ${offers.length > 6 ? `<div class="search ob-q">${icon('search')}<input id="ob-q" type="search" autocomplete="off" placeholder="Angebot suchen" aria-label="Angebot suchen" value="${esc(obQ)}"></div>` : ''}
+        <div class="ob-h"><span>Angebote</span><small>${fmtInt.format(kund.length + sonder.length + 1)}</small></div>
+        ${kund.length + sonder.length > 6 ? `<div class="search ob-q">${icon('search')}<input id="ob-q" type="search" autocomplete="off" placeholder="Angebot suchen" aria-label="Angebot suchen" value="${esc(obQ)}"></div>` : ''}
         <div class="ob-sec">Öffentlich</div>
         <div class="ob-tabs" role="tablist" aria-orientation="vertical" aria-label="Öffentliches Angebot">${tab(OSTD)}</div>
-        ${offers.length ? `<div class="ob-sec">Kundenangebote</div><div class="ob-tabs" role="tablist" aria-orientation="vertical" aria-label="Kundenangebote">${offers.map((o) => tab(o.id)).join('')}</div>` : ''}
+        ${kund.length ? `<div class="ob-sec">Kundenangebote</div><div class="ob-tabs" role="tablist" aria-orientation="vertical" aria-label="Kundenangebote">${kund.map((o) => tab(o.id)).join('')}</div>` : ''}
+        ${sonder.length ? `<div class="ob-sec">Sonderangebote</div><div class="ob-tabs ob-sonder" role="tablist" aria-orientation="vertical" aria-label="Sonderangebote">${sonder.map((o) => tab(o.id)).join('')}</div>` : ''}
         ${may('angebote.verwalten') ? `<button type="button" class="btn sm ghost ob-manage" data-ob="manage">${icon('list', 'sm')}Angebote verwalten</button>` : ''}
       </div>`;
     obFilter();
@@ -1915,14 +1944,17 @@
     const el = $('#offer-head');
     if (!el || !model) return;
     const n = memberCount(curOffer);
+    const so = istSonder(curOffer) ? offerDef(curOffer) : null;
     const pill = curOffer === OSTD ? `<span class="oh-pill std">${stdPublic ? 'öffentlich ohne Anmeldung' : 'nur nach Anmeldung'}</span>`
+      : so ? `<span class="oh-pill sonder st-${sonderStand(so)}" title="Gültigkeit · Stand heute (Kunden der Kundengruppen sehen es nur, solange es läuft, und erst nach dem Veröffentlichen)">${esc(sonderText(so))} · ${esc(SONDER_STAND[sonderStand(so)])}</span>`
       : ownList(curOffer) ? '<span class="oh-pill own" title="Enthält nur die Artikel, die hier hinzugefügt wurden – andere Angebote beeinflussen es nicht">Eigene Artikelliste</span>'
         : '<span class="oh-pill folgt" title="Zeigt alle Artikel des Wochenangebots, ohne eigenen Preis mit dem Wochenpreis">Folgt dem Wochenangebot</span>';
     const acts = [];
     if (may('sonderposten.senden') && may('versand.zugang')) acts.push(`<a class="btn sm ghost" data-ob="restposten" href="${VERSAND}" title="Sonderposten dieses Angebots per E-Mail an dessen Kunden senden – im Modul Versand (Liste „Angebote dieser Woche“)">${icon('mail', 'sm')}Sonderposten senden</a>`);
     if (!ro) acts.push(`<button type="button" class="btn sm ghost" data-ob="copy" title="Artikel und Preise aus einem anderen Angebot übernehmen">${icon('copy', 'sm')}Aus anderem Angebot</button>`);
+    if (so && viewAllowed('sonder')) acts.push(`<button type="button" class="btn sm ghost" data-ob="sonder" title="Name, Kundengruppen und Gültigkeit im Reiter „Sonderangebote“">${icon('calendar', 'sm')}Gültigkeit und Gruppen</button>`);
     el.innerHTML = `<div class="oh-t"><h2 id="oh-name">${esc(offerName(curOffer))}</h2>
-        <div class="oh-m"><span class="oh-art">${curOffer === OSTD ? 'Öffentliches Angebot' : 'Kundenangebot'}</span>${pill}<span class="oh-n">${plural(n, 'Artikel', 'Artikel')}</span></div></div>
+        <div class="oh-m"><span class="oh-art">${curOffer === OSTD ? 'Öffentliches Angebot' : so ? 'Sonderangebot' : 'Kundenangebot'}</span>${pill}<span class="oh-n">${plural(n, 'Artikel', 'Artikel')}</span></div></div>
       ${acts.length ? `<div class="oh-act">${acts.join('')}</div>` : ''}
       ${followsStd(curOffer) ? `<div class="oh-folgt">${icon('info', 'sm')}<span><strong>Folgt dem Wochenangebot:</strong> Artikel des Wochenangebots erscheinen hier automatisch (ohne eigenen Preis mit dem Wochenpreis). Mit einer eigenen Artikelliste enthält das Angebot nur noch die Artikel, die Sie hier hinzufügen – andere Angebote beeinflussen es dann nicht mehr.</span>${may('angebote.verwalten') && !ro ? '<button type="button" class="btn sm" data-ob="umstellen">Auf eigene Artikelliste umstellen</button>' : ''}</div>` : ''}`;
   }
@@ -1943,6 +1975,7 @@
     if (a === 'manage') openOffers();
     if (a === 'copy') openCopy();
     if (a === 'umstellen') umstellen(curOffer);
+    if (a === 'sonder' && window.WA.angebot.sonder.bearbeiten) window.WA.angebot.sonder.bearbeiten(curOffer);   // sonderangebote.js
   }
   $('#offer-bar').addEventListener('click', (e) => {
     const t = e.target.closest('[data-offer]');
@@ -1967,7 +2000,7 @@
     const n = eigen(model), pub = eigen(published);
     if (!(await confirmBox('Auf eigene Artikelliste umstellen?', `„${esc(offerName(oid))}“ enthält danach nur noch Artikel mit eigenem Preis – ${n ? `im Entwurf ${plural(n, 'Artikel', 'Artikel')}` : '<strong>derzeit keine, das Angebot startet leer</strong>'}. Kunden dieses Angebots sehen das <strong>sofort</strong> (veröffentlicht: ${plural(pub, 'Artikel', 'Artikel')}). Danach Artikel hinzufügen oder aus einem anderen Angebot übernehmen und veröffentlichen.`, 'Umstellen', true))) return;
     try {
-      const list = offers.map((o) => ({ id: o.id, name: o.name, fallback: o.id === oid || o.fallback === 'hidden' ? 'hidden' : 'standard', gruppen: o.gruppen || [] }));
+      const list = kundenAngebote().map((o) => ({ id: o.id, name: o.name, fallback: o.id === oid || o.fallback === 'hidden' ? 'hidden' : 'standard', gruppen: o.gruppen || [] }));
       const r = await api('offers_save', { body: { rev: offersRev, offers: list } });
       offers = r.offers; offersRev = r.rev; stdPublic = r.stdPublic !== false;
       ofReset();
@@ -1986,7 +2019,7 @@
   };
   function openOffers() { setView('angebote'); }
   function ofReset() {
-    offerEdit = offers.map((o) => ({ ...o, gruppen: [...(o.gruppen || [])] }));
+    offerEdit = kundenAngebote().map((o) => ({ ...o, gruppen: [...(o.gruppen || [])] }));   // Sonderangebote: eigener Reiter
     offerEdit.stdPublic = stdPublic;
     offerEdit.rev = offersRev;   // Stand beim Beginn der Bearbeitung – sonst würde ein zwischendurch geladener Stand fremde Änderungen überschreiben
     ofDirty = false;
@@ -2131,7 +2164,7 @@
         const zeile = (o) => { const n = ofArtikel(o.id, 'hidden'); return `• ${esc(o.name)}: ${n ? plural(n, 'Artikel', 'Artikel') : '<strong>leer</strong>'}`; };
         if (!(await confirmBox('Auf eigene Artikelliste umstellen?', `Diese Angebote enthalten danach nur noch Artikel mit eigenem Preis (Stand Entwurf):<br>${um.map(zeile).join('<br>')}<br>Kunden sehen die Umstellung <strong>sofort</strong> nach dem Speichern. Artikel fügen Sie danach unter „Angebot bearbeiten“ hinzu und veröffentlichen.`, 'Speichern', true))) return;
       }
-      const used = new Set(offers.map((o) => o.id));
+      const used = new Set(offers.map((o) => o.id));   // auch Sonderangebote: deren IDs sind vergeben
       const list = offerEdit.map((o) => {
         let id = o.id;
         if (!id) { const base = slug(o.name); id = base; let k = 2; while (used.has(id) || id === OSTD) id = `${base}-${k++}`; used.add(id); }
@@ -2142,24 +2175,32 @@
         const body = { rev: offerEdit.rev, offers: list };
         if (may('angebote.loeschen')) body.stdPublic = !!offerEdit.stdPublic;
         const r = await api('offers_save', { body });
-        offers = r.offers; offersRev = r.rev; stdPublic = r.stdPublic !== false;
-        const gone = new Set([OSTD, ...list.map((o) => o.id)]);
-        let dropped = false;
-        for (const it of model.items) {
-          if (it.variants) for (const k of Object.keys(it.variants)) if (!gone.has(k)) { delete it.variants[k]; dropped = true; }
-          if (it.namen) { for (const k of Object.keys(it.namen)) if (!gone.has(k)) { delete it.namen[k]; dropped = true; } if (!Object.keys(it.namen).length) delete it.namen; }
-          if (it.sale && it.sale.offers) { for (const k of Object.keys(it.sale.offers)) if (!gone.has(k)) { delete it.sale.offers[k]; dropped = true; } if (!Object.keys(it.sale.offers).length) delete it.sale.offers; }
-        }
-        if (!knownOffer(curOffer)) curOffer = OSTD;
+        const dropped = angeboteUebernehmen(r);
         ofReset();
         toast('Angebote gespeichert.');
-        diff = C.diffOffers(published, model);
-        renderOfferBar(); renderGroups(); renderChanges(); updatePublishBtn();
         if (dropped) changed({ render: true });
         renderOffersBody();
       } catch (ex) { b.disabled = false; renderOffersBody(ex.message); }
     }
   });
+
+  /* Neue Angebotsliste vom Server übernehmen (offers_save, Sonderangebote anlegen/löschen): Einträge gelöschter Angebote fallen aus
+     dem Entwurf (Preise, Bezeichnungen, Empfehlungen; der Server verwirft sie beim nächsten Speichern ohnehin). true = Entwurf geändert */
+  function angeboteUebernehmen(r) {
+    offers = r.offers; offersRev = r.rev; stdPublic = r.stdPublic !== false;
+    const gone = new Set([OSTD, ...offers.map((o) => o.id)]);
+    let dropped = false;
+    for (const it of model ? model.items : []) {
+      if (it.variants) { for (const k of Object.keys(it.variants)) if (!gone.has(k)) { delete it.variants[k]; dropped = true; } dropEmptyVariants(it); }
+      if (it.namen) { for (const k of Object.keys(it.namen)) if (!gone.has(k)) { delete it.namen[k]; dropped = true; } if (!Object.keys(it.namen).length) delete it.namen; }
+      if (it.sale && it.sale.offers) { for (const k of Object.keys(it.sale.offers)) if (!gone.has(k)) { delete it.sale.offers[k]; dropped = true; } if (!Object.keys(it.sale.offers).length) delete it.sale.offers; }
+    }
+    if (model && model.meta.werbung) for (const k of Object.keys(model.meta.werbung)) if (!gone.has(k)) { delete model.meta.werbung[k]; dropped = true; }
+    if (model && model.meta.werbung && !Object.keys(model.meta.werbung).length) delete model.meta.werbung;
+    if (!knownOffer(curOffer)) curOffer = OSTD;
+    if (model) { diff = C.diffOffers(published, model); renderOfferBar(); renderGroups(); renderChanges(); updatePublishBtn(); }
+    return dropped;
+  }
 
   /* Artikelpreise der Warenwirtschaft (CSV „Artikelpreise“: Preis-Art; Kundengruppe; Artikel; Preis) – Leser der Importart
      „angebot_preise“ der Importzentrale (Verwaltung → Import, IMPORT_LESER unten). Zuordnung zu den Angeboten, Vorschau und
@@ -2187,30 +2228,73 @@
   }
 
   /* Aus anderem Angebot übernehmen: Artikel und Preise eines anderen Angebots in das gewählte Angebot,
-     optional mit Auf-/Abschlag. Nimmt die Artikel in dieses Angebot auf; das Quellangebot bleibt unverändert. */
+     optional mit Auf-/Abschlag. Nimmt die Artikel in dieses Angebot auf; das Quellangebot bleibt unverändert.
+     Welche Artikel: Liste des Quellangebots mit Häkchen und Suche (13.11.2026, Sonderangebote) – für ein Sonderangebot ist
+     zunächst nichts gewählt (meist nur wenige Artikel), sonst alle (bisheriges Verhalten). */
   const dlgCopy = $('#dlg-offer-copy');
+  let ocWahl = new Set(), ocQ = '';
+  const ocQuelle = (src) => model.items.filter((it) => { const p = effPrice(it, src); return p && (p.status === 'value' || p.status === 'request'); });
+  function ocListe(src, neu) {
+    const l = ocQuelle(src);
+    if (neu) { ocWahl = istSonder(curOffer) ? new Set() : new Set(l.map((it) => it.id)); ocQ = ''; const q = $('#oc-q'); if (q) q.value = ''; }
+    const gName = new Map(model.groups.map((g) => [g.id, g.name])), toks = SU.woerter(ocQ);
+    let letzte = null;
+    const zeilen = l.map((it) => {
+      const g = gName.get(it.groupId) || '', p = effPrice(it, src), hier = inOffer(it, curOffer);
+      const kopf = g !== letzte ? `<li class="oc-g">${esc(g)}</li>` : '';
+      letzte = g;
+      return `${kopf}<li data-hay="${esc(SU.heu(it.code, nameIn(it, src), g))}"><label class="check"><input type="checkbox" value="${esc(it.id)}"${ocWahl.has(it.id) ? ' checked' : ''}><span class="oc-nr">${esc(it.code || '—')}</span><span class="oc-nm">${esc(nameIn(it, src))}${hier ? ' <small class="muted">· schon hier</small>' : ''}</span><span class="oc-p">${esc(priceShort(p))}</span></label></li>`;
+    });
+    $('#oc-list').innerHTML = zeilen.join('') || '<li class="oc-leer">Dieses Angebot enthält keine Artikel mit Preis.</li>';
+    for (const li of $$('#oc-list li[data-hay]')) li.hidden = !SU.passt(toks, li.dataset.hay);
+    for (const li of $$('#oc-list li.oc-g')) { let n = li.nextElementSibling, sicht = false; while (n && !n.classList.contains('oc-g')) { if (!n.hidden) sicht = true; n = n.nextElementSibling; } li.hidden = !sicht; }
+    ocZahl(l.length);
+  }
+  function ocZahl(n) {
+    const z = $('#oc-n'); if (z) z.textContent = `${fmtInt.format(ocWahl.size)} von ${fmtInt.format(n ?? ocQuelle($('#offer-copy-body [name=src]').value).length)} gewählt`;
+    const b = $('#offer-copy-body button[type=submit]'); if (b) b.disabled = !ocWahl.size;
+  }
   function openCopy() {
     if (ro) return;
-    const ids = [OSTD, ...offers.map((o) => o.id)].filter((id) => id !== curOffer);
+    const ids = [OSTD, ...offers.filter(angebotZeigen).map((o) => o.id)].filter((id) => id !== curOffer);
     if (!ids.length) { toast('Es gibt kein weiteres Angebot.'); return; }
     $('#offer-copy-body').innerHTML = `<div class="dlg-head"><div><h2 id="oc-title">Aus anderem Angebot übernehmen</h2><p>Ziel: <strong>${esc(offerName(curOffer))}</strong>. Übernommene Artikel stehen danach mit eigenem Preis in diesem Angebot und lassen sich einzeln ändern oder entfernen. Das andere Angebot bleibt unverändert.</p></div><button class="btn icon ghost" type="button" data-close aria-label="Schließen">${icon('x')}</button></div>
       <div class="dlg-body form-grid two">
         <label class="fld"><span>Aus Angebot</span><select name="src">${ids.map((id) => `<option value="${esc(id)}">${esc(offerName(id))} (${fmtInt.format(memberCount(id))})</option>`).join('')}</select></label>
         <label class="fld"><span>Auf-/Abschlag in %</span><input name="pct" type="number" step="0.5" value="0" inputmode="decimal"></label>
         <label class="fld"><span>Runden auf</span><select name="round"><option value="0.01">0,01 €</option><option value="0.05" selected>0,05 €</option><option value="0.1">0,10 €</option></select></label>
-        <label class="fld"><span>Welche Artikel</span><select name="mode"><option value="empty">nur Artikel, die hier fehlen${curOffer === OSTD ? '' : ' oder keinen eigenen Preis haben'}</option><option value="all">alle (Preise hier überschreiben)</option></select></label>
+        <label class="fld"><span>Vorhandene Preise</span><select name="mode"><option value="empty">nur Artikel, die hier fehlen${curOffer === OSTD ? '' : ' oder keinen eigenen Preis haben'}</option><option value="all">auch hier vorhandene überschreiben</option></select></label>
+        <div class="span2 so-feld oc-art"><span class="so-lbl">Artikel <small id="oc-n"></small></span>
+          <div class="oc-bar"><div class="search">${icon('search')}<input id="oc-q" type="search" autocomplete="off" placeholder="Artikel finden: Nummer, Bezeichnung, Gruppe …" aria-label="Artikel des Quellangebots suchen"></div>
+            <button type="button" class="link-btn" data-oc="alle">Alle</button><button type="button" class="link-btn" data-oc="keine">Keine</button></div>
+          <ul class="oc-list" id="oc-list" aria-label="Artikel des Quellangebots"></ul></div>
         <p class="hint span2">„Auf Anfrage“ wird übernommen, Artikel ohne Preis werden übersprungen. Mit „Rückgängig“ lässt sich die Übernahme zurücknehmen.</p>
       </div>
       <div class="dlg-foot"><button type="button" class="btn" data-close>Abbrechen</button><button type="submit" class="btn primary">${icon('copy')}Übernehmen</button></div>`;
+    ocListe(ids[0], true);
     dlgCopy.showModal();
   }
+  $('#offer-copy-body').addEventListener('change', (e) => {
+    if (e.target.name === 'src') { ocListe(e.target.value, true); return; }
+    if (e.target.closest('#oc-list') && e.target.type === 'checkbox') { if (e.target.checked) ocWahl.add(e.target.value); else ocWahl.delete(e.target.value); ocZahl(); }
+  });
+  $('#offer-copy-body').addEventListener('input', (e) => { if (e.target.id === 'oc-q') { ocQ = e.target.value; ocListe($('#offer-copy-body [name=src]').value, false); } });
+  $('#offer-copy-body').addEventListener('click', (e) => {
+    const a = e.target.closest('[data-oc]')?.dataset.oc;
+    if (!a) return;
+    // Alle/Keine wirken auf die sichtbaren (gefundenen) Artikel
+    for (const x of $$('#oc-list li[data-hay]:not([hidden]) input')) { x.checked = a === 'alle'; if (x.checked) ocWahl.add(x.value); else ocWahl.delete(x.value); }
+    ocZahl();
+  });
   $('#offer-copy-body').addEventListener('submit', (e) => {
     e.preventDefault();
     const f = e.target.elements, src = f.src.value, pct = Number(String(f.pct.value).replace(',', '.')) || 0, step = Number(f.round.value), all = f.mode.value === 'all';
     if (Math.abs(pct) > 50) { toast('Auf-/Abschlag bitte zwischen −50 und +50 %.'); return; }
+    if (!ocWahl.size) { toast('Bitte mindestens einen Artikel wählen.'); return; }
     pushUndo();
     let n = 0;
     for (const it of model.items) {
+      if (!ocWahl.has(it.id)) continue;
       const p = effPrice(it, src);   // null = nicht im Quellangebot
       if (!p || (p.status !== 'value' && p.status !== 'request')) continue;
       const hier = inOffer(it, curOffer), eigen = curOffer === OSTD ? hier : !!(it.variants && it.variants[curOffer] && it.variants[curOffer].status !== 'hidden');
@@ -2253,7 +2337,7 @@
     if (!model) return;
     pvOffer = knownOffer(oid) ? oid : OSTD;
     if (document.activeElement && document.activeElement.matches('.in')) document.activeElement.dispatchEvent(new Event('change', { bubbles: true }));
-    const ids = [OSTD, ...offers.map((o) => o.id)];
+    const ids = [OSTD, ...offers.filter((o) => angebotZeigen(o) || o.id === pvOffer).map((o) => o.id)];
     $('#vorschau-body').innerHTML = `
       <div class="dlg-head pv-head">
         <div class="pv-t"><h2 id="pv-title">Vorschau</h2><p>Entwurf · so sehen Kunden das Angebot nach dem Veröffentlichen</p></div>
@@ -2686,7 +2770,7 @@
   }
 
   /* Ansicht umschalten */
-  const VIEWS = ['orders', 'edit', 'einzel', 'hist', 'stock', 'einkauf', 'master', 'vkgruppen', 'kategorien', 'angebote', 'kunden', 'gruppen', 'vertreter', 'versandarten', 'lieferanten', 'abteilungen', 'importe', 'auswertung', 'mail', 'users', 'rollen', 'urlaub', 'log'];
+  const VIEWS = ['orders', 'edit', 'einzel', 'sonder', 'hist', 'stock', 'einkauf', 'master', 'vkgruppen', 'kategorien', 'angebote', 'kunden', 'gruppen', 'vertreter', 'versandarten', 'lieferanten', 'abteilungen', 'importe', 'auswertung', 'mail', 'users', 'rollen', 'urlaub', 'log'];
   const ADMIN_VIEWS = ['mail', 'users', 'rollen'];
   /* Aktiven Eintrag in der Seitenleiste sichtbar halten: am Computer scrollt die Leiste senkrecht (mehr Einträge als
      Bildschirmhöhe), schmal ist sie eine waagerechte Spur. Nur die Leiste selbst wird verschoben, nie die Seite. */
@@ -2716,6 +2800,7 @@
     document.body.classList.toggle('in-hist', v === 'hist');
     document.body.classList.toggle('in-other', v !== 'edit');
     document.body.classList.toggle('in-einzel', v === 'einzel');
+    document.body.classList.toggle('in-sonder', v === 'sonder');
     if (v === 'edit' && model) loadAux();
     if (v === 'hist') renderHistView();
     if (v === 'stock') renderStockView();
@@ -2735,6 +2820,7 @@
     if (v === 'lieferanten' && window.WA.views.lieferanten) window.WA.views.lieferanten();
     if (v === 'abteilungen' && window.WA.views.abteilungen) window.WA.views.abteilungen();   // Abteilungen (admin-verwaltung.js)
     if (v === 'einzel' && window.WA.views.einzel) window.WA.views.einzel();
+    if (v === 'sonder' && window.WA.views.sonder) window.WA.views.sonder();   // Sonderangebote (app/module/angebot/sonderangebote.js)
     if (v === 'importe' && window.WA.views.importe) window.WA.views.importe();   // Importzentrale (admin-import.js)
     if (v === 'auswertung' && window.WA.views.auswertung) window.WA.views.auswertung();
     if (v === 'mail' && window.WA.views.mail) window.WA.views.mail();
@@ -3884,7 +3970,7 @@
   const prevLabel = () => (prevWeek ? `KW ${prevWeek.week}/${prevWeek.year}` : '');   // KW 42/2026 wie überall
   function auxHeadHTML() {
     return `<th class="e-prev" title="Preis aus dem Preisverlauf${prevWeek ? ' (KW ' + esc(prevWeek.week) + '/' + esc(prevWeek.year) + ')' : ''}">Vorwoche €/kg<small>${esc(prevLabel())}</small></th>`
-      + `<th class="e-price">Preis €/kg<small>KW ${esc(model && model.meta.week || '')}${model && model.meta.year ? '/' + esc(model.meta.year) : ''}${curOffer !== OSTD ? ' · ' + esc(offerShort(curOffer)) : ''}</small></th>`
+      + `<th class="e-price">Preis €/kg<small>${istSonder(curOffer) ? esc(sonderText(offerDef(curOffer))) : `KW ${esc(model && model.meta.week || '')}${model && model.meta.year ? '/' + esc(model.meta.year) : ''}`}${curOffer !== OSTD ? ' · ' + esc(offerShort(curOffer)) : ''}</small></th>`   // Sonderangebot: dessen Gültigkeit
       + `<th class="e-stock" title="Verfügbarer Bestand (eingelagert)${stock && stock.date ? ' · Stand ' + esc(dmy(stock.date)) : ''}">Bestand kg<small>${stock && stock.date ? 'Stand ' + esc(mhdShort(stock.date)) : ''}</small></th>`;
   }
   function prevCellHTML(it) {
@@ -4657,7 +4743,7 @@
         <div class="fld span2"><span>Bezeichnung (Warenwirtschaft)</span><div class="ma-orig" id="ma-orig">${o.text ? esc(o.text) : '<span class="muted">—</span>'}</div><p class="hint">Original ${esc(quelle)}. Steht so in der MHD-Liste.</p></div>
         <label class="fld span2"><span>Angebotsbezeichnung (Basiswert)</span><input name="name" value="${esc(e.name)}" maxlength="200" required autocomplete="off"><small class="hint">Gilt im Wochenangebot und in jedem Angebot ohne eigene Bezeichnung.</small></label>
         ${offers.length ? `<div class="fld span2 ma-namen"><span>Bezeichnung je Angebot</span>
-          ${offers.map((x) => `<label class="ma-nrow"><span class="ma-on">${esc(offerShort(x.id))}${it ? `<small class="${imAngebot(x.id) ? 'ma-drin' : 'muted'}">${imAngebot(x.id) ? 'im Angebot' : 'nicht im Angebot'}</small>` : ''}</span><input name="oname" data-on="${esc(x.id)}" value="${esc(eigenName(e, x.id))}" placeholder="${esc(e.name)}" maxlength="200" autocomplete="off" aria-label="Bezeichnung in ${esc(offerShort(x.id))}"></label>`).join('')}
+          ${offers.filter((x) => x.art !== 'sonder' || eigenName(e, x.id)).map((x) => `<label class="ma-nrow"><span class="ma-on">${esc(offerShort(x.id))}${it ? `<small class="${imAngebot(x.id) ? 'ma-drin' : 'muted'}">${imAngebot(x.id) ? 'im Angebot' : 'nicht im Angebot'}</small>` : ''}</span><input name="oname" data-on="${esc(x.id)}" value="${esc(eigenName(e, x.id))}" placeholder="${esc(e.name)}" maxlength="200" autocomplete="off" aria-label="Bezeichnung in ${esc(offerShort(x.id))}"></label>`).join('')}
           <p class="hint">Leer = Basiswert. Jedes Angebot steht für sich; ändern lässt sich die Bezeichnung auch direkt im Angebot.</p>
         </div>` : ''}
         <label class="fld"><span>Fleischart</span><select name="category">${CAT_OPTS(e.category)}</select></label>
@@ -4977,7 +5063,9 @@
     importLeser: IMPORT_LESER,
     $, $$, api, esc, icon, toast, confirmBox, dateTime, timeOnly, plural, fold, SU, fmtNum, fmtInt, csvCell, ROLE_LABEL, offerName, offerShort,
     loadOffers, pendingCount, setView, renderWartungBanner, wartungBis, OSTD, may,
-    get me() { return me; }, get offers() { return offers; }, get stdPublic() { return stdPublic; },
+    // offers: Kundenangebote (Freischaltung beim Kunden, Verwaltung) – Sonderangebote gelten nur über Kundengruppen (sonderangebote)
+    get me() { return me; }, get offers() { return kundenAngebote(); }, get stdPublic() { return stdPublic; },
+    get sonderangebote() { return offers.filter((o) => o.art === 'sonder'); },
     get wartungSt() { return wartungSt; }, set wartungSt(v) { wartungSt = v; },
     get wartungEingabe() { return wartungEingabe; }, set wartungEingabe(v) { wartungEingabe = v; },
     views: {},
@@ -4987,6 +5075,11 @@
       aufbau: { daten: () => (model ? aufbauDaten() : null), uebernehmen: aufbauUebernehmen },
       // Drucken (app/module/angebot/druck.js): Adresse der Vorschau des gewählten Angebots; vorher den Entwurf speichern.
       // adresseFuer(Angebot, Entwurf?): Adresse der Angebotsseite für ein beliebiges Angebot – Entwurf (Vorschau) oder veröffentlichter Stand
+      // Sonderangebote (app/module/angebot/sonderangebote.js): Liste vom Server übernehmen, im Editor öffnen, Artikelzahl im Entwurf;
+      // bearbeiten() trägt sonderangebote.js ein (Knopf „Gültigkeit und Gruppen“ im Kopf des Angebots)
+      sonder: { uebernehmen: (r) => { if (angeboteUebernehmen(r)) changed({ render: true }); }, artikel: (id) => memberCount(id),
+        oeffnen(id) { if (!knownOffer(id)) return false; setView('edit'); setOffer(id); return true; }, bearbeiten: null,
+        stand: sonderStand, text: sonderText },
       druck: { adresse: () => (model ? pvUrl(curOffer) : ''), name: () => offerName(curOffer),
         adresseFuer: (oid, entwurf) => (entwurf ? pvUrl(oid || OSTD) : angebotsseite('?' + (oid && oid !== OSTD ? 'angebot=' + encodeURIComponent(oid) + '&' : '') + 't=' + Date.now())),
         async bereit() { const a = document.activeElement; if (a && a.matches && a.matches('.in')) a.dispatchEvent(new Event('change', { bubbles: true })); if (unsaved()) await saveNow(); } } },

@@ -156,6 +156,7 @@ Jede Code-Datei beginnt mit einem Kopfkommentar; dessen erste Aussage steht hier
 | --- | --- | --- |
 | `druck.php` | angebot | Druck der Angebote: Fußzeile des Briefbogens unter jedem gedruckten Angebot (Wunsch des Inhabers 13.11.2026). |
 | `import.php` | angebot | Importvertrag des Moduls Angebot – Schnittstelle zur Importzentrale (docs/plattform/schnittstellen/import.md). - Preisverlauf: frühere Angebotslisten (.xlsx) als Wochen im Preisverlauf. |
+| `sonderangebote.php` | angebot | STAFL-Plattform · Angebot · Sonderangebote (Auftrag des Inhabers 13.11.2026): ein Angebot für ganze Kundengruppen mit Gültigkeit – Zeitraum (von–bis, beide Tage eingeschlossen) oder Kalenderwoche (Montag bis Sonntag … |
 | `winab-export.php` | angebot | Export des Wochenangebots für WinAB (Auftrag des Inhabers 05.11.2026) |
 
 ## `app/api/module/bestand/`
@@ -350,6 +351,8 @@ Jede Code-Datei beginnt mit einem Kopfkommentar; dessen erste Aussage steht hier
 | `druck.js` | angebot | STAFL-Plattform · Angebot · Drucken aus „Angebot bearbeiten“ und Einstellung „Fußzeile im Druck“ (Wunsch des Inhabers 13.11.2026). |
 | `preisimport.css` | angebot | STAFL-Plattform · Angebot · Vorschau „Artikelpreise (CSV)“ in der Importzentrale (preisimport.js). |
 | `preisimport.js` | angebot | STAFL-Plattform · Angebot · Darstellung der Vorschau „Artikelpreise (CSV)“ in der Importzentrale (Verwaltung → Import). |
+| `sonderangebote.css` | angebot | STAFL-Plattform · Angebot · Sonderangebote (app/module/angebot/sonderangebote.js) |
+| `sonderangebote.js` | angebot | STAFL-Plattform · Angebot · Reiter „Sonderangebote“ im Eingabebereich (unter „Einzelangebote“, Auftrag des Inhabers 13.11.2026). |
 | `winab-export.js` | angebot | STAFL-Plattform · Angebot · Knopf „Export für WinAB“ in der Werkzeugleiste des Wochenangebots (Auftrag des Inhabers 05.11.2026). |
 
 ## `app/module/bestand/`
@@ -836,6 +839,7 @@ Jede Code-Datei beginnt mit einem Kopfkommentar; dessen erste Aussage steht hier
 | `test_sicherheit_modul.py` | sicherheit | Modul Sicherheit (Oberfläche sicherheit.intern unter /module/sicherheit/, docs/plattform/modul-sicherheit.md). |
 | `test_sidenav.py` | angebot | Testgruppe sidenav: Navigation des Eingabebereichs, Sichtbarkeit je Rolle, Kopfzeile ohne Überlappung und Darstellung je Bildschirmbreite. |
 | `test_sitzung_cookie.py` | plattform | Sitzungs-Cookie mit Präfix __Host- über HTTPS (GR-108, ADR-003 Befund B-1). |
+| `test_sonderangebote.py` | angebot | Sonderangebote (Angebot → Sonderangebote, module/angebot/sonderangebote.php) |
 | `test_stilllegung.py` | plattform | Alter Eingabebereich stillgelegt (WA_EIGENE_ANMELDUNG=aus, lib/oidc.php): auf dem Host ohne zentrale Anmeldung (angebot-stafl.de) gibt es keine Mitarbeiteranmeldung und keine Mitarbeiteraktionen mehr; die Kundenseite … |
 | `test_stock.py` | bestand | Summen exakt (Dezimal) und kaufmännisch gerundet wie die Anzeige – Gleitkomma-Summen kippen sonst bei ,xx5 je nach Datum |
 | `test_stock_overview.py` | bestand | Exakte Wochenpreise, separate erfasste Zugänge, Validierung, Rechte und Anzeige; Summenzeile über der Liste. |

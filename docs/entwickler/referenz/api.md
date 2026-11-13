@@ -6,7 +6,7 @@ Aufruf: `/api/?action=<aktion>` (GET lesend, POST mit JSON und `X-CSRF-Token` sc
 
 Spalten: **Art** – lesend, schreibend (nur POST) oder post (GET liest, POST schreibt); **Kennzeichen** – öffentlich (ohne Mitarbeiteranmeldung), Kunden-Wartung, wartungsfrei, fremde Herkunft, eigene Anmeldung (siehe [regeln/aktionen/LIESMICH.md](../../../regeln/aktionen/LIESMICH.md)).
 
-298 Aktionen in 16 Modulen.
+301 Aktionen in 16 Modulen.
 
 ## Angebot (`angebot`)
 
@@ -63,6 +63,9 @@ Spalten: **Art** – lesend, schreibend (nur POST) oder post (GET liest, POST sc
 | `publish` | `angebot.eingabe` | schreibend | – | Recht angebot.veroeffentlichen | `app/api/aktionen/entwurf.php` |
 | `restposten_info` | `angebot.eingabe` | lesend | – | Recht sonderposten.senden | `app/api/aktionen/mail.php` |
 | `save_draft` | `angebot.eingabe` | schreibend | – | Recht angebot.bearbeiten | `app/api/aktionen/entwurf.php` |
+| `sonderangebot_loeschen` | `angebot.eingabe` | schreibend | – | Recht angebote.loeschen + Bestätigung, Recht angebote.verwalten | `app/api/aktionen/angebote.php` |
+| `sonderangebot_save` | `angebot.eingabe` | schreibend | – | Recht angebote.verwalten | `app/api/aktionen/angebote.php` |
+| `sonderangebote` | `angebot.eingabe` | lesend | – | – | `app/api/aktionen/angebote.php` |
 | `version` | `angebot.eingabe` | lesend | – | – | `app/api/aktionen/entwurf.php` |
 | `versions` | `angebot.eingabe` | lesend | – | – | `app/api/aktionen/entwurf.php` |
 
