@@ -60,5 +60,7 @@ function fracht_hinweis(?array $s = null): array
 function fracht_public(): array
 {
     $s = fracht_settings();
-    return ['aktiv' => fracht_frei($s) !== null, 'frei' => fracht_frei($s), 'staffeln' => $s['aktiv'] ? $s['staffeln'] : [], 'hinweis' => fracht_hinweis($s)];
+    require_once dirname(__DIR__) . '/module/angebot/druck.php';   // Fußzeile der Druckfassung (Briefbogen), mit dem Hinweis ausgeliefert
+    return ['aktiv' => fracht_frei($s) !== null, 'frei' => fracht_frei($s), 'staffeln' => $s['aktiv'] ? $s['staffeln'] : [], 'hinweis' => fracht_hinweis($s),
+            'fuss' => druck_fuss_public()];
 }

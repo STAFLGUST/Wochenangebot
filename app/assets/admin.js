@@ -2250,6 +2250,7 @@
       </div>
       <div class="pv-main"><div class="pv-stage ${pvDev} laden" id="pv-stage"><iframe id="pv-frame" title="Vorschau der Angebotsseite"></iframe><div class="pv-laden"><div class="spinner"></div>Vorschau wird geladen …</div></div></div>
       <div class="dlg-foot pv-foot"><span class="pv-stand" id="pv-stand"></span><span class="spacer"></span>
+        <button type="button" class="btn" id="pv-drucken" title="Diese Vorschau drucken oder als PDF speichern (Angebotsansicht)">${icon('print')}Drucken</button>
         <button type="button" class="btn" data-close>Zurück zum Editor</button>
         <button type="button" class="btn primary" id="pv-publish" hidden>${icon('send')}Veröffentlichen</button></div>`;
     $('#pv-frame').addEventListener('load', () => { const st = $('#pv-stage'); if (st) st.classList.remove('laden'); });
@@ -2262,6 +2263,7 @@
   $('#vorschau-body').addEventListener('click', (e) => {
     const d = e.target.closest('[data-pv-dev]');
     if (d) { pvDev = d.dataset.pvDev; store.set('vorschauGeraet', pvDev); $('#pv-stage').classList.toggle('mobil', pvDev === 'mobil'); $('#pv-stage').classList.toggle('desktop', pvDev !== 'mobil'); for (const b of $$('#vorschau-body [data-pv-dev]')) b.setAttribute('aria-pressed', b.dataset.pvDev === pvDev); return; }
+    if (e.target.closest('#pv-drucken')) { try { $('#pv-frame').contentWindow.print(); } catch { toast('Die Vorschau ist noch nicht geladen.'); } return; }   // druckt nur die Vorschau (ihre Druckfassung), nicht den Eingabebereich
     if (e.target.closest('#pv-publish')) { dlgPv.close(); setTimeout(openPublish, 0); }
   });
   dlgPv.addEventListener('close', () => { const f = $('#pv-frame'); if (f) f.src = 'about:blank'; });
@@ -5088,7 +5090,10 @@
     // Angebotskategorien (app/module/verwaltung/angebotskategorien.js): Vorschlag aus dem Angebot; nach dem Speichern neu ordnen
     angebot: { kategorienVorschlag, kategorienGeaendert: () => kategorienLaden({ still: true }),
       // Aufbau des Angebots (app/module/angebot/aufbau.js): Daten fürs Fenster, Übernehmen über den Entwurf
-      aufbau: { daten: () => (model ? aufbauDaten() : null), uebernehmen: aufbauUebernehmen } },
+      aufbau: { daten: () => (model ? aufbauDaten() : null), uebernehmen: aufbauUebernehmen },
+      // Drucken (app/module/angebot/druck.js): Adresse der Vorschau des gewählten Angebots; vorher den Entwurf speichern
+      druck: { adresse: () => (model ? pvUrl(curOffer) : ''), name: () => offerName(curOffer),
+        async bereit() { const a = document.activeElement; if (a && a.matches && a.matches('.in')) a.dispatchEvent(new Event('change', { bubbles: true })); if (unsaved()) await saveNow(); } } },
   };
 
   /* Höhe der Kopfleiste für die links angeheftete Navigation */

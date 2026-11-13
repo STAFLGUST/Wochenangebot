@@ -13,6 +13,7 @@ const PREVIEW = new URLSearchParams(location.search).has('vorschau');
 const EINGEBETTET = PREVIEW && new URLSearchParams(location.search).has('eingebettet') && window.parent !== window;
 if (EINGEBETTET) document.documentElement.classList.add('eingebettet');
 const DRUCKEN = new URLSearchParams(location.search).has('drucken');   // aus dem Eingabebereich: gleich den Druckdialog öffnen (Einzelangebote)
+const DRUCK_DIREKT = new URLSearchParams(location.search).get('drucken') === 'liste';   // Knopf „Drucken“ in „Angebot bearbeiten“: ohne Auswahl die Angebotsansicht drucken
 /* Kundenangebot (?angebot=edeka): nur nach Anmeldung; ohne Angabe das öffentliche Wochenangebot */
 let OFFER = (() => { const v = new URLSearchParams(location.search).get('angebot') || ''; return /^[a-z0-9-]{1,40}$/.test(v) && v !== 'std' ? v : ''; })();
 let COMPANY = '';
@@ -652,7 +653,7 @@ const PL_LOGO = '<img class="al-logo" src="assets/logo-standard-fleisch.png" wid
 /* Ein Block: Nummer | Bezeichnung | Preis(e) | [Merken]. Der Gruppenkopf nutzt die ganze Breite, „€/kg“ steht über der Preisspalte. */
 function plBlockHTML(b, mode) {
   const { u, items, cont } = b, labels = u.labels, cols = labels.length;
-  const screen = mode !== 'print', werb = mode === 'werb';
+  const screen = mode !== 'print' && mode !== 'druck-werb', werb = mode === 'werb' || mode === 'druck-werb';
   const span = 2 + cols + (screen ? 1 : 0);
   const row = (it) => `<tr class="row${empfAn(it) && !werb ? ' werb-an' : ''}" data-id="${it.id}">
     <td class="c-code">${it.code ? hl(it.code) : ''}</td>
@@ -690,55 +691,40 @@ function renderListe(list, grouped) {
 /* Spaltenzahl folgt der Breite: bei Wechsel neu verteilen */
 if (window.ResizeObserver) new ResizeObserver(() => { const h = $('#list'); if (state.view === 'liste' && h && h.querySelector('.al') && plColsFor(h.clientWidth) !== plK) renderList(); }).observe(document.documentElement);
 
-/* Druck/PDF: A4 quer, drei Blöcke je Seite, jeder Abschnitt beginnt auf einer neuen Seite (wie die Excel-Liste) */
-/* Seitenhöhe in Zeilen: A4 quer 210 mm − Ränder 20 mm, Zeile 4,5 mm; Kopf der ersten Seite 15 mm, Abschnittsband 8,5 mm, 1 Zeile Reserve */
-const plCap = (first, withSec) => (190 - (first ? 15 : 0) - (withSec ? 8.5 : 0)) / 4.5 - 1;
+/* Druck/PDF „Angebotsansicht“: A4 quer, fortlaufend und kompakt – derselbe Inhalt wie am Bildschirm (Kopf mit Logo, Werbung,
+   Bereiche, Gruppen, Kennzeichen, Hinweis), gesetzt von assets/angebot-druck.js (gemessen statt geschätzt; drei oder vier
+   Spalten, Gruppen ungeteilt, letzte Seite ausgeglichen). Am Seitenfuß der Hinweis (Mengen, Fracht) und die Fußzeile des
+   Briefbogens (FRACHT.fuss) – auf jeder Seite oder nur der letzten (Einstellung „modus“, zum Vergleich ?fuss=jede|letzte). */
+const FUSS_PARAM = (() => { const v = new URLSearchParams(location.search).get('fuss'); return v === 'jede' || v === 'letzte' ? v : ''; })();
+const SPALTEN_PARAM = (() => { const v = new URLSearchParams(location.search).get('spalten'); return v === '3' || v === '4' ? +v : 0; })();   // zum Vergleich: Spaltenzahl festlegen
+const druckHinweis = () => [...eigenerHinweis(), ...((FRACHT && FRACHT.hinweis) || [])];   // wie hinweisHTML
+const druckFuss = () => (FRACHT && FRACHT.fuss) || null;
 function buildPrintListe(list, grouped, scopeText) {
   const units = plUnits(list, grouped, 36);
-  const pages = [];
-  const secs = plSections(units);
-  const colW = (c) => c.reduce((a, bl) => a + bl.u.head + bl.items.reduce((x, i) => x + bl.u.weight(i), 0), 0);
-  for (const sec of secs) {
-    const cap = plCap(!pages.length, !!sec.name);
-    const one = plVerteilen(sec.units, 3);
-    while (one.length < 3) one.push([]);
-    if (Math.max(...one.map(colW)) <= cap) { pages.push({ sec: sec.name, cont: false, cols: one, cap }); continue; }   // Abschnitt passt auf eine Seite
-    let cols = plFill(sec.units, Infinity, cap);
-    const per = [];
-    while (cols.length > 3) { per.push(cols.slice(0, 3)); cols = cols.slice(3); }
-    // letzte Seite des Abschnitts gleichmäßig auf drei Spalten verteilen
-    const earlier = new Set(per.flat(2).map((b) => b.u.key));
-    const byKey = new Map();
-    for (const b of cols.flat()) { if (!byKey.has(b.u.key)) byKey.set(b.u.key, { ...b.u, items: [] }); byKey.get(b.u.key).items.push(...b.items); }
-    const firstSeen = new Set();
-    const lz = plVerteilen([...byKey.values()], 3);
-    if (Math.max(...lz.map(colW)) > plCap(false, !!sec.name) + 1e-6) per.push(cols.concat([[], [], []]).slice(0, 3));   // übergroßer Block: Spalten wie gefüllt
-    else {
-      while (lz.length < 3) lz.push([]);
-      per.push(lz.map((c) => c.map((b) => {
-        const isFirst = !firstSeen.has(b.u.key); firstSeen.add(b.u.key);
-        return isFirst && earlier.has(b.u.key) ? { ...b, cont: true } : b;
-      })));
-    }
-    per.forEach((cols3, n) => pages.push({ sec: sec.name, cont: n > 0, cols: cols3, cap: plCap(false, !!sec.name) }));
-  }
-  /* Hinweis wie in der Excel-Liste: in die Spalte mit dem meisten Platz, sonst unter die Spalten, sonst auf eine eigene Seite */
-  const lines = [...eigenerHinweis(), ...((FRACHT && FRACHT.hinweis) || [])];   // wie hinweisHTML
-  let notePos = null;
-  if (lines.length && pages.length) {
-    const last = pages[pages.length - 1], used = last.cols.map(colW);
-    const inCol = 1.6 + lines.reduce((a, l) => a + Math.ceil(l.length / 50), 0) * 0.95;    // schmal: Zeilen brechen um
-    const wide = 1.6 + lines.reduce((a, l) => a + Math.ceil(l.length / 150), 0) * 0.95;
-    const k = used.indexOf(Math.min(...used));
-    if (last.cap - used[k] >= inCol) notePos = { page: pages.length - 1, col: k };
-    else if (last.cap - Math.max(...used) >= wide) notePos = { page: pages.length - 1, col: -1 };
-    else { pages.push({ sec: '', cont: false, cols: [[], [], []], cap: plCap(false, false) }); notePos = { page: pages.length - 1, col: -1 }; }
-  }
   const stand = PUBLISHED_AT ? new Date(PUBLISHED_AT).toLocaleDateString('de-DE', { day: '2-digit', month: '2-digit', year: 'numeric' }) : today();
   const m = DATA.meta || {};
-  return pages.map((pg, n) => `<section class="pl-page">${n === 0 ? `<header class="pl-ph">${PL_LOGO}<div class="pl-pt"><h1>${esc(m.offerName && m.offerName !== 'Wochenangebot' && !m.einzel ? m.offerName + ' · ' : '')}${esc(plTitle())}</h1><span>${scopeText ? esc(scopeText) + ' · ' : ''}${m.einzel && (m.nr || m.kunde) ? [m.nr ? 'Angebot ' + esc(m.nr) : '', m.kunde ? 'für ' + esc(m.kunde) : ''].filter(Boolean).join(' ') + ' · ' : ''}Stand ${esc(stand)} · Preise in € je kg</span></div></header>` : ''}
-    ${pg.sec ? `<div class="al-st"><h3>${plGroupName(pg.sec)}${pg.cont ? ' <span class="al-cont">Forts.</span>' : ''}</h3></div>` : ''}
-    <div class="al-cols" style="--k:3">${pg.cols.map((c, ci) => `<div class="al-col">${c.map((b) => plBlockHTML(b, 'print')).join('')}${notePos && notePos.page === n && notePos.col === ci ? hinweisHTML('al-note in-col') : ''}</div>`).join('')}</div>${notePos && notePos.page === n && notePos.col === -1 ? hinweisHTML('al-note') : ''}</section>`).join('');
+  const titel = `${m.offerName && m.offerName !== 'Wochenangebot' && !m.einzel ? m.offerName + ' · ' : ''}${plTitle()}`;
+  const zusatz = [scopeText, m.einzel && (m.nr || m.kunde) ? [m.nr ? 'Angebot ' + m.nr : '', m.kunde ? 'für ' + m.kunde : ''].filter(Boolean).join(' ') : '',
+    !m.einzel && m.weekStart ? `Angebotswoche ${dm(m.weekStart)}–${dmy(m.weekEnd)}` : '', 'Stand ' + stand, 'Preise in € je kg'].filter(Boolean);
+  const kopf = (n, N) => (n === 1
+    ? `<header class="pl-ph">${PL_LOGO}<div class="pl-pt"><h1>${esc(titel)}</h1><span>${zusatz.map(esc).join(' · ')} · <span class="pl-sz">Seite ${n} von ${N}</span></span></div></header>`
+    : `<header class="pl-ph pl-ph2"><strong>${esc(titel)}</strong><span>${esc(zusatz.filter((z) => z !== 'Preise in € je kg').join(' · '))} · <span class="pl-sz">Seite ${n} von ${N}</span></span></header>`);
+  const ws = scopeText ? [] : (DATA.werbungen || []);   // Werbung wie am Bildschirm: nur im gesamten Angebot
+  const werbung = ws.length && grouped ? `<div class="pl-werb" style="--w:${ws.length}">${ws.map((w, nr) => {
+    const items = w.artikel.map((x) => x.it), kk = ws.length > 1 ? 2 : 4, per = Math.ceil(items.length / kk), labels = plLabels(items);
+    const cols = [];
+    for (let i = 0; i < kk && i * per < items.length; i++) cols.push(items.slice(i * per, (i + 1) * per));
+    return `<section class="werb-sec"><div class="al-st werb-st"><h3>${icon('megaphone')}${esc(w.titel || (nr ? WERB_TITEL2 : WERB_TITEL))}</h3>${w.text ? `<span class="werb-txt">${esc(w.text)}</span>` : ''}</div>
+      <div class="pl-wcols" style="--k:${cols.length}">${cols.map((c) => `<div class="pl-wcol">${plBlockHTML({ u: { key: 'werb', title: '', items: c, labels }, items: c, cont: false }, 'druck-werb')}</div>`).join('')}</div></section>`;
+  }).join('')}</div>` : '';
+  const f = druckFuss();
+  return window.AngebotDruck.liste({
+    host: $('#print-root'), kopf, werbung, fuss: f, hinweis: druckHinweis(), modus: FUSS_PARAM || (f && f.modus) || 'jede', spalten: SPALTEN_PARAM || undefined,
+    bereiche: plSections(units).map((sec) => ({
+      html: sec.name ? `<div class="al-st pl-st"><h3>${plGroupName(sec.name)}</h3><span>${plural(sec.units.reduce((a, u) => a + u.items.length, 0), 'Artikel', 'Artikel')}</span></div>` : '',
+      gruppen: sec.units.map((u) => ({ n: u.items.length, block: (von, bis, forts) => plBlockHTML({ u, items: u.items.slice(von, bis), cont: forts }, 'print') })),
+    })),
+  }).html;
 }
 
 function cardHTML(it, grouped) {
@@ -1056,7 +1042,7 @@ function buildPrint({ scope, layout, grouped }) {
     </header>`;
   let body = '';
   if (layout === 'liste') {
-    body = `<div class="al al-print">${buildPrintListe(list, grouped, scope === 'all' ? '' : scopeText)}</div>`;
+    body = buildPrintListe(list, grouped, scope === 'all' ? '' : scopeText);
   } else if (layout === 'table') {
     const rows = [];
     let sec = null, grp = null;
@@ -1082,12 +1068,14 @@ function buildPrint({ scope, layout, grouped }) {
       body = `<div class="p-cols"><div class="p-group"><div class="p-gh">Artikel<span>€/kg</span></div>${list.map(row).join('')}</div></div>`;
     }
   }
-  $('#print-root').innerHTML = layout === 'liste' ? body : `<div class="p-doc">${head}${body}${hinweisHTML('al-note p-note')}</div>`;
+  $('#print-root').innerHTML = layout === 'liste' ? body : `<div class="p-doc">${head}${body}${hinweisHTML('al-note p-note')}${window.AngebotDruck.fussHTML(druckFuss(), [], 'hoch')}</div>`;
 
   let ps = $('#page-style');
   if (!ps) { ps = document.createElement('style'); ps.id = 'page-style'; document.head.appendChild(ps); }
   const label = `${COMPANY ? COMPANY + ' · ' : ''}${m.notice || 'Angebot'} ${kwKurz(m)} · Preise in € je kg`.replace(/["\\]/g, '');
-  ps.textContent = `@page { size: A4 ${layout === 'liste' ? 'landscape' : 'portrait'}; margin: ${layout === 'liste' ? '9mm 10mm 11mm 10mm' : '14mm 12mm 16mm 12mm'}; }\n@page { @bottom-left { content: "${label}"; font: 7.5pt ${getComputedStyle(document.body).fontFamily.replace(/"/g, "'")}; color: #777; } @bottom-right { content: "Seite " counter(page) " von " counter(pages); font: 7.5pt sans-serif; color: #777; } }`;
+  // Angebotsansicht: Seiten fester Höhe mit eigenem Kopf (Seite x von y) und Fuß – Ränder passend zum Satzspiegel in angebot-druck.js
+  ps.textContent = layout === 'liste' ? '@page { size: A4 landscape; margin: 8mm 9mm; }'
+    : `@page { size: A4 portrait; margin: 14mm 12mm 16mm 12mm; }\n@page { @bottom-left { content: "${label}"; font: 7.5pt ${getComputedStyle(document.body).fontFamily.replace(/"/g, "'")}; color: #777; } @bottom-right { content: "Seite " counter(page) " von " counter(pages); font: 7.5pt sans-serif; color: #777; } }`;
   document.title = (m.einzel ? `${offerTitle()} ${bisText(m)}` : `${offerTitle()} KW ${m.week ?? ''} ${m.year ?? ''}`) + (scope === 'fav' ? ' – Merkliste' : '');
 }
 function doPrint(opts) {
@@ -1975,7 +1963,11 @@ function renderWartung(w) {
   document.documentElement.dataset.bereit = '1';   // Bedienelemente aktiv (Ansicht, Filter, Mengen) – Tests warten darauf
   if (DRUCKEN) {   // Parameter entfernen, damit ein Neuladen nicht erneut druckt
     const u = new URL(location.href); u.searchParams.delete('drucken'); history.replaceState(history.state, '', u);
-    openPrint();
+    if (DRUCK_DIREKT) {   // Schriften abwarten (der Satz wird gemessen), dann drucken; dem Eingabebereich Bescheid geben
+      const melden = (stand) => { try { if (window.parent !== window) window.parent.postMessage({ wa: 'druck', stand }, location.origin); } catch { /* kein Rahmen */ } };
+      window.addEventListener('afterprint', () => melden('gedruckt'), { once: true });
+      (document.fonts && document.fonts.ready ? document.fonts.ready : Promise.resolve()).then(() => { melden('bereit'); doPrint({ scope: 'all', layout: 'liste', grouped: true }); });
+    } else openPrint();
   }
 })();
 })();

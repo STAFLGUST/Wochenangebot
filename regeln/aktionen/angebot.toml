@@ -68,6 +68,14 @@ oberflaeche = "angebot.eingabe"
 oberflaeche = "angebot.eingabe"
 schreibend = true
 
+# Fußzeile im Druck der Angebote (app/api/module/angebot/druck.php): lesen mit Modulzugang, ändern nur Administratoren
+[aktion.druck_fuss]
+oberflaeche = "angebot.eingabe"
+
+[aktion.druck_fuss_save]
+oberflaeche = "angebot.eingabe"
+schreibend = true
+
 [aktion.einzel_senden]
 oberflaeche = "angebot.eingabe"
 schreibend = true

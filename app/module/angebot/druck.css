@@ -1,0 +1,18 @@
+/* STAFL-Plattform · Angebot · Knopf „Drucken“ in der Kopfleiste von „Angebot bearbeiten“, unsichtbarer Rahmen für die
+   Druckfassung und Fenster „Fußzeile im Druck“ (app/module/angebot/druck.js). */
+body.in-other #btn-drucken, body.bereich-verwaltung #btn-drucken, body.bereich-bestand #btn-drucken { display: none !important; }
+#btn-drucken[aria-busy="true"] { cursor: progress; }
+/* Druckfassung: außerhalb des Bildes, aber mit echter Größe (die Seite misst ihren Satz) – nie display:none */
+.druck-frame { position: fixed; left: -3000px; top: 0; width: 1280px; height: 900px; border: 0; opacity: 0; pointer-events: none; }
+@media print { .druck-frame { display: none; } }
+#dlg-druck-fuss h2 { display: flex; align-items: center; gap: 8px; }
+.df-spalten { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; margin-bottom: 12px; }
+.df-spalten textarea { min-height: 124px; font-size: 13.5px; line-height: 1.4; resize: vertical; }
+#dlg-druck-fuss .fld + .fld { margin-top: 10px; }
+#dlg-druck-fuss .df-spalten .fld + .fld { margin-top: 0; }
+.df-modus { margin: 14px 0 12px; }
+.df-hinweis { padding: 10px 12px; border: 1px solid var(--line); border-radius: 10px; background: var(--surface-2); }
+.df-hinweis > span { font-size: 11.5px; font-weight: 600; letter-spacing: .04em; text-transform: uppercase; color: var(--muted); }
+.df-hinweis p { margin: 4px 0 0; font-size: 13px; line-height: 1.45; color: var(--text-2); }
+#df-stand { margin: 10px 0 0; }
+@media (max-width: 640px) { .df-spalten { grid-template-columns: minmax(0, 1fr); } }

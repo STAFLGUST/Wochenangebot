@@ -897,34 +897,7 @@ body.is-test::after { content: "TESTUMGEBUNG · nur Testdaten · E-Mails nur im 
   .al-tab .qty { height: 28px; }
 }
 
-/* Druck: A4 quer, drei Blöcke je Seite */
-#print-root .al { border: 0; border-radius: 0; box-shadow: none; padding: 0; background: #fff; color: #111; --al-zebra: #f2f2ef; --al-rule: #111; }
-#print-root .pl-page { break-after: page; }
-#print-root .pl-page:last-child { break-after: auto; }
-#print-root .pl-ph { display: flex; align-items: flex-end; justify-content: space-between; gap: 16px; padding-bottom: 2mm; margin-bottom: 3mm; border-bottom: .8mm solid #8c1d2c; }
-#print-root .pl-ph h1 { margin: 0; font-size: 13pt; font-weight: 650; }
-#print-root .pl-ph .al-logo { height: 15mm; background: none; padding: 0; }
-#print-root .pl-pt { text-align: right; display: flex; flex-direction: column; gap: 1mm; }
-#print-root .pl-ph .pl-co { display: block; font-size: 7.5pt; font-weight: 700; letter-spacing: .12em; text-transform: uppercase; color: #8c1d2c; margin-bottom: .6mm; }
-#print-root .pl-pt > span { font-size: 8pt; color: #444; }
-#print-root .al-st { background: #ececea; border-radius: 0; padding: 1.2mm 2.5mm; margin: 0 0 2.4mm; }
-#print-root .al-st h3 { font-size: 10pt; }
-#print-root .al-col { padding: 0 3.2mm; gap: 2.6mm; }
-#print-root .al-col:first-child { padding-left: 0; }
-#print-root .al-col:last-child { padding-right: 0; }
-#print-root .al-col + .al-col { border-left: .25mm solid #d6d6d2; }
-#print-root .al-tab { font-size: 9pt; line-height: 1.22; }
-#print-root .al-tab { --w-code: 11mm; --w-price: 14mm; --w-fav: 0mm; }
-#print-root .al-tab td { height: 4.5mm; padding: 0 1.2mm; }
-#print-root .al-tab td.c-code { font-size: 8.4pt; color: #111; padding-left: 1mm; }
-#print-root .al-h th { font-size: 8.6pt; padding: 0 0 .8mm 1mm; border-bottom-width: .35mm; }
-#print-root .al-hin .al-eh { padding-right: 1.2mm; }
-#print-root .al-sub th { font-size: 6.8pt; white-space: nowrap; }
-#print-root .al-tab .al-tag { font-size: 6.8pt; padding: 0 1mm; }
-#print-root .al-tab td.c-price.al-np { font-size: 8pt; }
-#print-root .al-tab .al-was { font-size: 7pt; display: inline; margin-right: 1mm; }
-#print-root .al-grp, #print-root .al-tab tr { break-inside: avoid; }
-#print-root .al, #print-root .al-st, #print-root .al-tab td { -webkit-print-color-adjust: exact; print-color-adjust: exact; }   /* Zebrastreifen und Abschnittsbänder auch auf Papier */
+/* Druck der Angebotsansicht (A4 quer): assets/angebot-druck.css */
 
 /* Umschalter Angebotsansicht / Bestellansicht – gut sichtbar ganz oben */
 .modebar { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; margin: 0 0 16px; }
