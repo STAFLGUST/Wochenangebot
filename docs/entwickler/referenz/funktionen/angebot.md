@@ -2,7 +2,7 @@
 
 <!-- ERZEUGT von `python3 werkzeuge/doku.py erzeugen` – nicht von Hand ändern. Quelle: Funktionen und Kommentare im Code. Die CI prüft, dass diese Datei zum Code passt. -->
 
-53 Dateien, 827 Funktionen – in der Reihenfolge der Datei, **fett** die Abschnitte. Text = erste Aussage des Kommentars direkt über der Funktion (Python: Docstring). Übersicht aller Module: [README.md](README.md).
+53 Dateien, 828 Funktionen – in der Reihenfolge der Datei, **fett** die Abschnitte. Text = erste Aussage des Kommentars direkt über der Funktion (Python: Docstring). Übersicht aller Module: [README.md](README.md).
 
 ## `app/api/lib/angebote.php`
 
@@ -258,7 +258,8 @@ _Export des Wochenangebots für WinAB (Auftrag des Inhabers 05.11.2026)_
 _Angebot · Frühere Wochen ansehen und Wochenablage (Wünsche des Inhabers 13.11.2026): das veröffentlichte Angebot einer Kalenderwoche – Wochenangebot oder ein Kundenangebot – nur für Mitarbeiter mit Modulzugang …_
 
 - `angebot_woche_kw(m)` – KW eines gespeicherten Angebots als „JJJJ-WW“ (nur gültige ISO-Wochen), sonst null
-- `angebot_woche_definitionen()` – Angebotsdefinitionen als Schnappschuss (GR-106): ID, Name und Regel der Artikelliste je Kundenangebot – ohne Kundengruppen
+- `angebot_woche_definition(o)` – Eine Angebotsdefinition so, wie offer_resolve sie braucht: ID, Name, Regel der Artikelliste, bei Sonderangeboten Art und Gültigkeit (Kopf „gültig von … bis …
+- `angebot_woche_definitionen()` – Angebotsdefinitionen als Schnappschuss (GR-106)
 - `angebot_woche_ablegen(model)` – Beim Veröffentlichen (angebot_veroeffentlichen, unter der Sperre „entwurf“): neuen Stand je KW ablegen, ersetzt dieselbe KW
 - `angebot_woche_retten(v)` – Vor dem Löschen einer alten Version (keep_versions): in die Ablage retten, wenn diese KW dort keinen neueren Stand hat
 - `angebot_wochen_verzeichnis()` – Gespeicherte Wochen (aufsteigend) und je KW der späteste Stand aus aktuellem Angebot und versionen/*: [Wochen => true, 'JJJJ-WW' => ['art' => …

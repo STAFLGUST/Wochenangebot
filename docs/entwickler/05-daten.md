@@ -216,12 +216,14 @@ ungültige Angabe, Veröffentlichen lehnt sie ab. Jede Veröffentlichung legt da
 als `versionen/<JJJJMMTT-hhmmss>-<hex>` ab (höchstens `keep_versions`) und den Preisverlauf `historie/<id>`.
 Dazu die **Wochenablage** `angebot-woche/<JJJJ-WW>` (Inhaber 13.11.2026, „je KW dauerhaft“; `module/angebot/wochen.php`):
 der neue Stand je KW, ersetzt den Stand derselben KW, ohne Grenze und ohne automatisches Löschen, intern (nie auf der
-Kundenseite). Wird eine Version wegen `keep_versions` gelöscht, wird sie vorher abgelegt, falls ihre KW dort noch keinen
+Kundenseite). Die Angebotsdefinitionen enthalten nie Kundengruppen (`gruppen`, `sonderGruppen`); bei Sonderangeboten `art`
+und `gueltig`, damit frühere Wochen deren damalige Gültigkeit zeigen. Wird eine Version wegen `keep_versions` gelöscht, wird sie vorher abgelegt, falls ihre KW dort noch keinen
 neueren Stand hat (`quelle: "version"`, `angebote: null` – Definitionen unbekannt). Ältere Fassungen ignorieren das Dokument.
 
 ```json
 {"format": 1, "woche": "2026-43", "stand": "<publishedAt>", "abgelegt": "<Zeitpunkt>", "quelle": "veroeffentlichung|version",
- "angebote": [{"id": "edeka", "name": "Wochenangebot Edeka", "fallback": "standard|hidden"}] | null, "modell": {…veröffentlichtes Angebot…}}
+ "angebote": [{"id": "edeka", "name": "Wochenangebot Edeka", "fallback": "standard|hidden", "art?": "sonder", "gueltig?": {…}}] | null,
+ "modell": {…veröffentlichtes Angebot…}}
 ```
 
 ```json

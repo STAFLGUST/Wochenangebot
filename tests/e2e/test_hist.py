@@ -236,9 +236,11 @@ def wochenablage_pruefen(a):
 
     # Sonderangebot: gespeicherte Gültigkeit der Woche (Kopf), nicht die heutige
     kg = api_get(a, 'kundengruppen')[1]
-    api_post(a, 'kundengruppen_save', {'rev': kg['rev'], 'groups': kg['groups'] + [{'nr': '75', 'name': 'Sondergruppe'}]})
+    rk = api_post_bestaetigt(a, 'kundengruppen_save', {'rev': kg['rev'], 'groups': kg['groups'] + [{'nr': '75', 'name': 'Sondergruppe'}]})
+    nkw = (datetime.date.today() + datetime.timedelta(days=7)).isocalendar()   # Gültigkeit darf nicht in der Vergangenheit enden
+    spaeter = [(datetime.date.today() + datetime.timedelta(days=t)).isoformat() for t in (30, 32)]
     lst = api_get(a, 'sonderangebote')[1]
-    r = api_post(a, 'sonderangebot_save', {'name': 'Grillwoche', 'gruppen': ['75'], 'gueltig': {'modus': 'kw', 'jahr': 2026, 'kw': 44}, 'rev': lst['rev']})
+    r = api_post(a, 'sonderangebot_save', {'name': 'Grillwoche', 'gruppen': ['75'], 'gueltig': {'modus': 'kw', 'jahr': nkw[0], 'kw': nkw[1]}, 'rev': lst['rev']})
     sid = (r[1] or {}).get('id', '')
     d = api_get(a, 'draft')[1]
     m = d['draft'] or d['published']
@@ -246,14 +248,15 @@ def wochenablage_pruefen(a):
     api_post(a, 'save_draft', {'revision': d['revision'], 'model': m})
     veroeffentlichen(a)
     defs = {x['id']: x for x in (dok('angebot-woche/2026-44') or {}).get('angebote', [])}
-    check('Sonderangebot: Ablage speichert Art und Gültigkeit, keine Kundengruppen', r[0] == 200 and defs.get(sid, {}).get('gueltig') == {'modus': 'kw', 'jahr': 2026, 'kw': 44}
-          and defs[sid].get('art') == 'sonder' and 'sonderGruppen' not in defs[sid] and all('gruppen' not in x for x in defs.values()), defs.get(sid))
+    check('Sonderangebot: Ablage speichert Art und Gültigkeit, keine Kundengruppen', r[0] == 200 and defs.get(sid, {}).get('gueltig') == {'modus': 'kw', 'jahr': nkw[0], 'kw': nkw[1]}
+          and defs[sid].get('art') == 'sonder' and 'sonderGruppen' not in defs[sid] and all('gruppen' not in x for x in defs.values()), (rk[0], r, defs.get(sid)))
     lst = api_get(a, 'sonderangebote')[1]
-    r = api_post(a, 'sonderangebot_save', {'id': sid, 'name': 'Grillwoche', 'gruppen': ['75'], 'gueltig': {'modus': 'zeitraum', 'von': '2026-12-01', 'bis': '2026-12-03'}, 'rev': lst['rev']})
+    r = api_post(a, 'sonderangebot_save', {'id': sid, 'name': 'Grillwoche', 'gruppen': ['75'], 'gueltig': {'modus': 'zeitraum', 'von': spaeter[0], 'bis': spaeter[1]}, 'rev': lst['rev']})
     c, w = woche(a, '2026-44', sid)
     meta = (w.get('offer') or {}).get('meta', {})
-    check('… frühere Woche zeigt die damalige Gültigkeit (KW 44), nicht die heutige (Dezember)', r[0] == 200 and c == 200 and w.get('einstellung') == 'damals' and meta.get('sonder') is True
-          and meta.get('week') == 44 and meta.get('year') == 2026 and not meta.get('gueltigVon') and preis_von(w, '10601')[0] == 9.99, (r[0], c, meta.get('week'), meta.get('gueltigVon')))
+    check('… frühere Woche (KW 44) zeigt die damalige Gültigkeit (KW), nicht die heutige (Zeitraum)', r[0] == 200 and c == 200 and w.get('einstellung') == 'damals' and meta.get('sonder') is True
+          and meta.get('week') == nkw[1] and meta.get('year') == nkw[0] and not meta.get('gueltigVon') and preis_von(w, '10601')[0] == 9.99,
+          (r[0], c, w.get('einstellung'), meta.get('week'), meta.get('gueltigVon')))
 
     # Alte Versionen: vor dem Löschen (keep_versions = 60) in die Ablage retten, wenn die KW dort keinen neueren Stand hat
     vorhanden = len(api_get(a, 'versions')[1]['versions'])
