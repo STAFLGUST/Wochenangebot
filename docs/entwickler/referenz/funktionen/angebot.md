@@ -60,7 +60,7 @@ _Einzelangebote: ein Angebot für genau einen Kunden (Angebot bearbeiten → Ein
 
 - `einzel_bestand_partien()`
 - `einzel_partien_aufloesen(pos, alt, me)` – Partien der Positionen auflösen ($alt: bisher gespeichertes Einzelangebot oder null).
-- `einzel_partie_menge(p)` – Für den Kunden angebotene Menge einer Partie-Position: eingetragene Menge, sonst die ganze Partie (Schnappschuss)
+- `einzel_partie_menge(p)` – Für den Kunden angebotene Menge einer Partie-Position: eingetragene Menge, sonst die ganze Partie (Schnappschuss, auf zwei Stellen abgerundet – angezeigt …
 - `einzel_partie_teile(p, mitMenge)` – Partieangaben für Kunde, Druck, PDF und E-Mail: „Charge P-0002 · MHD 04.12.2026 · 25,00 kg“
 - `einzel_partie_text(p, mitMenge)`
 - `einzel_summe(e)` – Summen (Positionen mit Menge und Preis; Partie ohne eingetragene Menge zählt mit der ganzen Partie)

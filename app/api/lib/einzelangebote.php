@@ -140,8 +140,9 @@ function einzel_partien_aufloesen(array $pos, ?array $alt, array $me): array
     }
     return $pos;
 }
-/* Für den Kunden angebotene Menge einer Partie-Position: eingetragene Menge, sonst die ganze Partie (Schnappschuss) */
-function einzel_partie_menge(array $p): float { return (float)($p['qty'] ?? $p['partie']['kg'] ?? 0); }
+/* Für den Kunden angebotene Menge einer Partie-Position: eingetragene Menge, sonst die ganze Partie (Schnappschuss, auf zwei
+   Stellen abgerundet – angezeigt wird nie mehr als die Partie) */
+function einzel_partie_menge(array $p): float { return $p['qty'] !== null ? (float)$p['qty'] : floor((float)($p['partie']['kg'] ?? 0) * 100 + 1e-6) / 100; }
 /* Partieangaben für Kunde, Druck, PDF und E-Mail: „Charge P-0002 · MHD 04.12.2026 · 25,00 kg“ */
 function einzel_partie_teile(array $p, bool $mitMenge = true): array
 {
@@ -156,7 +157,7 @@ function einzel_summe(array $e): array
 {
     $kg = 0.0; $sum = 0.0;
     foreach ($e['positions'] ?? [] as $p) {
-        $q = $p['qty'] ?? (is_array($p['partie'] ?? null) ? (float)$p['partie']['kg'] : null);
+        $q = $p['qty'] ?? (is_array($p['partie'] ?? null) ? einzel_partie_menge($p) : null);
         if ($q === null) continue;
         $kg += $q;
         if ($p['price'] !== null) $sum += round(round($p['price'] * 100) * $q) / 100;

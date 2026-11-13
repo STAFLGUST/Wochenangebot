@@ -350,7 +350,8 @@ EID5 = 'e-' + e5['id']
 
 # Schnappschuss (GR-106): neuer Bestand ändert das Angebot nicht; bekannte Partie bleibt auch verkauft gültig
 STOCK2 = json.loads(json.dumps(STOCK))
-STOCK2['articles'][0].update({'kg': 5, 'lots': [{'lot': 'P-0002', 'arrival': '2026-10-09', 'mhd': '2026-11-30', 'kolli': 1, 'kg': 5, 'ek': 19.25}]})
+STOCK2['articles'][0].update({'kg': 12.005, 'lots': [{'lot': 'P-0002', 'arrival': '2026-10-09', 'mhd': '2026-11-30', 'kolli': 1, 'kg': 5, 'ek': 19.25},
+                                                    {'lot': 'P-0003', 'arrival': '2026-10-12', 'mhd': '2026-12-10', 'kolli': 2, 'kg': 7.005, 'ek': 18}]})
 assert A.call('stock_import', STOCK2)[0] == 200
 d5 = A.call('einzel_detail&id=' + e5['id'])[1]['angebot']
 check('Bestand geändert: Partien im Angebot unverändert', [p.get('partie') for p in d5['positions'][:2]] == [p5[0]['partie'], p5[1]['partie']], [p.get('partie') for p in d5['positions']])
@@ -359,6 +360,13 @@ check('erneut gespeichert: Schnappschuss bleibt (verkaufte Partie, alte Menge), 
       and r['angebot']['positions'][0]['partie']['kg'] == 25 and r['angebot']['positions'][1]['qty'] == 15, r.get('angebot', {}).get('positions'))
 e5 = r.get('angebot', e5)
 check('neue Zuordnung einer verkauften Partie → 422', A.call('einzel_save', ps(positions=[PP[1]]))[0] == 422 and anzahl() == n0 + 1)
+st, r = A.call('einzel_save', ps(positions=[{**PP[0], 'qty': None, 'partie': {'lot': 'P-0003'}}]))
+tmp = r.get('angebot', {})
+mt = A.call('offer&angebot=e-' + tmp.get('id', ''))[1].get('offer', {}).get('items', [{}])
+check('Partie mit drei Nachkommastellen (7,005 kg): gespeichert genau, angeboten abgerundet 7,00 kg', st == 200 and tmp['positions'][0]['partie']['kg'] == 7.005
+      and tmp['summen'] == {'kg': 7.0, 'summe': 174.3} and mt[0].get('partie', {}).get('kg') == 7.0, (tmp.get('positions'), tmp.get('summen'), mt[0].get('partie')))
+check('… und eine Menge darüber (7,01 kg) → 422', A.call('einzel_save', ps(id=tmp['id'], revision=tmp['revision'], positions=[{**PP[0], 'qty': 7.01, 'partie': {'lot': 'P-0003'}}]))[0] == 422)
+assert A.call('einzel_loeschen', {'id': tmp['id']})[0] == 200
 assert A.call('stock_import', STOCK)[0] == 200   # Bestand wie zu Beginn (Oberfläche unten)
 
 # Ohne „Bestand ansehen“: vorhandene Partien bleiben beim Speichern erhalten, neue Zuordnung 403, Entfernen erlaubt

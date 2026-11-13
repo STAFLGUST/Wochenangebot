@@ -95,7 +95,7 @@
     const a = p.code ? idx && idx.get(key(p.code)) : null;
     const l = lot ? partienVon(a).find((x) => x.lot === lot) : null;
     p.partie = l ? { ...l } : null;
-    if (l && p.qty == null) p.qty = Math.round(l.kg * 100) / 100;   // ohne Menge: die ganze Partie anbieten (änderbar)
+    if (l && p.qty == null) p.qty = ganz(l);   // ohne Menge: die ganze Partie anbieten (änderbar)
     markDirty(); renderPos();
     const s = $(`#ez-pos tr[data-i="${i}"] [data-f="partie"]`); if (s) s.focus();
   }
@@ -105,11 +105,12 @@
     const b = belegt(p.code, -1);
     const l = partienVon(a).find((x) => !b.has(x.lot));
     if (!l || ed.positions.length >= MAX_POS) return;
-    ed.positions.splice(i + 1, 0, { code: p.code, name: p.name, qty: Math.round(l.kg * 100) / 100, price: p.price, notiz: '', partie: { ...l } });
+    ed.positions.splice(i + 1, 0, { code: p.code, name: p.name, qty: ganz(l), price: p.price, notiz: '', partie: { ...l } });
     markDirty(); renderPos();
     const s = $(`#ez-pos tr[data-i="${i + 1}"] [data-f="partie"]`); if (s) s.focus();
   }
   const zuViel = (p) => p.partie && p.qty != null && !Number.isNaN(p.qty) && p.qty > p.partie.kg + 1e-9;
+  const ganz = (l) => Math.floor(l.kg * 100 + 1e-6) / 100;   // ganze Partie als Menge, auf 2 Stellen abgerundet (15,005 kg → 15,00 – nie mehr als die Partie)
 
   async function laden() {
     const [l, k] = await Promise.all([api('einzel_liste'), kunden ? null : api('kunden')]);
@@ -265,7 +266,7 @@
   function summen() {
     let kg = 0, sum = 0;
     for (const p of ed.positions) {
-      const q = p.qty != null ? p.qty : p.partie ? p.partie.kg : null;   // Partie ohne Menge: ganze Partie (wie der Server)
+      const q = p.qty != null ? p.qty : p.partie ? ganz(p.partie) : null;   // Partie ohne Menge: ganze Partie (wie der Server)
       if (q != null && !Number.isNaN(q)) { kg += q; if (p.price != null && !Number.isNaN(p.price)) sum += Math.round(Math.round(p.price * 100) * q) / 100; }
     }
     return { kg, sum };

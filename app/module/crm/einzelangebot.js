@@ -38,7 +38,7 @@
   /* Summe der Positionen mit Menge und Preis (wie der Server: Cent je kg × kg) */
   function summen(pos) {
     let kg = 0, sum = 0;
-    for (const p of pos) { const q = zahl(p.qty, 'qty') ?? (p.partie ? p.partie.kg : null), pr = zahl(p.price); if (q > 0) { kg += q; if (pr >= 0 && pr !== null) sum += Math.round(Math.round(pr * 100) * q) / 100; } }
+    for (const p of pos) { const q = zahl(p.qty, 'qty') ?? (p.partie ? Math.floor(p.partie.kg * 100 + 1e-6) / 100 : null), pr = zahl(p.price); if (q > 0) { kg += q; if (pr >= 0 && pr !== null) sum += Math.round(Math.round(pr * 100) * q) / 100; } }
     return { kg, sum };
   }
 
