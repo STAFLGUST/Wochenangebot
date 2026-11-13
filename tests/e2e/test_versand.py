@@ -309,6 +309,17 @@ with sync_playwright() as pw:
           'vorschau=1&angebot=grosshandel' in v.get_attribute('#vs-angebote tr[data-angebot="grosshandel"] a[aria-label^="Vorschau"]', 'href')
           and 'drucken=liste' in v.get_attribute('#vs-angebote tr[data-angebot="std"] a[aria-label^="Drucken"]', 'href'))
     v.screenshot(path=SH + '/versand-seite.png', full_page=True)
+    # „Drucken“ aus der Liste: neuer Tab mit der Druckfassung des Entwurfs (Angebotsansicht, assets/angebot-druck.js), Druck genau einmal
+    v.context.add_init_script("window.print = () => { window.__gedruckt = (window.__gedruckt || 0) + 1; window.dispatchEvent(new Event('beforeprint')); };")
+    with v.context.expect_page() as neu:
+        v.click('#vs-angebote tr[data-angebot="grosshandel"] a[aria-label^="Drucken"]')
+    dr = neu.value; dr.on('pageerror', lambda e: errs.append('druck: ' + str(e)))
+    dr.wait_for_function('window.__gedruckt >= 1', timeout=20000)
+    ds = dr.evaluate("""() => ({ seiten: document.querySelectorAll('#print-root .pl-page').length, zeilen: document.querySelectorAll('#print-root .al-band tr.row').length,
+      n: window.__gedruckt, suche: location.search })""")
+    check('Versand: „Drucken“ öffnet die Druckfassung des Entwurfs dieses Angebots (Angebotsansicht) und ruft den Druck genau einmal auf',
+          ds['seiten'] >= 1 and ds['zeilen'] > 0 and ds['n'] == 1 and 'vorschau=1' in ds['suche'] and 'angebot=grosshandel' in ds['suche'] and 'drucken' not in ds['suche'], ds)
+    dr.close()
     v.click('#vs-pub'); v.wait_for_selector('#dlg-pub[open] .vs-aend')
     check('Fenster „Veröffentlichen“: Liste der Änderungen, „Im Angebot ändern“', 'preisänderungen (1)' in v.inner_text('#dlg-pub').lower() and 'Im Angebot ändern' in v.inner_text('#dlg-pub'))
     v.mouse.click(5, 5)
