@@ -703,7 +703,7 @@ function buildPrintListe(list, grouped, scopeText) {
   const unterzeile = (n, N) => `${vermerk}${zusatz.map((z) => esc(z) + ' · ').join('')}<span class="pl-sz">Seite ${n} von ${N}</span>`;
   const kopf = (n, N) => (n === 1
     ? `<header class="al-head pl-ph">${PL_LOGO}<div class="al-ht pl-pt"><h1>${esc(titel)}</h1><span>${unterzeile(n, N)}</span></div></header>`
-    : `<header class="pl-ph pl-ph2"><strong>${esc(titel)}</strong><span>${unterzeile(n, N)}</span></header>`);
+    : `<header class="al-head pl-ph pl-ph2">${PL_LOGO}<div class="al-ht pl-pt"><strong>${esc(titel)}</strong><span>${unterzeile(n, N)}</span></div></header>`);   // Folgeseiten: Logo kleiner
   const f = druckFuss();
   return window.AngebotDruck.liste({
     host: $('#print-root'), kopf, werbung: scopeText || !grouped ? '' : werbungHTML(false, true),   // Werbung wie am Bildschirm: nur im gesamten Angebot

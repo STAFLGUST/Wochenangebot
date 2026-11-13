@@ -385,8 +385,8 @@ with sync_playwright() as p:
     check('erste Seite: der erste Bereich beginnt gleich unter der Werbung', s['jeSeite'][0]['bereiche'] >= 1 and s['jeSeite'][0]['hoehe'] >= 60, s['jeSeite'][0])
     check('kompakt: höchstens 4 Seiten (vorher 6), alle Seiten vor der letzten zu mindestens 70 % der Höhe gefüllt (vier große Bereiche: der Rest einer Seite fasst keinen ganzen Block mehr)',
           N <= 4 and all(x['fuell'] >= 70 for x in s['jeSeite'][:-1]), (N, [x['fuell'] for x in s['jeSeite']]))
-    check('Kopf: Logo nur auf Seite 1, jede Seite mit Titel und „Seite x von y“ – ohne Angebotswoche, Stand und „Preise in € je kg“ (Wunsch Inhaber 13.11.2026)',
-          [x['logo'] for x in s['jeSeite']] == [1] + [0] * (N - 1) and all(f'Seite {i + 1} von {N}' in x['kopf'] and 'KW 43' in x['kopf']
+    check('Kopf: Logo auf jeder Seite, jede Seite mit Titel und „Seite x von y“ – ohne Angebotswoche, Stand und „Preise in € je kg“ (Wunsch Inhaber 13.11.2026)',
+          [x['logo'] for x in s['jeSeite']] == [1] * N and all(f'Seite {i + 1} von {N}' in x['kopf'] and 'KW 43' in x['kopf']
           and not re.search(r'Angebotswoche|Stand |je kg', x['kopf']) for i, x in enumerate(s['jeSeite'])), s['jeSeite'][0]['kopf'])
     check('Schrift (Nummer, Bezeichnung, Preis, Überschriften) gedruckt nicht unter 7,5 pt; Stufe genannt', s['schrift'] >= 7.45 and s['stufe'] in STUFEN, (s['schrift'], s['stufe']))
     check('GR-001/GR-008: Druck ohne Mengen, Partien, MHD und Einkaufspreise', not re.search(r'Bestand|Partie|MHD|Einkauf|EK-Preis', s['text']) and pg.locator('#print-root [data-qty], #print-root .c-qty').count() == 0)

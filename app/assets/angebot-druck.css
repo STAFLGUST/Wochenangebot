@@ -40,9 +40,12 @@
 #print-root .pl-pt > span { font-size: 13px; color: var(--text-2); }
 #print-root .pl-sz { font-weight: 600; color: var(--text); white-space: nowrap; }
 #print-root .pl-entwurf { font-weight: 650; letter-spacing: .06em; text-transform: uppercase; color: var(--accent); }   /* Vermerk im Kopf, einschaltbar: DRUCK_ENTWURF_VERMERK in frontend.js */
-#print-root .pl-ph2 { align-items: baseline; padding-bottom: 6px; border-bottom: 1px solid var(--regel); }
-#print-root .pl-ph2 > strong { font-size: 14px; font-weight: 650; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-#print-root .pl-ph2 > span { flex: none; font-size: 12px; color: var(--text-2); white-space: nowrap; }
+/* Folgeseiten: derselbe Kopf wie Seite 1 (Logo links, Titel und Seitenzahl rechts), nur kleiner und mit Linie darunter */
+#print-root .pl-ph2 { align-items: center; padding-bottom: 6px; border-bottom: 1px solid var(--regel); }
+#print-root .pl-ph2 .al-logo { height: calc(var(--logo) * .6); }
+#print-root .pl-ph2 .pl-pt { gap: 1px; }
+#print-root .pl-ph2 .pl-pt > strong { max-width: 100%; font-size: 14px; font-weight: 650; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+#print-root .pl-ph2 .pl-pt > span { font-size: 12px; white-space: nowrap; }
 
 /* Bereiche: Zeilen aus drei Spalten, ein Bereich über die Spalten seiner Gruppen, Balken abgerundet */
 #print-root .pl-doc .al-band { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); column-gap: var(--ab-spalte); align-items: start; margin: 0 0 var(--ab-band); }
