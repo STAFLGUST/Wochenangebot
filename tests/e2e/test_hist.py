@@ -130,6 +130,7 @@ def fruehere_wochen_pruefen(a, br, errs):
         a.wait_for_selector('#fw-leer:not([hidden]) [data-fw="gehe"]')
         check('Fenster: diese Woche ohne gespeichertes Angebot – Hinweis und Sprung zur letzten Woche', 'kein Angebot gespeichert' in a.inner_text('#fw-leer')
               and f'KW {jetzt[1]}/{jetzt[0]}' in titel() and a.is_hidden('[data-fw="heute"]') and a.is_disabled('[data-fw="vor"]'), titel())
+        a.wait_for_function(RUHE); a.screenshot(path=SH + '/fruehere-wochen-leer.png')
         a.click('#fw-leer [data-fw="gehe"]')
     else:
         a.click('[data-fw="zurueck"]')
