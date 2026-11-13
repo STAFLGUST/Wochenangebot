@@ -385,8 +385,9 @@ with sync_playwright() as p:
     check('erste Seite: der erste Bereich beginnt gleich unter der Werbung', s['jeSeite'][0]['bereiche'] >= 1 and s['jeSeite'][0]['hoehe'] >= 60, s['jeSeite'][0])
     check('kompakt: höchstens 4 Seiten (vorher 6), alle Seiten vor der letzten zu mindestens 70 % der Höhe gefüllt (vier große Bereiche: der Rest einer Seite fasst keinen ganzen Block mehr)',
           N <= 4 and all(x['fuell'] >= 70 for x in s['jeSeite'][:-1]), (N, [x['fuell'] for x in s['jeSeite']]))
-    check('Kopf: Logo nur auf Seite 1, jede Seite mit Titel, Angebotswoche bzw. Stand und „Seite x von y“',
-          [x['logo'] for x in s['jeSeite']] == [1] + [0] * (N - 1) and all(f'Seite {i + 1} von {N}' in x['kopf'] and 'KW 43' in x['kopf'] and 'Stand ' in x['kopf'] for i, x in enumerate(s['jeSeite'])), s['jeSeite'][0]['kopf'])
+    check('Kopf: Logo nur auf Seite 1, jede Seite mit Titel und „Seite x von y“ – ohne Angebotswoche, Stand und „Preise in € je kg“ (Wunsch Inhaber 13.11.2026)',
+          [x['logo'] for x in s['jeSeite']] == [1] + [0] * (N - 1) and all(f'Seite {i + 1} von {N}' in x['kopf'] and 'KW 43' in x['kopf']
+          and not re.search(r'Angebotswoche|Stand |je kg', x['kopf']) for i, x in enumerate(s['jeSeite'])), s['jeSeite'][0]['kopf'])
     check('Schrift (Nummer, Bezeichnung, Preis, Überschriften) gedruckt nicht unter 7,5 pt; Stufe genannt', s['schrift'] >= 7.45 and s['stufe'] in STUFEN, (s['schrift'], s['stufe']))
     check('GR-001/GR-008: Druck ohne Mengen, Partien, MHD und Einkaufspreise', not re.search(r'Bestand|Partie|MHD|Einkauf|EK-Preis', s['text']) and pg.locator('#print-root [data-qty], #print-root .c-qty').count() == 0)
     f1 = s['jeSeite'][-1]['fuss']
@@ -397,6 +398,18 @@ with sync_playwright() as p:
           and all(z in schirm['hinweis'] for z in hin), f1['hinweis'][:120])
     check('Fußzeile: drei Spalten und zwei Registerzeilen aus der Einstellung; öffentlich ohne Bankangaben', all(t in f1['brief'] for t in ('Musterfleisch Test GmbH', 'www.example.org', 'Musterstadt B 000 00', 'Musterstadt A 000 00'))
           and 'Testbank' not in s['text'] and 'DE 118949959' in f1['brief'], f1['brief'][:200])
+    lay = pg.evaluate("""() => { const p = [...document.querySelectorAll('#print-root .pl-page')].pop(), b = (e) => e.getBoundingClientRect();
+      const bs = [...p.querySelectorAll('.pl-bs')], bz = p.querySelector('.pl-bz'), br = p.querySelector('.pl-brief');
+      const w = document.querySelector('#print-root .werb-sec.werb-ein'), st = w && w.querySelector('.werb-st'), r1 = w && w.querySelector('tr.row');
+      return { oben: bs.map((e) => Math.round(b(e).top)), unterSpalten: bz && bs.length ? b(bz).top - Math.max(...bs.map((e) => b(e).bottom)) : null,
+        bzLinks: bz && bs.length ? Math.round(b(bz).left - b(bs[0]).left) : null, text: br ? br.innerText : '',
+        werbAbstand: st && r1 ? b(r1).top - b(st).bottom : null, werbEh: st ? (st.querySelector('.werb-eh') || {}).textContent : '',
+        werbKopf: w ? getComputedStyle(w.querySelector('.al-h')).display : '' }; }""")
+    check('Fußzeile: Spalten oben bündig, Registerzeilen darunter ab der ersten Spalte, „ * “ als „ · “ und ohne Leerzeichen vor dem Doppelpunkt',
+          len(lay['oben']) == 3 and len(set(lay['oben'])) == 1 and lay['unterSpalten'] is not None and lay['unterSpalten'] >= 0 and lay['bzLinks'] == 0
+          and ' * ' not in lay['text'] and ' :' not in lay['text'] and 'Musterstadt B 000 00 · Geschäftsführer: Erika Beispiel' in lay['text'], lay)
+    check('Werbung: Balken direkt auf den Zeilen wie der Kopf einer Artikelgruppe („€/kg“ im Balken, keine leere Kopfzeile)',
+          lay['werbEh'] == '€/kg' and lay['werbKopf'] == 'none' and lay['werbAbstand'] is not None and 0 <= lay['werbAbstand'] <= 8, lay)
     zurueck(pg)
     # echter Druck (wie Strg+P, ohne „Hintergrundgrafiken“): dasselbe Ergebnis wie gesetzt
     pdf = pg.pdf(prefer_css_page_size=True, print_background=False)

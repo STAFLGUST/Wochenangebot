@@ -39,16 +39,20 @@
   /* Verkleinerung der Satzfläche auf den Satzspiegel (px der Bildschirmansicht → A4 quer); 1 mm = 96/25,4 px */
   const zFaktor = (st) => Math.round(SEITE.b * 96 / 25.4 / st.breite * 100000) / 100000;
 
-  /* Fußzeile des Briefbogens: Siegel, drei Textspalten, zwei Zeilen (Handelsregister); darüber der Hinweis (Mengen, Fracht).
-     art „quer“: alles in einer Reihe über die Seitenbreite (Zeilen als vierter Block); „hoch“: Zeilen unter den Spalten. */
+  /* Fußzeile des Briefbogens: Siegel links, daneben die Textspalten gleich breit und oben bündig, darunter über dieselbe
+     Breite die Registerzeilen (Handelsregister, Geschäftsführung) kleiner; darüber der Hinweis (Mengen, Fracht).
+     art „quer“ (Angebotsansicht) und „hoch“ (Kompakt, Tabelle) sind gleich aufgebaut, nur die Maße unterscheiden sich.
+     Schreibweise nur für die Anzeige geordnet (gespeicherte Texte bleiben unverändert): „ * “ als Trenner wird „ · “,
+     kein Leerzeichen vor Doppelpunkt und innerhalb von Klammern – so wie im Briefbogen gemeint, aber ruhiger zu lesen. */
+  const ordnen = (t) => String(t).replace(/\s*\*\s*/g, ' · ').replace(/\s+:/g, ':').replace(/\(\s+/g, '(').replace(/\s+\)/g, ')');
   function fussHTML(fuss, hinweis, art) {
     const f = fuss || {}, sp = Array.isArray(f.spalten) ? f.spalten : [], ze = (Array.isArray(f.zeilen) ? f.zeilen : []).filter((z) => String(z || '').trim());
     const hin = (hinweis || []).filter((l) => String(l || '').trim());
     const spalten = sp.map((t) => zeilen(t)).filter((l) => l.length);
     if (!spalten.length && !ze.length && !hin.length) return '';
     const brief = spalten.length || ze.length ? `<div class="pl-brief"><img class="pl-siegel" src="assets/druck-siegel.jpg" width="316" height="250" alt="">
-        ${spalten.map((l) => `<p class="pl-bs">${l.map(esc).join('<br>')}</p>`).join('')}
-        ${ze.length ? `<p class="pl-bz">${ze.map((z) => `<span>${esc(z)}</span>`).join(' ')}</p>` : ''}</div>` : '';
+        <div class="pl-btext">${spalten.length ? `<div class="pl-bsp" style="--n:${spalten.length}">${spalten.map((l) => `<p class="pl-bs">${l.map((z) => esc(ordnen(z))).join('<br>')}</p>`).join('')}</div>` : ''}
+        ${ze.length ? `<p class="pl-bz">${ze.map((z) => `<span>${esc(ordnen(z))}</span>`).join('')}</p>` : ''}</div></div>` : '';
     return `<footer class="pl-fuss pl-fuss-${art === 'hoch' ? 'hoch' : 'quer'}">${hin.length ? `<p class="pl-hinweis">${hin.map((l, i) => `<span${i === 0 ? ' class="lead"' : ''}>${esc(l)}</span>`).join(' ')}</p>`.replace(/([^.!?:;…])<\/span> <span/g, '$1</span> · <span') : ''}${brief}</footer>`;
   }
 

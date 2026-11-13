@@ -316,7 +316,10 @@ function werbungHTML(eigeneKarte, druck) {   // druck: Fassung für die Drucksei
     for (let i = 0; i < kk; i++) cols.push(items.slice(i * per, (i + 1) * per));
     const block = (xs) => (xs.length ? plBlockHTML({ u: { key: 'werb', title: '', items: xs, labels }, items: xs, cont: false }, druck ? 'druck-werb' : 'werb') : '');
     const id = nr ? 'werb-h' + (nr + 1) : 'werb-h';
-    return `<section class="al-sec werb-sec"${druck ? '' : ` aria-labelledby="${id}"`}><div class="al-st werb-st"><h3${druck ? '' : ` id="${id}"`}>${icon('megaphone')}${esc(w.titel || (nr ? WERB_TITEL2 : WERB_TITEL))}</h3>${w.text ? `<span class="werb-txt">${esc(w.text)}</span>` : ''}</div>
+    /* Eine Spalte (zwei Werbungen nebeneinander, schmale Ansicht): Balken sitzt direkt auf den Zeilen wie der Kopf einer
+       Artikelgruppe – „€/kg“ steht rechts im Balken, die leere Kopfzeile der Tabelle entfällt (werb-ein, app.css). */
+    const ein = kk === 1;
+    return `<section class="al-sec werb-sec${ein ? ' werb-ein' : ''}"${druck ? '' : ` aria-labelledby="${id}"`}><div class="al-st werb-st"><h3${druck ? '' : ` id="${id}"`}>${icon('megaphone')}${esc(w.titel || (nr ? WERB_TITEL2 : WERB_TITEL))}</h3>${w.text ? `<span class="werb-txt">${esc(w.text)}</span>` : ''}${ein ? '<span class="werb-eh">€/kg</span>' : ''}</div>
     <div class="al-cols" style="--k:${kk}">${cols.map((c) => `<div class="al-col">${block(c)}</div>`).join('')}</div></section>`;
   };
   const inner = ws.length > 1 ? `<div class="werb-duo${duo ? '' : ' werb-stapel'}">${ws.map(sec).join('')}</div>` : sec(ws[0], 0);
@@ -692,12 +695,15 @@ function buildPrintListe(list, grouped, scopeText) {
   const stand = PUBLISHED_AT ? new Date(PUBLISHED_AT).toLocaleDateString('de-DE', { day: '2-digit', month: '2-digit', year: 'numeric' }) : today();
   const m = DATA.meta || {};
   const titel = `${m.offerName && m.offerName !== 'Wochenangebot' && !m.einzel ? m.offerName + ' · ' : ''}${plTitle()}`;
-  const zusatz = [scopeText, m.einzel && (m.nr || m.kunde) ? [m.nr ? 'Angebot ' + m.nr : '', m.kunde ? 'für ' + m.kunde : ''].filter(Boolean).join(' ') : '',
-    !m.einzel && m.weekStart ? `Angebotswoche ${dm(m.weekStart)}–${dmy(m.weekEnd)}` : '', 'Stand ' + stand, 'Preise in € je kg'].filter(Boolean);
+  /* Unter der Überschrift nur noch Auswahl (gefilterter Druck) bzw. Nummer und Kunde eines Einzelangebots und die
+     Seitenzahl – Angebotswoche, Stand und „Preise in € je kg“ entfallen (Wunsch des Inhabers 13.11.2026: die Überschrift
+     nennt die Woche schon, der Preis je kg steht an jeder Spalte). */
+  const zusatz = [scopeText, m.einzel && (m.nr || m.kunde) ? [m.nr ? 'Angebot ' + m.nr : '', m.kunde ? 'für ' + m.kunde : ''].filter(Boolean).join(' ') : ''].filter(Boolean);
   const vermerk = DRUCK_ENTWURF_VERMERK && PREVIEW ? '<span class="pl-entwurf">Entwurf</span> · ' : '';
+  const unterzeile = (n, N) => `${vermerk}${zusatz.map((z) => esc(z) + ' · ').join('')}<span class="pl-sz">Seite ${n} von ${N}</span>`;
   const kopf = (n, N) => (n === 1
-    ? `<header class="al-head pl-ph">${PL_LOGO}<div class="al-ht pl-pt"><h1>${esc(titel)}</h1><span>${vermerk}${zusatz.map(esc).join(' · ')} · <span class="pl-sz">Seite ${n} von ${N}</span></span></div></header>`
-    : `<header class="pl-ph pl-ph2"><strong>${esc(titel)}</strong><span>${vermerk}${esc(zusatz.filter((z) => z !== 'Preise in € je kg').join(' · '))} · <span class="pl-sz">Seite ${n} von ${N}</span></span></header>`);
+    ? `<header class="al-head pl-ph">${PL_LOGO}<div class="al-ht pl-pt"><h1>${esc(titel)}</h1><span>${unterzeile(n, N)}</span></div></header>`
+    : `<header class="pl-ph pl-ph2"><strong>${esc(titel)}</strong><span>${unterzeile(n, N)}</span></header>`);
   const f = druckFuss();
   return window.AngebotDruck.liste({
     host: $('#print-root'), kopf, werbung: scopeText || !grouped ? '' : werbungHTML(false, true),   // Werbung wie am Bildschirm: nur im gesamten Angebot
@@ -1064,11 +1070,19 @@ function buildPrint({ scope, layout, grouped }) {
     : `@page { size: A4 portrait; margin: 14mm 12mm 16mm 12mm; }\n@page { @bottom-left { content: "${label}"; font: 7.5pt ${getComputedStyle(document.body).fontFamily.replace(/"/g, "'")}; color: #777; } @bottom-right { content: "Seite " counter(page) " von " counter(pages); font: 7.5pt sans-serif; color: #777; } }`;
   document.title = (m.einzel ? `${offerTitle()} ${bisText(m)}` : `${offerTitle()} KW ${m.week ?? ''} ${m.year ?? ''}`) + (scope === 'fav' ? ' – Merkliste' : '');
 }
+/* Bilder der Druckfassung (Logo, Siegel der Fußzeile) erst laden lassen – sonst fehlen sie im Druck, wenn sie noch nicht im
+   Zwischenspeicher sind. Höchstens ms warten; ein fehlendes Bild hält den Druck nicht auf. */
+function bilderBereit(root, ms = 3000) {
+  const offen = [...(root ? root.querySelectorAll('img') : [])].filter((i) => !i.complete);
+  if (!offen.length) return Promise.resolve();
+  const geladen = offen.map((i) => new Promise((r) => { i.addEventListener('load', r, { once: true }); i.addEventListener('error', r, { once: true }); }));
+  return Promise.race([Promise.all(geladen), new Promise((r) => setTimeout(r, ms))]);
+}
 function doPrint(opts) {
   for (const d of $$('dialog[open]')) d.close();
   buildPrint(opts);
   printPrepared = true;
-  setTimeout(() => window.print(), 60);
+  bilderBereit($('#print-root')).then(() => setTimeout(() => window.print(), 60));
 }
 window.addEventListener('beforeprint', () => {
   if (!printPrepared) buildPrint({ scope: (hasFilters() || state.tab === 'fav') && current.length ? 'filtered' : 'all', layout: 'liste', grouped: state.sortKey === 'offer' });   // leere Auswahl: ganzes Angebot statt leerer Seiten
