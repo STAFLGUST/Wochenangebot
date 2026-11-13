@@ -2,7 +2,7 @@
 
 <!-- ERZEUGT von `python3 werkzeuge/doku.py erzeugen` – nicht von Hand ändern. Quelle: Funktionen und Kommentare im Code. Die CI prüft, dass diese Datei zum Code passt. -->
 
-53 Dateien, 813 Funktionen – in der Reihenfolge der Datei, **fett** die Abschnitte. Text = erste Aussage des Kommentars direkt über der Funktion (Python: Docstring). Übersicht aller Module: [README.md](README.md).
+55 Dateien, 833 Funktionen – in der Reihenfolge der Datei, **fett** die Abschnitte. Text = erste Aussage des Kommentars direkt über der Funktion (Python: Docstring). Übersicht aller Module: [README.md](README.md).
 
 ## `app/api/lib/angebote.php`
 
@@ -27,7 +27,7 @@ _Angebote, Kundenpreise, Sonderpreise, Datenmodell, gemeinsames Bearbeiten_
 - `sale_for(it, oid)` – Empfehlungspreis (Sonderposten „solange der Vorrat reicht“) eines Artikels in einem Angebot, sonst null
 - `stock_codes()` – Artikelnummern mit eingelagertem Bestand (null = keine Bestandsliste vorhanden)
 - `sold_out(it)`
-- `offer_resolve(m, def)` – Angebot für die Auslieferung: nur Preise dieses Angebots, keine Kundenpreise anderer Angebote, keine ausgeblendeten Artikel, Sonderpreise aufgelöst (ohne …
+- `offer_resolve(m, def, ausverkauftAusblenden)` – Angebot für die Auslieferung: nur Preise dieses Angebots, keine Kundenpreise anderer Angebote, keine ausgeblendeten Artikel, Sonderpreise aufgelöst (ohne …
 - `kw_gueltig(woche, jahr)` – Kalenderwoche nach ISO 8601: KW 53 gibt es nur in Jahren mit 53 Wochen (der 28.12. liegt immer in der letzten)
 - `clean_model(m, strict)` – Übernimmt nur bekannte Felder in bekannten Formaten
 
@@ -260,6 +260,15 @@ _Export des Wochenangebots für WinAB (Auftrag des Inhabers 05.11.2026)_
 - `winab_preis(v)` – Preis für WinAB: 26,1 → „26,10“, 12.345 → „12,345“
 - `winab_zeilen(pub)` – Zeilen [Artikelnummer, Preis] aus einem veröffentlichten Angebotsmodell (höchster Preis je Nummer) und Zählung
 - `winab_export()` – Datei für den Download: Name, Inhalt und Zahlen; 422 ohne veröffentlichtes Angebot oder ohne Preise
+
+## `app/api/module/angebot/wochen.php`
+
+_Angebot · Frühere Wochen ansehen (Wunsch des Inhabers 13.11.2026): das veröffentlichte Angebot einer Kalenderwoche – Wochenangebot oder ein Kundenangebot – nur für Mitarbeiter mit Modulzugang Angebot und nur lesend …_
+
+- `angebot_woche_kw(m)` – KW eines gespeicherten Angebots als „JJJJ-WW“ (nur gültige ISO-Wochen), sonst null
+- `angebot_wochen_verzeichnis()` – Gespeicherte Wochen: 'JJJJ-WW' => ['art' => veroeffentlicht\|version\|historie, 'id' => Versions-ID, 'stand' => publishedAt] – je KW der zuletzt …
+- `angebot_woche_aus_historie(h)` – Preisstand des Preisverlaufs als Angebotsmodell für offer_resolve: Angebotsgruppen aus den gespeicherten Gruppennamen (Reihenfolge wie gespeichert), ohne …
+- `angebot_woche(woche, oid)` – Aktion angebot_woche: KW „JJJJ-WW“ und Angebot (leer = Wochenangebot) → aufgelöstes Angebot dieser Woche oder null
 
 ## `app/api/order_outbox.php`
 
@@ -1027,6 +1036,22 @@ _STAFL-Plattform · Angebot · Drucken aus „Angebot bearbeiten“ und Einstell
 - `fussForm()`
 - `fussOeffnen()`
 
+## `app/module/angebot/fruehere-wochen.js`
+
+_STAFL-Plattform · Angebot · Fenster „Frühere Wochen“ (Wunsch des Inhabers 13.11.2026): frühere Wochenangebote ansehen und die KW wechseln wie in der REWE-Liste – Pfeile ‹ ›, Titel „<Angebot> · KW 43/2026“, „Diese …_
+
+**Kalenderwochen (ISO, „JJJJ-WW“) wie in der REWE-Liste**
+
+- `montag(kw)`
+- `isoKw(d)`
+- `zeitraum(kw)`
+- `geruest()`
+- `kopf()`
+- `hinweis(text)`
+- `laden()`
+- `oeffnen(kw)`
+- `gehe(kw)`
+
 ## `app/module/angebot/kopieren.js`
 
 _STAFL-Plattform · Angebot · Fenster „Angebot kopieren“ (Entscheidung des Inhabers 13.11.2026)._
@@ -1307,9 +1332,16 @@ _Mehrere Mitarbeiter bearbeiten den Entwurf gleichzeitig_
 
 ## `tests/e2e/test_hist.py`
 
-_Testgruppe hist: Preisverlauf – Import alter Angebotslisten, Zeiträume, Datendialog._
+_Testgruppe hist: Preisverlauf – Import alter Angebotslisten, Zeiträume, Datendialog; Frühere Wochen ansehen (KW wechseln, Angebot wählen, Quelle Veröffentlichung/Version/Preisverlauf, Rechte)._
 
 - `check(n, c, i)`
+- `api_get(pg, q)`
+- `api_post(pg, action, body)`
+- `api_post_bestaetigt(pg, action, body)`
+- `woche(pg, kw, oid)`
+- `rahmen_hat(pg, text)` – warten, bis die Angebotsseite im Fenster den Text zeigt (während des Ladens gibt es kurz kein body)
+- `preis_von(antwort, code)`
+- `fruehere_wochen_pruefen(a, br, errs)` – Frühere Wochen ansehen (nur Mitarbeiter mit Modulzugang Angebot, nur lesend): Quelle je KW, Auflösung auf dem Server, Rechte, Grenzfälle, Fenster mit …
 
 ## `tests/e2e/test_kunden_mail.py`
 

@@ -1,0 +1,28 @@
+/* STAFL-Plattform · Angebot · Fenster „Frühere Wochen“ (app/module/angebot/fruehere-wochen.js): Kopf mit KW-Wechsel (Pfeile
+   links und rechts vom Titel, „Diese Woche“, Muster der REWE-Liste), Hinweisleiste unter dem Kopf und die Fläche „kein
+   Angebot gespeichert“. Größe, Rahmen und Ladeanzeige wie das Fenster „Vorschau“ (.pv in admin.css); am Handy oben
+   ‹ Titel › und Schließen, darunter Angebot und „Diese Woche“. */
+.fw-head .fw-nav { flex: 0 1 auto; min-width: 0; display: flex; align-items: center; gap: 6px; }
+.fw-head .fw-t { min-width: 0; padding: 0 4px; }
+.fw-head .fw-t h2 { margin: 0; font-size: 19px; line-height: 1.2; letter-spacing: -.015em; }
+.fw-head .fw-t p { margin: 3px 0 0; color: var(--text-2); font-size: 13px; }
+.fw-head .fw-kw { white-space: nowrap; }
+.fw-head .fw-vor .i { transform: rotate(180deg); }
+dialog.modal.fw .dlg { max-height: none; }
+.fw-head .btn.icon:disabled { opacity: .35; }
+.fw-head .pv-sel { margin-left: auto; }
+.fw-hinweis { display: flex; align-items: flex-start; gap: 8px; padding: 10px 22px; font-size: 13px; line-height: 1.45; color: var(--text-2); background: var(--surface-2); border-top: 1px solid var(--line); }
+.fw-hinweis .i { flex: none; margin-top: 2px; }
+.fw-leer { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 6px; padding: 24px; text-align: center; background: var(--surface-2); }
+.fw-leer p { margin: 0; }
+.fw-leer .btn { margin-top: 10px; }
+.pv-stage iframe[hidden] { display: none; }
+@media (max-width: 760px) {
+  .fw-head .fw-nav { flex: 1 1 calc(100% - 64px); }
+  .fw-head .fw-t { flex: 1 1 auto; }
+  .fw-head .fw-t h2 { font-size: 16px; }
+  .fw-head .fw-t p { font-size: 12px; }
+  .fw-head .fw-heute { order: 3; }
+  .fw-head .pv-sel { order: 4; flex: 1 1 55%; margin-left: 0; }
+  .fw-hinweis { padding: 8px 14px; }
+}

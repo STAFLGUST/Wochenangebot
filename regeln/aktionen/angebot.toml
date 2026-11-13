@@ -14,6 +14,10 @@ fremde_herkunft = true   # kommt vom E-Mail-Programm, nicht von unserer Seite (G
 oberflaeche = "angebot.eingabe"
 # Artikelauswahl „Artikel hinzufügen“ im Angebot (Stammdaten, VK-Gruppe, Bestand nur mit bestand.sehen)
 
+# Frühere Wochen ansehen (nur lesend, Modulzugang Angebot): module/angebot/wochen.php
+[aktion.angebot_woche]
+oberflaeche = "angebot.eingabe"
+
 # Export für WinAB (Recht angebot.winab_export): veröffentlichtes Wochenangebot als CSV, POST wegen Protokolleintrag
 [aktion.angebot_winab_export]
 oberflaeche = "angebot.eingabe"

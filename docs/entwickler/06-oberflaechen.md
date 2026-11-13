@@ -320,6 +320,23 @@ Werbung wie die Quelle, gleiche Regel `fallback`, keine Kundengruppen – die Ko
 (`offer_resolve`). Quelle Wochenangebot: eigene Artikelliste, der Wochenpreis wird eigener Preis (ohne Preis „auf Anfrage“).
 Kein neues Datenfeld. Tests: Gruppe `angebote` (`kopieren_pruefen`).
 
+### Frühere Wochen
+
+Wunsch des Inhabers 13.11.2026: frühere Wochenangebote ansehen und die KW wechseln wie in der REWE-Liste – nur Mitarbeiter
+mit Modulzugang Angebot, nur lesend. Einstieg: Menü ⋯ → „Frühere Wochen“ (`[data-act="wochen"]`, sichtbar nur mit
+`angebot.zugang`; ein- und ausgeblendet beim Öffnen des Menüs wie „Fußzeile im Druck“) oder die Adresse
+`…/admin/#woche/JJJJ-WW` (öffnet das Fenster, sobald der Eingabebereich angemeldet zu sehen ist). Das Fenster
+`#dlg-wochen` (`app/module/angebot/fruehere-wochen.js` + `.css`, Klassen `pv`/`pv-*` des Fensters „Vorschau“ für Größe und
+Ladeanzeige) zeigt oben ‹ Titel › (`<Angebot> · KW 43/2026`, darunter Zeitraum, Quelle und Stand, Artikelzahl), „Diese
+Woche“ und die Auswahl des Angebots (gemerkt in `localStorage`, ohne Speicher Wochenangebot). Jede Woche fragt
+`angebot_woche` (Kopf, Hinweise, vorige/nächste gespeicherte Woche) und lädt dann die Angebotsseite im Rahmen mit
+`?vorschau=1&eingebettet=1&woche=JJJJ-WW[&angebot=…]` – `frontend.js` holt in diesem Fall `angebot_woche` statt
+`offer&draft=1`, sonst bleibt die Seite unverändert. Ohne gespeicherten Stand: Fläche „Für KW … ist kein Angebot
+gespeichert“ mit Sprung zur letzten gespeicherten Woche. Hinweisleiste: nur Preisstand (Preisverlauf, ohne Werbung,
+Bereiche, eigene Bezeichnungen, Empfehlungen) bzw. bei Kundenangeboten „Artikel nach der heutigen Einstellung“. Die Adresse
+folgt der KW (`history.replaceState`), Schließen entfernt `#woche/…`. Server: `app/api/module/angebot/wochen.php`.
+Tests: Gruppe `hist` (`fruehere_wochen_pruefen`).
+
 ### Empfehlung (früher „Sonderpreis“)
 
 Etikett in der Preiszelle (`saleBtnHTML`/`saleTagHTML`) und Leiste „Kurzes MHD“ öffnen `openSale()` (`#dlg-sale`):

@@ -228,8 +228,9 @@ function sold_out(array $it): bool
     return $codes !== null && $c !== '' && !isset($codes[code_key($c)]);
 }
 /* Angebot für die Auslieferung: nur Preise dieses Angebots, keine Kundenpreise anderer Angebote,
-   keine ausgeblendeten Artikel, Sonderpreise aufgelöst (ohne Angaben zu anderen Angeboten) */
-function offer_resolve(array $m, array $def): array
+   keine ausgeblendeten Artikel, Sonderpreise aufgelöst (ohne Angaben zu anderen Angeboten).
+   $ausverkauftAusblenden = false (frühere Wochen, module/angebot/wochen.php): Sonderposten bleiben auch ohne heutigen Bestand */
+function offer_resolve(array $m, array $def, bool $ausverkauftAusblenden = true): array
 {
     $std = $def['id'] === OFFER_STD;
     $items = [];
@@ -241,7 +242,7 @@ function offer_resolve(array $m, array $def): array
         unset($it['variants'], $it['sale'], $it['cell'], $it['namen']);   // Zelladresse der Excel-Datei ist intern; Bezeichnungen anderer Angebote nie
         if ($eigenerName !== '') $it['name'] = $eigenerName;   // eigene Bezeichnung in diesem Angebot, sonst der Basiswert
         if ($v && $v['status'] === 'hidden') continue;
-        if ($sale !== null && sold_out($it)) continue;   // Sonderposten ausverkauft
+        if ($sale !== null && $ausverkauftAusblenden && sold_out($it)) continue;   // Sonderposten ausverkauft
         $regular = $it['price'];
         if ($std) {
             // Wochenangebot: Grundpreis und Zusatzpreise bleiben

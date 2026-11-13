@@ -18,6 +18,7 @@
 <link rel="stylesheet" href="../module/angebot/preisimport.css">
 <link rel="stylesheet" href="../module/angebot/aufbau.css">
 <link rel="stylesheet" href="../module/angebot/kopieren.css">
+<link rel="stylesheet" href="../module/angebot/fruehere-wochen.css">
 <link rel="stylesheet" href="../module/angebot/druck.css">
 <link rel="stylesheet" href="../module/angebot/sonderangebote.css">
 <link rel="stylesheet" href="../module/verwaltung/angebotskategorien.css">
@@ -81,6 +82,7 @@
             <div class="menu-user" id="menu-user"></div>
             <hr>
             <button role="menuitem" type="button" data-act="versions"><svg class="i" aria-hidden="true"><use href="#i-history"/></svg>Frühere Veröffentlichungen</button>
+            <button role="menuitem" type="button" data-act="wochen" hidden><svg class="i" aria-hidden="true"><use href="#i-calendar"/></svg>Frühere Wochen</button>
             <button role="menuitem" type="button" data-act="discard"><svg class="i" aria-hidden="true"><use href="#i-undo"/></svg>Entwurf verwerfen</button>
             <button role="menuitem" type="button" data-act="druck-fuss" hidden><svg class="i" aria-hidden="true"><use href="#i-print"/></svg>Fußzeile im Druck</button>
             <hr>
@@ -282,6 +284,7 @@
 <dialog class="modal" id="dlg-of-gruppen" aria-labelledby="ofg-title"><div class="dlg" id="of-gruppen-body"></div></dialog>
 <dialog class="modal wide" id="dlg-k-import" aria-labelledby="ki-title"><div class="dlg" id="k-import-body"></div></dialog>
 <dialog class="modal pv" id="dlg-vorschau" aria-labelledby="pv-title"><div class="dlg" id="vorschau-body"></div></dialog>
+<dialog class="modal pv fw" id="dlg-wochen" aria-labelledby="fw-titel"><div class="dlg" id="wochen-body"></div></dialog>
 <dialog class="modal" id="dlg-offer-copy" aria-labelledby="oc-title"><form class="dlg" id="offer-copy-body" autocomplete="off"></form></dialog>
 <dialog class="modal" id="dlg-angebot-kopieren" aria-labelledby="ak-titel"><form class="dlg" id="angebot-kopieren-body" autocomplete="off"></form></dialog>
 <dialog class="modal" id="dlg-sonder" aria-labelledby="so-title"><form class="dlg" id="sonder-body" autocomplete="off"></form></dialog>
@@ -365,6 +368,7 @@
 <script src="../assets/admin-werbung.js"></script>
 <script src="../module/angebot/aufbau.js"></script>
 <script src="../module/angebot/kopieren.js"></script>
+<script src="../module/angebot/fruehere-wochen.js"></script>
 <script src="../module/angebot/druck.js"></script>
 <script src="../assets/admin-einzel.js"></script>
 <script src="../module/angebot/sonderangebote.js"></script>

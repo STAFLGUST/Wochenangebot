@@ -16,6 +16,10 @@ const DRUCKEN = new URLSearchParams(location.search).has('drucken');   // aus de
 const DRUCK_DIREKT = new URLSearchParams(location.search).get('drucken') === 'liste';   // Knopf „Drucken“ in „Angebot bearbeiten“: ohne Auswahl die Angebotsansicht drucken
 /* Direktdruck im unsichtbaren Rahmen (app/module/angebot/druck.js): dem Eingabebereich den Stand melden – bereit, gedruckt, fehler */
 const druckMelden = (stand) => { try { if (DRUCK_DIREKT && window.parent !== window) window.parent.postMessage({ wa: 'druck', stand }, location.origin); } catch { /* kein Rahmen */ } };
+/* Frühere Woche im Fenster „Frühere Wochen“ des Eingabebereichs (app/module/angebot/fruehere-wochen.js): ?vorschau=1&woche=JJJJ-WW
+   zeigt statt des Entwurfs den veröffentlichten Stand dieser KW (Aktion angebot_woche – nur Mitarbeiter mit Modulzugang
+   Angebot, prüft der Server; Kunden und Besucher bekommen keine Daten) */
+const WOCHE = (() => { const v = PREVIEW ? new URLSearchParams(location.search).get('woche') || '' : ''; return /^\d{4}-\d{2}$/.test(v) ? v : ''; })();
 /* Kundenangebot (?angebot=edeka): nur nach Anmeldung; ohne Angabe das öffentliche Wochenangebot */
 let OFFER = (() => { const v = new URLSearchParams(location.search).get('angebot') || ''; return /^[a-z0-9-]{1,40}$/.test(v) && v !== 'std' ? v : ''; })();
 let COMPANY = '';
@@ -163,7 +167,8 @@ function offlineHinweis(stand) {
 }
 
 async function loadData() {
-  const res = await fetch('api/?action=offer' + (PREVIEW ? '&draft=1' : '') + (OFFER ? '&angebot=' + encodeURIComponent(OFFER) : ''), { credentials: 'same-origin', cache: 'no-cache' });
+  const quelle = WOCHE ? 'api/?action=angebot_woche&woche=' + WOCHE : 'api/?action=offer' + (PREVIEW ? '&draft=1' : '');
+  const res = await fetch(quelle + (OFFER ? '&angebot=' + encodeURIComponent(OFFER) : ''), { credentials: 'same-origin', cache: 'no-cache' });
   let body = null;
   try { body = await res.json(); } catch { /* keine JSON-Antwort */ }
   if (res.status === 503 && body && body.wartung) throw Object.assign(new Error(body.error), { wartung: { message: body.error, until: body.until } });
@@ -171,6 +176,7 @@ async function loadData() {
   if (!res.ok || !body || !body.ok) {
     throw Object.assign(new Error(body && body.error ? body.error : 'Das Angebot konnte nicht geladen werden (' + res.status + ').'), { status: res.status });
   }
+  if (WOCHE && !body.offer) throw new Error('Für diese Woche ist kein Angebot gespeichert.');
   offlineHinweis(res.headers.get('X-WA-Offline'));
   COMPANY = body.company || '';
   PUBLISHED_AT = body.offer.publishedAt || body.offer.savedAt || null;
