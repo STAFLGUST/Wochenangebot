@@ -327,12 +327,15 @@ function werbungHTML(eigeneKarte, druck) {   // druck: Fassung für die Drucksei
 }
 
 /* ---------- Kopf, Kennzahlen, Navigation ---------- */
-/* Einzelangebot (Angebot nur für diesen Kunden): Gültigkeit statt Kalenderwoche */
-const bisText = (m) => (m.gueltigBis ? 'gültig bis ' + String(m.gueltigBis).split('-').reverse().join('.') : 'Einzelangebot');
-const kwKurz = (m) => (m.einzel ? bisText(m) : `KW ${m.week ?? '?'}/${m.year ?? '?'}`);
+/* Einzelangebot (Angebot nur für diesen Kunden) und Sonderangebot mit Zeitraum (meta.gueltigVon/gueltigBis vom Server,
+   module/angebot/sonderangebote.php): Gültigkeit statt Kalenderwoche. Ein Sonderangebot für eine KW trägt deren KW in week/year. */
+const mitGueltigkeit = (m) => !!(m && (m.einzel || (m.sonder && m.gueltigBis)));
+const bisText = (m) => (m.gueltigVon && m.gueltigBis ? 'gültig ' + (m.gueltigVon.slice(0, 4) === m.gueltigBis.slice(0, 4) ? dm(m.gueltigVon) : dmy(m.gueltigVon)) + '–' + dmy(m.gueltigBis)
+  : m.gueltigBis ? 'gültig bis ' + String(m.gueltigBis).split('-').reverse().join('.') : 'Einzelangebot');
+const kwKurz = (m) => (mitGueltigkeit(m) ? bisText(m) : `KW ${m.week ?? '?'}/${m.year ?? '?'}`);
 function renderStatic() {
   const m = DATA.meta;
-  const kw = m.einzel ? esc(bisText(m)) : m.week ? `KW ${esc(m.week)}${m.year ? `<span class="opt-sm">/${esc(m.year)}</span>` : ''}` : 'KW ?';
+  const kw = mitGueltigkeit(m) ? esc(bisText(m)) : m.week ? `KW ${esc(m.week)}${m.year ? `<span class="opt-sm">/${esc(m.year)}</span>` : ''}` : 'KW ?';
   renderStaticTitle();   // Fenstertitel (bei Einzelangeboten „gültig bis …“ statt Kalenderwoche)
   if (OFFER) { const h = $('#topbar h1'); if (h && h.firstChild && h.firstChild.nodeType === 3) h.firstChild.textContent = offerTitle() + ' '; }
   $('#company').textContent = COMPANY;
@@ -371,7 +374,7 @@ function renderBanner() {
     const own = list.some((o) => o.id === (OFFER || 'std'));
     b.innerHTML = `<div class="banner-inner k-banner">${icon('user')}<p>Angemeldet als <strong>${esc(KUNDE.firma)}</strong>${KUNDE.ansprechpartner ? ' · ' + esc(KUNDE.ansprechpartner) : ''}${!own && list.length ? ' – dieses Angebot ist nicht für Sie freigeschaltet; Bestellen ist nur in Ihren Angeboten möglich.' : ''}</p>
       ${!own && list.length === 1 ? `<div class="k-switch"><button type="button" class="btn sm on" data-kswitch="${esc(list[0].id)}">Zu ${esc(list[0].name)}</button></div>` : ''}
-      ${list.length > 1 ? `<div class="k-switch" role="tablist" aria-label="Angebot wählen">${list.map((o) => `<button type="button" role="tab" class="btn sm${o.id === (OFFER || 'std') ? ' on' : ''}" aria-selected="${o.id === (OFFER || 'std')}" data-kswitch="${esc(o.id)}">${esc(o.name)}</button>`).join('')}</div>` : ''}</div>`;
+      ${list.length > 1 ? `<div class="k-switch" role="tablist" aria-label="Angebot wählen">${list.map((o) => `<button type="button" role="tab" class="btn sm${o.id === (OFFER || 'std') ? ' on' : ''}" aria-selected="${o.id === (OFFER || 'std')}" data-kswitch="${esc(o.id)}">${esc(o.name)}${o.sonder && o.gueltigBis ? ` <small class="k-bis">bis ${esc(dm(o.gueltigBis))}</small>` : ''}</button>`).join('')}</div>` : ''}</div>`;
     return;
   }
   if (!PREVIEW && OFFER) {
@@ -1028,7 +1031,7 @@ function buildPrint({ scope, layout, grouped }) {
   const scopeText = scope === 'all' ? 'Gesamtes Angebot' : scope === 'fav' ? 'Merkliste' : (describeFilters() || 'Gesamtes Angebot');
   const stand = PUBLISHED_AT ? new Date(PUBLISHED_AT).toLocaleDateString('de-DE', { day: '2-digit', month: '2-digit', year: 'numeric' }) : today();   // wie in der Angebotsliste: Stand der Veröffentlichung
   const head = `<header class="p-head">${PL_LOGO.replace('class="al-logo"', 'class="al-logo p-logo"')}
-      <div class="p-ht"><h1 class="p-title">${esc(offerTitle())} <span>${m.einzel ? esc(bisText(m)) : `KW ${esc(m.week ?? '?')}/${esc(m.year ?? '?')}`}</span></h1>
+      <div class="p-ht"><h1 class="p-title">${esc(offerTitle())} <span>${mitGueltigkeit(m) ? esc(bisText(m)) : `KW ${esc(m.week ?? '?')}/${esc(m.year ?? '?')}`}</span></h1>
         <div class="p-sub">${esc(m.notice || 'Angebot')}${m.einzel && m.nr ? ' ' + esc(m.nr) : ''}${m.einzel && m.kunde ? ' für ' + esc(m.kunde) : ''}${m.weekStart ? ` · Angebotswoche ${dm(m.weekStart)}–${dmy(m.weekEnd)}` : ''} · Preise in € je kg · „–“ = ohne Preisangabe</div></div>
       <div class="p-meta"><strong>${esc(scopeText)}</strong><br>${plural(list.length, 'Position', 'Positionen')}<br>Stand: ${esc(stand)}</div>
     </header>`;
@@ -1068,7 +1071,7 @@ function buildPrint({ scope, layout, grouped }) {
   // Angebotsansicht: Seiten fester Höhe mit eigenem Kopf (Seite x von y) und Fuß – Ränder passend zum Satzspiegel in angebot-druck.js
   ps.textContent = layout === 'liste' ? '@page { size: A4 landscape; margin: 8mm 9mm; }'
     : `@page { size: A4 portrait; margin: 14mm 12mm 16mm 12mm; }\n@page { @bottom-left { content: "${label}"; font: 7.5pt ${getComputedStyle(document.body).fontFamily.replace(/"/g, "'")}; color: #777; } @bottom-right { content: "Seite " counter(page) " von " counter(pages); font: 7.5pt sans-serif; color: #777; } }`;
-  document.title = (m.einzel ? `${offerTitle()} ${bisText(m)}` : `${offerTitle()} KW ${m.week ?? ''} ${m.year ?? ''}`) + (scope === 'fav' ? ' – Merkliste' : '');
+  document.title = (mitGueltigkeit(m) ? `${offerTitle()} ${bisText(m)}` : `${offerTitle()} KW ${m.week ?? ''} ${m.year ?? ''}`) + (scope === 'fav' ? ' – Merkliste' : '');
 }
 /* Bilder der Druckfassung (Logo, Siegel der Fußzeile) erst laden lassen – sonst fehlen sie im Druck, wenn sie noch nicht im
    Zwischenspeicher sind. Höchstens ms warten; ein fehlendes Bild hält den Druck nicht auf. */
@@ -1094,7 +1097,7 @@ window.addEventListener('afterprint', () => {
 });
 function renderStaticTitle() {
   const m = DATA.meta;
-  document.title = (m.einzel ? `${offerTitle()} ${bisText(m)}` : `${offerTitle()} ${m.week ? 'KW ' + m.week + ' ' + (m.year || '') : ''}`).trim() + (COMPANY ? ' – ' + COMPANY : '');
+  document.title = (mitGueltigkeit(m) ? `${offerTitle()} ${bisText(m)}` : `${offerTitle()} ${m.week ? 'KW ' + m.week + ' ' + (m.year || '') : ''}`).trim() + (COMPANY ? ' – ' + COMPANY : '');
 }
 
 /* ---------- CSV ---------- */
@@ -1106,7 +1109,7 @@ function csvCell(v) {
 function exportCSV(list, suffix) {
   if (!list.length) { toast('Keine Artikel zum Exportieren.'); return; }
   const m = DATA.meta;
-  const head = ['Artikelnummer', 'Bezeichnung', 'Fleischart', 'Herkunft', 'Angebotsgruppe', 'Bereich', 'Zustand', 'Merkmale', 'Preis €/kg', 'Preisangabe', 'Weitere Preise', m.einzel ? 'Gültig bis' : 'Kalenderwoche'];
+  const head = ['Artikelnummer', 'Bezeichnung', 'Fleischart', 'Herkunft', 'Angebotsgruppe', 'Bereich', 'Zustand', 'Merkmale', 'Preis €/kg', 'Preisangabe', 'Weitere Preise', mitGueltigkeit(m) ? 'Gültig bis' : 'Kalenderwoche'];
   const lines = [head.map(csvCell).join(';')];
   for (const it of list) {
     const p = it.price;
@@ -1115,10 +1118,10 @@ function exportCSV(list, suffix) {
       p.status === 'value' ? String(p.value).replace('.', ',') : '',
       (p.label ? p.label + ': ' : '') + PRICE_STATUS_LABELS[p.status],
       it.altPrices.map((a) => `${a.label}: ${priceShort(a)}`).join(' | '),
-      m.einzel ? (m.gueltigBis ? String(m.gueltigBis).split('-').reverse().join('.') : '') : m.week ? `KW ${m.week}/${m.year ?? ''}` : '',
+      mitGueltigkeit(m) ? (m.gueltigBis ? String(m.gueltigBis).split('-').reverse().join('.') : '') : m.week ? `KW ${m.week}/${m.year ?? ''}` : '',
     ].map(csvCell).join(';'));
   }
-  download(`${offerTitle().replace(/[^A-Za-z0-9ÄÖÜäöüß]+/g, '_')}_${m.einzel ? (m.nr || 'Einzelangebot').replace(/[^A-Za-z0-9-]+/g, '_') : `KW${m.week ?? ''}_${m.year ?? ''}`}_${suffix}.csv`, '\ufeff' + lines.join('\r\n'), 'text/csv;charset=utf-8');
+  download(`${offerTitle().replace(/[^A-Za-z0-9ÄÖÜäöüß]+/g, '_')}_${m.einzel ? (m.nr || 'Einzelangebot').replace(/[^A-Za-z0-9-]+/g, '_') : mitGueltigkeit(m) ? `bis_${m.gueltigBis}` : `KW${m.week ?? ''}_${m.year ?? ''}`}_${suffix}.csv`, '\ufeff' + lines.join('\r\n'), 'text/csv;charset=utf-8');
   toast(`${plural(list.length, 'Artikel', 'Artikel')} als CSV exportiert.`);
 }
 function download(name, content, type) {
@@ -1534,7 +1537,7 @@ function orderLines() {
 function openOrder() {
   const d = $('#dlg-order'), t = cartTotals(), m = DATA.meta;
   const min = new Date().toLocaleDateString('sv-SE');   // heutiges Datum in Ortszeit (toISOString wäre UTC – kurz nach Mitternacht „gestern“)
-  $('#order-body').innerHTML = `<div class="dlg-head"><div><h2 id="or-title">Bestellwunsch prüfen</h2><p>${esc(offerTitle())}${m.einzel ? ` · ${esc(bisText(m))}` : m.week ? ` · KW ${esc(m.week)}/${esc(m.year || '')}` : ''} · ${esc(KUNDE.firma)}</p></div><button class="btn icon ghost" type="button" data-close aria-label="Schließen">${icon('x')}</button></div>
+  $('#order-body').innerHTML = `<div class="dlg-head"><div><h2 id="or-title">Bestellwunsch prüfen</h2><p>${esc(offerTitle())}${mitGueltigkeit(m) ? ` · ${esc(bisText(m))}` : m.week ? ` · KW ${esc(m.week)}/${esc(m.year || '')}` : ''} · ${esc(KUNDE.firma)}</p></div><button class="btn icon ghost" type="button" data-close aria-label="Schließen">${icon('x')}</button></div>
     <div class="dlg-body">
       <table class="otab"><thead><tr><th>Artikel</th><th class="r">Menge kg</th><th class="r">Preis</th><th class="r">Summe</th><th></th></tr></thead><tbody>
       ${orderLines().map(({ it, q }) => `<tr><td><div class="o-name">${esc(it.name)}</div><div class="sub">${esc([it.code, it.group].filter(Boolean).join(' · '))}</div></td>

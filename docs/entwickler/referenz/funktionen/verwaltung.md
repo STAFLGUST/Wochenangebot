@@ -27,9 +27,9 @@ _Kundenstammdaten und Kunden-Sitzung_
 - `kunden_email_anzeige(c)` – Adresse zur Anzeige auf der Kundenseite: gekürzt (die volle Adresse kennt ab Trennstufe 2 nur die Mitarbeiterseite)
 - `customers_load()`
 - `customers_save(d)` – Kundendokument speichern (innerhalb von with_lock('kunden')).
-- `customer_offers_direct(c)` – Freigeschaltete Angebote: direkt beim Kunden eingetragen (angebote) oder über seine Kundengruppe (Stammdaten → Angebote)
+- `customer_offers_direct(c)` – Freigeschaltete Angebote: direkt beim Kunden eingetragen (angebote) oder über seine Kundengruppe (Stammdaten → Angebote).
 - `customer_offers_gruppe(c)` – Über die Kundengruppe: das Angebot, dem die Gruppe zugeordnet ist (Stammdaten → Angebote).
-- `customer_offers(c)`
+- `customer_offers(c)` – Wirksame Angebote: direkt + Kundengruppe + heute gültige, veröffentlichte Sonderangebote der Kundengruppe (sonder_fuer_kunde, Schnittstelle des Moduls …
 - `customer_public(c, wawi)` – Kunde für den Eingabebereich (ohne Passwort-Hash und Geräteschlüssel).
 - `kunde_schnappschuss(c)`
 - `kunde_clear()`
