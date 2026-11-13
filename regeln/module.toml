@@ -37,7 +37,7 @@ agent = "angebot"
 abhaengigkeiten = ["plattform", "verwaltung", "bestand"]
 testgruppen = ["sys", "frontend", "design", "hist", "editor_aux", "revert", "gemeinsam", "angebote", "angebotsliste",
   "einzelangebote", "restposten", "bestellung", "order_management", "order_management_ui", "order_outbox",
-  "order_outbox_ui", "kunden_mail", "web_app", "legal_pages", "wartung", "sidenav", "p0", "fehlerpruefung", "aufbau"]
+  "order_outbox_ui", "kunden_mail", "web_app", "legal_pages", "wartung", "sidenav", "p0", "fehlerpruefung", "aufbau", "druck"]
 pfade = [
   "regeln/aktionen/angebot.toml",
   "app/index.html", "app/manifest.json", "app/sw.js", "app/admin/**",
@@ -57,7 +57,7 @@ pfade = [
   "tests/e2e/test_restposten.py", "tests/e2e/test_bestellung.py", "tests/e2e/test_order_*.py",
   "tests/e2e/order_setup.py", "tests/e2e/test_kunden_mail.py",
   "tests/e2e/test_web_app.py", "tests/e2e/test_legal_pages.py", "tests/e2e/test_wartung.py",
-  "tests/e2e/test_sidenav.py", "tests/e2e/test_p0.py", "tests/e2e/test_fehlerpruefung.py", "tests/e2e/test_aufbau.py",
+  "tests/e2e/test_sidenav.py", "tests/e2e/test_p0.py", "tests/e2e/test_fehlerpruefung.py", "tests/e2e/test_aufbau.py", "tests/e2e/test_druck.py",
   "tests/unit/merge.test.js", "tests/fixtures/angebote/**",
 ]
 pfade_geplant = ["app/api/module/angebot/**", "app/module/angebot/**"]

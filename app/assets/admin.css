@@ -676,7 +676,7 @@ button.m-diff { cursor: pointer; } button.m-diff:hover { filter: brightness(.95)
 .e-eigen { position: absolute; right: 10px; top: 50%; transform: translateY(-50%); font-size: 10.5px; font-weight: 700; letter-spacing: .05em; text-transform: uppercase; color: var(--c-frozen); background: var(--c-frozen-bg); padding: 1px 6px; border-radius: 5px; pointer-events: none; }
 .e-nmrow:has(.e-eigen) .newtag { right: 72px; }
 .e-nmrow:has(.werbtag) .e-eigen { position: static; transform: none; margin-left: 6px; }
-a.btn#btn-site { text-decoration: none; }
+a.btn#btn-site, .oh-act a.btn, a.btn#k-rund, a.btn#pv-versand { text-decoration: none; }   /* Verweise in Knopfform (Angebotsseite, Modul Versand) */
 @media (max-width: 480px) { #btn-site { display: none; } }
 
 /* ---------- Zwei-Faktor ---------- */
@@ -1194,15 +1194,15 @@ body.ro .sale-tag { cursor: default; }
 @media (max-width: 560px) { .cftab th:nth-child(4), .cftab td:nth-child(4) { display: none; } .sec-nav { position: static; } }
 @media (max-width: 860px) { .cftab th:nth-child(3), .cftab td:nth-child(3) { display: table-cell; } }
 
-/* Kopfzeile bei mittlerer Breite: Speicherstand in eigene Zeile, Beschriftungen der Nebenknöpfe nur für Screenreader */
+/* Kopfzeile bei mittlerer Breite: Speicherstand in eigene Zeile, Beschriftungen der Nebenknöpfe nur für Screenreader –
+   „Drucken“ behält seine Beschriftung (steht seit 13.11.2026 an der Stelle von „Veröffentlichen“, Entwurf des Inhabers) */
 @media (max-width: 1600px) {
   .adm-top { grid-template-columns: minmax(0, 1fr) auto; row-gap: 6px; }
   .adm-top .save-state { grid-column: 1 / -1; grid-row: 2; }
 }
 @media (max-width: 1360px) {
-  .adm-top .actions .btn:not(.primary) .lbl { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+  .adm-top .actions .btn:not(.primary):not(#btn-drucken) .lbl { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
 }
-/* schmal: Veröffentlichen-Knopf behält Platz für die Zahl der Änderungen */
 @media (max-width: 480px) { .adm-top .brand > div:not(.brand-mark) { display: none; } }
 /* Angebots-Host am Handy: Zurück-Knopf und sechs Aktionen füllen die Kopfzeile – das Logo läge sonst verdeckt darunter */
 /* Angebot am Handy mit Zurück-Knopf: Zurück-Knopf und sechs Aktionen füllen die Zeile – ohne Logo, sonst läge es unter

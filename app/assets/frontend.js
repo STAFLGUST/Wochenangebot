@@ -14,6 +14,8 @@ const EINGEBETTET = PREVIEW && new URLSearchParams(location.search).has('eingebe
 if (EINGEBETTET) document.documentElement.classList.add('eingebettet');
 const DRUCKEN = new URLSearchParams(location.search).has('drucken');   // aus dem Eingabebereich: gleich den Druckdialog öffnen (Einzelangebote)
 const DRUCK_DIREKT = new URLSearchParams(location.search).get('drucken') === 'liste';   // Knopf „Drucken“ in „Angebot bearbeiten“: ohne Auswahl die Angebotsansicht drucken
+/* Direktdruck im unsichtbaren Rahmen (app/module/angebot/druck.js): dem Eingabebereich den Stand melden – bereit, gedruckt, fehler */
+const druckMelden = (stand) => { try { if (DRUCK_DIREKT && window.parent !== window) window.parent.postMessage({ wa: 'druck', stand }, location.origin); } catch { /* kein Rahmen */ } };
 /* Kundenangebot (?angebot=edeka): nur nach Anmeldung; ohne Angabe das öffentliche Wochenangebot */
 let OFFER = (() => { const v = new URLSearchParams(location.search).get('angebot') || ''; return /^[a-z0-9-]{1,40}$/.test(v) && v !== 'std' ? v : ''; })();
 let COMPANY = '';
@@ -301,20 +303,20 @@ const werbAn = (it) => typeof it.werb === 'string';
 const empfAn = (it) => werbAn(it) || !!it.empfehlung;   // hervorgehobene Zeile (Werbung oder Empfehlung ohne Preisänderung)
 const werbTagHTML = (it, cls, nurHinweis) => (werbAn(it) && (it.werb || !nurHinweis) ? `<span class="tag werb-tag${cls ? ' ' + cls : ''}">${esc(it.werb || 'Empfehlung')}</span>`
   : !werbAn(it) && it.empfehlung && !nurHinweis ? `<span class="tag werb-tag${cls ? ' ' + cls : ''}">Empfehlung</span>` : '');
-function werbungHTML(eigeneKarte) {
+function werbungHTML(eigeneKarte, druck) {   // druck: Fassung für die Druckseite (drei Spalten, ohne Bedienelemente, auch bei gesetzten Filtern)
   const ws = DATA.werbungen;
-  if (!ws || !ws.length || state.tab !== 'all' || hasFilters()) return '';
+  if (!ws || !ws.length || (!druck && (state.tab !== 'all' || hasFilters()))) return '';
   const host = $('#list');
-  const k = plColsFor((host && host.clientWidth) || 1200);   // dieselben Spalten wie die Liste darunter
+  const k = druck ? 3 : plColsFor((host && host.clientWidth) || 1200);   // dieselben Spalten wie die Liste darunter
   const duo = ws.length > 1 && k > 1;                        // zwei Werbungen nebeneinander, je die Hälfte der Spalten
   const sec = (w, nr) => {
     const kk = ws.length > 1 ? (duo ? Math.max(1, Math.floor(k / 2)) : 1) : k;
     const items = w.artikel.map((x) => x.it), per = Math.ceil(items.length / kk), labels = plLabels(items);
     const cols = [];
     for (let i = 0; i < kk; i++) cols.push(items.slice(i * per, (i + 1) * per));
-    const block = (xs) => (xs.length ? plBlockHTML({ u: { key: 'werb', title: '', items: xs, labels }, items: xs, cont: false }, 'werb') : '');
+    const block = (xs) => (xs.length ? plBlockHTML({ u: { key: 'werb', title: '', items: xs, labels }, items: xs, cont: false }, druck ? 'druck-werb' : 'werb') : '');
     const id = nr ? 'werb-h' + (nr + 1) : 'werb-h';
-    return `<section class="al-sec werb-sec" aria-labelledby="${id}"><div class="al-st werb-st"><h3 id="${id}">${icon('megaphone')}${esc(w.titel || (nr ? WERB_TITEL2 : WERB_TITEL))}</h3>${w.text ? `<span class="werb-txt">${esc(w.text)}</span>` : ''}</div>
+    return `<section class="al-sec werb-sec"${druck ? '' : ` aria-labelledby="${id}"`}><div class="al-st werb-st"><h3${druck ? '' : ` id="${id}"`}>${icon('megaphone')}${esc(w.titel || (nr ? WERB_TITEL2 : WERB_TITEL))}</h3>${w.text ? `<span class="werb-txt">${esc(w.text)}</span>` : ''}</div>
     <div class="al-cols" style="--k:${kk}">${cols.map((c) => `<div class="al-col">${block(c)}</div>`).join('')}</div></section>`;
   };
   const inner = ws.length > 1 ? `<div class="werb-duo${duo ? '' : ' werb-stapel'}">${ws.map(sec).join('')}</div>` : sec(ws[0], 0);
@@ -529,7 +531,8 @@ function renderTable(list, grouped) {
    Eine Gruppe (Block) steht immer vollständig untereinander in einer Spalte (Inhaber 05.11.2026: nicht mehr „Forts.“ in der
    Nachbarspalte). Die Blöcke eines Abschnitts werden in Leserichtung so auf die Spalten verteilt, dass die höchste Spalte
    möglichst niedrig ist; kleine Abschnitte stehen nebeneinander in einer Zeile, wenn das insgesamt Platz spart. Nur im Druck
-   wird ein Block geteilt, der höher als eine ganze Seitenspalte ist (Kopf mit „Forts.“ wiederholt). */
+   (assets/angebot-druck.js) wird ein Block geteilt, der höher als eine ganze Seitenspalte ist oder allein das ganze Blatt
+   füllt (Einzelangebot, sortierte Liste: gleichmäßig über die drei Spalten, Kopf mit „Forts.“ wiederholt). */
 const plPrice = (p) => (p.status === 'value' ? fmtNum.format(p.value) : p.status === 'request' ? 'a. Anfr.' : '—');
 const plTitle = () => window.OfferCore.titelMitKw(DATA.meta);   // immer die KW des Angebots, nicht die des früheren Imports
 /* Text in Anführungszeichen (z. B. „Fleischmeister“) hervorheben wie in der Druckliste */
@@ -555,25 +558,6 @@ function plCells(it, labels) {
   for (const p of [it.price, ...it.altPrices]) { const k = p.label ? labels.indexOf(p.label) : -1; if (k >= 0 && !cells[k]) cells[k] = p; else free.push(p); }
   for (const p of free) { const k = p === it.price ? cells.lastIndexOf(null) : cells.indexOf(null); if (k >= 0) cells[k] = p; }   // ohne Beschriftung: Hauptpreis rechts
   return cells;
-}
-/* Druck: Spalten fester Höhe H nacheinander füllen. Ein Block, der nicht mehr in die Spalte passt, beginnt in der nächsten;
-   geteilt wird nur ein Block, der höher als eine ganze Spalte ist. units: [{key, items, weight(i), head}] */
-function plFill(units, k, H) {
-  const cols = [[]]; let load = 0;
-  const next = () => { cols.push([]); load = 0; };
-  for (const u of units) {
-    let rest = u.items.slice(), cont = false;
-    while (rest.length) {
-      const W = u.head + rest.reduce((a, i) => a + u.weight(i), 0), R = H - load;
-      if (W <= R + 1e-6) { cols[cols.length - 1].push({ u, items: rest, cont }); load += W; break; }
-      if (load > 0) { next(); continue; }   // nicht teilen: in der nächsten Spalte vollständig
-      let n = 0, acc = u.head;   // höher als eine ganze Spalte: so viel wie passt, Rest mit „Forts.“
-      while (n < rest.length && acc + u.weight(rest[n]) <= R + 1e-6) acc += u.weight(rest[n++]);
-      n = Math.max(1, n); cols[cols.length - 1].push({ u, items: rest.slice(0, n), cont }); rest = rest.slice(n); cont = true; next();
-    }
-  }
-  if (!cols[cols.length - 1].length) cols.pop();
-  return cols;
 }
 const plHoehe = (u) => u.head + u.items.reduce((a, i) => a + u.weight(i), 0);
 /* Blöcke in fester Reihenfolge ohne Teilen auf c Spalten: die höchste Spalte so niedrig wie möglich (lineare Aufteilung).
@@ -660,7 +644,8 @@ function plBlockHTML(b, mode) {
     <td class="c-name">${screen ? `<button type="button" class="name-btn" data-open="${it.id}" title="Details und Preisvergleich anzeigen">${hl(plName(it))}</button>` : esc(plName(it))}${werbTagHTML(it, 'al-tag', werb)}${it.sale ? '<span class="tag sale al-tag" title="Sonderpreis, solange der Vorrat reicht">Sonderposten</span>' : ''}</td>
     ${plCells(it, labels).map((p) => `<td class="c-price${p && p.status !== 'value' ? ' al-np' : ''}">${p ? (it.sale && p === it.price ? `${it.regular != null ? `<s class="p-was al-was">${fmtNum.format(it.regular)}</s>` : ''}<span class="al-sale" title="Sonderposten – solange der Vorrat reicht">${plPrice(p)}</span>` : plPrice(p)) : ''}</td>`).join('')}${screen ? `<td class="c-fav">${starHTML(it)}</td>` : ''}</tr>`;
   const cg = `<colgroup><col class="w-code"><col>${labels.map(() => '<col class="w-price">').join('')}${screen ? '<col class="w-fav">' : ''}</colgroup>`;
-  return `<div class="al-grp"><table class="al-tab">${cg}<thead><tr class="al-h"><th colspan="${span}" scope="colgroup"><div class="al-hin"><span class="al-gt">${u.title}${cont ? ' <span class="al-cont">Forts.</span>' : ''}</span><span class="al-eh">€/kg</span>${screen ? '<span class="al-fh" aria-hidden="true"></span>' : ''}</div></th></tr>
+  const was = u.items.some((it) => it.sale && it.regular != null) ? ' hat-was' : '';   // ganze Gruppe (auch ihre Teile im Druck): Preisspalte breit genug für „bisher“ und Sonderpreis
+  return `<div class="al-grp"><table class="al-tab${was}">${cg}<thead><tr class="al-h"><th colspan="${span}" scope="colgroup"><div class="al-hin"><span class="al-gt">${u.title}${cont ? ' <span class="al-cont">Forts.</span>' : ''}</span><span class="al-eh">€/kg</span>${screen ? '<span class="al-fh" aria-hidden="true"></span>' : ''}</div></th></tr>
     ${cols > 1 ? `<tr class="al-sub"><th colspan="2"></th>${labels.map((l) => `<th>${esc(l)}</th>`).join('')}${screen ? '<th></th>' : ''}</tr>` : ''}</thead>
     <tbody>${items.map(row).join('')}</tbody></table></div>`;
 }
@@ -691,12 +676,15 @@ function renderListe(list, grouped) {
 /* Spaltenzahl folgt der Breite: bei Wechsel neu verteilen */
 if (window.ResizeObserver) new ResizeObserver(() => { const h = $('#list'); if (state.view === 'liste' && h && h.querySelector('.al') && plColsFor(h.clientWidth) !== plK) renderList(); }).observe(document.documentElement);
 
-/* Druck/PDF „Angebotsansicht“: A4 quer, fortlaufend und kompakt – derselbe Inhalt wie am Bildschirm (Kopf mit Logo, Werbung,
-   Bereiche, Gruppen, Kennzeichen, Hinweis), gesetzt von assets/angebot-druck.js (gemessen statt geschätzt; drei oder vier
-   Spalten, Gruppen ungeteilt, letzte Seite ausgeglichen). Am Seitenfuß der Hinweis (Mengen, Fracht) und die Fußzeile des
-   Briefbogens (FRACHT.fuss) – auf jeder Seite oder nur der letzten (Einstellung „modus“, zum Vergleich ?fuss=jede|letzte). */
+/* Druck/PDF „Angebotsansicht“: A4 quer, im Aussehen der Vorschau – derselbe Inhalt wie am Bildschirm (Kopf mit Logo,
+   Werbung, Bereiche als Balken, Gruppen, Kennzeichen, Hinweis), gesetzt von assets/angebot-druck.js (gemessen statt geschätzt:
+   immer drei Spalten, Gruppen ungeteilt, Seiten fortlaufend gefüllt – ein Bereich beginnt, sobald Balken und ein Block
+   Platz haben –, Schriftgröße in drei Stufen automatisch so, dass möglichst wenige Seiten entstehen). Am Fuß der letzten
+   Seite der Hinweis (Mengen, Fracht) und die Fußzeile des Briefbogens (FRACHT.fuss) – oder auf jeder Seite (Einstellung
+   „modus“, zum Vergleich ?fuss=jede|letzte). Derselbe Weg für Wochenangebot, Kundenangebote und Einzelangebote. */
 const FUSS_PARAM = (() => { const v = new URLSearchParams(location.search).get('fuss'); return v === 'jede' || v === 'letzte' ? v : ''; })();
-const SPALTEN_PARAM = (() => { const v = new URLSearchParams(location.search).get('spalten'); return v === '3' || v === '4' ? +v : 0; })();   // zum Vergleich: Spaltenzahl festlegen
+const STUFE_PARAM = new URLSearchParams(location.search).get('stufe') || '';   // zum Vergleich: ?stufe=normal|kompakt|eng legt die Dichte fest (sonst automatisch)
+const DRUCK_ENTWURF_VERMERK = false;   // true: der Druck eines Entwurfs (Vorschau, Knopf „Drucken“ im Eingabebereich) trägt im Seitenkopf den Vermerk „Entwurf“
 const druckHinweis = () => [...eigenerHinweis(), ...((FRACHT && FRACHT.hinweis) || [])];   // wie hinweisHTML
 const druckFuss = () => (FRACHT && FRACHT.fuss) || null;
 function buildPrintListe(list, grouped, scopeText) {
@@ -706,24 +694,22 @@ function buildPrintListe(list, grouped, scopeText) {
   const titel = `${m.offerName && m.offerName !== 'Wochenangebot' && !m.einzel ? m.offerName + ' · ' : ''}${plTitle()}`;
   const zusatz = [scopeText, m.einzel && (m.nr || m.kunde) ? [m.nr ? 'Angebot ' + m.nr : '', m.kunde ? 'für ' + m.kunde : ''].filter(Boolean).join(' ') : '',
     !m.einzel && m.weekStart ? `Angebotswoche ${dm(m.weekStart)}–${dmy(m.weekEnd)}` : '', 'Stand ' + stand, 'Preise in € je kg'].filter(Boolean);
+  const vermerk = DRUCK_ENTWURF_VERMERK && PREVIEW ? '<span class="pl-entwurf">Entwurf</span> · ' : '';
   const kopf = (n, N) => (n === 1
-    ? `<header class="pl-ph">${PL_LOGO}<div class="pl-pt"><h1>${esc(titel)}</h1><span>${zusatz.map(esc).join(' · ')} · <span class="pl-sz">Seite ${n} von ${N}</span></span></div></header>`
-    : `<header class="pl-ph pl-ph2"><strong>${esc(titel)}</strong><span>${esc(zusatz.filter((z) => z !== 'Preise in € je kg').join(' · '))} · <span class="pl-sz">Seite ${n} von ${N}</span></span></header>`);
-  const ws = scopeText ? [] : (DATA.werbungen || []);   // Werbung wie am Bildschirm: nur im gesamten Angebot
-  const werbung = ws.length && grouped ? `<div class="pl-werb" style="--w:${ws.length}">${ws.map((w, nr) => {
-    const items = w.artikel.map((x) => x.it), kk = ws.length > 1 ? 2 : 4, per = Math.ceil(items.length / kk), labels = plLabels(items);
-    const cols = [];
-    for (let i = 0; i < kk && i * per < items.length; i++) cols.push(items.slice(i * per, (i + 1) * per));
-    return `<section class="werb-sec"><div class="al-st werb-st"><h3>${icon('megaphone')}${esc(w.titel || (nr ? WERB_TITEL2 : WERB_TITEL))}</h3>${w.text ? `<span class="werb-txt">${esc(w.text)}</span>` : ''}</div>
-      <div class="pl-wcols" style="--k:${cols.length}">${cols.map((c) => `<div class="pl-wcol">${plBlockHTML({ u: { key: 'werb', title: '', items: c, labels }, items: c, cont: false }, 'druck-werb')}</div>`).join('')}</div></section>`;
-  }).join('')}</div>` : '';
+    ? `<header class="al-head pl-ph">${PL_LOGO}<div class="al-ht pl-pt"><h1>${esc(titel)}</h1><span>${vermerk}${zusatz.map(esc).join(' · ')} · <span class="pl-sz">Seite ${n} von ${N}</span></span></div></header>`
+    : `<header class="pl-ph pl-ph2"><strong>${esc(titel)}</strong><span>${vermerk}${esc(zusatz.filter((z) => z !== 'Preise in € je kg').join(' · '))} · <span class="pl-sz">Seite ${n} von ${N}</span></span></header>`);
   const f = druckFuss();
   return window.AngebotDruck.liste({
-    host: $('#print-root'), kopf, werbung, fuss: f, hinweis: druckHinweis(), modus: FUSS_PARAM || (f && f.modus) || 'jede', spalten: SPALTEN_PARAM || undefined,
-    bereiche: plSections(units).map((sec) => ({
-      html: sec.name ? `<div class="al-st pl-st"><h3>${plGroupName(sec.name)}</h3><span>${plural(sec.units.reduce((a, u) => a + u.items.length, 0), 'Artikel', 'Artikel')}</span></div>` : '',
-      gruppen: sec.units.map((u) => ({ n: u.items.length, block: (von, bis, forts) => plBlockHTML({ u, items: u.items.slice(von, bis), cont: forts }, 'print') })),
-    })),
+    host: $('#print-root'), kopf, werbung: scopeText || !grouped ? '' : werbungHTML(false, true),   // Werbung wie am Bildschirm: nur im gesamten Angebot
+    fuss: f, hinweis: druckHinweis(), modus: FUSS_PARAM || (f && f.modus) || 'letzte', stufe: STUFE_PARAM,
+    bereiche: plSections(units).map((sec) => {
+      const n = sec.units.reduce((a, u) => a + u.items.length, 0);
+      return {
+        name: sec.name,
+        balken: (forts) => `<div class="al-st"><h3>${plGroupName(sec.name)}${forts ? ' <span class="al-cont">Forts.</span>' : ''}</h3><span>${plural(n, 'Artikel', 'Artikel')}</span></div>`,
+        gruppen: sec.units.map((u) => ({ n: u.items.length, verteilen: u.key === 'all', block: (von, bis, forts) => plBlockHTML({ u, items: u.items.slice(von, bis), cont: forts }, 'print') })),
+      };
+    }),
   }).html;
 }
 
@@ -1946,6 +1932,7 @@ function renderWartung(w) {
     if (KUNDE && !KUNDE.angebote.length && !KSTAFF) { renderLocked('Für Ihren Zugang ist derzeit kein Angebot freigeschaltet. Bitte wenden Sie sich an Ihren Ansprechpartner.', false); return; }
     await loadData();
   } catch (e) {
+    druckMelden('fehler');   // Direktdruck: nichts zu drucken (Wartung, Anmeldung nötig, Angebot fehlt)
     if (e.wartung) { renderWartung(e.wartung); return; }
     if (e.needLogin) { renderLocked((OFFER ? 'Dieses Angebot' : 'Das Wochenangebot') + ' ist nur nach Anmeldung sichtbar. Bitte melden Sie sich mit Ihrer Benutzerkennung und Ihrem Passwort an.'); openKundeLogin(); return; }
     $('#list').innerHTML = `<div class="empty"><div class="empty-ico">${icon('info')}</div><h3>Angebot nicht verfügbar</h3><p>${esc(e.message)}</p>
@@ -1964,9 +1951,8 @@ function renderWartung(w) {
   if (DRUCKEN) {   // Parameter entfernen, damit ein Neuladen nicht erneut druckt
     const u = new URL(location.href); u.searchParams.delete('drucken'); history.replaceState(history.state, '', u);
     if (DRUCK_DIREKT) {   // Schriften abwarten (der Satz wird gemessen), dann drucken; dem Eingabebereich Bescheid geben
-      const melden = (stand) => { try { if (window.parent !== window) window.parent.postMessage({ wa: 'druck', stand }, location.origin); } catch { /* kein Rahmen */ } };
-      window.addEventListener('afterprint', () => melden('gedruckt'), { once: true });
-      (document.fonts && document.fonts.ready ? document.fonts.ready : Promise.resolve()).then(() => { melden('bereit'); doPrint({ scope: 'all', layout: 'liste', grouped: true }); });
+      window.addEventListener('afterprint', () => druckMelden('gedruckt'), { once: true });
+      (document.fonts && document.fonts.ready ? document.fonts.ready : Promise.resolve()).then(() => { druckMelden('bereit'); doPrint({ scope: 'all', layout: 'liste', grouped: true }); });
     } else openPrint();
   }
 })();

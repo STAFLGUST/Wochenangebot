@@ -2,7 +2,7 @@
 
 <!-- ERZEUGT von `python3 werkzeuge/doku.py erzeugen` – nicht von Hand ändern. Quelle: Funktionen und Kommentare im Code. Die CI prüft, dass diese Datei zum Code passt. -->
 
-47 Dateien, 720 Funktionen – in der Reihenfolge der Datei, **fett** die Abschnitte. Text = erste Aussage des Kommentars direkt über der Funktion (Python: Docstring). Übersicht aller Module: [README.md](README.md).
+48 Dateien, 739 Funktionen – in der Reihenfolge der Datei, **fett** die Abschnitte. Text = erste Aussage des Kommentars direkt über der Funktion (Python: Docstring). Übersicht aller Module: [README.md](README.md).
 
 ## `app/api/lib/angebote.php`
 
@@ -81,7 +81,7 @@ _Einzelangebote: ein Angebot für genau einen Kunden (Angebot bearbeiten → Ein
 
 **PDF im Design der Angebotsansicht (A4 quer, drei Spalten)**
 
-- `einzel_pdf(e, c)` – Wie die Druckliste der Angebotsseite: Logo und Titel, Blöcke mit Kopfzeile „€/kg“, Zebrastreifen, Seitenzahlen.
+- `einzel_pdf(e, c)` – Wie die Druckliste der Angebotsseite: Logo und Titel, Blöcke mit Kopfzeile „€/kg“, Zebrastreifen, Seitenzahlen, am Seitenfuß die Fußzeile des Briefbogens …
 - `plural_de(n, eins, viele)`
 - `einzel_pdf_name(e)`
 
@@ -99,7 +99,7 @@ _Fracht: Mindestmenge für frachtfreie Lieferung, Frachtanteil je Staffel (unter
 - `fracht_kosten(kg, s)` – Frachtanteil für eine Gesamtmenge: kleinste Grenze, die noch über der Menge liegt
 - `fracht_eur(v)`
 - `fracht_hinweis(s)` – Vermerk unter dem Angebot (Bildschirm und Druck), Zeile für Zeile
-- `fracht_public()`
+- `fracht_public(angemeldet)` – $angemeldet: Mitarbeiter oder Kunde – nur dann enthält die Fußzeile geschützte Bankangaben (module/angebot/druck.php)
 
 ## `app/api/lib/kundenmail.php`
 
@@ -175,8 +175,14 @@ _Druck der Angebote: Fußzeile des Briefbogens unter jedem gedruckten Angebot (W
 - `druck_fuss_clean(in)` – Eingabe prüfen: drei Spalten, zwei Zeilen, Modus – unbekannte Felder fallen weg
 - `druck_fuss_gespeichert()` – Gespeicherte Einstellung (roh) oder null
 - `druck_fuss()` – Wirksame Fußzeile: eigene Texte, sonst die Vorgabe; „eigen“ sagt, ob Texte hinterlegt sind
-- `druck_fuss_public()` – Für die Angebotsseite (Druck): nur Texte und Modus
+- `druck_angemeldet()` – Angemeldet im Sinne der Fußzeile: Mitarbeiter oder Kunde mit eigenem Passwort.
+- `druck_fuss_public(angemeldet)` – Für die Angebotsseite (Druck): nur Texte und Modus.
 - `druck_fuss_speichern(in, me)` – Speichern (nur das Feld „druck“; Fracht und Hinweis bleiben unverändert).
+
+**Fußzeile im PDF des Einzelangebots (lib/pdf.php)**
+
+- `druck_fuss_pdf_hoehe(f)` – Höhe der Fußzeile in pt (0 = keine)
+- `druck_fuss_pdf(pdf, f, x, y, w)` – Fußzeile zeichnen: $x linker Rand, $y Oberkante (Linie), $w Breite
 
 ## `app/api/module/angebot/import.php`
 
@@ -654,15 +660,14 @@ _Angebot · Satz der Druckfassung „Angebotsansicht“ (A4 quer) für die Angeb
 
 - `fussHTML(fuss, hinweis, art)` – Fußzeile des Briefbogens: Siegel, drei Textspalten, zwei Zeilen (Handelsregister); darüber der Hinweis (Mengen, Fracht). art „quer“: alles in einer Reihe …
 
-**Messen: Bausteine unsichtbar in Druckgröße setzen**
+**Messen: Bausteine unsichtbar in Druckgröße setzen (eine Stufe)**
 
-- `messen(host, cfg, k, fuss)`
+- `messen(host, cfg, fuss, st)`
 
 **Verteilen**
 
-- `fuellen(m, start, caps, bis)`
-- `setzen(m, modus)` – Seiten ermitteln und die letzte(n) ausgleichen. modus: Fuß auf jeder Seite ('jede') oder nur der letzten ('letzte').
-- `liste(cfg)` – cfg: { host (#print-root), bereiche: [{ html, gruppen: [{ n, block(von, bis, forts) }] }], kopf(seite, seiten), werbung?, fuss?: {spalten, zeilen}, hinweis?: …
+- `setzen(m, modus)`
+- `liste(cfg)` – cfg: { host (#print-root), bereiche: [{ name, balken(forts), gruppen: [{ n, block(von, bis, forts), verteilen? }] }], kopf(seite, seiten), werbung?, fuss?: …
 
 ## `app/assets/frontend.js`
 
@@ -702,7 +707,7 @@ _Wochenangebot – öffentliches Frontend_
 
 **Werbung: vom Angebot hervorgehobene Artikel (meta.werbung, je Angebot vom Server aufgelöst)**
 
-- `werbungHTML(eigeneKarte)`
+- `werbungHTML(eigeneKarte, druck)`
 
 **Kopf, Kennzahlen, Navigation**
 
@@ -731,7 +736,6 @@ _Wochenangebot – öffentliches Frontend_
 - `plName(it)` – „Fleischmeister“ in der Bezeichnung weglassen, wenn Gruppe oder Abschnitt die Marke schon nennen (dort ist sie Überschrift)
 - `plLabels(items)`
 - `plCells(it, labels)`
-- `plFill(units, k, H)` – Druck: Spalten fester Höhe H nacheinander füllen.
 - `plOhneTeilen(units, c)` – Blöcke in fester Reihenfolge ohne Teilen auf c Spalten: die höchste Spalte so niedrig wie möglich (lineare Aufteilung).
 - `plGleichTeilen(u, k)` – Sortierte Gesamtliste (ohne Gruppen) ist ein einziger Block: er wird gleichmäßig auf die k Spalten verteilt (ab der zweiten Spalte mit „Forts.“) – sonst …
 - `plBaender(secs, k)`
@@ -955,7 +959,7 @@ _STAFL-Plattform · Angebot · Drucken aus „Angebot bearbeiten“ und Einstell
 **Drucken**
 
 - `fertig()`
-- `drucken()`
+- `drucken(opt)`
 
 **Fußzeile im Druck (nur Administratoren)**
 
@@ -1072,6 +1076,45 @@ _Gestaltung der Angebotsseite („Klar“ mit dem Design „Liquid Glass“: sch
 - `check(n, c, i)`
 - `page(w, h, scheme)`
 - `_leer(route)`
+
+## `tests/e2e/test_druck.py`
+
+_Druck der Angebote (Wunsch des Inhabers 13.11.2026): die Druckfassung „Angebotsansicht“ (A4 quer) zeigt alles, was die Vorschau zeigt – fortlaufend und kompakt._
+
+- `check(n, c, i)`
+- `doc(name)`
+- `roh(cl, action, headers)` – GET ohne JSON-Auswertung: (Status, Kopfzeilen, Bytes)
+- `pdf_stroeme(data)` – Entpackte Inhaltsströme (FlateDecode) eines PDF
+- `pdf_text(data)`
+- `norm(t)` – Text ohne Leerraum und Trennstriche (im PDF trennt der Browser lange Bezeichnungen am Zeilenende)
+- `norm_titel(name)` – Gruppenname, wie die Angebotsansicht ihn zeigt: "Marke" → „Marke“
+- `pdf_chromium_text(data)` – Text eines vom Browser gedruckten PDF in Zeichenreihenfolge, ohne Leerraum und Trennstriche.
+- `strom(o)`
+- `pdf_seiten(data)`
+- `pdf_farbig(data)` – Anzahl farbiger (nicht grauer) Füllfarben in den Seiteninhalten
+
+**Einstellung „Fußzeile im Druck“: Rechte, Vorgabe, Bereinigung**
+
+**Bankangaben nur für angemeldete Nutzer (der Server entscheidet)**
+
+**Angebot für den Druck: Werbung, Sonderposten, „auf Anfrage“, Zusatzpreis**
+
+- `satz(pg, wie)` – Druckfassung setzen (wie Strg+P) und im Druckmedium vermessen
+- `zurueck(pg)`
+- `laden(pg, pfad)`
+- `heil(s, modus)` – Feste Vorgaben des Satzes, die für jede Druckfassung gelten: Liste der Verstöße (leer = in Ordnung)
+- `pdf_alles(data, s)` – Zeilen (Nummer + Bezeichnung) der Druckfassung, die im PDF fehlen
+
+**Angebotsseite (öffentlich): Druck = Angebotsansicht am Bildschirm**
+
+**Viele Bereiche (wie mit Angebotskategorien): fortlaufend statt einer Seite je Bereich**
+
+**Einzelangebot: Druck der Angebotsseite und PDF des Servers**
+
+**Eingabebereich: Knopf „Drucken“, Vorschau, Fenster „Fußzeile im Druck“**
+
+- `anmelden(c, user, pw)`
+- `drucke(a, ausloesen)` – Druck auslösen und auf den neuen unsichtbaren Rahmen mit der Druckfassung warten (ein früherer Rahmen bleibt stehen, bis der Entwurf gespeichert ist – er …
 
 ## `tests/e2e/test_editor_aux.py`
 

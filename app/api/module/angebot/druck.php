@@ -4,16 +4,20 @@ declare(strict_types=1);
    Die Fußzeile besteht aus drei Textspalten (Firma/Anschrift · Telefon/Web · Bank/Steuer) und zwei Zeilen (Handelsregister);
    davor stehen die Siegel (assets/druck-siegel.jpg), darüber der Hinweis zu Mengen und Fracht (lib/fracht.php).
    Gespeichert als optionales Feld „druck“ im Dokument „fracht“ (Einstellungen des Angebots; ältere Fassungen ohne das Feld
-   bleiben lesbar, fracht_save erhält es): {spalten: [3 Texte], zeilen: [2 Texte], modus: 'jede'|'letzte'}.
+   bleiben lesbar, fracht_save erhält es): {spalten: [3 Texte], zeilen: [2 Texte], modus: 'jede'|'letzte', bankGeschuetzt: bool}.
    Ohne eigene Angaben gilt die Vorgabe unten – nur was ohnehin öffentlich im Impressum der Angebotsseite steht; Bank-,
    Steuer- und weitere Registerangaben trägt ein Administrator ein (Angebot bearbeiten → ⋯ → „Fußzeile im Druck“), sie
    stehen nicht im Code (GR-007). Ausgeliefert wird die Fußzeile mit dem Angebot (fracht_public → „fuss“), weil jede
    Druckfassung sie zeigt – sie enthält nur Angaben des Geschäftsbriefs.
-   modus: Fußzeile und Hinweis auf jeder Seite („jede“) oder nur am Fuß der letzten Seite („letzte“). */
+   bankGeschuetzt (Vorgabe: an): die dritte Spalte (Bank und Steuer) geht nur an angemeldete Nutzer – Mitarbeiter und
+   Kunden mit eigenem Passwort (druck_angemeldet). Ohne Anmeldung, also im öffentlichen Wochenangebot, steht dort nur die
+   Vorgabe aus dem Impressum; entschieden wird hier auf dem Server, nicht im Browser (GR-103).
+   modus: Fußzeile und Hinweis auf jeder Seite („jede“) oder nur am Fuß der letzten Seite („letzte“).
+   Dieselbe Fußzeile setzt druck_fuss_pdf() unter das PDF des Einzelangebots (lib/einzelangebote.php, E-Mail-Anhang). */
 if (!defined('WA_API')) { http_response_code(404); exit; }   // nur über api/index.php nutzbar
 
 const DRUCK_FUSS_MODI = ['jede', 'letzte'];
-const DRUCK_FUSS_MODUS = 'jede';   // Vorgabe, solange nichts gewählt ist (Entscheidung des Inhabers steht aus)
+const DRUCK_FUSS_MODUS = 'letzte';   // Vorgabe (Inhaber 13.11.2026): Fußzeile und Hinweis nur am Ende, auf der letzten Seite
 const DRUCK_FUSS_ZEILEN = 6;       // Zeilen je Spalte
 const DRUCK_FUSS_LAENGE = 70;      // Zeichen je Zeile einer Spalte
 const DRUCK_FUSS_LANG = 200;       // Zeichen je Registerzeile
@@ -52,7 +56,8 @@ function druck_fuss_clean($in): array
     for ($i = 0; $i < 3; $i++) $spalten[] = druck_fuss_text($sp[$i] ?? '', DRUCK_FUSS_ZEILEN, DRUCK_FUSS_LAENGE);
     for ($i = 0; $i < 2; $i++) $zeilen[] = druck_fuss_text($ze[$i] ?? '', 1, DRUCK_FUSS_LANG);
     $modus = in_array($in['modus'] ?? '', DRUCK_FUSS_MODI, true) ? $in['modus'] : DRUCK_FUSS_MODUS;
-    return ['spalten' => $spalten, 'zeilen' => $zeilen, 'modus' => $modus];
+    $bank = !array_key_exists('bankGeschuetzt', $in) || !empty($in['bankGeschuetzt']);   // ohne Angabe geschützt (sichere Vorgabe)
+    return ['spalten' => $spalten, 'zeilen' => $zeilen, 'modus' => $modus, 'bankGeschuetzt' => $bank];
 }
 /* Gespeicherte Einstellung (roh) oder null */
 function druck_fuss_gespeichert(): ?array
@@ -69,10 +74,22 @@ function druck_fuss(): array
     if (!$eigen) { $c['spalten'] = DRUCK_FUSS_VORGABE['spalten']; $c['zeilen'] = DRUCK_FUSS_VORGABE['zeilen']; }
     return $c + ['eigen' => $eigen, 'updatedAt' => $g['updatedAt'] ?? null, 'updatedBy' => (string)($g['updatedBy'] ?? '')];
 }
-/* Für die Angebotsseite (Druck): nur Texte und Modus */
-function druck_fuss_public(): array
+/* Angemeldet im Sinne der Fußzeile: Mitarbeiter oder Kunde mit eigenem Passwort. Ohne Sitzungs-Cookie wird keine Sitzung
+   begonnen – das öffentliche Wochenangebot bleibt ohne Cookie abrufbar. */
+function druck_angemeldet(): bool
+{
+    if (function_exists('oidc_modus') && oidc_modus()) return current_user() !== null;
+    if (!app_client() && !isset($_COOKIE[sitzung_cookie_name()])) return false;
+    if (current_user()) return true;
+    $k = current_customer();
+    return $k !== null && empty($k['login']['mustChange']);
+}
+/* Für die Angebotsseite (Druck): nur Texte und Modus. Geschützte Bankangaben (dritte Spalte) nur für angemeldete Nutzer –
+   sonst steht dort die Vorgabe aus dem Impressum. */
+function druck_fuss_public(bool $angemeldet = false): array
 {
     $f = druck_fuss();
+    if ($f['eigen'] && $f['bankGeschuetzt'] && !$angemeldet) $f['spalten'][2] = DRUCK_FUSS_VORGABE['spalten'][2];
     return ['spalten' => $f['spalten'], 'zeilen' => $f['zeilen'], 'modus' => $f['modus']];
 }
 /* Speichern (nur das Feld „druck“; Fracht und Hinweis bleiben unverändert). Leere Texte = wieder die Vorgabe. */
@@ -96,6 +113,55 @@ function druck_fuss_speichern($in, array $me): array
     }
     $mt = ['jede' => 'auf jeder Seite', 'letzte' => 'nur auf der letzten Seite'];
     if ($alt['modus'] !== $jetzt['modus']) $ch[] = ['k' => 'druck|modus', 'code' => '', 'name' => 'Fußzeile im Druck', 'f' => 'Fußzeile und Hinweis', 'from' => $mt[$alt['modus']], 'to' => $mt[$jetzt['modus']]];
+    if ($alt['bankGeschuetzt'] !== $jetzt['bankGeschuetzt']) $ch[] = ['k' => 'druck|bank', 'code' => '', 'name' => 'Fußzeile im Druck', 'f' => 'Bankangaben nur für angemeldete Nutzer', 'from' => $alt['bankGeschuetzt'] ? 'ja' : 'nein', 'to' => $jetzt['bankGeschuetzt'] ? 'ja' : 'nein'];
     if ($ch) audit('mail', 'Fußzeile im Druck der Angebote geändert', $ch);
     return $jetzt;
+}
+
+/* ---------- Fußzeile im PDF des Einzelangebots (lib/pdf.php) ----------
+   Dieselben Texte wie im Druck der Angebotsseite: dünne Linie, Siegel links, drei Spalten, rechts die Registerzeilen – über
+   die ganze Breite. Das PDF geht an den Kunden des Angebots bzw. an Mitarbeiter (Vorschau): vollständige Angaben. */
+const DRUCK_FUSS_PDF = ['schrift' => 6.6, 'zeile' => 8.1, 'siegel' => 40.0, 'oben' => 6.0];   // pt
+/* Höhe der Fußzeile in pt (0 = keine) */
+function druck_fuss_pdf_hoehe(array $f): float
+{
+    $n = 0;
+    foreach ($f['spalten'] as $t) $n = max($n, $t === '' ? 0 : count(explode("\n", $t)));
+    $z = count(array_filter($f['zeilen'], fn($x) => $x !== ''));
+    if (!$n && !$z) return 0.0;
+    return DRUCK_FUSS_PDF['oben'] + max(DRUCK_FUSS_PDF['siegel'], max($n, $z * 2) * DRUCK_FUSS_PDF['zeile']) + 2;
+}
+/* Fußzeile zeichnen: $x linker Rand, $y Oberkante (Linie), $w Breite */
+function druck_fuss_pdf(Pdf $pdf, array $f, float $x, float $y, float $w): void
+{
+    $M = DRUCK_FUSS_PDF; $fs = $M['schrift']; $lh = $M['zeile'];
+    $spalten = array_values(array_filter(array_map(fn($t) => $t === '' ? [] : explode("\n", $t), $f['spalten'])));
+    $zeilen = array_values(array_filter($f['zeilen'], fn($z) => $z !== ''));
+    if (!$spalten && !$zeilen) return;
+    $pdf->line($x, $y, $x + $w, $y, .7, '#111111');
+    $oben = $y + $M['oben'];
+    $siegel = dirname(__DIR__, 3) . '/assets/druck-siegel.jpg';
+    $sw = is_file($siegel) ? $M['siegel'] * 316 / 250 : 0.0;
+    if ($sw > 0) $pdf->jpeg($siegel, $x, $oben, $sw);
+    // Breiten: Spalten so breit wie ihr längster Text, Registerzeilen bekommen den Rest (umbrochen)
+    $bw = array_map(fn($l) => max(array_map(fn($t) => Pdf::width($t, $fs), $l)), $spalten);
+    $rest = $w - $sw - array_sum($bw);
+    $bloecke = count($spalten) + ($zeilen ? 1 : 0);
+    $zw = $zeilen ? max(120.0, min(232.0, $rest - 14.0 * $bloecke)) : 0.0;
+    $zl = [];
+    foreach ($zeilen as $z) { foreach (Pdf::wrap($z, $fs, $zw) as $l) $zl[] = $l; }
+    $zb = $zl ? max(array_map(fn($t) => Pdf::width($t, $fs), $zl)) : 0.0;
+    $luecke = $bloecke > 0 ? max(8.0, ($w - $sw - array_sum($bw) - $zb) / $bloecke) : 0.0;
+    $hoehe = max($M['siegel'], max(array_merge([0], array_map('count', $spalten), [count($zl)])) * $lh);
+    $cx = $x + $sw + $luecke;
+    foreach ($spalten as $i => $l) {
+        $ty = $oben + ($hoehe - count($l) * $lh) / 2 + $fs;   // senkrecht mittig zum Siegel
+        foreach ($l as $j => $t) $pdf->text($cx, $ty + $j * $lh, $t, $fs);
+        $cx += $bw[$i] + $luecke;
+    }
+    if ($zl) {
+        $zx = $x + $w - $zb;
+        $ty = $oben + ($hoehe - count($zl) * $lh) / 2 + $fs;
+        foreach ($zl as $j => $t) $pdf->text($zx, $ty + $j * $lh, $t, $fs);
+    }
 }

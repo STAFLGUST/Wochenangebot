@@ -8,7 +8,7 @@ Steckbrief eines Moduls mit Pfaden, Daten, Rechten und Regeln: `python3 werkzeug
 
 Wochenangebot, Kundenangebote, Einzelangebote, Kundenportal, Bestellwünsche, Preisverlauf
 
-Agent: `angebot` · hängt ab von `plattform`, `verwaltung`, `bestand` · Testgruppen: `sys`, `frontend`, `design`, `hist`, `editor_aux`, `revert`, `gemeinsam`, `angebote`, `angebotsliste`, `einzelangebote`, `restposten`, `bestellung`, `order_management`, `order_management_ui`, `order_outbox`, `order_outbox_ui`, `kunden_mail`, `web_app`, `legal_pages`, `wartung`, `sidenav`, `p0`, `fehlerpruefung`, `aufbau`
+Agent: `angebot` · hängt ab von `plattform`, `verwaltung`, `bestand` · Testgruppen: `sys`, `frontend`, `design`, `hist`, `editor_aux`, `revert`, `gemeinsam`, `angebote`, `angebotsliste`, `einzelangebote`, `restposten`, `bestellung`, `order_management`, `order_management_ui`, `order_outbox`, `order_outbox_ui`, `kunden_mail`, `web_app`, `legal_pages`, `wartung`, `sidenav`, `p0`, `fehlerpruefung`, `aufbau`, `druck`
 
 | Oberfläche | Art | Adresse | Entwicklung | Freigabe |
 | --- | --- | --- | --- | --- |
