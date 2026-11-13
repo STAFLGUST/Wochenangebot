@@ -214,6 +214,11 @@ oberflaeche = "angebot.eingabe"
 oberflaeche = "angebot.eingabe"
 schreibend = true
 
+# Kundenangebot kopieren (alles außer den Kunden, in den Entwurf): module/angebot/kopieren.php
+[aktion.offer_kopieren]
+oberflaeche = "angebot.eingabe"
+schreibend = true
+
 [aktion.publish]
 oberflaeche = "angebot.eingabe"
 schreibend = true
