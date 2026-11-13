@@ -125,49 +125,65 @@ function druck_fuss_speichern($in, array $me): array
 }
 
 /* ---------- Fußzeile im PDF des Einzelangebots (lib/pdf.php) ----------
-   Dieselben Texte wie im Druck der Angebotsseite: dünne Linie, Siegel links, drei Spalten, rechts die Registerzeilen – über
-   die ganze Breite. Das PDF geht an den Kunden des Angebots bzw. an Mitarbeiter (Vorschau): vollständige Angaben. */
-const DRUCK_FUSS_PDF = ['schrift' => 6.6, 'zeile' => 8.1, 'siegel' => 40.0, 'oben' => 6.0];   // pt
-/* Höhe der Fußzeile in pt (0 = keine) */
-function druck_fuss_pdf_hoehe(array $f): float
+   Derselbe Aufbau wie im Druck der Angebotsseite (assets/angebot-druck.js, fussHTML): dünne Linie, Siegel links, daneben die
+   Textspalten gleich breit und oben bündig, darunter über dieselbe Breite die Registerzeilen kleiner und grau, getrennt durch
+   eine feine Linie. Schreibweise wie dort nur für die Anzeige geordnet (druck_fuss_ordnen). Das PDF geht an den Kunden des
+   Angebots bzw. an Mitarbeiter (Vorschau): vollständige Angaben. */
+const DRUCK_FUSS_PDF = ['schrift' => 6.6, 'zeile' => 8.1, 'reg' => 5.9, 'regzeile' => 7.3, 'siegel' => 40.0, 'oben' => 6.0, 'luecke' => 14.0];   // pt
+/* „ * “ als Trenner → „ · “, kein Leerzeichen vor Doppelpunkt und innerhalb von Klammern (wie ordnen() in angebot-druck.js) */
+function druck_fuss_ordnen(string $t): string
 {
-    $n = 0;
-    foreach ($f['spalten'] as $t) $n = max($n, $t === '' ? 0 : count(explode("\n", $t)));
-    $z = count(array_filter($f['zeilen'], fn($x) => $x !== ''));
-    if (!$n && !$z) return 0.0;
-    return DRUCK_FUSS_PDF['oben'] + max(DRUCK_FUSS_PDF['siegel'], max($n, $z * 2) * DRUCK_FUSS_PDF['zeile']) + 2;
+    return preg_replace(['/\s*\*\s*/u', '/\s+:/u', '/\(\s+/u', '/\s+\)/u'], [' · ', ':', '(', ')'], $t) ?? $t;
+}
+/* Aufbau der Fußzeile für die Breite $w: Spalten (Zeilen je Spalte), umbrochene Registerzeilen, Siegelbreite, Höhen */
+function druck_fuss_pdf_satz(array $f, float $w): array
+{
+    $M = DRUCK_FUSS_PDF;
+    $spalten = array_values(array_filter(array_map(fn($t) => $t === '' ? [] : array_map('druck_fuss_ordnen', explode("\n", $t)), $f['spalten'])));
+    $zeilen = array_values(array_filter($f['zeilen'], fn($z) => $z !== ''));
+    $siegel = dirname(__DIR__, 3) . '/assets/druck-siegel.jpg';
+    $sw = is_file($siegel) ? $M['siegel'] * 316 / 250 : 0.0;
+    $tw = $w - ($sw > 0 ? $sw + $M['luecke'] : 0);   // Breite neben dem Siegel
+    $zl = [];
+    foreach ($zeilen as $z) { foreach (Pdf::wrap(druck_fuss_ordnen($z), $M['reg'], $tw) as $l) $zl[] = $l; }
+    $n = $spalten ? max(array_map('count', $spalten)) : 0;
+    $hs = $n * $M['zeile'];
+    $hz = $zl ? ($spalten ? 6.0 : 0.0) + count($zl) * $M['regzeile'] : 0.0;
+    return ['spalten' => $spalten, 'zl' => $zl, 'siegel' => $siegel, 'sw' => $sw, 'tw' => $tw, 'hs' => $hs, 'hz' => $hz,
+        'hoehe' => max($sw > 0 ? $M['siegel'] : 0.0, $hs + $hz)];
+}
+/* Höhe der Fußzeile in pt (0 = keine); $w: Breite wie beim Zeichnen */
+function druck_fuss_pdf_hoehe(array $f, float $w = 538.9): float
+{
+    $s = druck_fuss_pdf_satz($f, $w);
+    if (!$s['spalten'] && !$s['zl']) return 0.0;
+    return DRUCK_FUSS_PDF['oben'] + $s['hoehe'] + 2;
 }
 /* Fußzeile zeichnen: $x linker Rand, $y Oberkante (Linie), $w Breite */
 function druck_fuss_pdf(Pdf $pdf, array $f, float $x, float $y, float $w): void
 {
-    $M = DRUCK_FUSS_PDF; $fs = $M['schrift']; $lh = $M['zeile'];
-    $spalten = array_values(array_filter(array_map(fn($t) => $t === '' ? [] : explode("\n", $t), $f['spalten'])));
-    $zeilen = array_values(array_filter($f['zeilen'], fn($z) => $z !== ''));
-    if (!$spalten && !$zeilen) return;
+    $M = DRUCK_FUSS_PDF;
+    $s = druck_fuss_pdf_satz($f, $w);
+    if (!$s['spalten'] && !$s['zl']) return;
     $pdf->line($x, $y, $x + $w, $y, .7, '#111111');
     $oben = $y + $M['oben'];
-    $siegel = dirname(__DIR__, 3) . '/assets/druck-siegel.jpg';
-    $sw = is_file($siegel) ? $M['siegel'] * 316 / 250 : 0.0;
-    if ($sw > 0) $pdf->jpeg($siegel, $x, $oben, $sw);
-    // Breiten: Spalten so breit wie ihr längster Text, Registerzeilen bekommen den Rest (umbrochen)
-    $bw = array_map(fn($l) => max(array_map(fn($t) => Pdf::width($t, $fs), $l)), $spalten);
-    $rest = $w - $sw - array_sum($bw);
-    $bloecke = count($spalten) + ($zeilen ? 1 : 0);
-    $zw = $zeilen ? max(120.0, min(232.0, $rest - 14.0 * $bloecke)) : 0.0;
-    $zl = [];
-    foreach ($zeilen as $z) { foreach (Pdf::wrap($z, $fs, $zw) as $l) $zl[] = $l; }
-    $zb = $zl ? max(array_map(fn($t) => Pdf::width($t, $fs), $zl)) : 0.0;
-    $luecke = $bloecke > 0 ? max(8.0, ($w - $sw - array_sum($bw) - $zb) / $bloecke) : 0.0;
-    $hoehe = max($M['siegel'], max(array_merge([0], array_map('count', $spalten), [count($zl)])) * $lh);
-    $cx = $x + $sw + $luecke;
-    foreach ($spalten as $i => $l) {
-        $ty = $oben + ($hoehe - count($l) * $lh) / 2 + $fs;   // senkrecht mittig zum Siegel
-        foreach ($l as $j => $t) $pdf->text($cx, $ty + $j * $lh, $t, $fs);
-        $cx += $bw[$i] + $luecke;
+    if ($s['sw'] > 0) $pdf->jpeg($s['siegel'], $x, $oben + ($s['hoehe'] - $M['siegel']) / 2, $s['sw']);   // senkrecht mittig zum Text
+    $tx = $x + ($s['sw'] > 0 ? $s['sw'] + $M['luecke'] : 0);
+    $ty = $oben + max(0.0, ($s['hoehe'] - $s['hs'] - $s['hz']) / 2);   // Textblock mittig zum Siegel, Spalten oben bündig
+    $k = count($s['spalten']);
+    if ($k) {
+        $cw = ($s['tw'] - $M['luecke'] * ($k - 1)) / $k;   // Spalten gleich breit
+        foreach ($s['spalten'] as $i => $l) {
+            $cx = $tx + $i * ($cw + $M['luecke']);
+            foreach ($l as $j => $t) {
+                $zeile = Pdf::wrap($t, $M['schrift'], $cw)[0];   // zu lange Zeilen gekürzt statt in die Nachbarspalte
+                $pdf->text($cx, $ty + $M['schrift'] + $j * $M['zeile'], $zeile, $M['schrift']);
+            }
+        }
     }
-    if ($zl) {
-        $zx = $x + $w - $zb;
-        $ty = $oben + ($hoehe - count($zl) * $lh) / 2 + $fs;
-        foreach ($zl as $j => $t) $pdf->text($zx, $ty + $j * $lh, $t, $fs);
+    if ($s['zl']) {
+        $zy = $ty + $s['hs'];
+        if ($k) { $zy += 3.0; $pdf->line($tx, $zy, $tx + $s['tw'], $zy, .3, '#D9D6CF'); $zy += 3.0; }
+        foreach ($s['zl'] as $j => $t) $pdf->text($tx, $zy + $M['reg'] + $j * $M['regzeile'], $t, $M['reg'], false, '#4A4A44');
     }
 }

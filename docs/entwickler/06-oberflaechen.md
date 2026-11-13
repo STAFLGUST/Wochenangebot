@@ -439,8 +439,16 @@ Leiste senkrecht, schmal ist sie eine waagerechte Spur. Mit `body.bereich-import
     Variablen `--zeile`, `--ab-…` an `.pl-doc` in `angebot-druck.css` – nur dort). Der Satz rechnet alle Stufen und nimmt
     die größte Schrift, mit der es nicht mehr Seiten werden als mit der kleinsten. `?stufe=normal|kompakt|eng` legt die
     Stufe zum Vergleich fest. Am Satz stehen `data-stufe`, `data-seiten`, je Seite `data-fuell` (genutzte Höhe in %).
+  - **Kopf:** jede Seite mit Logo (Folgeseiten kleiner), Überschrift und „Seite x von y“; darunter nur beim Druck einer
+    Auswahl bzw. eines Einzelangebots diese Angabe – Angebotswoche, Stand und „Preise in € je kg“ stehen nicht im Kopf.
+    `doPrint()` druckt erst, wenn Logo und Siegel geladen sind (`bilderBereit`, höchstens 3 s).
+  - **Werbung:** in einer Spalte (zwei Werbungen nebeneinander, schmale Ansicht) sitzt der Balken direkt auf den Zeilen
+    wie der Kopf einer Artikelgruppe – „€/kg“ im Balken, keine leere Tabellenkopfzeile (`.werb-ein`, auch am Bildschirm).
   - **Fußzeile:** Hinweis (Mengen, Fracht) und Fußzeile des Briefbogens (`fracht.fuss` aus `module/angebot/druck.php`) am
     Fuß der letzten Seite (Vorgabe) oder jeder Seite (Einstellung „Fußzeile im Druck“, zum Vergleich `?fuss=jede|letzte`).
+    Aufbau: Siegel links, Textspalten gleich breit und oben bündig, darunter die Registerzeilen kleiner und grau; „ * “
+    erscheint als „ · “, ohne Leerzeichen vor Doppelpunkt und in Klammern (nur Anzeige, `ordnen()` bzw.
+    `druck_fuss_ordnen()` – gespeicherte Texte bleiben). Dasselbe im PDF des Einzelangebots (`druck_fuss_pdf`).
   - **Vorsicht beim Ändern:** die Satzfläche wird per `transform` verkleinert; `.pl-page` braucht `contain: size`, sonst
     verschiebt der Seitenumbruch von Chromium Blöcke aus dem unteren Teil der Seite aufs nächste Blatt, wo sie fehlen – am
     Bildschirm sieht man das nicht. `tests/e2e/test_druck.py` liest deshalb den Text aus dem gedruckten PDF.

@@ -401,7 +401,7 @@ function einzel_pdf(array $e, ?array $c): string
     // letzten – der Platz dafür wird freigehalten ($fussAuf sagt, welche Seiten sie tragen)
     require_once dirname(__DIR__) . '/module/angebot/druck.php';
     $fuss = druck_fuss();
-    $fussH = druck_fuss_pdf_hoehe($fuss);
+    $fussH = druck_fuss_pdf_hoehe($fuss, $W - 2 * $ML);
     $setzen = function (int $seiten) use ($rows, $tailH, $K, $top, $H, $MB, $ziel, $fuss, $fussH): array {
         $bottom = fn(int $page) => $H - $MB - ($fussH > 0 && ($fuss['modus'] === 'jede' || $page >= $seiten - 1) ? $fussH + 6 : 0);
         $pages = [[[]]]; $pg = 0; $col = 0; $y = $top(0) + 18;

@@ -597,6 +597,8 @@ with sync_playwright() as p:
     open(SH + '/druck-einzelangebot-server.pdf', 'wb').write(spdf)
     check('PDF des Servers (E-Mail-Anhang, PDF-Vorschau): Fußzeile mit drei Spalten und Registerzeilen, Siegel eingebettet', st == 200 and all(t in inh for t in ('Musterfleisch Test GmbH', 'www.example.org', 'Testbank Musterstadt',
           'Musterstadt B 000 00', 'Beispiel Verwaltung mbH')) and spdf.count(b'/Subtype /Image') == 2, (st, spdf.count(b'/Subtype /Image')))
+    check('… Registerzeilen wie im Druck der Angebotsseite geordnet („ · “ statt „ * “, kein Leerzeichen vor dem Doppelpunkt)',
+          'Musterstadt B 000 00 · Geschäftsführer: Erika Beispiel' in inh and ' * ' not in inh and 'Geschäftsführer :' not in inh, inh[inh.find('Musterstadt B'):][:90])
     n_letzte = pdf_seiten(spdf)
     check('… Variante „letzte Seite“: Fußzeile einmal; Hinweis zu Mengen und Fracht einmal', inh.count('Musterfleisch Test GmbH') == 1 and inh.count('Mindestbestellmenge von ca. 300 kg') == 1 and 'Lieferung nur dienstags' in inh,
           (inh.count('Musterfleisch Test GmbH'), n_letzte))
