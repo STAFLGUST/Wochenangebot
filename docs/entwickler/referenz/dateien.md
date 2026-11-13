@@ -157,6 +157,7 @@ Jede Code-Datei beginnt mit einem Kopfkommentar; dessen erste Aussage steht hier
 | `druck.php` | angebot | Druck der Angebote: Fußzeile des Briefbogens unter jedem gedruckten Angebot (Wunsch des Inhabers 13.11.2026). |
 | `import.php` | angebot | Importvertrag des Moduls Angebot – Schnittstelle zur Importzentrale (docs/plattform/schnittstellen/import.md). - Preisverlauf: frühere Angebotslisten (.xlsx) als Wochen im Preisverlauf. |
 | `winab-export.php` | angebot | Export des Wochenangebots für WinAB (Auftrag des Inhabers 05.11.2026) |
+| `wochen.php` | angebot | Angebot · Frühere Wochen ansehen (Wunsch des Inhabers 13.11.2026): das veröffentlichte Angebot einer Kalenderwoche – Wochenangebot oder ein Kundenangebot – nur für Mitarbeiter mit Modulzugang Angebot und nur lesend … |
 
 ## `app/api/module/bestand/`
 
@@ -348,6 +349,8 @@ Jede Code-Datei beginnt mit einem Kopfkommentar; dessen erste Aussage steht hier
 | `aufbau.js` | angebot | STAFL-Plattform · Angebot · Fenster „Aufbau des Angebots“ (Knopf „Editor“ in der Werkzeugleiste von „Angebot bearbeiten“, Wunsch des Inhabers 11.11.2026, Artikel 12.11.2026). |
 | `druck.css` | angebot | STAFL-Plattform · Angebot · Knopf „Drucken“ in der Kopfleiste von „Angebot bearbeiten“, unsichtbarer Rahmen für die Druckfassung und Fenster „Fußzeile im Druck“ (app/module/angebot/druck.js). |
 | `druck.js` | angebot | STAFL-Plattform · Angebot · Drucken aus „Angebot bearbeiten“ und Einstellung „Fußzeile im Druck“ (Wunsch des Inhabers 13.11.2026). |
+| `fruehere-wochen.css` | angebot | STAFL-Plattform · Angebot · Fenster „Frühere Wochen“ (app/module/angebot/fruehere-wochen.js) |
+| `fruehere-wochen.js` | angebot | STAFL-Plattform · Angebot · Fenster „Frühere Wochen“ (Wunsch des Inhabers 13.11.2026): frühere Wochenangebote ansehen und die KW wechseln wie in der REWE-Liste – Pfeile ‹ ›, Titel „<Angebot> · KW 43/2026“, „Diese … |
 | `preisimport.css` | angebot | STAFL-Plattform · Angebot · Vorschau „Artikelpreise (CSV)“ in der Importzentrale (preisimport.js). |
 | `preisimport.js` | angebot | STAFL-Plattform · Angebot · Darstellung der Vorschau „Artikelpreise (CSV)“ in der Importzentrale (Verwaltung → Import). |
 | `winab-export.js` | angebot | STAFL-Plattform · Angebot · Knopf „Export für WinAB“ in der Werkzeugleiste des Wochenangebots (Auftrag des Inhabers 05.11.2026). |
@@ -784,7 +787,7 @@ Jede Code-Datei beginnt mit einem Kopfkommentar; dessen erste Aussage steht hier
 | `test_geo_ip.py` | plattform | Testgruppe geo_ip: IP-Suche der Ländersperre (Modul Sicherheit, Dialog Ländersperre) – IPv4/IPv6 einem Land zuordnen, Hinweise, nur für Administratoren. |
 | `test_geraete.py` | plattform | Vertraute Geräte: Ein Browser, auf dem sich ein Zugang schon erfolgreich angemeldet hat, kommt auch während einer fremd ausgelösten Kontosperre mit dem richtigen Passwort durch (Mitarbeiter mit und ohne Zwei-Faktor, … |
 | `test_herkunft.py` | plattform | Herkunftsprüfung im API-Einstieg (GR-109, lib/herkunft.php): nur Anfragen von der eigenen Seite. `Sec-Fetch-Site` same-site/cross-site → 403 (auch von Nachbar-Subdomains wie test.angebot-stafl.de); bei Anfragen außer … |
-| `test_hist.py` | angebot | Testgruppe hist: Preisverlauf – Import alter Angebotslisten, Zeiträume, Datendialog. |
+| `test_hist.py` | angebot | Testgruppe hist: Preisverlauf – Import alter Angebotslisten, Zeiträume, Datendialog; Frühere Wochen ansehen (KW wechseln, Angebot wählen, Quelle Veröffentlichung/Version/Preisverlauf, Rechte). |
 | `test_hr.py` | hr | HR · Urlaubsverwaltung (Modul hr, Oberfläche hr.intern unter /module/hr/). |
 | `test_hr_uebersicht.py` | hr | HR · Urlaubsübersicht aller Mitarbeiter (Recht hr.uebersicht, Personalstelle hr.verwalten sieht sie auch). |
 | `test_importzentrale.py` | verwaltung | Importzentrale (Verwaltung → Import, Roadmap 10b): eine Stelle für alle Importe mit einheitlichem Ablauf (Importart → Datei → Vorschau neu/geändert/entfällt/Fehler je Zeile → Übernahme → Ergebnis und Protokoll). |

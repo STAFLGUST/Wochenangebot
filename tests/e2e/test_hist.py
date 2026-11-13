@@ -1,7 +1,9 @@
-"""Testgruppe hist: Preisverlauf – Import alter Angebotslisten, Zeiträume, Datendialog."""
+"""Testgruppe hist: Preisverlauf – Import alter Angebotslisten, Zeiträume, Datendialog; Frühere Wochen ansehen (KW wechseln,
+Angebot wählen, Quelle Veröffentlichung/Version/Preisverlauf, Rechte)."""
 import sys
 from umgebung import BASE  # Testserver je Gruppe (parallel)
-import glob, re
+import datetime, glob, json, re
+from kunden_hilfe import Client
 from playwright.sync_api import sync_playwright
 from versand_hilfe import veroeffentlichen
 B = BASE
@@ -9,6 +11,169 @@ from umgebung import SH, FIX, REPO, WORK, XL44
 res = []
 def check(n, c, i=''):
     res.append(bool(c)); print(('PASS ' if c else 'FAIL ') + n + (('  ' + str(i)) if i else ''))
+
+RUHE = "document.getAnimations().every((x) => x.playState !== 'running')"   # Fenster fertig eingeblendet (Bildschirmfoto)
+
+
+def api_get(pg, q):
+    return pg.evaluate("""async (q) => { const r = await fetch('/api/?action=' + q); let j = null; try { j = await r.json(); } catch (e) {} return [r.status, j]; }""", q)
+
+
+def api_post(pg, action, body):
+    return pg.evaluate("""async ([a, b]) => { const s = await (await fetch('/api/?action=status')).json();
+      const r = await fetch('/api/?action=' + a, {method: 'POST', headers: {'Content-Type': 'application/json', 'X-CSRF-Token': s.csrf || ''}, body: JSON.stringify(b)});
+      let j = null; try { j = await r.json(); } catch (e) {} return [r.status, j]; }""", [action, body])
+
+
+def api_post_bestaetigt(pg, action, body):
+    r = api_post(pg, action, body)
+    if r[0] == 403 and (r[1] or {}).get('code') == 'confirmation_required':
+        api_post(pg, 'reauth', {'password': 'Sicheres-Passwort-1'}); r = api_post(pg, action, body)
+    return r
+
+
+def woche(pg, kw, oid='std'):
+    r = api_get(pg, f'angebot_woche&woche={kw}&angebot={oid}')
+    return r[0], r[1] or {}
+
+
+def rahmen_hat(pg, text):
+    """warten, bis die Angebotsseite im Fenster den Text zeigt (während des Ladens gibt es kurz kein body)"""
+    pg.wait_for_function("""(t) => { const d = document.querySelector('#fw-frame').contentDocument; return !!(d && d.body && d.body.innerText.includes(t)); }""", arg=text)
+
+
+def preis_von(antwort, code):
+    it = next((i for i in ((antwort.get('offer') or {}).get('items') or []) if i.get('code') == code), None)
+    return it and (it['price'].get('value') if it['price'].get('status') == 'value' else it['price'].get('status')), it
+
+
+def fruehere_wochen_pruefen(a, br, errs):
+    """Frühere Wochen ansehen (nur Mitarbeiter mit Modulzugang Angebot, nur lesend): Quelle je KW, Auflösung auf dem Server,
+    Rechte, Grenzfälle, Fenster mit KW-Wechsel (Desktop, 390 px)."""
+    a.set_viewport_size({'width': 1440, 'height': 950})
+    a.click('#vt-edit'); a.wait_for_selector('#view-edit:not([hidden]) tr[data-id]')
+    # Vorbereitung: KW 43 mit Edeka-Preis, eigener Bezeichnung und Werbung veröffentlichen, danach KW 44 mit anderen Preisen
+    d = api_get(a, 'draft')[1]
+    m = d['draft'] or d['published']
+    it = {i['code']: i for i in m['items']}
+    it['10601'].setdefault('variants', {})['edeka'] = {'status': 'value', 'value': 22}
+    it['10601'].setdefault('namen', {})['edeka'] = 'Roastbeef Edeka'
+    m['meta'].setdefault('werbung', {})['edeka'] = {'titel': 'Edeka-Woche', 'artikel': [{'id': it['10601']['id']}]}
+    r = api_post(a, 'save_draft', {'revision': d['revision'], 'model': m})
+    check('Frühere Wochen · Vorbereitung: KW 43 mit Edeka-Preis, Bezeichnung und Werbung', r[0] == 200, r)
+    veroeffentlichen(a)
+    pub43 = api_get(a, 'draft')[1]['published']['publishedAt']
+    d = api_get(a, 'draft')[1]
+    m = d['draft'] or d['published']
+    it = {i['code']: i for i in m['items']}
+    m['meta']['week'] = 44
+    it['10601']['price'] = {'status': 'value', 'value': 26}
+    it['10601']['variants']['edeka'] = {'status': 'value', 'value': 23}
+    it['10601'].pop('namen', None)
+    m['meta']['werbung']['edeka'] = {'titel': 'Edeka KW 44', 'artikel': [{'id': it['10601']['id']}]}
+    r = api_post(a, 'save_draft', {'revision': d['revision'], 'model': m})
+    check('Frühere Wochen · Vorbereitung: KW 44 mit anderen Preisen', r[0] == 200, r)
+    veroeffentlichen(a)
+
+    # Quelle je KW und Auflösung auf dem Server
+    c, w = woche(a, '2026-44')
+    check('KW 44 (aktuell veröffentlicht): Wochenangebot mit neuem Preis', c == 200 and w.get('quelle') == 'veroeffentlicht' and preis_von(w, '10601')[0] == 26
+          and w.get('kw') == 44 and w.get('jahr') == 2026 and w.get('vorige') == '2026-43', (c, w.get('quelle'), preis_von(w, '10601')[0], w.get('vorige')))
+    c, w = woche(a, '2026-43', 'edeka')
+    p, i = preis_von(w, '10601')
+    check('KW 43 (frühere Veröffentlichung): letzter Stand der Woche mit Edeka-Preis, Bezeichnung und Werbung', c == 200 and w.get('quelle') == 'version' and p == 22
+          and i.get('name') == 'Roastbeef Edeka' and (w['offer']['meta'].get('werbung') or {}).get('titel') == 'Edeka-Woche' and w.get('stand') == pub43
+          and w['angebot'] == {'id': 'edeka', 'name': 'Wochenangebot Edeka'}, (c, w.get('quelle'), p, i, w.get('stand'), pub43))
+    roh = json.dumps(w, ensure_ascii=False)
+    check('… nur Edeka aufgelöst: keine variants/sale-Struktur, keine anderen Angebote', '"variants"' not in roh and '"offers"' not in roh and 'Edeka KW 44' not in roh)
+    c, w = woche(a, '2026-43')
+    roh = json.dumps(w, ensure_ascii=False)
+    check('KW 43 Wochenangebot: Wochenpreis, ohne Kundenpreise und Werbung der Kundenangebote', c == 200 and preis_von(w, '10601')[0] == 25.5 and '"variants"' not in roh
+          and 'Edeka-Woche' not in roh and 'Roastbeef Edeka' not in roh, preis_von(w, '10601')[0])
+    c, w = woche(a, '2026-42')
+    c2, w2 = woche(a, '2026-42', 'edeka')
+    check('KW 42 (nur Preisverlauf): einfache Liste nach Gruppen, ohne Werbung und Bereiche', c == 200 and w.get('quelle') == 'historie' and w.get('artikel', 0) > 200
+          and not w['offer']['meta'].get('werbung') and w['offer']['sections'] == [] and len(w['offer']['groups']) > 1 and preis_von(w, '10601')[0] not in (None, 22, 23), (c, w.get('quelle'), w.get('artikel')))
+    check('… Kundenangebot „folgt dem Wochenangebot“ mit den Wochenpreisen', c2 == 200 and w2.get('quelle') == 'historie' and preis_von(w2, '10601')[0] == preis_von(w, '10601')[0])
+    c, w = woche(a, '2026-30')
+    check('Woche ohne Daten: kein Angebot, nächste gespeicherte Woche genannt', c == 200 and w.get('quelle') is None and w.get('offer') is None and w.get('vorige') is None
+          and w.get('naechste') == '2026-36' and w.get('erste') == '2026-36', (w.get('quelle'), w.get('vorige'), w.get('naechste')))
+    c, w = woche(a, '2026-50')
+    check('… nach der letzten Woche: vorige gespeicherte Woche genannt', c == 200 and w.get('offer') is None and w.get('vorige') == '2026-44' and w.get('naechste') is None)
+    check('Ungültige KW 422, unbekanntes Angebot 404', woche(a, '2026-60')[0] == 422 and woche(a, '2026-ab')[0] == 422 and woche(a, '2025-53')[0] == 422
+          and woche(a, '2026-43', 'gibt-es-nicht')[0] == 404 and woche(a, '2026-43', 'e-123')[0] == 404)
+    # Rechte: ohne Anmeldung, Kunde, ohne Modulzugang Angebot; Leser darf ansehen (nur lesend)
+    check('Rechte: ohne Anmeldung 401', Client('198.51.100.71').call('angebot_woche&woche=2026-43&angebot=edeka')[0] == 401)
+    kd = api_get(a, 'kunden')[1]
+    r = api_post_bestaetigt(a, 'kunde_save', {'id': '', 'rev': kd['rev'], 'firma': 'Kantine Woche', 'nr': 'K-72', 'email': 'woche@example.org', 'active': True, 'angebote': ['edeka'],
+                                              'login': {'username': 'kantine.woche', 'password': 'Kantine-Kennwort-5', 'mustChange': False, 'active': True}})
+    K = Client('198.51.100.72')
+    angemeldet = r[0] == 200 and K.call('kunde_login', {'username': 'kantine.woche', 'password': 'Kantine-Kennwort-5'})[0] == 200
+    check('Rechte: Kunde (Edeka freigeschaltet) bekommt keine frühere Woche (401)', angemeldet and K.call('angebot_woche&woche=2026-43&angebot=edeka')[0] == 401
+          and K.call('offer&angebot=edeka')[0] == 200, r[0])
+    for nm, rolle, deny in (('Vera', 'viewer', []), ('Ohne', 'editor', ['angebot.zugang'])):
+        api_post_bestaetigt(a, 'user_save', {'name': nm, 'username': nm.lower() + '.woche', 'role': rolle, 'active': True, 'password': 'Bearbeiter-Zugang-1', 'mustChange': False, 'grant': [], 'deny': deny})
+    L, O = Client('198.51.100.73'), Client('198.51.100.74')
+    L.call('login', {'username': 'vera.woche', 'password': 'Bearbeiter-Zugang-1'}); O.call('login', {'username': 'ohne.woche', 'password': 'Bearbeiter-Zugang-1'})
+    c, w = L.call('angebot_woche&woche=2026-43&angebot=edeka')
+    check('Rechte: Leser mit Modulzugang sieht die Woche mit Kundenpreisen', c == 200 and preis_von(w, '10601')[0] == 22, c)
+    check('Rechte: ohne Modulzugang Angebot 403', O.call('angebot_woche&woche=2026-43')[0] == 403)
+
+    # Fenster: Menü ⋯ → „Frühere Wochen“, öffnet „Diese Woche“
+    jetzt = datetime.date.today().isocalendar()
+    diese = f'{jetzt[0]}-{jetzt[1]:02d}'
+    a.click('#btn-more'); a.wait_for_selector('#menu-more [data-act="wochen"]:not([hidden])')
+    a.click('#menu-more [data-act="wochen"]'); a.wait_for_selector('#dlg-wochen[open]')
+    a.wait_for_function("(kw) => location.hash === '#woche/' + kw", arg=diese)
+    titel = lambda: a.inner_text('#fw-titel').replace('\xa0', ' ')
+    if diese > '2026-44':
+        a.wait_for_selector('#fw-leer:not([hidden]) [data-fw="gehe"]')
+        check('Fenster: diese Woche ohne gespeichertes Angebot – Hinweis und Sprung zur letzten Woche', 'kein Angebot gespeichert' in a.inner_text('#fw-leer')
+              and f'KW {jetzt[1]}/{jetzt[0]}' in titel() and a.is_hidden('[data-fw="heute"]') and a.is_disabled('[data-fw="vor"]'), titel())
+        a.click('#fw-leer [data-fw="gehe"]')
+    else:
+        a.click('[data-fw="zurueck"]')
+    a.wait_for_function("location.hash === '#woche/2026-44'")
+    rahmen = a.frame_locator('#fw-frame')
+    rahmen.locator('tr.row').first.wait_for()
+    check('KW 44 in der Angebotsseite: Titel, „Diese Woche“, Wochenpreis', 'Wochenangebot · KW 44/2026' in titel() and a.is_visible('[data-fw="heute"]')
+          and '26,00' in rahmen.locator('body').inner_text(), titel())
+    a.select_option('#fw-angebot', 'edeka')
+    a.wait_for_function("document.querySelector('#fw-titel').textContent.includes('Edeka')")
+    rahmen.locator('tr.row').first.wait_for()
+    rahmen_hat(a, '23,00')
+    check('Angebot wählen: Edeka mit eigenem Preis', '23,00' in rahmen.locator('body').inner_text())
+    a.click('[data-fw="zurueck"]'); a.wait_for_function("location.hash === '#woche/2026-43' && document.querySelector('#fw-titel').textContent.includes('43')")
+    rahmen_hat(a, 'Roastbeef Edeka')
+    t = rahmen.locator('body').inner_text()
+    check('‹ KW 43: Edeka-Preis, eigene Bezeichnung und Werbung der damaligen Woche, Hinweis zur Einstellung', '22,00' in t and 'Roastbeef Edeka' in t and 'Edeka-Woche' in t
+          and 'heutigen Einstellung' in a.inner_text('#fw-hinweis') and 'zuletzt veröffentlicht' in a.inner_text('#fw-sub'), a.inner_text('#fw-sub'))
+    a.wait_for_function(RUHE); a.screenshot(path=SH + '/fruehere-wochen.png')
+    a.click('[data-fw="zurueck"]'); a.wait_for_function("location.hash === '#woche/2026-42'")
+    a.wait_for_selector('#fw-hinweis:not([hidden])')
+    check('‹ KW 42: nur Preisstand mit Hinweis', 'nur noch der Preisstand' in a.inner_text('#fw-hinweis') and 'nur Preisstand' in a.inner_text('#fw-sub'))
+    a.click('[data-fw="vor"]'); a.wait_for_function("location.hash === '#woche/2026-43'")
+    a.click('[data-fw="heute"]'); a.wait_for_function("(kw) => location.hash === '#woche/' + kw", arg=diese)
+    check('„Diese Woche“ springt zur aktuellen KW', a.is_hidden('[data-fw="heute"]'))
+    a.keyboard.press('Escape'); a.wait_for_selector('#dlg-wochen', state='hidden')
+    a.wait_for_function("location.hash === ''")
+    check('Schließen entfernt #woche aus der Adresse', a.evaluate('location.hash') == '')
+    # Aufruf über die Adresse #woche/JJJJ-WW (gewähltes Angebot bleibt gemerkt)
+    a.goto(B + '/admin/#woche/2026-43'); a.wait_for_selector('#dlg-wochen[open]')
+    a.wait_for_function("document.querySelector('#fw-titel').textContent.includes('Edeka') && document.querySelector('#fw-titel').textContent.includes('43/2026')")
+    check('Adresse #woche/2026-43 öffnet das Fenster in KW 43 (Angebot gemerkt)', a.input_value('#fw-angebot') == 'edeka')
+    a.keyboard.press('Escape'); a.wait_for_selector('#dlg-wochen', state='hidden')
+    # 390 px
+    mp = br.new_page(viewport={'width': 390, 'height': 844}, is_mobile=True); merr = []
+    mp.on('pageerror', lambda x: merr.append(str(x)))
+    mp.goto(B + '/admin/#woche/2026-43'); mp.wait_for_selector('#screen-auth:not([hidden])')
+    mp.fill('#au-user', 'admin'); mp.fill('#pw1', 'Sicheres-Passwort-1'); mp.click('#auth-submit')
+    mp.wait_for_selector('#dlg-wochen[open]')
+    rahmen_hat(mp, '25,50')
+    breite = mp.evaluate("[document.documentElement.scrollWidth, Math.round(document.querySelector('#dlg-wochen').getBoundingClientRect().width)]")
+    check('390 px: Fenster füllt den Bildschirm, kein seitliches Scrollen, keine JS-Fehler', breite[0] <= 390 and breite[1] <= 390 and not merr, (breite, merr))
+    mp.wait_for_function(RUHE); mp.screenshot(path=SH + '/fruehere-wochen-mobil.png'); mp.close()
+
 
 with sync_playwright() as p:
     br = p.chromium.launch(); a = br.new_page(viewport={'width': 1440, 'height': 950}); errs = []
@@ -109,6 +274,7 @@ with sync_playwright() as p:
     dsw = a.evaluate("document.querySelector('#dlg-hist-data .dlg-body').scrollWidth - document.querySelector('#dlg-hist-data .dlg-body').clientWidth"); check('mobile data dialog fits', dsw <= 1, dsw)
     a.keyboard.press('Escape')
     sw = a.evaluate('document.documentElement.scrollWidth'); check('mobile no h-scroll', sw <= 390, sw)
+    fruehere_wochen_pruefen(a, br, errs)
     check('no JS errors', not errs, errs)
     br.close()
 print(f'{sum(res)}/{len(res)} passed')

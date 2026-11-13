@@ -141,6 +141,16 @@ switch ($action) {
             respond(['ok' => true, 'versions' => $out]);
         }
 
+        /* Frühere Wochen ansehen (nur lesend, Modulzugang Angebot): veröffentlichter Stand einer KW für ein Angebot, aufgelöst auf
+           dem Server (module/angebot/wochen.php) – für das Fenster „Frühere Wochen“ und die Angebotsseite darin (?vorschau=1&woche=…) */
+        case 'angebot_woche': {
+            require_modulzugang('angebot');
+            header('Cache-Control: private, no-store');
+            require_once dirname(__DIR__) . '/module/angebot/wochen.php';
+            $oid = (string)($_GET['angebot'] ?? '');
+            respond(['ok' => true, 'company' => $CFG['company'], 'fracht' => fracht_public(true)] + angebot_woche((string)($_GET['woche'] ?? ''), $oid === '' ? OFFER_STD : $oid));
+        }
+
         case 'version': {
             require_modulzugang('angebot');
             $id = (string)($_GET['id'] ?? '');
