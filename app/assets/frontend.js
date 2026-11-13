@@ -680,6 +680,7 @@ if (window.ResizeObserver) new ResizeObserver(() => { const h = $('#list'); if (
    Hinweis (Mengen, Fracht) und die Fußzeile des Briefbogens (FRACHT.fuss) – oder auf jeder Seite (Einstellung „modus“,
    zum Vergleich ?fuss=jede|letzte). */
 const FUSS_PARAM = (() => { const v = new URLSearchParams(location.search).get('fuss'); return v === 'jede' || v === 'letzte' ? v : ''; })();
+const STUFE_PARAM = new URLSearchParams(location.search).get('stufe') || '';   // zum Vergleich: ?stufe=normal|kompakt|eng legt die Dichte fest (sonst automatisch)
 const DRUCK_ENTWURF_VERMERK = false;   // true: der Druck eines Entwurfs (Vorschau, Knopf „Drucken“ im Eingabebereich) trägt im Seitenkopf den Vermerk „Entwurf“
 const druckHinweis = () => [...eigenerHinweis(), ...((FRACHT && FRACHT.hinweis) || [])];   // wie hinweisHTML
 const druckFuss = () => (FRACHT && FRACHT.fuss) || null;
@@ -697,7 +698,7 @@ function buildPrintListe(list, grouped, scopeText) {
   const f = druckFuss();
   return window.AngebotDruck.liste({
     host: $('#print-root'), kopf, werbung: scopeText || !grouped ? '' : werbungHTML(false, true),   // Werbung wie am Bildschirm: nur im gesamten Angebot
-    fuss: f, hinweis: druckHinweis(), modus: FUSS_PARAM || (f && f.modus) || 'letzte',
+    fuss: f, hinweis: druckHinweis(), modus: FUSS_PARAM || (f && f.modus) || 'letzte', stufe: STUFE_PARAM,
     bereiche: plSections(units).map((sec) => {
       const n = sec.units.reduce((a, u) => a + u.items.length, 0);
       return {
