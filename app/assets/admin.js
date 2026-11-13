@@ -5091,8 +5091,10 @@
     angebot: { kategorienVorschlag, kategorienGeaendert: () => kategorienLaden({ still: true }),
       // Aufbau des Angebots (app/module/angebot/aufbau.js): Daten fürs Fenster, Übernehmen über den Entwurf
       aufbau: { daten: () => (model ? aufbauDaten() : null), uebernehmen: aufbauUebernehmen },
-      // Drucken (app/module/angebot/druck.js): Adresse der Vorschau des gewählten Angebots; vorher den Entwurf speichern
+      // Drucken (app/module/angebot/druck.js): Adresse der Vorschau des gewählten Angebots; vorher den Entwurf speichern.
+      // adresseFuer(Angebot, Entwurf?): Adresse der Angebotsseite für ein beliebiges Angebot – Entwurf (Vorschau) oder veröffentlichter Stand
       druck: { adresse: () => (model ? pvUrl(curOffer) : ''), name: () => offerName(curOffer),
+        adresseFuer: (oid, entwurf) => (entwurf ? pvUrl(oid || OSTD) : angebotsseite('?' + (oid && oid !== OSTD ? 'angebot=' + encodeURIComponent(oid) + '&' : '') + 't=' + Date.now())),
         async bereit() { const a = document.activeElement; if (a && a.matches && a.matches('.in')) a.dispatchEvent(new Event('change', { bubbles: true })); if (unsaved()) await saveNow(); } } },
   };
 

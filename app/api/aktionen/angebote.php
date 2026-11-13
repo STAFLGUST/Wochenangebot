@@ -18,7 +18,7 @@ switch ($action) {
                     if (!$e || $e['kid'] !== $k['id'] || !einzel_sichtbar($e)) fail('Dieses Angebot ist für Ihren Zugang nicht (mehr) verfügbar.', 403);
                 } else fail('Bitte anmelden.', 401);
                 header('Cache-Control: private, no-store');
-                respond(['ok' => true, 'company' => $CFG['company'], 'offer' => einzel_model($e), 'fracht' => fracht_public()]);
+                respond(['ok' => true, 'company' => $CFG['company'], 'offer' => einzel_model($e), 'fracht' => fracht_public(true)]);
             }
             if ($oid !== OFFER_STD || !std_public()) {
                 // Mitarbeiter mit Modulzugang Angebot sehen alle Angebote; Kunden nur freigeschaltete; sonst Anmeldung nötig
@@ -35,18 +35,23 @@ switch ($action) {
                 require_modulzugang('angebot');
                 $d = store_read('entwurf') ?? store_read('angebot');
                 if (!$d) fail('Kein Entwurf vorhanden.', 404);
-                respond(['ok' => true, 'company' => $CFG['company'], 'preview' => true, 'offer' => offer_resolve($d, $def), 'fracht' => fracht_public()]);
+                respond(['ok' => true, 'company' => $CFG['company'], 'preview' => true, 'offer' => offer_resolve($d, $def), 'fracht' => fracht_public(true)]);
             }
             $published = store_read('angebot');
             if ($published === null) fail('Es ist noch kein Angebot veröffentlicht.', 404);
             $offer = offer_resolve($published, $def);
+            // Fußzeile im Druck: geschützte Bankangaben nur für angemeldete Nutzer (module/angebot/druck.php)
+            require_once dirname(__DIR__) . '/module/angebot/druck.php';
+            $angemeldet = druck_angemeldet();
+            $fracht = fracht_public($angemeldet);
             if ($oid === OFFER_STD && std_public()) {
                 // ETag über die aufgelöste Antwort: ausverkaufte Sonderposten (Bestand) und Hinweis/Fracht gehören dazu
-                $etag = '"' . hash('sha256', json_encode($offer) . json_encode(fracht_public()) . ':std:3') . '"';
+                $etag = '"' . hash('sha256', json_encode($offer) . json_encode($fracht) . ':std:3') . '"';
                 header('ETag: ' . $etag);
+                if ($angemeldet) header('Cache-Control: private, no-cache');   // Antwort mit Anmeldung nie in fremden Zwischenspeichern
                 if (trim((string)($_SERVER['HTTP_IF_NONE_MATCH'] ?? '')) === $etag) { http_response_code(304); exit; }
             }
-            respond(['ok' => true, 'company' => $CFG['company'], 'offer' => $offer, 'fracht' => fracht_public()]);
+            respond(['ok' => true, 'company' => $CFG['company'], 'offer' => $offer, 'fracht' => $fracht]);
         }
 
         /* Artikel für „Artikel hinzufügen“ im Angebot: Stammdaten (VK-Gruppe), Wochenpreis, mit Recht „Bestand ansehen“
