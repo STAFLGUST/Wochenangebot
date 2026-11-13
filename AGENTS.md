@@ -30,7 +30,10 @@ CI (`.github/workflows/ci.yml`), Branchschutz und den Release-Prozess (`.github/
    verschlüsselt gespeichert (Schlüssel `mail-schluessel.php`, nicht in Sicherungen) und nie zurückgegeben.
 6. **Datenformate nur erweitern** (GR-006). Code muss bestehende Daten weiter lesen können, damit ein Rückfall auf die
    Vorversion keine Daten beschädigt. Unverträgliche Änderungen brauchen eine eigene Migration mit Freigabe.
-7. **Öffentliche Seite:** nie Mengen, Chargen, MHD oder Einkaufspreise ausliefern (GR-001, GR-008).
+7. **Öffentliche Seite und Angebote:** nie Mengen, Chargen, MHD oder Einkaufspreise ausliefern (GR-001, GR-008) – auch nicht
+   in Wochen- und Kundenangeboten. Einzige Ausnahme (Inhaber 13.11.2026): in einem freigegebenen Einzelangebot ausdrücklich
+   angebotene Partien zeigen dem berechtigten Kunden genau dieses Angebots Charge, MHD und Menge als Schnappschuss –
+   nie EK, nie weitere Partien, nie den Bestand.
 8. **Kundenangebote:** Preise eines Kundenangebots (`variants`) werden nur aufgelöst und nur an angemeldete,
    berechtigte Nutzer ausgeliefert (`offer_resolve`); das öffentliche Wochenangebot enthält nie Kundenpreise (GR-002).
 9. **Kundenzugänge** sind vom Eingabebereich getrennt (GR-003, GR-104): Aktionen des Eingabebereichs prüfen nur die

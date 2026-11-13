@@ -300,6 +300,130 @@ check('Leser darf nicht löschen', L.call('einzel_loeschen', {'id': e3['id']})[0
 check('Löschen', A.call('einzel_loeschen', {'id': e3['id']})[0] == 200 and A.call('einzel_detail&id=' + e3['id'])[0] == 404)
 check('Protokoll: Freigabe, Rückzug, Löschen', all(s in json.dumps(A.call('log')[1], ensure_ascii=False) for s in ('im Portal freigegeben', 'zurückgezogen', e3['nr'] + ' gelöscht')))
 
+# ---------- Partien im Einzelangebot (Entscheidung des Inhabers 13.11.2026, GR-001 Version 2) ----------
+# Der Kunde sieht zu einer ausdrücklich angebotenen Partie Charge, MHD und Menge (Schnappschuss) – nie EK, nie weitere Partien,
+# nie den Bestand. Zuordnen nur mit „Bestand ansehen“; Werte übernimmt der Server aus dem Bestand.
+check('alte Positionen ohne Partie bleiben im bisherigen Format', all(set(p) == {'code', 'name', 'qty', 'price', 'notiz'} for x in doc('einzelangebote')['list'] for p in x['positions']))
+PP = [{'code': '10601', 'name': 'Roastbeef, frisch', 'qty': 10, 'price': 24.9, 'notiz': '', 'partie': {'lot': 'P-0002', 'mhd': '1999-01-01', 'kg': 999, 'ek': 1}},
+      {'code': '10601', 'name': 'Roastbeef, frisch', 'qty': None, 'price': 23.5, 'notiz': 'kurzes MHD', 'partie': {'lot': 'P-0001'}},
+      {'code': '10701', 'name': 'Entrecote, frisch', 'qty': 3, 'price': 27, 'notiz': ''}]
+
+
+def ps(**kw):
+    return {'kid': kid, 'titel': 'Partien <Test>', 'gueltigBis': bis, 'hinweis': '', 'positions': PP, **kw}
+
+
+def anzahl():
+    return len(doc('einzelangebote')['list'])
+
+
+n0 = anzahl()
+check('Partie zuordnen ohne Recht „Bestand ansehen“ → 403', E.call('einzel_save', ps())[0] == 403)
+check('Kunde kann keine Partie zuordnen', K.call('einzel_save', ps())[0] in (401, 403))
+FEHLER = [('unbekannte Partie', [{**PP[0], 'partie': {'lot': 'P-9999'}}]),
+          ('Partie eines anderen Artikels', [{**PP[2], 'partie': {'lot': 'P-0001'}}]),
+          ('erwartete (nicht eingelagerte) Partie', [{**PP[0], 'partie': {'lot': 'TEST-A'}}]),
+          ('Partie an freier Position', [{'code': '', 'name': 'Frei', 'partie': {'lot': 'P-0001'}}]),
+          ('Partie als Text', [{**PP[0], 'partie': 'P-0001'}]),
+          ('Partie ohne Nummer', [{**PP[0], 'partie': {}}]),
+          ('Partie mit leerer Nummer', [{**PP[0], 'partie': {'lot': ' '}}]),
+          ('Menge größer als die Partie (15,01 > 15 kg)', [{**PP[1], 'qty': 15.01}]),
+          ('dieselbe Partie zweimal', [PP[0], {**PP[0], 'qty': 1}])]
+for name, pos in FEHLER:
+    st, r = A.call('einzel_save', ps(positions=pos))
+    check(f'Partie: {name} → 422', st == 422, (st, r.get('error')))
+st, r = A.call('einzel_save', ps(positions=[{**PP[1], 'qty': 16}]))
+check('Meldung nennt Partie und Menge', st == 422 and 'größer als die Partie P-0001 (15,00 kg)' in r.get('error', ''), r.get('error'))
+check('abgewiesene Partien legen nichts an', anzahl() == n0)
+
+st, r = A.call('einzel_save', ps())
+e5 = r.get('angebot', {})
+p5 = e5.get('positions', [{}, {}, {}])
+check('Partien zugeordnet: Schnappschuss aus dem Bestand, Werte des Browsers ignoriert', st == 200 and p5[0].get('partie') == {'lot': 'P-0002', 'mhd': '2026-12-04', 'kg': 25}
+      and p5[1].get('partie') == {'lot': 'P-0001', 'mhd': '2026-11-20', 'kg': 15} and 'partie' not in p5[2], p5)
+check('zwei Partien desselben Artikels als getrennte Positionen; Summe zählt Partie ohne Menge ganz', e5.get('summen') == {'kg': 28, 'summe': 682.5}, e5.get('summen'))
+gesp = next((x for x in doc('einzelangebote')['list'] if x['id'] == e5.get('id')), {})
+check('gespeichert ohne EK, Eingang oder Kolli', all(set(p['partie']) == {'lot', 'mhd', 'kg'} for p in gesp.get('positions', [])[:2])
+      and not re.search(r'18\.5|19\.25|"ek"|arrival|kolli', json.dumps(gesp)), gesp.get('positions'))
+check('Protokoll: Positionen mit Partie', f"{e5.get('nr')} für „Kantine <Einzel>“ angelegt (3 Positionen, davon 2 mit Partie)" in json.dumps(A.call('log')[1], ensure_ascii=False))
+EID5 = 'e-' + e5['id']
+
+# Schnappschuss (GR-106): neuer Bestand ändert das Angebot nicht; bekannte Partie bleibt auch verkauft gültig
+STOCK2 = json.loads(json.dumps(STOCK))
+STOCK2['articles'][0].update({'kg': 5, 'lots': [{'lot': 'P-0002', 'arrival': '2026-10-09', 'mhd': '2026-11-30', 'kolli': 1, 'kg': 5, 'ek': 19.25}]})
+assert A.call('stock_import', STOCK2)[0] == 200
+d5 = A.call('einzel_detail&id=' + e5['id'])[1]['angebot']
+check('Bestand geändert: Partien im Angebot unverändert', [p.get('partie') for p in d5['positions'][:2]] == [p5[0]['partie'], p5[1]['partie']], [p.get('partie') for p in d5['positions']])
+st, r = A.call('einzel_save', ps(id=e5['id'], revision=d5['revision'], positions=[PP[0], {**PP[1], 'qty': 15}, PP[2]]))
+check('erneut gespeichert: Schnappschuss bleibt (verkaufte Partie, alte Menge), Menge = Partie erlaubt', st == 200 and r['angebot']['positions'][1]['partie'] == {'lot': 'P-0001', 'mhd': '2026-11-20', 'kg': 15}
+      and r['angebot']['positions'][0]['partie']['kg'] == 25 and r['angebot']['positions'][1]['qty'] == 15, r.get('angebot', {}).get('positions'))
+e5 = r.get('angebot', e5)
+check('neue Zuordnung einer verkauften Partie → 422', A.call('einzel_save', ps(positions=[PP[1]]))[0] == 422 and anzahl() == n0 + 1)
+assert A.call('stock_import', STOCK)[0] == 200   # Bestand wie zu Beginn (Oberfläche unten)
+
+# Ohne „Bestand ansehen“: vorhandene Partien bleiben beim Speichern erhalten, neue Zuordnung 403, Entfernen erlaubt
+POS5 = [{'code': p['code'], 'name': p['name'], 'qty': p['qty'], 'price': p['price'], 'notiz': p['notiz'], **({'partie': {'lot': p['partie']['lot']}} if 'partie' in p else {})} for p in e5['positions']]
+st, r = E.call('einzel_save', ps(id=e5['id'], revision=e5['revision'], positions=POS5[:2] + [{**POS5[2], 'price': 26}]))
+check('Bearbeiter ohne Bestandsrecht: Partien bleiben beim Speichern erhalten', st == 200 and [p.get('partie') for p in r['angebot']['positions']] == [p.get('partie') for p in e5['positions']]
+      and r['angebot']['positions'][2]['price'] == 26, r)
+e5 = r.get('angebot', e5)
+st, r = E.call('einzel_save', ps(id=e5['id'], revision=e5['revision'], positions=POS5[:2] + [{**POS5[2], 'price': 26, 'partie': {'lot': 'P-0001'}}]))
+check('… neue Partie zuordnen → 403', st == 403)
+st, r = E.call('einzel_save', ps(id=e5['id'], revision=e5['revision'], positions=[POS5[0], {**POS5[1], 'partie': None}, {**POS5[2], 'price': 26}]))
+check('… Partie entfernen erlaubt', st == 200 and 'partie' not in r['angebot']['positions'][1] and r['angebot']['positions'][1]['qty'] == 15)
+e5 = r.get('angebot', e5)
+st, r = A.call('einzel_save', ps(id=e5['id'], revision=e5['revision'], positions=[POS5[0], POS5[1], {**POS5[2], 'price': 26}]))
+e5 = r.get('angebot', e5)
+check('Administrator ordnet die Partie wieder zu (aus dem Bestand)', st == 200 and e5['positions'][1].get('partie') == {'lot': 'P-0001', 'mhd': '2026-11-20', 'kg': 15})
+
+# CRM (Kunden-Pop-up): gleiche Funktionen; die Oberfläche schickt nur die Partienummer zurück
+st, r = V.call(f'crm_einzel_detail&key={kid}&id={e5["id"]}')
+check('CRM: Einzelangebot mit Partien (Schnappschuss, ohne EK)', st == 200 and r['angebot']['positions'][0].get('partie') == {'lot': 'P-0002', 'mhd': '2026-12-04', 'kg': 25} and '19.25' not in json.dumps(r), r.get('angebot', {}).get('positions'))
+st, r = V.call('crm_einzel_save', {'key': kid, 'id': e5['id'], 'revision': e5['revision'], 'titel': 'Partien <Test>', 'gueltigBis': bis, 'hinweis': '', 'positions': POS5[:2] + [{**POS5[2], 'price': 26.5}]})
+check('CRM: Speichern behält die Partien', st == 200 and [p.get('partie') for p in r['angebot']['positions']] == [p.get('partie') for p in e5['positions']] and r['angebot']['positions'][2]['price'] == 26.5, r.get('error'))
+e5 = r.get('angebot', e5)
+check('CRM: Menge über der Partie → 422', V.call('crm_einzel_save', {'key': kid, 'id': e5['id'], 'revision': e5['revision'], 'positions': [{**POS5[0], 'qty': 30}]})[0] == 422)
+
+# Kunde: nur im eigenen, freigegebenen Einzelangebot; Menge = angebotene Menge (nicht die Größe der Partie)
+check('Entwurf mit Partien: Kunde gesperrt', K.call('offer&angebot=' + EID5)[0] == 403)
+st, r = A.call('einzel_status', {'id': e5['id'], 'revision': e5['revision'], 'status': 'freigegeben'})
+e5 = r.get('angebot', e5)
+st, r = K.call('offer&angebot=' + EID5)
+off5 = r.get('offer', {})
+it5 = off5.get('items', [{}, {}, {}])
+check('Kunde sieht Charge, MHD und angebotene Menge', st == 200 and it5[0].get('partie') == {'lot': 'P-0002', 'mhd': '2026-12-04', 'kg': 10}
+      and it5[1].get('partie') == {'lot': 'P-0001', 'mhd': '2026-11-20', 'kg': 15} and 'partie' not in it5[2], it5)
+txt5 = json.dumps(off5)
+check('GR-001/GR-008: im Kundenmodell nie EK, Eingang, Kolli, weitere Partien oder Bestand', not re.search(r'18\.5|19\.25|"ek"|arrival|kolli|"lots"|incoming|TEST-A|"qty"|stdPrice|"kg": 25\b|"kg": 40\b', txt5), txt5[:400])
+check('anderer Kunde: Einzelangebot mit Partien gesperrt', K2.call('offer&angebot=' + EID5)[0] == 403 and 'P-0002' not in json.dumps(K2.call('kunde_status')[1]))
+check('ohne Anmeldung: gesperrt', Client().call('offer&angebot=' + EID5)[0] == 401)
+WOCHE = [K.call('offer'), Client().call('offer')] + [A.call('offer&angebot=' + o) for o in ('chefs-culinar', 'handelshof-efs', 'edeka', 'bela')]
+check('GR-001: Wochenangebot und Kundenangebote weiterhin ohne Partien, Chargen, MHD und Mengen', all(s == 200 for s, _ in WOCHE)
+      and not any(re.search(r'partie|P-000|"mhd"|"lot"|"kg"', json.dumps(x)) for _, x in WOCHE), [s for s, _ in WOCHE])
+
+# Bestellwunsch: Charge und MHD stehen am Namen (zwei Partien desselben Artikels unterscheidbar), Preise vom Server
+st, r = K.call('kunde_bestellung', {'angebot': EID5, 'publishedAt': off5.get('publishedAt'), 'positions': [{'id': 'p1', 'qty': 4, 'price': 0.01}, {'id': 'p2', 'qty': 2}], 'requestId': 'einzel-request-000000010'})
+b5 = [b for b in (doc('bestellungen') or []) if b.get('angebot') == EID5]
+check('Bestellwunsch: Charge und MHD am Artikel, Preis vom Server', st == 200 and b5 and [p['name'] for p in b5[-1]['positions']] == ['Roastbeef, frisch (Charge P-0002, MHD 04.12.2026)', 'Roastbeef, frisch – kurzes MHD (Charge P-0001, MHD 20.11.2026)']
+      and b5[-1]['positions'][0]['sum'] == 99.6, b5[-1]['positions'] if b5 else r)
+
+# PDF und E-Mail an den Kunden
+code, typ, data = hole(A, 'einzel_pdf&id=' + e5['id'])
+inh5 = pdf_inhalt(data)
+with open(SH + '/einzelangebot-partien.pdf', 'wb') as fh:   # zum Ansehen (Ergebnisordner der Tests)
+    fh.write(data)
+check('PDF: je Partie Charge, MHD und Menge', code == 200 and 'Charge P-0002 · MHD 04.12.2026 · 10,00 kg' in inh5 and 'Charge P-0001 · MHD 20.11.2026 · 15,00 kg' in inh5 and 'Menge 3,00 kg' in inh5, inh5[:600])
+check('PDF: ohne EK, Bestand und weitere Partien', not re.search(r'18,50|19,25|TEST-A|Eingelagert|25,00 kg', inh5))
+n0m = len(smtp.messages)
+st, r = A.call('einzel_senden', {'id': e5['id'], 'note': 'Partien wie besprochen.'})
+until(lambda: len(smtp.messages) > n0m)
+m5 = smtp.messages[-1] if len(smtp.messages) > n0m else {}
+b5t, b5h = m5.get('text') or '', m5.get('html') or ''
+b5x = re.sub(r'<[^>]+>', '', b5h)   # sichtbarer Text der HTML-Fassung
+check('E-Mail (Liste): je Partie Charge, MHD und Menge', st == 200 and '10601 Roastbeef, frisch: 24,90 €/kg, Charge P-0002 · MHD 04.12.2026 · 10,00 kg' in b5t
+      and 'Charge P-0001 · MHD 20.11.2026 · 15,00 kg' in b5t and 'Charge P-0002 · MHD 04.12.2026' in b5x and '15,00 kg' in b5x, b5t[:600])
+check('E-Mail: ohne EK, Bestand und weitere Partien', not re.search(r'18,50|19,25|TEST-A|Eingelagert|25,00 kg', b5t + b5h))
+
 # ---------- Oberfläche ----------
 errors = []
 
@@ -485,10 +609,57 @@ with sync_playwright() as p:
     check('drei Artikel aus zwei Gruppen übernommen (nach Gruppe sortiert), Wochenpreise vorbelegt', codes == ['10601', '10701', '10823'] and a.input_value('#ez-pos tr[data-i="1"] [data-f="price"]') == '27,21', codes)
     a.click('#ez-zurueck'); a.click('#dlg-confirm .btn.primary'); a.wait_for_selector('#view-einzel tr[data-ez]')
 
+    # Partien (Inhaber 13.11.2026): je Position eine Partie wählen, weitere Partie als eigene Position, Menge ≤ Partie
+    a.click(f'#view-einzel tr[data-ez="{e5["id"]}"]'); a.wait_for_selector('#ez-pos tr[data-i="1"] [data-f="partie"]')
+    check('Partie-Auswahl zeigt die gespeicherte Partie', a.input_value('#ez-pos tr[data-i="0"] [data-f="partie"]') == 'P-0002' and a.input_value('#ez-pos tr[data-i="1"] [data-f="partie"]') == 'P-0001'
+          and a.locator('#ez-pos tr[data-i="2"] [data-f="partie"]').count() == 0)
+    with ctx.expect_page() as pi:
+        a.click('#btn-ez-druck')
+    w = pi.value; w.on('pageerror', lambda e: errors.append(str(e)))
+    w.wait_for_selector('#dlg-print[open]'); w.click('#print-go'); w.wait_for_function('window.__gedruckt === true')
+    wt = w.inner_text('#print-root')
+    check('Druck (Angebotsansicht): je Partie Charge, MHD und Menge, kein EK', 'Charge P-0002 · MHD 04.12.2026 · 10,00 kg' in wt and 'Charge P-0001 · MHD 20.11.2026 · 15,00 kg' in wt
+          and not re.search(r'18,50|19,25|TEST-A|Eingelagert', wt), wt[:400])
+    w.emulate_media(media='print'); w.screenshot(path=SH + '/einzelangebot-partien-druck.png', full_page=True)
+    w.close()
+    a.click('#ez-zurueck'); a.wait_for_selector('#view-einzel tr[data-ez]')
+    a.click('#ez-neu'); a.wait_for_selector('#ez-kunde')
+    a.click('#ez-kunde'); a.fill('#ez-kunde', 'kantine einzel'); a.wait_for_selector('#ez-kunde-list li.akt[data-kid]'); a.press('#ez-kunde', 'Enter'); a.wait_for_selector('#ez-kunde-list', state='hidden')
+    a.click('#ez-add'); a.wait_for_selector('#dlg-ez-pick[open]'); a.click('#ezp-grp [data-grp="1600"]'); a.wait_for_selector('#ezp-list tr[data-code="10601"]')
+    a.check('#ezp-list [data-sel="10601"]'); a.click('#ezp-ok'); a.wait_for_selector('#ez-pos tr[data-i="0"] [data-f="partie"]')
+    r0 = '#ez-pos tr[data-i="0"]'
+    opts = a.eval_on_selector_all(r0 + ' [data-f="partie"] option', 'e => e.map(x => x.value + "|" + x.textContent)')
+    check('Partien zur Wahl: ohne, frühestes MHD zuerst, mit MHD und kg, ohne EK', opts == ['|ohne Partie', 'P-0001|P-0001 · MHD 20.11.2026 · 15,00 kg', 'P-0002|P-0002 · MHD 04.12.2026 · 25,00 kg'], opts)
+    a.select_option(r0 + ' [data-f="partie"]', 'P-0001'); a.wait_for_selector(r0 + ' [data-partie-plus]')
+    check('Partie gewählt: Menge mit der Partie vorbelegt, „+ Partie“ für weitere', a.input_value(r0 + ' [data-f="qty"]') == '15' and a.locator(r0 + ' [data-partie-plus]').is_visible())
+    a.click(r0 + ' [data-partie-plus]'); a.wait_for_selector('#ez-pos tr[data-i="1"] [data-f="partie"]')
+    r1 = '#ez-pos tr[data-i="1"]'
+    check('weitere Partie als eigene Position (nächste freie Partie, Menge, gleicher Preis)', a.input_value(r1 + ' [data-f="partie"]') == 'P-0002' and a.input_value(r1 + ' [data-f="qty"]') == '25'
+          and a.input_value(r1 + ' [data-f="price"]') == a.input_value(r0 + ' [data-f="price"]') and ed_count(a) == 2)
+    gesperrt = a.eval_on_selector(r0 + ' [data-f="partie"] option[value="P-0002"]', 'o => [o.disabled, o.textContent]')
+    check('vergebene Partie in der anderen Position gesperrt, kein weiteres „+ Partie“', gesperrt == [True, 'P-0002 · MHD 04.12.2026 · 25,00 kg (Position 2)'] and a.locator('#ez-pos [data-partie-plus]').count() == 0,
+          (gesperrt, a.locator('#ez-pos [data-partie-plus]').count()))
+    a.fill(r1 + ' [data-f="qty"]', '30')
+    check('Menge über der Partie markiert', 'invalid' in a.get_attribute(r1 + ' [data-f="qty"]', 'class'))
+    a.click('#ez-save'); a.wait_for_function("document.body.innerText.includes('größer als die Partie P-0002')")
+    check('Speichern mit zu großer Menge abgewiesen (Hinweis)', a.locator('#ez-dirty').is_visible())
+    a.fill(r1 + ' [data-f="qty"]', '20'); a.press(r1 + ' [data-f="qty"]', 'Tab')
+    a.screenshot(path=SH + '/einzelangebot-partien.png', full_page=True)
+    a.click('#ez-save'); a.wait_for_selector('#ez-freigeben')
+    neu6 = max((x for x in doc('einzelangebote')['list'] if x['kid'] == kid), key=lambda x: x['changed'])
+    check('über die Oberfläche gespeichert: zwei Positionen mit Partie (Schnappschuss)', [(p['qty'], p.get('partie')) for p in neu6['positions']]
+          == [(15, {'lot': 'P-0001', 'mhd': '2026-11-20', 'kg': 15}), (20, {'lot': 'P-0002', 'mhd': '2026-12-04', 'kg': 25})], neu6['positions'])
+    a.select_option(r0 + ' [data-f="partie"]', ''); a.wait_for_selector(r0 + ' [data-partie-plus]', state='detached')
+    check('„ohne Partie“ entfernt die Zuordnung (Menge bleibt)', a.input_value(r0 + ' [data-f="qty"]') == '15' and a.locator('#ez-dirty').is_visible())
+    a.select_option(r0 + ' [data-f="partie"]', 'P-0001'); a.click('#ez-save'); a.wait_for_function("!document.querySelector('#ez-dirty') || document.querySelector('#ez-dirty').hidden")
+    a.click('#ez-zurueck'); a.wait_for_selector('#view-einzel tr[data-ez]')
+
     a.set_viewport_size({'width': 390, 'height': 820}); a.emulate_media(color_scheme='dark')   # mobil im dunklen Modus
     a.locator('#view-einzel tr[data-ez]').first.click(); a.wait_for_selector('#ez-pos')
     over = a.evaluate('document.documentElement.scrollWidth - document.documentElement.clientWidth')
     check('Mobil 390 px: kein seitliches Scrollen', over <= 1, over)
+    sel = a.evaluate("[...document.querySelectorAll('#ez-pos [data-f=\"partie\"]')].map(s => { const r = s.getBoundingClientRect(); return r.width > 80 && r.left >= 0 && r.right <= innerWidth; })")
+    check('Mobil 390 px: Partie-Auswahl je Position sichtbar und im Bild', sel == [True, True], sel)
     a.screenshot(path=SH + '/einzelangebot-mobil.png', full_page=True)
     a.click('#ez-add'); a.wait_for_selector('#dlg-ez-pick[open]')
     check('Mobil: Gruppenwahl als Auswahlliste', a.locator('#ezp-grp-sel').is_visible() and a.locator('.ezp-nav').is_hidden())
@@ -509,7 +680,32 @@ with sync_playwright() as p:
     lp.locator('#view-einzel tr[data-ez]').first.click(); lp.wait_for_selector('#ez-pos')
     check('Leser: nur lesend, kein „Artikel hinzufügen“', lp.locator('#ez-save').count() == 0 and lp.locator('#ez-add').count() == 0 and lp.locator('#ez-kunde').is_disabled())
     check('Leser: oben nur Drucken, kein E-Mail-Versand', lp.locator('#btn-ez-druck').is_visible() and lp.locator('#btn-ez-mail').is_hidden() and lp.locator('#ez-mail').count() == 0)
+    pt = lp.eval_on_selector_all('#ez-pos .ez-partie-t', 'e => e.map(x => x.textContent)')
+    check('Leser: Partien nur als Text', pt == ['Partie P-0001 · MHD 20.11.2026 · 15,00 kg', 'Partie P-0002 · MHD 04.12.2026 · 25,00 kg'] and lp.locator('#ez-pos [data-f="partie"]').count() == 0, pt)
     lp.close()
+
+    # E-Mail an den Kunden mit Partien (Liste) als Bild: 600 und 390 px
+    mp = br.new_page(viewport={'width': 600, 'height': 900})
+    mp.set_content(b5h)
+    mp.screenshot(path=SH + '/einzelangebot-partien-mail.png', full_page=True)
+    mp.set_viewport_size({'width': 390, 'height': 900})
+    over = mp.evaluate('document.documentElement.scrollWidth - document.documentElement.clientWidth')
+    check('E-Mail mit Partien bei 390 px ohne seitliches Scrollen', over <= 1, over)
+    mp.screenshot(path=SH + '/einzelangebot-partien-mail-mobil.png', full_page=True)
+    mp.close()
+
+    # Bearbeiter ohne „Bestand ansehen“: Partien sichtbar, aber keine Auswahl (Server: 403 bei neuer Zuordnung)
+    ep = br.new_page(viewport={'width': 1280, 'height': 900})
+    ep.on('pageerror', lambda e: errors.append(str(e)))
+    ep.goto(BASE + '/admin/'); ep.wait_for_selector('#screen-auth:not([hidden])')
+    ep.fill('#au-user', 'eddi'); ep.fill('#pw1', 'Editor-Zugang-77'); ep.click('#auth-submit'); ep.wait_for_selector('#vt-einzel:not([hidden])')
+    ep.click('#vt-einzel'); ep.wait_for_selector(f'#view-einzel tr[data-ez="{e5["id"]}"]')
+    ep.click(f'#view-einzel tr[data-ez="{e5["id"]}"]'); ep.wait_for_selector('#ez-pos .ez-partie-t')
+    pt = ep.eval_on_selector_all('#ez-pos .ez-partie-t', 'e => e.map(x => x.textContent)')
+    check('ohne Bestandsrecht: Partien als Text, keine Auswahl, Bearbeiten möglich', pt == ['Partie P-0002 · MHD 04.12.2026 · 25,00 kg', 'Partie P-0001 · MHD 20.11.2026 · 15,00 kg']
+          and ep.locator('#ez-pos [data-f="partie"]').count() == 0 and ep.locator('#ez-save').is_visible(), pt)
+    ep.screenshot(path=SH + '/einzelangebot-partien-ohne-bestandsrecht.png')
+    ep.close()
 
     # Portal: Kunde sieht sein Einzelangebot und kann bestellen
     kctx = br.new_context(viewport={'width': 1280, 'height': 900})
@@ -534,6 +730,34 @@ with sync_playwright() as p:
     check('Portal mobil 390 px: kein seitliches Scrollen', over <= 1, over)
     m.screenshot(path=SH + '/einzelangebot-portal-mobil.png')
     c.close()
+
+    # Portal: Kunde sieht in seinem Einzelangebot je Partie Charge, MHD und Menge (Angebotsansicht, Bestellansicht, Details, 390 px)
+    pctx = br.new_context(viewport={'width': 1280, 'height': 900})
+    c = pctx.new_page()
+    c.on('pageerror', lambda e: errors.append(str(e)))
+    c.goto(BASE + '/'); c.wait_for_selector('#btn-kunde-login'); c.click('#btn-kunde-login')
+    c.fill('#kl-form [name=username]', 'kantine.einzel'); c.fill('#kl-form [name=password]', KPW); c.click('#kl-form [type=submit]')
+    c.wait_for_selector('.k-switch [data-kswitch^="e-"]')
+    c.goto(BASE + '/?angebot=' + EID5); c.wait_for_selector('#list .al-partie')
+    at = c.inner_text('#list')
+    check('Portal (Angebotsansicht): Charge, MHD und Menge je Partie', 'Charge P-0002 · MHD 04.12.2026 · 10,00 kg' in at and 'Charge P-0001 · MHD 20.11.2026 · 15,00 kg' in at
+          and c.locator('#list .al-partie').count() == 2, at[:400])
+    check('Portal: kein EK, kein Bestand, keine weiteren Partien', not re.search(r'18,50|19,25|TEST-A|Eingelagert|25,00 kg|P-0003', c.inner_text('body')))
+    c.screenshot(path=SH + '/einzelangebot-partien-portal.png')
+    c.click('#modebar [data-mode=liste]'); c.wait_for_selector('#list .t-partie')
+    check('Portal (Bestellansicht): Partie unter der Bezeichnung', 'Charge P-0002 · MHD 04.12.2026 · 10,00 kg' in c.inner_text('#list .grid'))
+    c.click('#list .name-btn >> nth=0'); c.wait_for_selector('#dlg-detail[open]')
+    dt = c.inner_text('#dlg-detail')
+    check('Portal (Details): Charge, MHD und Menge', 'Charge' in dt and 'P-0002' in dt and '04.12.2026' in dt and '10,00 kg' in dt, dt[:300])
+    c.keyboard.press('Escape')
+    m = pctx.new_page(); m.set_viewport_size({'width': 390, 'height': 820})
+    m.on('pageerror', lambda e: errors.append(str(e)))
+    m.goto(BASE + '/?angebot=' + EID5); m.wait_for_selector('#list .partie')
+    over = m.evaluate('document.documentElement.scrollWidth - document.documentElement.clientWidth')
+    vis = m.evaluate("[...document.querySelectorAll('#list .partie')].filter(x => x.offsetParent).map(x => { const r = x.getBoundingClientRect(); return r.left >= 0 && r.right <= innerWidth + 1; })")
+    check('Portal mobil 390 px: Partien sichtbar, kein seitliches Scrollen', over <= 1 and len(vis) == 2 and all(vis), (over, vis))
+    m.screenshot(path=SH + '/einzelangebot-partien-portal-mobil.png', full_page=True)
+    pctx.close()
     br.close()
 
 check('keine JavaScript-Fehler', not errors, errors[:3])

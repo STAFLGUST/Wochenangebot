@@ -2,10 +2,14 @@
 declare(strict_types=1);
 /* Einzelangebote: ein Angebot für genau einen Kunden (Angebot bearbeiten → Einzelangebote).
    Dokument „einzelangebote“: { seq: {Jahr: Nummer}, list: [Einzelangebot] }.
-   Einzelangebot: { id, nr (E-JJJJ-0001), kid, titel, gueltigBis, hinweis, positions: [{ code, name, qty, price, notiz }],
+   Einzelangebot: { id, nr (E-JJJJ-0001), kid, titel, gueltigBis, hinweis, positions: [{ code, name, qty, price, notiz, partie? }],
                     status (entwurf|freigegeben|zurueckgezogen), revision, created(By), changed(By), freigegebenAt, gesendet: [...] }
+   partie (optional, seit 13.11.2026): { lot, mhd, kg } – eine eingelagerte Partie des Bestands, die diese Position anbietet.
+   Schnappschuss beim Zuordnen (GR-106): danach unverändert gespeichert, spätere Bestandsänderungen ändern das Angebot nicht.
    Freigegebene, gültige Einzelangebote sieht der Kunde im Portal als eigenes Angebot (Kennung „e-<id>“) und kann daraus
-   bestellen; Preise rechnet der Server aus dem Einzelangebot (Regel 10). Bestand erscheint nie beim Kunden (Regel 7). */
+   bestellen; Preise rechnet der Server aus dem Einzelangebot (Regel 10). Den Bestand sieht der Kunde nie (GR-001) – einzige
+   Ausnahme (Entscheidung des Inhabers 13.11.2026): ausdrücklich angebotene Partien zeigen ihm Charge, MHD und Menge dieses
+   Schnappschusses; nie Einkaufspreise (GR-008), nie weitere Partien. */
 if (!defined('WA_API')) { http_response_code(404); exit; }   // nur über api/index.php nutzbar
 
 const EINZEL_STATUS = ['entwurf', 'freigegeben', 'zurueckgezogen'];
@@ -64,17 +68,99 @@ function einzel_clean(array $b): array
             $qty = round((float)$qty, 2);   // erst runden, dann prüfen – sonst würde 0,004 als „0 kg“ gespeichert
             if ($qty <= 0 || $qty > 99999) throw new InvalidArgumentException("Ungültige Menge bei „{$name}“ (0,01 bis 99.999 kg).");
         } else $qty = null;
-        $pos[] = ['code' => $code, 'name' => $name, 'qty' => $qty, 'price' => $price, 'notiz' => s($p['notiz'] ?? '', 200) ?? ''];
+        $row = ['code' => $code, 'name' => $name, 'qty' => $qty, 'price' => $price, 'notiz' => s($p['notiz'] ?? '', 200) ?? ''];
+        /* Partie: vom Browser zählt nur die Partienummer – MHD und Menge übernimmt der Server aus dem Bestand bzw. aus dem
+           gespeicherten Schnappschuss (einzel_partien_aufloesen) */
+        if (($p['partie'] ?? null) !== null) {
+            $lot = is_array($p['partie']) ? s($p['partie']['lot'] ?? null, 20, false) : null;
+            if ($lot === null) throw new InvalidArgumentException("Ungültige Partie bei „{$name}“.");
+            if ($code === '') throw new InvalidArgumentException("Eine Partie lässt sich nur einer Position mit Artikelnummer zuordnen („{$name}“).");
+            $row['partie'] = ['lot' => $lot];
+        }
+        $pos[] = $row;
     }
     return [$c, ['kid' => $kid, 'titel' => s($b['titel'] ?? '', 120) ?? '', 'gueltigBis' => $bis !== '' ? $bis : null,
                  'hinweis' => mb_substr(trim(str_replace("\r", '', preg_replace('/[\x00-\x08\x0b-\x1f]/u', '', (string)($b['hinweis'] ?? '')) ?? '')), 0, 1000),
                  'positions' => $pos]];
 }
-/* Summen (Positionen mit Menge und Preis) */
+/* ---------- Partien (Entscheidung des Inhabers 13.11.2026, GR-001 Version 2) ----------
+   Eingelagerte Partien des Bestands je Artikel: code_key → Partienummer → { lot, mhd, kg }. Nur Partien mit Nummer; kommt
+   eine Nummer bei einem Artikel mehrfach vor, zählen die Mengen zusammen (frühestes MHD). Nie Einkaufspreise (GR-008).
+   Das Angebot ist Leser des Dokuments „bestand“ (regeln/datenverantwortung.toml) – wie die Artikelsuche einzel_artikel(). */
+function einzel_bestand_partien(): array
+{
+    $out = [];
+    foreach ((store_read('bestand')['articles'] ?? []) as $a) {
+        $k = code_key((string)($a['code'] ?? ''));
+        foreach (($a['lots'] ?? []) as $l) {
+            $lot = (string)($l['lot'] ?? '');
+            if ($lot === '') continue;
+            $kg = round((float)($l['kg'] ?? 0), 3);
+            $mhd = is_string($l['mhd'] ?? null) ? $l['mhd'] : null;
+            if (!isset($out[$k][$lot])) { $out[$k][$lot] = ['lot' => $lot, 'mhd' => $mhd, 'kg' => $kg]; continue; }
+            $x = &$out[$k][$lot];
+            $x['kg'] = round($x['kg'] + $kg, 3);
+            if ($mhd !== null && ($x['mhd'] === null || $mhd < $x['mhd'])) $x['mhd'] = $mhd;
+            unset($x);
+        }
+    }
+    return $out;
+}
+/* Partien der Positionen auflösen ($alt: bisher gespeichertes Einzelangebot oder null). Gleiche Partie desselben Artikels wie
+   bisher: der gespeicherte Schnappschuss bleibt (GR-106) – auch wenn sich der Bestand inzwischen geändert hat oder die Partie
+   verkauft ist. Neue Zuordnung: nur mit Recht „bestand.sehen“ (403), Partie muss zum Artikel gehören und eingelagert sein
+   (422); Schnappschuss aus dem Bestand. Angebotene Menge höchstens die Menge der Partie (422); jede Partie nur einmal. */
+function einzel_partien_aufloesen(array $pos, ?array $alt, array $me): array
+{
+    $vorher = [];
+    foreach (($alt['positions'] ?? []) as $p) {
+        if (is_array($p['partie'] ?? null) && ($p['partie']['lot'] ?? '') !== '') $vorher[code_key((string)$p['code']) . '|' . $p['partie']['lot']] = $p['partie'];
+    }
+    $bestand = null; $belegt = [];
+    foreach ($pos as $i => $p) {
+        if (!isset($p['partie'])) continue;
+        $lot = $p['partie']['lot'];
+        $schluessel = code_key($p['code']) . '|' . $lot;
+        if (isset($belegt[$schluessel])) fail("Die Partie „{$lot}“ steht schon in einer anderen Position. Jede Partie lässt sich nur einmal anbieten.", 422);
+        $belegt[$schluessel] = true;
+        $snap = $vorher[$schluessel] ?? null;
+        if ($snap === null) {
+            if (!may($me, 'bestand.sehen')) fail('Partien zuordnen darf nur, wer den Bestand ansehen darf (Recht „Bestand ansehen“).', 403);
+            $bestand ??= einzel_bestand_partien();
+            $l = $bestand[code_key($p['code'])][$lot] ?? null;
+            if ($l === null) fail("Die Partie „{$lot}“ gehört nicht zum Artikel {$p['code']} oder ist nicht mehr im Bestand.", 422);
+            if (!($l['kg'] > 0)) fail("Die Partie „{$lot}“ hat keinen Bestand.", 422);
+            $snap = $l;
+        }
+        $snap = ['lot' => (string)$snap['lot'], 'mhd' => $snap['mhd'] ?? null, 'kg' => round((float)$snap['kg'], 3)];   // nur diese Felder (nie EK)
+        if ($p['qty'] !== null && $p['qty'] > $snap['kg'] + 1e-9) {
+            fail('Die Menge bei „' . $p['name'] . '“ (' . de_qty($p['qty']) . ' kg) ist größer als die Partie ' . $lot . ' (' . de_qty($snap['kg']) . ' kg).', 422);
+        }
+        $pos[$i]['partie'] = $snap;
+    }
+    return $pos;
+}
+/* Für den Kunden angebotene Menge einer Partie-Position: eingetragene Menge, sonst die ganze Partie (Schnappschuss) */
+function einzel_partie_menge(array $p): float { return (float)($p['qty'] ?? $p['partie']['kg'] ?? 0); }
+/* Partieangaben für Kunde, Druck, PDF und E-Mail: „Charge P-0002 · MHD 04.12.2026 · 25,00 kg“ */
+function einzel_partie_teile(array $p, bool $mitMenge = true): array
+{
+    $t = ['Charge ' . $p['partie']['lot']];
+    if (!empty($p['partie']['mhd'])) $t[] = 'MHD ' . date('d.m.Y', strtotime($p['partie']['mhd']));
+    if ($mitMenge) $t[] = de_qty(einzel_partie_menge($p)) . ' kg';
+    return $t;
+}
+function einzel_partie_text(array $p, bool $mitMenge = true): string { return implode(' · ', einzel_partie_teile($p, $mitMenge)); }
+/* Summen (Positionen mit Menge und Preis; Partie ohne eingetragene Menge zählt mit der ganzen Partie) */
 function einzel_summe(array $e): array
 {
     $kg = 0.0; $sum = 0.0;
-    foreach ($e['positions'] ?? [] as $p) if ($p['qty'] !== null) { $kg += $p['qty']; if ($p['price'] !== null) $sum += round(round($p['price'] * 100) * $p['qty']) / 100; }
+    foreach ($e['positions'] ?? [] as $p) {
+        $q = $p['qty'] ?? (is_array($p['partie'] ?? null) ? (float)$p['partie']['kg'] : null);
+        if ($q === null) continue;
+        $kg += $q;
+        if ($p['price'] !== null) $sum += round(round($p['price'] * 100) * $q) / 100;
+    }
     return ['kg' => round($kg, 2), 'summe' => round($sum, 2)];
 }
 /* Ansicht für den Eingabebereich (mit Kundenname) */
@@ -122,6 +208,10 @@ function einzel_speichern(array $b, array $me): array
     $id = is_string($b['id'] ?? null) ? $b['id'] : '';
     $e = with_lock('einzelangebote', function () use ($id, $b, $data, $me) {
         $d = einzel_load();
+        $i = $id === '' ? null : einzel_find($d, $id);
+        if ($id !== '' && $i === null) fail('Einzelangebot nicht gefunden.', 404);
+        if ($i !== null && (!is_int($b['revision'] ?? null) || $b['revision'] !== (int)$d['list'][$i]['revision'])) fail('Das Einzelangebot wurde inzwischen geändert. Bitte neu laden.', 409);
+        $data['positions'] = einzel_partien_aufloesen($data['positions'], $i === null ? null : $d['list'][$i], $me);
         if ($id === '') {
             $y = date('Y');
             $n = (int)($d['seq'][$y] ?? 0) + 1;
@@ -130,10 +220,7 @@ function einzel_speichern(array $b, array $me): array
                + ['status' => 'entwurf', 'revision' => 1, 'created' => now(), 'createdBy' => $me['name'], 'changed' => now(), 'changedBy' => $me['name'], 'freigegebenAt' => null, 'gesendet' => []];
             $d['list'][] = $e;
         } else {
-            $i = einzel_find($d, $id);
-            if ($i === null) fail('Einzelangebot nicht gefunden.', 404);
             $e = $d['list'][$i];
-            if (!is_int($b['revision'] ?? null) || $b['revision'] !== (int)$e['revision']) fail('Das Einzelangebot wurde inzwischen geändert. Bitte neu laden.', 409);
             $e = array_merge($e, $data, ['revision' => (int)$e['revision'] + 1, 'changed' => now(), 'changedBy' => $me['name']]);
             if ($e['status'] === 'freigegeben' && !$e['positions']) fail('Ein im Portal freigegebenes Einzelangebot braucht mindestens eine Position. Bitte zuerst die Freigabe beenden.', 422);
             if ($e['status'] === 'freigegeben') $e['freigegebenAt'] = einzel_stand($e['freigegebenAt'] ?? null);   // Kunde sieht die Änderung sofort; alte Bestellstände werden abgewiesen
@@ -142,7 +229,9 @@ function einzel_speichern(array $b, array $me): array
         store_write('einzelangebote', $d);
         return $e;
     });
-    audit('einzelangebot', "Einzelangebot {$e['nr']} für „{$c['firma']}“ " . ($id === '' ? 'angelegt' : 'gespeichert') . ' (' . count($e['positions']) . ' Positionen)');
+    $mitPartie = count(array_filter($e['positions'], fn($p) => isset($p['partie'])));
+    audit('einzelangebot', "Einzelangebot {$e['nr']} für „{$c['firma']}“ " . ($id === '' ? 'angelegt' : 'gespeichert') . ' (' . count($e['positions']) . ' Positionen'
+        . ($mitPartie ? ', davon ' . $mitPartie . ' mit Partie' : '') . ')');
     return einzel_view($e, einzel_kunden_map());
 }
 /* Status setzen: entwurf, freigegeben (Portal, braucht Positionen und Gültigkeit), zurueckgezogen; Ansicht zurück */
@@ -244,7 +333,9 @@ function einzel_von_kennung(string $oid): ?array
     $i = einzel_find($d, $m[1]);
     return $i === null ? null : $d['list'][$i];
 }
-/* Angebotsmodell wie offer_resolve() – nur Name, Merkmale und Preis, kein Bestand */
+/* Angebotsmodell wie offer_resolve() – nur Name, Merkmale und Preis, kein Bestand. Angebotene Partie (Ausnahme GR-001):
+   partie = { lot, mhd, kg } aus dem gespeicherten Schnappschuss, kg = angebotene Menge (einzel_partie_menge) – nie EK,
+   nie die Größe der Partie, wenn weniger angeboten wird */
 function einzel_model(array $e): array
 {
     $master = [];
@@ -263,10 +354,12 @@ function einzel_model(array $e): array
     $items = [];
     foreach ($e['positions'] as $i => $p) {
         $m = $p['code'] !== '' ? ($master[code_key($p['code'])] ?? null) : null;
-        $items[] = ['id' => 'p' . ($i + 1), 'code' => $p['code'], 'name' => $p['name'] . ($p['notiz'] !== '' ? ' – ' . $p['notiz'] : ''),
-                    'category' => in_array($m['category'] ?? '', CATEGORIES, true) ? $m['category'] : 'Sonstiges', 'origin' => $m['origin'] ?? null,
-                    'condition' => in_array($m['condition'] ?? '', CONDITIONS, true) ? $m['condition'] : 'unbekannt', 'groupId' => $gid,
-                    'price' => $p['price'] !== null ? ['status' => 'value', 'value' => $p['price']] : ['status' => 'request'], 'altPrices' => []];
+        $it = ['id' => 'p' . ($i + 1), 'code' => $p['code'], 'name' => $p['name'] . ($p['notiz'] !== '' ? ' – ' . $p['notiz'] : ''),
+               'category' => in_array($m['category'] ?? '', CATEGORIES, true) ? $m['category'] : 'Sonstiges', 'origin' => $m['origin'] ?? null,
+               'condition' => in_array($m['condition'] ?? '', CONDITIONS, true) ? $m['condition'] : 'unbekannt', 'groupId' => $gid,
+               'price' => $p['price'] !== null ? ['status' => 'value', 'value' => $p['price']] : ['status' => 'request'], 'altPrices' => []];
+        if (is_array($p['partie'] ?? null)) $it['partie'] = ['lot' => (string)$p['partie']['lot'], 'mhd' => $p['partie']['mhd'] ?? null, 'kg' => round(einzel_partie_menge($p), 2)];
+        $items[] = $it;
     }
     $titel = einzel_titel($e);
     return ['meta' => ['title' => $titel . (!empty($e['gueltigBis']) ? ' – gültig bis ' . date('d.m.Y', strtotime($e['gueltigBis'])) : ''), 'notice' => 'Einzelangebot',
@@ -351,7 +444,8 @@ function einzel_artikel(bool $mitBestand, bool $mitEk = false): array
 /* ---------- PDF im Design der Angebotsansicht (A4 quer, drei Spalten) ---------- */
 /* Wie die Druckliste der Angebotsseite: Logo und Titel, Blöcke mit Kopfzeile „€/kg“, Zebrastreifen, Seitenzahlen, am
    Seitenfuß die Fußzeile des Briefbogens (Einstellung „Fußzeile im Druck“).
-   Nur Positionen, Preise, Mengen und Hinweise – nie Bestand, Partien oder Einkaufspreise (Regel 7). */
+   Nur Positionen, Preise, Mengen und Hinweise; bei angebotenen Partien deren Charge, MHD und Menge (Schnappschuss, GR-001
+   Ausnahme) – nie der Bestand, weitere Partien oder Einkaufspreise (GR-001, GR-008). */
 function einzel_pdf(array $e, ?array $c): string
 {
     global $CFG;
@@ -379,8 +473,10 @@ function einzel_pdf(array $e, ?array $c): string
         $name = $p['name'] . ($p['notiz'] !== '' ? ' – ' . $p['notiz'] : '');
         $lines = Pdf::wrap($name, $FS, $wName);
         $eigen = Pdf::width($p['code'], $FS) > $wCode - 6;   // lange (freie) Artikelnummer: eigene Zeile über der Bezeichnung statt Überlappung
-        $h = 4.6 + (count($lines) + ($eigen ? 1 : 0)) * $LH + ($p['qty'] !== null ? 9 : 0);
-        $rows[] = ['t' => 'row', 'p' => $p, 'lines' => $lines, 'h' => $h, 'z' => $i % 2 === 0, 'eigen' => $eigen];
+        // Zeile unter der Bezeichnung: angebotene Partie (Charge, MHD, Menge) bzw. nur die Menge
+        $sub = isset($p['partie']) ? Pdf::wrap(einzel_partie_text($p), 7.4, $colW - $wCode - 4) : ($p['qty'] !== null ? ['Menge ' . de_qty($p['qty']) . ' kg'] : []);
+        $h = 4.6 + (count($lines) + ($eigen ? 1 : 0)) * $LH + count($sub) * 9;
+        $rows[] = ['t' => 'row', 'p' => $p, 'lines' => $lines, 'sub' => $sub, 'h' => $h, 'z' => $i % 2 === 0, 'eigen' => $eigen];
     }
     $tail = [];
     $su = einzel_summe($e);
@@ -463,7 +559,7 @@ function einzel_pdf(array $e, ?array $c): string
                 $pdf->text($x + 3, $by, $it['eigen'] ? $fit($p['code'], $FS, $colW - $wPrice - 8) : $p['code'], $FS);
                 if ($it['eigen']) $by += $LH;
                 foreach ($it['lines'] as $li => $l) $pdf->text($x + $wCode, $by + $li * $LH, $l, $FS);
-                if ($p['qty'] !== null) $pdf->text($x + $wCode, $by + count($it['lines']) * $LH - 1, 'Menge ' . de_qty($p['qty']) . ' kg', 7.4, false, '#555555');
+                foreach ($it['sub'] as $si => $sl) $pdf->text($x + $wCode, $by + count($it['lines']) * $LH - 1 + $si * 9, $sl, 7.4, false, '#555555');
                 if ($p['price'] !== null) $pdf->text($x + $colW - 4, $by, de_num((float)$p['price']), $FS + .2, true, '#111111', 'r');
                 else $pdf->text($x + $colW - 4, $by, 'auf Anfrage', 7.4, false, '#666666', 'r');
             }
@@ -498,7 +594,8 @@ function mail_tpl_einzel(array $c, array $e, string $note, string $format = 'lis
     $nrZusatz = str_contains($titel, (string)$e['nr']) ? '' : " ({$e['nr']})";   // Nummer nur einmal (Standardtitel enthält sie schon)
     $t = mail_greeting($c) . "\n\n" . $intro . "\n\n" . ($note !== '' ? $note . "\n\n" : '') . "$titel$nrZusatz\n";
     if ($pdf) $t .= 'Anhang: ' . einzel_pdf_name($e) . ' (' . plural_de(count($e['positions']), 'Position', 'Positionen') . ")\n";
-    else foreach ($e['positions'] as $p) $t .= '- ' . ($p['code'] !== '' ? $p['code'] . ' ' : '') . $p['name'] . ($p['notiz'] !== '' ? ' (' . $p['notiz'] . ')' : '') . ': ' . $pr($p) . ($p['qty'] !== null ? ', ' . de_qty($p['qty']) . ' kg' : '') . "\n";
+    else foreach ($e['positions'] as $p) $t .= '- ' . ($p['code'] !== '' ? $p['code'] . ' ' : '') . $p['name'] . ($p['notiz'] !== '' ? ' (' . $p['notiz'] . ')' : '') . ': ' . $pr($p)
+        . (isset($p['partie']) ? ', ' . einzel_partie_text($p) : ($p['qty'] !== null ? ', ' . de_qty($p['qty']) . ' kg' : '')) . "\n";
     if ($su['summe'] > 0 && !$pdf) $t .= "\nWarenwert (ca.): " . de_num($su['summe']) . " €\n";
     if ($e['hinweis'] !== '') $t .= "\n" . $e['hinweis'] . "\n";
     $t .= "\nPreise freibleibend, netto; abgerechnet wird nach tatsächlichem Gewicht.\n";
@@ -516,8 +613,10 @@ function mail_tpl_einzel(array $c, array $e, string $note, string $format = 'lis
     else {
     $h .= '<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="font-size:14px;border-collapse:collapse;margin:0 0 12px;"><tr><th ' . $th . '>Art.-Nr.</th><th ' . $th . '>Artikel</th><th ' . $thr . '>Menge</th><th ' . $thr . '>Preis</th></tr>';
     foreach ($e['positions'] as $p) {
-        $h .= '<tr><td ' . $td . '>' . mail_h($p['code']) . '</td><td ' . $td . '>' . mail_h($p['name']) . ($p['notiz'] !== '' ? '<br><span style="font-size:12px;color:#857c72;">' . mail_h($p['notiz']) . '</span>' : '') . '</td><td ' . $tdr . '>'
-            . ($p['qty'] !== null ? mail_h(de_qty($p['qty'])) . ' kg' : '') . '</td><td ' . $tdr . '><strong>' . mail_h($pr($p)) . '</strong></td></tr>';
+        $menge = isset($p['partie']) ? einzel_partie_menge($p) : $p['qty'];
+        $h .= '<tr><td ' . $td . '>' . mail_h($p['code']) . '</td><td ' . $td . '>' . mail_h($p['name']) . ($p['notiz'] !== '' ? '<br><span style="font-size:12px;color:#857c72;">' . mail_h($p['notiz']) . '</span>' : '')
+            . (isset($p['partie']) ? '<br><span style="font-size:12px;color:#4a443e;">' . implode(' · ', array_map(fn($t) => '<span style="white-space:nowrap;">' . mail_h($t) . '</span>', einzel_partie_teile($p, false))) . '</span>' : '') . '</td><td ' . $tdr . '>'
+            . ($menge !== null ? mail_h(de_qty($menge)) . ' kg' : '') . '</td><td ' . $tdr . '><strong>' . mail_h($pr($p)) . '</strong></td></tr>';
     }
     $h .= '</table>' . ($su['summe'] > 0 ? '<p style="margin:0 0 12px;text-align:right;">Warenwert (ca.): <strong>' . mail_h(de_num($su['summe'])) . ' €</strong></p>' : '');
     }

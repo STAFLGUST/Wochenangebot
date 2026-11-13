@@ -3,7 +3,9 @@
    Artikelsuche (Wochenpreis, Bestand) oder frei eintragen, speichern, im Portal freigeben bzw. die Freigabe beenden, als PDF
    ansehen, per E-Mail senden (Positionen als Liste oder PDF im Anhang; Bestätigung wie im Eingabebereich: Passwort bzw. erneute
    Anmeldung bei Keycloak) und löschen. Daten nur über die Aktionen crm_einzel_* (Rechte einzelangebote.* und crm.sehen prüft der
-   Server; Daten und Regeln beim Angebot). Wird von crm.js aufgerufen (window.STAFL_CRM_EINZEL). */
+   Server; Daten und Regeln beim Angebot). Wird von crm.js aufgerufen (window.STAFL_CRM_EINZEL).
+   Angebotene Partien (13.11.2026, zuordnen im Eingabebereich) zeigt der Reiter nur an und schickt beim Speichern ihre Nummer
+   zurück, damit der Schnappschuss des Servers erhalten bleibt. */
 'use strict';
 (() => {
   const NF2 = new Intl.NumberFormat('de-DE', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
@@ -36,7 +38,7 @@
   /* Summe der Positionen mit Menge und Preis (wie der Server: Cent je kg × kg) */
   function summen(pos) {
     let kg = 0, sum = 0;
-    for (const p of pos) { const q = zahl(p.qty, 'qty'), pr = zahl(p.price); if (q > 0) { kg += q; if (pr >= 0 && pr !== null) sum += Math.round(Math.round(pr * 100) * q) / 100; } }
+    for (const p of pos) { const q = zahl(p.qty, 'qty') ?? (p.partie ? p.partie.kg : null), pr = zahl(p.price); if (q > 0) { kg += q; if (pr >= 0 && pr !== null) sum += Math.round(Math.round(pr * 100) * q) / 100; } }
     return { kg, sum };
   }
 
@@ -88,7 +90,9 @@
     const std = a && a.stdPrice && a.stdPrice.status === 'value' ? a.stdPrice.value : null;
     const pr = zahl(p.price);
     const abw = std && pr > 0 ? (pr - std) / std * 100 : null;
-    const info = [p.code, std ? `Wochenpreis ${F.euroKg(std)}` : '', a && a.totalKg !== undefined ? `Bestand ${NFKG.format(a.totalKg)} kg` : ''].filter(Boolean).join(' · ');
+    // angebotene Partie (im Eingabebereich zugeordnet): hier nur Anzeige, sie bleibt beim Speichern erhalten
+    const partie = p.partie ? `Partie ${p.partie.lot}${p.partie.mhd ? ' · MHD ' + c.de(p.partie.mhd) : ''} · ${NFKG.format(p.partie.kg)} kg` : '';
+    const info = [p.code, partie, std ? `Wochenpreis ${F.euroKg(std)}` : '', a && a.totalKg !== undefined ? `Bestand ${NFKG.format(a.totalKg)} kg` : ''].filter(Boolean).join(' · ');
     return `<tr data-pos="${i}"><td class="name"><input type="text" data-p="name" maxlength="200" value="${c.esc(p.name)}" aria-label="Bezeichnung"${dis}><small>${c.esc(info || 'freie Position')}</small></td>
       <td data-label="Menge kg"><input type="text" inputmode="decimal" data-p="qty" value="${c.esc(p.qty)}" aria-label="Menge in kg" placeholder="kg"${dis}></td>
       <td data-label="Preis €/kg"><input type="text" inputmode="decimal" data-p="price" value="${c.esc(p.price)}" aria-label="Preis in € je kg" placeholder="auf Anfrage"${dis}>${abw !== null && Math.abs(abw) >= 1 ? `<small class="crm-ck-d ${abw < 0 ? 'minus' : 'plus'}">${F.veraenderung(abw / 100)} zum Wochenpreis</small>` : ''}</td>
@@ -170,7 +174,8 @@
       if (!String(p.name || '').trim()) { meldung('Jede Position braucht eine Bezeichnung.'); return false; }
       if (Number.isNaN(qty)) { meldung(`Menge bei „${p.name}“ bitte als Zahl angeben (z. B. 25 oder 12,5).`); return false; }
       if (Number.isNaN(price)) { meldung(`Preis bei „${p.name}“ bitte als Zahl angeben (z. B. 12,50) oder leer lassen (auf Anfrage).`); return false; }
-      pos.push({ code: p.code || '', name: String(p.name).trim(), qty, price, notiz: p.notiz || '' });
+      // Partie: nur die Nummer zurückschicken – der Server behält seinen Schnappschuss (zuordnen nur im Eingabebereich)
+      pos.push({ code: p.code || '', name: String(p.name).trim(), qty, price, notiz: p.notiz || '', ...(p.partie ? { partie: { lot: p.partie.lot } } : {}) });
     }
     const r = await E.c.api('crm_einzel_save', { key: E.key, id: ed.id || '', revision: ed.revision, titel: ed.titel || '', gueltigBis: ed.gueltigBis || '', hinweis: ed.hinweis || '', positions: pos });
     if (r.status !== 200 || !r.data.ok) { meldung(E.c.fehlerText(r, 'Speichern fehlgeschlagen')); return false; }

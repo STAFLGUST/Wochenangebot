@@ -884,6 +884,11 @@ body.is-test::after { content: "TESTUMGEBUNG · nur Testdaten · E-Mails nur im 
 .al-sale { color: var(--sale); }
 .al-tab .al-was { display: inline; margin-right: 6px; font-weight: 400; color: var(--muted); font-size: 11.5px; }   /* in derselben Zeile: Sonderposten-Zeilen behalten die Zeilenhöhe */
 .al-tab .al-tag { display: inline-block; margin-left: 6px; padding: 0 5px; border-radius: 4px; font-size: 10.5px; vertical-align: 1px; }
+/* Angebotene Partie im Einzelangebot (Charge, MHD, Menge – Inhaber 13.11.2026): schlichte Zeile unter der Bezeichnung */
+.partie { display: block; font-size: 12px; line-height: 1.3; color: var(--text-2); font-variant-numeric: tabular-nums; }
+.partie > span { white-space: nowrap; }   /* „MHD 04.12.2026“ nie trennen, umbrochen wird zwischen den Teilen */
+.al-tab .al-partie { font-size: 11.5px; padding-bottom: 2px; }
+.card-partie { font-size: 12.5px; color: var(--text); }
 @media (max-width: 640px) {
   .al { padding: 14px 12px 4px; border-radius: var(--r); }
   .al-st h3 { font-size: 14px; }
