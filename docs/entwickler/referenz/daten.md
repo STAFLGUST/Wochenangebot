@@ -13,7 +13,7 @@ Gelesen und geschrieben über `app/api/storage.php` (`store_read`, `store_write`
 | `bestellung` | Angebot | intern | – | plattform | Einstellungen der Bestellfunktion (an/aus, Kopie an den Kunden); ab Trennstufe 2 nur die Anzahl der Empfänger – die Adressen stehen in bestellung-empfaenger |
 | `bestellung-empfaenger` | Angebot | intern | plattform | plattform | Empfänger der Bestellwünsche (ab Trennstufe 2, ADR-007 Stufe 2b): nur innen – der Postausgang verschickt Bestellwünsche nur an diese Adressen |
 | `bestellungen` | Angebot | vertraulich | einkauf, plattform | – | Bestellwünsche der Kunden (Bestell-API v1) mit Verlauf – Historie: Positionen, Preise, Firma und Angebotswoche werden beim Absenden als Schnappschuss gespeichert |
-| `einzelangebote` | Angebot | vertraulich | crm | crm | Einzelangebote für genau einen Kunden (E-JJJJ-0001) |
+| `einzelangebote` | Angebot | vertraulich | crm | crm | Einzelangebote für genau einen Kunden (E-JJJJ-0001); Positionen optional mit angebotener Partie (Charge, MHD, kg – nie EK; Ausnahme von GR-001 nur für den Kunden dieses Angebots) – Historie: Angebotene Partie als Schnappschuss aus dem Bestand beim Zuordnen (GR-106); spätere Bestandsänderungen ändern das Angebot nicht |
 | `entwurf` | Angebot | intern | – | – | Bearbeitungsstand des nächsten Wochenangebots (gemeinsames Bearbeiten mit Revisionen) |
 | `entwurf-stand` | Angebot | intern | – | – | Revisionszähler des Entwurfs |
 | `fracht` | Angebot | intern | – | – | Frachtregel (Staffeln, Hinweis unter dem Angebot) |

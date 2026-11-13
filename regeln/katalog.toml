@@ -14,16 +14,17 @@ schema = 1
 
 [[regel]]
 id = "GR-001"
-titel = "Öffentliche Seite ohne interne Bestandsdaten"
-beschreibung = "Die öffentliche Seite liefert nie Mengen, Chargen, MHD oder Einkaufspreise aus."
+titel = "Öffentliche Seite und Angebote ohne interne Bestandsdaten"
+beschreibung = "Die öffentliche Seite sowie Wochen- und Kundenangebote liefern nie Mengen, Chargen, MHD oder Einkaufspreise aus. Einzige Ausnahme (Entscheidung des Inhabers 13.11.2026): Partien, die in einem freigegebenen Einzelangebot ausdrücklich angeboten werden, zeigen dem berechtigten Kunden genau dieses Einzelangebots Charge, MHD und angebotene Menge als Schnappschuss (GR-106) – nie Einkaufspreise (GR-008), nie weitere Partien, nie den Bestand."
 verantwortlich = "angebot"
 module = ["angebot", "bestand"]
-daten = ["angebot", "bestand"]
-tests = ["e2e:frontend", "e2e:stock"]
+daten = ["angebot", "bestand", "einzelangebote"]
+tests = ["e2e:frontend", "e2e:stock", "e2e:einzelangebote"]   # einzelangebote: Ausnahme nur im eigenen, freigegebenen Einzelangebot, nie EK; Wochen- und Kundenangebot weiter ohne
 quelle = "AGENTS.md"
 status = "verbindlich"
-version = 1
+version = 2
 seit = "2026-10-21"
+geaendert = "2026-11-13: Ausnahme für ausdrücklich angebotene Partien in Einzelangeboten (Entscheidung des Inhabers 13.11.2026)"
 
 [[regel]]
 id = "GR-002"

@@ -79,6 +79,7 @@
 #print-root .pl-doc .al-sale { color: var(--sale); }
 #print-root .pl-doc .al-tab .al-was { display: inline; margin: 0 6px 0 0; font-weight: 400; color: var(--muted); font-size: 11.5px; }
 #print-root .pl-doc .al-tab .al-tag { display: inline-block; margin-left: 6px; padding: 0 7px; border-radius: 999px; font-size: 10.5px; font-weight: 600; letter-spacing: .02em; vertical-align: 1px; white-space: nowrap; }
+#print-root .pl-doc .al-tab .al-partie { display: block; padding: 0 0 1px; font-size: 11px; line-height: 1.25; color: var(--text-2); }   /* angebotene Partie (Einzelangebot) */
 #print-root .pl-doc .tag.sale { background: var(--sale-bg); color: var(--sale); }
 #print-root .pl-doc .tag.werb-tag { background: var(--accent-soft); color: var(--accent); }
 
