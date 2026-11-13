@@ -445,7 +445,8 @@ Kunden sind eine eigene, externe Nutzergruppe (Dokument `kunden`, Zugang im Feld
   nie `uid` und damit nie Zugriff auf Aktionen des Eingabebereichs oder auf Mitarbeiter-Hosts. Kundenaktionen prüfen
   `current_customer()` und `require_customer_csrf()`.
 - **Freigeschaltete Angebote:** `customer_offers()` = direkt beim Kunden (`customer_offers_direct`, nur bekannte
-  Angebote) + über die Kundengruppe (`customer_offers_gruppe`; ohne zugeordnetes Angebot das Wochenangebot). Die Aktion
+  Angebote, nie Sonderangebote) + über die Kundengruppe (`customer_offers_gruppe`; ohne zugeordnetes Angebot das
+  Wochenangebot) + heute gültige, veröffentlichte Sonderangebote der Kundengruppe (`sonder_fuer_kunde`, Modul Angebot). Die Aktion
   `offer` liefert ein nicht öffentliches Angebot nur, wenn es darin steht, und Einzelangebote nur dem eigenen Kunden
   (`$e['kid'] === $k['id']`). Preise löst nur der Server auf (`offer_resolve`, GR-002, GR-005); Bestellpreise rechnet
   nur der Server (GR-004).

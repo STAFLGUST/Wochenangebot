@@ -75,7 +75,7 @@ function angebot_kopieren(array $b, array $me): array
             $def = offer_def($quelle);
             if (!$def) fail('Unbekanntes Angebot.', 404);
             $offers = $cur['offers'];
-            if (count($offers) >= OFFER_MAX) fail('Höchstens ' . OFFER_MAX . ' Kundenangebote – bitte zuerst ein nicht mehr benötigtes Angebot löschen.', 422);
+            if (count(sonder_ohne($offers)) >= OFFER_MAX) fail('Höchstens ' . OFFER_MAX . ' Kundenangebote – bitte zuerst ein nicht mehr benötigtes Angebot löschen.', 422);   // Sonderangebote zählen nicht mit
             $key = mb_strtolower($name);
             if ($key === 'wochenangebot') fail("Der Name „{$name}“ ist bereits vergeben.", 422);
             foreach ($offers as $o) if (mb_strtolower((string)$o['name']) === $key) fail("Der Name „{$name}“ ist bereits vergeben.", 422);

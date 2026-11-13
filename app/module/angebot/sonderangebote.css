@@ -1,0 +1,95 @@
+/* STAFL-Plattform · Angebot · Sonderangebote (app/module/angebot/sonderangebote.js): Karten der Liste nach Stand (läuft grün,
+   geplant blau, abgelaufen/beendet grau), Kippschalter „Zeitraum ↔ Kalenderwoche“ im Fenster, Auswahl der Kundengruppen;
+   dazu die Artikelauswahl im Fenster „Aus anderem Angebot übernehmen“ (admin.js) und die Kennzeichen der Sonderangebote in der
+   Angebotsleiste und im Kopf des Editors. Farben aus app.css (--c-fresh, --c-frozen), hell und dunkel; am Handy (390 px) eine
+   Spalte, Tippflächen mindestens 36 px. */
+:root { --so-l: var(--c-fresh); --so-l-bg: var(--c-fresh-bg); --so-g: var(--c-frozen); --so-g-bg: var(--c-frozen-bg); }
+
+/* ---------- Liste ---------- */
+.so-bar .search { flex: 1 1 260px; }
+.so-info { display: flex; align-items: flex-start; gap: 8px; margin: 0 0 16px; padding: 10px 14px; border: 1px solid var(--line); border-radius: var(--r-lg);
+  background: var(--surface); color: var(--text-2); font-size: 13px; line-height: 1.45; }
+.so-info .i { flex: none; margin-top: 1px; color: var(--so-g); }
+.so-sec { margin: 0 0 18px; }
+.so-h { display: flex; align-items: baseline; gap: 8px; margin: 0 0 10px; font-size: 13px; font-weight: 700; letter-spacing: .04em; text-transform: uppercase; color: var(--text-2); }
+.so-h small { font-size: 12px; font-weight: 600; letter-spacing: 0; color: var(--muted); font-variant-numeric: tabular-nums; }
+details.so-sec > summary { cursor: pointer; list-style: none; min-height: 36px; align-items: center; }
+details.so-sec > summary::-webkit-details-marker { display: none; }
+details.so-sec > summary::before { content: '▸'; font-size: 12px; color: var(--muted); transition: transform .15s; }
+details.so-sec[open] > summary::before { transform: rotate(90deg); }
+.so-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(330px, 1fr)); gap: 14px; }
+.so-k { display: flex; flex-direction: column; gap: 10px; min-width: 0; padding: 14px 16px; background: var(--surface); border: 1px solid var(--line);
+  border-left: 4px solid var(--line-strong); border-radius: var(--r-lg); box-shadow: var(--shadow); }
+.so-k.st-laeuft { border-left-color: var(--so-l); }
+.so-k.st-geplant { border-left-color: var(--so-g); }
+.so-k.st-abgelaufen, .so-k.st-beendet { opacity: .88; }
+.so-kopf { display: flex; align-items: flex-start; justify-content: space-between; gap: 10px; }
+.so-kopf h3 { margin: 0; font-size: 16px; line-height: 1.3; overflow-wrap: anywhere; }
+.so-st { flex: none; padding: 2px 10px; border-radius: 999px; font-size: 12px; font-weight: 650; white-space: nowrap; background: var(--surface-3); color: var(--text-2); }
+.so-st.laeuft { background: var(--so-l-bg); color: var(--so-l); }
+.so-st.geplant { background: var(--so-g-bg); color: var(--so-g); }
+.so-zeit, .so-gr { display: flex; align-items: flex-start; gap: 8px; margin: 0; font-size: 13.5px; line-height: 1.45; }
+.so-zeit .i, .so-gr > .i { flex: none; margin-top: 2px; color: var(--muted); }
+.so-gr .of-chips { display: flex; flex-wrap: wrap; gap: 4px; min-width: 0; }
+.so-zahlen { display: flex; flex-wrap: wrap; gap: 6px 20px; margin: 0; }
+.so-zahlen div { display: flex; align-items: baseline; gap: 6px; }
+.so-zahlen dt { font-size: 12px; color: var(--muted); order: 2; }
+.so-zahlen dd { margin: 0; font-size: 15px; font-weight: 700; font-variant-numeric: tabular-nums; }
+.so-hinweis { display: flex; align-items: flex-start; gap: 6px; margin: 0; padding: 7px 10px; border-radius: 10px; background: var(--surface-2); color: var(--text-2); font-size: 12.5px; line-height: 1.45; }
+.so-hinweis .i { flex: none; margin-top: 1px; color: var(--so-g); }
+.so-k .sub { margin: 0; font-size: 12px; color: var(--muted); }
+.so-akt { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin-top: auto; padding-top: 4px; }
+.so-akt .ibtn { margin-left: auto; }
+
+/* ---------- Fenster: Kippschalter Zeitraum ↔ Kalenderwoche, Kundengruppen ---------- */
+/* Feld mit Liste (Kundengruppen, Artikel beim Übernehmen): wie .fld, aber ohne dessen Eingabe-Stil für Suchfeld und Häkchen */
+.so-feld { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+.so-lbl { font-size: 11.5px; font-weight: 600; letter-spacing: .04em; text-transform: uppercase; color: var(--muted); }
+.so-lbl small { font-size: 11px; font-weight: 500; letter-spacing: 0; text-transform: none; }
+.so-kipp { display: inline-flex; align-items: center; gap: 4px; }
+.so-kl { min-height: 36px; padding: 0 8px; border: 0; border-radius: 8px; background: none; color: var(--muted); font: inherit; font-size: 14px; cursor: pointer; }
+.so-kl.an { color: var(--text); font-weight: 650; }
+.so-kl:hover { color: var(--text); }
+.so-kl:focus-visible, .so-schalter:focus-visible { outline: none; box-shadow: var(--focus); }
+.so-schalter { position: relative; flex: none; width: 50px; height: 28px; padding: 0; border: 1px solid var(--line-strong); border-radius: 999px; background: var(--so-l-bg); cursor: pointer; transition: background .15s; }
+.so-schalter i { position: absolute; top: 3px; left: 3px; width: 20px; height: 20px; border-radius: 50%; background: var(--so-l); transition: transform .15s; }
+.so-schalter[aria-checked="true"] { background: var(--so-g-bg); }
+.so-schalter[aria-checked="true"] i { transform: translateX(22px); background: var(--so-g); }
+.so-tage { margin: -4px 0 0; font-variant-numeric: tabular-nums; }
+.so-tage.warn { color: var(--c-aged); }
+.so-gw .search { margin-bottom: 2px; }
+.so-glist { max-height: 34vh; }
+@media (prefers-reduced-motion: reduce) { .so-schalter, .so-schalter i, details.so-sec > summary::before { transition: none; } }
+
+/* ---------- Angebotsleiste und Kopf des Editors ---------- */
+.ob-o.sonder small { white-space: normal; }
+.ob-o.sonder.st-laeuft .ob-n small { color: var(--so-l); }
+.ob-o.sonder.st-geplant .ob-n small { color: var(--so-g); }
+.oh-pill.sonder { background: var(--surface-3); color: var(--text-2); }
+.oh-pill.sonder.st-laeuft { background: var(--so-l-bg); color: var(--so-l); }
+.oh-pill.sonder.st-geplant { background: var(--so-g-bg); color: var(--so-g); }
+
+/* ---------- Fenster „Aus anderem Angebot übernehmen“: Artikelauswahl ---------- */
+.oc-art { min-width: 0; }
+.oc-bar { display: flex; align-items: center; gap: 4px 12px; flex-wrap: wrap; margin-bottom: 2px; }
+.oc-bar .search { flex: 1 1 220px; }
+.oc-list { list-style: none; margin: 0; padding: 0; max-height: 34vh; overflow-y: auto; border: 1px solid var(--line); border-radius: var(--r); }
+.oc-list li { border-bottom: 1px solid var(--line); }
+.oc-list li:last-child { border-bottom: 0; }
+.oc-list li.oc-g { position: sticky; top: 0; z-index: 1; padding: 5px 12px; background: var(--surface-2); color: var(--text-2); font-size: 11.5px; font-weight: 700; letter-spacing: .03em; text-transform: uppercase; }
+.oc-list li.oc-leer { padding: 12px; color: var(--muted); font-size: 13px; }
+.oc-list .check { display: flex; align-items: baseline; gap: 8px; min-height: 36px; padding: 6px 12px; font-size: 13.5px; }
+.oc-list .check input { align-self: center; }
+.oc-nr { flex: none; min-width: 52px; font-family: var(--mono); font-size: 12px; color: var(--text-2); font-variant-numeric: tabular-nums; }
+.oc-nm { flex: 1 1 auto; min-width: 0; overflow-wrap: anywhere; }
+.oc-p { flex: none; font-size: 12.5px; color: var(--text-2); font-variant-numeric: tabular-nums; white-space: nowrap; }
+
+/* ---------- Handy ---------- */
+@media (max-width: 560px) {
+  .so-grid { grid-template-columns: 1fr; }
+  .so-k { padding: 12px 14px; }
+  .so-akt .btn.sm { flex: 1 1 auto; justify-content: center; }
+  .oc-list .check { flex-wrap: wrap; }
+  .oc-p { margin-left: auto; }
+}
+@media (pointer: coarse) { .so-schalter { width: 56px; height: 32px; } .so-schalter i { width: 24px; height: 24px; } .so-schalter[aria-checked="true"] i { transform: translateX(24px); } }

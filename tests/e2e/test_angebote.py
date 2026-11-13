@@ -177,6 +177,12 @@ def kopieren_pruefen(a, br, v):
     r = post(a, 'offer_kopieren', {'quelle': 'edeka', 'name': 'Wochenangebot Metro', 'rev': cur['rev'], 'revision': d['revision']})
     gel = dok('angebote').get('geloescht', [])
     check('Kopieren: nie die ID eines gelöschten Angebots', r[0] == 200 and r[1]['id'].startswith('metro-') and r[1]['id'] not in gel, (r[1] or {}).get('id'))
+    # „sonder-…“ ist Sonderangeboten vorbehalten (#355): die Kopie bleibt ein gewöhnliches Kundenangebot
+    cur, d = get(a, 'offers')[1], get(a, 'draft')[1]
+    r = post(a, 'offer_kopieren', {'quelle': 'bela', 'name': 'Sonder Bela', 'rev': cur['rev'], 'revision': d['revision']})
+    neu_s = next((o for o in (r[1] or {}).get('offers', []) if o['name'] == 'Sonder Bela'), {})
+    check('Kopieren: Name „Sonder …“ ergibt keine Sonderangebots-ID, Kopie ohne Gültigkeit und Gruppen', r[0] == 200
+          and not neu_s.get('id', 'sonder-').startswith('sonder-') and 'art' not in neu_s and 'sonderGruppen' not in neu_s and not neu_s.get('gruppen'), neu_s)
     # ohne Entwurf (gerade veröffentlicht): Kopie auf Basis des veröffentlichten Angebots
     a.reload(); a.wait_for_selector('#screen-editor:not([hidden]) tr[data-id]')
     veroeffentlichen(a)

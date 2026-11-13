@@ -2,7 +2,7 @@
 
 <!-- ERZEUGT von `python3 werkzeuge/doku.py erzeugen` – nicht von Hand ändern. Quelle: Funktionen und Kommentare im Code. Die CI prüft, dass diese Datei zum Code passt. -->
 
-50 Dateien, 766 Funktionen – in der Reihenfolge der Datei, **fett** die Abschnitte. Text = erste Aussage des Kommentars direkt über der Funktion (Python: Docstring). Übersicht aller Module: [README.md](README.md).
+53 Dateien, 813 Funktionen – in der Reihenfolge der Datei, **fett** die Abschnitte. Text = erste Aussage des Kommentars direkt über der Funktion (Python: Docstring). Übersicht aller Module: [README.md](README.md).
 
 ## `app/api/lib/angebote.php`
 
@@ -228,6 +228,31 @@ _Angebot · Kundenangebot kopieren (Entscheidung des Inhabers 13.11.2026): ein A
 - `angebot_kopie_modell(m, quelle, neu)` – Inhalte des Angebots $quelle im Modell unter der neuen ID $neu eintragen (ohne zu prüfen; clean_model folgt).
 - `angebot_kopieren(b, me)` – Aktion offer_kopieren: {quelle, name, rev (Stand der Angebotsliste), revision (Stand des Entwurfs)}
 
+## `app/api/module/angebot/sonderangebote.php`
+
+_STAFL-Plattform · Angebot · Sonderangebote (Auftrag des Inhabers 13.11.2026): ein Angebot für ganze Kundengruppen mit Gültigkeit – Zeitraum (von–bis, beide Tage eingeschlossen) oder Kalenderwoche (Montag bis Sonntag …_
+
+- `sonder_ist(def)`
+- `sonder_ohne(offers)` – Kundenangebote ohne Sonderangebote (Obergrenze OFFER_MAX, Preisimport)
+- `sonder_ids()` – IDs aller Sonderangebote
+- `sonder_tz()`
+- `sonder_heute()`
+- `sonder_datum(v)` – Datum „JJJJ-MM-TT“, das es gibt (2000–2100), sonst null
+- `sonder_zeitraum(def)` – Gültigkeit als Tage [von, bis] (beide eingeschlossen); Kalenderwoche = Montag bis Sonntag. null = ungültige Angabe
+- `sonder_status(def, heute)` – Stand an einem Tag (Vorgabe heute): geplant \| laeuft \| beendet (vorzeitig) \| abgelaufen.
+- `sonder_ueberschneidet(def, von, bis)` – Überschneidet sich die Gültigkeit mit den Tagen von–bis?
+- `sonder_gueltig_text(def)` – Gültigkeit als Text: „KW 48/2026 (23.11.–29.11.2026)“ bzw. „17.11.–21.11.2026“ (über den Jahreswechsel mit beiden Jahren)
+- `sonder_gueltig_clean(g)` – Eingabe der Gültigkeit prüfen: {modus: 'zeitraum', von, bis} oder {modus: 'kw', jahr, kw}
+- `sonder_veroeffentlicht_ids()` – IDs der Angebote mit eigenen Artikeln im veröffentlichten Angebot („veröffentlicht“) – einmal je Anfrage
+- `sonder_sichtbar_je_gruppe()` – Kundengruppe → IDs der Sonderangebote, die ihre Kunden heute sehen (läuft, veröffentlicht) – einmal je Anfrage, damit customer_offers() in Schleifen über …
+- `sonder_fuer_kunde(c)` – Sonderangebote, die ein Kunde heute sieht (nur über seine Kundengruppe)
+- `sonder_meta(m, def)` – Kopfdaten eines aufgelösten Sonderangebots (offer_resolve): Gültigkeit statt der Woche des Wochenangebots.
+- `sonder_artikel(m, id)` – Artikel eines Angebots mit eigener Artikelliste in einem Modell (wie die Zahl im Editor)
+- `sonder_liste(me)` – Liste für den Reiter „Sonderangebote“: Zeilen mit Stand und Artikelzahlen, Kundengruppen mit Namen (Stammdaten) und – nur mit „kunden.sehen“, wie in …
+- `sonder_neue_id(name, cur)` – Neue ID „sonder-<name>“: nie die eines bestehenden oder gelöschten Angebots, nie eine, unter der noch Daten stehen
+- `sonder_speichern(me, b)` – Anlegen bzw. ändern (Name, Kundengruppen, Gültigkeit) und vorzeitig beenden/fortsetzen.
+- `sonder_loeschen(me, b)` – Löschen (Eingabe {rev, id}).
+
 ## `app/api/module/angebot/winab-export.php`
 
 _Export des Wochenangebots für WinAB (Auftrag des Inhabers 05.11.2026)_
@@ -366,6 +391,9 @@ _Wochenangebot – Eingabebereich Bearbeitet einen Entwurf auf dem Server (autom
 
 **Zustand**
 
+- `sonderZeitraum(o)`
+- `sonderStand(o)`
+- `sonderText(o)` – Gültigkeit kurz: „KW 48/2026“ bzw. „17.11.–21.11.2026“
 - `effPrice(it, oid)`
 - `variantShort(v, oid)`
 - `inOffer(it, oid)`
@@ -512,7 +540,10 @@ _Wochenangebot – Eingabebereich Bearbeitet einen Entwurf auf dem Server (autom
 - `ofMark()`
 - `openOfGruppen(key)`
 - `ofgCount()`
+- `angeboteUebernehmen(r)` – Neue Angebotsliste vom Server übernehmen (offers_save, Sonderangebote anlegen/löschen): Einträge gelöschter Angebote fallen aus dem Entwurf (Preise, …
 - `preiseAusCsv(buf)` – Artikelpreise der Warenwirtschaft (CSV „Artikelpreise“: Preis-Art; Kundengruppe; Artikel; Preis) – Leser der Importart „angebot_preise“ der Importzentrale …
+- `ocListe(src, neu)`
+- `ocZahl(n)`
 - `openCopy()`
 
 **Vorschau**
@@ -1031,6 +1062,30 @@ _STAFL-Plattform · Angebot · Darstellung der Vorschau „Artikelpreise (CSV)�
 - `html(ctx)`
 - `binden(root, ctx)`
 
+## `app/module/angebot/sonderangebote.js`
+
+_STAFL-Plattform · Angebot · Reiter „Sonderangebote“ im Eingabebereich (unter „Einzelangebote“, Auftrag des Inhabers 13.11.2026)._
+
+- `kwVon(s)` – ISO-Kalenderwoche eines Tages und Montag/Sonntag einer KW (wie der Server, ISO 8601)
+- `laden()`
+- `render()`
+
+**Liste**
+
+- `karte(z)`
+- `liste()`
+
+**Fenster „Sonderangebot“: Name, Gültigkeit (Kippschalter Zeitraum ↔ KW), Kundengruppen**
+
+- `oeffnen(z)`
+- `fenster(fehler)`
+- `gFilter()`
+- `zeitraum()` – Tage der Gültigkeit unter den Feldern (wie der Server rechnet: KW = Montag bis Sonntag)
+- `tage()`
+- `felderLesen()`
+- `modus(m)`
+- `speichern(b, meldung, fehler)` – Speichern über den Server (Prüfung dort); danach Angebotsliste im Editor und diese Liste neu
+
 ## `app/sw.js`
 
 _Web-App (zum Home-Bildschirm hinzugefügt)_
@@ -1357,6 +1412,44 @@ _Testgruppe sidenav: Navigation des Eingabebereichs, Sichtbarkeit je Rolle, Kopf
 - `login(pg, u, pw)`
 - `zentral(route, adresse)` – Rückweg zum Dashboard: Antwort des Servers unter zentraler Anmeldung nachgestellt (echter Ablauf: tests/oidc/)
 - `verwaltung(route)`
+
+## `tests/e2e/test_sonderangebote.py`
+
+_Sonderangebote (Angebot → Sonderangebote, module/angebot/sonderangebote.php)_
+
+- `check(n, c, i)`
+- `doc(name)`
+- `kunde(nr, gruppe, angebote)`
+
+**Rechte der Schnittstelle**
+
+**Prüfung der Eingaben**
+
+**Anlegen: Zeitraum (läuft), KW (geplant), KW 53 und KW 1 (Wochengrenze), Rechte für Kunden**
+
+**Sichtbarkeit vor dem Veröffentlichen**
+
+**Artikel ins Sonderangebot (Entwurf) und veröffentlichen**
+
+**Sichtbarkeit nach dem Veröffentlichen**
+
+**Bestellwunsch: Preis vom Server aus dem Sonderangebot**
+
+**Versand: „Angebote dieser Woche“ und Wochen-Mail**
+
+**Beenden und fortsetzen**
+
+**Ältere Fenster (offers_save)**
+
+**Löschen**
+
+**Oberfläche**
+
+- `login(pg, user, pw)`
+- `wait_saved(pg)`
+- `karte(pg, name)`
+- `zeilen(pg)`
+- `kein_ueberlauf(pg)`
 
 ## `tests/e2e/test_sys.py`
 

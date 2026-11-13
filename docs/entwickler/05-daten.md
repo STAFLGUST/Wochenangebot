@@ -261,6 +261,19 @@ Historie) und direkte Freischaltungen bei Kunden stehen können; gesperrt sind a
 (`module/angebot/kopieren.php`, gleiche ID-Regeln): neues Angebot ohne `gruppen` mit dem `fallback` der Quelle, dazu im
 Entwurf unter der neuen ID dieselben `variants`, `namen`, `sale.offers` und `meta.werbung` wie die Quelle.
 
+**Sonderangebote** (seit 13.11.2026, `module/angebot/sonderangebote.php`) stehen als Einträge mit `art: "sonder"` in
+derselben Liste: `{"id": "sonder-grillwoche", "name": "Grillwoche", "fallback": "hidden", "art": "sonder", "gueltig":
+{"modus": "zeitraum", "von": "2026-11-16", "bis": "2026-11-21"} | {"modus": "kw", "jahr": 2026, "kw": 48}, "sonderGruppen":
+["10"], "angelegt": {"t", "von"}, "geaendert?": {…}, "beendet?": {…}}`. Inhalte wie bei jedem Kundenangebot mit eigener
+Artikelliste in `variants`/`namen`/`sale.offers`/`meta.werbung` unter ihrer ID. Die Kundengruppen stehen bewusst in
+`sonderGruppen`, nicht in `gruppen`: keine 1:1-Regel (eine Gruppe hat ihr Wochen- bzw. Kundenangebot **und** gültige
+Sonderangebote), und ältere Fassungen (Rückfall) zeigen ein Angebot ohne `gruppen` keinem Kunden. Sichtbar ist ein
+Sonderangebot nur im Zeitraum (Tage eingeschlossen; KW = Montag bis Sonntag, Europe/Berlin), nicht vorzeitig beendet und
+nur, wenn das veröffentlichte Angebot Artikel davon enthält (`sonder_sichtbar_je_gruppe`). `offers_save` legt Sonderangebote
+nie an, ändert und löscht sie nicht (Zeilen mit ihrer ID werden übergangen, fehlende bleiben); neue Kundenangebote dürfen
+nicht mit `sonder-` beginnen. Höchstens `SONDER_MAX` (500) Sonderangebote, sie zählen nicht zu `OFFER_MAX`; abgelaufene
+bleiben gespeichert, gelöschte IDs kommen in `geloescht`.
+
 Bestellwünsche (`bestellungen`) und Einzelangebote (`einzelangebote`): [bestell-api-v1.md](../bestell-api-v1.md),
 [architektur.md](../architektur.md). Positionen eines Einzelangebots haben seit 13.11.2026 optional `partie: {lot, mhd, kg}`
 (angebotene Partie; Schnappschuss aus dem Bestand beim Zuordnen, GR-106; nie EK). Ältere Positionen ohne das Feld bleiben

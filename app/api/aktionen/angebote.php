@@ -71,15 +71,19 @@ switch ($action) {
             respond(['ok' => true, 'rev' => $d['rev'], 'offers' => $d['offers'], 'std' => offer_def(OFFER_STD), 'stdPublic' => std_public()]);
         }
 
+        /* Kundenangebote verwalten. Sonderangebote (art 'sonder') legt diese Aktion nie an, ändert und löscht sie nicht – dafür
+           gibt es sonderangebot_save/_loeschen: Zeilen mit ihrer ID (ältere Fenster zeigen sie noch als Kundenangebote) werden
+           übergangen, fehlende bleiben unverändert erhalten. */
         case 'offers_save': {
             $me = require_perm('angebote.verwalten', true);
             $b = body();
             $list = [];
             $names = [];
             $in = is_array($b['offers'] ?? null) ? $b['offers'] : [];
-            if (count($in) > OFFER_MAX) throw new InvalidArgumentException('Höchstens ' . OFFER_MAX . ' Kundenangebote.');
+            $sonderIds = sonder_ids();
+            if (count($in) > OFFER_MAX + SONDER_MAX) throw new InvalidArgumentException('Höchstens ' . OFFER_MAX . ' Kundenangebote.');
             foreach ($in as $o) {
-                if (!is_array($o)) continue;
+                if (!is_array($o) || in_array((string)($o['id'] ?? ''), $sonderIds, true)) continue;
                 $name = s($o['name'] ?? null, 80, false);
                 if ($name === null || mb_strlen($name) < 2) throw new InvalidArgumentException('Jedes Angebot braucht einen Namen (mindestens 2 Zeichen).');
                 $key = mb_strtolower($name);
@@ -89,22 +93,31 @@ switch ($action) {
                 if ($id === '' || $id === OFFER_STD || !preg_match('/^[a-z0-9-]{1,40}$/', $id)) throw new InvalidArgumentException('Ungültige Angebots-ID.');
                 // „e-…“ ist Einzelangeboten vorbehalten; reine Zahlen werden in JSON zu Zahlenschlüsseln – beides nur für neue Angebote sperren
                 if ((preg_match('/^e-/', $id) || ctype_digit($id)) && !in_array($id, offer_ids(), true)) throw new InvalidArgumentException("Die Angebots-ID „{$id}“ ist nicht erlaubt (beginnt mit „e-“ oder besteht nur aus Ziffern).");
+                // „sonder-…“ ist Sonderangeboten vorbehalten (bestehende Kundenangebote mit dieser ID bleiben gültig)
+                if (strncmp($id, SONDER_PRAEFIX, strlen(SONDER_PRAEFIX)) === 0 && !in_array($id, offer_ids(), true)) throw new InvalidArgumentException("Die Angebots-ID „{$id}“ ist Sonderangeboten vorbehalten.");
                 // ohne Angabe bleibt die bisherige Einstellung (unten unter der Sperre), sonst hidden|standard
                 $row = ['id' => $id, 'name' => $name];
                 if (array_key_exists('fallback', $o)) $row['fallback'] = $o['fallback'] === 'hidden' ? 'hidden' : 'standard';
                 if (array_key_exists('gruppen', $o)) $row['gruppen'] = offer_gruppen_clean($o['gruppen'], $name);
                 $list[] = $row;
             }
+            if (count($list) > OFFER_MAX) throw new InvalidArgumentException('Höchstens ' . OFFER_MAX . ' Kundenangebote.');
             if (count(array_unique(array_column($list, 'id'))) !== count($list)) throw new InvalidArgumentException('Angebots-IDs sind doppelt.');
             $res = with_lock('angebote', function () use ($b, $list, $me) {
                 $cur = offers_load();
                 if ((int)($b['rev'] ?? -1) !== (int)$cur['rev']) fail('Die Angebote wurden inzwischen an anderer Stelle geändert. Bitte die Seite neu laden.', 409);
-                $old = []; foreach ($cur['offers'] as $o) $old[$o['id']] = $o;
+                // Sonderangebote bleiben, wie sie sind (unter der Sperre erneut bestimmt); ihre Namen sind vergeben
+                $sonder = array_values(array_filter($cur['offers'], 'sonder_ist'));
+                $sonderIds = array_map('strval', array_column($sonder, 'id'));
+                $list = array_values(array_filter($list, function ($o) use ($sonderIds) { return !in_array($o['id'], $sonderIds, true); }));
+                $sonderNamen = array_map('mb_strtolower', array_column($sonder, 'name'));
+                foreach ($list as $o) if (in_array(mb_strtolower($o['name']), $sonderNamen, true)) throw new InvalidArgumentException("Der Name „{$o['name']}“ ist bereits vergeben (Sonderangebot).");
+                $old = []; foreach ($cur['offers'] as $o) if (!sonder_ist($o)) $old[$o['id']] = $o;
                 // IDs gelöschter Angebote werden nie wieder vergeben: im veröffentlichten Angebot, in der Historie und bei
                 // Kunden (direkte Freischaltung) können noch Preise, Sonderpreise und Freischaltungen unter der alten ID stehen.
                 $gesperrt = array_values(array_filter(is_array($cur['geloescht'] ?? null) ? $cur['geloescht'] : [], 'is_string'));
                 $gesperrt = array_values(array_unique(array_merge($gesperrt, angebot_ids_mit_resten(array_keys($old)))));   // Löschungen vor dieser Fassung
-                $belegt = array_flip(array_merge(array_keys($old), array_column($list, 'id'), $gesperrt));
+                $belegt = array_flip(array_merge(array_keys($old), array_column($list, 'id'), $gesperrt, $sonderIds));
                 foreach ($list as $i => $o) {
                     if (isset($old[$o['id']]) || !in_array($o['id'], $gesperrt, true)) continue;
                     $basis = substr($o['id'], 0, 36); $k = 2;
@@ -156,7 +169,7 @@ switch ($action) {
                     $d[] = ['k' => 'ostd|pub', 'code' => '', 'name' => 'Wochenangebot', 'f' => 'Öffentlich ohne Anmeldung', 'from' => $oldPub ? 'ja' : 'nein', 'to' => $pub ? 'ja' : 'nein'];
                 }
                 $geloescht = array_values(array_unique(array_merge($gesperrt, array_map('strval', array_keys($removed)))));
-                $out = ['rev' => (int)$cur['rev'] + 1, 'updatedAt' => now(), 'updatedBy' => $me['name'], 'offers' => array_values($new), 'stdPublic' => $pub,
+                $out = ['rev' => (int)$cur['rev'] + 1, 'updatedAt' => now(), 'updatedBy' => $me['name'], 'offers' => array_merge(array_values($new), $sonder), 'stdPublic' => $pub,
                         'geloescht' => array_slice($geloescht, -2000)]
                      // weitere Felder einer neueren Fassung bleiben (GR-006); stdGruppen entfällt bewusst (gilt automatisch)
                      + array_diff_key($cur, array_flip(['rev', 'updatedAt', 'updatedBy', 'offers', 'stdPublic', 'geloescht', 'stdGruppen']));
@@ -176,5 +189,27 @@ switch ($action) {
             require_modulzugang('angebot', true);
             require_once dirname(__DIR__) . '/module/angebot/kopieren.php';
             respond(['ok' => true] + angebot_kopieren(body(), $me));
+        }
+        /* Sonderangebote (module/angebot/sonderangebote.php): Liste für den Reiter „Sonderangebote“ – mit Modulzugang Angebot
+           (wie der Editor); Namen der Kundengruppen nur mit Stammdaten-, Kunden- oder Verwaltungsrecht, Kundenzahl nur mit kunden.sehen */
+        case 'sonderangebote': {
+            $me = require_modulzugang('angebot');
+            header('Cache-Control: no-store');
+            respond(['ok' => true] + sonder_liste($me));
+        }
+        /* Anlegen, ändern, vorzeitig beenden oder fortsetzen: {rev, id?, name, gruppen, gueltig, beendet?} */
+        case 'sonderangebot_save': {
+            $me = require_perm('angebote.verwalten', true);
+            require_modulzugang('angebot', true);
+            [$out, $row, $neu] = sonder_speichern($me, body());
+            respond(['ok' => true, 'rev' => $out['rev'], 'offers' => $out['offers'], 'id' => $row['id'], 'neu' => $neu, 'stdPublic' => std_public()]);
+        }
+        /* Löschen wie ein Kundenangebot: Recht „angebote.loeschen“ mit Bestätigung */
+        case 'sonderangebot_loeschen': {
+            require_perm('angebote.verwalten', true);
+            require_modulzugang('angebot', true);
+            $me = require_perm_confirmed('angebote.loeschen', 'angebote_loeschen');
+            $out = sonder_loeschen($me, body());
+            respond(['ok' => true, 'rev' => $out['rev'], 'offers' => $out['offers'], 'stdPublic' => std_public()]);
         }
 }
