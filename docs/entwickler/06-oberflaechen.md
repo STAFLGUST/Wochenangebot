@@ -478,7 +478,11 @@ Leiste senkrecht, schmal ist sie eine waagerechte Spur. Mit `body.bereich-import
 - **Web-App:** `sw.js` speichert nur Startseite, `/assets/`, `manifest.json` und das öffentliche Wochenangebot, immer
   zuerst Netz; offline trägt die Antwort `X-WA-Offline`, die Seite zeigt „Preise ohne Gewähr“.
 - **Nie ausgeliefert** (Server, nicht Oberfläche): Mengen, Chargen, MHD, Einkaufspreise (GR-001, GR-008), Kundenpreise im
-  öffentlichen Angebot (GR-002). Die Oberfläche darf solche Felder auch nicht „vorsorglich“ anfordern.
+  öffentlichen Angebot (GR-002). Die Oberfläche darf solche Felder auch nicht „vorsorglich“ anfordern. Einzige Ausnahme
+  (GR-001 Version 2, Inhaber 13.11.2026): im eigenen, freigegebenen Einzelangebot liefert `einzel_model` je ausdrücklich
+  angebotener Partie `it.partie = {lot, mhd, kg}` (Schnappschuss, `kg` = angebotene Menge); `frontend.js` zeigt sie als
+  „Charge · MHD · Menge“ unter der Bezeichnung (`partieHTML`: Angebotsansicht und Druck, Bestellansicht, Karten, Details,
+  Hochformat-Druck, CSV-Spalten) – nie EK oder weitere Partien.
 
 ## 6.4 Dashboard und Modulseiten (HR, CRM)
 

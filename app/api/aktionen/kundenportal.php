@@ -231,7 +231,10 @@ switch ($action) {
                 $sum = $price !== null ? round(round($price * 100) * $q) / 100 : null;   // in Cent rechnen (wie die Anzeige im Portal)
                 if ($sum !== null) $total += $sum; else $req++;
                 $qtyT += $q;
-                $pos[] = ['id' => $id, 'code' => (string)($it['code'] ?? ''), 'name' => (string)$it['name'] . (!empty($it['sale']) ? ' (Sonderposten)' : ''), 'group' => $gName[$it['groupId'] ?? ''] ?? '', 'qty' => $q, 'price' => $price, 'sum' => $sum];
+                // angebotene Partie eines Einzelangebots: Charge und MHD stehen mit im Namen (Schnappschuss, GR-106) – so sind zwei
+                // Partien desselben Artikels in Bestellwunsch, E-Mail und Bestellübersicht unterscheidbar
+                $partie = is_array($it['partie'] ?? null) ? ' (Charge ' . $it['partie']['lot'] . (!empty($it['partie']['mhd']) ? ', MHD ' . date('d.m.Y', strtotime($it['partie']['mhd'])) : '') . ')' : '';
+                $pos[] = ['id' => $id, 'code' => (string)($it['code'] ?? ''), 'name' => (string)$it['name'] . $partie . (!empty($it['sale']) ? ' (Sonderposten)' : ''), 'group' => $gName[$it['groupId'] ?? ''] ?? '', 'qty' => $q, 'price' => $price, 'sum' => $sum];
             }
             if (!$pos) fail('Bitte mindestens eine Menge eingeben.', 422);
             $termin = (string)($b['termin'] ?? '');

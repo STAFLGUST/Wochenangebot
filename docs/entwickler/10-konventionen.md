@@ -113,7 +113,8 @@ prüfen, Tippflächen ≥ 36 px, Kontrast ≥ 4,5 : 1. Gemeinsame Bausteine in `
 
 - Jede Aktion prüft selbst Anmeldung und Recht; schreibende Aktionen zusätzlich CSRF (`require_…(…, true)`).
 - Kein Vertrauen in Werte aus dem Browser für Preise, Rechte, Rollen, IDs anderer Nutzer (GR-004, GR-103).
-- Öffentliche Ausgaben ohne Mengen, Chargen, MHD, Einkaufspreise und Kundenpreise (GR-001, GR-002, GR-008).
+- Öffentliche Ausgaben ohne Mengen, Chargen, MHD, Einkaufspreise und Kundenpreise (GR-001, GR-002, GR-008); einzige
+  Ausnahme: ausdrücklich angebotene Partien im eigenen, freigegebenen Einzelangebot (Charge, MHD, Menge – nie EK; GR-001 v2).
 - Passwörter nur als Hash; Geheimnisse nie in Antworten, Protokoll oder Repository (GR-007).
 - Cookies nur `__Host-`, keine Freigaben für fremde Herkunft, Aktionen nur auf ihrem Host (GR-108, GR-109).
 - Protokoll (`audit`) ohne Kontaktdaten und Freitexte von Kunden.

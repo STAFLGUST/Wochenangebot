@@ -1605,6 +1605,16 @@ body.ro .sale-tag { cursor: default; }
 .ezpos .ez-std { width: 92px; white-space: nowrap; font-size: 13px; color: var(--text-2); }
 .ezpos .ez-a { width: 74px; white-space: nowrap; }
 .ezpos tfoot td { border-top: 1px solid var(--line-strong); border-bottom: 0; padding: 10px 6px; font-size: 13px; color: var(--text-2); }
+/* Partie einer Position (Inhaber 13.11.2026): Auswahl unter der Notiz, schlicht wie die Notiz */
+.ezpos .ez-partie { display: flex; align-items: center; flex-wrap: wrap; gap: 4px 8px; margin: 4px 0 0 8px; font-size: 12.5px; color: var(--text-2); }
+.ezpos .ez-partie label { display: inline-flex; align-items: center; gap: 6px; min-width: 0; max-width: 100%; }
+.ezpos .ez-partie label > span { font-size: 11.5px; font-weight: 600; color: var(--muted); }
+.ezpos .ez-partie select { min-width: 0; max-width: 100%; height: 30px; border: 1px solid var(--line); border-radius: 8px; padding: 0 26px 0 8px; background: var(--surface) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%23888' stroke-width='2.2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E") no-repeat right 8px center / 12px 12px;
+  color: var(--text); font-size: 12.5px; font-variant-numeric: tabular-nums; appearance: none; -webkit-appearance: none; text-overflow: ellipsis; }   /* Winkelzeichen wie die übrigen Auswahlfelder */
+.ezpos .ez-partie select:focus { border-color: var(--accent-line); box-shadow: var(--focus); outline: none; }
+.ezpos .ez-partie .btn.sm { height: 28px; padding: 0 8px; font-size: 12px; }
+.ezpos .ez-partie-h { color: var(--muted); font-size: 12px; }
+.ezpos .ez-partie-t { font-variant-numeric: tabular-nums; }
 .ez-leer { display: grid; place-items: center; gap: 4px; padding: 34px 16px; color: var(--muted); text-align: center; }
 .ez-leer .i { width: 28px; height: 28px; }
 .ez-leer p { margin: 0; }
