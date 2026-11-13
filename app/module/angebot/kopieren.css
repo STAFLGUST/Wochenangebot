@@ -1,0 +1,7 @@
+/* STAFL-Plattform · Angebot · Fenster „Angebot kopieren“ (app/module/angebot/kopieren.js): Hinweis mit Symbol neben dem
+   Text und Abstände der Zeile „Wird mitkopiert“; Knöpfe „Kopieren“ und „Löschen“ in Stammdaten → Angebote nebeneinander.
+   Sonst die Formulare und Fenster des Eingabebereichs (admin.css). */
+#dlg-angebot-kopieren .ak-was { margin: 12px 0 10px; line-height: 1.5; }
+#dlg-angebot-kopieren .ak-hinweis { display: flex; align-items: flex-start; gap: 8px; line-height: 1.45; }
+#dlg-angebot-kopieren .ak-hinweis .i { flex: none; margin-top: 2px; }
+#view-angebote .oftab td.act { white-space: nowrap; }

@@ -257,7 +257,9 @@ deren Kunden das Angebot ohne eigene Freischaltung sehen (je Gruppe höchstens e
 gesperrter ID `-2`, `-3` … an), weil unter der alten ID noch Kundenpreise, Sonderpreise (veröffentlichtes Angebot,
 Historie) und direkte Freischaltungen bei Kunden stehen können; gesperrt sind auch solche Reste aus der Zeit vor dem Feld
 (`angebot_ids_mit_resten`). Fehlt `fallback` in einer Anfrage, bleibt die gespeicherte Einstellung (neue Angebote: `hidden`); Felder, die
-`offers_save` nicht kennt, bleiben erhalten (GR-006).
+`offers_save` nicht kennt, bleiben erhalten (GR-006). Ein weiterer Weg zu einem neuen Angebot ist `offer_kopieren`
+(`module/angebot/kopieren.php`, gleiche ID-Regeln): neues Angebot ohne `gruppen` mit dem `fallback` der Quelle, dazu im
+Entwurf unter der neuen ID dieselben `variants`, `namen`, `sale.offers` und `meta.werbung` wie die Quelle.
 
 Bestellwünsche (`bestellungen`) und Einzelangebote (`einzelangebote`): [bestell-api-v1.md](../bestell-api-v1.md),
 [architektur.md](../architektur.md).

@@ -1921,6 +1921,7 @@
     const acts = [];
     if (may('sonderposten.senden') && may('versand.zugang')) acts.push(`<a class="btn sm ghost" data-ob="restposten" href="${VERSAND}" title="Sonderposten dieses Angebots per E-Mail an dessen Kunden senden – im Modul Versand (Liste „Angebote dieser Woche“)">${icon('mail', 'sm')}Sonderposten senden</a>`);
     if (!ro) acts.push(`<button type="button" class="btn sm ghost" data-ob="copy" title="Artikel und Preise aus einem anderen Angebot übernehmen">${icon('copy', 'sm')}Aus anderem Angebot</button>`);
+    if (darfKopieren()) acts.push(`<button type="button" class="btn sm ghost" data-ob="kopieren" title="Dieses Angebot als neues Kundenangebot kopieren – mit Preisen, Bezeichnungen, Empfehlungen und Werbung, ohne Kunden">${icon('copy', 'sm')}Kopieren</button>`);
     el.innerHTML = `<div class="oh-t"><h2 id="oh-name">${esc(offerName(curOffer))}</h2>
         <div class="oh-m"><span class="oh-art">${curOffer === OSTD ? 'Öffentliches Angebot' : 'Kundenangebot'}</span>${pill}<span class="oh-n">${plural(n, 'Artikel', 'Artikel')}</span></div></div>
       ${acts.length ? `<div class="oh-act">${acts.join('')}</div>` : ''}
@@ -1942,6 +1943,7 @@
     if (a === 'toggle') { obOpen = !obOpen; renderOfferBar(); if (obOpen) $(`#offer-bar [data-offer="${CSS.escape(curOffer)}"]`)?.focus(); return; }
     if (a === 'manage') openOffers();
     if (a === 'copy') openCopy();
+    if (a === 'kopieren') kopieOeffnen(curOffer);
     if (a === 'umstellen') umstellen(curOffer);
   }
   $('#offer-bar').addEventListener('click', (e) => {
@@ -1975,6 +1977,42 @@
       renderOfferBar(); renderGroups(); renderMhd(); renderChanges(); updatePublishBtn();
       toast(`„${offerShort(oid)}“ hat jetzt eine eigene Artikelliste.`, 5000);
     } catch (ex) { toast(ex.message, 7000); }
+  }
+  /* Kundenangebot kopieren (Inhaber 13.11.2026): Fenster in app/module/angebot/kopieren.js, Arbeit auf dem Server
+     (offer_kopieren, module/angebot/kopieren.php). Hier nur Daten fürs Fenster und der Ablauf: eigene Eingaben speichern,
+     kopieren (bei fremder Änderung neuen Stand holen und einmal wiederholen), Angebotsliste und Entwurf übernehmen, das neue
+     Angebot im Editor wählen. Rechte: angebote.verwalten und angebot.bearbeiten (prüft der Server). */
+  const darfKopieren = () => !ro && may('angebote.verwalten') && !!(window.WA && window.WA.angebot && window.WA.angebot.kopie && window.WA.angebot.kopie.oeffnen);
+  function kopieOeffnen(oid) {
+    if (!darfKopieren() || !knownOffer(oid)) return;
+    if (ofDirty) { toast('Bitte zuerst die Änderungen unter Stammdaten → Angebote speichern oder verwerfen.', 6000); return; }
+    window.WA.angebot.kopie.oeffnen(oid);
+  }
+  function kopieDaten(oid) {
+    const items = model ? model.items : [];
+    return { quelle: oid, name: offerName(oid), std: oid === OSTD, folgt: followsStd(oid), artikel: memberCount(oid),
+      namen: oid === OSTD ? 0 : items.filter((i) => i.namen && i.namen[oid]).length, werbung: !!werbungVon(oid),
+      vergeben: ['Wochenangebot', ...offers.map((o) => o.name)] };
+  }
+  async function kopieAusfuehren(oid, name) {
+    if (ofDirty) throw new Error('Bitte zuerst die Änderungen unter Stammdaten → Angebote speichern oder verwerfen.');
+    let r = null;
+    for (let versuch = 0; !r; versuch++) {
+      if (unsaved()) await saveNow();
+      try { r = await api('offer_kopieren', { body: { quelle: oid, name, rev: offersRev, revision } }); }
+      catch (e) {
+        if (e.status !== 409 || versuch) throw e;
+        await loadOffers(); await pullRemote();   // inzwischen anderswo geändert: neuen Stand holen, einmal wiederholen
+      }
+    }
+    offers = r.offers; offersRev = r.rev; stdPublic = r.stdPublic !== false;
+    ofReset();
+    try { await pullRemote(); } catch { /* der Hintergrundabgleich holt den Entwurf nach */ }
+    if (currentView !== 'edit') setView('edit');
+    setOffer(r.id);
+    diff = C.diffOffers(published, model);
+    renderGroups(); renderMhd(); renderChanges(); updatePublishBtn(); setSaveState(...lastSaveState);
+    return r;
   }
 
   /* Stammdaten → Angebote: anlegen, umbenennen, Regel für Artikel ohne eigenen Preis, Kundengruppen, löschen (Administrator).
@@ -2024,13 +2062,13 @@
       <div class="gcard of-card"><table class="etab oftab"><thead><tr><th>Angebot</th><th>Kundengruppen</th><th class="of-fb">Artikelliste</th><th class="num-s">Artikel</th><th class="num-s">Kunden</th><th class="act"></th></tr></thead><tbody>
         <tr class="of-std" data-ofk="std"><td><strong>Wochenangebot</strong><div class="sub">Standard · ${offerEdit.stdPublic ? 'öffentlich ohne Anmeldung' : 'nur für angemeldete Kunden'}</div>
           ${admin ? `<label class="check of-pub"><input type="checkbox" data-ofa-pub${offerEdit.stdPublic ? ' checked' : ''}> Öffentlich ohne Anmeldung sichtbar</label>` : ''}</td>
-          <td><span class="sub of-auto">${ofKg.length ? `alle übrigen Kundengruppen (${fmtInt.format(ofKg.filter((g) => !ofGruppeBei(g.nr, -1)).length)} von ${fmtInt.format(ofKg.length)})` : 'Kundengruppen ohne eigenes Angebot'}</span></td><td class="of-fb"><span class="sub">–</span></td><td class="num-s" data-l="Artikel">${fmtInt.format(memberCount(OSTD))}</td><td class="num-s" data-l="Kunden">${kz(OSTD, [])}</td><td class="act"></td></tr>
+          <td><span class="sub of-auto">${ofKg.length ? `alle übrigen Kundengruppen (${fmtInt.format(ofKg.filter((g) => !ofGruppeBei(g.nr, -1)).length)} von ${fmtInt.format(ofKg.length)})` : 'Kundengruppen ohne eigenes Angebot'}</span></td><td class="of-fb"><span class="sub">–</span></td><td class="num-s" data-l="Artikel">${fmtInt.format(memberCount(OSTD))}</td><td class="num-s" data-l="Kunden">${kz(OSTD, [])}</td><td class="act">${kopierKnopf({ id: OSTD, name: 'Wochenangebot' })}</td></tr>
         ${offerEdit.map((o, i) => `<tr data-oi="${i}" data-ofk="${i}"><td><input class="in" data-of="name" value="${esc(o.name)}" maxlength="80" aria-label="Name des Angebots"${edit ? '' : ' disabled'}></td>
           <td>${ofChips(o.gruppen, String(i))}</td>
           <td class="of-fb"><select class="in" data-of="fallback" aria-label="Artikelliste"${edit ? '' : ' disabled'}><option value="hidden"${o.fallback === 'hidden' ? ' selected' : ''}>Eigene Artikelliste</option><option value="standard"${o.fallback !== 'hidden' ? ' selected' : ''}>Folgt dem Wochenangebot (bisher)</option></select></td>
           <td class="num-s" data-l="Artikel">${o.isNew ? '<span class="sub">neu</span>' : fmtInt.format(ofArtikel(o.id, o.fallback))}</td>
           <td class="num-s" data-l="Kunden">${o.isNew ? kz('', o.gruppen) : kz(o.id, o.gruppen)}</td>
-          <td class="act">${admin || o.isNew ? `<button type="button" class="ibtn danger" data-ofa="del" aria-label="Angebot ${esc(o.name)} löschen" title="${o.isNew ? 'Entfernen' : 'Löschen'}">${icon('trash')}</button>` : ''}</td></tr>`).join('')}
+          <td class="act">${kopierKnopf(o)}${admin || o.isNew ? `<button type="button" class="ibtn danger" data-ofa="del" aria-label="Angebot ${esc(o.name)} löschen" title="${o.isNew ? 'Entfernen' : 'Löschen'}">${icon('trash')}</button>` : ''}</td></tr>`).join('')}
       </tbody></table></div>
       ${edit && offerEdit.some((o) => o.fallback !== 'hidden') ? `<div class="notice of-folgt">${icon('info', 'sm')}<span>${plural(offerEdit.filter((o) => o.fallback !== 'hidden').length, 'Angebot folgt', 'Angebote folgen')} noch dem Wochenangebot. Mit eigener Artikelliste enthält ein Angebot nur noch Artikel mit eigenem Preis – Angebote ohne eigene Preise starten leer.</span><button type="button" class="btn sm" data-ofa="alle-eigen">Alle auf eigene Artikelliste umstellen</button></div>` : ''}
       ${edit ? `<div class="of-actions"><button type="button" class="btn" data-ofa="add">${icon('plus')}Angebot hinzufügen</button><span class="sp"></span>
@@ -2038,6 +2076,8 @@
       <p class="form-err" id="of-err" role="alert">${esc(err)}</p>
       <p class="hint">${ofKunden ? 'Kunden = direkt freigeschaltet oder über eine zugeordnete Kundengruppe (Stand der Eingabe, vor dem Speichern).' : ''} Kundengruppen pflegen: Stammdaten → Kundengruppen; Gruppe eines Kunden: Stammdaten → Kunden.${ro ? '' : ` Artikelpreise der Warenwirtschaft importieren: <a href="${esc(IMPORTZENTRALE)}" id="of-preise-link">Verwaltung → Import</a>.`}</p>`;
   }
+  /* „Kopieren“ je Angebot (nur gespeicherte Angebote; mit ungespeicherten Änderungen erst speichern – Hinweis beim Klick) */
+  const kopierKnopf = (o) => (darfKopieren() && !o.isNew ? `<button type="button" class="ibtn" data-ofa="kopieren" data-ofid="${esc(o.id)}" aria-label="Angebot ${esc(o.name)} kopieren" title="Kopieren – als neues Kundenangebot mit Preisen, Bezeichnungen, Empfehlungen und Werbung, ohne Kunden">${icon('copy')}</button>` : '');
   /* Artikel eines Angebots mit der (noch nicht gespeicherten) Regel aus der Eingabe */
   function ofArtikel(id, fallback) {
     if (!model) return 0;
@@ -2102,6 +2142,7 @@
     if (!b) return;
     const a = b.dataset.ofa;
     if (a === 'gruppen') { openOfGruppen(b.dataset.ofk); return; }
+    if (a === 'kopieren') { kopieOeffnen(b.dataset.ofid); return; }
     if (a === 'reset') { ofReset(); renderOffersBody(); return; }
     if (a === 'alle-eigen') {
       for (const o of offerEdit) o.fallback = 'hidden';
@@ -4985,6 +5026,8 @@
     angebot: { kategorienVorschlag, kategorienGeaendert: () => kategorienLaden({ still: true }),
       // Aufbau des Angebots (app/module/angebot/aufbau.js): Daten fürs Fenster, Übernehmen über den Entwurf
       aufbau: { daten: () => (model ? aufbauDaten() : null), uebernehmen: aufbauUebernehmen },
+      // Kundenangebot kopieren (app/module/angebot/kopieren.js setzt „oeffnen“): Daten fürs Fenster, Kopieren über den Server
+      kopie: { oeffnen: null, daten: kopieDaten, ausfuehren: kopieAusfuehren },
       // Drucken (app/module/angebot/druck.js): Adresse der Vorschau des gewählten Angebots; vorher den Entwurf speichern.
       // adresseFuer(Angebot, Entwurf?): Adresse der Angebotsseite für ein beliebiges Angebot – Entwurf (Vorschau) oder veröffentlichter Stand
       druck: { adresse: () => (model ? pvUrl(curOffer) : ''), name: () => offerName(curOffer),

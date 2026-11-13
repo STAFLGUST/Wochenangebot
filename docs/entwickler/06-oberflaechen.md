@@ -288,6 +288,26 @@ Angebotskategorien sind Bereiche und Gruppen fest (die Stammdaten ordnen), Artik
 Artikel mit der veröffentlichten Fassung: zählt in der Statuszeile als eine Änderung, Abschnitt „Aufbau“ in der Liste der
 Änderungen mit Rücknahme (`revertChange('aufbau')`). Tests: Gruppe `aufbau`.
 
+### Angebot kopieren
+
+Entscheidung des Inhabers 13.11.2026: ein Kundenangebot (oder das Wochenangebot) als neues Kundenangebot kopieren und dann
+verändern. Knopf „Kopieren“ im Kopf des gewählten Angebots (`renderOfferHead`, `[data-ob="kopieren"]`) und je Zeile unter
+Stammdaten → Angebote (`kopierKnopf()`, `[data-ofa="kopieren"]`, nur gespeicherte Angebote; mit ungespeicherten Änderungen
+dort erst speichern). Sichtbar nur mit `angebote.verwalten` und ohne Nur-Ansicht (`darfKopieren()`); der Server verlangt
+zusätzlich `angebot.bearbeiten` und den Modulzugang Angebot. Das Fenster `#dlg-angebot-kopieren` baut
+`app/module/angebot/kopieren.js` aus `WA.angebot.kopie.daten(oid)` (Name, Artikelzahl, eigene Bezeichnungen, Werbung,
+vergebene Namen): Name vorbelegt mit „Kopie von …“ (vergeben → „(2)“, „(3)“ …), Zeile „Wird mitkopiert / Nicht mitkopiert“
+und der Hinweis, dass Kunden die Kopie erst mit zugeordneten Kundengruppen und nach dem Veröffentlichen sehen.
+
+„Kopieren“ ruft `WA.angebot.kopie.ausfuehren(oid, name)` (`kopieAusfuehren()` in `admin.js`): eigene Eingaben speichern,
+`offer_kopieren` mit `rev` (Angebotsliste) und `revision` (Entwurf); bei 409 Angebote und Entwurf neu holen (`loadOffers`,
+`pullRemote`) und einmal wiederholen. Danach übernimmt der Editor die Angebotsliste aus der Antwort, holt den Entwurf
+(`pullRemote`), wechselt nach „Angebot bearbeiten“ und wählt das neue Angebot (`setOffer`). Die Arbeit macht der Server
+(`app/api/module/angebot/kopieren.php`): unter der neuen ID dieselben `variants`, `namen`, `sale.offers` und dieselbe
+Werbung wie die Quelle, gleiche Regel `fallback`, keine Kundengruppen – die Kopie wird damit genau wie die Quelle aufgelöst
+(`offer_resolve`). Quelle Wochenangebot: eigene Artikelliste, der Wochenpreis wird eigener Preis (ohne Preis „auf Anfrage“).
+Kein neues Datenfeld. Tests: Gruppe `angebote` (`kopieren_pruefen`).
+
 ### Empfehlung (früher „Sonderpreis“)
 
 Etikett in der Preiszelle (`saleBtnHTML`/`saleTagHTML`) und Leiste „Kurzes MHD“ öffnen `openSale()` (`#dlg-sale`):

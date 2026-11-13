@@ -2,7 +2,7 @@
 Einzelangebot, entfernen nur im gewählten Angebot, Umstellung „folgt dem Wochenangebot“ → eigene Liste), Verwaltung,
 Übernahme, Excel-Import ohne Verlust der Kundenangebote, Veröffentlichen, Auslieferung nur an Berechtigte (Regel:
 Kundenpreise nie öffentlich), Werbung je Angebot (Fenster, Prüfung, Auslieferung nur des eigenen Eintrags, Angebotsseite), zweite Werbung rechts daneben,
-Angebotsauswahl unter den Bereichen der Seitenleiste."""
+Angebotsauswahl unter den Bereichen der Seitenleiste; Kundenangebot kopieren (alles außer den Kunden, in den Entwurf)."""
 import sys
 from umgebung import shot
 from umgebung import BASE  # Testserver je Gruppe (parallel)
@@ -11,6 +11,7 @@ from playwright.sync_api import sync_playwright
 from versand_hilfe import veroeffentlichen
 from umgebung import SH, storage_raw, storage_write
 from testdaten import de, preis
+from kunden_hilfe import Client
 B = BASE
 res = []
 def check(n, c, i=''):
@@ -54,6 +55,175 @@ def hinzufuegen(pg, q, preise):
 def item(offer, code): return next((i for i in offer['items'] if i['code'] == code), None)
 
 P10601, P10823 = preis('10601'), preis('10823')
+
+
+RUHE = "document.getAnimations().every((x) => x.playState !== 'running')"   # Fenster fertig eingeblendet (Bildschirmfoto)
+
+
+def dok(name):
+    """Gespeichertes Dokument (ohne PHP-Schutzzeile) oder None"""
+    raw = storage_raw(name)
+    return json.loads(raw.split('?>\n', 1)[-1]) if raw else None
+
+
+def ohne_kennung(o):
+    """Aufgelöstes Angebot ohne Name/ID des Angebots – zum Vergleich Quelle ↔ Kopie"""
+    m = {k: v for k, v in o['meta'].items() if k not in ('offerId', 'offerName')}
+    return {'items': o['items'], 'groups': o['groups'], 'sections': o['sections'], 'meta': m}
+
+
+def kopieren_pruefen(a, br, v):
+    """Kundenangebot kopieren (Inhaber 13.11.2026): offer_kopieren nimmt alles außer den Kunden mit – eigene Preise, eigene
+    Bezeichnungen, Empfehlungen je Angebot, Werbung, Regel der Artikelliste (damit auch ausgeblendete Artikel) – in den
+    Entwurf; Original und veröffentlichtes Angebot bleiben unverändert. Rechte, Grenzfälle, Oberfläche (Desktop, 390 px)."""
+    # Vorbereitung: Kundengruppe 71 bei „Bela“ (folgt dem Wochenangebot), dazu im Entwurf eigener Preis + Bezeichnung,
+    # ausgeblendeter Artikel, „auf Anfrage“ mit Sonderposten nur für Bela, Werbung
+    kg = get(a, 'kundengruppen')[1]
+    post_bestaetigt(a, 'kundengruppen_save', {'rev': kg['rev'], 'groups': kg['groups'] + [{'nr': '71', 'name': 'Testgruppe Bela'}]})
+    cur = get(a, 'offers')[1]
+    r = post(a, 'offers_save', {'rev': cur['rev'], 'offers': [{**o, 'gruppen': ['71'] if o['id'] == 'bela' else o.get('gruppen', [])} for o in cur['offers']]})
+    check('Kopieren · Vorbereitung: Kundengruppe 71 bei Bela', r[0] == 200 and next(o for o in r[1]['offers'] if o['id'] == 'bela').get('gruppen') == ['71'], r)
+    d = get(a, 'draft')[1]
+    mdl = d['draft'] or d['published']
+    it = {i['code']: i for i in mdl['items']}
+    it['10601'].setdefault('variants', {})['bela'] = {'status': 'value', 'value': 11.5}
+    it['10601'].setdefault('namen', {})['bela'] = 'Bela-Spezial'
+    it['10823'].setdefault('variants', {})['bela'] = {'status': 'hidden'}
+    it['10701'].setdefault('variants', {})['bela'] = {'status': 'request'}
+    it['10701']['sale'] = {'mark': True, 'offers': {'bela': {'value': 7.77}}}
+    mdl['meta'].setdefault('werbung', {})['bela'] = {'titel': 'Bela-Aktion', 'artikel': [{'id': it['10601']['id'], 'text': 'nur diese Woche'}]}
+    r = post(a, 'save_draft', {'revision': d['revision'], 'model': mdl})
+    check('Kopieren · Vorbereitung: Bela mit eigenem Preis, ausgeblendetem Artikel, Bezeichnung, Sonderposten und Werbung', r[0] == 200, r)
+    rev0 = (r[1] or {}).get('revision')
+    n_bela = sum(1 for i in mdl['items'] if ((i.get('variants') or {}).get('bela') or {}).get('status') != 'hidden')
+    bela_vorher = get(a, 'offer&angebot=bela&draft=1')[1]['offer']
+    entwurf_vorher, pub_vorher, of0 = dok('entwurf'), dok('angebot'), get(a, 'offers')[1]
+    body = lambda **k: {'quelle': 'bela', 'name': 'Kopie von Wochenangebot Bela', 'rev': of0['rev'], 'revision': rev0, **k}
+
+    # Rechte: ohne Anmeldung, Kunde, Leser, ohne „Entwurf bearbeiten“, ohne Modulzugang, ohne CSRF
+    check('Kopieren: ohne Anmeldung 401', Client('198.51.100.61').call('offer_kopieren', body())[0] == 401)
+    kd = get(a, 'kunden')[1]
+    r = post_bestaetigt(a, 'kunde_save', {'id': '', 'rev': kd['rev'], 'firma': 'Kantine Kopie', 'nr': 'K-71', 'email': 'kopie@example.org', 'active': True, 'angebote': ['bela'],
+                                         'login': {'username': 'kantine.kopie', 'password': 'Kantine-Kennwort-5', 'mustChange': False, 'active': True}})
+    K = Client('198.51.100.62')
+    check('Kopieren · Vorbereitung: Kunde angemeldet', r[0] == 200 and K.call('kunde_login', {'username': 'kantine.kopie', 'password': 'Kantine-Kennwort-5'})[0] == 200, r)
+    check('Kopieren: Kunde 401 (keine Mitarbeiteraktion)', K.call('offer_kopieren', body())[0] == 401)
+    for nm, deny in (('Kopa', ['angebot.bearbeiten']), ('Kopz', ['angebot.zugang'])):
+        post_bestaetigt(a, 'user_save', {'name': nm, 'username': nm.lower(), 'role': 'editor', 'active': True, 'password': 'Bearbeiter-Zugang-1', 'mustChange': False, 'grant': [], 'deny': deny})
+    V, Ka, Kz = Client('198.51.100.63'), Client('198.51.100.64'), Client('198.51.100.65')
+    V.call('login', {'username': 'vera', 'password': 'Leserin-Zugang-1'})
+    Ka.call('login', {'username': 'kopa', 'password': 'Bearbeiter-Zugang-1'}); Kz.call('login', {'username': 'kopz', 'password': 'Bearbeiter-Zugang-1'})
+    check('Kopieren: Leser 403', V.call('offer_kopieren', body())[0] == 403)
+    check('Kopieren: „Kundenangebote anlegen“ ohne „Entwurf bearbeiten“ 403', Ka.call('offer_kopieren', body())[0] == 403)
+    check('Kopieren: ohne Modulzugang Angebot 403', Kz.call('offer_kopieren', body())[0] == 403)
+    ohne = a.evaluate("""async (b) => { const r = await fetch('/api/?action=offer_kopieren', {method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(b)}); return r.status; }""", body())
+    check('Kopieren: ohne CSRF-Token abgewiesen', ohne in (401, 403), ohne)
+    check('Kopieren: nur per POST', get(a, 'offer_kopieren')[0] == 405)
+    check('… nichts angelegt, Entwurf unverändert', get(a, 'offers')[1]['rev'] == of0['rev'] and dok('entwurf') == entwurf_vorher)
+
+    # Grenzfälle: Quelle, Name, veraltete Stände, höchstens 100 Angebote
+    check('Kopieren: unbekanntes Angebot 404', post(a, 'offer_kopieren', body(quelle='gibt-es-nicht'))[0] == 404 and post(a, 'offer_kopieren', body(quelle='../x'))[0] == 404)
+    check('Kopieren: Name zu kurz, vergeben oder „Wochenangebot“ 422', post(a, 'offer_kopieren', body(name='x'))[0] == 422
+          and post(a, 'offer_kopieren', body(name='wochenangebot bela'))[0] == 422 and post(a, 'offer_kopieren', body(name='Wochenangebot'))[0] == 422)
+    check('Kopieren: veraltete Angebotsliste 409', post(a, 'offer_kopieren', body(rev=of0['rev'] - 1))[0] == 409)
+    r = post(a, 'offer_kopieren', body(revision=rev0 - 1))
+    check('Kopieren: veralteter Entwurf 409 mit Konflikt', r[0] == 409 and (r[1] or {}).get('conflict') is True, r)
+    voll = dok('angebote')
+    storage_write('angebote', {**voll, 'offers': voll['offers'] + [{'id': f'voll-{i}', 'name': f'Voll {i}', 'fallback': 'hidden'} for i in range(100 - len(voll['offers']))]})
+    r = post(a, 'offer_kopieren', body())
+    storage_write('angebote', voll)
+    check('Kopieren: höchstens 100 Kundenangebote (422)', r[0] == 422 and '100' in (r[1] or {}).get('error', ''), r)
+    check('… weiterhin nichts angelegt', get(a, 'offers')[1]['rev'] == of0['rev'] and dok('entwurf') == entwurf_vorher)
+
+    # Kopie von „Bela“: alles außer den Kunden, in den Entwurf
+    r = post(a, 'offer_kopieren', body())
+    k1 = r[1] or {}
+    neu1 = k1.get('id', '')
+    check('Kopieren: Bela kopiert (neue ID, Entwurfsrevision +1, Artikelzahl wie Bela)', r[0] == 200 and neu1 and neu1 not in [o['id'] for o in of0['offers']]
+          and k1.get('revision') == rev0 + 1 and k1.get('artikel') == n_bela and k1.get('namen') == 1 and k1.get('empfehlungen') == 1 and k1.get('werbung') is True, k1)
+    defs = {o['id']: o for o in get(a, 'offers')[1]['offers']}
+    check('… Angebot ohne Kundengruppen, gleiche Regel „folgt dem Wochenangebot“; Bela behält Gruppe 71',
+          defs.get(neu1, {}).get('name') == 'Kopie von Wochenangebot Bela' and defs[neu1].get('fallback') == 'standard' and not defs[neu1].get('gruppen')
+          and defs['bela'].get('gruppen') == ['71'], defs.get(neu1))
+    kopie = get(a, f'offer&angebot={neu1}&draft=1')[1]['offer']
+    check('… aufgelöst genau wie Bela (Artikel, Preise, Bezeichnungen, Sonderposten, Bereiche, Werbung)', ohne_kennung(kopie) == ohne_kennung(bela_vorher))
+    x = {i['code']: i for i in kopie['items']}
+    check('… eigener Preis und eigene Bezeichnung, ausgeblendeter Artikel fehlt, Werbung', x.get('10601', {}).get('price') == {'status': 'value', 'value': 11.5}
+          and x['10601'].get('name') == 'Bela-Spezial' and '10823' not in x and (kopie['meta'].get('werbung') or {}).get('titel') == 'Bela-Aktion', x.get('10601'))
+    en = dok('entwurf')
+    roh = all((i.get('variants') or {}).get(neu1) == (i.get('variants') or {}).get('bela') and (i.get('namen') or {}).get(neu1) == (i.get('namen') or {}).get('bela')
+              and ((i.get('sale') or {}).get('offers') or {}).get(neu1) == ((i.get('sale') or {}).get('offers') or {}).get('bela') for i in en['items'])
+    check('… im Entwurf je Artikel dieselben Einträge (variants, namen, sale.offers) und dieselbe Werbung', roh and en['meta']['werbung'].get(neu1) == en['meta']['werbung'].get('bela')
+          and en['rev'] == rev0 + 1)
+    unver = lambda m: [((i.get('variants') or {}).get('bela'), (i.get('namen') or {}).get('bela'), ((i.get('sale') or {}).get('offers') or {}).get('bela')) for i in m['items']]
+    bela_nach = get(a, 'offer&angebot=bela&draft=1')[1]['offer']
+    check('… Original unverändert (Entwurf und Auflösung), veröffentlichtes Angebot unverändert', unver(en) == unver(entwurf_vorher)
+          and ohne_kennung(bela_nach) == ohne_kennung(bela_vorher) and bela_nach['meta']['offerName'] == 'Wochenangebot Bela' and dok('angebot') == pub_vorher)
+    check('… Kunden sehen die Kopie nicht (nicht zugeordnet)', K.call(f'offer&angebot={neu1}')[0] == 403 and K.call('offer&angebot=bela')[0] == 200)
+    log = json.dumps(get(a, 'log')[1], ensure_ascii=False)
+    check('… Protokoll „als Kopie von“ mit Inhalt', 'als Kopie von „Wochenangebot Bela“' in log and '1 eigene Bezeichnung' in log)
+
+    # Wochenangebot als Quelle: eigene Artikelliste mit allen Artikeln des Wochenangebots und dem Wochenpreis als eigenem Preis
+    cur, d = get(a, 'offers')[1], get(a, 'draft')[1]
+    r = post(a, 'offer_kopieren', {'quelle': 'std', 'name': 'Kopie von Wochenangebot', 'rev': cur['rev'], 'revision': d['revision']})
+    neu2 = (r[1] or {}).get('id', '')
+    std_e, k2 = get(a, 'offer&angebot=std&draft=1')[1]['offer'], get(a, f'offer&angebot={neu2}&draft=1')[1]['offer'] if r[0] == 200 else {'items': [], 'meta': {}}
+    preise = lambda o: [(i['code'], i['name'], i['price'].get('value') if i['price']['status'] == 'value' else 'request', bool(i.get('sale'))) for i in o['items']]
+    check('Kopieren: Wochenangebot als Quelle – eigene Artikelliste, alle Artikel mit Wochenpreis, Werbung', r[0] == 200
+          and next((o for o in r[1]['offers'] if o['id'] == neu2), {}).get('fallback') == 'hidden' and preise(k2) == preise(std_e) and len(k2['items']) > 0
+          and k2['meta'].get('werbung') == std_e['meta'].get('werbung'), (r[0], preise(k2)[:3], preise(std_e)[:3]))
+    # gelöschte IDs werden nie wieder vergeben (wie offers_save)
+    cur, d = get(a, 'offers')[1], get(a, 'draft')[1]
+    r = post(a, 'offer_kopieren', {'quelle': 'edeka', 'name': 'Wochenangebot Metro', 'rev': cur['rev'], 'revision': d['revision']})
+    gel = dok('angebote').get('geloescht', [])
+    check('Kopieren: nie die ID eines gelöschten Angebots', r[0] == 200 and r[1]['id'].startswith('metro-') and r[1]['id'] not in gel, (r[1] or {}).get('id'))
+    # ohne Entwurf (gerade veröffentlicht): Kopie auf Basis des veröffentlichten Angebots
+    a.reload(); a.wait_for_selector('#screen-editor:not([hidden]) tr[data-id]')
+    veroeffentlichen(a)
+    cur, d = get(a, 'offers')[1], get(a, 'draft')[1]
+    r = post(a, 'offer_kopieren', {'quelle': 'bela', 'name': 'Bela nach Veröffentlichung', 'rev': cur['rev'], 'revision': d['revision']})
+    neu3 = (r[1] or {}).get('id', '')
+    check('Kopieren ohne offenen Entwurf: Entwurf aus dem veröffentlichten Angebot, Kopie wie Bela', d['draft'] is None and r[0] == 200 and dok('entwurf')['rev'] == d['revision'] + 1
+          and ohne_kennung(get(a, f'offer&angebot={neu3}&draft=1')[1]['offer']) == ohne_kennung(get(a, 'offer&angebot=bela')[1]['offer']), (d['draft'] is None, r[0]))
+
+    # Oberfläche: Stammdaten → Angebote, Knopf je Angebot, Fenster mit vorbelegtem Namen, danach neues Angebot im Editor gewählt
+    a.reload(); a.wait_for_selector('#screen-editor:not([hidden]) tr[data-id]')
+    a.click('#vt-angebote'); a.wait_for_selector('#view-angebote:not([hidden]) tr[data-oi]')
+    n_knopf = a.locator('#view-angebote [data-ofa=kopieren]').count()
+    check('Stammdaten → Angebote: „Kopieren“ beim Wochenangebot und bei jedem Kundenangebot', a.locator('#view-angebote tr.of-std [data-ofa=kopieren]').count() == 1
+          and n_knopf == a.locator('#view-angebote tr[data-oi]').count() + 1, n_knopf)
+    a.screenshot(path=SH + '/angebot-kopieren-liste.png')
+    a.click('#view-angebote [data-ofa=kopieren][data-ofid="bela"]'); a.wait_for_selector('#dlg-angebot-kopieren[open] #ak-name')
+    t = a.inner_text('#dlg-angebot-kopieren')
+    check('Fenster: Name vorbelegt (vergebener Name mit Nummer), Inhalt und Hinweis zu Kunden', a.input_value('#ak-name') == 'Kopie von Wochenangebot Bela (2)'
+          and '1 eigene Bezeichnung' in t and 'Werbung' in t and 'Kundengruppen' in t and 'veröffentlicht' in t, t)
+    a.wait_for_function(RUHE); a.screenshot(path=SH + '/angebot-kopieren.png')
+    a.fill('#ak-name', 'kopie von wochenangebot bela'); a.click('#ak-ok')
+    a.wait_for_function("document.querySelector('#ak-err').textContent.includes('bereits vergeben')")
+    check('Fenster: vergebener Name → Hinweis, Fenster bleibt offen', a.locator('#dlg-angebot-kopieren[open]').count() == 1)
+    a.fill('#ak-name', 'Wochenangebot Bela Sommer'); a.click('#ak-ok')
+    a.wait_for_selector('#dlg-angebot-kopieren', state='hidden')
+    a.wait_for_selector('#view-edit:not([hidden])'); a.wait_for_selector('#offer-bar [aria-selected="true"]:has-text("Bela Sommer")')
+    check('… danach im Editor gewählt: Kopie mit allen Artikeln von Bela, Name im Kopf, Hinweis', zahl(a, 'Bela Sommer') == n_bela and 'Wochenangebot Bela Sommer' in a.inner_text('#oh-name')
+          and 'angelegt' in a.inner_text('#toast'), (zahl(a, 'Bela Sommer'), n_bela))
+    a.wait_for_function("!/pending|saving/.test(document.querySelector('#save-state').className)")
+    a.screenshot(path=SH + '/angebot-kopieren-editor.png')
+    neu4 = next((o['id'] for o in get(a, 'offers')[1]['offers'] if o['name'] == 'Wochenangebot Bela Sommer'), '')
+    check('… Kopie aus der Oberfläche wie Bela aufgelöst', neu4 and ohne_kennung(get(a, f'offer&angebot={neu4}&draft=1')[1]['offer']) == ohne_kennung(get(a, 'offer&angebot=bela&draft=1')[1]['offer']))
+    a.click('#offer-head [data-ob=kopieren]'); a.wait_for_selector('#dlg-angebot-kopieren[open] #ak-name')
+    check('Editor: „Kopieren“ im Kopf des gewählten Angebots, Name vorbelegt', a.input_value('#ak-name') == 'Kopie von Wochenangebot Bela Sommer')
+    a.keyboard.press('Escape'); a.wait_for_selector('#dlg-angebot-kopieren', state='hidden')
+    v.reload(); v.wait_for_selector('#screen-editor:not([hidden]) tr[data-id]')
+    check('Leser: kein „Kopieren“', v.locator('[data-ob=kopieren], [data-ofa=kopieren]').count() == 0)
+    # 390 px: Fenster passt ohne seitliches Scrollen
+    m = br.new_page(viewport={'width': 390, 'height': 844}, is_mobile=True); merr = []
+    m.on('pageerror', lambda x: merr.append(str(x)))
+    login(m, 'admin', 'Sicheres-Passwort-1')
+    m.click('#offer-head [data-ob=kopieren]'); m.wait_for_selector('#dlg-angebot-kopieren[open] #ak-name')
+    bw = m.evaluate("document.querySelector('#dlg-angebot-kopieren').getBoundingClientRect().right")
+    sw = m.evaluate('document.documentElement.scrollWidth')
+    check('390 px: Fenster „Angebot kopieren“ passt, kein seitliches Scrollen, keine JS-Fehler', bw <= 390 and sw <= 390 and not merr, (bw, sw, merr))
+    m.wait_for_function(RUHE); m.screenshot(path=SH + '/angebot-kopieren-mobil.png'); m.close()
 
 with sync_playwright() as p:
     br = p.chromium.launch()
@@ -444,6 +614,7 @@ with sync_playwright() as p:
     p1, p2 = (r1[1] or {}).get('publishedAt', ''), (r2[1] or {}).get('publishedAt', '')
     check('zweimal in derselben Sekunde veröffentlicht: verschiedene, steigende Stände', r1[0] == 200 and r2[0] == 200 and p1 and p2 and p2 > p1 and p1[:19] <= p2[:19], (r1[0], r2[0], p1, p2))
     a.reload(); a.wait_for_selector('#screen-editor:not([hidden]) tr[data-id]')
+    kopieren_pruefen(a, br, v)
     # Mobil
     m = br.new_page(viewport={'width': 390, 'height': 844}, is_mobile=True); m.on('pageerror', lambda x: errs.append('m: ' + str(x)))
     login(m, 'admin', 'Sicheres-Passwort-1'); m.wait_for_timeout(300)

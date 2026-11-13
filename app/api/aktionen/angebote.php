@@ -167,4 +167,14 @@ switch ($action) {
             if ($d) audit('offers', 'Angebote geändert', $d);
             respond(['ok' => true, 'rev' => $out['rev'], 'offers' => $out['offers'], 'stdPublic' => $out['stdPublic']]);
         }
+
+        /* Kundenangebot kopieren (Inhaber 13.11.2026): neues Angebot mit allem außer den Kunden, Kopie in den Entwurf –
+           module/angebot/kopieren.php. Legt ein Angebot an (angebote.verwalten) und schreibt den Entwurf (angebot.bearbeiten). */
+        case 'offer_kopieren': {
+            $me = require_perm('angebote.verwalten', true);
+            if (!may($me, 'angebot.bearbeiten')) fail('Dafür fehlt Ihnen die Berechtigung. Bitte an einen Administrator wenden.', 403);
+            require_modulzugang('angebot', true);
+            require_once dirname(__DIR__) . '/module/angebot/kopieren.php';
+            respond(['ok' => true] + angebot_kopieren(body(), $me));
+        }
 }
