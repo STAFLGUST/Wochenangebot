@@ -531,7 +531,8 @@ function renderTable(list, grouped) {
    Eine Gruppe (Block) steht immer vollständig untereinander in einer Spalte (Inhaber 05.11.2026: nicht mehr „Forts.“ in der
    Nachbarspalte). Die Blöcke eines Abschnitts werden in Leserichtung so auf die Spalten verteilt, dass die höchste Spalte
    möglichst niedrig ist; kleine Abschnitte stehen nebeneinander in einer Zeile, wenn das insgesamt Platz spart. Nur im Druck
-   (assets/angebot-druck.js) wird ein Block geteilt, der höher als eine ganze Seitenspalte ist (Kopf mit „Forts.“ wiederholt). */
+   (assets/angebot-druck.js) wird ein Block geteilt, der höher als eine ganze Seitenspalte ist oder allein das ganze Blatt
+   füllt (Einzelangebot, sortierte Liste: gleichmäßig über die drei Spalten, Kopf mit „Forts.“ wiederholt). */
 const plPrice = (p) => (p.status === 'value' ? fmtNum.format(p.value) : p.status === 'request' ? 'a. Anfr.' : '—');
 const plTitle = () => window.OfferCore.titelMitKw(DATA.meta);   // immer die KW des Angebots, nicht die des früheren Imports
 /* Text in Anführungszeichen (z. B. „Fleischmeister“) hervorheben wie in der Druckliste */
@@ -643,7 +644,8 @@ function plBlockHTML(b, mode) {
     <td class="c-name">${screen ? `<button type="button" class="name-btn" data-open="${it.id}" title="Details und Preisvergleich anzeigen">${hl(plName(it))}</button>` : esc(plName(it))}${werbTagHTML(it, 'al-tag', werb)}${it.sale ? '<span class="tag sale al-tag" title="Sonderpreis, solange der Vorrat reicht">Sonderposten</span>' : ''}</td>
     ${plCells(it, labels).map((p) => `<td class="c-price${p && p.status !== 'value' ? ' al-np' : ''}">${p ? (it.sale && p === it.price ? `${it.regular != null ? `<s class="p-was al-was">${fmtNum.format(it.regular)}</s>` : ''}<span class="al-sale" title="Sonderposten – solange der Vorrat reicht">${plPrice(p)}</span>` : plPrice(p)) : ''}</td>`).join('')}${screen ? `<td class="c-fav">${starHTML(it)}</td>` : ''}</tr>`;
   const cg = `<colgroup><col class="w-code"><col>${labels.map(() => '<col class="w-price">').join('')}${screen ? '<col class="w-fav">' : ''}</colgroup>`;
-  return `<div class="al-grp"><table class="al-tab">${cg}<thead><tr class="al-h"><th colspan="${span}" scope="colgroup"><div class="al-hin"><span class="al-gt">${u.title}${cont ? ' <span class="al-cont">Forts.</span>' : ''}</span><span class="al-eh">€/kg</span>${screen ? '<span class="al-fh" aria-hidden="true"></span>' : ''}</div></th></tr>
+  const was = u.items.some((it) => it.sale && it.regular != null) ? ' hat-was' : '';   // ganze Gruppe (auch ihre Teile im Druck): Preisspalte breit genug für „bisher“ und Sonderpreis
+  return `<div class="al-grp"><table class="al-tab${was}">${cg}<thead><tr class="al-h"><th colspan="${span}" scope="colgroup"><div class="al-hin"><span class="al-gt">${u.title}${cont ? ' <span class="al-cont">Forts.</span>' : ''}</span><span class="al-eh">€/kg</span>${screen ? '<span class="al-fh" aria-hidden="true"></span>' : ''}</div></th></tr>
     ${cols > 1 ? `<tr class="al-sub"><th colspan="2"></th>${labels.map((l) => `<th>${esc(l)}</th>`).join('')}${screen ? '<th></th>' : ''}</tr>` : ''}</thead>
     <tbody>${items.map(row).join('')}</tbody></table></div>`;
 }
@@ -676,9 +678,10 @@ if (window.ResizeObserver) new ResizeObserver(() => { const h = $('#list'); if (
 
 /* Druck/PDF „Angebotsansicht“: A4 quer, im Aussehen der Vorschau – derselbe Inhalt wie am Bildschirm (Kopf mit Logo,
    Werbung, Bereiche als Balken, Gruppen, Kennzeichen, Hinweis), gesetzt von assets/angebot-druck.js (gemessen statt geschätzt:
-   immer drei Spalten, Gruppen ungeteilt, Bereiche zusammen, fortlaufend über die Seiten). Am Fuß der letzten Seite der
-   Hinweis (Mengen, Fracht) und die Fußzeile des Briefbogens (FRACHT.fuss) – oder auf jeder Seite (Einstellung „modus“,
-   zum Vergleich ?fuss=jede|letzte). */
+   immer drei Spalten, Gruppen ungeteilt, Seiten fortlaufend gefüllt – ein Bereich beginnt, sobald Balken und ein Block
+   Platz haben –, Schriftgröße in drei Stufen automatisch so, dass möglichst wenige Seiten entstehen). Am Fuß der letzten
+   Seite der Hinweis (Mengen, Fracht) und die Fußzeile des Briefbogens (FRACHT.fuss) – oder auf jeder Seite (Einstellung
+   „modus“, zum Vergleich ?fuss=jede|letzte). Derselbe Weg für Wochenangebot, Kundenangebote und Einzelangebote. */
 const FUSS_PARAM = (() => { const v = new URLSearchParams(location.search).get('fuss'); return v === 'jede' || v === 'letzte' ? v : ''; })();
 const STUFE_PARAM = new URLSearchParams(location.search).get('stufe') || '';   // zum Vergleich: ?stufe=normal|kompakt|eng legt die Dichte fest (sonst automatisch)
 const DRUCK_ENTWURF_VERMERK = false;   // true: der Druck eines Entwurfs (Vorschau, Knopf „Drucken“ im Eingabebereich) trägt im Seitenkopf den Vermerk „Entwurf“

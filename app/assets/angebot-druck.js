@@ -33,7 +33,7 @@
   const EPS = 0.5;                            // px Toleranz beim Vergleichen gemessener Höhen
   const ESC = { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' };
   const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ESC[c]);
-  const LEER = '<div class="al-st al-st-leer" aria-hidden="true"><h3>&nbsp;</h3></div>';   // unsichtbarer Balken: Bereich ohne Namen neben einem benannten (Blöcke der Zeile beginnen bündig, wie am Bildschirm)
+  const TRENN = '<div class="al-st pl-trenn" aria-hidden="true"><h3>&nbsp;</h3></div>';   // Bereich ohne Namen zwischen benannten: Linie in der Höhe eines Balkens – er gehört sichtbar zu keinem Nachbarn
   const zeilen = (t) => String(t ?? '').split('\n').map((l) => l.trim()).filter(Boolean);
   const summe = (a) => a.reduce((x, y) => x + y, 0);
   /* Verkleinerung der Satzfläche auf den Satzspiegel (px der Bildschirmansicht → A4 quer); 1 mm = 96/25,4 px */
@@ -65,7 +65,7 @@
     host.innerHTML = `<div class="al al-print pl-doc pl-mess pl-${st.name}" style="--z:${zFaktor(st)}"><div class="pl-in">
       <div data-m="mm" style="height:100mm"></div>
       <div data-m="kopf1" class="pl-m">${cfg.kopf(1, 1)}</div><div data-m="kopf2" class="pl-m">${cfg.kopf(2, 2)}</div>
-      <div data-m="werb" class="pl-m">${cfg.werbung || ''}</div><div data-m="fuss" class="pl-m">${fuss}</div><div data-m="leer" class="pl-m pl-mb" style="--c:1">${LEER}</div>
+      <div data-m="werb" class="pl-m">${cfg.werbung || ''}</div><div data-m="fuss" class="pl-m">${fuss}</div><div data-m="trenn" class="pl-m pl-mb" style="--c:1">${TRENN}</div>
       ${balken}<div class="pl-mcol" data-m="col">${col}</div></div></div>`;
     const h = (el) => (el ? el.getBoundingClientRect().height : 0);
     const q = (s) => host.querySelector(s);
@@ -82,12 +82,12 @@
       return { name: !!b.name, bar, barF, units };
     });
     return { H: SEITE.h * h(q('[data-m="mm"]')) / 100 / zFaktor(st), secs, kopf1: h(q('[data-m="kopf1"]')), kopf2: h(q('[data-m="kopf2"]')), werb: h(q('[data-m="werb"]')),
-      fuss: fuss ? h(q('[data-m="fuss"]')) : 0, leer: h(q('[data-m="leer"]')), G: ab('gruppe'), BAND: ab('band') };
+      fuss: fuss ? h(q('[data-m="fuss"]')) : 0, trenn: h(q('[data-m="trenn"]')), G: ab('gruppe'), BAND: ab('band') };
   }
 
   /* ---------- Verteilen ----------
      Rückgabe: Seiten [{ bands, y, K }] – bands: Zeilen der Seite, jede mit „teile“ (ein Bereich in 1–3 Spalten oder mehrere
-     Bereiche nebeneinander, zusammen drei Spalten): { si: Bereich, c: Spalten, forts, leer, cols: [[{ gi, von, bis, forts, h }]] };
+     Bereiche nebeneinander, zusammen drei Spalten): { si: Bereich, c: Spalten, forts, trenn, cols: [[{ gi, von, bis, forts, h }]] };
      y: genutzte Höhe, K: verfügbare Höhe (unter Kopf und Werbung, über der Fußzeile). */
   function setzen(m, modus) {
     const S = m.secs, n = S.length, G = m.G, jede = modus === 'jede' && m.fuss > 0;
@@ -131,12 +131,13 @@
       }
     }
 
-    /* Blöcke je Bereich; nur eine Gruppe, die allein höher ist als eine ganze Seitenspalte, wird in gleich hohe Teile zerlegt */
+    /* Blöcke je Bereich; nur eine Gruppe, die allein höher ist als eine ganze Seitenspalte (voll), wird in gleich hohe Teile
+       zerlegt – so hoch, dass sie auch unter Kopf und Werbung der ersten Seite passen, solange dort die halbe Höhe frei ist */
     for (const s of S) {
-      const voll = kap(1, jede) - Math.max(balken(s, SPALTEN, false), balken(s, SPALTEN, true));
+      const bar = Math.max(balken(s, SPALTEN, false), balken(s, SPALTEN, true)), voll = kap(1, jede) - bar;
       s.teile = [];
       for (const u of s.units) {
-        const cap = voll - u.headF;
+        const cap = Math.min(voll, Math.max(kap(0, jede) - bar, voll / 2)) - u.headF;
         let st = null;
         if (u.h > voll + EPS && cap > 0) for (let k = Math.ceil(summe(u.rows) / cap); !st && k <= u.rows.length; k++) st = stuecke(u, Array(k).fill(cap));
         s.teile.push(...(st ? st.filter((x) => x.bis > x.von) : [ganz(u)]));
@@ -164,12 +165,15 @@
     };
     const memo = new Map();
     const lage = (si, a, b, c) => { const key = si + '.' + a + '.' + b + '.' + c; if (!memo.has(key)) memo.set(key, teilen(S[si].teile.slice(a, b), c)); return memo.get(key); };
-    /* Fertige Zeile aus Teilen ({ si, c, forts, cols, inhalt: Höhe der Blöcke }) mit ihrer Höhe. Wie am Bildschirm: ein Bereich
-       allein in der Zeile bekommt den Balken über die ganze Breite; ein Bereich ohne Namen neben einem benannten bekommt
-       einen unsichtbaren Balken, damit die Blöcke der Zeile auf gleicher Höhe beginnen. */
+    /* Fertige Zeile aus Teilen ({ si, c, forts, cols, inhalt: Höhe der Blöcke }) mit ihrer Höhe. Jede Zeile ist genau drei
+       Spalten breit: der letzte Bereich der Zeile bekommt die Spalten, die rechts übrig sind (sein Balken reicht bis zum Rand;
+       ein Bereich allein also über die ganze Breite, wie am Bildschirm). Ein Bereich ohne Namen trägt statt des Balkens eine
+       Linie in derselben Höhe, wenn andere Bereiche Namen haben (hatNamen): seine Blöcke beginnen bündig mit denen der
+       Nachbarn, gehören aber sichtbar nicht zu deren Balken. */
+    const hatNamen = S.some((s) => s.name);
     const band = (teile) => {
-      const allein = teile.length === 1, mitName = teile.some((t) => S[t.si].name);
-      const ts = teile.map((t) => { const s = S[t.si], c = allein ? SPALTEN : t.c, leer = !s.name && mitName; return { ...t, c, leer, h: (leer ? m.leer : balken(s, c, t.forts)) + t.inhalt }; });
+      const rest = SPALTEN - teile.reduce((x, t) => x + t.c, 0);
+      const ts = teile.map((t, k) => { const s = S[t.si], c = t.c + (k === teile.length - 1 ? rest : 0), trenn = !s.name && hatNamen; return { ...t, c, trenn, h: (trenn ? m.trenn : balken(s, c, t.forts)) + t.inhalt }; });
       return { teile: ts, h: Math.max(...ts.map((t) => t.h)) };
     };
     /* Zeile aus ganzen Bereichen ab Bereich i (ab seinem Block u0): der Bereich in 1–3 Spalten, dazu wahlweise die folgenden
@@ -232,7 +236,7 @@
         starts.push(st);
         const steht = (e) => e.i === st.i && e.u === st.u;
         let frei = res(p), e = seite(st, p, frei);
-        if (steht(e) && frei && st.i < n) { frei = false; e = seite(st, p, false); }   // der nächste Block passt nur ohne Fußzeile auf eine Seite
+        if (steht(e) && frei && !jede && st.i < n) { frei = false; e = seite(st, p, false); }   // „letzte“: der nächste Block passt nur ohne Fußzeile auf eine Seite
         if (steht(e) && p > 0 && st.i < n) {   // passt auf keine Seite (z. B. sehr hoher Kopf): trotzdem setzen, damit es weitergeht
           const s = S[st.i], b = band([{ si: st.i, c: SPALTEN, forts: st.u > 0, cols: [[s.teile[st.u]]], inhalt: s.teile[st.u].h }]);
           e = { i: st.u + 1 >= s.teile.length ? st.i + 1 : st.i, u: st.u + 1 >= s.teile.length ? 0 : st.u + 1, y: b.h, bands: [b] };
@@ -273,7 +277,7 @@
       const ber = cfg.bereiche[t.si];
       if (t.forts && ber.name) bereichForts++;
       const cols = t.cols.concat(Array(Math.max(0, t.c - t.cols.length)).fill([]));   // weniger Blöcke als Spalten: die übrigen bleiben frei
-      return `<section class="al-sec" style="--c:${t.c}">${ber.name ? ber.balken(t.forts) : t.leer ? LEER : ''}
+      return `<section class="al-sec" style="--c:${t.c}">${ber.name ? ber.balken(t.forts) : t.trenn ? TRENN : ''}
         <div class="al-cols" style="--k:${t.c}">${cols.map((col) => `<div class="al-col">${col.map((fr) => { if (fr.forts) geteilt++; return ber.gruppen[fr.gi].block(fr.von, fr.bis, fr.forts); }).join('')}</div>`).join('')}</div></section>`;
     }).join('')}</div>`;
     const fuell = seiten.map((s) => Math.round(100 * Math.min(1, s.y / Math.max(1, s.K))));
