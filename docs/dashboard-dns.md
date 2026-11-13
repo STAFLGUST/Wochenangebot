@@ -27,3 +27,7 @@ Stand 25.10.2026 (Übersicht der DNS-Verwaltung vom Inhaber): CNAME → `dashboa
 `verwaltung`, `bestand`, `hr`, `crm`, `marketing`, `rewe`, `qs`, `einkauf`, `controlling`, `leergut`, `container-import` und
 `test`; A-Eintrag `@` zum VPS. Freigegeben (über Keycloak): `angebot`, `verwaltung`, `bestand`, `hr`, `crm`, `marketing`, später `sicherheit` (26.10.), `controlling` (28.10.)
 `leergut` (29.10.2026), `rewe` (30.10.2026) und `qs` (Qualitätssicherung, Entscheidung des Inhabers 30.10.2026). 503-Platzhalter bis zur Freigabe (GR-105): `einkauf`, `container-import`, `test`.
+
+Stand 13.11.2026: neue Adresse `versand.dashboard-stafl.de` (Modul Versand, freigegeben mit dem Merge). Der DNS-Eintrag
+`versand` besteht noch nicht; weil der Server inzwischen hinter bunny.net steht (`docs/bunny-cdn.md`), gilt für ihn eine eigene
+Reihenfolge – `docs/plattform/inbetriebnahme-versand.md`.

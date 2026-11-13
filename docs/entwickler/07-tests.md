@@ -56,6 +56,10 @@ Eine **Gruppe** ist eine Testdatei `tests/e2e/test_<gruppe>.py` mit einem Eintra
   durch die Werte des Arbeitsplatzes, `{AUX}` durch den Hilfsport. `MAIL_*`, `WA_URL` und `DOMAIN` aus der eigenen
   Shell werden nie an den Testserver weitergereicht.
 - Gruppen mit gleicher Vorbereitung teilen sich Einträge (`SUITES['versand'] = SUITES['kunden_mail']`).
+- `LISTE_IM_ANGEBOT`: Gruppen, die die Liste der unveröffentlichten Änderungen mit „Rückgängig“ im Eingabebereich prüfen
+  (`revert`, `angebote`, `aufbau`, `sys`). Für sie schaltet der Starter in der App-Kopie des Testordners `AENDERUNGSLISTE_IM_ANGEBOT`
+  in `admin.js` ein – vor dem Bereitstellen, damit Versionsnummer und Prüfliste passen. Ausgeliefert ist der Schalter aus
+  (Veröffentlichen liegt im Modul Versand); diesen Stand prüft die Gruppe `versand`.
 - `OPTIONAL`: Gruppen, die einen vorherigen Build brauchen (`app_web` braucht `mobile/dist-web`). Fehlt er, überspringt
   der volle Lauf die Gruppe mit Hinweis.
 
@@ -95,6 +99,7 @@ Eintrag. Lokal nachstellen, was ein CI-Teil ausführt: `WA_TEIL=2/3 python3 test
 | `smtp_test.py` | `TestSmtp(port, …)` – Test-Mailserver im Speicher (EHLO, optional STARTTLS/TLS, AUTH, `messages`); Empfänger `abgelehnt@…` werden mit 550 abgewiesen |
 | `testdaten.py` | Erwartungswerte aus den Fixtures berechnen (`angebot()`, `artikel()`, `preis()`, `de()` für deutsches Zahlenformat) – nie Preise oder Mengen fest eintragen |
 | `order_setup.py` | gemeinsame Vorbereitung der Bestellgruppen (Kunde mit Zugang, veröffentlichtes Angebot, Test-Mailserver) |
+| `versand_hilfe.py` | `veroeffentlichen(seite)` – veröffentlicht den gespeicherten Entwurf über das Modul Versand (`versand_start` → `versand_veroeffentlichen` mit Revision) und wartet, bis der offene Eingabebereich den Stand übernommen hat; für Gruppen, die „veröffentlicht“ nur als Zwischenschritt brauchen (die Seite muss als Mitarbeiter mit Zugang zum Versand angemeldet sein) |
 
 ### Unit-, Regelwerk- und Deploy-Tests
 

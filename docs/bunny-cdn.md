@@ -19,7 +19,9 @@ alles nach der Anmeldung leitet bunny unverändert an den Server weiter und spei
 | `stafl-dashboard-2` | controlling., leergut., rewe., qs., einkauf., container-import., test. (.dashboard-stafl.de) |
 
 Eine Zone fasst höchstens 10 Adressen, ihre eigene `b-cdn.net`-Adresse mitgezählt. Deshalb gibt es zwei Zonen fürs
-Dashboard. Neue Modul-Adressen kommen in `stafl-dashboard-2`.
+Dashboard. Neue Modul-Adressen kommen in `stafl-dashboard-2`. Eine neue Adresse braucht zuerst ihr Zertifikat am Server –
+das geht nicht über bunny (Caddy lehnt Verbindungen für einen Namen ohne Zertifikat ab); Vorgehen am Beispiel
+`versand.dashboard-stafl.de` (13.11.2026): `docs/plattform/inbetriebnahme-versand.md`.
 
 Einstellungen aller Zonen:
 

@@ -111,7 +111,7 @@ check('Zahlen je Modul (für die Seitenleiste) und gesamt', Z.get('qs') == {'off
 AKT = [(a['titel'], a['ziel']) for a in H.get('aktionen', [])]
 check('Schnellaktionen des Administrators in fester Reihenfolge (die ersten vier wie im Entwurf), Fenster zum Anlegen über „<reiter>/neu“', AKT == [
       ('Kundenangebot erstellen', 'einzel'), ('Urlaub beantragen', 'mein'), ('Interessent anlegen', 'kunden/neu'), ('Daten importieren', ''), ('Wochenangebot bearbeiten', ''),
-      ('Beitrag anlegen', 'kalender/neu'), ('Prüfnachweis erfassen', 'pruefplan'), ('Wiedervorlagen ansehen', 'wiedervorlagen'), ('REWE-Wochenabfrage', 'woche'),
+      ('Angebot veröffentlichen', ''), ('Beitrag anlegen', 'kalender/neu'), ('Prüfnachweis erfassen', 'pruefplan'), ('Wiedervorlagen ansehen', 'wiedervorlagen'), ('REWE-Wochenabfrage', 'woche'),
       ('Leergut abstimmen', 'abstimmungen')], AKT)
 zl = H.get('zuletzt', [])
 check('Zuletzt bearbeitet: eigene Änderungen, neueste zuerst, ohne Vorsatz des Moduls, höchstens sechs',
@@ -122,7 +122,7 @@ check('Favoriten noch nicht gewählt (Standard)', H.get('favoriten') is None, H.
 st, he = E.call('start_heute')
 check('Bearbeiter: keine Punkte aus Modulen ohne Recht (kein Genehmigen, nicht in QS eingeteilt, kein Leergut, keine REWE-Liste)', st == 200 and he['punkte'] == []
       and he['gesamt'] == {'offen': 0, 'ueberfaellig': 0}, he.get('punkte'))
-check('Bearbeiter: nur Schnellaktionen mit Recht (kein Kundenangebot, kein CRM)', [a['titel'] for a in he['aktionen']] == ['Urlaub beantragen', 'Daten importieren', 'Wochenangebot bearbeiten'], he['aktionen'])
+check('Bearbeiter: nur Schnellaktionen mit Recht (kein Kundenangebot, kein CRM; „Angebot veröffentlichen“ nur mit Zugang zum Versand)', [a['titel'] for a in he['aktionen']] == ['Urlaub beantragen', 'Daten importieren', 'Wochenangebot bearbeiten'], he['aktionen'])
 check('Bearbeiter: eigener Urlaubsantrag unter „Zuletzt bearbeitet“, maskiert (ohne Recht „HR verwalten“)', any(x['modul'] == 'hr' and x['text'] == 'Vorgang der Urlaubsverwaltung'
       for x in he['zuletzt']), he['zuletzt'])
 V = Client('198.51.100.4'); V.call('login', {'username': 'vera', 'password': 'Dritter-Zugang-4712'})
@@ -371,7 +371,7 @@ with sync_playwright() as pw:
     check('Seitenleiste: Einkauf und Container-Import unter „In Entwicklung“, ohne Verweis, mit „Bald“',
           [e['id'] for e in L['In Entwicklung']] == ['einkauf', 'containerimport'] and all(e['tag'] == 'SPAN' and e['aus'] == 'true' and not e['href']
           and e['bald'] == 'Bald' and 'bald verfügbar' in e['label'] for e in L['In Entwicklung']), L['In Entwicklung'])
-    check('Seitenleiste: Import, Verwaltung, Sicherheit unten unter „Verwaltung & Daten“', [e['id'] for e in L['Verwaltung & Daten']] == ['import', 'verwaltung', 'sicherheit'])
+    check('Seitenleiste: Import, Versand, Verwaltung, Sicherheit unten unter „Verwaltung & Daten“ (Versand direkt über der Verwaltung)', [e['id'] for e in L['Verwaltung & Daten']] == ['import', 'versand', 'verwaltung', 'sicherheit'])
     ziele = {e['id']: e['href'] for g in L.values() for e in g}
     check('Ziele im Testserver (gleicher Host): Eingabebereich, Import und Modulseiten', {m: ziele[m] for m in ('angebot', 'bestand', 'verwaltung', 'import', 'hr', 'crm', 'marketing', 'leergut', 'rewe', 'qs', 'controlling', 'sicherheit')}
           == {'angebot': '/admin/', 'bestand': '/admin/', 'verwaltung': '/admin/', 'import': '/import/', 'hr': '/module/hr/', 'crm': '/module/crm/', 'marketing': '/module/marketing/',
@@ -394,7 +394,7 @@ with sync_playwright() as pw:
     # ── Suche (Strg K, Feld in der Seitenleiste; kein eigener Knopf mehr auf der Startseite) ──
     pg.keyboard.press('Control+k'); pg.wait_for_selector('#r-palette[open]')
     check('Strg K öffnet die Suche, Fokus im Suchfeld, alle Anwendungen und Schnellaktionen', pg.evaluate("document.activeElement.id") == 'r-palette-eingabe'
-          and pg.locator('#r-palette [role="option"]').count() == len(FREI) + 3 + len(H['aktionen']))
+          and pg.locator('#r-palette [role="option"]').count() == len(FREI) + 4 + len(H['aktionen']))
     pg.keyboard.type('qualit')
     tr = pg.evaluate("[...document.querySelectorAll('#r-palette [role=\"option\"]')].map(o => [o.textContent.trim(), o.getAttribute('href'), o.getAttribute('aria-selected')])")
     check('Suche „qualit“: Qualitätssicherung (ohne Umlaut-Probleme), erster Treffer gewählt', tr == [['Qualitätssicherung', '/module/qs/', 'true']], tr)
@@ -434,7 +434,7 @@ with sync_playwright() as pw:
     # ── Favoriten bearbeiten (am Konto) ──
     pg.click('#db-fav-bearbeiten'); pg.wait_for_selector('#db-fav-wahl:not([hidden])')
     chips = pg.evaluate("[...document.querySelectorAll('.db-fav-chip')].map(b => [b.dataset.modul, b.getAttribute('aria-pressed')])")
-    check('Bearbeiten: alle nutzbaren Anwendungen (ohne „Bald“) als Schalter, Favoriten gedrückt', [c for c, _ in chips] == FREI + ['import', 'verwaltung', 'sicherheit']
+    check('Bearbeiten: alle nutzbaren Anwendungen (ohne „Bald“) als Schalter, Favoriten gedrückt', [c for c, _ in chips] == FREI + ['import', 'versand', 'verwaltung', 'sicherheit']
           and [c for c, p in chips if p == 'true'] == ['angebot', 'bestand', 'leergut', 'crm'] and pg.is_hidden('#db-grid') and pg.is_hidden('#db-fav-bearbeiten'), chips)
     pg.click('.db-fav-chip[data-modul="crm"]'); pg.click('.db-fav-chip[data-modul="qs"]')
     check('Zähler in der Erklärung (4 von 8)', '(4 von 8)' in pg.text_content('#db-fav-text'))

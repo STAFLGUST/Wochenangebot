@@ -47,7 +47,8 @@ with sync_playwright() as p:
     check('price formatted 24,10', row('10601').locator('input[data-f="price"]').input_value() == '24,10')
     check('row marked price change + was', 'is-price' in row('10601').get_attribute('class') and 'bisher' in row('10601').inner_text())
     check('keine Änderungsleiste mehr; Aufstellung am Knopf „Veröffentlichen“', a.locator('#changes').count() == 0 and '1 Preis geändert' in (a.get_attribute('#offen-zahl, #offen-liste', 'title') or ''), a.get_attribute('#offen-zahl, #offen-liste', 'title'))
-    check('draft saved state', 'noch nicht veröffentlicht' in a.inner_text('#save-state'), a.inner_text('#save-state'))
+    check('draft saved state: Zahl der unveröffentlichten Änderungen, Verweis „Zum Versand“', '1 Änderung nicht veröffentlicht' in a.inner_text('#save-state')
+          and a.locator('#save-state a.zum-versand').get_attribute('href') == '../module/versand/', a.inner_text('#save-state'))
     check('public unchanged before publish', pub_price('10601').startswith(de(preis('10601'))), pub_price('10601'))
     pv = ctx.new_page(); pv.goto(B + '/?vorschau=1#suche=10601'); pv.wait_for_selector('tr.row')
     check('preview shows draft', pv.locator('tr.row td.c-price').first.inner_text().startswith('24,10') and pv.locator('#preview-banner').is_visible())
@@ -67,7 +68,8 @@ with sync_playwright() as p:
     fr.locator('#list').get_by_text('24,10').first.wait_for(timeout=10000)
     check('Vorschau im Fenster: Angebotsseite mit dem Entwurf, ohne eigenen Hinweis und Rücksprung', '/index.html?vorschau=1&eingebettet=1' in src
           and fr.locator('#preview-banner').is_hidden() and fr.locator('#screen-editor').count() == 0, src)
-    check('Vorschau: Fuß nennt unveröffentlichte Änderungen, Veröffentlichen erreichbar', 'noch nicht veröffentlicht' in a.inner_text('#pv-stand') and a.locator('#pv-publish').is_visible(), a.inner_text('#pv-stand'))
+    check('Vorschau: Fuß nennt unveröffentlichte Änderungen, „Zum Versand“ statt „Veröffentlichen“', 'noch nicht veröffentlicht' in a.inner_text('#pv-stand') and a.locator('#pv-publish').count() == 0
+          and a.locator('#pv-versand').is_visible() and a.get_attribute('#pv-versand', 'href') == '../module/versand/', a.inner_text('#pv-stand'))
     check('Vorschau: „Neuer Tab“ öffnet dieselbe Vorschau als eigene Seite', a.get_attribute('#pv-tab', 'href') == '../index.html?vorschau=1')
     a.click('[data-pv-dev="mobil"]')
     w = a.locator('#pv-frame').bounding_box()['width']
@@ -89,8 +91,11 @@ with sync_playwright() as p:
     i2 = row('10701').locator('input[data-f="price"]'); i2.fill('abc'); i2.press('Tab'); a.wait_for_timeout(100)
     check('invalid price marked', 'invalid' in i2.get_attribute('class'))
     a.click('#offen-liste'); a.wait_for_selector('#dlg-publish[open]')
-    check('publish blocked with invalid price', a.locator('#dlg-publish [data-ia="publish"]').is_disabled() and 'nicht lesbar' in a.inner_text('#dlg-publish'))
+    check('Liste der Änderungen nennt den nicht lesbaren Preis; veröffentlicht wird hier nicht mehr', a.locator('#dlg-publish [data-ia="publish"]').count() == 0 and 'nicht lesbar' in a.inner_text('#dlg-publish'))
     a.click('#dlg-publish [data-close]')
+    # „Zum Versand“ hält an, solange ein Preis nicht lesbar ist (im Entwurf steht dort noch der bisherige Preis)
+    a.click('#save-state a.zum-versand'); a.wait_for_selector('#toast.show:has-text("nicht lesbar")')
+    check('„Zum Versand“ mit nicht lesbarem Preis: Hinweis, die Seite bleibt offen', '/admin/' in a.url and '/module/versand' not in a.url and 'bitte zuerst korrigieren' in a.inner_text('#toast'), (a.url, a.inner_text('#toast')))
     i2.fill('a. Anfr.'); i2.press('Tab'); a.wait_for_timeout(100)
     check('a. Anfr. accepted', 'invalid' not in (i2.get_attribute('class') or ''))
 

@@ -7,7 +7,7 @@ import re
 import sys
 from playwright.sync_api import sync_playwright
 from smtp_test import TestSmtp
-from umgebung import SH, FIX
+from umgebung import SH, FIX, until
 from kunden_hilfe import Client, B
 
 PW = 'Sicheres-Passwort-1'
@@ -236,15 +236,23 @@ with sync_playwright() as p:
     a.click('#offer-bar [data-offer="edeka"]')
     check('edeka view shows own sale price', 'Empfehlung 6,11' in row(IB['id']).locator('.sale-tag').inner_text())
     check('edeka: „keine Empfehlung in diesem Angebot“', 'keine Empfehlung' in row(IE['id']).locator('.sale-tag').inner_text())
-    a.click('#offer-head [data-ob=restposten]'); a.wait_for_selector('#dlg-rest[open]')
-    t = a.inner_text('#rest-body')
-    check('send dialog: items, only this offer\'s customers', 'Edeka Markt Nord' in t and 'Bela' not in t and '6,11' in t and 'unveröffentlichte' in t, t[:300])
-    a.screenshot(path=SH + '/restposten-senden.png')
+    # seit 13.11.2026 im Modul Versand: der Knopf im Angebot führt dorthin, gesendet wird aus der Liste „Angebote dieser Woche“
+    check('Angebot: „Sonderposten senden“ verweist auf das Modul Versand', a.get_attribute('#offer-head [data-ob=restposten]', 'href') == '../module/versand/' and a.locator('#dlg-rest').count() == 0)
+    v = actx.new_page(); v.on('pageerror', lambda e: errs.append('versand: ' + str(e)))
+    v.goto(B + '/module/versand/'); v.wait_for_selector('#vs-app:not([hidden]) [data-sonderposten="edeka"]')
+    check('Versand: Hinweis auf unveröffentlichte Änderungen – Kunden sehen den veröffentlichten Stand', 'Bitte zuerst veröffentlichen' in v.inner_text('#vs-s2'), v.inner_text('#vs-s2'))
+    v.click('[data-sonderposten="edeka"]'); v.wait_for_selector('#dlg-send[open] .vs-artikel li')
+    t = v.inner_text('#dlg-send')
+    check('send dialog: items, only this offer\'s customers', 'Edeka Markt Nord' in t and 'Bela' not in t and '6,11' in t and 'Sonderposten „' in t, t[:300])
+    v.screenshot(path=SH + '/restposten-senden.png')
     n0 = len(smtp.messages)
-    a.click('#rest-body [data-rp=send]'); a.wait_for_selector('#dlg-confirm[open]'); a.click('#dlg-confirm [data-v="1"]')
-    a.wait_for_selector('#rest-body .st-ok', timeout=15000)
-    check('sent from the dialog', len(smtp.messages) == n0 + 1 and smtp.messages[-1]['to'] == ['edeka@example.org'])
-    a.keyboard.press('Escape')
+    v.click('#send-jetzt')
+    v.wait_for_function("(() => { const m = document.querySelector('#send-meldung'); return m && !m.hidden && !document.querySelector('#dlg-send').dataset.busy; })()", timeout=20000)
+    if v.locator('#send-pw').count():   # Bestätigung mit Passwort, wenn die Anmeldung nicht mehr frisch ist
+        v.fill('#send-pw', PW); v.click('#send-jetzt')
+    v.wait_for_selector('#dlg-send .vs-erg.ok', timeout=15000)
+    check('sent from the dialog', until(lambda: len(smtp.messages) == n0 + 1, 5) and smtp.messages[-1]['to'] == ['edeka@example.org'])
+    v.close()
     # Angebotsseite: Sonderposten-Anzeige
     pg = br.new_page(viewport={'width': 1300, 'height': 900}); pg.on('pageerror', lambda e: errs.append(str(e)))
     pg.goto(B + '/'); pg.wait_for_selector('tr.row')

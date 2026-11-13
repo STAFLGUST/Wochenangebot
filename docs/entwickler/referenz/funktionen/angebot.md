@@ -2,7 +2,7 @@
 
 <!-- ERZEUGT von `python3 werkzeuge/doku.py erzeugen` – nicht von Hand ändern. Quelle: Funktionen und Kommentare im Code. Die CI prüft, dass diese Datei zum Code passt. -->
 
-45 Dateien, 699 Funktionen – in der Reihenfolge der Datei, **fett** die Abschnitte. Text = erste Aussage des Kommentars direkt über der Funktion (Python: Docstring). Übersicht aller Module: [README.md](README.md).
+47 Dateien, 720 Funktionen – in der Reihenfolge der Datei, **fett** die Abschnitte. Text = erste Aussage des Kommentars direkt über der Funktion (Python: Docstring). Übersicht aller Module: [README.md](README.md).
 
 ## `app/api/lib/angebote.php`
 
@@ -36,6 +36,13 @@ _Angebote, Kundenpreise, Sonderpreise, Datenmodell, gemeinsames Bearbeiten_
 - `draft_rev(draft)`
 - `draft_end(draft, why)`
 - `draft_conflict(draft)`
+
+**Veröffentlichen und Änderungsliste (Schnittstelle des Angebots)**
+
+- `angebot_veroeffentlichen(modell, revision)`
+- `angebot_aufbau_geaendert(pub, neu)` – Weicht der Aufbau (Reihenfolge der Gruppen, Bereich je Gruppe, Gruppe und Reihenfolge der Artikel) vom veröffentlichten Stand ab? Gleiche Regel wie …
+- `angebot_aenderungen(pub, dr)` – Unveröffentlichte Änderungen des Entwurfs als Zeilen für die Liste „Veröffentlichen“ (Modul Versand).
+- `angebot_stand()` – Stand des Angebots für das Modul Versand – nur Zahlen und Namen, keine Preise: veröffentlichter Stand und Entwurf (Woche, Zeitpunkt, wer zuletzt gespeichert …
 
 ## `app/api/lib/einzelangebote.php`
 
@@ -135,6 +142,15 @@ _E-Mails an Kunden, Abmelden, Bestellwunsch-Vorlagen, Einmal-Links, Versand_
 - `mail_send_many(cfg, jobs)` – Mehrere Nachrichten über eine Verbindung; Ergebnis je Auftrag
 - `mail_record(entries, wk)` – Versand an Kunden vermerken (letzte E-Mail, Wochenversand) und ins Versandprotokoll schreiben
 - `mail_job_for(c, typ, note, wk)`
+
+**Versand an Kunden (Schnittstelle des Angebots)**
+
+- `wochenmail_grund(c)` – Warum bekommt ein Kunde die Wochen-Mail nicht? '' = er bekommt sie
+- `versand_kunde_zeile(c, grund, wk)` – Empfänger als Zeile der Liste: nur, was die Auswahl braucht (keine Anschrift, keine Zugangsdaten)
+- `wochenmail_empfaenger()` – Empfänger des Wochenangebots: woche (mail_week oder null), empfaenger (bekommen die Mail), ausgeschlossen (mit Grund)
+- `wochenmail_senden(cfg, ids, note, week, year)` – Wochenangebot an höchstens 20 Kunden senden (ein Teil): Ergebnis je Kunden-ID in der Reihenfolge von $ids.
+- `sonderposten_empfaenger(def)` – Sonderposten eines Angebots: Artikel (wie veröffentlicht), Empfänger (nur Kunden dieses Angebots, GR-005) mit Grund, Stand
+- `sonderposten_senden(cfg, def, ids, note, publishedAt)` – Sonderposten an höchstens 200 Kunden des Angebots senden (ein Teil): Ergebnis je Kunden-ID.
 - `ksess_begrenzen(r, kid)` – Register auf die Obergrenzen kürzen: erst je Zugang, dann insgesamt (die zuletzt benutzten bleiben)
 - `kunde_sign_in(c, via)` – Kunde anmelden (nach Passwortprüfung oder Einmal-Link)
 
@@ -150,6 +166,17 @@ _Preisverlauf (Wochenstände)_
 - `history_backfill()` – Bisherige Veröffentlichungen einmalig in den Preisverlauf übernehmen (gelöschte Wochen ausgenommen)
 - `history_undelete(id)`
 - `clean_history_items(items)`
+
+## `app/api/module/angebot/druck.php`
+
+_Druck der Angebote: Fußzeile des Briefbogens unter jedem gedruckten Angebot (Wunsch des Inhabers 13.11.2026)._
+
+- `druck_fuss_text(v, zeilen, laenge)` – Text einer Spalte: höchstens DRUCK_FUSS_ZEILEN Zeilen, ohne Steuerzeichen, Leerzeichen bereinigt
+- `druck_fuss_clean(in)` – Eingabe prüfen: drei Spalten, zwei Zeilen, Modus – unbekannte Felder fallen weg
+- `druck_fuss_gespeichert()` – Gespeicherte Einstellung (roh) oder null
+- `druck_fuss()` – Wirksame Fußzeile: eigene Texte, sonst die Vorgabe; „eigen“ sagt, ob Texte hinterlegt sind
+- `druck_fuss_public()` – Für die Angebotsseite (Druck): nur Texte und Modus
+- `druck_fuss_speichern(in, me)` – Speichern (nur das Feld „druck“; Fracht und Hinweis bleiben unverändert).
 
 ## `app/api/module/angebot/import.php`
 
@@ -377,6 +404,7 @@ _Wochenangebot – Eingabebereich Bearbeitet einen Entwurf auf dem Server (autom
 **Speichern**
 
 - `setSaveState(st, msg)`
+- `offenHTML()`
 - `editorsHTML()`
 - `changed(opts)`
 - `saveNow()`
@@ -401,8 +429,8 @@ _Wochenangebot – Eingabebereich Bearbeitet einen Entwurf auf dem Server (autom
 - `renderAll()`
 - `renderMeta()`
 - `renderMetaInfo()`
-- `renderChanges()` – Unveröffentlichte Änderungen: Zahl am Knopf „Veröffentlichen“, Aufstellung als Hinweis beim Darüberfahren (die Leiste über dem Editor entfällt; die …
-- `updatePublishBtn()`
+- `renderChanges()`
+- `updatePublishBtn()` – früher Zahl am Knopf „Veröffentlichen“: jetzt die Zahl in der Statuszeile (nur wenn dort gerade der gespeicherte Stand steht)
 - `rowState(it)`
 - `matchesFilter(it)`
 - `wasHTML(it, st, before)`
@@ -458,7 +486,7 @@ _Wochenangebot – Eingabebereich Bearbeitet einen Entwurf auf dem Server (autom
 - `pvLaden()`
 - `openVorschau(oid)`
 
-**Veröffentlichen**
+**Liste der unveröffentlichten Änderungen**
 
 - `openPublish()`
 - `changedFields(o, it)`
@@ -470,8 +498,6 @@ _Wochenangebot – Eingabebereich Bearbeitet einen Entwurf auf dem Server (autom
 - `openVersions()`
 
 **Menü & Kopf**
-
-- `showSendHint(week, year)` – Versand an Kunden: Knopf oben und Hinweis direkt nach dem Veröffentlichen (an jedem Tag möglich)
 
 **Preisverlauf**
 
@@ -586,8 +612,6 @@ _Wochenangebot – Eingabebereich Bearbeitet einen Entwurf auf dem Server (autom
 - `openSale(id)`
 - `mhdList()`
 - `renderMhd()`
-- `openRestposten(oid)`
-- `restCount()`
 
 **Stammdaten (je Artikelnummer)**
 
@@ -623,6 +647,22 @@ _Wochenangebot – Eingabebereich Bearbeitet einen Entwurf auf dem Server (autom
 
 - `zeigeUmgezogen(ziel)` – Alter Eingabebereich stillgelegt: nur ein Hinweis mit Verweis, danach Weiterleitung (Adresse vom Server, nur https)
 - `zeigeKeinZugang(name)` – Kein Modulzugang (Rolle ohne „<modul>.zugang“): der Server sperrt alle Aktionen dieses Bereichs; hier nur der Hinweis
+
+## `app/assets/angebot-druck.js`
+
+_Angebot · Satz der Druckfassung „Angebotsansicht“ (A4 quer) für die Angebotsseite (frontend.js, Wunsch des Inhabers 13.11.2026)._
+
+- `fussHTML(fuss, hinweis, art)` – Fußzeile des Briefbogens: Siegel, drei Textspalten, zwei Zeilen (Handelsregister); darüber der Hinweis (Mengen, Fracht). art „quer“: alles in einer Reihe …
+
+**Messen: Bausteine unsichtbar in Druckgröße setzen**
+
+- `messen(host, cfg, k, fuss)`
+
+**Verteilen**
+
+- `fuellen(m, start, caps, bis)`
+- `setzen(m, modus)` – Seiten ermitteln und die letzte(n) ausgleichen. modus: Fuß auf jeder Seite ('jede') oder nur der letzten ('letzte').
+- `liste(cfg)` – cfg: { host (#print-root), bereiche: [{ html, gruppen: [{ n, block(von, bis, forts) }] }], kopf(seite, seiten), werbung?, fuss?: {spalten, zeilen}, hinweis?: …
 
 ## `app/assets/frontend.js`
 
@@ -907,6 +947,20 @@ _STAFL-Plattform · Angebot · Fenster „Aufbau des Angebots“ (Knopf „Edito
 - `rollen()`
 - `bewegen(e)`
 - `loslassen(e)`
+
+## `app/module/angebot/druck.js`
+
+_STAFL-Plattform · Angebot · Drucken aus „Angebot bearbeiten“ und Einstellung „Fußzeile im Druck“ (Wunsch des Inhabers 13.11.2026)._
+
+**Drucken**
+
+- `fertig()`
+- `drucken()`
+
+**Fußzeile im Druck (nur Administratoren)**
+
+- `fussForm()`
+- `fussOeffnen()`
 
 ## `app/module/angebot/preisimport.js`
 
@@ -1229,13 +1283,6 @@ _Setup_
 **Manual price edit**
 
 - `sichtbar(n)` – search/filter in editor – auf das erwartete Ergebnis warten statt fester Wartezeit (Filter greift verzögert)
-
-## `tests/e2e/test_versand.py`
-
-_Wochenangebot an Kunden senden_
-
-- `check(n, c, i)`
-- `login(user, password)`
 
 ## `tests/e2e/test_wartung.py`
 

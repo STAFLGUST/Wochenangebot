@@ -110,18 +110,28 @@ with sync_playwright() as p:
         a.screenshot(path=SH + '/users-mustchange-fehler.png')
         raise
     check('editor: no admin tabs', not a.locator('#vt-users').is_visible() and not a.locator('#vt-log').is_visible())
-    check('editor: publish visible', a.locator('#btn-publish').is_visible())
+    # Veröffentlichen liegt seit 13.11.2026 im Modul Versand: Bearbeiter haben das Recht, aber ohne Modulzugang keinen Weg dorthin
+    check('editor: „Drucken“ statt „Veröffentlichen“, ohne Zugang kein Verweis „Zum Versand“', a.locator('#btn-drucken').is_visible()
+          and a.locator('#btn-publish').count() == 0 and a.locator('#btn-send').count() == 0 and a.locator('a.zum-versand').count() == 0)
     r = api_from_page(a, 'user_save', {'name': 'Hack', 'username': 'hack', 'role': 'admin', 'active': True, 'password': 'Hack-Hack-123'})
     check('editor cannot create users (403)', r[0] == 403, r)
     set_price(a, '10701', '29,00')
+    r = api_from_page(a, 'versand_veroeffentlichen', {'revision': 0})
+    check('editor without access to Versand cannot publish (403)', r[0] == 403 and r[1].get('code') == 'kein_modulzugang', r)
+    _nu = read_users()   # Anna bekommt den Zugang zum Versand (wie über Verwaltung → Mitarbeiter, Ausnahme „erlauben“)
+    for _u in _nu['users']:
+        if _u['username'] == 'anna': _u['grant'] = ['versand.zugang']
+    storage_write('nutzer', _nu)
     veroeffentlichen(a)
+    a.reload(); a.wait_for_selector('#screen-editor:not([hidden]) tr[data-id]'); a.wait_for_selector('#save-state a.zum-versand')
+    check('editor with access: „Zum Versand“ in der Statuszeile', a.locator('#save-state a.zum-versand').count() == 1, a.inner_text('#save-state'))
     logout(a)
 
     # ---- Nur ansehen
     login(a, 'ben', 'Leser-Kennwort-123')
     check('viewer: inputs disabled', a.locator('tr[data-id] input[data-f="price"]').first.is_disabled() and a.locator('#m-week').is_disabled())
     check('viewer: search still usable', a.locator('#ed-q').is_enabled())
-    check('viewer: publish/import hidden', not a.locator('#btn-publish').is_visible() and not a.locator('#btn-import').is_visible())
+    check('viewer: no link to Versand, import hidden', a.locator('a.zum-versand').count() == 0 and a.locator('#btn-publish').count() == 0 and not a.locator('#btn-import').is_visible())
     check('viewer: read-only state shown', 'Nur Ansicht' in a.inner_text('#save-state'))
     a.locator('tr[data-id] [data-act="item"]').first.click(); a.wait_for_selector('#dlg-item[open]')
     check('viewer: item dialog read-only', a.locator('#item-body [name=price]').is_disabled() and not a.locator('#item-body [data-ia=del]').is_visible())

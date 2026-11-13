@@ -63,6 +63,7 @@
   let company = '';
   let model = null;          // Entwurf (wird bearbeitet)
   let published = null;      // veröffentlichter Stand
+  let pubStand = null;       // dessen Zeitpunkt (publishedAt) – ändert er sich, hat jemand im Modul Versand veröffentlicht
   let revision = 0;
   let base = null;           // zuletzt mit dem Server abgeglichener Stand (Grundlage für den Abgleich)
   let editors = [];          // andere Mitarbeiter, die gerade im Eingabebereich sind
@@ -997,6 +998,7 @@
     const mitAngebot = may('angebot.zugang');
     const d = mitAngebot ? await api('draft') : { published: null, draft: null, revision: 0 };
     published = d.published ? strip(d.published) : null;
+    pubStand = d.published ? d.published.publishedAt || null : null;
     model = d.draft ? strip(d.draft) : published ? clone(published) : emptyModel();
     base = clone(model);
     revision = d.revision || 0;
@@ -1144,6 +1146,9 @@
       const d = await api('draft', { query: '&bg=1' });
       const theirs = d.draft ? strip(d.draft) : d.published ? strip(d.published) : emptyModel();
       published = d.published ? strip(d.published) : null;
+      // neu veröffentlicht (im Modul Versand oder in einem anderen Fenster): Preisverlauf beim nächsten Öffnen neu laden
+      const stand = d.published ? d.published.publishedAt || null : null;
+      if (stand !== pubStand) { pubStand = stand; hist = null; }
       const r = C.mergeModels(base, model, theirs);
       base = theirs;
       revision = d.revision || 0;
@@ -2529,6 +2534,13 @@
   });
 
   $('#btn-undo').addEventListener('click', undo);
+  /* „Zum Versand“ mit einem nicht lesbaren Preis im Fenster: Der Entwurf enthält dann noch den bisherigen Preis – veröffentlicht
+     würde etwas anderes, als hier steht. Früher sperrte das der Dialog „Veröffentlichen“; jetzt hält der Verweis an. */
+  document.addEventListener('click', (e) => {
+    if (!invalid.size || !e.target.closest('a.zum-versand, #pv-versand')) return;
+    e.preventDefault();
+    toast(`${plural(invalid.size, 'Preis ist', 'Preise sind')} nicht lesbar – bitte zuerst korrigieren (rot markiert). Im Entwurf steht dort noch der bisherige Preis.`, 7000);
+  });
   $('#save-state').addEventListener('click', (e) => { if (e.target.closest('#offen-liste')) { if (document.activeElement && document.activeElement.matches('.in, .fld input')) document.activeElement.blur(); setTimeout(openPublish, 0); } });
   $('#btn-preview').addEventListener('click', () => openVorschau(curOffer));
   $('#save-state').addEventListener('click', (e) => { if (e.target.closest('[data-act="retry-save"]')) saveNow(); });

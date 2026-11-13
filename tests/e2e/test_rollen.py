@@ -63,7 +63,7 @@ KAT = {p['key']: p for p in rr['catalog']}
 check('Katalog: Erklärung je Recht (HR), sonst leer – Bezeichnungen in Alltagssprache', all(len(KAT[k]['hilfe']) > 80 for k in ('hr.antrag', 'hr.verwalten', 'hr.genehmigen', 'hr.uebersicht', 'hr.kalender'))
       and KAT['bestand.sehen']['hilfe'] == '' and KAT['hr.verwalten']['label'] == 'Personalstelle: Urlaubsverwaltung pflegen'
       and 'nie für sich selbst' in KAT['hr.verwalten']['hilfe'] and 'nie den Grund' in KAT['hr.antrag']['hilfe'], {k: KAT[k]['label'] for k in KAT if k.startswith('hr.')})
-STUFEN_ERWARTET = {'voll': {'angebot.veroeffentlichen', 'angebote.loeschen', 'wochenangebot.senden', 'sonderposten.senden', 'leergut.verwalten', 'crm.master',
+STUFEN_ERWARTET = {'voll': {'angebote.loeschen', 'wochenangebot.senden', 'sonderposten.senden', 'leergut.verwalten', 'crm.master',
                               'rewe.alle', 'rewe.verwalten', 'rewe.exportieren', 'qs.freigeben', 'qs.verwalten', 'hr.genehmigen', 'hr.uebersicht',
                               'marketing.freigeben', 'marketing.verwalten'},
                    'sensibel': {'bestand.einkaufspreise', 'crm.exportieren', 'controlling.umsatz_ek', 'controlling.bestand_ek', 'controlling.arbeitszeit_sehen',
@@ -78,10 +78,13 @@ check('Katalog: Vorschau-Bild je wichtigem Recht, Modulzugang zeigt die Kachel',
       all(p['vorschau'] == 'kachel' for p in rr['catalog'] if p['kind'] == 'zugang') and KAT['bestand.einkaufspreise']['vorschau'] == 'ek'
       and KAT['sicherheit.notfall']['vorschau'] == 'notfall' and KAT['angebot.bearbeiten']['vorschau'] == '' and len({p['vorschau'] for p in rr['catalog']} - {''}) == 13,
       sorted({p['vorschau'] for p in rr['catalog']}))
-check('Modulzugang für jede Kachel des Registers', ZUGANG == {f'{m}.zugang' for m in ['angebot', 'bestand', 'leergut', 'crm', 'rewe', 'qs', 'einkauf', 'containerimport', 'import', 'hr', 'marketing', 'controlling', 'verwaltung', 'sicherheit']}, sorted(ZUGANG))
-check('Modulzugang gehört zum Modul, Standard: beide Standardrollen (außer Register-Feld zugang_rollen: Sicherheit und Controlling ohne)',
-      all(p['modul'] == p['key'].split('.')[0] and p['default'] == ([] if p['key'] in ('sicherheit.zugang', 'controlling.zugang') else ['viewer', 'editor']) for p in rr['catalog'] if p['kind'] == 'zugang'))
-ZUGANG_STD = ZUGANG - {'sicherheit.zugang', 'controlling.zugang'}
+check('Modulzugang für jede Kachel des Registers', ZUGANG == {f'{m}.zugang' for m in ['angebot', 'bestand', 'leergut', 'crm', 'rewe', 'qs', 'einkauf', 'containerimport', 'import', 'hr', 'marketing', 'controlling', 'versand', 'verwaltung', 'sicherheit']}, sorted(ZUGANG))
+check('Modulzugang gehört zum Modul, Standard: beide Standardrollen (außer Register-Feld zugang_rollen: Sicherheit, Controlling und Versand ohne)',
+      all(p['modul'] == p['key'].split('.')[0] and p['default'] == ([] if p['key'] in ('sicherheit.zugang', 'controlling.zugang', 'versand.zugang') else ['viewer', 'editor']) for p in rr['catalog'] if p['kind'] == 'zugang'))
+ZUGANG_STD = ZUGANG - {'sicherheit.zugang', 'controlling.zugang', 'versand.zugang'}
+check('Versand (13.11.2026): Standardrollen ohne Modulzugang; „Angebot veröffentlichen“ gehört zum Modul Versand, Stufe Bearbeiten, Standard weiter Bearbeiter',
+      'versand.zugang' not in rechte(L) and 'versand.zugang' not in rechte(V) and KAT['angebot.veroeffentlichen']['modul'] == 'versand'
+      and KAT['angebot.veroeffentlichen']['stufe'] == 'bearbeiten' and KAT['angebot.veroeffentlichen']['default'] == ['editor'], KAT['angebot.veroeffentlichen'])
 check('Sicherheit: Standardrollen ohne Modulzugang', 'sicherheit.zugang' not in rechte(L) and 'sicherheit.zugang' not in rechte(V))
 check('Rechte sind Modulen zugeordnet (Register)', next(p for p in rr['catalog'] if p['key'] == 'kunden.sehen')['modul'] == 'verwaltung'
       and next(p for p in rr['catalog'] if p['key'] == 'preisverlauf.sehen')['modul'] == 'angebot')

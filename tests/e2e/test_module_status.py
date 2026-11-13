@@ -37,12 +37,12 @@ check('ohne Anmeldung 401', P.call('module_status')[0] == 401)
 code, r = L.call('module_status')
 check('Leser darf die Übersicht sehen', code == 200 and r.get('ok'), (code, r))
 mods = nach_id(r.get('module', []))
-check('alle Module des Registers', set(mods) == {'angebot', 'bestand', 'leergut', 'crm', 'rewe', 'qs', 'einkauf', 'containerimport', 'import', 'hr', 'marketing', 'controlling', 'verwaltung', 'sicherheit', 'dashboard', 'plattform', 'mobile'}, sorted(mods))
+check('alle Module des Registers', set(mods) == {'angebot', 'bestand', 'leergut', 'crm', 'rewe', 'qs', 'einkauf', 'containerimport', 'import', 'hr', 'marketing', 'controlling', 'versand', 'verwaltung', 'sicherheit', 'dashboard', 'plattform', 'mobile'}, sorted(mods))
 kacheln = [m['id'] for m in sorted(r['module'], key=lambda m: m['reihenfolge'] or 999) if m['dashboard']]
-check('vierzehn Kacheln in fester Reihenfolge (Sicherheit nach der Verwaltung)', kacheln == ['angebot', 'bestand', 'leergut', 'crm', 'rewe', 'qs', 'einkauf', 'containerimport', 'import', 'hr', 'marketing', 'controlling', 'verwaltung', 'sicherheit'], kacheln)
+check('fünfzehn Kacheln in fester Reihenfolge (Versand vor der Verwaltung, Sicherheit danach)', kacheln == ['angebot', 'bestand', 'leergut', 'crm', 'rewe', 'qs', 'einkauf', 'containerimport', 'import', 'hr', 'marketing', 'controlling', 'versand', 'verwaltung', 'sicherheit'], kacheln)
 gruppen = {m['id']: m['gruppe'] for m in r['module'] if m['dashboard']}
-check('Bereich je Kachel aus dem Register: Import, Verwaltung und Sicherheit unter „Verwaltung & Daten“, alle anderen Anwendungen',
-      {k for k, g in gruppen.items() if g == 'verwaltung'} == {'import', 'verwaltung', 'sicherheit'} and all(g in ('anwendungen', 'verwaltung') for g in gruppen.values())
+check('Bereich je Kachel aus dem Register: Import, Versand, Verwaltung und Sicherheit unter „Verwaltung & Daten“, alle anderen Anwendungen',
+      {k for k, g in gruppen.items() if g == 'verwaltung'} == {'import', 'versand', 'verwaltung', 'sicherheit'} and all(g in ('anwendungen', 'verwaltung') for g in gruppen.values())
       and all(m['gruppe'] is None for m in r['module'] if not m['dashboard']), gruppen)
 k = mods.get('containerimport', {}).get('kachel') or {}
 check('containerimport: angelegt, aber nicht nutzbar (Status Entwicklungsstand, ohne Zugang)', k.get('status') == 'entwicklungsstand' and not k.get('zugang'), k)
@@ -56,6 +56,10 @@ check('REWE freigegeben (rewe.dashboard-stafl.de, Auftrag des Inhabers 30.10.202
       rw['kachel']['ziel'] == 'rewe.intern' and rw['kachel']['zugang'] is True and rw['kachel']['status'] == 'verfuegbar'
       and rw['kachel']['adresse'] == 'https://rewe.dashboard-stafl.de/module/rewe/'
       and (lambda o: o['entwicklung'] == 'fertig' and o['freigabe'] == 'produktiv')(ob(rw, 'intern')), rw['kachel'])
+vs = mods['versand']
+check('Versand freigegeben (versand.dashboard-stafl.de, Auftrag des Inhabers 13.11.2026): Adresse /module/versand/ auf dem eigenen Host, fertig und produktiv; Leser ohne Modulzugang (keine Standardrolle)',
+      vs['kachel']['ziel'] == 'versand.intern' and vs['kachel']['adresse'] == 'https://versand.dashboard-stafl.de/module/versand/'
+      and (lambda o: o['entwicklung'] == 'fertig' and o['freigabe'] == 'produktiv')(ob(vs, 'intern')) and 'versand.zugang' not in L.call('status')[1]['user']['perms'], vs['kachel'])
 qs = mods['qs']
 check('Qualitätssicherung freigegeben (qs.dashboard-stafl.de, Entscheidung des Inhabers 30.10.2026): Kachel verfügbar, Adresse /module/qs/ auf dem eigenen Host',
       qs['kachel']['ziel'] == 'qs.intern' and qs['kachel']['zugang'] is True and qs['kachel']['status'] == 'verfuegbar'

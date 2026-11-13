@@ -200,6 +200,9 @@ letzten 100 Änderungen. Die Wartung der Kundenseite (`angebot.kunden`) steht we
 **`protokoll/<JJJJ-MM>`**: Liste der Einträge eines Monats (UTC), nur anhängen; Aufbau in
 [Kapitel 3.7](03-server.md#37-protokoll-audit). Änderungen `d` haben die Form
 `{"k": "<Schlüssel>", "code": "…", "name": "…", "f": "<Feld>", "from": "…", "to": "…"}`.
+Das Modul Versand (seit 13.11.2026) hat keine eigenen Dokumente: sein Verlauf liest über `protokoll_monat()` die Vorgänge
+`publish` und `mail` (Schlüssel `…|woche`, `…|restposten`) der letzten Monate (höchstens `PROTOKOLL_MONATE`) und gibt nur Zeitpunkt,
+Mitarbeiter, Art und Anzahl aus – nie Firmen oder Adressen aus den Einzelheiten.
 
 Weitere Dokumente des Kerns (Firewall, Mailversand, Benachrichtigungen, Integrität …): [referenz/daten.md](referenz/daten.md).
 

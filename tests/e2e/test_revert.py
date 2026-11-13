@@ -2,12 +2,13 @@ import sys
 from umgebung import BASE  # Testserver je Gruppe (parallel)
 import re
 from playwright.sync_api import sync_playwright
+from versand_hilfe import veroeffentlichen
 B = BASE; from umgebung import SH, FIX, REPO, WORK, XL44; res = []
 def check(n, c, i=''):
     res.append(bool(c)); print(('PASS ' if c else 'FAIL ') + n + (('  ' + str(i)) if i else ''))
 def row(pg, code): return pg.locator(f'tr[data-id]:has(input[data-f="code"][value="{code}"])').first
 def wait_saved(pg): pg.wait_for_function("document.querySelector('#save-state').className.includes('saved') || /Keine Änderungen/.test(document.querySelector('#save-state').textContent)", timeout=8000)
-def open_pub(pg): pg.click('#btn-publish'); pg.wait_for_selector('#dlg-publish[open]')
+def open_pub(pg): pg.click('#offen-liste'); pg.wait_for_selector('#dlg-publish[open]')   # Liste der Änderungen (Schalter AENDERUNGSLISTE_IM_ANGEBOT, run_e2e.py)
 def pub_text(pg): return pg.inner_text('#publish-body')
 def offer(pg):
     return pg.evaluate("async () => (await (await fetch('/api/?action=offer')).json()).offer")
@@ -18,7 +19,7 @@ with sync_playwright() as p:
     a.fill('#au-user', 'admin'); a.fill('#pw1', 'Sicheres-Passwort-1'); a.click('#auth-submit'); a.wait_for_selector('tr[data-id]')
     a.wait_for_timeout(500); wait_saved(a)
     # sauberer Ausgangspunkt: einmal veröffentlichen
-    open_pub(a); a.click('[data-ia=publish]'); a.wait_for_function("!document.querySelector('#dlg-publish').open", timeout=15000); a.wait_for_timeout(400)
+    veroeffentlichen(a)
     pub0 = offer(a); p10601 = next(i for i in pub0['items'] if i['code'] == '10601')
     # Änderungen
     pi = row(a, '10601').locator('input[data-f=price]'); old_price = pi.input_value(); pi.fill('99,99'); pi.press('Tab')
@@ -72,7 +73,7 @@ with sync_playwright() as p:
     m.goto(B + '/admin/'); m.wait_for_selector('#screen-auth:not([hidden])')
     m.fill('#au-user', 'admin'); m.fill('#pw1', 'Sicheres-Passwort-1'); m.click('#auth-submit'); m.wait_for_selector('tr[data-id]')
     r = row(m, '10601').locator('input[data-f=price]'); r.fill('12,34'); r.press('Tab'); m.wait_for_timeout(900)
-    m.click('#btn-publish'); m.wait_for_selector('#dlg-publish[open]'); m.wait_for_timeout(200)
+    m.click('#offen-liste'); m.wait_for_selector('#dlg-publish[open]'); m.wait_for_timeout(200)
     m.screenshot(path=SH + '/revert-mobile.png')
     sw = m.evaluate("document.querySelector('#dlg-publish').scrollWidth <= document.querySelector('#dlg-publish').clientWidth + 1")
     check('mobile dialog no overflow', sw)
