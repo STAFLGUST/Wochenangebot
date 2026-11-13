@@ -36,6 +36,7 @@
     'shield-check': '<path d="M12 3 4.5 6v6c0 4.4 3.2 8 7.5 9 4.3-1 7.5-4.6 7.5-9V6z"/><path d="m8.6 12 2.4 2.4 4.4-4.8"/>',
     'shield-lock': '<path d="M12 3 4.5 6v6c0 4.4 3.2 8 7.5 9 4.3-1 7.5-4.6 7.5-9V6z"/><rect x="9" y="11" width="6" height="5" rx="1"/><path d="M10.3 11V9.6a1.7 1.7 0 0 1 3.4 0V11"/>',
     truck: '<circle cx="9.5" cy="19.6" r="1.5" fill="currentColor" stroke="none"/><circle cx="17.5" cy="19.6" r="1.5" fill="currentColor" stroke="none"/><path d="M2.5 3.5h2.8l2.4 11.2a1.8 1.8 0 0 0 1.8 1.4h7.9a1.8 1.8 0 0 0 1.7-1.3L21 8H6.2"/>',
+    send: '<path d="M21 3 3.2 10.1l6.9 2.8L12.9 20z"/><path d="M21 3 10.1 12.9"/>',
     upload: '<path d="M4 14.5v3.5a2.5 2.5 0 0 0 2.5 2.5h11A2.5 2.5 0 0 0 20 18v-3.5M12 15.5V4M7.5 8.5 12 4l4.5 4.5"/>',
     settings: '<path d="M3.5 20.5V9.5L12 3.5l8.5 6v11"/><circle cx="12" cy="14.5" r="2.4"/><path d="M12 10.3v1.4M12 17.3v1.4M7.8 14.5h1.4M14.8 14.5h1.4M9 11.5l1 1M14 16.5l1 1M9 17.5l1-1M14 12.5l1-1"/>',
     calendar: '<rect x="3.5" y="5" width="17" height="15.5" rx="3"/><path d="M3.5 10h17M8 3v4M16 3v4"/><circle cx="8.5" cy="14" r="1.1" fill="currentColor" stroke="none"/><circle cx="12" cy="14" r="1.1" fill="currentColor" stroke="none"/><circle cx="15.5" cy="14" r="1.1" fill="currentColor" stroke="none"/><circle cx="8.5" cy="17.3" r="1.1" fill="currentColor" stroke="none"/><circle cx="12" cy="17.3" r="1.1" fill="currentColor" stroke="none"/>',

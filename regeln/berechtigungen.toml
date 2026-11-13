@@ -21,7 +21,7 @@ schema = 1
 # Bestehende Rechte (Stand rechte.php) → Modul
 [zuordnung]
 "angebot.bearbeiten"        = "angebot"
-"angebot.veroeffentlichen"  = "angebot"
+"angebot.veroeffentlichen"  = "versand"   # seit 13.11.2026 im Modul Versand; wirkt nur mit versand.zugang
 "angebote.verwalten"        = "angebot"
 "angebote.loeschen"         = "angebot"
 "preisverlauf.sehen"        = "angebot"
@@ -30,8 +30,8 @@ schema = 1
 "bestellungen.bearbeiten"   = "angebot"
 "einzelangebote.sehen"      = "angebot"
 "einzelangebote.bearbeiten" = "angebot"
-"wochenangebot.senden"      = "angebot"
-"sonderposten.senden"       = "angebot"
+"wochenangebot.senden"      = "versand"   # seit 13.11.2026 im Modul Versand; wirkt nur mit versand.zugang
+"sonderposten.senden"       = "versand"   # seit 13.11.2026 im Modul Versand; wirkt nur mit versand.zugang
 "bestand.sehen"             = "bestand"
 "bestand.einkaufspreise"    = "bestand"
 "bestand.mhd_senden"        = "bestand"

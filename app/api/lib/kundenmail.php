@@ -427,6 +427,121 @@ function mail_job_for(array $c, string $typ, string $note = '', ?array $wk = nul
     return ['to' => $c['email'], 'name' => $c['ansprechpartner'] ?: $c['firma'], 'subject' => $sub, 'text' => $txt, 'html' => $html,
             'headers' => ['List-Unsubscribe' => '<' . $one . '>', 'List-Unsubscribe-Post' => 'List-Unsubscribe=One-Click']];
 }
+/* ---------------- Versand an Kunden (Schnittstelle des Angebots) ----------------
+   Eine Stelle für die bisherigen Aktionen kunden_rundmail / kunden_restposten / restposten_info (ältere Fenster, Tests) und das
+   Modul Versand (versand_empfaenger, versand_senden). Rechte und Bestätigung prüft der Aufrufer (GR-103). */
+/* Warum bekommt ein Kunde die Wochen-Mail nicht? '' = er bekommt sie */
+function wochenmail_grund(array $c): string
+{
+    if (empty($c['active'])) return 'Kunde inaktiv';
+    if (empty($c['email'])) return 'keine E-Mail-Adresse';
+    if (empty($c['login']['active'])) return 'kein aktiver Zugang';
+    if (!customer_offers($c)) return 'kein Angebot freigeschaltet';
+    if (array_key_exists('mailAngebot', $c) && empty($c['mailAngebot'])) return !empty($c['abgemeldet']) ? 'hat sich vom Wochenangebot abgemeldet' : 'Wochenangebot per E-Mail nicht gewünscht';
+    return '';
+}
+/* Empfänger als Zeile der Liste: nur, was die Auswahl braucht (keine Anschrift, keine Zugangsdaten) */
+function versand_kunde_zeile(array $c, string $grund, ?array $wk = null): array
+{
+    $w = is_array($c['weekly'] ?? null) ? $c['weekly'] : null;
+    return ['id' => (string)$c['id'], 'firma' => (string)$c['firma'], 'nr' => (string)($c['nr'] ?? ''), 'email' => (string)($c['email'] ?? ''),
+            'angebote' => array_values(array_map('strval', customer_offers($c))), 'grund' => $grund,
+            'passwort' => !empty($c['login']['hash']),
+            'wochenmail' => $w ? ['week' => (int)($w['week'] ?? 0), 'year' => (int)($w['year'] ?? 0), 't' => (string)($w['t'] ?? '')] : null,
+            'gesendet' => $wk && $w && (int)($w['week'] ?? 0) === (int)$wk['week'] && (int)($w['year'] ?? 0) === (int)$wk['year'] ? (string)($w['t'] ?? '') : ''];
+}
+/* Empfänger des Wochenangebots: woche (mail_week oder null), empfaenger (bekommen die Mail), ausgeschlossen (mit Grund) */
+function wochenmail_empfaenger(): array
+{
+    $wk = mail_week();
+    $ok = []; $aus = [];
+    foreach (customers_load()['customers'] as $c) {
+        $g = wochenmail_grund($c);
+        if ($g === '') $ok[] = versand_kunde_zeile($c, '', $wk); else $aus[] = versand_kunde_zeile($c, $g, $wk);
+    }
+    $nach = fn($a, $b) => strcasecmp($a['firma'], $b['firma']);
+    usort($ok, $nach); usort($aus, $nach);
+    return ['woche' => $wk, 'empfaenger' => $ok, 'ausgeschlossen' => $aus];
+}
+/* Wochenangebot an höchstens 20 Kunden senden (ein Teil): Ergebnis je Kunden-ID in der Reihenfolge von $ids.
+   $week/$year müssen zur veröffentlichten Woche passen (sonst 409 – inzwischen wurde neu veröffentlicht). */
+function wochenmail_senden(array $cfg, array $ids, string $note, int $week, int $year): array
+{
+    $wk = mail_week();
+    if (!$wk) fail('Es ist noch kein Angebot veröffentlicht.', 409);
+    if ($week !== $wk['week'] || $year !== $wk['year']) fail('Inzwischen wurde ein anderes Angebot veröffentlicht. Bitte den Versand neu öffnen.', 409);
+    $ids = array_slice(array_values(array_filter($ids, 'is_string')), 0, 20);
+    $note = mb_substr(trim($note), 0, 1000);
+    $jobs = []; $res = []; $map = [];
+    foreach (customers_load()['customers'] as $c) {
+        if (!in_array($c['id'], $ids, true)) continue;
+        $map[$c['id']] = $c;
+        $why = wochenmail_grund($c);
+        if ($why !== '') { $res[$c['id']] = ['ok' => false, 'error' => $why, 'skipped' => true]; continue; }
+        $jobs[$c['id']] = mail_job_for($c, 'woche', $note, $wk);
+    }
+    @set_time_limit(180);
+    ignore_user_abort(true);
+    $res = $res + ($jobs ? mail_send_many($cfg, $jobs) : []);
+    $entries = [];
+    foreach ($res as $id => $r) if (empty($r['skipped'])) $entries[] = ['kid' => $id, 'firma' => $map[$id]['firma'], 'to' => $map[$id]['email'], 'typ' => 'woche', 'ok' => $r['ok'], 'error' => $r['error'] ?? ''];
+    if ($entries) mail_record($entries, $wk);
+    $okN = count(array_filter($res, function ($r) { return $r['ok']; }));
+    $bad = array_filter($res, function ($r) { return !$r['ok']; });
+    if ($res) audit('mail', "Wochenangebot KW {$wk['week']}/{$wk['year']} an $okN Kunden versendet" . ($bad ? ' (' . count($bad) . ' nicht zugestellt)' : ''),
+        array_map(function ($id) use ($res, $map) { $r = $res[$id]; return ['k' => "c$id|woche", 'code' => $map[$id]['nr'] ?? '', 'name' => $map[$id]['firma'], 'f' => 'Wochenangebot', 'from' => '', 'to' => ($map[$id]['email'] ?? '') . ($r['ok'] ? '' : ' – ' . $r['error'])]; }, array_keys($res)));
+    $out = [];
+    foreach ($ids as $id) $out[] = ['id' => $id] + ($res[$id] ?? ['ok' => false, 'error' => 'Kunde nicht gefunden']);
+    return $out;
+}
+/* Sonderposten eines Angebots: Artikel (wie veröffentlicht), Empfänger (nur Kunden dieses Angebots, GR-005) mit Grund, Stand */
+function sonderposten_empfaenger(array $def): array
+{
+    $pub = store_read('angebot');
+    $items = array_map(function ($it) { return ['id' => $it['id'], 'code' => $it['code'] ?? '', 'name' => $it['name'], 'price' => (float)$it['price']['value'], 'regular' => $it['regular'] ?? null]; }, restposten_items($def));
+    $rec = [];
+    foreach (customers_load()['customers'] as $c) {
+        if (!in_array($def['id'], customer_offers($c), true)) continue;
+        $rec[] = ['id' => $c['id'], 'firma' => $c['firma'], 'nr' => $c['nr'] ?? '', 'email' => $c['email'] ?? '', 'reason' => restposten_reason($c, $def['id'])];
+    }
+    usort($rec, function ($a, $b) { return strcasecmp($a['firma'], $b['firma']); });
+    return ['offer' => ['id' => $def['id'], 'name' => $def['name']], 'publishedAt' => $pub['publishedAt'] ?? null, 'items' => $items, 'recipients' => $rec];
+}
+/* Sonderposten an höchstens 200 Kunden des Angebots senden (ein Teil): Ergebnis je Kunden-ID. $publishedAt muss zum
+   veröffentlichten Stand passen (sonst 409). */
+function sonderposten_senden(array $cfg, array $def, array $ids, string $note, string $publishedAt): array
+{
+    $pub = store_read('angebot');
+    if (!$pub || $publishedAt !== (string)($pub['publishedAt'] ?? '')) fail('Inzwischen wurde neu veröffentlicht. Bitte den Versand neu öffnen und die Sonderposten prüfen.', 409);
+    $items = restposten_items($def);
+    if (!$items) fail('In diesem Angebot sind keine Sonderposten veröffentlicht (oder alle ohne Bestand).', 409);
+    $ids = array_slice(array_values(array_filter($ids, 'is_string')), 0, 200);
+    $note = mb_substr(trim($note), 0, 1000);
+    $jobs = []; $res = []; $map = [];
+    foreach (customers_load()['customers'] as $c) {
+        if (!in_array($c['id'], $ids, true)) continue;
+        $map[$c['id']] = $c;
+        $why = restposten_reason($c, $def['id']);
+        if ($why !== '') { $res[$c['id']] = ['ok' => false, 'error' => $why, 'skipped' => true]; continue; }
+        [$sub, $txt, $html] = mail_tpl_restposten($c, $def, $items, $note);
+        $one = mail_base_url() . '/api/?action=abmelden1&t=' . rawurlencode(abmelde_token($c['id']));
+        $jobs[$c['id']] = ['to' => $c['email'], 'name' => ($c['ansprechpartner'] ?? '') ?: $c['firma'], 'subject' => $sub, 'text' => $txt, 'html' => $html,
+                           'headers' => ['List-Unsubscribe' => '<' . $one . '>', 'List-Unsubscribe-Post' => 'List-Unsubscribe=One-Click']];
+    }
+    @set_time_limit(300);
+    ignore_user_abort(true);
+    $res = $res + ($jobs ? mail_send_many($cfg, $jobs) : []);
+    $entries = [];
+    foreach ($res as $id => $r) if (empty($r['skipped'])) $entries[] = ['kid' => $id, 'firma' => $map[$id]['firma'], 'to' => $map[$id]['email'], 'typ' => 'restposten', 'ok' => $r['ok'], 'error' => $r['error'] ?? ''];
+    if ($entries) mail_record($entries);
+    $okN = count(array_filter($res, function ($r) { return $r['ok']; }));
+    $bad = array_filter($res, function ($r) { return !$r['ok'] && empty($r['skipped']); });
+    if ($res) audit('mail', "Sonderposten {$def['name']} (" . count($items) . " Artikel) an $okN Kunden versendet" . ($bad ? ' (' . count($bad) . ' nicht zugestellt)' : ''),
+        array_map(function ($id) use ($res, $map) { $r = $res[$id]; return ['k' => "c$id|restposten", 'code' => $map[$id]['nr'] ?? '', 'name' => $map[$id]['firma'], 'f' => 'Sonderposten', 'from' => '', 'to' => ($map[$id]['email'] ?? '') . ($r['ok'] ? '' : ' – ' . $r['error'])]; }, array_keys($res)));
+    $out = [];
+    foreach ($ids as $id) $out[] = ['id' => $id] + ($res[$id] ?? ['ok' => false, 'error' => 'Kunde nicht gefunden']);
+    return $out;
+}
 /* Obergrenzen für das Sitzungsregister der Kunden (jede Anfrage eines angemeldeten Kunden liest es vollständig, also darf
    es nicht beliebig wachsen). Ohne Grenze bliebe jede Anmeldung bis zum Ende der Leerlaufzeit stehen, und ein einziger
    Zugang könnte durch wiederholtes Anmelden die Anfragen aller anderen Kunden verlangsamen.

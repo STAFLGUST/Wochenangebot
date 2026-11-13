@@ -1,0 +1,178 @@
+/* STAFL-Plattform · Modul Versand – Gestaltung „C2“ (Designvorschlag vom Inhaber gewählt 13.11.2026, Variante A)
+   Rahmen, Seitenleiste und alle Farben kommen aus ../../assets/rahmen.css (--r-*), Schrift Geist und die Grundform der
+   Fenster (dialog.modal, .dlg-head/.dlg-body/.dlg-foot) aus ../../assets/app.css; die Listen im Verlauf nutzen die Bausteine
+   des Rahmens (.r-karte). Hier nur, was es nur im Versand gibt: die zwei Schritte (Veröffentlichen, An Kunden senden), die
+   Liste „Angebote dieser Woche“, der Verlauf und die Fenster „Veröffentlichen“ und „Senden“. Hell und dunkel über die --r-*. */
+body.vs { line-height: 1.45; }
+.vs .r-i { width: 18px; height: 18px; }
+.vs-knopf { display: inline-flex; align-items: center; justify-content: center; gap: 8px; height: 38px; padding: 0 16px; box-sizing: border-box; border: 1px solid var(--r-linie-2); border-radius: 10px;
+  background: var(--r-flaeche); color: var(--r-text); font: inherit; font-size: 14px; font-weight: 600; white-space: nowrap; text-decoration: none; cursor: pointer; }
+.vs-knopf:hover { background: var(--r-flaeche-2); color: var(--r-text); }
+.vs-knopf.primaer { background: var(--r-akzent); border-color: var(--r-akzent); color: var(--r-akzent-ink); }
+.vs-knopf.primaer:hover { background: var(--r-akzent-hover); border-color: var(--r-akzent-hover); }
+.vs-knopf.klein { height: 32px; padding: 0 11px; font-size: 13px; border-radius: 9px; }
+.vs-knopf.nur-symbol { width: 34px; height: 34px; padding: 0; }
+.vs-knopf:disabled, .vs-knopf[aria-disabled="true"] { opacity: .5; cursor: not-allowed; }
+.vs-knopf .r-i { width: 16px; height: 16px; }
+.vs-zahl { display: inline-grid; place-items: center; min-width: 20px; height: 20px; padding: 0 6px; box-sizing: border-box; border-radius: 10px; font-size: 12px; font-weight: 600;
+  font-variant-numeric: tabular-nums; background: rgba(255, 255, 255, .22); }
+.vs-link { padding: 0; border: 0; background: none; color: var(--r-akzent-text); font: inherit; font-size: 13px; font-weight: 600; cursor: pointer; text-decoration: none; }
+.vs-link:hover { text-decoration: underline; text-underline-offset: 3px; }
+.vs-marke { display: inline-block; padding: 1px 8px; border-radius: 6px; font-size: 12px; font-weight: 600; line-height: 1.5; white-space: nowrap; background: var(--r-neutral-bg); color: var(--r-neutral); }
+.vs-marke.ok { background: var(--r-ok-bg); color: var(--r-ok); }
+.vs-marke.warn { background: var(--r-warn-bg); color: var(--r-warn); }
+.vs-marke.rot { background: var(--r-rot-bg); color: var(--r-rot); }
+.vs-leise { color: var(--r-leise); }
+.vs-zahlen { font-variant-numeric: tabular-nums; }
+
+/* Zwei Schritte: Veröffentlichen · An Kunden senden */
+.vs-schritte { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 340px), 1fr)); gap: 12px; }
+.vs-schritt { display: flex; flex-direction: column; gap: 14px; padding: 18px 20px 18px; min-width: 0; }
+.vs-schritt-kopf { display: flex; align-items: center; gap: 10px; }
+.vs-nr { flex: none; width: 24px; height: 24px; border-radius: 50%; display: grid; place-items: center; font-size: 12.5px; font-weight: 700; background: var(--r-neutral-bg); color: var(--r-text-2); }
+.vs-schritt.offen .vs-nr { background: var(--r-akzent); color: var(--r-akzent-ink); }
+.vs-schritt.erledigt .vs-nr { background: var(--r-ok-bg); color: var(--r-ok); }
+.vs-schritt h3 { flex: 1; margin: 0; font-size: 15px; font-weight: 600; }
+.vs-stand { margin: 0; font-size: 22px; font-weight: 700; line-height: 1.25; letter-spacing: -.015em; }
+.vs-stand small { display: block; margin-top: 4px; font-size: 13.5px; font-weight: 400; letter-spacing: 0; color: var(--r-text-2); }
+.vs-fakten { margin: 0; padding: 12px 0 0; border-top: 1px solid var(--r-linie); display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 4px 14px; font-size: 13px; }
+.vs-fakten dt { color: var(--r-leise); }
+.vs-fakten dd { margin: 0; overflow-wrap: anywhere; }
+.vs-schritt-fuss { display: flex; flex-wrap: wrap; align-items: center; gap: 10px 14px; margin-top: auto; }
+.vs-hinweis { display: flex; gap: 8px; margin: 0; padding: 9px 12px; border-radius: 10px; font-size: 13px; background: var(--r-warn-bg); color: var(--r-text); }
+.vs-hinweis .r-i { flex: none; margin-top: 1px; width: 16px; height: 16px; color: var(--r-warn); }
+.vs-hinweis.neutral { background: var(--r-neutral-bg); }
+.vs-hinweis.neutral .r-i { color: var(--r-text-2); }
+
+/* Liste der Angebote */
+.vs-tab { width: 100%; border-collapse: collapse; font-size: 14px; }
+.vs-tab th { padding: 10px 16px; text-align: left; font-size: 11px; font-weight: 600; letter-spacing: .06em; text-transform: uppercase; color: var(--r-leise);
+  background: var(--r-flaeche-2); border-bottom: 1px solid var(--r-linie); white-space: nowrap; }
+.vs-tab th:first-child { border-top-left-radius: 15px; } .vs-tab th:last-child { border-top-right-radius: 15px; }
+.vs-tab td { padding: 12px 16px; border-top: 1px solid var(--r-linie); vertical-align: middle; }
+.vs-tab tr:first-child td { border-top: 0; }
+.vs-tab .vs-r { text-align: right; }
+.vs-name { display: block; font-weight: 600; }
+.vs-unter { display: block; font-size: 12.5px; color: var(--r-leise); }
+.vs-detail { margin-top: 3px; }
+.vs-tab td.vs-fest, .vs-tab th { white-space: nowrap; }
+.vs .r-abschnitt-kopf { flex-wrap: wrap; gap: 2px 12px; }
+.vs-zeilenknoepfe { display: flex; justify-content: flex-end; gap: 6px; }
+@media (max-width: 760px) {
+  .vs-tab, .vs-tab tbody, .vs-tab tr, .vs-tab td { display: block; }
+  .vs-tab thead { display: none; }
+  .vs-tab tr { padding: 12px 16px; border-top: 1px solid var(--r-linie); }
+  .vs-tab tr:first-child { border-top: 0; }
+  .vs-tab td { padding: 0; border: 0; }
+  .vs-detail { display: inline; margin: 0 0 0 4px; }
+  .vs-tab td[data-t] { display: flex; justify-content: space-between; gap: 12px; margin-top: 6px; font-size: 13.5px; }
+  .vs-tab td[data-t]::before { content: attr(data-t); color: var(--r-leise); }
+  .vs-tab .vs-r { text-align: left; }
+  .vs-zeilenknoepfe { justify-content: flex-start; margin-top: 10px; flex-wrap: wrap; }
+}
+/* Fenster (Pop-up): schließt nur über ×, „Abbrechen“ oder Escape – nie durch einen Klick daneben */
+body.vs dialog.modal { width: min(680px, calc(100vw - 32px)); border: 1px solid var(--r-linie-2); border-radius: 16px; background: var(--r-flaeche); color: var(--r-text);
+  box-shadow: var(--r-schatten-menue); font-family: var(--font); }
+body.vs dialog.modal[open] { display: flex; flex-direction: column; animation: none; }
+body.vs dialog.modal::backdrop { background: var(--r-schleier); -webkit-backdrop-filter: none; backdrop-filter: none; }
+body.vs .dlg-head { border-bottom: 1px solid var(--r-linie); }
+body.vs .dlg-head p { color: var(--r-text-2); }
+body.vs .dlg-body { flex: 1; min-height: 0; }
+body.vs .dlg-foot { border-top: 1px solid var(--r-linie); align-items: center; }
+.vs-zu { flex: none; width: 34px; height: 34px; border: 0; border-radius: 9px; display: grid; place-items: center; background: transparent; color: var(--r-text-2); cursor: pointer; }
+.vs-zu:hover { background: var(--r-hover); color: var(--r-text); }
+.vs-filter { display: flex; flex-wrap: wrap; gap: 6px; margin: 0 0 14px; }
+.vs-chip { display: inline-flex; align-items: center; gap: 6px; height: 30px; padding: 0 11px; border: 1px solid var(--r-linie-2); border-radius: 15px; background: var(--r-flaeche); color: var(--r-text-2);
+  font: inherit; font-size: 13px; font-weight: 500; cursor: pointer; }
+.vs-chip[aria-pressed="true"] { border-color: var(--r-akzent); box-shadow: inset 0 0 0 1px var(--r-akzent); color: var(--r-text); font-weight: 600; }
+.vs-chip b { font-weight: 600; color: var(--r-leise); font-variant-numeric: tabular-nums; }
+.vs-h { display: flex; justify-content: space-between; align-items: baseline; margin: 18px 0 6px; font-size: 11px; font-weight: 600; letter-spacing: .06em; text-transform: uppercase; color: var(--r-leise); }
+.vs-h:first-child { margin-top: 0; }
+.vs-aend { list-style: none; margin: 0; padding: 0; border: 1px solid var(--r-linie); border-radius: 12px; overflow: hidden; font-size: 13.5px; }
+.vs-aend li { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 2px 16px; padding: 8px 12px; }
+.vs-aend li + li { border-top: 1px solid var(--r-linie); }
+.vs-aend li > span:last-child { color: var(--r-text-2); font-variant-numeric: tabular-nums; white-space: nowrap; }
+.vs-aend strong { color: var(--r-text); font-weight: 600; }
+.vs-aend .vs-marke { margin-right: 6px; }
+.vs-empf { border: 1px solid var(--r-linie); border-radius: 12px; overflow: hidden; }
+.vs-empf-kopf { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 9px 12px; background: var(--r-flaeche-2); border-bottom: 1px solid var(--r-linie); font-size: 13.5px; }
+.vs-empf ul { list-style: none; margin: 0; padding: 0; max-height: 236px; overflow: auto; }
+.vs-empf li { display: flex; align-items: center; gap: 12px; padding: 8px 12px; font-size: 13.5px; }
+.vs-empf li + li { border-top: 1px solid var(--r-linie); }
+.vs-empf input { width: 16px; height: 16px; margin: 0; accent-color: var(--r-akzent); flex: none; }
+.vs-empf .vs-wer { flex: 1; min-width: 0; }
+.vs-empf .vs-wer span { display: block; font-size: 12.5px; color: var(--r-leise); overflow-wrap: anywhere; }
+.vs-empf .vs-rechts { display: flex; flex-wrap: wrap; align-items: center; justify-content: flex-end; gap: 4px 6px; flex: 0 1 auto; max-width: 60%; }
+.vs-check { display: flex; align-items: center; gap: 10px; font-weight: 600; cursor: pointer; }
+.vs-feld { display: flex; flex-direction: column; gap: 6px; margin-top: 16px; font-size: 13.5px; font-weight: 600; }
+.vs-feld small { font-weight: 400; color: var(--r-leise); }
+.vs-feld textarea { box-sizing: border-box; width: 100%; min-height: 64px; padding: 9px 11px; border: 1px solid var(--r-linie-2); border-radius: 10px; background: var(--r-flaeche); color: var(--r-text); font: inherit; font-weight: 400; resize: vertical; }
+.vs-mail { margin-top: 16px; border: 1px solid var(--r-linie); border-radius: 12px; overflow: hidden; font-size: 13.5px; }
+.vs-mail dl { margin: 0; padding: 10px 12px; display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 3px 12px; background: var(--r-flaeche-2); border-bottom: 1px solid var(--r-linie); }
+.vs-mail dt { color: var(--r-leise); } .vs-mail dd { margin: 0; overflow-wrap: anywhere; }
+.vs-mail-text { padding: 14px 16px; }
+.vs-mail-text p { margin: 0 0 10px; }
+.vs-mail-knopf { display: inline-block; margin: 0 6px 6px 0; padding: 7px 14px; border-radius: 8px; background: var(--r-akzent); color: var(--r-akzent-ink); font-weight: 600; font-size: 13px; }
+details.vs-aus { margin-top: 10px; font-size: 13.5px; }
+details.vs-aus summary { cursor: pointer; color: var(--r-text-2); font-weight: 500; }
+details.vs-aus ul { margin: 6px 0 0; padding-left: 18px; color: var(--r-text-2); }
+.vs-fuss-links { margin-right: auto; font-size: 13px; color: var(--r-leise); }
+.vs-erfolg { display: flex; flex-direction: column; align-items: center; gap: 10px; padding: 14px 8px 6px; text-align: center; }
+.vs-erfolg .vs-haken { width: 44px; height: 44px; border-radius: 50%; display: grid; place-items: center; background: var(--r-ok-bg); color: var(--r-ok); }
+.vs-erfolg .vs-haken .r-i { width: 24px; height: 24px; }
+.vs-erfolg h3 { margin: 0; font-size: 18px; font-weight: 700; }
+.vs-erfolg p { margin: 0; max-width: 46ch; color: var(--r-text-2); font-size: 14px; }
+
+@media (max-width: 560px) {
+  body.vs dialog.modal { width: 100vw; max-width: 100vw; max-height: calc(100dvh - 24px); margin: auto 0 0; border-radius: 20px 20px 0 0; border-bottom: 0; }
+  body.vs .dlg-foot .vs-knopf { flex: 1; }
+  .vs-fuss-links { flex-basis: 100%; }
+  /* Empfänger: Stand und Angebote unter Firma und Adresse statt daneben (sonst bleibt für die Adresse kein Platz) */
+  .vs-empf li { flex-wrap: wrap; row-gap: 4px; }
+  .vs-empf .vs-wer { flex: 1 1 calc(100% - 28px); }
+  .vs-empf .vs-rechts { flex: 1 1 100%; justify-content: flex-start; padding-left: 28px; }
+  .vs-stand { font-size: 20px; }
+}
+
+/* ── Anmeldehinweis, Fehler, Hinweis unten (Toast) ── */
+.vs-main { flex: 1; }
+.vs-login { box-sizing: border-box; width: 100%; max-width: 420px; margin: 10vh auto 0; padding: 32px 28px; text-align: center;
+  background: var(--r-flaeche); border: 1px solid var(--r-linie); border-radius: 16px; box-shadow: var(--r-schatten); }
+.vs-login h1 { margin: 10px 0 6px; font-size: 22px; font-weight: 700; letter-spacing: -.02em; }
+.vs-login p { margin: 0 0 20px; color: var(--r-text-2); font-size: 14px; }
+.vs .vs-login-i { width: 28px; height: 28px; color: var(--r-akzent-text); }
+.vs-fehler { max-width: 640px; margin: 10vh auto 0; padding: 12px 16px; border-radius: 12px; background: var(--r-flaeche); border: 1px solid var(--r-linie-2); color: var(--r-akzent-text); }
+#vs-app { display: flex; flex-direction: column; gap: 28px; }
+#vs-app[hidden], .vs-login[hidden], .vs-fehler[hidden] { display: none; }
+.vs-toast { position: fixed; z-index: 70; left: 50%; bottom: 24px; transform: translate(-50%, 12px); max-width: min(560px, calc(100vw - 32px)); padding: 11px 16px; border-radius: 12px;
+  background: var(--r-text); color: var(--r-grund); font-size: 14px; opacity: 0; pointer-events: none; transition: opacity .15s, transform .15s; }
+.vs-toast.zeigen { opacity: 1; transform: translate(-50%, 0); }
+.vs-toast.fehler { background: var(--r-rot-flaeche); color: var(--r-rot-ink); }
+.vs-fuss { box-sizing: border-box; width: 100%; max-width: 1120px; margin: 0 auto; padding: 0 40px 24px; font-size: 12.5px; color: var(--r-leise); }
+@media (max-width: 900px) { .vs-fuss { padding: 0 16px 20px; } }
+/* Verlauf: Zeilen wie die Listen der Startseite */
+.vs-liste { margin: 0; padding: 4px 0; list-style: none; overflow: hidden; }
+.vs-zeile { display: flex; align-items: center; gap: 12px; min-height: 52px; padding: 8px 16px; box-sizing: border-box; }
+.vs-liste li + li > .vs-zeile { border-top: 1px solid var(--r-linie); }
+.vs-ico { flex: none; width: 30px; height: 30px; border-radius: 8px; display: grid; place-items: center; background: color-mix(in srgb, var(--r-m) 13%, transparent); color: var(--r-m); }
+.vs-ico .r-i { width: 16px; height: 16px; }
+.vs-zeile-text { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 1px; }
+.vs-zeile-titel { font-size: 14px; font-weight: 600; line-height: 1.35; overflow-wrap: anywhere; }
+.vs-zeile-meta { font-size: 12.5px; color: var(--r-leise); line-height: 1.4; overflow-wrap: anywhere; }
+.vs-zeile-datum { flex: none; font-size: 12.5px; color: var(--r-leise); font-variant-numeric: tabular-nums; white-space: nowrap; }
+.vs-leer { margin: 0; padding: 16px; font-size: 14px; color: var(--r-leise); }
+/* Fenster: Meldungen, Ergebnis je Empfänger, Passwort zur Bestätigung, Vorschau der E-Mail */
+.vs-meldung { margin: 0 0 12px; padding: 9px 12px; border-radius: 10px; font-size: 13.5px; background: var(--r-rot-bg); color: var(--r-rot); }
+.vs-meldung.ok { background: var(--r-ok-bg); color: var(--r-ok); }
+.vs-meldung[hidden] { display: none; }
+.vs-erg { flex: none; font-size: 12.5px; font-weight: 600; }
+.vs-erg.ok { color: var(--r-ok); } .vs-erg.bad { color: var(--r-rot); } .vs-erg.warn { color: var(--r-warn); }
+.vs-feld input { box-sizing: border-box; width: 100%; height: 40px; padding: 0 11px; border: 1px solid var(--r-linie-2); border-radius: 10px; background: var(--r-flaeche); color: var(--r-text); font: inherit; font-weight: 400; }
+.vs-mail iframe { display: block; width: 100%; height: 320px; border: 0; background: #fff; }
+.vs-artikel { margin: 0 0 14px; }
+.vs-knopf[aria-busy="true"] { opacity: .7; cursor: progress; }
+.vs-aend li small { flex-basis: 100%; color: var(--r-leise); font-size: 12.5px; }
+.vs-klein { font-size: 13px; }
+body.vs dialog.modal.vs-schmal { width: min(480px, calc(100vw - 32px)); }
+.vs-nr .r-i { width: 14px; height: 14px; }
+a.vs-knopf.nur-symbol { flex: none; }

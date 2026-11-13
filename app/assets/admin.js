@@ -849,9 +849,6 @@
     const dash = me && me.zentral && /^https:\/\/[^/\s"'<>]+\/[^\s"'<>]*$/.test(me.dashboard || '') ? me.dashboard : '';
     $('#btn-dashboard').hidden = !dash;
     if (dash) $('#btn-dashboard').href = dash;
-    $('#btn-send').hidden = !may('wochenangebot.senden');
-    $('#btn-publish').hidden = !may('angebot.veroeffentlichen');
-    if (!may('wochenangebot.senden')) $('#send-hint').hidden = true;
     $('#side-admin').hidden = !['importe', 'auswertung', 'mail', 'users', 'rollen', 'urlaub', 'log'].some(viewAllowed);
     $('#side-stamm').hidden = !['master', 'vkgruppen', 'kategorien', 'angebote', 'kunden', 'gruppen', 'vertreter', 'versandarten', 'lieferanten', 'abteilungen'].some(viewAllowed);
     $('#menu-user').innerHTML = me ? `<strong>${esc(me.name)}</strong><span>${esc(me.username)} · ${esc(me.rollenName || ROLE_LABEL[me.role] || '')}</span>` : '';
@@ -1030,16 +1027,30 @@
   function setSaveState(st, msg) {
     const el = $('#save-state');
     el.className = 'save-state ' + st;
-    const hasChanges = diff && (diff.added.length + diff.removed.length + diff.priceChanged.length + diff.changed.length + (metaChanged() ? 1 : 0)) > 0;
+    const hasChanges = !!diff && !!model && pendingCount() > 0;   // dieselbe Zählung wie die Zahl in der Statuszeile (auch Angebotspreise, Empfehlungen, Werbung, Aufbau)
     let text;
     if (ro) text = `${icon('lock', 'sm')} Nur Ansicht – ${hasChanges ? 'Entwurf mit unveröffentlichten Änderungen' : 'keine offenen Änderungen'}`;
     else if (st === 'pending' || st === 'saving') text = 'Speichert …';
     else if (st === 'error') text = `Nicht gespeichert: ${esc(msg || saveError || '')} <button type="button" class="link-btn" data-act="retry-save">Erneut versuchen</button>`;
     else if (!hasChanges && !published) text = 'Noch nichts veröffentlicht';
-    else if (!hasChanges) text = 'Keine Änderungen gegenüber der veröffentlichten Fassung';
-    else text = `Entwurf gespeichert${savedAt ? ' · ' + timeOnly(savedAt) + ' Uhr' : ''} · <strong>noch nicht veröffentlicht</strong>`;
+    else if (!hasChanges) text = 'Keine Änderungen gegenüber der veröffentlichten Fassung' + (zumVersand('Zum Versand') ? ' · ' + zumVersand('Zum Versand') : '');
+    else text = `Entwurf gespeichert${savedAt ? ' · ' + timeOnly(savedAt) + ' Uhr' : ''} · ${offenHTML()}`;
     lastSaveState = [st, msg];
     el.innerHTML = `<span class="dot"></span><span>${text}</span>${editorsHTML()}`;
+  }
+  /* Veröffentlichen und Versand liegen seit 13.11.2026 im Modul Versand (app/module/versand/). Im Eingabebereich steht nur noch
+     die Zahl der unveröffentlichten Änderungen; wer Zugang zum Versand hat, kommt von hier dorthin.
+     AENDERUNGSLISTE_IM_ANGEBOT = true macht die Zahl wieder zum Knopf, der die Liste der Änderungen mit „Rückgängig“ je Zeile
+     öffnet (openPublish, ohne „Jetzt veröffentlichen“) – vom Inhaber am 13.11.2026 nicht gewählt, deshalb aus. */
+  const AENDERUNGSLISTE_IM_ANGEBOT = false;
+  const VERSAND = /(^|\.)dashboard-stafl\.de$/.test(location.hostname) ? 'https://versand.dashboard-stafl.de/' : '../module/versand/';
+  const zumVersand = (text) => (may('versand.zugang') ? `<a class="link-btn zum-versand" href="${VERSAND}" title="Veröffentlichen und an Kunden senden: im Modul Versand">${text} →</a>` : '');
+  function offenHTML() {
+    const n = pendingCount();
+    const zahl = !published ? 'noch nicht veröffentlicht' : `${plural(n, 'Änderung', 'Änderungen')} nicht veröffentlicht`;
+    const info = AENDERUNGSLISTE_IM_ANGEBOT && published && !ro ? `<button type="button" class="link-btn" id="offen-liste" title="Liste der Änderungen ansehen">${zahl}</button>` : `<strong id="offen-zahl">${zahl}</strong>`;
+    const link = zumVersand('Zum Versand');
+    return info + (link ? ' · ' + link : '');
   }
   let lastSaveState = ['clean'];
   function editorsHTML() {
@@ -1256,30 +1267,12 @@
 
   /* Unveröffentlichte Änderungen: Zahl am Knopf „Veröffentlichen“, Aufstellung als Hinweis beim Darüberfahren
      (die Leiste über dem Editor entfällt; die Einzelheiten zeigt der Dialog „Veröffentlichen“) */
-  function renderChanges() {
-    const b = $('#btn-publish');
-    if (!b || !model) return;
-    if (!published) { b.title = 'Noch nichts veröffentlicht – nach dem Veröffentlichen erscheint das Angebot auf der Angebotsseite.'; return; }
-    const vAll = vChanges(), sc = sChanges();
-    const vh = vAll.filter((c) => c.offer === OSTD), vc = vAll.filter((c) => c.offer !== OSTD);
-    const parts = [];
-    if (metaChanged()) parts.push('Kopfdaten geändert');
-    if (diff.priceChanged.length) parts.push(`${diff.priceChanged.length} Preis${diff.priceChanged.length === 1 ? '' : 'e'} geändert`);
-    if (diff.added.length) parts.push(`${diff.added.length} neu`);
-    if (diff.changed.length) parts.push(`${diff.changed.length} bearbeitet`);
-    if (diff.removed.length) parts.push(`${diff.removed.length} entfernt`);
-    if (vc.length) parts.push(`${vc.length} Angebotspreis${vc.length === 1 ? '' : 'e'} geändert`);
-    if (vh.length) parts.push(`${vh.length} im Wochenangebot hinzugefügt/entfernt`);
-    if (sc.length) parts.push(`${sc.length} Empfehlung${sc.length === 1 ? '' : 'en'} geändert`);
-    if (wChanges().length) parts.push('Werbung geändert');
-    if (aufbauGeaendert()) parts.push('Aufbau geändert');
-    b.title =parts.length ? 'Unveröffentlichte Änderungen: ' + parts.join(' · ') : 'Keine unveröffentlichten Änderungen';
-  }
+  /* Unveröffentlichte Änderungen: die Zahl steht in der Statuszeile (offenHTML); die Einzelheiten zeigt das Modul Versand */
+  function renderChanges() { /* früher Hinweis am Knopf „Veröffentlichen“ – entfällt mit dem Knopf */ }
   const pendingCount = () => (!model ? 0 : !published ? model.items.length : diff.added.length + diff.removed.length + diff.priceChanged.length + diff.changed.length + vChanges().length + sChanges().length + wChanges().length + (metaChanged() ? 1 : 0) + (aufbauGeaendert() ? 1 : 0));
+  /* früher Zahl am Knopf „Veröffentlichen“: jetzt die Zahl in der Statuszeile (nur wenn dort gerade der gespeicherte Stand steht) */
   function updatePublishBtn() {
-    const b = $('#btn-publish');
-    const n = pendingCount();
-    b.innerHTML = `${icon('send')}<span class="lbl">Veröffentlichen</span>${n ? `<span class="badge-n">${published ? n : '!'}</span>` : ''}`;
+    if (lastSaveState[0] === 'saved' || lastSaveState[0] === 'clean') setSaveState(lastSaveState[0], lastSaveState[1]);
   }
 
   const CAT_OPTS = (sel) => C.CATEGORY_ORDER.map((c) => `<option${c === sel ? ' selected' : ''}>${esc(c)}</option>`).join('');
@@ -1903,7 +1896,7 @@
       : ownList(curOffer) ? '<span class="oh-pill own" title="Enthält nur die Artikel, die hier hinzugefügt wurden – andere Angebote beeinflussen es nicht">Eigene Artikelliste</span>'
         : '<span class="oh-pill folgt" title="Zeigt alle Artikel des Wochenangebots, ohne eigenen Preis mit dem Wochenpreis">Folgt dem Wochenangebot</span>';
     const acts = [];
-    if (may('sonderposten.senden')) acts.push(`<button type="button" class="btn sm ghost" data-ob="restposten" title="Sonderposten dieses Angebots per E-Mail an dessen Kunden senden">${icon('mail', 'sm')}Sonderposten senden</button>`);
+    if (may('sonderposten.senden') && may('versand.zugang')) acts.push(`<a class="btn sm ghost" data-ob="restposten" href="${VERSAND}" title="Sonderposten dieses Angebots per E-Mail an dessen Kunden senden – im Modul Versand (Liste „Angebote dieser Woche“)">${icon('mail', 'sm')}Sonderposten senden</a>`);
     if (!ro) acts.push(`<button type="button" class="btn sm ghost" data-ob="copy" title="Artikel und Preise aus einem anderen Angebot übernehmen">${icon('copy', 'sm')}Aus anderem Angebot</button>`);
     el.innerHTML = `<div class="oh-t"><h2 id="oh-name">${esc(offerName(curOffer))}</h2>
         <div class="oh-m"><span class="oh-art">${curOffer === OSTD ? 'Öffentliches Angebot' : 'Kundenangebot'}</span>${pill}<span class="oh-n">${plural(n, 'Artikel', 'Artikel')}</span></div></div>
@@ -1926,7 +1919,6 @@
     if (a === 'toggle') { obOpen = !obOpen; renderOfferBar(); if (obOpen) $(`#offer-bar [data-offer="${CSS.escape(curOffer)}"]`)?.focus(); return; }
     if (a === 'manage') openOffers();
     if (a === 'copy') openCopy();
-    if (a === 'restposten') openRestposten(curOffer);
     if (a === 'umstellen') umstellen(curOffer);
   }
   $('#offer-bar').addEventListener('click', (e) => {
@@ -2220,11 +2212,10 @@
   const pvUrl = (oid, tab) => angebotsseite('?vorschau=1' + (tab ? '' : '&eingebettet=1') + (oid !== OSTD ? '&angebot=' + encodeURIComponent(oid) : '') + (tab ? '' : '&t=' + Date.now()));
   function pvFuss() {
     const n = pendingCount();
-    const pub = may('angebot.veroeffentlichen') && !ro;
     $('#pv-stand').innerHTML = n ? `<span class="pv-dot"></span>${published ? plural(n, 'Änderung', 'Änderungen') + ' noch nicht veröffentlicht' : 'Noch nichts veröffentlicht'}`
       : 'Keine unveröffentlichten Änderungen – entspricht der veröffentlichten Fassung';
-    const b = $('#pv-publish');
-    if (b) b.hidden = !pub || !n;
+    const b = $('#pv-versand');
+    if (b) b.hidden = !n || ro;
   }
   function pvLaden() {
     const st = $('#pv-stage');
@@ -2252,7 +2243,7 @@
       <div class="dlg-foot pv-foot"><span class="pv-stand" id="pv-stand"></span><span class="spacer"></span>
         <button type="button" class="btn" id="pv-drucken" title="Diese Vorschau drucken oder als PDF speichern (Angebotsansicht)">${icon('print')}Drucken</button>
         <button type="button" class="btn" data-close>Zurück zum Editor</button>
-        <button type="button" class="btn primary" id="pv-publish" hidden>${icon('send')}Veröffentlichen</button></div>`;
+        ${may('versand.zugang') ? `<a class="btn primary" id="pv-versand" href="${VERSAND}" hidden title="Veröffentlichen und an Kunden senden: im Modul Versand">${icon('send')}Zum Versand</a>` : ''}</div>`;
     $('#pv-frame').addEventListener('load', () => { const st = $('#pv-stage'); if (st) st.classList.remove('laden'); });
     pvFuss();
     if (!dlgPv.open) dlgPv.showModal();
@@ -2264,14 +2255,15 @@
     const d = e.target.closest('[data-pv-dev]');
     if (d) { pvDev = d.dataset.pvDev; store.set('vorschauGeraet', pvDev); $('#pv-stage').classList.toggle('mobil', pvDev === 'mobil'); $('#pv-stage').classList.toggle('desktop', pvDev !== 'mobil'); for (const b of $$('#vorschau-body [data-pv-dev]')) b.setAttribute('aria-pressed', b.dataset.pvDev === pvDev); return; }
     if (e.target.closest('#pv-drucken')) { try { $('#pv-frame').contentWindow.print(); } catch { toast('Die Vorschau ist noch nicht geladen.'); } return; }   // druckt nur die Vorschau (ihre Druckfassung), nicht den Eingabebereich
-    if (e.target.closest('#pv-publish')) { dlgPv.close(); setTimeout(openPublish, 0); }
   });
   dlgPv.addEventListener('close', () => { const f = $('#pv-frame'); if (f) f.src = 'about:blank'; });
 
-  /* ======================= Veröffentlichen ======================= */
+  /* ======================= Liste der unveröffentlichten Änderungen =======================
+     Veröffentlicht wird im Modul Versand. Dieses Fenster zeigt nur noch die Änderungen mit „Rückgängig“ je Zeile und ist
+     ausgeschaltet (AENDERUNGSLISTE_IM_ANGEBOT, siehe offenHTML) – der Knopf dazu erscheint dann in der Statuszeile. */
   const dlgPublish = $('#dlg-publish');
   function openPublish() {
-    if (!may('angebot.veroeffentlichen')) return;
+    if (!AENDERUNGSLISTE_IM_ANGEBOT || ro) return;
     const v = C.validateModel(model);
     if (invalid.size) v.errors.unshift(`${plural(invalid.size, 'Preis ist', 'Preise sind')} nicht lesbar – bitte korrigieren (rot markiert).`);
     const before = new Map(Object.entries(diff.before));
@@ -2302,10 +2294,9 @@
       if (!metaChanged() && !diff.priceChanged.length && !diff.added.length && !diff.changed.length && !diff.removed.length && !vc.length && !sc.length && !wc.length && !ab) body += '<p class="notice">Keine Änderungen gegenüber der veröffentlichten Fassung.</p>';
     }
     if (v.warnings.length) body += `<p class="hint">${v.warnings.map(esc).join('<br>')}</p>`;
-    const can = !v.errors.length;
-    $('#publish-body').innerHTML = `<div class="dlg-head"><div><h2 id="pub-title">Veröffentlichen</h2><p>Nach dem Veröffentlichen sehen alle Besucher der Angebotsseite diesen Stand. Der bisherige Stand wird als Version gesichert.</p></div><button type="button" class="btn icon ghost" data-close aria-label="Schließen">${icon('x')}</button></div>
+    $('#publish-body').innerHTML = `<div class="dlg-head"><div><h2 id="pub-title">Unveröffentlichte Änderungen</h2><p>Einzelne Änderungen lassen sich hier zurücknehmen. Veröffentlicht wird im Modul Versand.</p></div><button type="button" class="btn icon ghost" data-close aria-label="Schließen">${icon('x')}</button></div>
       <div class="dlg-body">${body}</div>
-      <div class="dlg-foot"><button type="button" class="btn" data-close>Abbrechen</button><button type="button" class="btn primary" data-ia="publish"${can ? '' : ' disabled'}>${icon('send')}Jetzt veröffentlichen</button></div>`;
+      <div class="dlg-foot"><span class="left">${zumVersand('Zum Versand')}</span><button type="button" class="btn" data-close>Schließen</button></div>`;
     dlgPublish.showModal();
   }
   const FIELD_LABEL = { code: 'Art.-Nr.', name: 'Bezeichnung', category: 'Fleischart', origin: 'Herkunft', condition: 'Zustand' };
@@ -2408,36 +2399,6 @@
       openPublish();
       toast('Änderung zurückgenommen.');
       return;
-    }
-    const b = e.target.closest('[data-ia="publish"]');
-    if (!b) return;
-    b.disabled = true;
-    b.innerHTML = '<div class="spinner" style="width:16px;height:16px;border-width:2px"></div>Wird veröffentlicht …';
-    try {
-      clearTimeout(saveTimer);
-      while (saving || pulling) await new Promise((res) => setTimeout(res, 100));
-      queued = false;
-      const r = await api('publish', { body: { model, revision } });
-      published = clone(model);
-      base = clone(model);
-      hist = null;
-      revision = r.revision ?? 0;
-      savedAt = null;
-      dlgPublish.close();
-      diff = C.diffOffers(published, model);
-      renderAll();
-      setSaveState('clean');
-      toast(`Veröffentlicht: KW ${model.meta.week}/${model.meta.year} ist jetzt online (${dateTime(r.publishedAt)} Uhr).`, 6000);
-      showSendHint(model.meta.week, model.meta.year);
-    } catch (ex) {
-      let msg = ex.message;
-      if (ex.status === 409) {
-        // andere haben inzwischen gespeichert: übernehmen und die Zusammenfassung neu zeigen
-        try { await pullRemote(); openPublish(); msg += ' Die Änderungen sind jetzt übernommen – bitte prüfen und erneut veröffentlichen.'; } catch { /* Meldung bleibt */ }
-      }
-      const pb = $('[data-ia="publish"]');
-      if (pb) { pb.disabled = false; pb.innerHTML = `${icon('send')}${ex.status === 409 ? 'Jetzt veröffentlichen' : 'Erneut versuchen'}`; }
-      $('#publish-body .dlg-body').insertAdjacentHTML('afterbegin', `<p class="err-box" style="margin:0 0 12px">${esc(msg)}</p>`);
     }
   });
 
@@ -2550,21 +2511,7 @@
   });
 
   $('#btn-undo').addEventListener('click', undo);
-  /* Versand an Kunden: Knopf oben und Hinweis direkt nach dem Veröffentlichen (an jedem Tag möglich) */
-  function showSendHint(week, year) {
-    const h = $('#send-hint');
-    if (!can('admin')) { h.hidden = true; return; }
-    h.innerHTML = `<div class="send-in">${icon('check', 'sm')}<span><strong>KW ${esc(week)}/${esc(year)} ist online.</strong> Jetzt per E-Mail an Ihre Kunden senden?</span><button type="button" class="btn sm primary" data-send="open">${icon('mail', 'sm')}An Kunden senden</button><button type="button" class="btn sm ghost icon" data-send="close" aria-label="Hinweis schließen">${icon('x', 'sm')}</button></div>`;
-    h.hidden = false;
-  }
-  const openSend = () => { if (window.WA.openRund) window.WA.openRund(); };
-  $('#btn-send').addEventListener('click', openSend);
-  $('#send-hint').addEventListener('click', (e) => {
-    const a = e.target.closest('[data-send]')?.dataset.send;
-    if (a === 'close') $('#send-hint').hidden = true;
-    if (a === 'open') { $('#send-hint').hidden = true; openSend(); }
-  });
-  $('#btn-publish').addEventListener('click', () => { if (document.activeElement && document.activeElement.matches('.in, .fld input')) document.activeElement.blur(); setTimeout(openPublish, 0); });
+  $('#save-state').addEventListener('click', (e) => { if (e.target.closest('#offen-liste')) { if (document.activeElement && document.activeElement.matches('.in, .fld input')) document.activeElement.blur(); setTimeout(openPublish, 0); } });
   $('#btn-preview').addEventListener('click', () => openVorschau(curOffer));
   $('#save-state').addEventListener('click', (e) => { if (e.target.closest('[data-act="retry-save"]')) saveNow(); });
   /* Dialoge schließen per Escape oder [data-close] („Abbrechen“, Kreuz) – nie per Klick daneben (theme.js, alle Seiten) und
@@ -4428,89 +4375,6 @@
     if (!tr || ro) return;
     if (b.dataset.mp === 'sale' && tr.dataset.mid) openSale(tr.dataset.mid);
     if (b.dataset.mp === 'add') openArtikelwahl({ code: tr.dataset.mcode });
-  });
-
-  /* Sonderposten eines Angebots per E-Mail – nur an Kunden, denen genau dieses Angebot freigeschaltet ist */
-  const dlgRest = $('#dlg-rest');
-  let restInfo = null, restSel = new Set(), restBusy = false;
-  async function openRestposten(oid) {
-    let info;
-    try { info = await api('restposten_info', { query: '&offer=' + encodeURIComponent(oid) }); } catch (ex) { toast(ex.message); return; }
-    restInfo = info;
-    const ok = info.recipients.filter((c) => !c.reason), no = info.recipients.filter((c) => c.reason);
-    restSel = new Set(ok.map((c) => c.id));
-    const pend = pendingCount();
-    const items = info.items;
-    $('#rest-body').innerHTML = `<div class="dlg-head"><div><h2 id="rp-title">Sonderposten „${esc(info.offer.name)}“ versenden</h2><p>Nur Kunden mit dem Angebot <strong>${esc(info.offer.name)}</strong> erhalten diese E-Mail – jeder einzeln, mit den Sonderpreisen dieses Angebots. Andere Angebote und Kunden bleiben unsichtbar.</p></div><button class="btn icon ghost" type="button" data-close aria-label="Schließen">${icon('x')}</button></div>
-      <div class="dlg-body">
-        ${!info.mailReady ? '<div class="err-box">Der E-Mail-Versand ist noch nicht eingerichtet (Verwaltung → E-Mail).</div>' : ''}
-        ${pend ? `<div class="notice k-pend">${icon('info', 'sm')}<span>Es gibt ${plural(pend, 'unveröffentlichte Änderung', 'unveröffentlichte Änderungen')} im Entwurf. Versendet wird der <strong>veröffentlichte</strong> Stand – neue Empfehlungspreise bitte zuerst veröffentlichen.</span></div>` : ''}
-        ${items.length ? `<h3 class="d-h"><span>${plural(items.length, 'Sonderposten', 'Sonderposten')}</span></h3><ul class="plist">${items.map((x) => `<li><span>${esc(x.code || '—')} · ${esc(x.name)}</span><span><strong>${esc(fmtNum.format(x.price))} €/kg</strong>${x.regular != null ? ` <s class="muted">${esc(F.euroKg(x.regular))}</s>` : ''}</span></li>`).join('')}</ul>`
-          : `<div class="err-box">Im veröffentlichten Angebot „${esc(info.offer.name)}“ ist kein Sonderposten mit Bestand enthalten. Empfehlung mit Preis festlegen (${icon('tag', 'sm')}) und veröffentlichen.</div>`}
-        <h3 class="d-h"><span>Empfänger</span></h3>
-        ${ok.length ? `<div class="k-rlist"><label class="check k-rall"><input type="checkbox" id="rp-all"> Alle auswählen</label>
-          <table class="etab ktab k-rtab"><tbody>${ok.map((c) => `<tr data-rid="${esc(c.id)}"><td class="k-rchk"><input type="checkbox" data-psel="${esc(c.id)}" checked aria-label="${esc(c.firma)} auswählen"></td>
-            <td><div class="nm">${esc(c.firma)}</div><div class="sub">${esc(c.email)}</div></td><td class="k-rst"><span class="k-res"></span></td></tr>`).join('')}</tbody></table></div>`
-          : `<p class="hint">Kein Kunde mit E-Mail-Adresse hat das Angebot „${esc(info.offer.name)}“ freigeschaltet.</p>`}
-        ${no.length ? `<details class="k-no"><summary>${plural(no.length, 'Kunde', 'Kunden')} dieses Angebots nicht berücksichtigt</summary><ul>${no.map((c) => `<li>${esc(c.firma)} – ${esc(c.reason)}</li>`).join('')}</ul></details>` : ''}
-        <label class="fld"><span>Zusatztext <small class="muted">(optional)</small></span><textarea id="rp-note" rows="2" maxlength="1000" placeholder="z. B. Abholung oder Lieferung bis Freitag möglich."></textarea></label>
-        <div class="k-prevwrap" hidden><iframe id="rp-prev" sandbox="" title="Vorschau der E-Mail"></iframe></div>
-        <p class="form-err" id="rp-err" role="alert"></p>
-      </div>
-      <div class="dlg-foot"><span class="left"><button type="button" class="btn sm ghost" data-rp="prev"${items.length ? '' : ' disabled'}>${icon('eye', 'sm')}Vorschau</button></span><button type="button" class="btn" data-close>Schließen</button><button type="button" class="btn primary" data-rp="send">${icon('send')}<span id="rp-n"></span></button></div>`;
-    restCount();
-    dlgRest.showModal();
-  }
-  function restCount() {
-    const n = restSel.size;
-    $('#rp-n').textContent = n ? `An ${plural(n, 'Kunden', 'Kunden')} senden` : 'Kunden auswählen';
-    $('#rest-body [data-rp="send"]').disabled = !n || restBusy || !restInfo.items.length || !restInfo.mailReady;
-    const all = $('#rp-all'), boxes = $$('#rest-body [data-psel]');
-    if (all) { all.checked = boxes.length && boxes.every((b) => b.checked); all.indeterminate = !all.checked && boxes.some((b) => b.checked); }
-  }
-  dlgRest.addEventListener('cancel', (e) => { if (restBusy) e.preventDefault(); });
-  dlgRest.addEventListener('change', (e) => {
-    if (e.target.id === 'rp-all') for (const b of $$('#rest-body [data-psel]')) { b.checked = e.target.checked; b.checked ? restSel.add(b.dataset.psel) : restSel.delete(b.dataset.psel); }
-    if (e.target.dataset.psel) e.target.checked ? restSel.add(e.target.dataset.psel) : restSel.delete(e.target.dataset.psel);
-    restCount();
-  });
-  dlgRest.addEventListener('click', async (e) => {
-    if (e.target.closest('[data-close]') && !restBusy) { dlgRest.close(); return; }
-    const a = e.target.closest('[data-rp]')?.dataset.rp;
-    if (a === 'prev') {
-      try {
-        const r = await api('kunden_mail_vorschau', { body: { id: [...restSel][0] || '', type: 'restposten', offer: restInfo.offer.id, note: $('#rp-note').value } });
-        $('#rest-body .k-prevwrap').hidden = false;
-        $('#rp-prev').srcdoc = r.html;
-      } catch (ex) { $('#rp-err').textContent = ex.message; }
-    }
-    if (a === 'send') {
-      const ids = [...restSel];
-      if (!(await confirmBox('Sonderposten versenden?', `${plural(restInfo.items.length, 'Sonderposten', 'Sonderposten')} aus „${esc(restInfo.offer.name)}“ gehen jetzt per E-Mail an ${plural(ids.length, 'Kunden', 'Kunden')} dieses Angebots.`, 'Jetzt senden'))) return;
-      restBusy = true; dlgRest.dataset.busy = '1'; restCount();
-      const note = $('#rp-note').value;
-      let okN = 0, badN = 0;
-      $('#rp-err').textContent = '';
-      for (let i = 0; i < ids.length; i += 10) {
-        const part = ids.slice(i, i + 10);
-        for (const id of part) $(`#rest-body tr[data-rid="${CSS.escape(id)}"] .k-res`).innerHTML = '<span class="spinner sm"></span>';
-        $('#rp-n').textContent = `Wird gesendet … ${i}/${ids.length}`;
-        try {
-          const r = await api('kunden_restposten', { body: { offer: restInfo.offer.id, ids: part, note, publishedAt: restInfo.publishedAt } });
-          for (const x of r.results) {
-            const cell = $(`#rest-body tr[data-rid="${CSS.escape(x.id)}"] .k-res`);
-            if (x.ok) { okN++; restSel.delete(x.id); const cb = $(`#rest-body [data-psel="${CSS.escape(x.id)}"]`); if (cb) cb.checked = false; } else badN++;
-            if (cell) cell.innerHTML = x.ok ? `<span class="st-ok">${icon('check', 'sm')}gesendet</span>` : `<span class="st-err">${esc(x.error)}</span>`;
-          }
-        } catch (ex) {
-          badN += part.length;
-          for (const id of part) $(`#rest-body tr[data-rid="${CSS.escape(id)}"] .k-res`).innerHTML = `<span class="st-err">${esc(ex.message)}</span>`;
-          if (ex.status === 409 || ex.status === 401 || ex.status === 403) { $('#rp-err').textContent = ex.message; break; }
-        }
-      }
-      restBusy = false; delete dlgRest.dataset.busy; restCount();
-      toast(badN ? `${okN} gesendet, ${badN} nicht zugestellt.` : `Sonderposten an ${plural(okN, 'Kunden', 'Kunden')} gesendet.`, 6000);
-    }
   });
 
   /* ======================= Stammdaten (je Artikelnummer) ======================= */

@@ -102,31 +102,15 @@ switch ($action) {
             });
         }
 
+        /* Veröffentlichen (bisherige Stelle: ältere offene Fenster, Tests). Seit 13.11.2026 liegt das Veröffentlichen im Modul
+           Versand (versand_veroeffentlichen) – deshalb zusätzlich zum bestehenden Recht der Modulzugang „Versand“ (GR-103).
+           Die Arbeit macht angebot_veroeffentlichen() (lib/angebote.php), wie im Modul Versand. */
         case 'publish': {
             require_perm('angebot.veroeffentlichen', true);
-            with_lock('entwurf', function () use ($CFG) {
-                $dr = store_read('entwurf');
-                if (array_key_exists('revision', body()) && (int)body()['revision'] !== draft_rev($dr)) draft_conflict($dr);
-                $model = clean_model(body()['model'] ?? null, true);
-                $prev = store_read('angebot');
-                if ($prev) {
-                    $id = gmdate('Ymd-His') . '-' . bin2hex(random_bytes(3));
-                    store_write('versionen/' . $id, $prev);
-                    $list = store_names('versionen');
-                    rsort($list);
-                    foreach (array_slice($list, (int)$CFG['keep_versions']) as $old) store_delete($old);
-                }
-                // streng steigend mit Millisekunden (wie einzel_stand): zwei Veröffentlichungen in derselben Sekunde bekommen
-                // verschiedene Stände – ein Bestellwunsch auf der ersten Fassung wird dann nicht mit der zweiten gerechnet
-                $model['publishedAt'] = einzel_stand(is_array($prev) && is_string($prev['publishedAt'] ?? null) ? $prev['publishedAt'] : null);
-                store_write('angebot', $model);
-                $rev = draft_end($dr, 'veröffentlicht');
-                $h = history_from_model($model, 'Veröffentlichung', $model['publishedAt']);
-                if ($h) { $hid = history_id($h['week'], $h['year']); store_write('historie/' . $hid, $h); history_undelete($hid); }
-                $d = $prev ? changes_between($prev, $model) : [];
-                audit('publish', 'KW ' . $model['meta']['week'] . '/' . $model['meta']['year'] . ' veröffentlicht – ' . count($model['items']) . ' Artikel' . ($prev ? ' (' . changes_summary($d) . ')' : ' (erste Veröffentlichung)'), array_slice($d, 0, 2000));
-                respond(['ok' => true, 'publishedAt' => $model['publishedAt'], 'revision' => $rev]);
-            });
+            require_modulzugang('versand', true);
+            $b = body();
+            $r = angebot_veroeffentlichen(is_array($b['model'] ?? null) ? $b['model'] : null, array_key_exists('revision', $b) ? $b['revision'] : null);
+            respond(['ok' => true, 'publishedAt' => $r['publishedAt'], 'revision' => $r['revision']]);
         }
 
         /* Export für WinAB: veröffentlichtes Wochenangebot als CSV (Artikelnummer;Preis, höchster Preis je Nummer) –

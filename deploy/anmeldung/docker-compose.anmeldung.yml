@@ -75,7 +75,7 @@ services:
 
   app-mitarbeiter:
     # Mitarbeiter-Hosts (ADR-003, ADR-007): dashboard-stafl.de, angebot./verwaltung./bestand./hr./crm./marketing./sicherheit./
-    # controlling./leergut./rewe./qs.dashboard-stafl.de und die Prüfung vor der Anmeldeseite (Caddy forward_auth). Gleiches Image
+    # controlling./leergut./rewe./qs./versand.dashboard-stafl.de und die Prüfung vor der Anmeldeseite (Caddy forward_auth). Gleiches Image
     # und gleicher Code wie app; das Image baut der Dienst app (nie aus dem Netz holen).
     image: stafl-app:${STAFL_APP_VERSION:-lokal}
     pull_policy: never
@@ -141,6 +141,9 @@ services:
       # Qualitätssicherung (qs.dashboard-stafl.de, Stand 13): wie bei der Verwaltung – startbar vor dem Konsolenschritt
       OIDC_SECRET_QS: ${OIDC_SECRET_QS:-noch-nicht-eingerichtet}
       OIDC_CRYPTO_QS: ${OIDC_CRYPTO_QS:-${OIDC_CRYPTO_ANGEBOT:?in .env setzen}}
+      # Versand (versand.dashboard-stafl.de, Stand 18): wie bei der Verwaltung – startbar vor dem Konsolenschritt
+      OIDC_SECRET_VERSAND: ${OIDC_SECRET_VERSAND:-noch-nicht-eingerichtet}
+      OIDC_CRYPTO_VERSAND: ${OIDC_CRYPTO_VERSAND:-${OIDC_CRYPTO_ANGEBOT:?in .env setzen}}
       # Mitarbeiterkonten aus der Verwaltung (Stand 8, lib/anmeldekonten.php): Client „konten“ nur mit Service-Account; Keycloak im
       # internen Netz (nicht über Caddy). Ohne Geheimnis zeigt die Verwaltung „noch nicht eingerichtet“ – die Anwendung startet trotzdem
       OIDC_SECRET_KONTEN: ${OIDC_SECRET_KONTEN:-noch-nicht-eingerichtet}
