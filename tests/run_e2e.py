@@ -292,6 +292,23 @@ ZUSATZ = {'dashboard': [('dashboard', 'dashboard')], 'einheit': [('dashboard', '
 REGISTER_TEST = {'modulverwaltung': [("'rewe' => [", 'in_pruefung', 'keine'), ("'einkauf' => [", 'fertig')]}
 
 
+# Liste der unveröffentlichten Änderungen mit „Rückgängig“ im Eingabebereich: seit 13.11.2026 ausgeschaltet (Veröffentlichen liegt im
+# Modul Versand, Schalter AENDERUNGSLISTE_IM_ANGEBOT in app/assets/admin.js), aber weiter vorhanden. Diese Gruppen prüfen die
+# Liste und das Zurücknehmen und schalten sie dafür in ihrer App-Kopie ein – so bleibt der Schalter benutzbar. Nur die Kopie im
+# Testordner; den ausgelieferten Stand (ohne Liste) prüft die Gruppe „versand“.
+LISTE_IM_ANGEBOT = {'revert', 'angebote', 'aufbau', 'sys'}
+LISTE_AUS, LISTE_AN = 'const AENDERUNGSLISTE_IM_ANGEBOT = false;', 'const AENDERUNGSLISTE_IM_ANGEBOT = true;'
+
+
+def liste_im_angebot_einschalten(app):
+    pfad = os.path.join(app, 'assets', 'admin.js')
+    with open(pfad, encoding='utf-8') as f:
+        text = f.read()
+    assert text.count(LISTE_AUS) == 1, 'Schalter AENDERUNGSLISTE_IM_ANGEBOT nicht gefunden'
+    with open(pfad, 'w', encoding='utf-8', newline='\n') as f:
+        f.write(text.replace(LISTE_AUS, LISTE_AN))
+
+
 def register_anpassen(app, aenderungen):
     pfad = os.path.join(app, 'api', 'lib', 'module-liste.php')
     with open(pfad, encoding='utf-8') as f:
@@ -322,6 +339,8 @@ def run_in(name, slot):
     app = os.path.join(WORK, f'app-{name}')
     shutil.rmtree(app, ignore_errors=True)
     shutil.copytree(os.path.join(REPO, 'app'), app)
+    if name in LISTE_IM_ANGEBOT:   # vor dem Bereitstellen, damit Versionsnummer und Prüfliste zur geänderten Datei passen
+        liste_im_angebot_einschalten(app)
     BEREITSTELLEN.verzeichnis(pathlib.Path(app))   # wie der Server: ?v=… setzen, Prüfliste erzeugen
     for quelle, ziel in ZUSATZ.get(name, ()):   # Oberflächen außerhalb der Dokumentwurzel nur für ihre Gruppe einblenden
         shutil.copytree(os.path.join(REPO, quelle), os.path.join(app, ziel))

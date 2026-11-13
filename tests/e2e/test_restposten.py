@@ -198,7 +198,7 @@ with sync_playwright() as p:
     row(X['id']).locator('[data-act=remove]').click()
     a.wait_for_function("document.querySelector('#save-state').classList.contains('saved')", timeout=10000)
     check('✕ entfernt aus dem Wochenangebot', row(X['id']).count() == 0 and next(i for i in A.call('draft')[1]['draft']['items'] if i['id'] == X['id'])['variants'] == {'std': {'status': 'hidden'}})
-    check('change shown for Wochenangebot', 'im Wochenangebot hinzugefügt/entfernt' in (a.get_attribute('#btn-publish', 'title') or ''))
+    check('change shown for Wochenangebot', 'im Wochenangebot hinzugefügt/entfernt' in (a.get_attribute('#offen-zahl, #offen-liste', 'title') or ''))
     a.click('#btn-undo'); a.wait_for_selector(f'tr[data-id="{X["id"]}"]')
     a.wait_for_function("document.querySelector('#save-state').classList.contains('saved') || /Keine Änderungen/.test(document.querySelector('#save-state').textContent)", timeout=10000)
     # Kurzes MHD → Sonderpreis (Leiste beim Öffnen zugeklappt)
@@ -220,7 +220,7 @@ with sync_playwright() as p:
     sv = next(i for i in A.call('draft')[1]['draft']['items'] if i['id'] == mid).get('sale') or {}
     exp = {o: {'status': 'none'} for o, m in rows if o not in ('std', 'edeka')}; exp['edeka'] = {'value': 7.5}
     check('sale price set from MHD list (andere Angebote „keine Empfehlung“)', sv.get('value') == 7.77 and sv.get('offers') == exp, sv)
-    check('changes show Empfehlung', 'Empfehlung' in (a.get_attribute('#btn-publish', 'title') or ''))
+    check('changes show Empfehlung', 'Empfehlung' in (a.get_attribute('#offen-zahl, #offen-liste', 'title') or ''))
     # Empfehlung ohne Preis über das Fenster: Preisfeld leer → nur hervorheben; alle Angebote „keine“ → Fehlermeldung
     a.keyboard.press('Escape')
     rk = a.locator(f'tr[data-id="{withs[7]["id"]}"]')

@@ -1,4 +1,5 @@
 import sys
+from versand_hilfe import veroeffentlichen
 from umgebung import BASE  # Testserver je Gruppe (parallel)
 import re, json, time
 from playwright.sync_api import sync_playwright, expect
@@ -45,7 +46,7 @@ with sync_playwright() as p:
     wait_saved()
     check('price formatted 24,10', row('10601').locator('input[data-f="price"]').input_value() == '24,10')
     check('row marked price change + was', 'is-price' in row('10601').get_attribute('class') and 'bisher' in row('10601').inner_text())
-    check('keine Änderungsleiste mehr; Aufstellung am Knopf „Veröffentlichen“', a.locator('#changes').count() == 0 and '1 Preis geändert' in (a.get_attribute('#btn-publish', 'title') or ''), a.get_attribute('#btn-publish', 'title'))
+    check('keine Änderungsleiste mehr; Aufstellung am Knopf „Veröffentlichen“', a.locator('#changes').count() == 0 and '1 Preis geändert' in (a.get_attribute('#offen-zahl, #offen-liste', 'title') or ''), a.get_attribute('#offen-zahl, #offen-liste', 'title'))
     check('draft saved state', 'noch nicht veröffentlicht' in a.inner_text('#save-state'), a.inner_text('#save-state'))
     check('public unchanged before publish', pub_price('10601').startswith(de(preis('10601'))), pub_price('10601'))
     pv = ctx.new_page(); pv.goto(B + '/?vorschau=1#suche=10601'); pv.wait_for_selector('tr.row')
@@ -87,7 +88,7 @@ with sync_playwright() as p:
     # invalid price
     i2 = row('10701').locator('input[data-f="price"]'); i2.fill('abc'); i2.press('Tab'); a.wait_for_timeout(100)
     check('invalid price marked', 'invalid' in i2.get_attribute('class'))
-    a.click('#btn-publish'); a.wait_for_selector('#dlg-publish[open]')
+    a.click('#offen-liste'); a.wait_for_selector('#dlg-publish[open]')
     check('publish blocked with invalid price', a.locator('#dlg-publish [data-ia="publish"]').is_disabled() and 'nicht lesbar' in a.inner_text('#dlg-publish'))
     a.click('#dlg-publish [data-close]')
     i2.fill('a. Anfr.'); i2.press('Tab'); a.wait_for_timeout(100)
@@ -113,7 +114,7 @@ with sync_playwright() as p:
     row('10202').locator('[data-act="item"]').click(); a.wait_for_selector('#dlg-item[open]')
     a.screenshot(path=SH + '/admin-item.png')
     a.click('#dlg-item [data-ia="del"]'); a.wait_for_timeout(150)
-    check('item deleted', row('10202').count() == 0 and 'entfernt' in (a.get_attribute('#btn-publish', 'title') or ''))
+    check('item deleted', row('10202').count() == 0 and 'entfernt' in (a.get_attribute('#offen-zahl, #offen-liste', 'title') or ''))
     a.click('#btn-undo'); a.wait_for_timeout(150)
     check('undo restores item', row('10202').count() == 1)
     # delete for real another one
@@ -157,11 +158,11 @@ with sync_playwright() as p:
     a.uncheck('#only-changes'); a.wait_for_timeout(200)
 
     # publish
-    a.click('#btn-publish'); a.wait_for_selector('#dlg-publish[open]')
+    a.click('#offen-liste'); a.wait_for_selector('#dlg-publish[open]')
     t = a.inner_text('#dlg-publish').lower()
     check('publish summary', 'preisänderungen (3)' in t and 'neu (2)' in t and 'entfernt (1)' in t, re.sub(r'\s+', ' ', t)[:400])
     a.screenshot(path=SH + '/admin-publish.png')
-    a.click('#dlg-publish [data-ia="publish"]'); a.wait_for_function("!document.querySelector('#dlg-publish').open")
+    a.click('#dlg-publish [data-close]'); veroeffentlichen(a)
     check('after publish: no changes', 'Keine Änderungen' in a.inner_text('#save-state'), a.inner_text('#save-state'))
     check('public shows new price', pub_price('10601').startswith('24,10'), pub_price('10601'))
     check('public shows alt price', '23,90' in pub_price('10601'), pub_price('10601'))
@@ -178,7 +179,7 @@ with sync_playwright() as p:
     check('Entwurf: KW 44 vorbereitet', a.input_value('#m-week') == '44')
     pub.goto(B + '/?r=2'); pub.wait_for_selector('tr.row'); check('public KW43 still', 'KW 43' in pub.inner_text('#kw-pill'))
     wait_saved()
-    a.click('#btn-publish'); a.click('#dlg-publish [data-ia="publish"]'); a.wait_for_function("!document.querySelector('#dlg-publish').open")
+    veroeffentlichen(a)
     pub.goto(B + '/?r=3'); pub.wait_for_selector('tr.row'); check('public KW44 after publish', 'KW 44' in pub.inner_text('#kw-pill'), pub.inner_text('#kw-pill'))
 
     # versions

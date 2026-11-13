@@ -1048,7 +1048,7 @@
   function offenHTML() {
     const n = pendingCount();
     const zahl = !published ? 'noch nicht veröffentlicht' : `${plural(n, 'Änderung', 'Änderungen')} nicht veröffentlicht`;
-    const info = AENDERUNGSLISTE_IM_ANGEBOT && published && !ro ? `<button type="button" class="link-btn" id="offen-liste" title="Liste der Änderungen ansehen">${zahl}</button>` : `<strong id="offen-zahl">${zahl}</strong>`;
+    const info = AENDERUNGSLISTE_IM_ANGEBOT && published && !ro ? `<button type="button" class="link-btn" id="offen-liste" title="${esc(offenHinweis || 'Liste der Änderungen ansehen')}">${zahl}</button>` : `<strong id="offen-zahl"${offenHinweis ? ` title="${esc(offenHinweis)}"` : ''}>${zahl}</strong>`;
     const link = zumVersand('Zum Versand');
     return info + (link ? ' · ' + link : '');
   }
@@ -1267,8 +1267,26 @@
 
   /* Unveröffentlichte Änderungen: Zahl am Knopf „Veröffentlichen“, Aufstellung als Hinweis beim Darüberfahren
      (die Leiste über dem Editor entfällt; die Einzelheiten zeigt der Dialog „Veröffentlichen“) */
-  /* Unveröffentlichte Änderungen: die Zahl steht in der Statuszeile (offenHTML); die Einzelheiten zeigt das Modul Versand */
-  function renderChanges() { /* früher Hinweis am Knopf „Veröffentlichen“ – entfällt mit dem Knopf */ }
+  /* Unveröffentlichte Änderungen: die Zahl steht in der Statuszeile (offenHTML), die Aufstellung als Hinweis beim Darüberfahren;
+     die Einzelheiten zeigt das Modul Versand */
+  let offenHinweis = '';
+  function renderChanges() {
+    if (!model || !published) { offenHinweis = ''; return; }
+    const vAll = vChanges(), sc = sChanges();
+    const vh = vAll.filter((c) => c.offer === OSTD), vc = vAll.filter((c) => c.offer !== OSTD);
+    const parts = [];
+    if (metaChanged()) parts.push('Kopfdaten geändert');
+    if (diff.priceChanged.length) parts.push(`${diff.priceChanged.length} Preis${diff.priceChanged.length === 1 ? '' : 'e'} geändert`);
+    if (diff.added.length) parts.push(`${diff.added.length} neu`);
+    if (diff.changed.length) parts.push(`${diff.changed.length} bearbeitet`);
+    if (diff.removed.length) parts.push(`${diff.removed.length} entfernt`);
+    if (vc.length) parts.push(`${vc.length} Angebotspreis${vc.length === 1 ? '' : 'e'} geändert`);
+    if (vh.length) parts.push(`${vh.length} im Wochenangebot hinzugefügt/entfernt`);
+    if (sc.length) parts.push(`${sc.length} Empfehlung${sc.length === 1 ? '' : 'en'} geändert`);
+    if (wChanges().length) parts.push('Werbung geändert');
+    if (aufbauGeaendert()) parts.push('Aufbau geändert');
+    offenHinweis = parts.length ? 'Unveröffentlichte Änderungen: ' + parts.join(' · ') : '';
+  }
   const pendingCount = () => (!model ? 0 : !published ? model.items.length : diff.added.length + diff.removed.length + diff.priceChanged.length + diff.changed.length + vChanges().length + sChanges().length + wChanges().length + (metaChanged() ? 1 : 0) + (aufbauGeaendert() ? 1 : 0));
   /* früher Zahl am Knopf „Veröffentlichen“: jetzt die Zahl in der Statuszeile (nur wenn dort gerade der gespeicherte Stand steht) */
   function updatePublishBtn() {

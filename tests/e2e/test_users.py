@@ -3,6 +3,7 @@ from umgebung import storage_raw, storage_write
 from auth_helpers import read_users
 from umgebung import BASE  # Testserver je Gruppe (parallel)
 import sys
+from versand_hilfe import veroeffentlichen
 import json, os, re
 from playwright.sync_api import sync_playwright
 B = BASE
@@ -113,7 +114,7 @@ with sync_playwright() as p:
     r = api_from_page(a, 'user_save', {'name': 'Hack', 'username': 'hack', 'role': 'admin', 'active': True, 'password': 'Hack-Hack-123'})
     check('editor cannot create users (403)', r[0] == 403, r)
     set_price(a, '10701', '29,00')
-    a.click('#btn-publish'); a.click('#dlg-publish [data-ia="publish"]'); a.wait_for_function("!document.querySelector('#dlg-publish').open")
+    veroeffentlichen(a)
     logout(a)
 
     # ---- Nur ansehen
