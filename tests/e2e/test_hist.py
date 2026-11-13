@@ -1,13 +1,14 @@
 """Testgruppe hist: Preisverlauf – Import alter Angebotslisten, Zeiträume, Datendialog; Frühere Wochen ansehen (KW wechseln,
-Angebot wählen, Quelle Veröffentlichung/Version/Preisverlauf, Rechte)."""
+Angebot wählen, Quelle Wochenablage/Veröffentlichung/Version/Preisverlauf, Rechte); Wochenablage je KW (ablegen, ersetzen,
+damalige Angebotsdefinitionen, alte Versionen retten, nie auf der Kundenseite)."""
 import sys
 from umgebung import BASE  # Testserver je Gruppe (parallel)
-import datetime, glob, json, re
+import datetime, glob, json, os, re
 from kunden_hilfe import Client
 from playwright.sync_api import sync_playwright
 from versand_hilfe import veroeffentlichen
 B = BASE
-from umgebung import SH, FIX, REPO, WORK, XL44
+from umgebung import SH, FIX, REPO, WORK, XL44, storage_raw, storage_write, trennstufe, datenordner, _storage_raw
 res = []
 def check(n, c, i=''):
     res.append(bool(c)); print(('PASS ' if c else 'FAIL ') + n + (('  ' + str(i)) if i else ''))
@@ -37,6 +38,23 @@ def woche(pg, kw, oid='std'):
     return r[0], r[1] or {}
 
 
+def dok(name):
+    """Gespeichertes Dokument (ohne PHP-Schutzzeile) oder None – so, wie der Testserver es liest"""
+    raw = storage_raw(name)
+    return json.loads(raw.split('?>\n', 1)[-1]) if raw else None
+
+
+def ablage_namen():
+    """Wochen in der Wochenablage angebot-woche/* (Dateien oder Datenbank)"""
+    ordner = datenordner('angebot-woche/2026-01')
+    if os.path.isfile(ordner + '/.sqlite-active'):
+        import sqlite3
+        with sqlite3.connect(ordner + '/.sqlite/store.sqlite') as db:
+            return sorted(r[0].split('/', 1)[1] for r in db.execute("SELECT name FROM documents WHERE name LIKE 'angebot-woche/%'"))
+    d = ordner + '/angebot-woche'
+    return sorted(f[:-4] for f in os.listdir(d) if f.endswith('.php')) if os.path.isdir(d) else []
+
+
 def rahmen_hat(pg, text):
     """warten, bis die Angebotsseite im Fenster den Text zeigt (während des Ladens gibt es kurz kein body)"""
     pg.wait_for_function("""(t) => { const d = document.querySelector('#fw-frame').contentDocument; return !!(d && d.body && d.body.innerText.includes(t)); }""", arg=text)
@@ -61,8 +79,20 @@ def fruehere_wochen_pruefen(a, br, errs):
     m['meta'].setdefault('werbung', {})['edeka'] = {'titel': 'Edeka-Woche', 'artikel': [{'id': it['10601']['id']}]}
     r = api_post(a, 'save_draft', {'revision': d['revision'], 'model': m})
     check('Frühere Wochen · Vorbereitung: KW 43 mit Edeka-Preis, Bezeichnung und Werbung', r[0] == 200, r)
+    ab0 = dok('angebot-woche/2026-43')
+    pub0 = d['published']['publishedAt']
+    v0 = next((i for i in (ab0 or {}).get('modell', {}).get('items', []) if i.get('code') == '10601'), {})
+    check('Wochenablage: Veröffentlichung legt KW 43 ab (Stand, Modell, Angebotsdefinitionen)', ab0 and ab0.get('stand') == pub0 and ab0.get('quelle') == 'veroeffentlichung'
+          and v0.get('price', {}).get('value') == 25.5 and {'id': 'edeka', 'name': 'Wochenangebot Edeka', 'fallback': 'standard'} in ab0.get('angebote', [])
+          and ablage_namen() == ['2026-43'], (ab0 or {}).get('stand'))
     veroeffentlichen(a)
     pub43 = api_get(a, 'draft')[1]['published']['publishedAt']
+    ab1 = dok('angebot-woche/2026-43')
+    v1 = next((i for i in (ab1 or {}).get('modell', {}).get('items', []) if i.get('code') == '10601'), {})
+    groesse = len(storage_raw('angebot-woche/2026-43') or '')
+    print(f'INFO Wochenablage KW 43: {groesse / 1024:.0f} KB (Modell {len(json.dumps(ab1["modell"])) / 1024:.0f} KB, Definitionen {len(json.dumps(ab1["angebote"]))} Byte)')
+    check('… zweite Veröffentlichung derselben KW ersetzt die Ablage (ein Dokument je KW)', ab1.get('stand') == pub43 != pub0 and v1.get('variants', {}).get('edeka') == {'status': 'value', 'value': 22}
+          and ablage_namen() == ['2026-43'] and 0 < groesse < 400 * 1024, (ab1.get('stand'), pub43, ablage_namen(), groesse))
     d = api_get(a, 'draft')[1]
     m = d['draft'] or d['published']
     it = {i['code']: i for i in m['items']}
@@ -77,11 +107,12 @@ def fruehere_wochen_pruefen(a, br, errs):
 
     # Quelle je KW und Auflösung auf dem Server
     c, w = woche(a, '2026-44')
-    check('KW 44 (aktuell veröffentlicht): Wochenangebot mit neuem Preis', c == 200 and w.get('quelle') == 'veroeffentlicht' and preis_von(w, '10601')[0] == 26
+    check('KW 44 (aktuell veröffentlicht, aus der Wochenablage): Wochenangebot mit neuem Preis', c == 200 and w.get('quelle') == 'ablage' and preis_von(w, '10601')[0] == 26
           and w.get('kw') == 44 and w.get('jahr') == 2026 and w.get('vorige') == '2026-43', (c, w.get('quelle'), preis_von(w, '10601')[0], w.get('vorige')))
     c, w = woche(a, '2026-43', 'edeka')
     p, i = preis_von(w, '10601')
-    check('KW 43 (frühere Veröffentlichung): letzter Stand der Woche mit Edeka-Preis, Bezeichnung und Werbung', c == 200 and w.get('quelle') == 'version' and p == 22
+    check('KW 43 (Wochenablage): letzter Stand der Woche mit Edeka-Preis, Bezeichnung und Werbung, damalige Einstellung', c == 200 and w.get('quelle') == 'ablage' and p == 22
+          and w.get('einstellung') == 'damals' and ablage_namen() == ['2026-43', '2026-44']
           and i.get('name') == 'Roastbeef Edeka' and (w['offer']['meta'].get('werbung') or {}).get('titel') == 'Edeka-Woche' and w.get('stand') == pub43
           and w['angebot'] == {'id': 'edeka', 'name': 'Wochenangebot Edeka'}, (c, w.get('quelle'), p, i, w.get('stand'), pub43))
     roh = json.dumps(w, ensure_ascii=False)
@@ -147,8 +178,8 @@ def fruehere_wochen_pruefen(a, br, errs):
     a.click('[data-fw="zurueck"]'); a.wait_for_function("location.hash === '#woche/2026-43' && document.querySelector('#fw-titel').textContent.includes('43')")
     rahmen_hat(a, 'Roastbeef Edeka')
     t = rahmen.locator('body').inner_text()
-    check('‹ KW 43: Edeka-Preis, eigene Bezeichnung und Werbung der damaligen Woche, Hinweis zur Einstellung', '22,00' in t and 'Roastbeef Edeka' in t and 'Edeka-Woche' in t
-          and 'heutigen Einstellung' in a.inner_text('#fw-hinweis') and 'zuletzt veröffentlicht' in a.inner_text('#fw-sub'), a.inner_text('#fw-sub'))
+    check('‹ KW 43: Edeka-Preis, eigene Bezeichnung und Werbung der damaligen Woche, Einstellung gespeichert (kein Hinweis)', '22,00' in t and 'Roastbeef Edeka' in t and 'Edeka-Woche' in t
+          and a.is_hidden('#fw-hinweis') and 'zuletzt veröffentlicht' in a.inner_text('#fw-sub'), a.inner_text('#fw-sub'))
     a.wait_for_function(RUHE); a.screenshot(path=SH + '/fruehere-wochen.png')
     a.click('[data-fw="zurueck"]'); a.wait_for_function("location.hash === '#woche/2026-42'")
     a.wait_for_selector('#fw-hinweis:not([hidden])')
@@ -175,6 +206,70 @@ def fruehere_wochen_pruefen(a, br, errs):
     check('390 px: Fenster füllt den Bildschirm, kein seitliches Scrollen, keine JS-Fehler', breite[0] <= 390 and breite[1] <= 390 and not merr, (breite, merr))
     mp.wait_for_function(RUHE); mp.screenshot(path=SH + '/fruehere-wochen-mobil.png'); mp.close()
 
+
+
+def wochenablage_pruefen(a):
+    """Wochenablage angebot-woche/<JJJJ-WW>: damalige Angebotsdefinitionen, Angebot, das es damals nicht gab, alte Versionen
+    werden vor dem Löschen gerettet, nie auf der Kundenseite."""
+    a.set_viewport_size({'width': 1440, 'height': 950})
+    # Damalige Einstellung: Edeka heute umbenannt und mit eigener Artikelliste, dazu ein neues Angebot
+    cur = api_get(a, 'offers')[1]
+    neu = [{**o, 'name': 'Wochenangebot Edeka Neu', 'fallback': 'hidden'} if o['id'] == 'edeka' else o for o in cur['offers']] + [{'id': 'metro-woche', 'name': 'Wochenangebot Metro Woche', 'fallback': 'hidden'}]
+    r = api_post(a, 'offers_save', {'rev': cur['rev'], 'offers': neu})
+    check('Wochenablage · Vorbereitung: Edeka umbenannt und auf eigene Artikelliste, neues Angebot', r[0] == 200, r)
+    alle = len(woche(a, '2026-43')[1]['offer']['items'])
+    c, w = woche(a, '2026-43', 'edeka')
+    check('Damalige Einstellung: Edeka in KW 43 mit damaligem Namen und „folgt dem Wochenangebot“', c == 200 and w.get('einstellung') == 'damals'
+          and w['angebot']['name'] == 'Wochenangebot Edeka' and w.get('artikel') == alle and preis_von(w, '10601')[0] == 22, (w.get('einstellung'), w.get('angebot'), w.get('artikel'), alle))
+    namen = {o['id']: o['name'] for o in w.get('angebote', [])}
+    check('… Auswahl der Woche: damalige Namen, heutige Angebote ergänzt', namen.get('edeka') == 'Wochenangebot Edeka' and namen.get('metro-woche') == 'Wochenangebot Metro Woche', namen)
+    c, w = woche(a, '2026-42', 'edeka')
+    check('… ohne Ablage (Preisverlauf): heutige Einstellung (eigene Liste ohne eigene Preise = leer)', c == 200 and w.get('einstellung') == 'heute' and w.get('artikel') == 0
+          and w['angebot']['name'] == 'Wochenangebot Edeka Neu', (w.get('einstellung'), w.get('artikel')))
+    c, w = woche(a, '2026-43', 'metro-woche')
+    check('Angebot, das es in der Woche noch nicht gab: kein Angebot, Hinweis', c == 200 and w.get('fehlt') is True and w.get('offer') is None, (c, w.get('fehlt')))
+    a.goto(B + '/admin/#woche/2026-43'); a.wait_for_selector('#dlg-wochen[open] #fw-angebot')
+    a.select_option('#fw-angebot', 'metro-woche'); a.wait_for_selector('#fw-leer:not([hidden])')
+    check('… im Fenster: „gab es in KW 43/2026 noch nicht“', 'gab es in KW' in a.inner_text('#fw-leer') and 'noch nicht' in a.inner_text('#fw-leer'), a.inner_text('#fw-leer'))
+    a.wait_for_function(RUHE); a.screenshot(path=SH + '/fruehere-wochen-fehlt.png')
+    a.select_option('#fw-angebot', 'std'); a.keyboard.press('Escape'); a.wait_for_selector('#dlg-wochen', state='hidden')
+
+    # Alte Versionen: vor dem Löschen (keep_versions = 60) in die Ablage retten, wenn die KW dort keinen neueren Stand hat
+    vorhanden = len(api_get(a, 'versions')[1]['versions'])
+    weg = vorhanden + 1   # so viele der ältesten Versionen löscht die nächste Veröffentlichung
+    basis = api_get(a, 'draft')[1]['published']
+    for i in range(60):
+        v = json.loads(json.dumps(basis))
+        v['meta']['week'] = 20 if i < weg else 21
+        v['publishedAt'] = f'2020-01-01T00:00:{i:02d}.000Z'
+        next(x for x in v['items'] if x['code'] == '10601')['price'] = {'status': 'value', 'value': 100 + i}
+        storage_write(f'versionen/20200101-{i:06d}-abcdef', v)
+    d = api_get(a, 'draft')[1]
+    m = d['draft'] or d['published']
+    m['meta']['notice'] = 'Wochenablage-Test'
+    api_post(a, 'save_draft', {'revision': d['revision'], 'model': m})
+    a.wait_for_selector('#screen-editor:not([hidden])')
+    veroeffentlichen(a)
+    gerettet = dok('angebot-woche/2026-20')
+    v20 = next((x for x in (gerettet or {}).get('modell', {}).get('items', []) if x.get('code') == '10601'), {})
+    ids = [x['id'] for x in api_get(a, 'versions')[1]['versions']]
+    check('Gelöschte alte Versionen gerettet: neuester Stand der KW, ohne Definitionen; nicht gelöschte KW nicht abgelegt', gerettet and gerettet.get('quelle') == 'version'
+          and gerettet.get('angebote') is None and gerettet.get('stand') == f'2020-01-01T00:00:{weg - 1:02d}.000Z' and v20.get('price', {}).get('value') == 100 + weg - 1
+          and '2026-21' not in ablage_namen() and not any(x.startswith('20200101-') and int(x[9:15]) < weg for x in ids) and len(ids) == 60, ((gerettet or {}).get('stand'), weg, len(ids)))
+    c, w = woche(a, '2026-20')
+    c2, w2 = woche(a, '2026-20', 'bela')
+    check('… frühere Wochen zeigen die gerettete Woche (Kundenangebot nach heutiger Einstellung)', c == 200 and w.get('quelle') == 'ablage' and preis_von(w, '10601')[0] == 100 + weg - 1
+          and c2 == 200 and w2.get('einstellung') == 'heute', (w.get('quelle'), preis_von(w, '10601')[0]))
+    c, w = woche(a, '2026-21')
+    check('… nicht gelöschte Versionen weiter aus versionen/*', c == 200 and w.get('quelle') == 'version' and preis_von(w, '10601')[0] == 159, (w.get('quelle'), preis_von(w, '10601')[0]))
+
+    # Nie auf der Kundenseite: intern in jeder Trennstufe; getrennt liegt die Ablage nur im internen Ordner
+    import sys
+    sys.path.insert(0, os.path.join(REPO, 'deploy'))
+    import daten_trennen as dt
+    intern = all(dt.ist_intern('angebot-woche/2026-43', dt.kundenseite(stufe=st)) for st in range(1, dt.ZIELSTUFE + 1))
+    getrennt = trennstufe() == 0 or (_storage_raw(os.environ['UDATA'], 'angebot-woche/2026-43') is None and datenordner('angebot-woche/2026-43') == os.environ.get('UINTERN'))
+    check('Wochenablage nie auf der Kundenseite (intern ab Trennstufe 1; getrennt nur im internen Ordner)', intern and getrennt, (intern, trennstufe()))
 
 with sync_playwright() as p:
     br = p.chromium.launch(); a = br.new_page(viewport={'width': 1440, 'height': 950}); errs = []
@@ -276,6 +371,7 @@ with sync_playwright() as p:
     a.keyboard.press('Escape')
     sw = a.evaluate('document.documentElement.scrollWidth'); check('mobile no h-scroll', sw <= 390, sw)
     fruehere_wochen_pruefen(a, br, errs)
+    wochenablage_pruefen(a)
     check('no JS errors', not errs, errs)
     br.close()
 print(f'{sum(res)}/{len(res)} passed')

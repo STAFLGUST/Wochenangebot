@@ -82,6 +82,14 @@ beschreibung = "Frühere veröffentlichte Angebote (unveränderliche Schnappsch�
 historie = "Schnappschuss je Veröffentlichung; Anzahl begrenzt (keep_versions)"
 
 [[dokument]]
+name = "angebot-woche/*"
+eigentuemer = "angebot"
+bereich = "intern"   # nie auf der Kundenseite: nur Mitarbeiterseite (Fenster „Frühere Wochen“), nicht in Auszügen
+schutz = "vertraulich"
+beschreibung = "Wochenablage: je Kalenderwoche der zuletzt veröffentlichte Stand mit den damaligen Angebotsdefinitionen (Name, Artikelliste je Angebot)"
+historie = "Schnappschuss je KW beim Veröffentlichen (GR-106), ersetzt nur den Stand derselben KW; dauerhaft, ohne Grenze und ohne automatisches Löschen"
+
+[[dokument]]
 name = "historie/*"
 eigentuemer = "angebot"
 bereich = "intern"

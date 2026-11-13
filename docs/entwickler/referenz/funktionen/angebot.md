@@ -2,7 +2,7 @@
 
 <!-- ERZEUGT von `python3 werkzeuge/doku.py erzeugen` – nicht von Hand ändern. Quelle: Funktionen und Kommentare im Code. Die CI prüft, dass diese Datei zum Code passt. -->
 
-50 Dateien, 774 Funktionen – in der Reihenfolge der Datei, **fett** die Abschnitte. Text = erste Aussage des Kommentars direkt über der Funktion (Python: Docstring). Übersicht aller Module: [README.md](README.md).
+50 Dateien, 780 Funktionen – in der Reihenfolge der Datei, **fett** die Abschnitte. Text = erste Aussage des Kommentars direkt über der Funktion (Python: Docstring). Übersicht aller Module: [README.md](README.md).
 
 ## `app/api/lib/angebote.php`
 
@@ -230,10 +230,13 @@ _Export des Wochenangebots für WinAB (Auftrag des Inhabers 05.11.2026)_
 
 ## `app/api/module/angebot/wochen.php`
 
-_Angebot · Frühere Wochen ansehen (Wunsch des Inhabers 13.11.2026): das veröffentlichte Angebot einer Kalenderwoche – Wochenangebot oder ein Kundenangebot – nur für Mitarbeiter mit Modulzugang Angebot und nur lesend …_
+_Angebot · Frühere Wochen ansehen und Wochenablage (Wünsche des Inhabers 13.11.2026): das veröffentlichte Angebot einer Kalenderwoche – Wochenangebot oder ein Kundenangebot – nur für Mitarbeiter mit Modulzugang …_
 
 - `angebot_woche_kw(m)` – KW eines gespeicherten Angebots als „JJJJ-WW“ (nur gültige ISO-Wochen), sonst null
-- `angebot_wochen_verzeichnis()` – Gespeicherte Wochen: 'JJJJ-WW' => ['art' => veroeffentlicht\|version\|historie, 'id' => Versions-ID, 'stand' => publishedAt] – je KW der zuletzt …
+- `angebot_woche_definitionen()` – Angebotsdefinitionen als Schnappschuss (GR-106): ID, Name und Regel der Artikelliste je Kundenangebot – ohne Kundengruppen
+- `angebot_woche_ablegen(model)` – Beim Veröffentlichen (angebot_veroeffentlichen, unter der Sperre „entwurf“): neuen Stand je KW ablegen, ersetzt dieselbe KW
+- `angebot_woche_retten(v)` – Vor dem Löschen einer alten Version (keep_versions): in die Ablage retten, wenn diese KW dort keinen neueren Stand hat
+- `angebot_wochen_verzeichnis()` – Gespeicherte Wochen (aufsteigend) und je KW der späteste Stand aus aktuellem Angebot und versionen/*: [Wochen => true, 'JJJJ-WW' => ['art' => …
 - `angebot_woche_aus_historie(h)` – Preisstand des Preisverlaufs als Angebotsmodell für offer_resolve: Angebotsgruppen aus den gespeicherten Gruppennamen (Reihenfolge wie gespeichert), ohne …
 - `angebot_woche(woche, oid)` – Aktion angebot_woche: KW „JJJJ-WW“ und Angebot (leer = Wochenangebot) → aufgelöstes Angebot dieser Woche oder null
 
@@ -1255,16 +1258,19 @@ _Mehrere Mitarbeiter bearbeiten den Entwurf gleichzeitig_
 
 ## `tests/e2e/test_hist.py`
 
-_Testgruppe hist: Preisverlauf – Import alter Angebotslisten, Zeiträume, Datendialog; Frühere Wochen ansehen (KW wechseln, Angebot wählen, Quelle Veröffentlichung/Version/Preisverlauf, Rechte)._
+_Testgruppe hist: Preisverlauf – Import alter Angebotslisten, Zeiträume, Datendialog; Frühere Wochen ansehen (KW wechseln, Angebot wählen, Quelle Wochenablage/Veröffentlichung/Version/Preisverlauf, Rechte); …_
 
 - `check(n, c, i)`
 - `api_get(pg, q)`
 - `api_post(pg, action, body)`
 - `api_post_bestaetigt(pg, action, body)`
 - `woche(pg, kw, oid)`
+- `dok(name)` – Gespeichertes Dokument (ohne PHP-Schutzzeile) oder None – so, wie der Testserver es liest
+- `ablage_namen()` – Wochen in der Wochenablage angebot-woche/* (Dateien oder Datenbank)
 - `rahmen_hat(pg, text)` – warten, bis die Angebotsseite im Fenster den Text zeigt (während des Ladens gibt es kurz kein body)
 - `preis_von(antwort, code)`
 - `fruehere_wochen_pruefen(a, br, errs)` – Frühere Wochen ansehen (nur Mitarbeiter mit Modulzugang Angebot, nur lesend): Quelle je KW, Auflösung auf dem Server, Rechte, Grenzfälle, Fenster mit …
+- `wochenablage_pruefen(a)` – Wochenablage angebot-woche/<JJJJ-WW>: damalige Angebotsdefinitionen, Angebot, das es damals nicht gab, alte Versionen werden vor dem Löschen gerettet, nie …
 
 ## `tests/e2e/test_kunden_mail.py`
 

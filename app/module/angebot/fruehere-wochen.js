@@ -5,8 +5,9 @@
    Inhalt: die Angebotsseite im Rahmen (wie die Vorschau, ../index.html?vorschau=1&eingebettet=1&woche=…), die über die Aktion
    angebot_woche den zuletzt veröffentlichten Stand der KW lädt – aufgelöst auf dem Server (app/api/module/angebot/wochen.php,
    offer_resolve, GR-002/GR-005). Kopf und Hinweise aus derselben Aktion: Quelle (aktuell veröffentlicht, frühere
-   Veröffentlichung oder nur Preisstand aus dem Preisverlauf), Stand, ohne gespeicherten Stand ein Hinweis mit Sprung zur
-   letzten gespeicherten Woche. KW-Rechnung nach dem Muster der REWE-Liste (isoKw, kwPlus), nicht aus dem REWE-Modul geladen.
+   Veröffentlichung aus der Wochenablage oder den Versionen, oder nur Preisstand aus dem Preisverlauf), Stand; Kundenangebote
+   mit ihrer damaligen Einstellung, sonst ein Hinweis; gab es das Angebot in der Woche nicht, ein Hinweis statt der Seite; ohne
+   gespeicherten Stand ein Hinweis mit Sprung zur letzten gespeicherten Woche. KW-Rechnung nach dem Muster der REWE-Liste (isoKw, kwPlus), nicht aus dem REWE-Modul geladen.
    Wird von admin/index.html nach admin.js geladen. */
 (function () {
   'use strict';
@@ -70,7 +71,7 @@
     body.querySelector('#fw-titel').innerHTML = `${name ? esc(name) + ' · ' : ''}<span class="fw-kw">${esc(kwText(S.woche))}</span>`;
     const teile = [zeitraum(S.woche)];
     if (d && d.quelle === 'veroeffentlicht') teile.push('aktuell veröffentlicht' + (d.stand ? ' · ' + F.datumZeit(d.stand) : ''));
-    else if (d && d.quelle === 'version') teile.push('zuletzt veröffentlicht' + (d.stand ? ' ' + F.datumZeit(d.stand) : ''));
+    else if (d && (d.quelle === 'ablage' || d.quelle === 'version')) teile.push('zuletzt veröffentlicht' + (d.stand ? ' ' + F.datumZeit(d.stand) : ''));
     else if (d && d.quelle === 'historie') teile.push('nur Preisstand');
     if (d && d.quelle) teile.push(`${d.artikel} Artikel`);
     body.querySelector('#fw-sub').textContent = teile.join(' · ');
@@ -104,6 +105,12 @@
     if (nr !== S.nr) return;
     S.d = d;
     kopf();
+    if (!d.offer && d.fehlt) {   // Kundenangebot gab es in dieser Woche noch nicht (Wochenablage mit den damaligen Angeboten)
+      stage.classList.remove('laden'); frame.hidden = true; frame.removeAttribute('src'); leer.hidden = false;
+      leer.innerHTML = `<p><strong>„${esc(d.angebot.name)}“ gab es in ${esc(kwText(S.woche))} noch nicht.</strong></p>
+        <p class="hint">Das Wochenangebot dieser Woche ist gespeichert – oben ein anderes Angebot wählen.</p>`;
+      return;
+    }
     if (!d.offer) {
       stage.classList.remove('laden'); frame.hidden = true; frame.removeAttribute('src'); leer.hidden = false;
       leer.innerHTML = `<p><strong>Für ${esc(kwText(S.woche))} ist kein Angebot gespeichert.</strong></p>
@@ -111,9 +118,10 @@
         ${d.vorige ? `<button type="button" class="btn" data-fw="gehe" data-kw="${esc(d.vorige)}">${icon('back', 'sm')}Zur letzten gespeicherten Woche (${esc(kwText(d.vorige))})</button>` : ''}`;
       return;
     }
-    const kunde = d.angebot.id !== 'std';
-    if (d.quelle === 'historie') hinweis(`Für diese Woche ist nur noch der Preisstand gespeichert (Preisverlauf): Artikel und Preise nach Angebotsgruppen – ohne Werbung, Bereiche, eigene Bezeichnungen und Empfehlungen.${kunde ? ' Artikel des Kundenangebots nach seiner heutigen Einstellung.' : ''}`);
-    else if (d.quelle === 'version' && kunde) hinweis('Artikel des Kundenangebots nach seiner heutigen Einstellung (eigene Artikelliste oder „folgt dem Wochenangebot“).');
+    // Kundenangebot ohne gespeicherte Definition dieser Woche (vor der Wochenablage): Artikel nach der heutigen Einstellung
+    const heute = d.angebot.id !== 'std' && d.einstellung !== 'damals' && d.quelle !== 'veroeffentlicht';
+    if (d.quelle === 'historie') hinweis(`Für diese Woche ist nur noch der Preisstand gespeichert (Preisverlauf): Artikel und Preise nach Angebotsgruppen – ohne Werbung, Bereiche, eigene Bezeichnungen und Empfehlungen.${heute ? ' Artikel des Kundenangebots nach seiner heutigen Einstellung.' : ''}`);
+    else if (heute) hinweis('Artikel des Kundenangebots nach seiner heutigen Einstellung (eigene Artikelliste oder „folgt dem Wochenangebot“) – für diese Woche ist sie nicht gespeichert.');
     frame.hidden = false;
     frame.src = adresse(S.woche, d.angebot.id);
   }
