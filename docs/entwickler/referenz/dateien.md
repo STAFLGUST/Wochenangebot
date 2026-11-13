@@ -153,6 +153,7 @@ Jede Code-Datei beginnt mit einem Kopfkommentar; dessen erste Aussage steht hier
 
 | Datei | Modul | Inhalt |
 | --- | --- | --- |
+| `druck.php` | angebot | Druck der Angebote: Fußzeile des Briefbogens unter jedem gedruckten Angebot (Wunsch des Inhabers 13.11.2026). |
 | `import.php` | angebot | Importvertrag des Moduls Angebot – Schnittstelle zur Importzentrale (docs/plattform/schnittstellen/import.md). - Preisverlauf: frühere Angebotslisten (.xlsx) als Wochen im Preisverlauf. |
 | `winab-export.php` | angebot | Export des Wochenangebots für WinAB (Auftrag des Inhabers 05.11.2026) |
 
@@ -247,6 +248,8 @@ Jede Code-Datei beginnt mit einem Kopfkommentar; dessen erste Aussage steht hier
 | `admin-werbung.js` | angebot | Eingabebereich – Fenster „Werbung schalten“ (Angebot bearbeiten, Knopf „Werbung“ in der Werkzeugleiste) Bis zu zwei Werbungen je Angebot (Reiter „Werbung 1“/„Werbung 2“, „Weitere Werbung“ legt die zweite an): je … |
 | `admin.css` | plattform | Eingabebereich – ergänzt app.css |
 | `admin.js` | angebot | Wochenangebot – Eingabebereich Bearbeitet einen Entwurf auf dem Server (automatisch gespeichert). |
+| `angebot-druck.css` | angebot | Angebot · Druckfassung „Angebotsansicht“ (A4 quer) der Angebotsseite – gesetzt von assets/angebot-druck.js. |
+| `angebot-druck.js` | angebot | Angebot · Satz der Druckfassung „Angebotsansicht“ (A4 quer) für die Angebotsseite (frontend.js, Wunsch des Inhabers 13.11.2026). |
 | `app.css` | angebot | Designsystem „Klar“: neutrale Flächen, ein Akzent (Bordeaux), Geist / Geist Mono (lokal eingebunden, SIL Open Font License, assets/fonts/LICENSE-Geist.txt – keine Verbindung zu fremden Servern) |
 | `bestaetigt.js` | angebot | Rücksprungseite der Bestätigung im eigenen Fenster (admin/bestaetigt.html): meldet dem Eingabebereich, dass die erneute Anmeldung bei der STAFL-Anmeldung abgeschlossen ist, und schließt das Fenster. |
 | `detailkarte.js` | plattform | STAFL-Plattform – Detailkarte (Straßen, Gebäude, Ortsnamen) vom eigenen Server Gemeinsame Kartenkomponente für die CRM-Karte und die Auswertung der Verwaltung. |
@@ -336,6 +339,8 @@ Jede Code-Datei beginnt mit einem Kopfkommentar; dessen erste Aussage steht hier
 | --- | --- | --- |
 | `aufbau.css` | angebot | STAFL-Plattform · Angebot · Knopf „Editor“ in der Werkzeugleiste von „Angebot bearbeiten“ und Fenster „Aufbau des Angebots“ (app/module/angebot/aufbau.js): hellblau im Blauton des Kennzeichens „eigene“ (--c-frozen … |
 | `aufbau.js` | angebot | STAFL-Plattform · Angebot · Fenster „Aufbau des Angebots“ (Knopf „Editor“ in der Werkzeugleiste von „Angebot bearbeiten“, Wunsch des Inhabers 11.11.2026, Artikel 12.11.2026). |
+| `druck.css` | angebot | STAFL-Plattform · Angebot · Knopf „Drucken“ in der Kopfleiste von „Angebot bearbeiten“, unsichtbarer Rahmen für die Druckfassung und Fenster „Fußzeile im Druck“ (app/module/angebot/druck.js). |
+| `druck.js` | angebot | STAFL-Plattform · Angebot · Drucken aus „Angebot bearbeiten“ und Einstellung „Fußzeile im Druck“ (Wunsch des Inhabers 13.11.2026). |
 | `preisimport.css` | angebot | STAFL-Plattform · Angebot · Vorschau „Artikelpreise (CSV)“ in der Importzentrale (preisimport.js). |
 | `preisimport.js` | angebot | STAFL-Plattform · Angebot · Darstellung der Vorschau „Artikelpreise (CSV)“ in der Importzentrale (Verwaltung → Import). |
 | `winab-export.js` | angebot | STAFL-Plattform · Angebot · Knopf „Export für WinAB“ in der Werkzeugleiste des Wochenangebots (Auftrag des Inhabers 05.11.2026). |
@@ -749,6 +754,7 @@ Jede Code-Datei beginnt mit einem Kopfkommentar; dessen erste Aussage steht hier
 | `test_dashboard.py` | dashboard | Mitarbeiter-Dashboard (dashboard/, Roadmap PR 6) im gemeinsamen Rahmen „C2“ (app/assets/rahmen.css, rahmen.js) |
 | `test_datentrennung.py` | plattform | Testgruppe datentrennung (ADR-007 Stufe 2): getrennte Daten wie im Betrieb. |
 | `test_design.py` | angebot | Gestaltung der Angebotsseite („Klar“ mit dem Design „Liquid Glass“: schwebende Glas-Kopfzeile, Kapseln, Liste als Glaskarte): lokale Schriften (keine fremden Server), Kopf, Filterleiste mit Aufklappmenüs (Desktop) bzw. |
+| `test_druck.py` | angebot | Druck der Angebote (Wunsch des Inhabers 13.11.2026): die Druckfassung „Angebotsansicht“ (A4 quer) zeigt alles, was die Vorschau zeigt – fortlaufend und kompakt. |
 | `test_editor_aux.py` | angebot | Testgruppe editor_aux |
 | `test_einheit.py` | plattform | Einheitliches Erscheinungsbild aller Mitarbeiter-Oberflächen (Dashboard, Eingabebereich auf den Bereichs-Hosts Angebot, Verwaltung, Bestand, alle Modulseiten – HR, CRM, Controlling, Leergut, Marketing, QS, REWE, … |
 | `test_einkauf.py` | einkauf | Einkauf: Fehlmengen aus offenen Bestellwünschen gegenüber dem Bestand, Rechte je Rolle (Ansehen für alle, Kundennamen und Melden ab Bearbeiter), E-Mail an die Empfänger „Einkaufsbedarf“, Status „gemeldet“, Oberfläche. |

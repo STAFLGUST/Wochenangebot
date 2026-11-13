@@ -401,8 +401,29 @@ Leiste senkrecht, schmal ist sie eine waagerechte Spur. Mit `body.bereich-import
 - **Bestellwunsch:** Mengen je Kunde und Angebot im Browser, Leiste `#orderbar`, Dialog `#dlg-order`, Senden mit
   `kunde_bestellung` und `requestId` (Wiederholung ohne Doppelbestellung). Angezeigte Summen sind „ca.“ – Preise und
   Summen rechnet nur der Server (GR-004). „Meine Bestellwünsche“: `#dlg-customer-orders`.
-- **Druck/PDF:** `openPrint()` → `#dlg-print` (Umfang: alles, gefiltert, Merkliste) → Inhalt in `#print-root`, Druckregeln
-  in `app.css`. `?drucken=1` öffnet den Dialog sofort (aus den Einzelangeboten); der Parameter wird danach entfernt.
+- **Druck/PDF:** `openPrint()` → `#dlg-print` (Umfang: alles, gefiltert, Merkliste) → Inhalt in `#print-root`. `?drucken=1`
+  öffnet den Dialog sofort (aus den Einzelangeboten), `?drucken=liste` druckt ohne Auswahl die Angebotsansicht (Knopf
+  „Drucken“ im Eingabebereich, `app/module/angebot/druck.js`); der Parameter wird danach entfernt. Strg+P ohne Dialog
+  druckt ebenfalls die Angebotsansicht (`beforeprint`).
+  - **Angebotsansicht, A4 quer** (Vorgabe; Wochenangebot, Kundenangebote, Einzelangebote – ein Weg): `buildPrintListe()`
+    übergibt fertige HTML-Bausteine (Kopf, Werbung, Balken je Bereich, Block je Gruppe) an `AngebotDruck.liste()` in
+    `assets/angebot-druck.js`; Regeln in `assets/angebot-druck.css`. Der Satz misst die Bausteine unsichtbar in
+    Druckgröße und verteilt sie rechnerisch auf Seiten fester Höhe (`.pl-page`, 279 × 193 mm):
+    immer drei Spalten; ein Block wird nie geteilt; jede Seite nimmt so viele Blöcke auf wie möglich; ein Bereich beginnt
+    auf der laufenden Seite, sobald sein Balken und ein ganzer Block Platz haben, und wird nur zwischen Blöcken umbrochen
+    (Balken auf der nächsten Seite mit „Forts.“); kleine Bereiche stehen nebeneinander. Ausnahmen: eine Gruppe, die allein
+    höher ist als eine Seite, und ein einzelner Block (Einzelangebot ab 9 Positionen, sortierte Liste ohne Gruppen) werden
+    in gleich hohe Teile zerlegt (Gruppenkopf mit „Forts.“). Ein Bereich ohne Namen trägt eine Linie statt des Balkens.
+  - **Dichte:** drei Stufen (`STUFEN`: normal 8,3 pt, kompakt 7,9 pt, eng 7,5 pt; Zeilenhöhe und Abstände je Stufe als
+    Variablen `--zeile`, `--ab-…` an `.pl-doc` in `angebot-druck.css` – nur dort). Der Satz rechnet alle Stufen und nimmt
+    die größte Schrift, mit der es nicht mehr Seiten werden als mit der kleinsten. `?stufe=normal|kompakt|eng` legt die
+    Stufe zum Vergleich fest. Am Satz stehen `data-stufe`, `data-seiten`, je Seite `data-fuell` (genutzte Höhe in %).
+  - **Fußzeile:** Hinweis (Mengen, Fracht) und Fußzeile des Briefbogens (`fracht.fuss` aus `module/angebot/druck.php`) am
+    Fuß der letzten Seite (Vorgabe) oder jeder Seite (Einstellung „Fußzeile im Druck“, zum Vergleich `?fuss=jede|letzte`).
+  - **Vorsicht beim Ändern:** die Satzfläche wird per `transform` verkleinert; `.pl-page` braucht `contain: size`, sonst
+    verschiebt der Seitenumbruch von Chromium Blöcke aus dem unteren Teil der Seite aufs nächste Blatt, wo sie fehlen – am
+    Bildschirm sieht man das nicht. `tests/e2e/test_druck.py` liest deshalb den Text aus dem gedruckten PDF.
+  - **Hochformat** („Kompakt“, „Tabelle“): Regeln in `app.css`, Fußzeile einmal am Ende (`AngebotDruck.fussHTML`).
 - **Wartung:** Kunden und Besucher sehen nur `renderWartung()`; angemeldete Mitarbeiter (`staff`) sehen das Angebot mit
   Banner (GR-009).
 - **Web-App:** `sw.js` speichert nur Startseite, `/assets/`, `manifest.json` und das öffentliche Wochenangebot, immer
