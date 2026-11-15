@@ -95,7 +95,7 @@ code, d = A.call('draft')
 model = d['draft'] or d['published']
 I1 = model['items'][0]
 I1.setdefault('variants', {})['edeka'] = {'status': 'value', 'value': 19.99}
-check('Angebot veröffentlicht', A.call('publish', {'model': model})[0] == 200)
+check('Angebot veröffentlicht', A.call('publish', {'model': model, 'revision': d['revision']})[0] == 200)
 code, r = A.call('kunden')
 code, r = A.call('kunde_save', {'id': '', 'rev': r['rev'], 'firma': 'Kantine Intern-Test', 'nr': 'K-88', 'ansprechpartner': 'Frau Koch', 'strasse': '', 'plz': '', 'ort': 'Hamburg',
                                 'land': '', 'email': 'kantine@example.org', 'telefon': '', 'notiz': '', 'active': True, 'angebote': ['edeka'],

@@ -335,7 +335,11 @@ Woche“ und die Auswahl des Angebots (gemerkt in `localStorage`, ohne Speicher 
 `angebot_woche` (Kopf, Hinweise, vorige/nächste gespeicherte Woche) und lädt dann die Angebotsseite im Rahmen mit
 `?vorschau=1&eingebettet=1&woche=JJJJ-WW[&angebot=…]` – `frontend.js` holt in diesem Fall `angebot_woche` statt
 `offer&draft=1`, sonst bleibt die Seite unverändert. Quelle je KW: Wochenablage `angebot-woche/<JJJJ-WW>` (mit den
-damaligen Angebotsdefinitionen), aktuelles Angebot oder `versionen/*` – der späteste Stand –, sonst der Preisverlauf.
+damaligen Angebotsdefinitionen), aktuelles Angebot oder `versionen/*` – der späteste Stand (`angebot_woche_modell`) –,
+sonst der Preisverlauf, und den nur mit dessen eigenem Recht (`preisverlauf_lesbar`: `preisverlauf.sehen` oder
+`angebot.bearbeiten`, dieselbe Schranke wie `history_prev`). Ohne dieses Recht gilt eine nur im Preisverlauf vorhandene
+Woche als Woche ohne Daten und steht auch nicht in der Wochenliste (`vorige`/`naechste`/`erste`). Aus dem Preisverlauf
+kommen keine Kundenpreise: Kundenangebote zeigen dann den Wochenpreis, Angebote mit eigener Artikelliste bleiben leer.
 Ohne gespeicherten Stand: Fläche „Für KW … ist kein Angebot gespeichert“ mit Sprung zur letzten gespeicherten Woche; gab es
 das gewählte Kundenangebot in der Woche nicht (`fehlt`): „… gab es in KW … noch nicht“. Hinweisleiste: nur Preisstand
 (Preisverlauf, ohne Werbung, Bereiche, eigene Bezeichnungen, Empfehlungen) bzw. bei Kundenangeboten ohne gespeicherte
@@ -396,7 +400,9 @@ Der Editor hat bei ~280 Artikeln rund 12 000 Elemente. Deshalb zeichnet `renderG
 - **Wechsel des Angebots (Liste links):** `setOffer()` zeichnet die Gruppen neu, weil jedes Angebot eine eigene Artikelliste hat
   (`inOffer()`); gezeichnet werden nur Artikel und Gruppen des gewählten Angebots.
 - **Zurück in den Editor:** `loadAux()` frischt Vorwoche und Bestand nur auf, wenn sie sich seit dem letzten Zeichnen
-  geändert haben (`auxStand`).
+  geändert haben (`auxStand`). Die Spalte „Vorwoche“ kommt aus `history_prev`: Wochenpreis aus dem Preisverlauf, der
+  Preis je Kundenangebot aus dem vollständigen Wochenstand (`angebot_woche_modell`: Wochenablage, aktuelles Angebot,
+  `versionen/*`) und nur mit `angebot.zugang`; ist dieser Stand nicht mehr vorhanden, zeigt die Spalte den Wochenpreis.
 - **CSS:** `#groups > .gcard { content-visibility: auto; contain-intrinsic-size: auto 640px }` – Gruppen außerhalb des
   Bildschirms werden nicht gestylt, gesetzt und gezeichnet (beim Drucken aus).
 

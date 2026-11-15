@@ -401,6 +401,11 @@ stehen in der Rechteübersicht je Modul als „Modul … öffnen“.
 Zentrale ruft die Vorschau- und Übernahmefunktionen fremder Module auf, ihre eigenen Aktionen gehören aber dem Modul
 `verwaltung`; der Eigentümer steht erst zur Laufzeit in der Importart. `import_arten` zeigt nur Importarten, deren
 Eigentümer-Modul dem Nutzer offensteht.
+**Preisverlauf und frühere Wochen (seit 15.11.2026):** Der Preisverlauf trägt keine Kundenpreise mehr – `history_data`
+und `history_prev` (Recht `preisverlauf.sehen`) liefern sie nicht, und `history_from_model()` schreibt sie nicht in
+`historie/*`. Nur die Vorwochenpreise je Kundenangebot gehen in `history_prev` zusätzlich mit `angebot.zugang` heraus
+(GR-002). Frühere Wochen (`angebot_woche`) verlangen für die Quelle Preisverlauf `preisverlauf.sehen`, der Abgleich des
+Entwurfs samt Anwesenheitsliste (`draft_ping`) `angebot.zugang`.
 
 **Versand (seit 13.11.2026):** Veröffentlichen und Senden liegen im Modul `versand` mit eigenem Modulzugang `versand.zugang`
 (`zugang_rollen = []` – keine Standardrolle, nur Administratoren). Die bestehenden Rechte `angebot.veroeffentlichen`,
@@ -408,7 +413,11 @@ Eigentümer-Modul dem Nutzer offensteht.
 Katalog aber beim Modul Versand und wirken **nur zusammen mit dem Zugang**. Auf dem Versand-Host setzt das
 `modul_zugang_durchsetzen()` durch; die bisherigen Aktionen `publish`, `kunden_rundmail`, `restposten_info` und
 `kunden_restposten` (Angebot-Host, für ältere offene Fenster und Tests) rufen zusätzlich `require_modulzugang('versand')` –
-sonst ließe sich der Zugang über die Schnittstelle umgehen. `angebot.veroeffentlichen` hat bewusst keine Voraussetzung `r`
+sonst ließe sich der Zugang über die Schnittstelle umgehen. `publish` verlangt seit 15.11.2026 wie
+`versand_veroeffentlichen` die `revision` als Pflichtfeld und nimmt ein Modell im Anfragekörper nur von jemandem an, der
+`angebot.bearbeiten` hat: der Inhalt (Preise, Kundenpreise, Bezeichnungen, Werbung und die Kalenderwoche – und mit ihr die
+Schnappschüsse in Preisverlauf und Wochenablage) gehört zum Bearbeitungsrecht. Wer nur freigeben darf, veröffentlicht den
+gespeicherten, geprüften Entwurf (`angebot_veroeffentlichen(null, $revision)`). `angebot.veroeffentlichen` hat bewusst keine Voraussetzung `r`
 auf den Zugang: `rights_close` würde ihn sonst jedem Bearbeiter mitgeben. Folge für die Vergabe: Bearbeiter haben
 `angebot.veroeffentlichen` als Standard ihrer Rolle – wer ihnen `versand.zugang` gibt, gibt ihnen das Veröffentlichen; für
 „nur ansehen“ das Recht in der Rolle abwählen oder bei der Person verbieten. Die Änderungsliste mit Preisen

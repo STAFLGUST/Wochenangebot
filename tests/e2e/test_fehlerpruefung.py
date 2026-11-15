@@ -1,6 +1,7 @@
 """Regressionstests der Design- und Fehlerprüfung: Angebots-IDs, Kundenpreise unter Zahlen-IDs, Einzelangebote
 (Senden, Leeren, Mengen, Hinweis/Titel/CSV im Portal), Kundenimport (Nummern ohne führende Null, Zeilen ohne Nummer),
-Rechte von mail_info und history_prev, Bestellwunsch mit verschobenen Positionen, Filter-Schublade (inert) und
+Rechte von mail_info und history_prev, Veröffentlichen nur mit dem Recht am Inhalt (Preisverlauf ohne Kundenpreise,
+entfernte Woche bleibt entfernt, draft_ping nur mit Modulzugang Angebot), Bestellwunsch mit verschobenen Positionen, Filter-Schublade (inert) und
 mobile Darstellung im Eingabebereich. Nur synthetische Testdaten; es werden keine echten E-Mails versendet."""
 import csv
 import io
@@ -86,6 +87,65 @@ check('history_prev für Leser (Preisverlauf ansehen) erlaubt', L.call('history_
 assert A.call('user_save', {'id': uid['lea'], 'name': 'Lea Leser', 'role': 'viewer', 'active': True, 'grant': [], 'deny': ['preisverlauf.sehen']})[0] == 200
 check('history_prev ohne Preisverlauf- und Bearbeitungsrecht gesperrt', L.call('history_prev&week=40&year=2026')[0] == 403)
 assert A.call('user_save', {'id': uid['lea'], 'name': 'Lea Leser', 'role': 'viewer', 'active': True, 'grant': [], 'deny': []})[0] == 200
+
+
+# ---------- Veröffentlichen: der Inhalt gehört zu „Entwurf bearbeiten“ (Sicherheitsprüfung 15.11.2026) ----------
+def lea(grant, deny):
+    assert A.call('user_save', {'id': uid['lea'], 'name': 'Lea Leser', 'role': 'viewer', 'active': True, 'grant': grant, 'deny': deny})[0] == 200
+
+
+def rev():
+    return A.call('draft')[1]['revision']
+
+
+ANG = next(x['id'] for x in A.call('offers')[1]['offers'] if x['id'] != 'std')
+basis = json.loads(json.dumps(A.call('draft')[1]['published']))
+check('publish ohne „revision“ abgewiesen – niemand veröffentlicht, was er nicht gesehen hat',
+      (lambda x: x[0] == 422 and 'neu laden' in x[1].get('error', ''))(A.call('publish', {'model': basis})))
+# Freigeben ohne Bearbeiten (Rollenstufen: Versand „Bearbeiten“ + Angebot „Ansehen“)
+lea(['angebot.veroeffentlichen', 'versand.zugang'], [])
+eigen = json.loads(json.dumps(basis))
+eigen['items'][0]['price'] = {'status': 'value', 'value': 3.33}
+eigen['items'][0]['variants'] = {**(eigen['items'][0].get('variants') or {}), ANG: {'status': 'value', 'value': 4.44}}
+st, r = L.call('publish', {'model': eigen, 'revision': rev()})
+check('Freigabe ohne „Entwurf bearbeiten“: eigenes Modell abgewiesen (403)', st == 403 and 'Entwurf bearbeiten' in r.get('error', ''), (st, r))
+check('… und nichts veröffentlicht', doc('angebot')['items'][0]['price'] != {'status': 'value', 'value': 3.33}, doc('angebot')['items'][0]['price'])
+# derselbe Zugang veröffentlicht weiterhin den gespeicherten, geprüften Entwurf
+entwurf = json.loads(json.dumps(basis))
+entwurf['items'][0]['price'] = {'status': 'value', 'value': 7.77}
+entwurf['items'][0]['variants'] = {**(entwurf['items'][0].get('variants') or {}), ANG: {'status': 'value', 'value': 8.88}}
+assert A.call('save_draft', {'revision': rev(), 'model': entwurf})[0] == 200
+st, r = L.call('publish', {'revision': rev()})
+check('Freigabe ohne „Entwurf bearbeiten“: der gespeicherte Entwurf wird veröffentlicht', st == 200
+      and doc('angebot')['items'][0]['price'] == {'status': 'value', 'value': 7.77}, (st, r))
+KW = doc('angebot')['meta']
+HID = '%04d-%02d' % (KW['year'], KW['week'])
+h = doc('historie/' + HID)
+check('Preisverlauf speichert keine Kundenpreise (variants) – Zusage des Dokuments historie/*',
+      h is not None and not any('variants' in i for i in h['items']), h['items'][0] if h else None)
+# Eine aus dem Preisverlauf entfernte Woche bleibt entfernt, solange der Veröffentlichende sie nicht bearbeiten darf
+assert A.call('history_delete', {'id': HID})[0] == 200 and doc('historie/' + HID) is None
+entwurf['items'][1]['price'] = {'status': 'value', 'value': 6.66}
+assert A.call('save_draft', {'revision': rev(), 'model': entwurf})[0] == 200
+st, r = L.call('publish', {'revision': rev()})
+check('entfernte Woche bleibt entfernt, wenn „Preisverlauf bearbeiten“ fehlt', st == 200 and doc('historie/' + HID) is None, (st, r))
+assert A.call('save_draft', {'revision': rev(), 'model': entwurf})[0] == 200
+st, r = A.call('publish', {'revision': rev()})
+check('mit „Preisverlauf bearbeiten“ nimmt das Veröffentlichen die Woche wieder auf', st == 200 and doc('historie/' + HID) is not None, (st, r))
+
+# ---------- Preisverlauf und Abgleich ohne Modulzugang Angebot ----------
+lea([], ['angebot.zugang'])
+st, r = L.call('history_data')
+check('history_data ohne Modulzugang Angebot: keine Kundenpreise', st == 200 and '"variants"' not in json.dumps(r, ensure_ascii=False), st)
+st, r = L.call(f'history_prev&week={KW["week"] + 1}&year={KW["year"]}')
+check('history_prev ohne Modulzugang Angebot: keine Kundenpreise', st == 200 and '"variants"' not in json.dumps(r, ensure_ascii=False), (st, r))
+check('draft_ping ohne Modulzugang Angebot gesperrt', L.call('draft_ping', {})[0] == 403)
+lea([], [])
+st, r = L.call(f'history_prev&week={KW["week"] + 1}&year={KW["year"]}')
+vor = next((i for i in (r.get('week') or {}).get('items', []) if i['code'] == entwurf['items'][0]['code']), None)
+check('history_prev mit Modulzugang Angebot: Vorwochenpreis des Kundenangebots aus dem Wochenstand', st == 200 and vor
+      and (vor.get('variants') or {}).get(ANG) == {'status': 'value', 'value': 8.88}, (st, vor))
+check('draft_ping mit Modulzugang Angebot erlaubt', L.call('draft_ping', {})[0] == 200)
 
 
 # ---------- Einzelangebote ----------
