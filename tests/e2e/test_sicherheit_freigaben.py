@@ -372,10 +372,9 @@ ht = open(os.path.join(REPO, 'app/.htaccess'), encoding='utf-8').read()
 check('.htaccess: CSP, HSTS (nur HTTPS), Permissions-Policy', "Content-Security-Policy \"default-src 'self'; script-src 'self';" in ht and 'Strict-Transport-Security "max-age=31536000; includeSubDomains" env=HTTPS' in ht
       and 'Permissions-Policy' in ht)
 check('.htaccess: X-Powered-By (PHP-Version) wird entfernt', 'Header unset X-Powered-By' in ht)
-cf_haupt = open(os.path.join(REPO, 'Caddyfile'), encoding='utf-8').read().split('test.{$DOMAIN} {')[0]
-check('Caddy: HTTPS-Pflicht (HSTS) 1 Jahr, auch für alle Subdomains, ohne preload', 'Strict-Transport-Security "max-age=31536000; includeSubDomains"' in cf_haupt
-      and not any('preload' in z for z in cf_haupt.splitlines() if 'Strict-Transport-Security' in z))
 cf = open(os.path.join(REPO, 'Caddyfile'), encoding='utf-8').read()
+check('Caddy: HTTPS-Pflicht (HSTS) 1 Jahr, auch für alle Subdomains, ohne preload', 'Strict-Transport-Security "max-age=31536000; includeSubDomains"' in cf
+      and not any('preload' in z for z in cf.splitlines() if 'Strict-Transport-Security' in z))
 abschnitt = cf.split('(zwischenspeichern) {', 1)[-1].split('\n}\n', 1)[0]
 # Verhalten mit echtem Caddy (Weiterleitungen und Fehler nie gespeichert): tests/deploy/test_zwischenspeichern.py
 check('Caddy: versionierte Skripte/Stylesheets (?v=…) ein Jahr zwischenspeichern, nur erfolgreiche Antworten, alles andere weiter „no-cache“ und nie in fremden Zwischenspeichern („private“)',
