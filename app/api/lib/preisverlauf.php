@@ -16,7 +16,23 @@ function history_ids(): array
     sort($ids);
     return $ids;
 }
-/* Preis-Stand einer Woche aus einem veröffentlichten Angebot */
+/* Eine gespeicherte Woche lesen – ohne Kundenpreise (variants). Der Preisverlauf führt keine Kundenpreise
+   (regeln/datenverantwortung.toml: „Schnappschuss je Woche, ohne Kunden- und Einkaufspreise“, GR-002); vor dem
+   15.11.2026 gespeicherte Wochen enthalten sie noch, deshalb filtert jeder Leser sie hier heraus statt sie
+   einmalig aus den Dateien zu entfernen (GR-006: altes Format bleibt lesbar, ein Rückfall beschädigt nichts). */
+function history_week(string $id): ?array
+{
+    $h = store_read('historie/' . $id);
+    if (!is_array($h)) return null;
+    $items = [];
+    foreach (is_array($h['items'] ?? null) ? $h['items'] : [] as $it) {
+        if (is_array($it)) unset($it['variants']);
+        $items[] = $it;
+    }
+    $h['items'] = $items;
+    return $h;
+}
+/* Preis-Stand einer Woche aus einem veröffentlichten Angebot (ohne Kundenpreise – wie clean_history_items auf dem Importweg) */
 function history_from_model(array $m, string $origin, ?string $at): ?array
 {
     $w = $m['meta']['week'] ?? null;
@@ -29,7 +45,6 @@ function history_from_model(array $m, string $origin, ?string $at): ?array
         $row = ['code' => $it['code'] ?? null, 'name' => (string)($it['name'] ?? ''), 'group' => $gn[$it['groupId'] ?? ''] ?? '',
                 'category' => $it['category'] ?? 'Sonstiges', 'price' => $it['price'] ?? ['status' => 'none']];
         if (!empty($it['altPrices'])) $row['altPrices'] = $it['altPrices'];
-        if (!empty($it['variants'])) $row['variants'] = $it['variants'];
         $items[] = $row;
     }
     return ['week' => $w, 'year' => $y, 'origin' => $origin, 'source' => (string)($m['meta']['source'] ?? ''), 'savedAt' => $at ?: now(), 'items' => $items];
@@ -52,6 +67,13 @@ function history_backfill(): void
         if (!isset($cand[$id]) || strcmp((string)$h['savedAt'], (string)$cand[$id]['savedAt']) > 0) $cand[$id] = $h;
     }
     foreach ($cand as $id => $h) store_write('historie/' . $id, $h);
+}
+/* Darf der angemeldete Nutzer den Preisverlauf lesen? Gleiche Schranke wie die Aktion history_prev
+   (aktionen/preisverlauf.php) – auch für die Quelle Preisverlauf in „Frühere Wochen“ (module/angebot/wochen.php, GR-103) */
+function preisverlauf_lesbar(): bool
+{
+    $u = current_user();
+    return $u !== null && (may($u, 'preisverlauf.sehen') || may($u, 'angebot.bearbeiten'));
 }
 function history_undelete(string $id): void
 {

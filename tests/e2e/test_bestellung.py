@@ -32,7 +32,7 @@ I1, I2, I3 = items[0], items[1], items[2]
 I1.setdefault('variants', {})['edeka'] = {'status': 'value', 'value': 19.99}
 I2.setdefault('variants', {})['edeka'] = {'status': 'request'}
 I3.setdefault('variants', {})['edeka'] = {'status': 'hidden'}
-code, r = A.call('publish', {'model': model})
+code, r = A.call('publish', {'model': model, 'revision': d['revision']})
 check('offer with customer prices published', code == 200, r)
 
 code, r = A.call('kunden')

@@ -149,6 +149,19 @@ def fruehere_wochen_pruefen(a, br, errs):
     c, w = L.call('angebot_woche&woche=2026-43&angebot=edeka')
     check('Rechte: Leser mit Modulzugang sieht die Woche mit Kundenpreisen', c == 200 and preis_von(w, '10601')[0] == 22, c)
     check('Rechte: ohne Modulzugang Angebot 403', O.call('angebot_woche&woche=2026-43')[0] == 403)
+    # Quelle Preisverlauf nur mit dem Recht des Preisverlaufs (Sicherheitsprüfung 15.11.2026): ohne das Recht ist eine nur
+    # dort gespeicherte Woche eine Woche ohne Daten und erscheint auch nicht in der Wochenliste
+    api_post_bestaetigt(a, 'user_save', {'name': 'Ohne Verlauf', 'username': 'ohneverlauf.woche', 'role': 'viewer', 'active': True,
+                                         'password': 'Bearbeiter-Zugang-1', 'mustChange': False, 'grant': [], 'deny': ['preisverlauf.sehen']})
+    V = Client('198.51.100.75')
+    V.call('login', {'username': 'ohneverlauf.woche', 'password': 'Bearbeiter-Zugang-1'})
+    c, w = V.call('angebot_woche&woche=2026-42&angebot=edeka')
+    check('Rechte: ohne „Preisverlauf ansehen“ keine nur im Preisverlauf gespeicherte Woche', c == 200 and w.get('offer') is None
+          and w.get('quelle') is None and w.get('erste') == '2026-43' and w.get('vorige') is None, (c, w.get('quelle'), w.get('erste')))
+    c, w = V.call('angebot_woche&woche=2026-43&angebot=edeka')
+    check('… die Wochenablage bleibt ihm offen (Kundenpreis der KW 43)', c == 200 and w.get('quelle') == 'ablage' and preis_von(w, '10601')[0] == 22, (c, w.get('quelle')))
+    c, w = L.call('angebot_woche&woche=2026-42&angebot=edeka')
+    check('… mit dem Recht unverändert: Preisverlauf als Quelle', c == 200 and w.get('quelle') == 'historie' and w.get('erste') == '2026-36', (c, w.get('quelle'), w.get('erste')))
 
     # Fenster: Menü ⋯ → „Frühere Wochen“, öffnet „Diese Woche“
     jetzt = datetime.date.today().isocalendar()

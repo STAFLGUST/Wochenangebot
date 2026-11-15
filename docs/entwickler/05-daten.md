@@ -214,6 +214,12 @@ Weitere Dokumente des Kerns (Firewall, Mailversand, Benachrichtigungen, Integrit
 `meta.week` ist eine ISO-Kalenderwoche: KW 53 nur in Jahren mit 53 Wochen (`kw_gueltig`); der Entwurf behält eine
 ungültige Angabe, Veröffentlichen lehnt sie ab. Jede Veröffentlichung legt das vorige Angebot
 als `versionen/<JJJJMMTT-hhmmss>-<hex>` ab (höchstens `keep_versions`) und den Preisverlauf `historie/<id>`.
+Der Preisverlauf führt **keine Kundenpreise** (`variants`) – nur Artikel, Gruppe, Kategorie und den Wochenpreis
+(`history_from_model`, dieselbe Form wie `clean_history_items()` auf dem Importweg; GR-002). Gelesen wird er nur über
+`history_week()`, das `variants` aus vor dem 15.11.2026 gespeicherten Wochen herausfiltert – alte Dateien bleiben
+unverändert lesbar (GR-006), eine Migration gibt es nicht. Hat ein Administrator eine Woche aus dem Preisverlauf entfernt
+(`historie_geloescht`), nimmt eine Veröffentlichung derselben KW sie nur wieder auf, wenn der Veröffentlichende
+`preisverlauf.bearbeiten` hat.
 Dazu die **Wochenablage** `angebot-woche/<JJJJ-WW>` (Inhaber 13.11.2026, „je KW dauerhaft“; `module/angebot/wochen.php`):
 der neue Stand je KW, ersetzt den Stand derselben KW, ohne Grenze und ohne automatisches Löschen, intern (nie auf der
 Kundenseite). Die Angebotsdefinitionen enthalten nie Kundengruppen (`gruppen`, `sonderGruppen`); bei Sonderangeboten `art`

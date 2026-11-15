@@ -371,9 +371,12 @@ Modulzugang ersetzt keine Einzelrechte: ein Recht wie `kunden.sehen` kann in meh
 **Grenze des Modulzugangs:** Er sperrt einen Host (eine Oberfläche), nicht die Daten eines Moduls. Angebot, Bestand und
 Verwaltung teilen sich den Eingabebereich – die Kundenansicht der Verwaltung nutzt Angebotsaktionen, das Angebot liest
 Bestand und Stammdaten. Ausnahme seit Oktober 2026: Aktionen, die Angebotsinhalte ausliefern und sonst nur die Anmeldung
-prüfen würden – Entwurf (`draft`), Versionen (`versions`, `version`), Kundenangebote und Vorschau für Mitarbeiter
+prüfen würden – Entwurf (`draft`), Abgleich des Entwurfs und Anwesenheitsliste (`draft_ping`, seit 15.11.2026),
+Versionen (`versions`, `version`), frühere Wochen (`angebot_woche`), Kundenangebote und Vorschau für Mitarbeiter
 (`offer` ohne öffentliches Wochenangebot) –, verlangen `require_modulzugang('angebot')`, also `angebot.zugang` auf jedem
-Host (403 ohne `kein_modulzugang`, damit die Seite nicht gesperrt wird). Die Liste der Kundenangebote (`offers`, nur Namen)
+Host (403 ohne `kein_modulzugang`, damit die Seite nicht gesperrt wird). Den Preisverlauf trägt dieses Tor nicht:
+`history_data` und `history_prev` (Recht `preisverlauf.sehen`) liefern keine Kundenpreise; nur die Vorwochenpreise je
+Kundenangebot gehen in `history_prev` mit `angebot.zugang` heraus (`modul_zugang_frei`, GR-002). Die Liste der Kundenangebote (`offers`, nur Namen)
 gibt es mit `angebot.zugang` oder `kunden.sehen` (Kundenzuordnung). Die Oberfläche lädt ohne `angebot.zugang` keinen
 Entwurf und startet keinen Abgleich. Wer z. B. ohne
 `angebot.zugang`, aber mit `bestand.zugang` und `bestellungen.sehen` den Bestand-Host öffnet, kann Bestellungen über
@@ -386,7 +389,11 @@ Dashboard-Host nimmt keine Fachaktionen an (Schritt 2), dort ließe sich der Mod
 Katalog aber beim Modul Versand und wirken **nur zusammen mit dem Zugang**. Auf dem Versand-Host setzt das
 `modul_zugang_durchsetzen()` durch; die bisherigen Aktionen `publish`, `kunden_rundmail`, `restposten_info` und
 `kunden_restposten` (Angebot-Host, für ältere offene Fenster und Tests) rufen zusätzlich `require_modulzugang('versand')` –
-sonst ließe sich der Zugang über die Schnittstelle umgehen. `angebot.veroeffentlichen` hat bewusst keine Voraussetzung `r`
+sonst ließe sich der Zugang über die Schnittstelle umgehen. `publish` verlangt seit 15.11.2026 wie
+`versand_veroeffentlichen` die `revision` als Pflichtfeld und nimmt ein Modell im Anfragekörper nur von jemandem an, der
+`angebot.bearbeiten` hat: der Inhalt (Preise, Kundenpreise, Bezeichnungen, Werbung und die Kalenderwoche – und mit ihr die
+Schnappschüsse in Preisverlauf und Wochenablage) gehört zum Bearbeitungsrecht. Wer nur freigeben darf, veröffentlicht den
+gespeicherten, geprüften Entwurf (`angebot_veroeffentlichen(null, $revision)`). `angebot.veroeffentlichen` hat bewusst keine Voraussetzung `r`
 auf den Zugang: `rights_close` würde ihn sonst jedem Bearbeiter mitgeben. Folge für die Vergabe: Bearbeiter haben
 `angebot.veroeffentlichen` als Standard ihrer Rolle – wer ihnen `versand.zugang` gibt, gibt ihnen das Veröffentlichen; für
 „nur ansehen“ das Recht in der Rolle abwählen oder bei der Person verbieten. Die Änderungsliste mit Preisen
