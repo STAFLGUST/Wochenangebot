@@ -92,12 +92,13 @@ seite() { curl -fsS "http://127.0.0.1:$WEB_PORT/$1"; }
 ok "Release: Seiten mit Versionsnummer = Prüfsumme der ausgelieferten Datei (wie früher im Repository)" 'seite "" | grep -q "assets/frontend.js?v=$(vnr frontend.js)\"" \
   && seite admin/ | grep -q "assets/admin.js?v=$(vnr admin.js)\"" && ! git -C "$B" show HEAD:app/index.html | grep -q "?v="'
 vnrp() { python3 -c "import hashlib,sys; print(hashlib.sha256(open(sys.argv[1],'rb').read()).hexdigest()[:10])" "$B/$1"; }
-ok "Release: auch Modulseiten (eigene Skripte relativ zur Seite) und Dashboard (neben app/, nicht in der Prüfliste)" \
+ok "Release: auch Modulseiten (eigene Skripte relativ zur Seite) und Dashboard (neben app/, mit in der Prüfliste)" \
   'seite module/qs/ | grep -q "src=\"qs.js?v=$(vnrp app/module/qs/qs.js)\"" && seite module/qs/ | grep -q "href=\"qs.css?v=$(vnrp app/module/qs/qs.css)\"" \
    && seite module/qs/ | grep -q "href=\"../../assets/app.css?v=$(vnr app.css)\"" \
    && grep -q "src=\"dashboard.js?v=$(vnrp dashboard/dashboard.js)\"" "$B/dashboard/index.html" \
    && grep -q "href=\"../assets/app.css?v=$(vnr app.css)\"" "$B/dashboard/index.html" \
-   && ! git -C "$B" show HEAD:dashboard/index.html | grep -q "?v=" && ! grep -q "dashboard/" "$LISTE"'
+   && ! git -C "$B" show HEAD:dashboard/index.html | grep -q "?v=" \
+   && grep -q "'"'"'dashboard/index.html'"'"' => \[" "$LISTE" && grep -q "'"'"'dashboard/dashboard.js'"'"' => '"'"'" "$LISTE"'
 ok "Release: Prüfliste aus genau diesem Commit, nicht im Repository" 'grep -q "aus Commit $G_SHA" "$LISTE" && head -1 "$LISTE" | grep -q "http_response_code(404)" \
   && [ -z "$(git -C "$B" status --porcelain -- app/api/lib)" ] && python3 "$B/deploy/bereitstellen.py" --pruefen >/dev/null'
 

@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Prüfliste der Dateiprüfung (app/api/lib/integritaet-liste.php): prüfen, dass sie NICHT im Repository steht.
 
-Die Liste (Pfad unter app/ => SHA-256) entsteht beim Einspielen aus genau dem freigegebenen Commit
+Die Liste (Pfad unter app/ => SHA-256, dazu das Dashboard unter dashboard/<pfad>) entsteht beim Einspielen aus genau dem freigegebenen Commit
 (deploy/bereitstellen.py) und liegt dann im nur lesend eingebundenen Programmordner – wie früher, nur ohne
 Merge-Konflikte. Die Dateiprüfung im Eingabebereich (Sicherheit → Dateiprüfung) vergleicht damit den Stand auf dem
 Server und meldet veränderte, fehlende und unbekannte Dateien; fehlt die Liste, meldet sie das als kritisch.
@@ -36,7 +36,9 @@ def main() -> int:
             print(f'Lokale Prüfliste entfernt: {REL}')
         print('Nichts weiter zu tun – die Prüfliste erzeugt der Server beim Einspielen (deploy/bereitstellen.py).')
         return 0
-    seiten, liste, fehlend = B.bereitstellung(B.ordner_dateien(APP))
+    dateien = B.ordner_dateien(APP)          # Dashboard (neben app/) gehört unter dashboard/<pfad> in dieselbe Liste
+    dateien.update({B.ZUSATZ + '/' + k: v for k, v in B.ordner_dateien(ROOT / B.ZUSATZ).items()})
+    seiten, liste, fehlend = B.bereitstellung(dateien)
     if '--zeigen' in args:
         sys.stdout.write(B.liste_php(liste, 'dem Arbeitsstand').decode('utf-8'))
         return 0
@@ -47,6 +49,8 @@ def main() -> int:
         fehler.append(f'{REL} fehlt in .gitignore.')
     if not {'index.html', '.htaccess', 'api/index.php', 'api/lib/integritaet.php'} <= set(liste) or B.LISTE in liste:
         fehler.append('Erzeugung der Prüfliste liefert nicht die erwarteten Dateien.')
+    if not any(k.startswith(B.ZUSATZ + '/') for k in liste):
+        fehler.append(f'Erzeugung der Prüfliste enthält keine Datei des Ordners {B.ZUSATZ}/ – die Dateiprüfung würde ihn übersehen.')
     fehler += fehlend
     if fehler:
         print('\n'.join(fehler))

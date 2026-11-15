@@ -25,11 +25,11 @@ Server, nie mit echten Daten (GR-007). Keine Erfolgsmeldung ohne tatsächlich au
 Eine **Gruppe** ist eine Testdatei `tests/e2e/test_<gruppe>.py` mit einem Eintrag in `SUITES`. Für jede Gruppe baut
 `run_e2e.py` einen eigenen, frischen Testserver:
 
-1. **App-Kopie:** `app/` wird nach `tests/.arbeit/app-<gruppe>/` kopiert. Darauf läuft
-   `deploy/bereitstellen.py` (`verzeichnis()`) wie beim Einspielen auf dem Server: Versionsnummern `?v=…` setzen und die
-   Prüfliste der Dateiprüfung erzeugen.
+1. **App-Kopie:** `app/` wird nach `tests/.arbeit/app-<gruppe>/` kopiert.
 2. **Zusatz-Oberflächen** (`ZUSATZ`): Oberflächen außerhalb von `app/` werden nur für ihre Gruppe in die Kopie
-   eingeblendet, z. B. `dashboard/` für die Gruppen `dashboard` und `rollen` – wie auf dem Server mit Versionsnummern.
+   eingeblendet, z. B. `dashboard/` für die Gruppen `dashboard`, `rollen` oder `integritaet`. Danach läuft
+   `deploy/bereitstellen.py` (`verzeichnis()`) wie beim Einspielen auf dem Server: Versionsnummern `?v=…` setzen und die
+   Prüfliste der Dateiprüfung erzeugen – auch für die eingeblendete Oberfläche (Einträge `dashboard/<pfad>`).
 3. **Testzustand des Modulregisters** (`REGISTER_TEST`): einzelne Gruppen stellen in *ihrer Kopie* von
    `app/api/lib/module-liste.php` geplante Module auf einen anderen Entwicklungsstand (derzeit `modulverwaltung`).
    Das Register im Code bleibt unverändert.

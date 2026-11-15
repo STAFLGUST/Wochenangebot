@@ -292,7 +292,8 @@ def run(name):
 
 
 # Noch nicht produktiv ausgelieferte Oberflächen (nicht in app/): nur in der jeweiligen Testgruppe unter dem Testserver
-ZUSATZ = {'dashboard': [('dashboard', 'dashboard')], 'einheit': [('dashboard', 'dashboard')], 'rollen': [('dashboard', 'dashboard')], 'sicherheit_modul': [('dashboard', 'dashboard')]}
+ZUSATZ = {'dashboard': [('dashboard', 'dashboard')], 'einheit': [('dashboard', 'dashboard')], 'rollen': [('dashboard', 'dashboard')],
+          'sicherheit_modul': [('dashboard', 'dashboard')], 'integritaet': [('dashboard', 'dashboard')]}   # integritaet: Dashboard in der Prüfliste
 
 # Testzustand des Modulregisters für einzelne Gruppen: um Testfreigabe und Produktivfreigabe der Modulverwaltung zu
 # prüfen, braucht die Gruppe ein Modul „in Prüfung“ ohne Freigabe und ein fertiges, nicht freigegebenes Modul. Dafür stellt sie
@@ -349,11 +350,10 @@ def run_in(name, slot):
     shutil.copytree(os.path.join(REPO, 'app'), app)
     if name in LISTE_IM_ANGEBOT:   # vor dem Bereitstellen, damit Versionsnummer und Prüfliste zur geänderten Datei passen
         liste_im_angebot_einschalten(app)
-    BEREITSTELLEN.verzeichnis(pathlib.Path(app))   # wie der Server: ?v=… setzen, Prüfliste erzeugen
     for quelle, ziel in ZUSATZ.get(name, ()):   # Oberflächen außerhalb der Dokumentwurzel nur für ihre Gruppe einblenden
         shutil.copytree(os.path.join(REPO, quelle), os.path.join(app, ziel))
-        if quelle == BEREITSTELLEN.ZUSATZ == ziel:   # Dashboard wie auf dem Server mit Versionsnummern
-            BEREITSTELLEN.zusatz_verzeichnis(pathlib.Path(app))
+    # wie der Server: ?v=… setzen, Prüfliste erzeugen – nach dem Einblenden, damit das Dashboard mit darin steht
+    BEREITSTELLEN.verzeichnis(pathlib.Path(app))
     if name in REGISTER_TEST:
         register_anpassen(app, REGISTER_TEST[name])
     data = os.path.join(app, 'data')

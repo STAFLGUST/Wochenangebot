@@ -2,7 +2,7 @@
 
 <!-- ERZEUGT von `python3 werkzeuge/doku.py erzeugen` – nicht von Hand ändern. Quelle: Funktionen und Kommentare im Code. Die CI prüft, dass diese Datei zum Code passt. -->
 
-116 Dateien, 1172 Funktionen – in der Reihenfolge der Datei, **fett** die Abschnitte. Text = erste Aussage des Kommentars direkt über der Funktion (Python: Docstring). Übersicht aller Module: [README.md](README.md).
+116 Dateien, 1167 Funktionen – in der Reihenfolge der Datei, **fett** die Abschnitte. Text = erste Aussage des Kommentars direkt über der Funktion (Python: Docstring). Übersicht aller Module: [README.md](README.md).
 
 ## `.github/scripts/apt_vorrat.py`
 
@@ -589,7 +589,7 @@ _Nutzerrechte: was eine Rolle bzw. ein einzelner Nutzer im Eingabebereich sehen 
 - `require_modulzugang(modul, write)` – Angemeldet UND Modulzugang „<modul>.zugang“ – unabhängig vom Host der Anfrage (GR-103).
 - `modul_host_frei(u, modul)`
 - `anfrage_modul(aktion)` – Modul der Oberfläche dieser Anfrage: der Host (Webserver: WA_OBERFLAECHE, nie aus Kopfzeilen) – sonst die Oberfläche der Aktion, außer dem gemeinsamen …
-- `modul_zugang_durchsetzen(aktion)` – Geprüft werden zwei Module: das des Hosts (anfrage_modul) und das der Aktion selbst – dessen Daten sie liest und schreibt.
+- `modul_zugang_durchsetzen(aktion)`
 - `rights_catalog()`
 - `rollen_liste(roles, users)` – Rollenübersicht für die Verwaltung (Administrator): Rechte, Name, Anzahl Mitarbeiter
 - `rechte_module()` – Module für die Rechte-Übersicht: Kachel-Module in Dashboard-Reihenfolge, dazu „plattform“ für Rechte ohne Modul
@@ -909,10 +909,8 @@ _Bereitstellung eines Stands_
 - `ersetzen(m)`
 - `ohne_versionen(inhalt)`
 - `bereitstellung(dateien)` – dateien: Pfad unter app/ → Inhalt (wie im Commit).
-- `zusatz_seiten(dateien, zusatz)` – Seiten des Dashboards stempeln. zusatz: Pfad unter dashboard/ → Inhalt; Einbindungen werden wie im Browser aufgelöst (/dashboard/ liegt neben app/: …
 - `php_text(s)`
 - `liste_php(liste, quelle)`
-- `schreibpfad(wurzel, rel)` – Schreibziel unterhalb von wurzel – die Pfade entstehen rein lexikalisch (Prüfliste, Dashboard-Seiten), ein Verzeichnis-Verweis im eingespielten Stand darf …
 - `schreiben(pfad, inhalt, modus)` – Atomar ersetzen (Apache liest nie eine halb geschriebene Datei); lesbar für den Webserver.
 - `lesen(pfad)`
 
@@ -926,7 +924,6 @@ _Bereitstellung eines Stands_
 
 - `ordner_dateien(app)`
 - `verzeichnis(app, quelle)` – Kopie eines app/-Ordners bereitstellen: Seiten stempeln, Prüfliste schreiben (wie auf dem Server).
-- `zusatz_verzeichnis(app)` – Im Testlauf unter app/dashboard/ eingeblendetes Dashboard (tests/run_e2e.py, ZUSATZ) wie auf dem Server stempeln.
 - `main(argv)`
 
 ## `deploy/cdn_netzsperre.py`
@@ -970,7 +967,6 @@ _Daten trennen (ADR-007 Stufe 2): interne Dokumente aus daten/ in daten-intern/ 
 - `sqlite_aktiv(root)`
 - `dok_lesen(root, name)`
 - `json_text(wert)`
-- `ordner_nofollow(root, rel)` – Zielordner für rel unterhalb von root anlegen bzw. prüfen, ohne je einem Verweis zu folgen – dieselbe Regel wie db.write_nofollow() für die Datei selbst, nur …
 - `dok_schreiben(root, name, wert)`
 - `dok_namen(root, praefix)` – Dokumente unter einem Präfix (z. B. kundenprotokoll/) in beiden Speicherarten
 - `protokoll_vereinen(alt, neu)` – Einträge beider Protokolle eines Monats zeitlich sortiert.
@@ -986,7 +982,6 @@ _Daten trennen (ADR-007 Stufe 2): interne Dokumente aus daten/ in daten-intern/ 
 **Plan**
 
 - `altbestand(haupt, ks)` – Reste des Speicher-Umbaus im gemeinsamen Ordner (ADR-007 Stufe 2b: dort liegt nichts, was die Kundenseite nicht braucht): frühere Datendateien äußerer …
-- `rest_dateien(root, ks)` – Zwischendateien interner Dokumente im gemeinsamen Ordner: <name>.php.neu, <name>.php.kopie (Abbruch dieses Werkzeugs) und <name>.php.<hex>.tmp (abgebrochener …
 - `altdatei_entfernen(root, name)` – Im SQLite-Betrieb blieb die frühere Datendatei beim Umschalten liegen.
 - `interne_dateien(root, ks)` – Datendateien (*.php) interner Dokumente im Ordner – im SQLite-Modus auch übrig gebliebene alte Dateien.
 - `ablage_dateien(root)`

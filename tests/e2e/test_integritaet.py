@@ -1,6 +1,7 @@
 """Dateiprüfung (Sicherheit → Dateiprüfung): Programmdateien gegen die Prüfliste (verändert, fehlt, unbekannt),
 Datenordner (Sperrzeile, ausführbare Dateien, Schutz des Datenbankordners, Dateiablage), auffällige Muster in Dateien und
 gespeicherten Daten, Komponenten, Rechte, Speichern, automatische Prüfung, Benachrichtigung, Oberfläche.
+Die Prüfliste umfasst auch das Dashboard (Einträge dashboard/<pfad>), das im Betrieb neben der Webwurzel liegt.
 Der Testserver läuft aus einer Kopie von app/ – nur diese Kopie wird verändert."""
 import json
 import os
@@ -54,6 +55,8 @@ LISTE = os.path.join(APP, 'api', 'lib', 'integritaet-liste.php')
 liste = open(LISTE, encoding='utf-8').read()
 check('generated list starts with the guard and has no data files', liste.startswith("<?php if (!defined('WA_API')) { http_response_code(404); exit; }") and "'data/" not in liste and "'index.html' =>" in liste and "'.htaccess' =>" in liste and 'deploy/bereitstellen.py' in liste)
 check('HTML pages listed with two allowed versions (with/without ?v=)', "'index.html' => ['" in liste and "'admin/index.html' => ['" in liste and "'api/index.php' => '" in liste)
+check('dashboard files are listed too (prefix dashboard/)', "'dashboard/index.html' => ['" in liste and "'dashboard/dashboard.js' => '" in liste
+      and "'dashboard/dashboard.css' => '" in liste, [z for z in liste.split('\n') if 'dashboard/' in z])
 seite = open(os.path.join(APP, 'index.html'), encoding='utf-8').read()
 import hashlib
 v_frontend = hashlib.sha256(open(os.path.join(APP, 'assets', 'frontend.js'), 'rb').read()).hexdigest()[:10]
@@ -125,6 +128,7 @@ check('manual run logged', 'Dateiprüfung ausgeführt' in json.dumps(A.call('log
 # ---------- Veränderungen ----------
 A.call('benachrichtigung_save', {'events': {'sicherheit': {'on': True, 'to': 'it@example.org'}}})
 with open(os.path.join(APP, 'assets', 'theme.js'), 'a', encoding='utf-8') as f: f.write('\n/* verändert */\n')
+with open(os.path.join(APP, 'dashboard', 'dashboard.js'), 'a', encoding='utf-8') as f: f.write('\n/* verändert */\n')
 os.remove(os.path.join(APP, 'assets', 'legal.css'))
 BACKDOOR = "<?php eval(base64_decode($_POST['x'])); ?>\n"
 with open(os.path.join(APP, 'api', 'x.php'), 'w') as f: f.write(BACKDOOR)
@@ -137,6 +141,7 @@ storage_write('benachrichtigung-stand', {'sicherheit': {'last': 0, 'skipped': 0}
 code, r, raw = A.call('security_integrity', {'run': True}, raw=True)
 I = by_path(r); c = r['result']['counts']
 check('modified JS file', I.get('assets/theme.js', {}).get('art') == 'geaendert' and I['assets/theme.js']['stufe'] == 'warnung', I.get('assets/theme.js'))
+check('modified dashboard file is reported', I.get('dashboard/dashboard.js', {}).get('art') == 'geaendert', I.get('dashboard/dashboard.js'))
 check('missing file', I.get('assets/legal.css', {}).get('art') == 'fehlt', I.get('assets/legal.css'))
 x = I.get('api/x.php', {})
 check('unknown PHP file: critical with signature', x.get('art') == 'unbekannt' and x.get('stufe') == 'kritisch' and 'eval mit verschleiertem Code' in x.get('signatur', ''), x)
@@ -146,7 +151,7 @@ check('data: .phtml is critical', I.get('data/werkzeug.phtml', {}).get('stufe') 
 check('data: other file is only a hint', I.get('data/export.json', {}).get('stufe') == 'hinweis', I.get('data/export.json'))
 sus = [v for k, v in I.items() if 'notiz-test' in k]
 check('stored document with foreign script: suspicious', len(sus) == 1 and sus[0]['art'] == 'verdaechtig' and sus[0]['stufe'] == 'kritisch' and 'Fremdes Skript' in sus[0].get('signatur', ''), sus)
-check('counts', c['modified'] == 1 and c['missing'] == 1 and c['unknown'] == 2 and c['suspicious'] == 1 and c['critical'] >= 4 and r['result']['ok'] is False, c)
+check('counts', c['modified'] == 2 and c['missing'] == 1 and c['unknown'] == 2 and c['suspicious'] == 1 and c['critical'] >= 4 and r['result']['ok'] is False, c)
 check('critical items first', r['result']['items'][0]['stufe'] == 'kritisch')
 check('no file contents in the answer', 'base64_decode' not in raw and 'evil.example' not in raw and 'echo' not in raw)
 check('alert mail on new findings', until(lambda: mails('Dateiprüfung'), 8), [m['subject'] for m in smtp.messages])
@@ -207,6 +212,7 @@ shutil.rmtree(kopie)
 
 # ---------- Aufräumen → wieder sauber ----------
 shutil.copy(os.path.join(REPO, 'app', 'assets', 'theme.js'), os.path.join(APP, 'assets', 'theme.js'))
+shutil.copy(os.path.join(REPO, 'dashboard', 'dashboard.js'), os.path.join(APP, 'dashboard', 'dashboard.js'))
 shutil.copy(os.path.join(REPO, 'app', 'assets', 'legal.css'), os.path.join(APP, 'assets', 'legal.css'))
 for p in [os.path.join(APP, 'api', 'x.php'), os.path.join(APP, 'assets', 'notiz.txt'), os.path.join(DATA, 'hinten.php'), os.path.join(DATA, 'werkzeug.phtml'), os.path.join(DATA, 'export.json')]:
     os.remove(p)
@@ -304,6 +310,22 @@ storage_write('integritaet', d)
 code, r = A.call('security_integrity')
 check('at most once a day', code == 200 and r['result']['ranAt'] == alt, r['result']['ranAt'])
 check('history keeps at most 20 runs', len(r['history']) <= 20)
+
+# ---------- Dashboard wie im Betrieb: neben der Webwurzel (/var/www/dashboard), nicht darunter ----------
+NEBEN = os.path.join(os.path.dirname(APP), 'dashboard')
+shutil.move(os.path.join(APP, 'dashboard'), NEBEN)
+check('dashboard next to the document root: compared from there, no findings', run(A)[1]['result']['ok'] is True)
+with open(os.path.join(NEBEN, 'dashboard.js'), 'a', encoding='utf-8') as f: f.write('\n/* verändert */\n')
+with open(os.path.join(NEBEN, 'fremd.js'), 'w', encoding='utf-8') as f: f.write('x\n')
+I = by_path(run(A)[1])
+check('dashboard next to the document root: modified and unknown files are reported',
+      I.get('dashboard/dashboard.js', {}).get('art') == 'geaendert' and I.get('dashboard/fremd.js', {}).get('art') == 'unbekannt',
+      [I.get('dashboard/dashboard.js'), I.get('dashboard/fremd.js')])
+os.remove(os.path.join(NEBEN, 'fremd.js'))
+shutil.copy(os.path.join(REPO, 'dashboard', 'dashboard.js'), os.path.join(NEBEN, 'dashboard.js'))
+shutil.rmtree(NEBEN)
+check('dashboard folder missing entirely (customer container): its entries are not reported as missing',
+      run(A)[1]['result']['ok'] is True)
 
 smtp.close()
 print(f'{sum(res)}/{len(res)} passed')

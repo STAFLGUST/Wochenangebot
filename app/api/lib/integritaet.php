@@ -2,7 +2,8 @@
 declare(strict_types=1);
 /* Dateiprüfung (wie ein Datei-Scanner gegen Schadcode): vergleicht die Programmdateien mit der Prüfliste der
    freigegebenen Fassung (integritaet-liste.php, beim Einspielen aus dem freigegebenen Commit erzeugt von
-   deploy/bereitstellen.py; Wert = SHA-256 oder bei HTML-Seiten [mit, ohne Versionsnummern]), meldet unbekannte Dateien,
+   deploy/bereitstellen.py; Wert = SHA-256 oder bei HTML-Seiten [mit, ohne Versionsnummern]; Einträge dashboard/<pfad>
+   liegen im Betrieb neben der Webwurzel), meldet unbekannte Dateien,
    prüft den Datenordner (Sperrzeile, ausführbare Dateien, Schutz des Datenbankordners; Dateien der Dateiablage
    data/dateien/<bereich>/<xx>/<id>.bin sind erwartet) und sucht in unbekannten bzw.
    veränderten Dateien und in gespeicherten Daten nach typischen Mustern von Hintertüren, Schadcode und Link-Spam.
@@ -15,6 +16,8 @@ const INTEGRITAET_MAX_DATEIEN = 5000;
 const INTEGRITAET_ZEIT = 20.0;             // Sekunden; danach wird abgebrochen (Ergebnis als unvollständig markiert)
 const INTEGRITAET_MAX_EINTRAEGE = 500;     // gespeicherte/ausgelieferte Befunde je Lauf
 const INTEGRITAET_VERLAUF = 20;
+/* Dashboard: im Betrieb neben der Webwurzel (/dashboard/), im Testlauf darunter – Prüfliste nennt es dashboard/<pfad> */
+const INTEGRITAET_ZUSATZ = 'dashboard';
 const INTEGRITAET_AUTO_STUNDEN = 24;       // älter → beim Öffnen der Sicherheitsansicht automatisch prüfen (höchstens 1× am Tag)
 const INTEGRITAET_STUFEN = ['kritisch' => 3, 'warnung' => 2, 'hinweis' => 1];
 /* Ende der Sicherheitsupdates je PHP-Version (php.net/supported-versions, Stand Oktober 2026) */
@@ -132,7 +135,11 @@ function integritaet_pruefen(): array
     };
     $lesen = function (string $abs): ?string { $sz = @filesize($abs); return $sz !== false && $sz <= INTEGRITAET_MAX_BYTES ? (string)@file_get_contents($abs) : null; };
 
-    /* 1. Freigegebene Dateien: fehlt / verändert */
+    /* 1. Freigegebene Dateien: fehlt / verändert. Das Dashboard liegt im Betrieb neben der Webwurzel
+       (/var/www/dashboard), im Testlauf darunter; ohne diese Einbindung (Kundencontainer) bleiben seine Zeilen außen vor. */
+    $zvorsilbe = INTEGRITAET_ZUSATZ . '/';
+    $zbasis = is_dir($root . '/' . INTEGRITAET_ZUSATZ) ? $root
+        : (is_dir(dirname($root) . '/' . INTEGRITAET_ZUSATZ) ? dirname($root) : null);
     $liste = integritaet_liste();
     if ($liste === null) {
         $add('api/lib/integritaet-liste.php', 'fehlt', 'kritisch', 'Prüfliste fehlt – Programmdateien können nicht verglichen werden');
@@ -140,8 +147,10 @@ function integritaet_pruefen(): array
     }
     foreach ($liste as $rel => $hash) {
         if ($grenze()) break;
+        $zusatzzeile = strncmp($rel, $zvorsilbe, strlen($zvorsilbe)) === 0;
+        if ($zusatzzeile && $zbasis === null) continue;
         $n++; $c['checked']++;
-        $abs = $root . '/' . $rel;
+        $abs = ($zusatzzeile ? $zbasis : $root) . '/' . $rel;
         if (!is_file($abs)) { $c['missing']++; $add($rel, 'fehlt', 'warnung', 'Datei der freigegebenen Fassung fehlt'); continue; }
         $ist = (string)hash_file('sha256', $abs);   // HTML-Seiten: zwei zulässige Fassungen (mit/ohne Versionsnummern)
         if (!array_filter((array)$hash, function ($h) use ($ist) { return is_string($h) && hash_equals($h, $ist); })) {
@@ -152,23 +161,27 @@ function integritaet_pruefen(): array
         }
     }
 
-    /* 2. Unbekannte Dateien im Programmordner (ohne Datenordner) */
-    $dirs = new RecursiveCallbackFilterIterator(new RecursiveDirectoryIterator($root, FilesystemIterator::SKIP_DOTS),
-        function (SplFileInfo $f) use ($root, $dataReal) {
-            if (!$f->isDir()) return true;
-            $p = $f->getPathname();
-            return $p !== $root . '/data' && (realpath($p) ?: $p) !== $dataReal;
-        });
-    foreach (new RecursiveIteratorIterator($dirs) as $f) {
-        if ($grenze()) break;
-        if ($f->isDir()) continue;
-        $rel = str_replace('\\', '/', substr($f->getPathname(), strlen($root) + 1));
-        if (isset($liste[$rel]) || $rel === 'api/lib/integritaet-liste.php') continue;
-        $n++; $c['checked']++; $c['unknown']++;
-        $exe = preg_match(INTEGRITAET_AUSFUEHRBAR, $rel) === 1;
-        $art = integritaet_art($rel); $txt = $art && !$f->isLink() ? $lesen($f->getPathname()) : null;
-        [$sig, $ss] = $txt !== null ? integritaet_muster($txt, $art) : [[], ''];
-        $add($rel, 'unbekannt', $exe ? 'kritisch' : 'warnung', $exe ? 'Unbekannte ausführbare Datei – nicht Teil der freigegebenen Fassung' : 'Unbekannte Datei – nicht Teil der freigegebenen Fassung', $sig, $ss);
+    /* 2. Unbekannte Dateien im Programmordner (ohne Datenordner) und im Dashboard neben der Webwurzel */
+    $wurzeln = [[$root, '']];
+    if ($zbasis !== null && $zbasis !== $root) $wurzeln[] = [$zbasis . '/' . INTEGRITAET_ZUSATZ, $zvorsilbe];
+    foreach ($wurzeln as [$basis, $vorsilbe]) {
+        $dirs = new RecursiveCallbackFilterIterator(new RecursiveDirectoryIterator($basis, FilesystemIterator::SKIP_DOTS),
+            function (SplFileInfo $f) use ($root, $dataReal) {
+                if (!$f->isDir()) return true;
+                $p = $f->getPathname();
+                return $p !== $root . '/data' && (realpath($p) ?: $p) !== $dataReal;
+            });
+        foreach (new RecursiveIteratorIterator($dirs) as $f) {
+            if ($grenze()) break;
+            if ($f->isDir()) continue;
+            $rel = $vorsilbe . str_replace('\\', '/', substr($f->getPathname(), strlen($basis) + 1));
+            if (isset($liste[$rel]) || $rel === 'api/lib/integritaet-liste.php') continue;
+            $n++; $c['checked']++; $c['unknown']++;
+            $exe = preg_match(INTEGRITAET_AUSFUEHRBAR, $rel) === 1;
+            $art = integritaet_art($rel); $txt = $art && !$f->isLink() ? $lesen($f->getPathname()) : null;
+            [$sig, $ss] = $txt !== null ? integritaet_muster($txt, $art) : [[], ''];
+            $add($rel, 'unbekannt', $exe ? 'kritisch' : 'warnung', $exe ? 'Unbekannte ausführbare Datei – nicht Teil der freigegebenen Fassung' : 'Unbekannte Datei – nicht Teil der freigegebenen Fassung', $sig, $ss);
+        }
     }
 
     /* 3. Datenordner: nur Datensätze mit Sperrzeile, keine ausführbaren Dateien, Schutz des Datenbankordners – nach der Datentrennung
