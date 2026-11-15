@@ -516,9 +516,16 @@ Aktionen `controlling_<bereich>_…`. Geplant sind weitere Bereiche (OP-Konten, 
   nächsten Import dieses Monats). Sortiert nach Tag, Kunde, Artikel, berechnet;
   `hash` = SHA-256 von JSON der Zeilen (gleich im Browser), Grundlage des Vergleichs beim nächsten Import.
 - **`controlling-umsatzteile/<Kennung>-<JJJJ-MM>`** (vertraulich): Zwischenablage eines Imports bis zur Übernahme (mit Mitarbeiter
-  und Prüfsumme); gelöscht mit der Übernahme bzw. nach einem Tag.
+  und Prüfsumme); gelöscht mit der Übernahme bzw. nach einem Tag – aufgeräumt wird zu Beginn jedes Hochladens (wie
+  `ablage_teil`), nicht erst in einer gelungenen Übernahme. Begrenzt auf `UMSATZDATEN_TEILE_MAX` offene Teile (darüber 429)
+  und `UMSATZDATEN_TEIL_BYTES` je Teil (darüber 413).
 - **Import:** Der Zeitraum der Datei (erster bis letzter Tag) ersetzt die gespeicherten Umsätze dieses Zeitraums; Monate davor und
-  danach bleiben, Randmonate behalten ihre Tage außerhalb. Verglichen wird je Monat über `hash`, übertragen werden nur neue und
+  danach bleiben, Randmonate behalten ihre Tage außerhalb. Ein Teil darf deshalb nur Tage im Zeitraum der Datei enthalten – sonst
+  weist die Übernahme ihn mit 422 ab (die Tage würden sich zu den bleibenden addieren und den Monat bei jeder Übernahme wachsen
+  lassen); zusammen mit den bleibenden Tagen gilt weiter `UMSATZDATEN_ZEILEN_MAX`. Die Übernahme schreibt erst die Monate, dann
+  das Verzeichnis und löscht entfallene Monate zuletzt (`with_lock` ist im Dateispeicher keine Transaktion): ein Abbruch lässt
+  höchstens einen Monat ohne Verzeichniseintrag zurück. Widersprechen sich Verzeichnis und gespeicherter Monat trotzdem, gilt der
+  Monat als „geändert“ statt „unverändert“ und der nächste Import schreibt ihn neu. Verglichen wird je Monat über `hash`, übertragen werden nur neue und
   geänderte Monate – dieselbe Datei erneut ändert nichts. Die Auswertung ordnet Vertreter, Kundengruppe, Artikelgruppe und Fleischart
   nach den heutigen Stammdaten zu (die Datei enthält keine Zuordnung); die Umsatzzeilen selbst bleiben unverändert.
 
