@@ -9,6 +9,17 @@ const SEC_DEFAULTS = ['twofa' => 'off', 'pwMin' => 10, 'pwComplex' => false, 'pw
                       'ipEnabled' => false, 'adminIps' => [], 'lockAfter' => 10, 'lockMinutes' => 15,
                       'geoEnabled' => false, 'geoMode' => 'block', 'geoCountries' => [], 'geoScope' => 'admin',
                       'bestaetigungAus' => [], 'bestaetigungMinuten' => 5];
+/* Bezeichnungen der Felder im Protokoll (Sicherheitseinstellungen speichern und aus Datei übernehmen) */
+const SEC_FELD_LABEL = ['twofa' => 'Zwei-Faktor-Pflicht', 'pwMin' => 'Passwort-Mindestlänge', 'pwComplex' => 'Passwort-Komplexität',
+    'pwLeak' => 'Passwörter gegen Datenlecks prüfen', 'idleMinutes' => 'Abmeldung nach Inaktivität (Min.)',
+    'ipEnabled' => 'IP-Freigabe Eingabebereich', 'adminIps' => 'Freigegebene Adressen', 'lockAfter' => 'Kontosperre nach Fehlversuchen',
+    'lockMinutes' => 'Kontosperre (Min.)', 'geoEnabled' => 'Ländersperre', 'geoMode' => 'Ländersperre – Art',
+    'geoCountries' => 'Ländersperre – Länder', 'geoScope' => 'Ländersperre – gilt für', 'bestaetigungMinuten' => 'Passwortbestätigung gilt (Min.)'];
+/* Wertebereiche der übertragbaren Felder für den Import aus einer Datei: Auswahl bzw. [kleinster, größter Wert] bzw. „bool“.
+   sec_clean/fw_clean klemmen diese Felder stillschweigend auf den Standard – eine unvertraute Datei wird deshalb abgewiesen. */
+const SEC_IMPORT_WERTE = ['twofa' => ['off', 'admins', 'all'], 'idleMinutes' => [15, 30, 60, 120, 240, 480, 720],
+    'pwMin' => 'min:10:32', 'lockAfter' => 'min:3:20', 'lockMinutes' => 'min:5:1440', 'treffer' => 'min:1:50', 'fehlerLimit' => 'min:0:500',
+    'pwComplex' => 'bool', 'pwLeak' => 'bool', 'autoSperre' => 'bool', 'feed' => 'bool'];
 /* Passwortbestätigung je Aktion (Sicherheit → Passwortbestätigung). Schlüssel = Aktion; [Bereich, Bezeichnung, fest].
    „fest“ = immer Pflicht (Zugänge, Rechte, Sitzungen, Sperren, Sicherheit, Postfach-Zugangsdaten) – nicht abschaltbar.
    Gespeichert werden nur die abgeschalteten Schlüssel (`bestaetigungAus`); unbekannte Schlüssel verlangen immer die Bestätigung. */

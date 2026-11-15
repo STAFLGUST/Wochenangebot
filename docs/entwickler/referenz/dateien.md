@@ -732,6 +732,7 @@ Jede Code-Datei beginnt mit einem Kopfkommentar; dessen erste Aussage steht hier
 | `test_kundencontainer.sh` | plattform | Gehärteter Kundencontainer (ADR-007, „Härtung des Kundencontainers“) mit echtem Docker – Einstellungen genau aus docker-compose.yml und deploy/anmeldung/docker-compose.anmeldung.yml (Dienst app), Image … |
 | `test_notfallwerkzeuge.sh` | plattform | Test der Notfallwerkzeuge (wartung-aus, ip-freigabe-aus, notfall-aus, passwort-zuruecksetzen) |
 | `test_notzugang.sh` | plattform | Test von deploy/notzugang.sh (Notzugang über einen SSH-Tunnel, ADR-007 Regel 6) – mit Platzhalter für docker compose, in einem Wegwerf-Ordner. |
+| `test_passwort_zuruecksetzen.sh` | plattform | Test von deploy/passwort-zuruecksetzen.php (läuft im App-Container, nicht über das Web erreichbar): neuen Administrator anlegen, Passwort eines vorhandenen Mitarbeiters zurücksetzen, Mitarbeiter „ohne Anmeldung“ … |
 | `test_postfach_schluessel.sh` | plattform | Test von deploy/postfach-schluessel.sh (Schlüssel des Postfach-Passworts aus dem gemeinsamen Datenordner, ADR-007) – in einem Wegwerf-Ordner, ohne root (Besitzer wird nur versucht zu setzen) – und dass die Anwendung … |
 | `test_release_pruefen.sh` | plattform | Test der Release-Prüfungen (.github/scripts/release-pruefen.sh) mit einem Platzhalter für gh |
 | `test_sichern.sh` | plattform | Test der Datensicherung (deploy/sichern.sh) in einem Wegwerf-Ordner mit Testdaten. |

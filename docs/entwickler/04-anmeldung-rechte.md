@@ -328,6 +328,14 @@ Alles in `lib/rechte.php`; Zuordnung Recht → Modul in `regeln/berechtigungen.t
 - Eigene Rollen `r<8 hex>` im Dokument `rollen` (`eigene`, `namen`), gepflegt über `rolle_save`/`rolle_loeschen`.
 - Ein Mitarbeiter hat `role` und optional weitere `rollen`; die Rechte addieren sich (`user_rollen`). `admin` gibt es
   nur als Hauptrolle.
+- **Schreiben des Dokuments `rechte`** (beide Wege: `rechte_save` und `rolle_save` für eine Standardrolle) läuft über
+  `rechte_schreiben()` unter `with_lock('rechte')` – Lesen und Schreiben in einem Abschnitt, sonst verlöre ein
+  gleichzeitiges Speichern eine Änderung (ein entzogenes Recht käme zurück). In `rolle_save` liegt diese Sperre immer
+  innerhalb von `with_lock('rollen')`; die Reihenfolge ist überall gleich, damit sich nichts verklemmt. Dazu zählt
+  `rechte_schreiben()` die Revision `rev` hoch: Die Oberfläche schickt die `rev` zurück, die die Aktion `rechte`
+  geliefert hat, und ein Speichern auf veraltetem Lesestand wird mit 409 „Bitte neu laden“ abgelehnt (wie
+  `gruppen_speichern`). Ohne `rev` in der Anfrage (ältere Oberfläche, Skripte) wird wie bisher gespeichert; `rev` ist ein
+  neues optionales Feld (GR-006).
 
 **Wirksame Rechte** (`user_perms`): Rechte aller Rollen + `grant` → Voraussetzungen ergänzen (`rights_close`, Feld `r`:
 wer bearbeiten darf, darf auch sehen) → `deny` abziehen → alles entfernen, dessen Voraussetzung jetzt fehlt.
@@ -346,6 +354,12 @@ und `PERMS_SENSIBEL` (Einkaufswerte, Kontaktdaten-Export, Personaldaten, Kundenz
 werden einzeln vergeben). `PERMS_VORSCHAU` ordnet einem Recht ein Vorschau-Bild zu (`app/assets/admin-rollen-vorschau.js`,
 fest gezeichnete Beispieldaten). Die Oberfläche fasst damit je Modul zu „Kein Zugang · Ansehen · Bearbeiten · Voll“
 zusammen (sonst „Angepasst“ bzw. „Nur Zugang“); gespeichert wird weiter nur die Liste der Rechte (`rolle_save`).
+
+**Mitarbeiter „ohne Anmeldung“** (Feld `zugang` = `false`, z. B. nur für die Urlaubsverwaltung angelegt) können sich
+nie anmelden: `nutzer_hat_zugang()` wird neben `active` auch in der eigenen Anmeldung (`login`) und bei Keycloak
+(`oidc_aktiv`) geprüft, und das Serverwerkzeug `deploy/passwort-zuruecksetzen.php` lehnt solche Konten ab. Sonst entstünde
+ein anmeldefähiges Konto, das Verwaltung, HR und QS weiter als „ohne Anmeldung“ zeigen und das die Kontenübersicht des
+Moduls Sicherheit gar nicht auflistet. Eine Anmeldung richtet man in der Verwaltung ein.
 
 **Vertreter am Mitarbeiter** (Feld `vertreter`, `user_save`, Prüfung `nutzer_vertreter`): Nummer aus Stammdaten →
 Vertreter. Das CRM zeigt damit „Mein Cockpit“ mit den Kunden dieses Vertreters (Vertreter oder Vertreter 2). Ohne das

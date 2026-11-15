@@ -2,7 +2,7 @@
 
 <!-- ERZEUGT von `python3 werkzeuge/doku.py erzeugen` – nicht von Hand ändern. Quelle: Funktionen und Kommentare im Code. Die CI prüft, dass diese Datei zum Code passt. -->
 
-116 Dateien, 1169 Funktionen – in der Reihenfolge der Datei, **fett** die Abschnitte. Text = erste Aussage des Kommentars direkt über der Funktion (Python: Docstring). Übersicht aller Module: [README.md](README.md).
+116 Dateien, 1171 Funktionen – in der Reihenfolge der Datei, **fett** die Abschnitte. Text = erste Aussage des Kommentars direkt über der Funktion (Python: Docstring). Übersicht aller Module: [README.md](README.md).
 
 ## `.github/scripts/apt_vorrat.py`
 
@@ -593,6 +593,8 @@ _Nutzerrechte: was eine Rolle bzw. ein einzelner Nutzer im Eingabebereich sehen 
 - `rights_catalog()`
 - `rollen_liste(roles, users)` – Rollenübersicht für die Verwaltung (Administrator): Rechte, Name, Anzahl Mitarbeiter
 - `rechte_module()` – Module für die Rechte-Übersicht: Kachel-Module in Dashboard-Reihenfolge, dazu „plattform“ für Rechte ohne Modul
+- `rechte_schreiben(roles, kat, me)` – Dokument „rechte“ schreiben: Revision hochzählen und ein Speichern auf veraltetem Lesestand ablehnen – wie gruppen_speichern.
+- `rechte_rev()`
 
 ## `app/api/lib/sicherheit.php`
 
@@ -1150,7 +1152,7 @@ _HTTP-Client mit eigener Sitzung für API-Tests (IP über X-Forwarded-For, wie h
 
 _Kleiner Test-Mailserver für die Ende-zu-Ende-Tests (nimmt Nachrichten an und hält sie im Speicher)._
 
-- `__init__(port, user, password, mode, cert, key)`
+- `__init__(port, user, password, mode, cert, key, vorweg)`
 - `_loop()`
 - `_session(c)`
 - `close()`
@@ -1500,6 +1502,10 @@ _Rollen und Rechte: eigene Rollen (anlegen, umbenennen, kopieren, löschen), Mod
 **Standardrolle ändern, Modulzugang entziehen**
 
 **Kopieren, Löschen, Protokoll**
+
+**Gleichzeitiges Speichern: veralteter Lesestand wird abgelehnt (Dokument „rechte“)**
+
+**Mitarbeiter „ohne Anmeldung“ kann sich nie anmelden (auch mit von außen gesetztem Passwort)**
 
 - `seite(user, password, w, ziel)`
 
