@@ -556,7 +556,10 @@ GR-109) und zeichnet daraus Favoriten (bis dahin Platzhalter, kein Springen von 
 Schnellaktionen, „Zuletzt bearbeitet“, die Unterzeile und die Zahlen der Seitenleiste (`STAFL_RAHMEN.zahlen`). Antwort:
 `punkte` (je `modul`, `art` = `ueberfaellig` | `heute` | `demnaechst`, `titel`, `detail`, `datum`, `ziel` = Reiter des
 Moduls, `anzahl`), `zahlen` je Modul (`offen`, `ueberfaellig`), `gesamt`, `aktionen`, `zuletzt`, `favoriten` (`null` =
-Standard), `fehler` (Module, deren Punkte gerade nicht abrufbar waren). **Neues Modul anschließen:** im eigenen Code eine
+Standard), `fehler` (Module, deren Punkte gerade nicht abrufbar waren). „Zuletzt bearbeitet“ zeigt nur Protokollzeilen
+des eigenen Kontos, erkannt an der Nutzer-ID (Feld `uid`, schreibt `audit()` seit 15.11.2026): Benutzernamen werden nach
+dem Löschen eines Mitarbeiters wieder vergeben, seine Protokollzeilen bleiben bis zum Ablauf der Aufbewahrung stehen.
+Ältere Zeilen ohne `uid` zeigt die Startseite deshalb nicht. **Neues Modul anschließen:** im eigenen Code eine
 Funktion `<präfix>_startseite(array $me): array` mit eigener Rechteprüfung (`may`) und in `STARTSEITE_ANBIETER`
 (`app/api/lib/startseite.php`) eintragen; Tage und Gruppe über `startseite_tage()`/`startseite_art()`. Nur Texte liefern,
 die der Mitarbeiter im Modul ohnehin sieht – Personal- und Gesundheitsdaten höchstens als Anzahl (Beispiel `hr_startseite`).

@@ -119,13 +119,16 @@ function startseite_vergleich(array $a, array $b): int
 /* Eigene letzte Änderungen aus dem Protokoll (laufender und vorheriger Monat), je Text nur die neueste */
 function startseite_zuletzt(array $me, array $module): array
 {
-    $wer = (string)($me['username'] ?? '');
-    if ($wer === '') return [];
+    // Nur Einträge des eigenen Kontos, erkannt an der Nutzer-ID (Feld „uid“, seit 15.11.2026): Benutzernamen werden nach dem
+    // Löschen eines Mitarbeiters wieder vergeben, seine Protokollzeilen bleiben bis zum Ablauf der Aufbewahrung stehen – über den
+    // Benutzernamen sähe ein neues Konto die Texte des Vorgängers. Ältere Einträge ohne „uid“ zeigt die Startseite deshalb nicht.
+    $uid = (string)($me['id'] ?? '');
+    if ($uid === '') return [];
     $out = []; $gesehen = [];
     foreach ([utc_monat(0), utc_monat(-1)] as $monat) {
         $eigene = [];
         foreach (protokoll_monat($monat) as $e) {
-            if (($e['u'] ?? '') !== $wer || ($e['r'] ?? '') === 'kunde') continue;
+            if ((string)($e['uid'] ?? '') !== $uid || ($e['r'] ?? '') === 'kunde') continue;
             $modul = STARTSEITE_PROTOKOLL_MODUL[$e['a'] ?? ''] ?? null;
             if ($modul === null || !isset($module[$modul])) continue;
             $eigene[] = $e + ['modul' => $modul];

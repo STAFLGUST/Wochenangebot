@@ -18,7 +18,7 @@ from zoneinfo import ZoneInfo
 from playwright.sync_api import sync_playwright
 
 from kunden_hilfe import Client, B
-from umgebung import SH, storage_write
+from umgebung import SH, storage_raw, storage_write
 
 PW = 'Sicheres-Passwort-1'
 res = []
@@ -781,6 +781,23 @@ V = Client('198.51.100.8'); V.call('login', {'username': 'vera', 'password': 'Dr
 check('ohne diese Rechte: keine Punkte aus Bestand und Bestellwünschen (eigene Rechteprüfung der Module)', [p['modul'] for p in V.call('start_heute')[1]['punkte']] == ['crm'])
 
 check('keine JavaScript-Fehler', not fehler, fehler)
+# „Zuletzt bearbeitet“ hängt an der Nutzer-ID, nicht am Benutzernamen: ein Benutzername wird nach dem Löschen eines
+# Mitarbeiters erneut vergeben, seine Protokollzeilen bleiben bis zum Ablauf der Aufbewahrung stehen.
+A.call('user_save', {'id': '', 'name': 'Nina Neu', 'username': 'nina', 'role': 'editor', 'active': True, 'password': 'Vierter-Zugang-4713', 'mustChange': False})
+NINA = {u['username']: u['id'] for u in A.call('users')[1]['users']}['nina']
+MONAT = datetime.now(ZoneInfo('UTC')).strftime('%Y-%m')
+JETZT = datetime.now(ZoneInfo('UTC')).strftime('%Y-%m-%dT%H:%M:%SZ')
+raw = storage_raw('protokoll/' + MONAT)
+eintraege = json.loads((raw.split('\n', 1)[1] if raw.startswith('<?php') else raw)) if raw else []
+eintraege.append({'t': JETZT, 'u': 'nina', 'n': 'Norbert Nachfolger', 'r': 'editor', 'ip': '', 'a': 'draft', 's': 'Entwurf des Vorgängers'})
+eintraege.append({'t': JETZT, 'u': 'nina', 'n': 'Nina Neu', 'r': 'editor', 'ip': '', 'a': 'draft', 's': 'Eigener Entwurf', 'uid': NINA})
+storage_write('protokoll/' + MONAT, eintraege)
+N = Client('198.51.100.6'); N.call('login', {'username': 'nina', 'password': 'Vierter-Zugang-4713'})
+st, hn = N.call('start_heute')
+texte = [x['text'] for x in hn.get('zuletzt', [])]
+check('Zuletzt bearbeitet: nur Zeilen der eigenen Nutzer-ID – Zeilen eines gleichnamigen Vorgängers bleiben verborgen',
+      st == 200 and 'Eigener Entwurf' in texte and 'Entwurf des Vorgängers' not in texte, texte)
+
 ok = sum(res)
 print(f'{ok}/{len(res)} passed')
 sys.exit(0 if ok == len(res) else 1)

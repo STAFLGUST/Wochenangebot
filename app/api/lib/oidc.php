@@ -151,7 +151,7 @@ function oidc_admin_konto_pruefen(array $u, array $id, bool $neu): void
 }
 function oidc_aktiv(array $u): array
 {
-    if (empty($u['active'])) fail('Ihr Mitarbeiterkonto ist gesperrt. Bitte an einen Administrator wenden.', 403);
+    if (empty($u['active']) || !nutzer_hat_zugang($u)) fail('Ihr Mitarbeiterkonto ist gesperrt. Bitte an einen Administrator wenden.', 403);
     return $u;
 }
 /* Kennungen (sub) der Keycloak-Konten gelöschter Mitarbeiter → Zeitpunkt (Dokument „oidc-geloescht“, nur wachsend und

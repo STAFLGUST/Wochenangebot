@@ -265,6 +265,8 @@ jobs:
         run: sh tests/deploy/test_notzugang.sh
       - name: Schlüssel des Postfach-Passworts aus dem gemeinsamen Datenordner (deploy/postfach-schluessel.sh, ADR-007)
         run: sh tests/deploy/test_postfach_schluessel.sh
+      - name: Passwort zurücksetzen auf dem Server (deploy/passwort-zuruecksetzen.php, Konten ohne Anmeldung)
+        run: sh tests/deploy/test_passwort_zuruecksetzen.sh
       - name: Daten trennen (deploy/daten_trennen.py, daten-trennen.sh, ADR-007 Stufe 2) – Dateien und SQLite, Speicherschicht beider Seiten
         run: |
           python3 tests/deploy/test_daten_trennen.py

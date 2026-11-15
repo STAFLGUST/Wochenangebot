@@ -226,6 +226,35 @@ check('Bearbeiter darf nicht löschen', V.call('rolle_loeschen', {'id': LAGER})[
 log = str(A.call('log')[1].get('entries') or [])
 check('Protokoll: angelegt, geändert, Rechte', 'Rolle „Lager“ angelegt' in log and 'Rolle „Vertrieb Innendienst“ geändert' in log and 'Modul „HR“ öffnen' in log)
 
+# ---------- Gleichzeitiges Speichern: veralteter Lesestand wird abgelehnt (Dokument „rechte“) ----------
+rd0 = A.call('rechte')[1]
+stand = rd0['rev']
+vrolle = next(x for x in rd0['rollen'] if x['id'] == 'viewer')
+vn, vr = vrolle['name'], sorted(set(vrolle['rechte']))
+code, r = A.call('rolle_save', {'id': 'viewer', 'name': vn, 'rechte': vr, 'rev': stand})
+check('Standardrolle mit passendem Lesestand gespeichert', code == 200, r)
+code, r = A.call('rolle_save', {'id': 'viewer', 'name': vn, 'rechte': vr, 'rev': stand})
+check('Zweites Speichern mit demselben (veralteten) Lesestand: 409, bitte neu laden', code == 409 and 'neu laden' in r.get('error', ''), r)
+check('Ohne „rev“ (ältere Oberfläche) wird weiter gespeichert', A.call('rolle_save', {'id': 'viewer', 'name': vn, 'rechte': vr})[0] == 200)
+code, r = A.call('rechte_save', {'roles': {'viewer': vr}, 'rev': 0})
+check('rechte_save: veralteter Lesestand abgelehnt', code == 409, r)
+# Entzug wirkt: sensibles Recht aus der eigenen Rolle ist in den wirksamen Rechten des Mitarbeiters weg
+A.call('rolle_save', {'id': LAGER, 'name': 'Lager', 'rechte': ['bestand.zugang', 'bestand.sehen']})
+check('Entzogenes sensibles Recht gilt nicht weiter (Server und Übersicht)', 'bestand.einkaufspreise' not in rechte(L)
+      and 'bestand.einkaufspreise' not in next(u for u in A.call('rechte')[1]['users'] if u['username'] == 'lars')['perms'])
+A.call('rolle_save', {'id': LAGER, 'name': 'Lager', 'rechte': lg['rechte']})
+
+# ---------- Mitarbeiter „ohne Anmeldung“ kann sich nie anmelden (auch mit von außen gesetztem Passwort) ----------
+OPW = 'Ohne-Anmeldung-42'
+A.call('user_save', {'id': '', 'name': 'Olli Ohne', 'username': 'olli', 'role': 'viewer', 'active': True, 'password': OPW, 'mustChange': False})
+dok = dokument('nutzer')
+for u in dok['users']:
+    if u['username'] == 'olli':
+        u['zugang'] = False          # wie das Serverwerkzeug: Hash und active bleiben stehen
+storage_write('nutzer', dok)
+code, r = Client('198.51.100.9').call('login', {'username': 'olli', 'password': OPW})
+check('„ohne Anmeldung“ mit vorhandenem Passwort: Anmeldung abgelehnt', code == 401 and 'deaktiviert' in r.get('error', ''), r)
+
 with sync_playwright() as pw:
     br = pw.chromium.launch()
     fehler = []

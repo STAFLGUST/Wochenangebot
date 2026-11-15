@@ -40,8 +40,7 @@ switch ($action) {
             }
             store_write('firewall', $new);
             $GLOBALS['FWS'] = $new;
-            $L = ['waf' => 'Firewall', 'autoSperre' => 'Automatisch sperren', 'treffer' => 'Sperren nach Treffern', 'sperrMinuten' => 'Sperrdauer (Min.)',
-                  'fehlerLimit' => 'Fehlerbremse (Anfragen/5 Min.)', 'feed' => 'Bedrohungsliste', 'erlaubt' => 'Nie sperren'];
+            $L = FW_FELD_LABEL;
             $fmt = fn($v) => is_bool($v) ? ($v ? 'an' : 'aus') : (is_array($v) ? implode(', ', $v) : (string)(FW_WAF_MODI[$v] ?? $v));
             $d = [];
             foreach ($L as $k => $label) if ($fmt($old[$k] ?? '') !== $fmt($new[$k])) $d[] = ['k' => "fw|$k", 'code' => '', 'name' => 'Schutz', 'f' => $label, 'from' => $fmt($old[$k] ?? ''), 'to' => $fmt($new[$k])];
@@ -120,14 +119,30 @@ switch ($action) {
             $me = require_admin_confirmation('fw_save');
             $x = body()['export'] ?? null;
             if (!is_array($x) || ($x['art'] ?? '') !== 'wochenangebot-sicherheit' || (int)($x['version'] ?? 0) !== 1) throw new InvalidArgumentException('Das ist keine Datei mit Sicherheitseinstellungen dieses Portals.');
-            $oldS = sec();
+            $oldS = sec(); $oldF = fw();
             // Adress- und Länderlisten bleiben wie sie sind (eine Datei von einem anderen Server könnte sonst alle aussperren)
-            $newS = sec_clean(array_merge($oldS, array_diff_key(array_intersect_key((array)($x['sicherheit'] ?? []), SEC_DEFAULTS), FW_NICHT_UEBERTRAGEN)), $oldS, $me);
-            $newF = fw_clean(array_diff_key(array_intersect_key((array)($x['firewall'] ?? []), FW_DEFAULTS), ['erlaubt' => 1, 'mitschnittBis' => 1]), fw());
+            $datS = array_diff_key(array_intersect_key((array)($x['sicherheit'] ?? []), SEC_DEFAULTS), FW_NICHT_UEBERTRAGEN);
+            $datF = array_diff_key(array_intersect_key((array)($x['firewall'] ?? []), FW_DEFAULTS), ['erlaubt' => 1, 'mitschnittBis' => 1]);
+            // Unvertraute Datei: jeden Wert gegen seinen Wertebereich prüfen und die Datei abweisen. sec_clean/fw_clean würden
+            // einen unzulässigen Wert still auf den Standard setzen – und der ist bei diesen Feldern die schwächste Stufe.
+            foreach ($datS + $datF as $k => $v) {
+                $bereich = SEC_IMPORT_WERTE[$k] ?? null;
+                $gut = $bereich === null ? true
+                    : (is_array($bereich) ? in_array($v, $bereich, true)
+                    : ($bereich === 'bool' ? is_bool($v) : is_int($v) && $v >= (int)explode(':', $bereich)[1] && $v <= (int)explode(':', $bereich)[2]));
+                if (!$gut) throw new InvalidArgumentException("Die Datei enthält für „{$k}“ einen unzulässigen Wert – bitte nicht übernehmen.");
+            }
+            $newS = sec_clean(array_merge($oldS, $datS), $oldS, $me);
+            $newF = fw_clean($datF, $oldF);
             if ($newF['feed'] && !fw_feed_info()) { try { fw_feed_laden(); } catch (Throwable $e) { $newF['feed'] = false; } }
             store_write('sicherheit', $newS); $GLOBALS['SEC'] = $newS;
             store_write('firewall', $newF); $GLOBALS['FWS'] = $newF;
-            audit('security', 'Sicherheitseinstellungen aus Datei übernommen (Stand ' . s($x['stand'] ?? '', 30) . ')');
+            // Protokoll feldweise wie security_save und fw_save: jede übernommene Änderung mit alt und neu
+            $fmt = fn($v) => is_bool($v) ? ($v ? 'an' : 'aus') : (is_array($v) ? implode(', ', $v) : (string)$v);
+            $d = [];
+            foreach (SEC_FELD_LABEL as $k => $label) if ($fmt($oldS[$k] ?? '') !== $fmt($newS[$k] ?? '')) $d[] = ['k' => "sec|$k", 'code' => '', 'name' => 'Sicherheit', 'f' => $label, 'from' => $fmt($oldS[$k] ?? ''), 'to' => $fmt($newS[$k] ?? '')];
+            foreach (FW_FELD_LABEL as $k => $label) if ($fmt($oldF[$k] ?? '') !== $fmt($newF[$k] ?? '')) $d[] = ['k' => "fw|$k", 'code' => '', 'name' => 'Schutz', 'f' => $label, 'from' => $fmt($oldF[$k] ?? ''), 'to' => $fmt($newF[$k] ?? '')];
+            audit('security', 'Sicherheitseinstellungen aus Datei übernommen (Stand ' . s($x['stand'] ?? '', 30) . ')', $d);
             respond(['ok' => true, 'sec' => $newS] + fw_status());
         }
 }

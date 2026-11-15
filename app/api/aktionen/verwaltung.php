@@ -73,10 +73,7 @@ switch ($action) {
             $new = sec_clean($b, $old, $me);
             store_write('sicherheit', $new);
             $GLOBALS['SEC'] = $new;
-            $L = ['twofa' => 'Zwei-Faktor-Pflicht', 'pwMin' => 'Passwort-Mindestlänge', 'pwComplex' => 'Passwort-Komplexität', 'pwLeak' => 'Passwörter gegen Datenlecks prüfen', 'idleMinutes' => 'Abmeldung nach Inaktivität (Min.)',
-                  'ipEnabled' => 'IP-Freigabe Eingabebereich', 'adminIps' => 'Freigegebene Adressen', 'lockAfter' => 'Kontosperre nach Fehlversuchen', 'lockMinutes' => 'Kontosperre (Min.)',
-                  'geoEnabled' => 'Ländersperre', 'geoMode' => 'Ländersperre – Art', 'geoCountries' => 'Ländersperre – Länder', 'geoScope' => 'Ländersperre – gilt für',
-                  'bestaetigungMinuten' => 'Passwortbestätigung gilt (Min.)'];
+            $L = SEC_FELD_LABEL;
             $GV = ['block' => 'ausgewählte Länder sperren', 'allow' => 'nur ausgewählte Länder erlauben', 'admin' => 'nur Eingabebereich', 'all' => 'ganze Seite'];
             $fmt = function ($v) use ($GV) { return is_bool($v) ? ($v ? 'an' : 'aus') : (is_array($v) ? implode(', ', $v) : (string)($GV[$v] ?? $v)); };
             $d = [];
@@ -176,7 +173,7 @@ switch ($action) {
             $labels = ROLE_LABELS; foreach (array_keys($roles) as $r) $labels[$r] = rolle_name($r);
             respond(['ok' => true, 'catalog' => rights_catalog(), 'roles' => $roles, 'adminOnly' => PERMS_ADMIN_ONLY, 'roleLabels' => $labels,
                      'rollen' => rollen_liste($roles, $users), 'module' => rechte_module(),
-                     'custom' => store_read('rechte') !== null, 'updatedAt' => $d['updatedAt'] ?? null, 'updatedBy' => $d['updatedBy'] ?? '',
+                     'custom' => store_read('rechte') !== null, 'rev' => (int)($d['rev'] ?? 0), 'updatedAt' => $d['updatedAt'] ?? null, 'updatedBy' => $d['updatedBy'] ?? '',
                      'users' => array_map(function ($u) use ($roles) { return ['id' => $u['id'], 'name' => $u['name'], 'username' => $u['username'], 'role' => $u['role'], 'rollen' => user_rollen($u), 'active' => (bool)$u['active'],
                          'grant' => array_values((array)($u['grant'] ?? [])), 'deny' => array_values((array)($u['deny'] ?? [])), 'perms' => user_perms($u, $roles)]; }, $users)]);
         }
@@ -185,20 +182,25 @@ switch ($action) {
             $me = require_admin_confirmation('rechte_save');
             $in = body()['roles'] ?? null;
             if (!is_array($in)) fail('Ungültige Anfrage.', 422);
-            $old = rights_roles();
-            $new = []; $d = [];
-            $kat = perms_katalog();
-            foreach (PERM_ROLES as $r) {
-                $new[$r] = is_array($in[$r] ?? null) ? rights_clean($in[$r]) : $old[$r];
-                // Ältere Oberfläche (noch geöffnete Seite) kennt den Modulzugang nicht: bisherigen Wert behalten statt ihn zu entziehen
-                $istZugang = fn($k) => ($kat[$k]['k'] ?? '') === 'zugang';
-                if (!array_filter($new[$r], $istZugang)) $new[$r] = array_merge($new[$r], array_filter($old[$r], $istZugang));
-                $new[$r] = rights_close(array_values(array_unique($new[$r])));
-                $add = array_diff($new[$r], $old[$r]); $rem = array_diff($old[$r], $new[$r]);
-                foreach ($add as $k) $d[] = ['k' => "r|$r|$k", 'code' => '', 'name' => rolle_name($r), 'f' => $kat[$k]['l'], 'from' => 'nein', 'to' => 'ja'];
-                foreach ($rem as $k) $d[] = ['k' => "r|$r|$k", 'code' => '', 'name' => rolle_name($r), 'f' => $kat[$k]['l'], 'from' => 'ja', 'to' => 'nein'];
-            }
-            store_write('rechte', ['roles' => $new, 'bekannt' => array_keys($kat), 'updatedAt' => now(), 'updatedBy' => $me['name']]);
+            // Lesen und Schreiben des Dokuments „rechte“ in einem Abschnitt: sonst überschreibt ein gleichzeitiges
+            // rechte_save oder rolle_save (beide schreiben dasselbe Dokument) diese Änderung stillschweigend.
+            [$new, $d] = with_lock('rechte', function () use ($in, $me) {
+                $old = rights_roles();
+                $new = []; $d = [];
+                $kat = perms_katalog();
+                foreach (PERM_ROLES as $r) {
+                    $new[$r] = is_array($in[$r] ?? null) ? rights_clean($in[$r]) : $old[$r];
+                    // Ältere Oberfläche (noch geöffnete Seite) kennt den Modulzugang nicht: bisherigen Wert behalten statt ihn zu entziehen
+                    $istZugang = fn($k) => ($kat[$k]['k'] ?? '') === 'zugang';
+                    if (!array_filter($new[$r], $istZugang)) $new[$r] = array_merge($new[$r], array_filter($old[$r], $istZugang));
+                    $new[$r] = rights_close(array_values(array_unique($new[$r])));
+                    $add = array_diff($new[$r], $old[$r]); $rem = array_diff($old[$r], $new[$r]);
+                    foreach ($add as $k) $d[] = ['k' => "r|$r|$k", 'code' => '', 'name' => rolle_name($r), 'f' => $kat[$k]['l'], 'from' => 'nein', 'to' => 'ja'];
+                    foreach ($rem as $k) $d[] = ['k' => "r|$r|$k", 'code' => '', 'name' => rolle_name($r), 'f' => $kat[$k]['l'], 'from' => 'ja', 'to' => 'nein'];
+                }
+                rechte_schreiben($new, $kat, $me);
+                return [$new, $d];
+            });
             if ($d) audit('user', 'Rechte der Rollen geändert', $d);
             respond(['ok' => true, 'roles' => $new]);
         }
@@ -235,9 +237,14 @@ switch ($action) {
                 foreach (array_diff($rechte, $vorher) as $k) $d[] = ['k' => "r|$id|$k", 'code' => '', 'name' => $name, 'f' => $kat[$k]['l'], 'from' => 'nein', 'to' => 'ja'];
                 foreach (array_diff($vorher, $rechte) as $k) $d[] = ['k' => "r|$id|$k", 'code' => '', 'name' => $name, 'f' => $kat[$k]['l'], 'from' => 'ja', 'to' => 'nein'];
                 if (in_array($id, PERM_ROLES, true)) {
-                    // Standardrolle: Rechte im Dokument „rechte“ (wie bisher, ältere Fassungen lesen sie weiter), Name im Dokument „rollen“
-                    $roles = []; foreach (PERM_ROLES as $r) $roles[$r] = $r === $id ? $rechte : $alt[$r];
-                    store_write('rechte', ['roles' => $roles, 'bekannt' => array_keys($kat), 'updatedAt' => now(), 'updatedBy' => $me['name']]);
+                    // Standardrolle: Rechte im Dokument „rechte“ (wie bisher, ältere Fassungen lesen sie weiter), Name im Dokument „rollen“.
+                    // Lesen und Schreiben dieses Dokuments unter seiner eigenen Sperre – immer innerhalb von with_lock('rollen'),
+                    // damit die Sperrreihenfolge überall gleich ist (with_lock_in ist wiedereintrittsfähig, storage.php).
+                    with_lock('rechte', function () use ($id, $rechte, $kat, $me) {
+                        $jetzt = rights_roles();
+                        $roles = []; foreach (PERM_ROLES as $r) $roles[$r] = $r === $id ? $rechte : $jetzt[$r];
+                        rechte_schreiben($roles, $kat, $me);
+                    });
                     $namen = is_array($dok['namen'] ?? null) ? $dok['namen'] : [];
                     if ($name === ROLE_LABELS[$id]) unset($namen[$id]); else $namen[$id] = $name;
                     $dok['namen'] = $namen;
