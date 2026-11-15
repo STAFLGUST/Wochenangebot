@@ -416,7 +416,10 @@ Mitarbeiter sind die Nutzer der Plattform (`users_load()`); HR speichert nur eig
   Zeilen im Kalender (`hr_monat`, Inhaber 11.11.2026): Mitarbeiter bekommen nur die Personen ihrer eigenen Abteilung
   (`hr_gleiche_abteilung`) und sich selbst – ohne eigene Person im Urlaubsplan keine, ohne Abteilung nur die eigene;
   `hr.verwalten` und `hr.uebersicht` bekommen alle (Antwortfeld `alleAbteilungen`). Die Vertretungsprüfung und andere
-  serverseitige Prüfungen nutzen weiter alle Abwesenheiten.
+  serverseitige Prüfungen nutzen weiter alle Abwesenheiten – sie geben aber dieselbe Grenze heraus wie der Kalender:
+  `hr_antrag_zeitraum` nennt die genauen Tage der gewählten Vertretung nur bei Kollegen der eigenen Abteilung bzw. mit
+  `hr.verwalten`/`hr.uebersicht` (Parameter `$me`), sonst nur, dass sie „nicht verfügbar“ ist (Sicherheitsdurchsicht
+  15.11.2026; gilt auch für die zusätzliche Vertretung, die Vorschau und die Vorplanung).
   Sichtbarkeit im Kalender (`hr_monat` → `hr_zeile`, Antwortfeld `sicht`, seit 11.11.2026; `voll` bleibt für ältere Seiten):
   `voll` = Personalstelle (Art, offene Anträge mit „?“, freie Tage „x“; die eigene Zeile sieht jeder so), `kollege` = nur „A“
   (nur genehmigt, nie der Grund), `urlaub` = Recht `hr.kalender` (sensibel, einzeln vergeben), je Zeile nur für Kollegen der

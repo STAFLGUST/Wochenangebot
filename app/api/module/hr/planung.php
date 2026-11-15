@@ -223,8 +223,11 @@ function hr_vertretung_luecken(array $e, array $p, array $vp, array $eintraege, 
    Schließtagen auch ohne Vertretung. $andere: weitere Zeiträume derselben Vorplanung (keine Überschneidung untereinander).
    Rückgabe: {von, bis, tage (Schließtage je ½), fehler (erster Grund zur Ablehnung) und code, hinweise[],
    vertretung und vertretung2: null|{id, name, fest, status da|abwesend|frei, text}}. Ist eine feste Vertretung hinterlegt
-   (hr_feste_vertretung), gilt sie statt $vertretung; $vertretung2 ist die optionale zusätzliche Vertretung (Inhaber 10.11.2026). */
-function hr_antrag_zeitraum(array $ich, array $personal, array $eintraege, array $einst, string $art, string $von, string $bis, $vertretung, array $andere = [], $vertretung2 = null): array
+   (hr_feste_vertretung), gilt sie statt $vertretung; $vertretung2 ist die optionale zusätzliche Vertretung (Inhaber 10.11.2026).
+   $me (angemeldetes Konto): entscheidet wie im Kalender (hr_monat), ob die Antwort die genauen Tage der Vertretung nennen
+   darf – eigene Abteilung, Personalstelle (hr.verwalten) oder Urlaubsübersicht (hr.uebersicht). Sonst heißt es nur, dass
+   die Vertretung nicht verfügbar ist; ohne $me gilt die engere Sicht. */
+function hr_antrag_zeitraum(array $ich, array $personal, array $eintraege, array $einst, string $art, string $von, string $bis, $vertretung, array $andere = [], $vertretung2 = null, ?array $me = null): array
 {
     $r = ['von' => $von, 'bis' => $bis, 'tage' => 0.0, 'fehler' => null, 'code' => 200, 'hinweise' => [], 'vertretung' => null, 'vertretung2' => null];
     $f = function (string $text, int $code) use (&$r) { if ($r['fehler'] === null) { $r['fehler'] = $text; $r['code'] = $code; } };
@@ -256,22 +259,27 @@ function hr_antrag_zeitraum(array $ich, array $personal, array $eintraege, array
     if (!$leer($vertretung2) && (string)$vertretung2 === (string)$vertretung) $vertretung2 = null;          // doppelt gewählt: einmal genügt
     $idx = hr_personen_index($personal);
     // Ist die Vertretung im Zeitraum da? Nur Genehmigtes anderer (wie im Kalender); abwesend = Ablehnung, arbeitet nicht = Hinweis
-    $pruefe = function ($vid, bool $zusatz) use ($idx, $ich, $von, $bis, $eintraege, $fest, $f, &$r): bool {
+    $pruefe = function ($vid, bool $zusatz) use ($idx, $ich, $von, $bis, $eintraege, $fest, $f, $me, &$r): bool {
         $vp = $idx[(string)$vid] ?? null;
         $wer = $zusatz ? 'zusätzliche Vertretung' : 'Vertretung';
         if (!$vp || !$vp['aktiv'] || $vp['id'] === $ich['id']) { $f('Bitte eine gültige ' . $wer . ' wählen.', 422); return false; }
         $l = hr_vertretung_luecken(['von' => $von, 'bis' => $bis], $ich, $vp, $eintraege, true);
         $n = hr_name($vp);
         $v = ['id' => $vp['id'], 'name' => $n, 'fest' => !$zusatz && $fest !== null];
+        // Abteilungsgrenze des Kalenders (hr_monat, urlaub.php): genaue Tage nur, wenn der Anfragende sie dort ohnehin
+        // sähe. Die Prüfung selbst braucht nur, ob die Vertretung verfügbar ist – mehr geht nicht hinaus.
+        $tage = hr_gleiche_abteilung($ich, $vp) || ($me !== null && (may($me, 'hr.verwalten') || may($me, 'hr.uebersicht')));
         if ($l['abwesend']) {
-            $text = "Ihre $wer $n ist in dieser Zeit selbst abwesend (" . hr_daten_text($l['abwesend']) . ') – '
+            $text = ($tage ? "Ihre $wer $n ist in dieser Zeit selbst abwesend (" . hr_daten_text($l['abwesend']) . ') – '
+                           : "Ihre $wer $n ist in dieser Zeit nicht verfügbar – ")
                 . ($zusatz ? 'bitte wählen Sie eine andere oder lassen Sie das Feld leer.'
                            : ($v['fest'] ? 'sie ist für Sie fest hinterlegt. Bitte wählen Sie einen anderen Zeitraum oder wenden Sie sich an die Personalstelle.'
                                          : 'bitte wählen Sie eine andere Vertretung.'));
             $v += ['status' => 'abwesend', 'text' => $text];
             $f($text, 409);
         } elseif ($l['frei']) {
-            $text = "Ihre $wer $n arbeitet an diesen Tagen nicht (" . hr_daten_text($l['frei']) . ') – bitte mit der Personalstelle klären.';
+            $text = $tage ? "Ihre $wer $n arbeitet an diesen Tagen nicht (" . hr_daten_text($l['frei']) . ') – bitte mit der Personalstelle klären.'
+                          : "Ihre $wer $n arbeitet in dieser Zeit nicht an allen Tagen – bitte mit der Personalstelle klären.";
             $v += ['status' => 'frei', 'text' => $text];
             $r['hinweise'][] = $text;
         } else $v += ['status' => 'da', 'text' => "$n ist in dieser Zeit da."];
@@ -337,13 +345,13 @@ function hr_zeitraeume_anfrage($l): array
 }
 
 /* Vorplanung prüfen (ohne zu speichern): jeder Zeitraum wie ein Antrag (hr_antrag_zeitraum), nur im Vorplanungsjahr.
-   Rückgabe [zeiträume[], gültige Zeiträume[]] */
-function hr_vorplanung_pruefen(array $ich, array $personal, array $eintraege, array $einst, array $zr, int $jahr): array
+   $me wie dort (Sicht auf die Tage der Vertretung). Rückgabe [zeiträume[], gültige Zeiträume[]] */
+function hr_vorplanung_pruefen(array $ich, array $personal, array $eintraege, array $einst, array $zr, int $jahr, ?array $me = null): array
 {
     $erg = []; $gut = [];
     foreach ($zr as $i => $z) {
         $andere = array_slice($zr, 0, $i);   // nur frühere Zeilen: die erste bleibt gültig, die überschneidende wird markiert
-        $e = hr_antrag_zeitraum($ich, $personal, $eintraege, $einst, 'U', $z['von'], $z['bis'], $z['vertretung'], $andere, $z['vertretung2'] ?? null);
+        $e = hr_antrag_zeitraum($ich, $personal, $eintraege, $einst, 'U', $z['von'], $z['bis'], $z['vertretung'], $andere, $z['vertretung2'] ?? null, $me);
         if (substr($z['von'], 0, 4) !== (string)$jahr || substr($z['bis'], 0, 4) !== (string)$jahr) { $e['fehler'] = "Die Vorplanung gilt für $jahr – bitte nur Tage in $jahr."; $e['code'] = 422; }
         $erg[] = $e;
         if ($e['fehler'] === null) $gut[] = $z;

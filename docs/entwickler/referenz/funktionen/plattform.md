@@ -2,7 +2,7 @@
 
 <!-- ERZEUGT von `python3 werkzeuge/doku.py erzeugen` – nicht von Hand ändern. Quelle: Funktionen und Kommentare im Code. Die CI prüft, dass diese Datei zum Code passt. -->
 
-116 Dateien, 1169 Funktionen – in der Reihenfolge der Datei, **fett** die Abschnitte. Text = erste Aussage des Kommentars direkt über der Funktion (Python: Docstring). Übersicht aller Module: [README.md](README.md).
+116 Dateien, 1170 Funktionen – in der Reihenfolge der Datei, **fett** die Abschnitte. Text = erste Aussage des Kommentars direkt über der Funktion (Python: Docstring). Übersicht aller Module: [README.md](README.md).
 
 ## `.github/scripts/apt_vorrat.py`
 
@@ -159,7 +159,8 @@ _Modul Bestand · MHD-Liste an den Verkauf: dieselbe Liste wie die Suche „MHD�
 - `mhd_xml(t)`
 - `mhd_spalte(n)`
 - `mhd_xlsx(l, titel)`
-- `mhd_bild_pruefen(b64)` – Bild der Liste aus dem Browser prüfen (nur PNG, Größe begrenzt; der Browser zeichnet in drei- oder zweifacher Auflösung).
+- `mhd_png_vollstaendig(png)` – Vollständigkeit eines PNG: Der Puffer besteht ausschließlich aus gültigen Blöcken (Länge, Typ aus vier Buchstaben, CRC), beginnt mit IHDR, endet mit IEND und …
+- `mhd_bild_pruefen(b64)` – Bild der Liste aus dem Browser prüfen (nur PNG; der Browser zeichnet in drei- oder zweifacher Auflösung).
 - `mhd_mail(l, png, notiz, me, st, breite)` – E-Mail an den Verkauf: Text, HTML mit eingebettetem Bild (cid), Excel im Anhang.
 
 ## `app/api/lib/dateiablage.php`
