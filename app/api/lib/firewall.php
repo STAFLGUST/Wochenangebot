@@ -60,12 +60,12 @@ function fw_erlaubt(string $ip): bool
     return !empty($S['adminIps']) && ip_allowed($ip, $S['adminIps']);
 }
 /* Angemeldeter Mitarbeiter? Nur nachsehen, wenn eine Sitzung mitkommt – sonst würde für jeden anonymen Besucher eine
-   Sitzung (Cookie, Datei) angelegt */
+   Sitzung (Cookie, Datei) angelegt (sitzung_vorhanden in lib/sitzung.php) */
 function fw_mitarbeiter(): bool
 {
     global $ME;
     if ($ME) return true;
-    if (empty($_COOKIE[sitzung_cookie_name()]) && empty($_SERVER['HTTP_X_WA_SITZUNG'])) return false;
+    if (!sitzung_vorhanden()) return false;
     return (bool)current_user();
 }
 /* Von einer fremden Seite ausgelöst (z. B. <img src="…/wp-login.php"> oder ein Link)? Browser senden Sec-Fetch-Site;

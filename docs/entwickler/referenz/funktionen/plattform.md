@@ -2,7 +2,7 @@
 
 <!-- ERZEUGT von `python3 werkzeuge/doku.py erzeugen` – nicht von Hand ändern. Quelle: Funktionen und Kommentare im Code. Die CI prüft, dass diese Datei zum Code passt. -->
 
-116 Dateien, 1169 Funktionen – in der Reihenfolge der Datei, **fett** die Abschnitte. Text = erste Aussage des Kommentars direkt über der Funktion (Python: Docstring). Übersicht aller Module: [README.md](README.md).
+116 Dateien, 1171 Funktionen – in der Reihenfolge der Datei, **fett** die Abschnitte. Text = erste Aussage des Kommentars direkt über der Funktion (Python: Docstring). Übersicht aller Module: [README.md](README.md).
 
 ## `.github/scripts/apt_vorrat.py`
 
@@ -643,6 +643,7 @@ _Mitarbeiter-Sitzung, Rollen, Passwortbestätigung, CSRF_
 - `app_client()` – App-Zugriff (docs/app-api.md): Die App sendet „X-WA-Client: app“ und trägt die Sitzungskennung in der Kopfzeile „X-WA-Sitzung“ statt in einem Cookie; jede …
 - `app_session_header()`
 - `sitzung_cookie_name()`
+- `sitzung_vorhanden()` – Liegt überhaupt eine Sitzung vor – läuft schon eine oder legt der Aufrufer eine Kennung vor (Browser im Cookie, App in der Kopfzeile, wie start_session() sie …
 - `start_session()`
 - `bg_request()` – Automatische Abfragen im Hintergrund (Abgleich mit anderen Bearbeitern) zählen nicht als Aktivität – die Abmeldung nach Inaktivität bleibt wirksam.
 - `current_user()`
@@ -1603,6 +1604,7 @@ _Sitzungs-Cookie mit Präfix __Host- über HTTPS (GR-108, ADR-003 Befund B-1)._
 - `check(n, c, i)`
 - `roh(action, data, https, cookies, csrf, ip, extra)` – Eine Anfrage; Rückgabe: Status, JSON, Liste der Set-Cookie-Zeilen, Kopfzeilen.
 - `cookie(zeilen, name)` – Wert und Attribute (klein geschrieben) des zuletzt gesetzten Cookies „name“, sonst (None, '').
+- `sitzungen()`
 - `wie_https(ctx)` – Origin der API-Anfragen wie hinter Caddy (https://…) – Chromium setzt ihn selbst, daher über route umschreiben.
 - `umschreiben(route)`
 

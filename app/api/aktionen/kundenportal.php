@@ -8,8 +8,7 @@ switch ($action) {
         /* ---------- Kunden-Anmeldung (Angebotsseite) ---------- */
         case 'kunde_status': {
             header('Cache-Control: no-store');
-            start_session();
-            $k = current_customer();
+            $k = current_customer();   // öffnet die Sitzung nur mit vorgelegter Kennung (lib/sitzung.php)
             $staff = kunden_wartung_ausnahme(current_user());   // Mitarbeiter (im Notfallmodus nur Administratoren, lib/notfall.php)
             respond(['ok' => true, 'stdPublic' => std_public(), 'staff' => $staff, 'kunde' => $k ? kunde_payload($k) : null, 'bestellung' => $k ? order_enabled() : false, 'bestellfunktion' => order_enabled(), 'wartung' => wartung(), 'testumgebung' => testumgebung(), 'csrf' => $k ? ($_SESSION['kcsrf'] ?? null) : null]);
         }
@@ -88,8 +87,7 @@ switch ($action) {
         }
 
         case 'kunde_logout': {
-            start_session();
-            if (current_customer()) {
+            if (current_customer()) {   // ohne vorgelegte Kennung gibt es nichts abzumelden
                 require_customer_csrf();
                 $sid = (string)($_SESSION['ksid'] ?? '');
                 ksess_remove(function ($k) use ($sid) { return $k === $sid; });

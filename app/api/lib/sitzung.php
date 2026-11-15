@@ -26,6 +26,16 @@ function app_session_header(): void
    „__Host-“ dort verwerfen. Das frühere Cookie ohne Präfix wird über HTTPS nicht mehr gelesen, sondern gelöscht. */
 const SITZUNG_COOKIE = 'WA_ADMIN';
 function sitzung_cookie_name(): string { return (is_https() ? '__Host-' : '') . SITZUNG_COOKIE; }
+/* Liegt überhaupt eine Sitzung vor – läuft schon eine oder legt der Aufrufer eine Kennung vor (Browser im Cookie,
+   App in der Kopfzeile, wie start_session() sie liest)? Nur dann nachsehen; sonst legte jede anonyme Anfrage eine
+   Sitzungsdatei an und bekäme ein Cookie (Befund 15.11.2026). */
+function sitzung_vorhanden(): bool
+{
+    if (session_status() === PHP_SESSION_ACTIVE) return true;
+    if (app_client()) return !empty($_SERVER['HTTP_X_WA_SITZUNG']);   // App: Kennung nur aus der Kopfzeile
+    // Das alte Cookie ohne Präfix zählt mit, damit start_session() es weiter im Browser löscht (GR-108)
+    return !empty($_COOKIE[sitzung_cookie_name()]) || !empty($_COOKIE[SITZUNG_COOKIE]);
+}
 
 function start_session(): void
 {
@@ -77,6 +87,7 @@ function current_user(): ?array
     if ($ME !== null) return $ME;
     if (oidc_modus()) return $ME = oidc_nutzer();   // Keycloak-Host: Identität vom Webserver (lib/oidc.php, GR-110)
     if (eigene_anmeldung_stillgelegt()) return null;   // alter Eingabebereich stillgelegt: keine Mitarbeitersitzung mehr (lib/oidc.php)
+    if (!sitzung_vorhanden()) return null;   // ohne vorgelegte Kennung keine Sitzung beginnen
     start_session();
     if (empty($_SESSION['uid'])) return null;
     $users = users_load();
