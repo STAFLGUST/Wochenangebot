@@ -6,7 +6,7 @@ Administratoren haben alle Rechte. Standard = Rechte der Standardrollen ohne ges
 
 ## Modulzugang
 
-Für jedes Modul mit Kachel entsteht `<modul>.zugang` (lib/rechte.php, `perms_katalog`): Kachel im Dashboard und Oberfläche des Moduls; Standard: beide Standardrollen.
+Für jedes Modul mit Kachel entsteht `<modul>.zugang` (lib/rechte.php, `perms_katalog`): Kachel im Dashboard und Oberfläche des Moduls; Standard: beide Standardrollen. Ohne ihn läuft keine Aktion des Moduls – auf keinem Host (`modul_zugang_durchsetzen` prüft das Modul des Hosts und das der Aktion). Ein Fachrecht allein öffnet den Bereich also nicht; Ausnahme sind die im Aktionsregister mit `zugang_gemeinsam` vermerkten Aktionen des gemeinsamen Eingabebereichs.
 
 | Recht | Modul |
 | --- | --- |

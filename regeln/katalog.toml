@@ -161,14 +161,14 @@ seit = "2026-10-21"
 [[regel]]
 id = "GR-103"
 titel = "Autorisierung immer serverseitig"
-beschreibung = "Jede Aktion prüft Anmeldung und Recht auf dem Server (require_auth/require_perm). Sichtbarkeit einer Kachel, ein Modulstatus oder versteckte Knöpfe sind nie eine Berechtigung. Jedes Recht ist einem Modul zugeordnet (regeln/berechtigungen.toml)."
+beschreibung = "Jede Aktion prüft Anmeldung und Recht auf dem Server (require_auth/require_perm). Sichtbarkeit einer Kachel, ein Modulstatus oder versteckte Knöpfe sind nie eine Berechtigung. Jedes Recht ist einem Modul zugeordnet (regeln/berechtigungen.toml). Auch der Modulzugang „<modul>.zugang“ ist eine Berechtigung: ohne ihn läuft keine Aktion des Moduls, auf keinem Host (modul_zugang_durchsetzen prüft das Modul des Hosts und das der Aktion; Ausnahmen nur mit dem Vermerk zugang_gemeinsam im Aktionsregister)."
 verantwortlich = "plattform"
 module = ["angebot", "bestand", "crm", "rewe", "qs", "einkauf", "verwaltung", "dashboard", "plattform"]
 daten = ["rechte", "nutzer"]
-tests = ["e2e:users", "e2e:rechte", "e2e:sidenav"]
+tests = ["e2e:users", "e2e:rechte", "e2e:sidenav", "e2e:rollen", "e2e:rollen_host", "e2e:importzentrale"]
 quelle = "AGENTS.md"
 status = "verbindlich"
-version = 1
+version = 2
 seit = "2026-10-21"
 
 [[regel]]

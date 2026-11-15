@@ -314,9 +314,11 @@
       throw Object.assign(new Error('Sitzung abgelaufen – bitte erneut anmelden.'), { status: 401 });
     }
     // Alter Eingabebereich stillgelegt (angebot-stafl.de/admin/): Hinweis und weiter zum neuen Eingabebereich
-    // Kein Modulzugang für diesen Bereich (Rolle, lib/rechte.php): Hinweis mit Rückweg zum Dashboard
+    // Kein Modulzugang (Rolle, lib/rechte.php): „seite“ = die ganze Seite ist gesperrt (Hinweis mit Rückweg zum
+    // Dashboard); seite:false = nur diese Aktion eines fremden Moduls, dann bleibt die Seite stehen und der Aufrufer
+    // zeigt den Fehler (z. B. Preisverlauf im Bestandsbereich)
     if (res.status === 403 && data?.code === 'kein_modulzugang') {
-      zeigeKeinZugang(data.name);
+      if (data.seite !== false) zeigeKeinZugang(data.name);
       throw Object.assign(new Error(data.error || 'Kein Zugang zu diesem Bereich.'), { status: 403 });
     }
     if (res.status === 410 && data?.code === 'umgezogen') {
@@ -526,7 +528,8 @@
     const nur = BEREICH_VIEWS[bereich()];
     if (nur && !nur.includes(v)) return false;
     if (['mail', 'rollen'].includes(v)) return can('admin');   // System (Betrieb, Wartung, Module) und Sicherheit: Modul Sicherheit
-    if (v === 'users') return can('admin') || may('hr.verwalten');   // Mitarbeiter: Administratoren alles, Personalstelle die HR-Angaben
+    if (v === 'users') return can('admin') || (may('hr.verwalten') && may('hr.zugang'));   // Mitarbeiter: Administratoren alles, Personalstelle die HR-Angaben
+    if (v === 'urlaub') return may('hr.verwalten') && may('hr.zugang');   // HR-Aktionen verlangen auch den Modulzugang HR (Server: GR-103)
     if (v === 'gruppen' || v === 'vertreter' || v === 'versandarten') return may('stammdaten.sehen') || may('kunden.sehen');
     if (v === 'importe') return !!(window.WA && window.WA.importSichtbar && window.WA.importSichtbar());   // Importzentrale (admin-import.js)
     return !VIEW_PERM[v] || may(VIEW_PERM[v]);

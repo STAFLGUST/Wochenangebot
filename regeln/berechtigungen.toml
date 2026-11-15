@@ -10,9 +10,10 @@
 # - Neue Rechte beginnen mit der Modul-ID: „<modul>.<recht>“, z. B. „crm.sehen“, „crm.bearbeiten“.
 #   Solche Rechte brauchen hier keinen Eintrag; sie werden über das Präfix zugeordnet.
 # - Der Zugang zu einem Modul (Kachel, Oberfläche) heißt „<modul>.zugang“. lib/rechte.php erzeugt ihn für jedes Modul mit
-#   Kachel aus dem Modulregister (kein Eintrag hier nötig); ohne ihn sperrt der Server den Host des Moduls
-#   (modul_zugang_durchsetzen). Die eigentliche Autorisierung erfolgt weiter serverseitig je Aktion (require_perm),
-#   nie über die Sichtbarkeit einer Kachel.
+#   Kachel aus dem Modulregister (kein Eintrag hier nötig). Er ist selbst eine Berechtigung: ohne ihn sperrt der Server
+#   den Host des Moduls UND jede Aktion des Moduls auf jedem anderen Host (modul_zugang_durchsetzen, seit 15.11.2026;
+#   Ausnahmen: die mit „zugang_gemeinsam“ vermerkten Aktionen des gemeinsamen Eingabebereichs). Das Fachrecht bleibt
+#   zusätzlich nötig – geprüft wird weiter serverseitig je Aktion (require_perm), nie über die Sichtbarkeit einer Kachel.
 # - Die Zuordnung unten erzeugt werkzeuge/regeln.py zusätzlich als RECHTE_MODUL (lib/module-liste.php): danach gliedert
 #   die Verwaltung („Rollen und Rechte“) die Rechte nach Modulen.
 
