@@ -164,6 +164,23 @@ st, r = F.call('marketing_beitrag_save', {'id': b1['id'], 'felder': {'text': 'Fr
 check('Freigeberin ändert Text: bleibt freigegeben', st == 200 and r['beitrag']['status'] == 'geplant', r.get('beitrag', {}).get('status'))
 st, r = F.call('marketing_beitrag_save', {'id': b1['id'], 'felder': {'veroeffentlichung': ''}})
 check('freigegebener Beitrag ohne Termin: 422', st == 422, (st, r))
+# Nebenweg (Sicherheitsdurchsicht 15.11.2026): ein mitgesendetes Feld „status“ hob die Rücknahme der Freigabe auf –
+# damit änderte und veröffentlichte ein Bearbeiter ohne Freigaberecht einen schon freigegebenen Beitrag.
+_b = lambda: [e for e in F.call('marketing_start')[1]['beitraege'] if e['id'] == b1['id']][0]   # noqa: E731
+_vor = _b()
+assert _vor['status'] == 'geplant' and _vor['freigabe']
+st, r = Bb.call('marketing_beitrag_save', {'id': b1['id'], 'felder': {'text': 'Nebenweg: Text geändert.'}, 'status': 'geplant'})
+_n = _b()
+check('Bearbeiter ändert Text und schickt status „geplant“ mit: 403, Status und Freigabe unverändert', st == 403
+      and _n['status'] == 'geplant' and _n['freigabe'] == _vor['freigabe'] and _n['text'] == _vor['text'], (st, r, _n.get('status')))
+st, r = Bb.call('marketing_beitrag_save', {'id': b1['id'], 'felder': {'text': 'Nebenweg: Text geändert.'}, 'status': 'veroeffentlicht'})
+_n = _b()
+check('… dasselbe mit status „veröffentlicht“: 409, nichts veröffentlicht', st == 409 and _n['status'] == 'geplant'
+      and _n['freigabe'] == _vor['freigabe'] and not _n.get('veroeffentlichtAm') and _n['text'] == _vor['text'], (st, r, _n.get('status')))
+check('wiederholter Status „geplant“ ohne Änderung braucht das Freigaberecht (nie rechtefrei)',
+      Bb.call('marketing_beitrag_save', {'id': b1['id'], 'felder': {}, 'status': 'geplant'})[0] == 403)
+check('Freigeberin darf den Text eines freigegebenen Beitrags mit status „geplant“ ändern', F.call('marketing_beitrag_save',
+      {'id': b1['id'], 'felder': {'text': 'Freigeberin ändert mit Status.'}, 'status': 'geplant'})[0] == 200 and _b()['status'] == 'geplant')
 st, r = Bb.call('marketing_beitrag_save', {'id': b1['id'], 'felder': {'veroeffentlicht': {'instagram': 'https://www.instagram.com/p/beispiel/'},
                                                                      'ergebnisse': {'instagram': {'reichweite': '1200', 'interaktionen': 85, 'aufrufe': None}, 'tiktok': {}}},
                                            'status': 'veroeffentlicht'})

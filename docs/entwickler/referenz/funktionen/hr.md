@@ -103,12 +103,12 @@ _Modul HR · Jahresplanung des Urlaubs (Inhaber 03.11.2026, Vorplanung und Einze
 - `hr_planung_ich(ich, eintraege, heute)` – Hinweis auf der Urlaubsseite des Mitarbeiters: nur in der Planungsphase (ab Beginn, bis die Planung abgeschlossen ist); nach dem Stichtag nur noch für alle, …
 - `hr_planung_schnitt(a, b)` – Überschneidung zweier Zeiträume
 - `hr_vertretung_luecken(e, p, vp, eintraege, nurGenehmigt)` – Wann ist die Vertretung im Zeitraum eines Antrags nicht da? Arbeitstage des Antragstellers, an denen die Vertretung abwesend ist (jede Abwesenheit außer …
-- `hr_antrag_zeitraum(ich, personal, eintraege, einst, art, von, bis, vertretung, andere, vertretung2)` – Prüfung eines Zeitraums für einen eigenen Antrag – gemeinsam für hr_antrag, hr_vorplanung und die Vorschau hr_antrag_pruefen.
+- `hr_antrag_zeitraum(ich, personal, eintraege, einst, art, von, bis, vertretung, andere, vertretung2, me)` – Prüfung eines Zeitraums für einen eigenen Antrag – gemeinsam für hr_antrag, hr_vorplanung und die Vorschau hr_antrag_pruefen.
 - `hr_feste_vertretung(ich, personal)` – Feste Vertretung eines Mitarbeiters aus den Stammdaten (hr-personal.vertretung, Verwaltung → Mitarbeiter; Inhaber 10.11.2026): steht im Antrag fest und muss …
 - `hr_vertretung_text(e, idx)` – Vertretungen eines Eintrags als Text: „A“, „A, zusätzlich B“ oder ''
 - `hr_meine_vertretungen(ich, personal, eintraege)` – Wen vertritt der Mitarbeiter?
 - `hr_zeitraeume_anfrage(l)` – Zeiträume aus der Anfrage (Vorplanung und Vorschau): [{von, bis, vertretung}] – höchstens HR_VORPLANUNG_MAX
-- `hr_vorplanung_pruefen(ich, personal, eintraege, einst, zr, jahr)` – Vorplanung prüfen (ohne zu speichern): jeder Zeitraum wie ein Antrag (hr_antrag_zeitraum), nur im Vorplanungsjahr.
+- `hr_vorplanung_pruefen(ich, personal, eintraege, einst, zr, jahr, me)` – Vorplanung prüfen (ohne zu speichern): jeder Zeitraum wie ein Antrag (hr_antrag_zeitraum), nur im Vorplanungsjahr.
 - `hr_daten_text(daten)` – Daten als kurze Zeiträume (aufeinanderfolgende Kalendertage zusammengefasst, höchstens vier, dann „…“)
 - `hr_planung_konflikte(e, p, idx, eintraege, sperren, pe, verfuegbar, einzel, amStueck)` – Konflikte eines Urlaubsantrags in der Jahresplanung.
 - `hr_planung(jahr, me)` – Zusammenfassung eines Jahres für die Personalstelle und „Urlaub genehmigen“: Mitarbeiter im Urlaubsplan mit Stand, alle Urlaubsanträge des Jahres (beantragt, …

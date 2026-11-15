@@ -432,6 +432,14 @@ und `history_prev` (Recht `preisverlauf.sehen`) liefern sie nicht, und `history_
 (GR-002). Frühere Wochen (`angebot_woche`) verlangen für die Quelle Preisverlauf `preisverlauf.sehen`, der Abgleich des
 Entwurfs samt Anwesenheitsliste (`draft_ping`) `angebot.zugang`.
 
+**Abgeleitete Angaben hängen am selben Recht wie die Angabe selbst.** Unterdrückt eine Antwort eine Zahl, weil das Recht
+fehlt, darf sie auch nicht als Summe, Zähler, Warnhinweis, Sortierung oder Fehlertext wieder auftauchen – wer die Anfrage
+bestimmt, fragt sonst Zeile für Zeile ab, was die Antwort einzeln verweigert. Beispiele aus der Durchsicht vom
+15.11.2026: die Importvorschau der Stammdatenlisten zählt entfallende Einträge mit zugeordneten Kunden nur noch mit
+`kunden.sehen` (`gruppen_import_vorschau`, derselbe Schalter `$zaehlt` wie für die Zahl je Zeile); die
+Vertretungsprüfung in HR nennt die genauen Abwesenheitstage nur im Rahmen der Abteilungsgrenze des Kalenders
+(`hr_antrag_zeitraum`).
+
 **Versand (seit 13.11.2026):** Veröffentlichen und Senden liegen im Modul `versand` mit eigenem Modulzugang `versand.zugang`
 (`zugang_rollen = []` – keine Standardrolle, nur Administratoren). Die bestehenden Rechte `angebot.veroeffentlichen`,
 `wochenangebot.senden` und `sonderposten.senden` behalten ihre Schlüssel (gespeicherte Rollenrechte bleiben gültig), stehen im

@@ -1190,6 +1190,40 @@ check('… Vorschau (speichert nichts): Vertretung „abwesend“, derselbe Grun
 st, r = F.call('hr_antrag_pruefen', {'zeitraeume': [{'von': iso(N1 + dt.timedelta(days=14 + 7)), 'bis': iso(N1 + dt.timedelta(days=14 + 7)), 'vertretung': PE}]})
 z_ = (r.get('zeitraeume') or [{}])[0]
 check('… Vorschau: Vertretung da', st == 200 and (z_.get('vertretung') or {}).get('status') == 'da' and z_.get('fehler') is None and z_.get('tage') == 1, (st, r))
+# Abteilungsgrenze der Vertretungsprüfung (Sicherheitsdurchsicht 15.11.2026): die Prüfung braucht nur, ob die Vertretung
+# verfügbar ist. Genaue Abwesenheitstage nennt sie nur, wer sie im Kalender ohnehin sieht – eigene Abteilung,
+# Personalstelle oder Urlaubsübersicht. Andre (Lager) ist am N3+3 abwesend; Fritz ist Lager, Erika Verwaltung.
+VT_ = iso(N3 + dt.timedelta(days=3)); VT_TAG_ = f'{(N3 + dt.timedelta(days=3)):%d.%m.%Y}'
+vpr_ = lambda cl, z, **kw: ((cl.call('hr_antrag_pruefen', dict(kw, zeitraeume=[z]))[1].get('zeitraeume') or [{}])[0])   # noqa: E731
+vtext_ = lambda z, k='vertretung': ((z.get(k) or {}).get('text') or '')   # noqa: E731
+zf_ = vpr_(F, {'von': VT_, 'bis': VT_, 'vertretung': PA})
+ze_ = vpr_(E, {'von': VT_, 'bis': VT_, 'vertretung': PA})
+check('eigene Abteilung: genaue Tage wie bisher', (zf_.get('vertretung') or {}).get('status') == 'abwesend'
+      and f'selbst abwesend ({VT_TAG_})' in vtext_(zf_), zf_)
+check('andere Abteilung: „nicht verfügbar“, kein Datum und kein Grund – abgelehnt wird trotzdem (409)',
+      (ze_.get('vertretung') or {}).get('status') == 'abwesend' and ze_.get('code') == 409 and 'nicht verfügbar' in vtext_(ze_)
+      and VT_TAG_ not in vtext_(ze_) and 'abwesend' not in vtext_(ze_), (ze_, vtext_(ze_)))
+# Lena ist Verwaltung, Andre Lager: mit dem Recht der Urlaubsübersicht (wie hr.verwalten) nennt die Prüfung die Tage
+lena_rechte_ = lambda g: A.call('user_save', {'id': ids['lena'], 'name': 'Lena Leser', 'role': 'viewer', 'active': True, 'grant': g})[0]   # noqa: E731
+assert lena_rechte_(['hr.uebersicht']) == 200
+zu_ = vpr_(L, {'von': VT_, 'bis': VT_, 'vertretung': PA})
+check('mit Urlaubsübersicht (hr.uebersicht, wie die Personalstelle): Tage auch über die Abteilung hinaus',
+      f'selbst abwesend ({VT_TAG_})' in vtext_(zu_), (zu_, vtext_(zu_)))
+assert lena_rechte_([]) == 200
+zu0_ = vpr_(L, {'von': VT_, 'bis': VT_, 'vertretung': PA})
+check('… Recht entzogen: dieselbe Anfrage wieder ohne Tage', 'nicht verfügbar' in vtext_(zu0_) and VT_TAG_ not in vtext_(zu0_), (zu0_, vtext_(zu0_)))
+zz_ = vpr_(E, {'von': VT_, 'bis': VT_, 'vertretung': PL, 'vertretung2': PA})
+check('zusätzliche Vertretung aus anderer Abteilung: ebenfalls ohne Datum', (zz_.get('vertretung2') or {}).get('status') == 'abwesend'
+      and 'nicht verfügbar' in vtext_(zz_, 'vertretung2') and VT_TAG_ not in vtext_(zz_, 'vertretung2'), (zz_, vtext_(zz_, 'vertretung2')))
+FR_ = iso(N1 + dt.timedelta(days=4))   # Freitag – Andre arbeitet Mo–Do: Hinweis, keine Ablehnung
+zh_ = vpr_(E, {'von': FR_, 'bis': FR_, 'vertretung': PA})
+check('„arbeitet nicht“ aus anderer Abteilung: Hinweis ohne Tage', (zh_.get('vertretung') or {}).get('status') == 'frei'
+      and 'nicht an allen Tagen' in vtext_(zh_) and f'{(N1 + dt.timedelta(days=4)):%d.%m.%Y}' not in vtext_(zh_), (zh_, vtext_(zh_)))
+# Vorplanung nutzt dieselbe Prüfung (hr_vorplanung_pruefen → hr_antrag_zeitraum): auch dort keine Tage über die
+# Abteilungsgrenze hinaus – sonst wären mit 20 Zeilen je Anfrage die Tage des ganzen Personals abfragbar.
+zv_ = vpr_(E, {'von': VT_, 'bis': VT_, 'vertretung': PA}, vorplanung=True)
+check('Vorplanung: Vertretung aus anderer Abteilung „nicht verfügbar“, ohne Datum',
+      (zv_.get('vertretung') or {}).get('status') == 'abwesend' and 'nicht verfügbar' in vtext_(zv_) and VT_TAG_ not in vtext_(zv_), (zv_, vtext_(zv_)))
 st, r = E.call('hr_antrag', {'von': iso(N1 + dt.timedelta(days=7)), 'bis': iso(N1 + dt.timedelta(days=7)), 'vertretung': PL})
 PH_ = r['eintrag']['id'] if st == 200 else None   # Erika beantragt (offen)
 st, r = F.call('hr_antrag', {'von': iso(N1 + dt.timedelta(days=7)), 'bis': iso(N1 + dt.timedelta(days=7)), 'vertretung': PE})
@@ -1528,9 +1562,9 @@ st, r = P.call('hr_eintrag_save', {'person': PE, 'art': 'U', 'von': iso(T1 + dt.
 VT_E = r['eintrag']['id'] if st == 200 else None   # Erika (feste Vertretung) genehmigt weg
 st, r = F.call('hr_antrag', {'von': iso(T1 + dt.timedelta(days=7)), 'bis': iso(T1 + dt.timedelta(days=7))})
 check('Feste Vertretung abwesend: abgelehnt (409) – „fest hinterlegt“, anderen Zeitraum oder Personalstelle', st == 409
-      and 'Ihre Vertretung Erika Editor ist in dieser Zeit selbst abwesend' in r.get('error', '') and 'fest hinterlegt' in r.get('error', ''), (st, r))
+      and 'Ihre Vertretung Erika Editor ist in dieser Zeit nicht verfügbar' in r.get('error', '') and 'fest hinterlegt' in r.get('error', ''), (st, r))   # andere Abteilung: ohne Tage
 st, r = F.call('hr_antrag', {'von': iso(T1 + dt.timedelta(days=2)), 'bis': iso(T1 + dt.timedelta(days=2)), 'vertretung2': PL})
-check('Zusätzliche Vertretung abwesend: abgelehnt (409)', st == 409 and 'Ihre zusätzliche Vertretung Lena Leser ist in dieser Zeit selbst abwesend' in r.get('error', ''), (st, r))
+check('Zusätzliche Vertretung abwesend: abgelehnt (409)', st == 409 and 'Ihre zusätzliche Vertretung Lena Leser ist in dieser Zeit nicht verfügbar' in r.get('error', ''), (st, r))
 check('… ungültige zusätzliche Vertretung: 422', F.call('hr_antrag', {'von': iso(T1 + dt.timedelta(days=14)), 'bis': iso(T1 + dt.timedelta(days=14)), 'vertretung2': 'u-x'})[0] == 422)
 st, r = F.call('hr_antrag', {'von': iso(T1 + dt.timedelta(days=14)), 'bis': iso(T1 + dt.timedelta(days=14)), 'vertretung2': PE})
 VT_C = r['eintrag']['id'] if st == 200 else None
@@ -2258,7 +2292,8 @@ with sync_playwright() as p:
             zr_setzen(1, JP2 + dt.timedelta(days=3), JP2 + dt.timedelta(days=3))
             pg.wait_for_selector('#vp-liste .hr-vp-zeile.fehler')
             st2_ = zeile(1).locator('.hr-vp-status').text_content()
-            check('Vertretung abwesend: Zeile rot mit Bitte um andere Vertretung (vor dem Absenden, ohne Grund)', 'selbst abwesend' in st2_ and 'andere Vertretung' in st2_ and 'Urlaub' not in st2_, st2_)
+            check('Vertretung abwesend: Zeile rot mit Bitte um andere Vertretung (vor dem Absenden, ohne Grund und – andere Abteilung – ohne Tage)',
+                  'nicht verfügbar' in st2_ and 'andere Vertretung' in st2_ and 'Urlaub' not in st2_, st2_)
             pg.wait_for_function(f"document.querySelector('#vp-stand').textContent.includes('{vor_['geplant'] + 2:g}'.replace('.', ','))")
             check('Stand mit diesen Zeiträumen: zählt nur die gültige Zeile; Knopf „Alle 2 Zeiträume beantragen“', pg.is_visible('#vp-stand .hr-mp-balken')
                   and pg.text_content('#antrag-senden') == 'Alle 2 Zeiträume beantragen', (pg.text_content('#vp-stand'), pg.text_content('#antrag-senden')))
@@ -2293,7 +2328,7 @@ with sync_playwright() as p:
                 pg.fill(f_, iso(d_)); pg.dispatch_event(f_, 'change')
             pg.select_option('#antrag-vertretung', PA)
             pg.wait_for_selector('#antrag-pruefung.fehler')
-            check('390px einzelner Antrag: Vertretung abwesend – Hinweis vor dem Absenden', 'Andre Vierzig ist in dieser Zeit selbst abwesend' in pg.text_content('#antrag-pruefung'),
+            check('390px einzelner Antrag: Vertretung abwesend – Hinweis vor dem Absenden', 'Andre Vierzig ist in dieser Zeit nicht verfügbar' in pg.text_content('#antrag-pruefung'),
                   pg.text_content('#antrag-pruefung'))
             pg.screenshot(path=os.path.join(SH, 'hr_antrag_vertretung_390.png'), full_page=False)
             for f_ in ('#antrag-von', '#antrag-bis'):

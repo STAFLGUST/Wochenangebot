@@ -65,8 +65,10 @@ switch ($action) {
                     $geaendert = array_keys(array_filter($f, function ($v, $k) use ($alt) { return $v !== ($alt[$k] ?? null); }, ARRAY_FILTER_USE_BOTH));
                     if ($neuerStatus === null && !$geaendert) return mkt_beitrag_aus($alt, mkt_team_namen());
                     if ($geaendert) mkt_verlauf($e, $me, 'geändert: ' . implode(', ', $geaendert));
-                    // Inhalt eines freigegebenen Beitrags geändert, ohne selbst freigeben zu dürfen → zurück in die Freigabe
-                    if ($neuerStatus === null && $alt['status'] === 'geplant' && array_intersect($geaendert, MKT_FREIGABE_FELDER) && !may($me, 'marketing.freigeben')) {
+                    // Inhalt eines freigegebenen Beitrags geändert, ohne selbst freigeben zu dürfen → zurück in die Freigabe.
+                    // Auch wenn die Anfrage „status“ mitschickt: ein mitgesendeter Status hob die Rücknahme sonst auf
+                    // (mkt_status_setzen lehnt danach „geplant“ mit 403 und „veröffentlicht“ mit 409 ab).
+                    if ($alt['status'] === 'geplant' && array_intersect($geaendert, MKT_FREIGABE_FELDER) && !may($me, 'marketing.freigeben')) {
                         $e['status'] = 'freigabe'; $e['freigabe'] = null;
                         mkt_verlauf($e, $me, 'Freigabe zurückgenommen (Inhalt oder Termin geändert) → Zur Freigabe');
                     }

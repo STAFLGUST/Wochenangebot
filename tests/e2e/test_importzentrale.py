@@ -202,6 +202,22 @@ check('Zentrale: Aktiv-Regel als Standard, Zeile mit Grund, Hinweis', st == 200 
 st, r = K.call('import_pruefen', {'art': 'kunden', 'daten': ALT, 'optionen': {'aktivRegel': False}})
 check('Zentrale: Aktiv-Regel abschaltbar', st == 200 and 'inaktiv' not in r['zeilen'][0]['text'] and not any('Aktiv-Status' in h['text'] for h in r['hinweise']), r.get('zeilen'))
 
+# ---------- Listen der Stammdaten: Kundenzuordnungen nur mit „Kunden ansehen“ ----------
+# Nebenweg (Sicherheitsdurchsicht 15.11.2026): die Zahl je Zeile war richtig unterdrückt, der zusammenfassende
+# Warnhinweis derselben Antwort nannte aber, wie viele entfallende Einträge zugeordnete Kunden haben – weil der
+# Mitarbeiter den Inhalt der „Datei“ bestimmt, war damit je Nummer abfragbar, ob ein Kunde daran hängt.
+_KG = A.call('kundengruppen')[1]['groups']
+_vorschau = lambda cl, nr: cl.call('import_pruefen', {'art': 'kundengruppen',   # dieselbe Liste ohne eine Nummer: genau die entfällt
+      'daten': {'groups': [{**g, 'zeile': i + 2} for i, g in enumerate(_KG) if g['nr'] != nr]}})[1]   # noqa: E731
+_zug = {g['nr']: 'zugeordnet' in _vorschau(A, g['nr'])['zeilen'][0]['text'] for g in _KG}
+_mit = next(n for n, z in _zug.items() if z); _ohne = next(n for n, z in _zug.items() if not z)
+_warn = lambda v: [h['text'] for h in v['hinweise'] if h['stufe'] == 'warn']   # noqa: E731
+check('mit „Kunden ansehen“: Warnhinweis nur, wenn dem entfallenden Eintrag Kunden zugeordnet sind',
+      _warn(_vorschau(A, _mit)) and not _warn(_vorschau(A, _ohne)), (_zug, _warn(_vorschau(A, _mit))))
+_vm, _vo = _vorschau(E, _mit), _vorschau(E, _ohne)
+check('ohne „Kunden ansehen“: keine Zahl je Zeile, kein Warnhinweis, zeichengleiche Hinweise für beide Nummern',
+      _vm['hinweise'] == _vo['hinweise'] and not _warn(_vm) and 'zugeordnet' not in _vm['zeilen'][0]['text'], (_vm['hinweise'], _vm['zeilen']))
+
 # ---------- Bestand (Eigentümer Bestand) über die Schnittstelle ----------
 ART = [{'code': '10601', 'name': 'Roastbeef', 'kg': 120.5, 'mhd': '2026-11-02', 'mhdKg': 20.0, 'lots': [{'lot': 'P1', 'kg': 120.5, 'mhd': '2026-11-02', 'ek': 18.68}]},
        {'code': '10823', 'name': 'Steakhüfte', 'kg': 40.0, 'mhd': None, 'mhdKg': None, 'lots': [{'lot': 'P2', 'kg': 40.0, 'ek': 12.1}]}]

@@ -134,7 +134,7 @@ switch ($action) {
                 if (!$ich) fail('Ihr Konto ist noch keinem Mitarbeiter zugeordnet. Bitte an die Personalstelle wenden.', 409);
                 // gemeinsame Prüfung mit Vorplanung und Vorschau – auch ob die Vertretung da ist (Inhaber 10.11.2026)
                 // feste Vertretung (Stammdaten) und optionale zusätzliche – beide müssen da sein (Inhaber 10.11.2026)
-                $z = hr_antrag_zeitraum($ich, $personal, $abw['eintraege'], $einst, $art, $von, $bis, $b['vertretung'] ?? null, [], $b['vertretung2'] ?? null);
+                $z = hr_antrag_zeitraum($ich, $personal, $abw['eintraege'], $einst, $art, $von, $bis, $b['vertretung'] ?? null, [], $b['vertretung2'] ?? null, $me);
                 if ($z['fehler'] !== null) fail($z['fehler'], $z['code']);
                 // genug Urlaubstage? Über der Grenze der Personalstelle: abgelehnt; darunter nur mit Bestätigung (Inhaber 10.11.2026)
                 $ue = $art === 'U' ? hr_ueberzug($ich, $abw['eintraege'], [['art' => 'U', 'von' => $von, 'bis' => $bis]]) : ['tage' => 0.0];
@@ -179,7 +179,7 @@ switch ($action) {
             if ($vor) {
                 if ($art !== 'U') fail('Die Vorplanung gilt für Urlaub.', 422);
                 $pe = hr_planung_einst(); $jahr = hr_planung_jahr(null, $pe);
-                [$erg, $gut] = hr_vorplanung_pruefen($ich, $personal, $abw['eintraege'], $einst, $zr, $jahr);
+                [$erg, $gut] = hr_vorplanung_pruefen($ich, $personal, $abw['eintraege'], $einst, $zr, $jahr, $me);
                 $stand = hr_planung_person($ich, $abw['eintraege'], $jahr, $pe, $gut);
                 $konto = hr_konto($ich, $abw['eintraege'], $jahr);
                 $neu = array_sum(array_map(function ($e) { return $e['fehler'] === null ? $e['tage'] : 0; }, $erg));
@@ -189,7 +189,7 @@ switch ($action) {
                          'ueberzugText' => $ue['tage'] > 0 ? hr_ueberzug_text($ue, $einst['ueberziehenMax']) : null]);
             }
             if (count($zr) !== 1) fail('Bitte einen Zeitraum angeben.', 422);
-            $z = hr_antrag_zeitraum($ich, $personal, $abw['eintraege'], $einst, $art, $zr[0]['von'], $zr[0]['bis'], $zr[0]['vertretung'], [], $zr[0]['vertretung2']);
+            $z = hr_antrag_zeitraum($ich, $personal, $abw['eintraege'], $einst, $art, $zr[0]['von'], $zr[0]['bis'], $zr[0]['vertretung'], [], $zr[0]['vertretung2'], $me);
             // genug Urlaubstage? über der Grenze: Ablehnungsgrund; darunter: Rückfrage beim Absenden (Inhaber 10.11.2026)
             $ue = $art === 'U' ? hr_ueberzug($ich, $abw['eintraege'], [['art' => 'U', 'von' => $zr[0]['von'], 'bis' => $zr[0]['bis']]]) : ['tage' => 0.0];
             $z['ueberzug'] = $ue['tage']; $z['ueberziehenMax'] = $einst['ueberziehenMax'];
@@ -214,7 +214,7 @@ switch ($action) {
                 $ich = hr_ich($personal, $me);
                 if (!$ich) fail('Ihr Konto ist noch keinem Mitarbeiter zugeordnet. Bitte an die Personalstelle wenden.', 409);
                 $jahr = hr_planung_jahr();
-                [$erg, $gut] = hr_vorplanung_pruefen($ich, $personal, $abw['eintraege'], $einst, $zr, $jahr);
+                [$erg, $gut] = hr_vorplanung_pruefen($ich, $personal, $abw['eintraege'], $einst, $zr, $jahr, $me);
                 if (count($gut) !== count($zr)) return ['fehler' => true, 'zeitraeume' => $erg];
                 // genug Urlaubstage für alle Zeilen zusammen? (wie beim einzelnen Antrag, Inhaber 10.11.2026)
                 $ue = hr_ueberzug($ich, $abw['eintraege'], array_map(function ($z) { return ['art' => 'U', 'von' => $z['von'], 'bis' => $z['bis']]; }, $zr));
