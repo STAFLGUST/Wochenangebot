@@ -332,6 +332,11 @@ $pres = with_lock('anwesenheit', function () use ($me, $now) {
 `app/api/mail.php` enthält einen eigenen SMTP-Client (Klasse `Smtp`, STARTTLS oder SSL, eine Verbindung für mehrere
 Nachrichten), `mail_build` (Text/HTML, Anhänge als multipart/mixed; Anhänge mit `cid` als eingebettete Bilder in multipart/related, im HTML `src="cid:…"`), `mail_layout`, `mail_button`, `mail_h`; für Einladungen und Passwort-Links `mail_layout_einladung` (Kopfband, Überschrift, Schritte) mit `mail_button_gross` und `mail_feld` – dasselbe Aussehen hat die Keycloak-Vorlage `deploy/anmeldung/theme/stafl/email/html/executeActions.ftl`.
 
+- **STARTTLS:** Nach der Antwort `220` auf `STARTTLS` darf im Klartext nichts mehr folgen. Hat der Mailserver (oder
+  jemand im Netzpfad) weitere Bytes vorweggeschickt, bricht der Client die Verbindung mit einem Fehler ab – verwerfen
+  genügte nicht, sonst ließen sich echte Antworten durch eingeschobene ersetzen. Der Fehlertext beginnt mit
+  „Verschlüsselung – “ und gilt damit als „sicher nicht zugestellt“ (`POSTAUSGANG_SICHER_NICHT_ZUGESTELLT`), ein
+  Wiederholen bleibt möglich.
 - **Postfach:** `mail_cfg()` liefert die Einstellungen oder `null` (Versand nicht eingerichtet). Vorrang hat das im
   Eingabebereich gespeicherte Postfach (Dokument `mailkonto`, Passwort `passEnc` mit libsodium verschlüsselt,
   Schlüssel im Dokument `mail-schluessel`, nie in Sicherungen, nie in Antworten); sonst die Umgebungsvariablen
@@ -420,6 +425,14 @@ bzw. des IPv6-/64-Netzes, `client_key`); Grenzen aus `config.php` (`max_attempts
 | Diagnose | `lib/diagnose.php` | nur lesend, für Administratoren |
 
 Sicherheitseinstellungen liest `sec()` einmal je Anfrage: `array_merge(SEC_DEFAULTS, store_read('sicherheit') ?? [])`.
+
+**Einstellungen aus einer Datei übernehmen** (`fw_import`, Modul Sicherheit → Einstellungen → Import): Die Datei ist
+unvertraut. Jeder übertragbare Wert wird vor dem Zusammenlegen gegen seinen Wertebereich geprüft (`SEC_IMPORT_WERTE`) und
+die Datei bei einem unzulässigen Wert mit 422 abgewiesen – `sec_clean`/`fw_clean` würden ihn still auf den Standard
+setzen, und der ist bei diesen Feldern (Zwei-Faktor-Pflicht, Passwortlänge, Sitzungsdauer, Kontosperre, Fehlerbremse)
+die schwächste Stufe. Übernommene Änderungen stehen feldweise im Protokoll (`SEC_FELD_LABEL`, `FW_FELD_LABEL` – dieselben
+Bezeichnungen wie bei `security_save`/`fw_save`), und der Importdialog zeigt vorher dieselbe Tabelle „jetzt/danach“ wie
+der Vorlagendialog. Adress- und Länderlisten überträgt eine Datei nie.
 
 ## 3.9 Bestell-API und App-API
 

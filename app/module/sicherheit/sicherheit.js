@@ -1110,7 +1110,7 @@
 
   /* ======================= Einstellungen & Vorlagen ======================= */
   const SEC_LABEL = { twofa: 'Zwei-Faktor-Pflicht', pwMin: 'Passwort-Mindestlänge', pwComplex: 'Passwort-Komplexität', pwLeak: 'Datenleck-Prüfung', idleMinutes: 'Abmeldung nach Inaktivität (Min.)',
-    lockAfter: 'Kontosperre nach Fehlversuchen', lockMinutes: 'Kontosperre (Min.)' };
+    lockAfter: 'Kontosperre nach Fehlversuchen', lockMinutes: 'Kontosperre (Min.)', bestaetigungMinuten: 'Passwortbestätigung gilt (Min.)' };
   const FW_LABEL = { waf: 'Firewall', autoSperre: 'Automatische Sperre', treffer: 'Treffer bis zur Sperre', sperrMinuten: 'Sperrdauer', fehlerLimit: 'Fehlerbremse', feed: 'Bedrohungsliste', mitschnittMinuten: 'Mitschnitt (Min.)' };
   const TWOFA = { off: 'freiwillig', admins: 'für Administratoren', all: 'für alle Zugänge' };
   const wertText = (k, v) => (typeof v === 'boolean' ? (v ? 'an' : 'aus') : k === 'twofa' ? TWOFA[v] || v : k === 'sperrMinuten' ? DAUER[v] || v + ' Min.' : k === 'waf' && S.fw ? S.fw.modi[v] || v : String(v ?? '—'));
@@ -1176,12 +1176,18 @@
       dialogZu(); toast('Wochenbericht gespeichert.'); einstZeichnen();
     } });
   }
+  /* Vergleichstabelle „jetzt/danach“ – für Vorlagen und für den Import aus einer Datei */
+  function vorschauTabelle(zeilen) {
+    return `<table class="sic-tabelle klein vorschau"><thead><tr><th>Einstellung</th><th>jetzt</th><th>danach</th></tr></thead><tbody>${zeilen.map(([l, a, b]) => `<tr class="${a !== b ? 'neu' : ''}"><td>${esc(l)}</td><td>${esc(a)}</td><td>${a !== b ? `<strong>${esc(b)}</strong>` : esc(b)}</td></tr>`).join('')}</tbody></table>`;
+  }
+  /* Felder, die eine Datei nie überträgt (Adressen, Länder, Mitschnitt) – sie hängen am einzelnen Server */
+  const IMPORT_NICHT = ['ipEnabled', 'adminIps', 'geoEnabled', 'geoMode', 'geoCountries', 'geoScope', 'erlaubt', 'mitschnittBis', 'bestaetigungAus'];
   function vorlageDialog(k) {
     const v = S.fw.vorlagen[k], w = v.werte || { sec: {}, fw: {} }, St = S.sec.settings, F = S.fw.fw;
     const zeilen = [...Object.entries(w.sec).map(([x, n]) => [SEC_LABEL[x] || x, wertText(x, St[x]), wertText(x, n)]), ...Object.entries(w.fw).map(([x, n]) => [FW_LABEL[x] || x, wertText(x, F[x]), wertText(x, n)])];
     const geaendert = zeilen.filter(([, a, b]) => a !== b).length;
     dialog(`${dKopf(`Vorlage „${v.label}“`, esc(v.text))}<div class="sic-dinhalt">
-        <table class="sic-tabelle klein vorschau"><thead><tr><th>Einstellung</th><th>jetzt</th><th>danach</th></tr></thead><tbody>${zeilen.map(([l, a, b]) => `<tr class="${a !== b ? 'neu' : ''}"><td>${esc(l)}</td><td>${esc(a)}</td><td>${a !== b ? `<strong>${esc(b)}</strong>` : esc(b)}</td></tr>`).join('')}</tbody></table>
+        ${vorschauTabelle(zeilen)}
         <p class="sic-hinweis">${geaendert ? `${plural(geaendert, 'Einstellung ändert sich', 'Einstellungen ändern sich')}.` : 'Die Einstellungen entsprechen bereits dieser Vorlage.'} Adresslisten und Länder bleiben unverändert.</p></div>
       ${dFuss(`<button type="button" class="btn" data-d="zu">Abbrechen</button><button type="submit" class="btn primary"${geaendert ? '' : ' disabled'}>Vorlage anwenden</button>`)}`,
     { breit: true, handler: async (a) => {
@@ -1200,14 +1206,19 @@
       if (a !== 'submit' || !daten) return;
       const r = await aufruf('fw_import', { body: { export: daten } });
       S.fw = { ...S.fw, ...r }; S.sec = null; dialogZu(); toast('Einstellungen übernommen.'); await einstellungenTab();
-    } });
+    }, breit: true });
     $('#im-datei', dlg).addEventListener('change', async (e) => {
       daten = null; $('#im-los', dlg).disabled = true; dFehler('');
       try {
         const x = JSON.parse(await e.target.files[0].text());
         if (!x || x.art !== 'wochenangebot-sicherheit') throw new Error('Die Datei ist kein Export der Sicherheitseinstellungen.');
         daten = x;
-        $('#im-vorschau', dlg).innerHTML = `<p class="sic-meldung ok">Export vom ${esc(zeit(x.stand))} Uhr · ${zahl(Object.keys(x.sicherheit || {}).length)} Sicherheits- und ${zahl(Object.keys(x.firewall || {}).length)} Firewall-Einstellungen.</p>`;
+        const St = S.sec.settings, F = S.fw.fw;
+        const zeilen = [...Object.entries(x.sicherheit || {}).filter(([k]) => !IMPORT_NICHT.includes(k)).map(([k, n]) => [SEC_LABEL[k] || k, wertText(k, St[k]), wertText(k, n)]),
+          ...Object.entries(x.firewall || {}).filter(([k]) => !IMPORT_NICHT.includes(k)).map(([k, n]) => [FW_LABEL[k] || k, wertText(k, F[k]), wertText(k, n)])];
+        const geaendert = zeilen.filter(([, a, b]) => a !== b).length;
+        $('#im-vorschau', dlg).innerHTML = `<p class="sic-meldung ok">Export vom ${esc(zeit(x.stand))} Uhr</p>${vorschauTabelle(zeilen)}
+          <p class="sic-hinweis">${geaendert ? `${plural(geaendert, 'Einstellung ändert sich', 'Einstellungen ändern sich')}` : 'Keine Einstellung ändert sich'} beim Übernehmen.</p>`;
         $('#im-los', dlg).disabled = false;
       } catch (ex) { dFehler(ex.name === 'SyntaxError' ? 'Die Datei ist keine gültige JSON-Datei.' : ex.message); }
     });

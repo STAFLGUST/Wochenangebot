@@ -309,6 +309,18 @@ n0 = len(smtp.messages)
 check('after removal .env account is used again', A.call('mail_test', {'to': 'ich@example.org'})[0] == 200 and len(smtp.messages) == n0 + 1)
 smtp2.close()
 
+# ---------- STARTTLS: vor dem Handschlag eingeschobene Klartextantworten brechen den Versand ab ----------
+smtp3 = TestSmtp(SMTP_PORT2, user='konto@example.org', password=KONTO_PW, vorweg=True)
+code, r = A.call('mail_konto_save', {**konto, 'secure': 'starttls'})
+check('STARTTLS mit vorweggeschickten Klartextantworten: Verbindungsprüfung bricht ab',
+      code == 200 and r['connection']['ok'] is False and 'zusätzliche Daten' in r['connection']['error'], r)
+n0 = len(smtp3.messages)
+code, r = A.call('mail_test', {'to': 'ich@example.org'})
+check('Versand abgebrochen, nichts zugestellt', code == 502 and 'zusätzliche Daten' in r.get('error', '') and len(smtp3.messages) == n0, (code, r))
+check('Fehlertext gilt als „sicher nicht zugestellt“ (Wiederholung möglich)', 'Verschlüsselung – ' in r.get('error', ''), r.get('error'))
+A.call('mail_konto_save', {'remove': True})
+smtp3.close()
+
 # ---------- Oberfläche ----------
 with sync_playwright() as p:
     br = p.chromium.launch()

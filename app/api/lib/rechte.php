@@ -390,3 +390,15 @@ function rechte_module(): array
     }
     return $out;
 }
+/* Dokument „rechte“ schreiben: Revision hochzählen und ein Speichern auf veraltetem Lesestand ablehnen – wie
+   gruppen_speichern. Die Oberfläche schickt die Revision zurück, die die Aktion „rechte“ geliefert hat; ohne Angabe
+   (ältere Oberfläche, Skripte) wird wie bisher gespeichert, dort schützt allein die Sperre. „rev“ ist ein neues
+   optionales Feld (GR-006). Aufruf immer innerhalb von with_lock('rechte'). */
+function rechte_schreiben(array $roles, array $kat, array $me): void
+{
+    $rev = rechte_rev();
+    $gesendet = body()['rev'] ?? null;
+    if (is_int($gesendet) && $gesendet !== $rev) fail('Die Rechte wurden inzwischen an anderer Stelle geändert. Bitte neu laden.', 409);
+    store_write('rechte', ['roles' => $roles, 'bekannt' => array_keys($kat), 'rev' => $rev + 1, 'updatedAt' => now(), 'updatedBy' => $me['name']]);
+}
+function rechte_rev(): int { return (int)((store_read('rechte') ?? [])['rev'] ?? 0); }

@@ -14,7 +14,8 @@ from playwright.sync_api import sync_playwright
 from auth_helpers import expire_session
 from kunden_hilfe import Client
 from smtp_test import TestSmtp
-from umgebung import BASE, SMTP_PORT, storage_raw, storage_write, until
+import os
+from umgebung import BASE, SH, SMTP_PORT, storage_raw, storage_write, until
 
 PW = 'Sicheres-Passwort-1'
 res = []
@@ -224,6 +225,19 @@ st, r = A.call('fw_import', {'export': x2})
 check('Import übernimmt keine Adresslisten (Schutz vor Aussperren)', st == 200 and not doc('sicherheit').get('ipEnabled') and doc('sicherheit').get('adminIps', []) == [], r.get('error'))
 check('fremde Datei abgewiesen', A.call('fw_import', {'export': {'art': 'etwas', 'version': 1}})[0] == 422)
 check('Protokoll: Import und Vorlage', 'Sicherheitseinstellungen aus Datei übernommen' in json.dumps(A.call('log')[1], ensure_ascii=False))
+dl = [x for e in A.call('log')[1]['entries'] if 'aus Datei übernommen' in e['s'] for x in e.get('d', [])]
+check('Protokoll: Importeintrag nennt die geänderten Felder mit alt und neu (wie beim Speichern)',
+      any(x['f'] == 'Passwort-Mindestlänge' and x['to'] == '14' for x in dl)
+      and any(x['f'] == 'Sperren nach Treffern' and x['to'] == '7' for x in dl), dl)
+# Unzulässige Werte in der Datei: abweisen, nicht still auf den (schwächsten) Standard setzen
+vorherS, vorherF = doc('sicherheit'), doc('firewall')
+for feld, wert in (('twofa', None), ('twofa', 'alle'), ('pwMin', 'x'), ('pwMin', 99), ('idleMinutes', 99999), ('lockMinutes', 'x'), ('lockAfter', 999), ('pwComplex', 'ja')):
+    code, r = A.call('fw_import', {'export': {**x, 'sicherheit': {**x['sicherheit'], feld: wert}}})
+    check(f'Datei mit unzulässigem Wert abgewiesen ({feld}={wert!r})', code == 422 and feld in r.get('error', ''), (code, r.get('error')))
+for feld, wert in (('treffer', 999), ('fehlerLimit', 'x'), ('feed', 'an')):
+    code, r = A.call('fw_import', {'export': {**x, 'firewall': {**x['firewall'], feld: wert}}})
+    check(f'Datei mit unzulässigem Wert abgewiesen ({feld}={wert!r})', code == 422 and feld in r.get('error', ''), (code, r.get('error')))
+check('Abgewiesene Datei lässt „sicherheit“ und „firewall“ unverändert', doc('sicherheit') == vorherS and doc('firewall') == vorherF)
 A.call('fw_save', {'treffer': 5})
 
 # ---------- Oberfläche ----------
@@ -286,6 +300,19 @@ with sync_playwright() as p:
             with a.expect_download() as dl:
                 a.click('[data-e=export]')
             check('Export als Datei', dl.value.suggested_filename.startswith('sicherheitseinstellungen-') and dl.value.suggested_filename.endswith('.json'))
+        # Importdialog: Vorschau als Tabelle „jetzt/danach“ (vorher nur die Zahl der Schlüssel)
+        a.click('#sic-tabs [data-tab="einstellungen"]'); a.wait_for_selector('#tab-einstellungen [data-e=import]')
+        ex = A.call('fw_export')[1]['export']
+        ex['sicherheit']['pwMin'] = 16
+        a.click('[data-e=import]'); a.wait_for_selector('#sic-dlg[open] #im-datei')
+        a.set_input_files('#im-datei', files=[{'name': 'sicherheitseinstellungen.json', 'mimeType': 'application/json', 'buffer': json.dumps(ex).encode()}])
+        a.wait_for_selector('#im-vorschau table.vorschau tr.neu')
+        check(f'{w}px: Importdialog zeigt je Einstellung „jetzt“ und „danach“, Änderungen hervorgehoben',
+              [t.strip() for t in a.locator('#im-vorschau table thead th').all_inner_texts()] == ['Einstellung', 'jetzt', 'danach']
+              and 'Passwort-Mindestlänge' in a.inner_text('#im-vorschau tr.neu') and '16' in a.inner_text('#im-vorschau tr.neu')
+              and 'Einstellung ändert sich' in a.inner_text('#im-vorschau') and a.is_enabled('#im-los'), a.inner_text('#im-vorschau'))
+        a.screenshot(path=os.path.join(SH, f'sicherheit_import_vorschau_{w}.png'))
+        a.click('#sic-dlg [data-d=zu]'); a.wait_for_function("!document.querySelector('#sic-dlg').open")
         ctx.close()
     # Bearbeiter sieht den Bereich nicht
     e = br.new_page()
