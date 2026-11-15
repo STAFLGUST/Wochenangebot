@@ -39,7 +39,7 @@ Einheiten, `window.STAFL_FORMAT`) und `suche.js` (Suchregel aller Suchfelder, `w
 [10 Konventionen](10-konventionen.md#suche)).
 
 Alle Pfade sind relativ zur Seite (Rechtsseiten: absolut ab `/`). Damit funktionieren dieselben Dateien auf dem
-Testserver (`tests/run_e2e.py`), in der Testumgebung und auf jedem Produktions-Host.
+Testserver (`tests/run_e2e.py`) und auf jedem Produktions-Host.
 
 **Welche Seite auf welchem Host** (Quelle: `Caddyfile`, `deploy/anmeldung/apache-oidc.conf`):
 
@@ -167,13 +167,16 @@ const BEREICH_VIEWS = {
 `bereich()` macht aus `verwaltung.verwaltung` den Bereich `verwaltung.import`, wenn die Adresse `?nur=import` trägt
 oder die Rolle nur `import.zugang` (ohne `verwaltung.zugang`) hat – die Adresse kann den Bereich nur einschränken.
 `viewAllowed(v)` prüft in dieser Reihenfolge: Bereich → Administrator-Ansichten (`can('admin')`) → Sonderfälle
-(`users`: auch `hr.verwalten`; `gruppen`/`vertreter`/`versandarten`: `stammdaten.sehen` oder `kunden.sehen`; `importe`:
-`W.importSichtbar()`) → `VIEW_PERM`.
+(`users` und `urlaub`: `hr.verwalten` **und** `hr.zugang` – HR-Aktionen verlangen seit 15.11.2026 beides, auf jedem Host;
+`gruppen`/`vertreter`/`versandarten`: `stammdaten.sehen` oder `kunden.sehen`; `importe`: `W.importSichtbar()`) → `VIEW_PERM`.
 
 - `can(role)` vergleicht die Rolle (`viewer` < `editor` < `admin`), `may(perm)` ein Einzelrecht (Administrator: alle).
 - **Beides ist nur Anzeige.** Die verbindliche Prüfung macht der Server bei jeder Aktion (GR-103, `require_perm`,
-  Modulzugang je Host). Eine neue Ansicht ohne serverseitige Rechteprüfung ihrer Aktionen ist ein Fehler, auch wenn
-  der Tab ausgeblendet ist.
+  Modulzugang des Hosts und der Aktion). Eine neue Ansicht ohne serverseitige Rechteprüfung ihrer Aktionen ist ein
+  Fehler, auch wenn der Tab ausgeblendet ist.
+- Antwortet eine Aktion mit 403 `kein_modulzugang`, zeigt `api()` den Hinweis „Kein Zugang“ nur, wenn `seite` nicht
+  `false` ist (ganze Oberfläche gesperrt). Bei `seite: false` ist nur diese Aktion eines fremden Moduls gesperrt – die
+  Seite bleibt stehen, der Aufrufer behandelt den Fehler (04-anmeldung-rechte.md, 4.4).
 
 ### `api()` – die Hilfsfunktion für alle Aufrufe
 

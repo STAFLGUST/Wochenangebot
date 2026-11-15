@@ -120,6 +120,31 @@ check('Leser: Kundenimport 403', L.call('import_pruefen', {'art': 'kunden', 'dat
 check('Bearbeiter ohne Kundenrecht: Kundenimport 403 (Vorschau und Übernahme)', E.call('import_pruefen', {'art': 'kunden', 'daten': {'rows': ROWS}})[0] == 403
       and E.call('import_uebernehmen', {'art': 'kunden', 'daten': {'rows': ROWS}, 'stand': 0})[0] == 403)
 check('nur Kundenrecht: Bestand 403', K.call('import_pruefen', {'art': 'bestand', 'daten': {'articles': []}, 'optionen': {'datum': '2026-10-16'}})[0] == 403)
+
+# ---------- Modulzugang des Eigentümers (GR-103, Sicherheitsfund 15.11.2026) ----------
+# Das Fachrecht allein genügt nicht: wer „hr.verwalten“ hat, aber keinen Zugang zum Bereich HR, darf über die
+# Importzentrale weder die Vorschau der Abwesenheiten sehen noch sie übernehmen – sonst wäre die gesperrte
+# HR-Oberfläche über den Verwaltungs-Host umgehbar.
+ZEIT_XLS = {'blaetter': [{'name': 'Bericht', 'grid': [
+    ['Vorname', 'Nachname', 'Name (Abwesenheit)', 'Abwesenheitsvergütung', 'Startdatum', 'Enddatum', 'Dauer', 'Mitarbeiternummer', 'Abteilung'],
+    ['Petra', 'Pruefdaten', None, None, None, None, None, '', 'Testabteilung'],
+    [None, None, 'Urlaub ', 'Bezahlte Abwesenheit', 46324, 46325, '16:00', None, None]]}]}
+st, r = A.call('rolle_save', {'name': 'Zeitstelle', 'rechte': ['verwaltung.zugang', 'hr.verwalten']})
+ZST = r['id']
+check('Rolle mit Personalrecht, ohne HR-Zugang (Modulzugang kommt nicht mit)', st == 200
+      and 'hr.zugang' not in next(x for x in r['rollen'] if x['id'] == ZST)['rechte'], r.get('rollen'))
+assert A.call('user_save', {'id': '', 'name': 'Petra Personal', 'username': 'petra', 'rollen': [ZST], 'active': True,
+                            'password': 'Personal-Zugang-9', 'mustChange': False})[0] == 200
+P = Client('198.51.100.7'); assert P.call('login', {'username': 'petra', 'password': 'Personal-Zugang-9'})[0] == 200
+check('Personalrecht ohne HR-Zugang: Importart „Abwesenheiten“ wird nicht angeboten', 'zeiterfassung' not in ids(P), ids(P))
+vorher = (doc('hr-abwesenheiten'), doc('hr-personal'))
+st1, r1 = P.call('import_pruefen', {'art': 'zeiterfassung', 'daten': ZEIT_XLS, 'quelle': 'pruefbericht.xlsx'})
+st2, r2 = P.call('import_uebernehmen', {'art': 'zeiterfassung', 'daten': ZEIT_XLS, 'quelle': 'pruefbericht.xlsx', 'stand': None})
+check('… Vorschau und Übernahme 403 (Zugang zum Bereich HR fehlt)', st1 == 403 and st2 == 403 and 'HR' in r1.get('error', ''), (st1, r1, st2, r2))
+check('… keine Abwesenheiten und keine Personen geschrieben', (doc('hr-abwesenheiten'), doc('hr-personal')) == vorher)
+assert A.call('rolle_save', {'id': ZST, 'name': 'Zeitstelle', 'rechte': ['verwaltung.zugang', 'hr.verwalten', 'hr.zugang']})[0] == 200
+check('Mit HR-Zugang: Importart wieder da, Vorschau läuft (nicht an der Berechtigung)', 'zeiterfassung' in ids(P)
+      and P.call('import_pruefen', {'art': 'zeiterfassung', 'daten': ZEIT_XLS, 'quelle': 'pruefbericht.xlsx'})[0] != 403, ids(P))
 check('Leser: Preisverlauf 403', L.call('import_pruefen', {'art': 'preisverlauf', 'daten': {'wochen': []}})[0] == 403)
 check('nur per POST', A.call('import_pruefen')[0] == 405)
 check('unbekannte Importart 404', A.call('import_pruefen', {'art': 'gibt_es_nicht'})[0] == 404)

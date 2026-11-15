@@ -9,9 +9,12 @@ Vorschau-Bilder (Beispieldaten), „Auf einen Blick“, Rollen vergleichen mit �
 
 Testdaten: Vertreter 11 Vera Vertrieb, 12 Tom Tour (Stammdaten → Vertreter); nur synthetische Daten.
 
-Der Testserver hat keinen eigenen Host (kein WA_OBERFLAECHE): gesperrt wird nach der Oberfläche der Aktion – HR-Aktionen
-(hr.intern) brauchen „hr.zugang“, der gemeinsame Eingabebereich (angebot.eingabe) regelt die Sichtbarkeit über die
-Einzelrechte. Die Sperre je Host prüft die Gruppe „rollen_host“ (WA_OBERFLAECHE=bestand.intern).
+Der Testserver hat keinen eigenen Host (kein WA_OBERFLAECHE): gesperrt wird nach dem Modul der Aktion – HR-Aktionen
+brauchen „hr.zugang“, Bestandsaktionen „bestand.zugang“ usw., auch wenn sie im gemeinsamen Eingabebereich
+(angebot.eingabe) liegen (Sicherheitsfund 15.11.2026). Ausnahme: die im Aktionsregister mit „zugang_gemeinsam“
+vermerkten Aktionen, die der Angebotsbereich modulübergreifend braucht (Stammdaten, Kunden, Kundengruppen,
+Angebotsliste) – dort autorisiert allein das Fachrecht. Die Sperre je Host prüft die Gruppe „rollen_host“
+(WA_OBERFLAECHE=bestand.intern).
 """
 import json
 import sys
@@ -111,8 +114,12 @@ check('Rechte genau laut Rolle', set(st['perms']) == {'bestand.zugang', 'bestand
 check('Lager sieht Bestand mit EK, nicht den Preisverlauf', L.call('stock')[0] == 200 and L.call('history_list')[0] == 403)
 # Angebotsinhalte (Entwurf, Versionen, Kundenangebote mit Kundenpreisen) nur mit Modulzugang Angebot – unabhängig vom Host (GR-103)
 OID = A.call('offers')[1]['offers'][0]['id']
-for name, (code, r) in [('Entwurf', L.call('draft')), ('Versionen', L.call('versions')), ('Version', L.call('version&id=20260101-000000-abcdef')),
-                        ('Kundenangebot', L.call('offer&angebot=' + OID)), ('Vorschau des Entwurfs', L.call('offer&draft=1')), ('Liste der Kundenangebote', L.call('offers'))]:
+# Aktionen des Moduls Angebot sperrt seit 15.11.2026 schon das Modulzugangstor („seite“: false = nur diese Aktion ist
+# gesperrt, nicht die ganze Seite – sonst verdeckte ein einzelner Abruf den Bestandsbereich)
+for name, (code, r) in [('Entwurf', L.call('draft')), ('Versionen', L.call('versions')), ('Version', L.call('version&id=20260101-000000-abcdef'))]:
+    check(f'Ohne Modulzugang Angebot: {name} 403 (nur die Aktion, nicht die Seite)',
+          code == 403 and r.get('code') == 'kein_modulzugang' and r.get('modul') == 'angebot' and r.get('seite') is False, (code, r))
+for name, (code, r) in [('Kundenangebot', L.call('offer&angebot=' + OID)), ('Vorschau des Entwurfs', L.call('offer&draft=1')), ('Liste der Kundenangebote', L.call('offers'))]:
     check(f'Ohne Modulzugang Angebot: {name} 403 (ohne Seitensperre)', code == 403 and r.get('code') != 'kein_modulzugang', (code, r))
 check('Standardrolle mit Modulzugang: Entwurf, Versionen, Kundenangebot, Liste weiter offen', all(V.call(a_)[0] == 200 for a_ in ('draft', 'versions', 'offers', 'offer&angebot=' + OID)))
 check('Öffentliches Wochenangebot ohne Anmeldung unverändert', Client('198.51.100.90').call('offer')[0] == 200)
@@ -127,6 +134,38 @@ check('Ausnahme je Mitarbeiter (für „Was darf …?“)', A.call('user_save', 
       and 'einkauf.sehen' in rechte(K))
 code, r = L.call('hr_start')
 check('Ohne HR-Zugang: HR gesperrt (Server)', code == 403 and r.get('code') == 'kein_modulzugang' and r.get('modul') == 'hr', r)
+# Sicherheitsfund 15.11.2026: Das Fachrecht allein öffnet keinen Bereich. Aktionen der gemeinsamen Oberfläche prüfen
+# seither auch den Modulzugang ihres eigenen Moduls – sonst wären Personaldaten und Bestand (Charge, Menge, MHD, EK)
+# trotz entzogenem „hr.zugang“/„bestand.zugang“ über den Eingabe- und Verwaltungsbereich lesbar und schreibbar.
+code, r = A.call('rolle_save', {'name': 'Personalbüro ohne Zugang', 'rechte': ['verwaltung.zugang', 'hr.verwalten', 'bestand.sehen', 'bestand.einkaufspreise']})
+PBZ = r['id']
+check('Rolle mit Personal- und Bestandsrecht, ohne deren Modulzugang', code == 200
+      and not {'hr.zugang', 'bestand.zugang'} & set(next(x for x in r['rollen'] if x['id'] == PBZ)['rechte']), r.get('rollen'))
+assert A.call('user_save', {'id': '', 'name': 'Petra Personal', 'username': 'petra', 'rollen': [PBZ], 'active': True, 'password': 'Personal-Zugang-9', 'mustChange': False})[0] == 200
+PB = anmelden('petra', 'Personal-Zugang-9')
+for aktion, modul in [('mitarbeiter_hr&jahr=2026', 'hr'), ('stock', 'bestand')]:
+    code, r = PB.call(aktion)
+    check(f'Fachrecht ohne Modulzugang: {aktion.split("&")[0]} 403 kein_modulzugang ({modul})',
+          code == 403 and r.get('code') == 'kein_modulzugang' and r.get('modul') == modul and r.get('seite') is False, (code, r))
+check('… auch schreibend (HR-Einstellungen, Bestandsimport nur mit Recht)', PB.call('hr_einstellungen_save', {'sperren': [], 'ferien': []})[1].get('code') == 'kein_modulzugang')
+assert A.call('rolle_save', {'id': PBZ, 'name': 'Personalbüro', 'rechte': ['verwaltung.zugang', 'hr.verwalten', 'hr.zugang', 'bestand.sehen', 'bestand.einkaufspreise', 'bestand.zugang']})[0] == 200
+check('Mit Modulzugang: beides wieder offen', PB.call('mitarbeiter_hr&jahr=2026')[0] == 200 and PB.call('stock')[0] == 200)
+# Gegenprobe: der Angebotsbereich braucht Stammdaten, Kunden und Kundengruppen (Register: „zugang_gemeinsam“) – dort
+# autorisiert allein das Fachrecht, ohne Zugang zum Bereich Verwaltung. Deren übrige Aktionen bleiben gesperrt.
+code, r = A.call('rolle_save', {'name': 'Angebot ohne Verwaltung', 'rechte': ['angebot.zugang', 'angebot.bearbeiten', 'stammdaten.sehen', 'kunden.sehen']})
+AOV = r['id']
+assert code == 200 and 'verwaltung.zugang' not in next(x for x in r['rollen'] if x['id'] == AOV)['rechte']
+assert A.call('user_save', {'id': '', 'name': 'Anna Angebot', 'username': 'anna', 'rollen': [AOV], 'active': True, 'password': 'Angebot-Zugang-7', 'mustChange': False})[0] == 200
+AN = anmelden('anna', 'Angebot-Zugang-7')
+check('Angebotsbereich ohne Verwaltungszugang: Stammdaten, VK-Gruppen, Kategorien, Kunden und Kundengruppen weiter offen',
+      all(AN.call(a_)[0] == 200 for a_ in ('master', 'vkgruppen', 'angebotskategorien', 'kunden', 'kundengruppen')),
+      {a_: AN.call(a_)[0] for a_ in ('master', 'vkgruppen', 'angebotskategorien', 'kunden', 'kundengruppen')})
+code, r = AN.call('abteilungen')
+check('… andere Verwaltungsaktionen bleiben ohne Verwaltungszugang gesperrt', code == 403 and r.get('code') == 'kein_modulzugang' and r.get('modul') == 'verwaltung', (code, r))
+# Prüfkonten und -rollen wieder entfernen (die Oberflächen-Prüfungen unten zählen Rollen und Mitarbeiter)
+for u_ in ('petra', 'anna'):
+    assert A.call('user_delete', {'id': next(x['id'] for x in A.call('users')[1]['users'] if x['username'] == u_)})[0] == 200
+check('Prüfrollen wieder löschbar (kein Mitarbeiter mehr)', all(A.call('rolle_loeschen', {'id': r_})[0] == 200 for r_ in (PBZ, AOV)))
 ms = {m['id']: m for m in L.call('module_status')[1]['module']}
 check('Dashboard: nur Kacheln mit Zugang', ms['bestand']['kachel']['recht'] and ms['bestand']['kachel']['zugang']
       and not ms['angebot']['kachel']['recht'] and not ms['angebot']['kachel']['zugang'] and not ms['hr']['kachel']['recht'], {k: v['kachel']['recht'] for k, v in ms.items() if v['kachel']})
@@ -383,6 +422,21 @@ with sync_playwright() as pw:
     a.click('#view-rollen .rl-item:has-text("Personalstelle")'); a.wait_for_selector('#view-rollen .rl-item.on:has-text("Personalstelle")')
     a.screenshot(path=SH + '/rollen-dunkel.png')
     a.close()
+    # Personalstelle ohne Modulzugang HR (Sicherheitsfund 15.11.2026): der Server sperrt jede HR-Aktion, die Oberfläche
+    # zeigt „Urlaub“ und die HR-Angaben dann nicht mehr
+    pp = seite('paula', 'Personal-Zugang-66')
+    pp.wait_for_selector('#screen-editor:not([hidden])')
+    check('UI Personalstelle: Ansicht „Urlaub“ da (Personalrecht mit HR-Zugang)', pp.is_visible('#vt-urlaub'))
+    assert A.call('user_save', {'id': uid['paula'], 'name': pu['name'], 'username': 'paula', 'rollen': pu['rollen'],
+                                'active': True, 'deny': ['hr.zugang'], 'vertreter': pu.get('vertreter') or ''})[0] == 200
+    pp.goto(B + '/admin/'); pp.wait_for_selector('#screen-editor:not([hidden])')
+    check('UI Personalstelle ohne HR-Zugang: keine Ansicht „Urlaub“, keine HR-Angaben', not pp.is_visible('#vt-urlaub') and not pp.is_visible('#vt-users'))
+    pp.screenshot(path=SH + '/rollen-ohne-hr-zugang.png')
+    pp.set_viewport_size({'width': 390, 'height': 844})
+    pp.wait_for_function('() => document.documentElement.clientWidth <= 390')
+    check('390 px ohne HR-Zugang: kein waagerechtes Scrollen', pp.evaluate('document.documentElement.scrollWidth') <= 390)
+    pp.screenshot(path=SH + '/rollen-ohne-hr-zugang-390.png')
+    pp.close()
     # Lager: Bestand ja, HR-Seite gesperrt, Dashboard nur mit Bestand
     lp = seite('lars', 'Lager-Zugang-551')
     lp.wait_for_selector('#screen-editor:not([hidden])')

@@ -229,7 +229,10 @@ def rechte_md(rw) -> str:
          "starten leer. Erklärung: [04-anmeldung-rechte.md](../04-anmeldung-rechte.md).", "",
          "## Modulzugang", "",
          "Für jedes Modul mit Kachel entsteht `<modul>.zugang` (lib/rechte.php, `perms_katalog`): Kachel im Dashboard und "
-         "Oberfläche des Moduls; Standard: beide Standardrollen.", "",
+         "Oberfläche des Moduls; Standard: beide Standardrollen. Ohne ihn läuft keine Aktion des Moduls – auf keinem Host "
+         "(`modul_zugang_durchsetzen` prüft das Modul des Hosts und das der Aktion). Ein Fachrecht allein öffnet den Bereich "
+         "also nicht; Ausnahme sind die im Aktionsregister mit `zugang_gemeinsam` vermerkten Aktionen des gemeinsamen "
+         "Eingabebereichs.", "",
          "| Recht | Modul |", "| --- | --- |"]
     for m in sorted(rw.modulliste, key=lambda m: (m.get("reihenfolge", 999), m["id"])):
         if m.get("dashboard") and rg.kachel_ziel(m):

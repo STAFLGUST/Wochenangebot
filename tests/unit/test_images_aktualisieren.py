@@ -33,8 +33,8 @@ def ok(name, cond, info=''):
         FAIL += 1; print(f'FAIL {name}' + (f'  {info}' if info else ''))
 
 
-DATEIEN = ['docker-compose.yml', 'deploy/anmeldung/docker-compose.anmeldung.yml', 'deploy/testumgebung/docker-compose.yml',
-           'deploy/testumgebung.sh', 'deploy/image/Dockerfile', '.github/workflows/ci.yml', 'deploy/anmeldung/pruefen.sh',
+DATEIEN = ['docker-compose.yml', 'deploy/anmeldung/docker-compose.anmeldung.yml',
+           'deploy/image/Dockerfile', '.github/workflows/ci.yml', 'deploy/anmeldung/pruefen.sh',
            'deploy/karte-laden.sh', 'deploy/adressen-laden.sh', 'tests/deploy/test_images.py']
 
 
@@ -56,8 +56,8 @@ namen = {f'{n}:{t}' for n, t in echt}
 ok('Fundstellen: PHP, Caddy, Keycloak, PostgreSQL und Hilfsimages gefunden',
    {'php:8.3-apache', 'postgres:17-alpine'} <= namen
    and all(any(n.startswith(p) for n in namen) for p in ('caddy:2.', 'quay.io/keycloak/keycloak:')), sorted(namen))
-ok('Fundstellen: PHP-Grundimage an vier Stellen (Kundenseite, Testumgebung, Skript, Dockerfile)',
-   len(next(v for (n, t), v in echt.items() if n == 'php').popitem()[1]) == 4)
+ok('Fundstellen: PHP-Grundimage an zwei Stellen (Kundenseite, Dockerfile)',
+   len(next(v for (n, t), v in echt.items() if n == 'php').popitem()[1]) == 2)
 ok('Fundstellen: erzeugte Doku und Testarbeitsordner werden ausgelassen',
    not any(o.startswith(w.AUSLASSEN) for v in echt.values() for orte in v.values() for o in orte))
 
@@ -79,7 +79,7 @@ ok('Bericht nennt geänderte Images mit allen Stellen, unveränderte nicht',
 
 ok('setzen: Exit 3 (eingetragen)', lauf('--wurzel', t, '--quelle', quelle, '--setzen') == 3)
 alle = '\n'.join((t / d).read_text() for d in DATEIEN)
-ok('setzen: PHP-Grundimage an allen vier Stellen neu, alter Digest nirgends mehr', alle.count(neu_php) == 4 and alt_php not in alle)
+ok('setzen: PHP-Grundimage an allen zwei Stellen neu, alter Digest nirgends mehr', alle.count(neu_php) == 2 and alt_php not in alle)
 ok('setzen: Keycloak in der Compose-Datei neu (CI lädt von dort, Workflows ohne Digests)', alle.count(neu_kc) == 1 and alt_kc not in alle
    and neu_kc not in (t / '.github/workflows/ci.yml').read_text())
 ok('setzen: übrige Images unverändert', all(next(iter(v)) in alle for k, v in funde.items() if k not in (php, kc)))
@@ -88,7 +88,7 @@ ok('danach: tests/deploy/test_images.py grün (einheitlich, CI lädt dieselben F
 ok('erneut prüfen: alles aktuell → Exit 0', lauf('--wurzel', t, '--quelle', quelle) == 0)
 
 # verschiedene Digests derselben Fassung: nicht automatisch vereinheitlichen
-d = t / 'deploy/testumgebung.sh'
+d = t / 'docker-compose.yml'
 d.write_text(d.read_text().replace(neu_php, 'c' * 64))
 ok('uneinheitliche Fassung: Exit 1, nichts geändert', lauf('--wurzel', t, '--quelle', quelle, '--setzen') == 1 and ('c' * 64) in d.read_text()
    and (t / 'deploy/image/Dockerfile').read_text().count(neu_php) == 1)

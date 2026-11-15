@@ -589,7 +589,7 @@ _Nutzerrechte: was eine Rolle bzw. ein einzelner Nutzer im Eingabebereich sehen 
 - `require_modulzugang(modul, write)` – Angemeldet UND Modulzugang „<modul>.zugang“ – unabhängig vom Host der Anfrage (GR-103).
 - `modul_host_frei(u, modul)`
 - `anfrage_modul(aktion)` – Modul der Oberfläche dieser Anfrage: der Host (Webserver: WA_OBERFLAECHE, nie aus Kopfzeilen) – sonst die Oberfläche der Aktion, außer dem gemeinsamen …
-- `modul_zugang_durchsetzen(aktion)`
+- `modul_zugang_durchsetzen(aktion)` – Geprüft werden zwei Module: das des Hosts (anfrage_modul) und das der Aktion selbst – dessen Daten sie liest und schreibt.
 - `rights_catalog()`
 - `rollen_liste(roles, users)` – Rollenübersicht für die Verwaltung (Administrator): Rechte, Name, Anzahl Mitarbeiter
 - `rechte_module()` – Module für die Rechte-Übersicht: Kachel-Module in Dashboard-Reihenfolge, dazu „plattform“ für Rechte ohne Modul

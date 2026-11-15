@@ -105,7 +105,7 @@ _Importzentrale (Verwaltung → Import, Roadmap 10b) – ein Ablauf für alle Im
 - `import_optionen(a, roh)` – Optionen der Importart aus der Anfrage: nur registrierte, mit Standardwert
 - `import_ergebnis(r)` – Antwort des Eigentümers vereinheitlichen: Zahlen, höchstens IMPORT_ZEILEN_MAX Zeilen (Fehler zuerst), Hinweise; „details“, „fuss“ und „knopf“ des Eigentümers …
 - `import_upload(v, pflicht)` – Kennung eines Importlaufs (vom Browser zufällig gewählt, 32 Hex-Zeichen) – nur bei Importarten mit Teilen nötig
-- `import_vorbereiten(b)` – Gemeinsame Prüfung vor Vorschau, Teil und Übernahme: Anmeldung (mit CSRF), Importart, Recht, Ablauf, Wartung
+- `import_vorbereiten(b)` – Gemeinsame Prüfung vor Vorschau, Teil und Übernahme: Anmeldung (mit CSRF), Importart, Recht, Modulzugang des Eigentümers, Ablauf, Wartung
 - `import_teil_ausfuehren()` – Ein Teil einer großen Datei an den Eigentümer (Zwischenablage).
 - `import_ausfuehren(uebernehmen)` – Vorschau oder Übernahme einer Importart.
 
@@ -325,6 +325,8 @@ _Importzentrale (Verwaltung → Import, Roadmap 10b): eine Stelle für alle Impo
 **Registrierung: jede Importart gehört dem Daten-Eigentümer**
 
 **Rechte: Anzeige und Prüfung je Importart (GR-103)**
+
+**Modulzugang des Eigentümers (GR-103, Sicherheitsfund 15.11.2026)**
 
 **Kunden über die Schnittstelle der Zentrale**
 

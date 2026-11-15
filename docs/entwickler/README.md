@@ -40,7 +40,7 @@ Code passt oder eine Code-Datei keinen beschreibenden Kopfkommentar hat (`python
 - [`docs/architektur.md`](../architektur.md) – ausführliche Beschreibung jeder Server-Datei und der Gestaltung („was liegt wo“)
 - [`docs/plattform/`](../plattform/README.md) – Zielarchitektur, Entscheidungen (ADR), Roadmap, Arbeiten mit mehreren Agenten
 - [`tests/README.md`](../../tests/README.md) – alle Testgruppen mit Inhalt
-- [`docs/release-freigabe.md`](../release-freigabe.md), [`docs/datenbank.md`](../datenbank.md), [`docs/testumgebung.md`](../testumgebung.md) – Betrieb
+- [`docs/release-freigabe.md`](../release-freigabe.md), [`docs/datenbank.md`](../datenbank.md) – Betrieb
 - [`mobile/LIESMICH.md`](../../mobile/LIESMICH.md) – App für iOS und Android (Expo), nutzt dieselbe API;
   [`docs/app-grundlagen.md`](../app-grundlagen.md), [`docs/app-api.md`](../app-api.md) – Grundlagen und Schnittstelle der App
 - [`docs/bestell-api-v1.md`](../bestell-api-v1.md), [`docs/bestell-mailversand.md`](../bestell-mailversand.md) – Bestellungen

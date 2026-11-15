@@ -150,6 +150,7 @@ oeffentlich = true
 [aktion.kunde_mail]
 oberflaeche = "angebot.eingabe"
 schreibend = true
+zugang_gemeinsam = true   # Kundenzugangs-Mail aus der Kundenverwaltung
 
 [aktion.kunde_merkliste]
 oberflaeche = "angebot.kunden"
@@ -201,6 +202,7 @@ schreibend = true
 
 [aktion.mail_info]
 oberflaeche = "angebot.eingabe"
+zugang_gemeinsam = true   # Postfach-Kurzinfo in der Kundenverwaltung
 
 [aktion.offer]
 oberflaeche = "angebot.kunden"
@@ -209,6 +211,7 @@ kunden_wartung = true
 
 [aktion.offers]
 oberflaeche = "angebot.eingabe"
+zugang_gemeinsam = true   # Angebotsliste für die Zuordnung in der Kundenverwaltung (Recht kunden.sehen, siehe aktionen/angebote.php)
 
 [aktion.offers_save]
 oberflaeche = "angebot.eingabe"

@@ -14,9 +14,12 @@ dem die Aktion fachlich gehört. Daraus erzeugt `python3 werkzeuge/regeln.py erz
 | `fremde_herkunft` | darf von fremden Seiten kommen (keine Herkunftsprüfung, `lib/herkunft.php`, GR-109); nur für die in `werkzeuge/regeln.py` (`FREMDE_HERKUNFT`) festgelegten öffentlichen, nicht schreibenden Aktionen – heute nur `abmelden1` (RFC 8058) | `false` |
 | `lokale_anmeldung` | eigenes Anmeldeverfahren (Passwort, zweiter Faktor, Passkey, Kunden-Anmeldung); auf Keycloak-Hosts (`WA_OIDC=1`) mit 403 gesperrt (GR-110, `lib/oidc.php`) | `false` |
 | `wartung_frei` | bleibt erreichbar, wenn die Oberfläche in Wartung ist (Anmeldung, Abmelden, Status, eigener Zugang) – damit sich Administratoren anmelden können; schreibend nur für die Anmelde-Aktionen | `false` |
+| `zugang_gemeinsam` | Aktion des gemeinsamen Eingabebereichs, die ein anderes Modul bedient: geprüft wird nur der Modulzugang des **Hosts**, nicht der des eigenen Moduls (`modul_zugang_durchsetzen`, GR-103 – autorisiert dort allein das Fachrecht). Nur für die in `werkzeuge/regeln.py` (`ZUGANG_GEMEINSAM`) festgelegten Aktionen auf `angebot.eingabe`; Erweiterung nur im Plattform-PR mit Begründung | `false` |
 
 Neue Aktion: Eintrag in der Datei des eigenen Moduls, `python3 werkzeuge/regeln.py erzeugen` (schreibt auch
 `app/api/lib/module-liste.php` aus Modulregister und Wartungstabelle). Die Prüfliste der Dateiprüfung entsteht beim
 Einspielen (`deploy/bereitstellen.py`). Die Berechtigung prüft weiterhin die Aktion selbst (`require_perm`, GR-103) –
-das Register ersetzt keine Rechteprüfung. Konflikt in `aktionen-liste.php` nach einem Rebase: nicht von Hand
+das Register ersetzt keine Rechteprüfung. Aus dem Feld `modul` folgt zusätzlich der nötige Modulzugang
+`<modul>.zugang` (auf jedem Host, `modul_zugang_durchsetzen`): eine Aktion gehört in die Datei des Moduls, dessen Daten
+sie liest und schreibt. Konflikt in `aktionen-liste.php` nach einem Rebase: nicht von Hand
 zusammenführen, sondern neu erzeugen.

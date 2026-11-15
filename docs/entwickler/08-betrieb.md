@@ -1,8 +1,7 @@
 # 8 · CI, Release und Betrieb
 
 Wie ein Stand vom Pull Request bis auf den Server kommt, was die CI prüft und wie der Server aufgebaut ist. Die
-Ablaufbeschreibungen für den Inhaber stehen in [`docs/release-freigabe.md`](../release-freigabe.md),
-[`docs/testumgebung.md`](../testumgebung.md), [`docs/datenbank.md`](../datenbank.md),
+Ablaufbeschreibungen für den Inhaber stehen in [`docs/release-freigabe.md`](../release-freigabe.md), [`docs/datenbank.md`](../datenbank.md),
 [`docs/plattform/inbetriebnahme-anmeldung.md`](../plattform/inbetriebnahme-anmeldung.md) und
 [`deploy/anmeldung/LIESMICH.md`](../../deploy/anmeldung/LIESMICH.md). Wie man testet: [07 – Tests](07-tests.md).
 
@@ -33,7 +32,7 @@ den Release vorlegt.
 | Statische Prüfungen (`statisch`) | siehe Liste unten | immer |
 | Sicherheitsprüfungen (`sicherheit`) | gitleaks über den Verlauf bis `HEAD` (`.gitleaks.toml`, Version und Prüfsumme fest); Trivy: `tests/requirements.txt` (HIGH/CRITICAL blockiert), Images aus `docker-compose.yml` (nur Bericht) | immer |
 | Anwendungs-Image prüfen (`image`) | `deploy/image/pruefen.sh` (Bau, Vergleich mit `php:8.3-apache`); `deploy/anmeldung/pruefen.sh` mit festen Keycloak-/PostgreSQL-Digests; Trivy auf `stafl-app:pruefung` (CRITICAL mit Korrektur blockiert, HIGH als Bericht) | nach `statisch`, außer übernommen |
-| Sicherung und Release-Prozess (`betrieb`) | `tests/deploy/`: `test_datenbank.py`, `test_sqlite_http.sh`, `test_sichern.sh`, `test_freigabe.sh`, `test_testumgebung.sh`, `test_release_pruefen.sh`, `test_anmeldung_einrichten.sh`, `test_notzugang.sh`, `test_cdn_netzsperre.py` (nftables in Netz-Namensräumen), `test_cdn_netzsperre.sh`, `test_konten_pruefen.sh`, `test_speicher.sh`, `test_datenbank_umschalten.sh`, `test_altdateien.sh`, `test_karte_laden.sh`, `test_adressen_laden.sh` | nach `statisch`, außer übernommen |
+| Sicherung und Release-Prozess (`betrieb`) | `tests/deploy/`: `test_datenbank.py`, `test_sqlite_http.sh`, `test_sichern.sh`, `test_freigabe.sh`, `test_release_pruefen.sh`, `test_anmeldung_einrichten.sh`, `test_notzugang.sh`, `test_cdn_netzsperre.py` (nftables in Netz-Namensräumen), `test_cdn_netzsperre.sh`, `test_konten_pruefen.sh`, `test_speicher.sh`, `test_datenbank_umschalten.sh`, `test_altdateien.sh`, `test_karte_laden.sh`, `test_adressen_laden.sh` | nach `statisch`, außer übernommen |
 | Ende-zu-Ende-Tests (*speicherart*, Teil *k*/3) (`e2e`) | Matrix `storage: [files, sqlite]` × `teil: [1, 2, 3]`, dazu über `include` „(sqlite, getrennt, Teil *k*/3)“ mit `WA_TEST_TRENNUNG=1` (Daten getrennt wie auf dem Server, ADR-007); `.github/scripts/testumgebung.sh e2e`, dann `python tests/run_e2e.py` mit `WA_JOBS=4`; Artefakt bei Fehler | nach `statisch`, außer übernommen |
 | Ende-zu-Ende-Tests (`e2e_required`) | fester Name für den Branchschutz; grün nur, wenn alle neun Teile grün sind | nach `e2e` |
 | Anmeldung über Keycloak (nur CI) (`oidc`) | `testumgebung.sh oidc`, `tests/oidc/umgebung.sh start`, `tests/oidc/test_oidc.py`, `stop`; Artefakt `oidc-ergebnisse` | nach `statisch`, außer übernommen |
@@ -51,7 +50,7 @@ den Release vorlegt.
    und Browser-Zwischenspeicher mit echtem Caddy (`tests/deploy/test_zwischenspeichern.py`: Abschnitt `zwischenspeichern`
    vor einer Nachbildung der Anwendung – Weiterleitung zur Anmeldung, 401 und 404 nie gespeichert)
    und Container-Images fest über Digest (`tests/deploy/test_images.py`: alle fremden Images mit `@sha256`, gleiches PHP-Grundimage
-   für Kundenseite, Anwendungs-Image und Testumgebung, CI lädt und scannt dieselben Fassungen)
+   für Kundenseite und Anwendungs-Image, CI lädt und scannt dieselben Fassungen)
 5. Dashboard-Domains nur als geschützte Platzhalter (`tests/deploy/test_dashboard_domains.py`, GR-105; HSTS 1 Jahr je Host)
 6. Python-Syntax (`py_compile` für Tests, Werkzeuge, `deploy/*.py`, `.github/scripts/*.py`)
 7. Regelwerk und Modulgrenzen (`werkzeuge/regeln.py pruefen`, `tests/regeln/test_regeln.py`)
@@ -152,13 +151,12 @@ Ein VPS mit Docker Compose; Installationsordner `/opt/wochenangebot` (Git-Checko
 
 | Dienst | Herkunft | Aufgabe |
 | --- | --- | --- |
-| `caddy` | `docker-compose.yml`, Image `caddy:2`, Konfiguration `Caddyfile` | einziger öffentlicher Eingang (Ports 80/443), TLS-Zertifikate, Sicherheits-Header, Browser-Zwischenspeicher (Abschnitt `zwischenspeichern`); leitet an `app`, `app-mitarbeiter`, `keycloak` bzw. `app-test` weiter; nicht freigegebene Dashboard-Hosts als 503-Platzhalter (GR-105) |
+| `caddy` | `docker-compose.yml`, Image `caddy:2`, Konfiguration `Caddyfile` | einziger öffentlicher Eingang (Ports 80/443), TLS-Zertifikate, Sicherheits-Header, Browser-Zwischenspeicher (Abschnitt `zwischenspeichern`); leitet an `app`, `app-mitarbeiter` bzw. `keycloak` weiter; nicht freigegebene Dashboard-Hosts als 503-Platzhalter (GR-105) |
 | `app` | `docker-compose.yml`; mit Ergänzungsdatei Image `stafl-app` aus `deploy/image/` (PHP 8.3, Apache, mod_auth_openidc nicht geladen) – baut dieses Image | die Anwendung; `app/` nur lesend, `daten/` als Datenordner. Mit Ergänzungsdatei **nur die Kundenseite** `angebot-stafl.de` (ADR-007): keine Anmelde-Geheimnisse; gehärtet: alle Prozesse als `www-data` ohne Linux-Sonderrechte, nur im Netz `kunde` mit Caddy (ohne Ausgang ins Internet; Datenleck-Prüfung über das Relais `caddy:8081`), Dateisystem nur lesbar (`/tmp`, `/run` im Speicher ohne Ausführung), `no-new-privileges`, PHP eingeschränkt (`deploy/anmeldung/kunde-php.ini`), Apache ohne Version (`kunde-apache.conf`), Grenzen `KUNDEN_CPUS`/`KUNDEN_SPEICHER` (Standard 3 CPU, 4 GB) |
 | `app-mitarbeiter` | `deploy/anmeldung/docker-compose.anmeldung.yml`, dasselbe Image `stafl-app` (nie aus dem Netz geholt) | alle Mitarbeiter-Hosts und die Prüfung vor der Anmeldeseite: `app/` nur lesend, derselbe Datenordner, dazu `dashboard/`, `apache-oidc.conf` (Keycloak-Hosts), Detailkarte, alle Anmelde-Geheimnisse und das Dienstkonto `konten`; Netz `intern` mit Caddy und Keycloak. Neue Anmelde-Werte aus `.env`: `docker compose up -d app-mitarbeiter` |
 | `postausgang` | `deploy/anmeldung/docker-compose.anmeldung.yml`, dasselbe Image `stafl-app` | verschickt die E-Mails, die die Kundenseite nur als Auftrag ablegt (ADR-007): alle 5 s `php api/postausgang.php` als `www-data`, Dateisystem nur lesbar, kein Port, eigenes Netz `postausgang` nur mit Ausgang zum Postfach; Postfach-Werte aus `.env` und `daten-geheim/` (nur lesend). Zustand: `docker compose ps postausgang` (Healthcheck = Lebenszeichen) |
 | `keycloak` | `deploy/anmeldung/docker-compose.anmeldung.yml` (Version und Digest fest) | Mitarbeiteranmeldung, Realm `mitarbeiter`; Verwaltung nur auf `127.0.0.1:8180`; öffentlich über Caddy nur `/realms/mitarbeiter/` und `/resources/`; Netze `intern` (Caddy, app-mitarbeiter) und `anmeldung` – von der Kundenseite nicht erreichbar |
 | `keycloak-db` | ebenda, PostgreSQL 17 (Digest fest) | Datenbank nur für Keycloak, internes Netz `anmeldung` |
-| `app-test` | `deploy/testumgebung/docker-compose.yml` in `/opt/wochenangebot-test` | Testumgebung, nur im Netz `wochenangebot-edge` |
 
 Die Ergänzungsdatei ist aktiv, wenn `.env` `COMPOSE_FILE=docker-compose.yml:deploy/anmeldung/docker-compose.anmeldung.yml`
 enthält (Inbetriebnahme Schritt 5). Ohne sie antworten die Keycloak-Hosts mit 502, nie mit der Anwendung ohne Anmeldung.
@@ -209,7 +207,7 @@ Ohne gültigen Schlüssel wirkt nichts davon. Jede neue Weiterleitung (`reverse_
 | `aktualisieren.sh` | Bereitstellung sicherstellen, im Release-Modus `freigabe-einspielen.sh` | systemd-Timer |
 | `release-modus-einrichten.sh` | Release-Modus einschalten (`.release-modus`, Token prüfen) | Inhaber, einmalig |
 | `freigabe-einspielen.sh` | freigegebenes Release einspielen, Healthcheck, automatischer Rückfall | `aktualisieren.sh` |
-| `bereitstellen.py` | Versionsnummern und Prüfliste aus dem aktiven Commit; `--pruefen` nur prüfen; `--verzeichnis` für einen Programmordner | Einspiel- und Rückfallskripte, `testumgebung.sh` (Werkzeug des Echtbetriebs, als `www-data`), `run_e2e.py` |
+| `bereitstellen.py` | Versionsnummern und Prüfliste aus dem aktiven Commit; `--pruefen` nur prüfen; `--verzeichnis` für einen Programmordner | Einspiel- und Rückfallskripte, `run_e2e.py`, `tests/deploy/test_freigabe.sh` |
 | `release-zurueck.sh` | Notfall-Rückfall auf den Stand vor dem letzten Release | Inhaber |
 | `sichern.sh` | Datensicherung mit Probeentpacken, inkl. Keycloak-Datenbank; `--jetzt` sofort | Timer `wochenangebot-sicherung` bzw. `aktualisieren.sh` (1×/Tag), Release |
 | `sicherung-einrichten.sh` | eigener Sicherungs-Timer (täglich 02:30) | Inhaber, einmalig |
@@ -217,7 +215,6 @@ Ohne gültigen Schlüssel wirkt nichts davon. Jede neue Weiterleitung (`reverse_
 | `datenbank.py` | SQLite: `check`, Migration/Rückkonvertierung (`--offline`), Sicherung, `altdateien` (Altdateien auflisten/archivieren) | `datenbank-umschalten.sh`, `sichern.sh`, `run_e2e.py` |
 | `datenbank-umschalten.sh` | `migrate` / `rollback` zwischen Dateien und SQLite | Inhaber, nur mit Freigabe und Wartungsfenster |
 | `altdateien.sh` | `zeigen` / `archivieren` der alten Datendateien nach der Umschaltung (nur bei aktivem SQLite, Archiv in `sicherungen/`) | Inhaber, nur mit Freigabe; Anwendung bleibt in Betrieb |
-| `testumgebung.sh` | Testumgebung `test.<Domain>` (siehe unten) | Inhaber |
 | `wartung-aus.sh` | Notfall: alle Wartungen beenden | Inhaber |
 | `notzugang.sh` | Notfall: alten Eingabebereich mit eigener Anmeldung öffnen/schließen – nur über einen SSH-Tunnel (`127.0.0.1:8190`) | Inhaber |
 | `cdn-netzsperre.sh`, `cdn_netzsperre.py` | Netzsperre: Port 80/443 nur für die Edge-Server von bunny.net (nftables, eigene Tabelle `inet stafl_netzsperre`): `status` / `beobachten` (nur zählen) / `an` (verwerfen, Probe über bunny, sonst zurück auf beobachten) / `aus` (Notfall, sofort) / `aktualisieren` (Liste höchstens alle 6 Stunden, Regeln setzen); Anleitung `docs/bunny-cdn.md`, Abschnitt 7 | Inhaber; Timer `wochenangebot-netzsperre` (alle 30 Min.) |
@@ -236,7 +233,7 @@ Ohne gültigen Schlüssel wirkt nichts davon. Jede neue Weiterleitung (`reverse_
 `daten/` ist im App-Container beschreibbar. Skripte, die als root laufen, schreiben dort deshalb nie direkt: Statusdateien
 (`sicherung.php`, `deployment.php`) entstehen im Installationsordner und ersetzen den Eintrag nur per Umbenennen, `chown`
 nur mit `-h` bzw. für echte Dateien (`find -type f`); Angaben, denen root folgt (vorheriger Stand für den Rückfall), stehen
-in root-Dateien außerhalb (`.release-vorher`). Code eines Testzweigs läuft nie auf dem Server (`testumgebung.sh`).
+in root-Dateien außerhalb (`.release-vorher`). Code eines Testzweigs läuft nie auf dem Server.
 
 Dieselbe Regel gilt für **Ordnernamen** und für jeden Ordner, in den ein weniger vertrauter Prozess schreiben darf:
 `daten_trennen.py` legt Zielordner Schritt für Schritt an und bricht ab, sobald eine Komponente ein Verweis ist
@@ -280,20 +277,12 @@ nie löschen und neu anlegen – die Verknüpfung hängt an der Keycloak-Kennung
 `werkzeuge/realm_produktion.py` erzeugt, nicht von Hand geändert. Neue Modul-Hosts brauchen außerdem DNS, Caddy-Eintrag
 und Client – alles mit Freigabe ([Inbetriebnahme](../plattform/inbetriebnahme-anmeldung.md)).
 
-### Testumgebung
+### Keine Testinstanz auf dem Server
 
-Zweite, getrennte Instanz `test.<Domain>` auf demselben Server ([`docs/testumgebung.md`](../testumgebung.md)): eigener
-Ordner `/opt/wochenangebot-test`, nur Testdaten, kein Mailversand (Testpostfach, `WA_TESTUMGEBUNG=1`), Passwortschutz
-vor der ganzen Seite, nur im Netz `wochenangebot-edge`.
-
-```sh
-sh deploy/testumgebung.sh einspielen <zweig>      # Stand eines Zweigs des eigenen Repositorys
-sh deploy/testumgebung.sh zuruecksetzen           # Testdaten neu
-sh deploy/testumgebung.sh status | starten | stoppen
-```
-
-Ein manuelles `docker compose down` im Echtbetrieb scheitert, solange die Testumgebung läuft (vorher `stoppen`). Die
-Keycloak-Anmeldung gibt es in der Testumgebung nicht; sie wird nur in der CI geprüft (GR-111).
+Es gibt keine Testinstanz unter `test.<Domain>` mehr (entfernt am 15.11.2026, GR-111). Neue Stände werden lokal
+(`tests/run_e2e.py`) und in der CI geprüft; auf dem Server läuft nur freigegebener Code. Der Umgebungsschalter
+`WA_TESTUMGEBUNG=1` (Kennzeichen, kein Mailversand, Testpostfach) bleibt und wird in der CI geprüft
+(`tests/e2e/test_testumgebung.py`).
 
 ### Speicherplatz
 
@@ -343,8 +332,8 @@ deshalb nur über einen eigenen PR:
 
 1. Aktuelle Fassung und Digest ermitteln, z. B. `docker buildx imagetools inspect caddy:2` (Zeile „Digest“, Version aus
    `CADDY_VERSION`) bzw. `docker buildx imagetools inspect php:8.3-apache`.
-2. Eintragen: Caddy in `docker-compose.yml`; PHP an allen vier Stellen gleich (`deploy/image/Dockerfile`, `docker-compose.yml`,
-   `deploy/testumgebung/docker-compose.yml`, `deploy/testumgebung.sh`); Keycloak/PostgreSQL in
+2. Eintragen: Caddy in `docker-compose.yml`; PHP an beiden Stellen gleich (`deploy/image/Dockerfile`,
+   `docker-compose.yml`); Keycloak/PostgreSQL in
    `deploy/anmeldung/docker-compose.anmeldung.yml` und den `docker pull`-Zeilen in `.github/workflows/ci.yml`.
 3. PR mit grüner CI (Caddy-Prüfung, Anwendungs-Image, Trivy-Bericht); nach dem Release startet der betroffene Container einmal
    neu (Caddy: wenige Sekunden, Zertifikate bleiben im Volume).

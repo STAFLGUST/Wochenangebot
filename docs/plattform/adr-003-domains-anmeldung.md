@@ -117,9 +117,10 @@ Image statt `php:8.3-apache` (ohnehin nötig für PostgreSQL). Umsetzung zunäch
 
 ## 3. Testumgebung
 
-Heute läuft `test.angebot-stafl.de` auf dem Produktivserver mit beliebigen Branches. Als Nachbar-Subdomain ist sie
-**dieselbe Site** wie die Kundenseite: Code dort kann Cookies für `angebot-stafl.de` setzen, und Anfragen von dort gelten
-als „same-site“.
+Bis zum 15.11.2026 lief `test.angebot-stafl.de` auf dem Produktivserver mit beliebigen Branches. Als Nachbar-Subdomain war
+sie **dieselbe Site** wie die Kundenseite: Code dort konnte Cookies für `angebot-stafl.de` setzen, und Anfragen von dort
+galten als „same-site“. **Nachtrag 15.11.2026:** Diese Instanz ist entfernt worden (Sicherheitsfund zum Datenordner der
+Testumgebung); auf dem Produktivserver gibt es keine Testinstanz mehr.
 
 **Mittelfristig (Entscheidung 3):** eigene registrierbare Testdomain (z. B. `stafl-test.de`) mit eigener Keycloak-Instanz
 und eigenem kleinen Server.
@@ -127,9 +128,9 @@ und eigenem kleinen Server.
 **Bis dahin gilt (GR-111):**
 - Keycloak und die neue Anmeldung laufen **nur in der CI** (kurzlebige Container, Testschlüssel, Testnutzer) – keine
   Test-Instanz von Keycloak unter `dashboard-stafl.de` oder `angebot-stafl.de`.
-- `test.dashboard-stafl.de` bleibt 503-Platzhalter und wird nicht als Testumgebung genutzt.
-- `test.angebot-stafl.de` bleibt wie heute (nur Testdaten, eigener Passwortschutz, kein E-Mail-Versand); keine
-  Produktiv-Zugangsdaten oder -Geheimnisse dort.
+- `test.dashboard-stafl.de` wird nicht als Testumgebung genutzt (seit 15.11.2026 auch nicht mehr im `Caddyfile`).
+- Auf dem Produktivserver läuft keine Testinstanz (`test.angebot-stafl.de` entfernt am 15.11.2026); geprüft wird
+  lokal und in der CI.
 - Befund B-1 (unten) zuerst beheben – er verringert genau das Risiko aus der gemeinsamen Site.
 
 ## 4. Grenzen: was Subdomains nicht leisten
@@ -147,7 +148,7 @@ Subdomains nicht. Deshalb, abgestuft:
 | Nr. | Befund | Risiko | Vorschlag |
 | --- | --- | --- | --- |
 | B-1 | **Umgesetzt (PR „Sitzung: __Host-Präfix“), wirksam nach Release.** Sitzungs-Cookie `WA_ADMIN` ohne `__Host-`-Präfix; Mitarbeiter und Kunden teilen eine PHP-Sitzung auf der Kundendomain | Cookie-Tossing von `test.angebot-stafl.de`; abgemildert durch `SameSite=Strict`, HttpOnly, strikten Sitzungsmodus, neue Kennung nach Anmeldung, CSRF-Token, CSP | Präfix `__Host-` (kleiner PR; alle Sitzungen enden einmalig, Kunden und Mitarbeiter melden sich neu an; App nicht betroffen) |
-| B-2 | Testumgebung mit beliebigen Branches auf Produktivserver und -domain | §3 | Testdomain und eigener Server mittelfristig |
+| B-2 | **Behoben am 15.11.2026:** Instanz entfernt. Vorher: Testumgebung mit beliebigen Branches auf Produktivserver und -domain | §3 | Testdomain und eigener Server mittelfristig |
 | B-3 | Eigene WebAuthn-Prüfung für Passkeys | Eigenbau sicherheitskritischer Prüfungen | für Mitarbeiter durch Keycloak ersetzen |
 
 ## 6. Umsetzungsweg (jeder Schritt einzeln freigegeben)

@@ -6,7 +6,8 @@ declare(strict_types=1);
    Die Zentrale liest und prüft keine Dateiformate selbst. Jede Importart gehört dem Modul, dem die Daten gehören
    (regeln/datenverantwortung.toml), und ist in dessen Importvertrag registriert (app/api/module/<modul>/import.php,
    Funktion import_arten_<modul>()). Die Zentrale ruft nur dessen Vorschau- und Übernahmefunktion auf und prüft vorher
-   einheitlich: Anmeldung, Recht der Importart (GR-103), Wartung der Oberfläche, zu der die Importaktion des Eigentümers
+   einheitlich: Anmeldung, Recht der Importart (GR-103), Modulzugang des Eigentümers („<modul>.zugang“, GR-103 – ohne ihn
+   ist der Bereich gesperrt, auch über die Zentrale), Wartung der Oberfläche, zu der die Importaktion des Eigentümers
    gehört (GR-107), und – falls registriert – die Passwortbestätigung. Vertrag: docs/plattform/schnittstellen/import.md.
    Große Dateien (Registrierung „teile“): Der Leser liefert neben den Daten der Vorschau einzelne Teile; die Vorschau nennt,
    welche Teile der Eigentümer für die Übernahme braucht, der Browser schickt sie vorher einzeln (import_teil, je Anfrage
@@ -144,7 +145,8 @@ function import_upload($v, bool $pflicht): string
     return $u;
 }
 
-/* Gemeinsame Prüfung vor Vorschau, Teil und Übernahme: Anmeldung (mit CSRF), Importart, Recht, Ablauf, Wartung */
+/* Gemeinsame Prüfung vor Vorschau, Teil und Übernahme: Anmeldung (mit CSRF), Importart, Recht, Modulzugang des
+   Eigentümers, Ablauf, Wartung */
 function import_vorbereiten(array $b): array
 {
     $me = require_auth(true);
@@ -152,6 +154,10 @@ function import_vorbereiten(array $b): array
     $a = import_registry()[$id] ?? null;
     if (!$a) fail('Unbekannte Importart.', 404);
     if (!import_darf($me, $a)) fail('Dafür fehlt Ihnen die Berechtigung. Bitte an einen Administrator wenden.', 403);
+    // Modulzugang des Eigentümers (GR-103), unabhängig vom Host: die Zentrale liest und schreibt dessen Dokumente, hier
+    // gilt also dieselbe Sperre wie für jede andere Aktion dieses Moduls. Der Einstieg prüft das nicht mit – die
+    // Importaktionen gehören dem Modul Verwaltung, der Eigentümer steht erst zur Laufzeit in der Importart.
+    require_modulzugang((string)$a['eigentuemer'], true);
     if ($a['ablauf'] !== 'zentrale') fail('Dieser Import läuft im Angebotseditor (Vorschau und Rückgängig dort).', 422);
     // Wartung der Oberfläche, zu der die Importaktion des Eigentümers gehört (GR-107): wie bei der Aktion selbst (503)
     modul_durchsetzen(AKTIONEN[$a['aktion']]);
