@@ -67,8 +67,8 @@ check("jeder Site-Block bindet den Abschnitt zuerst ein", sites and all(inhalt.s
       [k for k, v in sites.items() if not v.startswith("\timport cdn\n")])
 ziele = re.findall(r"^(\t+)(reverse_proxy|forward_auth)[^\n]*\{\n(.*?)^\1\}", caddy, re.MULTILINE | re.DOTALL)
 ohne = [z[1] for z in ziele if "header_up X-Forwarded-For {besucher_ip}" not in z[2] or "header_up -X-Stafl-Cdn" not in z[2]]
-check("jede Weiterleitung (Anwendung, Testumgebung, Keycloak, Prüfung vor der Anmeldung) mit Besucher-IP und ohne Schlüssel",
-      len(ziele) == caddy.count("reverse_proxy ") + caddy.count("forward_auth ") == 5 and not ohne, (len(ziele), ohne))
+check("jede Weiterleitung (Anwendung, Keycloak, Prüfung vor der Anmeldung) mit Besucher-IP und ohne Schlüssel",
+      len(ziele) == caddy.count("reverse_proxy ") + caddy.count("forward_auth ") == 4 and not ohne, (len(ziele), ohne))
 check("Compose: Caddy bekommt CDN_SCHLUESSEL (leer) und CDN_PFLICHT (0)",
       "CDN_SCHLUESSEL: ${CDN_SCHLUESSEL:-}" in compose and "CDN_PFLICHT: ${CDN_PFLICHT:-0}" in compose)
 check(".env-Vorlage: CDN aus, ohne Schlüssel", re.search(r"^CDN_SCHLUESSEL=$", vorlage, re.MULTILINE) and re.search(r"^CDN_PFLICHT=0$", vorlage, re.MULTILINE))

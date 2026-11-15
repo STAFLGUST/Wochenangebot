@@ -53,7 +53,7 @@ def import_von(kopf):
 
 
 mitarbeiter = next((k for k in alle if k.startswith("dashboard-stafl.de,")), "")
-soll = {"{$DOMAIN}, www.{$DOMAIN}": ["public"], "test.{$DOMAIN}": ["private"], mitarbeiter: ["private"]}
+soll = {"{$DOMAIN}, www.{$DOMAIN}": ["public"], mitarbeiter: ["private"]}
 for kopf, art in soll.items():
     check(f"{kopf[:40]}: zwischenspeichern {art[0]}, sonst „private, no-cache“", import_von(kopf) == art and '?Cache-Control "private, no-cache"' in alle.get(kopf, ""),
           import_von(kopf))

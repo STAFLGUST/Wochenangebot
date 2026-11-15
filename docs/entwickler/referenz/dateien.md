@@ -87,7 +87,7 @@ Jede Code-Datei beginnt mit einem Kopfkommentar; dessen erste Aussage steht hier
 | `einzelangebote.php` | angebot | Aktionen: Einzelangebote (Angebot bearbeiten → Einzelangebote). |
 | `entwurf.php` | angebot | Aktionen: Entwurf, gemeinsames Bearbeiten, Veröffentlichen, Versionen Wird von api/index.php im globalen Gültigkeitsbereich eingebunden; jede Aktion endet mit respond()/fail(). |
 | `hr.php` | hr | Aktionen: HR · Urlaubsverwaltung (Oberfläche hr.intern, Logik in app/api/module/hr/) Rechte (GR-103): hr.antrag – eigener Urlaub und Gleittage, Anträge (nur wenn in Verwaltung → Urlaub eingeschaltet; Gleittage nur … |
-| `importzentrale.php` | verwaltung | Aktionen: Importzentrale (Verwaltung → Import; Ablauf und Prüfungen: module/verwaltung/importzentrale.php) GET import_arten Importarten, für die der angemeldete Nutzer das Recht hat (Anzeige ist keine Berechtigung) … |
+| `importzentrale.php` | verwaltung | Aktionen: Importzentrale (Verwaltung → Import; Ablauf und Prüfungen: module/verwaltung/importzentrale.php) GET import_arten Importarten, für die der Nutzer Recht und Modulzugang des Eigentümers hat (Anzeige ist keine … |
 | `integritaet.php` | plattform | Aktion: Dateiprüfung (lib/integritaet.php) – nur Administratoren. |
 | `kundengruppen.php` | verwaltung | Aktionen: Listen der Stammdaten – Kundengruppen, VK-Gruppen, Vertreter, Versandarten, Lieferanten, Abteilungen (Beschreibung: lib/kunden.php) und Angebotskategorien (module/verwaltung/angebotskategorien.php). |
 | `kundenportal.php` | angebot | Aktionen: Kunden auf der Angebotsseite |
@@ -500,7 +500,6 @@ Jede Code-Datei beginnt mit einem Kopfkommentar; dessen erste Aussage steht hier
 | `sicherung-pruefen.php` | plattform | Prüft eine entpackte Datensicherung (Ersatz für sicherung-pruefen.py, falls kein Python vorhanden ist): jede Datendatei muss gültiges JSON enthalten. |
 | `sicherung-pruefen.py` | plattform | Prüft eine entpackte Datensicherung: jede Datendatei muss gültiges JSON enthalten. |
 | `speicher.sh` | plattform | Speicherbelegung des Servers anzeigen und gefahrlos Aufräumbares entfernen (Docker-Zwischenspeicher, ungenutzte Images). cd /opt/wochenangebot && sh deploy/speicher.sh # nur anzeigen – ändert nichts cd … |
-| `testumgebung.sh` | plattform | Testumgebung test.<Domain> auf demselben Server – vollständig getrennt vom Echtbetrieb (eigener Ordner, eigener Container, nur Testdaten, keine E-Mails, Passwortschutz). sh deploy/testumgebung.sh einrichten einmalig |
 | `wartung-aus.php` | plattform | Notfall: alle Wartungen beenden – Angebotsseite (Dokument „wartung“) und alle Bereiche (Dokument „module“). |
 | `wartung-aus.sh` | plattform | Notfall: alle Wartungen beenden (Angebotsseite und alle Bereiche), z. |
 
@@ -585,13 +584,6 @@ Jede Code-Datei beginnt mit einem Kopfkommentar; dessen erste Aussage steht hier
 | `adressen.py` | plattform | Adressverzeichnis für die CRM-Karte aus OpenStreetMap (ODbL) |
 | `deutschland.geojson` | plattform | – |
 
-## `deploy/testumgebung/`
-
-| Datei | Modul | Inhalt |
-| --- | --- | --- |
-| `apache-schutz.conf` | plattform | Testumgebung: ganze Seite nur mit Benutzername/Passwort (zusätzlich zu den Anmeldungen der Anwendung) |
-| `docker-compose.yml` | plattform | Testumgebung (test.<Domain>) – wird von deploy/testumgebung.sh nach /opt/wochenangebot-test kopiert und dort gestartet. |
-
 ## `docs/`
 
 | Datei | Modul | Inhalt |
@@ -608,7 +600,6 @@ Jede Code-Datei beginnt mit einem Kopfkommentar; dessen erste Aussage steht hier
 | `rechtliche-seiten.md` | angebot | Kontakt, Impressum und Datenschutz |
 | `release-freigabe.md` | plattform | Release freigeben |
 | `sicherheitspruefung-2026-10-17.md` | plattform | Sicherheitsprüfung vom 17.10.2026 |
-| `testumgebung.md` | plattform | Testumgebung `test.<Domain>` |
 
 ## `docs/entwickler/`
 
@@ -746,7 +737,6 @@ Jede Code-Datei beginnt mit einem Kopfkommentar; dessen erste Aussage steht hier
 | `test_sichern.sh` | plattform | Test der Datensicherung (deploy/sichern.sh) in einem Wegwerf-Ordner mit Testdaten. |
 | `test_speicher.sh` | plattform | Test von deploy/speicher.sh – mit Platzhalter für docker, in einem Wegwerf-Ordner. |
 | `test_sqlite_http.sh` | plattform | Exercise real production PHP image and Apache, not the built-in test server. |
-| `test_testumgebung.sh` | plattform | Test der Testumgebung-Verwaltung (deploy/testumgebung.sh) mit Platzhaltern für docker und git – ohne Server. |
 | `test_zwischenspeichern.py` | plattform | Browser-Zwischenspeicher (Caddyfile, Abschnitt „zwischenspeichern“) mit echtem Caddy in der Fassung des Betriebs. |
 
 ## `tests/e2e/`

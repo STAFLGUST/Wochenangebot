@@ -61,10 +61,10 @@ um, wenn ein Modul ohnehin daran arbeitet.
 | `angebot-stafl.de/admin/` | heutige Mitarbeiter-Eingabe; Ziel laut ADR-003: `angebot.dashboard-stafl.de` (alte Adresse leitet weiter) | produktiv |
 | `dashboard-stafl.de` | Dashboard + Anmeldung | 503-Platzhalter |
 | `<modul>.dashboard-stafl.de` | Modul-Oberfläche `app/module/<id>/` + `/api/` | 503-Platzhalter |
-| `test.dashboard-stafl.de` | nicht als Testumgebung nutzen (ADR-003); Integration später auf eigener Testdomain | 503-Platzhalter |
+| `test.dashboard-stafl.de` | nicht als Testumgebung nutzen (ADR-003); Integration später auf eigener Testdomain | nicht im `Caddyfile` |
 | `login.dashboard-stafl.de` | Keycloak (ADR-003) | DNS fehlt |
 | `angebot.dashboard-stafl.de` | Angebot · Mitarbeiter-Eingabe (ADR-003) | DNS fehlt |
-| `test.angebot-stafl.de` | bestehende Testumgebung | produktiv (401) |
+| `test.angebot-stafl.de` | frühere Testumgebung | entfernt (15.11.2026, GR-111) |
 
 - Caddy schaltet einen Host erst frei, wenn **alle** seine Oberflächen eine Freigabe haben (GR-105, CI prüft gegen das
   Register). Freigegeben wird per Release, nicht per Klick.

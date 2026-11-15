@@ -32,7 +32,7 @@
   const exceptions = (u) => (u.role === 'admin' ? '' : [u.grant.length ? `+${u.grant.length}` : '', u.deny.length ? `−${u.deny.length}` : ''].filter(Boolean).join(' / '));
   const roleBadge = (r) => `<span class="role-b r-${['admin', 'editor', 'viewer'].includes(r) ? esc(r) : 'eigen'}">${esc(rollenName(r))}</span>`;
   const roleBadges = (u) => rollenVon(u).map(roleBadge).join(' ');
-  const hrAn = () => !!(W.hr && may('hr.verwalten'));
+  const hrAn = () => !!(W.hr && may('hr.verwalten') && may('hr.zugang'));   // HR-Aktionen verlangen auch den Modulzugang HR (GR-103)
   /* Zentrale Anmeldung (Keycloak-Host): es gibt nur das Passwort von Keycloak – kein Passwort der Anwendung im Dialog,
      stattdessen der Abschnitt „Zentrale Anmeldung“ (anmeldekonto, lib/anmeldekonten.php) */
   const zentral = () => !!(W.me && W.me.zentral);
@@ -1650,7 +1650,7 @@
   /* Abteilungen (Inhaber 10.11.2026): Nummer und Bezeichnung, von Hand gepflegt (kein CSV). Die HR-Angaben der Mitarbeiter
      verweisen über die Nummer darauf (Verwaltung → Mitarbeiter → Bearbeiten, app/module/hr/verwaltung-hr.js); Umbenennen
      wirkt überall. Mit „hr.verwalten“: Anzahl Mitarbeiter je Abteilung und Übernahme der Abteilungen aus den Mitarbeiterangaben. */
-  const hrDa = () => !!(W.hr && may('hr.verwalten'));
+  const hrDa = () => !!(W.hr && may('hr.verwalten') && may('hr.zugang'));   // wie hrAn (Modulzugang HR, GR-103)
   const AB = gruppenListe({ liste: 'abteilungen', p: 'ab', view: '#view-abteilungen', eine: 'Abteilung', viele: 'Abteilungen', nrSpalten: ['abteilungnr'],
     felder: [{ k: 'name', label: 'Bezeichnung', max: 40, req: true, csv: ['bezeichnung', 'name', 'abteilung'], span2: true }],
     ohneCsv: true, nrVorschlag: true, nrText: 'Die Nummer bestimmt die Reihenfolge der Liste.',

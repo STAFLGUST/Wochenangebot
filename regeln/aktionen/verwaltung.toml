@@ -7,6 +7,7 @@ modul = "verwaltung"
 # Angebotskategorien (Stammdaten): Abschnitte des Angebots mit zugeordneten VK-Gruppen, ordnen den Aufbau aller Angebote
 [aktion.angebotskategorien]
 oberflaeche = "angebot.eingabe"
+zugang_gemeinsam = true   # Aufbau des Angebots: der Angebotseditor liest die Kategorien
 
 [aktion.angebotskategorien_save]
 oberflaeche = "angebot.eingabe"
@@ -33,6 +34,7 @@ schreibend = true
 
 [aktion.kunden]
 oberflaeche = "angebot.eingabe"
+zugang_gemeinsam = true   # Kundenliste für Kundenangebote, Einzel- und Sonderangebote im Angebotsbereich
 
 [aktion.kunden_import]
 oberflaeche = "angebot.eingabe"
@@ -57,6 +59,7 @@ schreibend = true
 
 [aktion.kundengruppen]
 oberflaeche = "angebot.eingabe"
+zugang_gemeinsam = true   # Kundengruppen für Sonder- und Kundenangebote im Angebotsbereich
 
 [aktion.kundengruppen_save]
 oberflaeche = "angebot.eingabe"
@@ -64,10 +67,12 @@ schreibend = true
 
 [aktion.master]
 oberflaeche = "angebot.eingabe"
+zugang_gemeinsam = true   # Artikelstammdaten: der Angebotseditor vergleicht und übernimmt sie
 
 [aktion.master_save]
 oberflaeche = "angebot.eingabe"
 schreibend = true
+zugang_gemeinsam = true   # Artikelstammdaten aus dem Angebotseditor („als Stammdaten speichern“, Vereinheitlichung)
 
 [aktion.ort_update]
 oberflaeche = "angebot.eingabe"
@@ -97,6 +102,7 @@ schreibend = true
 
 [aktion.vkgruppen]
 oberflaeche = "angebot.eingabe"
+zugang_gemeinsam = true   # VK-Gruppen für Artikelwahl und Stammdatenabgleich im Angebotsbereich
 
 [aktion.vkgruppen_save]
 oberflaeche = "angebot.eingabe"

@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Container-Images fest über Digest (Sicherheitsdurchsicht 26.10.2026, Befund 12): jedes fremde Image in den Compose-Dateien
 und im Dockerfile ist mit @sha256 festgelegt – ein Release holt so nie unbemerkt eine andere Fassung. Kundenseite,
-Anwendungs-Image und Testumgebung nutzen dasselbe PHP-Grundimage; die CI prüft und scannt genau die eingetragenen Images."""
+Anwendungs-Image nutzen dasselbe PHP-Grundimage; die CI prüft und scannt genau die eingetragenen Images."""
 from pathlib import Path
 import re
 
@@ -14,7 +14,7 @@ def images(pfad):
 
 fehler = []
 alle = {}
-for pfad in ("docker-compose.yml", "deploy/anmeldung/docker-compose.anmeldung.yml", "deploy/testumgebung/docker-compose.yml"):
+for pfad in ("docker-compose.yml", "deploy/anmeldung/docker-compose.anmeldung.yml"):
     for img in images(pfad):
         if img.startswith("stafl-app:"):   # selbst gebaut aus deploy/image (Grundimage dort fest)
             continue
@@ -27,10 +27,8 @@ if not FEST.match(dockerfile):
     fehler.append(f"deploy/image/Dockerfile: {dockerfile} nicht fest")
 
 php = [i for i in alle.get("docker-compose.yml", []) if i.startswith("php:")]
-test_php = [i for i in alle.get("deploy/testumgebung/docker-compose.yml", []) if i.startswith("php:")]
-skript = re.search(r"^PHP_IMAGE=(\S+)", Path("deploy/testumgebung.sh").read_text(encoding="utf-8"), re.MULTILINE).group(1)
-if not (php and php == test_php and php[0] == dockerfile and skript == dockerfile):
-    fehler.append(f"PHP-Grundimage uneinheitlich: Kundenseite {php}, Testumgebung {test_php}/{skript}, Dockerfile {dockerfile}")
+if not (php and php[0] == dockerfile):
+    fehler.append(f"PHP-Grundimage uneinheitlich: Kundenseite {php}, Dockerfile {dockerfile}")
 
 ci = Path(".github/workflows/ci.yml").read_text(encoding="utf-8")
 # CI lädt die Images der zentralen Anmeldung aus der Compose-Datei (dieselbe Fassung); Digests stehen nie in Workflow-Dateien –

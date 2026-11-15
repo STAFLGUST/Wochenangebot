@@ -4,7 +4,7 @@ Neue Stände gehen nur live, wenn der Inhaber sie ausdrücklich freigibt. Die Fr
 
 ## Ablauf
 
-1. PR mergen (optional vorher in der Testumgebung prüfen, siehe `docs/testumgebung.md`).
+1. PR mergen.
 2. Die CI läuft auf `main`. Ist sie grün, startet sie den Release-Lauf (Job „Release zur Freigabe vorlegen“).
    Hat die CI des Pull Requests genau denselben Inhalt schon vollständig geprüft (Normalfall), dauert das etwa
    1 Minute statt 6–30 Minuten – siehe „Keine Doppelprüfung nach dem Merge“.
@@ -115,8 +115,7 @@ Server aus dem eingespielten (also freigegebenen, CI-geprüften) Commit:
 - **Prüfliste** `app/api/lib/integritaet-liste.php` (nicht versioniert, `.gitignore`): gelesen aus den Git-Objekten des
   Commits, nicht aus dem Arbeitsordner – veränderte oder zusätzliche Dateien werden nie als freigegeben übernommen; sie
   liegt im nur lesend eingebundenen Programmordner. HTML-Seiten stehen mit beiden Fassungen darin (mit/ohne Nummern).
-- Läuft nach jedem Codewechsel (Release, automatischer und manueller Rückfall, `testumgebung.sh einspielen`,
-  `einrichten.sh`) und bei jedem Lauf von `aktualisieren.sh` (alle 2 Minuten; schreibt nur, wenn etwas fehlt). Eine Seite
+- Läuft nach jedem Codewechsel (Release, automatischer und manueller Rückfall, `einrichten.sh`) und bei jedem Lauf von `aktualisieren.sh` (alle 2 Minuten; schreibt nur, wenn etwas fehlt). Eine Seite
   wird nur ergänzt, wenn sie genau dem Commit entspricht; anders veränderte Dateien bleiben stehen und die Dateiprüfung
   meldet sie.
 - Stände von vor der Umstellung enthalten Liste und Nummern selbst – dann ändert das Skript nichts (Rückfall).
