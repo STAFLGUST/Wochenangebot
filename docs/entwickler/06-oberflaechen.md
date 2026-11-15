@@ -39,7 +39,7 @@ Einheiten, `window.STAFL_FORMAT`) und `suche.js` (Suchregel aller Suchfelder, `w
 [10 Konventionen](10-konventionen.md#suche)).
 
 Alle Pfade sind relativ zur Seite (Rechtsseiten: absolut ab `/`). Damit funktionieren dieselben Dateien auf dem
-Testserver (`tests/run_e2e.py`), in der Testumgebung und auf jedem Produktions-Host.
+Testserver (`tests/run_e2e.py`) und auf jedem Produktions-Host.
 
 **Welche Seite auf welchem Host** (Quelle: `Caddyfile`, `deploy/anmeldung/apache-oidc.conf`):
 

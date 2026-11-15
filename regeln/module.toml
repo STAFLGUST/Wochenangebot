@@ -621,14 +621,9 @@ adressen = ["https://angebot-stafl.de/", "https://dashboard-stafl.de/"]
 beschreibung = "Echtbetrieb – nur freigegebene Releases (docs/release-freigabe.md)"
 
 [[umgebung]]
-id = "test-angebot"
-adressen = ["https://test.angebot-stafl.de/"]
-beschreibung = "Bestehende Testumgebung des Angebotsportals (Container app-test, docs/testumgebung.md)"
-
-[[umgebung]]
 id = "integration"
 adressen = ["https://test.dashboard-stafl.de/"]
-beschreibung = "503-Platzhalter – nicht als Testumgebung nutzen (ADR-003, GR-111); Integration später auf eigener Testdomain"
+beschreibung = "Geplant (Roadmap 9), heute nicht geroutet – nicht als Testumgebung nutzen (ADR-003, GR-111); Integration später auf eigener Testdomain"
 
 # ───────────────────────────── Koordinationspflichtige Bereiche ─────────────────────────────
 # Änderungen hier nur nach Abstimmung (PR-Text: Abschnitt „Koordination“), weil mehrere Module/Agenten betroffen sind.
@@ -657,7 +652,7 @@ pfade = ["regeln/katalog.toml", "regeln/module.toml", "regeln/wartung.toml", "AG
 
 [[koordination]]
 bereich = "Betrieb: Docker, Caddy, Release und Sicherung"
-pfade = ["Caddyfile", "docker-compose.yml", "deploy/*.sh", "deploy/testumgebung/**", "deploy/image/**", "deploy/anmeldung/**", ".github/workflows/**",
+pfade = ["Caddyfile", "docker-compose.yml", "deploy/*.sh", "deploy/image/**", "deploy/anmeldung/**", ".github/workflows/**",
   ".github/scripts/**"]
 
 [[koordination]]

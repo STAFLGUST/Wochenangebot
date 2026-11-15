@@ -271,11 +271,11 @@ seit = "2026-10-21"
 [[regel]]
 id = "GR-111"
 titel = "Testumgebungen ohne Produktivsitzungen, -geheimnisse und -daten"
-beschreibung = "Testumgebungen nutzen nur synthetische Daten, eigene Zugangsdaten und eigene Schlüssel; nie Produktivdaten, -passwörter oder -geheimnisse. Bis zur eigenen Testdomain läuft der Identitätsanbieter nur in der CI – keine Test-Instanz unter dashboard-stafl.de oder angebot-stafl.de; test.dashboard-stafl.de bleibt Platzhalter."
+beschreibung = "Testumgebungen nutzen nur synthetische Daten, eigene Zugangsdaten und eigene Schlüssel; nie Produktivdaten, -passwörter oder -geheimnisse. Bis zur eigenen Testdomain laufen Testumgebungen nur in der CI und lokal – keine Test-Instanz auf dem Produktivserver und keine Testadresse unter dashboard-stafl.de oder angebot-stafl.de (die frühere Instanz test.angebot-stafl.de ist am 15.11.2026 entfernt worden)."
 verantwortlich = "plattform"
 module = ["plattform"]
 daten = ["testpostfach"]
-tests = ["e2e:testumgebung", "datei:tests/deploy/test_testumgebung.sh"]
+tests = ["e2e:testumgebung"]
 quelle = "AGENTS.md"
 status = "verbindlich"
 version = 1

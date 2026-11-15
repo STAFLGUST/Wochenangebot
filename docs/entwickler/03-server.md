@@ -473,6 +473,6 @@ Gelesene Kopfzeilen (vom Browser bzw. Proxy, also nicht vertrauenswürdig ohne P
 `X-Forwarded-Proto` (in `is_https()`), `If-None-Match`, `User-Agent`.
 
 Geheimnisse gehören in `.env` auf dem Server, nie ins Repository (GR-007). Betrieb und Compose-Dateien:
-[architektur.md](../architektur.md), [testumgebung.md](../testumgebung.md).
+[architektur.md](../architektur.md).
 
 Stand: 2026-10-24

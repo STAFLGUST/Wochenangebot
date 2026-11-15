@@ -20,7 +20,6 @@ an Produktion, DNS oder Daten.
 | `https://dashboard-stafl.de`, `https://crm.dashboard-stafl.de` | 503 „in Vorbereitung“, `no-store`, `noindex` | Caddy-Stand aus PR #62 ist eingespielt |
 | `https://angebot-stafl.de/api/index.php?action=app_info` | 200, `wartung: null`, `testumgebung: false` | Angebotsportal läuft normal, Wartung aus |
 | `https://angebot-stafl.de/admin/` | 200 | heutiger Eingabebereich |
-| `https://test.angebot-stafl.de` | 401 | Testumgebung mit Passwortschutz |
 
 **Nicht von außen prüfbar:** ob SQLite auf dem Server aktiv ist (Marker `daten/.sqlite-active`) und welcher Commit genau
 läuft. Bitte bei Gelegenheit auf dem Server prüfen: `ls -la daten/.sqlite-active` und `git -C /opt/… rev-parse HEAD`.
@@ -50,11 +49,11 @@ läuft. Bitte bei Gelegenheit auf dem Server prüfen: `ls -la daten/.sqlite-acti
   auf diesem Branch: Dateien **2.546/2.546** bestanden (Gruppe `app_web` übersprungen, braucht App-Build).
 - **CI:** statische Prüfungen (Syntax, Caddy-Parser, Dashboard-Platzhalter, Versionsnummern, Prüfliste, actionlint),
   Sicherheitsprüfungen (gitleaks über den ganzen Verlauf, Trivy), Betrieb (Datenbankmigration, Sicherung,
-  Release-Modus mit Healthcheck/Rückfall, Testumgebung), E2E-Matrix Dateien/SQLite.
+  Release-Modus mit Healthcheck/Rückfall), E2E-Matrix Dateien/SQLite.
 - **Release:** grüne CI auf `main` → Release-Lauf wartet auf Freigabe in der Umgebung `produktion` → Tag → Server
   spielt per Timer ein (`deploy/freigabe-einspielen.sh`: Prüfung, Healthcheck, automatischer Rückfall).
-- **Testumgebung:** `test.angebot-stafl.de` → Container `app-test` (synthetische Daten, Apache-Passwort,
-  E-Mails ins Testpostfach).
+- **Testumgebung:** keine auf dem Server – `test.angebot-stafl.de` ist am 15.11.2026 entfernt worden (GR-111);
+  geprüft wird lokal und in der CI.
 - **Sicherung:** lokaler Timer (`deploy/sichern.sh`, bei SQLite über die Backup-API) + Hostinger-VPS-Backups.
 
 ## Befunde für den Plattformumbau

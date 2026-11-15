@@ -28,14 +28,14 @@ welchem Modul gehört, steht in `regeln/` (`python3 werkzeuge/regeln.py modul <i
 - **Auslieferung:** nur über Release: nach grüner CI auf `main` wartet der Release-Lauf auf die Freigabe des
   Inhabers (Umgebung `produktion`, `docs/release-freigabe.md`); der Server spielt per Timer ein
   (`deploy/freigabe-einspielen.sh`: Prüfung, Healthcheck, automatischer Rückfall).
-- **Bereitstellung** (`deploy/bereitstellen.py`): nach jedem Codewechsel (Release, Rückfall, Testumgebung, Einrichtung; zusätzlich
+- **Bereitstellung** (`deploy/bereitstellen.py`): nach jedem Codewechsel (Release, Rückfall, Einrichtung; zusätzlich
   bei jedem Lauf von `aktualisieren.sh`, falls etwas fehlt) aus den Git-Objekten genau des aktiven Commits: Versionsnummern
   `?v=<SHA-256 des Inhalts, 10 Zeichen>` für jede eigene `.js`/`.css` in den HTML-Seiten unter `app/` (Angebotsseite,
   Eingabebereich, Modulseiten) und im Dashboard (`dashboard/`) und die Prüfliste `app/api/lib/integritaet-liste.php` (einschließlich der Dashboard-Dateien unter `dashboard/<pfad>`). Beides
   steht nicht im Repository (keine Merge-Konflikte mehr). Ohne Nummer lädt der Browser mit Rückfrage (`no-cache`) – nie
   eine veraltete Kopie. Ältere Stände, die Liste und Nummern noch selbst enthalten, bleiben unverändert (Rückfall).
-- **Testumgebung:** `test.<Domain>` → Container `app-test` in `/opt/wochenangebot-test` (`deploy/testumgebung.sh`,
-  `docs/testumgebung.md`); `WA_TESTUMGEBUNG=1` leitet E-Mails ins Testpostfach.
+- **Keine Testinstanz auf dem Server** (entfernt am 15.11.2026, GR-111): neue Stände werden lokal und in der CI
+  geprüft. Der Schalter `WA_TESTUMGEBUNG=1` (Kennzeichen, E-Mails nur ins Testpostfach) bleibt für Tests und CI.
 - **Daten:** Dokumente über `app/api/storage.php` – Dateien (`daten/*.php`) oder SQLite (`daten/.sqlite/store.sqlite`,
   aktiv mit `daten/.sqlite-active`, siehe `docs/datenbank.md`). Sicherung: `deploy/sichern.sh`. Nach der Datentrennung
   (ADR-007 Stufe 2a, `deploy/daten-trennen.sh`) liegen interne Dokumente in `daten-intern/` – nur Mitarbeiterseite und Postausgang.
@@ -255,5 +255,5 @@ Bestandsdaten, exakte Wochenpreise, ETA-Quelle und kompatible Erweiterungen:
   Die Gruppen `revert`, `angebote`, `aufbau` und `sys` schalten in ihrer App-Kopie die Liste der Änderungen im Eingabebereich ein
   (`LISTE_IM_ANGEBOT` in `run_e2e.py`, Schalter `AENDERUNGSLISTE_IM_ANGEBOT` in `admin.js`); den ausgelieferten Stand prüft die Gruppe `versand`.
 - App: `cd mobile && npm test` (Jest), `npm run typecheck`, `npm run export:native`; Gruppe `app_web` testet den Web-Build der App gegen den Testserver (nur wenn `mobile/dist-web` gebaut ist).
-- `tests/unit/*.test.js` (Node), `tests/deploy/*` (Sicherung, Release-Modus, Release-Prüfungen, Datenbank, Testumgebung).
+- `tests/unit/*.test.js` (Node), `tests/deploy/*` (Sicherung, Release-Modus, Release-Prüfungen, Datenbank).
 - CI (`.github/workflows/ci.yml`): Syntax, Regelwerk und Modulgrenzen (`werkzeuge/regeln.py`), Einbindungen ohne Versionsnummern, Prüfliste nicht im Repository, Ports, Secrets, Abhängigkeiten, E2E in beiden Speicherarten (je 3 Teile, `WA_TEIL`). Auf `main` Übernahme der Prüfung aus dem Pull Request bei gleichem Inhalt (`.github/scripts/ci_nachweis.py`); Paketvorrat und Downloads im Zwischenspeicher (`zwischenspeicher.yml`, `.github/scripts/testumgebung.sh`, `apt_vorrat.py`); Trockenlauf des Nachweises: `ci-nachweis.yml`.
