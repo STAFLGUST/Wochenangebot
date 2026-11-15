@@ -235,6 +235,17 @@ Ohne gültigen Schlüssel wirkt nichts davon. Jede neue Weiterleitung (`reverse_
 nur mit `-h` bzw. für echte Dateien (`find -type f`); Angaben, denen root folgt (vorheriger Stand für den Rückfall), stehen
 in root-Dateien außerhalb (`.release-vorher`). Code eines Testzweigs läuft nie auf dem Server.
 
+Dieselbe Regel gilt für **Ordnernamen** und für jeden Ordner, in den ein weniger vertrauter Prozess schreiben darf:
+`daten_trennen.py` legt Zielordner Schritt für Schritt an und bricht ab, sobald eine Komponente ein Verweis ist
+(`ordner_nofollow`, beide Richtungen); `karte-laden.sh` und `adressen-laden.sh` prüfen jedes Ergebnis des Lade-Containers in
+`daten-karte/` auf eine echte Datei (`echt`), tauschen nur mit `mv -fT` aus (folgt keinem Verweis, ersetzt ihn), erzeugen die
+Stand-Vermerke im Installationsordner und setzen sie nur per Umbenennen ein (`vermerken`), machen den Namen der Quelldatei
+unmittelbar vor dem Download frei (der Probelauf des Containers lief vorher) und übernehmen aus der Kopfzeile `last-modified`
+nur harmlose Zeichen; `bereitstellen.py` schreibt nur innerhalb des übergebenen Programmordners (`schreibpfad`, beide
+Schreibwege) und legt seine Zwischendatei nie über einen Verweis an. Geprüft wird das in `tests/deploy/test_sichern.sh`,
+`test_postfach_schluessel.sh`, `test_datenbank_umschalten.sh`, `test_daten_trennen.py`, `test_karte_laden.sh`,
+`test_adressen_laden.sh` und `test_freigabe.sh`.
+
 Die PHP-Notfallwerkzeuge laufen im App-Container als `www-data` (`docker compose exec -T -u www-data app php …`), damit
 Datenbank-Journal und Sperrdateien nicht root gehören.
 

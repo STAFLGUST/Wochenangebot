@@ -20,6 +20,8 @@ case "\$*" in
   *" extract "*)
     [ -f "$T/laden-fehler" ] && exit 1
     ziel=\$(printf '%s\n' "\$@" | grep -m1 '^/daten/' | sed 's|^/daten/||')
+    # mit \$T/verweis: der Lauf legt statt der Datei einen Verweis nach außerhalb an (wie ein übernommenes Werkzeug)
+    [ -f "$T/verweis" ] && { ln -sfn "$T/opfer" "\$daten/\$ziel"; exit 0; }
     { printf 'PMTiles'; head -c "\$(cat "$T/groesse")" /dev/zero; } > "\$daten/\$ziel" ;;
   *" show "*) [ -f "$T/show-fehler" ] && exit 1; exit 0 ;;
   *) echo "unerwartet: \$*" >&2; exit 9 ;;
@@ -58,6 +60,21 @@ rm -f "$T/show-fehler"; touch "$T/laden-fehler"
 AUS=$(KARTE_STAND=20261027.pmtiles sh "$REPO/deploy/karte-laden.sh" 2>&1) && CODE=0 || CODE=$?
 ok "Download fehlgeschlagen: bisherige Karte bleibt" '[ $CODE = 1 ] && echo "$AUS" | grep -q "bisherige Karte bleibt" && [ "$(md5sum daten-karte/karte.pmtiles)" = "$alt" ]'
 rm -f "$T/laden-fehler"
+
+# daten-karte ist im Lade-Container beschreibbar: dort angelegte Verweise dürfen root nie umlenken (wie tests/deploy/test_sichern.sh)
+echo ORIGINAL > "$T/opfer"; chmod 600 "$T/opfer"; touch "$T/verweis"
+AUS=$(KARTE_STAND=20261028.pmtiles sh "$REPO/deploy/karte-laden.sh" 2>&1) && CODE=0 || CODE=$?
+ok "Verweis statt neuer Karte: Abbruch, fremde Datei unverändert" '[ $CODE = 1 ] && echo "$AUS" | grep -q "kein echtes Ergebnis" \
+  && [ "$(cat "$T/opfer")" = ORIGINAL ] && [ "$(stat -c %a "$T/opfer")" = 600 ] && [ "$(md5sum daten-karte/karte.pmtiles)" = "$alt" ]'
+rm -f "$T/verweis" daten-karte/karte.neu.pmtiles
+rm -f daten-karte/stand.txt daten-karte/karte.pmtiles
+ln -s "$T/opfer" daten-karte/stand.txt; ln -s "$T/opfer2" daten-karte/karte.pmtiles
+AUS=$(KARTE_STAND=20261028.pmtiles sh "$REPO/deploy/karte-laden.sh" 2>&1) && CODE=0 || CODE=$?
+ok "Karte und Stand folgen keinem Verweis in daten-karte (Ziele unverändert, Verweise ersetzt)" '[ $CODE = 0 ] \
+  && [ "$(cat "$T/opfer")" = ORIGINAL ] && [ "$(stat -c %a "$T/opfer")" = 600 ] && [ ! -e "$T/opfer2" ] \
+  && [ ! -L daten-karte/stand.txt ] && [ ! -L daten-karte/karte.pmtiles ] && [ "$(cat daten-karte/stand.txt)" = 20261028.pmtiles ] \
+  && [ "$(head -c 7 daten-karte/karte.pmtiles)" = PMTiles ] && [ -z "$(ls -A . | grep "^\.stand\.")" ]'
+alt=$(md5sum daten-karte/karte.pmtiles)
 
 AUS=$(KARTE_PLATZ_GB=999999 KARTE_STAND=20261027.pmtiles sh "$REPO/deploy/karte-laden.sh" 2>&1) && CODE=0 || CODE=$?
 ok "zu wenig Platz: Abbruch vor dem Laden" '[ $CODE = 1 ] && echo "$AUS" | grep -q "Zu wenig freier Platz"'

@@ -46,9 +46,13 @@ for a in "\$@"; do quelle=\$ziel; ziel=\$a; done
 daten=\$(printf '%s\n' "\$@" | grep -m1 ':/daten\$' | cut -d: -f1)
 case "\$quelle" in
   /probe/*) [ -f "$T/probe-fehler" ] && { echo "ImportError: libexpat.so.1" >&2; exit 1; }
+            # mit \$T/verweis-quelle legt schon der Probelauf einen Verweis unter dem Namen der Quelldatei an
+            [ -f "$T/verweis-quelle" ] && ln -sfn "$T/opfer" "\$daten/adressen-quelle.osm.pbf"
             [ -s "\$(printf '%s\n' "\$@" | grep -m1 ':/probe:ro\$' | cut -d: -f1)/adressen.osm" ] || { echo "Testdaten fehlen" >&2; exit 1; } ;;
   *) [ -f "$T/umwandeln-fehler" ] && exit 1
-     [ -s "\$daten/adressen-quelle.osm.pbf" ] || { echo "Quelle fehlt" >&2; exit 1; } ;;
+     [ -s "\$daten/adressen-quelle.osm.pbf" ] || { echo "Quelle fehlt" >&2; exit 1; }
+     # mit \$T/verweis-ziel liefert der Lauf statt des Verzeichnisses einen Verweis nach außerhalb
+     [ -f "$T/verweis-ziel" ] && { ln -sfn "$T/opfer" "\$daten/\${ziel#/daten/}"; exit 0; } ;;
 esac
 python3 "$REPO/deploy/karte/adressen.py" --json "$REPO/tests/fixtures/karte/adressen.json" "\$daten/\${ziel#/daten/}" 2>/dev/null
 STUB
@@ -115,6 +119,35 @@ echo 'Wed, 28 Oct 2026 02:16:18 GMT' > "$T/stand"
 AUS=$(sh "$REPO/deploy/adressen-laden.sh") && CODE=0 || CODE=$?
 ok "Quelle mit Weiterleitung: Prüfsumme neben dem Ziel gefunden und geprüft" '[ $CODE = 0 ] && echo "$AUS" | grep -q "Prüfsumme (MD5) stimmt" && grep -q "https://ziel.example/europe/germany-261028.osm.pbf.md5" "$T/aufrufe"'
 rm -f "$T/md5-nur-ziel" "$T/weiterleitung"
+
+# daten-karte ist im Lade-Container beschreibbar: dort angelegte Verweise dürfen root nie umlenken (wie tests/deploy/test_sichern.sh)
+alt=$(md5sum daten-karte/adressen.sqlite)
+echo ORIGINAL > "$T/opfer"; chmod 600 "$T/opfer"
+echo 'Thu, 29 Oct 2026 02:16:18 GMT' > "$T/stand"; touch "$T/verweis-ziel"
+AUS=$(sh "$REPO/deploy/adressen-laden.sh" 2>&1) && CODE=0 || CODE=$?
+ok "Verweis statt neuem Verzeichnis: Abbruch, fremde Datei unverändert" '[ $CODE = 1 ] && echo "$AUS" | grep -q "kein echtes Ergebnis" \
+  && [ "$(cat "$T/opfer")" = ORIGINAL ] && [ "$(stat -c %a "$T/opfer")" = 600 ] && [ "$(md5sum daten-karte/adressen.sqlite)" = "$alt" ]'
+rm -f "$T/verweis-ziel"; touch "$T/verweis-quelle"
+AUS=$(sh "$REPO/deploy/adressen-laden.sh" 2>&1) && CODE=0 || CODE=$?
+ok "Verweis unter dem Namen der Quelldatei (vom Probelauf): Download folgt ihm nicht" '[ $CODE = 0 ] \
+  && [ "$(cat "$T/opfer")" = ORIGINAL ] && [ "$(stat -c %a "$T/opfer")" = 600 ] && [ -s daten-karte/adressen.sqlite ]'
+rm -f "$T/verweis-quelle"
+rm -f daten-karte/adressen-stand.txt daten-karte/adressen.sqlite
+ln -s "$T/opfer" daten-karte/adressen-stand.txt; ln -s "$T/opfer2" daten-karte/adressen.sqlite
+printf '%s\n' 'Fri, 30 Oct 2026 02:16:18 GMT' > "$T/stand"
+AUS=$(sh "$REPO/deploy/adressen-laden.sh" 2>&1) && CODE=0 || CODE=$?
+ok "Verzeichnis und Stand folgen keinem Verweis in daten-karte (Ziele unverändert, Verweise ersetzt)" '[ $CODE = 0 ] \
+  && [ "$(cat "$T/opfer")" = ORIGINAL ] && [ "$(stat -c %a "$T/opfer")" = 600 ] && [ ! -e "$T/opfer2" ] \
+  && [ ! -L daten-karte/adressen-stand.txt ] && [ ! -L daten-karte/adressen.sqlite ] \
+  && [ "$(cat daten-karte/adressen-stand.txt)" = "Fri, 30 Oct 2026 02:16:18 GMT" ] && [ -z "$(ls -A . | grep "^\.stand\.")" ]'
+# Der Stand kommt aus einer Kopfzeile der Quelle und landet in einer Datei: nur harmlose Zeichen, begrenzte Länge
+printf '%s\n' 'Sat, 31 Oct 2026 02:16:18 GMT
+*/5 * * * * root sh /tmp/x' > "$T/stand"
+AUS=$(sh "$REPO/deploy/adressen-laden.sh" 2>&1) && CODE=0 || CODE=$?
+ok "Stand der Quelle wird vor dem Vermerken auf harmlose Zeichen begrenzt" '[ $CODE = 0 ] \
+  && [ "$(wc -l < daten-karte/adressen-stand.txt)" = 1 ] && ! grep -q "[*/]" daten-karte/adressen-stand.txt \
+  && grep -q "31 Oct 2026" daten-karte/adressen-stand.txt'
+printf '%s\n' 'Sun, 01 Nov 2026 02:16:18 GMT' > "$T/stand"
 
 AUS=$(sh "$REPO/deploy/adressen-laden.sh" entfernen) && CODE=0 || CODE=$?
 ok "entfernen: Verzeichnis und Stand weg" '[ $CODE = 0 ] && [ ! -e daten-karte/adressen.sqlite ] && [ ! -e daten-karte/adressen-stand.txt ]'

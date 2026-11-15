@@ -126,17 +126,30 @@ def liste_php(liste: dict, quelle: str) -> bytes:
     return ''.join(zeilen).encode('utf-8')
 
 
+def schreibpfad(wurzel: Path, rel) -> Path:
+    """Schreibziel unterhalb von wurzel – die Pfade entstehen rein lexikalisch (Prüfliste, Dashboard-Seiten), ein
+    Verzeichnis-Verweis im eingespielten Stand darf also nie aus dem Programmordner herausführen."""
+    pfad = wurzel / rel
+    if not pfad.parent.resolve().is_relative_to(wurzel.resolve()):
+        raise SystemExit(f'Bereitstellung abgebrochen: {pfad} liegt außerhalb von {wurzel} (Verzeichnis-Verweis?).')
+    return pfad
+
+
 def schreiben(pfad: Path, inhalt: bytes, modus: int = 0o644) -> None:
     """Atomar ersetzen (Apache liest nie eine halb geschriebene Datei); lesbar für den Webserver."""
     tmp = pfad.with_name('.' + pfad.name + '.bereitstellen-tmp')
     try:
-        with open(tmp, 'wb') as f:
+        # Zwischendatei nie über einen untergeschobenen Verweis schreiben (wie write_nofollow() in deploy/datenbank.py);
+        # os.replace ersetzt danach auch einen Verweis unter dem Zielnamen, statt ihm zu folgen.
+        if os.path.lexists(tmp):
+            os.unlink(tmp)
+        with os.fdopen(os.open(tmp, os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW, modus), 'wb') as f:
             f.write(inhalt)
         os.chmod(tmp, modus)
         os.replace(tmp, pfad)
     finally:
-        if tmp.exists():
-            tmp.unlink()
+        if os.path.lexists(tmp):
+            os.unlink(tmp)
 
 
 def lesen(pfad: Path):
@@ -202,7 +215,8 @@ def server(nur_pruefen: bool) -> int:
             continue
         if ist == inhalt and rel in seiten:          # Seite genau wie im Commit, nur ohne Nummern → Nummern setzen
             if not nur_pruefen:
-                schreiben(app / rel, gestempelt, (app / rel).stat().st_mode & 0o777)
+                ziel = schreibpfad(app, rel)
+                schreiben(ziel, gestempelt, ziel.stat().st_mode & 0o777)
                 geschrieben.append(rel)
             else:
                 abweichend.append(f'{rel}: ohne Versionsnummern')
@@ -213,7 +227,7 @@ def server(nur_pruefen: bool) -> int:
         if nur_pruefen:
             abweichend.append(f'{LISTE}: {"fehlt" if not (app / LISTE).exists() else "passt nicht zum Commit"}')
         else:
-            schreiben(app / LISTE, soll)
+            schreiben(schreibpfad(app, LISTE), soll)
             geschrieben.append(LISTE)
     # Dashboard (neben app/) erst nach der Prüfliste: ein Fehler hier lässt Seiten und Prüfliste unter app/ unberührt
     try:
@@ -222,7 +236,7 @@ def server(nur_pruefen: bool) -> int:
         for f in zfehlend:
             print(f'Hinweis: {f} – Einbindung bleibt ohne Versionsnummer')
         for k, gestempelt in zseiten.items():
-            pfad = WURZEL / ZUSATZ / k
+            pfad = schreibpfad(WURZEL, ZUSATZ + '/' + k)
             ist = lesen(pfad)
             if ist == gestempelt:
                 continue
@@ -270,8 +284,9 @@ def verzeichnis(app: Path, quelle: str = 'einer Arbeitskopie') -> int:
     seiten, liste, fehlend = bereitstellung(dateien)
     for rel, inhalt in seiten.items():
         if inhalt != dateien[rel]:
-            schreiben(app / rel, inhalt, (app / rel).stat().st_mode & 0o777)
-    schreiben(app / LISTE, liste_php(liste, quelle))
+            ziel = schreibpfad(app, rel)
+            schreiben(ziel, inhalt, ziel.stat().st_mode & 0o777)
+    schreiben(schreibpfad(app, LISTE), liste_php(liste, quelle))
     for f in fehlend:
         print(f'Hinweis: {f}')
     return 1 if fehlend else 0
@@ -285,7 +300,8 @@ def zusatz_verzeichnis(app: Path) -> int:
     seiten, fehlend = zusatz_seiten({k: v for k, v in dateien.items() if not k.startswith(vorsilbe)}, zusatz)
     for k, inhalt in seiten.items():
         if inhalt != zusatz[k]:
-            schreiben(app / ZUSATZ / k, inhalt, (app / ZUSATZ / k).stat().st_mode & 0o777)
+            ziel = schreibpfad(app, ZUSATZ + '/' + k)
+            schreiben(ziel, inhalt, ziel.stat().st_mode & 0o777)
     for f in fehlend:
         print(f'Hinweis: {f}')
     return 1 if fehlend else 0

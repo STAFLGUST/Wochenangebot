@@ -2,7 +2,7 @@
 
 <!-- ERZEUGT von `python3 werkzeuge/doku.py erzeugen` – nicht von Hand ändern. Quelle: Funktionen und Kommentare im Code. Die CI prüft, dass diese Datei zum Code passt. -->
 
-116 Dateien, 1171 Funktionen – in der Reihenfolge der Datei, **fett** die Abschnitte. Text = erste Aussage des Kommentars direkt über der Funktion (Python: Docstring). Übersicht aller Module: [README.md](README.md).
+116 Dateien, 1172 Funktionen – in der Reihenfolge der Datei, **fett** die Abschnitte. Text = erste Aussage des Kommentars direkt über der Funktion (Python: Docstring). Übersicht aller Module: [README.md](README.md).
 
 ## `.github/scripts/apt_vorrat.py`
 
@@ -523,7 +523,7 @@ _Postausgang von innen (ADR-007, Zielarchitektur Kundenseite Regel 4)_
 - `postausgang_lauf(jetzt)` – Ein Durchgang des Dienstes: fällige Aufträge abarbeiten, gelegentlich alle Vorgänge prüfen, Lebenszeichen schreiben.
 - `postausgang_ausfuehren(a)`
 - `postausgang_ereignisse(items)` – Ereignisse der Kundenseite: nur Sicherheitsereignisse (Anmeldesperre, Datenleck …), Texte gekürzt – Empfänger bestimmen die internen Einstellungen …
-- `postausgang_hinweis(a)` – Abmeldehinweis: Kunde aus den internen Stammdaten (nur die Kennung kommt aus dem Auftrag); nur wenn die Änderung dort auch gespeichert ist.
+- `postausgang_hinweis(a)` – Abmeldehinweis: Kunde aus den internen Stammdaten (nur die Kennung kommt aus dem Auftrag); nur wenn die Änderung dort auch gespeichert ist, höchstens …
 - `postausgang_bestellung(nr, versuche)` – Bestellwunsch: offene Versandaufträge senden; sicher nicht zugestellte nach POSTAUSGANG_WIEDERHOLEN erneut versuchen.
 - `postausgang_wieder(a, sekunden)`
 
@@ -643,7 +643,6 @@ _Mitarbeiter-Sitzung, Rollen, Passwortbestätigung, CSRF_
 - `app_client()` – App-Zugriff (docs/app-api.md): Die App sendet „X-WA-Client: app“ und trägt die Sitzungskennung in der Kopfzeile „X-WA-Sitzung“ statt in einem Cookie; jede …
 - `app_session_header()`
 - `sitzung_cookie_name()`
-- `sitzung_vorhanden()` – Liegt überhaupt eine Sitzung vor – läuft schon eine oder legt der Aufrufer eine Kennung vor (Browser im Cookie, App in der Kopfzeile, wie start_session() sie …
 - `start_session()`
 - `bg_request()` – Automatische Abfragen im Hintergrund (Abgleich mit anderen Bearbeitern) zählen nicht als Aktivität – die Abmeldung nach Inaktivität bleibt wirksam.
 - `current_user()`
@@ -913,6 +912,7 @@ _Bereitstellung eines Stands_
 - `zusatz_seiten(dateien, zusatz)` – Seiten des Dashboards stempeln. zusatz: Pfad unter dashboard/ → Inhalt; Einbindungen werden wie im Browser aufgelöst (/dashboard/ liegt neben app/: …
 - `php_text(s)`
 - `liste_php(liste, quelle)`
+- `schreibpfad(wurzel, rel)` – Schreibziel unterhalb von wurzel – die Pfade entstehen rein lexikalisch (Prüfliste, Dashboard-Seiten), ein Verzeichnis-Verweis im eingespielten Stand darf …
 - `schreiben(pfad, inhalt, modus)` – Atomar ersetzen (Apache liest nie eine halb geschriebene Datei); lesbar für den Webserver.
 - `lesen(pfad)`
 
@@ -970,6 +970,7 @@ _Daten trennen (ADR-007 Stufe 2): interne Dokumente aus daten/ in daten-intern/ 
 - `sqlite_aktiv(root)`
 - `dok_lesen(root, name)`
 - `json_text(wert)`
+- `ordner_nofollow(root, rel)` – Zielordner für rel unterhalb von root anlegen bzw. prüfen, ohne je einem Verweis zu folgen – dieselbe Regel wie db.write_nofollow() für die Datei selbst, nur …
 - `dok_schreiben(root, name, wert)`
 - `dok_namen(root, praefix)` – Dokumente unter einem Präfix (z. B. kundenprotokoll/) in beiden Speicherarten
 - `protokoll_vereinen(alt, neu)` – Einträge beider Protokolle eines Monats zeitlich sortiert.
@@ -985,6 +986,7 @@ _Daten trennen (ADR-007 Stufe 2): interne Dokumente aus daten/ in daten-intern/ 
 **Plan**
 
 - `altbestand(haupt, ks)` – Reste des Speicher-Umbaus im gemeinsamen Ordner (ADR-007 Stufe 2b: dort liegt nichts, was die Kundenseite nicht braucht): frühere Datendateien äußerer …
+- `rest_dateien(root, ks)` – Zwischendateien interner Dokumente im gemeinsamen Ordner: <name>.php.neu, <name>.php.kopie (Abbruch dieses Werkzeugs) und <name>.php.<hex>.tmp (abgebrochener …
 - `altdatei_entfernen(root, name)` – Im SQLite-Betrieb blieb die frühere Datendatei beim Umschalten liegen.
 - `interne_dateien(root, ks)` – Datendateien (*.php) interner Dokumente im Ordner – im SQLite-Modus auch übrig gebliebene alte Dateien.
 - `ablage_dateien(root)`
@@ -1604,7 +1606,6 @@ _Sitzungs-Cookie mit Präfix __Host- über HTTPS (GR-108, ADR-003 Befund B-1)._
 - `check(n, c, i)`
 - `roh(action, data, https, cookies, csrf, ip, extra)` – Eine Anfrage; Rückgabe: Status, JSON, Liste der Set-Cookie-Zeilen, Kopfzeilen.
 - `cookie(zeilen, name)` – Wert und Attribute (klein geschrieben) des zuletzt gesetzten Cookies „name“, sonst (None, '').
-- `sitzungen()`
 - `wie_https(ctx)` – Origin der API-Anfragen wie hinter Caddy (https://…) – Chromium setzt ihn selbst, daher über route umschreiben.
 - `umschreiben(route)`
 

@@ -330,6 +330,23 @@ python3 "$B/deploy/bereitstellen.py" > "$T/out.txt" 2>&1
 ok "fehlende Liste und Nummern nachgeholt (identisch)" 'cmp -s "$LISTE" "$T/liste.vorher" && seite "" | grep -q "frontend.js?v=$(vnr frontend.js)\"" && grep -q "Bereitgestellt für" "$T/out.txt"'
 python3 "$B/deploy/bereitstellen.py" > "$T/out.txt" 2>&1
 ok "erneuter Aufruf ohne Abweichung: schreibt nichts, meldet nichts" '[ ! -s "$T/out.txt" ]'
+# Verzeichnis-Verweis im eingespielten Stand: der Schreibpfad der Prüfliste entsteht lexikalisch und darf nie aus dem
+# Programmordner herausführen (beide Schreibwege; wie tests/deploy/test_sichern.sh für die Dateien selbst)
+mkdir -p "$T/opfer-ordner"; cp -r "$T/src/app" "$T/app-verweis"
+rm -rf "$T/app-verweis/api/lib"; ln -s "$T/opfer-ordner" "$T/app-verweis/api/lib"
+RC=0; python3 "$B/deploy/bereitstellen.py" --verzeichnis "$T/app-verweis" > "$T/out.txt" 2>&1 || RC=$?
+ok "--verzeichnis mit Verzeichnis-Verweis: Abbruch, nichts außerhalb des Ordners geschrieben" '[ "$RC" != 0 ] && grep -q "liegt außerhalb" "$T/out.txt" \
+  && [ -z "$(ls -A "$T/opfer-ordner")" ]'
+rm "$T/app-verweis/api/lib"; cp -r "$T/src/app/api/lib" "$T/app-verweis/api/lib"
+RC=0; python3 "$B/deploy/bereitstellen.py" --verzeichnis "$T/app-verweis" > "$T/out.txt" 2>&1 || RC=$?
+ok "--verzeichnis ohne Verweis: Gegenprobe schreibt die Prüfliste wie bisher" '[ "$RC" = 0 ] && grep -q "Prüfliste" "$T/app-verweis/api/lib/integritaet-liste.php"'
+rm -rf "$T/app-verweis"
+mv "$B/app/api/lib" "$T/lib.weg"; ln -s "$T/opfer-ordner" "$B/app/api/lib"
+RC=0; python3 "$B/deploy/bereitstellen.py" > "$T/out.txt" 2>&1 || RC=$?
+ok "Server-Weg mit Verzeichnis-Verweis: Abbruch, nichts außerhalb von app/ geschrieben" '[ "$RC" != 0 ] && grep -q "liegt außerhalb" "$T/out.txt" \
+  && [ -z "$(ls -A "$T/opfer-ordner")" ]'
+rm "$B/app/api/lib"; mv "$T/lib.weg" "$B/app/api/lib"; rmdir "$T/opfer-ordner"
+ok "Server-Weg danach wieder in Ordnung" 'python3 "$B/deploy/bereitstellen.py" --pruefen >/dev/null'
 # Dashboard neben app/: Abweichungen dort lassen Prüfliste und Seiten unter app/ unberührt
 mv "$B/dashboard/index.html" "$T/dashboard-index.weg"; rm "$LISTE"; RC=0; python3 "$B/deploy/bereitstellen.py" > "$T/out.txt" 2>&1 || RC=$?
 ok "Dashboard-Seite fehlt: Prüfliste trotzdem geschrieben, Abweichung gemeldet" '[ "$RC" = 1 ] && cmp -s "$LISTE" "$T/liste.vorher" && grep -q "dashboard/index.html: fehlt" "$T/out.txt"'

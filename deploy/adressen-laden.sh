@@ -24,6 +24,14 @@ MIN_ADRESSEN=${ADRESSEN_MIN:-1000000}        # weniger = Quelle unvollständig (
 PLATZ_GB=${ADRESSEN_PLATZ_GB:-12}            # Quelle (ca. 4,5 GB) + Arbeitsdatei + neue und alte Zieldatei
 MODUS=${1:-laden}
 abbruch() { echo "Abbruch: $*" >&2; exit 1; }
+# daten-karte ist im Lade-Container beschreibbar: ein dort untergeschobener Verweis darf root nie auf eine andere Datei
+# des Servers umlenken (gleiche Regel wie status_schreiben() in deploy/sichern.sh und ablegen() in deploy/postfach-schluessel.sh).
+echt() { [ -f "$1" ] && [ ! -L "$1" ] || abbruch "$1 ist kein echtes Ergebnis des Laufs (Verweis oder Sonderdatei) – verworfen."; }
+# Vermerk außerhalb des Container-Ordners erzeugen und nur per Umbenennen einsetzen; mv -fT folgt keinem Verweis, auch keinem auf einen Ordner
+vermerken() {
+  TMP=$(mktemp "$(pwd)/.stand.XXXXXX") || abbruch "Zwischendatei nicht anlegbar."
+  printf '%s\n' "$2" > "$TMP" && chmod 644 "$TMP" && mv -fT "$TMP" "$1" || { rm -f "$TMP"; abbruch "Stand nicht vermerkt."; }
+}
 case "$MODUS" in laden|pruefen|probe|entfernen) ;; *) echo "Aufruf: sh deploy/adressen-laden.sh [pruefen|probe|laden|entfernen]" >&2; exit 2 ;; esac
 [ -f .env ] && [ -f docker-compose.yml ] && [ -f deploy/karte/adressen.py ] || abbruch "Bitte im Installationsordner ausführen: cd /opt/wochenangebot"
 ZIEL=daten-karte
@@ -76,6 +84,7 @@ STAND=$(kopfwert last-modified)
 BYTES=$(kopfwert content-length | tr -cd '0-9'); BYTES=${BYTES:-0}
 ADRESSE=$(kopfwert url_effective); ADRESSE=${ADRESSE:-$QUELLE}
 GROESSE=$((BYTES / 1048576))
+STAND=$(printf '%s' "$STAND" | tr -cd 'A-Za-z0-9 ,:+-' | cut -c1-64)   # steht später in einer Datei: nur harmlose Zeichen
 [ -n "$STAND" ] || STAND=unbekannt
 # Veröffentlichte MD5-Prüfsumme: neben der Datei bzw. neben dem Ziel einer Weiterleitung; leer, wenn keine abrufbar ist
 pruefsumme() {
@@ -104,7 +113,11 @@ probe
 # 1. Quelle laden und prüfen: mit der veröffentlichten Prüfsumme, sonst über die angekündigte Größe (das Umwandeln liest
 #    danach jeden Block der Datei; beschädigte Daten brechen dort ab)
 echo "lade:      $QUELLE …"
+# curl -o folgt einem Verweis, und der Probelauf des Containers lief schon: Namen unmittelbar vorher freimachen
+rm -f "$ZIEL/adressen-quelle.osm.pbf"
+[ ! -e "$ZIEL/adressen-quelle.osm.pbf" ] || abbruch "Zwischendatei der Quelle nicht entfernbar – bitte daten-karte prüfen."
 $CURL -fSL --retry 3 --max-time 7200 -o "$ZIEL/adressen-quelle.osm.pbf" "$QUELLE" || abbruch "Download fehlgeschlagen – das bisherige Verzeichnis bleibt unverändert."
+echt "$ZIEL/adressen-quelle.osm.pbf"
 soll=$(pruefsumme)
 if [ -n "$soll" ]; then
   ist=$(md5sum "$ZIEL/adressen-quelle.osm.pbf" | awk '{ print $1 }')
@@ -120,11 +133,12 @@ fi
 echo "wandle um: Adressen aus OpenStreetMap → daten-karte/adressen.neu.sqlite (dauert eine Weile) …"
 umwandeln /daten/adressen-quelle.osm.pbf /daten/adressen.neu.sqlite || abbruch "Umwandeln fehlgeschlagen – das bisherige Verzeichnis bleibt unverändert."
 
-# 3. Prüfen: lesbar, bekanntes Format, plausible Anzahl
+# 3. Prüfen: echtes Ergebnis des Laufs, lesbar, bekanntes Format, plausible Anzahl
+echt "$ZIEL/adressen.neu.sqlite"
 anzahl=$(anzahl_in "$ZIEL/adressen.neu.sqlite")
 [ "$anzahl" -ge "$MIN_ADRESSEN" ] || abbruch "Neues Verzeichnis unvollständig oder nicht lesbar ($anzahl Adressen) – verworfen."
 chmod 644 "$ZIEL/adressen.neu.sqlite"
-mv -f "$ZIEL/adressen.neu.sqlite" "$ZIEL/adressen.sqlite"   # im selben Ordner: sofortiger Austausch
-printf '%s\n' "$STAND" > "$ZIEL/adressen-stand.txt"
+mv -fT "$ZIEL/adressen.neu.sqlite" "$ZIEL/adressen.sqlite"   # im selben Ordner: sofortiger Austausch, -T ersetzt auch einen Verweis
+vermerken "$ZIEL/adressen-stand.txt" "$STAND"
 groesse_mb=$(( $(wc -c < "$ZIEL/adressen.sqlite") / 1048576 ))
 echo "geladen:   Adressverzeichnis Stand $STAND, $anzahl Adressen, ${groesse_mb} MB – die CRM-Karte zeigt Kunden ab dem nächsten Öffnen auf Hausnummer genau."
