@@ -89,11 +89,13 @@ check('app_info zeigt eingeschaltete Bestellfunktion', App().call('app_info')[1]
 k = App()
 st, s = k.call('kunde_status')
 first = k.sid
-check('Kopfzeile X-WA-Sitzung statt Cookie', st == 200 and len(first) >= 22 and 'set-cookie' not in k.last)
+# Ohne vorgelegte Kennung beginnt der Server keine Sitzung (Befund 15.11.2026) – in der App fiel das vorher nicht auf,
+# weil sie ohne Cookie arbeitet und das fehlende Set-Cookie daher nichts verrät.
+check('ohne Anmeldung keine Sitzung: keine Kennung und kein Cookie in der Antwort', st == 200 and first == '' and 'set-cookie' not in k.last and 'x-wa-sitzung' not in k.last)
 check('Antworten mit Sitzung nicht zwischenspeichern', 'no-store' in k.last.get('cache-control', ''))
 st, j = k.call('kunde_login', {'username': 'app.kantine', 'password': KPW})
 check('Kunden-Anmeldung in der App', st == 200 and j['kunde']['firma'] == 'App Kantine' and k.csrf)
-check('Anmeldung vergibt neue Kennung (keine Sitzungsfixierung)', k.sid and k.sid != first and 'set-cookie' not in k.last)
+check('Anmeldung vergibt die Kennung in der Kopfzeile X-WA-Sitzung statt im Cookie', len(k.sid) >= 22 and k.sid != first and 'set-cookie' not in k.last)
 st, s = k.call('kunde_status')
 check('Folgeanfrage mit Kennung ist angemeldet', s.get('kunde') and s['kunde']['username'] == 'app.kantine' and s.get('csrf') == k.csrf and s.get('bestellung') is True)
 

@@ -74,8 +74,9 @@ function druck_fuss(): array
     if (!$eigen) { $c['spalten'] = DRUCK_FUSS_VORGABE['spalten']; $c['zeilen'] = DRUCK_FUSS_VORGABE['zeilen']; }
     return $c + ['eigen' => $eigen, 'updatedAt' => $g['updatedAt'] ?? null, 'updatedBy' => (string)($g['updatedBy'] ?? '')];
 }
-/* Angemeldet im Sinne der Fußzeile: Mitarbeiter oder Kunde mit eigenem Passwort. Ohne Sitzungs-Cookie wird keine Sitzung
-   begonnen – das öffentliche Wochenangebot bleibt ohne Cookie abrufbar.
+/* Angemeldet im Sinne der Fußzeile: Mitarbeiter oder Kunde mit eigenem Passwort. Ohne vorgelegte Sitzungskennung
+   (Cookie im Browser, Kopfzeile in der App) wird keine Sitzung begonnen – das öffentliche Wochenangebot bleibt ohne
+   Anmeldung abrufbar.
    Mit Cookie beginnt PHP die Sitzung; dabei schickt es sonst von sich aus „Cache-Control: no-store …“ (Cache-Begrenzer
    „nocache“). Das öffentliche Angebot wäre dann für jeden Besucher mit Sitzungs-Cookie nicht mehr speicherbar und die
    Web-App zeigte offline nichts (app/sw.js speichert nur Antworten ohne „no-store“/„private“). Deshalb hier ohne
@@ -84,7 +85,7 @@ function druck_fuss(): array
 function druck_angemeldet(): bool
 {
     if (function_exists('oidc_modus') && oidc_modus()) return current_user() !== null;
-    if (!app_client() && !isset($_COOKIE[sitzung_cookie_name()])) return false;
+    if (!sitzung_vorhanden()) return false;
     if (session_status() !== PHP_SESSION_ACTIVE && !headers_sent()) session_cache_limiter('');
     if (current_user()) return true;
     $k = current_customer();
