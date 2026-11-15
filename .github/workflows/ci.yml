@@ -246,8 +246,6 @@ jobs:
         run: sh tests/deploy/test_altdateien.sh
       - name: Release-Modus mit Healthcheck und Rückfall (deploy/freigabe-einspielen.sh)
         run: sh tests/deploy/test_freigabe.sh
-      - name: Testumgebung verwalten (mit Platzhaltern für docker/git)
-        run: sh tests/deploy/test_testumgebung.sh
       - name: Detailkarte laden (deploy/karte-laden.sh, mit Platzhaltern für docker/curl)
         run: sh tests/deploy/test_karte_laden.sh
       - name: Adressverzeichnis laden (deploy/adressen-laden.sh, mit Platzhaltern für docker/curl)

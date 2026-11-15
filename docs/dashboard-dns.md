@@ -4,12 +4,12 @@ Stand 21.10.2026. Die DNS-Verwaltung bei Hostinger zeigt für `dashboard-stafl.d
 
 Dieser PR fügt **ausschließlich** Caddy-Hosts für die Domain und sieben Subdomains hinzu. Alle antworten vorerst mit HTTP 503 und einem einfachen Text „in Vorbereitung“, ohne Reverse Proxy zu den internen Anwendungen. Kein zusätzlicher Docker-Dienst und keine Anmeldung werden hier bereitgestellt. `www.dashboard-stafl.de` leitet auf die Hauptadresse weiter.
 
-Die Kundenwebsite `angebot-stafl.de` und `test.angebot-stafl.de` behalten ihre bestehenden Caddy-Siteblöcke.
+Die Kundenwebsite `angebot-stafl.de` behält ihren bestehenden Caddy-Siteblock (die Testadresse `test.angebot-stafl.de` ist am 15.11.2026 entfernt worden).
 
 ## Sicherheit und Freigabe
 
 - Die DNS-Einträge allein stellen keine Mitarbeiteranmeldung bereit; 503-Platzhalter sind bewusst öffentlich lesbar, verraten aber keine internen Daten.
-- `test.dashboard-stafl.de` stellt **noch keine** integrierte Testumgebung bereit. Dafür sind später eigene isolierte Testdienste und ein Passwort-/Zugriffsschutz erforderlich.
+- `test.dashboard-stafl.de` ist nicht mehr im `Caddyfile` und stellt keine Testumgebung bereit (GR-111); eine Integrationsumgebung kommt später auf einer eigenen Testdomain (Roadmap 9).
 - Caddy fordert erst beim späteren produktiven Einspielen für die neuen Hosts Zertifikate an. Öffentliche DNS-Auflösung und Erreichbarkeit auf Port 80/443 sind Voraussetzung.
 - Bei GitHub `main` wurde ein neuerer Stand beobachtet als auf dem VPS. Ein Release würde neben diesem PR möglicherweise weitere freigegebene Commits einspielen. Vor Freigabe die Release-Differenz prüfen.
 - Die produktive Änderung erfolgt ausschließlich über den vorhandenen freigabepflichtigen Release-Prozess. Dieser PR allein verändert den VPS nicht.
