@@ -16,6 +16,8 @@ während des Einspielens veränderte oder hinzugefügte Datei wird so nie als �
    veränderte Seite bleibt unangetastet, damit die Dateiprüfung sie meldet.
 2. Prüfliste app/api/lib/integritaet-liste.php (Pfad unter app/ => SHA-256) für Sicherheit → Dateiprüfung. HTML-Seiten
    stehen mit beiden zulässigen Fassungen darin (mit und ohne Versionsnummern), beide stammen aus dem Commit.
+   Die Dateien des Dashboards stehen unter dashboard/<pfad> in derselben Liste – was ausgeliefert wird, wird auch
+   verglichen (sonst bliebe veränderter Dashboard-Code auf den Mitarbeiter-Hosts unentdeckt).
    Die Datei liegt im Programmordner, der im Container nur lesend eingebunden ist (wie bisher).
 
 Ein Commit, der die Prüfliste selbst noch enthält (Stand vor dieser Umstellung, z. B. nach einem Rückfall), bringt
@@ -37,7 +39,7 @@ import sys
 from pathlib import Path
 
 WURZEL = Path(__file__).resolve().parent.parent
-ZUSATZ = 'dashboard'   # Seiten außerhalb von app/, im Betrieb unter /dashboard/ (Alias, apache-oidc.conf) – nicht in der Prüfliste
+ZUSATZ = 'dashboard'   # Seiten außerhalb von app/, im Betrieb unter /dashboard/ (Alias, apache-oidc.conf)
 LISTE = 'api/lib/integritaet-liste.php'            # relativ zu app/
 # Eigene Skripte und Stylesheets: relativ (qs.js, ../../assets/app.css) oder ab / – keine Adressen mit Schema oder //
 REF = re.compile(r'''(?P<attr>(?:src|href)=")(?P<pfad>(?![a-zA-Z][a-zA-Z0-9+.-]*:|//)[^"?#]+\.(?:js|css))(?:\?v=[^"#]*)?"''')
@@ -99,18 +101,6 @@ def bereitstellung(dateien: dict) -> tuple:
             hashes.append(hashlib.sha256(dateien[rel]).hexdigest())
         liste[rel] = hashes
     return seiten, liste, fehlend
-
-
-def zusatz_seiten(dateien: dict, zusatz: dict) -> tuple:
-    """Seiten des Dashboards stempeln. zusatz: Pfad unter dashboard/ → Inhalt; Einbindungen werden wie im Browser
-    aufgelöst (/dashboard/ liegt neben app/: ../assets/app.css → assets/app.css). Ergebnis: (Pfad unter dashboard/ →
-    gestempelt, fehlend)."""
-    alle = {**dateien, **{ZUSATZ + '/' + k: v for k, v in zusatz.items()}}
-    fehlend, seiten = [], {}
-    for k in sorted(zusatz):
-        if ist_seite(k):
-            seiten[k] = stempeln(ZUSATZ + '/' + k, zusatz[k], alle, fehlend)
-    return seiten, fehlend
 
 
 def php_text(s: str) -> str:
@@ -188,7 +178,14 @@ def server(nur_pruefen: bool) -> int:
             print(f'Stand {commit[:12]} bringt Versionsnummern und Prüfliste selbst mit (ältere Fassung).')
         return 0
     dateien = commit_dateien(commit)
-    seiten, liste, fehlend = bereitstellung(dateien)
+    # Dashboard (neben app/) in dieselbe Bereitstellung: Seiten werden wie im Browser aufgelöst (dashboard/index.html:
+    # ../assets/app.css → assets/app.css) und stehen unter dashboard/<pfad> in der Prüfliste
+    zusatz, zfehler = {}, ''
+    try:
+        zusatz = commit_dateien(commit, ZUSATZ)
+    except (OSError, subprocess.CalledProcessError) as e:
+        zfehler = f'{ZUSATZ}/: nicht bereitgestellt ({e})'
+    seiten, liste, fehlend = bereitstellung({**dateien, **{ZUSATZ + '/' + k: v for k, v in zusatz.items()}})
     for f in fehlend:
         print(f'Hinweis: {f} – Einbindung bleibt ohne Versionsnummer')
     app = WURZEL / 'app'
@@ -215,27 +212,25 @@ def server(nur_pruefen: bool) -> int:
         else:
             schreiben(app / LISTE, soll)
             geschrieben.append(LISTE)
-    # Dashboard (neben app/) erst nach der Prüfliste: ein Fehler hier lässt Seiten und Prüfliste unter app/ unberührt
-    try:
-        zusatz = commit_dateien(commit, ZUSATZ)
-        zseiten, zfehlend = zusatz_seiten(dateien, zusatz)
-        for f in zfehlend:
-            print(f'Hinweis: {f} – Einbindung bleibt ohne Versionsnummer')
-        for k, gestempelt in zseiten.items():
-            pfad = WURZEL / ZUSATZ / k
-            ist = lesen(pfad)
-            if ist == gestempelt:
-                continue
-            if ist == zusatz[k]:
-                if not nur_pruefen:
-                    schreiben(pfad, gestempelt, pfad.stat().st_mode & 0o777)
-                    geschrieben.append(f'{ZUSATZ}/{k}')
-                else:
-                    abweichend.append(f'{ZUSATZ}/{k}: ohne Versionsnummern')
+    # Dashboard-Seiten (neben app/) erst nach der Prüfliste schreiben: ein Fehler hier lässt app/ unberührt
+    for k, inhalt in zusatz.items():
+        gestempelt = seiten.get(ZUSATZ + '/' + k)
+        if gestempelt is None:          # nur Seiten werden gestempelt, die übrigen Dateien kommen aus dem Commit
+            continue
+        pfad = WURZEL / ZUSATZ / k
+        ist = lesen(pfad)
+        if ist == gestempelt:
+            continue
+        if ist == inhalt:
+            if not nur_pruefen:
+                schreiben(pfad, gestempelt, pfad.stat().st_mode & 0o777)
+                geschrieben.append(f'{ZUSATZ}/{k}')
             else:
-                abweichend.append(f'{ZUSATZ}/{k}: {"fehlt" if ist is None else "weicht vom Commit ab"}')
-    except (OSError, subprocess.CalledProcessError) as e:
-        abweichend.append(f'{ZUSATZ}/: nicht bereitgestellt ({e})')
+                abweichend.append(f'{ZUSATZ}/{k}: ohne Versionsnummern')
+        else:
+            abweichend.append(f'{ZUSATZ}/{k}: {"fehlt" if ist is None else "weicht vom Commit ab"}')
+    if zfehler:
+        abweichend.append(zfehler)
     if geschrieben:
         print(f'Bereitgestellt für {commit[:12]}: ' + ', '.join(geschrieben))
     if abweichend:
@@ -272,20 +267,6 @@ def verzeichnis(app: Path, quelle: str = 'einer Arbeitskopie') -> int:
         if inhalt != dateien[rel]:
             schreiben(app / rel, inhalt, (app / rel).stat().st_mode & 0o777)
     schreiben(app / LISTE, liste_php(liste, quelle))
-    for f in fehlend:
-        print(f'Hinweis: {f}')
-    return 1 if fehlend else 0
-
-
-def zusatz_verzeichnis(app: Path) -> int:
-    """Im Testlauf unter app/dashboard/ eingeblendetes Dashboard (tests/run_e2e.py, ZUSATZ) wie auf dem Server stempeln."""
-    vorsilbe = ZUSATZ + '/'
-    dateien = ordner_dateien(app)
-    zusatz = {k[len(vorsilbe):]: v for k, v in dateien.items() if k.startswith(vorsilbe)}
-    seiten, fehlend = zusatz_seiten({k: v for k, v in dateien.items() if not k.startswith(vorsilbe)}, zusatz)
-    for k, inhalt in seiten.items():
-        if inhalt != zusatz[k]:
-            schreiben(app / ZUSATZ / k, inhalt, (app / ZUSATZ / k).stat().st_mode & 0o777)
     for f in fehlend:
         print(f'Hinweis: {f}')
     return 1 if fehlend else 0

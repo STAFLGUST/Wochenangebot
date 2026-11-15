@@ -2,7 +2,7 @@
 
 <!-- ERZEUGT von `python3 werkzeuge/doku.py erzeugen` – nicht von Hand ändern. Quelle: Funktionen und Kommentare im Code. Die CI prüft, dass diese Datei zum Code passt. -->
 
-116 Dateien, 1169 Funktionen – in der Reihenfolge der Datei, **fett** die Abschnitte. Text = erste Aussage des Kommentars direkt über der Funktion (Python: Docstring). Übersicht aller Module: [README.md](README.md).
+116 Dateien, 1167 Funktionen – in der Reihenfolge der Datei, **fett** die Abschnitte. Text = erste Aussage des Kommentars direkt über der Funktion (Python: Docstring). Übersicht aller Module: [README.md](README.md).
 
 ## `.github/scripts/apt_vorrat.py`
 
@@ -909,7 +909,6 @@ _Bereitstellung eines Stands_
 - `ersetzen(m)`
 - `ohne_versionen(inhalt)`
 - `bereitstellung(dateien)` – dateien: Pfad unter app/ → Inhalt (wie im Commit).
-- `zusatz_seiten(dateien, zusatz)` – Seiten des Dashboards stempeln. zusatz: Pfad unter dashboard/ → Inhalt; Einbindungen werden wie im Browser aufgelöst (/dashboard/ liegt neben app/: …
 - `php_text(s)`
 - `liste_php(liste, quelle)`
 - `schreiben(pfad, inhalt, modus)` – Atomar ersetzen (Apache liest nie eine halb geschriebene Datei); lesbar für den Webserver.
@@ -925,7 +924,6 @@ _Bereitstellung eines Stands_
 
 - `ordner_dateien(app)`
 - `verzeichnis(app, quelle)` – Kopie eines app/-Ordners bereitstellen: Seiten stempeln, Prüfliste schreiben (wie auf dem Server).
-- `zusatz_verzeichnis(app)` – Im Testlauf unter app/dashboard/ eingeblendetes Dashboard (tests/run_e2e.py, ZUSATZ) wie auf dem Server stempeln.
 - `main(argv)`
 
 ## `deploy/cdn_netzsperre.py`

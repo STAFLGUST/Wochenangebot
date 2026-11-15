@@ -62,10 +62,11 @@ und eigener Sitzung. Apache setzt je Host `WA_OBERFLAECHE`; daraus macht der Ser
 `deploy/anmeldung/docker-compose.anmeldung.yml` nach `/var/www/dashboard` ein; `apache-oidc.conf` macht es mit
 `Alias /dashboard /var/www/dashboard` **nur auf den Keycloak-Hosts** erreichbar. Unter `angebot-stafl.de` gibt es kein
 Dashboard. `abgemeldet.html`, `dashboard.css` und `/assets/` sind ohne Anmeldung abrufbar (Abmeldeseite). Im Testlauf
-blendet `tests/run_e2e.py` den Ordner nur für die Gruppen `dashboard` und `rollen` unter `/dashboard/` ein (`ZUSATZ`).
-`deploy/bereitstellen.py` versieht auch die Dashboard-Seiten mit Versionsnummern (wie die Seiten unter `app/`; das
-Dashboard steht nicht in der Prüfliste der Dateiprüfung). Im Testlauf stempelt `run_e2e.py` die eingeblendete Kopie
-genauso (`zusatz_verzeichnis`). Einbindungen deshalb immer ohne `?v=` und relativ zur Seite bzw. ab `/` schreiben.
+blendet `tests/run_e2e.py` den Ordner nur für die Gruppen mit Eintrag in `ZUSATZ` unter `/dashboard/` ein.
+`deploy/bereitstellen.py` versieht auch die Dashboard-Seiten mit Versionsnummern (wie die Seiten unter `app/`) und
+nimmt die Dateien des Dashboards unter `dashboard/<pfad>` in die Prüfliste der Dateiprüfung auf – was ausgeliefert
+wird, wird auch verglichen. Im Testlauf blendet `run_e2e.py` den Ordner vor dem Bereitstellen ein, damit dieselben
+Einträge entstehen. Einbindungen deshalb immer ohne `?v=` und relativ zur Seite bzw. ab `/` schreiben.
 
 ## 6.2 Eingabebereich (`app/admin/`)
 

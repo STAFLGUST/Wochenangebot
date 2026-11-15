@@ -94,6 +94,23 @@ ok('uneinheitliche Fassung: Exit 1, nichts geändert', lauf('--wurzel', t, '--qu
    and (t / 'deploy/image/Dockerfile').read_text().count(neu_php) == 1)
 shutil.rmtree(t)
 
+# Derselbe Digest unter einer ANDEREN Fassung (z. B. eine Notiz in der Doku): darf die Festlegung nicht umlenken
+FEST = ('docker-compose.yml', 'deploy/image/Dockerfile', 'deploy/testumgebung.sh', 'deploy/testumgebung/docker-compose.yml')
+t = kopie()
+funde = w.fundstellen(t)
+php = next((n, tg) for n, tg in funde if n == 'php')
+alt_php = next(iter(funde[php]))
+(t / 'docs').mkdir(parents=True, exist_ok=True)
+(t / 'docs/hinweis.md').write_text(f'Notiz: php:8.4-apache@sha256:{alt_php}\n', encoding='utf-8')
+q = t / 'q.json'
+q.write_text(json.dumps({'php:8.4-apache': 'sha256:' + 'e' * 64, 'php:8.3-apache': 'sha256:' + '3' * 64}))
+rc = lauf('--wurzel', t, '--quelle', q, '--setzen')
+fest = [(t / d).read_text() for d in FEST]
+ok('Digest unter mehreren Fassungen: Exit 1, Festlegungen unverändert',
+   rc == 1 and all(alt_php in x for x in fest)
+   and not any(('e' * 64) in x or ('3' * 64) in x for x in fest))
+shutil.rmtree(t)
+
 # neuere Fassungen derselben Reihe
 ok('neuere Fassungen: Patch derselben Reihe, sortiert', w.neuere_fassungen('26.8.1', ['26.8.0', '26.8.10', '26.9.0', '26.8.2', '26.8.2-alpine', '27.0.0']) == ['26.8.2', '26.8.10'])
 ok('neuere Fassungen: mit Zusatz und Präfix', w.neuere_fassungen('3.12.14-bookworm', ['3.12.15-bookworm', '3.12.15-slim', '3.13.0-bookworm']) == ['3.12.15-bookworm']

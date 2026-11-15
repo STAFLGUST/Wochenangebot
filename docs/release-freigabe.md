@@ -115,6 +115,8 @@ Server aus dem eingespielten (also freigegebenen, CI-geprüften) Commit:
 - **Prüfliste** `app/api/lib/integritaet-liste.php` (nicht versioniert, `.gitignore`): gelesen aus den Git-Objekten des
   Commits, nicht aus dem Arbeitsordner – veränderte oder zusätzliche Dateien werden nie als freigegeben übernommen; sie
   liegt im nur lesend eingebundenen Programmordner. HTML-Seiten stehen mit beiden Fassungen darin (mit/ohne Nummern).
+  Die Dateien des Dashboards (`dashboard/` neben `app/`) stehen unter `dashboard/<pfad>` in derselben Liste – sonst
+  würde die Dateiprüfung veränderten Dashboard-Code auf den Mitarbeiter-Hosts nicht melden.
 - Läuft nach jedem Codewechsel (Release, automatischer und manueller Rückfall, `testumgebung.sh einspielen`,
   `einrichten.sh`) und bei jedem Lauf von `aktualisieren.sh` (alle 2 Minuten; schreibt nur, wenn etwas fehlt). Eine Seite
   wird nur ergänzt, wenn sie genau dem Commit entspricht; anders veränderte Dateien bleiben stehen und die Dateiprüfung
