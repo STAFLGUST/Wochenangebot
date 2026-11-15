@@ -133,7 +133,7 @@ NUTZER = (('lisa', 'Lisa Lesen', 'viewer', 'Leserin-Konto-12', {'grant': ['qs.se
           ('bernd', 'Bernd Bearbeiter', 'editor', 'Bearbeit-Konto-34', {'grant': ['qs.bearbeiten']}),
           ('quinn', 'Quinn QMB', 'editor', 'Freigabe-Konto-56', {'grant': ['qs.freigeben']}),
           ('fritz', 'Fritz Freigabe', 'editor', 'Freigabe-Konto-78', {'grant': ['qs.freigeben']}),
-          ('vera', 'Vera Verwalten', 'editor', 'Verwalt-Konto-90', {'grant': ['qs.verwalten']}),
+          ('vera', 'Vera Verwalten', 'editor', 'Verwalt-Konto-90', {'grant': ['qs.verwalten', 'qs.freigeben']}),   # ein Datenpaket mit Versionen braucht beide Rechte
           ('otto', 'Otto Ohne', 'editor', 'Ohne-Konto-11', {}))
 for u, n, r, p, extra in NUTZER:
     st, r_ = A.call('user_save', {'id': '', 'name': n, 'username': u, 'role': r, 'active': True, 'password': p, 'mustChange': False, **extra})
