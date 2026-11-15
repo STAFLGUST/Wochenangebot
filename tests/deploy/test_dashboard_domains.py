@@ -19,7 +19,6 @@ def site(kopf):
 hosts = [
     "einkauf.dashboard-stafl.de",
     "container-import.dashboard-stafl.de",
-    "test.dashboard-stafl.de",
 ]
 block = site(", ".join(hosts))
 assert 'respond "STAFL-Plattform: Dieser Bereich befindet sich in Vorbereitung." 503' in block
@@ -79,7 +78,7 @@ for kopf in ("login.dashboard-stafl.de", "www.dashboard-stafl.de"):
     assert 'Strict-Transport-Security "max-age=31536000"' in site(kopf), kopf
 assert 'Strict-Transport-Security "max-age=31536000"' in mitarbeiter
 
-# Kundenportal und vorhandene Testumgebung behalten ihre separaten Routen.
+# Kundenportal behält seine separate Route; eine Testadresse gibt es nicht mehr (GR-111, 15.11.2026).
 assert "{$DOMAIN}, www.{$DOMAIN} {" in caddy
-assert "test.{$DOMAIN} {" in caddy
-print("OK: drei Modul-Hosts sind 503-Platzhalter; Anmeldung (mit Prüfung vor jeder Seite), Dashboard, Mitarbeiter-Eingabe, Verwaltung, Bestand, HR, CRM, Marketing, Sicherheit, Controlling, Leergut, REWE, Qualitätssicherung und Versand nur mit der Ergänzungsdatei.")
+assert "test.{$DOMAIN}" not in caddy and "test.dashboard-stafl.de" not in caddy
+print("OK: zwei Modul-Hosts sind 503-Platzhalter; Anmeldung (mit Prüfung vor jeder Seite), Dashboard, Mitarbeiter-Eingabe, Verwaltung, Bestand, HR, CRM, Marketing, Sicherheit, Controlling, Leergut, REWE, Qualitätssicherung und Versand nur mit der Ergänzungsdatei.")

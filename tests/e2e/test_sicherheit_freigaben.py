@@ -84,9 +84,7 @@ aus = subprocess.run(['php', '-r', DUMMY, REPO], capture_output=True, text=True)
 check('Vergleichswert für unbekannte Namen mit denselben Kosten wie die gespeicherten Passwörter (z. B. PHP 8.4: 12)', aus == '[12,11,10,10]', aus)
 check('aufgelöste Proxy-Adresse wird gemerkt', any(f.startswith('wa-proxy-') and f.endswith('.json') and f != 'wa-proxy-4-' + hashlib.sha256(b'schon-mal-aufgeloest.invalid').hexdigest() + '.json' for f in os.listdir(TMP)), os.listdir(TMP))
 compose = open(os.path.join(REPO, 'docker-compose.yml'), encoding='utf-8').read()
-test_compose = open(os.path.join(REPO, 'deploy/testumgebung/docker-compose.yml'), encoding='utf-8').read()
-check('Echtbetrieb vertraut nur Caddy, Testumgebung nicht im Produktivnetz', 'WA_TRUSTED_PROXIES: caddy' in compose and 'PROD_NETWORK' not in test_compose
-      and 'wochenangebot-edge' in test_compose and 'WA_TRUSTED_PROXIES: wa-caddy' in test_compose)
+check('Echtbetrieb vertraut nur Caddy', 'WA_TRUSTED_PROXIES: caddy' in compose)
 
 # ---------- Fehlversuche je IPv6-/64 ----------
 for i in range(5):
@@ -378,14 +376,13 @@ cf_haupt = open(os.path.join(REPO, 'Caddyfile'), encoding='utf-8').read().split(
 check('Caddy: HTTPS-Pflicht (HSTS) 1 Jahr, auch für alle Subdomains, ohne preload', 'Strict-Transport-Security "max-age=31536000; includeSubDomains"' in cf_haupt
       and not any('preload' in z for z in cf_haupt.splitlines() if 'Strict-Transport-Security' in z))
 cf = open(os.path.join(REPO, 'Caddyfile'), encoding='utf-8').read()
-bloecke = cf.split('test.{$DOMAIN} {')
 abschnitt = cf.split('(zwischenspeichern) {', 1)[-1].split('\n}\n', 1)[0]
 # Verhalten mit echtem Caddy (Weiterleitungen und Fehler nie gespeichert): tests/deploy/test_zwischenspeichern.py
-check('Caddy: versionierte Skripte/Stylesheets (?v=…) ein Jahr zwischenspeichern, nur erfolgreiche Antworten, alles andere weiter „no-cache“ und nie in fremden Zwischenspeichern („private“) – Echtbetrieb und Testumgebung',
-      len(bloecke) == 2 and '@versioniert {\n\t\tpath *.js *.css\n\t\tnot path /api/*\n\t\tquery v=*\n\t}' in abschnitt
+check('Caddy: versionierte Skripte/Stylesheets (?v=…) ein Jahr zwischenspeichern, nur erfolgreiche Antworten, alles andere weiter „no-cache“ und nie in fremden Zwischenspeichern („private“)',
+      '@versioniert {\n\t\tpath *.js *.css\n\t\tnot path /api/*\n\t\tquery v=*\n\t}' in abschnitt
       and 'Cache-Control "{args[0]}, max-age=31536000, immutable"\n\t\tmatch status 2xx 304' in abschnitt
-      and '\timport zwischenspeichern public\n' in bloecke[0] and '\timport zwischenspeichern private\n' in bloecke[1].split('\n}\n', 1)[0]
-      and all('?Cache-Control "private, no-cache"' in b for b in bloecke))
+      and '\timport zwischenspeichern public\n' in cf and '\timport zwischenspeichern private\n' in cf
+      and '?Cache-Control "private, no-cache"' in cf)
 
 # ---------- Oberfläche: Hinweis im Code-Schritt bei gesperrtem Zugang ----------
 storage_write('sicherheit', {**sec, 'ipEnabled': False, 'lockAfter': 3, 'lockMinutes': 5})
