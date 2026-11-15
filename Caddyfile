@@ -124,38 +124,6 @@ http://:8081 {
 	}
 }
 
-# Testumgebung: test.<Domain> → Container „app-test“ (Ordner /opt/wochenangebot-test, deploy/testumgebung.sh).
-# Nur Testdaten, Zugang zusätzlich per Passwort (Apache im Test-Container), keine Suchmaschinen.
-# Läuft der Test-Container nicht, antwortet nur diese Adresse mit einem Fehler – der Echtbetrieb ist unberührt.
-test.{$DOMAIN} {
-	import cdn
-	encode zstd gzip
-	header {
-		Strict-Transport-Security "max-age=31536000"
-		X-Content-Type-Options "nosniff"
-		X-Frame-Options "SAMEORIGIN"
-		Referrer-Policy "same-origin"
-		Content-Security-Policy "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self' data:; connect-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'self'; upgrade-insecure-requests"
-		Permissions-Policy "camera=(), microphone=(), geolocation=(), payment=(), usb=(), interest-cohort=()"
-		Cross-Origin-Resource-Policy "same-origin"
-		X-Robots-Tag "noindex, nofollow"
-		?Cache-Control "private, no-cache"
-		-Server
-		-X-Powered-By
-	}
-	# wie im Echtbetrieb, aber nur im Browser (Zugang mit Passwort)
-	import zwischenspeichern private
-	@private path /data /data/*
-	respond @private 404
-	# Falle: typische Pfade von Angriffswerkzeugen (diese Seite hat keine davon) → Firewall zählt und sperrt automatisch
-	@falle path /wp-login.php /xmlrpc.php /wp-admin /wp-admin/* /wp-content/* /wp-includes/* /.env /.env.* /.git /.git/* /phpmyadmin* /pma/* /myadmin* /vendor/phpunit/* /cgi-bin/* /.aws/* /server-status /actuator* /admin.php /administrator/* /boaform/* /HNAP1*
-	rewrite @falle /api/index.php?action=waf_probe&p={path}
-	reverse_proxy app-test:80 {
-		header_up X-Forwarded-For {besucher_ip}
-		header_up -X-Stafl-Cdn
-	}
-}
-
 # STAFL-Plattform: zentrale Anmeldung (ADR-003, docs/plattform/inbetriebnahme-anmeldung.md Schritt 6).
 # Ziele gibt es nur mit der Ergänzungsdatei deploy/anmeldung/docker-compose.anmeldung.yml (COMPOSE_FILE in .env):
 # „keycloak“ und „app-mitarbeiter“ (eigener Container derselben Anwendung mit Keycloak-Hosts in Apache, ADR-007). Ohne sie
@@ -245,7 +213,7 @@ dashboard-stafl.de, angebot.dashboard-stafl.de, verwaltung.dashboard-stafl.de, b
 # STAFL-Plattform: vorbereitete Modul-Domains ohne öffentlich erreichbare Anwendung (GR-105).
 # Erst nach fertiger Anmeldung, Rechteprüfung und geprüfter Release-Freigabe pro Modul routen.
 # Bis dahin: keine Weiterleitung an die produktive Angebots-API oder interne Container.
-einkauf.dashboard-stafl.de, container-import.dashboard-stafl.de, test.dashboard-stafl.de {
+einkauf.dashboard-stafl.de, container-import.dashboard-stafl.de {
 	import cdn
 	encode zstd gzip
 	header {

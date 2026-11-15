@@ -58,7 +58,6 @@ printf '%8s  %s\n' "$(groesse daten)" "daten/ (Geschäftsdaten)"
 [ -d daten/historie ] && printf '%8s  %s\n' "$(groesse daten/historie)" "daten/historie ($(anzahl daten/historie) Wochen Preisverlauf)"
 [ -d sicherungen ] && printf '%8s  %s\n' "$(groesse sicherungen)" "sicherungen/ ($(anzahl sicherungen) Dateien, je Art die letzten 30)"
 [ -d daten-anmeldung ] && printf '%8s  %s\n' "$(groesse daten-anmeldung)" "daten-anmeldung/ (Keycloak-Einrichtung)"
-[ -d ../wochenangebot-test ] && printf '%8s  %s\n' "$(groesse ../wochenangebot-test)" "/opt/wochenangebot-test (Testumgebung)"
 echo
 echo "== Aufräumbar ohne Risiko"
 U=""; [ "$DOCKER_OK" = 1 ] && U=$(ungenutzt)
