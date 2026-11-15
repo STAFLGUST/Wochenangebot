@@ -198,6 +198,12 @@ Leergut, REWE, QS mit der Dateiablage, Entwurf, Versionen, Preisverlauf, Einkauf
   Skripte, die als root dort hineinschreiben, legen die Datei außerhalb an und bringen sie nur per Umbenennen hinein
   (`mv -fT`, `os.replace`) bzw. öffnen sie mit `O_NOFOLLOW` – ein dort vorab angelegter Verweis lenkt so nichts um
   (`deploy/postfach-schluessel.sh`, `deploy/daten_trennen.py`, `deploy/datenbank.py`; Vorbild `deploy/sichern.sh`).
+  Dasselbe gilt seit 15.11.2026 für die **Ordnernamen**: `daten_trennen.py` legt jeden Zielordner einzeln an und bricht ab,
+  sobald eine Komponente ein Verweis oder kein Ordner ist (`ordner_nofollow`) – vorher hätte ein Verweis als Ordnername im
+  Datenordner das Werkzeug beim Zurückführen aus beiden Datenordnern herausschreiben lassen.
+- **Reste abgebrochener Schreibvorgänge** (seit 15.11.2026): Zwischendateien interner Dokumente (`<name>.php.neu`,
+  `<name>.php.kopie`, `<name>.php.<hex>.tmp`) tragen denselben vollen Inhalt wie das Dokument. `status` nennt sie, `trennen`
+  entfernt sie (`rest_dateien`) – sonst bliebe ein solcher Rest unbegrenzt im Ordner der Kundenseite liegen.
 - **Sicherung:** `deploy/sichern.sh` sichert danach zusätzlich `daten-intern/` als `intern-<Zeit>.tar.gz` (gleich geprüft) und
   bricht ab, wenn der Ordner fehlt. Ob gesichert wird, entscheidet seit 05.11.2026 das Kennzeichen `daten-intern/.daten-intern`
   (nicht mehr allein das gemeinsame): ein entferntes Kennzeichen in `daten/` kann die internen Daten nicht still aus der

@@ -527,5 +527,47 @@ for stufe in (1, dt.ZIELSTUFE):
         check(f'{w}: erfolgreicher Vorgang speichert in beiden, danach keine offene Transaktion', json.loads(r or 'null') == [{'x': 2}, {'customers': [], 'neu': 2}, True], r)
         check(f'{w}: Entwurf liegt innen, Kunden außen', 'entwurf' in zeilen(i) and 'entwurf' not in zeilen(d) and 'kunden' in zeilen(d) and 'kunden' not in zeilen(i))
 
+# ─────────────── Verweise als Ordnername, Reste eines Abbruchs (daten/ ist im Container beschreibbar) ───────────────
+# Wie tests/deploy/test_sichern.sh und test_postfach_schluessel.sh: ein dort angelegter Verweis darf dieses als root
+# laufende Werkzeug nie aus den beiden Datenordnern herausschreiben lassen – auch nicht als Ordnername.
+with tempfile.TemporaryDirectory() as t:
+    t = Path(t); d = aufbau(t); i = t / 'daten-intern'; (t / 'opfer').mkdir()
+    i.mkdir(); os.symlink(t / 'opfer', i / 'protokoll')
+    code, out = lauf('trennen', str(d), str(i), '--offline')
+    check('trennen: Verweis als Ordnername in daten-intern → Abbruch, nichts außerhalb angelegt',
+          code == 1 and 'Verweis als Ordnername' in out and not any((t / 'opfer').iterdir())
+          and (d / 'protokoll/2026-11.php').is_file(), out)
+    shutil.rmtree(i)
+    code, out = lauf('trennen', str(d), str(i), '--offline')
+    check('trennen: Gegenprobe ohne Verweis läuft wie bisher', code == 0 and (i / 'protokoll/2026-11.php').is_file(), out)
+
+for ordner in ('protokoll', 'dateien'):   # Dokument-Unterordner und Dateiablage
+    with tempfile.TemporaryDirectory() as t:
+        t = Path(t); d = aufbau(t); i = t / 'daten-intern'; (t / 'opfer').mkdir()
+        subprocess.run([sys.executable, str(SKRIPT), 'trennen', str(d), str(i), '--offline'], check=True, capture_output=True)
+        os.symlink(t / 'opfer', d / ordner)
+        code, out = lauf('zusammenfuehren', str(d), str(i), '--offline')
+        check(f'zusammenführen: Verweis als Ordnername {ordner}/ in daten/ → Abbruch, nichts außerhalb angelegt',
+              code == 1 and 'Verweis als Ordnername' in out and not any((t / 'opfer').iterdir())
+              and (i / 'protokoll/2026-11.php').is_file() and (i / 'dateien/qs/ab/ab12.bin').is_file(), out)
+        (d / ordner).unlink()
+        code, out = lauf('zusammenfuehren', str(d), str(i), '--offline')
+        check(f'zusammenführen: Gegenprobe ohne Verweis ({ordner}/) läuft wie bisher',
+              code == 0 and (d / 'protokoll/2026-11.php').is_file() and (d / 'dateien/qs/ab/ab12.bin').read_bytes() == b'PDF-Inhalt', out)
+
+# Zwischendateien eines abgebrochenen Schreibvorgangs: sie tragen den vollen Inhalt und dürfen nicht im gemeinsamen Ordner bleiben
+with tempfile.TemporaryDirectory() as t:
+    t = Path(t); d = aufbau(t); i = t / 'daten-intern'
+    for name in ('hr-personal.php.neu', 'nutzer.php.kopie', 'protokoll/2026-11.php.a1b2c3.tmp', 'angebot.php.neu'):
+        (d / name).write_text(G + '{"geheim":1}')
+    code, out = lauf('pruefen', str(d), str(i))
+    check('pruefen nennt die Zwischendateien interner Dokumente (eingerückt, damit die Vorprüfung nicht „nichts zu tun“ meldet)',
+          code == 0 and all(n in out for n in ('hr-personal.php.neu', 'nutzer.php.kopie', '2026-11.php.a1b2c3.tmp'))
+          and 'angebot.php.neu' not in out, out)
+    code, out = lauf('trennen', str(d), str(i), '--offline')
+    check('trennen entfernt die Zwischendateien interner Dokumente, die der Kundenseite bleiben unberührt',
+          code == 0 and not (d / 'hr-personal.php.neu').exists() and not (d / 'nutzer.php.kopie').exists()
+          and not (d / 'protokoll').exists() and (d / 'angebot.php.neu').is_file(), out)
+
 print(f'{ok_n}/{ok_n + fail_n} passed')
 sys.exit(0 if fail_n == 0 else 1)
