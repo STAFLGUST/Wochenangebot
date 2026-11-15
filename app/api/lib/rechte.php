@@ -138,7 +138,10 @@ const PERM_ROLES = ['viewer', 'editor'];
    Standard: beide Standardrollen (so bleibt der bisherige Zugang aller Mitarbeiter unverändert), außer das Register nennt
    andere (Feld zugang_rollen, z. B. Sicherheit: keine). Die Rechte innerhalb
    eines Moduls (PERMS) hängen nicht davon ab: ein Recht kann auch in einem anderen Modul genutzt werden (z. B. Kunden
-   sehen im Angebot), der Modulzugang sperrt nur die Oberfläche des Moduls (modul_zugang_durchsetzen). */
+   sehen im Angebot). Der Modulzugang ist dabei trotzdem eine Berechtigung und keine Anzeigeregel: ohne ihn läuft keine
+   Aktion des Moduls – auf keinem Host (modul_zugang_durchsetzen prüft Host UND Modul der Aktion). Nur die im
+   Aktionsregister ausdrücklich mit „zugang_gemeinsam“ vermerkten Aktionen des gemeinsamen Eingabebereichs kommen ohne
+   den Zugang ihres eigenen Moduls aus; dort autorisiert allein das Fachrecht (regeln/aktionen/LIESMICH.md). */
 function perms_katalog(): array
 {
     static $k = null;
@@ -313,7 +316,8 @@ function modul_host_frei(?array $u, string $modul): bool
 }
 /* Modul der Oberfläche dieser Anfrage: der Host (Webserver: WA_OBERFLAECHE, nie aus Kopfzeilen) – sonst die Oberfläche der
    Aktion, außer dem gemeinsamen Eingabebereich ohne eigenen Host (angebot.eingabe: dort liegen heute Angebot, Bestand,
-   Verwaltung zusammen; die Sichtbarkeit regeln dort die Einzelrechte) */
+   Verwaltung, Einkauf und HR zusammen, deshalb ist hier kein Modul zu bestimmen). Das Modul der Aktion prüft
+   modul_zugang_durchsetzen zusätzlich – ohne Host und ohne Oberfläche bleibt also der Modulzugang der Aktion wirksam. */
 function anfrage_modul(?array $aktion): ?string
 {
     $host = oidc_einstellung('WA_OBERFLAECHE');
@@ -322,18 +326,26 @@ function anfrage_modul(?array $aktion): ?string
     if ($ob === '' || $ob === 'angebot.eingabe') return null;
     return explode('.', $ob, 2)[0];
 }
+/* Geprüft werden zwei Module: das des Hosts (anfrage_modul) und das der Aktion selbst – dessen Daten sie liest und
+   schreibt. Nur so wirkt der Entzug von „<modul>.zugang“ auch dort, wo die Aktion auf einem fremden Host liegt (der
+   gemeinsame Eingabebereich bündelt Angebot, Bestand, Verwaltung, Einkauf und HR auf drei Hosts). Ausgenommen:
+   Plattformkern und Dashboard (kein Zugangsrecht) und die im Register mit „zugang_gemeinsam“ vermerkten Aktionen, die
+   der gemeinsame Eingabebereich modulübergreifend braucht (Autorisierung dort: das Fachrecht, GR-103). */
 function modul_zugang_durchsetzen(?array $aktion): void
 {
     if ($aktion === null || $aktion['oeffentlich'] || $aktion['wartung_frei']) return;
     if (in_array($aktion['modul'], ['plattform', 'dashboard'], true)) return;   // eigener Zugang, Status, Rollenprüfung im Kern
-    $m = anfrage_modul($aktion);
-    if ($m === null) return;
     $u = current_user();
-    if (!$u || modul_host_frei($u, $m)) return;   // ohne Anmeldung: die Aktion meldet selbst „Bitte erneut anmelden“
-    header('Cache-Control: no-store');
-    $name = MODULE[$m]['name'] ?? $m;
-    respond(['ok' => false, 'code' => 'kein_modulzugang', 'modul' => $m, 'name' => $name,
-             'error' => 'Sie haben keinen Zugang zum Bereich „' . $name . '“. Bitte an einen Administrator wenden.'], 403);
+    if (!$u) return;   // ohne Anmeldung: die Aktion meldet selbst „Bitte erneut anmelden“
+    // „seite“ sagt der Oberfläche, ob die ganze Seite gesperrt ist (Host ohne Zugang) oder nur diese eine Aktion eines
+    // fremden Moduls – sonst ersetzte ein einzelner Abruf (z. B. Preisverlauf im Bestand) den ganzen Eingabebereich.
+    foreach ([[anfrage_modul($aktion), true], [!empty($aktion['zugang_gemeinsam']) ? null : (string)$aktion['modul'], false]] as [$m, $seite]) {
+        if ($m === null || $m === '' || modul_host_frei($u, $m)) continue;
+        header('Cache-Control: no-store');
+        $name = MODULE[$m]['name'] ?? $m;
+        respond(['ok' => false, 'code' => 'kein_modulzugang', 'modul' => $m, 'name' => $name, 'seite' => $seite,
+                 'error' => 'Sie haben keinen Zugang zum Bereich „' . $name . '“. Bitte an einen Administrator wenden.'], 403);
+    }
 }
 
 function rights_catalog(): array

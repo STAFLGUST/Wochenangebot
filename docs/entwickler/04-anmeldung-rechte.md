@@ -362,23 +362,45 @@ if (may($me, 'bestand.einkaufspreise')) { … }    // Teilinhalt nur mit Recht (
 `require_auth($write, $role)` prüft eine Rollenstufe (`ROLES`: viewer 1, editor 2, admin 3; eigene Rollen zählen 1).
 Für Fachrechte immer `require_perm` verwenden, nicht die Stufe – heute fragt nur noch `admin` die Stufe ab.
 
-**Modulzugang:** `modul_zugang_durchsetzen()` im Einstieg weist auf dem Host eines Moduls (aus `WA_OBERFLAECHE`, sonst
-der Oberfläche der Aktion außer `angebot.eingabe`) jede nicht öffentliche Aktion ohne `<modul>.zugang` mit 403
-`kein_modulzugang` ab. Ausgenommen: Aktionen der Module `plattform`/`dashboard`, `oeffentlich`, `wartung_frei`.
+**Modulzugang:** `modul_zugang_durchsetzen()` im Einstieg prüft für jede nicht öffentliche Aktion **zwei** Module und
+weist ohne `<modul>.zugang` mit 403 `kein_modulzugang` ab:
+
+1. das Modul des **Hosts** (aus `WA_OBERFLAECHE`, sonst der Oberfläche der Aktion außer `angebot.eingabe`) – dann ist die
+   ganze Oberfläche gesperrt (`seite: true`, die Oberfläche zeigt „Kein Zugang“ mit Rückweg zum Dashboard);
+2. das Modul der **Aktion** selbst (Feld `modul` im Aktionsregister), dessen Daten sie liest und schreibt – dann ist nur
+   diese Aktion gesperrt (`seite: false`, die Seite bleibt stehen und der Aufrufer zeigt den Fehler).
+
+Ausgenommen: Aktionen der Module `plattform`/`dashboard` (kein Zugangsrecht), `oeffentlich`, `wartung_frei`.
 `modul_host_frei()` lässt auch den Zugang eines Teilmoduls gelten (`teil_von`, z. B. Import → Verwaltung). Der
 Modulzugang ersetzt keine Einzelrechte: ein Recht wie `kunden.sehen` kann in mehreren Modulen genutzt werden.
 
-**Grenze des Modulzugangs:** Er sperrt einen Host (eine Oberfläche), nicht die Daten eines Moduls. Angebot, Bestand und
-Verwaltung teilen sich den Eingabebereich – die Kundenansicht der Verwaltung nutzt Angebotsaktionen, das Angebot liest
-Bestand und Stammdaten. Ausnahme seit Oktober 2026: Aktionen, die Angebotsinhalte ausliefern und sonst nur die Anmeldung
-prüfen würden – Entwurf (`draft`), Versionen (`versions`, `version`), Kundenangebote und Vorschau für Mitarbeiter
-(`offer` ohne öffentliches Wochenangebot) –, verlangen `require_modulzugang('angebot')`, also `angebot.zugang` auf jedem
-Host (403 ohne `kein_modulzugang`, damit die Seite nicht gesperrt wird). Die Liste der Kundenangebote (`offers`, nur Namen)
-gibt es mit `angebot.zugang` oder `kunden.sehen` (Kundenzuordnung). Die Oberfläche lädt ohne `angebot.zugang` keinen
-Entwurf und startet keinen Abgleich. Wer z. B. ohne
-`angebot.zugang`, aber mit `bestand.zugang` und `bestellungen.sehen` den Bestand-Host öffnet, kann Bestellungen über
-die Schnittstelle weiter lesen. Wer Daten eines Moduls nicht sehen soll, dem die **Einzelrechte** entziehen. Der
-Dashboard-Host nimmt keine Fachaktionen an (Schritt 2), dort ließe sich der Modulzugang sonst ganz umgehen.
+**Der Modulzugang ist eine Berechtigung, keine Anzeigeregel (seit 15.11.2026, Sicherheitsfund):** Vorher wurde nur der
+Host gemessen. Weil der gemeinsame Eingabebereich Angebot, Bestand, Verwaltung, Einkauf und HR auf drei Hosts bündelt,
+war ein entzogener Zugang dort wirkungslos: mit `hr.verwalten` ohne `hr.zugang` ließen sich Personaldaten über den
+Angebots- oder Verwaltungs-Host lesen und schreiben, mit `bestand.sehen` ohne `bestand.zugang` Charge, Menge, MHD und
+Einkaufspreise. Wer einen Bereich nicht betreten darf, bekommt seine Daten jetzt auf **keiner** Adresse mehr – wie es
+`require_modulzugang()` und die Dashboard-Sonderregel (`herkunft.php`) schon vorsahen.
+
+**Ausnahmen im Register (`zugang_gemeinsam = true`):** Ein paar Aktionen des gemeinsamen Eingabebereichs arbeiten
+modulübergreifend; dort autorisiert allein das Fachrecht, geprüft bleibt der Modulzugang des Hosts. Heute: Stammdaten
+(`master`, `master_save`, `vkgruppen`, `angebotskategorien`), Kunden und Kundengruppen (`kunden`, `kundengruppen`) für
+den Angebotseditor sowie Angebotsliste, Kundenzugangs-Mail und Postfach-Kurzinfo (`offers`, `kunde_mail`, `mail_info`)
+für die Kundenverwaltung und die Einkaufsansicht (`einkauf`, `einkauf_melden`), die noch im Angebotsbereich liegt.
+Die Liste steht als `ZUGANG_GEMEINSAM` in `werkzeuge/regeln.py` – die CI lehnt jeden weiteren Vermerk ab, Erweiterung nur
+im Plattform-PR mit Begründung. Zusätzlich verlangen Aktionen, die Inhalte eines Moduls ausliefern und sonst nur die
+Anmeldung prüfen würden, weiter `require_modulzugang()` (Entwurf `draft`, Versionen, Kundenangebote und Vorschau für
+Mitarbeiter: `angebot.zugang`; Veröffentlichen und Senden: `versand.zugang`; Importzentrale: den Zugang des
+**Eigentümers** der Importart, siehe 4.4 unten). Der Dashboard-Host nimmt keine Fachaktionen an (Schritt 2).
+
+**Folge für die Rechtevergabe:** Standardrollen (`viewer`, `editor`) haben alle Modulzugänge – für sie ändert sich
+nichts. Eine eigene Rolle, die ein Fachrecht ohne den Modulzugang seines Moduls hat (z. B. „Personalstelle“ mit
+`hr.verwalten`, weil sensible Rechte einzeln angekreuzt werden), braucht den Zugang jetzt zusätzlich. Die Zugänge
+stehen in der Rechteübersicht je Modul als „Modul … öffnen“.
+
+**Importzentrale:** `import_vorbereiten()` prüft neben dem Fachrecht `require_modulzugang($a['eigentuemer'])` – die
+Zentrale ruft die Vorschau- und Übernahmefunktionen fremder Module auf, ihre eigenen Aktionen gehören aber dem Modul
+`verwaltung`; der Eigentümer steht erst zur Laufzeit in der Importart. `import_arten` zeigt nur Importarten, deren
+Eigentümer-Modul dem Nutzer offensteht.
 
 **Abgeleitete Angaben hängen am selben Recht wie die Angabe selbst.** Unterdrückt eine Antwort eine Zahl, weil das Recht
 fehlt, darf sie auch nicht als Summe, Zähler, Warnhinweis, Sortierung oder Fehlertext wieder auftauchen – wer die Anfrage
@@ -487,9 +509,10 @@ Kunden sind eine eigene, externe Nutzergruppe (Dokument `kunden`, Zugang im Feld
 
 - GR-108, GR-109 und GR-110 stehen in `regeln/katalog.toml` noch auf `geplant`, obwohl Hosts, Keycloak und
   Aktion ↔ Host für HR und CRM produktiv sind; Angebot, Verwaltung und Bestand teilen sich weiter die Aktionen von
-  `angebot.eingabe` (der Modulzugang sperrt dort nur den Host, siehe 4.4). Eine echte Trennung braucht eigene
-  Oberflächen je Modul im Aktionsregister und einen Eingabebereich, der auf jedem Host nur die Daten seines Moduls lädt.
+  `angebot.eingabe` (der Modulzugang wirkt dort seit 15.11.2026 über das Modul der Aktion, siehe 4.4 – elf Aktionen
+  bleiben als `zugang_gemeinsam` ausgenommen). Eine echte Trennung braucht eigene Oberflächen je Modul im
+  Aktionsregister und einen Eingabebereich, der auf jedem Host nur die Daten seines Moduls lädt.
 - Die App kennt nur die lokale Anmeldung (Kopfzeile `X-WA-Sitzung`, Basisadresse z. B. `https://angebot-stafl.de`);
   dort ist die Mitarbeiteranmeldung stillgelegt (410). Die Anmeldung über OIDC für Apps ist geplant (ADR-003 §2).
 
-Stand: 2026-10-24
+Stand: 2026-11-15

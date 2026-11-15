@@ -702,6 +702,25 @@ class Verstoesse(unittest.TestCase):
         self.p.erzeugen()
         self.assertFehler("fremde_herkunft muss true oder false sein")
 
+    def test_zugang_gemeinsam_nur_fuer_festgelegte_aktionen(self):
+        # Ein Vermerk „zugang_gemeinsam“ macht den Modulzugang einer Aktion wirkungslos (GR-103) – nur die
+        # festgelegten Aktionen des gemeinsamen Eingabebereichs dürfen ihn tragen
+        self.p.ersetzen("regeln/aktionen/angebot.toml", "schreibend = true", "schreibend = true\nzugang_gemeinsam = true")
+        self.p.erzeugen()
+        self.assertFehler("zugang_gemeinsam nur für die festgelegten")
+
+    def test_zugang_gemeinsam_kein_wahrheitswert(self):
+        self.p.ersetzen("regeln/aktionen/angebot.toml", "schreibend = true", 'schreibend = true\nzugang_gemeinsam = "ja"')
+        self.p.erzeugen()
+        self.assertFehler("zugang_gemeinsam muss true oder false sein")
+
+    def test_echtes_register_zugang_gemeinsam_nur_gemeinsamer_eingabebereich(self):
+        rw = regeln.laden(WURZEL)
+        tab = regeln.aktionen_tabelle(rw)
+        gem = sorted(n for n, a in tab.items() if a["zugang_gemeinsam"])
+        self.assertEqual(gem, sorted(regeln.ZUGANG_GEMEINSAM))
+        self.assertTrue(all(tab[n]["oberflaeche"] == "angebot.eingabe" for n in gem))
+
     def test_echtes_register_nur_abmelden1_von_fremd(self):
         rw = regeln.laden(WURZEL)
         fremd = sorted(n for n, a in regeln.aktionen_tabelle(rw).items() if a["fremde_herkunft"])
@@ -810,7 +829,7 @@ class Verstoesse(unittest.TestCase):
 
     def test_erzeugte_liste_ist_php(self):
         text = (self.p.wurzel / regeln.AKTIONEN_LISTE).read_text(encoding="utf-8")
-        self.assertIn("'offer' => ['modul' => 'angebot', 'oberflaeche' => 'angebot.kunden', 'schreibend' => false, 'oeffentlich' => true, 'kunden_wartung' => true, 'wartung_frei' => false, 'fremde_herkunft' => false, 'lokale_anmeldung' => false],", text)
+        self.assertIn("'offer' => ['modul' => 'angebot', 'oberflaeche' => 'angebot.kunden', 'schreibend' => false, 'oeffentlich' => true, 'kunden_wartung' => true, 'wartung_frei' => false, 'fremde_herkunft' => false, 'lokale_anmeldung' => false, 'zugang_gemeinsam' => false],", text)
         self.assertIn("'save_draft' => ['modul' => 'angebot', 'oberflaeche' => 'angebot.eingabe', 'schreibend' => true,", text)
 
     def test_folgen_im_kleinen(self):

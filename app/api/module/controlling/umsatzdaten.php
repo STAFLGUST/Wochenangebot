@@ -13,8 +13,10 @@ declare(strict_types=1);
    aber nicht zu Menge und Umsatz der Auswertung.
 
    Import: Der Zeitraum der Datei (erster bis letzter Tag) ersetzt die gespeicherten Umsätze dieses Zeitraums; Monate davor
-   und danach bleiben. Verglichen wird je Monat über die Prüfsumme (SHA-256 der Zeilen als JSON, im Browser gleich
-   berechnet) – nur geänderte Monate werden übertragen; dieselbe Datei erneut ändert nichts. Der Leser im Browser
+   und danach bleiben – die Übernahme weist Teile mit Tagen außerhalb des Zeitraums ab (sie würden sich zu den bleibenden
+   Tagen addieren) und schreibt das Verzeichnis vor dem Löschen entfallener Monate, damit ein Abbruch keinen
+   Verzeichniseintrag ohne Dokument hinterlässt. Verglichen wird je Monat über die Prüfsumme (SHA-256 der Zeilen als JSON,
+   im Browser gleich berechnet) – nur geänderte Monate werden übertragen; dieselbe Datei erneut ändert nichts. Der Leser im Browser
    (app/module/controlling/umsatz-import.js) liest die CSV und fasst zusammen; hier prüft der Server jede Zeile erneut.
    Wird von api/index.php geladen; Speicherzugriffe nur auf Dokumente des Controllings (regeln/datenverantwortung.toml). */
 if (!defined('WA_API')) { http_response_code(404); exit; }   // nur über api/index.php nutzbar
@@ -25,7 +27,9 @@ const UMSATZDATEN_ZEILEN_MAX = 60000;      // Zeilen je Monat (heute rund 7 000)
 const UMSATZDATEN_MONATE_MAX = 600;        // Monate in einer Datei (50 Jahre)
 const UMSATZDATEN_LISTE_MAX = 50000;       // Kunden- bzw. Artikelnummern in einer Datei
 const UMSATZDATEN_IMPORTE_MAX = 50;        // Einträge im Importverlauf
-const UMSATZDATEN_TEIL_STUNDEN = 24;       // Zwischenablage eines nicht übernommenen Imports
+const UMSATZDATEN_TEIL_STUNDEN = 24;       // Zwischenablage eines nicht übernommenen Imports (wie ABLAGE_UPLOAD_STUNDEN)
+const UMSATZDATEN_TEILE_MAX = 1200;        // offene Teile in der Zwischenablage (zwei vollständige Importläufe: 2 × UMSATZDATEN_MONATE_MAX)
+const UMSATZDATEN_TEIL_BYTES = 5242880;    // Bytes eines Teils (JSON) – wie ABLAGE_TEIL_MAX unter der Grenze des API-Einstiegs (6 MB)
 const UMSATZDATEN_RUECKGANG = 0.8;         // Warnung, wenn ein Monat weniger als 80 % der bisherigen Positionen hat
 
 /* Verzeichnis mit Standardwerten; unbekannte (neuere) Felder bleiben erhalten (GR-006) */
@@ -168,12 +172,19 @@ function umsatzdaten_vergleich(array $in, array $index): array
         $teilweise = $t1 > 1 || $t2 < umsatzdaten_tage($m);
         $neu = $in['monate'][$m] ?? null;
         $alt = is_array($index['monate'][$m] ?? null) ? $index['monate'][$m] : null;
+        // Verzeichniseintrag ohne gespeicherten Monat (abgebrochener Import): wie „bisher keine Umsätze“ behandeln, damit
+        // der Monat neu geschrieben wird statt stillschweigend zu fehlen. store_mtime liest kein Dokument.
+        if ($alt && store_mtime(UMSATZDATEN . '/' . $m) === null) $alt = null;
+        $abweichung = false;   // gespeicherter Monat passt nicht zu seinem Verzeichniseintrag
         if ($alt && $teilweise) {   // nur die Tage im Zeitraum vergleichen
-            $innen = umsatzdaten_tagesbereich(umsatzdaten_monat($m), $t1, $t2, true);
+            $alle = umsatzdaten_monat($m);
+            $abweichung = umsatzdaten_hash($alle) !== ($alt['hash'] ?? '');
+            $innen = umsatzdaten_tagesbereich($alle, $t1, $t2, true);
             $alt = $innen ? umsatzdaten_summen($innen) + ['hash' => umsatzdaten_hash($innen)] : null;
         }
         if (!$neu && !$alt) continue;
-        $art = !$alt ? 'neu' : (!$neu ? 'entfaellt' : ($neu['hash'] === $alt['hash'] ? 'unveraendert' : 'geaendert'));
+        // Bei Abweichung nie „unveraendert“: sonst zementiert ein erneuter gleicher Import den falschen Verzeichniseintrag
+        $art = !$alt ? 'neu' : (!$neu ? 'entfaellt' : ($neu['hash'] === $alt['hash'] && !$abweichung ? 'unveraendert' : 'geaendert'));
         $out[$m] = ['art' => $art, 'neu' => $neu, 'alt' => $alt, 'von' => $t1, 'bis' => $t2, 'teilweise' => $teilweise];
     }
     return $out;
@@ -239,7 +250,20 @@ function umsatzdaten_import_teil(array $e, array $me): void
     $zeilen = umsatzdaten_zeilen_pruefen($m, $d['zeilen'] ?? null);
     $hash = umsatzdaten_hash($zeilen);
     if (($d['hash'] ?? '') !== $hash) throw new InvalidArgumentException(umsatzdaten_monatsname($m) . ': Prüfsumme stimmt nicht. Bitte die Datei erneut wählen.');
-    store_write(UMSATZDATEN_TEILE . '/' . $e['upload'] . '-' . $m, ['von' => $me['id'], 't' => time(), 'monat' => $m, 'hash' => $hash, 'zeilen' => $zeilen]);
+    $teil = ['von' => $me['id'], 't' => time(), 'monat' => $m, 'hash' => $hash, 'zeilen' => $zeilen];
+    if (strlen(json_encode($teil, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_THROW_ON_ERROR)) > UMSATZDATEN_TEIL_BYTES)
+        fail(umsatzdaten_monatsname($m) . ': der Monat ist zu groß für einen Teil.', 413);
+    $name = UMSATZDATEN_TEILE . '/' . $e['upload'] . '-' . $m;
+    // Haltefrist gilt auf dem Schreibweg (wie ablage_teil zu Beginn eines Uploads), nicht erst in einer gelungenen
+    // Übernahme – sonst bleiben Teile mit Einkaufswerten beliebig lange liegen (regeln/datenverantwortung.toml).
+    umsatzdaten_teile_aufraeumen();
+    // Mengengrenze der Zwischenablage: zählt nur Namen, liest kein Dokument. Einen Teil, den es schon gibt, ersetzt sie.
+    // shortcut: gezählt wird die ganze Zwischenablage statt je Nutzer, und die Bytes nur je Teil – der Eigentümer steht im
+    // Dokument, nicht im Namen, und die Speicherschicht nennt keine Dokumentgrößen. Je Nutzer zählen, sobald sie das tut.
+    $offen = 0;
+    foreach (store_names(UMSATZDATEN_TEILE) as $x) if ($x !== $name) $offen++;
+    if ($offen >= UMSATZDATEN_TEILE_MAX) fail('Zu viele nicht übernommene Importteile. Bitte den laufenden Import abschließen.', 429);
+    store_write($name, $teil);
 }
 
 /* Zwischenablage aufräumen: Teile dieses Imports bzw. alle, die älter als UMSATZDATEN_TEIL_STUNDEN sind */
@@ -268,19 +292,31 @@ function umsatzdaten_import_uebernehmen(array $e, array $me): array
             $t = store_read(UMSATZDATEN_TEILE . '/' . $upload . '-' . $m);
             return is_array($t) && ($t['von'] ?? null) === $me['id'] && ($t['hash'] ?? '') === $x['neu']['hash'] && is_array($t['zeilen'] ?? null) ? $t['zeilen'] : null;
         };
-        // zuerst alle Teile prüfen – fehlt einer, wird nichts geschrieben. Je Monat nur einmal im Speicher (Speichergrenze 128 MB)
+        // zuerst alle Teile prüfen – fehlt einer oder passt er nicht zum Zeitraum, wird nichts geschrieben.
+        // Je Monat nur einmal im Speicher (Speichergrenze 128 MB)
         foreach ($v as $m => $x) {
-            if (($x['art'] === 'neu' || $x['art'] === 'geaendert') && $teil($m, $x) === null)
-                fail(umsatzdaten_monatsname($m) . ' wurde nicht vollständig übertragen. Bitte erneut übernehmen.', 422);
+            if ($x['art'] !== 'neu' && $x['art'] !== 'geaendert') continue;
+            $zeilen = $teil($m, $x);
+            if ($zeilen === null) fail(umsatzdaten_monatsname($m) . ' wurde nicht vollständig übertragen. Bitte erneut übernehmen.', 422);
+            if (!$x['teilweise']) continue;
+            // Ein Randmonat ersetzt nur die Tage im Zeitraum der Datei. Tage außerhalb würden sich zu den bleibenden Tagen
+            // addieren statt sie zu ersetzen – das Monatsdokument wüchse bei jeder Übernahme derselben Datei weiter.
+            if (umsatzdaten_tagesbereich($zeilen, $x['von'], $x['bis'], false))
+                fail(umsatzdaten_monatsname($m) . sprintf(': der Teil enthält Tage außerhalb des Zeitraums der Datei (%02d.–%02d.). Bitte die Datei erneut wählen.', $x['von'], $x['bis']), 422);
+            if (count($zeilen) + count(umsatzdaten_tagesbereich(umsatzdaten_monat($m), $x['von'], $x['bis'], false)) > UMSATZDATEN_ZEILEN_MAX)
+                fail(umsatzdaten_monatsname($m) . ': zusammen mit den übrigen Tagen zu viele Zeilen für einen Monat.', 422);
         }
+        $loeschen = [];
         foreach ($v as $m => $x) {
             if ($x['art'] === 'unveraendert') continue;
             $zeilen = $x['art'] === 'entfaellt' ? [] : $teil($m, $x);
-            if ($x['teilweise']) {   // Tage außerhalb des Zeitraums der Datei bleiben
+            // Tage außerhalb des Zeitraums der Datei bleiben. Beide Listen sind sortiert und haben wegen der Prüfung oben
+            // keinen Tag gemeinsam – zusammen sortiert sind sie also wieder streng steigend (keine Doppelten).
+            if ($x['teilweise']) {
                 $zeilen = array_merge(umsatzdaten_tagesbereich(umsatzdaten_monat($m), $x['von'], $x['bis'], false), $zeilen);
                 umsatzdaten_sortieren($zeilen);
             }
-            if (!$zeilen) { store_delete(UMSATZDATEN . '/' . $m); unset($index['monate'][$m]); continue; }
+            if (!$zeilen) { $loeschen[] = $m; unset($index['monate'][$m]); continue; }
             $hash = umsatzdaten_hash($zeilen);
             store_write(UMSATZDATEN . '/' . $m, ['monat' => $m, 'hash' => $hash, 'zeilen' => $zeilen]);
             $index['monate'][$m] = ['hash' => $hash] + umsatzdaten_summen($zeilen);
@@ -298,6 +334,9 @@ function umsatzdaten_import_uebernehmen(array $e, array $me): array
         $index['rev']++;
         $index['geaendert'] = ['t' => now(), 'von' => $me['id'], 'vonName' => $me['name']];
         store_write(UMSATZDATEN, $index);
+        // Monate erst nach dem Verzeichnis löschen (with_lock ist im Dateispeicher keine Transaktion): ein Abbruch lässt
+        // dann höchstens einen geschriebenen Monat ohne Verzeichniseintrag zurück – nie einen Eintrag ohne Dokument.
+        foreach ($loeschen as $m) store_delete(UMSATZDATEN . '/' . $m);
         umsatzdaten_teile_aufraeumen($upload);
         return $vorschau;
     });

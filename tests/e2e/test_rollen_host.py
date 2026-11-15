@@ -1,6 +1,8 @@
 """Modulzugang je Host: der Testserver meldet sich wie bestand.dashboard-stafl.de (WA_OBERFLAECHE=bestand.intern).
 Ohne „bestand.zugang“ laufen dort keine Aktionen (auch nicht die des gemeinsamen Eingabebereichs, die andere Hosts
 dürfen) – außer Status, Abmelden und Funktionen des Plattformkerns. Die Seite zeigt „Kein Zugang“ mit Rückweg.
+Umgekehrt genügt der Zugang zu diesem Host nicht für Aktionen anderer Module (Personaldaten, Preisverlauf): die werden
+einzeln gesperrt (403 kein_modulzugang, seite=false – die Seite bleibt stehen, Sicherheitsfund 15.11.2026).
 Gegenstück ohne Host: Gruppe „rollen“."""
 import sys
 from playwright.sync_api import sync_playwright
@@ -35,7 +37,26 @@ check('Gesperrt auch Aktionen des gemeinsamen Eingabebereichs', E.call('history_
 check('Schreibende Aktionen ebenso', E.call('stock_import', {'date': '2026-10-16', 'articles': []})[1].get('code') == 'kein_modulzugang')
 check('Plattformkern bleibt erreichbar (Modulübersicht)', E.call('module_status')[0] == 200)
 check('Mit Modulzugang: Bestand offen', L.call('status')[1]['user']['modulzugang'] is True and L.call('stock')[0] == 200)
-check('Mit Modulzugang, ohne Einzelrecht: weiter gesperrt (Recht)', L.call('history_list')[0] == 403 and L.call('history_list')[1].get('code') != 'kein_modulzugang')
+check('Mit Modulzugang, ohne Einzelrecht: weiter gesperrt (Recht)', L.call('stock_import', {'date': '2026-10-16', 'articles': []})[0] == 403
+      and L.call('stock_import', {'date': '2026-10-16', 'articles': []})[1].get('code') != 'kein_modulzugang')
+# Aktion eines fremden Moduls auf diesem Host (Preisverlauf gehört zum Angebot): gesperrt, aber nur die Aktion –
+# „seite“ false, sonst verdeckte ein einzelner Abruf den Bestandsbereich (Sicherheitsfund 15.11.2026)
+code, r = L.call('history_list')
+check('Fremdes Modul auf diesem Host: gesperrt, ohne die Seite zu sperren', code == 403 and r.get('code') == 'kein_modulzugang'
+      and r.get('modul') == 'angebot' and r.get('seite') is False, (code, r))
+# Fund 15.11.2026: Personalrecht ohne HR-Zugang kam über den Bestands-/Eingabebereichs-Host an die Personaldaten
+code, r = A.call('rolle_save', {'name': 'Zeitstelle', 'rechte': ['bestand.zugang', 'hr.verwalten']})
+ZST = r['id']
+check('Rolle mit Personalrecht, ohne HR-Zugang', code == 200 and 'hr.zugang' not in next(x for x in r['rollen'] if x['id'] == ZST)['rechte'], r.get('rollen'))
+assert A.call('user_save', {'id': '', 'name': 'Petra Personal', 'username': 'petra', 'rollen': [ZST], 'active': True, 'password': 'Personal-Zugang-9', 'mustChange': False})[0] == 200
+PB = Client('198.51.100.33'); PB.call('login', {'username': 'petra', 'password': 'Personal-Zugang-9'})
+code, r = PB.call('mitarbeiter_hr&jahr=2026')
+check('Personaldaten über den fremden Host: 403 kein_modulzugang (Bereich HR)', code == 403 and r.get('code') == 'kein_modulzugang'
+      and r.get('modul') == 'hr' and r.get('seite') is False, (code, r))
+check('… auch schreibend und auch die Urlaubseinstellungen', PB.call('mitarbeiter_hr_save', {'id': 'x', 'hr': {}})[1].get('code') == 'kein_modulzugang'
+      and PB.call('hr_einstellungen_save', {'sperren': [], 'ferien': []})[1].get('code') == 'kein_modulzugang')
+assert A.call('rolle_save', {'id': ZST, 'name': 'Zeitstelle', 'rechte': ['bestand.zugang', 'hr.verwalten', 'hr.zugang']})[0] == 200
+check('Mit HR-Zugang: Personaldaten wieder offen', PB.call('mitarbeiter_hr&jahr=2026')[0] == 200)
 check('Bestand-Host ohne Modulzugang Angebot: kein Entwurf und keine Kundenpreise', L.call('draft')[0] == 403 and L.call('versions')[0] == 403
       and L.call('offer&angebot=' + A.call('offers')[1]['offers'][0]['id'])[0] == 403 and L.call('offers')[0] == 403)
 

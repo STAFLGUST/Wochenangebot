@@ -6,7 +6,10 @@ mit controlling.umsatz_ek und bestand.einkaufspreise (GR-008, je eines allein ge
 Hinweise (Zeitraum, Belegköpfe, ohne Berechnung, unbekannte Kunden/Artikel, Rückgang); Teile: Prüfsumme (unabhängig in
 Python berechnet = Server = Browser), Sortierung, Werte, fremder Mitarbeiter, fehlender Teil, veralteter Stand 409;
 Übernahme: nur geänderte Monate, dieselbe Datei erneut ändert nichts, Randmonate nur im Zeitraum der Datei ersetzt (übrige
-Tage bleiben), Monat ohne Umsätze im Zeitraum entfällt, Zwischenablage aufgeräumt (auch alte Reste), Importverlauf,
+Tage bleiben), Teil mit Tagen außerhalb des Zeitraums der Datei 422 (auch mehrfach: der Monat häuft keine Zeilen an),
+Monat ohne Umsätze im Zeitraum entfällt, Verzeichnis und gespeicherter Monat widersprechen sich (abgebrochene Übernahme):
+Randmonat gilt als geändert statt unverändert und Verzeichniseintrag ohne Dokument als neu, Zwischenablage aufgeräumt
+(alte Reste auch ohne Übernahme, schon beim Hochladen) und begrenzt (429 über der Mengengrenze), Importverlauf,
 Protokoll ohne Beträge; Auswertung: Summen je Vertreter, Kundengruppe, Kunde, Artikelgruppe, Fleischart, Artikel, Monat,
 Quartal, Jahr, KW gegen unabhängig gerechnete Werte, Filter (auch „ohne“), Vorjahr (im laufenden Monat bis zum gleichen
 Tag), ungültige Anfragen; Bestellpausen (Stammkunden mit ungewöhnlich langer Pause, unabhängig gerechnet, Filter, Stichtag, Rechte); Pop-up-Details (controlling_umsatz_detail): Kunden und Artikel mit letztem Kauf, Preisspiegel (Ø Preis aller Kunden je Artikel), Liefertage des
@@ -36,7 +39,7 @@ import urllib.parse
 from playwright.sync_api import sync_playwright
 
 from kunden_hilfe import Client
-from umgebung import BASE, SH, WORK, datenordner, storage_raw, storage_sqlite, storage_write
+from umgebung import BASE, SH, WORK, datenordner, storage_docs, storage_raw, storage_sqlite, storage_write
 
 PW = 'Sicheres-Passwort-1'
 res = []
@@ -352,6 +355,77 @@ assert teil(INA, '2026-06', TEILE_E['2026-06'], upload='9' * 32)[0] == 200
 st, u = uebernehmen(INA, DATEN_E, v['stand'], upload='9' * 32)
 check('Juni 2026 ersetzt (Testdaten für neu/verloren und ABC)', st == 200 and u['zahlen']['geaendert'] == 1, (st, u))
 POS_JETZT = [p for p in POS_JETZT if not (p[0].year == 2026 and p[0].month == 6)] + POS_E
+
+
+def entfernen(prefix):
+    """Gespeicherte Dokumente mit diesem Präfix direkt entfernen (Testvorbereitung: abgebrochener Import, Aufräumen)."""
+    ordner = datenordner(prefix)
+    if storage_sqlite():
+        import sqlite3
+        with sqlite3.connect(ordner + '/.sqlite/store.sqlite') as db:
+            db.execute('DELETE FROM documents WHERE name LIKE ?', (prefix + '%',))
+    else:
+        import glob as _g
+        for f in _g.glob(os.path.join(ordner, prefix + '*.php')):
+            os.remove(f)
+
+
+# ── Teil mit Tagen außerhalb des Zeitraums der Datei: abgewiesen, Monat häuft keine Zeilen an ──
+# (Gegenprobe mit Tagen im Zeitraum: „Teilmonat übernommen“ weiter oben.)
+OKT_SOLL = dokument('controlling-umsatzdaten/2026-10')['zeilen']
+DATEN_X = {**DATEN_B, 'zeitraum': {'von': '2026-10-15', 'bis': '2026-10-20'}}
+st, v = pruefen(INA, DATEN_X, upload='7' * 32)
+check('Zeitraum 15.–20. mit einem Teil vom 10.–20.: Vorschau fordert den Teil', st == 200 and v['teile'] == ['2026-10'], (st, v.get('zahlen')))
+assert teil(INA, '2026-10', TEILE_B['2026-10'], upload='7' * 32)[0] == 200
+viermal = [uebernehmen(INA, DATEN_X, v['stand'], upload='7' * 32) for _ in range(4)]
+check('Teil mit Tagen außerhalb des Zeitraums: jedes Mal 422', all(s_ == 422 and 'außerhalb des Zeitraums' in r.get('error', '') for s_, r in viermal), viermal[0])
+check('Oktober nach vier abgewiesenen Übernahmen unverändert (keine Anhäufung)', dokument('controlling-umsatzdaten/2026-10')['zeilen'] == OKT_SOLL,
+      len(dokument('controlling-umsatzdaten/2026-10')['zeilen']))
+check('Verzeichnis nach abgewiesener Übernahme unverändert', dokument('controlling-umsatzdaten')['rev'] == v['stand'])
+
+# ── Verzeichnis widerspricht dem gespeicherten Monat (Abbruch mitten in der Übernahme) ──
+idx = dokument('controlling-umsatzdaten')
+storage_write('controlling-umsatzdaten', {**idx, 'monate': {**idx['monate'], '2026-10': {**idx['monate']['2026-10'], 'hash': '1' * 64}}})
+st, v = pruefen(INA, DATEN_B, upload='8' * 32)
+check('Randmonat mit falschem Verzeichniseintrag gilt als geändert, nicht als unverändert', st == 200 and v['zahlen']['geaendert'] == 1 and v['teile'] == ['2026-10'], (st, v.get('zahlen')))
+assert teil(INA, '2026-10', TEILE_B['2026-10'], upload='8' * 32)[0] == 200
+st, u = uebernehmen(INA, DATEN_B, v['stand'], upload='8' * 32)
+okt = dokument('controlling-umsatzdaten/2026-10')['zeilen']
+check('Übernahme stellt den Verzeichniseintrag richtig, die Zeilen bleiben gleich', st == 200 and okt == OKT_SOLL
+      and dokument('controlling-umsatzdaten')['monate']['2026-10']['hash'] == hashlib.sha256(json.dumps(okt, separators=(',', ':'), ensure_ascii=False).encode()).hexdigest(), (st, u.get('error')))
+
+# Verzeichniseintrag ohne gespeicherten Monat: der Monat wird neu geschrieben statt stillschweigend zu fehlen
+FEB = [p for p in POS_JETZT if p[0].year == 2025 and p[0].month == 2]
+DATEN_F, TEILE_F = lesen(FEB)
+DATEN_F['zeitraum'] = {'von': '2025-02-01', 'bis': '2025-02-28'}   # ganzer Monat: ohne die Prüfung des Dokuments gilt er als „unveraendert“
+FEB_SOLL = dokument('controlling-umsatzdaten/2025-02')['hash']
+entfernen('controlling-umsatzdaten/2025-02')
+st, v = pruefen(INA, DATEN_F, upload='6' * 32)
+check('Verzeichniseintrag ohne gespeicherten Monat gilt als neu', st == 200 and v['teile'] == ['2025-02'] and v['zahlen']['neu'] == 1, (st, v.get('zahlen')))
+assert teil(INA, '2025-02', TEILE_F['2025-02'], upload='6' * 32)[0] == 200
+st, u = uebernehmen(INA, DATEN_F, v['stand'], upload='6' * 32)
+check('fehlender Monat wieder gespeichert, Prüfsumme wie vorher', st == 200 and (dokument('controlling-umsatzdaten/2025-02') or {}).get('hash') == FEB_SOLL, (st, u.get('error')))
+
+# ── Zwischenablage: Aufräumen schon beim Hochladen, Mengengrenze ──
+ALT = 'controlling-umsatzteile/' + 'f' * 32 + '-2025-05'
+if not storage_sqlite():
+    os.makedirs(os.path.join(datenordner(ALT), 'controlling-umsatzteile'), exist_ok=True)
+storage_write(ALT, {'von': 'x', 't': 0, 'monat': '2025-05', 'hash': '0' * 64, 'zeilen': []})
+if storage_sqlite():
+    import sqlite3
+    with sqlite3.connect(datenordner(ALT) + '/.sqlite/store.sqlite') as db:
+        db.execute('UPDATE documents SET mtime=? WHERE name=?', (1000, ALT))
+else:
+    os.utime(os.path.join(datenordner(ALT), ALT + '.php'), (1000, 1000))
+assert teil(INA, '2025-01', TEILE_A['2025-01'], upload='5' * 32)[0] == 200
+check('alter Teil verschwindet schon beim Hochladen eines Teils, ohne jede Übernahme', storage_raw(ALT) is None)
+for i in range(1200):
+    storage_write('controlling-umsatzteile/' + '4' * 32 + '-%04d-%02d' % (2000 + i // 12, i % 12 + 1), {'von': 'x', 't': 0, 'monat': '2000-01', 'hash': '0' * 64, 'zeilen': []})
+st, r = teil(INA, '2025-03', TEILE_A['2025-03'], upload='5' * 32)
+check('über der Mengengrenze der Zwischenablage: 429, der Teil wird nicht abgelegt', st == 429 and 'Importteile' in r.get('error', '')
+      and storage_raw('controlling-umsatzteile/' + '5' * 32 + '-2025-03') is None, (st, r))
+entfernen('controlling-umsatzteile/')   # Testreste, darunter der Teil der abgewiesenen Übernahme
+check('Zwischenablage nach dem Aufräumen des Tests leer', not storage_docs('controlling-umsatzteile'), list(storage_docs('controlling-umsatzteile')))
 
 # ── Auswertung (Server) ──
 check('Auswertung ohne Recht: 403', OLAF.call('controlling_umsatz_auswertung')[0] == 403 and OLAF.call('controlling_umsatz_daten')[0] == 403)

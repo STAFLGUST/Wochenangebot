@@ -6,7 +6,9 @@ modul = "einkauf"
 
 [aktion.einkauf]
 oberflaeche = "angebot.eingabe"
+zugang_gemeinsam = true   # Ansicht „Bedarf melden“ liegt noch im Angebotsbereich (eigene Oberfläche geplant)
 
 [aktion.einkauf_melden]
 oberflaeche = "angebot.eingabe"
 schreibend = true
+zugang_gemeinsam = true   # Ansicht „Bedarf melden“ liegt noch im Angebotsbereich (eigene Oberfläche geplant)
