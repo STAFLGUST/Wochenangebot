@@ -104,7 +104,11 @@ SUITES['sicherheit_druck'] = SUITES['bestellung']
 SUITES['integritaet'] = SUITES['bestellung']   # Dateiprüfung; Test-Mailserver für die Benachrichtigung
 SUITES['geraete'] = SUITES['bestellung']   # vertraute Geräte
 SUITES['bestand_pdf'] = (8790, 'data-seed', True)   # Bestand: Marke, MHD-Farben, PDF
-SUITES['passwortpruefung'] = (8790, 'data-seed', True, {'WA_PWNED_URL': 'http://127.0.0.1:{AUX}/range/%s'})   # Datenleck-Prüfung (nachgebauter Dienst)
+SUITES['passwortpruefung'] = (8790, 'data-seed', True, {   # Datenleck-Prüfung (nachgebauter Dienst); Postfach für die Benachrichtigung über den Kundenvorgang
+    'WA_PWNED_URL': 'http://127.0.0.1:{AUX}/range/%s',
+    'MAIL_SMTP_HOST': '127.0.0.1', 'MAIL_SMTP_PORT': '2526', 'MAIL_SMTP_SECURE': 'none', 'MAIL_SMTP_USER': 'portal@example.org',
+    'MAIL_SMTP_PASS': 'Test-Postfach-1', 'MAIL_FROM': 'angebot@example.org', 'MAIL_FROM_NAME': 'Standard-Fleisch',
+    'MAIL_REPLY_TO': 'verkauf@example.org', 'WA_URL': 'http://127.0.0.1:8790'})
 SUITES['app_web'] = SUITES['bestellung']   # App (mobile/) als Web-Build; braucht mobile/dist-web
 # Gruppen, die einen vorherigen Build brauchen: im vollen Lauf nur, wenn der Build vorliegt (sonst Hinweis)
 OPTIONAL = {'app_web': os.path.join(REPO, 'mobile', 'dist-web', 'index.html')}

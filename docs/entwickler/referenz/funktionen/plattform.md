@@ -523,7 +523,7 @@ _Postausgang von innen (ADR-007, Zielarchitektur Kundenseite Regel 4)_
 - `postausgang_lauf(jetzt)` – Ein Durchgang des Dienstes: fällige Aufträge abarbeiten, gelegentlich alle Vorgänge prüfen, Lebenszeichen schreiben.
 - `postausgang_ausfuehren(a)`
 - `postausgang_ereignisse(items)` – Ereignisse der Kundenseite: nur Sicherheitsereignisse (Anmeldesperre, Datenleck …), Texte gekürzt – Empfänger bestimmen die internen Einstellungen …
-- `postausgang_hinweis(a)` – Abmeldehinweis: Kunde aus den internen Stammdaten (nur die Kennung kommt aus dem Auftrag); nur wenn die Änderung dort auch gespeichert ist, höchstens …
+- `postausgang_hinweis(a)` – Abmeldehinweis: Kunde aus den internen Stammdaten (nur die Kennung kommt aus dem Auftrag); nur wenn die Änderung dort auch gespeichert ist.
 - `postausgang_bestellung(nr, versuche)` – Bestellwunsch: offene Versandaufträge senden; sicher nicht zugestellte nach POSTAUSGANG_WIEDERHOLEN erneut versuchen.
 - `postausgang_wieder(a, sekunden)`
 

@@ -387,7 +387,10 @@ Eintrag an das Monatsdokument `protokoll/<JJJJ-MM>` (UTC) an:
 - Kunden: IP nur bei fehlgeschlagener Anmeldung. Vorgänge mit Kundendaten (`LOG_KUNDENDATEN`) und Einträge der Rolle
   `kunde` sieht nur, wer `kunden.sehen` hat, Urlaubsvorgänge nur mit `hr.verwalten`. Maskiert wird an einer Stelle:
   `protokoll_maskieren($entries, $me)` in `lib/protokoll.php` – **jeder** Leser der Monatsdokumente ruft sie auf
-  (Aktion `log`, `sec_ereignisse`, Lagebild und Export des Moduls Sicherheit, GR-103). Ein neuer Leser muss das
+  (Aktion `log`, `sec_ereignisse`, Lagebild und Export des Moduls Sicherheit, GR-103). Auch die Benachrichtigung aus dem
+  Protokoll (`notify_from_audit`, `lib/benachrichtigung.php`) geht seit 15.11.2026 durch dieselbe Funktion – mit dem Leser
+  ohne Rechte, weil Empfänger einer E-Mail keine geprüften Rechte haben. Vorher trug sie bei Kundenvorgängen die Kunden-IP
+  und die Kennung des Zugangs nach außen, die der Eintrag selbst bewusst weglässt (Befund 15.11.2026). Ein neuer Leser muss das
   ebenfalls tun; ohne die Maskierung gäbe ein Recht wie `sicherheit.sehen` Kundenstammdaten, fremde Detaillisten und
   Postfachdaten heraus (Befund 05.11.2026). Verlauf und auffällige Adressen des Lagebilds bleiben unmaskiert: dort
   stehen nur Zahlen, Adressen und versuchte Benutzernamen – genau das, was das Recht `sicherheit.sehen` zusagt.

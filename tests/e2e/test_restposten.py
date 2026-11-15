@@ -156,6 +156,7 @@ code, r = A.call('kunden_restposten', {'offer': 'std', 'ids': [KS], 'publishedAt
 check('Wochenangebot customers get the Wochenangebot sale prices', code == 200 and r['results'][0]['ok'] and '6,66' in smtp.messages[-1]['text'])
 code, r = A.call('kunden_mail_vorschau', {'type': 'restposten', 'offer': 'edeka', 'id': KE})
 check('preview of sale mail', code == 200 and '6,11' in r['html'])
+check('preview without a valid unsubscribe code (Befund 15.11.2026)', '#abmelden=BEISPIEL' in r['html'] and ('#abmelden=' + KE) not in r['html'])
 
 # --- Eigene Artikelliste (Regel „hidden“): nur Artikel mit eigenem Eintrag – Sonderposten anderer Artikel erscheinen dort
 # nicht (früher: Sonderposten in jedem Angebot mit dieser Regel); Sonderpreis gilt für die eigenen Artikel (GR-005)

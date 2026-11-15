@@ -161,21 +161,28 @@ Ausgelöst von: {$me['name']}
             respond(['ok' => true]);
         }
 
+        /* Vorschau einer Kunden-E-Mail (ohne Versand). Dieselben Inhalte zeigt versand_vorschau im Modul Versand – darum
+           dasselbe Tor wie dort: Modulzugang „Versand“ für die Angebots- und Sonderposten-Mails und für Sonderposten
+           zusätzlich sonderposten.senden, weil darin die Sonderpreise eines Kundenangebots stehen (GR-002, GR-005).
+           Die Vorschau rendert den Kunden ohne Kennung (mail_vorschau_kunde): sie zeigt nie einen gültigen Abmeldecode. */
         case 'kunden_mail_vorschau': {
             $vme = require_auth(true);
             if (!may($vme, 'kunden.bearbeiten') && !may($vme, 'wochenangebot.senden')) fail('Dafür fehlt Ihnen die Berechtigung. Bitte an einen Administrator wenden.', 403);
             $b = body();
             $typ = in_array($b['type'] ?? '', ['woche', 'angebot', 'invite', 'reset', 'restposten'], true) ? $b['type'] : 'woche';
+            if ($typ !== 'invite' && $typ !== 'reset') require_modulzugang('versand');
             $c = null;
             foreach (customers_load()['customers'] as $x) if ($x['id'] === ($b['id'] ?? '')) $c = $x;
             if (!$c) $c = ['firma' => 'Musterkunde GmbH', 'ansprechpartner' => 'Frau Muster', 'email' => 'kunde@example.org', 'angebote' => [OFFER_STD], 'login' => ['username' => 'musterkunde']];
             if (!mail_base_url()) fail('Die Adresse der Angebotsseite für Links fehlt (DOMAIN bzw. WA_URL in .env).', 409);
+            $cv = mail_vorschau_kunde($c);
             if ($typ === 'restposten') {
+                require_perm('sonderposten.senden');
                 $def = offer_def((string)($b['offer'] ?? ''));
                 if (!$def) fail('Angebot nicht gefunden.', 404);
-                [$sub, , $html] = mail_tpl_restposten($c, $def, restposten_items($def), mb_substr(trim((string)($b['note'] ?? '')), 0, 1000));
-            } elseif ($typ === 'invite' || $typ === 'reset') [$sub, , $html] = mail_tpl_zugang($c, mail_base_url() . '/#zugang=BEISPIEL', $typ, time() + 86400 * TOKEN_DAYS[$typ]);
-            else [$sub, , $html] = mail_tpl_angebot($c, mb_substr(trim((string)($b['note'] ?? '')), 0, 1000), mail_week());
+                [$sub, , $html] = mail_tpl_restposten($cv, $def, restposten_items($def), mb_substr(trim((string)($b['note'] ?? '')), 0, 1000));
+            } elseif ($typ === 'invite' || $typ === 'reset') [$sub, , $html] = mail_tpl_zugang($cv, mail_base_url() . '/#zugang=BEISPIEL', $typ, time() + 86400 * TOKEN_DAYS[$typ]);
+            else [$sub, , $html] = mail_tpl_angebot($cv, mb_substr(trim((string)($b['note'] ?? '')), 0, 1000), mail_week());
             respond(['ok' => true, 'subject' => $sub, 'html' => $html, 'to' => $c['email'] ?? '']);
         }
 

@@ -2,7 +2,7 @@
 
 <!-- ERZEUGT von `python3 werkzeuge/doku.py erzeugen` – nicht von Hand ändern. Quelle: Funktionen und Kommentare im Code. Die CI prüft, dass diese Datei zum Code passt. -->
 
-55 Dateien, 840 Funktionen – in der Reihenfolge der Datei, **fett** die Abschnitte. Text = erste Aussage des Kommentars direkt über der Funktion (Python: Docstring). Übersicht aller Module: [README.md](README.md).
+55 Dateien, 841 Funktionen – in der Reihenfolge der Datei, **fett** die Abschnitte. Text = erste Aussage des Kommentars direkt über der Funktion (Python: Docstring). Übersicht aller Module: [README.md](README.md).
 
 ## `app/api/lib/angebote.php`
 
@@ -127,9 +127,10 @@ _E-Mails an Kunden, Abmelden, Bestellwunsch-Vorlagen, Einmal-Links, Versand_
 - `abmelde_token(kid)`
 - `abmelde_kunde(tok)`
 - `abmelde_url(c)`
+- `mail_vorschau_kunde(c)` – Kundensatz für eine Vorschau: ohne Kennung, damit abmelde_url() den Platzhalter „BEISPIEL“ einsetzt.
 - `abmelde_setzen(c, ab, via)` – Abmelden/Wiederanmelden speichern; true, wenn sich der Status geändert hat
 - `abmelde_melden(c, ab, via)`
-- `abmelde_hinweis_senden(c, ab, t)` – Hinweis an das Team über eine Ab- bzw. Wiederanmeldung ($t: Zeitpunkt der Änderung, UTC)
+- `abmelde_hinweis_senden(c, ab, t)` – Hinweis an das Team über eine Ab- bzw. Wiederanmeldung ($t: Zeitpunkt der Änderung, UTC).
 
 **Bestellwünsche**
 
