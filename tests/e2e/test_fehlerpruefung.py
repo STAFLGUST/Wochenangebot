@@ -1,6 +1,7 @@
 """Regressionstests der Design- und Fehlerprüfung: Angebots-IDs, Kundenpreise unter Zahlen-IDs, Einzelangebote
 (Senden, Leeren, Mengen, Hinweis/Titel/CSV im Portal), Kundenimport (Nummern ohne führende Null, Zeilen ohne Nummer),
-Rechte von mail_info und history_prev, Bestellwunsch mit verschobenen Positionen, Filter-Schublade (inert) und
+Rechte von mail_info und history_prev, Veröffentlichen nur mit dem Recht am Inhalt (Preisverlauf ohne Kundenpreise,
+entfernte Woche bleibt entfernt, draft_ping nur mit Modulzugang Angebot), Bestellwunsch mit verschobenen Positionen, Filter-Schublade (inert) und
 mobile Darstellung im Eingabebereich. Nur synthetische Testdaten; es werden keine echten E-Mails versendet."""
 import csv
 import io
