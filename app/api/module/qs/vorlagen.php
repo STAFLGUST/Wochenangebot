@@ -11,7 +11,8 @@ declare(strict_types=1);
    sie beim Tippen zerlegt) und Excel (Zellen, Kopf- und Fußzeilen). Groß/Klein, Umlaute und Leerzeichen egal; unbekannte
    Namen bleiben stehen. Unterstützt: .docx, .dotx, .xlsx, .xltx, .xlsm (Office Open XML); .dotx/.xltx werden beim Erzeugen
    zu .docx/.xlsx. ZIP ohne PHP-Erweiterung „zip“: gelesen werden nur die Textteile, alle anderen Einträge (Bilder, Makros)
-   werden unverändert übernommen. Grenzen gegen ZIP-Bomben: höchstens 2000 Einträge, je Textteil 30 MB entpackt. */
+   werden unverändert übernommen. Grenzen gegen ZIP-Bomben: höchstens 2000 Einträge, je Textteil 30 MB entpackt und
+   20000 Textelemente je Textteil (darüber gilt die Datei als nicht lesbar – der Aufwand bleibt nach oben beschränkt). */
 if (!defined('WA_API')) { http_response_code(404); exit; }   // nur über api/index.php nutzbar
 require_once __DIR__ . '/../../lib/dateiablage.php';
 
@@ -19,6 +20,10 @@ const QS_OFFICE = ['docx' => 'word', 'dotx' => 'word', 'xlsx' => 'excel', 'xltx'
 const QS_OFFICE_DOKUMENT = ['dotx' => 'docx', 'xltx' => 'xlsx'];   // Vorlagendatei → Dokument
 const QS_ZIP_EINTRAEGE = 2000;
 const QS_ZIP_TEIL_MAX = 30 * 1024 * 1024;
+/* Textelemente (<w:t>/<t>) samt Gruppenmarken je Textteil: in der Größenordnung der größten Listengrenzen des Moduls
+   (QS_MAX_MASSNAHMEN) und das Zehnfache von QS_ZIP_EINTRAEGE; hält auch preg_match_all unter dem PHP-Vorgabewert
+   memory_limit = 128M (gemessen etwa 2 KiB je Element). Darüber behandeln wir die Datei wie eine nicht lesbare. */
+const QS_XML_STUECKE_MAX = 20000;
 /* Platzhalter (Schlüssel ohne Umlaute, Leerzeichen und Satzzeichen) → Feld */
 const QS_PLATZHALTER = ['nr' => 'nr', 'nummer' => 'nr', 'doknr' => 'nr', 'dokumentennr' => 'nr', 'dokumentnr' => 'nr', 'titel' => 'titel',
     'kapitel' => 'kapitel', 'art' => 'art', 'zustaendig' => 'zustaendig', 'vertreter' => 'vertreter', 'version' => 'version', 'datum' => 'datum',
@@ -131,20 +136,20 @@ function qs_zip_bauen(array $eintraege, string $z): string
    $offen sammelt bekannte, aber nicht gefüllte Platzhalter. Rückgabe: Anzahl ersetzt. */
 function qs_stuecke_ersetzen(array &$seg, array $werte, array &$offen): int
 {
-    $voll = ''; $start = [];
-    foreach ($seg as $i => $s) { $start[$i] = strlen($voll); $voll .= $s['t']; }
+    $voll = ''; $start = []; $ende = [];   // Grenzen der Originalstücke (Ersetzungen weiter hinten verschieben sie nicht)
+    foreach ($seg as $i => $s) { $start[$i] = strlen($voll); $voll .= $s['t']; $ende[$i] = strlen($voll); }
     if (strpos($voll, '{{') === false || !preg_match_all(QS_PLATZHALTER_RE, $voll, $mm, PREG_SET_ORDER | PREG_OFFSET_CAPTURE)) return 0;
-    $n = 0;
+    $n = 0; $hi = count($seg) - 1;   // die Treffer kommen von hinten, darum sinkt der Zeiger nur: jedes Stück wird insgesamt einmal besucht
     foreach (array_reverse($mm) as $m) {
         $feld = qs_platzhalter_feld($m[1][0]);
         if ($feld === null) continue;
         if (!array_key_exists($feld, $werte)) { $offen[$feld] = true; continue; }
         $s = $m[0][1]; $e = $s + strlen($m[0][0]); $erst = true;
-        foreach ($seg as $i => $x) {
-            $a = $start[$i]; $b = $a + strlen($x['t']);   // Grenzen der Originalstücke (Ersetzungen weiter hinten verschieben sie nicht)
-            if ($b <= $s) continue;
-            if ($a >= $e) break;
-            $von = max($s, $a) - $a; $bis = min($e, $b) - $a;
+        while ($hi > 0 && $start[$hi] >= $e) $hi--;                 // letztes Stück, das in den Treffer hineinreicht
+        $lo = $hi; while ($lo > 0 && $ende[$lo - 1] > $s) $lo--;    // erstes Stück des Treffers
+        for ($i = $lo; $i <= $hi; $i++) {
+            if ($ende[$i] <= $s || $start[$i] >= $e) continue;
+            $von = max($s, $start[$i]) - $start[$i]; $bis = min($e, $ende[$i]) - $start[$i];
             $seg[$i]['t'] = substr($seg[$i]['t'], 0, $von) . ($erst ? (string)$werte[$feld] : '') . substr($seg[$i]['t'], $bis);
             $seg[$i]['neu'] = true;
             $erst = false;
@@ -153,11 +158,13 @@ function qs_stuecke_ersetzen(array &$seg, array $werte, array &$offen): int
     }
     return $n;
 }
-/* XML mit Gruppen (<w:p>/<si>/<is>) und Textelementen (<w:t>/<t>): Platzhalter je Gruppe ersetzen */
-function qs_xml_ersetzen(string $xml, string $gruppe, string $tt, array $werte, array &$offen, int &$n): string
+/* XML mit Gruppen (<w:p>/<si>/<is>) und Textelementen (<w:t>/<t>): Platzhalter je Gruppe ersetzen.
+   null, wenn der Teil mehr als QS_XML_STUECKE_MAX Elemente enthält (Grenze, bevor gerechnet wird). */
+function qs_xml_ersetzen(string $xml, string $gruppe, string $tt, array $werte, array &$offen, int &$n): ?string
 {
     $re = '#<' . $gruppe . '(?=[\s>/])[^>]*>|</' . $gruppe . '>|<' . $tt . '(?=[\s>])([^>]*)>(.*?)</' . $tt . '>#s';
     if (strpos($xml, '{{') === false || !preg_match_all($re, $xml, $mm, PREG_SET_ORDER | PREG_OFFSET_CAPTURE)) return $xml;
+    if (count($mm) > QS_XML_STUECKE_MAX) return null;
     $stapel = [[]]; $aenderungen = [];
     $abschliessen = function (array $seg) use ($werte, &$offen, &$n, &$aenderungen, $tt) {
         $k = $seg ? qs_stuecke_ersetzen($seg, $werte, $offen) : 0;
@@ -178,9 +185,10 @@ function qs_xml_ersetzen(string $xml, string $gruppe, string $tt, array $werte, 
         } elseif (substr($tag, -2) !== '/>') $stapel[] = [];
     }
     while ($stapel) $abschliessen(array_pop($stapel));
-    usort($aenderungen, function ($a, $b) { return $b[0] <=> $a[0]; });
-    foreach ($aenderungen as [$pos, $laenge, $neu]) $xml = substr_replace($xml, $neu, $pos, $laenge);
-    return $xml;
+    usort($aenderungen, function ($a, $b) { return $a[0] <=> $b[0]; });
+    $aus = ''; $p = 0;   // in einem Durchgang zusammensetzen (je Änderung einmal substr_replace wäre quadratisch)
+    foreach ($aenderungen as [$pos, $laenge, $neu]) { $aus .= substr($xml, $p, $pos - $p) . $neu; $p = $pos + $laenge; }
+    return $aus . substr($xml, $p);
 }
 /* Kopf- und Fußzeilen in Excel (Text mit Steuerzeichen „&“: ein echtes & wird „&&“) */
 function qs_excel_kopf_ersetzen(string $xml, array $werte, array &$offen, int &$n): string
@@ -217,8 +225,10 @@ function qs_office_fuellen(string $daten, string $art, array $werte, bool $alsDo
         $vorher = $n; $neu = $xml;
         if ($word) $neu = qs_xml_ersetzen($xml, 'w:p', 'w:t', $werte, $offen, $n);
         elseif ($strings) $neu = qs_xml_ersetzen($xml, 'si', 't', $werte, $offen, $n);
-        elseif ($blatt) $neu = qs_excel_kopf_ersetzen(qs_xml_ersetzen($xml, 'is', 't', $werte, $offen, $n), $werte, $offen, $n);
+        elseif ($blatt) $neu = qs_xml_ersetzen($xml, 'is', 't', $werte, $offen, $n);
         else $neu = str_replace(['wordprocessingml.template.main+xml', 'spreadsheetml.template.main+xml'], ['wordprocessingml.document.main+xml', 'spreadsheetml.sheet.main+xml'], $xml);
+        if ($neu === null) return null;   // zu viele Textelemente: wie eine nicht lesbare Datei behandeln
+        if ($blatt) $neu = qs_excel_kopf_ersetzen($neu, $werte, $offen, $n);
         if ($neu !== $xml) { $z[$name]['neu'] = $neu; $geaendert = true; }
         elseif ($n !== $vorher) $geaendert = true;
     }

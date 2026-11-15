@@ -14,7 +14,8 @@ Monatsverlauf, Zuweisung an Mitarbeiter); Nachweise (Zukunft, Abweichung nur mit
 „Kontrollen durchführen“, Maßnahme nur mit „bearbeiten“, stornieren nur eigene, storniert zählt nicht); Maßnahmen im Aufbau des
 IFS-Maßnahmenplans (Nummer je Jahr, Bewertung, Korrektur, Ursache, wirksam nur mit Freigaberecht und Notiz, abgeschlossene nur
 mit Freigaberecht ändern); CSV (BOM, keine Formeln, Protokoll); Datenpaket (Format, Vorschau mit Fehlern je Eintrag, nichts halb
-übernommen, nur leer oder „ersetzen“, Versionen aus der Excel, Kürzel als Schnappschuss, Einstellungen bleiben); Protokoll ohne
+übernommen, nur leer oder „ersetzen“, Versionen nur mit Freigaberecht und mit zwei Kürzeln für erstellt und geprüft
+(4-Augen-Prinzip), Versionen aus der Excel, Kürzel als Schnappschuss, Einstellungen bleiben); Protokoll ohne
 Texte; Oberfläche (Übersicht mit Kennzahlen und „Ihre Aufgaben“, Dokumente mit Zustandsfilter und Seitenleiste bis zur Freigabe
 durch eine zweite Person, Überprüfung, Handbuch mit Ziel, Suche und Verweisen, Jahresplan mit Nachweis und Maßnahme, eigene
 Kontrolle mit „Kontrollen durchführen“, Maßnahmen-Tafel und IFS-Maske, Einstellungen mit Mitarbeitern, Überprüfungsfrist und
@@ -74,7 +75,8 @@ NUTZER = (('lisa', 'Lisa Lesen', 'viewer', 'Leserin-Konto-12', {'grant': ['qs.se
           ('fritz', 'Fritz Freigabe', 'editor', 'Freigabe-Konto-78', {'grant': ['qs.freigeben']}),
           ('vera', 'Vera Verwalten', 'editor', 'Verwalt-Konto-90', {'grant': ['qs.verwalten']}),
           ('otto', 'Otto Ohne', 'editor', 'Ohne-Konto-11', {}),
-          ('kai', 'Kai Kontrolle', 'editor', 'Kontroll-Konto-22', {'grant': ['qs.nachweis']}))
+          ('kai', 'Kai Kontrolle', 'editor', 'Kontroll-Konto-22', {'grant': ['qs.nachweis']}),
+          ('uwe', 'Uwe Uebernahme', 'editor', 'Uebernahm-Konto-24', {'grant': ['qs.verwalten', 'qs.freigeben']}))
 for u, n, r, p, extra in NUTZER:
     st, r_ = A.call('user_save', {'id': '', 'name': n, 'username': u, 'role': r, 'active': True, 'password': p, 'mustChange': False, **extra})
     assert st == 200, r_
@@ -83,6 +85,7 @@ K = {}
 for i, (u, _, _, p, _) in enumerate(NUTZER):
     K[u] = Client(f'198.51.100.{10 + i}'); K[u].call('login', {'username': u, 'password': p})
 L, Be, Q, F, V, O, KA, N = K['lisa'], K['bernd'], K['quinn'], K['fritz'], K['vera'], K['otto'], K['kai'], Client('198.51.100.30')
+U = K['uwe']   # verwalten und freigeben: nur so lässt sich ein Datenpaket mit Dokumentenversionen übernehmen
 
 # ── Register und Freigabe ──
 mod = {m['id']: m for m in A.call('module_status')[1]['module']}['qs']
@@ -435,25 +438,30 @@ for x in paket['dokumente']:
     if x['nr'] == '1.4-F02':
         x['versionen'][0]['datum'] = tag(-30)   # aktuell freigegeben (Überprüfung erst in drei Jahren)
 check('Datenpaket nur mit „verwalten“ (Freigabe 403)', Q.call('qs_import', {'paket': paket, 'vorschau': True})[0] == 403)
+st, r = V.call('qs_import', {'paket': paket, 'vorschau': True})
+check('Datenpaket mit Versionen macht Dokumente gültig: „verwalten“ allein → 403', st == 403 and 'freigeben' in r.get('error', ''), (st, r))
+check('Datenpaket ohne Versionen: „verwalten“ genügt', V.call('qs_import', {'paket': {'format': 'stafl-qs', 'version': 1, 'kapitel': paket['kapitel']}, 'vorschau': True})[0] == 200)
 check('falsches Format → 422', V.call('qs_import', {'paket': {'format': 'stafl-leergut', 'version': 1}, 'vorschau': True})[0] == 422)
 kaputt = json.loads(json.dumps(paket))
 kaputt['dokumente'][1]['nr'] = kaputt['dokumente'][0]['nr']
 kaputt['dokumente'][2]['versionen'].append({'nr': 2, 'datum': '2024-01-01'})
 kaputt['dokumente'][6]['versionen'] = [{'nr': 1}]
+kaputt['dokumente'][3]['versionen'][0]['geprueft'] = kaputt['dokumente'][3]['versionen'][0]['erstellt']   # 4-Augen-Prinzip
 kaputt['handbuch'][0]['kapitel'] = '9.9'
 kaputt['pruefungen'][0]['intervall'] = 'nie'
 kaputt['massnahmen'][0]['bewertung'] = 'Z'
-st, r = V.call('qs_import', {'paket': kaputt, 'vorschau': True})
+st, r = U.call('qs_import', {'paket': kaputt, 'vorschau': True})
 teile = sorted((f['teil'], f['zeile']) for f in r.get('fehler', []))
-check('Vorschau: Fehler je Eintrag (doppelte Nr., doppelte Version, Ordner mit Version, Kapitel, Intervall, Bewertung)', st == 200
-      and teile == [('dokumente', 2), ('dokumente', 3), ('dokumente', 7), ('handbuch', 1), ('massnahmen', 1), ('pruefungen', 1)] and r['leer'] is False, r)
+check('Vorschau: Fehler je Eintrag (doppelte Nr., doppelte Version, 4-Augen-Prinzip, Ordner mit Version, Kapitel, Intervall, Bewertung)', st == 200
+      and teile == [('dokumente', 2), ('dokumente', 3), ('dokumente', 4), ('dokumente', 7), ('handbuch', 1), ('massnahmen', 1), ('pruefungen', 1)] and r['leer'] is False, r)
+check('Vorschau: gleiches Kürzel für erstellt und geprüft nennt das 4-Augen-Prinzip', any('4-Augen' in f['text'] for f in r.get('fehler', [])), r.get('fehler'))
 anzahl_vorher = len(L.call('qs_start')[1]['dokumente'])
-st, r = V.call('qs_import', {'paket': kaputt})
+st, r = U.call('qs_import', {'paket': kaputt})
 check('mit Fehlern: nichts übernommen (422)', st == 422 and len(L.call('qs_start')[1]['dokumente']) == anzahl_vorher == 3, r)
-st, r = V.call('qs_import', {'paket': paket})
+st, r = U.call('qs_import', {'paket': paket})
 check('Daten vorhanden ohne „ersetzen“ → 409', st == 409, r)
 V.call('qs_stamm_save', {'einstellungen': {'ueberpruefungMonate': 48}})
-st, r = V.call('qs_import', {'paket': paket, 'ersetzen': True})
+st, r = U.call('qs_import', {'paket': paket, 'ersetzen': True})
 check('Datenpaket übernommen (ersetzt): Zahlen', st == 200 and r['zahlen'] == {'kapitel': 4, 'personen': 4, 'dokumente': 9, 'versionen': 7, 'handbuch': 5, 'pruefungen': 6, 'massnahmen': 1}, r)
 d = L.call('qs_start')[1]
 check('Einstellungen bleiben beim Ersetzen (48 Monate)', d['einstellungen']['ueberpruefungMonate'] == 48, d['einstellungen'])
@@ -674,8 +682,8 @@ with sync_playwright() as p:
     check('390px: kein waagerechtes Scrollen (Kai)', pg.evaluate('document.documentElement.scrollWidth <= window.innerWidth + 1'))
     ctx.close()
 
-    # Vera: Einstellungen und Datenpaket
-    ctx, pg = anmelden('vera', 'Verwalt-Konto-90', '198.51.100.14')
+    # Uwe: Einstellungen und Datenpaket (verwalten und freigeben – ein Paket mit Versionen braucht beides)
+    ctx, pg = anmelden('uwe', 'Uebernahm-Konto-24', '198.51.100.17')
     pg.click('#qm-tabs [data-tab="einstellungen"]')
     check('Einstellungen: Kapitel und Personen als Eingabezeilen, Verknüpfung, Überprüfungsfrist', pg.locator('#qm-e-kapitel tr').count() == 4 and pg.locator('#qm-e-personen tr').count() == 4
           and pg.input_value('#qm-e-personen tr:first-child [data-f="mitarbeiter"]') == ids['quinn'] and pg.input_value('#qm-e-monate') == '36')
@@ -695,6 +703,10 @@ with sync_playwright() as p:
     pg.set_input_files('#qm-e-datei', PAKET_DATEI); pg.wait_for_selector('#qm-e-vorschau .qm-vorschau')
     check('Datenpaket: Vorschau mit Zahlen, „ersetzen“ angeboten (Modul nicht leer)', '9' in text(pg, '#qm-e-vorschau') and pg.is_visible('#qm-e-ersetzen') and pg.is_enabled('#qm-e-uebernehmen'))
     pg.screenshot(path=os.path.join(SH, 'qs_einstellungen_1280.png'), full_page=True)
+    pg.set_viewport_size({'width': 390, 'height': 844})
+    pg.screenshot(path=os.path.join(SH, 'qs_einstellungen_390.png'), full_page=True)
+    check('390px Einstellungen: kein waagerechtes Scrollen', pg.evaluate('document.documentElement.scrollWidth <= window.innerWidth + 1'))
+    pg.set_viewport_size({'width': 1280, 'height': 900})
     pg.click('#qm-e-uebernehmen'); pg.wait_for_selector('#qm-e-meldung:not(:empty)')
     check('ohne „ersetzen“: Hinweis, nichts übernommen', 'ersetzen' in text(pg, '#qm-e-meldung'))
     ctx.close()
