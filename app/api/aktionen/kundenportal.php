@@ -378,7 +378,9 @@ switch ($action) {
             $c = abmelde_kunde((string)($b['token'] ?? ''));
             if (!$c) { attempts_record(false, 'kundelink'); fail('Dieser Abmeldelink ist ungültig. Bitte wenden Sie sich direkt an uns.', 404); }
             $ab = empty($b['wieder']);
-            if (abmelde_setzen($c, $ab, 'link')) abmelde_melden($c, $ab, 'link');
+            // auch der gelungene Wechsel zählt für die Adressbremse ($CFG['max_attempts'] je Stunde): sonst ließe sich mit einem
+            // abgeflossenen Abmeldecode unbegrenzt am Kundendokument schreiben und protokollieren (kein Login, kein CSRF)
+            if (abmelde_setzen($c, $ab, 'link')) { attempts_record(false, 'kundelink'); abmelde_melden($c, $ab, 'link'); }
             respond(['ok' => true, 'subscribed' => !$ab]);
         }
 
@@ -388,7 +390,7 @@ switch ($action) {
             attempts_check('kundelink');
             $c = abmelde_kunde((string)($_GET['t'] ?? ''));
             if (!$c) { attempts_record(false, 'kundelink'); fail('Ungültiger Abmeldelink.', 404); }
-            if (abmelde_setzen($c, true, '1klick')) abmelde_melden($c, true, '1klick');
+            if (abmelde_setzen($c, true, '1klick')) { attempts_record(false, 'kundelink'); abmelde_melden($c, true, '1klick'); }
             respond(['ok' => true]);
         }
 }

@@ -417,7 +417,15 @@ sonst ließe sich der Zugang über die Schnittstelle umgehen. `publish` verlangt
 `versand_veroeffentlichen` die `revision` als Pflichtfeld und nimmt ein Modell im Anfragekörper nur von jemandem an, der
 `angebot.bearbeiten` hat: der Inhalt (Preise, Kundenpreise, Bezeichnungen, Werbung und die Kalenderwoche – und mit ihr die
 Schnappschüsse in Preisverlauf und Wochenablage) gehört zum Bearbeitungsrecht. Wer nur freigeben darf, veröffentlicht den
-gespeicherten, geprüften Entwurf (`angebot_veroeffentlichen(null, $revision)`). `angebot.veroeffentlichen` hat bewusst keine Voraussetzung `r`
+gespeicherten, geprüften Entwurf (`angebot_veroeffentlichen(null, $revision)`).
+
+Ebenso die alte Vorschau `kunden_mail_vorschau` (seit
+15.11.2026): für „woche“/„angebot“/„restposten“ den Modulzugang, für „restposten“ zusätzlich `sonderposten.senden`, weil
+darin die Sonderpreise eines Kundenangebots stehen (GR-002, GR-005, Befund 15.11.2026). Vorschauen zeigen außerdem nie
+einen wirksamen Code: der Kundensatz geht ohne Kennung in die Vorlage (`mail_vorschau_kunde()`, `lib/kundenmail.php`),
+damit `abmelde_url()` den Platzhalter `BEISPIEL` einsetzt – wie `#zugang=BEISPIEL` bei Einladung und Passwort-Link.
+
+`angebot.veroeffentlichen` hat bewusst keine Voraussetzung `r`
 auf den Zugang: `rights_close` würde ihn sonst jedem Bearbeiter mitgeben. Folge für die Vergabe: Bearbeiter haben
 `angebot.veroeffentlichen` als Standard ihrer Rolle – wer ihnen `versand.zugang` gibt, gibt ihnen das Veröffentlichen; für
 „nur ansehen“ das Recht in der Rolle abwählen oder bei der Person verbieten. Die Änderungsliste mit Preisen
@@ -461,7 +469,13 @@ Kunden sind eine eigene, externe Nutzergruppe (Dokument `kunden`, Zugang im Feld
 
 - **Anmeldung:** `kunde_login` (`aktionen/kundenportal.php`) mit Sperre nach Fehlversuchen, vertrauten Geräten und
   optionaler Datenleck-Prüfung; Passwort festlegen über Einmal-Link (`kunde_token_*`). Ungültige Links (auch Abmeldelinks)
-  zählen im eigenen Bereich `kundelink` (`attempts_key`), nie im Kunden-Login. `kunde_save` verwirft einen offenen Link,
+  zählen im eigenen Bereich `kundelink` (`attempts_key`), nie im Kunden-Login. Beim Abmeldelink zählt seit 15.11.2026 auch
+  der **gelungene** Wechsel (`kunde_abmelden`, `abmelden1`, nur wenn sich der Stand wirklich ändert): der Code gilt
+  unbefristet, ohne Anmeldung und ohne CSRF-Prüfung – ohne diese Zählung wäre er ein unbegrenzt wiederholbarer
+  Schreibzugriff auf das Kundendokument samt Protokolleintrag und Hinweis-E-Mail (Befund 15.11.2026). Es gilt dieselbe
+  Grenze wie bei den Fehlversuchen (`max_attempts` je Stunde und Adresse, danach `lock_minutes` Sperre); die Hinweis-Mails
+  begrenzt zusätzlich `POSTAUSGANG_HINWEIS_TAG` (10 je Kunde und Tag, geprüft in `abmelde_hinweis_senden()` – also auf
+  beiden Versandwegen, mit und ohne Dienst „postausgang“). `kunde_save` verwirft einen offenen Link,
   wenn sich die E-Mail-Adresse ändert oder Kunde bzw. Zugang gesperrt wird.
 - **Sitzung:** `kunde_sign_in()` (`lib/kundenmail.php`) vergibt eine neue Sitzungskennung und setzt nur Kundenschlüssel
   (`kid`, `ksv`, `kseen`, `kcsrf`, `ksid`) plus Eintrag im Register `kundensitzungen`. `current_customer()`

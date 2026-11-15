@@ -13,7 +13,8 @@ import time
 from playwright.sync_api import sync_playwright
 
 from kunden_hilfe import Client
-from umgebung import AUX_PORT, BASE, WORK, storage_raw, storage_write
+from smtp_test import TestSmtp
+from umgebung import AUX_PORT, BASE, SMTP_PORT, WORK, storage_raw, storage_write, until
 
 PW = 'Sicheres-Passwort-1'
 GELEAKT = 'Konto-Passwort-9'       # gilt im nachgebauten Dienst als 42-mal geleakt
@@ -119,6 +120,27 @@ check('unauffälliges Passwort: keine Pflicht', st == 200 and not r['user']['mus
 K = Client('203.0.113.30')
 st, r = K.call('kunde_login', {'username': 'kantine.leck', 'password': GELEAKT})
 check('Kunde mit betroffenem Passwort: muss sofort ändern (Grund: Datenleck)', st == 200 and r['kunde']['mustChange'] is True and r['kunde'].get('mustChangeGrund') == 'datenleck', (st, r))
+# Benachrichtigung über einen Kundenvorgang: wie im Protokoll ohne IP-Adresse und ohne Kennung des Zugangs (Befund 15.11.2026)
+smtp = TestSmtp(SMTP_PORT, password='Test-Postfach-1')
+A.call('benachrichtigung_save', {'events': {'sicherheit': {'on': True, 'to': 'it@example.org'}}})
+storage_write('benachrichtigung-stand', {})
+ku = doc('kunden')
+for x in ku['customers']:
+    if (x.get('login') or {}).get('username') == 'kantine.leck': x['login'].pop('leakGeprueft', None)
+storage_write('kunden', ku)   # noch einmal prüfen lassen (sonst nur einmal je Passwort)
+st, r = Client('203.0.113.31').call('kunde_login', {'username': 'kantine.leck', 'password': GELEAKT})
+check('… Ereignis erneut erkannt', st == 200 and r['kunde']['mustChange'] is True, (st, r))
+check('… Benachrichtigung verschickt', until(lambda: any('Sicherheitsereignisse' in x['subject'] for x in smtp.messages), 8), [x['subject'] for x in smtp.messages])
+mail = next((x for x in smtp.messages if 'Sicherheitsereignisse' in x['subject']), {'text': '', 'html': '', 'subject': ''})
+txt = mail['text'] + mail['html'] + mail['subject']
+check('… Benachrichtigung ohne Kunden-IP, ohne Kennung und ohne Klartext (wie protokoll_maskieren im Protokoll)',
+      'IP-Adresse' not in txt and '203.0.113.31' not in txt and 'kantine.leck' not in txt and 'Datenlecks gefunden' not in txt
+      and 'Vorgang mit Kundendaten' in txt and 'Kunde' in txt, txt[:600])
+check('… Protokolleintrag bleibt vollständig (nur die Benachrichtigung ist maskiert)',
+      any(e['a'] == 'security' and 'kantine.leck' in e['s'] and e['ip'] == '' for e in protokoll()),
+      [e for e in protokoll() if e['a'] == 'security'][-1:])
+A.call('benachrichtigung_save', {'events': {'sicherheit': {'on': False, 'to': 'it@example.org'}}})
+
 st, r = K.call('kunde_passwort', {'current': GELEAKT, 'password': GELEAKT})
 check('… Kunde kann kein Passwort aus einem Datenleck wählen', st == 422, (st, r))
 st, r = K.call('kunde_passwort', {'current': GELEAKT, 'password': NEU})
