@@ -135,12 +135,16 @@ check('mit „Preisverlauf bearbeiten“ nimmt das Veröffentlichen die Woche wi
 
 # ---------- Preisverlauf und Abgleich ohne Modulzugang Angebot ----------
 lea([], ['angebot.zugang'])
+# Seit dem Modulzugangstor (#360, in main) sperrt schon der API-Einstieg die ganze Aktion – strenger als das
+# Herausfiltern der Kundenpreise. Dass trotzdem gefiltert wird, prueft der Fall *mit* Modulzugang darunter.
 st, r = L.call('history_data')
-check('history_data ohne Modulzugang Angebot: keine Kundenpreise', st == 200 and '"variants"' not in json.dumps(r, ensure_ascii=False), st)
+check('history_data ohne Modulzugang Angebot gesperrt', st == 403 and r.get('code') == 'kein_modulzugang', (st, r))
 st, r = L.call(f'history_prev&week={KW["week"] + 1}&year={KW["year"]}')
-check('history_prev ohne Modulzugang Angebot: keine Kundenpreise', st == 200 and '"variants"' not in json.dumps(r, ensure_ascii=False), (st, r))
+check('history_prev ohne Modulzugang Angebot gesperrt', st == 403 and r.get('code') == 'kein_modulzugang', (st, r))
 check('draft_ping ohne Modulzugang Angebot gesperrt', L.call('draft_ping', {})[0] == 403)
 lea([], [])
+st, r = L.call('history_data')
+check('history_data mit Modulzugang Angebot: keine Kundenpreise (GR-002)', st == 200 and '"variants"' not in json.dumps(r, ensure_ascii=False), st)
 st, r = L.call(f'history_prev&week={KW["week"] + 1}&year={KW["year"]}')
 vor = next((i for i in (r.get('week') or {}).get('items', []) if i['code'] == entwurf['items'][0]['code']), None)
 check('history_prev mit Modulzugang Angebot: Vorwochenpreis des Kundenangebots aus dem Wochenstand', st == 200 and vor
