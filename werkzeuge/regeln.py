@@ -697,6 +697,14 @@ WARTUNG_FREI_SCHREIBEND = {"login", "login_2fa", "logout", "setup", "passkey_log
 # Aktionen, die von fremden Seiten kommen dürfen (GR-109): Ein-Klick-Abmeldung nach RFC 8058 – das E-Mail-Programm sendet
 # das Formular selbst; geschützt durch den Abmelde-Schlüssel im Link. Erweiterung nur mit Begründung im PR.
 FREMDE_HERKUNFT = {"abmelden1"}
+# Aktionen des gemeinsamen Eingabebereichs, die ein anderes Modul als ihr eigenes bedienen und die deshalb ohne den
+# Modulzugang ihres Moduls laufen (GR-103: autorisiert dort das Fachrecht, geprüft bleibt der Modulzugang des Hosts).
+# Erweiterung nur im Plattform-PR mit Begründung – jede weitere Aktion hier macht einen Modulzugang ein Stück wirkungslos.
+# Heute: Stammdaten, Kunden und Kundengruppen braucht der Angebotseditor (Einzel-, Sonder- und Kundenangebote);
+# Angebotsliste, Kundenzugangs-Mail und Postfach-Kurzinfo braucht die Kundenverwaltung; Einkauf hat seine Ansicht
+# („Bedarf melden“) noch im Angebotsbereich, eine eigene Oberfläche ist erst geplant.
+ZUGANG_GEMEINSAM = {"master", "master_save", "vkgruppen", "angebotskategorien", "kunden", "kundengruppen",
+                    "offers", "kunde_mail", "mail_info", "einkauf", "einkauf_melden"}
 CASE_RE = re.compile(r"case '([a-z0-9_]+)'")
 GLEICH_RE = re.compile(r"\$action === '([a-z0-9_]+)'")
 
@@ -729,7 +737,8 @@ def aktionen_tabelle(rw: Regelwerk) -> dict:
                          "schreibend": a.get("schreibend", False), "oeffentlich": a.get("oeffentlich", False),
                          "kunden_wartung": a.get("kunden_wartung", False), "wartung_frei": a.get("wartung_frei", False),
                          "fremde_herkunft": a.get("fremde_herkunft", False),
-                         "lokale_anmeldung": a.get("lokale_anmeldung", False)}
+                         "lokale_anmeldung": a.get("lokale_anmeldung", False),
+                         "zugang_gemeinsam": a.get("zugang_gemeinsam", False)}
     return tab
 
 
@@ -746,12 +755,14 @@ def aktionen_php(rw: Regelwerk) -> str:
          "   öffentlich (ohne Mitarbeiter-Anmeldung, keine IP-/Ländersperre des Eingabebereichs) und kunden_wartung",
          "   (pausiert im Wartungsmodus der Angebotsseite), wartung_frei (bleibt bei Wartung der Oberfläche erreichbar:",
          "   Anmeldung, Abmelden, Status), fremde_herkunft (darf von fremden Seiten kommen – nur Ein-Klick-Abmeldung,",
-         "   GR-109), lokale_anmeldung (eigenes Anmeldeverfahren – auf Keycloak-Hosts gesperrt, GR-110).",
+         "   GR-109), lokale_anmeldung (eigenes Anmeldeverfahren – auf Keycloak-Hosts gesperrt, GR-110),",
+         "   zugang_gemeinsam (Aktion des gemeinsamen Eingabebereichs für ein anderes Modul: geprüft wird nur der",
+         "   Modulzugang des Hosts, nicht der des eigenen Moduls – GR-103, autorisiert das Fachrecht).",
          "   Bei Konflikten nach einem Rebase einfach neu erzeugen. */",
          "if (!defined('WA_API')) { http_response_code(404); exit; }   // nur über api/index.php nutzbar", "",
          "const AKTIONEN = ["]
     for name, a in sorted(aktionen_tabelle(rw).items()):
-        felder = ", ".join(f"'{k}' => {php_wert(a[k])}" for k in ("modul", "oberflaeche", "schreibend", "oeffentlich", "kunden_wartung", "wartung_frei", "fremde_herkunft", "lokale_anmeldung"))
+        felder = ", ".join(f"'{k}' => {php_wert(a[k])}" for k in ("modul", "oberflaeche", "schreibend", "oeffentlich", "kunden_wartung", "wartung_frei", "fremde_herkunft", "lokale_anmeldung", "zugang_gemeinsam"))
         z.append(f"    '{name}' => [{felder}],")
     z.append("];")
     return "\n".join(z) + "\n"
@@ -837,7 +848,7 @@ def pruefe_aktionen(rw: Regelwerk) -> None:
                 rw.f(f"{wo}: schon in {gesehen[name]} registriert – jede Aktion gehört genau einem Modul")
                 continue
             gesehen[name] = ort
-            unbekannt = set(a) - {"oberflaeche", "schreibend", "oeffentlich", "kunden_wartung", "wartung_frei", "fremde_herkunft", "lokale_anmeldung"}
+            unbekannt = set(a) - {"oberflaeche", "schreibend", "oeffentlich", "kunden_wartung", "wartung_frei", "fremde_herkunft", "lokale_anmeldung", "zugang_gemeinsam"}
             if unbekannt:
                 rw.f(f"{wo}: unbekannte Felder {', '.join(sorted(unbekannt))}")
             ob = oberflaechen.get(a.get("oberflaeche", ""))
@@ -845,7 +856,7 @@ def pruefe_aktionen(rw: Regelwerk) -> None:
                 rw.f(f"{wo}: oberflaeche „{a.get('oberflaeche', '')}“ gibt es nicht (Form <modul>.<oberfläche>)")
             if a.get("schreibend", False) not in (True, False, "post"):
                 rw.f(f"{wo}: schreibend muss true, false oder \"post\" sein")
-            for feld in ("oeffentlich", "kunden_wartung", "wartung_frei", "fremde_herkunft", "lokale_anmeldung"):
+            for feld in ("oeffentlich", "kunden_wartung", "wartung_frei", "fremde_herkunft", "lokale_anmeldung", "zugang_gemeinsam"):
                 if not isinstance(a.get(feld, False), bool):
                     rw.f(f"{wo}: {feld} muss true oder false sein")
             if ob and a.get("oeffentlich") and ob.get("art") != "extern":
@@ -858,6 +869,8 @@ def pruefe_aktionen(rw: Regelwerk) -> None:
                 rw.f(f"{wo}: wartung_frei nur für Mitarbeiter-Aktionen (öffentliche regelt kunden_wartung)")
             if a.get("fremde_herkunft") and (not a.get("oeffentlich") or a.get("schreibend") or name not in FREMDE_HERKUNFT):
                 rw.f(f"{wo}: fremde_herkunft nur für die festgelegten öffentlichen, nicht schreibenden Aktionen {sorted(FREMDE_HERKUNFT)} (GR-109)")
+            if a.get("zugang_gemeinsam") and (name not in ZUGANG_GEMEINSAM or a.get("oberflaeche") != "angebot.eingabe"):
+                rw.f(f"{wo}: zugang_gemeinsam nur für die festgelegten Aktionen des gemeinsamen Eingabebereichs {sorted(ZUGANG_GEMEINSAM)} (GR-103)")
             if a.get("wartung_frei") and a.get("schreibend") is True and name not in WARTUNG_FREI_SCHREIBEND:
                 rw.f(f"{wo}: schreibende Aktion als wartung_frei – nur Anmeldung und eigener Zugang erlaubt (GR-107)")
     code = aktionen_im_code(rw.wurzel)

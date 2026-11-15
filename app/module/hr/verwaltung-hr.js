@@ -14,6 +14,10 @@
   const W = window.WA;
   if (!W) return;
   const { $, $$, api, esc, icon, toast, may, confirmBox } = W;
+  /* HR-Angaben nur mit Fachrecht UND Modulzugang HR: der Server verlangt für jede HR-Aktion beides, auf jedem Host
+     (lib/rechte.php, modul_zugang_durchsetzen, GR-103). Ohne den Zugang stünde hier sonst eine Ansicht, die nichts
+     laden kann; verbindlich ist allein die Prüfung auf dem Server. */
+  const darfHr = () => may('hr.verwalten') && may('hr.zugang');
   const WT = ['Mo', 'Di', 'Mi', 'Do', 'Fr', 'Sa', 'So'];
   const zahl = (n) => window.STAFL_FORMAT.zahl(Math.round(Number(n || 0) * 2) / 2, 0, 1);   // halbe Tage, echtes Minus wie überall
   let daten = null;                      // Antwort von mitarbeiter_hr (aktuelles Jahr)
@@ -26,7 +30,7 @@
   const verfallText = (d) => (d && d.verfallAb ? `erstmals am ${tagMonat(d.uebertragBis)}${d.verfallAb}` : `jedes Jahr am ${tagMonat(d && d.uebertragBis)}`);
 
   async function laden() {
-    if (!may('hr.verwalten')) { daten = null; return null; }
+    if (!darfHr()) { daten = null; return null; }
     daten = await api('mitarbeiter_hr&jahr=' + JAHR);
     return daten;
   }
@@ -44,7 +48,7 @@
 
   /* ---------- HR-Teil im Dialog ---------- */
   function formular(uid) {
-    if (!may('hr.verwalten')) return '';
+    if (!darfHr()) return '';
     const p = uid ? person(uid) : null;
     const abt = [...new Set((daten ? daten.personen : []).map((x) => x.abteilung).filter(Boolean))].sort((a, b) => a.localeCompare(b, 'de'));
     // Abteilungen aus den Stammdaten (Stammdaten → Abteilungen, Inhaber 10.11.2026): Auswahl statt freiem Text. Eine Abteilung
@@ -106,7 +110,7 @@
   /* HR-Angaben aus dem Formular speichern (nach dem Speichern des Mitarbeiters, mit dessen Kennung) */
   async function speichern(uid, form) {
     const teil = form.querySelector('#hr-teil');
-    if (!teil || !may('hr.verwalten')) return;
+    if (!teil || !darfHr()) return;
     if (!daten) await laden();
     const wert = (n) => form.querySelector(`[name="${n}"]`).value;
     const body = { nutzer: uid, rev: daten.rev, personalnummer: wert('hr_personalnummer').trim(), pos: Number(wert('hr_pos') || 0),
@@ -125,7 +129,7 @@
 
   /* Hinweis: Einträge der Urlaubsliste ohne Mitarbeiter (Altbestand) übernehmen */
   function altbestand() {
-    if (!daten || !may('hr.verwalten')) return '';
+    if (!daten || !darfHr()) return '';
     const alt = daten.personen.filter((p) => p.altbestand);
     if (!alt.length) return '';
     return `<div class="gcard hr-alt" id="hr-alt"><p><strong>${alt.length === 1 ? '1 ehemaliger Mitarbeiter' : alt.length + ' ehemalige Mitarbeiter'} (nicht zugeordnet):</strong>
@@ -466,14 +470,14 @@
   /* Für Stammdaten → Abteilungen (admin-verwaltung.js): Abteilungen aus den Mitarbeiterangaben (Reihenfolge wie im
      Urlaubsplan) und Anzahl der Mitarbeiter je Abteilung (Nummer) – nur mit „hr.verwalten“, sonst null */
   async function abteilungenAusAngaben() {
-    if (!may('hr.verwalten')) return null;
+    if (!darfHr()) return null;
     await laden();
     const namen = new Map();
     for (const p of daten.personen) if (!p.altbestand && p.abteilung && !namen.has(p.abteilung.toLowerCase())) namen.set(p.abteilung.toLowerCase(), p.abteilung);
     return [...namen.values()];
   }
   async function abteilungZahlen() {
-    if (!may('hr.verwalten')) return null;
+    if (!darfHr()) return null;
     await laden();
     const n = {};
     for (const p of daten.personen) if (!p.altbestand && p.abteilungNr) n[p.abteilungNr] = (n[p.abteilungNr] || 0) + 1;
