@@ -432,7 +432,18 @@ button.qm-kpi{font:inherit;text-align:left;color:inherit;cursor:pointer}
 .qm-sa-tabelle .qm-chip{white-space:normal;height:auto;min-height:22px;padding-top:3px;padding-bottom:3px;line-height:1.25}
 .qm-sa-wahl{min-width:220px;height:34px;font-size:12.5px}
 .qm-sa-fortschritt{width:100%;height:8px;accent-color:var(--qm-green)}
-@media(max-width:760px){.qm-sa-tabelle tr{grid-template-columns:28px minmax(0,1fr)}.qm-sa-tabelle td.qm-sa-an{grid-row:1/4}.qm-sa-wahl{min-width:0;width:100%}}
+/* Eingang: Dateien ohne Ziel (Knopf mit Zahl, Liste mit Ordnerpfad, Ziel wählen) */
+.qm-eingang-knopf b{font-variant-numeric:tabular-nums}
+.qm-eingang-knopf.voll{border-color:var(--qm-gelb);background:var(--qm-gelb-soft);color:var(--qm-gelb)}
+.qm-ei-filter select.qm-eingabe{max-width:320px}
+.qm-ei-filter .qm-suche{flex:1;min-width:200px}
+.qm-ei-pfad{font-size:12px;color:var(--qm-muted);overflow-wrap:anywhere}
+@media(min-width:761px){.qm-ei-tabelle td:last-child{white-space:nowrap}}
+.qm-sa-tabelle .qm-datei-name{max-width:100%}
+.qm-ei-ziel{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.qm-ei-ziel .qm-sa-wahl{flex:1}
+@media(max-width:560px){.qm-ei-filter select.qm-eingabe{max-width:none}.qm-ei-filter .qm-suche{min-width:0}.qm-ei-ziel .qm-hilfe{width:100%}}
+@media(max-width:760px){.qm-sa-tabelle tr{grid-template-columns:28px minmax(0,1fr)}.qm-sa-tabelle td.qm-sa-an{grid-row:1/4}.qm-sa-tabelle td:not(.qm-sa-an){grid-column:2}.qm-sa-wahl{min-width:0;width:100%}}
 /* Vorlagen (Bauabschnitt 3) */
 .qm-platzhalter{color:var(--qm-blau);font-weight:600}
 .qm-vorlagenkarte h3 .i{width:16px;height:16px;color:var(--qm-green)}

@@ -704,7 +704,13 @@ with sync_playwright() as p:
             pg.screenshot(path=os.path.join(SH, f'qs_ablage_export_{breite}_{thema}.png'))
         ctx.close()
 
-    # Sammel-Ablage: Ordner „QM-System“ und ZIP (Quinn, Freigaberecht)
+    # Sammel-Ablage: Ordner „QM-System“ und ZIP (Quinn, Freigaberecht). Per Nr. nur direkt im passenden Kapitelordner oder im Aufbau
+    # des eigenen Exports, nie unter „_…“, „alt_…“, „alt“; alles andere mit Ordnerpfad in den Eingang
+    st, r = Be.call('qs_dokument_save', {'kapitel': '2.1', 'art': 'A', 'nr': '', 'titel': 'Wareneingang Kühlware'})
+    D4 = r['dokument']['id']
+    d_ = speicher('qs-dokumente')
+    next(x for x in d_['liste'] if x['id'] == D4)['nr'] = '2.1.1.1-A01'   # Nummer mit vier Teilen wie aus der bisherigen Excel
+    storage_write('qs-dokumente', d_)
     tmp = tempfile.mkdtemp(prefix='qs-sammel-')
     QMS = os.path.join(tmp, 'QM-System')
     DATEIEN = {'1.4 Qualitätssicherung/1.4-F01 Probenahmeprotokoll/1.4-F01 Probenahmeprotokoll Scan.pdf': pdf('Scan'),
@@ -712,9 +718,18 @@ with sync_playwright() as p:
                '1.4 Qualitätssicherung/1.4-F01 Probenahmeprotokoll/_ältere Versionen/Version 1/Protokoll.pdf': klein,
                '1.4 Qualitätssicherung/1.4-F02 Reinigungsplan/Reinigungsplan Anlage.pdf': pdf('Anlage'),
                '1.4 Qualitätssicherung/1.4-F02 Reinigungsplan/Plan.pdf': pdf('Plan'),
+               '1.4 Qualitätssicherung/1.4-F02 Reinigungsplan/Anlage defekt.pdf': b'MZ' + b'\0' * 64,                # Inhalt passt nicht: Fehler, Lauf geht weiter
+               '1.4 Qualitätssicherung/1.4-F02_unterschrieben_2026-02-05.pdf': pdf('F02 unterschrieben'),          # b) direkt im Kapitelordner
+               '1.4 Qualitätssicherung/_alt/1.4-F01 Probenahmeprotokoll alt.pdf': pdf('F01 alt'),                  # a) älterer Stand
+               '_Firma B/1.4 Qualitätssicherung/1.4-F01 Probenahmeprotokoll.pdf': pdf('Firma B'),                  # a) andere Firma
+               '2.1 Einkauf - Wareneingang/_alt/Lieferantenzertifikate/Zertifikat alt.pdf': pdf('Zertifikat alt'),  # a) auch keine Titel-Zuordnung
+               '2.1 Einkauf - Wareneingang/1.4-F02 Reinigungsplan Kopie.pdf': pdf('falsches Kapitel'),             # b) Kapitel passt nicht
+               '1.4 Qualitätssicherung/Checkliste Probenahme/1.4-F01_2023-11-21.pdf': pdf('Nachweis'),             # b) Aufzeichnung im Unterordner
+               '2.1 Einkauf - Wareneingang/2.1.1.1-A01 Wareneingang Kühlware.pdf': pdf('vier Teile'),              # c) Nr. mit vier Teilen
+               '2.1 Einkauf - Wareneingang/9.2.1.1.1-A01 Fremdnummer.pdf': pdf('fünf Teile'),                      # c) kein Teil einer längeren Nr.
                '2.1 Einkauf - Wareneingang/Lieferantenzertifikate/Zertifikat C.pdf': pdf('Zertifikat C'),
                '2.1 Einkauf - Wareneingang/Massenablage/Beleg 99.txt': b'Beleg 99\n',
-               'Sonstiges/Notiz zur Probenahme.txt': 'Notiz: Probenahme am Rind\n'.encode(),
+               'Sonstiges/Notiz zur Probenahme.txt': 'Notiz: Probenahme am Rind\n'.encode(), 'Sonstiges/Verknüpfung Labor.lnk': b'L\0\0\0\x01\x14\x02\0',
                'Sonstiges/setup.exe': b'MZ' + b'\0' * 50, 'Sonstiges/leer.pdf': b'', 'Dokumentenliste.csv': b'Nr;Titel\n', '.DS_Store': b'\0\0'}
     for pfad_, inhalt in DATEIEN.items():
         os.makedirs(os.path.dirname(os.path.join(QMS, pfad_)), exist_ok=True)
@@ -727,6 +742,12 @@ with sync_playwright() as p:
     def sa_zahl(n):
         return pg.evaluate("n => { const d = [...document.querySelectorAll('#sa-zahlen div')].find(x => x.querySelector('span').textContent === n); return d ? Number(d.querySelector('b').textContent.replace(/\\./g, '')) : -1; }", n)
 
+    def sa_zeile(name):
+        return text(pg, f'#sa-liste tr:has-text("{name}")')
+
+    EIN_SA = {'1.4-F01 Probenahmeprotokoll alt.pdf': '1.4 Qualitätssicherung/_alt', '1.4-F01 Probenahmeprotokoll.pdf': '_Firma B/1.4 Qualitätssicherung',
+              'Zertifikat alt.pdf': '2.1 Einkauf - Wareneingang/_alt/Lieferantenzertifikate', '1.4-F02 Reinigungsplan Kopie.pdf': '2.1 Einkauf - Wareneingang',
+              '1.4-F01_2023-11-21.pdf': '1.4 Qualitätssicherung/Checkliste Probenahme', '9.2.1.1.1-A01 Fremdnummer.pdf': '2.1 Einkauf - Wareneingang'}
     ctx, pg = anmelden('quinn', 'Freigabe-Konto-56', '198.51.100.12')
     check('Sammel-Ablage: Knopf mit Bearbeitungsrecht', pg.is_visible('#qm-d-sammel'))
     pg.click('#qm-d-sammel'); pg.wait_for_selector('#dlg-sammel[open]')
@@ -734,41 +755,63 @@ with sync_playwright() as p:
     pg.wait_for_selector('#sa-liste tr[data-sa]')
     st_ = sa_status()
     check('Ordner gelesen: alle Dateien mit Zuordnung', len(st_) == len(DATEIEN), st_)
-    check('Zuordnung über die Nr. im Ordnernamen: gültige Version bzw. Entwurf', st_.get('1.4-F01 Probenahmeprotokoll Scan.pdf') == 'wird abgelegt'
-          and st_.get('Reinigungsplan Anlage.pdf') == 'wird abgelegt' and 'gültige Version 2' in text(pg, '#sa-liste tr:has-text("Scan.pdf")')
-          and 'Entwurf' in text(pg, '#sa-liste tr:has-text("Reinigungsplan Anlage.pdf")'), st_)
-    check('Ordner-Dokument über den Ordnernamen, eingezogenes gesperrt', st_.get('Zertifikat C.pdf') == 'wird abgelegt' and 'Lieferantenzertifikate' in text(pg, '#sa-liste tr:has-text("Zertifikat C.pdf")')
+    check('Zuordnung im Aufbau des Exports (Kapitel/Nr. Titel/Datei): gültige Version bzw. Entwurf', st_.get('1.4-F01 Probenahmeprotokoll Scan.pdf') == 'wird abgelegt'
+          and st_.get('Reinigungsplan Anlage.pdf') == 'wird abgelegt' and 'gültige Version 2' in sa_zeile('Scan.pdf') and 'Entwurf' in sa_zeile('Reinigungsplan Anlage.pdf'), st_)
+    check('b) Nr. direkt im passenden Kapitelordner: zugeordnet (Entwurf)', st_.get('1.4-F02_unterschrieben_2026-02-05.pdf') == 'wird abgelegt'
+          and '1.4-F02' in sa_zeile('1.4-F02_unterschrieben'), sa_zeile('1.4-F02_unterschrieben'))
+    check('b) Nr. im falschen Kapitelordner oder in einem Unterordner (Aufzeichnung): Eingang', st_.get('1.4-F02 Reinigungsplan Kopie.pdf') == 'nicht zugeordnet'
+          and st_.get('1.4-F01_2023-11-21.pdf') == 'nicht zugeordnet' and 'sonst in den Eingang · Nr. nur direkt im Kapitelordner' in sa_zeile('1.4-F02 Reinigungsplan Kopie.pdf'), st_)
+    check('a) unter „_alt“ und „_Firma B“: nie per Nr., unter „_alt“ auch nicht per Ordnertitel – Eingang mit Grund', st_.get('1.4-F01 Probenahmeprotokoll alt.pdf') == 'nicht zugeordnet'
+          and st_.get('1.4-F01 Probenahmeprotokoll.pdf') == 'nicht zugeordnet' and st_.get('Zertifikat alt.pdf') == 'nicht zugeordnet'
+          and 'Ordner „_alt“' in sa_zeile('1.4-F01 Probenahmeprotokoll alt.pdf') and 'Ordner „_Firma B“' in sa_zeile('1.4-F01 Probenahmeprotokoll.pdf'), st_)
+    check('c) Nr. mit vier Teilen zugeordnet, Teil einer fünfteiligen Nr. nicht', st_.get('2.1.1.1-A01 Wareneingang Kühlware.pdf') == 'wird abgelegt'
+          and 'Wareneingang Kühlware' in sa_zeile('2.1.1.1-A01 Wareneingang') and st_.get('9.2.1.1.1-A01 Fremdnummer.pdf') == 'nicht zugeordnet', st_)
+    check('Ordner-Dokument über den Ordnernamen, eingezogenes gesperrt', st_.get('Zertifikat C.pdf') == 'wird abgelegt' and 'Lieferantenzertifikate' in sa_zeile('Zertifikat C.pdf')
           and st_.get('Beleg 99.txt') == 'Dokument eingezogen', st_)
-    check('übersprungen: ältere Version, Export-Datei, Systemdatei, Dateiart, leer; gleicher Name und Größe schon abgelegt', st_.get('Protokoll.pdf', '').startswith('ältere Version')
-          and st_.get('Dokumentenliste.csv') == 'Datei eines Exports' and st_.get('.DS_Store') == 'Systemdatei' and st_.get('setup.exe') == 'Dateiart nicht erlaubt'
-          and st_.get('leer.pdf') == 'leer' and st_.get('Plan.pdf') == 'schon abgelegt' and st_.get('Notiz zur Probenahme.txt') == 'nicht zugeordnet', st_)
-    check('Zahlen: 12 Dateien, 4 abzulegen, 1 nicht zugeordnet', (sa_zahl('Dateien'), sa_zahl('abzulegen'), sa_zahl('nicht zugeordnet')) == (12, 4, 1))
+    check('übersprungen: ältere Version, Export-Datei, Systemdateien (auch .lnk), Dateiart mit Endung, leer; gleicher Name und Größe schon abgelegt', st_.get('Protokoll.pdf', '').startswith('ältere Version')
+          and st_.get('Dokumentenliste.csv') == 'Datei eines Exports' and st_.get('.DS_Store') == 'Systemdatei' and st_.get('Verknüpfung Labor.lnk') == 'Systemdatei'
+          and st_.get('setup.exe') == 'Dateiart nicht erlaubt (.exe)' and st_.get('leer.pdf') == 'leer' and st_.get('Plan.pdf') == 'schon abgelegt'
+          and st_.get('Notiz zur Probenahme.txt') == 'nicht zugeordnet', st_)
+    check('Zahlen: 22 Dateien, 14 abzulegen (davon 7 in den Eingang), 7 nicht zugeordnet', (sa_zahl('Dateien'), sa_zahl('abzulegen'), sa_zahl('nicht zugeordnet')) == (22, 14, 7),
+          (sa_zahl('Dateien'), sa_zahl('abzulegen'), sa_zahl('nicht zugeordnet')))
     w = pg.locator('#sa-liste tr:has-text("Notiz zur Probenahme.txt") .qm-sa-wahl')
     w.fill('1.4-F01 · Probenahmeprotokoll (1.4)'); w.dispatch_event('change')
-    pg.wait_for_function("document.querySelector('#sa-los').textContent.startsWith('5 ')")
-    check('von Hand zugeordnet: 5 abzulegen', 'von Hand' in text(pg, '#sa-liste tr:has-text("Notiz zur Probenahme.txt")'), text(pg, '#sa-liste tr:has-text("Notiz zur Probenahme.txt")'))
+    pg.wait_for_function("document.querySelector('#sa-liste tr[data-sa]:has(.qm-name)') && [...document.querySelectorAll('#sa-liste tr[data-sa]')].some(t => t.textContent.includes('Notiz zur Probenahme') && t.textContent.includes('von Hand'))")
+    check('von Hand zugeordnet: weiter 14 abzulegen', text(pg, '#sa-los').startswith('14 '), text(pg, '#sa-los'))
     pg.click('#sa-filter [data-sa-filter="uebersprungen"]')
-    check('Filter „Übersprungen“', pg.locator('#sa-liste tr[data-sa]').count() == 6, sa_status())
+    check('Filter „Übersprungen“', pg.locator('#sa-liste tr[data-sa]').count() == 7, sa_status())
     pg.click('#sa-filter [data-sa-filter=""]')
     pg.screenshot(path=os.path.join(SH, 'qs_sammel_vorschau_1280.png'))
     pg.click('#sa-los')
     pg.wait_for_function("document.querySelector('#sa-meldung').textContent.includes('abgelegt')")
     st_ = sa_status()
-    check('abgelegt: 4 neue, gleicher Inhalt unter anderem Namen „schon abgelegt“', text(pg, '#sa-meldung').startswith('4 Dateien abgelegt')
+    meldung = text(pg, '#sa-meldung')
+    check('abgelegt: 6 an Dokumenten, gleicher Inhalt unter anderem Namen „schon abgelegt“', meldung.startswith('6 Dateien abgelegt, 6 im Eingang')
           and [st_.get(n) for n in ('1.4-F01 Probenahmeprotokoll Scan.pdf', 'Reinigungsplan Anlage.pdf', 'Zertifikat C.pdf', 'Notiz zur Probenahme.txt', 'Ablauf Kopie.docx')]
-          == ['abgelegt'] * 4 + ['schon abgelegt'], (text(pg, '#sa-meldung'), st_))
+          == ['abgelegt'] * 4 + ['schon abgelegt'], (meldung, st_))
+    check('Fehler bei einer Datei hält den Lauf nicht an (spätere Dateien abgelegt)', 'passt nicht' in st_.get('Anlage defekt.pdf', '') and st_.get('Zertifikat C.pdf') == 'abgelegt'
+          and all(st_.get(n) == 'im Eingang' for n in EIN_SA), st_)
+    check('Bericht: übersprungen nach Grund', all(t in meldung for t in ('Systemdateien 2', 'Dateiart nicht erlaubt 1', 'leer 1', 'gesperrt 1', 'schon vorhanden 2', 'mit Fehler 1')), meldung)
     n1 = [f['name'] for f in aktiv_(dok(D1)['versionen'][1]['dateien'])]
     check('Server: Dateien an den richtigen Stellen', '1.4-F01 Probenahmeprotokoll Scan.pdf' in n1 and 'Notiz zur Probenahme.txt' in n1 and 'Ablauf Kopie.docx' not in n1
-          and 'Reinigungsplan Anlage.pdf' in [f['name'] for f in dok(D2)['versionen'][0]['dateien']] and 'Zertifikat C.pdf' in [f['name'] for f in dok(O1)['dateien']]
-          and not any(f['name'] == 'Beleg 99.txt' for f in dok(O2)['dateien']), n1)
+          and not set(EIN_SA) & set(n1) and 'Reinigungsplan Anlage.pdf' in [f['name'] for f in dok(D2)['versionen'][0]['dateien']]
+          and '1.4-F02_unterschrieben_2026-02-05.pdf' in [f['name'] for f in dok(D2)['versionen'][0]['dateien']] and 'Zertifikat C.pdf' in [f['name'] for f in dok(O1)['dateien']]
+          and [f['name'] for f in dok(D4)['versionen'][0].get('dateien', [])] == ['2.1.1.1-A01 Wareneingang Kühlware.pdf'] and not any(f['name'] == 'Beleg 99.txt' for f in dok(O2)['dateien']), n1)
+    im_e = {f['name']: f['pfad'] for f in eingang().values()}
+    check('Server: Nicht-Zugeordnetes im Eingang mit Ordnerpfad relativ zum gewählten Ordner', all(im_e.get(n) == p_ for n, p_ in EIN_SA.items()), im_e)
     pg.screenshot(path=os.path.join(SH, 'qs_sammel_fertig_1280.png'))
     pg.eval_on_selector('#sa-ordner', 'e => { e.value = ""; }')
     pg.set_input_files('#sa-ordner', QMS)
-    pg.wait_for_function("document.querySelector('#sa-los').textContent.startsWith('1 ')")
+    pg.wait_for_function("document.querySelector('#sa-los').textContent.startsWith('3 ')")
     st_ = sa_status()
-    check('derselbe Ordner noch einmal: gleicher Name und Größe „schon abgelegt“, nur die umbenannte Kopie bliebe (der Server erkennt sie)',
-          sa_zahl('abzulegen') == 1 and st_.get('Zertifikat C.pdf') == 'schon abgelegt' and st_.get('Notiz zur Probenahme.txt') == 'nicht zugeordnet'
-          and st_.get('Ablauf Kopie.docx') == 'wird abgelegt', st_)
+    check('derselbe Ordner noch einmal: Abgelegtes und Dateien im Eingang „schon abgelegt“, offen nur Kopie, Fehler und die nicht gemerkte Handzuordnung',
+          sa_zahl('abzulegen') == 3 and st_.get('Zertifikat C.pdf') == 'schon abgelegt' and all(st_.get(n) == 'schon abgelegt' for n in EIN_SA)
+          and st_.get('Notiz zur Probenahme.txt') == 'nicht zugeordnet' and st_.get('Ablauf Kopie.docx') == 'wird abgelegt' and st_.get('Anlage defekt.pdf') == 'wird abgelegt', st_)
+    pg.eval_on_selector('#sa-ordner', 'e => { e.value = ""; }')
+    pg.set_input_files('#sa-ordner', os.path.join(QMS, '_Firma B'))
+    pg.wait_for_function("document.querySelectorAll('#sa-liste tr[data-sa]').length === 1")
+    check('nur „_Firma B“ gewählt: gleicher Pfad wie im ganzen Ordner (schon im Eingang), nicht per Nr. zugeordnet',
+          sa_status() == {'1.4-F01 Probenahmeprotokoll.pdf': 'schon abgelegt'} and 'Eingang' in sa_zeile('1.4-F01 Probenahmeprotokoll.pdf'), sa_status())
     zp = os.path.join(tmp, 'QM-System.zip')
     with zipfile.ZipFile(zp, 'w', zipfile.ZIP_DEFLATED) as z_:
         z_.writestr('QM-System/1.4 Qualitätssicherung/1.4-F01 Probenahmeprotokoll/Prüfbericht Mai.pdf', pdf('Mai', 200000))
@@ -783,6 +826,35 @@ with sync_playwright() as p:
     check('ZIP: entpackt und abgelegt, Inhalt gleich', pm_ and roh(L, 'qs_datei&id=' + pm_[0]['id'])[2] == pdf('Mai', 200000), pm_)
     pg.click('#dlg-sammel .qm-knopfreihe [data-sa-zu]'); pg.wait_for_selector('#dlg-sammel', state='hidden')
     ctx.close()
+
+    # Langer Lauf: abbrechen (der erste Upload wird festgehalten, bis „Abbrechen“ gedrückt ist), neu laden, denselben Ordner wieder wählen
+    NACHW = os.path.join(tmp, 'Nachweise')
+    for k in (1, 2, 3):
+        os.makedirs(os.path.join(NACHW, 'Labor A'), exist_ok=True)
+        with open(os.path.join(NACHW, 'Labor A', f'Befund {k}.pdf'), 'wb') as f_:
+            f_.write(pdf(f'Befund {k}'))
+    ctx, pg = anmelden('quinn', 'Freigabe-Konto-56', '198.51.100.12')
+    pg.click('#qm-d-sammel'); pg.wait_for_selector('#dlg-sammel[open]')
+    pg.set_input_files('#sa-ordner', NACHW)
+    pg.wait_for_function("document.querySelector('#sa-los').textContent.startsWith('3 ')")
+    pg.evaluate("""() => { const f = window.fetch; window.__weiter = new Promise((ok) => { window.__frei = ok; });
+      window.fetch = async (...a) => { if (String(a[0]).includes('qs_datei_hochladen') && !window.__gehalten) { window.__gehalten = true; await window.__weiter; } return f(...a); }; }""")
+    pg.click('#sa-los'); pg.wait_for_selector('#sa-stopp:not([hidden])'); pg.click('#sa-stopp'); pg.evaluate('window.__frei()')
+    pg.wait_for_function("document.querySelector('#sa-meldung').textContent.includes('abgebrochen')")
+    check('abgebrochen: eine Datei im Eingang, zwei nicht abgelegt', text(pg, '#sa-meldung').startswith('0 Dateien abgelegt, 1 im Eingang') and '2 nicht abgelegt' in text(pg, '#sa-meldung'),
+          text(pg, '#sa-meldung'))
+    pg.click('#dlg-sammel .qm-knopfreihe [data-sa-zu]'); ctx.close()
+    ctx, pg = anmelden('quinn', 'Freigabe-Konto-56', '198.51.100.12')
+    pg.click('#qm-d-sammel'); pg.wait_for_selector('#dlg-sammel[open]')
+    pg.set_input_files('#sa-ordner', NACHW)
+    pg.wait_for_function("document.querySelector('#sa-los').textContent.startsWith('2 ')")
+    check('nach Neuladen derselbe Ordner: die abgelegte Datei „schon abgelegt“, zwei offen', sorted(sa_status().values()) == ['nicht zugeordnet', 'nicht zugeordnet', 'schon abgelegt'], sa_status())
+    pg.click('#sa-los')
+    pg.wait_for_function("document.querySelector('#sa-meldung').textContent.includes('im Eingang')")
+    befunde = sorted((f['name'], f['pfad']) for f in eingang().values() if f['name'].startswith('Befund '))
+    check('fortgesetzt: jede Datei genau einmal im Eingang, Pfad ohne den gewählten Ordner', befunde == [(f'Befund {k}.pdf', 'Labor A') for k in (1, 2, 3)]
+          and text(pg, '#sa-meldung').startswith('0 Dateien abgelegt, 2 im Eingang · übersprungen: schon vorhanden 1'), (befunde, text(pg, '#sa-meldung')))
+    ctx.close()
     ctx, pg = anmelden('bernd', 'Bearbeit-Konto-34', '198.51.100.11', 390, 'dark', 844)
     pg.click('#qm-d-sammel'); pg.wait_for_selector('#dlg-sammel[open]')
     pg.set_input_files('#sa-ordner', QMS)
@@ -793,6 +865,67 @@ with sync_playwright() as p:
     check('390px dunkel: Sammel-Ablage ohne waagerechtes Scrollen', pg.evaluate('document.documentElement.scrollWidth <= window.innerWidth + 1'))
     pg.screenshot(path=os.path.join(SH, 'qs_sammel_390_dark.png'))
     ctx.close()
+
+    # Eingang in der Oberfläche (Bernd): hochladen ohne Ziel (Auswahl, Ziehen), Liste mit Ordnerpfad, Suche und Ordner, zuordnen, löschen, herunterladen
+    def ei_zeilen():
+        return pg.locator('#ei-liste tr[data-ei]').count()
+
+    def ei_warte(n):
+        pg.wait_for_function('n => document.querySelectorAll("#ei-liste tr[data-ei]").length === n', arg=n)
+
+    n_e = len(eingang())
+    ctx, pg = anmelden('bernd', 'Bearbeit-Konto-34', '198.51.100.11')
+    check('Eingang-Knopf in „Dokumente“: Zahl, hervorgehoben', pg.is_visible('#qm-d-eingang') and text(pg, '#qm-d-eingang-zahl') == str(n_e)
+          and 'voll' in (pg.get_attribute('#qm-d-eingang', 'class') or ''), text(pg, '#qm-d-eingang'))
+    pg.click('#qm-d-eingang'); ei_warte(n_e)
+    check('Eingang: Liste mit allen Dateien, Ordnerpfad und wer', '1.4 Qualitätssicherung / _alt' in text(pg, '#ei-liste') and 'Bernd Bearbeiter' in text(pg, '#ei-liste')
+          and f'{n_e} Dateien' in text(pg, '#ei-titel'), text(pg, '#ei-titel'))
+    with pg.expect_file_chooser() as fc:
+        pg.click('#ei-drop')
+    fc.value.set_files([{'name': 'Scan Wareneingang 1.pdf', 'mimeType': 'application/pdf', 'buffer': pdf('Scan WE 1')},
+                        {'name': 'Scan Wareneingang 2.pdf', 'mimeType': 'application/pdf', 'buffer': pdf('Scan WE 2')}])
+    toast(pg, '2 Dateien abgelegt'); ei_warte(n_e + 2)
+    pg.evaluate(ZIEH, ['#ei-drop', [['Lieferschein.pdf', '%PDF-1.4 Lieferschein', 'application/pdf'], ['Video.mov', 'x', 'video/quicktime']]])
+    toast(pg, 'Video.mov'); ei_warte(n_e + 3)
+    check('Eingang: per Auswahl und Ziehen hochgeladen (verbotene Art mit Grund), Zahl im Knopf', text(pg, '#qm-d-eingang-zahl') == str(n_e + 3) and len(eingang()) == n_e + 3
+          and 'nicht erlaubt' in text(pg, '#ei-laden'), text(pg, '#ei-laden'))
+    pg.fill('#ei-suche', 'Scan Wareneingang'); ei_warte(2)
+    pg.fill('#ei-suche', 'Checkliste Probenahme'); ei_warte(1)
+    check('Suche findet auch den Ordnerpfad', '1.4-F01_2023-11-21.pdf' in text(pg, '#ei-liste'))
+    pg.fill('#ei-suche', ''); pg.select_option('#ei-ordner', '_Firma B'); ei_warte(1)
+    check('Ordner-Filter (erste Ebene, mit Zahl)', '1.4-F01 Probenahmeprotokoll.pdf' in text(pg, '#ei-liste') and '_Firma B (1)' in text(pg, '#ei-ordner'))
+    pg.select_option('#ei-ordner', ''); ei_warte(n_e + 3)
+    pg.screenshot(path=os.path.join(SH, 'qs_eingang_1280.png'))
+    pg.fill('#ei-suche', 'Scan Wareneingang'); ei_warte(2)
+    pg.check('#ei-alle'); pg.wait_for_function("document.querySelector('#ei-gewaehlt').textContent.startsWith('2 Dateien')")
+    check('ohne Ziel kein Zuordnen', pg.is_disabled('#ei-zuordnen') and pg.is_enabled('#ei-loeschen'))
+    pg.fill('#ei-ziel', 'Laborbefunde (2.1)'); pg.wait_for_selector('#ei-zuordnen:enabled')
+    scans = {f['name']: f['id'] for f in eingang().values() if f['name'].startswith('Scan Wareneingang')}
+    pg.click('#ei-zuordnen'); toast(pg, '2 Dateien zugeordnet: Laborbefunde (2.1)'); ei_warte(0)
+    check('Zuordnen: am Ordner mit gleicher Kennung, nicht mehr im Eingang', set(scans.values()) <= {f['id'] for f in dok(O3)['dateien']} and not set(scans.values()) & set(eingang())
+          and text(pg, '#qm-d-eingang-zahl') == str(n_e + 1), scans)
+    pg.fill('#ei-suche', 'Lieferschein'); ei_warte(1)
+    lid = next(i_ for i_, f in eingang().items() if f['name'] == 'Lieferschein.pdf')
+    pg.check(f'#ei-liste [data-ei-an="{lid}"]'); pg.click('#ei-loeschen')
+    check('Löschen fragt nach (zweiter Klick)', 'endgültig löschen?' in text(pg, '#ei-loeschen') and lid in eingang())
+    pg.click('#ei-loeschen'); toast(pg, '1 Datei gelöscht'); ei_warte(0)
+    check('gelöscht: nicht mehr im Eingang, Datei weg', lid not in eingang() and not os.path.isfile(blob_pfad(lid)))
+    pg.fill('#ei-suche', 'Checkliste'); ei_warte(1)
+    with pg.expect_download() as dl:
+        pg.click('#ei-liste [data-ei-datei]')
+    check('Herunterladen aus dem Eingang: Name und Inhalt', dl.value.suggested_filename == '1.4-F01_2023-11-21.pdf' and open(dl.value.path(), 'rb').read() == pdf('Nachweis'))
+    pg.fill('#ei-suche', '')
+    check('1280 px: Eingang ohne waagerechtes Scrollen', pg.evaluate("(() => { const d = document.querySelector('#dlg-eingang'); return d.scrollWidth <= d.clientWidth + 1 && document.documentElement.scrollWidth <= window.innerWidth + 1; })()"))
+    ctx.close()
+    for user, pw, breite, thema in (('bernd', 'Bearbeit-Konto-34', 390, 'dark'), ('lisa', 'Leserin-Konto-12', 390, 'light'), ('bernd', 'Bearbeit-Konto-34', 1280, 'dark')):
+        ctx, pg = anmelden(user, pw, '198.51.100.10' if user == 'lisa' else '198.51.100.11', breite, thema, 844 if breite < 500 else 900)
+        pg.click('#qm-d-eingang'); pg.wait_for_selector('#ei-liste tr[data-ei]')
+        if user == 'lisa':
+            check(f'{breite}px {thema}: nur ansehen – Liste und Herunterladen, kein Hochladen, Auswählen, Zuordnen, Löschen', pg.is_hidden('#ei-drop') and pg.locator('#ei-liste input').count() == 0
+                  and pg.is_hidden('#ei-zuordnen') and pg.is_hidden('#ei-loeschen') and pg.locator('#ei-liste [data-ei-datei]').count() > 0)
+        check(f'{breite}px {thema}: Eingang ohne waagerechtes Scrollen', pg.evaluate("(() => { const d = document.querySelector('#dlg-eingang'); return d.scrollWidth <= d.clientWidth + 1 && document.documentElement.scrollWidth <= window.innerWidth + 1; })()"))
+        pg.screenshot(path=os.path.join(SH, f'qs_eingang_{user}_{breite}_{thema}.png'))
+        ctx.close()
     shutil.rmtree(tmp, ignore_errors=True)
     br.close()
 check('keine JavaScript-Fehler', not fehler, fehler)
