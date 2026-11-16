@@ -3,7 +3,7 @@ Glaskarte): lokale Schriften (keine fremden Server), Kopf, Filterleiste mit Aufk
 (schmal), Merkliste als Spalte ab 1280 px, hell/dunkel, kein seitliches Scrollen, Druck ohne Glas."""
 import sys
 import urllib.request
-from playwright.sync_api import sync_playwright
+from playwright.sync_api import sync_playwright, TimeoutError as PWTimeout
 from umgebung import BASE as B, SH, until
 
 res = []
@@ -110,6 +110,19 @@ with sync_playwright() as pw:
         t.keyboard.press('Escape')
         ph = t.evaluate("getComputedStyle(document.querySelector('#q')).textOverflow")
         check(f'{breite} px: langer Platzhalter im Suchfeld endet mit „…“', ph == 'ellipsis', ph)
+        # Suchfeld hervorgehoben (Wunsch des Inhabers 16.11.2026): Rand und Lupe in der Markenfarbe, Lichtkranz, beim Tippen kräftiger Rand
+        sf = t.evaluate("""() => { const q = document.querySelector('#q'), farbe = (v) => { const e = document.createElement('span'); e.style.color = `var(${v})`; q.parentElement.append(e); const c = getComputedStyle(e).color; e.remove(); return c; };
+          const s = getComputedStyle(q); return { rand: parseFloat(s.borderTopWidth), randFarbe: s.borderTopColor, linie: farbe('--accent-line'), akzent: farbe('--accent'), schatten: s.boxShadow,
+            lupe: getComputedStyle(document.querySelector('.search svg.i')).color }; }""")
+        t.focus('#q')
+        try:   # Übergang des Rands abwarten
+            t.wait_for_function("(a) => getComputedStyle(document.querySelector('#q')).borderTopColor === a", arg=sf['akzent'], timeout=3000)
+        except PWTimeout:
+            pass
+        fokus = t.evaluate("getComputedStyle(document.querySelector('#q')).borderTopColor")
+        t.evaluate("document.activeElement.blur()")
+        check(f'{breite} px {schema}: Suchfeld hervorgehoben – Rand 2 px in der Markenfarbe, Lichtkranz, Lupe in der Markenfarbe, beim Tippen Rand in voller Markenfarbe',
+              sf['rand'] >= 2 and sf['randFarbe'] == sf['linie'] and sf['schatten'] != 'none' and sf['lupe'] == sf['akzent'] and fokus == sf['akzent'], (sf, fokus))
         t.close()
     for schema in ('light', 'dark'):
         t = page(1280, 900, schema)

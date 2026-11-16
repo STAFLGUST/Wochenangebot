@@ -261,13 +261,13 @@ SATZ = """() => {
     zeilen: [...D.querySelectorAll('.al-band tr.row')].map((r) => r.dataset.id),
     texte: [...D.querySelectorAll('.al-band tr.row, .werb-sec tr.row')].map((r) => r.querySelector('.c-code').textContent + ((r.querySelector('.c-name').firstChild || {}).textContent || '')),
     werb: [...D.querySelectorAll('.werb-sec tr.row')].map((r) => r.dataset.id),
-    gruppen: [...D.querySelectorAll('.al-band .al-gt')].filter((g) => !g.querySelector('.al-cont')).map((g) => g.textContent.trim()),
+    gruppen: [...D.querySelectorAll('.al-band .al-gt, .al-band .al-st-eh h3')].filter((g) => !g.querySelector('.al-cont')).map((g) => g.textContent.trim()),
     forts: D.querySelectorAll('.al-band .al-gt .al-cont').length,
     bereiche: [...D.querySelectorAll('.al-band .al-st:not(.pl-trenn) h3')].filter((h) => !h.querySelector('.al-cont')).map((h) => h.textContent.trim()),
-    sektionen: [...D.querySelectorAll('.al-band > .al-sec')].map((x) => { const b = x.querySelector(':scope > .al-st:not(.pl-trenn)');
+    sektionen: [...D.querySelectorAll('.al-band .al-sec')].map((x) => { const b = x.querySelector(':scope > .al-st:not(.pl-trenn)');
       return { name: b ? ohneForts(b.querySelector('h3')) : '', anzahl: b ? parseInt(b.querySelector(':scope > span').textContent, 10) : null, linie: !!x.querySelector(':scope > .pl-trenn'),
-        zeilen: x.querySelectorAll('tr.row').length, titel: [...x.querySelectorAll('.al-gt')].map(ohneForts), nachbarn: x.parentElement.children.length - 1 }; }),
-    bloecke: [...D.querySelectorAll('.al-band .al-grp')].map((g) => ({ titel: ohneForts(g.querySelector('.al-gt')), forts: !!g.querySelector('.al-cont'), zeilen: g.querySelectorAll('tr.row').length })),
+        zeilen: x.querySelectorAll('tr.row').length, titel: [...x.querySelectorAll('.al-gt')].map(ohneForts) }; }),
+    bloecke: [...D.querySelectorAll('.al-band .al-grp')].map((g) => ({ titel: ohneForts(g.querySelector('.al-gt') || g.closest('.al-sec').querySelector('.al-st-eh h3')), forts: !!g.querySelector('.al-cont'), zeilen: g.querySelectorAll('tr.row').length })),
     jeSeite: pages.map((p) => {
       const pb = box(p), f = p.querySelector('.pl-in > .pl-fuss'), bands = [...p.querySelectorAll('.al-band')], grp = [...p.querySelectorAll('.al-band .al-grp')];
       const grenze = f ? box(f).top : pb.bottom, oben = bands.length ? box(bands[0]).top : grenze, unten = Math.max(oben, ...grp.map((g) => box(g).bottom));
@@ -275,10 +275,13 @@ SATZ = """() => {
       const hin = f && f.querySelector('.pl-hinweis'), br = f && f.querySelector('.pl-brief'), si = f && f.querySelector('.pl-siegel');
       const letzte = bands.length ? [...bands[bands.length - 1].querySelectorAll('.al-col')] : [];
       return { h: pb.height, b: pb.width, fuell: +p.dataset.fuell, hoehe: Math.round(100 * (unten - oben) / Math.max(1, grenze - oben)),
-        spalten: bands.map((b) => [...b.querySelectorAll(':scope > .al-sec')].reduce((a, s) => a + s.querySelectorAll(':scope > .al-cols > .al-col').length, 0)),
+        spalten: bands.map((b) => (b.classList.contains('al-stapel')   // Stapel: drei Spalten aus einspaltigen Bereichen untereinander
+          ? [...b.querySelectorAll(':scope > .al-stapel-sp')].filter((sp) => sp.children.length && [...sp.children].every((s) => s.matches('.al-sec') && s.querySelectorAll(':scope > .al-cols > .al-col').length === 1)).length
+          : [...b.querySelectorAll(':scope > .al-sec')].reduce((a, s) => a + s.querySelectorAll(':scope > .al-cols > .al-col').length, 0))),
+        stapel: p.querySelectorAll('.al-band.al-stapel').length,
         bereiche: st.length, namen: st.map((x) => ohneForts(x.querySelector('h3'))), fortsBalken: st.map((x) => !!x.querySelector('.al-cont')),
         fortsSpaeter: bands.slice(1).reduce((a, b) => a + b.querySelectorAll('.al-st .al-cont').length, 0),
-        balkenOhneBlock: [...p.querySelectorAll('.al-band > .al-sec')].filter((x) => !x.querySelector('.al-grp')).length,
+        balkenOhneBlock: [...p.querySelectorAll('.al-band .al-sec')].filter((x) => !x.querySelector('.al-grp')).length,
         kopf: (p.querySelector('.pl-ph') || {}).innerText || '', logo: p.querySelectorAll('img.al-logo').length, werb: p.querySelector('.werb-sec') ? 1 : 0,
         ueber: unten - grenze, oberhalb: Math.max(0, ...grp.map((g) => pb.top - box(g).top)),
         rechts: Math.max(pb.right, ...[...p.querySelectorAll('.al-band td, .al-band .al-st, .werb-sec td, .al-sale')].map((e) => box(e).right)) - pb.right,
@@ -575,6 +578,45 @@ with sync_playwright() as p:
                 schlecht.append((st, modus, len(x['zeilen']), heil(x, modus)))
             zurueck(v)
     check('viele Bereiche in jeder Stufe und mit Fußzeile auf jeder bzw. nur der letzten Seite: vollständig, drei Spalten, nichts läuft über', not schlecht, schlecht)
+
+    # ---------- Viele kleine Bereiche, jede Gruppe heißt wie ihr Bereich (Wunsch des Inhabers 16.11.2026: weniger freie Flächen) ----------
+    d = A.call('draft')[1]
+    m3 = json.loads(json.dumps(m2))
+    for g in m3['groups']:
+        g['section'] = g['name']
+    st, r = A.call('save_draft', {'model': m3, 'revision': d['revision']})
+    assert st == 200, r
+    laden(v, '/?vorschau=1')
+    vs3 = v.evaluate("""() => ({ zeilen: [...document.querySelectorAll('#list .al-band tr.row')].map((r) => r.dataset.id), gruppen: [...document.querySelectorAll('#list .al-band .al-gt')].map((g) => g.textContent.trim()) })""")
+    s9 = satz(v)
+    check('viele kleine Bereiche: als Stapel gesetzt (einspaltige Bereiche untereinander, von oben nach unten in der Reihenfolge des Angebots), vollständig, feste Vorgaben eingehalten',
+          sum(x['stapel'] for x in s9['jeSeite']) >= 1 and s9['zeilen'] == vs3['zeilen'] and len(s9['zeilen']) == GESAMT and heil(s9, 'letzte') == [],
+          ([x['stapel'] for x in s9['jeSeite']], len(s9['zeilen']), heil(s9, 'letzte')))
+    je9, soll9 = {}, {}
+    for x in s9['sektionen']:
+        je9[x['name']] = je9.get(x['name'], 0) + x['zeilen']
+    for it in m3['items']:
+        n9 = norm_titel(next(g['section'] for g in m3['groups'] if g['id'] == it['groupId']))
+        soll9[n9] = soll9.get(n9, 0) + 1
+    eh = v.evaluate("""() => { const t = (e) => [...e.childNodes].filter((n) => !(n.classList && n.classList.contains('al-cont'))).map((n) => n.textContent).join('').trim();
+      const secs = [...document.querySelectorAll('#print-root .al-band .al-sec')], spalten = (x) => x.querySelectorAll(':scope > .al-cols > .al-col').length;
+      const mit = secs.filter((x) => x.querySelector(':scope > .al-st-eh > .al-eh'));
+      return { balken: document.querySelectorAll('#print-root .al-band .al-st-eh').length, mit: mit.length, breit: mit.filter((x) => spalten(x) !== 1).length,
+        versatz: Math.max(0, ...mit.map((x) => Math.abs(x.querySelector('.al-st-eh > .al-eh').getBoundingClientRect().right - Math.max(...[...x.querySelectorAll('td.c-price')].map((td) => td.getBoundingClientRect().right))))),
+        doppelt: secs.filter((x) => spalten(x) === 1 && !x.querySelector('.al-cont') && x.querySelector(':scope > .al-st:not(.pl-trenn) h3')
+          && [...x.querySelectorAll('.al-gt')].some((g) => t(g) === t(x.querySelector(':scope > .al-st h3')))).map((x) => t(x.querySelector(':scope > .al-st h3'))) }; }""")
+    check('Gruppe heißt wie ihr Bereich: in einer Spalte Überschrift nur einmal (im Balken, „€/kg“ bündig über den Preisen, nie über mehreren Spalten); Gruppen, Zeilen und Artikelzahl je Bereich wie in der Vorschau',
+          eh['balken'] >= 1 and eh['balken'] == eh['mit'] and not eh['breit'] and eh['versatz'] <= 8 and not eh['doppelt'] and s9['gruppen'] == vs3['gruppen']
+          and je9 == soll9 and all(x['anzahl'] == soll9[x['name']] for x in s9['sektionen']), (eh, len(s9['gruppen']), len(vs3['gruppen'])))
+    grau = v.evaluate("""() => { const c = (s) => getComputedStyle(document.querySelector(s)).backgroundColor.match(/\\d+/g).slice(0, 3).map(Number);
+      return { zebra: c('#print-root .al-band .al-tab tbody tr:nth-child(odd):not(.werb-an) td'), balken: c('#print-root .al-band .al-st:not(.pl-trenn)') }; }""")
+    check('Zebrastreifen im Druck kräftig genug für den Ausdruck (je Farbkanal höchstens 236), Balken dunkler als die Streifen',
+          max(grau['zebra']) <= 236 and max(grau['balken']) < min(grau['zebra']), grau)
+    shot(v.locator('#print-root .pl-page').first, SH + '/druck-stapel-s1.png')
+    zurueck(v)
+    d = A.call('draft')[1]
+    st, r = A.call('save_draft', {'model': m2, 'revision': d['revision']})   # Entwurf wie zuvor für die folgenden Prüfungen
+    assert st == 200, r
 
     # ---------- Einzelangebot: Druck der Angebotsseite und PDF des Servers ----------
     laden(v, '/?angebot=e-' + ez['id'])
