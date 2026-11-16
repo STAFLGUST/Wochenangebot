@@ -74,7 +74,7 @@
     if (r.status === 401) { zeigeAnmeldung(); return false; }
     if (r.status !== 200 || !r.data.ok) { meldung(fehlerText(r, 'Der Plan konnte nicht erstellt werden')); return false; }
     I.plan = r.data;
-    I.liste.forEach((e, i) => { e.plan = r.data.dateien[i]; e.status = e.plan.schonDa ? 'vorhanden' : e.plan.status; e.grund = e.plan.grund || ''; });
+    I.liste.forEach((e, i) => { e.plan = r.data.dateien[i]; e.status = e.plan.schonDa ? 'vorhanden' : e.plan.status; e.grund = e.plan.schonDa ? '' : e.plan.grund || ''; });
     for (const z of r.data.oberste) if (z.art !== 'auto') I.wahl[z.name] = { art: z.art, ...(z.kapitel ? { kapitel: z.kapitel } : {}), ...(z.titel ? { titel: z.titel } : {}) };
     return true;
   }
@@ -181,7 +181,7 @@
   function fortschritt() {
     const L = I.lauf, sek = (Date.now() - L.start) / 1000, rate = L.gesendet / Math.max(sek, 1), rest = Math.max(0, L.bytes - L.gesendet);
     $('#im-fortschritt').max = L.bytes || 1; $('#im-fortschritt').value = L.gesendet;
-    $('#im-stand').textContent = `${Q.zahl(L.erledigt)} von ${dateienText(L.dateien)} · ${gb(L.gesendet)} von ${gb(L.bytes)}`
+    $('#im-stand').textContent = `${Q.zahl(L.erledigt)} von ${dateienText(L.dateien)} · ${L.gesendet ? gb(L.gesendet) : '0 KB'} von ${gb(L.bytes)}`
       + (L.ende ? '' : rate > 0 && L.gesendet ? ` · noch etwa ${Q.zahl(Math.max(1, Math.round(rest / rate / 60)))} min` : '');
   }
   async function eintragenJetzt(alle) {
