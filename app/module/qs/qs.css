@@ -432,7 +432,18 @@ button.qm-kpi{font:inherit;text-align:left;color:inherit;cursor:pointer}
 .qm-sa-tabelle .qm-chip{white-space:normal;height:auto;min-height:22px;padding-top:3px;padding-bottom:3px;line-height:1.25}
 .qm-sa-wahl{min-width:220px;height:34px;font-size:12.5px}
 .qm-sa-fortschritt{width:100%;height:8px;accent-color:var(--qm-green)}
-@media(max-width:760px){.qm-sa-tabelle tr{grid-template-columns:28px minmax(0,1fr)}.qm-sa-tabelle td.qm-sa-an{grid-row:1/4}.qm-sa-wahl{min-width:0;width:100%}}
+/* Eingang: Dateien ohne Ziel (Knopf mit Zahl, Liste mit Ordnerpfad, Ziel wählen) */
+.qm-eingang-knopf b{font-variant-numeric:tabular-nums}
+.qm-eingang-knopf.voll{border-color:var(--qm-gelb);background:var(--qm-gelb-soft);color:var(--qm-gelb)}
+.qm-ei-filter select.qm-eingabe{max-width:320px}
+.qm-ei-filter .qm-suche{flex:1;min-width:200px}
+.qm-ei-pfad{font-size:12px;color:var(--qm-muted);overflow-wrap:anywhere}
+@media(min-width:761px){.qm-ei-tabelle td:last-child{white-space:nowrap}}
+.qm-sa-tabelle .qm-datei-name{max-width:100%}
+.qm-ei-ziel{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.qm-ei-ziel .qm-sa-wahl{flex:1}
+@media(max-width:560px){.qm-ei-filter select.qm-eingabe{max-width:none}.qm-ei-filter .qm-suche{min-width:0}.qm-ei-ziel .qm-hilfe{width:100%}}
+@media(max-width:760px){.qm-sa-tabelle tr{grid-template-columns:28px minmax(0,1fr)}.qm-sa-tabelle td.qm-sa-an{grid-row:1/4}.qm-sa-tabelle td:not(.qm-sa-an){grid-column:2}.qm-sa-wahl{min-width:0;width:100%}}
 /* Vorlagen (Bauabschnitt 3) */
 .qm-platzhalter{color:var(--qm-blau);font-weight:600}
 .qm-vorlagenkarte h3 .i{width:16px;height:16px;color:var(--qm-green)}
@@ -679,3 +690,36 @@ body.qm.r .qm-rund:hover { background: var(--r-flaeche-2); }
   .vf-kopfzeile .qm-filterzeile .btn{flex:1 1 auto;justify-content:center}
   .vf-fassung{grid-template-columns:minmax(0,1fr)}
 }
+/* Ordnerbaum eines Ordners/externen Dokuments (archiv.js): Unterordner aufklappbar, Zahl und Größe, ZIP je Ordner */
+.qm-baum{display:flex;flex-direction:column;gap:6px}
+.qm-baum-kopf{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.qm-baum-kopf .qm-suche{flex:1;min-width:160px}
+.qm-baum-ordner{border:1px solid var(--qm-line);border-radius:10px;background:var(--qm-card)}
+.qm-baum-ordner>summary{display:flex;align-items:center;gap:8px;padding:7px 10px;cursor:pointer;list-style:none;min-width:0}
+.qm-baum-ordner>summary::-webkit-details-marker{display:none}
+.qm-baum-ordner>summary .i{width:16px;height:16px;flex:none;color:var(--qm-muted)}
+.qm-baum-name{font-weight:650;font-size:13px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0}
+.qm-baum-ordner>summary .qm-sub{margin-left:auto;white-space:nowrap}
+.qm-baum-zip{display:inline-flex;align-items:center;gap:3px;font-size:12px;font-weight:650;color:var(--qm-blau);text-decoration:none;white-space:nowrap}
+.qm-baum-zip .i{width:14px;height:14px}
+.qm-baum-inhalt{display:flex;flex-direction:column;gap:6px;padding:0 8px 8px 16px}
+@media(max-width:560px){.qm-baum-inhalt{padding-left:6px}.qm-baum-ordner>summary .qm-sub{display:none}.qm-baum-zip{margin-left:auto}}
+/* Ordner-Import (ordnerimport.js) */
+.qm-im-wurzel{margin:0;font-size:13.5px}
+.qm-im-warnung{margin:0;color:var(--qm-gelb);font-weight:600}
+.qm-im-wahl select.qm-eingabe{min-width:200px;max-width:100%}
+.qm-im-bereich{display:flex;gap:6px;margin-top:6px}
+.qm-im-bereich input:first-child{width:72px;flex:none}
+.qm-im-bereich input:last-child{flex:1;min-width:0}
+.qm-im-nachtragen{border:1px solid var(--qm-gelb);background:var(--qm-gelb-soft);border-radius:12px;padding:10px 12px;display:flex;flex-direction:column;gap:6px}
+.qm-im-nachtragen .qm-hilfe{margin:0}
+.qm-im-frage{border:1px solid var(--qm-line);border-radius:12px;padding:10px 12px;display:flex;flex-direction:column;gap:6px}
+.qm-im-frage.offen{border-color:var(--qm-gelb);background:var(--qm-gelb-soft)}
+.qm-im-frage .qm-feld{display:flex;flex-direction:column;gap:4px;font-weight:600}
+.qm-im-frage .qm-hilfe{margin:0}
+.qm-im-frei{border:0;border-top:1px solid var(--qm-line);margin:0;padding:8px 0 0;min-width:0;display:flex;flex-direction:column;gap:4px}
+.qm-im-frei:first-child{border-top:0;padding-top:0}
+.qm-im-frei legend{font-weight:700;padding:0;overflow-wrap:anywhere}
+.qm-im-gruppen ul{list-style:none;margin:4px 0 6px;padding-left:12px}
+.qm-im-gruppen .qm-check{overflow-wrap:anywhere}
+@media(max-width:560px){.qm-im-wahl select.qm-eingabe{min-width:0;width:100%}}

@@ -216,6 +216,7 @@ Jede Code-Datei beginnt mit einem Kopfkommentar; dessen erste Aussage steht hier
 
 | Datei | Modul | Inhalt |
 | --- | --- | --- |
+| `ablage.php` | qs | QM-System · Dokumentenablage |
 | `bericht.php` | qs | QM-System · Audit-Bericht (Aktionen qs_bericht, qs_bericht_excel) |
 | `organigramm.php` | qs | QM-System · Organigramm als gelenktes Dokument (Entscheidung des Inhabers 16.11.2026 „Im QM-System zeichnen“; nur bei Bedarf geladen von app/api/aktionen/qs.php). |
 | `qs.php` | qs | Qualitätssicherung · QM-System (IFS Wholesale) |
@@ -424,7 +425,9 @@ Jede Code-Datei beginnt mit einem Kopfkommentar; dessen erste Aussage steht hier
 
 | Datei | Modul | Inhalt |
 | --- | --- | --- |
+| `archiv.js` | qs | STAFL-Plattform · QM-System |
 | `index.html` | qs | Übersicht |
+| `ordnerimport.js` | qs | STAFL-Plattform · QM-System |
 | `organigramm.css` | qs | STAFL-Plattform · QM-System – Organigramm (organigramm.js) |
 | `organigramm.js` | qs | STAFL-Plattform · QM-System – Organigramm in einem gelenkten Dokument |
 | `qs.css` | qs | STAFL-Plattform · QM-System – Gestaltung „Liquid Glass“ wie Dashboard, Leergut, Controlling, HR, CRM und Marketing: warmer Grund mit drei weichen Farbflächen, Glasflächen, kein Rot im Hintergrund. |
@@ -751,6 +754,7 @@ Jede Code-Datei beginnt mit einem Kopfkommentar; dessen erste Aussage steht hier
 | `auth_helpers.py` | plattform | HTTP-Client und Zeitsteuerung ausschließlich für isolierte Testdaten/Sitzungen. |
 | `kunden_hilfe.py` | plattform | HTTP-Client mit eigener Sitzung für API-Tests (IP über X-Forwarded-For, wie hinter dem eigenen Proxy). |
 | `order_setup.py` | angebot | Gemeinsame Vorbereitung der Bestell-Testgruppen |
+| `qs_hilfe.py` | plattform | Gemeinsame Hilfen der Tests zur Dokumentenablage des QM-Systems (test_qs_eingang.py, test_qs_import.py) |
 | `smtp_test.py` | plattform | Kleiner Test-Mailserver für die Ende-zu-Ende-Tests (nimmt Nachrichten an und hält sie im Speicher). |
 | `test_ablage_grenzen.py` | plattform | Dateiablage des Plattformkerns (app/api/lib/dateiablage.php) |
 | `test_abteilungen.py` | verwaltung | Stammdaten → Abteilungen (Auftrag des Inhabers 10.11.2026) |
@@ -824,6 +828,9 @@ Jede Code-Datei beginnt mit einem Kopfkommentar; dessen erste Aussage steht hier
 | `test_qs.py` | qs | Qualitätssicherung (Modul qs, Oberfläche qs.intern unter /module/qs/) – QM-System |
 | `test_qs_ablage.py` | qs | Qualitätssicherung – Dokumentenablage (QM-System Bauabschnitt 2) |
 | `test_qs_bericht.py` | qs | Qualitätssicherung – Audit-Bericht (app/api/module/qs/bericht.php, Aktionen qs_bericht und qs_bericht_excel, Reiter „Audit“). |
+| `test_qs_eingang.py` | qs | QM-System – Eingang (Dateien ohne Ziel, Dokument qs-ablage mit ziel „eingang“, module/qs/ablage.php). |
+| `test_qs_import.py` | qs | QM-System – Ordner-Import (qs_sammel_plan, qs_import_eintragen, module/qs/ablage.php) und Ordnerbaum (qs_archiv, qs_archiv_zip). |
+| `test_qs_kapitel15.py` | qs | QM-System – Kapitel 1.5 „Mitarbeiter“ samt Unterkapiteln 1.5.x (personenbezogene Unterlagen, Entscheidung des Inhabers 16.11.2026): alles daraus sieht nur, wer „bearbeiten“ darf (qs_sichtbar, qs_dok_sichtbar in … |
 | `test_qs_organigramm.py` | qs | Qualitätssicherung – Organigramm im QM-System (app/api/module/qs/organigramm.php, Aktionen qs_organigramm_save und qs_organigramm_vorschau, Oberfläche app/module/qs/organigramm.js). |
 | `test_qs_verfahren.py` | qs | Qualitätssicherung – Verfahrensdokumentation nach GoBD (app/api/module/qs/verfahren.php und verfahren-export.php, Aktionen qs_verfahren*, Reiter „Verfahrensdoku“ in app/module/qs/verfahren.js). |
 | `test_qs_vorlagen.py` | qs | Qualitätssicherung – Vorlagen und Nummernstruktur (QM-System Bauabschnitt 3, app/api/module/qs/vorlagen.php). |
@@ -909,6 +916,7 @@ Jede Code-Datei beginnt mit einem Kopfkommentar; dessen erste Aussage steht hier
 | `karte_stil.mjs` | plattform | – |
 | `lokal.py` | plattform | Lokaler Entwicklungsserver mit Testdaten – wie ein Testserver der E2E-Suite, aber zum Ausprobieren im Browser. python3 werkzeuge/lokal.py http://127.0.0.1:8080 mit Testdaten (tests/fixtures/data-seed) python3 … |
 | `nielsen_gebiete.py` | plattform | Nielsen-Gebiete für die CRM-Karte (app/module/crm/nielsen.json) aus den Bundesländern von Natural Earth erzeugen. |
+| `qs_ablage_leser.py` | plattform | QM-System: „dateien“ an Ordnern und externen Dokumenten nur in den vier Lesern von app/api/module/qs/ablage.php lesen. |
 | `realm_produktion.py` | plattform | Realm „mitarbeiter“ für den Betrieb aus dem geprüften Test-Realm erzeugen (eine Quelle, kein Auseinanderlaufen). python3 werkzeuge/realm_produktion.py # schreibt deploy/anmeldung/realm-mitarbeiter.json python3 … |
 | `regeln.py` | plattform | Regelwerk der STAFL-Plattform prüfen und Änderungsfolgen ermitteln (nur Python-Standardbibliothek). python3 werkzeuge/regeln.py pruefen Alle Prüfungen (CI); Ausgang 1 bei Fehlern python3 werkzeuge/regeln.py betroffen … |
 | `testdaten_erzeugen.py` | plattform | Erzeugt die anonymisierten Testdaten unter tests/fixtures aus echten Originaldateien. |

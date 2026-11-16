@@ -2,7 +2,7 @@
 
 <!-- ERZEUGT von `python3 werkzeuge/doku.py erzeugen` – nicht von Hand ändern. Quelle: Funktionen und Kommentare im Code. Die CI prüft, dass diese Datei zum Code passt. -->
 
-16 Dateien, 371 Funktionen – in der Reihenfolge der Datei, **fett** die Abschnitte. Text = erste Aussage des Kommentars direkt über der Funktion (Python: Docstring). Übersicht aller Module: [README.md](README.md).
+22 Dateien, 488 Funktionen – in der Reihenfolge der Datei, **fett** die Abschnitte. Text = erste Aussage des Kommentars direkt über der Funktion (Python: Docstring). Übersicht aller Module: [README.md](README.md).
 
 ## `app/api/aktionen/qs.php`
 
@@ -12,7 +12,93 @@ _Aktionen: QM-System (Oberfläche qs.intern, Daten und Regeln in app/api/module/
 - `qs_rev_pruefen(b, alt, was)` – Veralteter Stand eines Eintrags → 409 mit dem aktuellen Eintrag
 - `qs_dok_name(d)`
 - `qs_dok_antwort(d)`
-- `qs_dok_ablegen(doc, i, d, me)` – Dokument speichern: Stand hochzählen, „geändert“ setzen
+
+## `app/api/module/qs/ablage.php`
+
+_QM-System · Dokumentenablage_
+
+- `qs_dateien_aktiv(liste)`
+
+**Regeln je Stelle**
+
+- `qs_ablage_regel(d, ver, me, was, belegt, neu)` – Darf $me an dieser Stelle Dateien ablegen ('hochladen'), aus dem Eingang zuordnen ('zuordnen') oder entfernen ('entfernen')?
+- `qs_ablage_stelle(d, ver, me, was, belegt, neu)`
+- `qs_ablage_einstellungen()` – Einstellungen für die Oberfläche: erlaubte Dateiendungen und Größen (vom Plattformkern), Grenzen je Stelle und je Bündel
+
+**Leser beider Ablageorte: ältere Dateien am Ordner (qs-dokumente, „dateien“) und qs-ablage**
+
+- `qs_ablage_nach_ziel(ablage)` – Einträge von qs-ablage je Ziel (Index für qs_ordner_dateien)
+- `qs_ordner_dateien(d, index)` – Alle Dateien eines Ordners/externen Dokuments, auch entfernte: ältere am Dokument und die aus $index (qs_ablage_nach_ziel; leer = nur die älteren)
+- `qs_ablage_belegt(d, je)` – Aktive Dateien eines Ordners/externen Dokuments (ältere und $je aus qs_ablage_je bzw. qs-ablage-zahlen) bzw. des Eingangs ($d = null)
+- `qs_datei_suchen(liste, id)` – Datei suchen – in qs-dokumente (Versionen, ältere am Ordner), sonst in qs-ablage: [Datei, Dokument-Index, Version-Index, Index] oder null.
+
+**qs-ablage und qs-ablage-zahlen**
+
+- `qs_im_eingang(f)`
+- `qs_ablage_je(liste)` – Zahl und Bytes der aktiven Dateien je Ziel
+- `qs_ablage_schreiben(ab)` – qs-ablage schreiben und qs-ablage-zahlen neu zählen – immer beide, unter der Sperre „qs-dokumente“
+- `qs_ablage_zahlen()`
+- `qs_ablage_uebersicht(dokumente)` – Zahl und Bytes je Ordner/externem Dokument für qs_start – nur für $dokumente (die sichtbaren): qs-ablage-zahlen und die älteren Dateien am Dokument
+- `qs_datei_eintrag(datei, me, pfad)` – Eintrag einer hochgeladenen Datei (Version oder qs-ablage); pfad nur, wenn gesetzt
+- `qs_pfad(v)` – Ordnerpfad „pfad“ (Anzeige, Ordnerbaum, Suche – nie ein Pfad im Dateisystem), Format in 05-daten.md
+- `qs_ablage_auswahl(v)` – Auswahl im Eingang: eindeutige Datei-Kennungen (als Text, auch wenn sie nur aus Ziffern bestehen)
+- `qs_dokumente_dateien(liste)` – Kennungen aller Dateien in qs-dokumente (auch Rohfassungen ausgefüllter Dateien)
+- `qs_ablage_aufraeumen(abgelegt, erzeugt, gespeichert)` – Am Ende der Anfrage die hier abgelegten bzw. erzeugten Dateien entfernen, die nicht gespeichert sind – registriert vor dem Ablegen, damit auch ein Abbruch …
+
+**Eintragen: Version (qs-dokumente) oder qs-ablage**
+
+- `qs_datei_eintragen(d, vi, me, f, erzeugt)` – Datei $f in die Version $vi eintragen.
+- `qs_ablage_vermerk(d, vi, me, namen, wie)` – Ein Verlaufseintrag je Vorgang: im Entwurf an der Version, an freigegebenen Versionen auch am Dokument (nachgetragen)
+- `qs_ablage_eintragen(neu, me, wie, erzeugt)` – Hochgeladene Dateien eintragen (Kern für Upload und Ordner-Import, ohne fail()).
+- `qs_datei_gleich(d, vi, sha)` – Liegt in dieser Version schon eine aktive Datei mit diesem Inhalt (SHA-256, auch Rohfassung)?
+
+**Eingang**
+
+- `qs_eingang_dateien()` – Dateien im Eingang für die Oberfläche (qs_eingang)
+- `qs_eingang_ziele(dokumente, me)` – Ziele, denen $me aus dem Eingang zuordnen darf (qs_ablage_regel 'zuordnen'): Ordner, externe Dokumente, Entwürfe – je {dok, ver}
+- `qs_eingang_platzhalter(ids)` – Platzhalter der Word-/Excel-Dateien im Eingang, die in einen Entwurf zugeordnet werden – vor der Sperre gelesen
+- `qs_eingang_zuordnen(ids, dok, ver, me, platzhalter, erzeugt)` – Dateien aus dem Eingang zuordnen: an einen Ordner/ein externes Dokument ändert sich nur „ziel“ (ein Schreibvorgang), in einen Entwurf wandert der Eintrag …
+- `qs_eingang_loeschen(ids)` – Dateien im Eingang endgültig löschen: Einträge weg, Prüfsummen gemerkt (ein erneuter Import legt sie nicht wieder in den Eingang).
+
+**Archiv: Dateien eines Ordners/externen Dokuments**
+
+- `qs_archiv_dateien(d)` – Dateien eines Ordners/externen Dokuments (ältere und qs-ablage, auch entfernte) – für Ordnerbaum, ZIP
+- `qs_archiv_antwort(f)` – Datei für Ordnerbaum und Eingang (ohne Prüfsumme und Dateiart – hält die Antwort klein)
+- `qs_archiv_entfernen(doc, id, b, me)` – Datei eines Ordners/externen Dokuments in qs-ablage als „entfernt“ vermerken (mit Grund; die Datei bleibt).
+- `qs_dateien_text(n)`
+- `qs_dateien_zahl(liste)` – Zahl der aktiven Dateien in qs-dokumente und qs-ablage (Datenpaket: ersetzt nicht, sobald Dateien liegen) – qs-ablage direkt gezählt
+- `qs_archiv_zip_pfad(f)` – ZIP-Pfad einer Archivdatei unter dem Ordner des Dokuments: <pfad>/<Datei>
+- `qs_ablage_eintraege(dokumente, stamm, kapitel, alle, heute, me)` – Einträge für den ZIP-Export „QM-System/<Kapitel>/<Dokument>/<Datei>“: gültige Version bzw. Archivdateien (mit Unterordnern aus pfad); mit $alle zusätzlich …
+
+**Ordner-Import (Regeln in 05-daten.md, nur hier berechnet)**
+
+- `qs_norm(t)`
+- `qs_norm_trenner(t)`
+- `qs_import_schluessel(...teile)` – Schlüssel aus mehreren Teilen (Ordner-Dokument, schon Abgelegtes, gleiche Datei)
+- `qs_nr_schluessel(nr)` – Dokumenten-Nr.
+- `qs_import_teile(pfad)` – Ordnernamen eines Pfads aus dem Browser („/“ oder „\“ getrennt); kein Text oder zu lang → 422
+- `qs_import_ordner_lesen(ordner)` – Ordnerliste der Anfrage [[Ordnerpfad wie gewählt, [[Name, Größe], …]], …] prüfen → [[Ordnerpfad, Ordnernamen, [[Name, Größe], …]], …]
+- `qs_import_angaben(b)` – Angaben des Nutzers (Plan und Eintragen): wurzel {name, art sf\|kapitel\|neu\|'' (keine Antwort), kapitel, titel}, wahl und freigaben {nachtragen, entwurf} je …
+- `qs_import_kapitel(stamm)`
+- `qs_import_erkannt(name, kap)` – Kapitel (kein Bereich), dessen Nummer vorn im Ordnernamen steht, oder null
+- `qs_import_exakt(name, k)` – Heißt der Ordner genau wie das Kapitel („<Nr>“, „<Nr> <Titel>“) bzw. wie der Bereich (auch nur der Titel, auch mit „_“ vorn)?
+- `qs_import_bereich_name(name, kap)`
+- `qs_import_weglassbar(name, kap)` – Darf der gemeinsame erste Ordner wegfallen?
+- `qs_import_oben(t, A, kap)` – Ordnernamen ab dem obersten Ordner.
+- `qs_import_zuordnung(name, x, offen, A, kap)` – Zuordnung eines obersten Ordners: die Wahl des Nutzers ($x bzw. $A['wahl'][$name]) gilt immer; ohne Wahl ein Kapitelordner (genau „<Nr>“ oder „<Nr> <Titel>“: …
+- `qs_import_verzeichnis(dokumente, kap)` – Verzeichnisse aus qs-dokumente (beim Eintragen unter der Sperre neu gebaut): Nummern gelenkter Dokumente – ohne Bereiche, dort nie per Nummer –, Ordnernamen …
+- `qs_import_rest_passt(rest, d)` – Passt der Rest hinter der Nummer zum Dokument?
+- `qs_import_kapitel_passt(d, kap)`
+- `qs_import_nr_dok(name, kap, V)` – Datei direkt im Kapitelordner: Name ohne Endung beginnt mit der Nummer, der Rest ist leer oder der Titel
+- `qs_import_gelenkt(d, name, groesse, voll, me)` – Ziel eines gelenkten Dokuments: ein offener Entwurf geht vor (dokument), sonst die gültige Version (nachtragen, nur mit Freigaberecht); gesperrt → Eingang
+- `qs_import_archiv(z, t, voll, V)` – Archiv: Ordner-Dokument je (Kapitel, Unterordner der ersten Ebene bzw. „Weitere Dateien“), tiefere Ebenen als pfad; der Name des obersten Ordners steht vorn …
+- `qs_import_ueberspringen(name, groesse, oben)` – Grund zum Überspringen (Systemdatei, Liste eines eigenen Exports, Dateiart, leer, zu groß) oder null
+- `qs_import_datei(t, name, groesse, z, ohne, V, export, me)` – Entscheidung für eine Datei (rein; Plan und Eintragen).
+- `qs_import_plan(ordner, A, me, stamm, dokumente, ablage)` – Zuordnungsplan (Aktion qs_sammel_plan).
+- `qs_import_anlegen(plan, me, stamm, doc)` – Bereiche und Ordner-Dokumente des Plans anlegen (unter der Sperre): erst alle Grenzen prüfen, dann schreiben; danach zeigen die Einträge des Plans auf die …
+- `qs_import_planen(b, me)` – Ordner-Import, Schritt 1 (Aktion qs_sammel_plan): Plan; mit anlegen unter der Sperre einmal gerechnet und danach Bereiche und Ordner-Dokumente angelegt.
+- `qs_import_uploads(v)` – Uploads eines Bündels aus der Anfrage: [[upload, erwarteter Status (QS_IMPORT_ABLEGEN), Version, abgewählt], …], 1 bis QS_IMPORT_BUENDEL
+- `qs_import_eintragen(ups, A, me)` – Ordner-Import, Schritt 2 (Aktion qs_import_eintragen): fertige Uploads (qs_datei_hochladen mit sammeln) in einem Schreibvorgang eintragen.
 
 ## `app/api/module/qs/bericht.php`
 
@@ -67,6 +153,17 @@ _Qualitätssicherung · QM-System (IFS Wholesale)_
 - `qs_wer(me)`
 - `qs_verlauf(e, me, was)`
 - `qs_heute()`
+- `qs_dok_ablegen(doc, i, d, me)` – Dokument in qs-dokumente speichern: Stand hochzählen, „geändert“ setzen (unter der Sperre)
+
+**Geschützte Kapitel (1.5 „Mitarbeiter“, Entscheidung des Inhabers 16.11.2026)**
+
+- `qs_kapitel_geschuetzt(k)`
+- `qs_name_geschuetzt(name)` – Ordnername mit geschützter Nummer vorn („1.5 Mitarbeiter“, „_1.5.1_Zeugnisse“, auch „alt_1.5 …“ und „Kopie von 1.5 …“ wie in der Ordnerablage üblich; nicht …
+- `qs_geschuetzt(e, stamm)` – Eintrag (Dokument, Abschnitt, Prüfung, Maßnahme) geschützt?
+- `qs_dateien_sichtbar(dateien, me)` – Dateien eines Ordners, die $me sieht (Ordnerbaum, Ordner-ZIP, Ablage-Export, qs_datei): mit qs.bearbeiten alle, sonst keine aus einem Unterordner mit …
+- `qs_sichtbar(me, ...namen)` – Die eine Stelle für alle Lesewege (Liste, Suche, Zahlen, CSV, Dateien, Ordnerbaum, ZIP, Bericht, Verfahrensdoku): lädt die genannten Listen (dokumente, …
+- `qs_dok_sichtbar(d, me)`
+- `qs_protokoll_name(e, name)` – Name im Protokoll: aus geschützten Kapiteln nur die Kapitelnummer – das Protokoll sieht, wer „protokoll.sehen“ hat, nicht nur „bearbeiten“
 - `qs_leer()` – Ist das Modul noch leer (für den Import ohne „ersetzen“)?
 - `qs_nat_cmp(a, b)` – Kapitel- und Abschnittsnummern natürlich sortieren („1.2“ vor „1.10“, „2.0.9“ vor „2.0.10“)
 
@@ -75,6 +172,7 @@ _Qualitätssicherung · QM-System (IFS Wholesale)_
 - `qs_mitarbeiter()` – Wählbare Mitarbeiter: aktive Zugänge und Mitarbeiter ohne Anmeldung (z. B. Lager); deaktivierte Zugänge nicht
 - `qs_kuerzel_von(stamm, userId)` – Kürzel, die mit einem Mitarbeiter verknüpft sind
 - `qs_pruefung_meine(p, stamm, userId)` – Ist der Mitarbeiter für die Prüfung eingeteilt (ausführend oder über sein Kürzel zuständig/Vertreter)?
+- `qs_massnahme_meine(m, kuerzel)` – Ist die Maßnahme einem der Kürzel $kuerzel (qs_kuerzel_von) zugewiesen – „Zuständig“ kann mehrere nennen („QB / TE“)?
 
 **Prüfen der Eingaben**
 
@@ -119,16 +217,6 @@ _Qualitätssicherung · QM-System (IFS Wholesale)_
 - `qs_ueberpruefung(d, monate, heute)` – Überprüfung: seit (letzte Freigabe oder „ohne Änderung überprüft“), fällig ab (+ N Monate), fällig ja/nein.
 - `qs_dok_aus(d, monate, heute)`
 - `qs_entwurf(me, aenderungen, grund)` – Neuer Entwurf (Version ohne Nummer)
-
-**Dokumentenablage**
-
-- `qs_dateien_aktiv(liste)`
-- `qs_ablage_stelle(d, ver, me, was)` – Darf $me an dieser Stelle (Dokument, Version-ID oder '' für Ordner/externe Dokumente) Dateien ablegen bzw. entfernen?
-- `qs_ablage_einstellungen()` – Einstellungen für die Oberfläche: erlaubte Dateiendungen, Höchstgröße je Datei und je Teilstück, Dateien je Stelle
-- `qs_datei_finden(liste, id)` – Datei in allen Dokumenten suchen: [Dokument-Index, Version-Index oder null, Datei-Index] oder null
-- `qs_datei_gleich(d, vi, sha)` – Liegt an dieser Stelle (Version bzw. Dokument) schon eine aktive Datei mit diesem Inhalt (SHA-256, auch Rohfassung)?
-- `qs_dateien_zahl(liste)`
-- `qs_ablage_eintraege(dokumente, stamm, kapitel, alle, heute)` – Einträge für den ZIP-Export „QM-System/<Kapitel>/<Dokument>/<Datei>“: gültige Version (bzw.
 
 **Handbuch**
 
@@ -233,7 +321,7 @@ _QM-System · Verfahrensdokumentation nach GoBD (Reiter „Verfahrensdoku“ der
 
 - `qs_vf_aus(doku, dokumente, stamm, heute)` – Dokumentation für die Oberfläche: Abschnitte sortiert mit Nummer, Fassungen ohne Inhalt (den liefert der Export als PDF), Abweichung seit der letzten …
 - `qs_vf_laden(id)` – Dokumentation für eine Änderung laden (unter der Sperre): [Speicher-Dokument, Index, Dokumentation] oder 404
-- `qs_vf_antworten(doku)`
+- `qs_vf_antworten(doku, me)`
 - `qs_vf_ablegen(doc, i, doku, me)` – Dokumentation nach einer Änderung speichern: Stand hochzählen, „geändert“ setzen
 
 ## `app/api/module/qs/vorlagen.php`
@@ -256,11 +344,12 @@ _Qualitätssicherung · Vorlagen und Lenkungsangaben in Word- und Excel-Dateien 
 **Platzhalter ersetzen**
 
 - `qs_stuecke_ersetzen(seg, werte, offen)` – Textstücke einer Gruppe (Absatz, Zelle): $seg = [['t' => Text], …]; ersetzt Platzhalter auch über Stückgrenzen.
-- `qs_xml_ersetzen(xml, gruppe, tt, werte, offen, n)` – XML mit Gruppen (<w:p>/<si>/<is>) und Textelementen (<w:t>/<t>): Platzhalter je Gruppe ersetzen. null, wenn der Teil mehr als QS_XML_STUECKE_MAX Elemente …
+- `qs_xml_ersetzen(xml, gruppe, tt, werte, offen, n)` – XML mit Gruppen (<w:p>/<si>/<is>) und Textelementen (<w:t>/<t>): Platzhalter je Gruppe ersetzen. null, wenn der Teil größer als QS_XML_BYTES_MAX ist oder …
 - `qs_excel_kopf_ersetzen(xml, werte, offen, n)` – Kopf- und Fußzeilen in Excel (Text mit Steuerzeichen „&“: ein echtes & wird „&&“)
 - `qs_office_fuellen(daten, art, werte, alsDokument)` – Word-/Excel-Datei ausfüllen.
 - `qs_office_platzhalter(daten, art)` – Welche bekannten Platzhalter enthält die Datei?
 - `qs_office_lesen(f)` – Inhalt einer Word-/Excel-Datei (Metadaten mit id, groesse) zum Ausfüllen: [Inhalt, ''] oder [null, Grund für Meldung und Verlauf].
+- `qs_platzhalter_vorab(datei)` – Platzhalter einer hochgeladenen Word-/Excel-Datei (für die Anzeige im Entwurf) – vor der Sperre gelesen; null bei anderen Arten oder nicht lesbar (auch über …
 
 **Anwenden**
 
@@ -270,6 +359,69 @@ _Qualitätssicherung · Vorlagen und Lenkungsangaben in Word- und Excel-Dateien 
 - `qs_lenkung_datei(d, v, f, stamm, me, erzeugt)` – Eine Datei einer freigegebenen Version ausfüllen (auch beim Nachtragen); unverändert, wenn nicht nötig oder nicht lesbar
 - `qs_dateien_uebernehmen(g, me, erzeugt)` – Überarbeitung: Dateien der gültigen Version (Rohfassung mit Platzhaltern) als Kopie in den neuen Entwurf
 - `qs_erzeugte_aufraeumen(erzeugt, fertig)` – Neu erzeugte Dateien wieder entfernen, wenn das Speichern scheitert (Aufruf am Ende der Anfrage)
+
+## `app/module/qs/archiv.js`
+
+_STAFL-Plattform · QM-System_
+
+**Ordnerbaum: Map pfad → Knoten, <details> erst beim Aufklappen gefüllt**
+
+- `baumBauen(dateien)`
+- `dateiZeile(f, offen, mitPfad)`
+- `knotenInhalt(k, offen)`
+- `baumZeichnen()`
+- `inhaltZeichnen(w, offen)`
+- `baumLaden(dok)`
+- `baumHtml(x)` – HTML des Ordnerbaums für die Seitenleiste (qs.js renderDok); lädt beim ersten Öffnen eines Dokuments
+- `neu(dok)` – Nach Hochladen/Entfernen neu laden: Eingang bzw. Ordner des Dokuments
+- `ladeEingang()`
+- `eingangSicht()`
+- `eingangZiele(ziele)`
+- `eingangKnoepfe()`
+- `eingangZeichnen()`
+- `oeffneEingang()`
+- `eingangWeg(ids)`
+- `eingangFehler(r, text)`
+
+## `app/module/qs/ordnerimport.js`
+
+_STAFL-Plattform · QM-System_
+
+**Ordner, Ziehen und ZIP lesen: Liste { pfad (Ordner), name, groesse, holen }**
+
+- `ordnerLesen(e, pfad, aus)`
+- `zipLesen(file)`
+- `zipEintrag(file, lokal, komp, methode, flags, name)`
+
+**Plan vom Server: Dateien je Ordner gebündelt (hält die Anfrage unter 6 MB)**
+
+- `planen(anlegen)`
+- `laden(quelle)`
+
+**Vorschau**
+
+- `meldung(text, ok)`
+- `wurzelHtml(P)` – Wohin gehört der gewählte Ordner?
+- `wahlHtml(z)`
+- `zahlen(liste)`
+- `freigabenHtml(P)` – Freigaben je oberstem Ordner: Nachtragen in gültige Versionen (Vorgabe aus), Entwürfe (Vorgabe an); Dateien je Dokument gruppiert, einzeln abwählbar
+- `zeichnen()`
+- `dateiZeile(e)`
+- `listeZeichnen()`
+
+**Lauf: LAUFEND Uploads gleichzeitig, fertige Uploads gebündelt eintragen, Fehler halten nicht an**
+
+- `fortschritt()`
+- `buendelZahl(l)` – So viele fertige Uploads passen in ein Bündel: Zahl, Bytes und Word/Excel-Nachträge (Lenkung unter der Sperre) – Grenzen vom Server
+- `eintragenJetzt(alle)`
+- `arbeiter()`
+- `starten()`
+- `berichtCsv()`
+
+**Ereignisse**
+
+- `oeffnen()`
+- `neuPlanen()`
 
 ## `app/module/qs/organigramm.js`
 
@@ -367,28 +519,13 @@ _STAFL-Plattform · Qualitätssicherung (QM-System) – Oberfläche nach dem Des
 - `ladenHtml(x, vid)`
 - `ladenAktualisieren(i)`
 - `pruefsumme(f)`
-- `dateiSenden(f, dok, ver, nurNeu, beiTeil)` – Eine Datei in Teilen hochladen (der API-Einstieg nimmt nur JSON bis 6 MB an). nurNeu: gleicher Inhalt an dieser Stelle wird nicht noch einmal abgelegt …
-- `hochladen(dateien, vid)` – Dateien nacheinander ablegen (Seitenleiste: Ziehen oder Auswählen)
-- `waehleDateien(vid)`
+- `dateiSenden(f, dok, ver, beiTeil, extra)` – Eine Datei in Teilen hochladen (der API-Einstieg nimmt nur JSON bis 6 MB an); extra: pfad, sammeln, herkunft (Ordner-Import).
+- `hochladen(dateien, vid, dok)`
+- `waehleDateien(vid, dok)`
 - `dateiOrt(x, id)`
 - `speichereDatei(blob, name)`
-- `herunterladen(id)`
+- `herunterladen(id)` – Herunterladen über einen direkten Link wie der ZIP-Export: große Dateien landen nicht im Speicher des Browsers, der Browser zeigt den Fortschritt
 - `entferneDatei(id)`
-
-**Sammel-Ablage: ganzer Ordner „QM-System“ oder ein ZIP davon**
-
-- `saIndex()`
-- `saNrIn(t, idx)`
-- `saZiel(x)`
-- `saPruefen(e, idx)`
-- `saZeile(e, i)`
-- `saZeigen()`
-- `saZeileNeu(i)`
-- `oeffneSammel()`
-- `saLesenOrdner(eintrag, pfad, aus)`
-- `saZipLesen(file)`
-- `saZipEintrag(file, lokal, komp, methode, flags, name)`
-- `saLaden(quelle)`
 - `exportUmfang(kap, alle)` – Export der Ablage als ZIP: der Server erstellt das Archiv erst beim Herunterladen (direkt in die Antwort)
 - `exportHinweis()`
 - `oeffneExport()`
@@ -529,14 +666,12 @@ _Qualitätssicherung – Dokumentenablage (QM-System Bauabschnitt 2)_
 - `zip_lesen(inhalt)`
 - `dok(did, cli)`
 - `schritt(cli, did, s, **extra)`
-- `nur_neu(cli, dok_, ver, name, inhalt)`
+- `archiv(did, cli)` – ── Ordner: Dateien im Archiv (qs-ablage, geladen über qs_archiv) ──
 - `text(pg, sel)`
 - `anmelden(user, pw, ip, breite, thema, hoehe)`
 - `toast(pg, inhalt)`
 - `oeffne_dok(pg, did)`
 - `passt(pg)`
-- `sa_status()`
-- `sa_zahl(n)`
 
 ## `tests/e2e/test_qs_bericht.py`
 
@@ -550,6 +685,52 @@ _Qualitätssicherung – Audit-Bericht (app/api/module/qs/bericht.php, Aktionen 
 - `zeitraum(von, bis)`
 - `anmelden(user, pw_, ip, breite, thema, hoehe)`
 - `text(pg, sel)`
+
+## `tests/e2e/test_qs_eingang.py`
+
+_QM-System – Eingang (Dateien ohne Ziel, Dokument qs-ablage mit ziel „eingang“, module/qs/ablage.php)._
+
+- `hoch_e(cli, name, inhalt, pfad)`
+- `eingang(cli)`
+- `archiv(did)`
+- `dok(did)`
+- `schritt(cli, did, s, **extra)`
+- `halb_zugeordnet(name, did, vi)`
+- `toast(pg, inhalt)`
+- `ei_warte(pg, n)`
+
+## `tests/e2e/test_qs_import.py`
+
+_QM-System – Ordner-Import (qs_sammel_plan, qs_import_eintragen, module/qs/ablage.php) und Ordnerbaum (qs_archiv, qs_archiv_zip)._
+
+- `plan(cli, pfade, angaben, anlegen)` – Plan für Pfade („Ordner/…/Datei“ oder (Pfad, Größe)); Rückgabe (Status, Antwort, {Pfad: Eintrag})
+- `sammeln(cli, pfad, inhalt)` – Upload für den Ordner-Import: nur Name und Herkunft (Ordnerpfad wie gewählt) – Rückgabe der fertige Upload (noch nicht eingetragen)
+- `eintragen(cli, ups, angaben, **extra)` – ups: [(Upload, Plan-Eintrag)] – erwarteter Status und Version wie im Plan
+- `dok(did)`
+- `dok_titel(titel, kap)`
+- `archiv(did, cli)`
+- `eingang()`
+- `benutzt()` – Kennungen, auf die qs-dokumente (auch Rohfassungen) und qs-ablage zeigen
+- `gelenkt(kap, art, nr, titel, gueltig)`
+- `ist(e, neu)`
+- `gross_docx(mb)`
+- `lange_absaetze(n, laenge)` – Word-Datei mit Platzhalter: entpackt rund 28 MB in 19.800 Textelementen (unter der Elementgrenze), gepackt rund 0,1 MB
+- `zahl(pg, n)`
+- `zeilen(pg)`
+- `oberste(pg)`
+- `warte_ende(pg)`
+- `neu_geplant(pg, aktion)` – Aktion, die einen neuen Plan anfordert – wartet auf dessen Antwort
+- `qm_waehlen(pg, wurzel_beantworten)`
+
+## `tests/e2e/test_qs_kapitel15.py`
+
+_QM-System – Kapitel 1.5 „Mitarbeiter“ samt Unterkapiteln 1.5.x (personenbezogene Unterlagen, Entscheidung des Inhabers 16.11.2026): alles daraus sieht nur, wer „bearbeiten“ darf (qs_sichtbar, qs_dok_sichtbar in …_
+
+- `dok(did, cli)`
+- `schritt(did, s, cli)`
+- `ordner(kap, titel, datei)`
+- `drin(raw, liste)`
+- `excel(cli)`
 
 ## `tests/e2e/test_qs_organigramm.py`
 
