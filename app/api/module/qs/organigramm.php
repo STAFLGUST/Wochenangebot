@@ -99,7 +99,7 @@ function qs_organigramm_speichern(): never
         $d['versionen'][$o] = $v;
         return [qs_dok_ablegen($doc, $i, $d, $me), $was];
     });
-    if ($was !== '') audit('qs', 'QM-System: Organigramm in ' . qs_dok_name($d) . " $was");
+    if ($was !== '') audit('qs', 'QM-System: Organigramm in ' . qs_protokoll_name($d, qs_dok_name($d)) . " $was");
     respond(['ok' => true, 'dokument' => qs_dok_antwort($d)]);
 }
 
@@ -138,9 +138,9 @@ function qs_organigramm_namen(array $og, array $stamm): array
    der Prüfer sieht vorher, was festgeschrieben wird */
 function qs_organigramm_vorschau(): never
 {
-    require_perm('qs.sehen');
+    $me = require_perm('qs.sehen');
     $doc = qs_doc('qs-dokumente');
-    $d = $doc['liste'][qs_dokument_index($doc, $_GET['dokument'] ?? '')];
+    $d = qs_dok_sichtbar($doc['liste'][qs_dokument_index($doc, $_GET['dokument'] ?? '')], $me);
     $o = qs_ver_index($d, QS_VER_OFFEN);
     if ($o === null || !isset($d['versionen'][$o]['organigramm']['knoten'])) fail('Zu diesem Dokument gibt es keinen Entwurf mit Organigramm.', 404);
     $v = $d['versionen'][$o];

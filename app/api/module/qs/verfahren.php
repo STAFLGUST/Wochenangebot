@@ -342,9 +342,9 @@ function qs_vf_laden($id): array
     $i = qs_vf_index($doc['liste'], $id, 'Verfahrensdokumentation');
     return [$doc, $i, qs_vf_normal($doc['liste'][$i])];
 }
-function qs_vf_antworten(array $doku): void
+function qs_vf_antworten(array $doku, array $me): void
 {
-    respond(['ok' => true, 'doku' => qs_vf_aus($doku, qs_doc('qs-dokumente')['liste'], qs_stamm(), qs_heute())]);
+    respond(['ok' => true, 'doku' => qs_vf_aus($doku, qs_sichtbar($me, 'dokumente')['dokumente'], qs_stamm(), qs_heute())]);
 }
 /* Dokumentation nach einer Änderung speichern: Stand hochzählen, „geändert“ setzen */
 function qs_vf_ablegen(array &$doc, int $i, array $doku, array $me): array
