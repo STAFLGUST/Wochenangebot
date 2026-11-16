@@ -312,13 +312,19 @@ Querformat, Reihenfolge und Anordnung der Bereiche und Gruppen in Abschnitten, f
 Einzelangebot (`#ez-design`, gespeicherte Einzelangebote, `einzelangebote.bearbeiten`). Das Fenster `#dlg-design` baut
 `app/module/angebot/design.js` (Stile `design.css`): Reiter „Dieses Angebot“ (Standard oder Vorlage, „Anpassen“, „Auf Vorlage
 zurücksetzen“, „Speichern“ → `angebot_design_setzen`) und „Vorlagen“ (Liste mit Nutzung; neu, bearbeiten/umbenennen,
-kopieren, löschen → `angebot_design_save`/`angebot_design_loeschen`, nur mit `angebote.verwalten`). Bearbeitet werden Format,
-Spalten und Abschnitte (↑/↓, entfernen; Gruppen-Abschnitt mit Überschrift, Spalten und Bereichen/Gruppen des Angebots aus
-`WA.angebot.design.namen()` – leer = alle übrigen Gruppen; Text-Abschnitt mit Überschrift und Text). Rechts die Vorschau:
+kopieren, löschen → `angebot_design_speichern`/`angebot_design_loeschen`, nur mit `angebote.verwalten`). Vorlage und Anpassung
+führt nur der Server zusammen: das Fenster übernimmt `wirksam` aus `angebot_designs` bzw. `angebot_design_setzen`. Bearbeitet werden Format,
+Spalten (im Hochformat 1–3; beim Wechsel ins Hochformat werden 4 Spalten zu 3) und Abschnitte (↑/↓, entfernen; Gruppen-Abschnitt
+mit Überschrift, Spalten und Bereichen/Gruppen des Angebots aus `WA.angebot.design.namen()` – leer = alle übrigen Gruppen;
+Text-Abschnitt mit Überschrift und Text; ein Abschnitt einer neueren Fassung steht nur da und bleibt beim Speichern erhalten). Rechts die Vorschau:
 die Angebotsseite im Rahmen (`WA.angebot.design.adresse(oid)` + `&designvorschau=druck|web`); das Fenster schickt das
 ungespeicherte Design per `postMessage {wa: 'design', design, ansicht}`, die Seite zeigt Druckseiten (`html.druckansicht`,
-verkleinert) oder die Kundenansicht und meldet Spalten, Format und Seitenzahl. Das Design wirkt nach dem Speichern sofort
-(ohne Veröffentlichen). Auf der Angebotsseite ordnet `plAbschnitte()` die Gruppen den Abschnitten zu – dieselbe Regel für
+verkleinert) oder die Kundenansicht und meldet Spalten, Format und Seitenzahl. Die Vorschau zeigt den Entwurf (`offer&draft=1`,
+darüber das ungespeicherte Design). Gespeichert ist nicht veröffentlicht (Inhaber 16.11.2026): Kunden sehen das Design erst
+nach „Veröffentlichen“ im Modul Versand – das Fenster zeigt dann `#ds-offen` („noch nicht veröffentlicht“, aus `offen` der
+Server-Antwort), die Liste „Veröffentlichen“ eine Zeile der Art `design` je Angebot; Einzelangebote wirken mit der Freigabe bzw.
+beim Speichern des freigegebenen Einzelangebots. Ist nur ein Design offen (kein Entwurf), veröffentlicht der Versand den
+bisherigen Stand mit dem neuen Design. Auf der Angebotsseite ordnet `plAbschnitte()` die Gruppen den Abschnitten zu – dieselbe Regel für
 Bildschirm (`renderListe`, je Abschnitt höchstens so viele Spalten wie die Breite erlaubt, 390 px einspaltig) und Druck
 (`buildPrintListe`). Tests: Gruppe `angebot_design`.
 
@@ -512,7 +518,8 @@ Leiste senkrecht, schmal ist sie eine waagerechte Spur. Mit `body.bereich-import
     `assets/angebot-druck.js`; Regeln in `assets/angebot-druck.css`. Der Satz misst die Bausteine unsichtbar in
     Druckgröße und verteilt sie rechnerisch auf Seiten fester Höhe (`.pl-page`, 279 × 193 mm):
     ohne Design drei Spalten (mit Design `cfg.raster` und je Bereich `k`/`ab`: Bereiche verschiedener Abschnitte nie in
-    einer Zeile, Text-Abschnitte über die ganze Breite, eine Abschnittsüberschrift endet nie eine Seite); ein Block wird nie geteilt; jede Seite nimmt so viele Blöcke auf wie möglich; ein Bereich beginnt
+    einer Zeile, feste Blöcke `fest` – Text-Abschnitte und Überschriften – über die ganze Breite, eine Abschnittsüberschrift endet
+    nie eine Seite, im Hochformat höchstens drei Spalten); ein Block wird nie geteilt; jede Seite nimmt so viele Blöcke auf wie möglich; ein Bereich beginnt
     auf der laufenden Seite, sobald sein Balken und ein ganzer Block Platz haben, und wird nur zwischen Blöcken umbrochen
     (Balken auf der nächsten Seite mit „Forts.“); kleine Bereiche stehen nebeneinander. Folgen mehr als drei kleine
     Bereiche mit Namen (höchstens zwei Blöcke, `STAPEL_BLOECKE`), dürfen sie als Stapel stehen (`.al-band.al-stapel`): jeder

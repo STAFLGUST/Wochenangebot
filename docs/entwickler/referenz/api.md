@@ -15,8 +15,8 @@ Spalten: **Art** – lesend, schreibend (nur POST) oder post (GET liest, POST sc
 | `abmelden1` | `angebot.kunden` | lesend | öffentlich, fremde Herkunft | – | `app/api/aktionen/kundenportal.php` |
 | `angebot_artikel` | `angebot.eingabe` | lesend | – | Recht angebot.bearbeiten | `app/api/aktionen/angebote.php` |
 | `angebot_design_loeschen` | `angebot.eingabe` | schreibend | – | Recht angebote.verwalten | `app/api/aktionen/angebote.php` |
-| `angebot_design_save` | `angebot.eingabe` | schreibend | – | Recht angebote.verwalten | `app/api/aktionen/angebote.php` |
 | `angebot_design_setzen` | `angebot.eingabe` | schreibend | – | – | `app/api/aktionen/angebote.php` |
+| `angebot_design_speichern` | `angebot.eingabe` | schreibend | – | Recht angebote.verwalten | `app/api/aktionen/angebote.php` |
 | `angebot_designs` | `angebot.eingabe` | lesend | – | – | `app/api/aktionen/angebote.php` |
 | `angebot_winab_export` | `angebot.eingabe` | schreibend | – | Recht angebot.winab_export | `app/api/aktionen/entwurf.php` |
 | `angebot_woche` | `angebot.eingabe` | lesend | – | – | `app/api/aktionen/entwurf.php` |

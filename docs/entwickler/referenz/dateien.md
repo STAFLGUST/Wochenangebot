@@ -755,7 +755,7 @@ Jede Code-Datei beginnt mit einem Kopfkommentar; dessen erste Aussage steht hier
 | `test_admin_confirmation.py` | plattform | Sensible Aktionen, kontoweite Bestätigungsbremse und Dateisperren über echte HTTP-Anfragen. |
 | `test_admin_confirmation_ui.py` | plattform | Abgelaufene Admin-Freigabe im Browser |
 | `test_aktionsregister.py` | plattform | Aktionsregister (regeln/aktionen/*.toml → app/api/lib/aktionen-liste.php) wirkt im API-Einstieg für jede Aktion. |
-| `test_angebot_design.py` | angebot | Design je Angebot (Inhaber 16.11.2026) |
+| `test_angebot_design.py` | angebot | Design je Angebot (Inhaber 16.11.2026, GR-010) |
 | `test_angebote.py` | angebot | Mehrere Angebote: Kundenangebote mit eigenen Preisen, eigene Artikelliste je Angebot (Artikel hinzufügen wie im Einzelangebot, entfernen nur im gewählten Angebot, Umstellung „folgt dem Wochenangebot“ → eigene Liste), … |
 | `test_angebotskategorien.py` | verwaltung | Angebotskategorien (Stammdaten der Verwaltung, Inhaber 05.11.2026) |
 | `test_angebotsliste.py` | angebot | Angebotsliste (Standardansicht der Angebotsseite) |

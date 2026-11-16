@@ -133,10 +133,10 @@ seit = "2026-10-21"
 [[regel]]
 id = "GR-010"
 titel = "Design eines Angebots ändert nur den Aufbau"
-beschreibung = "Das Design eines Angebots (Vorlage und Anpassung, module/angebot/design.php) legt nur Spalten, Hoch-/Querformat, Reihenfolge der Abschnitte und freie Texte fest – für Druck und Kundenseite nach derselben Regel (plAbschnitte in assets/frontend.js). Es blendet keinen Artikel aus: Gruppen ohne Zuordnung stehen im ersten Abschnitt ohne Inhalt, sonst unter „Weitere Artikel“. Ausgeliefert wird nur das wirksame Layout über offer_resolve bzw. einzel_model; es macht nie Felder sichtbar, die das Angebot sonst nicht zeigt (GR-001, GR-002, GR-008). Freie Texte werden überall escaped; Textlängen und die Zahl der Abschnitte begrenzt der Server."
+beschreibung = "Das Design eines Angebots (Vorlage und Anpassung, module/angebot/design.php) legt nur Spalten, Hoch-/Querformat (im Hochformat höchstens drei Spalten), Reihenfolge der Abschnitte und freie Texte fest – für Druck und Kundenseite nach derselben Regel (plAbschnitte in assets/frontend.js). Es blendet keinen Artikel aus: Gruppen ohne Zuordnung stehen im ersten Abschnitt ohne Inhalt, sonst unter „Weitere Artikel“. Es wirkt erst mit dem Veröffentlichen – Wochen-, Kunden- und Sonderangebote mit angebot.veroeffentlichen, Einzelangebote mit der Freigabe bzw. dem Speichern des freigegebenen Einzelangebots; Speichern einer Wahl oder Vorlage macht nichts öffentlich. Kunden bekommen nur den Schnappschuss des wirksamen Layouts (Raster und Abschnitte mit den Namen, die im Angebot vorkommen; keine Vorlagen, keine Mitarbeiternamen) über offer_resolve bzw. einzel_model; frühere Wochen behalten ihr Design (GR-106). Es macht nie Felder sichtbar, die das Angebot sonst nicht zeigt (GR-001, GR-002, GR-008). Freie Texte werden überall escaped; Textlängen, Zahl der Abschnitte und Größe begrenzt der Server."
 verantwortlich = "angebot"
 module = ["angebot"]
-daten = ["angebot-designs", "angebote", "einzelangebote"]
+daten = ["angebot", "angebot-designs", "angebote", "einzelangebote"]
 tests = ["e2e:angebot_design"]
 quelle = "Inhaber 16.11.2026"
 status = "verbindlich"
