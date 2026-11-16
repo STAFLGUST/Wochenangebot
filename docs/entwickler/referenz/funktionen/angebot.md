@@ -184,7 +184,7 @@ _Angebot · Design je Angebot (Inhaber 16.11.2026)_
 
 - `design_load()`
 - `design_index(d, id)`
-- `design_vorlage(id)`
+- `design_vorlage(id)` – shortcut: liest „angebot-designs“ bei jedem Aufruf (je Angebot mit Design 2–3-mal beim Veröffentlichen und in der Änderungsliste); wird das bei vielen …
 
 **Prüfen**
 

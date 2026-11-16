@@ -37,6 +37,8 @@ function design_index(array $d, string $id): ?int
     foreach ($d['vorlagen'] as $i => $v) if ((string)($v['id'] ?? '') === $id) return $i;
     return null;
 }
+// shortcut: liest „angebot-designs“ bei jedem Aufruf (je Angebot mit Design 2–3-mal beim Veröffentlichen und in der Änderungsliste);
+// wird das bei vielen Angeboten und großen Vorlagen spürbar, die Vorlagen einmal je Anfrage laden und durchreichen
 function design_vorlage(string $id): ?array
 {
     $d = design_load();
