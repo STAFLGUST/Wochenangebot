@@ -1,9 +1,10 @@
-/* Angebot · Druckfassung „Angebotsansicht“ (A4 quer) der Angebotsseite – gesetzt von assets/angebot-druck.js.
+/* Angebot · Druckfassung „Angebotsansicht“ (A4 quer, mit Design auch hoch) der Angebotsseite – gesetzt von assets/angebot-druck.js.
    Aussehen wie die Vorschau (Angebotsansicht am Bildschirm, Regeln „body.kseite .al …“ in app.css): Kopf mit Logo und Titel,
    Bereiche als abgerundete graue Balken, Gruppenkopf mit „€/kg“ und Linie, abgerundete gestreifte Zeilen, Marke kursiv rot,
    Werbung und Sonderposten wie dort. Die Maße sind die der Bildschirmansicht in px (hier ausdrücklich gesetzt, weil die
    Bildschirmregeln nur für „screen“ gelten und am Handy andere Maße haben); gesetzt wird auf einer Fläche fester Breite
-   (.pl-in), die für den Satzspiegel 279 × 193 mm verkleinert wird (--z, von angebot-druck.js gesetzt).
+   (.pl-in), die für den Satzspiegel 279 × 193 mm (hoch 192 × 280 mm: --sb, --sh) verkleinert wird (--z, von angebot-druck.js
+   gesetzt). Spalten je Zeile --k (ohne Design 3).
    Dichte in drei Stufen (angebot-druck.js wählt die größte Schrift, mit der es nicht mehr Seiten werden):
      .pl-normal  Satzbreite 1240 px, 13 px Schrift ≙ 8,3 pt     .pl-kompakt  1310 px ≙ 7,9 pt     .pl-eng  1370 px ≙ 7,5 pt
    Zeilenhöhe und Abstände je Stufe stehen als Variablen an .pl-doc (--zeile, --ab-…); angebot-druck.js liest --ab-gruppe
@@ -12,10 +13,10 @@
    vom Dunkelmodus. Die Messung in angebot-druck.js (#print-root.pl-messen, unsichtbar) nutzt dieselben Regeln. */
 #print-root.pl-messen { display: block !important; position: absolute; left: -4000px; top: 0; visibility: hidden; pointer-events: none; contain: layout style; }
 #print-root .pl-m { display: flow-root; }
-#print-root .pl-mb { width: calc(var(--c) * (100% - 2 * var(--ab-spalte)) / 3 + (var(--c) - 1) * var(--ab-spalte)); }   /* Balken über c Spalten */
-#print-root .pl-mcol { width: calc((100% - 2 * var(--ab-spalte)) / 3); display: flex; flex-direction: column; }   /* eine Spalte */
+#print-root .pl-mb { width: calc(var(--c) * (100% - (var(--k, 3) - 1) * var(--ab-spalte)) / var(--k, 3) + (var(--c) - 1) * var(--ab-spalte)); }   /* Balken über c von k Spalten */
+#print-root .pl-mcol { width: calc((100% - (var(--k, 3) - 1) * var(--ab-spalte)) / var(--k, 3)); display: flex; flex-direction: column; }   /* eine von k Spalten */
 #print-root .pl-doc, #print-root .pl-doc * { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
-#print-root .pl-doc { --z: .85039; width: 279mm; margin: 0; border: 0; border-radius: 0; box-shadow: none; padding: 0; background: #fff; color: #0b0b0b; font-family: var(--font); font-variant-numeric: tabular-nums;
+#print-root .pl-doc { --z: .85039; width: var(--sb, 279mm); margin: 0; border: 0; border-radius: 0; box-shadow: none; padding: 0; background: #fff; color: #0b0b0b; font-family: var(--font); font-variant-numeric: tabular-nums;
   -webkit-backdrop-filter: none; backdrop-filter: none;
   --text: #0b0b0b; --text-2: #4d4648; --muted: #6d6669; --accent: #8c1d2c; --accent-soft: #f9eeef; --accent-line: #ebc6cb; --sale: #c2410c; --sale-bg: #fff1e6;
   --aus: #e0dfde; --zebra: #ebeae9; --regel: #d4d3d3;
@@ -26,11 +27,11 @@
 /* Eine Seite ist ein fester Kasten. „contain: size“ macht ihn für den Seitenumbruch des Browsers unteilbar: sonst rechnet
    Chromium mit der unverkleinerten Satzfläche (höher als das Blatt) und verschiebt Blöcke im unteren Teil der Seite auf das
    nächste Blatt, wo sie abgeschnitten wären – am Bildschirm unsichtbar, im PDF fehlten Zeilen (geprüft in test_druck.py). */
-#print-root .pl-page { position: relative; box-sizing: border-box; width: 279mm; height: 193mm; overflow: hidden; contain: size layout paint; break-after: page; break-inside: avoid; }
+#print-root .pl-page { position: relative; box-sizing: border-box; width: var(--sb, 279mm); height: var(--sh, 193mm); overflow: hidden; contain: size layout paint; break-after: page; break-inside: avoid; }
 #print-root .pl-page:last-child { break-after: auto; }
 /* Satzfläche in den Maßen der Bildschirmansicht, verkleinert auf die Seite */
-#print-root .pl-in { position: relative; box-sizing: border-box; width: calc(279mm / var(--z)); font-size: 13px; line-height: 1.3; }
-#print-root .pl-page > .pl-in { position: absolute; left: 0; top: 0; height: calc(193mm / var(--z)); transform: scale(var(--z)); transform-origin: 0 0; }
+#print-root .pl-in { position: relative; box-sizing: border-box; width: calc(var(--sb, 279mm) / var(--z)); font-size: 13px; line-height: 1.3; }
+#print-root .pl-page > .pl-in { position: absolute; left: 0; top: 0; height: calc(var(--sh, 193mm) / var(--z)); transform: scale(var(--z)); transform-origin: 0 0; }
 
 /* Kopf: erste Seite wie die Vorschau (Logo links, Titel rechts), Folgeseiten eine Zeile */
 #print-root .pl-ph { display: flex; flex-wrap: nowrap; align-items: flex-end; justify-content: space-between; gap: 10px 24px; margin: 0 0 var(--ab-kopf); }
@@ -47,8 +48,8 @@
 #print-root .pl-ph2 .pl-pt > strong { max-width: 100%; font-size: 14px; font-weight: 650; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 #print-root .pl-ph2 .pl-pt > span { font-size: 12px; white-space: nowrap; }
 
-/* Bereiche: Zeilen aus drei Spalten, ein Bereich über die Spalten seiner Gruppen, Balken abgerundet */
-#print-root .pl-doc .al-band { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); column-gap: var(--ab-spalte); align-items: start; margin: 0 0 var(--ab-band); }
+/* Bereiche: Zeilen aus k Spalten, ein Bereich über die Spalten seiner Gruppen, Balken abgerundet */
+#print-root .pl-doc .al-band { display: grid; grid-template-columns: repeat(var(--k, 3), minmax(0, 1fr)); column-gap: var(--ab-spalte); align-items: start; margin: 0 0 var(--ab-band); }
 #print-root .pl-doc .al-band > .al-sec { grid-column: span var(--c, 1); min-width: 0; margin: 0; }
 #print-root .pl-doc .al-stapel-sp { min-width: 0; display: flex; flex-direction: column; gap: var(--ab-band); }   /* Stapel: Bereiche einer Spalte untereinander */
 #print-root .pl-doc .al-stapel-sp > .al-sec { min-width: 0; margin: 0; }
@@ -60,6 +61,11 @@
 #print-root .pl-doc .al-st.al-st-eh > span:not(.al-eh) { margin-left: auto; }
 #print-root .pl-doc .al-st > .al-eh { font-size: 13px; font-weight: 650; color: #111; }
 #print-root .pl-doc .al-cols { display: grid; grid-template-columns: repeat(var(--k, 3), minmax(0, 1fr)); column-gap: var(--ab-spalte); align-items: start; }
+/* Text-Abschnitt des Designs: Überschrift und Text über die ganze Breite, Linie links in der Akzentfarbe */
+#print-root .pl-doc .pl-text { margin: 0; padding: 2px 0 2px 14px; border-left: 3px solid var(--accent); }
+#print-root .pl-doc .pl-text h3 { margin: 0; font-size: 15px; font-weight: 650; line-height: 1.3; color: var(--text); }
+#print-root .pl-doc .pl-text p { margin: 3px 0 0; font-size: 13px; line-height: 1.45; color: var(--text-2); overflow-wrap: anywhere; }
+#print-root .pl-doc .pl-text h3:only-child { color: var(--accent); }
 #print-root .pl-doc .al-col { min-width: 0; padding: 0; border: 0; display: flex; flex-direction: column; gap: var(--ab-gruppe); container-type: normal; }
 
 /* Gruppen: Tabellen wie in der Vorschau */
@@ -125,4 +131,13 @@
 
 @media print {
   #print-root.pl-messen { position: static; visibility: visible; }   /* falls während einer Messung gedruckt wird */
+}
+/* Vorschau im Fenster „Design“ des Eingabebereichs (?designvorschau=druck, frontend.js): die Druckseiten am Bildschirm, auf die
+   Breite des Fensters verkleinert (--vz; die Messung .pl-mess bleibt unverkleinert) */
+@media screen {
+  html.druckansicht body > *:not(#print-root) { display: none !important; }
+  html.druckansicht, html.druckansicht body { background: #e7e5e2; }
+  html.druckansicht #print-root { display: block; padding: 12px; }
+  html.druckansicht #print-root > .pl-doc:not(.pl-mess) { zoom: var(--vz, 1); margin: 0 auto; background: none; }
+  html.druckansicht #print-root .pl-page { margin: 0 0 14px; background: #fff; box-shadow: 0 1px 8px rgba(0, 0, 0, .2); }
 }

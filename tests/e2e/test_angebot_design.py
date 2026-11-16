@@ -174,6 +174,139 @@ check('Einzelangebot mit angepasstem Standard (2 Spalten): Kunde bekommt es, Rev
       st == 200 and ke['meta'].get('design') == {'raster': {'spalten': 2, 'format': 'quer'}, 'abschnitte': []}
       and [e for e in doc('einzelangebote')['list'] if e['id'] == ez['id']][0]['revision'] == ez['revision'], ke['meta'].get('design'))
 
+
+# ---------- Browser: Kundenseite und Druck ----------
+WEB = """() => ({ reihe: [...document.querySelectorAll('#list .al-text h3, #list .al-band .al-st:not(.al-st-leer) h3')].map((h) => h.textContent.trim()),
+  zeilen: [...document.querySelectorAll('#list .al-band tr.row')].map((r) => r.dataset.id),
+  k: [...document.querySelectorAll('#list .al-band')].map((b) => getComputedStyle(b).gridTemplateColumns.split(' ').length),
+  texte: [...document.querySelectorAll('#list .al-text')].map((t) => t.innerText), html: [...document.querySelectorAll('#list .al-text')].map((t) => t.innerHTML).join(''),
+  xss: !!document.querySelector('#list .al-text img, #list .al-text b') || !!window.__xss, sw: document.documentElement.scrollWidth })"""
+DRUCK = """() => { const D = document.querySelector('#print-root .pl-doc'); if (!D) return null;
+  const b = (e) => e.getBoundingClientRect();
+  const seiten = [...D.querySelectorAll('.pl-page')].map((p) => {
+    const pb = b(p), f = p.querySelector('.pl-in > .pl-fuss'), grenze = f ? b(f).top : pb.bottom;
+    const kaesten = [...p.querySelectorAll('.al-band .al-grp, .al-band .pl-text, .al-band .al-st')].map(b), bl = [...p.querySelectorAll('.al-band .al-grp, .al-band .pl-text')].map(b);
+    let ueber = 0;
+    for (let i = 0; i < bl.length; i++) for (let j = i + 1; j < bl.length; j++) { const x = bl[i], y = bl[j]; if (Math.min(x.right, y.right) - Math.max(x.left, y.left) > 1 && Math.min(x.bottom, y.bottom) - Math.max(x.top, y.top) > 1) ueber++; }
+    return { b: pb.width / (96 / 25.4), h: pb.height / (96 / 25.4), ueber, raus: Math.max(0, ...kaesten.map((k) => Math.max(pb.left - k.left, k.right - pb.right, pb.top - k.top, k.bottom - grenze))),
+      k: [...p.querySelectorAll('.al-band')].map((bd) => getComputedStyle(bd).gridTemplateColumns.split(' ').length),
+      kopfAmEnde: (() => { const bs = [...p.querySelectorAll('.al-band')], l = bs[bs.length - 1]; return !!(l && l.querySelector(':scope > .pl-text > h3:only-child')) && p !== [...D.querySelectorAll('.pl-page')].pop(); })() }; });
+  const reihe = [...D.querySelectorAll('.al-band .pl-text h3, .al-band .al-st:not(.pl-trenn) h3')].filter((h) => !h.querySelector('.al-cont')).map((h) => h.textContent.trim());
+  return { seiten, spalten: +D.dataset.spalten, format: D.dataset.format, zeilen: [...D.querySelectorAll('.al-band tr.row')].map((r) => r.dataset.id), reihe,
+    text: D.innerText, xss: !!D.querySelector('.pl-text img, .pl-text b') || !!window.__xss, page: (document.querySelector('#page-style') || {}).textContent || '' }; }"""
+INIT = "window.print = () => { window.__gedruckt = (window.__gedruckt || 0) + 1; window.dispatchEvent(new Event('beforeprint')); };"
+
+
+def ohne_doppel(xs):
+    return [x for i, x in enumerate(xs) if i == 0 or xs[i - 1] != x]
+
+
+def druck(pg):
+    pg.evaluate("window.dispatchEvent(new Event('beforeprint'))")
+    try:
+        pg.wait_for_selector('#print-root .pl-doc .pl-page', state='attached', timeout=15000)
+    except Exception:
+        print('JavaScript-Fehler:', errors)
+        raise
+    pg.wait_for_function("[...document.querySelectorAll('#print-root img')].every((i) => i.complete)")
+    pg.emulate_media(media='print')
+    s = pg.evaluate(DRUCK)
+    return s
+
+
+def zurueck(pg):
+    pg.emulate_media(media='null')
+    pg.evaluate("window.dispatchEvent(new Event('afterprint'))")
+
+
+def laden(pg, pfad='/'):
+    pg.goto(BASE + pfad); pg.wait_for_selector('.al tr.row'); pg.evaluate('document.fonts.ready')
+
+
+def heil(s, b, h, kmax):
+    f = []
+    for i, x in enumerate(s['seiten']):
+        if abs(x['b'] - b) > .5 or abs(x['h'] - h) > .5: f.append(f"Seite {i + 1}: {x['b']:.1f}×{x['h']:.1f} mm")
+        if x['ueber']: f.append(f"Seite {i + 1}: {x['ueber']} Überlappungen")
+        if x['raus'] > .5: f.append(f"Seite {i + 1}: ragt {x['raus']:.1f} px aus der Seite")
+        if any(k > kmax for k in x['k']): f.append(f"Seite {i + 1}: Zeile mit {x['k']} Spalten")
+        if x['kopfAmEnde']: f.append(f"Seite {i + 1}: endet mit einer Überschrift")
+    return f
+
+
+SEKT = [re.sub(r'"([^"]{2,40}?)"', r'„\1“', x) for x in SEKT]   # Bereichsnamen, wie die Angebotsansicht sie zeigt: "Marke" → „Marke“
+SCHRITT = ['Willkommen <b>Gastro</b>', SEKT[2], 'Alles Weitere', SEKT[0], SEKT[1], SEKT[3]]
+with sync_playwright() as p:
+    br = p.chromium.launch()
+    ctx = br.new_context(viewport={'width': 1280, 'height': 900})
+    ctx.add_init_script(INIT)
+    pg = ctx.new_page(); pg.on('pageerror', lambda ex: errors.append(str(ex)))
+    laden(pg)
+    w = pg.evaluate(WEB)
+    check('Kundenseite (1280 px, „Gastro“): Abschnitte in der Reihenfolge des Designs – Text, Bereich 3, „Alles Weitere“ mit den übrigen Bereichen',
+          ohne_doppel(w['reihe']) == SCHRITT, w['reihe'])
+    check('… jeder Artikel genau einmal (GR-010), zwei Spalten je Zeile', len(w['zeilen']) == ITEMS == len(set(w['zeilen'])) and set(w['k']) == {2}, (len(w['zeilen']), set(w['k'])))
+    check('Text-Abschnitt escaped: Markup erscheint als Text, kein Element, kein Skript', not w['xss'] and '<img src=x' in w['texte'][0] and '&lt;b&gt;' in w['html'], w['texte'][:1])
+    shot(pg, f'{SH}/design-kundenseite-1280-hell.png')
+    s = druck(pg)
+    check('Druck „Gastro“: A4 hoch 192 × 280 mm, zwei Spalten, nichts ragt aus der Seite, keine Überlappung, keine Seite endet mit einer Überschrift', s['format'] == 'hoch' and s['spalten'] == 2 and heil(s, 192, 280, 2) == [] and 'portrait' in s['page'],
+          (s['format'], s['spalten'], heil(s, 192, 280, 2)[:3]))
+    check('… dieselbe Reihenfolge der Abschnitte und Artikel wie auf der Kundenseite, Text escaped', ohne_doppel(s['reihe']) == SCHRITT and s['zeilen'] == w['zeilen'] and not s['xss'] and '<img src=x' in s['text'],
+          (ohne_doppel(s['reihe']), len(s['zeilen'])))
+    shot(pg.locator('#print-root'), f'{SH}/design-druck-gastro-hoch.png')
+    zurueck(pg)
+    ctx.close()
+
+    # „Export“: 4 Spalten quer, Gruppen nach Namen, ein Abschnitt mit 2 Spalten, Rest unter „Weitere Artikel“
+    E.call('angebot_design_setzen', {'angebot': 'std', 'design': {'vorlage': xid}})
+    sued = [g['section'] for g in pub['groups'] if g['name'] in ('Argentinien, frisch', 'Uruguay, frisch')]
+    ERW = ['Südamerika', sued[0], SEKT[3], 'Weitere Artikel', SEKT[0], SEKT[1], SEKT[2]]
+    for schema in ('light', 'dark'):
+        ctx = br.new_context(viewport={'width': 1280, 'height': 900}, color_scheme=schema)
+        ctx.add_init_script(INIT)
+        pg = ctx.new_page(); pg.on('pageerror', lambda ex: errors.append(str(ex)))
+        laden(pg)
+        w = pg.evaluate(WEB)
+        if schema == 'light':
+            check('Kundenseite „Export“: Gruppen nach Namen (Groß-/Kleinschreibung egal), übrige Gruppen unter „Weitere Artikel“, kein Artikel fehlt (GR-010)',
+                  ohne_doppel(w['reihe']) == ERW and len(w['zeilen']) == ITEMS == len(set(w['zeilen'])), (w['reihe'], len(w['zeilen'])))
+            check('… Spalten je Abschnitt: 4, 2 (Abschnitt), 4', set(w['k']) == {4, 2}, w['k'])
+            s = druck(pg)
+            check('Druck „Export“: A4 quer 279 × 193 mm, höchstens vier Spalten, nichts ragt heraus, keine Überlappung, alle Artikel in Reihenfolge der Kundenseite',
+                  s['format'] == 'quer' and s['spalten'] == 4 and heil(s, 279, 193, 4) == [] and s['zeilen'] == w['zeilen'] and ohne_doppel(s['reihe']) == ERW and 'landscape' in s['page'],
+                  (heil(s, 279, 193, 4)[:3], ohne_doppel(s['reihe'])))
+            check('… Zeilen mit vier und mit zwei Spalten', {4, 2} <= {k for x in s['seiten'] for k in x['k']}, [x['k'] for x in s['seiten']])
+            shot(pg.locator('#print-root'), f'{SH}/design-druck-export-quer.png')
+            zurueck(pg)
+        shot(pg, f'{SH}/design-kundenseite-export-1280-{"hell" if schema == "light" else "dunkel"}.png')
+        ctx.close()
+
+    E.call('angebot_design_setzen', {'angebot': 'std', 'design': {'vorlage': gid}})
+    for schema in ('light', 'dark'):
+        mc = br.new_context(viewport={'width': 390, 'height': 844}, is_mobile=True, has_touch=True, device_scale_factor=2, color_scheme=schema)
+        mc.add_init_script(INIT)
+        mo = mc.new_page(); mo.on('pageerror', lambda ex: errors.append(str(ex)))
+        laden(mo)
+        w = mo.evaluate(WEB)
+        check(f'Kundenseite 390 px ({schema}): einspaltig, Reihenfolge der Abschnitte bleibt, kein Querscrollen', set(w['k']) == {1} and ohne_doppel(w['reihe']) == SCHRITT and w['sw'] <= 390 and len(w['zeilen']) == ITEMS,
+              (set(w['k']), w['sw']))
+        shot(mo, f'{SH}/design-kundenseite-390-{"hell" if schema == "light" else "dunkel"}.png')
+        mc.close()
+
+    # ohne Design: wie bisher (drei Spalten quer, keine Texte)
+    E.call('angebot_design_setzen', {'angebot': 'std', 'design': None})
+    ctx = br.new_context(viewport={'width': 1280, 'height': 900})
+    ctx.add_init_script(INIT)
+    pg = ctx.new_page(); pg.on('pageerror', lambda ex: errors.append(str(ex)))
+    laden(pg)
+    w = pg.evaluate(WEB)
+    s = druck(pg)
+    check('ohne Design: Kundenseite ohne Texte in Angebotsreihenfolge, Druck drei Spalten quer', not w['texte'] and ohne_doppel(w['reihe']) == SEKT and set(w['k']) == {3}
+          and s['spalten'] == 3 and s['format'] == 'quer' and heil(s, 279, 193, 3) == [] and s['zeilen'] == w['zeilen'], (w['reihe'], s['spalten']))
+    zurueck(pg)
+    ctx.close()
+    br.close()
+
 check('keine JavaScript-Fehler', not errors, errors[:3])
 print(f'{sum(res)}/{len(res)} passed')
 sys.exit(0 if all(res) else 1)
