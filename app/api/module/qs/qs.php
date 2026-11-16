@@ -128,10 +128,12 @@ function qs_kapitel_geschuetzt(string $k): bool
     foreach (QS_KAPITEL_BEARBEITER as $g) if ($n === $g || str_starts_with($n, $g . '.')) return true;
     return false;
 }
-/* Ordnername mit geschützter Nummer vorn („1.5 Mitarbeiter“, „_1.5.1_Zeugnisse“; nicht „1.50 …“, kein Datum „01.05.2024“)? */
+/* Ordnername mit geschützter Nummer vorn („1.5 Mitarbeiter“, „_1.5.1_Zeugnisse“, auch „alt_1.5 …“ und „Kopie von 1.5 …“ wie in der
+   Ordnerablage üblich; nicht „1.50 …“, kein Datum „01.05.2024“)? */
 function qs_name_geschuetzt(string $name): bool
 {
-    return preg_match('/^(\d{1,2}(?:\.\d{1,2}){0,2})(?:[\s_-]|$)/', ltrim($name, '_ '), $m) === 1 && qs_kapitel_geschuetzt($m[1]);
+    $name = preg_replace('/^(?:[\s_-]*(?:alt|kopie(?:\s+von)?)(?=[\s_-]))*[\s_-]*/iu', '', $name);
+    return preg_match('/^(\d{1,2}(?:\.\d{1,2}){0,2})(?:[\s_-]|$)/', $name, $m) === 1 && qs_kapitel_geschuetzt($m[1]);
 }
 /* Eintrag (Dokument, Abschnitt, Prüfung, Maßnahme) geschützt? Kapitel-Kennung; Nummer vorn im Titel bei Ordner-Dokumenten und in Bereichen */
 function qs_geschuetzt(array $e, array $stamm): bool

@@ -6,7 +6,7 @@ Geprüft an jedem Leseweg: qs_start (Dokumente, Handbuch, Prüfplan, Nachweise, 
 drei Listen, Audit-Bericht (Ansicht und Excel), qs_datei, qs_archiv, qs_archiv_zip, qs_ablage_export (auch je Kapitel), Organigramm-Vorschau,
 Verfahrensdoku (qs_verfahren, Antwort nach dem Speichern, PDF des Arbeitsstands, ZIP für Prüfungen), Protokoll ohne Namen; Grenze „1.50“
 bleibt sichtbar; Ordner „1.5 …“ außerhalb von Kapitel 1.5 ebenso – als Ordner-Dokument (Titel) und als Unterordner (pfad der Datei), aus dem
-Import einer zweiten Firma (Bereich 90, auch „HACCP/1.5 Mitarbeiter/…“) und von Hand in Kapitel 1.4 abgelegt; Oberfläche für „ansehen“ und „Nachweise“ (1280/390 px, keine JavaScript-Fehler). Nur erfundene Testdaten.
+Import einer zweiten Firma (Bereich 90, auch „HACCP/1.5 Mitarbeiter/…“) und von Hand in Kapitel 1.4 abgelegt, auch „alt_1.5 …“ und „Kopie von 1.5.1 …“; Oberfläche für „ansehen“ und „Nachweise“ (1280/390 px, keine JavaScript-Fehler). Nur erfundene Testdaten.
 """
 import io
 import json
@@ -184,13 +184,15 @@ for abfrage in ('qs_ablage_export&alle=1', 'qs_ablage_export&kapitel=90&alle=1')
 # ── Von Hand in Kapitel 1.4: Ordner-Dokument „1.5.1 Zeugnisse“ und Unterordner „Akten/1.5 Mitarbeiter“ eines anderen Ordners ──
 H151, h151 = ordner('1.4', '1.5.1 Zeugnisse', 'Hand-Zeugnis.pdf')
 H14, h14 = ordner('1.4', 'Ablage Personal', 'Hand-Liste.pdf')
-hp = {n: hochladen(Be, H14, '', n, pdf(n), {'pfad': p})[1]['datei'] for n, p in (('Hand-Akte.pdf', 'Akten/1.5 Mitarbeiter'), ('Hand-150.pdf', 'Akten/1.50 Sonstiges'))}
+hp = {n: hochladen(Be, H14, '', n, pdf(n), {'pfad': p})[1]['datei'] for n, p in (('Hand-Akte.pdf', 'Akten/1.5 Mitarbeiter'), ('Hand-150.pdf', 'Akten/1.50 Sonstiges'),
+                                                                                 ('Hand-Alt.pdf', 'Akten/alt_1.5 Mitarbeiter'), ('Hand-Kopie.pdf', 'Kopie von 1.5.1 Zeugnisse'))}
 st, r = L.call('qs_start')
 check('Kapitel 1.4: Ordner „1.5.1 Zeugnisse“ fehlt für „ansehen“, „Ablage Personal“ bleibt', H151 not in [d['id'] for d in r['dokumente']]
       and H14 in [d['id'] for d in r['dokumente']])
 check('… Ordnerbaum „Ablage Personal“: „ansehen“ ohne „Akten/1.5 Mitarbeiter“, mit „Akten/1.50 Sonstiges“',
-      baum(L, H14) == ['Hand-150.pdf@Akten/1.50 Sonstiges', 'Hand-Liste.pdf@'] and len(baum(Be, H14)) == 3, (baum(L, H14), baum(Be, H14)))
-for was, abruf in (('Datei im Ordner 1.5.1', 'qs_datei&id=' + h151), ('Datei im Unterordner 1.5', 'qs_datei&id=' + hp['Hand-Akte.pdf'])):
+      baum(L, H14) == ['Hand-150.pdf@Akten/1.50 Sonstiges', 'Hand-Liste.pdf@'] and len(baum(Be, H14)) == 5, (baum(L, H14), baum(Be, H14)))
+for was, abruf in (('Datei im Ordner 1.5.1', 'qs_datei&id=' + h151), ('Datei im Unterordner 1.5', 'qs_datei&id=' + hp['Hand-Akte.pdf']),
+                   ('Datei im Unterordner „alt_1.5 …“', 'qs_datei&id=' + hp['Hand-Alt.pdf']), ('Datei im Unterordner „Kopie von 1.5.1 …“', 'qs_datei&id=' + hp['Hand-Kopie.pdf'])):
     check(f'Kapitel 1.4, {was}: „ansehen“ 403, „bearbeiten“ 200', roh(L, abruf)[0] == 403 and roh(Be, abruf)[0] == 200)
 namen = zipn(L, 'qs_ablage_export&kapitel=1.4&alle=1') + zipn(L, f'qs_archiv_zip&dok={H14}')
 check('… Ablage-Export und Ordner-ZIP für „ansehen“ ohne beide, mit „Hand-150“', 'Hand-Zeugnis' not in namen and 'Hand-Akte' not in namen and 'Hand-150' in namen, namen)
