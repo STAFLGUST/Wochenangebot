@@ -2,7 +2,7 @@
 
 <!-- ERZEUGT von `python3 werkzeuge/doku.py erzeugen` – nicht von Hand ändern. Quelle: Funktionen und Kommentare im Code. Die CI prüft, dass diese Datei zum Code passt. -->
 
-120 Dateien, 1197 Funktionen – in der Reihenfolge der Datei, **fett** die Abschnitte. Text = erste Aussage des Kommentars direkt über der Funktion (Python: Docstring). Übersicht aller Module: [README.md](README.md).
+120 Dateien, 1205 Funktionen – in der Reihenfolge der Datei, **fett** die Abschnitte. Text = erste Aussage des Kommentars direkt über der Funktion (Python: Docstring). Übersicht aller Module: [README.md](README.md).
 
 ## `.github/scripts/apt_vorrat.py`
 
@@ -177,7 +177,8 @@ _Dateiablage der Plattform (neben der Speicherschicht): hochgeladene Dateien ein
 - `ablage_dateiname(v)` – Dateiname für Anzeige und Download: ohne Pfad, Steuer- und unter Windows verbotene Zeichen, höchstens 150 Zeichen, Endung bleibt erhalten.
 - `ablage_art(name)` – Endung → Art (Schlüssel in ABLAGE_ARTEN) oder Ausnahme
 - `ablage_inhalt_passt(pfad, art)` – Passt der Dateikopf zur Endung?
-- `ablage_zip_pruefen(pfad)` – Namen im zentralen Verzeichnis eines ZIP-Archivs gegen ABLAGE_GESPERRT prüfen, ohne zu entpacken (auch Zip64); wirft bei gesperrter Endung oder unlesbarem …
+- `ablage_zip_pruefen(pfad)` – Namen eines ZIP-Archivs gegen ABLAGE_GESPERRT prüfen, ohne zu entpacken (auch Zip64); wirft bei gesperrter Endung, mehr als ABLAGE_ZIP_EINTRAEGE_MAX …
+- `ablage_zip_felder(z)` – Zusatzfelder eines ZIP-Kopfes → [Kennung => [Inhalt, …]]; null, wenn ein Feld abgeschnitten ist (wie bei Python) oder es mehr als ABLAGE_ZIP_FELDER_MAX sind
 
 **Hochladen in Teilen**
 
@@ -1812,7 +1813,7 @@ _Reine Funktionen und Tabellen der Dateiablage (app/api/lib/dateiablage.php) ohn
 
 ## `tests/unit/dateiablage_zip.php`
 
-_Hilfsskript für tests/unit/test_dateiablage_zip.py_
+_Hilfsskript für tests/unit/test_dateiablage_zip.py zu app/api/lib/dateiablage.php._
 
 - `store_ordner(bereich)`
 - `store_getrennt()`
@@ -1851,7 +1852,14 @@ _ZIP-Export der Dateiablage (app/api/lib/dateiablage.php, ablage_zip_senden) üb
 - `check(n, c, i)`
 - `export(wurzel, eintraege, ziel, nach_erstem_teil)` – ZIP über das Hilfsskript erzeugen; lange Nullfolgen als Lücke schreiben (die Testdateien bestehen fast nur aus Nullen). nach_erstem_teil läuft, sobald das …
 - `unzip_test(ziel)` – Info-ZIP unzip -t: 0 nur ohne Warnung (z. B. „mismatching local filename“)
+- `pruefen(*pfade)` – ablage_zip_pruefen über das Hilfsskript: je Datei „ok“ oder die Meldung; jede PHP-Warnung lässt den Test scheitern
+- `lokal(name, daten, extra)`
+- `zentral(name, daten, versatz, extra)`
+- `ende(anzahl, laenge, start, kommentar)`
+- `archiv(eintraege, anzahl, extra, lokal_extra, lokal_name)` – eintraege: [(name, daten)]; anzahl: Zahl im Ende-Satz (Standard: richtig); extra/lokal_extra/lokal_name: {Nummer: Wert}
+- `unicode_pfad(echt, angezeigt)`
 - `datei(i, inhalt, groesse)`
+- `zipfile_bytes(eintraege, kommentar)` – ── Prüfung beim Hochladen: echte Archive anderer Packer werden angenommen ──
 
 ## `tests/unit/test_doku.py`
 
