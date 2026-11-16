@@ -12,6 +12,10 @@ const PREVIEW = new URLSearchParams(location.search).has('vorschau');
    Vorschau-Hinweis und ohne „Zurück zum Eingabebereich“ – Hinweis und Schließen stehen im Fenster darüber */
 const EINGEBETTET = PREVIEW && new URLSearchParams(location.search).has('eingebettet') && window.parent !== window;
 if (EINGEBETTET) document.documentElement.classList.add('eingebettet');
+/* Vorschau im Fenster „Design“ des Eingabebereichs (app/module/angebot/design.js): ?vorschau=1&eingebettet=1&designvorschau=druck|web.
+   Das Fenster schickt das ungespeicherte Design (postMessage {wa: 'design', design, ansicht}); die Seite zeigt damit die
+   Kundenansicht oder die Druckseiten am Bildschirm und meldet {wa: 'design', stand: 'bereit' | 'gezeigt', ansicht, spalten, format, seiten} */
+const DESIGN_FENSTER = EINGEBETTET && /^(druck|web)$/.test(new URLSearchParams(location.search).get('designvorschau') || '');
 const DRUCKEN = new URLSearchParams(location.search).has('drucken');   // aus dem Eingabebereich: gleich den Druckdialog öffnen (Einzelangebote)
 const DRUCK_DIREKT = new URLSearchParams(location.search).get('drucken') === 'liste';   // Knopf „Drucken“ in „Angebot bearbeiten“: ohne Auswahl die Angebotsansicht drucken
 /* Direktdruck im unsichtbaren Rahmen (app/module/angebot/druck.js): dem Eingabebereich den Stand melden – bereit, gedruckt, fehler */
@@ -319,7 +323,7 @@ function werbungHTML(eigeneKarte, druck) {   // druck: Fassung für die Drucksei
   const ws = DATA.werbungen;
   if (!ws || !ws.length || (!druck && (state.tab !== 'all' || hasFilters()))) return '';
   const host = $('#list');
-  const k = druck ? 3 : plColsFor((host && host.clientWidth) || 1200);   // dieselben Spalten wie die Liste darunter
+  const k = druck ? plRaster().spalten : plColsFor((host && host.clientWidth) || 1200);   // dieselben Spalten wie die Liste darunter
   const duo = ws.length > 1 && k > 1;                        // zwei Werbungen nebeneinander, je die Hälfte der Spalten
   const sec = (w, nr) => {
     const kk = ws.length > 1 ? (duo ? Math.max(1, Math.floor(k / 2)) : 1) : k;
@@ -669,32 +673,74 @@ function plBlockHTML(b, mode) {
   return `<div class="al-grp"><table class="al-tab${was}">${cg}${kopf ? `<thead>${kopf}</thead>` : ''}
     <tbody>${items.map(row).join('')}</tbody></table></div>`;
 }
-let plK = 3;
+let plK = 3, plK4 = false;
 const plColsFor = (w) => (w >= 900 ? 3 : w >= 500 ? 2 : 1);   // drei Blöcke erst, wenn die Bezeichnungen ganz passen (768 px: zwei)
+
+/* ---------- Design des Angebots (Inhaber 16.11.2026; Server: api/module/angebot/design.php) ----------
+   meta.design = { raster: { spalten 1–4, format quer|hoch }, abschnitte: [{ art: 'gruppen', titel, spalten?, inhalt: [{bereich} | {gruppe}] }
+   | { art: 'text', titel, text }] } – ohne Design ein Abschnitt mit allen Gruppen, drei Spalten quer (bisheriges Verhalten).
+   plAbschnitte ist die eine Regel für Bildschirm und Druck: Bereiche und Gruppen nach Namen (ohne Groß-/Kleinschreibung), jede
+   Gruppe nur im ersten passenden Abschnitt, übrige Gruppen im ersten Abschnitt ohne Inhalt, sonst unter „Weitere Artikel“ am
+   Ende – kein Artikel geht verloren (GR-010). Leere Abschnitte entfallen; Texte und Überschriften nur im ganzen Angebot
+   (mitText, nicht bei Suche, Filter oder Merkliste). Am Bildschirm hat ein Abschnitt höchstens so viele Spalten wie die Breite
+   erlaubt (390 px: eine), die Reihenfolge bleibt. Nur bekannte Arten (PL_ARTEN): ein Abschnitt einer neueren Fassung fällt weg,
+   statt als Gruppen-Abschnitt alle übrigen Gruppen an sich zu ziehen (GR-006). Im Hochformat höchstens drei Spalten. */
+let DESIGN_VORSCHAU = null;   // Fenster „Design“ im Eingabebereich (app/module/angebot/design.js): ungespeichertes Design zur Vorschau
+const designAktiv = () => DESIGN_VORSCHAU || (DATA.meta && DATA.meta.design) || null;
+const spaltenOk = (n) => Number.isInteger(n) && n >= 1 && n <= 4;
+const PL_ARTEN = new Set(['gruppen', 'text']);
+const plRaster = () => { const r = (designAktiv() || {}).raster || {}, format = r.format === 'hoch' ? 'hoch' : 'quer'; return { spalten: Math.min(spaltenOk(r.spalten) ? r.spalten : 3, format === 'hoch' ? 3 : 4), format }; };
+const vollesAngebot = () => state.tab === 'all' && !hasFilters();
+function plAbschnitte(units, mitText) {
+  const d = designAktiv(), K = plRaster().spalten, klein = (t) => String(t ?? '').trim().toLocaleLowerCase('de');
+  const bekannt = (d && Array.isArray(d.abschnitte) ? d.abschnitte : []).filter((a) => a && PL_ARTEN.has(a.art));
+  const ab = bekannt.length ? bekannt : [{ art: 'gruppen', inhalt: [] }];
+  const out = ab.map((a) => (a.art === 'text' ? { art: 'text', titel: a.titel || '', text: a.text || '' }
+    : { art: 'gruppen', titel: a.titel || '', spalten: spaltenOk(a.spalten) ? a.spalten : K, rest: !(a.inhalt || []).length, units: [] }));
+  const frei = new Set(units);
+  ab.forEach((a, i) => {
+    if (a.art !== 'gruppen') return;
+    for (const r of a.inhalt || []) for (const u of units) {
+      if (frei.has(u) && ('bereich' in r ? klein(u.section) === klein(r.bereich) : klein(u.items[0].group) === klein(r.gruppe))) { frei.delete(u); out[i].units.push(u); }
+    }
+  });
+  const uebrig = units.filter((u) => frei.has(u));
+  let ziel = out.find((x) => x.rest);
+  if (uebrig.length && !ziel) out.push(ziel = { art: 'gruppen', titel: 'Weitere Artikel', spalten: K, rest: true, units: [] });
+  if (ziel) ziel.units.push(...uebrig);
+  return out.flatMap((x) => (x.art === 'text' ? (mitText ? [x] : []) : !x.units.length ? [] : mitText && x.titel ? [{ art: 'text', titel: x.titel, text: '', kopf: true }, x] : [x]));
+}
+const plTextHTML = (a) => `${a.titel ? `<h3>${esc(a.titel)}</h3>` : ''}${a.text ? `<p>${esc(a.text).replace(/\n/g, '<br>')}</p>` : ''}`;   // Texte des Designs nur escaped (Bildschirm und Druck)
 function renderListe(list, grouped) {
   const host = $('#list');
   plK = plColsFor((host && host.clientWidth) || 1200);
+  plK4 = ((host && host.clientWidth) || 1200) >= 1200;
   const colW = ((host && host.clientWidth) || 1200) / plK;
   const units = plUnits(list, grouped, Math.max(18, Math.floor((colW - 150) / 6.6)));
   const stand = PUBLISHED_AT ? new Date(PUBLISHED_AT).toLocaleDateString('de-DE', { day: '2-digit', month: '2-digit', year: 'numeric' }) : '';
   const m = DATA.meta || {};
   const head = `<div class="al-head">${PL_LOGO}<div class="al-ht"><h2>${esc(m.offerName && m.offerName !== 'Wochenangebot' && !m.einzel ? m.offerName + ' · ' : '')}${esc(plTitle())}</h2><span>${stand ? 'Stand ' + esc(stand) + ' · ' : ''}Preise in € je kg</span></div></div>${werbungHTML(false)}`;
-  const zeilen = grouped ? plBaender(plSections(units), plK)
-    : [[{ sec: { name: '', units }, c: Math.min(plK, units[0].items.length) || 1, cols: plGleichTeilen(units[0], plK) }]];
-  const baender = zeilen.map((band) => `<div class="al-band" style="--k:${plK}">${band.map(({ sec, c, cols }) => {
+  const bandHTML = (k) => (band) => `<div class="al-band" style="--k:${k}">${band.map(({ sec, c, cols }) => {
     const n = sec.units.reduce((a, u) => a + u.items.length, 0);
     // Abschnitt ohne Namen neben einem benannten: unsichtbarer Platzhalter, damit die Blöcke der Zeile oben bündig beginnen
     const kopf = sec.name ? `<div class="al-st"><h3>${plGroupName(sec.name)}</h3><span>${plural(n, 'Artikel', 'Artikel')}</span></div>`
       : band.some((x) => x.sec.name) ? '<div class="al-st al-st-leer" aria-hidden="true"><h3>&nbsp;</h3></div>' : '';
     // allein in der Zeile: Band über die ganze Breite, Spalten so breit wie in den anderen Zeilen (übrige bleiben frei)
-    const breite = band.length === 1 ? plK : c;
+    const breite = band.length === 1 ? k : c;
     return `<section class="al-sec" style="--c:${breite}">${kopf}
       <div class="al-cols" style="--k:${breite}">${cols.map((col) => `<div class="al-col">${col.map((b) => plBlockHTML(b, 'screen')).join('')}</div>`).join('')}</div></section>`;
-  }).join('')}</div>`);
+  }).join('')}</div>`;
+  const baender = grouped
+    ? plAbschnitte(units, vollesAngebot()).map((a) => {
+      if (a.art === 'text') return `<section class="al-text">${plTextHTML(a)}</section>`;
+      const k = Math.min(a.spalten, plK4 ? 4 : plK);
+      return plBaender(plSections(a.units), k).map(bandHTML(k)).join('');
+    })
+    : [[{ sec: { name: '', units }, c: Math.min(plK, units[0].items.length) || 1, cols: plGleichTeilen(units[0], plK) }]].map(bandHTML(plK));
   return `<div class="al" data-k="${plK}">${head}${baender.join('')}${hinweisHTML('al-note')}</div>`;
 }
 /* Spaltenzahl folgt der Breite: bei Wechsel neu verteilen */
-if (window.ResizeObserver) new ResizeObserver(() => { const h = $('#list'); if (state.view === 'liste' && h && h.querySelector('.al') && plColsFor(h.clientWidth) !== plK) renderList(); }).observe(document.documentElement);
+if (window.ResizeObserver) new ResizeObserver(() => { const h = $('#list'); if (state.view === 'liste' && h && h.querySelector('.al') && (plColsFor(h.clientWidth) !== plK || (h.clientWidth >= 1200) !== plK4)) renderList(); }).observe(document.documentElement);
 
 /* Druck/PDF „Angebotsansicht“: A4 quer, im Aussehen der Vorschau – derselbe Inhalt wie am Bildschirm (Kopf mit Logo,
    Werbung, Bereiche als Balken, Gruppen, Kennzeichen, Hinweis), gesetzt von assets/angebot-druck.js (gemessen statt geschätzt:
@@ -722,19 +768,21 @@ function buildPrintListe(list, grouped, scopeText) {
     ? `<header class="al-head pl-ph">${PL_LOGO}<div class="al-ht pl-pt"><h1>${esc(titel)}</h1><span>${unterzeile(n, N)}</span></div></header>`
     : `<header class="al-head pl-ph pl-ph2">${PL_LOGO}<div class="al-ht pl-pt"><strong>${esc(titel)}</strong><span>${unterzeile(n, N)}</span></div></header>`);   // Folgeseiten: Logo kleiner
   const f = druckFuss();
+  // Abschnitte des Designs (plAbschnitte, wie am Bildschirm); sortierte Liste ohne Gruppen: ein Abschnitt
+  const abschnitte = grouped ? plAbschnitte(units, !scopeText) : [{ art: 'gruppen', spalten: plRaster().spalten, units }];
   return window.AngebotDruck.liste({
     host: $('#print-root'), kopf, werbung: scopeText || !grouped ? '' : werbungHTML(false, true),   // Werbung wie am Bildschirm: nur im gesamten Angebot
-    fuss: f, hinweis: druckHinweis(), modus: FUSS_PARAM || (f && f.modus) || 'letzte', stufe: STUFE_PARAM,
-    bereiche: plSections(units).map((sec) => {
-      const n = sec.units.reduce((a, u) => a + u.items.length, 0);
+    fuss: f, hinweis: druckHinweis(), modus: FUSS_PARAM || (f && f.modus) || 'letzte', stufe: STUFE_PARAM, raster: plRaster(),
+    bereiche: abschnitte.flatMap((a, ab) => (a.art === 'text' ? [{ fest: plTextHTML(a), kopf: !!a.kopf, ab }] : plSections(a.units).map((sec) => {
+      const n = sec.units.reduce((x, u) => x + u.items.length, 0);
       return {
-        name: sec.name,
+        k: a.spalten, ab, name: sec.name,
         // einzige Gruppe heißt wie ihr Bereich: steht der Bereich in einer Spalte, „€/kg“ im Balken statt eines zweiten Kopfes (angebot-druck.js, Wunsch 16.11.2026)
         kopfImBalken: sec.units.length === 1 && sec.units[0].items[0].group === sec.name,
         balken: (forts, eh) => `<div class="al-st${eh ? ' al-st-eh' : ''}"><h3>${plGroupName(sec.name)}${forts ? ' <span class="al-cont">Forts.</span>' : ''}</h3><span>${plural(n, 'Artikel', 'Artikel')}</span>${eh ? '<span class="al-eh">€/kg</span>' : ''}</div>`,
         gruppen: sec.units.map((u) => ({ n: u.items.length, verteilen: u.key === 'all', block: (von, bis, forts, ohneKopf) => plBlockHTML({ u, items: u.items.slice(von, bis), cont: forts, ohneKopf }, 'print') })),
       };
-    }),
+    }))),
   }).html;
 }
 
@@ -1087,9 +1135,33 @@ function buildPrint({ scope, layout, grouped }) {
   if (!ps) { ps = document.createElement('style'); ps.id = 'page-style'; document.head.appendChild(ps); }
   const label = `${COMPANY ? COMPANY + ' · ' : ''}${m.notice || 'Angebot'} ${kwKurz(m)} · Preise in € je kg`.replace(/["\\]/g, '');
   // Angebotsansicht: Seiten fester Höhe mit eigenem Kopf (Seite x von y) und Fuß – Ränder passend zum Satzspiegel in angebot-druck.js
-  ps.textContent = layout === 'liste' ? '@page { size: A4 landscape; margin: 8mm 9mm; }'
+  ps.textContent = layout === 'liste' ? `@page { size: A4 ${plRaster().format === 'hoch' ? 'portrait' : 'landscape'}; margin: 8mm 9mm; }`
     : `@page { size: A4 portrait; margin: 14mm 12mm 16mm 12mm; }\n@page { @bottom-left { content: "${label}"; font: 7.5pt ${getComputedStyle(document.body).fontFamily.replace(/"/g, "'")}; color: #777; } @bottom-right { content: "Seite " counter(page) " von " counter(pages); font: 7.5pt sans-serif; color: #777; } }`;
   document.title = (mitGueltigkeit(m) ? `${offerTitle()} ${bisText(m)}` : `${offerTitle()} KW ${m.week ?? ''} ${m.year ?? ''}`) + (scope === 'fav' ? ' – Merkliste' : '');
+}
+function designFenster() {
+  let ansicht = new URLSearchParams(location.search).get('designvorschau');
+  const melden = (stand) => { const d = $('#print-root .pl-doc'); window.parent.postMessage({ wa: 'design', stand, ansicht, spalten: d ? +d.dataset.spalten : null, format: d ? d.dataset.format : null, seiten: d ? +d.dataset.seiten : null }, location.origin); };
+  const einpassen = () => {   // Druckseiten auf die Breite des Fensters verkleinern (gemessen ohne Verkleinerung)
+    const d = $('#print-root > .pl-doc'), h = document.documentElement;
+    if (!d) return;
+    h.style.setProperty('--vz', '1');
+    h.style.setProperty('--vz', String(Math.min(1, (h.clientWidth - 24) / Math.max(1, d.getBoundingClientRect().width))));
+  };
+  const zeigen = () => {
+    document.documentElement.classList.toggle('druckansicht', ansicht === 'druck');
+    if (ansicht === 'druck') { buildPrint({ scope: 'all', layout: 'liste', grouped: true }); einpassen(); } else { $('#print-root').innerHTML = ''; render(); }
+  };
+  window.addEventListener('message', (e) => {
+    if (e.origin !== location.origin || e.source !== window.parent || !e.data || e.data.wa !== 'design') return;
+    DESIGN_VORSCHAU = e.data.design && typeof e.data.design === 'object' ? e.data.design : null;
+    if (e.data.ansicht === 'druck' || e.data.ansicht === 'web') ansicht = e.data.ansicht;
+    zeigen();
+    melden('gezeigt');
+  });
+  window.addEventListener('resize', einpassen);
+  zeigen();
+  melden('bereit');
 }
 /* Bilder der Druckfassung (Logo, Siegel der Fußzeile) erst laden lassen – sonst fehlen sie im Druck, wenn sie noch nicht im
    Zwischenspeicher sind. Höchstens ms warten; ein fehlendes Bild hält den Druck nicht auf. */
@@ -1986,6 +2058,7 @@ function renderWartung(w) {
   render();
   updateFavCount();
   document.documentElement.dataset.bereit = '1';   // Bedienelemente aktiv (Ansicht, Filter, Mengen) – Tests warten darauf
+  if (DESIGN_FENSTER) designFenster();
   if (DRUCKEN) {   // Parameter entfernen, damit ein Neuladen nicht erneut druckt
     const u = new URL(location.href); u.searchParams.delete('drucken'); history.replaceState(history.state, '', u);
     if (DRUCK_DIREKT) {   // Schriften abwarten (der Satz wird gemessen), dann drucken; dem Eingabebereich Bescheid geben

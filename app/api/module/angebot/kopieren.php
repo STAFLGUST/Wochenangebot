@@ -2,7 +2,8 @@
 declare(strict_types=1);
 /* Angebot · Kundenangebot kopieren (Entscheidung des Inhabers 13.11.2026): ein Angebot als neues Kundenangebot anlegen und
    dabei alles außer den Kunden mitnehmen – eigene Preise (variants), eigene Bezeichnungen (namen), Empfehlungen und
-   Sonderposten je Angebot (sale.offers), Werbung (meta.werbung) und die Regel der Artikelliste (fallback). Damit kommen auch
+   Sonderposten je Angebot (sale.offers), Werbung (meta.werbung), das Design (module/angebot/design.php) und die Regel der
+   Artikelliste (fallback). Damit kommen auch
    ausgeblendete Artikel richtig mit: bei „eigener Artikelliste“ fehlt ihr Eintrag, bei „folgt dem Wochenangebot“ steht dort
    {status: hidden} – beides wird genau so übernommen. Kundengruppen bleiben leer (jede Gruppe gehört zu höchstens einem
    Angebot); Kunden sehen die Kopie erst mit zugeordneter Kundengruppe und nach dem Veröffentlichen.
@@ -87,7 +88,7 @@ function angebot_kopieren(array $b, array $me): array
             while (isset($belegt[$id])) $id = substr($basisId, 0, 36) . '-' . $k++;
             $fallback = $quelle === OFFER_STD || ($def['fallback'] ?? 'standard') === 'hidden' ? 'hidden' : 'standard';
             // 3. Angebotsliste schreiben (neues Angebot ohne Kundengruppen; weitere Felder einer neueren Fassung bleiben, GR-006)
-            $offers[] = ['id' => $id, 'name' => $name, 'fallback' => $fallback];
+            $offers[] = ['id' => $id, 'name' => $name, 'fallback' => $fallback] + (is_array($def['design'] ?? null) ? ['design' => $def['design']] : []);   // Design kommt mit
             $out = ['rev' => (int)$cur['rev'] + 1, 'updatedAt' => now(), 'updatedBy' => $me['name'], 'offers' => array_values($offers)]
                  + array_diff_key($cur, array_flip(['rev', 'updatedAt', 'updatedBy', 'offers']));
             store_write('angebote', $out);
@@ -118,10 +119,11 @@ function angebot_kopieren(array $b, array $me): array
             if ($z['namen']) $teile[] = $z['namen'] === 1 ? '1 eigene Bezeichnung' : $z['namen'] . ' eigene Bezeichnungen';
             if ($z['empfehlungen']) $teile[] = $z['empfehlungen'] === 1 ? '1 Empfehlung' : $z['empfehlungen'] . ' Empfehlungen';
             if ($z['werbung']) $teile[] = 'Werbung';
+            if (is_array($def['design'] ?? null)) $teile[] = 'Design';
             audit('offers', "Angebot „{$name}“ als Kopie von „{$def['name']}“ angelegt – " . implode(', ', $teile)
                 . ' (ohne Kundengruppen; im Entwurf, für Kunden erst nach Zuordnung und Veröffentlichen)', array_slice($d, 0, 2000));
             return ['id' => $id, 'name' => $name, 'fallback' => $fallback, 'artikel' => $artikel, 'namen' => $z['namen'], 'empfehlungen' => $z['empfehlungen'],
-                    'werbung' => $z['werbung'], 'rev' => $out['rev'], 'offers' => $out['offers'], 'stdPublic' => std_public(), 'revision' => $rev];
+                    'werbung' => $z['werbung'], 'design' => is_array($def['design'] ?? null), 'rev' => $out['rev'], 'offers' => $out['offers'], 'stdPublic' => std_public(), 'revision' => $rev];
         });
     });
 }

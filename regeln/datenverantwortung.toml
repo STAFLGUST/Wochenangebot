@@ -52,6 +52,14 @@ schutz = "vertraulich"
 beschreibung = "Kundenangebote mit Kundenpreisen (variants), Sichtbarkeit und Sonderpreisen"
 
 [[dokument]]
+name = "angebot-designs"
+eigentuemer = "angebot"
+bereich = "intern"   # die Kundenseite braucht nur den Schnappschuss im veröffentlichten Angebot (angebot, einzelangebote)
+schutz = "intern"
+beschreibung = "Design-Vorlagen der Angebote (module/angebot/design.php): Name, Raster (Spalten, Hoch-/Querformat) und Abschnitte (Bereiche und Gruppen mit Namen, freie Texte), angelegt/geändert von; die Wahl je Angebot steht am Angebot (angebote, einzelangebote), veröffentlicht wird nur das wirksame Layout als Schnappschuss (meta.design im Dokument angebot, designFreigegeben am Einzelangebot)"
+historie = "Veröffentlichte Stände halten das Layout als Schnappschuss (versionen/*, angebot-woche/*); spätere Änderungen einer Vorlage wirken erst mit der nächsten Veröffentlichung (GR-106)"
+
+[[dokument]]
 name = "entwurf"
 eigentuemer = "angebot"
 bereich = "intern"

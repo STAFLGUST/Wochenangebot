@@ -162,11 +162,13 @@ def kopieren_pruefen(a, br, v):
     check('… Kunden sehen die Kopie nicht (nicht zugeordnet)', K.call(f'offer&angebot={neu1}')[0] == 403 and K.call('offer&angebot=bela')[0] == 200)
     # Rückfallschutz für #379: Design-Schnappschüsse im veröffentlichten Modell gehen nie ungefiltert hinaus
     pub = dok('angebot')
-    storage_write('angebot', {**pub, 'meta': {**pub['meta'], 'design': {'bela': {'abschnitte': [{'art': 'text', 'text': 'Nur für Bela'}]}}}})
+    nur_bela = {'abschnitte': [{'art': 'text', 'text': 'Nur für Bela'}]}
+    storage_write('angebot', {**pub, 'meta': {**pub['meta'], 'design': {'bela': nur_bela, 'fremd': {'abschnitte': [{'art': 'text', 'text': 'Nur für Fremd'}]}}}})
     anon, kb = Client('198.51.100.66').call('offer'), K.call('offer&angebot=bela')
     storage_write('angebot', pub)
-    check('Veröffentlichtes meta.design wird weder anonym noch an Kunden ausgeliefert', anon[0] == 200 and kb[0] == 200
-          and 'design' not in anon[1]['offer']['meta'] and 'design' not in kb[1]['offer']['meta'] and 'Nur für Bela' not in json.dumps(anon[1]) + json.dumps(kb[1]), (anon[0], kb[0]))
+    check('Veröffentlichtes meta.design: anonym nichts, der Kunde nur das Design seines Angebots (#379), nie fremde', anon[0] == 200 and kb[0] == 200
+          and 'design' not in anon[1]['offer']['meta'] and kb[1]['offer']['meta'].get('design') == nur_bela
+          and 'Nur für Bela' not in json.dumps(anon[1]) and 'Nur für Fremd' not in json.dumps(anon[1]) + json.dumps(kb[1]), (anon[0], kb[0]))
     log = json.dumps(get(a, 'log')[1], ensure_ascii=False)
     check('… Protokoll „als Kopie von“ mit Inhalt', 'als Kopie von „Wochenangebot Bela“' in log and '1 eigene Bezeichnung' in log)
 

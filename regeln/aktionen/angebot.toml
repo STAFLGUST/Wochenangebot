@@ -14,6 +14,22 @@ fremde_herkunft = true   # kommt vom E-Mail-Programm, nicht von unserer Seite (G
 oberflaeche = "angebot.eingabe"
 # Artikelauswahl „Artikel hinzufügen“ im Angebot (Stammdaten, VK-Gruppe, Bestand nur mit bestand.sehen)
 
+# Design je Angebot (module/angebot/design.php): Vorlagen lesen, anlegen/ändern, löschen; Design eines Angebots wählen
+[aktion.angebot_designs]
+oberflaeche = "angebot.eingabe"
+
+[aktion.angebot_design_speichern]
+oberflaeche = "angebot.eingabe"
+schreibend = true
+
+[aktion.angebot_design_loeschen]
+oberflaeche = "angebot.eingabe"
+schreibend = true
+
+[aktion.angebot_design_setzen]
+oberflaeche = "angebot.eingabe"
+schreibend = true
+
 # Frühere Wochen ansehen (nur lesend, Modulzugang Angebot): module/angebot/wochen.php
 [aktion.angebot_woche]
 oberflaeche = "angebot.eingabe"

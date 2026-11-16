@@ -2,7 +2,7 @@
 
 <!-- ERZEUGT von `python3 werkzeuge/doku.py erzeugen` – nicht von Hand ändern. Quelle: Funktionen und Kommentare im Code. Die CI prüft, dass diese Datei zum Code passt. -->
 
-55 Dateien, 848 Funktionen – in der Reihenfolge der Datei, **fett** die Abschnitte. Text = erste Aussage des Kommentars direkt über der Funktion (Python: Docstring). Übersicht aller Module: [README.md](README.md).
+58 Dateien, 915 Funktionen – in der Reihenfolge der Datei, **fett** die Abschnitte. Text = erste Aussage des Kommentars direkt über der Funktion (Python: Docstring). Übersicht aller Module: [README.md](README.md).
 
 ## `app/api/lib/angebote.php`
 
@@ -81,7 +81,7 @@ _Einzelangebote: ein Angebot für genau einen Kunden (Angebot bearbeiten → Ein
 
 - `einzel_fuer_kunde(c)` – Für den Kunden sichtbare Einzelangebote (freigegeben, noch gültig)
 - `einzel_von_kennung(oid)`
-- `einzel_model(e)` – Angebotsmodell wie offer_resolve() – nur Name, Merkmale und Preis, kein Bestand.
+- `einzel_model(e, entwurf)` – Angebotsmodell wie offer_resolve() – nur Name, Merkmale und Preis, kein Bestand.
 
 **Artikelsuche im Eingabebereich**
 
@@ -177,6 +177,52 @@ _Preisverlauf (Wochenstände)_
 - `preisverlauf_lesbar()` – Darf der angemeldete Nutzer den Preisverlauf lesen?
 - `history_undelete(id)`
 - `clean_history_items(items)`
+
+## `app/api/module/angebot/design.php`
+
+_Angebot · Design je Angebot (Inhaber 16.11.2026)_
+
+- `design_load()`
+- `design_index(d, id)`
+- `design_vorlage(id)` – shortcut: liest „angebot-designs“ bei jedem Aufruf (je Angebot mit Design 2–3-mal beim Veröffentlichen und in der Änderungsliste); wird das bei vielen …
+
+**Prüfen**
+
+- `design_spalten(s)`
+- `design_raster_clean(v, teil)` – Raster einer Vorlage (alle Felder, Vorgabe Standard) bzw. einer Anpassung ($teil: nur die übergebenen Felder)
+- `design_text(v, max)` – Freier Text mit Zeilen: ohne Steuerzeichen, höchstens 30 Zeilen und $max Zeichen
+- `design_ab_text(a, titel)`
+- `design_ab_gruppen(a, titel)`
+- `design_abschnitte_clean(v)`
+- `design_layout_pruefen(l)` – Ganzes Layout: im Hochformat höchstens drei Spalten – im Raster und in jedem Gruppen-Abschnitt
+- `design_groesse_pruefen(x)`
+
+**Zusammenführen (nur hier; der Editor übernimmt das Ergebnis „wirksam“)**
+
+- `design_basis(vorlage)`
+- `design_zusammen(wahl)` – Vorlage und Anpassung zusammen; eine gelöschte Vorlage gilt als Standard, die Anpassung bleibt
+- `design_wirksam(wahl)` – Wirksames Layout – null: Standard.
+- `design_wahl_clean(v)` – Design am Angebot prüfen: null = Standard ohne Anpassung.
+
+**Schnappschuss (Veröffentlichen)**
+
+- `design_fuer(gruppen, wahl)` – Layout der Wahl für ein Angebot mit diesen Gruppen ([{name, section}], aufgelöst): nur bekannte Arten, in Gruppen-Abschnitten nur Bereiche und Gruppen des …
+- `design_staende(model)` – Schnappschüsse aller Angebote für ein Modell, das gerade veröffentlicht wird: {Angebots-ID: Layout}, nur Angebote mit Design
+- `design_aenderungen(pub)` – Gespeichertes, noch nicht veröffentlichtes Design je Angebot – Zeilen der Änderungsliste vor dem Veröffentlichen (angebot_aenderungen, Modul Versand).
+- `design_geaendert(prev, model)` – Namen der Angebote, deren Schnappschuss sich zwischen zwei veröffentlichten Ständen unterscheidet (Protokoll)
+- `design_kurz(l)`
+- `design_einzel(e)` – Einzelangebot: Layout der Wahl mit den Namen dieses Angebots (eine Gruppe mit dem Titel, wie einzel_model)
+- `design_einzel_freigeben(e)` – Freigabe bzw. Speichern eines freigegebenen Einzelangebots: Schnappschuss für den Kunden (einzel_status_setzen, einzel_speichern)
+
+**Fenster „Design“ und Aktionen**
+
+- `design_nutzung(me)` – Vorlage-Kennung → Angebote, die sie nutzen.
+- `design_text_wahl(wahl)`
+- `design_angebot(oid)` – Design eines Angebots für das Fenster: Wahl, wirksames Layout (der Editor rechnet nicht selbst) und ob Kunden es schon sehen – offen: die gespeicherte Wahl …
+- `design_liste(me, oid)` – Daten für das Fenster „Design“: Vorlagen mit Nutzung und – mit $oid – das Design dieses Angebots
+- `design_vorlage_speichern(me, b)` – Vorlage anlegen ($b ohne id) oder ändern: {rev, id?, name, raster, abschnitte}; Recht prüft die Aktion.
+- `design_vorlage_loeschen(me, b)` – Vorlage löschen: {rev, id} – nicht, solange ein Angebot sie nutzt (409 mit den Namen).
+- `design_setzen(me, oid, design)` – Design eines Angebots wählen ($design null = Standard): Kunden- und Sonderangebote, Wochenangebot („std“), Einzelangebote („e-…“).
 
 ## `app/api/module/angebot/druck.php`
 
@@ -733,18 +779,18 @@ _Wochenangebot – Eingabebereich Bearbeitet einen Entwurf auf dem Server (autom
 
 ## `app/assets/angebot-druck.js`
 
-_Angebot · Satz der Druckfassung „Angebotsansicht“ (A4 quer) für die Angebotsseite (frontend.js, Wunsch des Inhabers 13.11.2026)._
+_Angebot · Satz der Druckfassung „Angebotsansicht“ (A4) für die Angebotsseite (frontend.js, Wunsch des Inhabers 13.11.2026)._
 
 - `fussHTML(fuss, hinweis, art)`
 
 **Messen: Bausteine unsichtbar in Druckgröße setzen (eine Stufe)**
 
-- `messen(host, cfg, fuss, st)`
+- `messen(host, cfg, fuss, st, css)`
 
 **Verteilen**
 
 - `setzen(m, modus)`
-- `liste(cfg)` – cfg: { host (#print-root), bereiche: [{ name, kopfImBalken?, balken(forts, eh), gruppen: [{ n, block(von, bis, forts, ohneKopf), verteilen? }] }], …
+- `liste(cfg0)` – cfg: { host (#print-root), raster?: { spalten 1–4, format 'quer' \| 'hoch' } (ohne: drei Spalten quer; hoch: höchstens drei), bereiche: [{ name, …
 
 ## `app/assets/frontend.js`
 
@@ -819,6 +865,10 @@ _Wochenangebot – öffentliches Frontend_
 - `plUnits(list, grouped, charsPerLine)`
 - `plSections(units)`
 - `plBlockHTML(b, mode)` – Ein Block: Nummer \| Bezeichnung \| Preis(e) \| [Merken].
+
+**Design des Angebots (Inhaber 16.11.2026; Server: api/module/angebot/design.php)**
+
+- `plAbschnitte(units, mitText)`
 - `renderListe(list, grouped)`
 - `buildPrintListe(list, grouped, scopeText)`
 - `cardHTML(it, grouped)`
@@ -855,6 +905,7 @@ _Wochenangebot – öffentliches Frontend_
 - `printPriceCell(p)`
 - `printAltNote(it)`
 - `buildPrint({…})`
+- `designFenster()`
 - `bilderBereit(root, ms)` – Bilder der Druckfassung (Logo, Siegel der Fußzeile) erst laden lassen – sonst fehlen sie im Druck, wenn sie noch nicht im Zwischenspeicher sind.
 - `doPrint(opts)`
 - `renderStaticTitle()`
@@ -1030,6 +1081,41 @@ _STAFL-Plattform · Angebot · Fenster „Aufbau des Angebots“ (Knopf „Edito
 - `bewegen(e)`
 - `loslassen(e)`
 
+## `app/module/angebot/design.js`
+
+_STAFL-Plattform · Angebot · Fenster „Design“ (Inhaber 16.11.2026)_
+
+**Bearbeitung: Raster und Abschnitte (Angebot und Vorlage)**
+
+- `refHTML(r, i, j)`
+- `abschnittHTML(a, i, n, max)`
+- `editorHTML(d, ro)`
+
+**Reiter**
+
+- `angebotHTML()`
+- `standHTML()` – Gespeichert, aber für Kunden noch nicht sichtbar?
+- `vorlagenHTML()`
+- `geruest()` – Gerüst einmal beim Öffnen (der Rahmen der Vorschau bleibt stehen – neu eingehängt würde er neu laden), danach nur die linke Seite und die Fußleiste neu
+- `zeichnen(fokus)`
+- `standZeigen()`
+
+**Vorschau (Angebotsseite im Rahmen)**
+
+- `rahmen()`
+- `vorschau(sofort)`
+
+**Öffnen, Laden, Speichern**
+
+- `oeffnen(opt)`
+- `uebernehmen(w, wirksam)` – gespeichertes Design des Angebots in den Zustand übernehmen; das Layout (wirksam) hat der Server zusammengeführt – auch bei einer gelöschten Vorlage mit …
+- `neuLaden(meldung)`
+- `speichern(knopf)`
+- `vorlageSpeichern(knopf)`
+- `vorlageLoeschen(v)`
+- `fehler(t)`
+- `freierName(basisName)`
+
 ## `app/module/angebot/druck.js`
 
 _STAFL-Plattform · Angebot · Drucken aus „Angebot bearbeiten“ und Einstellung „Fußzeile im Druck“ (Wunsch des Inhabers 13.11.2026)._
@@ -1133,6 +1219,56 @@ _Gemeinsame Vorbereitung der Bestell-Testgruppen_
 
 - `setup()`
 - `customer(username, firma)`
+
+## `tests/e2e/test_angebot_design.py`
+
+_Design je Angebot (Inhaber 16.11.2026, GR-010)_
+
+- `check(n, c, i)`
+- `doc(name)`
+- `oeffentlich(oid)`
+- `veroeffentlicht(oid)` – Veröffentlichter Stand eines Angebots, wie Kunden ihn bekommen (Mitarbeiteransicht ohne Entwurf)
+- `veroeffentlichen(c)`
+
+**Rechte**
+
+**Grenzen und falsche Typen**
+
+- `save(c, body)`
+
+**Wählen ist nicht veröffentlichen**
+
+**Kunde, Kundenangebot: Schnappschuss nur mit den Namen des Angebots**
+
+**Vorlage ändern: wirkt erst mit dem Veröffentlichen; nicht angepasste folgen, angepasste Abschnitte bleiben**
+
+**Frühere Woche behält ihr Design**
+
+**Löschen nur ungenutzter Vorlagen**
+
+**Kopieren übernimmt das Design**
+
+**Einzelangebot: Freigabe und Speichern sind das Veröffentlichen**
+
+- `einzel(titel, n, freigeben)`
+
+**Kunde, anonymer Besucher, CSRF, Wartung**
+
+**Browser: Kundenseite und Druck**
+
+- `waehlen_und_veroeffentlichen(oid, design)`
+- `ohne_doppel(xs)`
+- `druck(pg)`
+- `zurueck(pg)`
+- `laden(pg, pfad)`
+- `heil(s, b, h, kmax)`
+
+**Eingabebereich: Fenster „Design“ mit Live-Vorschau**
+
+- `anmelden(c, user, pw)`
+- `rahmen(a)`
+- `satz_im_rahmen(a, spalten, fmt)`
+- `oeffnen(a)`
 
 ## `tests/e2e/test_angebote.py`
 

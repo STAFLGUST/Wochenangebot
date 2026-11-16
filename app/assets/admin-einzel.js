@@ -8,6 +8,7 @@
    Partien desselben Artikels als eigene Positionen („+ Partie“). Den Kunden zeigt das Angebot Charge, MHD und Menge – die
    Werte übernimmt der Server beim Speichern als Schnappschuss aus dem Bestand (nie EK). Ohne das Recht nur Anzeige.
    Drucken / PDF öffnet das Einzelangebot auf der Angebotsseite mit deren Druckdialog (wie für Kunden).
+   „Design“ (gespeicherte Einzelangebote, einzelangebote.bearbeiten) öffnet das Fenster „Design“ (app/module/angebot/design.js).
    E-Mail wahlweise mit den Positionen als Liste oder mit dem Angebot als PDF im Anhang (Design der Angebotsansicht).
    Server: app/api/aktionen/einzelangebote.php
    ========================================================================== */
@@ -235,6 +236,7 @@
           ${ro ? '' : `<button type="button" class="btn primary" id="ez-save">${icon('check')}Speichern</button>`}
           ${ro || !ed.id ? '' : ed.status === 'freigegeben' ? `<button type="button" class="btn" id="ez-entfreigeben">${icon('undo')}Freigabe beenden</button>` : `<button type="button" class="btn" id="ez-freigeben">${icon('eye')}Im Portal freigeben</button>`}
           <button type="button" class="btn" id="ez-druck"${ed.positions.length ? '' : ' disabled'}>${icon('print')}Drucken / PDF</button>
+          ${ro || !ed.id ? '' : `<button type="button" class="btn" id="ez-design" title="Spalten, Hoch-/Querformat und Texte für Druck und Kundenseite">${icon('design')}Design</button>`}
           ${ro || !ed.id ? '' : `<button type="button" class="btn" id="ez-mail">${icon('mail')}Per E-Mail senden</button>`}
           ${ro || !ed.id ? '' : `<span class="sp"></span><button type="button" class="btn ghost" id="ez-del" style="color:var(--accent)">${icon('trash', 'sm')}Löschen</button>`}
         </div>
@@ -427,6 +429,7 @@
     if (t.closest('#ez-freigeben')) { status('freigegeben'); return; }
     if (t.closest('#ez-entfreigeben')) { status('entwurf'); return; }
     if (t.closest('#ez-druck')) { kopfLesen(); drucken(); return; }
+    if (t.closest('#ez-design') && W.angebot.design.oeffnen) { W.angebot.design.oeffnen({ angebot: 'e-' + ed.id, name: ed.nr, einzel: true }); return; }
     if (t.closest('#ez-mail')) { kopfLesen(); mailDialog(); return; }
     if (t.closest('#ez-del')) {
       if (!(await confirmBox('Einzelangebot löschen?', `${esc(ed.nr)} wird gelöscht${ed.status === 'freigegeben' ? ' und verschwindet beim Kunden aus dem Portal' : ''}.`, 'Löschen', true))) return;

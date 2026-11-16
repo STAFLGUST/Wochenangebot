@@ -83,6 +83,7 @@ SUITES['angebotskategorien'] = (8790, 'data-seed', True)   # Stammdaten Angebots
 SUITES['aufbau'] = (8790, 'data-seed', True)   # Angebot: Knopf „Editor“, Reihenfolge der Bereiche und Gruppen (app/module/angebot/aufbau.js)
 SUITES['druck'] = (8790, 'data-seed', True)   # Angebot: Druckfassung „Angebotsansicht“, Fußzeile des Briefbogens, Knopf „Drucken“ (app/assets/angebot-druck.js)
 SUITES['sonderangebote'] = SUITES['bestellung']   # Angebot: Sonderangebote für Kundengruppen mit Gültigkeit (module/angebot/sonderangebote.php); Test-Mailserver für den Bestellwunsch
+SUITES['angebot_design'] = (8790, 'data-seed', True)   # Angebot: Design je Angebot – Vorlagen, Raster und Abschnitte für Druck und Kundenseite (module/angebot/design.php)
 SUITES['kundenimport'] = SUITES['bestellung']
 SUITES['vertreter'] = SUITES['bestellung']
 SUITES['lieferanten'] = SUITES['bestellung']   # Stammdaten Lieferanten und Versandarten, Versandart am Kunden
@@ -204,6 +205,7 @@ GEWICHT = {
     'aufbau': 50,   # geschätzt (November 2026, mit Artikeln lokal 57 s), noch ohne CI-Median
     'druck': 45,   # geschätzt (November 2026), noch ohne CI-Median
     'sonderangebote': 45,   # geschätzt (November 2026), noch ohne CI-Median
+    'angebot_design': 60,   # geschätzt (November 2026), noch ohne CI-Median
     'lieferanten': 12,   # geschätzt (November 2026), noch ohne CI-Median
     'abteilungen': 15,   # geschätzt (November 2026), noch ohne CI-Median
     'rollen': 20, 'rollen_host': 8, 'einheit': 90,   # geschätzt (Oktober 2026), noch ohne CI-Median

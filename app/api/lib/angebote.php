@@ -15,6 +15,7 @@ if (!defined('WA_API')) { http_response_code(404); exit; }   // nur über api/in
      Kundengruppen (sonderGruppen) mit Gültigkeit (Zeitraum oder KW); sichtbar nur im Zeitraum und nach Veröffentlichung.
    Kundenpreise verlassen den Server nur aufgelöst und nur für berechtigte Nutzer (offer_resolve). */
 require_once dirname(__DIR__) . '/module/angebot/sonderangebote.php';
+require_once dirname(__DIR__) . '/module/angebot/design.php';
 const OFFER_STD = 'std';
 const OFFER_DEFAULTS = [
     ['id' => 'chefs-culinar', 'name' => 'Wochenangebot Chefs Culinar', 'fallback' => 'standard'],
@@ -68,8 +69,9 @@ function std_public(): bool { $d = offers_load(); return !array_key_exists('stdP
 
 function offer_def(string $id): ?array
 {
-    if ($id === OFFER_STD) return ['id' => OFFER_STD, 'name' => 'Wochenangebot', 'fallback' => 'standard'];
-    foreach (offers_load()['offers'] as $o) if ($o['id'] === $id) return $o;
+    $d = offers_load();
+    if ($id === OFFER_STD) return ['id' => OFFER_STD, 'name' => 'Wochenangebot', 'fallback' => 'standard'] + (is_array($d['stdDesign'] ?? null) ? ['design' => $d['stdDesign']] : []);
+    foreach ($d['offers'] as $o) if ($o['id'] === $id) return $o;
     return null;
 }
 function clean_variants($v, string $where, array $known): array
@@ -272,7 +274,6 @@ function offer_resolve(array $m, array $def, bool $ausverkauftAusblenden = true)
     $m['sections'] = $secs;
     $m['items'] = $items;
     unset($m['meta']['source'], $m['meta']['sheetName']);   // Dateiname/Blatt der Excel-Datei sind intern
-    unset($m['meta']['design']);   // Design-Schnappschüsse aller Angebote (ab #379): nie ungefiltert ausliefern, auch nicht nach einem Rückfall
     // Werbung: nur der Eintrag dieses Angebots und nur Artikel, die ausgeliefert werden – nie die anderer Angebote.
     // Bis zu zwei Blöcke (erster im Eintrag, zweiter in „weitere“); ein leerer erster Block rückt den zweiten nach vorn.
     $w = is_array($m['meta']['werbung'] ?? null) ? ($m['meta']['werbung'][$def['id']] ?? null) : null;
@@ -296,6 +297,11 @@ function offer_resolve(array $m, array $def, bool $ausverkauftAusblenden = true)
     $m['meta']['offerId'] = $def['id'];
     $m['meta']['offerName'] = $def['name'];
     if (sonder_ist($def)) $m = sonder_meta($m, $def);   // Sonderangebot: Gültigkeit statt der Woche des Wochenangebots
+    // Design: nur der beim Veröffentlichen festgehaltene Schnappschuss dieses Angebots (module/angebot/design.php, GR-106) – nie
+    // die Layouts anderer Angebote, nie die Vorlagen
+    $ds = is_array($m['meta']['design'] ?? null) ? ($m['meta']['design'][$def['id']] ?? null) : null;
+    unset($m['meta']['design']);
+    if (is_array($ds)) $m['meta']['design'] = $ds;
     return $m;
 }
 
@@ -428,13 +434,17 @@ function angebot_veroeffentlichen(?array $modell, $revision): array
     return with_lock('entwurf', function () use ($modell, $revision, $keep) {
         $dr = store_read('entwurf');
         if ($revision !== null && (int)$revision !== draft_rev($dr)) draft_conflict($dr);
+        $prev = store_read('angebot');
+        $nurDesign = false;   // ohne Entwurf, aber mit gespeichertem Design: der veröffentlichte Stand mit neuem Design-Schnappschuss
         if ($modell === null) {
-            if (!$dr) respond(['ok' => false, 'code' => 'nichts_offen', 'revision' => draft_rev($dr),
+            if (!$dr && !($prev && design_aenderungen($prev))) respond(['ok' => false, 'code' => 'nichts_offen', 'revision' => draft_rev($dr),
                                'error' => 'Es gibt keine offenen Änderungen – veröffentlicht ist bereits der aktuelle Stand.'], 409);
-            $modell = $dr;
+            $nurDesign = !$dr;
+            $modell = $dr ?: $prev;
         }
         $model = clean_model($modell, true);
-        $prev = store_read('angebot');
+        $staende = design_staende($model);   // Design je Angebot als Schnappschuss (module/angebot/design.php, GR-106)
+        if ($staende) $model['meta']['design'] = $staende;
         require_once dirname(__DIR__) . '/module/angebot/wochen.php';   // Wochenablage angebot-woche/<JJJJ-WW>
         if ($prev) {
             $id = gmdate('Ymd-His') . '-' . bin2hex(random_bytes(3));
@@ -449,7 +459,7 @@ function angebot_veroeffentlichen(?array $modell, $revision): array
         $model['publishedAt'] = einzel_stand(is_array($prev) && is_string($prev['publishedAt'] ?? null) ? $prev['publishedAt'] : null);
         store_write('angebot', $model);
         angebot_woche_ablegen($model);   // je KW dauerhaft: ersetzt den Stand derselben KW (im selben Sperr- und Transaktionsrahmen)
-        $rev = draft_end($dr, 'veröffentlicht');
+        $rev = $nurDesign ? draft_rev(null) : draft_end($dr, 'veröffentlicht');   // nur Design: offene Fenster behalten ihre Revision
         $h = history_from_model($model, 'Veröffentlichung', $model['publishedAt']);
         if ($h) {
             $hid = history_id($h['week'], $h['year']);
@@ -462,7 +472,9 @@ function angebot_veroeffentlichen(?array $modell, $revision): array
             }
         }
         $d = $prev ? changes_between($prev, $model) : [];
-        audit('publish', 'KW ' . $model['meta']['week'] . '/' . $model['meta']['year'] . ' veröffentlicht – ' . count($model['items']) . ' Artikel' . ($prev ? ' (' . changes_summary($d) . ')' : ' (erste Veröffentlichung)'), array_slice($d, 0, 2000));
+        $dn = design_geaendert($prev, $model);
+        audit('publish', 'KW ' . $model['meta']['week'] . '/' . $model['meta']['year'] . ' veröffentlicht – ' . count($model['items']) . ' Artikel' . ($prev ? ' (' . changes_summary($d) . ')' : ' (erste Veröffentlichung)')
+            . ($dn ? ' · Design: ' . implode(', ', $dn) : ''), array_slice($d, 0, 2000));
         return ['publishedAt' => $model['publishedAt'], 'revision' => $rev, 'week' => $model['meta']['week'], 'year' => $model['meta']['year'], 'artikel' => count($model['items'])];
     });
 }
@@ -494,7 +506,9 @@ function angebot_aufbau_geaendert(array $pub, array $neu): bool
 /* Unveröffentlichte Änderungen des Entwurfs als Zeilen für die Liste „Veröffentlichen“ (Modul Versand). Grundlage ist
    changes_between() – dieselbe Liste, die das Protokoll beim Veröffentlichen festhält. Gezählt wird wie am Knopf des Editors:
    Kopfdaten einmal, je Artikel eine Preisänderung oder eine Bearbeitung, je Angebot und Artikel ein Angebotspreis, je Artikel
-   eine Empfehlung, je Angebot die Werbung, der Aufbau einmal. „angebot“ = Angebot, das die Zeile betrifft ('' = alle).
+   eine Empfehlung, je Angebot die Werbung und das Design, der Aufbau einmal. Ein gespeichertes Design zählt auch ohne Entwurf
+   (entwurf = false, anzahl > 0: angebot_veroeffentlichen veröffentlicht dann den bisherigen Stand mit dem neuen Design).
+   „angebot“ = Angebot, das die Zeile betrifft ('' = alle).
    Rückgabe: erste (noch nichts veröffentlicht), entwurf (bool), revision, anzahl, zeilen [{art, angebot, code, name, von, nach,
    zusatz}], jeAngebot {Angebots-ID bzw. '' → Anzahl}, arten {art → Anzahl}. Zeilen enthalten Preise – der Aufrufer liefert
    sie nur mit Modulzugang Angebot aus. */
@@ -503,10 +517,10 @@ function angebot_aenderungen(?array $pub = null, ?array $dr = null): array
     $pub = $pub ?? store_read('angebot');
     $dr = $dr ?? store_read('entwurf');
     $out = ['erste' => !$pub, 'entwurf' => (bool)$dr, 'revision' => draft_rev($dr), 'anzahl' => 0, 'zeilen' => [], 'jeAngebot' => [], 'arten' => []];
-    if (!$dr) return $out;
+    if (!$dr && !$pub) return $out;
     if (!$pub) { $out['anzahl'] = count($dr['items'] ?? []); $out['arten'] = ['neu' => $out['anzahl']]; $out['jeAngebot'] = ['' => $out['anzahl']]; return $out; }
     $zeilen = []; $kopf = []; $jeArtikel = []; $aufbau = false;
-    foreach (changes_between($pub, $dr) as $c) {
+    foreach ($dr ? changes_between($pub, $dr) : [] as $c) {
         [$id, $f] = explode('|', (string)$c['k'], 2) + [1 => ''];
         $z = ['art' => '', 'angebot' => '', 'code' => (string)$c['code'], 'name' => (string)$c['name'], 'von' => (string)$c['from'], 'nach' => (string)$c['to'], 'zusatz' => ''];
         if ($id === 'm' && strpos($f, 'w:') === 0) { $z['art'] = 'werbung'; $z['angebot'] = substr($f, 2); $z['name'] = 'Werbung'; $zeilen[] = $z; }
@@ -532,7 +546,8 @@ function angebot_aenderungen(?array $pub = null, ?array $dr = null): array
     if ($kopf) array_unshift($zeilen, ['art' => 'kopf', 'angebot' => '', 'code' => '', 'name' => implode(' · ', array_map(fn($c) => (string)$c['f'], $kopf)),
         'von' => implode(' · ', array_map(fn($c) => $c['f'] === 'Kalenderwoche' ? 'KW ' . $c['from'] : (string)$c['from'], $kopf)),
         'nach' => implode(' · ', array_map(fn($c) => $c['f'] === 'Kalenderwoche' ? 'KW ' . $c['to'] : (string)$c['to'], $kopf)), 'zusatz' => '']);
-    if ($aufbau || angebot_aufbau_geaendert($pub, $dr)) $zeilen[] = ['art' => 'aufbau', 'angebot' => '', 'code' => '', 'name' => 'Reihenfolge der Bereiche, Gruppen oder Artikel geändert', 'von' => '', 'nach' => '', 'zusatz' => 'gilt für alle Angebote'];
+    if ($dr && ($aufbau || angebot_aufbau_geaendert($pub, $dr))) $zeilen[] = ['art' => 'aufbau', 'angebot' => '', 'code' => '', 'name' => 'Reihenfolge der Bereiche, Gruppen oder Artikel geändert', 'von' => '', 'nach' => '', 'zusatz' => 'gilt für alle Angebote'];
+    array_push($zeilen, ...design_aenderungen($pub));   // gespeichertes Design je Angebot – auch ohne Entwurf (module/angebot/design.php)
     foreach ($zeilen as $z) {
         $out['arten'][$z['art']] = ($out['arten'][$z['art']] ?? 0) + 1;
         $out['jeAngebot'][$z['angebot']] = ($out['jeAngebot'][$z['angebot']] ?? 0) + 1;

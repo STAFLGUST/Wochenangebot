@@ -1,7 +1,8 @@
 /* STAFL-Plattform · Modul Versand – Wochenangebot und Kundenangebote veröffentlichen und per E-Mail an Kunden senden
    (Auftrag des Inhabers 13.11.2026; Gestaltung „C2“, Variante A: zwei Schritte oben, Angebote zur Kontrolle, Verlauf).
    Daten: versand_start (Stand, nur Zahlen), versand_aenderungen (Liste im Fenster „Veröffentlichen“, nur mit Modulzugang
-   Angebot), versand_veroeffentlichen (gespeicherter Entwurf, mit Revision – 409, wenn inzwischen jemand gespeichert hat),
+   Angebot), versand_veroeffentlichen (gespeicherter Entwurf, mit Revision – 409, wenn inzwischen jemand gespeichert hat; ohne
+   Entwurf, wenn nur ein gespeichertes Design je Angebot offen ist – Zeilen der Art „design“),
    versand_empfaenger / versand_vorschau / versand_senden (Wochenangebot bzw. Sonderposten eines Angebots, in Teilen zu zehn),
    versand_verlauf (aus dem Protokoll, ohne Kundennamen).
    Bestätigung beim Senden wie überall: unter der zentralen Anmeldung erneute Anmeldung (reauth_required, Rücksprung hierher –
@@ -64,10 +65,10 @@
     return `Angebotswoche Mo ${v.slice(8, 10)}.${v.slice(5, 7)}. – So ${b.slice(8, 10)}.${b.slice(5, 7)}.${b.slice(0, 4)}`;
   }
   const ART_TEXT = { preis: 'Preisänderungen', neu: 'Neu', entfernt: 'Entfernt', bearbeitet: 'Bearbeitet', angebotspreis: 'Angebotspreise',
-    sichtbar: 'Im Wochenangebot ein- oder ausgeblendet', empfehlung: 'Empfehlungen', werbung: 'Werbung', kopf: 'Kopfdaten', aufbau: 'Aufbau' };
-  const ART_REIHE = ['kopf', 'preis', 'neu', 'entfernt', 'bearbeitet', 'angebotspreis', 'sichtbar', 'empfehlung', 'werbung', 'aufbau'];
+    sichtbar: 'Im Wochenangebot ein- oder ausgeblendet', empfehlung: 'Empfehlungen', werbung: 'Werbung', kopf: 'Kopfdaten', aufbau: 'Aufbau', design: 'Design (Druck und Kundenseite)' };
+  const ART_REIHE = ['kopf', 'preis', 'neu', 'entfernt', 'bearbeitet', 'angebotspreis', 'sichtbar', 'empfehlung', 'werbung', 'aufbau', 'design'];
   const ART_KURZ = { preis: ['Preis', 'Preise'], neu: ['neu', 'neu'], entfernt: ['entfernt', 'entfernt'], bearbeitet: ['bearbeitet', 'bearbeitet'], angebotspreis: ['Angebotspreis', 'Angebotspreise'],
-    sichtbar: ['ein-/ausgeblendet', 'ein-/ausgeblendet'], empfehlung: ['Empfehlung', 'Empfehlungen'], werbung: ['Werbung', 'Werbung'], kopf: ['Kopfdaten', 'Kopfdaten'], aufbau: ['Aufbau', 'Aufbau'] };
+    sichtbar: ['ein-/ausgeblendet', 'ein-/ausgeblendet'], empfehlung: ['Empfehlung', 'Empfehlungen'], werbung: ['Werbung', 'Werbung'], kopf: ['Kopfdaten', 'Kopfdaten'], aufbau: ['Aufbau', 'Aufbau'], design: ['Design', 'Designs'] };
 
   /* ---------- Darstellung ---------- */
   const dunkel = () => document.documentElement.getAttribute('data-theme') === 'dark'
@@ -94,22 +95,24 @@
     $('#vs-unterzeile').textContent = woche ? `Wochenangebot ${kw(woche)} · ${wochenText(woche)}` : 'Noch kein Angebot angelegt';
     document.title = `STAFL-Plattform · Versand${woche ? ' · ' + kw(woche) : ''}`;
 
-    /* Schritt 1: Veröffentlichen */
-    const offen = !!e && (n > 0 || ae.erste);
+    /* Schritt 1: Veröffentlichen – auch ohne Entwurf, wenn nur ein gespeichertes Design offen ist (n > 0) */
+    const offen = n > 0 || (!!e && ae.erste);
     const online = v ? `${esc(kw(v))} · veröffentlicht ${esc(zeit(v.publishedAt))}<span id="vs-pub-von"></span>` : '';
     const nAng = d.angebote.length;
     const s1 = { id: 'vs-s1', nr: 1, titel: 'Veröffentlichen', hinweise: [], fakten: [] };
-    if (!e) Object.assign(s1, { klasse: 'erledigt', marke: v ? ['aktuell', 'ok'] : null, stand: v ? `${kw(v)} ist online` : 'Noch nichts veröffentlicht',
+    if (!e && !n) Object.assign(s1, { klasse: 'erledigt', marke: v ? ['aktuell', 'ok'] : null, stand: v ? `${kw(v)} ist online` : 'Noch nichts veröffentlicht',
       klein: v ? `veröffentlicht ${esc(zeit(v.publishedAt))}<span id="vs-pub-von"></span> · keine offenen Änderungen` : 'Es gibt noch keinen Entwurf. Das Angebot entsteht in „Angebot bearbeiten“.',
       fakten: [['Gilt für', v ? `alle ${plural(nAng, 'Angebot', 'Angebote')}` : '']] });
     else Object.assign(s1, { klasse: offen ? 'offen' : '', marke: offen ? ['offen', 'warn'] : ['keine Änderungen erkannt', ''],
       stand: ae.erste ? 'Noch nichts veröffentlicht' : n > 0 ? `${plural(n, 'Änderung', 'Änderungen')} nicht veröffentlicht` : 'Entwurf ohne erkennbare Änderungen',
-      klein: `Entwurf ${esc(kw(e))}${ae.erste ? ` · ${plural(e.artikel, 'Artikel', 'Artikel')}` : ''} · zuletzt bearbeitet ${esc(zeit(e.savedAt))}${e.savedBy ? ' von ' + esc(e.savedBy) : ''}`,
+      klein: e ? `Entwurf ${esc(kw(e))}${ae.erste ? ` · ${plural(e.artikel, 'Artikel', 'Artikel')}` : ''} · zuletzt bearbeitet ${esc(zeit(e.savedAt))}${e.savedBy ? ' von ' + esc(e.savedBy) : ''}`
+        : `Nur das Design ${plural(n, 'eines Angebots', 'mehrerer Angebote')} wurde geändert – die Artikel bleiben wie veröffentlicht`,
       fakten: [['Online ist', online], ['Gilt für', `alle ${plural(nAng, 'Angebot', 'Angebote')} (Wochenangebot und Kundenangebote)`]] });
     if (d.anwesend.length) s1.hinweise.push([`Gerade im Angebot: <strong>${esc(d.anwesend.join(', '))}</strong>. Veröffentlicht wird der zuletzt gespeicherte Stand.`, true]);
-    const darfPub = r.veroeffentlichen && !!e;
-    s1.fuss = `<button class="vs-knopf${offen && r.veroeffentlichen ? ' primaer' : ''}" type="button" id="vs-pub"${darfPub ? '' : ' disabled'} title="${esc(!e ? 'Nichts zu veröffentlichen – es gibt keine offenen Änderungen' : !r.veroeffentlichen ? 'Dafür fehlt Ihnen das Recht „Angebot veröffentlichen“' : 'Änderungen prüfen und veröffentlichen')}">${icon('send')}Veröffentlichen${e && n > 0 && !ae.erste ? `<span class="vs-zahl">${n}</span>` : ''}</button>`
-      + (!e ? '<span class="vs-leise vs-klein">Nichts zu veröffentlichen</span>' : !r.veroeffentlichen ? '<span class="vs-leise vs-klein">Ihnen fehlt das Recht zum Veröffentlichen</span>' : '')
+    const etwas = !!e || n > 0;
+    const darfPub = r.veroeffentlichen && etwas;
+    s1.fuss = `<button class="vs-knopf${offen && r.veroeffentlichen ? ' primaer' : ''}" type="button" id="vs-pub"${darfPub ? '' : ' disabled'} title="${esc(!etwas ? 'Nichts zu veröffentlichen – es gibt keine offenen Änderungen' : !r.veroeffentlichen ? 'Dafür fehlt Ihnen das Recht „Angebot veröffentlichen“' : 'Änderungen prüfen und veröffentlichen')}">${icon('send')}Veröffentlichen${n > 0 && !ae.erste ? `<span class="vs-zahl">${n}</span>` : ''}</button>`
+      + (!etwas ? '<span class="vs-leise vs-klein">Nichts zu veröffentlichen</span>' : !r.veroeffentlichen ? '<span class="vs-leise vs-klein">Ihnen fehlt das Recht zum Veröffentlichen</span>' : '')
       + (r.angebot ? `<a class="vs-link" href="${esc(ANGEBOT)}admin/">Im Angebot ansehen</a>` : '');
 
     /* Schritt 2: An Kunden senden */
@@ -134,7 +137,7 @@
     /* Angebote dieser Woche */
     $('#vs-angebote').innerHTML = d.angebote.map((a) => {
       const arten = a.std ? ae.arten : null;   // Aufstellung nur beim Wochenangebot (Artikel und Kopfdaten gelten für alle)
-      const detail = arten && a.aenderungen ? ART_REIHE.filter((k) => arten[k] && k !== 'angebotspreis' && k !== 'werbung').map((k) => (k === 'kopf' || k === 'aufbau' ? ART_KURZ[k][0] : `${arten[k]} ${ART_KURZ[k][arten[k] === 1 ? 0 : 1]}`)).join(' · ') : '';
+      const detail = arten && a.aenderungen ? ART_REIHE.filter((k) => arten[k] && k !== 'angebotspreis' && k !== 'werbung' && k !== 'design').map((k) => (k === 'kopf' || k === 'aufbau' ? ART_KURZ[k][0] : `${arten[k]} ${ART_KURZ[k][arten[k] === 1 ? 0 : 1]}`)).join(' · ') : '';
       const aend = ae.erste && e ? '<span class="vs-marke warn">noch nicht veröffentlicht</span>'
         : a.aenderungen ? `<span class="vs-marke warn">${plural(a.aenderungen, 'Änderung', 'Änderungen')}</span>${detail ? `<span class="vs-unter vs-detail">${esc(detail)}</span>` : ''}` : '<span class="vs-marke ok">aktuell</span>';
       const q = a.std ? '' : '&angebot=' + encodeURIComponent(a.id);
@@ -206,14 +209,14 @@
         }).join('')}${z.length > 200 ? `<li><span>… und ${z.length - 200} weitere</span><span></span></li>` : ''}</ul>`;
       }
     }
-    $('#pub-inhalt').innerHTML = zu('pub-titel', `${kw(e)} veröffentlichen`, `Danach sehen Kunden diesen Stand.${v ? ` Der bisherige Stand (${esc(kw(v))}) wird als Version gesichert.` : ''}`)
+    $('#pub-inhalt').innerHTML = zu('pub-titel', `${kw(e || v)} veröffentlichen`, `Danach sehen Kunden diesen Stand.${v ? ` Der bisherige Stand (${esc(kw(v))}) wird als Version gesichert.` : ''}`)
       + `<div class="dlg-body"><p class="vs-meldung" id="pub-meldung" role="alert" hidden></p>${body}</div>
       <div class="dlg-foot">${d.rechte.angebot ? `<span class="vs-fuss-links">Etwas stimmt nicht? <a class="vs-link" href="${esc(ANGEBOT)}admin/">Im Angebot ändern</a></span>` : ''}
         <button class="vs-knopf" type="button" data-close>Abbrechen</button><button class="vs-knopf primaer" type="button" id="pub-jetzt">${icon('send')}Jetzt veröffentlichen</button></div>`;
   }
   async function pubOeffnen() {
     const d = S.d;
-    if (!d.entwurf) return;
+    if (!d.entwurf && !d.aenderungen.anzahl) return;
     if (d.rechte.angebot) {
       const r = await api('versand_aenderungen');
       if (r.status !== 200 || !r.data.ok) { toast(fehlerText(r, 'Änderungen nicht geladen'), true); return; }

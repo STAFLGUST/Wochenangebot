@@ -287,7 +287,35 @@ Historie) und direkte Freischaltungen bei Kunden stehen können; gesperrt sind a
 (`angebot_ids_mit_resten`). Fehlt `fallback` in einer Anfrage, bleibt die gespeicherte Einstellung (neue Angebote: `hidden`); Felder, die
 `offers_save` nicht kennt, bleiben erhalten (GR-006). Ein weiterer Weg zu einem neuen Angebot ist `offer_kopieren`
 (`module/angebot/kopieren.php`, gleiche ID-Regeln): neues Angebot ohne `gruppen` mit dem `fallback` der Quelle, dazu im
-Entwurf unter der neuen ID dieselben `variants`, `namen`, `sale.offers` und `meta.werbung` wie die Quelle.
+Entwurf unter der neuen ID dieselben `variants`, `namen`, `sale.offers` und `meta.werbung` wie die Quelle; das `design`
+der Quelle kommt an die neue Definition.
+
+**Design je Angebot** (seit 16.11.2026, `module/angebot/design.php`, GR-010). Drei Stellen:
+
+- **Vorlagen** im internen Dokument `angebot-designs` (nur Mitarbeiterseite): `{"rev", "vorlagen": [{"id", "name", "raster":
+  {"spalten": 1–4, "format": "quer" | "hoch"}, "abschnitte": [{"art": "gruppen", "titel", "spalten"?, "inhalt": [{"bereich":
+  Name} | {"gruppe": Name}]} | {"art": "text", "titel", "text"}], "angelegt", "geaendert"?}]}`. Bereiche und Gruppen stehen mit
+  Namen (höchstens 120 Zeichen), weil der Excel-Import die Gruppen-Kennungen je Woche neu vergibt. Im Hochformat höchstens 3
+  Spalten (Raster und Abschnitt), je Vorlage bzw. Anpassung höchstens 32 KB. Abschnitte einer unbekannten Art (aus einer
+  neueren Fassung) bleiben beim Speichern unverändert stehen und werden nie ausgeliefert.
+- **Wahl** (gespeichert, noch nicht veröffentlicht): optional `design: {"vorlage": "<Kennung>" | "", "anpassung"?: {"raster"?:
+  {"spalten"?, "format"?}, "abschnitte"?: […]}}` an der Definition eines Kunden- oder Sonderangebots, für das Wochenangebot als
+  `stdDesign` im Dokument `angebote`, für Einzelangebote am Eintrag in `einzelangebote`. Gespeichert wird nur die Abweichung von
+  der Vorlage. Eine Vorlage, die ein Angebot wählt, lässt sich nicht löschen.
+- **Veröffentlicht** (Schnappschuss, GR-106): beim Veröffentlichen legt `angebot_veroeffentlichen` in das Modell (`angebot`,
+  damit auch `versionen/*` und `angebot-woche/*`) `meta.design = {"<Angebots-ID>": {"raster", "abschnitte"}}` – nur Angebote mit
+  Design, nur bekannte Arten, in Gruppen-Abschnitten nur Namen, die im Angebot vorkommen (ein Abschnitt, von dem nichts
+  vorkommt, entfällt). Einzelangebote: `designFreigegeben: {"raster", "abschnitte"}` am Eintrag, gesetzt bei der Freigabe und
+  beim Speichern eines freigegebenen Einzelangebots. Keine Vorlagen-Kennungen, keine Namen von Mitarbeitern.
+
+Ausgeliefert wird nur der Schnappschuss: `offer_resolve` setzt `meta.design = {raster, abschnitte}` aus `meta.design[<ID>]`
+des Modells, `einzel_model` aus `designFreigegeben`; die Vorschau im Eingabebereich (`offer&draft=1`, Einzelangebot als
+Mitarbeiter) zeigt die gespeicherte Wahl. Ohne Feld gilt das bisherige Verhalten (Standard: drei Spalten quer, kein Abschnitt).
+**Rückfall:** Die Vorversion übergeht `design`, `stdDesign`, `designFreigegeben` und `angebot-designs` (Daten bleiben, alle
+Schreiber behalten unbekannte Felder) und zeigt alles im Standard. Sie reicht aber `meta.design` des veröffentlichten Modells
+ungefiltert in der Antwort `offer` weiter – die Layouts aller Angebote (Abschnittsnamen und Texte, keine Preise) –, bis sie
+selbst veröffentlicht (`clean_model` verwirft das Feld). Vor einem Rückfall daher alle Designs auf „Standard“ setzen und
+veröffentlichen, oder danach einmal veröffentlichen.
 
 **Sonderangebote** (seit 13.11.2026, `module/angebot/sonderangebote.php`) stehen als Einträge mit `art: "sonder"` in
 derselben Liste: `{"id": "sonder-grillwoche", "name": "Grillwoche", "fallback": "hidden", "art": "sonder", "gueltig":

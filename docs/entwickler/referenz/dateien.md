@@ -154,6 +154,7 @@ Jede Code-Datei beginnt mit einem Kopfkommentar; dessen erste Aussage steht hier
 
 | Datei | Modul | Inhalt |
 | --- | --- | --- |
+| `design.php` | angebot | Angebot · Design je Angebot (Inhaber 16.11.2026) |
 | `druck.php` | angebot | Druck der Angebote: Fußzeile des Briefbogens unter jedem gedruckten Angebot (Wunsch des Inhabers 13.11.2026). |
 | `import.php` | angebot | Importvertrag des Moduls Angebot – Schnittstelle zur Importzentrale (docs/plattform/schnittstellen/import.md). - Preisverlauf: frühere Angebotslisten (.xlsx) als Wochen im Preisverlauf. |
 | `kopieren.php` | angebot | Angebot · Kundenangebot kopieren (Entscheidung des Inhabers 13.11.2026): ein Angebot als neues Kundenangebot anlegen und dabei alles außer den Kunden mitnehmen – eigene Preise (variants), eigene Bezeichnungen … |
@@ -260,8 +261,8 @@ Jede Code-Datei beginnt mit einem Kopfkommentar; dessen erste Aussage steht hier
 | `admin-werbung.js` | angebot | Eingabebereich – Fenster „Werbung schalten“ (Angebot bearbeiten, Knopf „Werbung“ in der Werkzeugleiste) Bis zu zwei Werbungen je Angebot (Reiter „Werbung 1“/„Werbung 2“, „Weitere Werbung“ legt die zweite an): je … |
 | `admin.css` | plattform | Eingabebereich – ergänzt app.css |
 | `admin.js` | angebot | Wochenangebot – Eingabebereich Bearbeitet einen Entwurf auf dem Server (automatisch gespeichert). |
-| `angebot-druck.css` | angebot | Angebot · Druckfassung „Angebotsansicht“ (A4 quer) der Angebotsseite – gesetzt von assets/angebot-druck.js. |
-| `angebot-druck.js` | angebot | Angebot · Satz der Druckfassung „Angebotsansicht“ (A4 quer) für die Angebotsseite (frontend.js, Wunsch des Inhabers 13.11.2026). |
+| `angebot-druck.css` | angebot | Angebot · Druckfassung „Angebotsansicht“ (A4 quer, mit Design auch hoch) der Angebotsseite – gesetzt von assets/angebot-druck.js. |
+| `angebot-druck.js` | angebot | Angebot · Satz der Druckfassung „Angebotsansicht“ (A4) für die Angebotsseite (frontend.js, Wunsch des Inhabers 13.11.2026). |
 | `app.css` | angebot | Designsystem „Klar“: neutrale Flächen, ein Akzent (Bordeaux), Geist / Geist Mono (lokal eingebunden, SIL Open Font License, assets/fonts/LICENSE-Geist.txt – keine Verbindung zu fremden Servern) |
 | `bestaetigt.js` | angebot | Rücksprungseite der Bestätigung im eigenen Fenster (admin/bestaetigt.html): meldet dem Eingabebereich, dass die erneute Anmeldung bei der STAFL-Anmeldung abgeschlossen ist, und schließt das Fenster. |
 | `detailkarte.js` | plattform | STAFL-Plattform – Detailkarte (Straßen, Gebäude, Ortsnamen) vom eigenen Server Gemeinsame Kartenkomponente für die CRM-Karte und die Auswertung der Verwaltung. |
@@ -351,6 +352,8 @@ Jede Code-Datei beginnt mit einem Kopfkommentar; dessen erste Aussage steht hier
 | --- | --- | --- |
 | `aufbau.css` | angebot | STAFL-Plattform · Angebot · Knopf „Editor“ in der Werkzeugleiste von „Angebot bearbeiten“ und Fenster „Aufbau des Angebots“ (app/module/angebot/aufbau.js): hellblau im Blauton des Kennzeichens „eigene“ (--c-frozen … |
 | `aufbau.js` | angebot | STAFL-Plattform · Angebot · Fenster „Aufbau des Angebots“ (Knopf „Editor“ in der Werkzeugleiste von „Angebot bearbeiten“, Wunsch des Inhabers 11.11.2026, Artikel 12.11.2026). |
+| `design.css` | angebot | STAFL-Plattform · Angebot · Knopf „Design“ und Fenster „Design“ (app/module/angebot/design.js): links Wahl bzw. |
+| `design.js` | angebot | STAFL-Plattform · Angebot · Fenster „Design“ (Inhaber 16.11.2026) |
 | `druck.css` | angebot | STAFL-Plattform · Angebot · Knopf „Drucken“ in der Kopfleiste von „Angebot bearbeiten“, unsichtbarer Rahmen für die Druckfassung und Fenster „Fußzeile im Druck“ (app/module/angebot/druck.js). |
 | `druck.js` | angebot | STAFL-Plattform · Angebot · Drucken aus „Angebot bearbeiten“ und Einstellung „Fußzeile im Druck“ (Wunsch des Inhabers 13.11.2026). |
 | `fruehere-wochen.css` | angebot | STAFL-Plattform · Angebot · Fenster „Frühere Wochen“ (app/module/angebot/fruehere-wochen.js) |
@@ -761,6 +764,7 @@ Jede Code-Datei beginnt mit einem Kopfkommentar; dessen erste Aussage steht hier
 | `test_admin_confirmation.py` | plattform | Sensible Aktionen, kontoweite Bestätigungsbremse und Dateisperren über echte HTTP-Anfragen. |
 | `test_admin_confirmation_ui.py` | plattform | Abgelaufene Admin-Freigabe im Browser |
 | `test_aktionsregister.py` | plattform | Aktionsregister (regeln/aktionen/*.toml → app/api/lib/aktionen-liste.php) wirkt im API-Einstieg für jede Aktion. |
+| `test_angebot_design.py` | angebot | Design je Angebot (Inhaber 16.11.2026, GR-010) |
 | `test_angebote.py` | angebot | Mehrere Angebote: Kundenangebote mit eigenen Preisen, eigene Artikelliste je Angebot (Artikel hinzufügen wie im Einzelangebot, entfernen nur im gewählten Angebot, Umstellung „folgt dem Wochenangebot“ → eigene Liste), … |
 | `test_angebotskategorien.py` | verwaltung | Angebotskategorien (Stammdaten der Verwaltung, Inhaber 05.11.2026) |
 | `test_angebotsliste.py` | angebot | Angebotsliste (Standardansicht der Angebotsseite) |

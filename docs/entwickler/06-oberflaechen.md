@@ -304,6 +304,30 @@ Angebotskategorien sind Bereiche und Gruppen fest (die Stammdaten ordnen), Artik
 Artikel mit der veröffentlichten Fassung: zählt in der Statuszeile als eine Änderung, Abschnitt „Aufbau“ in der Liste der
 Änderungen mit Rücknahme (`revertChange('aufbau')`). Tests: Gruppe `aufbau`.
 
+### Design je Angebot
+
+Wunsch des Inhabers 16.11.2026: je Angebot ein eigener Aufbau für Druck/PDF und Kundenseite – Spaltenzahl (1–4), Hoch- oder
+Querformat, Reihenfolge und Anordnung der Bereiche und Gruppen in Abschnitten, freie Text-Abschnitte. Knopf „Design“
+(`#btn-design`, Werkzeugleiste von „Angebot bearbeiten“, sichtbar wie „Editor“ nur mit `angebot.bearbeiten`) und im
+Einzelangebot (`#ez-design`, gespeicherte Einzelangebote, `einzelangebote.bearbeiten`). Das Fenster `#dlg-design` baut
+`app/module/angebot/design.js` (Stile `design.css`): Reiter „Dieses Angebot“ (Standard oder Vorlage, „Anpassen“, „Auf Vorlage
+zurücksetzen“, „Speichern“ → `angebot_design_setzen`) und „Vorlagen“ (Liste mit Nutzung; neu, bearbeiten/umbenennen,
+kopieren, löschen → `angebot_design_speichern`/`angebot_design_loeschen`, nur mit `angebote.verwalten`). Vorlage und Anpassung
+führt nur der Server zusammen: das Fenster übernimmt `wirksam` aus `angebot_designs` bzw. `angebot_design_setzen`. Bearbeitet werden Format,
+Spalten (im Hochformat 1–3; beim Wechsel ins Hochformat werden 4 Spalten zu 3) und Abschnitte (↑/↓, entfernen; Gruppen-Abschnitt
+mit Überschrift, Spalten und Bereichen/Gruppen des Angebots aus `WA.angebot.design.namen()` – leer = alle übrigen Gruppen;
+Text-Abschnitt mit Überschrift und Text; ein Abschnitt einer neueren Fassung steht nur da und bleibt beim Speichern erhalten). Rechts die Vorschau:
+die Angebotsseite im Rahmen (`WA.angebot.design.adresse(oid)` + `&designvorschau=druck|web`); das Fenster schickt das
+ungespeicherte Design per `postMessage {wa: 'design', design, ansicht}`, die Seite zeigt Druckseiten (`html.druckansicht`,
+verkleinert) oder die Kundenansicht und meldet Spalten, Format und Seitenzahl. Die Vorschau zeigt den Entwurf (`offer&draft=1`,
+darüber das ungespeicherte Design). Gespeichert ist nicht veröffentlicht (Inhaber 16.11.2026): Kunden sehen das Design erst
+nach „Veröffentlichen“ im Modul Versand – das Fenster zeigt dann `#ds-offen` („noch nicht veröffentlicht“, aus `offen` der
+Server-Antwort), die Liste „Veröffentlichen“ eine Zeile der Art `design` je Angebot; Einzelangebote wirken mit der Freigabe bzw.
+beim Speichern des freigegebenen Einzelangebots. Ist nur ein Design offen (kein Entwurf), veröffentlicht der Versand den
+bisherigen Stand mit dem neuen Design. Auf der Angebotsseite ordnet `plAbschnitte()` die Gruppen den Abschnitten zu – dieselbe Regel für
+Bildschirm (`renderListe`, je Abschnitt höchstens so viele Spalten wie die Breite erlaubt, 390 px einspaltig) und Druck
+(`buildPrintListe`). Tests: Gruppe `angebot_design`.
+
 ### Angebot kopieren
 
 Entscheidung des Inhabers 13.11.2026: ein Kundenangebot (oder das Wochenangebot) als neues Kundenangebot kopieren und dann
@@ -320,9 +344,9 @@ und der Hinweis, dass Kunden die Kopie erst mit zugeordneten Kundengruppen und n
 `pullRemote`) und einmal wiederholen. Danach übernimmt der Editor die Angebotsliste aus der Antwort, holt den Entwurf
 (`pullRemote`), wechselt nach „Angebot bearbeiten“ und wählt das neue Angebot (`setOffer`). Die Arbeit macht der Server
 (`app/api/module/angebot/kopieren.php`): unter der neuen ID dieselben `variants`, `namen`, `sale.offers` und dieselbe
-Werbung wie die Quelle, gleiche Regel `fallback`, keine Kundengruppen – die Kopie wird damit genau wie die Quelle aufgelöst
-(`offer_resolve`). Quelle Wochenangebot: eigene Artikelliste, der Wochenpreis wird eigener Preis (ohne Preis „auf Anfrage“).
-Kein neues Datenfeld. Tests: Gruppe `angebote` (`kopieren_pruefen`).
+Werbung wie die Quelle, gleiche Regel `fallback`, dasselbe Design, keine Kundengruppen – die Kopie wird damit genau wie die
+Quelle aufgelöst (`offer_resolve`). Quelle Wochenangebot: eigene Artikelliste, der Wochenpreis wird eigener Preis (ohne Preis
+„auf Anfrage“). Kein neues Datenfeld. Tests: Gruppe `angebote` (`kopieren_pruefen`).
 
 ### Frühere Wochen
 
@@ -488,11 +512,14 @@ Leiste senkrecht, schmal ist sie eine waagerechte Spur. Mit `body.bereich-import
   öffnet den Dialog sofort (aus den Einzelangeboten), `?drucken=liste` druckt ohne Auswahl die Angebotsansicht (Knopf
   „Drucken“ im Eingabebereich, `app/module/angebot/druck.js`); der Parameter wird danach entfernt. Strg+P ohne Dialog
   druckt ebenfalls die Angebotsansicht (`beforeprint`).
-  - **Angebotsansicht, A4 quer** (Vorgabe; Wochenangebot, Kundenangebote, Einzelangebote – ein Weg): `buildPrintListe()`
+  - **Angebotsansicht, A4 quer** (Vorgabe; Wochenangebot, Kundenangebote, Einzelangebote – ein Weg; mit Design auch A4 hoch
+    192 × 280 mm und 1–4 Spalten je Abschnitt, siehe „Design je Angebot“): `buildPrintListe()`
     übergibt fertige HTML-Bausteine (Kopf, Werbung, Balken je Bereich, Block je Gruppe) an `AngebotDruck.liste()` in
     `assets/angebot-druck.js`; Regeln in `assets/angebot-druck.css`. Der Satz misst die Bausteine unsichtbar in
     Druckgröße und verteilt sie rechnerisch auf Seiten fester Höhe (`.pl-page`, 279 × 193 mm):
-    immer drei Spalten; ein Block wird nie geteilt; jede Seite nimmt so viele Blöcke auf wie möglich; ein Bereich beginnt
+    ohne Design drei Spalten (mit Design `cfg.raster` und je Bereich `k`/`ab`: Bereiche verschiedener Abschnitte nie in
+    einer Zeile, feste Blöcke `fest` – Text-Abschnitte und Überschriften – über die ganze Breite, eine Abschnittsüberschrift endet
+    nie eine Seite, im Hochformat höchstens drei Spalten); ein Block wird nie geteilt; jede Seite nimmt so viele Blöcke auf wie möglich; ein Bereich beginnt
     auf der laufenden Seite, sobald sein Balken und ein ganzer Block Platz haben, und wird nur zwischen Blöcken umbrochen
     (Balken auf der nächsten Seite mit „Forts.“); kleine Bereiche stehen nebeneinander. Folgen mehr als drei kleine
     Bereiche mit Namen (höchstens zwei Blöcke, `STAPEL_BLOECKE`), dürfen sie als Stapel stehen (`.al-band.al-stapel`): jeder
