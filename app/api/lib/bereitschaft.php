@@ -162,8 +162,14 @@ function probe_pruefung(): array
     $s = store_read('sicherung');
     $alt = is_array($s) && !empty($s['t']) ? (time() - (strtotime((string)$s['t']) ?: 0)) / 3600 : null;
     if ($alt === null) $add('sicherung', 'warn', 'Datensicherung', 'noch keine automatische Sicherung', 'Tägliche Sicherung einrichten (deploy/sicherung-einrichten.sh).');
-    else $add('sicherung', empty($s['ok']) || $alt > 48 ? 'bad' : 'ok', 'Datensicherung', empty($s['ok']) ? 'letzte Sicherung fehlgeschlagen' : ($alt > 48 ? 'älter als 2 Tage' : 'aktuell (' . date('d.m.Y, H:i', strtotime((string)$s['t'])) . ' Uhr)'),
-              empty($s['ok']) || $alt > 48 ? 'Sicherung prüfen – im Ernstfall ist sie der Weg zurück.' : '');
+    else {
+        $kritisch = ($s['ablage']['zustand'] ?? '') === 'kritisch';   // gesichert, aber viele Dateien fehlen in der Ablage (deploy/dateien_sichern.py)
+        $warnung = !empty($s['meldung']);
+        $add('sicherung', empty($s['ok']) || $alt > 48 || $kritisch ? 'bad' : ($warnung ? 'warn' : 'ok'), 'Datensicherung',
+             empty($s['ok']) ? 'letzte Sicherung fehlgeschlagen' : ($alt > 48 ? 'älter als 2 Tage' : ($warnung ? 'mit Warnung' : 'aktuell') . ' (' . date('d.m.Y, H:i', strtotime((string)$s['t'])) . ' Uhr)'),
+             empty($s['ok']) || $alt > 48 ? 'Sicherung prüfen – im Ernstfall ist sie der Weg zurück.'
+             : ($kritisch ? 'Dateien aus der Sicherung zurückholen (Befehle in sicherungen/.dateien-fehlend).' : ($warnung ? (string)$s['meldung'] : '')));
+    }
     if (konten_eingerichtet()) $add('zentral', 'ok', 'Zentrale Anmeldung', 'Sitzungen bei Keycloak lassen sich im Notfall beenden');
     elseif (oidc_modus()) $add('zentral', 'warn', 'Zentrale Anmeldung', 'Kontenverwaltung nicht eingerichtet – Keycloak-Sitzungen lassen sich im Notfall nicht beenden', 'deploy/anmeldung/konten.sh realm-aktualisieren und Neustart der Anwendung.');
     else $add('zentral', 'info', 'Zentrale Anmeldung', 'auf diesem Host nicht verwendet');

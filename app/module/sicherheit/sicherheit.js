@@ -1526,7 +1526,8 @@
     else if (!b.ok) sich = karte('bad', 'Datensicherung', 'fehlgeschlagen', `${esc(zeit(b.t))} Uhr · ${esc(b.meldung || (b.fehler ? `${b.fehler} Datei(en) fehlerhaft` : 'Server prüfen'))}`);
     else if (b.inhalt === false) sich = karte('warn', 'Datensicherung', 'nur Archiv geprüft', `${esc(zeit(b.t))} Uhr · ${esc(b.meldung || 'Inhalt nicht geprüft')}`);
     else if ((Date.now() - new Date(b.t).getTime()) / 3600000 > 48) sich = karte('bad', 'Datensicherung', 'veraltet', `letzte ${esc(zeit(b.t))} Uhr – älter als 2 Tage, Server prüfen`);
-    else if (b.meldung) sich = karte('warn', 'Datensicherung', 'mit Warnung', `${esc(zeit(b.t))} Uhr · ${esc(b.meldung)}${ablage}`);   // gesichert, z. B. Dateien fehlen in Ablage und Sicherung
+    else if (b.ablage && b.ablage.zustand === 'kritisch') sich = karte('bad', 'Datensicherung', 'Dateien fehlen', `${esc(zeit(b.t))} Uhr · Dateien aus der Sicherung zurückholen · ${esc(b.meldung || '')}${ablage}`);   // gesichert, aber viele Dateien fehlen in der Ablage
+    else if (b.meldung) sich = karte('warn', 'Datensicherung', 'mit Warnung', `${esc(zeit(b.t))} Uhr · ${esc(b.meldung)}${ablage}`);   // gesichert, z. B. einzelne Dateien fehlen in der Ablage
     else sich = karte('ok', 'Datensicherung', 'geprüft', `${esc(zeit(b.t))} Uhr · ${b.datensaetze ? `${zahl(b.datensaetze)} Datensätze${b.speicher === 'sqlite' ? ' (Datenbank)' : ''} · ` : ''}${plural(+b.anzahl || 0, 'Stand', 'Stände')} bis 30 Tage zurück, je ${mbZahl(+b.groesse || 0)} MB${ablage}`);
     const frei = k && k.free && k.total ? (k.free < 1024 ** 3 ? 'bad' : k.free < 5 * 1024 ** 3 ? 'warn' : 'ok') : 'warn';   // 5 GB: auch Reserve der Sicherung (deploy/sichern.sh)
     return [
