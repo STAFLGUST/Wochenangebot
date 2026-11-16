@@ -1507,10 +1507,11 @@
     renderAlles();
     zeigeTab(location.hash.slice(1).split('/')[0] || 'uebersicht');
   }
-  /* Jede Anmeldung erzeugt ein neues CSRF-Token (sign_in) – nach einer Anmeldung in einem anderen Tab hier nachholen; true = geändert */
+  /* Jede Anmeldung erzeugt ein neues CSRF-Token (sign_in) – nach einer Anmeldung in einem anderen Tab hier nachholen; true = geändert.
+     Nur für dieselbe Person: hat sich dort jemand anderes angemeldet, arbeitet dieser Tab nicht unter dessen Namen weiter (4-Augen-Prinzip). */
   async function csrfNeu() {
     const st = await api('status'), alt = S.csrf;
-    if (st.status === 200 && st.data.loggedIn) S.csrf = st.data.csrf || '';
+    if (st.status === 200 && st.data.loggedIn && st.data.user && String(st.data.user.id) === String(S.d.ich.id)) S.csrf = st.data.csrf || '';
     return S.csrf !== alt;
   }
   /* Brücke für weitere Dateien des Moduls (verfahren.js, organigramm.js): dieselben Hilfen und derselbe Zustand, keine zweite Kopie.

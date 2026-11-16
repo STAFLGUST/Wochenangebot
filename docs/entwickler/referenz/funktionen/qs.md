@@ -274,7 +274,7 @@ _Qualitätssicherung · Vorlagen und Lenkungsangaben in Word- und Excel-Dateien 
 
 _STAFL-Plattform · QM-System – Organigramm in einem gelenkten Dokument_
 
-- `sichern()` – Ungespeicherte Zeichnung je Entwurf im Browser sichern: übersteht Ablauf der Anmeldung, Neuladen und das Schließen bei einem Konflikt. shortcut: die …
+- `sichern()` – Ungespeicherte Zeichnung je Person und Entwurf im Tab sichern: übersteht Ablauf der Anmeldung, Neuladen und das Schließen bei einem Konflikt. sessionStorage …
 - `gesichert()`
 - `sicherungWeg()`
 
@@ -451,7 +451,7 @@ _STAFL-Plattform · Qualitätssicherung (QM-System) – Oberfläche nach dem Des
 **Start**
 
 - `laden()`
-- `csrfNeu()` – Jede Anmeldung erzeugt ein neues CSRF-Token (sign_in) – nach einer Anmeldung in einem anderen Tab hier nachholen; true = geändert
+- `csrfNeu()` – Jede Anmeldung erzeugt ein neues CSRF-Token (sign_in) – nach einer Anmeldung in einem anderen Tab hier nachholen; true = geändert.
 
 ## `app/module/qs/verfahren.js`
 

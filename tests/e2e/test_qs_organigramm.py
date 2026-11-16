@@ -493,6 +493,14 @@ with sync_playwright() as pw:
     ctx.clear_cookies()
     pg.click('#og-speichern'); meldung(pg, 'Anmeldung ist abgelaufen')
     check('abgelaufene Anmeldung: Meldung, Fenster und Eingabe bleiben', pg.is_visible('#dlg-og') and pg.input_value('#og-hinweis') == 'nach der Abmeldung' and pg.is_enabled('#og-speichern'))
+    tab = ctx.new_page()   # andere Person meldet sich im selben Browser an: ihr Token darf dieser Tab nicht übernehmen
+    tab.goto(B + '/admin/'); tab.wait_for_selector('#screen-auth:not([hidden])')
+    tab.fill('#au-user', 'lisa'); tab.fill('#pw1', 'Leserin-Konto-12'); tab.click('#auth-submit'); tab.wait_for_selector('#screen-auth', state='hidden')
+    tab.close()
+    pg.click('#og-speichern'); meldung(pg, 'Sicherheitsprüfung')
+    check('andere Person im neuen Tab angemeldet: nicht unter ihrem Namen gespeichert, Eingabe bleibt', gf_hinweis() == 'während des Speicherns'
+          and pg.input_value('#og-hinweis') == 'nach der Abmeldung', gf_hinweis())
+    ctx.clear_cookies()
     tab = ctx.new_page()   # „in einem neuen Tab anmelden“: dieselben Cookies, neues CSRF-Token
     tab.goto(B + '/admin/'); tab.wait_for_selector('#screen-auth:not([hidden])')
     tab.fill('#au-user', 'bernd'); tab.fill('#pw1', 'Bearbeit-Konto-34'); tab.click('#auth-submit'); tab.wait_for_selector('#screen-auth', state='hidden')

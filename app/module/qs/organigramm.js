@@ -19,14 +19,14 @@
   const neueId = () => { let id; do id = 'k' + Math.random().toString(36).slice(2, 10); while (knoten(id)); return id; };
   const meldung = (text, ok = false) => { $('#og-meldung').className = 'qm-meldung' + (ok ? ' ok' : ''); $('#og-meldung').textContent = text; };
 
-  const ablage = () => `stafl-qs-organigramm:${G.dok}:${G.version}`;
-  /* Ungespeicherte Zeichnung je Entwurf im Browser sichern: übersteht Ablauf der Anmeldung, Neuladen und das Schließen bei einem Konflikt.
-     shortcut: die Sicherung eines verworfenen Entwurfs bleibt liegen, wenn niemand „Schließen“ wählt – wenige KB, bei Bedarf beim Öffnen aufräumen. */
-  function sichern() { try { localStorage.setItem(ablage(), JSON.stringify({ t: Date.now(), rev: G.rev, knoten: G.knoten })); } catch { /* privates Fenster oder voll */ } }
+  const ablage = () => `stafl-qs-organigramm:${S.d.ich.id}:${G.dok}:${G.version}`;
+  /* Ungespeicherte Zeichnung je Person und Entwurf im Tab sichern: übersteht Ablauf der Anmeldung, Neuladen und das Schließen bei einem Konflikt.
+     sessionStorage statt localStorage: auf gemeinsam genutzten Rechnern bleibt nach dem Schließen des Tabs nichts liegen. */
+  function sichern() { try { sessionStorage.setItem(ablage(), JSON.stringify({ t: Date.now(), rev: G.rev, knoten: G.knoten })); } catch { /* privates Fenster oder voll */ } }
   function gesichert() {
-    try { const s = JSON.parse(localStorage.getItem(ablage())); return s && Number.isInteger(s.rev) && Array.isArray(s.knoten) ? s : null; } catch { return null; }
+    try { const s = JSON.parse(sessionStorage.getItem(ablage())); return s && Number.isInteger(s.rev) && Array.isArray(s.knoten) ? s : null; } catch { return null; }
   }
-  function sicherungWeg() { try { localStorage.removeItem(ablage()); } catch { /* nicht verfügbar */ } }
+  function sicherungWeg() { try { sessionStorage.removeItem(ablage()); } catch { /* nicht verfügbar */ } }
 
   /* ---------- Karte in der Seitenleiste des Dokuments ---------- */
   function karte(x) {
