@@ -2,7 +2,7 @@
 
 <!-- ERZEUGT von `python3 werkzeuge/doku.py erzeugen` – nicht von Hand ändern. Quelle: Funktionen und Kommentare im Code. Die CI prüft, dass diese Datei zum Code passt. -->
 
-13 Dateien, 316 Funktionen – in der Reihenfolge der Datei, **fett** die Abschnitte. Text = erste Aussage des Kommentars direkt über der Funktion (Python: Docstring). Übersicht aller Module: [README.md](README.md).
+16 Dateien, 371 Funktionen – in der Reihenfolge der Datei, **fett** die Abschnitte. Text = erste Aussage des Kommentars direkt über der Funktion (Python: Docstring). Übersicht aller Module: [README.md](README.md).
 
 ## `app/api/aktionen/qs.php`
 
@@ -35,6 +35,24 @@ _QM-System · Audit-Bericht (Aktionen qs_bericht, qs_bericht_excel)_
 - `qs_xl_blatt(zeilen, breiten, kopf, umbruch)` – Blatt: Zeilen aus Zellen (Wert oder [Wert, Stil]); $kopf = Zeile der Kopfzeile (1-basiert, 0 = keine); $umbruch = Spalten mit Umbruch
 - `qs_xl_mappe(blaetter, titel)`
 - `qs_bericht_xlsx(b, wer)` – Arbeitsmappe: Zusammenfassung, Prüfplan (je Monat), Versäumnisse und Fristen, Abweichungen, Maßnahmen, Dokumente, Überprüfung fällig, Handbuch
+
+## `app/api/module/qs/organigramm.php`
+
+_QM-System · Organigramm als gelenktes Dokument (Entscheidung des Inhabers 16.11.2026 „Im QM-System zeichnen“; nur bei Bedarf geladen von app/api/aktionen/qs.php)._
+
+- `qs_organigramm_pruefen(v, alt, stamm)` – Eingabe → gültige Struktur ohne Namens-Schnappschuss; null bei leerer Liste (Organigramm aus dem Entwurf nehmen).
+- `qs_organigramm_speichern()` – Aktion qs_organigramm_save: Struktur im offenen Entwurf speichern, mit leerer Liste entfernen (Stand „rev“ wie bei qs_version_save).
+- `qs_organigramm_uebernehmen(gueltig, neu)` – „Überarbeitung beginnen“: Struktur der gültigen Version in den neuen Entwurf – ohne Namens-Schnappschuss (im Entwurf gelten die heutigen Namen)
+- `qs_organigramm_schritt(d, v, me, erzeugt)` – Nach jedem Schritt in qs_version_schritt: ab dem Einreichen hält die Version die Namen fest – der Prüfer prüft genau diese, die Freigabe übernimmt sie …
+- `qs_organigramm_namen(og, stamm)`
+- `qs_organigramm_vorschau()` – Aktion qs_organigramm_vorschau (GET): dieselbe PDF wie bei der Freigabe für die offene Version, als ENTWURF gekennzeichnet – der Prüfer sieht vorher, was …
+- `qs_organigramm_lage(knoten, hoehe)` – Lage aller Kästen und Linien in pt, Ursprung oben links: ['b', 'h', 'kaesten' => [id => ['x', 'y']], 'linien' => [[x1, y1, x2, y2]]].
+- `qs_og_teilbaum(id, unter, hoehe)` – Teilbaum ab $id mit Ursprung oben links: Stabsstellen paarweise links und rechts der Linie unter der Stelle; Unterstellen nebeneinander – oder senkrecht …
+- `qs_og_verschieben(ziel, teil, dx, dy)`
+- `qs_organigramm_kasten(k, namen)` – Kasten einer Stelle: Textzeilen mit Grundlinie y (pt ab Oberkante) und Höhe h – Stelle, Person(en) oder „unbesetzt“, Vertretung, Hinweis
+- `qs_og_trennen(wort, g, innen, fett)` – Wort, das auch verkleinert nicht in die Zeile passt, mit Trennstrich zerlegen (Teile mit Leerzeichen für Pdf::wrap)
+- `qs_og_einpassen(t, g, max, fett)` – Text auf $max pt Breite: erst verkleinern (bis QS_OG_MIN_SCHRIFT), dann mit „…“ kürzen → [Text, Größe]
+- `qs_organigramm_pdf(d, v, stamm, marke)` – Eine Seite A4 quer: Logo, Titel und Firma im Kopf, Lenkungsangaben im Fuß (wie die Platzhalter in Word-/Excel-Dateien).
 
 ## `app/api/module/qs/qs.php`
 
@@ -253,6 +271,45 @@ _Qualitätssicherung · Vorlagen und Lenkungsangaben in Word- und Excel-Dateien 
 - `qs_dateien_uebernehmen(g, me, erzeugt)` – Überarbeitung: Dateien der gültigen Version (Rohfassung mit Platzhaltern) als Kopie in den neuen Entwurf
 - `qs_erzeugte_aufraeumen(erzeugt, fertig)` – Neu erzeugte Dateien wieder entfernen, wenn das Speichern scheitert (Aufruf am Ende der Anfrage)
 
+## `app/module/qs/organigramm.js`
+
+_STAFL-Plattform · QM-System – Organigramm in einem gelenkten Dokument_
+
+- `sichern()` – Ungespeicherte Zeichnung je Person und Entwurf im Tab sichern: übersteht Ablauf der Anmeldung, Neuladen und das Schließen bei einem Konflikt. sessionStorage …
+- `gesichert()`
+- `sicherungWeg()`
+
+**Karte in der Seitenleiste des Dokuments**
+
+- `karte(x)`
+- `vorschau(id)` – dieselbe PDF, die die Freigabe ablegt, mit „ENTWURF“ gekennzeichnet; liefert '' oder den Fehlertext
+
+**Diagramm**
+
+- `kastenHtml(k)`
+- `knotenHtml(k)`
+- `zeichnen()`
+- `zoom(z)`
+- `einpassen()`
+
+**Felder der gewählten Stelle**
+
+- `felder()`
+- `waehle(id)`
+- `geaendert()`
+- `neu(teil)`
+- `tauschen(k, schritt)`
+- `loeschen(k)`
+
+**Fenster**
+
+- `fenster()`
+- `oeffnen(id, art)` – art: 'ansehen' = gültige Version, 'entwurf' = offene Version nur lesen, 'bearbeiten' = offener Entwurf.
+- `schliessen()`
+- `sperren(an)` – Während der Anfrage samt Konfliktbehandlung ist die Zeichnung gesperrt: die Antwort überschreibt keine neuen Eingaben, Schließen und ein zweiter Lauf warten
+- `speichern()`
+- `uebertragen(tokenHolen)` – Zeichnung senden → [Meldung, gespeichert?]; nach einer Anmeldung in einem anderen Tab einmal mit neuem CSRF-Token erneut
+
 ## `app/module/qs/qs.js`
 
 _STAFL-Plattform · Qualitätssicherung (QM-System) – Oberfläche nach dem Designvorschlag vom 30.10.2026._
@@ -395,6 +452,7 @@ _STAFL-Plattform · Qualitätssicherung (QM-System) – Oberfläche nach dem Des
 **Start**
 
 - `laden()`
+- `csrfNeu()` – Jede Anmeldung erzeugt ein neues CSRF-Token (sign_in) – nach einer Anmeldung in einem anderen Tab hier nachholen; true = geändert.
 
 ## `app/module/qs/verfahren.js`
 
@@ -492,6 +550,30 @@ _Qualitätssicherung – Audit-Bericht (app/api/module/qs/bericht.php, Aktionen 
 - `zeitraum(von, bis)`
 - `anmelden(user, pw_, ip, breite, thema, hoehe)`
 - `text(pg, sel)`
+
+## `tests/e2e/test_qs_organigramm.py`
+
+_Qualitätssicherung – Organigramm im QM-System (app/api/module/qs/organigramm.php, Aktionen qs_organigramm_save und qs_organigramm_vorschau, Oberfläche app/module/qs/organigramm.js)._
+
+- `check(n, c, i)`
+- `de(iso)`
+- `roh(cli, query)` – GET ohne JSON-Auswertung: (Status, Kopfzeilen, Inhalt)
+- `pdf_text(raw)` – Text aus den (komprimierten) Seiteninhalten des PDF-Erzeugers: (…) Tj, WinAnsi – je Seite eine Liste von Zeilen
+- `dok(cli, did)`
+- `knoten(id_, titel, ueber, art, personen, vertretung, hinweis)`
+- `speichern(cli, liste, d)`
+- `schritt(cli, s, **mehr)`
+- `vorschau(cli, did)`
+- `fehler_bei(name, liste, teil)`
+- `antwort(ja)`
+- `baum(pg)`
+- `lage(pg)`
+- `meldung(pg, teil)`
+- `anmelden(user, pw_, ip, breite, thema, hoehe)`
+- `oeffne_dok(pg, did)`
+- `andere_person_speichert(hinweis)` – zwei Personen am selben Entwurf: Rückfrage statt Sackgasse
+- `gf_hinweis()`
+- `abgelaufen(url)`
 
 ## `tests/e2e/test_qs_verfahren.py`
 

@@ -697,6 +697,15 @@ laufen unter der Sperre `qs-dokumente`. Zuständig/Vertreter sind **Kürzel** (S
   die Rohfassung mit Platzhaltern, sie bleibt in der Ablage und wird bei „Dateien übernehmen“ kopiert). Vorlagen (Art V) werden nie ausgefüllt.
   **Nummernstruktur:** Arten A, F, L, E heißen `<Kapitel>-<Art><2–3 Ziffern>`; beim Anlegen und bei Änderung von Nummer, Kapitel oder Art
   prüft `qs_dokument_save` sie (leer = nächste freie, höchste vorhandene + 1 – auch eingezogene zählen); das Datenpaket prüft sie nicht.
+  **Organigramm** (optional, Entscheidung des Inhabers 16.11.2026, `module/qs/organigramm.php`): eine Version trägt `organigramm: {"knoten":
+  [{"id": "<a-z0-9, bis 24>", "titel", "personen": ["<Kürzel>"], "vertretung": "<Kürzel>|", "ueber": "<id>|", "art": "linie|stab", "hinweis"}],
+  "namen": {"<Kürzel>": "<Name>"}?}`; ein Dokument ist ein Organigramm, sobald eine Version das Feld trägt. 1 bis 300 Stellen, je Stelle
+  höchstens 10 Personen aus `qs-stamm`, kein Zyklus; eine Stabsstelle (`stab`) sitzt an einer Stelle und hat keine eigenen Unterstellen; die
+  Reihenfolge der Liste ist die Reihenfolge unter einer Stelle. Ändern nur im offenen Entwurf (`qs_organigramm_save`, `qs.bearbeiten`; wer
+  ändert, kommt in `bearbeiter`; eine leere Liste nimmt das Feld wieder aus dem Entwurf; optional `version` = Kennung des Entwurfs, passt sie
+  nicht zum offenen Entwurf: 409 vor der Stand-Prüfung). `namen` (Schnappschuss, GR-106) entsteht beim Einreichen (fehlt er in Daten einer
+  Vorversion der Anwendung, beim Prüfen), verschwindet beim Zurückgeben und gilt unverändert für die Freigabe; die Freigabe legt die PDF-Fassung als Datei mit
+  `organigramm: true` ab. „Überarbeitung beginnen“ übernimmt `knoten` ohne `namen`, „Dateien übernehmen“ lässt die PDF aus.
 - **`qs-handbuch`**: `{"id": "h…", "rev", "kapitel", "pos", "nr": "2.0.14", "titel", "text", "verweise": ["1.3-L02 HACCP-Analyse"], "ifs",
   "zustaendig", "vertreter", "entfallen": {…}|null, "aenderungen": [{"datum", "was", "grund", "von"}]}`. Ein Abschnitt „Ziel“ steht in der
   Oberfläche als Einleitung des Kapitels.

@@ -310,6 +310,7 @@ function qs_dateien_uebernehmen(array $g, array $me, array &$erzeugt): array
 {
     $aus = [];
     foreach (qs_dateien_aktiv($g['dateien'] ?? []) as $f) {
+        if (!empty($f['organigramm'])) continue;   // PDF-Fassung des Organigramms entsteht bei der nächsten Freigabe neu
         $roh = isset($f['roh']);
         $k = ablage_kopieren('qs', (string)($roh ? $f['roh'] : $f['id']), (string)($roh ? ($f['sha256Roh'] ?? '') : ($f['sha256'] ?? '')));
         if ($k === null) continue;
