@@ -85,12 +85,16 @@ prüfen. Keine Sicherungen verschiedener Zeitpunkte mischen. Das Postfachpasswor
 hinterlegen. Ein vollständiger Wiederherstellungstest am Produktionssystem steht weiterhin aus.
 
 **Dateiablage** (`dateien/`, hochgeladene Dokumente, nie in der Datenbank): seit 16.11.2026 nicht mehr im Archiv. Jeder Lauf
-legt einen eigenen Stand `sicherungen/dateien-daten/<Zeit>/` an (nach der Datentrennung `dateien-intern/<Zeit>/`), mit der
-gleichen Zeit wie das Archiv. Unveränderte Dateien sind feste Verweise (Hardlinks) auf den vorigen Stand, nur neue werden
-kopiert (`deploy/dateien_sichern.py`); halbe Uploads (`.teile`) nicht. Geprüft wird, dass jede Datei, auf die die gesicherten
-Daten verweisen, im Stand liegt, dazu eine Stichprobe von 20 Dateien mit SHA-256. Zurückspielen: den Stand derselben Zeit
-kopieren, z. B. `cp -a sicherungen/dateien-intern/<Zeit> daten-intern/dateien`, danach `chown -R 33:33`. Jeder Stand ist
-vollständig; ältere Stände zu löschen schadet den neueren nicht. Vorher (bis 16.11.2026) lag die Dateiablage im Archiv.
+legt einen eigenen Stand `sicherungen/dateien/<Zeit>/` an, mit der gleichen Zeit wie die Archive. Unveränderte Dateien sind
+feste Verweise (Hardlinks) auf den vorigen Stand, nur neue werden kopiert (`deploy/dateien_sichern.py`); halbe Uploads
+(`.teile`) nicht. Prüfung und Ausweg bei fehlenden Dateien: [08-betrieb.md](entwickler/08-betrieb.md#sicherung).
+Zurückspielen: den Stand derselben Zeit kopieren, z. B. `cp -a sicherungen/dateien/<Zeit> daten-intern/dateien` (vor der
+Datentrennung nach `daten/dateien`), danach `chown -R 33:33`. Fehlt der Stand dieser Zeit (z. B. ein Archiv aus der Zeit vor
+dem 16.11.2026 mit der Ablage darin, oder der Stand wurde gelöscht), den nächstneueren Stand nehmen: Dateien kommen nur hinzu,
+er enthält also alle Dateien, auf die das ältere Archiv verweist, außer zwischenzeitlich gelöschten Entwürfen. Jeder Stand
+ist vollständig; ältere Stände zu löschen schadet den neueren nicht. Ohne `deploy/dateien_sichern.py` (Rückfall auf einen
+Stand vor dem 16.11.2026) liegt die Dateiablage wieder im Archiv, im SQLite-Betrieb über den Abzug der Datenbank
+(`datenbank.py snapshot` kopiert `dateien/`, außer `sichern.sh` setzt `WA_SNAPSHOT_OHNE_DATEIEN=1`).
 
 **Getrennte Daten (ADR-007 Stufe 2a):** Nach `deploy/daten-trennen.sh trennen` gibt es je Lauf zwei Archive vom selben
 Zeitpunkt: `daten-<Zeit>.tar.gz` (nach `daten/`) und `intern-<Zeit>.tar.gz` (nach `daten-intern/`, mit eigener Datenbank im

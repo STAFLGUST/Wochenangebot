@@ -25,6 +25,12 @@ der Module als `<bereich>/<xx>/<id>.bin` – in beiden Speicherarten im Dateisys
 Sicherungsprüfung und Umschalten behandeln nur `*.php` als Dokumente); unvollständige Uploads unter `dateien/.teile/*.tmp`
 (nicht gesichert, beim nächsten Upload nach 24 h entfernt). Die Metadaten (Name, Größe, SHA-256, wer, wann) stehen im Dokument des Moduls.
 
+**Verweis auf eine Datei der Ablage** (Vertrag mit der Sicherung, `deploy/dateien_sichern.py`): ein Eintrag
+`{"id": <Kennung>, "groesse": <Bytes>, "sha256": <64 Hex>}` an beliebiger Stelle eines Dokuments, so wie ihn
+`ablage_teil`, `ablage_ablegen` und `ablage_kopieren` zurückgeben. Einzige Ausnahme ist die Rohfassung einer QS-Vorlage
+`{"roh": <Kennung>, "sha256Roh": <64 Hex>}` ohne Größe (`module/qs/vorlagen.php`). Die Sicherung erkennt Verweise nur an
+dieser Form; ein neues Modul, das Dateien anders referenziert, wird nicht gegen die Sicherung geprüft.
+
 Die SQLite-Ablage übernimmt die Dokumente **unverändert** als JSON – es gibt keine Tabellen je Kunde oder Artikel. Für den
 Code ist die Speicherart daher unsichtbar; jede Änderung muss in beiden Arten funktionieren (die E2E-Suite läuft in
 beiden, lokal mit `WA_TEST_STORAGE=sqlite`).
@@ -34,15 +40,16 @@ beiden, lokal mit `WA_TEST_STORAGE=sqlite`).
 [datenbank.md](../datenbank.md). Nie nur den Marker löschen oder alte Dateien über die Datenbank kopieren.
 
 **Sicherung** (`deploy/sichern.sh`): täglich über einen eigenen systemd-Timer (`deploy/sicherung-einrichten.sh`; ohne
-Timer ruft `aktualisieren.sh` sie höchstens einmal am Tag auf; sofort: `--jetzt`), die letzten 30 Stände unter
-`sicherungen/` im Projektordner, nur für root lesbar. Jede Sicherung wird probeweise entpackt und geprüft; bei SQLite
+Timer ruft `aktualisieren.sh` sie höchstens einmal am Tag auf; sofort: `--jetzt`) unter `sicherungen/` im Projektordner,
+nur für root lesbar; Aufbewahrung nach Zeit ([08-betrieb.md](08-betrieb.md#sicherung)). Jede Sicherung wird probeweise entpackt und geprüft; bei SQLite
 über die Backup-API (konsistenter Schnappschuss). Nicht gesichert wird `mail-schluessel` – nach einer Wiederherstellung
 auf neuem Server das Postfach-Passwort neu eingeben. Läuft Keycloak, wird dessen Datenbank zusätzlich gesichert. Status
-im Dokument `sicherung` (Anzeige unter „Sicherheit“, Felder `dateien_anzahl`, `dateien_groesse`, `dateien_neu`,
-`dateien_staende`, `dateien_belegt` für die Dateiablage). Die Dateiablage steht nicht im Archiv: je Lauf ein Stand
-`sicherungen/dateien-<daten|intern>/<Zeit>/` mit festen Verweisen auf den vorigen Stand (`deploy/dateien_sichern.py`), so belegen
-alle Stände etwa einen Bestand plus die Änderungen. Vor dem Sichern prüft das Skript den Platz (neue Dateien, dreimal die
-übrigen Daten, 5 GB Reserve) und bricht sonst mit Meldung ab. Wiederherstellung: [`docs/datenbank.md`](../datenbank.md#sicherung-und-wiederherstellung).
+im Dokument `sicherung` (Anzeige unter „Sicherheit“). Für die Dateiablage steht dort das Objekt
+`"ablage": {"anzahl", "groesse", "neu", "staende", "belegt", "fehlend"}` (Dateien und Bytes des neuesten Stands, davon nur
+in ihm gespeicherte Bytes, Zahl der Stände, Bytes aller Stände, fehlende Dateien) bzw. `null` ohne Werkzeug. `ok` mit nicht
+leerer `meldung` heißt: gesichert, aber mit Warnung. Die Dateiablage steht nicht im Archiv, sondern je Lauf als Stand
+`sicherungen/dateien/<Zeit>/` mit festen Verweisen auf den vorigen Stand (`deploy/dateien_sichern.py`); Prüfung, Platz und
+Ausweg: [08-betrieb.md](08-betrieb.md#sicherung). Wiederherstellung: [`docs/datenbank.md`](../datenbank.md#sicherung-und-wiederherstellung).
 
 ## 5.2 Formate nur erweitern (GR-006)
 
