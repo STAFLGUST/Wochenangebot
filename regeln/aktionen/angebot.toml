@@ -18,7 +18,7 @@ oberflaeche = "angebot.eingabe"
 [aktion.angebot_designs]
 oberflaeche = "angebot.eingabe"
 
-[aktion.angebot_design_save]
+[aktion.angebot_design_speichern]
 oberflaeche = "angebot.eingabe"
 schreibend = true
 

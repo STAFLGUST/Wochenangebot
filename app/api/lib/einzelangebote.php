@@ -4,7 +4,9 @@ declare(strict_types=1);
    Dokument „einzelangebote“: { seq: {Jahr: Nummer}, list: [Einzelangebot] }.
    Einzelangebot: { id, nr (E-JJJJ-0001), kid, titel, gueltigBis, hinweis, positions: [{ code, name, qty, price, notiz, partie? }],
                     status (entwurf|freigegeben|zurueckgezogen), revision, created(By), changed(By), freigegebenAt, gesendet: [...],
-                    design? (Aufbau für Kundenseite und Druck, module/angebot/design.php – setzt nur design_setzen) }
+                    design? (gespeichertes Design, module/angebot/design.php – setzt nur design_setzen),
+                    designFreigegeben? (Schnappschuss des Layouts für den Kunden – bei Freigabe und beim Speichern eines freigegebenen
+                    Einzelangebots, design_einzel_freigeben; GR-106) }
    partie (optional, seit 13.11.2026): { lot, mhd, kg } – eine eingelagerte Partie des Bestands, die diese Position anbietet.
    Schnappschuss beim Zuordnen (GR-106): danach unverändert gespeichert, spätere Bestandsänderungen ändern das Angebot nicht.
    Freigegebene, gültige Einzelangebote sieht der Kunde im Portal als eigenes Angebot (Kennung „e-<id>“) und kann daraus
@@ -225,7 +227,10 @@ function einzel_speichern(array $b, array $me): array
             $e = $d['list'][$i];
             $e = array_merge($e, $data, ['revision' => (int)$e['revision'] + 1, 'changed' => now(), 'changedBy' => $me['name']]);
             if ($e['status'] === 'freigegeben' && !$e['positions']) fail('Ein im Portal freigegebenes Einzelangebot braucht mindestens eine Position. Bitte zuerst die Freigabe beenden.', 422);
-            if ($e['status'] === 'freigegeben') $e['freigegebenAt'] = einzel_stand($e['freigegebenAt'] ?? null);   // Kunde sieht die Änderung sofort; alte Bestellstände werden abgewiesen
+            if ($e['status'] === 'freigegeben') {   // Kunde sieht die Änderung sofort (auch ein inzwischen gespeichertes Design); alte Bestellstände werden abgewiesen
+                $e['freigegebenAt'] = einzel_stand($e['freigegebenAt'] ?? null);
+                $e = design_einzel_freigeben($e);
+            }
             $d['list'][$i] = $e;
         }
         store_write('einzelangebote', $d);
@@ -252,7 +257,7 @@ function einzel_status_setzen(array $b, array $me): array
         $e['status'] = $status;
         $e['revision'] = (int)$e['revision'] + 1;
         $e['changed'] = now(); $e['changedBy'] = $me['name'];
-        if ($status === 'freigegeben') $e['freigegebenAt'] = einzel_stand($e['freigegebenAt'] ?? null);
+        if ($status === 'freigegeben') { $e['freigegebenAt'] = einzel_stand($e['freigegebenAt'] ?? null); $e = design_einzel_freigeben($e); }
         $d['list'][$i] = $e;
         store_write('einzelangebote', $d);
         return $e;
@@ -337,8 +342,9 @@ function einzel_von_kennung(string $oid): ?array
 }
 /* Angebotsmodell wie offer_resolve() – nur Name, Merkmale und Preis, kein Bestand. Angebotene Partie (Ausnahme GR-001):
    partie = { lot, mhd, kg } aus dem gespeicherten Schnappschuss, kg = angebotene Menge (einzel_partie_menge) – nie EK,
-   nie die Größe der Partie, wenn weniger angeboten wird */
-function einzel_model(array $e): array
+   nie die Größe der Partie, wenn weniger angeboten wird. Design: für den Kunden der Schnappschuss der Freigabe, mit $entwurf
+   (Mitarbeiter: Vorschau, Drucken) das gespeicherte Design */
+function einzel_model(array $e, bool $entwurf = false): array
 {
     $master = [];
     if (!store_sichtbar('stammdaten')) {   // Kundenseite ab Trennstufe 2: Merkmale aus dem Auszug (lib/bestand.php)
@@ -367,7 +373,7 @@ function einzel_model(array $e): array
     return ['meta' => ['title' => $titel . (!empty($e['gueltigBis']) ? ' – gültig bis ' . date('d.m.Y', strtotime($e['gueltigBis'])) : ''), 'notice' => 'Einzelangebot',
                        'offerId' => 'e-' . $e['id'], 'offerName' => $titel, 'einzel' => true, 'nr' => $e['nr'], 'gueltigBis' => $e['gueltigBis'] ?? null,
                        'kunde' => einzel_kunden_map()[$e['kid']]['firma'] ?? '', 'hinweis' => (string)($e['hinweis'] ?? '')]   // Hinweis an den Kunden (Bildschirm und Druck)
-                     + (($ds = design_wirksam($e['design'] ?? null)) ? ['design' => $ds] : []),   // nur Layout (module/angebot/design.php)
+                     + (($ds = $entwurf ? design_einzel($e) : ($e['designFreigegeben'] ?? null)) && is_array($ds) ? ['design' => $ds] : []),   // nur Layout (module/angebot/design.php)
             'sections' => [], 'groups' => [['id' => $gid, 'name' => $titel, 'section' => '']], 'items' => $items,
             'publishedAt' => (string)($e['freigegebenAt'] ?? $e['changed'] ?? '')];
 }

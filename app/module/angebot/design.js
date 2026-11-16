@@ -3,10 +3,14 @@
    Einzelangebot (einzelangebote.bearbeiten). Zwei Reiter:
    – „Dieses Angebot“: Design wählen (Standard oder eine Vorlage), „Anpassen“ öffnet dieselbe Bearbeitung wie bei Vorlagen,
      „Auf Vorlage zurücksetzen“ verwirft die Anpassung; „Speichern“ → angebot_design_setzen (der Server behält nur Abweichungen).
+     Gespeichert ist noch nicht veröffentlicht: Kunden sehen das Design erst nach „Veröffentlichen“ (Modul Versand) bzw. bei
+     Einzelangeboten nach Freigabe oder Speichern des freigegebenen Einzelangebots – das Fenster zeigt den Stand (offen).
    – „Vorlagen“ (ändern nur mit angebote.verwalten): Liste mit Nutzung, neu, bearbeiten/umbenennen, kopieren, löschen (genutzte
-     Vorlagen lehnt der Server mit den Namen der Angebote ab) → angebot_design_save / angebot_design_loeschen.
-   Bearbeitung: Format (quer/hoch), Spalten 1–4, Abschnitte als Liste (↑/↓, entfernen): Gruppen-Abschnitt mit Überschrift,
-   Spalten und Bereichen/Gruppen des Angebots (leer = alle übrigen Gruppen), Text-Abschnitt mit Überschrift und Text.
+     Vorlagen lehnt der Server mit den Namen der Angebote ab) → angebot_design_speichern / angebot_design_loeschen.
+   Vorlage und Anpassung führt nur der Server zusammen (wirksam in angebot_designs und angebot_design_setzen).
+   Bearbeitung: Format (quer/hoch), Spalten 1–4 (hoch: 1–3), Abschnitte als Liste (↑/↓, entfernen): Gruppen-Abschnitt mit
+   Überschrift, Spalten und Bereichen/Gruppen des Angebots (leer = alle übrigen Gruppen), Text-Abschnitt mit Überschrift und
+   Text. Abschnitte einer neueren Fassung (unbekannte Art) stehen nur da und bleiben beim Speichern unverändert.
    Daneben die Live-Vorschau: die Angebotsseite im Rahmen (?vorschau=1&eingebettet=1&designvorschau=druck|web, assets/frontend.js),
    das ungespeicherte Design per postMessage – Druckseiten oder Kundenansicht, gesetzt mit dem gewählten Angebot.
    Wird von admin/index.html nach admin.js geladen; Daten des Editors über WA.angebot.design (admin.js). */
@@ -23,7 +27,8 @@
   let z = null;   // Zustand des Fensters (oeffnen)
 
   const basis = (vid) => { const v = z.daten.vorlagen.find((x) => x.id === vid); return kopie(v ? { raster: v.raster, abschnitte: v.abschnitte } : z.daten.standard); };
-  const wirksam = (w) => { const b = basis(w ? w.vorlage : ''), a = (w && w.anpassung) || {}; return { raster: { ...b.raster, ...(a.raster || {}) }, abschnitte: a.abschnitte || b.abschnitte }; };
+  const ARTEN = { gruppen: 'Gruppen', text: 'Text' };
+  const maxSpalten = (d) => (d.raster.format === 'hoch' ? 3 : 4);   // wie der Server: im Hochformat höchstens drei
   const gleich = (a, b) => JSON.stringify(a) === JSON.stringify(b);
   const rasterText = (d) => `${d.raster.spalten} ${d.raster.spalten === 1 ? 'Spalte' : 'Spalten'} · ${d.raster.format === 'hoch' ? 'Hochformat' : 'Querformat'} · ${d.abschnitte.length || 'ohne'} ${d.abschnitte.length === 1 ? 'Abschnitt' : 'Abschnitte'}`;
   /* das Design, das gerade bearbeitet bzw. angezeigt wird */
@@ -36,10 +41,13 @@
     return `<li class="ds-ref${da ? '' : ' fehlt'}"><span><b>${typ === 'bereich' ? 'Bereich' : 'Gruppe'}</b> ${esc(name)}${da ? '' : ' <em>(nicht in diesem Angebot)</em>'}</span>
       <button type="button" class="ibtn" data-ds="ref-weg" data-i="${i}" data-j="${j}" aria-label="${typ === 'bereich' ? 'Bereich' : 'Gruppe'} „${esc(name)}“ entfernen">${icon('x', 'sm')}</button></li>`;
   }
-  function abschnittHTML(a, i, n) {
+  function abschnittHTML(a, i, n, max) {
     const pfeile = `<span class="ds-btns"><button type="button" class="ibtn" data-ds="hoch" data-i="${i}" aria-label="Abschnitt ${i + 1} nach oben"${i === 0 ? ' disabled' : ''}>${icon('up')}</button>
       <button type="button" class="ibtn" data-ds="runter" data-i="${i}" aria-label="Abschnitt ${i + 1} nach unten"${i === n - 1 ? ' disabled' : ''}>${icon('down')}</button>
       <button type="button" class="ibtn danger" data-ds="weg" data-i="${i}" aria-label="Abschnitt ${i + 1} entfernen">${icon('trash')}</button></span>`;
+    if (!ARTEN[a.art]) {
+      return `<li class="ds-ab fremd" data-i="${i}"><div class="ds-ab-kopf"><span class="ds-art">${esc(a.art)}</span><span class="ds-fremd">${esc(a.titel || '')} <em>Abschnitt aus einer neueren Fassung – bleibt beim Speichern erhalten</em></span>${pfeile}</div></li>`;
+    }
     const titel = `<input class="ds-titel" data-f="titel" data-i="${i}" maxlength="80" value="${esc(a.titel || '')}" placeholder="${a.art === 'text' ? 'Überschrift' : 'Überschrift (optional)'}" aria-label="Überschrift von Abschnitt ${i + 1}">`;
     if (a.art === 'text') {
       return `<li class="ds-ab text" data-i="${i}"><div class="ds-ab-kopf"><span class="ds-art">Text</span>${titel}${pfeile}</div>
@@ -50,7 +58,7 @@
     const neu = `<select class="ds-neu" data-f="neu" data-i="${i}" aria-label="Bereich oder Gruppe zu Abschnitt ${i + 1} hinzufügen"><option value="">+ Bereich oder Gruppe …</option>
       ${z.namen.bereiche.length ? `<optgroup label="Bereiche">${z.namen.bereiche.filter((b) => !vergeben.has('b:' + b.toLowerCase())).map((b) => opt('b:' + b, b)).join('')}</optgroup>` : ''}
       <optgroup label="Gruppen">${z.namen.gruppen.filter((g) => !vergeben.has('g:' + g.name.toLowerCase())).map((g) => opt('g:' + g.name, g.name + (g.bereich ? ' – ' + g.bereich : ''))).join('')}</optgroup></select>`;
-    const sp = `<label class="ds-sp"><span>Spalten</span><select data-f="spalten" data-i="${i}" aria-label="Spalten von Abschnitt ${i + 1}"><option value="">wie Raster</option>${[1, 2, 3, 4].map((k) => `<option value="${k}"${a.spalten === k ? ' selected' : ''}>${k}</option>`).join('')}</select></label>`;
+    const sp = `<label class="ds-sp"><span>Spalten</span><select data-f="spalten" data-i="${i}" aria-label="Spalten von Abschnitt ${i + 1}"><option value="">wie Raster</option>${[1, 2, 3, 4].filter((k) => k <= max).map((k) => `<option value="${k}"${a.spalten === k ? ' selected' : ''}>${k}</option>`).join('')}</select></label>`;
     return `<li class="ds-ab" data-i="${i}"><div class="ds-ab-kopf"><span class="ds-art">Gruppen</span>${titel}${pfeile}</div>
       <div class="ds-ab-zeile">${sp}${neu}</div>
       ${(a.inhalt || []).length ? `<ul class="ds-refs">${a.inhalt.map((r, j) => refHTML(r, i, j)).join('')}</ul>` : '<p class="ds-rest">Alle übrigen Gruppen des Angebots in Angebotsreihenfolge.</p>'}</li>`;
@@ -58,9 +66,9 @@
   function editorHTML(d, ro) {
     if (ro) return `<p class="ds-zus">${esc(rasterText(d))}</p>`;
     return `<div class="ds-raster"><div class="fld"><span>Format</span><div class="ds-seg" role="radiogroup" aria-label="Format">${['quer', 'hoch'].map((f) => `<button type="button" role="radio" data-ds="format" data-wert="${f}" aria-checked="${d.raster.format === f}">${f === 'quer' ? 'Quer' : 'Hoch'}</button>`).join('')}</div></div>
-        <div class="fld"><span>Spalten</span><div class="ds-seg" role="radiogroup" aria-label="Spalten">${[1, 2, 3, 4].map((k) => `<button type="button" role="radio" data-ds="spalten" data-wert="${k}" aria-checked="${d.raster.spalten === k}">${k}</button>`).join('')}</div></div></div>
+        <div class="fld"><span>Spalten</span><div class="ds-seg" role="radiogroup" aria-label="Spalten">${[1, 2, 3, 4].map((k) => `<button type="button" role="radio" data-ds="spalten" data-wert="${k}" aria-checked="${d.raster.spalten === k}"${k > maxSpalten(d) ? ' disabled title="Im Hochformat höchstens 3 Spalten"' : ''}>${k}</button>`).join('')}</div></div></div>
       <h3 class="ds-h">Abschnitte</h3>
-      ${d.abschnitte.length ? `<ol class="ds-liste">${d.abschnitte.map((a, i) => abschnittHTML(a, i, d.abschnitte.length)).join('')}</ol>`
+      ${d.abschnitte.length ? `<ol class="ds-liste">${d.abschnitte.map((a, i) => abschnittHTML(a, i, d.abschnitte.length, maxSpalten(d))).join('')}</ol>`
         : '<p class="ds-rest">Keine Abschnitte: alle Gruppen in Angebotsreihenfolge, wie bisher.</p>'}
       <div class="ds-plus"><button type="button" class="btn" data-ds="neu-gruppen">${icon('plus', 'sm')}Gruppen-Abschnitt</button><button type="button" class="btn" data-ds="neu-text">${icon('plus', 'sm')}Text-Abschnitt</button></div>
       <p class="hint">Bereiche und Gruppen gelten über ihren Namen. Gruppen ohne Abschnitt stehen im ersten Abschnitt ohne Inhalt, sonst am Ende unter „Weitere Artikel“ – kein Artikel fehlt.</p>`;
@@ -73,7 +81,16 @@
       <p class="ds-zus">${esc(rasterText(z.entwurf))}${angepasst && !gleich(z.entwurf, basis(z.wahl)) ? ' · <span class="ds-angepasst">angepasst</span>' : ''}</p>
       ${ro ? '<p class="hint">Sie dürfen das Design dieses Angebots nicht ändern.</p>' : `<div class="ds-knoepfe"><button type="button" class="btn" id="ds-anpassen" aria-expanded="${angepasst}"${angepasst ? ' disabled' : ''}>${icon('aufbau', 'sm')}Anpassen</button>
         <button type="button" class="btn ghost" id="ds-zuruecksetzen"${angepasst ? '' : ' disabled'}>${icon('undo', 'sm')}Auf Vorlage zurücksetzen</button></div>`}
+      ${standHTML()}
       ${angepasst && !ro ? `<div class="ds-editor">${editorHTML(z.entwurf, false)}</div>` : ''}`;
+  }
+  /* Gespeichert, aber für Kunden noch nicht sichtbar? (Server: offen bzw. Freigabe des Einzelangebots) */
+  function standHTML() {
+    const w = z.daten;
+    const t = z.einzel && !w.freigegeben ? 'Für den Kunden wirkt das Design mit der Freigabe des Einzelangebots im Portal.'
+      : !w.offen ? '' : z.einzel ? 'Gespeichertes Design ist beim Kunden noch nicht sichtbar: es wirkt, sobald das Einzelangebot gespeichert oder neu freigegeben wird.'
+        : 'Gespeichertes Design ist noch nicht veröffentlicht: Kunden sehen es nach „Veröffentlichen“ (Modul Versand).';
+    return t ? `<p class="ds-offen${w.offen ? ' warn' : ''}" id="ds-offen">${icon('info', 'sm')}<span>${esc(t)}</span></p>` : '';
   }
   function vorlagenHTML() {
     const w = z.daten, darf = w.darfVorlagen;
@@ -92,7 +109,7 @@
   /* Gerüst einmal beim Öffnen (der Rahmen der Vorschau bleibt stehen – neu eingehängt würde er neu laden), danach nur die
      linke Seite und die Fußleiste neu */
   function geruest() {
-    body.innerHTML = `<div class="dlg-head"><div><h2 id="ds-titel">${icon('design')}Design · ${esc(z.name)}</h2><p>Aufbau für Druck/PDF und Kundenseite. Wirkt sofort nach dem Speichern.</p></div>
+    body.innerHTML = `<div class="dlg-head"><div><h2 id="ds-titel">${icon('design')}Design · ${esc(z.name)}</h2><p>Aufbau für Druck/PDF und Kundenseite. ${z.einzel ? 'Der Kunde sieht ein gespeichertes Design erst mit der Freigabe bzw. dem Speichern des Einzelangebots.' : 'Kunden sehen ein gespeichertes Design erst nach dem Veröffentlichen.'}</p></div>
         <button type="button" class="btn icon ghost" data-close aria-label="Schließen">${icon('x')}</button></div>
       <div class="dlg-body ds-body"><div class="ds-links" id="ds-links"></div>
         <div class="ds-rechts"><div class="ds-vk"><div class="ds-seg" role="radiogroup" aria-label="Vorschau">${['druck', 'web'].map((a) => `<button type="button" role="radio" data-ds="ansicht" data-wert="${a}" aria-checked="${z.ansicht === a}">${a === 'druck' ? 'Druck' : 'Kundenseite'}</button>`).join('')}</div>
@@ -155,17 +172,18 @@
     if (frame) { frame.remove(); frame = null; }
     z = { angebot: o.angebot, name: o.name, einzel: !!o.einzel, daten, reiter: 'angebot', ansicht: z ? z.ansicht : 'druck', vorlage: null, fehler: '',
       namen: o.einzel ? { bereiche: [], gruppen: [] } : D.namen() };
-    uebernehmen(daten.wahl);
+    uebernehmen(daten.wahl, daten.wirksam);
     geruest();
     zeichnen();
     dlg.showModal();
     (body.querySelector('#ds-wahl:not(:disabled)') || body.querySelector('[data-close]')).focus();
   }
-  /* gespeichertes Design des Angebots in den Zustand übernehmen */
-  function uebernehmen(w) {
+  /* gespeichertes Design des Angebots in den Zustand übernehmen; das Layout (wirksam) hat der Server zusammengeführt – auch bei
+     einer gelöschten Vorlage mit Anpassung (dann Standard mit Anpassung, wie für Kunden) */
+  function uebernehmen(w, wirksam) {
     z.wahl = w && z.daten.vorlagen.some((v) => v.id === w.vorlage) ? w.vorlage : '';
     z.angepasst = !!(w && w.anpassung);
-    z.entwurf = wirksam(w && z.wahl === w.vorlage ? w : null);
+    z.entwurf = kopie(wirksam);
     z.start = [z.wahl, z.angepasst ? kopie(z.entwurf) : null];
   }
   async function neuLaden(meldung) {
@@ -176,10 +194,13 @@
     knopf.disabled = true;
     try {
       const r = await api('angebot_design_setzen', { body: { angebot: z.angebot, design: { vorlage: z.wahl, anpassung: z.angepasst ? { raster: z.entwurf.raster, abschnitte: z.entwurf.abschnitte } : null } } });
-      uebernehmen(r.wahl);
+      Object.assign(z.daten, { offen: r.offen, freigegeben: r.freigegeben });
+      uebernehmen(r.wahl, r.wirksam);
       delete dlg.dataset.geaendert;
       dlg.close();
-      toast(`Design von „${z.name}“ gespeichert: ${r.wahl ? (z.daten.vorlagen.find((v) => v.id === r.wahl.vorlage) || { name: 'Standard' }).name + (r.wahl.anpassung ? ' (angepasst)' : '') : 'Standard'}.`, 5000);
+      const name = r.wahl ? (z.daten.vorlagen.find((v) => v.id === r.wahl.vorlage) || { name: 'Standard' }).name + (r.wahl.anpassung ? ' (angepasst)' : '') : 'Standard';
+      const wann = !r.offen ? '' : z.einzel ? (r.freigegeben ? ' – für den Kunden sichtbar nach Speichern des Einzelangebots' : ' – für den Kunden sichtbar mit der Freigabe') : ' – für Kunden sichtbar nach „Veröffentlichen“';
+      toast(`Design von „${z.name}“ gespeichert: ${name}${wann}.`, 6000);
     } catch (e) {
       knopf.disabled = false;
       if (e.status !== 401) fehler(e.message || 'Nicht gespeichert.');
@@ -191,13 +212,13 @@
     if (v.name.trim().length < 2) { fehler('Bitte einen Namen für die Vorlage angeben (mindestens 2 Zeichen).'); return; }
     knopf.disabled = true;
     try {
-      await api('angebot_design_save', { body: { rev: z.daten.rev, id: v.id || '', name: v.name, raster: v.raster, abschnitte: v.abschnitte } });
+      await api('angebot_design_speichern', { body: { rev: z.daten.rev, id: v.id || '', name: v.name, raster: v.raster, abschnitte: v.abschnitte } });
       await neuLaden();
       z.vorlage = null;
       if (!z.angepasst) z.entwurf = basis(z.wahl);   // die gewählte Vorlage kann sich gerade geändert haben
       zeichnen();
       vorschau(true);
-      toast(`Vorlage „${v.name.trim()}“ gespeichert.`, 4000);
+      toast(`Vorlage „${v.name.trim()}“ gespeichert – Angebote mit dieser Vorlage zeigen sie nach dem nächsten Veröffentlichen.`, 6000);
     } catch (e) {
       knopf.disabled = false;
       if (e.status === 409) { await neuLaden(e.message); z.vorlage = null; zeichnen(); return; }
@@ -243,7 +264,12 @@
     if (a === 'v-kopieren' && v) { z.vorlage = kopie({ id: '', name: freierName(v.name), raster: v.raster, abschnitte: v.abschnitte }); z.vorlageStart = {}; zeichnen('#ds-name'); vorschau(); return; }
     if (a === 'v-loeschen' && v) { vorlageLoeschen(v); return; }
     if (!d) return;
-    if (a === 'format') d.raster.format = t.dataset.wert;
+    if (a === 'format') {
+      d.raster.format = t.dataset.wert;
+      const max = maxSpalten(d);   // ins Hochformat: zu viele Spalten auf drei begrenzen (Raster und Abschnitte)
+      d.raster.spalten = Math.min(d.raster.spalten, max);
+      for (const x of d.abschnitte) if (x.art === 'gruppen' && x.spalten > max) x.spalten = max;
+    }
     else if (a === 'spalten') d.raster.spalten = +t.dataset.wert;
     else if (a === 'neu-gruppen') d.abschnitte.push({ art: 'gruppen', titel: '', inhalt: [] });
     else if (a === 'neu-text') d.abschnitte.push({ art: 'text', titel: '', text: '' });

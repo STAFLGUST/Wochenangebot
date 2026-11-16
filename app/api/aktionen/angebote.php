@@ -12,13 +12,14 @@ switch ($action) {
             if (!preg_match('/^[a-z0-9-]{1,40}$/', $oid)) fail('Unbekanntes Angebot.', 404);
             if (strncmp($oid, 'e-', 2) === 0) {   // Einzelangebot: nur der Kunde selbst (freigegeben, gültig) oder Mitarbeiter mit Recht
                 $e = einzel_von_kennung($oid);
-                if (current_user()) { require_perm('einzelangebote.sehen'); if (!$e) fail('Unbekanntes Angebot.', 404); }
+                $mitarbeiter = (bool)current_user();   // Mitarbeiter sehen das gespeicherte Design, Kunden das freigegebene (einzel_model)
+                if ($mitarbeiter) { require_perm('einzelangebote.sehen'); if (!$e) fail('Unbekanntes Angebot.', 404); }
                 elseif ($k = current_customer()) {
                     if (!empty($k['login']['mustChange'])) fail('Bitte zuerst ein eigenes Passwort festlegen.', 403);
                     if (!$e || $e['kid'] !== $k['id'] || !einzel_sichtbar($e)) fail('Dieses Angebot ist für Ihren Zugang nicht (mehr) verfügbar.', 403);
                 } else fail('Bitte anmelden.', 401);
                 header('Cache-Control: private, no-store');
-                respond(['ok' => true, 'company' => $CFG['company'], 'offer' => einzel_model($e), 'fracht' => fracht_public(true)]);
+                respond(['ok' => true, 'company' => $CFG['company'], 'offer' => einzel_model($e, $mitarbeiter), 'fracht' => fracht_public(true)]);
             }
             if ($oid !== OFFER_STD || !std_public()) {
                 // Mitarbeiter mit Modulzugang Angebot sehen alle Angebote; Kunden nur freigeschaltete; sonst Anmeldung nötig
@@ -35,7 +36,10 @@ switch ($action) {
                 require_modulzugang('angebot');
                 $d = store_read('entwurf') ?? store_read('angebot');
                 if (!$d) fail('Kein Entwurf vorhanden.', 404);
-                respond(['ok' => true, 'company' => $CFG['company'], 'preview' => true, 'offer' => offer_resolve($d, $def), 'fracht' => fracht_public(true)]);
+                $o = offer_resolve($d, $def);
+                unset($o['meta']['design']);   // Vorschau: das gespeicherte Design, auch wenn es noch nicht veröffentlicht ist (module/angebot/design.php)
+                if ($ds = design_fuer($o['groups'], $def['design'] ?? null)) $o['meta']['design'] = $ds;
+                respond(['ok' => true, 'company' => $CFG['company'], 'preview' => true, 'offer' => $o, 'fracht' => fracht_public(true)]);
             }
             $published = store_read('angebot');
             if ($published === null) fail('Es ist noch kein Angebot veröffentlicht.', 404);
@@ -192,13 +196,14 @@ switch ($action) {
         }
         /* Design je Angebot (module/angebot/design.php): Vorlagen lesen mit Modulzugang Angebot (?angebot= dazu das Design dieses
            Angebots), Vorlagen anlegen, ändern und löschen mit angebote.verwalten, Design eines Angebots wählen mit angebot.bearbeiten
-           bzw. bei Einzelangeboten („e-…“) mit einzelangebote.bearbeiten */
+           bzw. bei Einzelangeboten („e-…“) mit einzelangebote.bearbeiten. Keine dieser Aktionen macht etwas für Kunden sichtbar:
+           das geschieht nur beim Veröffentlichen (angebot.veroeffentlichen) bzw. bei der Freigabe eines Einzelangebots. */
         case 'angebot_designs': {
             $me = require_modulzugang('angebot');
             header('Cache-Control: no-store');
             respond(['ok' => true] + design_liste($me, (string)($_GET['angebot'] ?? '')));
         }
-        case 'angebot_design_save': {
+        case 'angebot_design_speichern': {
             $me = require_perm('angebote.verwalten', true);
             respond(['ok' => true] + design_vorlage_speichern($me, body()));
         }
