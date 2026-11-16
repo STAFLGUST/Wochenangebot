@@ -484,6 +484,7 @@ Jede Code-Datei beginnt mit einem Kopfkommentar; dessen erste Aussage steht hier
 | `bereitstellen.py` | plattform | Bereitstellung eines Stands |
 | `cdn-netzsperre.sh` | plattform | Netzsperre am Server |
 | `cdn_netzsperre.py` | plattform | Netzsperre am Server |
+| `dateien_sichern.py` | plattform | Inkrementelle Sicherung der Dateiablage (dateien/<bereich>/<xx>/<id>.bin, lib/dateiablage.php) für deploy/sichern.sh. |
 | `daten-trennen.sh` | plattform | Daten trennen (ADR-007 Stufe 2): interne Dokumente (Personal, Nutzer, CRM, Controlling, QS, Dateiablage …) aus dem gemeinsamen Ordner daten/ in daten-intern/ verschieben, den nur die Mitarbeiterseite … |
 | `daten_trennen.py` | plattform | Daten trennen (ADR-007 Stufe 2): interne Dokumente aus daten/ in daten-intern/ verschieben – bzw. zurückführen. |
 | `datenbank-umschalten.sh` | plattform | Speicher umschalten: Dateien → SQLite (migrate) oder zurück (rollback), im Wartungsfenster durch den Betreiber. |

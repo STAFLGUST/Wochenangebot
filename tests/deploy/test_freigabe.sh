@@ -4,7 +4,7 @@
 # Prüft: kein Release → nichts passiert; freigegebener Commit geht live; defekter Release wird erkannt und
 # automatisch zurückgesetzt (und nicht erneut versucht); Release ohne CI und Commit außerhalb von main werden abgelehnt;
 # neuester Release-Lauf nach Startzeit (auch bei unsortierter Antwort), nie automatisch auf einen älteren Stand;
-# Sicherung mit dem Skript des neuen Commits; Anwendungs-Image wird nur bei Änderungen unter deploy/image/ (und aktiver
+# Sicherung mit dem Skript und dem Werkzeug der Dateiablage des neuen Commits; Anwendungs-Image wird nur bei Änderungen unter deploy/image/ (und aktiver
 # Ergänzungsdatei der Anmeldung) gebaut, ein Bau-Fehler verhindert das Einspielen, beim Rückfall gilt das alte Image;
 # nach erfolgreichem Release nur hängende Images aufgeräumt (Fehler dabei unschädlich); manueller Notfall-Rückfall
 # (deploy/release-zurueck.sh) mit Container-Neustart bei geänderter Konfiguration, gemerktem bzw. neu gebautem Image;
@@ -204,6 +204,20 @@ N0=$(anzahl)
 printf '{"release":"%s","ci_ok":["%s"]}' "$R_SHA" "$R_SHA" > "$T/state.json"
 lauf || true
 ok "aktiver Stand ohne Sicherungsskript: Skript des neuen Commits sichert" '[ "$(kopf)" = "$R_SHA" ] && [ "$(st ok)" = True ] && [ "$(anzahl)" -gt "$N0" ]'
+# Werkzeug der Dateiablage ebenfalls aus dem neuen Commit (sonst wirkt eine Korrektur am Werkzeug erst ein Release später)
+ok "temporäres Werkzeug der Dateiablage steht in .gitignore" 'git -C "$REPO" check-ignore -q deploy/.dateien_sichern-release.py'
+KW_SHA=$(commit werkzeug-kaputt x "sed -i '1i import sys; sys.exit(\"kaputt\")' '$T/src/deploy/dateien_sichern.py'")
+printf '{"release":"%s","ci_ok":["%s"]}' "$KW_SHA" "$KW_SHA" > "$T/state.json"
+lauf || true
+ok "neues Werkzeug der Dateiablage defekt: nicht eingespielt, temporäre Dateien entfernt" '[ "$(kopf)" = "$R_SHA" ] && [ "$(st ok)" = False ] \
+  && grep -q "Sicherung vor dem Release fehlgeschlagen" "$B/daten/deployment.php" && [ ! -e "$B/deploy/.dateien_sichern-release.py" ] && [ ! -e "$B/deploy/.sichern-release.sh" ]'
+git -C "$B" reset -q --hard "$KW_SHA"   # Lage wie im Betrieb: aktiver Stand mit defektem Werkzeug
+FW_SHA=$(commit werkzeug-repariert x "sed -i '1d' '$T/src/deploy/dateien_sichern.py'")
+N0=$(anzahl)
+printf '{"release":"%s","ci_ok":["%s"]}' "$FW_SHA" "$FW_SHA" > "$T/state.json"
+lauf || true
+ok "altes Werkzeug defekt, neues funktioniert: Release sichert mit dem neuen und geht live" '[ "$(kopf)" = "$FW_SHA" ] && [ "$(st ok)" = True ] && [ "$(anzahl)" -gt "$N0" ] \
+  && [ ! -e "$B/deploy/.dateien_sichern-release.py" ]'
 
 # Anwendungs-Image (deploy/image): nur mit aktiver Ergänzungsdatei (COMPOSE_FILE in .env) bauen
 I0_SHA=$(commit image-ohne-anmeldung x "echo '# Update 1' >> '$T/src/deploy/image/Dockerfile'")

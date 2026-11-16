@@ -13,5 +13,6 @@ __pycache__/
 .release-vorher
 .status.*
 deploy/.sichern-release.sh
+deploy/.dateien_sichern-release.py
 # Prüfliste der Dateiprüfung: entsteht beim Einspielen aus dem freigegebenen Commit (deploy/bereitstellen.py)
 app/api/lib/integritaet-liste.php

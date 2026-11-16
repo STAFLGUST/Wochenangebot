@@ -4,8 +4,8 @@ declare(strict_types=1);
    beiden Speicherarten im Dateisystem unter data/dateien/<bereich>/<xx>/<id>.bin – die SQLite-Datenbank enthält nur
    JSON-Dokumente, die Metadaten (Name, Größe, Prüfsumme, wer, wann) führt das Modul in seinem eigenen Dokument.
    Schutz: data/ liefert der Webserver nie aus (Caddy @private, app/.htaccess); ausgeliefert wird nur über Aktionen mit
-   Rechteprüfung (ablage_senden), immer als Download (attachment, nosniff, sandbox). Sicherung: Teil des Datenarchivs
-   (deploy/sichern.sh, alles unter data/); unvollständige Uploads (*.tmp) nicht. Die Dateien heißen bewusst nicht *.php:
+   Rechteprüfung (ablage_senden), immer als Download (attachment, nosniff, sandbox). Sicherung: eigene Stände mit festen
+   Verweisen (deploy/sichern.sh, deploy/dateien_sichern.py); unvollständige Uploads (.teile) nicht. Die Dateien heißen bewusst nicht *.php:
    Sicherungsprüfung und Datenbank-Umschaltung behandeln nur *.php als JSON-Dokumente.
    Hochladen in Teilen: der API-Einstieg nimmt nur JSON bis 6 MB an – ablage_teil() sammelt Teile (Base64, je höchstens
    ABLAGE_TEIL_MAX Bytes) eines Uploads unter data/dateien/.teile/, prüft beim letzten Teil Größe, SHA-256 und Dateiart
