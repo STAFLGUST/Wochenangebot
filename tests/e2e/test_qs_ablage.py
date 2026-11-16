@@ -93,14 +93,14 @@ def teile_reste():
     return glob.glob(os.path.join(ABLAGE, '.teile', '*'))
 
 
-def hochladen(cli, dok, ver, name, inhalt, teil=TEIL, sha=None, groesse=None, nur_erster=False):
+def hochladen(cli, dok, ver, name, inhalt, teil=TEIL, sha=None, groesse=None, nur_erster=False, extra=None):
     """Datei in Teilen hochladen wie die Oberfläche; Rückgabe (Status, Antwort des letzten Aufrufs, Zahl der Aufrufe)"""
     upload, pos, nr, n = '', 0, 0, 0
     pruef = hashlib.sha256(inhalt).hexdigest() if sha is None else sha
     while True:
         stueck = inhalt[pos:pos + teil]
         st, r = cli.call('qs_datei_hochladen', {'dokument': dok, 'version': ver, 'name': name, 'groesse': len(inhalt) if groesse is None else groesse,
-                                                'sha256': pruef, 'upload': upload, 'teil': nr, 'daten': base64.b64encode(stueck).decode()})
+                                                'sha256': pruef, 'upload': upload, 'teil': nr, 'daten': base64.b64encode(stueck).decode(), **(extra or {})})
         n += 1
         if st != 200 or r.get('fertig') or nur_erster:
             return st, r, n
@@ -441,6 +441,126 @@ check('Nachtragen mit Platzhalter: ausgefüllt, Prüfsumme der Rohfassung gemerk
 st, r = nur_neu(Q, D1, V2, 'Aushang.docx', roh_aushang)
 check('nurNeu erkennt auch die Rohfassung einer ausgefüllten Datei', st == 200 and r.get('doppelt') is True, r)
 
+# ── Eingang: Dateien ohne Ziel hochladen, später zuordnen oder löschen ──
+def eingang(cli=None):
+    st_, r_ = (cli or L).call('qs_eingang')
+    return {f['id']: f for f in r_.get('dateien', [])} if st_ == 200 else None
+
+
+def hoch_e(cli, name, inhalt, pfad=None, **kw):
+    return hochladen(cli, 'eingang', '', name, inhalt, extra={'pfad': pfad} if pfad is not None else None, **kw)
+
+
+EIN1 = pdf('Eingang Befund 1')
+check('Eingang: ohne Anmeldung, ohne QM-Recht, nur ansehen kein Hochladen', hoch_e(N, 'a.pdf', EIN1)[0] in (401, 403, 404) and hoch_e(O, 'a.pdf', EIN1)[0] == 403
+      and hoch_e(L, 'a.pdf', EIN1)[0] == 403)
+check('Eingang: Liste ohne QM-Recht 403, ohne Anmeldung kein Zugang, leer 200', O.call('qs_eingang')[0] == 403 and N.call('qs_eingang')[0] in (401, 403, 404) and eingang() == {})
+check('Eingang: zuordnen/löschen per GET 405, ohne Recht 403', Be.call('qs_datei_zuordnen')[0] == 405 and Be.call('qs_eingang_loeschen')[0] == 405
+      and L.call('qs_datei_zuordnen', {'dateien': ['abcdefabcdefabcdefab'], 'dokument': O1})[0] == 403 and L.call('qs_eingang_loeschen', {'dateien': ['abcdefabcdefabcdefab']})[0] == 403)
+st, r, _ = hoch_e(Be, 'Befund Labor 01.pdf', EIN1, pfad=' QM-System\\1.4 Qualitätssicherung//Befunde/../ Labor  A\tab 2025 /')
+e1 = r.get('datei', '')
+check('Eingang: Hochladen ohne Ziel – Antwort nennt die Zahl, kein Dokument', st == 200 and r.get('eingangZahl') == 1 and 'dokument' not in r, r)
+x1 = (eingang() or {}).get(e1, {})
+check('Eingang: Liste mit Name, Größe, wer, Ordnerpfad einheitlich bereinigt („/“, ohne leere und „..“-Teile, Leerraum zusammengefasst)',
+      x1.get('name') == 'Befund Labor 01.pdf' and x1.get('groesse') == len(EIN1) and x1.get('hochgeladen', {}).get('von') == 'Bernd Bearbeiter'
+      and x1.get('pfad') == 'QM-System/1.4 Qualitätssicherung/Befunde/Labor A ab 2025' and 'sha256' not in x1, x1)
+st, r = L.call('qs_start')
+check('Eingang: qs_start nennt nur die Zahl, nicht die Liste, und führt ihn nicht als Dokument', r.get('eingangZahl') == 1 and 'eingang' not in r
+      and not any(d['id'] == 'eingang' or d.get('eingang') for d in r['dokumente']), r.get('eingangZahl'))
+check('Eingang: Download, Inhalt gleich, Datei unter data/dateien/qs', roh(L, 'qs_datei&id=' + e1)[2] == EIN1 and os.path.isfile(blob_pfad(e1)))
+oh = hoch_e(Be, 'Ohne Pfad.pdf', pdf('ohne'))[1].get('datei')
+gesp = [f for x in speicher('qs-dokumente')['liste'] if x.get('eingang') for f in x['dateien'] if f['id'] == oh]
+check('Eingang: ohne pfad wird das Feld nicht gespeichert (Liste: leer), mit Version → 422', gesp and 'pfad' not in gesp[0] and eingang()[oh]['pfad'] == ''
+      and hochladen(Be, 'eingang', V2, 'v.pdf', pdf('v'))[0] == 422, gesp)
+lang = '/'.join(f'Ebene {i} ' + 'x' * 150 for i in range(15))
+st, r, _ = hoch_e(Be, 'Tief.pdf', pdf('tief'), pfad=lang)
+tief = eingang()[r['datei']]['pfad'].split('/')
+check('Eingang: Pfad höchstens 12 Ordner zu je 120 Zeichen', len(tief) == 12 and all(len(t) == 120 for t in tief), [len(t) for t in tief])
+
+# nurNeu im Eingang: dieselbe Datei = gleicher Pfad, Name und Inhalt
+def nur_neu_e(name, inhalt, pfad):
+    return Be.call('qs_datei_hochladen', {'dokument': 'eingang', 'version': '', 'name': name, 'groesse': len(inhalt), 'sha256': hashlib.sha256(inhalt).hexdigest(),
+                                          'upload': '', 'teil': 0, 'daten': base64.b64encode(inhalt).decode(), 'nurNeu': True, 'pfad': pfad})
+
+
+P1 = 'QM-System/1.4 Qualitätssicherung/Befunde/Labor A ab 2025'
+n0 = len(eingang())
+st, r = nur_neu_e('Befund Labor 01.pdf', EIN1, P1)
+st2, r2 = nur_neu_e('Befund Labor 01.pdf', EIN1, 'QM-System/2.1 Einkauf/Befunde')
+st3, r3 = nur_neu_e('Befund Labor 01 Kopie.pdf', EIN1, P1)
+check('nurNeu im Eingang: gleicher Pfad+Name+Inhalt doppelt; anderer Pfad oder Name wird abgelegt', st == 200 and r.get('doppelt') and r.get('datei') == e1
+      and st2 == 200 and not r2.get('doppelt') and st3 == 200 and not r3.get('doppelt') and len(eingang()) == n0 + 2, (r, r2, r3))
+loesch_mich = [r2['datei'], r3['datei']]
+
+# Eingang ist kein Dokument: nicht bearbeiten, lenken, entfernen, als Vorlage nutzen; nicht in Listen und Exporten
+st, r = Be.call('qs_dokument_save', {'id': 'eingang', 'kapitel': '1.4', 'art': 'O', 'nr': '', 'titel': 'Umbenannt'})
+st2, r2 = Q.call('qs_dokument_save', {'id': 'eingang', 'kapitel': '1.4', 'art': 'O', 'nr': '', 'titel': 'Eingang', 'eingezogen': True, 'einzugGrund': 'weg'})
+check('Eingang: nicht umbenennen, nicht einziehen (404)', st == 404 and st2 == 404, (r, r2))
+check('Eingang: keine Versionen, kein Lenkungsschritt (404)', Be.call('qs_version_save', {'dokument': 'eingang', 'aenderungen': 'x', 'grund': 'y'})[0] == 404
+      and Q.call('qs_version_schritt', {'dokument': 'eingang', 'schritt': 'ueberprueft'})[0] == 404)
+check('Eingang: nicht als Vorlage (422)', Be.call('qs_dokument_save', {'kapitel': '1.4', 'art': 'F', 'nr': '', 'titel': 'Aus Eingang', 'vorlage': 'eingang'})[0] == 422)
+st, r = Q.call('qs_datei_entfernen', {'datei': e1, 'grund': 'weg'})
+check('Eingang: „entfernen“ gilt nicht (409, löschen oder zuordnen)', st == 409 and 'zugeordnet oder gelöscht' in r.get('error', ''), r)
+st, _, csv_ = L.call('qs_export', {'liste': 'dokumente'}, raw=True)
+z_, e_ = zip_lesen(roh(L, 'qs_ablage_export&alle=1')[2])
+st3, r3 = L.call(f'qs_bericht&von={HEUTE[:4]}-01-01&bis={HEUTE}')
+check('Eingang: nicht in Dokumentenliste (CSV), ZIP und Audit-Bericht', st == 200 and 'Eingang (nicht zugeordnet)' not in csv_
+      and not any('Befund Labor' in n or 'Eingang' in n for n in e_) and st3 == 200 and 'Eingang (nicht zugeordnet)' not in json.dumps(r3, ensure_ascii=False), sorted(e_)[:5])
+
+# Zuordnen: Ordner, externes Dokument (mehrere auf einmal), Entwurf; Bytes und Kennung bleiben
+st, r = Be.call('qs_dokument_save', {'kapitel': '2.1', 'art': 'O', 'nr': '', 'titel': 'Laborbefunde'})
+O3 = r['dokument']['id']
+st, r = Be.call('qs_datei_zuordnen', {'dateien': [e1], 'dokument': O3, 'version': ''})
+z1 = [f for f in r.get('dokument', {}).get('dateien', []) if f['id'] == e1]
+check('Zuordnen in einen Ordner: gleiche Kennung am Ziel, nicht mehr im Eingang, Zahl in der Antwort', st == 200 and z1 and e1 not in eingang() and r.get('eingangZahl') == len(eingang()), r)
+check('Zuordnen: Inhalt beim Download gleich (SHA-256), Datei nicht kopiert, Pfad und wer bleiben', hashlib.sha256(roh(L, 'qs_datei&id=' + e1)[2]).hexdigest() == hashlib.sha256(EIN1).hexdigest()
+      and z1[0]['sha256'] == hashlib.sha256(EIN1).hexdigest() and z1[0]['pfad'] == P1 and z1[0]['hochgeladen']['von'] == 'Bernd Bearbeiter' and os.path.isfile(blob_pfad(e1)))
+check('Zuordnen: Verlauf am Ziel', 'Datei aus dem Eingang zugeordnet: Befund Labor 01.pdf' in json.dumps(dok(O3)['verlauf'], ensure_ascii=False))
+mehr = [hoch_e(Be, f'Zertifikat {c}.pdf', pdf('Zertifikat ' + c))[1]['datei'] for c in 'DE']
+st, r = Be.call('qs_datei_zuordnen', {'dateien': mehr, 'dokument': O1})
+check('Mehrfach zuordnen an ein externes Dokument', st == 200 and {f['id'] for f in aktiv_(r['dokument']['dateien'])} >= set(mehr) and not set(mehr) & set(eingang()), r)
+st, r = Be.call('qs_dokument_save', {'kapitel': '1.4', 'art': 'F', 'nr': '1.4-F05', 'titel': 'Wareneingangskontrolle'})
+D3 = r['dokument']['id']; V31 = r['dokument']['versionen'][0]['id']
+ef = hoch_e(Be, 'Formular.docx', docx_w('Formular {{Version}} vom {{Datum}}'))[1]['datei']
+st, r = Q.call('qs_datei_zuordnen', {'dateien': [ef], 'dokument': D3, 'version': V31})
+v31 = r['dokument']['versionen'][0] if st == 200 else {}
+f31 = [f for f in v31.get('dateien', []) if f['id'] == ef]
+check('Zuordnen in einen Entwurf: wie Hochladen – Bearbeiter (4-Augen), Platzhalter erkannt, Verlauf der Version', st == 200 and f31 and ids['quinn'] in v31['bearbeiter']
+      and set(f31[0].get('platzhalter', [])) >= {'version', 'datum'} and 'Datei aus dem Eingang zugeordnet: Formular.docx' in json.dumps(v31['verlauf'], ensure_ascii=False), (r, f31))
+ef2 = hoch_e(Be, 'Nachtrag.pdf', pdf('Nachtrag'))[1]['datei']
+st, r = Q.call('qs_datei_zuordnen', {'dateien': [ef2], 'dokument': D1, 'version': V2})
+check('Zuordnen in eine freigegebene Version: 409, Datei bleibt im Eingang', st == 409 and 'nachtragen' in r.get('error', '') and ef2 in eingang(), r)
+check('Zuordnen: in Prüfung, eingezogen, unbekanntes Ziel, Eingang als Ziel, nur ansehen', schritt(Be, D3, 'einreichen')[0] == 200
+      and Q.call('qs_datei_zuordnen', {'dateien': [ef2], 'dokument': D3, 'version': V31})[0] == 409 and Be.call('qs_datei_zuordnen', {'dateien': [ef2], 'dokument': O2})[0] == 409
+      and Be.call('qs_datei_zuordnen', {'dateien': [ef2], 'dokument': 'dnix'})[0] == 404 and Be.call('qs_datei_zuordnen', {'dateien': [ef2], 'dokument': 'eingang'})[0] == 404
+      and L.call('qs_datei_zuordnen', {'dateien': [ef2], 'dokument': O3})[0] == 403 and ef2 in eingang())
+st, r = Be.call('qs_datei_zuordnen', {'dateien': [ef2, 'abcdefabcdefabcdefab'], 'dokument': O3})
+check('Alles oder nichts: eine unbekannte Datei → 404, die andere bleibt im Eingang', st == 404 and ef2 in eingang() and ef2 not in [f['id'] for f in dok(O3)['dateien']], r)
+check('Auswahl: leer, keine Liste, ungültige Kennung → 422', Be.call('qs_datei_zuordnen', {'dateien': [], 'dokument': O3})[0] == 422
+      and Be.call('qs_datei_zuordnen', {'dateien': 'x', 'dokument': O3})[0] == 422 and Be.call('qs_eingang_loeschen', {'dateien': ['../etc']})[0] == 422)
+ef3 = hoch_e(Be, 'Grenze.pdf', pdf('Grenze'))[1]['datei']
+fuellen(O3, 1000 - len(aktiv_(dok(O3)['dateien'])) - 1, 'grenzeziel')
+st, r = Be.call('qs_datei_zuordnen', {'dateien': [ef2, ef3], 'dokument': O3})
+check('Grenze am Ziel: zwei Dateien auf den letzten Platz → 422, beide bleiben im Eingang', st == 422 and '1000' in r.get('error', '') and {ef2, ef3} <= set(eingang()), r)
+check('eine Datei passt noch', Be.call('qs_datei_zuordnen', {'dateien': [ef3], 'dokument': O3})[0] == 200)
+leeren('grenzeziel')
+
+# Löschen im Eingang: endgültig (Eintrag und Datei), alles oder nichts
+st, r = Be.call('qs_eingang_loeschen', {'dateien': [loesch_mich[0], 'abcdefabcdefabcdefab']})
+check('Löschen: unbekannte Datei → 404, nichts gelöscht', st == 404 and loesch_mich[0] in eingang() and os.path.isfile(blob_pfad(loesch_mich[0])), r)
+check('Löschen einer zugeordneten Datei über den Eingang → 404', Be.call('qs_eingang_loeschen', {'dateien': [e1]})[0] == 404 and os.path.isfile(blob_pfad(e1)))
+st, r = Be.call('qs_eingang_loeschen', {'dateien': loesch_mich})
+check('Löschen: Eintrag und Datei weg, Download 404, Zahl in der Antwort', st == 200 and not set(loesch_mich) & set(eingang()) and r.get('eingangZahl') == len(eingang())
+      and not any(os.path.isfile(blob_pfad(i)) for i in loesch_mich) and roh(L, 'qs_datei&id=' + loesch_mich[0])[0] == 404, r)
+
+# Grenze des Eingangs (vorbereitet im Speicher)
+fuellen('eingang', 20000 - len(eingang()) - 1, 'grenzeeingang')
+st, r, _ = hoch_e(Be, 'Letzte.pdf', pdf('letzte'))
+st2, r2, _ = hoch_e(Be, 'Zuviel.pdf', pdf('zu viel'))
+check('Eingang: höchstens 20000 Dateien (20000. abgelegt, danach 422 „voll“)', st == 200 and r.get('eingangZahl') == 20000 and st2 == 422 and 'voll' in r2.get('error', ''), (st, r2))
+leeren('grenzeeingang')
+EINGANG_NAMEN = ('Befund Labor 01.pdf', 'Formular.docx', 'Zertifikat D.pdf')
+
 # ── Datenpaket, Speicherung, Protokoll ──
 paket = json.load(open(PAKET_DATEI, encoding='utf-8'))
 st, r = V.call('qs_import', {'paket': paket, 'vorschau': True})
@@ -454,7 +574,10 @@ check('Dateien liegen auch mit SQLite im Dateisystem', os.path.isfile(blob_pfad(
 log = json.dumps(A.call('log')[1], ensure_ascii=False)
 check('Protokoll: abgelegt, gelöscht, entfernt, ZIP', all(t in log for t in ('QM-System: Datei für 1.4-F01 Probenahmeprotokoll abgelegt', 'gelöscht (Entwurf)', 'entfernt (vermerkt)',
                                                                             'Dokumentenablage als ZIP heruntergeladen', 'Kapitel 2.1', 'mit älteren Versionen')), log[-2000:])
-check('Protokoll ohne Dateinamen und Gründe', 'Unterschrift.pdf' not in log and 'Falsche Unterschriftenseite' not in log and 'IFS-Zertifikat' not in log)
+check('Protokoll ohne Dateinamen und Gründe', 'Unterschrift.pdf' not in log and 'Falsche Unterschriftenseite' not in log and 'IFS-Zertifikat' not in log
+      and not any(n in log for n in EINGANG_NAMEN))
+check('Protokoll: Eingang (hochgeladen, zugeordnet, gelöscht)', all(t in log for t in ('Datei für Eingang (nicht zugeordnet) abgelegt', '1 Datei aus dem Eingang Laborbefunde zugeordnet',
+                                                                                   '2 Dateien im Eingang gelöscht')), log[-1500:])
 
 # ── Oberfläche ──
 st, r = Be.call('qs_dokument_save', {'kapitel': '1.4', 'art': 'F', 'nr': '1.4-F02', 'titel': 'Reinigungsplan', 'zustaendig': 'QB'})

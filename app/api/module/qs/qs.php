@@ -427,7 +427,7 @@ function qs_eingang_pfad($v): string
 {
     $teile = [];
     foreach (preg_split('~[/\\\\]+~', is_string($v) ? $v : '') ?: [] as $t) {
-        $t = trim(preg_replace('/\s+/u', ' ', preg_replace('/[\x00-\x1F\x7F]/u', '', $t) ?? '') ?? '');
+        $t = trim(preg_replace('/[\x00-\x1F\x7F]/u', '', preg_replace('/\s+/u', ' ', $t) ?? '') ?? '');
         if ($t !== '' && $t !== '.' && $t !== '..') $teile[] = mb_substr($t, 0, 120);
     }
     return implode('/', array_slice($teile, 0, 12));
