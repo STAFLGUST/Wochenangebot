@@ -2,7 +2,7 @@
 
 <!-- ERZEUGT von `python3 werkzeuge/doku.py erzeugen` – nicht von Hand ändern. Quelle: Funktionen und Kommentare im Code. Die CI prüft, dass diese Datei zum Code passt. -->
 
-13 Dateien, 315 Funktionen – in der Reihenfolge der Datei, **fett** die Abschnitte. Text = erste Aussage des Kommentars direkt über der Funktion (Python: Docstring). Übersicht aller Module: [README.md](README.md).
+16 Dateien, 350 Funktionen – in der Reihenfolge der Datei, **fett** die Abschnitte. Text = erste Aussage des Kommentars direkt über der Funktion (Python: Docstring). Übersicht aller Module: [README.md](README.md).
 
 ## `app/api/aktionen/qs.php`
 
@@ -35,6 +35,18 @@ _QM-System · Audit-Bericht (Aktionen qs_bericht, qs_bericht_excel)_
 - `qs_xl_blatt(zeilen, breiten, kopf, umbruch)` – Blatt: Zeilen aus Zellen (Wert oder [Wert, Stil]); $kopf = Zeile der Kopfzeile (1-basiert, 0 = keine); $umbruch = Spalten mit Umbruch
 - `qs_xl_mappe(blaetter, titel)`
 - `qs_bericht_xlsx(b, wer)` – Arbeitsmappe: Zusammenfassung, Prüfplan (je Monat), Versäumnisse und Fristen, Abweichungen, Maßnahmen, Dokumente, Überprüfung fällig, Handbuch
+
+## `app/api/module/qs/organigramm.php`
+
+_QM-System · Organigramm als gelenktes Dokument (Entscheidung des Inhabers 16.11.2026 „Im QM-System zeichnen“; nur bei Bedarf geladen von app/api/aktionen/qs.php)._
+
+- `qs_organigramm_pruefen(v, alt, stamm)` – Eingabe → gültige Struktur ohne Namens-Schnappschuss.
+- `qs_organigramm_speichern()` – Aktion qs_organigramm_save: Struktur im offenen Entwurf speichern (Stand „rev“ des Dokuments wie bei qs_version_save)
+- `qs_organigramm_uebernehmen(gueltig, neu)` – „Überarbeitung beginnen“: Struktur der gültigen Version in den neuen Entwurf – ohne Namens-Schnappschuss (im Entwurf gelten die heutigen Namen)
+- `qs_organigramm_freigeben(d, v, stamm, me, erzeugt)` – Freigabe (nach Nummer, Datum und Freigabe-Vermerk): Namen festhalten und die PDF-Fassung als Datei der Version ablegen
+- `qs_organigramm_lage(knoten, hoehe)` – Lage aller Kästen und Linien (pt, Ursprung oben links) aus der Struktur und der Höhe je Kasten: untergeordnete Stellen nebeneinander unter ihrer Stelle, …
+- `qs_organigramm_zeilen(k, namen)` – Textzeilen eines Kastens [Text, Größe, fett, Farbe]: Stelle, Person(en) oder „unbesetzt“, Vertretung, Hinweis.
+- `qs_organigramm_pdf(d, v, stamm)` – PDF-Fassung einer freigegebenen Version: eine Seite A4 quer, Diagramm eingepasst; Kopf mit Logo, Titel und Firma, Fuß mit den Lenkungsangaben (Nr., Version, …
 
 ## `app/api/module/qs/qs.php`
 
@@ -251,6 +263,40 @@ _Qualitätssicherung · Vorlagen und Lenkungsangaben in Word- und Excel-Dateien 
 - `qs_lenkung_datei(d, v, f, stamm, me, erzeugt)` – Eine Datei einer freigegebenen Version ausfüllen (auch beim Nachtragen); unverändert, wenn nicht nötig oder nicht lesbar
 - `qs_dateien_uebernehmen(g, me, erzeugt)` – Überarbeitung: Dateien der gültigen Version (Rohfassung mit Platzhaltern) als Kopie in den neuen Entwurf
 - `qs_erzeugte_aufraeumen(erzeugt, fertig)` – Neu erzeugte Dateien wieder entfernen, wenn das Speichern scheitert (Aufruf am Ende der Anfrage)
+
+## `app/module/qs/organigramm.js`
+
+_STAFL-Plattform · Qualitätssicherung – Organigramm in einem gelenkten Dokument (Entscheidung des Inhabers 16.11.2026 „Im QM-System zeichnen“)._
+
+- `neueId()`
+
+**Karte in der Seitenleiste des Dokuments**
+
+- `karte(x)`
+
+**Diagramm**
+
+- `kastenHtml(k)`
+- `knotenHtml(k)`
+- `zeichnen()`
+- `zoom(z)`
+- `einpassen()`
+
+**Felder der gewählten Stelle**
+
+- `felder()`
+- `waehle(id)`
+- `geaendert()`
+- `neu(teil)`
+- `tat(t)`
+
+**Fenster**
+
+- `fenster()`
+- `oeffnen(id, art)` – art: 'ansehen' = gültige Version, 'entwurf' = offene Version nur lesen, 'bearbeiten' = offener Entwurf (ohne eigene Struktur beginnt er mit der gültigen …
+- `schliessen()`
+- `speichern()`
+- `drucken()` – Drucken: Diagramm ohne Bedienelemente auf A4 quer, eingepasst (Kopf mit Dokument und Stand)
 
 ## `app/module/qs/qs.js`
 
@@ -491,6 +537,22 @@ _Qualitätssicherung – Audit-Bericht (app/api/module/qs/bericht.php, Aktionen 
 - `zeitraum(von, bis)`
 - `anmelden(user, pw_, ip, breite, thema, hoehe)`
 - `text(pg, sel)`
+
+## `tests/e2e/test_qs_organigramm.py`
+
+_Qualitätssicherung – Organigramm im QM-System (app/api/module/qs/organigramm.php, Aktion qs_organigramm_save, Oberfläche app/module/qs/organigramm.js)._
+
+- `check(n, c, i)`
+- `de(iso)`
+- `roh(cli, query)` – GET ohne JSON-Auswertung: (Status, Kopfzeilen, Inhalt)
+- `pdf_text(raw)` – Text aus den (komprimierten) Seiteninhalten des PDF-Erzeugers: (…) Tj, WinAnsi – je Seite eine Liste von Zeilen
+- `dok(cli, did)`
+- `knoten(id_, titel, ueber, art, personen, vertretung, hinweis)`
+- `speichern(cli, liste, d)`
+- `fehler_bei(name, liste, teil)`
+- `baum(pg)`
+- `anmelden(user, pw_, ip, breite, thema, hoehe)`
+- `oeffne_dok(pg, did)`
 
 ## `tests/e2e/test_qs_verfahren.py`
 

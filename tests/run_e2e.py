@@ -147,6 +147,7 @@ SUITES['qs_ablage'] = (8790, 'data-seed', True)   # QM-System: Dokumentenablage 
 SUITES['qs_vorlagen'] = (8790, 'data-seed', True)   # QM-System: Dokumente aus Word-/Excel-Vorlagen, Nummernstruktur, Lenkungsangaben bei der Freigabe
 SUITES['qs_bericht'] = (8790, 'data-seed', True)   # QM-System: Audit-Bericht eines Zeitraums (Ansicht, Excel, Druck)
 SUITES['qs_verfahren'] = (8790, 'data-seed', True)   # QM-System: Verfahrensdokumentation nach GoBD (Fassungen, Export für Prüfungen als PDF/ZIP)
+SUITES['qs_organigramm'] = (8790, 'data-seed', True)   # QM-System: Organigramm im Entwurf zeichnen, Freigabe mit PDF-Fassung
 SUITES['sicherheit_modul'] = SUITES['bestellung']   # Modul Sicherheit (app/module/sicherheit/, Oberfläche sicherheit.intern); Test-Mailserver
 SUITES['notfall'] = SUITES['bestellung']   # Notfallmodus (lib/notfall.php): Kunden-Wartung, Aussperren, Sitzungen, Mailsperre, Firewall
 SUITES['sicherheit_bereitschaft'] = SUITES['bestellung']   # Leitfaden, Probealarm, Wochenbericht, ungenutzte Zugänge (lib/bereitschaft.php); Test-Mailserver
