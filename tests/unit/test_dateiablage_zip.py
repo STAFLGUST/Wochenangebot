@@ -5,9 +5,11 @@ verschwindet, fehlt im Archiv, das gültig bleibt. Geprüft mit Pythons zipfile 
 (prüft auch, dass lokaler und zentraler Name gleich gelesen werden).
 
 Prüfung beim Hochladen (ablage_zip_pruefen): die eigenen Exporte, Archive von Pythons zipfile (auch 65535 Einträge ohne Zip64,
-Kommentar mit Ende-Signatur), Info-ZIP und leere Archive werden angenommen; präparierte Archive, in denen Python, Go, Java oder
+Kommentar mit Ende-Signatur, in einen Datenstrom mit Data Descriptor), Info-ZIP, leere Archive, mit NUL-Bytes aufgefüllte Archive
+(bsdtar nach stdout) und Ordner wie „chart.js/“ werden angenommen; präparierte Archive, in denen Python, Go, Java, 7-Zip oder
 unzip ein Programm zeigen, das Verzeichnis aber nicht (NUL im Namen, falsche Zahl der Einträge, Verzeichnis an anderer Stelle,
-Unicode-Pfad, abweichender lokaler Name, Doppelpunkt), werden abgelehnt; die Meldung nennt höchstens 5 gesperrte Einträge;
+Unicode-Pfad, abweichender lokaler Name, Doppelpunkt, „a.exe/.“, „a.exe\\“, versteckter lokaler Kopf vorn oder in einer Lücke,
+abweichende lokale Größe, überlappende Köpfe), werden abgelehnt; die Meldung nennt höchstens 5 gesperrte Einträge;
 mehr als 200.000 Einträge werden abgelehnt. PHP gibt dabei keine Warnung aus."""
 import io
 import json
@@ -153,11 +155,23 @@ with tempfile.TemporaryDirectory() as tmp:
         f.write('Prüfung')
     if shutil.which('zip'):
         subprocess.run(['zip', '-q', 'infozip.zip', 'Anleitung.txt'], check=True)
+    class Strom(io.BytesIO):   # nicht spulbar wie eine Leitung: zipfile schreibt Größen und Prüfsumme in einen Data Descriptor (Bit 3)
+        def seek(self, *a):
+            raise io.UnsupportedOperation
+
+    strom = Strom()
+    with zipfile.ZipFile(strom, 'w', zipfile.ZIP_DEFLATED) as z:
+        z.writestr('QM/Plan.txt', 'Prüfplan ' * 50); z.writestr('QM/Liste.csv', 'a;b')
+    assert zipfile.ZipFile(io.BytesIO(strom.getvalue())).infolist()[0].flag_bits & 8, 'zipfile schreibt in den Strom mit Bit 3'
+    bsdtar = zipfile_bytes([('QM/Plan.pdf', b'%PDF-1.4'), ('QM/Liste.csv', 'a;b')])
     gut = {
         'zipfile mit Unterordnern und Ordnereintrag': zipfile_bytes([('QM/1.4/Plan.pdf', b'%PDF-1.4'), ('QM/leer/', b''), ('QM/Liste.csv', 'a;b')]),
         'zipfile, 65535 Einträge ohne Zip64': py65535,
         'zipfile mit Kommentar, der die Ende-Signatur enthält': zipfile_bytes([('Ordner/Prüfplan.xlsx', bytes(1000))], b'Kommentar mit PK\x05\x06 darin'),
         'leeres Archiv': ende(0, 0, 0),
+        'zipfile in einen Datenstrom (Data Descriptor)': strom.getvalue(),
+        'wie bsdtar nach stdout: mit NUL-Bytes auf 10240er-Blöcke aufgefüllt': bsdtar + bytes(10240 - len(bsdtar) % 10240),
+        'Ordner, dessen Name auf .js endet': zipfile_bytes([('Web/chart.js/', b''), ('Web/chart.js/Liesmich.txt', 'x')]),
     }
     if os.path.exists('infozip.zip'):
         gut['Info-ZIP zip (Zeit- und Unix-Zusatzfelder)'] = open('infozip.zip', 'rb').read()
@@ -178,6 +192,19 @@ with tempfile.TemporaryDirectory() as tmp:
     z64_daneben = lokal(*H) + zwei + b'PK\x06\x06' + struct.pack('<QHHIIQQQQ', 44, 45, 45, 0, 0, 1, 1, len(zwei) + 10, 0)
     z64_daneben += b'PK\x06\x07' + struct.pack('<IQI', 0, len(lokal(*H)) + len(zwei), 1) + ende(1, len(zwei), len(lokal(*H)))
     geteilt = lokal(*H) + zentral(*H, 0) * 2
+    # versteckte lokale Köpfe ohne Eintrag im Verzeichnis: 7-Zip entpackt sie ohne Warnung
+    Z = (b'Zweite.txt', b'zwei')
+    vorne = lokal(*B) + lokal(*H) + zentral(*H, len(lokal(*B)))
+    vorne += ende(1, len(zentral(*H, 0)), len(lokal(*B) + lokal(*H)))
+    zz = zentral(*H, 0) + zentral(*Z, len(lokal(*H) + lokal(*B)))
+    luecke = lokal(*H) + lokal(*B) + lokal(*Z) + zz + ende(2, len(zz), len(lokal(*H) + lokal(*B) + lokal(*Z)))
+    kleiner = bytearray(archiv([(H[0], H[1] + lokal(*B))]))   # Verzeichnis zählt Rechnung.exe zu den Daten, der lokale Kopf nicht
+    kleiner[18:22] = struct.pack('<I', len(H[1]))
+    # lokaler Kopf von Zweite.txt liegt im Zusatzfeld des ersten: so lassen sich Köpfe vielfach überlappend lesen (Rechenzeit)
+    innen = lokal(*Z)
+    aussen = lokal(*H, extra=struct.pack('<HH', 0x9999, len(innen)) + innen)
+    zz = zentral(*H, 0) + zentral(*Z, 30 + len(H[0]) + 4)
+    ueberlappend = aussen + zz + ende(2, len(zz), len(aussen))
     boese = {
         'a) NUL am Ende des Namens': (archiv([H, (b'Rechnung.exe\0', B[1])]), 'beschädigt'),
         'a) NUL vor .txt': (archiv([H, (b'Rechnung.exe\0.txt', B[1])]), 'beschädigt'),
@@ -191,6 +218,14 @@ with tempfile.TemporaryDirectory() as tmp:
         'Doppelpunkt: Datenstrom von Rechnung.exe': (archiv([H, (b'Rechnung.exe:x', B[1])]), 'gesperrte Dateiart'),
         'zweites Ende im Kommentar': (voll[:-2] + struct.pack('<H', 22) + ende(0, 0, len(voll) - 22), 'beschädigt'),
         'Kommentarlänge reicht nicht bis zum Dateiende': (voll + b'x', 'beschädigt'),
+        'nach dem Ende NUL-Bytes und dann weitere Bytes': (voll + bytes(16) + b'x', 'beschädigt'),
+        'versteckter lokaler Kopf vor dem ersten Eintrag': (vorne, 'beschädigt'),
+        'versteckter lokaler Kopf in einer Lücke zwischen zwei Einträgen': (luecke, 'beschädigt'),
+        'lokaler Kopf nennt kleinere gepackte Größe als das Verzeichnis': (bytes(kleiner), 'beschädigt'),
+        'lokale Köpfe überlappen': (ueberlappend, 'beschädigt'),
+        'Rechnung.exe/. (Python und bsdtar entpacken die Datei Rechnung.exe)': (archiv([H, (b'Rechnung.exe/.', B[1])]), 'gesperrte Dateiart'),
+        'Rechnung.exe\\ (Windows-Trennzeichen am Ende)': (archiv([H, (b'Rechnung.exe\\', B[1])]), 'gesperrte Dateiart'),
+        'index.html/..': (archiv([H, (b'Ordner/index.html/..', B[1])]), 'gesperrte Dateiart'),
         'Zip64-Ende und klassisches Ende nennen verschiedene Längen': (z64_daneben, 'beschädigt'),
         'zwei Einträge teilen einen lokalen Kopf': (geteilt + ende(2, len(geteilt) - len(lokal(*H)), len(lokal(*H))), 'beschädigt'),
         'mehr als 16 Zusatzfelder': (archiv([H], extra={0: b'\x99\x99\0\0' * 17}), 'beschädigt'),

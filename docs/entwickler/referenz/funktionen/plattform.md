@@ -2,7 +2,7 @@
 
 <!-- ERZEUGT von `python3 werkzeuge/doku.py erzeugen` – nicht von Hand ändern. Quelle: Funktionen und Kommentare im Code. Die CI prüft, dass diese Datei zum Code passt. -->
 
-120 Dateien, 1205 Funktionen – in der Reihenfolge der Datei, **fett** die Abschnitte. Text = erste Aussage des Kommentars direkt über der Funktion (Python: Docstring). Übersicht aller Module: [README.md](README.md).
+120 Dateien, 1206 Funktionen – in der Reihenfolge der Datei, **fett** die Abschnitte. Text = erste Aussage des Kommentars direkt über der Funktion (Python: Docstring). Übersicht aller Module: [README.md](README.md).
 
 ## `.github/scripts/apt_vorrat.py`
 
@@ -1860,6 +1860,7 @@ _ZIP-Export der Dateiablage (app/api/lib/dateiablage.php, ablage_zip_senden) üb
 - `unicode_pfad(echt, angezeigt)`
 - `datei(i, inhalt, groesse)`
 - `zipfile_bytes(eintraege, kommentar)` – ── Prüfung beim Hochladen: echte Archive anderer Packer werden angenommen ──
+- `seek(*a)`
 
 ## `tests/unit/test_doku.py`
 
