@@ -5,6 +5,13 @@
 # Sofort sichern:   sh /opt/wochenangebot/deploy/sichern.sh --jetzt
 #
 # Jede Sicherung wird direkt nach dem Erstellen probeweise entpackt und geprüft (alle Datendateien lesbar).
+# Dateiablage (dateien/ in daten/ bzw. nach der Trennung in daten-intern/, hochgeladene Dateien wie QM-Dokumente): nicht im
+# Archiv, sondern je Lauf als Stand sicherungen/dateien-<daten|intern>/<Zeit>/ mit festen Verweisen auf den vorigen Stand
+# (deploy/dateien_sichern.py) – Platz für einen Bestand plus die Änderungen. Geprüft wird, dass jede Datei, auf die die
+# gesicherten Daten verweisen, im Stand liegt, dazu eine Stichprobe mit SHA-256. Fehlt das Werkzeug (Sicherung vor dem
+# Release: Skript des neuen Commits, übrige Dateien in deploy/ noch im alten Stand), bleibt die Dateiablage im Archiv.
+# Vor dem Sichern wird der Platz geprüft (neue Dateien, dreimal die übrigen Daten, 5 GB Reserve); reicht er nicht, bricht
+# die Sicherung mit Meldung im Status ab.
 # Nicht gesichert wird der Schlüssel für das im Eingabebereich hinterlegte Postfach-Passwort (mail-schluessel.php):
 # Sicherungen enthalten das Passwort damit nur verschlüsselt; nach einer Wiederherstellung auf neuem Server muss es
 # unter Verwaltung → E-Mail neu eingegeben werden.
@@ -30,6 +37,10 @@ SNAP=""
 DATENSAETZE=0
 SPEICHER=dateien
 ANMELDUNG=aus          # aus (nicht in Betrieb) | ok | fehler
+DSW="$BASIS/deploy/dateien_sichern.py"
+DSF="$ZIEL/.dateisicherung-fehler"
+[ -f "$DSW" ] || DSW=""
+D_ANZAHL=0; D_GROESSE=0; D_NEU=0; D_STAENDE=0; D_BELEGT=0
 ANM_DATEI=""
 ANM_MELDUNG=""
 ANM_GRUND=""
@@ -38,8 +49,9 @@ KC_COMPOSE=${WA_KC_COMPOSE:-docker compose -f docker-compose.yml -f deploy/anmel
 
 status() { # ok datei groesse dateien fehler inhalt_geprueft meldung
   ANZ=$(find "$ZIEL" -maxdepth 1 -name 'daten-*.tar.gz' 2>/dev/null | wc -l)
-  printf '%s\n{"t":"%s","ok":%s,"datei":"%s","groesse":%s,"dateien":%s,"fehler":%s,"inhalt":%s,"anzahl":%s,"behalten":%s,"meldung":"%s","datensaetze":%s,"speicher":"%s","anmeldung":"%s","anmeldung_datei":"%s","intern_datei":"%s"}' \
+  printf '%s\n{"t":"%s","ok":%s,"datei":"%s","groesse":%s,"dateien":%s,"fehler":%s,"inhalt":%s,"anzahl":%s,"behalten":%s,"meldung":"%s","datensaetze":%s,"speicher":"%s","anmeldung":"%s","anmeldung_datei":"%s","intern_datei":"%s","dateien_anzahl":%s,"dateien_groesse":%s,"dateien_neu":%s,"dateien_staende":%s,"dateien_belegt":%s}' \
     "$GUARD" "$(date -u +%Y-%m-%dT%H:%M:%SZ)" "$1" "$2" "$3" "$4" "$5" "$6" "$ANZ" "$BEHALTEN" "$7" "$DATENSAETZE" "$SPEICHER" "$ANMELDUNG" "$ANM_DATEI" "${INTERN_DATEI##*/}" \
+    "$D_ANZAHL" "$D_GROESSE" "$D_NEU" "$D_STAENDE" "$D_BELEGT" \
     | status_schreiben
 }
 # daten/ ist im Container beschreibbar: dort angelegte Verweise dürfen root nie umlenken. Deshalb entsteht die Datei
@@ -83,10 +95,41 @@ if [ "${1:-}" != "--jetzt" ]; then
 fi
 [ -d "$BASIS/daten" ] || fehler "Ordner daten/ fehlt"
 
-FREI=$(df -Pk "$ZIEL" | awk 'NR==2 {print $4}')
-[ "${FREI:-0}" -gt 204800 ] || fehler "zu wenig Speicherplatz"
-
 STAMP=$(date -u +%Y-%m-%d_%H%M%S)
+# ablagen: je Dateiablage „<quelle>:<ziel>“ (Pfade ohne Leerzeichen); daten-intern nur nach der Datentrennung
+ablagen() {
+  [ -n "$DSW" ] || return 0
+  for A in daten:daten daten-intern:intern; do
+    [ "${A%%:*}" = daten-intern ] && [ ! -f "$BASIS/daten-intern/.daten-intern" ] && continue
+    [ -d "$BASIS/${A%%:*}/dateien" ] && echo "$BASIS/${A%%:*}/dateien:$ZIEL/dateien-${A##*:}"
+  done
+  return 0
+}
+ds_grund() { tail -1 "$DSF" 2>/dev/null | tr -d '"\\\000-\037' | cut -c1-200; }
+dateien_aufbauen() {
+  for A in $(ablagen); do
+    N=$(python3 "$DSW" aufbauen "${A%%:*}" "${A#*:}" "$STAMP" 2>"$DSF") || fehler "$(ds_grund)"
+    D_NEU=$((D_NEU + N))
+  done
+}
+
+# Platz: neue Dateien der Ablage + dreimal die übrigen Daten (Abzug der Datenbank, Archiv, Probe-Entpacken) + 5 GB Reserve.
+# Unter 5 GB frei warnt der Reiter System (Speicherplatz); die Sicherung soll den Server nie unter diese Schwelle drücken.
+gb() { awk -v k="$1" 'BEGIN { printf "%.1f", k / 1048576 }' | tr . ,; }
+NEU_KB=0
+for A in $(ablagen); do
+  rm -rf "${A#*:}"/*.tmp   # Reste eines abgebrochenen Laufs
+  N=$(python3 "$DSW" bedarf "${A%%:*}" "${A#*:}" 2>"$DSF") || fehler "$(ds_grund)"
+  NEU_KB=$((NEU_KB + N / 1024))
+done
+AUSSER=""; [ -n "$DSW" ] && AUSSER=--exclude=dateien
+# shellcheck disable=SC2046,SC2086  # optionaler Ordner und Ausschluss ohne Leerzeichen
+DATEN_KB=$(du -sk $AUSSER "$BASIS/daten" $([ -d "$BASIS/daten-intern" ] && echo "$BASIS/daten-intern") | awk '{s += $1} END {print s + 0}')
+NOETIG=$((NEU_KB + 3 * DATEN_KB + 5 * 1048576))
+FREI=$(df -Pk "$ZIEL" | awk 'NR==2 {print $4}')
+[ "${FREI:-0}" -ge "$NOETIG" ] || fehler "zu wenig Speicherplatz: $(gb "${FREI:-0}") GB frei, nötig $(gb "$NOETIG") GB (neue Dateien $(gb "$NEU_KB") GB, Daten 3 × $(gb "$DATEN_KB") GB, Reserve 5 GB)"
+
+dateien_aufbauen
 DATEIEN=0
 FEHLER=0
 INHALT=true
@@ -101,7 +144,8 @@ sichere_ordner() {
     python3 "$BASIS/deploy/datenbank.py" snapshot "$O_ORDNER" --output "$O_SNAP/data" >/dev/null || fehler "Datenbank-Sicherung fehlgeschlagen ($O_NAME)"
     O_QUELLE="$O_SNAP/data"
   fi
-  tar czf "$O_DATEI.tmp" -C "$O_QUELLE" --exclude='./geo' --exclude='*.tmp' --exclude='./.*.lock' --exclude='./sicherung.php' --exclude='./mail-schluessel.php' . || { rm -f "$O_DATEI.tmp"; fehler "Archiv konnte nicht erstellt werden ($O_NAME)"; }
+  # shellcheck disable=SC2086  # ohne Werkzeug für die Dateiablage bleibt sie im Archiv
+  tar czf "$O_DATEI.tmp" -C "$O_QUELLE" ${DSW:+--exclude=./dateien} --exclude='./geo' --exclude='*.tmp' --exclude='./.*.lock' --exclude='./sicherung.php' --exclude='./mail-schluessel.php' . || { rm -f "$O_DATEI.tmp"; fehler "Archiv konnte nicht erstellt werden ($O_NAME)"; }
   # Wiederherstellungstest: in einen leeren Ordner entpacken und jede Datendatei prüfen
   O_PRUEF=$(mktemp -d); PRUEF="$PRUEF $O_PRUEF"
   tar xzf "$O_DATEI.tmp" -C "$O_PRUEF" || { rm -f "$O_DATEI.tmp"; fehler "Archiv nicht lesbar ($O_NAME)"; }
@@ -141,6 +185,14 @@ if [ -f "$BASIS/daten-intern/.daten-intern" ] || [ -f "$BASIS/daten/.daten-getre
   [ -f "$BASIS/daten/.daten-getrennt" ] || fehler "daten-intern/ ist markiert, in daten/ fehlt das Kennzeichen (sh deploy/daten-trennen.sh status)"
   sichere_ordner "$BASIS/daten-intern" intern
   INTERN_DATEI="$ZIEL/intern-$STAMP.tar.gz"
+fi
+# Dateien, die während des Archivs hinzukamen, ergänzen; dann gegen die entpackten Archive prüfen und abschließen
+if [ -n "$(ablagen)" ]; then
+  dateien_aufbauen
+  # shellcheck disable=SC2046,SC2086  # Listen ohne Leerzeichen
+  ERG=$(python3 "$DSW" abschliessen "$BEHALTEN" "$STAMP" $(ablagen | sed 's/^[^:]*://') --daten $PRUEF 2>"$DSF") || fehler "$(ds_grund)"
+  # shellcheck disable=SC2086
+  set -- $ERG; D_ANZAHL=$1; D_GROESSE=$2; D_STAENDE=$3; D_BELEGT=$4
 fi
 
 # ── Zentrale Anmeldung: Keycloak-Datenbank, sobald sie läuft oder laut .env in Betrieb ist ──
@@ -184,7 +236,7 @@ elif [ "$FEHLER" -eq 0 ]; then
     status true "$(basename "$DATEI")" "$GROESSE" "$DATEIEN" 0 false "Inhalt nicht geprüft (kein Python/PHP verfügbar)"
   fi
   melden ok
-  echo "Datensicherung erstellt und geprüft: $(basename "$DATEI")${INTERN_DATEI:+ und $(basename "$INTERN_DATEI")} ($DATENSAETZE Datensätze, $([ "$SPEICHER" = sqlite ] && echo Datenbank || echo Dateien))$([ "$ANMELDUNG" = ok ] && echo "; Anmeldung: $ANM_DATEI")"
+  echo "Datensicherung erstellt und geprüft: $(basename "$DATEI")${INTERN_DATEI:+ und $(basename "$INTERN_DATEI")} ($DATENSAETZE Datensätze, $([ "$SPEICHER" = sqlite ] && echo Datenbank || echo Dateien))$([ "$ANMELDUNG" = ok ] && echo "; Anmeldung: $ANM_DATEI")$([ "$D_STAENDE" -gt 0 ] && echo "; Dateiablage: $D_ANZAHL Dateien, $((D_NEU / 1048576)) MB neu kopiert")"
 else
   touch "$ZIEL/.letzter-fehler"
   status false "$(basename "$DATEI")" "$GROESSE" "$DATEIEN" "$FEHLER" "$INHALT" "$FEHLER Datei(en) fehlerhaft${ANM_MELDUNG:+; $ANM_MELDUNG}"

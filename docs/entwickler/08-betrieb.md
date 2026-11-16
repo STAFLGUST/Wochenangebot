@@ -191,12 +191,12 @@ Ohne gültigen Schlüssel wirkt nichts davon. Jede neue Weiterleitung (`reverse_
 | `.env` | Domain, Mail-Zugang, Geheimnisse der Anmeldung, Token für den Release-Modus, Schlüssel für bunny.net (`CDN_SCHLUESSEL`, `CDN_PFLICHT`) (nur root) |
 | `.release-vorher`, `.release-abgelehnt` | Stand vor dem letzten Release (Notfall-Rückfall) bzw. abgelehnter Release (nur root) |
 | `.cdn-netzsperre`, `.cdn-netzsperre-liste.json`, `.cdn-netzsperre-regeln` | Netzsperre für bunny.net: Modus, Liste der Edge-Server, Prüfsumme der gesetzten Regeln (nur root, `cdn-netzsperre.sh`) |
-| `daten/` | Geschäftsdaten (Dateien oder `daten/.sqlite/store.sqlite`), Dateiablage `daten/dateien/` (hochgeladene Dateien, z. B. QM-Dokumente; in der Sicherung enthalten), Status von Sicherung und Deployment, `mail-schluessel.php` bis zum Umzug nach `daten-geheim/` (nicht in Sicherungen), Versandaufträge der Kundenseite (`postausgang`) |
+| `daten/` | Geschäftsdaten (Dateien oder `daten/.sqlite/store.sqlite`), Dateiablage `daten/dateien/` (hochgeladene Dateien, z. B. QM-Dokumente; gesichert als eigene Stände `sicherungen/dateien-*`), Status von Sicherung und Deployment, `mail-schluessel.php` bis zum Umzug nach `daten-geheim/` (nicht in Sicherungen), Versandaufträge der Kundenseite (`postausgang`) |
 | `daten-intern/` | Interne Dokumente nach `deploy/daten-trennen.sh trennen` (ADR-007 Stufe 2a: Personal, Nutzer, CRM, Controlling, QS mit Dateiablage …; ab Trennstufe 2 auch Kundenstamm, Bestand, Stammdaten, Postfach-Zugänge, Empfänger der Bestellwünsche); nur in `app-mitarbeiter` und `postausgang` (`/var/www/daten-intern`), nie in der Kundenseite; gesichert als `intern-<Zeit>.tar.gz`; nur root/www-data |
 | `daten-geheim/` | Schlüssel des im Eingabebereich hinterlegten Postfach-Passworts (`mail-schluessel.php`, nach `postfach-schluessel.sh umziehen`); nur in `app-mitarbeiter` und `postausgang`, nie in der Kundenseite, nicht gesichert, nur root/www-data |
 | `daten-anmeldung/` | Realm-Import, Tresor `vault/` (Postfach-Passwort für Keycloak, nicht gesichert), während der Einrichtung `einrichtung.env` |
 | `daten-karte/` | Detailkarte `karte.pmtiles` (OpenStreetMap, Deutschland bis Zoomstufe 15, ca. 5–6 GB) und `stand.txt`, Adressverzeichnis `adressen.sqlite` (geschätzt um 1 GB) und `adressen-stand.txt`; im Anwendungs-Container nur lesend unter `/var/www/karte`, nicht gesichert (jederzeit neu ladbar) |
-| `sicherungen/` | Datensicherungen und `anmeldung-<Zeit>.dump`, je 30 Stände, nur root |
+| `sicherungen/` | Datensicherungen, Stände der Dateiablage `dateien-<daten|intern>/<Zeit>/` und `anmeldung-<Zeit>.dump`, je 30 Stände, nur root |
 | Volumes | `caddy_data`, `caddy_config` (Zertifikate), `keycloak_db` |
 
 ### Skripte in `deploy/`
@@ -209,9 +209,10 @@ Ohne gültigen Schlüssel wirkt nichts davon. Jede neue Weiterleitung (`reverse_
 | `freigabe-einspielen.sh` | freigegebenes Release einspielen, Healthcheck, automatischer Rückfall | `aktualisieren.sh` |
 | `bereitstellen.py` | Versionsnummern und Prüfliste aus dem aktiven Commit; `--pruefen` nur prüfen; `--verzeichnis` für einen Programmordner | Einspiel- und Rückfallskripte, `run_e2e.py`, `tests/deploy/test_freigabe.sh` |
 | `release-zurueck.sh` | Notfall-Rückfall auf den Stand vor dem letzten Release | Inhaber |
-| `sichern.sh` | Datensicherung mit Probeentpacken, inkl. Keycloak-Datenbank; `--jetzt` sofort | Timer `wochenangebot-sicherung` bzw. `aktualisieren.sh` (1×/Tag), Release |
+| `sichern.sh` | Datensicherung mit Probeentpacken und Platzprüfung, inkl. Keycloak-Datenbank und Dateiablage; `--jetzt` sofort | Timer `wochenangebot-sicherung` bzw. `aktualisieren.sh` (1×/Tag), Release |
 | `sicherung-einrichten.sh` | eigener Sicherungs-Timer (täglich 02:30) | Inhaber, einmalig |
 | `sicherung-pruefen.py`, `sicherung-pruefen.php` | entpackte Sicherung prüfen | `sichern.sh` |
+| `dateien_sichern.py` | Dateiablage: Stand mit festen Verweisen auf den vorigen, Platzbedarf, Prüfung gegen die Verweise der Daten | `sichern.sh` |
 | `datenbank.py` | SQLite: `check`, Migration/Rückkonvertierung (`--offline`), Sicherung, `altdateien` (Altdateien auflisten/archivieren) | `datenbank-umschalten.sh`, `sichern.sh`, `run_e2e.py` |
 | `datenbank-umschalten.sh` | `migrate` / `rollback` zwischen Dateien und SQLite | Inhaber, nur mit Freigabe und Wartungsfenster |
 | `altdateien.sh` | `zeigen` / `archivieren` der alten Datendateien nach der Umschaltung (nur bei aktivem SQLite, Archiv in `sicherungen/`) | Inhaber, nur mit Freigabe; Anwendung bleibt in Betrieb |
@@ -304,6 +305,12 @@ Es gibt keine Testinstanz unter `test.<Domain>` mehr (entfernt am 15.11.2026, GR
 - `deploy/sichern.sh` sichert `daten/` täglich (eigener Timer oder über `aktualisieren.sh`) und vor jedem Release; jede
   Sicherung wird probeweise entpackt und geprüft. Bei SQLite über die Backup-API (konsistenter Snapshot).
 - Läuft Keycloak, wird dessen Datenbank mitgesichert (`pg_dump`, Inhalt geprüft).
+- Die Dateiablage (`dateien/`) liegt nicht im Archiv, sondern je Lauf als Stand `sicherungen/dateien-<daten|intern>/<Zeit>/`
+  mit festen Verweisen auf den vorigen Stand (`deploy/dateien_sichern.py`). Platz: etwa ein Bestand plus die Änderungen der
+  aufbewahrten Stände. Vor jedem Lauf prüft `sichern.sh`, ob neue Dateien, dreimal die übrigen Daten und 5 GB Reserve frei
+  sind (die 5 GB sind die Warnschwelle „Speicherplatz“ im Reiter System); sonst bricht es mit Meldung im Status ab.
+- Alle Sicherungen liegen auf demselben Datenträger wie die Daten. Eine zweite Ebene außerhalb sind die VPS-Sicherungen bei
+  Hostinger (Stand 16.11.2026: vier); sie stellen nur den ganzen Server zurück, und wir steuern sie nicht.
 - Nicht gesichert: `mail-schluessel.php` und `daten-anmeldung/vault/`. Nach Wiederherstellung auf neuem Server das
   Postfach-Passwort neu eingeben bzw. `konten.sh mail-einrichten` erneut ausführen.
 - Wiederherstellung: [`docs/datenbank.md`](../datenbank.md#sicherung-und-wiederherstellung), Keycloak:

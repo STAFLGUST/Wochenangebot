@@ -2,7 +2,7 @@
 
 <!-- ERZEUGT von `python3 werkzeuge/doku.py erzeugen` – nicht von Hand ändern. Quelle: Funktionen und Kommentare im Code. Die CI prüft, dass diese Datei zum Code passt. -->
 
-116 Dateien, 1175 Funktionen – in der Reihenfolge der Datei, **fett** die Abschnitte. Text = erste Aussage des Kommentars direkt über der Funktion (Python: Docstring). Übersicht aller Module: [README.md](README.md).
+117 Dateien, 1186 Funktionen – in der Reihenfolge der Datei, **fett** die Abschnitte. Text = erste Aussage des Kommentars direkt über der Funktion (Python: Docstring). Übersicht aller Module: [README.md](README.md).
 
 ## `.github/scripts/apt_vorrat.py`
 
@@ -953,6 +953,22 @@ _Netzsperre am Server_
 - `regelwerk_aus_liste(pfad, modus, schnittstelle)`
 - `bericht(pfad, zeilen)`
 - `main(argv)`
+
+## `deploy/dateien_sichern.py`
+
+_Inkrementelle Sicherung der Dateiablage (dateien/<bereich>/<xx>/<id>.bin, lib/dateiablage.php) für deploy/sichern.sh._
+
+- `dateien(wurzel)` – relativer Pfad → lstat der regulären Dateien mit gültigem Namen; folgt keinem Verweis
+- `staende(ziel)`
+- `gleich(a, b)`
+- `vorher(ziel)`
+- `bedarf(quelle, ziel)`
+- `aufbauen(quelle, ziel, zeit)`
+- `verweise(daten)` – id → (groesse oder None, sha256 oder '') aus allen Dokumenten einer entpackten Sicherung (Dateien oder SQLite)
+- `lauf(x)`
+- `sha256(p)`
+- `abschliessen(behalten, zeit, ziele, daten)`
+- `main(a)`
 
 ## `deploy/daten_trennen.py`
 

@@ -84,8 +84,13 @@ leeren Datenordner entpacken, Eigentümer wieder auf Containerbenutzer 33:33 set
 prüfen. Keine Sicherungen verschiedener Zeitpunkte mischen. Das Postfachpasswort nötigenfalls neu
 hinterlegen. Ein vollständiger Wiederherstellungstest am Produktionssystem steht weiterhin aus.
 
-Der Snapshot nimmt auch die Dateiablage `daten/dateien/` mit (hochgeladene Dokumente stehen nie in der Datenbank; bis
-04.11.2026 fehlten sie in Sicherungen des SQLite-Betriebs) – ohne halbe Uploads (`.teile`).
+**Dateiablage** (`dateien/`, hochgeladene Dokumente, nie in der Datenbank): seit 16.11.2026 nicht mehr im Archiv. Jeder Lauf
+legt einen eigenen Stand `sicherungen/dateien-daten/<Zeit>/` an (nach der Datentrennung `dateien-intern/<Zeit>/`), mit der
+gleichen Zeit wie das Archiv. Unveränderte Dateien sind feste Verweise (Hardlinks) auf den vorigen Stand, nur neue werden
+kopiert (`deploy/dateien_sichern.py`); halbe Uploads (`.teile`) nicht. Geprüft wird, dass jede Datei, auf die die gesicherten
+Daten verweisen, im Stand liegt, dazu eine Stichprobe von 20 Dateien mit SHA-256. Zurückspielen: den Stand derselben Zeit
+kopieren, z. B. `cp -a sicherungen/dateien-intern/<Zeit> daten-intern/dateien`, danach `chown -R 33:33`. Jeder Stand ist
+vollständig; ältere Stände zu löschen schadet den neueren nicht. Vorher (bis 16.11.2026) lag die Dateiablage im Archiv.
 
 **Getrennte Daten (ADR-007 Stufe 2a):** Nach `deploy/daten-trennen.sh trennen` gibt es je Lauf zwei Archive vom selben
 Zeitpunkt: `daten-<Zeit>.tar.gz` (nach `daten/`) und `intern-<Zeit>.tar.gz` (nach `daten-intern/`, mit eigener Datenbank im

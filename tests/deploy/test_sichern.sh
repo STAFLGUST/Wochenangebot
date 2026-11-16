@@ -5,7 +5,7 @@ REPO=$(cd "$(dirname "$0")/../.." && pwd)
 T=$(mktemp -d); trap 'chmod -R u+rwx "$T" 2>/dev/null; rm -rf "$T"' EXIT
 PASS=0; FAIL=0
 ok() { if eval "$2"; then PASS=$((PASS + 1)); echo "PASS $1"; else FAIL=$((FAIL + 1)); echo "FAIL $1"; fi; }
-mkdir -p "$T/deploy"; cp "$REPO"/deploy/sichern.sh "$REPO"/deploy/sicherung-pruefen.* "$REPO"/deploy/datenbank.py "$T/deploy/"
+mkdir -p "$T/deploy"; cp "$REPO"/deploy/sichern.sh "$REPO"/deploy/sicherung-pruefen.* "$REPO"/deploy/datenbank.py "$REPO"/deploy/dateien_sichern.py "$T/deploy/"
 cp -r "$REPO/tests/fixtures/data-seed" "$T/daten"
 printf '%s\n{"key":"dGVzdA=="}' '<?php http_response_code(404); exit; ?>' > "$T/daten/mail-schluessel.php"
 st() { python3 -c "import json; t=open('$T/daten/sicherung.php').read(); print(json.loads(t[t.index(chr(10))+1:]).get('$1'))"; }
@@ -37,11 +37,12 @@ mkdir "$T/restore"
 tar xzf "$LATEST" -C "$T/restore"
 ok "SQLite-Archiv enthält geprüfte Datenbank" 'python3 "$T/deploy/datenbank.py" check "$T/restore" >/dev/null'
 ok "SQLite-Archiv enthält keinen Postfachschlüssel" '[ ! -f "$T/restore/mail-schluessel.php" ]'
-# Dateiablage (hochgeladene Dokumente, nie in der Datenbank) gehört auch im SQLite-Modus in die Sicherung; halbe Uploads nicht
-mkdir -p "$T/daten/dateien/qs/ab" "$T/daten/dateien/.teile"; echo PDF-Inhalt > "$T/daten/dateien/qs/ab/ab12.bin"; echo halb > "$T/daten/dateien/.teile/x.part"; sleep 1
+# Dateiablage (hochgeladene Dokumente, nie in der Datenbank) wird auch im SQLite-Modus gesichert – als eigener Stand, nicht im Archiv
+mkdir -p "$T/daten/dateien/qs/ab" "$T/daten/dateien/.teile"; echo PDF-Inhalt > "$T/daten/dateien/qs/ab/ab1234567890ab.bin"; echo halb > "$T/daten/dateien/.teile/x.part"; sleep 1
 sh "$T/deploy/sichern.sh" --jetzt >/dev/null
-LATEST=$(ls -1t "$T"/sicherungen/daten-*.tar.gz | head -1)
-ok "SQLite-Archiv enthält die Dateiablage (ohne halbe Uploads)" 'tar tzf "$LATEST" | grep -q "dateien/qs/ab/ab12.bin" && ! tar tzf "$LATEST" | grep -q "x.part"'
+LATEST=$(ls -1t "$T"/sicherungen/daten-*.tar.gz | head -1); STAND=$(basename "$LATEST" .tar.gz); STAND=${STAND#daten-}
+ok "SQLite: Dateiablage als Stand gesichert (ohne halbe Uploads), nicht im Archiv" '[ "$(st ok)" = True ] && cmp -s "$T/sicherungen/dateien-daten/$STAND/qs/ab/ab1234567890ab.bin" "$T/daten/dateien/qs/ab/ab1234567890ab.bin" \
+  && [ ! -e "$T/sicherungen/dateien-daten/$STAND/.teile" ] && ! tar tzf "$LATEST" | grep -q "dateien/"'
 rm -rf "$T/daten/dateien"
 printf 'broken' > "$T/restore/.sqlite/store.sqlite"
 ok "Beschädigte Datenbank im Archiv erkannt" '[ "$(python3 "$T/deploy/sicherung-pruefen.py" "$T/restore")" -gt 0 ]'
@@ -114,12 +115,85 @@ EOF2
   sh "$T/deploy/sichern.sh" --jetzt >/dev/null 2>&1 && R=0 || R=$?; export R
   ok "Anmeldung in Betrieb, Datenbank läuft nicht: Fehler statt stiller Lücke" '[ "$R" = 1 ] && [ "$(st anmeldung)" = fehler ] && grep -q "Datenbank läuft aber nicht" "$T/daten/sicherung.php"'
 fi
+# ── Dateiablage: je Lauf ein Stand mit festen Verweisen auf den vorigen, geprüft gegen die Verweise der gesicherten Daten ──
+W=$(mktemp -d); export W
+mkdir -p "$W/deploy"; cp "$REPO"/deploy/sichern.sh "$REPO"/deploy/sicherung-pruefen.* "$REPO"/deploy/datenbank.py "$REPO"/deploy/dateien_sichern.py "$W/deploy/"
+cp -r "$REPO/tests/fixtures/data-seed" "$W/daten"
+sw() { python3 -c "import json; t=open('$W/daten/sicherung.php').read(); print(json.loads(t[t.index(chr(10))+1:]).get('$1'))"; }
+# ablage <id> <inhalt>: Datei in die Ablage; verweise [zusatz-id]: qs-dokumente verweist (wie das QM-System) auf alle Dateien
+ablage() { mkdir -p "$W/daten/dateien/qs/$(echo "$1" | cut -c1-2)"; printf '%s' "$2" > "$W/daten/dateien/qs/$(echo "$1" | cut -c1-2)/$1.bin"; }
+verweise() { python3 - "$W/daten" "${1:-}" <<'PY'
+import glob, hashlib, json, os, sys
+d, extra = sys.argv[1], sys.argv[2]
+f = [{'id': os.path.basename(p)[:-4], 'name': 'Datei.pdf', 'groesse': os.path.getsize(p), 'sha256': hashlib.sha256(open(p, 'rb').read()).hexdigest()}
+     for p in sorted(glob.glob(d + '/dateien/qs/*/*.bin')) if not os.path.islink(p)]
+if extra:
+    f.append({'id': extra, 'name': 'fehlt.pdf', 'groesse': 3, 'sha256': '0' * 64})
+open(d + '/qs-dokumente.php', 'w').write('<?php http_response_code(404); exit; ?>\n' + json.dumps({'liste': [{'id': 'd1', 'dateien': f}]}))
+PY
+}
+stand() { ls -1d "$W"/sicherungen/dateien-daten/2* | sed -n "${1}p"; }
+ablage aa00000000000000000001 'Inhalt eins'; ablage ab00000000000000000002 'Inhalt zwei'; ablage ac00000000000000000003 'Inhalt drei'
+mkdir -p "$W/daten/dateien/.teile"; echo halb > "$W/daten/dateien/.teile/x.tmp"; ln -s /etc/hostname "$W/daten/dateien/qs/aa/ad00000000000000000004.bin"
+verweise
+sh "$W/deploy/sichern.sh" --jetzt >/dev/null
+S1=$(stand 1); export S1
+ok "Dateiablage: erster Stand mit allen Dateien, ohne halbe Uploads und Verweise, Archiv ohne dateien/" '[ "$(sw ok)" = True ] && [ "$(find "$S1" -type f | wc -l)" = 3 ] \
+  && cmp -s "$S1/qs/ab/ab00000000000000000002.bin" "$W/daten/dateien/qs/ab/ab00000000000000000002.bin" && [ ! -e "$S1/.teile" ] && [ -z "$(find "$S1" -type l)" ] \
+  && ! tar tzf "$W"/sicherungen/daten-*.tar.gz | grep -q "dateien/"'
+ok "Dateiablage: Status nennt Anzahl, Größe, neu kopiert und Stände" '[ "$(sw dateien_anzahl)" = 3 ] && [ "$(sw dateien_groesse)" = 33 ] && [ "$(sw dateien_neu)" = 33 ] \
+  && [ "$(sw dateien_staende)" = 1 ] && [ "$(sw dateien_belegt)" = 33 ] && [ "$(stat -c %a "$S1")" = 700 ]'
+rm -r "$W/daten/dateien/qs/ac"; ablage ae00000000000000000005 'neue Datei'; verweise; sleep 1
+sh "$W/deploy/sichern.sh" --jetzt >/dev/null
+S2=$(stand 2); export S2
+ok "Dateiablage: zweiter Stand verweist auf unveränderte Dateien, kopiert nur die neue, gelöschte bleibt im ersten" '[ "$(sw ok)" = True ] \
+  && [ "$(stat -c %i "$S1/qs/aa/aa00000000000000000001.bin")" = "$(stat -c %i "$S2/qs/aa/aa00000000000000000001.bin")" ] \
+  && [ -f "$S2/qs/ae/ae00000000000000000005.bin" ] && [ ! -e "$S2/qs/ac/ac00000000000000000003.bin" ] && [ -f "$S1/qs/ac/ac00000000000000000003.bin" ] \
+  && [ "$(sw dateien_neu)" = 10 ] && [ "$(sw dateien_anzahl)" = 3 ] && [ "$(sw dateien_staende)" = 2 ] && [ "$(sw dateien_belegt)" = 43 ]'
+verweise af00000000000000000006; sleep 1
+sh "$W/deploy/sichern.sh" --jetzt >/dev/null 2>&1 || true
+ok "Dateiablage: Verweis auf fehlende Datei → Fehler mit Meldung, kein neuer Stand" '[ "$(sw ok)" = False ] && grep -q "1 Datei(en), auf die die Daten verweisen, fehlen" "$W/daten/sicherung.php" \
+  && [ "$(ls -1d "$W"/sicherungen/dateien-daten/2* | grep -vc "\.tmp$")" = 2 ]'
+verweise
+python3 -c "import os, sys; p = sys.argv[1]; t = os.stat(p); open(p, 'r+b').write(b'X'); os.utime(p, ns=(t.st_atime_ns, t.st_mtime_ns))" "$S2/qs/ab/ab00000000000000000002.bin"; sleep 1
+sh "$W/deploy/sichern.sh" --jetzt >/dev/null 2>&1 || true
+ok "Dateiablage: veränderte Kopie in der Sicherung fällt bei der Stichprobe mit SHA-256 auf" '[ "$(sw ok)" = False ] && grep -q "Prüfsumme in der Dateisicherung stimmt nicht" "$W/daten/sicherung.php" \
+  && [ -z "$(ls -d "$W"/sicherungen/dateien-daten/*.tmp 2>/dev/null)" ] || [ "$(ls -d "$W"/sicherungen/dateien-daten/*.tmp | wc -l)" = 1 ]'
+rm -rf "$W"/sicherungen/dateien-daten; sleep 1
+sh "$W/deploy/sichern.sh" --jetzt >/dev/null
+ok "Dateiablage: nach dem Entfernen der kaputten Stände wieder vollständig kopiert, Rest des Fehllaufs aufgeräumt" '[ "$(sw ok)" = True ] && [ "$(sw dateien_neu)" = 32 ] \
+  && [ -z "$(ls -d "$W"/sicherungen/dateien-daten/*.tmp 2>/dev/null)" ]'
+LATEST=$(ls -1t "$W"/sicherungen/daten-*.tar.gz | head -1); STAND=$(basename "$LATEST" .tar.gz); STAND=${STAND#daten-}
+mkdir "$W/zurueck"; tar xzf "$LATEST" -C "$W/zurueck"; cp -a "$W/sicherungen/dateien-daten/$STAND" "$W/zurueck/dateien"
+ok "Wiederherstellung: Archiv und Stand derselben Zeit ergeben Daten und Dateiablage (ohne halbe Uploads)" 'diff -r -x .teile -x ad00000000000000000004.bin "$W/daten/dateien" "$W/zurueck/dateien" >/dev/null \
+  && cmp -s "$W/daten/qs-dokumente.php" "$W/zurueck/qs-dokumente.php" && [ "$(stat -c %h "$W/zurueck/dateien/qs/aa/aa00000000000000000001.bin")" = 1 ]'
+for Z in 2099-01-01_000000 2099-01-02_000000; do
+  python3 "$W/deploy/dateien_sichern.py" aufbauen "$W/daten/dateien" "$W/sicherungen/dateien-daten" "$Z" >/dev/null
+  python3 "$W/deploy/dateien_sichern.py" abschliessen 2 "$Z" "$W/sicherungen/dateien-daten" --daten "$W/daten" >/dev/null
+done
+ok "Aufbewahrung: nur die neuesten Stände bleiben, ihre Dateien vollständig" '[ "$(ls -1 "$W"/sicherungen/dateien-daten | tr "\n" " ")" = "2099-01-01_000000 2099-01-02_000000 " ] \
+  && [ "$(find "$W/sicherungen/dateien-daten/2099-01-02_000000" -type f | wc -l)" = 3 ] && [ "$(find "$W/sicherungen/dateien-daten/2099-01-01_000000" -type f | wc -l)" = 3 ]'
+mkdir "$W/bin"; printf '#!/bin/sh\necho "Filesystem 1024-blocks Used Available Capacity Mounted"\necho "/dev/x 400000000 399000000 1048576 99%% /"\n' > "$W/bin/df"; chmod +x "$W/bin/df"
+ablage ag00000000000000000007 'noch eine'; verweise; sleep 1
+ANZ_VOR=$(ls "$W"/sicherungen/daten-*.tar.gz | wc -l); export ANZ_VOR
+PATH="$W/bin:$PATH" sh "$W/deploy/sichern.sh" --jetzt >/dev/null 2>&1 || true
+ok "zu wenig Platz (1 GB frei): Abbruch vor dem Sichern mit Meldung im Status" '[ "$(sw ok)" = False ] && grep -q "zu wenig Speicherplatz: 1,0 GB frei, nötig 5,0 GB" "$W/daten/sicherung.php" \
+  && [ "$(ls "$W"/sicherungen/daten-*.tar.gz | wc -l)" = "$ANZ_VOR" ]'
+rm "$W/deploy/dateien_sichern.py"; sleep 1
+sh "$W/deploy/sichern.sh" --jetzt >/dev/null
+LATEST=$(ls -1t "$W"/sicherungen/daten-*.tar.gz | head -1); export LATEST
+ok "ohne Werkzeug (Sicherung vor dem Release mit altem deploy/): Dateiablage wie bisher im Archiv" '[ "$(sw ok)" = True ] && tar tzf "$LATEST" | grep -q "dateien/qs/ag/ag00000000000000000007.bin" \
+  && ! tar tzf "$LATEST" | grep -q "x.tmp"'
+chmod -R u+rwx "$W" 2>/dev/null; rm -rf "$W"
 # Getrennte Daten (ADR-007 Stufe 2): zweites Archiv intern-*.tar.gz für daten-intern/, gleich geprüft – Dateien und SQLite
 for ART in dateien sqlite; do
   U=$(mktemp -d)
-  mkdir -p "$U/deploy" "$U/regeln"; cp "$REPO"/deploy/sichern.sh "$REPO"/deploy/sicherung-pruefen.* "$REPO"/deploy/datenbank.py "$REPO"/deploy/daten_trennen.py "$U/deploy/"
+  mkdir -p "$U/deploy" "$U/regeln"; cp "$REPO"/deploy/sichern.sh "$REPO"/deploy/sicherung-pruefen.* "$REPO"/deploy/datenbank.py "$REPO"/deploy/daten_trennen.py "$REPO"/deploy/dateien_sichern.py "$U/deploy/"
   cp "$REPO/regeln/datenverantwortung.toml" "$U/regeln/"; cp -r "$REPO/tests/fixtures/data-seed" "$U/daten"
   printf '%s\n{"personen":[{"name":"Test Person"}]}' '<?php http_response_code(404); exit; ?>' > "$U/daten/hr-personal.php"
+  mkdir -p "$U/daten/dateien/qs/ba"; printf 'Prüfbericht' > "$U/daten/dateien/qs/ba/ba00000000000000000001.bin"
+  printf '%s\n{"liste":[{"id":"d1","dateien":[{"id":"ba00000000000000000001","groesse":12,"sha256":"%s"}]}]}' '<?php http_response_code(404); exit; ?>' \
+    "$(sha256sum "$U/daten/dateien/qs/ba/ba00000000000000000001.bin" | cut -c1-64)" > "$U/daten/qs-dokumente.php"
   [ "$ART" = sqlite ] && python3 "$U/deploy/datenbank.py" migrate "$U/daten" --offline >/dev/null
   python3 "$U/deploy/daten_trennen.py" trennen "$U/daten" "$U/daten-intern" --offline >/dev/null
   sh "$U/deploy/sichern.sh" --jetzt >/dev/null 2>&1 && R=0 || R=$?; export R U
@@ -131,6 +205,8 @@ for ART in dateien sqlite; do
   else
     ok "getrennt ($ART): Personaldaten nur in der internen Datenbank" 'python3 -c "import sqlite3,sys; a=sqlite3.connect(sys.argv[1]); b=sqlite3.connect(sys.argv[2]); n=lambda c: {r[0] for r in c.execute(\"SELECT name FROM documents\")}; sys.exit(0 if \"hr-personal\" in n(b) and \"hr-personal\" not in n(a) and \"angebot\" in n(a) else 1)" "$U/r1/.sqlite/store.sqlite" "$U/r2/.sqlite/store.sqlite"'
   fi
+  ok "getrennt ($ART): Dateiablage aus daten-intern als Stand dateien-intern, gegen das interne Archiv geprüft" '[ "$(su dateien_anzahl)" = 1 ] \
+    && [ -f "$U/sicherungen/dateien-intern/$(basename "$U"/sicherungen/intern-*.tar.gz .tar.gz | cut -c8-)/qs/ba/ba00000000000000000001.bin" ] && [ ! -e "$U/sicherungen/dateien-daten" ]'
   ok "getrennt ($ART): Datensätze beider Bereiche gezählt" '[ "$(su datensaetze)" -ge 2 ] && [ "$(stat -c %a "$U"/sicherungen/intern-*.tar.gz)" = 600 ]'
   rm -f "$U/daten/.daten-getrennt"; sleep 1
   sh "$U/deploy/sichern.sh" --jetzt >/dev/null 2>&1 && R=0 || R=$?

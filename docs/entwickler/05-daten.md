@@ -23,7 +23,7 @@ Postfach-Passworts), `sicherung` und `deployment` (Statusdateien der Skripte). A
 Länder- und Ortsdatenbank (`geo/`) und die **Dateiablage** (`daten/dateien/`, `lib/dateiablage.php`): hochgeladene Dateien
 der Module als `<bereich>/<xx>/<id>.bin` – in beiden Speicherarten im Dateisystem, nie als `*.php` (die Werkzeuge für
 Sicherungsprüfung und Umschalten behandeln nur `*.php` als Dokumente); unvollständige Uploads unter `dateien/.teile/*.tmp`
-(nicht gesichert, nach 24 h entfernt). Die Metadaten (Name, Größe, SHA-256, wer, wann) stehen im Dokument des Moduls.
+(nicht gesichert, beim nächsten Upload nach 24 h entfernt). Die Metadaten (Name, Größe, SHA-256, wer, wann) stehen im Dokument des Moduls.
 
 Die SQLite-Ablage übernimmt die Dokumente **unverändert** als JSON – es gibt keine Tabellen je Kunde oder Artikel. Für den
 Code ist die Speicherart daher unsichtbar; jede Änderung muss in beiden Arten funktionieren (die E2E-Suite läuft in
@@ -38,8 +38,11 @@ Timer ruft `aktualisieren.sh` sie höchstens einmal am Tag auf; sofort: `--jetzt
 `sicherungen/` im Projektordner, nur für root lesbar. Jede Sicherung wird probeweise entpackt und geprüft; bei SQLite
 über die Backup-API (konsistenter Schnappschuss). Nicht gesichert wird `mail-schluessel` – nach einer Wiederherstellung
 auf neuem Server das Postfach-Passwort neu eingeben. Läuft Keycloak, wird dessen Datenbank zusätzlich gesichert. Status
-im Dokument `sicherung` (Anzeige unter „Sicherheit“). Die Dateiablage `daten/dateien/` ist Teil des Archivs – mit
-hochgeladenen Dateien wächst die Sicherung entsprechend.
+im Dokument `sicherung` (Anzeige unter „Sicherheit“, Felder `dateien_anzahl`, `dateien_groesse`, `dateien_neu`,
+`dateien_staende`, `dateien_belegt` für die Dateiablage). Die Dateiablage steht nicht im Archiv: je Lauf ein Stand
+`sicherungen/dateien-<daten|intern>/<Zeit>/` mit festen Verweisen auf den vorigen Stand (`deploy/dateien_sichern.py`), so belegen
+alle Stände etwa einen Bestand plus die Änderungen. Vor dem Sichern prüft das Skript den Platz (neue Dateien, dreimal die
+übrigen Daten, 5 GB Reserve) und bricht sonst mit Meldung ab. Wiederherstellung: [`docs/datenbank.md`](../datenbank.md#sicherung-und-wiederherstellung).
 
 ## 5.2 Formate nur erweitern (GR-006)
 
