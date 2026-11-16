@@ -196,6 +196,7 @@ switch ($action) {
                 } else {
                     if (count($d['versionen']) >= QS_MAX_VERSIONEN) fail('Zu viele Versionen.', 422);
                     $neu = qs_entwurf($me, $aend, $grund);
+                    require_once __DIR__ . '/../module/qs/organigramm.php'; qs_organigramm_uebernehmen($gueltig === null ? null : $d['versionen'][$gueltig], $neu);
                     if ($uebernehmen && $gueltig !== null && ($f = qs_dateien_uebernehmen($d['versionen'][$gueltig], $me, $erzeugt))) {
                         $neu['dateien'] = $f;
                         qs_verlauf($neu, $me, 'Dateien aus Version ' . ($d['versionen'][$gueltig]['nr'] ?? '?') . ' übernommen (' . count($f) . ')');
@@ -261,6 +262,7 @@ switch ($action) {
                     if ($g !== null) { $d['versionen'][$g]['status'] = 'ersetzt'; qs_verlauf($d['versionen'][$g], $me, "ersetzt durch Version $nr"); }
                     $v['status'] = 'freigegeben'; $v['nr'] = $nr; $v['datum'] = qs_heute(); $v['freigegeben'] = qs_wer($me);
                     qs_lenkung_eintragen($d, $v, qs_stamm(), $me, $erzeugt);   // Version, Datum, Kürzel in Word-/Excel-Dateien
+                    require_once __DIR__ . '/../module/qs/organigramm.php'; qs_organigramm_freigeben($d, $v, qs_stamm(), $me, $erzeugt);   // Namen festhalten, PDF-Fassung
                     qs_verlauf($v, $me, "freigegeben als Version $nr");
                     qs_verlauf($d, $me, "Version $nr freigegeben");
                     $text = "Version $nr freigegeben";
@@ -428,6 +430,12 @@ switch ($action) {
             header('X-Content-Type-Options: nosniff');
             echo $xlsx;
             exit;
+        }
+
+        /* Organigramm im offenen Entwurf speichern (dokument, rev, organigramm.knoten) – Regeln in module/qs/organigramm.php */
+        case 'qs_organigramm_save': {
+            require_once __DIR__ . '/../module/qs/organigramm.php';
+            qs_organigramm_speichern();
         }
 
         /* Abschnitt des QM-Handbuchs anlegen (ohne id) oder ändern (id + rev): jede inhaltliche Änderung mit Grund in der
