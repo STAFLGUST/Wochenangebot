@@ -218,6 +218,7 @@ Jede Code-Datei beginnt mit einem Kopfkommentar; dessen erste Aussage steht hier
 | Datei | Modul | Inhalt |
 | --- | --- | --- |
 | `bericht.php` | qs | QM-System · Audit-Bericht (Aktionen qs_bericht, qs_bericht_excel) |
+| `organigramm.php` | qs | QM-System · Organigramm als gelenktes Dokument (Entscheidung des Inhabers 16.11.2026 „Im QM-System zeichnen“; nur bei Bedarf geladen von app/api/aktionen/qs.php). |
 | `qs.php` | qs | Qualitätssicherung · QM-System (IFS Wholesale) |
 | `verfahren-export.php` | qs | QM-System · Verfahrensdokumentation |
 | `verfahren.php` | qs | QM-System · Verfahrensdokumentation nach GoBD (Reiter „Verfahrensdoku“ der Oberfläche qs.intern, Aktionen qs_verfahren* in app/api/aktionen/qs.php; wird nur von diesen Aktionen geladen). |
@@ -427,6 +428,8 @@ Jede Code-Datei beginnt mit einem Kopfkommentar; dessen erste Aussage steht hier
 | Datei | Modul | Inhalt |
 | --- | --- | --- |
 | `index.html` | qs | Übersicht |
+| `organigramm.css` | qs | STAFL-Plattform · QM-System – Organigramm (organigramm.js) |
+| `organigramm.js` | qs | STAFL-Plattform · QM-System – Organigramm in einem gelenkten Dokument |
 | `qs.css` | qs | STAFL-Plattform · QM-System – Gestaltung „Liquid Glass“ wie Dashboard, Leergut, Controlling, HR, CRM und Marketing: warmer Grund mit drei weichen Farbflächen, Glasflächen, kein Rot im Hintergrund. |
 | `qs.js` | qs | STAFL-Plattform · Qualitätssicherung (QM-System) – Oberfläche nach dem Designvorschlag vom 30.10.2026. |
 | `verfahren.js` | qs | STAFL-Plattform · Qualitätssicherung – Reiter „Verfahrensdoku“ |
@@ -823,6 +826,7 @@ Jede Code-Datei beginnt mit einem Kopfkommentar; dessen erste Aussage steht hier
 | `test_qs.py` | qs | Qualitätssicherung (Modul qs, Oberfläche qs.intern unter /module/qs/) – QM-System |
 | `test_qs_ablage.py` | qs | Qualitätssicherung – Dokumentenablage (QM-System Bauabschnitt 2) |
 | `test_qs_bericht.py` | qs | Qualitätssicherung – Audit-Bericht (app/api/module/qs/bericht.php, Aktionen qs_bericht und qs_bericht_excel, Reiter „Audit“). |
+| `test_qs_organigramm.py` | qs | Qualitätssicherung – Organigramm im QM-System (app/api/module/qs/organigramm.php, Aktionen qs_organigramm_save und qs_organigramm_vorschau, Oberfläche app/module/qs/organigramm.js). |
 | `test_qs_verfahren.py` | qs | Qualitätssicherung – Verfahrensdokumentation nach GoBD (app/api/module/qs/verfahren.php und verfahren-export.php, Aktionen qs_verfahren*, Reiter „Verfahrensdoku“ in app/module/qs/verfahren.js). |
 | `test_qs_vorlagen.py` | qs | Qualitätssicherung – Vorlagen und Nummernstruktur (QM-System Bauabschnitt 3, app/api/module/qs/vorlagen.php). |
 | `test_rechte.py` | plattform | Nutzerrechte: Rechte je Rolle (einstellbar) und Ausnahmen je Nutzer (erlauben/verbieten). |

@@ -760,10 +760,11 @@
         <div class="qm-knopfreihe">${kannEdit ? '<button class="btn" type="button" data-schritt="verwerfen">Verwerfen</button><button class="btn" type="button" data-schritt="speichern">Entwurf speichern</button><button class="btn primary" type="button" data-schritt="einreichen">Zur Prüfung geben</button>' : ''}${darf('freigeben') && o.status !== 'entwurf' ? '<button class="btn" type="button" data-schritt="zurueck">Zurückgeben</button>' : ''}${darf('freigeben') && o.status === 'pruefung' && !eigen(o) ? '<button class="btn" type="button" data-schritt="pruefen">Nur prüfen</button><button class="btn primary" type="button" data-schritt="pruefen_freigeben">Prüfen und freigeben</button>' : ''}${darf('freigeben') && o.status === 'geprueft' ? '<button class="btn primary" type="button" data-schritt="freigeben">Freigeben</button>' : ''}</div>
         ${(o.verlauf || []).length ? `<ul class="qm-verlauf">${o.verlauf.map((l) => `<li>${esc(zeitpunkt(l.t))} · ${esc(l.von)}: ${esc(l.was)}</li>`).join('')}</ul>` : ''}</section>`;
     } else if (gelenkt && !x.eingezogen && darf('bearbeiten')) {
+      const uebernehmbar = g ? aktiv(g.dateien).filter((f) => !f.organigramm) : [];   // die PDF eines Organigramms entsteht bei der Freigabe neu
       karte = `<section class="qm-karte"><h3>Überarbeiten</h3><p class="qm-hilfe">Änderungen und Grund in Stichworten (Handbuch 2.0.11). Die Versionsnummer zählt erst mit der Freigabe hoch.</p>
         <div class="qm-formraster"><label class="qm-breit">Änderungen<input class="qm-eingabe" id="dk-aend" maxlength="2000" placeholder="z. B. Ablauf ergänzt"></label>
         <label class="qm-breit">Änderungsgrund<input class="qm-eingabe" id="dk-grund" maxlength="1000" placeholder="z. B. Internes Audit"></label></div>
-        ${g && aktiv(g.dateien).length ? `<label class="qm-check"><input type="checkbox" id="dk-dateien" checked> Dateien der Version ${esc(g.nr)} übernehmen (${zahl(aktiv(g.dateien).length)}) – mit ihren Platzhaltern</label>` : ''}
+        ${uebernehmbar.length ? `<label class="qm-check"><input type="checkbox" id="dk-dateien" checked> Dateien der Version ${esc(g.nr)} übernehmen (${zahl(uebernehmbar.length)}) – mit ihren Platzhaltern</label>` : ''}
         <div class="qm-knopfreihe">${darf('freigeben') && g ? '<button class="btn" type="button" data-schritt="ueberprueft">Ohne Änderung überprüft</button>' : ''}<button class="btn primary" type="button" data-schritt="neu">Überarbeitung beginnen</button></div></section>`;
     }
     const vers = [...(x.versionen || [])].reverse();
@@ -782,6 +783,7 @@
       ${ablage}
       ${vorlageKarte}
       ${karte}
+      ${window.STAFL_QS.organigramm ? window.STAFL_QS.organigramm.karte(x) : ''}
       <section><h3 class="qm-zwischen">Versionen</h3>${versHtml}</section>
       ${(x.verlauf || []).length ? `<details class="qm-details"><summary>Verlauf</summary><ul class="qm-verlauf">${x.verlauf.slice().reverse().map((l) => `<li>${esc(zeitpunkt(l.t))} · ${esc(l.von)}: ${esc(l.was)}</li>`).join('')}</ul></details>` : ''}
       <p class="qm-meldung" id="dk-meldung" role="alert"></p>
@@ -1505,10 +1507,17 @@
     renderAlles();
     zeigeTab(location.hash.slice(1).split('/')[0] || 'uebersicht');
   }
-  /* Brücke für weitere Dateien des Moduls (verfahren.js): dieselben Hilfen und derselbe Zustand, keine zweite Kopie.
-     verfahren.js trägt sich als STAFL_QS.verfahren ein; zeigeTab ruft dann zeigen() auf. */
-  window.STAFL_QS = { $, $$, S, esc, api, senden, oeffne, toast, fehlerText, zeigeAnmeldung, datum, wer, werName, icon, chip, optionen, natCmp,
-    verweisDok, gueltige, oeffneDok, speichereDatei, verfahren: null };
+  /* Jede Anmeldung erzeugt ein neues CSRF-Token (sign_in) – nach einer Anmeldung in einem anderen Tab hier nachholen; true = geändert.
+     Nur für dieselbe Person: hat sich dort jemand anderes angemeldet, arbeitet dieser Tab nicht unter dessen Namen weiter (4-Augen-Prinzip). */
+  async function csrfNeu() {
+    const st = await api('status'), alt = S.csrf;
+    if (st.status === 200 && st.data.loggedIn && st.data.user && String(st.data.user.id) === String(S.d.ich.id)) S.csrf = st.data.csrf || '';
+    return S.csrf !== alt;
+  }
+  /* Brücke für weitere Dateien des Moduls (verfahren.js, organigramm.js): dieselben Hilfen und derselbe Zustand, keine zweite Kopie.
+     verfahren.js trägt sich als STAFL_QS.verfahren ein (zeigeTab ruft zeigen() auf), organigramm.js als STAFL_QS.organigramm (renderDok ruft karte(x) auf). */
+  window.STAFL_QS = { $, $$, S, esc, api, senden, oeffne, toast, fehlerText, zeigeAnmeldung, datum, zeitpunkt, wer, werName, icon, chip, optionen, natCmp,
+    verweisDok, gueltige, offene, naechsteVersion, darf, neuLaden, csrfNeu, oeffneDok, speichereDatei, verfahren: null, organigramm: null };
   themaKnopf();
   document.addEventListener('DOMContentLoaded', () => { laden().catch(() => fehler('Keine Verbindung zum Server.')); });
 })();

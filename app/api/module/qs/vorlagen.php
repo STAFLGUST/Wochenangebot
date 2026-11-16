@@ -300,6 +300,7 @@ function qs_dateien_uebernehmen(array $g, array $me, array &$erzeugt): array
 {
     $aus = [];
     foreach (qs_dateien_aktiv($g['dateien'] ?? []) as $f) {
+        if (!empty($f['organigramm'])) continue;   // PDF-Fassung des Organigramms entsteht bei der nächsten Freigabe neu
         $quelle = (string)($f['roh'] ?? $f['id']);
         $k = ablage_kopieren('qs', $quelle);
         if ($k === null) continue;

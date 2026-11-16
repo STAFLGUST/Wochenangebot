@@ -1,0 +1,85 @@
+/* STAFL-Plattform · QM-System – Organigramm (organigramm.js): Fenster mit Diagramm und Seitenleiste, Baum mit Linien nur aus CSS.
+   Die Anordnung folgt derselben Regel wie die PDF (qs_og_teilbaum in app/api/module/qs/organigramm.php) – Änderungen an beiden.
+   Farben nur aus den --qm-* von qs.css (hell und dunkel). */
+.qm-dialog.og-dialog{width:min(1500px,calc(100vw - 28px));height:calc(100dvh - 28px)}
+.og-rahmen{height:100%;display:flex;flex-direction:column;gap:10px;padding:16px 18px}
+.og-kopf{display:grid;grid-template-columns:minmax(0,1fr) auto auto;align-items:center}
+.og-kopf h2{font-size:18px}
+.og-werkzeug{display:flex;align-items:center;gap:6px;flex-wrap:wrap}
+.og-werkzeug .btn.sm{min-width:36px;justify-content:center}
+.og-koerper{flex:1;min-height:0;display:grid;grid-template-columns:minmax(0,1fr) 330px;gap:14px}
+.og-dialog:not(.og-bearbeiten) .og-koerper{grid-template-columns:minmax(0,1fr)}
+.og-flaeche{min-height:0;overflow:auto;border:1px solid var(--qm-line);border-radius:16px;background:var(--qm-total-bg)}
+.og-seite{min-height:0;overflow:auto;display:flex;flex-direction:column;gap:10px;padding-right:2px}
+.og-seite h3{margin:4px 0 0}
+.og-fuss{margin:0}
+.og-wieder{display:flex;flex-wrap:wrap;align-items:center;gap:8px 12px;padding:10px 12px;border-radius:12px;background:var(--qm-gelb-soft);font-size:13px;font-weight:650}
+.og-wieder span{flex:1 1 240px}
+.og-wieder div{display:flex;gap:6px}
+
+/* Baum */
+.og-baum{--og-linie:var(--qm-muted);--og-spalt:18px;--og-b:176px;--og-einzug:36px;--og-stapel:12px;width:max-content;margin:0 auto;padding:14px 16px 20px}
+.og-wurzeln{display:flex;align-items:flex-start;gap:44px}
+.og-k{display:flex;flex-direction:column;align-items:center}
+.og-kasten{position:relative;width:var(--og-b);display:flex;flex-direction:column;gap:2px;padding:8px 10px;border:1.5px solid var(--qm-border);border-radius:12px;background:var(--qm-card);color:var(--qm-text);font:inherit;font-size:12px;line-height:1.3;text-align:left;hyphens:auto;overflow-wrap:break-word}
+.og-kasten b{font-size:12.5px}
+.og-kasten small{color:var(--qm-muted);font-size:11px}
+.og-unbesetzt{color:var(--qm-muted);font-style:italic}
+.og-stabkasten{background:var(--qm-blau-soft);border-color:var(--qm-blau);border-style:dashed}
+button.og-kasten{cursor:pointer}
+button.og-kasten:hover{border-color:var(--qm-accent)}
+.og-kasten.gewaehlt{border-color:var(--qm-accent);border-style:solid;box-shadow:var(--qm-focus)}
+/* Stabsstellen: je Zeile links und rechts der Linie, die Linie läuft durch die Zeilen (in der letzten ohne Unterstellen nur bis zur Mitte) */
+.og-stab{display:flex;flex-direction:column}
+.og-stabzeile{position:relative;display:grid;grid-template-columns:1fr 1fr;column-gap:calc(2 * var(--og-spalt));padding-top:12px}
+.og-stabzeile::before{content:'';position:absolute;left:50%;top:0;bottom:0;border-left:1.5px solid var(--og-linie)}
+.og-ende>.og-stabzeile:last-child::before{bottom:calc(50% - 6px)}
+.og-l{justify-self:end}
+.og-r{justify-self:start}
+.og-l>.og-kasten::after,.og-r>.og-kasten::before{content:'';position:absolute;top:50%;width:calc(var(--og-spalt) + 1.5px);border-top:1.5px solid var(--og-linie)}
+.og-l>.og-kasten::after{left:100%}
+.og-r>.og-kasten::before{right:100%}
+/* untergeordnete Stellen */
+.og-kinder{position:relative;display:flex;align-items:flex-start;padding-top:16px}
+.og-kinder::before{content:'';position:absolute;top:0;left:50%;height:16px;border-left:1.5px solid var(--og-linie)}
+.og-kinder>.og-k{position:relative;padding:16px 6px 0}
+.og-kinder>.og-k::before,.og-kinder>.og-k::after{content:'';position:absolute;top:0;width:50%;height:16px;border-top:1.5px solid var(--og-linie)}
+.og-kinder>.og-k::before{right:50%}
+.og-kinder>.og-k::after{left:50%;border-left:1.5px solid var(--og-linie)}
+.og-kinder>.og-k:first-child::before,.og-kinder>.og-k:last-child::after{border-top:0}
+.og-kinder>.og-k:only-child::before{display:none}
+/* gestapelte Unterstellen: Schiene bei 3/4 des Einzugs, je Kasten ein Haken zur Mitte (Rahmen 1,5 px mitgerechnet) */
+.og-stapel{display:flex;flex-direction:column;gap:var(--og-stapel);padding:var(--og-stapel) 0 0 var(--og-einzug)}
+.og-stapel>.og-kasten::before,.og-stapel>.og-kasten:not(:last-child)::after{content:'';position:absolute;left:calc(-1.5px - var(--og-einzug) / 4);border-left:1.5px solid var(--og-linie)}
+.og-stapel>.og-kasten::before{top:calc(-1.5px - var(--og-stapel));height:calc(50% + 1.5px + var(--og-stapel));width:calc(var(--og-einzug) / 4);border-bottom:1.5px solid var(--og-linie)}
+.og-stapel>.og-kasten:not(:last-child)::after{top:50%;bottom:-1.5px}
+.og-leer{display:flex;flex-direction:column;align-items:flex-start;gap:10px;max-width:340px;padding:8px}
+.og-leer label{display:flex;flex-direction:column;gap:5px;width:100%;color:var(--qm-muted);font-size:12px;font-weight:650}
+
+/* Seitenleiste */
+.og-felder{padding:12px;border-radius:14px;background:var(--qm-total-bg);border:1px solid var(--qm-line)}
+.og-personen{display:flex;flex-direction:column;gap:6px;color:var(--qm-muted);font-size:12px;font-weight:650}
+.og-chips{display:flex;flex-wrap:wrap;gap:6px}
+.og-chip{height:26px;padding-right:3px;color:var(--qm-text)}
+.og-chip button{width:20px;height:20px;border:0;border-radius:50%;background:transparent;color:inherit;font-size:15px;line-height:1;cursor:pointer}
+.og-taten{display:flex;flex-wrap:wrap;gap:6px}
+.og-taten .og-weg{margin-left:auto;color:var(--qm-rot)}
+.og-liste{list-style:none;margin:0;padding:0;display:grid;gap:2px}
+.og-zeile{width:100%;display:flex;flex-wrap:wrap;align-items:baseline;gap:2px 8px;padding:6px 8px 6px calc(8px + var(--t, 0) * 16px);border:0;border-radius:9px;background:transparent;color:var(--qm-text);font:inherit;font-size:13px;text-align:left;cursor:pointer}
+.og-zeile span{color:var(--qm-muted);font-size:12px}
+.og-zeile em{font-style:normal;color:var(--qm-blau);font-size:11px;font-weight:700}
+.og-zeile:hover{background:var(--qm-chip)}
+.og-zeile.gewaehlt{background:var(--qm-chip);box-shadow:inset 3px 0 0 var(--qm-accent)}
+
+@media(max-width:760px){
+  .og-koerper{display:flex;flex-direction:column;overflow:auto;gap:12px}
+  .og-dialog.og-bearbeiten .og-flaeche{flex:none;height:44dvh}
+  .og-dialog:not(.og-bearbeiten) .og-flaeche{flex:1}
+  .og-seite{overflow:visible}
+}
+@media(max-width:560px){
+  .qm-dialog.og-dialog{height:94dvh}
+  .og-kopf{grid-template-columns:minmax(0,1fr) auto}
+  .og-werkzeug{grid-column:1/-1;order:3}
+  .og-rahmen{padding:14px 15px calc(14px + env(safe-area-inset-bottom))}
+}

@@ -6,7 +6,7 @@ Aufruf: `/api/?action=<aktion>` (GET lesend, POST mit JSON und `X-CSRF-Token` sc
 
 Spalten: **Art** – lesend, schreibend (nur POST) oder post (GET liest, POST schreibt); **Kennzeichen** – öffentlich (ohne Mitarbeiteranmeldung), Kunden-Wartung, wartungsfrei, fremde Herkunft, eigene Anmeldung (siehe [regeln/aktionen/LIESMICH.md](../../../regeln/aktionen/LIESMICH.md)).
 
-307 Aktionen in 16 Modulen.
+309 Aktionen in 16 Modulen.
 
 ## Angebot (`angebot`)
 
@@ -167,6 +167,8 @@ Spalten: **Art** – lesend, schreibend (nur POST) oder post (GET liest, POST sc
 | `qs_massnahme_save` | `qs.intern` | schreibend | – | Recht qs.bearbeiten | `app/api/aktionen/qs.php` |
 | `qs_nachweis_save` | `qs.intern` | schreibend | – | Recht qs.nachweis | `app/api/aktionen/qs.php` |
 | `qs_nachweis_storno` | `qs.intern` | schreibend | – | Recht qs.nachweis | `app/api/aktionen/qs.php` |
+| `qs_organigramm_save` | `qs.intern` | schreibend | – | – | `app/api/aktionen/qs.php` |
+| `qs_organigramm_vorschau` | `qs.intern` | lesend | – | – | `app/api/aktionen/qs.php` |
 | `qs_pruefung_save` | `qs.intern` | schreibend | – | Recht qs.freigeben | `app/api/aktionen/qs.php` |
 | `qs_stamm_save` | `qs.intern` | schreibend | – | Recht qs.verwalten | `app/api/aktionen/qs.php` |
 | `qs_start` | `qs.intern` | lesend | – | Recht qs.sehen | `app/api/aktionen/qs.php` |
