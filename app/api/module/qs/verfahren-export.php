@@ -187,7 +187,8 @@ function qs_vf_pdf_lauf(array $doku, array $teile, array $alle, array $k, int $g
     $enthalten = array_map(function ($t) { return (int)($t['f']['nr'] ?? 0); }, $teile);
     foreach ($alle as $i => $f) {
         $s->platz(46);
-        $s->text('Fassung ' . (int)$f['nr'] . ' · ' . qs_vf_pdf_gueltig((string)$f['gueltigAb'], qs_vf_gueltig_bis($alle, $i))
+        // „bis“ aus allen Fassungen (die Übersicht einer einzelnen Fassung endet bei ihr, ihr Ende steht aber fest – wie auf dem Deckblatt)
+        $s->text('Fassung ' . (int)$f['nr'] . ' · ' . qs_vf_pdf_gueltig((string)$f['gueltigAb'], qs_vf_gueltig_bis($doku['fassungen'], $i))
             . ($k['art'] === 'pruefung' && in_array((int)$f['nr'], $enthalten, true) ? ' · im Prüfungszeitraum' : ''), 10, true);
         $s->text('Freigegeben am ' . qs_de((string)$f['datum']) . ' von ' . (string)($f['freigegeben']['von'] ?? '') . ' · Anlass: ' . (string)$f['grund'], 9.5);
         foreach (is_array($f['aenderungen'] ?? null) ? $f['aenderungen'] : [] as $z) $s->text((string)$z, 9, false, '#3d3a36', 12, '•');
@@ -214,6 +215,17 @@ function qs_vf_pdf(array $doku, array $teile, array $alle, array $k): string
     [, $seiten] = qs_vf_pdf_lauf($doku, $teile, $alle, $k, 0);
     return qs_vf_pdf_lauf($doku, $teile, $alle, $k, $seiten)[0];
 }
+/* Dateien einer Version, wie sie zum Zeitpunkt $t (Freigabe der Fassung, ISO-UTC wie now()) dort hingen: vorher abgelegt und
+   damals noch nicht entfernt. Später nachgetragene Dateien gehören nicht zum Stand der Fassung, später entfernte schon –
+   entfernte Dateien bleiben in der Ablage. Ohne Zeitpunkt (ältere Daten): die heute aktiven Dateien. */
+function qs_vf_dateien_am($liste, string $t): array
+{
+    if ($t === '') return qs_dateien_aktiv($liste);
+    return array_values(array_filter(is_array($liste) ? $liste : [], function ($f) use ($t) {
+        if (!is_array($f) || (string)($f['hochgeladen']['t'] ?? '') > $t) return false;
+        return empty($f['entfernt']) || (string)($f['entfernt']['t'] ?? '') > $t;
+    }));
+}
 /* Dateien der verknüpften QM-Dokumente in den Versionen, die die Fassungen festgehalten haben (für das ZIP) */
 function qs_vf_export_dateien(array $teile, array $dokumente, string $wurzel): array
 {
@@ -224,7 +236,7 @@ function qs_vf_export_dateien(array $teile, array $dokumente, string $wurzel): a
         if ($d === null || (string)$x['version'] === '') continue;
         foreach ((array)($d['versionen'] ?? []) as $v) {
             if ((string)($v['nr'] ?? '') !== (string)$x['version'] || !in_array((string)($v['status'] ?? ''), ['freigegeben', 'ersetzt'], true)) continue;
-            foreach (qs_dateien_aktiv($v['dateien'] ?? []) as $f) {
+            foreach (qs_vf_dateien_am($v['dateien'] ?? [], (string)($t['f']['freigegeben']['t'] ?? '')) as $f) {
                 if (isset($gesehen[(string)$f['id']])) continue;
                 $gesehen[(string)$f['id']] = true;
                 $e[] = ['pfad' => $wurzel . '/QM-Dokumente/' . ablage_zip_pfad(trim($x['nr'] . ' ' . $x['titel'])) . '/Version ' . ablage_zip_pfad((string)$x['version']) . '/' . ablage_zip_pfad((string)$f['name']),

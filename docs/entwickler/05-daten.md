@@ -789,15 +789,18 @@ Verfahrensdokumentation nach GoBD (`module/qs/verfahren.php`, Aktionen `qs_verfa
   Kürzeln und zu jedem Verweis die an diesem Tag gültige Version des QM-Dokuments (`dok`, `nr`, `titel`, `version`, `datum`). Sie werden nie geändert oder gelöscht; eine Dokumentation mit Fassung lässt sich nicht löschen,
   ein IT-System aus einer Fassung nur „außer Betrieb“ setzen.
 - Freigabe (`qs_verfahren_freigeben`, `grund`, `gueltigAb`): alle Abschnitte `fertig` mit Inhalt, „gültig ab“ nach dem „gültig ab“ der vorigen Fassung
-  (derselbe Tag wird abgelehnt – sonst endete die vorige Fassung vor ihrem Beginn), kein Abschnitt ohne bekannten Teil, und
+  (derselbe Tag wird abgelehnt – sonst endete die vorige Fassung vor ihrem Beginn) und höchstens ein Jahr nach heute (Tippfehler im Jahr
+  ließen sich nicht mehr korrigieren), kein Abschnitt ohne bekannten Teil, und
   es muss sich etwas geändert haben – `qs_vf_abweichung` vergleicht den Arbeitsstand mit der letzten Fassung (auch eine neue Version eines
-  verknüpften QM-Dokuments zählt) und liefert die Änderungsliste in Worten; sie wird als `aenderungen` gespeichert. Ohne Abweichung statt
+  verknüpften QM-Dokuments zählt, ebenso ein Verweis, der bei der letzten Fassung noch kein Dokument traf und jetzt eines mit gültiger Version
+  trifft: „jetzt verknüpft“) und liefert die Änderungsliste in Worten; sie wird als `aenderungen` gespeichert. Ohne Abweichung statt
   dessen `ohneAenderung: true` („ohne Änderung überprüft“, Frist 12 Monate).
 - Antwort (`qs_vf_aus`): Fassungen ohne `inhalt`, dazu `gueltigBis`, `seitFassung` (Abweichung) und `ueberpruefung`; den Inhalt einer Fassung
   liefert nur der Export.
 - Export (`qs_verfahren_export`, GET `doku`; `module/qs/verfahren-export.php`, PDF über `lib/pdf.php`): `fassung=N` (0 = Arbeitsstand, auf jeder
   Seite als Entwurf gekennzeichnet) oder `von`/`bis` = Export für Prüfungen mit allen Fassungen, die im Zeitraum galten, und der Historie aller
-  Fassungen; `dokumente=1` liefert ein ZIP mit den Dateien der verknüpften QM-Dokumente in der Version der jeweiligen Fassung.
+  Fassungen; `dokumente=1` liefert ein ZIP mit den Dateien der verknüpften QM-Dokumente in der Version der jeweiligen Fassung – so,
+  wie sie zum Zeitpunkt der Freigabe der Fassung an der Version hingen (`qs_vf_dateien_am`: später nachgetragene nicht, später entfernte schon).
 
 Datenpaket (`qs_import`, mit `qs.verwalten`, `vorschau: true` schreibt nichts): `{"format": "stafl-qs", "version": 1, "kapitel", "personen",
 "dokumente": [{… , "versionen": [{"nr", "datum", "aenderungen", "grund", "erstellt", "geprueft", "freigegeben"}]}], "handbuch", "pruefungen",

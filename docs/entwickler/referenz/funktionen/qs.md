@@ -2,7 +2,7 @@
 
 <!-- ERZEUGT von `python3 werkzeuge/doku.py erzeugen` – nicht von Hand ändern. Quelle: Funktionen und Kommentare im Code. Die CI prüft, dass diese Datei zum Code passt. -->
 
-22 Dateien, 488 Funktionen – in der Reihenfolge der Datei, **fett** die Abschnitte. Text = erste Aussage des Kommentars direkt über der Funktion (Python: Docstring). Übersicht aller Module: [README.md](README.md).
+22 Dateien, 489 Funktionen – in der Reihenfolge der Datei, **fett** die Abschnitte. Text = erste Aussage des Kommentars direkt über der Funktion (Python: Docstring). Übersicht aller Module: [README.md](README.md).
 
 ## `app/api/aktionen/qs.php`
 
@@ -278,6 +278,7 @@ _QM-System · Verfahrensdokumentation_
 - `qs_vf_pdf_inhalt(s, inhalt)` – Inhalt einer Fassung (oder des Arbeitsstands) setzen
 - `qs_vf_pdf_lauf(doku, teile, alle, k, gesamt)` – Ein Durchlauf.
 - `qs_vf_pdf(doku, teile, alle, k)`
+- `qs_vf_dateien_am(liste, t)` – Dateien einer Version, wie sie zum Zeitpunkt $t (Freigabe der Fassung, ISO-UTC wie now()) dort hingen: vorher abgelegt und damals noch nicht entfernt.
 - `qs_vf_export_dateien(teile, dokumente, wurzel)` – Dateien der verknüpften QM-Dokumente in den Versionen, die die Fassungen festgehalten haben (für das ZIP)
 - `qs_vf_export(doku, q, me, dokumente, stamm)` – Export ausführen und senden (endet immer).
 - `qs_vf_pdf_senden(pdf, name, inline)`
