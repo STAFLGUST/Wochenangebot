@@ -689,7 +689,20 @@ laufen unter der Sperre `qs-dokumente`. Zuständig/Vertreter sind **Kürzel** (S
   "sha256", "hochgeladen": {"t", "von", "vonId"}, "nachgetragen": true?, "entfernt": {"t", "von", "vonId", "grund"}?}]` je Version
   (gelenkt) bzw. am Dokument (Ordner, extern); die Datei selbst liegt in der Dateiablage (Bereich `qs`). Im Entwurf (`qs.bearbeiten`,
   wer ablegt oder löscht, kommt in `bearbeiter`) wird endgültig gelöscht; sonst nur `entfernt` vermerkt (freigegebene/ersetzte Versionen
-  nur mit `qs.freigeben`, mit Grund). In Prüfung, verworfen oder eingezogen: keine Änderung (409); höchstens 50 Dateien je Stelle.
+  nur mit `qs.freigeben`, mit Grund). In Prüfung, verworfen oder eingezogen: keine Änderung (409); höchstens 1000 Dateien je Stelle
+  (`QS_MAX_DATEIEN`, bis 16.11.2026: 50).
+  **Eingang** (optional, seit 16.11.2026): Dateien ohne Ziel liegen im festen Eintrag `{"id": "eingang", "eingang": true, "art": "O",
+  "kapitel": "", "nr": "", "titel": "Eingang (nicht zugeordnet)", "versionen": [], "dateien": […], …}` derselben Liste – alle Felder eines
+  Ordners sind gesetzt, damit eine ältere Programmfassung ihn als Ordner ohne Kapitel liest. Der Server legt ihn beim ersten Hochladen mit
+  `dokument: "eingang"` an; höchstens 20 000 aktive Dateien (`QS_MAX_EINGANG`), kein Verlauf je Datei. Datei-Einträge im Eingang optional
+  mit `pfad`: Ordnerpfad aus der Sammel-Ablage relativ zum gewählten Ordner (z. B. `"1.4 Qualitätssicherung/Befunde/Labor A ab 2025"`) –
+  nur Anzeige, Suche und künftig das Anlegen von Ordner-Dokumenten, nie ein Dateisystempfad. Format (`qs_eingang_pfad`, gleich in
+  `saPfad` in `qs.js`): Ordnernamen mit `/` getrennt, Leerraum zusammengefasst, ohne Steuerzeichen und leere/`.`/`..`-Teile, je Teil
+  höchstens 120 Zeichen, höchstens 12 Teile; leer = Feld fehlt. Der Eingang ist kein Dokument: `qs_start`, Dokumentenliste (CSV), ZIP und
+  Dokument-Aktionen (`qs_dokument_index`) lassen ihn aus; `qs_start` nennt nur `eingangZahl`, die Liste liefert `qs_eingang` (ohne
+  Prüfsumme und Dateiart). `qs_datei_zuordnen` hängt Einträge unverändert (gleiche Kennung, Datei bleibt liegen) an einen Ordner, ein
+  externes Dokument oder einen Entwurf um – alles oder nichts, eingetragen wie beim Hochladen (`qs_datei_eintragen`); `qs_eingang_loeschen`
+  entfernt Eintrag und Datei endgültig. `nurNeu` im Eingang: dieselbe Datei = gleicher `pfad`, Name und Inhalt.
   **Vorlagen und Lenkungsangaben** (seit Bauabschnitt 3, `module/qs/vorlagen.php`; Grenzen je Office-Datei: 2000 ZIP-Einträge,
   30 MB entpackt und 20000 Textelemente je Textteil – darüber gilt die Datei als nicht lesbar): Datei-Einträge optional mit `platzhalter: ["version", …]`
   (bekannte, noch offene Platzhalter in Word/Excel), `vorlage: {"dokument", "nr", "version"}` (aus einer Vorlage erzeugt), `uebernommen: N`

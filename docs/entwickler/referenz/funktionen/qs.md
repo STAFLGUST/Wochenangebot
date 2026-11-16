@@ -2,7 +2,7 @@
 
 <!-- ERZEUGT von `python3 werkzeuge/doku.py erzeugen` – nicht von Hand ändern. Quelle: Funktionen und Kommentare im Code. Die CI prüft, dass diese Datei zum Code passt. -->
 
-13 Dateien, 315 Funktionen – in der Reihenfolge der Datei, **fett** die Abschnitte. Text = erste Aussage des Kommentars direkt über der Funktion (Python: Docstring). Übersicht aller Module: [README.md](README.md).
+13 Dateien, 340 Funktionen – in der Reihenfolge der Datei, **fett** die Abschnitte. Text = erste Aussage des Kommentars direkt über der Funktion (Python: Docstring). Übersicht aller Module: [README.md](README.md).
 
 ## `app/api/aktionen/qs.php`
 
@@ -95,6 +95,12 @@ _Qualitätssicherung · QM-System (IFS Wholesale)_
 - `qs_nr_naechste(alle, kap, art, ohne)`
 - `qs_nr_struktur(nr, kap, art, alle, alt)` – Nummer prüfen bzw. vergeben (leer = nächste freie); Art in Großbuchstaben
 - `qs_dokument_index(doc, id)`
+- `qs_dokumente(liste)` – Dokumente ohne den Eingang – für Listen, Kennzahlen und Exporte (er hat kein Kapitel und ist kein Dokument)
+- `qs_eingang_index(doc, me)` – Index des Eingangs; fehlt er, wird er in $doc angelegt (geschrieben wird er erst mit der ersten Datei, unter der Sperre).
+- `qs_eingang_zahl(liste)` – Dateien im Eingang – qs_start nennt nur die Zahl, die Liste lädt qs_eingang erst beim Öffnen (bis 20 000 Einträge, mehrere MB)
+- `qs_eingang_datei(eingang, id)` – Index einer aktiven Datei im Eingang oder 404
+- `qs_eingang_pfad(v)` – Ordnerpfad einer Datei im Eingang („pfad“, optional): woher sie in der Sammel-Ablage kam, relativ zum gewählten QM-Ordner, z. B. „1.4 …
+- `qs_eingang_auswahl(v)` – Auswahl im Eingang: eindeutige Datei-Kennungen (1 bis QS_MAX_EINGANG)
 - `qs_ver_index(d, status)` – Index der gültigen (freigegebenen) bzw. der offenen Version (Entwurf, in Prüfung, geprüft) oder null
 - `qs_naechste_nr(d)`
 - `qs_dok_status(d)` – Zustand eines Dokuments für Übersicht und Filter
@@ -106,9 +112,10 @@ _Qualitätssicherung · QM-System (IFS Wholesale)_
 
 - `qs_dateien_aktiv(liste)`
 - `qs_ablage_stelle(d, ver, me, was)` – Darf $me an dieser Stelle (Dokument, Version-ID oder '' für Ordner/externe Dokumente) Dateien ablegen bzw. entfernen?
-- `qs_ablage_einstellungen()` – Einstellungen für die Oberfläche: erlaubte Dateiendungen, Höchstgröße je Datei und je Teilstück, Dateien je Stelle
+- `qs_datei_eintragen(d, ver, me, f, wie, erzeugt)` – Datei $f an einer Stelle eintragen – dieselbe Funktion für Hochladen und Zuordnen aus dem Eingang. qs_ablage_stelle prüft Rechte, Zustand und Höchstzahl; im …
+- `qs_ablage_einstellungen()` – Einstellungen für die Oberfläche: erlaubte Dateiendungen, Höchstgröße je Datei und je Teilstück, Dateien je Stelle und im Eingang
 - `qs_datei_finden(liste, id)` – Datei in allen Dokumenten suchen: [Dokument-Index, Version-Index oder null, Datei-Index] oder null
-- `qs_datei_gleich(d, vi, sha)` – Liegt an dieser Stelle (Version bzw. Dokument) schon eine aktive Datei mit diesem Inhalt (SHA-256, auch Rohfassung)?
+- `qs_datei_gleich(d, vi, sha, pfad, name)` – Liegt an dieser Stelle (Version bzw. Dokument) schon eine aktive Datei mit diesem Inhalt (SHA-256, auch Rohfassung)?
 - `qs_dateien_zahl(liste)`
 - `qs_ablage_eintraege(dokumente, stamm, kapitel, alle, heute)` – Einträge für den ZIP-Export „QM-System/<Kapitel>/<Dokument>/<Datei>“: gültige Version (bzw.
 
@@ -309,20 +316,21 @@ _STAFL-Plattform · Qualitätssicherung (QM-System) – Oberfläche nach dem Des
 - `ladenHtml(x, vid)`
 - `ladenAktualisieren(i)`
 - `pruefsumme(f)`
-- `dateiSenden(f, dok, ver, nurNeu, beiTeil)` – Eine Datei in Teilen hochladen (der API-Einstieg nimmt nur JSON bis 6 MB an). nurNeu: gleicher Inhalt an dieser Stelle wird nicht noch einmal abgelegt …
-- `hochladen(dateien, vid)` – Dateien nacheinander ablegen (Seitenleiste: Ziehen oder Auswählen)
-- `waehleDateien(vid)`
+- `dateiSenden(f, dok, ver, nurNeu, beiTeil, pfad)` – Eine Datei in Teilen hochladen (der API-Einstieg nimmt nur JSON bis 6 MB an). nurNeu: gleicher Inhalt an dieser Stelle wird nicht noch einmal abgelegt …
+- `hochladen(dateien, vid, dok)`
+- `waehleDateien(vid, dok)`
 - `dateiOrt(x, id)`
 - `speichereDatei(blob, name)`
-- `herunterladen(id)`
+- `herunterladen(id, name)`
 - `entferneDatei(id)`
 
 **Sammel-Ablage: ganzer Ordner „QM-System“ oder ein ZIP davon**
 
 - `saIndex()`
-- `saNrIn(t, idx)`
+- `saNrIn(t, idx, kap, anfang)` – Dokument zu einer Nr. in t, dessen Kapitel (oder Nr.-Kapitel) zum Kapitelordner kap passt; anfang: Nr. steht vorne („1.4-F01 Titel“)
 - `saZiel(x)`
 - `saPruefen(e, idx)`
+- `saBericht(l, abgebrochen)` – Bericht am Ende: abgelegt, im Eingang, übersprungen nach Grund, nicht abgelegt (abgewählt oder nach Abbruch)
 - `saZeile(e, i)`
 - `saZeigen()`
 - `saZeileNeu(i)`
@@ -334,6 +342,14 @@ _STAFL-Plattform · Qualitätssicherung (QM-System) – Oberfläche nach dem Des
 - `exportUmfang(kap, alle)` – Export der Ablage als ZIP: der Server erstellt das Archiv erst beim Herunterladen (direkt in die Antwort)
 - `exportHinweis()`
 - `oeffneExport()`
+- `ladeEingang()`
+- `eingangSicht()`
+- `eingangZiele()`
+- `eingangKnoepfe()`
+- `renderEingang()`
+- `oeffneEingang()`
+- `eingangWeg(ids)`
+- `eingangFehler(r, text)`
 - `renderDok()`
 - `vorlagePasst(x, art)`
 - `dfVorlagen()`
@@ -464,13 +480,19 @@ _Qualitätssicherung – Dokumentenablage (QM-System Bauabschnitt 2)_
 - `blob_pfad(did)`
 - `blobs()`
 - `teile_reste()`
-- `hochladen(cli, dok, ver, name, inhalt, teil, sha, groesse, nur_erster)` – Datei in Teilen hochladen wie die Oberfläche; Rückgabe (Status, Antwort des letzten Aufrufs, Zahl der Aufrufe)
+- `hochladen(cli, dok, ver, name, inhalt, teil, sha, groesse, nur_erster, extra)` – Datei in Teilen hochladen wie die Oberfläche; Rückgabe (Status, Antwort des letzten Aufrufs, Zahl der Aufrufe)
 - `teil_senden(cli, dok, ver, name, groesse, upload, nr, stueck, sha)`
 - `roh(cli, query)` – GET ohne JSON-Auswertung: (Status, Kopfzeilen, Inhalt)
 - `zip_lesen(inhalt)`
 - `dok(did, cli)`
 - `schritt(cli, did, s, **extra)`
+- `speicher(name)` – Höchstzahl je Stelle: mehr als 50 Dateien in einem Ordner (früher die Grenze), höchstens 1000 – der Rest bis zur Grenze steht vorbereitet im Speicher …
+- `fuellen(did, n, praefix)` – n aktive Einträge ohne Datei an Dokument did (bzw. im Eingang) – nur zum Erreichen einer Grenze
+- `leeren(praefix)`
 - `nur_neu(cli, dok_, ver, name, inhalt)`
+- `eingang(cli)` – ── Eingang: Dateien ohne Ziel hochladen, später zuordnen oder löschen ──
+- `hoch_e(cli, name, inhalt, pfad, **kw)`
+- `nur_neu_e(name, inhalt, pfad)` – nurNeu im Eingang: dieselbe Datei = gleicher Pfad, Name und Inhalt
 - `text(pg, sel)`
 - `anmelden(user, pw, ip, breite, thema, hoehe)`
 - `toast(pg, inhalt)`
@@ -478,6 +500,9 @@ _Qualitätssicherung – Dokumentenablage (QM-System Bauabschnitt 2)_
 - `passt(pg)`
 - `sa_status()`
 - `sa_zahl(n)`
+- `sa_zeile(name)`
+- `ei_zeilen()` – Eingang in der Oberfläche (Bernd): hochladen ohne Ziel (Auswahl, Ziehen), Liste mit Ordnerpfad, Suche und Ordner, zuordnen, löschen, herunterladen
+- `ei_warte(n)`
 
 ## `tests/e2e/test_qs_bericht.py`
 
