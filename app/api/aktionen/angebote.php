@@ -190,6 +190,29 @@ switch ($action) {
             require_once dirname(__DIR__) . '/module/angebot/kopieren.php';
             respond(['ok' => true] + angebot_kopieren(body(), $me));
         }
+        /* Design je Angebot (module/angebot/design.php): Vorlagen lesen mit Modulzugang Angebot (?angebot= dazu das Design dieses
+           Angebots), Vorlagen anlegen, ändern und löschen mit angebote.verwalten, Design eines Angebots wählen mit angebot.bearbeiten
+           bzw. bei Einzelangeboten („e-…“) mit einzelangebote.bearbeiten */
+        case 'angebot_designs': {
+            $me = require_modulzugang('angebot');
+            header('Cache-Control: no-store');
+            respond(['ok' => true] + design_liste($me, (string)($_GET['angebot'] ?? '')));
+        }
+        case 'angebot_design_save': {
+            $me = require_perm('angebote.verwalten', true);
+            respond(['ok' => true] + design_vorlage_speichern($me, body()));
+        }
+        case 'angebot_design_loeschen': {
+            $me = require_perm('angebote.verwalten', true);
+            respond(['ok' => true] + design_vorlage_loeschen($me, body()));
+        }
+        case 'angebot_design_setzen': {
+            $b = body();
+            $oid = is_string($b['angebot'] ?? null) ? $b['angebot'] : '';
+            if (!preg_match('/^[a-z0-9-]{1,40}$/', $oid)) fail('Unbekanntes Angebot.', 404);
+            $me = require_perm(strncmp($oid, 'e-', 2) === 0 ? 'einzelangebote.bearbeiten' : 'angebot.bearbeiten', true);
+            respond(['ok' => true] + design_setzen($me, $oid, $b['design'] ?? null));
+        }
         /* Sonderangebote (module/angebot/sonderangebote.php): Liste für den Reiter „Sonderangebote“ – mit Modulzugang Angebot
            (wie der Editor); Namen der Kundengruppen nur mit Stammdaten-, Kunden- oder Verwaltungsrecht, Kundenzahl nur mit kunden.sehen */
         case 'sonderangebote': {

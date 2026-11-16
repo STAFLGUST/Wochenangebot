@@ -3,7 +3,8 @@ declare(strict_types=1);
 /* Einzelangebote: ein Angebot für genau einen Kunden (Angebot bearbeiten → Einzelangebote).
    Dokument „einzelangebote“: { seq: {Jahr: Nummer}, list: [Einzelangebot] }.
    Einzelangebot: { id, nr (E-JJJJ-0001), kid, titel, gueltigBis, hinweis, positions: [{ code, name, qty, price, notiz, partie? }],
-                    status (entwurf|freigegeben|zurueckgezogen), revision, created(By), changed(By), freigegebenAt, gesendet: [...] }
+                    status (entwurf|freigegeben|zurueckgezogen), revision, created(By), changed(By), freigegebenAt, gesendet: [...],
+                    design? (Aufbau für Kundenseite und Druck, module/angebot/design.php – setzt nur design_setzen) }
    partie (optional, seit 13.11.2026): { lot, mhd, kg } – eine eingelagerte Partie des Bestands, die diese Position anbietet.
    Schnappschuss beim Zuordnen (GR-106): danach unverändert gespeichert, spätere Bestandsänderungen ändern das Angebot nicht.
    Freigegebene, gültige Einzelangebote sieht der Kunde im Portal als eigenes Angebot (Kennung „e-<id>“) und kann daraus
@@ -365,7 +366,8 @@ function einzel_model(array $e): array
     $titel = einzel_titel($e);
     return ['meta' => ['title' => $titel . (!empty($e['gueltigBis']) ? ' – gültig bis ' . date('d.m.Y', strtotime($e['gueltigBis'])) : ''), 'notice' => 'Einzelangebot',
                        'offerId' => 'e-' . $e['id'], 'offerName' => $titel, 'einzel' => true, 'nr' => $e['nr'], 'gueltigBis' => $e['gueltigBis'] ?? null,
-                       'kunde' => einzel_kunden_map()[$e['kid']]['firma'] ?? '', 'hinweis' => (string)($e['hinweis'] ?? '')],   // Hinweis an den Kunden (Bildschirm und Druck)
+                       'kunde' => einzel_kunden_map()[$e['kid']]['firma'] ?? '', 'hinweis' => (string)($e['hinweis'] ?? '')]   // Hinweis an den Kunden (Bildschirm und Druck)
+                     + (($ds = design_wirksam($e['design'] ?? null)) ? ['design' => $ds] : []),   // nur Layout (module/angebot/design.php)
             'sections' => [], 'groups' => [['id' => $gid, 'name' => $titel, 'section' => '']], 'items' => $items,
             'publishedAt' => (string)($e['freigegebenAt'] ?? $e['changed'] ?? '')];
 }

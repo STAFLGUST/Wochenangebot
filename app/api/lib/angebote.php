@@ -15,6 +15,7 @@ if (!defined('WA_API')) { http_response_code(404); exit; }   // nur über api/in
      Kundengruppen (sonderGruppen) mit Gültigkeit (Zeitraum oder KW); sichtbar nur im Zeitraum und nach Veröffentlichung.
    Kundenpreise verlassen den Server nur aufgelöst und nur für berechtigte Nutzer (offer_resolve). */
 require_once dirname(__DIR__) . '/module/angebot/sonderangebote.php';
+require_once dirname(__DIR__) . '/module/angebot/design.php';
 const OFFER_STD = 'std';
 const OFFER_DEFAULTS = [
     ['id' => 'chefs-culinar', 'name' => 'Wochenangebot Chefs Culinar', 'fallback' => 'standard'],
@@ -68,8 +69,9 @@ function std_public(): bool { $d = offers_load(); return !array_key_exists('stdP
 
 function offer_def(string $id): ?array
 {
-    if ($id === OFFER_STD) return ['id' => OFFER_STD, 'name' => 'Wochenangebot', 'fallback' => 'standard'];
-    foreach (offers_load()['offers'] as $o) if ($o['id'] === $id) return $o;
+    $d = offers_load();
+    if ($id === OFFER_STD) return ['id' => OFFER_STD, 'name' => 'Wochenangebot', 'fallback' => 'standard'] + (is_array($d['stdDesign'] ?? null) ? ['design' => $d['stdDesign']] : []);
+    foreach ($d['offers'] as $o) if ($o['id'] === $id) return $o;
     return null;
 }
 function clean_variants($v, string $where, array $known): array
@@ -295,6 +297,8 @@ function offer_resolve(array $m, array $def, bool $ausverkauftAusblenden = true)
     $m['meta']['offerId'] = $def['id'];
     $m['meta']['offerName'] = $def['name'];
     if (sonder_ist($def)) $m = sonder_meta($m, $def);   // Sonderangebot: Gültigkeit statt der Woche des Wochenangebots
+    unset($m['meta']['design']);
+    if ($ds = design_wirksam($def['design'] ?? null)) $m['meta']['design'] = $ds;   // nur Layout (module/angebot/design.php)
     return $m;
 }
 

@@ -13,8 +13,8 @@ if (realpath((string)($_SERVER['SCRIPT_FILENAME'] ?? '')) === __FILE__) { http_r
 const DATEN_KUNDENSEITE = ['abmelde-schluessel', 'anmeldeorte', 'bestellungen', 'datenleck', 'deployment', 'kunden', 'kundensitzungen', 'laendersperre', 'mail-schluessel', 'merklisten', 'postausgang', 'sicherung', 'sperrliste'];
 const DATEN_KUNDENSEITE_PRAEFIX = ['kundenprotokoll/'];
 const DATEN_TRENNSTUFE = 5;
-const DATEN_AB_STUFE = ['angebot' => 3, 'angebote' => 3, 'anmeldenamen' => 5, 'artikelauszug' => 3, 'bedrohungsliste' => 3, 'benachrichtigungen' => 2, 'bestand' => 2, 'bestellung' => 3, 'einzelangebote' => 3, 'firewall' => 3, 'fracht' => 3, 'fw_zaehler' => 5, 'logins' => 5, 'mailkonto' => 2, 'mailkonto-intern' => 2, 'mailvorlage' => 2, 'postausgang-stand' => 3, 'sicherheit' => 3, 'sicherheit-notfall' => 3, 'stammdaten' => 2, 'verkehr' => 5, 'wartung' => 3];
+const DATEN_AB_STUFE = ['angebot' => 3, 'angebot-designs' => 3, 'angebote' => 3, 'anmeldenamen' => 5, 'artikelauszug' => 3, 'bedrohungsliste' => 3, 'benachrichtigungen' => 2, 'bestand' => 2, 'bestellung' => 3, 'einzelangebote' => 3, 'firewall' => 3, 'fracht' => 3, 'fw_zaehler' => 5, 'logins' => 5, 'mailkonto' => 2, 'mailkonto-intern' => 2, 'mailvorlage' => 2, 'postausgang-stand' => 3, 'sicherheit' => 3, 'sicherheit-notfall' => 3, 'stammdaten' => 2, 'verkehr' => 5, 'wartung' => 3];
 const DATEN_AB_STUFE_PRAEFIX = ['protokoll/' => 4];
 const KUNDEN_FELDER_KUNDENSEITE = ['id', 'nr', 'firma', 'ansprechpartner', 'gruppe', 'angebote', 'active', 'login', 'mailAngebot', 'abgemeldet', 'emailMaske'];
-const DATEN_VEROEFFENTLICHT = ['angebot', 'angebote', 'artikelauszug', 'bedrohungsliste', 'bestellung', 'einzelangebote', 'firewall', 'fracht', 'postausgang-stand', 'sicherheit', 'sicherheit-notfall', 'wartung'];
+const DATEN_VEROEFFENTLICHT = ['angebot', 'angebot-designs', 'angebote', 'artikelauszug', 'bedrohungsliste', 'bestellung', 'einzelangebote', 'firewall', 'fracht', 'postausgang-stand', 'sicherheit', 'sicherheit-notfall', 'wartung'];
 const DATEN_JE_SEITE = ['anmeldenamen', 'fw_zaehler', 'logins', 'verkehr'];

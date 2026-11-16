@@ -52,6 +52,14 @@ schutz = "vertraulich"
 beschreibung = "Kundenangebote mit Kundenpreisen (variants), Sichtbarkeit und Sonderpreisen"
 
 [[dokument]]
+name = "angebot-designs"
+eigentuemer = "angebot"
+bereich = "veroeffentlicht"
+trennstufe = 3   # wie „angebote“: die Kundenseite löst das Design eines Angebots aus der Kopie auf (offer_resolve)
+schutz = "intern"
+beschreibung = "Design-Vorlagen der Angebote (module/angebot/design.php): Name, Raster (Spalten, Hoch-/Querformat) und Abschnitte (Bereiche und Gruppen mit Namen, freie Texte); die Wahl je Angebot steht am Angebot (angebote, einzelangebote)"
+
+[[dokument]]
 name = "entwurf"
 eigentuemer = "angebot"
 bereich = "intern"
