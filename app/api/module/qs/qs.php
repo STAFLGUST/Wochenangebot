@@ -32,9 +32,6 @@ declare(strict_types=1);
    darf (er gilt damit als Bearbeiter – 4-Augen-Prinzip); in Prüfung und verworfen ist nichts änderbar; zu einer
    freigegebenen oder ersetzten Version trägt nur „qs.freigeben“ Dateien nach (z. B. die bisherige Datei aus dem Ordner
    „QM-System“). Außerhalb des Entwurfs wird nie gelöscht, nur „entfernt“ vermerkt (mit Grund; die Datei bleibt erhalten).
-   Eingang: Dateien ohne Ziel landen im festen Eintrag „eingang“ von qs-dokumente (Ordner ohne Kapitel, Kennzeichen eingang)
-   und werden später einem Ordner, externen Dokument oder Entwurf zugeordnet (gleiche Kennung, die Datei bleibt liegen) oder
-   endgültig gelöscht – der Eingang ist kein Nachweis. Er ist kein Dokument: Listen, Exporte und Dokument-Aktionen lassen ihn aus.
    Nummernstruktur (Anlegen und Ändern in der Oberfläche): Arbeitsanweisungen, Formblätter, Listen und Excel-Dokumente heißen
    „<Kapitel>-<Art><laufende Nr.>“ (z. B. 1.4-F08); leer = nächste freie Nummer (nie wiederverwendet, auch nicht von eingezogenen).
    Vorlagen und Lenkungsangaben (module/qs/vorlagen.php): neue Dokumente aus einer Vorlage (Art V), Platzhalter in Word/Excel,
@@ -78,9 +75,7 @@ const QS_MAX_AENDERUNGEN = 200;
 const QS_MAX_VERLAUF = 100;
 const QS_MAX_VERWEISE = 20;
 const QS_START_NACHWEISE = 5000;   // qs_start liefert die neuesten Nachweise (Fälligkeiten rechnet der Server aus allen)
-const QS_MAX_DATEIEN = 1000;       // aktive Dateien je Version bzw. je Ordner/externem Dokument
-const QS_MAX_EINGANG = 20000;      // Dateien im Eingang (hochgeladen, noch keinem Dokument zugeordnet)
-const QS_EINGANG = 'eingang';      // feste Kennung des Eingangs in qs-dokumente
+const QS_MAX_DATEIEN = 50;         // aktive Dateien je Version bzw. je Ordner/externem Dokument
 const QS_NR_STRUKTUR = ['A', 'F', 'L', 'E'];   // Nummer „<Kapitel>-<Art><laufende Nr.>“ (z. B. 1.4-F08); Vorlagen „V“ heißen frei (z. B. „Vorlage F“)
 
 /* ---------- Laden und Schreiben ---------- */
@@ -387,61 +382,9 @@ function qs_nr_struktur(string $nr, string $kap, string $art, array $alle, ?arra
 function qs_dokument_index(array $doc, $id): int
 {
     $id = is_string($id) ? $id : '';
-    foreach ($doc['liste'] as $i => $e) if (($e['id'] ?? '') === $id && $id !== '' && empty($e['eingang'])) return $i;
+    foreach ($doc['liste'] as $i => $e) if (($e['id'] ?? '') === $id && $id !== '') return $i;
     fail('Dokument nicht gefunden.', 404);
     return -1;
-}
-/* Dokumente ohne den Eingang – für Listen, Kennzahlen und Exporte (er hat kein Kapitel und ist kein Dokument) */
-function qs_dokumente(array $liste): array
-{
-    return array_values(array_filter($liste, function ($d) { return empty($d['eingang']); }));
-}
-/* Index des Eingangs; fehlt er, wird er in $doc angelegt (geschrieben wird er erst mit der ersten Datei, unter der Sperre).
-   Alle Felder eines Ordners sind gesetzt, damit auch eine ältere Programmfassung ihn als Ordner ohne Kapitel lesen kann. */
-function qs_eingang_index(array &$doc, array $me): int
-{
-    foreach ($doc['liste'] as $i => $e) if (!empty($e['eingang'])) return $i;
-    $doc['liste'][] = ['id' => QS_EINGANG, 'eingang' => true, 'art' => 'O', 'kapitel' => '', 'nr' => '', 'titel' => 'Eingang (nicht zugeordnet)', 'ablage' => '',
-                       'zustaendig' => '', 'vertreter' => '', 'notiz' => '', 'versionen' => [], 'eingezogen' => null, 'ueberprueft' => null, 'dateien' => [],
-                       'rev' => 0, 'erstellt' => qs_wer($me), 'quelle' => 'eingang', 'verlauf' => []];
-    return count($doc['liste']) - 1;
-}
-/* Dateien im Eingang – qs_start nennt nur die Zahl, die Liste lädt qs_eingang erst beim Öffnen (bis 20 000 Einträge, mehrere MB) */
-function qs_eingang_zahl(array $liste): int
-{
-    foreach ($liste as $d) if (!empty($d['eingang'])) return count(qs_dateien_aktiv($d['dateien'] ?? []));
-    return 0;
-}
-/* Index einer aktiven Datei im Eingang oder 404 */
-function qs_eingang_datei(array $eingang, string $id): int
-{
-    foreach ((array)($eingang['dateien'] ?? []) as $k => $f) if (($f['id'] ?? '') === $id && empty($f['entfernt'])) return $k;
-    fail('Die Datei liegt nicht (mehr) im Eingang.', 404);
-    return -1;
-}
-/* Ordnerpfad einer Datei im Eingang („pfad“, optional): woher sie in der Sammel-Ablage kam, relativ zum gewählten QM-Ordner, z. B.
-   „1.4 Qualitätssicherung/Befunde/Labor A ab 2025“. Nur Anzeige, Suche und künftig das Anlegen von Ordner-Dokumenten – nie ein
-   Pfad im Dateisystem. Einheitliches Format: Ordnernamen mit „/“ getrennt, ohne Steuerzeichen, Leerraum zusammengefasst, ohne
-   leere, „.“- und „..“-Teile, je Teil höchstens 120 Zeichen, höchstens 12 Teile. */
-function qs_eingang_pfad($v): string
-{
-    $teile = [];
-    foreach (preg_split('~[/\\\\]+~', is_string($v) ? $v : '') ?: [] as $t) {
-        $t = trim(preg_replace('/[\x00-\x1F\x7F]/u', '', preg_replace('/\s+/u', ' ', $t) ?? '') ?? '');
-        if ($t !== '' && $t !== '.' && $t !== '..') $teile[] = mb_substr($t, 0, 120);
-    }
-    return implode('/', array_slice($teile, 0, 12));
-}
-/* Auswahl im Eingang: eindeutige Datei-Kennungen (1 bis QS_MAX_EINGANG) */
-function qs_eingang_auswahl($v): array
-{
-    if (!is_array($v) || !$v || count($v) > QS_MAX_EINGANG) throw new InvalidArgumentException('Bitte Dateien aus dem Eingang wählen.');
-    $ids = [];
-    foreach ($v as $x) {
-        if (!is_string($x) || !preg_match('/^[a-z0-9]{12,40}$/D', $x)) throw new InvalidArgumentException('Ungültige Datei-Kennung.');
-        $ids[$x] = true;
-    }
-    return array_keys($ids);
 }
 /* Index der gültigen (freigegebenen) bzw. der offenen Version (Entwurf, in Prüfung, geprüft) oder null */
 function qs_ver_index(array $d, array $status): ?int
@@ -501,12 +444,6 @@ function qs_dateien_aktiv($liste): array
    Rückgabe: Index der Version oder null (Ablage am Dokument); sonst fail(). */
 function qs_ablage_stelle(array $d, string $ver, array $me, string $was): ?int
 {
-    if (!empty($d['eingang'])) {   // Eingang: nur hochladen; zugeordnet und gelöscht wird über eigene Aktionen
-        if ($ver !== '') fail('Der Eingang hat keine Versionen.', 422);
-        if ($was !== 'hochladen') fail('Dateien im Eingang werden zugeordnet oder gelöscht.', 409);
-        if (count(qs_dateien_aktiv($d['dateien'] ?? [])) >= QS_MAX_EINGANG) fail('Der Eingang ist voll (höchstens ' . QS_MAX_EINGANG . ' Dateien) – bitte zuerst zuordnen oder löschen.', 422);
-        return null;
-    }
     if (!empty($d['eingezogen'])) fail('Das Dokument ist eingezogen – die Ablage ist geschlossen.', 409);
     if (!in_array($d['art'] ?? '', QS_GELENKT, true)) {
         if ($ver !== '') fail('Ordner und externe Dokumente haben keine Versionen.', 422);
@@ -524,41 +461,11 @@ function qs_ablage_stelle(array $d, string $ver, array $me, string $was): ?int
     if ($was === 'hochladen' && count(qs_dateien_aktiv($d['versionen'][$vi]['dateien'] ?? [])) >= QS_MAX_DATEIEN) fail('Zu viele Dateien (höchstens ' . QS_MAX_DATEIEN . ').', 422);
     return $vi;
 }
-/* Datei $f an einer Stelle eintragen – dieselbe Funktion für Hochladen und Zuordnen aus dem Eingang. qs_ablage_stelle prüft
-   Rechte, Zustand und Höchstzahl; im Entwurf zählt $me als Bearbeiter (4-Augen-Prinzip), an freigegebenen Versionen wird
-   nachgetragen (Lenkungsangaben gleich eingetragen). Word/Excel in Versionen: Platzhalter merken (die Freigabe füllt sie aus).
-   Im Eingang kein Verlauf – er verdrängte sonst die übrigen Einträge. Rückgabe [Dokument, Kennung der Datei]. */
-function qs_datei_eintragen(array $d, string $ver, array $me, array $f, string $wie, array &$erzeugt): array
-{
-    require_once __DIR__ . '/vorlagen.php';
-    $vi = qs_ablage_stelle($d, $ver, $me, 'hochladen');
-    if ($vi === null) {
-        $d['dateien'] = is_array($d['dateien'] ?? null) ? array_values($d['dateien']) : [];
-        $d['dateien'][] = $f;
-        if (empty($d['eingang'])) qs_verlauf($d, $me, $wie . ': ' . $f['name']);
-        return [$d, (string)$f['id']];
-    }
-    if (isset(QS_OFFICE[$f['art']]) && ($p = qs_office_platzhalter((string)ablage_lesen('qs', $f['id']), $f['art']))) $f['platzhalter'] = $p;
-    $v = $d['versionen'][$vi];
-    $v['dateien'] = is_array($v['dateien'] ?? null) ? array_values($v['dateien']) : [];
-    if ($v['status'] === 'entwurf') {
-        if (!in_array((string)$me['id'], array_map('strval', (array)($v['bearbeiter'] ?? [])), true)) $v['bearbeiter'][] = (string)$me['id'];   // 4-Augen-Prinzip
-        qs_verlauf($v, $me, $wie . ': ' . $f['name']);
-    } else {
-        $f['nachgetragen'] = true;
-        $f = qs_lenkung_datei($d, $v, $f, qs_stamm(), $me, $erzeugt);   // freigegebene Version: Lenkungsangaben gleich eintragen
-        qs_verlauf($v, $me, 'Datei nachgetragen: ' . $f['name']);
-        qs_verlauf($d, $me, 'Datei zu Version ' . ($v['nr'] ?? '?') . ' nachgetragen: ' . $f['name']);
-    }
-    $v['dateien'][] = $f;
-    $d['versionen'][$vi] = $v;
-    return [$d, (string)$f['id']];
-}
-/* Einstellungen für die Oberfläche: erlaubte Dateiendungen, Höchstgröße je Datei und je Teilstück, Dateien je Stelle und im Eingang */
+/* Einstellungen für die Oberfläche: erlaubte Dateiendungen, Höchstgröße je Datei und je Teilstück, Dateien je Stelle */
 function qs_ablage_einstellungen(): array
 {
     require_once __DIR__ . '/vorlagen.php';
-    return ['arten' => array_keys(ABLAGE_ARTEN), 'max' => ABLAGE_DATEI_MAX, 'teil' => ABLAGE_TEIL_MAX, 'dateien' => QS_MAX_DATEIEN, 'eingang' => QS_MAX_EINGANG,
+    return ['arten' => array_keys(ABLAGE_ARTEN), 'max' => ABLAGE_DATEI_MAX, 'teil' => ABLAGE_TEIL_MAX, 'dateien' => QS_MAX_DATEIEN,
             'office' => array_keys(QS_OFFICE), 'platzhalter' => QS_PLATZHALTER_TEXT, 'nrStruktur' => QS_NR_STRUKTUR];
 }
 /* Datei in allen Dokumenten suchen: [Dokument-Index, Version-Index oder null, Datei-Index] oder null */
@@ -571,14 +478,12 @@ function qs_datei_finden(array $liste, string $id): ?array
     }
     return null;
 }
-/* Liegt an dieser Stelle (Version bzw. Dokument) schon eine aktive Datei mit diesem Inhalt (SHA-256, auch Rohfassung)? Kennung oder null.
-   Im Eingang zählt nur dieselbe Datei – gleicher Ordnerpfad, Name und Inhalt (gleiche Inhalte in zwei Ordnern bleiben beide). */
-function qs_datei_gleich(array $d, ?int $vi, string $sha, string $pfad = '', string $name = ''): ?string
+/* Liegt an dieser Stelle (Version bzw. Dokument) schon eine aktive Datei mit diesem Inhalt (SHA-256, auch Rohfassung)? Kennung oder null */
+function qs_datei_gleich(array $d, ?int $vi, string $sha): ?string
 {
     if (!preg_match('/^[0-9a-f]{64}$/D', $sha)) return null;
     foreach (qs_dateien_aktiv($vi === null ? ($d['dateien'] ?? []) : ($d['versionen'][$vi]['dateien'] ?? [])) as $f)
-        if ((empty($d['eingang']) || ((string)($f['pfad'] ?? '') === $pfad && (string)$f['name'] === $name))
-            && (hash_equals($sha, (string)($f['sha256'] ?? '')) || hash_equals($sha, (string)($f['sha256Roh'] ?? '')))) return (string)$f['id'];
+        if (hash_equals($sha, (string)($f['sha256'] ?? '')) || hash_equals($sha, (string)($f['sha256Roh'] ?? ''))) return (string)$f['id'];
     return null;
 }
 function qs_dateien_zahl(array $liste): int

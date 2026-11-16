@@ -9,7 +9,8 @@ declare(strict_types=1);
    Sicherungsprüfung und Datenbank-Umschaltung behandeln nur *.php als JSON-Dokumente.
    Hochladen in Teilen: der API-Einstieg nimmt nur JSON bis 6 MB an – ablage_teil() sammelt Teile (Base64, je höchstens
    ABLAGE_TEIL_MAX Bytes) eines Uploads unter data/dateien/.teile/, prüft beim letzten Teil Größe, SHA-256 und Dateiart
-   (Endung und Dateikopf passen zusammen) und legt die Datei ab. Ein Upload gehört dem Nutzer, der ihn begonnen hat.
+   (Endung und Dateikopf passen zusammen) und legt die Datei ab – oder lässt sie als fertigen Upload liegen, bis
+   ablage_fertig_ablegen() sie übernimmt (gebündeltes Eintragen vieler Dateien). Ein Upload gehört dem Nutzer, der ihn begonnen hat.
    Vom Server erzeugte Dateien (z. B. aus einer Vorlage ausgefüllt) legt ablage_ablegen() ab, ablage_kopieren() kopiert eine Datei
    unter neuer Kennung (z. B. in eine neue Version), ablage_lesen() liefert den Inhalt.
    ZIP-Export: ablage_zip_senden() schreibt ein ZIP (Methode „stored“, UTF-8-Namen) direkt in die Antwort – ohne die
@@ -119,7 +120,7 @@ function ablage_aufraeumen(): void
    Rückgabe: ['fertig' => false, 'upload' => …, 'empfangen' => n] oder beim letzten Teil
    ['fertig' => true, 'ziel' => …, 'datei' => ['id', 'name', 'art', 'mime', 'groesse', 'sha256']] – die Datei liegt dann
    bereits in der Ablage; scheitert danach das Eintragen beim Modul, entfernt es sie mit ablage_entfernen(). */
-function ablage_teil(string $bereich, string $nutzerId, array $ziel, array $b): array
+function ablage_teil(string $bereich, string $nutzerId, array $ziel, array $b, bool $ablegen = true): array
 {
     ablage_bereich($bereich);
     $upload = is_string($b['upload'] ?? null) ? $b['upload'] : '';
@@ -148,6 +149,7 @@ function ablage_teil(string $bereich, string $nutzerId, array $ziel, array $b): 
         if (!is_array($meta) || ($meta['nutzer'] ?? '') !== $nutzerId || ($meta['bereich'] ?? '') !== $bereich || ($meta['ziel'] ?? null) !== $ziel)
             throw new InvalidArgumentException('Der Upload gehört zu einer anderen Datei. Bitte erneut hochladen.');
         if ($teil !== (int)$meta['naechster']) throw new InvalidArgumentException('Teile in falscher Reihenfolge. Bitte die Datei erneut hochladen.');
+        if (!empty($meta['fertig'])) throw new InvalidArgumentException('Der Upload ist schon vollständig.');
     }
     if ($meta['empfangen'] + strlen($roh) > $meta['groesse']) { ablage_upload_verwerfen($upload); throw new InvalidArgumentException('Die Datei ist größer als angegeben.'); }
     $teilPfad = "$ordner/$upload.tmp";
@@ -158,22 +160,40 @@ function ablage_teil(string $bereich, string $nutzerId, array $ziel, array $b): 
         file_put_contents("$ordner/$upload-meta.tmp", json_encode($meta), LOCK_EX);
         return ['fertig' => false, 'upload' => $upload, 'empfangen' => $meta['empfangen']];
     }
-    // Letzter Teil: Größe, Prüfsumme und Dateikopf prüfen, dann in die Ablage
+    // Letzter Teil: Größe, Prüfsumme und Dateikopf prüfen, dann in die Ablage – oder mit $ablegen = false (gebündeltes Eintragen)
+    // als fertiger Upload liegen lassen, bis ablage_fertig_ablegen() ihn übernimmt; sonst räumt ablage_aufraeumen() ihn weg
     try {
         clearstatcache(true, $teilPfad);
         if ((int)filesize($teilPfad) !== (int)$meta['groesse']) throw new InvalidArgumentException('Die Datei kam nicht vollständig an. Bitte erneut hochladen.');
         $sha = (string)hash_file('sha256', $teilPfad);
         if ($meta['sha256'] !== '' && !hash_equals($meta['sha256'], $sha)) throw new InvalidArgumentException('Die Datei kam beschädigt an (Prüfsumme). Bitte erneut hochladen.');
         if (!ablage_inhalt_passt($teilPfad, $meta['art'])) throw new InvalidArgumentException('Der Inhalt passt nicht zur Dateiendung „.' . $meta['art'] . '“.');
+        $meta['sha256'] = $sha; $meta['fertig'] = true;
+        if (file_put_contents("$ordner/$upload-meta.tmp", json_encode($meta), LOCK_EX) === false) throw new RuntimeException('Ablage nicht beschreibbar');
+    } catch (Throwable $e) {
+        ablage_upload_verwerfen($upload);
+        throw $e;
+    }
+    return $ablegen ? ablage_fertig_ablegen($bereich, $nutzerId, $upload) : ['fertig' => true, 'upload' => $upload, 'ziel' => $meta['ziel']];
+}
+/* Fertigen Upload (ablage_teil mit $ablegen = false) in die Ablage übernehmen – nur für den Nutzer, der ihn hochgeladen hat.
+   Rückgabe wie ablage_teil: ['fertig', 'ziel', 'datei' => id, name, art, mime, groesse, sha256]; unbekannt oder abgelaufen → InvalidArgumentException. */
+function ablage_fertig_ablegen(string $bereich, string $nutzerId, string $upload): array
+{
+    $ordner = ablage_teile_ordner();
+    $meta = preg_match('/^[0-9a-f]{24}$/D', $upload) && is_file("$ordner/$upload.tmp") ? json_decode((string)@file_get_contents("$ordner/$upload-meta.tmp"), true) : null;
+    if (!is_array($meta) || empty($meta['fertig']) || ($meta['nutzer'] ?? '') !== $nutzerId || ($meta['bereich'] ?? '') !== ablage_bereich($bereich))
+        throw new InvalidArgumentException('Der Upload ist abgelaufen. Bitte die Datei erneut hochladen.');
+    try {
         $id = ablage_neue_id();
         $ziel = ablage_pfad($bereich, $id);
         if (!is_dir(dirname($ziel)) && !@mkdir(dirname($ziel), 0775, true) && !is_dir(dirname($ziel))) throw new RuntimeException('Ablage nicht beschreibbar');
-        if (!@rename($teilPfad, $ziel)) throw new RuntimeException('Ablage nicht beschreibbar');
+        if (!@rename("$ordner/$upload.tmp", $ziel)) throw new RuntimeException('Ablage nicht beschreibbar');
     } finally {
         ablage_upload_verwerfen($upload);
     }
     return ['fertig' => true, 'ziel' => $meta['ziel'], 'datei' => ['id' => $id, 'name' => $meta['name'], 'art' => $meta['art'],
-            'mime' => ABLAGE_ARTEN[$meta['art']][0], 'groesse' => (int)$meta['groesse'], 'sha256' => $sha]];
+            'mime' => ABLAGE_ARTEN[$meta['art']][0], 'groesse' => (int)$meta['groesse'], 'sha256' => (string)$meta['sha256']]];
 }
 function ablage_upload_verwerfen(string $upload): void
 {
