@@ -64,6 +64,17 @@ schreibend = true
 oberflaeche = "qs.intern"
 schreibend = true
 
+[aktion.qs_eingang]
+oberflaeche = "qs.intern"
+
+[aktion.qs_datei_zuordnen]
+oberflaeche = "qs.intern"
+schreibend = true
+
+[aktion.qs_eingang_loeschen]
+oberflaeche = "qs.intern"
+schreibend = true
+
 [aktion.qs_datei]
 oberflaeche = "qs.intern"
 

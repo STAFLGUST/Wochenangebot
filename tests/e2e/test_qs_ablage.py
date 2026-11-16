@@ -6,7 +6,7 @@ Aktion); Hochladen in Teilen (ein Teil, mehrere Teile, Reihenfolge, fremder Nutz
 Teil zu groß, Datei zu groß, leer, größer als angegeben, Prüfsumme, Endung nicht erlaubt, Inhalt passt nicht zur Endung,
 Dateiname ohne Pfad und verbotene Zeichen); Regeln je Zustand (Entwurf mit „bearbeiten“ und 4-Augen-Prinzip, in Prüfung
 gesperrt, freigegebene und ersetzte Versionen nur mit „freigeben“ nachtragen/entfernen mit Grund, verworfen und eingezogen
-gesperrt, Ordner ohne Versionen, höchstens 50 Dateien, Ordner mit Dateien wird nicht gelenkt); Entfernen (Entwurf endgültig
+gesperrt, Ordner ohne Versionen, mehr als 50 und höchstens 1000 Dateien, Ordner mit Dateien wird nicht gelenkt); Entfernen (Entwurf endgültig
 gelöscht, sonst nur vermerkt, doppelt 409, veralteter Stand 409); Download (Kopfzeilen attachment/nosniff/sandbox, UTF-8-Name,
 Inhalt gleich, entfernt/unbekannt 404, fehlende Datei 404); ZIP (Aufbau QM-System/<Kapitel>/<Dokument>/<Datei>, Dokumentenliste,
 gültige Version, mit „alle“ ältere Versionen/Entwurf/eingezogen, Kapitelfilter, gleiche Namen, fehlende Datei in Hinweise.txt,
@@ -34,7 +34,7 @@ import zipfile
 from playwright.sync_api import sync_playwright
 
 from kunden_hilfe import Client, B, API
-from umgebung import SH, ablageordner, storage_raw, storage_sqlite
+from umgebung import SH, ablageordner, storage_raw, storage_sqlite, storage_write
 
 PW = 'Sicheres-Passwort-1'
 HIER = os.path.dirname(os.path.abspath(__file__))
@@ -150,7 +150,7 @@ check('Kapitel und Personen', V.call('qs_stamm_save', {'kapitel': KAP, 'personen
 
 st, r = L.call('qs_start')
 check('Start: Einstellungen der Ablage (Endungen, 25 MB je Datei, Teile zu 3 MB, 50 Dateien)', st == 200 and r['ablage']['max'] == 25 * MB and r['ablage']['teil'] == TEIL
-      and r['ablage']['dateien'] == 50 and {'pdf', 'docx', 'xlsx', 'xls', 'msg', 'png', 'jpg'} <= set(r['ablage']['arten']) and 'exe' not in r['ablage']['arten'] and 'php' not in r['ablage']['arten'], r.get('ablage'))
+      and r['ablage']['dateien'] == 1000 and {'pdf', 'docx', 'xlsx', 'xls', 'msg', 'png', 'jpg'} <= set(r['ablage']['arten']) and 'exe' not in r['ablage']['arten'] and 'php' not in r['ablage']['arten'], r.get('ablage'))
 
 
 def dok(did, cli=None):
@@ -325,12 +325,38 @@ st, r = Be.call('qs_dokument_save', {'kapitel': '2.1', 'art': 'X', 'nr': '', 'ti
 check('Ordner → externes Dokument (auch ohne Versionen) bleibt möglich', st == 200, r)
 check('Datei nicht gefunden → 404', Be.call('qs_datei_entfernen', {'datei': 'abcdefabcdefabcdefab', 'grund': 'x'})[0] == 404)
 
-# Höchstzahl je Stelle
+# Höchstzahl je Stelle: mehr als 50 Dateien in einem Ordner (früher die Grenze), höchstens 1000 – der Rest bis zur Grenze steht
+# vorbereitet im Speicher (Einträge ohne Datei), damit der Test nicht 1000 Dateien hochlädt
+def speicher(name):
+    return json.loads((storage_raw(name) or '{}').split('?>\n', 1)[-1])
+
+
+def fuellen(did, n, praefix):
+    """n aktive Einträge ohne Datei an Dokument did (bzw. im Eingang) – nur zum Erreichen einer Grenze"""
+    d = speicher('qs-dokumente')
+    x = next(e for e in d['liste'] if e['id'] == did)
+    x['dateien'] += [{'id': f'{praefix}{i:012d}', 'name': f'Füllung {i}.txt', 'art': 'txt', 'mime': 'text/plain', 'groesse': 1, 'sha256': '0' * 64,
+                      'hochgeladen': {'t': '2026-11-01T08:00:00+01:00', 'von': 'Test', 'vonId': 'test'}} for i in range(n)]
+    storage_write('qs-dokumente', d)
+
+
+def leeren(praefix):
+    d = speicher('qs-dokumente')
+    for x in d['liste']:
+        x['dateien'] = [f for f in x.get('dateien', []) if not f['id'].startswith(praefix)]
+    storage_write('qs-dokumente', d)
+
+
 st, r = Be.call('qs_dokument_save', {'kapitel': '2.1', 'art': 'O', 'nr': '', 'titel': 'Massenablage'})
 O2 = r['dokument']['id']
-ok50 = all(hochladen(Be, O2, '', f'Beleg {i:02d}.txt', f'Beleg {i}\n'.encode())[0] == 200 for i in range(50))
-st, r, _ = hochladen(Be, O2, '', 'Beleg 51.txt', b'Beleg 51\n')
-check('höchstens 50 Dateien je Stelle (51. → 422)', ok50 and st == 422 and '50' in r.get('error', ''), r)
+ok51 = all(hochladen(Be, O2, '', f'Beleg {i:02d}.txt', f'Beleg {i}\n'.encode())[0] == 200 for i in range(51))
+check('mehr als 50 Dateien in einem Ordner (51 abgelegt)', ok51 and len(aktiv_(dok(O2)['dateien'])) == 51)
+fuellen(O2, 1000 - 51 - 1, 'fuellung')
+st, r, _ = hochladen(Be, O2, '', 'Beleg 1000.txt', b'Beleg 1000\n')
+st2, r2, _ = hochladen(Be, O2, '', 'Beleg 1001.txt', b'Beleg 1001\n')
+check('höchstens 1000 Dateien je Stelle (1000. abgelegt, 1001. → 422)', st == 200 and st2 == 422 and '1000' in r2.get('error', ''), (st, r2))
+leeren('fuellung')
+check('Füllung entfernt: 52 echte Dateien im Ordner', len(aktiv_(dok(O2)['dateien'])) == 52)
 
 # ── Download ──
 st, r, _ = hochladen(Q, D1, V1, 'Prüfbericht März.pdf', pdf('März'))
