@@ -136,7 +136,7 @@
     const P = I.plan, L = I.lauf;
     $('#im-ergebnis').hidden = !P;
     if (!P) return;
-    const auto = P.oberste.filter((z) => z.art === 'auto').map((z) => z.kapitel);
+    const auto = [...new Set(P.oberste.filter((z) => z.art === 'auto').map((z) => z.kapitel))].sort(Q.natCmp);   // Reihenfolge des Dateisystems ist zufällig
     $('#im-wurzel').innerHTML = `Gewählter Ordner: <b>${esc(P.wurzel || (I.ordner[0] && I.ordner[0].pfad.split('/')[0]) || '—')}</b> · ${dateienText(I.liste.length)} · ${gb(I.liste.reduce((s, e) => s + e.groesse, 0))}`
       + ` · erkannte Kapitel: <b>${auto.length ? esc(auto.join(', ')) : 'keine'}</b>`;
     $('#im-warnung').hidden = !auto.length;
