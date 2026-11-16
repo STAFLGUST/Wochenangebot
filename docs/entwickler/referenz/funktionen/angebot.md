@@ -744,7 +744,7 @@ _Angebot · Satz der Druckfassung „Angebotsansicht“ (A4 quer) für die Angeb
 **Verteilen**
 
 - `setzen(m, modus)`
-- `liste(cfg)` – cfg: { host (#print-root), bereiche: [{ name, balken(forts), gruppen: [{ n, block(von, bis, forts), verteilen? }] }], kopf(seite, seiten), werbung?, fuss?: …
+- `liste(cfg)` – cfg: { host (#print-root), bereiche: [{ name, kopfImBalken?, balken(forts, eh), gruppen: [{ n, block(von, bis, forts, ohneKopf), verteilen? }] }], …
 
 ## `app/assets/frontend.js`
 
@@ -1237,6 +1237,8 @@ _Druck der Angebote (Wunsch des Inhabers 13.11.2026): die Druckfassung „Angebo
 **Angebotsseite (öffentlich): Druck = Angebotsansicht am Bildschirm**
 
 **Viele Bereiche (wie mit Angebotskategorien): fortlaufend statt einer Seite je Bereich**
+
+**Viele kleine Bereiche, jede Gruppe heißt wie ihr Bereich (Wunsch des Inhabers 16.11.2026: weniger freie Flächen)**
 
 **Einzelangebot: Druck der Angebotsseite und PDF des Servers**
 

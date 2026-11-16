@@ -214,7 +214,7 @@ textarea.qm-eingabe{height:auto;padding:8px 10px;resize:vertical;line-height:1.4
 @media(prefers-reduced-motion:reduce){.qm-toast{transition:none}}
 
 /* ---------- QM-System ---------- */
-.qm a:not(.stafl-zurueck){color:var(--qm-accent)}   /* Zurück-Knopf zum Dashboard wie in allen Modulen (Schriftfarbe) */
+.qm a:not(.stafl-zurueck):not(.r-eintrag){color:var(--qm-accent)}   /* Zurück-Knopf zum Dashboard und Einträge der Seitenleiste (rahmen.css, schwarz) wie in allen Modulen */
 .qm a.btn{text-decoration:none;color:inherit}
 .qm-suche{min-width:220px}
 .qm-tabelle tr.qm-gruppe td{padding:14px 8px 6px;background:transparent;border-bottom:1px solid var(--qm-border)}

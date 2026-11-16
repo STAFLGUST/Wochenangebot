@@ -1,11 +1,16 @@
 /* Angebot · Satz der Druckfassung „Angebotsansicht“ (A4 quer) für die Angebotsseite (frontend.js, Wunsch des Inhabers 13.11.2026).
    Der Druck sieht aus wie die Vorschau (Angebotsansicht am Bildschirm): Kopf mit Logo und Titel, Bereiche als abgerundete
    Balken über den Spalten ihres Bereichs, Gruppen als Blöcke mit „€/kg“, abgerundete gestreifte Zeilen – immer drei Spalten.
+   Heißt die einzige Gruppe eines Bereichs wie der Bereich (kopfImBalken) und steht der Bereich in einer Spalte, trägt sein
+   Balken „€/kg“ und der Block keinen eigenen Kopf (keine doppelte Überschrift; am Bildschirm bleibt der Kopf).
    Wochenangebot, Kundenangebote und Einzelangebote nutzen denselben Satz. Regeln:
    - Ein Block (Gruppe mit Kopf und allen Zeilen) steht immer vollständig in einer Spalte auf einer Seite.
    - Die Seiten werden fortlaufend gefüllt: jede Seite nimmt so viele Blöcke auf wie möglich. Die Blöcke eines Bereichs
      stehen in der Reihenfolge des Angebots nebeneinander in möglichst gleich hohen Spalten (links oben der erste Block);
-     kleine Bereiche stehen nebeneinander in einer Zeile, wenn das Höhe spart.
+     kleine Bereiche stehen nebeneinander in einer Zeile, wenn das Höhe spart. Folgen mehr als drei Bereiche mit Namen,
+     mit höchstens zwei Blöcken (STAPEL_BLOECKE), dürfen sie als Stapel stehen: jeder einspaltig, in Reihenfolge von oben nach unten auf die drei Spalten verteilt –
+     so füllen kurze Bereiche die Lücke unter ihrem Vorgänger, statt dass der höchste Nachbar die Zeile bestimmt
+     (Wunsch des Inhabers 16.11.2026: weniger freie Flächen im Druck).
    - Ein Bereich beginnt auf der laufenden Seite, sobald sein Balken und mindestens ein ganzer Block Platz haben. Umbrochen
      wird nur zwischen Blöcken; auf der nächsten Seite steht der Balken noch einmal („Forts.“).
    - Einzige Ausnahme vom ungeteilten Block: eine Gruppe, die allein höher ist als eine ganze Seitenspalte, wird in gleich
@@ -29,6 +34,7 @@
   /* Stufen der Dichte, von groß nach klein: Satzbreite in px der Bildschirmansicht (13 px Schrift werden im Druck
      8,3 / 7,9 / 7,5 pt); Zeilenhöhe und Abstände je Stufe stehen in angebot-druck.css (.pl-normal, .pl-kompakt, .pl-eng) */
   const STUFEN = [{ name: 'normal', breite: 1240 }, { name: 'kompakt', breite: 1310 }, { name: 'eng', breite: 1370 }];
+  const STAPEL_BLOECKE = 2;                   // im Stapel nur kleine Bereiche: höchstens so viele Blöcke (größere bleiben über ihre Spalten verteilt)
   const MIN_ZEILEN = 3;                       // ein einzelner Block wird erst ab so vielen Zeilen je Spalte über die Spalten verteilt
   const EPS = 0.5;                            // px Toleranz beim Vergleichen gemessener Höhen
   const ESC = { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' };
@@ -64,6 +70,7 @@
     let col = '', balken = '';
     cfg.bereiche.forEach((b, bi) => {
       if (b.name) balken += cs.map((c) => `<div class="pl-m pl-mb" data-b="${bi}.${c}" style="--c:${c}">${b.balken(false)}</div><div class="pl-m pl-mb" data-bf="${bi}.${c}" style="--c:${c}">${b.balken(true)}</div>`).join('');
+      if (b.kopfImBalken) { balken += `<div class="pl-m pl-mb" data-be="${bi}" style="--c:1">${b.balken(false, true)}</div>`; col += `<div data-o="${bi}" class="pl-m">${b.gruppen[0].block(0, b.gruppen[0].n, false, true)}</div>`; }
       b.gruppen.forEach((g, gi) => { col += `<div data-g="${bi}.${gi}" class="pl-m">${g.block(0, g.n, false)}</div><div data-f="${bi}.${gi}" class="pl-m">${g.block(0, 1, true)}</div>`; });
     });
     host.innerHTML = `<div class="al al-print pl-doc pl-mess pl-${st.name}" style="--z:${zFaktor(st)}"><div class="pl-in">
@@ -83,7 +90,8 @@
         const head = h(box) - summe(rows);   // Gruppenkopf samt Linien
         return { gi, h: h(box), head, headF: Math.max(head, h(boxF) - h(boxF.querySelector('table').tBodies[0].rows[0])), rows, verteilen: !!g.verteilen };   // headF: Kopf mit „Forts.“
       });
-      return { name: !!b.name, bar, barF, units };
+      const eh = b.name && b.kopfImBalken ? { bar: h(q(`[data-be="${bi}"]`)), weniger: units[0].h - h(q(`[data-o="${bi}"]`)) } : null;   // „€/kg“ im Balken, Block ohne Kopf
+      return { name: !!b.name, bar, barF, units, eh };
     });
     return { H: SEITE.h * h(q('[data-m="mm"]')) / 100 / zFaktor(st), secs, kopf1: h(q('[data-m="kopf1"]')), kopf2: h(q('[data-m="kopf2"]')), werb: h(q('[data-m="werb"]')),
       fuss: fuss ? h(q('[data-m="fuss"]')) : 0, trenn: h(q('[data-m="trenn"]')), G: ab('gruppe'), BAND: ab('band') };
@@ -91,8 +99,9 @@
 
   /* ---------- Verteilen ----------
      Rückgabe: Seiten [{ bands, y, K }] – bands: Zeilen der Seite, jede mit „teile“ (ein Bereich in 1–3 Spalten oder mehrere
-     Bereiche nebeneinander, zusammen drei Spalten): { si: Bereich, c: Spalten, forts, trenn, cols: [[{ gi, von, bis, forts, h }]] };
-     y: genutzte Höhe, K: verfügbare Höhe (unter Kopf und Werbung, über der Fußzeile). */
+     Bereiche nebeneinander, zusammen drei Spalten): { si: Bereich, c: Spalten, forts, trenn, cols: [[{ gi, von, bis, forts, h }]] },
+     oder ein Stapel mit „stapel“: drei Spalten, jede eine Liste solcher Teile (c = 1) untereinander; ein Teil mit eh trägt
+     „€/kg“ im Balken (Block ohne Kopf); y: genutzte Höhe, K: verfügbare Höhe (unter Kopf und Werbung, über der Fußzeile). */
   function setzen(m, modus) {
     const S = m.secs, n = S.length, G = m.G, jede = modus === 'jede' && m.fuss > 0;
     const kap = (p, res) => m.H - (p === 0 ? m.kopf1 + m.werb : m.kopf2) - (res ? m.fuss : 0);
@@ -147,13 +156,14 @@
         s.teile.push(...(st ? st.filter((x) => x.bis > x.von) : [ganz(u)]));
       }
     }
-    /* Blöcke in fester Reihenfolge ungeteilt auf c Spalten: höchste Spalte so niedrig wie möglich (wie am Bildschirm) */
-    const teilen = (us, c) => {
+    /* Einheiten mit Höhe h in fester Reihenfolge ungeteilt auf c Spalten, g Abstand dazwischen: höchste Spalte so niedrig wie
+       möglich (wie am Bildschirm). Einheiten sind die Blöcke eines Bereichs (Abstand G) oder ganze Bereiche eines Stapels. */
+    const teilen = (us, c, g = G) => {
       const k = us.length;
       c = Math.max(1, Math.min(c, k));
       const pre = [0];
       for (const u of us) pre.push(pre[pre.length - 1] + u.h);
-      const hoehe = (a, i) => pre[i] - pre[a] + G * (i - a - 1);
+      const hoehe = (a, i) => pre[i] - pre[a] + g * (i - a - 1);
       const f = [[0].concat(Array(k).fill(Infinity))], cut = [[]];
       for (let j = 1; j <= c; j++) {
         f[j] = [Infinity]; cut[j] = [0];
@@ -175,9 +185,14 @@
        Linie in derselben Höhe, wenn andere Bereiche Namen haben (hatNamen): seine Blöcke beginnen bündig mit denen der
        Nachbarn, gehören aber sichtbar nicht zu deren Balken. */
     const hatNamen = S.some((s) => s.name);
+    // Teil mit seiner Höhe: Balken bzw. Linie und Inhalt; „€/kg“ im Balken nur, wenn der Bereich ungeteilt in einer Spalte steht
+    const fertig = (t, c = t.c) => {
+      const s = S[t.si], trenn = !s.name && hatNamen, eh = !!s.eh && c === 1 && s.teile.length === 1;
+      return { ...t, c, trenn, eh, h: (trenn ? m.trenn : eh ? s.eh.bar : balken(s, c, t.forts)) + t.inhalt - (eh ? s.eh.weniger : 0) };
+    };
     const band = (teile) => {
       const rest = SPALTEN - teile.reduce((x, t) => x + t.c, 0);
-      const ts = teile.map((t, k) => { const s = S[t.si], c = t.c + (k === teile.length - 1 ? rest : 0), trenn = !s.name && hatNamen; return { ...t, c, trenn, h: (trenn ? m.trenn : balken(s, c, t.forts)) + t.inhalt }; });
+      const ts = teile.map((t, k) => fertig(t, t.c + (k === teile.length - 1 ? rest : 0)));
       return { teile: ts, h: Math.max(...ts.map((t) => t.h)) };
     };
     /* Zeile aus ganzen Bereichen ab Bereich i (ab seinem Block u0): der Bereich in 1–3 Spalten, dazu wahlweise die folgenden
@@ -196,6 +211,17 @@
         }
       };
       rec(i, SPALTEN, []);
+      /* Stapel ab Bereich i: mehr als drei ganze Bereiche mit Namen, jeder in einer Spalte, untereinander mit dem Abstand der
+         Zeilen. Ohne „teile“: ein Stapel wird nie um einen angefangenen Bereich ergänzt (seite). Höher als drei Seitenspalten
+         passt er nie – dort endet die Suche (sonst wächst die Rechenzeit mit der Zahl der Bereiche stark). */
+      const reihe = [];
+      let hoch = 0;
+      for (let j = i; j < n && S[j].name && S[j].teile.length - (j === i ? u0 : 0) <= STAPEL_BLOECKE; j++) {
+        const v = j === i ? u0 : 0, l = lage(j, v, S[j].teile.length, 1), t = fertig({ si: j, c: 1, forts: v > 0, cols: l.cols, inhalt: l.h });
+        reihe.push(t);
+        if ((hoch += t.h) > SPALTEN * m.H) break;
+        if (reihe.length > SPALTEN) { const sp = teilen(reihe, SPALTEN, m.BAND); out.push({ band: { stapel: sp.cols, h: sp.h }, bis: j + 1, frei: 0 }); }
+      }
       kmemo.set(key, out);
       return out;
     };
@@ -215,7 +241,7 @@
           const y = z.y + lueck + k.band.h, alt = best.get(k.bis);
           if (k.band.h <= R + EPS && (!alt || y < alt.y - EPS)) best.set(k.bis, { y, bands: z.bands.concat(k.band) });
         }
-        for (const pre of [{ teile: [], bis: i, frei: SPALTEN }].concat(ks.filter((k) => k.frei >= 1 && k.bis < n && k.band.h <= R + EPS))) {
+        for (const pre of [{ teile: [], bis: i, frei: SPALTEN }].concat(ks.filter((k) => k.teile && k.frei >= 1 && k.bis < n && k.band.h <= R + EPS))) {
           const j = pre.bis, s = S[j], v = j === i ? u0 : 0;
           let a = v, b = null;
           for (let e = v + 1; e < s.teile.length; e++) {
@@ -262,7 +288,7 @@
     return seiten;
   }
 
-  /* cfg: { host (#print-root), bereiche: [{ name, balken(forts), gruppen: [{ n, block(von, bis, forts), verteilen? }] }],
+  /* cfg: { host (#print-root), bereiche: [{ name, kopfImBalken?, balken(forts, eh), gruppen: [{ n, block(von, bis, forts, ohneKopf), verteilen? }] }],
             kopf(seite, seiten), werbung?, fuss?: {spalten, zeilen}, hinweis?: [Zeilen], modus: 'letzte' | 'jede', stufe?: Name einer Stufe }
      Rückgabe { html, seiten, spalten, geteilt, stufe, fuell: [Füllgrad je Seite in %] } – html ersetzt den Inhalt von host. */
   function liste(cfg) {
@@ -277,13 +303,15 @@
     } finally { host.classList.remove('pl-messen'); host.innerHTML = alt; }
     const { st, seiten } = wahl, N = seiten.length;
     let geteilt = 0, bereichForts = 0;
-    const band = (b) => `<div class="al-band">${b.teile.map((t) => {
+    const sec = (t) => {
       const ber = cfg.bereiche[t.si];
       if (t.forts && ber.name) bereichForts++;
       const cols = t.cols.concat(Array(Math.max(0, t.c - t.cols.length)).fill([]));   // weniger Blöcke als Spalten: die übrigen bleiben frei
-      return `<section class="al-sec" style="--c:${t.c}">${ber.name ? ber.balken(t.forts) : t.trenn ? TRENN : ''}
-        <div class="al-cols" style="--k:${t.c}">${cols.map((col) => `<div class="al-col">${col.map((fr) => { if (fr.forts) geteilt++; return ber.gruppen[fr.gi].block(fr.von, fr.bis, fr.forts); }).join('')}</div>`).join('')}</div></section>`;
-    }).join('')}</div>`;
+      return `<section class="al-sec" style="--c:${t.c}">${ber.name ? ber.balken(t.forts, t.eh) : t.trenn ? TRENN : ''}
+        <div class="al-cols" style="--k:${t.c}">${cols.map((col) => `<div class="al-col">${col.map((fr) => { if (fr.forts) geteilt++; return ber.gruppen[fr.gi].block(fr.von, fr.bis, fr.forts, t.eh); }).join('')}</div>`).join('')}</div></section>`;
+    };
+    const band = (b) => (b.stapel ? `<div class="al-band al-stapel">${b.stapel.map((sp) => `<div class="al-stapel-sp">${sp.map(sec).join('')}</div>`).join('')}</div>`
+      : `<div class="al-band">${b.teile.map(sec).join('')}</div>`);
     const fuell = seiten.map((s) => Math.round(100 * Math.min(1, s.y / Math.max(1, s.K))));
     const html = seiten.map((s, p) => `<section class="pl-page" data-fuell="${fuell[p]}"><div class="pl-in">${cfg.kopf(p + 1, N)}${p === 0 ? cfg.werbung || '' : ''}
       ${s.bands.map(band).join('')}${fuss && (modus === 'jede' || p === N - 1) ? fuss : ''}</div></section>`).join('');
