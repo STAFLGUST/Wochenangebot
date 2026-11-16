@@ -683,15 +683,18 @@ const plColsFor = (w) => (w >= 900 ? 3 : w >= 500 ? 2 : 1);   // drei Blöcke er
    Gruppe nur im ersten passenden Abschnitt, übrige Gruppen im ersten Abschnitt ohne Inhalt, sonst unter „Weitere Artikel“ am
    Ende – kein Artikel geht verloren (GR-010). Leere Abschnitte entfallen; Texte und Überschriften nur im ganzen Angebot
    (mitText, nicht bei Suche, Filter oder Merkliste). Am Bildschirm hat ein Abschnitt höchstens so viele Spalten wie die Breite
-   erlaubt (390 px: eine), die Reihenfolge bleibt. */
+   erlaubt (390 px: eine), die Reihenfolge bleibt. Nur bekannte Arten (PL_ARTEN): ein Abschnitt einer neueren Fassung fällt weg,
+   statt als Gruppen-Abschnitt alle übrigen Gruppen an sich zu ziehen (GR-006). Im Hochformat höchstens drei Spalten. */
 let DESIGN_VORSCHAU = null;   // Fenster „Design“ im Eingabebereich (app/module/angebot/design.js): ungespeichertes Design zur Vorschau
 const designAktiv = () => DESIGN_VORSCHAU || (DATA.meta && DATA.meta.design) || null;
 const spaltenOk = (n) => Number.isInteger(n) && n >= 1 && n <= 4;
-const plRaster = () => { const r = (designAktiv() || {}).raster || {}; return { spalten: spaltenOk(r.spalten) ? r.spalten : 3, format: r.format === 'hoch' ? 'hoch' : 'quer' }; };
+const PL_ARTEN = new Set(['gruppen', 'text']);
+const plRaster = () => { const r = (designAktiv() || {}).raster || {}, format = r.format === 'hoch' ? 'hoch' : 'quer'; return { spalten: Math.min(spaltenOk(r.spalten) ? r.spalten : 3, format === 'hoch' ? 3 : 4), format }; };
 const vollesAngebot = () => state.tab === 'all' && !hasFilters();
 function plAbschnitte(units, mitText) {
   const d = designAktiv(), K = plRaster().spalten, klein = (t) => String(t ?? '').trim().toLocaleLowerCase('de');
-  const ab = d && Array.isArray(d.abschnitte) && d.abschnitte.length ? d.abschnitte : [{ art: 'gruppen', inhalt: [] }];
+  const bekannt = (d && Array.isArray(d.abschnitte) ? d.abschnitte : []).filter((a) => a && PL_ARTEN.has(a.art));
+  const ab = bekannt.length ? bekannt : [{ art: 'gruppen', inhalt: [] }];
   const out = ab.map((a) => (a.art === 'text' ? { art: 'text', titel: a.titel || '', text: a.text || '' }
     : { art: 'gruppen', titel: a.titel || '', spalten: spaltenOk(a.spalten) ? a.spalten : K, rest: !(a.inhalt || []).length, units: [] }));
   const frei = new Set(units);
@@ -770,7 +773,7 @@ function buildPrintListe(list, grouped, scopeText) {
   return window.AngebotDruck.liste({
     host: $('#print-root'), kopf, werbung: scopeText || !grouped ? '' : werbungHTML(false, true),   // Werbung wie am Bildschirm: nur im gesamten Angebot
     fuss: f, hinweis: druckHinweis(), modus: FUSS_PARAM || (f && f.modus) || 'letzte', stufe: STUFE_PARAM, raster: plRaster(),
-    bereiche: abschnitte.flatMap((a, ab) => (a.art === 'text' ? [{ text: plTextHTML(a), kopf: !!a.kopf, ab }] : plSections(a.units).map((sec) => {
+    bereiche: abschnitte.flatMap((a, ab) => (a.art === 'text' ? [{ fest: plTextHTML(a), kopf: !!a.kopf, ab }] : plSections(a.units).map((sec) => {
       const n = sec.units.reduce((x, u) => x + u.items.length, 0);
       return {
         k: a.spalten, ab, name: sec.name,

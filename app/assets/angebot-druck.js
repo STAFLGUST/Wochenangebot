@@ -2,23 +2,23 @@
    Der Druck sieht aus wie die Vorschau (Angebotsansicht am Bildschirm): Kopf mit Logo und Titel, Bereiche als abgerundete
    Balken über den Spalten ihres Bereichs, Gruppen als Blöcke mit „€/kg“, abgerundete gestreifte Zeilen. Ohne Design drei
    Spalten quer; das Design des Angebots (Inhaber 16.11.2026, cfg.raster und je Bereich k/ab) legt Format (quer/hoch) und
-   Spalten je Abschnitt fest – Bereiche verschiedener Abschnitte stehen nie in einer Zeile, ein Text-Abschnitt (text) steht
-   über die ganze Breite und wird nie geteilt.
+   Spalten je Abschnitt fest (im Hochformat höchstens drei) – Bereiche verschiedener Abschnitte stehen nie in einer Zeile, ein
+   fester Block (fest: fertiges HTML, z. B. Text-Abschnitt oder Überschrift) steht über die ganze Breite und wird nie geteilt.
    Heißt die einzige Gruppe eines Bereichs wie der Bereich (kopfImBalken) und steht der Bereich in einer Spalte, trägt sein
    Balken „€/kg“ und der Block keinen eigenen Kopf (keine doppelte Überschrift; am Bildschirm bleibt der Kopf).
    Wochenangebot, Kundenangebote und Einzelangebote nutzen denselben Satz. Regeln:
    - Ein Block (Gruppe mit Kopf und allen Zeilen) steht immer vollständig in einer Spalte auf einer Seite.
    - Die Seiten werden fortlaufend gefüllt: jede Seite nimmt so viele Blöcke auf wie möglich. Die Blöcke eines Bereichs
      stehen in der Reihenfolge des Angebots nebeneinander in möglichst gleich hohen Spalten (links oben der erste Block);
-     kleine Bereiche stehen nebeneinander in einer Zeile, wenn das Höhe spart. Folgen mehr als drei Bereiche mit Namen,
-     mit höchstens zwei Blöcken (STAPEL_BLOECKE), dürfen sie als Stapel stehen: jeder einspaltig, in Reihenfolge von oben nach unten auf die drei Spalten verteilt –
+     kleine Bereiche stehen nebeneinander in einer Zeile, wenn das Höhe spart. Folgen mehr Bereiche mit Namen, als die Zeile
+     Spalten hat, mit höchstens zwei Blöcken (STAPEL_BLOECKE), dürfen sie als Stapel stehen: jeder einspaltig, in Reihenfolge von oben nach unten auf die Spalten verteilt –
      so füllen kurze Bereiche die Lücke unter ihrem Vorgänger, statt dass der höchste Nachbar die Zeile bestimmt
      (Wunsch des Inhabers 16.11.2026: weniger freie Flächen im Druck).
    - Ein Bereich beginnt auf der laufenden Seite, sobald sein Balken und mindestens ein ganzer Block Platz haben. Umbrochen
      wird nur zwischen Blöcken; auf der nächsten Seite steht der Balken noch einmal („Forts.“).
    - Einzige Ausnahme vom ungeteilten Block: eine Gruppe, die allein höher ist als eine ganze Seitenspalte, wird in gleich
      hohe Teile zerlegt (Gruppenkopf mit „Forts.“), die wie Blöcke gesetzt werden. Die sortierte Gesamtliste ohne Gruppen
-     („verteilen“) wird gleichmäßig auf die drei Spalten jeder Seite verteilt.
+     („verteilen“) wird gleichmäßig auf die Spalten jeder Seite verteilt.
    - Dichte: gesetzt wird in drei festen Stufen (STUFEN: normal, kompakt, eng – Schrift 8,3 / 7,9 / 7,5 pt, dazu knappere
      Zeilen und Abstände in angebot-druck.css). Gewählt wird automatisch die größte Schrift, mit der das Angebot nicht mehr
      Seiten braucht als mit der kleinsten (cfg.stufe legt eine Stufe fest, zum Vergleich).
@@ -29,7 +29,7 @@
    Fußzeile des Briefbogens stehen am Fuß der letzten Seite („letzte“, Vorgabe) oder jeder Seite („jede“); der Platz dafür
    ist freigehalten (nichts wird überdeckt).
    Kein Zugriff auf Daten: frontend.js liefert fertige HTML-Bausteine (nur aufgelöste Angebotsdaten, GR-001/GR-002).
-   Schnittstelle: window.AngebotDruck = { liste(cfg), fussHTML(fuss, hinweis, art), SEITE, SEITEN, STUFEN }. */
+   Schnittstelle: window.AngebotDruck = { liste(cfg), fussHTML(fuss, hinweis, art), SEITE, STUFEN }. */
 (function (root) {
   'use strict';
   const SEITE = { b: 279, h: 193 };          // Satzspiegel in mm (A4 quer 297 × 210, Ränder 9 mm seitlich, 8 mm oben/unten, 1 mm Reserve)
@@ -74,7 +74,7 @@
     let col = '', balken = '';
     cfg.bereiche.forEach((b, bi) => {
       const K = b.k, cs = Array.from({ length: K }, (_, i) => i + 1);
-      if (b.text) { balken += `<div class="pl-m pl-mb" data-t="${bi}" style="--c:${K};--k:${K}">${textHTML(b)}</div>`; return; }
+      if (b.fest) { balken += `<div class="pl-m pl-mb" data-t="${bi}" style="--c:${K};--k:${K}">${festHTML(b)}</div>`; return; }
       if (b.name) balken += cs.map((c) => `<div class="pl-m pl-mb" data-b="${bi}.${c}" style="--c:${c};--k:${K}">${b.balken(false)}</div><div class="pl-m pl-mb" data-bf="${bi}.${c}" style="--c:${c};--k:${K}">${b.balken(true)}</div>`).join('');
       let c1 = '';
       if (b.kopfImBalken) { balken += `<div class="pl-m pl-mb" data-be="${bi}" style="--c:1;--k:${K}">${b.balken(false, true)}</div>`; c1 += `<div data-o="${bi}" class="pl-m">${b.gruppen[0].block(0, b.gruppen[0].n, false, true)}</div>`; }
@@ -91,7 +91,7 @@
     const stil = getComputedStyle(q('.pl-doc')), ab = (n) => parseFloat(stil.getPropertyValue('--ab-' + n)) || 0;
     const secs = cfg.bereiche.map((b, bi) => {
       const bar = Array(b.k + 1).fill(0), barF = Array(b.k + 1).fill(0), basis = { k: b.k, ab: b.ab };
-      if (b.text) { const th = h(q(`[data-t="${bi}"]`)); return { ...basis, name: false, text: true, kopf: !!b.kopf, bar, barF, units: [{ gi: 0, h: th, head: th, headF: th, rows: [], fest: true }], eh: null }; }
+      if (b.fest) { const th = h(q(`[data-t="${bi}"]`)); return { ...basis, name: false, fest: true, kopf: !!b.kopf, bar, barF, units: [{ gi: 0, h: th, head: th, headF: th, rows: [], fest: true }], eh: null }; }
       if (b.name) for (let c = 1; c <= b.k; c++) { bar[c] = h(q(`[data-b="${bi}.${c}"]`)); barF[c] = h(q(`[data-bf="${bi}.${c}"]`)); }
       const units = b.gruppen.map((g, gi) => {
         const box = q(`[data-g="${bi}.${gi}"]`), boxF = q(`[data-f="${bi}.${gi}"]`);
@@ -133,21 +133,27 @@
 
     /* Besteht der Druck aus einem einzigen Block (Einzelangebot, sortierte Gesamtliste ohne Gruppen, Auswahl aus einer Gruppe),
        wird er gleichmäßig über die Spalten so weniger Seiten wie möglich verteilt – sonst bliebe er in einer Spalte.
-       Ab MIN_ZEILEN Zeilen je Spalte; die sortierte Gesamtliste („verteilen“) immer. */
-    const u1 = n === 1 && S[0].units.length === 1 && !S[0].text ? S[0].units[0] : null;
-    if (u1 && (u1.verteilen || u1.rows.length >= S[0].k * MIN_ZEILEN)) {
-      const u = u1, s = S[0], K = s.k;
+       Ab MIN_ZEILEN Zeilen je Spalte; die sortierte Gesamtliste („verteilen“) immer. Führende Überschriften (kopf) stehen auf
+       Seite 1 über die ganze Breite darüber; ihre Höhe fehlt dort jeder Spalte. */
+    let v1 = 0;
+    while (v1 < n - 1 && S[v1].kopf) v1++;
+    const u1 = n === v1 + 1 && S[v1].units.length === 1 && !S[v1].fest ? S[v1].units[0] : null;
+    if (u1 && (u1.verteilen || u1.rows.length >= S[v1].k * MIN_ZEILEN)) {
+      const u = u1, s = S[v1], K = s.k;
+      const koepfe = S.slice(0, v1).map((x, si) => ({ teile: [{ si, c: x.k }], h: x.units[0].h, k: x.k }));
+      const oben = summe(koepfe.map((b) => b.h + m.BAND));   // Überschriften samt Zeilenabstand darunter
       for (let P = 1; P <= 400; P++) {
         const res = (p) => m.fuss > 0 && (jede || p === P - 1), caps = [];
-        for (let p = 0; p < P; p++) for (let c = 0; c < K; c++) caps.push(Math.max(0, kap(p, res(p)) - balken(s, K, p > 0) - (caps.length ? u.headF : u.head)));
+        for (let p = 0; p < P; p++) for (let c = 0; c < K; c++) caps.push(Math.max(0, kap(p, res(p)) - (p === 0 ? oben : 0) - balken(s, K, p > 0) - (caps.length ? u.headF : u.head)));
         const st = summe(caps) + EPS < summe(u.rows) ? null : stuecke(u, caps);
         if (!st) continue;
         const seiten = [];
         for (let p = 0; p < P; p++) {
           const cols = st.slice(p * K, (p + 1) * K).filter((x) => x.bis > x.von).map((x) => [x]);
           if (!cols.length && p > 0) continue;
-          const y = cols.length ? balken(s, K, p > 0) + Math.max(...cols.map((c) => c[0].h)) : 0;
-          seiten.push({ bands: cols.length ? [{ teile: [{ si: 0, c: K, forts: p > 0, cols }], h: y, k: K }] : [], y, K: kap(p, res(p)) });
+          const block = cols.length ? [{ teile: [{ si: v1, c: K, forts: p > 0, cols }], h: balken(s, K, p > 0) + Math.max(...cols.map((c) => c[0].h)), k: K }] : [];
+          const bands = (p === 0 ? koepfe : []).concat(block);
+          seiten.push({ bands, y: summe(bands.map((b) => b.h)) + m.BAND * Math.max(0, bands.length - 1), K: kap(p, res(p)) });
         }
         return seiten;
       }
@@ -188,15 +194,15 @@
     };
     const memo = new Map();
     const lage = (si, a, b, c) => { const key = si + '.' + a + '.' + b + '.' + c; if (!memo.has(key)) memo.set(key, teilen(S[si].teile.slice(a, b), c)); return memo.get(key); };
-    /* Fertige Zeile aus Teilen ({ si, c, forts, cols, inhalt: Höhe der Blöcke }) mit ihrer Höhe. Jede Zeile ist genau drei
-       Spalten breit: der letzte Bereich der Zeile bekommt die Spalten, die rechts übrig sind (sein Balken reicht bis zum Rand;
+    /* Fertige Zeile aus Teilen ({ si, c, forts, cols, inhalt: Höhe der Blöcke }) mit ihrer Höhe. Jede Zeile ist genau so breit,
+       wie ihr Abschnitt Spalten hat (k): der letzte Bereich der Zeile bekommt die Spalten, die rechts übrig sind (sein Balken reicht bis zum Rand;
        ein Bereich allein also über die ganze Breite, wie am Bildschirm). Ein Bereich ohne Namen trägt statt des Balkens eine
        Linie in derselben Höhe, wenn andere Bereiche Namen haben (hatNamen): seine Blöcke beginnen bündig mit denen der
        Nachbarn, gehören aber sichtbar nicht zu deren Balken. */
     const hatNamen = S.some((s) => s.name);
     // Teil mit seiner Höhe: Balken bzw. Linie und Inhalt; „€/kg“ im Balken nur, wenn der Bereich ungeteilt in einer Spalte steht
     const fertig = (t, c = t.c) => {
-      const s = S[t.si], trenn = !s.name && !s.text && hatNamen, eh = !!s.eh && c === 1 && s.teile.length === 1;
+      const s = S[t.si], trenn = !s.name && !s.fest && hatNamen, eh = !!s.eh && c === 1 && s.teile.length === 1;
       return { ...t, c, trenn, eh, h: (trenn ? m.trenn : eh ? s.eh.bar : balken(s, c, t.forts)) + t.inhalt - (eh ? s.eh.weniger : 0) };
     };
     const band = (teile) => {
@@ -206,7 +212,7 @@
     };
     /* Zeile aus ganzen Bereichen ab Bereich i (ab seinem Block u0): der Bereich in 1–K Spalten, dazu wahlweise die folgenden
        Bereiche desselben Abschnitts nebeneinander (zusammen höchstens K Spalten); frei = Spalten, die rechts noch übrig sind.
-       Ein Text-Abschnitt steht allein über alle K Spalten. */
+       Ein fester Block steht allein über alle K Spalten. */
     const kmemo = new Map();
     const kandidaten = (i, u0) => {
       const key = i + '.' + u0;
@@ -214,15 +220,15 @@
       const out = [], K = S[i].k, ab = S[i].ab;
       const rec = (j, frei, teile) => {
         const s = S[j], v = j === i ? u0 : 0, forts = v > 0, anz = s.teile.length - v;
-        for (let c = s.text ? frei : 1; c <= (s.text ? frei : Math.min(frei, anz)); c++) {
+        for (let c = s.fest ? frei : 1; c <= (s.fest ? frei : Math.min(frei, anz)); c++) {
           const l = lage(j, v, s.teile.length, c), t = teile.concat({ si: j, c, forts, cols: l.cols, inhalt: l.h });
           out.push({ teile: t, band: band(t), bis: j + 1, frei: frei - c });
           if (j + 1 < n && frei - c >= 1 && S[j + 1].ab === ab) rec(j + 1, frei - c, t);
         }
       };
       rec(i, K, []);
-      /* Stapel ab Bereich i: mehr als drei ganze Bereiche mit Namen, jeder in einer Spalte, untereinander mit dem Abstand der
-         Zeilen. Ohne „teile“: ein Stapel wird nie um einen angefangenen Bereich ergänzt (seite). Höher als drei Seitenspalten
+      /* Stapel ab Bereich i: mehr als K ganze Bereiche mit Namen, jeder in einer Spalte, untereinander mit dem Abstand der
+         Zeilen. Ohne „teile“: ein Stapel wird nie um einen angefangenen Bereich ergänzt (seite). Höher als K Seitenspalten
          passt er nie – dort endet die Suche (sonst wächst die Rechenzeit mit der Zahl der Bereiche stark). */
       const reihe = [];
       let hoch = 0;
@@ -299,19 +305,20 @@
     return seiten;
   }
 
-  /* Text-Abschnitt des Designs: fertiges HTML (Überschrift und Text, von frontend.js escaped) */
-  const textHTML = (b, c) => `<section class="al-sec pl-text"${c ? ` style="--c:${c}"` : ''}>${b.text}</section>`;
+  /* Fester Block über die ganze Breite: fertiges HTML (Text-Abschnitt des Designs, von frontend.js escaped) */
+  const festHTML = (b, c) => `<section class="al-sec pl-fest"${c ? ` style="--c:${c}"` : ''}>${b.fest}</section>`;
 
-  /* cfg: { host (#print-root), raster?: { spalten 1–4, format 'quer' | 'hoch' } (ohne: drei Spalten quer),
+  /* cfg: { host (#print-root), raster?: { spalten 1–4, format 'quer' | 'hoch' } (ohne: drei Spalten quer; hoch: höchstens drei),
             bereiche: [{ name, kopfImBalken?, balken(forts, eh), gruppen: [{ n, block(von, bis, forts, ohneKopf), verteilen? }], k?, ab? }
-                       | { text: HTML, kopf?, k?, ab? }] – kopf: Überschrift, die mit dem folgenden Abschnitt auf die Seite kommt; k: Spalten des Abschnitts (Vorgabe raster.spalten), ab: Abschnitt (Bereiche
+                       | { fest: HTML eines unteilbaren Blocks über die ganze Breite, kopf?, k?, ab? }] – kopf: Überschrift, die mit dem folgenden Abschnitt auf die Seite kommt; k: Spalten des Abschnitts (Vorgabe raster.spalten), ab: Abschnitt (Bereiche
                        verschiedener Abschnitte stehen nie in einer Zeile; ohne Angabe alle in einem),
             kopf(seite, seiten), werbung?, fuss?: {spalten, zeilen}, hinweis?: [Zeilen], modus: 'letzte' | 'jede', stufe?: Name einer Stufe }
      Rückgabe { html, seiten, spalten, format, geteilt, stufe, fuell: [Füllgrad je Seite in %] } – html ersetzt den Inhalt von host. */
   function liste(cfg0) {
     const format = cfg0.raster && cfg0.raster.format === 'hoch' ? 'hoch' : 'quer', seite = SEITEN[format];
-    const K0 = cfg0.raster && cfg0.raster.spalten >= 1 && cfg0.raster.spalten <= 4 ? cfg0.raster.spalten : SPALTEN;
-    const cfg = { ...cfg0, seite, bereiche: cfg0.bereiche.map((b) => ({ ...b, k: b.k >= 1 && b.k <= 4 ? b.k : K0, ab: b.ab ?? 0 })) };
+    const KMAX = format === 'hoch' ? 3 : 4;   // im Hochformat würden vier Spalten die Bezeichnungen Buchstabe für Buchstabe umbrechen
+    const K0 = Math.min(KMAX, cfg0.raster && cfg0.raster.spalten >= 1 && cfg0.raster.spalten <= 4 ? cfg0.raster.spalten : SPALTEN);
+    const cfg = { ...cfg0, seite, bereiche: cfg0.bereiche.map((b) => ({ ...b, k: Math.min(KMAX, b.k >= 1 && b.k <= 4 ? b.k : K0), ab: b.ab ?? 0 })) };
     const host = cfg.host, modus = cfg.modus === 'jede' ? 'jede' : 'letzte';
     const stil = (st) => `--z:${zFaktor(st)}` + (format === 'hoch' ? `;--sb:${seite.b}mm;--sh:${seite.h}mm` : '');
     const fuss = fussHTML(cfg.fuss, cfg.hinweis, 'quer');
@@ -326,7 +333,7 @@
     let geteilt = 0, bereichForts = 0;
     const sec = (t) => {
       const ber = cfg.bereiche[t.si];
-      if (ber.text) return textHTML(ber, t.c);
+      if (ber.fest) return festHTML(ber, t.c);
       if (t.forts && ber.name) bereichForts++;
       const cols = t.cols.concat(Array(Math.max(0, t.c - t.cols.length)).fill([]));   // weniger Blöcke als Spalten: die übrigen bleiben frei
       return `<section class="al-sec" style="--c:${t.c}">${ber.name ? ber.balken(t.forts, t.eh) : t.trenn ? TRENN : ''}
@@ -341,5 +348,5 @@
       seiten: N, spalten: K0, format, geteilt, stufe: st.name, fuell };
   }
 
-  root.AngebotDruck = { liste, fussHTML, SEITE, SEITEN, STUFEN };
+  root.AngebotDruck = { liste, fussHTML, SEITE, STUFEN };
 })(window);

@@ -62,10 +62,10 @@
 #print-root .pl-doc .al-st > .al-eh { font-size: 13px; font-weight: 650; color: #111; }
 #print-root .pl-doc .al-cols { display: grid; grid-template-columns: repeat(var(--k, 3), minmax(0, 1fr)); column-gap: var(--ab-spalte); align-items: start; }
 /* Text-Abschnitt des Designs: Überschrift und Text über die ganze Breite, Linie links in der Akzentfarbe */
-#print-root .pl-doc .pl-text { margin: 0; padding: 2px 0 2px 14px; border-left: 3px solid var(--accent); }
-#print-root .pl-doc .pl-text h3 { margin: 0; font-size: 15px; font-weight: 650; line-height: 1.3; color: var(--text); }
-#print-root .pl-doc .pl-text p { margin: 3px 0 0; font-size: 13px; line-height: 1.45; color: var(--text-2); overflow-wrap: anywhere; }
-#print-root .pl-doc .pl-text h3:only-child { color: var(--accent); }
+#print-root .pl-doc .pl-fest { margin: 0; padding: 2px 0 2px 14px; border-left: 3px solid var(--accent); }
+#print-root .pl-doc .pl-fest h3 { margin: 0; font-size: 15px; font-weight: 650; line-height: 1.3; color: var(--text); }
+#print-root .pl-doc .pl-fest p { margin: 3px 0 0; font-size: 13px; line-height: 1.45; color: var(--text-2); overflow-wrap: anywhere; }
+#print-root .pl-doc .pl-fest h3:only-child { color: var(--accent); }
 #print-root .pl-doc .al-col { min-width: 0; padding: 0; border: 0; display: flex; flex-direction: column; gap: var(--ab-gruppe); container-type: normal; }
 
 /* Gruppen: Tabellen wie in der Vorschau */
