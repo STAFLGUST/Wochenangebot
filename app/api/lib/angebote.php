@@ -272,6 +272,7 @@ function offer_resolve(array $m, array $def, bool $ausverkauftAusblenden = true)
     $m['sections'] = $secs;
     $m['items'] = $items;
     unset($m['meta']['source'], $m['meta']['sheetName']);   // Dateiname/Blatt der Excel-Datei sind intern
+    unset($m['meta']['design']);   // Design-Schnappschüsse aller Angebote (ab #379): nie ungefiltert ausliefern, auch nicht nach einem Rückfall
     // Werbung: nur der Eintrag dieses Angebots und nur Artikel, die ausgeliefert werden – nie die anderer Angebote.
     // Bis zu zwei Blöcke (erster im Eintrag, zweiter in „weitere“); ein leerer erster Block rückt den zweiten nach vorn.
     $w = is_array($m['meta']['werbung'] ?? null) ? ($m['meta']['werbung'][$def['id']] ?? null) : null;
