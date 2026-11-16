@@ -14,14 +14,13 @@ declare(strict_types=1);
    unter neuer Kennung (z. B. in eine neue Version), ablage_lesen() liefert den Inhalt (nur bis ABLAGE_LESEN_MAX).
    Große Dateien: Zusammensetzen, Prüfsumme und Kopfprüfung arbeiten auf der Datei, nie auf dem ganzen Inhalt im Speicher.
    ZIP-Export: ablage_zip_senden() schreibt ein ZIP (Methode „stored“, UTF-8-Namen) direkt in die Antwort – ohne die
-   PHP-Erweiterung „zip“ und ohne das ganze Archiv im Speicher zu halten. */
+   PHP-Erweiterung „zip“ und ohne das ganze Archiv im Speicher zu halten; ab 4 GB bzw. 65535 Einträgen mit Zip64-Feldern. */
 if (!defined('WA_API')) { http_response_code(404); exit; }   // nur über api/index.php nutzbar
 
 const ABLAGE_TEIL_MAX = 3 * 1024 * 1024;        // Bytes je Teil (Base64 ≈ 4 MB, unter der Grenze des API-Einstiegs)
 const ABLAGE_DATEI_MAX = 250 * 1024 * 1024;     // Bytes je Datei (Inhaber 16.11.2026: ganzes QM-System mit Videos und ZIP)
 const ABLAGE_LESEN_MAX = 25 * 1024 * 1024;      // ablage_lesen() hält die Datei im Speicher (Office-Füllung unter memory_limit 128M)
 const ABLAGE_UPLOAD_STUNDEN = 24;               // unvollständige Uploads werden danach entfernt
-const ABLAGE_ZIP_MAX = 3500 * 1024 * 1024;      // ZIP ohne Zip64: unter 4 GB bleiben
 /* Erlaubte Dateiarten: Endung → [MIME-Typ, Kopfprüfung aus ABLAGE_KOEPFE bzw. „text“/„binaer“]. Unbekannte Endungen bleiben
    abgelehnt. Bewusst nie erlaubt sind Arten, die beim Öffnen Code ausführen: im Browser html, htm, xhtml, svg, js, unter
    Windows exe, com, scr, msi, bat, cmd, ps1, vbs, jar, hta, lnk, reg. Der Inhalt eines ZIP-Archivs wird nicht geprüft. */
@@ -264,10 +263,11 @@ function ablage_senden(string $bereich, string $id, string $name, string $mime):
     exit;
 }
 
-/* ---------- ZIP-Export (Methode „stored“, ohne Zip64) ----------
+/* ---------- ZIP-Export (Methode „stored“) ----------
    $eintraege: Liste von ['pfad' => 'Ordner/Datei.pdf', 'bereich' => …, 'id' => …] (Datei aus der Ablage) oder
    ['pfad' => …, 'inhalt' => string] (z. B. eine CSV). Pfade mit „/“, UTF-8; doppelte Pfade bekommen „ (2)“ usw.
-   Fehlende Dateien werden übersprungen und in „Hinweise.txt“ vermerkt. */
+   Fehlende Dateien werden übersprungen und in „Hinweise.txt“ vermerkt. Jeder Eintrag bleibt unter 4 GB (ABLAGE_DATEI_MAX);
+   Zip64 braucht es nur für den Versatz ab 4 GB und ab 65535 Einträgen. */
 function ablage_zip_pfad(string $teil): string
 {
     $t = preg_replace('/[\x00-\x1f\x7f<>:"\/\\\\|?*]+/u', '-', $teil) ?? '';
@@ -278,7 +278,7 @@ function ablage_zip_pfad(string $teil): string
 function ablage_zip_senden(string $dateiname, array $eintraege): void
 {
     @set_time_limit(0);
-    $fehlend = []; $liste = []; $gesehen = []; $summe = 0;
+    $fehlend = []; $liste = []; $gesehen = [];
     foreach ($eintraege as $e) {
         $pfad = (string)$e['pfad'];
         if (isset($e['id'])) {
@@ -295,14 +295,12 @@ function ablage_zip_senden(string $dateiname, array $eintraege): void
         }
         $gesehen[mb_strtolower($pfad)] = true;
         $e['pfad'] = $pfad;
-        $summe += $e['groesse'];
         $liste[] = $e;
     }
     if ($fehlend) {
         $wurzel = strpos((string)($liste[0]['pfad'] ?? ''), '/') !== false ? explode('/', (string)$liste[0]['pfad'])[0] . '/' : '';
         $liste[] = ['pfad' => $wurzel . 'Hinweise.txt', 'inhalt' => "Folgende Dateien fehlen in der Ablage und sind nicht enthalten:\r\n" . implode("\r\n", $fehlend) . "\r\n", 'groesse' => 0];
     }
-    if ($summe > ABLAGE_ZIP_MAX) fail('Der Export ist zu groß für ein ZIP-Archiv. Bitte nach Kapitel exportieren.', 413);
     header('Content-Type: application/zip');
     header('Content-Disposition: ' . ablage_disposition($dateiname));
     header('Cache-Control: private, no-store');
@@ -320,10 +318,15 @@ function ablage_zip_senden(string $dateiname, array $eintraege): void
         echo $kopf;
         if (isset($e['datei'])) { $fh = fopen($e['datei'], 'rb'); while (!feof($fh)) { echo fread($fh, 1048576); flush(); } fclose($fh); }
         else echo $inhalt;
-        $verz .= "PK\x01\x02" . pack('vvvvvvVVVvvvvvVV', 20, 20, 0x0800, 0, $zeit, $datum, $crc, $len, $len, strlen($name), 0, 0, 0, 0, 0, $off) . $name;
+        $z64 = $off >= 0xFFFFFFFF;   // Versatz passt nicht in 32 Bit: 0xFFFFFFFF und Zip64-Zusatzfeld (Kennung 1) mit dem Versatz
+        $verz .= "PK\x01\x02" . pack('vvvvvvVVVvvvvvVV', $z64 ? 45 : 20, $z64 ? 45 : 20, 0x0800, 0, $zeit, $datum, $crc, $len, $len, strlen($name), $z64 ? 12 : 0, 0, 0, 0, 0, min($off, 0xFFFFFFFF))
+              . $name . ($z64 ? pack('vvP', 1, 8, $off) : '');
         $off += strlen($kopf) + $len;
         $n++;
     }
-    echo $verz . "PK\x05\x06" . pack('vvvvVVv', 0, 0, $n, $n, strlen($verz), $off, 0);
+    $ende = '';
+    if ($off >= 0xFFFFFFFF || $n >= 0xFFFF)   // Zip64-Ende des Verzeichnisses und Verweis darauf vor dem gewöhnlichen Ende
+        $ende = "PK\x06\x06" . pack('PvvVVPPPP', 44, 45, 45, 0, 0, $n, $n, strlen($verz), $off) . "PK\x06\x07" . pack('VPV', 0, $off + strlen($verz), 1);
+    echo $verz . $ende . "PK\x05\x06" . pack('vvvvVVv', 0, 0, min($n, 0xFFFF), min($n, 0xFFFF), strlen($verz), min($off, 0xFFFFFFFF), 0);
     exit;
 }

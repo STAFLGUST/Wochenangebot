@@ -2,7 +2,7 @@
 
 <!-- ERZEUGT von `python3 werkzeuge/doku.py erzeugen` – nicht von Hand ändern. Quelle: Funktionen und Kommentare im Code. Die CI prüft, dass diese Datei zum Code passt. -->
 
-117 Dateien, 1182 Funktionen – in der Reihenfolge der Datei, **fett** die Abschnitte. Text = erste Aussage des Kommentars direkt über der Funktion (Python: Docstring). Übersicht aller Module: [README.md](README.md).
+119 Dateien, 1187 Funktionen – in der Reihenfolge der Datei, **fett** die Abschnitte. Text = erste Aussage des Kommentars direkt über der Funktion (Python: Docstring). Übersicht aller Module: [README.md](README.md).
 
 ## `.github/scripts/apt_vorrat.py`
 
@@ -194,7 +194,7 @@ _Dateiablage der Plattform (neben der Speicherschicht): hochgeladene Dateien ein
 - `ablage_disposition(name)` – Content-Disposition mit ASCII-Ersatz und UTF-8-Namen (RFC 6266/5987)
 - `ablage_senden(bereich, id, name, mime)` – Datei als Download senden und beenden; fehlt sie, 404 (JSON)
 
-**ZIP-Export (Methode „stored“, ohne Zip64)**
+**ZIP-Export (Methode „stored“)**
 
 - `ablage_zip_pfad(teil)`
 - `ablage_zip_senden(dateiname, eintraege)`
@@ -1796,6 +1796,13 @@ _Startet für jede Testgruppe einen frischen PHP-Server mit Testdaten und führt
 - `main()`
 - `worker(items)`
 
+## `tests/unit/dateiablage_zip.php`
+
+_Hilfsskript für tests/unit/test_dateiablage_zip.py_
+
+- `store_ordner(bereich)`
+- `store_getrennt()`
+
 ## `tests/unit/test_adressen.py`
 
 _Adressverzeichnis der CRM-Karte_
@@ -1822,6 +1829,14 @@ _Nachweis „schon im Pull Request vollständig geprüft“ (.github/scripts/ci_
 - `suche(w, tree, sha)`
 - `wackelig(p, _api)`
 - `merken(p, _api)`
+
+## `tests/unit/test_dateiablage_zip.py`
+
+_ZIP-Export der Dateiablage (app/api/lib/dateiablage.php, ablage_zip_senden) über die Grenzen des klassischen ZIP-Formats: kleines Archiv ohne Zip64-Felder; Versatz über 4 GB (18 Dateien zu 250 MB, als Lücken-Dateien …_
+
+- `check(n, c, i)`
+- `export(wurzel, eintraege, ziel)` – ZIP über das Hilfsskript erzeugen; lange Nullfolgen als Lücke schreiben (die Testdateien bestehen fast nur aus Nullen)
+- `datei(i, inhalt, groesse)`
 
 ## `tests/unit/test_doku.py`
 
