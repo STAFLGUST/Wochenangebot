@@ -18,7 +18,7 @@
 #print-root .pl-doc { --z: .85039; width: 279mm; margin: 0; border: 0; border-radius: 0; box-shadow: none; padding: 0; background: #fff; color: #0b0b0b; font-family: var(--font); font-variant-numeric: tabular-nums;
   -webkit-backdrop-filter: none; backdrop-filter: none;
   --text: #0b0b0b; --text-2: #4d4648; --muted: #6d6669; --accent: #8c1d2c; --accent-soft: #f9eeef; --accent-line: #ebc6cb; --sale: #c2410c; --sale-bg: #fff1e6;
-  --aus: #f0efef; --zebra: #f7f6f6; --regel: #d4d3d3;
+  --aus: #e0dfde; --zebra: #ebeae9; --regel: #d4d3d3;
   /* Stufe „normal“: Zeilenhöhe, Abstand zwischen Blöcken / unter dem Balken / zwischen Zeilen von Bereichen / zwischen Spalten / unter dem Kopf, Polster des Balkens */
   --zeile: 24px; --ab-gruppe: 12px; --ab-balken: 8px; --ab-band: 14px; --ab-spalte: 30px; --ab-kopf: 14px; --p-balken: 6px; --logo: 54px; }
 #print-root .pl-doc.pl-kompakt { --zeile: 23px; --ab-gruppe: 10px; --ab-balken: 7px; --ab-band: 12px; --ab-spalte: 28px; --ab-kopf: 12px; --p-balken: 5px; --logo: 52px; }
@@ -50,10 +50,14 @@
 /* Bereiche: Zeilen aus drei Spalten, ein Bereich über die Spalten seiner Gruppen, Balken abgerundet */
 #print-root .pl-doc .al-band { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); column-gap: var(--ab-spalte); align-items: start; margin: 0 0 var(--ab-band); }
 #print-root .pl-doc .al-band > .al-sec { grid-column: span var(--c, 1); min-width: 0; margin: 0; }
+#print-root .pl-doc .al-stapel-sp { min-width: 0; display: flex; flex-direction: column; gap: var(--ab-band); }   /* Stapel: Bereiche einer Spalte untereinander */
+#print-root .pl-doc .al-stapel-sp > .al-sec { min-width: 0; margin: 0; }
 #print-root .pl-doc .al-st { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; margin: 0 0 var(--ab-balken); padding: var(--p-balken) 14px; background: var(--aus); border-radius: 14px; box-shadow: none; visibility: visible; }
 #print-root .pl-doc .al-st.pl-trenn { background: linear-gradient(var(--regel), var(--regel)) center / 100% 2px no-repeat; border-radius: 0; }   /* Bereich ohne Namen: Linie in der Höhe eines Balkens (gehört zu keinem Nachbarbereich) */
 #print-root .pl-doc .al-st h3 { margin: 0; font-size: 15px; font-weight: 650; line-height: 1.25; letter-spacing: -.005em; text-transform: none; }
 #print-root .pl-doc .al-st > span { flex: none; font-size: 12px; color: #68685f; white-space: nowrap; }
+#print-root .pl-doc .al-st.al-st-eh > span:not(.al-eh) { margin-left: auto; }   /* Balken mit „€/kg“ (Gruppe heißt wie ihr Bereich): Anzahl und „€/kg“ rechts */
+#print-root .pl-doc .al-st > .al-eh { font-size: 13px; font-weight: 650; color: #111; }
 #print-root .pl-doc .al-cols { display: grid; grid-template-columns: repeat(var(--k, 3), minmax(0, 1fr)); column-gap: var(--ab-spalte); align-items: start; }
 #print-root .pl-doc .al-col { min-width: 0; padding: 0; border: 0; display: flex; flex-direction: column; gap: var(--ab-gruppe); container-type: normal; }
 

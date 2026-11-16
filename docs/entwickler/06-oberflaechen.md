@@ -494,13 +494,19 @@ Leiste senkrecht, schmal ist sie eine waagerechte Spur. Mit `body.bereich-import
     Druckgröße und verteilt sie rechnerisch auf Seiten fester Höhe (`.pl-page`, 279 × 193 mm):
     immer drei Spalten; ein Block wird nie geteilt; jede Seite nimmt so viele Blöcke auf wie möglich; ein Bereich beginnt
     auf der laufenden Seite, sobald sein Balken und ein ganzer Block Platz haben, und wird nur zwischen Blöcken umbrochen
-    (Balken auf der nächsten Seite mit „Forts.“); kleine Bereiche stehen nebeneinander. Ausnahmen: eine Gruppe, die allein
+    (Balken auf der nächsten Seite mit „Forts.“); kleine Bereiche stehen nebeneinander. Folgen mehr als drei kleine
+    Bereiche (höchstens zwei Blöcke, `STAPEL_BLOECKE`), dürfen sie als Stapel stehen (`.al-band.al-stapel`): jeder
+    einspaltig, in Angebotsreihenfolge von oben nach unten auf die drei Spalten verteilt – so füllen kurze Bereiche die
+    Lücke unter ihrem Vorgänger. Heißt die einzige Gruppe eines Bereichs wie der Bereich (eine Preisspalte), entfällt ihr
+    Kopf; „€/kg“ steht dann im Balken (`.al-st-eh`). Ausnahmen: eine Gruppe, die allein
     höher ist als eine Seite, und ein einzelner Block (Einzelangebot ab 9 Positionen, sortierte Liste ohne Gruppen) werden
     in gleich hohe Teile zerlegt (Gruppenkopf mit „Forts.“). Ein Bereich ohne Namen trägt eine Linie statt des Balkens.
   - **Dichte:** drei Stufen (`STUFEN`: normal 8,3 pt, kompakt 7,9 pt, eng 7,5 pt; Zeilenhöhe und Abstände je Stufe als
     Variablen `--zeile`, `--ab-…` an `.pl-doc` in `angebot-druck.css` – nur dort). Der Satz rechnet alle Stufen und nimmt
     die größte Schrift, mit der es nicht mehr Seiten werden als mit der kleinsten. `?stufe=normal|kompakt|eng` legt die
     Stufe zum Vergleich fest. Am Satz stehen `data-stufe`, `data-seiten`, je Seite `data-fuell` (genutzte Höhe in %).
+    Grautöne des Drucks (`--aus` Balken, `--zebra` Streifen) sind so kräftig, dass sie auch auf Bürodruckern sichtbar
+    bleiben (Streifen höchstens 236 je Farbkanal, Balken dunkler; Test `druck`).
   - **Kopf:** jede Seite mit Logo (Folgeseiten kleiner), Überschrift und „Seite x von y“; darunter nur beim Druck einer
     Auswahl bzw. eines Einzelangebots diese Angabe – Angebotswoche, Stand und „Preise in € je kg“ stehen nicht im Kopf.
     `doPrint()` druckt erst, wenn Logo und Siegel geladen sind (`bilderBereit`, höchstens 3 s).

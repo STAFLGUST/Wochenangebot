@@ -1238,6 +1238,8 @@ _Druck der Angebote (Wunsch des Inhabers 13.11.2026): die Druckfassung „Angebo
 
 **Viele Bereiche (wie mit Angebotskategorien): fortlaufend statt einer Seite je Bereich**
 
+**Viele kleine Bereiche, jede Gruppe heißt wie ihr Bereich (Wunsch des Inhabers 16.11.2026: weniger freie Flächen)**
+
 **Einzelangebot: Druck der Angebotsseite und PDF des Servers**
 
 **Eingabebereich: Knopf „Drucken“, Vorschau, Fenster „Fußzeile im Druck“**

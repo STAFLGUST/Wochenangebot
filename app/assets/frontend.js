@@ -663,8 +663,8 @@ function plBlockHTML(b, mode) {
     ${plCells(it, labels).map((p) => `<td class="c-price${p && p.status !== 'value' ? ' al-np' : ''}">${p ? (it.sale && p === it.price ? `${it.regular != null ? `<s class="p-was al-was">${fmtNum.format(it.regular)}</s>` : ''}<span class="al-sale" title="Sonderposten – solange der Vorrat reicht">${plPrice(p)}</span>` : plPrice(p)) : ''}</td>`).join('')}${screen ? `<td class="c-fav">${starHTML(it)}</td>` : ''}</tr>`;
   const cg = `<colgroup><col class="w-code"><col>${labels.map(() => '<col class="w-price">').join('')}${screen ? '<col class="w-fav">' : ''}</colgroup>`;
   const was = u.items.some((it) => it.sale && it.regular != null) ? ' hat-was' : '';   // ganze Gruppe (auch ihre Teile im Druck): Preisspalte breit genug für „bisher“ und Sonderpreis
-  return `<div class="al-grp"><table class="al-tab${was}">${cg}<thead><tr class="al-h"><th colspan="${span}" scope="colgroup"><div class="al-hin"><span class="al-gt">${u.title}${cont ? ' <span class="al-cont">Forts.</span>' : ''}</span><span class="al-eh">€/kg</span>${screen ? '<span class="al-fh" aria-hidden="true"></span>' : ''}</div></th></tr>
-    ${cols > 1 ? `<tr class="al-sub"><th colspan="2"></th>${labels.map((l) => `<th>${esc(l)}</th>`).join('')}${screen ? '<th></th>' : ''}</tr>` : ''}</thead>
+  return `<div class="al-grp"><table class="al-tab${was}">${cg}${b.ohneKopf ? '' : `<thead><tr class="al-h"><th colspan="${span}" scope="colgroup"><div class="al-hin"><span class="al-gt">${u.title}${cont ? ' <span class="al-cont">Forts.</span>' : ''}</span><span class="al-eh">€/kg</span>${screen ? '<span class="al-fh" aria-hidden="true"></span>' : ''}</div></th></tr>
+    ${cols > 1 ? `<tr class="al-sub"><th colspan="2"></th>${labels.map((l) => `<th>${esc(l)}</th>`).join('')}${screen ? '<th></th>' : ''}</tr>` : ''}</thead>`}
     <tbody>${items.map(row).join('')}</tbody></table></div>`;
 }
 let plK = 3;
@@ -725,10 +725,12 @@ function buildPrintListe(list, grouped, scopeText) {
     fuss: f, hinweis: druckHinweis(), modus: FUSS_PARAM || (f && f.modus) || 'letzte', stufe: STUFE_PARAM,
     bereiche: plSections(units).map((sec) => {
       const n = sec.units.reduce((a, u) => a + u.items.length, 0);
+      // nur eine Gruppe, die wie ihr Bereich heißt: ihr Kopf entfällt, „€/kg“ steht im Balken (Wunsch des Inhabers 16.11.2026: keine doppelte Überschrift)
+      const eins = sec.units.length === 1 && sec.units[0].labels.length === 1 && sec.units[0].items[0].group === sec.name;
       return {
         name: sec.name,
-        balken: (forts) => `<div class="al-st"><h3>${plGroupName(sec.name)}${forts ? ' <span class="al-cont">Forts.</span>' : ''}</h3><span>${plural(n, 'Artikel', 'Artikel')}</span></div>`,
-        gruppen: sec.units.map((u) => ({ n: u.items.length, verteilen: u.key === 'all', block: (von, bis, forts) => plBlockHTML({ u, items: u.items.slice(von, bis), cont: forts }, 'print') })),
+        balken: (forts) => `<div class="al-st${eins ? ' al-st-eh' : ''}"><h3>${plGroupName(sec.name)}${forts ? ' <span class="al-cont">Forts.</span>' : ''}</h3><span>${plural(n, 'Artikel', 'Artikel')}</span>${eins ? '<span class="al-eh">€/kg</span>' : ''}</div>`,
+        gruppen: sec.units.map((u) => ({ n: u.items.length, verteilen: u.key === 'all', block: (von, bis, forts) => plBlockHTML({ u, items: u.items.slice(von, bis), cont: forts, ohneKopf: eins }, 'print') })),
       };
     }),
   }).html;
