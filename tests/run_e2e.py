@@ -144,7 +144,9 @@ SUITES['leergut'] = (8790, 'data-seed', True)   # Leergut · Leergutkonten und A
 SUITES['rewe'] = (8790, 'data-seed', True)   # REWE · Vordisposition Dry Aged (app/module/rewe/, Oberfläche rewe.intern)
 SUITES['qs'] = (8790, 'data-seed', True)   # QM-System (app/module/qs/, Oberfläche qs.intern): Dokumentenlenkung, Handbuch, Prüfplan, Maßnahmen
 SUITES['qs_ablage'] = (8790, 'data-seed', True)   # QM-System: Dokumentenablage (lib/dateiablage.php) mit Hochladen in Teilen, Download und ZIP-Export
-SUITES['ablage_grenzen'] = (8790, 'data-seed', True, {'PHP_INI_SCAN_DIR': ':' + os.path.join(REPO, 'tests', 'fixtures', 'php')})   # Dateiablage: Dateiarten, 250 MB je Datei unter memory_limit 128M wie im Betrieb
+# Dateiablage: Dateiarten und Höchstgröße unter memory_limit 128M wie im Betrieb; zwei PHP-Prozesse, damit eine Anfrage während eines
+# laufenden Downloads derselben Sitzung ankommt (Sitzungssperre)
+SUITES['ablage_grenzen'] = (8790, 'data-seed', True, {'PHP_INI_SCAN_DIR': ':' + os.path.join(REPO, 'tests', 'fixtures', 'php'), 'PHP_CLI_SERVER_WORKERS': '2'})
 SUITES['qs_vorlagen'] = (8790, 'data-seed', True)   # QM-System: Dokumente aus Word-/Excel-Vorlagen, Nummernstruktur, Lenkungsangaben bei der Freigabe
 SUITES['qs_bericht'] = (8790, 'data-seed', True)   # QM-System: Audit-Bericht eines Zeitraums (Ansicht, Excel, Druck)
 SUITES['qs_verfahren'] = (8790, 'data-seed', True)   # QM-System: Verfahrensdokumentation nach GoBD (Fassungen, Export für Prüfungen als PDF/ZIP)

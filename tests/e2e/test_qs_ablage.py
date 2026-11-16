@@ -149,7 +149,8 @@ PERS = [{'id': 'QB', 'name': 'Quinn Beispiel', 'funktion': 'QMB', 'mitarbeiter':
 check('Kapitel und Personen', V.call('qs_stamm_save', {'kapitel': KAP, 'personen': PERS})[0] == 200)
 
 st, r = L.call('qs_start')
-check('Start: Einstellungen der Ablage (Endungen, 250 MB je Datei, Teile zu 3 MB, 50 Dateien)', st == 200 and r['ablage']['max'] == 250 * MB and r['ablage']['teil'] == TEIL
+MAX = r['ablage']['max']   # Grenze je Datei vom Server; ihren Wert prüft die Gruppe ablage_grenzen
+check('Start: Einstellungen der Ablage (Endungen, Höchstgröße je Datei, Teile zu 3 MB, 50 Dateien)', st == 200 and MAX > TEIL and r['ablage']['teil'] == TEIL
       and r['ablage']['dateien'] == 50 and {'pdf', 'docx', 'xlsx', 'xls', 'msg', 'png', 'jpg'} <= set(r['ablage']['arten']) and 'exe' not in r['ablage']['arten'] and 'php' not in r['ablage']['arten'], r.get('ablage'))
 
 
@@ -191,8 +192,8 @@ for name, args, code, text in (
         ('leere Datei', (D1, V1, 'leer.pdf', b''), 422, 'leer')):
     st, r, _ = hochladen(Be, *args)
     check(f'Hochladen: {name} → {code}', st == code and (not text or text in r.get('error', '')), (st, r))
-st, r = teil_senden(Be, D1, V1, 'gross.pdf', 250 * MB + 1, '', 0, b'%PDF-')
-check('Datei über 250 MB → 422 (schon beim ersten Teil)', st == 422 and '250 MB' in r.get('error', ''), r)
+st, r = teil_senden(Be, D1, V1, 'gross.pdf', MAX + 1, '', 0, b'%PDF-')
+check('Datei über der Höchstgröße → 422 (schon beim ersten Teil)', st == 422 and f'{MAX // MB} MB' in r.get('error', ''), r)
 st, r = teil_senden(Be, D1, V1, 'a.pdf', 4 * MB, '', 0, b'%PDF-' + b'x' * TEIL)
 check('Teil über 3 MB → 422', st == 422 and 'Teil zu groß' in r.get('error', ''), r)
 st, r = teil_senden(Be, D1, V1, 'a.pdf', 100, '', 1, b'%PDF-')
@@ -473,7 +474,7 @@ with sync_playwright() as p:
     check('Liste: Büroklammer mit Zahl bei Dateien der gültigen Version', pg.locator(f'#qm-d-liste tr[data-dok="{D1}"] .qm-anz').count() == 1
           and pg.locator(f'#qm-d-liste tr[data-dok="{D2}"] .qm-anz').count() == 0)
     oeffne_dok(pg, D2)
-    check('Entwurf: Ablagefeld mit Hinweis auf Größe', pg.locator(f'#qm-dk .qm-drop[data-drop="{V21}"]').count() == 1 and '250 MB' in text(pg, '#qm-dk .qm-drop'))
+    check('Entwurf: Ablagefeld mit Hinweis auf Größe', pg.locator(f'#qm-dk .qm-drop[data-drop="{V21}"]').count() == 1 and f'{MAX // MB} MB' in text(pg, '#qm-dk .qm-drop'))
     pg.fill('#dk-aend', 'Reinigung Kühlhaus ergänzt')
     with pg.expect_file_chooser() as fc:
         pg.click('#qm-dk .qm-drop')

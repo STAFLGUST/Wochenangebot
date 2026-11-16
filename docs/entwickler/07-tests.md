@@ -14,7 +14,7 @@ Server, nie mit echten Daten (GR-007). Keine Erfolgsmeldung ohne tatsächlich au
 | Ende-zu-Ende (E2E) | `tests/e2e/test_<gruppe>.py`, Starter `tests/run_e2e.py` | `python3 tests/run_e2e.py [gruppe …]` | PHP 8.3, Python, Playwright-Chromium |
 | Unit (JavaScript) | `tests/unit/*.test.js` | `node tests/unit/<datei>.test.js` | Node.js |
 | Unit (PHP) | `tests/unit/stock_prices.php` | `php tests/unit/stock_prices.php` | PHP 8.3 |
-| Unit (PHP über Python) | `tests/unit/test_dateiablage_zip.py` (Hilfsskript `dateiablage_zip.php`): ZIP-Export der Dateiablage über 4 GB und ab 65535 Einträgen (Zip64) | `python3 tests/unit/test_dateiablage_zip.py` | PHP 8.3, Python, etwa 5 GB Lücken-Dateien in `/tmp` (belegen kaum Platz) |
+| Unit (PHP, PHP über Python) | `tests/unit/dateiablage.php` (reine Funktionen: Zip64-Grenzen des Verzeichnisendes, Platzreserve, Kopftabelle) und `tests/unit/test_dateiablage_zip.py` (Hilfsskript `dateiablage_zip.php`): ZIP-Export der Dateiablage über 4 GB und ab 65535 Einträgen (Zip64), geprüft auch mit Info-ZIP `unzip -t` | `php tests/unit/dateiablage.php`, `python3 tests/unit/test_dateiablage_zip.py` | PHP 8.3, Python, unzip, etwa 5 GB Lücken-Dateien in `/tmp` (belegen unter Linux kaum Platz, unter NTFS den vollen) |
 | Unit (CI-Werkzeuge) | `tests/unit/test_run_e2e_teile.py`, `test_ci_nachweis.py`, `test_apt_vorrat.py`, `test_images_aktualisieren.py` | `python3 tests/unit/<datei>.py` | Python |
 | Regelwerk | `werkzeuge/regeln.py`, `tests/regeln/test_regeln.py` | `python3 werkzeuge/regeln.py pruefen` und `python3 tests/regeln/test_regeln.py` | Python (nur Standardbibliothek) |
 | Betrieb/Deploy | `tests/deploy/` | `sh tests/deploy/<datei>.sh` bzw. `python3 tests/deploy/<datei>.py` | Shell, Python, teils Docker |

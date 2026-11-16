@@ -2,7 +2,7 @@
 
 <!-- ERZEUGT von `python3 werkzeuge/doku.py erzeugen` – nicht von Hand ändern. Quelle: Funktionen und Kommentare im Code. Die CI prüft, dass diese Datei zum Code passt. -->
 
-119 Dateien, 1187 Funktionen – in der Reihenfolge der Datei, **fett** die Abschnitte. Text = erste Aussage des Kommentars direkt über der Funktion (Python: Docstring). Übersicht aller Module: [README.md](README.md).
+120 Dateien, 1197 Funktionen – in der Reihenfolge der Datei, **fett** die Abschnitte. Text = erste Aussage des Kommentars direkt über der Funktion (Python: Docstring). Übersicht aller Module: [README.md](README.md).
 
 ## `.github/scripts/apt_vorrat.py`
 
@@ -173,15 +173,18 @@ _Dateiablage der Plattform (neben der Speicherschicht): hochgeladene Dateien ein
 - `ablage_bereich(bereich)`
 - `ablage_pfad(bereich, id)`
 - `ablage_neue_id()`
+- `ablage_mb(bytes)`
 - `ablage_dateiname(v)` – Dateiname für Anzeige und Download: ohne Pfad, Steuer- und unter Windows verbotene Zeichen, höchstens 150 Zeichen, Endung bleibt erhalten.
 - `ablage_art(name)` – Endung → Art (Schlüssel in ABLAGE_ARTEN) oder Ausnahme
 - `ablage_inhalt_passt(pfad, art)` – Passt der Dateikopf zur Endung?
+- `ablage_zip_pruefen(pfad)` – Namen im zentralen Verzeichnis eines ZIP-Archivs gegen ABLAGE_GESPERRT prüfen, ohne zu entpacken (auch Zip64); wirft bei gesperrter Endung oder unlesbarem …
 
 **Hochladen in Teilen**
 
 - `ablage_teile_ordner()`
 - `ablage_aufraeumen()` – Unvollständige Uploads nach ABLAGE_UPLOAD_STUNDEN entfernen
 - `ablage_teil(bereich, nutzerId, ziel, b)` – Einen Teil annehmen.
+- `ablage_platz_reicht(frei, groesse)`
 - `ablage_upload_verwerfen(upload)`
 
 **Lesen, Ablegen, Kopieren, Entfernen, Ausliefern**
@@ -189,7 +192,7 @@ _Dateiablage der Plattform (neben der Speicherschicht): hochgeladene Dateien ein
 - `ablage_vorhanden(bereich, id)`
 - `ablage_lesen(bereich, id)` – Inhalt lesen (z. B. eine Vorlage zum Ausfüllen) oder null, wenn die Datei fehlt oder größer als ABLAGE_LESEN_MAX ist
 - `ablage_ablegen(bereich, inhalt)` – Vom Server erzeugten Inhalt (z. B. eine ausgefüllte Vorlage) als neue Datei ablegen: ['id', 'groesse', 'sha256']
-- `ablage_kopieren(bereich, id)` – Datei unter neuer Kennung kopieren (z. B. in eine neue Version): ['id', 'groesse', 'sha256'] oder null, wenn sie fehlt
+- `ablage_kopieren(bereich, id, sha256)` – Datei unter neuer Kennung ablegen (z. B. in eine neue Version): ['id', 'groesse', 'sha256'] oder null, wenn sie fehlt.
 - `ablage_entfernen(bereich, id)`
 - `ablage_disposition(name)` – Content-Disposition mit ASCII-Ersatz und UTF-8-Namen (RFC 6266/5987)
 - `ablage_senden(bereich, id, name, mime)` – Datei als Download senden und beenden; fehlt sie, 404 (JSON)
@@ -198,6 +201,7 @@ _Dateiablage der Plattform (neben der Speicherschicht): hochgeladene Dateien ein
 
 - `ablage_zip_pfad(teil)`
 - `ablage_zip_senden(dateiname, eintraege)`
+- `ablage_zip_ende(anzahl, verzLaenge, verzStart)` – Ende des Verzeichnisses; ab 65535 Einträgen bzw. 4 GB (Länge oder Beginn des Verzeichnisses) davor das Zip64-Ende und der Verweis darauf.
 
 ## `app/api/lib/diagnose.php`
 
@@ -1166,11 +1170,14 @@ _Dateiablage des Plattformkerns (app/api/lib/dateiablage.php)_
 
 - `check(n, c, i)`
 - `hochladen(cli, dok, ver, name, inhalt, groesse)` – In Teilen hochladen wie die Oberfläche: (Status, letzte Antwort)
-- `roh(cli, query)`
+- `roh(cli, query, timeout)`
 - `box(typ, inhalt)`
 - `zip_mit(eintraege, stored)`
 - `xlsx(text, fuellung)` – Excel-Datei mit Platzhalter in sharedStrings; fuellung = Bytes eines ungepackten Bildes (macht die Datei groß)
 - `pdf(text)`
+- `zip64(daten)` – Ende des Verzeichnisses als Zip64 mit Höchstwerten im klassischen Ende, wie es Packer ab 65535 Einträgen bzw. 4 GB schreiben
+- `dok(did)`
+- `sitzung_frei(query)` – Läuft ein Download (Antwort noch nicht gelesen), antwortet eine weitere Anfrage derselben Sitzung trotzdem
 
 ## `tests/e2e/test_admin_confirmation.py`
 
@@ -1796,6 +1803,13 @@ _Startet für jede Testgruppe einen frischen PHP-Server mit Testdaten und führt
 - `main()`
 - `worker(items)`
 
+## `tests/unit/dateiablage.php`
+
+_Reine Funktionen und Tabellen der Dateiablage (app/api/lib/dateiablage.php) ohne Server_
+
+- `check(name, ok)`
+- `eocd(ende)`
+
 ## `tests/unit/dateiablage_zip.php`
 
 _Hilfsskript für tests/unit/test_dateiablage_zip.py_
@@ -1835,7 +1849,8 @@ _Nachweis „schon im Pull Request vollständig geprüft“ (.github/scripts/ci_
 _ZIP-Export der Dateiablage (app/api/lib/dateiablage.php, ablage_zip_senden) über die Grenzen des klassischen ZIP-Formats: kleines Archiv ohne Zip64-Felder; Versatz über 4 GB (18 Dateien zu 250 MB, als Lücken-Dateien …_
 
 - `check(n, c, i)`
-- `export(wurzel, eintraege, ziel)` – ZIP über das Hilfsskript erzeugen; lange Nullfolgen als Lücke schreiben (die Testdateien bestehen fast nur aus Nullen)
+- `export(wurzel, eintraege, ziel, nach_erstem_teil)` – ZIP über das Hilfsskript erzeugen; lange Nullfolgen als Lücke schreiben (die Testdateien bestehen fast nur aus Nullen). nach_erstem_teil läuft, sobald das …
+- `unzip_test(ziel)` – Info-ZIP unzip -t: 0 nur ohne Warnung (z. B. „mismatching local filename“)
 - `datei(i, inhalt, groesse)`
 
 ## `tests/unit/test_doku.py`

@@ -130,8 +130,10 @@ jobs:
         run: |
           php tests/unit/stock_prices.php
           node tests/unit/stock_prices.test.js
-      - name: Unit-Test ZIP-Export der Dateiablage (Zip64 ab 4 GB bzw. 65535 Einträgen)
-        run: python3 tests/unit/test_dateiablage_zip.py
+      - name: Unit-Tests Dateiablage (ZIP-Export mit Zip64, Platzreserve, Dateiarten)
+        run: |
+          php tests/unit/dateiablage.php
+          python3 tests/unit/test_dateiablage_zip.py
       - name: Unit-Test gemeinsames Bearbeiten (Abgleich)
         run: node tests/unit/merge.test.js
       - name: Adressverzeichnis der CRM-Karte (Aufbau mit pyosmium, Nachschlagen in PHP, gleiche Schreibweisen-Regeln)
