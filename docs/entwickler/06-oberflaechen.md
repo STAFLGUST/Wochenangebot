@@ -495,10 +495,10 @@ Leiste senkrecht, schmal ist sie eine waagerechte Spur. Mit `body.bereich-import
     immer drei Spalten; ein Block wird nie geteilt; jede Seite nimmt so viele Blöcke auf wie möglich; ein Bereich beginnt
     auf der laufenden Seite, sobald sein Balken und ein ganzer Block Platz haben, und wird nur zwischen Blöcken umbrochen
     (Balken auf der nächsten Seite mit „Forts.“); kleine Bereiche stehen nebeneinander. Folgen mehr als drei kleine
-    Bereiche (höchstens zwei Blöcke, `STAPEL_BLOECKE`), dürfen sie als Stapel stehen (`.al-band.al-stapel`): jeder
+    Bereiche mit Namen (höchstens zwei Blöcke, `STAPEL_BLOECKE`), dürfen sie als Stapel stehen (`.al-band.al-stapel`): jeder
     einspaltig, in Angebotsreihenfolge von oben nach unten auf die drei Spalten verteilt – so füllen kurze Bereiche die
-    Lücke unter ihrem Vorgänger. Heißt die einzige Gruppe eines Bereichs wie der Bereich (eine Preisspalte), entfällt ihr
-    Kopf; „€/kg“ steht dann im Balken (`.al-st-eh`). Ausnahmen: eine Gruppe, die allein
+    Lücke unter ihrem Vorgänger. Heißt die einzige Gruppe eines Bereichs wie der Bereich (`kopfImBalken`) und steht er
+    ungeteilt in einer Spalte, entfällt ihr Kopf; „€/kg“ steht dann im Balken (`.al-st-eh`). Am Bildschirm bleibt der Kopf. Ausnahmen: eine Gruppe, die allein
     höher ist als eine Seite, und ein einzelner Block (Einzelangebot ab 9 Positionen, sortierte Liste ohne Gruppen) werden
     in gleich hohe Teile zerlegt (Gruppenkopf mit „Forts.“). Ein Bereich ohne Namen trägt eine Linie statt des Balkens.
   - **Dichte:** drei Stufen (`STUFEN`: normal 8,3 pt, kompakt 7,9 pt, eng 7,5 pt; Zeilenhöhe und Abstände je Stufe als

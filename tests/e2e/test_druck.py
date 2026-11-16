@@ -266,7 +266,7 @@ SATZ = """() => {
     bereiche: [...D.querySelectorAll('.al-band .al-st:not(.pl-trenn) h3')].filter((h) => !h.querySelector('.al-cont')).map((h) => h.textContent.trim()),
     sektionen: [...D.querySelectorAll('.al-band .al-sec')].map((x) => { const b = x.querySelector(':scope > .al-st:not(.pl-trenn)');
       return { name: b ? ohneForts(b.querySelector('h3')) : '', anzahl: b ? parseInt(b.querySelector(':scope > span').textContent, 10) : null, linie: !!x.querySelector(':scope > .pl-trenn'),
-        zeilen: x.querySelectorAll('tr.row').length, titel: [...x.querySelectorAll('.al-gt')].map(ohneForts), nachbarn: x.parentElement.children.length - 1 }; }),
+        zeilen: x.querySelectorAll('tr.row').length, titel: [...x.querySelectorAll('.al-gt')].map(ohneForts) }; }),
     bloecke: [...D.querySelectorAll('.al-band .al-grp')].map((g) => ({ titel: ohneForts(g.querySelector('.al-gt') || g.closest('.al-sec').querySelector('.al-st-eh h3')), forts: !!g.querySelector('.al-cont'), zeilen: g.querySelectorAll('tr.row').length })),
     jeSeite: pages.map((p) => {
       const pb = box(p), f = p.querySelector('.pl-in > .pl-fuss'), bands = [...p.querySelectorAll('.al-band')], grp = [...p.querySelectorAll('.al-band .al-grp')];
@@ -276,7 +276,7 @@ SATZ = """() => {
       const letzte = bands.length ? [...bands[bands.length - 1].querySelectorAll('.al-col')] : [];
       return { h: pb.height, b: pb.width, fuell: +p.dataset.fuell, hoehe: Math.round(100 * (unten - oben) / Math.max(1, grenze - oben)),
         spalten: bands.map((b) => (b.classList.contains('al-stapel')   // Stapel: drei Spalten aus einspaltigen Bereichen untereinander
-          ? [...b.querySelectorAll(':scope > .al-stapel-sp')].filter((sp) => [...sp.children].every((s) => s.matches('.al-sec') && s.querySelectorAll(':scope > .al-cols > .al-col').length === 1)).length
+          ? [...b.querySelectorAll(':scope > .al-stapel-sp')].filter((sp) => sp.children.length && [...sp.children].every((s) => s.matches('.al-sec') && s.querySelectorAll(':scope > .al-cols > .al-col').length === 1)).length
           : [...b.querySelectorAll(':scope > .al-sec')].reduce((a, s) => a + s.querySelectorAll(':scope > .al-cols > .al-col').length, 0))),
         stapel: p.querySelectorAll('.al-band.al-stapel').length,
         bereiche: st.length, namen: st.map((x) => ohneForts(x.querySelector('h3'))), fortsBalken: st.map((x) => !!x.querySelector('.al-cont')),
@@ -588,23 +588,26 @@ with sync_playwright() as p:
     assert st == 200, r
     laden(v, '/?vorschau=1')
     vs3 = v.evaluate("""() => ({ zeilen: [...document.querySelectorAll('#list .al-band tr.row')].map((r) => r.dataset.id), gruppen: [...document.querySelectorAll('#list .al-band .al-gt')].map((g) => g.textContent.trim()) })""")
-    s8 = satz(v)
+    s9 = satz(v)
     check('viele kleine Bereiche: als Stapel gesetzt (einspaltige Bereiche untereinander, von oben nach unten in der Reihenfolge des Angebots), vollständig, feste Vorgaben eingehalten',
-          sum(x['stapel'] for x in s8['jeSeite']) >= 1 and s8['zeilen'] == vs3['zeilen'] and len(s8['zeilen']) == GESAMT and heil(s8, 'letzte') == [],
-          ([x['stapel'] for x in s8['jeSeite']], len(s8['zeilen']), heil(s8, 'letzte')))
-    je8, soll8 = {}, {}
-    for x in s8['sektionen']:
-        je8[x['name']] = je8.get(x['name'], 0) + x['zeilen']
+          sum(x['stapel'] for x in s9['jeSeite']) >= 1 and s9['zeilen'] == vs3['zeilen'] and len(s9['zeilen']) == GESAMT and heil(s9, 'letzte') == [],
+          ([x['stapel'] for x in s9['jeSeite']], len(s9['zeilen']), heil(s9, 'letzte')))
+    je9, soll9 = {}, {}
+    for x in s9['sektionen']:
+        je9[x['name']] = je9.get(x['name'], 0) + x['zeilen']
     for it in m3['items']:
-        n8 = norm_titel(next(g['section'] for g in m3['groups'] if g['id'] == it['groupId']))
-        soll8[n8] = soll8.get(n8, 0) + 1
+        n9 = norm_titel(next(g['section'] for g in m3['groups'] if g['id'] == it['groupId']))
+        soll9[n9] = soll9.get(n9, 0) + 1
     eh = v.evaluate("""() => { const t = (e) => [...e.childNodes].filter((n) => !(n.classList && n.classList.contains('al-cont'))).map((n) => n.textContent).join('').trim();
-      return { balken: document.querySelectorAll('#print-root .al-band .al-st-eh').length, eh: document.querySelectorAll('#print-root .al-band .al-st-eh > .al-eh').length,
-        doppelt: [...document.querySelectorAll('#print-root .al-band .al-sec')].filter((x) => { const b = x.querySelector(':scope > .al-st h3');   // Ausnahme: mehrere Preisspalten brauchen den Kopf
-          return b && [...x.querySelectorAll('.al-grp')].some((g) => g.querySelector('.al-gt') && t(g.querySelector('.al-gt')) === t(b) && !g.querySelector('tr.al-sub')); }).map((x) => t(x.querySelector('.al-st h3'))) }; }""")
-    check('Gruppe heißt wie ihr Bereich: Überschrift nur einmal (im Balken, dort „€/kg“), keine doppelte Zeile; Gruppen, Zeilen und Artikelzahl je Bereich wie in der Vorschau',
-          eh['balken'] >= 1 and eh['balken'] == eh['eh'] and not eh['doppelt'] and s8['gruppen'] == vs3['gruppen']
-          and je8 == soll8 and all(x['anzahl'] == soll8[x['name']] for x in s8['sektionen']), (eh, len(s8['gruppen']), len(vs3['gruppen'])))
+      const secs = [...document.querySelectorAll('#print-root .al-band .al-sec')], spalten = (x) => x.querySelectorAll(':scope > .al-cols > .al-col').length;
+      const mit = secs.filter((x) => x.querySelector(':scope > .al-st-eh > .al-eh'));
+      return { balken: document.querySelectorAll('#print-root .al-band .al-st-eh').length, mit: mit.length, breit: mit.filter((x) => spalten(x) !== 1).length,
+        versatz: Math.max(0, ...mit.map((x) => Math.abs(x.querySelector('.al-st-eh > .al-eh').getBoundingClientRect().right - Math.max(...[...x.querySelectorAll('td.c-price')].map((td) => td.getBoundingClientRect().right))))),
+        doppelt: secs.filter((x) => spalten(x) === 1 && !x.querySelector('.al-cont') && x.querySelector(':scope > .al-st:not(.pl-trenn) h3')
+          && [...x.querySelectorAll('.al-gt')].some((g) => t(g) === t(x.querySelector(':scope > .al-st h3')))).map((x) => t(x.querySelector(':scope > .al-st h3'))) }; }""")
+    check('Gruppe heißt wie ihr Bereich: in einer Spalte Überschrift nur einmal (im Balken, „€/kg“ bündig über den Preisen, nie über mehreren Spalten); Gruppen, Zeilen und Artikelzahl je Bereich wie in der Vorschau',
+          eh['balken'] >= 1 and eh['balken'] == eh['mit'] and not eh['breit'] and eh['versatz'] <= 8 and not eh['doppelt'] and s9['gruppen'] == vs3['gruppen']
+          and je9 == soll9 and all(x['anzahl'] == soll9[x['name']] for x in s9['sektionen']), (eh, len(s9['gruppen']), len(vs3['gruppen'])))
     grau = v.evaluate("""() => { const c = (s) => getComputedStyle(document.querySelector(s)).backgroundColor.match(/\\d+/g).slice(0, 3).map(Number);
       return { zebra: c('#print-root .al-band .al-tab tbody tr:nth-child(odd):not(.werb-an) td'), balken: c('#print-root .al-band .al-st:not(.pl-trenn)') }; }""")
     check('Zebrastreifen im Druck kräftig genug für den Ausdruck (je Farbkanal höchstens 236), Balken dunkler als die Streifen',

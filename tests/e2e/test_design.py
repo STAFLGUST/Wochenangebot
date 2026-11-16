@@ -3,7 +3,7 @@ Glaskarte): lokale Schriften (keine fremden Server), Kopf, Filterleiste mit Aufk
 (schmal), Merkliste als Spalte ab 1280 px, hell/dunkel, kein seitliches Scrollen, Druck ohne Glas."""
 import sys
 import urllib.request
-from playwright.sync_api import sync_playwright
+from playwright.sync_api import sync_playwright, TimeoutError as PWTimeout
 from umgebung import BASE as B, SH, until
 
 res = []
@@ -117,7 +117,7 @@ with sync_playwright() as pw:
         t.focus('#q')
         try:   # Übergang des Rands abwarten
             t.wait_for_function("(a) => getComputedStyle(document.querySelector('#q')).borderTopColor === a", arg=sf['akzent'], timeout=3000)
-        except Exception:
+        except PWTimeout:
             pass
         fokus = t.evaluate("getComputedStyle(document.querySelector('#q')).borderTopColor")
         t.evaluate("document.activeElement.blur()")

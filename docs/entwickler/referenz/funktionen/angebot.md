@@ -744,7 +744,7 @@ _Angebot · Satz der Druckfassung „Angebotsansicht“ (A4 quer) für die Angeb
 **Verteilen**
 
 - `setzen(m, modus)`
-- `liste(cfg)` – cfg: { host (#print-root), bereiche: [{ name, balken(forts), gruppen: [{ n, block(von, bis, forts), verteilen? }] }], kopf(seite, seiten), werbung?, fuss?: …
+- `liste(cfg)` – cfg: { host (#print-root), bereiche: [{ name, kopfImBalken?, balken(forts, eh), gruppen: [{ n, block(von, bis, forts, ohneKopf), verteilen? }] }], …
 
 ## `app/assets/frontend.js`
 
