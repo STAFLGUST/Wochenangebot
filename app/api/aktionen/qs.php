@@ -196,6 +196,7 @@ switch ($action) {
                 } else {
                     if (count($d['versionen']) >= QS_MAX_VERSIONEN) fail('Zu viele Versionen.', 422);
                     $neu = qs_entwurf($me, $aend, $grund);
+                    require_once __DIR__ . '/../module/qs/organigramm.php'; qs_organigramm_uebernehmen($gueltig === null ? null : $d['versionen'][$gueltig], $neu);
                     if ($uebernehmen && $gueltig !== null && ($f = qs_dateien_uebernehmen($d['versionen'][$gueltig], $me, $erzeugt))) {
                         $neu['dateien'] = $f;
                         qs_verlauf($neu, $me, 'Dateien aus Version ' . ($d['versionen'][$gueltig]['nr'] ?? '?') . ' übernommen (' . count($f) . ')');
@@ -265,6 +266,7 @@ switch ($action) {
                     qs_verlauf($d, $me, "Version $nr freigegeben");
                     $text = "Version $nr freigegeben";
                 }
+                require_once __DIR__ . '/../module/qs/organigramm.php'; qs_organigramm_schritt($d, $v, $me, $erzeugt);   // Namen ab dem Einreichen, PDF-Fassung bei der Freigabe
                 $d['versionen'][$o] = $v;
                 return [qs_dok_ablegen($doc, $i, $d, $me), $text];
             });
@@ -297,7 +299,7 @@ switch ($action) {
             $eingetragen = false;
             register_shutdown_function(function () use (&$eingetragen, $datei) { if (!$eingetragen) { try { ablage_entfernen('qs', $datei['id']); } catch (Throwable $e) { /* bleibt liegen */ } } });
             // Word/Excel in gelenkten Dokumenten: enthaltene Platzhalter merken (Anzeige; die Freigabe füllt sie aus)
-            $platzhalter = isset(QS_OFFICE[$datei['art']]) && $ver !== '' ? qs_office_platzhalter((string)ablage_lesen('qs', $datei['id']), $datei['art']) : null;
+            $platzhalter = isset(QS_OFFICE[$datei['art']]) && $ver !== '' ? qs_office_platzhalter((string)qs_office_lesen($datei)[0], $datei['art']) : null;
             $erzeugt = []; $fertig = false;
             qs_erzeugte_aufraeumen($erzeugt, $fertig);
             $d = with_lock('qs-dokumente', function () use ($dok, $ver, $me, $datei, $platzhalter, &$erzeugt) {
@@ -428,6 +430,16 @@ switch ($action) {
             header('X-Content-Type-Options: nosniff');
             echo $xlsx;
             exit;
+        }
+
+        /* Organigramm im offenen Entwurf speichern (dokument, rev, organigramm.knoten) bzw. als PDF-Vorschau (GET dokument) – module/qs/organigramm.php */
+        case 'qs_organigramm_save': {
+            require_once __DIR__ . '/../module/qs/organigramm.php';
+            qs_organigramm_speichern();
+        }
+        case 'qs_organigramm_vorschau': {
+            require_once __DIR__ . '/../module/qs/organigramm.php';
+            qs_organigramm_vorschau();
         }
 
         /* Abschnitt des QM-Handbuchs anlegen (ohne id) oder ändern (id + rev): jede inhaltliche Änderung mit Grund in der

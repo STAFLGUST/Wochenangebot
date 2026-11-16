@@ -241,6 +241,16 @@ function qs_office_platzhalter(string $daten, string $art): ?array
     return $r === null ? null : $r['offen'];
 }
 
+/* Inhalt einer Word-/Excel-Datei (Metadaten mit id, groesse) zum Ausfüllen: [Inhalt, ''] oder [null, Grund für Meldung und
+   Verlauf]. Über ABLAGE_LESEN_MAX liest das Modul die Datei nicht: Ausfüllen hält sie samt entpackten Textteilen im Speicher,
+   und der Betrieb läuft mit memory_limit 128M. */
+function qs_office_lesen(array $f): array
+{
+    if ((int)($f['groesse'] ?? 0) > ABLAGE_LESEN_MAX) return [null, 'ist über ' . ablage_mb(ABLAGE_LESEN_MAX) . ' groß und damit zu groß zum Ausfüllen'];
+    $daten = ablage_lesen('qs', (string)$f['id']);
+    return [$daten, $daten === null ? 'fehlt in der Ablage' : ''];
+}
+
 /* ---------- Anwenden ---------- */
 /* Gültige Version einer Vorlage mit ihren Word-/Excel-Dateien (oder Fehler 422) */
 function qs_vorlage_dateien(array $vd): array
@@ -261,8 +271,8 @@ function qs_vorlage_anwenden(array $vd, array $d, array $stamm, array $me, array
     [$v, $dateien] = qs_vorlage_dateien($vd);
     $aus = [];
     foreach ($dateien as $f) {
-        $daten = ablage_lesen('qs', (string)$f['id']);
-        if ($daten === null) throw new InvalidArgumentException("Die Vorlagendatei „{$f['name']}“ fehlt in der Ablage.");
+        [$daten, $grund] = qs_office_lesen($f);
+        if ($daten === null) throw new InvalidArgumentException("Die Vorlagendatei „{$f['name']}“ $grund.");
         $r = qs_office_fuellen($daten, (string)$f['art'], qs_werte_stamm($d, $stamm), true);
         if ($r === null) throw new InvalidArgumentException("Die Vorlagendatei „{$f['name']}“ ist keine lesbare Word- oder Excel-Datei.");
         $ext = QS_OFFICE_DOKUMENT[$f['art']] ?? (string)$f['art'];
@@ -284,9 +294,9 @@ function qs_lenkung_eintragen(array $d, array &$v, array $stamm, array $me, arra
 function qs_lenkung_datei(array $d, array &$v, array $f, array $stamm, array $me, array &$erzeugt): array
 {
     if (!in_array($d['art'] ?? '', QS_NR_STRUKTUR, true) || !empty($f['entfernt']) || !isset(QS_OFFICE[$f['art'] ?? '']) || !empty($f['roh'])) return $f;
-    $daten = ablage_lesen('qs', (string)$f['id']);
+    [$daten, $grund] = qs_office_lesen($f);
     $r = $daten === null ? null : qs_office_fuellen($daten, (string)$f['art'], qs_werte_lenkung($d, $v, $stamm));
-    if ($r === null) { qs_verlauf($v, $me, 'Lenkungsangaben in „' . $f['name'] . '“ nicht eingetragen (Datei nicht lesbar)'); return $f; }
+    if ($r === null) { qs_verlauf($v, $me, 'Lenkungsangaben in „' . $f['name'] . '“ nicht eingetragen (Datei ' . ($grund ?: 'nicht lesbar') . ')'); return $f; }
     if ($r['ersetzt'] === 0) return $f;
     $abl = ablage_ablegen('qs', $r['daten']);
     $erzeugt[] = $abl['id'];
@@ -300,13 +310,14 @@ function qs_dateien_uebernehmen(array $g, array $me, array &$erzeugt): array
 {
     $aus = [];
     foreach (qs_dateien_aktiv($g['dateien'] ?? []) as $f) {
-        $quelle = (string)($f['roh'] ?? $f['id']);
-        $k = ablage_kopieren('qs', $quelle);
+        if (!empty($f['organigramm'])) continue;   // PDF-Fassung des Organigramms entsteht bei der nächsten Freigabe neu
+        $roh = isset($f['roh']);
+        $k = ablage_kopieren('qs', (string)($roh ? $f['roh'] : $f['id']), (string)($roh ? ($f['sha256Roh'] ?? '') : ($f['sha256'] ?? '')));
         if ($k === null) continue;
         $erzeugt[] = $k['id'];
         $neu = ['id' => $k['id'], 'name' => (string)$f['name'], 'art' => (string)$f['art'], 'mime' => (string)($f['mime'] ?? ''), 'groesse' => $k['groesse'],
                 'sha256' => $k['sha256'], 'hochgeladen' => qs_wer($me), 'uebernommen' => $g['nr'] ?? null];
-        if (isset(QS_OFFICE[$f['art']])) { $p = qs_office_platzhalter((string)ablage_lesen('qs', $k['id']), (string)$f['art']); if ($p) $neu['platzhalter'] = $p; }
+        if (isset(QS_OFFICE[$f['art']])) { $p = qs_office_platzhalter((string)qs_office_lesen($k)[0], (string)$f['art']); if ($p) $neu['platzhalter'] = $p; }
         $aus[] = $neu;
     }
     return $aus;

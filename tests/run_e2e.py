@@ -144,9 +144,13 @@ SUITES['leergut'] = (8790, 'data-seed', True)   # Leergut · Leergutkonten und A
 SUITES['rewe'] = (8790, 'data-seed', True)   # REWE · Vordisposition Dry Aged (app/module/rewe/, Oberfläche rewe.intern)
 SUITES['qs'] = (8790, 'data-seed', True)   # QM-System (app/module/qs/, Oberfläche qs.intern): Dokumentenlenkung, Handbuch, Prüfplan, Maßnahmen
 SUITES['qs_ablage'] = (8790, 'data-seed', True)   # QM-System: Dokumentenablage (lib/dateiablage.php) mit Hochladen in Teilen, Download und ZIP-Export
+# Dateiablage: Dateiarten und Höchstgröße unter memory_limit 128M wie im Betrieb; zwei PHP-Prozesse, damit eine Anfrage während eines
+# laufenden Downloads derselben Sitzung ankommt (Sitzungssperre)
+SUITES['ablage_grenzen'] = (8790, 'data-seed', True, {'PHP_INI_SCAN_DIR': ':' + os.path.join(REPO, 'tests', 'fixtures', 'php'), 'PHP_CLI_SERVER_WORKERS': '2'})
 SUITES['qs_vorlagen'] = (8790, 'data-seed', True)   # QM-System: Dokumente aus Word-/Excel-Vorlagen, Nummernstruktur, Lenkungsangaben bei der Freigabe
 SUITES['qs_bericht'] = (8790, 'data-seed', True)   # QM-System: Audit-Bericht eines Zeitraums (Ansicht, Excel, Druck)
 SUITES['qs_verfahren'] = (8790, 'data-seed', True)   # QM-System: Verfahrensdokumentation nach GoBD (Fassungen, Export für Prüfungen als PDF/ZIP)
+SUITES['qs_organigramm'] = (8790, 'data-seed', True)   # QM-System: Organigramm im Entwurf zeichnen, Freigabe mit PDF-Fassung
 SUITES['sicherheit_modul'] = SUITES['bestellung']   # Modul Sicherheit (app/module/sicherheit/, Oberfläche sicherheit.intern); Test-Mailserver
 SUITES['notfall'] = SUITES['bestellung']   # Notfallmodus (lib/notfall.php): Kunden-Wartung, Aussperren, Sitzungen, Mailsperre, Firewall
 SUITES['sicherheit_bereitschaft'] = SUITES['bestellung']   # Leitfaden, Probealarm, Wochenbericht, ungenutzte Zugänge (lib/bereitschaft.php); Test-Mailserver
@@ -184,9 +188,11 @@ GEWICHT = {
     'rewe': 40,   # geschätzt (Oktober 2026), noch ohne CI-Median
     'qs': 35,   # geschätzt (Oktober 2026), noch ohne CI-Median
     'qs_ablage': 25,   # geschätzt (Oktober 2026), noch ohne CI-Median
+    'ablage_grenzen': 15,   # geschätzt (November 2026, lokal 10 s), noch ohne CI-Median
     'qs_vorlagen': 25,   # geschätzt (Oktober 2026), noch ohne CI-Median
     'qs_bericht': 20,   # geschätzt (Oktober 2026), noch ohne CI-Median
     'qs_verfahren': 30,   # geschätzt (November 2026), noch ohne CI-Median
+    'qs_organigramm': 28,   # gemessen lokal (November 2026): 26–29 s mit 2 parallelen Gruppen; noch ohne CI-Median
     'protokoll': 6,   # geschätzt (Oktober 2026), noch ohne CI-Median
     'angebotskategorien': 12,   # geschätzt (November 2026), noch ohne CI-Median
     'aufbau': 50,   # geschätzt (November 2026, mit Artikeln lokal 57 s), noch ohne CI-Median

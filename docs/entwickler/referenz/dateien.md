@@ -217,6 +217,7 @@ Jede Code-Datei beginnt mit einem Kopfkommentar; dessen erste Aussage steht hier
 | Datei | Modul | Inhalt |
 | --- | --- | --- |
 | `bericht.php` | qs | QM-System · Audit-Bericht (Aktionen qs_bericht, qs_bericht_excel) |
+| `organigramm.php` | qs | QM-System · Organigramm als gelenktes Dokument (Entscheidung des Inhabers 16.11.2026 „Im QM-System zeichnen“; nur bei Bedarf geladen von app/api/aktionen/qs.php). |
 | `qs.php` | qs | Qualitätssicherung · QM-System (IFS Wholesale) |
 | `verfahren-export.php` | qs | QM-System · Verfahrensdokumentation |
 | `verfahren.php` | qs | QM-System · Verfahrensdokumentation nach GoBD (Reiter „Verfahrensdoku“ der Oberfläche qs.intern, Aktionen qs_verfahren* in app/api/aktionen/qs.php; wird nur von diesen Aktionen geladen). |
@@ -424,6 +425,8 @@ Jede Code-Datei beginnt mit einem Kopfkommentar; dessen erste Aussage steht hier
 | Datei | Modul | Inhalt |
 | --- | --- | --- |
 | `index.html` | qs | Übersicht |
+| `organigramm.css` | qs | STAFL-Plattform · QM-System – Organigramm (organigramm.js) |
+| `organigramm.js` | qs | STAFL-Plattform · QM-System – Organigramm in einem gelenkten Dokument |
 | `qs.css` | qs | STAFL-Plattform · QM-System – Gestaltung „Liquid Glass“ wie Dashboard, Leergut, Controlling, HR, CRM und Marketing: warmer Grund mit drei weichen Farbflächen, Glasflächen, kein Rot im Hintergrund. |
 | `qs.js` | qs | STAFL-Plattform · Qualitätssicherung (QM-System) – Oberfläche nach dem Designvorschlag vom 30.10.2026. |
 | `verfahren.js` | qs | STAFL-Plattform · Qualitätssicherung – Reiter „Verfahrensdoku“ |
@@ -749,6 +752,7 @@ Jede Code-Datei beginnt mit einem Kopfkommentar; dessen erste Aussage steht hier
 | `kunden_hilfe.py` | plattform | HTTP-Client mit eigener Sitzung für API-Tests (IP über X-Forwarded-For, wie hinter dem eigenen Proxy). |
 | `order_setup.py` | angebot | Gemeinsame Vorbereitung der Bestell-Testgruppen |
 | `smtp_test.py` | plattform | Kleiner Test-Mailserver für die Ende-zu-Ende-Tests (nimmt Nachrichten an und hält sie im Speicher). |
+| `test_ablage_grenzen.py` | plattform | Dateiablage des Plattformkerns (app/api/lib/dateiablage.php) |
 | `test_abteilungen.py` | verwaltung | Stammdaten → Abteilungen (Auftrag des Inhabers 10.11.2026) |
 | `test_admin_confirmation.py` | plattform | Sensible Aktionen, kontoweite Bestätigungsbremse und Dateisperren über echte HTTP-Anfragen. |
 | `test_admin_confirmation_ui.py` | plattform | Abgelaufene Admin-Freigabe im Browser |
@@ -820,6 +824,7 @@ Jede Code-Datei beginnt mit einem Kopfkommentar; dessen erste Aussage steht hier
 | `test_qs.py` | qs | Qualitätssicherung (Modul qs, Oberfläche qs.intern unter /module/qs/) – QM-System |
 | `test_qs_ablage.py` | qs | Qualitätssicherung – Dokumentenablage (QM-System Bauabschnitt 2) |
 | `test_qs_bericht.py` | qs | Qualitätssicherung – Audit-Bericht (app/api/module/qs/bericht.php, Aktionen qs_bericht und qs_bericht_excel, Reiter „Audit“). |
+| `test_qs_organigramm.py` | qs | Qualitätssicherung – Organigramm im QM-System (app/api/module/qs/organigramm.php, Aktionen qs_organigramm_save und qs_organigramm_vorschau, Oberfläche app/module/qs/organigramm.js). |
 | `test_qs_verfahren.py` | qs | Qualitätssicherung – Verfahrensdokumentation nach GoBD (app/api/module/qs/verfahren.php und verfahren-export.php, Aktionen qs_verfahren*, Reiter „Verfahrensdoku“ in app/module/qs/verfahren.js). |
 | `test_qs_vorlagen.py` | qs | Qualitätssicherung – Vorlagen und Nummernstruktur (QM-System Bauabschnitt 3, app/api/module/qs/vorlagen.php). |
 | `test_rechte.py` | plattform | Nutzerrechte: Rechte je Rolle (einstellbar) und Ausnahmen je Nutzer (erlauben/verbieten). |
@@ -878,12 +883,15 @@ Jede Code-Datei beginnt mit einem Kopfkommentar; dessen erste Aussage steht hier
 | --- | --- | --- |
 | `adressen.php` | plattform | Hilfsskript für tests/unit/test_adressen.py |
 | `bestand_parser.test.js` | bestand | Unit-Test: Der Bestands-Parser der App (stock-core.js) liefert für die Test-Bestandsliste exakt dieselben Summen wie die unabhängige Referenzauswertung (tests/fixtures/bestand/master_stock.json). |
+| `dateiablage.php` | plattform | Reine Funktionen und Tabellen der Dateiablage (app/api/lib/dateiablage.php) ohne Server |
+| `dateiablage_zip.php` | plattform | Hilfsskript für tests/unit/test_dateiablage_zip.py zu app/api/lib/dateiablage.php. |
 | `merge.test.js` | angebot | Unit-Test: Drei-Wege-Abgleich beim gemeinsamen Bearbeiten des Entwurfs (OfferCore.mergeModels). |
 | `stock_prices.php` | bestand | Isolated calendar/history selection tests, no server or production storage. |
 | `stock_prices.test.js` | bestand | Unit-Test: Preisvergleich, Wochenpreise und Summenzeile der Bestandsliste (StockCore aus app/assets/stock-core.js). |
 | `test_adressen.py` | plattform | Adressverzeichnis der CRM-Karte |
 | `test_apt_vorrat.py` | plattform | Paketvorrat der CI (.github/scripts/apt_vorrat.py) mit nachgebautem apt-cache. python3 tests/unit/test_apt_vorrat.py Prüft: nur Pakete mit passender SHA-256 aus der (signierten) Paketliste werden übernommen; … |
 | `test_ci_nachweis.py` | plattform | Nachweis „schon im Pull Request vollständig geprüft“ (.github/scripts/ci_nachweis.py) mit nachgebauter GitHub-API. python3 tests/unit/test_ci_nachweis.py Prüft |
+| `test_dateiablage_zip.py` | plattform | ZIP-Export der Dateiablage (app/api/lib/dateiablage.php, ablage_zip_senden) über die Grenzen des klassischen ZIP-Formats: kleines Archiv ohne Zip64-Felder; Versatz über 4 GB (18 Dateien zu 250 MB, als Lücken-Dateien … |
 | `test_doku.py` | plattform | Werkzeug der Entwickler-Dokumentation (werkzeuge/doku.py) |
 | `test_images_aktualisieren.py` | plattform | Sicherheitsupdates der Container-Images (werkzeuge/images_aktualisieren.py) – ohne Netz, mit Digests aus einer Datei. python3 tests/unit/test_images_aktualisieren.py Prüft an einer Kopie der echten Dateien |
 | `test_run_e2e_teile.py` | plattform | Aufteilung der E2E-Testgruppen auf CI-Aufträge (tests/run_e2e.py |
