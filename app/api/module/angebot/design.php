@@ -215,7 +215,7 @@ function design_vorlage_loeschen(array $me, array $b): array
         store_write('angebot-designs', $d);
         return [$name, $d];
     })));
-    audit('offers', 'Design-Vorlage „' . $name . '“ gelöscht', [], $me);
+    audit('offers', 'Design-Vorlage „' . $name . '“ gelöscht');
     return ['rev' => $d['rev']];
 }
 /* Design eines Angebots setzen ($design null = Standard): Kunden- und Sonderangebote, Wochenangebot („std“), Einzelangebote („e-…“).
@@ -251,6 +251,6 @@ function design_setzen(array $me, string $oid, $design): array
         });
         $name = (string)$def['name'];
     }
-    audit('offers', 'Design von „' . $name . '“: ' . design_text_wahl($wahl), [], $me);
+    audit('offers', 'Design von „' . $name . '“: ' . design_text_wahl($wahl));
     return ['wahl' => $wahl, 'wirksam' => design_wirksam($wahl)];
 }

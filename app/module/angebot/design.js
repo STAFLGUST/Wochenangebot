@@ -146,10 +146,7 @@
   });
 
   /* ---------- Öffnen, Laden, Speichern ---------- */
-  async function laden(oid) {
-    const r = await api('angebot_designs&angebot=' + encodeURIComponent(oid));
-    return r;
-  }
+  const laden = (oid) => api('angebot_designs&angebot=' + encodeURIComponent(oid));
   async function oeffnen(opt) {
     const o = opt || D.angebot();
     if (!o) return;
@@ -180,7 +177,6 @@
     try {
       const r = await api('angebot_design_setzen', { body: { angebot: z.angebot, design: { vorlage: z.wahl, anpassung: z.angepasst ? { raster: z.entwurf.raster, abschnitte: z.entwurf.abschnitte } : null } } });
       uebernehmen(r.wahl);
-      z.daten.wahl = r.wahl;
       delete dlg.dataset.geaendert;
       dlg.close();
       toast(`Design von „${z.name}“ gespeichert: ${r.wahl ? (z.daten.vorlagen.find((v) => v.id === r.wahl.vorlage) || { name: 'Standard' }).name + (r.wahl.anpassung ? ' (angepasst)' : '') : 'Standard'}.`, 5000);
@@ -195,13 +191,13 @@
     if (v.name.trim().length < 2) { fehler('Bitte einen Namen für die Vorlage angeben (mindestens 2 Zeichen).'); return; }
     knopf.disabled = true;
     try {
-      const r = await api('angebot_design_save', { body: { rev: z.daten.rev, id: v.id || '', name: v.name, raster: v.raster, abschnitte: v.abschnitte } });
+      await api('angebot_design_save', { body: { rev: z.daten.rev, id: v.id || '', name: v.name, raster: v.raster, abschnitte: v.abschnitte } });
       await neuLaden();
       z.vorlage = null;
+      if (!z.angepasst) z.entwurf = basis(z.wahl);   // die gewählte Vorlage kann sich gerade geändert haben
       zeichnen();
       vorschau(true);
       toast(`Vorlage „${v.name.trim()}“ gespeichert.`, 4000);
-      return r;
     } catch (e) {
       knopf.disabled = false;
       if (e.status === 409) { await neuLaden(e.message); z.vorlage = null; zeichnen(); return; }

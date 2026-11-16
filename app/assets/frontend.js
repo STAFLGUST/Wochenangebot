@@ -730,7 +730,7 @@ function renderListe(list, grouped) {
   const baender = grouped
     ? plAbschnitte(units, vollesAngebot()).map((a) => {
       if (a.art === 'text') return `<section class="al-text">${plTextHTML(a)}</section>`;
-      const k = Math.min(a.spalten, plK4 && plK === 3 ? 4 : plK);
+      const k = Math.min(a.spalten, plK4 ? 4 : plK);
       return plBaender(plSections(a.units), k).map(bandHTML(k)).join('');
     })
     : [[{ sec: { name: '', units }, c: Math.min(plK, units[0].items.length) || 1, cols: plGleichTeilen(units[0], plK) }]].map(bandHTML(plK));

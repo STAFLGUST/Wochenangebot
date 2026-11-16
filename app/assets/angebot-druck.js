@@ -300,7 +300,7 @@
   }
 
   /* Text-Abschnitt des Designs: fertiges HTML (Überschrift und Text, von frontend.js escaped) */
-  const textHTML = (b) => `<section class="al-sec pl-text">${b.text}</section>`;
+  const textHTML = (b, c) => `<section class="al-sec pl-text"${c ? ` style="--c:${c}"` : ''}>${b.text}</section>`;
 
   /* cfg: { host (#print-root), raster?: { spalten 1–4, format 'quer' | 'hoch' } (ohne: drei Spalten quer),
             bereiche: [{ name, kopfImBalken?, balken(forts, eh), gruppen: [{ n, block(von, bis, forts, ohneKopf), verteilen? }], k?, ab? }
@@ -326,7 +326,7 @@
     let geteilt = 0, bereichForts = 0;
     const sec = (t) => {
       const ber = cfg.bereiche[t.si];
-      if (ber.text) return textHTML(ber).replace('<section class="al-sec pl-text">', `<section class="al-sec pl-text" style="--c:${t.c}">`);
+      if (ber.text) return textHTML(ber, t.c);
       if (t.forts && ber.name) bereichForts++;
       const cols = t.cols.concat(Array(Math.max(0, t.c - t.cols.length)).fill([]));   // weniger Blöcke als Spalten: die übrigen bleiben frei
       return `<section class="al-sec" style="--c:${t.c}">${ber.name ? ber.balken(t.forts, t.eh) : t.trenn ? TRENN : ''}
