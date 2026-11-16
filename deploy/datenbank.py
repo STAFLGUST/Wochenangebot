@@ -12,6 +12,8 @@ import sys
 import tarfile
 import tempfile
 
+# GUARD, document_path und validate nutzt deploy/dateien_sichern.py; beim Release dessen Fassung des neuen Commits mit dieser
+# Datei des alten: Signatur nur erweitern.
 GUARD = '<?php http_response_code(404); exit; ?>\n'
 SIDECARS = {'mail-schluessel', 'sicherung', 'deployment'}
 KEY = re.compile(r'^[a-zA-Z0-9_-]+(?:/[a-zA-Z0-9_-]+)*$')

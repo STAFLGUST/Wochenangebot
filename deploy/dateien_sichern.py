@@ -6,20 +6,23 @@ neue kopiert. Alle Stände belegen so etwa einen Bestand plus die Änderungen, u
 (cp -a). Halbe Uploads (.teile), Verweise und fremde Namen kommen nicht hinein. Festschreiben (<Zeit>.tmp → <Zeit>) und
 Aufbewahrung übernimmt sichern.sh gemeinsam mit den Archiven, erst wenn alles geprüft ist.
 
-  bedarf <ablage> <ziel>                     Bytes, die ein neuer Stand kopieren müsste (Platzprüfung)
+  bedarf <ablage> <ziel> [<zeit>]            Bytes, die ein neuer Stand kopieren müsste (Platzprüfung)
   aufbauen <ablage> <ziel> <zeit>            <zeit>.tmp anlegen bzw. ergänzen
-  pruefen <ablage> <ziel> <zeit> <daten …>   <zeit>.tmp noch einmal ergänzen und gegen die Verweise der entpackten
-                                             Sicherung prüfen (Einteilung: pruefen()); Warnungen in einer Zeile auf
-                                             stderr, Rückgabe 0
-  abschliessen <ziel> <zeit>                 JSON zum festgeschriebenen Stand: anzahl, groesse, neu (Bytes nur in diesem
-                                             Stand), staende, belegt (Bytes aller Stände), fehlend
+  pruefen <ablage> <ziel> <zeit> <daten …>   <zeit>.tmp noch einmal ergänzen und jede Datei, auf die die entpackte
+                                             Sicherung verweist, in den Stand bringen (pruefen()); Zustand der Ablage
+                                             (ok, warnung, kritisch) auf stdout, Warnungen in einer Zeile auf stderr,
+                                             Rückgabe 0
+  abschliessen <ziel> <zeit> [<zustand>]     JSON zum festgeschriebenen Stand: anzahl, groesse, neu (Bytes nur in diesem
+                                             Stand), staende, belegt (Bytes aller Stände), fehlend (in der Ablage), zustand
   fehlende <ablage> <daten …>                für den Betreiber: Verweise, deren Datei in der Ablage fehlt oder eine andere
                                              Größe hat, je Zeile Kennung, Dokument und Befund
 
 Ein Verweis ist ein Eintrag {id, groesse, sha256} in einem Dokument (Rückgabe von ablage_teil/ablage_ablegen/
-ablage_kopieren), Ausnahme QS-Rohfassung {roh, sha256Roh} ohne Größe (docs/entwickler/05-daten.md). Dokumente liest
-datenbank.py (Dateien oder SQLite). Kommandozeile nur erweitern (das Release nutzt das Werkzeug des Vorstands, wenn der neue
-Commit keins hat). Fehler: Meldung auf stderr, Rückgabewert 1.
+ablage_kopieren), Ausnahme QS-Rohfassung {roh, sha256Roh} ohne Größe (docs/entwickler/05-daten.md). Dokumente: SQLite über
+datenbank.validate, Dateien so nachsichtig wie sicherung-pruefen.py. Beim Release läuft dieses Werkzeug des neuen Commits mit
+datenbank.py des alten (Vermerk dort). Kommandozeile nur erweitern (das Release nutzt das Werkzeug des Vorstands, wenn der
+neue Commit keins hat). Fehler nur bei Störungen der Sicherung selbst (Ein-/Ausgabe, Datenbank): Meldung auf stderr,
+Rückgabewert 1.
 """
 import argparse
 import hashlib
@@ -27,19 +30,25 @@ import json
 import os
 import random
 import re
+import shlex
 import shutil
 import sqlite3
 import stat
 import sys
+import zlib
+from datetime import date
 from pathlib import Path
 
-from datenbank import documents, validate
+from datenbank import GUARD, document_path, validate
 
 NAME = re.compile(r'[a-z][a-z0-9-]{1,30}/[a-z0-9]{2}/([a-z0-9]{12,40})\.bin')   # wie ablage_pfad() in lib/dateiablage.php
 ZEIT = re.compile(r'\d{4}-\d{2}-\d{2}_\d{6}')
 ID = re.compile(r'[a-z0-9]{12,40}')
 SHA = re.compile(r'[0-9a-f]{64}')
-STICHPROBE = 20
+STICHPROBE = 20   # zufällig je Lauf, dazu jede Datei einmal in RUNDE Tagen (Kennung mod RUNDE = Tag mod RUNDE)
+RUNDE = 30
+KRITISCH = 10     # fehlen mehr Dateien in der Ablage (oder mehr als 1 % der verwiesenen), ist der Zustand kritisch
+WEBSERVER = '33'  # www-data in den Containern; Besitzer der Ablage (docs/entwickler/08-betrieb.md)
 
 
 def dateien(wurzel):
@@ -68,16 +77,22 @@ def gleich(a, b):
     return a.st_size == b.st_size and int(a.st_mtime) == int(b.st_mtime)
 
 
-def plan(ablage, ziel):
-    """je Datei der Ablage: (relativer Pfad, lstat, gleiche Datei im neuesten Stand zum Verlinken oder None = kopieren)"""
-    s = staende(ziel)
-    alt = dateien(s[-1]) if s else {}
+def vorlage(ziel, zeit=None):
+    """neuester festgeschriebener Stand vor <zeit>; ein Stand mit späterer Zeit (vorgestellte Uhr) dient nie als Vorlage"""
+    s = [p for p in staende(ziel) if zeit is None or p.name < zeit]
+    return s[-1] if s else None
+
+
+def plan(ablage, ziel, zeit=None):
+    """je Datei der Ablage: (relativer Pfad, lstat, gleiche Datei im vorigen Stand zum Verlinken oder None = kopieren)"""
+    v = vorlage(ziel, zeit)
+    alt = dateien(v) if v else {}
     for rel, st in dateien(ablage).items():
-        yield rel, st, s[-1] / rel if rel in alt and gleich(alt[rel], st) else None
+        yield rel, st, v / rel if rel in alt and gleich(alt[rel], st) else None
 
 
-def bedarf(ablage, ziel):
-    return sum(st.st_size for _, st, vorlage in plan(ablage, ziel) if vorlage is None)
+def bedarf(ablage, ziel, zeit=None):
+    return sum(st.st_size for _, st, quelle in plan(ablage, ziel, zeit) if quelle is None)
 
 
 def kopieren(quelle, z):
@@ -97,13 +112,13 @@ def aufbauen(ablage, ziel, zeit):
     neu.mkdir(mode=0o700, parents=True, exist_ok=True)
     schon = dateien(neu)
     da = {}
-    for rel, st, vorlage in plan(ablage, ziel):
+    for rel, st, quelle in plan(ablage, ziel, zeit):
         z = neu / rel
         if not (rel in schon and gleich(schon[rel], st)):
             z.parent.mkdir(parents=True, exist_ok=True)
-            if vorlage:
+            if quelle:
                 z.unlink(missing_ok=True)
-                os.link(vorlage, z)
+                os.link(quelle, z)
             elif not kopieren(ablage / rel, z):
                 continue
         da[rel] = st
@@ -111,12 +126,25 @@ def aufbauen(ablage, ziel, zeit):
 
 
 def verweise(daten):
-    """id → (Dokument, groesse oder None, sha256 oder '') aus den Dokumenten eines Datenordners oder einer entpackten Sicherung"""
+    """({id → (Dokument, groesse oder None, sha256 oder '')}, [nicht lesbare Dokumente]) aus einem Datenordner oder einer
+    entpackten Sicherung. Im Dateispeicher wird jedes Dokument für sich gelesen, so nachsichtig wie sicherung-pruefen.py:
+    ein fehlerhaftes nennt die Sicherung als Warnung, statt abzubrechen."""
+    dokumente, kaputt = [], []
     if (daten / '.sqlite-active').is_file():
         with sqlite3.connect((daten / '.sqlite/store.sqlite').resolve().as_uri() + '?mode=ro', uri=True) as c:
-            zeilen = validate(c)
+            dokumente = [(name, json.loads(inhalt)) for name, inhalt, _ in validate(c)]
     else:
-        zeilen = list(documents(daten))
+        for p in sorted(daten.rglob('*.php')):
+            rel = p.relative_to(daten)
+            if not document_path(rel):
+                continue
+            try:
+                if p.is_symlink():
+                    raise OSError('Verweis')   # root folgt keinem Verweis aus dem beschreibbaren Datenordner
+                t = p.read_text()
+                dokumente.append((str(rel.with_suffix('')), json.loads(t[len(GUARD):] if t.startswith(GUARD) else t)))
+            except (OSError, ValueError):
+                kaputt.append(str(rel))
     aus = {}
 
     def lauf(x, dok):
@@ -131,9 +159,9 @@ def verweise(daten):
         if isinstance(x, list):
             for v in x:
                 lauf(v, dok)
-    for name, inhalt, _ in zeilen:
-        lauf(json.loads(inhalt), name)
-    return aus
+    for name, wert in dokumente:
+        lauf(wert, name)
+    return aus, kaputt
 
 
 def sha256(p):
@@ -148,59 +176,99 @@ def je_id(liste):
     return {NAME.fullmatch(rel).group(1): rel for rel in liste}
 
 
+def kurz(ids):
+    return ', '.join(ids[:3]) + (' …' if len(ids) > 3 else '')
+
+
+def zurueckholen(quelle, ziel):
+    """Befehl für den Betreiber: neue Datei (nie ein fester Verweis in die Sicherung), Ordner und Datei dem Webserver"""
+    q = ' '.join(shlex.quote(str(p)) for p in (ziel.parent.parent.parent, ziel.parent.parent, ziel.parent))
+    return (f'install -d -o {WEBSERVER} -g {WEBSERVER} {q} && cp -a {shlex.quote(str(quelle))} {shlex.quote(str(ziel))}'
+            f' && chown {WEBSERVER}:{WEBSERVER} {shlex.quote(str(ziel))}')
+
+
 def pruefen(ablage, ziel, zeit, daten):
-    """Ergänzt <zeit>.tmp mit einer neuen Auflistung der Ablage und teilt jeden Verweis der Sicherung ein:
-    im Stand mit passender Größe: in Ordnung. In der Ablage, im Stand fehlend oder mit anderer Größe: einmal nachkopieren,
-    sonst Fehler. Weder in der Ablage noch im Stand: nur Warnung, Liste in sicherungen/.dateien-fehlend (die Anwendung
-    rechnet selbst mit fehlenden Dateien, z. B. ZIP-Export mit Hinweise.txt). Stichprobe mit SHA-256: stimmt die Kopie im
-    Stand nicht, die Datei in der Ablage aber schon, wird sie im neuen Stand frisch kopiert statt verlinkt (Warnung);
-    stimmen beide nicht, Fehler. Gibt die Warnungen zurück."""
+    """Ergänzt <zeit>.tmp mit einer neuen Auflistung der Ablage und bringt jede Datei, auf die die Sicherung verweist, in den
+    Stand (Tabelle in docs/entwickler/08-betrieb.md): aus der Ablage; passt dort die Größe nicht zum Dokument, die passende
+    Fassung des vorigen Stands; fehlt sie in der Ablage, die des vorigen Stands. So trägt jeder Stand eine Datei weiter,
+    solange ein Dokument auf sie verweist, und die Aufbewahrung verliert sie nie. Alles nur Warnungen: Liste
+    sicherungen/.dateien-fehlend mit dem Befehl zum Zurückholen je Datei (die Anwendung rechnet selbst mit fehlenden
+    Dateien, z. B. ZIP-Export mit Hinweise.txt). Stichprobe mit SHA-256 (rotierend und zufällig): stimmt die Kopie im Stand
+    nicht, die Datei in der Ablage aber schon, wird sie frisch kopiert statt verlinkt. Gibt (Zustand, Warnungen) zurück."""
     neu = ziel / f'{zeit}.tmp'
-    lebend = je_id(aufbauen(ablage, ziel, zeit))
+    da = aufbauen(ablage, ziel, zeit)
+    lebend = je_id(da)
     stand = je_id(dateien(neu))
-    refs = {}
+    v = vorlage(ziel, zeit)
+    alt = je_id(dateien(v)) if v else {}
+    refs, kaputt = {}, []
     for d in daten:
-        refs.update(verweise(d))
-    fehlend = []
+        r, k = verweise(d)
+        refs.update(r)
+        kaputt += k
+
+    def passt(p, g):
+        return g is None or p.lstat().st_size == g
+
+    fehlen, aus_stand, anders = [], [], []   # (Kennung, Dokument) fehlt in der Ablage; Größe in der Ablage falsch, Stand richtig; Größe im Stand falsch
     for i, (dok, g, _) in sorted(refs.items()):
-        if i in stand and (g is None or (neu / stand[i]).lstat().st_size == g):
-            continue
-        if i in lebend:
+        if i in lebend and not (i in stand and passt(neu / stand[i], g)):
             if kopieren(ablage / lebend[i], neu / lebend[i]):
                 stand[i] = lebend[i]
-                if g is None or (neu / stand[i]).lstat().st_size == g:
-                    continue
-            else:
+            else:   # beim Kopieren verschwunden (Entwurf gelöscht)
                 del lebend[i]
                 stand.pop(i, None)
-        if i in stand or i in lebend:
-            raise ValueError(f'Datei {i} ({dok}) hat eine andere Größe als im Dokument ({g} Bytes) – Datei aus einem älteren '
-                             'Stand zurückholen oder Verweis prüfen (docs/entwickler/08-betrieb.md)')
-        fehlend.append((i, dok))
-    mit_sha = [i for i, (_, _, s) in refs.items() if s and i in stand]
-    geheilt = []
-    for i in random.sample(mit_sha, min(STICHPROBE, len(mit_sha))):
-        dok, _, s = refs[i]
+        if not (i in stand and passt(neu / stand[i], g)) and i in alt and (i not in stand or passt(v / alt[i], g)):
+            z = neu / alt[i]
+            z.parent.mkdir(parents=True, exist_ok=True)
+            z.unlink(missing_ok=True)
+            os.link(v / alt[i], z)
+            stand[i] = alt[i]
+        if i not in lebend:
+            fehlen.append((i, dok))
+        if i in stand and not passt(neu / stand[i], g):
+            anders.append(i)
+        elif i in lebend and g is not None and da[lebend[i]].st_size != g:
+            aus_stand.append(i)
+    mit_sha = sorted(i for i, (_, _, s) in refs.items() if s and i in stand and i not in anders)
+    tag = date.fromisoformat(zeit[:10]).toordinal() % RUNDE
+    probe = {i for i in mit_sha if zlib.crc32(i.encode()) % RUNDE == tag} | set(random.sample(mit_sha, min(STICHPROBE, len(mit_sha))))
+    geheilt, falsch = [], []
+    for i in sorted(probe):
+        s = refs[i][2]
         if sha256(neu / stand[i]) == s:
             continue
         if i in lebend and sha256(ablage / lebend[i]) == s and kopieren(ablage / lebend[i], neu / stand[i]) \
                 and sha256(neu / stand[i]) == s:
             geheilt.append(i)
-            continue
-        raise ValueError(f'Prüfsumme der Datei {i} ({dok}) stimmt weder in der Sicherung noch in der Ablage – Datei aus einem '
-                         'älteren Stand zurückholen (docs/entwickler/08-betrieb.md)')
+        else:
+            falsch.append(i)
     liste = ziel.parent / '.dateien-fehlend'
-    if fehlend:
-        liste.write_text(''.join(f'{i}\t{dok}\n' for i, dok in fehlend))
+    if fehlen:
+        liste.write_text(''.join(f'{i}\t{dok}\t' + (zurueckholen(ziel / zeit / stand[i], ablage / stand[i]) if i in stand
+                                                     else 'fehlt in Ablage und Sicherung') + '\n' for i, dok in fehlen))
     else:
         liste.unlink(missing_ok=True)
+    weg = [i for i, _ in fehlen if i not in stand]
     warnungen = []
-    if fehlend:
-        warnungen.append(f'{len(fehlend)} Datei(en) fehlen in Ablage und Sicherung ({", ".join(i for i, _ in fehlend[:3])}'
-                         f'{" …" if len(fehlend) > 3 else ""}), Liste: sicherungen/.dateien-fehlend')
+    if len(fehlen) > len(weg):
+        warnungen.append(f'{len(fehlen) - len(weg)} Datei(en) fehlen in der Ablage, in der Sicherung erhalten (Stand {zeit}), '
+                         'Befehle zum Zurückholen: sicherungen/.dateien-fehlend')
+    if weg:
+        warnungen.append(f'{len(weg)} Datei(en) fehlen in Ablage und Sicherung ({kurz(weg)}), Liste: sicherungen/.dateien-fehlend')
+    if aus_stand:
+        warnungen.append(f'{len(aus_stand)} Datei(en) in der Ablage mit anderer Größe als im Dokument, passende Fassung aus Stand '
+                         f'{v.name} gesichert ({kurz(aus_stand)})')
+    if anders:
+        warnungen.append(f'{len(anders)} Datei(en) mit anderer Größe als im Dokument, vorhandene Fassung gesichert ({kurz(anders)})')
     if geheilt:
-        warnungen.append(f'{len(geheilt)} beschädigte Kopie(n) in der Sicherung neu kopiert ({", ".join(geheilt[:3])})')
-    return warnungen
+        warnungen.append(f'{len(geheilt)} beschädigte Kopie(n) in der Sicherung neu kopiert ({kurz(geheilt)})')
+    if falsch:
+        warnungen.append(f'{len(falsch)} Datei(en) mit falscher Prüfsumme in Sicherung und Ablage, vorhandene Fassung gesichert ({kurz(falsch)})')
+    if kaputt:
+        warnungen.append(f'{len(kaputt)} Dokument(e) nicht lesbar, Verweise darin nicht geprüft ({kurz(kaputt)})')
+    zustand = 'kritisch' if len(fehlen) > KRITISCH or len(fehlen) * 100 > len(refs) else 'warnung' if warnungen else 'ok'
+    return zustand, warnungen
 
 
 def belegt(staende_liste):
@@ -220,18 +288,22 @@ def belegt(staende_liste):
     return sum(groesse.values())
 
 
-def abschliessen(ziel, zeit):
+def abschliessen(ziel, zeit, zustand):
     s = staende(ziel)
     letzte = dateien(ziel / zeit).values()
     liste = ziel.parent / '.dateien-fehlend'
     return {'anzahl': len(letzte), 'groesse': sum(st.st_size for st in letzte), 'neu': sum(st.st_size for st in letzte if st.st_nlink == 1),
-            'staende': len(s), 'belegt': belegt(s), 'fehlend': len(liste.read_text().splitlines()) if liste.is_file() else 0}
+            'staende': len(s), 'belegt': belegt(s), 'fehlend': len(liste.read_text().splitlines()) if liste.is_file() else 0,
+            'zustand': zustand}
 
 
 def fehlende(ablage, daten):
     lebend = {NAME.fullmatch(rel).group(1): st for rel, st in dateien(ablage).items()}
     for d in daten:
-        for i, (dok, g, _) in sorted(verweise(d).items()):
+        refs, kaputt = verweise(d)
+        for name in kaputt:
+            yield '-', name, 'Dokument nicht lesbar'
+        for i, (dok, g, _) in sorted(refs.items()):
             if i not in lebend:
                 yield i, dok, 'fehlt'
             elif g is not None and lebend[i].st_size != g:
@@ -247,24 +319,26 @@ def zeit(wert):
 def main():
     p = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     b = p.add_subparsers(dest='befehl', required=True)
-    for name, felder in (('bedarf', 'ablage ziel'), ('aufbauen', 'ablage ziel zeit'), ('pruefen', 'ablage ziel zeit daten'),
-                         ('abschliessen', 'ziel zeit'), ('fehlende', 'ablage daten')):
+    for name, felder in (('bedarf', 'ablage ziel zeit?'), ('aufbauen', 'ablage ziel zeit'), ('pruefen', 'ablage ziel zeit daten+'),
+                         ('abschliessen', 'ziel zeit zustand?'), ('fehlende', 'ablage daten+')):
         u = b.add_parser(name)
-        for f in felder.split():
-            u.add_argument(f, type=zeit if f == 'zeit' else Path, nargs='+' if f == 'daten' else None)
+        for f in felder.split():   # Endung ? = optional, + = mindestens einmal
+            n = f.rstrip('?+')
+            u.add_argument(n, type=zeit if n == 'zeit' else str if n == 'zustand' else Path, nargs=f[len(n):] or None)
     a = p.parse_args()
     if 'ablage' in a and a.ablage.is_symlink():
         p.error('Dateiablage ist ein Verweis')
     if a.befehl == 'bedarf':
-        print(bedarf(a.ablage, a.ziel))
+        print(bedarf(a.ablage, a.ziel, a.zeit))
     elif a.befehl == 'aufbauen':
         aufbauen(a.ablage, a.ziel, a.zeit)
     elif a.befehl == 'pruefen':
-        warnungen = pruefen(a.ablage, a.ziel, a.zeit, a.daten)
+        zustand, warnungen = pruefen(a.ablage, a.ziel, a.zeit, a.daten)
+        print(zustand)
         if warnungen:
             print('; '.join(warnungen), file=sys.stderr)
     elif a.befehl == 'abschliessen':
-        print(json.dumps(abschliessen(a.ziel, a.zeit), separators=(',', ':')))
+        print(json.dumps(abschliessen(a.ziel, a.zeit, a.zustand or 'ok'), separators=(',', ':')))
     else:
         for zeile in fehlende(a.ablage, a.daten):
             print(*zeile, sep='\t')
