@@ -7,7 +7,7 @@ Abschnitte in fünf Teilen, Nummern, Fragen); Abschnitt ändern, anlegen, versch
 veralteter Stand 409; IT-Systeme (Pflichtfelder, Datum, Zuordnung, Entfernen räumt Zuordnungen ab); Freigabe (nur wenn alles
 fertig, Anlass Pflicht, Erstfassung, Schnappschuss mit Version des verknüpften QM-Dokuments und Namen zu den Kürzeln, nichts
 geändert → 422, „ohne Änderung überprüft“ mit Frist 12 Monate); nach der Fassung: Abweichung in Worten, System in Fassung
-nicht löschbar (außer Betrieb), neue Version eines QM-Dokuments zählt als Änderung, „gültig ab“ nie vor der vorigen Fassung,
+nicht löschbar (außer Betrieb), neue Version eines QM-Dokuments zählt als Änderung, „gültig ab“ nach dem Beginn der vorigen Fassung,
 Fassung 1 bleibt unverändert, Dokumentation mit Fassung nicht löschbar; Export: PDF je Fassung (Text der Fassung, nicht der
 heutige), Entwurf gekennzeichnet, Export für Prüfungen (Zeitraum, Fassungen im Zeitraum, Änderungshistorie, Fehler 422/404),
 ZIP mit der Datei des QM-Dokuments in der damaligen Version, Protokoll.
@@ -30,7 +30,7 @@ import zlib
 from playwright.sync_api import sync_playwright
 
 from kunden_hilfe import Client, B, API
-from umgebung import SH
+from umgebung import SH, storage_raw
 
 HIER = os.path.dirname(os.path.abspath(__file__))
 PAKET_DATEI = os.path.join(HIER, '..', 'fixtures', 'qs', 'datenpaket.json')
@@ -217,6 +217,10 @@ check('Fassung 1 freigegeben: Datum heute, gültig ab wie angegeben, Name, Ände
 check('nach der Freigabe: keine Abweichung, Überprüfung in 12 Monaten, System steht in der Fassung', d['seitFassung']['offen'] is False and d['seitFassung']['zeilen'] == []
       and d['ueberpruefung']['seit'] == HEUTE.isoformat() and d['ueberpruefung']['faellig'] is False and d['ueberpruefung']['faelligAb'][:4] == str(HEUTE.year + 1)
       and all(s['inFassung'] for s in d['systeme']), (d['seitFassung'], d['ueberpruefung']))
+gesp = json.loads((storage_raw('qs-verfahren') or '{}').split('?>\n', 1)[-1] or '{}')
+inh1 = next((x for x in gesp.get('liste', []) if x.get('id') == DID), {}).get('fassungen', [{}])[0].get('inhalt', {})
+check('Schnappschuss der Fassung 1 enthält die Teile mit Überschrift (spätere Änderungen der Teile ändern alte Fassungen nicht)',
+      inh1.get('teile', {}).get('allgemein') == 'Allgemeine Beschreibung' and len(inh1.get('teile', {})) == 5, list(inh1))
 st, r = G.call('qs_verfahren_freigeben', {'doku': DID, 'grund': 'noch einmal'})
 check('zweite Freigabe ohne Änderung: 422 mit Hinweis auf die Überprüfung', st == 422 and 'nichts geändert' in r['error'] and 'überprüft' in r['error'], r)
 check('„ohne Änderung überprüft“: pflegen 403', Bo.call('qs_verfahren_freigeben', {'doku': DID, 'ohneAenderung': True})[0] == 403)
@@ -255,7 +259,11 @@ check('neue Version des verknüpften QM-Dokuments zählt als Änderung (bisher 2
       and 'QM-Dokument 1.3-L02 HACCP-Analyse: jetzt Version 3 (bisher Version 2)' in ab['zeilen'], ab)
 check('Abweichung nennt alles: Kopf, geändert, neu, Systeme, QM-Dokument', {z.split(':')[0] for z in ab['zeilen']} >= {'Geändert', 'Neu', 'IT-System neu', 'IT-System außer Betrieb', 'QM-Dokument 1.3-L02 HACCP-Analyse'}
       and any(z.startswith('Allgemeine Angaben geändert') for z in ab['zeilen']), ab['zeilen'])
-check('Fassung 2: „gültig ab“ vor Fassung 1 → 422', 'liegt vor der Fassung 1' in G.call('qs_verfahren_freigeben', {'doku': DID, 'grund': 'Portal', 'gueltigAb': tag(-401)})[1].get('error', ''))
+check('Fassung 2: „gültig ab“ vor Fassung 1 → 422', 'muss nach dem Beginn der Fassung 1' in G.call('qs_verfahren_freigeben', {'doku': DID, 'grund': 'Portal', 'gueltigAb': tag(-401)})[1].get('error', ''))
+# derselbe Tag wie Fassung 1: Fassung 1 hätte sonst „gültig ab AB1 bis AB1 − 1 Tag“ (Gültigkeit endet vor ihrem Beginn)
+st, r = G.call('qs_verfahren_freigeben', {'doku': DID, 'grund': 'Tippfehler', 'gueltigAb': AB1})
+check('Fassung 2: „gültig ab“ am selben Tag wie Fassung 1 → 422, keine Fassung angelegt', st == 422 and 'muss nach dem Beginn der Fassung 1' in r.get('error', '')
+      and len(next(x for x in A.call('qs_verfahren')[1]['dokus'] if x['id'] == DID)['fassungen']) == 1, (st, r.get('error')))
 AB2 = tag(-100)
 st, r = G.call('qs_verfahren_freigeben', {'doku': DID, 'grund': 'Rechnungseingang über Portal, neues Bank-System', 'gueltigAb': AB2})
 d = r.get('doku', {})
@@ -320,8 +328,12 @@ check('Export als ZIP: PDF und die Datei des QM-Dokuments in der Version der Fas
       and any(n.endswith('/Verfahrensdokumentation.pdf') for n in namen) and any(n.endswith('/QM-Dokumente/1.3-L02 HACCP-Analyse/Version 2/HACCP-Analyse V2.pdf') for n in namen)
       and z.read([n for n in namen if n.endswith('HACCP-Analyse V2.pdf')][0]) == INHALT_V2 and z.read([n for n in namen if n.endswith('Verfahrensdokumentation.pdf')][0])[:5] == b'%PDF-', namen)
 check('Export nur mit Recht: „QM ansehen“ 403', roh(L, E + '&fassung=1')[0] == 403 and roh(L, E + f'&von={tag(-300)}&bis={tag(0)}')[0] == 403)
-st, r = Bo.call('qs_verfahren_save', {'titel': 'Ohne Fassung'})
+st, r = Bo.call('qs_verfahren_save', {'titel': 'Ohne Fassung ' + 'Langer Titel ' * 13 + 'ENDE-TITEL', 'gesellschaft': 'Muster Fleisch GmbH & Co. KG ' * 6 + 'ENDE-FIRMA'})
 check('Export für Prüfungen ohne freigegebene Fassung: 422', 'noch keine freigegebene Fassung' in fehlertext(roh(Vi, f'qs_verfahren_export&doku={r["doku"]["id"]}&von={tag(-10)}&bis={tag(0)}')[2]))
+# Fußzeile: Bezeichnung + Unternehmen (je bis 200 Zeichen) gekürzt, „Seite x von y“ bleibt frei
+fuss = [t for t in pdf_text(roh(Vi, f'qs_verfahren_export&doku={r["doku"]["id"]}&fassung=0')[2])[0] if t.endswith(' …')]
+check('Entwurf-PDF: lange Fußzeile gekürzt mit „…“, Ende von Titel und Unternehmen nicht im Satz', len(fuss) == 1 and fuss[0].startswith('Ohne Fassung')
+      and 'ENDE-TITEL' not in fuss[0] and len(fuss[0]) < 120, fuss)
 assert Bo.call('qs_verfahren_save', {'id': r['doku']['id'], 'loeschen': True})[0] == 200
 log = json.dumps(A.call('log')[1], ensure_ascii=False)
 check('Protokoll: Anlegen, Abschnitt, IT-System, Freigabe, Überprüfung, Export mit Zeitraum und Fassungen', all(t in log for t in (

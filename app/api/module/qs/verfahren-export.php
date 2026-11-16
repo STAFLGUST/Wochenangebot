@@ -33,7 +33,9 @@ final class QsVfSatz
     private function rahmen(): void
     {
         $this->pdf->line(self::L, 800, self::R, 800, .5, '#b9b4ac');
-        $this->pdf->text(self::L, 813, $this->fuss, 7.5, false, '#5f5b55');
+        // lange Bezeichnung + Unternehmen (je bis 200 Zeichen): gekürzt statt über „Seite x von y“ und den Rand hinaus
+        $fuss = Pdf::wrap($this->fuss, 7.5, self::R - self::L - 100);
+        $this->pdf->text(self::L, 813, $fuss[0] . (count($fuss) > 1 ? ' …' : ''), 7.5, false, '#5f5b55');
         $this->pdf->text(self::R, 813, 'Seite ' . $this->seite . ($this->gesamt ? ' von ' . $this->gesamt : ''), 7.5, false, '#5f5b55', 'r');
         if ($this->marke !== '') $this->pdf->text(self::R, 40, $this->marke, 9, true, '#b3261e', 'r');
     }
@@ -82,7 +84,9 @@ function qs_vf_pdf_inhalt(QsVfSatz $s, array $inhalt): void
 {
     $sysName = []; foreach ($inhalt['systeme'] ?? [] as $x) $sysName[(string)$x['id']] = (string)$x['name'];
     $rang = 0;
-    foreach (QS_VF_TEILE as $teil => $titel) {
+    $teile = is_array($inhalt['teile'] ?? null) ? $inhalt['teile'] : QS_VF_TEILE;   // ältere Fassungen ohne eigene Liste: heutige Teile
+    foreach ($inhalt['abschnitte'] ?? [] as $a) if (!isset($teile[$a['teil'] ?? ''])) $teile[(string)($a['teil'] ?? '')] = 'Weitere Abschnitte';   // nie still weglassen
+    foreach ($teile as $teil => $titel) {
         $rang++;
         $liste = array_values(array_filter($inhalt['abschnitte'] ?? [], function ($a) use ($teil) { return ($a['teil'] ?? '') === $teil; }));
         if (!$liste) continue;

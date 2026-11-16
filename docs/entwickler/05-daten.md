@@ -785,10 +785,11 @@ Verfahrensdokumentation nach GoBD (`module/qs/verfahren.php`, Aktionen `qs_verfa
   "bis", "rev"}], "fassungen": [{"nr", "datum", "gueltigAb", "grund", "freigegeben": {"t", "von", "vonId"}, "inhalt", "aenderungen": ["…"]}],
   "pruefungen": [{"datum", "fassung", "notiz", "t", "von", "vonId"}]}`.
 - Der Arbeitsstand (Abschnitte, Systeme, Kopf) ist frei änderbar; **Fassungen sind unveränderliche Schnappschüsse** (GR-106): `inhalt` hält
-  Kopf, Abschnitte mit Nummer, IT-Systeme, die Namen zu den Kürzeln und zu jedem Verweis die an diesem Tag gültige Version des QM-Dokuments
-  (`dok`, `nr`, `titel`, `version`, `datum`). Sie werden nie geändert oder gelöscht; eine Dokumentation mit Fassung lässt sich nicht löschen,
+  Kopf, die Teile mit Überschrift (`teile`, ältere Fassungen ohne: die heutigen), Abschnitte mit Nummer, IT-Systeme, die Namen zu den
+  Kürzeln und zu jedem Verweis die an diesem Tag gültige Version des QM-Dokuments (`dok`, `nr`, `titel`, `version`, `datum`). Sie werden nie geändert oder gelöscht; eine Dokumentation mit Fassung lässt sich nicht löschen,
   ein IT-System aus einer Fassung nur „außer Betrieb“ setzen.
-- Freigabe (`qs_verfahren_freigeben`, `grund`, `gueltigAb`): alle Abschnitte `fertig` mit Inhalt, „gültig ab“ nie vor der vorigen Fassung, und
+- Freigabe (`qs_verfahren_freigeben`, `grund`, `gueltigAb`): alle Abschnitte `fertig` mit Inhalt, „gültig ab“ nach dem „gültig ab“ der vorigen Fassung
+  (derselbe Tag wird abgelehnt – sonst endete die vorige Fassung vor ihrem Beginn), kein Abschnitt ohne bekannten Teil, und
   es muss sich etwas geändert haben – `qs_vf_abweichung` vergleicht den Arbeitsstand mit der letzten Fassung (auch eine neue Version eines
   verknüpften QM-Dokuments zählt) und liefert die Änderungsliste in Worten; sie wird als `aenderungen` gespeichert. Ohne Abweichung statt
   dessen `ohneAenderung: true` („ohne Änderung überprüft“, Frist 12 Monate).
