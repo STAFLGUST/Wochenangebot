@@ -563,17 +563,6 @@ with sync_playwright() as p:
     satz_im_rahmen(a, 2, 'hoch')
     a.click('#ds-fuss [data-ds="speichern"]'); a.wait_for_selector('#dlg-design:not([open])', state='attached')
     check('„Auf Vorlage zurücksetzen“ und Speichern: Anpassung weg', doc('angebote')['stdDesign'] == {'vorlage': gid}, doc('angebote').get('stdDesign'))
-    # Modul Versand: die Liste „Veröffentlichen“ nennt das Design; danach sehen Kunden es
-    a.goto(BASE + '/module/versand/'); a.wait_for_selector('#vs-app:not([hidden]) #vs-s1')
-    check('Versand: Schritt 1 offen, „Veröffentlichen“ möglich', a.is_enabled('#vs-pub') and 'nicht veröffentlicht' in a.inner_text('#vs-s1'), a.inner_text('#vs-s1'))
-    a.click('#vs-pub'); a.wait_for_selector('#dlg-pub[open] .vs-aend')
-    pt = a.inner_text('#dlg-pub').lower()   # Überschriften der Liste in Großbuchstaben (CSS)
-    check('Versand: Fenster „Veröffentlichen“ listet das Design des Wochenangebots', 'design (druck und kundenseite) (1)' in pt and 'vorlage „gastro“' in pt and 'standard → 2 spalten, hoch' in pt, pt[-400:])
-    a.evaluate("document.querySelector('#dlg-pub .vs-aend:last-of-type').scrollIntoView()")
-    shot(a.locator('#dlg-pub'), f'{SH}/design-versand-1280-hell.png')
-    a.click('#pub-jetzt'); a.wait_for_selector('#dlg-fertig[open]')
-    check('… nach „Jetzt veröffentlichen“ sehen Kunden das Design', oeffentlich()['meta'].get('design', {}).get('raster') == GASTRO['raster'])
-    a.goto(BASE + '/admin/'); a.wait_for_selector('#screen-editor:not([hidden]) tr[data-id]')
 
     # Vorlagen: neu, kopieren, umbenennen, löschen
     oeffnen(a)
@@ -626,7 +615,17 @@ with sync_playwright() as p:
     mit = fr.evaluate("(() => { const d = document.querySelector('#print-root > .pl-doc'); return { seiten: +d.dataset.seiten, fuell: [...d.querySelectorAll('.pl-page')].map((p) => +p.dataset.fuell), kopf: !!d.querySelector('.pl-fest h3') }; })()")
     check('Einzelangebot (110 Positionen, quer, 4 Spalten) mit Überschrift: eine Seite, die Überschrift steht darüber', mit['seiten'] == 1 and mit['kopf'] and mit['fuell'][0] > 80, mit)
     shot(a.locator('#dlg-design'), f'{SH}/design-einzel-ueberschrift-1280-hell.png')
-    a.keyboard.press('Escape')
+    a.keyboard.press('Escape'); a.wait_for_selector('#dlg-design:not([open])', state='attached')
+    # Modul Versand (gespeichert ist noch „Gastro“ am Wochenangebot): die Liste „Veröffentlichen“ nennt das Design; danach sehen Kunden es
+    a.goto(BASE + '/module/versand/'); a.wait_for_selector('#vs-app:not([hidden]) #vs-s1')
+    check('Versand: Schritt 1 offen, „Veröffentlichen“ möglich', a.is_enabled('#vs-pub') and 'nicht veröffentlicht' in a.inner_text('#vs-s1'), a.inner_text('#vs-s1'))
+    a.click('#vs-pub'); a.wait_for_selector('#dlg-pub[open] .vs-aend')
+    pt = a.inner_text('#dlg-pub').lower()   # Überschriften der Liste in Großbuchstaben (CSS)
+    check('Versand: Fenster „Veröffentlichen“ listet das Design des Wochenangebots', 'design (druck und kundenseite) (1)' in pt and 'vorlage „gastro“' in pt and 'standard → 2 spalten, hoch' in pt, pt[-400:])
+    a.evaluate("document.querySelector('#dlg-pub .vs-aend:last-of-type').scrollIntoView()")
+    shot(a.locator('#dlg-pub'), f'{SH}/design-versand-1280-hell.png')
+    a.click('#pub-jetzt'); a.wait_for_selector('#dlg-fertig[open]')
+    check('… nach „Jetzt veröffentlichen“ sehen Kunden das Design', oeffentlich()['meta'].get('design', {}).get('raster') == GASTRO['raster'])
     ctx.close()
 
     for schema in ('light', 'dark'):
