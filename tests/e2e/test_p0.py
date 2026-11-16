@@ -63,10 +63,30 @@ with sync_playwright() as p:
     check('backup card: none yet', 'noch keine automatische Sicherung' in g, g)
     t = time.strftime('%Y-%m-%dT%H:%M:%SZ', time.gmtime())
     open(DATA + '/sicherung.php', 'w').write(GUARD + json.dumps({'t': t, 'ok': True, 'datei': 'daten-x.tar.gz', 'groesse': 2400000, 'dateien': 40, 'fehler': 0, 'anzahl': 12, 'behalten': 30}))
-    g = system_neu(); check('backup card: ok', 'geprüft' in g and '12 Stände' in g, g)
-    open(DATA + '/sicherung.php', 'w').write(GUARD + json.dumps({'t': t, 'ok': False, 'datei': '', 'groesse': 0, 'dateien': 0, 'fehler': 1, 'anzahl': 12, 'behalten': 30}))
-    system_neu()
-    check('backup card: failure shown red', a.locator('#tab-system .sic-karte.bad:has-text("Datensicherung")').count() == 1)
+    g = system_neu(); check('backup card: ok', 'geprüft' in g and '12 Stände bis 30 Tage zurück' in g and 'Dateiablage' not in g, g)
+    def karte_zeigen(name, status, **felder):   # Status schreiben, Karte prüfen lassen, Bildschirmfotos bei 1440 und 390 px
+        open(DATA + '/sicherung.php', 'w').write(GUARD + json.dumps({'t': t, 'datei': 'daten-x.tar.gz', 'groesse': 2400000, 'dateien': 40, 'fehler': 0, 'anzahl': 12, 'behalten': 30,
+                                                                     'ok': status != 'bad', **felder}))
+        g = system_neu()
+        sichtbar = a.locator(f'#tab-system .sic-karte.{status}:has-text("Datensicherung")').count() == 1
+        a.locator('#tab-system .sic-karte:has-text("Datensicherung")').screenshot(path=f'{SH}/p0-sicherung-{name}-1440.png')
+        a.set_viewport_size({'width': 390, 'height': 844}); system_neu()
+        a.locator('#tab-system .sic-karte:has-text("Datensicherung")').screenshot(path=f'{SH}/p0-sicherung-{name}-390.png')
+        breit = a.evaluate('document.documentElement.scrollWidth <= window.innerWidth + 1')
+        a.set_viewport_size({'width': 1440, 'height': 950})
+        return g, sichtbar and breit
+    ablage = {'anzahl': 15000, 'groesse': 12 * 1024 ** 3, 'neu': 0, 'staende': 42, 'belegt': 13 * 1024 ** 3, 'fehlend': 0}
+    g, gut = karte_zeigen('ok', 'ok', ablage=ablage)
+    check('backup card: file store with count, size and used space (390px without horizontal scrolling)', gut and 'Dateiablage 15.000 Dateien (12,0 GB), Sicherung belegt 13,0 GB' in g, g)
+    g, gut = karte_zeigen('warnung', 'warn', ablage={**ablage, 'fehlend': 1, 'zustand': 'warnung'},
+                          meldung='1 Datei(en) fehlen in Ablage und Sicherung (ab12cd34ef56ab12cd34ef56), Liste: sicherungen/.dateien-fehlend')
+    check('backup card: saved with warning shown yellow with the reason', gut and '1 Datei(en) fehlen in Ablage und Sicherung (ab12cd34ef56ab12cd34ef56)' in g and 'mit Warnung' in g, g)
+    g, gut = karte_zeigen('kritisch', 'bad', ok=True, ablage={**ablage, 'fehlend': 240, 'zustand': 'kritisch'},
+                          meldung='240 Datei(en) fehlen in der Ablage, in der Sicherung erhalten (Stand 2026-11-16_023012), Befehle zum Zurückholen: sicherungen/.dateien-fehlend')
+    check('backup card: many files missing in the store shown red with the way out (saved, so not "failed")', gut and 'Dateien fehlen' in g
+          and 'Dateien aus der Sicherung zurückholen' in g and '240 Datei(en) fehlen in der Ablage, in der Sicherung erhalten' in g and 'fehlgeschlagen' not in g, g)
+    g, gut = karte_zeigen('fehler', 'bad', fehler=1, meldung='zu wenig Speicherplatz: 3,0 GB frei, nötig 17,3 GB (neue Dateien 12,0 GB, Daten 3 × 0,1 GB, Reserve 5 GB)')
+    check('backup card: failure shown red with the reason (e.g. too little space)', gut and 'zu wenig Speicherplatz: 3,0 GB frei, nötig 17,3 GB' in g, g)
     # 6) Bereitstellungs-Status (Release-Modus)
     check('deploy card: not yet set up', a.locator('#tab-system .sic-karte.warn:has-text("Bereitstellung")').count() == 1 and 'ohne Freigabe' in a.inner_text('#tab-system .sic-karten'))
     open(DATA + '/deployment.php', 'w').write(GUARD + json.dumps({'t': t, 'ok': True, 'sha': 'abcdef1234567890abcdef1234567890abcdef12', 'vorher': '', 'lauf': '1', 'meldung': ''}))

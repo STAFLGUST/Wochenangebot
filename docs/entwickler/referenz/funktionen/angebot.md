@@ -2,7 +2,7 @@
 
 <!-- ERZEUGT von `python3 werkzeuge/doku.py erzeugen` – nicht von Hand ändern. Quelle: Funktionen und Kommentare im Code. Die CI prüft, dass diese Datei zum Code passt. -->
 
-55 Dateien, 847 Funktionen – in der Reihenfolge der Datei, **fett** die Abschnitte. Text = erste Aussage des Kommentars direkt über der Funktion (Python: Docstring). Übersicht aller Module: [README.md](README.md).
+55 Dateien, 848 Funktionen – in der Reihenfolge der Datei, **fett** die Abschnitte. Text = erste Aussage des Kommentars direkt über der Funktion (Python: Docstring). Übersicht aller Module: [README.md](README.md).
 
 ## `app/api/lib/angebote.php`
 
@@ -1436,6 +1436,7 @@ _Testgruppe p0: Ersteinrichtung gesperrt (leeres System, WA_INSTALLED, kaputte N
 - `srv(port, data, env)`
 - `st(url)`
 - `system_neu()` – 5) Sicherungs-Status im Modul Sicherheit, Reiter System (bis 27.10.2026 Verwaltung → System)
+- `karte_zeigen(name, status, **felder)`
 
 ## `tests/e2e/test_restposten.py`
 

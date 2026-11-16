@@ -84,9 +84,10 @@ Zwischenspeicher werden nur mit passender Prüfsumme aus der signierten Ubuntu-P
    unverändert. Schlägt der Bau fehl, wird nichts eingespielt; Meldung im Eingabebereich, nächster Versuch beim
    nächsten Lauf (alle 2 Minuten). So kommen Sicherheitsupdates des Basis-Images (neuer Digest) wirklich an.
 3. **Sicherung** mit dem Sicherungsskript des **neuen** Commits (`deploy/.sichern-release.sh`, wird danach gelöscht;
-   fehlt das Skript im neuen Commit, das vorhandene). Ein Fehler im alten Skript blockiert so nicht mehr das Release,
-   das ihn behebt. Die Hilfsdateien in `deploy/` (`datenbank.py`, `sicherung-pruefen.*`) stammen dabei noch aus dem
-   alten Stand. Ohne Sicherung kein Release.
+   fehlt das Skript im neuen Commit, das vorhandene), ebenso das Werkzeug der Dateiablage (`deploy/.dateien_sichern-release.py`).
+   Ein Fehler im alten Skript oder Werkzeug blockiert so nicht mehr das Release, das ihn behebt. Die übrigen Hilfsdateien in
+   `deploy/` (`datenbank.py`, `sicherung-pruefen.*`) stammen dabei noch aus dem alten Stand. Ohne Sicherung kein Release;
+   fehlende Dateien der Ablage sind nur eine Warnung ([08-betrieb.md](entwickler/08-betrieb.md#sicherung)).
 4. Code wechseln. Alle Container werden neu erstellt, wenn sich `Caddyfile`, `docker-compose.yml` oder die
    Ergänzungsdatei ändern; wurde in Schritt 2 nur das Image gebaut, nur die beiden Anwendungs-Container `app` und
    `app-mitarbeiter` (ADR-007; Keycloak läuft weiter); hat sich nur `deploy/anmeldung/apache-oidc.conf` geändert, nur

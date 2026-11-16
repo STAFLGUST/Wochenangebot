@@ -167,7 +167,7 @@ button.sic-karte:hover { transform: translateY(-1px); box-shadow: inset 0 1px 0 
 .sic-kzeile { display: flex; align-items: flex-end; gap: 10px; }
 .sic-mini { width: 64px; height: 26px; margin-left: auto; flex: none; fill: var(--sic-muted); }
 .sic-karte.ok .sic-mini { fill: var(--sic-ok-hell); } .sic-karte.warn .sic-mini { fill: var(--sic-warn-hell); } .sic-karte.bad .sic-mini { fill: var(--sic-bad-hell); }
-.sic-ktext { font-size: 12.5px; color: var(--sic-muted); line-height: 1.4; }
+.sic-ktext { font-size: 12.5px; color: var(--sic-muted); line-height: 1.4; overflow-wrap: anywhere; }   /* lange Kennungen und Pfade brechen statt überzulaufen */
 
 /* ── Lagebild oben: Gesamtbewertung und Notfall ── */
 .sic-oben { display: grid; grid-template-columns: minmax(0, 1.1fr) minmax(0, 1.35fr) minmax(0, 1fr); gap: 18px; }

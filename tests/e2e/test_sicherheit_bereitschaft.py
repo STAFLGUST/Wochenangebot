@@ -14,6 +14,7 @@ keine JavaScript-Fehler. Nur synthetische Testdaten.
 """
 import datetime
 import json
+import os
 import sys
 import time
 import zoneinfo
@@ -116,12 +117,19 @@ st, r = A.call('sicherheit_leitfaden_haken', {'schritt': 'ausloesen', 'erledigt'
 check('Abhaken außerhalb eines Notfalls: 409', st == 409, (st, r))
 
 # ── Probealarm ──
+def sicherung_melden(**felder):   # Status der Datensicherung wie deploy/sichern.sh (Begleitdatei in daten/, auch im SQLite-Betrieb)
+    open(os.environ['UDATA'] + '/sicherung.php', 'w').write('<?php http_response_code(404); exit; ?>\n' + json.dumps(
+        {'t': time.strftime('%Y-%m-%dT%H:%M:%SZ', time.gmtime()), 'ok': True, 'datei': 'daten-x.tar.gz', 'meldung': '', 'ablage': None, **felder}))
+sicherung_melden(meldung='1 Datei(en) fehlen in Ablage und Sicherung (ab12cd34ef56ab12cd34ef56), Liste: sicherungen/.dateien-fehlend',
+                 ablage={'anzahl': 3, 'fehlend': 1, 'zustand': 'warnung'})
 st, r = A.call('sicherheit_probealarm', {})
 p0 = r.get('probe', {})
 k = {x['k']: x for x in p0.get('punkte', [])}
 check('Probealarm ohne Empfänger: ausgeführt, Meldung als Lücke vermerkt', st == 200 and k.get('meldung', {}).get('stufe') == 'bad'
       and p0['mail'] == {'an': 0, 'ok': 0, 'fehler': 'keine Empfänger eingetragen'}, (st, r))
 check('Bereitschaftsprüfung: alle Prüfpunkte', set(k) == {'meldung', 'ausloeser', 'beender', 'zweifaktor', 'kontakte', 'selbstsperre', 'sicherung', 'zentral'}, sorted(k))
+check('Datensicherung gesichert mit Warnung: gelb „mit Warnung“ mit der Meldung als Hinweis, nicht „aktuell“', k['sicherung']['stufe'] == 'warn'
+      and k['sicherung']['text'].startswith('mit Warnung (') and 'fehlen in Ablage und Sicherung' in k['sicherung']['hinweis'], k['sicherung'])
 check('Prüfpunkte: Auslösen (2 Personen) ok, Beenden (1 Administrator) Hinweis, Ansprechpartner ok, zentrale Anmeldung nur Info',
       k['ausloeser']['stufe'] == 'ok' and k['beender']['stufe'] == 'warn' and k['kontakte']['stufe'] == 'ok' and k['zentral']['stufe'] == 'info'
       and p0['gesamt'] == 7, {x: k[x]['stufe'] for x in k})
@@ -132,8 +140,13 @@ d = doc('sicherheit-bereitschaft'); d['proben'][0]['t'] = time.strftime('%Y-%m-%
 check('Benachrichtigung „Sicherheitsereignisse“ an it@ eingerichtet', A.call('benachrichtigung_save', {'events': {'sicherheit': {'on': True, 'to': 'it@example.org, chef@example.org'}}})[0] == 200)
 fw_vorher = doc('firewall'); sitz_vorher = len(doc('sitzungen') or {})
 vor = len(smtp.messages)
+sicherung_melden(meldung='240 Datei(en) fehlen in der Ablage, in der Sicherung erhalten (Stand 2026-11-16_023012), Befehle zum Zurückholen: sicherungen/.dateien-fehlend',
+                 ablage={'anzahl': 15000, 'fehlend': 240, 'zustand': 'kritisch'})
 st, r = Ni.call('sicherheit_probealarm', {})
 p1 = r.get('probe', {})
+s1 = {x['k']: x for x in p1.get('punkte', [])}.get('sicherung', {})
+check('Datensicherung mit vielen fehlenden Dateien der Ablage: rot, Hinweis „aus der Sicherung zurückholen“', s1.get('stufe') == 'bad'
+      and s1.get('text', '').startswith('mit Warnung (') and 'Dateien aus der Sicherung zurückholen' in s1.get('hinweis', ''), s1)
 check('Probealarm durch Mitarbeiterin mit „Notfall auslösen“', st == 200 and p1.get('vonName') == 'Nina Notfall' and p1['mail']['an'] == 2 and p1['mail']['ok'] == 2, (st, p1.get('mail')))
 check('… Meldung ok, Bereitschaft gezählt', {x['k']: x['stufe'] for x in p1['punkte']}['meldung'] == 'ok' and p1['ok'] == sum(1 for x in p1['punkte'] if x['stufe'] == 'ok'))
 until(lambda: len(mails('it@example.org', 'PROBEALARM')) >= 1, 10)
