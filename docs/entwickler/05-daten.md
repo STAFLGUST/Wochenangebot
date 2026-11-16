@@ -673,7 +673,7 @@ Löst die Excel „QM-System“ ab (Blätter Inhaltsverzeichnis, Managementsyste
 laufen unter der Sperre `qs-dokumente`. Zuständig/Vertreter sind **Kürzel** (Schnappschuss, GR-106); Namen in `erstellt`, `geprueft`,
 `freigegeben`, `verlauf` sind Schnappschüsse `{"t", "von", "vonId"}`.
 
-- **`qs-stamm`**: `{"rev", "kapitel": [{"id": "1.4", "titel", "zustaendig", "vertreter", "aktiv"}], "personen": [{"id": "<Kürzel>", "name",
+- **`qs-stamm`**: `{"rev", "kapitel": [{"id": "1.4", "titel", "zustaendig", "vertreter", "aktiv", "bereich": true?}], "personen": [{"id": "<Kürzel>", "name",
   "funktion", "mitarbeiter": "<Nutzer-ID>|", "aktiv"}], "einstellungen": {"ueberpruefungMonate": 36}}`. Ein Mitarbeiter ist mit höchstens
   einem Kürzel verknüpft; verwendete Kapitel werden nur deaktiviert.
 - **`qs-dokumente`**: `{"id": "d…", "rev", "kapitel", "art": "A|F|L|E|V|X|O", "nr": "1.4-F08", "titel", "ablage": "<Pfad>|https://…",
@@ -685,24 +685,10 @@ laufen unter der Sperre `qs-dokumente`. Zuständig/Vertreter sind **Kürzel** (S
   vorige gültige Version wird `ersetzt`. Wer in `bearbeiter` steht, prüft nicht (4-Augen-Prinzip, serverseitig). Die Antwort ergänzt
   `zustand` (`gueltig|entwurf|pruefung|ohne|eingezogen|register`) und `ueberpruefung` (`{"seit", "faelligAb", "faellig"}` – seit der
   letzten Freigabe bzw. `ueberprueft`, nach `ueberpruefungMonate`).
-  **Dokumentenablage** (optional, seit Bauabschnitt 2): `dateien: [{"id": "<20 Hex>", "name", "art": "pdf|docx|…", "mime", "groesse",
-  "sha256", "hochgeladen": {"t", "von", "vonId"}, "nachgetragen": true?, "entfernt": {"t", "von", "vonId", "grund"}?}]` je Version
-  (gelenkt) bzw. am Dokument (Ordner, extern); die Datei selbst liegt in der Dateiablage (Bereich `qs`). Im Entwurf (`qs.bearbeiten`,
-  wer ablegt oder löscht, kommt in `bearbeiter`) wird endgültig gelöscht; sonst nur `entfernt` vermerkt (freigegebene/ersetzte Versionen
-  nur mit `qs.freigeben`, mit Grund). In Prüfung, verworfen oder eingezogen: keine Änderung (409); höchstens 1000 Dateien je Stelle
-  (`QS_MAX_DATEIEN`, bis 16.11.2026: 50).
-  **Eingang** (optional, seit 16.11.2026): Dateien ohne Ziel liegen im festen Eintrag `{"id": "eingang", "eingang": true, "art": "O",
-  "kapitel": "", "nr": "", "titel": "Eingang (nicht zugeordnet)", "versionen": [], "dateien": […], …}` derselben Liste – alle Felder eines
-  Ordners sind gesetzt, damit eine ältere Programmfassung ihn als Ordner ohne Kapitel liest. Der Server legt ihn beim ersten Hochladen mit
-  `dokument: "eingang"` an; höchstens 20 000 aktive Dateien (`QS_MAX_EINGANG`), kein Verlauf je Datei. Datei-Einträge im Eingang optional
-  mit `pfad`: Ordnerpfad aus der Sammel-Ablage relativ zum gewählten Ordner (z. B. `"1.4 Qualitätssicherung/Befunde/Labor A ab 2025"`) –
-  nur Anzeige, Suche und künftig das Anlegen von Ordner-Dokumenten, nie ein Dateisystempfad. Format (`qs_eingang_pfad`, gleich in
-  `saPfad` in `qs.js`): Ordnernamen mit `/` getrennt, Leerraum zusammengefasst, ohne Steuerzeichen und leere/`.`/`..`-Teile, je Teil
-  höchstens 120 Zeichen, höchstens 12 Teile; leer = Feld fehlt. Der Eingang ist kein Dokument: `qs_start`, Dokumentenliste (CSV), ZIP und
-  Dokument-Aktionen (`qs_dokument_index`) lassen ihn aus; `qs_start` nennt nur `eingangZahl`, die Liste liefert `qs_eingang` (ohne
-  Prüfsumme und Dateiart). `qs_datei_zuordnen` hängt Einträge unverändert (gleiche Kennung, Datei bleibt liegen) an einen Ordner, ein
-  externes Dokument oder einen Entwurf um – alles oder nichts, eingetragen wie beim Hochladen (`qs_datei_eintragen`); `qs_eingang_loeschen`
-  entfernt Eintrag und Datei endgültig. `nurNeu` im Eingang: dieselbe Datei = gleicher `pfad`, Name und Inhalt.
+  **Dateien je Version** (optional, seit Bauabschnitt 2): `versionen[].dateien: [{"id": "<20 Hex>", "name", "art": "pdf|docx|…", "mime",
+  "groesse", "sha256", "hochgeladen": {"t", "von", "vonId"}, "pfad"?, "nachgetragen": true?, "entfernt": {"t", "von", "vonId", "grund"}?}]`;
+  ältere Ordner und externe Dokumente tragen dieselben Einträge am Dokument (`dateien`, ohne `pfad`) – neue Dateien dort stehen in
+  `qs-ablage` (unten), die Leser führen beide zusammen (GR-006). Regeln der Ablage: Abschnitt „QM-System: Dokumentenablage“.
   **Vorlagen und Lenkungsangaben** (seit Bauabschnitt 3, `module/qs/vorlagen.php`; Grenzen je Office-Datei: 2000 ZIP-Einträge,
   30 MB entpackt und 20000 Textelemente je Textteil – darüber gilt die Datei als nicht lesbar): Datei-Einträge optional mit `platzhalter: ["version", …]`
   (bekannte, noch offene Platzhalter in Word/Excel), `vorlage: {"dokument", "nr", "version"}` (aus einer Vorlage erzeugt), `uebernommen: N`
@@ -710,6 +696,11 @@ laufen unter der Sperre `qs-dokumente`. Zuständig/Vertreter sind **Kürzel** (S
   die Rohfassung mit Platzhaltern, sie bleibt in der Ablage und wird bei „Dateien übernehmen“ kopiert). Vorlagen (Art V) werden nie ausgefüllt.
   **Nummernstruktur:** Arten A, F, L, E heißen `<Kapitel>-<Art><2–3 Ziffern>`; beim Anlegen und bei Änderung von Nummer, Kapitel oder Art
   prüft `qs_dokument_save` sie (leer = nächste freie, höchste vorhandene + 1 – auch eingezogene zählen); das Datenpaket prüft sie nicht.
+- **`qs-ablage`** (seit 16.11.2026, Ordner-Import): `{"rev", "liste": [{"id", "name", "art", "mime", "groesse", "sha256", "hochgeladen",
+  "ziel": "<Dokument-Kennung>|eingang", "pfad"?, "entfernt"?}], "verworfen": ["<sha256>", …]}` – alle Dateien der Ordner (O), externen
+  Dokumente (X) und des Eingangs. `verworfen`: Prüfsummen endgültig im Eingang gelöschter Dateien (höchstens 20 000, die ältesten fallen
+  weg). Geschrieben nur über `qs_ablage_schreiben()` (module/qs/ablage.php), das zugleich **`qs-ablage-zahlen`**
+  `{"rev", "je": {"<ziel>": {"dateien", "bytes"}}}` neu zählt (nur aktive Dateien; `qs_start` liest nur diese Zahlen).
 - **`qs-handbuch`**: `{"id": "h…", "rev", "kapitel", "pos", "nr": "2.0.14", "titel", "text", "verweise": ["1.3-L02 HACCP-Analyse"], "ifs",
   "zustaendig", "vertreter", "entfallen": {…}|null, "aenderungen": [{"datum", "was", "grund", "von"}]}`. Ein Abschnitt „Ziel“ steht in der
   Oberfläche als Einleitung des Kapitels.
@@ -768,6 +759,54 @@ dasselbe Kürzel nennen (Fehler je Eintrag in der Vorschau). Ältere Versionen b
 Mit Fehlern wird nichts übernommen, in ein Modul mit Daten nur mit `ersetzen` (Einstellungen bleiben, Nachweise werden geleert); sobald in
 der Dokumentenablage Dateien liegen, gar nicht mehr (409 – die Dateien gingen sonst verloren; die Vorschau nennt `dateien`). Echte Pakete
 liegen nie im Repository (GR-007); Beispiel: `tests/fixtures/qs/datenpaket.json`.
+
+#### QM-System: Dokumentenablage (Regeln, `module/qs/ablage.php`)
+
+Die einzige Beschreibung der Regeln; Code-Kommentare verweisen hierher.
+
+- **Wo die Metadaten stehen:** Dateien gelenkter Dokumente je Version in `qs-dokumente`; Dateien der Ordner, externen Dokumente und des
+  Eingangs in `qs-ablage` (`ziel`); ältere `dateien` an Ordnern bleiben in `qs-dokumente` und werden mitgelesen. Die Dateien selbst liegen
+  in der Dateiablage des Plattformkerns (`lib/dateiablage.php`, Bereich `qs`).
+- **Stelle** (`qs_ablage_regel`): im Entwurf mit `qs.bearbeiten` – wer ablegt, zuordnet oder die Datei hochgeladen hat, kommt in
+  `bearbeiter` (4-Augen-Prinzip); an freigegebenen und ersetzten Versionen nur nachtragen mit `qs.freigeben` (Lenkungsangaben gleich
+  eingetragen), nie aus dem Eingang zuordnen; in Prüfung, verworfen oder eingezogen nichts. Grenzen: 1000 aktive Dateien je Version,
+  10 000 je Ordner/externem Dokument, 20 000 im Eingang, 50 000 Einträge in `qs-ablage` (jeder Schreibvorgang schreibt das ganze Dokument).
+- **Entfernen:** im Entwurf endgültig; an Versionen, Ordnern und externen Dokumenten nur `entfernt` vermerkt (Grund Pflicht). Im Eingang
+  wird zugeordnet oder endgültig gelöscht; die Prüfsumme bleibt in `verworfen`, und nie wird eine Datei gelöscht, die `qs-dokumente` noch
+  verwendet.
+- **Sichtbarkeit:** Ordner, externe Dokumente und Versionen mit `qs.sehen`; der Eingang (Liste, Zahl, Download) nur mit `qs.bearbeiten` –
+  dort liegen unsortierte, womöglich personenbezogene Unterlagen.
+- **`pfad`** (`qs_pfad`): Unterordner relativ zum Ordner-Dokument (Archiv) bzw. zum gewählten Ordner (Eingang). `/`-getrennt, `\` teilt
+  ebenfalls, Leerraum zusammengefasst, ohne Steuerzeichen und leere, `.`- und `..`-Teile, je Teil 120 Zeichen, höchstens 12 Teile und
+  500 Byte (ganze Teile); leer = Feld fehlt. Nur Anzeige, Ordnerbaum und Suche, nie ein Pfad im Dateisystem; Zuordnen behält ihn.
+- **Schreiben:** alles unter der Sperre `qs-dokumente`, ein Schreibvorgang je Dokument und Vorgang. Zuordnen an einen Ordner ändert nur
+  `ziel`; in einen Entwurf wandert der Eintrag nach `qs-dokumente` (zuerst das Ziel, dann `qs-ablage`). Ein Verlaufseintrag je Vorgang;
+  das Protokoll nennt Anzahlen, nie Datei- oder Ordnernamen.
+- **Ordner-Import** (`qs_import_plan`, nur der Server rechnet):
+  1. Wurzel: Haben alle Pfade denselben ersten Ordner, der weder mit einer Kapitelnummer noch mit `_` beginnt noch `alt`/`alt_…` heißt,
+     fällt er weg.
+  2. Oberste Ordner: Beginnt der Name mit der Nummer eines vorhandenen Kapitels ohne `bereich`, gehört er automatisch dazu. Sonst wählt
+     der Nutzer: Eingang (Vorgabe), nicht übernehmen, ein Kapitel oder einen Bereich, einen neuen Bereich (nur `qs.verwalten`; ein Kapitel
+     mit `bereich: true` und Nummer ab 90, damit eine ältere Fassung die Kapitelpflege weiter prüfen kann). Lose Dateien → Eingang.
+  3. Gelenkte Dokumente per Nummer nur in automatisch erkannten Kapitelordnern: eine Datei direkt darin, deren Name ohne Endung mit der
+     Nummer beginnt (Groß-/Kleinschreibung und führende Nullen egal) und deren Rest leer ist oder dem Titel entspricht (Trenner Leerzeichen,
+     `_`, `-`); oder eine Datei im Ordner, der wie im eigenen ZIP-Export exakt `Nr Titel` heißt. Kapitel des Dokuments oder Anfang der
+     Nummer = Kapitelordner. Ziel: gültige Version (nachtragen – nur mit `qs.freigeben` und nur mit dem Häkchen der Vorschau, sonst Eingang)
+     oder Entwurf; gesperrt → Eingang mit Grund. In Bereichen nie.
+  4. Archiv: ein Ordner-Dokument je Kapitel/Bereich und Unterordner der ersten Ebene; ein vorhandenes mit gleichem Titel (Groß-/Klein-
+     schreibung und Leerraum egal) wird wiederverwendet. Dateien direkt im Kapitelordner → „Weitere Dateien“; tiefere Ebenen als `pfad`.
+     `_alt`, `alt_…` usw. sind normale Unterordner, nie Fassungen. Eingezogener oder voller Ordner → Eingang.
+  5. Übersprungen: Systemdateien (`.…`, `~$…`, `Thumbs.db`, `desktop.ini`, `.lnk`), ganz oben `Dokumentenliste.csv`/`Hinweise.txt`,
+     `_ältere Versionen`/`_Entwurf` im Ordner eines gelenkten Dokuments (eigener Export), nicht erlaubte Dateiart, leer, zu groß. Höchstens
+     30 000 Dateien je Lauf.
+  6. Schon abgelegt: am Ziel gleicher `pfad`, Name und Größe, oder irgendwo der ganze Ordnerpfad mit Name und Größe (Eingang, auch nach dem
+     Zuordnen). Beim Eintragen zusätzlich die Prüfsumme (gleich → nicht abgelegt) und `verworfen` (früher gelöscht → nicht abgelegt).
+  7. Ablauf: Plan → anlegen (Bereiche, Ordner-Dokumente) → Uploads mit `sammeln` (fertige Uploads bleiben in der Dateiablage liegen) →
+     `qs_import_eintragen` trägt bis zu 100 in einem Schreibvorgang ein (gemessen 15 000 Dateien: 11 s Dateien, 19 s SQLite, längste
+     Sperre 0,15 bzw. 0,26 s). Ein inzwischen gesperrtes Ziel → Eingang mit dem ganzen Ordnerpfad.
+- **Rückfall (GR-006):** Eine ältere Fassung kennt `qs-ablage` nicht – die Dateien sind dort unsichtbar, bleiben aber erhalten und sind nach
+  der Rückkehr wieder da. Grenze: „Datenpaket ersetzen“ der älteren Fassung zählt nur Dateien in `qs-dokumente` und kann Ordner-Dokumente
+  ersetzen; die Archivdateien hängen dann an Kennungen, die es nicht mehr gibt.
 
 ## 5.4 Datenverantwortung (GR-101)
 

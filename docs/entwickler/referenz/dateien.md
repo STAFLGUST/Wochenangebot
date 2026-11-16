@@ -216,6 +216,7 @@ Jede Code-Datei beginnt mit einem Kopfkommentar; dessen erste Aussage steht hier
 
 | Datei | Modul | Inhalt |
 | --- | --- | --- |
+| `ablage.php` | qs | QM-System · Dokumentenablage |
 | `bericht.php` | qs | QM-System · Audit-Bericht (Aktionen qs_bericht, qs_bericht_excel) |
 | `qs.php` | qs | Qualitätssicherung · QM-System (IFS Wholesale) |
 | `verfahren-export.php` | qs | QM-System · Verfahrensdokumentation |
@@ -423,7 +424,9 @@ Jede Code-Datei beginnt mit einem Kopfkommentar; dessen erste Aussage steht hier
 
 | Datei | Modul | Inhalt |
 | --- | --- | --- |
+| `archiv.js` | qs | STAFL-Plattform · QM-System |
 | `index.html` | qs | Übersicht |
+| `ordnerimport.js` | qs | STAFL-Plattform · QM-System |
 | `qs.css` | qs | STAFL-Plattform · QM-System – Gestaltung „Liquid Glass“ wie Dashboard, Leergut, Controlling, HR, CRM und Marketing: warmer Grund mit drei weichen Farbflächen, Glasflächen, kein Rot im Hintergrund. |
 | `qs.js` | qs | STAFL-Plattform · Qualitätssicherung (QM-System) – Oberfläche nach dem Designvorschlag vom 30.10.2026. |
 | `verfahren.js` | qs | STAFL-Plattform · Qualitätssicherung – Reiter „Verfahrensdoku“ |
@@ -819,6 +822,8 @@ Jede Code-Datei beginnt mit einem Kopfkommentar; dessen erste Aussage steht hier
 | `test_qs.py` | qs | Qualitätssicherung (Modul qs, Oberfläche qs.intern unter /module/qs/) – QM-System |
 | `test_qs_ablage.py` | qs | Qualitätssicherung – Dokumentenablage (QM-System Bauabschnitt 2) |
 | `test_qs_bericht.py` | qs | Qualitätssicherung – Audit-Bericht (app/api/module/qs/bericht.php, Aktionen qs_bericht und qs_bericht_excel, Reiter „Audit“). |
+| `test_qs_eingang.py` | qs | QM-System – Eingang (Dateien ohne Ziel, Dokument qs-ablage mit ziel „eingang“, module/qs/ablage.php). |
+| `test_qs_import.py` | qs | QM-System – Ordner-Import (qs_sammel_plan, qs_import_eintragen, module/qs/ablage.php) und Ordnerbaum (qs_archiv, qs_archiv_zip). |
 | `test_qs_verfahren.py` | qs | Qualitätssicherung – Verfahrensdokumentation nach GoBD (app/api/module/qs/verfahren.php und verfahren-export.php, Aktionen qs_verfahren*, Reiter „Verfahrensdoku“ in app/module/qs/verfahren.js). |
 | `test_qs_vorlagen.py` | qs | Qualitätssicherung – Vorlagen und Nummernstruktur (QM-System Bauabschnitt 3, app/api/module/qs/vorlagen.php). |
 | `test_rechte.py` | plattform | Nutzerrechte: Rechte je Rolle (einstellbar) und Ausnahmen je Nutzer (erlauben/verbieten). |

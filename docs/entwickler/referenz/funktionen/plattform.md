@@ -2,7 +2,7 @@
 
 <!-- ERZEUGT von `python3 werkzeuge/doku.py erzeugen` – nicht von Hand ändern. Quelle: Funktionen und Kommentare im Code. Die CI prüft, dass diese Datei zum Code passt. -->
 
-116 Dateien, 1175 Funktionen – in der Reihenfolge der Datei, **fett** die Abschnitte. Text = erste Aussage des Kommentars direkt über der Funktion (Python: Docstring). Übersicht aller Module: [README.md](README.md).
+116 Dateien, 1176 Funktionen – in der Reihenfolge der Datei, **fett** die Abschnitte. Text = erste Aussage des Kommentars direkt über der Funktion (Python: Docstring). Übersicht aller Module: [README.md](README.md).
 
 ## `.github/scripts/apt_vorrat.py`
 
@@ -181,7 +181,8 @@ _Dateiablage der Plattform (neben der Speicherschicht): hochgeladene Dateien ein
 
 - `ablage_teile_ordner()`
 - `ablage_aufraeumen()` – Unvollständige Uploads nach ABLAGE_UPLOAD_STUNDEN entfernen
-- `ablage_teil(bereich, nutzerId, ziel, b)` – Einen Teil annehmen.
+- `ablage_teil(bereich, nutzerId, ziel, b, ablegen)` – Einen Teil annehmen.
+- `ablage_fertig_ablegen(bereich, nutzerId, upload)` – Fertigen Upload (ablage_teil mit $ablegen = false) in die Ablage übernehmen – nur für den Nutzer, der ihn hochgeladen hat.
 - `ablage_upload_verwerfen(upload)`
 
 **Lesen, Ablegen, Kopieren, Entfernen, Ausliefern**
