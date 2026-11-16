@@ -205,8 +205,8 @@ function integritaet_pruefen(): array
                 $base = $f->getFilename();
                 $path = $label . '/' . $rel;
                 if (substr($base, -4) === '.tmp' || ($base[0] === '.' && substr($base, -5) === '.lock') || $rel === '.sqlite-active' || $rel === $schalter) continue;   // Zwischendateien, Sperren, Schalter
+                if (preg_match(INTEGRITAET_ABLAGE, $rel)) continue;   // Dateiablage der Module: erwartet, zählt nicht zur Höchstzahl
                 $n++; $c['checked']++;
-                if (preg_match(INTEGRITAET_ABLAGE, $rel)) continue;   // Dateiablage der Module
                 if (substr($base, -4) === '.php') {
                     $fh = @fopen($f->getPathname(), 'rb'); $head = $fh ? (string)fread($fh, 128) : ''; if ($fh) fclose($fh);
                     if ($rel === 'index.php') {

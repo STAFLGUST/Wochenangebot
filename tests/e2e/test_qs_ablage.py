@@ -149,7 +149,8 @@ PERS = [{'id': 'QB', 'name': 'Quinn Beispiel', 'funktion': 'QMB', 'mitarbeiter':
 check('Kapitel und Personen', V.call('qs_stamm_save', {'kapitel': KAP, 'personen': PERS})[0] == 200)
 
 st, r = L.call('qs_start')
-check('Start: Einstellungen der Ablage (Endungen, 25 MB je Datei, Teile zu 3 MB, 50 Dateien)', st == 200 and r['ablage']['max'] == 25 * MB and r['ablage']['teil'] == TEIL
+MAX = r['ablage']['max']   # Grenze je Datei vom Server; ihren Wert prüft die Gruppe ablage_grenzen
+check('Start: Einstellungen der Ablage (Endungen, Höchstgröße je Datei, Teile zu 3 MB, 50 Dateien)', st == 200 and MAX > TEIL and r['ablage']['teil'] == TEIL
       and r['ablage']['dateien'] == 50 and {'pdf', 'docx', 'xlsx', 'xls', 'msg', 'png', 'jpg'} <= set(r['ablage']['arten']) and 'exe' not in r['ablage']['arten'] and 'php' not in r['ablage']['arten'], r.get('ablage'))
 
 
@@ -191,8 +192,8 @@ for name, args, code, text in (
         ('leere Datei', (D1, V1, 'leer.pdf', b''), 422, 'leer')):
     st, r, _ = hochladen(Be, *args)
     check(f'Hochladen: {name} → {code}', st == code and (not text or text in r.get('error', '')), (st, r))
-st, r = teil_senden(Be, D1, V1, 'gross.pdf', 25 * MB + 1, '', 0, b'%PDF-')
-check('Datei über 25 MB → 422 (schon beim ersten Teil)', st == 422 and '25 MB' in r.get('error', ''), r)
+st, r = teil_senden(Be, D1, V1, 'gross.pdf', MAX + 1, '', 0, b'%PDF-')
+check('Datei über der Höchstgröße → 422 (schon beim ersten Teil)', st == 422 and f'{MAX // MB} MB' in r.get('error', ''), r)
 st, r = teil_senden(Be, D1, V1, 'a.pdf', 4 * MB, '', 0, b'%PDF-' + b'x' * TEIL)
 check('Teil über 3 MB → 422', st == 422 and 'Teil zu groß' in r.get('error', ''), r)
 st, r = teil_senden(Be, D1, V1, 'a.pdf', 100, '', 1, b'%PDF-')
@@ -207,8 +208,8 @@ st, r, _ = hochladen(Be, D1, V1, 'Bericht.pdf', b'MZ\x90\0' + b'\0' * 200)
 check('Programm mit Endung .pdf → 422 (Inhalt passt nicht)', st == 422 and 'passt nicht' in r.get('error', ''), r)
 st, r, _ = hochladen(Be, D1, V1, 'Notiz.txt', b'<html><script>alert(1)</script></html>')
 check('HTML mit Endung .txt → 422', st == 422 and 'passt nicht' in r.get('error', ''), r)
-st, r, _ = hochladen(Be, D1, V1, 'Liste.xlsx', XLS)
-check('Office 97 mit Endung .xlsx → 422', st == 422, r)
+st, r, _ = hochladen(Be, D1, V1, 'Liste.odt', XLS)
+check('Office 97 mit Endung .odt → 422 (OLE nur bei Word/Excel/PowerPoint: alte Art oder mit Kennwort)', st == 422 and 'passt nicht' in r.get('error', ''), r)
 st, r, _ = hochladen(Be, D1, V1, 'Falsch.pdf', pdf('x', 5000), sha='0' * 64)
 check('falsche Prüfsumme → 422', st == 422 and 'Prüfsumme' in r.get('error', ''), r)
 check('nach Fehlern: keine Datei in der Ablage, keine Reste der Teile', blobs() == [] and teile_reste() == [], (blobs(), teile_reste()))
@@ -473,7 +474,7 @@ with sync_playwright() as p:
     check('Liste: Büroklammer mit Zahl bei Dateien der gültigen Version', pg.locator(f'#qm-d-liste tr[data-dok="{D1}"] .qm-anz').count() == 1
           and pg.locator(f'#qm-d-liste tr[data-dok="{D2}"] .qm-anz').count() == 0)
     oeffne_dok(pg, D2)
-    check('Entwurf: Ablagefeld mit Hinweis auf Größe', pg.locator(f'#qm-dk .qm-drop[data-drop="{V21}"]').count() == 1 and '25 MB' in text(pg, '#qm-dk .qm-drop'))
+    check('Entwurf: Ablagefeld mit Hinweis auf Größe', pg.locator(f'#qm-dk .qm-drop[data-drop="{V21}"]').count() == 1 and f'{MAX // MB} MB' in text(pg, '#qm-dk .qm-drop'))
     pg.fill('#dk-aend', 'Reinigung Kühlhaus ergänzt')
     with pg.expect_file_chooser() as fc:
         pg.click('#qm-dk .qm-drop')

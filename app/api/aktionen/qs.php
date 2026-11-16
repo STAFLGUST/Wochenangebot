@@ -299,7 +299,7 @@ switch ($action) {
             $eingetragen = false;
             register_shutdown_function(function () use (&$eingetragen, $datei) { if (!$eingetragen) { try { ablage_entfernen('qs', $datei['id']); } catch (Throwable $e) { /* bleibt liegen */ } } });
             // Word/Excel in gelenkten Dokumenten: enthaltene Platzhalter merken (Anzeige; die Freigabe füllt sie aus)
-            $platzhalter = isset(QS_OFFICE[$datei['art']]) && $ver !== '' ? qs_office_platzhalter((string)ablage_lesen('qs', $datei['id']), $datei['art']) : null;
+            $platzhalter = isset(QS_OFFICE[$datei['art']]) && $ver !== '' ? qs_office_platzhalter((string)qs_office_lesen($datei)[0], $datei['art']) : null;
             $erzeugt = []; $fertig = false;
             qs_erzeugte_aufraeumen($erzeugt, $fertig);
             $d = with_lock('qs-dokumente', function () use ($dok, $ver, $me, $datei, $platzhalter, &$erzeugt) {
