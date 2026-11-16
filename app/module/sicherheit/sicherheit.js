@@ -1520,14 +1520,15 @@
   }
   function systemKarten(d) {
     const n = d.notfall, b = d.backup, st = d.storage || {}, k = d.disk, ml = d.mail, o = d.orders, c = d.customers;
+    const ablage = b && b.ablage && b.ablage.anzahl ? ` · Dateiablage ${plural(+b.ablage.anzahl, 'Datei', 'Dateien')} (${gbZahl(+b.ablage.groesse || 0)} GB), Sicherung belegt ${gbZahl(+b.ablage.belegt || 0)} GB` : '';
     let sich;
     if (!b || !b.t) sich = karte('warn', 'Datensicherung', 'keine', 'noch keine automatische Sicherung – entsteht nach dem nächsten Server-Update täglich');
     else if (!b.ok) sich = karte('bad', 'Datensicherung', 'fehlgeschlagen', `${esc(zeit(b.t))} Uhr · ${esc(b.meldung || (b.fehler ? `${b.fehler} Datei(en) fehlerhaft` : 'Server prüfen'))}`);
     else if (b.inhalt === false) sich = karte('warn', 'Datensicherung', 'nur Archiv geprüft', `${esc(zeit(b.t))} Uhr · ${esc(b.meldung || 'Inhalt nicht geprüft')}`);
     else if ((Date.now() - new Date(b.t).getTime()) / 3600000 > 48) sich = karte('bad', 'Datensicherung', 'veraltet', `letzte ${esc(zeit(b.t))} Uhr – älter als 2 Tage, Server prüfen`);
-    else sich = karte('ok', 'Datensicherung', 'geprüft', `${esc(zeit(b.t))} Uhr · ${b.datensaetze ? `${zahl(b.datensaetze)} Datensätze${b.speicher === 'sqlite' ? ' (Datenbank)' : ''} · ` : ''}${plural(+b.anzahl || 0, 'Stand', 'Stände')} je ${mbZahl(+b.groesse || 0)} MB${b.dateien_staende
-      ? ` · Dateiablage ${plural(+b.dateien_anzahl || 0, 'Datei', 'Dateien')} (${gbZahl(+b.dateien_groesse || 0)} GB), ${plural(+b.dateien_staende, 'Stand belegt', 'Stände belegen')} ${gbZahl(+b.dateien_belegt || 0)} GB` : ''}`);
-    const frei = k && k.free && k.total ? (k.free < 1024 ** 3 ? 'bad' : k.free < 5 * 1024 ** 3 ? 'warn' : 'ok') : 'warn';
+    else if (b.meldung) sich = karte('warn', 'Datensicherung', 'mit Warnung', `${esc(zeit(b.t))} Uhr · ${esc(b.meldung)}${ablage}`);   // gesichert, z. B. Dateien fehlen in Ablage und Sicherung
+    else sich = karte('ok', 'Datensicherung', 'geprüft', `${esc(zeit(b.t))} Uhr · ${b.datensaetze ? `${zahl(b.datensaetze)} Datensätze${b.speicher === 'sqlite' ? ' (Datenbank)' : ''} · ` : ''}${plural(+b.anzahl || 0, 'Stand', 'Stände')} bis 30 Tage zurück, je ${mbZahl(+b.groesse || 0)} MB${ablage}`);
+    const frei = k && k.free && k.total ? (k.free < 1024 ** 3 ? 'bad' : k.free < 5 * 1024 ** 3 ? 'warn' : 'ok') : 'warn';   // 5 GB: auch Reserve der Sicherung (deploy/sichern.sh)
     return [
       n ? karte('bad', 'Notfallmodus', 'aktiv', `seit ${esc(zeit(n.seit))} Uhr – Mitarbeiter ohne Administratorrolle gesperrt`, 'notfall') : karte('ok', 'Notfallmodus', 'aus', 'Normalbetrieb', 'notfall'),
       sich,
