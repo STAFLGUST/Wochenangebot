@@ -332,6 +332,11 @@ $pres = with_lock('anwesenheit', function () use ($me, $now) {
 `app/api/mail.php` enthält einen eigenen SMTP-Client (Klasse `Smtp`, STARTTLS oder SSL, eine Verbindung für mehrere
 Nachrichten), `mail_build` (Text/HTML, Anhänge als multipart/mixed; Anhänge mit `cid` als eingebettete Bilder in multipart/related, im HTML `src="cid:…"`), `mail_layout`, `mail_button`, `mail_h`; für Einladungen und Passwort-Links `mail_layout_einladung` (Kopfband, Überschrift, Schritte) mit `mail_button_gross` und `mail_feld` – dasselbe Aussehen hat die Keycloak-Vorlage `deploy/anmeldung/theme/stafl/email/html/executeActions.ftl`.
 
+- **STARTTLS:** Nach der Antwort `220` auf `STARTTLS` darf im Klartext nichts mehr folgen. Hat der Mailserver (oder
+  jemand im Netzpfad) weitere Bytes vorweggeschickt, bricht der Client die Verbindung mit einem Fehler ab – verwerfen
+  genügte nicht, sonst ließen sich echte Antworten durch eingeschobene ersetzen. Der Fehlertext beginnt mit
+  „Verschlüsselung – “ und gilt damit als „sicher nicht zugestellt“ (`POSTAUSGANG_SICHER_NICHT_ZUGESTELLT`), ein
+  Wiederholen bleibt möglich.
 - **Postfach:** `mail_cfg()` liefert die Einstellungen oder `null` (Versand nicht eingerichtet). Vorrang hat das im
   Eingabebereich gespeicherte Postfach (Dokument `mailkonto`, Passwort `passEnc` mit libsodium verschlüsselt,
   Schlüssel im Dokument `mail-schluessel`, nie in Sicherungen, nie in Antworten); sonst die Umgebungsvariablen
@@ -387,7 +392,10 @@ Eintrag an das Monatsdokument `protokoll/<JJJJ-MM>` (UTC) an:
 - Kunden: IP nur bei fehlgeschlagener Anmeldung. Vorgänge mit Kundendaten (`LOG_KUNDENDATEN`) und Einträge der Rolle
   `kunde` sieht nur, wer `kunden.sehen` hat, Urlaubsvorgänge nur mit `hr.verwalten`. Maskiert wird an einer Stelle:
   `protokoll_maskieren($entries, $me)` in `lib/protokoll.php` – **jeder** Leser der Monatsdokumente ruft sie auf
-  (Aktion `log`, `sec_ereignisse`, Lagebild und Export des Moduls Sicherheit, GR-103). Ein neuer Leser muss das
+  (Aktion `log`, `sec_ereignisse`, Lagebild und Export des Moduls Sicherheit, GR-103). Auch die Benachrichtigung aus dem
+  Protokoll (`notify_from_audit`, `lib/benachrichtigung.php`) geht seit 15.11.2026 durch dieselbe Funktion – mit dem Leser
+  ohne Rechte, weil Empfänger einer E-Mail keine geprüften Rechte haben. Vorher trug sie bei Kundenvorgängen die Kunden-IP
+  und die Kennung des Zugangs nach außen, die der Eintrag selbst bewusst weglässt (Befund 15.11.2026). Ein neuer Leser muss das
   ebenfalls tun; ohne die Maskierung gäbe ein Recht wie `sicherheit.sehen` Kundenstammdaten, fremde Detaillisten und
   Postfachdaten heraus (Befund 05.11.2026). Verlauf und auffällige Adressen des Lagebilds bleiben unmaskiert: dort
   stehen nur Zahlen, Adressen und versuchte Benutzernamen – genau das, was das Recht `sicherheit.sehen` zusagt.
@@ -417,6 +425,14 @@ bzw. des IPv6-/64-Netzes, `client_key`); Grenzen aus `config.php` (`max_attempts
 | Diagnose | `lib/diagnose.php` | nur lesend, für Administratoren |
 
 Sicherheitseinstellungen liest `sec()` einmal je Anfrage: `array_merge(SEC_DEFAULTS, store_read('sicherheit') ?? [])`.
+
+**Einstellungen aus einer Datei übernehmen** (`fw_import`, Modul Sicherheit → Einstellungen → Import): Die Datei ist
+unvertraut. Jeder übertragbare Wert wird vor dem Zusammenlegen gegen seinen Wertebereich geprüft (`SEC_IMPORT_WERTE`) und
+die Datei bei einem unzulässigen Wert mit 422 abgewiesen – `sec_clean`/`fw_clean` würden ihn still auf den Standard
+setzen, und der ist bei diesen Feldern (Zwei-Faktor-Pflicht, Passwortlänge, Sitzungsdauer, Kontosperre, Fehlerbremse)
+die schwächste Stufe. Übernommene Änderungen stehen feldweise im Protokoll (`SEC_FELD_LABEL`, `FW_FELD_LABEL` – dieselben
+Bezeichnungen wie bei `security_save`/`fw_save`), und der Importdialog zeigt vorher dieselbe Tabelle „jetzt/danach“ wie
+der Vorlagendialog. Adress- und Länderlisten überträgt eine Datei nie.
 
 ## 3.9 Bestell-API und App-API
 

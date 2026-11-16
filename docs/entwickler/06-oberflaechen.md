@@ -62,10 +62,11 @@ und eigener Sitzung. Apache setzt je Host `WA_OBERFLAECHE`; daraus macht der Ser
 `deploy/anmeldung/docker-compose.anmeldung.yml` nach `/var/www/dashboard` ein; `apache-oidc.conf` macht es mit
 `Alias /dashboard /var/www/dashboard` **nur auf den Keycloak-Hosts** erreichbar. Unter `angebot-stafl.de` gibt es kein
 Dashboard. `abgemeldet.html`, `dashboard.css` und `/assets/` sind ohne Anmeldung abrufbar (Abmeldeseite). Im Testlauf
-blendet `tests/run_e2e.py` den Ordner nur für die Gruppen `dashboard` und `rollen` unter `/dashboard/` ein (`ZUSATZ`).
-`deploy/bereitstellen.py` versieht auch die Dashboard-Seiten mit Versionsnummern (wie die Seiten unter `app/`; das
-Dashboard steht nicht in der Prüfliste der Dateiprüfung). Im Testlauf stempelt `run_e2e.py` die eingeblendete Kopie
-genauso (`zusatz_verzeichnis`). Einbindungen deshalb immer ohne `?v=` und relativ zur Seite bzw. ab `/` schreiben.
+blendet `tests/run_e2e.py` den Ordner nur für die Gruppen mit Eintrag in `ZUSATZ` unter `/dashboard/` ein.
+`deploy/bereitstellen.py` versieht auch die Dashboard-Seiten mit Versionsnummern (wie die Seiten unter `app/`) und
+nimmt die Dateien des Dashboards unter `dashboard/<pfad>` in die Prüfliste der Dateiprüfung auf – was ausgeliefert
+wird, wird auch verglichen. Im Testlauf blendet `run_e2e.py` den Ordner vor dem Bereitstellen ein, damit dieselben
+Einträge entstehen. Einbindungen deshalb immer ohne `?v=` und relativ zur Seite bzw. ab `/` schreiben.
 
 ## 6.2 Eingabebereich (`app/admin/`)
 
@@ -335,7 +336,11 @@ Woche“ und die Auswahl des Angebots (gemerkt in `localStorage`, ohne Speicher 
 `angebot_woche` (Kopf, Hinweise, vorige/nächste gespeicherte Woche) und lädt dann die Angebotsseite im Rahmen mit
 `?vorschau=1&eingebettet=1&woche=JJJJ-WW[&angebot=…]` – `frontend.js` holt in diesem Fall `angebot_woche` statt
 `offer&draft=1`, sonst bleibt die Seite unverändert. Quelle je KW: Wochenablage `angebot-woche/<JJJJ-WW>` (mit den
-damaligen Angebotsdefinitionen), aktuelles Angebot oder `versionen/*` – der späteste Stand –, sonst der Preisverlauf.
+damaligen Angebotsdefinitionen), aktuelles Angebot oder `versionen/*` – der späteste Stand (`angebot_woche_modell`) –,
+sonst der Preisverlauf, und den nur mit dessen eigenem Recht (`preisverlauf_lesbar`: `preisverlauf.sehen` oder
+`angebot.bearbeiten`, dieselbe Schranke wie `history_prev`). Ohne dieses Recht gilt eine nur im Preisverlauf vorhandene
+Woche als Woche ohne Daten und steht auch nicht in der Wochenliste (`vorige`/`naechste`/`erste`). Aus dem Preisverlauf
+kommen keine Kundenpreise: Kundenangebote zeigen dann den Wochenpreis, Angebote mit eigener Artikelliste bleiben leer.
 Ohne gespeicherten Stand: Fläche „Für KW … ist kein Angebot gespeichert“ mit Sprung zur letzten gespeicherten Woche; gab es
 das gewählte Kundenangebot in der Woche nicht (`fehlt`): „… gab es in KW … noch nicht“. Hinweisleiste: nur Preisstand
 (Preisverlauf, ohne Werbung, Bereiche, eigene Bezeichnungen, Empfehlungen) bzw. bei Kundenangeboten ohne gespeicherte
@@ -396,7 +401,9 @@ Der Editor hat bei ~280 Artikeln rund 12 000 Elemente. Deshalb zeichnet `renderG
 - **Wechsel des Angebots (Liste links):** `setOffer()` zeichnet die Gruppen neu, weil jedes Angebot eine eigene Artikelliste hat
   (`inOffer()`); gezeichnet werden nur Artikel und Gruppen des gewählten Angebots.
 - **Zurück in den Editor:** `loadAux()` frischt Vorwoche und Bestand nur auf, wenn sie sich seit dem letzten Zeichnen
-  geändert haben (`auxStand`).
+  geändert haben (`auxStand`). Die Spalte „Vorwoche“ kommt aus `history_prev`: Wochenpreis aus dem Preisverlauf, der
+  Preis je Kundenangebot aus dem vollständigen Wochenstand (`angebot_woche_modell`: Wochenablage, aktuelles Angebot,
+  `versionen/*`) und nur mit `angebot.zugang`; ist dieser Stand nicht mehr vorhanden, zeigt die Spalte den Wochenpreis.
 - **CSS:** `#groups > .gcard { content-visibility: auto; contain-intrinsic-size: auto 640px }` – Gruppen außerhalb des
   Bildschirms werden nicht gestylt, gesetzt und gezeichnet (beim Drucken aus).
 
@@ -559,7 +566,10 @@ GR-109) und zeichnet daraus Favoriten (bis dahin Platzhalter, kein Springen von 
 Schnellaktionen, „Zuletzt bearbeitet“, die Unterzeile und die Zahlen der Seitenleiste (`STAFL_RAHMEN.zahlen`). Antwort:
 `punkte` (je `modul`, `art` = `ueberfaellig` | `heute` | `demnaechst`, `titel`, `detail`, `datum`, `ziel` = Reiter des
 Moduls, `anzahl`), `zahlen` je Modul (`offen`, `ueberfaellig`), `gesamt`, `aktionen`, `zuletzt`, `favoriten` (`null` =
-Standard), `fehler` (Module, deren Punkte gerade nicht abrufbar waren). **Neues Modul anschließen:** im eigenen Code eine
+Standard), `fehler` (Module, deren Punkte gerade nicht abrufbar waren). „Zuletzt bearbeitet“ zeigt nur Protokollzeilen
+des eigenen Kontos, erkannt an der Nutzer-ID (Feld `uid`, schreibt `audit()` seit 15.11.2026): Benutzernamen werden nach
+dem Löschen eines Mitarbeiters wieder vergeben, seine Protokollzeilen bleiben bis zum Ablauf der Aufbewahrung stehen.
+Ältere Zeilen ohne `uid` zeigt die Startseite deshalb nicht. **Neues Modul anschließen:** im eigenen Code eine
 Funktion `<präfix>_startseite(array $me): array` mit eigener Rechteprüfung (`may`) und in `STARTSEITE_ANBIETER`
 (`app/api/lib/startseite.php`) eintragen; Tage und Gruppe über `startseite_tage()`/`startseite_art()`. Nur Texte liefern,
 die der Mitarbeiter im Modul ohnehin sieht – Personal- und Gesundheitsdaten höchstens als Anzahl (Beispiel `hr_startseite`).

@@ -211,6 +211,22 @@ check('admin can switch it back on (clears flag)', code == 200 and r['customer']
 code, r = A.call('log')
 check('audit: unsubscribe events', sum(1 for e in r['entries'] if e['a'] == 'kunde_abmeldung') >= 3)
 
+# ---------- Mengenbremse: auch der gelungene Wechsel zählt (Befund 15.11.2026) ----------
+# Ohne das wäre der Abmeldelink ein unbegrenzt wiederholbarer Schreibzugriff auf das Kundendokument (ohne Anmeldung, ohne CSRF).
+Q = Client('198.51.100.62')
+for _ in range(4): Q.call('kunde_abmelden', {'token': 'k000000000000.' + 'x' * 32})   # vier Fehlversuche derselben Adresse
+n0 = len(smtp.messages); nlog = sum(1 for e in A.call('log')[1]['entries'] if e['a'] == 'kunde_abmeldung')
+check('unsubscribing still works at the limit', Q.call('kunde_abmelden', {'token': ABM})[0] == 200)
+code, r = Q.call('kunde_abmelden', {'token': ABM, 'wieder': True})
+sub = next(x for x in A.call('kunden')[1]['customers'] if x['id'] == K_ok)['mailAngebot']
+check('one switch too many: 429, no write, no notice, no audit entry', code == 429 and sub is False and len(smtp.messages) == n0 + 1
+      and sum(1 for e in A.call('log')[1]['entries'] if e['a'] == 'kunde_abmeldung') == nlog + 1, (code, r, sub))
+check('another address is not affected', Client('198.51.100.63').call('kunde_abmelden_info', {'token': ABM})[0] == 200)
+code, r = A.call('kunden'); c_ok = next(c for c in r['customers'] if c['id'] == K_ok)
+code, r = A.call('kunde_save', {**{k: c_ok[k] for k in ['nr', 'firma', 'ansprechpartner', 'strasse', 'plz', 'ort', 'land', 'email', 'telefon', 'notiz', 'angebote', 'active']},
+                                'id': K_ok, 'rev': r['rev'], 'mailAngebot': True, 'login': {'username': 'hotel.seeblick', 'password': '', 'active': True}})
+check('admin switches it on again', code == 200 and r['customer']['mailAngebot'] is True)
+
 # ---------- Testmail, Rechte, Protokoll ----------
 check('test mail needs valid address', A.call('mail_test', {'to': 'kein'})[0] == 422)
 n0 = len(smtp.messages)
@@ -227,6 +243,21 @@ check('audit: mails logged', sum(1 for e in r['entries'] if e['a'] == 'mail') >=
 check('audit: no tokens or passwords', all(t not in raw for t in [tok1, tokA, tokB, tokC, SMTP_PW, 'Eigenes-Kennwort-55']))
 code, r = A.call('kunden_mail_vorschau', {'id': K_ok, 'type': 'woche', 'note': 'Hallo'})
 check('preview renders without sending', code == 200 and 'Hallo' in r['html'] and r['to'] == 'kueche@example.org' and len(smtp.messages) == n0 + 1)
+# Vorschau zeigt den Abmeldeknopf, aber nie einen gültigen Code (Befund 15.11.2026): der echte Code gilt unbefristet und ohne Anmeldung
+check('preview shows the unsubscribe button with a placeholder, not the real code',
+      '#abmelden=BEISPIEL' in r['html'] and ('#abmelden=' + K_ok) not in r['html'] and ABM not in r['html'] and 'Vom Wochenangebot abmelden' in r['html'])
+check('the code from the preview does not unsubscribe anybody', Client('198.51.100.64').call('kunde_abmelden', {'token': 'BEISPIEL'})[0] == 404)
+# Rechte: dasselbe Tor wie versand_vorschau im Modul Versand (Modulzugang Versand, Sonderposten zusätzlich sonderposten.senden)
+A.call('user_save', {'id': '', 'name': 'Olga Ohne', 'username': 'olga', 'role': 'viewer', 'active': True, 'password': 'Editor-Zugang-77', 'mustChange': False})
+uid_olga = next(u['id'] for u in A.call('users')[1]['users'] if u['username'] == 'olga')
+A.call('user_save', {'id': uid_olga, 'name': 'Olga Ohne', 'role': 'viewer', 'active': True, 'grant': ['wochenangebot.senden'], 'deny': []})
+O = Client('198.51.100.6'); O.call('login', {'username': 'olga', 'password': 'Editor-Zugang-77'})
+code, r = O.call('kunden_mail_vorschau', {'id': K_ok, 'type': 'woche'})
+check('send permission without module access Versand: preview 403', code == 403 and 'Versand' in r.get('error', ''), (code, r))
+A.call('user_save', {'id': uid_olga, 'name': 'Olga Ohne', 'role': 'viewer', 'active': True, 'grant': ['wochenangebot.senden', 'versand.zugang'], 'deny': []})
+check('with module access: weekly preview works', O.call('kunden_mail_vorschau', {'id': K_ok, 'type': 'woche'})[0] == 200)
+code, r = O.call('kunden_mail_vorschau', {'id': K_ok, 'type': 'restposten', 'offer': 'std'})
+check('sale preview needs sonderposten.senden (prices of a customer offer, GR-005)', code == 403 and 'Berechtigung' in r.get('error', ''), (code, r))
 
 # ---------- Mailserver nicht erreichbar ----------
 smtp.close(); time.sleep(0.2)
@@ -277,6 +308,18 @@ check('remove account', A.call('mail_konto_save', {'remove': True})[0] == 200 an
 n0 = len(smtp.messages)
 check('after removal .env account is used again', A.call('mail_test', {'to': 'ich@example.org'})[0] == 200 and len(smtp.messages) == n0 + 1)
 smtp2.close()
+
+# ---------- STARTTLS: vor dem Handschlag eingeschobene Klartextantworten brechen den Versand ab ----------
+smtp3 = TestSmtp(SMTP_PORT2, user='konto@example.org', password=KONTO_PW, vorweg=True)
+code, r = A.call('mail_konto_save', {**konto, 'secure': 'starttls'})
+check('STARTTLS mit vorweggeschickten Klartextantworten: Verbindungsprüfung bricht ab',
+      code == 200 and r['connection']['ok'] is False and 'zusätzliche Daten' in r['connection']['error'], r)
+n0 = len(smtp3.messages)
+code, r = A.call('mail_test', {'to': 'ich@example.org'})
+check('Versand abgebrochen, nichts zugestellt', code == 502 and 'zusätzliche Daten' in r.get('error', '') and len(smtp3.messages) == n0, (code, r))
+check('Fehlertext gilt als „sicher nicht zugestellt“ (Wiederholung möglich)', 'Verschlüsselung – ' in r.get('error', ''), r.get('error'))
+A.call('mail_konto_save', {'remove': True})
+smtp3.close()
 
 # ---------- Oberfläche ----------
 with sync_playwright() as p:

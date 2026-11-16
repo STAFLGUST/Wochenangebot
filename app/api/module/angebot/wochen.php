@@ -12,8 +12,11 @@ declare(strict_types=1);
    Ablage, wenn diese KW dort noch keinen neueren Stand hat (Definitionen dann unbekannt) – so geht ab jetzt kein vollständiger
    Wochenstand mehr verloren, auch nicht aus der Zeit vor der Ablage; ein Nachfüllen beim Lesen gibt es nicht.
    Quelle je KW (angebot_woche): der Stand mit dem spätesten publishedAt aus Ablage, aktuellem Angebot und versionen/*
-   (gleich alt: die Ablage, sie kennt die Definitionen); sonst der Preisstand im Preisverlauf (historie/<JJJJ-WW>, nur Artikel
-   und Preise – ohne Werbung, Bereiche, eigene Bezeichnungen, Empfehlungen) als einfache Liste nach Angebotsgruppen.
+   (gleich alt: die Ablage, sie kennt die Definitionen); sonst – nur mit dem Recht des Preisverlaufs (preisverlauf_lesbar,
+   wie die Aktion history_prev) – der Preisstand im Preisverlauf (historie/<JJJJ-WW>, nur Artikel und Preise, ohne
+   Kundenpreise, Werbung, Bereiche, eigene Bezeichnungen, Empfehlungen) als einfache Liste nach Angebotsgruppen. Ohne
+   dieses Recht gilt eine nur im Preisverlauf vorhandene Woche als Woche ohne Daten und erscheint auch nicht in der
+   Wochenliste (vorige/naechste/erste).
    Aufgelöst wird immer auf dem Server mit offer_resolve (GR-002/GR-005): nur das gewählte Angebot, mit seiner damaligen
    Definition, wenn die Ablage sie kennt, sonst mit der heutigen. Sonderposten bleiben sichtbar, auch wenn sie heute
    ausverkauft sind (der Bestand von damals ist nicht bekannt).
@@ -87,14 +90,15 @@ function angebot_wochen_verzeichnis(): array
         $v[$k] = ['art' => 'version', 'id' => $id, 'stand' => $stand];
     }
     foreach (store_names('angebot-woche') as $f) { $k = basename($f); if (preg_match('/^\d{4}-\d{2}$/', $k)) $wochen[$k] = true; }
-    foreach (history_ids() as $h) $wochen[$h] = true;
+    if (preisverlauf_lesbar()) foreach (history_ids() as $h) $wochen[$h] = true;   // nur mit dem Recht des Preisverlaufs (GR-103)
     ksort($wochen);
     return ['wochen' => array_keys($wochen), 'je' => $v];
 }
 
 /* Preisstand des Preisverlaufs als Angebotsmodell für offer_resolve: Angebotsgruppen aus den gespeicherten Gruppennamen
-   (Reihenfolge wie gespeichert), ohne Bereiche, Werbung, eigene Bezeichnungen und Empfehlungen; Kundenpreise (variants)
-   nur, soweit sie bei der Veröffentlichung gespeichert wurden (eingelesene alte Listen haben keine) */
+   (Reihenfolge wie gespeichert), ohne Bereiche, Werbung, eigene Bezeichnungen und Empfehlungen. Ohne Kundenpreise – der
+   Preisverlauf führt keine (history_week, GR-002): Kundenangebote zeigen aus dieser Quelle den Wochenpreis, Angebote mit
+   eigener Artikelliste bleiben leer. Vollständige Wochenstände liefert die Wochenablage (angebot_woche_modell). */
 function angebot_woche_aus_historie(array $h): array
 {
     $groups = []; $gid = []; $items = [];
@@ -106,11 +110,24 @@ function angebot_woche_aus_historie(array $h): array
                 'origin' => null, 'condition' => 'unbekannt', 'groupId' => $gid[$g],
                 'price' => is_array($it['price'] ?? null) ? $it['price'] : ['status' => 'none'],
                 'altPrices' => is_array($it['altPrices'] ?? null) ? array_values($it['altPrices']) : []];
-        if (is_array($it['variants'] ?? null)) $row['variants'] = $it['variants'];
         $items[] = $row;
     }
     return ['meta' => ['week' => (int)($h['week'] ?? 0), 'year' => (int)($h['year'] ?? 0), 'notice' => ''], 'sections' => [], 'groups' => $groups, 'items' => $items,
             'publishedAt' => is_string($h['savedAt'] ?? null) ? $h['savedAt'] : null];
+}
+
+/* Vollständiger Stand einer KW (mit Kundenpreisen und Werbung) aus Wochenablage, aktuellem Angebot und versionen/* –
+   ohne den Preisverlauf. Rückgabe [Modell|null, Quelle|null, damalige Angebotsdefinitionen|null]; Quelle ≠ null bei
+   einem gefundenen, aber leeren Dokument. Auch die Vorwochenspalte des Editors nutzt das (Aktion history_prev). */
+function angebot_woche_modell(string $woche, ?array $verz = null): array
+{
+    $kandidat = ($verz ?? angebot_wochen_verzeichnis())['je'][$woche] ?? null;
+    $ablage = store_read('angebot-woche/' . $woche);
+    if (is_array($ablage) && is_array($ablage['modell'] ?? null) && (!$kandidat || strcmp((string)($ablage['stand'] ?? ''), $kandidat['stand']) >= 0))
+        return [$ablage['modell'], 'ablage', is_array($ablage['angebote'] ?? null) ? $ablage['angebote'] : null];
+    if (!$kandidat) return [null, null, null];
+    $m = $kandidat['art'] === 'veroeffentlicht' ? store_read('angebot') : store_read('versionen/' . $kandidat['id']);
+    return [is_array($m) ? $m : null, $kandidat['art'] === 'veroeffentlicht' ? 'veroeffentlicht' : 'version', null];
 }
 
 /* Aktion angebot_woche: KW „JJJJ-WW“ und Angebot (leer = Wochenangebot) → aufgelöstes Angebot dieser Woche oder null */
@@ -119,15 +136,12 @@ function angebot_woche(string $woche, string $oid): array
     if (!preg_match('/^(\d{4})-(\d{2})$/', $woche, $m) || (int)$m[1] < 2000 || (int)$m[1] > 2100 || !kw_gueltig((int)$m[2], (int)$m[1])) fail('Ungültige Kalenderwoche.', 422);
     if (!preg_match('/^[a-z0-9-]{1,40}$/', $oid) || strncmp($oid, 'e-', 2) === 0) fail('Unbekanntes Angebot.', 404);
     $verz = angebot_wochen_verzeichnis();
-    // Quelle: spätester Stand aus Ablage, aktuellem Angebot und Versionen; sonst Preisverlauf
-    $kandidat = $verz['je'][$woche] ?? null;
-    $ablage = store_read('angebot-woche/' . $woche);
-    $modell = null; $quelle = null; $defs = null;
-    if (is_array($ablage) && is_array($ablage['modell'] ?? null) && (!$kandidat || strcmp((string)($ablage['stand'] ?? ''), $kandidat['stand']) >= 0)) {
-        $modell = $ablage['modell']; $quelle = 'ablage'; $defs = is_array($ablage['angebote'] ?? null) ? $ablage['angebote'] : null;
-    } elseif ($kandidat && $kandidat['art'] === 'veroeffentlicht') { $modell = store_read('angebot'); $quelle = 'veroeffentlicht'; }
-    elseif ($kandidat) { $modell = store_read('versionen/' . $kandidat['id']); $quelle = 'version'; }
-    elseif (in_array($woche, $verz['wochen'], true)) { $h = store_read('historie/' . $woche); $modell = is_array($h) ? angebot_woche_aus_historie($h) : null; $quelle = 'historie'; }
+    // Quelle: spätester Stand aus Ablage, aktuellem Angebot und Versionen; sonst Preisverlauf (nur mit dessen Recht,
+    // preisverlauf_lesbar – die Wochenliste enthält ihn dann ohnehin nicht)
+    [$modell, $quelle, $defs] = angebot_woche_modell($woche, $verz);
+    if ($quelle === null && preisverlauf_lesbar() && in_array($woche, $verz['wochen'], true)) {
+        $h = history_week($woche); $modell = is_array($h) ? angebot_woche_aus_historie($h) : null; $quelle = 'historie';
+    }
     if (!is_array($modell)) { $modell = null; $quelle = null; }
     // Definition des Angebots: damals (Ablage), sonst heute; gab es das Angebot in dieser Woche nicht, kein Angebot (fehlt)
     $damals = [];

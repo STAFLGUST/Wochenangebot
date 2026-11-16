@@ -6,7 +6,7 @@ Nummer, alte Nummern aus dem Datenpaket bleiben bei anderen Änderungen, Vorlage
 über mehrere Textstücke verteilten Platzhaltern, Kopfzeile, Bild unverändert, .dotx wird .docx; Excel mit Zellen, Kopf-/Fußzeile
 und „&“; Dateiname aus Nr. und Titel; Lenkungs-Platzhalter bleiben bis zur Freigabe; Fehler: unbekannt, keine Vorlage, ohne
 Freigabe, nur PDF, nicht lesbar ohne Reste, Ordner, beim Ändern, eingezogen); Vorlagen werden bei Freigabe und Nachtragen nie
-ausgefüllt; Freigabe trägt Version, Datum, Kürzel, Änderungen ein (ausgefüllte Fassung neu, Rohfassung bleibt, ZIP mit der
+ausgefüllt (Grenze: über 20000 Textelemente je Textteil gilt die Datei als nicht lesbar); Freigabe trägt Version, Datum, Kürzel, Änderungen ein (ausgefüllte Fassung neu, Rohfassung bleibt, ZIP mit der
 ausgefüllten); Datei ohne Platzhalter bleibt, nicht lesbare Datei hält die Freigabe nicht auf; Nachtragen in freigegebene Version
 füllt sofort; Überarbeitung übernimmt die Rohfassungen als Kopie (Platzhalter erkannt, Löschen im Entwurf lässt die freigegebene
 Version unberührt), zweite Freigabe mit Version 2; Rechte; Protokoll; Oberfläche (Anlegen mit vorgewählter Vorlage und Nummer,
@@ -119,7 +119,7 @@ NUTZER = (('lisa', 'Lisa Lesen', 'viewer', 'Leserin-Konto-12', {'grant': ['qs.se
           ('bernd', 'Bernd Bearbeiter', 'editor', 'Bearbeit-Konto-34', {'grant': ['qs.bearbeiten']}),
           ('quinn', 'Quinn QMB', 'editor', 'Freigabe-Konto-56', {'grant': ['qs.freigeben']}),
           ('fritz', 'Fritz Freigabe', 'editor', 'Freigabe-Konto-78', {'grant': ['qs.freigeben']}),
-          ('vera', 'Vera Verwalten', 'editor', 'Verwalt-Konto-90', {'grant': ['qs.verwalten']}))
+          ('vera', 'Vera Verwalten', 'editor', 'Verwalt-Konto-90', {'grant': ['qs.verwalten', 'qs.freigeben']}))   # ein Datenpaket mit Versionen braucht beide Rechte
 for u, n, r, p, extra in NUTZER:
     st, r_ = A.call('user_save', {'id': '', 'name': n, 'username': u, 'role': r, 'active': True, 'password': p, 'mustChange': False, **extra})
     assert st == 200, r_
@@ -210,9 +210,16 @@ st, r = neu(Be, kapitel='1.1', art='V', nr='Vorlage A', titel='Kaputte Vorlage')
 VA = r['dokument']
 hochladen(Be, VA['id'], VA['versionen'][0]['id'], 'Vorlage.docx', b'PK\x03\x04' + b'kein echtes ZIP' * 20)
 schritt(Be, VA['id'], 'einreichen'); schritt(F, VA['id'], 'pruefen_freigeben')
+# Obergrenze: mehr als QS_XML_STUECKE_MAX (20000) Textelemente in einem Textteil gelten als nicht lesbar – eine winzige
+# Datei soll den Server nicht lange rechnen lassen (die Platzhalter-Ersetzung läuft unter der Schreibsperre des Moduls)
+st, r = neu(Be, kapitel='1.1', art='V', nr='Vorlage Z', titel='Zu viele Textstücke')
+VZ = r['dokument']
+check('Vorlage mit 20001 Textstücken hochgeladen (ZIP klein)', hochladen(Be, VZ['id'], VZ['versionen'][0]['id'], 'Vorlage.docx', docx([['{{Nr}}'] * 20001]))[0] == 200)
+schritt(Be, VZ['id'], 'einreichen'); schritt(F, VZ['id'], 'pruefen_freigeben')
 vorher = blobs(); anzahl = len(L.call('qs_start')[1]['dokumente'])
 for name, b, text in (('unbekannte Vorlage', {'vorlage': 'dnix'}, 'gibt es nicht'), ('kein Vorlagen-Dokument', {'vorlage': ALT['id']}, 'keine Vorlage'),
                       ('Vorlage nur mit PDF', {'vorlage': VP['id']}, 'Word- oder Excel'), ('Vorlage nicht lesbar', {'vorlage': VA['id']}, 'keine lesbare'),
+                      ('Vorlage über der Grenze von 20000 Textstücken', {'vorlage': VZ['id']}, 'keine lesbare'),
                       ('Ordner aus Vorlage', {'art': 'O', 'vorlage': VF}, 'Formblätter'), ('Vorlage aus Vorlage', {'art': 'V', 'nr': 'Vorlage X', 'vorlage': VF}, 'Formblätter')):
     st, r = neu(Be, **b)
     check(f'Erzeugen: {name} → 422', st == 422 and text in r.get('error', ''), (st, r))

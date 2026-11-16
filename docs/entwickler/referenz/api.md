@@ -23,7 +23,7 @@ Spalten: **Art** – lesend, schreibend (nur POST) oder post (GET liest, POST sc
 | `bestellungen` | `angebot.eingabe` | lesend | – | siehe Datei | `app/api/aktionen/kundenportal.php` |
 | `discard_draft` | `angebot.eingabe` | schreibend | – | Recht angebot.bearbeiten | `app/api/aktionen/entwurf.php` |
 | `draft` | `angebot.eingabe` | lesend | – | – | `app/api/aktionen/entwurf.php` |
-| `draft_ping` | `angebot.eingabe` | schreibend | – | angemeldet | `app/api/aktionen/entwurf.php` |
+| `draft_ping` | `angebot.eingabe` | schreibend | – | – | `app/api/aktionen/entwurf.php` |
 | `druck_fuss` | `angebot.eingabe` | lesend | – | – | `app/api/aktionen/kundenportal.php` |
 | `druck_fuss_save` | `angebot.eingabe` | schreibend | – | Administrator | `app/api/aktionen/kundenportal.php` |
 | `einzel_artikel` | `angebot.eingabe` | lesend | – | Recht einzelangebote.bearbeiten | `app/api/aktionen/einzelangebote.php` |
@@ -54,7 +54,7 @@ Spalten: **Art** – lesend, schreibend (nur POST) oder post (GET liest, POST sc
 | `kunde_status` | `angebot.kunden` | lesend | öffentlich | Kunde | `app/api/aktionen/kundenportal.php` |
 | `kunde_token_check` | `angebot.kunden` | schreibend | öffentlich, Kunden-Wartung, eigene Anmeldung | – | `app/api/aktionen/kundenportal.php` |
 | `kunde_token_set` | `angebot.kunden` | schreibend | öffentlich, Kunden-Wartung, eigene Anmeldung | – | `app/api/aktionen/kundenportal.php` |
-| `kunden_mail_vorschau` | `angebot.eingabe` | schreibend | – | angemeldet | `app/api/aktionen/mail.php` |
+| `kunden_mail_vorschau` | `angebot.eingabe` | schreibend | – | Recht sonderposten.senden | `app/api/aktionen/mail.php` |
 | `kunden_restposten` | `angebot.eingabe` | schreibend | – | Recht sonderposten.senden + Bestätigung | `app/api/aktionen/mail.php` |
 | `kunden_rundmail` | `angebot.eingabe` | schreibend | – | Recht wochenangebot.senden + Bestätigung | `app/api/aktionen/mail.php` |
 | `mail_info` | `angebot.eingabe` | lesend | – | angemeldet | `app/api/aktionen/mail.php` |

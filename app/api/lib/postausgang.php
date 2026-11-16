@@ -152,7 +152,7 @@ function postausgang_ereignisse($items): array
     return $out;
 }
 /* Abmeldehinweis: Kunde aus den internen Stammdaten (nur die Kennung kommt aus dem Auftrag); nur wenn die Änderung dort auch
-   gespeichert ist, höchstens POSTAUSGANG_HINWEIS_TAG je Kunde und Tag */
+   gespeichert ist. Die Tagesgrenze POSTAUSGANG_HINWEIS_TAG zieht abmelde_hinweis_senden() – dort gilt sie für beide Versandwege. */
 function postausgang_hinweis(array $a): void
 {
     $kid = is_array($a['kunde'] ?? null) ? (string)($a['kunde']['id'] ?? '') : '';
@@ -162,9 +162,6 @@ function postausgang_hinweis(array $a): void
     if ($c === null) { error_log('[postausgang] Abmeldehinweis: Kunde unbekannt'); return; }
     $angemeldet = !array_key_exists('mailAngebot', $c) || !empty($c['mailAngebot']);
     if ($angemeldet === $ab) { error_log('[postausgang] Abmeldehinweis: Stand des Kunden ' . $kid . ' passt nicht – verworfen'); return; }
-    $seit = gmdate('Y-m-d\TH:i:s', time() - 86400); $n = 0;
-    foreach (store_read('mailversand') ?? [] as $e) if (($e['typ'] ?? '') === 'hinweis' && ($e['kid'] ?? '') === $kid && (string)($e['t'] ?? '') >= $seit) $n++;
-    if ($n >= POSTAUSGANG_HINWEIS_TAG) { error_log('[postausgang] Abmeldehinweis: Tagesgrenze für Kunde ' . $kid); return; }
     $t = is_string($a['t'] ?? null) && strtotime($a['t']) ? $a['t'] : now();
     abmelde_hinweis_senden($c, $ab, $t);
 }

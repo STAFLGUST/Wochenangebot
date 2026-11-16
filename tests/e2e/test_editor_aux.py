@@ -30,6 +30,8 @@ ZUGANG_10601 = [{'code': '10601', 'name': 'Zugang Test', 'kg': 50.0, 'arrival': 
 def login(pg, user, pw):
     pg.goto(B + '/admin/'); pg.wait_for_selector('#screen-auth:not([hidden])')
     pg.fill('#au-user', user); pg.fill('#pw1', pw); pg.click('#auth-submit'); pg.wait_for_selector('#screen-editor:not([hidden]) tr[data-id]')
+def get(pg, action):
+    return pg.evaluate("""async (a) => { const r = await fetch('../api/?action=' + a); return [r.status, await r.json()]; }""", action)
 def post(pg, action, body):
     return pg.evaluate("""async ([a, b]) => { const s = await (await fetch('../api/?action=status')).json();
       const r = await fetch('../api/?action=' + a, {method:'POST', headers:{'Content-Type':'application/json','X-CSRF-Token':s.csrf}, body: JSON.stringify(b)}); return [r.status, await r.json()]; }""", [action, body])
@@ -169,7 +171,7 @@ with sync_playwright() as p:
                    art(c[3], 'w5', price={'status': 'request'}),                                             # auf Anfrage
                    art(c[4], 'w6', price=wert(5.1234)),                                                      # vier Nachkommastellen
                    art(sp, 'w7', price=wert(20.0), sale={'value': 15.5})]                                    # Sonderposten: Preis wie beim Kunden
-    r = post(a, 'publish', {'model': wm}); check('WinAB: Testangebot KW 45/2026 veröffentlicht', r[0] == 200, r)
+    r = post(a, 'publish', {'model': wm, 'revision': get(a, 'draft')[1]['revision']}); check('WinAB: Testangebot KW 45/2026 veröffentlicht', r[0] == 200, r)
     nat = lambda t: [int(x) if x.isdigit() else x.lower() for x in re.split(r'(\d+)', t)]
     def wb(v): t = f'{v:.4f}'.replace('.', ','); return re.sub(r'(,\d\d)0{1,2}$', r'\1', t)
     erw = {c[0]['code']: 12.5, c[1]['code']: 9.25, c[4]['code']: 5.1234, sp['code']: 15.5}
@@ -235,7 +237,7 @@ with sync_playwright() as p:
     check('mobile: „Export für WinAB“ in der Werkzeugleiste ohne seitliches Scrollen', m.locator('#btn-winab').is_visible() and m.evaluate('document.documentElement.scrollWidth') <= 390)
     # Ohne Artikel mit Preis: keine Datei (422)
     wm['items'] = [art(c[3], 'w5', price={'status': 'request'})]
-    post(a, 'publish', {'model': wm}); r = post(a, 'angebot_winab_export', {})
+    post(a, 'publish', {'model': wm, 'revision': get(a, 'draft')[1]['revision']}); r = post(a, 'angebot_winab_export', {})
     check('WinAB: ohne Artikel mit Preis 422', r[0] == 422 and 'kein Artikel mit Preis' in r[1].get('error', ''), r)
     check('no JS errors', not errs, errs)
     br.close()

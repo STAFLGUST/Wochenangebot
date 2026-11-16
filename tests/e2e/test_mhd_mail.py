@@ -81,6 +81,14 @@ check('ohne Bild → 422', E.call('stock_mhd_senden', {'codes': IN_LISTE})[0] ==
 check('kein PNG → 422', E.call('stock_mhd_senden', {'codes': IN_LISTE, 'bild': base64.b64encode(b'GIF89a' + b'x' * 200).decode()})[0] == 422)
 check('PNG zu klein → 422', E.call('stock_mhd_senden', {'codes': IN_LISTE, 'bild': base64.b64encode(png(20, 10)).decode()})[0] == 422)
 check('kein Base64 → 422', E.call('stock_mhd_senden', {'codes': IN_LISTE, 'bild': '%%%'})[0] == 422)
+# Der Anhang geht aus dem internen Postfach an den Verkauf: geprüft wird der ganze Puffer, nicht nur der PNG-Kopf –
+# sonst gingen hinter einem gültigen Kopf nahezu beliebige Bytes als „image/png“ mit hinaus.
+gut_ = png()
+bild_ = lambda b: {'codes': IN_LISTE, 'bild': base64.b64encode(b).decode()}   # noqa: E731
+check('gültiges PNG mit angehängten Fremdbytes → 422', E.call('stock_mhd_senden', bild_(gut_ + b'A' * 4096))[0] == 422)
+check('nur Signatur und IHDR (kein Bildinhalt) → 422', E.call('stock_mhd_senden', bild_(gut_[:8 + 25]))[0] == 422)
+check('zweites IEND angehängt → 422', E.call('stock_mhd_senden', bild_(gut_ + gut_[-12:]))[0] == 422)
+check('PNG mit kaputter Blockprüfsumme → 422', E.call('stock_mhd_senden', bild_(gut_[:-1] + bytes([gut_[-1] ^ 0xff])))[0] == 422)
 
 # ---------- Versand ----------
 # MHD-Liste mit der Originalbezeichnung der Warenwirtschaft (Inhaber 03.11.2026): Bezeichnung1 aus dem Artikelstammdaten-

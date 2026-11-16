@@ -109,7 +109,8 @@ switch ($action) {
                         users_save($users);
                         return [$lockedNow ? 'lockednow' : 'bad', $users[$i]];
                     }
-                    if (!$u['active']) return ['inactive', $u];
+                    // Auch „ohne Anmeldung“ (Feld zugang=false) ist keine Anmeldung – unabhängig davon, wer Hash und active gesetzt hat
+                    if (!$u['active'] || !nutzer_hat_zugang($u)) return ['inactive', $u];
                     if (password_needs_rehash((string)$u['hash'], PASSWORD_DEFAULT)) $users[$i]['hash'] = password_hash($pw, PASSWORD_DEFAULT);
                     // Mit zweitem Faktor (Authenticator-App oder Passkey) ist das Passwort allein noch keine erfolgreiche Anmeldung.
                     $x = ['gh' => $gi !== null ? (string)$u['geraete'][$gi]['h'] : '', 'neu' => false];

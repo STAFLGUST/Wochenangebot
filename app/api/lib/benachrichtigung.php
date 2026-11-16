@@ -87,16 +87,23 @@ function notify_from_audit(string $a, string $s, array $d, ?array $who): void
 {
     $ev = NOTIFY_AUDIT[$a] ?? null;
     if (!$ev) return;
+    // Was nach außen geht, entscheidet dieselbe Quelle wie für Leser des Protokolls (protokoll_maskieren in lib/protokoll.php).
+    // Empfänger einer Benachrichtigung haben keine geprüften Rechte, darum gilt der Leser ohne Rechte: bei Kundenvorgängen also
+    // ohne IP-Adresse (die der Protokolleintrag selbst nicht speichert), ohne Namen des Kundenzugangs und ohne Änderungsliste.
+    $w = is_array($who) ? $who : [];
+    $e = protokoll_maskieren([['a' => $a, 's' => $s, 'r' => (string)($w['role'] ?? ''), 'ip' => client_ip(),
+                              'n' => (string)($w['name'] ?? ''), 'u' => (string)($w['username'] ?? ''), 'd' => $d]], [])[0];
+    $ch = is_array($e['d'] ?? null) ? $e['d'] : [];
     $facts = [];
-    if ($who && ($who['name'] ?? '') !== '') $facts[] = ['Durch', $who['name'] . (($who['username'] ?? '') !== '' ? " ({$who['username']})" : '')];
-    $facts[] = ['IP-Adresse', client_ip()];
-    foreach (array_slice($d, 0, 8) as $c) {
+    if (($e['n'] ?? '') !== '') $facts[] = ['Durch', $e['n'] . (($e['u'] ?? '') !== '' ? " ({$e['u']})" : '')];
+    if (($e['ip'] ?? '') !== '') $facts[] = ['IP-Adresse', $e['ip']];
+    foreach (array_slice($ch, 0, 8) as $c) {
         if (!is_array($c)) continue;
         $f = trim((string)($c['name'] ?? '') . ' · ' . (string)($c['f'] ?? ''), ' ·');
         $facts[] = [$f !== '' ? $f : 'Änderung', trim((string)($c['from'] ?? '') . ' → ' . (string)($c['to'] ?? ''), ' →')];
     }
-    if (count($d) > 8) $facts[] = ['…', (count($d) - 8) . ' weitere Änderungen (siehe Protokoll)'];
-    notify($ev, $s, $facts);
+    if (count($ch) > 8) $facts[] = ['…', (count($ch) - 8) . ' weitere Änderungen (siehe Protokoll)'];
+    notify($ev, (string)$e['s'], $facts);
 }
 
 /* Inhalt einer Benachrichtigung: [Betreff, Text, HTML] */

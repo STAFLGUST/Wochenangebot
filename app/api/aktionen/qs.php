@@ -12,7 +12,8 @@ declare(strict_types=1);
                                    Prüfplan ändern (auch Zuweisung an Mitarbeiter); Maßnahmen als wirksam abschließen,
                                    verwerfen oder wieder öffnen;
                     qs.verwalten – Kapitel, Personen (Kürzel, Verknüpfung mit Mitarbeitern) und Einstellungen pflegen,
-                                   Datenpaket übernehmen.
+                                   Datenpaket übernehmen (enthält es Dokumentenversionen, zusätzlich qs.freigeben – es macht
+                                   gelenkte Dokumente gültig).
                     qs.verfahren_sehen / _bearbeiten / _freigeben – Verfahrensdokumentation nach GoBD (eigene, sensible
                                    Rechte): ansehen und exportieren / Abschnitte und IT-Systeme pflegen / Fassung freigeben,
                                    „ohne Änderung überprüft“ vermerken.
@@ -620,11 +621,15 @@ switch ($action) {
             respond(['ok' => true, 'rev' => $stamm['rev'], 'kapitel' => $stamm['kapitel'], 'personen' => $stamm['personen'], 'einstellungen' => $stamm['einstellungen']]);
         }
 
-        /* Datenpaket prüfen (vorschau) und übernehmen – nur in ein leeres Modul oder mit „ersetzen“ */
+        /* Datenpaket prüfen (vorschau) und übernehmen – nur in ein leeres Modul oder mit „ersetzen“.
+           Enthält das Paket Dokumentenversionen, macht es gelenkte Dokumente gültig – derselbe Schritt wie „freigeben“
+           in qs_version_schritt und darum nur mit „qs.freigeben“ (regeln/module.toml, Dokumentenlenkung). */
         case 'qs_import': {
             $me = require_perm('qs.verwalten', true);
             $b = body();
             $erg = qs_paket_pruefen($b['paket'] ?? null, $me);
+            if ($erg['zahlen']['versionen'] > 0 && !may($me, 'qs.freigeben'))
+                fail('Ein Datenpaket mit Dokumentenversionen macht gelenkte Dokumente gültig – das darf nur, wer prüfen und freigeben darf.', 403);
             $leer = qs_leer();
             $dateien = qs_dateien_zahl(qs_doc('qs-dokumente')['liste']);
             if (!empty($b['vorschau'])) respond(['ok' => true, 'zahlen' => $erg['zahlen'], 'fehler' => $erg['fehler'], 'leer' => $leer, 'dateien' => $dateien]);

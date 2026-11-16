@@ -13,6 +13,10 @@ if (!is_array($data) || !isset($data['users'])) throw new RuntimeException('Nutz
 $found = false;
 foreach ($data['users'] as &$u) {
     if ($u['username'] !== $name) continue;
+    // Mitarbeiter „ohne Anmeldung“ (Feld zugang=false, app/api/lib/nutzer.php) bleiben ohne Anmeldung: sonst entstünde ein
+    // anmeldefähiges Konto, das Verwaltung, HR und QS weiter als „ohne Anmeldung“ zeigen und das die Kontenübersicht des
+    // Moduls Sicherheit gar nicht auflistet – ein verdeckter Kontozustand.
+    if (($u['zugang'] ?? true) === false) { fwrite(STDERR, "Nutzer \"$name\" hat keine Anmeldung (\"ohne Anmeldung\"). Anmeldung zuerst in der Verwaltung einrichten.\n"); exit(1); }
     $u['hash'] = password_hash($pw, PASSWORD_DEFAULT);
     $u['mustChange'] = true;
     $u['active'] = true;

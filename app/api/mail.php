@@ -285,6 +285,13 @@ final class Smtp
         if ($c['secure'] === 'starttls') {
             if (!preg_grep('/^250[ -]STARTTLS/i', $caps)) $this->err('Der Mailserver bietet keine Verschlüsselung (STARTTLS) an.');
             $this->cmd('STARTTLS', [220], 'Verschlüsselung');
+            // Nach der 220-Antwort darf im Klartext nichts mehr folgen: sonst hat jemand im Netzpfad Antworten vorweggeschickt,
+            // die der Client nach dem Handschlag für die (dann verschlüsselten) Antworten des Mailservers hielte. Abbrechen,
+            // nicht verwerfen – sonst ließen sich echte Antworten durch eingeschobene ersetzen.
+            stream_set_blocking($fh, false);
+            $rest = stream_get_contents($fh);
+            stream_set_blocking($fh, true);
+            if (is_string($rest) && $rest !== '') $this->err('Verschlüsselung – der Mailserver hat vor dem Handschlag zusätzliche Daten gesendet; Verbindung abgebrochen.');
             if (!@stream_socket_enable_crypto($fh, true, STREAM_CRYPTO_METHOD_TLSv1_2_CLIENT | STREAM_CRYPTO_METHOD_TLSv1_3_CLIENT)) $this->err('Verschlüsselte Verbindung zum Mailserver fehlgeschlagen (Zertifikat?).');
             $caps = $this->cmd($ehlo, [250], 'Begrüßung');
         }

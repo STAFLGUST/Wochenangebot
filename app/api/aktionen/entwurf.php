@@ -22,9 +22,10 @@ switch ($action) {
             ]);
         }
 
-        /* Abgleich: Stand des Entwurfs und wer gerade im Eingabebereich ist (alle paar Sekunden) */
+        /* Abgleich: Stand des Entwurfs und wer gerade im Eingabebereich ist (alle paar Sekunden) – wie „draft“ nur mit
+           Modulzugang Angebot, unabhängig vom Host der Anfrage (GR-103) */
         case 'draft_ping': {
-            $me = require_auth(true);
+            $me = require_modulzugang('angebot', true);
             $now = time();
             $pres = store_read('anwesenheit') ?? [];
             $mine = $pres[$me['id']] ?? null;
@@ -104,12 +105,19 @@ switch ($action) {
 
         /* Veröffentlichen (bisherige Stelle: ältere offene Fenster, Tests). Seit 13.11.2026 liegt das Veröffentlichen im Modul
            Versand (versand_veroeffentlichen) – deshalb zusätzlich zum bestehenden Recht der Modulzugang „Versand“ (GR-103).
-           Die Arbeit macht angebot_veroeffentlichen() (lib/angebote.php), wie im Modul Versand. */
+           Die Arbeit macht angebot_veroeffentlichen() (lib/angebote.php), wie im Modul Versand.
+           „revision“ ist Pflicht (wie versand_veroeffentlichen): niemand veröffentlicht etwas, das er nicht gesehen hat.
+           Ein Modell im Anfragekörper nimmt nur an, wer den Inhalt auch bearbeiten darf – Preise, Kundenpreise,
+           Bezeichnungen, Werbung und die Kalenderwoche (und mit ihr die Schnappschüsse in Preisverlauf und Wochenablage)
+           gehören zu angebot.bearbeiten. Wer nur freigeben darf, veröffentlicht den gespeicherten, geprüften Entwurf. */
         case 'publish': {
-            require_perm('angebot.veroeffentlichen', true);
+            $me = require_perm('angebot.veroeffentlichen', true);
             require_modulzugang('versand', true);
             $b = body();
-            $r = angebot_veroeffentlichen(is_array($b['model'] ?? null) ? $b['model'] : null, array_key_exists('revision', $b) ? $b['revision'] : null);
+            if (!array_key_exists('revision', $b) || !is_int($b['revision'])) fail('Bitte die Seite neu laden und die Änderungen erneut prüfen.', 422);
+            $modell = is_array($b['model'] ?? null) ? $b['model'] : null;
+            if ($modell !== null && !may($me, 'angebot.bearbeiten')) fail('Ohne das Recht „Entwurf bearbeiten“ kann nur der gespeicherte Entwurf veröffentlicht werden.', 403);
+            $r = angebot_veroeffentlichen($modell, $b['revision']);
             respond(['ok' => true, 'publishedAt' => $r['publishedAt'], 'revision' => $r['revision']]);
         }
 

@@ -274,10 +274,11 @@ function mkt_status_setzen(array &$e, string $neu, array $me): string
 {
     if (!isset(MKT_STATUS[$neu])) throw new InvalidArgumentException('Unbekannter Status.');
     $alt = (string)($e['status'] ?? 'idee');
-    if ($alt === $neu) return '';
     $freigeber = may($me, 'marketing.freigeben');
+    // Recht vor dem vorzeitigen Ausstieg: auch ein mitgesendeter, gleicher Status „geplant“ ist eine Freigabe
+    if ($neu === 'geplant' && !$freigeber) fail('Freigeben darf nur, wer das Recht „Beiträge freigeben“ hat. Bitte auf „Zur Freigabe“ setzen.', 403);
+    if ($alt === $neu) return '';
     if ($neu === 'geplant') {
-        if (!$freigeber) fail('Freigeben darf nur, wer das Recht „Beiträge freigeben“ hat. Bitte auf „Zur Freigabe“ setzen.', 403);
         if (($e['veroeffentlichung'] ?? '') === '') throw new InvalidArgumentException('Zum Freigeben bitte zuerst den Veröffentlichungstermin eintragen.');
         if (!($e['kanaele'] ?? [])) throw new InvalidArgumentException('Zum Freigeben bitte mindestens einen Kanal wählen.');
         $e['freigabe'] = ['t' => now(), 'von' => (string)$me['name'], 'vonId' => (string)$me['id']];

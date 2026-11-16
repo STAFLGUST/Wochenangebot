@@ -214,6 +214,12 @@ Weitere Dokumente des Kerns (Firewall, Mailversand, Benachrichtigungen, Integrit
 `meta.week` ist eine ISO-Kalenderwoche: KW 53 nur in Jahren mit 53 Wochen (`kw_gueltig`); der Entwurf behält eine
 ungültige Angabe, Veröffentlichen lehnt sie ab. Jede Veröffentlichung legt das vorige Angebot
 als `versionen/<JJJJMMTT-hhmmss>-<hex>` ab (höchstens `keep_versions`) und den Preisverlauf `historie/<id>`.
+Der Preisverlauf führt **keine Kundenpreise** (`variants`) – nur Artikel, Gruppe, Kategorie und den Wochenpreis
+(`history_from_model`, dieselbe Form wie `clean_history_items()` auf dem Importweg; GR-002). Gelesen wird er nur über
+`history_week()`, das `variants` aus vor dem 15.11.2026 gespeicherten Wochen herausfiltert – alte Dateien bleiben
+unverändert lesbar (GR-006), eine Migration gibt es nicht. Hat ein Administrator eine Woche aus dem Preisverlauf entfernt
+(`historie_geloescht`), nimmt eine Veröffentlichung derselben KW sie nur wieder auf, wenn der Veröffentlichende
+`preisverlauf.bearbeiten` hat.
 Dazu die **Wochenablage** `angebot-woche/<JJJJ-WW>` (Inhaber 13.11.2026, „je KW dauerhaft“; `module/angebot/wochen.php`):
 der neue Stand je KW, ersetzt den Stand derselben KW, ohne Grenze und ohne automatisches Löschen, intern (nie auf der
 Kundenseite). Die Angebotsdefinitionen enthalten nie Kundengruppen (`gruppen`, `sonderGruppen`); bei Sonderangeboten `art`
@@ -416,7 +422,10 @@ Mitarbeiter sind die Nutzer der Plattform (`users_load()`); HR speichert nur eig
   Zeilen im Kalender (`hr_monat`, Inhaber 11.11.2026): Mitarbeiter bekommen nur die Personen ihrer eigenen Abteilung
   (`hr_gleiche_abteilung`) und sich selbst – ohne eigene Person im Urlaubsplan keine, ohne Abteilung nur die eigene;
   `hr.verwalten` und `hr.uebersicht` bekommen alle (Antwortfeld `alleAbteilungen`). Die Vertretungsprüfung und andere
-  serverseitige Prüfungen nutzen weiter alle Abwesenheiten.
+  serverseitige Prüfungen nutzen weiter alle Abwesenheiten – sie geben aber dieselbe Grenze heraus wie der Kalender:
+  `hr_antrag_zeitraum` nennt die genauen Tage der gewählten Vertretung nur bei Kollegen der eigenen Abteilung bzw. mit
+  `hr.verwalten`/`hr.uebersicht` (Parameter `$me`), sonst nur, dass sie „nicht verfügbar“ ist (Sicherheitsdurchsicht
+  15.11.2026; gilt auch für die zusätzliche Vertretung, die Vorschau und die Vorplanung).
   Sichtbarkeit im Kalender (`hr_monat` → `hr_zeile`, Antwortfeld `sicht`, seit 11.11.2026; `voll` bleibt für ältere Seiten):
   `voll` = Personalstelle (Art, offene Anträge mit „?“, freie Tage „x“; die eigene Zeile sieht jeder so), `kollege` = nur „A“
   (nur genehmigt, nie der Grund), `urlaub` = Recht `hr.kalender` (sensibel, einzeln vergeben), je Zeile nur für Kollegen der
@@ -681,7 +690,8 @@ laufen unter der Sperre `qs-dokumente`. Zuständig/Vertreter sind **Kürzel** (S
   (gelenkt) bzw. am Dokument (Ordner, extern); die Datei selbst liegt in der Dateiablage (Bereich `qs`). Im Entwurf (`qs.bearbeiten`,
   wer ablegt oder löscht, kommt in `bearbeiter`) wird endgültig gelöscht; sonst nur `entfernt` vermerkt (freigegebene/ersetzte Versionen
   nur mit `qs.freigeben`, mit Grund). In Prüfung, verworfen oder eingezogen: keine Änderung (409); höchstens 50 Dateien je Stelle.
-  **Vorlagen und Lenkungsangaben** (seit Bauabschnitt 3, `module/qs/vorlagen.php`): Datei-Einträge optional mit `platzhalter: ["version", …]`
+  **Vorlagen und Lenkungsangaben** (seit Bauabschnitt 3, `module/qs/vorlagen.php`; Grenzen je Office-Datei: 2000 ZIP-Einträge,
+  30 MB entpackt und 20000 Textelemente je Textteil – darüber gilt die Datei als nicht lesbar): Datei-Einträge optional mit `platzhalter: ["version", …]`
   (bekannte, noch offene Platzhalter in Word/Excel), `vorlage: {"dokument", "nr", "version"}` (aus einer Vorlage erzeugt), `uebernommen: N`
   (Kopie aus Version N), `roh: "<id>"`, `sha256Roh` (Prüfsumme der Rohfassung) und `ausgefuellt: {"t", "felder"}` (bei der Freigabe bzw. beim Nachtragen ausgefüllte Fassung; `roh` ist
   die Rohfassung mit Platzhaltern, sie bleibt in der Ablage und wird bei „Dateien übernehmen“ kopiert). Vorlagen (Art V) werden nie ausgefüllt.
@@ -736,9 +746,12 @@ Verfahrensdokumentation nach GoBD (`module/qs/verfahren.php`, Aktionen `qs_verfa
   Seite als Entwurf gekennzeichnet) oder `von`/`bis` = Export für Prüfungen mit allen Fassungen, die im Zeitraum galten, und der Historie aller
   Fassungen; `dokumente=1` liefert ein ZIP mit den Dateien der verknüpften QM-Dokumente in der Version der jeweiligen Fassung.
 
-Datenpaket (`qs_import`, nur mit `qs.verwalten`, `vorschau: true` schreibt nichts): `{"format": "stafl-qs", "version": 1, "kapitel", "personen",
+Datenpaket (`qs_import`, mit `qs.verwalten`, `vorschau: true` schreibt nichts): `{"format": "stafl-qs", "version": 1, "kapitel", "personen",
 "dokumente": [{… , "versionen": [{"nr", "datum", "aenderungen", "grund", "erstellt", "geprueft", "freigegeben"}]}], "handbuch", "pruefungen",
 "massnahmen"}` – die höchste Version gilt, ältere sind `ersetzt`; Verknüpfungen mit Mitarbeitern und Zuweisungen enthält das Paket nicht.
+Weil die höchste Version das Dokument **gültig** macht – derselbe Schritt wie „freigeben“ –, braucht ein Paket mit Versionen zusätzlich
+`qs.freigeben` (sonst 403, auch in der Vorschau), und für diese Version gilt das 4-Augen-Prinzip: `erstellt` und `geprueft` dürfen nicht
+dasselbe Kürzel nennen (Fehler je Eintrag in der Vorschau). Ältere Versionen bleiben Schnappschüsse, wie sie in der Excel stehen (GR-106).
 Mit Fehlern wird nichts übernommen, in ein Modul mit Daten nur mit `ersetzen` (Einstellungen bleiben, Nachweise werden geleert); sobald in
 der Dokumentenablage Dateien liegen, gar nicht mehr (409 – die Dateien gingen sonst verloren; die Vorschau nennt `dateien`). Echte Pakete
 liegen nie im Repository (GR-007); Beispiel: `tests/fixtures/qs/datenpaket.json`.

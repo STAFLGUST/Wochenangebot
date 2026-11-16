@@ -443,7 +443,7 @@
       if (name.length < 2) { err.textContent = 'Bitte einen Namen für die Rolle angeben (mindestens 2 Zeichen).'; $('#rl-name').focus(); return; }
       const btn = e.target.closest('button'); btn.disabled = true;
       try {
-        const r = await api('rolle_save', { body: { id: entwurf.id, name, beschreibung: entwurf.beschreibung.trim(), rechte: [...entwurf.rechte] } });
+        const r = await api('rolle_save', { body: { id: entwurf.id, name, beschreibung: entwurf.beschreibung.trim(), rechte: [...entwurf.rechte], rev: daten.rev } });
         const neu = !entwurf.id;
         toast(neu ? `Rolle „${name}“ angelegt – jetzt unter „Mitarbeiter“ zuordnen.` : `Rolle „${name}“ gespeichert. Die Rechte gelten ab der nächsten Aktion der Mitarbeiter.`);
         await laden(r.id);

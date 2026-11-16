@@ -133,8 +133,9 @@ function current_customer(): ?array
 {
     global $KUNDE;
     if ($KUNDE !== null) return $KUNDE ?: null;
-    start_session();
     $KUNDE = false;
+    if (!sitzung_vorhanden()) return null;   // ohne vorgelegte Kennung keine Sitzung beginnen (lib/sitzung.php)
+    start_session();
     if (empty($_SESSION['kid'])) return null;
     if (time() - (int)($_SESSION['kseen'] ?? 0) > (int)sec()['idleMinutes'] * 60) { kunde_clear(); return null; }
     $c = null;

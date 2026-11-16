@@ -28,6 +28,7 @@ import fcntl
 import json
 import os
 from pathlib import Path
+import re
 import shutil
 import sqlite3
 import sys
@@ -36,8 +37,9 @@ import time
 import tomllib
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-import datenbank as db  # noqa: E402  GUARD, SIDECARS, SCHEMA, document_path, validate, connect
+import datenbank as db  # noqa: E402  GUARD, SIDECARS, SCHEMA, document_path, validate, connect, write_nofollow
 
+REST = re.compile(r'^(?P<dok>.+\.php)(?:\.neu|\.kopie|\.[0-9a-f]+\.tmp)$')   # Zwischendateien, siehe rest_dateien()
 MARKER_HAUPT = '.daten-getrennt'
 MARKER_INTERN = '.daten-intern'
 REGELN = Path(__file__).resolve().parent.parent / 'regeln' / 'datenverantwortung.toml'
@@ -135,6 +137,24 @@ def json_text(wert):
     return json.dumps(wert, ensure_ascii=False, separators=(',', ':'))
 
 
+def ordner_nofollow(root, rel):
+    """Zielordner für rel unterhalb von root anlegen bzw. prüfen, ohne je einem Verweis zu folgen – dieselbe Regel wie
+    db.write_nofollow() für die Datei selbst, nur für die Ordnernamen: daten/ ist in den Containern beschreibbar
+    (ADR-007), ein dort als Ordnername untergeschobener Verweis darf dieses root-Werkzeug nie aus root herausschreiben."""
+    d = root
+    for teil in Path(rel).parent.parts:
+        if teil in ('', '.', '..'):
+            raise ValueError('Unerlaubte Pfadkomponente: ' + str(rel))
+        d = d / teil
+        if d.is_symlink():
+            raise ValueError('Verweis als Ordnername im Datenordner: ' + str(d))
+        if not d.exists():
+            d.mkdir(mode=0o755)
+        elif not d.is_dir():
+            raise ValueError('Kein Ordner im Datenordner: ' + str(d))
+    return d
+
+
 def dok_schreiben(root, name, wert):
     if sqlite_aktiv(root):
         with db.connect(root) as c:
@@ -144,9 +164,9 @@ def dok_schreiben(root, name, wert):
             raise ValueError('Vergleich nach dem Schreiben fehlgeschlagen: ' + name)
         return
     p = root / (name + '.php')
-    p.parent.mkdir(parents=True, exist_ok=True)
-    # Zwischendatei nie über einen untergeschobenen Verweis schreiben (daten/ ist im Container beschreibbar); das
-    # abschließende Umbenennen ersetzt einen Verweis unter dem Zielnamen, statt ihm zu folgen – db.write_nofollow().
+    ordner_nofollow(root, name + '.php')
+    # Weder Ordnername noch Zwischendatei über einen untergeschobenen Verweis schreiben (daten/ ist im Container
+    # beschreibbar); das abschließende Umbenennen ersetzt einen Verweis unter dem Zielnamen, statt ihm zu folgen.
     tmp = p.with_name(p.name + '.neu')
     db.write_nofollow(tmp, (db.GUARD + json_text(wert)).encode(), 0o644)
     if json.loads(tmp.read_text()[len(db.GUARD):]) != wert:
@@ -260,6 +280,25 @@ def altbestand(haupt, ks):
     return rest
 
 
+def rest_dateien(root, ks):
+    """Zwischendateien interner Dokumente im gemeinsamen Ordner: <name>.php.neu, <name>.php.kopie (Abbruch dieses
+    Werkzeugs) und <name>.php.<hex>.tmp (abgebrochener Schreibvorgang der Anwendung, app/api/storage.php). Sie tragen
+    denselben vollen Inhalt wie das Dokument und dürfen im Ordner der Kundenseite nicht liegen bleiben (ADR-007 Stufe 2).
+    Endungsunabhängig und in beiden Speicherarten – interne_dateien() sieht nur *.php."""
+    out = []
+    for p in sorted(root.rglob('*.php.*')):
+        rel = p.relative_to(root)
+        if rel.parts[0] == 'dateien' or p.is_symlink() or not p.is_file():
+            continue
+        m = REST.match(rel.name)
+        if not m:
+            continue
+        dok = rel.with_name(m.group('dok'))
+        if db.document_path(dok) and ist_intern(str(dok.with_suffix('')), ks):
+            out.append(rel)
+    return out
+
+
 def altdatei_entfernen(root, name):
     """Im SQLite-Betrieb blieb die frühere Datendatei beim Umschalten liegen. Wird das Dokument hier gekürzt, hielte sie weiter den
     vollen Stand im Ordner der Kundenseite. Gelesen wird sie nie, und ein Rückfall auf Dateien schreibt sie aus der Datenbank neu
@@ -321,7 +360,7 @@ def kopieren(quelle, ziel, rel):
     s, z = quelle / rel, ziel / rel
     if s.is_symlink() or not s.is_file():
         raise ValueError('Unerwarteter Eintrag (Verweis oder Sonderdatei): ' + str(rel))
-    z.parent.mkdir(parents=True, exist_ok=True)
+    ordner_nofollow(ziel, rel)
     # wie dok_schreiben: die Zwischendatei entsteht ohne einem Verweis zu folgen, Rechte und Zeiten danach wie die Quelle
     tmp = z.with_name(z.name + '.kopie')
     inhalt = s.read_bytes()
@@ -436,6 +475,11 @@ def plan(haupt, intern, regeln, ziel=ZIELSTUFE):
         print(f'  neu in daten-intern: {n}' + erklaerung.get(n, art))
     if bereinigen:
         print('  im gemeinsamen Ordner kürzen: kunden auf die Portalfelder, bestellung ohne Empfängeradressen')
+    reste = rest_dateien(haupt, ks)
+    if reste:
+        print('Zwischendateien interner Dokumente im gemeinsamen Ordner (werden beim Trennen entfernt):')
+        for rel in reste[:200]:
+            print('  ' + str(rel))
     rest = altbestand(haupt, ks)
     if rest:
         print('Hinweis: Reste des Speicher-Umbaus im gemeinsamen Ordner (nicht für die Kundenseite gedacht): ' + ', '.join(rest[:8]))
@@ -508,6 +552,8 @@ def trennen(haupt, intern, regeln, ziel=ZIELSTUFE):
             if rest:
                 raise ValueError('Interne Zeilen nicht entfernt: ' + ', '.join(r[0] for r in rest[:5]))
     for rel in dateien + ablage:
+        (haupt / rel).unlink()
+    for rel in rest_dateien(haupt, ks):   # Reste eines abgebrochenen Schreibvorgangs: voller Inhalt, gelesen wird sie nie
         (haupt / rel).unlink()
     ordner_aufraeumen(haupt, dateien + ablage)
     if (haupt / 'dateien').is_dir() and not any((haupt / 'dateien').iterdir()):

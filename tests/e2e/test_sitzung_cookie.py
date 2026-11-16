@@ -5,6 +5,7 @@ Cookie-Speicher Secure-Cookies über http://127.0.0.1 nicht zurückschicken wür
 Set-Cookie-Angaben prüfen.
 """
 import json
+import os
 import sys
 import urllib.error
 import urllib.request
@@ -125,6 +126,40 @@ check('Firewall: angemeldeter Mitarbeiter (__Host-Cookie) wird erkannt', st_staf
 st, j, sc, _ = roh('status', cookies={NEU: sid})
 roh('logout', {}, cookies={NEU: sid}, csrf=j.get('csrf', ''))
 check('HTTPS: nach Abmelden ungültig', roh('status', cookies={NEU: sid})[1].get('loggedIn') is False)
+
+# ── Keine Sitzung ohne vorgelegte Kennung (Befund 15.11.2026) ──
+# Vorher legte jede anonyme Anfrage an eine öffentliche Aktion eine Sitzungsdatei an, die bis zum Ende der
+# Leerlaufzeit (Voreinstellung 8 Stunden) liegen blieb.
+SESS = os.environ['WA_SESSION_DIR']
+
+
+def sitzungen():
+    return {n for n in os.listdir(SESS) if n.startswith('sess_')}
+
+
+vor = sitzungen()
+anon = [(a, roh(a, d, ip='198.51.100.78')) for a, d in (('kunde_status', None), ('offer', None), ('kunde_merkliste', None), ('kunde_logout', {}))]
+check('anonyme Anfragen an die öffentlichen Aktionen legen keine Sitzungsdatei an', sitzungen() == vor, sorted(sitzungen() - vor))
+check('anonyme Anfragen setzen kein Sitzungs-Cookie', all(not sc for _, (_, _, sc, _) in anon), [(a, sc) for a, (_, _, sc, _) in anon if sc])
+check('anonyme Anfragen werden weiter beantwortet (keine neuen Fehler)', all(st in (200, 401) for _, (st, _, _, _) in anon), [(a, st) for a, (st, _, _, _) in anon])
+
+# App-Clients: dieselbe Lücke fiel ohne Cookie nicht auf, weil die App die Kennung in der Kopfzeile führt
+vor = sitzungen()
+app_anon = [roh(a, None, ip='198.51.100.79', extra=app) for a in ('offer', 'kunde_status')]
+check('App ohne Kennung: keine Sitzungsdatei und keine Kennung in der Antwort',
+      sitzungen() == vor and all(not h.get('X-WA-Sitzung') for _, _, _, h in app_anon), sorted(sitzungen() - vor))
+
+# Mit vorgelegter Kennung bleibt alles wie bisher
+vor = sitzungen()
+st, j, sc, _ = roh('kunde_login', {'username': 'cookie.kunde', 'password': 'Kunden-Kennwort-7'}, ip='198.51.100.74')
+ksid2 = cookie(sc, NEU)[0]
+check('Kunden-Anmeldung legt weiter eine Sitzung an (Datei und __Host-Cookie)', st == 200 and bool(ksid2) and len(sitzungen() - vor) == 1, (st, sorted(sitzungen() - vor)))
+check('angemeldeter Kunde wird mit vorgelegter Kennung weiter erkannt',
+      (roh('kunde_status', cookies={NEU: ksid2}, ip='198.51.100.74')[1].get('kunde') or {}).get('firma') == 'Cookie Test GmbH')
+st, j, sc, hd = roh('login', {'username': 'admin', 'password': PW}, ip='198.51.100.75', extra=app)
+asid2 = hd.get('X-WA-Sitzung', '')
+check('App-Anmeldung legt weiter eine Sitzung an und nennt die Kennung', st == 200 and bool(asid2)
+      and roh('status', ip='198.51.100.75', extra={**app, 'X-WA-Sitzung': asid2})[1].get('loggedIn') is True, (st, bool(asid2)))
 
 # ── Echter Browser: Chromium behandelt 127.0.0.1 als sicheren Ursprung und speichert dort auch __Host-Cookies ──
 from playwright.sync_api import sync_playwright  # noqa: E402

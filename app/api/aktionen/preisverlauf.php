@@ -25,12 +25,17 @@ switch ($action) {
             history_backfill();
             $weeks = [];
             foreach (history_ids() as $id) {
-                $h = store_read('historie/' . $id);
+                // history_week: ohne Kundenpreise – die Ansicht nutzt nur price (GR-002)
+                $h = history_week($id);
                 if ($h) { $h['id'] = $id; $weeks[] = $h; }
             }
             respond(['ok' => true, 'weeks' => $weeks]);
         }
 
+        /* Vorwochenspalte des Editors. Die Preise je Kundenangebot stehen nicht im Preisverlauf (der führt keine
+           Kundenpreise), sondern im vollständigen Wochenstand (Wochenablage, aktuelles Angebot, versionen/*) – und gehen
+           nur an Aufrufer mit Modulzugang Angebot heraus, also hinter demselben Tor wie die Aktionen draft und version
+           (GR-002, GR-103). Ohne diesen Zugang bleibt es beim Wochenpreis. */
         case 'history_prev': {
             $me = require_auth();
             if (!may($me, 'preisverlauf.sehen') && !may($me, 'angebot.bearbeiten')) fail('Dafür fehlt Ihnen die Berechtigung. Bitte an einen Administrator wenden.', 403);
@@ -42,12 +47,21 @@ switch ($action) {
             $cur = history_id($w, $y);
             $prev = null;
             foreach (history_ids() as $id) if (strcmp($id, $cur) < 0) $prev = $id;   // jüngste Woche vor der Angebotswoche
-            $h = $prev ? store_read('historie/' . $prev) : null;
+            $h = $prev ? history_week($prev) : null;
             if ($h) {
+                $var = [];
+                if (modul_zugang_frei($me, 'angebot')) {
+                    require_once dirname(__DIR__) . '/module/angebot/wochen.php';
+                    [$voll] = angebot_woche_modell($prev);
+                    // Zuordnung über die Artikelnummer (der Preisverlauf führt keine Artikel-IDs); Artikel ohne Nummer
+                    // behalten den Wochenpreis
+                    foreach (is_array($voll['items'] ?? null) ? $voll['items'] : [] as $it)
+                        if (!empty($it['variants']) && !empty($it['code'])) $var[(string)$it['code']] = $it['variants'];
+                }
                 $items = [];
                 foreach (($h['items'] ?? []) as $it) {
                     $row = ['code' => $it['code'] ?? null, 'name' => $it['name'] ?? '', 'price' => $it['price'] ?? ['status' => 'none']];
-                    if (!empty($it['variants'])) $row['variants'] = $it['variants'];
+                    if (isset($var[(string)($it['code'] ?? '')])) $row['variants'] = $var[(string)$it['code']];
                     $items[] = $row;
                 }
                 $h = ['id' => $prev, 'week' => $h['week'], 'year' => $h['year'], 'items' => $items];

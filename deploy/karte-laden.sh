@@ -23,6 +23,14 @@ MIN_GROESSE_MB=${KARTE_MIN_MB:-500}          # kleiner = abgebrochener Download
 PLATZ_GB=${KARTE_PLATZ_GB:-14}               # neue Datei (ca. 5–6 GB) neben der alten plus Reserve
 MODUS=${1:-laden}
 abbruch() { echo "Abbruch: $*" >&2; exit 1; }
+# daten-karte ist im Lade-Container beschreibbar: ein dort untergeschobener Verweis darf root nie auf eine andere Datei
+# des Servers umlenken (gleiche Regel wie status_schreiben() in deploy/sichern.sh und ablegen() in deploy/postfach-schluessel.sh).
+echt() { [ -f "$1" ] && [ ! -L "$1" ] || abbruch "$1 ist kein echtes Ergebnis des Laufs (Verweis oder Sonderdatei) – verworfen."; }
+# Vermerk außerhalb des Container-Ordners erzeugen und nur per Umbenennen einsetzen; mv -fT folgt keinem Verweis, auch keinem auf einen Ordner
+vermerken() {
+  TMP=$(mktemp "$(pwd)/.stand.XXXXXX") || abbruch "Zwischendatei nicht anlegbar."
+  printf '%s\n' "$2" > "$TMP" && chmod 644 "$TMP" && mv -fT "$TMP" "$1" || { rm -f "$TMP"; abbruch "Stand nicht vermerkt."; }
+}
 case "$MODUS" in laden|pruefen|entfernen) ;; *) echo "Aufruf: sh deploy/karte-laden.sh [pruefen|laden|entfernen]" >&2; exit 2 ;; esac
 [ -f .env ] && [ -f docker-compose.yml ] && [ -f deploy/karte/deutschland.geojson ] || abbruch "Bitte im Installationsordner ausführen: cd /opt/wochenangebot"
 ZIEL=daten-karte
@@ -67,13 +75,14 @@ rm -f "$ZIEL/karte.neu.pmtiles"
 echo "lade:      Ausschnitt Deutschland bis Zoomstufe $MAXZOOM – das dauert eine Weile …"
 lauf /daten/karte.neu.pmtiles || { rm -f "$ZIEL/karte.neu.pmtiles"; abbruch "Laden fehlgeschlagen – die bisherige Karte bleibt unverändert."; }
 
-# Prüfen: Größe plausibel, Kopf „PMTiles“ Version 3, das Werkzeug kann die Datei lesen
+# Prüfen: echtes Ergebnis des Laufs, Größe plausibel, Kopf „PMTiles“ Version 3, das Werkzeug kann die Datei lesen
+echt "$ZIEL/karte.neu.pmtiles"
 groesse_mb=$(( $(wc -c < "$ZIEL/karte.neu.pmtiles") / 1048576 ))
 [ "$groesse_mb" -ge "$MIN_GROESSE_MB" ] || { rm -f "$ZIEL/karte.neu.pmtiles"; abbruch "Neue Karte nur ${groesse_mb} MB – unvollständig, verworfen."; }
 [ "$(head -c 7 "$ZIEL/karte.neu.pmtiles")" = PMTiles ] || { rm -f "$ZIEL/karte.neu.pmtiles"; abbruch "Neue Karte hat kein PMTiles-Format – verworfen."; }
 $DOCKER run --rm -v "$(pwd)/$ZIEL:/daten:ro" "$WERKZEUG" show /daten/karte.neu.pmtiles >/dev/null 2>&1 \
   || { rm -f "$ZIEL/karte.neu.pmtiles"; abbruch "Neue Karte nicht lesbar – verworfen."; }
 chmod 644 "$ZIEL/karte.neu.pmtiles"
-mv -f "$ZIEL/karte.neu.pmtiles" "$ZIEL/karte.pmtiles"   # im selben Ordner: sofortiger Austausch
-printf '%s\n' "$STAND" > "$ZIEL/stand.txt"
+mv -fT "$ZIEL/karte.neu.pmtiles" "$ZIEL/karte.pmtiles"   # im selben Ordner: sofortiger Austausch, -T ersetzt auch einen Verweis
+vermerken "$ZIEL/stand.txt" "$STAND"
 echo "geladen:   Detailkarte Stand ${STAND%.pmtiles}, ${groesse_mb} MB – CRM-Karte und Auswertung zeigen ab dem nächsten Öffnen Straßen und Gebäude."

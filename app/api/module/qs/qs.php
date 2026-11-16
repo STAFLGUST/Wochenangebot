@@ -850,7 +850,9 @@ function qs_csv_massnahmen(array $liste): string
    geprueft, freigegeben (Kürzel)}]}], handbuch [{kapitel, nr, titel, text, verweise, ifs, zustaendig, vertreter,
    aenderungen [{datum, was, grund}]}], pruefungen [{kapitel, titel, beschreibung, intervall, start, sollwert, massnahme,
    womit, zustaendig, vertreter}], massnahmen [{nr, quelle, bezug, kapitel, anforderung, bewertung, feststellung, …, status}].
-   Versionen aus der Excel: die höchste gilt (freigegeben), ältere sind „ersetzt“; Kürzel als Schnappschuss. Verknüpfungen
+   Versionen aus der Excel: die höchste gilt (freigegeben), ältere sind „ersetzt“; Kürzel als Schnappschuss. Weil das Paket
+   damit Dokumente gültig macht, braucht ein Paket mit Versionen „qs.freigeben“ (geprüft in qs_import) und die gültige Version
+   zwei verschiedene Kürzel für erstellt und geprüft (4-Augen-Prinzip); ältere Versionen bleiben als Schnappschuss, wie sie sind. Verknüpfungen
    mit Mitarbeitern und ausführende Mitarbeiter enthält das Paket nicht (sie hängen von der Plattform ab). */
 function qs_paket_pruefen($p, array $me): array
 {
@@ -891,7 +893,12 @@ function qs_paket_pruefen($p, array $me): array
                            'quelle' => 'paket', 'verlauf' => []];
             }
             usort($vers, function ($a, $b) { return $a['nr'] <=> $b['nr']; });
-            if ($vers) $vers[count($vers) - 1]['status'] = 'freigegeben';
+            if ($vers) {   // die höchste Version gilt – für sie gilt auch das 4-Augen-Prinzip (ältere bleiben historische Schnappschüsse, GR-106)
+                $g = $vers[count($vers) - 1]['kuerzel'];
+                if ($g['erstellt'] !== '' && strcasecmp($g['erstellt'], $g['geprueft']) === 0)
+                    throw new InvalidArgumentException('Version ' . $vers[count($vers) - 1]['nr'] . ': 4-Augen-Prinzip – erstellt und geprüft brauchen zwei verschiedene Kürzel.');
+                $vers[count($vers) - 1]['status'] = 'freigegeben';
+            }
             $d['versionen'] = $vers;
             if (count($docs['dokumente']) >= QS_MAX_DOKUMENTE) throw new InvalidArgumentException('Zu viele Dokumente.');
             $docs['dokumente'][] = ['id' => qs_id('d')] + $d + ['rev' => 1, 'erstellt' => $wer, 'geaendert' => $wer, 'quelle' => 'paket', 'verlauf' => []];

@@ -252,6 +252,17 @@ braucht, setzt `lokale_anmeldung = true`.
 Ein altes `WA_ADMIN` ohne Präfix wird über HTTPS nicht gelesen, sondern gelöscht. **Nie** ein Cookie mit
 `Domain=dashboard-stafl.de` setzen. Die App nutzt statt Cookie die Kopfzeile `X-WA-Sitzung` ([app-api.md](../app-api.md)).
 
+**Keine Sitzung ohne vorgelegte Kennung (seit 15.11.2026).** `start_session()` legt für jede neue Kennung sofort eine
+Sitzungsdatei an und schickt ein Cookie. Deshalb rufen `current_user()` (`lib/sitzung.php`), `current_customer()`
+(`lib/kunden.php`), `fw_mitarbeiter()` (`lib/firewall.php`) und `druck_angemeldet()` (`module/angebot/druck.php`) es nur
+auf, wenn `sitzung_vorhanden()` wahr ist: Es läuft schon eine Sitzung, oder der Aufrufer legt eine Kennung vor – im
+Browser das Sitzungs-Cookie (auch das alte `WA_ADMIN` ohne Präfix, damit es weiter gelöscht wird), in der App die
+Kopfzeile `X-WA-Sitzung`. Vorher legte jede anonyme Anfrage an eine öffentliche Aktion (`kunde_status`, `offer`,
+`kunde_merkliste`, `kunde_logout`) eine leere Sitzungsdatei an, die bis zum Ende der Leerlaufzeit liegen blieb.
+Wer eine Sitzung **anlegen** will (`login`, `kunde_login`, `kunde_token_set`, Passkeys, OIDC), ruft `start_session()`
+weiterhin unbedingt auf – für angemeldete Nutzer ändert sich nichts. Geprüft in `tests/e2e/test_sitzung_cookie.py`
+und `tests/e2e/test_app_api.py`.
+
 ### Sitzungsregister
 
 `sign_in()` vergibt eine neue Sitzungskennung (`session_regenerate_id(true)`), ein neues CSRF-Token
@@ -328,6 +339,14 @@ Alles in `lib/rechte.php`; Zuordnung Recht → Modul in `regeln/berechtigungen.t
 - Eigene Rollen `r<8 hex>` im Dokument `rollen` (`eigene`, `namen`), gepflegt über `rolle_save`/`rolle_loeschen`.
 - Ein Mitarbeiter hat `role` und optional weitere `rollen`; die Rechte addieren sich (`user_rollen`). `admin` gibt es
   nur als Hauptrolle.
+- **Schreiben des Dokuments `rechte`** (beide Wege: `rechte_save` und `rolle_save` für eine Standardrolle) läuft über
+  `rechte_schreiben()` unter `with_lock('rechte')` – Lesen und Schreiben in einem Abschnitt, sonst verlöre ein
+  gleichzeitiges Speichern eine Änderung (ein entzogenes Recht käme zurück). In `rolle_save` liegt diese Sperre immer
+  innerhalb von `with_lock('rollen')`; die Reihenfolge ist überall gleich, damit sich nichts verklemmt. Dazu zählt
+  `rechte_schreiben()` die Revision `rev` hoch: Die Oberfläche schickt die `rev` zurück, die die Aktion `rechte`
+  geliefert hat, und ein Speichern auf veraltetem Lesestand wird mit 409 „Bitte neu laden“ abgelehnt (wie
+  `gruppen_speichern`). Ohne `rev` in der Anfrage (ältere Oberfläche, Skripte) wird wie bisher gespeichert; `rev` ist ein
+  neues optionales Feld (GR-006).
 
 **Wirksame Rechte** (`user_perms`): Rechte aller Rollen + `grant` → Voraussetzungen ergänzen (`rights_close`, Feld `r`:
 wer bearbeiten darf, darf auch sehen) → `deny` abziehen → alles entfernen, dessen Voraussetzung jetzt fehlt.
@@ -346,6 +365,12 @@ und `PERMS_SENSIBEL` (Einkaufswerte, Kontaktdaten-Export, Personaldaten, Kundenz
 werden einzeln vergeben). `PERMS_VORSCHAU` ordnet einem Recht ein Vorschau-Bild zu (`app/assets/admin-rollen-vorschau.js`,
 fest gezeichnete Beispieldaten). Die Oberfläche fasst damit je Modul zu „Kein Zugang · Ansehen · Bearbeiten · Voll“
 zusammen (sonst „Angepasst“ bzw. „Nur Zugang“); gespeichert wird weiter nur die Liste der Rechte (`rolle_save`).
+
+**Mitarbeiter „ohne Anmeldung“** (Feld `zugang` = `false`, z. B. nur für die Urlaubsverwaltung angelegt) können sich
+nie anmelden: `nutzer_hat_zugang()` wird neben `active` auch in der eigenen Anmeldung (`login`) und bei Keycloak
+(`oidc_aktiv`) geprüft, und das Serverwerkzeug `deploy/passwort-zuruecksetzen.php` lehnt solche Konten ab. Sonst entstünde
+ein anmeldefähiges Konto, das Verwaltung, HR und QS weiter als „ohne Anmeldung“ zeigen und das die Kontenübersicht des
+Moduls Sicherheit gar nicht auflistet. Eine Anmeldung richtet man in der Verwaltung ein.
 
 **Vertreter am Mitarbeiter** (Feld `vertreter`, `user_save`, Prüfung `nutzer_vertreter`): Nummer aus Stammdaten →
 Vertreter. Das CRM zeigt damit „Mein Cockpit“ mit den Kunden dieses Vertreters (Vertreter oder Vertreter 2). Ohne das
@@ -401,6 +426,19 @@ stehen in der Rechteübersicht je Modul als „Modul … öffnen“.
 Zentrale ruft die Vorschau- und Übernahmefunktionen fremder Module auf, ihre eigenen Aktionen gehören aber dem Modul
 `verwaltung`; der Eigentümer steht erst zur Laufzeit in der Importart. `import_arten` zeigt nur Importarten, deren
 Eigentümer-Modul dem Nutzer offensteht.
+**Preisverlauf und frühere Wochen (seit 15.11.2026):** Der Preisverlauf trägt keine Kundenpreise mehr – `history_data`
+und `history_prev` (Recht `preisverlauf.sehen`) liefern sie nicht, und `history_from_model()` schreibt sie nicht in
+`historie/*`. Nur die Vorwochenpreise je Kundenangebot gehen in `history_prev` zusätzlich mit `angebot.zugang` heraus
+(GR-002). Frühere Wochen (`angebot_woche`) verlangen für die Quelle Preisverlauf `preisverlauf.sehen`, der Abgleich des
+Entwurfs samt Anwesenheitsliste (`draft_ping`) `angebot.zugang`.
+
+**Abgeleitete Angaben hängen am selben Recht wie die Angabe selbst.** Unterdrückt eine Antwort eine Zahl, weil das Recht
+fehlt, darf sie auch nicht als Summe, Zähler, Warnhinweis, Sortierung oder Fehlertext wieder auftauchen – wer die Anfrage
+bestimmt, fragt sonst Zeile für Zeile ab, was die Antwort einzeln verweigert. Beispiele aus der Durchsicht vom
+15.11.2026: die Importvorschau der Stammdatenlisten zählt entfallende Einträge mit zugeordneten Kunden nur noch mit
+`kunden.sehen` (`gruppen_import_vorschau`, derselbe Schalter `$zaehlt` wie für die Zahl je Zeile); die
+Vertretungsprüfung in HR nennt die genauen Abwesenheitstage nur im Rahmen der Abteilungsgrenze des Kalenders
+(`hr_antrag_zeitraum`).
 
 **Versand (seit 13.11.2026):** Veröffentlichen und Senden liegen im Modul `versand` mit eigenem Modulzugang `versand.zugang`
 (`zugang_rollen = []` – keine Standardrolle, nur Administratoren). Die bestehenden Rechte `angebot.veroeffentlichen`,
@@ -408,7 +446,19 @@ Eigentümer-Modul dem Nutzer offensteht.
 Katalog aber beim Modul Versand und wirken **nur zusammen mit dem Zugang**. Auf dem Versand-Host setzt das
 `modul_zugang_durchsetzen()` durch; die bisherigen Aktionen `publish`, `kunden_rundmail`, `restposten_info` und
 `kunden_restposten` (Angebot-Host, für ältere offene Fenster und Tests) rufen zusätzlich `require_modulzugang('versand')` –
-sonst ließe sich der Zugang über die Schnittstelle umgehen. `angebot.veroeffentlichen` hat bewusst keine Voraussetzung `r`
+sonst ließe sich der Zugang über die Schnittstelle umgehen. `publish` verlangt seit 15.11.2026 wie
+`versand_veroeffentlichen` die `revision` als Pflichtfeld und nimmt ein Modell im Anfragekörper nur von jemandem an, der
+`angebot.bearbeiten` hat: der Inhalt (Preise, Kundenpreise, Bezeichnungen, Werbung und die Kalenderwoche – und mit ihr die
+Schnappschüsse in Preisverlauf und Wochenablage) gehört zum Bearbeitungsrecht. Wer nur freigeben darf, veröffentlicht den
+gespeicherten, geprüften Entwurf (`angebot_veroeffentlichen(null, $revision)`).
+
+Ebenso die alte Vorschau `kunden_mail_vorschau` (seit
+15.11.2026): für „woche“/„angebot“/„restposten“ den Modulzugang, für „restposten“ zusätzlich `sonderposten.senden`, weil
+darin die Sonderpreise eines Kundenangebots stehen (GR-002, GR-005, Befund 15.11.2026). Vorschauen zeigen außerdem nie
+einen wirksamen Code: der Kundensatz geht ohne Kennung in die Vorlage (`mail_vorschau_kunde()`, `lib/kundenmail.php`),
+damit `abmelde_url()` den Platzhalter `BEISPIEL` einsetzt – wie `#zugang=BEISPIEL` bei Einladung und Passwort-Link.
+
+`angebot.veroeffentlichen` hat bewusst keine Voraussetzung `r`
 auf den Zugang: `rights_close` würde ihn sonst jedem Bearbeiter mitgeben. Folge für die Vergabe: Bearbeiter haben
 `angebot.veroeffentlichen` als Standard ihrer Rolle – wer ihnen `versand.zugang` gibt, gibt ihnen das Veröffentlichen; für
 „nur ansehen“ das Recht in der Rolle abwählen oder bei der Person verbieten. Die Änderungsliste mit Preisen
@@ -452,7 +502,13 @@ Kunden sind eine eigene, externe Nutzergruppe (Dokument `kunden`, Zugang im Feld
 
 - **Anmeldung:** `kunde_login` (`aktionen/kundenportal.php`) mit Sperre nach Fehlversuchen, vertrauten Geräten und
   optionaler Datenleck-Prüfung; Passwort festlegen über Einmal-Link (`kunde_token_*`). Ungültige Links (auch Abmeldelinks)
-  zählen im eigenen Bereich `kundelink` (`attempts_key`), nie im Kunden-Login. `kunde_save` verwirft einen offenen Link,
+  zählen im eigenen Bereich `kundelink` (`attempts_key`), nie im Kunden-Login. Beim Abmeldelink zählt seit 15.11.2026 auch
+  der **gelungene** Wechsel (`kunde_abmelden`, `abmelden1`, nur wenn sich der Stand wirklich ändert): der Code gilt
+  unbefristet, ohne Anmeldung und ohne CSRF-Prüfung – ohne diese Zählung wäre er ein unbegrenzt wiederholbarer
+  Schreibzugriff auf das Kundendokument samt Protokolleintrag und Hinweis-E-Mail (Befund 15.11.2026). Es gilt dieselbe
+  Grenze wie bei den Fehlversuchen (`max_attempts` je Stunde und Adresse, danach `lock_minutes` Sperre); die Hinweis-Mails
+  begrenzt zusätzlich `POSTAUSGANG_HINWEIS_TAG` (10 je Kunde und Tag, geprüft in `abmelde_hinweis_senden()` – also auf
+  beiden Versandwegen, mit und ohne Dienst „postausgang“). `kunde_save` verwirft einen offenen Link,
   wenn sich die E-Mail-Adresse ändert oder Kunde bzw. Zugang gesperrt wird.
 - **Sitzung:** `kunde_sign_in()` (`lib/kundenmail.php`) vergibt eine neue Sitzungskennung und setzt nur Kundenschlüssel
   (`kid`, `ksv`, `kseen`, `kcsrf`, `ksid`) plus Eintrag im Register `kundensitzungen`. `current_customer()`
