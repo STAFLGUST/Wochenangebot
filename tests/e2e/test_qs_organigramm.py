@@ -15,7 +15,7 @@ import zlib
 from playwright.sync_api import sync_playwright
 
 from kunden_hilfe import Client, B, API
-from umgebung import SH
+from umgebung import SH, storage_raw, storage_write
 
 HIER = os.path.dirname(os.path.abspath(__file__))
 REPO = os.path.abspath(os.path.join(HIER, '..', '..'))
@@ -233,6 +233,13 @@ v = r.get('dokument', {}).get('versionen', [{}])[0]
 check('leere Liste nimmt das Organigramm aus dem Entwurf', st == 200 and 'organigramm' not in v and v['verlauf'][-1]['was'] == 'Organigramm entfernt', v.get('verlauf', [{}])[-1:])
 check('ohne Organigramm keine PDF-Vorschau (404)', vorschau(L)[0] == 404)
 check('zurück auf die Struktur', speichern(Be, STRUKTUR)[0] == 200)
+d = dok()
+st, r = Be.call('qs_organigramm_save', {'dokument': DOK['id'], 'version': 'v000000000000', 'rev': 1, 'organigramm': {'knoten': STRUKTUR[:1]}})
+check('Zeichnung eines anderen Entwurfs („version“): 409 mit klarer Meldung vor der Stand-Prüfung, nichts geändert', st == 409 and r.get('code') != 'konflikt'
+      and 'verworfen oder freigegeben' in r.get('error', '') and dok()['rev'] == d['rev'], r)
+check('passende „version“: gespeichert wie ohne', Be.call('qs_organigramm_save', {'dokument': DOK['id'], 'version': d['versionen'][0]['id'], 'rev': d['rev'],
+                                                                              'organigramm': {'knoten': STRUKTUR[:-1]}})[0] == 200
+      and len(dok()['versionen'][0]['organigramm']['knoten']) == 8 and speichern(Be, STRUKTUR)[0] == 200)
 ordner = next(x for x in start['dokumente'] if x['art'] == 'O')
 gueltig = next(x for x in start['dokumente'] if x['nr'] == '1.4-A01')
 check('Ordner: 422; gültiges Dokument ohne Entwurf: 409', speichern(Be, STRUKTUR, dok(did=ordner['id']))[0] == 422 and speichern(Be, STRUKTUR, dok(did=gueltig['id']))[0] == 409)
@@ -299,7 +306,13 @@ check('Entwurf geändert', speichern(Be, neu)[0] == 200)
 check('eingereicht', schritt(Be, 'einreichen') == 200 and 'namen' in dok()['versionen'][1]['organigramm'])
 check('zurückgegeben: Namen wieder entfernt', schritt(Q, 'zurueck', grund='Lager prüfen') == 200 and 'namen' not in dok()['versionen'][1]['organigramm'])
 check('erneut eingereicht', schritt(Be, 'einreichen') == 200)
-st, r = Q.call('qs_version_schritt', {'dokument': DOK['id'], 'rev': dok()['rev'], 'schritt': 'pruefen_freigeben'})
+roh_dok = storage_raw('qs-dokumente')
+gespeichert = json.loads(roh_dok.split('\n', 1)[1] if roh_dok.startswith('<?php') else roh_dok)
+next(x for x in gespeichert['liste'] if x['id'] == DOK['id'])['versionen'][1]['organigramm'].pop('namen')
+storage_write('qs-dokumente', gespeichert)   # wie nach dem Einreichen mit einer Vorversion der Anwendung
+check('geprüft (zweistufig): fehlende Namen beim Prüfen festgehalten', schritt(Q, 'pruefen') == 200
+      and dok()['versionen'][1]['organigramm'].get('namen', {}).get('QB') == 'Quinn Umbenannt', dok()['versionen'][1]['organigramm'].get('namen'))
+st, r = Q.call('qs_version_schritt', {'dokument': DOK['id'], 'rev': dok()['rev'], 'schritt': 'freigeben'})
 d2 = r.get('dokument', {})
 v1e, v2f = d2['versionen'][0], d2['versionen'][1]
 check('Version 2 gültig mit neuem Namen, Version 1 ersetzt und unverändert', st == 200 and v2f['nr'] == 2 and v2f['organigramm']['namen']['QB'] == 'Quinn Umbenannt' and v1e['status'] == 'ersetzt'
@@ -451,12 +464,16 @@ with sync_playwright() as pw:
         return next(k for k in dok(Be, PLAN)['versionen'][0]['organigramm']['knoten'] if k['ueber'] == '')['hinweis']
 
     pg.click('#qm-dk [data-og="bearbeiten"]'); pg.wait_for_selector('#dlg-og[open] .og-kasten')
+    check('nach „Schließen“ mit Verwerfen keine Frage nach einer gesicherten Zeichnung', pg.is_hidden('#og-wieder'))
     pg.locator('#og-liste .og-zeile').first.click(); pg.fill('#og-hinweis', 'aus dem Browser')
     check('andere Person speichert denselben Entwurf', andere_person_speichert('von Vera'))
+    pg.evaluate("""() => { const c = window.confirm; window.confirm = (t) => { window.beimFragen = [document.querySelector('#og-speichern').disabled, document.querySelector('#og-koerper').inert];
+      window.confirm = c; return c.call(window, t); }; }""")
     dialoge.clear(); pg.once('dialog', antwort(False))
     pg.click('#og-speichern'); meldung(pg, 'Nicht gespeichert')
     check('Konflikt abgelehnt: Rückfrage nennt die andere Person, eigene Fassung bleibt im Fenster, nichts überschrieben', dialoge == ['Inzwischen geändert von Vera Verwalten – Ihre Fassung trotzdem speichern?']
           and pg.input_value('#og-hinweis') == 'aus dem Browser' and pg.is_enabled('#og-speichern') and gf_hinweis() == 'von Vera', (dialoge, gf_hinweis()))
+    check('während der Rückfrage bleiben Speichern und Zeichnung gesperrt (kein zweiter Lauf)', pg.evaluate('() => window.beimFragen') == [True, True], pg.evaluate('() => window.beimFragen'))
     check('andere Person speichert noch einmal', andere_person_speichert('wieder von Vera'))
     dialoge.clear(); pg.once('dialog', antwort(True))
     pg.click('#og-speichern'); meldung(pg, 'Organigramm gespeichert.')
@@ -466,12 +483,50 @@ with sync_playwright() as pw:
     pg.click('#og-speichern')
     check('während des Speicherns: Zeichnung und Speichern gesperrt', pg.is_disabled('#og-speichern')
           and pg.evaluate("() => { const i = document.querySelector('#og-hinweis'); i.focus(); return document.activeElement !== i && document.querySelector('#og-koerper').inert; }"))
+    ja = antwort(True); dialoge.clear(); pg.on('dialog', ja)
+    pg.keyboard.press('Escape'); pg.keyboard.press('Escape'); pg.click('#og-zu'); pg.click('#og-fuss [data-og-tat="schliessen"]')
+    check('während des Speicherns: Esc, × und „Schließen“ warten (keine Rückfrage, Fenster bleibt)', not dialoge and pg.is_visible('#dlg-og'), dialoge)
+    pg.remove_listener('dialog', ja)
     pg.evaluate('() => window.weiter()'); meldung(pg, 'Organigramm gespeichert.')
     check('nach dem Speichern wieder frei', not pg.evaluate("() => document.querySelector('#og-koerper').inert") and gf_hinweis() == 'während des Speicherns')
     pg.fill('#og-hinweis', 'nach der Abmeldung')
     ctx.clear_cookies()
     pg.click('#og-speichern'); meldung(pg, 'Anmeldung ist abgelaufen')
     check('abgelaufene Anmeldung: Meldung, Fenster und Eingabe bleiben', pg.is_visible('#dlg-og') and pg.input_value('#og-hinweis') == 'nach der Abmeldung' and pg.is_enabled('#og-speichern'))
+    tab = ctx.new_page()   # „in einem neuen Tab anmelden“: dieselben Cookies, neues CSRF-Token
+    tab.goto(B + '/admin/'); tab.wait_for_selector('#screen-auth:not([hidden])')
+    tab.fill('#au-user', 'bernd'); tab.fill('#pw1', 'Bearbeit-Konto-34'); tab.click('#auth-submit'); tab.wait_for_selector('#screen-auth', state='hidden')
+    tab.close()
+    pg.click('#og-speichern'); meldung(pg, 'Organigramm gespeichert.')
+    check('nach Anmeldung in einem neuen Tab: im alten Fenster gespeichert, die Zeichnung blieb erhalten', gf_hinweis() == 'nach der Abmeldung', gf_hinweis())
+
+    # Konflikt, während die Anmeldung abläuft: die Anmeldemaske schließt das Fenster – die Zeichnung kommt nach dem Neuladen wieder
+    pg.fill('#og-hinweis', 'gesichert')
+    check('andere Person speichert vor dem Ablauf', andere_person_speichert('von Vera vor dem Ablauf'))
+
+    def abgelaufen(url):
+        return 'action=qs_start' in url
+
+    pg.route(abgelaufen, lambda r: r.fulfill(status=401, content_type='application/json', body='{"ok":false,"error":"Bitte erneut anmelden."}'))
+    pg.click('#og-speichern'); pg.wait_for_selector('#qm-login:not([hidden])')
+    check('Konflikt bei abgelaufener Anmeldung: Anmeldemaske, Fenster geschlossen, nichts gespeichert', pg.is_hidden('#dlg-og') and gf_hinweis() == 'von Vera vor dem Ablauf')
+    pg.unroute(abgelaufen)
+    pg.reload(); pg.wait_for_selector('#qm-app:not([hidden])')
+    oeffne_dok(pg, PLAN)
+    pg.click('#qm-dk [data-og="bearbeiten"]'); pg.wait_for_selector('#og-wieder:not([hidden])')
+    frage = pg.text_content('#og-wieder-text')
+    check('nach dem Neuladen: Frage „Ungespeicherte Zeichnung vom … wiederherstellen?“, bis zur Antwort gesperrt', re.fullmatch(r'Ungespeicherte Zeichnung vom \d\d\.\d\d\.\d{4}, \d\d:\d\d wiederherstellen\?', frage)
+          and pg.evaluate("() => document.querySelector('#og-koerper').inert") and pg.is_disabled('#og-speichern'), frage)
+    pg.screenshot(path=os.path.join(SH, 'qs_organigramm_wiederherstellen_1280_light.png'))
+    pg.click('[data-og-tat="wiederherstellen"]'); pg.locator('#og-liste .og-zeile').first.click()
+    check('wiederhergestellt: eigene Eingabe wieder da, Frage weg, Speichern frei', pg.input_value('#og-hinweis') == 'gesichert' and pg.is_hidden('#og-wieder') and pg.is_enabled('#og-speichern'))
+    dialoge.clear(); pg.once('dialog', antwort(True))
+    pg.click('#og-speichern'); meldung(pg, 'Organigramm gespeichert.')
+    check('wiederhergestellte Zeichnung: Rückfrage wegen der fremden Änderung, dann gespeichert', dialoge == ['Inzwischen geändert von Vera Verwalten – Ihre Fassung trotzdem speichern?']
+          and gf_hinweis() == 'gesichert', (dialoge, gf_hinweis()))
+    pg.click('#og-zu'); pg.wait_for_selector('#dlg-og', state='hidden')
+    pg.click('#qm-dk [data-og="bearbeiten"]'); pg.wait_for_selector('#dlg-og[open] .og-kasten')
+    check('nach dem Speichern keine Frage mehr', pg.is_hidden('#og-wieder'))
     ctx.close()
 
     for breite, thema in ((1280, 'dark'), (390, 'light'), (390, 'dark')):
@@ -492,6 +547,24 @@ with sync_playwright() as pw:
             pg.screenshot(path=os.path.join(SH, f'qs_organigramm_ansehen_{breite}_{thema}.png'))
         ctx.close()
 
+    # 390 px: Frage nach dem Neuladen, „Verwerfen“ löscht die Sicherung
+    ctx, pg = anmelden('bernd', 'Bearbeit-Konto-34', '198.51.100.11', 390, 'light', 844)
+    oeffne_dok(pg, PLAN)
+    pg.click('#qm-dk [data-og="bearbeiten"]'); pg.wait_for_selector('#dlg-og[open] .og-kasten')
+    pg.locator('#og-liste .og-zeile').first.click(); pg.fill('#og-hinweis', 'nur im Browser')
+    pg.reload(); pg.wait_for_selector('#qm-app:not([hidden])')
+    oeffne_dok(pg, PLAN)
+    pg.click('#qm-dk [data-og="bearbeiten"]'); pg.wait_for_selector('#og-wieder:not([hidden])')
+    breit = pg.evaluate("() => { const d = document.querySelector('#dlg-og'); return [document.documentElement.scrollWidth - window.innerWidth, d.scrollWidth - d.clientWidth]; }")
+    check('390 px: Frage nach dem Neuladen ohne waagerechtes Scrollen', breit[0] <= 0 and breit[1] <= 0 and pg.is_visible('[data-og-tat="verwerfen"]'), breit)
+    pg.screenshot(path=os.path.join(SH, 'qs_organigramm_wiederherstellen_390_light.png'))
+    pg.click('[data-og-tat="verwerfen"]'); pg.locator('#og-liste .og-zeile').first.click()
+    check('„Verwerfen“: gespeicherter Stand, nichts zu speichern', pg.is_hidden('#og-wieder') and pg.input_value('#og-hinweis') == 'gesichert' and pg.is_disabled('#og-speichern'))
+    pg.click('#og-zu'); pg.wait_for_selector('#dlg-og', state='hidden')
+    pg.click('#qm-dk [data-og="bearbeiten"]'); pg.wait_for_selector('#dlg-og[open] .og-kasten')
+    check('verworfene Sicherung wird nicht erneut angeboten', pg.is_hidden('#og-wieder'))
+    ctx.close()
+
     # Organigramm wieder aus dem Entwurf nehmen
     ctx, pg = anmelden('bernd', 'Bearbeit-Konto-34', '198.51.100.11')
     oeffne_dok(pg, PLAN)
@@ -503,6 +576,16 @@ with sync_playwright() as pw:
     pg.click('#og-speichern'); meldung(pg, 'Organigramm gespeichert.')
     check('entfernt: Entwurf ohne Organigramm, Karte bietet wieder „im System zeichnen“', 'organigramm' not in dok(Be, PLAN)['versionen'][0]
           and 'im System zeichnen' in pg.text_content('#qm-dk .og-karte'))
+
+    # Entwurf inzwischen verworfen und neu begonnen: die alte Zeichnung landet nicht im neuen Entwurf
+    pg.click('[data-og-tat="erste"]')
+    check('andere Person verwirft den Entwurf und beginnt einen neuen', V.call('qs_version_schritt', {'dokument': PLAN, 'rev': dok(V, PLAN)['rev'], 'schritt': 'verwerfen', 'grund': 'neu'})[0] == 200
+          and V.call('qs_version_save', {'dokument': PLAN, 'rev': dok(V, PLAN)['rev'], 'aenderungen': 'Neu angelegt'})[0] == 200)
+    dialoge.clear(); pg.once('dialog', antwort(True))
+    pg.click('#og-speichern'); meldung(pg, 'verworfen oder freigegeben')
+    offen = [v for v in dok(Be, PLAN)['versionen'] if v['status'] == 'entwurf']
+    check('Speichern im alten Fenster: klare Meldung, keine Rückfrage, neuer Entwurf ohne Organigramm', not dialoge and len(offen) == 1 and 'organigramm' not in offen[0]
+          and pg.is_visible('#dlg-og'), (dialoge, offen))
     ctx.close()
     br.close()
 check('keine JavaScript-Fehler', not fehler, fehler[:5])

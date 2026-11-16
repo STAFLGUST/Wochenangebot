@@ -1507,10 +1507,16 @@
     renderAlles();
     zeigeTab(location.hash.slice(1).split('/')[0] || 'uebersicht');
   }
+  /* Jede Anmeldung erzeugt ein neues CSRF-Token (sign_in) – nach einer Anmeldung in einem anderen Tab hier nachholen; true = geändert */
+  async function csrfNeu() {
+    const st = await api('status'), alt = S.csrf;
+    if (st.status === 200 && st.data.loggedIn) S.csrf = st.data.csrf || '';
+    return S.csrf !== alt;
+  }
   /* Brücke für weitere Dateien des Moduls (verfahren.js, organigramm.js): dieselben Hilfen und derselbe Zustand, keine zweite Kopie.
      verfahren.js trägt sich als STAFL_QS.verfahren ein (zeigeTab ruft zeigen() auf), organigramm.js als STAFL_QS.organigramm (renderDok ruft karte(x) auf). */
-  window.STAFL_QS = { $, $$, S, esc, api, senden, oeffne, toast, fehlerText, zeigeAnmeldung, datum, wer, werName, icon, chip, optionen, natCmp,
-    verweisDok, gueltige, offene, naechsteVersion, darf, neuLaden, oeffneDok, speichereDatei, verfahren: null, organigramm: null };
+  window.STAFL_QS = { $, $$, S, esc, api, senden, oeffne, toast, fehlerText, zeigeAnmeldung, datum, zeitpunkt, wer, werName, icon, chip, optionen, natCmp,
+    verweisDok, gueltige, offene, naechsteVersion, darf, neuLaden, csrfNeu, oeffneDok, speichereDatei, verfahren: null, organigramm: null };
   themaKnopf();
   document.addEventListener('DOMContentLoaded', () => { laden().catch(() => fehler('Keine Verbindung zum Server.')); });
 })();

@@ -71,7 +71,8 @@ function qs_organigramm_pruefen($v, ?array $alt, array $stamm): ?array
     return ['knoten' => array_values($out)] + ($alt ?? []);
 }
 
-/* Aktion qs_organigramm_save: Struktur im offenen Entwurf speichern, mit leerer Liste entfernen (Stand „rev“ wie bei qs_version_save) */
+/* Aktion qs_organigramm_save: Struktur im offenen Entwurf speichern, mit leerer Liste entfernen (Stand „rev“ wie bei qs_version_save).
+   Optional „version“ (Kennung des Entwurfs beim Öffnen): eine Zeichnung landet nie in einem später begonnenen Entwurf. */
 function qs_organigramm_speichern(): never
 {
     $me = require_perm('qs.bearbeiten', true);
@@ -80,10 +81,12 @@ function qs_organigramm_speichern(): never
         $doc = qs_doc('qs-dokumente');
         $i = qs_dokument_index($doc, $b['dokument'] ?? '');
         $d = $doc['liste'][$i];
+        $o = qs_ver_index($d, QS_VER_OFFEN);
+        if (isset($b['version']) && ($o === null || ($d['versionen'][$o]['id'] ?? '') !== $b['version']))   // vor „rev“: sonst böte die Oberfläche „trotzdem speichern“ an
+            fail('Der Entwurf, zu dem diese Zeichnung gehört, wurde inzwischen verworfen oder freigegeben – sie wird nicht gespeichert.', 409);
         qs_rev_pruefen($b, $d, 'Das Dokument');
         if (!in_array($d['art'] ?? '', QS_GELENKT, true)) fail('Ordner und externe Dokumente haben keine Versionen.', 422);
         if (!empty($d['eingezogen'])) fail('Das Dokument ist eingezogen.', 409);
-        $o = qs_ver_index($d, QS_VER_OFFEN);
         if ($o === null) fail('Das Organigramm lässt sich nur in einem Entwurf ändern – bitte zuerst „Überarbeitung beginnen“.', 409);
         $v = $d['versionen'][$o];
         if ($v['status'] !== 'entwurf') fail('Die Überarbeitung liegt zur Prüfung vor und kann nicht mehr geändert werden.', 409);
@@ -112,9 +115,9 @@ function qs_organigramm_schritt(array $d, array &$v, array $me, array &$erzeugt)
 {
     if (!isset($v['organigramm']['knoten'])) return;
     if ($v['status'] === 'entwurf') { unset($v['organigramm']['namen']); return; }
-    if (!in_array($v['status'], ['pruefung', 'freigegeben'], true)) return;
+    if (!in_array($v['status'], ['pruefung', 'geprueft', 'freigegeben'], true)) return;   // jeder Stand nach dem Entwurf außer „verworfen“
     $stamm = qs_stamm();
-    $v['organigramm']['namen'] ??= qs_organigramm_namen($v['organigramm'], $stamm);   // fehlt nur, wenn die Vorversion eingereicht hat
+    $v['organigramm']['namen'] ??= qs_organigramm_namen($v['organigramm'], $stamm);   // fehlt nur, wenn eine Vorversion der Anwendung eingereicht hat
     if ($v['status'] !== 'freigegeben') return;
     $abl = ablage_ablegen('qs', qs_organigramm_pdf($d, $v, $stamm));
     $erzeugt[] = $abl['id'];

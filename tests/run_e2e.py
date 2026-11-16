@@ -188,7 +188,7 @@ GEWICHT = {
     'qs_vorlagen': 25,   # geschätzt (Oktober 2026), noch ohne CI-Median
     'qs_bericht': 20,   # geschätzt (Oktober 2026), noch ohne CI-Median
     'qs_verfahren': 30,   # geschätzt (November 2026), noch ohne CI-Median
-    'qs_organigramm': 20,   # gemessen lokal (November 2026): 17–19 s mit 2 parallelen Gruppen, allein 11 s; noch ohne CI-Median
+    'qs_organigramm': 28,   # gemessen lokal (November 2026): 26–29 s mit 2 parallelen Gruppen; noch ohne CI-Median
     'protokoll': 6,   # geschätzt (Oktober 2026), noch ohne CI-Median
     'angebotskategorien': 12,   # geschätzt (November 2026), noch ohne CI-Median
     'aufbau': 50,   # geschätzt (November 2026, mit Artikeln lokal 57 s), noch ohne CI-Median

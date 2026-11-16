@@ -13,6 +13,9 @@
 .og-seite{min-height:0;overflow:auto;display:flex;flex-direction:column;gap:10px;padding-right:2px}
 .og-seite h3{margin:4px 0 0}
 .og-fuss{margin:0}
+.og-wieder{display:flex;flex-wrap:wrap;align-items:center;gap:8px 12px;padding:10px 12px;border-radius:12px;background:var(--qm-gelb-soft);font-size:13px;font-weight:650}
+.og-wieder span{flex:1 1 240px}
+.og-wieder div{display:flex;gap:6px}
 
 /* Baum */
 .og-baum{--og-linie:var(--qm-muted);--og-spalt:18px;--og-b:176px;--og-einzug:36px;--og-stapel:12px;width:max-content;margin:0 auto;padding:14px 16px 20px}

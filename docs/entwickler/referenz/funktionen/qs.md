@@ -2,7 +2,7 @@
 
 <!-- ERZEUGT von `python3 werkzeuge/doku.py erzeugen` – nicht von Hand ändern. Quelle: Funktionen und Kommentare im Code. Die CI prüft, dass diese Datei zum Code passt. -->
 
-16 Dateien, 364 Funktionen – in der Reihenfolge der Datei, **fett** die Abschnitte. Text = erste Aussage des Kommentars direkt über der Funktion (Python: Docstring). Übersicht aller Module: [README.md](README.md).
+16 Dateien, 370 Funktionen – in der Reihenfolge der Datei, **fett** die Abschnitte. Text = erste Aussage des Kommentars direkt über der Funktion (Python: Docstring). Übersicht aller Module: [README.md](README.md).
 
 ## `app/api/aktionen/qs.php`
 
@@ -41,7 +41,7 @@ _QM-System · Audit-Bericht (Aktionen qs_bericht, qs_bericht_excel)_
 _QM-System · Organigramm als gelenktes Dokument (Entscheidung des Inhabers 16.11.2026 „Im QM-System zeichnen“; nur bei Bedarf geladen von app/api/aktionen/qs.php)._
 
 - `qs_organigramm_pruefen(v, alt, stamm)` – Eingabe → gültige Struktur ohne Namens-Schnappschuss; null bei leerer Liste (Organigramm aus dem Entwurf nehmen).
-- `qs_organigramm_speichern()` – Aktion qs_organigramm_save: Struktur im offenen Entwurf speichern, mit leerer Liste entfernen (Stand „rev“ wie bei qs_version_save)
+- `qs_organigramm_speichern()` – Aktion qs_organigramm_save: Struktur im offenen Entwurf speichern, mit leerer Liste entfernen (Stand „rev“ wie bei qs_version_save).
 - `qs_organigramm_uebernehmen(gueltig, neu)` – „Überarbeitung beginnen“: Struktur der gültigen Version in den neuen Entwurf – ohne Namens-Schnappschuss (im Entwurf gelten die heutigen Namen)
 - `qs_organigramm_schritt(d, v, me, erzeugt)` – Nach jedem Schritt in qs_version_schritt: ab dem Einreichen hält die Version die Namen fest – der Prüfer prüft genau diese, die Freigabe übernimmt sie …
 - `qs_organigramm_namen(og, stamm)`
@@ -274,6 +274,10 @@ _Qualitätssicherung · Vorlagen und Lenkungsangaben in Word- und Excel-Dateien 
 
 _STAFL-Plattform · QM-System – Organigramm in einem gelenkten Dokument_
 
+- `sichern()` – Ungespeicherte Zeichnung je Entwurf im Browser sichern: übersteht Ablauf der Anmeldung, Neuladen und das Schließen bei einem Konflikt. shortcut: die …
+- `gesichert()`
+- `sicherungWeg()`
+
 **Karte in der Seitenleiste des Dokuments**
 
 - `karte(x)`
@@ -301,8 +305,9 @@ _STAFL-Plattform · QM-System – Organigramm in einem gelenkten Dokument_
 - `fenster()`
 - `oeffnen(id, art)` – art: 'ansehen' = gültige Version, 'entwurf' = offene Version nur lesen, 'bearbeiten' = offener Entwurf.
 - `schliessen()`
-- `sperren(an)` – Während der Anfrage ist die Zeichnung gesperrt, sonst überschriebe die Antwort neue Eingaben
+- `sperren(an)` – Während der Anfrage samt Konfliktbehandlung ist die Zeichnung gesperrt: die Antwort überschreibt keine neuen Eingaben, Schließen und ein zweiter Lauf warten
 - `speichern()`
+- `uebertragen(tokenHolen)` – Zeichnung senden → [Meldung, gespeichert?]; nach einer Anmeldung in einem anderen Tab einmal mit neuem CSRF-Token erneut
 
 ## `app/module/qs/qs.js`
 
@@ -446,6 +451,7 @@ _STAFL-Plattform · Qualitätssicherung (QM-System) – Oberfläche nach dem Des
 **Start**
 
 - `laden()`
+- `csrfNeu()` – Jede Anmeldung erzeugt ein neues CSRF-Token (sign_in) – nach einer Anmeldung in einem anderen Tab hier nachholen; true = geändert
 
 ## `app/module/qs/verfahren.js`
 
@@ -566,6 +572,7 @@ _Qualitätssicherung – Organigramm im QM-System (app/api/module/qs/organigramm
 - `oeffne_dok(pg, did)`
 - `andere_person_speichert(hinweis)` – zwei Personen am selben Entwurf: Rückfrage statt Sackgasse
 - `gf_hinweis()`
+- `abgelaufen(url)`
 
 ## `tests/e2e/test_qs_verfahren.py`
 

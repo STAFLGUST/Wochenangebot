@@ -8,7 +8,7 @@
   if (!Q) return;
   const { $, S, esc, api, chip, datum, icon, darf, offene } = Q;
   const GRENZEN = { personen: 10, titel: 120, hinweis: 200 };   // wie QS_OG_MAX_* in app/api/module/qs/organigramm.php
-  const G = { dok: '', edit: false, rev: 0, knoten: [], namen: null, wahl: '', geaendert: false, speichert: false, zoom: 1 };
+  const G = { dok: '', version: '', edit: false, rev: 0, knoten: [], namen: null, wahl: '', geaendert: false, speichert: false, wieder: null, zoom: 1 };
   const dok = () => S.d.dokumente.find((x) => x.id === G.dok) || null;
   const person = (kz) => S.d.personen.find((p) => p.id === kz) || null;
   const name = (kz) => (G.namen ? G.namen[kz] || kz : (person(kz) || {}).name || `${kz} (nicht in den Personen)`);
@@ -18,6 +18,15 @@
   const kopie = (v) => ((v && v.organigramm) || { knoten: [] }).knoten.map((k) => ({ ...k, personen: [...k.personen] }));
   const neueId = () => { let id; do id = 'k' + Math.random().toString(36).slice(2, 10); while (knoten(id)); return id; };
   const meldung = (text, ok = false) => { $('#og-meldung').className = 'qm-meldung' + (ok ? ' ok' : ''); $('#og-meldung').textContent = text; };
+
+  const ablage = () => `stafl-qs-organigramm:${G.dok}:${G.version}`;
+  /* Ungespeicherte Zeichnung je Entwurf im Browser sichern: übersteht Ablauf der Anmeldung, Neuladen und das Schließen bei einem Konflikt.
+     shortcut: die Sicherung eines verworfenen Entwurfs bleibt liegen, wenn niemand „Schließen“ wählt – wenige KB, bei Bedarf beim Öffnen aufräumen. */
+  function sichern() { try { localStorage.setItem(ablage(), JSON.stringify({ t: Date.now(), rev: G.rev, knoten: G.knoten })); } catch { /* privates Fenster oder voll */ } }
+  function gesichert() {
+    try { const s = JSON.parse(localStorage.getItem(ablage())); return s && Number.isInteger(s.rev) && Array.isArray(s.knoten) ? s : null; } catch { return null; }
+  }
+  function sicherungWeg() { try { localStorage.removeItem(ablage()); } catch { /* nicht verfügbar */ } }
 
   /* ---------- Karte in der Seitenleiste des Dokuments ---------- */
   function karte(x) {
@@ -71,6 +80,8 @@
       : `<div class="og-leer"><p><b>Noch kein Organigramm – Stelle anlegen</b></p>${G.geaendert ? '<p class="qm-hilfe">Speichern ohne Stelle nimmt das Organigramm aus dem Entwurf.</p>' : ''}
         <label>Oberste Stelle<input class="qm-eingabe" id="og-erste" maxlength="${GRENZEN.titel}" value="Geschäftsführung"></label>
         <button class="btn primary" type="button" data-og-tat="erste">Stelle anlegen</button></div>`;
+    $('#og-wieder').hidden = !G.wieder;
+    $('#og-koerper').inert = G.speichert || !!G.wieder;   // gesperrt während des Speicherns und bis zur Antwort auf die Wiederherstellen-Frage
     if (!G.edit) return;
     const zeile = (k, t) => `<li><button type="button" class="og-zeile${k.id === G.wahl ? ' gewaehlt' : ''}" data-og-tat="waehlen" data-og-knoten="${esc(k.id)}" style="--t:${t}"><b>${esc(k.titel)}</b>${
       k.art === 'stab' ? '<em>Stab</em>' : ''}<span>${esc(k.personen.map(name).join(', ') || 'unbesetzt')}</span></button></li>` + [...unter(k.id, 'stab'), ...unter(k.id, 'linie')].map((c) => zeile(c, t + 1)).join('');
@@ -109,10 +120,10 @@
     const b = $(`#og-baum [data-og-knoten="${CSS.escape(id)}"]`);
     if (b) b.scrollIntoView({ block: 'nearest', inline: 'nearest' });
   }
-  function geaendert() { G.geaendert = true; meldung(''); zeichnen(); }
+  function geaendert() { G.geaendert = true; sichern(); meldung(''); zeichnen(); }
   function neu(teil) {
     const k = { id: neueId(), personen: [], vertretung: '', hinweis: '', ...teil };
-    G.knoten.push(k); G.geaendert = true; waehle(k.id);
+    G.knoten.push(k); geaendert(); waehle(k.id);
     $('#og-titel-in').focus(); $('#og-titel-in').select();
   }
   function tauschen(k, schritt) {
@@ -141,6 +152,8 @@
     links: (k) => tauschen(k, -1),
     rechts: (k) => tauschen(k, 1),
     'person-weg': (k, b) => { k.personen = k.personen.filter((p) => p !== b.dataset.person); geaendert(); felder(); },
+    wiederherstellen: () => { Object.assign(G, { knoten: G.wieder.knoten, rev: G.wieder.rev, geaendert: true, wieder: null }); zeichnen(); felder(); einpassen(); },
+    verwerfen: () => { sicherungWeg(); G.wieder = null; zeichnen(); },
   };
   const FELDER = {
     titel: (k, w) => { k.titel = w; },
@@ -159,6 +172,7 @@
         <div class="og-werkzeug"><button class="btn sm" type="button" data-og-tat="kleiner" aria-label="Verkleinern" title="Verkleinern">−</button><button class="btn sm" type="button" data-og-tat="einpassen" title="Ganzes Organigramm zeigen">Einpassen</button><button class="btn sm" type="button" data-og-tat="groesser" aria-label="Vergrößern" title="Vergrößern">+</button>
           <button class="btn sm" type="button" id="og-vorschau" data-og-tat="vorschau">${icon('dokument')}PDF-Vorschau</button><a class="btn sm" id="og-pdf" download hidden>${icon('download')}PDF</a></div>
         <button class="qm-dialog-schliessen" type="button" id="og-zu" data-og-tat="schliessen" aria-label="Schließen">×</button></div>
+      <div class="og-wieder" id="og-wieder" role="alert" hidden><span id="og-wieder-text"></span><div><button class="btn sm primary" type="button" data-og-tat="wiederherstellen">Wiederherstellen</button><button class="btn sm" type="button" data-og-tat="verwerfen">Verwerfen</button></div></div>
       <div class="og-koerper" id="og-koerper">
         <div class="og-flaeche" id="og-flaeche"><div class="og-baum" id="og-baum"></div></div>
         <aside class="og-seite" id="og-seite">
@@ -182,6 +196,8 @@
       <div class="qm-knopfreihe og-fuss" id="og-fuss"><button class="btn" type="button" data-og-tat="schliessen">Schließen</button><button class="btn primary" type="button" id="og-speichern" data-og-tat="speichern">Speichern</button></div>
     </div></dialog>`);
     const d = $('#dlg-og');
+    // Esc selbst behandeln: Chrome schließt beim zweiten Esc ohne neue Nutzeraktion, ohne „cancel“ abzuwarten
+    document.addEventListener('keydown', (ev) => { if (ev.key === 'Escape' && d.open) { ev.preventDefault(); schliessen(); } });
     d.addEventListener('cancel', (ev) => { ev.preventDefault(); schliessen(); });
     d.addEventListener('click', (ev) => { const b = ev.target.closest('[data-og-tat]'); if (b) TATEN[b.dataset.ogTat](knoten(G.wahl), b); });
     const feld = (ev) => { const k = knoten(G.wahl), f = ev.target.dataset.feld; if (!k || !f) return false; FELDER[f](k, ev.target.value); geaendert(); return true; };
@@ -190,13 +206,16 @@
     return d;
   }
   /* art: 'ansehen' = gültige Version, 'entwurf' = offene Version nur lesen, 'bearbeiten' = offener Entwurf. Namen aus dem
-     Schnappschuss der Version (ab dem Einreichen), im Entwurf die heutigen; rev = Stand beim Öffnen gegen fremde Änderungen. */
+     Schnappschuss der Version (ab dem Einreichen), im Entwurf die heutigen; rev = Stand beim Öffnen gegen fremde Änderungen,
+     version = Entwurf, zu dem die Zeichnung gehört. Eine Sicherung dieses Entwurfs wird zuerst angeboten. */
   function oeffnen(id, art) {
     G.dok = id;
     const x = dok(), v = x && (art === 'ansehen' ? Q.gueltige(x) : offene(x));
     if (!v) return;
-    Object.assign(G, { edit: art === 'bearbeiten', rev: x.rev, knoten: kopie(v), namen: (v.organigramm || {}).namen || null, wahl: '', geaendert: false, speichert: false });
+    Object.assign(G, { edit: art === 'bearbeiten', version: v.id, rev: x.rev, knoten: kopie(v), namen: (v.organigramm || {}).namen || null, wahl: '', geaendert: false, speichert: false });
+    G.wieder = G.edit ? gesichert() : null;
     const d = fenster();
+    if (G.wieder) $('#og-wieder-text').textContent = `Ungespeicherte Zeichnung vom ${Q.zeitpunkt(G.wieder.t)} wiederherstellen?`;
     d.classList.toggle('og-bearbeiten', G.edit);
     $('#og-titel').textContent = `${x.nr ? x.nr + ' ' : ''}${x.titel}`;
     $('#og-sub').textContent = art === 'ansehen' ? `Organigramm · Version ${v.nr} gültig seit ${datum(v.datum)}`
@@ -206,42 +225,49 @@
     if (pdf) $('#og-pdf').href = `../../api/?action=qs_datei&id=${encodeURIComponent(pdf.id)}`;
     $('#og-vorschau').hidden = art === 'ansehen';
     $('#og-seite').hidden = !G.edit; $('#og-fuss').hidden = !G.edit;
-    $('#og-koerper').inert = false;
     meldung('');
     if (!d.open) d.showModal();
     zeichnen(); felder(); einpassen();
   }
   function schliessen() {
-    if (G.geaendert && !confirm('Ungespeicherte Änderungen am Organigramm verwerfen?')) return;
+    if (G.speichert) return;   // erst nach Antwort und Konfliktbehandlung, sonst fragte ein 409 bei geschlossenem Fenster nach
+    if (G.geaendert) {
+      if (!confirm('Ungespeicherte Änderungen am Organigramm verwerfen?')) return;
+      sicherungWeg();
+    }
     G.geaendert = false;
     $('#dlg-og').close();
   }
-  /* Während der Anfrage ist die Zeichnung gesperrt, sonst überschriebe die Antwort neue Eingaben */
-  function sperren(an) { G.speichert = an; $('#og-koerper').inert = an; zeichnen(); }
+  /* Während der Anfrage samt Konfliktbehandlung ist die Zeichnung gesperrt: die Antwort überschreibt keine neuen Eingaben,
+     Schließen und ein zweiter Lauf warten */
+  function sperren(an) { G.speichert = an; zeichnen(); }
   async function speichern() {
     meldung('');
     sperren(true);
-    const r = await api('qs_organigramm_save', { dokument: G.dok, rev: G.rev, organigramm: { knoten: G.knoten } });
+    const [text, ok] = await uebertragen();
     sperren(false);
-    if (r.status === 401) { meldung('Die Anmeldung ist abgelaufen. Bitte in einem neuen Tab anmelden und dann hier erneut speichern – die Zeichnung bleibt erhalten.'); return; }
+    meldung(text, ok);
+  }
+  /* Zeichnung senden → [Meldung, gespeichert?]; nach einer Anmeldung in einem anderen Tab einmal mit neuem CSRF-Token erneut */
+  async function uebertragen(tokenHolen = true) {
+    const r = await api('qs_organigramm_save', { dokument: G.dok, version: G.version, rev: G.rev, organigramm: { knoten: G.knoten } });
+    if (r.status === 403 && tokenHolen && (await Q.csrfNeu())) return uebertragen(false);
+    if (r.status === 401) return ['Die Anmeldung ist abgelaufen. Bitte in einem neuen Tab anmelden und dann hier erneut speichern – die Zeichnung bleibt erhalten.'];
     if (r.status === 409 && r.data.code === 'konflikt') {
-      if (!(await Q.neuLaden())) { meldung('Der neue Stand ließ sich nicht laden – bitte erneut speichern.'); return; }
+      if (!(await Q.neuLaden())) return ['Der neue Stand ließ sich nicht laden – bitte erneut speichern.'];
       const x = dok();
-      if (!confirm(`Inzwischen geändert von ${(x.geaendert || {}).von || 'jemand anderem'} – Ihre Fassung trotzdem speichern?`)) {
-        meldung('Nicht gespeichert. Ihre Fassung steht weiter hier; „Schließen“ verwirft sie.');
-        return;
-      }
+      if (!confirm(`Inzwischen geändert von ${(x.geaendert || {}).von || 'jemand anderem'} – Ihre Fassung trotzdem speichern?`)) return ['Nicht gespeichert. Ihre Fassung steht weiter hier; „Schließen“ verwirft sie.'];
       G.rev = x.rev;
-      speichern();
-      return;
+      return uebertragen(tokenHolen);
     }
-    if (r.status !== 200 || !r.data.ok) { meldung(Q.fehlerText(r, 'Speichern fehlgeschlagen')); return; }
+    if (r.status !== 200 || !r.data.ok) return [Q.fehlerText(r, 'Speichern fehlgeschlagen')];
     const d = r.data.dokument;
     S.d.dokumente[S.d.dokumente.findIndex((y) => y.id === d.id)] = d;
     Object.assign(G, { rev: d.rev, knoten: kopie(offene(d)), geaendert: false });
-    zeichnen(); felder();
+    sicherungWeg();
+    felder();
     Q.oeffneDok(d.id);
-    meldung('Organigramm gespeichert.', true);
+    return ['Organigramm gespeichert.', true];
   }
 
   Q.organigramm = { karte };
