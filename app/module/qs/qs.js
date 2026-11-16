@@ -782,6 +782,7 @@
       ${ablage}
       ${vorlageKarte}
       ${karte}
+      ${window.STAFL_QS.organigramm ? window.STAFL_QS.organigramm.karte(x) : ''}
       <section><h3 class="qm-zwischen">Versionen</h3>${versHtml}</section>
       ${(x.verlauf || []).length ? `<details class="qm-details"><summary>Verlauf</summary><ul class="qm-verlauf">${x.verlauf.slice().reverse().map((l) => `<li>${esc(zeitpunkt(l.t))} · ${esc(l.von)}: ${esc(l.was)}</li>`).join('')}</ul></details>` : ''}
       <p class="qm-meldung" id="dk-meldung" role="alert"></p>
