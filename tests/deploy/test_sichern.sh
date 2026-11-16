@@ -41,17 +41,21 @@ ok "SQLite-Archiv enthält geprüfte Datenbank" 'python3 "$T/deploy/datenbank.py
 ok "SQLite-Archiv enthält keinen Postfachschlüssel" '[ ! -f "$T/restore/mail-schluessel.php" ]'
 # Dateiablage (hochgeladene Dokumente, nie in der Datenbank) wird auch im SQLite-Modus gesichert – als eigener Stand, nicht im Archiv
 mkdir -p "$T/daten/dateien/qs/ab" "$T/daten/dateien/.teile"; echo PDF-Inhalt > "$T/daten/dateien/qs/ab/ab1234567890ab.bin"; echo halb > "$T/daten/dateien/.teile/x.part"; sleep 1
-sh "$T/deploy/sichern.sh" --jetzt >/dev/null
+# tar-Attrappe merkt sich, ob der Abzug der Datenbank (Quelle des Archivs) die Dateiablage enthält (je Lauf 12 GB nach /tmp)
+mkdir "$T/bin-abzug"; ECHT_TAR=$(command -v tar); export ECHT_TAR T
+printf '#!/bin/sh\n[ "$1" != czf ] || [ ! -d "$4/dateien" ] || echo "$4" >> "$T/abzug-mit-dateien"\nexec "$ECHT_TAR" "$@"\n' > "$T/bin-abzug/tar"; chmod +x "$T/bin-abzug/tar"
+PATH="$T/bin-abzug:$PATH" sh "$T/deploy/sichern.sh" --jetzt >/dev/null
 LATEST=$(ls -1t "$T"/sicherungen/daten-*.tar.gz | head -1); STAND=$(basename "$LATEST" .tar.gz); STAND=${STAND#daten-}
-ok "SQLite: Dateiablage als Stand gesichert (ohne halbe Uploads), nicht im Archiv" '[ "$(feld "$T/daten" ok)" = True ] && cmp -s "$T/sicherungen/dateien/$STAND/qs/ab/ab1234567890ab.bin" "$T/daten/dateien/qs/ab/ab1234567890ab.bin" \
-  && [ ! -e "$T/sicherungen/dateien/$STAND/.teile" ] && ! tar tzf "$LATEST" | grep -q "dateien/"'
+ok "SQLite: Dateiablage als Stand gesichert (ohne halbe Uploads), weder im Archiv noch im Abzug der Datenbank" '[ "$(feld "$T/daten" ok)" = True ] && cmp -s "$T/sicherungen/dateien/$STAND/qs/ab/ab1234567890ab.bin" "$T/daten/dateien/qs/ab/ab1234567890ab.bin" \
+  && [ ! -e "$T/sicherungen/dateien/$STAND/.teile" ] && ! tar tzf "$LATEST" | grep -q "dateien/" && [ ! -e "$T/abzug-mit-dateien" ]'
 ok "Datenbank-Abzug: ohne Schalter mit Dateiablage (älteres sichern.sh), mit WA_SNAPSHOT_OHNE_DATEIEN=1 ohne" 'python3 "$T/deploy/datenbank.py" snapshot "$T/daten" --output "$T/abzug1" >/dev/null \
   && cmp -s "$T/abzug1/dateien/qs/ab/ab1234567890ab.bin" "$T/daten/dateien/qs/ab/ab1234567890ab.bin" && [ ! -e "$T/abzug1/dateien/.teile" ] \
   && WA_SNAPSHOT_OHNE_DATEIEN=1 python3 "$T/deploy/datenbank.py" snapshot "$T/daten" --output "$T/abzug2" >/dev/null && [ ! -e "$T/abzug2/dateien" ]'
 mv "$T/deploy/dateien_sichern.py" "$T/werkzeug.py"; sleep 1
-sh "$T/deploy/sichern.sh" --jetzt >/dev/null
+PATH="$T/bin-abzug:$PATH" sh "$T/deploy/sichern.sh" --jetzt >/dev/null
 LATEST=$(ls -1t "$T"/sicherungen/daten-*.tar.gz | head -1)
-ok "SQLite ohne Werkzeug: Dateiablage im Archiv statt stiller Lücke" '[ "$(feld "$T/daten" ok)" = True ] && tar tzf "$LATEST" | grep -q "dateien/qs/ab/ab1234567890ab.bin" && ! tar tzf "$LATEST" | grep -q "x.part"'
+ok "SQLite ohne Werkzeug: Dateiablage über den Abzug im Archiv statt stiller Lücke" '[ "$(feld "$T/daten" ok)" = True ] && tar tzf "$LATEST" | grep -q "dateien/qs/ab/ab1234567890ab.bin" && ! tar tzf "$LATEST" | grep -q "x.part" \
+  && [ -s "$T/abzug-mit-dateien" ]'
 mv "$T/werkzeug.py" "$T/deploy/dateien_sichern.py"
 rm -rf "$T/daten/dateien"
 printf 'broken' > "$T/restore/.sqlite/store.sqlite"
@@ -126,9 +130,9 @@ EOF2
   ok "Anmeldung in Betrieb, Datenbank läuft nicht: Fehler statt stiller Lücke" '[ "$R" = 1 ] && [ "$(feld "$T/daten" anmeldung)" = fehler ] && grep -q "Datenbank läuft aber nicht" "$T/daten/sicherung.php"'
 fi
 # ── Dateiablage: je Lauf ein Stand sicherungen/dateien/<Zeit>/ mit festen Verweisen auf den vorigen, geprüft gegen die Verweise ──
-W="$T/w"; export W T
-mkdir -p "$W/deploy"; cp "$REPO"/deploy/sichern.sh "$REPO"/deploy/sicherung-pruefen.* "$REPO"/deploy/datenbank.py "$REPO"/deploy/dateien_sichern.py "$W/deploy/"
-cp -r "$REPO/tests/fixtures/data-seed" "$W/daten"
+umgebung() { W=$1; export W; mkdir -p "$W/deploy"; cp "$REPO"/deploy/sichern.sh "$REPO"/deploy/sicherung-pruefen.* "$REPO"/deploy/datenbank.py "$REPO"/deploy/dateien_sichern.py "$W/deploy/"
+  cp -r "$REPO/tests/fixtures/data-seed" "$W/daten"; }   # neuer Arbeitsordner $W mit Testdaten; die Helfer unten arbeiten in $W
+umgebung "$T/w"; export T
 # verweise.py <daten> [fehlt:<id>] [roh:<id>] [groesse:<id>:<bytes>]: qs-dokumente verweist (wie das QM-System) auf alle Dateien der
 # Ablage; dazu ein Verweis auf eine fehlende Datei, eine Rohfassung {roh, sha256Roh} statt {id, groesse, sha256} bzw. eine andere Größe
 cat > "$T/verweise.py" <<'PY'
@@ -163,7 +167,7 @@ ok "Dateiablage: erster Stand mit allen Dateien, ohne halbe Uploads und Verweise
   && [ -z "$(find "$S1" -type l)" ] && ! tar tzf "$W"/sicherungen/daten-*.tar.gz | grep -q "dateien/" && [ -f "$W/sicherungen/daten-${S1##*/}.tar.gz" ]'
 ok "Dateiablage: Status nennt Anzahl, Größe, neu kopiert, Stände, belegt und fehlend; nichts Vorläufiges bleibt liegen" '[ "$(feld "$W/daten" ablage.anzahl)" = 3 ] \
   && [ "$(feld "$W/daten" ablage.groesse)" = 33 ] && [ "$(feld "$W/daten" ablage.neu)" = 33 ] && [ "$(feld "$W/daten" ablage.staende)" = 1 ] \
-  && [ "$(feld "$W/daten" ablage.belegt)" = 33 ] && [ "$(feld "$W/daten" ablage.fehlend)" = 0 ] && [ "$(feld "$W/daten" meldung)" = "" ] && [ "$(stat -c %a "$S1")" = 700 ] \
+  && [ "$(feld "$W/daten" ablage.belegt)" = 33 ] && [ "$(feld "$W/daten" ablage.fehlend)" = 0 ] && [ "$(feld "$W/daten" ablage.zustand)" = ok ] && [ "$(feld "$W/daten" meldung)" = "" ] && [ "$(stat -c %a "$S1")" = 700 ] \
   && [ -z "$(find "$W/sicherungen" -name "*.tmp" -o -name ".dateisicherung-fehler")" ]'
 rm -r "$W/daten/dateien/qs/ac"; ablage ae00000000000000000005 'neue Datei'; verweise; lauf
 S2=$(stand 2); export S2
@@ -196,17 +200,17 @@ else
 fi
 ablage ag00000000000000000007 'Rohfassung'; verweise fehlt:af00000000000000000006 roh:ag00000000000000000007 roh:ah00000000000000000008
 R=0; lauf || R=$?; export R
-ok "Verweise auf Dateien, die in Ablage und Sicherung fehlen (auch Rohfassung): nur Warnung, Archiv und Stand festgeschrieben" '[ "$R" = 0 ] && [ "$(feld "$W/daten" ok)" = True ] \
-  && [ "$(feld "$W/daten" ablage.fehlend)" = 2 ] && [ -f "$(neuester)/qs/ag/ag00000000000000000007.bin" ] && [ -f "$W/sicherungen/daten-$(basename "$(neuester)").tar.gz" ] \
+ok "Verweise auf Dateien, die in Ablage und Sicherung fehlen (auch Rohfassung): nur Warnung, Archiv und Stand festgeschrieben, Zustand kritisch (über 1 %)" '[ "$R" = 0 ] && [ "$(feld "$W/daten" ok)" = True ] \
+  && [ "$(feld "$W/daten" ablage.fehlend)" = 2 ] && [ "$(feld "$W/daten" ablage.zustand)" = kritisch ] && [ -f "$(neuester)/qs/ag/ag00000000000000000007.bin" ] && [ -f "$W/sicherungen/daten-$(basename "$(neuester)").tar.gz" ] \
   && [ "$(feld "$W/daten" meldung)" = "2 Datei(en) fehlen in Ablage und Sicherung (af00000000000000000006, ah00000000000000000008), Liste: sicherungen/.dateien-fehlend" ] \
-  && [ "$(cat "$W/sicherungen/.dateien-fehlend")" = "$(printf "af00000000000000000006\tqs-dokumente\nah00000000000000000008\tqs-dokumente")" ]'
+  && [ "$(cat "$W/sicherungen/.dateien-fehlend")" = "$(printf "af00000000000000000006\tqs-dokumente\tfehlt in Ablage und Sicherung\nah00000000000000000008\tqs-dokumente\tfehlt in Ablage und Sicherung")" ]'
 ok "Lese-Befehl fehlende: Kennung, Dokument und Befund für den Betreiber" '[ "$(python3 "$W/deploy/dateien_sichern.py" fehlende "$W/daten/dateien" "$W/daten")" \
   = "$(printf "af00000000000000000006\tqs-dokumente\tfehlt\nah00000000000000000008\tqs-dokumente\tfehlt")" ]'
 verweise
 python3 -c "import os, sys; p = sys.argv[1]; t = os.stat(p); open(p, 'r+b').write(b'X'); os.utime(p, ns=(t.st_atime_ns, t.st_mtime_ns))" "$(neuester)/qs/ab/ab00000000000000000002.bin"
 ALT=$(neuester); export ALT
 R=0; lauf || R=$?; export R
-ok "beschädigte Kopie in der Sicherung, Datei in der Ablage richtig: im neuen Stand frisch kopiert, Warnung" '[ "$R" = 0 ] && [ "$(feld "$W/daten" ok)" = True ] \
+ok "beschädigte Kopie in der Sicherung, Datei in der Ablage richtig: im neuen Stand frisch kopiert, Warnung" '[ "$R" = 0 ] && [ "$(feld "$W/daten" ok)" = True ] && [ "$(feld "$W/daten" ablage.zustand)" = warnung ] \
   && [ "$(feld "$W/daten" meldung)" = "1 beschädigte Kopie(n) in der Sicherung neu kopiert (ab00000000000000000002)" ] \
   && cmp -s "$(neuester)/qs/ab/ab00000000000000000002.bin" "$W/daten/dateien/qs/ab/ab00000000000000000002.bin" \
   && [ "$(stat -c %i "$(neuester)/qs/ab/ab00000000000000000002.bin")" != "$(stat -c %i "$ALT/qs/ab/ab00000000000000000002.bin")" ] && [ ! -e "$W/sicherungen/.dateien-fehlend" ]'
@@ -227,25 +231,38 @@ PY
 ok "Datei verschwindet beim Kopieren: kein Fehler, nicht im Stand, als fehlend gemeldet" '[ "$R" = 0 ] && grep -q "^1 Datei(en) fehlen in Ablage und Sicherung (ai00000000000000000009)" "$W/kopieren.txt" \
   && [ ! -e "$W/sicherungen/dateien/2099-01-01_000000.tmp/qs/ai/ai00000000000000000009.bin" ] && [ ! -e "$W/daten/dateien/qs/ai/ai00000000000000000009.bin" ]'
 rm -rf "$W/sicherungen/dateien/2099-01-01_000000.tmp"; rmdir "$W/daten/dateien/qs/ai"
-# Fehler (Datei in der Ablage mit anderer Größe als im Dokument): nichts dieses Laufs bleibt. 30 Fehlversuche hintereinander
+# Größe passt nicht zum Dokument: kein Abbruch. Gesichert wird die passende Fassung des vorigen Stands, sonst die der Ablage.
+verweise; VORIG=$(neuester); export VORIG
+printf 'Inhalt zwei, später geändert' > "$W/daten/dateien/qs/ab/ab00000000000000000002.bin"   # das Dokument nennt weiter die alte Größe
+R=0; lauf || R=$?; export R
+ok "Datei in der Ablage mit anderer Größe als im Dokument, passende Fassung im vorigen Stand: diese gesichert (fester Verweis), Warnung statt Abbruch" '[ "$R" = 0 ] \
+  && [ "$(feld "$W/daten" ok)" = True ] && [ "$(feld "$W/daten" ablage.zustand)" = warnung ] && [ "$(cat "$(neuester)/qs/ab/ab00000000000000000002.bin")" = "Inhalt zwei" ] \
+  && [ "$(stat -c %i "$(neuester)/qs/ab/ab00000000000000000002.bin")" = "$(stat -c %i "$VORIG/qs/ab/ab00000000000000000002.bin")" ] \
+  && [ "$(feld "$W/daten" meldung)" = "1 Datei(en) in der Ablage mit anderer Größe als im Dokument, passende Fassung aus Stand ${VORIG##*/} gesichert (ab00000000000000000002)" ]'
+verweise groesse:ab00000000000000000002:999
+R=0; lauf || R=$?; export R
+ok "Größe passt in keiner Fassung: die der Ablage gesichert, Warnung statt Abbruch" '[ "$R" = 0 ] && [ "$(feld "$W/daten" ok)" = True ] \
+  && cmp -s "$(neuester)/qs/ab/ab00000000000000000002.bin" "$W/daten/dateien/qs/ab/ab00000000000000000002.bin" \
+  && [ "$(feld "$W/daten" meldung)" = "1 Datei(en) mit anderer Größe als im Dokument, vorhandene Fassung gesichert (ab00000000000000000002)" ]'
+ablage ab00000000000000000002 'Inhalt zwei'; verweise
+# Störung der Sicherung selbst (Datendatei im Archiv fehlerhaft): nichts dieses Laufs bleibt. 30 Fehlversuche hintereinander
 # (das Release versucht es alle 2 Minuten) lassen ältere Sicherungen unangetastet.
 vor() { date -u -d "$1" +%Y-%m-%d_%H%M%S; }
 alt() { for Z in "$@"; do touch "$W/sicherungen/daten-$Z.tar.gz" "$W/sicherungen/anmeldung-$Z.dump"; mkdir "$W/sicherungen/dateien/$Z"; done; }   # Attrappen früherer Läufe
 TAG10=$(date -u -d '10 days ago' +%Y-%m-%d); Z40=$(vor '40 days ago'); export TAG10 Z40
 alt "$Z40" "${TAG10}_080000" "${TAG10}_120000" "${TAG10}_180000"
-verweise groesse:ab00000000000000000002:999
+echo '{kaputt' > "$W/daten/defekt.php"
 inhalt > "$W/vorher.txt"
 R=0; lauf || R=$?; export R
-ok "Datei in der Ablage mit anderer Größe als im Dokument: Fehler mit Grund, kein Archiv, kein Stand, kein .tmp" '[ "$R" = 1 ] && [ "$(feld "$W/daten" ok)" = False ] \
-  && feld "$W/daten" meldung | grep -q "^Dateisicherung: Datei ab00000000000000000002 (qs-dokumente) hat eine andere Größe als im Dokument (999 Bytes)" \
-  && [ "$(inhalt)" = "$(cat "$W/vorher.txt")" ]'
+ok "Störung der Sicherung (Datendatei im Archiv fehlerhaft): Fehler, kein Archiv, kein Stand, kein .tmp" '[ "$R" = 1 ] && [ "$(feld "$W/daten" ok)" = False ] \
+  && [ "$(feld "$W/daten" fehler)" = 1 ] && [ "$(inhalt)" = "$(cat "$W/vorher.txt")" ]'
 N=0; while [ "$N" -lt 30 ]; do sh "$W/deploy/sichern.sh" --jetzt >/dev/null 2>&1 || true; N=$((N + 1)); done
 ok "30 Fehlversuche hintereinander: kein älteres Archiv, keine Keycloak-Sicherung und kein Stand gelöscht" '[ "$(inhalt)" = "$(cat "$W/vorher.txt")" ]'
-verweise; lauf
+rm "$W/daten/defekt.php"; lauf
 ok "Aufbewahrung: weniger als 30 Läufe – alle bleiben, auch ältere als 30 Tage (Schutz bei verstellter Uhr)" '[ "$(feld "$W/daten" ok)" = True ] \
   && [ -f "$W/sicherungen/daten-$Z40.tar.gz" ] && [ -d "$W/sicherungen/dateien/${TAG10}_080000" ]'
 VOR=$(ls "$W"/sicherungen/daten-*.tar.gz | wc -l); export VOR
-N=1; while [ "$N" -le 31 ]; do alt "$(vor "-1 day -$N minutes")"; N=$((N + 1)); done
+N=1; while [ "$N" -le 31 ]; do alt "$(vor "-$((N % 2 + 1)) days -$N minutes")"; N=$((N + 1)); done   # je Tag unter dem Deckel von 24
 lauf
 ok "Aufbewahrung nach Zeit: alle Läufe der letzten 7 Tage, der letzte jedes Tages bis 30 Tage; Archiv, Keycloak-Sicherung und Stand gemeinsam" '[ "$(feld "$W/daten" ok)" = True ] \
   && [ ! -e "$W/sicherungen/daten-$Z40.tar.gz" ] && [ ! -e "$W/sicherungen/anmeldung-$Z40.dump" ] && [ ! -e "$W/sicherungen/dateien/$Z40" ] \
@@ -253,17 +270,32 @@ ok "Aufbewahrung nach Zeit: alle Läufe der letzten 7 Tage, der letzte jedes Tag
   && [ -f "$W/sicherungen/daten-${TAG10}_180000.tar.gz" ] && [ -f "$W/sicherungen/anmeldung-${TAG10}_180000.dump" ] && [ -d "$W/sicherungen/dateien/${TAG10}_180000" ] \
   && [ "$(ls "$W"/sicherungen/daten-*.tar.gz | wc -l)" = $((VOR + 31 + 1 - 3)) ] && [ "$(ls "$W"/sicherungen/dateien | wc -l)" = $((VOR + 31 + 1 - 3)) ] \
   && [ "$(feld "$W/daten" anzahl)" = $((VOR + 31 + 1 - 3)) ]'
-# Sperre: läuft schon eine Sicherung, endet ein zweiter Aufruf sofort und lässt deren .tmp in Ruhe
+TAG3=$(date -u -d '3 days ago' +%Y-%m-%d); export TAG3
+N=10; while [ "$N" -lt 50 ]; do alt "${TAG3}_10${N}00"; N=$((N + 1)); done   # 40 Läufe an einem Tag (Release wiederholt nach Keycloak-Fehler)
+lauf
+ok "Aufbewahrung: je Tag der letzten 7 höchstens die 24 neuesten Läufe (Archiv, Keycloak-Sicherung und Stand)" '[ "$(feld "$W/daten" ok)" = True ] \
+  && [ "$(ls "$W"/sicherungen/daten-"$TAG3"_* | wc -l)" = 24 ] && [ "$(ls "$W"/sicherungen/anmeldung-"$TAG3"_* | wc -l)" = 24 ] && [ "$(ls -d "$W"/sicherungen/dateien/"$TAG3"_* | wc -l)" = 24 ] \
+  && [ -f "$W/sicherungen/daten-${TAG3}_102600.tar.gz" ] && [ ! -e "$W/sicherungen/daten-${TAG3}_102500.tar.gz" ]'
+# Sperre: läuft schon eine Sicherung, wartet ein zweiter Aufruf mit --jetzt (Timer, Release) und lässt deren .tmp in Ruhe
 mkdir "$W/sicherungen/dateien/2099-01-02_000000.tmp"
 ( flock 9; touch "$W/gesperrt"; while [ ! -e "$W/frei" ]; do sleep 0.1; done ) 9>"$W/sicherungen/.sperre" & SPERRE=$!
 while [ ! -e "$W/gesperrt" ]; do sleep 0.1; done
 T0=$(feld "$W/daten" t); export T0
-R=0; lauf || R=$?; export R
-touch "$W/frei"; wait "$SPERRE"
-ok "Sperre: zweiter Lauf endet mit Fehler, ändert weder Status noch fremdes .tmp" '[ "$R" = 1 ] && grep -q "läuft bereits" "$W/aus.txt" && [ "$(feld "$W/daten" t)" = "$T0" ] \
+lauf & LAUF=$!
+sleep 2
+ok "Sperre: zweiter Lauf mit --jetzt wartet und ändert solange weder Status noch fremdes .tmp" 'kill -0 "$LAUF" && [ "$(feld "$W/daten" t)" = "$T0" ] \
   && [ -d "$W/sicherungen/dateien/2099-01-02_000000.tmp" ]'
-lauf
-ok "nach der Sperre: Rest eines abgebrochenen Laufs aufgeräumt" '[ "$(feld "$W/daten" ok)" = True ] && [ -z "$(find "$W/sicherungen" -name "*.tmp")" ]'
+touch "$W/frei"; wait "$SPERRE"; R=0; wait "$LAUF" || R=$?; export R
+ok "… und sichert, sobald die Sperre frei ist; Rest des abgebrochenen Laufs aufgeräumt" '[ "$R" = 0 ] && [ "$(feld "$W/daten" ok)" = True ] && [ "$(feld "$W/daten" t)" != "$T0" ] \
+  && [ -z "$(find "$W/sicherungen" -name "*.tmp")" ]'
+( flock 9; touch "$W/gesperrt2"; while [ ! -e "$W/frei2" ]; do sleep 0.1; done ) 9>"$W/sicherungen/.sperre" & SPERRE=$!
+while [ ! -e "$W/gesperrt2" ]; do sleep 0.1; done
+touch -d '2 days ago' "$W"/sicherungen/daten-*.tar.gz; rm -f "$W/sicherungen/.letzter-fehler"   # sonst endet der Aufruf ohne --jetzt vor der Sperre
+T0=$(feld "$W/daten" t); export T0
+R=0; sh "$W/deploy/sichern.sh" > "$W/aus.txt" 2> "$W/fehler.txt" || R=$?; export R
+touch "$W/frei2"; wait "$SPERRE"
+ok "Sperre ohne --jetzt (aktualisieren.sh): endet sofort mit Fehler, Grund auf stderr (das Release verwirft stdout)" '[ "$R" = 1 ] && grep -q "läuft bereits" "$W/fehler.txt" \
+  && ! grep -q "läuft bereits" "$W/aus.txt" && [ "$(feld "$W/daten" t)" = "$T0" ]'
 STAND=$(neuester); STAND=${STAND##*/}
 mkdir "$W/zurueck"; tar xzf "$W/sicherungen/daten-$STAND.tar.gz" -C "$W/zurueck"; cp -a "$W/sicherungen/dateien/$STAND" "$W/zurueck/dateien"
 ok "Wiederherstellung: Archiv und Stand derselben Zeit ergeben Daten und Dateiablage (ohne halbe Uploads)" 'diff -r -x .teile -x ad00000000000000000004.bin "$W/daten/dateien" "$W/zurueck/dateien" >/dev/null \
@@ -278,6 +310,102 @@ rm "$W/deploy/dateien_sichern.py"; lauf
 LATEST=$(ls -1 "$W"/sicherungen/daten-*.tar.gz | tail -1); export LATEST
 ok "ohne Werkzeug (Sicherung vor dem Release mit altem deploy/): Dateiablage wie bisher im Archiv" '[ "$(feld "$W/daten" ok)" = True ] && tar tzf "$LATEST" | grep -q "dateien/qs/ak/ak00000000000000000011.bin" \
   && ! tar tzf "$LATEST" | grep -q "x.tmp" && [ "$(feld "$W/daten" ablage)" = None ]'
+chmod -R u+rwx "$W" 2>/dev/null; rm -rf "$W"
+# Test-Uhr: VERSATZ verstellt sie („+1 day“; relative Angaben wie „7 days ago“ gelten von dort aus), FEST liefert diese
+# Zeitmarke statt der aktuellen (mit FEST_EINMAL nur beim ersten Aufruf)
+mkdir "$T/bin-uhr"; ECHT_DATE=$(command -v date); export ECHT_DATE
+cat > "$T/bin-uhr/date" <<'EOF2'
+#!/bin/sh
+if [ -n "${FEST:-}" ] && [ "$*" = "-u +%Y-%m-%d_%H%M%S" ] && [ ! -e "${FEST_EINMAL:-/-}" ]; then [ -z "${FEST_EINMAL:-}" ] || touch "$FEST_EINMAL"; echo "$FEST"; exit 0; fi
+for a; do case $a in *ago) exec "$ECHT_DATE" -u -d "$("$ECHT_DATE" -u -d "${VERSATZ:-now}" '+%Y-%m-%d %H:%M:%S') $a" +%Y-%m-%d_%H%M%S ;; esac; done
+exec "$ECHT_DATE" -d "${VERSATZ:-now}" "$@"
+EOF2
+chmod +x "$T/bin-uhr/date"
+uhr() { PATH="$T/bin-uhr:$PATH" sh "$W/deploy/sichern.sh" --jetzt > "$W/aus.txt" 2>&1; }
+
+# ── Nie eine verwiesene Datei verlieren: fehlt sie in der Ablage, trägt jeder Stand sie aus dem vorigen weiter ──
+umgebung "$T/v"
+ablage aa00000000000000000001 'Inhalt eins'; ablage ab00000000000000000002 'Inhalt zwei'; ablage ac00000000000000000003 'Inhalt drei'; verweise; lauf
+S0=$(neuester); cp -a "$W/daten/dateien" "$W/original"; export S0
+rm -rf "$W/daten/dateien"   # Ablage verloren, die Dokumente verweisen weiter auf die Dateien
+R=0; lauf || R=$?; export R
+S1=$(neuester); export S1
+ok "Ablage verloren: alle verwiesenen Dateien aus dem vorigen Stand übernommen (feste Verweise), Sicherung erfolgreich, Zustand kritisch" '[ "$R" = 0 ] \
+  && [ "$(feld "$W/daten" ok)" = True ] && [ "$(feld "$W/daten" ablage.zustand)" = kritisch ] && [ "$(feld "$W/daten" ablage.anzahl)" = 3 ] && [ "$(feld "$W/daten" ablage.fehlend)" = 3 ] \
+  && [ "$(stat -c %i "$S1/qs/ab/ab00000000000000000002.bin")" = "$(stat -c %i "$S0/qs/ab/ab00000000000000000002.bin")" ] \
+  && [ "$(feld "$W/daten" meldung)" = "3 Datei(en) fehlen in der Ablage, in der Sicherung erhalten (Stand ${S1##*/}), Befehle zum Zurückholen: sicherungen/.dateien-fehlend" ]'
+ok "Liste .dateien-fehlend: je Datei Kennung, Dokument und Befehl zum Zurückholen als eigene Datei des Webservers" '[ "$(wc -l < "$W/sicherungen/.dateien-fehlend")" = 3 ] \
+  && [ "$(sed -n 2p "$W/sicherungen/.dateien-fehlend")" = "$(printf "ab00000000000000000002\tqs-dokumente\tinstall -d -o 33 -g 33 %s %s %s && cp -a %s %s && chown 33:33 %s" \
+       "$W/daten/dateien" "$W/daten/dateien/qs" "$W/daten/dateien/qs/ab" "$S1/qs/ab/ab00000000000000000002.bin" "$W/daten/dateien/qs/ab/ab00000000000000000002.bin" "$W/daten/dateien/qs/ab/ab00000000000000000002.bin")" ]'
+N=1; while [ "$N" -le 31 ]; do export VERSATZ="+$N days"; uhr || echo "Lauf +$N Tage: $(tail -1 "$W/aus.txt")"; N=$((N + 1)); done   # 31 Tage täglich gesichert
+ok "nach 31 Tagen und 31 Läufen: frühere Stände aufgeräumt, die Dateien liegen weiter unverändert im neuesten Stand" '[ ! -e "$S0" ] && [ ! -e "$S1" ] \
+  && [ "$(feld "$W/daten" ok)" = True ] && [ "$(feld "$W/daten" ablage.zustand)" = kritisch ] && diff -r "$W/original" "$(neuester)" >/dev/null'
+# Ausweg wie in docs/entwickler/08-betrieb.md: die Befehle der Liste ausführen (ohne root ohne Besitzerwechsel)
+cut -f3 "$W/sicherungen/.dateien-fehlend" | grep -v '^fehlt' | if [ "$(id -u)" = 0 ]; then sh; else sed 's/ -o 33 -g 33//; s/ && chown 33:33 .*//' | sh; fi
+export VERSATZ="+32 days"; uhr; unset VERSATZ
+ok "Ausweg: die Befehle holen jede Datei als eigene Datei zurück (kein fester Verweis in die Sicherung), danach ohne Warnung" 'diff -r "$W/original" "$W/daten/dateien" >/dev/null \
+  && [ "$(stat -c %h "$W/daten/dateien/qs/aa/aa00000000000000000001.bin")" = 1 ] && { [ "$(id -u)" != 0 ] || [ "$(stat -c %u:%g "$W/daten/dateien/qs/aa/aa00000000000000000001.bin")" = 33:33 ]; } \
+  && [ "$(feld "$W/daten" ok)" = True ] && [ "$(feld "$W/daten" meldung)" = "" ] && [ "$(feld "$W/daten" ablage.zustand)" = ok ] && [ ! -e "$W/sicherungen/.dateien-fehlend" ]'
+chmod -R u+rwx "$W" 2>/dev/null; rm -rf "$W"
+
+# ── Uhr, Zeitmarke, Prüfsummen-Runde, Dokumente, hängender Keycloak-Abzug ──
+umgebung "$T/x"
+ablage aa00000000000000000001 'Inhalt eins'; ablage ab00000000000000000002 'Inhalt zwei'; verweise; lauf
+S0=$(neuester); export S0
+N=1; while [ "$N" -le 20 ]; do Z=$(date -u -d "$N days ago" +%Y-%m-%d); touch "$W/sicherungen/daten-${Z}_023000.tar.gz"; mkdir "$W/sicherungen/dateien/${Z}_023000"; N=$((N + 1)); done
+VOR=$(ls "$W"/sicherungen/daten-*.tar.gz | wc -l); export VOR
+export VERSATZ="+365 days"; R=0; uhr || R=$?; unset VERSATZ; export R
+ZUKUNFT=$(neuester); export ZUKUNFT
+ok "Uhr ein Jahr vorgestellt: gesichert, nichts aufgeräumt, Warnung Uhrzeit prüfen" '[ "$R" = 0 ] && [ "$(feld "$W/daten" ok)" = True ] \
+  && [ "$(ls "$W"/sicherungen/daten-*.tar.gz | wc -l)" = $((VOR + 1)) ] && [ "$(ls -d "$W"/sicherungen/dateien/2* | wc -l)" = $((VOR + 1)) ] \
+  && [ "$(feld "$W/daten" meldung)" = "Uhrzeit prüfen: letzter Lauf ${S0##*/} liegt über 2 Tage zurück, ältere Sicherungen nicht aufgeräumt" ]'
+ablage ac00000000000000000003 'nach der Uhr'; verweise; lauf; lauf
+heute() { for S in "$W"/sicherungen/dateien/2*; do [ "$S" = "$ZUKUNFT" ] || echo "$S"; done; }   # Stände ohne den mit Zukunftszeit
+S2=$(heute | tail -1); S1=$(heute | tail -2 | head -1); export S1 S2
+ok "Uhr wieder richtig: der Stand mit Zukunftszeit dient nicht als Vorlage, neue Dateien werden einmal kopiert und dann verlinkt" '[ "$(feld "$W/daten" ok)" = True ] \
+  && [ "$(stat -c %i "$S2/qs/ac/ac00000000000000000003.bin")" = "$(stat -c %i "$S1/qs/ac/ac00000000000000000003.bin")" ] && [ "$(feld "$W/daten" ablage.neu)" = 0 ] \
+  && [ -d "$ZUKUNFT" ] && [ "$(feld "$W/daten" meldung)" = "" ]'
+inhalt > "$W/vorher.txt"; cp "$W/sicherungen/daten-${S2##*/}.tar.gz" "$W/archiv-vorher"
+export FEST="${S2##*/}"; R=0; uhr || R=$?; export R
+ok "Zeitmarke schon vergeben (Uhr zurückgestellt): Abbruch mit Meldung, nichts überschrieben" '[ "$R" = 1 ] && [ "$(feld "$W/daten" ok)" = False ] \
+  && feld "$W/daten" meldung | grep -q "^Zeitmarke ${S2##*/} schon vergeben" && [ "$(inhalt)" = "$(cat "$W/vorher.txt")" ] && cmp -s "$W/archiv-vorher" "$W/sicherungen/daten-${S2##*/}.tar.gz"'
+export FEST_EINMAL="$W/fest-einmal"; R=0; uhr || R=$?; unset FEST FEST_EINMAL; export R
+ok "Zeitmarke in derselben Sekunde vergeben: eine Sekunde später gesichert, der vorige Lauf bleibt unverändert" '[ "$R" = 0 ] && [ -e "$W/fest-einmal" ] && [ "$(feld "$W/daten" ok)" = True ] \
+  && cmp -s "$W/archiv-vorher" "$W/sicherungen/daten-${S2##*/}.tar.gz" && [ "$(ls "$W"/sicherungen/daten-*.tar.gz | wc -l)" = $(($(grep -c "^./daten-" "$W/vorher.txt") + 1)) ]'
+# rotierende Prüfsummen-Stichprobe: ohne Zufall prüft sie jede Datei einmal in 30 aufeinanderfolgenden Tagen
+python3 -c "import os, sys; p = sys.argv[1]; t = os.stat(p); open(p, 'r+b').write(b'X'); os.utime(p, ns=(t.st_atime_ns, t.st_mtime_ns))" "$(heute | tail -1)/qs/ab/ab00000000000000000002.bin"
+python3 - "$W/deploy" "$W/daten/dateien" "$W/sicherungen/dateien" "$W/daten" > "$W/runde.txt" 2>&1 <<'PY' && R=0 || R=$?; export R
+import shutil, sys
+from datetime import date, timedelta
+from pathlib import Path
+sys.path.insert(0, sys.argv[1])
+import dateien_sichern as d
+d.STICHPROBE = 0
+for n in range(30):
+    zeit = f'{date.today() + timedelta(1 + n)}_000000'   # zwischen dem heutigen Stand und dem mit Zukunftszeit
+    print(zeit, *d.pruefen(Path(sys.argv[2]), Path(sys.argv[3]), zeit, [Path(sys.argv[4])])[1])
+    shutil.rmtree(Path(sys.argv[3]) / f'{zeit}.tmp')
+PY
+ok "rotierende Stichprobe: beschädigte Kopie an genau einem von 30 Tagen erkannt und geheilt" '[ "$R" = 0 ] && [ "$(grep -c "1 beschädigte Kopie(n) in der Sicherung neu kopiert (ab00000000000000000002)" "$W/runde.txt")" = 1 ]'
+# hängender Keycloak-Abzug: die Frist (hier 2 s statt KC_FRIST) beendet ihn, die Sperre ist danach frei
+mkdir -p "$W/deploy/anmeldung" "$W/daten-anmeldung" "$W/bin-frist"; touch "$W/deploy/anmeldung/docker-compose.anmeldung.yml"
+printf '#!/bin/sh\ncase "$1" in ps) echo 0123abcd ;; exec) sleep 60 ;; esac\n' > "$W/kc-haengt.sh"
+ECHT_TIMEOUT=$(command -v timeout); export ECHT_TIMEOUT
+printf '#!/bin/sh\nshift; exec "$ECHT_TIMEOUT" 2 "$@"\n' > "$W/bin-frist/timeout"; chmod +x "$W/bin-frist/timeout"
+A0=$(date +%s); R=0; WA_KC_COMPOSE="sh $W/kc-haengt.sh" PATH="$W/bin-frist:$PATH" sh "$W/deploy/sichern.sh" --jetzt > "$W/aus.txt" 2>&1 || R=$?; DAUER=$(($(date +%s) - A0)); export R DAUER
+ok "Keycloak-Abzug hängt: nach der Frist Fehler mit Grund, Geschäftsdaten gesichert, kein Warten auf den Container" '[ "$R" = 1 ] && [ "$DAUER" -lt 30 ] \
+  && [ "$(feld "$W/daten" anmeldung)" = fehler ] && feld "$W/daten" meldung | grep -q "Keycloak) fehlgeschlagen: keine Antwort nach 300 s"'
+rm -rf "$W/deploy/anmeldung" "$W/daten-anmeldung"
+A0=$(date +%s); lauf; DAUER=$(($(date +%s) - A0)); export DAUER
+ok "… danach ist die Sperre frei: der nächste Lauf sichert sofort" '[ "$(feld "$W/daten" ok)" = True ] && [ "$DAUER" -lt 30 ]'
+# Dokumente im Dateispeicher je Datei gelesen, so nachsichtig wie die Archivprüfung; Unlesbares nur als Warnung mit Namen
+G='<?php http_response_code(404); exit; ?>'
+printf '{"dateien":[{"id":"af00000000000000000006","groesse":3,"sha256":"%s"}]}' "$(printf '0%.0s' $(seq 64))" > "$W/daten/notiz.php"   # ohne Sperrzeile
+printf '%s\n{"a":1}' "$G" > "$W/daten/angebot.alt.php"; printf '%s\n"text"' "$G" > "$W/daten/zaehler.php"; ln -s qs-dokumente.php "$W/daten/kopie.php"
+R=0; lauf || R=$?; export R
+ok "Dokumente ohne Sperrzeile, mit Punkt im Namen oder skalarem JSON: gesichert und gelesen; ein Verweis als Dokument nur Warnung mit Namen" '[ "$R" = 0 ] \
+  && [ "$(feld "$W/daten" ok)" = True ] && feld "$W/daten" meldung | grep -q "1 Datei(en) fehlen in Ablage und Sicherung (af00000000000000000006)" \
+  && feld "$W/daten" meldung | grep -q "1 Dokument(e) nicht lesbar, Verweise darin nicht geprüft (kopie.php)"'
 chmod -R u+rwx "$W" 2>/dev/null; rm -rf "$W"
 # Getrennte Daten (ADR-007 Stufe 2): zweites Archiv intern-*.tar.gz für daten-intern/, gleich geprüft – Dateien und SQLite
 for ART in dateien sqlite; do
@@ -304,7 +432,7 @@ for ART in dateien sqlite; do
   fi
   ok "getrennt ($ART): Dateiablage aus daten-intern in derselben Reihe, über die Trennung hinweg fest verlinkt, Verweise aus dem internen Archiv geprüft" '[ "$(feld "$U/daten" ablage.anzahl)" = 1 ] \
     && [ "$(feld "$U/daten" ablage.neu)" = 0 ] && [ "$(stat -c %i "$U/sicherungen/dateien/$ST/qs/ba/ba00000000000000000001.bin")" = "$(stat -c %i "$VOR/qs/ba/ba00000000000000000001.bin")" ] \
-    && [ "$(feld "$U/daten" ablage.fehlend)" = 1 ] && [ "$(cat "$U/sicherungen/.dateien-fehlend")" = "$(printf "bb00000000000000000002\tqs-dokumente")" ]'
+    && [ "$(feld "$U/daten" ablage.fehlend)" = 1 ] && [ "$(cat "$U/sicherungen/.dateien-fehlend")" = "$(printf "bb00000000000000000002\tqs-dokumente\tfehlt in Ablage und Sicherung")" ]'
   ok "getrennt ($ART): Datensätze beider Bereiche gezählt" '[ "$(feld "$U/daten" datensaetze)" -ge 2 ] && [ "$(stat -c %a "$U"/sicherungen/intern-*.tar.gz)" = 600 ]'
   rm -f "$U/daten/.daten-getrennt"; sleep 1
   sh "$U/deploy/sichern.sh" --jetzt >/dev/null 2>&1 && R=0 || R=$?

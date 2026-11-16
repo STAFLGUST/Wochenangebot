@@ -78,9 +78,13 @@ with sync_playwright() as p:
     ablage = {'anzahl': 15000, 'groesse': 12 * 1024 ** 3, 'neu': 0, 'staende': 42, 'belegt': 13 * 1024 ** 3, 'fehlend': 0}
     g, gut = karte_zeigen('ok', 'ok', ablage=ablage)
     check('backup card: file store with count, size and used space (390px without horizontal scrolling)', gut and 'Dateiablage 15.000 Dateien (12,0 GB), Sicherung belegt 13,0 GB' in g, g)
-    g, gut = karte_zeigen('warnung', 'warn', ablage={**ablage, 'fehlend': 3},
-                          meldung='3 Datei(en) fehlen in Ablage und Sicherung (ab12cd34ef56ab12cd34, cd34ef56ab12cd34ef56, ef56ab12cd34ef56ab12), Liste: sicherungen/.dateien-fehlend')
-    check('backup card: saved with warning shown yellow with the reason', gut and '3 Datei(en) fehlen in Ablage und Sicherung (ab12cd34ef56ab12cd34' in g and 'mit Warnung' in g, g)
+    g, gut = karte_zeigen('warnung', 'warn', ablage={**ablage, 'fehlend': 1, 'zustand': 'warnung'},
+                          meldung='1 Datei(en) fehlen in Ablage und Sicherung (ab12cd34ef56ab12cd34ef56), Liste: sicherungen/.dateien-fehlend')
+    check('backup card: saved with warning shown yellow with the reason', gut and '1 Datei(en) fehlen in Ablage und Sicherung (ab12cd34ef56ab12cd34ef56)' in g and 'mit Warnung' in g, g)
+    g, gut = karte_zeigen('kritisch', 'bad', ok=True, ablage={**ablage, 'fehlend': 240, 'zustand': 'kritisch'},
+                          meldung='240 Datei(en) fehlen in der Ablage, in der Sicherung erhalten (Stand 2026-11-16_023012), Befehle zum Zurückholen: sicherungen/.dateien-fehlend')
+    check('backup card: many files missing in the store shown red with the way out (saved, so not "failed")', gut and 'Dateien fehlen' in g
+          and 'Dateien aus der Sicherung zurückholen' in g and '240 Datei(en) fehlen in der Ablage, in der Sicherung erhalten' in g and 'fehlgeschlagen' not in g, g)
     g, gut = karte_zeigen('fehler', 'bad', fehler=1, meldung='zu wenig Speicherplatz: 3,0 GB frei, nötig 17,3 GB (neue Dateien 12,0 GB, Daten 3 × 0,1 GB, Reserve 5 GB)')
     check('backup card: failure shown red with the reason (e.g. too little space)', gut and 'zu wenig Speicherplatz: 3,0 GB frei, nötig 17,3 GB' in g, g)
     # 6) Bereitstellungs-Status (Release-Modus)
