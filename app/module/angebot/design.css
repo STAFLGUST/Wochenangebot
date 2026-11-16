@@ -1,0 +1,83 @@
+/* STAFL-Plattform · Angebot · Knopf „Design“ und Fenster „Design“ (app/module/angebot/design.js): links Wahl bzw. Vorlagen und
+   die Bearbeitung von Raster und Abschnitten, rechts die Vorschau (Angebotsseite im Rahmen). Farben über die Variablen des
+   Eingabebereichs (hell und dunkel); unter 900 px untereinander, am Handy (390 px) Tippflächen ab 36 px, nichts ragt heraus. */
+#btn-design { flex: 0 0 auto; }
+.ed-toolbar:has(> #btn-design:not([hidden])) .search { flex-basis: 180px; }
+
+#dlg-design { width: min(1280px, calc(100vw - 32px)); }
+#dlg-design .dlg { height: min(860px, calc(100dvh - 32px)); }
+#dlg-design h2 { display: flex; align-items: center; gap: 8px; }
+#dlg-design h2 .i { color: var(--accent); }
+.ds-body { flex: 1 1 auto; min-height: 0; display: grid; grid-template-columns: minmax(340px, 440px) minmax(0, 1fr); gap: 18px; overflow: hidden; }
+.ds-links { min-width: 0; overflow: auto; padding-right: 4px; }
+.ds-rechts { min-width: 0; min-height: 0; display: flex; flex-direction: column; gap: 8px; }
+.ds-vk { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+.ds-info { font-size: 12.5px; color: var(--muted); font-variant-numeric: tabular-nums; }
+.ds-vorschau { flex: 1 1 auto; min-height: 320px; width: 100%; border: 1px solid var(--line); border-radius: 12px; background: var(--surface-2); }
+
+/* Reiter und Umschalter */
+.ds-reiter { display: flex; gap: 4px; margin: 0 0 14px; padding: 3px; border: 1px solid var(--line); border-radius: 12px; background: var(--surface-2); }
+.ds-reiter button { flex: 1 1 0; min-height: 36px; border: 0; border-radius: 9px; background: transparent; color: var(--text-2); font: inherit; font-size: 13.5px; font-weight: 600; cursor: pointer; }
+.ds-reiter button[aria-selected="true"] { background: var(--surface); color: var(--text); box-shadow: var(--shadow-sm); }
+.ds-seg { display: inline-flex; gap: 2px; padding: 2px; border: 1px solid var(--line); border-radius: 10px; background: var(--surface); }
+.ds-seg button { min-width: 44px; min-height: 34px; padding: 0 12px; border: 0; border-radius: 8px; background: transparent; color: var(--text-2); font: inherit; font-size: 13px; font-weight: 600; cursor: pointer; }
+.ds-seg button[aria-checked="true"] { background: var(--accent-soft); color: var(--accent); box-shadow: inset 0 0 0 1px var(--accent-line); }
+.ds-reiter button:focus-visible, .ds-seg button:focus-visible { outline: none; box-shadow: var(--focus); }
+
+.ds-zus { margin: 6px 0 10px; font-size: 13px; color: var(--text-2); }
+.ds-angepasst { display: inline-block; padding: 0 8px; border-radius: 99px; background: var(--accent-soft); color: var(--accent); font-size: 11.5px; font-weight: 700; letter-spacing: .03em; }
+.ds-knoepfe { display: flex; flex-wrap: wrap; gap: 8px; margin: 0 0 12px; }
+.ds-editor { margin-top: 4px; padding-top: 12px; border-top: 1px solid var(--line); }
+.ds-raster { display: flex; flex-wrap: wrap; gap: 14px 22px; margin: 0 0 14px; }
+.ds-h { margin: 0 0 8px; font-size: 13px; font-weight: 700; letter-spacing: .04em; text-transform: uppercase; color: var(--muted); }
+.ds-rest { margin: 4px 0 8px; font-size: 13px; color: var(--muted); font-style: italic; }
+
+/* Abschnitte */
+.ds-liste, .ds-refs, .ds-vorlagen { list-style: none; margin: 0; padding: 0; }
+.ds-liste { display: grid; gap: 10px; margin-bottom: 10px; }
+.ds-ab { padding: 8px 8px 10px; border: 1px solid var(--line); border-radius: 12px; background: var(--surface); }
+.ds-ab.text { border-left: 3px solid var(--accent); }
+.ds-ab-kopf { display: flex; align-items: center; gap: 6px; }
+.ds-art { flex: none; min-width: 58px; font-size: 11px; font-weight: 700; letter-spacing: .05em; text-transform: uppercase; color: var(--muted); }
+.ds-titel, .ds-ab textarea, .ds-ab select, #ds-name { min-width: 0; border: 1px solid var(--line); border-radius: 8px; background: var(--surface); color: var(--text); font: inherit; font-size: 13.5px; }
+.ds-titel { flex: 1 1 auto; height: 36px; padding: 0 10px; }
+.ds-ab textarea { display: block; box-sizing: border-box; width: 100%; margin-top: 8px; padding: 8px 10px; resize: vertical; }
+.ds-ab select { height: 36px; max-width: 100%; padding: 0 8px; }
+.ds-titel:focus, .ds-ab textarea:focus, .ds-ab select:focus { outline: none; border-color: var(--accent-line); box-shadow: var(--focus); }
+.ds-btns { flex: none; display: inline-flex; gap: 2px; }
+#dlg-design .ds-btns .ibtn { width: 36px; height: 36px; }
+.ds-ab-zeile { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-top: 8px; }
+.ds-sp { display: inline-flex; align-items: center; gap: 6px; font-size: 12.5px; color: var(--muted); }
+.ds-neu { flex: 1 1 180px; width: 0; max-width: 100%; }   /* lange Gruppennamen in der Auswahl: nicht breiter als der Abschnitt */
+.ds-refs { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
+.ds-ref { display: inline-flex; align-items: center; gap: 2px; max-width: 100%; padding: 0 2px 0 10px; border: 1px solid var(--line); border-radius: 99px; background: var(--surface-2); font-size: 12.5px; }
+.ds-ref > span { min-width: 0; overflow-wrap: anywhere; line-height: 1.3; padding: 4px 0; }
+.ds-ref b { font-weight: 600; color: var(--muted); }
+.ds-ref.fehlt { border-style: dashed; }
+.ds-ref em { color: var(--muted); }
+.ds-plus { display: flex; flex-wrap: wrap; gap: 8px; }
+
+/* Vorlagen */
+#ds-name { height: 38px; padding: 0 12px; }
+.ds-vorlagen { display: grid; gap: 8px; }
+.ds-v { display: flex; align-items: center; gap: 8px; padding: 8px 8px 8px 12px; border: 1px solid var(--line); border-radius: 12px; background: var(--surface); }
+.ds-v-t { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; gap: 1px; }
+.ds-v-t b { font-size: 14px; overflow-wrap: anywhere; }
+.ds-v-t small { font-size: 12px; color: var(--muted); overflow-wrap: anywhere; }
+
+.ds-stand { flex: 1 1 0; min-width: 0; font-size: 13px; color: var(--muted); }
+.ds-stand.geaendert { color: var(--accent); font-weight: 600; }
+
+@media (max-width: 900px) {
+  #dlg-design .dlg { height: auto; }
+  .ds-body { display: block; overflow: auto; }
+  .ds-links { overflow: visible; padding: 0; }
+  .ds-rechts { margin-top: 16px; }
+  .ds-vorschau { height: 460px; flex: none; }
+}
+@media (max-width: 640px) {
+  .ds-ab-kopf { flex-wrap: wrap; }
+  .ds-titel { flex-basis: calc(100% - 70px); }
+  .ds-ab-kopf .ds-btns { margin-left: auto; }
+  .ds-stand { display: none; }
+}

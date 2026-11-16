@@ -4344,6 +4344,7 @@
     const b = $('#btn-aufbau'), s = !ro && model ? aufbauSperre() : null;
     if (!b) return;
     b.hidden = ro || !model;   // nur wer das Angebot bearbeiten darf (der Server prüft beim Speichern dasselbe Recht)
+    const d = $('#btn-design'); if (d) d.hidden = b.hidden;   // Knopf „Design“ (app/module/angebot/design.js): dasselbe Recht
     b.classList.toggle('gesperrt', !!s && s.art === 'folgt');
     b.title = s ? (s.art === 'folgt' ? 'Nur ansehen: ' : '') + s.text : 'Aufbau des Angebots: Reihenfolge der Bereiche, Gruppen und Artikel festlegen';
   }
@@ -5117,6 +5118,10 @@
     angebot: { kategorienVorschlag, kategorienGeaendert: () => kategorienLaden({ still: true }),
       // Aufbau des Angebots (app/module/angebot/aufbau.js): Daten fürs Fenster, Übernehmen über den Entwurf
       aufbau: { daten: () => (model ? aufbauDaten() : null), uebernehmen: aufbauUebernehmen },
+      // Design des Angebots (app/module/angebot/design.js setzt „oeffnen“): gewähltes Angebot, Namen seiner Bereiche und Gruppen
+      design: { oeffnen: null, angebot: () => (model ? { angebot: curOffer, name: offerName(curOffer) } : null),
+        namen: () => { const gs = model ? sichtbareGruppen() : []; return { bereiche: [...new Set(gs.map((g) => g.section).filter(Boolean))], gruppen: gs.map((g) => ({ name: g.name, bereich: g.section || '' })) }; },
+        adresse: (oid) => pvUrl(oid || OSTD) },
       // Kundenangebot kopieren (app/module/angebot/kopieren.js setzt „oeffnen“): Daten fürs Fenster, Kopieren über den Server
       kopie: { oeffnen: null, daten: kopieDaten, ausfuehren: kopieAusfuehren },
       // Drucken (app/module/angebot/druck.js): Adresse der Vorschau des gewählten Angebots; vorher den Entwurf speichern.

@@ -305,6 +305,110 @@ with sync_playwright() as p:
           and s['spalten'] == 3 and s['format'] == 'quer' and heil(s, 279, 193, 3) == [] and s['zeilen'] == w['zeilen'], (w['reihe'], s['spalten']))
     zurueck(pg)
     ctx.close()
+
+    # ---------- Eingabebereich: Fenster „Design“ mit Live-Vorschau ----------
+    def anmelden(c, user, pw):
+        a = c.new_page(); a.on('pageerror', lambda ex: errors.append(str(ex)))
+        a.goto(BASE + '/admin/'); a.wait_for_selector('#screen-auth:not([hidden])')
+        a.fill('#au-user', user); a.fill('#pw1', pw); a.click('#auth-submit'); a.wait_for_selector('#screen-editor:not([hidden]) tr[data-id]')
+        return a
+
+    def rahmen(a):
+        return a.wait_for_selector('#dlg-design[open] .ds-vorschau').content_frame()
+
+    def satz_im_rahmen(a, spalten, fmt):
+        fr = rahmen(a)
+        fr.wait_for_function(f"(() => {{ const d = document.querySelector('#print-root > .pl-doc'); return d && d.dataset.spalten === '{spalten}' && d.dataset.format === '{fmt}'; }})()", timeout=20000)
+        return fr
+
+    def oeffnen(a):
+        a.click('#btn-design'); a.wait_for_selector('#dlg-design[open] #ds-wahl')
+
+    ctx = br.new_context(viewport={'width': 1280, 'height': 900})
+    a = anmelden(ctx, 'admin', PW)
+    check('Knopf „Design“ in „Angebot bearbeiten“ sichtbar (Bearbeitungsrecht)', a.locator('#btn-design').is_visible())
+    oeffnen(a)
+    satz_im_rahmen(a, 3, 'quer')
+    check('Fenster öffnet mit „Standard“ und Druckvorschau des Wochenangebots (3 Spalten quer)', a.input_value('#ds-wahl') == '' and 'Wochenangebot' in a.inner_text('#ds-titel'))
+    a.select_option('#ds-wahl', gid)
+    fr = satz_im_rahmen(a, 2, 'hoch')
+    check('Vorlage „Gastro“ gewählt: Vorschau sofort 2 Spalten hoch, mit Text-Abschnitt', 'Willkommen' in fr.inner_text('#print-root') and a.inner_text('#ds-info').startswith('2 Spalten · hoch'), a.inner_text('#ds-info'))
+    a.click('#ds-anpassen')
+    a.click('.ds-editor [data-ds="spalten"][data-wert="3"]')
+    satz_im_rahmen(a, 3, 'hoch')
+    a.click('#dlg-design [data-ds="ansicht"][data-wert="web"]')
+    rahmen(a).wait_for_function("!document.documentElement.classList.contains('druckansicht') && document.querySelectorAll('#list .al-text').length >= 1 && [...document.querySelectorAll('#list .al-band')].every((b) => getComputedStyle(b).gridTemplateColumns.split(' ').length <= 3)")
+    check('Umschalter „Kundenseite“: Vorschau zeigt die Kundenansicht mit dem ungespeicherten Design', a.locator('#dlg-design [data-ds="ansicht"][data-wert="web"][aria-checked="true"]').count() == 1)
+    a.click('#dlg-design [data-ds="ansicht"][data-wert="druck"]')
+    satz_im_rahmen(a, 3, 'hoch')
+    shot(a.locator('#dlg-design'), f'{SH}/design-fenster-1280-hell.png')
+    a.click('#ds-fuss [data-ds="speichern"]'); a.wait_for_selector('#dlg-design:not([open])', state='attached')
+    check('Speichern: nur die Abweichung (3 Spalten) an der Vorlage „Gastro“', doc('angebote')['stdDesign'] == {'vorlage': gid, 'anpassung': {'raster': {'spalten': 3}}}, doc('angebote').get('stdDesign'))
+    oeffnen(a)
+    satz_im_rahmen(a, 3, 'hoch')
+    check('erneut geöffnet: „angepasst“ markiert', a.locator('#ds-links .ds-angepasst').count() == 1 and a.input_value('#ds-wahl') == gid)
+    a.click('#ds-zuruecksetzen')
+    satz_im_rahmen(a, 2, 'hoch')
+    a.click('#ds-fuss [data-ds="speichern"]'); a.wait_for_selector('#dlg-design:not([open])', state='attached')
+    check('„Auf Vorlage zurücksetzen“ und Speichern: Anpassung weg', doc('angebote')['stdDesign'] == {'vorlage': gid}, doc('angebote').get('stdDesign'))
+
+    # Vorlagen: neu, kopieren, umbenennen, löschen
+    oeffnen(a)
+    a.click('#ds-r-vorlagen')
+    a.click('[data-ds="v-neu"]'); a.fill('#ds-name', 'Messe')
+    a.click('.ds-editor [data-ds="spalten"][data-wert="4"]')
+    a.click('[data-ds="neu-text"]'); a.fill('.ds-ab[data-i="0"] .ds-titel', 'Messe 2026'); a.fill('.ds-ab[data-i="0"] textarea', 'Stand 4, Halle B')
+    a.click('[data-ds="neu-gruppen"]'); a.select_option('.ds-ab[data-i="1"] [data-f="neu"]', 'b:' + pub['sections'][0])
+    a.click('.ds-ab[data-i="1"] [data-ds="hoch"]')
+    satz_im_rahmen(a, 4, 'quer')
+    shot(a.locator('#dlg-design'), f'{SH}/design-vorlage-1280-hell.png')
+    a.click('[data-ds="v-speichern"]'); a.wait_for_selector('.ds-vorlagen .ds-v:has-text("Messe")')
+    mv = [v for v in A.call('angebot_designs')[1]['vorlagen'] if v['name'] == 'Messe']
+    check('Neue Vorlage „Messe“ über das Fenster: 4 Spalten, Gruppen-Abschnitt vor dem Text (verschoben), Bereich nach Namen',
+          mv and mv[0]['raster'] == {'spalten': 4, 'format': 'quer'} and [x['art'] for x in mv[0]['abschnitte']] == ['gruppen', 'text']
+          and mv[0]['abschnitte'][0]['inhalt'] == [{'bereich': pub['sections'][0]}] and mv[0]['abschnitte'][1]['text'] == 'Stand 4, Halle B', mv)
+    a.click('.ds-v:has-text("Messe") [data-ds="v-kopieren"]')
+    check('Kopieren schlägt „Kopie von Messe“ vor', a.input_value('#ds-name') == 'Kopie von Messe')
+    a.click('[data-ds="v-speichern"]'); a.wait_for_selector('.ds-v:has-text("Kopie von Messe")')
+    a.click('.ds-v:has-text("Kopie von Messe") [data-ds="v-bearbeiten"]'); a.fill('#ds-name', 'Messe klein')
+    a.click('[data-ds="v-speichern"]'); a.wait_for_selector('.ds-v:has-text("Messe klein")')
+    namen = [v['name'] for v in A.call('angebot_designs')[1]['vorlagen']]
+    check('Kopie gespeichert und umbenannt', 'Messe klein' in namen and 'Kopie von Messe' not in namen and 'Messe' in namen, namen)
+    a.click('.ds-v:has-text("Messe klein") [data-ds="v-loeschen"]'); a.click('#confirm-body [data-v="1"]')
+    a.wait_for_function("![...document.querySelectorAll('.ds-v b')].some((b) => b.textContent === 'Messe klein')")
+    a.click('.ds-v:has-text("Gastro") [data-ds="v-loeschen"]'); a.click('#confirm-body [data-v="1"]')
+    a.wait_for_function("document.querySelector('#ds-err').textContent.includes('noch genutzt')")
+    check('Löschen: ungenutzte Vorlage weg; genutzte mit klarer Meldung abgelehnt', 'Messe klein' not in [v['name'] for v in A.call('angebot_designs')[1]['vorlagen']]
+          and 'Wochenangebot' in a.inner_text('#ds-err') and any(v['id'] == gid for v in A.call('angebot_designs')[1]['vorlagen']), a.inner_text('#ds-err'))
+    a.keyboard.press('Escape'); a.wait_for_selector('#dlg-design:not([open])', state='attached')
+
+    # Einzelangebot: dasselbe Fenster, Vorschau mit dem Einzelangebot
+    a.evaluate("(id) => window.WA.angebot.design.oeffnen({ angebot: id, name: 'Testangebot', einzel: true })", EID)
+    satz_im_rahmen(a, 2, 'quer')
+    check('Einzelangebot: Fenster „Design“ mit Reiter „Dieses Einzelangebot“ und Vorschau des Einzelangebots (2 Spalten)', a.inner_text('#ds-r-angebot') == 'Dieses Einzelangebot'
+          and rahmen(a).locator('#print-root tr.row').count() == 30)
+    a.keyboard.press('Escape')
+    ctx.close()
+
+    for schema in ('light', 'dark'):
+        for breite, hoehe in ((1280, 900), (390, 844)):
+            c = br.new_context(viewport={'width': breite, 'height': hoehe}, color_scheme=schema, **({'is_mobile': True, 'has_touch': True, 'device_scale_factor': 2} if breite == 390 else {}))
+            a = anmelden(c, 'admin', PW)
+            oeffnen(a)
+            a.click('#ds-anpassen')
+            satz_im_rahmen(a, 2, 'hoch')
+            m = a.evaluate("""() => { const d = document.querySelector('#dlg-design').getBoundingClientRect(), f = [...document.querySelectorAll('#dlg-design .ds-links button, #dlg-design .ds-links input, #dlg-design .ds-links select, #dlg-design .ds-links textarea')].filter((e) => e.offsetParent).map((e) => e.getBoundingClientRect());
+              return { l: d.left, r: d.right, raus: Math.max(0, ...f.map((x) => x.right - d.right)), klein: f.filter((x) => x.height < 30).length, sw: document.documentElement.scrollWidth }; }""")
+            if breite == 390:
+                check(f'390 px ({schema}): Fenster passt, nichts ragt heraus, Bedienelemente mindestens 30 px hoch', m['l'] >= 0 and m['r'] <= 390.5 and m['raus'] <= .5 and m['klein'] == 0 and m['sw'] <= 390, m)
+            shot(a.locator('#dlg-design'), f'{SH}/design-fenster-{breite}-{"hell" if schema == "light" else "dunkel"}.png')
+            c.close()
+
+    # Leser: kein Knopf, der Server lehnt ab (oben geprüft)
+    ctx = br.new_context(viewport={'width': 1280, 'height': 900})
+    a = anmelden(ctx, 'lea', PW_L)
+    check('Leser ohne Bearbeitungsrecht: Knopf „Design“ ausgeblendet', a.locator('#btn-design').is_hidden())
+    ctx.close()
     br.close()
 
 check('keine JavaScript-Fehler', not errors, errors[:3])
