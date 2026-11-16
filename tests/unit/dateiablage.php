@@ -1,7 +1,8 @@
 <?php
 /* Reine Funktionen und Tabellen der Dateiablage (app/api/lib/dateiablage.php) ohne Server: Ende des ZIP-Verzeichnisses genau an
    den Zip64-Grenzen (Versatz 0xFFFFFFFE/0xFFFFFFFF, 65534/65535 Einträge), Platzreserve nach einem Upload, jede Kopfprüfung der
-   Dateiarten ist bekannt und keine erlaubte Art steht auf der Sperrliste. */
+   Dateiarten ist bekannt und keine erlaubte Art steht auf der Sperrliste; Word, Excel und PowerPoint mit Kennwort (OLE-Container) werden
+   angenommen, als OpenDocument, ZIP oder PDF nicht. */
 declare(strict_types=1);
 const WA_API = true;
 require __DIR__ . '/../../app/api/lib/dateiablage.php';
@@ -27,6 +28,18 @@ check('ab 65535 Einträgen: Zip64-Ende mit der echten Anzahl, im klassischen End
 
 check('Platz reicht, wenn danach genau die Reserve frei bleibt', ablage_platz_reicht(ABLAGE_RESERVE + 100.0, 100));
 check('Platz reicht nicht, wenn ein Byte der Reserve fehlt', !ablage_platz_reicht(ABLAGE_RESERVE + 100.0, 101) && !ablage_platz_reicht(0.0, 1));
+
+// Kopf einer OLE-/CFB-Datei (MS-CFB 2.2), wie Microsoft Office eine Datei mit Kennwort speichert
+$cfb = pack('a8a16vvvvva6VVVVVVVVV', "\xD0\xCF\x11\xE0\xA1\xB1\x1A\xE1", '', 0x3E, 3, 0xFFFE, 9, 6, '', 0, 1, 1, 0, 0x1000, 0xFFFFFFFE, 0, 0xFFFFFFFE, 0)
+     . pack('V', 0) . str_repeat(pack('V', 0xFFFFFFFF), 108);
+$tmp = tempnam(sys_get_temp_dir(), 'cfb');
+file_put_contents($tmp, $cfb . str_repeat("\0", 1024));
+check('Office-Datei mit Kennwort (OLE-Container) als docx, xlsx, xlsm, pptx angenommen', strlen($cfb) === 512
+    && ablage_inhalt_passt($tmp, 'docx') && ablage_inhalt_passt($tmp, 'xlsx') && ablage_inhalt_passt($tmp, 'xlsm') && ablage_inhalt_passt($tmp, 'pptx'));
+check('OLE-Container nicht als OpenDocument, ZIP oder PDF', !ablage_inhalt_passt($tmp, 'odt') && !ablage_inhalt_passt($tmp, 'zip') && !ablage_inhalt_passt($tmp, 'pdf'));
+file_put_contents($tmp, "PK\x05\x06" . str_repeat("\0", 18));
+check('leeres ZIP bleibt als docx abgelehnt', !ablage_inhalt_passt($tmp, 'docx'));
+unlink($tmp);
 
 $unbekannt = array_keys(array_filter(ABLAGE_ARTEN, fn($a) => !in_array($a[1], ['text', 'binaer'], true) && !isset(ABLAGE_KOEPFE[$a[1]])));
 check('jede Art hat eine bekannte Kopfprüfung', $unbekannt === []);

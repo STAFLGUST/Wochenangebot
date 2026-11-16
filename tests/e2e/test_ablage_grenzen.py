@@ -2,7 +2,8 @@
 
 Geprüft über das QM-System (qs_datei_hochladen, qs_datei, qs_ablage_export, Freigabe und Überarbeitung): Einstellungen für die
 Oberfläche (250 MB je Datei, neue Arten, keine ausführbaren Arten); Kopfprüfung jeder neuen Art (Videos mp4/m4v/mov auch als ältere
-QuickTime-Datei und mit langem ftyp-Block, Fotos heic/heif/tif/tiff/bmp, zip auch leer, xlsb, opus/ogg, json, ics, ttv) gültig
+QuickTime-Datei und mit langem ftyp-Block, Fotos heic/heif/tif/tiff/bmp, zip auch leer, xlsb, opus/ogg, json, ics, ttv, Word und
+Excel mit Kennwort als OLE-Container) gültig
 abgelegt mit MIME-Typ und gefälscht abgelehnt (z. B. .mp4 mit PDF-Kopf, Windows-Programm als .mp4/.heic, leeres ZIP als .docx,
 .heic mit fremder Marke, .json mit HTML, .ttv mit Programm oder HTML nach Leerraum); html, svg, js, exe, lnk, bat und Ähnliches
 bleiben abgelehnt, auch als Eintrag eines ZIP (Großbuchstaben, Unterordner, Zip64), beschädigtes ZIP-Verzeichnis abgelehnt; Grenze
@@ -90,6 +91,11 @@ def zip64(daten):
     return daten[:p] + ende64 + b'PK\x06\x07' + struct.pack('<IQI', 0, p, 1) + b'PK\x05\x06' + struct.pack('<HHHHIIH', 0, 0, 0xFFFF, 0xFFFF, 0xFFFFFFFF, 0xFFFFFFFF, 0)
 
 
+# Kopf einer OLE-/CFB-Datei (MS-CFB 2.2): so speichert Microsoft Office eine docx/xlsx mit Kennwort
+CFB = (b'\xd0\xcf\x11\xe0\xa1\xb1\x1a\xe1' + bytes(16) + struct.pack('<5H', 0x3E, 3, 0xFFFE, 9, 6) + bytes(6)
+       + struct.pack('<10I', 0, 1, 1, 0, 0x1000, 0xFFFFFFFE, 0, 0xFFFFFFFE, 0, 0) + b'\xff' * 432 + bytes(1024))
+
+
 def dok(did):
     return {x['id']: x for x in Be.call('qs_start')[1]['dokumente']}[did]
 
@@ -148,6 +154,8 @@ GUELTIG = {
     'Ordner.zip': (zip_mit({'Unterordner/tief/Plan.pdf': pdf('Plan'), 'Unterordner/Liste.csv': 'a;b'}), 'application/zip'),
     'Zip64.zip': (zip64(zip_mit({'Hinweis.txt': 'Prüfung', 'Bilder/Foto.jpg': b'\xff\xd8\xff'})), 'application/zip'),
     'Mappe.xlsb': (zip_mit({'[Content_Types].xml': '<Types/>', 'xl/workbook.bin': b'\x83\x01\0'}), 'application/vnd.ms-excel.sheet.binary.macroEnabled.12'),
+    'Geschützt.docx': (CFB, 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'),
+    'Geschützt.xlsx': (CFB, 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'),
     'Messwerte.json': (b'{"messung": [3.5, 4.0]}\n', 'application/json'),
     'Termin.ics': (b'BEGIN:VCALENDAR\r\nVERSION:2.0\r\nEND:VCALENDAR\r\n', 'text/calendar'),
     'Kuehlhaus.ttv': (b'wd2\xcd{#\0\x01' + bytes(range(256)), 'application/octet-stream'),
@@ -155,6 +163,7 @@ GUELTIG = {
 }
 assert GUELTIG['Leer.zip'][0][:4] == b'PK\x05\x06', 'leeres ZIP: nur das Ende des Verzeichnisses'
 assert GUELTIG['Lang.mp4'][0][:4] == b'\0\0\0<', 'ftyp-Block mit 60 Bytes'
+assert len(CFB) == 512 + 1024, 'CFB-Kopf hat 512 Bytes'
 assert zipfile.ZipFile(io.BytesIO(GUELTIG['Zip64.zip'][0])).namelist() == ['Hinweis.txt', 'Bilder/Foto.jpg'], 'Zip64-Ende lesbar'
 ids = {}
 for name, (inhalt, mime) in GUELTIG.items():
