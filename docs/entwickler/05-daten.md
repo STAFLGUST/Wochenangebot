@@ -276,7 +276,20 @@ Historie) und direkte Freischaltungen bei Kunden stehen können; gesperrt sind a
 (`angebot_ids_mit_resten`). Fehlt `fallback` in einer Anfrage, bleibt die gespeicherte Einstellung (neue Angebote: `hidden`); Felder, die
 `offers_save` nicht kennt, bleiben erhalten (GR-006). Ein weiterer Weg zu einem neuen Angebot ist `offer_kopieren`
 (`module/angebot/kopieren.php`, gleiche ID-Regeln): neues Angebot ohne `gruppen` mit dem `fallback` der Quelle, dazu im
-Entwurf unter der neuen ID dieselben `variants`, `namen`, `sale.offers` und `meta.werbung` wie die Quelle.
+Entwurf unter der neuen ID dieselben `variants`, `namen`, `sale.offers` und `meta.werbung` wie die Quelle; das `design`
+der Quelle kommt an die neue Definition.
+
+**Design je Angebot** (seit 16.11.2026, `module/angebot/design.php`, GR-010): optional `design: {"vorlage": "<Kennung>" | "",
+"anpassung"?: {"raster"?: {"spalten"?, "format"?}, "abschnitte"?: […]}}` an der Definition eines Kunden- oder Sonderangebots,
+für das Wochenangebot als `stdDesign` im Dokument `angebote`, für Einzelangebote am Eintrag in `einzelangebote`. Die Vorlagen
+stehen im eigenen Dokument `angebot-designs` (veröffentlicht wie `angebote`, Trennstufe 3 – die Kundenseite löst das Design
+auf): `{"rev", "vorlagen": [{"id", "name", "raster": {"spalten": 1–4, "format": "quer" | "hoch"}, "abschnitte": [{"art":
+"gruppen", "titel", "spalten"?, "inhalt": [{"bereich": Name} | {"gruppe": Name}]} | {"art": "text", "titel", "text"}],
+"angelegt", "geaendert"?}]}`. Bereiche und Gruppen stehen mit Namen, weil der Excel-Import die Gruppen-Kennungen je Woche neu
+vergibt. Gespeichert wird nur die Abweichung von der Vorlage; ohne Feld gilt das bisherige Verhalten (Standard: drei
+Spalten quer, kein Abschnitt). `offer_resolve`/`einzel_model` liefern nur `meta.design = {raster, abschnitte}` (wirksam);
+eine gelöschte Vorlage gilt als Standard. Eine Vorlage, die ein Angebot nutzt, lässt sich nicht löschen. Ältere Fassungen
+(Rückfall) übergehen die Felder.
 
 **Sonderangebote** (seit 13.11.2026, `module/angebot/sonderangebote.php`) stehen als Einträge mit `art: "sonder"` in
 derselben Liste: `{"id": "sonder-grillwoche", "name": "Grillwoche", "fallback": "hidden", "art": "sonder", "gueltig":

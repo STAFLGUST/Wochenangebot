@@ -2,7 +2,7 @@
 
 <!-- ERZEUGT von `python3 werkzeuge/doku.py erzeugen` – nicht von Hand ändern. Quelle: Funktionen und Kommentare im Code. Die CI prüft, dass diese Datei zum Code passt. -->
 
-55 Dateien, 847 Funktionen – in der Reihenfolge der Datei, **fett** die Abschnitte. Text = erste Aussage des Kommentars direkt über der Funktion (Python: Docstring). Übersicht aller Module: [README.md](README.md).
+58 Dateien, 894 Funktionen – in der Reihenfolge der Datei, **fett** die Abschnitte. Text = erste Aussage des Kommentars direkt über der Funktion (Python: Docstring). Übersicht aller Module: [README.md](README.md).
 
 ## `app/api/lib/angebote.php`
 
@@ -177,6 +177,25 @@ _Preisverlauf (Wochenstände)_
 - `preisverlauf_lesbar()` – Darf der angemeldete Nutzer den Preisverlauf lesen?
 - `history_undelete(id)`
 - `clean_history_items(items)`
+
+## `app/api/module/angebot/design.php`
+
+_Angebot · Design je Angebot (Inhaber 16.11.2026)_
+
+- `design_load()`
+- `design_vorlage(id)`
+- `design_raster_clean(v, teil)` – Raster einer Vorlage (alle Felder, Vorgabe Standard) bzw. einer Anpassung ($teil: nur die übergebenen Felder)
+- `design_text(v, max)` – Freier Text mit Zeilen: ohne Steuerzeichen, höchstens 30 Zeilen und $max Zeichen
+- `design_abschnitte_clean(v)`
+- `design_basis(vorlage)`
+- `design_wahl_clean(v)` – Design am Angebot prüfen: null = Standard ohne Anpassung.
+- `design_wirksam(wahl)` – Wirksames Layout eines Designs – null: Standard (bisheriges Verhalten, nichts ausgeliefert).
+- `design_nutzung()` – Vorlage-Kennung → Namen der Angebote, die sie nutzen
+- `design_text_wahl(wahl)`
+- `design_liste(me, oid)` – Daten für das Fenster „Design“: Vorlagen mit Nutzung und – mit $oid – das Design dieses Angebots
+- `design_vorlage_speichern(me, b)` – Vorlage anlegen ($b ohne id) oder ändern: {rev, id?, name, raster, abschnitte}; Recht prüft die Aktion
+- `design_vorlage_loeschen(me, b)` – Vorlage löschen: {rev, id} – nicht, solange ein Angebot sie nutzt (409 mit den Namen).
+- `design_setzen(me, oid, design)` – Design eines Angebots setzen ($design null = Standard): Kunden- und Sonderangebote, Wochenangebot („std“), Einzelangebote („e-…“).
 
 ## `app/api/module/angebot/druck.php`
 
@@ -733,18 +752,18 @@ _Wochenangebot – Eingabebereich Bearbeitet einen Entwurf auf dem Server (autom
 
 ## `app/assets/angebot-druck.js`
 
-_Angebot · Satz der Druckfassung „Angebotsansicht“ (A4 quer) für die Angebotsseite (frontend.js, Wunsch des Inhabers 13.11.2026)._
+_Angebot · Satz der Druckfassung „Angebotsansicht“ (A4) für die Angebotsseite (frontend.js, Wunsch des Inhabers 13.11.2026)._
 
 - `fussHTML(fuss, hinweis, art)`
 
 **Messen: Bausteine unsichtbar in Druckgröße setzen (eine Stufe)**
 
-- `messen(host, cfg, fuss, st)`
+- `messen(host, cfg, fuss, st, css)`
 
 **Verteilen**
 
 - `setzen(m, modus)`
-- `liste(cfg)` – cfg: { host (#print-root), bereiche: [{ name, kopfImBalken?, balken(forts, eh), gruppen: [{ n, block(von, bis, forts, ohneKopf), verteilen? }] }], …
+- `liste(cfg0)` – cfg: { host (#print-root), raster?: { spalten 1–4, format 'quer' \| 'hoch' } (ohne: drei Spalten quer), bereiche: [{ name, kopfImBalken?, balken(forts, eh), …
 
 ## `app/assets/frontend.js`
 
@@ -819,6 +838,10 @@ _Wochenangebot – öffentliches Frontend_
 - `plUnits(list, grouped, charsPerLine)`
 - `plSections(units)`
 - `plBlockHTML(b, mode)` – Ein Block: Nummer \| Bezeichnung \| Preis(e) \| [Merken].
+
+**Design des Angebots (Inhaber 16.11.2026; Server: api/module/angebot/design.php)**
+
+- `plAbschnitte(units, mitText)`
 - `renderListe(list, grouped)`
 - `buildPrintListe(list, grouped, scopeText)`
 - `cardHTML(it, grouped)`
@@ -855,6 +878,7 @@ _Wochenangebot – öffentliches Frontend_
 - `printPriceCell(p)`
 - `printAltNote(it)`
 - `buildPrint({…})`
+- `designFenster()`
 - `bilderBereit(root, ms)` – Bilder der Druckfassung (Logo, Siegel der Fußzeile) erst laden lassen – sonst fehlen sie im Druck, wenn sie noch nicht im Zwischenspeicher sind.
 - `doPrint(opts)`
 - `renderStaticTitle()`
@@ -1030,6 +1054,41 @@ _STAFL-Plattform · Angebot · Fenster „Aufbau des Angebots“ (Knopf „Edito
 - `bewegen(e)`
 - `loslassen(e)`
 
+## `app/module/angebot/design.js`
+
+_STAFL-Plattform · Angebot · Fenster „Design“ (Inhaber 16.11.2026)_
+
+**Bearbeitung: Raster und Abschnitte (Angebot und Vorlage)**
+
+- `refHTML(r, i, j)`
+- `abschnittHTML(a, i, n)`
+- `editorHTML(d, ro)`
+
+**Reiter**
+
+- `angebotHTML()`
+- `vorlagenHTML()`
+- `geruest()` – Gerüst einmal beim Öffnen (der Rahmen der Vorschau bleibt stehen – neu eingehängt würde er neu laden), danach nur die linke Seite und die Fußleiste neu
+- `zeichnen(fokus)`
+- `standZeigen()`
+
+**Vorschau (Angebotsseite im Rahmen)**
+
+- `rahmen()`
+- `vorschau(sofort)`
+
+**Öffnen, Laden, Speichern**
+
+- `laden(oid)`
+- `oeffnen(opt)`
+- `uebernehmen(w)` – gespeichertes Design des Angebots in den Zustand übernehmen
+- `neuLaden(meldung)`
+- `speichern(knopf)`
+- `vorlageSpeichern(knopf)`
+- `vorlageLoeschen(v)`
+- `fehler(t)`
+- `freierName(basisName)`
+
 ## `app/module/angebot/druck.js`
 
 _STAFL-Plattform · Angebot · Drucken aus „Angebot bearbeiten“ und Einstellung „Fußzeile im Druck“ (Wunsch des Inhabers 13.11.2026)._
@@ -1133,6 +1192,42 @@ _Gemeinsame Vorbereitung der Bestell-Testgruppen_
 
 - `setup()`
 - `customer(username, firma)`
+
+## `tests/e2e/test_angebot_design.py`
+
+_Design je Angebot (Inhaber 16.11.2026)_
+
+- `check(n, c, i)`
+- `doc(name)`
+
+**Rechte**
+
+**Grenzen**
+
+- `save(c, body)`
+
+**Design je Angebot**
+
+**Löschen nur ungenutzter Vorlagen**
+
+**Kopieren übernimmt das Design**
+
+**Kunde und Einzelangebot**
+
+**Browser: Kundenseite und Druck**
+
+- `ohne_doppel(xs)`
+- `druck(pg)`
+- `zurueck(pg)`
+- `laden(pg, pfad)`
+- `heil(s, b, h, kmax)`
+
+**Eingabebereich: Fenster „Design“ mit Live-Vorschau**
+
+- `anmelden(c, user, pw)`
+- `rahmen(a)`
+- `satz_im_rahmen(a, spalten, fmt)`
+- `oeffnen(a)`
 
 ## `tests/e2e/test_angebote.py`
 
