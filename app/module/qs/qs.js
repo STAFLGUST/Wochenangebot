@@ -743,7 +743,7 @@
     saZeigen();
     $('#sa-meldung').className = 'qm-meldung' + (fehl ? '' : ' ok');
     $('#sa-meldung').textContent = saBericht(S2.eintraege, S2.abbrechen);
-    toast(fehl ? `${zahl(fehl)} Dateien nicht abgelegt – Gründe in der Liste.` : `Sammel-Ablage: ${zahl(fertig)} ${fertig === 1 ? 'Datei' : 'Dateien'} abgelegt`, !!fehl);
+    toast(fehl ? `${dateienText(fehl)} nicht abgelegt – Gründe in der Liste.` : `Sammel-Ablage: ${dateienText(fertig)} abgelegt`, !!fehl);
   });
 
   /* Export der Ablage als ZIP: der Server erstellt das Archiv erst beim Herunterladen (direkt in die Antwort) */
