@@ -146,6 +146,9 @@ SUITES['qs'] = (8790, 'data-seed', True)   # QM-System (app/module/qs/, Oberflä
 SUITES['qs_ablage'] = (8790, 'data-seed', True)   # QM-System: Dokumentenablage (lib/dateiablage.php) mit Hochladen in Teilen, Download und ZIP-Export
 SUITES['qs_eingang'] = (8790, 'data-seed', True)   # QM-System: Eingang (Dateien ohne Ziel) – zuordnen, löschen, Rechte, Grenzen
 SUITES['qs_import'] = (8790, 'data-seed', True)   # QM-System: Ordner-Import (Plan, gebündeltes Eintragen, Bereiche) und Ordnerbaum
+# Dateiablage: Dateiarten und Höchstgröße unter memory_limit 128M wie im Betrieb; zwei PHP-Prozesse, damit eine Anfrage während eines
+# laufenden Downloads derselben Sitzung ankommt (Sitzungssperre)
+SUITES['ablage_grenzen'] = (8790, 'data-seed', True, {'PHP_INI_SCAN_DIR': ':' + os.path.join(REPO, 'tests', 'fixtures', 'php'), 'PHP_CLI_SERVER_WORKERS': '2'})
 SUITES['qs_vorlagen'] = (8790, 'data-seed', True)   # QM-System: Dokumente aus Word-/Excel-Vorlagen, Nummernstruktur, Lenkungsangaben bei der Freigabe
 SUITES['qs_bericht'] = (8790, 'data-seed', True)   # QM-System: Audit-Bericht eines Zeitraums (Ansicht, Excel, Druck)
 SUITES['qs_verfahren'] = (8790, 'data-seed', True)   # QM-System: Verfahrensdokumentation nach GoBD (Fassungen, Export für Prüfungen als PDF/ZIP)
@@ -190,6 +193,7 @@ GEWICHT = {
     'qs_ablage': 25,   # geschätzt (Oktober 2026), noch ohne CI-Median
     'qs_eingang': 30,   # geschätzt (November 2026), noch ohne CI-Median
     'qs_import': 40,   # geschätzt (November 2026), noch ohne CI-Median
+    'ablage_grenzen': 15,   # geschätzt (November 2026, lokal 10 s), noch ohne CI-Median
     'qs_vorlagen': 25,   # geschätzt (Oktober 2026), noch ohne CI-Median
     'qs_bericht': 20,   # geschätzt (Oktober 2026), noch ohne CI-Median
     'qs_verfahren': 30,   # geschätzt (November 2026), noch ohne CI-Median

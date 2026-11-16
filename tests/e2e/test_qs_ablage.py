@@ -147,8 +147,8 @@ PERS = [{'id': 'QB', 'name': 'Quinn Beispiel', 'funktion': 'QMB', 'mitarbeiter':
 check('Kapitel und Personen', V.call('qs_stamm_save', {'kapitel': KAP, 'personen': PERS})[0] == 200)
 
 st, r = L.call('qs_start')
-MAX = r['ablage']['max']   # Höchstgröße liest jede Prüfung vom Server (Plattformkern, lib/dateiablage.php)
-check('Start: Einstellungen der Ablage (Endungen, Höchstgröße, Teile zu 3 MB, 1000 Dateien je Version, 10 000 je Ordner)', st == 200 and MAX >= 25 * MB and r['ablage']['teil'] == TEIL
+MAX = r['ablage']['max']   # Grenze je Datei vom Server; ihren Wert prüft die Gruppe ablage_grenzen
+check('Start: Einstellungen der Ablage (Endungen, Höchstgröße je Datei, Teile zu 3 MB, 1000 Dateien je Version, 10 000 je Ordner)', st == 200 and MAX > TEIL and r['ablage']['teil'] == TEIL
       and r['ablage']['dateien'] == 1000 and r['ablage']['ordner'] == 10000 and {'pdf', 'docx', 'xlsx', 'xls', 'msg', 'png', 'jpg'} <= set(r['ablage']['arten']) and 'exe' not in r['ablage']['arten'] and 'php' not in r['ablage']['arten'], r.get('ablage'))
 
 
@@ -206,8 +206,8 @@ st, r, _ = hochladen(Be, D1, V1, 'Bericht.pdf', b'MZ\x90\0' + b'\0' * 200)
 check('Programm mit Endung .pdf → 422 (Inhalt passt nicht)', st == 422 and 'passt nicht' in r.get('error', ''), r)
 st, r, _ = hochladen(Be, D1, V1, 'Notiz.txt', b'<html><script>alert(1)</script></html>')
 check('HTML mit Endung .txt → 422', st == 422 and 'passt nicht' in r.get('error', ''), r)
-st, r, _ = hochladen(Be, D1, V1, 'Liste.xlsx', XLS)
-check('Office 97 mit Endung .xlsx → 422', st == 422, r)
+st, r, _ = hochladen(Be, D1, V1, 'Liste.odt', XLS)
+check('Office 97 mit Endung .odt → 422 (OLE nur bei Word/Excel/PowerPoint: alte Art oder mit Kennwort)', st == 422 and 'passt nicht' in r.get('error', ''), r)
 st, r, _ = hochladen(Be, D1, V1, 'Falsch.pdf', pdf('x', 5000), sha='0' * 64)
 check('falsche Prüfsumme → 422', st == 422 and 'Prüfsumme' in r.get('error', ''), r)
 check('nach Fehlern: keine Datei in der Ablage, keine Reste der Teile', blobs() == [] and teile_reste() == [], (blobs(), teile_reste()))

@@ -418,6 +418,15 @@ check('große Word-Datei (28 MB XML): Bündel heil, Datei im Entwurf ohne Platzh
       and plg[G + '/1.4-F02.docx']['status'] == 'dokument' and r['uploads'][ugw]['status'] == 'abgelegt' and r['uploads'][ubg]['status'] == 'eingang'
       and gf and 'platzhalter' not in gf, (st, r, gf))
 
+# ── #375: ein ZIP mit gesperrter Art (Rechnung.exe) wird auch gebündelt schon beim letzten Teil abgelehnt und landet nie in der Ablage ──
+zb = io.BytesIO()
+with zipfile.ZipFile(zb, 'w') as z:
+    z.writestr('Belege/Rechnung.pdf', pdf('Rechnung')); z.writestr('Belege/Rechnung.exe', b'MZ' + b'\0' * 64)
+vorher, teile = blobs(), set(glob.glob(os.path.join(ABLAGE, '.teile', '*')))
+st, r = hochladen(Q, '', '', 'Belege.zip', zb.getvalue(), {'sammeln': True, 'herkunft': G + '/Belege'})
+check('gebündelter Upload: ZIP mit Rechnung.exe abgelehnt (422), kein fertiger Upload, keine Datei in der Ablage', st == 422 and 'Rechnung.exe' in r.get('error', '')
+      and not r.get('upload') and blobs() == vorher and set(glob.glob(os.path.join(ABLAGE, '.teile', '*'))) <= teile, (st, r))
+
 # ── Abbruch beim Schreiben (Review 2, MITTEL 4): qs-ablage lässt sich nicht schreiben, nachdem qs-dokumente geschrieben ist (Dateimodus)
 #    bzw. alles wird zurückgesetzt (SQLite). Danach zeigt keine Version auf eine fehlende Datei, und es bleibt keine verwaiste Datei ──
 st, r, plb = plan(Q, [G + '/1.4-F05.docx', G + '/Reinigungsnachweise/2025/Abbruch.pdf'], ANG)

@@ -11,34 +11,71 @@ declare(strict_types=1);
    ABLAGE_TEIL_MAX Bytes) eines Uploads unter data/dateien/.teile/, prüft beim letzten Teil Größe, SHA-256 und Dateiart
    (Endung und Dateikopf passen zusammen) und legt die Datei ab – oder lässt sie als fertigen Upload liegen, bis
    ablage_fertig_ablegen() sie übernimmt (gebündeltes Eintragen vieler Dateien). Ein Upload gehört dem Nutzer, der ihn begonnen hat.
-   Vom Server erzeugte Dateien (z. B. aus einer Vorlage ausgefüllt) legt ablage_ablegen() ab, ablage_kopieren() kopiert eine Datei
-   unter neuer Kennung (z. B. in eine neue Version), ablage_lesen() liefert den Inhalt.
+   Ein Upload beginnt nur, wenn danach noch ABLAGE_RESERVE auf der Platte frei bleibt. Ein ZIP-Archiv darf keine Einträge
+   gesperrter Arten enthalten (ohne Entpacken: Verzeichnis, lokale Köpfe, Unicode-Pfad; höchstens ABLAGE_ZIP_EINTRAEGE_MAX) – geprüft
+   beim letzten Teil, also auch für fertige Uploads, die erst ablage_fertig_ablegen() übernimmt.
+   Vom Server erzeugte Dateien (z. B. aus einer Vorlage ausgefüllt) legt ablage_ablegen() ab, ablage_kopieren() legt eine Datei
+   unter neuer Kennung ab (z. B. in eine neue Version; fester Verweis, da Ablage-Dateien sich nie ändern), ablage_lesen()
+   liefert den Inhalt (nur bis ABLAGE_LESEN_MAX). Downloads geben die Sitzung vor dem Senden frei.
+   Große Dateien: Zusammensetzen, Prüfsumme und Kopfprüfung arbeiten auf der Datei, nie auf dem ganzen Inhalt im Speicher.
    ZIP-Export: ablage_zip_senden() schreibt ein ZIP (Methode „stored“, UTF-8-Namen) direkt in die Antwort – ohne die
-   PHP-Erweiterung „zip“ und ohne das ganze Archiv im Speicher zu halten. */
+   PHP-Erweiterung „zip“ und ohne das ganze Archiv im Speicher zu halten; ab 4 GB bzw. 65535 Einträgen mit Zip64-Feldern. */
 if (!defined('WA_API')) { http_response_code(404); exit; }   // nur über api/index.php nutzbar
 
 const ABLAGE_TEIL_MAX = 3 * 1024 * 1024;        // Bytes je Teil (Base64 ≈ 4 MB, unter der Grenze des API-Einstiegs)
-const ABLAGE_DATEI_MAX = 25 * 1024 * 1024;      // Bytes je Datei
+const ABLAGE_DATEI_MAX = 250 * 1024 * 1024;     // Bytes je Datei (Inhaber 16.11.2026: ganzes QM-System mit Videos und ZIP)
+const ABLAGE_LESEN_MAX = 25 * 1024 * 1024;      // ablage_lesen() hält die ganze Datei im Speicher
+/* Frei nach einem Upload: die Schwelle, ab der Sicherheit → System „Freier Speicher“ warnt (lib/diagnose.php), und die Reserve
+   der Sicherung (deploy/sichern.sh) – Datenbank, Protokolle und Sicherung brauchen den Platz auch bei voller Ablage */
+const ABLAGE_RESERVE = 5 * 1024 * 1024 * 1024;
 const ABLAGE_UPLOAD_STUNDEN = 24;               // unvollständige Uploads werden danach entfernt
-const ABLAGE_ZIP_MAX = 3500 * 1024 * 1024;      // ZIP ohne Zip64: unter 4 GB bleiben
-/* Erlaubte Dateiarten: Endung → [MIME-Typ, erwarteter Dateikopf] (ole = Office 97–2003/Outlook, zip = Office Open XML/ODF) */
+/* Nie erlaubt, auch nicht als Eintrag eines ZIP-Archivs: Arten, die beim Öffnen Code ausführen – im Browser bzw. unter Windows */
+const ABLAGE_GESPERRT = ['html', 'htm', 'xhtml', 'svg', 'js', 'exe', 'com', 'scr', 'msi', 'bat', 'cmd', 'ps1', 'vbs', 'jar', 'hta', 'lnk', 'reg'];
+/* Erlaubte Dateiarten: Endung → [MIME-Typ, Kopfprüfung aus ABLAGE_KOEPFE bzw. „text“/„binaer“]. Unbekannte Endungen bleiben
+   abgelehnt. Ein ZIP-Archiv wird nicht entpackt; geprüft werden die Namen seiner Einträge (ablage_zip_pruefen). */
 const ABLAGE_ARTEN = [
     'pdf' => ['application/pdf', 'pdf'],
     'doc' => ['application/msword', 'ole'], 'dot' => ['application/msword', 'ole'],
-    'docx' => ['application/vnd.openxmlformats-officedocument.wordprocessingml.document', 'zip'],
-    'dotx' => ['application/vnd.openxmlformats-officedocument.wordprocessingml.template', 'zip'],
+    'docx' => ['application/vnd.openxmlformats-officedocument.wordprocessingml.document', 'ooxml'],
+    'dotx' => ['application/vnd.openxmlformats-officedocument.wordprocessingml.template', 'ooxml'],
     'xls' => ['application/vnd.ms-excel', 'ole'], 'xlt' => ['application/vnd.ms-excel', 'ole'],
-    'xlsx' => ['application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', 'zip'],
-    'xlsm' => ['application/vnd.ms-excel.sheet.macroEnabled.12', 'zip'],
-    'xltx' => ['application/vnd.openxmlformats-officedocument.spreadsheetml.template', 'zip'],
+    'xlsx' => ['application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', 'ooxml'],
+    'xlsm' => ['application/vnd.ms-excel.sheet.macroEnabled.12', 'ooxml'],
+    'xltx' => ['application/vnd.openxmlformats-officedocument.spreadsheetml.template', 'ooxml'],
     'ppt' => ['application/vnd.ms-powerpoint', 'ole'],
-    'pptx' => ['application/vnd.openxmlformats-officedocument.presentationml.presentation', 'zip'],
-    'odt' => ['application/vnd.oasis.opendocument.text', 'zip'], 'ods' => ['application/vnd.oasis.opendocument.spreadsheet', 'zip'],
-    'odp' => ['application/vnd.oasis.opendocument.presentation', 'zip'],
-    'vsdx' => ['application/vnd.ms-visio.drawing', 'zip'],
+    'pptx' => ['application/vnd.openxmlformats-officedocument.presentationml.presentation', 'ooxml'],
+    'odt' => ['application/vnd.oasis.opendocument.text', 'office'], 'ods' => ['application/vnd.oasis.opendocument.spreadsheet', 'office'],
+    'odp' => ['application/vnd.oasis.opendocument.presentation', 'office'],
+    'vsdx' => ['application/vnd.ms-visio.drawing', 'ooxml'],
     'msg' => ['application/vnd.ms-outlook', 'ole'], 'eml' => ['message/rfc822', 'text'],
     'rtf' => ['application/rtf', 'rtf'], 'txt' => ['text/plain', 'text'], 'csv' => ['text/csv', 'text'],
     'png' => ['image/png', 'png'], 'jpg' => ['image/jpeg', 'jpg'], 'jpeg' => ['image/jpeg', 'jpg'], 'gif' => ['image/gif', 'gif'],
+    'heic' => ['image/heic', 'heic'], 'heif' => ['image/heif', 'heic'], 'tif' => ['image/tiff', 'tif'], 'tiff' => ['image/tiff', 'tif'],
+    'bmp' => ['image/bmp', 'bmp'],
+    'mov' => ['video/quicktime', 'video'], 'mp4' => ['video/mp4', 'video'], 'm4v' => ['video/x-m4v', 'video'],
+    'opus' => ['audio/ogg', 'ogg'], 'ogg' => ['audio/ogg', 'ogg'],
+    'zip' => ['application/zip', 'zip'], 'xlsb' => ['application/vnd.ms-excel.sheet.binary.macroEnabled.12', 'ooxml'],
+    'json' => ['application/json', 'text'], 'ics' => ['text/calendar', 'text'],
+    'ttv' => ['application/octet-stream', 'binaer'],   // Trendview-Datenschreiber: Binärformat ohne festen Kopf
+];
+/* Erwartete Dateiköpfe: Liste von [Versatz, Bytes], einer muss passen */
+const ABLAGE_KOEPFE = [
+    'pdf' => [[0, '%PDF-']],
+    'zip' => [[0, "PK\x03\x04"], [0, "PK\x05\x06"]],   // PK\5\6: leeres ZIP
+    'office' => [[0, "PK\x03\x04"]],                     // OpenDocument: ZIP-Archiv, nie leer, auch mit Kennwort
+    // Microsoft Office speichert eine Datei mit Kennwort als OLE-Container; ein OLE-Container ist als .doc/.xls ohnehin erlaubt
+    'ooxml' => [[0, "PK\x03\x04"], [0, "\xD0\xCF\x11\xE0\xA1\xB1\x1A\xE1"]],
+    'ole' => [[0, "\xD0\xCF\x11\xE0\xA1\xB1\x1A\xE1"]],
+    'png' => [[0, "\x89PNG\r\n\x1a\n"]],
+    'jpg' => [[0, "\xFF\xD8\xFF"]],
+    'gif' => [[0, 'GIF87a'], [0, 'GIF89a']],
+    'rtf' => [[0, '{\\rtf']],
+    'tif' => [[0, "II*\0"], [0, "MM\0*"]],
+    'bmp' => [[0, 'BM']],
+    'ogg' => [[0, 'OggS']],
+    // ISO-BMFF (MP4, neuere MOV): „ftyp“ an Byte 4; ältere QuickTime-Dateien beginnen mit einem anderen Block der obersten Ebene
+    'video' => [[4, 'ftyp'], [4, 'moov'], [4, 'mdat'], [4, 'wide'], [4, 'free'], [4, 'skip'], [4, 'pnot']],
+    'heic' => [[4, 'ftypheic'], [4, 'ftypheix'], [4, 'ftyphevc'], [4, 'ftyphevx'], [4, 'ftypmif1'], [4, 'ftypmsf1']],
 ];
 
 /* ---------- Pfade und Namen ---------- */
@@ -59,6 +96,7 @@ function ablage_pfad(string $bereich, string $id): string
     return ablage_wurzel() . '/' . ablage_bereich($bereich) . '/' . substr($id, 0, 2) . '/' . $id . '.bin';
 }
 function ablage_neue_id(): string { return bin2hex(random_bytes(10)); }
+function ablage_mb(int $bytes): string { return intdiv($bytes, 1048576) . ' MB'; }
 /* Dateiname für Anzeige und Download: ohne Pfad, Steuer- und unter Windows verbotene Zeichen, höchstens 150 Zeichen,
    Endung bleibt erhalten. Leer → InvalidArgumentException. */
 function ablage_dateiname($v): string
@@ -80,7 +118,7 @@ function ablage_dateiname($v): string
 function ablage_art(string $name): string
 {
     $e = strtolower(pathinfo($name, PATHINFO_EXTENSION));
-    if (!isset(ABLAGE_ARTEN[$e])) throw new InvalidArgumentException('Diese Dateiart ist nicht erlaubt. Erlaubt sind ' . implode(', ', array_keys(ABLAGE_ARTEN)) . '.');
+    if (!isset(ABLAGE_ARTEN[$e]) || in_array($e, ABLAGE_GESPERRT, true)) throw new InvalidArgumentException('Diese Dateiart ist nicht erlaubt. Erlaubt sind ' . implode(', ', array_keys(ABLAGE_ARTEN)) . '.');
     return $e;
 }
 /* Passt der Dateikopf zur Endung? (verhindert z. B. ein Programm mit Endung .pdf) */
@@ -90,16 +128,142 @@ function ablage_inhalt_passt(string $pfad, string $art): bool
     if (!$fh) return false;
     $kopf = (string)fread($fh, 8192);
     fclose($fh);
-    $soll = ABLAGE_ARTEN[$art][1] ?? '';
-    if ($soll === 'pdf') return strncmp($kopf, '%PDF-', 5) === 0;
-    if ($soll === 'zip') return strncmp($kopf, "PK\x03\x04", 4) === 0;
-    if ($soll === 'ole') return strncmp($kopf, "\xD0\xCF\x11\xE0\xA1\xB1\x1A\xE1", 8) === 0;
-    if ($soll === 'png') return strncmp($kopf, "\x89PNG\r\n\x1a\n", 8) === 0;
-    if ($soll === 'jpg') return strncmp($kopf, "\xFF\xD8\xFF", 3) === 0;
-    if ($soll === 'gif') return strncmp($kopf, 'GIF87a', 6) === 0 || strncmp($kopf, 'GIF89a', 6) === 0;
-    if ($soll === 'rtf') return strncmp($kopf, '{\\rtf', 5) === 0;
-    if ($soll === 'text') return strpos($kopf, "\0") === false && strncmp($kopf, 'MZ', 2) !== 0 && stripos(ltrim($kopf), '<') !== 0;
+    if (strncmp($kopf, 'MZ', 2) === 0) return false;   // Windows-Programm, gleich mit welcher Endung
+    $soll = ABLAGE_ARTEN[$art][1];
+    // „<“ nur bei Arten ohne festen Kopf: ein MP4 mit 60 Byte langem ftyp-Block beginnt mit \0\0\0<
+    if ($soll === 'text') return strpos($kopf, "\0") === false && strncmp(ltrim($kopf), '<', 1) !== 0;
+    if ($soll === 'binaer') return strncmp(ltrim($kopf, " \t\r\n"), '<', 1) !== 0;
+    foreach (ABLAGE_KOEPFE[$soll] as [$pos, $bytes]) if (substr($kopf, $pos, strlen($bytes)) === $bytes) return true;
     return false;
+}
+/* ZIP-Aufbau (PKWARE APPNOTE 4.3): Signatur und feste Länge der Sätze. Der Höchstwert eines 16-/32-Bit-Feldes heißt „siehe Zip64“. */
+const ABLAGE_ZIP_SAETZE = [
+    'lokal' => ["PK\x03\x04", 30],       // Kopf vor jedem Inhalt
+    'eintrag' => ["PK\x01\x02", 46],     // Eintrag im zentralen Verzeichnis
+    'ende64' => ["PK\x06\x06", 56],      // Zip64-Ende (ohne erweiterbaren Teil, den nur verschlüsselte Verzeichnisse nutzen)
+    'verweis64' => ["PK\x06\x07", 20],   // Verweis auf das Zip64-Ende, direkt vor dem Ende
+    'ende' => ["PK\x05\x06", 22],        // Ende des Verzeichnisses, danach der Kommentar
+];
+const ABLAGE_ZIP_VOLL16 = 0xFFFF;
+const ABLAGE_ZIP_VOLL32 = 0xFFFFFFFF;
+const ABLAGE_ZIP_FELD_ZIP64 = 0x0001;
+const ABLAGE_ZIP_FELD_UNICODE = 0x7075;   // Unicode-Pfad (Info-ZIP): Version, Prüfsumme des Namens, Name in UTF-8
+/* Zusatzfelder je Kopf: Packer schreiben bis zu fünf (Zeiten, Unix-Kennung, Zip64, Unicode-Pfad, Verschlüsselung). Mehr hält
+   nur die Prüfung auf (65535 Bytes leerer Felder sind 16383 Felder). */
+const ABLAGE_ZIP_FELDER_MAX = 16;
+/* Höchstzahl der Einträge je ZIP: ein QM-Archiv hat höchstens einige Zehntausend (das ganze QM-System rund 15.000 Dateien).
+   Bis zur Grenze dauert die Prüfung höchstens rund 3 s; 250 MB voller kleinster Einträge (3,4 Mio.) bräuchten 20 bis 30 s. */
+const ABLAGE_ZIP_EINTRAEGE_MAX = 200000;
+const ABLAGE_ZIP_MELDUNG_MAX = 5;          // so viele gesperrte Einträge nennt die Meldung
+/* Namen eines ZIP-Archivs gegen ABLAGE_GESPERRT prüfen, ohne zu entpacken (auch Zip64); wirft bei gesperrter Endung, mehr als
+   ABLAGE_ZIP_EINTRAEGE_MAX Einträgen oder unklarem Aufbau. Geprüft wird jeder Name, den ein Entpacker zeigen könnte: im
+   Verzeichnis, im lokalen Kopf (muss gleich sein) und im Unicode-Pfad beider. Das Verzeichnis muss lückenlos direkt vor dem Ende
+   stehen und genau die angegebene Zahl Einträge haben – sonst lesen Python, Go, Java oder unzip womöglich andere Einträge.
+   Die lokalen Köpfe liegen lückenlos ab Byte 0 in der Reihenfolge des Verzeichnisses – sonst zeigt z. B. 7-Zip versteckte Köpfe.
+   Ein ZIP im ZIP wird nicht geöffnet.
+   Bekannte Grenze: steht die Größe erst hinter den Daten (Data Descriptor, Bit 3), kann ein Eintrag in seinen Daten einen
+   Descriptor und einen weiteren lokalen Kopf verbergen. Den sehen nur Leser ohne Verzeichnis (Java ZipInputStream, bsdtar über
+   eine Pipe), nicht 7-Zip, Windows, Python oder unzip; erkennen hieße die Daten entpacken. */
+function ablage_zip_pruefen(string $pfad): void
+{
+    $kaputt = new InvalidArgumentException('Das ZIP-Archiv ist beschädigt (Inhaltsverzeichnis nicht lesbar).');
+    $groesse = (int)filesize($pfad);
+    $fh = fopen($pfad, 'rb');
+    if ($fh === false) throw new RuntimeException('Ablage nicht lesbar');
+    try {
+        $lesen = function (int $pos, int $n) use ($fh): string { if ($n < 1 || $pos < 0) return ''; fseek($fh, $pos); return (string)fread($fh, $n); };
+        $satz = function (int $pos, string $art) use ($lesen, $kaputt): string {
+            [$sig, $n] = ABLAGE_ZIP_SAETZE[$art];
+            $s = $lesen($pos, $n);
+            return strlen($s) === $n && str_starts_with($s, $sig) ? $s : throw $kaputt;
+        };
+        // Ende: der letzte Satz, der ganz in die Datei passt (so suchen Go und Java), danach der Kommentar bis zum Dateiende –
+        // höchstens noch NUL-Bytes: bsdtar (auch tar.exe unter Windows) füllt beim Schreiben nach stdout ganze Blöcke auf
+        [$endeSig, $endeLaenge] = ABLAGE_ZIP_SAETZE['ende'];
+        $endeAb = max(0, $groesse - $endeLaenge - ABLAGE_ZIP_VOLL16);
+        $ende = $lesen($endeAb, $groesse - $endeAb);
+        $p = strlen($ende) < $endeLaenge ? false : strrpos($ende, $endeSig, -$endeLaenge);
+        if ($p === false) throw $kaputt;
+        $e = unpack('x10/vanzahl/Vlaenge/Vstart/vkommentar', $ende, $p);
+        $kommentarEnde = $p + $endeLaenge + $e['kommentar'];
+        if ($kommentarEnde > strlen($ende) || strspn($ende, "\0", $kommentarEnde) !== strlen($ende) - $kommentarEnde) throw $kaputt;
+        $verzEnde = $endeAb + $p;
+        $verz = $e;   // Zahl der Einträge, Länge und Beginn des Verzeichnisses
+        $verweisPos = $verzEnde - ABLAGE_ZIP_SAETZE['verweis64'][1];
+        $zip64 = str_starts_with($lesen($verweisPos, 4), ABLAGE_ZIP_SAETZE['verweis64'][0]);
+        if ($zip64) {   // wie bei Python, sobald der Verweis da ist; klassische Felder: Höchstwert oder gleicher Wert (wie bei Java)
+            $verzEnde = unpack('x8/Pende64', $satz($verweisPos, 'verweis64'))['ende64'];
+            $verz = unpack('x32/Panzahl/Plaenge/Pstart', $satz($verzEnde, 'ende64'));
+            if ($verzEnde + ABLAGE_ZIP_SAETZE['ende64'][1] !== $verweisPos) throw $kaputt;   // ohne erweiterbaren Teil
+            foreach (['anzahl' => ABLAGE_ZIP_VOLL16, 'laenge' => ABLAGE_ZIP_VOLL32, 'start' => ABLAGE_ZIP_VOLL32] as $k => $voll)
+                if ($e[$k] !== $voll && $e[$k] !== $verz[$k]) throw $kaputt;
+        }
+        if ($verz['start'] + $verz['laenge'] !== $verzEnde) throw $kaputt;
+        // Windows: „a.exe. “ = „a.exe“, „a.exe:x“ = Datenstrom von a.exe; Python, bsdtar: „a.exe/.“, „a.exe\“ = Datei a.exe (Ordner enden auf „/“)
+        $muster = '/\.(?:' . implode('|', ABLAGE_GESPERRT) . ')(?:[ .]*:|[ .\/\\\\]*(?<!\/)$)/iD';
+        // Zip64-Feld eines Kopfes: enthält nur die Werte, die im Kopf Höchstwert sind, in dieser Reihenfolge
+        $zip64Werte = function (array $kopf, array $felder) use ($kaputt): array {
+            $z64 = $felder[ABLAGE_ZIP_FELD_ZIP64][0] ?? '';
+            foreach (['groesse', 'gepackt', 'versatz'] as $k) {
+                if (($kopf[$k] ?? 0) !== ABLAGE_ZIP_VOLL32) continue;
+                if (strlen($z64) < 8) throw $kaputt;
+                $kopf[$k] = unpack('P', $z64)[1];
+                $z64 = substr($z64, 8);
+            }
+            return $kopf;
+        };
+        $gelesen = $zahlGesperrt = 0;
+        $gesperrt = [];
+        $naechster = [0];   // wo der nächste lokale Kopf (zuletzt: das Verzeichnis) beginnen darf
+        for ($pos = $verz['start']; $pos < $verzEnde; $gelesen++) {
+            if ($gelesen === ABLAGE_ZIP_EINTRAEGE_MAX) throw new InvalidArgumentException('Das ZIP-Archiv hat mehr als ' . number_format(ABLAGE_ZIP_EINTRAEGE_MAX, 0, ',', '.') . ' Einträge. Bitte in kleinere Archive teilen.');
+            $c = unpack('x20/Vgepackt/Vgroesse/vname/vextra/vkommentar/x8/Vversatz', $satz($pos, 'eintrag'));
+            $pos += ABLAGE_ZIP_SAETZE['eintrag'][1];
+            $name = $lesen($pos, $c['name']);
+            $felder = ablage_zip_felder($lesen($pos + $c['name'], $c['extra'])) ?? throw $kaputt;
+            $pos += $c['name'] + $c['extra'] + $c['kommentar'];
+            if ($pos > $verzEnde) throw $kaputt;
+            $c = $zip64Werte($c, $felder);
+            // lückenlos: jeder lokale Kopf beginnt genau nach den Daten (und dem Data Descriptor) des vorigen, mit gleichem Namen;
+            // ohne Data Descriptor nennt er dieselbe gepackte Größe. Ein negativer Wert (≥ 2^63) würde Köpfe überlappen lassen.
+            if (!in_array($c['versatz'], $naechster, true) || $c['gepackt'] < 0) throw $kaputt;
+            $l = unpack('x6/vflags/x10/Vgepackt/Vgroesse/vname/vextra', $satz($c['versatz'], 'lokal'));
+            $lokal = $c['versatz'] + ABLAGE_ZIP_SAETZE['lokal'][1];
+            if ($lesen($lokal, $l['name']) !== $name) throw $kaputt;
+            $lfelder = ablage_zip_felder($lesen($lokal + $l['name'], $l['extra'])) ?? throw $kaputt;
+            $descriptor = ($l['flags'] & 8) !== 0;
+            if (!$descriptor && $zip64Werte($l, $lfelder)['gepackt'] !== $c['gepackt']) throw $kaputt;
+            $datenEnde = $lokal + $l['name'] + $l['extra'] + $c['gepackt'];
+            // Data Descriptor: CRC und zwei Größen zu 4 oder 8 Bytes, mit oder ohne Signatur
+            $naechster = $descriptor ? [$datenEnde + 12, $datenEnde + 16, $datenEnde + 20, $datenEnde + 24] : [$datenEnde];
+            $namen = [$name];
+            foreach ([$felder, $lfelder] as $f)
+                foreach ($f[ABLAGE_ZIP_FELD_UNICODE] ?? [] as $u) $namen[] = substr($u, 5);   // nach Version (1) und Prüfsumme (4)
+            foreach ($namen as $n) {
+                if (str_contains($n, "\0")) throw $kaputt;   // Python und Go schneiden dort ab: „a.exe\0.txt“ wird zu „a.exe“
+                if (preg_match($muster, $n) === 0) continue;   // ein Fehler der Suche (false) sperrt
+                if (++$zahlGesperrt <= ABLAGE_ZIP_MELDUNG_MAX) $gesperrt[] = '„' . mb_substr(mb_scrub($n), 0, 150) . '“';
+                break;
+            }
+        }
+        // 16-Bit-Zahl ohne Zip64 modulo 65536 (so zählen Go und unzip; 65535 Einträge schreibt Python ohne Zip64)
+        if ($pos !== $verzEnde || !in_array($verz['start'], $naechster, true) || ($zip64 ? $gelesen : $gelesen & ABLAGE_ZIP_VOLL16) !== $verz['anzahl']) throw $kaputt;
+        if ($gesperrt) throw new InvalidArgumentException('Das ZIP-Archiv enthält gesperrte Dateiarten: ' . implode(', ', $gesperrt)
+            . ($zahlGesperrt > count($gesperrt) ? ' und ' . ($zahlGesperrt - count($gesperrt)) . ' weitere' : '') . '.');
+    } finally {
+        fclose($fh);
+    }
+}
+/* Zusatzfelder eines ZIP-Kopfes → [Kennung => [Inhalt, …]]; null, wenn ein Feld abgeschnitten ist (wie bei Python) oder es mehr
+   als ABLAGE_ZIP_FELDER_MAX sind */
+function ablage_zip_felder(string $z): ?array
+{
+    for ($felder = [], $i = 0, $k = 0; $i + 4 <= strlen($z); $i += 4 + $f['n']) {
+        $f = unpack('vid/vn', $z, $i);
+        if ($i + 4 + $f['n'] > strlen($z) || ++$k > ABLAGE_ZIP_FELDER_MAX) return null;
+        $felder[$f['id']][] = substr($z, $i + 4, $f['n']);
+    }
+    return $felder;
 }
 
 /* ---------- Hochladen in Teilen ---------- */
@@ -139,7 +303,10 @@ function ablage_teil(string $bereich, string $nutzerId, array $ziel, array $b, b
         $art = ablage_art($name);
         $groesse = $b['groesse'] ?? null;
         if (!is_int($groesse) || $groesse < 1) throw new InvalidArgumentException('Die Datei ist leer.');
-        if ($groesse > ABLAGE_DATEI_MAX) throw new InvalidArgumentException('Die Datei ist zu groß (höchstens ' . (int)(ABLAGE_DATEI_MAX / 1048576) . ' MB).');
+        if ($groesse > ABLAGE_DATEI_MAX) throw new InvalidArgumentException('Die Datei ist zu groß (höchstens ' . ablage_mb(ABLAGE_DATEI_MAX) . ').');
+        $frei = @disk_free_space($ordner);   // false (nicht ermittelbar): wie bisher annehmen
+        if ($frei !== false && !ablage_platz_reicht($frei, $groesse))
+            throw new InvalidArgumentException('Auf dem Server ist nicht genug Speicherplatz für diese Datei frei. Bitte den Administrator informieren.');
         $sha = is_string($b['sha256'] ?? null) ? strtolower($b['sha256']) : '';
         if ($sha !== '' && !preg_match('/^[0-9a-f]{64}$/D', $sha)) throw new InvalidArgumentException('Ungültige Prüfsumme.');
         $upload = bin2hex(random_bytes(12));
@@ -170,6 +337,7 @@ function ablage_teil(string $bereich, string $nutzerId, array $ziel, array $b, b
         $sha = (string)hash_file('sha256', $teilPfad);
         if ($meta['sha256'] !== '' && !hash_equals($meta['sha256'], $sha)) throw new InvalidArgumentException('Die Datei kam beschädigt an (Prüfsumme). Bitte erneut hochladen.');
         if (!ablage_inhalt_passt($teilPfad, $meta['art'])) throw new InvalidArgumentException('Der Inhalt passt nicht zur Dateiendung „.' . $meta['art'] . '“.');
+        if ($meta['art'] === 'zip') ablage_zip_pruefen($teilPfad);   // vor „fertig“: auch gebündelte Uploads (ablage_fertig_ablegen)
         $meta['sha256'] = $sha; $meta['fertig'] = true;
         if (file_put_contents("$ordner/$upload-meta.tmp", json_encode($meta), LOCK_EX) === false) throw new RuntimeException('Ablage nicht beschreibbar');
     } catch (Throwable $e) {
@@ -200,6 +368,7 @@ function ablage_fertig_ablegen(string $bereich, string $nutzerId, string $upload
     return ['fertig' => true, 'ziel' => $meta['ziel'], 'datei' => ['id' => $id, 'name' => $meta['name'], 'art' => $meta['art'],
             'mime' => ABLAGE_ARTEN[$meta['art']][0], 'groesse' => (int)$meta['groesse'], 'sha256' => (string)$meta['sha256']]];
 }
+function ablage_platz_reicht(float $frei, int $groesse): bool { return $frei - $groesse >= ABLAGE_RESERVE; }
 function ablage_upload_verwerfen(string $upload): void
 {
     if (!preg_match('/^[0-9a-f]{24}$/D', $upload)) return;
@@ -209,34 +378,36 @@ function ablage_upload_verwerfen(string $upload): void
 
 /* ---------- Lesen, Ablegen, Kopieren, Entfernen, Ausliefern ---------- */
 function ablage_vorhanden(string $bereich, string $id): bool { return is_file(ablage_pfad($bereich, $id)); }
-/* Inhalt lesen (z. B. eine Vorlage zum Ausfüllen) oder null, wenn die Datei fehlt */
+/* Inhalt lesen (z. B. eine Vorlage zum Ausfüllen) oder null, wenn die Datei fehlt oder größer als ABLAGE_LESEN_MAX ist */
 function ablage_lesen(string $bereich, string $id): ?string
 {
     $p = ablage_pfad($bereich, $id);
-    if (!is_file($p) || filesize($p) > ABLAGE_DATEI_MAX) return null;
+    if (!is_file($p) || filesize($p) > ABLAGE_LESEN_MAX) return null;
     $t = file_get_contents($p);
     return $t === false ? null : $t;
 }
 /* Vom Server erzeugten Inhalt (z. B. eine ausgefüllte Vorlage) als neue Datei ablegen: ['id', 'groesse', 'sha256'] */
 function ablage_ablegen(string $bereich, string $inhalt): array
 {
-    if ($inhalt === '' || strlen($inhalt) > ABLAGE_DATEI_MAX) throw new InvalidArgumentException('Die erzeugte Datei ist leer oder zu groß (höchstens ' . (int)(ABLAGE_DATEI_MAX / 1048576) . ' MB).');
+    if ($inhalt === '' || strlen($inhalt) > ABLAGE_DATEI_MAX) throw new InvalidArgumentException('Die erzeugte Datei ist leer oder zu groß (höchstens ' . ablage_mb(ABLAGE_DATEI_MAX) . ').');
     $id = ablage_neue_id();
     $ziel = ablage_pfad($bereich, $id);
     if (!is_dir(dirname($ziel)) && !@mkdir(dirname($ziel), 0775, true) && !is_dir(dirname($ziel))) throw new RuntimeException('Ablage nicht beschreibbar');
     if (file_put_contents("$ziel.tmp", $inhalt, LOCK_EX) !== strlen($inhalt) || !@rename("$ziel.tmp", $ziel)) { @unlink("$ziel.tmp"); throw new RuntimeException('Ablage nicht beschreibbar'); }
     return ['id' => $id, 'groesse' => strlen($inhalt), 'sha256' => hash('sha256', $inhalt)];
 }
-/* Datei unter neuer Kennung kopieren (z. B. in eine neue Version): ['id', 'groesse', 'sha256'] oder null, wenn sie fehlt */
-function ablage_kopieren(string $bereich, string $id): ?array
+/* Datei unter neuer Kennung ablegen (z. B. in eine neue Version): ['id', 'groesse', 'sha256'] oder null, wenn sie fehlt.
+   Ablage-Dateien ändern sich nie: fester Verweis (Hardlink, kostet weder Platz noch Zeit), Kopie nur, wo das Dateisystem keinen
+   kennt; ablage_entfernen() löscht nur den eigenen Namen. $sha256: Prüfsumme aus den Metadaten des Moduls, sonst gerechnet. */
+function ablage_kopieren(string $bereich, string $id, string $sha256 = ''): ?array
 {
     $q = ablage_pfad($bereich, $id);
     if (!is_file($q)) return null;
     $neu = ablage_neue_id();
     $ziel = ablage_pfad($bereich, $neu);
     if (!is_dir(dirname($ziel)) && !@mkdir(dirname($ziel), 0775, true) && !is_dir(dirname($ziel))) throw new RuntimeException('Ablage nicht beschreibbar');
-    if (!@copy($q, "$ziel.tmp") || !@rename("$ziel.tmp", $ziel)) { @unlink("$ziel.tmp"); throw new RuntimeException('Ablage nicht beschreibbar'); }
-    return ['id' => $neu, 'groesse' => (int)filesize($ziel), 'sha256' => (string)hash_file('sha256', $ziel)];
+    if (!@link($q, $ziel) && (!@copy($q, "$ziel.tmp") || !@rename("$ziel.tmp", $ziel))) { @unlink("$ziel.tmp"); throw new RuntimeException('Ablage nicht beschreibbar'); }
+    return ['id' => $neu, 'groesse' => (int)filesize($ziel), 'sha256' => $sha256 !== '' ? $sha256 : (string)hash_file('sha256', $ziel)];
 }
 function ablage_entfernen(string $bereich, string $id): void
 {
@@ -254,6 +425,7 @@ function ablage_senden(string $bereich, string $id, string $name, string $mime):
 {
     $p = ablage_pfad($bereich, $id);
     if (!is_file($p)) fail('Die Datei fehlt in der Ablage.', 404);
+    if (session_status() === PHP_SESSION_ACTIVE) session_write_close();   // sonst wartet jede weitere Anfrage der Sitzung auf das Ende des Downloads
     @set_time_limit(300);
     header('Content-Type: ' . ($mime !== '' ? $mime : 'application/octet-stream'));
     header('Content-Disposition: ' . ablage_disposition($name));
@@ -266,10 +438,12 @@ function ablage_senden(string $bereich, string $id, string $name, string $mime):
     exit;
 }
 
-/* ---------- ZIP-Export (Methode „stored“, ohne Zip64) ----------
+/* ---------- ZIP-Export (Methode „stored“) ----------
    $eintraege: Liste von ['pfad' => 'Ordner/Datei.pdf', 'bereich' => …, 'id' => …] (Datei aus der Ablage) oder
    ['pfad' => …, 'inhalt' => string] (z. B. eine CSV). Pfade mit „/“, UTF-8; doppelte Pfade bekommen „ (2)“ usw.
-   Fehlende Dateien werden übersprungen und in „Hinweise.txt“ vermerkt. */
+   Fehlende Dateien werden übersprungen und in „Hinweise.txt“ vermerkt; verschwindet eine Datei erst während des Exports, fehlt
+   sie im Archiv und steht im Fehlerprotokoll des Servers. Jeder Eintrag bleibt unter 4 GB; Zip64 braucht es nur für den
+   Versatz ab 4 GB und ab 65535 Einträgen. */
 function ablage_zip_pfad(string $teil): string
 {
     $t = preg_replace('/[\x00-\x1f\x7f<>:"\/\\\\|?*]+/u', '-', $teil) ?? '';
@@ -280,14 +454,15 @@ function ablage_zip_pfad(string $teil): string
 function ablage_zip_senden(string $dateiname, array $eintraege): void
 {
     @set_time_limit(0);
-    $fehlend = []; $liste = []; $gesehen = []; $summe = 0;
+    $fehlend = []; $liste = []; $gesehen = [];
     foreach ($eintraege as $e) {
         $pfad = (string)$e['pfad'];
         if (isset($e['id'])) {
             $p = ablage_pfad((string)$e['bereich'], (string)$e['id']);
             if (!is_file($p)) { $fehlend[] = $pfad; continue; }
-            $e['datei'] = $p; $e['groesse'] = (int)filesize($p);
-        } else $e['groesse'] = strlen((string)$e['inhalt']);
+            if (filesize($p) >= 0xFFFFFFFF) throw new RuntimeException('ZIP-Export: Eintrag ab 4 GB nicht vorgesehen (' . $pfad . ')');
+            $e['datei'] = $p;
+        }
         // gleiche Pfade unterscheiden (Windows: ohne Groß-/Kleinschreibung)
         $basis = $pfad; $n = 1;
         while (isset($gesehen[mb_strtolower($pfad)])) {
@@ -297,14 +472,13 @@ function ablage_zip_senden(string $dateiname, array $eintraege): void
         }
         $gesehen[mb_strtolower($pfad)] = true;
         $e['pfad'] = $pfad;
-        $summe += $e['groesse'];
         $liste[] = $e;
     }
     if ($fehlend) {
         $wurzel = strpos((string)($liste[0]['pfad'] ?? ''), '/') !== false ? explode('/', (string)$liste[0]['pfad'])[0] . '/' : '';
-        $liste[] = ['pfad' => $wurzel . 'Hinweise.txt', 'inhalt' => "Folgende Dateien fehlen in der Ablage und sind nicht enthalten:\r\n" . implode("\r\n", $fehlend) . "\r\n", 'groesse' => 0];
+        $liste[] = ['pfad' => $wurzel . 'Hinweise.txt', 'inhalt' => "Folgende Dateien fehlen in der Ablage und sind nicht enthalten:\r\n" . implode("\r\n", $fehlend) . "\r\n"];
     }
-    if ($summe > ABLAGE_ZIP_MAX) fail('Der Export ist zu groß für ein ZIP-Archiv. Bitte nach Kapitel exportieren.', 413);
+    if (session_status() === PHP_SESSION_ACTIVE) session_write_close();   // sonst wartet jede weitere Anfrage der Sitzung auf das Ende des Exports
     header('Content-Type: application/zip');
     header('Content-Disposition: ' . ablage_disposition($dateiname));
     header('Cache-Control: private, no-store');
@@ -313,19 +487,42 @@ function ablage_zip_senden(string $dateiname, array $eintraege): void
     $t = getdate();
     $zeit = ($t['hours'] << 11) | ($t['minutes'] << 5) | intdiv($t['seconds'], 2);
     $datum = (max(0, $t['year'] - 1980) << 9) | ($t['mon'] << 5) | $t['mday'];
-    $off = 0; $verz = ''; $n = 0;
+    $off = 0; $verz = ''; $anzahl = 0;
     foreach ($liste as $e) {
         $name = (string)$e['pfad'];
-        if (isset($e['datei'])) { $crc = (int)hexdec((string)hash_file('crc32b', $e['datei'])); $len = (int)filesize($e['datei']); }
-        else { $inhalt = (string)$e['inhalt']; $crc = crc32($inhalt); $len = strlen($inhalt); }
-        $kopf = "PK\x03\x04" . pack('vvvvvVVVvv', 20, 0x0800, 0, $zeit, $datum, $crc, $len, $len, strlen($name), 0) . $name;
+        if (isset($e['datei'])) {
+            // Erst öffnen, dann Kopf schreiben: ein geöffneter Inhalt bleibt lesbar, auch wenn die Datei danach entfernt wird
+            $fh = @fopen($e['datei'], 'rb');
+            if ($fh === false) { error_log('ZIP-Export: ' . $name . ' während des Exports entfernt, nicht im Archiv'); continue; }
+            $len = (int)fstat($fh)['size'];
+            $h = hash_init('crc32b'); hash_update_stream($h, $fh); rewind($fh);
+            $crc = (int)hexdec(hash_final($h));
+        } else { $inhalt = (string)$e['inhalt']; $crc = crc32($inhalt); $len = strlen($inhalt); }
+        $zip64 = $off >= 0xFFFFFFFF;   // Versatz passt nicht in 32 Bit
+        $version = $zip64 ? 45 : 20;
+        // Zip64-Feld auch im lokalen Kopf: Info-ZIP unzip wertet das UTF-8-Kennzeichen nur bei vorhandenem Zusatzfeld aus und
+        // läse den Namen sonst lokal anders als im Verzeichnis („mismatching local filename“)
+        $extraLokal = $zip64 ? pack('vvPP', 1, 16, $len, $len) : '';
+        $extraVerz = $zip64 ? pack('vvP', 1, 8, $off) : '';
+        $groesseLokal = $zip64 ? 0xFFFFFFFF : $len;
+        $kopf = "PK\x03\x04" . pack('vvvvvVVVvv', $version, 0x0800, 0, $zeit, $datum, $crc, $groesseLokal, $groesseLokal, strlen($name), strlen($extraLokal)) . $name . $extraLokal;
         echo $kopf;
-        if (isset($e['datei'])) { $fh = fopen($e['datei'], 'rb'); while (!feof($fh)) { echo fread($fh, 1048576); flush(); } fclose($fh); }
+        if (isset($e['datei'])) { while (!feof($fh)) { echo fread($fh, 1048576); flush(); } fclose($fh); }
         else echo $inhalt;
-        $verz .= "PK\x01\x02" . pack('vvvvvvVVVvvvvvVV', 20, 20, 0x0800, 0, $zeit, $datum, $crc, $len, $len, strlen($name), 0, 0, 0, 0, 0, $off) . $name;
+        $verz .= "PK\x01\x02" . pack('vvvvvvVVVvvvvvVV', $version, $version, 0x0800, 0, $zeit, $datum, $crc, $len, $len, strlen($name), strlen($extraVerz), 0, 0, 0, 0, min($off, 0xFFFFFFFF))
+              . $name . $extraVerz;
         $off += strlen($kopf) + $len;
-        $n++;
+        $anzahl++;
     }
-    echo $verz . "PK\x05\x06" . pack('vvvvVVv', 0, 0, $n, $n, strlen($verz), $off, 0);
+    echo $verz . ablage_zip_ende($anzahl, strlen($verz), $off);
     exit;
+}
+/* Ende des Verzeichnisses; ab 65535 Einträgen bzw. 4 GB (Länge oder Beginn des Verzeichnisses) davor das Zip64-Ende und der
+   Verweis darauf. In den 16-/32-Bit-Feldern steht dann der Höchstwert als Zeichen „siehe Zip64“. */
+function ablage_zip_ende(int $anzahl, int $verzLaenge, int $verzStart): string
+{
+    $ende = "PK\x05\x06" . pack('vvvvVVv', 0, 0, min($anzahl, 0xFFFF), min($anzahl, 0xFFFF), min($verzLaenge, 0xFFFFFFFF), min($verzStart, 0xFFFFFFFF), 0);
+    if ($anzahl < 0xFFFF && $verzLaenge < 0xFFFFFFFF && $verzStart < 0xFFFFFFFF) return $ende;
+    return "PK\x06\x06" . pack('PvvVVPPPP', 44, 45, 45, 0, 0, $anzahl, $anzahl, $verzLaenge, $verzStart)
+         . "PK\x06\x07" . pack('VPV', 0, $verzStart + $verzLaenge, 1) . $ende;
 }

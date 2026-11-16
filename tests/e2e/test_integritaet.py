@@ -253,6 +253,14 @@ I = by_path(run(A)[1])
 check('data: PHP file inside the Dateiablage is critical', I.get('data/dateien/qs/ab/werkzeug.php', {}).get('stufe') == 'kritisch', I.get('data/dateien/qs/ab/werkzeug.php'))
 check('data: other names inside the Dateiablage are reported', I.get('data/dateien/qs/ab/notiz.txt', {}).get('stufe') == 'hinweis'
       and I.get('data/dateien/qs/ab/ab12cd34ef56ab78cd90.bin.phtml', {}).get('stufe') == 'kritisch', [I.get('data/dateien/qs/ab/notiz.txt'), I.get('data/dateien/qs/ab/ab12cd34ef56ab78cd90.bin.phtml')])
+os.remove(os.path.join(AB, 'werkzeug.php')); os.remove(os.path.join(AB, 'notiz.txt')); os.remove(os.path.join(AB, 'ab12cd34ef56ab78cd90.bin.phtml'))
+for i in range(5001):   # QM-System mit rund 15.000 Dateien: die Ablage zählt nicht zur Höchstzahl der geprüften Dateien
+    did = f'{i:02x}'[-2:] + f'{i:018d}'
+    os.makedirs(os.path.join(DATA, 'dateien', 'qs', did[:2]), exist_ok=True)
+    open(os.path.join(DATA, 'dateien', 'qs', did[:2], did + '.bin'), 'wb').close()
+code, r = run(A)
+check('data: 5000+ files in the Dateiablage do not abort the check (data records still checked)', code == 200 and r['result']['partial'] is False and r['result']['ok'],
+      {k: r['result'].get(k) for k in ('partial', 'partialText', 'ok')})
 shutil.rmtree(os.path.join(DATA, 'dateien'))
 check('data: clean again after the Dateiablage checks', run(A)[1]['result']['ok'])
 
