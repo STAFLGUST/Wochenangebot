@@ -2,7 +2,7 @@
 
 <!-- ERZEUGT von `python3 werkzeuge/doku.py erzeugen` – nicht von Hand ändern. Quelle: Funktionen und Kommentare im Code. Die CI prüft, dass diese Datei zum Code passt. -->
 
-120 Dateien, 1206 Funktionen – in der Reihenfolge der Datei, **fett** die Abschnitte. Text = erste Aussage des Kommentars direkt über der Funktion (Python: Docstring). Übersicht aller Module: [README.md](README.md).
+121 Dateien, 1229 Funktionen – in der Reihenfolge der Datei, **fett** die Abschnitte. Text = erste Aussage des Kommentars direkt über der Funktion (Python: Docstring). Übersicht aller Module: [README.md](README.md).
 
 ## `.github/scripts/apt_vorrat.py`
 
@@ -958,6 +958,34 @@ _Netzsperre am Server_
 - `regelwerk_aus_liste(pfad, modus, schnittstelle)`
 - `bericht(pfad, zeilen)`
 - `main(argv)`
+
+## `deploy/dateien_sichern.py`
+
+_Inkrementelle Sicherung der Dateiablage (dateien/<bereich>/<xx>/<id>.bin, lib/dateiablage.php) für deploy/sichern.sh._
+
+- `dateien(wurzel)` – relativer Pfad → lstat der regulären Dateien mit gültigem Namen; folgt keinem Verweis, fehlender Ordner = leer
+- `staende(ziel)`
+- `gleich(a, b)`
+- `vorlage(ziel, zeit)` – neuester festgeschriebener Stand vor <zeit>; ein Stand mit späterer Zeit (vorgestellte Uhr) dient nie als Vorlage
+- `plan(ablage, ziel, zeit)` – je Datei der Ablage: (relativer Pfad, lstat, gleiche Datei im vorigen Stand zum Verlinken oder None = kopieren)
+- `bedarf(ablage, ziel, zeit)`
+- `kopieren(quelle, z)` – frische Kopie (eigene Inode); False, wenn die Quelle inzwischen gelöscht ist
+- `aufbauen(ablage, ziel, zeit)` – <zeit>.tmp ergänzen; gibt die Dateien der Ablage zurück, die jetzt im Stand liegen (relativer Pfad → lstat)
+- `verweise(daten)` – ({id → (Dokument, groesse oder None, sha256 oder '')}, [nicht lesbare Dokumente]) aus einem Datenordner oder einer entpackten Sicherung.
+- `lauf(x, dok)`
+- `sha256(p)`
+- `je_id(liste)`
+- `kurz(ids)`
+- `schreiben(quelle, ablage, rel)` – im Kindprozess: quelle (Sicherung, nur root lesbar) als neue Datei ablage/rel anlegen.
+- `zurueckholen(ziel)` – Jede Datei aus sicherungen/.dateien-fehlend, die im neuesten Stand liegt, als eigene Datei (nie ein fester Verweis in die Sicherung) in die Ablage …
+- `pruefen(ablage, ziel, zeit, daten)` – Ergänzt <zeit>.tmp mit einer neuen Auflistung der Ablage und bringt jede Datei, auf die die Sicherung verweist, in den Stand (Tabelle in …
+- `passt(p, g)`
+- `belegt(staende_liste)` – Bytes aller Stände, fest verlinkte Dateien einmal; die Inode kommt aus dem Verzeichnis, stat nur bei einer neuen (bei 150 Ständen mit je 15.000 Dateien sonst …
+- `lauf(ordner)`
+- `abschliessen(ziel, zeit, zustand)`
+- `fehlende(ablage, daten)`
+- `zeit(wert)`
+- `main()`
 
 ## `deploy/daten_trennen.py`
 

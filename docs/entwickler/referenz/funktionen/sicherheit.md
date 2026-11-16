@@ -2,7 +2,7 @@
 
 <!-- ERZEUGT von `python3 werkzeuge/doku.py erzeugen` – nicht von Hand ändern. Quelle: Funktionen und Kommentare im Code. Die CI prüft, dass diese Datei zum Code passt. -->
 
-5 Dateien, 107 Funktionen – in der Reihenfolge der Datei, **fett** die Abschnitte. Text = erste Aussage des Kommentars direkt über der Funktion (Python: Docstring). Übersicht aller Module: [README.md](README.md).
+5 Dateien, 108 Funktionen – in der Reihenfolge der Datei, **fett** die Abschnitte. Text = erste Aussage des Kommentars direkt über der Funktion (Python: Docstring). Übersicht aller Module: [README.md](README.md).
 
 ## `app/api/aktionen/sicherheit.php`
 
@@ -170,6 +170,7 @@ _Bereitschaft im Modul Sicherheit (lib/bereitschaft.php, docs/plattform/modul-si
 - `doc(name)`
 - `berlin()`
 - `woche()`
+- `sicherung_melden(**felder)` – ── Probealarm ──
 - `anmelden(user, pw, ip, breite, thema, hoehe, hash_)`
 - `tab(pg, t)`
 - `dialog_zu(pg)`
