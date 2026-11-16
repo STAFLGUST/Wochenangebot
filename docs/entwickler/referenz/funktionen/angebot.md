@@ -2,7 +2,7 @@
 
 <!-- ERZEUGT von `python3 werkzeuge/doku.py erzeugen` – nicht von Hand ändern. Quelle: Funktionen und Kommentare im Code. Die CI prüft, dass diese Datei zum Code passt. -->
 
-58 Dateien, 894 Funktionen – in der Reihenfolge der Datei, **fett** die Abschnitte. Text = erste Aussage des Kommentars direkt über der Funktion (Python: Docstring). Übersicht aller Module: [README.md](README.md).
+58 Dateien, 893 Funktionen – in der Reihenfolge der Datei, **fett** die Abschnitte. Text = erste Aussage des Kommentars direkt über der Funktion (Python: Docstring). Übersicht aller Module: [README.md](README.md).
 
 ## `app/api/lib/angebote.php`
 
@@ -1079,7 +1079,6 @@ _STAFL-Plattform · Angebot · Fenster „Design“ (Inhaber 16.11.2026)_
 
 **Öffnen, Laden, Speichern**
 
-- `laden(oid)`
 - `oeffnen(opt)`
 - `uebernehmen(w)` – gespeichertes Design des Angebots in den Zustand übernehmen
 - `neuLaden(meldung)`
