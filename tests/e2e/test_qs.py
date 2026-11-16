@@ -528,6 +528,13 @@ with sync_playwright() as p:
     kpis = [pg.inner_text(f'#qm-u-kpis .qm-kpi:nth-child({i}) b') for i in range(1, 5)]
     check('Übersicht: Adresse #uebersicht, vier Kennzahlen (6 gültig, 5 Überprüfung fällig, 1 offene Maßnahme)', pg.url.endswith('#uebersicht') and kpis[0] == '6' and kpis[1] == '5' and kpis[3] == '1', kpis)
     check('Übersicht: Unterzeile mit Kapiteln und Dokumenten', '4 Kapitel' in text(pg, '#qm-unterzeile') and '7 gelenkte Dokumente' in text(pg, '#qm-unterzeile'), text(pg, '#qm-unterzeile'))
+    pg.wait_for_selector('#r-leiste a.r-eintrag[data-modul="qs"]', state='attached')
+    lf = pg.evaluate("""() => { const t = document.createElement('span'); t.style.color = 'var(--r-text)'; document.querySelector('#r-leiste').append(t); const soll = getComputedStyle(t).color; t.remove();
+      return { soll, ist: [...new Set([...document.querySelectorAll('#r-leiste a.r-eintrag')].map((a) => getComputedStyle(a).color))] }; }""")
+    check('Seitenleiste: Einträge schwarz wie in allen Modulen (Textfarbe der Leiste), nicht in der Linkfarbe des QM-Systems', lf['ist'] == [lf['soll']], lf)
+    pg.hover('#r-leiste a[data-modul="qs"]'); pg.wait_for_function("document.querySelector('.r-app').classList.contains('r-auf')")
+    pg.screenshot(path=os.path.join(SH, 'qs_leiste_offen_1280.png'))
+    pg.mouse.move(900, 600); pg.wait_for_function("!document.querySelector('.r-app').classList.contains('r-auf')")
     check('Ihre Aufgaben: eigene Kontrollen (Kürzel QB) und eigene Maßnahme', 'Systembewertung' in text(pg, '#qm-u-aufgaben') and 'Ihre Kontrolle' in text(pg, '#qm-u-aufgaben')
           and '2026-001' in text(pg, '#qm-u-aufgaben') and 'Überprüfung fällig' in text(pg, '#qm-u-aufgaben'), text(pg, '#qm-u-aufgaben'))
     check('Fällige Prüfungen, Stand je Kapitel (4 Balken), offene Maßnahme', 'Systembewertung' in text(pg, '#qm-u-faellig') and pg.locator('#qm-u-kapitel [data-kap-dok]').count() == 4
