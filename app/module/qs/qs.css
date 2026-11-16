@@ -690,3 +690,27 @@ body.qm.r .qm-rund:hover { background: var(--r-flaeche-2); }
   .vf-kopfzeile .qm-filterzeile .btn{flex:1 1 auto;justify-content:center}
   .vf-fassung{grid-template-columns:minmax(0,1fr)}
 }
+/* Ordnerbaum eines Ordners/externen Dokuments (archiv.js): Unterordner aufklappbar, Zahl und Größe, ZIP je Ordner */
+.qm-baum{display:flex;flex-direction:column;gap:6px}
+.qm-baum-kopf{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.qm-baum-kopf .qm-suche{flex:1;min-width:160px}
+.qm-baum-ordner{border:1px solid var(--qm-line);border-radius:10px;background:var(--qm-card)}
+.qm-baum-ordner>summary{display:flex;align-items:center;gap:8px;padding:7px 10px;cursor:pointer;list-style:none;min-width:0}
+.qm-baum-ordner>summary::-webkit-details-marker{display:none}
+.qm-baum-ordner>summary .i{width:16px;height:16px;flex:none;color:var(--qm-muted)}
+.qm-baum-name{font-weight:650;font-size:13px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0}
+.qm-baum-ordner>summary .qm-sub{margin-left:auto;white-space:nowrap}
+.qm-baum-zip{display:inline-flex;align-items:center;gap:3px;font-size:12px;font-weight:650;color:var(--qm-blau);text-decoration:none;white-space:nowrap}
+.qm-baum-zip .i{width:14px;height:14px}
+.qm-baum-inhalt{display:flex;flex-direction:column;gap:6px;padding:0 8px 8px 16px}
+@media(max-width:560px){.qm-baum-inhalt{padding-left:6px}.qm-baum-ordner>summary .qm-sub{display:none}}
+/* Ordner-Import (ordnerimport.js) */
+.qm-im-wurzel{margin:0;font-size:13.5px}
+.qm-im-warnung{margin:0;color:var(--qm-gelb);font-weight:600}
+.qm-im-wahl select.qm-eingabe{min-width:200px;max-width:100%}
+.qm-im-bereich{display:flex;gap:6px;margin-top:6px}
+.qm-im-bereich input:first-child{width:72px;flex:none}
+.qm-im-bereich input:last-child{flex:1;min-width:0}
+.qm-im-nachtragen{border:1px solid var(--qm-gelb);background:var(--qm-gelb-soft);border-radius:12px;padding:10px 12px;display:flex;flex-direction:column;gap:6px}
+.qm-im-nachtragen .qm-hilfe{margin:0}
+@media(max-width:560px){.qm-im-wahl select.qm-eingabe{min-width:0;width:100%}}

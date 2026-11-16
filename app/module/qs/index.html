@@ -93,7 +93,7 @@
               <button class="btn sm" type="button" id="qm-d-csv"><svg class="i" aria-hidden="true"><use href="#i-download"/></svg>Dokumentenliste</button>
               <button class="btn sm" type="button" id="qm-d-zip"><svg class="i" aria-hidden="true"><use href="#i-download"/></svg>Ablage (ZIP)</button>
               <button class="btn sm qm-eingang-knopf" type="button" id="qm-d-eingang" hidden><svg class="i" aria-hidden="true"><use href="#i-eingang"/></svg>Eingang <b id="qm-d-eingang-zahl">0</b></button>
-              <button class="btn sm" type="button" id="qm-d-sammel" hidden><svg class="i" aria-hidden="true"><use href="#i-upload"/></svg>Sammel-Ablage</button>
+              <button class="btn sm" type="button" id="qm-d-import" hidden><svg class="i" aria-hidden="true"><use href="#i-upload"/></svg>Ordner importieren</button>
               <button class="btn sm primary" type="button" id="qm-d-neu" hidden><svg class="i" aria-hidden="true"><use href="#i-plus"/></svg>Dokument anlegen</button>
             </div>
             <div class="qm-pillen" id="qm-d-zustand" role="group" aria-label="Zustand"></div>
@@ -439,23 +439,32 @@
   </form>
 </dialog>
 
-<dialog class="qm-dialog qm-dialog-gross" id="dlg-sammel" aria-labelledby="sa-titel">
-  <form id="sa-form" novalidate>
-    <div class="qm-dialogkopf"><div><span class="qm-sub">Dokumentenablage</span><h2 id="sa-titel">Sammel-Ablage</h2></div><button class="qm-dialog-schliessen" type="button" data-sa-zu aria-label="Schließen">×</button></div>
-    <p class="qm-hilfe">Den ganzen Ordner „QM-System“ (oder ein ZIP davon) hierher ziehen. Per Dokumenten-Nr. wird nur zugeordnet, was direkt im passenden Kapitelordner oder im Aufbau des Exports „Kapitel/Nr. Titel/Datei“ liegt – nie unter Ordnern wie „_alt“ oder „alt_…“. Alles andere kommt mit seinem Ordnerpfad in den Eingang. Dieselbe Datei wird nicht doppelt abgelegt.</p>
-    <div class="qm-drop qm-sa-drop" id="sa-drop"><svg class="i" aria-hidden="true"><use href="#i-upload"/></svg><span><b>Ordner oder ZIP hierher ziehen</b><span>oder auswählen:</span></span>
-      <span class="qm-sa-knoepfe"><button class="btn sm" type="button" id="sa-ordner-knopf">Ordner wählen</button><button class="btn sm" type="button" id="sa-zip-knopf">ZIP wählen</button></span></div>
-    <input type="file" id="sa-ordner" webkitdirectory multiple class="sr-only" tabindex="-1" aria-hidden="true">
-    <input type="file" id="sa-zip" accept=".zip,application/zip" class="sr-only" tabindex="-1" aria-hidden="true">
-    <datalist id="sa-dokumente"></datalist>
-    <div id="sa-ergebnis" hidden>
-      <div class="qm-vorschau" id="sa-zahlen"></div>
-      <div class="qm-pillen" id="sa-filter" role="group" aria-label="Auswahl"></div>
-      <div class="qm-tabelle-wrap qm-sa-liste" id="sa-liste"></div>
-      <progress id="sa-fortschritt" class="qm-sa-fortschritt" hidden></progress>
+<!-- Ordner-Import: ganzen QM-Ordner einmal wählen; Plan und Regeln vom Server (qs_sammel_plan), Uploads gebündelt eingetragen -->
+<dialog class="qm-dialog qm-dialog-gross" id="dlg-import" aria-labelledby="im-titel">
+  <form id="im-form" novalidate>
+    <div class="qm-dialogkopf"><div><span class="qm-sub">Dokumentenablage</span><h2 id="im-titel">Ordner importieren</h2></div><button class="qm-dialog-schliessen" type="button" data-im-zu aria-label="Schließen">×</button></div>
+    <p class="qm-hilfe">Den ganzen QM-Ordner einmal wählen. Kapitelordner werden an der Nummer erkannt, ihre Unterordner werden zu Ordnern im Kapitel – die Ordnerstruktur bleibt erhalten. Gültige Versionen bekommen nur Dateien, die genau wie das Dokument heißen, und nur mit Häkchen. Nach einem Abbruch denselben Ordner erneut wählen: Abgelegtes wird übersprungen.</p>
+    <div class="qm-drop qm-sa-drop" id="im-drop"><svg class="i" aria-hidden="true"><use href="#i-upload"/></svg><span><b>Ordner oder ZIP hierher ziehen</b><span>oder auswählen:</span></span>
+      <span class="qm-sa-knoepfe"><button class="btn sm" type="button" id="im-ordner-knopf">Ordner wählen</button><button class="btn sm" type="button" id="im-zip-knopf">ZIP wählen</button></span></div>
+    <input type="file" id="im-ordner" webkitdirectory multiple class="sr-only" tabindex="-1" aria-hidden="true">
+    <input type="file" id="im-zip" accept=".zip,application/zip" class="sr-only" tabindex="-1" aria-hidden="true">
+    <div id="im-ergebnis" hidden>
+      <p class="qm-im-wurzel" id="im-wurzel"></p>
+      <p class="qm-hilfe qm-im-warnung" id="im-warnung" hidden>Kapitelordner werden an ihrer Nummer erkannt. Gehört der gewählte Ordner zu einer anderen Firma, bitte abbrechen und den Ordner der Firma selbst wählen (z. B. „_Firma“) – er wird dann ein eigener Bereich.</p>
+      <div class="qm-tabelle-wrap" id="im-oberste"></div>
+      <div class="qm-vorschau" id="im-zahlen"></div>
+      <div class="qm-im-nachtragen" id="im-nachtragen" hidden>
+        <label class="qm-check"><input type="checkbox" id="im-nachtragen-an"> <span id="im-nachtragen-text"></span></label>
+        <details class="qm-details"><summary>Diese Dateien ansehen</summary><ul class="qm-verlauf" id="im-nachtragen-liste"></ul></details>
+        <p class="qm-hilfe">Nachtragen lässt sich nicht rückgängig machen. Ohne Häkchen kommen diese Dateien in den Eingang.</p>
+      </div>
+      <progress id="im-fortschritt" class="qm-sa-fortschritt" value="0" max="1"></progress>
+      <p class="qm-hilfe" id="im-stand"></p>
+      <div class="qm-pillen" id="im-filter" role="group" aria-label="Auswahl"></div>
+      <div class="qm-tabelle-wrap qm-sa-liste" id="im-liste"></div>
     </div>
-    <p class="qm-meldung" id="sa-meldung" role="status"></p>
-    <div class="qm-knopfreihe"><button class="btn" type="button" data-sa-zu>Schließen</button><button class="btn" type="button" id="sa-stopp" hidden>Abbrechen</button><button class="btn primary" type="submit" id="sa-los" disabled>Dateien ablegen</button></div>
+    <p class="qm-meldung" id="im-meldung" role="status"></p>
+    <div class="qm-knopfreihe"><button class="btn" type="button" data-im-zu>Schließen</button><button class="btn" type="button" id="im-csv" hidden>Bericht als CSV</button><button class="btn" type="button" id="im-stopp" hidden>Abbrechen</button><button class="btn primary" type="submit" id="im-los" disabled>Importieren</button></div>
   </form>
 </dialog>
 
@@ -463,7 +472,7 @@
 <dialog class="qm-dialog qm-dialog-gross" id="dlg-eingang" aria-labelledby="ei-titel">
   <form id="ei-form" novalidate>
     <div class="qm-dialogkopf"><div><span class="qm-sub">Dokumentenablage</span><h2 id="ei-titel">Eingang</h2></div><button class="qm-dialog-schliessen" type="button" data-ei-zu aria-label="Schließen">×</button></div>
-    <p class="qm-hilfe" id="ei-hilfe">Dateien ohne Ziel. Zuordnen legt sie einem Ordner, externen Dokument oder Entwurf ab, ohne sie neu hochzuladen. Löschen entfernt sie endgültig.</p>
+    <p class="qm-hilfe">Dateien ohne Ziel – nur für Bearbeiter sichtbar. Zuordnen legt sie einem Ordner, externen Dokument oder Entwurf ab, ohne sie neu hochzuladen. Löschen entfernt sie endgültig.</p>
     <div class="qm-drop" role="button" tabindex="0" id="ei-drop" aria-label="In den Eingang hochladen: Dateien hierher ziehen oder auswählen"><svg class="i" aria-hidden="true"><use href="#i-upload"/></svg><span><b>In den Eingang hochladen</b><span>hierher ziehen oder <u>auswählen</u><small id="ei-max"></small></span></span></div>
     <div id="ei-laden"></div>
     <div class="qm-filterzeile qm-ei-filter">
@@ -595,12 +604,15 @@
   <symbol id="i-lupe" viewBox="0 0 24 24"><circle cx="11" cy="11" r="6.5"/><path d="m20 20-4.2-4.2"/></symbol>
   <symbol id="i-haken" viewBox="0 0 24 24"><path d="m5 12.5 4.5 4.5L19 7.5"/></symbol>
   <symbol id="i-klammer" viewBox="0 0 24 24"><path d="m20.5 11.5-8.4 8.4a5.2 5.2 0 0 1-7.4-7.4l8.6-8.6a3.5 3.5 0 0 1 4.9 4.9l-8.6 8.6a1.7 1.7 0 0 1-2.4-2.4l7.9-7.9"/></symbol>
+  <symbol id="i-ordner" viewBox="0 0 24 24"><path d="M3.5 6.5a1.5 1.5 0 0 1 1.5-1.5h4.2l2 2.2H19a1.5 1.5 0 0 1 1.5 1.5v9.3a1.5 1.5 0 0 1-1.5 1.5H5a1.5 1.5 0 0 1-1.5-1.5z"/></symbol>
   <symbol id="i-dokument" viewBox="0 0 24 24"><path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"/><path d="M14 3v5h5"/></symbol>
   <symbol id="i-klemmbrett" viewBox="0 0 24 24"><rect x="5" y="4.5" width="14" height="16.5" rx="2"/><path d="M9 4.5V3h6v1.5M9 11h6M9 15h4"/></symbol>
   <symbol id="i-blitz" viewBox="0 0 24 24"><path d="M13 3 5 13.5h6L10 21l8-10.5h-6z"/></symbol>
 </svg>
 <script src="../../assets/rahmen.js"></script>
 <script src="qs.js"></script>
+<script src="archiv.js"></script>
+<script src="ordnerimport.js"></script>
 <script src="verfahren.js"></script>
 </body>
 </html>

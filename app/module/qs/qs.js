@@ -22,7 +22,7 @@
   const TABS = ['uebersicht', 'dokumente', 'handbuch', 'pruefplan', 'massnahmen', 'bericht', 'verfahren', 'einstellungen'];
   const MONATE = ['Jan', 'Feb', 'Mär', 'Apr', 'Mai', 'Jun', 'Jul', 'Aug', 'Sep', 'Okt', 'Nov', 'Dez'];
   const S = { csrf: '', d: null, tab: 'uebersicht', kap: '', zustand: '', ansicht: 'tafel', toast: 0, paket: null, dok: '', pruefung: '', edit: {}, grund: null, laden: null, wahl: null,
-    sammel: { eintraege: [], filter: '', laeuft: false, abbrechen: false }, eingang: { dateien: null, wahl: new Set() }, bericht: null, berichtLaeuft: false };
+    bericht: null, berichtLaeuft: false };
 
   /* ---------- Aufruf der API: wirft nie, liefert { status, data, json } ---------- */
   async function api(action, body, query = '') {
@@ -105,8 +105,8 @@
     $('#qm-tabs [data-tab="einstellungen"]').hidden = !darf('verwalten');
     $('#qm-tabs [data-tab="verfahren"]').hidden = !darf('verfahren');
     $('#qm-d-neu').hidden = !darf('bearbeiten');
-    $('#qm-d-sammel').hidden = !darf('bearbeiten');
-    $('#qm-d-eingang').hidden = !darf('bearbeiten') && !d.eingangZahl;
+    $('#qm-d-import').hidden = !darf('bearbeiten');
+    $('#qm-d-eingang').hidden = !darf('bearbeiten');
     $('#qm-d-eingang').classList.toggle('voll', !!d.eingangZahl);
     $('#qm-d-eingang-zahl').textContent = zahl(d.eingangZahl || 0);
     $('#qm-m-neu').hidden = !darf('bearbeiten');
@@ -127,7 +127,7 @@
   }
   function renderAlles() {
     filterOptionen();
-    renderUebersicht(); renderDokumente(); renderDok(); renderEingang(); renderHandbuch(); renderPruefplan(); renderMassnahmen();
+    renderUebersicht(); renderDokumente(); renderDok(); archiv().eingangZeichnen(); renderHandbuch(); renderPruefplan(); renderMassnahmen();
     if (darf('verwalten')) renderEinstellungen();
   }
   function filterOptionen() {
@@ -254,7 +254,7 @@
     if (!S.d || ev.target.closest('dialog')) return;
     const g = ev.target.closest('[data-gehe]'); if (g) { zeigeTab(g.dataset.gehe); return; }
     const nw = ev.target.closest('[data-nachweis]'); if (nw) { oeffneNachweis(nw.dataset.nachweis); return; }
-    const d = ev.target.closest('[data-dok]'); if (d) { oeffneDok(d.dataset.dok); return; }
+    const d = ev.target.closest('[data-dok]'); if (d && d.id !== 'qm-dk') { oeffneDok(d.dataset.dok); return; }   // die Seitenleiste selbst trägt data-dok
     const p = ev.target.closest('[data-pruefung]'); if (p) { oeffnePruefung(p.dataset.pruefung); return; }
     const m = ev.target.closest('[data-massn]'); if (m) oeffneMassnahme(m.dataset.massn);
   });
@@ -280,7 +280,7 @@
         kapAlt = x.kapitel; const k = S.d.kapitel.find((y) => y.id === x.kapitel) || {};
         html += `<tr class="qm-gruppe"><td colspan="6"><b>${esc(kapitelText(x.kapitel))}</b>${k.zustaendig ? ` <span class="qm-sub">Zuständig ${esc(k.zustaendig)}${k.vertreter ? ' · Vertreter ' + esc(k.vertreter) : ''}</span>` : ''}</td></tr>`;
       }
-      const g = gueltige(x), nd = aktiv(istGelenkt(x) ? (g ? g.dateien : []) : x.dateien).length;
+      const g = gueltige(x), nd = istGelenkt(x) ? aktiv(g ? g.dateien : []).length : archivZahl(x).n;
       html += `<tr class="qm-klick${x.zustand === 'eingezogen' ? ' qm-aus' : ''}${x.id === S.dok ? ' qm-gewaehlt' : ''}" data-dok="${esc(x.id)}">
         <td class="qm-nr qm-mobil-weg" data-label="Nr.">${esc(x.nr) || '<span class="qm-null">—</span>'}</td>
         <td class="qm-voll" data-label="Titel"><span class="qm-name">${x.nr ? `<span class="qm-nur-mobil">${esc(x.nr)} · </span>` : ''}${esc(x.titel)}</span><span class="qm-sub">${esc(S.d.arten[x.art] || x.art)}${x.ablage && !istGelenkt(x) ? ' · ' + esc(x.ablage) : ''}${nd ? ` · <span class="qm-anz" title="${nd === 1 ? '1 Datei' : nd + ' Dateien'} in der Ablage">${icon('klammer')}${zahl(nd)}</span>` : ''}</span></td>
@@ -313,6 +313,9 @@
      Entwurf mit „bearbeiten“ (zählt für das 4-Augen-Prinzip), an freigegebenen Versionen nur mit „freigeben“ (nachtragen,
      entfernen mit Grund); in der Prüfung nur ansehen. Die Regeln prüft der Server – hier nur, was angeboten wird. */
   const aktiv = (l) => (l || []).filter((f) => !f.entfernt);
+  /* Dateien eines Ordners/externen Dokuments: ältere am Dokument und die im Archiv (qs-ablage-zahlen) */
+  const archivZahl = (x) => { const z = (S.d.ablageZahlen || {})[x.id] || {}; return { n: aktiv(x.dateien).length + (z.dateien || 0), b: aktiv(x.dateien).reduce((s2, f) => s2 + (f.groesse || 0), 0) + (z.bytes || 0) }; };
+  const archiv = () => window.STAFL_QS.archiv;
   const groesseText = (n) => (n >= 1048576 ? `${(n / 1048576).toLocaleString('de-DE', { maximumFractionDigits: 1 })} MB` : `${zahl(Math.max(1, Math.round(n / 1024)))} KB`);
   function ablageOffen(x, v) {
     if (x.eingezogen || !darf('bearbeiten')) return false;
@@ -372,30 +375,26 @@
       return [...new Uint8Array(await crypto.subtle.digest('SHA-256', await f.arrayBuffer()))].map((b) => b.toString(16).padStart(2, '0')).join('');
     } catch { return ''; }
   }
-  /* Eine Datei in Teilen hochladen (der API-Einstieg nimmt nur JSON bis 6 MB an). nurNeu: gleicher Inhalt an dieser Stelle
-     wird nicht noch einmal abgelegt (Antwort doppelt). Rückgabe { ok } | { doppelt } | { fehler } | { anmelden } */
-  async function dateiSenden(f, dok, ver, nurNeu, beiTeil, pfad = '') {
+  /* Eine Datei in Teilen hochladen (der API-Einstieg nimmt nur JSON bis 6 MB an); extra: pfad, sammeln, herkunft (Ordner-Import).
+     Rückgabe { ok, datei } | { ok, upload } (sammeln: fertiger Upload, eingetragen über qs_import_eintragen) | { fehler } | { anmelden } */
+  async function dateiSenden(f, dok, ver, beiTeil, extra = {}) {
     const a = S.d.ablage, sha = await pruefsumme(f);
     let upload = '', teil = 0, pos = 0;
     for (;;) {
       const stueck = f.slice(pos, pos + a.teil);
       let daten;
       try { daten = await alsBase64(stueck); } catch { return { fehler: 'Die Datei ist nicht lesbar.' }; }
-      const body = { dokument: dok, version: ver, name: f.name, groesse: f.size, sha256: sha, upload, teil, daten };
-      if (nurNeu) body.nurNeu = true;
-      if (pfad) body.pfad = pfad;   // Ordnerpfad aus der Sammel-Ablage (nur im Eingang gespeichert)
-      const r = await api('qs_datei_hochladen', body);
+      const r = await api('qs_datei_hochladen', { ...extra, dokument: dok, version: ver, name: f.name, groesse: f.size, sha256: sha, upload, teil, daten });
       if (r.status === 401) return { anmelden: true };
       if (r.status !== 200 || !r.data.ok) return { fehler: fehlerText(r, 'Hochladen fehlgeschlagen') };
-      if (r.data.doppelt) return { doppelt: true };
       pos += stueck.size; teil++;
       if (beiTeil) beiTeil(pos);
-      if (r.data.fertig) return { ok: true };
+      if (r.data.fertig) return { ok: true, datei: r.data.datei, upload: r.data.upload };
       upload = r.data.upload;
     }
   }
   /* Dateien nacheinander ablegen (Seitenleiste bzw. Eingang: Ziehen oder Auswählen); dok „eingang“ = ohne Ziel */
-  const zeigeLaden = () => { renderDok(); renderEingang(); };
+  const zeigeLaden = () => { renderDok(); archiv().eingangZeichnen(); };
   async function hochladen(dateien, vid, dok = S.dok) {
     const a = S.d.ablage;
     if (!a || !dateien || !dateien.length || (dok !== 'eingang' && !S.d.dokumente.some((y) => y.id === dok))) return;
@@ -411,7 +410,7 @@
     for (let i = 0; i < liste.length; i++) {
       const e = liste[i];
       if (e.fehler) continue;
-      const r = await dateiSenden(e.datei, dok, vid, false, (pos) => { e.empfangen = pos; ladenAktualisieren(i); });
+      const r = await dateiSenden(e.datei, dok, vid, (pos) => { e.empfangen = pos; ladenAktualisieren(i); });
       if (r.anmelden) { S.laden = null; zeigeAnmeldung(); return; }
       if (r.fehler) e.fehler = r.fehler; else { e.fertig = true; ok++; }
       ladenAktualisieren(i);
@@ -419,7 +418,7 @@
     S.laden.fertig = true;
     const fehl = liste.filter((e) => e.fehler);
     if (!fehl.length) S.laden = null;
-    if (ok && dok === 'eingang') await ladeEingang();
+    if (ok) await archiv().neu(dok);
     if (ok) await neuLaden(); else zeigeLaden();
     if (!fehl.length) toast(ok === 1 ? 'Datei abgelegt' : `${zahl(ok)} Dateien abgelegt`);
     else toast(fehl.length === 1 ? `${fehl[0].name}: ${fehl[0].fehler}` : `${zahl(fehl.length)} Dateien nicht abgelegt – Gründe in der Liste.`, true);
@@ -437,16 +436,14 @@
     document.body.append(a); a.click();
     setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 1500);
   }
-  async function herunterladen(id, name = '') {
-    const x = S.d.dokumente.find((y) => y.id === S.dok), ort = x ? dateiOrt(x, id) : null;
-    let res;
-    try { res = await fetch(API + '?action=qs_datei&id=' + encodeURIComponent(id), { credentials: 'same-origin', cache: 'no-store' }); } catch { toast('Keine Verbindung zum Server.', true); return; }
-    if (res.status === 401) { zeigeAnmeldung(); return; }
-    if (!res.ok) { let d = {}; try { d = await res.json(); } catch { /* keine JSON-Antwort */ } toast(d.error || `Herunterladen fehlgeschlagen (${res.status}).`, true); return; }
-    speichereDatei(await res.blob(), name || (ort ? ort.f.name : 'Datei'));
+  /* Herunterladen über einen direkten Link wie der ZIP-Export: große Dateien landen nicht im Speicher des Browsers, der Browser zeigt den Fortschritt */
+  function herunterladen(id) {
+    const a = document.createElement('a');
+    a.href = API + '?action=qs_datei&id=' + encodeURIComponent(id); a.download = '';
+    document.body.append(a); a.click(); a.remove();
   }
   async function entferneDatei(id) {
-    const x = S.d.dokumente.find((y) => y.id === S.dok), ort = x ? dateiOrt(x, id) : null;
+    const x = S.d.dokumente.find((y) => y.id === S.dok), ort = x ? dateiOrt(x, id) || archiv().ort(x, id) : null;
     if (!ort) return;
     const entwurf = !!ort.v && ort.v.status === 'entwurf';
     const g = await frageGrund('Datei entfernen', entwurf ? `„${ort.f.name}“ wird aus dem Entwurf gelöscht.`
@@ -456,6 +453,7 @@
     if (r.status === 401) { zeigeAnmeldung(); return; }
     if (r.status !== 200 || !r.data.ok) { toast(fehlerText(r, 'Entfernen fehlgeschlagen'), true); if (r.status === 409) await neuLaden(); return; }
     if (S.laden && S.laden.fertig) S.laden = null;
+    await archiv().neu(x.id);
     toast('Datei entfernt'); await neuLaden();
   }
   /* Ziehen und Ablegen: Felder hervorheben, sobald Dateien über die Seite gezogen werden; daneben nichts im Browser öffnen */
@@ -483,276 +481,13 @@
   });
   $('#qm-dk').addEventListener('keydown', (ev) => { const z = imFeld(ev); if (z && (ev.key === 'Enter' || ev.key === ' ')) { ev.preventDefault(); waehleDateien(z.dataset.drop); } });
 
-  /* ---------- Sammel-Ablage: ganzer Ordner „QM-System“ oder ein ZIP davon ----------
-     Per Dokumenten-Nr. nur an zwei Stellen (Auftrag 16.11.2026 nach Durchsicht des echten QM-Ordners, sonst landen Nachweise, ältere Stände und
-     Unterlagen anderer Firmen in gültigen Versionen): direkt im Kapitelordner, dessen Nummer zum Kapitel des Dokuments passt
-     („1.4 …/1.4-F01.xlsx“), oder im Aufbau des eigenen Exports „<Kapitel>/<Nr. Titel>/<Datei>“ – und nie unter einem Ordner,
-     der mit „_“ oder „alt_“ beginnt oder „alt“ heißt (SA_FREMD). Unterordner mit dem Titel eines Ordner-/externen Dokuments gehen
-     dorthin (nicht unter SA_FREMD). Ziel: gültige Version (nur mit „freigeben“), sonst der Entwurf; Ordner/extern am Dokument.
-     Alles andere geht mit seinem Ordnerpfad (relativ zum gewählten Ordner) in den Eingang. Hochgeladen wird mit nurNeu – dieselbe
-     Datei wird nicht doppelt abgelegt (im Eingang: gleicher Pfad, Name und Inhalt); nach Abbruch oder Neuladen lässt sich derselbe
-     Ordner erneut wählen. Ein Fehler bei einer Datei hält den Lauf nicht an. Regeln prüft der Server. */
-  const SA_MAX = 20000;
-  const SA_STATUS = { bereit: ['wird abgelegt', 'gruen'], vorhanden: ['schon abgelegt', ''], offen: ['nicht zugeordnet', 'gelb'], gesperrt: ['', 'rot'],
-    art: ['Dateiart nicht erlaubt', ''], gross: ['zu groß', 'rot'], leer: ['leer', ''], system: ['Systemdatei', ''], alt: ['ältere Version / Entwurf aus einem Export', ''],
-    export: ['Datei eines Exports', ''], laeuft: ['wird hochgeladen …', 'blau'], fertig: ['abgelegt', 'gruen'], eingang: ['im Eingang', 'gelb'], fehler: ['', 'rot'] };
-  const SA_GRUPPE = { bereit: 'bereit', laeuft: 'bereit', fertig: 'bereit', offen: 'offen', eingang: 'offen', vorhanden: 'vorhanden', fehler: 'fehler' };
-  /* Übersprungen nach Grund (Bericht am Ende) */
-  const SA_GRUENDE = [['system', 'Systemdateien'], ['art', 'Dateiart nicht erlaubt'], ['gross', 'zu groß'], ['leer', 'leer'], ['alt', 'aus einem Export'], ['export', 'Export-Listen'],
-    ['gesperrt', 'gesperrt'], ['vorhanden', 'schon vorhanden'], ['fehler', 'mit Fehler']];
-  const SA_FREMD = /^(?:_|alt_|alt$)/i;   // _alt, _Sicherung, _in Bearbeitung, _<andere Firma>, alt, alt_<Name>
-  const KAP_RE = /^(\d+(?:\.\d+)*)(?:\s|$)/;   // Kapitelordner „1.4 Qualitätssicherung“
-  /* Ordnerpfad wie der Server ihn speichert (qs_eingang_pfad): „/“-getrennt, Leerraum zusammengefasst, ohne Steuerzeichen und
-     leere/„.“/„..“-Teile, je Teil 120 Zeichen, höchstens 12 Teile */
-  const saPfad = (teile) => teile.map((t) => t.replace(/\s+/g, ' ').replace(/[\x00-\x1f\x7f]/g, '').trim()).filter((t) => t && t !== '.' && t !== '..')
-    .map((t) => [...t].slice(0, 120).join('')).slice(0, 12).join('/');
-  const saSchluessel = (pfad, name, groesse) => `${pfad}\n${name}\n${groesse}`;
-  const CP437 = 'ÇüéâäàåçêëèïîìÄÅÉæÆôöòûùÿÖÜ¢£¥₧ƒáíóúñÑªº¿⌐¬½¼¡«»░▒▓│┤╡╢╖╕╣║╗╝╜╛┐└┴┬├─┼╞╟╚╔╩╦╠═╬╧╨╤╥╙╘╒╓╫╪┘┌█▄▌▐▀αßΓπΣσµτΦΘΩδ∞φε∩≡±≥≤⌠⌡÷≈°∙·√ⁿ²■ ';
-  const cp437 = (b) => [...b].map((c) => (c < 128 ? String.fromCharCode(c) : CP437[c - 128])).join('');
-  const escRe = (t) => t.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-  const saNorm = (t) => String(t || '').toLocaleLowerCase('de-DE').replace(/\s+/g, ' ').trim();
-  const NR_RE = /(^|[^\d.])(\d+(?:\.\d+){0,3})\s*-\s*([A-Za-z])\s*0*(\d{1,3})(?!\d)/g;   // bis vier Teile („2.2.1.1-A01“), nie ein Teil einer längeren Nummer (Grenzgruppe statt Lookbehind: ältere Safari)
-  const nrSchluessel = (nr) => String(nr || '').toUpperCase().replace(/\s+/g, '').replace(/-([A-Z])0*(\d+)$/, '-$1$2');
-  function saIndex() {
-    const nr = new Map(), frei = [], titel = new Map();
-    for (const x of S.d.dokumente) {
-      if (x.nr && /^\d+(\.\d+)*-[A-Za-z]\d+$/.test(x.nr)) nr.set(nrSchluessel(x.nr), x);
-      else if (x.nr) frei.push({ x, re: new RegExp(`(^|[^\\p{L}\\p{N}])${escRe(x.nr)}($|[^\\p{L}\\p{N}])`, 'iu') });
-      if (!istGelenkt(x)) { const k = saNorm(x.titel); if (!titel.has(k)) titel.set(k, []); titel.get(k).push(x); }
-    }
-    frei.sort((a, b) => b.x.nr.length - a.x.nr.length);
-    return { nr, frei, titel };
-  }
-  /* Dokument zu einer Nr. in t, dessen Kapitel (oder Nr.-Kapitel) zum Kapitelordner kap passt; anfang: Nr. steht vorne („1.4-F01 Titel“) */
-  function saNrIn(t, idx, kap, anfang) {
-    const passt = (x) => x && (x.kapitel === kap || String(x.nr).split('-')[0] === kap);
-    for (const m of t.matchAll(NR_RE)) {
-      if (anfang && (m.index || m[1])) break;
-      const x = idx.nr.get(`${m[2]}-${m[3].toUpperCase()}${m[4]}`);
-      if (passt(x)) return x;
-    }
-    for (const f of idx.frei) if ((anfang ? t.search(f.re) === 0 : f.re.test(t)) && passt(f.x)) return f.x;
-    return null;
-  }
-  function saZiel(x) {   // wohin kommt eine Datei für Dokument x?
-    const z = { dok: x.id };
-    if (x.eingezogen) return { ...z, status: 'gesperrt', grund: 'Dokument eingezogen' };
-    if (!istGelenkt(x)) return darf('bearbeiten') ? { ...z, ver: '', status: 'bereit', text: x.art === 'O' ? 'Ordner' : 'externes Dokument' } : { ...z, status: 'gesperrt', grund: 'ohne Recht' };
-    const g = gueltige(x), o = offene(x);
-    if (g) return darf('freigeben') ? { ...z, ver: g.id, status: 'bereit', text: `gültige Version ${g.nr}` } : { ...z, status: 'gesperrt', grund: 'nur mit Freigaberecht (gültige Version)' };
-    if (o && o.status === 'entwurf') return { ...z, ver: o.id, status: 'bereit', text: `Entwurf zu Version ${naechsteVersion(x)}` };
-    return { ...z, status: 'gesperrt', grund: o ? 'Entwurf liegt zur Prüfung' : 'noch ohne Version' };
-  }
-  function saPruefen(e, idx) {
-    const teile = e.pfad.split('/').filter(Boolean), name = teile.pop() || '', ext = name.includes('.') ? name.split('.').pop().toLowerCase() : '';
-    const a = S.d.ablage, rel = teile.slice(S.sammel.wurzel && teile[0] === S.sammel.wurzel ? 1 : 0);
-    Object.assign(e, { name, ordner: teile.join(' / '), rel: saPfad(rel), dok: '', ver: '', text: '', grund: '' });
-    if (/^(\.|~\$)/.test(name) || /^(thumbs\.db|desktop\.ini)$/i.test(name) || /\.lnk$/i.test(name)) return Object.assign(e, { status: 'system' });
-    if (teile.some((t) => /^_(ältere Versionen|Entwurf)$/i.test(t))) return Object.assign(e, { status: 'alt' });
-    if (teile.length <= 1 && /^(Dokumentenliste\.csv|Hinweise\.txt)$/i.test(name)) return Object.assign(e, { status: 'export' });
-    if (!a.arten.includes(ext)) return Object.assign(e, { status: 'art', grund: ext ? '.' + ext : 'ohne Endung' });
-    if (!e.groesse) return Object.assign(e, { status: 'leer' });
-    if (e.groesse > a.max) return Object.assign(e, { status: 'gross' });
-    const fremd = teile.find((t) => SA_FREMD.test(t)), kap = (rel[0] || '').match(KAP_RE);
-    let x = null;
-    if (e.manuell) x = S.d.dokumente.find((y) => y.id === e.manuell);
-    else if (!fremd) {
-      if (kap && rel.length === 1) x = saNrIn(name.replace(/\.[^.]+$/, ''), idx, kap[1], false);   // direkt im Kapitelordner
-      else if (kap && rel.length === 2) x = saNrIn(rel[1], idx, kap[1], true);                    // Aufbau des eigenen Exports
-      for (let i = teile.length - 1; !x && i >= 0; i--) {
-        const l = idx.titel.get(saNorm(teile[i]));
-        if (l) x = l.find((y) => teile.some((t) => t.startsWith(y.kapitel + ' '))) || l[0];
-      }
-    }
-    if (!x) {   // in den Eingang (mit Ordnerpfad); dieselbe Datei liegt dort schon?
-      Object.assign(e, { status: 'offen', grund: fremd ? `Ordner „${fremd}“` : name.search(NR_RE) >= 0 ? 'Nr. nur direkt im Kapitelordner' : '' });
-      if (S.sammel.imEingang && S.sammel.imEingang.has(saSchluessel(e.rel, name, e.groesse))) e.status = 'vorhanden';
-      if (e.an === undefined) e.an = true;
-      return e;
-    }
-    Object.assign(e, saZiel(x));
-    if (e.status === 'bereit') {   // gleicher Name und Größe liegen dort schon (genau prüft der Server über die Prüfsumme)
-      const v = e.ver ? (x.versionen || []).find((y) => y.id === e.ver) : null;
-      if (aktiv(v ? v.dateien : x.dateien).some((f) => f.name === name && f.groesse === e.groesse)) e.status = 'vorhanden';
-    }
-    if (e.an === undefined) e.an = true;
-    return e;
-  }
-  const saGruppe = (e) => SA_GRUPPE[e.status] || 'uebersprungen';
-  /* Bericht am Ende: abgelegt, im Eingang, übersprungen nach Grund, nicht abgelegt (abgewählt oder nach Abbruch) */
-  function saBericht(l, abgebrochen) {
-    const n = (st) => l.filter((e) => e.status === st).length, fertig = n('fertig');
-    const weg = SA_GRUENDE.map(([st, text]) => [n(st), text]).filter(([k]) => k).map(([k, text]) => `${text} ${zahl(k)}`);
-    const offen = n('bereit') + n('offen');
-    return `${zahl(fertig)} ${fertig === 1 ? 'Datei' : 'Dateien'} abgelegt, ${zahl(n('eingang'))} im Eingang`
-      + (weg.length ? ` · übersprungen: ${weg.join(', ')}` : '') + (offen ? ` · ${zahl(offen)} nicht abgelegt` : '') + (abgebrochen ? ' – abgebrochen' : '') + '.';
-  }
-  function saZeile(e, i) {
-    const x = e.dok ? S.d.dokumente.find((y) => y.id === e.dok) : null, [text, farbe] = SA_STATUS[e.status] || ['', ''];
-    const ziel = e.status === 'offen' ? `<input class="qm-eingabe qm-sa-wahl" list="sa-dokumente" data-sa-dok="${i}" placeholder="Dokument zuordnen …" aria-label="Dokument für ${esc(e.name)}"><span class="qm-sub">sonst in den Eingang${e.grund ? ' · ' + esc(e.grund) : ''}</span>`
-      : !x && ['laeuft', 'eingang', 'vorhanden', 'fehler'].includes(e.status) ? `<b>Eingang</b><span class="qm-sub">${esc(e.rel ? e.rel.split('/').join(' / ') : 'ohne Ordner')}</span>`
-      : x ? `<b>${esc(x.nr || x.titel)}</b>${x.nr ? ' ' + esc(x.titel) : ''}<span class="qm-sub">${esc(e.text || e.grund || '')}${e.manuell ? ' · von Hand' : ''}</span>` : '<span class="qm-null">—</span>';
-    return `<tr data-sa="${i}"><td class="qm-sa-an">${(e.status === 'bereit' || e.status === 'offen') && !S.sammel.laeuft ? `<input type="checkbox" data-sa-an="${i}"${e.an ? ' checked' : ''} aria-label="${esc(e.name)} ablegen">` : ''}</td>
-      <td class="qm-voll" data-label="Datei"><span class="qm-name">${esc(e.name)}</span><span class="qm-sub">${esc(e.ordner || '—')} · ${esc(groesseText(e.groesse))}</span></td>
-      <td data-label="Ziel">${ziel}</td><td data-label="Status" class="qm-sa-status">${chip(e.status === 'gesperrt' ? e.grund : e.status === 'fehler' ? e.fehler : e.status === 'art' ? `${text} (${e.grund})` : e.status === 'laeuft' && e.empfangen ? `${Math.round(100 * e.empfangen / e.groesse)} %` : text, farbe)}</td></tr>`;
-  }
-  function saZeigen() {
-    const S2 = S.sammel, l = S2.eintraege, z = { bereit: 0, offen: 0, vorhanden: 0, uebersprungen: 0, fehler: 0 };
-    for (const e of l) z[saGruppe(e)]++;
-    const fertig = l.filter((e) => e.status === 'fertig').length, abzulegen = l.filter((e) => (e.status === 'bereit' || e.status === 'offen') && e.an).length;
-    $('#sa-ergebnis').hidden = !l.length;
-    $('#sa-zahlen').innerHTML = [['Dateien', l.length], ['abzulegen', abzulegen], ['abgelegt', fertig], ['im Eingang', l.filter((e) => e.status === 'eingang').length],
-      ['nicht zugeordnet', z.offen], ['schon abgelegt', z.vorhanden], ['übersprungen', z.uebersprungen + z.fehler]]
-      .map(([n, w]) => `<div><b>${zahl(w)}</b><span>${esc(n)}</span></div>`).join('');
-    const F = [['', 'Alle', l.length], ['bereit', 'Ablegen', z.bereit], ['offen', 'Nicht zugeordnet', z.offen], ['vorhanden', 'Schon abgelegt', z.vorhanden], ['uebersprungen', 'Übersprungen', z.uebersprungen], ['fehler', 'Fehler', z.fehler]];
-    $('#sa-filter').innerHTML = F.map(([k, n, c]) => (k && !c && S2.filter !== k ? '' : `<button type="button" data-sa-filter="${k}" aria-pressed="${S2.filter === k}" class="${k === 'offen' ? 'gelb' : ''}">${esc(n)} <b>${zahl(c)}</b></button>`)).join('');
-    const zeilen = l.map((e, i) => [e, i]).filter(([e]) => !S2.filter || saGruppe(e) === S2.filter);
-    $('#sa-liste').innerHTML = `<table class="qm-tabelle qm-karten qm-sa-tabelle"><thead><tr><th></th><th>Datei</th><th>Ziel</th><th>Status</th></tr></thead><tbody>${zeilen.slice(0, 2000).map(([e, i]) => saZeile(e, i)).join('') || leerzeile(4, 'Keine Dateien in dieser Auswahl.')}</tbody></table>`
-      + (zeilen.length > 2000 ? `<p class="qm-hilfe">Angezeigt: 2000 von ${zahl(zeilen.length)} Dateien.</p>` : '');
-    $('#sa-los').disabled = S2.laeuft || !abzulegen;
-    $('#sa-los').textContent = abzulegen === 1 ? '1 Datei ablegen' : `${zahl(abzulegen)} Dateien ablegen`;
-    $('#sa-stopp').hidden = !S2.laeuft;
-  }
-  function saZeileNeu(i) {
-    const tr = $(`#sa-liste tr[data-sa="${i}"]`);
-    if (tr) tr.outerHTML = saZeile(S.sammel.eintraege[i], i);
-  }
-  function oeffneSammel() {
-    S.sammel = { eintraege: [], filter: '', laeuft: false, abbrechen: false };
-    $('#sa-dokumente').innerHTML = S.d.dokumente.filter((x) => !x.eingezogen).sort((a, b) => natCmp(a.kapitel, b.kapitel) || natCmp(a.nr, b.nr) || natCmp(a.titel, b.titel))
-      .map((x) => `<option value="${esc(`${x.nr ? x.nr + ' · ' : ''}${x.titel} (${x.kapitel})`)}"></option>`).join('');
-    $('#sa-meldung').textContent = '';
-    saZeigen();
-    oeffne($('#dlg-sammel'));
-  }
-  async function saLesenOrdner(eintrag, pfad, aus) {
-    if (aus.length > SA_MAX) return;
-    if (eintrag.isFile) { const f = await new Promise((ok, nein) => eintrag.file(ok, nein)); aus.push({ pfad: pfad + f.name, groesse: f.size, holen: async () => f }); return; }
-    if (!eintrag.isDirectory) return;
-    const leser = eintrag.createReader();
-    for (;;) {
-      const teil = await new Promise((ok, nein) => leser.readEntries(ok, nein));
-      if (!teil.length) break;
-      for (const e of teil) await saLesenOrdner(e, pfad + eintrag.name + '/', aus);
-    }
-  }
-  async function saZipLesen(file) {
-    const ab = Math.max(0, file.size - 65557), ende = new DataView(await file.slice(ab).arrayBuffer());
-    let e = -1;
-    for (let i = ende.byteLength - 22; i >= 0; i--) if (ende.getUint32(i, true) === 0x06054b50) { e = i; break; }
-    if (e < 0) throw new Error('Die Datei ist kein ZIP-Archiv.');
-    const anz = ende.getUint16(e + 10, true), cdGroesse = ende.getUint32(e + 12, true), cdPos = ende.getUint32(e + 16, true);
-    if (anz === 0xffff || cdPos === 0xffffffff) throw new Error('Dieses ZIP ist zu groß (ZIP64) – bitte den Ordner selbst hineinziehen.');
-    const cd = new DataView(await file.slice(cdPos, cdPos + cdGroesse).arrayBuffer()), aus = [];
-    let p = 0;
-    for (let i = 0; i < anz && aus.length <= SA_MAX; i++) {
-      if (cd.getUint32(p, true) !== 0x02014b50) throw new Error('Das ZIP-Archiv ist beschädigt.');
-      const flags = cd.getUint16(p + 8, true), methode = cd.getUint16(p + 10, true), komp = cd.getUint32(p + 20, true), roh = cd.getUint32(p + 24, true);
-      const nl = cd.getUint16(p + 28, true), xl = cd.getUint16(p + 30, true), kl = cd.getUint16(p + 32, true), lokal = cd.getUint32(p + 42, true);
-      const b = new Uint8Array(cd.buffer, cd.byteOffset + p + 46, nl), name = (flags & 0x800) ? new TextDecoder().decode(b) : cp437(b);
-      p += 46 + nl + xl + kl;
-      if (name.endsWith('/')) continue;
-      aus.push({ pfad: name.replace(/\\/g, '/'), groesse: roh, holen: () => saZipEintrag(file, lokal, komp, methode, flags, name) });
-    }
-    return aus;
-  }
-  async function saZipEintrag(file, lokal, komp, methode, flags, name) {
-    if (flags & 1) throw new Error('verschlüsselt im ZIP');
-    const kopf = new DataView(await file.slice(lokal, lokal + 30).arrayBuffer());
-    if (kopf.getUint32(0, true) !== 0x04034b50) throw new Error('ZIP-Eintrag beschädigt');
-    const start = lokal + 30 + kopf.getUint16(26, true) + kopf.getUint16(28, true), roh = file.slice(start, start + komp);
-    let blob;
-    if (methode === 0) blob = roh;
-    else if (methode === 8 && 'DecompressionStream' in window) blob = await new Response(roh.stream().pipeThrough(new DecompressionStream('deflate-raw'))).blob();
-    else throw new Error('Packverfahren im ZIP nicht unterstützt – bitte den Ordner hineinziehen');
-    return new File([blob], name.split('/').pop());
-  }
-  async function saLaden(quelle) {   // quelle: Promise einer Liste { pfad, groesse, holen }
-    $('#sa-meldung').className = 'qm-meldung'; $('#sa-meldung').textContent = 'Dateien werden gelesen …';
-    let liste;
-    try { liste = await quelle; } catch (err) { $('#sa-meldung').textContent = err.message || String(err); return; }
-    $('#sa-meldung').textContent = liste.length > SA_MAX ? `Mehr als ${zahl(SA_MAX)} Dateien – bitte Kapitel einzeln ablegen.` : liste.length ? '' : 'Keine Dateien gefunden.';
-    if (liste.length > SA_MAX) return;
-    // gewählter Ordner selbst (z. B. „QM-System“) gehört nicht in den Pfad – außer er ist ein Kapitelordner oder nach SA_FREMD
-    // gesperrt („_Firma B“): so bleibt der Pfad derselben Datei gleich, ob der ganze Ordner oder nur ein Teil gewählt wird
-    const erster = (p) => { const t = p.split('/').filter(Boolean); return t.length > 1 ? t[0] : null; }, w = liste.length ? erster(liste[0].pfad) : null;
-    S.sammel.wurzel = w && !KAP_RE.test(w) && !SA_FREMD.test(w) && liste.every((e) => erster(e.pfad) === w) ? w : '';
-    S.sammel.imEingang = null;
-    if (S.d.eingangZahl && await ladeEingang()) S.sammel.imEingang = new Set(S.eingang.dateien.map((f) => saSchluessel(f.pfad, f.name, f.groesse)));
-    S.sammel.eintraege = liste.map((e) => ({ ...e, status: '' }));
-    S.sammel.filter = '';
-    const idx = saIndex(), RANG = { bereit: 0, offen: 1, gesperrt: 2, vorhanden: 3 };
-    for (const e of S.sammel.eintraege) saPruefen(e, idx);
-    S.sammel.eintraege.sort((a, b) => (RANG[a.status] ?? 4) - (RANG[b.status] ?? 4) || natCmp(a.pfad, b.pfad));   // Wichtiges zuerst
-    saZeigen();
-  }
-  $('#qm-d-sammel').addEventListener('click', oeffneSammel);
-  $('#sa-ordner-knopf').addEventListener('click', () => { $('#sa-ordner').value = ''; $('#sa-ordner').click(); });
-  $('#sa-zip-knopf').addEventListener('click', () => { $('#sa-zip').value = ''; $('#sa-zip').click(); });
-  $('#sa-ordner').addEventListener('change', (ev) => saLaden(Promise.resolve([...ev.target.files].map((f) => ({ pfad: f.webkitRelativePath || f.name, groesse: f.size, holen: async () => f })))));
-  $('#sa-zip').addEventListener('change', (ev) => { const f = ev.target.files[0]; if (f) saLaden(saZipLesen(f)); });
-  $('#sa-drop').addEventListener('drop', (ev) => {   // vor dem allgemeinen Ablegen: Ordner nur während des Ereignisses lesbar
-    if (!ev.dataTransfer || S.sammel.laeuft) return;
-    const items = [...(ev.dataTransfer.items || [])].filter((it) => it.kind === 'file');
-    const eintraege = items.map((it) => (it.webkitGetAsEntry ? it.webkitGetAsEntry() : null)).filter(Boolean);
-    const dateien = [...ev.dataTransfer.files];
-    if (dateien.length === 1 && /\.zip$/i.test(dateien[0].name) && !(eintraege[0] && eintraege[0].isDirectory)) { saLaden(saZipLesen(dateien[0])); return; }
-    if (eintraege.length) saLaden((async () => { const aus = []; for (const e of eintraege) await saLesenOrdner(e, '', aus); return aus; })());
-    else saLaden(Promise.resolve(dateien.map((f) => ({ pfad: f.name, groesse: f.size, holen: async () => f }))));
-  });
-  $('#sa-filter').addEventListener('click', (ev) => { const b = ev.target.closest('[data-sa-filter]'); if (b) { S.sammel.filter = b.dataset.saFilter; saZeigen(); } });
-  $('#sa-liste').addEventListener('change', (ev) => {
-    const an = ev.target.closest('[data-sa-an]');
-    if (an) { S.sammel.eintraege[Number(an.dataset.saAn)].an = an.checked; saZeigen(); return; }
-    const w = ev.target.closest('[data-sa-dok]');
-    if (!w) return;
-    const x = S.d.dokumente.find((y) => `${y.nr ? y.nr + ' · ' : ''}${y.titel} (${y.kapitel})` === w.value);
-    if (!x) { w.setAttribute('aria-invalid', 'true'); return; }
-    const e = S.sammel.eintraege[Number(w.dataset.saDok)];
-    if (e.manuell === x.id) return;
-    e.manuell = x.id; e.an = true;
-    saPruefen(e, saIndex());
-    setTimeout(saZeigen);   // nicht im Ereignis neu zeichnen: das Entfernen des Eingabefelds löst sonst „blur“ und ein zweites „change“ aus
-  });
-  $('#sa-stopp').addEventListener('click', () => { S.sammel.abbrechen = true; $('#sa-stopp').disabled = true; });
-  $$('#dlg-sammel [data-sa-zu]').forEach((b) => b.addEventListener('click', () => { if (S.sammel.laeuft) toast('Die Ablage läuft noch – „Abbrechen“ stoppt nach der aktuellen Datei.', true); else $('#dlg-sammel').close(); }));
-  $('#dlg-sammel').addEventListener('cancel', (ev) => { if (S.sammel && S.sammel.laeuft) { ev.preventDefault(); toast('Die Ablage läuft noch – „Abbrechen“ stoppt nach der aktuellen Datei.', true); } });
-  $('#sa-form').addEventListener('submit', async (ev) => {
-    ev.preventDefault();
-    const S2 = S.sammel, liste = S2.eintraege.map((e, i) => [e, i]).filter(([e]) => (e.status === 'bereit' || e.status === 'offen') && e.an);
-    if (!liste.length || S2.laeuft) return;
-    S2.laeuft = true; S2.abbrechen = false; $('#sa-stopp').disabled = false;
-    const fp = $('#sa-fortschritt'); fp.hidden = false; fp.max = liste.length; fp.value = 0;
-    saZeigen();
-    let n = 0;
-    for (const [e, i] of liste) {
-      if (S2.abbrechen) break;
-      const ein = e.status === 'offen';
-      e.status = 'laeuft'; e.empfangen = 0; saZeileNeu(i);
-      let f;
-      try { f = await e.holen(); } catch (err) { e.status = 'fehler'; e.fehler = err.message || 'nicht lesbar'; saZeileNeu(i); fp.value = ++n; continue; }
-      const r = await dateiSenden(f, ein ? 'eingang' : e.dok, ein ? '' : e.ver, true, (pos) => { e.empfangen = pos; saZeileNeu(i); }, ein ? e.rel : '');
-      if (r.anmelden) { S2.laeuft = false; $('#dlg-sammel').close(); zeigeAnmeldung(); return; }
-      e.status = r.ok ? (ein ? 'eingang' : 'fertig') : r.doppelt ? 'vorhanden' : 'fehler'; e.fehler = r.fehler || '';
-      saZeileNeu(i); fp.value = ++n;
-    }
-    S2.laeuft = false; fp.hidden = true;
-    const fertig = liste.filter(([e]) => e.status === 'fertig').length, fehl = liste.filter(([e]) => e.status === 'fehler').length;
-    await neuLaden();
-    if (!$('#dlg-sammel').open) return;
-    saZeigen();
-    $('#sa-meldung').className = 'qm-meldung' + (fehl ? '' : ' ok');
-    $('#sa-meldung').textContent = saBericht(S2.eintraege, S2.abbrechen);
-    toast(fehl ? `${dateienText(fehl)} nicht abgelegt – Gründe in der Liste.` : `Sammel-Ablage: ${dateienText(fertig)} abgelegt`, !!fehl);
-  });
-
   /* Export der Ablage als ZIP: der Server erstellt das Archiv erst beim Herunterladen (direkt in die Antwort) */
   function exportUmfang(kap, alle) {
     let n = 0, b = 0;
     const dazu = (l) => aktiv(l).forEach((f) => { n++; b += f.groesse || 0; });
     for (const x of S.d.dokumente) {
       if ((kap && x.kapitel !== kap) || (x.eingezogen && !alle)) continue;
-      dazu(x.dateien);
+      if (!istGelenkt(x)) { const z = archivZahl(x); n += z.n; b += z.b; }
       for (const v of x.versionen || []) if (v.status === 'freigegeben' || (alle && v.status !== 'verworfen')) dazu(v.dateien);
     }
     return { n, b };
@@ -776,135 +511,6 @@
     document.body.append(a); a.click(); a.remove();
     $('#dlg-ablage').close();
     toast('Das ZIP wird erstellt und heruntergeladen …');
-  });
-
-  /* ---------- Eingang: Dateien ohne Ziel (Server: qs_eingang, qs_datei_hochladen mit „eingang“, qs_datei_zuordnen,
-     qs_eingang_loeschen). Die Liste lädt erst beim Öffnen (bis 20 000 Dateien); angezeigt werden höchstens EI_ZEILEN Zeilen,
-     Suche (Name und Ordnerpfad) und Ordner grenzen ein, „alle“ wählt alle gefilterten. Ziele: Ordner, externe Dokumente und
-     Entwürfe – freigegebene Versionen nicht (dort wird nachgetragen). Die Regeln prüft der Server. ---------- */
-  const EI_ZEILEN = 500, OHNE_ORDNER = '/';   // „/“ kommt in keinem Ordnernamen vor
-  const ordnerVon = (f) => (f.pfad ? f.pfad.split('/')[0] : OHNE_ORDNER);
-  const dateienText = (n) => (n === 1 ? '1 Datei' : `${zahl(n)} Dateien`);
-  async function ladeEingang() {
-    const r = await api('qs_eingang');
-    if (r.status === 401) { zeigeAnmeldung(); return false; }
-    if (r.status !== 200 || !r.data.ok) { toast(fehlerText(r, 'Eingang nicht geladen'), true); return false; }
-    S.eingang.dateien = r.data.dateien.slice().reverse();   // neueste zuerst
-    const da = new Set(S.eingang.dateien.map((f) => f.id));
-    for (const id of [...S.eingang.wahl]) if (!da.has(id)) S.eingang.wahl.delete(id);
-    return true;
-  }
-  function eingangSicht() {
-    const q = SU.woerter($('#ei-suche').value), o = $('#ei-ordner').value;
-    return (S.eingang.dateien || []).filter((f) => (!o || ordnerVon(f) === o) && SU.passt(q, SU.heu(f.name, f.pfad)));
-  }
-  function eingangZiele() {
-    const m = new Map();
-    for (const x of [...S.d.dokumente].sort((a, b) => natCmp(a.kapitel, b.kapitel) || natCmp(a.nr, b.nr) || natCmp(a.titel, b.titel))) {
-      const o = istGelenkt(x) ? offene(x) : null;
-      if (x.eingezogen || (istGelenkt(x) && (!o || o.status !== 'entwurf'))) continue;
-      m.set(`${x.nr ? x.nr + ' · ' : ''}${x.titel} (${x.kapitel})${o ? ' – Entwurf' : ''}`, { dok: x.id, ver: o ? o.id : '' });
-    }
-    S.eingang.ziele = m;
-    $('#ei-ziele').innerHTML = [...m.keys()].map((k) => `<option value="${esc(k)}"></option>`).join('');
-  }
-  const eingangZiel = () => (S.eingang.ziele && S.eingang.ziele.get($('#ei-ziel').value)) || null;
-  function eingangKnoepfe() {
-    const n = S.eingang.wahl.size, k = $('#ei-loeschen');
-    $('#ei-gewaehlt').textContent = n ? `${dateienText(n)} ausgewählt` : 'Dateien auswählen, dann ein Ziel wählen';
-    $('#ei-zuordnen').disabled = !n || !eingangZiel();
-    k.disabled = !n;
-    if (!k.dataset.sicher) k.textContent = n ? `${dateienText(n)} löschen` : 'Löschen';
-  }
-  function renderEingang() {
-    if (!$('#dlg-eingang').open) return;
-    const E = S.eingang, alle = E.dateien || [], b = darf('bearbeiten'), a = S.d.ablage || { max: 0, eingang: 0 };
-    $('#ei-drop').hidden = !b; $('#ei-zielzeile').hidden = !b; $('#ei-zuordnen').hidden = !b; $('#ei-loeschen').hidden = !b;
-    $('#ei-hilfe').hidden = !b;
-    $('#ei-max').textContent = ` · bis ${zahl(Math.round(a.max / 1048576))} MB je Datei, höchstens ${zahl(a.eingang)} Dateien`;
-    $('#ei-laden').innerHTML = ladenHtml({ id: 'eingang' }, '');
-    $('#ei-titel').textContent = E.dateien ? `Eingang · ${dateienText(alle.length)}` : 'Eingang';
-    const je = new Map();
-    for (const f of alle) je.set(ordnerVon(f), (je.get(ordnerVon(f)) || 0) + 1);
-    const w = $('#ei-ordner').value;
-    $('#ei-ordner').innerHTML = `<option value="">Alle Ordner</option>` + [...je].sort((x, y) => (x[0] === OHNE_ORDNER) - (y[0] === OHNE_ORDNER) || natCmp(x[0], y[0]))
-      .map(([o, n]) => `<option value="${esc(o)}">${esc(o === OHNE_ORDNER ? 'ohne Ordner' : o)} (${zahl(n)})</option>`).join('');
-    $('#ei-ordner').value = je.has(w) ? w : '';
-    const sicht = eingangSicht(), gew = sicht.filter((f) => E.wahl.has(f.id)).length;
-    const zeile = (f) => `<tr data-ei="${esc(f.id)}">${b ? `<td class="qm-sa-an"><input type="checkbox" data-ei-an="${esc(f.id)}"${E.wahl.has(f.id) ? ' checked' : ''} aria-label="${esc(f.name)} auswählen"></td>` : ''}
-      <td class="qm-voll" data-label="Datei"><button class="qm-datei-name" type="button" data-ei-datei="${esc(f.id)}" title="${esc(f.name)} herunterladen">${icon('dokument')}<span>${esc(f.name)}</span></button><span class="qm-sub">${esc(groesseText(f.groesse))}</span></td>
-      <td data-label="Ordner" class="qm-ei-pfad">${f.pfad ? esc(f.pfad.split('/').join(' / ')) : '<span class="qm-null">—</span>'}</td>
-      <td data-label="Hochgeladen">${esc(f.hochgeladen.von)}<span class="qm-sub">${esc(zeitpunkt(f.hochgeladen.t))}</span></td></tr>`;
-    $('#ei-liste').innerHTML = E.dateien === null ? '<p class="qm-hilfe">Wird geladen …</p>'
-      : `<table class="qm-tabelle qm-karten qm-sa-tabelle qm-ei-tabelle"><thead><tr>${b ? `<th class="qm-sa-an"><input type="checkbox" id="ei-alle" aria-label="Alle ${zahl(sicht.length)} auswählen"${sicht.length && gew === sicht.length ? ' checked' : ''}></th>` : ''}<th>Datei</th><th>Ordner</th><th>Hochgeladen</th></tr></thead>`
-        + `<tbody>${sicht.slice(0, EI_ZEILEN).map(zeile).join('') || leerzeile(b ? 4 : 3, alle.length ? 'Keine passenden Dateien.' : 'Der Eingang ist leer.')}</tbody></table>`
-        + (sicht.length > EI_ZEILEN ? `<p class="qm-hilfe">Angezeigt: ${zahl(EI_ZEILEN)} von ${zahl(sicht.length)} – Suche oder Ordner grenzen ein; „alle“ wählt alle ${zahl(sicht.length)}.</p>` : '');
-    eingangKnoepfe();
-  }
-  async function oeffneEingang() {
-    eingangZiele();
-    S.eingang.dateien = null; S.eingang.wahl.clear();
-    if (S.laden && S.laden.fertig) S.laden = null;
-    $('#ei-ziel').value = ''; $('#ei-suche').value = ''; $('#ei-ordner').value = ''; delete $('#ei-loeschen').dataset.sicher;
-    oeffne($('#dlg-eingang'));
-    renderEingang();
-    if (await ladeEingang()) renderEingang();
-  }
-  function eingangWeg(ids) {
-    const weg = new Set(ids);
-    S.eingang.dateien = S.eingang.dateien.filter((f) => !weg.has(f.id));
-    S.eingang.wahl.clear();
-  }
-  function eingangFehler(r, text) {
-    if (r.status === 401) { zeigeAnmeldung(); return true; }
-    if (r.status === 200 && r.data.ok) return false;
-    $('#ei-meldung').className = 'qm-meldung'; $('#ei-meldung').textContent = fehlerText(r, text);
-    eingangKnoepfe();
-    return true;
-  }
-  $('#qm-d-eingang').addEventListener('click', oeffneEingang);
-  $$('#dlg-eingang [data-ei-zu]').forEach((k) => k.addEventListener('click', () => $('#dlg-eingang').close()));
-  ['#ei-suche', '#ei-ordner'].forEach((sel) => $(sel).addEventListener('input', renderEingang));
-  $('#ei-ziel').addEventListener('input', () => { $('#ei-ziel').removeAttribute('aria-invalid'); eingangKnoepfe(); });
-  $('#ei-drop').addEventListener('click', () => waehleDateien('', 'eingang'));
-  $('#ei-drop').addEventListener('keydown', (ev) => { if (ev.key === 'Enter' || ev.key === ' ') { ev.preventDefault(); waehleDateien('', 'eingang'); } });
-  $('#ei-liste').addEventListener('change', (ev) => {
-    const E = S.eingang, c = ev.target;
-    if (c.id === 'ei-alle') for (const f of eingangSicht()) { if (c.checked) E.wahl.add(f.id); else E.wahl.delete(f.id); }
-    else if (c.dataset.eiAn) { if (c.checked) E.wahl.add(c.dataset.eiAn); else E.wahl.delete(c.dataset.eiAn); }
-    else return;
-    delete $('#ei-loeschen').dataset.sicher;
-    renderEingang();
-  });
-  $('#ei-liste').addEventListener('click', (ev) => {
-    const d = ev.target.closest('[data-ei-datei]');
-    if (d) herunterladen(d.dataset.eiDatei, (S.eingang.dateien.find((f) => f.id === d.dataset.eiDatei) || {}).name);
-  });
-  $('#ei-form').addEventListener('submit', async (ev) => {
-    ev.preventDefault();
-    const z = eingangZiel(), ids = [...S.eingang.wahl], name = $('#ei-ziel').value;
-    if (!z) { $('#ei-ziel').setAttribute('aria-invalid', 'true'); return; }
-    if (!ids.length) return;
-    $('#ei-zuordnen').disabled = true;
-    const r = await api('qs_datei_zuordnen', { dateien: ids, dokument: z.dok, version: z.ver });
-    if (eingangFehler(r, 'Zuordnen fehlgeschlagen')) return;
-    eingangWeg(ids);
-    $('#ei-ziel').value = ''; $('#ei-meldung').textContent = '';
-    toast(`${dateienText(ids.length)} zugeordnet: ${name}`);
-    await neuLaden();
-    eingangZiele();
-  });
-  $('#ei-loeschen').addEventListener('click', async () => {
-    const k = $('#ei-loeschen'), ids = [...S.eingang.wahl];
-    if (!ids.length) return;
-    if (!k.dataset.sicher) { k.dataset.sicher = '1'; k.textContent = `${dateienText(ids.length)} endgültig löschen?`; return; }
-    delete k.dataset.sicher; k.disabled = true;
-    const r = await api('qs_eingang_loeschen', { dateien: ids });
-    if (eingangFehler(r, 'Löschen fehlgeschlagen')) return;
-    eingangWeg(ids);
-    $('#ei-meldung').textContent = '';
-    toast(`${dateienText(ids.length)} gelöscht`);
-    await neuLaden();
   });
 
   function renderDok() {
@@ -958,7 +564,7 @@
       <p class="qm-hilfe">„Dokument anlegen“ mit dieser Vorlage kopiert die Word-/Excel-Datei der gültigen Version und füllt die Platzhalter {{Nr}}, {{Titel}}, {{Kapitel}}, {{Art}}, {{Zuständig}}, {{Vertreter}} aus.
       {{Version}}, {{Datum}}, {{Erstellt}}, {{Geprüft}}, {{Freigegeben}}, {{Änderungen}} und {{Grund}} trägt die Freigabe des neuen Dokuments ein. Platzhalter wie {{Nr}} einfach als Text in Kopf- oder Fußzeile bzw. Zelle schreiben.</p>
       ${vorlageNutzbar(x) ? '' : '<p class="qm-meldung">Noch nicht nutzbar: Es braucht eine freigegebene Version mit einer Word- oder Excel-Datei (.docx, .dotx, .xlsx, .xltx, .xlsm).</p>'}</section>` : '';
-    const ablage = !gelenkt ? `<section class="qm-ablage"><h3 class="qm-zwischen">${icon('klammer')}Dateien</h3>${dateiListe(x, null, 'Noch keine Dateien.')}${ablageZone(x, null, 'Dateien ablegen')}${ladenHtml(x, '')}</section>`
+    const ablage = !gelenkt ? `<section class="qm-ablage"><h3 class="qm-zwischen">${icon('klammer')}Dateien</h3>${archiv().baumHtml(x)}${ablageZone(x, null, 'Dateien ablegen')}${ladenHtml(x, '')}</section>`
       : g ? `<section class="qm-ablage"><h3 class="qm-zwischen">${icon('klammer')}Dateien · Version ${esc(g.nr)}</h3>${dateiListe(x, g, 'Zur gültigen Version liegen keine Dateien.')}${ablageZone(x, g, 'Datei nachtragen')}${ladenHtml(x, g.id)}</section>` : '';
     p.innerHTML = `<div class="qm-dp-kopf"><div><span class="qm-sub">${esc(S.d.arten[x.art] || x.art)}${x.nr ? ' · ' + esc(x.nr) : ''}</span><h2>${esc(x.titel)}</h2></div><button class="qm-dialog-schliessen" type="button" data-dk="schliessen" aria-label="Dokument schließen">×</button></div>
       <div class="qm-chips">${chips.join('')}</div>
@@ -1689,10 +1295,12 @@
     renderAlles();
     zeigeTab(location.hash.slice(1).split('/')[0] || 'uebersicht');
   }
-  /* Brücke für weitere Dateien des Moduls (verfahren.js): dieselben Hilfen und derselbe Zustand, keine zweite Kopie.
-     verfahren.js trägt sich als STAFL_QS.verfahren ein; zeigeTab ruft dann zeigen() auf. */
+  /* Brücke für weitere Dateien des Moduls (archiv.js, ordnerimport.js, verfahren.js): dieselben Hilfen und derselbe Zustand, keine
+     zweite Kopie. archiv.js trägt sich als STAFL_QS.archiv ein (Ordnerbaum, Eingang), verfahren.js als STAFL_QS.verfahren. */
   window.STAFL_QS = { $, $$, S, esc, api, senden, oeffne, toast, fehlerText, zeigeAnmeldung, datum, wer, werName, icon, chip, optionen, natCmp,
-    verweisDok, gueltige, oeffneDok, speichereDatei, verfahren: null };
+    verweisDok, gueltige, oeffneDok, speichereDatei, verfahren: null,
+    darf, zahl, zeitpunkt, leerzeile, aktiv, istGelenkt, offene, kapitelText, groesseText, frageGrund, neuLaden, dateiSenden, hochladen,
+    herunterladen, waehleDateien, ladenHtml, ablageZone, archiv: null };
   themaKnopf();
   document.addEventListener('DOMContentLoaded', () => { laden().catch(() => fehler('Keine Verbindung zum Server.')); });
 })();
