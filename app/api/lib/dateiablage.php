@@ -157,7 +157,11 @@ const ABLAGE_ZIP_MELDUNG_MAX = 5;          // so viele gesperrte Einträge nennt
    ABLAGE_ZIP_EINTRAEGE_MAX Einträgen oder unklarem Aufbau. Geprüft wird jeder Name, den ein Entpacker zeigen könnte: im
    Verzeichnis, im lokalen Kopf (muss gleich sein) und im Unicode-Pfad beider. Das Verzeichnis muss lückenlos direkt vor dem Ende
    stehen und genau die angegebene Zahl Einträge haben – sonst lesen Python, Go, Java oder unzip womöglich andere Einträge.
-   Ein ZIP im ZIP wird nicht geöffnet. */
+   Die lokalen Köpfe liegen lückenlos ab Byte 0 in der Reihenfolge des Verzeichnisses – sonst zeigt z. B. 7-Zip versteckte Köpfe.
+   Ein ZIP im ZIP wird nicht geöffnet.
+   Bekannte Grenze: steht die Größe erst hinter den Daten (Data Descriptor, Bit 3), kann ein Eintrag in seinen Daten einen
+   Descriptor und einen weiteren lokalen Kopf verbergen. Den sehen nur Leser ohne Verzeichnis (Java ZipInputStream, bsdtar über
+   eine Pipe), nicht 7-Zip, Windows, Python oder unzip; erkennen hieße die Daten entpacken. */
 function ablage_zip_pruefen(string $pfad): void
 {
     $kaputt = new InvalidArgumentException('Das ZIP-Archiv ist beschädigt (Inhaltsverzeichnis nicht lesbar).');
@@ -171,28 +175,45 @@ function ablage_zip_pruefen(string $pfad): void
             $s = $lesen($pos, $n);
             return strlen($s) === $n && str_starts_with($s, $sig) ? $s : throw $kaputt;
         };
-        // Ende: der letzte Satz, der ganz in die Datei passt (so suchen Go und Java), mit Kommentar genau bis zum Dateiende
+        // Ende: der letzte Satz, der ganz in die Datei passt (so suchen Go und Java), danach der Kommentar bis zum Dateiende –
+        // höchstens noch NUL-Bytes: bsdtar (auch tar.exe unter Windows) füllt beim Schreiben nach stdout ganze Blöcke auf
         [$endeSig, $endeLaenge] = ABLAGE_ZIP_SAETZE['ende'];
         $endeAb = max(0, $groesse - $endeLaenge - ABLAGE_ZIP_VOLL16);
         $ende = $lesen($endeAb, $groesse - $endeAb);
         $p = strlen($ende) < $endeLaenge ? false : strrpos($ende, $endeSig, -$endeLaenge);
         if ($p === false) throw $kaputt;
         $e = unpack('x10/vanzahl/Vlaenge/Vstart/vkommentar', $ende, $p);
-        if ($p + $endeLaenge + $e['kommentar'] !== strlen($ende)) throw $kaputt;
+        $kommentarEnde = $p + $endeLaenge + $e['kommentar'];
+        if ($kommentarEnde > strlen($ende) || strspn($ende, "\0", $kommentarEnde) !== strlen($ende) - $kommentarEnde) throw $kaputt;
         $verzEnde = $endeAb + $p;
+        $verz = $e;   // Zahl der Einträge, Länge und Beginn des Verzeichnisses
         $verweisPos = $verzEnde - ABLAGE_ZIP_SAETZE['verweis64'][1];
         $zip64 = str_starts_with($lesen($verweisPos, 4), ABLAGE_ZIP_SAETZE['verweis64'][0]);
         if ($zip64) {   // wie bei Python, sobald der Verweis da ist; klassische Felder: Höchstwert oder gleicher Wert (wie bei Java)
             $verzEnde = unpack('x8/Pende64', $satz($verweisPos, 'verweis64'))['ende64'];
-            $z = unpack('x32/Panzahl/Plaenge/Pstart', $satz($verzEnde, 'ende64'));
+            $verz = unpack('x32/Panzahl/Plaenge/Pstart', $satz($verzEnde, 'ende64'));
             if ($verzEnde + ABLAGE_ZIP_SAETZE['ende64'][1] !== $verweisPos) throw $kaputt;   // ohne erweiterbaren Teil
             foreach (['anzahl' => ABLAGE_ZIP_VOLL16, 'laenge' => ABLAGE_ZIP_VOLL32, 'start' => ABLAGE_ZIP_VOLL32] as $k => $voll)
-                if ($e[$k] !== $voll && $e[$k] !== $z[$k]) throw $kaputt;
-            $e = $z;
+                if ($e[$k] !== $voll && $e[$k] !== $verz[$k]) throw $kaputt;
         }
-        if ($e['start'] + $e['laenge'] !== $verzEnde) throw $kaputt;
-        $muster = '/\.(?:' . implode('|', ABLAGE_GESPERRT) . ')[ .]*(?::|$)/iD';   // Windows: „a.exe. “ = „a.exe“, „a.exe:x“ = Datenstrom von a.exe
-        for ($pos = $e['start'], $gelesen = 0, $vorher = -1, $gesperrt = [], $zahlGesperrt = 0; $pos < $verzEnde; $gelesen++) {
+        if ($verz['start'] + $verz['laenge'] !== $verzEnde) throw $kaputt;
+        // Windows: „a.exe. “ = „a.exe“, „a.exe:x“ = Datenstrom von a.exe; Python, bsdtar: „a.exe/.“, „a.exe\“ = Datei a.exe (Ordner enden auf „/“)
+        $muster = '/\.(?:' . implode('|', ABLAGE_GESPERRT) . ')(?:[ .]*:|[ .\/\\\\]*(?<!\/)$)/iD';
+        // Zip64-Feld eines Kopfes: enthält nur die Werte, die im Kopf Höchstwert sind, in dieser Reihenfolge
+        $zip64Werte = function (array $kopf, array $felder) use ($kaputt): array {
+            $z64 = $felder[ABLAGE_ZIP_FELD_ZIP64][0] ?? '';
+            foreach (['groesse', 'gepackt', 'versatz'] as $k) {
+                if (($kopf[$k] ?? 0) !== ABLAGE_ZIP_VOLL32) continue;
+                if (strlen($z64) < 8) throw $kaputt;
+                $kopf[$k] = unpack('P', $z64)[1];
+                $z64 = substr($z64, 8);
+            }
+            return $kopf;
+        };
+        $gelesen = $zahlGesperrt = 0;
+        $gesperrt = [];
+        $naechster = [0];   // wo der nächste lokale Kopf (zuletzt: das Verzeichnis) beginnen darf
+        for ($pos = $verz['start']; $pos < $verzEnde; $gelesen++) {
             if ($gelesen === ABLAGE_ZIP_EINTRAEGE_MAX) throw new InvalidArgumentException('Das ZIP-Archiv hat mehr als ' . number_format(ABLAGE_ZIP_EINTRAEGE_MAX, 0, ',', '.') . ' Einträge. Bitte in kleinere Archive teilen.');
             $c = unpack('x20/Vgepackt/Vgroesse/vname/vextra/vkommentar/x8/Vversatz', $satz($pos, 'eintrag'));
             $pos += ABLAGE_ZIP_SAETZE['eintrag'][1];
@@ -200,18 +221,21 @@ function ablage_zip_pruefen(string $pfad): void
             $felder = ablage_zip_felder($lesen($pos + $c['name'], $c['extra'])) ?? throw $kaputt;
             $pos += $c['name'] + $c['extra'] + $c['kommentar'];
             if ($pos > $verzEnde) throw $kaputt;
-            if ($c['versatz'] === ABLAGE_ZIP_VOLL32) {   // Zip64-Feld enthält nur die Werte, die hier Höchstwert sind, in dieser Reihenfolge
-                $vor = 8 * (($c['groesse'] === ABLAGE_ZIP_VOLL32) + ($c['gepackt'] === ABLAGE_ZIP_VOLL32));
-                $z64 = $felder[ABLAGE_ZIP_FELD_ZIP64][0] ?? '';
-                $c['versatz'] = strlen($z64) >= $vor + 8 ? unpack('P', $z64, $vor)[1] : throw $kaputt;
-            }
-            // je Eintrag ein eigener lokaler Kopf, aufsteigend vor dem Verzeichnis (geteilte Köpfe würden je Eintrag neu gelesen), gleicher Name
-            $l = unpack('x26/vname/vextra', $satz($c['versatz'], 'lokal'));
+            $c = $zip64Werte($c, $felder);
+            // lückenlos: jeder lokale Kopf beginnt genau nach den Daten (und dem Data Descriptor) des vorigen, mit gleichem Namen;
+            // ohne Data Descriptor nennt er dieselbe gepackte Größe. Ein negativer Wert (≥ 2^63) würde Köpfe überlappen lassen.
+            if (!in_array($c['versatz'], $naechster, true) || $c['gepackt'] < 0) throw $kaputt;
+            $l = unpack('x6/vflags/x10/Vgepackt/Vgroesse/vname/vextra', $satz($c['versatz'], 'lokal'));
             $lokal = $c['versatz'] + ABLAGE_ZIP_SAETZE['lokal'][1];
-            if ($c['versatz'] <= $vorher || $lokal > $e['start'] || $lesen($lokal, $l['name']) !== $name) throw $kaputt;
-            $vorher = $c['versatz'];
+            if ($lesen($lokal, $l['name']) !== $name) throw $kaputt;
+            $lfelder = ablage_zip_felder($lesen($lokal + $l['name'], $l['extra'])) ?? throw $kaputt;
+            $descriptor = ($l['flags'] & 8) !== 0;
+            if (!$descriptor && $zip64Werte($l, $lfelder)['gepackt'] !== $c['gepackt']) throw $kaputt;
+            $datenEnde = $lokal + $l['name'] + $l['extra'] + $c['gepackt'];
+            // Data Descriptor: CRC und zwei Größen zu 4 oder 8 Bytes, mit oder ohne Signatur
+            $naechster = $descriptor ? [$datenEnde + 12, $datenEnde + 16, $datenEnde + 20, $datenEnde + 24] : [$datenEnde];
             $namen = [$name];
-            foreach ([$felder, ablage_zip_felder($lesen($lokal + $l['name'], $l['extra'])) ?? throw $kaputt] as $f)
+            foreach ([$felder, $lfelder] as $f)
                 foreach ($f[ABLAGE_ZIP_FELD_UNICODE] ?? [] as $u) $namen[] = substr($u, 5);   // nach Version (1) und Prüfsumme (4)
             foreach ($namen as $n) {
                 if (str_contains($n, "\0")) throw $kaputt;   // Python und Go schneiden dort ab: „a.exe\0.txt“ wird zu „a.exe“
@@ -221,7 +245,7 @@ function ablage_zip_pruefen(string $pfad): void
             }
         }
         // 16-Bit-Zahl ohne Zip64 modulo 65536 (so zählen Go und unzip; 65535 Einträge schreibt Python ohne Zip64)
-        if ($pos !== $verzEnde || ($zip64 ? $gelesen : $gelesen & ABLAGE_ZIP_VOLL16) !== $e['anzahl']) throw $kaputt;
+        if ($pos !== $verzEnde || !in_array($verz['start'], $naechster, true) || ($zip64 ? $gelesen : $gelesen & ABLAGE_ZIP_VOLL16) !== $verz['anzahl']) throw $kaputt;
         if ($gesperrt) throw new InvalidArgumentException('Das ZIP-Archiv enthält gesperrte Dateiarten: ' . implode(', ', $gesperrt)
             . ($zahlGesperrt > count($gesperrt) ? ' und ' . ($zahlGesperrt - count($gesperrt)) . ' weitere' : '') . '.');
     } finally {
