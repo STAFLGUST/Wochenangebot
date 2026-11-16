@@ -2,7 +2,7 @@
 
 <!-- ERZEUGT von `python3 werkzeuge/doku.py erzeugen` – nicht von Hand ändern. Quelle: Funktionen und Kommentare im Code. Die CI prüft, dass diese Datei zum Code passt. -->
 
-22 Dateien, 485 Funktionen – in der Reihenfolge der Datei, **fett** die Abschnitte. Text = erste Aussage des Kommentars direkt über der Funktion (Python: Docstring). Übersicht aller Module: [README.md](README.md).
+22 Dateien, 486 Funktionen – in der Reihenfolge der Datei, **fett** die Abschnitte. Text = erste Aussage des Kommentars direkt über der Funktion (Python: Docstring). Übersicht aller Module: [README.md](README.md).
 
 ## `app/api/aktionen/qs.php`
 
@@ -158,6 +158,7 @@ _Qualitätssicherung · QM-System (IFS Wholesale)_
 **Geschützte Kapitel (1.5 „Mitarbeiter“, Entscheidung des Inhabers 16.11.2026)**
 
 - `qs_kapitel_geschuetzt(k)`
+- `qs_geschuetzt(e, stamm)` – Eintrag (Dokument, Abschnitt, Prüfung, Maßnahme) geschützt?
 - `qs_sichtbar(me, ...namen)` – Die eine Stelle für alle Lesewege (Liste, Suche, Zahlen, CSV, Dateien, Ordnerbaum, ZIP, Bericht, Verfahrensdoku): lädt die genannten Listen (dokumente, …
 - `qs_dok_sichtbar(d, me)`
 - `qs_protokoll_name(e, name)` – Name im Protokoll: aus geschützten Kapiteln nur die Kapitelnummer – das Protokoll sieht, wer „protokoll.sehen“ hat, nicht nur „bearbeiten“

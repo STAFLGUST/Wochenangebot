@@ -119,12 +119,22 @@ function qs_dok_ablegen(array &$doc, int $i, array $d, array $me): array
     return $d;
 }
 /* ---------- Geschützte Kapitel (1.5 „Mitarbeiter“, Entscheidung des Inhabers 16.11.2026) ----------
-   Kapitel aus QS_KAPITEL_BEARBEITER samt Unterkapiteln („1.5“, „1.5.1“, nicht „1.50“), erkannt an der Kennung (nie am Titel); die Nummern
-   als Zahlen verglichen („01.5“ = „1.5“) */
+   Kapitel aus QS_KAPITEL_BEARBEITER samt Unterkapiteln („1.5“, „1.5.1“, nicht „1.50“), erkannt an der Kennung; die Nummern als Zahlen
+   verglichen („01.5“ = „1.5“). In Bereichen (zweite Firma) zählt der Titel: der Import macht jeden Kapitelordner der Firma zu einem eigenen
+   Ordner-Dokument („1.5 Mitarbeiter“ in Kapitel 90), tiefere Ordner liegen nur als pfad darin (qs_geschuetzt) */
 function qs_kapitel_geschuetzt(string $k): bool
 {
     $n = implode('.', array_map('intval', explode('.', $k)));
     foreach (QS_KAPITEL_BEARBEITER as $g) if ($n === $g || str_starts_with($n, $g . '.')) return true;
+    return false;
+}
+/* Eintrag (Dokument, Abschnitt, Prüfung, Maßnahme) geschützt? Kapitel-Kennung; in einem Bereich auch die Nummer vorn im Titel */
+function qs_geschuetzt(array $e, array $stamm): bool
+{
+    $k = (string)($e['kapitel'] ?? '');
+    if (qs_kapitel_geschuetzt($k)) return true;
+    if (!preg_match('/^\d+(?:\.\d+)*/', ltrim((string)($e['titel'] ?? ''), '_ '), $m) || !qs_kapitel_geschuetzt($m[0])) return false;
+    foreach ($stamm['kapitel'] as $x) if ((string)$x['id'] === $k && !empty($x['bereich'])) return true;
     return false;
 }
 /* Die eine Stelle für alle Lesewege (Liste, Suche, Zahlen, CSV, Dateien, Ordnerbaum, ZIP, Bericht, Verfahrensdoku): lädt die genannten
@@ -136,7 +146,7 @@ function qs_sichtbar(array $me, string ...$namen): array
     $l = []; foreach ($namen as $n) $l[$n] = qs_doc('qs-' . $n)['liste'];
     if (may($me, 'qs.bearbeiten')) return $l;
     $stamm = qs_stamm(); $id = (string)$me['id']; $kuerzel = qs_kuerzel_von($stamm, $id);
-    $frei = function (array $e): bool { return !qs_kapitel_geschuetzt((string)($e['kapitel'] ?? '')); };
+    $frei = function (array $e) use ($stamm): bool { return !qs_geschuetzt($e, $stamm); };
     $nur = function (array $liste, callable $ok): array { return array_values(array_filter($liste, $ok)); };
     foreach (['dokumente', 'handbuch'] as $n) if (isset($l[$n])) $l[$n] = $nur($l[$n], $frei);
     if (isset($l['massnahmen'])) $l['massnahmen'] = $nur($l['massnahmen'], function ($m) use ($frei, $kuerzel) { return $frei($m) || qs_massnahme_meine($m, $kuerzel); });
@@ -150,13 +160,13 @@ function qs_sichtbar(array $me, string ...$namen): array
 }
 function qs_dok_sichtbar(array $d, array $me): array
 {
-    if (qs_kapitel_geschuetzt((string)($d['kapitel'] ?? '')) && !may($me, 'qs.bearbeiten')) fail('Dieses Kapitel (personenbezogene Unterlagen) sieht nur, wer bearbeiten darf.', 403);
+    if (!may($me, 'qs.bearbeiten') && qs_geschuetzt($d, qs_stamm())) fail('Dieses Kapitel (personenbezogene Unterlagen) sieht nur, wer bearbeiten darf.', 403);
     return $d;
 }
 /* Name im Protokoll: aus geschützten Kapiteln nur die Kapitelnummer – das Protokoll sieht, wer „protokoll.sehen“ hat, nicht nur „bearbeiten“ */
 function qs_protokoll_name(array $e, string $name): string
 {
-    return qs_kapitel_geschuetzt((string)($e['kapitel'] ?? '')) ? '(Kapitel ' . $e['kapitel'] . ', personenbezogen)' : $name;
+    return qs_geschuetzt($e, qs_stamm()) ? '(Kapitel ' . $e['kapitel'] . ', personenbezogen)' : $name;
 }
 /* Ist das Modul noch leer (für den Import ohne „ersetzen“)? */
 function qs_leer(): bool
