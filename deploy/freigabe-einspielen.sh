@@ -13,8 +13,9 @@
 #   HC_DEPLOY_URL=https://…  Totmannschalter/Benachrichtigung (bei Fehler wird „/fail“ angehängt)
 #
 # Sicherung vor dem Einspielen mit dem Sicherungsskript des NEUEN Commits (ein Fehler im alten Skript blockiert sonst
-# auch das Release mit der Korrektur). Es läuft als deploy/.sichern-release.sh und nutzt die übrigen Dateien in deploy/
-# (datenbank.py, sicherung-pruefen.*) noch im alten Stand.
+# auch das Release mit der Korrektur). Es läuft als deploy/.sichern-release.sh, das Werkzeug der Dateiablage aus demselben
+# Commit als deploy/.dateien_sichern-release.py (sichern.sh bevorzugt es); die übrigen Dateien in deploy/ (datenbank.py,
+# sicherung-pruefen.*) sind noch im alten Stand.
 # Anwendungs-Image (deploy/image): Ist die Ergänzungsdatei der Anmeldung über COMPOSE_FILE in .env aktiv und ändert das
 # Release deploy/image/, wird das Image vorab als stafl-app:release-neu gebaut (Code bleibt bis dahin unverändert), erst
 # beim Einspielen auf den aktiven Namen umgetaggt; das bisherige Image bleibt als stafl-app:release-vorher für den Rückfall
@@ -55,7 +56,8 @@ APP_BILD="stafl-app:${APP_VERSION:-lokal}"   # Name wie in der Ergänzungsdatei:
 BILD_NEU=stafl-app:release-neu
 BILD_VORHER=stafl-app:release-vorher
 SICHERN_NEU="$BASIS/deploy/.sichern-release.sh"
-trap 'rm -f "$SICHERN_NEU"' EXIT
+WERKZEUG_NEU="$BASIS/deploy/.dateien_sichern-release.py"
+trap 'rm -f "$SICHERN_NEU" "$WERKZEUG_NEU"' EXIT
 trap 'exit 1' HUP INT TERM
 BAUEN=0
 HC_URL=$(envwert HC_DEPLOY_URL)
@@ -190,13 +192,14 @@ fi
 if [ -n "${WA_SICHERN:-}" ]; then
   SICHERN=$WA_SICHERN
 elif git show "$SHA:deploy/sichern.sh" > "$SICHERN_NEU" 2>/dev/null; then
+  git show "$SHA:deploy/dateien_sichern.py" > "$WERKZEUG_NEU" 2>/dev/null || rm -f "$WERKZEUG_NEU"
   SICHERN="sh $SICHERN_NEU --jetzt"
 else
   rm -f "$SICHERN_NEU"; SICHERN="sh deploy/sichern.sh --jetzt"
 fi
 $SICHERN >/dev/null || { status false "$AKTUELL" "$AKTUELL" "$LAUF_ID" "Sicherung vor dem Release fehlgeschlagen – nicht eingespielt (nächster Versuch beim nächsten Lauf)"; melden fail; echo "Sicherung fehlgeschlagen – Release nicht eingespielt"; exit 1; }
 
-rm -f "$SICHERN_NEU"
+rm -f "$SICHERN_NEU" "$WERKZEUG_NEU"
 
 # 6. Einspielen, prüfen, bei Fehler zurück
 einspielen "$SHA" "$AKTUELL"
