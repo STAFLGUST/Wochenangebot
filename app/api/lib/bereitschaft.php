@@ -168,7 +168,7 @@ function probe_pruefung(): array
         $add('sicherung', empty($s['ok']) || $alt > 48 || $kritisch ? 'bad' : ($warnung ? 'warn' : 'ok'), 'Datensicherung',
              empty($s['ok']) ? 'letzte Sicherung fehlgeschlagen' : ($alt > 48 ? 'älter als 2 Tage' : ($warnung ? 'mit Warnung' : 'aktuell') . ' (' . date('d.m.Y, H:i', strtotime((string)$s['t'])) . ' Uhr)'),
              empty($s['ok']) || $alt > 48 ? 'Sicherung prüfen – im Ernstfall ist sie der Weg zurück.'
-             : ($kritisch ? 'Dateien aus der Sicherung zurückholen (Befehle in sicherungen/.dateien-fehlend).' : ($warnung ? (string)$s['meldung'] : '')));
+             : ($kritisch ? 'Dateien aus der Sicherung zurückholen: python3 deploy/dateien_sichern.py zurueckholen sicherungen/dateien (als root im Programmordner).' : ($warnung ? (string)$s['meldung'] : '')));
     }
     if (konten_eingerichtet()) $add('zentral', 'ok', 'Zentrale Anmeldung', 'Sitzungen bei Keycloak lassen sich im Notfall beenden');
     elseif (oidc_modus()) $add('zentral', 'warn', 'Zentrale Anmeldung', 'Kontenverwaltung nicht eingerichtet – Keycloak-Sitzungen lassen sich im Notfall nicht beenden', 'deploy/anmeldung/konten.sh realm-aktualisieren und Neustart der Anwendung.');

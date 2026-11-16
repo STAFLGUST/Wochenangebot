@@ -2,7 +2,7 @@
 
 <!-- ERZEUGT von `python3 werkzeuge/doku.py erzeugen` – nicht von Hand ändern. Quelle: Funktionen und Kommentare im Code. Die CI prüft, dass diese Datei zum Code passt. -->
 
-117 Dateien, 1197 Funktionen – in der Reihenfolge der Datei, **fett** die Abschnitte. Text = erste Aussage des Kommentars direkt über der Funktion (Python: Docstring). Übersicht aller Module: [README.md](README.md).
+117 Dateien, 1198 Funktionen – in der Reihenfolge der Datei, **fett** die Abschnitte. Text = erste Aussage des Kommentars direkt über der Funktion (Python: Docstring). Übersicht aller Module: [README.md](README.md).
 
 ## `.github/scripts/apt_vorrat.py`
 
@@ -971,7 +971,8 @@ _Inkrementelle Sicherung der Dateiablage (dateien/<bereich>/<xx>/<id>.bin, lib/d
 - `sha256(p)`
 - `je_id(liste)`
 - `kurz(ids)`
-- `zurueckholen(quelle, ziel)` – Befehl für den Betreiber: neue Datei (nie ein fester Verweis in die Sicherung), Ordner und Datei dem Webserver
+- `schreiben(quelle, ablage, rel)` – im Kindprozess: quelle (Sicherung, nur root lesbar) als neue Datei ablage/rel anlegen.
+- `zurueckholen(ziel)` – Jede Datei aus sicherungen/.dateien-fehlend, die im neuesten Stand liegt, als eigene Datei (nie ein fester Verweis in die Sicherung) in die Ablage …
 - `pruefen(ablage, ziel, zeit, daten)` – Ergänzt <zeit>.tmp mit einer neuen Auflistung der Ablage und bringt jede Datei, auf die die Sicherung verweist, in den Stand (Tabelle in …
 - `passt(p, g)`
 - `belegt(staende_liste)` – Bytes aller Stände, fest verlinkte Dateien einmal; die Inode kommt aus dem Verzeichnis, stat nur bei einer neuen (bei 150 Ständen mit je 15.000 Dateien sonst …

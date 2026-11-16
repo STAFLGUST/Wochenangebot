@@ -16,6 +16,9 @@ Aufbewahrung übernimmt sichern.sh gemeinsam mit den Archiven, erst wenn alles g
                                              Stand), staende, belegt (Bytes aller Stände), fehlend (in der Ablage), zustand
   fehlende <ablage> <daten …>                für den Betreiber: Verweise, deren Datei in der Ablage fehlt oder eine andere
                                              Größe hat, je Zeile Kennung, Dokument und Befund
+  zurueckholen <ziel>                        für den Betreiber (root): jede Datei aus sicherungen/.dateien-fehlend aus dem
+                                             neuesten Stand in die Ablage zurückholen (zurueckholen()); Rückgabe 1, wenn
+                                             eine nicht zurückkam
 
 Ein Verweis ist ein Eintrag {id, groesse, sha256} in einem Dokument (Rückgabe von ablage_teil/ablage_ablegen/
 ablage_kopieren), Ausnahme QS-Rohfassung {roh, sha256Roh} ohne Größe (docs/entwickler/05-daten.md). Dokumente: SQLite über
@@ -30,7 +33,6 @@ import json
 import os
 import random
 import re
-import shlex
 import shutil
 import sqlite3
 import stat
@@ -45,6 +47,7 @@ NAME = re.compile(r'[a-z][a-z0-9-]{1,30}/[a-z0-9]{2}/([a-z0-9]{12,40})\.bin')   
 ZEIT = re.compile(r'\d{4}-\d{2}-\d{2}_\d{6}')
 ID = re.compile(r'[a-z0-9]{12,40}')
 SHA = re.compile(r'[0-9a-f]{64}')
+DOKUMENT = re.compile(r'[\w.-]+(?:/[\w.-]+)*', re.ASCII)   # wie datenbank.KEY, dazu Punkte (angebot.alt.php); nie Steuer- oder Shell-Zeichen
 STICHPROBE = 20   # zufällig je Lauf, dazu jede Datei einmal in RUNDE Tagen (Kennung mod RUNDE = Tag mod RUNDE)
 RUNDE = 30
 KRITISCH = 10     # fehlen mehr Dateien in der Ablage (oder mehr als 1 % der verwiesenen), ist der Zustand kritisch
@@ -138,6 +141,9 @@ def verweise(daten):
             rel = p.relative_to(daten)
             if not document_path(rel):
                 continue
+            if not DOKUMENT.fullmatch(str(rel.with_suffix(''))):
+                kaputt.append(ascii(str(rel)))   # Name aus dem beschreibbaren Datenordner: kein Tabulator oder Zeilenumbruch in Liste und Meldung
+                continue
             try:
                 if p.is_symlink():
                     raise OSError('Verweis')   # root folgt keinem Verweis aus dem beschreibbaren Datenordner
@@ -180,11 +186,73 @@ def kurz(ids):
     return ', '.join(ids[:3]) + (' …' if len(ids) > 3 else '')
 
 
-def zurueckholen(quelle, ziel):
-    """Befehl für den Betreiber: neue Datei (nie ein fester Verweis in die Sicherung), Ordner und Datei dem Webserver"""
-    q = ' '.join(shlex.quote(str(p)) for p in (ziel.parent.parent.parent, ziel.parent.parent, ziel.parent))
-    return (f'install -d -o {WEBSERVER} -g {WEBSERVER} {q} && cp -a {shlex.quote(str(quelle))} {shlex.quote(str(ziel))}'
-            f' && chown {WEBSERVER}:{WEBSERVER} {shlex.quote(str(ziel))}')
+def schreiben(quelle, ablage, rel):
+    """im Kindprozess: quelle (Sicherung, nur root lesbar) als neue Datei ablage/rel anlegen. Die Ablage ist im Container
+    beschreibbar: geschrieben wird als Webserver, kein Ordner darf ein Verweis sein, ein Verweis am Ziel wird ersetzt"""
+    q = os.open(quelle, os.O_RDONLY | os.O_NOFOLLOW)
+    st = os.fstat(q)
+    if os.geteuid() == 0:
+        u = int(WEBSERVER)
+        os.setgroups([])
+        os.setresgid(u, u, u)
+        os.setresuid(u, u, u)
+    d = None
+    for teil in (str(ablage), *rel.parts[:-1]):
+        try:
+            os.mkdir(teil, 0o755, dir_fd=d)
+        except FileExistsError:
+            pass
+        d = os.open(teil, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW, dir_fd=d)
+    tmp = f'.{rel.name}.{os.getpid()}.neu'
+    f = os.open(tmp, os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW, 0o600, dir_fd=d)
+    try:
+        with open(q, 'rb') as a, open(f, 'wb') as b:
+            shutil.copyfileobj(a, b, 1 << 20)
+            b.flush()
+            os.fchmod(f, stat.S_IMODE(st.st_mode))
+            os.utime(f, ns=(st.st_atime_ns, st.st_mtime_ns))   # gleiche Größe und Zeit: der nächste Lauf verlinkt statt zu kopieren
+        os.replace(tmp, rel.name, src_dir_fd=d, dst_dir_fd=d)
+    except BaseException:
+        os.unlink(tmp, dir_fd=d)
+        raise
+
+
+def zurueckholen(ziel):
+    """Jede Datei aus sicherungen/.dateien-fehlend, die im neuesten Stand liegt, als eigene Datei (nie ein fester Verweis in
+    die Sicherung) in die Ablage zurückholen; vorhandene Dateien bleiben. Jede Zeile wird gegen den Stand geprüft (Kennung
+    und Ziel passen zusammen). Gibt (zurückgeholt, nicht zurückgeholt) zurück, Gründe auf stderr."""
+    s = vorlage(ziel)
+    stand = je_id(dateien(s)) if s else {}
+    liste = ziel.parent / '.dateien-fehlend'
+    da = offen = 0
+    for zeile in liste.read_text().splitlines() if liste.is_file() else []:
+        f = zeile.split('\t')
+        i, z = f[0], Path(f[-1])
+        rel = Path(*z.parts[-3:])
+        if not (z.is_absolute() and stand.get(i) == str(rel)):
+            print(f'{ascii(i)}: nicht in der Sicherung ({ascii(f[-1])})', file=sys.stderr)
+            offen += 1
+            continue
+        try:
+            if stat.S_ISREG(os.lstat(z).st_mode):
+                continue
+        except OSError:
+            pass
+        pid = os.fork()
+        if pid == 0:
+            code = 1
+            try:
+                schreiben(s / rel, z.parents[2], rel)
+                code = 0
+            except Exception as e:
+                print(f'{i}: {e}', file=sys.stderr, flush=True)
+            finally:
+                os._exit(code)
+        if os.waitpid(pid, 0)[1]:
+            offen += 1
+        else:
+            da += 1
+    return da, offen
 
 
 def pruefen(ablage, ziel, zeit, daten):
@@ -192,7 +260,7 @@ def pruefen(ablage, ziel, zeit, daten):
     Stand (Tabelle in docs/entwickler/08-betrieb.md): aus der Ablage; passt dort die Größe nicht zum Dokument, die passende
     Fassung des vorigen Stands; fehlt sie in der Ablage, die des vorigen Stands. So trägt jeder Stand eine Datei weiter,
     solange ein Dokument auf sie verweist, und die Aufbewahrung verliert sie nie. Alles nur Warnungen: Liste
-    sicherungen/.dateien-fehlend mit dem Befehl zum Zurückholen je Datei (die Anwendung rechnet selbst mit fehlenden
+    sicherungen/.dateien-fehlend mit Kennung, Dokument und Ziel in der Ablage je Datei (zurueckholen; die Anwendung rechnet selbst mit fehlenden
     Dateien, z. B. ZIP-Export mit Hinweise.txt). Stichprobe mit SHA-256 (rotierend und zufällig): stimmt die Kopie im Stand
     nicht, die Datei in der Ablage aber schon, wird sie frisch kopiert statt verlinkt. Gibt (Zustand, Warnungen) zurück."""
     neu = ziel / f'{zeit}.tmp'
@@ -245,15 +313,15 @@ def pruefen(ablage, ziel, zeit, daten):
             falsch.append(i)
     liste = ziel.parent / '.dateien-fehlend'
     if fehlen:
-        liste.write_text(''.join(f'{i}\t{dok}\t' + (zurueckholen(ziel / zeit / stand[i], ablage / stand[i]) if i in stand
-                                                     else 'fehlt in Ablage und Sicherung') + '\n' for i, dok in fehlen))
+        liste.write_text(''.join(f'{i}\t{dok}\t{ablage / stand[i] if i in stand else "fehlt in Ablage und Sicherung"}\n'
+                                 for i, dok in fehlen))
     else:
         liste.unlink(missing_ok=True)
     weg = [i for i, _ in fehlen if i not in stand]
     warnungen = []
     if len(fehlen) > len(weg):
         warnungen.append(f'{len(fehlen) - len(weg)} Datei(en) fehlen in der Ablage, in der Sicherung erhalten (Stand {zeit}), '
-                         'Befehle zum Zurückholen: sicherungen/.dateien-fehlend')
+                         'zurückholen: python3 deploy/dateien_sichern.py zurueckholen sicherungen/dateien')
     if weg:
         warnungen.append(f'{len(weg)} Datei(en) fehlen in Ablage und Sicherung ({kurz(weg)}), Liste: sicherungen/.dateien-fehlend')
     if aus_stand:
@@ -320,7 +388,7 @@ def main():
     p = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     b = p.add_subparsers(dest='befehl', required=True)
     for name, felder in (('bedarf', 'ablage ziel zeit?'), ('aufbauen', 'ablage ziel zeit'), ('pruefen', 'ablage ziel zeit daten+'),
-                         ('abschliessen', 'ziel zeit zustand?'), ('fehlende', 'ablage daten+')):
+                         ('abschliessen', 'ziel zeit zustand?'), ('fehlende', 'ablage daten+'), ('zurueckholen', 'ziel')):
         u = b.add_parser(name)
         for f in felder.split():   # Endung ? = optional, + = mindestens einmal
             n = f.rstrip('?+')
@@ -339,6 +407,10 @@ def main():
             print('; '.join(warnungen), file=sys.stderr)
     elif a.befehl == 'abschliessen':
         print(json.dumps(abschliessen(a.ziel, a.zeit, a.zustand or 'ok'), separators=(',', ':')))
+    elif a.befehl == 'zurueckholen':
+        da, offen = zurueckholen(a.ziel)
+        print(f'{da} Datei(en) zurückgeholt' + (f', {offen} nicht (Gründe oben)' if offen else ''))
+        sys.exit(1 if offen else 0)
     else:
         for zeile in fehlende(a.ablage, a.daten):
             print(*zeile, sep='\t')

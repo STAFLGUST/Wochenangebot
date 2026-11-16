@@ -10,8 +10,8 @@
 # Dateiablage (dateien/ in daten/ bzw. nach der Trennung in daten-intern/, z. B. QM-Dokumente): nicht im Archiv, sondern je
 # Lauf ein Stand sicherungen/dateien/<Zeit>/ mit festen Verweisen auf den vorigen (deploy/dateien_sichern.py; beim Release die
 # Fassung des neuen Commits, deploy/.dateien_sichern-release.py). Jede Datei, auf die die Daten verweisen, kommt in den Stand,
-# notfalls aus dem vorigen; fehlt sie in der Ablage, ist das nur eine Warnung (Liste sicherungen/.dateien-fehlend mit dem Befehl
-# zum Zurückholen, Zustand der Ablage im Status). Abbruch nur bei Störungen der Sicherung selbst. Platz: docs/entwickler/08-betrieb.md.
+# notfalls aus dem vorigen; fehlt sie in der Ablage, ist das nur eine Warnung (Liste sicherungen/.dateien-fehlend, zurückholen mit
+# „dateien_sichern.py zurueckholen“, Zustand der Ablage im Status). Abbruch nur bei Störungen der Sicherung selbst. Platz: docs/entwickler/08-betrieb.md.
 # Nicht gesichert wird der Schlüssel für das im Eingabebereich hinterlegte Postfach-Passwort (mail-schluessel.php):
 # Sicherungen enthalten das Passwort damit nur verschlüsselt; nach einer Wiederherstellung auf neuem Server muss es
 # unter Verwaltung → E-Mail neu eingegeben werden.
@@ -190,8 +190,8 @@ WARNUNG=$(grund "$DSF" 300)
 # alles). Maßgeblich sind die Zeiten der Datenarchive, Tage in UTC.
 rotieren() {
   B=$(for F in "$ZIEL"/daten-*.tar.gz; do F=${F##*/daten-}; echo "${F%.tar.gz}"; done | sort -r \
-    | awk -v w="$(date -u -d '7 days ago' +%Y-%m-%d_%H%M%S)" -v m="$(date -u -d '30 days ago' +%Y-%m-%d_%H%M%S)" -v n="$BEHALTEN" \
-        '{ k = ++je[substr($0, 1, 10)] } NR <= n || ($0 >= w && k <= 24) || ($0 >= m && k == 1)')
+    | awk -v w="$(date -u -d '7 days ago' +%Y-%m-%d_%H%M%S)" -v m="$(date -u -d '30 days ago' +%Y-%m-%d_%H%M%S)" -v n="$BEHALTEN" -v s="$STAMP" \
+        '{ k = ++je[substr($0, 1, 10)] } $0 == s || NR <= n || ($0 >= w && k <= 24) || ($0 >= m && k == 1)')
   for F in "$ZIEL"/daten-*.tar.gz "$ZIEL"/intern-*.tar.gz "$ZIEL"/anmeldung-*.dump "$ZIEL"/dateien/*; do
     Z=${F##*/}; Z=${Z#daten-}; Z=${Z#intern-}; Z=${Z#anmeldung-}; Z=${Z%.tar.gz}; Z=${Z%.dump}
     case $Z in ????-??-??_??????) case $B in *"$Z"*) ;; *) rm -rf "$F" ;; esac ;; esac
@@ -213,18 +213,18 @@ anmeldung_sichern() {
   # Die Datenbank verlangt auch im Container ein Passwort (scram-sha-256): es kommt aus der Umgebung des Containers
   # (POSTGRES_PASSWORD), nie über die Befehlszeile. Grund eines Fehlers landet gekürzt in der Statusmeldung.
   # shellcheck disable=SC2086,SC2016  # KC_COMPOSE ist bewusst ein Befehl mit Argumenten; $POSTGRES_PASSWORD wertet der Container aus
-  timeout "$KC_FRIST" $KC_COMPOSE exec -T keycloak-db sh -c 'PGPASSWORD="$POSTGRES_PASSWORD" exec pg_dump -U keycloak -d keycloak --format=custom' > "$KC_DUMP.tmp" 2>"$KC_DUMP.fehler.tmp" || {
+  timeout -k 10 "$KC_FRIST" $KC_COMPOSE exec -T keycloak-db sh -c 'PGPASSWORD="$POSTGRES_PASSWORD" exec pg_dump -U keycloak -d keycloak --format=custom' > "$KC_DUMP.tmp" 2>"$KC_DUMP.fehler.tmp" || {
     RC=$?; ANM_GRUND=$(grund "$KC_DUMP.fehler.tmp" 160); [ "$RC" -ne 124 ] || ANM_GRUND="keine Antwort nach $KC_FRIST s"; return 1; }
   # Prüfung: Archiv lesbar und enthält die Konten (Tabelle user_entity mit Daten)
   # shellcheck disable=SC2086
-  timeout "$KC_FRIST" $KC_COMPOSE exec -T keycloak-db pg_restore --list < "$KC_DUMP.tmp" 2>/dev/null | grep -q 'TABLE DATA public user_entity' || return 1
+  timeout -k 10 "$KC_FRIST" $KC_COMPOSE exec -T keycloak-db pg_restore --list < "$KC_DUMP.tmp" 2>/dev/null | grep -q 'TABLE DATA public user_entity' || return 1
   mv "$KC_DUMP.tmp" "$KC_DUMP"; chmod 600 "$KC_DUMP"
   ANM_DATEI=$(basename "$KC_DUMP")
 }
 ANM_GRUND=""
 if [ -f "$BASIS/deploy/anmeldung/docker-compose.anmeldung.yml" ] && [ -d "$BASIS/daten-anmeldung" ]; then
   # shellcheck disable=SC2086
-  if [ -n "$(timeout "$KC_FRIST" $KC_COMPOSE ps -q keycloak-db 2>/dev/null)" ]; then
+  if [ -n "$(timeout -k 10 "$KC_FRIST" $KC_COMPOSE ps -q keycloak-db 2>/dev/null)" ]; then
     if anmeldung_sichern; then ANMELDUNG=ok; else ANMELDUNG=fehler; ANM_MELDUNG="Sicherung der Anmeldung (Keycloak) fehlgeschlagen${ANM_GRUND:+: $ANM_GRUND}"; fi
   elif grep -q '^COMPOSE_FILE=.*anmeldung' "$BASIS/.env" 2>/dev/null; then
     ANMELDUNG=fehler; ANM_MELDUNG="Anmeldung (Keycloak) in Betrieb, Datenbank läuft aber nicht – nicht gesichert"

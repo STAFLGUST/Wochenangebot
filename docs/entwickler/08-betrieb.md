@@ -332,13 +332,13 @@ Es gibt keine Testinstanz unter `test.<Domain>` mehr (entfernt am 15.11.2026, GR
   | Befund | Folge |
   | --- | --- |
   | Datei im Stand, Größe wie im Dokument | in Ordnung |
-  | fehlt in der Ablage, liegt im vorigen Stand | übernommen; Warnung „… fehlen in der Ablage, in der Sicherung erhalten (Stand …)“, in `sicherungen/.dateien-fehlend` je Datei der Befehl zum Zurückholen |
+  | fehlt in der Ablage, liegt im vorigen Stand | übernommen; Warnung „… fehlen in der Ablage, in der Sicherung erhalten (Stand …), zurückholen: …“, in `sicherungen/.dateien-fehlend` je Datei das Ziel in der Ablage |
   | fehlt in der Ablage und im vorigen Stand | Warnung „… fehlen in Ablage und Sicherung“ mit den ersten drei Kennungen, in der Liste „fehlt in Ablage und Sicherung“ |
   | in der Ablage mit anderer Größe als im Dokument | die passende Fassung des vorigen Stands, sonst die der Ablage; Warnung |
   | Kopie im Stand beschädigt (SHA-256), Datei in der Ablage richtig | im neuen Stand frisch kopiert statt verlinkt, Warnung |
   | Kopie und Datei in der Ablage beschädigt | vorhandene Fassung bleibt, Warnung |
   | Datei verschwindet während des Kopierens (Entwurf gelöscht) | übersprungen, danach wie oben eingeteilt |
-  | Dokument nicht lesbar (z. B. Verweis statt Datei) | Warnung mit Dateinamen, seine Verweise ungeprüft |
+  | Dokument nicht lesbar (z. B. Verweis statt Datei, Name mit Steuer- oder Shell-Zeichen) | Warnung mit Dateinamen (Sonderzeichen maskiert), seine Verweise ungeprüft |
 
   Zustand der Ablage im Status (`ablage.zustand`): `kritisch`, wenn mehr als 10 oder mehr als 1 % der verwiesenen Dateien in
   der Ablage fehlen (Karte „Datensicherung“ rot: „Dateien aus der Sicherung zurückholen“), `warnung` bei jeder anderen
@@ -347,9 +347,13 @@ Es gibt keine Testinstanz unter `test.<Domain>` mehr (entfernt am 15.11.2026, GR
   Ablage: ein Dreißigstel, rund 400 MB lesen und hashen je Lauf (Messung im PR #378).
 
 - **Ausweg für den Betreiber.** `sicherungen/.dateien-fehlend` (nach jedem Lauf neu) nennt je Datei Kennung, Dokument und
-  den Befehl zum Zurückholen aus dem neuesten Stand: Ordner und Datei für den Webserver (`33:33`), eine eigene Kopie, nie ein
-  fester Verweis in die Sicherung. Alle auf einmal: `cut -f3 sicherungen/.dateien-fehlend | grep -v '^fehlt' | sh`. Danach
-  ist die Karte beim nächsten Lauf wieder grün. `python3 deploy/dateien_sichern.py fehlende daten-intern/dateien daten
+  Ziel in der Ablage (bzw. „fehlt in Ablage und Sicherung“); sie enthält keine Befehle. Zurückholen, als root im
+  Programmordner: `python3 deploy/dateien_sichern.py zurueckholen sicherungen/dateien`. Jede Datei der Liste kommt aus dem
+  neuesten Stand als eigene Kopie (nie ein fester Verweis in die Sicherung) mit Größe, Rechten und Zeit der Sicherung zurück;
+  vorhandene Dateien bleiben. Die Ablage ist im Container beschreibbar, deshalb liest root nur die Sicherung und
+  geschrieben wird als Webserver (uid/gid 33): Ein Verweis am Ziel wird ersetzt, ein Verweis als Ordner abgelehnt, nichts
+  außerhalb der Ablage geändert. Nie Zeilen der Liste an eine Shell geben. Gründe für nicht zurückgeholte Dateien stehen auf
+  stderr, Rückgabe dann 1. Danach ist die Karte beim nächsten Lauf wieder grün. `python3 deploy/dateien_sichern.py fehlende daten-intern/dateien daten
   daten-intern` (vor der Datentrennung `fehlende daten/dateien daten`) listet jederzeit jeden Verweis ohne passende Datei in
   der Ablage mit Dokument und Befund; nur lesend. Hält ein Fehler das Release auf, stoppt `.release-abgelehnt` die
   Wiederholung ([Release-Freigabe](../release-freigabe.md)).

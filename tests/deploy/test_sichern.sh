@@ -333,17 +333,25 @@ S1=$(neuester); export S1
 ok "Ablage verloren: alle verwiesenen Dateien aus dem vorigen Stand übernommen (feste Verweise), Sicherung erfolgreich, Zustand kritisch" '[ "$R" = 0 ] \
   && [ "$(feld "$W/daten" ok)" = True ] && [ "$(feld "$W/daten" ablage.zustand)" = kritisch ] && [ "$(feld "$W/daten" ablage.anzahl)" = 3 ] && [ "$(feld "$W/daten" ablage.fehlend)" = 3 ] \
   && [ "$(stat -c %i "$S1/qs/ab/ab00000000000000000002.bin")" = "$(stat -c %i "$S0/qs/ab/ab00000000000000000002.bin")" ] \
-  && [ "$(feld "$W/daten" meldung)" = "3 Datei(en) fehlen in der Ablage, in der Sicherung erhalten (Stand ${S1##*/}), Befehle zum Zurückholen: sicherungen/.dateien-fehlend" ]'
-ok "Liste .dateien-fehlend: je Datei Kennung, Dokument und Befehl zum Zurückholen als eigene Datei des Webservers" '[ "$(wc -l < "$W/sicherungen/.dateien-fehlend")" = 3 ] \
-  && [ "$(sed -n 2p "$W/sicherungen/.dateien-fehlend")" = "$(printf "ab00000000000000000002\tqs-dokumente\tinstall -d -o 33 -g 33 %s %s %s && cp -a %s %s && chown 33:33 %s" \
-       "$W/daten/dateien" "$W/daten/dateien/qs" "$W/daten/dateien/qs/ab" "$S1/qs/ab/ab00000000000000000002.bin" "$W/daten/dateien/qs/ab/ab00000000000000000002.bin" "$W/daten/dateien/qs/ab/ab00000000000000000002.bin")" ]'
+  && [ "$(feld "$W/daten" meldung)" = "3 Datei(en) fehlen in der Ablage, in der Sicherung erhalten (Stand ${S1##*/}), zurückholen: python3 deploy/dateien_sichern.py zurueckholen sicherungen/dateien" ]'
+ok "Liste .dateien-fehlend: je Datei Kennung, Dokument und Ziel in der Ablage, kein Befehl" '[ "$(wc -l < "$W/sicherungen/.dateien-fehlend")" = 3 ] \
+  && [ "$(sed -n 2p "$W/sicherungen/.dateien-fehlend")" = "$(printf "ab00000000000000000002\tqs-dokumente\t%s" "$W/daten/dateien/qs/ab/ab00000000000000000002.bin")" ]'
 N=1; while [ "$N" -le 31 ]; do export VERSATZ="+$N days"; uhr || echo "Lauf +$N Tage: $(tail -1 "$W/aus.txt")"; N=$((N + 1)); done   # 31 Tage täglich gesichert
 ok "nach 31 Tagen und 31 Läufen: frühere Stände aufgeräumt, die Dateien liegen weiter unverändert im neuesten Stand" '[ ! -e "$S0" ] && [ ! -e "$S1" ] \
   && [ "$(feld "$W/daten" ok)" = True ] && [ "$(feld "$W/daten" ablage.zustand)" = kritisch ] && diff -r "$W/original" "$(neuester)" >/dev/null'
-# Ausweg wie in docs/entwickler/08-betrieb.md: die Befehle der Liste ausführen (ohne root ohne Besitzerwechsel)
-cut -f3 "$W/sicherungen/.dateien-fehlend" | grep -v '^fehlt' | if [ "$(id -u)" = 0 ]; then sh; else sed 's/ -o 33 -g 33//; s/ && chown 33:33 .*//' | sh; fi
+# Ausweg wie in docs/entwickler/08-betrieb.md: „zurueckholen“ (als root) schreibt als Webserver (uid 33) und folgt keinem
+# Verweis, den der Container in der Ablage anlegt: hier ein Verweis am Ziel und einer als Ordner auf Dateien des Hosts
+mkdir -p "$W/daten/dateien/qs/aa"; [ "$(id -u)" != 0 ] || { chmod 755 "$T"; chown -R 33:33 "$W/daten"; }   # wie im Betrieb: Datenordner des Webservers
+echo ORIGINAL > "$T/host-datei"; chmod 644 "$T/host-datei"; mkdir "$T/host-ordner"; HOST_VOR=$(stat -c %U:%G:%a "$T/host-datei" "$T/host-ordner"); export HOST_VOR
+ln -s "$T/host-datei" "$W/daten/dateien/qs/aa/aa00000000000000000001.bin"; ln -s "$T/host-ordner" "$W/daten/dateien/qs/ab"
+R=0; python3 "$W/deploy/dateien_sichern.py" zurueckholen "$W/sicherungen/dateien" > "$W/zurueck.txt" 2>&1 || R=$?; export R
+ok "zurueckholen: Verweis am Ziel ersetzt statt verfolgt, Verweis als Ordner abgelehnt, Dateien des Hosts unverändert" '[ "$R" = 1 ] \
+  && [ "$(cat "$T/host-datei")" = ORIGINAL ] && [ "$(stat -c %U:%G:%a "$T/host-datei" "$T/host-ordner")" = "$HOST_VOR" ] && [ -z "$(ls -A "$T/host-ordner")" ] \
+  && [ ! -L "$W/daten/dateien/qs/aa/aa00000000000000000001.bin" ] && cmp -s "$W/original/qs/aa/aa00000000000000000001.bin" "$W/daten/dateien/qs/aa/aa00000000000000000001.bin" \
+  && grep -q "^ab00000000000000000002: " "$W/zurueck.txt" && grep -q "^2 Datei(en) zurückgeholt, 1 nicht" "$W/zurueck.txt"'
+rm "$W/daten/dateien/qs/ab"; python3 "$W/deploy/dateien_sichern.py" zurueckholen "$W/sicherungen/dateien" >/dev/null || true   # Ergebnis prüft der nächste Test
 export VERSATZ="+32 days"; uhr; unset VERSATZ
-ok "Ausweg: die Befehle holen jede Datei als eigene Datei zurück (kein fester Verweis in die Sicherung), danach ohne Warnung" 'diff -r "$W/original" "$W/daten/dateien" >/dev/null \
+ok "Ausweg: zurueckholen holt jede Datei als eigene Datei des Webservers zurück (kein fester Verweis in die Sicherung), danach ohne Warnung" 'diff -r "$W/original" "$W/daten/dateien" >/dev/null \
   && [ "$(stat -c %h "$W/daten/dateien/qs/aa/aa00000000000000000001.bin")" = 1 ] && { [ "$(id -u)" != 0 ] || [ "$(stat -c %u:%g "$W/daten/dateien/qs/aa/aa00000000000000000001.bin")" = 33:33 ]; } \
   && [ "$(feld "$W/daten" ok)" = True ] && [ "$(feld "$W/daten" meldung)" = "" ] && [ "$(feld "$W/daten" ablage.zustand)" = ok ] && [ ! -e "$W/sicherungen/.dateien-fehlend" ]'
 chmod -R u+rwx "$W" 2>/dev/null; rm -rf "$W"
@@ -391,7 +399,7 @@ ok "rotierende Stichprobe: beschädigte Kopie an genau einem von 30 Tagen erkann
 mkdir -p "$W/deploy/anmeldung" "$W/daten-anmeldung" "$W/bin-frist"; touch "$W/deploy/anmeldung/docker-compose.anmeldung.yml"
 printf '#!/bin/sh\ncase "$1" in ps) echo 0123abcd ;; exec) sleep 60 ;; esac\n' > "$W/kc-haengt.sh"
 ECHT_TIMEOUT=$(command -v timeout); export ECHT_TIMEOUT
-printf '#!/bin/sh\nshift; exec "$ECHT_TIMEOUT" 2 "$@"\n' > "$W/bin-frist/timeout"; chmod +x "$W/bin-frist/timeout"
+printf '#!/bin/sh\n[ "$1 $2" = "-k 10" ] || exit 99   # nach der Frist hart beenden, falls der Container TERM nicht beachtet\nshift 3; exec "$ECHT_TIMEOUT" 2 "$@"\n' > "$W/bin-frist/timeout"; chmod +x "$W/bin-frist/timeout"
 A0=$(date +%s); R=0; WA_KC_COMPOSE="sh $W/kc-haengt.sh" PATH="$W/bin-frist:$PATH" sh "$W/deploy/sichern.sh" --jetzt > "$W/aus.txt" 2>&1 || R=$?; DAUER=$(($(date +%s) - A0)); export R DAUER
 ok "Keycloak-Abzug hängt: nach der Frist Fehler mit Grund, Geschäftsdaten gesichert, kein Warten auf den Container" '[ "$R" = 1 ] && [ "$DAUER" -lt 30 ] \
   && [ "$(feld "$W/daten" anmeldung)" = fehler ] && feld "$W/daten" meldung | grep -q "Keycloak) fehlgeschlagen: keine Antwort nach 300 s"'
@@ -406,6 +414,17 @@ R=0; lauf || R=$?; export R
 ok "Dokumente ohne Sperrzeile, mit Punkt im Namen oder skalarem JSON: gesichert und gelesen; ein Verweis als Dokument nur Warnung mit Namen" '[ "$R" = 0 ] \
   && [ "$(feld "$W/daten" ok)" = True ] && feld "$W/daten" meldung | grep -q "1 Datei(en) fehlen in Ablage und Sicherung (af00000000000000000006)" \
   && feld "$W/daten" meldung | grep -q "1 Dokument(e) nicht lesbar, Verweise darin nicht geprüft (kopie.php)"'
+# Dokumentname mit Tabulator und Shell-Befehl (der Container kann ihn anlegen): nur Warnung, nie in Liste oder Ausweg
+printf '%s\n{"a":{"id":"zz0000000000000000000z","groesse":1,"sha256":"%s"}}' "$G" "$(printf '0%.0s' $(seq 64))" > "$W/daten/$(printf 'x\ttouch GEHACKT').php"
+R=0; lauf || R=$?; (cd "$W" && python3 deploy/dateien_sichern.py zurueckholen sicherungen/dateien >/dev/null 2>&1) || true; export R
+ok "Dokumentname mit Tabulator und Befehl: als nicht lesbar gemeldet, Liste nur Kennung, Dokument und Ziel, nichts ausgeführt" '[ "$R" = 0 ] \
+  && feld "$W/daten" meldung | grep -q "2 Dokument(e) nicht lesbar, Verweise darin nicht geprüft (kopie.php, .xttouch GEHACKT.php.)" \
+  && [ -z "$(awk -F "\t" "NF != 3" "$W/sicherungen/.dateien-fehlend")" ] && ! grep -q "touch\|zz0000000000000000000z" "$W/sicherungen/.dateien-fehlend" && [ -z "$(find "$T" -name "GEHACKT*")" ]'
+# Uhr zurückgestellt nach vielen Läufen am selben Tag (Release-Schleife): rotieren behält immer den laufenden Lauf
+H=$(date -u +%Y-%m-%d); N=0; while [ "$N" -lt 40 ]; do alt "$(date -u -d "$H 20:00 UTC + $((N * 2)) min" +%Y-%m-%d_%H%M%S)" 2>/dev/null || true; N=$((N + 1)); done
+export VERSATZ="$H 18:20 UTC"; R=0; uhr || R=$?; unset VERSATZ; export R H
+ok "Uhr zurück, über 30 neuere Läufe am selben Tag: der laufende Lauf bleibt mit Archiv und Stand" '[ "$R" = 0 ] && [ "$(feld "$W/daten" ok)" = True ] \
+  && [ "$(feld "$W/daten" datei)" = "daten-${H}_182000.tar.gz" ] && [ -f "$W/sicherungen/daten-${H}_182000.tar.gz" ] && [ -d "$W/sicherungen/dateien/${H}_182000" ]'
 chmod -R u+rwx "$W" 2>/dev/null; rm -rf "$W"
 # Getrennte Daten (ADR-007 Stufe 2): zweites Archiv intern-*.tar.gz für daten-intern/, gleich geprüft – Dateien und SQLite
 for ART in dateien sqlite; do
