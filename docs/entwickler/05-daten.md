@@ -785,7 +785,9 @@ Die einzige Beschreibung der Regeln; Code-Kommentare verweisen hierher.
   wird zugeordnet oder endgültig gelöscht; die Prüfsumme bleibt in `verworfen`, und nie wird eine Datei gelöscht, die `qs-dokumente` noch
   verwendet.
 - **Sichtbarkeit:** Ordner, externe Dokumente und Versionen mit `qs.sehen`; der Eingang (Liste, Zahl, Download) nur mit `qs.bearbeiten` –
-  dort liegen unsortierte, womöglich personenbezogene Unterlagen.
+  dort liegen unsortierte, womöglich personenbezogene Unterlagen. Ebenso alle Dokumente der Kapitel in `QS_KAPITEL_BEARBEITER` (`qs.php`,
+  heute 1.5 „Mitarbeiter“, Entscheidung des Inhabers 16.11.2026; Kennzeichen ist die Kapitel-Kennung, nie der Titel): `qs_dokumente_sichtbar`
+  filtert Liste, CSV, ZIP-Export und Audit-Bericht, `qs_dok_sichtbar` gibt für Dateien, Ordnerbaum und Ordner-ZIP 403.
 - **`pfad`** (`qs_pfad`): Unterordner relativ zum Ordner-Dokument (Archiv) bzw. zum gewählten Ordner (Eingang). `/`-getrennt, `\` teilt
   ebenfalls, Leerraum zusammengefasst, ohne Steuerzeichen und leere, `.`- und `..`-Teile, je Teil 120 Zeichen, höchstens 12 Teile und
   500 Byte (ganze Teile); leer = Feld fehlt. Nur Anzeige, Ordnerbaum und Suche, nie ein Pfad im Dateisystem; Zuordnen behält ihn.
