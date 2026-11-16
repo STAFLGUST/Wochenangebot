@@ -133,13 +133,14 @@ function qs_ablage_zahlen(): array
     $d = store_read('qs-ablage-zahlen');
     return is_array($d['je'] ?? null) ? $d['je'] : [];
 }
-/* Zahl und Bytes je Ordner/externem Dokument für qs_start: qs-ablage-zahlen und die älteren Dateien am Dokument (ohne Eingang) */
+/* Zahl und Bytes je Ordner/externem Dokument für qs_start – nur für $dokumente (die sichtbaren): qs-ablage-zahlen und die älteren Dateien am Dokument */
 function qs_ablage_uebersicht(array $dokumente): array
 {
-    $je = array_diff_key(qs_ablage_zahlen(), [QS_EINGANG => true]);
-    foreach ($dokumente as $d) if (!in_array($d['art'] ?? '', QS_GELENKT, true) && ($alt = qs_dateien_aktiv(qs_ordner_dateien($d, [])))) {
-        $id = (string)$d['id'];
-        $je[$id] = ['dateien' => (int)($je[$id]['dateien'] ?? 0) + count($alt), 'bytes' => (int)($je[$id]['bytes'] ?? 0) + array_sum(array_map('intval', array_column($alt, 'groesse')))];
+    $zahlen = qs_ablage_zahlen(); $je = [];
+    foreach ($dokumente as $d) if (!in_array($d['art'] ?? '', QS_GELENKT, true)) {
+        $id = (string)$d['id']; $alt = qs_dateien_aktiv(qs_ordner_dateien($d, []));
+        $z = ['dateien' => (int)($zahlen[$id]['dateien'] ?? 0) + count($alt), 'bytes' => (int)($zahlen[$id]['bytes'] ?? 0) + array_sum(array_map('intval', array_column($alt, 'groesse')))];
+        if ($z['dateien']) $je[$id] = $z;
     }
     return $je;
 }

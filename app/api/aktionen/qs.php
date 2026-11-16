@@ -50,7 +50,7 @@ switch ($action) {
             $handbuch = qs_doc('qs-handbuch')['liste'];
             qs_abschnitte_sortieren($handbuch);
             usort($nachweise, function ($a, $b) { return [$b['datum'], $b['erfasst']['t'] ?? ''] <=> [$a['datum'], $a['erfasst']['t'] ?? '']; });
-            $dokumente = qs_doc('qs-dokumente')['liste'];
+            $dokumente = qs_dokumente_sichtbar(qs_doc('qs-dokumente')['liste'], $me);
             $monate = (int)$stamm['einstellungen']['ueberpruefungMonate'];
             respond(['ok' => true, 'heute' => $heute, 'ich' => ['id' => (string)$me['id'], 'name' => (string)$me['name'], 'kuerzel' => qs_kuerzel_von($stamm, (string)$me['id'])],
                      'rechte' => ['nachweis' => may($me, 'qs.nachweis'), 'bearbeiten' => may($me, 'qs.bearbeiten'), 'freigeben' => may($me, 'qs.freigeben'), 'verwalten' => may($me, 'qs.verwalten'),
@@ -69,11 +69,11 @@ switch ($action) {
 
         /* Dokumentenliste, Prüfplan oder Maßnahmen als CSV (Excel), im Protokoll vermerkt */
         case 'qs_export': {
-            require_perm('qs.sehen', true);
+            $me = require_perm('qs.sehen', true);
             $b = body();
             $liste = qs_wahl($b['liste'] ?? 'dokumente', ['dokumente', 'pruefplan', 'massnahmen'], 'Liste');
             $heute = qs_heute();
-            if ($liste === 'dokumente') { $daten = qs_doc('qs-dokumente')['liste']; $csv = qs_csv_dokumente($daten, qs_stamm(), $heute); $name = 'QM-Dokumentenliste'; }
+            if ($liste === 'dokumente') { $daten = qs_dokumente_sichtbar(qs_doc('qs-dokumente')['liste'], $me); $csv = qs_csv_dokumente($daten, qs_stamm(), $heute); $name = 'QM-Dokumentenliste'; }
             elseif ($liste === 'pruefplan') {
                 $daten = qs_pruefungen_aus(qs_doc('qs-pruefplan')['liste'], qs_doc('qs-nachweise')['liste'], $heute);
                 $namen = []; foreach (qs_mitarbeiter() as $m) $namen[$m['id']] = $m['name'];
@@ -386,29 +386,31 @@ switch ($action) {
             $me = require_perm('qs.sehen');
             require_once __DIR__ . '/../lib/dateiablage.php';
             $id = is_string($_GET['id'] ?? null) ? $_GET['id'] : '';
-            $ort = qs_datei_suchen(qs_doc('qs-dokumente')['liste'], $id);
+            $liste = qs_doc('qs-dokumente')['liste'];
+            $ort = qs_datei_suchen($liste, $id);
             if ($ort === null) fail('Datei nicht gefunden.', 404);
             $f = $ort[0];
             if (($f['ziel'] ?? '') === QS_EINGANG && !may($me, 'qs.bearbeiten')) fail('Dateien im Eingang sieht nur, wer bearbeiten darf.', 403);
+            foreach ($liste as $i => $d) if ($i === $ort[1] || ($ort[1] === null && (string)$d['id'] === (string)($f['ziel'] ?? ''))) qs_dok_sichtbar($d, $me);
             if (!empty($f['entfernt'])) fail('Die Datei wurde entfernt.', 404);
             ablage_senden('qs', (string)$f['id'], (string)$f['name'], (string)($f['mime'] ?? ''));
         }
 
         /* Dateien eines Ordners/externen Dokuments (GET dok) für den Ordnerbaum – erst beim Öffnen geladen, nicht in qs_start */
         case 'qs_archiv': {
-            require_perm('qs.sehen');
+            $me = require_perm('qs.sehen');
             header('Cache-Control: no-store');
             $doc = qs_doc('qs-dokumente');
-            $d = $doc['liste'][qs_dokument_index($doc, $_GET['dok'] ?? '')];
+            $d = qs_dok_sichtbar($doc['liste'][qs_dokument_index($doc, $_GET['dok'] ?? '')], $me);
             respond(['ok' => true, 'dateien' => array_map('qs_archiv_antwort', qs_archiv_dateien($d))]);
         }
 
         /* Ordner bzw. Unterordner (GET dok, pfad) als ZIP „<Dokument>/<pfad>/<Datei>“; im Protokoll vermerkt (ohne Ordnernamen) */
         case 'qs_archiv_zip': {
-            require_perm('qs.sehen');
+            $me = require_perm('qs.sehen');
             require_once __DIR__ . '/../lib/dateiablage.php';
             $doc = qs_doc('qs-dokumente');
-            $d = $doc['liste'][qs_dokument_index($doc, $_GET['dok'] ?? '')];
+            $d = qs_dok_sichtbar($doc['liste'][qs_dokument_index($doc, $_GET['dok'] ?? '')], $me);
             $pfad = qs_pfad($_GET['pfad'] ?? '');
             $wurzel = ablage_zip_pfad(qs_dok_name($d));
             $e = [];
@@ -424,14 +426,14 @@ switch ($action) {
         /* Ablage als ZIP (GET): „QM-System/<Kapitel>/<Dokument>/<Datei>“ (Archivdateien mit ihren Unterordnern) und die Dokumentenliste;
            kapitel = nur ein Kapitel, alle=1 = auch ältere Versionen, Entwürfe und eingezogene Dokumente. Im Protokoll vermerkt. */
         case 'qs_ablage_export': {
-            require_perm('qs.sehen');
+            $me = require_perm('qs.sehen');
             require_once __DIR__ . '/../lib/dateiablage.php';
             $stamm = qs_stamm();
             $kapitel = is_string($_GET['kapitel'] ?? null) ? $_GET['kapitel'] : '';
             if ($kapitel !== '') qs_kapitel_pruefen($kapitel, $stamm);
             $alle = ($_GET['alle'] ?? '') === '1';
             $heute = qs_heute();
-            $e = qs_ablage_eintraege(qs_doc('qs-dokumente')['liste'], $stamm, $kapitel, $alle, $heute);
+            $e = qs_ablage_eintraege(qs_dokumente_sichtbar(qs_doc('qs-dokumente')['liste'], $me), $stamm, $kapitel, $alle, $heute);
             audit('qs', 'QM-System: Dokumentenablage als ZIP heruntergeladen (' . (count($e) - 1) . ' Dateien' . ($kapitel !== '' ? ', Kapitel ' . $kapitel : '') . ($alle ? ', mit älteren Versionen' : '') . ')');
             ablage_zip_senden('QM-System_' . ($kapitel !== '' ? ablage_zip_pfad($kapitel) . '_' : '') . $heute . '.zip', $e);
         }
@@ -471,7 +473,7 @@ switch ($action) {
             $heute = qs_heute();
             [$von, $bis] = qs_bericht_zeitraum($_GET['von'] ?? '', $_GET['bis'] ?? '', $heute);
             $namen = []; foreach (qs_mitarbeiter() as $m) $namen[$m['id']] = $m['name'];
-            $b = qs_bericht_daten(qs_stamm(), qs_doc('qs-dokumente')['liste'], qs_doc('qs-handbuch')['liste'], qs_doc('qs-pruefplan')['liste'],
+            $b = qs_bericht_daten(qs_stamm(), qs_dokumente_sichtbar(qs_doc('qs-dokumente')['liste'], $me), qs_doc('qs-handbuch')['liste'], qs_doc('qs-pruefplan')['liste'],
                                   qs_doc('qs-nachweise')['liste'], qs_doc('qs-massnahmen')['liste'], $namen, $von, $bis, $heute);
             if ($action === 'qs_bericht') respond(['ok' => true, 'erstellt' => ['t' => now(), 'von' => (string)$me['name']]] + $b);
             $xlsx = qs_bericht_xlsx($b, (string)$me['name']);

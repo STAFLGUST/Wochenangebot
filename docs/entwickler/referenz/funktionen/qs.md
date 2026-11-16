@@ -2,7 +2,7 @@
 
 <!-- ERZEUGT von `python3 werkzeuge/doku.py erzeugen` – nicht von Hand ändern. Quelle: Funktionen und Kommentare im Code. Die CI prüft, dass diese Datei zum Code passt. -->
 
-21 Dateien, 473 Funktionen – in der Reihenfolge der Datei, **fett** die Abschnitte. Text = erste Aussage des Kommentars direkt über der Funktion (Python: Docstring). Übersicht aller Module: [README.md](README.md).
+21 Dateien, 475 Funktionen – in der Reihenfolge der Datei, **fett** die Abschnitte. Text = erste Aussage des Kommentars direkt über der Funktion (Python: Docstring). Übersicht aller Module: [README.md](README.md).
 
 ## `app/api/aktionen/qs.php`
 
@@ -38,7 +38,7 @@ _QM-System · Dokumentenablage_
 - `qs_ablage_je(liste)` – Zahl und Bytes der aktiven Dateien je Ziel
 - `qs_ablage_schreiben(ab)` – qs-ablage schreiben und qs-ablage-zahlen neu zählen – immer beide, unter der Sperre „qs-dokumente“
 - `qs_ablage_zahlen()`
-- `qs_ablage_uebersicht(dokumente)` – Zahl und Bytes je Ordner/externem Dokument für qs_start: qs-ablage-zahlen und die älteren Dateien am Dokument (ohne Eingang)
+- `qs_ablage_uebersicht(dokumente)` – Zahl und Bytes je Ordner/externem Dokument für qs_start – nur für $dokumente (die sichtbaren): qs-ablage-zahlen und die älteren Dateien am Dokument
 - `qs_datei_eintrag(datei, me, pfad)` – Eintrag einer hochgeladenen Datei (Version oder qs-ablage); pfad nur, wenn gesetzt
 - `qs_pfad(v)` – Ordnerpfad „pfad“ (Anzeige, Ordnerbaum, Suche – nie ein Pfad im Dateisystem), Format in 05-daten.md
 - `qs_ablage_auswahl(v)` – Auswahl im Eingang: eindeutige Datei-Kennungen (als Text, auch wenn sie nur aus Ziffern bestehen)
@@ -154,6 +154,8 @@ _Qualitätssicherung · QM-System (IFS Wholesale)_
 - `qs_verlauf(e, me, was)`
 - `qs_heute()`
 - `qs_dok_ablegen(doc, i, d, me)` – Dokument in qs-dokumente speichern: Stand hochzählen, „geändert“ setzen (unter der Sperre)
+- `qs_dokumente_sichtbar(liste, me)` – Dokumente, die $me sehen darf – Kapitel aus QS_KAPITEL_BEARBEITER (Kapitel-Kennung, nie der Titel) nur mit qs.bearbeiten; gilt für Liste, CSV, Dateien, …
+- `qs_dok_sichtbar(d, me)`
 - `qs_leer()` – Ist das Modul noch leer (für den Import ohne „ersetzen“)?
 - `qs_nat_cmp(a, b)` – Kapitel- und Abschnittsnummern natürlich sortieren („1.2“ vor „1.10“, „2.0.9“ vor „2.0.10“)
 

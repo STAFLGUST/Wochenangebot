@@ -59,12 +59,38 @@ NUTZER = (('lisa', 'Lisa Lesen', 'viewer', 'Leserin-Konto-12', {'grant': ['qs.se
 A, K, ids = nutzer(NUTZER)
 L, Be, An, Q, O, N = K['lisa'], K['bernd'], K['anna'], K['quinn'], K['otto'], Client('198.51.100.30')
 V = Client('198.51.100.20'); V.call('login', {'username': 'admin', 'password': PW})
-KAP = [{'id': '1.4', 'titel': 'Qualitätssicherung', 'zustaendig': 'QB'}, {'id': '2.1', 'titel': 'Einkauf / Wareneingang', 'zustaendig': 'QB'}]
+KAP = [{'id': '1.4', 'titel': 'Qualitätssicherung', 'zustaendig': 'QB'}, {'id': '1.5', 'titel': 'Mitarbeiter', 'zustaendig': 'QB'},
+       {'id': '2.1', 'titel': 'Einkauf / Wareneingang', 'zustaendig': 'QB'}]
 check('Kapitel', V.call('qs_stamm_save', {'kapitel': KAP})[0] == 200)
 O1 = Be.call('qs_dokument_save', {'kapitel': '2.1', 'art': 'O', 'nr': '', 'titel': 'Laborbefunde'})[1]['dokument']['id']
 X1 = Be.call('qs_dokument_save', {'kapitel': '2.1', 'art': 'X', 'nr': '', 'titel': 'Lieferantenzertifikate'})[1]['dokument']['id']
 r = Q.call('qs_dokument_save', {'kapitel': '1.4', 'art': 'F', 'nr': '1.4-F05', 'titel': 'Wareneingangskontrolle'})[1]['dokument']
 D3, V31 = r['id'], r['versionen'][0]['id']
+
+# ── Kapitel 1.5 „Mitarbeiter“ (personenbezogene Unterlagen, Entscheidung des Inhabers 16.11.2026): nur mit „bearbeiten“ sichtbar ──
+P15 = Be.call('qs_dokument_save', {'kapitel': '1.5', 'art': 'O', 'nr': '', 'titel': 'Personalakten'})[1]['dokument']['id']
+akte = hochladen(Be, P15, '', 'Akte Muster.pdf', pdf('Akte'))[1]['datei']
+r15 = An.call('qs_dokument_save', {'kapitel': '1.5', 'art': 'F', 'nr': '', 'titel': 'Unterweisung'})[1]['dokument']
+unterw = hochladen(An, r15['id'], r15['versionen'][0]['id'], 'Unterweisung.pdf', pdf('Unterweisung'))[1]['datei']
+rev15 = lambda: {x['id']: x for x in Be.call('qs_start')[1]['dokumente']}[r15['id']]['rev']
+An.call('qs_version_schritt', {'dokument': r15['id'], 'rev': rev15(), 'schritt': 'einreichen'})
+check('Kapitel 1.5: Ordner mit Datei und freigegebenes Formblatt angelegt', Q.call('qs_version_schritt', {'dokument': r15['id'], 'rev': rev15(), 'schritt': 'pruefen_freigeben'})[0] == 200)
+st, r = L.call('qs_start')
+check('Kapitel 1.5 mit nur „ansehen“: nicht in der Liste (also auch nicht in der Suche), keine Zahl je Ordner', st == 200 and not any(d['kapitel'] == '1.5' for d in r['dokumente'])
+      and P15 not in r['ablageZahlen'] and any(d['kapitel'] == '1.5' for d in Be.call('qs_start')[1]['dokumente']), [d['titel'] for d in r['dokumente']])
+st, _, csv15 = L.call('qs_export', {'liste': 'dokumente'}, raw=True)
+check('… nicht in der Dokumentenliste (CSV)', st == 200 and 'Personalakten' not in csv15 and 'Unterweisung' not in csv15)
+for was, abruf in (('Datei am Ordner', 'qs_datei&id=' + akte), ('Datei der gültigen Version', 'qs_datei&id=' + unterw), ('Ordnerbaum', f'qs_archiv&dok={P15}'),
+                   ('Ordner als ZIP', f'qs_archiv_zip&dok={P15}')):
+    check(f'… kein direkter Abruf ({was}): 403; mit „bearbeiten“ 200', roh(L, abruf)[0] == 403 and roh(Be, abruf)[0] == 200)
+for q in ('qs_ablage_export&alle=1', 'qs_ablage_export&kapitel=1.5&alle=1'):
+    st, z = roh(L, q)
+    n15 = zipfile.ZipFile(io.BytesIO(z)).namelist() if st == 200 else ['?']
+    check(f'… nicht im ZIP-Export ({q.split("&", 1)[1]}), mit „bearbeiten“ schon', not any('Mitarbeiter' in x for x in n15)
+          and any('Mitarbeiter' in x for x in zipfile.ZipFile(io.BytesIO(roh(Be, q)[1])).namelist()), n15)
+heute = r['heute']
+b15 = lambda cli: json.dumps(cli.call(f'qs_bericht&von={heute[:8]}01&bis={heute}')[1], ensure_ascii=False)
+check('… nicht im Audit-Bericht, mit „bearbeiten“ schon', 'Unterweisung' not in b15(L) and 'Unterweisung' in b15(Be))
 
 # ── Rechte ──
 EIN1 = pdf('Eingang Befund 1')

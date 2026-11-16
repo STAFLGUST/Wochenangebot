@@ -42,6 +42,7 @@ require __DIR__ . '/ablage.php';
 
 const QS_ARTEN = ['A' => 'Arbeitsanweisung', 'F' => 'Formblatt', 'L' => 'Liste', 'E' => 'Excel', 'V' => 'Vorlage', 'X' => 'Externes Dokument', 'O' => 'Ordner'];
 const QS_GELENKT = ['A', 'F', 'L', 'E', 'V'];
+const QS_KAPITEL_BEARBEITER = ['1.5'];   // personenbezogene Unterlagen (Inhaber 16.11.2026): Dokumente dieser Kapitel nur mit qs.bearbeiten
 const QS_VER_STATUS = ['entwurf' => 'Entwurf', 'pruefung' => 'In Prüfung', 'geprueft' => 'Geprüft', 'freigegeben' => 'Freigegeben', 'ersetzt' => 'Ersetzt', 'verworfen' => 'Verworfen'];
 const QS_VER_OFFEN = ['entwurf', 'pruefung', 'geprueft'];
 const QS_INTERVALLE = ['arbeitstaeglich' => 'täglich (Arbeitstage Mo–Fr)', 'taeglich' => 'täglich (auch am Wochenende)', 'woechentlich' => 'wöchentlich',
@@ -115,6 +116,18 @@ function qs_dok_ablegen(array &$doc, int $i, array $d, array $me): array
     $d['geaendert'] = qs_wer($me);
     $doc['liste'][$i] = $d;
     qs_schreiben('qs-dokumente', $doc);
+    return $d;
+}
+/* Dokumente, die $me sehen darf – Kapitel aus QS_KAPITEL_BEARBEITER (Kapitel-Kennung, nie der Titel) nur mit qs.bearbeiten; gilt für
+   Liste, CSV, Dateien, Archiv, ZIP und Bericht. qs_dok_sichtbar: 403 für ein einzelnes Dokument. */
+function qs_dokumente_sichtbar(array $liste, array $me): array
+{
+    if (may($me, 'qs.bearbeiten')) return $liste;
+    return array_values(array_filter($liste, function ($d) { return !in_array((string)($d['kapitel'] ?? ''), QS_KAPITEL_BEARBEITER, true); }));
+}
+function qs_dok_sichtbar(array $d, array $me): array
+{
+    if (!qs_dokumente_sichtbar([$d], $me)) fail('Dieses Kapitel (personenbezogene Unterlagen) sieht nur, wer bearbeiten darf.', 403);
     return $d;
 }
 /* Ist das Modul noch leer (für den Import ohne „ersetzen“)? */
