@@ -392,6 +392,7 @@ switch ($action) {
             $f = $ort[0];
             if (($f['ziel'] ?? '') === QS_EINGANG && !may($me, 'qs.bearbeiten')) fail('Dateien im Eingang sieht nur, wer bearbeiten darf.', 403);
             foreach ($liste as $i => $d) if ($i === $ort[1] || ($ort[1] === null && (string)$d['id'] === (string)($f['ziel'] ?? ''))) qs_dok_sichtbar($d, $me);
+            if (!qs_dateien_sichtbar([$f], $me)) fail('Dieser Ordner (personenbezogene Unterlagen) ist nur für Bearbeiter sichtbar.', 403);
             if (!empty($f['entfernt'])) fail('Die Datei wurde entfernt.', 404);
             ablage_senden('qs', (string)$f['id'], (string)$f['name'], (string)($f['mime'] ?? ''));
         }
@@ -402,7 +403,7 @@ switch ($action) {
             header('Cache-Control: no-store');
             $doc = qs_doc('qs-dokumente');
             $d = qs_dok_sichtbar($doc['liste'][qs_dokument_index($doc, $_GET['dok'] ?? '')], $me);
-            respond(['ok' => true, 'dateien' => array_map('qs_archiv_antwort', qs_archiv_dateien($d))]);
+            respond(['ok' => true, 'dateien' => array_map('qs_archiv_antwort', qs_dateien_sichtbar(qs_archiv_dateien($d), $me))]);
         }
 
         /* Ordner bzw. Unterordner (GET dok, pfad) als ZIP „<Dokument>/<pfad>/<Datei>“; im Protokoll vermerkt (ohne Ordnernamen) */
@@ -414,7 +415,7 @@ switch ($action) {
             $pfad = qs_pfad($_GET['pfad'] ?? '');
             $wurzel = ablage_zip_pfad(qs_dok_name($d));
             $e = [];
-            foreach (qs_dateien_aktiv(qs_archiv_dateien($d)) as $f) {
+            foreach (qs_dateien_sichtbar(qs_dateien_aktiv(qs_archiv_dateien($d)), $me) as $f) {
                 $p = (string)($f['pfad'] ?? '');
                 if ($pfad === '' || $p === $pfad || str_starts_with($p, $pfad . '/')) $e[] = ['pfad' => $wurzel . '/' . qs_archiv_zip_pfad($f), 'bereich' => 'qs', 'id' => (string)$f['id']];
             }
@@ -433,7 +434,7 @@ switch ($action) {
             if ($kapitel !== '') qs_kapitel_pruefen($kapitel, $stamm);
             $alle = ($_GET['alle'] ?? '') === '1';
             $heute = qs_heute();
-            $e = qs_ablage_eintraege(qs_sichtbar($me, 'dokumente')['dokumente'], $stamm, $kapitel, $alle, $heute);
+            $e = qs_ablage_eintraege(qs_sichtbar($me, 'dokumente')['dokumente'], $stamm, $kapitel, $alle, $heute, $me);
             audit('qs', 'QM-System: Dokumentenablage als ZIP heruntergeladen (' . (count($e) - 1) . ' Dateien' . ($kapitel !== '' ? ', Kapitel ' . $kapitel : '') . ($alle ? ', mit älteren Versionen' : '') . ')');
             ablage_zip_senden('QM-System_' . ($kapitel !== '' ? ablage_zip_pfad($kapitel) . '_' : '') . $heute . '.zip', $e);
         }

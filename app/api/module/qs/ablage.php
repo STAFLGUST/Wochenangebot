@@ -410,7 +410,7 @@ function qs_archiv_zip_pfad(array $f): string
 /* Einträge für den ZIP-Export „QM-System/<Kapitel>/<Dokument>/<Datei>“: gültige Version bzw. Archivdateien (mit Unterordnern aus pfad);
    mit $alle zusätzlich ältere Versionen und offene Entwürfe in Unterordnern. Eingezogene Dokumente nur mit $alle (Ordner „_eingezogen“).
    Dazu die Dokumentenliste als CSV (kennzeichnet beim Ordner-Import den eigenen Export). */
-function qs_ablage_eintraege(array $dokumente, array $stamm, string $kapitel, bool $alle, string $heute): array
+function qs_ablage_eintraege(array $dokumente, array $stamm, string $kapitel, bool $alle, string $heute, array $me): array
 {
     $kt = []; foreach ($stamm['kapitel'] as $k) $kt[(string)$k['id']] = (string)$k['titel'];
     $wurzel = 'QM-System';
@@ -423,7 +423,7 @@ function qs_ablage_eintraege(array $dokumente, array $stamm, string $kapitel, bo
         if ($eingezogen && !$alle) continue;
         $kap = ablage_zip_pfad(trim($d['kapitel'] . ' ' . ($kt[$d['kapitel']] ?? '')));
         $ordner = $wurzel . '/' . ($eingezogen ? '_eingezogen/' : '') . $kap . '/' . ablage_zip_pfad(trim(($d['nr'] !== '' ? $d['nr'] . ' ' : '') . $d['titel']));
-        foreach (qs_dateien_aktiv(qs_ordner_dateien($d, $index)) as $f) $e[] = ['pfad' => $ordner . '/' . qs_archiv_zip_pfad($f), 'bereich' => 'qs', 'id' => (string)$f['id']];
+        foreach (qs_dateien_sichtbar(qs_dateien_aktiv(qs_ordner_dateien($d, $index)), $me) as $f) $e[] = ['pfad' => $ordner . '/' . qs_archiv_zip_pfad($f), 'bereich' => 'qs', 'id' => (string)$f['id']];
         foreach ((array)($d['versionen'] ?? []) as $v) {
             $st = (string)($v['status'] ?? '');
             if ($st === 'freigegeben') $unter = '';

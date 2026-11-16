@@ -5,7 +5,8 @@ mit ihren Nachweisen und eine selbst zugewiesene Maßnahme – nicht mehr.
 Geprüft an jedem Leseweg: qs_start (Dokumente, Handbuch, Prüfplan, Nachweise, Maßnahmen, Zahlen je Ordner, Zahl der Nachweise), CSV aller
 drei Listen, Audit-Bericht (Ansicht und Excel), qs_datei, qs_archiv, qs_archiv_zip, qs_ablage_export (auch je Kapitel), Organigramm-Vorschau,
 Verfahrensdoku (qs_verfahren, Antwort nach dem Speichern, PDF des Arbeitsstands, ZIP für Prüfungen), Protokoll ohne Namen; Grenze „1.50“
-bleibt sichtbar; in einem Bereich (zweite Firma, Kapitel 90) gilt dasselbe für den importierten Ordner „1.5 Mitarbeiter“ (Nummer im Titel); Oberfläche für „ansehen“ und „Nachweise“ (1280/390 px, keine JavaScript-Fehler). Nur erfundene Testdaten.
+bleibt sichtbar; Ordner „1.5 …“ außerhalb von Kapitel 1.5 ebenso – als Ordner-Dokument (Titel) und als Unterordner (pfad der Datei), aus dem
+Import einer zweiten Firma (Bereich 90, auch „HACCP/1.5 Mitarbeiter/…“) und von Hand in Kapitel 1.4 abgelegt; Oberfläche für „ansehen“ und „Nachweise“ (1280/390 px, keine JavaScript-Fehler). Nur erfundene Testdaten.
 """
 import io
 import json
@@ -146,28 +147,53 @@ pdf_ = {n: b''.join(zlib.decompress(x) for x in re.findall(rb'stream\n(.*?)\nend
         for n, c in (('vf', VF), ('admin', V))}
 check('PDF des Arbeitsstands: ohne Titel des 1.5-Dokuments, mit für „bearbeiten“', b'Personalakte Beispiel' not in pdf_['vf'] and b'Personalakte Beispiel' in pdf_['admin'])
 
-# ── Bereich einer zweiten Firma (Kapitel 90): der Import macht ihren Kapitelordner „1.5 Mitarbeiter“ zum Ordner-Dokument dieses Titels ──
-MF = [('Matthies Fleischwaren/1.5 Mitarbeiter', 'Matthies-Akte.pdf'), ('Matthies Fleischwaren/1.50 Sonstiges', 'Matthies-150.pdf')]
+# ── Bereich einer zweiten Firma (Kapitel 90): Kapitelordner „1.5 Mitarbeiter“ wird Ordner-Dokument dieses Titels, tiefer liegt er im pfad ──
+MF = [('Matthies Fleischwaren/1.5 Mitarbeiter', 'Matthies-Akte.pdf'), ('Matthies Fleischwaren/1.50 Sonstiges', 'Matthies-150.pdf'),
+      ('Matthies Fleischwaren/HACCP-Matthies/1.5 Mitarbeiter/Gesundheitszeugnisse', 'Matthies-Zeugnis.pdf'),
+      ('Matthies Fleischwaren/HACCP-Matthies/1.50 Sonstiges', 'Matthies-HACCP-150.pdf'), ('Matthies Fleischwaren/HACCP-Matthies', 'Matthies-HACCP.pdf')]
 MW = {'wurzel': {'name': 'Matthies Fleischwaren', 'art': 'neu', 'kapitel': '90', 'titel': 'Matthies Fleischwaren'}}
 st, r = V.call('qs_sammel_plan', {'ordner': [[o, [[n, len(pdf(n))]]] for o, n in MF], **MW, 'anlegen': True})
 ups = [hochladen(V, '', '', n, pdf(n), {'sammeln': True, 'herkunft': o})[1]['upload'] for o, n in MF]
 st2, r2 = V.call('qs_import_eintragen', {**MW, 'uploads': [{'upload': u, 'status': 'ablage', 'ver': '', 'ohne': False} for u in ups]})
 md = {d['titel']: d['id'] for d in Be.call('qs_start')[1]['dokumente'] if d['kapitel'] == '90'}
-M15, M150 = md.get('1.5 Mitarbeiter'), md.get('1.50 Sonstiges')
-fm = {f['name']: f['id'] for d in (M15, M150) if d for f in Be.call(f'qs_archiv&dok={d}')[1]['dateien']}
-check('Import Bereich 90: Ordner „1.5 Mitarbeiter“ und „1.50 Sonstiges“ mit je einer Datei', st == 200 and st2 == 200 and M15 and M150
-      and set(fm) == {'Matthies-Akte.pdf', 'Matthies-150.pdf'}, (r, r2, md, fm))
+M15, M150, MH = md.get('1.5 Mitarbeiter'), md.get('1.50 Sonstiges'), md.get('HACCP-Matthies')
+fm = {f['name']: f['id'] for d in (M15, M150, MH) if d for f in Be.call(f'qs_archiv&dok={d}')[1]['dateien']}
+check('Import Bereich 90: Ordner „1.5 Mitarbeiter“, „1.50 Sonstiges“ und „HACCP-Matthies“ (Zeugnis im pfad „1.5 Mitarbeiter/…“)', st == 200 and st2 == 200
+      and M15 and M150 and MH and set(fm) == {n for _, n in MF}, (r, r2, md, fm))
 st, r, raw = L.call('qs_start', raw=True)
 check('qs_start „ansehen“: Bereichs-Ordner „1.5 Mitarbeiter“ fehlt (auch in den Zahlen), „1.50 Sonstiges“ bleibt',
       M15 not in [d['id'] for d in r['dokumente']] and M15 not in r['ablageZahlen'] and M150 in [d['id'] for d in r['dokumente']])
-for was, abruf in (('Ordnerbaum', f'qs_archiv&dok={M15}'), ('ZIP', f'qs_archiv_zip&dok={M15}'), ('Datei', 'qs_datei&id=' + fm.get('Matthies-Akte.pdf', ''))):
+for was, abruf in (('Ordnerbaum', f'qs_archiv&dok={M15}'), ('ZIP', f'qs_archiv_zip&dok={M15}'), ('Datei', 'qs_datei&id=' + fm.get('Matthies-Akte.pdf', '')),
+                   ('Datei im Unterordner HACCP-Matthies/1.5 Mitarbeiter', 'qs_datei&id=' + fm.get('Matthies-Zeugnis.pdf', ''))):
     check(f'Bereich 90, 1.5 Mitarbeiter – {was}: „ansehen“ und „Nachweise“ 403, „bearbeiten“ 200', roh(L, abruf)[0] == 403 and roh(N, abruf)[0] == 403 and roh(Be, abruf)[0] == 200)
+baum = lambda cli, d: sorted(f['name'] + '@' + f['pfad'] for f in cli.call(f'qs_archiv&dok={d}')[1]['dateien'])
+zipn = lambda cli, q: ' '.join(zipfile.ZipFile(io.BytesIO(roh(cli, q)[1])).namelist())
+check('Ordnerbaum HACCP-Matthies: „ansehen“ ohne den Unterordner „1.5 Mitarbeiter“, „1.50 Sonstiges“ bleibt; „bearbeiten“ alles',
+      baum(L, MH) == ['Matthies-HACCP-150.pdf@1.50 Sonstiges', 'Matthies-HACCP.pdf@'] and len(baum(Be, MH)) == 3, (baum(L, MH), baum(Be, MH)))
+check('Ordner-ZIP HACCP-Matthies: „ansehen“ ohne Zeugnis, „bearbeiten“ mit; Unterordner „1.5 Mitarbeiter“ einzeln für „ansehen“ 404',
+      'Matthies-Zeugnis' not in zipn(L, f'qs_archiv_zip&dok={MH}') and 'Matthies-HACCP-150' in zipn(L, f'qs_archiv_zip&dok={MH}')
+      and 'Matthies-Zeugnis' in zipn(Be, f'qs_archiv_zip&dok={MH}') and roh(L, f'qs_archiv_zip&dok={MH}&pfad=1.5%20Mitarbeiter')[0] == 404)
 check('Gegenprobe Bereich 90, 1.50: Datei und Ordnerbaum für „ansehen“ 200', roh(L, 'qs_datei&id=' + fm.get('Matthies-150.pdf', ''))[0] == 200
       and roh(L, f'qs_archiv&dok={M150}')[0] == 200)
 for abfrage in ('qs_ablage_export&alle=1', 'qs_ablage_export&kapitel=90&alle=1'):
     namen = {n: ' '.join(zipfile.ZipFile(io.BytesIO(roh(c, abfrage)[1])).namelist()) for n, c in (('lisa', L), ('bernd', Be))}
-    check(f'ZIP-Export ({abfrage.split("&", 1)[1]}): Bereichs-Ordner 1.5 nur für „bearbeiten“, 1.50 für beide', 'Matthies-Akte' not in namen['lisa']
-          and 'Matthies-150' in namen['lisa'] and 'Matthies-Akte' in namen['bernd'], namen)
+    check(f'ZIP-Export ({abfrage.split("&", 1)[1]}): Ordner 1.5 im Bereich (auch als Unterordner) nur für „bearbeiten“, 1.50 für beide',
+          'Matthies-Akte' not in namen['lisa'] and 'Matthies-Zeugnis' not in namen['lisa'] and 'Matthies-150' in namen['lisa'] and 'Matthies-HACCP-150' in namen['lisa']
+          and 'Matthies-Akte' in namen['bernd'] and 'Matthies-Zeugnis' in namen['bernd'], namen)
+
+# ── Von Hand in Kapitel 1.4: Ordner-Dokument „1.5.1 Zeugnisse“ und Unterordner „Akten/1.5 Mitarbeiter“ eines anderen Ordners ──
+H151, h151 = ordner('1.4', '1.5.1 Zeugnisse', 'Hand-Zeugnis.pdf')
+H14, h14 = ordner('1.4', 'Ablage Personal', 'Hand-Liste.pdf')
+hp = {n: hochladen(Be, H14, '', n, pdf(n), {'pfad': p})[1]['datei'] for n, p in (('Hand-Akte.pdf', 'Akten/1.5 Mitarbeiter'), ('Hand-150.pdf', 'Akten/1.50 Sonstiges'))}
+st, r = L.call('qs_start')
+check('Kapitel 1.4: Ordner „1.5.1 Zeugnisse“ fehlt für „ansehen“, „Ablage Personal“ bleibt', H151 not in [d['id'] for d in r['dokumente']]
+      and H14 in [d['id'] for d in r['dokumente']])
+check('… Ordnerbaum „Ablage Personal“: „ansehen“ ohne „Akten/1.5 Mitarbeiter“, mit „Akten/1.50 Sonstiges“',
+      baum(L, H14) == ['Hand-150.pdf@Akten/1.50 Sonstiges', 'Hand-Liste.pdf@'] and len(baum(Be, H14)) == 3, (baum(L, H14), baum(Be, H14)))
+for was, abruf in (('Datei im Ordner 1.5.1', 'qs_datei&id=' + h151), ('Datei im Unterordner 1.5', 'qs_datei&id=' + hp['Hand-Akte.pdf'])):
+    check(f'Kapitel 1.4, {was}: „ansehen“ 403, „bearbeiten“ 200', roh(L, abruf)[0] == 403 and roh(Be, abruf)[0] == 200)
+namen = zipn(L, 'qs_ablage_export&kapitel=1.4&alle=1') + zipn(L, f'qs_archiv_zip&dok={H14}')
+check('… Ablage-Export und Ordner-ZIP für „ansehen“ ohne beide, mit „Hand-150“', 'Hand-Zeugnis' not in namen and 'Hand-Akte' not in namen and 'Hand-150' in namen, namen)
 
 # ── Protokoll: Vorgänge aus 1.5 ohne Namen ──
 log = json.dumps(A.call('log')[1], ensure_ascii=False)

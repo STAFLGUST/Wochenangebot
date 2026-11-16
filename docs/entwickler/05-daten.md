@@ -787,9 +787,9 @@ Die einzige Beschreibung der Regeln; Code-Kommentare verweisen hierher.
 - **Sichtbarkeit:** Ordner, externe Dokumente und Versionen mit `qs.sehen`; der Eingang (Liste, Zahl, Download) nur mit `qs.bearbeiten` –
   dort liegen unsortierte, womöglich personenbezogene Unterlagen. Ebenso **alles** aus den Kapiteln in `QS_KAPITEL_BEARBEITER` samt
   Unterkapiteln (`qs.php`, heute 1.5 „Mitarbeiter“ und 1.5.x, Entscheidung des Inhabers 16.11.2026; Kennzeichen ist die Kapitel-Kennung,
-  `qs_kapitel_geschuetzt`; in einem Bereich die Nummer vorn im Titel, `qs_geschuetzt` – der Import macht jeden Kapitelordner der zweiten
-  Firma zu einem Ordner-Dokument, etwa „1.5 Mitarbeiter“ in Kapitel 90; ein tiefer verschachtelter Ordner „1.5 …“ liegt nur als `pfad` in
-  einem anderen Ordner-Dokument und ist damit nicht erfasst): Dokumente, Dateien, Handbuch-Abschnitte, Prüfungen, Nachweise und Maßnahmen. Ausnahme: die
+  `qs_kapitel_geschuetzt`; dazu Ordnernamen mit dieser Nummer vorn, `qs_name_geschuetzt`: Ordner-Dokumente und Einträge eines Bereichs
+  mit solchem Titel, `qs_geschuetzt` – etwa „1.5 Mitarbeiter“ in Kapitel 90 einer zweiten Firma –, und Archivdateien, in deren `pfad` ein
+  solcher Ordner steht, `qs_dateien_sichtbar` für Ordnerbaum, Ordner-ZIP, Ablage-Export und `qs_datei`): Dokumente, Dateien, Handbuch-Abschnitte, Prüfungen, Nachweise und Maßnahmen. Ausnahme: die
   eigene Prüfung (`qs_pruefung_meine`) mit ihren Nachweisen und die eigene Maßnahme (`qs_massnahme_meine`). Die eine Stelle für alle
   Lesewege ist `qs_sichtbar` (Liste und Suche, Zahlen, CSV, ZIP-Export, Audit-Bericht, Verfahrensdoku samt Export); `qs_dok_sichtbar` gibt
   für Dateien, Ordnerbaum, Ordner-ZIP und Organigramm-Vorschau 403. Das Protokoll nennt bei diesen Vorgängen nur die Kapitelnummer

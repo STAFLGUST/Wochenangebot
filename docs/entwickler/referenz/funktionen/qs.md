@@ -2,7 +2,7 @@
 
 <!-- ERZEUGT von `python3 werkzeuge/doku.py erzeugen` – nicht von Hand ändern. Quelle: Funktionen und Kommentare im Code. Die CI prüft, dass diese Datei zum Code passt. -->
 
-22 Dateien, 486 Funktionen – in der Reihenfolge der Datei, **fett** die Abschnitte. Text = erste Aussage des Kommentars direkt über der Funktion (Python: Docstring). Übersicht aller Module: [README.md](README.md).
+22 Dateien, 488 Funktionen – in der Reihenfolge der Datei, **fett** die Abschnitte. Text = erste Aussage des Kommentars direkt über der Funktion (Python: Docstring). Übersicht aller Module: [README.md](README.md).
 
 ## `app/api/aktionen/qs.php`
 
@@ -68,7 +68,7 @@ _QM-System · Dokumentenablage_
 - `qs_dateien_text(n)`
 - `qs_dateien_zahl(liste)` – Zahl der aktiven Dateien in qs-dokumente und qs-ablage (Datenpaket: ersetzt nicht, sobald Dateien liegen) – qs-ablage direkt gezählt
 - `qs_archiv_zip_pfad(f)` – ZIP-Pfad einer Archivdatei unter dem Ordner des Dokuments: <pfad>/<Datei>
-- `qs_ablage_eintraege(dokumente, stamm, kapitel, alle, heute)` – Einträge für den ZIP-Export „QM-System/<Kapitel>/<Dokument>/<Datei>“: gültige Version bzw. Archivdateien (mit Unterordnern aus pfad); mit $alle zusätzlich …
+- `qs_ablage_eintraege(dokumente, stamm, kapitel, alle, heute, me)` – Einträge für den ZIP-Export „QM-System/<Kapitel>/<Dokument>/<Datei>“: gültige Version bzw. Archivdateien (mit Unterordnern aus pfad); mit $alle zusätzlich …
 
 **Ordner-Import (Regeln in 05-daten.md, nur hier berechnet)**
 
@@ -158,7 +158,9 @@ _Qualitätssicherung · QM-System (IFS Wholesale)_
 **Geschützte Kapitel (1.5 „Mitarbeiter“, Entscheidung des Inhabers 16.11.2026)**
 
 - `qs_kapitel_geschuetzt(k)`
+- `qs_name_geschuetzt(name)` – Ordnername mit geschützter Nummer vorn („1.5 Mitarbeiter“, „_1.5.1_Zeugnisse“; nicht „1.50 …“, kein Datum „01.05.2024“)?
 - `qs_geschuetzt(e, stamm)` – Eintrag (Dokument, Abschnitt, Prüfung, Maßnahme) geschützt?
+- `qs_dateien_sichtbar(dateien, me)` – Dateien eines Ordners, die $me sieht (Ordnerbaum, Ordner-ZIP, Ablage-Export, qs_datei): mit qs.bearbeiten alle, sonst keine aus einem Unterordner mit …
 - `qs_sichtbar(me, ...namen)` – Die eine Stelle für alle Lesewege (Liste, Suche, Zahlen, CSV, Dateien, Ordnerbaum, ZIP, Bericht, Verfahrensdoku): lädt die genannten Listen (dokumente, …
 - `qs_dok_sichtbar(d, me)`
 - `qs_protokoll_name(e, name)` – Name im Protokoll: aus geschützten Kapiteln nur die Kapitelnummer – das Protokoll sieht, wer „protokoll.sehen“ hat, nicht nur „bearbeiten“
