@@ -4,7 +4,8 @@
 # Dokumentenablage (Dateien je Version, Archiv der Ordner mit Unterordnern, Eingang, Ordner-Import, in Teilen hochladen,
 # herunterladen, ZIP-Export – module/qs/ablage.php, lib/dateiablage.php) und
 # Audit-Bericht eines Zeitraums (Ansicht und Excel – module/qs/bericht.php) sowie Verfahrensdokumentation nach GoBD
-# (qs_verfahren*: Abschnitte, IT-Systeme, Fassungen, Export für Prüfungen – module/qs/verfahren.php).
+# (qs_verfahren*: Abschnitte, IT-Systeme, Fassungen, Export für Prüfungen – module/qs/verfahren.php) und Organigramm im
+# Entwurf eines gelenkten Dokuments (qs_organigramm_save, PDF-Vorschau qs_organigramm_vorschau – module/qs/organigramm.php).
 # Erklärung der Felder: regeln/aktionen/LIESMICH.md · nach Änderungen: python3 werkzeuge/regeln.py erzeugen
 
 schema = 1
@@ -100,6 +101,13 @@ schreibend = true
 oberflaeche = "qs.intern"
 
 [aktion.qs_bericht_excel]
+oberflaeche = "qs.intern"
+
+[aktion.qs_organigramm_save]
+oberflaeche = "qs.intern"
+schreibend = true
+
+[aktion.qs_organigramm_vorschau]
 oberflaeche = "qs.intern"
 
 [aktion.qs_verfahren]
