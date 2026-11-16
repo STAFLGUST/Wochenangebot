@@ -442,8 +442,26 @@ eigentuemer = "qs"
 bereich = "intern"
 schutz = "intern"
 dynamisch = true   # gelesen und geschrieben über qs_doc()/qs_schreiben() in module/qs/qs.php
-beschreibung = "Gelenkte Dokumente (Nummer, Kapitel, Art, Titel, Ablage, Zuständig, Vertreter, eingezogen, ohne Änderung überprüft) mit Versionen: Nummer, Freigabedatum, Änderungen, Änderungsgrund, Status Entwurf/in Prüfung/geprüft/freigegeben/ersetzt/verworfen, erstellt/geprüft/freigegeben, Verlauf"
+beschreibung = "Register aller QM-Dokumente (Nummer, Kapitel, Art, Titel, Ablage, Zuständig, Vertreter, eingezogen, ohne Änderung überprüft); gelenkte Dokumente mit Versionen: Nummer, Freigabedatum, Änderungen, Änderungsgrund, Status Entwurf/in Prüfung/geprüft/freigegeben/ersetzt/verworfen, erstellt/geprüft/freigegeben, Dateien je Version (Metadaten), Verlauf. Dateien von Ordnern und externen Dokumenten stehen seit dem Ordner-Import in qs-ablage; ältere Einträge „dateien“ am Dokument bleiben gültig (Leser führen beide zusammen)"
 historie = "Versionen werden nie gelöscht: eine neue Freigabe setzt die vorige auf „ersetzt“; Namen und Kürzel als Schnappschuss (GR-106)"
+
+[[dokument]]
+name = "qs-ablage"
+eigentuemer = "qs"
+bereich = "intern"
+schutz = "intern"
+dynamisch = true   # gelesen und geschrieben über qs_doc()/qs_ablage_schreiben() in module/qs/ablage.php (Sperre „qs-dokumente“)
+beschreibung = "Dateien (Metadaten) der Ordner, externen Dokumente und des Eingangs: je Datei Kennung, Name, Art, Größe, Prüfsumme, hochgeladen (wann, wer), Ziel (Dokument-Kennung oder „eingang“), Unterordner „pfad“, entfernt (wann, wer, Grund); dazu die Prüfsummen endgültig im Eingang gelöschter Dateien (verworfen, begrenzt). Die Dateien selbst liegen in der Dateiablage (lib/dateiablage.php)"
+historie = "Dateien an Ordnern und externen Dokumenten werden nie gelöscht, nur als „entfernt“ vermerkt (mit Grund); im Eingang endgültig gelöscht (kein Nachweis)"
+
+[[dokument]]
+name = "qs-ablage-zahlen"
+eigentuemer = "qs"
+bereich = "intern"
+schutz = "intern"
+dynamisch = true   # bei jedem Schreiben von qs-ablage neu gezählt (qs_ablage_schreiben), gelesen von qs_start
+beschreibung = "Zahl und Bytes der aktiven Dateien je Ziel aus qs-ablage – damit die Startseite des QM-Systems nicht die ganze Liste lesen muss"
+historie = "keine – abgeleitet, heilt sich bei jedem Schreiben von qs-ablage"
 
 [[dokument]]
 name = "qs-handbuch"

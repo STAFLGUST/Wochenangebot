@@ -16,6 +16,7 @@ die Gruppe. Nur erfundene Testdaten.
 import base64
 import hashlib
 import io
+import json
 import os
 import struct
 import time
@@ -24,7 +25,7 @@ import urllib.request
 import zipfile
 
 from kunden_hilfe import Client, API
-from umgebung import ablageordner
+from umgebung import ablageordner, storage_raw
 
 PW = 'Sicheres-Passwort-1'
 MB = 1024 * 1024
@@ -169,7 +170,7 @@ ids = {}
 for name, (inhalt, mime) in GUELTIG.items():
     st, r = hochladen(Be, O, '', name, inhalt)
     ids[name] = r.get('datei')
-    e = next((f for f in (r.get('dokument') or {}).get('dateien', []) if f['id'] == r.get('datei')), {})
+    e = next((f for f in json.loads((storage_raw('qs-ablage') or '{}').split('?>\n', 1)[-1] or '{}').get('liste', []) if f['id'] == r.get('datei')), {})   # Ordner-Dateien in qs-ablage
     check(f'{name}: abgelegt als {mime}', st == 200 and e.get('mime') == mime and e.get('groesse') == len(inhalt), (st, r.get('error'), e.get('mime')))
 
 HTML = b'<html><script>alert(1)</script></html>'

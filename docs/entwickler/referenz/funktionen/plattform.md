@@ -2,7 +2,7 @@
 
 <!-- ERZEUGT von `python3 werkzeuge/doku.py erzeugen` – nicht von Hand ändern. Quelle: Funktionen und Kommentare im Code. Die CI prüft, dass diese Datei zum Code passt. -->
 
-120 Dateien, 1206 Funktionen – in der Reihenfolge der Datei, **fett** die Abschnitte. Text = erste Aussage des Kommentars direkt über der Funktion (Python: Docstring). Übersicht aller Module: [README.md](README.md).
+123 Dateien, 1247 Funktionen – in der Reihenfolge der Datei, **fett** die Abschnitte. Text = erste Aussage des Kommentars direkt über der Funktion (Python: Docstring). Übersicht aller Module: [README.md](README.md).
 
 ## `.github/scripts/apt_vorrat.py`
 
@@ -184,7 +184,8 @@ _Dateiablage der Plattform (neben der Speicherschicht): hochgeladene Dateien ein
 
 - `ablage_teile_ordner()`
 - `ablage_aufraeumen()` – Unvollständige Uploads nach ABLAGE_UPLOAD_STUNDEN entfernen
-- `ablage_teil(bereich, nutzerId, ziel, b)` – Einen Teil annehmen.
+- `ablage_teil(bereich, nutzerId, ziel, b, ablegen)` – Einen Teil annehmen.
+- `ablage_fertig_ablegen(bereich, nutzerId, upload)` – Fertigen Upload (ablage_teil mit $ablegen = false) in die Ablage übernehmen – nur für den Nutzer, der ihn hochgeladen hat.
 - `ablage_platz_reicht(frei, groesse)`
 - `ablage_upload_verwerfen(upload)`
 
@@ -959,6 +960,34 @@ _Netzsperre am Server_
 - `bericht(pfad, zeilen)`
 - `main(argv)`
 
+## `deploy/dateien_sichern.py`
+
+_Inkrementelle Sicherung der Dateiablage (dateien/<bereich>/<xx>/<id>.bin, lib/dateiablage.php) für deploy/sichern.sh._
+
+- `dateien(wurzel)` – relativer Pfad → lstat der regulären Dateien mit gültigem Namen; folgt keinem Verweis, fehlender Ordner = leer
+- `staende(ziel)`
+- `gleich(a, b)`
+- `vorlage(ziel, zeit)` – neuester festgeschriebener Stand vor <zeit>; ein Stand mit späterer Zeit (vorgestellte Uhr) dient nie als Vorlage
+- `plan(ablage, ziel, zeit)` – je Datei der Ablage: (relativer Pfad, lstat, gleiche Datei im vorigen Stand zum Verlinken oder None = kopieren)
+- `bedarf(ablage, ziel, zeit)`
+- `kopieren(quelle, z)` – frische Kopie (eigene Inode); False, wenn die Quelle inzwischen gelöscht ist
+- `aufbauen(ablage, ziel, zeit)` – <zeit>.tmp ergänzen; gibt die Dateien der Ablage zurück, die jetzt im Stand liegen (relativer Pfad → lstat)
+- `verweise(daten)` – ({id → (Dokument, groesse oder None, sha256 oder '')}, [nicht lesbare Dokumente]) aus einem Datenordner oder einer entpackten Sicherung.
+- `lauf(x, dok)`
+- `sha256(p)`
+- `je_id(liste)`
+- `kurz(ids)`
+- `schreiben(quelle, ablage, rel)` – im Kindprozess: quelle (Sicherung, nur root lesbar) als neue Datei ablage/rel anlegen.
+- `zurueckholen(ziel)` – Jede Datei aus sicherungen/.dateien-fehlend, die im neuesten Stand liegt, als eigene Datei (nie ein fester Verweis in die Sicherung) in die Ablage …
+- `pruefen(ablage, ziel, zeit, daten)` – Ergänzt <zeit>.tmp mit einer neuen Auflistung der Ablage und bringt jede Datei, auf die die Sicherung verweist, in den Stand (Tabelle in …
+- `passt(p, g)`
+- `belegt(staende_liste)` – Bytes aller Stände, fest verlinkte Dateien einmal; die Inode kommt aus dem Verzeichnis, stat nur bei einer neuen (bei 150 Ständen mit je 15.000 Dateien sonst …
+- `lauf(ordner)`
+- `abschliessen(ziel, zeit, zustand)`
+- `fehlende(ablage, daten)`
+- `zeit(wert)`
+- `main()`
+
 ## `deploy/daten_trennen.py`
 
 _Daten trennen (ADR-007 Stufe 2): interne Dokumente aus daten/ in daten-intern/ verschieben – bzw. zurückführen._
@@ -1155,6 +1184,27 @@ _HTTP-Client mit eigener Sitzung für API-Tests (IP über X-Forwarded-For, wie h
 
 - `__init__(ip)`
 - `call(action, data, raw)`
+
+## `tests/e2e/qs_hilfe.py`
+
+_Gemeinsame Hilfen der Tests zur Dokumentenablage des QM-Systems (test_qs_eingang.py, test_qs_import.py)_
+
+- `check(n, c, i)`
+- `ende()`
+- `pdf(text)`
+- `docx_w(text)` – Word-Datei mit Absatz und Textstück (wie Word), damit Platzhalter erkannt werden
+- `blob_pfad(did)`
+- `blobs()` – Kennungen aller Dateien der QS-Ablage auf der Platte
+- `speicher(name)`
+- `hochladen(cli, dok, ver, name, inhalt, extra)`
+- `roh(cli, query)`
+- `nutzer(nutzer_liste, ip_ab)` – Administrator anmelden, Nutzer (Name, Anzeigename, Rolle, Passwort, Rechte) anlegen und anmelden: (Admin, {Name: Client}, {Name: Kennung})
+- `fuellen(cli, n, ziel, praefix)` – n aktive Einträge ohne Datei in qs-ablage – nur zum Erreichen einer Grenze; die Zahlen zählt danach der Server neu
+- `leeren(cli, praefix)` – Füllung wieder entfernen; den letzten Eintrag löscht der Server im Eingang – dabei zählt er neu (auch wenn die Zahlen noch „voll“ sagen)
+- `neu_zaehlen(cli)` – qs-ablage-zahlen neu zählen lassen wie im Betrieb: eine Datei in den Eingang legen und wieder löschen (jedes Schreiben zählt neu)
+- `anmelden(br, user, pw, ip, breite, thema, hoehe)` – Browser anmelden und das QM-System („Dokumente“) öffnen; Fehler der Seite landen in fehler
+- `text(pg, sel)`
+- `ohne_scrollen(pg, dlg)`
 
 ## `tests/e2e/smtp_test.py`
 
@@ -1984,6 +2034,12 @@ _Nielsen-Gebiete für die CRM-Karte (app/module/crm/nielsen.json) aus den Bundes
 - `runden(geo)`
 - `r(c)`
 - `main()`
+
+## `werkzeuge/qs_ablage_leser.py`
+
+_QM-System: „dateien“ an Ordnern und externen Dokumenten nur in den vier Lesern von app/api/module/qs/ablage.php lesen._
+
+- `funde(wurzel)`
 
 ## `werkzeuge/realm_produktion.py`
 

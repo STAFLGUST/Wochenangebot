@@ -56,7 +56,7 @@ printf '%8s  %s\n' "$(groesse daten)" "daten/ (Geschäftsdaten)"
 [ -d daten/protokoll ] && printf '%8s  %s\n' "$(groesse daten/protokoll)" "daten/protokoll ($(anzahl daten/protokoll) Monate Aktivitätsprotokoll)"
 [ -d daten/versionen ] && printf '%8s  %s\n' "$(groesse daten/versionen)" "daten/versionen ($(anzahl daten/versionen) frühere Veröffentlichungen, begrenzt)"
 [ -d daten/historie ] && printf '%8s  %s\n' "$(groesse daten/historie)" "daten/historie ($(anzahl daten/historie) Wochen Preisverlauf)"
-[ -d sicherungen ] && printf '%8s  %s\n' "$(groesse sicherungen)" "sicherungen/ ($(anzahl sicherungen) Dateien, je Art die letzten 30)"
+[ -d sicherungen ] && printf '%8s  %s\n' "$(groesse sicherungen)" "sicherungen/ ($(anzahl sicherungen) Dateien; 7 Tage alle Läufe, 30 Tage einer je Tag)"
 [ -d daten-anmeldung ] && printf '%8s  %s\n' "$(groesse daten-anmeldung)" "daten-anmeldung/ (Keycloak-Einrichtung)"
 echo
 echo "== Aufräumbar ohne Risiko"

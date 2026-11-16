@@ -191,12 +191,12 @@ Ohne gültigen Schlüssel wirkt nichts davon. Jede neue Weiterleitung (`reverse_
 | `.env` | Domain, Mail-Zugang, Geheimnisse der Anmeldung, Token für den Release-Modus, Schlüssel für bunny.net (`CDN_SCHLUESSEL`, `CDN_PFLICHT`) (nur root) |
 | `.release-vorher`, `.release-abgelehnt` | Stand vor dem letzten Release (Notfall-Rückfall) bzw. abgelehnter Release (nur root) |
 | `.cdn-netzsperre`, `.cdn-netzsperre-liste.json`, `.cdn-netzsperre-regeln` | Netzsperre für bunny.net: Modus, Liste der Edge-Server, Prüfsumme der gesetzten Regeln (nur root, `cdn-netzsperre.sh`) |
-| `daten/` | Geschäftsdaten (Dateien oder `daten/.sqlite/store.sqlite`), Dateiablage `daten/dateien/` (hochgeladene Dateien, z. B. QM-Dokumente; in der Sicherung enthalten), Status von Sicherung und Deployment, `mail-schluessel.php` bis zum Umzug nach `daten-geheim/` (nicht in Sicherungen), Versandaufträge der Kundenseite (`postausgang`) |
+| `daten/` | Geschäftsdaten (Dateien oder `daten/.sqlite/store.sqlite`), Dateiablage `daten/dateien/` (hochgeladene Dateien, z. B. QM-Dokumente; gesichert als eigene Stände `sicherungen/dateien/<Zeit>/`; nach der Datentrennung in `daten-intern/dateien/`), Status von Sicherung und Deployment, `mail-schluessel.php` bis zum Umzug nach `daten-geheim/` (nicht in Sicherungen), Versandaufträge der Kundenseite (`postausgang`) |
 | `daten-intern/` | Interne Dokumente nach `deploy/daten-trennen.sh trennen` (ADR-007 Stufe 2a: Personal, Nutzer, CRM, Controlling, QS mit Dateiablage …; ab Trennstufe 2 auch Kundenstamm, Bestand, Stammdaten, Postfach-Zugänge, Empfänger der Bestellwünsche); nur in `app-mitarbeiter` und `postausgang` (`/var/www/daten-intern`), nie in der Kundenseite; gesichert als `intern-<Zeit>.tar.gz`; nur root/www-data |
 | `daten-geheim/` | Schlüssel des im Eingabebereich hinterlegten Postfach-Passworts (`mail-schluessel.php`, nach `postfach-schluessel.sh umziehen`); nur in `app-mitarbeiter` und `postausgang`, nie in der Kundenseite, nicht gesichert, nur root/www-data |
 | `daten-anmeldung/` | Realm-Import, Tresor `vault/` (Postfach-Passwort für Keycloak, nicht gesichert), während der Einrichtung `einrichtung.env` |
 | `daten-karte/` | Detailkarte `karte.pmtiles` (OpenStreetMap, Deutschland bis Zoomstufe 15, ca. 5–6 GB) und `stand.txt`, Adressverzeichnis `adressen.sqlite` (geschätzt um 1 GB) und `adressen-stand.txt`; im Anwendungs-Container nur lesend unter `/var/www/karte`, nicht gesichert (jederzeit neu ladbar) |
-| `sicherungen/` | Datensicherungen und `anmeldung-<Zeit>.dump`, je 30 Stände, nur root |
+| `sicherungen/` | Datensicherungen `daten-`/`intern-<Zeit>.tar.gz`, Keycloak `anmeldung-<Zeit>.dump`, Stände der Dateiablage `dateien/<Zeit>/`, Liste `.dateien-fehlend`, Sperre `.sperre`; Aufbewahrung siehe [Sicherung](#sicherung); nur root |
 | Volumes | `caddy_data`, `caddy_config` (Zertifikate), `keycloak_db` |
 
 ### Skripte in `deploy/`
@@ -206,12 +206,13 @@ Ohne gültigen Schlüssel wirkt nichts davon. Jede neue Weiterleitung (`reverse_
 | `einrichten.sh` | Timer `wochenangebot-update` (alle 2 Min.) einrichten | Inhaber, einmalig |
 | `aktualisieren.sh` | Bereitstellung sicherstellen, im Release-Modus `freigabe-einspielen.sh` | systemd-Timer |
 | `release-modus-einrichten.sh` | Release-Modus einschalten (`.release-modus`, Token prüfen) | Inhaber, einmalig |
-| `freigabe-einspielen.sh` | freigegebenes Release einspielen, Healthcheck, automatischer Rückfall | `aktualisieren.sh` |
+| `freigabe-einspielen.sh` | freigegebenes Release einspielen (Sicherung vorher mit `sichern.sh` und `dateien_sichern.py` des neuen Commits), Healthcheck, automatischer Rückfall | `aktualisieren.sh` |
 | `bereitstellen.py` | Versionsnummern und Prüfliste aus dem aktiven Commit; `--pruefen` nur prüfen; `--verzeichnis` für einen Programmordner | Einspiel- und Rückfallskripte, `run_e2e.py`, `tests/deploy/test_freigabe.sh` |
 | `release-zurueck.sh` | Notfall-Rückfall auf den Stand vor dem letzten Release | Inhaber |
-| `sichern.sh` | Datensicherung mit Probeentpacken, inkl. Keycloak-Datenbank; `--jetzt` sofort | Timer `wochenangebot-sicherung` bzw. `aktualisieren.sh` (1×/Tag), Release |
+| `sichern.sh` | Datensicherung mit Probeentpacken und Platzprüfung, inkl. Keycloak-Datenbank und Dateiablage; `--jetzt` sofort | Timer `wochenangebot-sicherung` bzw. `aktualisieren.sh` (1×/Tag), Release |
 | `sicherung-einrichten.sh` | eigener Sicherungs-Timer (täglich 02:30) | Inhaber, einmalig |
 | `sicherung-pruefen.py`, `sicherung-pruefen.php` | entpackte Sicherung prüfen | `sichern.sh` |
+| `dateien_sichern.py` | Dateiablage: Stand mit festen Verweisen auf den vorigen, Platzbedarf, Prüfung gegen die Verweise der Daten; `fehlende` für den Betreiber | `sichern.sh`, Betreiber |
 | `datenbank.py` | SQLite: `check`, Migration/Rückkonvertierung (`--offline`), Sicherung, `altdateien` (Altdateien auflisten/archivieren) | `datenbank-umschalten.sh`, `sichern.sh`, `run_e2e.py` |
 | `datenbank-umschalten.sh` | `migrate` / `rollback` zwischen Dateien und SQLite | Inhaber, nur mit Freigabe und Wartungsfenster |
 | `altdateien.sh` | `zeigen` / `archivieren` der alten Datendateien nach der Umschaltung (nur bei aktivem SQLite, Archiv in `sicherungen/`) | Inhaber, nur mit Freigabe; Anwendung bleibt in Betrieb |
@@ -301,9 +302,71 @@ Es gibt keine Testinstanz unter `test.<Domain>` mehr (entfernt am 15.11.2026, GR
 
 ### Sicherung
 
-- `deploy/sichern.sh` sichert `daten/` täglich (eigener Timer oder über `aktualisieren.sh`) und vor jedem Release; jede
-  Sicherung wird probeweise entpackt und geprüft. Bei SQLite über die Backup-API (konsistenter Snapshot).
+- `deploy/sichern.sh` sichert `daten/` (nach der Trennung auch `daten-intern/`) täglich (eigener Timer oder über
+  `aktualisieren.sh`) und vor jedem Release; jede Sicherung wird probeweise entpackt und geprüft. Bei SQLite über die
+  Backup-API (konsistenter Snapshot).
 - Läuft Keycloak, wird dessen Datenbank mitgesichert (`pg_dump`, Inhalt geprüft).
+- **Erst prüfen, dann festschreiben.** Archive und Stand der Dateiablage entstehen als `.tmp`. Erst wenn alle Prüfungen
+  bestehen, werden sie gemeinsam umbenannt, danach greift die Aufbewahrung. Ein Fehler entfernt alles dieses Laufs; ältere
+  Sicherungen bleiben, auch wenn das Release es alle 2 Minuten erneut versucht. Abgebrochen wird nur bei Störungen der
+  Sicherung selbst (Archiv, Abzug der Datenbank, Prüfung des Archivs, Ein-/Ausgabe, Platz), nie wegen einzelner Dateien.
+- **Sperre** (`sicherungen/.sperre`): Mit `--jetzt` (Timer, Release, von Hand) wartet ein zweiter Lauf bis 10 Minuten, ohne
+  (`aktualisieren.sh`) endet er sofort mit Fehler; der Grund steht auf stderr. Jeder Aufruf in den Keycloak-Container ist auf
+  300 s begrenzt (`KC_FRIST`; der Abzug dauert Sekunden), damit ein hängender Container die Sperre nicht hält. Der Timer
+  beendet einen Lauf nach 2 Stunden (`TimeoutStartSec`; dafür `deploy/sicherung-einrichten.sh` einmal erneut ausführen);
+  `sichern.sh` räumt dabei auf und meldet den Abbruch im Status. Ist die Zeitmarke eines Laufs schon vergeben (zwei Läufe in
+  derselben Sekunde, zurückgestellte Uhr), nimmt er eine Sekunde später oder bricht ab; überschrieben wird nie.
+- **Aufbewahrung** (gemeinsam für `daten-`, `intern-`, `anmeldung-` und `dateien/` derselben Zeit, Tage in UTC): die Läufe
+  der letzten 7 Tage, je Tag die 24 neuesten, dazu der letzte Lauf jedes Tages der letzten 30 Tage, immer mindestens die
+  30 neuesten Läufe (eine verstellte Uhr löscht so nie alles). Liegt ein Lauf mehr als 2 Tage nach dem bisher neuesten
+  (vorgestellte Uhr oder langer Ausfall), räumt er nicht auf und warnt „Uhrzeit prüfen“. Ein Stand mit späterer Zeit als der
+  laufende dient nie als Vorlage für feste Verweise.
+- **Dateiablage** (`dateien/`): nicht im Archiv, sondern je Lauf ein Stand `sicherungen/dateien/<Zeit>/` mit der Zeit der
+  Archive. Unveränderte Dateien (gleiche Größe und Änderungszeit) sind feste Verweise (Hardlinks) auf den vorigen Stand,
+  auch über die Datentrennung hinweg (`daten_trennen.py` erhält Größe und Zeit). Beim Release nutzt die Sicherung das
+  Werkzeug des neuen Commits (`deploy/.dateien_sichern-release.py`). Jede Datei, auf die ein gesichertes Dokument verweist
+  (Vertrag: [05-daten.md](05-daten.md#51-speicherarten)), kommt in den Stand. Fehlt sie in der Ablage, trägt jeder Stand sie
+  aus dem vorigen weiter (fester Verweis), solange ein Dokument auf sie verweist; die Aufbewahrung verliert sie so nie. Alle
+  Befunde sind Warnungen, Sicherung und Release laufen weiter:
+
+  | Befund | Folge |
+  | --- | --- |
+  | Datei im Stand, Größe wie im Dokument | in Ordnung |
+  | fehlt in der Ablage, liegt im vorigen Stand | übernommen; Warnung „… fehlen in der Ablage, in der Sicherung erhalten (Stand …), zurückholen: …“, in `sicherungen/.dateien-fehlend` je Datei das Ziel in der Ablage |
+  | fehlt in der Ablage und im vorigen Stand | Warnung „… fehlen in Ablage und Sicherung“ mit den ersten drei Kennungen, in der Liste „fehlt in Ablage und Sicherung“ |
+  | in der Ablage mit anderer Größe als im Dokument | die passende Fassung des vorigen Stands, sonst die der Ablage; Warnung |
+  | Kopie im Stand beschädigt (SHA-256), Datei in der Ablage richtig | im neuen Stand frisch kopiert statt verlinkt, Warnung |
+  | Kopie und Datei in der Ablage beschädigt | vorhandene Fassung bleibt, Warnung |
+  | Datei verschwindet während des Kopierens (Entwurf gelöscht) | übersprungen, danach wie oben eingeteilt |
+  | Dokument nicht lesbar (z. B. Verweis statt Datei, Name mit Steuer- oder Shell-Zeichen) | Warnung mit Dateinamen (Sonderzeichen maskiert), seine Verweise ungeprüft |
+
+  Zustand der Ablage im Status (`ablage.zustand`): `kritisch`, wenn mehr als 10 oder mehr als 1 % der verwiesenen Dateien in
+  der Ablage fehlen (Karte „Datensicherung“ rot: „Dateien aus der Sicherung zurückholen“), `warnung` bei jeder anderen
+  Warnung (gelb „mit Warnung“), sonst `ok`. Die SHA-256-Stichprobe prüft je Lauf 20 zufällige Dateien und alle, deren
+  Kennung (CRC32) modulo 30 zum Tag passt; so ist jede Datei innerhalb von 30 Tagen einmal geprüft. Mehrkosten bei 12 GB
+  Ablage: ein Dreißigstel, rund 400 MB lesen und hashen je Lauf (Messung im PR #378).
+
+- **Ausweg für den Betreiber.** `sicherungen/.dateien-fehlend` (nach jedem Lauf neu) nennt je Datei Kennung, Dokument und
+  Ziel in der Ablage (bzw. „fehlt in Ablage und Sicherung“); sie enthält keine Befehle. Zurückholen, als root im
+  Programmordner: `python3 deploy/dateien_sichern.py zurueckholen sicherungen/dateien`. Jede Datei der Liste kommt aus dem
+  neuesten Stand als eigene Kopie (nie ein fester Verweis in die Sicherung) mit Größe, Rechten und Zeit der Sicherung zurück;
+  vorhandene Dateien bleiben. Die Ablage ist im Container beschreibbar, deshalb liest root nur die Sicherung und
+  geschrieben wird als Webserver (uid/gid 33): Ein Verweis am Ziel wird ersetzt, ein Verweis als Ordner abgelehnt, nichts
+  außerhalb der Ablage geändert. Nie Zeilen der Liste an eine Shell geben. Gründe für nicht zurückgeholte Dateien stehen auf
+  stderr, Rückgabe dann 1. Danach ist die Karte beim nächsten Lauf wieder grün. `python3 deploy/dateien_sichern.py fehlende daten-intern/dateien daten
+  daten-intern` (vor der Datentrennung `fehlende daten/dateien daten`) listet jederzeit jeden Verweis ohne passende Datei in
+  der Ablage mit Dokument und Befund; nur lesend. Hält ein Fehler das Release auf, stoppt `.release-abgelehnt` die
+  Wiederholung ([Release-Freigabe](../release-freigabe.md)).
+- **Platz.** Vor jedem Lauf müssen frei sein: neue Dateien der Ablage + 3 × übrige Daten (Abzug der Datenbank, Archiv,
+  Probe-Entpacken; gezählt ohne das, was nicht ins Archiv kommt, also ohne `dateien/` und `geo/`) + 5 GB Reserve (die
+  Warnschwelle „Speicherplatz“ im Reiter System). Sonst bricht die Sicherung vorher mit Meldung im Status ab. Auf Dauer
+  belegt: die Ablage einmal, dazu ihre Änderungen der letzten 30 Tage, und je Lauf Archive, Keycloak-Sicherung und rund
+  1 MB Ordner des Stands (gemessen bei 15.000 Dateien). Mit höchstens 24 Läufen je Tag in den letzten 7 Tagen (das Fenster
+  berührt 8 UTC-Tage) und einem je Tag davor sind das höchstens 8 × 24 + 23 = 215 Läufe. Beispiel 12 GB Ablage und 10 MB
+  Archive je Lauf: 12 GB + Änderungen + 215 × 11 MB ≈ 14,4 GB; bei 50 MB je Lauf ≈ 23 GB. Größe der heutigen Archive auf
+  dem Server: `ls -la sicherungen`.
+- Alle Sicherungen liegen auf demselben Datenträger wie die Daten. Eine zweite Ebene außerhalb sind die VPS-Sicherungen bei
+  Hostinger (Stand 16.11.2026: vier); sie stellen nur den ganzen Server zurück, und wir steuern sie nicht.
 - Nicht gesichert: `mail-schluessel.php` und `daten-anmeldung/vault/`. Nach Wiederherstellung auf neuem Server das
   Postfach-Passwort neu eingeben bzw. `konten.sh mail-einrichten` erneut ausführen.
 - Wiederherstellung: [`docs/datenbank.md`](../datenbank.md#sicherung-und-wiederherstellung), Keycloak:

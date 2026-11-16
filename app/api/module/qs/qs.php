@@ -25,13 +25,11 @@ declare(strict_types=1);
      qs-pruefplan   Prüfungen mit Intervall, ab wann, Sollwert, Maßnahme bei Abweichung, Zuständig, ausführende Mitarbeiter
      qs-nachweise   Durchführungen der Prüfungen; nie geändert oder gelöscht, nur storniert
      qs-massnahmen  Maßnahmen mit Nummer je Jahr, IFS-Feldern, Status und Wirksamkeitsprüfung
+     qs-ablage, qs-ablage-zahlen  Dateien der Ordner, externen Dokumente und des Eingangs (module/qs/ablage.php)
    Gelesen (Eigentümer Plattform, über users_load): Mitarbeiter für die Verknüpfung mit Kürzeln und die Zuweisung von
    Prüfungen (nur Kennung, Name, Zugang). Feiertage über hr_feiertag() des Moduls HR.
-   Dokumentenablage (Dateien, lib/dateiablage.php, Bereich „qs“): gelenkte Dokumente tragen Dateien je Version
-   (versionen[].dateien), Ordner und externe Dokumente am Dokument (dateien). Im Entwurf legt ab und entfernt, wer bearbeiten
-   darf (er gilt damit als Bearbeiter – 4-Augen-Prinzip); in Prüfung und verworfen ist nichts änderbar; zu einer
-   freigegebenen oder ersetzten Version trägt nur „qs.freigeben“ Dateien nach (z. B. die bisherige Datei aus dem Ordner
-   „QM-System“). Außerhalb des Entwurfs wird nie gelöscht, nur „entfernt“ vermerkt (mit Grund; die Datei bleibt erhalten).
+   Dokumentenablage (Dateien je Version, Archiv der Ordner und externen Dokumente, Eingang, Ordner-Import): module/qs/ablage.php
+   mit den eigenen Dokumenten qs-ablage und qs-ablage-zahlen.
    Nummernstruktur (Anlegen und Ändern in der Oberfläche): Arbeitsanweisungen, Formblätter, Listen und Excel-Dokumente heißen
    „<Kapitel>-<Art><laufende Nr.>“ (z. B. 1.4-F08); leer = nächste freie Nummer (nie wiederverwendet, auch nicht von eingezogenen).
    Vorlagen und Lenkungsangaben (module/qs/vorlagen.php): neue Dokumente aus einer Vorlage (Art V), Platzhalter in Word/Excel,
@@ -40,9 +38,11 @@ declare(strict_types=1);
    Zuständig/Vertreter sind Kürzel (Schnappschuss, GR-106). Gespeicherte Felder, die diese Fassung nicht kennt, bleiben beim
    Speichern erhalten (GR-006). Rechte (GR-103): qs.sehen, qs.nachweis, qs.bearbeiten, qs.freigeben, qs.verwalten. */
 if (!defined('WA_API')) { http_response_code(404); exit; }   // nur über api/index.php nutzbar
+require __DIR__ . '/ablage.php';
 
 const QS_ARTEN = ['A' => 'Arbeitsanweisung', 'F' => 'Formblatt', 'L' => 'Liste', 'E' => 'Excel', 'V' => 'Vorlage', 'X' => 'Externes Dokument', 'O' => 'Ordner'];
 const QS_GELENKT = ['A', 'F', 'L', 'E', 'V'];
+const QS_KAPITEL_BEARBEITER = ['1.5'];   // personenbezogene Unterlagen (Inhaber 16.11.2026): diese Kapitel samt Unterkapiteln nur mit qs.bearbeiten (qs_sichtbar)
 const QS_VER_STATUS = ['entwurf' => 'Entwurf', 'pruefung' => 'In Prüfung', 'geprueft' => 'Geprüft', 'freigegeben' => 'Freigegeben', 'ersetzt' => 'Ersetzt', 'verworfen' => 'Verworfen'];
 const QS_VER_OFFEN = ['entwurf', 'pruefung', 'geprueft'];
 const QS_INTERVALLE = ['arbeitstaeglich' => 'täglich (Arbeitstage Mo–Fr)', 'taeglich' => 'täglich (auch am Wochenende)', 'woechentlich' => 'wöchentlich',
@@ -75,7 +75,6 @@ const QS_MAX_AENDERUNGEN = 200;
 const QS_MAX_VERLAUF = 100;
 const QS_MAX_VERWEISE = 20;
 const QS_START_NACHWEISE = 5000;   // qs_start liefert die neuesten Nachweise (Fälligkeiten rechnet der Server aus allen)
-const QS_MAX_DATEIEN = 50;         // aktive Dateien je Version bzw. je Ordner/externem Dokument
 const QS_NR_STRUKTUR = ['A', 'F', 'L', 'E'];   // Nummer „<Kapitel>-<Art><laufende Nr.>“ (z. B. 1.4-F08); Vorlagen „V“ heißen frei (z. B. „Vorlage F“)
 
 /* ---------- Laden und Schreiben ---------- */
@@ -110,6 +109,80 @@ function qs_verlauf(array &$e, array $me, string $was): void
     if (count($e['verlauf']) > QS_MAX_VERLAUF) $e['verlauf'] = array_slice($e['verlauf'], -QS_MAX_VERLAUF);
 }
 function qs_heute(): string { return date('Y-m-d'); }
+/* Dokument in qs-dokumente speichern: Stand hochzählen, „geändert“ setzen (unter der Sperre) */
+function qs_dok_ablegen(array &$doc, int $i, array $d, array $me): array
+{
+    $d['rev'] = (int)($d['rev'] ?? 0) + 1;
+    $d['geaendert'] = qs_wer($me);
+    $doc['liste'][$i] = $d;
+    qs_schreiben('qs-dokumente', $doc);
+    return $d;
+}
+/* ---------- Geschützte Kapitel (1.5 „Mitarbeiter“, Entscheidung des Inhabers 16.11.2026) ----------
+   Kapitel aus QS_KAPITEL_BEARBEITER samt Unterkapiteln („1.5“, „1.5.1“, nicht „1.50“), erkannt an der Kennung; die Nummern als Zahlen
+   verglichen („01.5“ = „1.5“). Ordnernamen zählen auch: der Import macht Ordner zu Ordner-Dokumenten („1.5 Mitarbeiter“ in Kapitel 90 einer
+   zweiten Firma), tiefere Ordner stehen im pfad ihrer Dateien („HACCP/1.5 Mitarbeiter/…“) – qs_geschuetzt, qs_dateien_sichtbar */
+function qs_kapitel_geschuetzt(string $k): bool
+{
+    $n = implode('.', array_map('intval', explode('.', $k)));
+    foreach (QS_KAPITEL_BEARBEITER as $g) if ($n === $g || str_starts_with($n, $g . '.')) return true;
+    return false;
+}
+/* Ordnername mit geschützter Nummer vorn („1.5 Mitarbeiter“, „_1.5.1_Zeugnisse“, auch „alt_1.5 …“ und „Kopie von 1.5 …“ wie in der
+   Ordnerablage üblich; nicht „1.50 …“, kein Datum „01.05.2024“)? */
+function qs_name_geschuetzt(string $name): bool
+{
+    $name = preg_replace('/^(?:[\s_-]*(?:alt|kopie(?:\s+von)?)(?=[\s_-]))*[\s_-]*/iu', '', $name);
+    return preg_match('/^(\d{1,2}(?:\.\d{1,2}){0,2})(?:[\s_-]|$)/', $name, $m) === 1 && qs_kapitel_geschuetzt($m[1]);
+}
+/* Eintrag (Dokument, Abschnitt, Prüfung, Maßnahme) geschützt? Kapitel-Kennung; Nummer vorn im Titel bei Ordner-Dokumenten und in Bereichen */
+function qs_geschuetzt(array $e, array $stamm): bool
+{
+    $k = (string)($e['kapitel'] ?? '');
+    if (qs_kapitel_geschuetzt($k)) return true;
+    if (!qs_name_geschuetzt((string)($e['titel'] ?? ''))) return false;
+    if (($e['art'] ?? '') === 'O') return true;
+    foreach ($stamm['kapitel'] as $x) if ((string)$x['id'] === $k && !empty($x['bereich'])) return true;
+    return false;
+}
+/* Dateien eines Ordners, die $me sieht (Ordnerbaum, Ordner-ZIP, Ablage-Export, qs_datei): mit qs.bearbeiten alle, sonst keine aus einem
+   Unterordner mit geschützter Nummer (ein Ordner im pfad) */
+function qs_dateien_sichtbar(array $dateien, array $me): array
+{
+    if (may($me, 'qs.bearbeiten')) return $dateien;
+    return array_values(array_filter($dateien, function (array $f): bool { return !array_filter(explode('/', (string)($f['pfad'] ?? '')), 'qs_name_geschuetzt'); }));
+}
+/* Die eine Stelle für alle Lesewege (Liste, Suche, Zahlen, CSV, Dateien, Ordnerbaum, ZIP, Bericht, Verfahrensdoku): lädt die genannten
+   Listen (dokumente, handbuch, pruefplan, nachweise, massnahmen) und gibt zurück, was $me davon sieht. Mit qs.bearbeiten alles; sonst aus
+   geschützten Kapiteln nur die eigenen Prüfungen (qs_pruefung_meine) mit ihren Nachweisen und die eigenen Maßnahmen (qs_massnahme_meine) –
+   damit erledigt, wer sie zugewiesen bekommen hat, nicht mehr. Ein einzelnes Dokument: qs_dok_sichtbar. */
+function qs_sichtbar(array $me, string ...$namen): array
+{
+    $l = []; foreach ($namen as $n) $l[$n] = qs_doc('qs-' . $n)['liste'];
+    if (may($me, 'qs.bearbeiten')) return $l;
+    $stamm = qs_stamm(); $id = (string)$me['id']; $kuerzel = qs_kuerzel_von($stamm, $id);
+    $frei = function (array $e) use ($stamm): bool { return !qs_geschuetzt($e, $stamm); };
+    $nur = function (array $liste, callable $ok): array { return array_values(array_filter($liste, $ok)); };
+    foreach (['dokumente', 'handbuch'] as $n) if (isset($l[$n])) $l[$n] = $nur($l[$n], $frei);
+    if (isset($l['massnahmen'])) $l['massnahmen'] = $nur($l['massnahmen'], function ($m) use ($frei, $kuerzel) { return $frei($m) || qs_massnahme_meine($m, $kuerzel); });
+    if (isset($l['pruefplan']) || isset($l['nachweise'])) {
+        $plan = $nur($l['pruefplan'] ?? qs_doc('qs-pruefplan')['liste'], function ($p) use ($frei, $stamm, $id) { return $frei($p) || qs_pruefung_meine($p, $stamm, $id); });
+        if (isset($l['pruefplan'])) $l['pruefplan'] = $plan;
+        $ids = array_flip(array_map('strval', array_column($plan, 'id')));
+        if (isset($l['nachweise'])) $l['nachweise'] = $nur($l['nachweise'], function ($x) use ($ids) { return isset($ids[(string)($x['pruefung'] ?? '')]); });
+    }
+    return $l;
+}
+function qs_dok_sichtbar(array $d, array $me): array
+{
+    if (!may($me, 'qs.bearbeiten') && qs_geschuetzt($d, qs_stamm())) fail('Dieses Kapitel (personenbezogene Unterlagen) sieht nur, wer bearbeiten darf.', 403);
+    return $d;
+}
+/* Name im Protokoll: aus geschützten Kapiteln nur die Kapitelnummer – das Protokoll sieht, wer „protokoll.sehen“ hat, nicht nur „bearbeiten“ */
+function qs_protokoll_name(array $e, string $name): string
+{
+    return qs_geschuetzt($e, qs_stamm()) ? '(Kapitel ' . $e['kapitel'] . ', personenbezogen)' : $name;
+}
 /* Ist das Modul noch leer (für den Import ohne „ersetzen“)? */
 function qs_leer(): bool
 {
@@ -158,6 +231,11 @@ function qs_pruefung_meine(array $p, array $stamm, string $userId): bool
     if (in_array($userId, array_map('strval', (array)($p['ausfuehrende'] ?? [])), true)) return true;
     $k = qs_kuerzel_von($stamm, $userId);
     return $k && (in_array((string)($p['zustaendig'] ?? ''), $k, true) || in_array((string)($p['vertreter'] ?? ''), $k, true));
+}
+/* Ist die Maßnahme einem der Kürzel $kuerzel (qs_kuerzel_von) zugewiesen – „Zuständig“ kann mehrere nennen („QB / TE“)? */
+function qs_massnahme_meine(array $m, array $kuerzel): bool
+{
+    return (bool)array_intersect($kuerzel, preg_split('/[\s\/,;]+/', (string)($m['zustaendig'] ?? '')) ?: []);
 }
 
 /* ---------- Prüfen der Eingaben ---------- */
@@ -335,7 +413,8 @@ function qs_dokument_pruefen(array $b, ?array $alt, array $stamm, array $alle, b
     $row['art'] = qs_wahl($b['art'] ?? ($alt['art'] ?? 'F'), array_keys(QS_ARTEN), 'Art');
     if ($alt !== null && ($alt['art'] ?? '') !== $row['art'] && in_array($alt['art'] ?? '', QS_GELENKT, true) !== in_array($row['art'], QS_GELENKT, true) && !empty($alt['versionen']))
         throw new InvalidArgumentException('Ein Dokument mit Versionen kann nicht zu einem Ordner oder externen Dokument werden (und umgekehrt).');
-    if ($alt !== null && in_array($alt['art'] ?? '', QS_GELENKT, true) !== in_array($row['art'], QS_GELENKT, true) && qs_dateien_aktiv($alt['dateien'] ?? []))
+    if ($alt !== null && in_array($alt['art'] ?? '', QS_GELENKT, true) !== in_array($row['art'], QS_GELENKT, true)
+            && qs_ablage_belegt($alt, qs_ablage_zahlen()) > 0)
         throw new InvalidArgumentException('In der Ablage des Dokuments liegen Dateien – es kann nicht zu einem gelenkten Dokument werden.');
     $row['kapitel'] = qs_kapitel_pruefen($b['kapitel'] ?? '', $stamm);
     $row['nr'] = qs_text($b['nr'] ?? '', 40, 'Dokumenten-Nr.');
@@ -433,95 +512,6 @@ function qs_entwurf(array $me, string $aenderungen, string $grund): array
           'erstellt' => qs_wer($me), 'bearbeiter' => [(string)$me['id']], 'geprueft' => null, 'freigegeben' => null, 'kuerzel' => null, 'quelle' => 'hand', 'verlauf' => []];
     qs_verlauf($v, $me, 'Entwurf erstellt');
     return $v;
-}
-
-/* ---------- Dokumentenablage ---------- */
-function qs_dateien_aktiv($liste): array
-{
-    return array_values(array_filter(is_array($liste) ? $liste : [], function ($f) { return is_array($f) && empty($f['entfernt']); }));
-}
-/* Darf $me an dieser Stelle (Dokument, Version-ID oder '' für Ordner/externe Dokumente) Dateien ablegen bzw. entfernen?
-   Rückgabe: Index der Version oder null (Ablage am Dokument); sonst fail(). */
-function qs_ablage_stelle(array $d, string $ver, array $me, string $was): ?int
-{
-    if (!empty($d['eingezogen'])) fail('Das Dokument ist eingezogen – die Ablage ist geschlossen.', 409);
-    if (!in_array($d['art'] ?? '', QS_GELENKT, true)) {
-        if ($ver !== '') fail('Ordner und externe Dokumente haben keine Versionen.', 422);
-        if ($was === 'hochladen' && count(qs_dateien_aktiv($d['dateien'] ?? [])) >= QS_MAX_DATEIEN) fail('Zu viele Dateien (höchstens ' . QS_MAX_DATEIEN . ').', 422);
-        return null;
-    }
-    $vi = null;
-    foreach ((array)($d['versionen'] ?? []) as $i => $v) if (($v['id'] ?? '') === $ver && $ver !== '') $vi = $i;
-    if ($vi === null) fail('Version nicht gefunden.', 404);
-    $st = (string)$d['versionen'][$vi]['status'];
-    if (in_array($st, ['pruefung', 'geprueft'], true)) fail('Die Überarbeitung liegt zur Prüfung vor – Dateien lassen sich nur im Entwurf ändern (zurückgeben lassen).', 409);
-    if ($st === 'verworfen') fail('Die Version ist verworfen.', 409);
-    if (in_array($st, ['freigegeben', 'ersetzt'], true) && !may($me, 'qs.freigeben'))
-        fail('Dateien einer freigegebenen Version trägt nur nach oder entfernt, wer prüfen und freigeben darf.', 403);
-    if ($was === 'hochladen' && count(qs_dateien_aktiv($d['versionen'][$vi]['dateien'] ?? [])) >= QS_MAX_DATEIEN) fail('Zu viele Dateien (höchstens ' . QS_MAX_DATEIEN . ').', 422);
-    return $vi;
-}
-/* Einstellungen für die Oberfläche: erlaubte Dateiendungen, Höchstgröße je Datei und je Teilstück, Dateien je Stelle */
-function qs_ablage_einstellungen(): array
-{
-    require_once __DIR__ . '/vorlagen.php';
-    return ['arten' => array_keys(ABLAGE_ARTEN), 'max' => ABLAGE_DATEI_MAX, 'teil' => ABLAGE_TEIL_MAX, 'dateien' => QS_MAX_DATEIEN,
-            'office' => array_keys(QS_OFFICE), 'platzhalter' => QS_PLATZHALTER_TEXT, 'nrStruktur' => QS_NR_STRUKTUR];
-}
-/* Datei in allen Dokumenten suchen: [Dokument-Index, Version-Index oder null, Datei-Index] oder null */
-function qs_datei_finden(array $liste, string $id): ?array
-{
-    if (!preg_match('/^[a-z0-9]{12,40}$/D', $id)) return null;
-    foreach ($liste as $i => $d) {
-        foreach ((array)($d['dateien'] ?? []) as $k => $f) if (($f['id'] ?? '') === $id) return [$i, null, $k];
-        foreach ((array)($d['versionen'] ?? []) as $j => $v) foreach ((array)($v['dateien'] ?? []) as $k => $f) if (($f['id'] ?? '') === $id) return [$i, $j, $k];
-    }
-    return null;
-}
-/* Liegt an dieser Stelle (Version bzw. Dokument) schon eine aktive Datei mit diesem Inhalt (SHA-256, auch Rohfassung)? Kennung oder null */
-function qs_datei_gleich(array $d, ?int $vi, string $sha): ?string
-{
-    if (!preg_match('/^[0-9a-f]{64}$/D', $sha)) return null;
-    foreach (qs_dateien_aktiv($vi === null ? ($d['dateien'] ?? []) : ($d['versionen'][$vi]['dateien'] ?? [])) as $f)
-        if (hash_equals($sha, (string)($f['sha256'] ?? '')) || hash_equals($sha, (string)($f['sha256Roh'] ?? ''))) return (string)$f['id'];
-    return null;
-}
-function qs_dateien_zahl(array $liste): int
-{
-    $n = 0;
-    foreach ($liste as $d) {
-        $n += count(qs_dateien_aktiv($d['dateien'] ?? []));
-        foreach ((array)($d['versionen'] ?? []) as $v) $n += count(qs_dateien_aktiv($v['dateien'] ?? []));
-    }
-    return $n;
-}
-/* Einträge für den ZIP-Export „QM-System/<Kapitel>/<Dokument>/<Datei>“: gültige Version (bzw. Dateien von Ordnern und
-   externen Dokumenten); mit $alle zusätzlich ältere Versionen und offene Entwürfe in Unterordnern. Eingezogene Dokumente
-   nur mit $alle (Ordner „_eingezogen“). Dazu die Dokumentenliste als CSV. */
-function qs_ablage_eintraege(array $dokumente, array $stamm, string $kapitel, bool $alle, string $heute): array
-{
-    $kt = []; foreach ($stamm['kapitel'] as $k) $kt[(string)$k['id']] = (string)$k['titel'];
-    $wurzel = 'QM-System';
-    $e = [];
-    $gewaehlt = array_values(array_filter($dokumente, function ($d) use ($kapitel) { return $kapitel === '' || (string)$d['kapitel'] === $kapitel; }));
-    usort($gewaehlt, function ($a, $b) { return qs_nat_cmp((string)$a['kapitel'], (string)$b['kapitel']) ?: strnatcasecmp((string)$a['nr'], (string)$b['nr']); });
-    foreach ($gewaehlt as $d) {
-        $eingezogen = !empty($d['eingezogen']);
-        if ($eingezogen && !$alle) continue;
-        $kap = ablage_zip_pfad(trim($d['kapitel'] . ' ' . ($kt[$d['kapitel']] ?? '')));
-        $ordner = $wurzel . '/' . ($eingezogen ? '_eingezogen/' : '') . $kap . '/' . ablage_zip_pfad(trim(($d['nr'] !== '' ? $d['nr'] . ' ' : '') . $d['titel']));
-        foreach (qs_dateien_aktiv($d['dateien'] ?? []) as $f) $e[] = ['pfad' => $ordner . '/' . ablage_zip_pfad((string)$f['name']), 'bereich' => 'qs', 'id' => (string)$f['id']];
-        foreach ((array)($d['versionen'] ?? []) as $v) {
-            $st = (string)($v['status'] ?? '');
-            if ($st === 'freigegeben') $unter = '';
-            elseif (!$alle || $st === 'verworfen') continue;
-            elseif ($st === 'ersetzt') $unter = '/_ältere Versionen/Version ' . ($v['nr'] ?? '?');
-            else $unter = '/_Entwurf';
-            foreach (qs_dateien_aktiv($v['dateien'] ?? []) as $f) $e[] = ['pfad' => $ordner . $unter . '/' . ablage_zip_pfad((string)$f['name']), 'bereich' => 'qs', 'id' => (string)$f['id']];
-        }
-    }
-    array_unshift($e, ['pfad' => $wurzel . '/Dokumentenliste.csv', 'inhalt' => qs_csv_dokumente($gewaehlt, $stamm, $heute)]);
-    return $e;
 }
 
 /* ---------- Handbuch ---------- */
@@ -774,7 +764,7 @@ function qs_startseite(array $me): array
     if ($kuerzel) foreach (qs_doc('qs-massnahmen')['liste'] as $m) {
         $frist = (string)($m['frist'] ?? '');
         if (!in_array($m['status'] ?? 'offen', ['offen', 'in_arbeit'], true) || $frist === '') continue;
-        if (!array_intersect($kuerzel, preg_split('/[\s\/,;]+/', (string)($m['zustaendig'] ?? '')))) continue;
+        if (!qs_massnahme_meine($m, $kuerzel)) continue;
         $art = startseite_art(qs_tage_bis($heute, $frist), 7);
         if ($art === '') continue;
         $was = trim((string)($m['massnahme'] ?? '')) !== '' ? (string)$m['massnahme'] : (string)($m['feststellung'] ?? '');

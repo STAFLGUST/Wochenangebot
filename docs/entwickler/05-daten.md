@@ -23,7 +23,13 @@ Postfach-Passworts), `sicherung` und `deployment` (Statusdateien der Skripte). A
 Länder- und Ortsdatenbank (`geo/`) und die **Dateiablage** (`daten/dateien/`, `lib/dateiablage.php`): hochgeladene Dateien
 der Module als `<bereich>/<xx>/<id>.bin` – in beiden Speicherarten im Dateisystem, nie als `*.php` (die Werkzeuge für
 Sicherungsprüfung und Umschalten behandeln nur `*.php` als Dokumente); unvollständige Uploads unter `dateien/.teile/*.tmp`
-(nicht gesichert, nach 24 h entfernt). Die Metadaten (Name, Größe, SHA-256, wer, wann) stehen im Dokument des Moduls.
+(nicht gesichert, beim nächsten Upload nach 24 h entfernt). Die Metadaten (Name, Größe, SHA-256, wer, wann) stehen im Dokument des Moduls.
+
+**Verweis auf eine Datei der Ablage** (Vertrag mit der Sicherung, `deploy/dateien_sichern.py`): ein Eintrag
+`{"id": <Kennung>, "groesse": <Bytes>, "sha256": <64 Hex>}` an beliebiger Stelle eines Dokuments, so wie ihn
+`ablage_teil`, `ablage_ablegen` und `ablage_kopieren` zurückgeben. Einzige Ausnahme ist die Rohfassung einer QS-Vorlage
+`{"roh": <Kennung>, "sha256Roh": <64 Hex>}` ohne Größe (`module/qs/vorlagen.php`). Die Sicherung erkennt Verweise nur an
+dieser Form; ein neues Modul, das Dateien anders referenziert, wird nicht gegen die Sicherung geprüft.
 
 Die SQLite-Ablage übernimmt die Dokumente **unverändert** als JSON – es gibt keine Tabellen je Kunde oder Artikel. Für den
 Code ist die Speicherart daher unsichtbar; jede Änderung muss in beiden Arten funktionieren (die E2E-Suite läuft in
@@ -34,12 +40,17 @@ beiden, lokal mit `WA_TEST_STORAGE=sqlite`).
 [datenbank.md](../datenbank.md). Nie nur den Marker löschen oder alte Dateien über die Datenbank kopieren.
 
 **Sicherung** (`deploy/sichern.sh`): täglich über einen eigenen systemd-Timer (`deploy/sicherung-einrichten.sh`; ohne
-Timer ruft `aktualisieren.sh` sie höchstens einmal am Tag auf; sofort: `--jetzt`), die letzten 30 Stände unter
-`sicherungen/` im Projektordner, nur für root lesbar. Jede Sicherung wird probeweise entpackt und geprüft; bei SQLite
+Timer ruft `aktualisieren.sh` sie höchstens einmal am Tag auf; sofort: `--jetzt`) unter `sicherungen/` im Projektordner,
+nur für root lesbar; Aufbewahrung nach Zeit ([08-betrieb.md](08-betrieb.md#sicherung)). Jede Sicherung wird probeweise entpackt und geprüft; bei SQLite
 über die Backup-API (konsistenter Schnappschuss). Nicht gesichert wird `mail-schluessel` – nach einer Wiederherstellung
 auf neuem Server das Postfach-Passwort neu eingeben. Läuft Keycloak, wird dessen Datenbank zusätzlich gesichert. Status
-im Dokument `sicherung` (Anzeige unter „Sicherheit“). Die Dateiablage `daten/dateien/` ist Teil des Archivs – mit
-hochgeladenen Dateien wächst die Sicherung entsprechend.
+im Dokument `sicherung` (Anzeige unter „Sicherheit“). Für die Dateiablage steht dort das Objekt
+`"ablage": {"anzahl", "groesse", "neu", "staende", "belegt", "fehlend", "zustand"}` (Dateien und Bytes des neuesten Stands,
+davon nur in ihm gespeicherte Bytes, Zahl der Stände, Bytes aller Stände, in der Ablage fehlende Dateien, `ok`/`warnung`/
+`kritisch`) bzw. `null` ohne Werkzeug. `ok` mit nicht leerer `meldung` heißt: gesichert, aber mit Warnung; `zustand`
+`kritisch`: gesichert, aber viele Dateien fehlen in der Ablage. Die Dateiablage steht nicht im Archiv, sondern je Lauf als Stand
+`sicherungen/dateien/<Zeit>/` mit festen Verweisen auf den vorigen Stand (`deploy/dateien_sichern.py`); Prüfung, Platz und
+Ausweg: [08-betrieb.md](08-betrieb.md#sicherung). Wiederherstellung: [`docs/datenbank.md`](../datenbank.md#sicherung-und-wiederherstellung).
 
 ## 5.2 Formate nur erweitern (GR-006)
 
@@ -701,7 +712,7 @@ Löst die Excel „QM-System“ ab (Blätter Inhaltsverzeichnis, Managementsyste
 laufen unter der Sperre `qs-dokumente`. Zuständig/Vertreter sind **Kürzel** (Schnappschuss, GR-106); Namen in `erstellt`, `geprueft`,
 `freigegeben`, `verlauf` sind Schnappschüsse `{"t", "von", "vonId"}`.
 
-- **`qs-stamm`**: `{"rev", "kapitel": [{"id": "1.4", "titel", "zustaendig", "vertreter", "aktiv"}], "personen": [{"id": "<Kürzel>", "name",
+- **`qs-stamm`**: `{"rev", "kapitel": [{"id": "1.4", "titel", "zustaendig", "vertreter", "aktiv", "bereich": true?}], "personen": [{"id": "<Kürzel>", "name",
   "funktion", "mitarbeiter": "<Nutzer-ID>|", "aktiv"}], "einstellungen": {"ueberpruefungMonate": 36}}`. Ein Mitarbeiter ist mit höchstens
   einem Kürzel verknüpft; verwendete Kapitel werden nur deaktiviert.
 - **`qs-dokumente`**: `{"id": "d…", "rev", "kapitel", "art": "A|F|L|E|V|X|O", "nr": "1.4-F08", "titel", "ablage": "<Pfad>|https://…",
@@ -713,11 +724,10 @@ laufen unter der Sperre `qs-dokumente`. Zuständig/Vertreter sind **Kürzel** (S
   vorige gültige Version wird `ersetzt`. Wer in `bearbeiter` steht, prüft nicht (4-Augen-Prinzip, serverseitig). Die Antwort ergänzt
   `zustand` (`gueltig|entwurf|pruefung|ohne|eingezogen|register`) und `ueberpruefung` (`{"seit", "faelligAb", "faellig"}` – seit der
   letzten Freigabe bzw. `ueberprueft`, nach `ueberpruefungMonate`).
-  **Dokumentenablage** (optional, seit Bauabschnitt 2): `dateien: [{"id": "<20 Hex>", "name", "art": "pdf|docx|…", "mime", "groesse",
-  "sha256", "hochgeladen": {"t", "von", "vonId"}, "nachgetragen": true?, "entfernt": {"t", "von", "vonId", "grund"}?}]` je Version
-  (gelenkt) bzw. am Dokument (Ordner, extern); die Datei selbst liegt in der Dateiablage (Bereich `qs`). Im Entwurf (`qs.bearbeiten`,
-  wer ablegt oder löscht, kommt in `bearbeiter`) wird endgültig gelöscht; sonst nur `entfernt` vermerkt (freigegebene/ersetzte Versionen
-  nur mit `qs.freigeben`, mit Grund). In Prüfung, verworfen oder eingezogen: keine Änderung (409); höchstens 50 Dateien je Stelle.
+  **Dateien je Version** (optional, seit Bauabschnitt 2): `versionen[].dateien: [{"id": "<20 Hex>", "name", "art": "pdf|docx|…", "mime",
+  "groesse", "sha256", "hochgeladen": {"t", "von", "vonId"}, "pfad"?, "nachgetragen": true?, "entfernt": {"t", "von", "vonId", "grund"}?}]`;
+  ältere Ordner und externe Dokumente tragen dieselben Einträge am Dokument (`dateien`, ohne `pfad`) – neue Dateien dort stehen in
+  `qs-ablage` (unten), die Leser führen beide zusammen (GR-006). Regeln der Ablage: Abschnitt „QM-System: Dokumentenablage“.
   **Vorlagen und Lenkungsangaben** (seit Bauabschnitt 3, `module/qs/vorlagen.php`; Grenzen je Office-Datei: 2000 ZIP-Einträge,
   30 MB entpackt und 20000 Textelemente je Textteil – darüber gilt die Datei als nicht lesbar): Datei-Einträge optional mit `platzhalter: ["version", …]`
   (bekannte, noch offene Platzhalter in Word/Excel), `vorlage: {"dokument", "nr", "version"}` (aus einer Vorlage erzeugt), `uebernommen: N`
@@ -734,6 +744,11 @@ laufen unter der Sperre `qs-dokumente`. Zuständig/Vertreter sind **Kürzel** (S
   nicht zum offenen Entwurf: 409 vor der Stand-Prüfung). `namen` (Schnappschuss, GR-106) entsteht beim Einreichen (fehlt er in Daten einer
   Vorversion der Anwendung, beim Prüfen), verschwindet beim Zurückgeben und gilt unverändert für die Freigabe; die Freigabe legt die PDF-Fassung als Datei mit
   `organigramm: true` ab. „Überarbeitung beginnen“ übernimmt `knoten` ohne `namen`, „Dateien übernehmen“ lässt die PDF aus.
+- **`qs-ablage`** (seit 16.11.2026, Ordner-Import): `{"rev", "liste": [{"id", "name", "art", "mime", "groesse", "sha256", "hochgeladen",
+  "ziel": "<Dokument-Kennung>|eingang", "pfad"?, "entfernt"?}], "verworfen": ["<sha256>", …]}` – alle Dateien der Ordner (O), externen
+  Dokumente (X) und des Eingangs. `verworfen`: Prüfsummen endgültig im Eingang gelöschter Dateien (höchstens 20 000, die ältesten fallen
+  weg). Geschrieben nur über `qs_ablage_schreiben()` (module/qs/ablage.php), das zugleich **`qs-ablage-zahlen`**
+  `{"rev", "je": {"<ziel>": {"dateien", "bytes"}}}` neu zählt (nur aktive Dateien; `qs_start` liest nur diese Zahlen).
 - **`qs-handbuch`**: `{"id": "h…", "rev", "kapitel", "pos", "nr": "2.0.14", "titel", "text", "verweise": ["1.3-L02 HACCP-Analyse"], "ifs",
   "zustaendig", "vertreter", "entfallen": {…}|null, "aenderungen": [{"datum", "was", "grund", "von"}]}`. Ein Abschnitt „Ziel“ steht in der
   Oberfläche als Einleitung des Kapitels.
@@ -792,6 +807,89 @@ dasselbe Kürzel nennen (Fehler je Eintrag in der Vorschau). Ältere Versionen b
 Mit Fehlern wird nichts übernommen, in ein Modul mit Daten nur mit `ersetzen` (Einstellungen bleiben, Nachweise werden geleert); sobald in
 der Dokumentenablage Dateien liegen, gar nicht mehr (409 – die Dateien gingen sonst verloren; die Vorschau nennt `dateien`). Echte Pakete
 liegen nie im Repository (GR-007); Beispiel: `tests/fixtures/qs/datenpaket.json`.
+
+#### QM-System: Dokumentenablage (Regeln, `module/qs/ablage.php`)
+
+Die einzige Beschreibung der Regeln; Code-Kommentare verweisen hierher.
+
+- **Wo die Metadaten stehen:** Dateien gelenkter Dokumente je Version in `qs-dokumente`; Dateien der Ordner, externen Dokumente und des
+  Eingangs in `qs-ablage` (`ziel`); ältere `dateien` an Ordnern bleiben in `qs-dokumente` und werden mitgelesen. Die Dateien selbst liegen
+  in der Dateiablage des Plattformkerns (`lib/dateiablage.php`, Bereich `qs`).
+- **Stelle** (`qs_ablage_regel`): im Entwurf mit `qs.bearbeiten` – wer ablegt, zuordnet oder die Datei hochgeladen hat, kommt in
+  `bearbeiter` (4-Augen-Prinzip); an freigegebenen und ersetzten Versionen nur nachtragen mit `qs.freigeben` (Lenkungsangaben gleich
+  eingetragen), nie aus dem Eingang zuordnen; in Prüfung, verworfen oder eingezogen nichts. Grenzen: 1000 aktive Dateien je Version,
+  10 000 je Ordner/externem Dokument, 20 000 im Eingang, 25 000 Einträge in `qs-ablage` (jeder Schreibvorgang schreibt das ganze Dokument;
+  darüber wird `qs-ablage` geteilt, etwa je Kapitel).
+- **Entfernen:** im Entwurf endgültig; an Versionen, Ordnern und externen Dokumenten nur `entfernt` vermerkt (Grund Pflicht). Im Eingang
+  wird zugeordnet oder endgültig gelöscht; die Prüfsumme bleibt in `verworfen`, und nie wird eine Datei gelöscht, die `qs-dokumente` noch
+  verwendet.
+- **Sichtbarkeit:** Ordner, externe Dokumente und Versionen mit `qs.sehen`; der Eingang (Liste, Zahl, Download) nur mit `qs.bearbeiten` –
+  dort liegen unsortierte, womöglich personenbezogene Unterlagen. Ebenso **alles** aus den Kapiteln in `QS_KAPITEL_BEARBEITER` samt
+  Unterkapiteln (`qs.php`, heute 1.5 „Mitarbeiter“ und 1.5.x, Entscheidung des Inhabers 16.11.2026; Kennzeichen ist die Kapitel-Kennung,
+  `qs_kapitel_geschuetzt`; dazu Ordnernamen mit dieser Nummer vorn, `qs_name_geschuetzt`: Ordner-Dokumente und Einträge eines Bereichs
+  mit solchem Titel, `qs_geschuetzt` – etwa „1.5 Mitarbeiter“ in Kapitel 90 einer zweiten Firma –, und Archivdateien, in deren `pfad` ein
+  solcher Ordner steht, `qs_dateien_sichtbar` für Ordnerbaum, Ordner-ZIP, Ablage-Export und `qs_datei`): Dokumente, Dateien, Handbuch-Abschnitte, Prüfungen, Nachweise und Maßnahmen. Ausnahme: die
+  eigene Prüfung (`qs_pruefung_meine`) mit ihren Nachweisen und die eigene Maßnahme (`qs_massnahme_meine`). Die eine Stelle für alle
+  Lesewege ist `qs_sichtbar` (Liste und Suche, Zahlen, CSV, ZIP-Export, Audit-Bericht, Verfahrensdoku samt Export); `qs_dok_sichtbar` gibt
+  für Dateien, Ordnerbaum, Ordner-ZIP und Organigramm-Vorschau 403. Das Protokoll nennt bei diesen Vorgängen nur die Kapitelnummer
+  (`qs_protokoll_name`). Freigegebene Fassungen der Verfahrensdoku bleiben vollständige Schnappschüsse (GR-106) und nennen Nummer und
+  Titel verknüpfter Dokumente auch aus 1.5.
+- **`pfad`** (`qs_pfad`): Unterordner relativ zum Ordner-Dokument (Archiv) bzw. zum gewählten Ordner (Eingang). `/`-getrennt, `\` teilt
+  ebenfalls, Leerraum zusammengefasst, ohne Steuerzeichen und leere, `.`- und `..`-Teile, je Teil 120 Zeichen, höchstens 12 Teile und
+  500 Byte (ganze Teile); leer = Feld fehlt. Nur Anzeige, Ordnerbaum und Suche, nie ein Pfad im Dateisystem; Zuordnen behält ihn.
+- **Schreiben:** alles unter der Sperre `qs-dokumente`, ein Schreibvorgang je Dokument und Vorgang. Zuordnen an einen Ordner ändert nur
+  `ziel`; in einen Entwurf wandert der Eintrag nach `qs-dokumente` (zuerst das Ziel, dann `qs-ablage`; steht er nach einem Abbruch schon im
+  Entwurf, wird er nicht doppelt eingetragen, und Löschen im Entwurf entfernt die Datei nur, wenn sie nirgends mehr steht). Ein
+  Verlaufseintrag je Vorgang; das Protokoll nennt Anzahlen, nie Datei- oder Ordnernamen. Das Datenpaket zählt `qs-ablage` selbst.
+- **Ordner-Import** (nur der Server rechnet; Plan und Eintragen entscheiden jede Datei mit derselben Funktion `qs_import_datei`):
+  1. Wurzel: Haben alle Pfade denselben ersten Ordner, der weder mit einer Kapitelnummer noch mit `_` beginnt noch `alt`/`alt_…` heißt
+     noch wie ein Bereich, fällt er weg. Stehen darin Ordner mit Kapitelnummer, fragt die Vorschau ausdrücklich, wohin er gehört:
+     Standard-Fleisch (dann fällt er weg), ein Bereich oder ein neuer Bereich (dann ist er selbst der oberste Ordner). Ohne Antwort sind
+     diese Kapitelordner `offen`, und nichts startet (`offen` im Plan, `anlegen` → 422). Heißt er wie ein Bereich (Titel oder
+     „Nr Titel“, auch mit `_` vorn), gilt dieser Bereich ohne Frage.
+  2. Oberste Ordner: Die Wahl des Nutzers gilt immer. Ohne Wahl: ein Ordner, der genau wie ein Kapitel ohne `bereich` heißt (`<Nr>` oder
+     `<Nr> <Titel>`, Groß-/Kleinschreibung und Trenner egal), ist dieses Kapitel (`genau`, Nummern und Archiv); ein anderer Ordner mit der
+     Nummer (etwa „1.4 QS alt“, „1.4 Stand 2019“) ist ein Vorschlag nur für das Archiv des Kapitels – per Nummer ordnet er erst zu, wenn der
+     Nutzer ihn ausdrücklich als „dieses Kapitel“ bestätigt; ein Ordner mit dem Namen eines Bereichs gehört zu diesem; sonst Eingang.
+     Wählbar: Eingang, nicht übernehmen, ein Kapitel oder Bereich (Archiv), ein neuer Bereich (nur `qs.verwalten`; Kapitel mit
+     `bereich: true` und Nummer 90 bis 99, damit eine ältere Fassung die Kapitelpflege weiter prüfen kann). Lose Dateien → Eingang.
+  3. Gelenkte Dokumente per Nummer nur im Kapitelordner (`genau`): eine Datei direkt darin, deren Name ohne Endung mit der Nummer beginnt
+     (Groß-/Kleinschreibung und führende Nullen egal) und deren Rest leer ist oder dem Titel entspricht (Trenner Leerzeichen, `_`, `-`);
+     oder – nur wenn ganz oben in der Auswahl `Dokumentenliste.csv` liegt (eigener ZIP-Export) – eine Datei im Ordner exakt `Nr Titel`.
+     Kapitel des Dokuments oder Anfang der Nummer = Kapitelordner. Dokumente in Bereichen zählen dabei nie, auch nicht über das
+     Nummern-Präfix. Ziel: ein offener Entwurf geht vor (`dokument`), sonst die gültige Version (`nachtragen`, nur mit `qs.freigeben`);
+     in Prüfung oder gesperrt → Eingang mit Grund.
+  4. Freigaben je oberstem Ordner (`freigaben`): in gültige Versionen nur mit dem Häkchen `nachtragen` (Vorgabe aus), in Entwürfe mit
+     `entwurf` (Vorgabe an; Entwürfe lassen sich löschen). Ohne Häkchen → Eingang („ohne Häkchen“). In der Vorschau abgewählte Dateien
+     (`ohne`, „Ordnerpfad/Name“ wie gewählt) kommen ins Archiv. Der Plan nennt `kandidat` und `dok` je solcher Datei (Gruppen je Nummer).
+  5. Archiv: ein Ordner-Dokument je Kapitel/Bereich und Unterordner der ersten Ebene; ein vorhandenes mit gleichem Titel (Groß-/Klein-
+     schreibung und Leerraum egal) wird wiederverwendet. Dateien direkt im obersten Ordner → „Weitere Dateien“; tiefere Ebenen als `pfad`.
+     Ist der oberste Ordner nicht genau das Kapitel bzw. der Bereich, steht sein Name vorn im `pfad` – so kommt kein Ordner auf einen
+     anderen. `_alt`, `alt_…` usw. sind normale Unterordner, nie Fassungen. Eingezogener oder voller Ordner → Eingang.
+  6. Übersprungen: Systemdateien (`.…`, `~$…`, `Thumbs.db`, `desktop.ini`, `.lnk`), ganz oben `Dokumentenliste.csv`/`Hinweise.txt`,
+     im eigenen Export `_ältere Versionen`/`_Entwurf` im Ordner eines gelenkten Dokuments, nicht erlaubte Dateiart, leer, zu groß.
+     Höchstens 30 000 Dateien je Lauf.
+  7. Schon abgelegt: am Ziel gleicher `pfad`, Name und Größe, oder irgendwo der ganze Ordnerpfad mit Name und Größe (Eingang, auch nach dem
+     Zuordnen). Beim Eintragen zusätzlich die Prüfsumme (gleich → `vorhanden`) und – nur für den Eingang – `verworfen` (früher gelöscht).
+  8. Ablauf: Plan → anlegen (Bereiche und Ordner-Dokumente, alle Grenzen vor dem Schreiben geprüft; der Plan wird dabei nicht neu gerechnet)
+     → Uploads mit `sammeln` und `herkunft` (nur der Ordnerpfad wie gewählt; fertige Uploads bleiben in der Dateiablage liegen) →
+     `qs_import_eintragen` mit den Angaben wie beim Plan und dem erwarteten Status und der Version je Datei. Der Server entscheidet unter der
+     Sperre neu; weicht das Ergebnis ab (Entwurf inzwischen freigegeben, Version ersetzt, Häkchen fehlt), kommt die Datei in den Eingang.
+     Ein Bündel hat höchstens 100 Dateien und 40 MB Word/Excel-Nachträge (deren Lenkung läuft unter der Sperre), beides prüft der Server;
+     die Grenze von 1 GB je Bündel hält nur der Browser ein. Word/Excel-Textteile über 8 MB oder mit mehr als 20 000 Textelementen liest das
+     Modul nicht (`qs_xml_ersetzen`, vor dem Suchen gezählt): die Datei wird abgelegt, nur ohne Platzhalter und Lenkungsangaben. Was nicht
+     abgelegt wird oder nach einem Abbruch nirgends gespeichert ist, entfernt das Ende der Anfrage (`qs_ablage_aufraeumen`, nach einem
+     fatalen Fehler mitten in einer SQLite-Transaktion erst nach dem Zurücksetzen).
+  9. Im Browser (`ordnerimport.js`): Pfade und Dateinamen zusammengesetzt (NFC, macOS liefert zerlegte Umlaute). Antwort zur Wurzel,
+     Zuordnung und abgewählte Dateien merkt er sich je Fingerabdruck des gewählten Ordners (Name, Zahl der Dateien, Bytes) – ein anderer
+     Ordner gleichen Namens bekommt keine Antwort vorab; die Häkchen nie.
+- **Leser beider Ablageorte:** nur `qs_ablage_nach_ziel`, `qs_ordner_dateien`, `qs_ablage_belegt` und `qs_datei_suchen` lesen `dateien` an
+  Ordnern und externen Dokumenten (`werkzeuge/qs_ablage_leser.py` prüft das in der Gruppe `qs_eingang`). Der Browser bekommt Zahlen
+  (`ablageZahlen`) und Dateien (`qs_archiv`) vom Server.
+- **Rückfall (GR-006):** Eine ältere Fassung kennt `qs-ablage` nicht – die Dateien sind dort unsichtbar, bleiben aber erhalten und sind nach
+  der Rückkehr wieder da. Grenzen der älteren Fassung: „Datenpaket ersetzen“ zählt nur Dateien in `qs-dokumente` und kann Ordner-Dokumente
+  ersetzen (die Archivdateien hängen dann an Kennungen, die es nicht mehr gibt); und sie erlaubt, ein Ordner-Dokument, dessen Dateien nur in
+  `qs-ablage` liegen, zu einem gelenkten Dokument zu machen – danach zeigt der Ordnerbaum diese Dateien nicht mehr.
 
 ## 5.4 Datenverantwortung (GR-101)
 

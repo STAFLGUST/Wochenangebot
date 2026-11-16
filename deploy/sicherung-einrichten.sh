@@ -3,6 +3,7 @@
 #   sh /opt/wochenangebot/deploy/sicherung-einrichten.sh
 # Danach läuft die Sicherung täglich um 02:30 Uhr unabhängig von der Aktualisierung; schlägt sie fehl,
 # protokolliert systemd das und das Skript meldet den Fehler (Statuskarte, optional Totmannschalter).
+# Erneut ausführen übernimmt geänderte Units (seit 16.11.2026 mit TimeoutStartSec).
 # Rückgängig:  systemctl disable --now wochenangebot-sicherung.timer
 set -eu
 cd "$(dirname "$0")/.."
@@ -16,6 +17,9 @@ Type=oneshot
 ExecStart=/bin/sh /opt/wochenangebot/deploy/sichern.sh --jetzt
 Nice=10
 IOSchedulingClass=idle
+# Notbremse: dauert ein Lauf länger (erster Lauf kopiert die Ablage, sonst Minuten), beendet systemd ihn; sichern.sh räumt
+# dabei auf und meldet den Abbruch
+TimeoutStartSec=2h
 UNIT
 cat > /etc/systemd/system/wochenangebot-sicherung.timer <<'UNIT'
 [Unit]
