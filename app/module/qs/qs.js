@@ -511,7 +511,7 @@
   const cp437 = (b) => [...b].map((c) => (c < 128 ? String.fromCharCode(c) : CP437[c - 128])).join('');
   const escRe = (t) => t.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
   const saNorm = (t) => String(t || '').toLocaleLowerCase('de-DE').replace(/\s+/g, ' ').trim();
-  const NR_RE = /(?<![\d.])(\d+(?:\.\d+){0,3})\s*-\s*([A-Za-z])\s*0*(\d{1,3})(?!\d)/g;   // bis vier Teile („2.2.1.1-A01“), nie ein Teil einer längeren Nummer
+  const NR_RE = /(^|[^\d.])(\d+(?:\.\d+){0,3})\s*-\s*([A-Za-z])\s*0*(\d{1,3})(?!\d)/g;   // bis vier Teile („2.2.1.1-A01“), nie ein Teil einer längeren Nummer (Grenzgruppe statt Lookbehind: ältere Safari)
   const nrSchluessel = (nr) => String(nr || '').toUpperCase().replace(/\s+/g, '').replace(/-([A-Z])0*(\d+)$/, '-$1$2');
   function saIndex() {
     const nr = new Map(), frei = [], titel = new Map();
@@ -527,8 +527,8 @@
   function saNrIn(t, idx, kap, anfang) {
     const passt = (x) => x && (x.kapitel === kap || String(x.nr).split('-')[0] === kap);
     for (const m of t.matchAll(NR_RE)) {
-      if (anfang && m.index) break;
-      const x = idx.nr.get(`${m[1]}-${m[2].toUpperCase()}${m[3]}`);
+      if (anfang && (m.index || m[1])) break;
+      const x = idx.nr.get(`${m[2]}-${m[3].toUpperCase()}${m[4]}`);
       if (passt(x)) return x;
     }
     for (const f of idx.frei) if ((anfang ? t.search(f.re) === 0 : f.re.test(t)) && passt(f.x)) return f.x;
