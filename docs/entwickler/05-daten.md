@@ -785,9 +785,14 @@ Die einzige Beschreibung der Regeln; Code-Kommentare verweisen hierher.
   wird zugeordnet oder endgültig gelöscht; die Prüfsumme bleibt in `verworfen`, und nie wird eine Datei gelöscht, die `qs-dokumente` noch
   verwendet.
 - **Sichtbarkeit:** Ordner, externe Dokumente und Versionen mit `qs.sehen`; der Eingang (Liste, Zahl, Download) nur mit `qs.bearbeiten` –
-  dort liegen unsortierte, womöglich personenbezogene Unterlagen. Ebenso alle Dokumente der Kapitel in `QS_KAPITEL_BEARBEITER` (`qs.php`,
-  heute 1.5 „Mitarbeiter“, Entscheidung des Inhabers 16.11.2026; Kennzeichen ist die Kapitel-Kennung, nie der Titel): `qs_dokumente_sichtbar`
-  filtert Liste, CSV, ZIP-Export und Audit-Bericht, `qs_dok_sichtbar` gibt für Dateien, Ordnerbaum und Ordner-ZIP 403.
+  dort liegen unsortierte, womöglich personenbezogene Unterlagen. Ebenso **alles** aus den Kapiteln in `QS_KAPITEL_BEARBEITER` samt
+  Unterkapiteln (`qs.php`, heute 1.5 „Mitarbeiter“ und 1.5.x, Entscheidung des Inhabers 16.11.2026; Kennzeichen ist die Kapitel-Kennung,
+  nie der Titel, `qs_kapitel_geschuetzt`): Dokumente, Dateien, Handbuch-Abschnitte, Prüfungen, Nachweise und Maßnahmen. Ausnahme: die
+  eigene Prüfung (`qs_pruefung_meine`) mit ihren Nachweisen und die eigene Maßnahme (`qs_massnahme_meine`). Die eine Stelle für alle
+  Lesewege ist `qs_sichtbar` (Liste und Suche, Zahlen, CSV, ZIP-Export, Audit-Bericht, Verfahrensdoku samt Export); `qs_dok_sichtbar` gibt
+  für Dateien, Ordnerbaum, Ordner-ZIP und Organigramm-Vorschau 403. Das Protokoll nennt bei diesen Vorgängen nur die Kapitelnummer
+  (`qs_protokoll_name`). Freigegebene Fassungen der Verfahrensdoku bleiben vollständige Schnappschüsse (GR-106) und nennen Nummer und
+  Titel verknüpfter Dokumente auch aus 1.5.
 - **`pfad`** (`qs_pfad`): Unterordner relativ zum Ordner-Dokument (Archiv) bzw. zum gewählten Ordner (Eingang). `/`-getrennt, `\` teilt
   ebenfalls, Leerraum zusammengefasst, ohne Steuerzeichen und leere, `.`- und `..`-Teile, je Teil 120 Zeichen, höchstens 12 Teile und
   500 Byte (ganze Teile); leer = Feld fehlt. Nur Anzeige, Ordnerbaum und Suche, nie ein Pfad im Dateisystem; Zuordnen behält ihn.
@@ -829,8 +834,14 @@ Die einzige Beschreibung der Regeln; Code-Kommentare verweisen hierher.
      → Uploads mit `sammeln` und `herkunft` (nur der Ordnerpfad wie gewählt; fertige Uploads bleiben in der Dateiablage liegen) →
      `qs_import_eintragen` mit den Angaben wie beim Plan und dem erwarteten Status und der Version je Datei. Der Server entscheidet unter der
      Sperre neu; weicht das Ergebnis ab (Entwurf inzwischen freigegeben, Version ersetzt, Häkchen fehlt), kommt die Datei in den Eingang.
-     Ein Bündel hat höchstens 100 Dateien, 1 GB und 40 MB Word/Excel-Nachträge (deren Lenkung läuft unter der Sperre). Was nicht abgelegt
-     wird oder nach einem Abbruch nirgends gespeichert ist, entfernt das Ende der Anfrage (`qs_ablage_aufraeumen`).
+     Ein Bündel hat höchstens 100 Dateien und 40 MB Word/Excel-Nachträge (deren Lenkung läuft unter der Sperre), beides prüft der Server;
+     die Grenze von 1 GB je Bündel hält nur der Browser ein. Word/Excel-Textteile über 8 MB oder mit mehr als 20 000 Textelementen liest das
+     Modul nicht (`qs_xml_ersetzen`, vor dem Suchen gezählt): die Datei wird abgelegt, nur ohne Platzhalter und Lenkungsangaben. Was nicht
+     abgelegt wird oder nach einem Abbruch nirgends gespeichert ist, entfernt das Ende der Anfrage (`qs_ablage_aufraeumen`, nach einem
+     fatalen Fehler mitten in einer SQLite-Transaktion erst nach dem Zurücksetzen).
+  9. Im Browser (`ordnerimport.js`): Pfade und Dateinamen zusammengesetzt (NFC, macOS liefert zerlegte Umlaute). Antwort zur Wurzel,
+     Zuordnung und abgewählte Dateien merkt er sich je Fingerabdruck des gewählten Ordners (Name, Zahl der Dateien, Bytes) – ein anderer
+     Ordner gleichen Namens bekommt keine Antwort vorab; die Häkchen nie.
 - **Leser beider Ablageorte:** nur `qs_ablage_nach_ziel`, `qs_ordner_dateien`, `qs_ablage_belegt` und `qs_datei_suchen` lesen `dateien` an
   Ordnern und externen Dokumenten (`werkzeuge/qs_ablage_leser.py` prüft das in der Gruppe `qs_eingang`). Der Browser bekommt Zahlen
   (`ablageZahlen`) und Dateien (`qs_archiv`) vom Server.

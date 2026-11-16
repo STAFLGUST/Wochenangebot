@@ -46,11 +46,10 @@ switch ($action) {
             header('Cache-Control: no-store');
             $heute = qs_heute();
             $stamm = qs_stamm();
-            $nachweise = qs_doc('qs-nachweise')['liste'];
-            $handbuch = qs_doc('qs-handbuch')['liste'];
+            ['dokumente' => $dokumente, 'handbuch' => $handbuch, 'pruefplan' => $plan, 'nachweise' => $nachweise, 'massnahmen' => $massnahmen]
+                = qs_sichtbar($me, 'dokumente', 'handbuch', 'pruefplan', 'nachweise', 'massnahmen');
             qs_abschnitte_sortieren($handbuch);
             usort($nachweise, function ($a, $b) { return [$b['datum'], $b['erfasst']['t'] ?? ''] <=> [$a['datum'], $a['erfasst']['t'] ?? '']; });
-            $dokumente = qs_dokumente_sichtbar(qs_doc('qs-dokumente')['liste'], $me);
             $monate = (int)$stamm['einstellungen']['ueberpruefungMonate'];
             respond(['ok' => true, 'heute' => $heute, 'ich' => ['id' => (string)$me['id'], 'name' => (string)$me['name'], 'kuerzel' => qs_kuerzel_von($stamm, (string)$me['id'])],
                      'rechte' => ['nachweis' => may($me, 'qs.nachweis'), 'bearbeiten' => may($me, 'qs.bearbeiten'), 'freigeben' => may($me, 'qs.freigeben'), 'verwalten' => may($me, 'qs.verwalten'),
@@ -61,9 +60,9 @@ switch ($action) {
                      'dokumente' => array_map(function ($d) use ($monate, $heute) { return qs_dok_aus($d, $monate, $heute); }, $dokumente),
                      'ablageZahlen' => qs_ablage_uebersicht($dokumente), 'eingangZahl' => may($me, 'qs.bearbeiten') ? qs_ablage_belegt(null, qs_ablage_zahlen()) : 0,
                      'handbuch' => $handbuch,
-                     'pruefungen' => qs_pruefungen_aus(qs_doc('qs-pruefplan')['liste'], $nachweise, $heute),
+                     'pruefungen' => qs_pruefungen_aus($plan, $nachweise, $heute),
                      'nachweise' => array_slice($nachweise, 0, QS_START_NACHWEISE), 'nachweiseGesamt' => count($nachweise),
-                     'massnahmen' => array_map(function ($m) use ($heute) { return qs_massnahme_aus($m, $heute); }, qs_doc('qs-massnahmen')['liste']),
+                     'massnahmen' => array_map(function ($m) use ($heute) { return qs_massnahme_aus($m, $heute); }, $massnahmen),
                      'leer' => qs_leer(), 'ablage' => qs_ablage_einstellungen()]);
         }
 
@@ -73,13 +72,14 @@ switch ($action) {
             $b = body();
             $liste = qs_wahl($b['liste'] ?? 'dokumente', ['dokumente', 'pruefplan', 'massnahmen'], 'Liste');
             $heute = qs_heute();
-            if ($liste === 'dokumente') { $daten = qs_dokumente_sichtbar(qs_doc('qs-dokumente')['liste'], $me); $csv = qs_csv_dokumente($daten, qs_stamm(), $heute); $name = 'QM-Dokumentenliste'; }
+            if ($liste === 'dokumente') { $daten = qs_sichtbar($me, 'dokumente')['dokumente']; $csv = qs_csv_dokumente($daten, qs_stamm(), $heute); $name = 'QM-Dokumentenliste'; }
             elseif ($liste === 'pruefplan') {
-                $daten = qs_pruefungen_aus(qs_doc('qs-pruefplan')['liste'], qs_doc('qs-nachweise')['liste'], $heute);
+                $l = qs_sichtbar($me, 'pruefplan', 'nachweise');
+                $daten = qs_pruefungen_aus($l['pruefplan'], $l['nachweise'], $heute);
                 $namen = []; foreach (qs_mitarbeiter() as $m) $namen[$m['id']] = $m['name'];
                 $csv = qs_csv_pruefplan($daten, $namen); $name = 'QM-Pruefplan';
             }
-            else { $daten = qs_doc('qs-massnahmen')['liste']; $csv = qs_csv_massnahmen($daten); $name = 'QM-Massnahmen'; }
+            else { $daten = qs_sichtbar($me, 'massnahmen')['massnahmen']; $csv = qs_csv_massnahmen($daten); $name = 'QM-Massnahmen'; }
             audit('qs', 'QM-System: ' . ['dokumente' => 'Dokumentenliste', 'pruefplan' => 'Prüfplan', 'massnahmen' => 'Maßnahmen'][$liste] . ' als CSV heruntergeladen (' . count($daten) . ' Einträge)');
             header('Content-Type: text/csv; charset=utf-8');
             header('Content-Disposition: attachment; filename="' . $name . '_' . $heute . '.csv"');
@@ -149,7 +149,7 @@ switch ($action) {
                 return [$d, $was];
             });
             $fertig = true;
-            audit('qs', 'QM-System: Dokument ' . qs_dok_name($d) . ' ' . $was . ($erzeugt ? ' (aus Vorlage)' : ''));
+            audit('qs', 'QM-System: Dokument ' . qs_protokoll_name($d, qs_dok_name($d)) . ' ' . $was . ($erzeugt ? ' (aus Vorlage)' : ''));
             respond(['ok' => true, 'dokument' => qs_dok_antwort($d)]);
         }
 
@@ -197,7 +197,7 @@ switch ($action) {
                 return qs_dok_ablegen($doc, $i, $d, $me);
             });
             $fertig = true;
-            audit('qs', 'QM-System: Entwurf für ' . qs_dok_name($d) . ' gespeichert');
+            audit('qs', 'QM-System: Entwurf für ' . qs_protokoll_name($d, qs_dok_name($d)) . ' gespeichert');
             respond(['ok' => true, 'dokument' => qs_dok_antwort($d)]);
         }
 
@@ -261,7 +261,7 @@ switch ($action) {
                 return [qs_dok_ablegen($doc, $i, $d, $me), $text];
             });
             $fertig = true;
-            audit('qs', 'QM-System: ' . qs_dok_name($d) . ' – ' . $text);
+            audit('qs', 'QM-System: ' . qs_protokoll_name($d, qs_dok_name($d)) . ' – ' . $text);
             respond(['ok' => true, 'dokument' => qs_dok_antwort($d)]);
         }
 
@@ -295,7 +295,7 @@ switch ($action) {
             if ($aus[0]['status'] === 'fehler') fail($aus[0]['grund'], $aus[0]['code']);
             $gespeichert = array_flip(array_merge($abgelegt, $erzeugt));
             $d = null; foreach ($liste as $x) if ((string)$x['id'] === $dok) $d = $x;
-            audit('qs', 'QM-System: Datei für ' . ($d ? qs_dok_name($d) : 'den Eingang') . ' abgelegt (' . round($datei['groesse'] / 1024) . ' KB)');
+            audit('qs', 'QM-System: Datei für ' . ($d ? qs_protokoll_name($d, qs_dok_name($d)) : 'den Eingang') . ' abgelegt (' . round($datei['groesse'] / 1024) . ' KB)');
             respond(['ok' => true, 'fertig' => true, 'datei' => $aus[0]['datei']] + ($d ? ['dokument' => qs_dok_antwort($d)] : []));
         }
 
@@ -321,7 +321,7 @@ switch ($action) {
             $platzhalter = $ver !== '' ? qs_eingang_platzhalter($ids) : [];   // Word/Excel in einen Entwurf: vor der Sperre
             $erzeugt = [];
             [$d, $rest] = with_lock('qs-dokumente', function () use ($ids, $dok, $ver, $me, $platzhalter, &$erzeugt) { return qs_eingang_zuordnen($ids, $dok, $ver, $me, $platzhalter, $erzeugt); });
-            audit('qs', 'QM-System: ' . qs_dateien_text(count($ids)) . ' aus dem Eingang ' . qs_dok_name($d) . ' zugeordnet');
+            audit('qs', 'QM-System: ' . qs_dateien_text(count($ids)) . ' aus dem Eingang ' . qs_protokoll_name($d, qs_dok_name($d)) . ' zugeordnet');
             respond(['ok' => true, 'dokument' => qs_dok_antwort($d), 'eingangZahl' => $rest]);
         }
 
@@ -377,7 +377,7 @@ switch ($action) {
                 return [$d, (string)$f['name'], $entwurf ? $id : '', $entwurf && qs_datei_suchen($doc['liste'], $id) === null];
             });
             if ($frei) ablage_entfernen('qs', $loeschen);   // erst nach dem Speichern: im Fehlerfall bleibt die Datei
-            audit('qs', 'QM-System: Datei aus ' . qs_dok_name($d) . ($loeschen !== '' ? ' gelöscht (Entwurf)' : ' entfernt (vermerkt)'));
+            audit('qs', 'QM-System: Datei aus ' . qs_protokoll_name($d, qs_dok_name($d)) . ($loeschen !== '' ? ' gelöscht (Entwurf)' : ' entfernt (vermerkt)'));
             respond(['ok' => true, 'dokument' => qs_dok_antwort($d)]);
         }
 
@@ -419,7 +419,7 @@ switch ($action) {
                 if ($pfad === '' || $p === $pfad || str_starts_with($p, $pfad . '/')) $e[] = ['pfad' => $wurzel . '/' . qs_archiv_zip_pfad($f), 'bereich' => 'qs', 'id' => (string)$f['id']];
             }
             if (!$e) fail('In diesem Ordner liegen keine Dateien.', 404);
-            audit('qs', 'QM-System: Ordner ' . qs_dok_name($d) . ($pfad !== '' ? ' (Unterordner)' : '') . ' als ZIP heruntergeladen (' . qs_dateien_text(count($e)) . ')');
+            audit('qs', 'QM-System: Ordner ' . qs_protokoll_name($d, qs_dok_name($d)) . ($pfad !== '' ? ' (Unterordner)' : '') . ' als ZIP heruntergeladen (' . qs_dateien_text(count($e)) . ')');
             ablage_zip_senden($wurzel . ($pfad !== '' ? ' - ' . ablage_zip_pfad(str_replace('/', ' - ', $pfad)) : '') . '.zip', $e);
         }
 
@@ -433,7 +433,7 @@ switch ($action) {
             if ($kapitel !== '') qs_kapitel_pruefen($kapitel, $stamm);
             $alle = ($_GET['alle'] ?? '') === '1';
             $heute = qs_heute();
-            $e = qs_ablage_eintraege(qs_dokumente_sichtbar(qs_doc('qs-dokumente')['liste'], $me), $stamm, $kapitel, $alle, $heute);
+            $e = qs_ablage_eintraege(qs_sichtbar($me, 'dokumente')['dokumente'], $stamm, $kapitel, $alle, $heute);
             audit('qs', 'QM-System: Dokumentenablage als ZIP heruntergeladen (' . (count($e) - 1) . ' Dateien' . ($kapitel !== '' ? ', Kapitel ' . $kapitel : '') . ($alle ? ', mit älteren Versionen' : '') . ')');
             ablage_zip_senden('QM-System_' . ($kapitel !== '' ? ablage_zip_pfad($kapitel) . '_' : '') . $heute . '.zip', $e);
         }
@@ -473,8 +473,8 @@ switch ($action) {
             $heute = qs_heute();
             [$von, $bis] = qs_bericht_zeitraum($_GET['von'] ?? '', $_GET['bis'] ?? '', $heute);
             $namen = []; foreach (qs_mitarbeiter() as $m) $namen[$m['id']] = $m['name'];
-            $b = qs_bericht_daten(qs_stamm(), qs_dokumente_sichtbar(qs_doc('qs-dokumente')['liste'], $me), qs_doc('qs-handbuch')['liste'], qs_doc('qs-pruefplan')['liste'],
-                                  qs_doc('qs-nachweise')['liste'], qs_doc('qs-massnahmen')['liste'], $namen, $von, $bis, $heute);
+            $l = qs_sichtbar($me, 'dokumente', 'handbuch', 'pruefplan', 'nachweise', 'massnahmen');
+            $b = qs_bericht_daten(qs_stamm(), $l['dokumente'], $l['handbuch'], $l['pruefplan'], $l['nachweise'], $l['massnahmen'], $namen, $von, $bis, $heute);
             if ($action === 'qs_bericht') respond(['ok' => true, 'erstellt' => ['t' => now(), 'von' => (string)$me['name']]] + $b);
             $xlsx = qs_bericht_xlsx($b, (string)$me['name']);
             audit('qs', 'QM-System: Audit-Bericht ' . qs_de($von) . ' – ' . qs_de($bis) . ' als Excel heruntergeladen');
@@ -536,7 +536,7 @@ switch ($action) {
                 qs_schreiben('qs-handbuch', $doc);
                 return [$a, $was];
             });
-            if ($was !== '') audit('qs', 'QM-System: Handbuch ' . $a['kapitel'] . ' ' . $a['nr'] . ' „' . $a['titel'] . '“ ' . $was);
+            if ($was !== '') audit('qs', 'QM-System: Handbuch ' . qs_protokoll_name($a, $a['kapitel'] . ' ' . $a['nr'] . ' „' . $a['titel'] . '“') . ' ' . $was);
             respond(['ok' => true, 'abschnitt' => $a, 'unveraendert' => $was === '']);
         }
 
@@ -566,7 +566,7 @@ switch ($action) {
                 qs_schreiben('qs-pruefplan', $doc);
                 return $p;
             });
-            audit('qs', 'QM-System: Prüfung „' . $p['titel'] . '“ gespeichert' . (empty($p['aktiv']) ? ' (inaktiv)' : ''));
+            audit('qs', 'QM-System: Prüfung ' . qs_protokoll_name($p, '„' . $p['titel'] . '“') . ' gespeichert' . (empty($p['aktiv']) ? ' (inaktiv)' : ''));
             $eigene = qs_nachweise_nach_pruefung(qs_doc('qs-nachweise')['liste'])[$p['id']] ?? [];
             respond(['ok' => true, 'pruefung' => $p + ['faellig' => qs_faelligkeit($p, $eigene, qs_heute())]]);
         }
@@ -605,7 +605,7 @@ switch ($action) {
                 qs_schreiben('qs-nachweise', $doc);
                 return [$n, $m, $p];
             });
-            audit('qs', 'QM-System: Nachweis „' . $p['titel'] . '“ vom ' . qs_de($n['datum']) . ' erfasst (' . QS_ERGEBNIS[$n['ergebnis']] . ')' . ($m ? ', Maßnahme ' . $m['nr'] . ' angelegt' : ''));
+            audit('qs', 'QM-System: Nachweis ' . qs_protokoll_name($p, '„' . $p['titel'] . '“') . ' vom ' . qs_de($n['datum']) . ' erfasst (' . QS_ERGEBNIS[$n['ergebnis']] . ')' . ($m ? ', Maßnahme ' . $m['nr'] . ' angelegt' : ''));
             $eigene = qs_nachweise_nach_pruefung(qs_doc('qs-nachweise')['liste'])[$p['id']] ?? [];
             respond(['ok' => true, 'nachweis' => $n, 'massnahme' => $m ? qs_massnahme_aus($m, qs_heute()) : null, 'pruefung' => $p + ['faellig' => qs_faelligkeit($p, $eigene, qs_heute())]]);
         }
@@ -723,7 +723,7 @@ switch ($action) {
             $me = require_perm('qs.verfahren_sehen');
             header('Cache-Control: no-store');
             require_once __DIR__ . '/../module/qs/verfahren.php';
-            $heute = qs_heute(); $stamm = qs_stamm(); $dokumente = qs_doc('qs-dokumente')['liste'];
+            $heute = qs_heute(); $stamm = qs_stamm(); $dokumente = qs_sichtbar($me, 'dokumente')['dokumente'];
             respond(['ok' => true, 'heute' => $heute, 'teile' => QS_VF_TEILE, 'systemArten' => QS_VF_SYSTEM_ART, 'betrieb' => QS_VF_BETRIEB,
                      'ueberpruefungMonate' => QS_VF_UEBERPRUEFUNG_MONATE,
                      'rechte' => ['bearbeiten' => may($me, 'qs.verfahren_bearbeiten'), 'freigeben' => may($me, 'qs.verfahren_freigeben')],
@@ -764,7 +764,7 @@ switch ($action) {
             });
             audit('qs', 'QM-System: Verfahrensdokumentation „' . $d['titel'] . '“ ' . $was);
             if ($was === 'gelöscht') respond(['ok' => true, 'geloescht' => true]);
-            qs_vf_antworten($d);
+            qs_vf_antworten($d, $me);
         }
 
         /* Abschnitt anlegen, ändern oder entfernen (der Arbeitsstand ist frei änderbar; Fassungen bleiben unberührt) */
@@ -793,7 +793,7 @@ switch ($action) {
                 return [qs_vf_ablegen($doc, $i, $d, $me), 'Abschnitt „' . $a['titel'] . '“ ' . ($alt === null ? 'angelegt' : 'geändert')];
             });
             audit('qs', 'QM-System: Verfahrensdokumentation „' . $d['titel'] . '“ – ' . $was);
-            qs_vf_antworten($d);
+            qs_vf_antworten($d, $me);
         }
 
         /* Abschnitt innerhalb seines Teils eine Stelle nach oben oder unten setzen (richtung: auf | ab) */
@@ -816,7 +816,7 @@ switch ($action) {
                 foreach ($reihe as $n => $k) $d['abschnitte'][$k]['pos'] = $n + 1;
                 return qs_vf_ablegen($doc, $i, $d, $me);
             });
-            qs_vf_antworten($d);
+            qs_vf_antworten($d, $me);
         }
 
         /* IT-System anlegen, ändern oder entfernen; steht es in einer Fassung, wird es nur „außer Betrieb“ gesetzt */
@@ -843,7 +843,7 @@ switch ($action) {
                 return [qs_vf_ablegen($doc, $i, $d, $me), 'IT-System „' . $s['name'] . '“ ' . ($alt === null ? 'angelegt' : 'geändert')];
             });
             audit('qs', 'QM-System: Verfahrensdokumentation „' . $d['titel'] . '“ – ' . $was);
-            qs_vf_antworten($d);
+            qs_vf_antworten($d, $me);
         }
 
         /* Neue Fassung freigeben (grund = Anlass, gueltigAb) oder – ohneAenderung – „ohne Änderung überprüft“ vermerken */
@@ -872,7 +872,7 @@ switch ($action) {
                 return [qs_vf_ablegen($doc, $i, $d, $me), 'Fassung ' . $f['nr'] . ' freigegeben (gültig ab ' . qs_de($ab) . ', Anlass: ' . mb_substr($grund, 0, 120) . ')'];
             });
             audit('qs', 'QM-System: Verfahrensdokumentation „' . $d['titel'] . '“ – ' . $was);
-            qs_vf_antworten($d);
+            qs_vf_antworten($d, $me);
         }
 
         /* Export (GET doku): fassung=N als PDF (0 = Arbeitsstand als Entwurf) oder Export für Prüfungen von/bis – als PDF,
@@ -884,6 +884,6 @@ switch ($action) {
             require_once __DIR__ . '/../module/qs/verfahren.php';
             require_once __DIR__ . '/../module/qs/verfahren-export.php';
             [, , $d] = qs_vf_laden($_GET['doku'] ?? '');
-            qs_vf_export($d, $_GET, $me, qs_doc('qs-dokumente')['liste'], qs_stamm());
+            qs_vf_export($d, $_GET, $me, qs_sichtbar($me, 'dokumente')['dokumente'], qs_stamm());
         }
 }

@@ -187,7 +187,9 @@ function qs_ablage_aufraeumen(array &$abgelegt, array &$erzeugt, array &$gespeic
     register_shutdown_function(function () use (&$abgelegt, &$erzeugt, &$gespeichert) {
         $offen = array_values(array_filter(array_merge($abgelegt, $erzeugt), function ($id) use (&$gespeichert) { return !isset($gespeichert[$id]); }));
         if (!$offen) return;
-        try { $benutzt = qs_dokumente_dateien(qs_doc('qs-dokumente')['liste']) + array_flip(array_map('strval', array_column(qs_doc('qs-ablage')['liste'], 'id'))); }
+        // ein fataler Fehler mitten in einer SQLite-Transaktion: sonst läse diese Funktion den nie gespeicherten Stand und behielte die Dateien
+        if (!empty($GLOBALS['store_tx'])) store_rollback();
+        try { $benutzt =qs_dokumente_dateien(qs_doc('qs-dokumente')['liste']) + array_flip(array_map('strval', array_column(qs_doc('qs-ablage')['liste'], 'id'))); }
         catch (Throwable $e) { return; }   // Stand nicht lesbar: lieber liegen lassen
         foreach ($offen as $id) if (!isset($benutzt[$id])) { try { ablage_entfernen('qs', $id); } catch (Throwable $e) { /* bleibt liegen */ } }
     });

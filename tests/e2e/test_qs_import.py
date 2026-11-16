@@ -395,6 +395,29 @@ check('Word/Excel-Nachträge je Bündel höchstens 40 MB (Lenkung unter der Sper
       and rg[ug2]['status'] == 'fehler' and 'Bündel' in rg[ug2].get('grund', '') and len(blobs() - vorher) == 1, rg)
 check('keine Reste unter .teile', not [x for x in glob.glob(os.path.join(ABLAGE, '.teile', '*')) if any(u_ in x for u_ in (u1, u2, u3, u4, u5, u6, u7, u8, u9, u10, u11, ug1, ug2))])
 
+
+def lange_absaetze(n=6600, laenge=4500):
+    """Word-Datei mit Platzhalter: entpackt rund 28 MB in 19.800 Textelementen (unter der Elementgrenze), gepackt rund 0,1 MB"""
+    satz = 'Lorem ipsum dolor sit amet {{Titel}} ' * (laenge // 37)
+    xml = ('<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"><w:body>'
+           + ''.join(f'<w:p><w:r><w:t>{satz}{i}</w:t></w:r></w:p>' for i in range(n)) + '</w:body></w:document>')
+    b_ = io.BytesIO()
+    with zipfile.ZipFile(b_, 'w', zipfile.ZIP_DEFLATED) as z:
+        z.writestr('[Content_Types].xml', '<Types/>'); z.writestr('word/document.xml', xml)
+    return b_.getvalue()
+
+
+# ── Große Word-Datei (Review 3, N2): über 8 MB XML gilt sie als nicht lesbar – sie liegt im Entwurf, nur ohne Platzhalter; das Bündel bleibt heil
+#    (vorher erschöpfte das Lesen bei memory_limit 128M den Speicher, und das ganze Bündel endete mit 500) ──
+GW, BG = lange_absaetze(), pdf('Begleitung N2')
+st, r, plg = plan(Q, [(G + '/1.4-F02.docx', len(GW)), ('QM-System/Begleitung N2.pdf', len(BG))], ANG)
+ugw, ubg = sammeln(Q, G + '/1.4-F02.docx', GW), sammeln(Q, 'QM-System/Begleitung N2.pdf', BG)
+st, r = eintragen(Q, [(ugw, plg[G + '/1.4-F02.docx']), (ubg, plg['QM-System/Begleitung N2.pdf'])], ANG)
+gf = next((f for f in dok(D5['id'])['versionen'][0].get('dateien', []) if f['name'] == '1.4-F02.docx'), {})
+check('große Word-Datei (28 MB XML): Bündel heil, Datei im Entwurf ohne Platzhalter (nicht gelesen), Begleitdatei im Eingang', st == 200
+      and plg[G + '/1.4-F02.docx']['status'] == 'dokument' and r['uploads'][ugw]['status'] == 'abgelegt' and r['uploads'][ubg]['status'] == 'eingang'
+      and gf and 'platzhalter' not in gf, (st, r, gf))
+
 # ── Abbruch beim Schreiben (Review 2, MITTEL 4): qs-ablage lässt sich nicht schreiben, nachdem qs-dokumente geschrieben ist (Dateimodus)
 #    bzw. alles wird zurückgesetzt (SQLite). Danach zeigt keine Version auf eine fehlende Datei, und es bleibt keine verwaiste Datei ──
 st, r, plb = plan(Q, [G + '/1.4-F05.docx', G + '/Reinigungsnachweise/2025/Abbruch.pdf'], ANG)
@@ -598,6 +621,24 @@ with sync_playwright() as p:
           and z_.get('1.4-F01 Temperaturkontrolle.pdf') == 'schon abgelegt' and z_.get('1.4-F01.docx') == 'schon abgelegt' and z_.get('Entwurf Hygieneplan.pdf') == 'schon abgelegt'
           and text(pg, '#im-los') == '1 Datei importieren', (z_, text(pg, '#im-los')))
     check('Freigaben werden nie gemerkt: das Häkchen für gültige Versionen ist wieder aus', all(not c.is_checked() for c in pg.locator('#im-freigaben [data-im-art="nachtragen"]').all()))
+    # Review 3 (M3): ein anderer Ordner gleichen Namens – etwa der der Fremdfirma – bekommt die gemerkte Antwort nicht (Schlüssel: Name, Zahl, Bytes);
+    # N5: zerlegte Umlaute wie von macOS (NFD) gelten wie zusammengesetzte (Kapitelordner, Dateiname)
+    QMS2 = os.path.join(tmp, 'zweiter', 'QM-System')
+    for pfad_, inhalt in (('1.4 Qualita\u0308tssicherung/Pru\u0308fbericht N5.pdf', pdf('NFD')), ('1.4 Qualita\u0308tssicherung/1.4-F01.pdf', pdf('Fremdfirma'))):
+        os.makedirs(os.path.dirname(os.path.join(QMS2, pfad_)), exist_ok=True)
+        with open(os.path.join(QMS2, pfad_), 'wb') as f_:
+            f_.write(inhalt)
+    pg.eval_on_selector('#im-ordner', 'e => { e.value = ""; }')
+    pg.set_input_files('#im-ordner', QMS2)
+    pg.wait_for_function("document.querySelectorAll('#im-liste tbody tr .qm-name').length === 2 && document.querySelector('#im-meldung').textContent === ''")
+    check('anderer Ordner „QM-System“: Wurzel-Frage offen, Importieren gesperrt (keine gemerkte Antwort)', pg.input_value('#im-wurzel-wahl') == '' and pg.is_disabled('#im-los')
+          and zeilen(pg).get('1.4-F01.pdf') == 'Zuordnung offen', zeilen(pg))
+    neu_geplant(pg, lambda: pg.select_option('#im-wurzel-wahl', 'sf'))
+    wahl_ = pg.evaluate("[...document.querySelectorAll('#im-oberste [data-im-wahl]')].map(s => [s.dataset.imWahl, s.value])")
+    check('zerlegte Umlaute: Kapitelordner „1.4 Qualitätssicherung“ genau erkannt', wahl_ == [['1.4 Qualitätssicherung', 'genau']], wahl_)
+    pg.click('#im-los'); warte_ende(pg)
+    we2 = sorted(f['name'] for f in archiv(dok_titel('Weitere Dateien', '1.4')['id']))
+    check('… Dateiname zusammengesetzt abgelegt (NFC)', 'Prüfbericht N5.pdf' in we2 and 'Pru\u0308fbericht N5.pdf' not in we2, we2)
     pg.click('#dlg-import .qm-knopfreihe [data-im-zu]'); pg.wait_for_selector('#dlg-import', state='hidden')
     ctx.close()
 

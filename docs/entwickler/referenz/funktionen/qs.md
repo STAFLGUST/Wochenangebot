@@ -2,7 +2,7 @@
 
 <!-- ERZEUGT von `python3 werkzeuge/doku.py erzeugen` – nicht von Hand ändern. Quelle: Funktionen und Kommentare im Code. Die CI prüft, dass diese Datei zum Code passt. -->
 
-21 Dateien, 475 Funktionen – in der Reihenfolge der Datei, **fett** die Abschnitte. Text = erste Aussage des Kommentars direkt über der Funktion (Python: Docstring). Übersicht aller Module: [README.md](README.md).
+22 Dateien, 484 Funktionen – in der Reihenfolge der Datei, **fett** die Abschnitte. Text = erste Aussage des Kommentars direkt über der Funktion (Python: Docstring). Übersicht aller Module: [README.md](README.md).
 
 ## `app/api/aktionen/qs.php`
 
@@ -154,8 +154,13 @@ _Qualitätssicherung · QM-System (IFS Wholesale)_
 - `qs_verlauf(e, me, was)`
 - `qs_heute()`
 - `qs_dok_ablegen(doc, i, d, me)` – Dokument in qs-dokumente speichern: Stand hochzählen, „geändert“ setzen (unter der Sperre)
-- `qs_dokumente_sichtbar(liste, me)` – Dokumente, die $me sehen darf – Kapitel aus QS_KAPITEL_BEARBEITER (Kapitel-Kennung, nie der Titel) nur mit qs.bearbeiten; gilt für Liste, CSV, Dateien, …
+
+**Geschützte Kapitel (1.5 „Mitarbeiter“, Entscheidung des Inhabers 16.11.2026)**
+
+- `qs_kapitel_geschuetzt(k)`
+- `qs_sichtbar(me, ...namen)` – Die eine Stelle für alle Lesewege (Liste, Suche, Zahlen, CSV, Dateien, Ordnerbaum, ZIP, Bericht, Verfahrensdoku): lädt die genannten Listen (dokumente, …
 - `qs_dok_sichtbar(d, me)`
+- `qs_protokoll_name(e, name)` – Name im Protokoll: aus geschützten Kapiteln nur die Kapitelnummer – das Protokoll sieht, wer „protokoll.sehen“ hat, nicht nur „bearbeiten“
 - `qs_leer()` – Ist das Modul noch leer (für den Import ohne „ersetzen“)?
 - `qs_nat_cmp(a, b)` – Kapitel- und Abschnittsnummern natürlich sortieren („1.2“ vor „1.10“, „2.0.9“ vor „2.0.10“)
 
@@ -164,6 +169,7 @@ _Qualitätssicherung · QM-System (IFS Wholesale)_
 - `qs_mitarbeiter()` – Wählbare Mitarbeiter: aktive Zugänge und Mitarbeiter ohne Anmeldung (z. B. Lager); deaktivierte Zugänge nicht
 - `qs_kuerzel_von(stamm, userId)` – Kürzel, die mit einem Mitarbeiter verknüpft sind
 - `qs_pruefung_meine(p, stamm, userId)` – Ist der Mitarbeiter für die Prüfung eingeteilt (ausführend oder über sein Kürzel zuständig/Vertreter)?
+- `qs_massnahme_meine(m, kuerzel)` – Ist die Maßnahme einem der Kürzel $kuerzel (qs_kuerzel_von) zugewiesen – „Zuständig“ kann mehrere nennen („QB / TE“)?
 
 **Prüfen der Eingaben**
 
@@ -312,7 +318,7 @@ _QM-System · Verfahrensdokumentation nach GoBD (Reiter „Verfahrensdoku“ der
 
 - `qs_vf_aus(doku, dokumente, stamm, heute)` – Dokumentation für die Oberfläche: Abschnitte sortiert mit Nummer, Fassungen ohne Inhalt (den liefert der Export als PDF), Abweichung seit der letzten …
 - `qs_vf_laden(id)` – Dokumentation für eine Änderung laden (unter der Sperre): [Speicher-Dokument, Index, Dokumentation] oder 404
-- `qs_vf_antworten(doku)`
+- `qs_vf_antworten(doku, me)`
 - `qs_vf_ablegen(doc, i, doku, me)` – Dokumentation nach einer Änderung speichern: Stand hochzählen, „geändert“ setzen
 
 ## `app/api/module/qs/vorlagen.php`
@@ -335,7 +341,7 @@ _Qualitätssicherung · Vorlagen und Lenkungsangaben in Word- und Excel-Dateien 
 **Platzhalter ersetzen**
 
 - `qs_stuecke_ersetzen(seg, werte, offen)` – Textstücke einer Gruppe (Absatz, Zelle): $seg = [['t' => Text], …]; ersetzt Platzhalter auch über Stückgrenzen.
-- `qs_xml_ersetzen(xml, gruppe, tt, werte, offen, n)` – XML mit Gruppen (<w:p>/<si>/<is>) und Textelementen (<w:t>/<t>): Platzhalter je Gruppe ersetzen. null, wenn der Teil mehr als QS_XML_STUECKE_MAX Elemente …
+- `qs_xml_ersetzen(xml, gruppe, tt, werte, offen, n)` – XML mit Gruppen (<w:p>/<si>/<is>) und Textelementen (<w:t>/<t>): Platzhalter je Gruppe ersetzen. null, wenn der Teil größer als QS_XML_BYTES_MAX ist oder …
 - `qs_excel_kopf_ersetzen(xml, werte, offen, n)` – Kopf- und Fußzeilen in Excel (Text mit Steuerzeichen „&“: ein echtes & wird „&&“)
 - `qs_office_fuellen(daten, art, werte, alsDokument)` – Word-/Excel-Datei ausfüllen.
 - `qs_office_platzhalter(daten, art)` – Welche bekannten Platzhalter enthält die Datei?
@@ -704,12 +710,23 @@ _QM-System – Ordner-Import (qs_sammel_plan, qs_import_eintragen, module/qs/abl
 - `gelenkt(kap, art, nr, titel, gueltig)`
 - `ist(e, neu)`
 - `gross_docx(mb)`
+- `lange_absaetze(n, laenge)` – Word-Datei mit Platzhalter: entpackt rund 28 MB in 19.800 Textelementen (unter der Elementgrenze), gepackt rund 0,1 MB
 - `zahl(pg, n)`
 - `zeilen(pg)`
 - `oberste(pg)`
 - `warte_ende(pg)`
 - `neu_geplant(pg, aktion)` – Aktion, die einen neuen Plan anfordert – wartet auf dessen Antwort
 - `qm_waehlen(pg, wurzel_beantworten)`
+
+## `tests/e2e/test_qs_kapitel15.py`
+
+_QM-System – Kapitel 1.5 „Mitarbeiter“ samt Unterkapiteln 1.5.x (personenbezogene Unterlagen, Entscheidung des Inhabers 16.11.2026): alles daraus sieht nur, wer „bearbeiten“ darf (qs_sichtbar, qs_dok_sichtbar in …_
+
+- `dok(did, cli)`
+- `schritt(did, s, cli)`
+- `ordner(kap, titel, datei)`
+- `drin(raw, liste)`
+- `excel(cli)`
 
 ## `tests/e2e/test_qs_organigramm.py`
 

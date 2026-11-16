@@ -828,6 +828,7 @@ Jede Code-Datei beginnt mit einem Kopfkommentar; dessen erste Aussage steht hier
 | `test_qs_bericht.py` | qs | Qualitätssicherung – Audit-Bericht (app/api/module/qs/bericht.php, Aktionen qs_bericht und qs_bericht_excel, Reiter „Audit“). |
 | `test_qs_eingang.py` | qs | QM-System – Eingang (Dateien ohne Ziel, Dokument qs-ablage mit ziel „eingang“, module/qs/ablage.php). |
 | `test_qs_import.py` | qs | QM-System – Ordner-Import (qs_sammel_plan, qs_import_eintragen, module/qs/ablage.php) und Ordnerbaum (qs_archiv, qs_archiv_zip). |
+| `test_qs_kapitel15.py` | qs | QM-System – Kapitel 1.5 „Mitarbeiter“ samt Unterkapiteln 1.5.x (personenbezogene Unterlagen, Entscheidung des Inhabers 16.11.2026): alles daraus sieht nur, wer „bearbeiten“ darf (qs_sichtbar, qs_dok_sichtbar in … |
 | `test_qs_organigramm.py` | qs | Qualitätssicherung – Organigramm im QM-System (app/api/module/qs/organigramm.php, Aktionen qs_organigramm_save und qs_organigramm_vorschau, Oberfläche app/module/qs/organigramm.js). |
 | `test_qs_verfahren.py` | qs | Qualitätssicherung – Verfahrensdokumentation nach GoBD (app/api/module/qs/verfahren.php und verfahren-export.php, Aktionen qs_verfahren*, Reiter „Verfahrensdoku“ in app/module/qs/verfahren.js). |
 | `test_qs_vorlagen.py` | qs | Qualitätssicherung – Vorlagen und Nummernstruktur (QM-System Bauabschnitt 3, app/api/module/qs/vorlagen.php). |

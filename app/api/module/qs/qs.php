@@ -42,7 +42,7 @@ require __DIR__ . '/ablage.php';
 
 const QS_ARTEN = ['A' => 'Arbeitsanweisung', 'F' => 'Formblatt', 'L' => 'Liste', 'E' => 'Excel', 'V' => 'Vorlage', 'X' => 'Externes Dokument', 'O' => 'Ordner'];
 const QS_GELENKT = ['A', 'F', 'L', 'E', 'V'];
-const QS_KAPITEL_BEARBEITER = ['1.5'];   // personenbezogene Unterlagen (Inhaber 16.11.2026): Dokumente dieser Kapitel nur mit qs.bearbeiten
+const QS_KAPITEL_BEARBEITER = ['1.5'];   // personenbezogene Unterlagen (Inhaber 16.11.2026): diese Kapitel samt Unterkapiteln nur mit qs.bearbeiten (qs_sichtbar)
 const QS_VER_STATUS = ['entwurf' => 'Entwurf', 'pruefung' => 'In Prüfung', 'geprueft' => 'Geprüft', 'freigegeben' => 'Freigegeben', 'ersetzt' => 'Ersetzt', 'verworfen' => 'Verworfen'];
 const QS_VER_OFFEN = ['entwurf', 'pruefung', 'geprueft'];
 const QS_INTERVALLE = ['arbeitstaeglich' => 'täglich (Arbeitstage Mo–Fr)', 'taeglich' => 'täglich (auch am Wochenende)', 'woechentlich' => 'wöchentlich',
@@ -118,17 +118,45 @@ function qs_dok_ablegen(array &$doc, int $i, array $d, array $me): array
     qs_schreiben('qs-dokumente', $doc);
     return $d;
 }
-/* Dokumente, die $me sehen darf – Kapitel aus QS_KAPITEL_BEARBEITER (Kapitel-Kennung, nie der Titel) nur mit qs.bearbeiten; gilt für
-   Liste, CSV, Dateien, Archiv, ZIP und Bericht. qs_dok_sichtbar: 403 für ein einzelnes Dokument. */
-function qs_dokumente_sichtbar(array $liste, array $me): array
+/* ---------- Geschützte Kapitel (1.5 „Mitarbeiter“, Entscheidung des Inhabers 16.11.2026) ----------
+   Kapitel aus QS_KAPITEL_BEARBEITER samt Unterkapiteln („1.5“, „1.5.1“, nicht „1.50“), erkannt an der Kennung (nie am Titel); die Nummern
+   als Zahlen verglichen („01.5“ = „1.5“) */
+function qs_kapitel_geschuetzt(string $k): bool
 {
-    if (may($me, 'qs.bearbeiten')) return $liste;
-    return array_values(array_filter($liste, function ($d) { return !in_array((string)($d['kapitel'] ?? ''), QS_KAPITEL_BEARBEITER, true); }));
+    $n = implode('.', array_map('intval', explode('.', $k)));
+    foreach (QS_KAPITEL_BEARBEITER as $g) if ($n === $g || str_starts_with($n, $g . '.')) return true;
+    return false;
+}
+/* Die eine Stelle für alle Lesewege (Liste, Suche, Zahlen, CSV, Dateien, Ordnerbaum, ZIP, Bericht, Verfahrensdoku): lädt die genannten
+   Listen (dokumente, handbuch, pruefplan, nachweise, massnahmen) und gibt zurück, was $me davon sieht. Mit qs.bearbeiten alles; sonst aus
+   geschützten Kapiteln nur die eigenen Prüfungen (qs_pruefung_meine) mit ihren Nachweisen und die eigenen Maßnahmen (qs_massnahme_meine) –
+   damit erledigt, wer sie zugewiesen bekommen hat, nicht mehr. Ein einzelnes Dokument: qs_dok_sichtbar. */
+function qs_sichtbar(array $me, string ...$namen): array
+{
+    $l = []; foreach ($namen as $n) $l[$n] = qs_doc('qs-' . $n)['liste'];
+    if (may($me, 'qs.bearbeiten')) return $l;
+    $stamm = qs_stamm(); $id = (string)$me['id']; $kuerzel = qs_kuerzel_von($stamm, $id);
+    $frei = function (array $e): bool { return !qs_kapitel_geschuetzt((string)($e['kapitel'] ?? '')); };
+    $nur = function (array $liste, callable $ok): array { return array_values(array_filter($liste, $ok)); };
+    foreach (['dokumente', 'handbuch'] as $n) if (isset($l[$n])) $l[$n] = $nur($l[$n], $frei);
+    if (isset($l['massnahmen'])) $l['massnahmen'] = $nur($l['massnahmen'], function ($m) use ($frei, $kuerzel) { return $frei($m) || qs_massnahme_meine($m, $kuerzel); });
+    if (isset($l['pruefplan']) || isset($l['nachweise'])) {
+        $plan = $nur($l['pruefplan'] ?? qs_doc('qs-pruefplan')['liste'], function ($p) use ($frei, $stamm, $id) { return $frei($p) || qs_pruefung_meine($p, $stamm, $id); });
+        if (isset($l['pruefplan'])) $l['pruefplan'] = $plan;
+        $ids = array_flip(array_map('strval', array_column($plan, 'id')));
+        if (isset($l['nachweise'])) $l['nachweise'] = $nur($l['nachweise'], function ($x) use ($ids) { return isset($ids[(string)($x['pruefung'] ?? '')]); });
+    }
+    return $l;
 }
 function qs_dok_sichtbar(array $d, array $me): array
 {
-    if (!qs_dokumente_sichtbar([$d], $me)) fail('Dieses Kapitel (personenbezogene Unterlagen) sieht nur, wer bearbeiten darf.', 403);
+    if (qs_kapitel_geschuetzt((string)($d['kapitel'] ?? '')) && !may($me, 'qs.bearbeiten')) fail('Dieses Kapitel (personenbezogene Unterlagen) sieht nur, wer bearbeiten darf.', 403);
     return $d;
+}
+/* Name im Protokoll: aus geschützten Kapiteln nur die Kapitelnummer – das Protokoll sieht, wer „protokoll.sehen“ hat, nicht nur „bearbeiten“ */
+function qs_protokoll_name(array $e, string $name): string
+{
+    return qs_kapitel_geschuetzt((string)($e['kapitel'] ?? '')) ? '(Kapitel ' . $e['kapitel'] . ', personenbezogen)' : $name;
 }
 /* Ist das Modul noch leer (für den Import ohne „ersetzen“)? */
 function qs_leer(): bool
@@ -178,6 +206,11 @@ function qs_pruefung_meine(array $p, array $stamm, string $userId): bool
     if (in_array($userId, array_map('strval', (array)($p['ausfuehrende'] ?? [])), true)) return true;
     $k = qs_kuerzel_von($stamm, $userId);
     return $k && (in_array((string)($p['zustaendig'] ?? ''), $k, true) || in_array((string)($p['vertreter'] ?? ''), $k, true));
+}
+/* Ist die Maßnahme einem der Kürzel $kuerzel (qs_kuerzel_von) zugewiesen – „Zuständig“ kann mehrere nennen („QB / TE“)? */
+function qs_massnahme_meine(array $m, array $kuerzel): bool
+{
+    return (bool)array_intersect($kuerzel, preg_split('/[\s\/,;]+/', (string)($m['zustaendig'] ?? '')) ?: []);
 }
 
 /* ---------- Prüfen der Eingaben ---------- */
@@ -706,7 +739,7 @@ function qs_startseite(array $me): array
     if ($kuerzel) foreach (qs_doc('qs-massnahmen')['liste'] as $m) {
         $frist = (string)($m['frist'] ?? '');
         if (!in_array($m['status'] ?? 'offen', ['offen', 'in_arbeit'], true) || $frist === '') continue;
-        if (!array_intersect($kuerzel, preg_split('/[\s\/,;]+/', (string)($m['zustaendig'] ?? '')))) continue;
+        if (!qs_massnahme_meine($m, $kuerzel)) continue;
         $art = startseite_art(qs_tage_bis($heute, $frist), 7);
         if ($art === '') continue;
         $was = trim((string)($m['massnahme'] ?? '')) !== '' ? (string)$m['massnahme'] : (string)($m['feststellung'] ?? '');

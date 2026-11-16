@@ -11,8 +11,9 @@ declare(strict_types=1);
    sie beim Tippen zerlegt) und Excel (Zellen, Kopf- und Fußzeilen). Groß/Klein, Umlaute und Leerzeichen egal; unbekannte
    Namen bleiben stehen. Unterstützt: .docx, .dotx, .xlsx, .xltx, .xlsm (Office Open XML); .dotx/.xltx werden beim Erzeugen
    zu .docx/.xlsx. ZIP ohne PHP-Erweiterung „zip“: gelesen werden nur die Textteile, alle anderen Einträge (Bilder, Makros)
-   werden unverändert übernommen. Grenzen gegen ZIP-Bomben: höchstens 2000 Einträge, je Textteil 30 MB entpackt und
-   20000 Textelemente je Textteil (darüber gilt die Datei als nicht lesbar – der Aufwand bleibt nach oben beschränkt). */
+   werden unverändert übernommen. Grenzen gegen ZIP-Bomben: höchstens 2000 Einträge, je Textteil 30 MB entpackt; Platzhalter nur in
+   Textteilen bis 8 MB mit höchstens 20000 Textelementen (darüber gilt die Datei als nicht lesbar – sie wird abgelegt, nur ohne
+   Platzhalter und Lenkungsangaben; der Aufwand bleibt nach oben beschränkt). */
 if (!defined('WA_API')) { http_response_code(404); exit; }   // nur über api/index.php nutzbar
 require_once __DIR__ . '/../../lib/dateiablage.php';
 
@@ -24,6 +25,9 @@ const QS_ZIP_TEIL_MAX = 30 * 1024 * 1024;
    (QS_MAX_MASSNAHMEN) und das Zehnfache von QS_ZIP_EINTRAEGE; hält auch preg_match_all unter dem PHP-Vorgabewert
    memory_limit = 128M (gemessen etwa 2 KiB je Element). Darüber behandeln wir die Datei wie eine nicht lesbare. */
 const QS_XML_STUECKE_MAX = 20000;
+/* Bytes eines Textteils mit Platzhaltern: preg_match_all und das Zusammensetzen brauchen etwa das Fünffache (gemessen 8,6 MB → 45 MB);
+   so bleibt eine große Datei unter memory_limit = 128M, statt das ganze Bündel des Ordner-Imports mit 500 abzubrechen */
+const QS_XML_BYTES_MAX = 8 * 1024 * 1024;
 /* Platzhalter (Schlüssel ohne Umlaute, Leerzeichen und Satzzeichen) → Feld */
 const QS_PLATZHALTER = ['nr' => 'nr', 'nummer' => 'nr', 'doknr' => 'nr', 'dokumentennr' => 'nr', 'dokumentnr' => 'nr', 'titel' => 'titel',
     'kapitel' => 'kapitel', 'art' => 'art', 'zustaendig' => 'zustaendig', 'vertreter' => 'vertreter', 'version' => 'version', 'datum' => 'datum',
@@ -159,11 +163,13 @@ function qs_stuecke_ersetzen(array &$seg, array $werte, array &$offen): int
     return $n;
 }
 /* XML mit Gruppen (<w:p>/<si>/<is>) und Textelementen (<w:t>/<t>): Platzhalter je Gruppe ersetzen.
-   null, wenn der Teil mehr als QS_XML_STUECKE_MAX Elemente enthält (Grenze, bevor gerechnet wird). */
+   null, wenn der Teil größer als QS_XML_BYTES_MAX ist oder mehr als QS_XML_STUECKE_MAX Elemente enthält (beides gezählt, bevor gerechnet wird). */
 function qs_xml_ersetzen(string $xml, string $gruppe, string $tt, array $werte, array &$offen, int &$n): ?string
 {
     $re = '#<' . $gruppe . '(?=[\s>/])[^>]*>|</' . $gruppe . '>|<' . $tt . '(?=[\s>])([^>]*)>(.*?)</' . $tt . '>#s';
-    if (strpos($xml, '{{') === false || !preg_match_all($re, $xml, $mm, PREG_SET_ORDER | PREG_OFFSET_CAPTURE)) return $xml;
+    if (strpos($xml, '{{') === false) return $xml;
+    if (strlen($xml) > QS_XML_BYTES_MAX || 2 * substr_count($xml, '</' . $gruppe . '>') + substr_count($xml, '</' . $tt . '>') > QS_XML_STUECKE_MAX) return null;
+    if (!preg_match_all($re, $xml, $mm, PREG_SET_ORDER | PREG_OFFSET_CAPTURE)) return $xml;
     if (count($mm) > QS_XML_STUECKE_MAX) return null;
     $stapel = [[]]; $aenderungen = [];
     $abschliessen = function (array $seg) use ($werte, &$offen, &$n, &$aenderungen, $tt) {

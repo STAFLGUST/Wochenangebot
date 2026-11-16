@@ -27,7 +27,8 @@
   const schluessel = (e) => `${e.pfad}/${e.name}`;   // abgewählte Datei: Ordnerpfad wie gewählt und Name (so vergleicht der Server)
 
   /* ---------- Ordner, Ziehen und ZIP lesen: Liste { pfad (Ordner), name, groesse, holen } ---------- */
-  const eintrag = (voll, groesse, holen) => { const t = voll.split('/').filter(Boolean); return { name: t.pop() || '', pfad: t.join('/'), groesse, holen }; };
+  // macOS liefert Umlaute zerlegt (NFD); der Server vergleicht Kapitel- und Ordnernamen zusammengesetzt (NFC)
+  const eintrag = (voll, groesse, holen) => { const t = voll.normalize('NFC').split('/').filter(Boolean); return { name: t.pop() || '', pfad: t.join('/'), groesse, holen }; };
   async function ordnerLesen(e, pfad, aus) {
     if (aus.length > S.d.ablage.importMax) return;
     if (e.isFile) { const f = await new Promise((ok, nein) => e.file(ok, nein)); aus.push(eintrag(pfad + f.name, f.size, async () => f)); return; }
@@ -92,17 +93,19 @@
     I.liste = I.ordner.flatMap((o) => o.dateien);
     meldung('Plan wird erstellt …', true);
     if (!(await planen())) return;
-    const gemerkt = wahlLaden(I.plan.wurzel.name);
+    const gemerkt = wahlLaden();
     if (gemerkt.wahl || gemerkt.wurzel) {
       Object.assign(I, { wurzel: gemerkt.wurzel || {}, wahl: gemerkt.wahl || {}, ohne: new Set(gemerkt.ohne || []) });
       if (!(await planen())) { Object.assign(I, { wurzel: {}, wahl: {}, ohne: new Set() }); if (!(await planen())) return; }
     }
     meldung('', true); zeichnen();
   }
-  // Wurzel, Zuordnung der obersten Ordner und abgewählte Dateien je gewähltem Ordner (Fortsetzen nach Neuladen) – die Freigaben nie
+  // Wurzel, Zuordnung der obersten Ordner und abgewählte Dateien je gewähltem Ordner (Fortsetzen nach Neuladen) – die Freigaben nie. Schlüssel
+  // ist der Fingerabdruck (Name, Zahl der Dateien, Bytes): ein anderer Ordner gleichen Namens (etwa der der Fremdfirma) bekommt keine Antwort vorab
   const WAHL = 'qs-import-wahl:';
-  const wahlLaden = (w) => { try { return JSON.parse(localStorage.getItem(WAHL + w) || '{}'); } catch { return {}; } };
-  const wahlMerken = () => { try { localStorage.setItem(WAHL + I.plan.wurzel.name, JSON.stringify({ wurzel: I.wurzel, wahl: I.wahl, ohne: [...I.ohne] })); } catch { /* ohne Speicher */ } };
+  const fingerabdruck = () => `${WAHL}${I.plan.wurzel.name}|${I.liste.length}|${I.liste.reduce((s, e) => s + e.groesse, 0)}`;
+  const wahlLaden = () => { try { return JSON.parse(localStorage.getItem(fingerabdruck()) || '{}'); } catch { return {}; } };
+  const wahlMerken = () => { try { localStorage.setItem(fingerabdruck(), JSON.stringify({ wurzel: I.wurzel, wahl: I.wahl, ohne: [...I.ohne] })); } catch { /* ohne Speicher */ } };
   const dokText = (id) => { const x = S.d.dokumente.find((y) => y.id === id); return x ? `${x.nr ? x.nr + ' ' : ''}${x.titel}` : ''; };
   const zielText = (e) => {
     const p = e.plan || {};

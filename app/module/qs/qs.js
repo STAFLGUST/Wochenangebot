@@ -382,7 +382,7 @@
       const stueck = f.slice(pos, pos + a.teil);
       let daten;
       try { daten = await alsBase64(stueck); } catch { return { fehler: 'Die Datei ist nicht lesbar.' }; }
-      const r = await api('qs_datei_hochladen', { ...extra, dokument: dok, version: ver, name: f.name, groesse: f.size, sha256: sha, upload, teil, daten });
+      const r = await api('qs_datei_hochladen', { ...extra, dokument: dok, version: ver, name: f.name.normalize('NFC'), groesse: f.size, sha256: sha, upload, teil, daten });
       if (r.status === 401) return { anmelden: true };
       if (r.status !== 200 || !r.data.ok) return { fehler: fehlerText(r, 'Hochladen fehlgeschlagen') };
       pos += stueck.size; teil++;
