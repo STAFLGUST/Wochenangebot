@@ -69,6 +69,9 @@ function abmelde_kunde(string $tok): ?array
     return null;
 }
 function abmelde_url(array $c): string { return mail_base_url() . '/#abmelden=' . (!empty($c['id']) ? abmelde_token($c['id']) : 'BEISPIEL'); }
+/* Kundensatz für eine Vorschau: ohne Kennung, damit abmelde_url() den Platzhalter „BEISPIEL“ einsetzt. Der Abmeldecode gilt
+   unbefristet und ohne Anmeldung – eine Vorschau darf ihn nie ausliefern; sonst ist alles wie in der echten E-Mail. */
+function mail_vorschau_kunde(array $c): array { unset($c['id']); return $c; }
 /* Abmelden/Wiederanmelden speichern; true, wenn sich der Status geändert hat */
 function abmelde_setzen(array $c, bool $ab, string $via): bool
 {
@@ -102,11 +105,16 @@ function abmelde_melden(array $c, bool $ab, string $via): void
     }
     abmelde_hinweis_senden($c, $ab, now());
 }
-/* Hinweis an das Team über eine Ab- bzw. Wiederanmeldung ($t: Zeitpunkt der Änderung, UTC) */
+/* Hinweis an das Team über eine Ab- bzw. Wiederanmeldung ($t: Zeitpunkt der Änderung, UTC).
+   Höchstens POSTAUSGANG_HINWEIS_TAG Hinweise je Kunde und Tag – hier statt nur im Postausgang, damit die Grenze auf beiden
+   Versandwegen gilt (ohne WA_POSTAUSGANG sendet abmelde_melden() direkt). Der Zustand ist gespeichert, nur der Hinweis entfällt. */
 function abmelde_hinweis_senden(array $c, bool $ab, string $t): void
 {
     $cfg = mail_cfg_intern();
     if (!$cfg || !mail_base_url()) return;
+    $seit = gmdate('Y-m-d\TH:i:s', time() - 86400); $n = 0;
+    foreach (store_read('mailversand') ?? [] as $e) if (($e['typ'] ?? '') === 'hinweis' && ($e['kid'] ?? '') === $c['id'] && (string)($e['t'] ?? '') >= $seit) $n++;
+    if ($n >= POSTAUSGANG_HINWEIS_TAG) { error_log('[wochenangebot] Abmeldehinweis: Tagesgrenze für Kunde ' . $c['id']); return; }
     $targets = notify_targets('abmeldung');
     if (!$targets) return;
     $sub = ($ab ? 'Abmeldung' : 'Wiederanmeldung') . " Wochenangebot: {$c['firma']}";

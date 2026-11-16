@@ -116,6 +116,9 @@ function audit(string $a, string $s, array $d = [], ?array $who = null, bool $me
                 // Kunden: IP nur bei fehlgeschlagener Anmeldung (Sicherheit), sonst nicht speichern (wie bei der Auswertung zugesagt)
                 $ip = ($who['role'] ?? '') === 'kunde' && $a !== 'kunde_login_fail' ? '' : client_ip();
                 $e = ['t' => now(), 'u' => $u, 'n' => $who['name'] ?? '', 'r' => $who['role'] ?? '', 'ip' => $ip, 'a' => $a, 's' => $s];
+                // Nutzer-ID mitschreiben (neues optionales Feld, GR-006): Benutzernamen können nach dem Löschen eines
+                // Mitarbeiters erneut vergeben werden – Leser mit Eigentümerbezug (startseite_zuletzt) brauchen die stabile Identität.
+                if (($who['role'] ?? '') !== 'kunde' && ($who['id'] ?? '') !== '') $e['uid'] = (string)$who['id'];
                 if ($d) $e['d'] = $d;
                 $log[] = $e;
             }

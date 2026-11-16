@@ -5,6 +5,7 @@ import hashlib
 import hmac
 import json
 import sys
+import time
 from playwright.sync_api import sync_playwright
 from kunden_hilfe import Client, B
 from smtp_test import TestSmtp
@@ -115,6 +116,16 @@ code, r = P.call('kunde_abmelden', {'token': tok})
 check('customer unsubscribes', code == 200, r)
 check('sales gets unsubscribe notice (configured recipient)', until(lambda: len(mails_to('verkauf@example.org')) == 1, 8) and 'Gasthaus Linde' in mails_to('verkauf@example.org')[0]['text'], [m['subject'] for m in smtp.messages[-3:]])
 check('no duplicate notice', len(mails_to('verkauf@example.org')) == 1)
+# Tagesgrenze der Hinweise (Befund 15.11.2026): höchstens POSTAUSGANG_HINWEIS_TAG (10) je Kunde und Tag – auf beiden
+# Versandwegen, also auch ohne den Dienst „postausgang“. Der Abmeldelink darf keine beliebig lange Mailkette auslösen.
+ml = doc('mailversand') or []
+jetzt = time.strftime('%Y-%m-%dT%H:%M:%SZ', time.gmtime())
+ml += [{'t': jetzt, 'typ': 'hinweis', 'kid': kid, 'firma': 'Gasthaus Linde', 'to': 'verkauf@example.org', 'ok': True, 'error': '', 'by': 'automatisch'} for _ in range(10)]
+storage_write('mailversand', ml)
+n0 = len(mails_to('verkauf@example.org'))
+code, r = P.call('kunde_abmelden', {'token': tok, 'wieder': True})
+kunde = next(c for c in doc('kunden')['customers'] if c['id'] == kid)
+check('daily limit reached: state is saved, no further notice', code == 200 and kunde['mailAngebot'] is True and len(mails_to('verkauf@example.org')) == n0, (code, r))
 
 # ---------- Ausgeschaltet: keine E-Mail ----------
 A.call('benachrichtigung_save', {'events': {'sicherheit': {'on': False, 'to': 'it@example.org'}}})

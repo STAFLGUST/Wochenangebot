@@ -2,7 +2,7 @@
 
 <!-- ERZEUGT von `python3 werkzeuge/doku.py erzeugen` – nicht von Hand ändern. Quelle: Funktionen und Kommentare im Code. Die CI prüft, dass diese Datei zum Code passt. -->
 
-55 Dateien, 840 Funktionen – in der Reihenfolge der Datei, **fett** die Abschnitte. Text = erste Aussage des Kommentars direkt über der Funktion (Python: Docstring). Übersicht aller Module: [README.md](README.md).
+55 Dateien, 847 Funktionen – in der Reihenfolge der Datei, **fett** die Abschnitte. Text = erste Aussage des Kommentars direkt über der Funktion (Python: Docstring). Übersicht aller Module: [README.md](README.md).
 
 ## `app/api/lib/angebote.php`
 
@@ -127,9 +127,10 @@ _E-Mails an Kunden, Abmelden, Bestellwunsch-Vorlagen, Einmal-Links, Versand_
 - `abmelde_token(kid)`
 - `abmelde_kunde(tok)`
 - `abmelde_url(c)`
+- `mail_vorschau_kunde(c)` – Kundensatz für eine Vorschau: ohne Kennung, damit abmelde_url() den Platzhalter „BEISPIEL“ einsetzt.
 - `abmelde_setzen(c, ab, via)` – Abmelden/Wiederanmelden speichern; true, wenn sich der Status geändert hat
 - `abmelde_melden(c, ab, via)`
-- `abmelde_hinweis_senden(c, ab, t)` – Hinweis an das Team über eine Ab- bzw. Wiederanmeldung ($t: Zeitpunkt der Änderung, UTC)
+- `abmelde_hinweis_senden(c, ab, t)` – Hinweis an das Team über eine Ab- bzw. Wiederanmeldung ($t: Zeitpunkt der Änderung, UTC).
 
 **Bestellwünsche**
 
@@ -170,8 +171,10 @@ _Preisverlauf (Wochenstände)_
 
 - `history_id(week, year)`
 - `history_ids()`
-- `history_from_model(m, origin, at)` – Preis-Stand einer Woche aus einem veröffentlichten Angebot
+- `history_week(id)` – Eine gespeicherte Woche lesen – ohne Kundenpreise (variants).
+- `history_from_model(m, origin, at)` – Preis-Stand einer Woche aus einem veröffentlichten Angebot (ohne Kundenpreise – wie clean_history_items auf dem Importweg)
 - `history_backfill()` – Bisherige Veröffentlichungen einmalig in den Preisverlauf übernehmen (gelöschte Wochen ausgenommen)
+- `preisverlauf_lesbar()` – Darf der angemeldete Nutzer den Preisverlauf lesen?
 - `history_undelete(id)`
 - `clean_history_items(items)`
 
@@ -272,6 +275,7 @@ _Angebot · Frühere Wochen ansehen und Wochenablage (Wünsche des Inhabers 13.1
 - `angebot_woche_retten(v)` – Vor dem Löschen einer alten Version (keep_versions): in die Ablage retten, wenn diese KW dort keinen neueren Stand hat
 - `angebot_wochen_verzeichnis()` – Gespeicherte Wochen (aufsteigend) und je KW der späteste Stand aus aktuellem Angebot und versionen/*: [Wochen => true, 'JJJJ-WW' => ['art' => …
 - `angebot_woche_aus_historie(h)` – Preisstand des Preisverlaufs als Angebotsmodell für offer_resolve: Angebotsgruppen aus den gespeicherten Gruppennamen (Reihenfolge wie gespeichert), ohne …
+- `angebot_woche_modell(woche, verz)` – Vollständiger Stand einer KW (mit Kundenpreisen und Werbung) aus Wochenablage, aktuellem Angebot und versionen/* – ohne den Preisverlauf.
 - `angebot_woche(woche, oid)` – Aktion angebot_woche: KW „JJJJ-WW“ und Angebot (leer = Wochenangebot) → aufgelöstes Angebot dieser Woche oder null
 
 ## `app/api/order_outbox.php`
@@ -1247,6 +1251,7 @@ _Testgruppe editor_aux_
 
 - `check(n, c, i)`
 - `login(pg, user, pw)`
+- `get(pg, action)`
 - `post(pg, action, body)`
 
 **Artikelkarte des Bestands im Angebot (Wunsch Inhaber 06.11.2026)**
@@ -1309,6 +1314,13 @@ _Regressionstests der Design- und Fehlerprüfung_
 **KW 53 nur in Jahren mit 53 ISO-Wochen**
 
 **Rechte: mail_info, history_prev**
+
+**Veröffentlichen: der Inhalt gehört zu „Entwurf bearbeiten“ (Sicherheitsprüfung 15.11.2026)**
+
+- `lea(grant, deny)`
+- `rev()`
+
+**Preisverlauf und Abgleich ohne Modulzugang Angebot**
 
 **Einzelangebote**
 

@@ -190,10 +190,21 @@ def main(argv=None):
         return 1
     quelle = json.loads(Path(a.quelle).read_text(encoding='utf-8')) if a.quelle else None
     tokens, neu, fehler, hinweise, zeilen = {}, {}, [], [], []
+    # Spiegelfall zur Prüfung unten: derselbe Digest unter mehreren Fassungen würde beim Eintragen die Festlegung der
+    # anderen Fassung umlenken – eine Zeile in einer beliebigen versionierten Textdatei (auch Doku) genügte dafür.
+    unter = {}
+    for (name, tag), digests in funde.items():
+        for d in digests:
+            unter.setdefault(d, set()).add(f'{name}:{tag}')
+    mehrfach = {d for d, refs in unter.items() if len(refs) > 1}
+    for d in sorted(mehrfach):
+        fehler.append(f'sha256:{d[:12]}… steht unter mehreren Fassungen ({", ".join(sorted(unter[d]))}) – erst vereinheitlichen')
     for (name, tag), digests in sorted(funde.items()):
         ref = f'{name}:{tag}'
         if len(digests) > 1:
             fehler.append(f'{ref}: verschiedene Digests im Repository ({", ".join(d[:12] for d in digests)}) – erst vereinheitlichen')
+            continue
+        if any(d in mehrfach for d in digests):   # nur melden, nichts eintragen
             continue
         alt = next(iter(digests))
         try:
@@ -203,7 +214,7 @@ def main(argv=None):
             continue
         orte = digests[alt]
         if aktuell != alt:
-            neu[alt] = aktuell
+            neu[(name, tag, alt)] = aktuell
         zeilen.append((ref, alt, aktuell, orte))
         if a.neuere and quelle is None and re.fullmatch(r'v?\d+\.\d+\.\d+.*', tag):   # gleitende Fassungen (8.3-apache) haben keine
             try:
@@ -214,7 +225,8 @@ def main(argv=None):
                 hinweise.append(f'{ref}: Fassungen nicht abrufbar ({e})')
     if a.setzen and neu:
         for n, text in dateien(wurzel):
-            ersetzt = REF.sub(lambda m: m.group(0).replace(m['digest'], neu.get(m['digest'], m['digest'])), text)
+            ersetzt = REF.sub(lambda m: m.group(0).replace(      # nur Treffer derselben Fassung (name:tag)
+                m['digest'], neu.get((m['name'], m['tag'], m['digest']), m['digest'])), text)
             if ersetzt != text:
                 (wurzel / n).write_text(ersetzt, encoding='utf-8')
     # Ausgabe

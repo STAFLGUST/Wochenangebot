@@ -14,6 +14,9 @@ const FW_DEFAULTS = ['waf' => 'sperren', 'autoSperre' => true, 'treffer' => 5, '
                      'feed' => false, 'mitschnittBis' => 0, 'erlaubt' => []];
 /* Nicht exportiert/importiert: Listen und Schalter, die vom einzelnen Server abhängen (Adressen, Länder) */
 const FW_NICHT_UEBERTRAGEN = ['ipEnabled' => 1, 'adminIps' => 1, 'geoEnabled' => 1, 'geoMode' => 1, 'geoCountries' => 1, 'geoScope' => 1];
+/* Bezeichnungen der Felder im Protokoll (Firewall speichern und aus Datei übernehmen) */
+const FW_FELD_LABEL = ['waf' => 'Firewall', 'autoSperre' => 'Automatisch sperren', 'treffer' => 'Sperren nach Treffern',
+    'sperrMinuten' => 'Sperrdauer (Min.)', 'fehlerLimit' => 'Fehlerbremse (Anfragen/5 Min.)', 'feed' => 'Bedrohungsliste', 'erlaubt' => 'Nie sperren'];
 const FW_WAF_MODI = ['aus' => 'aus', 'protokoll' => 'nur protokollieren', 'sperren' => 'Anfrage abweisen'];
 const FW_SPERR_MINUTEN = [10, 60, 360, 1440, 10080];
 const FW_VERKEHR_MAX = 500;
@@ -60,12 +63,12 @@ function fw_erlaubt(string $ip): bool
     return !empty($S['adminIps']) && ip_allowed($ip, $S['adminIps']);
 }
 /* Angemeldeter Mitarbeiter? Nur nachsehen, wenn eine Sitzung mitkommt – sonst würde für jeden anonymen Besucher eine
-   Sitzung (Cookie, Datei) angelegt */
+   Sitzung (Cookie, Datei) angelegt (sitzung_vorhanden in lib/sitzung.php) */
 function fw_mitarbeiter(): bool
 {
     global $ME;
     if ($ME) return true;
-    if (empty($_COOKIE[sitzung_cookie_name()]) && empty($_SERVER['HTTP_X_WA_SITZUNG'])) return false;
+    if (!sitzung_vorhanden()) return false;
     return (bool)current_user();
 }
 /* Von einer fremden Seite ausgelöst (z. B. <img src="…/wp-login.php"> oder ein Link)? Browser senden Sec-Fetch-Site;

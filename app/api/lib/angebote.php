@@ -450,7 +450,16 @@ function angebot_veroeffentlichen(?array $modell, $revision): array
         angebot_woche_ablegen($model);   // je KW dauerhaft: ersetzt den Stand derselben KW (im selben Sperr- und Transaktionsrahmen)
         $rev = draft_end($dr, 'veröffentlicht');
         $h = history_from_model($model, 'Veröffentlichung', $model['publishedAt']);
-        if ($h) { $hid = history_id($h['week'], $h['year']); store_write('historie/' . $hid, $h); history_undelete($hid); }
+        if ($h) {
+            $hid = history_id($h['week'], $h['year']);
+            // Eine aus dem Preisverlauf entfernte Woche bleibt entfernt: wieder aufnehmen darf sie nur, wer
+            // preisverlauf.bearbeiten hat – sonst hebt das Veröffentlichen eine Entscheidung des Preisverlaufs auf (GR-103).
+            $u = current_user();
+            if (!in_array($hid, store_read('historie_geloescht') ?? [], true) || ($u && may($u, 'preisverlauf.bearbeiten'))) {
+                store_write('historie/' . $hid, $h);
+                history_undelete($hid);
+            }
+        }
         $d = $prev ? changes_between($prev, $model) : [];
         audit('publish', 'KW ' . $model['meta']['week'] . '/' . $model['meta']['year'] . ' veröffentlicht – ' . count($model['items']) . ' Artikel' . ($prev ? ' (' . changes_summary($d) . ')' : ' (erste Veröffentlichung)'), array_slice($d, 0, 2000));
         return ['publishedAt' => $model['publishedAt'], 'revision' => $rev, 'week' => $model['meta']['week'], 'year' => $model['meta']['year'], 'artikel' => count($model['items'])];

@@ -92,7 +92,7 @@ check('öffentliches Angebot bleibt zwischenspeicherbar (Offline)', st == 200 an
 pub = A.call('draft')[1]['published']
 pub['meta']['source'] = 'Interne-Datei_KW43.xlsx'; pub['meta']['sheetName'] = 'Blatt Intern'
 pub['items'][0]['cell'] = 'B12'
-assert A.call('publish', {'model': pub})[0] == 200
+assert A.call('publish', {'model': pub, 'revision': A.call('draft')[1]['revision']})[0] == 200
 off = Client('203.0.113.51').call('offer')[1]['offer']
 txt = json.dumps(off, ensure_ascii=False)
 check('öffentlich: kein Dateiname, kein Blattname, keine Zelladresse', 'Interne-Datei' not in txt and 'Blatt Intern' not in txt and '"cell"' not in txt)
@@ -150,7 +150,7 @@ k2 = A.call('einzel_status', {'id': k2['id'], 'revision': k2['revision'], 'statu
 pub = A.call('draft')[1]['published']
 pub['items'][0]['price'] = {'status': 'value', 'value': 4.125}
 PCODE = pub['items'][0]['code']
-assert A.call('publish', {'model': pub})[0] == 200
+assert A.call('publish', {'model': pub, 'revision': A.call('draft')[1]['revision']})[0] == 200
 PUB_DATE = de_datum(A.call('draft')[1]['published']['publishedAt'])
 
 errors = []

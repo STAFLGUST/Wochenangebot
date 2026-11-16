@@ -2,6 +2,8 @@
 
 Unterstützt EHLO, optional STARTTLS bzw. direktes TLS, AUTH PLAIN/LOGIN, MAIL/RCPT/DATA/RSET/QUIT.
 Empfänger, die mit „abgelehnt@“ beginnen, werden mit 550 abgewiesen (Fehlerfall).
+Mit vorweg=True schickt der Server hinter der 220-Antwort auf STARTTLS noch Klartextzeilen mit (nachgestellter Angreifer im
+Netzpfad) – der Client muss die Verbindung abbrechen, statt sie nach dem Handschlag als Antworten des Servers zu lesen.
 """
 import base64
 import email
@@ -12,8 +14,9 @@ import threading
 
 
 class TestSmtp:
-    def __init__(self, port, user='portal@example.org', password='Test-Postfach-1', mode='none', cert=None, key=None):
+    def __init__(self, port, user='portal@example.org', password='Test-Postfach-1', mode='none', cert=None, key=None, vorweg=False):
         self.port, self.user, self.password, self.mode = port, user, password, mode
+        self.vorweg = vorweg
         self.messages, self.logins = [], []
         self.ctx = None
         if mode in ('starttls', 'ssl'):
@@ -50,11 +53,14 @@ class TestSmtp:
                 up = cmd.upper()
                 if up.startswith('EHLO'):
                     caps = ['250-test']
-                    if self.mode == 'starttls' and not tls:
+                    if (self.mode == 'starttls' or self.vorweg) and not tls:
                         caps.append('250-STARTTLS')
                     caps.append('250 AUTH PLAIN LOGIN')
                     send('\r\n'.join(caps))
                 elif up == 'STARTTLS':
+                    if self.vorweg:
+                        c.sendall(b'220 go ahead\r\n250-test\r\n250 AUTH PLAIN LOGIN\r\n')   # eingeschobene Klartextantworten
+                        return
                     send('220 go ahead')
                     c = self.ctx.wrap_socket(c, server_side=True)
                     f = c.makefile('rb'); tls = True

@@ -395,7 +395,7 @@ function gruppen_import_vorschau(array $e, array $me): array
     foreach ($alt as $nr => $a) {
         $n['entfaellt']++;
         $k = $zahl[$nr] ?? 0;
-        if ($k) $mit++;
+        if ($k && $zaehlt) $mit++;   // abgeleitete Kundenzahlen nur mit kunden.sehen – wie die Zahl je Zeile
         $z[] = ['art' => 'entfaellt', 'zeile' => null, 'schluessel' => (string)$nr, 'name' => $a['name'], 'text' => 'nicht mehr in der Datei – wird entfernt' . ($k && $zaehlt ? " ($k " . ($liste === 'vkgruppen' ? 'Artikel' : ($liste === 'versandarten' ? 'Kunden und Lieferanten' : ($k === 1 ? 'Kunde' : 'Kunden'))) . ' zugeordnet)' : '')];
     }
     if ($mit) $h[] = ['stufe' => 'warn', 'text' => "$mit entfallende " . ($mit === 1 ? 'Eintrag hat' : 'Einträge haben') . ' zugeordnete ' . ($liste === 'vkgruppen' ? 'Artikel' : ($liste === 'versandarten' ? 'Kunden oder Lieferanten' : 'Kunden')) . '; diese behalten die Nummer, bis eine andere gewählt wird.'];

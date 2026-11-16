@@ -330,6 +330,8 @@ _Importzentrale (Verwaltung → Import, Roadmap 10b): eine Stelle für alle Impo
 
 **Kunden über die Schnittstelle der Zentrale**
 
+**Listen der Stammdaten: Kundenzuordnungen nur mit „Kunden ansehen“**
+
 **Bestand (Eigentümer Bestand) über die Schnittstelle**
 
 **Wartung der Oberfläche (GR-107): Importe pausieren, Administratoren arbeiten weiter**

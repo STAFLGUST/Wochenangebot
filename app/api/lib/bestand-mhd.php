@@ -190,16 +190,40 @@ function mhd_xlsx(array $l, string $titel): string
     ]);
 }
 
-/* Bild der Liste aus dem Browser prüfen (nur PNG, Größe begrenzt; der Browser zeichnet in drei- oder zweifacher Auflösung). Rückgabe: PNG-Daten. */
+/* Vollständigkeit eines PNG: Der Puffer besteht ausschließlich aus gültigen Blöcken (Länge, Typ aus vier Buchstaben,
+   CRC), beginnt mit IHDR, endet mit IEND und trägt dahinter kein Byte mehr. Der Kopf allein sagt darüber nichts – ohne
+   diese Prüfung gingen Fremddaten hinter einem gültigen Kopf als Bildanhang mit hinaus. */
+function mhd_png_vollstaendig(string $png): bool
+{
+    $n = strlen($png);
+    $i = 8;            // hinter der Signatur
+    $erster = true; $ende = false; $bloecke = 0;
+    while ($i < $n) {
+        if ($ende || $n - $i < 12 || ++$bloecke > 10000) return false;   // nichts nach IEND; Länge (4) + Typ (4) + CRC (4)
+        $len = unpack('N', substr($png, $i, 4))[1];
+        $typ = substr($png, $i + 4, 4);
+        if ($len > $n - $i - 12 || !preg_match('/^[A-Za-z]{4}$/', $typ)) return false;
+        if ($erster && $typ !== 'IHDR') return false;
+        if (unpack('N', substr($png, $i + 8 + $len, 4))[1] !== crc32($typ . substr($png, $i + 8, $len))) return false;
+        if ($typ === 'IEND') $ende = true;
+        $erster = false;
+        $i += 12 + $len;
+    }
+    return $ende && $i === $n;
+}
+
+/* Bild der Liste aus dem Browser prüfen (nur PNG; der Browser zeichnet in drei- oder zweifacher Auflösung). Geprüft wird
+   der ganze Puffer, nicht nur der Kopf – das Bild geht als Anhang an den Verkauf hinaus. Die Größe begrenzt bereits
+   body() (kern.php, 6 MiB je Anfrage). Rückgabe: PNG-Daten. */
 function mhd_bild_pruefen($b64): string
 {
     if (!is_string($b64) || $b64 === '') fail('Das Bild der MHD-Liste fehlt.', 422);
     $b64 = preg_replace('#^data:image/png;base64,#', '', $b64) ?? '';
-    if (strlen($b64) > 8 * 1024 * 1024) fail('Das Bild der MHD-Liste ist zu groß.', 413);
     $png = base64_decode($b64, true);
     if ($png === false || strncmp($png, "\x89PNG\r\n\x1a\n", 8) !== 0) fail('Das Bild der MHD-Liste ist ungültig.', 422);
     $info = @getimagesizefromstring($png);
     if (!$info || $info[2] !== IMAGETYPE_PNG || $info[0] < 100 || $info[0] > 6000 || $info[1] < 50 || $info[1] > 30000) fail('Das Bild der MHD-Liste ist ungültig.', 422);
+    if (!mhd_png_vollstaendig($png)) fail('Das Bild der MHD-Liste ist ungültig.', 422);
     return $png;
 }
 

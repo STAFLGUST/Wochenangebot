@@ -104,7 +104,11 @@ SUITES['sicherheit_druck'] = SUITES['bestellung']
 SUITES['integritaet'] = SUITES['bestellung']   # Dateiprüfung; Test-Mailserver für die Benachrichtigung
 SUITES['geraete'] = SUITES['bestellung']   # vertraute Geräte
 SUITES['bestand_pdf'] = (8790, 'data-seed', True)   # Bestand: Marke, MHD-Farben, PDF
-SUITES['passwortpruefung'] = (8790, 'data-seed', True, {'WA_PWNED_URL': 'http://127.0.0.1:{AUX}/range/%s'})   # Datenleck-Prüfung (nachgebauter Dienst)
+SUITES['passwortpruefung'] = (8790, 'data-seed', True, {   # Datenleck-Prüfung (nachgebauter Dienst); Postfach für die Benachrichtigung über den Kundenvorgang
+    'WA_PWNED_URL': 'http://127.0.0.1:{AUX}/range/%s',
+    'MAIL_SMTP_HOST': '127.0.0.1', 'MAIL_SMTP_PORT': '2526', 'MAIL_SMTP_SECURE': 'none', 'MAIL_SMTP_USER': 'portal@example.org',
+    'MAIL_SMTP_PASS': 'Test-Postfach-1', 'MAIL_FROM': 'angebot@example.org', 'MAIL_FROM_NAME': 'Standard-Fleisch',
+    'MAIL_REPLY_TO': 'verkauf@example.org', 'WA_URL': 'http://127.0.0.1:8790'})
 SUITES['app_web'] = SUITES['bestellung']   # App (mobile/) als Web-Build; braucht mobile/dist-web
 # Gruppen, die einen vorherigen Build brauchen: im vollen Lauf nur, wenn der Build vorliegt (sonst Hinweis)
 OPTIONAL = {'app_web': os.path.join(REPO, 'mobile', 'dist-web', 'index.html')}
@@ -288,7 +292,8 @@ def run(name):
 
 
 # Noch nicht produktiv ausgelieferte Oberflächen (nicht in app/): nur in der jeweiligen Testgruppe unter dem Testserver
-ZUSATZ = {'dashboard': [('dashboard', 'dashboard')], 'einheit': [('dashboard', 'dashboard')], 'rollen': [('dashboard', 'dashboard')], 'sicherheit_modul': [('dashboard', 'dashboard')]}
+ZUSATZ = {'dashboard': [('dashboard', 'dashboard')], 'einheit': [('dashboard', 'dashboard')], 'rollen': [('dashboard', 'dashboard')],
+          'sicherheit_modul': [('dashboard', 'dashboard')], 'integritaet': [('dashboard', 'dashboard')]}   # integritaet: Dashboard in der Prüfliste
 
 # Testzustand des Modulregisters für einzelne Gruppen: um Testfreigabe und Produktivfreigabe der Modulverwaltung zu
 # prüfen, braucht die Gruppe ein Modul „in Prüfung“ ohne Freigabe und ein fertiges, nicht freigegebenes Modul. Dafür stellt sie
@@ -345,11 +350,10 @@ def run_in(name, slot):
     shutil.copytree(os.path.join(REPO, 'app'), app)
     if name in LISTE_IM_ANGEBOT:   # vor dem Bereitstellen, damit Versionsnummer und Prüfliste zur geänderten Datei passen
         liste_im_angebot_einschalten(app)
-    BEREITSTELLEN.verzeichnis(pathlib.Path(app))   # wie der Server: ?v=… setzen, Prüfliste erzeugen
     for quelle, ziel in ZUSATZ.get(name, ()):   # Oberflächen außerhalb der Dokumentwurzel nur für ihre Gruppe einblenden
         shutil.copytree(os.path.join(REPO, quelle), os.path.join(app, ziel))
-        if quelle == BEREITSTELLEN.ZUSATZ == ziel:   # Dashboard wie auf dem Server mit Versionsnummern
-            BEREITSTELLEN.zusatz_verzeichnis(pathlib.Path(app))
+    # wie der Server: ?v=… setzen, Prüfliste erzeugen – nach dem Einblenden, damit das Dashboard mit darin steht
+    BEREITSTELLEN.verzeichnis(pathlib.Path(app))
     if name in REGISTER_TEST:
         register_anpassen(app, REGISTER_TEST[name])
     data = os.path.join(app, 'data')
