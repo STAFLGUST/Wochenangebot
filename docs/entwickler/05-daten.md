@@ -702,8 +702,9 @@ laufen unter der Sperre `qs-dokumente`. Zuständig/Vertreter sind **Kürzel** (S
   "namen": {"<Kürzel>": "<Name>"}?}`; ein Dokument ist ein Organigramm, sobald eine Version das Feld trägt. 1 bis 300 Stellen, je Stelle
   höchstens 10 Personen aus `qs-stamm`, kein Zyklus; eine Stabsstelle (`stab`) sitzt an einer Stelle und hat keine eigenen Unterstellen; die
   Reihenfolge der Liste ist die Reihenfolge unter einer Stelle. Ändern nur im offenen Entwurf (`qs_organigramm_save`, `qs.bearbeiten`; wer
-  ändert, kommt in `bearbeiter`). Die Freigabe schreibt `namen` (Schnappschuss, GR-106) und legt die PDF-Fassung als Datei mit
-  `organigramm: true` ab; „Überarbeitung beginnen“ übernimmt `knoten` ohne `namen`, „Dateien übernehmen“ lässt die PDF aus.
+  ändert, kommt in `bearbeiter`; eine leere Liste nimmt das Feld wieder aus dem Entwurf). `namen` (Schnappschuss, GR-106) entsteht beim
+  Einreichen, verschwindet beim Zurückgeben und gilt unverändert für die Freigabe; die Freigabe legt die PDF-Fassung als Datei mit
+  `organigramm: true` ab. „Überarbeitung beginnen“ übernimmt `knoten` ohne `namen`, „Dateien übernehmen“ lässt die PDF aus.
 - **`qs-handbuch`**: `{"id": "h…", "rev", "kapitel", "pos", "nr": "2.0.14", "titel", "text", "verweise": ["1.3-L02 HACCP-Analyse"], "ifs",
   "zustaendig", "vertreter", "entfallen": {…}|null, "aenderungen": [{"datum", "was", "grund", "von"}]}`. Ein Abschnitt „Ziel“ steht in der
   Oberfläche als Einleitung des Kapitels.

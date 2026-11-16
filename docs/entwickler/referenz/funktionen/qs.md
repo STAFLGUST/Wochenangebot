@@ -2,7 +2,7 @@
 
 <!-- ERZEUGT von `python3 werkzeuge/doku.py erzeugen` – nicht von Hand ändern. Quelle: Funktionen und Kommentare im Code. Die CI prüft, dass diese Datei zum Code passt. -->
 
-16 Dateien, 350 Funktionen – in der Reihenfolge der Datei, **fett** die Abschnitte. Text = erste Aussage des Kommentars direkt über der Funktion (Python: Docstring). Übersicht aller Module: [README.md](README.md).
+16 Dateien, 364 Funktionen – in der Reihenfolge der Datei, **fett** die Abschnitte. Text = erste Aussage des Kommentars direkt über der Funktion (Python: Docstring). Übersicht aller Module: [README.md](README.md).
 
 ## `app/api/aktionen/qs.php`
 
@@ -40,13 +40,19 @@ _QM-System · Audit-Bericht (Aktionen qs_bericht, qs_bericht_excel)_
 
 _QM-System · Organigramm als gelenktes Dokument (Entscheidung des Inhabers 16.11.2026 „Im QM-System zeichnen“; nur bei Bedarf geladen von app/api/aktionen/qs.php)._
 
-- `qs_organigramm_pruefen(v, alt, stamm)` – Eingabe → gültige Struktur ohne Namens-Schnappschuss.
-- `qs_organigramm_speichern()` – Aktion qs_organigramm_save: Struktur im offenen Entwurf speichern (Stand „rev“ des Dokuments wie bei qs_version_save)
+- `qs_organigramm_pruefen(v, alt, stamm)` – Eingabe → gültige Struktur ohne Namens-Schnappschuss; null bei leerer Liste (Organigramm aus dem Entwurf nehmen).
+- `qs_organigramm_speichern()` – Aktion qs_organigramm_save: Struktur im offenen Entwurf speichern, mit leerer Liste entfernen (Stand „rev“ wie bei qs_version_save)
 - `qs_organigramm_uebernehmen(gueltig, neu)` – „Überarbeitung beginnen“: Struktur der gültigen Version in den neuen Entwurf – ohne Namens-Schnappschuss (im Entwurf gelten die heutigen Namen)
-- `qs_organigramm_freigeben(d, v, stamm, me, erzeugt)` – Freigabe (nach Nummer, Datum und Freigabe-Vermerk): Namen festhalten und die PDF-Fassung als Datei der Version ablegen
-- `qs_organigramm_lage(knoten, hoehe)` – Lage aller Kästen und Linien (pt, Ursprung oben links) aus der Struktur und der Höhe je Kasten: untergeordnete Stellen nebeneinander unter ihrer Stelle, …
-- `qs_organigramm_zeilen(k, namen)` – Textzeilen eines Kastens [Text, Größe, fett, Farbe]: Stelle, Person(en) oder „unbesetzt“, Vertretung, Hinweis.
-- `qs_organigramm_pdf(d, v, stamm)` – PDF-Fassung einer freigegebenen Version: eine Seite A4 quer, Diagramm eingepasst; Kopf mit Logo, Titel und Firma, Fuß mit den Lenkungsangaben (Nr., Version, …
+- `qs_organigramm_schritt(d, v, me, erzeugt)` – Nach jedem Schritt in qs_version_schritt: ab dem Einreichen hält die Version die Namen fest – der Prüfer prüft genau diese, die Freigabe übernimmt sie …
+- `qs_organigramm_namen(og, stamm)`
+- `qs_organigramm_vorschau()` – Aktion qs_organigramm_vorschau (GET): dieselbe PDF wie bei der Freigabe für die offene Version, als ENTWURF gekennzeichnet – der Prüfer sieht vorher, was …
+- `qs_organigramm_lage(knoten, hoehe)` – Lage aller Kästen und Linien in pt, Ursprung oben links: ['b', 'h', 'kaesten' => [id => ['x', 'y']], 'linien' => [[x1, y1, x2, y2]]].
+- `qs_og_teilbaum(id, unter, hoehe)` – Teilbaum ab $id mit Ursprung oben links: Stabsstellen paarweise links und rechts der Linie unter der Stelle; Unterstellen nebeneinander – oder senkrecht …
+- `qs_og_verschieben(ziel, teil, dx, dy)`
+- `qs_organigramm_kasten(k, namen)` – Kasten einer Stelle: Textzeilen mit Grundlinie y (pt ab Oberkante) und Höhe h – Stelle, Person(en) oder „unbesetzt“, Vertretung, Hinweis
+- `qs_og_trennen(wort, g, innen, fett)` – Wort, das auch verkleinert nicht in die Zeile passt, mit Trennstrich zerlegen (Teile mit Leerzeichen für Pdf::wrap)
+- `qs_og_einpassen(t, g, max, fett)` – Text auf $max pt Breite: erst verkleinern (bis QS_OG_MIN_SCHRIFT), dann mit „…“ kürzen → [Text, Größe]
+- `qs_organigramm_pdf(d, v, stamm, marke)` – Eine Seite A4 quer: Logo, Titel und Firma im Kopf, Lenkungsangaben im Fuß (wie die Platzhalter in Word-/Excel-Dateien).
 
 ## `app/api/module/qs/qs.php`
 
@@ -266,13 +272,12 @@ _Qualitätssicherung · Vorlagen und Lenkungsangaben in Word- und Excel-Dateien 
 
 ## `app/module/qs/organigramm.js`
 
-_STAFL-Plattform · Qualitätssicherung – Organigramm in einem gelenkten Dokument (Entscheidung des Inhabers 16.11.2026 „Im QM-System zeichnen“)._
-
-- `neueId()`
+_STAFL-Plattform · QM-System – Organigramm in einem gelenkten Dokument_
 
 **Karte in der Seitenleiste des Dokuments**
 
 - `karte(x)`
+- `vorschau(id)` – dieselbe PDF, die die Freigabe ablegt, mit „ENTWURF“ gekennzeichnet; liefert '' oder den Fehlertext
 
 **Diagramm**
 
@@ -288,15 +293,16 @@ _STAFL-Plattform · Qualitätssicherung – Organigramm in einem gelenkten Dokum
 - `waehle(id)`
 - `geaendert()`
 - `neu(teil)`
-- `tat(t)`
+- `tauschen(k, schritt)`
+- `loeschen(k)`
 
 **Fenster**
 
 - `fenster()`
-- `oeffnen(id, art)` – art: 'ansehen' = gültige Version, 'entwurf' = offene Version nur lesen, 'bearbeiten' = offener Entwurf (ohne eigene Struktur beginnt er mit der gültigen …
+- `oeffnen(id, art)` – art: 'ansehen' = gültige Version, 'entwurf' = offene Version nur lesen, 'bearbeiten' = offener Entwurf.
 - `schliessen()`
+- `sperren(an)` – Während der Anfrage ist die Zeichnung gesperrt, sonst überschriebe die Antwort neue Eingaben
 - `speichern()`
-- `drucken()` – Drucken: Diagramm ohne Bedienelemente auf A4 quer, eingepasst (Kopf mit Dokument und Stand)
 
 ## `app/module/qs/qs.js`
 
@@ -540,7 +546,7 @@ _Qualitätssicherung – Audit-Bericht (app/api/module/qs/bericht.php, Aktionen 
 
 ## `tests/e2e/test_qs_organigramm.py`
 
-_Qualitätssicherung – Organigramm im QM-System (app/api/module/qs/organigramm.php, Aktion qs_organigramm_save, Oberfläche app/module/qs/organigramm.js)._
+_Qualitätssicherung – Organigramm im QM-System (app/api/module/qs/organigramm.php, Aktionen qs_organigramm_save und qs_organigramm_vorschau, Oberfläche app/module/qs/organigramm.js)._
 
 - `check(n, c, i)`
 - `de(iso)`
@@ -549,10 +555,17 @@ _Qualitätssicherung – Organigramm im QM-System (app/api/module/qs/organigramm
 - `dok(cli, did)`
 - `knoten(id_, titel, ueber, art, personen, vertretung, hinweis)`
 - `speichern(cli, liste, d)`
+- `schritt(cli, s, **mehr)`
+- `vorschau(cli, did)`
 - `fehler_bei(name, liste, teil)`
+- `antwort(ja)`
 - `baum(pg)`
+- `lage(pg)`
+- `meldung(pg, teil)`
 - `anmelden(user, pw_, ip, breite, thema, hoehe)`
 - `oeffne_dok(pg, did)`
+- `andere_person_speichert(hinweis)` – zwei Personen am selben Entwurf: Rückfrage statt Sackgasse
+- `gf_hinweis()`
 
 ## `tests/e2e/test_qs_verfahren.py`
 
