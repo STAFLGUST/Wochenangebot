@@ -227,10 +227,19 @@ def snapshot(root, target):
         (target / '.sqlite-active').write_text('1\n')
         (target / '.sqlite/.htaccess').write_text('Require all denied\n')
         # DB contains all business records. Operational statuses remain sidecars; markers of the data separation
-        # (ADR-007 Stufe 2) are copied as well. The file store dateien/ is backed up separately (deploy/dateien_sichern.py).
+        # (ADR-007 Stufe 2) and the file store dateien/ (uploaded documents, never in the database) are copied as well.
+        # deploy/sichern.sh with deploy/dateien_sichern.py backs dateien/ up on its own and sets WA_SNAPSHOT_OHNE_DATEIEN=1.
         for name in ('deployment.php', 'index.php', '.daten-getrennt', '.daten-intern'):
             if (root / name).is_file():
                 shutil.copy2(root / name, target / name)
+        ablage = root / 'dateien'
+        if ablage.is_dir() and not ablage.is_symlink() and os.environ.get('WA_SNAPSHOT_OHNE_DATEIEN') != '1':
+            for p in sorted(ablage.rglob('*')):
+                rel = p.relative_to(root)
+                if p.is_symlink() or not p.is_file() or '.teile' in rel.parts:
+                    continue   # never follow links; unfinished uploads are not part of the backup
+                (target / rel).parent.mkdir(parents=True, exist_ok=True)
+                shutil.copy2(p, target / rel)
     else:
         raise ValueError('Snapshot command requires an active database')
     print('Consistent SQLite snapshot created and verified')

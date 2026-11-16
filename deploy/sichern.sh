@@ -4,18 +4,18 @@
 # ruft aktualisieren.sh das Skript auf (höchstens 1× pro Tag).
 # Sofort sichern:   sh /opt/wochenangebot/deploy/sichern.sh --jetzt
 #
-# Jede Sicherung wird direkt nach dem Erstellen probeweise entpackt und geprüft (alle Datendateien lesbar).
-# Dateiablage (dateien/ in daten/ bzw. nach der Trennung in daten-intern/, hochgeladene Dateien wie QM-Dokumente): nicht im
-# Archiv, sondern je Lauf als Stand sicherungen/dateien-<daten|intern>/<Zeit>/ mit festen Verweisen auf den vorigen Stand
-# (deploy/dateien_sichern.py) – Platz für einen Bestand plus die Änderungen. Geprüft wird, dass jede Datei, auf die die
-# gesicherten Daten verweisen, im Stand liegt, dazu eine Stichprobe mit SHA-256. Fehlt das Werkzeug (Sicherung vor dem
-# Release: Skript des neuen Commits, übrige Dateien in deploy/ noch im alten Stand), bleibt die Dateiablage im Archiv.
-# Vor dem Sichern wird der Platz geprüft (neue Dateien, dreimal die übrigen Daten, 5 GB Reserve); reicht er nicht, bricht
-# die Sicherung mit Meldung im Status ab.
+# Ablauf: Platz prüfen, Archive und Stand der Dateiablage als .tmp bauen, Archive probeweise entpacken und prüfen, den Stand
+# gegen die Verweise der Archive prüfen. Erst wenn alles stimmt, werden Archive und Stand gemeinsam festgeschrieben und die
+# Aufbewahrung angewandt (rotieren). Ein Fehler entfernt alles dieses Laufs; ältere Sicherungen bleiben unangetastet.
+# Dateiablage (dateien/ in daten/ bzw. nach der Trennung in daten-intern/, z. B. QM-Dokumente): nicht im Archiv, sondern je
+# Lauf ein Stand sicherungen/dateien/<Zeit>/ mit festen Verweisen auf den vorigen (deploy/dateien_sichern.py; beim Release die
+# Fassung des neuen Commits, deploy/.dateien_sichern-release.py). Fehlen Dateien, auf die die Daten verweisen, in Ablage und
+# Stand, ist das nur eine Warnung (Liste sicherungen/.dateien-fehlend). Platzbedarf: docs/entwickler/08-betrieb.md.
 # Nicht gesichert wird der Schlüssel für das im Eingabebereich hinterlegte Postfach-Passwort (mail-schluessel.php):
 # Sicherungen enthalten das Passwort damit nur verschlüsselt; nach einer Wiederherstellung auf neuem Server muss es
 # unter Verwaltung → E-Mail neu eingegeben werden.
-# Ablage: /opt/wochenangebot/sicherungen (nur für root lesbar, nicht über das Web erreichbar), die letzten 30 Stände.
+# Ablage: /opt/wochenangebot/sicherungen (nur für root lesbar, nicht über das Web erreichbar). Aufbewahrung: rotieren().
+# Zwei Läufe gleichzeitig verhindert eine Sperre (sicherungen/.sperre); der zweite endet sofort mit Fehler.
 # Zentrale Anmeldung: läuft Keycloak (deploy/anmeldung), wird zusätzlich dessen Datenbank gesichert
 # (anmeldung-<Zeit>.dump, pg_dump im Container, Inhalt geprüft). Enthält Passwort-Hashes und Einmalcode-Geheimnisse –
 # gleicher Schutz wie die Geschäftsdaten. Rücksicherung üben: deploy/anmeldung/ruecksicherung-probe.sh,
@@ -27,31 +27,29 @@ set -eu
 cd "$(dirname "$0")/.."
 BASIS=$(pwd)
 ZIEL="$BASIS/sicherungen"
-BEHALTEN=30
+BEHALTEN=30            # so viele Läufe bleiben mindestens, auch bei verstellter Uhr (rotieren)
 STATUS="$BASIS/daten/sicherung.php"
 GUARD='<?php http_response_code(404); exit; ?>'
 HC_URL=$(sed -n 's/^HC_SICHERUNG_URL=//p' "$BASIS/.env" 2>/dev/null | head -1 | tr -d '"'"'"' ')
 FERTIG=0
-PRUEF=""
-SNAP=""
+STAMP=""
+ARBEIT=""
 DATENSAETZE=0
 SPEICHER=dateien
 ANMELDUNG=aus          # aus (nicht in Betrieb) | ok | fehler
-DSW="$BASIS/deploy/dateien_sichern.py"
-DSF="$ZIEL/.dateisicherung-fehler"
-[ -f "$DSW" ] || DSW=""
-D_ANZAHL=0; D_GROESSE=0; D_NEU=0; D_STAENDE=0; D_BELEGT=0
+ABLAGE_JSON=null
 ANM_DATEI=""
 ANM_MELDUNG=""
-ANM_GRUND=""
 INTERN_DATEI=""
 KC_COMPOSE=${WA_KC_COMPOSE:-docker compose -f docker-compose.yml -f deploy/anmeldung/docker-compose.anmeldung.yml}
+DSW="$BASIS/deploy/.dateien_sichern-release.py"
+[ -f "$DSW" ] || DSW="$BASIS/deploy/dateien_sichern.py"
+[ -f "$DSW" ] || DSW=""
 
 status() { # ok datei groesse dateien fehler inhalt_geprueft meldung
   ANZ=$(find "$ZIEL" -maxdepth 1 -name 'daten-*.tar.gz' 2>/dev/null | wc -l)
-  printf '%s\n{"t":"%s","ok":%s,"datei":"%s","groesse":%s,"dateien":%s,"fehler":%s,"inhalt":%s,"anzahl":%s,"behalten":%s,"meldung":"%s","datensaetze":%s,"speicher":"%s","anmeldung":"%s","anmeldung_datei":"%s","intern_datei":"%s","dateien_anzahl":%s,"dateien_groesse":%s,"dateien_neu":%s,"dateien_staende":%s,"dateien_belegt":%s}' \
-    "$GUARD" "$(date -u +%Y-%m-%dT%H:%M:%SZ)" "$1" "$2" "$3" "$4" "$5" "$6" "$ANZ" "$BEHALTEN" "$7" "$DATENSAETZE" "$SPEICHER" "$ANMELDUNG" "$ANM_DATEI" "${INTERN_DATEI##*/}" \
-    "$D_ANZAHL" "$D_GROESSE" "$D_NEU" "$D_STAENDE" "$D_BELEGT" \
+  printf '%s\n{"t":"%s","ok":%s,"datei":"%s","groesse":%s,"dateien":%s,"fehler":%s,"inhalt":%s,"anzahl":%s,"behalten":%s,"meldung":"%s","datensaetze":%s,"speicher":"%s","anmeldung":"%s","anmeldung_datei":"%s","intern_datei":"%s","ablage":%s}' \
+    "$GUARD" "$(date -u +%Y-%m-%dT%H:%M:%SZ)" "$1" "$2" "$3" "$4" "$5" "$6" "$ANZ" "$BEHALTEN" "$7" "$DATENSAETZE" "$SPEICHER" "$ANMELDUNG" "$ANM_DATEI" "$INTERN_DATEI" "$ABLAGE_JSON" \
     | status_schreiben
 }
 # daten/ ist im Container beschreibbar: dort angelegte Verweise dürfen root nie umlenken. Deshalb entsteht die Datei
@@ -69,13 +67,12 @@ melden() { # ok|fail
   if [ "$1" = ok ]; then curl -fsS -m 10 --retry 3 "$HC_URL" >/dev/null 2>&1 || true
   else curl -fsS -m 10 --retry 3 "$HC_URL/fail" >/dev/null 2>&1 || true; fi
 }
+grund() { tail -1 "$1" 2>/dev/null | tr -d '"\\\000-\037' | cut -c1-"$2"; }   # letzte Zeile einer Fehlerausgabe, für JSON entschärft
 aufraeumen() {
   RC=$?
-  # shellcheck disable=SC2086  # Listen von Wegwerf-Ordnern (mktemp, ohne Leerzeichen)
-  [ -n "$SNAP" ] && rm -rf $SNAP
-  # shellcheck disable=SC2086
-  [ -n "$PRUEF" ] && rm -rf $PRUEF
-  rm -f "$ZIEL"/anmeldung-*.dump.tmp "$ZIEL"/anmeldung-*.dump.fehler.tmp 2>/dev/null
+  [ -z "$ARBEIT" ] || rm -rf "$ARBEIT"
+  # alles dieses Laufs, was noch nicht festgeschrieben ist (STAMP erst mit der Sperre gesetzt)
+  [ -z "$STAMP" ] || rm -rf "$ZIEL/dateien/$STAMP.tmp" "$ZIEL"/*-"$STAMP".tar.gz.tmp "$ZIEL/anmeldung-$STAMP".dump*.tmp
   if [ "$FERTIG" -eq 0 ] && [ "$RC" -ne 0 ]; then   # unerwarteter Abbruch: Fehler sichtbar machen
     touch "$ZIEL/.letzter-fehler" 2>/dev/null || true
     status false "" 0 0 1 false "Abbruch (Code $RC)"
@@ -84,7 +81,7 @@ aufraeumen() {
   fi
 }
 trap aufraeumen EXIT
-fehler() { FERTIG=1; touch "$ZIEL/.letzter-fehler" 2>/dev/null || true; status false "" 0 0 1 false "$1"; melden fail; echo "Datensicherung fehlgeschlagen: $1"; exit 1; }
+fehler() { FERTIG=1; touch "$ZIEL/.letzter-fehler" 2>/dev/null || true; status false "" 0 0 "${2:-1}" false "$1"; melden fail; echo "Datensicherung fehlgeschlagen: $1"; exit 1; }
 
 mkdir -p "$ZIEL"
 chmod 700 "$ZIEL"
@@ -93,62 +90,60 @@ if [ "${1:-}" != "--jetzt" ]; then
   if [ -n "$(find "$ZIEL" -maxdepth 1 -name 'daten-*.tar.gz' -mmin -1380 | head -1)" ]; then FERTIG=1; exit 0; fi
   if [ -n "$(find "$ZIEL" -maxdepth 1 -name '.letzter-fehler' -mmin -60 | head -1)" ]; then FERTIG=1; exit 0; fi
 fi
+exec 9>"$ZIEL/.sperre"
+flock -n 9 || { FERTIG=1; echo "Datensicherung läuft bereits – dieser Aufruf sichert nicht"; exit 1; }
+STAMP=$(date -u +%Y-%m-%d_%H%M%S)
+rm -rf "$ZIEL"/dateien/*.tmp "$ZIEL"/*.tmp   # Reste abgebrochener Läufe (unter der Sperre läuft kein anderer)
+ARBEIT=$(mktemp -d)
+DSF="$ARBEIT/werkzeug-fehler"
+AUSSER="$ARBEIT/ausser"   # nicht im Archiv und nicht im Platzbedarf (tar und du lesen dieselbe Liste)
+printf '%s\n' ./geo ./sicherung.php ./mail-schluessel.php '*.tmp' './.*.lock' > "$AUSSER"
+# shortcut: ohne Werkzeug bleibt die Dateiablage im Archiv (nur die Release-Sicherung, die #378 einspielt: altes deploy/); nach dem ersten Release mit Werkzeug entfernen
+if [ -n "$DSW" ]; then echo ./dateien >> "$AUSSER"; export WA_SNAPSHOT_OHNE_DATEIEN=1; fi
+ds() { [ -z "$DSW" ] || python3 "$DSW" "$@" 2>"$DSF"; }
 [ -d "$BASIS/daten" ] || fehler "Ordner daten/ fehlt"
 
-STAMP=$(date -u +%Y-%m-%d_%H%M%S)
-# ablagen: je Dateiablage „<quelle>:<ziel>“ (Pfade ohne Leerzeichen); daten-intern nur nach der Datentrennung
-ablagen() {
-  [ -n "$DSW" ] || return 0
-  for A in daten:daten daten-intern:intern; do
-    [ "${A%%:*}" = daten-intern ] && [ ! -f "$BASIS/daten-intern/.daten-intern" ] && continue
-    [ -d "$BASIS/${A%%:*}/dateien" ] && echo "$BASIS/${A%%:*}/dateien:$ZIEL/dateien-${A##*:}"
-  done
-  return 0
-}
-ds_grund() { tail -1 "$DSF" 2>/dev/null | tr -d '"\\\000-\037' | cut -c1-200; }
-dateien_aufbauen() {
-  for A in $(ablagen); do
-    N=$(python3 "$DSW" aufbauen "${A%%:*}" "${A#*:}" "$STAMP" 2>"$DSF") || fehler "$(ds_grund)"
-    D_NEU=$((D_NEU + N))
-  done
-}
+# Getrennte Daten (ADR-007 Stufe 2, deploy/daten-trennen.sh): interne Dokumente und die Dateiablage liegen in daten-intern/
+# (wie ablage_wurzel() in lib/dateiablage.php); eigenes Archiv intern-<Zeit>.tar.gz. Maßgeblich ist das Kennzeichen in
+# daten-intern/ (dort kann die Kundenseite nicht schreiben): sonst könnte ein entferntes Kennzeichen in daten/ die internen
+# Daten still aus der Sicherung nehmen. Beide Kennzeichen müssen zusammenpassen.
+INTERN=""
+if [ -f "$BASIS/daten-intern/.daten-intern" ] || [ -f "$BASIS/daten/.daten-getrennt" ]; then
+  [ -f "$BASIS/daten-intern/.daten-intern" ] || fehler "Daten sind getrennt, daten-intern/ fehlt aber oder ist nicht markiert"
+  [ -f "$BASIS/daten/.daten-getrennt" ] || fehler "daten-intern/ ist markiert, in daten/ fehlt das Kennzeichen (sh deploy/daten-trennen.sh status)"
+  INTERN="$BASIS/daten-intern"
+fi
+ABLAGE="${INTERN:-$BASIS/daten}/dateien"
 
-# Platz: neue Dateien der Ablage + dreimal die übrigen Daten (Abzug der Datenbank, Archiv, Probe-Entpacken) + 5 GB Reserve.
-# Unter 5 GB frei warnt der Reiter System (Speicherplatz); die Sicherung soll den Server nie unter diese Schwelle drücken.
+# Platz: neue Dateien der Ablage + dreimal die übrigen Daten (Abzug der Datenbank, Archiv, Probe-Entpacken) + 5 GB Reserve
+# (Warnschwelle „Speicherplatz“ im Reiter System). Begründung: docs/entwickler/08-betrieb.md.
 gb() { awk -v k="$1" 'BEGIN { printf "%.1f", k / 1048576 }' | tr . ,; }
-NEU_KB=0
-for A in $(ablagen); do
-  rm -rf "${A#*:}"/*.tmp   # Reste eines abgebrochenen Laufs
-  N=$(python3 "$DSW" bedarf "${A%%:*}" "${A#*:}" 2>"$DSF") || fehler "$(ds_grund)"
-  NEU_KB=$((NEU_KB + N / 1024))
-done
-AUSSER=""; [ -n "$DSW" ] && AUSSER=--exclude=dateien
-# shellcheck disable=SC2046,SC2086  # optionaler Ordner und Ausschluss ohne Leerzeichen
-DATEN_KB=$(du -sk $AUSSER "$BASIS/daten" $([ -d "$BASIS/daten-intern" ] && echo "$BASIS/daten-intern") | awk '{s += $1} END {print s + 0}')
+NEU=$(ds bedarf "$ABLAGE" "$ZIEL/dateien") || fehler "$(grund "$DSF" 200)"
+NEU_KB=$((${NEU:-0} / 1024))
+DATEN_KB=0
+for O in "$BASIS/daten" ${INTERN:+"$INTERN"}; do DATEN_KB=$((DATEN_KB + $(cd "$O" && du -sk -X "$AUSSER" . | cut -f1))); done
 NOETIG=$((NEU_KB + 3 * DATEN_KB + 5 * 1048576))
 FREI=$(df -Pk "$ZIEL" | awk 'NR==2 {print $4}')
 [ "${FREI:-0}" -ge "$NOETIG" ] || fehler "zu wenig Speicherplatz: $(gb "${FREI:-0}") GB frei, nötig $(gb "$NOETIG") GB (neue Dateien $(gb "$NEU_KB") GB, Daten 3 × $(gb "$DATEN_KB") GB, Reserve 5 GB)"
 
-dateien_aufbauen
+ds aufbauen "$ABLAGE" "$ZIEL/dateien" "$STAMP" || fehler "$(grund "$DSF" 200)"
 DATEIEN=0
 FEHLER=0
 INHALT=true
-# sichere_ordner <ordner> <name>: Archiv <name>-<Zeit>.tar.gz (SQLite: aus einem geprüften Abzug), probeweise entpacken und jede
-# Datendatei prüfen; zählt DATEIEN, FEHLER und DATENSAETZE weiter, behält je Name die letzten $BEHALTEN Stände
+# sichere_ordner <ordner> <name>: Archiv <name>-<Zeit>.tar.gz.tmp (SQLite: aus einem geprüften Abzug), probeweise nach
+# $ARBEIT/pruef-<name> entpacken und jede Datendatei prüfen; zählt DATEIEN, FEHLER und DATENSAETZE weiter
 sichere_ordner() {
   O_ORDNER=$1; O_NAME=$2
-  O_DATEI="$ZIEL/$O_NAME-$STAMP.tar.gz"
+  O_DATEI="$ZIEL/$O_NAME-$STAMP.tar.gz.tmp"
   O_QUELLE="$O_ORDNER"
   if [ -f "$O_ORDNER/.sqlite-active" ]; then
-    O_SNAP=$(mktemp -d); SNAP="$SNAP $O_SNAP"
-    python3 "$BASIS/deploy/datenbank.py" snapshot "$O_ORDNER" --output "$O_SNAP/data" >/dev/null || fehler "Datenbank-Sicherung fehlgeschlagen ($O_NAME)"
-    O_QUELLE="$O_SNAP/data"
+    O_QUELLE="$ARBEIT/abzug-$O_NAME"
+    python3 "$BASIS/deploy/datenbank.py" snapshot "$O_ORDNER" --output "$O_QUELLE" >/dev/null || fehler "Datenbank-Sicherung fehlgeschlagen ($O_NAME)"
   fi
-  # shellcheck disable=SC2086  # ohne Werkzeug für die Dateiablage bleibt sie im Archiv
-  tar czf "$O_DATEI.tmp" -C "$O_QUELLE" ${DSW:+--exclude=./dateien} --exclude='./geo' --exclude='*.tmp' --exclude='./.*.lock' --exclude='./sicherung.php' --exclude='./mail-schluessel.php' . || { rm -f "$O_DATEI.tmp"; fehler "Archiv konnte nicht erstellt werden ($O_NAME)"; }
+  tar czf "$O_DATEI" -C "$O_QUELLE" -X "$AUSSER" . || fehler "Archiv konnte nicht erstellt werden ($O_NAME)"
   # Wiederherstellungstest: in einen leeren Ordner entpacken und jede Datendatei prüfen
-  O_PRUEF=$(mktemp -d); PRUEF="$PRUEF $O_PRUEF"
-  tar xzf "$O_DATEI.tmp" -C "$O_PRUEF" || { rm -f "$O_DATEI.tmp"; fehler "Archiv nicht lesbar ($O_NAME)"; }
+  O_PRUEF="$ARBEIT/pruef-$O_NAME"; mkdir "$O_PRUEF"
+  tar xzf "$O_DATEI" -C "$O_PRUEF" || fehler "Archiv nicht lesbar ($O_NAME)"
   O_QZAHL=$(cd "$O_QUELLE" && find . -name '*.php' ! -path './geo/*' ! -name 'sicherung.php' ! -name 'mail-schluessel.php' | wc -l)
   O_DATEIEN=$(find "$O_PRUEF" -name '*.php' | wc -l)
   O_FEHLER=0
@@ -169,31 +164,32 @@ sichere_ordner() {
   fi
   case "$O_SAETZE" in ''|*[!0-9]*) O_SAETZE=0 ;; esac
   [ "$O_DATEIEN" -ge "$O_QZAHL" ] || O_FEHLER=$((O_FEHLER + O_QZAHL - O_DATEIEN))
-  mv "$O_DATEI.tmp" "$O_DATEI"
-  chmod 600 "$O_DATEI"
-  ls -1t "$ZIEL"/"$O_NAME"-*.tar.gz | tail -n +$((BEHALTEN + 1)) | xargs -r rm -f
   DATEIEN=$((DATEIEN + O_DATEIEN)); FEHLER=$((FEHLER + O_FEHLER)); DATENSAETZE=$((DATENSAETZE + O_SAETZE))
 }
-DATEI="$ZIEL/daten-$STAMP.tar.gz"
 sichere_ordner "$BASIS/daten" daten
-# Getrennte Daten (ADR-007 Stufe 2, deploy/daten-trennen.sh): interne Dokumente liegen in daten-intern/ – eigenes Archiv
-# intern-<Zeit>.tar.gz, gleich geprüft. Wiederherstellen: daten-*.tar.gz nach daten/, intern-*.tar.gz nach daten-intern/.
-# Maßgeblich ist das Kennzeichen in daten-intern/ (dort kann die Kundenseite nicht schreiben): sonst könnte ein entferntes
-# Kennzeichen in daten/ die internen Daten still aus der Sicherung nehmen. Beide Kennzeichen müssen zusammenpassen.
-if [ -f "$BASIS/daten-intern/.daten-intern" ] || [ -f "$BASIS/daten/.daten-getrennt" ]; then
-  [ -f "$BASIS/daten-intern/.daten-intern" ] || fehler "Daten sind getrennt, daten-intern/ fehlt aber oder ist nicht markiert"
-  [ -f "$BASIS/daten/.daten-getrennt" ] || fehler "daten-intern/ ist markiert, in daten/ fehlt das Kennzeichen (sh deploy/daten-trennen.sh status)"
-  sichere_ordner "$BASIS/daten-intern" intern
-  INTERN_DATEI="$ZIEL/intern-$STAMP.tar.gz"
-fi
-# Dateien, die während des Archivs hinzukamen, ergänzen; dann gegen die entpackten Archive prüfen und abschließen
-if [ -n "$(ablagen)" ]; then
-  dateien_aufbauen
-  # shellcheck disable=SC2046,SC2086  # Listen ohne Leerzeichen
-  ERG=$(python3 "$DSW" abschliessen "$BEHALTEN" "$STAMP" $(ablagen | sed 's/^[^:]*://') --daten $PRUEF 2>"$DSF") || fehler "$(ds_grund)"
-  # shellcheck disable=SC2086
-  set -- $ERG; D_ANZAHL=$1; D_GROESSE=$2; D_STAENDE=$3; D_BELEGT=$4
-fi
+[ -z "$INTERN" ] || sichere_ordner "$INTERN" intern
+[ "$FEHLER" -eq 0 ] || fehler "$FEHLER Datei(en) im Archiv fehlerhaft – nicht gesichert, ältere Sicherungen bleiben" "$FEHLER"
+# Stand um Dateien ergänzen, die während der Archive hinzukamen, und gegen die Verweise der entpackten Archive prüfen
+ds pruefen "$ABLAGE" "$ZIEL/dateien" "$STAMP" "$ARBEIT"/pruef-* || fehler "$(grund "$DSF" 200)"
+WARNUNG=$(grund "$DSF" 300)
+
+# rotieren: Aufbewahrung, gemeinsam für Archive, Keycloak-Sicherungen und Stände der Dateiablage derselben Zeit. Es bleiben
+# alle Läufe der letzten 7 Tage, der letzte Lauf jedes Tages der letzten 30 Tage und immer die $BEHALTEN neuesten Läufe
+# (eine verstellte Uhr löscht so nie alles). Maßgeblich sind die Zeiten der Datenarchive.
+rotieren() {
+  B=$(for F in "$ZIEL"/daten-*.tar.gz; do F=${F##*/daten-}; echo "${F%.tar.gz}"; done | sort -r \
+    | awk -v w="$(date -u -d '7 days ago' +%Y-%m-%d_%H%M%S)" -v m="$(date -u -d '30 days ago' +%Y-%m-%d_%H%M%S)" -v n="$BEHALTEN" \
+        'NR <= n || $0 >= w || ($0 >= m && substr($0, 1, 10) != tag) { print } { tag = substr($0, 1, 10) }')
+  for F in "$ZIEL"/daten-*.tar.gz "$ZIEL"/intern-*.tar.gz "$ZIEL"/anmeldung-*.dump "$ZIEL"/dateien/*; do
+    Z=${F##*/}; Z=${Z#daten-}; Z=${Z#intern-}; Z=${Z#anmeldung-}; Z=${Z%.tar.gz}; Z=${Z%.dump}
+    case $Z in ????-??-??_??????) case $B in *"$Z"*) ;; *) rm -rf "$F" ;; esac ;; esac
+  done
+}
+for F in "$ZIEL"/*-"$STAMP".tar.gz.tmp; do chmod 600 "$F"; mv "$F" "${F%.tmp}"; done
+[ ! -d "$ZIEL/dateien/$STAMP.tmp" ] || mv "$ZIEL/dateien/$STAMP.tmp" "$ZIEL/dateien/$STAMP"
+rotieren
+INTERN_DATEI=${INTERN:+intern-$STAMP.tar.gz}
+if [ -n "$DSW" ]; then ABLAGE_JSON=$(ds abschliessen "$ZIEL/dateien" "$STAMP") || fehler "$(grund "$DSF" 200)"; fi
 
 # ── Zentrale Anmeldung: Keycloak-Datenbank, sobald sie läuft oder laut .env in Betrieb ist ──
 anmeldung_sichern() {
@@ -202,15 +198,15 @@ anmeldung_sichern() {
   # (POSTGRES_PASSWORD), nie über die Befehlszeile. Grund eines Fehlers landet gekürzt in der Statusmeldung.
   # shellcheck disable=SC2086,SC2016  # KC_COMPOSE ist bewusst ein Befehl mit Argumenten; $POSTGRES_PASSWORD wertet der Container aus
   if ! $KC_COMPOSE exec -T keycloak-db sh -c 'PGPASSWORD="$POSTGRES_PASSWORD" exec pg_dump -U keycloak -d keycloak --format=custom' > "$KC_DUMP.tmp" 2>"$KC_DUMP.fehler.tmp"; then
-    ANM_GRUND=$(tail -1 "$KC_DUMP.fehler.tmp" | tr -d '"\\\000-\037' | cut -c1-160); return 1
+    ANM_GRUND=$(grund "$KC_DUMP.fehler.tmp" 160); return 1
   fi
   # Prüfung: Archiv lesbar und enthält die Konten (Tabelle user_entity mit Daten)
   # shellcheck disable=SC2086
   $KC_COMPOSE exec -T keycloak-db pg_restore --list < "$KC_DUMP.tmp" 2>/dev/null | grep -q 'TABLE DATA public user_entity' || return 1
   mv "$KC_DUMP.tmp" "$KC_DUMP"; chmod 600 "$KC_DUMP"
-  ls -1t "$ZIEL"/anmeldung-*.dump | tail -n +$((BEHALTEN + 1)) | xargs -r rm -f
   ANM_DATEI=$(basename "$KC_DUMP")
 }
+ANM_GRUND=""
 if [ -f "$BASIS/deploy/anmeldung/docker-compose.anmeldung.yml" ] && [ -d "$BASIS/daten-anmeldung" ]; then
   # shellcheck disable=SC2086
   if [ -n "$($KC_COMPOSE ps -q keycloak-db 2>/dev/null)" ]; then
@@ -219,28 +215,18 @@ if [ -f "$BASIS/deploy/anmeldung/docker-compose.anmeldung.yml" ] && [ -d "$BASIS
     ANMELDUNG=fehler; ANM_MELDUNG="Anmeldung (Keycloak) in Betrieb, Datenbank läuft aber nicht – nicht gesichert"
   fi
 fi
-rm -f "$ZIEL"/anmeldung-*.dump.tmp "$ZIEL"/anmeldung-*.dump.fehler.tmp
-GROESSE=$(stat -c %s "$DATEI")
+DATEI="daten-$STAMP.tar.gz"
+GROESSE=$(stat -c %s "$ZIEL/$DATEI")
 FERTIG=1
-if [ "$FEHLER" -eq 0 ] && [ "$ANMELDUNG" = fehler ]; then
+if [ "$ANMELDUNG" = fehler ]; then
   touch "$ZIEL/.letzter-fehler"
-  status false "$(basename "$DATEI")" "$GROESSE" "$DATEIEN" 0 "$INHALT" "$ANM_MELDUNG"
+  status false "$DATEI" "$GROESSE" "$DATEIEN" 0 "$INHALT" "$ANM_MELDUNG${WARNUNG:+; $WARNUNG}"
   melden fail
-  echo "Datensicherung erstellt und geprüft: $(basename "$DATEI"); aber: $ANM_MELDUNG"
-  exit 1
-elif [ "$FEHLER" -eq 0 ]; then
-  rm -f "$ZIEL/.letzter-fehler"
-  if [ "$INHALT" = true ]; then
-    status true "$(basename "$DATEI")" "$GROESSE" "$DATEIEN" 0 true ""
-  else
-    status true "$(basename "$DATEI")" "$GROESSE" "$DATEIEN" 0 false "Inhalt nicht geprüft (kein Python/PHP verfügbar)"
-  fi
-  melden ok
-  echo "Datensicherung erstellt und geprüft: $(basename "$DATEI")${INTERN_DATEI:+ und $(basename "$INTERN_DATEI")} ($DATENSAETZE Datensätze, $([ "$SPEICHER" = sqlite ] && echo Datenbank || echo Dateien))$([ "$ANMELDUNG" = ok ] && echo "; Anmeldung: $ANM_DATEI")$([ "$D_STAENDE" -gt 0 ] && echo "; Dateiablage: $D_ANZAHL Dateien, $((D_NEU / 1048576)) MB neu kopiert")"
-else
-  touch "$ZIEL/.letzter-fehler"
-  status false "$(basename "$DATEI")" "$GROESSE" "$DATEIEN" "$FEHLER" "$INHALT" "$FEHLER Datei(en) fehlerhaft${ANM_MELDUNG:+; $ANM_MELDUNG}"
-  melden fail
-  echo "Datensicherung erstellt, aber $FEHLER Datei(en) fehlerhaft: $(basename "$DATEI")"
+  echo "Datensicherung erstellt und geprüft: $DATEI; aber: $ANM_MELDUNG"
   exit 1
 fi
+rm -f "$ZIEL/.letzter-fehler"
+[ "$INHALT" = true ] || WARNUNG="Inhalt nicht geprüft (kein Python/PHP verfügbar)${WARNUNG:+; $WARNUNG}"
+status true "$DATEI" "$GROESSE" "$DATEIEN" 0 "$INHALT" "$WARNUNG"
+melden ok
+echo "Datensicherung erstellt und geprüft: $DATEI${INTERN_DATEI:+ und $INTERN_DATEI} ($DATENSAETZE Datensätze, $([ "$SPEICHER" = sqlite ] && echo Datenbank || echo Dateien))$([ "$ANMELDUNG" = ok ] && echo "; Anmeldung: $ANM_DATEI")${WARNUNG:+; Warnung: $WARNUNG}"
