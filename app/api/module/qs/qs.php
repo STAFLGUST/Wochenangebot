@@ -343,7 +343,7 @@ function qs_dokument_pruefen(array $b, ?array $alt, array $stamm, array $alle, b
     if ($alt !== null && ($alt['art'] ?? '') !== $row['art'] && in_array($alt['art'] ?? '', QS_GELENKT, true) !== in_array($row['art'], QS_GELENKT, true) && !empty($alt['versionen']))
         throw new InvalidArgumentException('Ein Dokument mit Versionen kann nicht zu einem Ordner oder externen Dokument werden (und umgekehrt).');
     if ($alt !== null && in_array($alt['art'] ?? '', QS_GELENKT, true) !== in_array($row['art'], QS_GELENKT, true)
-            && (qs_dateien_aktiv($alt['dateien'] ?? []) || (qs_ablage_zahlen()[(string)$alt['id']]['dateien'] ?? 0)))
+            && qs_ablage_belegt($alt, qs_ablage_zahlen()) > 0)
         throw new InvalidArgumentException('In der Ablage des Dokuments liegen Dateien – es kann nicht zu einem gelenkten Dokument werden.');
     $row['kapitel'] = qs_kapitel_pruefen($b['kapitel'] ?? '', $stamm);
     $row['nr'] = qs_text($b['nr'] ?? '', 40, 'Dokumenten-Nr.');

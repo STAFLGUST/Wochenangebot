@@ -2,7 +2,7 @@
 
 <!-- ERZEUGT von `python3 werkzeuge/doku.py erzeugen` – nicht von Hand ändern. Quelle: Funktionen und Kommentare im Code. Die CI prüft, dass diese Datei zum Code passt. -->
 
-116 Dateien, 1176 Funktionen – in der Reihenfolge der Datei, **fett** die Abschnitte. Text = erste Aussage des Kommentars direkt über der Funktion (Python: Docstring). Übersicht aller Module: [README.md](README.md).
+118 Dateien, 1193 Funktionen – in der Reihenfolge der Datei, **fett** die Abschnitte. Text = erste Aussage des Kommentars direkt über der Funktion (Python: Docstring). Übersicht aller Module: [README.md](README.md).
 
 ## `.github/scripts/apt_vorrat.py`
 
@@ -1152,6 +1152,27 @@ _HTTP-Client mit eigener Sitzung für API-Tests (IP über X-Forwarded-For, wie h
 - `__init__(ip)`
 - `call(action, data, raw)`
 
+## `tests/e2e/qs_hilfe.py`
+
+_Gemeinsame Hilfen der Tests zur Dokumentenablage des QM-Systems (test_qs_eingang.py, test_qs_import.py)_
+
+- `check(n, c, i)`
+- `ende()`
+- `pdf(text)`
+- `docx_w(text)` – Word-Datei mit Absatz und Textstück (wie Word), damit Platzhalter erkannt werden
+- `blob_pfad(did)`
+- `blobs()` – Kennungen aller Dateien der QS-Ablage auf der Platte
+- `speicher(name)`
+- `hochladen(cli, dok, ver, name, inhalt, extra)`
+- `roh(cli, query)`
+- `nutzer(nutzer_liste, ip_ab)` – Administrator anmelden, Nutzer (Name, Anzeigename, Rolle, Passwort, Rechte) anlegen und anmelden: (Admin, {Name: Client}, {Name: Kennung})
+- `fuellen(cli, n, ziel, praefix)` – n aktive Einträge ohne Datei in qs-ablage – nur zum Erreichen einer Grenze; die Zahlen zählt danach der Server neu
+- `leeren(cli, praefix)` – Füllung wieder entfernen; den letzten Eintrag löscht der Server im Eingang – dabei zählt er neu (auch wenn die Zahlen noch „voll“ sagen)
+- `neu_zaehlen(cli)` – qs-ablage-zahlen neu zählen lassen wie im Betrieb: eine Datei in den Eingang legen und wieder löschen (jedes Schreiben zählt neu)
+- `anmelden(br, user, pw, ip, breite, thema, hoehe)` – Browser anmelden und das QM-System („Dokumente“) öffnen; Fehler der Seite landen in fehler
+- `text(pg, sel)`
+- `ohne_scrollen(pg, dlg)`
+
 ## `tests/e2e/smtp_test.py`
 
 _Kleiner Test-Mailserver für die Ende-zu-Ende-Tests (nimmt Nachrichten an und hält sie im Speicher)._
@@ -1934,6 +1955,12 @@ _Nielsen-Gebiete für die CRM-Karte (app/module/crm/nielsen.json) aus den Bundes
 - `runden(geo)`
 - `r(c)`
 - `main()`
+
+## `werkzeuge/qs_ablage_leser.py`
+
+_QM-System: „dateien“ an Ordnern und externen Dokumenten nur in den vier Lesern von app/api/module/qs/ablage.php lesen._
+
+- `funde(wurzel)`
 
 ## `werkzeuge/realm_produktion.py`
 

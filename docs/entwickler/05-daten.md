@@ -770,7 +770,8 @@ Die einzige Beschreibung der Regeln; Code-Kommentare verweisen hierher.
 - **Stelle** (`qs_ablage_regel`): im Entwurf mit `qs.bearbeiten` – wer ablegt, zuordnet oder die Datei hochgeladen hat, kommt in
   `bearbeiter` (4-Augen-Prinzip); an freigegebenen und ersetzten Versionen nur nachtragen mit `qs.freigeben` (Lenkungsangaben gleich
   eingetragen), nie aus dem Eingang zuordnen; in Prüfung, verworfen oder eingezogen nichts. Grenzen: 1000 aktive Dateien je Version,
-  10 000 je Ordner/externem Dokument, 20 000 im Eingang, 50 000 Einträge in `qs-ablage` (jeder Schreibvorgang schreibt das ganze Dokument).
+  10 000 je Ordner/externem Dokument, 20 000 im Eingang, 25 000 Einträge in `qs-ablage` (jeder Schreibvorgang schreibt das ganze Dokument;
+  darüber wird `qs-ablage` geteilt, etwa je Kapitel).
 - **Entfernen:** im Entwurf endgültig; an Versionen, Ordnern und externen Dokumenten nur `entfernt` vermerkt (Grund Pflicht). Im Eingang
   wird zugeordnet oder endgültig gelöscht; die Prüfsumme bleibt in `verworfen`, und nie wird eine Datei gelöscht, die `qs-dokumente` noch
   verwendet.
@@ -780,33 +781,52 @@ Die einzige Beschreibung der Regeln; Code-Kommentare verweisen hierher.
   ebenfalls, Leerraum zusammengefasst, ohne Steuerzeichen und leere, `.`- und `..`-Teile, je Teil 120 Zeichen, höchstens 12 Teile und
   500 Byte (ganze Teile); leer = Feld fehlt. Nur Anzeige, Ordnerbaum und Suche, nie ein Pfad im Dateisystem; Zuordnen behält ihn.
 - **Schreiben:** alles unter der Sperre `qs-dokumente`, ein Schreibvorgang je Dokument und Vorgang. Zuordnen an einen Ordner ändert nur
-  `ziel`; in einen Entwurf wandert der Eintrag nach `qs-dokumente` (zuerst das Ziel, dann `qs-ablage`). Ein Verlaufseintrag je Vorgang;
-  das Protokoll nennt Anzahlen, nie Datei- oder Ordnernamen.
-- **Ordner-Import** (`qs_import_plan`, nur der Server rechnet):
-  1. Wurzel: Haben alle Pfade denselben ersten Ordner, der weder mit einer Kapitelnummer noch mit `_` beginnt noch `alt`/`alt_…` heißt,
-     fällt er weg.
-  2. Oberste Ordner: Beginnt der Name mit der Nummer eines vorhandenen Kapitels ohne `bereich`, gehört er automatisch dazu. Sonst wählt
-     der Nutzer: Eingang (Vorgabe), nicht übernehmen, ein Kapitel oder einen Bereich, einen neuen Bereich (nur `qs.verwalten`; ein Kapitel
-     mit `bereich: true` und Nummer ab 90, damit eine ältere Fassung die Kapitelpflege weiter prüfen kann). Lose Dateien → Eingang.
-  3. Gelenkte Dokumente per Nummer nur in automatisch erkannten Kapitelordnern: eine Datei direkt darin, deren Name ohne Endung mit der
-     Nummer beginnt (Groß-/Kleinschreibung und führende Nullen egal) und deren Rest leer ist oder dem Titel entspricht (Trenner Leerzeichen,
-     `_`, `-`); oder eine Datei im Ordner, der wie im eigenen ZIP-Export exakt `Nr Titel` heißt. Kapitel des Dokuments oder Anfang der
-     Nummer = Kapitelordner. Ziel: gültige Version (nachtragen – nur mit `qs.freigeben` und nur mit dem Häkchen der Vorschau, sonst Eingang)
-     oder Entwurf; gesperrt → Eingang mit Grund. In Bereichen nie.
-  4. Archiv: ein Ordner-Dokument je Kapitel/Bereich und Unterordner der ersten Ebene; ein vorhandenes mit gleichem Titel (Groß-/Klein-
-     schreibung und Leerraum egal) wird wiederverwendet. Dateien direkt im Kapitelordner → „Weitere Dateien“; tiefere Ebenen als `pfad`.
-     `_alt`, `alt_…` usw. sind normale Unterordner, nie Fassungen. Eingezogener oder voller Ordner → Eingang.
-  5. Übersprungen: Systemdateien (`.…`, `~$…`, `Thumbs.db`, `desktop.ini`, `.lnk`), ganz oben `Dokumentenliste.csv`/`Hinweise.txt`,
-     `_ältere Versionen`/`_Entwurf` im Ordner eines gelenkten Dokuments (eigener Export), nicht erlaubte Dateiart, leer, zu groß. Höchstens
-     30 000 Dateien je Lauf.
-  6. Schon abgelegt: am Ziel gleicher `pfad`, Name und Größe, oder irgendwo der ganze Ordnerpfad mit Name und Größe (Eingang, auch nach dem
-     Zuordnen). Beim Eintragen zusätzlich die Prüfsumme (gleich → nicht abgelegt) und `verworfen` (früher gelöscht → nicht abgelegt).
-  7. Ablauf: Plan → anlegen (Bereiche, Ordner-Dokumente) → Uploads mit `sammeln` (fertige Uploads bleiben in der Dateiablage liegen) →
-     `qs_import_eintragen` trägt bis zu 100 in einem Schreibvorgang ein (gemessen 15 000 Dateien: 11 s Dateien, 19 s SQLite, längste
-     Sperre 0,15 bzw. 0,26 s). Ein inzwischen gesperrtes Ziel → Eingang mit dem ganzen Ordnerpfad.
+  `ziel`; in einen Entwurf wandert der Eintrag nach `qs-dokumente` (zuerst das Ziel, dann `qs-ablage`; steht er nach einem Abbruch schon im
+  Entwurf, wird er nicht doppelt eingetragen, und Löschen im Entwurf entfernt die Datei nur, wenn sie nirgends mehr steht). Ein
+  Verlaufseintrag je Vorgang; das Protokoll nennt Anzahlen, nie Datei- oder Ordnernamen. Das Datenpaket zählt `qs-ablage` selbst.
+- **Ordner-Import** (nur der Server rechnet; Plan und Eintragen entscheiden jede Datei mit derselben Funktion `qs_import_datei`):
+  1. Wurzel: Haben alle Pfade denselben ersten Ordner, der weder mit einer Kapitelnummer noch mit `_` beginnt noch `alt`/`alt_…` heißt
+     noch wie ein Bereich, fällt er weg. Stehen darin Ordner mit Kapitelnummer, fragt die Vorschau ausdrücklich, wohin er gehört:
+     Standard-Fleisch (dann fällt er weg), ein Bereich oder ein neuer Bereich (dann ist er selbst der oberste Ordner). Ohne Antwort sind
+     diese Kapitelordner `offen`, und nichts startet (`offen` im Plan, `anlegen` → 422). Heißt er wie ein Bereich (Titel oder
+     „Nr Titel“, auch mit `_` vorn), gilt dieser Bereich ohne Frage.
+  2. Oberste Ordner: Die Wahl des Nutzers gilt immer. Ohne Wahl: ein Ordner, der genau wie ein Kapitel ohne `bereich` heißt (`<Nr>` oder
+     `<Nr> <Titel>`, Groß-/Kleinschreibung und Trenner egal), ist dieses Kapitel (`genau`, Nummern und Archiv); ein anderer Ordner mit der
+     Nummer (etwa „1.4 QS alt“, „1.4 Stand 2019“) ist ein Vorschlag nur für das Archiv des Kapitels – per Nummer ordnet er erst zu, wenn der
+     Nutzer ihn ausdrücklich als „dieses Kapitel“ bestätigt; ein Ordner mit dem Namen eines Bereichs gehört zu diesem; sonst Eingang.
+     Wählbar: Eingang, nicht übernehmen, ein Kapitel oder Bereich (Archiv), ein neuer Bereich (nur `qs.verwalten`; Kapitel mit
+     `bereich: true` und Nummer 90 bis 99, damit eine ältere Fassung die Kapitelpflege weiter prüfen kann). Lose Dateien → Eingang.
+  3. Gelenkte Dokumente per Nummer nur im Kapitelordner (`genau`): eine Datei direkt darin, deren Name ohne Endung mit der Nummer beginnt
+     (Groß-/Kleinschreibung und führende Nullen egal) und deren Rest leer ist oder dem Titel entspricht (Trenner Leerzeichen, `_`, `-`);
+     oder – nur wenn ganz oben in der Auswahl `Dokumentenliste.csv` liegt (eigener ZIP-Export) – eine Datei im Ordner exakt `Nr Titel`.
+     Kapitel des Dokuments oder Anfang der Nummer = Kapitelordner. Dokumente in Bereichen zählen dabei nie, auch nicht über das
+     Nummern-Präfix. Ziel: ein offener Entwurf geht vor (`dokument`), sonst die gültige Version (`nachtragen`, nur mit `qs.freigeben`);
+     in Prüfung oder gesperrt → Eingang mit Grund.
+  4. Freigaben je oberstem Ordner (`freigaben`): in gültige Versionen nur mit dem Häkchen `nachtragen` (Vorgabe aus), in Entwürfe mit
+     `entwurf` (Vorgabe an; Entwürfe lassen sich löschen). Ohne Häkchen → Eingang („ohne Häkchen“). In der Vorschau abgewählte Dateien
+     (`ohne`, „Ordnerpfad/Name“ wie gewählt) kommen ins Archiv. Der Plan nennt `kandidat` und `dok` je solcher Datei (Gruppen je Nummer).
+  5. Archiv: ein Ordner-Dokument je Kapitel/Bereich und Unterordner der ersten Ebene; ein vorhandenes mit gleichem Titel (Groß-/Klein-
+     schreibung und Leerraum egal) wird wiederverwendet. Dateien direkt im obersten Ordner → „Weitere Dateien“; tiefere Ebenen als `pfad`.
+     Ist der oberste Ordner nicht genau das Kapitel bzw. der Bereich, steht sein Name vorn im `pfad` – so kommt kein Ordner auf einen
+     anderen. `_alt`, `alt_…` usw. sind normale Unterordner, nie Fassungen. Eingezogener oder voller Ordner → Eingang.
+  6. Übersprungen: Systemdateien (`.…`, `~$…`, `Thumbs.db`, `desktop.ini`, `.lnk`), ganz oben `Dokumentenliste.csv`/`Hinweise.txt`,
+     im eigenen Export `_ältere Versionen`/`_Entwurf` im Ordner eines gelenkten Dokuments, nicht erlaubte Dateiart, leer, zu groß.
+     Höchstens 30 000 Dateien je Lauf.
+  7. Schon abgelegt: am Ziel gleicher `pfad`, Name und Größe, oder irgendwo der ganze Ordnerpfad mit Name und Größe (Eingang, auch nach dem
+     Zuordnen). Beim Eintragen zusätzlich die Prüfsumme (gleich → `vorhanden`) und – nur für den Eingang – `verworfen` (früher gelöscht).
+  8. Ablauf: Plan → anlegen (Bereiche und Ordner-Dokumente, alle Grenzen vor dem Schreiben geprüft; der Plan wird dabei nicht neu gerechnet)
+     → Uploads mit `sammeln` und `herkunft` (nur der Ordnerpfad wie gewählt; fertige Uploads bleiben in der Dateiablage liegen) →
+     `qs_import_eintragen` mit den Angaben wie beim Plan und dem erwarteten Status und der Version je Datei. Der Server entscheidet unter der
+     Sperre neu; weicht das Ergebnis ab (Entwurf inzwischen freigegeben, Version ersetzt, Häkchen fehlt), kommt die Datei in den Eingang.
+     Ein Bündel hat höchstens 100 Dateien, 1 GB und 40 MB Word/Excel-Nachträge (deren Lenkung läuft unter der Sperre). Was nicht abgelegt
+     wird oder nach einem Abbruch nirgends gespeichert ist, entfernt das Ende der Anfrage (`qs_ablage_aufraeumen`).
+- **Leser beider Ablageorte:** nur `qs_ablage_nach_ziel`, `qs_ordner_dateien`, `qs_ablage_belegt` und `qs_datei_suchen` lesen `dateien` an
+  Ordnern und externen Dokumenten (`werkzeuge/qs_ablage_leser.py` prüft das in der Gruppe `qs_eingang`). Der Browser bekommt Zahlen
+  (`ablageZahlen`) und Dateien (`qs_archiv`) vom Server.
 - **Rückfall (GR-006):** Eine ältere Fassung kennt `qs-ablage` nicht – die Dateien sind dort unsichtbar, bleiben aber erhalten und sind nach
-  der Rückkehr wieder da. Grenze: „Datenpaket ersetzen“ der älteren Fassung zählt nur Dateien in `qs-dokumente` und kann Ordner-Dokumente
-  ersetzen; die Archivdateien hängen dann an Kennungen, die es nicht mehr gibt.
+  der Rückkehr wieder da. Grenzen der älteren Fassung: „Datenpaket ersetzen“ zählt nur Dateien in `qs-dokumente` und kann Ordner-Dokumente
+  ersetzen (die Archivdateien hängen dann an Kennungen, die es nicht mehr gibt); und sie erlaubt, ein Ordner-Dokument, dessen Dateien nur in
+  `qs-ablage` liegen, zu einem gelenkten Dokument zu machen – danach zeigt der Ordnerbaum diese Dateien nicht mehr.
 
 ## 5.4 Datenverantwortung (GR-101)
 

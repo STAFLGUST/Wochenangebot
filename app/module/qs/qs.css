@@ -713,4 +713,13 @@ body.qm.r .qm-rund:hover { background: var(--r-flaeche-2); }
 .qm-im-bereich input:last-child{flex:1;min-width:0}
 .qm-im-nachtragen{border:1px solid var(--qm-gelb);background:var(--qm-gelb-soft);border-radius:12px;padding:10px 12px;display:flex;flex-direction:column;gap:6px}
 .qm-im-nachtragen .qm-hilfe{margin:0}
+.qm-im-frage{border:1px solid var(--qm-line);border-radius:12px;padding:10px 12px;display:flex;flex-direction:column;gap:6px}
+.qm-im-frage.offen{border-color:var(--qm-gelb);background:var(--qm-gelb-soft)}
+.qm-im-frage .qm-feld{display:flex;flex-direction:column;gap:4px;font-weight:600}
+.qm-im-frage .qm-hilfe{margin:0}
+.qm-im-frei{border:0;border-top:1px solid var(--qm-line);margin:0;padding:8px 0 0;min-width:0;display:flex;flex-direction:column;gap:4px}
+.qm-im-frei:first-child{border-top:0;padding-top:0}
+.qm-im-frei legend{font-weight:700;padding:0;overflow-wrap:anywhere}
+.qm-im-gruppen ul{list-style:none;margin:4px 0 6px;padding-left:12px}
+.qm-im-gruppen .qm-check{overflow-wrap:anywhere}
 @media(max-width:560px){.qm-im-wahl select.qm-eingabe{min-width:0;width:100%}}

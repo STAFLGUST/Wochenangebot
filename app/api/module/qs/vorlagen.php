@@ -241,6 +241,15 @@ function qs_office_platzhalter(string $daten, string $art): ?array
     return $r === null ? null : $r['offen'];
 }
 
+/* Platzhalter einer hochgeladenen Word-/Excel-Datei (für die Anzeige im Entwurf) – vor der Sperre gelesen; null bei anderen Arten oder
+   nicht lesbar. Die einzige Stelle beim Ablegen, die dafür Dateien liest: nach PR #375 liest hier qs_office_lesen($datei) mit Größenprüfung. */
+function qs_platzhalter_vorab(array $datei): ?array
+{
+    if (!isset(QS_OFFICE[$datei['art'] ?? ''])) return null;
+    $daten = ablage_lesen('qs', (string)$datei['id']);
+    return $daten === null ? null : qs_office_platzhalter($daten, (string)$datei['art']);
+}
+
 /* ---------- Anwenden ---------- */
 /* Gültige Version einer Vorlage mit ihren Word-/Excel-Dateien (oder Fehler 422) */
 function qs_vorlage_dateien(array $vd): array

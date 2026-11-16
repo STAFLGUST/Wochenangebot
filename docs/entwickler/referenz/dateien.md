@@ -750,6 +750,7 @@ Jede Code-Datei beginnt mit einem Kopfkommentar; dessen erste Aussage steht hier
 | `auth_helpers.py` | plattform | HTTP-Client und Zeitsteuerung ausschließlich für isolierte Testdaten/Sitzungen. |
 | `kunden_hilfe.py` | plattform | HTTP-Client mit eigener Sitzung für API-Tests (IP über X-Forwarded-For, wie hinter dem eigenen Proxy). |
 | `order_setup.py` | angebot | Gemeinsame Vorbereitung der Bestell-Testgruppen |
+| `qs_hilfe.py` | plattform | Gemeinsame Hilfen der Tests zur Dokumentenablage des QM-Systems (test_qs_eingang.py, test_qs_import.py) |
 | `smtp_test.py` | plattform | Kleiner Test-Mailserver für die Ende-zu-Ende-Tests (nimmt Nachrichten an und hält sie im Speicher). |
 | `test_abteilungen.py` | verwaltung | Stammdaten → Abteilungen (Auftrag des Inhabers 10.11.2026) |
 | `test_admin_confirmation.py` | plattform | Sensible Aktionen, kontoweite Bestätigungsbremse und Dateisperren über echte HTTP-Anfragen. |
@@ -905,6 +906,7 @@ Jede Code-Datei beginnt mit einem Kopfkommentar; dessen erste Aussage steht hier
 | `karte_stil.mjs` | plattform | – |
 | `lokal.py` | plattform | Lokaler Entwicklungsserver mit Testdaten – wie ein Testserver der E2E-Suite, aber zum Ausprobieren im Browser. python3 werkzeuge/lokal.py http://127.0.0.1:8080 mit Testdaten (tests/fixtures/data-seed) python3 … |
 | `nielsen_gebiete.py` | plattform | Nielsen-Gebiete für die CRM-Karte (app/module/crm/nielsen.json) aus den Bundesländern von Natural Earth erzeugen. |
+| `qs_ablage_leser.py` | plattform | QM-System: „dateien“ an Ordnern und externen Dokumenten nur in den vier Lesern von app/api/module/qs/ablage.php lesen. |
 | `realm_produktion.py` | plattform | Realm „mitarbeiter“ für den Betrieb aus dem geprüften Test-Realm erzeugen (eine Quelle, kein Auseinanderlaufen). python3 werkzeuge/realm_produktion.py # schreibt deploy/anmeldung/realm-mitarbeiter.json python3 … |
 | `regeln.py` | plattform | Regelwerk der STAFL-Plattform prüfen und Änderungsfolgen ermitteln (nur Python-Standardbibliothek). python3 werkzeuge/regeln.py pruefen Alle Prüfungen (CI); Ausgang 1 bei Fehlern python3 werkzeuge/regeln.py betroffen … |
 | `testdaten_erzeugen.py` | plattform | Erzeugt die anonymisierten Testdaten unter tests/fixtures aus echten Originaldateien. |

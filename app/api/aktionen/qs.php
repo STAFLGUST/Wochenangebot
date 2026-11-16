@@ -17,11 +17,8 @@ declare(strict_types=1);
                     qs.verfahren_sehen / _bearbeiten / _freigeben – Verfahrensdokumentation nach GoBD (eigene, sensible
                                    Rechte): ansehen und exportieren / Abschnitte und IT-Systeme pflegen / Fassung freigeben,
                                    „ohne Änderung überprüft“ vermerken.
-   Dokumentenablage (lib/dateiablage.php): Dateien herunterladen und als ZIP exportieren mit qs.sehen; im Entwurf und an
-   Ordnern/externen Dokumenten ablegen und entfernen mit qs.bearbeiten; zu freigegebenen Versionen nachtragen und entfernen
-   (nur vermerkt, mit Grund) mit qs.freigeben – Regeln in qs_ablage_regel() (module/qs/ablage.php). Eingang (Dateien ohne Ziel):
-   ansehen, hochladen, zuordnen und endgültig löschen nur mit qs.bearbeiten; Ordner-Import (qs_sammel_plan, qs_import_eintragen)
-   mit qs.bearbeiten, neue Bereiche dabei mit qs.verwalten.
+   Dokumentenablage, Eingang und Ordner-Import: Regeln und Rechte je Stelle in module/qs/ablage.php, beschrieben in
+   docs/entwickler/05-daten.md („QM-System: Dokumentenablage“).
    Gleichzeitiges Bearbeiten: Dokumente, Abschnitte, Prüfungen und Maßnahmen tragen „rev“; ein veralteter Stand bekommt 409.
    Wird von api/index.php im globalen Gültigkeitsbereich eingebunden; jede Aktion endet mit respond()/fail(). */
 if (!defined('WA_API')) { http_response_code(404); exit; }   // nur über api/index.php nutzbar
@@ -55,7 +52,6 @@ switch ($action) {
             usort($nachweise, function ($a, $b) { return [$b['datum'], $b['erfasst']['t'] ?? ''] <=> [$a['datum'], $a['erfasst']['t'] ?? '']; });
             $dokumente = qs_doc('qs-dokumente')['liste'];
             $monate = (int)$stamm['einstellungen']['ueberpruefungMonate'];
-            $zahlen = qs_ablage_zahlen();
             respond(['ok' => true, 'heute' => $heute, 'ich' => ['id' => (string)$me['id'], 'name' => (string)$me['name'], 'kuerzel' => qs_kuerzel_von($stamm, (string)$me['id'])],
                      'rechte' => ['nachweis' => may($me, 'qs.nachweis'), 'bearbeiten' => may($me, 'qs.bearbeiten'), 'freigeben' => may($me, 'qs.freigeben'), 'verwalten' => may($me, 'qs.verwalten'),
                                   'verfahren' => may($me, 'qs.verfahren_sehen')],
@@ -63,7 +59,7 @@ switch ($action) {
                      'quellen' => QS_QUELLEN, 'bewertungen' => QS_BEWERTUNG, 'massnStatus' => QS_MASSN_STATUS,
                      'kapitel' => $stamm['kapitel'], 'personen' => $stamm['personen'], 'einstellungen' => $stamm['einstellungen'], 'mitarbeiter' => qs_mitarbeiter(),
                      'dokumente' => array_map(function ($d) use ($monate, $heute) { return qs_dok_aus($d, $monate, $heute); }, $dokumente),
-                     'ablageZahlen' => array_diff_key($zahlen, [QS_EINGANG => true]), 'eingangZahl' => may($me, 'qs.bearbeiten') ? (int)($zahlen[QS_EINGANG]['dateien'] ?? 0) : 0,
+                     'ablageZahlen' => qs_ablage_uebersicht($dokumente), 'eingangZahl' => may($me, 'qs.bearbeiten') ? qs_ablage_belegt(null, qs_ablage_zahlen()) : 0,
                      'handbuch' => $handbuch,
                      'pruefungen' => qs_pruefungen_aus(qs_doc('qs-pruefplan')['liste'], $nachweise, $heute),
                      'nachweise' => array_slice($nachweise, 0, QS_START_NACHWEISE), 'nachweiseGesamt' => count($nachweise),
@@ -269,9 +265,8 @@ switch ($action) {
 
         /* Datei ablegen – in Teilen (lib/dateiablage.php): dokument (Kennung oder „eingang“), version ('' bei Ordnern, externen
            Dokumenten und im Eingang), pfad (Unterordner), name, groesse, sha256, upload ('' beim ersten Teil), teil, daten (Base64).
-           Regeln je Stelle: qs_ablage_regel(). sammeln=true (Ordner-Import): der fertige Upload bleibt liegen und wird mit anderen über
-           qs_import_eintragen eingetragen; herkunft = ganzer Ordnerpfad, falls das Ziel dann gesperrt ist. Antwort: fertig=false mit
-           upload, bis der letzte Teil da ist. */
+           Regeln je Stelle: qs_ablage_regel(). sammeln=true (Ordner-Import): nur herkunft (Ordnerpfad wie gewählt) – der fertige Upload
+           bleibt liegen, das Ziel berechnet qs_import_eintragen. Antwort: fertig=false mit upload, bis der letzte Teil da ist. */
         case 'qs_datei_hochladen': {
             $me = require_perm('qs.bearbeiten', true);
             require_once __DIR__ . '/../lib/dateiablage.php';
@@ -279,7 +274,8 @@ switch ($action) {
             $b = body();
             $dok = is_string($b['dokument'] ?? null) ? $b['dokument'] : ''; $ver = is_string($b['version'] ?? null) ? $b['version'] : '';
             $sammeln = !empty($b['sammeln']);
-            $ziel = ['dokument' => $dok, 'version' => $ver, 'pfad' => qs_pfad($b['pfad'] ?? '')] + ($sammeln ? ['sammeln' => true, 'herkunft' => qs_pfad($b['herkunft'] ?? '')] : []);
+            if ($sammeln) { qs_import_teile($b['herkunft'] ?? null); $ziel = ['sammeln' => true, 'herkunft' => $b['herkunft']]; }
+            else $ziel = ['dokument' => $dok, 'version' => $ver, 'pfad' => qs_pfad($b['pfad'] ?? '')];
             if (($b['upload'] ?? '') === '' && !$sammeln) {
                 $doc = qs_doc('qs-dokumente'); $d = $dok === QS_EINGANG ? null : $doc['liste'][qs_dokument_index($doc, $dok)];
                 qs_ablage_stelle($d, $ver, $me, 'hochladen', qs_ablage_belegt($d, qs_ablage_zahlen()));
@@ -288,30 +284,25 @@ switch ($action) {
             if (!$r['fertig']) respond(['ok' => true, 'fertig' => false, 'upload' => $r['upload'], 'empfangen' => $r['empfangen']]);
             if ($sammeln) respond(['ok' => true, 'fertig' => true, 'upload' => $r['upload']]);
             $datei = $r['datei'];
-            // Scheitert das Eintragen (fail/Ausnahme), bleibt keine verwaiste Datei zurück
-            $eingetragen = false;
-            register_shutdown_function(function () use (&$eingetragen, $datei) { if (!$eingetragen) { try { ablage_entfernen('qs', $datei['id']); } catch (Throwable $e) { /* bleibt liegen */ } } });
-            // Word/Excel in gelenkten Dokumenten: enthaltene Platzhalter merken (Anzeige; die Freigabe füllt sie aus) – vor der Sperre
-            $platzhalter = isset(QS_OFFICE[$datei['art']]) && $ver !== '' ? qs_office_platzhalter((string)ablage_lesen('qs', $datei['id']), $datei['art']) : null;
-            $erzeugt = []; $fertig = false;
-            qs_erzeugte_aufraeumen($erzeugt, $fertig);
+            $abgelegt = [(string)$datei['id']]; $erzeugt = []; $gespeichert = [];
+            qs_ablage_aufraeumen($abgelegt, $erzeugt, $gespeichert);   // scheitert das Eintragen, bleibt keine verwaiste Datei zurück
+            $platzhalter = $ver !== '' ? qs_platzhalter_vorab($datei) : null;
             [$aus, $liste] = with_lock('qs-dokumente', function () use ($datei, $dok, $ver, $ziel, $platzhalter, $me, &$erzeugt) {
-                return qs_ablage_eintragen([['datei' => $datei, 'dokument' => $dok, 'version' => $ver, 'pfad' => $ziel['pfad'], 'platzhalter' => $platzhalter]], $me, false, $erzeugt);
+                return qs_ablage_eintragen([['datei' => $datei, 'ziel' => $dok, 'version' => $ver, 'pfad' => $ziel['pfad'], 'platzhalter' => $platzhalter]], $me, 'abgelegt', $erzeugt);
             });
-            $eingetragen = true; $fertig = true;
+            if ($aus[0]['status'] === 'fehler') fail($aus[0]['grund'], $aus[0]['code']);
+            $gespeichert = array_flip(array_merge($abgelegt, $erzeugt));
             $d = null; foreach ($liste as $x) if ((string)$x['id'] === $dok) $d = $x;
             audit('qs', 'QM-System: Datei für ' . ($d ? qs_dok_name($d) : 'den Eingang') . ' abgelegt (' . round($datei['groesse'] / 1024) . ' KB)');
             respond(['ok' => true, 'fertig' => true, 'datei' => $aus[0]['datei']] + ($d ? ['dokument' => qs_dok_antwort($d)] : []));
         }
 
         /* Eingang (GET, nur mit qs.bearbeiten – dort liegen unsortierte, womöglich personenbezogene Unterlagen): Dateien ohne Ziel,
-           erst beim Öffnen geladen (qs_start nennt nur die Zahl) */
+           erst beim Öffnen geladen (qs_start nennt nur die Zahl), und die Ziele, denen der Nutzer zuordnen darf */
         case 'qs_eingang': {
-            require_perm('qs.bearbeiten');
+            $me = require_perm('qs.bearbeiten');
             header('Cache-Control: no-store');
-            $dateien = [];
-            foreach (qs_doc('qs-ablage')['liste'] as $f) if (($f['ziel'] ?? '') === QS_EINGANG && empty($f['entfernt'])) $dateien[] = qs_archiv_antwort($f);
-            respond(['ok' => true, 'dateien' => $dateien]);
+            respond(['ok' => true, 'dateien' => qs_eingang_dateien(), 'ziele' => qs_eingang_ziele(qs_doc('qs-dokumente')['liste'], $me)]);
         }
 
         /* Dateien aus dem Eingang zuordnen (dateien = Kennungen) – einem Ordner oder externen Dokument (version '') oder dem Entwurf
@@ -323,12 +314,9 @@ switch ($action) {
             $b = body();
             $ids = qs_ablage_auswahl($b['dateien'] ?? null);
             $dok = is_string($b['dokument'] ?? null) ? $b['dokument'] : ''; $ver = is_string($b['version'] ?? null) ? $b['version'] : '';
-            $platzhalter = [];   // Word/Excel in einen Entwurf: Platzhalter vor der Sperre ermitteln
-            if ($ver !== '') {
-                $wahl = array_flip($ids);
-                foreach (qs_doc('qs-ablage')['liste'] as $f) if (isset($wahl[(string)$f['id']]) && isset(QS_OFFICE[$f['art'] ?? '']))
-                    $platzhalter[(string)$f['id']] = qs_office_platzhalter((string)ablage_lesen('qs', (string)$f['id']), (string)$f['art']);
-            }
+            $doc = qs_doc('qs-dokumente'); $d = $doc['liste'][qs_dokument_index($doc, $dok)];
+            qs_ablage_stelle($d, $ver, $me, 'zuordnen', qs_ablage_belegt($d, qs_ablage_zahlen()), count($ids));   // Grenzen vor dem Lesen der Dateien
+            $platzhalter = $ver !== '' ? qs_eingang_platzhalter($ids) : [];   // Word/Excel in einen Entwurf: vor der Sperre
             $erzeugt = [];
             [$d, $rest] = with_lock('qs-dokumente', function () use ($ids, $dok, $ver, $me, $platzhalter, &$erzeugt) { return qs_eingang_zuordnen($ids, $dok, $ver, $me, $platzhalter, $erzeugt); });
             audit('qs', 'QM-System: ' . qs_dateien_text(count($ids)) . ' aus dem Eingang ' . qs_dok_name($d) . ' zugeordnet');
@@ -353,16 +341,16 @@ switch ($action) {
             $me = require_perm('qs.bearbeiten', true);
             require_once __DIR__ . '/../lib/dateiablage.php';
             $b = body();
-            [$d, $name, $loeschen] = with_lock('qs-dokumente', function () use ($b, $me) {
+            [$d, $name, $loeschen, $frei] = with_lock('qs-dokumente', function () use ($b, $me) {
                 $doc = qs_doc('qs-dokumente');
                 $id = is_string($b['datei'] ?? null) ? $b['datei'] : '';
-                $ort = qs_datei_finden($doc['liste'], $id);
-                if ($ort === null) return qs_archiv_entfernen($doc, $id, $b, $me);
-                [$i, $vi, $k] = $ort;
+                $ort = qs_datei_suchen($doc['liste'], $id);
+                if ($ort === null) fail('Datei nicht gefunden.', 404);
+                [$f, $i, $vi, $k] = $ort;
+                if ($i === null) return qs_archiv_entfernen($doc, $id, $b, $me);
                 $d = $doc['liste'][$i];
                 qs_rev_pruefen($b, $d, 'Das Dokument');
                 qs_ablage_stelle($d, $vi === null ? '' : (string)$d['versionen'][$vi]['id'], $me, 'entfernen');
-                $f = $vi === null ? $d['dateien'][$k] : $d['versionen'][$vi]['dateien'][$k];
                 if (!empty($f['entfernt'])) fail('Die Datei ist schon entfernt.', 409);
                 $entwurf = $vi !== null && $d['versionen'][$vi]['status'] === 'entwurf';
                 $grund = qs_text($b['grund'] ?? '', 500, 'Grund');
@@ -382,9 +370,11 @@ switch ($action) {
                         qs_verlauf($d, $me, 'Datei aus Version ' . ($d['versionen'][$vi]['nr'] ?? '?') . ' entfernt: ' . $f['name'] . ' – ' . $grund);
                     }
                 }
-                return [qs_dok_ablegen($doc, $i, $d, $me), (string)$f['name'], $entwurf ? (string)$f['id'] : ''];
+                $d = qs_dok_ablegen($doc, $i, $d, $me);
+                // im Entwurf gelöscht – die Datei selbst nur, wenn sie nirgends mehr steht (nach einem Abbruch beim Zuordnen auch im Eingang)
+                return [$d, (string)$f['name'], $entwurf ? $id : '', $entwurf && qs_datei_suchen($doc['liste'], $id) === null];
             });
-            if ($loeschen !== '') ablage_entfernen('qs', $loeschen);   // erst nach dem Speichern: im Fehlerfall bleibt die Datei
+            if ($frei) ablage_entfernen('qs', $loeschen);   // erst nach dem Speichern: im Fehlerfall bleibt die Datei
             audit('qs', 'QM-System: Datei aus ' . qs_dok_name($d) . ($loeschen !== '' ? ' gelöscht (Entwurf)' : ' entfernt (vermerkt)'));
             respond(['ok' => true, 'dokument' => qs_dok_antwort($d)]);
         }
@@ -394,11 +384,9 @@ switch ($action) {
             $me = require_perm('qs.sehen');
             require_once __DIR__ . '/../lib/dateiablage.php';
             $id = is_string($_GET['id'] ?? null) ? $_GET['id'] : '';
-            $liste = qs_doc('qs-dokumente')['liste'];
-            $ort = qs_datei_finden($liste, $id);
-            if ($ort !== null) { [$i, $vi, $k] = $ort; $f = $vi === null ? $liste[$i]['dateien'][$k] : $liste[$i]['versionen'][$vi]['dateien'][$k]; }
-            else $f = preg_match('/^[a-z0-9]{12,40}$/D', $id) ? qs_ablage_finden(qs_doc('qs-ablage')['liste'], $id) : null;
-            if ($f === null) fail('Datei nicht gefunden.', 404);
+            $ort = qs_datei_suchen(qs_doc('qs-dokumente')['liste'], $id);
+            if ($ort === null) fail('Datei nicht gefunden.', 404);
+            $f = $ort[0];
             if (($f['ziel'] ?? '') === QS_EINGANG && !may($me, 'qs.bearbeiten')) fail('Dateien im Eingang sieht nur, wer bearbeiten darf.', 403);
             if (!empty($f['entfernt'])) fail('Die Datei wurde entfernt.', 404);
             ablage_senden('qs', (string)$f['id'], (string)$f['name'], (string)($f['mime'] ?? ''));
@@ -410,7 +398,7 @@ switch ($action) {
             header('Cache-Control: no-store');
             $doc = qs_doc('qs-dokumente');
             $d = $doc['liste'][qs_dokument_index($doc, $_GET['dok'] ?? '')];
-            respond(['ok' => true, 'dateien' => array_map('qs_archiv_antwort', qs_archiv_dateien($d, qs_doc('qs-ablage')['liste']))]);
+            respond(['ok' => true, 'dateien' => array_map('qs_archiv_antwort', qs_archiv_dateien($d))]);
         }
 
         /* Ordner bzw. Unterordner (GET dok, pfad) als ZIP „<Dokument>/<pfad>/<Datei>“; im Protokoll vermerkt (ohne Ordnernamen) */
@@ -422,7 +410,7 @@ switch ($action) {
             $pfad = qs_pfad($_GET['pfad'] ?? '');
             $wurzel = ablage_zip_pfad(qs_dok_name($d));
             $e = [];
-            foreach (qs_dateien_aktiv(qs_archiv_dateien($d, qs_doc('qs-ablage')['liste'])) as $f) {
+            foreach (qs_dateien_aktiv(qs_archiv_dateien($d)) as $f) {
                 $p = (string)($f['pfad'] ?? '');
                 if ($pfad === '' || $p === $pfad || str_starts_with($p, $pfad . '/')) $e[] = ['pfad' => $wurzel . '/' . qs_archiv_zip_pfad($f), 'bereich' => 'qs', 'id' => (string)$f['id']];
             }
@@ -441,62 +429,31 @@ switch ($action) {
             if ($kapitel !== '') qs_kapitel_pruefen($kapitel, $stamm);
             $alle = ($_GET['alle'] ?? '') === '1';
             $heute = qs_heute();
-            $e = qs_ablage_eintraege(qs_doc('qs-dokumente')['liste'], qs_doc('qs-ablage')['liste'], $stamm, $kapitel, $alle, $heute);
+            $e = qs_ablage_eintraege(qs_doc('qs-dokumente')['liste'], $stamm, $kapitel, $alle, $heute);
             audit('qs', 'QM-System: Dokumentenablage als ZIP heruntergeladen (' . (count($e) - 1) . ' Dateien' . ($kapitel !== '' ? ', Kapitel ' . $kapitel : '') . ($alle ? ', mit älteren Versionen' : '') . ')');
             ablage_zip_senden('QM-System_' . ($kapitel !== '' ? ablage_zip_pfad($kapitel) . '_' : '') . $heute . '.zip', $e);
         }
 
-        /* Ordner-Import, Schritt 1: Zuordnungsplan (qs_import_plan in module/qs/ablage.php) – ordner = [[Ordnerpfad, [[Name, Größe], …]], …],
-           wahl = Zuordnung der obersten Ordner. anlegen=true legt neue Bereiche (qs.verwalten) und Ordner-Dokumente an und liefert den
-           Plan mit ihren Kennungen. */
+        /* Ordner-Import, Schritt 1: Zuordnungsplan (qs_import_planen in module/qs/ablage.php) – ordner = [[Ordnerpfad, [[Name, Größe], …]], …],
+           wurzel, wahl, freigaben, ohne; anlegen=true legt neue Bereiche (qs.verwalten) und Ordner-Dokumente an und liefert den Plan mit
+           ihren Kennungen */
         case 'qs_sammel_plan': {
             $me = require_perm('qs.bearbeiten', true);
             require_once __DIR__ . '/../lib/dateiablage.php';
-            $b = body();
-            $ordner = is_array($b['ordner'] ?? null) ? array_values($b['ordner']) : [];
-            $wahl = is_array($b['wahl'] ?? null) ? $b['wahl'] : [];
-            if (empty($b['anlegen'])) respond(['ok' => true] + qs_import_plan($ordner, $wahl, $me, qs_stamm(), qs_doc('qs-dokumente')['liste'], qs_doc('qs-ablage')['liste']));
-            [$plan, $neu, $bereiche] = with_lock('qs-dokumente', function () use ($ordner, $wahl, $me) {
-                $stamm = qs_stamm(); $doc = qs_doc('qs-dokumente'); $ab = qs_doc('qs-ablage')['liste'];
-                $p = qs_import_plan($ordner, $wahl, $me, $stamm, $doc['liste'], $ab);
-                $wahl = qs_import_anlegen($p, $wahl, $me, $stamm, $doc);
-                return [qs_import_plan($ordner, $wahl, $me, $stamm, $doc['liste'], $ab), count($p['neu']), count($p['bereiche'])];
-            });
+            [$plan, $neu, $bereiche] = qs_import_planen(body(), $me);
             if ($neu || $bereiche) audit('qs', "QM-System: Ordner-Import: $neu Ordner-Dokumente" . ($bereiche ? " und $bereiche Bereiche" : '') . ' angelegt');
             respond(['ok' => true] + $plan);
         }
 
-        /* Ordner-Import, Schritt 2: bis QS_IMPORT_BUENDEL fertige Uploads (qs_datei_hochladen mit sammeln) in einem Schreibvorgang eintragen
-           (qs_ablage_eintragen). Was nicht abgelegt wird (gleiche Datei, früher im Eingang gelöscht, Fehler), verschwindet wieder.
-           Antwort je Upload: status abgelegt|eingang|vorhanden|verworfen|fehler, datei, grund. */
+        /* Ordner-Import, Schritt 2: bis QS_IMPORT_BUENDEL fertige Uploads (qs_datei_hochladen mit sammeln) in einem Schreibvorgang eintragen –
+           uploads = [{upload, status, ver, ohne}] (erwartet laut Plan), dazu wurzel, wahl, freigaben, export wie beim Plan. Das Ziel
+           berechnet der Server unter der Sperre neu (qs_import_eintragen). Antwort je Upload: status, datei, grund. */
         case 'qs_import_eintragen': {
             $me = require_perm('qs.bearbeiten', true);
             require_once __DIR__ . '/../lib/dateiablage.php';
-            require_once __DIR__ . '/../module/qs/vorlagen.php';
-            $ups = body()['uploads'] ?? null;
-            if (!is_array($ups) || !$ups || count($ups) > QS_IMPORT_BUENDEL || array_filter($ups, function ($u) { return !is_string($u); }))
-                throw new InvalidArgumentException('Bitte 1 bis ' . QS_IMPORT_BUENDEL . ' fertige Uploads angeben.');
-            $ergebnis = []; $neu = [];
-            foreach (array_unique($ups) as $u) {
-                try { $r = ablage_fertig_ablegen('qs', (string)$me['id'], $u); }
-                catch (InvalidArgumentException $e) { $ergebnis[$u] = ['status' => 'fehler', 'grund' => $e->getMessage()]; continue; }
-                $z = $r['ziel']; $datei = $r['datei'];
-                $neu[$u] = ['datei' => $datei, 'dokument' => (string)($z['dokument'] ?? ''), 'version' => (string)($z['version'] ?? ''), 'pfad' => (string)($z['pfad'] ?? ''),
-                            'herkunft' => (string)($z['herkunft'] ?? ''), 'platzhalter' => ($z['version'] ?? '') !== '' && isset(QS_OFFICE[$datei['art']])
-                                ? qs_office_platzhalter((string)ablage_lesen('qs', $datei['id']), $datei['art']) : null];
-            }
-            $eingetragen = false;
-            register_shutdown_function(function () use (&$eingetragen, $neu) { if (!$eingetragen) foreach ($neu as $e) { try { ablage_entfernen('qs', $e['datei']['id']); } catch (Throwable $t) { /* bleibt liegen */ } } });
-            $erzeugt = []; $fertig = false;
-            qs_erzeugte_aufraeumen($erzeugt, $fertig);
-            [$aus] = $neu ? with_lock('qs-dokumente', function () use ($neu, $me, &$erzeugt) { return qs_ablage_eintragen($neu, $me, true, $erzeugt); }) : [[]];
-            $eingetragen = true; $fertig = true;
-            $n = 0;
-            foreach ($aus as $u => $e) {
-                if (in_array($e['status'], ['abgelegt', 'eingang'], true)) $n++;
-                else ablage_entfernen('qs', $neu[$u]['datei']['id']);
-                $ergebnis[$u] = $e;
-            }
+            $b = body();
+            $ergebnis = qs_import_eintragen(qs_import_uploads($b['uploads'] ?? null), qs_import_angaben($b), $me);
+            $n = count(array_filter($ergebnis, function ($e) { return in_array($e['status'], ['abgelegt', 'eingang'], true); }));
             if ($n) audit('qs', 'QM-System: Ordner-Import: ' . qs_dateien_text($n) . ' abgelegt');
             respond(['ok' => true, 'uploads' => $ergebnis]);
         }

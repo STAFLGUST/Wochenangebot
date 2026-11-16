@@ -443,21 +443,18 @@
 <dialog class="qm-dialog qm-dialog-gross" id="dlg-import" aria-labelledby="im-titel">
   <form id="im-form" novalidate>
     <div class="qm-dialogkopf"><div><span class="qm-sub">Dokumentenablage</span><h2 id="im-titel">Ordner importieren</h2></div><button class="qm-dialog-schliessen" type="button" data-im-zu aria-label="Schließen">×</button></div>
-    <p class="qm-hilfe">Den ganzen QM-Ordner einmal wählen. Kapitelordner werden an der Nummer erkannt, ihre Unterordner werden zu Ordnern im Kapitel – die Ordnerstruktur bleibt erhalten. Gültige Versionen bekommen nur Dateien, die genau wie das Dokument heißen, und nur mit Häkchen. Nach einem Abbruch denselben Ordner erneut wählen: Abgelegtes wird übersprungen.</p>
+    <p class="qm-hilfe">Den ganzen QM-Ordner einmal wählen. Kapitelordner werden an der Nummer erkannt, ihre Unterordner werden zu Ordnern im Kapitel – die Ordnerstruktur bleibt erhalten. In gültige Versionen kommen nur Dateien, die genau wie das Dokument heißen, und nur mit Häkchen je Ordner. Nach einem Abbruch denselben Ordner erneut wählen: Abgelegtes wird übersprungen.</p>
     <div class="qm-drop qm-sa-drop" id="im-drop"><svg class="i" aria-hidden="true"><use href="#i-upload"/></svg><span><b>Ordner oder ZIP hierher ziehen</b><span>oder auswählen:</span></span>
       <span class="qm-sa-knoepfe"><button class="btn sm" type="button" id="im-ordner-knopf">Ordner wählen</button><button class="btn sm" type="button" id="im-zip-knopf">ZIP wählen</button></span></div>
     <input type="file" id="im-ordner" webkitdirectory multiple class="sr-only" tabindex="-1" aria-hidden="true">
     <input type="file" id="im-zip" accept=".zip,application/zip" class="sr-only" tabindex="-1" aria-hidden="true">
     <div id="im-ergebnis" hidden>
       <p class="qm-im-wurzel" id="im-wurzel"></p>
-      <p class="qm-hilfe qm-im-warnung" id="im-warnung" hidden>Kapitelordner werden an ihrer Nummer erkannt. Gehört der gewählte Ordner zu einer anderen Firma, bitte abbrechen und den Ordner der Firma selbst wählen (z. B. „_Firma“) – er wird dann ein eigener Bereich.</p>
+      <div class="qm-im-frage" id="im-frage" hidden></div>
+      <p class="qm-hilfe qm-im-warnung" id="im-warnung" hidden>Per Dokumenten-Nummer ordnet nur ein Ordner zu, der genau wie das Kapitel heißt („1.4“ oder „1.4 Titel“); andere Ordner mit Kapitelnummer kommen ins Archiv des Kapitels, ihr Name bleibt erhalten. Ordner einer anderen Firma bitte ihrem Bereich zuordnen – dort wird nie per Nummer zugeordnet.</p>
       <div class="qm-tabelle-wrap" id="im-oberste"></div>
       <div class="qm-vorschau" id="im-zahlen"></div>
-      <div class="qm-im-nachtragen" id="im-nachtragen" hidden>
-        <label class="qm-check"><input type="checkbox" id="im-nachtragen-an"> <span id="im-nachtragen-text"></span></label>
-        <details class="qm-details"><summary>Diese Dateien ansehen</summary><ul class="qm-verlauf" id="im-nachtragen-liste"></ul></details>
-        <p class="qm-hilfe">Nachtragen lässt sich nicht rückgängig machen. Ohne Häkchen kommen diese Dateien in den Eingang.</p>
-      </div>
+      <div class="qm-im-nachtragen" id="im-freigaben" hidden></div>
       <progress id="im-fortschritt" class="qm-sa-fortschritt" value="0" max="1"></progress>
       <p class="qm-hilfe" id="im-stand"></p>
       <div class="qm-pillen" id="im-filter" role="group" aria-label="Auswahl"></div>

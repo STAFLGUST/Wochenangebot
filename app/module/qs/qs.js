@@ -309,12 +309,10 @@
   function schliesseDok() { S.dok = ''; if (S.laden && S.laden.fertig) S.laden = null; renderDok(); renderDokumente(); }
 
   /* ---------- Dokumentenablage (Server: qs_datei_hochladen, qs_datei, qs_datei_entfernen, qs_ablage_export) ----------
-     Gelenkte Dokumente tragen Dateien je Version, Ordner und externe Dokumente am Dokument. Ablegen und Entfernen im
-     Entwurf mit „bearbeiten“ (zählt für das 4-Augen-Prinzip), an freigegebenen Versionen nur mit „freigeben“ (nachtragen,
-     entfernen mit Grund); in der Prüfung nur ansehen. Die Regeln prüft der Server – hier nur, was angeboten wird. */
+     Regeln nur auf dem Server (docs/entwickler/05-daten.md, „QM-System: Dokumentenablage“) – hier nur, was angeboten wird. */
   const aktiv = (l) => (l || []).filter((f) => !f.entfernt);
-  /* Dateien eines Ordners/externen Dokuments: ältere am Dokument und die im Archiv (qs-ablage-zahlen) */
-  const archivZahl = (x) => { const z = (S.d.ablageZahlen || {})[x.id] || {}; return { n: aktiv(x.dateien).length + (z.dateien || 0), b: aktiv(x.dateien).reduce((s2, f) => s2 + (f.groesse || 0), 0) + (z.bytes || 0) }; };
+  const archivZahl = (x) => { const z = (S.d.ablageZahlen || {})[x.id] || {}; return { n: z.dateien || 0, b: z.bytes || 0 }; };   // Zahl und Bytes eines Ordners vom Server
+  const dateienText = (n) => (n === 1 ? '1 Datei' : `${zahl(n)} Dateien`);
   const archiv = () => window.STAFL_QS.archiv;
   const groesseText = (n) => (n >= 1048576 ? `${(n / 1048576).toLocaleString('de-DE', { maximumFractionDigits: 1 })} MB` : `${zahl(Math.max(1, Math.round(n / 1024)))} KB`);
   function ablageOffen(x, v) {
@@ -336,7 +334,7 @@
     return t.length ? ' · ' + t.join(' · ') : '';
   }
   function dateiListe(x, v, leer) {
-    const alle = (v ? v.dateien : x.dateien) || [], da = aktiv(alle), weg = alle.filter((f) => f.entfernt), offen = ablageOffen(x, v);
+    const alle = v.dateien || [], da = aktiv(alle), weg = alle.filter((f) => f.entfernt), offen = ablageOffen(x, v);
     let h = da.length ? `<ul class="qm-dateien">${da.map((f) => `<li class="qm-datei"><button class="qm-datei-name" type="button" data-datei="${esc(f.id)}" title="${esc(f.name)} herunterladen">${icon('dokument')}<span>${esc(f.name)}</span></button>`
       + `<span class="qm-sub">${esc(groesseText(f.groesse))}${f.hochgeladen ? ` · ${esc(f.hochgeladen.von)} · ${esc(window.STAFL_FORMAT.datum(f.hochgeladen.t))}` : ''}${f.nachgetragen ? ' · nachgetragen' : ''}${dateiHerkunft(f, v)}</span>`
       + `${offen ? `<button class="qm-datei-weg" type="button" data-datei-weg="${esc(f.id)}" aria-label="${esc(f.name)} entfernen" title="Entfernen">×</button>` : ''}</li>`).join('')}</ul>`
@@ -425,8 +423,7 @@
   }
   function waehleDateien(vid, dok = S.dok) { S.wahl = { vid, dok }; const i = $('#qm-datei-wahl'); i.value = ''; i.click(); }
   $('#qm-datei-wahl').addEventListener('change', (ev) => { const f = [...ev.target.files]; ev.target.value = ''; if (f.length && S.wahl) hochladen(f, S.wahl.vid, S.wahl.dok); });
-  function dateiOrt(x, id) {
-    for (const f of x.dateien || []) if (f.id === id) return { f, v: null };
+  function dateiOrt(x, id) {   // Dateien von Ordnern und externen Dokumenten kennt der Ordnerbaum (archiv.js)
     for (const v of x.versionen || []) for (const f of v.dateien || []) if (f.id === id) return { f, v };
     return null;
   }
@@ -1300,7 +1297,7 @@
   window.STAFL_QS = { $, $$, S, esc, api, senden, oeffne, toast, fehlerText, zeigeAnmeldung, datum, wer, werName, icon, chip, optionen, natCmp,
     verweisDok, gueltige, oeffneDok, speichereDatei, verfahren: null,
     darf, zahl, zeitpunkt, leerzeile, aktiv, istGelenkt, offene, kapitelText, groesseText, frageGrund, neuLaden, dateiSenden, hochladen,
-    herunterladen, waehleDateien, ladenHtml, ablageZone, archiv: null };
+    herunterladen, waehleDateien, ladenHtml, ablageZone, dateienText, archiv: null };
   themaKnopf();
   document.addEventListener('DOMContentLoaded', () => { laden().catch(() => fehler('Keine Verbindung zum Server.')); });
 })();

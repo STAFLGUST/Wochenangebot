@@ -1,28 +1,30 @@
 /* STAFL-Plattform · QM-System: Ordner-Import – einen ganzen Ordner (oder ein ZIP) einmal wählen, der Server legt jede Datei an
-   der richtigen Stelle ab (Regeln nur dort: qs_sammel_plan, module/qs/ablage.php). Ablauf: Ordner lesen → Plan (Vorschau je oberstem
-   Ordner, Zuordnung wählen, Nachtragen in gültige Versionen nur mit Häkchen) → Plan mit anlegen (neue Bereiche und Ordner-Dokumente)
-   → Uploads mit LAUFEND gleichzeitig (qs_datei_hochladen mit sammeln) → je Bündel ein Eintrag (qs_import_eintragen) → Bericht als CSV.
-   Fortsetzen: denselben Ordner erneut wählen, Abgelegtes zeigt der Plan als „schon abgelegt“. Nutzt die Brücke window.STAFL_QS. */
+   der richtigen Stelle ab. Regeln und Pfade nur auf dem Server (module/qs/ablage.php, beschrieben in docs/entwickler/05-daten.md):
+   der Browser schickt die Dateiliste und die Angaben des Nutzers (Wurzel, Zuordnung und Freigaben je oberstem Ordner, abgewählte
+   Dateien) an qs_sammel_plan, zeigt den Plan, lädt mit LAUFEND gleichzeitig hoch (qs_datei_hochladen mit sammeln und herkunft) und
+   trägt gebündelt ein (qs_import_eintragen mit dem erwarteten Status je Datei). Nutzt die Brücke window.STAFL_QS. */
 'use strict';
 (() => {
   const Q = window.STAFL_QS;
-  const { $, $$, S, esc, api, toast, fehlerText, zeigeAnmeldung, chip } = Q;
+  const { $, $$, S, esc, api, toast, fehlerText, zeigeAnmeldung, chip, dateienText } = Q;
   const LAUFEND = 3, ZEILEN = 500;
-  /* Status einer Datei: Text, Farbe, Gruppe (Filter und Zahlen), ablegbar (wird hochgeladen) */
+  /* Status einer Datei: hoch = wird hochgeladen; gruppe für Filter und Zahlen */
+  const st = (text, farbe, gruppe, hoch = false) => ({ text, farbe, gruppe, hoch });
   const ST = {
-    ablage: ['ins Archiv', 'gruen', 'neu', true], dokument: ['in den Entwurf', 'gruen', 'neu', true], nachtragen: ['in die gültige Version', 'gelb', 'neu', true],
-    eingang: ['in den Eingang', 'gelb', 'eingang', true], vorhanden: ['schon abgelegt', '', 'vorhanden', false],
-    aus: ['nicht übernommen', '', 'weg', false], system: ['Systemdatei', '', 'weg', false], export: ['aus einem Export', '', 'weg', false],
-    art: ['Dateiart nicht erlaubt', '', 'weg', false], leer: ['leer', '', 'weg', false], gross: ['zu groß', 'rot', 'weg', false], voll: ['Eingang voll', 'rot', 'weg', false],
-    laeuft: ['wird hochgeladen …', 'blau', 'lauf', false], hochgeladen: ['wird eingetragen …', 'blau', 'lauf', false],
-    abgelegt: ['abgelegt', 'gruen', 'fertig', false], imEingang: ['im Eingang', 'gelb', 'fertig', false], verworfen: ['früher gelöscht', '', 'weg', false],
-    fehler: ['Fehler', 'rot', 'fehler', false],
+    ablage: st('ins Archiv', 'gruen', 'ablegen', true), dokument: st('in den Entwurf', 'gruen', 'ablegen', true),
+    nachtragen: st('in die gültige Version', 'gelb', 'ablegen', true), eingang: st('in den Eingang', 'gelb', 'eingang', true),
+    offen: st('Zuordnung offen', 'gelb', 'offen'), vorhanden: st('schon abgelegt', '', 'vorhanden'),
+    aus: st('nicht übernommen', '', 'weg'), system: st('Systemdatei', '', 'weg'), export: st('aus einem Export', '', 'weg'),
+    art: st('Dateiart nicht erlaubt', '', 'weg'), leer: st('leer', '', 'weg'), gross: st('zu groß', 'rot', 'weg'), voll: st('Eingang voll', 'rot', 'weg'),
+    laeuft: st('wird hochgeladen …', 'blau', 'lauf'), hochgeladen: st('wird eingetragen …', 'blau', 'lauf'),
+    abgelegt: st('abgelegt', 'gruen', 'fertig'), imEingang: st('im Eingang', 'gelb', 'fertig'), verworfen: st('früher gelöscht', '', 'weg'),
+    fehler: st('Fehler', 'rot', 'fehler'),
   };
-  const FILTER = [['', 'Alle'], ['neu', 'Neu'], ['eingang', 'Eingang'], ['vorhanden', 'Schon abgelegt'], ['weg', 'Übersprungen'], ['fertig', 'Fertig'], ['fehler', 'Fehler']];
-  const I = { liste: [], ordner: [], plan: null, wahl: {}, filter: '', nachtragen: false, lauf: null };
+  const FILTER = [['', 'Alle'], ['ablegen', 'Neu'], ['eingang', 'Eingang'], ['offen', 'Offen'], ['vorhanden', 'Schon abgelegt'], ['weg', 'Übersprungen'], ['fertig', 'Fertig'], ['fehler', 'Fehler']];
+  const I = { liste: [], ordner: [], plan: null, wurzel: {}, wahl: {}, freigaben: {}, ohne: new Set(), filter: '', lauf: null };
   const gb = (b) => (b >= 1073741824 ? `${(b / 1073741824).toLocaleString('de-DE', { maximumFractionDigits: 2 })} GB` : Q.groesseText(b));
-  const status = (e) => ST[e.status] || ['', '', 'weg', false];
-  const dateienText = (n) => Q.archiv.dateienText(n);
+  const status = (e) => ST[e.status] || st('', '', 'weg');
+  const schluessel = (e) => `${e.pfad}/${e.name}`;   // abgewählte Datei: Ordnerpfad wie gewählt und Name (so vergleicht der Server)
 
   /* ---------- Ordner, Ziehen und ZIP lesen: Liste { pfad (Ordner), name, groesse, holen } ---------- */
   const eintrag = (voll, groesse, holen) => { const t = voll.split('/').filter(Boolean); return { name: t.pop() || '', pfad: t.join('/'), groesse, holen }; };
@@ -69,13 +71,13 @@
   }
 
   /* ---------- Plan vom Server: Dateien je Ordner gebündelt (hält die Anfrage unter 6 MB) ---------- */
+  const angaben = () => ({ wurzel: { ...I.wurzel, name: I.plan ? I.plan.wurzel.name : '' }, wahl: I.wahl, freigaben: I.freigaben });
   async function planen(anlegen = false) {
-    const r = await api('qs_sammel_plan', { ordner: I.ordner.map((o) => [o.pfad, o.dateien.map((e) => [e.name, e.groesse])]), wahl: I.wahl, anlegen });
+    const r = await api('qs_sammel_plan', { ordner: I.ordner.map((o) => [o.pfad, o.dateien.map((e) => [e.name, e.groesse])]), ...angaben(), ohne: [...I.ohne], anlegen });
     if (r.status === 401) { zeigeAnmeldung(); return false; }
     if (r.status !== 200 || !r.data.ok) { meldung(fehlerText(r, 'Der Plan konnte nicht erstellt werden')); return false; }
     I.plan = r.data;
     I.liste.forEach((e, i) => { e.plan = r.data.dateien[i]; e.status = e.plan.schonDa ? 'vorhanden' : e.plan.status; e.grund = e.plan.schonDa ? '' : e.plan.grund || ''; });
-    for (const z of r.data.oberste) if (z.art !== 'auto') I.wahl[z.name] = { art: z.art, ...(z.kapitel ? { kapitel: z.kapitel } : {}), ...(z.titel ? { titel: z.titel } : {}) };
     return true;
   }
   async function laden(quelle) {
@@ -86,93 +88,126 @@
     if (!liste.length) { meldung('Keine Dateien gefunden.'); return; }
     const je = new Map();
     for (const e of liste) { if (!je.has(e.pfad)) je.set(e.pfad, { pfad: e.pfad, dateien: [] }); je.get(e.pfad).dateien.push(e); }
-    I.ordner = [...je.values()]; I.liste = I.ordner.flatMap((o) => o.dateien); I.wahl = {}; I.filter = ''; I.nachtragen = false; I.lauf = null;
+    Object.assign(I, { ordner: [...je.values()], wurzel: {}, wahl: {}, freigaben: {}, ohne: new Set(), filter: '', lauf: null, plan: null });
+    I.liste = I.ordner.flatMap((o) => o.dateien);
     meldung('Plan wird erstellt …', true);
     if (!(await planen())) return;
-    const gemerkt = wahlLaden(I.plan.wurzel || '');
-    if (Object.keys(gemerkt).length) { I.wahl = gemerkt; if (!(await planen())) { I.wahl = {}; if (!(await planen())) return; } }
+    const gemerkt = wahlLaden(I.plan.wurzel.name);
+    if (gemerkt.wahl || gemerkt.wurzel) {
+      Object.assign(I, { wurzel: gemerkt.wurzel || {}, wahl: gemerkt.wahl || {}, ohne: new Set(gemerkt.ohne || []) });
+      if (!(await planen())) { Object.assign(I, { wurzel: {}, wahl: {}, ohne: new Set() }); if (!(await planen())) return; }
+    }
     meldung('', true); zeichnen();
   }
-  /* Ordnerpfad ohne den weggelassenen gewählten Ordner – so bereinigt ihn der Server wie im Plan */
-  const rel = (e) => { const t = e.pfad.split('/').filter(Boolean); if (I.plan.wurzel && t[0] === I.plan.wurzel) t.shift(); return t.join('/'); };
-  const oben = (e) => rel(e).split('/')[0];
-  const WAHL = 'qs-import-wahl:';   // Zuordnung der obersten Ordner je gewähltem Ordner (Fortsetzen nach Neuladen)
+  // Wurzel, Zuordnung der obersten Ordner und abgewählte Dateien je gewähltem Ordner (Fortsetzen nach Neuladen) – die Freigaben nie
+  const WAHL = 'qs-import-wahl:';
   const wahlLaden = (w) => { try { return JSON.parse(localStorage.getItem(WAHL + w) || '{}'); } catch { return {}; } };
-  const wahlMerken = () => { try { localStorage.setItem(WAHL + (I.plan.wurzel || ''), JSON.stringify(I.wahl)); } catch { /* ohne Speicher */ } };
+  const wahlMerken = () => { try { localStorage.setItem(WAHL + I.plan.wurzel.name, JSON.stringify({ wurzel: I.wurzel, wahl: I.wahl, ohne: [...I.ohne] })); } catch { /* ohne Speicher */ } };
+  const dokText = (id) => { const x = S.d.dokumente.find((y) => y.id === id); return x ? `${x.nr ? x.nr + ' ' : ''}${x.titel}` : ''; };
   const zielText = (e) => {
     const p = e.plan || {};
     if (p.ziel === 'eingang' || e.status === 'imEingang') return 'Eingang';
-    if (/^neu:/.test(p.ziel || '')) { const n = I.plan.neu[Number(p.ziel.slice(4))]; return n ? `${n.titel} (neu, ${Q.kapitelText(n.kapitel)})` : ''; }
-    const x = S.d.dokumente.find((y) => y.id === p.ziel);
-    return x ? `${x.nr ? x.nr + ' ' : ''}${x.titel}` : '';
+    if (p.neu !== undefined) { const n = I.plan.neu[p.neu]; return n ? `${n.titel} (neu, ${Q.kapitelText(n.kapitel)})` : ''; }
+    return dokText(p.ziel);
   };
-  const hochladen = (e) => status(e)[3];
-  /* Nachtragen in gültige Versionen nur mit Häkchen – sonst in den Eingang (mit dem ganzen Ordnerpfad) */
-  const inEingang = (p) => p.status === 'eingang' || (p.status === 'nachtragen' && !I.nachtragen);
 
   /* ---------- Vorschau ---------- */
   function meldung(text, ok = false) { $('#im-meldung').className = 'qm-meldung' + (ok ? ' ok' : ''); $('#im-meldung').textContent = text; }
-  function wahlHtml(z) {
-    if (z.art === 'auto') return `<b>${esc(Q.kapitelText(z.kapitel))}</b><span class="qm-sub">an der Kapitelnummer erkannt</span>`;
-    const w = I.wahl[z.name] || { art: 'eingang' }, gesperrt = !!I.lauf;
-    const opt = [['eingang', 'Eingang'], ['aus', 'nicht übernehmen'], ...S.d.kapitel.map((k) => [`kapitel:${k.id}`, `${k.bereich ? 'Bereich' : 'Kapitel'} ${k.id} ${k.titel}`]),
+  const gesperrt = () => (I.lauf ? ' disabled' : '');
+  const option = (k, t, wert) => `<option value="${esc(k)}"${k === wert ? ' selected' : ''}>${esc(t)}</option>`;
+  const bereichFelder = (w, attr, name) => `<span class="qm-im-bereich"><input class="qm-eingabe" ${attr}-nr="${esc(name)}" value="${esc(w.kapitel || '')}" aria-label="Nummer des Bereichs (90 bis 99)" inputmode="numeric"${gesperrt()}>`
+    + `<input class="qm-eingabe" ${attr}-titel="${esc(name)}" value="${esc(w.titel || '')}" aria-label="Titel des Bereichs"${gesperrt()}></span>`;
+  /* Wohin gehört der gewählte Ordner? Nur wenn er wegfallen würde und darin Kapitelordner stehen – ohne Antwort startet nichts */
+  function wurzelHtml(P) {
+    const w = I.wurzel, wert = w.art === 'kapitel' ? `kapitel:${w.kapitel}` : w.art || '';
+    const opt = [['', '— bitte wählen —'], ['sf', 'Standard-Fleisch: Kapitelordner darin zuordnen'], ...S.d.kapitel.filter((k) => k.bereich).map((k) => [`kapitel:${k.id}`, `Bereich ${k.id} ${k.titel}`]),
       ...(Q.darf('verwalten') ? [['neu', 'Neuer Bereich …']] : [])];
-    const wert = w.art === 'kapitel' ? `kapitel:${w.kapitel}` : w.art;
-    let h = `<select class="qm-eingabe" data-im-wahl="${esc(z.name)}" aria-label="Zuordnung für ${esc(z.name)}"${gesperrt ? ' disabled' : ''}>${opt.map(([k, t]) => `<option value="${esc(k)}"${k === wert ? ' selected' : ''}>${esc(t)}</option>`).join('')}</select>`;
-    if (w.art === 'neu') h += `<span class="qm-im-bereich"><input class="qm-eingabe" data-im-nr="${esc(z.name)}" value="${esc(w.kapitel || '')}" aria-label="Nummer des Bereichs" inputmode="decimal"${gesperrt ? ' disabled' : ''}><input class="qm-eingabe" data-im-titel="${esc(z.name)}" value="${esc(w.titel || '')}" aria-label="Titel des Bereichs"${gesperrt ? ' disabled' : ''}></span>`;
-    return h;
+    return `<label class="qm-feld"><span>Wohin gehört der Ordner „${esc(P.wurzel.name)}“? Darin stehen Ordner mit Kapitelnummer.</span>`
+      + `<select class="qm-eingabe" id="im-wurzel-wahl"${gesperrt()}>${opt.map(([k, t]) => option(k, t, wert)).join('')}</select></label>`
+      + (w.art === 'neu' ? bereichFelder(w, 'data-im-wurzel', P.wurzel.name) : '')
+      + `<p class="qm-hilfe">Gehört er zu einer anderen Firma, wählen Sie ihren Bereich – dort wird nie per Dokumenten-Nummer zugeordnet.</p>`;
+  }
+  function wahlHtml(z) {
+    if (z.wurzel) return `<b>${esc(Q.kapitelText(z.kapitel || ''))}</b><span class="qm-sub">oben gewählt</span>`;
+    if (z.art === 'offen') return '<b>offen</b><span class="qm-sub">bitte oben wählen, wohin der Ordner gehört</span>';
+    const wert = z.art === 'kapitel' ? `kapitel:${z.kapitel}` : z.art, w = I.wahl[z.name] || {};
+    const opt = [...(z.erkannt ? [['genau', `Kapitel ${z.erkannt} – Kapitelordner (Nummern)`], [`kapitel:${z.erkannt}`, `Kapitel ${z.erkannt} – nur Archiv`]] : []),
+      ['eingang', 'Eingang'], ['aus', 'nicht übernehmen'],
+      ...S.d.kapitel.filter((k) => k.id !== z.erkannt).map((k) => [`kapitel:${k.id}`, `${k.bereich ? 'Bereich' : 'Kapitel'} ${k.id} ${k.titel}`]),
+      ...(Q.darf('verwalten') ? [['neu', 'Neuer Bereich …']] : [])];
+    const sub = z.art === 'genau' ? 'an der Kapitelnummer erkannt' : z.imPfad ? 'nur Archiv – der Ordnername bleibt erhalten' : '';
+    return `<select class="qm-eingabe" data-im-wahl="${esc(z.name)}" aria-label="Zuordnung für ${esc(z.name)}"${gesperrt()}>${opt.map(([k, t]) => option(k, t, wert)).join('')}</select>`
+      + (z.art === 'neu' ? bereichFelder(w, 'data-im', z.name) : '') + (sub ? `<span class="qm-sub">${esc(sub)}</span>` : '');
   }
   function zahlen(liste) {
     const z = { n: liste.length, b: 0, neu: 0, vorhanden: 0, weg: 0, fertig: 0, fehler: 0 };
     for (const e of liste) {
-      const g = status(e)[2];
+      const s = status(e);
       z.b += e.groesse;
-      if (hochladen(e)) z.neu++;
-      if (g in z && g !== 'neu') z[g]++;
+      if (s.hoch) z.neu++;
+      if (s.gruppe in z) z[s.gruppe]++;
     }
     return z;
+  }
+  /* Freigaben je oberstem Ordner: Nachtragen in gültige Versionen (Vorgabe aus), Entwürfe (Vorgabe an); Dateien je Dokument gruppiert, einzeln abwählbar */
+  function freigabenHtml(P) {
+    const je = P.oberste.map(() => []);
+    for (const e of I.liste) if (e.plan && e.plan.kandidat && e.plan.oben !== undefined) je[e.plan.oben].push(e);
+    const entwuerfe = new Set(I.liste.filter((e) => e.status === 'dokument').map((e) => e.plan.ver)).size;
+    const teil = P.oberste.map((z, i) => {
+      if (!je[i].length) return '';
+      const art = (k) => je[i].filter((e) => e.plan.kandidat === k && !I.ohne.has(schluessel(e))).length;
+      const box = (k, n, text) => (n ? `<label class="qm-check"><input type="checkbox" data-im-frei="${esc(z.name)}" data-im-art="${k}"${z[k] ? ' checked' : ''}${gesperrt()}> ${esc(text)}</label>` : '');
+      const gruppen = new Map();
+      for (const e of je[i]) { if (!gruppen.has(e.plan.dok)) gruppen.set(e.plan.dok, []); gruppen.get(e.plan.dok).push(e); }
+      const liste = [...gruppen].map(([dok, l]) => `<li><b>${esc(dokText(dok))}</b> → ${l[0].plan.kandidat === 'nachtragen' ? 'gültige Version' : 'Entwurf'}${l.length > 1 ? ` · ${Q.zahl(l.length)} Dateien zu dieser Nummer` : ''}`
+        + `<ul>${l.map((e) => `<li><label class="qm-check"><input type="checkbox" data-im-ohne="${esc(schluessel(e))}"${I.ohne.has(schluessel(e)) ? '' : ' checked'}${gesperrt()}> ${esc(e.name)}</label></li>`).join('')}</ul></li>`).join('');
+      return `<fieldset class="qm-im-frei"><legend>${esc(z.name)}</legend>`
+        + box('nachtragen', art('nachtragen'), `${dateienText(art('nachtragen'))} als aktuelle Fassung in gültige Versionen nachtragen`)
+        + box('entwurf', art('dokument'), `${dateienText(art('dokument'))} in Entwürfe ablegen`)
+        + `<details class="qm-details"><summary>Dateien je Dokument ansehen und einzeln abwählen</summary><ul class="qm-verlauf qm-im-gruppen">${liste}</ul></details></fieldset>`;
+    }).join('');
+    return teil && teil + (entwuerfe ? `<p class="qm-hilfe"><b>Sie werden Bearbeiter ${entwuerfe === 1 ? 'dieses Entwurfs' : `dieser ${Q.zahl(entwuerfe)} Entwürfe`}</b> (4-Augen-Prinzip: Sie können ${entwuerfe === 1 ? 'ihn' : 'sie'} danach nicht selbst prüfen).</p>` : '')
+      + '<p class="qm-hilfe">Nachtragen lässt sich nicht rückgängig machen. Ohne Häkchen kommen diese Dateien in den Eingang, abgewählte ins Archiv.</p>';
   }
   function zeichnen() {
     const P = I.plan, L = I.lauf;
     $('#im-ergebnis').hidden = !P;
     if (!P) return;
-    const auto = [...new Set(P.oberste.filter((z) => z.art === 'auto').map((z) => z.kapitel))].sort(Q.natCmp);   // Reihenfolge des Dateisystems ist zufällig
-    $('#im-wurzel').innerHTML = `Gewählter Ordner: <b>${esc(P.wurzel || (I.ordner[0] && I.ordner[0].pfad.split('/')[0]) || '—')}</b> · ${dateienText(I.liste.length)} · ${gb(I.liste.reduce((s, e) => s + e.groesse, 0))}`
-      + ` · erkannte Kapitel: <b>${auto.length ? esc(auto.join(', ')) : 'keine'}</b>`;
-    $('#im-warnung').hidden = !auto.length;
-    const je = new Map(P.oberste.map((z) => [z.name, []])), lose = [];
-    for (const e of I.liste) (je.get(oben(e)) || lose).push(e);
+    const erkannt = [...new Set(P.oberste.filter((z) => z.erkannt).map((z) => z.erkannt))].sort(Q.natCmp);   // Reihenfolge des Dateisystems ist zufällig
+    $('#im-wurzel').innerHTML = `Gewählter Ordner: <b>${esc(P.wurzel.name || '—')}</b> · ${dateienText(I.liste.length)} · ${gb(I.liste.reduce((s, e) => s + e.groesse, 0))}`
+      + ` · erkannte Kapitel: <b>${erkannt.length ? esc(erkannt.join(', ')) : 'keine'}</b>`;
+    $('#im-frage').hidden = !P.wurzel.frage; $('#im-frage').classList.toggle('offen', P.offen);
+    if (P.wurzel.frage) $('#im-frage').innerHTML = wurzelHtml(P);
+    $('#im-warnung').hidden = !erkannt.length;
+    const je = P.oberste.map(() => []), lose = [];
+    for (const e of I.liste) (e.plan && e.plan.oben !== undefined ? je[e.plan.oben] : lose).push(e);
     const zeile = (name, z, l) => { const c = zahlen(l); return `<tr><td class="qm-voll" data-label="Ordner"><span class="qm-name">${esc(name)}</span></td><td data-label="Zuordnung" class="qm-im-wahl">${z}</td>`
       + `<td class="qm-zahl" data-label="Dateien">${Q.zahl(c.n)}<span class="qm-sub">${gb(c.b)}</span></td><td class="qm-zahl" data-label="neu">${Q.zahl(c.neu)}</td><td class="qm-zahl" data-label="schon da">${Q.zahl(c.vorhanden)}</td><td class="qm-zahl" data-label="übersprungen">${Q.zahl(c.weg)}</td></tr>`; };
     $('#im-oberste').innerHTML = `<table class="qm-tabelle qm-karten qm-im-tabelle"><thead><tr><th>Oberster Ordner</th><th>Zuordnung</th><th class="qm-zahl">Dateien</th><th class="qm-zahl">neu</th><th class="qm-zahl">schon da</th><th class="qm-zahl">übersprungen</th></tr></thead><tbody>`
-      + P.oberste.map((z) => zeile(z.name, wahlHtml(z), je.get(z.name))).join('') + (lose.length ? zeile('lose Dateien', '<b>Eingang</b>', lose) : '') + '</tbody></table>';
-    const nt = I.liste.filter((e) => e.status === 'nachtragen');
-    $('#im-nachtragen').hidden = !nt.length;
-    if (nt.length) {
-      $('#im-nachtragen-an').checked = I.nachtragen; $('#im-nachtragen-an').disabled = !!L;
-      $('#im-nachtragen-text').textContent = `${dateienText(nt.length)} als aktuelle Fassung in gültige Versionen nachtragen`;
-      $('#im-nachtragen-liste').innerHTML = nt.slice(0, ZEILEN).map((e) => `<li>${esc(e.pfad ? e.pfad + '/' : '')}<b>${esc(e.name)}</b> → ${esc(zielText(e))}</li>`).join('');
-    }
+      + P.oberste.map((z, i) => zeile(z.name, wahlHtml(z), je[i])).join('') + (lose.length ? zeile('lose Dateien', '<b>Eingang</b>', lose) : '') + '</tbody></table>';
+    const frei = freigabenHtml(P);
+    $('#im-freigaben').hidden = !frei; $('#im-freigaben').innerHTML = frei;
     const c = zahlen(I.liste);
     $('#im-zahlen').innerHTML = [['Dateien', c.n], ['neu', c.neu], ['schon abgelegt', c.vorhanden], ['übersprungen', c.weg], ['neue Ordner', P.neu.length], ['neue Bereiche', Object.keys(P.bereiche || {}).length]]
       .concat(L ? [['fertig', c.fertig], ['Fehler', c.fehler]] : []).map(([n, w]) => `<div><b>${Q.zahl(w)}</b><span>${esc(n)}</span></div>`).join('');
-    const gruppe = (g) => I.liste.filter((e) => status(e)[2] === g).length;
+    const gruppe = (g) => I.liste.filter((e) => status(e).gruppe === g).length;
     $('#im-filter').innerHTML = FILTER.map(([k, n]) => { const z = k ? gruppe(k) : I.liste.length; return k && !z && I.filter !== k ? '' : `<button type="button" data-im-filter="${k}" aria-pressed="${I.filter === k}">${esc(n)} <b>${Q.zahl(z)}</b></button>`; }).join('');
     listeZeichnen();
-    const offen = I.liste.filter(hochladen).length;
-    $('#im-los').hidden = !!L; $('#im-los').disabled = !offen;
+    const offen = I.liste.filter((e) => status(e).hoch).length;
+    $('#im-los').hidden = !!L; $('#im-los').disabled = !offen || P.offen;
     $('#im-los').textContent = offen === 1 ? '1 Datei importieren' : `${Q.zahl(offen)} Dateien importieren`;
     $('#im-stopp').hidden = !L || L.ende; $('#im-csv').hidden = !L || !L.ende;
     $('#im-fortschritt').hidden = !L; $('#im-stand').hidden = !L;
   }
   function dateiZeile(e) {
-    const [text, farbe] = status(e);
+    const s = status(e);
     return `<tr><td class="qm-voll" data-label="Datei"><span class="qm-name">${esc(e.name)}</span><span class="qm-sub">${esc(e.pfad || '—')} · ${esc(Q.groesseText(e.groesse))}</span></td>`
       + `<td data-label="Ziel">${esc(zielText(e) || '—')}${e.plan && e.plan.pfad && e.plan.ziel !== 'eingang' ? `<span class="qm-sub">${esc(e.plan.pfad.split('/').join(' / '))}</span>` : ''}</td>`
-      + `<td data-label="Status" class="qm-sa-status">${chip(text + (e.grund ? ` · ${e.grund}` : '') + (e.status === 'laeuft' && e.empfangen ? ` ${Math.round(100 * e.empfangen / e.groesse)} %` : ''), farbe)}</td></tr>`;
+      + `<td data-label="Status" class="qm-sa-status">${chip(s.text + (e.grund ? ` · ${e.grund}` : '') + (e.status === 'laeuft' && e.empfangen ? ` ${Math.round(100 * e.empfangen / e.groesse)} %` : ''), s.farbe)}</td></tr>`;
   }
   function listeZeichnen() {
-    const l = I.liste.filter((e) => !I.filter || status(e)[2] === I.filter);
+    const l = I.liste.filter((e) => !I.filter || status(e).gruppe === I.filter);
     $('#im-liste').innerHTML = `<table class="qm-tabelle qm-karten qm-sa-tabelle"><thead><tr><th>Datei</th><th>Ziel</th><th>Status</th></tr></thead><tbody>${l.slice(0, ZEILEN).map(dateiZeile).join('') || Q.leerzeile(3, 'Keine Dateien in dieser Auswahl.')}</tbody></table>`
       + (l.length > ZEILEN ? `<p class="qm-hilfe">Angezeigt: ${Q.zahl(ZEILEN)} von ${Q.zahl(l.length)} Dateien.</p>` : '');
   }
@@ -184,15 +219,27 @@
     $('#im-stand').textContent = `${Q.zahl(L.erledigt)} von ${dateienText(L.dateien)} · ${L.gesendet ? gb(L.gesendet) : '0 KB'} von ${gb(L.bytes)}`
       + (L.ende ? '' : rate > 0 && L.gesendet ? ` · noch etwa ${Q.zahl(Math.max(1, Math.round(rest / rate / 60)))} min` : '');
   }
+  /* So viele fertige Uploads passen in ein Bündel: Zahl, Bytes und Word/Excel-Nachträge (Lenkung unter der Sperre) – Grenzen vom Server */
+  function buendelZahl(l) {
+    const a = S.d.ablage;
+    let n = 0, b = 0, lk = 0;
+    for (const e of l) {
+      const o = e.plan.status === 'nachtragen' && a.office.includes((e.name.split('.').pop() || '').toLowerCase()) ? e.groesse : 0;
+      if (n && (n >= a.buendel || b + e.groesse > a.buendelBytes || (o && lk + o > a.lenkungBytes))) break;
+      n++; b += e.groesse; lk += o;
+    }
+    return n;
+  }
   async function eintragenJetzt(alle) {
-    const L = I.lauf, n = S.d.ablage.buendel;
-    while (L.fertig.length >= (alle ? 1 : n)) {
-      const teil = L.fertig.splice(0, n);
-      const r = await api('qs_import_eintragen', { uploads: teil.map((e) => e.upload) });
+    const L = I.lauf;
+    while (L.fertig.length && (alle || buendelZahl(L.fertig) < L.fertig.length || L.fertig.length >= S.d.ablage.buendel)) {
+      const teil = L.fertig.splice(0, buendelZahl(L.fertig));
+      const r = await api('qs_import_eintragen', { ...angaben(), export: I.plan.export,
+        uploads: teil.map((e) => ({ upload: e.upload, status: e.plan.status, ver: e.plan.ver || '', ohne: I.ohne.has(schluessel(e)) })) });
       if (r.status === 401) { L.abbrechen = true; L.anmelden = true; return; }
       for (const e of teil) {
         const x = r.status === 200 && r.data.ok ? r.data.uploads[e.upload] : { status: 'fehler', grund: fehlerText(r, 'Eintragen fehlgeschlagen') };
-        e.status = { abgelegt: e.ein ? 'imEingang' : 'abgelegt', eingang: 'imEingang', vorhanden: 'vorhanden', verworfen: 'verworfen' }[x && x.status] || 'fehler';
+        e.status = { abgelegt: 'abgelegt', eingang: 'imEingang', vorhanden: 'vorhanden', verworfen: 'verworfen' }[x && x.status] || 'fehler';
         e.grund = x && x.grund ? x.grund : '';
         L.erledigt++;
       }
@@ -207,24 +254,21 @@
       e.status = 'laeuft'; e.empfangen = 0;
       let f;
       try { f = await e.holen(); } catch (err) { e.status = 'fehler'; e.grund = err.message || 'nicht lesbar'; L.erledigt++; continue; }
-      const p = e.plan;
-      e.ein = inEingang(p);
-      const r = await Q.dateiSenden(f, e.ein ? 'eingang' : p.ziel, e.ein ? '' : p.ver || '', (pos) => { L.gesendet += pos - vorher.gesendet; vorher.gesendet = pos; e.empfangen = pos; },
-        { sammeln: true, pfad: e.ein ? rel(e) : p.pfad || '', herkunft: rel(e) });
+      const r = await Q.dateiSenden(f, '', '', (pos) => { L.gesendet += pos - vorher.gesendet; vorher.gesendet = pos; e.empfangen = pos; }, { sammeln: true, herkunft: e.pfad });
       if (r.anmelden) { L.abbrechen = true; L.anmelden = true; return; }
       if (r.fehler) { e.status = 'fehler'; e.grund = r.fehler; L.erledigt++; continue; }
       e.status = 'hochgeladen'; e.upload = r.upload; L.fertig.push(e);
-      if (L.fertig.length >= S.d.ablage.buendel) await eintragen();
+      await eintragen();
     }
   }
   async function starten() {
-    if (I.lauf) return;
+    if (I.lauf || !I.plan || I.plan.offen) return;
     $('#im-los').disabled = true;
     meldung('Neue Ordner und Bereiche werden angelegt …', true);
     if (!(await planen(true))) { $('#im-los').disabled = false; return; }
     wahlMerken();
     await Q.neuLaden();
-    const warte = I.liste.filter(hochladen);
+    const warte = I.liste.filter((e) => status(e).hoch);
     I.lauf = { warte, fertig: [], kette: Promise.resolve(), start: Date.now(), gesendet: 0, bytes: warte.reduce((s, e) => s + e.groesse, 0), dateien: warte.length, erledigt: 0, abbrechen: false, ende: false };
     meldung('');
     zeichnen(); fortschritt();
@@ -246,7 +290,7 @@
   }
   function berichtCsv() {
     const z = (v) => { const t = String(v ?? ''); return /^[=+\-@]/.test(t) ? `'${t}` : t; };   // keine Formeln in Excel
-    const zeilen = [['Ordner', 'Datei', 'Größe (Bytes)', 'Ergebnis', 'Ziel', 'Grund'], ...I.liste.map((e) => [e.pfad, e.name, e.groesse, status(e)[0], zielText(e), e.grund])];
+    const zeilen = [['Ordner', 'Datei', 'Größe (Bytes)', 'Ergebnis', 'Ziel', 'Grund'], ...I.liste.map((e) => [e.pfad, e.name, e.groesse, status(e).text, zielText(e), e.grund])];
     const csv = '﻿' + zeilen.map((r) => r.map((v) => `"${z(v).replace(/"/g, '""')}"`).join(';')).join('\r\n');
     Q.speichereDatei(new Blob([csv], { type: 'text/csv;charset=utf-8' }), `QM-Ordner-Import_${S.d.heute}.csv`);
   }
@@ -258,6 +302,11 @@
     zeichnen();
     Q.oeffne($('#dlg-import'));
   }
+  async function neuPlanen() {
+    meldung('Plan wird erstellt …', true);
+    if (await planen()) { wahlMerken(); meldung('', true); zeichnen(); }
+  }
+  const wahlAus = (wert, vorschlag) => (wert.startsWith('kapitel:') ? { art: 'kapitel', kapitel: wert.slice(8) } : wert === 'neu' ? { art: 'neu', ...vorschlag } : { art: wert });
   $('#qm-d-import').addEventListener('click', oeffnen);
   $('#im-ordner-knopf').addEventListener('click', () => { $('#im-ordner').value = ''; $('#im-ordner').click(); });
   $('#im-zip-knopf').addEventListener('click', () => { $('#im-zip').value = ''; $('#im-zip').click(); });
@@ -271,16 +320,30 @@
     if (eintraege.length) laden((async () => { const aus = []; for (const e of eintraege) await ordnerLesen(e, '', aus); return aus; })());
     else laden(Promise.resolve(dateien.map((f) => eintrag(f.name, f.size, async () => f))));
   });
-  $('#im-oberste').addEventListener('change', async (ev) => {
+  $('#im-frage').addEventListener('change', (ev) => {
+    const el = ev.target;
+    if (el.id === 'im-wurzel-wahl') I.wurzel = el.value ? wahlAus(el.value, I.plan.wurzel.bereichVorschlag) : {};
+    else if (el.dataset.imWurzelNr !== undefined || el.dataset.imWurzelTitel !== undefined) I.wurzel = { ...I.wurzel, [el.dataset.imWurzelNr !== undefined ? 'kapitel' : 'titel']: el.value.trim() };
+    else return;
+    neuPlanen();
+  });
+  $('#im-oberste').addEventListener('change', (ev) => {
     const el = ev.target, name = el.dataset.imWahl ?? el.dataset.imNr ?? el.dataset.imTitel;
     if (name === undefined) return;
     const z = I.plan.oberste.find((x) => x.name === name);
-    if (el.dataset.imWahl !== undefined) I.wahl[name] = el.value.startsWith('kapitel:') ? { art: 'kapitel', kapitel: el.value.slice(8) } : el.value === 'neu' ? { art: 'neu', ...z.vorschlag } : { art: el.value };
+    if (el.dataset.imWahl !== undefined) I.wahl[name] = wahlAus(el.value, z.bereichVorschlag);
     else I.wahl[name] = { ...I.wahl[name], [el.dataset.imNr !== undefined ? 'kapitel' : 'titel']: el.value.trim() };
-    meldung('Plan wird erstellt …', true);
-    if (await planen()) { wahlMerken(); meldung('', true); zeichnen(); }
+    neuPlanen();
   });
-  $('#im-nachtragen-an').addEventListener('change', (ev) => { I.nachtragen = ev.target.checked; zeichnen(); });
+  $('#im-freigaben').addEventListener('change', (ev) => {
+    const el = ev.target;
+    if (el.dataset.imFrei !== undefined) {
+      const z = I.plan.oberste.find((x) => x.name === el.dataset.imFrei);
+      I.freigaben[z.name] = { nachtragen: z.nachtragen, entwurf: z.entwurf, [el.dataset.imArt]: el.checked };
+    } else if (el.dataset.imOhne !== undefined) { if (el.checked) I.ohne.delete(el.dataset.imOhne); else I.ohne.add(el.dataset.imOhne); }
+    else return;
+    neuPlanen();
+  });
   $('#im-filter').addEventListener('click', (ev) => { const b = ev.target.closest('[data-im-filter]'); if (b) { I.filter = b.dataset.imFilter; zeichnen(); } });
   $('#im-form').addEventListener('submit', (ev) => { ev.preventDefault(); starten(); });
   $('#im-stopp').addEventListener('click', () => { if (I.lauf) { I.lauf.abbrechen = true; $('#im-stopp').disabled = true; meldung('Wird nach den laufenden Dateien angehalten …', true); } });

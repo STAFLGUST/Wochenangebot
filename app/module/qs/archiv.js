@@ -1,18 +1,17 @@
 /* STAFL-Plattform · QM-System: Archiv der Ordner und externen Dokumente (Ordnerbaum in der Seitenleiste) und Eingang (Dateien
-   ohne Ziel: hochladen, zuordnen, löschen). Daten erst beim Öffnen: qs_archiv (Ordner) bzw. qs_eingang; Zahlen je Ordner kommen
-   aus qs_start (qs-ablage-zahlen). Herunterladen über direkte Links (qs_datei, qs_archiv_zip). Regeln prüft der Server
-   (module/qs/ablage.php). Nutzt die Brücke window.STAFL_QS aus qs.js und trägt sich als STAFL_QS.archiv ein. */
+   ohne Ziel: hochladen, zuordnen, löschen). Daten erst beim Öffnen: qs_archiv (Ordner) bzw. qs_eingang (Dateien und erlaubte Ziele);
+   Herunterladen über direkte Links (qs_datei, qs_archiv_zip). Regeln nur auf dem Server (docs/entwickler/05-daten.md). Nutzt die
+   Brücke window.STAFL_QS aus qs.js und trägt sich als STAFL_QS.archiv ein. */
 'use strict';
 (() => {
   const Q = window.STAFL_QS;
-  const { $, $$, S, esc, api, toast, fehlerText, zeigeAnmeldung, icon, natCmp } = Q;
+  const { $, $$, S, esc, api, toast, fehlerText, zeigeAnmeldung, icon, natCmp, dateienText } = Q;
   const SU = window.STAFL_SUCHE;
   const API = '../../api/';
   const ZEILEN = 500;   // höchstens so viele Zeilen je Suche bzw. Liste
   const OHNE_ORDNER = '/';   // „/“ kommt in keinem Ordnernamen vor
   const B = { dok: '', dateien: null, q: '' };   // Ordnerbaum des offenen Dokuments
-  const E = { dateien: null, wahl: new Set(), ziele: new Map() };   // Eingang
-  const dateienText = (n) => (n === 1 ? '1 Datei' : `${Q.zahl(n)} Dateien`);
+  const E = { dateien: null, wahl: new Set(), ziele: new Map() };   // Eingang; ziele: Beschriftung → {dok, ver} (vom Server erlaubt)
   const link = (q) => API + '?action=' + q;
   const pfadText = (p) => (p ? p.split('/').join(' / ') : '');
 
@@ -107,8 +106,7 @@
   });
 
   /* ---------- Eingang (nur mit „bearbeiten“): Liste lädt erst beim Öffnen (bis 20 000 Dateien), angezeigt höchstens ZEILEN;
-     Suche (Name und Ordnerpfad) und Ordner der ersten Ebene grenzen ein, „alle“ wählt alle gefilterten. Ziele: Ordner, externe
-     Dokumente und Entwürfe – freigegebene Versionen nicht (dort wird nachgetragen). ---------- */
+     Suche (Name und Ordnerpfad) und Ordner der ersten Ebene grenzen ein, „alle“ wählt alle gefilterten. Ziele liefert der Server. ---------- */
   const ordnerVon = (f) => (f.pfad ? f.pfad.split('/')[0] : OHNE_ORDNER);
   async function ladeEingang() {
     const r = await api('qs_eingang');
@@ -117,21 +115,21 @@
     E.dateien = r.data.dateien.slice().reverse();   // neueste zuerst
     const da = new Set(E.dateien.map((f) => f.id));
     for (const id of [...E.wahl]) if (!da.has(id)) E.wahl.delete(id);
+    eingangZiele(r.data.ziele);
     return true;
   }
   function eingangSicht() {
     const q = SU.woerter($('#ei-suche').value), o = $('#ei-ordner').value;
     return (E.dateien || []).filter((f) => (!o || ordnerVon(f) === o) && SU.passt(q, SU.heu(f.name, f.pfad)));
   }
-  function eingangZiele() {
+  function eingangZiele(ziele) {
+    const dok = new Map(S.d.dokumente.map((x) => [x.id, x]));
     E.ziele = new Map();
-    for (const x of [...S.d.dokumente].sort((a, b) => natCmp(a.kapitel, b.kapitel) || natCmp(a.nr, b.nr) || natCmp(a.titel, b.titel))) {
-      const o = Q.istGelenkt(x) ? Q.offene(x) : null;
-      if (x.eingezogen || (Q.istGelenkt(x) && (!o || o.status !== 'entwurf'))) continue;
-      const basis = `${x.nr ? x.nr + ' · ' : ''}${x.titel} (${x.kapitel})${o ? ' – Entwurf' : ''}`;
+    for (const z of ziele.filter((y) => dok.has(y.dok)).sort((a, b) => { const x = dok.get(a.dok), y = dok.get(b.dok); return natCmp(x.kapitel, y.kapitel) || natCmp(x.nr, y.nr) || natCmp(x.titel, y.titel); })) {
+      const x = dok.get(z.dok), basis = `${x.nr ? x.nr + ' · ' : ''}${x.titel} (${x.kapitel})${z.ver ? ' – Entwurf' : ''}`;
       let text = basis;
       for (let n = 2; E.ziele.has(text); n++) text = `${basis} ${n}`;   // gleiche Titel bleiben unterscheidbar
-      E.ziele.set(text, { dok: x.id, ver: o ? o.id : '' });
+      E.ziele.set(text, z);
     }
     $('#ei-ziele').innerHTML = [...E.ziele.keys()].map((k) => `<option value="${esc(k)}"></option>`).join('');
   }
@@ -167,7 +165,7 @@
     eingangKnoepfe();
   }
   async function oeffneEingang() {
-    eingangZiele();
+    eingangZiele([]);
     E.dateien = null; E.wahl.clear();
     if (S.laden && S.laden.fertig) S.laden = null;
     $('#ei-ziel').value = ''; $('#ei-suche').value = ''; $('#ei-ordner').value = ''; $('#ei-meldung').textContent = ''; delete $('#ei-loeschen').dataset.sicher;
@@ -215,7 +213,7 @@
     toast(`${dateienText(ids.length)} zugeordnet: ${name}`);
     if (z.dok === B.dok) B.dok = '';
     await Q.neuLaden();
-    eingangZiele();
+    if (await ladeEingang()) eingangZeichnen();
   });
   $('#ei-loeschen').addEventListener('click', async () => {
     const k = $('#ei-loeschen'), ids = [...E.wahl];
@@ -230,5 +228,5 @@
     await Q.neuLaden();
   });
 
-  Q.archiv = { baumHtml, neu, ort, eingangZeichnen, dateienText };
+  Q.archiv = { baumHtml, neu, ort, eingangZeichnen };
 })();

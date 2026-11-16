@@ -119,7 +119,9 @@ function ablage_aufraeumen(): void
    $ziel: Angaben des Moduls (z. B. Dokument und Version), werden mit dem Upload gemerkt und beim letzten Teil zurückgegeben.
    Rückgabe: ['fertig' => false, 'upload' => …, 'empfangen' => n] oder beim letzten Teil
    ['fertig' => true, 'ziel' => …, 'datei' => ['id', 'name', 'art', 'mime', 'groesse', 'sha256']] – die Datei liegt dann
-   bereits in der Ablage; scheitert danach das Eintragen beim Modul, entfernt es sie mit ablage_entfernen(). */
+   bereits in der Ablage; scheitert danach das Eintragen beim Modul, entfernt es sie mit ablage_entfernen().
+   Mit $ablegen = false beim letzten Teil ['fertig' => true, 'upload' => …, 'ziel' => …]: der geprüfte Upload bleibt liegen, bis
+   ablage_fertig_ablegen() ihn übernimmt. */
 function ablage_teil(string $bereich, string $nutzerId, array $ziel, array $b, bool $ablegen = true): array
 {
     ablage_bereich($bereich);
@@ -188,7 +190,10 @@ function ablage_fertig_ablegen(string $bereich, string $nutzerId, string $upload
         $id = ablage_neue_id();
         $ziel = ablage_pfad($bereich, $id);
         if (!is_dir(dirname($ziel)) && !@mkdir(dirname($ziel), 0775, true) && !is_dir(dirname($ziel))) throw new RuntimeException('Ablage nicht beschreibbar');
-        if (!@rename("$ordner/$upload.tmp", $ziel)) throw new RuntimeException('Ablage nicht beschreibbar');
+        if (!@rename("$ordner/$upload.tmp", $ziel)) {   // gleichzeitig ein zweiter Aufruf: der erste hat ihn schon übernommen
+            if (!is_file("$ordner/$upload.tmp")) throw new InvalidArgumentException('Der Upload ist abgelaufen. Bitte die Datei erneut hochladen.');
+            throw new RuntimeException('Ablage nicht beschreibbar');
+        }
     } finally {
         ablage_upload_verwerfen($upload);
     }
