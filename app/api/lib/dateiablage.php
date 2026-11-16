@@ -11,16 +11,20 @@ declare(strict_types=1);
    ABLAGE_TEIL_MAX Bytes) eines Uploads unter data/dateien/.teile/, prüft beim letzten Teil Größe, SHA-256 und Dateiart
    (Endung und Dateikopf passen zusammen) und legt die Datei ab. Ein Upload gehört dem Nutzer, der ihn begonnen hat.
    Vom Server erzeugte Dateien (z. B. aus einer Vorlage ausgefüllt) legt ablage_ablegen() ab, ablage_kopieren() kopiert eine Datei
-   unter neuer Kennung (z. B. in eine neue Version), ablage_lesen() liefert den Inhalt.
+   unter neuer Kennung (z. B. in eine neue Version), ablage_lesen() liefert den Inhalt (nur bis ABLAGE_LESEN_MAX).
+   Große Dateien: Zusammensetzen, Prüfsumme und Kopfprüfung arbeiten auf der Datei, nie auf dem ganzen Inhalt im Speicher.
    ZIP-Export: ablage_zip_senden() schreibt ein ZIP (Methode „stored“, UTF-8-Namen) direkt in die Antwort – ohne die
    PHP-Erweiterung „zip“ und ohne das ganze Archiv im Speicher zu halten. */
 if (!defined('WA_API')) { http_response_code(404); exit; }   // nur über api/index.php nutzbar
 
 const ABLAGE_TEIL_MAX = 3 * 1024 * 1024;        // Bytes je Teil (Base64 ≈ 4 MB, unter der Grenze des API-Einstiegs)
-const ABLAGE_DATEI_MAX = 25 * 1024 * 1024;      // Bytes je Datei
+const ABLAGE_DATEI_MAX = 250 * 1024 * 1024;     // Bytes je Datei (Inhaber 16.11.2026: ganzes QM-System mit Videos und ZIP)
+const ABLAGE_LESEN_MAX = 25 * 1024 * 1024;      // ablage_lesen() hält die Datei im Speicher (Office-Füllung unter memory_limit 128M)
 const ABLAGE_UPLOAD_STUNDEN = 24;               // unvollständige Uploads werden danach entfernt
 const ABLAGE_ZIP_MAX = 3500 * 1024 * 1024;      // ZIP ohne Zip64: unter 4 GB bleiben
-/* Erlaubte Dateiarten: Endung → [MIME-Typ, erwarteter Dateikopf] (ole = Office 97–2003/Outlook, zip = Office Open XML/ODF) */
+/* Erlaubte Dateiarten: Endung → [MIME-Typ, Kopfprüfung aus ABLAGE_KOEPFE bzw. „text“/„binaer“]. Unbekannte Endungen bleiben
+   abgelehnt. Bewusst nie erlaubt sind Arten, die beim Öffnen Code ausführen: im Browser html, htm, xhtml, svg, js, unter
+   Windows exe, com, scr, msi, bat, cmd, ps1, vbs, jar, hta, lnk, reg. Der Inhalt eines ZIP-Archivs wird nicht geprüft. */
 const ABLAGE_ARTEN = [
     'pdf' => ['application/pdf', 'pdf'],
     'doc' => ['application/msword', 'ole'], 'dot' => ['application/msword', 'ole'],
@@ -38,6 +42,29 @@ const ABLAGE_ARTEN = [
     'msg' => ['application/vnd.ms-outlook', 'ole'], 'eml' => ['message/rfc822', 'text'],
     'rtf' => ['application/rtf', 'rtf'], 'txt' => ['text/plain', 'text'], 'csv' => ['text/csv', 'text'],
     'png' => ['image/png', 'png'], 'jpg' => ['image/jpeg', 'jpg'], 'jpeg' => ['image/jpeg', 'jpg'], 'gif' => ['image/gif', 'gif'],
+    'heic' => ['image/heic', 'heic'], 'heif' => ['image/heif', 'heic'], 'tif' => ['image/tiff', 'tif'], 'tiff' => ['image/tiff', 'tif'],
+    'bmp' => ['image/bmp', 'bmp'],
+    'mov' => ['video/quicktime', 'video'], 'mp4' => ['video/mp4', 'video'], 'm4v' => ['video/x-m4v', 'video'],
+    'opus' => ['audio/ogg', 'ogg'], 'ogg' => ['audio/ogg', 'ogg'],
+    'zip' => ['application/zip', 'zip'], 'xlsb' => ['application/vnd.ms-excel.sheet.binary.macroEnabled.12', 'zip'],
+    'json' => ['application/json', 'text'], 'ics' => ['text/calendar', 'text'],
+    'ttv' => ['application/octet-stream', 'binaer'],   // Trendview-Datenschreiber: Binärformat ohne festen Kopf
+];
+/* Erwartete Dateiköpfe: Liste von [Versatz, Bytes], einer muss passen */
+const ABLAGE_KOEPFE = [
+    'pdf' => [[0, '%PDF-']],
+    'zip' => [[0, "PK\x03\x04"], [0, "PK\x05\x06"]],   // PK\5\6: leeres ZIP
+    'ole' => [[0, "\xD0\xCF\x11\xE0\xA1\xB1\x1A\xE1"]],
+    'png' => [[0, "\x89PNG\r\n\x1a\n"]],
+    'jpg' => [[0, "\xFF\xD8\xFF"]],
+    'gif' => [[0, 'GIF87a'], [0, 'GIF89a']],
+    'rtf' => [[0, '{\\rtf']],
+    'tif' => [[0, "II*\0"], [0, "MM\0*"]],
+    'bmp' => [[0, 'BM']],
+    'ogg' => [[0, 'OggS']],
+    // ISO-BMFF (MP4, neuere MOV): „ftyp“ an Byte 4; ältere QuickTime-Dateien beginnen mit einem anderen Block der obersten Ebene
+    'video' => [[4, 'ftyp'], [4, 'moov'], [4, 'mdat'], [4, 'wide'], [4, 'free'], [4, 'skip'], [4, 'pnot']],
+    'heic' => [[4, 'ftypheic'], [4, 'ftypheix'], [4, 'ftyphevc'], [4, 'ftyphevx'], [4, 'ftypmif1'], [4, 'ftypmsf1']],
 ];
 
 /* ---------- Pfade und Namen ---------- */
@@ -90,14 +117,10 @@ function ablage_inhalt_passt(string $pfad, string $art): bool
     $kopf = (string)fread($fh, 8192);
     fclose($fh);
     $soll = ABLAGE_ARTEN[$art][1] ?? '';
-    if ($soll === 'pdf') return strncmp($kopf, '%PDF-', 5) === 0;
-    if ($soll === 'zip') return strncmp($kopf, "PK\x03\x04", 4) === 0;
-    if ($soll === 'ole') return strncmp($kopf, "\xD0\xCF\x11\xE0\xA1\xB1\x1A\xE1", 8) === 0;
-    if ($soll === 'png') return strncmp($kopf, "\x89PNG\r\n\x1a\n", 8) === 0;
-    if ($soll === 'jpg') return strncmp($kopf, "\xFF\xD8\xFF", 3) === 0;
-    if ($soll === 'gif') return strncmp($kopf, 'GIF87a', 6) === 0 || strncmp($kopf, 'GIF89a', 6) === 0;
-    if ($soll === 'rtf') return strncmp($kopf, '{\\rtf', 5) === 0;
-    if ($soll === 'text') return strpos($kopf, "\0") === false && strncmp($kopf, 'MZ', 2) !== 0 && stripos(ltrim($kopf), '<') !== 0;
+    $programmOderHtml = strncmp($kopf, 'MZ', 2) === 0 || stripos(ltrim($kopf), '<') === 0;
+    if ($soll === 'text') return strpos($kopf, "\0") === false && !$programmOderHtml;
+    if ($soll === 'binaer') return !$programmOderHtml;
+    foreach (ABLAGE_KOEPFE[$soll] ?? [] as [$pos, $bytes]) if (substr($kopf, $pos, strlen($bytes)) === $bytes) return true;
     return false;
 }
 
@@ -184,11 +207,11 @@ function ablage_upload_verwerfen(string $upload): void
 
 /* ---------- Lesen, Ablegen, Kopieren, Entfernen, Ausliefern ---------- */
 function ablage_vorhanden(string $bereich, string $id): bool { return is_file(ablage_pfad($bereich, $id)); }
-/* Inhalt lesen (z. B. eine Vorlage zum Ausfüllen) oder null, wenn die Datei fehlt */
+/* Inhalt lesen (z. B. eine Vorlage zum Ausfüllen) oder null, wenn die Datei fehlt oder größer als ABLAGE_LESEN_MAX ist */
 function ablage_lesen(string $bereich, string $id): ?string
 {
     $p = ablage_pfad($bereich, $id);
-    if (!is_file($p) || filesize($p) > ABLAGE_DATEI_MAX) return null;
+    if (!is_file($p) || filesize($p) > ABLAGE_LESEN_MAX) return null;
     $t = file_get_contents($p);
     return $t === false ? null : $t;
 }

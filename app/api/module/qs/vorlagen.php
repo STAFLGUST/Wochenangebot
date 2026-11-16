@@ -262,7 +262,7 @@ function qs_vorlage_anwenden(array $vd, array $d, array $stamm, array $me, array
     $aus = [];
     foreach ($dateien as $f) {
         $daten = ablage_lesen('qs', (string)$f['id']);
-        if ($daten === null) throw new InvalidArgumentException("Die Vorlagendatei „{$f['name']}“ fehlt in der Ablage.");
+        if ($daten === null) throw new InvalidArgumentException("Die Vorlagendatei „{$f['name']}“ fehlt in der Ablage oder ist zum Ausfüllen zu groß (höchstens " . (int)(ABLAGE_LESEN_MAX / 1048576) . ' MB).');
         $r = qs_office_fuellen($daten, (string)$f['art'], qs_werte_stamm($d, $stamm), true);
         if ($r === null) throw new InvalidArgumentException("Die Vorlagendatei „{$f['name']}“ ist keine lesbare Word- oder Excel-Datei.");
         $ext = QS_OFFICE_DOKUMENT[$f['art']] ?? (string)$f['art'];

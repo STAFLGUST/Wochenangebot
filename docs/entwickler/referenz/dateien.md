@@ -748,6 +748,7 @@ Jede Code-Datei beginnt mit einem Kopfkommentar; dessen erste Aussage steht hier
 | `kunden_hilfe.py` | plattform | HTTP-Client mit eigener Sitzung für API-Tests (IP über X-Forwarded-For, wie hinter dem eigenen Proxy). |
 | `order_setup.py` | angebot | Gemeinsame Vorbereitung der Bestell-Testgruppen |
 | `smtp_test.py` | plattform | Kleiner Test-Mailserver für die Ende-zu-Ende-Tests (nimmt Nachrichten an und hält sie im Speicher). |
+| `test_ablage_grenzen.py` | plattform | Dateiablage des Plattformkerns (app/api/lib/dateiablage.php) |
 | `test_abteilungen.py` | verwaltung | Stammdaten → Abteilungen (Auftrag des Inhabers 10.11.2026) |
 | `test_admin_confirmation.py` | plattform | Sensible Aktionen, kontoweite Bestätigungsbremse und Dateisperren über echte HTTP-Anfragen. |
 | `test_admin_confirmation_ui.py` | plattform | Abgelaufene Admin-Freigabe im Browser |

@@ -2,7 +2,7 @@
 
 <!-- ERZEUGT von `python3 werkzeuge/doku.py erzeugen` – nicht von Hand ändern. Quelle: Funktionen und Kommentare im Code. Die CI prüft, dass diese Datei zum Code passt. -->
 
-116 Dateien, 1175 Funktionen – in der Reihenfolge der Datei, **fett** die Abschnitte. Text = erste Aussage des Kommentars direkt über der Funktion (Python: Docstring). Übersicht aller Module: [README.md](README.md).
+117 Dateien, 1182 Funktionen – in der Reihenfolge der Datei, **fett** die Abschnitte. Text = erste Aussage des Kommentars direkt über der Funktion (Python: Docstring). Übersicht aller Module: [README.md](README.md).
 
 ## `.github/scripts/apt_vorrat.py`
 
@@ -187,7 +187,7 @@ _Dateiablage der Plattform (neben der Speicherschicht): hochgeladene Dateien ein
 **Lesen, Ablegen, Kopieren, Entfernen, Ausliefern**
 
 - `ablage_vorhanden(bereich, id)`
-- `ablage_lesen(bereich, id)` – Inhalt lesen (z. B. eine Vorlage zum Ausfüllen) oder null, wenn die Datei fehlt
+- `ablage_lesen(bereich, id)` – Inhalt lesen (z. B. eine Vorlage zum Ausfüllen) oder null, wenn die Datei fehlt oder größer als ABLAGE_LESEN_MAX ist
 - `ablage_ablegen(bereich, inhalt)` – Vom Server erzeugten Inhalt (z. B. eine ausgefüllte Vorlage) als neue Datei ablegen: ['id', 'groesse', 'sha256']
 - `ablage_kopieren(bereich, id)` – Datei unter neuer Kennung kopieren (z. B. in eine neue Version): ['id', 'groesse', 'sha256'] oder null, wenn sie fehlt
 - `ablage_entfernen(bereich, id)`
@@ -1159,6 +1159,18 @@ _Kleiner Test-Mailserver für die Ende-zu-Ende-Tests (nimmt Nachrichten an und h
 - `_loop()`
 - `_session(c)`
 - `close()`
+
+## `tests/e2e/test_ablage_grenzen.py`
+
+_Dateiablage des Plattformkerns (app/api/lib/dateiablage.php)_
+
+- `check(n, c, i)`
+- `hochladen(cli, dok, ver, name, inhalt, groesse)` – In Teilen hochladen wie die Oberfläche: (Status, letzte Antwort)
+- `roh(cli, query)`
+- `box(typ, inhalt)`
+- `zip_mit(eintraege, stored)`
+- `xlsx(text, fuellung)` – Excel-Datei mit Platzhalter in sharedStrings; fuellung = Bytes eines ungepackten Bildes (macht die Datei groß)
+- `pdf(text)`
 
 ## `tests/e2e/test_admin_confirmation.py`
 
