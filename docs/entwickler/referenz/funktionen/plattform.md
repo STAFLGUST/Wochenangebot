@@ -2,7 +2,7 @@
 
 <!-- ERZEUGT von `python3 werkzeuge/doku.py erzeugen` – nicht von Hand ändern. Quelle: Funktionen und Kommentare im Code. Die CI prüft, dass diese Datei zum Code passt. -->
 
-117 Dateien, 1193 Funktionen – in der Reihenfolge der Datei, **fett** die Abschnitte. Text = erste Aussage des Kommentars direkt über der Funktion (Python: Docstring). Übersicht aller Module: [README.md](README.md).
+117 Dateien, 1197 Funktionen – in der Reihenfolge der Datei, **fett** die Abschnitte. Text = erste Aussage des Kommentars direkt über der Funktion (Python: Docstring). Übersicht aller Module: [README.md](README.md).
 
 ## `.github/scripts/apt_vorrat.py`
 
@@ -961,18 +961,22 @@ _Inkrementelle Sicherung der Dateiablage (dateien/<bereich>/<xx>/<id>.bin, lib/d
 - `dateien(wurzel)` – relativer Pfad → lstat der regulären Dateien mit gültigem Namen; folgt keinem Verweis, fehlender Ordner = leer
 - `staende(ziel)`
 - `gleich(a, b)`
-- `plan(ablage, ziel)` – je Datei der Ablage: (relativer Pfad, lstat, gleiche Datei im neuesten Stand zum Verlinken oder None = kopieren)
-- `bedarf(ablage, ziel)`
+- `vorlage(ziel, zeit)` – neuester festgeschriebener Stand vor <zeit>; ein Stand mit späterer Zeit (vorgestellte Uhr) dient nie als Vorlage
+- `plan(ablage, ziel, zeit)` – je Datei der Ablage: (relativer Pfad, lstat, gleiche Datei im vorigen Stand zum Verlinken oder None = kopieren)
+- `bedarf(ablage, ziel, zeit)`
 - `kopieren(quelle, z)` – frische Kopie (eigene Inode); False, wenn die Quelle inzwischen gelöscht ist
 - `aufbauen(ablage, ziel, zeit)` – <zeit>.tmp ergänzen; gibt die Dateien der Ablage zurück, die jetzt im Stand liegen (relativer Pfad → lstat)
-- `verweise(daten)` – id → (Dokument, groesse oder None, sha256 oder '') aus den Dokumenten eines Datenordners oder einer entpackten Sicherung
+- `verweise(daten)` – ({id → (Dokument, groesse oder None, sha256 oder '')}, [nicht lesbare Dokumente]) aus einem Datenordner oder einer entpackten Sicherung.
 - `lauf(x, dok)`
 - `sha256(p)`
 - `je_id(liste)`
-- `pruefen(ablage, ziel, zeit, daten)` – Ergänzt <zeit>.tmp mit einer neuen Auflistung der Ablage und teilt jeden Verweis der Sicherung ein: im Stand mit passender Größe: in Ordnung.
+- `kurz(ids)`
+- `zurueckholen(quelle, ziel)` – Befehl für den Betreiber: neue Datei (nie ein fester Verweis in die Sicherung), Ordner und Datei dem Webserver
+- `pruefen(ablage, ziel, zeit, daten)` – Ergänzt <zeit>.tmp mit einer neuen Auflistung der Ablage und bringt jede Datei, auf die die Sicherung verweist, in den Stand (Tabelle in …
+- `passt(p, g)`
 - `belegt(staende_liste)` – Bytes aller Stände, fest verlinkte Dateien einmal; die Inode kommt aus dem Verzeichnis, stat nur bei einer neuen (bei 150 Ständen mit je 15.000 Dateien sonst …
 - `lauf(ordner)`
-- `abschliessen(ziel, zeit)`
+- `abschliessen(ziel, zeit, zustand)`
 - `fehlende(ablage, daten)`
 - `zeit(wert)`
 - `main()`

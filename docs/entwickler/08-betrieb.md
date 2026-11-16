@@ -308,38 +308,59 @@ Es gibt keine Testinstanz unter `test.<Domain>` mehr (entfernt am 15.11.2026, GR
 - Läuft Keycloak, wird dessen Datenbank mitgesichert (`pg_dump`, Inhalt geprüft).
 - **Erst prüfen, dann festschreiben.** Archive und Stand der Dateiablage entstehen als `.tmp`. Erst wenn alle Prüfungen
   bestehen, werden sie gemeinsam umbenannt, danach greift die Aufbewahrung. Ein Fehler entfernt alles dieses Laufs; ältere
-  Sicherungen bleiben, auch wenn das Release es alle 2 Minuten erneut versucht. Eine Sperre (`sicherungen/.sperre`,
-  `flock -n`) verhindert zwei Läufe gleichzeitig; der zweite endet mit Fehler.
-- **Aufbewahrung** (gemeinsam für `daten-`, `intern-`, `anmeldung-` und `dateien/` derselben Zeit): alle Läufe der letzten
-  7 Tage, dazu der letzte Lauf jedes Tages der letzten 30 Tage, immer mindestens die 30 neuesten Läufe (eine verstellte Uhr
-  löscht so nie alles).
+  Sicherungen bleiben, auch wenn das Release es alle 2 Minuten erneut versucht. Abgebrochen wird nur bei Störungen der
+  Sicherung selbst (Archiv, Abzug der Datenbank, Prüfung des Archivs, Ein-/Ausgabe, Platz), nie wegen einzelner Dateien.
+- **Sperre** (`sicherungen/.sperre`): Mit `--jetzt` (Timer, Release, von Hand) wartet ein zweiter Lauf bis 10 Minuten, ohne
+  (`aktualisieren.sh`) endet er sofort mit Fehler; der Grund steht auf stderr. Jeder Aufruf in den Keycloak-Container ist auf
+  300 s begrenzt (`KC_FRIST`; der Abzug dauert Sekunden), damit ein hängender Container die Sperre nicht hält. Der Timer
+  beendet einen Lauf nach 2 Stunden (`TimeoutStartSec`; dafür `deploy/sicherung-einrichten.sh` einmal erneut ausführen);
+  `sichern.sh` räumt dabei auf und meldet den Abbruch im Status. Ist die Zeitmarke eines Laufs schon vergeben (zwei Läufe in
+  derselben Sekunde, zurückgestellte Uhr), nimmt er eine Sekunde später oder bricht ab; überschrieben wird nie.
+- **Aufbewahrung** (gemeinsam für `daten-`, `intern-`, `anmeldung-` und `dateien/` derselben Zeit, Tage in UTC): die Läufe
+  der letzten 7 Tage, je Tag die 24 neuesten, dazu der letzte Lauf jedes Tages der letzten 30 Tage, immer mindestens die
+  30 neuesten Läufe (eine verstellte Uhr löscht so nie alles). Liegt ein Lauf mehr als 2 Tage nach dem bisher neuesten
+  (vorgestellte Uhr oder langer Ausfall), räumt er nicht auf und warnt „Uhrzeit prüfen“. Ein Stand mit späterer Zeit als der
+  laufende dient nie als Vorlage für feste Verweise.
 - **Dateiablage** (`dateien/`): nicht im Archiv, sondern je Lauf ein Stand `sicherungen/dateien/<Zeit>/` mit der Zeit der
   Archive. Unveränderte Dateien (gleiche Größe und Änderungszeit) sind feste Verweise (Hardlinks) auf den vorigen Stand,
   auch über die Datentrennung hinweg (`daten_trennen.py` erhält Größe und Zeit). Beim Release nutzt die Sicherung das
-  Werkzeug des neuen Commits (`deploy/.dateien_sichern-release.py`). Geprüft wird gegen die Verweise der gesicherten
-  Dokumente (Vertrag: [05-daten.md](05-daten.md#51-speicherarten)), dazu eine Stichprobe von 20 Dateien mit SHA-256:
+  Werkzeug des neuen Commits (`deploy/.dateien_sichern-release.py`). Jede Datei, auf die ein gesichertes Dokument verweist
+  (Vertrag: [05-daten.md](05-daten.md#51-speicherarten)), kommt in den Stand. Fehlt sie in der Ablage, trägt jeder Stand sie
+  aus dem vorigen weiter (fester Verweis), solange ein Dokument auf sie verweist; die Aufbewahrung verliert sie so nie. Alle
+  Befunde sind Warnungen, Sicherung und Release laufen weiter:
 
   | Befund | Folge |
   | --- | --- |
   | Datei im Stand, Größe wie im Dokument | in Ordnung |
-  | fehlt in der Ablage und im Stand | Warnung (gelbe Karte „mit Warnung“, erste drei Kennungen), Liste `sicherungen/.dateien-fehlend` mit Kennung und Dokument; Sicherung und Release laufen weiter |
-  | in der Ablage, im Stand fehlend oder mit anderer Größe | einmal nachkopieren; passt die Größe dann nicht zum Dokument: Fehler |
-  | Kopie im Stand beschädigt, Datei in der Ablage richtig | im neuen Stand frisch kopiert statt verlinkt, Warnung |
-  | Kopie und Datei in der Ablage beschädigt | Fehler |
+  | fehlt in der Ablage, liegt im vorigen Stand | übernommen; Warnung „… fehlen in der Ablage, in der Sicherung erhalten (Stand …)“, in `sicherungen/.dateien-fehlend` je Datei der Befehl zum Zurückholen |
+  | fehlt in der Ablage und im vorigen Stand | Warnung „… fehlen in Ablage und Sicherung“ mit den ersten drei Kennungen, in der Liste „fehlt in Ablage und Sicherung“ |
+  | in der Ablage mit anderer Größe als im Dokument | die passende Fassung des vorigen Stands, sonst die der Ablage; Warnung |
+  | Kopie im Stand beschädigt (SHA-256), Datei in der Ablage richtig | im neuen Stand frisch kopiert statt verlinkt, Warnung |
+  | Kopie und Datei in der Ablage beschädigt | vorhandene Fassung bleibt, Warnung |
   | Datei verschwindet während des Kopierens (Entwurf gelöscht) | übersprungen, danach wie oben eingeteilt |
+  | Dokument nicht lesbar (z. B. Verweis statt Datei) | Warnung mit Dateinamen, seine Verweise ungeprüft |
 
-- **Ausweg für den Betreiber.** `python3 deploy/dateien_sichern.py fehlende daten-intern/dateien daten daten-intern` (vor
-  der Datentrennung `fehlende daten/dateien daten`) listet jeden Verweis ohne passende Datei mit Dokument und Befund; nur
-  lesend. Eine fehlende oder falsche Datei aus einem älteren Stand zurückholen, z. B.
-  `cp -a sicherungen/dateien/<Zeit>/qs/ab/<id>.bin daten-intern/dateien/qs/ab/ && chown 33:33 daten-intern/dateien/qs/ab/<id>.bin`.
-  Hält ein Fehler das Release auf, stoppt `.release-abgelehnt` die Wiederholung ([Release-Freigabe](../release-freigabe.md)).
+  Zustand der Ablage im Status (`ablage.zustand`): `kritisch`, wenn mehr als 10 oder mehr als 1 % der verwiesenen Dateien in
+  der Ablage fehlen (Karte „Datensicherung“ rot: „Dateien aus der Sicherung zurückholen“), `warnung` bei jeder anderen
+  Warnung (gelb „mit Warnung“), sonst `ok`. Die SHA-256-Stichprobe prüft je Lauf 20 zufällige Dateien und alle, deren
+  Kennung (CRC32) modulo 30 zum Tag passt; so ist jede Datei innerhalb von 30 Tagen einmal geprüft. Mehrkosten bei 12 GB
+  Ablage: ein Dreißigstel, rund 400 MB lesen und hashen je Lauf (Messung im PR #378).
+
+- **Ausweg für den Betreiber.** `sicherungen/.dateien-fehlend` (nach jedem Lauf neu) nennt je Datei Kennung, Dokument und
+  den Befehl zum Zurückholen aus dem neuesten Stand: Ordner und Datei für den Webserver (`33:33`), eine eigene Kopie, nie ein
+  fester Verweis in die Sicherung. Alle auf einmal: `cut -f3 sicherungen/.dateien-fehlend | grep -v '^fehlt' | sh`. Danach
+  ist die Karte beim nächsten Lauf wieder grün. `python3 deploy/dateien_sichern.py fehlende daten-intern/dateien daten
+  daten-intern` (vor der Datentrennung `fehlende daten/dateien daten`) listet jederzeit jeden Verweis ohne passende Datei in
+  der Ablage mit Dokument und Befund; nur lesend. Hält ein Fehler das Release auf, stoppt `.release-abgelehnt` die
+  Wiederholung ([Release-Freigabe](../release-freigabe.md)).
 - **Platz.** Vor jedem Lauf müssen frei sein: neue Dateien der Ablage + 3 × übrige Daten (Abzug der Datenbank, Archiv,
   Probe-Entpacken; gezählt ohne das, was nicht ins Archiv kommt, also ohne `dateien/` und `geo/`) + 5 GB Reserve (die
   Warnschwelle „Speicherplatz“ im Reiter System). Sonst bricht die Sicherung vorher mit Meldung im Status ab. Auf Dauer
   belegt: die Ablage einmal, dazu ihre Änderungen der letzten 30 Tage, und je Lauf Archive, Keycloak-Sicherung und rund
-  1 MB Ordner des Stands (gemessen bei 15.000 Dateien). Bei bis zu 19 Läufen am Tag (18 Releases und der Timer) sind das
-  höchstens 7 × 19 + 23 = 156 Läufe. Beispiel 12 GB Ablage und 10 MB Archive je Lauf: 12 GB + Änderungen + 156 × 11 MB
-  ≈ 13,7 GB; bei 50 MB je Lauf ≈ 20 GB. Größe der heutigen Archive auf dem Server: `ls -la sicherungen`.
+  1 MB Ordner des Stands (gemessen bei 15.000 Dateien). Mit höchstens 24 Läufen je Tag in den letzten 7 Tagen (das Fenster
+  berührt 8 UTC-Tage) und einem je Tag davor sind das höchstens 8 × 24 + 23 = 215 Läufe. Beispiel 12 GB Ablage und 10 MB
+  Archive je Lauf: 12 GB + Änderungen + 215 × 11 MB ≈ 14,4 GB; bei 50 MB je Lauf ≈ 23 GB. Größe der heutigen Archive auf
+  dem Server: `ls -la sicherungen`.
 - Alle Sicherungen liegen auf demselben Datenträger wie die Daten. Eine zweite Ebene außerhalb sind die VPS-Sicherungen bei
   Hostinger (Stand 16.11.2026: vier); sie stellen nur den ganzen Server zurück, und wir steuern sie nicht.
 - Nicht gesichert: `mail-schluessel.php` und `daten-anmeldung/vault/`. Nach Wiederherstellung auf neuem Server das

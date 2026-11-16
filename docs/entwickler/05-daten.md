@@ -45,9 +45,10 @@ nur für root lesbar; Aufbewahrung nach Zeit ([08-betrieb.md](08-betrieb.md#sich
 über die Backup-API (konsistenter Schnappschuss). Nicht gesichert wird `mail-schluessel` – nach einer Wiederherstellung
 auf neuem Server das Postfach-Passwort neu eingeben. Läuft Keycloak, wird dessen Datenbank zusätzlich gesichert. Status
 im Dokument `sicherung` (Anzeige unter „Sicherheit“). Für die Dateiablage steht dort das Objekt
-`"ablage": {"anzahl", "groesse", "neu", "staende", "belegt", "fehlend"}` (Dateien und Bytes des neuesten Stands, davon nur
-in ihm gespeicherte Bytes, Zahl der Stände, Bytes aller Stände, fehlende Dateien) bzw. `null` ohne Werkzeug. `ok` mit nicht
-leerer `meldung` heißt: gesichert, aber mit Warnung. Die Dateiablage steht nicht im Archiv, sondern je Lauf als Stand
+`"ablage": {"anzahl", "groesse", "neu", "staende", "belegt", "fehlend", "zustand"}` (Dateien und Bytes des neuesten Stands,
+davon nur in ihm gespeicherte Bytes, Zahl der Stände, Bytes aller Stände, in der Ablage fehlende Dateien, `ok`/`warnung`/
+`kritisch`) bzw. `null` ohne Werkzeug. `ok` mit nicht leerer `meldung` heißt: gesichert, aber mit Warnung; `zustand`
+`kritisch`: gesichert, aber viele Dateien fehlen in der Ablage. Die Dateiablage steht nicht im Archiv, sondern je Lauf als Stand
 `sicherungen/dateien/<Zeit>/` mit festen Verweisen auf den vorigen Stand (`deploy/dateien_sichern.py`); Prüfung, Platz und
 Ausweg: [08-betrieb.md](08-betrieb.md#sicherung). Wiederherstellung: [`docs/datenbank.md`](../datenbank.md#sicherung-und-wiederherstellung).
 
