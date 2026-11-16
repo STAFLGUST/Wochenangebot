@@ -262,11 +262,11 @@ switch ($action) {
                     if ($g !== null) { $d['versionen'][$g]['status'] = 'ersetzt'; qs_verlauf($d['versionen'][$g], $me, "ersetzt durch Version $nr"); }
                     $v['status'] = 'freigegeben'; $v['nr'] = $nr; $v['datum'] = qs_heute(); $v['freigegeben'] = qs_wer($me);
                     qs_lenkung_eintragen($d, $v, qs_stamm(), $me, $erzeugt);   // Version, Datum, Kürzel in Word-/Excel-Dateien
-                    require_once __DIR__ . '/../module/qs/organigramm.php'; qs_organigramm_freigeben($d, $v, qs_stamm(), $me, $erzeugt);   // Namen festhalten, PDF-Fassung
                     qs_verlauf($v, $me, "freigegeben als Version $nr");
                     qs_verlauf($d, $me, "Version $nr freigegeben");
                     $text = "Version $nr freigegeben";
                 }
+                require_once __DIR__ . '/../module/qs/organigramm.php'; qs_organigramm_schritt($d, $v, $me, $erzeugt);   // Namen ab dem Einreichen, PDF-Fassung bei der Freigabe
                 $d['versionen'][$o] = $v;
                 return [qs_dok_ablegen($doc, $i, $d, $me), $text];
             });
@@ -432,10 +432,14 @@ switch ($action) {
             exit;
         }
 
-        /* Organigramm im offenen Entwurf speichern (dokument, rev, organigramm.knoten) – Regeln in module/qs/organigramm.php */
+        /* Organigramm im offenen Entwurf speichern (dokument, rev, organigramm.knoten) bzw. als PDF-Vorschau (GET dokument) – module/qs/organigramm.php */
         case 'qs_organigramm_save': {
             require_once __DIR__ . '/../module/qs/organigramm.php';
             qs_organigramm_speichern();
+        }
+        case 'qs_organigramm_vorschau': {
+            require_once __DIR__ . '/../module/qs/organigramm.php';
+            qs_organigramm_vorschau();
         }
 
         /* Abschnitt des QM-Handbuchs anlegen (ohne id) oder ändern (id + rev): jede inhaltliche Änderung mit Grund in der

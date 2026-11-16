@@ -1,37 +1,36 @@
 <?php
 declare(strict_types=1);
 /* QM-System · Organigramm als gelenktes Dokument (Entscheidung des Inhabers 16.11.2026 „Im QM-System zeichnen“; nur bei
-   Bedarf geladen von app/api/aktionen/qs.php). Die Struktur liegt als optionales Feld „organigramm“ an einer Version in
-   qs-dokumente. Ein Dokument ist ein Organigramm, sobald eine seiner Versionen das Feld trägt – keine Einstellung, keine feste Nummer.
-     knoten  Stellen und Funktionen (1 bis 300): id, titel, personen (Kürzel der QM-Personen), vertretung (Kürzel), ueber
-             (übergeordnete Stelle, '' = oberste Ebene), art ('linie' | 'stab' = Stabsstelle oder Beauftragte seitlich an der
-             Linie, ohne eigene untergeordnete Stellen), hinweis. Die Reihenfolge der Liste ist die Reihenfolge unter einer Stelle.
-     namen   erst ab der Freigabe: Namen zu den Kürzeln als Schnappschuss (GR-106) – spätere Änderungen der Personen ändern
-             die freigegebene Fassung nicht.
-   Lenkung wie bei Dateien: ändern nur im Entwurf mit „qs.bearbeiten“ (zählt als Bearbeiter, 4-Augen-Prinzip); Prüfung und
-   Freigabe über qs_version_schritt. Die Freigabe legt die PDF-Fassung (A4 quer, Logo, Lenkungsangaben im Fuß) als Datei der
-   Version ab (dateien[].organigramm = true). „Überarbeitung beginnen“ übernimmt die Struktur, nicht die PDF. */
+   Bedarf geladen von app/api/aktionen/qs.php). Die Struktur ist ein Feld an der Version statt eines eigenen Speicher-Dokuments,
+   damit Lenkung, 4-Augen-Prinzip und Freigabe unverändert gelten. Datenform: docs/entwickler/05-daten.md.
+   qs_organigramm_lage und app/module/qs/organigramm.css ordnen nach derselben Regel an – Änderungen immer an beiden. */
 if (!defined('WA_API')) { http_response_code(404); exit; }   // nur über api/index.php nutzbar
-require_once __DIR__ . '/vorlagen.php';
 
 const QS_OG_MAX_KNOTEN = 300;
 const QS_OG_MAX_PERSONEN = 10;
+const QS_OG_MAX_TITEL = 120;
+const QS_OG_MAX_HINWEIS = 200;
 const QS_OG_ARTEN = ['linie', 'stab'];
-/* Maße der PDF-Fassung in pt, vor dem Einpassen auf die Seite: Kastenbreite, Innenrand, Abstand zwischen Nachbarn, zwischen den
-   Ebenen und zwischen den Stabsstellen links und rechts der Linie */
-const QS_OG_B = 124.0;
-const QS_OG_RAND = 5.0;
-const QS_OG_SPALT = 12.0;
-const QS_OG_EBENE = 26.0;
-const QS_OG_STAB = 30.0;
+/* Maße der PDF-Fassung in pt, bevor das Diagramm auf die Seite eingepasst wird */
+const QS_OG_KASTEN_BREITE = 88.0;
+const QS_OG_INNENRAND = 4.0;
+const QS_OG_ZEILENHOEHE = 1.3;   // je pt Schriftgröße
+const QS_OG_NACHBAR_ABSTAND = 9.0;
+const QS_OG_EBENEN_ABSTAND = 22.0;
+const QS_OG_STAB_ABSTAND = 24.0;
+const QS_OG_STAPEL_EINZUG = 18.0;
+const QS_OG_STAPEL_ABSTAND = 6.0;
+const QS_OG_WURZEL_ABSTAND = 30.0;
+const QS_OG_MIN_SCHRIFT = 6.0;
+const QS_OG_SCHRIFT_KLEIN = 7.0;   // Vertretung und Hinweis; bis hierhin wird ein zu langes Wort verkleinert, danach getrennt
 
-/* Eingabe → gültige Struktur ohne Namens-Schnappschuss. $alt = bisherige Struktur des Entwurfs: Felder, die diese Fassung
-   nicht kennt, bleiben an Knoten mit gleicher Kennung erhalten (GR-006). */
-function qs_organigramm_pruefen($v, ?array $alt, array $stamm): array
+/* Eingabe → gültige Struktur ohne Namens-Schnappschuss; null bei leerer Liste (Organigramm aus dem Entwurf nehmen).
+   $alt = bisherige Struktur: Felder, die diese Fassung nicht kennt, bleiben an Knoten mit gleicher Kennung erhalten (GR-006). */
+function qs_organigramm_pruefen($v, ?array $alt, array $stamm): ?array
 {
     $liste = is_array($v) ? ($v['knoten'] ?? null) : null;
     if (!is_array($liste) || !array_is_list($liste)) throw new InvalidArgumentException('Organigramm: ungültige Angaben.');
-    if (!$liste) throw new InvalidArgumentException('Das Organigramm braucht mindestens eine Stelle.');
+    if (!$liste) return null;
     if (count($liste) > QS_OG_MAX_KNOTEN) throw new InvalidArgumentException('Organigramm: höchstens ' . QS_OG_MAX_KNOTEN . ' Stellen.');
     $bekannt = array_map('strval', array_column($stamm['personen'], 'id'));
     $person = function ($x, string $was) use ($bekannt): string {
@@ -47,16 +46,17 @@ function qs_organigramm_pruefen($v, ?array $alt, array $stamm): array
         $id = is_array($x) && is_string($x['id'] ?? null) ? $x['id'] : '';
         if (!preg_match('/^[a-z0-9]{1,24}$/D', $id)) throw new InvalidArgumentException("$nr: ungültige Kennung.");
         if (isset($out[$id])) throw new InvalidArgumentException("$nr: Kennung doppelt.");
-        $k = ['id' => $id, 'titel' => qs_kuerzel($x['titel'] ?? '', $nr, 120)] + ($bisher[$id] ?? []);
+        $k = ['id' => $id, 'titel' => qs_kuerzel($x['titel'] ?? '', $nr, QS_OG_MAX_TITEL)] + ($bisher[$id] ?? []);
         if ($k['titel'] === '') throw new InvalidArgumentException("$nr: bitte die Stelle bzw. Funktion benennen.");
         $was = "Stelle „{$k['titel']}“";
         $p = $x['personen'] ?? [];
         if (!is_array($p) || count($p) > QS_OG_MAX_PERSONEN) throw new InvalidArgumentException("$was: höchstens " . QS_OG_MAX_PERSONEN . ' Personen.');
         $k['personen'] = array_values(array_unique(array_filter(array_map(fn($y) => $person($y, "$was: Person"), $p), 'strlen')));
         $k['vertretung'] = $person($x['vertretung'] ?? '', "$was: Vertretung");
-        $k['ueber'] = is_string($x['ueber'] ?? null) ? $x['ueber'] : '';
+        $k['ueber'] = $x['ueber'] ?? '';
+        if (!is_string($k['ueber'])) throw new InvalidArgumentException("$was: ungültige übergeordnete Stelle.");
         $k['art'] = qs_wahl($x['art'] ?? 'linie', QS_OG_ARTEN, "$was: Art");
-        $k['hinweis'] = qs_kuerzel($x['hinweis'] ?? '', "$was: Hinweis", 200);
+        $k['hinweis'] = qs_kuerzel($x['hinweis'] ?? '', "$was: Hinweis", QS_OG_MAX_HINWEIS);
         $out[$id] = $k;
     }
     foreach ($out as $k) {
@@ -71,8 +71,8 @@ function qs_organigramm_pruefen($v, ?array $alt, array $stamm): array
     return ['knoten' => array_values($out)] + ($alt ?? []);
 }
 
-/* Aktion qs_organigramm_save: Struktur im offenen Entwurf speichern (Stand „rev“ des Dokuments wie bei qs_version_save) */
-function qs_organigramm_speichern(): void
+/* Aktion qs_organigramm_save: Struktur im offenen Entwurf speichern, mit leerer Liste entfernen (Stand „rev“ wie bei qs_version_save) */
+function qs_organigramm_speichern(): never
 {
     $me = require_perm('qs.bearbeiten', true);
     $b = body();
@@ -89,10 +89,10 @@ function qs_organigramm_speichern(): void
         if ($v['status'] !== 'entwurf') fail('Die Überarbeitung liegt zur Prüfung vor und kann nicht mehr geändert werden.', 409);
         $neu = qs_organigramm_pruefen($b['organigramm'] ?? null, $v['organigramm'] ?? null, qs_stamm());
         if (($v['organigramm'] ?? null) === $neu) return [$d, ''];
-        $was = isset($v['organigramm']) ? 'geändert' : 'angelegt';
-        $v['organigramm'] = $neu;
+        $was = $neu === null ? 'entfernt' : (isset($v['organigramm']) ? 'geändert' : 'angelegt');
+        if ($neu === null) unset($v['organigramm']); else $v['organigramm'] = $neu;
         if (!in_array((string)$me['id'], array_map('strval', (array)$v['bearbeiter']), true)) $v['bearbeiter'][] = (string)$me['id'];
-        qs_verlauf($v, $me, "Organigramm $was (" . count($neu['knoten']) . ' Stellen)');
+        qs_verlauf($v, $me, "Organigramm $was" . ($neu === null ? '' : ' (' . count($neu['knoten']) . ' Stellen)'));
         $d['versionen'][$o] = $v;
         return [qs_dok_ablegen($doc, $i, $d, $me), $was];
     });
@@ -106,14 +106,16 @@ function qs_organigramm_uebernehmen(?array $gueltig, array &$neu): void
     if (isset($gueltig['organigramm']['knoten'])) $neu['organigramm'] = array_diff_key($gueltig['organigramm'], ['namen' => true]);
 }
 
-/* Freigabe (nach Nummer, Datum und Freigabe-Vermerk): Namen festhalten und die PDF-Fassung als Datei der Version ablegen */
-function qs_organigramm_freigeben(array $d, array &$v, array $stamm, array $me, array &$erzeugt): void
+/* Nach jedem Schritt in qs_version_schritt: ab dem Einreichen hält die Version die Namen fest – der Prüfer prüft genau diese,
+   die Freigabe übernimmt sie unverändert (GR-106, 4-Augen-Prinzip); zurück im Entwurf gelten wieder die heutigen Namen. */
+function qs_organigramm_schritt(array $d, array &$v, array $me, array &$erzeugt): void
 {
     if (!isset($v['organigramm']['knoten'])) return;
-    $name = array_column($stamm['personen'], 'name', 'id');
-    $namen = [];
-    foreach ($v['organigramm']['knoten'] as $k) foreach ([...$k['personen'], $k['vertretung']] as $kz) if ($kz !== '') $namen[$kz] = (string)($name[$kz] ?? $kz);
-    $v['organigramm']['namen'] = $namen;
+    if ($v['status'] === 'entwurf') { unset($v['organigramm']['namen']); return; }
+    if (!in_array($v['status'], ['pruefung', 'freigegeben'], true)) return;
+    $stamm = qs_stamm();
+    $v['organigramm']['namen'] ??= qs_organigramm_namen($v['organigramm'], $stamm);   // fehlt nur, wenn die Vorversion eingereicht hat
+    if ($v['status'] !== 'freigegeben') return;
     $abl = ablage_ablegen('qs', qs_organigramm_pdf($d, $v, $stamm));
     $erzeugt[] = $abl['id'];
     $v['dateien'][] = ['id' => $abl['id'], 'name' => ablage_dateiname("{$d['nr']} {$d['titel']} - Version {$v['nr']}.pdf"), 'art' => 'pdf', 'mime' => 'application/pdf',
@@ -121,126 +123,209 @@ function qs_organigramm_freigeben(array $d, array &$v, array $stamm, array $me, 
     qs_verlauf($v, $me, 'PDF-Fassung des Organigramms abgelegt');
 }
 
-/* Lage aller Kästen und Linien (pt, Ursprung oben links) aus der Struktur und der Höhe je Kasten: untergeordnete Stellen
-   nebeneinander unter ihrer Stelle, Stabsstellen paarweise links und rechts an der Linie darunter, oberste Stellen nebeneinander.
-   Dieselbe Anordnung zeichnet die Oberfläche mit CSS (app/module/qs/organigramm.css).
-   Rückgabe ['b' => Breite, 'h' => Höhe, 'kaesten' => [id => [x, y]], 'linien' => [[x1, y1, x2, y2], …]] */
+function qs_organigramm_namen(array $og, array $stamm): array
+{
+    $name = array_column($stamm['personen'], 'name', 'id');
+    $namen = [];
+    foreach ($og['knoten'] as $k) foreach ([...$k['personen'], $k['vertretung']] as $kz) if ($kz !== '') $namen[$kz] = (string)($name[$kz] ?? $kz);
+    return $namen;
+}
+
+/* Aktion qs_organigramm_vorschau (GET): dieselbe PDF wie bei der Freigabe für die offene Version, als ENTWURF gekennzeichnet –
+   der Prüfer sieht vorher, was festgeschrieben wird */
+function qs_organigramm_vorschau(): never
+{
+    require_perm('qs.sehen');
+    $doc = qs_doc('qs-dokumente');
+    $d = $doc['liste'][qs_dokument_index($doc, $_GET['dokument'] ?? '')];
+    $o = qs_ver_index($d, QS_VER_OFFEN);
+    if ($o === null || !isset($d['versionen'][$o]['organigramm']['knoten'])) fail('Zu diesem Dokument gibt es keinen Entwurf mit Organigramm.', 404);
+    $v = $d['versionen'][$o];
+    $v['nr'] = qs_naechste_nr($d);
+    $pdf = qs_organigramm_pdf($d, $v, qs_stamm(), 'ENTWURF – nicht freigegeben');
+    header('Content-Type: application/pdf');
+    header('Content-Disposition: ' . ablage_disposition(ablage_dateiname("{$d['nr']} {$d['titel']} - Entwurf Version {$v['nr']}.pdf")));
+    header('Cache-Control: private, no-store');
+    header('X-Content-Type-Options: nosniff');
+    header('Content-Length: ' . strlen($pdf));
+    echo $pdf;
+    exit;
+}
+
+/* Lage aller Kästen und Linien in pt, Ursprung oben links: ['b', 'h', 'kaesten' => [id => ['x', 'y']], 'linien' => [[x1, y1, x2, y2]]].
+   Oberste Stellen stehen nebeneinander; die Regel darunter steht bei qs_og_teilbaum. */
 function qs_organigramm_lage(array $knoten, array $hoehe): array
 {
-    $linie = ['' => []]; $stab = [];
-    foreach ($knoten as $k) { $linie[$k['id']] = []; $stab[$k['id']] = []; }
-    foreach ($knoten as $k) if ($k['art'] === 'stab') $stab[$k['ueber']][] = $k['id']; else $linie[$k['ueber']][] = $k['id'];
-    $zeile = fn(array $s, int $i): float => max($hoehe[$s[$i]], $hoehe[$s[$i + 1] ?? $s[$i]]);
-    $mass = [];
-    $messen = function (string $id) use (&$messen, &$mass, $linie, $stab, $hoehe, $zeile): array {
-        foreach ($linie[$id] as $c) $messen($c);
-        $band = 0.0;
-        for ($i = 0; $i < count($stab[$id]); $i += 2) $band += QS_OG_EBENE / 2 + $zeile($stab[$id], $i);
-        $reihe = array_sum(array_map(fn($c) => $mass[$c][0], $linie[$id])) + QS_OG_SPALT * max(0, count($linie[$id]) - 1);
-        $hKinder = $linie[$id] ? QS_OG_EBENE + max(array_map(fn($c) => $mass[$c][1], $linie[$id])) : 0;
-        return $mass[$id] = [max(QS_OG_B, $stab[$id] ? 2 * QS_OG_B + QS_OG_STAB : 0, $reihe), $hoehe[$id] + $band + $hKinder, $reihe];
-    };
-    $kaesten = []; $linien = [];
-    $setzen = function (string $id, float $x, float $y) use (&$setzen, &$kaesten, &$linien, &$mass, $linie, $stab, $hoehe, $zeile): void {
-        [$b, , $reihe] = $mass[$id];
-        $cx = $x + $b / 2;
-        $kaesten[$id] = [$cx - QS_OG_B / 2, $y];
-        $unten = $y + $hoehe[$id];
-        $yy = $unten; $ende = $unten;
-        for ($i = 0, $s = $stab[$id]; $i < count($s); $i += 2) {
-            $yy += QS_OG_EBENE / 2;
-            foreach ([[$s[$i], true], [$s[$i + 1] ?? null, false]] as [$c, $links]) {
-                if ($c === null) continue;
-                $kx = $links ? $cx - QS_OG_STAB / 2 - QS_OG_B : $cx + QS_OG_STAB / 2;
-                $kaesten[$c] = [$kx, $yy];
-                $ende = max($ende, $ym = $yy + $hoehe[$c] / 2);
-                $linien[] = [$cx, $ym, $links ? $kx + QS_OG_B : $kx, $ym];
-            }
-            $yy += $zeile($s, $i);
-        }
-        if ($linie[$id]) {
-            $ende = $yy + QS_OG_EBENE / 2;
-            $cx0 = $cx - $reihe / 2; $mitten = [];
-            foreach ($linie[$id] as $c) {
-                $setzen($c, $cx0, $yy + QS_OG_EBENE);
-                $mitten[] = $m = $cx0 + $mass[$c][0] / 2;
-                $linien[] = [$m, $ende, $m, $yy + QS_OG_EBENE];
-                $cx0 += $mass[$c][0] + QS_OG_SPALT;
-            }
-            if (count($mitten) > 1) $linien[] = [$mitten[0], $ende, end($mitten), $ende];
-        }
-        if ($ende > $unten) $linien[] = [$cx, $unten, $cx, $ende];
-    };
+    $unter = ['' => ['linie' => [], 'stab' => []]];
+    foreach ($knoten as $k) $unter[$k['id']] = ['linie' => [], 'stab' => []];
+    foreach ($knoten as $k) $unter[$k['ueber']][$k['art']][] = $k['id'];
+    $lage = ['kaesten' => [], 'linien' => []];
     $x = 0.0; $h = 0.0;
-    foreach ($linie[''] as $id) {
-        [$b, $hh] = $messen($id);
-        $setzen($id, $x, 0.0);
-        $x += $b + 3 * QS_OG_SPALT; $h = max($h, $hh);
+    foreach ($unter['']['linie'] as $id) {
+        $t = qs_og_teilbaum($id, $unter, $hoehe);
+        qs_og_verschieben($lage, $t, $x, 0.0);
+        $x += $t['b'] + QS_OG_WURZEL_ABSTAND; $h = max($h, $t['h']);
     }
-    return ['b' => $x - 3 * QS_OG_SPALT, 'h' => $h, 'kaesten' => $kaesten, 'linien' => $linien];
+    return ['b' => $x - QS_OG_WURZEL_ABSTAND, 'h' => $h] + $lage;
 }
 
-/* Textzeilen eines Kastens [Text, Größe, fett, Farbe]: Stelle, Person(en) oder „unbesetzt“, Vertretung, Hinweis. Ein Wort, das
-   nicht in eine Zeile passt (z. B. „Qualitätsmanagementbeauftragte“), verkleinert die Schrift statt getrennt zu werden. */
-function qs_organigramm_zeilen(array $k, array $namen): array
+/* Teilbaum ab $id mit Ursprung oben links: Stabsstellen paarweise links und rechts der Linie unter der Stelle; Unterstellen
+   nebeneinander – oder senkrecht gestapelt, wenn die Stelle keine Stabsstellen hat und keine Unterstelle eigene Unterstellen.
+   Jeder Teil steht mittig unter der Stelle, die Stelle also mittig im Teilbaum. */
+function qs_og_teilbaum(string $id, array $unter, array $hoehe): array
 {
-    $w = QS_OG_B - 2 * QS_OG_RAND; $z = [];
-    $dazu = function (string $t, float $g, bool $fett, string $farbe) use (&$z, $w): void {
-        $breit = max(array_map(fn($x) => Pdf::width($x, $g, $fett), preg_split('/\s+/u', $t) ?: [$t]));
-        if ($breit > $w) $g = max(5.0, $g * $w / $breit);
-        foreach (Pdf::wrap($t, $g, $w, $fett) as $x) $z[] = [$x, $g, $fett, $farbe];
-    };
-    $dazu($k['titel'], 7.6, true, '#1b1a18');
-    if (!$k['personen']) $dazu('unbesetzt', 7, false, '#8a857e');
-    foreach ($k['personen'] as $p) $dazu($namen[$p] ?? $p, 7, false, '#1b1a18');
-    if ($k['vertretung'] !== '') $dazu('Vertretung: ' . ($namen[$k['vertretung']] ?? $k['vertretung']), 6.3, false, '#5f5b55');
-    if ($k['hinweis'] !== '') $dazu($k['hinweis'], 6.3, false, '#5f5b55');
-    return $z;
+    $B = QS_OG_KASTEN_BREITE;
+    $t = ['kaesten' => [$id => ['x' => -$B / 2, 'y' => 0.0]], 'linien' => []];   // x zunächst ab der Mitte der Stelle
+    $halb = $B / 2;
+    $y = $stamm = $hoehe[$id];
+    foreach (array_chunk($unter[$id]['stab'], 2) as $paar) {
+        $halb = $B + QS_OG_STAB_ABSTAND / 2;
+        $y += QS_OG_EBENEN_ABSTAND / 2;
+        foreach ($paar as $i => $c) {
+            $x = $i === 0 ? -$halb : QS_OG_STAB_ABSTAND / 2;
+            $t['kaesten'][$c] = ['x' => $x, 'y' => $y];
+            $ym = $y + $hoehe[$c] / 2;
+            $t['linien'][] = [0.0, $ym, $i === 0 ? $x + $B : $x, $ym];
+            $stamm = max($stamm, $ym);
+        }
+        $y += max(array_map(fn($c) => $hoehe[$c], $paar));
+    }
+    $linie = $unter[$id]['linie'];
+    $blatt = fn($c) => !$unter[$c]['linie'] && !$unter[$c]['stab'];
+    if ($linie && !$unter[$id]['stab'] && count(array_filter($linie, $blatt)) === count($linie)) {
+        $halb = ($B + QS_OG_STAPEL_EINZUG) / 2;
+        $x = -$B / 2 + QS_OG_STAPEL_EINZUG / 2;
+        $schiene = -$B / 2 + QS_OG_STAPEL_EINZUG / 4;
+        foreach ($linie as $c) {
+            $y += QS_OG_STAPEL_ABSTAND;
+            $t['kaesten'][$c] = ['x' => $x, 'y' => $y];
+            $ym = $y + $hoehe[$c] / 2;
+            $t['linien'][] = [$schiene, $ym, $x, $ym];
+            $y += $hoehe[$c];
+        }
+        $t['linien'][] = [$schiene, $hoehe[$id], $schiene, $ym];
+    } elseif ($linie) {
+        $kinder = array_map(fn($c) => qs_og_teilbaum($c, $unter, $hoehe), $linie);
+        $reihe = array_sum(array_column($kinder, 'b')) + QS_OG_NACHBAR_ABSTAND * (count($kinder) - 1);
+        $halb = max($halb, $reihe / 2);
+        $stamm = $y + QS_OG_EBENEN_ABSTAND / 2;
+        $y += QS_OG_EBENEN_ABSTAND;
+        $x = -$reihe / 2; $mitten = [];
+        foreach ($kinder as $k) {
+            qs_og_verschieben($t, $k, $x, $y);
+            $mitten[] = $m = $x + $k['b'] / 2;
+            $t['linien'][] = [$m, $stamm, $m, $y];
+            $x += $k['b'] + QS_OG_NACHBAR_ABSTAND;
+        }
+        if (count($mitten) > 1) $t['linien'][] = [$mitten[0], $stamm, end($mitten), $stamm];
+        $y += max(array_column($kinder, 'h'));
+    }
+    if ($stamm > $hoehe[$id]) $t['linien'][] = [0.0, $hoehe[$id], 0.0, $stamm];
+    $aus = ['b' => 2 * $halb, 'h' => $y, 'kaesten' => [], 'linien' => []];
+    qs_og_verschieben($aus, $t, $halb, 0.0);
+    return $aus;
 }
 
-/* PDF-Fassung einer freigegebenen Version: eine Seite A4 quer, Diagramm eingepasst; Kopf mit Logo, Titel und Firma, Fuß mit
-   den Lenkungsangaben (Nr., Version, Datum, erstellt, geprüft, freigegeben – wie die Platzhalter in Word-/Excel-Dateien).
-   shortcut: immer eine Seite – sehr große Organigramme werden klein; bei Bedarf auf mehrere Seiten verteilen. */
-function qs_organigramm_pdf(array $d, array $v, array $stamm): string
+function qs_og_verschieben(array &$ziel, array $teil, float $dx, float $dy): void
+{
+    foreach ($teil['kaesten'] as $id => $p) $ziel['kaesten'][$id] = ['x' => $p['x'] + $dx, 'y' => $p['y'] + $dy];
+    foreach ($teil['linien'] as [$x1, $y1, $x2, $y2]) $ziel['linien'][] = [$x1 + $dx, $y1 + $dy, $x2 + $dx, $y2 + $dy];
+}
+
+/* Kasten einer Stelle: Textzeilen mit Grundlinie y (pt ab Oberkante) und Höhe h – Stelle, Person(en) oder „unbesetzt“, Vertretung, Hinweis */
+function qs_organigramm_kasten(array $k, array $namen): array
+{
+    $innen = QS_OG_KASTEN_BREITE - 2 * QS_OG_INNENRAND;
+    $zeilen = []; $y = QS_OG_INNENRAND;
+    $dazu = function (string $text, float $g, bool $fett, string $farbe) use (&$zeilen, &$y, $innen): void {
+        $woerter = preg_split('/\s+/u', trim($text)) ?: [$text];
+        $breit = max(array_map(fn($w) => Pdf::width($w, $g, $fett), $woerter));
+        if ($breit > $innen) $g = max(min($g, QS_OG_SCHRIFT_KLEIN), $g * $innen / $breit);
+        foreach (Pdf::wrap(implode(' ', array_map(fn($w) => qs_og_trennen($w, $g, $innen, $fett), $woerter)), $g, $innen, $fett) as $z) {
+            $y += $g * QS_OG_ZEILENHOEHE;
+            $zeilen[] = ['text' => $z, 'g' => $g, 'fett' => $fett, 'farbe' => $farbe, 'y' => $y - $g * .3];
+        }
+    };
+    $dazu($k['titel'], 8.0, true, '#1b1a18');
+    if (!$k['personen']) $dazu('unbesetzt', 7.4, false, '#8a857e');
+    foreach ($k['personen'] as $p) $dazu($namen[$p] ?? $p, 7.4, false, '#1b1a18');
+    if ($k['vertretung'] !== '') $dazu('Vertretung: ' . ($namen[$k['vertretung']] ?? $k['vertretung']), QS_OG_SCHRIFT_KLEIN, false, '#5f5b55');
+    if ($k['hinweis'] !== '') $dazu($k['hinweis'], QS_OG_SCHRIFT_KLEIN, false, '#5f5b55');
+    return ['zeilen' => $zeilen, 'h' => $y + QS_OG_INNENRAND];
+}
+
+/* Wort, das auch verkleinert nicht in die Zeile passt, mit Trennstrich zerlegen (Teile mit Leerzeichen für Pdf::wrap) */
+function qs_og_trennen(string $wort, float $g, float $innen, bool $fett): string
+{
+    $teile = [];
+    while (Pdf::width($wort, $g, $fett) > $innen && mb_strlen($wort) > 2) {
+        $n = mb_strlen($wort) - 1;
+        while ($n > 1 && Pdf::width(mb_substr($wort, 0, $n) . '-', $g, $fett) > $innen) $n--;
+        for ($m = $n; $m > $n / 2; $m--) if (preg_match('/^[^aeiouäöüy-][aeiouäöüy]/iu', mb_substr($wort, $m))) { $n = $m; break; }   // vor Konsonant + Vokal: „management-beauftragte“
+        $teile[] = mb_substr($wort, 0, $n) . '-';
+        $wort = mb_substr($wort, $n);
+    }
+    return implode(' ', [...$teile, $wort]);
+}
+
+/* Text auf $max pt Breite: erst verkleinern (bis QS_OG_MIN_SCHRIFT), dann mit „…“ kürzen → [Text, Größe] */
+function qs_og_einpassen(string $t, float $g, float $max, bool $fett): array
+{
+    $breit = Pdf::width($t, $g, $fett);
+    if ($breit > $max) $g = max(QS_OG_MIN_SCHRIFT, $g * $max / $breit);
+    while (Pdf::width($t, $g, $fett) > $max && mb_strlen($t) > 1) $t = mb_substr($t, 0, -2) . '…';
+    return [$t, $g];
+}
+
+/* Eine Seite A4 quer: Logo, Titel und Firma im Kopf, Lenkungsangaben im Fuß (wie die Platzhalter in Word-/Excel-Dateien).
+   Namen aus dem Schnappschuss der Version, im Entwurf die heutigen; $marke kennzeichnet die Vorschau.
+   shortcut: immer eine Seite – ab etwa 9 Stellen mit eigenen Unterstellen in einer Reihe fällt die Schrift unter 6 pt und die PDF
+   sagt das; kommt das bei echten Organigrammen vor, auf mehrere Seiten verteilen. */
+function qs_organigramm_pdf(array $d, array $v, array $stamm, string $marke = ''): string
 {
     global $CFG;
     require_once __DIR__ . '/../../lib/pdf.php';
-    $og = $v['organigramm']; $namen = (array)($og['namen'] ?? []);
-    $zeilen = []; $hoehe = [];
-    foreach ($og['knoten'] as $k) {
-        $zeilen[$k['id']] = qs_organigramm_zeilen($k, $namen);
-        $hoehe[$k['id']] = 2 * QS_OG_RAND + array_sum(array_map(fn($z) => $z[1] * 1.3, $zeilen[$k['id']]));
-    }
-    $lage = qs_organigramm_lage($og['knoten'], $hoehe);
+    require_once __DIR__ . '/vorlagen.php';
+    $og = $v['organigramm'];
+    $namen = $og['namen'] ?? qs_organigramm_namen($og, $stamm);
+    $kaesten = [];
+    foreach ($og['knoten'] as $k) $kaesten[$k['id']] = qs_organigramm_kasten($k, $namen);
+    $lage = qs_organigramm_lage($og['knoten'], array_map(fn($x) => $x['h'], $kaesten));
     $pdf = new Pdf();
-    $L = 28.0; $R = $pdf->w - 28.0; $oben = 86.0; $unten = 530.0;
+    $L = 28.0; $R = $pdf->w - 28.0; $oben = 86.0; $unten = 530.0; $logo = 110.0;
     $s = min(1.0, ($R - $L) / $lage['b'], ($unten - $oben) / $lage['h']);
     $ox = $L + ($R - $L - $lage['b'] * $s) / 2;
     $lw = max(.35, .9 * $s);
 
-    $pdf->jpeg(__DIR__ . '/../../lib/druck-logo.jpg', $L, 22, 110);
-    $pdf->text($R, 40, (string)$d['titel'], 15, true, '#1b1a18', 'r');
-    $pdf->text($R, 54, implode(' · ', array_filter([(string)$d['nr'], (string)($CFG['company'] ?? '')])), 8, false, '#5f5b55', 'r');
+    $pdf->jpeg(__DIR__ . '/../../lib/druck-logo.jpg', $L, 22, $logo);
+    if ($marke !== '') $pdf->text($R, 18, $marke, 9, true, '#b3261e', 'r');
+    [$t, $g] = qs_og_einpassen((string)$d['titel'], 15, $R - $L - $logo - 20, true);
+    $pdf->text($R, 40, $t, $g, true, '#1b1a18', 'r');
+    [$t, $g] = qs_og_einpassen(implode(' · ', array_filter([(string)$d['nr'], (string)($CFG['company'] ?? '')])), 8, $R - $L - $logo - 20, false);
+    $pdf->text($R, 54, $t, $g, false, '#5f5b55', 'r');
     $pdf->line($L, 70, $R, 70, .6, '#b9b4ac');
+    $klein = $s * min(array_column(array_merge(...array_column($kaesten, 'zeilen')), 'g'));
+    if ($klein < QS_OG_MIN_SCHRIFT)
+        $pdf->text($L, 81, 'Hinweis: Für eine Seite zu groß – verkleinert auf ' . number_format($klein, 1, ',', '') . ' pt Schrift. Große Bereiche besser als eigene Organigramme führen.', 7.5, false, '#b3261e');
 
     foreach ($lage['linien'] as [$x1, $y1, $x2, $y2]) $pdf->line($ox + $x1 * $s, $oben + $y1 * $s, $ox + $x2 * $s, $oben + $y2 * $s, $lw, '#6f6a64');
     foreach ($og['knoten'] as $k) {
-        [$x, $y] = $lage['kaesten'][$k['id']];
-        $x = $ox + $x * $s; $y = $oben + $y * $s; $w = QS_OG_B * $s; $h = $hoehe[$k['id']] * $s;
+        $p = $lage['kaesten'][$k['id']];
+        $x = $ox + $p['x'] * $s; $y = $oben + $p['y'] * $s; $w = QS_OG_KASTEN_BREITE * $s; $h = $kaesten[$k['id']]['h'] * $s;
         $stab = $k['art'] === 'stab';
         $pdf->rect($x, $y, $w, $h, $stab ? '#eef3f8' : '#ffffff');
         foreach ([[0, 0, 1, 0], [1, 0, 1, 1], [1, 1, 0, 1], [0, 1, 0, 0]] as [$a, $b, $c, $e]) $pdf->line($x + $a * $w, $y + $b * $h, $x + $c * $w, $y + $e * $h, $lw, $stab ? '#6d8fb5' : '#8a857e');
-        $ty = $y + QS_OG_RAND * $s;
-        foreach ($zeilen[$k['id']] as [$t, $g, $fett, $farbe]) { $ty += $g * 1.3 * $s; $pdf->text($x + QS_OG_RAND * $s, $ty - $g * .3 * $s, $t, $g * $s, $fett, $farbe); }
+        foreach ($kaesten[$k['id']]['zeilen'] as $z) $pdf->text($x + QS_OG_INNENRAND * $s, $y + $z['y'] * $s, $z['text'], $z['g'] * $s, $z['fett'], $z['farbe']);
     }
 
     $l = qs_werte_lenkung($d, $v, $stamm);
     $pdf->line($L, 544, $R, 544, .6, '#b9b4ac');
-    $x = $L;
+    $spalte = 108.0; $x = $L;
     foreach (['Dokument-Nr.' => $l['nr'], 'Version' => $l['version'], 'Datum' => $l['datum'], 'Erstellt' => $l['erstellt'], 'Geprüft' => $l['geprueft'], 'Freigegeben' => $l['freigegeben']] as $was => $wert) {
         $pdf->text($x, 557, $was, 6.5, false, '#5f5b55');
-        $pdf->text($x, 569, $wert, 8.5, true, '#1b1a18');
-        $x += 108;
+        [$t, $g] = qs_og_einpassen($wert !== '' ? $wert : '—', 8.5, $spalte - 8, true);
+        $pdf->text($x, 569, $t, $g, true, '#1b1a18');
+        $x += $spalte;
     }
     $pdf->text($R, 569, 'Seite 1 von 1', 7.5, false, '#5f5b55', 'r');
     return $pdf->output(trim($d['nr'] . ' ' . $d['titel']));

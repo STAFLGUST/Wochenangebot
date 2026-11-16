@@ -1,8 +1,6 @@
-/* STAFL-Plattform · QM-System – Organigramm (organigramm.js): Fenster mit Diagramm und Seitenleiste, Baum mit Linien nur aus
-   CSS. Untergeordnete Stellen stehen nebeneinander unter ihrer Stelle (waagerechte Leiste, senkrechte Striche), Stabsstellen
-   paarweise links und rechts an der senkrechten Linie darunter – dieselbe Anordnung rechnet der Server für die PDF-Fassung
-   (qs_organigramm_lage in app/api/module/qs/organigramm.php). Farben nur aus den --qm-* von qs.css (hell und dunkel).
-   Handy (bis 760 px): Diagramm oben zum Scrollen und Zoomen, darunter Felder und Gliederung. Druck: A4 quer über #print-root. */
+/* STAFL-Plattform · QM-System – Organigramm (organigramm.js): Fenster mit Diagramm und Seitenleiste, Baum mit Linien nur aus CSS.
+   Die Anordnung folgt derselben Regel wie die PDF (qs_og_teilbaum in app/api/module/qs/organigramm.php) – Änderungen an beiden.
+   Farben nur aus den --qm-* von qs.css (hell und dunkel). */
 .qm-dialog.og-dialog{width:min(1500px,calc(100vw - 28px));height:calc(100dvh - 28px)}
 .og-rahmen{height:100%;display:flex;flex-direction:column;gap:10px;padding:16px 18px}
 .og-kopf{display:grid;grid-template-columns:minmax(0,1fr) auto auto;align-items:center}
@@ -17,10 +15,10 @@
 .og-fuss{margin:0}
 
 /* Baum */
-.og-baum{--og-linie:var(--qm-muted);--og-spalt:18px;width:max-content;margin:0 auto;padding:14px 16px 20px}
+.og-baum{--og-linie:var(--qm-muted);--og-spalt:18px;--og-b:176px;--og-einzug:36px;--og-stapel:12px;width:max-content;margin:0 auto;padding:14px 16px 20px}
 .og-wurzeln{display:flex;align-items:flex-start;gap:44px}
 .og-k{display:flex;flex-direction:column;align-items:center}
-.og-kasten{position:relative;width:176px;display:flex;flex-direction:column;gap:2px;padding:8px 10px;border:1.5px solid var(--qm-border);border-radius:12px;background:var(--qm-card);color:var(--qm-text);font:inherit;font-size:12px;line-height:1.3;text-align:left;hyphens:auto;overflow-wrap:break-word}
+.og-kasten{position:relative;width:var(--og-b);display:flex;flex-direction:column;gap:2px;padding:8px 10px;border:1.5px solid var(--qm-border);border-radius:12px;background:var(--qm-card);color:var(--qm-text);font:inherit;font-size:12px;line-height:1.3;text-align:left;hyphens:auto;overflow-wrap:break-word}
 .og-kasten b{font-size:12.5px}
 .og-kasten small{color:var(--qm-muted);font-size:11px}
 .og-unbesetzt{color:var(--qm-muted);font-style:italic}
@@ -47,6 +45,11 @@ button.og-kasten:hover{border-color:var(--qm-accent)}
 .og-kinder>.og-k::after{left:50%;border-left:1.5px solid var(--og-linie)}
 .og-kinder>.og-k:first-child::before,.og-kinder>.og-k:last-child::after{border-top:0}
 .og-kinder>.og-k:only-child::before{display:none}
+/* gestapelte Unterstellen: Schiene bei 3/4 des Einzugs, je Kasten ein Haken zur Mitte (Rahmen 1,5 px mitgerechnet) */
+.og-stapel{display:flex;flex-direction:column;gap:var(--og-stapel);padding:var(--og-stapel) 0 0 var(--og-einzug)}
+.og-stapel>.og-kasten::before,.og-stapel>.og-kasten:not(:last-child)::after{content:'';position:absolute;left:calc(-1.5px - var(--og-einzug) / 4);border-left:1.5px solid var(--og-linie)}
+.og-stapel>.og-kasten::before{top:calc(-1.5px - var(--og-stapel));height:calc(50% + 1.5px + var(--og-stapel));width:calc(var(--og-einzug) / 4);border-bottom:1.5px solid var(--og-linie)}
+.og-stapel>.og-kasten:not(:last-child)::after{top:50%;bottom:-1.5px}
 .og-leer{display:flex;flex-direction:column;align-items:flex-start;gap:10px;max-width:340px;padding:8px}
 .og-leer label{display:flex;flex-direction:column;gap:5px;width:100%;color:var(--qm-muted);font-size:12px;font-weight:650}
 
@@ -76,14 +79,4 @@ button.og-kasten:hover{border-color:var(--qm-accent)}
   .og-kopf{grid-template-columns:minmax(0,1fr) auto}
   .og-werkzeug{grid-column:1/-1;order:3}
   .og-rahmen{padding:14px 15px calc(14px + env(safe-area-inset-bottom))}
-}
-
-@page og{size:A4 landscape;margin:10mm}
-@media print{
-  body.qm.r.og-drucken>*:not(#print-root){display:none!important}
-  body.og-drucken #print-root{display:block!important}
-  #print-root .og-druck{page:og;-webkit-print-color-adjust:exact;print-color-adjust:exact;color:#000}
-  .og-druck-kopf{display:flex;justify-content:space-between;align-items:baseline;gap:16px;margin-bottom:6mm;padding-bottom:2mm;border-bottom:.3mm solid #999;font-size:11pt}
-  .og-druck-kopf span{color:#555;font-size:9pt}
-  #print-root .og-baum{padding:0}
 }
