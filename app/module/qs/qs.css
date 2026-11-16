@@ -703,7 +703,7 @@ body.qm.r .qm-rund:hover { background: var(--r-flaeche-2); }
 .qm-baum-zip{display:inline-flex;align-items:center;gap:3px;font-size:12px;font-weight:650;color:var(--qm-blau);text-decoration:none;white-space:nowrap}
 .qm-baum-zip .i{width:14px;height:14px}
 .qm-baum-inhalt{display:flex;flex-direction:column;gap:6px;padding:0 8px 8px 16px}
-@media(max-width:560px){.qm-baum-inhalt{padding-left:6px}.qm-baum-ordner>summary .qm-sub{display:none}}
+@media(max-width:560px){.qm-baum-inhalt{padding-left:6px}.qm-baum-ordner>summary .qm-sub{display:none}.qm-baum-zip{margin-left:auto}}
 /* Ordner-Import (ordnerimport.js) */
 .qm-im-wurzel{margin:0;font-size:13.5px}
 .qm-im-warnung{margin:0;color:var(--qm-gelb);font-weight:600}
