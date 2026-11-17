@@ -84,6 +84,23 @@ function offer_def(string $id): ?array
     foreach ($d['offers'] as $o) if ($o['id'] === $id) return $o;
     return null;
 }
+/* Eigene Angebotsgruppen eines Artikels ($item['gruppen']): Angebots-ID → Gruppen-ID. Nur bestehende Kundenangebote ($known,
+   nie das Wochenangebot) und vorhandene Gruppen ($gids); gleich dem Basiswert ($basis = groupId) = kein Eintrag. */
+function angebotsgruppen_clean($v, string $basis, array $gids, array $known): array
+{
+    $out = [];
+    foreach (is_array($v) ? $v : [] as $oid => $g) {
+        $oid = (string)$oid;   // numerische Angebots-IDs kommen als Zahl an
+        if ($oid !== OFFER_STD && in_array($oid, $known, true) && is_string($g) && $g !== $basis && isset($gids[$g])) $out[$oid] = $g;
+    }
+    ksort($out, SORT_STRING);
+    return $out;
+}
+/* Gruppen, die ein Artikel benutzt: Basiswert und eigene je Angebot (wie gruppenVon in admin.js) – solche Gruppen bleiben erhalten */
+function artikel_gruppen_ids(array $it): array
+{
+    return array_merge([$it['groupId']], array_values($it['gruppen'] ?? []));
+}
 function clean_variants($v, string $where, array $known): array
 {
     $out = [];
@@ -397,14 +414,8 @@ function clean_model($m, bool $strict): array
         // optional: eigene Bezeichnung je Kundenangebot (ältere Fassungen verwerfen das Feld; dann gilt wieder „name“)
         $namen = angebotsnamen_clean($it['namen'] ?? null, $name, $known);
         if ($namen) $row['namen'] = $namen;
-        // optional: eigene Angebotsgruppe je Kundenangebot (ältere Fassungen verwerfen das Feld; dann gilt wieder „groupId“).
-        // Nur bestehende Kundenangebote und Gruppen; gleich dem Basiswert = kein Eintrag.
-        $eigen = [];
-        foreach (is_array($it['gruppen'] ?? null) ? $it['gruppen'] : [] as $oid => $g) {
-            $oid = (string)$oid;   // numerische Angebots-IDs kommen als Zahl an
-            if ($oid !== OFFER_STD && in_array($oid, $known, true) && is_string($g) && $g !== $gid && isset($gids[$g])) $eigen[$oid] = $g;
-        }
-        ksort($eigen, SORT_STRING);
+        // optional: eigene Angebotsgruppe je Kundenangebot (ältere Fassungen verwerfen das Feld; dann gilt wieder „groupId“)
+        $eigen = angebotsgruppen_clean($it['gruppen'] ?? null, $gid, $gids, $known);
         if ($eigen) $row['gruppen'] = $eigen;
         $sale = clean_sale($it['sale'] ?? null, $name, $known);
         if ($sale) $row['sale'] = $sale;
@@ -414,7 +425,7 @@ function clean_model($m, bool $strict): array
     $werbung = clean_werbung($meta['werbung'] ?? null, $known, $iids);   // optional (ältere Fassungen verwerfen das Feld)
     if ($werbung) $outMeta['werbung'] = $werbung;
     $used = [];   // auch Gruppen, die nur ein Kundenangebot benutzt (gruppen) – sonst verlöre es beim Veröffentlichen seine Überschrift
-    foreach ($items as $it) foreach (array_merge([$it['groupId']], array_values($it['gruppen'] ?? [])) as $g) $used[$g] = true;
+    foreach ($items as $it) foreach (artikel_gruppen_ids($it) as $g) $used[$g] = true;
     if ($strict) $groups = array_values(array_filter($groups, function ($g) use ($used) { return isset($used[$g['id']]); }));
     $sections = [];
     foreach ($groups as $g) if ($g['section'] !== '' && !in_array($g['section'], $sections, true)) $sections[] = $g['section'];
@@ -502,11 +513,14 @@ function angebot_veroeffentlichen(?array $modell, $revision): array
     });
 }
 /* Weicht der Aufbau (Reihenfolge der Gruppen, Bereich je Gruppe, Gruppe und Reihenfolge der Artikel) vom veröffentlichten Stand
-   ab? Gleiche Regel wie aufbauGeaendert() im Editor (admin.js): nur Gruppen und Artikel, die es in beiden Ständen gibt. */
+   ab? Gleiche Regel wie aufbauGeaendert() im Editor (admin.js): nur Gruppen und Artikel, die es in beiden Ständen gibt. Die
+   Reihenfolge wird je Angebot verglichen – Wochenangebot und jedes Angebot mit eigenen Gruppen ($it['gruppen']): dort kann sie
+   sich auch ändern, wenn sie im Wochenangebot gleich bleibt. Artikel, deren eigene Gruppe dort geändert ist, zählen als
+   „bearbeitet“ (angebot_aenderungen), nicht hier. */
 function angebot_aufbau_geaendert(array $pub, array $neu): bool
 {
     $pg = []; foreach ($pub['groups'] ?? [] as $g) $pg[(string)$g['id']] = (string)$g['name'];
-    $used = []; foreach ($neu['items'] ?? [] as $it) foreach (array_merge([$it['groupId']], array_values($it['gruppen'] ?? [])) as $g) $used[(string)$g] = true;
+    $used = []; foreach ($neu['items'] ?? [] as $it) foreach (artikel_gruppen_ids($it) as $g) $used[(string)$g] = true;
     $neuG = array_values(array_filter($neu['groups'] ?? [], fn($g) => isset($used[(string)$g['id']])));
     $mg = []; foreach ($neuG as $g) $mg[(string)$g['id']] = (string)$g['name'];
     $sig = function (array $gs, array $other): string {
@@ -515,16 +529,25 @@ function angebot_aufbau_geaendert(array $pub, array $neu): bool
         return implode("\x02", $o);
     };
     if ($sig($pub['groups'] ?? [], $mg) !== $sig($neuG, $pg)) return true;
-    $reihe = function (array $m, array $other): string {
+    $eigen = fn(array $it, string $oid): string => (string)($it['gruppen'][$oid] ?? '');
+    $reihe = function (array $m, array $other, string $oid) use ($eigen): string {
         $gi = []; foreach ($m['groups'] ?? [] as $i => $g) $gi[(string)$g['id']] = $i;
         $x = [];
-        foreach ($m['items'] ?? [] as $i => $it) if (isset($other[(string)$it['id']])) $x[] = [$gi[(string)$it['groupId']] ?? PHP_INT_MAX, $i, $it['id'] . '@' . $it['groupId']];
+        foreach ($m['items'] ?? [] as $i => $it) {
+            $a = $other[(string)$it['id']] ?? null;
+            if ($a === null || $eigen($a, $oid) !== $eigen($it, $oid)) continue;
+            $g = $eigen($it, $oid) !== '' ? $eigen($it, $oid) : (string)$it['groupId'];
+            $x[] = [$gi[$g] ?? PHP_INT_MAX, $i, $it['id'] . '@' . $g];
+        }
         usort($x, fn($a, $b) => [$a[0], $a[1]] <=> [$b[0], $b[1]]);
         return implode("\x02", array_column($x, 2));
     };
-    $idsN = []; foreach ($neu['items'] ?? [] as $it) $idsN[(string)$it['id']] = true;
-    $idsP = []; foreach ($pub['items'] ?? [] as $it) $idsP[(string)$it['id']] = true;
-    return $reihe($pub, $idsN) !== $reihe($neu, $idsP);
+    $jeId = function (array $m): array { $o = []; foreach ($m['items'] ?? [] as $it) $o[(string)$it['id']] = $it; return $o; };
+    $pi = $jeId($pub); $ni = $jeId($neu);
+    $oids = [OFFER_STD => true];
+    foreach ([$pub, $neu] as $m) foreach ($m['items'] ?? [] as $it) foreach (array_keys($it['gruppen'] ?? []) as $oid) $oids[(string)$oid] = true;
+    foreach (array_keys($oids) as $oid) if ($reihe($pub, $ni, (string)$oid) !== $reihe($neu, $pi, (string)$oid)) return true;
+    return false;
 }
 /* Unveröffentlichte Änderungen des Entwurfs als Zeilen für die Liste „Veröffentlichen“ (Modul Versand). Grundlage ist
    changes_between() – dieselbe Liste, die das Protokoll beim Veröffentlichen festhält. Gezählt wird wie am Knopf des Editors:
@@ -556,14 +579,16 @@ function angebot_aenderungen(?array $pub = null, ?array $dr = null): array
         else $jeArtikel[$id][] = $c;   // Preis, Preisbezeichnung, Zusatzpreise, Stammfelder, eigene Bezeichnung und Gruppe je Angebot
     }
     foreach ($jeArtikel as $liste) {
-        $preis = null; $felder = [];
+        $preis = null; $felder = []; $betrifft = [];
         foreach ($liste as $c) {
             $f = explode('|', (string)$c['k'], 2)[1] ?? '';
+            $betrifft[preg_match('/^[gn]:(.+)$/', $f, $t) ? $t[1] : ''] = true;   // eigene Gruppe/Bezeichnung: nur dieses Angebot
             if ($f === 'price') $preis = $c;
             else $felder[] = $c['f'] . ': ' . ($c['from'] !== '' ? $c['from'] : '—') . ' → ' . ($c['to'] !== '' ? $c['to'] : '—');
         }
         $erste = $preis ?? $liste[0];
-        $zeilen[] = ['art' => $preis ? 'preis' : 'bearbeitet', 'angebot' => '', 'code' => (string)$erste['code'], 'name' => (string)$erste['name'],
+        // Eine Zeile je Artikel (gezählt wie im Editor). Betrifft sie nur ein Kundenangebot, zählt sie dort, sonst bei allen
+        $zeilen[] = ['art' => $preis ? 'preis' : 'bearbeitet', 'angebot' => count($betrifft) === 1 ? (string)array_key_first($betrifft) : '', 'code' => (string)$erste['code'], 'name' => (string)$erste['name'],
                      'von' => $preis ? (string)$preis['from'] : '', 'nach' => $preis ? (string)$preis['to'] : '', 'zusatz' => mb_substr(implode(' · ', $felder), 0, 400)];
     }
     if ($kopf) array_unshift($zeilen, ['art' => 'kopf', 'angebot' => '', 'code' => '', 'name' => implode(' · ', array_map(fn($c) => (string)$c['f'], $kopf)),

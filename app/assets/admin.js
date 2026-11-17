@@ -173,7 +173,7 @@
   function entfernen(it, oid) {
     if (oid === OSTD || followsStd(oid)) { it.variants = it.variants || {}; it.variants[oid] = { status: 'hidden' }; }
     else if (it.variants) { delete it.variants[oid]; dropEmptyVariants(it); }
-    if (it.gruppen) setzeGruppe(it, oid, '');
+    setzeGruppe(it, oid, '');   // ein veralteter Eintrag hielte die Gruppe am Leben und blockierte „Gruppe entfernen“
     invalid.delete(it.id + '|' + oid);
     if (offersOf(it).length) return false;
     model.items.splice(model.items.indexOf(it), 1);
@@ -206,7 +206,9 @@
   }
   /* Angebotsgruppe je Angebot (Auftrag des Inhabers 17.11.2026), gleiches Muster: it.groupId ist der Basiswert (Wochenangebot
      und jedes Angebot ohne eigene Gruppe), it.gruppen[<Kundenangebot>] eine eigene Gruppe nur dort. Die Reihenfolge bleibt
-     gemeinsam (Stelle in model.items). Nicht in den Artikelstammdaten – sie kennen die Gruppen des Entwurfs nicht. */
+     gemeinsam (Stelle in model.items). Nicht in den Artikelstammdaten – sie kennen die Gruppen des Entwurfs nicht.
+     Regel: im Kontext eines Angebots immer gruppeIn(it, oid); it.groupId nur für den Basiswert (Wochenangebot,
+     Stammdaten-Vorschläge, Zurücknehmen, Export, Kategorien). */
   const eigenGruppe = (it, oid) => { const g = oid !== OSTD && it.gruppen && it.gruppen[oid]; return g && gById(g) ? g : ''; };
   const gruppeIn = (it, oid) => eigenGruppe(it, oid) || it.groupId;
   /* Gruppen, die ein Artikel benutzt (Basiswert und eigene je Angebot): solche Gruppen bleiben erhalten */
@@ -268,7 +270,10 @@
   };
   /* Weicht der Aufbau (Reihenfolge der Gruppen, Bereich je Gruppe, Gruppe und Reihenfolge der Artikel; gilt für alle Angebote)
      von der veröffentlichten Fassung ab? Verglichen werden nur Gruppen mit Artikeln, die es veröffentlicht und im Entwurf mit
-     gleichem Namen gibt, und Artikel, die es in beiden gibt (neue/entfernte zeigen „Neu“/„Entfernt“). */
+     gleichem Namen gibt, und Artikel, die es in beiden gibt (neue/entfernte zeigen „Neu“/„Entfernt“). Die Reihenfolge wird
+     je Angebot verglichen – Wochenangebot und jedes Angebot mit eigenen Gruppen (it.gruppen): dort kann sie sich auch ändern,
+     wenn sie im Wochenangebot gleich bleibt. Artikel, deren eigene Gruppe dort geändert ist, zählen als „Bearbeitet“, nicht
+     hier. Gleiche Regel auf dem Server: angebot_aufbau_geaendert (app/api/lib/angebote.php). */
   function aufbauGeaendert() {
     if (!published || !model) return false;
     const pg = new Map(published.groups.map((g) => [g.id, g.name])), used = new Set(model.items.flatMap(gruppenVon));
@@ -276,17 +281,23 @@
     const sig = (gs, other) => gs.filter((g) => other.get(g.id) === g.name).map((g) => g.id + '\u0001' + (g.section || '')).join('\u0002');
     if (sig(published.groups, mg) !== sig(model.groups.filter((g) => used.has(g.id)), pg)) return true;
     // Artikel in Angebotsreihenfolge (Gruppe, dann Stelle – wie OfferCore.enrichOffer)
-    const reihe = (m, other) => {
+    const eigen = (it, oid) => (it.gruppen && it.gruppen[oid]) || '';
+    const reihe = (m, other, oid) => {
       const gi = new Map(m.groups.map((g, i) => [g.id, i]));
-      return m.items.map((it, i) => ({ it, i })).filter((x) => other.has(x.it.id))
-        .sort((a, b) => (gi.get(a.it.groupId) ?? 1e9) - (gi.get(b.it.groupId) ?? 1e9) || a.i - b.i).map((x) => x.it.id + '@' + x.it.groupId).join('\u0002');
+      return m.items.map((it, i) => ({ id: it.id, i, e: eigen(it, oid), g: eigen(it, oid) || it.groupId }))
+        .filter((x) => other.has(x.id) && eigen(other.get(x.id), oid) === x.e)
+        .sort((a, b) => (gi.get(a.g) ?? 1e9) - (gi.get(b.g) ?? 1e9) || a.i - b.i).map((x) => x.id + '@' + x.g).join('\u0002');
     };
-    return reihe(published, new Set(model.items.map((i) => i.id))) !== reihe(model, new Set(published.items.map((i) => i.id)));
+    const pi = new Map(published.items.map((i) => [i.id, i])), mi = new Map(model.items.map((i) => [i.id, i]));
+    const oids = new Set([OSTD, ...[published, model].flatMap((m) => m.items.flatMap((it) => Object.keys(it.gruppen || {})))]);
+    return [...oids].some((oid) => reihe(published, mi, oid) !== reihe(model, pi, oid));
   }
   /* Artikel neu ordnen: ziel = Map(Gruppen-ID → Artikel-IDs in gewünschter Reihenfolge) für die „Anker“ (z. B. alle Artikel des
-     gewählten Angebots); jeder Anker kommt in die Gruppe aus ziel. Andere Artikel bleiben in ihrer Gruppe hinter dem letzten Anker
-     davor, der dort bleibt. Geändert werden nur die Plätze der Artikel dieser Gruppen in model.items (je Gruppe zählt nur die
-     Reihenfolge, OfferCore.enrichOffer). Rückgabe: false, wenn ziel nicht aufgeht (dann bleibt alles unverändert).
+     gewählten Angebots); jeder Anker kommt in die Gruppe aus ziel. Andere Artikel bleiben in ihrer Basisgruppe hinter dem letzten
+     Anker davor, dessen Basisgruppe das ist und bleibt (ein Anker, der nur in diesem Angebot dort steht, zieht sie nicht mit –
+     sonst änderte sich die Reihenfolge im Wochenangebot). Geändert werden nur die Plätze der Artikel dieser Gruppen in
+     model.items (je Gruppe zählt nur die Reihenfolge, OfferCore.enrichOffer). Rückgabe: false, wenn ziel nicht aufgeht (dann
+     bleibt alles unverändert).
      oid = Angebot, aus dessen Sicht geordnet wird: Anker stehen in ihrer Gruppe dieses Angebots; wechselt ein Anker mit
      eigener Gruppe dort die Gruppe, ändert sich nur diese – ohne eigene Gruppe wie bisher der Basiswert (alle Angebote). */
   function artikelOrdnen(ziel, oid = OSTD) {
@@ -294,7 +305,7 @@
     for (const [g, ids] of ziel) for (const id of ids) { if (!byId.has(id) || zu.has(id)) return false; zu.set(id, g); }
     const kette = new Map(), vorn = new Map(), letzter = new Map();
     for (const it of model.items) {
-      if (zu.has(it.id)) { if (zu.get(it.id) === gruppeIn(it, oid)) letzter.set(zu.get(it.id), it.id); continue; }
+      if (zu.has(it.id)) { if (zu.get(it.id) === it.groupId) letzter.set(it.groupId, it.id); continue; }
       const a = letzter.get(it.groupId), m = a ? kette : vorn, k = a || it.groupId;
       if (!m.has(k)) m.set(k, []);
       m.get(k).push(it);
@@ -1647,7 +1658,7 @@
       model.items.forEach((x, i) => { if (gruppeIn(x, curOffer) === groupId) idx = i; });
       if (idx < 0) {
         const gi = model.groups.findIndex((x) => x.id === groupId);
-        idx = model.items.findIndex((x) => model.groups.findIndex((y) => y.id === x.groupId) > gi) - 1;
+        idx = model.items.findIndex((x) => model.groups.findIndex((y) => y.id === x.groupId) > gi) - 1;   // Basiswert: die Liste steht in der Reihenfolge der Basisgruppen
         if (idx < -1) idx = model.items.length - 1;
       }
       model.items.splice(idx + 1, 0, it);
@@ -2271,11 +2282,15 @@
     offers = r.offers; offersRev = r.rev; stdPublic = r.stdPublic !== false;
     const gone = new Set([OSTD, ...offers.map((o) => o.id)]);
     let dropped = false;
+    // Schlüssel gelöschter Angebote aus x[feld] entfernen; ein leeres Objekt fällt weg
+    const ohneGeloeschte = (x, feld) => {
+      if (!x || !x[feld]) return;
+      for (const k of Object.keys(x[feld])) if (!gone.has(k)) { delete x[feld][k]; dropped = true; }
+      if (!Object.keys(x[feld]).length) delete x[feld];
+    };
     for (const it of model ? model.items : []) {
-      if (it.variants) { for (const k of Object.keys(it.variants)) if (!gone.has(k)) { delete it.variants[k]; dropped = true; } dropEmptyVariants(it); }
-      if (it.namen) { for (const k of Object.keys(it.namen)) if (!gone.has(k)) { delete it.namen[k]; dropped = true; } if (!Object.keys(it.namen).length) delete it.namen; }
-      if (it.gruppen) { for (const k of Object.keys(it.gruppen)) if (!gone.has(k)) { delete it.gruppen[k]; dropped = true; } if (!Object.keys(it.gruppen).length) delete it.gruppen; }
-      if (it.sale && it.sale.offers) { for (const k of Object.keys(it.sale.offers)) if (!gone.has(k)) { delete it.sale.offers[k]; dropped = true; } if (!Object.keys(it.sale.offers).length) delete it.sale.offers; }
+      for (const feld of ['variants', 'namen', 'gruppen']) ohneGeloeschte(it, feld);
+      ohneGeloeschte(it.sale, 'offers');
     }
     if (model && model.meta.werbung) for (const k of Object.keys(model.meta.werbung)) if (!gone.has(k)) { delete model.meta.werbung[k]; dropped = true; }
     if (model && model.meta.werbung && !Object.keys(model.meta.werbung).length) delete model.meta.werbung;
@@ -2491,8 +2506,13 @@
   const FIELD_LABEL = { code: 'Art.-Nr.', name: 'Bezeichnung', category: 'Fleischart', origin: 'Herkunft', condition: 'Zustand' };
   function changedFields(o, it) {
     if (!o) return '';
-    const f = Object.keys(FIELD_LABEL).filter((k) => (o[k] || '') !== (it[k] || ''));
-    return f.length ? `<span class="rv-f">${f.map((k) => `${esc(FIELD_LABEL[k])}: ${esc(o[k] || '—')} → ${esc(it[k] || '—')}`).join(' · ')}</span>` : '';
+    const f = Object.keys(FIELD_LABEL).filter((k) => (o[k] || '') !== (it[k] || '')).map((k) => `${FIELD_LABEL[k]}: ${o[k] || '—'} → ${it[k] || '—'}`);
+    // Bezeichnung und Gruppe je Angebot (wie die Änderungsliste des Servers, changes_between)
+    for (const [feld, titel, text] of [['namen', 'Bezeichnung', (v) => v], ['gruppen', 'Gruppe', (v) => (gById(v) || published.groups.find((g) => g.id === v) || {}).name || v]]) {
+      const a = o[feld] || {}, b = it[feld] || {};
+      for (const k of new Set([...Object.keys(a), ...Object.keys(b)])) if (a[k] !== b[k]) f.push(`${titel} ${offerShort(k)}: ${a[k] ? text(a[k]) : 'wie Basis'} → ${b[k] ? text(b[k]) : 'wie Basis'}`);
+    }
+    return f.length ? `<span class="rv-f">${f.map(esc).join(' · ')}</span>` : '';
   }
   /* Eine einzelne Änderung gegenüber der veröffentlichten Fassung zurücknehmen */
   function revertChange(kind, id) {
@@ -2505,6 +2525,13 @@
       const da = new Set(model.items.map((i) => i.id)), ziel = new Map();
       for (const it of published.items) if (da.has(it.id) && gById(it.groupId)) { if (!ziel.has(it.groupId)) ziel.set(it.groupId, []); ziel.get(it.groupId).push(it.id); }
       artikelOrdnen(ziel);
+      // Dazu die gemeinsamen Artikel über alle Gruppen in veröffentlichter Reihenfolge: mit eigenen Gruppen je Angebot
+      // (it.gruppen) zählt sie auch zwischen Artikeln verschiedener Basisgruppen. Neue bleiben hinter ihrem Vorgänger der Gruppe.
+      const stelle = new Map(published.items.map((it, i) => [it.id, i])), letzter = new Map(), kette = new Map(), vorn = [];
+      for (const it of model.items) {
+        if (stelle.has(it.id)) { letzter.set(it.groupId, it.id); kette.set(it.id, [it]); } else (kette.get(letzter.get(it.groupId)) || vorn).push(it);
+      }
+      model.items.splice(0, model.items.length, ...vorn, ...[...kette].sort((a, b) => stelle.get(a[0]) - stelle.get(b[0])).flatMap((x) => x[1]));
       return;
     }
     if (kind === 'meta') { const w = model.meta.werbung; model.meta = clone(published.meta); if (w) model.meta.werbung = w; else delete model.meta.werbung; return; }   // Werbung getrennt

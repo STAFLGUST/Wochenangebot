@@ -8,7 +8,9 @@ Tabelle) und beim Kunden; ältere Versionen unverändert; Revisionskonflikt mit 
 Artikel: Gruppen aufklappen (einzeln, alle), Artikel per Pfeil und Ziehen umsortieren, per Ziehen in eine aufgeklappte bzw.
 zugeklappte Gruppe und über „In Gruppe …“ verschieben, Zahlen, Abbrechen, Übernehmen (Entwurf, Editor, Protokoll,
 Veröffentlichen, Angebotsseite Liste/Tabelle, Kundenangebot), Konflikt, mit Angebotskategorien nur Artikel änderbar, 390 px
-mit Touch. Nur Testdaten (Seed-Angebot)."""
+mit Touch. Eigene Gruppe je Angebot: verschieben ändert nur die Gruppe dieses Angebots; Ordnen innerhalb der eigenen Gruppe
+lässt das Wochenangebot unverändert, zählt als Aufbau-Änderung und lässt sich zurücknehmen; mit Angebotskategorien bleibt
+„Nach unten“ bestehen. Nur Testdaten (Seed-Angebot)."""
 import json
 import sys
 
@@ -509,6 +511,55 @@ with sync_playwright() as p:
           next(i for i in oe['items'] if i['id'] == gx['id'])['groupId'] == ziel and next(i for i in os_['items'] if i['id'] == gx['id'])['groupId'] == basis_x)
     check('Protokoll: Aufbau nennt die neue Gruppe (auch eigene Gruppe je Angebot)', 'Gruppe bei 1 Artikel neu' in json.dumps(A.call('log')[1], ensure_ascii=False))
     a.locator('#offer-bar [data-offer="std"]').first.click(); a.wait_for_selector(f'#groups section.gcard[data-gid="{basis_x}"] tr[data-id="{gx["id"]}"]')
+
+    # Ordnen innerhalb einer eigenen Gruppe: nur dieses Angebot ändert sich. Konstellation: ec steht mit Basisgruppe GB_ nur im
+    # Kundenangebot in GE; davor in der Liste alle übrigen Artikel von GB_, dahinter ne (GE, nicht im Kundenangebot) und eg (GE).
+    mb, rb = entwurf(A)
+    gi = {g['id']: k for k, g in enumerate(mb['groups'])}
+    eig = sorted((i for i in mb['items'] if im_angebot(i, EIGEN)), key=lambda i: gi[i['groupId']])
+    for i in eig:
+        i.pop('gruppen', None)
+    ec, eg = eig[0], eig[-1]   # Basisgruppe von ec steht vor der von eg (unten für die Angebotskategorien)
+    GB_, GE = ec['groupId'], eg['groupId']
+    ne = next(i for i in mb['items'] if i['groupId'] == GE and not im_angebot(i, EIGEN))
+    ec['gruppen'] = {EIGEN: GE}
+    kopf = [i for i in mb['items'] if i['groupId'] == GB_ and i is not ec] + [ec, ne, eg]
+    mb['items'] = kopf + [i for i in mb['items'] if i not in kopf]
+    assert gi[GB_] < gi[GE] and A.call('save_draft', {'model': mb, 'revision': rb})[0] == 200
+    a.reload(); a.wait_for_selector('#screen-editor:not([hidden]) tr[data-id]')
+    veroeffentlichen(a)
+    std0 = angebot_reihe(entwurf(A)[0])
+    eigen_tab = lambda: (a.locator(f'#offer-bar [data-offer="{EIGEN}"]').first.click(), a.wait_for_selector(f'#groups section.gcard[data-gid="{GE}"] tr[data-id="{ec["id"]}"]'))
+    kunde_ge = lambda: [i['id'] for i in A.call(f'offer&draft=1&angebot={EIGEN}')[1]['offer']['items'] if i['groupId'] == GE]
+    ruhig = lambda: a.wait_for_function("!/pending|saving/.test(document.querySelector('#save-state').className)")
+    eigen_tab()
+    oeffnen(a)
+    a.click(f'#abf-liste .abf-g[data-gid="{GE}"] [data-ab="g-auf"]')
+    hinweis = a.inner_text('#dlg-aufbau .abf-hinweis')
+    check('eigene Gruppe: Hinweis sagt, dass die Stelle für alle Angebote gilt', dlg_art(a, GE) == [ec['id'], eg['id']] and 'wechseln sie nur hier' in hinweis
+          and 'Stelle kann sich dabei auch in anderen Angeboten ändern' in hinweis, hinweis)
+    shot(a.locator('#dlg-aufbau'), SH + '/aufbau-nur-hier-1280.png')
+    a.click(f'#abf-liste .abf-a[data-aid="{ec["id"]}"] [data-ab="a-runter"]')
+    a.click('#abf-ok'); a.wait_for_selector('#dlg-aufbau', state='hidden'); gespeichert(a)
+    check('in der eigenen Gruppe geordnet: Kundenangebot in neuer Reihenfolge, Reihenfolge des Wochenangebots unverändert (auch der Artikel, die nur dort stehen)',
+          kunde_ge() == [eg['id'], ec['id']] and angebot_reihe(entwurf(A)[0]) == std0, kunde_ge())
+    a.click('#offen-liste'); a.wait_for_selector('#dlg-publish[open]')
+    ae = A.call('versand_aenderungen')[1]
+    check('… zählt als Aufbau-Änderung, obwohl das Wochenangebot gleich bleibt: Editor und Versand-Liste nennen sie (einzige Änderung)',
+          'Reihenfolge der Bereiche, Gruppen oder Artikel geändert' in a.inner_text('#dlg-publish') and ae['arten'] == {'aufbau': 1} and ae['anzahl'] == 1, ae['arten'])
+    a.click('#publish-body [data-rv=aufbau]'); a.click('#dlg-confirm [data-v="1"]')
+    a.wait_for_function("document.querySelector('#publish-body').textContent.includes('Keine Änderungen gegenüber')")
+    a.click('#dlg-publish [data-close]'); ruhig()
+    check('… „Rückgängig“ in der Liste stellt die Reihenfolge des Kundenangebots wieder her', kunde_ge() == [ec['id'], eg['id']]
+          and A.call('versand_aenderungen')[1]['anzahl'] == 0 and angebot_reihe(entwurf(A)[0]) == std0, kunde_ge())
+    a.set_viewport_size({'width': 390, 'height': 844})
+    oeffnen(a)
+    w = a.evaluate("(() => { const d = document.querySelector('#dlg-aufbau'); return [d.scrollWidth, d.clientWidth, document.documentElement.scrollWidth]; })()")
+    check('390 px: Fenster mit dem Hinweis „nur hier“ ohne waagerechtes Scrollen', w[0] <= w[1] and w[2] <= 390 and 'wechseln sie nur hier' in a.inner_text('#dlg-aufbau'), w)
+    shot(a, SH + '/aufbau-nur-hier-390.png')
+    a.click('#dlg-aufbau .dlg-foot [data-close]'); a.wait_for_selector('#dlg-aufbau', state='hidden')
+    a.set_viewport_size({'width': 1440, 'height': 950})
+    a.locator('#offer-bar [data-offer="std"]').first.click(); a.wait_for_selector(f'#groups section.gcard[data-gid="{GB_}"] tr[data-id="{ec["id"]}"]')
     check('keine Skriptfehler (eigene Gruppe)', not errors, errors[:3])
 
     # ---------- Ohne Bearbeitungsrecht: kein Knopf, Server 403 ----------
@@ -581,6 +632,18 @@ with sync_playwright() as p:
     mk2, _ = entwurf(A)
     check('Angebotskategorien: Artikel lassen sich verschieben, Gruppen bleiben in der Reihenfolge der Kategorien',
           art_reihe(mk2, g0)[:2] == [av[1], av[0]] and gruppen_reihe(mk2) == gruppen_reihe(mk), art_reihe(mk2, g0)[:3])
+    # Artikel mit eigener Gruppe: „Nach unten“ im Kundenangebot bleibt – er springt nicht in den Block seiner Basisgruppe zurück
+    eigen_tab()
+    ed_ge = lambda: a.eval_on_selector_all(f'#groups section.gcard[data-gid="{GE}"] tr[data-id]', 'xs => xs.map(x => x.dataset.id)')
+    vor_k = ed_ge()
+    a.click(f'#groups tr[data-id="{ec["id"]}"] [data-act=item]'); a.wait_for_selector('#dlg-item[open] [data-ia=down]:not([disabled])')
+    a.click('#item-body [data-ia=down]'); a.wait_for_selector('#dlg-item[open] [data-ia=down][disabled]'); gespeichert(a)
+    a.click('#item-body [type=submit]'); a.wait_for_selector('#dlg-item', state='hidden')
+    a.reload(); a.wait_for_selector('#screen-editor:not([hidden]) tr[data-id]')
+    a.wait_for_function("(document.querySelector('#btn-aufbau').title || '').includes('Angebotskategorien')"); ruhig()
+    eigen_tab()
+    check('Angebotskategorien: Artikel mit eigener Gruppe im Kundenangebot „Nach unten“ – Stelle bleibt nach Speichern und erneutem Laden',
+          vor_k == [ec['id'], eg['id']] and ed_ge() == [eg['id'], ec['id']] and kunde_ge() == [eg['id'], ec['id']], (vor_k, ed_ge(), kunde_ge()))
     check('keine Skriptfehler', not errors, errors[:3])
     br.close()
 

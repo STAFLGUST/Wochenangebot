@@ -267,7 +267,7 @@ neueren Stand hat (`quelle: "version"`, `angebote: null` – Definitionen unbeka
 | `sale?` | Empfehlung (bis 11/2026 „Sonderpreis“): Grundwert `value` (Empfehlungspreis = Sonderposten „solange der Vorrat reicht“) oder `mark: true` (ohne Preisänderung, nur hervorheben); je Angebot abweichend `{value}`, `{status: mark}` oder `{status: none}`. `offer_resolve` liefert mit Preis `sale: true` und `regular` (ohne Bestand ausgeblendet), ohne Preis `empfehlung: true` (Preis und Sichtbarkeit unverändert). Ältere Fassungen verwerfen Einträge ohne `value` |
 | `cell?`, `nameRaw?` | Zelladresse und Originaltext der Excel-Datei (intern) |
 | `namen?` | Eigene Bezeichnung je Kundenangebot: `{<Angebots-ID>: Text ≤ 200}`; fehlt ein Eintrag, gilt `name` (Basiswert, zugleich die Bezeichnung im Wochenangebot – unter `std` gibt es keinen Eintrag); leere Texte und Schlüssel gelöschter Angebote fallen weg (`angebotsnamen_clean`); `offer_resolve` setzt `name` des jeweiligen Angebots und entfernt das Feld; ältere Fassungen verwerfen das Feld (dann gilt überall wieder `name`) |
-| `gruppen?` | Eigene Angebotsgruppe je Kundenangebot (Inhaber 17.11.2026): `{<Angebots-ID>: <Gruppen-ID>}`; fehlt ein Eintrag, gilt `groupId` (Basiswert, zugleich die Gruppe im Wochenangebot – unter `std` gibt es keinen Eintrag). `clean_model` behält nur Einträge bestehender Kundenangebote mit vorhandener Gruppe, die vom Basiswert abweichen; eine Gruppe, die nur so benutzt wird, bleibt beim Veröffentlichen im Modell. `offer_resolve` setzt `groupId` des jeweiligen Angebots, entfernt das Feld und liefert je Angebot nur Gruppen mit ausgelieferten Artikeln – das Wochenangebot bekommt keine leere Überschrift. Die Reihenfolge bleibt gemeinsam (Stelle in `items`). Nicht zu verwechseln mit `gruppen` (Kundengruppen) der Angebotsdefinition in `angebote`. Ältere Fassungen verwerfen das Feld (dann gilt überall wieder `groupId`) |
+| `gruppen?` | Eigene Angebotsgruppe je Kundenangebot (Inhaber 17.11.2026): `{<Angebots-ID>: <Gruppen-ID>}`; fehlt ein Eintrag, gilt `groupId` (Basiswert, zugleich die Gruppe im Wochenangebot – unter `std` gibt es keinen Eintrag). `clean_model` behält nur Einträge bestehender Kundenangebote mit vorhandener Gruppe, die vom Basiswert abweichen; eine Gruppe, die nur so benutzt wird, bleibt beim Veröffentlichen im Modell. `offer_resolve` setzt `groupId` des jeweiligen Angebots, entfernt das Feld und liefert je Angebot nur Gruppen mit ausgelieferten Artikeln – das Wochenangebot bekommt keine leere Überschrift. Die Reihenfolge bleibt gemeinsam (Stelle in `items`, keine Reihenfolge je Angebot – Folgen in [06-oberflaechen.md](06-oberflaechen.md), „Bekannte Grenze“). Nicht zu verwechseln mit `gruppen` (Kundengruppen) der Angebotsdefinition in `angebote`. Ältere Fassungen verwerfen das Feld (dann gilt überall wieder `groupId`) |
 | `meta.werbung?` | Werbung je Angebots-ID (`std` oder Kundenangebot): `titel` (≤ 80 Zeichen), `text?` (≤ 240), `artikel` = höchstens 12 Artikel-IDs in Reihenfolge mit `text?` (Hinweis, ≤ 40), `weitere?` = eine zweite Werbung im selben Aufbau (höchstens zwei je Angebot, `WERBUNG_BLOECKE`; ältere Fassungen lesen nur die erste); unbekannte Angebote/Artikel und doppelte fallen weg, leere Werbungen ebenso – die nächste rückt nach (`clean_werbung`), keine Übernahme durch Angebote, die dem Wochenangebot folgen; `offer_resolve` liefert nur den Eintrag des jeweiligen Angebots und nur ausgelieferte Artikel (`meta.werbung = {titel, text?, artikel, weitere?}`); ältere Fassungen verwerfen das Feld |
 | Gruppe `vk?` | VK-Gruppe (Stammdaten), aus der „Artikel hinzufügen“ die Angebotsgruppe wählt; `^[0-9A-Za-z._-]{1,10}$`, intern (`offer_resolve` entfernt sie); ältere Fassungen verwerfen das Feld |
 
@@ -282,7 +282,8 @@ eine spätere Fassung speichert – bleibt auf dem Server (Rückfallschutz, GR-0
 `{"rev": 4, "offers": [{"id": "kunde-a", "name": "Wochenangebot Kunde A", "fallback": "standard", "gruppen?": ["10"]}], "stdPublic": true, "geloescht?": ["alt-id"], "updatedAt": "…", "updatedBy": "…"}`.
 `fallback`: `hidden` = eigene Artikelliste (nur Artikel mit eigenem Eintrag in `variants`, auch Sonderposten nur dann; Voreinstellung
 für neue Angebote), `standard` = folgt dem Wochenangebot (bisher: alle Artikel des Wochenangebots, ohne eigenen Preis mit
-dem Standardpreis). `gruppen`: Kundengruppen,
+dem Standardpreis). `gruppen`: Kundengruppen (Nummern aus `kundengruppen`; nicht zu verwechseln mit `items[].gruppen` am
+Artikel des Angebotsmodells = eigene Angebotsgruppen je Kundenangebot),
 deren Kunden das Angebot ohne eigene Freischaltung sehen (je Gruppe höchstens ein Angebot). Fehlt das Dokument, gelten
 `OFFER_DEFAULTS`. Neue IDs dürfen nicht mit `e-` beginnen (Einzelangebote) und nicht nur aus Ziffern bestehen.
 `geloescht`: IDs gelöschter Angebote – sie werden nie wieder vergeben (`offers_save` hängt bei einem neuen Angebot mit
@@ -290,8 +291,9 @@ gesperrter ID `-2`, `-3` … an), weil unter der alten ID noch Kundenpreise, Son
 (veröffentlichtes Angebot, Historie) und direkte Freischaltungen bei Kunden stehen können; gesperrt sind auch solche Reste aus der Zeit vor dem Feld
 (`angebot_ids_mit_resten`). Fehlt `fallback` in einer Anfrage, bleibt die gespeicherte Einstellung (neue Angebote: `hidden`); Felder, die
 `offers_save` nicht kennt, bleiben erhalten (GR-006). Ein weiterer Weg zu einem neuen Angebot ist `offer_kopieren`
-(`module/angebot/kopieren.php`, gleiche ID-Regeln): neues Angebot ohne `gruppen` mit dem `fallback` der Quelle, dazu im
-Entwurf unter der neuen ID dieselben `variants`, `namen`, `gruppen`, `sale.offers` und `meta.werbung` wie die Quelle; das `design`
+(`module/angebot/kopieren.php`, gleiche ID-Regeln): neues Angebot ohne `gruppen` (Kundengruppen der Angebotsdefinition) mit dem `fallback` der Quelle, dazu im
+Entwurf unter der neuen ID dieselben `variants`, `namen`, `gruppen` (eigene Angebotsgruppen der Artikel, `items[].gruppen`),
+`sale.offers` und `meta.werbung` wie die Quelle; das `design`
 der Quelle kommt an die neue Definition.
 
 **Design je Angebot** (seit 16.11.2026, `module/angebot/design.php`, GR-010). Drei Stellen:
@@ -325,8 +327,9 @@ veröffentlichen, oder danach einmal veröffentlichen.
 derselben Liste: `{"id": "sonder-grillwoche", "name": "Grillwoche", "fallback": "hidden", "art": "sonder", "gueltig":
 {"modus": "zeitraum", "von": "2026-11-16", "bis": "2026-11-21"} | {"modus": "kw", "jahr": 2026, "kw": 48}, "sonderGruppen":
 ["10"], "angelegt": {"t", "von"}, "geaendert?": {…}, "beendet?": {…}}`. Inhalte wie bei jedem Kundenangebot mit eigener
-Artikelliste in `variants`/`namen`/`gruppen`/`sale.offers`/`meta.werbung` unter ihrer ID. Die Kundengruppen stehen bewusst in
-`sonderGruppen`, nicht in `gruppen`: keine 1:1-Regel (eine Gruppe hat ihr Wochen- bzw. Kundenangebot **und** gültige
+Artikelliste in `variants`/`namen`/`gruppen`/`sale.offers`/`meta.werbung` der Artikel unter ihrer ID (`items[].gruppen` =
+eigene Angebotsgruppen). Die Kundengruppen stehen bewusst in
+`sonderGruppen`, nicht in `gruppen` der Angebotsdefinition: keine 1:1-Regel (eine Gruppe hat ihr Wochen- bzw. Kundenangebot **und** gültige
 Sonderangebote), und ältere Fassungen (Rückfall) zeigen ein Angebot ohne `gruppen` keinem Kunden. Sichtbar ist ein
 Sonderangebot nur im Zeitraum (Tage eingeschlossen; KW = Montag bis Sonntag, Europe/Berlin), nicht vorzeitig beendet und
 nur, wenn das veröffentlichte Angebot Artikel davon enthält (`sonder_sichtbar_je_gruppe`). `offers_save` legt Sonderangebote
@@ -405,7 +408,9 @@ Bezeichnungen eindeutig, höchstens 100 Kategorien (`module/verwaltung/angebotsk
 Lesen: Aktion `angebotskategorien` mit `stammdaten.sehen` oder `angebot.bearbeiten` (liefert dazu Nummer und Name der
 VK-Gruppen), speichern: `angebotskategorien_save` mit `stammdaten.bearbeiten` und Revision. Der Editor ordnet den
 Entwurf danach (`OfferCore.nachKategorien`: VK-Gruppe der Angebotsgruppe `groups[].vk`, sonst die häufigste ihrer
-Artikel – einmal gemerkt; Abschnitt `section` = Kategorie; Gruppen ohne Kategorie am Ende ohne Abschnitt). Leer =
+Artikel – einmal gemerkt; Abschnitt `section` = Kategorie; Gruppen ohne Kategorie am Ende ohne Abschnitt; Artikel in der
+Reihenfolge ihrer Basisgruppen; ein Artikel mit eigener Gruppe je Angebot `gruppen`, der zwischen Artikeln anderer
+Basisgruppen steht, bleibt hinter seinem Vorgänger). Leer =
 Reihenfolge von Hand wie früher.
 
 **`stammdaten`**: Artikelstammdaten aus `clean_master()`.
