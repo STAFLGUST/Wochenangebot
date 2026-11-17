@@ -17,6 +17,11 @@ if (!defined('WA_API')) { http_response_code(404); exit; }   // nur über api/in
 require_once dirname(__DIR__) . '/module/angebot/sonderangebote.php';
 require_once dirname(__DIR__) . '/module/angebot/design.php';
 const OFFER_STD = 'std';
+/* Felder eines Artikels, die offer_resolve ausliefert (Positivliste). Alles andere – eigene Preise, Bezeichnungen und
+   Sonderpreise anderer Angebote, die Zelladresse der Excel-Datei und jedes Feld, das erst eine spätere Fassung speichert –
+   verlässt den Server nie. So legt auch ein Rückfall auf diese Fassung keine neueren Felder je Angebot offen (GR-002, GR-005, GR-006). */
+const ARTIKEL_FELDER_AUSGELIEFERT = ['id' => 1, 'code' => 1, 'name' => 1, 'nameRaw' => 1, 'category' => 1, 'origin' => 1, 'condition' => 1,
+    'groupId' => 1, 'price' => 1, 'altPrices' => 1];
 const OFFER_DEFAULTS = [
     ['id' => 'chefs-culinar', 'name' => 'Wochenangebot Chefs Culinar', 'fallback' => 'standard'],
     ['id' => 'handelshof-efs', 'name' => 'Wochenangebot Handelshof, EFS', 'fallback' => 'standard'],
@@ -241,7 +246,7 @@ function offer_resolve(array $m, array $def, bool $ausverkauftAusblenden = true)
         $emp = empfehlung_fuer($it, $def['id']);
         $sale = $emp ? $emp['preis'] : null;
         $eigenerName = !$std && is_array($it['namen'] ?? null) ? trim((string)($it['namen'][$def['id']] ?? '')) : '';
-        unset($it['variants'], $it['sale'], $it['cell'], $it['namen']);   // Zelladresse der Excel-Datei ist intern; Bezeichnungen anderer Angebote nie
+        $it = array_intersect_key($it, ARTIKEL_FELDER_AUSGELIEFERT);   // alles andere bleibt auf dem Server – auch Felder, die erst eine spätere Fassung kennt
         if ($eigenerName !== '') $it['name'] = $eigenerName;   // eigene Bezeichnung in diesem Angebot, sonst der Basiswert
         if ($v && $v['status'] === 'hidden') continue;
         if ($sale !== null && $ausverkauftAusblenden && sold_out($it)) continue;   // Sonderposten ausverkauft
