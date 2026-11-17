@@ -9,6 +9,7 @@
 #   sh /opt/wochenangebot/deploy/sicherung-extern.sh status      # Ziel, Timer, Zahl, Alter und Größe der Stände – aus dem Repository (ändert nichts)
 #   sh /opt/wochenangebot/deploy/sicherung-extern.sh pruefen     # restic check und Rücksicherungsprobe: neuestes Archiv zurückholen, byteweise vergleichen
 #   sh /opt/wochenangebot/deploy/sicherung-extern.sh passwort-neu  # Passwort des Repositorys wechseln (Verdacht, Mitarbeiterwechsel), neues einmal anzeigen
+#   sh /opt/wochenangebot/deploy/sicherung-extern.sh passwort-pruefen  # aufbewahrte Kopie des Passworts prüfen: verdeckt eingeben, wird verglichen (ändert nichts)
 #   sh /opt/wochenangebot/deploy/sicherung-extern.sh aus         # Timer entfernen; Repository, Schlüssel und Passwort bleiben
 #
 # Ziel: SICHERUNG_EXTERN_ZIEL=<Benutzer>@<Benutzer>.your-storagebox.de in .env (Unterkonto der Storage Box). Das Passwort der
@@ -52,6 +53,7 @@ SYSTEMCTL=${WA_SYSTEMCTL:-systemctl}
 UNITS=${WA_UNITS:-/etc/systemd/system}
 FERTIG=1                  # 0 = Lauf, dessen Abbruch einen Fehlerstatus hinterlässt (jetzt, pruefen)
 ARBEIT=""
+TTY_ALT=""                # Einstellung des Terminals vor dem verdeckten Einlesen (passwort-pruefen), für aufraeumen()
 NEU=""                    # Zwischendatei eines neuen Passworts, bis sie die Passwortdatei ersetzt
 envwert() { sed -n "s/^$1=//p" "$ENV" 2>/dev/null | tail -1 | tr -d '"'"'"' '; }
 ZIEL=$(envwert SICHERUNG_EXTERN_ZIEL)
@@ -97,6 +99,7 @@ melden() { # ok|fail
 aufraeumen() {
   RC=$?
   [ -z "$ARBEIT" ] || rm -rf "$ARBEIT"
+  [ -z "$TTY_ALT" ] || stty "$TTY_ALT" 2>/dev/null || true
   [ -z "$NEU" ] || rm -f "$NEU"
   if [ "$FERTIG" -eq 0 ] && [ "$RC" -ne 0 ]; then   # unerwarteter Abbruch: Fehler sichtbar machen
     status false "Abbruch (Code $RC)"
@@ -282,6 +285,10 @@ UNIT
     exec 9<"$NEU"
     flock -n 9
     mv -fT "$NEU" "$PASSWORT"
+    NEU=""   # die Zwischendatei gibt es nicht mehr – aufraeumen() soll nichts mehr anfassen
+    # Vor dem Entfernen der alten Schlüssel muss die neue Passwortdatei sicher auf der Platte liegen: fiele sonst gleich danach
+    # der Strom aus, könnte sie leer sein, während das bisherige Passwort schon nicht mehr gilt
+    sync "$PASSWORT" "$BASIS" 2>/dev/null || sync
     # Erst jetzt alle anderen Schlüssel entfernen – den des bisherigen Passworts und Reste abgebrochener Wechsel. Scheitert
     # das, öffnen beide Passwörter das Repository; gezeigt wird keines, ein erneuter Aufruf wechselt noch einmal und räumt auf.
     OFFEN="Neues Passwort hinterlegt, aber das bisherige gilt noch und das neue wird nicht angezeigt. Erneut: sh deploy/sicherung-extern.sh passwort-neu"
@@ -290,7 +297,27 @@ UNIT
 for k in json.load(sys.stdin):
     if not k["current"]: print(re.fullmatch("[0-9a-f]+", k["id"]).group())' < "$ARBEIT/schluessel") || abbruch "$OFFEN"
     for K in $ANDERE; do r key remove "$K" >"$ARBEIT/aus" 2>&1 || { zeigen; abbruch "$OFFEN"; }; done
-    passwort_zeigen "Das bisherige Passwort gilt nicht mehr: Eintrag im Passwortmanager ersetzen, alten Ausdruck vernichten."
+    passwort_zeigen "Das bisherige Passwort gilt nicht mehr: Eintrag im Passwortmanager ersetzen und neu ausdrucken. Den alten Ausdruck erst vernichten, wenn die neue Kopie geprüft ist: sh deploy/sicherung-extern.sh passwort-pruefen"
+    ;;
+  passwort-pruefen)
+    # Prüft die außerhalb aufbewahrte Kopie (Passwortmanager, Ausdruck), bevor der alte Ausdruck vernichtet wird: ein
+    # Tippfehler dort fiele sonst erst im Ernstfall auf. Verdeckt einlesen, mit der Passwortdatei vergleichen – das Passwort
+    # steht so weder auf dem Bildschirm noch im Befehlsverlauf. Ändert nichts.
+    eingerichtet || abbruch "nicht eingerichtet – zuerst: sh deploy/sicherung-extern.sh einrichten"
+    printf 'Passwort aus dem Passwortmanager bzw. vom Ausdruck eingeben (wird nicht angezeigt), dann Eingabetaste: ' >&2
+    TTY_ALT=$(stty -g 2>/dev/null) || TTY_ALT=""
+    [ -z "$TTY_ALT" ] || stty -echo
+    IFS= read -r EINGABE || true
+    [ -z "$TTY_ALT" ] || stty "$TTY_ALT"
+    TTY_ALT=""
+    echo >&2
+    EINGABE=$(printf '%s' "$EINGABE" | tr -d ' \t\r')   # das Passwort enthält keine Leerzeichen; beim Einfügen kommen welche mit
+    if [ -n "$EINGABE" ] && [ "$EINGABE" = "$(cat "$PASSWORT")" ]; then
+      echo "Stimmt: Die Eingabe ist das Passwort des Repositorys."
+    else
+      echo "Stimmt NICHT mit dem Passwort des Repositorys überein. Kopie berichtigen (nichts vernichten) und erneut prüfen." >&2
+      exit 1
+    fi
     ;;
   aus)
     $SYSTEMCTL disable --now "$TIMER.timer" >/dev/null 2>&1 || true
@@ -299,7 +326,7 @@ for k in json.load(sys.stdin):
     echo "Externe Kopie aus: Timer entfernt. Repository, Schlüssel und Passwort bleiben; wieder an: sh deploy/sicherung-extern.sh einrichten"
     ;;
   *)
-    echo "Aufruf: sh deploy/sicherung-extern.sh einrichten|jetzt|status|pruefen|passwort-neu|aus" >&2
+    echo "Aufruf: sh deploy/sicherung-extern.sh einrichten|jetzt|status|pruefen|passwort-neu|passwort-pruefen|aus" >&2
     exit 2
     ;;
 esac

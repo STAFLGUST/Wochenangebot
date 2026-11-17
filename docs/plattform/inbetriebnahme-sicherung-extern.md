@@ -166,12 +166,17 @@ cd /opt/wochenangebot && sh deploy/sicherung-extern.sh passwort-neu
   Passwortdatei auf dem Server und entfernt erst danach **alle anderen** Schlüssel des Repositorys – den des bisherigen
   Passworts und auch solche, die jemand von Hand mit `restic key add` angelegt hat. Dann zeigt er das neue Passwort
   **einmal**. Stände, Timer und Karte bleiben, wie sie sind.
-- **Danach sofort:** neues Passwort in den Passwortmanager (alten Eintrag ersetzen) und neu ausdrucken; den alten
-  Ausdruck vernichten. Die Ausgabe nicht kopieren oder weitergeben.
+- **Danach sofort:** neues Passwort in den Passwortmanager (alten Eintrag ersetzen) und neu ausdrucken. Die Ausgabe
+  nicht kopieren oder weitergeben.
+- **Kopie prüfen, erst dann den alten Ausdruck vernichten** (*getestet*): `sh deploy/sicherung-extern.sh passwort-pruefen`
+  liest das Passwort verdeckt ein (aus dem Passwortmanager einfügen bzw. vom Ausdruck abtippen) und vergleicht es mit der
+  Passwortdatei auf dem Server. Erst bei „Stimmt“ ist die Kopie brauchbar – ein Tippfehler fiele sonst erst im Ernstfall
+  auf, wenn der Server weg ist. Der Befehl ändert nichts und passt auch nach dem ersten Einrichten.
 - Läuft gerade eine Übertragung, bricht der Befehl ab („läuft bereits – später erneut versuchen“) und ändert nichts.
 - **Abbruch oder Fehler:** Die Passwortdatei auf dem Server öffnet das Repository zu jedem Zeitpunkt, die nächtliche
   Kopie läuft weiter. Solange kein Passwort angezeigt wurde, ist der Wechsel nicht abgeschlossen und das bisherige
-  Passwort kann noch gelten – den Befehl einfach wiederholen.
+  Passwort kann noch gelten – den Befehl einfach wiederholen. Das gilt auch, wenn die Verbindung zur Konsole genau
+  während der Anzeige abriss: Dann gilt das bisherige schon nicht mehr, das neue wurde aber nicht gesehen.
 - **Grenze – ältere Snapshots der Storage Box:** Der Wechsel verschlüsselt nichts neu. restic verschlüsselt die Daten
   mit einem Hauptschlüssel; das Passwort schließt nur die Schlüsseldatei auf, in der er liegt (Ordner `keys/`). Der
   Hauptschlüssel bleibt beim Wechsel derselbe. Ein Snapshot der Storage Box von vor dem Wechsel enthält noch die alte
@@ -180,6 +185,7 @@ cd /opt/wochenangebot && sh deploy/sicherung-extern.sh passwort-neu
   (*getestet*). Das alte Passwort allein, ohne Zugriff auf die Storage Box, öffnet nichts. Die Lücke schließt sich,
   sobald die Snapshots von vor dem Wechsel gelöscht sind (*abgeleitet*): Automatische Snapshots ersetzt Hetzner der
   Reihe nach durch neuere, von Hand angelegte löscht Hetzner nie von selbst – diese in der Hetzner Console löschen
+  (vorher einen neuen Snapshot anlegen: die Snapshots sind zugleich der Löschschutz, Abschnitt 2)
   ([Hetzner Docs, Storage Box Snapshots](https://docs.hetzner.com/storage/storage-box/snapshots/), gelesen am 17.11.2026).
 - **Reicht nicht**, wenn auch der Zugriff auf die Storage Box in fremde Hände kam (Server übernommen, Hetzner-Konto):
   Dann braucht es ein neues Repository mit neuem Hauptschlüssel – ein eigener Schritt, den dieser Befehl nicht macht

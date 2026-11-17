@@ -212,6 +212,14 @@ lauf status
 ok "status nach dem Wechsel" '[ $CODE = 0 ] && echo "$AUS" | grep -Eq "Stände: [0-9]+, neuester "'
 lauf pruefen
 ok "pruefen nach dem Wechsel: Archiv zurückgeholt, byteweise gleich" '[ $CODE = 0 ] && echo "$AUS" | grep -q "byteweise gleich"'
+# Aufbewahrte Kopie prüfen (vor dem Vernichten des alten Ausdrucks): verdeckt eingelesen, nie ausgegeben, ändert nichts
+cp "$P" "$T/pw-vor-pruefen"
+AUS=$(printf '  %s \r\n' "$(cat "$P")" | $S passwort-pruefen 2>&1) && CODE=0 || CODE=$?
+ok "passwort-pruefen mit dem richtigen Passwort (auch mit Leerzeichen vom Einfügen): Stimmt, Passwort nicht ausgegeben, nichts geändert" '[ $CODE = 0 ] && echo "$AUS" | grep -q "^Stimmt: " && ! echo "$AUS" | grep -qF "$(cat "$P")" && cmp -s "$P" "$T/pw-vor-pruefen" && [ "$(schluessel)" = 1 ]'
+AUS=$(printf '%sx\n' "$(cat "$P")" | $S passwort-pruefen 2>&1) && CODE=0 || CODE=$?
+ok "passwort-pruefen mit einem Tippfehler: stimmt nicht, Code 1, Passwort nicht ausgegeben" '[ $CODE = 1 ] && echo "$AUS" | grep -q "Stimmt NICHT" && ! echo "$AUS" | grep -qF "$(cat "$P")"'
+AUS=$(cat "$T/pw-alt" | $S passwort-pruefen 2>&1) && CODE=0 || CODE=$?
+ok "passwort-pruefen mit dem bisherigen Passwort bzw. leerer Eingabe: stimmt nicht" '[ $CODE = 1 ] && ! printf "" | $S passwort-pruefen >/dev/null 2>&1'
 # Grenze des Wechsels (steht so in der Anleitung): der Hauptschlüssel bleibt derselbe. Eine Schlüsseldatei von vor dem Wechsel –
 # wie sie in einem älteren Snapshot der Storage Box liegt – öffnet mit dem alten Passwort auch Stände von nach dem Wechsel
 cp "$T/keys-alt"/* "$T/repo/keys/"
