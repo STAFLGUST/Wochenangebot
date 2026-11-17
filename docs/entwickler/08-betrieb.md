@@ -280,7 +280,9 @@ und Client – alles mit Freigabe ([Inbetriebnahme](../plattform/inbetriebnahme-
 
 ### Keine Testinstanz auf dem Server
 
-Es gibt keine Testinstanz unter `test.<Domain>` mehr (entfernt am 15.11.2026, GR-111). Neue Stände werden lokal
+Es gibt keine Testinstanz unter `test.<Domain>` mehr (aus dem Repository entfernt am 15.11.2026, GR-111; Container und
+Ordner `/opt/wochenangebot-test` auf dem Server gelöscht am 17.11.2026 – offen sind noch der DNS-Eintrag `test` und der
+Hostname der Testadresse in der bunny-Zone der Kundenseite). Neue Stände werden lokal
 (`tests/run_e2e.py`) und in der CI geprüft; auf dem Server läuft nur freigegebener Code. Der Umgebungsschalter
 `WA_TESTUMGEBUNG=1` (Kennzeichen, kein Mailversand, Testpostfach) bleibt und wird in der CI geprüft
 (`tests/e2e/test_testumgebung.py`).

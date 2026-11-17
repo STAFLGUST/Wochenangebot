@@ -159,7 +159,7 @@ Zonen, zunächst **nur protokollieren**.
 | Einstellung | Wert | Warum |
 |---|---|---|
 | Lernmodus | an bis 10.11.2026 (Vorgabe von bunny: 7 Tage) | erst Fehlalarme sehen |
-| WAF (Abwehr typischer Angriffe) | Profil „General“, Ausführung **Log** | bleibt auch nach dem Lernmodus „nur protokollieren“, bis jemand umstellt |
+| WAF (Abwehr typischer Angriffe) | Profil „General“, Ausführung **Block** seit 17.11.2026 (bis dahin **Log**) | hält Angriffe vor dem Server auf; siehe „Stand 17.11.2026“ unten |
 | Kopfzeilen / Inhalt der Anfrage protokollieren | aus; `Cookie`, `Authorization`, `X-Stafl-Cdn`, `X-CSRF-Token` ignoriert | keine Sitzungen, Passwörter oder den CDN-Schlüssel in den Protokollen |
 | Zu große Anfrage/Antwort für die Prüfung | Log | große Importe und Exporte werden nie wegen ihrer Größe abgewiesen |
 | DDoS-Abwehr | Empfindlichkeit **niedrig** | Prüfseiten mit JavaScript nur bei echten Angriffen (stören App und Schnittstelle) |
@@ -179,6 +179,13 @@ schon vor dem Server auf.
 **Nach dem Lernmodus** (ab 10.11.2026): bunny → Shield → Event Logs der vier Zonen ansehen. Fehlalarme (z. B. bei Importen,
 der App oder der Keycloak-Anmeldung) je Regel auf „Log“ stellen oder abschalten, dann WAF und Ratenbegrenzungen auf **Block**
 bzw. **Rate Limit** umstellen. Keine Prüfseite („Challenge“) für die Schnittstelle oder die Anmeldung einschalten.
+
+**Stand 17.11.2026** (Angabe des Inhabers, im bunny-Konto umgestellt; aus dem Repository nicht nachprüfbar): „Rule execution
+mode“ der WAF steht in allen vier Zonen auf **Block**. „Request body limit action“ und „Response body limit action“ bleiben
+auf **Log** – große Importe, Uploads (QM-Dateien) und Exporte überschreiten die Prüfgrenze des Plans und würden mit „Block“
+abgewiesen. Noch offen: Probe nach der Umstellung (anmelden, eine Datei importieren, eine Datei im QM-System hochladen) und
+der Stand der Ratenbegrenzungen (Tabelle oben: zuletzt dokumentiert **Log**). Wird ein eigener Vorgang abgewiesen: Regel unter
+Shield → WAF → „Triggered Rules“ suchen und einzeln auf „Log“ stellen.
 
 **Rückfall:** In der Zone Shield → WAF ausschalten bzw. DDoS-Empfindlichkeit „Off“; Ratenbegrenzungen löschen. Am Server
 ändert sich dabei nichts.
@@ -255,6 +262,10 @@ sh deploy/cdn-netzsperre.sh an                   # fremde Verbindungen verwerfen
 die Liste noch nicht kannte (dann wäre er im Modus „an“ abgewiesen worden). Erwartet sind nur vereinzelte Scanner. `an` ruft
 danach `https://<DOMAIN>/api/?action=status` über bunny ab; scheitert das dreimal, schaltet das Skript selbst auf `beobachten`
 zurück.
+
+**Stand:** seit 16.11.2026 im Modus `beobachten`, seit 17.11.2026 **`an`** (Inhaber, Hostinger-Browserkonsole; Probe über
+bunny erfolgreich). In der Beobachtungszeit: vereinzelte fremde Verbindungsversuche an Port 443, je Adresse nur wenige –
+kein Hinweis auf eigene Nutzer, die bunny umgehen.
 
 **Notfall und Rückweg:** `sh deploy/cdn-netzsperre.sh aus` entfernt Regeln und Timer sofort (braucht weder Netz noch `.env`).
 Vor einem Rückfall auf einen Release ohne dieses Skript ebenfalls zuerst `aus` – sonst blieben die Regeln bis zum nächsten
