@@ -1238,15 +1238,21 @@ GI = Client('198.51.100.9'); assert GI.call('login', {'username': 'gina', 'passw
 check('… auch nicht „Urlaub genehmigen“ ohne Personalstelle (alle Urlaubszeiträume + Kalender verrieten sonst Krankheitstage)', GI.call('hr_planung')[0] == 403
       and GI.call(f'hr_planung&jahr={Y - 1}')[0] == 403)
 check('… Personalstelle: Standard ist das nächste Jahr', P.call('hr_planung')[1]['jahr'] == Y)
-# Anträge der laufenden Vorplanung entscheidet die Personalstelle unter „Jahresplanung“ – am Reiter „Anträge“ zählen sie nicht
-# (Inhaber 17.11.2026). Wer nur „Urlaub genehmigen“ hat, hat keine Jahresplanung: dort bleiben sie unter „Anträge“.
-vo_ = P.call(f'hr_verwaltung&jahr={Y}')[1]['offen']; sp_ = P.call('hr_start')[1]; sg_ = GI.call('hr_start')[1]
-check('Vorplanung: offene Urlaubsanträge des Planungsjahres sind als „planung“ markiert, andere nicht', any(a_['planung'] for a_ in vo_)
-      and all(a_['planung'] == (a_['art'] == 'U' and a_['von'][:4] == str(Y)) for a_ in vo_), [(a_['art'], a_['von'], a_['planung']) for a_ in vo_])
-check('… Personalstelle: sie zählen am Reiter „Jahresplanung“, nicht mehr bei „Anträge“', sp_['planungOffen'] == sum(1 for a_ in vo_ if a_['planung'] and not a_['eigen']) > 0
-      and sp_['offen'] == sum(1 for a_ in vo_ if not a_['planung'] and not a_['eigen']), (sp_['offen'], sp_['planungOffen']))
-check('… nur „Urlaub genehmigen“: alle weiter unter „Anträge“', sg_['planungOffen'] is None
-      and sg_['offen'] == sum(1 for a_ in GI.call('hr_offen')[1]['offen'] if not a_['eigen']) >= sp_['planungOffen'], (sg_['offen'], sg_['planungOffen']))
+# Anträge der laufenden Vorplanung stehen für die Personalstelle unter „Jahresplanung“, nicht unter „Anträge“ (hr_jahresplanung_pruefer)
+offen_p_ = lambda: P.call(f'hr_verwaltung&jahr={Y}')[1]['offen']   # noqa: E731
+zahlen_ = lambda o, s: (s['offen'], s['planungOffen']) == (sum(1 for a_ in o if not a_['planung'] and not a_['eigen']), sum(1 for a_ in o if a_['planung'] and not a_['eigen']))   # noqa: E731
+vo_ = offen_p_(); sp_ = P.call('hr_start')[1]; go_ = GI.call('hr_offen')[1]['offen']; sg_ = GI.call('hr_start')[1]
+check('Vorplanung: offene Urlaubsanträge des Planungsjahres sind für die Personalstelle „planung“ und zählen am Reiter „Jahresplanung“',
+      all(a_['planung'] for a_ in vo_ if a_['id'] in (PA_, PB_, PI_, PJ_)) and sp_['planungOffen'] > 0 and zahlen_(vo_, sp_), (sp_['offen'], sp_['planungOffen']))
+check('… nur „Urlaub genehmigen“ (ohne Jahresplanung): alle weiter unter „Anträge“', not any(a_['planung'] for a_ in go_) and sg_['planungOffen'] is None
+      and sg_['offen'] == sum(1 for a_ in go_ if not a_['eigen']) > 0, (sg_['offen'], sg_['planungOffen']))
+# nicht mehr im Urlaubsplan: die Jahresplanung zeigt nur aktive Mitarbeiter – der offene Antrag muss unter „Anträge“ bleiben
+rev = P.call('mitarbeiter_hr')[1]['rev']; hr(ids['fritz'], aktiv=False)
+vi_ = offen_p_()
+check('… Mitarbeiter nicht mehr im Urlaubsplan: sein offener Antrag steht wieder unter „Anträge“ und zählt dort',
+      [a_['planung'] for a_ in vi_ if a_['id'] in (PI_, PJ_)] == [False, False] and zahlen_(vi_, P.call('hr_start')[1])
+      and not any(a_['id'] in (PI_, PJ_) for a_ in P.call(f'hr_planung&jahr={Y}')[1]['antraege']), [(a_['id'], a_['planung']) for a_ in vi_])
+rev = P.call('mitarbeiter_hr')[1]['rev']; hr(ids['fritz'], aktiv=True)
 st, r, raw_ = P.call(f'hr_planung&jahr={Y}', raw=True)
 an_ = {a_['id']: a_ for a_ in r['antraege']}
 pp_ = {p_['id']: p_ for p_ in r['personen']}
@@ -1296,7 +1302,7 @@ check('… an Fritz und Erika: Stichtag, Ziel, was fehlt, Vertretung, bisherige 
       and 'höchstens 5 Tage dürfen unverplant bleiben, also mindestens 15 von 20 Tagen' in mfp_.get('text', '') and '90 %' not in mfp_.get('text', '')
       and 'Liegt keine Planung vor, plant die Personalstelle Ihren Urlaub.' in mfp_.get('text', ''), (st, r, mfp_.get('text', '')[:500]))
 check('… nennt den Weg (Schalter „Vorplanung“, alle Zeiträume auf einmal) und die Regeln; ohne feste Vertretung „wählen Sie“',
-      'den Schalter „Vorplanung“ einschalten und alle Zeiträume' in mfp_.get('text', '') and 'höchstens 4 einzelne Urlaubstage' in mfp_.get('text', '')
+      'den Schalter „Vorplanung“ einschalten und alle Zeiträume' in mfp_.get('text', '') and 'höchstens 4 einzelne Urlaubstage, der übrige Urlaub möglichst zusammenhängend' in mfp_.get('text', '')
       and 'am Stück höchstens' in mfp_.get('text', '') and 'Wählen Sie für jeden Zeitraum eine Vertretung aus.' in mfp_.get('text', '')
       and 'Ihre Vertretung ist' not in mfp_.get('text', ''), mfp_.get('text', '')[:900])
 MAIL_HTML['planung'] = mail_html(mfp_)
@@ -1552,6 +1558,11 @@ mff_ = next((m_ for m_ in smtp.messages[n0:] if m_['to'] == ['fritz@example.org'
 check('Erinnerung Jahresplanung mit fester Vertretung: „Ihre Vertretung ist Erika Editor“ statt „wählen Sie“', st == 200
       and 'Ihre Vertretung ist Erika Editor – sie muss in Ihren Zeiträumen da sein.' in mff_.get('text', '')
       and 'Wählen Sie für jeden Zeitraum' not in mff_.get('text', ''), (st, mff_.get('text', '')[:700]))
+n0 = len(smtp.messages)
+st, r = P.call('hr_planung_erinnern', {'jahr': Y + 1})
+until(lambda: len(smtp.messages) >= n0 + (r.get('ergebnis') or {}).get('gesendet', 1))
+check('… für ein anderes Jahr als das Planungsjahr ohne den Schalter „Vorplanung“ (den gibt es nur dafür)', st == 200
+      and f'Stellen Sie dazu im Urlaubsportal Urlaubsanträge für {Y + 1}.' in smtp.messages[n0]['text'] and 'Schalter' not in smtp.messages[n0]['text'], (st, r))
 VOR_VT = {e_['id'] for e_ in P.call(f'hr_verwaltung&jahr={Y}')[1]['eintraege']}
 T1 = freie_wochen(montag(Y, 5, 2), 5, F, E, L) + dt.timedelta(days=1)   # Dienstag; Fritz, Erika und Lena haben dann nichts
 n0 = len(smtp.messages)
@@ -1744,6 +1755,11 @@ with sync_playwright() as p:
         pg.fill('#au-user', user); pg.fill('#pw1', pw); pg.click('#auth-submit')
         pg.wait_for_selector('#screen-auth', state='hidden')
         return ctx, pg
+
+    def plan_setzen(**w):   # Einstellungen der Jahresplanung ändern (übrige Felder bleiben)
+        v2 = P.call('mitarbeiter_hr')[1]
+        st_, r_ = P.call('hr_einstellungen_save', {'sperren': v2['sperren'], 'ferien': v2['ferien'], 'planung': {**v2['planung'], **w}})
+        assert st_ == 200, r_
 
     # ── HR-Mails als Bild (Inhaber 03.11.2026: ordentlich, Tabellen, Link zum Portal): 600 px und Handy 390 px ohne waagerechtes Scrollen ──
     mctx = br.new_context(viewport={'width': 600, 'height': 900}, locale='de-DE')
@@ -2105,10 +2121,6 @@ with sync_playwright() as p:
         check(f'{breite}px Genehmigende: kein waagerechtes Scrollen', pg.evaluate('document.documentElement.scrollWidth <= window.innerWidth + 1'))
         pg.screenshot(path=os.path.join(SH, f'hr_genehmigen_{breite}.png'), full_page=True)
         ctx.close()
-    def plan_setzen(**w):
-        v2 = P.call('mitarbeiter_hr')[1]
-        st_, r_ = P.call('hr_einstellungen_save', {'sperren': v2['sperren'], 'ferien': v2['ferien'], 'planung': {**v2['planung'], **w}})
-        assert st_ == 200, r_
     # Hier geht es um gewöhnliche Anträge: Planung so stellen, dass Anträge für Y nicht zur laufenden Vorplanung gehören
     # (sonst stehen sie für die Personalstelle unter „Jahresplanung“ – eigene Prüfung weiter unten). Am 31.12. beginnt die
     # Planung mit dem Beginn 31.12. – dann stattdessen ein Stichtag, der schon vorbei ist.
@@ -2386,7 +2398,7 @@ with sync_playwright() as p:
     check('Zeitleiste: kein Hinweis „24./31.12.“ mehr (Betriebsurlaub automatisch); Infozeile nennt die Einzeltage-Grenze',
           '24./31.12.' not in pg.text_content('#jp-zeitleiste') and 'höchstens 4 einzelne Urlaubstage' in pg.text_content('#jp-info'), pg.text_content('#jp-info'))
     pg.screenshot(path=os.path.join(SH, 'hr_planung_1280.png'), full_page=True)
-    # Anträge der Vorplanung: Zahl am Reiter „Jahresplanung“, unter „Anträge“ nur ein Hinweis mit Sprung (Inhaber 17.11.2026)
+    # Anträge der Vorplanung: Zahl am Reiter „Jahresplanung“, unter „Anträge“ nur ein Hinweis mit Sprung
     sp_ = P.call('hr_start')[1]
     pg.click('[data-tab="antraege"]'); pg.wait_for_selector('#antraege-liste .hr-antraege-planung')
     check('Vorplanung: Zahl am Reiter „Jahresplanung“, unter „Anträge“ keine Karten dafür, sondern ein Hinweis', sp_['planungOffen'] > 0
@@ -2395,6 +2407,11 @@ with sync_playwright() as p:
           and 'der Vorplanung' in pg.text_content('.hr-antraege-planung') and 'Jahresplanung' in pg.text_content('.hr-antraege-planung'),
           (pg.text_content('#hr-planung-offen'), pg.text_content('#hr-offen'), pg.text_content('.hr-antraege-planung')))
     pg.screenshot(path=os.path.join(SH, 'hr_antraege_vorplanung_1280.png'), full_page=True)
+    pg.set_viewport_size({'width': 390, 'height': 800})
+    check('390px Anträge: Hinweis auf die Vorplanung ohne waagerechtes Scrollen', pg.evaluate('document.documentElement.scrollWidth <= window.innerWidth + 1')
+          and pg.is_visible('#antraege-liste [data-zur-planung]'))
+    pg.screenshot(path=os.path.join(SH, 'hr_antraege_vorplanung_390.png'), full_page=False)
+    pg.set_viewport_size({'width': 1280, 'height': 900})
     pg.click('#antraege-liste [data-zur-planung]'); pg.wait_for_selector('#tab-planung:not([hidden]) #jp-zeitleiste .hr-jp-zl')
     check('… „Zur Jahresplanung“ öffnet den Reiter', pg.get_attribute('[data-tab="planung"]', 'aria-selected') == 'true')
     pg.click(f'#jp-zeitleiste .hr-jp-balken[data-jp-antrag="{JP_L}"]'); pg.wait_for_selector(f'#jp-a-{JP_L}.hervor')
@@ -2474,10 +2491,6 @@ with sync_playwright() as p:
           and pg.evaluate("(() => { const r = document.querySelector('#jp-zeitleiste'); return r.scrollWidth > r.clientWidth; })()")
           and pg.evaluate("getComputedStyle(document.querySelector('#jp-zeitleiste .hr-jp-zeile[data-jp-person] .hr-jp-name')).position") == 'sticky')
     pg.screenshot(path=os.path.join(SH, 'hr_planung_390.png'), full_page=True)
-    pg.click('[data-tab="antraege"]'); pg.wait_for_selector('#antraege-liste .hr-antraege-planung')
-    check('390px Anträge: Hinweis auf die Vorplanung ohne waagerechtes Scrollen', pg.evaluate('document.documentElement.scrollWidth <= window.innerWidth + 1')
-          and pg.is_visible('#antraege-liste [data-zur-planung]'))
-    pg.screenshot(path=os.path.join(SH, 'hr_antraege_vorplanung_390.png'), full_page=False)
     ctx.close()
     # Nur „Urlaub genehmigen“ (Gina): kein Reiter „Jahresplanung“ (nur Personalstelle), Anträge wie bisher
     ctx, pg = anmelden('gina', 'Genehmigen-Zugang-77', '198.51.100.8')

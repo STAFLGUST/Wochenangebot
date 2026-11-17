@@ -98,7 +98,7 @@ _Modul HR · Jahresplanung des Urlaubs (Inhaber 03.11.2026, Vorplanung und Einze
 - `hr_planung_ziel_text(st)` – Ziel in Worten (Mail): höchstens N Urlaubstage unverplant, also mindestens X von Y Tagen
 - `hr_planung_person(p, eintraege, jahr, pe, zusatz)` – Stand einer Person: Anspruch, Ziel (Anspruch weniger der höchstens unverplanten Tage, nie unter 0), geplant = beantragt + genehmigt (dazu der Betriebsurlaub …
 - `hr_vorplanung_eintrag(e, jahr, pe)` – Entstand der Eintrag in der Vorplanung des Jahres? = bis zum Stichtag erfasst (UTC-Zeit, ohne Erfassungszeit: nein)
-- `hr_in_jahresplanung(e, jahr, pe)` – Offener Urlaubsantrag der laufenden Jahresplanung (Inhaber 17.11.2026): beginnt im Planungsjahr, in der Vorplanung erfasst, Planung noch nicht abgeschlossen.
+- `hr_jahresplanung_pruefer(personal, me)` – Welche offenen Anträge stehen für diesen Mitarbeiter unter „Jahresplanung“ statt unter „Anträge“ (Inhaber 17.11.2026)?
 - `hr_einzeltage_hinweis(p, eintraege, e)` – Hinweis beim einzelnen Antrag (hr_antrag): liegt er in der Vorplanung seines Jahres und sind es damit mehr einzelne Urlaubstage als vorgesehen?
 - `hr_einzeltage(p, eintraege, jahr, pe, zusatz)` – Einzelne Urlaubstage der Vorplanung eines Jahres (Inhaber 10.11.2026: höchstens einzeltageMax, der übrige Urlaub möglichst zusammenhängend).
 - `hr_planung_ich(ich, eintraege, heute)` – Hinweis auf der Urlaubsseite des Mitarbeiters: nur in der Planungsphase (ab Beginn, bis die Planung abgeschlossen ist); nach dem Stichtag nur noch für alle, …
@@ -213,7 +213,7 @@ _Modul HR · Urlaubsverwaltung – Fachlogik (Daten, Feiertage, Urlaubskonto, An
 - `hr_eigene_angaben_pruefen(werte, jahr, jv, uid, u)` – Eigene HR-Angaben (mitarbeiter_hr_save für sich selbst): Felder mit Einfluss auf das Urlaubskonto dürfen sich nicht ändern – unveränderte Werte werden …
 - `hr_eigene_ids(personal, me)` – Kennungen der eigenen Person(en) des angemeldeten Mitarbeiters (verknüpft, auch nicht im Urlaubsplan) – für das Vier-Augen-Prinzip bei Angaben, Zuordnung und …
 - `hr_eigene_person(personal, me, person)`
-- `hr_offen_zahlen(personal, eintraege, me)` – Was der Mitarbeiter entscheiden kann, getrennt nach Ort (Zahlen an den Reitern, Startseite): [Anträge, Jahresplanung].
+- `hr_offen_entscheidbar(personal, eintraege, me)` – Offene Anträge, die der Mitarbeiter entscheiden kann (Zahlen an den Reitern, Startseite): mit „Urlaub genehmigen“ ohne die eigenen, Personalstelle ohne …
 - `hr_offene_antraege(personal, abw, me)` – Offene Urlaubsanträge für die Entscheidung (hr_verwaltung, hr_offen): Konto, Vertretung, wer aus derselben Abteilung gleichzeitig weg ist (ohne Grund), …
 - `hr_zeitraeume_pruefen(l, was)` – Zeiträume (Urlaubssperren, Ferien) prüfen: [{von, bis, text}]
 - `hr_in_zeitraum(liste, d)`
@@ -359,7 +359,7 @@ _STAFL-Plattform · HR · Urlaub Gleittage-Konto (02.11.2026)_
 
 - `ladeVerwaltung(jahr)`
 - `ladeAntraege()` – Offene Anträge: Personalstelle über hr_verwaltung, sonst (nur „Urlaub genehmigen“) über hr_offen
-- `zahlOffen()` – Zahlen an den Reitern: entscheidbare Anträge (ohne eigene); ohne Genehmigungsrecht alle offenen
+- `zahlOffen()` – Zahlen an den Reitern: entscheidbare Anträge (ohne eigene); ohne Genehmigungsrecht alle offenen.
 - `fehlerVerwaltung(text)`
 
 **Anträge**
@@ -474,8 +474,8 @@ _HR · Urlaubsverwaltung (Modul hr, Oberfläche hr.intern unter /module/hr/)._
 - `neue_offen(vorher)`
 - `konto_pa(jahr)` – ── Eintritt (Inhaber 11.11.2026): im Eintrittsjahr anteiliger Urlaubsanspruch – 1/12 je vollem Monat ab dem Eintrittstag, Bruchteile ab ½ auf volle Tage, …
 - `anmelden(user, pw, ip, breite, verfall_hinweis)`
-- `zeit(cl, uebernehmen, stand, **opt)`
 - `plan_setzen(**w)`
+- `zeit(cl, uebernehmen, stand, **opt)`
 - `zr_setzen(i, von, bis)`
 - `anmelden_handy(user, pw, ip, hoehe)` – ── Handy (Prüfung 10.11.2026): echte Mobil-Simulation (390 px, Touch, mobiles Ansichtsfenster, 3-fache Pixeldichte) – im Browser (Höhe 664 mit Leisten) und …
 

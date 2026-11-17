@@ -58,11 +58,11 @@ switch ($action) {
             $kollegen = [];
             foreach ($personal['personen'] as $p) if ($p['aktiv'] && (!$ich || $p['id'] !== $ich['id'])) $kollegen[] = ['id' => $p['id'], 'name' => hr_name($p)];
             // Zahl am Reiter „Anträge“: was der Mitarbeiter entscheiden kann (ohne eigene); Personalstelle ohne Genehmigungsrecht: alle offenen
-            // Anträge der laufenden Vorplanung zählen für die Personalstelle am Reiter „Jahresplanung“
-            $offen = null; $planungOffen = null;
+            $offen = null; $planungOffen = null;   // planungOffen: Anteil am Reiter „Jahresplanung“ (nur Personalstelle)
             if ($genehmigen || $verwalten) {
-                [$o, $pl] = hr_offen_zahlen($personal, $abw['eintraege'], $me);
-                $offen = count($o); $planungOffen = $verwalten ? count($pl) : null;
+                $o = hr_offen_entscheidbar($personal, $abw['eintraege'], $me);
+                $pl = count(array_filter($o, hr_jahresplanung_pruefer($personal, $me)));
+                $offen = count($o) - $pl; $planungOffen = $verwalten ? $pl : null;
             }
             // Korrekturmeldungen: eigene (neueste zuerst); Personalstelle zusätzlich die Zahl offener, die sie erledigen kann (ohne eigene)
             $korr = hr_korrekturen()['meldungen'];

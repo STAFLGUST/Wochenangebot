@@ -132,13 +132,19 @@ function hr_vorplanung_eintrag(array $e, int $jahr, array $pe): bool
     $t = (string)($e['erfasst']['t'] ?? '');
     return $t !== '' && substr($t, 0, 10) <= hr_planung_daten($pe, $jahr)['stichtag'];
 }
-/* Offener Urlaubsantrag der laufenden Jahresplanung (Inhaber 17.11.2026): beginnt im Planungsjahr, in der Vorplanung erfasst,
-   Planung noch nicht abgeschlossen. Die Personalstelle entscheidet solche Anträge unter „Jahresplanung“ – unter „Anträge“
-   verstellen sie sonst die laufenden. Nach dem Abschluss noch offene erscheinen wieder unter „Anträge“. */
-function hr_in_jahresplanung(array $e, int $jahr, array $pe): bool
+/* Welche offenen Anträge stehen für diesen Mitarbeiter unter „Jahresplanung“ statt unter „Anträge“ (Inhaber 17.11.2026)?
+   Rückgabe: Prüfer fn(Eintrag): bool. Nur die Personalstelle hat den Reiter; dorthin gehören offene Urlaubsanträge der
+   laufenden Vorplanung – Beginn im Planungsjahr, bis zum Stichtag erfasst, Planung nicht abgeschlossen, Mitarbeiter aktiv
+   (nur die zeigt hr_planung). Unter „Anträge“ verstellen sie sonst die laufenden; nach dem Abschluss stehen sie wieder dort. */
+function hr_jahresplanung_pruefer(array $personal, array $me): callable
 {
-    return $e['art'] === 'U' && $e['status'] === 'beantragt' && substr($e['von'], 0, 4) === (string)$jahr
-        && !isset($pe['abschluss'][(string)$jahr]) && hr_vorplanung_eintrag($e, $jahr, $pe);
+    if (!may($me, 'hr.verwalten')) return function () { return false; };
+    $pe = hr_planung_einst(); $jahr = hr_planung_jahr(null, $pe); $idx = hr_personen_index($personal);
+    if (isset($pe['abschluss'][(string)$jahr])) return function () { return false; };
+    return function (array $e) use ($pe, $jahr, $idx) {
+        return $e['art'] === 'U' && $e['status'] === 'beantragt' && substr($e['von'], 0, 4) === (string)$jahr
+            && ($idx[$e['person']]['aktiv'] ?? false) && hr_vorplanung_eintrag($e, $jahr, $pe);
+    };
 }
 
 /* Hinweis beim einzelnen Antrag (hr_antrag): liegt er in der Vorplanung seines Jahres und sind es damit mehr einzelne
@@ -527,7 +533,7 @@ function hr_planung_mail_zeilen(array $p, array $eintraege, int $jahr, array $id
 }
 
 /* Erinnerung „Bitte planen Sie Ihren Urlaub“ */
-function hr_planung_erinnerung_inhalt(array $p, array $eintraege, int $jahr, array $pe, array $idx, ?array $fest = null, int $amStueck = 0): array
+function hr_planung_erinnerung_inhalt(array $p, array $eintraege, int $jahr, array $pe, array $idx, ?array $fest, int $amStueck): array
 {
     $st = hr_planung_person($p, $eintraege, $jahr, $pe);
     $dt = hr_planung_daten($pe, $jahr);
@@ -539,12 +545,13 @@ function hr_planung_erinnerung_inhalt(array $p, array $eintraege, int $jahr, arr
         . ': ' . hr_planung_ziel_text($st) . '.';
     $box = 'Bisher geplant: ' . hr_tage_text($st['geplant']) . ' – es fehlen noch ' . hr_tage_text($st['fehlt']) . '.';
     // Weg und Regeln wie im Portal (Vorplanung seit 10.11.2026): feste Vertretung aus den Stammdaten, sonst selbst wählen
-    $regeln = array_filter([$pe['einzeltageMax'] ? 'höchstens ' . $pe['einzeltageMax'] . ' einzelne Urlaubstage, der übrige Urlaub zusammenhängend' : '',
+    $regeln = array_filter([$pe['einzeltageMax'] ? 'höchstens ' . $pe['einzeltageMax'] . ' einzelne Urlaubstage, der übrige Urlaub möglichst zusammenhängend' : '',
                             $amStueck > 0 ? 'am Stück höchstens ' . $amStueck . ' Arbeitstage' : '']);
-    $wie = 'So geht es: Im Urlaubsportal bei „Urlaub beantragen“ den Schalter „Vorplanung“ einschalten und alle Zeiträume für ' . $jahr . ' auf einmal eintragen. '
-        . ($fest ? 'Ihre Vertretung ist ' . hr_name($fest) . ' – sie muss in Ihren Zeiträumen da sein.' : ($pe['vertretungPflicht'] ? 'Wählen Sie für jeden Zeitraum eine Vertretung aus.' : ''));
+    $wie = implode(' ', array_filter([$jahr === hr_planung_jahr(null, $pe)   // den Schalter gibt es nur für das Planungsjahr
+            ? 'So geht es: Im Urlaubsportal bei „Urlaub beantragen“ den Schalter „Vorplanung“ einschalten und alle Zeiträume für ' . $jahr . ' auf einmal eintragen.'
+            : 'Stellen Sie dazu im Urlaubsportal Urlaubsanträge für ' . $jahr . '.',
+        $fest ? 'Ihre Vertretung ist ' . hr_name($fest) . ' – sie muss in Ihren Zeiträumen da sein.' : ($pe['vertretungPflicht'] ? 'Wählen Sie für jeden Zeitraum eine Vertretung aus.' : '')]));
     $dazu = ($regeln ? 'Bitte beachten: ' . implode('; ', $regeln) . '. ' : '')
-        . ($st['betriebsurlaub'] > 0 ? 'Der 24.12. und 31.12. (Betrieb geschlossen) sind schon eingerechnet. ' : '')
         . 'Die Personalstelle prüft die Planung und gibt sie frei. Liegt keine Planung vor, plant die Personalstelle Ihren Urlaub.';
     $zeilen = hr_planung_mail_zeilen($p, $eintraege, $jahr, $idx);
     [$lt, $lh] = hr_mail_knopf();
@@ -601,7 +608,7 @@ function hr_planung_senden(string $art, int $jahr, array $me, ?string $person = 
     [$mit, $ohne] = hr_planung_empfaenger($jahr, $art === 'planung', $person);
     if (!$mit) throw new RuntimeException($art === 'planung' ? 'Alle Mitarbeiter mit E-Mail-Adresse haben ihr Ziel schon erreicht.' : 'Kein Mitarbeiter mit E-Mail-Adresse.');
     $abw = hr_abwesenheiten()['eintraege']; $personal = hr_personal(); $idx = hr_personen_index($personal); $pe = hr_planung_einst(); $m = hr_mail_einst();
-    $amStueck = (int)hr_einstellungen()['amStueckMax'];
+    $amStueck = hr_einstellungen()['amStueckMax'];
     $jobs = [];
     foreach ($mit as [$p, $an]) {
         [$betreff, $text, $html] = $art === 'planung' ? hr_planung_erinnerung_inhalt($p, $abw, $jahr, $pe, $idx, hr_feste_vertretung($p, $personal), $amStueck)
