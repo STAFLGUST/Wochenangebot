@@ -377,7 +377,8 @@ check('… Mitarbeiterin zieht den künftigen Urlaub wieder zurück (Konto unver
 st, r = V.call('hr_verwaltung&jahr=' + str(Y))
 check('Personalstelle ohne Genehmigungsrecht: sieht offene Anträge', st == 200 and OFFEN in [a['id'] for a in r['offen']], st)
 check('… darf aber nicht entscheiden (403) und hr_offen nicht (403)', V.call('hr_entscheiden', {'id': OFFEN, 'entscheidung': 'genehmigt'})[0] == 403 and V.call('hr_offen')[0] == 403)
-check('… Start: Zahl offener Anträge trotzdem', (lambda x: x['verwalten'] is True and x['genehmigen'] is False and x['offen'] >= 1)(V.call('hr_start')[1]))
+check('… Start: Zahl offener Anträge trotzdem (in der Planungsphase am Reiter „Jahresplanung“)',
+      (lambda x: x['verwalten'] is True and x['genehmigen'] is False and x['offen'] + x['planungOffen'] >= 1)(V.call('hr_start')[1]))
 # Vier-Augen-Prinzip
 st, r = G.call('hr_antrag', {'von': iso(OKT + dt.timedelta(days=7)), 'bis': iso(OKT + dt.timedelta(days=8))})
 A_GINA = r['eintrag']['id']
@@ -1237,6 +1238,15 @@ GI = Client('198.51.100.9'); assert GI.call('login', {'username': 'gina', 'passw
 check('… auch nicht „Urlaub genehmigen“ ohne Personalstelle (alle Urlaubszeiträume + Kalender verrieten sonst Krankheitstage)', GI.call('hr_planung')[0] == 403
       and GI.call(f'hr_planung&jahr={Y - 1}')[0] == 403)
 check('… Personalstelle: Standard ist das nächste Jahr', P.call('hr_planung')[1]['jahr'] == Y)
+# Anträge der laufenden Vorplanung entscheidet die Personalstelle unter „Jahresplanung“ – am Reiter „Anträge“ zählen sie nicht
+# (Inhaber 17.11.2026). Wer nur „Urlaub genehmigen“ hat, hat keine Jahresplanung: dort bleiben sie unter „Anträge“.
+vo_ = P.call(f'hr_verwaltung&jahr={Y}')[1]['offen']; sp_ = P.call('hr_start')[1]; sg_ = GI.call('hr_start')[1]
+check('Vorplanung: offene Urlaubsanträge des Planungsjahres sind als „planung“ markiert, andere nicht', any(a_['planung'] for a_ in vo_)
+      and all(a_['planung'] == (a_['art'] == 'U' and a_['von'][:4] == str(Y)) for a_ in vo_), [(a_['art'], a_['von'], a_['planung']) for a_ in vo_])
+check('… Personalstelle: sie zählen am Reiter „Jahresplanung“, nicht mehr bei „Anträge“', sp_['planungOffen'] == sum(1 for a_ in vo_ if a_['planung'] and not a_['eigen']) > 0
+      and sp_['offen'] == sum(1 for a_ in vo_ if not a_['planung'] and not a_['eigen']), (sp_['offen'], sp_['planungOffen']))
+check('… nur „Urlaub genehmigen“: alle weiter unter „Anträge“', sg_['planungOffen'] is None
+      and sg_['offen'] == sum(1 for a_ in GI.call('hr_offen')[1]['offen'] if not a_['eigen']) >= sp_['planungOffen'], (sg_['offen'], sg_['planungOffen']))
 st, r, raw_ = P.call(f'hr_planung&jahr={Y}', raw=True)
 an_ = {a_['id']: a_ for a_ in r['antraege']}
 pp_ = {p_['id']: p_ for p_ in r['personen']}
@@ -1285,6 +1295,10 @@ check('… an Fritz und Erika: Stichtag, Ziel, was fehlt, Vertretung, bisherige 
       and 'es fehlen noch' in mfp_.get('text', '') and 'Vertretung' in mfp_.get('text', '') and 'Andre Vierzig' in mfp_.get('text', '')
       and 'höchstens 5 Tage dürfen unverplant bleiben, also mindestens 15 von 20 Tagen' in mfp_.get('text', '') and '90 %' not in mfp_.get('text', '')
       and 'Liegt keine Planung vor, plant die Personalstelle Ihren Urlaub.' in mfp_.get('text', ''), (st, r, mfp_.get('text', '')[:500]))
+check('… nennt den Weg (Schalter „Vorplanung“, alle Zeiträume auf einmal) und die Regeln; ohne feste Vertretung „wählen Sie“',
+      'den Schalter „Vorplanung“ einschalten und alle Zeiträume' in mfp_.get('text', '') and 'höchstens 4 einzelne Urlaubstage' in mfp_.get('text', '')
+      and 'am Stück höchstens' in mfp_.get('text', '') and 'Wählen Sie für jeden Zeitraum eine Vertretung aus.' in mfp_.get('text', '')
+      and 'Ihre Vertretung ist' not in mfp_.get('text', ''), mfp_.get('text', '')[:900])
 MAIL_HTML['planung'] = mail_html(mfp_)
 # Abschluss: Jahresübersicht an alle mit Adresse, Hinweis bei den Mitarbeitern verschwindet; wieder öffnen
 falsch_ = [GI.call('hr_planung_abschluss', {'jahr': Y, 'abgeschlossen': True})[0], P.call('hr_planung_abschluss', {'jahr': Y, 'abgeschlossen': 'ja'})[0],
@@ -1301,6 +1315,8 @@ check('… abgeschlossen: Jahresübersicht an Fritz und Erika (genehmigter Zeitr
 MAIL_HTML['jahresuebersicht'] = mail_html(jf_)
 check('… danach keine Erinnerung mehr (409), auch nicht für vergangene Jahre', P.call('hr_planung_erinnern', {'jahr': Y})[0] == 409
       and P.call('hr_planung_erinnern', {'jahr': Y - 2})[0] == 409)
+check('… noch offene Anträge stehen nach dem Abschluss wieder unter „Anträge“', not any(a_['planung'] for a_ in P.call(f'hr_verwaltung&jahr={Y}')[1]['offen'])
+      and P.call('hr_start')[1]['planungOffen'] == 0)
 check('… Hinweis bei den Mitarbeitern weg, Zusammenfassung zeigt den Abschluss, doppelt 409', E.call('hr_start')[1].get('planung') is None
       and P.call('hr_planung')[1]['abschluss']['by'] == 'Paul Personal' and P.call('hr_planung_abschluss', {'jahr': Y, 'abgeschlossen': True})[0] == 409)
 n0 = len(smtp.messages)
@@ -1529,6 +1545,13 @@ check('Vier-Augen: die eigene feste Vertretung ändert eine andere Person der Pe
       P.call('mitarbeiter_hr_save', {'nutzer': ids['paul'], 'rev': rev, 'vertretung': PE})[0] == 403)
 check('Mitarbeiter: feste Vertretung im Start (für das gesperrte Feld), andere nicht', F.call('hr_start')[1].get('festeVertretung') == {'id': PE, 'name': 'Erika Editor'}
       and E.call('hr_start')[1].get('festeVertretung') is None)
+n0 = len(smtp.messages)
+st, r = P.call('hr_planung_erinnern', {'jahr': Y})
+until(lambda: len(smtp.messages) >= n0 + (r.get('ergebnis') or {}).get('gesendet', 1))
+mff_ = next((m_ for m_ in smtp.messages[n0:] if m_['to'] == ['fritz@example.org']), {})
+check('Erinnerung Jahresplanung mit fester Vertretung: „Ihre Vertretung ist Erika Editor“ statt „wählen Sie“', st == 200
+      and 'Ihre Vertretung ist Erika Editor – sie muss in Ihren Zeiträumen da sein.' in mff_.get('text', '')
+      and 'Wählen Sie für jeden Zeitraum' not in mff_.get('text', ''), (st, mff_.get('text', '')[:700]))
 VOR_VT = {e_['id'] for e_ in P.call(f'hr_verwaltung&jahr={Y}')[1]['eintraege']}
 T1 = freie_wochen(montag(Y, 5, 2), 5, F, E, L) + dt.timedelta(days=1)   # Dienstag; Fritz, Erika und Lena haben dann nichts
 n0 = len(smtp.messages)
@@ -2082,6 +2105,15 @@ with sync_playwright() as p:
         check(f'{breite}px Genehmigende: kein waagerechtes Scrollen', pg.evaluate('document.documentElement.scrollWidth <= window.innerWidth + 1'))
         pg.screenshot(path=os.path.join(SH, f'hr_genehmigen_{breite}.png'), full_page=True)
         ctx.close()
+    def plan_setzen(**w):
+        v2 = P.call('mitarbeiter_hr')[1]
+        st_, r_ = P.call('hr_einstellungen_save', {'sperren': v2['sperren'], 'ferien': v2['ferien'], 'planung': {**v2['planung'], **w}})
+        assert st_ == 200, r_
+    # Hier geht es um gewöhnliche Anträge: Planung so stellen, dass Anträge für Y nicht zur laufenden Vorplanung gehören
+    # (sonst stehen sie für die Personalstelle unter „Jahresplanung“ – eigene Prüfung weiter unten). Am 31.12. beginnt die
+    # Planung mit dem Beginn 31.12. – dann stattdessen ein Stichtag, der schon vorbei ist.
+    PLAN_VOR = P.call('mitarbeiter_hr')[1]['planung']
+    plan_setzen(**(dict(start='01-01', stichtag='01-02') if HEUTE_.strftime('%m-%d') == '12-31' else dict(start='12-31', stichtag='01-31')))
     # Personalstelle ohne Genehmigungsrecht (Vera): Anträge sichtbar, aber ohne Knöpfe, mit Hinweis
     ctx, pg = anmelden('vera', 'Genehmigen-Zugang-77', '198.51.100.9')
     pg.goto(B + '/module/hr/#antraege'); pg.wait_for_selector('.hr-antrag .hr-hinweis')
@@ -2097,6 +2129,7 @@ with sync_playwright() as p:
     pg.screenshot(path=os.path.join(SH, 'hr_antraege_1280.png'), full_page=True)
     pg.click('.hr-antrag [data-genehmigen]'); pg.wait_for_selector('.hr-leer')
     check('Oberfläche: Antrag genehmigt, keine offenen mehr', P.call('hr_verwaltung&jahr=' + str(Y))[1]['offen'] == [])
+    plan_setzen(start=PLAN_VOR['start'], stichtag=PLAN_VOR['stichtag'])
 
     # Kalender der Personalstelle: Krankheit über den Monatswechsel nahe heute (für „± 2 Wochen“)
     heute_ = dt.date.today()
@@ -2235,11 +2268,6 @@ with sync_playwright() as p:
     #    „Jahresplanung“ für Personalstelle und Genehmigende (Kennzahlen, Zeitleiste, Konflikte, Filter, gesammelt genehmigen,
     #    ablehnen, Erinnerung, Abschluss mit Jahresübersicht, wieder öffnen), Einstellungen in Verwaltung → Urlaub ──
     PLAN_ALT = P.call('mitarbeiter_hr')[1]['planung']
-
-    def plan_setzen(**w):
-        v2 = P.call('mitarbeiter_hr')[1]
-        st_, r_ = P.call('hr_einstellungen_save', {'sperren': v2['sperren'], 'ferien': v2['ferien'], 'planung': {**v2['planung'], **w}})
-        assert st_ == 200, r_
     plan_setzen(start='01-01', stichtag='12-31', unverplantMax=5, vertretungPflicht=True)   # Hinweis an jedem Tag sichtbar, Planungsjahr = Y
     planung = lambda: P.call(f'hr_planung&jahr={Y}')[1]   # noqa: E731
     JP1, JP2 = montag(Y, 11, 1), montag(Y, 11, 2)          # erste zwei Novemberwochen (Weihnachtssperre erst in der letzten)
@@ -2358,6 +2386,17 @@ with sync_playwright() as p:
     check('Zeitleiste: kein Hinweis „24./31.12.“ mehr (Betriebsurlaub automatisch); Infozeile nennt die Einzeltage-Grenze',
           '24./31.12.' not in pg.text_content('#jp-zeitleiste') and 'höchstens 4 einzelne Urlaubstage' in pg.text_content('#jp-info'), pg.text_content('#jp-info'))
     pg.screenshot(path=os.path.join(SH, 'hr_planung_1280.png'), full_page=True)
+    # Anträge der Vorplanung: Zahl am Reiter „Jahresplanung“, unter „Anträge“ nur ein Hinweis mit Sprung (Inhaber 17.11.2026)
+    sp_ = P.call('hr_start')[1]
+    pg.click('[data-tab="antraege"]'); pg.wait_for_selector('#antraege-liste .hr-antraege-planung')
+    check('Vorplanung: Zahl am Reiter „Jahresplanung“, unter „Anträge“ keine Karten dafür, sondern ein Hinweis', sp_['planungOffen'] > 0
+          and pg.text_content('#hr-planung-offen') == str(sp_['planungOffen']) and (pg.text_content('#hr-offen') or '0') == str(sp_['offen'] + sp_['korrekturenOffen'])
+          and pg.locator('#antraege-liste .hr-antrag').count() == sum(1 for a in P.call(f'hr_verwaltung&jahr={Y}')[1]['offen'] if not a['planung'])
+          and 'der Vorplanung' in pg.text_content('.hr-antraege-planung') and 'Jahresplanung' in pg.text_content('.hr-antraege-planung'),
+          (pg.text_content('#hr-planung-offen'), pg.text_content('#hr-offen'), pg.text_content('.hr-antraege-planung')))
+    pg.screenshot(path=os.path.join(SH, 'hr_antraege_vorplanung_1280.png'), full_page=True)
+    pg.click('#antraege-liste [data-zur-planung]'); pg.wait_for_selector('#tab-planung:not([hidden]) #jp-zeitleiste .hr-jp-zl')
+    check('… „Zur Jahresplanung“ öffnet den Reiter', pg.get_attribute('[data-tab="planung"]', 'aria-selected') == 'true')
     pg.click(f'#jp-zeitleiste .hr-jp-balken[data-jp-antrag="{JP_L}"]'); pg.wait_for_selector(f'#jp-a-{JP_L}.hervor')
     check('Klick auf einen Balken: Antrag in der Liste hervorgehoben, Konflikt als Hinweis', 'selbst abwesend' in pg.text_content(f'#jp-a-{JP_L}') and pg.is_visible(f'#jp-a-{JP_L}'))
     pg.click('#jp-filter [data-jp-filter="konflikt"]'); pg.wait_for_selector('#jp-filter [data-jp-filter="konflikt"][aria-pressed="true"]')
@@ -2435,6 +2474,10 @@ with sync_playwright() as p:
           and pg.evaluate("(() => { const r = document.querySelector('#jp-zeitleiste'); return r.scrollWidth > r.clientWidth; })()")
           and pg.evaluate("getComputedStyle(document.querySelector('#jp-zeitleiste .hr-jp-zeile[data-jp-person] .hr-jp-name')).position") == 'sticky')
     pg.screenshot(path=os.path.join(SH, 'hr_planung_390.png'), full_page=True)
+    pg.click('[data-tab="antraege"]'); pg.wait_for_selector('#antraege-liste .hr-antraege-planung')
+    check('390px Anträge: Hinweis auf die Vorplanung ohne waagerechtes Scrollen', pg.evaluate('document.documentElement.scrollWidth <= window.innerWidth + 1')
+          and pg.is_visible('#antraege-liste [data-zur-planung]'))
+    pg.screenshot(path=os.path.join(SH, 'hr_antraege_vorplanung_390.png'), full_page=False)
     ctx.close()
     # Nur „Urlaub genehmigen“ (Gina): kein Reiter „Jahresplanung“ (nur Personalstelle), Anträge wie bisher
     ctx, pg = anmelden('gina', 'Genehmigen-Zugang-77', '198.51.100.8')

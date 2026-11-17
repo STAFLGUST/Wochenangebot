@@ -2,7 +2,7 @@
 
 <!-- ERZEUGT von `python3 werkzeuge/doku.py erzeugen` – nicht von Hand ändern. Quelle: Funktionen und Kommentare im Code. Die CI prüft, dass diese Datei zum Code passt. -->
 
-11 Dateien, 294 Funktionen – in der Reihenfolge der Datei, **fett** die Abschnitte. Text = erste Aussage des Kommentars direkt über der Funktion (Python: Docstring). Übersicht aller Module: [README.md](README.md).
+11 Dateien, 296 Funktionen – in der Reihenfolge der Datei, **fett** die Abschnitte. Text = erste Aussage des Kommentars direkt über der Funktion (Python: Docstring). Übersicht aller Module: [README.md](README.md).
 
 ## `app/api/aktionen/hr.php`
 
@@ -98,6 +98,7 @@ _Modul HR · Jahresplanung des Urlaubs (Inhaber 03.11.2026, Vorplanung und Einze
 - `hr_planung_ziel_text(st)` – Ziel in Worten (Mail): höchstens N Urlaubstage unverplant, also mindestens X von Y Tagen
 - `hr_planung_person(p, eintraege, jahr, pe, zusatz)` – Stand einer Person: Anspruch, Ziel (Anspruch weniger der höchstens unverplanten Tage, nie unter 0), geplant = beantragt + genehmigt (dazu der Betriebsurlaub …
 - `hr_vorplanung_eintrag(e, jahr, pe)` – Entstand der Eintrag in der Vorplanung des Jahres? = bis zum Stichtag erfasst (UTC-Zeit, ohne Erfassungszeit: nein)
+- `hr_in_jahresplanung(e, jahr, pe)` – Offener Urlaubsantrag der laufenden Jahresplanung (Inhaber 17.11.2026): beginnt im Planungsjahr, in der Vorplanung erfasst, Planung noch nicht abgeschlossen.
 - `hr_einzeltage_hinweis(p, eintraege, e)` – Hinweis beim einzelnen Antrag (hr_antrag): liegt er in der Vorplanung seines Jahres und sind es damit mehr einzelne Urlaubstage als vorgesehen?
 - `hr_einzeltage(p, eintraege, jahr, pe, zusatz)` – Einzelne Urlaubstage der Vorplanung eines Jahres (Inhaber 10.11.2026: höchstens einzeltageMax, der übrige Urlaub möglichst zusammenhängend).
 - `hr_planung_ich(ich, eintraege, heute)` – Hinweis auf der Urlaubsseite des Mitarbeiters: nur in der Planungsphase (ab Beginn, bis die Planung abgeschlossen ist); nach dem Stichtag nur noch für alle, …
@@ -117,7 +118,7 @@ _Modul HR · Jahresplanung des Urlaubs (Inhaber 03.11.2026, Vorplanung und Einze
 **E-Mails der Jahresplanung (Aufbau wie die übrigen HR-Mails, module/hr/mail.php)**
 
 - `hr_planung_mail_zeilen(p, eintraege, jahr, idx)` – Zeilen [Zeitraum (+ beantragt), Tage, –, Vertretung] eines Jahres für hr_mail_tabelle
-- `hr_planung_erinnerung_inhalt(p, eintraege, jahr, pe, idx)` – Erinnerung „Bitte planen Sie Ihren Urlaub“
+- `hr_planung_erinnerung_inhalt(p, eintraege, jahr, pe, idx, fest, amStueck)` – Erinnerung „Bitte planen Sie Ihren Urlaub“
 - `hr_planung_uebersicht_inhalt(p, eintraege, jahr, idx)` – Jahresübersicht nach dem Abschluss der Planung
 - `hr_planung_empfaenger(jahr, nurOffen, person)` – Empfänger: Mitarbeiter im Urlaubsplan mit E-Mail-Adresse; $nurOffen: nur wer das Ziel noch nicht erreicht hat; $person: nur diese Person.
 - `hr_planung_senden(art, jahr, me, person)` – Versand: art „planung“ (Erinnerung) oder „jahresuebersicht“
@@ -212,6 +213,7 @@ _Modul HR · Urlaubsverwaltung – Fachlogik (Daten, Feiertage, Urlaubskonto, An
 - `hr_eigene_angaben_pruefen(werte, jahr, jv, uid, u)` – Eigene HR-Angaben (mitarbeiter_hr_save für sich selbst): Felder mit Einfluss auf das Urlaubskonto dürfen sich nicht ändern – unveränderte Werte werden …
 - `hr_eigene_ids(personal, me)` – Kennungen der eigenen Person(en) des angemeldeten Mitarbeiters (verknüpft, auch nicht im Urlaubsplan) – für das Vier-Augen-Prinzip bei Angaben, Zuordnung und …
 - `hr_eigene_person(personal, me, person)`
+- `hr_offen_zahlen(personal, eintraege, me)` – Was der Mitarbeiter entscheiden kann, getrennt nach Ort (Zahlen an den Reitern, Startseite): [Anträge, Jahresplanung].
 - `hr_offene_antraege(personal, abw, me)` – Offene Urlaubsanträge für die Entscheidung (hr_verwaltung, hr_offen): Konto, Vertretung, wer aus derselben Abteilung gleichzeitig weg ist (ohne Grund), …
 - `hr_zeitraeume_pruefen(l, was)` – Zeiträume (Urlaubssperren, Ferien) prüfen: [{von, bis, text}]
 - `hr_in_zeitraum(liste, d)`
@@ -265,7 +267,7 @@ _Modul HR · Urlaubsverwaltung – Fachlogik (Daten, Feiertage, Urlaubskonto, An
 - `hr_gleiche_abteilung(a, b)` – Gleiche Abteilung (Sicht 'urlaub' nur für Kollegen der eigenen Abteilung, Inhaber 11.11.2026): über die Nummer der Stammdaten (abteilungNr, nach hr_personal …
 - `hr_zeile(p, eintraege, tage, sicht)` – Kürzel je Person und Tag eines Monats.
 - `hr_monat(jahr, monat, me, voll, kollegen, alleAbteilungen)` – Monatsplan: alle aktiven Mitarbeiter, gruppiert nach Abteilung (Reihenfolge laut Position).
-- `hr_startseite(me)` – Startseite des Dashboards („Heute für Sie“, lib/startseite.php): was dieser Mitarbeiter in HR entscheiden kann – dieselben Zahlen wie am Reiter „Anträge“ …
+- `hr_startseite(me)` – Startseite des Dashboards („Heute für Sie“, lib/startseite.php): was dieser Mitarbeiter in HR entscheiden kann – dieselben Zahlen wie an den Reitern …
 
 ## `app/api/module/hr/zeiterfassung.php`
 
@@ -357,7 +359,7 @@ _STAFL-Plattform · HR · Urlaub Gleittage-Konto (02.11.2026)_
 
 - `ladeVerwaltung(jahr)`
 - `ladeAntraege()` – Offene Anträge: Personalstelle über hr_verwaltung, sonst (nur „Urlaub genehmigen“) über hr_offen
-- `zahlOffen()` – Zahl am Reiter: entscheidbare Anträge (ohne eigene); ohne Genehmigungsrecht alle offenen
+- `zahlOffen()` – Zahlen an den Reitern: entscheidbare Anträge (ohne eigene); ohne Genehmigungsrecht alle offenen
 - `fehlerVerwaltung(text)`
 
 **Anträge**

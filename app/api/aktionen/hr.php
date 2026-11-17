@@ -58,10 +58,12 @@ switch ($action) {
             $kollegen = [];
             foreach ($personal['personen'] as $p) if ($p['aktiv'] && (!$ich || $p['id'] !== $ich['id'])) $kollegen[] = ['id' => $p['id'], 'name' => hr_name($p)];
             // Zahl am Reiter „Anträge“: was der Mitarbeiter entscheiden kann (ohne eigene); Personalstelle ohne Genehmigungsrecht: alle offenen
-            $offen = null;
-            if ($genehmigen || $verwalten) $offen = count(array_filter($abw['eintraege'], function ($e) use ($genehmigen, $personal, $me) {
-                return $e['status'] === 'beantragt' && (!$genehmigen || !hr_eigen($personal, $me, $e));
-            }));
+            // Anträge der laufenden Vorplanung zählen für die Personalstelle am Reiter „Jahresplanung“
+            $offen = null; $planungOffen = null;
+            if ($genehmigen || $verwalten) {
+                [$o, $pl] = hr_offen_zahlen($personal, $abw['eintraege'], $me);
+                $offen = count($o); $planungOffen = $verwalten ? count($pl) : null;
+            }
             // Korrekturmeldungen: eigene (neueste zuerst); Personalstelle zusätzlich die Zahl offener, die sie erledigen kann (ohne eigene)
             $korr = hr_korrekturen()['meldungen'];
             $eigeneIds = hr_eigene_ids($personal, $me);
@@ -69,7 +71,7 @@ switch ($action) {
             usort($meine, function ($a, $b) { return strcmp($b['erfasst']['t'] ?? '', $a['erfasst']['t'] ?? ''); });
             $korrOffen = $verwalten ? count(array_filter($korr, function ($m) use ($eigeneIds) { return $m['status'] === 'offen' && !isset($eigeneIds[$m['person']]); })) : null;
             respond(['ok' => true, 'jahr' => $jahr, 'heute' => hr_heute(), 'name' => $me['name'], 'verwalten' => $verwalten, 'genehmigen' => $genehmigen, 'uebersicht' => $uebersicht, 'neuVerknuepft' => $neuVerknuepft,
-                     'offen' => $offen, 'korrekturenOffen' => $korrOffen,
+                     'offen' => $offen, 'planungOffen' => $planungOffen, 'korrekturenOffen' => $korrOffen,
                      'korrekturen' => array_map(function ($m) use ($ich) { return hr_korrektur_aus($m, $ich); }, array_slice($meine, 0, 30)),
                      'ich' => $ich ? ['id' => $ich['id'], 'name' => hr_name($ich), 'abteilung' => $ich['abteilung'], 'arbeitstage' => $ich['arbeitstage']] : null,
                      'konto' => $ich ? hr_konto($ich, $abw['eintraege'], $jahr) : null, 'eintraege' => $eigene, 'kollegen' => $kollegen,

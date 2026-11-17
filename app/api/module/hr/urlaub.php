@@ -818,11 +818,25 @@ function hr_eigene_person(array $personal, array $me, string $person): bool
     return false;
 }
 
+/* Was der Mitarbeiter entscheiden kann, getrennt nach Ort (Zahlen an den Reitern, Startseite): [Anträge, Jahresplanung].
+   Mit „Urlaub genehmigen“ ohne die eigenen, Personalstelle ohne dieses Recht alle offenen. Nur die Personalstelle hat die
+   Jahresplanung – für alle anderen bleiben auch die Anträge der Vorplanung unter „Anträge“. */
+function hr_offen_zahlen(array $personal, array $eintraege, array $me): array
+{
+    $genehmigen = may($me, 'hr.genehmigen'); $verwalten = may($me, 'hr.verwalten');
+    $pe = hr_planung_einst(); $pj = hr_planung_jahr(null, $pe);
+    $offen = array_filter($eintraege, function ($e) use ($genehmigen, $personal, $me) { return $e['status'] === 'beantragt' && (!$genehmigen || !hr_eigen($personal, $me, $e)); });
+    $planung = $verwalten ? array_filter($offen, function ($e) use ($pj, $pe) { return hr_in_jahresplanung($e, $pj, $pe); }) : [];
+    return [array_values(array_diff_key($offen, $planung)), array_values($planung)];
+}
+
 /* Offene Urlaubsanträge für die Entscheidung (hr_verwaltung, hr_offen): Konto, Vertretung, wer aus derselben Abteilung
-   gleichzeitig weg ist (ohne Grund), „eigen“ = Antrag des angemeldeten Mitarbeiters (nicht entscheidbar). */
+   gleichzeitig weg ist (ohne Grund), „eigen“ = Antrag des angemeldeten Mitarbeiters (nicht entscheidbar),
+   „planung“ = Antrag der laufenden Jahresplanung. */
 function hr_offene_antraege(array $personal, array $abw, array $me): array
 {
     $idx = hr_personen_index($personal);
+    $pe = hr_planung_einst(); $pj = hr_planung_jahr(null, $pe);
     $offen = []; $freiJe = [];
     foreach ($abw['eintraege'] as $e) {
         if ($e['status'] !== 'beantragt') continue;
@@ -837,6 +851,7 @@ function hr_offene_antraege(array $personal, array $abw, array $me): array
         $aus['vertretungName'] = $e['vertretung'] && isset($idx[$e['vertretung']]) ? hr_name($idx[$e['vertretung']]) : null;
         $aus['vertretung2Name'] = ($e['vertretung2'] ?? null) && isset($idx[$e['vertretung2']]) ? hr_name($idx[$e['vertretung2']]) : null;
         $aus['eigen'] = hr_eigen($personal, $me, $e);
+        $aus['planung'] = hr_in_jahresplanung($e, $pj, $pe);   // Personalstelle: unter „Jahresplanung“ statt „Anträge“
         $aus['kollegen'] = [];
         foreach ($abw['eintraege'] as $o) {
             if ($o['id'] === $e['id'] || $o['person'] === $e['person'] || !in_array($o['status'], HR_AKTIV, true) || $o['bis'] < $e['von'] || $o['von'] > $e['bis']) continue;
@@ -1289,16 +1304,14 @@ function hr_monat(int $jahr, int $monat, array $me, bool $voll, string $kollegen
 }
 
 /* Startseite des Dashboards („Heute für Sie“, lib/startseite.php): was dieser Mitarbeiter in HR entscheiden kann – dieselben
-   Zahlen wie am Reiter „Anträge“ (hr_start: offene Anträge ohne eigene, Korrekturmeldungen der Personalstelle). Bewusst nur
+   Zahlen wie an den Reitern „Anträge“ und „Jahresplanung“ zusammen (hr_start: offene Anträge ohne eigene, Korrekturmeldungen der Personalstelle). Bewusst nur
    Anzahlen und das früheste Datum, keine Namen oder Arten (Abwesenheiten sind Personaldaten, Krankheit Gesundheitsdaten). */
 function hr_startseite(array $me): array
 {
     $genehmigen = may($me, 'hr.genehmigen'); $verwalten = may($me, 'hr.verwalten');
     if (!$genehmigen && !$verwalten) return [];
     $heute = hr_heute(); $personal = hr_personal(); $out = [];
-    $offen = array_filter(hr_abwesenheiten()['eintraege'], function ($e) use ($genehmigen, $personal, $me) {
-        return $e['status'] === 'beantragt' && (!$genehmigen || !hr_eigen($personal, $me, $e));
-    });
+    $offen = array_merge(...array_slice(hr_offen_zahlen($personal, hr_abwesenheiten()['eintraege'], $me), 0, 2));   // Anträge und Jahresplanung zusammen
     if ($offen) {
         $n = count($offen); $ab = min(array_column($offen, 'von'));
         $out[] = ['art' => $ab < $heute ? 'ueberfaellig' : 'heute', 'titel' => $n === 1 ? 'Antrag entscheiden' : "$n Anträge entscheiden",
