@@ -64,7 +64,8 @@ function sec_top_ips(array $entries): array
 
 /* Externe Kopie der Datensicherung (deploy/sicherung-extern.sh, Dokument sicherung-extern): Stufe, Kurzwert und Text – eine Quelle
    für die Karte im Reiter System und die Konfigurationsprüfung. Warnung, solange sie nicht eingerichtet, der letzte Lauf
-   fehlgeschlagen oder der neueste Stand älter als 36 Stunden ist (täglicher Lauf plus Reserve). */
+   fehlgeschlagen oder der letzte erfolgreiche Lauf älter als 36 Stunden ist (täglicher Lauf plus Reserve) – und wenn seine
+   Zeit mehr als eine Stunde in der Zukunft liegt: bei vorgestellter Uhr würde „älter als 36 Stunden“ sonst nie erreicht. */
 function sicherung_extern_stand(): array
 {
     $x = store_read('sicherung-extern');
@@ -74,6 +75,7 @@ function sicherung_extern_stand(): array
     if (empty($x['ok'])) return ['stufe' => 'warn', 'wert' => 'Fehler', 'text' => $am($x['t']) . ' · ' . ($m !== '' ? $m : 'Server prüfen')];
     $letzter = (int)strtotime((string)($x['letzter'] ?? ''));
     $text = $letzter ? 'zuletzt erfolgreich am ' . $am($x['letzter']) : 'noch kein Stand';
+    if ($letzter - time() > 3600) return ['stufe' => 'warn', 'wert' => 'Zeit unklar', 'text' => 'letzter Lauf am ' . $am($x['letzter']) . ' – das liegt in der Zukunft, Uhr des Servers prüfen'];
     if (time() - $letzter > 36 * 3600) return ['stufe' => 'warn', 'wert' => 'veraltet', 'text' => $text . ' – älter als 36 Stunden, Server prüfen'];
     $n = (int)($x['staende'] ?? 0);
     return ['stufe' => $m !== '' ? 'warn' : 'ok', 'wert' => $m !== '' ? 'mit Warnung' : 'aktuell',

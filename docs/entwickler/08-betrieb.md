@@ -387,9 +387,17 @@ Hostname der Testadresse in der bunny-Zone der Kundenseite). Neue Stände werden
   - **Status:** `daten/sicherung-extern.php` (Dokument `sicherung-extern`, wie `sicherung` eine Datei neben der
     Datenbank; nur Zeit, Ergebnis, Meldung, Zahl und Größe der Stände – nie Ziel, Ausgabe von restic oder Geheimnisse).
     `sicherung_extern_stand()` in `lib/diagnose.php` macht daraus die Karte „Externe Kopie“ (Sicherheit → System) und den
-    Punkt „Externe Datensicherung“ der Konfigurationsprüfung: Warnung, solange nicht eingerichtet, fehlgeschlagen oder
-    der neueste Stand älter als 36 Stunden ist. Die Kundenseite liefert den Status nicht aus. Im Dateibetrieb liegt die
-    Statusdatei im Archiv der Sicherung und zählt dort als ein Datensatz.
+    Punkt „Externe Datensicherung“ der Konfigurationsprüfung: Warnung, solange nicht eingerichtet, fehlgeschlagen, der
+    letzte erfolgreiche Lauf älter als 36 Stunden ist oder seine Zeit mehr als eine Stunde in der Zukunft liegt
+    (vorgestellte Uhr). `letzter` ist die Zeit des eigenen Laufs, nicht die des neuesten Stands im Repository – ein Stand
+    aus der Zukunft bliebe sonst für immer der neueste. Nur `jetzt` schreibt „in Ordnung“; ein erfolgreiches `pruefen`
+    lässt den Status stehen (ein Fehler von `jetzt` bleibt sichtbar), ein gescheitertes schreibt seinen Fehler. Die
+    Kundenseite liefert den Status nicht aus. Im Dateibetrieb liegt die Statusdatei im Archiv der Sicherung und zählt
+    dort als ein Datensatz; das Skript ersetzt sie deshalb nur unter der Sperre von `sichern.sh` (wartet bis zu
+    60 Sekunden, schreibt danach trotzdem).
+  - **Die Karte ist ein Hinweis, kein Beleg:** `daten/` ist in den Containern beschreibbar (nach der Datentrennung auch
+    im Container der Kundenseite), wer dort als Benutzer der Anwendung schreibt, kann „aktuell“ fälschen. Der Beleg ist
+    `sicherung-extern.sh status` (liest nur das Repository, nie die Statusdatei) bzw. `pruefen` als root auf dem Server.
   - **Grenze:** Wer den Server übernimmt, hat Schlüssel und Passwort und kann die Kopie löschen. Dagegen stehen die
     automatischen Snapshots der Storage Box und das Unterkonto (Anleitung, Abschnitt 2) – nicht das Skript.
   - **Geprüft** mit restic 0.12.1, 0.16.4 und 0.18.1 (`tests/deploy/test_sicherung_extern.sh`); nicht geprüft: echte

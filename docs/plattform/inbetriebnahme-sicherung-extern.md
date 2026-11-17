@@ -28,8 +28,10 @@ Storage Box (Form `u123456-sub1`).
   12 Monate. Jeder Stand enthält den ganzen Ordner `sicherungen/`, also schon bis zu 30 Tage lokale Sicherungen. Die externe
   Kopie reicht damit rund **13 Monate** zurück (lokal: 30 Tage). Siehe Abschnitt 8, Punkt „Löschfristen“.
 - Unter **Sicherheit → System** zeigt die Karte **„Externe Kopie“** den Zustand: „nicht eingerichtet“, „aktuell – zuletzt
-  erfolgreich am …“, „Fehler“ oder „veraltet“ (neuester Stand älter als 36 Stunden). Dieselbe Angabe steht in der
-  Konfigurationsprüfung im Lagebild („Externe Datensicherung“).
+  erfolgreich am …“, „Fehler“, „veraltet“ (letzter erfolgreicher Lauf älter als 36 Stunden) oder „Zeit unklar“ (seine Zeit
+  liegt in der Zukunft – Uhr des Servers prüfen). Dieselbe Angabe steht in der Konfigurationsprüfung im Lagebild
+  („Externe Datensicherung“). **Die Karte ist ein Hinweis, kein Beleg** (Abschnitt 4, „Grenzen“): Der Beleg ist
+  `status` bzw. `pruefen` als root auf dem Server.
 
 ## 2. Bei Hetzner (alles *abgeleitet, nicht getestet*)
 
@@ -82,9 +84,14 @@ Ausgehende Verbindungen sind erlaubt; an Firewall, Netzsperre und SSH von außen
      (Ausdruck in den Tresor bzw. zu den Firmenunterlagen). Ohne dieses Passwort ist die externe Kopie wertlos; es liegt
      sonst nur auf dem Server, der im Ernstfall weg ist. Es enthält keine verwechselbaren Zeichen (kein 0/O, 1/l/I).
    - den öffentlichen Schlüssel und den Befehl zum Hinterlegen,
-   - den **Fingerabdruck der Storage Box** (*abgeleitet*): Beim ersten Kontakt merkt sich der Server den Schlüssel der
-     Gegenstelle in `.sicherung-extern-hosts`; ändert er sich später, verweigert die Kopie die Verbindung. Den
-     Fingerabdruck mit den Angaben von Hetzner vergleichen (ob und wo Hetzner sie veröffentlicht, ist hier nicht geprüft).
+   - den **Fingerabdruck der Storage Box** (*abgeleitet*): Schon dieser erste Aufruf nimmt Kontakt auf und merkt sich
+     den Schlüssel der Gegenstelle ungefragt in `.sicherung-extern-hosts`; ändert er sich später, verweigert die Kopie
+     die Verbindung. **Jetzt vergleichen, bevor in Schritt 4 das Passwort des Unterkontos getippt wird:** Der gezeigte
+     Fingerabdruck (`SHA256:…`, Zeile mit `ED25519`) muss in der Liste stehen, die Hetzner veröffentlicht –
+     [Hetzner Docs, Storage Box Overview, Abschnitt „SSH host keys“](https://docs.hetzner.com/storage/storage-box/general/)
+     (gelesen am 17.11.2026). Weicht er ab: abbrechen, `rm /opt/wochenangebot/.sicherung-extern-hosts`, nichts eintippen
+     und klären. Zeigt der Aufruf keinen Fingerabdruck, war die Storage Box nicht erreichbar (Schritt 2.3 abwarten,
+     Aufruf wiederholen).
 
    Der erste Aufruf endet mit „Repository nicht erreichbar … Schlüssel hinterlegt?“ – das ist richtig, der Schlüssel
    ist noch nicht hinterlegt.
@@ -96,8 +103,11 @@ Ausgehende Verbindungen sind erlaubt; an Firewall, Netzsperre und SSH von außen
    ```
 
    Der Befehl fragt nach dem **Passwort des Unterkontos** (wird nicht angezeigt). Es wird nur hier einmal getippt und
-   nirgends gespeichert. Fragt ssh vorher „Are you sure you want to continue connecting?“, den Fingerabdruck wie in
-   Schritt 3 vergleichen und mit `yes` bestätigen.
+   auf dem Server nicht gespeichert; es muss auch nirgends aufbewahrt werden – für eine Rücksicherung wird es in der
+   Hetzner Console neu gesetzt (Schritt 6.3). Eine Rückfrage zum Fingerabdruck kommt hier nicht mehr: Der Schlüssel der
+   Gegenstelle ist seit Schritt 3 gemerkt, deshalb der Vergleich dort. Fragt ssh doch „Are you sure you want to continue
+   connecting?“ (Schritt 3 hatte keinen Kontakt), den dort gezeigten Fingerabdruck genauso vergleichen und erst dann mit
+   `yes` bestätigen.
 5. **Einrichten, zweiter Aufruf** (*getestet* über den SFTP-Weg mit `sftp-server`):
 
    ```
@@ -117,12 +127,14 @@ Ausgehende Verbindungen sind erlaubt; an Firewall, Netzsperre und SSH von außen
 7. **Prüfen** (*getestet*):
 
    ```
-   sh deploy/sicherung-extern.sh status     # Ziel, Timer, letzter Lauf, Zahl und Größe der Stände
+   sh deploy/sicherung-extern.sh status     # Ziel, Timer, Zahl, Alter und Größe der Stände – direkt aus dem Repository
    sh deploy/sicherung-extern.sh pruefen    # restic check + Rücksicherungsprobe
    ```
 
    `pruefen` holt das neueste Archiv `daten-<Zeit>.tar.gz` von der Storage Box in einen Wegwerf-Ordner zurück und
-   vergleicht es byteweise mit dem lokalen Original. Danach unter Sicherheit → System die Karte „Externe Kopie“ ansehen.
+   vergleicht es byteweise mit dem lokalen Original. Besteht die Prüfung, ändert sie die Karte nicht (ein Fehler des
+   letzten Laufs bleibt dort stehen, bis ein Lauf gelingt); scheitert sie, zeigt die Karte den Fehler. Danach unter
+   Sicherheit → System die Karte „Externe Kopie“ ansehen.
 8. **Optional: Totmannschalter** wie bei der Sicherung: `HC_SICHERUNG_EXTERN_URL=https://…` in `.env` (*abgeleitet*,
    gleiche Bauart wie `HC_SICHERUNG_URL`).
 
@@ -139,6 +151,25 @@ Ausgehende Verbindungen sind erlaubt; an Firewall, Netzsperre und SSH von außen
 - **Last:** Jeder neue Stand der Dateiablage wird einmal vollständig gelesen (Prüfsummen), übertragen wird nur, was die
   Storage Box noch nicht hat. Der Lauf hat niedrige Priorität (`Nice`, `IOSchedulingClass=idle`).
 
+### Grenzen
+
+- **Die Karte ist ein Hinweis, kein Beleg.** Ihre Angaben stehen in `daten/sicherung-extern.php`. Der Ordner `daten/`
+  ist in den Containern der Anwendung beschreibbar (nach der Datentrennung auch im Container der Kundenseite, wie bei
+  `sicherung.php`). Wer dort Code als Benutzer der Anwendung ausführt, kann „aktuell“ fälschen. Verlässlich ist nur,
+  was root auf dem Server sieht: `status` (liest ausschließlich das Repository, nie diese Datei) und `pruefen`.
+- **Ein Stand kann einmal unvollständig sein** (*abgeleitet*): Startet während einer laufenden Übertragung eine
+  Datensicherung (`sichern.sh` vor einem Release), kann der externe Stand dieses Laufs ein neues Archiv enthalten, aber
+  den zugehörigen Stand der Dateiablage noch nicht. restic meldet das nicht, die Karte bleibt grün. Der nächste Lauf
+  kopiert den fehlenden Teil; die älteren Stände sind nicht betroffen.
+- **Statusdatei im Archiv der Datensicherung** (*abgeleitet*): Im Dateibetrieb packt `sichern.sh` auch
+  `daten/sicherung-extern.php` ins Archiv (anders als `sicherung.php`). Würde die Datei genau dann ersetzt, während `tar`
+  sie liest, bräche diese eine lokale Sicherung ab. Das Skript ersetzt die Datei deshalb nur, wenn die Sperre von
+  `sichern.sh` frei ist, und wartet darauf bis zu 60 Sekunden (*getestet*). Läuft die Datensicherung länger, schreibt
+  es den Status trotzdem – der Rest der Grenze; die nächste Datensicherung läuft wieder normal.
+- **Eine vorgestellte Uhr** hinterlässt im Repository einen Stand mit einer Zeit in der Zukunft. Die Karte nennt immer
+  die Zeit des letzten eigenen Laufs und warnt, wenn sie in der Zukunft liegt (*getestet*). `status` zeigt den
+  neuesten Stand des Repositorys – ein Alter mit negativem Vorzeichen heißt: Uhr prüfen.
+
 ## 5. Fehlerbilder
 
 | Anzeige | Bedeutung | Schritt |
@@ -148,7 +179,8 @@ Ausgehende Verbindungen sind erlaubt; an Firewall, Netzsperre und SSH von außen
 | „keine lokale Sicherung vorhanden“ | `sicherungen/` enthält kein Archiv | zuerst die Karte „Datensicherung“ klären |
 | „kopiert, aber Aufräumen alter Stände fehlgeschlagen“ | Kopie ist da, alte Stände wurden nicht entfernt | meist vorübergehend; bleibt es, `pruefen` |
 | „Prüfung des Repositorys fehlgeschlagen“ / „… weicht vom lokalen Original ab“ | Kopie beschädigt | nicht löschen; Snapshot der Storage Box sichern, dann klären |
-| ssh meldet „REMOTE HOST IDENTIFICATION HAS CHANGED“ | Schlüssel der Storage Box hat sich geändert | bei Hetzner nachfragen bzw. Statusmeldungen lesen; erst nach Klärung `.sicherung-extern-hosts` löschen und Schritt 3.4 wiederholen |
+| „Zeit unklar – … liegt in der Zukunft“ | Die Uhr des Servers ging beim letzten Lauf vor (oder geht jetzt nach) | `date` und `timedatectl` in der Konsole; nach der Korrektur `jetzt` – die Karte nennt dann wieder die richtige Zeit |
+| ssh meldet „REMOTE HOST IDENTIFICATION HAS CHANGED“ | Schlüssel der Storage Box hat sich geändert | bei Hetzner nachfragen bzw. Statusmeldungen lesen; erst nach Klärung `.sicherung-extern-hosts` löschen, `einrichten` aufrufen und den neuen Fingerabdruck wie in Schritt 3.3 vergleichen |
 
 ## 6. Rücksicherung auf einem neuen Server (*abgeleitet, nicht getestet*; die restic-Befehle sind einzeln *getestet*)
 
@@ -158,14 +190,19 @@ Zugang zur Hetzner Console.
 1. Neuen Server aufsetzen wie in `LIESMICH.md` (Docker, Repository nach `/opt/wochenangebot`, `.env`). Die Anwendung
    noch nicht starten.
 2. `apt-get install -y restic`
-3. Zugang zur Storage Box: einen **neuen** SSH-Schlüssel erzeugen und hinterlegen (der alte lag nur auf dem alten Server).
-   Wurde der alte Server übernommen, vorher in der Hetzner Console das Passwort des Unterkontos ändern und den alten
-   Schlüssel entfernen (Datei `.ssh/authorized_keys` im Ordner des Unterkontos).
+3. Zugang zur Storage Box: **zuerst in der Hetzner Console das Passwort des Unterkontos neu setzen – immer.** Das alte
+   wurde bei der Einrichtung nur einmal getippt und nirgends aufbewahrt (Schritt 3.4), und nach einer Übernahme des
+   alten Servers wäre es ohnehin zu ersetzen. Dann einen **neuen** SSH-Schlüssel erzeugen und mit dem neuen Passwort
+   hinterlegen (der alte Schlüssel lag nur auf dem alten Server):
 
    ```
    ssh-keygen -t ed25519 -N '' -f /root/.ssh/storagebox
    cat /root/.ssh/storagebox.pub | ssh -p 23 <Benutzer>@<Benutzer>.your-storagebox.de install-ssh-key
    ```
+
+   ssh fragt hier „Are you sure you want to continue connecting?“: den Fingerabdruck wie in Schritt 3.3 mit der Liste
+   von Hetzner vergleichen, erst dann `yes` und das neue Passwort. Wurde der alte Server übernommen, zusätzlich den
+   alten Schlüssel entfernen (Datei `.ssh/authorized_keys` im Ordner des Unterkontos).
 
 4. Stände ansehen (fragt nach dem Repository-Passwort):
 
@@ -174,8 +211,12 @@ Zugang zur Hetzner Console.
      -r sftp:<Benutzer>@<Benutzer>.your-storagebox.de:wochenangebot snapshots
    ```
 
-   Hat ein Angreifer die Kopie gelöscht oder überschrieben: in der Hetzner Console einen **Snapshot** von vor dem
-   Vorfall zurückspielen bzw. den Ordner aus `/.zfs/snapshot/<Name>/` zurückkopieren, dann weiter.
+   Hat ein Angreifer die Kopie gelöscht oder überschrieben: den Ordner aus einem **Snapshot** von vor dem Vorfall
+   zurückkopieren (`/.zfs/snapshot/<Name>/`, nur lesbar), dann weiter. **Vorsicht beim Zurückspielen in der Hetzner
+   Console:** Wer die Storage Box auf einen älteren Snapshot zurücksetzt, löscht alles, was danach entstand – auch
+   **alle neueren Snapshots** (Hinweis der Hetzner-Oberfläche; so auch
+   [Hetzner Docs, Storage Box Snapshots](https://docs.hetzner.com/storage/storage-box/snapshots/), gelesen am
+   17.11.2026). Deshalb zuerst zurückkopieren und nur zurücksetzen, wenn feststeht, welcher Snapshot der richtige ist.
 5. Den gewünschten Stand zurückholen (ohne Angabe: `latest`):
 
    ```
@@ -189,9 +230,17 @@ Zugang zur Hetzner Console.
    [`docs/datenbank.md`](../datenbank.md#sicherung-und-wiederherstellung) und für die Anmeldung
    [Rücksicherung der Anmeldung](inbetriebnahme-anmeldung.md#rücksicherung-der-anmeldung-keycloak). Nicht in der Sicherung:
    Schlüssel des Postfach-Passworts und `daten-anmeldung/vault/` (Postfach-Passwörter neu eingeben).
-8. Externe Kopie auf dem neuen Server wieder einrichten: Passwort aus dem Passwortmanager nach
-   `/opt/wochenangebot/.sicherung-extern-passwort` schreiben (`chmod 600`), dann Abschnitt 3 ab Schritt 3.1. Das Skript
-   findet das vorhandene Repository („Repository vorhanden“) und setzt die Reihe der Stände fort.
+8. Externe Kopie auf dem neuen Server wieder einrichten: zuerst das Repository-Passwort aus dem Passwortmanager in
+   seine Datei schreiben – mit `umask 077`, damit sie von Anfang an nur root lesen kann, und über `cat`, damit das
+   Passwort nicht im Befehlsverlauf der Konsole landet:
+
+   ```
+   ( umask 077; cat > /opt/wochenangebot/.sicherung-extern-passwort )
+   ```
+
+   Passwort einfügen, Eingabetaste, dann Strg+D. Kontrolle: `ls -l /opt/wochenangebot/.sicherung-extern-passwort` zeigt
+   `-rw-------`. Dann Abschnitt 3 ab Schritt 3.1. Das Skript findet das vorhandene Repository („Repository vorhanden“)
+   und setzt die Reihe der Stände fort.
 
 **Einmal üben** (Empfehlung, bevor es ernst wird): Schritte 2 bis 5 auf einem beliebigen Linux-Rechner außerhalb des
 Servers durchspielen, nur mit Passwortmanager und Hetzner-Zugang. Erst dann ist bewiesen, dass die Unterlagen reichen.
@@ -203,6 +252,12 @@ Servers durchspielen, nur mit Passwortmanager und Hetzner-Zugang. Erst dann ist 
 - Rückfall auf ein Release vor dieser Änderung: vorher `aus` ausführen (das ältere Release enthält das Skript nicht, der
   Timer liefe ins Leere). Die Statusdatei `daten/sicherung-extern.php` kennt das ältere Release nicht; sie kann gelöscht
   werden.
+- **Vor einem Umschalten der Speicherart unter einem älteren Release** (Dateien → SQLite, `datenbank-umschalten.sh`)
+  **muss** `daten/sicherung-extern.php` gelöscht werden (*getestet* mit `deploy/datenbank.py` beider Stände): Das ältere
+  `datenbank.py` hält die Datei für ein gewöhnliches Dokument und nimmt sie in die Datenbank auf. Nach dem Vorrollen
+  lehnt das neue `datenbank.py` die Datenbank dann ab („Invalid database key“), und damit scheitert auch jede
+  Datensicherung (`sichern.sh`). Ist es schon passiert (*abgeleitet*): unter dem älteren Release zurück auf Dateien
+  schalten, die Datei löschen, erneut umschalten. Ohne Umschalten der Speicherart ist der Rückfall unkritisch.
 
 ## 8. Offene Entscheidungen für den Inhaber
 

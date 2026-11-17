@@ -43,6 +43,14 @@ AUS=$(WA_RESTIC="$T/bin/fehlt" $S einrichten 2>&1) && CODE=0 || CODE=$?
 ok "einrichten ohne restic: Abbruch mit Hinweis, nichts erzeugt" '[ $CODE = 1 ] && echo "$AUS" | grep -q "apt-get install restic" && [ ! -e "$I/.sicherung-extern-schluessel" ]'
 lauf vielleicht
 ok "unbekannter Befehl abgelehnt" '[ $CODE = 2 ]'
+mkdir -p "$T/mit leer/deploy"; cp "$REPO/deploy/sicherung-extern.sh" "$T/mit leer/deploy/"
+AUS=$(sh "$T/mit leer/deploy/sicherung-extern.sh" status 2>&1) && CODE=0 || CODE=$?
+ok "Installationsordner mit Leerzeichen (stünde ungeschützt in Unit und sftp.command): Abbruch mit klarer Meldung" '[ $CODE = 1 ] && echo "$AUS" | grep -q "enthält Leerzeichen oder Sonderzeichen"'
+flock -x "$I/.env" sleep 2 &
+sleep 0.5
+lauf einrichten
+ok "einrichten zweimal gleichzeitig: Abbruch, weder Schlüssel noch Passwort erzeugt" '[ $CODE = 1 ] && echo "$AUS" | grep -q "einrichten läuft bereits" && [ -z "$(ls -A "$I" | grep "^\.sicherung-extern" || true)" ]'
+wait
 if [ "$(id -u)" != 0 ]; then
   AUS=$(WA_OHNE_ROOT='' $S status 2>&1) && CODE=0 || CODE=$?
   ok "ohne root: Abbruch" '[ $CODE = 1 ] && echo "$AUS" | grep -q "als root"'
@@ -75,6 +83,8 @@ ok "einrichten erneut: zerstört nichts, zeigt das Passwort nicht wieder" '[ $CO
 # ── Kopieren ──
 lauf jetzt
 ok "jetzt: Stand angelegt, Status ok mit Zeit, Anzahl und Größe" '[ $CODE = 0 ] && [ "$(feld ok)" = True ] && [ "$(feld staende)" = 1 ] && [ "$(feld groesse)" -gt 1000000 ] && feld letzter | grep -Eq "^20[0-9-]{8}T[0-9:]{8}Z$" && [ -z "$(feld meldung)" ]'
+export ABSTAND; ABSTAND=$(($(date -d "$(r snapshots --json | python3 -c 'import json, sys; print(json.load(sys.stdin)[0]["time"])')" +%s) - $(date -d "$(feld letzter)" +%s)))
+ok "Zeit im Status ist die des eben angelegten Stands (restic liegt $ABSTAND s dahinter)" '[ "$ABSTAND" -ge 0 ] && [ "$ABSTAND" -le 30 ]'
 ok "Status für die Anwendung lesbar, ohne Passwort, Schlüssel und Ziel" '[ "$(stat -c %a "$I/daten/sicherung-extern.php")" = 644 ] && ! grep -qF -e "$PW" -e "$T/repo" -e ssh-ed25519 "$I/daten/sicherung-extern.php"'
 r restore latest --target "$T/zurueck" >/dev/null
 Z="$T/zurueck$I/sicherungen"
@@ -85,11 +95,12 @@ ok "ein Verweis in sicherungen/ bleibt ein Verweis: Inhalt von außerhalb nicht 
 rm -rf "$T/zurueck"
 
 lauf status
-ok "status: Repository, Timer, letzter Lauf, Stände, Größe – ohne Sperre im Repository" '[ $CODE = 0 ] && echo "$AUS" | grep -q "Timer: active" && echo "$AUS" | grep -q "Letzter Lauf: .*in Ordnung" && echo "$AUS" | grep -Eq "Stände: 1, neuester .* \(vor 0 Stunden\)" && echo "$AUS" | grep -Eq "Größe des Repositorys: [0-9]+ MB" && [ -z "$(ls "$T/repo/locks")" ] && [ "$(anzahl)" = 1 ]'
+ok "status: Repository, Timer, Stände, Größe – ohne Sperre im Repository" '[ $CODE = 0 ] && echo "$AUS" | grep -q "Timer: active" && echo "$AUS" | grep -Eq "Stände: 1, neuester .* \(vor 0 Stunden\)" && echo "$AUS" | grep -Eq "Größe des Repositorys: [0-9]+ MB" && [ -z "$(ls "$T/repo/locks")" ] && [ "$(anzahl)" = 1 ]'
 
 # ── Prüfung mit Rücksicherungsprobe ──
+VORHER=$(cat "$I/daten/sicherung-extern.php")
 lauf pruefen
-ok "pruefen: restic check und neuestes Archiv zurückgeholt, byteweise gleich; Arbeitsordner entfernt" '[ $CODE = 0 ] && echo "$AUS" | grep -q "daten-2026-11-16_023000.tar.gz zurückgeholt und byteweise gleich" && [ -z "$(ls -A "$I" | grep "arbeit" || true)" ] && [ "$(feld ok)" = True ]'
+ok "pruefen: restic check und neuestes Archiv zurückgeholt, byteweise gleich; Arbeitsordner entfernt, Status unverändert" '[ $CODE = 0 ] && echo "$AUS" | grep -q "daten-2026-11-16_023000.tar.gz zurückgeholt und byteweise gleich" && [ -z "$(ls -A "$I" | grep "arbeit" || true)" ] && [ "$(cat "$I/daten/sicherung-extern.php")" = "$VORHER" ]'
 cp "$I/sicherungen/daten-2026-11-16_023000.tar.gz" "$T/original"; echo x >> "$I/sicherungen/daten-2026-11-16_023000.tar.gz"
 lauf pruefen
 ok "pruefen: abweichendes Archiv ergibt Fehler und Fehlerstatus" '[ $CODE = 1 ] && [ "$(feld ok)" = False ] && feld meldung | grep -q "weicht vom lokalen Original ab"'
@@ -134,13 +145,22 @@ wait
 # ── Fehlerfälle hinterlassen einen Fehlerstatus ──
 AUS=$(WA_SICHERUNG_EXTERN_REPO="$T/nicht-da" $S jetzt 2>&1) && CODE=0 || CODE=$?
 ok "Ziel nicht erreichbar: Rückgabewert 1, Fehlerstatus ohne Pfad des Ziels" '[ $CODE = 1 ] && [ "$(feld ok)" = False ] && feld meldung | grep -q "Übertragung fehlgeschlagen" && ! grep -q "nicht-da" "$I/daten/sicherung-extern.php"'
-# restic-Attrappe: gibt für einen Unterbefehl einen vorgegebenen Code zurück (STUB_<befehl>) bzw. beendet das Skript (term)
+VORHER=$(cat "$I/daten/sicherung-extern.php")
+lauf pruefen
+ok "pruefen nach gescheitertem jetzt: Prüfung besteht, der Fehlerstatus bleibt stehen" '[ $CODE = 0 ] && echo "$AUS" | grep -q "byteweise gleich" && [ "$(cat "$I/daten/sicherung-extern.php")" = "$VORHER" ] && [ "$(feld ok)" = False ]'
+# restic-Attrappe: gibt für einen Unterbefehl einen vorgegebenen Code zurück (STUB_<befehl>), beendet das Skript (term) oder
+# verhält sich wie ein sichern.sh, das mitten im Lauf startet (sperre): hält dessen Sperre 4 Sekunden und merkt sich den
+# Status, wie er kurz vor dem Loslassen aussah
 cat > "$T/bin/restic" <<'EOF'
 #!/bin/sh
 for A in "$@"; do
   case "$A" in backup|forget)
     eval "RC=\${STUB_$A:-}"
     if [ "$RC" = term ]; then kill -TERM "$PPID"; sleep 2; exit 1; fi
+    if [ "$RC" = sperre ]; then
+      flock -x "$STUB_I/sicherungen/.sperre" sh -c 'sleep 4; cp "$STUB_I/daten/sicherung-extern.php" "$STUB_I/waehrend"' >/dev/null 2>&1 &
+      sleep 0.5; exec restic "$@"
+    fi
     [ -z "$RC" ] || { [ "$RC" = 1 ] || restic "$@" >/dev/null 2>&1; exit "$RC"; } ;;
   esac
 done
@@ -153,6 +173,9 @@ AUS=$(WA_RESTIC="$T/bin/restic" STUB_backup=3 $S jetzt 2>&1) && CODE=0 || CODE=$
 ok "restic meldet unlesbare Dateien (Code 3): Stand angelegt, Status ok mit Warnung" '[ $CODE = 0 ] && [ "$(feld ok)" = True ] && feld meldung | grep -q "nicht lesbar"'
 AUS=$(WA_RESTIC="$T/bin/restic" STUB_forget=1 $S jetzt 2>&1) && CODE=0 || CODE=$?
 ok "Aufräumen scheitert: kopiert, Status ok mit Warnung" '[ $CODE = 0 ] && [ "$(feld ok)" = True ] && feld meldung | grep -q "Aufräumen alter Stände fehlgeschlagen"'
+VORHER=$(cat "$I/daten/sicherung-extern.php")
+AUS=$(WA_RESTIC="$T/bin/restic" STUB_backup=sperre STUB_I="$I" $S jetzt 2>&1) && CODE=0 || CODE=$?
+ok "Datensicherung startet während der Übertragung: Status erst ersetzt, wenn ihre Sperre frei ist (ihr tar läse die Datei sonst im Wechsel)" '[ $CODE = 0 ] && [ "$(cat "$I/waehrend")" = "$VORHER" ] && [ "$(feld ok)" = True ] && [ -z "$(feld meldung)" ]'
 mv "$I/sicherungen" "$I/sicherungen.weg"; mkdir "$I/sicherungen"
 lauf jetzt
 ok "keine lokale Sicherung: Fehlerstatus, kein leerer Stand" '[ $CODE = 1 ] && [ "$(feld ok)" = False ] && feld meldung | grep -q "keine lokale Sicherung"'
@@ -164,6 +187,18 @@ lauf jetzt
 ok "Verweis statt sicherungen/: Fehlerstatus, nichts von außerhalb kopiert" '[ $CODE = 1 ] && feld meldung | grep -q "Verweis" && [ "$(anzahl)" = "$VORHER" ]'
 rm "$I/sicherungen"; mv "$I/sicherungen.weg" "$I/sicherungen"
 echo ORIGINAL > "$T/opfer"; chmod 600 "$T/opfer"
+printf '%s\n%s' '<?php http_response_code(404); exit; ?>' '{"t":"2026-11-17T03:40:00Z","ok":false,"meldung":"GEFAELSCHT"}' > "$I/daten/sicherung-extern.php"
+lauf status
+ok "status zeigt nichts aus der Statusdatei (im Container beschreibbar): Angaben nur aus dem Repository" '[ $CODE = 0 ] && echo "$AUS" | grep -Eq "Stände: [0-9]+, neuester " && ! echo "$AUS" | grep -q GEFAELSCHT'
+rm -f "$I/daten/sicherung-extern.php"; mkfifo "$I/daten/sicherung-extern.php"
+AUS=$(timeout 120 $S status 2>&1) && CODE=0 || CODE=$?
+ok "FIFO statt der Statusdatei: status bleibt nicht hängen" '[ $CODE = 0 ] && echo "$AUS" | grep -Eq "Stände: [0-9]+, neuester "'
+rm -f "$I/daten/sicherung-extern.php"; ln -s /dev/zero "$I/daten/sicherung-extern.php"
+AUS=$(timeout 120 $S status 2>&1) && CODE=0 || CODE=$?
+ok "Verweis auf /dev/zero statt der Statusdatei: status liest ihn nicht" '[ $CODE = 0 ] && echo "$AUS" | grep -Eq "Stände: [0-9]+, neuester "'
+rm -f "$I/daten/sicherung-extern.php"; mkfifo "$I/daten/sicherung-extern.php"
+lauf jetzt
+ok "FIFO statt der Statusdatei: jetzt ersetzt sie durch eine echte Datei" '[ $CODE = 0 ] && [ -f "$I/daten/sicherung-extern.php" ] && [ "$(feld ok)" = True ]'
 rm -f "$I/daten/sicherung-extern.php"; ln -s "$T/opfer" "$I/daten/sicherung-extern.php"
 lauf jetzt
 ok "Verweis statt der Statusdatei: ersetzt, Ziel des Verweises unverändert" '[ $CODE = 0 ] && [ "$(cat "$T/opfer")" = ORIGINAL ] && [ ! -L "$I/daten/sicherung-extern.php" ] && [ "$(feld ok)" = True ]'
@@ -180,6 +215,11 @@ ok "Verweis statt des Passworts: einrichten bricht ab, nichts überschrieben, ni
 lauf pruefen
 ok "Verweis statt des Passworts: pruefen bricht ab" '[ $CODE = 1 ] && echo "$AUS" | grep -q "nicht eingerichtet"'
 rm "$I/.sicherung-extern-passwort"; mv "$T/passwort" "$I/.sicherung-extern-passwort"
+
+# ── Uhr war einmal vorgestellt: ein Stand aus der Zukunft bleibt der neueste im Repository ──
+r backup -q --host stafl --time "$(date -u -d '2 days' '+%Y-%m-%d %H:%M:%S')" "$I/sicherungen" >/dev/null
+lauf jetzt
+ok "Stand aus der Zukunft im Repository: Status nennt die Zeit des eigenen Laufs, nicht die des neuesten Stands" '[ $CODE = 0 ] && [ "$(feld ok)" = True ] && ! [ "$(feld letzter)" \> "$(date -u +%Y-%m-%dT%H:%M:%SZ)" ] && [ "$(feld letzter)" \> "$(date -u -d "5 minutes ago" +%Y-%m-%dT%H:%M:%SZ)" ]'
 
 # ── beschädigtes Repository (zuletzt: danach ist es unbrauchbar) ──
 for F in "$T/repo/data"/*/*; do chmod u+w "$F"; truncate -s -1 "$F"; done   # restic legt die Dateien nur lesbar an
@@ -217,7 +257,7 @@ else
   rm "$T/box-weg"
   echo "[box.example]:23 $(cut -d' ' -f1,2 "$J/.sicherung-extern-schluessel.pub")" > "$J/.sicherung-extern-hosts"   # was das echte ssh beim ersten Kontakt merkt
   lauf einrichten
-  ok "SFTP: zweiter Aufruf legt das Repository im Ordner wochenangebot an, Passwort nicht erneut gezeigt, Fingerabdruck der Gegenstelle gezeigt" '[ $CODE = 0 ] && [ -f "$T/box/wochenangebot/config" ] && ! echo "$AUS" | grep -qF "$PW" && [ -n "$(ls "$T/units")" ] && echo "$AUS" | grep -q "SHA256:.*box.example"'
+  ok "SFTP: zweiter Aufruf legt das Repository im Ordner wochenangebot an, Passwort nicht erneut gezeigt, Fingerabdruck der Gegenstelle gezeigt (vergleichen, bevor das Passwort der Storage Box getippt wird)" '[ $CODE = 0 ] && [ -f "$T/box/wochenangebot/config" ] && ! echo "$AUS" | grep -qF "$PW" && [ -n "$(ls "$T/units")" ] && echo "$AUS" | grep -q "SHA256:.*box.example" && echo "$AUS" | grep -q "BEVOR das Passwort"'
   ok "SFTP: ssh mit Port 23, eigenem Schlüssel, gemerkter Gegenstelle, ohne Passwortabfrage" 'grep -q -- "-F /dev/null -p 23 -i $J/.sicherung-extern-schluessel -o IdentitiesOnly=yes -o BatchMode=yes -o StrictHostKeyChecking=accept-new -o UserKnownHostsFile=$J/.sicherung-extern-hosts .* benutzer-sub1@box.example -s sftp$" "$T/ssh-aufrufe"'
   lauf jetzt
   ok "SFTP: jetzt kopiert, Status ok ohne Namen der Gegenstelle" '[ $CODE = 0 ] && [ "$(feld ok)" = True ] && [ "$(feld staende)" = 1 ] && ! grep -q "box.example" "$J/daten/sicherung-extern.php"'
@@ -229,7 +269,7 @@ else
   lauf jetzt
   ok "SFTP: Storage Box nicht erreichbar: Rückgabewert 1, Fehlerstatus ohne Namen der Gegenstelle" '[ $CODE = 1 ] && [ "$(feld ok)" = False ] && feld meldung | grep -q "Übertragung fehlgeschlagen" && ! grep -q "box.example" "$J/daten/sicherung-extern.php"'
   lauf status
-  ok "SFTP: status bei nicht erreichbarer Storage Box: letzter Lauf mit Fehler, Rückgabewert 1" '[ $CODE = 1 ] && echo "$AUS" | grep -q "Letzter Lauf: .*FEHLER" && echo "$AUS" | grep -q "nicht erreichbar"'
+  ok "SFTP: status bei nicht erreichbarer Storage Box: Rückgabewert 1" '[ $CODE = 1 ] && echo "$AUS" | grep -q "nicht erreichbar"'
 fi
 echo "sicherung-extern.sh: $PASS bestanden, $FAIL fehlgeschlagen"
 [ "$FAIL" = 0 ]

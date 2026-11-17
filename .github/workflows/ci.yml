@@ -283,9 +283,10 @@ jobs:
       - name: Externe Kopie der Datensicherung (deploy/sicherung-extern.sh) – mit echtem restic, lokal und über SFTP (sftp-server)
         env:
           WA_RESTIC_PFLICHT: "1"
-        # restic und sftp-server aus dem signierten Ubuntu-Archiv (wie nftables unten; Ubuntu 24.04: restic 0.16.4)
+        # restic und sftp-server aus dem signierten Ubuntu-Archiv (wie nftables unten; Ubuntu 24.04: restic 0.16.4).
+        # Ohne empfohlene Pakete: openssh-sftp-server empfiehlt openssh-server, und der startete einen sshd auf dem Runner.
         run: |
-          { command -v restic >/dev/null && [ -x /usr/lib/openssh/sftp-server ]; } || { sudo apt-get update -qq && sudo apt-get install -y -qq restic openssh-sftp-server; }
+          { command -v restic >/dev/null && [ -x /usr/lib/openssh/sftp-server ]; } || { sudo apt-get update -qq && sudo apt-get install -y -qq --no-install-recommends restic openssh-sftp-server; }
           sh tests/deploy/test_sicherung_extern.sh
       - name: Netzsperre für bunny.net (deploy/cdn-netzsperre.sh, cdn_netzsperre.py) – mit echtem nftables in Netz-Namensräumen
         env:

@@ -7,7 +7,7 @@
 #   sh deploy/altdateien.sh archivieren  – Sicherung, Archiv sicherungen/altdateien-<Zeit>.tar.gz (geprüft), dann entfernen
 # Läuft nur bei aktivem SQLite mit fehlerfreier Datenbank. Die Anwendung bleibt in Betrieb: sie greift im SQLite-Betrieb
 # nur noch auf die Datenbank und die Statusdateien zu (app/api/storage.php), nie auf diese Dateien.
-# Bleiben stehen: Datenbank (.sqlite/, .sqlite-active), Postfach-Schlüssel, Statusdateien (sicherung, deployment),
+# Bleiben stehen: Datenbank (.sqlite/, .sqlite-active), Postfach-Schlüssel, Statusdateien (sicherung, sicherung-extern, deployment),
 # index.php, geo/ und alle Sperr- und Punktdateien. Anleitung: docs/datenbank.md („Alte Datendateien aufräumen“).
 set -eu
 cd "$(dirname "$0")/.."

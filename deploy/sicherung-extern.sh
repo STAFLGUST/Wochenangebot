@@ -6,7 +6,7 @@
 #
 #   sh /opt/wochenangebot/deploy/sicherung-extern.sh einrichten  # Schlüssel und Passwort erzeugen, Repository anlegen, Timer (täglich 03:30)
 #   sh /opt/wochenangebot/deploy/sicherung-extern.sh jetzt       # sofort kopieren, danach Aufbewahrung anwenden (ruft auch der Timer auf)
-#   sh /opt/wochenangebot/deploy/sicherung-extern.sh status      # Ziel, Timer, letzter Lauf, Zahl und Größe der Stände (ändert nichts)
+#   sh /opt/wochenangebot/deploy/sicherung-extern.sh status      # Ziel, Timer, Zahl, Alter und Größe der Stände – aus dem Repository (ändert nichts)
 #   sh /opt/wochenangebot/deploy/sicherung-extern.sh pruefen     # restic check und Rücksicherungsprobe: neuestes Archiv zurückholen, byteweise vergleichen
 #   sh /opt/wochenangebot/deploy/sicherung-extern.sh aus         # Timer entfernen; Repository, Schlüssel und Passwort bleiben
 #
@@ -21,8 +21,10 @@
 # Aufbewahrung: je Tag ein Stand für 30 Tage, je Woche einer für 8 Wochen, je Monat einer für 12 Monate. Jeder Stand enthält
 # den ganzen Ordner, also schon bis zu 30 Tage lokale Sicherungen – so reicht die externe Kopie rund 13 Monate zurück.
 # Status: daten/sicherung-extern.php (Karte „Externe Kopie“ unter Sicherheit → System; ohne Ziel und Geheimnisse). Jeder
-# Abbruch von „jetzt“ und „pruefen“ hinterlässt dort einen Fehlerstatus. Optional Totmannschalter wie bei sichern.sh:
-# HC_SICHERUNG_EXTERN_URL=https://… in .env (bei Fehler wird „/fail“ angehängt).
+# Abbruch von „jetzt“ und „pruefen“ hinterlässt dort einen Fehlerstatus; ein erfolgreiches „pruefen“ ändert ihn nicht (ein
+# Fehler des letzten „jetzt“ bleibt sichtbar). Die Datei ist im Container beschreibbar: root schreibt sie nur und liest sie
+# nie – die Karte ist ein Hinweis, der Beleg ist „status“ bzw. „pruefen“ hier auf dem Server. Optional Totmannschalter wie
+# bei sichern.sh: HC_SICHERUNG_EXTERN_URL=https://… in .env (bei Fehler wird „/fail“ angehängt).
 # Löschschutz: Wer den Server übernimmt, hat Schlüssel und Passwort und kann das Repository löschen. Dagegen helfen nur
 # die automatischen Snapshots der Storage Box (bei Hetzner einschalten) – dieses Skript kann das nicht leisten.
 set -eu
@@ -76,7 +78,10 @@ status() { # ok meldung [letzter anzahl groesse]
     "$1" "$(printf '%s' "$2" | tr -d '"\\\000-\037')" "$(printf '%s' "${3:-}" | tr -cd '0-9TZ:-')" "$(zahl "${4:-}")" "$(zahl "${5:-}")" > "$ST_TMP" || { rm -f "$ST_TMP"; return 0; }
   chown 33:33 "$ST_TMP" 2>/dev/null || true
   chmod 644 "$ST_TMP"
-  mv -fT "$ST_TMP" "$STATUS" || rm -f "$ST_TMP"
+  # Im Dateibetrieb packt sichern.sh diese Datei ins Archiv; ersetzt man sie, während tar sie liest, bricht dessen Lauf ab.
+  # Deshalb unter der Sperre von sichern.sh ersetzen (geteilt, nur für das Umbenennen). Höchstens 60 Sekunden warten – auch
+  # ein von systemd beendeter Lauf (90 Sekunden bis zum harten Ende) soll seinen Fehlerstatus noch schreiben.
+  { [ -e "$QUELLE/.sperre" ] && flock -s -w 60 "$QUELLE/.sperre" mv -fT "$ST_TMP" "$STATUS"; } || mv -fT "$ST_TMP" "$STATUS" || rm -f "$ST_TMP"
 }
 melden() { # ok|fail
   [ -n "$HC_URL" ] || return 0
@@ -105,12 +110,12 @@ z = [datetime.datetime.fromisoformat(re.sub(r"\.\d+", "", s["time"]).replace("Z"
 print(len(z), max(z).astimezone(datetime.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ") if z else "")'
 }
 groesse() { r stats --no-lock --mode raw-data --json | python3 -c 'import json, sys; print(int(json.load(sys.stdin)["total_size"]))'; }
-erfolg() { # [warnung]
+erfolg() { # zeit-des-stands [warnung]
   S=$(staende) || fehler "Stände im Repository nicht lesbar"
   G=$(groesse) || G=0
   FERTIG=1
-  status true "${1:-}" "${S#* }" "${S%% *}" "$G"
-  echo "Externe Kopie in Ordnung: ${S%% *} Stände, neuester ${S#* }, $((G / 1048576)) MB im Repository${1:+; Warnung: $1}"
+  status true "${2:-}" "$1" "${S%% *}" "$G"
+  echo "Externe Kopie in Ordnung: Stand von $1, ${S%% *} Stände, $((G / 1048576)) MB im Repository${2:+; Warnung: $2}"
 }
 # Beginn eines Laufs: nur eingerichtet, nie zwei Läufe gleichzeitig. Die Sperre liegt auf der Passwortdatei, nur lesend
 # geöffnet – so entsteht keine weitere Datei und nichts wird beschrieben.
@@ -123,9 +128,14 @@ lauf_beginnen() {
 }
 
 [ "$(id -u)" = 0 ] || [ -n "${WA_OHNE_ROOT:-}" ] || abbruch "als root ausführen."
+# Der Pfad steht ungeschützt in der systemd-Unit (ExecStart) und in sftp.command: nur Zeichen, die dort nichts bedeuten
+case "$BASIS" in *[!A-Za-z0-9/._-]*) abbruch "Installationsordner $BASIS enthält Leerzeichen oder Sonderzeichen – erlaubt sind Buchstaben, Ziffern, / . _ -" ;; esac
 case "${1:-status}" in
   einrichten)
     [ -f "$ENV" ] || abbruch "$ENV nicht gefunden."
+    # nie zweimal gleichzeitig: sonst könnte das angezeigte Passwort nicht das des Repositorys sein (Sperre auf .env, nur lesend)
+    exec 8<"$ENV"
+    flock -n 8 || abbruch "einrichten läuft bereits"
     command -v "$RESTIC" >/dev/null 2>&1 || abbruch "restic fehlt (apt-get install restic)."
     command -v ssh-keygen >/dev/null 2>&1 || abbruch "ssh-keygen fehlt (apt-get install openssh-client)."
     [ -n "${WA_SICHERUNG_EXTERN_REPO:-}" ] || ziel_gueltig || abbruch "Ziel fehlt oder ist ungültig – in $ENV eintragen: SICHERUNG_EXTERN_ZIEL=<Benutzer>@<Benutzer>.your-storagebox.de"
@@ -161,7 +171,8 @@ case "${1:-status}" in
     elif r init >"$ARBEIT/aus" 2>&1; then echo "Repository angelegt."
     else ERREICHT=0; zeigen; fi
     if [ -s "$HOSTS" ]; then
-      echo "Schlüssel der Storage Box, beim ersten Kontakt gemerkt (Fingerabdruck mit den Angaben von Hetzner vergleichen):"
+      echo "Schlüssel der Storage Box, beim ersten Kontakt gemerkt. Fingerabdruck mit den Angaben von Hetzner vergleichen,"
+      echo "BEVOR das Passwort des Storage-Box-Zugangs eingetippt wird; weicht er ab: abbrechen und $HOSTS löschen."
       ssh-keygen -lf "$HOSTS" || true
     fi
     [ "$ERREICHT" = 1 ] || abbruch "Repository nicht erreichbar oder nicht mit diesem Passwort lesbar. Schlüssel hinterlegt (Befehl oben)? Danach erneut: sh deploy/sicherung-extern.sh einrichten"
@@ -201,6 +212,9 @@ UNIT
     [ ! -e "$QUELLE/.sperre" ] || flock -s -w 600 "$QUELLE/.sperre" true || fehler "Datensicherung läuft noch – externe Kopie ausgelassen"
     [ -n "$(find "$QUELLE" -maxdepth 1 -type f -name 'daten-*.tar.gz' | head -1)" ] || fehler "keine lokale Sicherung vorhanden – nichts zu kopieren"
     r unlock >/dev/null 2>&1 || true   # Sperren abgebrochener Läufe im Repository; fremde, noch gültige bleiben
+    # Zeit dieses Stands (restic nimmt die Uhr beim Start von backup) – nicht der neueste Stand im Repository: einer aus der
+    # Zukunft (Uhr war einmal vorgestellt) bliebe sonst für immer der neueste, und die Karte würde nie mehr „veraltet“ melden
+    BEGINN=$(date -u +%Y-%m-%dT%H:%M:%SZ)
     RC=0
     r backup --host "$RECHNER" --exclude "$QUELLE/.sperre" --exclude "$QUELLE/.letzter-fehler" --exclude '*.tmp' "$QUELLE" >"$ARBEIT/aus" 2>&1 || RC=$?
     WARNUNG=""
@@ -211,7 +225,7 @@ UNIT
     esac
     r forget --host "$RECHNER" --keep-daily "$TAGE" --keep-weekly "$WOCHEN" --keep-monthly "$MONATE" --prune >"$ARBEIT/aus" 2>&1 \
       || { zeigen; WARNUNG="kopiert, aber Aufräumen alter Stände fehlgeschlagen${WARNUNG:+; $WARNUNG}"; }
-    erfolg "$WARNUNG"
+    erfolg "$BEGINN" "$WARNUNG"
     melden ok
     ;;
   pruefen)
@@ -223,22 +237,19 @@ UNIT
     echt "$DATEI" || fehler "Rücksicherungsprobe: lokales Original ${DATEI##*/} fehlt – externe Kopie veraltet?"
     r restore --host "$RECHNER" latest --target "$ARBEIT/zurueck" --include "$DATEI" >"$ARBEIT/aus" 2>&1 || { zeigen; fehler "Rücksicherungsprobe fehlgeschlagen (restic restore)"; }
     cmp -s "$ARBEIT/zurueck$DATEI" "$DATEI" || fehler "Rücksicherungsprobe: ${DATEI##*/} weicht vom lokalen Original ab"
+    # kein Status: sonst stünde nach einem gescheiterten „jetzt“ wieder „in Ordnung“ auf der Karte
     echo "Geprüft: Repository in Ordnung; ${DATEI##*/} zurückgeholt und byteweise gleich mit dem lokalen Original."
-    erfolg
     ;;
   status)
     if ! eingerichtet; then echo "Externe Kopie: nicht eingerichtet (sh deploy/sicherung-extern.sh einrichten)"; exit 0; fi
     echo "Externe Kopie: eingerichtet, Repository $RESTIC_REPOSITORY"
     echo "Timer: $($SYSTEMCTL is-active "$TIMER.timer" 2>/dev/null || true)"
-    # nur Anzeige: die Datei liegt in daten/ und ist im Container beschreibbar
-    if echt "$STATUS"; then
-      sed 1d "$STATUS" | python3 -c 'import json, sys
-d = json.load(sys.stdin)
-print("Letzter Lauf:", d.get("t"), "– in Ordnung" if d.get("ok") else "– FEHLER", d.get("meldung") or "")' 2>/dev/null || true
-    fi
+    # Alle Angaben aus dem Repository, nichts aus daten/sicherung-extern.php: die Datei ist im Container beschreibbar (ein
+    # Verweis oder eine FIFO an ihrer Stelle darf root nicht aufhalten), und ihr Inhalt wäre kein Beleg
     S=$(staende 2>/dev/null) || abbruch "Repository nicht erreichbar oder noch nicht angelegt."
     echo "Stände: ${S%% *}$([ -z "${S#* }" ] || echo ", neuester ${S#* } (vor $((($(date +%s) - $(date -d "${S#* }" +%s)) / 3600)) Stunden)")"
     echo "Größe des Repositorys: $(($(groesse) / 1048576)) MB"
+    echo "Grund eines fehlgeschlagenen Laufs: journalctl -u $TIMER.service -n 30"
     ;;
   aus)
     $SYSTEMCTL disable --now "$TIMER.timer" >/dev/null 2>&1 || true

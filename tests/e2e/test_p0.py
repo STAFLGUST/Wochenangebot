@@ -112,6 +112,11 @@ with sync_playwright() as p:
     check('external copy card: failed run with the reason (yellow)', gut and 'Fehler' in g and 'Übertragung fehlgeschlagen (restic Code 1)' in g, g)
     g, gut = extern_zeigen('alt', 'warn', {'t': iso(jetzt), 'ok': True, 'meldung': '', 'letzter': iso(jetzt - 37 * 3600), 'staende': 43, 'groesse': 5 * 1024 ** 3})
     check('external copy card: newest copy older than 36 hours (yellow)', gut and 'veraltet' in g and 'älter als 36 Stunden' in g, g)
+    g, gut = extern_zeigen('zukunft', 'warn', {'t': iso(jetzt), 'ok': True, 'meldung': '', 'letzter': iso(jetzt + 2 * 86400), 'staende': 43, 'groesse': 5 * 1024 ** 3})
+    check('external copy card: time of the last run in the future (clock was set ahead) is a warning, never "aktuell" (yellow)',
+          gut and 'Zeit unklar' in g and 'in der Zukunft' in g and 'aktuell' not in g, g)
+    g, gut = extern_zeigen('voraus', 'ok', {'t': iso(jetzt), 'ok': True, 'meldung': '', 'letzter': iso(jetzt + 1800), 'staende': 43, 'groesse': 5 * 1024 ** 3})
+    check('external copy card: half an hour ahead (clock drift) stays green', gut and 'aktuell' in g, g)
     g, gut = extern_zeigen('warnung', 'warn', {'t': iso(jetzt), 'ok': True, 'meldung': '<b>kopiert</b>, aber Aufräumen alter Stände fehlgeschlagen', 'letzter': iso(jetzt), 'staende': 1, 'groesse': 0})
     check('external copy card: copied with a warning (yellow), text shown as text', gut and 'mit Warnung' in g and '1 Stand, 0 MB' in g and '<b>kopiert</b>, aber Aufräumen' in g, g)
     r = a.request.get(B + '/data/sicherung-extern.php')
