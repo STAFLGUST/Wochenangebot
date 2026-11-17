@@ -286,14 +286,24 @@ das Fenster `data-geaendert` (erstes Escape warnt, `theme.js`).
 
 Woher Gruppe und Reihenfolge eines Artikels kommen: aus dem Entwurf selbst – `it.groupId` und die Stelle in `model.items`
 (je Gruppe zählt nur die Reihenfolge, `OfferCore.enrichOffer`), nicht aus den Stammdaten. Beides ist für alle Angebote
-gemeinsam, wie „Angebotsgruppe“ und „Nach oben/unten“ im Artikelfenster (`openItem`), das dieselben Felder ändert.
+gemeinsam, wie „Angebotsgruppe (Basiswert)“ und „Nach oben/unten“ im Artikelfenster (`openItem`), das dieselben Felder ändert.
+
+Ausnahme, Angebotsgruppe je Angebot (Inhaber 17.11.2026, Muster wie die Bezeichnung je Angebot): `it.gruppen[<Kundenangebot>]`
+stellt einen Artikel nur in diesem Angebot unter eine andere Gruppe – gewählt im Artikelfenster unter „Bezeichnung und Gruppe
+je Angebot“ (`[name=ogroup]`, erste Auswahl „wie Basiswert“). `gruppeIn(it, oid)` liefert die Gruppe im Angebot (eigene, sonst
+`groupId`); danach richten sich im Editor eines Kundenangebots die sichtbaren Gruppen, die Zeilen je Gruppe, „Gruppe aus diesem
+Angebot entfernen“, „Nach oben/unten“, die Liste „Aus anderem Angebot übernehmen“, die Werbung und dieses Fenster (Kennzeichen
+„nur hier“). Die Stelle in `model.items` bleibt gemeinsam: „Nach oben/unten“ verschiebt nur den Artikel selbst vor bzw. hinter
+seinen Nachbarn. `gruppenBereinigen()` (in `changed()`) entfernt Einträge, die dem Basiswert gleichen oder deren Gruppe fehlt;
+eine Gruppe wird nicht gelöscht, solange ein Angebot sie benutzt (`gruppenVon`). Aufgelöst wird nur auf dem Server (`offer_resolve`).
+In den Artikelstammdaten gibt es das Feld nicht – sie kennen die Gruppen des Entwurfs nicht.
 
 „Übernehmen“ ruft `WA.angebot.aufbau.uebernehmen(neu, stand)` (`aufbauUebernehmen()`, `neu` = `[{id, bereich, artikel}]`):
 eigene Speicherungen abwarten, `draft_ping`, bei neuer Revision `pullRemote()`; weichen danach Reihenfolge/Bereiche der
 Gruppen oder die Artikel je Gruppe vom Stand beim Öffnen ab (`stand`), wird nichts übernommen (`{konflikt, grund, wer,
 daten}` – das Fenster zeigt den neuen Stand). Sonst ordnet `gruppenOrdnen(anker, reihe)` `model.groups` neu – Gruppen, die
-im gewählten Angebot nicht vorkommen, bleiben hinter ihrer Vorgängergruppe –, `artikelOrdnen(ziel)` setzt `groupId` der
-Artikel des Angebots und ihre Reihenfolge (Artikel anderer Angebote bleiben in ihrer Gruppe hinter dem Artikel davor; nur
+im gewählten Angebot nicht vorkommen, bleiben hinter ihrer Vorgängergruppe –, `artikelOrdnen(ziel, oid)` setzt `groupId` der
+Artikel des Angebots – bei Artikeln mit eigener Gruppe in diesem Angebot nur `gruppen[oid]` – und ihre Reihenfolge (Artikel anderer Angebote bleiben in ihrer Gruppe hinter dem Artikel davor; nur
 die Plätze der betroffenen Gruppen in `model.items` ändern sich), dazu `section`, Rückgängig, `saveNote = {type: 'aufbau'}`
 (Protokoll „Aufbau des Angebots geändert …“ mit Zahl der Gruppen mit neuem Bereich und der Artikel mit neuer Gruppe in
 `save_draft`) und sofortiges Speichern (`saveNow()`). Kein eigener Speicherweg, kein neues Datenfeld. Wirkung überall, wo
@@ -343,7 +353,7 @@ und der Hinweis, dass Kunden die Kopie erst mit zugeordneten Kundengruppen und n
 `offer_kopieren` mit `rev` (Angebotsliste) und `revision` (Entwurf); bei 409 Angebote und Entwurf neu holen (`loadOffers`,
 `pullRemote`) und einmal wiederholen. Danach übernimmt der Editor die Angebotsliste aus der Antwort, holt den Entwurf
 (`pullRemote`), wechselt nach „Angebot bearbeiten“ und wählt das neue Angebot (`setOffer`). Die Arbeit macht der Server
-(`app/api/module/angebot/kopieren.php`): unter der neuen ID dieselben `variants`, `namen`, `sale.offers` und dieselbe
+(`app/api/module/angebot/kopieren.php`): unter der neuen ID dieselben `variants`, `namen`, `gruppen`, `sale.offers` und dieselbe
 Werbung wie die Quelle, gleiche Regel `fallback`, dasselbe Design, keine Kundengruppen – die Kopie wird damit genau wie die
 Quelle aufgelöst (`offer_resolve`). Quelle Wochenangebot: eigene Artikelliste, der Wochenpreis wird eigener Preis (ohne Preis
 „auf Anfrage“). Kein neues Datenfeld. Tests: Gruppe `angebote` (`kopieren_pruefen`).

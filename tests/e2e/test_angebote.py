@@ -2,7 +2,8 @@
 Einzelangebot, entfernen nur im gewählten Angebot, Umstellung „folgt dem Wochenangebot“ → eigene Liste), Verwaltung,
 Übernahme, Excel-Import ohne Verlust der Kundenangebote, Veröffentlichen, Auslieferung nur an Berechtigte (Regel:
 Kundenpreise nie öffentlich), Werbung je Angebot (Fenster, Prüfung, Auslieferung nur des eigenen Eintrags, Angebotsseite), zweite Werbung rechts daneben,
-Angebotsauswahl unter den Bereichen der Seitenleiste; Kundenangebot kopieren (alles außer den Kunden, in den Entwurf)."""
+Angebotsauswahl unter den Bereichen der Seitenleiste; Kundenangebot kopieren (alles außer den Kunden, in den Entwurf);
+Angebotsgruppe je Angebot (eigene Gruppe eines Artikels in einem Kundenangebot, Mülltonne in der Artikelzeile)."""
 import sys
 from umgebung import shot
 from umgebung import BASE  # Testserver je Gruppe (parallel)
@@ -240,6 +241,187 @@ def kopieren_pruefen(a, br, v):
     check('390 px: Fenster „Angebot kopieren“ passt, kein seitliches Scrollen, keine JS-Fehler', bw <= 390 and sw <= 390 and not merr, (bw, sw, merr))
     m.wait_for_function(RUHE); m.screenshot(path=SH + '/angebot-kopieren-mobil.png'); m.close()
 
+
+def gruppe_je_angebot_pruefen(a, br):
+    """Angebotsgruppe je Angebot (Inhaber 17.11.2026): item.gruppen = {Angebots-ID: Gruppen-ID} stellt einen Artikel in einem
+    Kundenangebot unter eine andere Gruppe; ohne Eintrag gilt groupId (Basiswert, Wochenangebot). Server: nur gültige Einträge,
+    Auflösung je Angebot (nie fremde Zuordnungen, keine leere Gruppe im Wochenangebot), Kopieren, gelöschtes Angebot,
+    Protokoll. Oberfläche: Fenster „Artikel bearbeiten“, Editor je Angebot, Zurücknehmen, Mülltonne (1280 px und 390 px)."""
+    CH, HH, BE = 'chefs-culinar', 'handelshof-efs', 'bela'
+    d = get(a, 'draft')[1]
+    mdl = d['draft'] or d['published']
+    frei = lambda i: i.get('code') and not i.get('sale') and not i.get('gruppen') and all(((i.get('variants') or {}).get(o) or {}).get('status') != 'hidden' for o in ('std', CH, HH, BE))
+    kand = [i for i in mdl['items'] if frei(i)]
+    x = kand[0]; basis = x['groupId']
+    v = next(i for i in kand if i['groupId'] != basis); andere = v['groupId']
+    w = next(i for i in kand if i is not x and i is not v)
+    gname = {g['id']: g['name'] for g in mdl['groups']}
+    mdl['groups'] += [{'id': 'gx-chefs', 'name': 'Nur bei Chefs', 'section': ''}, {'id': 'gx-bela', 'name': 'Nur bei Bela', 'section': ''}]
+    # gültig: Chefs (x, v) und Bela (w); ungültig: Wochenangebot, unbekanntes Angebot, unbekannte Gruppe, gleich dem Basiswert, keine Zeichenkette
+    x['gruppen'] = {CH: 'gx-chefs', 'std': andere, 'gibt-es-nicht': andere, HH: 'gibt-es-nicht', BE: basis}
+    v['gruppen'] = {CH: 'gx-chefs'}
+    w['gruppen'] = {BE: 'gx-bela', CH: 7}
+    r = post(a, 'save_draft', {'revision': d['revision'], 'model': mdl})
+    en = {i['id']: i for i in dok('entwurf')['items']}
+    check('Gruppe je Angebot: nur gültige Einträge gespeichert (kein Wochenangebot, bekannte Angebote und Gruppen, nicht gleich dem Basiswert)', r[0] == 200
+          and en[x['id']].get('gruppen') == {CH: 'gx-chefs'} and en[v['id']].get('gruppen') == {CH: 'gx-chefs'} and en[w['id']].get('gruppen') == {BE: 'gx-bela'}
+          and en[x['id']]['groupId'] == basis, (r[0], en[x['id']].get('gruppen'), en[w['id']].get('gruppen')))
+    ito = lambda o, i: next((k for k in o['items'] if k['id'] == i['id']), {})
+    gids = lambda o: [g['id'] for g in o['groups']]
+    roh = lambda o: any('gruppen' in k for k in o['items'])
+
+    def aufgeloest(holen, stand):
+        oc, os_, ob = holen(CH), holen('std'), holen(BE)
+        check(f'{stand}: Kundenangebot zeigt den Artikel unter seiner eigenen Gruppe, die Überschrift ist dabei', ito(oc, x).get('groupId') == 'gx-chefs' and ito(oc, v).get('groupId') == 'gx-chefs'
+              and 'gx-chefs' in gids(oc) and ito(oc, w).get('groupId') == w['groupId'], (ito(oc, x).get('groupId'), gids(oc)[-3:]))
+        check(f'{stand}: Wochenangebot unverändert unter der Basisgruppe, keine leere Gruppe', ito(os_, x).get('groupId') == basis and ito(os_, v).get('groupId') == andere
+              and ito(os_, w).get('groupId') == w['groupId'] and not {'gx-chefs', 'gx-bela'} & set(gids(os_)) and 'Nur bei' not in json.dumps(os_, ensure_ascii=False), gids(os_)[-3:])
+        check(f'{stand}: jedes Angebot nur mit seiner eigenen Zuordnung, „gruppen“ wird nie ausgeliefert', ito(ob, w).get('groupId') == 'gx-bela' and ito(ob, x).get('groupId') == basis
+              and 'Nur bei Chefs' not in json.dumps(ob, ensure_ascii=False) and 'Nur bei Bela' not in json.dumps(oc, ensure_ascii=False) and not (roh(oc) or roh(os_) or roh(ob)))
+        return oc
+
+    aufgeloest(lambda o: get(a, f'offer&angebot={o}&draft=1')[1]['offer'], 'Entwurf')
+    zl = get(a, 'versand_aenderungen')[1]['zeilen']
+    check('Versand: Änderungsliste nennt die Gruppe je Angebot beim Artikel', any(z['art'] == 'bearbeitet' and z['code'] == x['code']
+          and 'Gruppe Wochenangebot Chefs Culinar: wie Basis → Nur bei Chefs' in z['zusatz'] for z in zl), [z for z in zl if z['code'] == x['code']])
+    a.reload(); a.wait_for_selector('#screen-editor:not([hidden]) tr[data-id]')
+    veroeffentlichen(a)
+    pub = dok('angebot')
+    check('veröffentlicht: Gruppe, die nur ein Kundenangebot benutzt, bleibt im Modell', {'gx-chefs', 'gx-bela'} <= {g['id'] for g in pub['groups']}
+          and next(i for i in pub['items'] if i['id'] == x['id']).get('gruppen') == {CH: 'gx-chefs'})
+    aufgeloest(lambda o: get(a, 'offer' if o == 'std' else f'offer&angebot={o}')[1]['offer'], 'veröffentlicht')
+    kd = get(a, 'kunden')[1]
+    r = post_bestaetigt(a, 'kunde_save', {'id': '', 'rev': kd['rev'], 'firma': 'Kantine Gruppe', 'nr': 'K-72', 'email': 'gruppe@example.org', 'active': True, 'angebote': [CH],
+                                         'login': {'username': 'kantine.gruppe', 'password': 'Kantine-Kennwort-6', 'mustChange': False, 'active': True}})
+    K = Client('198.51.100.71')
+    check('Vorbereitung: Kunde des Angebots Chefs Culinar angemeldet', r[0] == 200 and K.call('kunde_login', {'username': 'kantine.gruppe', 'password': 'Kantine-Kennwort-6'})[0] == 200, r)
+    kc, anon = K.call(f'offer&angebot={CH}'), Client('198.51.100.72').call('offer')
+    check('Kunde des Angebots: Artikel unter der eigenen Gruppe, keine Zuordnung anderer Angebote; fremdes Angebot 403', kc[0] == 200 and ito(kc[1]['offer'], x).get('groupId') == 'gx-chefs'
+          and 'gx-chefs' in gids(kc[1]['offer']) and 'Nur bei Bela' not in json.dumps(kc[1], ensure_ascii=False) and not roh(kc[1]['offer']) and K.call(f'offer&angebot={BE}')[0] == 403, kc[0])
+    check('ohne Anmeldung: Wochenangebot mit Basisgruppe, keine Gruppe eines Kundenangebots', anon[0] == 200 and ito(anon[1]['offer'], x).get('groupId') == basis
+          and 'Nur bei' not in json.dumps(anon[1], ensure_ascii=False) and not roh(anon[1]['offer']))
+    log = json.dumps(get(a, 'log')[1], ensure_ascii=False)
+    check('Protokoll: Gruppe je Angebot mit Angebots- und Gruppenname', 'Gruppe Wochenangebot Chefs Culinar' in log and 'Nur bei Chefs' in log and 'wie Basis' in log)
+
+    # Oberfläche: Editor je Angebot, Fenster „Artikel bearbeiten“
+    ed = lambda gid: a.eval_on_selector_all(f'#groups section.gcard[data-gid="{gid}"] tr[data-id]', 'xs => xs.map(e => e.dataset.id)')
+    entw = lambda i: next(k for k in (get(a, 'draft')[1]['draft'] or get(a, 'draft')[1]['published'])['items'] if k['id'] == i['id'])
+    zeile = f'#groups tr[data-id="{x["id"]}"]'
+    tab(a, 'Wochenangebot').click(); a.wait_for_selector(zeile)
+    check('Editor Wochenangebot: Artikel unter der Basisgruppe, Gruppe des Kundenangebots fehlt', x['id'] in ed(basis) and a.locator('#groups section.gcard[data-gid="gx-chefs"]').count() == 0)
+    check('Artikelzeile: Mülltonne statt X zum Entfernen aus dem Angebot', a.get_attribute(f'{zeile} [data-act=remove] use', 'href') == '#i-trash' and a.locator('symbol#i-trash').count() == 1)
+    tab(a, 'Chefs').click(); a.wait_for_selector('#groups section.gcard[data-gid="gx-chefs"]')
+    check('Editor Kundenangebot: Artikel unter der eigenen Gruppe mit ihrer Überschrift', set(ed('gx-chefs')) == {x['id'], v['id']} and x['id'] not in ed(basis)
+          and a.input_value('#groups section.gcard[data-gid="gx-chefs"] [data-gf=name]') == 'Nur bei Chefs', ed('gx-chefs'))
+    a.set_viewport_size({'width': 1280, 'height': 900})
+    a.click(f'{zeile} [data-act=item]'); a.wait_for_selector('#dlg-item[open] [name=ogroup]')
+    sel = lambda o: f'#item-body [name=ogroup][data-on="{o}"]'
+    drin = [o['id'] for o in get(a, 'offers')[1]['offers'] if any(k['id'] == x['id'] for k in get(a, f'offer&angebot={o["id"]}&draft=1')[1]['offer']['items'])]
+    txt = a.text_content('#item-body')
+    check('Fenster: „Angebotsgruppe (Basiswert)“, je Kundenangebot Bezeichnung und Gruppe, Hinweis angepasst', 'Angebotsgruppe (Basiswert)' in txt and 'Bezeichnung und Gruppe je Angebot' in txt
+          and 'Bezeichnung und Gruppe lassen sich je Angebot anpassen' in txt and 'Merkmale und Gruppe gelten' not in txt
+          and sorted(a.eval_on_selector_all('#item-body [name=ogroup]', 'xs => xs.map(e => e.dataset.on)')) == sorted(drin) and a.locator('#item-body [name=oname]').count() == len(drin), drin)
+    check('Fenster: eigene Gruppe gewählt und hervorgehoben, sonst „wie Basiswert“ mit Namen der Basisgruppe', a.input_value(sel(CH)) == 'gx-chefs' and 'eigen' in (a.get_attribute(sel(CH), 'class') or '')
+          and a.input_value(sel(HH)) == '' and a.text_content(sel(HH) + ' option >> nth=0') == f'wie Basiswert ({gname[basis]})'
+          and a.eval_on_selector(sel(HH), 'e => [...e.options].slice(1).map(o => o.value)') == [g['id'] for g in dok('entwurf')['groups']] if dok('entwurf') else True)
+    a.select_option(sel(HH), andere); wait_saved(a)
+    check('Fenster: Gruppe für ein Angebot gewählt – nur dort gespeichert, Basiswert bleibt', entw(x).get('gruppen') == {CH: 'gx-chefs', HH: andere} and entw(x)['groupId'] == basis
+          and 'eigen' in (a.get_attribute(sel(HH), 'class') or ''), entw(x).get('gruppen'))
+    a.wait_for_function(RUHE); shot(a.locator('#dlg-item'), SH + '/gruppe-je-angebot-fenster-1280.png')
+    check('Statuszeile: eine Bearbeitung nicht veröffentlicht', '1 bearbeitet' in (a.get_attribute('#offen-zahl, #offen-liste', 'title') or ''), a.get_attribute('#offen-zahl, #offen-liste', 'title'))
+    a.click('#item-body [type=submit]'); a.wait_for_selector('#dlg-item', state='hidden')
+    tab(a, 'Handelshof').click(); a.wait_for_selector(zeile)
+    check('Editor: im zweiten Angebot unter der dort gewählten Gruppe', x['id'] in ed(andere) and x['id'] not in ed(basis))
+    a.click(f'{zeile} [data-act=item]'); a.wait_for_selector('#dlg-item[open] [name=ogroup]')
+    a.select_option(sel(HH), basis); wait_saved(a)
+    check('Fenster: Basisgruppe gewählt = keine eigene Gruppe („wie Basiswert“)', a.input_value(sel(HH)) == '' and entw(x).get('gruppen') == {CH: 'gx-chefs'}, entw(x).get('gruppen'))
+    a.select_option(sel(HH), 'gx-chefs'); wait_saved(a)
+    a.click('#item-body [type=submit]'); a.wait_for_selector('#dlg-item', state='hidden')
+    # Zurücknehmen in der Liste der unveröffentlichten Änderungen
+    a.click('#offen-liste'); a.wait_for_selector('#dlg-publish[open]')
+    check('Liste der Änderungen: Gruppe je Angebot als „Bearbeitet“', 'bearbeitet (1)' in a.inner_text('#publish-body').lower() and a.locator(f'#publish-body [data-rv=changed][data-rid="{x["id"]}"]').count() == 1, a.inner_text('#publish-body')[:200])
+    a.click(f'#publish-body [data-rv=changed][data-rid="{x["id"]}"]'); a.click('#dlg-confirm [data-v="1"]')
+    a.wait_for_function("document.querySelector('#publish-body').textContent.includes('Keine Änderungen gegenüber')")
+    a.click('#dlg-publish [data-close]'); wait_saved(a)
+    check('… zurückgenommen: wieder wie veröffentlicht', entw(x).get('gruppen') == {CH: 'gx-chefs'}, entw(x).get('gruppen'))
+    a.click('#btn-undo'); a.wait_for_function(f"document.querySelector('#groups section.gcard[data-gid=\"gx-chefs\"] tr[data-id=\"{x['id']}\"]')"); wait_saved(a)
+    check('Rückgängig stellt die eigene Gruppe wieder her', entw(x).get('gruppen') == {CH: 'gx-chefs', HH: 'gx-chefs'}, entw(x).get('gruppen'))
+    # „Nach oben“ innerhalb der Gruppe dieses Angebots: nur der Artikel selbst wandert
+    tab(a, 'Chefs').click(); a.wait_for_selector('#groups section.gcard[data-gid="gx-chefs"]')
+    p_, q_ = ed('gx-chefs')
+    pb = next(i for i in (x, v) if i['id'] == p_)['groupId']
+    tab(a, 'Wochenangebot').click(); a.wait_for_selector(zeile); std_vorher = ed(pb)
+    tab(a, 'Chefs').click(); a.wait_for_selector('#groups section.gcard[data-gid="gx-chefs"]')
+    a.click(f'#groups tr[data-id="{q_}"] [data-act=item]'); a.wait_for_selector('#dlg-item[open] [data-ia=up]:not([disabled])')
+    a.click('#item-body [data-ia=up]'); a.wait_for_selector('#dlg-item[open] [data-ia=up][disabled]'); wait_saved(a)
+    a.click('#item-body [type=submit]'); a.wait_for_selector('#dlg-item', state='hidden')
+    chefs_nach = ed('gx-chefs')
+    tab(a, 'Wochenangebot').click(); a.wait_for_selector(zeile)
+    check('„Nach oben“ im Kundenangebot: Reihenfolge in dessen Gruppe getauscht, der Nachbar behält seinen Platz im Wochenangebot', chefs_nach == [q_, p_] and ed(pb) == std_vorher, (chefs_nach, ed(pb)[:4]))
+    a.click('#btn-undo'); wait_saved(a)
+    # „Gruppe aus diesem Angebot entfernen“: Gruppe bleibt, solange ein anderes Angebot sie benutzt
+    tab(a, 'Chefs').click(); a.wait_for_selector('#groups section.gcard[data-gid="gx-chefs"]')
+    a.click('#groups section.gcard[data-gid="gx-chefs"] [data-act=g-del]'); a.click('#dlg-confirm [data-v="1"]')
+    a.wait_for_function("!document.querySelector('#groups section.gcard[data-gid=\"gx-chefs\"]')"); wait_saved(a)
+    e2 = dok('entwurf')
+    check('Gruppe aus dem Angebot entfernt: Artikel dort ausgeblendet, eigene Gruppe dieses Angebots fällt weg; die Gruppe bleibt für das andere Angebot',
+          entw(x).get('gruppen') == {HH: 'gx-chefs'} and 'gruppen' not in entw(v) and entw(x)['variants'][CH] == {'status': 'hidden'}
+          and 'gx-chefs' in [g['id'] for g in e2['groups']], entw(x).get('gruppen'))
+    tab(a, 'Handelshof').click(); a.wait_for_selector('#groups section.gcard[data-gid="gx-chefs"]')
+    check('… im anderen Angebot weiter unter dieser Gruppe', ed('gx-chefs') == [x['id']])
+    a.click('#btn-undo'); wait_saved(a)
+    # „Artikel in diese Gruppe“ in einem Kundenangebot: ein Artikel aus einem anderen Angebot steht nur hier in der gewählten Gruppe
+    tab(a, 'Edeka').click(); a.wait_for_selector('#groups section.gcard')
+    ge = a.get_attribute('#groups section.gcard >> nth=0', 'data-gid')
+    c = next(i for i in kand if i['groupId'] != ge and 'edeka' not in (i.get('variants') or {}) and sum(1 for k in mdl['items'] if k.get('code') == i['code']) == 1)
+    a.click(f'#groups section.gcard[data-gid="{ge}"] [data-act=add-item]'); a.wait_for_selector('#dlg-ez-pick[open] #ezp-q')
+    a.fill('#ezp-q', c['code']); a.wait_for_selector(f'#ezp-list tr[data-code="{c["code"]}"]'); a.click(f'#ezp-list tr[data-code="{c["code"]}"] .ezp-n')
+    a.click('#ezp-ok'); a.wait_for_selector('#dlg-ez-pick', state='hidden'); wait_saved(a)
+    check('„Artikel in diese Gruppe“ im Kundenangebot: vorhandener Artikel steht nur dort in der gewählten Gruppe, Basiswert bleibt',
+          (entw(c).get('gruppen') or {}).get('edeka') == ge and entw(c)['groupId'] == c['groupId'] and c['id'] in ed(ge), (entw(c).get('gruppen'), ge))
+    a.click('#btn-undo'); wait_saved(a)
+    a.set_viewport_size({'width': 1440, 'height': 950})
+    # 390 px: Bezeichnung und Gruppe je Angebot untereinander, ohne seitliches Scrollen
+    m = br.new_page(viewport={'width': 390, 'height': 844}, is_mobile=True); merr = []
+    m.on('pageerror', lambda e: merr.append(str(e)))
+    login(m, 'admin', 'Sicheres-Passwort-1')
+    m.click(f'#groups tr[data-id="{x["id"]}"] [data-act=item]'); m.wait_for_selector('#dlg-item[open] [name=ogroup]')
+    mass = m.evaluate("""(() => { const d = document.querySelector('#dlg-item'), z = d.querySelector('.it-nrow'), i = z.querySelector('input').getBoundingClientRect(), s = z.querySelector('select').getBoundingClientRect();
+      return [d.getBoundingClientRect().right, document.documentElement.scrollWidth, Math.max(...[...d.querySelectorAll('.it-nrow input, .it-nrow select')].map(e => e.getBoundingClientRect().right)), s.top >= i.bottom, s.height]; })()""")
+    check('390 px: Fenster passt, Gruppe unter der Bezeichnung, nichts ragt heraus, keine JS-Fehler', mass[0] <= 390 and mass[1] <= 390 and mass[2] <= 390 and mass[3] and mass[4] >= 36 and not merr, (mass, merr))
+    m.locator('#dlg-item .it-namen').scroll_into_view_if_needed(); m.wait_for_function(RUHE); m.screenshot(path=SH + '/gruppe-je-angebot-fenster-390.png'); m.close()
+
+    # Kopieren nimmt die eigene Gruppe mit; nach dem Löschen des Angebots fallen dessen Einträge weg
+    a.reload(); a.wait_for_selector('#screen-editor:not([hidden]) tr[data-id]')
+    of0, d = get(a, 'offers')[1], get(a, 'draft')[1]
+    r = post(a, 'offer_kopieren', {'quelle': HH, 'name': 'Handelshof Gruppenkopie', 'rev': of0['rev'], 'revision': d['revision']})
+    neu = (r[1] or {}).get('id', '')
+    en = dok('entwurf') or {'items': []}
+    check('Kopieren: eigene Gruppe des Quellangebots gilt auch in der Kopie (aufgelöst wie die Quelle)', r[0] == 200 and neu
+          and next(i for i in en['items'] if i['id'] == x['id']).get('gruppen') == {CH: 'gx-chefs', HH: 'gx-chefs', neu: 'gx-chefs'}
+          and ohne_kennung(get(a, f'offer&angebot={neu}&draft=1')[1]['offer']) == ohne_kennung(get(a, f'offer&angebot={HH}&draft=1')[1]['offer']), r)
+    cur = get(a, 'offers')[1]
+    r = post_bestaetigt(a, 'offers_save', {'rev': cur['rev'], 'offers': [o for o in cur['offers'] if o['id'] != neu]})
+    # Prüfung der Reste allein über „gruppen“: übrige Einträge der Kopie und den Vermerk „geloescht“ aus den Testdaten nehmen
+    for i in en['items']:
+        for f in ('variants', 'namen'): (i.get(f) or {}).pop(neu, None)
+        ((i.get('sale') or {}).get('offers') or {}).pop(neu, None)
+    (en['meta'].get('werbung') or {}).pop(neu, None)
+    storage_write('entwurf', en)
+    doc = dok('angebote')
+    storage_write('angebote', {**doc, 'geloescht': [k for k in doc.get('geloescht', []) if k != neu]})
+    cur = get(a, 'offers')[1]
+    r2 = post(a, 'offers_save', {'rev': cur['rev'], 'offers': cur['offers'] + [{'id': neu, 'name': 'Handelshof Gruppenkopie', 'fallback': 'standard'}]})
+    wieder = next((o['id'] for o in (r2[1] or {}).get('offers', []) if o['name'] == 'Handelshof Gruppenkopie'), None)
+    check('Angebot gelöscht: seine ID wird nicht neu vergeben, solange darunter noch Gruppen stehen', r[0] == 200 and r2[0] == 200 and wieder not in (None, neu), (r[0], r2[0], wieder))
+    cur = get(a, 'offers')[1]
+    post_bestaetigt(a, 'offers_save', {'rev': cur['rev'], 'offers': [o for o in cur['offers'] if o['id'] != wieder]})
+    d = get(a, 'draft')[1]
+    r = post(a, 'save_draft', {'revision': d['revision'], 'model': d['draft']})
+    check('… beim nächsten Speichern fallen die Einträge des gelöschten Angebots weg', r[0] == 200
+          and next(i for i in dok('entwurf')['items'] if i['id'] == x['id']).get('gruppen') == {CH: 'gx-chefs', HH: 'gx-chefs'}, r[0])
+    a.reload(); a.wait_for_selector('#screen-editor:not([hidden]) tr[data-id]')
+
 with sync_playwright() as p:
     br = p.chromium.launch()
     actx = br.new_context(viewport={'width': 1440, 'height': 950}); a = actx.new_page(); errs = []
@@ -272,7 +454,7 @@ with sync_playwright() as p:
     check('Knopf „Veröffentlichen“ nennt den Angebotspreis', '1 Angebotspreis geändert' in (a.get_attribute('#offen-zahl, #offen-liste', 'title') or ''), a.get_attribute('#offen-zahl, #offen-liste', 'title'))
     check('Kopf: Angebot „folgt dem Wochenangebot“ mit Hinweis zur Umstellung', 'Folgt dem Wochenangebot' in a.inner_text('#offer-head') and a.locator('#offer-head [data-ob=umstellen]').count() == 1)
     row(a, '10823').locator('[data-act=remove]').click(); wait_saved(a)
-    check('✕ entfernt nur aus diesem Angebot', row(a, '10823').count() == 0 and zahl(a, 'Edeka') == n_std - 1 and zahl(a, 'Wochenangebot') == n_std)
+    check('Mülltonne der Zeile entfernt nur aus diesem Angebot', row(a, '10823').count() == 0 and zahl(a, 'Edeka') == n_std - 1 and zahl(a, 'Wochenangebot') == n_std)
     bad = row(a, '10701').locator('input[data-f=vprice]'); bad.fill('abc'); bad.press('Tab'); a.wait_for_timeout(200)
     check('invalid offer price rejected', 'invalid' in bad.get_attribute('class') and 'nicht lesbar' in a.inner_text('#toast'))
     bad.fill(''); bad.press('Tab'); wait_saved(a)
@@ -341,10 +523,10 @@ with sync_playwright() as p:
     check('freie Position im Angebot', zahl(a, 'Metro') == 2 and neu.locator('input[data-f=vprice]').input_value() == '8,80')
     check('… erscheint in keinem anderen Angebot', zahl(a, 'Wochenangebot') == n_std and zahl(a, 'Edeka') == n_std and zahl(a, 'Bela') == n_std)
     vi = neu.locator('input[data-f=vprice]'); vi.fill(''); vi.press('Tab'); a.wait_for_timeout(200)
-    check('eigene Liste: leerer Preis wird nicht übernommen (Hinweis auf ✕)', vi.input_value() == '8,80' and '✕' in a.inner_text('#toast'))
-    # ✕: Artikel, der nur hier steht, wird gelöscht; Rückgängig holt ihn zurück
+    check('eigene Liste: leerer Preis wird nicht übernommen (Hinweis auf die Mülltonne)', vi.input_value() == '8,80' and 'Mülltonne am Zeilenende' in a.inner_text('#toast'))
+    # Mülltonne: Artikel, der nur hier steht, wird gelöscht; Rückgängig holt ihn zurück
     neu.locator('[data-act=remove]').click(); a.wait_for_selector('#toast.show:has-text("gelöscht")')
-    check('✕ in eigener Liste: nur hier → gelöscht', zahl(a, 'Metro') == 1 and 'in keinem anderen Angebot' in a.inner_text('#toast'))
+    check('Mülltonne in eigener Liste: nur hier → gelöscht', zahl(a, 'Metro') == 1 and 'in keinem anderen Angebot' in a.inner_text('#toast'))
     a.click('#btn-undo'); a.wait_for_function("document.querySelectorAll('#groups tr[data-id]').length === 2"); wait_saved(a)
     check('Rückgängig stellt die Position wieder her', zahl(a, 'Metro') == 2)
     # Vorschau des gewählten Kundenangebots (Entwurf, noch nicht veröffentlicht) im Fenster; Angebot umschaltbar
@@ -630,6 +812,7 @@ with sync_playwright() as p:
     check('zweimal in derselben Sekunde veröffentlicht: verschiedene, steigende Stände', r1[0] == 200 and r2[0] == 200 and p1 and p2 and p2 > p1 and p1[:19] <= p2[:19], (r1[0], r2[0], p1, p2))
     a.reload(); a.wait_for_selector('#screen-editor:not([hidden]) tr[data-id]')
     kopieren_pruefen(a, br, v)
+    gruppe_je_angebot_pruefen(a, br)
     # Mobil
     m = br.new_page(viewport={'width': 390, 'height': 844}, is_mobile=True); m.on('pageerror', lambda x: errs.append('m: ' + str(x)))
     login(m, 'admin', 'Sicheres-Passwort-1'); m.wait_for_timeout(300)

@@ -670,7 +670,11 @@ button.m-diff { cursor: pointer; } button.m-diff:hover { filter: brightness(.95)
 .ma-namen .ma-nrow input:not(:placeholder-shown), .it-namen .it-nrow input:not(:placeholder-shown) { border-color: var(--c-frozen); background-color: var(--c-frozen-bg); color: var(--c-frozen); }
 .ma-status { display: flex; align-items: flex-start; gap: 6px; margin: 0; }
 .ma-status > .i { flex: none; margin-top: 2px; }
-@media (max-width: 560px) { .ma-nrow, .it-nrow { grid-template-columns: 1fr; gap: 4px; } }
+/* Artikel-Dialog: je Kundenangebot Bezeichnung und Angebotsgruppe nebeneinander (eigene Gruppe farbig wie die eigene Bezeichnung) */
+.it-nrow { grid-template-columns: minmax(96px, 22%) 1fr 1fr; }
+.it-nrow select { min-width: 0; }
+.it-namen .it-nrow select.eigen { border-color: var(--c-frozen); background-color: var(--c-frozen-bg); color: var(--c-frozen); }
+@media (max-width: 560px) { .ma-nrow, .it-nrow { grid-template-columns: 1fr; gap: 4px; } .it-nrow + .it-nrow { margin-top: 6px; } }
 /* Editor: eigene Bezeichnung im gewählten Kundenangebot */
 .etab .e-nm.e-nm-eigen { color: var(--c-frozen); }
 .e-eigen { position: absolute; right: 10px; top: 50%; transform: translateY(-50%); font-size: 10.5px; font-weight: 700; letter-spacing: .05em; text-transform: uppercase; color: var(--c-frozen); background: var(--c-frozen-bg); padding: 1px 6px; border-radius: 5px; pointer-events: none; }

@@ -1,9 +1,9 @@
 <?php
 declare(strict_types=1);
 /* Angebot · Kundenangebot kopieren (Entscheidung des Inhabers 13.11.2026): ein Angebot als neues Kundenangebot anlegen und
-   dabei alles außer den Kunden mitnehmen – eigene Preise (variants), eigene Bezeichnungen (namen), Empfehlungen und
-   Sonderposten je Angebot (sale.offers), Werbung (meta.werbung), das Design (module/angebot/design.php) und die Regel der
-   Artikelliste (fallback). Damit kommen auch
+   dabei alles außer den Kunden mitnehmen – eigene Preise (variants), eigene Bezeichnungen (namen) und Angebotsgruppen
+   (gruppen), Empfehlungen und Sonderposten je Angebot (sale.offers), Werbung (meta.werbung), das Design
+   (module/angebot/design.php) und die Regel der Artikelliste (fallback). Damit kommen auch
    ausgeblendete Artikel richtig mit: bei „eigener Artikelliste“ fehlt ihr Eintrag, bei „folgt dem Wochenangebot“ steht dort
    {status: hidden} – beides wird genau so übernommen. Kundengruppen bleiben leer (jede Gruppe gehört zu höchstens einem
    Angebot); Kunden sehen die Kopie erst mit zugeordneter Kundengruppe und nach dem Veröffentlichen.
@@ -48,6 +48,8 @@ function angebot_kopie_modell(array $m, string $quelle, string $neu): array
             if (is_array($v)) $m['items'][$i]['variants'][$neu] = $v;
             $nm = is_array($it['namen'] ?? null) ? ($it['namen'][$quelle] ?? null) : null;
             if (is_string($nm) && trim($nm) !== '') { $m['items'][$i]['namen'][$neu] = $nm; $z['namen']++; }
+            $gr = is_array($it['gruppen'] ?? null) ? ($it['gruppen'][$quelle] ?? null) : null;
+            if (is_string($gr)) $m['items'][$i]['gruppen'][$neu] = $gr;   // eigene Angebotsgruppe (geprüft in clean_model)
         }
         $so = is_array($it['sale'] ?? null) && is_array($it['sale']['offers'] ?? null) ? ($it['sale']['offers'][$quelle] ?? null) : null;
         if (is_array($so)) { $m['items'][$i]['sale']['offers'][$neu] = $so; $z['empfehlungen']++; }

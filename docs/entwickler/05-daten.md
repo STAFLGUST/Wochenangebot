@@ -62,7 +62,7 @@ Ein Release kann jederzeit auf die Vorversion zurückfallen (automatisch, wenn d
 
 **1. Neue Felder sind optional und fehlen, solange sie leer sind.** `user_save` schreibt `vorname`, `nachname`,
 `email`, `rollen`, `grant`, `deny`, `twofaPflicht` nur, wenn sie einen Wert haben; `clean_model` schreibt `nameRaw`,
-`cell`, `variants`, `sale`, `namen` nur bei Bedarf; `clean_master` ebenso `vkGruppe`, `gtin`, `nameWawi` und `namen`:
+`cell`, `variants`, `sale`, `namen`, `gruppen` nur bei Bedarf; `clean_master` ebenso `vkGruppe`, `gtin`, `nameWawi` und `namen`:
 
 ```php
 if ($vk !== '') $e['vkGruppe'] = $vk;
@@ -267,11 +267,12 @@ neueren Stand hat (`quelle: "version"`, `angebote: null` – Definitionen unbeka
 | `sale?` | Empfehlung (bis 11/2026 „Sonderpreis“): Grundwert `value` (Empfehlungspreis = Sonderposten „solange der Vorrat reicht“) oder `mark: true` (ohne Preisänderung, nur hervorheben); je Angebot abweichend `{value}`, `{status: mark}` oder `{status: none}`. `offer_resolve` liefert mit Preis `sale: true` und `regular` (ohne Bestand ausgeblendet), ohne Preis `empfehlung: true` (Preis und Sichtbarkeit unverändert). Ältere Fassungen verwerfen Einträge ohne `value` |
 | `cell?`, `nameRaw?` | Zelladresse und Originaltext der Excel-Datei (intern) |
 | `namen?` | Eigene Bezeichnung je Kundenangebot: `{<Angebots-ID>: Text ≤ 200}`; fehlt ein Eintrag, gilt `name` (Basiswert, zugleich die Bezeichnung im Wochenangebot – unter `std` gibt es keinen Eintrag); leere Texte und Schlüssel gelöschter Angebote fallen weg (`angebotsnamen_clean`); `offer_resolve` setzt `name` des jeweiligen Angebots und entfernt das Feld; ältere Fassungen verwerfen das Feld (dann gilt überall wieder `name`) |
+| `gruppen?` | Eigene Angebotsgruppe je Kundenangebot (Inhaber 17.11.2026): `{<Angebots-ID>: <Gruppen-ID>}`; fehlt ein Eintrag, gilt `groupId` (Basiswert, zugleich die Gruppe im Wochenangebot – unter `std` gibt es keinen Eintrag). `clean_model` behält nur Einträge bestehender Kundenangebote mit vorhandener Gruppe, die vom Basiswert abweichen; eine Gruppe, die nur so benutzt wird, bleibt beim Veröffentlichen im Modell. `offer_resolve` setzt `groupId` des jeweiligen Angebots, entfernt das Feld und liefert je Angebot nur Gruppen mit ausgelieferten Artikeln – das Wochenangebot bekommt keine leere Überschrift. Die Reihenfolge bleibt gemeinsam (Stelle in `items`). Nicht zu verwechseln mit `gruppen` (Kundengruppen) der Angebotsdefinition in `angebote`. Ältere Fassungen verwerfen das Feld (dann gilt überall wieder `groupId`) |
 | `meta.werbung?` | Werbung je Angebots-ID (`std` oder Kundenangebot): `titel` (≤ 80 Zeichen), `text?` (≤ 240), `artikel` = höchstens 12 Artikel-IDs in Reihenfolge mit `text?` (Hinweis, ≤ 40), `weitere?` = eine zweite Werbung im selben Aufbau (höchstens zwei je Angebot, `WERBUNG_BLOECKE`; ältere Fassungen lesen nur die erste); unbekannte Angebote/Artikel und doppelte fallen weg, leere Werbungen ebenso – die nächste rückt nach (`clean_werbung`), keine Übernahme durch Angebote, die dem Wochenangebot folgen; `offer_resolve` liefert nur den Eintrag des jeweiligen Angebots und nur ausgelieferte Artikel (`meta.werbung = {titel, text?, artikel, weitere?}`); ältere Fassungen verwerfen das Feld |
 | Gruppe `vk?` | VK-Gruppe (Stammdaten), aus der „Artikel hinzufügen“ die Angebotsgruppe wählt; `^[0-9A-Za-z._-]{1,10}$`, intern (`offer_resolve` entfernt sie); ältere Fassungen verwerfen das Feld |
 
 Grenzen: höchstens 5000 Artikel und 1000 Gruppen; IDs `^[A-Za-z0-9_-]+$`; Artikelnummer `^[0-9A-Za-z./-]+$`.
-`variants`, `sale`, `cell`, `namen` und `meta.werbung` verlassen den Server nie roh – `offer_resolve()` löst sie je Angebot auf und entfernt sie
+`variants`, `sale`, `cell`, `namen`, `gruppen` und `meta.werbung` verlassen den Server nie roh – `offer_resolve()` löst sie je Angebot auf und entfernt sie
 (GR-001, GR-002, GR-005).
 
 **`angebote`**: Kundenangebote.
@@ -282,12 +283,12 @@ dem Standardpreis). `gruppen`: Kundengruppen,
 deren Kunden das Angebot ohne eigene Freischaltung sehen (je Gruppe höchstens ein Angebot). Fehlt das Dokument, gelten
 `OFFER_DEFAULTS`. Neue IDs dürfen nicht mit `e-` beginnen (Einzelangebote) und nicht nur aus Ziffern bestehen.
 `geloescht`: IDs gelöschter Angebote – sie werden nie wieder vergeben (`offers_save` hängt bei einem neuen Angebot mit
-gesperrter ID `-2`, `-3` … an), weil unter der alten ID noch Kundenpreise, Sonderpreise (veröffentlichtes Angebot,
-Historie) und direkte Freischaltungen bei Kunden stehen können; gesperrt sind auch solche Reste aus der Zeit vor dem Feld
+gesperrter ID `-2`, `-3` … an), weil unter der alten ID noch Kundenpreise, Sonderpreise, eigene Bezeichnungen und Gruppen
+(veröffentlichtes Angebot, Historie) und direkte Freischaltungen bei Kunden stehen können; gesperrt sind auch solche Reste aus der Zeit vor dem Feld
 (`angebot_ids_mit_resten`). Fehlt `fallback` in einer Anfrage, bleibt die gespeicherte Einstellung (neue Angebote: `hidden`); Felder, die
 `offers_save` nicht kennt, bleiben erhalten (GR-006). Ein weiterer Weg zu einem neuen Angebot ist `offer_kopieren`
 (`module/angebot/kopieren.php`, gleiche ID-Regeln): neues Angebot ohne `gruppen` mit dem `fallback` der Quelle, dazu im
-Entwurf unter der neuen ID dieselben `variants`, `namen`, `sale.offers` und `meta.werbung` wie die Quelle; das `design`
+Entwurf unter der neuen ID dieselben `variants`, `namen`, `gruppen`, `sale.offers` und `meta.werbung` wie die Quelle; das `design`
 der Quelle kommt an die neue Definition.
 
 **Design je Angebot** (seit 16.11.2026, `module/angebot/design.php`, GR-010). Drei Stellen:
@@ -321,7 +322,7 @@ veröffentlichen, oder danach einmal veröffentlichen.
 derselben Liste: `{"id": "sonder-grillwoche", "name": "Grillwoche", "fallback": "hidden", "art": "sonder", "gueltig":
 {"modus": "zeitraum", "von": "2026-11-16", "bis": "2026-11-21"} | {"modus": "kw", "jahr": 2026, "kw": 48}, "sonderGruppen":
 ["10"], "angelegt": {"t", "von"}, "geaendert?": {…}, "beendet?": {…}}`. Inhalte wie bei jedem Kundenangebot mit eigener
-Artikelliste in `variants`/`namen`/`sale.offers`/`meta.werbung` unter ihrer ID. Die Kundengruppen stehen bewusst in
+Artikelliste in `variants`/`namen`/`gruppen`/`sale.offers`/`meta.werbung` unter ihrer ID. Die Kundengruppen stehen bewusst in
 `sonderGruppen`, nicht in `gruppen`: keine 1:1-Regel (eine Gruppe hat ihr Wochen- bzw. Kundenangebot **und** gültige
 Sonderangebote), und ältere Fassungen (Rückfall) zeigen ein Angebot ohne `gruppen` keinem Kunden. Sichtbar ist ein
 Sonderangebot nur im Zeitraum (Tage eingeschlossen; KW = Montag bis Sonntag, Europe/Berlin), nicht vorzeitig beendet und

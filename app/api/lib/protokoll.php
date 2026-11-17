@@ -229,6 +229,10 @@ function changes_between(?array $a, array $b): array
             $nf = (string)($o['namen'][$oid] ?? ''); $nt = (string)($it['namen'][$oid] ?? '');
             if ($nf !== $nt) { $def = offer_def($oid); $out[] = ['k' => "$id|n:$oid", 'code' => $code, 'name' => $it['name'], 'f' => 'Bezeichnung ' . ($def['name'] ?? $oid), 'from' => $nf ?: 'wie Basis', 'to' => $nt ?: 'wie Basis']; }
         }
+        foreach (array_unique(array_merge(array_map('strval', array_keys($o['gruppen'] ?? [])), array_map('strval', array_keys($it['gruppen'] ?? [])))) as $oid) {   // eigene Angebotsgruppe je Angebot
+            $gf = (string)($o['gruppen'][$oid] ?? ''); $gt = (string)($it['gruppen'][$oid] ?? '');
+            if ($gf !== $gt) { $def = offer_def($oid); $out[] = ['k' => "$id|g:$oid", 'code' => $code, 'name' => $it['name'], 'f' => 'Gruppe ' . ($def['name'] ?? $oid), 'from' => $gf !== '' ? $gname($gf) : 'wie Basis', 'to' => $gt !== '' ? $gname($gt) : 'wie Basis']; }
+        }
         if (sale_text($o['sale'] ?? null) !== sale_text($it['sale'] ?? null)) $out[] = ['k' => "$id|sale", 'code' => $code, 'name' => $it['name'], 'f' => 'Empfehlung', 'from' => sale_text($o['sale'] ?? null) ?: 'keine Empfehlung', 'to' => sale_text($it['sale'] ?? null) ?: 'keine Empfehlung'];
     }
     foreach ($ia as $id => $it) {

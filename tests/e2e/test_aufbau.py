@@ -481,6 +481,36 @@ with sync_playwright() as p:
     a.click('#dlg-aufbau .dlg-foot [data-close]'); a.wait_for_selector('#dlg-aufbau', state='hidden')
     check('keine Skriptfehler (Artikel)', not errors, errors[:3])
 
+    # ---------- Eigene Gruppe je Angebot (Inhaber 17.11.2026): verschieben ändert nur die Gruppe dieses Angebots ----------
+    mg, rg = entwurf(A)
+    eig = [i for i in mg['items'] if im_angebot(i, EIGEN)]
+    gx, basis_x = eig[0], eig[0]['groupId']
+    gy = next(i for i in eig if i['groupId'] != basis_x)
+    ziel = next((i['groupId'] for i in eig if i['groupId'] not in (basis_x, gy['groupId'])), None)
+    gx['gruppen'] = {EIGEN: gy['groupId']}
+    assert ziel and A.call('save_draft', {'model': mg, 'revision': rg})[0] == 200
+    a.reload(); a.wait_for_selector('#screen-editor:not([hidden]) tr[data-id]')
+    a.locator(f'#offer-bar [data-offer="{EIGEN}"]').first.click(); a.wait_for_selector(f'#groups section.gcard[data-gid="{gy["groupId"]}"] tr[data-id="{gx["id"]}"]')
+    oeffnen(a)
+    a.click(f'#abf-liste .abf-g[data-gid="{gy["groupId"]}"] [data-ab="g-auf"]')
+    check('eigene Gruppe: Artikel steht im Fenster unter der Gruppe dieses Angebots, gekennzeichnet „nur hier“; Hinweis nennt es',
+          set(dlg_art(a, gy['groupId'])) == {gx['id'], gy['id']} and basis_x not in flach(fenster(a))
+          and a.locator('#abf-liste .abf-eig').count() == 1 and a.locator(f'#abf-liste .abf-a[data-aid="{gx["id"]}"] .abf-eig').count() == 1
+          and 'wechseln sie nur hier' in a.inner_text('#dlg-aufbau'), dlg_art(a, gy['groupId']))
+    a.select_option(f'#abf-liste .abf-a[data-aid="{gx["id"]}"] select', ziel)
+    a.click('#abf-ok'); a.wait_for_selector('#dlg-aufbau', state='hidden'); gespeichert(a)
+    mh, _ = entwurf(A)
+    xh = next(i for i in mh['items'] if i['id'] == gx['id'])
+    vor = {i['id']: i['groupId'] for i in mg['items']}
+    check('eigene Gruppe verschoben: nur die Gruppe dieses Angebots wechselt, der Basiswert aller Artikel bleibt', xh.get('gruppen') == {EIGEN: ziel}
+          and all(i['groupId'] == vor[i['id']] for i in mh['items']), (xh.get('gruppen'), xh['groupId']))
+    oe, os_ = A.call(f'offer&draft=1&angebot={EIGEN}')[1]['offer'], A.call('offer&draft=1')[1]['offer']
+    check('… aufgelöst: im Kundenangebot unter der neuen Gruppe, im Wochenangebot unter der Basisgruppe',
+          next(i for i in oe['items'] if i['id'] == gx['id'])['groupId'] == ziel and next(i for i in os_['items'] if i['id'] == gx['id'])['groupId'] == basis_x)
+    check('Protokoll: Aufbau nennt die neue Gruppe (auch eigene Gruppe je Angebot)', 'Gruppe bei 1 Artikel neu' in json.dumps(A.call('log')[1], ensure_ascii=False))
+    a.locator('#offer-bar [data-offer="std"]').first.click(); a.wait_for_selector(f'#groups section.gcard[data-gid="{basis_x}"] tr[data-id="{gx["id"]}"]')
+    check('keine Skriptfehler (eigene Gruppe)', not errors, errors[:3])
+
     # ---------- Ohne Bearbeitungsrecht: kein Knopf, Server 403 ----------
     lp = br.new_page(viewport={'width': 1440, 'height': 950})
     lp.on('pageerror', lambda e: errors.append(str(e)))

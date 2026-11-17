@@ -157,7 +157,7 @@ Jede Code-Datei beginnt mit einem Kopfkommentar; dessen erste Aussage steht hier
 | `design.php` | angebot | Angebot · Design je Angebot (Inhaber 16.11.2026) |
 | `druck.php` | angebot | Druck der Angebote: Fußzeile des Briefbogens unter jedem gedruckten Angebot (Wunsch des Inhabers 13.11.2026). |
 | `import.php` | angebot | Importvertrag des Moduls Angebot – Schnittstelle zur Importzentrale (docs/plattform/schnittstellen/import.md). - Preisverlauf: frühere Angebotslisten (.xlsx) als Wochen im Preisverlauf. |
-| `kopieren.php` | angebot | Angebot · Kundenangebot kopieren (Entscheidung des Inhabers 13.11.2026): ein Angebot als neues Kundenangebot anlegen und dabei alles außer den Kunden mitnehmen – eigene Preise (variants), eigene Bezeichnungen … |
+| `kopieren.php` | angebot | Angebot · Kundenangebot kopieren (Entscheidung des Inhabers 13.11.2026): ein Angebot als neues Kundenangebot anlegen und dabei alles außer den Kunden mitnehmen – eigene Preise (variants), eigene Bezeichnungen (namen) … |
 | `sonderangebote.php` | angebot | STAFL-Plattform · Angebot · Sonderangebote (Auftrag des Inhabers 13.11.2026): ein Angebot für ganze Kundengruppen mit Gültigkeit – Zeitraum (von–bis, beide Tage eingeschlossen) oder Kalenderwoche (Montag bis Sonntag … |
 | `winab-export.php` | angebot | Export des Wochenangebots für WinAB (Auftrag des Inhabers 05.11.2026) |
 | `wochen.php` | angebot | Angebot · Frühere Wochen ansehen und Wochenablage (Wünsche des Inhabers 13.11.2026): das veröffentlichte Angebot einer Kalenderwoche – Wochenangebot oder ein Kundenangebot – nur für Mitarbeiter mit Modulzugang … |
