@@ -19,6 +19,8 @@
    vertritt (hr_start.vertretungen). Reiter
    „Jahresplanung“ (nur Personalstelle; gesammelt genehmigen mit „Urlaub genehmigen“): Stand je Mitarbeiter, Zeitleiste mit Konflikten, Anträge
    mit Konflikten genehmigen/ablehnen, konfliktfreie gesammelt genehmigen, Erinnerung, Abschluss mit Jahresübersicht.
+   Offene Anträge der laufenden Vorplanung stehen für die Personalstelle nur dort (Server: Merkmal „planung“), mit eigener
+   Zahl am Reiter; unter „Anträge“ bleibt ein Hinweis mit Sprung.
    Personalstelle (Recht hr.verwalten): Korrekturmeldungen erledigen (mit Antwort, nie die eigene), Abwesenheiten eintragen (U, K, G, freier Tag; nicht für sich selbst),
    Mitarbeiter mit Anspruch und Übertrag, Excel-Export für den Steuerberater, Übernahme der bisherigen Excel-Planung,
    Urlaubssperren und Ferien. Alle Rechte prüft der Server bei jeder Aktion (GR-103) – ausgeblendete Bereiche sind nur
@@ -28,6 +30,7 @@
   const API = '../../api/';
   const $ = (s, el = document) => el.querySelector(s);
   const $$ = (s, el = document) => [...el.querySelectorAll(s)];
+  const marke = (el, n) => { el.hidden = !n; el.textContent = n || ''; };   // Zahl an einem Reiter
   const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
   const icon = (n) => `<svg class="i" aria-hidden="true"><use href="#i-${n}"/></svg>`;
   const MONATE = ['Januar', 'Februar', 'März', 'April', 'Mai', 'Juni', 'Juli', 'August', 'September', 'Oktober', 'November', 'Dezember'];
@@ -117,8 +120,8 @@
     for (const el of $$('[data-antraege]')) el.hidden = !(r.data.verwalten || r.data.genehmigen);
     for (const el of $$('[data-uebersicht]')) el.hidden = !r.data.uebersicht;
     for (const el of $$('[data-planung]')) el.hidden = !r.data.verwalten;   // Jahresplanung nur für die Personalstelle (Datenschutz)
-    const offen = $('#hr-offen'), n = (r.data.offen || 0) + (r.data.korrekturenOffen || 0);   // Anträge und Korrekturmeldungen (Personalstelle)
-    offen.hidden = !n; offen.textContent = n || '';
+    marke($('#hr-offen'), (r.data.offen || 0) + (r.data.korrekturenOffen || 0));   // Anträge und Korrekturmeldungen (Personalstelle)
+    marke($('#hr-planung-offen'), r.data.planungOffen || 0);   // Anträge der laufenden Vorplanung
     zeigeMein();
     return true;
   }
@@ -797,7 +800,7 @@
       const j = Number(td.dataset.datum.slice(0, 4));
       if (S.verw.jahr !== j) await ladeVerwaltung(j);   // Zeitraum über den Jahreswechsel
       const ein = S.verw.eintraege.find((x) => x.person === td.dataset.person && x.von <= td.dataset.datum && td.dataset.datum <= x.bis && ['genehmigt', 'beantragt'].includes(x.status));
-      if (ein && ein.status === 'beantragt') { zeigeTab('antraege'); return; }
+      if (ein && ein.status === 'beantragt') { if (S.offen.some((a) => a.id === ein.id && a.planung)) zurPlanung(); else zeigeTab('antraege'); return; }
       eintragDialog(ein || { person: td.dataset.person, von: td.dataset.datum, bis: td.dataset.datum, art: 'U' });
     }
   });
@@ -822,19 +825,22 @@
     zahlOffen();
     if (S.tab === 'antraege') zeigeAntraege();
   }
-  // Zahl am Reiter: entscheidbare Anträge (ohne eigene); ohne Genehmigungsrecht alle offenen
+  // Zahlen an den Reitern: entscheidbare Anträge (ohne eigene); ohne Genehmigungsrecht alle offenen. „planung“ (Server): unter „Jahresplanung“
   function zahlOffen() {
     const korr = S.verw && S.verw.korrekturen ? S.verw.korrekturen.filter((k) => k.status === 'offen' && !k.eigen).length : 0;
-    const n = S.offen.filter((a) => !(S.start && S.start.genehmigen) || !a.eigen).length + korr;
-    const offen = $('#hr-offen');
-    offen.hidden = !n; offen.textContent = n || '';
+    const meine = S.offen.filter((a) => !(S.start && S.start.genehmigen) || !a.eigen), np = meine.filter((a) => a.planung).length;
+    marke($('#hr-offen'), meine.length - np + korr);
+    marke($('#hr-planung-offen'), np);
   }
   function fehlerVerwaltung(text) { for (const id of ['#antraege-liste']) $(id).innerHTML = `<p class="hr-meldung fehler">${esc(text)}</p>`; }
 
   /* ---------- Anträge ---------- */
   function zeigeAntraege() {
     const darf = !!(S.start && S.start.genehmigen);
-    $('#antraege-liste').innerHTML = S.offen.length ? S.offen.map((a) => {
+    const liste = S.offen.filter((a) => !a.planung), np = S.offen.length - liste.length;
+    const zurPlanung = np ? `<p class="hr-glas hr-antraege-planung">${np === 1 ? '1 offener Antrag' : `${np} offene Anträge`} der Vorplanung ${np === 1 ? 'steht' : 'stehen'} unter „Jahresplanung“.
+      <button type="button" class="btn" data-zur-planung>Zur Jahresplanung</button></p>` : '';
+    $('#antraege-liste').innerHTML = zurPlanung + (liste.length ? liste.map((a) => {
       const gleit = a.art === 'G' && a.gleitKonto;
       const k = gleit ? a.gleitKonto : a.konto;
       const nach = k.rest - (a.tageImJahr ?? a.tage);   // Konto des Beginnjahres: nur die Tage in diesem Jahr
@@ -850,7 +856,7 @@
         ${darf && !a.eigen ? '<div class="knoepfe"><button type="button" class="btn primary" data-genehmigen>Genehmigen</button><button type="button" class="btn gefahr" data-ablehnen>Ablehnen</button></div>'
           : `<p class="hr-hinweis">${a.eigen ? 'Ihr eigener Antrag – darüber entscheidet eine andere Person mit dem Recht „Urlaub genehmigen“.' : 'Die Entscheidung trifft eine Person mit dem Recht „Urlaub genehmigen“.'}</p>`}
       </article>`;
-    }).join('') : '<p class="hr-leer hr-glas">Keine offenen Anträge.</p>';
+    }).join('') : np ? '' : '<p class="hr-leer hr-glas">Keine offenen Anträge.</p>');
     if (!S.start || !S.start.verwalten || !S.verw) return;   // „Alle Einträge“ nur für die Personalstelle
     zeigeKorrekturenVerwaltung();
     const v = S.verw;
@@ -906,7 +912,9 @@
     const b = e.target.closest('[data-bearbeiten]');
     if (b) eintragDialog(S.verw.eintraege.find((x) => x.id === b.dataset.bearbeiten));
   });
+  const zurPlanung = () => { S.pjahr = null; zeigeTab('planung'); };   // immer das Planungsjahr, nicht ein zuletzt geblättertes
   $('#antraege-liste').addEventListener('click', async (e) => {
+    if (e.target.closest('[data-zur-planung]')) { zurPlanung(); return; }
     const karte = e.target.closest('[data-id]');
     if (!karte) return;
     const a = S.offen.find((x) => x.id === karte.dataset.id);
@@ -1294,12 +1302,14 @@
       r = await api('hr_planung_abschluss', { jahr: j, abgeschlossen: true });
       if (r.status !== 200) { knopf.disabled = false; meldung(m, fehlerText(r, 'Abschließen fehlgeschlagen')); return; }
       await ladePlanung(); meldung(m, `Planung ${j} abgeschlossen – Jahresübersicht: ${gesendet(r.data.ergebnis)}.`, r.data.ergebnis && r.data.ergebnis.fehlerText && r.data.ergebnis.fehlerText.length && !r.data.ergebnis.gesendet ? 'warn' : 'ok');
+      ladeAntraege();   // noch offene Anträge stehen jetzt wieder unter „Anträge“
     } else if (was === 'oeffnen') {
       if (!(await frage(`Planung ${j} wieder öffnen?`, 'Die Mitarbeiter sehen den Planungshinweis wieder (in der Planungsphase). Bereits gesendete Jahresübersichten bleiben, wie sie sind.', 'Wieder öffnen'))) return;
       knopf.disabled = true;
       r = await api('hr_planung_abschluss', { jahr: j, abgeschlossen: false });
       if (r.status !== 200) { knopf.disabled = false; meldung(m, fehlerText(r, 'Öffnen fehlgeschlagen')); return; }
       await ladePlanung(); meldung(m, `Planung ${j} wieder geöffnet.`, 'ok');
+      ladeAntraege();
     } else if (was === 'senden') {
       if (!(await frage(`Jahresübersicht ${j} erneut senden?`, `Jeder Mitarbeiter mit E-Mail-Adresse bekommt seine Jahresübersicht ${j} mit dem aktuellen Stand.`, 'Senden'))) return;
       knopf.disabled = true;
