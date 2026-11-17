@@ -255,7 +255,7 @@ und dann per `rename` ersetzt (kein halb geschriebenes Dokument). Nicht lesbares
 Datenbank oder stimmt das Schema nicht, bricht der Server ab – kein stiller Rückgriff auf Dateien. Umschalten,
 Sicherung und Rückfall: [datenbank.md](../datenbank.md).
 
-**Seitendateien:** `STORE_SIDECARS = ['mail-schluessel', 'sicherung', 'deployment']` bleiben auch bei SQLite Dateien
+**Seitendateien:** `STORE_SIDECARS = ['mail-schluessel', 'sicherung', 'sicherung-extern', 'deployment']` bleiben auch bei SQLite Dateien
 (Postfach-Schlüssel außerhalb der Sicherung, Statusdateien der Skripte).
 
 **Zwei Bereiche (ADR-007 Stufe 2a):** Nach `deploy/daten-trennen.sh trennen` (Kennzeichen `$DATA/.daten-getrennt`) liegen

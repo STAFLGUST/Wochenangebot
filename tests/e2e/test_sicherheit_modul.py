@@ -97,7 +97,7 @@ check('Konten: Rechte und Anmeldeschutz je Konto', [x['key'] for x in k['nele'][
 check('Konten: Sitzungen ohne Kennungen anderer Felder (nur sid, ip, Gerät, Zeiten)', set(k['admin']['sitzungen'][0]) == {'sid', 'ip', 'ua', 'created', 'seen', 'current'}, k['admin']['sitzungen'][0])
 check('Sicherheit → System: betrieb_status nur Administrator', A.call('betrieb_status')[0] == 200 and E.call('betrieb_status')[0] == 403 and N.call('betrieb_status')[0] == 401)
 st, r = A.call('betrieb_status')
-check('betrieb_status: Wartung, Sicherung, Speicher, Versand, Notfall – ohne Sicherheitseinstellungen', {'wartung', 'backup', 'storage', 'mail', 'orders', 'notfall'} <= set(r) and 'settings' not in r and 'sessions' not in r, sorted(r))
+check('betrieb_status: Wartung, Sicherung, Speicher, Versand, Notfall – ohne Sicherheitseinstellungen', {'wartung', 'backup', 'backupExtern', 'storage', 'mail', 'orders', 'notfall'} <= set(r) and 'settings' not in r and 'sessions' not in r, sorted(r))
 nu = {x['username']: x for x in r.get('nutzer', [])}
 check('betrieb_status: Testerauswahl nur mit Kennung, Name, Benutzername und Status (keine Passwörter, Rechte, E-Mail)',
       {'admin', 'erik', 'nele'} <= set(nu) and all(set(x) == {'id', 'name', 'username', 'active'} for x in nu.values()) and 'hash' not in json.dumps(r['nutzer']), list(nu.values())[:2])
@@ -363,8 +363,8 @@ with sync_playwright() as p:
     pg.goto(B + '/admin/#sec'); pg.wait_for_url(lambda u: u.endswith('/module/sicherheit/#system')); pg.wait_for_selector('#tab-system:not([hidden]) #sy-kunden')
     check('alte Adresse Verwaltung #sec führt zu Sicherheit → System', pg.url.endswith('/module/sicherheit/#system'))
     sy = pg.inner_text('#tab-system')
-    check('System: Betriebskarten, Wartung, Module, Diagnose, Verlauf', pg.locator('#tab-system .sic-karte').count() == 8 and all(t in sy for t in (
-        'Notfallmodus', 'Datensicherung', 'Bereitstellung', 'Datenablage', 'Speicherplatz', 'E-Mail-Versand', 'Bestellwünsche', 'Kunden',
+    check('System: Betriebskarten, Wartung, Module, Diagnose, Verlauf', pg.locator('#tab-system .sic-karte').count() == 9 and all(t in sy for t in (
+        'Notfallmodus', 'Datensicherung', 'Externe Kopie', 'Bereitstellung', 'Datenablage', 'Speicherplatz', 'E-Mail-Versand', 'Bestellwünsche', 'Kunden',
         'Wartungsmodus · Angebotsseite', 'Wartung · Eingabebereich', 'Module und Freigaben', 'Diagnose', 'Verlauf')), sy[:300])
     # Wartungsmodus der Angebotsseite: einschalten, Hinweis ändern, beenden – je im Dialog
     pg.click('[data-sy="kunden-an"]'); pg.wait_for_selector('#sic-dlg[open] #sy-k-text')

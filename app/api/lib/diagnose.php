@@ -62,6 +62,24 @@ function sec_top_ips(array $entries): array
     return array_map(function ($b) use ($blocked) { return $b + ['cc' => geo_country($b['ip']), 'blocked' => isset($blocked[$b['ip']])]; }, array_slice(array_values($by), 0, 10));
 }
 
+/* Externe Kopie der Datensicherung (deploy/sicherung-extern.sh, Dokument sicherung-extern): Stufe, Kurzwert und Text – eine Quelle
+   für die Karte im Reiter System und die Konfigurationsprüfung. Warnung, solange sie nicht eingerichtet, der letzte Lauf
+   fehlgeschlagen oder der neueste Stand älter als 36 Stunden ist (täglicher Lauf plus Reserve). */
+function sicherung_extern_stand(): array
+{
+    $x = store_read('sicherung-extern');
+    if (!is_array($x) || empty($x['t'])) return ['stufe' => 'warn', 'wert' => 'nicht eingerichtet', 'text' => 'Sicherungen liegen nur auf diesem Server'];
+    $am = function ($t): string { return date('d.m.Y, H:i', (int)strtotime((string)$t)) . ' Uhr'; };
+    $m = (string)($x['meldung'] ?? '');
+    if (empty($x['ok'])) return ['stufe' => 'warn', 'wert' => 'Fehler', 'text' => $am($x['t']) . ' · ' . ($m !== '' ? $m : 'Server prüfen')];
+    $letzter = (int)strtotime((string)($x['letzter'] ?? ''));
+    $text = $letzter ? 'zuletzt erfolgreich am ' . $am($x['letzter']) : 'noch kein Stand';
+    if (time() - $letzter > 36 * 3600) return ['stufe' => 'warn', 'wert' => 'veraltet', 'text' => $text . ' – älter als 36 Stunden, Server prüfen'];
+    $n = (int)($x['staende'] ?? 0);
+    return ['stufe' => $m !== '' ? 'warn' : 'ok', 'wert' => $m !== '' ? 'mit Warnung' : 'aktuell',
+            'text' => $text . ' · ' . $n . ($n === 1 ? ' Stand' : ' Stände') . ', ' . number_format((int)($x['groesse'] ?? 0) / 1048576, 0, ',', '.') . ' MB' . ($m !== '' ? ' · ' . $m : '')];
+}
+
 /* Betriebszustand (Modul Sicherheit: Reiter System und Lagebild): Wartung, Sicherung, Bereitstellung, Datenablage,
    Speicher, E-Mail-Versand, Bestellwünsche, Kunden – nur lesend, für Administratoren */
 function betrieb_daten(array $me): array
@@ -72,7 +90,7 @@ function betrieb_daten(array $me): array
     $woche = array_filter($alle, function ($x) { return strtotime((string)$x['t']) > time() - 7 * 86400; });
     $letzte = $alle ? end($alle) : null;
     $kunden = array_filter(customers_load()['customers'], function ($x) { return !empty($x['active']); });
-    return ['backup' => store_read('sicherung'),
+    return ['backup' => store_read('sicherung'), 'backupExtern' => sicherung_extern_stand(),
             'wartung' => wartung(), 'wartungEingabe' => modul_wartung_anzeige('angebot', 'eingabe', $me),
             'wartungVerlauf' => array_slice(modul_laufzeit()['verlauf'], 0, 20), 'storage' => store_stats(), 'php' => PHP_VERSION,
             'disk' => ['free' => @disk_free_space($DATA) ?: null, 'total' => @disk_total_space($DATA) ?: null],
@@ -121,6 +139,8 @@ function sec_config_checks(array $users): array
     else $add('Dienste', ($m['secure'] ?? '') === 'none' ? 'bad' : 'ok', 'E-Mail-Verbindung', ($m['secure'] ?? '') === 'none' ? 'unverschlüsselt' : 'verschlüsselt (' . strtoupper((string)$m['secure']) . ')', ($m['secure'] ?? '') === 'none' ? 'SSL oder STARTTLS verwenden.' : '');
     $ns = notify_settings()['events']['sicherheit'] ?? ['on' => false, 'to' => []];
     $add('Dienste', $ns['on'] && $ns['to'] ? 'ok' : 'warn', 'Alarm bei Sicherheitsereignissen', $ns['on'] && $ns['to'] ? 'per E-Mail an ' . implode(', ', $ns['to']) : 'ausgeschaltet', $ns['on'] && $ns['to'] ? '' : 'Verwaltung → E-Mail → Benachrichtigungen → Sicherheitsereignisse.');
+    $x = sicherung_extern_stand();
+    $add('Dienste', $x['stufe'], 'Externe Datensicherung', $x['wert'] . ' – ' . $x['text'], $x['stufe'] === 'ok' ? '' : 'Verschlüsselte Kopie außerhalb des Servers einrichten bzw. prüfen: deploy/sicherung-extern.sh (docs/plattform/inbetriebnahme-sicherung-extern.md).');
     $g = geo_info();
     $gAge = $g ? (int)floor((time() - strtotime($g['date'] . 'T00:00:00Z')) / 86400) : null;
     if (!empty(sec()['pwLeak'])) {

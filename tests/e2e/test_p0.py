@@ -87,6 +87,35 @@ with sync_playwright() as p:
           and 'Dateien aus der Sicherung zurückholen' in g and '240 Datei(en) fehlen in der Ablage, in der Sicherung erhalten' in g and 'fehlgeschlagen' not in g, g)
     g, gut = karte_zeigen('fehler', 'bad', fehler=1, meldung='zu wenig Speicherplatz: 3,0 GB frei, nötig 17,3 GB (neue Dateien 12,0 GB, Daten 3 × 0,1 GB, Reserve 5 GB)')
     check('backup card: failure shown red with the reason (e.g. too little space)', gut and 'zu wenig Speicherplatz: 3,0 GB frei, nötig 17,3 GB' in g, g)
+    # 5b) Externe Kopie der Datensicherung (deploy/sicherung-extern.sh schreibt sicherung-extern.php neben die Datenbank)
+    def extern_zeigen(name, stufe, status):   # Status schreiben bzw. entfernen, Karte prüfen, Bildschirmfotos bei 1280 und 390 px
+        pfad = DATA + '/sicherung-extern.php'
+        if status is None: os.path.exists(pfad) and os.remove(pfad)
+        else: open(pfad, 'w').write(GUARD + json.dumps(status))
+        k = a.locator('#tab-system .sic-karte:has-text("Externe Kopie")')
+        a.set_viewport_size({'width': 1280, 'height': 900}); system_neu(); text = k.inner_text()
+        sichtbar = a.locator(f'#tab-system .sic-karte.{stufe}:has-text("Externe Kopie")').count() == 1
+        k.screenshot(path=f'{SH}/p0-extern-{name}-1280.png')
+        a.set_viewport_size({'width': 390, 'height': 844}); system_neu(); k.screenshot(path=f'{SH}/p0-extern-{name}-390.png')
+        breit = a.evaluate('document.documentElement.scrollWidth <= window.innerWidth + 1')
+        a.set_viewport_size({'width': 1440, 'height': 950})
+        return text, sichtbar and breit
+    iso = lambda s: time.strftime('%Y-%m-%dT%H:%M:%SZ', time.gmtime(s))
+    jetzt = time.time()
+    g, gut = extern_zeigen('keine', 'warn', None)
+    check('external copy card: not set up (yellow)', gut and 'nicht eingerichtet' in g and 'nur auf diesem Server' in g, g)
+    g, gut = extern_zeigen('ok', 'ok', {'t': iso(jetzt), 'ok': True, 'meldung': '', 'letzter': iso(jetzt - 3600), 'staende': 43, 'groesse': 5 * 1024 ** 3})
+    check('external copy card: last successful run with count and size (green)', gut and 'aktuell' in g and 'zuletzt erfolgreich am ' + time.strftime('%d.%m.%Y', time.localtime(jetzt - 3600)) in g
+          and '43 Stände, 5.120 MB' in g, g)
+    g, gut = extern_zeigen('fehler', 'warn', {'t': iso(jetzt), 'ok': False, 'meldung': 'Übertragung fehlgeschlagen (restic Code 1) – Storage Box erreichbar, Schlüssel hinterlegt, Platz frei?',
+                                              'letzter': '', 'staende': 0, 'groesse': 0})
+    check('external copy card: failed run with the reason (yellow)', gut and 'Fehler' in g and 'Übertragung fehlgeschlagen (restic Code 1)' in g, g)
+    g, gut = extern_zeigen('alt', 'warn', {'t': iso(jetzt), 'ok': True, 'meldung': '', 'letzter': iso(jetzt - 37 * 3600), 'staende': 43, 'groesse': 5 * 1024 ** 3})
+    check('external copy card: newest copy older than 36 hours (yellow)', gut and 'veraltet' in g and 'älter als 36 Stunden' in g, g)
+    g, gut = extern_zeigen('warnung', 'warn', {'t': iso(jetzt), 'ok': True, 'meldung': '<b>kopiert</b>, aber Aufräumen alter Stände fehlgeschlagen', 'letzter': iso(jetzt), 'staende': 1, 'groesse': 0})
+    check('external copy card: copied with a warning (yellow), text shown as text', gut and 'mit Warnung' in g and '1 Stand, 0 MB' in g and '<b>kopiert</b>, aber Aufräumen' in g, g)
+    r = a.request.get(B + '/data/sicherung-extern.php')
+    check('external copy status file not reachable from the web', r.status in (403, 404) and 'staende' not in r.text(), r.status)
     # 6) Bereitstellungs-Status (Release-Modus)
     check('deploy card: not yet set up', a.locator('#tab-system .sic-karte.warn:has-text("Bereitstellung")').count() == 1 and 'ohne Freigabe' in a.inner_text('#tab-system .sic-karten'))
     open(DATA + '/deployment.php', 'w').write(GUARD + json.dumps({'t': t, 'ok': True, 'sha': 'abcdef1234567890abcdef1234567890abcdef12', 'vorher': '', 'lauf': '1', 'meldung': ''}))

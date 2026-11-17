@@ -233,7 +233,7 @@ jobs:
     needs: [nachweis, statisch]
     if: ${{ !cancelled() && needs.statisch.result == 'success' && !(needs.nachweis.result == 'success' && needs.nachweis.outputs.uebernommen == 'true') }}
     runs-on: ubuntu-24.04
-    timeout-minutes: 10
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
         with:
@@ -280,6 +280,13 @@ jobs:
         run: sh tests/deploy/test_konten_pruefen.sh
       - name: Speicherbelegung und Aufräumen (deploy/speicher.sh, mit Platzhalter für docker), Protokollbegrenzung
         run: sh tests/deploy/test_speicher.sh
+      - name: Externe Kopie der Datensicherung (deploy/sicherung-extern.sh) – mit echtem restic, lokal und über SFTP (sftp-server)
+        env:
+          WA_RESTIC_PFLICHT: "1"
+        # restic und sftp-server aus dem signierten Ubuntu-Archiv (wie nftables unten; Ubuntu 24.04: restic 0.16.4)
+        run: |
+          { command -v restic >/dev/null && [ -x /usr/lib/openssh/sftp-server ]; } || { sudo apt-get update -qq && sudo apt-get install -y -qq restic openssh-sftp-server; }
+          sh tests/deploy/test_sicherung_extern.sh
       - name: Netzsperre für bunny.net (deploy/cdn-netzsperre.sh, cdn_netzsperre.py) – mit echtem nftables in Netz-Namensräumen
         env:
           WA_NETZ_PFLICHT: "1"

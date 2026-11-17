@@ -1,7 +1,7 @@
 <?php
 /* Shared persistence for HTTP and maintenance tools. No automatic migration/fallback. */
 const GUARD = "<?php http_response_code(404); exit; ?>\n";
-const STORE_SIDECARS = ['mail-schluessel', 'sicherung', 'deployment'];
+const STORE_SIDECARS = ['mail-schluessel', 'sicherung', 'sicherung-extern', 'deployment'];
 require_once __DIR__ . '/lib/datenbereiche-liste.php';   // Speicherbereiche (erzeugt aus regeln/datenverantwortung.toml)
 
 /* ---------------- Speicherbereiche (ADR-007 Stufe 2) ----------------

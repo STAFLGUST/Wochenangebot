@@ -18,8 +18,8 @@ Anfrage:
 | Dateien (Standard) | keine Datei `.sqlite-active` | je Dokument `daten/<name>.php` (im Container `/var/www/html/data`), Inhalt: Sperrzeile `<?php http_response_code(404); exit; ?>` + JSON; Unterordner für Namen mit `/` (z. B. `daten/protokoll/2026-01.php`) |
 | SQLite | `daten/.sqlite-active` vorhanden | `daten/.sqlite/store.sqlite`, Tabelle `documents(name, payload, mtime)`, Schema `user_version = 1` |
 
-Auch bei SQLite bleiben drei **Seitendateien** Dateien (`STORE_SIDECARS`): `mail-schluessel` (Schlüssel des
-Postfach-Passworts), `sicherung` und `deployment` (Statusdateien der Skripte). Außerhalb der Speicherschicht liegen die
+Auch bei SQLite bleiben vier **Seitendateien** Dateien (`STORE_SIDECARS`, gleiche Liste `SIDECARS` in `deploy/datenbank.py`):
+`mail-schluessel` (Schlüssel des Postfach-Passworts), `sicherung`, `sicherung-extern` und `deployment` (Statusdateien der Skripte). Außerhalb der Speicherschicht liegen die
 Länder- und Ortsdatenbank (`geo/`) und die **Dateiablage** (`daten/dateien/`, `lib/dateiablage.php`): hochgeladene Dateien
 der Module als `<bereich>/<xx>/<id>.bin` – in beiden Speicherarten im Dateisystem, nie als `*.php` (die Werkzeuge für
 Sicherungsprüfung und Umschalten behandeln nur `*.php` als Dokumente); unvollständige Uploads unter `dateien/.teile/*.tmp`

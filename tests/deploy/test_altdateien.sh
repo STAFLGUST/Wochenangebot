@@ -18,6 +18,7 @@ neu() {   # Installation mit Datenordner im Dateibetrieb
   printf '%s\n[{"t":"2026-10-01","was":"Test"}]' "$G" > protokoll/2026-10.php
   printf '%s\n{"schluessel":"nur-ein-test"}' "$G" > mail-schluessel.php
   printf '%s\n{"ok":true}' "$G" > sicherung.php
+  printf '%s\n{"ok":true,"staende":3}' "$G" > sicherung-extern.php
   printf '%s\n{"commit":"abc"}' "$G" > deployment.php
   printf '%s\n' "$G" > index.php
   printf 'geo-test' > geo/laender.dat.php
@@ -45,7 +46,7 @@ A=$(ls sicherungen/altdateien-*.tar.gz 2>/dev/null | head -1)
 ok "archivieren: erst Sicherung, dann Archiv mit Rechten 600" '[ $CODE = 0 ] && grep -qx "sichern --jetzt" "$T/aufrufe" && [ -n "$A" ] && [ "$(stat -c %a "$A")" = 600 ] && [ "$(stat -c %a sicherungen)" = 700 ]'
 ok "Archiv enthält genau die Altdateien" '[ "$(tar -tzf "$A" | sort | tr "\n" " ")" = "angebot.php kunden/k1.php protokoll/2026-10.php " ]'
 ok "Altdateien entfernt, leere Unterordner auch" '[ ! -e daten/angebot.php ] && [ ! -e daten/kunden ] && [ ! -e daten/protokoll ]'
-ok "bleiben: Datenbank, Schalter, Schlüssel, Statusdateien, index.php, geo, Sperren" '[ -f daten/.sqlite/store.sqlite ] && [ -f daten/.sqlite-active ] && [ -f daten/mail-schluessel.php ] && [ -f daten/sicherung.php ] && [ -f daten/deployment.php ] && [ -f daten/index.php ] && [ -f daten/geo/laender.dat.php ] && [ -f daten/.storage.lock ] && [ -f daten/.hr-abwesenheiten.lock ]'
+ok "bleiben: Datenbank, Schalter, Schlüssel, Statusdateien, index.php, geo, Sperren" '[ -f daten/.sqlite/store.sqlite ] && [ -f daten/.sqlite-active ] && [ -f daten/mail-schluessel.php ] && [ -f daten/sicherung.php ] && [ -f daten/sicherung-extern.php ] && [ -f daten/deployment.php ] && [ -f daten/index.php ] && [ -f daten/geo/laender.dat.php ] && [ -f daten/.storage.lock ] && [ -f daten/.hr-abwesenheiten.lock ]'
 ok "Datenbank danach fehlerfrei" 'python3 deploy/datenbank.py check daten | grep -q "3 documents verified"'
 mkdir "$T/ansehen" && tar -xzf "$A" -C "$T/ansehen"
 ok "Archiv entpackt: Inhalt unverändert" 'grep -q "Muster GmbH" "$T/ansehen/kunden/k1.php"'

@@ -15,7 +15,7 @@ import tempfile
 # GUARD, document_path und validate nutzt deploy/dateien_sichern.py; beim Release dessen Fassung des neuen Commits mit dieser
 # Datei des alten: Signatur nur erweitern.
 GUARD = '<?php http_response_code(404); exit; ?>\n'
-SIDECARS = {'mail-schluessel', 'sicherung', 'deployment'}
+SIDECARS = {'mail-schluessel', 'sicherung', 'sicherung-extern', 'deployment'}
 KEY = re.compile(r'^[a-zA-Z0-9_-]+(?:/[a-zA-Z0-9_-]+)*$')
 SCHEMA = '''CREATE TABLE documents(name TEXT PRIMARY KEY, payload TEXT NOT NULL CHECK(json_valid(payload)), mtime INTEGER NOT NULL) WITHOUT ROWID; PRAGMA user_version=1;'''
 

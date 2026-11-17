@@ -53,7 +53,7 @@ with sync_playwright() as p:
     check('own session listed', 'diese Sitzung' in s.inner_text('#tab-sitzungen'))
     s.screenshot(path=SH + '/security.png', full_page=True)
     s.click('#sic-tabs [data-tab="system"]'); s.wait_for_selector('#tab-system:not([hidden]) .sic-einst')
-    check('Reiter System im Modul Sicherheit: Betrieb, Wartung, Module, Diagnose', s.locator('#tab-system .sic-karte').count() == 8
+    check('Reiter System im Modul Sicherheit: Betrieb, Wartung, Module, Diagnose', s.locator('#tab-system .sic-karte').count() == 9
           and s.locator('#sy-kunden, #sy-eingabe, #sy-module, #sy-diagnose').count() == 4, s.locator('#tab-system .sic-karte').count())
 
     def modul_tab(t):

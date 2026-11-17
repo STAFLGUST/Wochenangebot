@@ -151,6 +151,11 @@ try:
     check('Mitarbeiterseite zeigt beide Protokolle zusammen', {'kunde_login', 'bestellung', 'customers', 'user'} <= {e.get('a') for e in lg.get('entries', [])}, sorted({e.get('a') for e in lg.get('entries', [])}))
     neu = spur()[vorher:]
     check('Kundenseite: keine einzige Anfrage nach internen Dokumenten (Serverprotokoll)', not neu, neu[:8])
+    # nach der Spur-Prüfung: die Abfrage einer Mitarbeiter-Aktion prüft die Wartung und fragt dabei selbst nach einem internen Dokument
+    K2 = Client('198.51.100.31'); angemeldet = K2.call('kunde_login', {'username': 'kantine.dt', 'password': 'Neues-Kennwort-88'})[0] == 200
+    code, bs = K2.call('betrieb_status')
+    check('Kundenseite: Betriebsstatus (Sicherung, externe Kopie) weder für angemeldete Kunden noch anonym', angemeldet and code in (401, 403, 404) and 'backup' not in json.dumps(bs)
+          and Client('198.51.100.32').call('betrieb_status')[0] in (401, 403, 404) and 'backupExtern' not in json.dumps(K2.call('kunde_status')[1]), (code, bs))
     check('Kundenseite: nichts Internes in den gemeinsamen Ordner geschrieben', not interne_im_gemeinsamen_ordner(), interne_im_gemeinsamen_ordner()[:5])
 
     # ---------- Postausgang verschickt (Versandprotokoll intern) ----------
