@@ -1519,7 +1519,7 @@
     systemEntwurf();
   }
   function systemKarten(d) {
-    const n = d.notfall, b = d.backup, st = d.storage || {}, k = d.disk, ml = d.mail, o = d.orders, c = d.customers;
+    const n = d.notfall, b = d.backup, x = d.backupExtern, st = d.storage || {}, k = d.disk, ml = d.mail, o = d.orders, c = d.customers;
     const ablage = b && b.ablage && b.ablage.anzahl ? ` · Dateiablage ${plural(+b.ablage.anzahl, 'Datei', 'Dateien')} (${gbZahl(+b.ablage.groesse || 0)} GB), Sicherung belegt ${gbZahl(+b.ablage.belegt || 0)} GB` : '';
     let sich;
     if (!b || !b.t) sich = karte('warn', 'Datensicherung', 'keine', 'noch keine automatische Sicherung – entsteht nach dem nächsten Server-Update täglich');
@@ -1533,6 +1533,7 @@
     return [
       n ? karte('bad', 'Notfallmodus', 'aktiv', `seit ${esc(zeit(n.seit))} Uhr – Mitarbeiter ohne Administratorrolle gesperrt`, 'notfall') : karte('ok', 'Notfallmodus', 'aus', 'Normalbetrieb', 'notfall'),
       sich,
+      x ? karte(x.stufe, 'Externe Kopie', esc(x.wert), esc(x.text)) : '',
       bereitstellungKarte(d.deployment),
       karte('ok', 'Datenablage', st.mode === 'sqlite' ? 'SQLite' : 'Dateien', `${zahl(st.documents || 0)} Datensätze · ${mbZahl(st.bytes || 0)} MB${d.php ? ` · PHP ${esc(d.php)}` : ''}`),
       k && k.free && k.total ? karte(frei, 'Speicherplatz', `${gbZahl(k.free)} GB`, `frei von ${gbZahl(k.total)} GB${frei === 'ok' ? '' : ' – bald aufräumen oder erweitern'}`) : karte('warn', 'Speicherplatz', 'unbekannt', ''),

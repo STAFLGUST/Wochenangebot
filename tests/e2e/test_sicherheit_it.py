@@ -47,9 +47,11 @@ check('timeline: 14 days, today counts failures', len(d['timeline']) == 14 and d
 top = {x['ip']: x for x in d['topIps']}
 check('suspicious address listed with count and usernames', '203.0.113.9' in top and top['203.0.113.9']['n'] == 3 and 'admin' in top['203.0.113.9']['users'], d['topIps'][:2])
 titles = {c['title']: c for c in d['config']}
-for t in ['Administratoren', 'Unbenutzte Zugänge', 'Sitzungs-Cookies', 'Fehlermeldungen', 'PHP-Version', 'PHP-Erweiterungen', 'E-Mail-Verbindung', 'Alarm bei Sicherheitsereignissen', 'Länderdaten']:
+for t in ['Administratoren', 'Unbenutzte Zugänge', 'Sitzungs-Cookies', 'Fehlermeldungen', 'PHP-Version', 'PHP-Erweiterungen', 'E-Mail-Verbindung', 'Alarm bei Sicherheitsereignissen', 'Externe Datensicherung', 'Länderdaten']:
     check(f'config check present: {t}', t in titles and titles[t]['level'] in ('ok', 'warn', 'bad', 'info'), titles.get(t))
 check('alarm off → hint', titles['Alarm bei Sicherheitsereignissen']['level'] == 'warn')
+check('no external backup → hint with the way to set it up', titles['Externe Datensicherung']['level'] == 'warn' and 'nicht eingerichtet' in titles['Externe Datensicherung']['text']
+      and 'deploy/sicherung-extern.sh' in titles['Externe Datensicherung']['hint'], titles['Externe Datensicherung'])
 check('new accounts are not reported as unused', titles['Unbenutzte Zugänge']['level'] == 'ok', titles['Unbenutzte Zugänge'])
 A.call('benachrichtigung_save', {'events': {'sicherheit': {'on': True, 'to': 'it@example.org'}}})
 titles = {c['title']: c for c in A.call('security_status')[1]['config']}

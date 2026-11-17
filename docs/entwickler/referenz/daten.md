@@ -80,6 +80,7 @@ Gelesen und geschrieben über `app/api/storage.php` (`store_read`, `store_write`
 | `sicherheit-bereitschaft` | Plattformkern | intern | – | – | Bereitschaft (Modul Sicherheit, lib/bereitschaft.php): Leitfaden für den Ernstfall mit Ansprechpartnern, im Notfall abgehakte Schritte, Probealarme mit Bestätigungen, Wochenbericht (an/aus, Wochentag, Versandverlauf) – Historie: Probealarme (letzte 20) und abgehakte Leitfäden je Notfall (letzte 20) als Schnappschuss; Leitfaden selbst ohne Versionen |
 | `sicherheit-notfall` | Plattformkern | intern | – | – | Notfallmodus (Modul Sicherheit): Zustand, Grund, Kundenhinweis, Wirkung, gesicherte Sicherheits- und Firewall-Einstellungen, Verlauf |
 | `sicherung` | Plattformkern | intern | – | – | Status der Datensicherung (Datei neben der Datenbank) |
+| `sicherung-extern` | Plattformkern | intern | – | – | Status der externen Kopie der Datensicherung (deploy/sicherung-extern.sh; Datei neben der Datenbank, ohne Ziel und Geheimnisse) |
 | `sitzungen` | Plattformkern | geheim | – | – | Sitzungsregister der Mitarbeiter |
 | `sperrliste` | Plattformkern | intern | – | – | Gesperrte Adressen |
 | `testpostfach` | Plattformkern | vertraulich | – | angebot | Abgefangene E-Mails der Testumgebung (WA_TESTUMGEBUNG=1) |

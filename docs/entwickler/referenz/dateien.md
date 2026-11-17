@@ -507,6 +507,7 @@ Jede Code-Datei beginnt mit einem Kopfkommentar; dessen erste Aussage steht hier
 | `release-zurueck.sh` | plattform | Notfall: auf die Version vor dem letzten Release zurückgehen (Daten bleiben unverändert). sh /opt/wochenangebot/deploy/release-zurueck.sh Der zurückgenommene Stand wird nicht erneut automatisch eingespielt; ein neuer … |
 | `sichern.sh` | plattform | Tägliche Datensicherung des Ordners daten/ (nach der Datentrennung, ADR-007 Stufe 2, zusätzlich daten-intern/ als intern-*.tar.gz). |
 | `sicherung-einrichten.sh` | plattform | Einmalig auf dem Server (als root): eigene Zeitsteuerung für die Datensicherung einrichten. sh /opt/wochenangebot/deploy/sicherung-einrichten.sh Danach läuft die Sicherung täglich um 02:30 Uhr unabhängig von der … |
+| `sicherung-extern.sh` | plattform | Externe Kopie der Datensicherung: der Ordner sicherungen/ (geprüfte Archive von deploy/sichern.sh, Keycloak-Abzüge, Stände der Dateiablage) verschlüsselt und inkrementell auf eine Hetzner Storage Box – mit restic … |
 | `sicherung-pruefen.php` | plattform | Prüft eine entpackte Datensicherung (Ersatz für sicherung-pruefen.py, falls kein Python vorhanden ist): jede Datendatei muss gültiges JSON enthalten. |
 | `sicherung-pruefen.py` | plattform | Prüft eine entpackte Datensicherung: jede Datendatei muss gültiges JSON enthalten. |
 | `speicher.sh` | plattform | Speicherbelegung des Servers anzeigen und gefahrlos Aufräumbares entfernen (Docker-Zwischenspeicher, ungenutzte Images). cd /opt/wochenangebot && sh deploy/speicher.sh # nur anzeigen – ändert nichts cd … |
@@ -668,6 +669,7 @@ Jede Code-Datei beginnt mit einem Kopfkommentar; dessen erste Aussage steht hier
 | `adr-007-kundencontainer.md` | plattform | ADR-007: Kundenseite in eigenem Container |
 | `bestandsaufnahme.md` | plattform | Bestandsaufnahme (Phase 0) – Stand 21.10.2026 |
 | `inbetriebnahme-anmeldung.md` | plattform | Inbetriebnahme der zentralen Anmeldung (Keycloak) – Ablaufplan |
+| `inbetriebnahme-sicherung-extern.md` | plattform | Inbetriebnahme: Externe Kopie der Datensicherung (Hetzner Storage Box) |
 | `inbetriebnahme-versand.md` | versand | Inbetriebnahme: Modul „Versand“ (versand.dashboard-stafl.de) |
 | `modul-sicherheit.md` | sicherheit | Modul Sicherheit (sicherheit.dashboard-stafl.de) |
 | `multi-agent.md` | plattform | Entwicklung mit mehreren KI-Agenten |
@@ -746,6 +748,7 @@ Jede Code-Datei beginnt mit einem Kopfkommentar; dessen erste Aussage steht hier
 | `test_postfach_schluessel.sh` | plattform | Test von deploy/postfach-schluessel.sh (Schlüssel des Postfach-Passworts aus dem gemeinsamen Datenordner, ADR-007) – in einem Wegwerf-Ordner, ohne root (Besitzer wird nur versucht zu setzen) – und dass die Anwendung … |
 | `test_release_pruefen.sh` | plattform | Test der Release-Prüfungen (.github/scripts/release-pruefen.sh) mit einem Platzhalter für gh |
 | `test_sichern.sh` | plattform | Test der Datensicherung (deploy/sichern.sh) in einem Wegwerf-Ordner mit Testdaten. |
+| `test_sicherung_extern.sh` | plattform | Test von deploy/sicherung-extern.sh (externe Kopie der Datensicherung) in einem Wegwerf-Ordner – mit echtem restic gegen ein lokales Repository (WA_SICHERUNG_EXTERN_REPO) und über den SFTP-Weg des Betriebs (Attrappe … |
 | `test_speicher.sh` | plattform | Test von deploy/speicher.sh – mit Platzhalter für docker, in einem Wegwerf-Ordner. |
 | `test_sqlite_http.sh` | plattform | Exercise real production PHP image and Apache, not the built-in test server. |
 | `test_zwischenspeichern.py` | plattform | Browser-Zwischenspeicher (Caddyfile, Abschnitt „zwischenspeichern“) mit echtem Caddy in der Fassung des Betriebs. |

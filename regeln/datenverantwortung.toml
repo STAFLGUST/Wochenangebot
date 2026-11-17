@@ -888,6 +888,13 @@ schutz = "intern"
 beschreibung = "Status der Datensicherung (Datei neben der Datenbank)"
 
 [[dokument]]
+name = "sicherung-extern"
+eigentuemer = "plattform"
+bereich = "kundenseite"
+schutz = "intern"
+beschreibung = "Status der externen Kopie der Datensicherung (deploy/sicherung-extern.sh; Datei neben der Datenbank, ohne Ziel und Geheimnisse)"
+
+[[dokument]]
 name = "deployment"
 eigentuemer = "plattform"
 bereich = "kundenseite"

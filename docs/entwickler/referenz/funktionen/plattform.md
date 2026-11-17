@@ -2,7 +2,7 @@
 
 <!-- ERZEUGT von `python3 werkzeuge/doku.py erzeugen` – nicht von Hand ändern. Quelle: Funktionen und Kommentare im Code. Die CI prüft, dass diese Datei zum Code passt. -->
 
-123 Dateien, 1247 Funktionen – in der Reihenfolge der Datei, **fett** die Abschnitte. Text = erste Aussage des Kommentars direkt über der Funktion (Python: Docstring). Übersicht aller Module: [README.md](README.md).
+123 Dateien, 1248 Funktionen – in der Reihenfolge der Datei, **fett** die Abschnitte. Text = erste Aussage des Kommentars direkt über der Funktion (Python: Docstring). Übersicht aller Module: [README.md](README.md).
 
 ## `.github/scripts/apt_vorrat.py`
 
@@ -212,6 +212,7 @@ _Sicherheit für IT-Administratoren_
 - `sec_log_entries(days)` – Protokolleinträge der letzten $days Tage (Monatsdateien)
 - `sec_timeline(entries)` – Verlauf der letzten 14 Tage je Tag: fehlgeschlagene Anmeldungen (Mitarbeiter/Kunden), Passwortbestätigung, Ländersperre
 - `sec_top_ips(entries)` – Auffällige Adressen (7 Tage): fehlgeschlagene Anmeldungen je IP mit Land und versuchten Benutzernamen
+- `sicherung_extern_stand()` – Externe Kopie der Datensicherung (deploy/sicherung-extern.sh, Dokument sicherung-extern): Stufe, Kurzwert und Text – eine Quelle für die Karte im Reiter …
 - `betrieb_daten(me)` – Betriebszustand (Modul Sicherheit: Reiter System und Lagebild): Wartung, Sicherung, Bereitstellung, Datenablage, Speicher, E-Mail-Versand, Bestellwünsche, …
 - `sec_config_checks(users)` – Konfigurationsprüfung (serverseitig sichtbar): [bereich, stufe ok\|warn\|bad\|info, titel, befund, empfehlung]
 - `sec_diag(check)` – Nur lesende Diagnosen; Ergebnis: ['ok' => bool, 'items' => [[label, wert, stufe]], 'ms' => int]

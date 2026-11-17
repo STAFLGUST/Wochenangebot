@@ -10,7 +10,7 @@ declare(strict_types=1);
    DATEN_JE_SEITE: ab ihrer Trennstufe schreibt jede Seite ihr eigenes Dokument (Kundenseite außen, Mitarbeiterseite innen). */
 if (realpath((string)($_SERVER['SCRIPT_FILENAME'] ?? '')) === __FILE__) { http_response_code(404); exit; }
 
-const DATEN_KUNDENSEITE = ['abmelde-schluessel', 'anmeldeorte', 'bestellungen', 'datenleck', 'deployment', 'kunden', 'kundensitzungen', 'laendersperre', 'mail-schluessel', 'merklisten', 'postausgang', 'sicherung', 'sperrliste'];
+const DATEN_KUNDENSEITE = ['abmelde-schluessel', 'anmeldeorte', 'bestellungen', 'datenleck', 'deployment', 'kunden', 'kundensitzungen', 'laendersperre', 'mail-schluessel', 'merklisten', 'postausgang', 'sicherung', 'sicherung-extern', 'sperrliste'];
 const DATEN_KUNDENSEITE_PRAEFIX = ['kundenprotokoll/'];
 const DATEN_TRENNSTUFE = 5;
 const DATEN_AB_STUFE = ['angebot' => 3, 'angebote' => 3, 'anmeldenamen' => 5, 'artikelauszug' => 3, 'bedrohungsliste' => 3, 'benachrichtigungen' => 2, 'bestand' => 2, 'bestellung' => 3, 'einzelangebote' => 3, 'firewall' => 3, 'fracht' => 3, 'fw_zaehler' => 5, 'logins' => 5, 'mailkonto' => 2, 'mailkonto-intern' => 2, 'mailvorlage' => 2, 'postausgang-stand' => 3, 'sicherheit' => 3, 'sicherheit-notfall' => 3, 'stammdaten' => 2, 'verkehr' => 5, 'wartung' => 3];

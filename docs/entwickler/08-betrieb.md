@@ -32,7 +32,7 @@ den Release vorlegt.
 | Statische Prüfungen (`statisch`) | siehe Liste unten | immer |
 | Sicherheitsprüfungen (`sicherheit`) | gitleaks über den Verlauf bis `HEAD` (`.gitleaks.toml`, Version und Prüfsumme fest); Trivy: `tests/requirements.txt` (HIGH/CRITICAL blockiert), Images aus `docker-compose.yml` (nur Bericht) | immer |
 | Anwendungs-Image prüfen (`image`) | `deploy/image/pruefen.sh` (Bau, Vergleich mit `php:8.3-apache`); `deploy/anmeldung/pruefen.sh` mit festen Keycloak-/PostgreSQL-Digests; Trivy auf `stafl-app:pruefung` (CRITICAL mit Korrektur blockiert, HIGH als Bericht) | nach `statisch`, außer übernommen |
-| Sicherung und Release-Prozess (`betrieb`) | `tests/deploy/`: `test_datenbank.py`, `test_sqlite_http.sh`, `test_sichern.sh`, `test_freigabe.sh`, `test_release_pruefen.sh`, `test_anmeldung_einrichten.sh`, `test_notzugang.sh`, `test_cdn_netzsperre.py` (nftables in Netz-Namensräumen), `test_cdn_netzsperre.sh`, `test_konten_pruefen.sh`, `test_speicher.sh`, `test_datenbank_umschalten.sh`, `test_altdateien.sh`, `test_karte_laden.sh`, `test_adressen_laden.sh` | nach `statisch`, außer übernommen |
+| Sicherung und Release-Prozess (`betrieb`) | `tests/deploy/`: `test_datenbank.py`, `test_sqlite_http.sh`, `test_sichern.sh`, `test_freigabe.sh`, `test_release_pruefen.sh`, `test_anmeldung_einrichten.sh`, `test_notzugang.sh`, `test_cdn_netzsperre.py` (nftables in Netz-Namensräumen), `test_cdn_netzsperre.sh`, `test_konten_pruefen.sh`, `test_speicher.sh`, `test_sicherung_extern.sh` (echtes restic, lokal und über SFTP), `test_datenbank_umschalten.sh`, `test_altdateien.sh`, `test_karte_laden.sh`, `test_adressen_laden.sh` | nach `statisch`, außer übernommen |
 | Ende-zu-Ende-Tests (*speicherart*, Teil *k*/3) (`e2e`) | Matrix `storage: [files, sqlite]` × `teil: [1, 2, 3]`, dazu über `include` „(sqlite, getrennt, Teil *k*/3)“ mit `WA_TEST_TRENNUNG=1` (Daten getrennt wie auf dem Server, ADR-007); `.github/scripts/testumgebung.sh e2e`, dann `python tests/run_e2e.py` mit `WA_JOBS=4`; Artefakt bei Fehler | nach `statisch`, außer übernommen |
 | Ende-zu-Ende-Tests (`e2e_required`) | fester Name für den Branchschutz; grün nur, wenn alle neun Teile grün sind | nach `e2e` |
 | Anmeldung über Keycloak (nur CI) (`oidc`) | `testumgebung.sh oidc`, `tests/oidc/umgebung.sh start`, `tests/oidc/test_oidc.py`, `stop`; Artefakt `oidc-ergebnisse` | nach `statisch`, außer übernommen |
@@ -188,10 +188,11 @@ Ohne gültigen Schlüssel wirkt nichts davon. Jede neue Weiterleitung (`reverse_
 
 | Ort | Inhalt |
 | --- | --- |
-| `.env` | Domain, Mail-Zugang, Geheimnisse der Anmeldung, Token für den Release-Modus, Schlüssel für bunny.net (`CDN_SCHLUESSEL`, `CDN_PFLICHT`) (nur root) |
+| `.env` | Domain, Mail-Zugang, Geheimnisse der Anmeldung, Token für den Release-Modus, Schlüssel für bunny.net (`CDN_SCHLUESSEL`, `CDN_PFLICHT`), Ziel der externen Kopie (`SICHERUNG_EXTERN_ZIEL`) (nur root) |
 | `.release-vorher`, `.release-abgelehnt` | Stand vor dem letzten Release (Notfall-Rückfall) bzw. abgelehnter Release (nur root) |
 | `.cdn-netzsperre`, `.cdn-netzsperre-liste.json`, `.cdn-netzsperre-regeln` | Netzsperre für bunny.net: Modus, Liste der Edge-Server, Prüfsumme der gesetzten Regeln (nur root, `cdn-netzsperre.sh`) |
-| `daten/` | Geschäftsdaten (Dateien oder `daten/.sqlite/store.sqlite`), Dateiablage `daten/dateien/` (hochgeladene Dateien, z. B. QM-Dokumente; gesichert als eigene Stände `sicherungen/dateien/<Zeit>/`; nach der Datentrennung in `daten-intern/dateien/`), Status von Sicherung und Deployment, `mail-schluessel.php` bis zum Umzug nach `daten-geheim/` (nicht in Sicherungen), Versandaufträge der Kundenseite (`postausgang`) |
+| `.sicherung-extern-schluessel` (+`.pub`), `.sicherung-extern-passwort`, `.sicherung-extern-hosts`, `.sicherung-extern-cache/` | Externe Kopie der Datensicherung: SSH-Schlüssel für die Storage Box, Passwort des restic-Repositorys (zusätzlich außerhalb des Servers aufbewahrt), gemerkter Schlüssel der Gegenstelle, Zwischenspeicher (nur root, `sicherung-extern.sh`; nie in `daten/`, nie in den Sicherungen) |
+| `daten/` | Geschäftsdaten (Dateien oder `daten/.sqlite/store.sqlite`), Dateiablage `daten/dateien/` (hochgeladene Dateien, z. B. QM-Dokumente; gesichert als eigene Stände `sicherungen/dateien/<Zeit>/`; nach der Datentrennung in `daten-intern/dateien/`), Status von Sicherung, externer Kopie und Deployment, `mail-schluessel.php` bis zum Umzug nach `daten-geheim/` (nicht in Sicherungen), Versandaufträge der Kundenseite (`postausgang`) |
 | `daten-intern/` | Interne Dokumente nach `deploy/daten-trennen.sh trennen` (ADR-007 Stufe 2a: Personal, Nutzer, CRM, Controlling, QS mit Dateiablage …; ab Trennstufe 2 auch Kundenstamm, Bestand, Stammdaten, Postfach-Zugänge, Empfänger der Bestellwünsche); nur in `app-mitarbeiter` und `postausgang` (`/var/www/daten-intern`), nie in der Kundenseite; gesichert als `intern-<Zeit>.tar.gz`; nur root/www-data |
 | `daten-geheim/` | Schlüssel des im Eingabebereich hinterlegten Postfach-Passworts (`mail-schluessel.php`, nach `postfach-schluessel.sh umziehen`); nur in `app-mitarbeiter` und `postausgang`, nie in der Kundenseite, nicht gesichert, nur root/www-data |
 | `daten-anmeldung/` | Realm-Import, Tresor `vault/` (Postfach-Passwort für Keycloak, nicht gesichert), während der Einrichtung `einrichtung.env` |
@@ -211,6 +212,7 @@ Ohne gültigen Schlüssel wirkt nichts davon. Jede neue Weiterleitung (`reverse_
 | `release-zurueck.sh` | Notfall-Rückfall auf den Stand vor dem letzten Release | Inhaber |
 | `sichern.sh` | Datensicherung mit Probeentpacken und Platzprüfung, inkl. Keycloak-Datenbank und Dateiablage; `--jetzt` sofort | Timer `wochenangebot-sicherung` bzw. `aktualisieren.sh` (1×/Tag), Release |
 | `sicherung-einrichten.sh` | eigener Sicherungs-Timer (täglich 02:30) | Inhaber, einmalig |
+| `sicherung-extern.sh` | Externe Kopie von `sicherungen/` auf eine Hetzner Storage Box (restic über SFTP, verschlüsselt, inkrementell): `einrichten` (Schlüssel, Passwort, Repository, Timer) / `jetzt` (kopieren, Aufbewahrung 30 Tage · 8 Wochen · 12 Monate) / `status` (nur lesend) / `pruefen` (`restic check`, Rücksicherungsprobe mit byteweisem Vergleich) / `aus` (Timer entfernen); Anleitung `docs/plattform/inbetriebnahme-sicherung-extern.md` | Inhaber; Timer `wochenangebot-sicherung-extern` (täglich 03:30) |
 | `sicherung-pruefen.py`, `sicherung-pruefen.php` | entpackte Sicherung prüfen | `sichern.sh` |
 | `dateien_sichern.py` | Dateiablage: Stand mit festen Verweisen auf den vorigen, Platzbedarf, Prüfung gegen die Verweise der Daten; `fehlende` für den Betreiber | `sichern.sh`, Betreiber |
 | `datenbank.py` | SQLite: `check`, Migration/Rückkonvertierung (`--offline`), Sicherung, `altdateien` (Altdateien auflisten/archivieren) | `datenbank-umschalten.sh`, `sichern.sh`, `run_e2e.py` |
@@ -232,7 +234,7 @@ Ohne gültigen Schlüssel wirkt nichts davon. Jede neue Weiterleitung (`reverse_
 | `anmeldung/pruefen.sh`, `image/pruefen.sh` | Betriebskonfiguration bzw. Image mit Docker prüfen | CI („Anwendungs-Image prüfen“) |
 
 `daten/` ist im App-Container beschreibbar. Skripte, die als root laufen, schreiben dort deshalb nie direkt: Statusdateien
-(`sicherung.php`, `deployment.php`) entstehen im Installationsordner und ersetzen den Eintrag nur per Umbenennen, `chown`
+(`sicherung.php`, `sicherung-extern.php`, `deployment.php`) entstehen im Installationsordner und ersetzen den Eintrag nur per Umbenennen, `chown`
 nur mit `-h` bzw. für echte Dateien (`find -type f`); Angaben, denen root folgt (vorheriger Stand für den Rückfall), stehen
 in root-Dateien außerhalb (`.release-vorher`). Code eines Testzweigs läuft nie auf dem Server.
 
@@ -243,7 +245,7 @@ Dieselbe Regel gilt für **Ordnernamen** und für jeden Ordner, in den ein wenig
 Stand-Vermerke im Installationsordner und setzen sie nur per Umbenennen ein (`vermerken`), machen den Namen der Quelldatei
 unmittelbar vor dem Download frei (der Probelauf des Containers lief vorher) und übernehmen aus der Kopfzeile `last-modified`
 nur harmlose Zeichen; `bereitstellen.py` schreibt nur innerhalb des übergebenen Programmordners (`schreibpfad`, beide
-Schreibwege) und legt seine Zwischendatei nie über einen Verweis an. Geprüft wird das in `tests/deploy/test_sichern.sh`,
+Schreibwege) und legt seine Zwischendatei nie über einen Verweis an. Geprüft wird das in `tests/deploy/test_sichern.sh`, `test_sicherung_extern.sh`,
 `test_postfach_schluessel.sh`, `test_datenbank_umschalten.sh`, `test_daten_trennen.py`, `test_karte_laden.sh`,
 `test_adressen_laden.sh` und `test_freigabe.sh`.
 
@@ -367,8 +369,39 @@ Hostname der Testadresse in der bunny-Zone der Kundenseite). Neue Stände werden
   berührt 8 UTC-Tage) und einem je Tag davor sind das höchstens 8 × 24 + 23 = 215 Läufe. Beispiel 12 GB Ablage und 10 MB
   Archive je Lauf: 12 GB + Änderungen + 215 × 11 MB ≈ 14,4 GB; bei 50 MB je Lauf ≈ 23 GB. Größe der heutigen Archive auf
   dem Server: `ls -la sicherungen`.
-- Alle Sicherungen liegen auf demselben Datenträger wie die Daten. Eine zweite Ebene außerhalb sind die VPS-Sicherungen bei
-  Hostinger (Stand 16.11.2026: vier); sie stellen nur den ganzen Server zurück, und wir steuern sie nicht.
+- Die Sicherungen von `sichern.sh` liegen auf demselben Datenträger wie die Daten. Die VPS-Sicherungen bei Hostinger
+  (Stand 16.11.2026: vier) stellen nur den ganzen Server zurück, und wir steuern sie nicht.
+- **Externe Kopie** (`deploy/sicherung-extern.sh`, ab 17.11.2026; wirksam erst nach der Einrichtung auf dem Server,
+  [Anleitung](../plattform/inbetriebnahme-sicherung-extern.md)): Der Ordner `sicherungen/` geht täglich um 03:30 Uhr mit
+  restic über SFTP (Port 23, eigener SSH-Schlüssel) auf eine Hetzner Storage Box – verschlüsselt mit einem Passwort, das
+  nur auf dem Server und beim Inhaber liegt, inkrementell und ohne Vervielfachung (feste Verweise der Dateiablage
+  bleiben einer). Ohne `.sperre` und `*.tmp`.
+  - **Entkoppelt von `sichern.sh`:** eigener Timer, eigene Sperre. Die Kopie wartet bis zu 10 Minuten auf die Sperre der
+    Sicherung, hält sie aber nicht – eine lange erste Übertragung blockiert so kein Release (dessen Sicherung wartet nur
+    10 Minuten). Räumt `sichern.sh` während der Übertragung auf, meldet restic unlesbare Dateien: der Stand entsteht
+    trotzdem, der Status trägt eine Warnung.
+  - **Aufbewahrung:** je Tag ein Stand für 30 Tage, je Woche einer für 8 Wochen, je Monat einer für 12 Monate
+    (`restic forget --prune`). Jeder Stand enthält den ganzen Ordner, also schon bis zu 30 Tage lokale Sicherungen: die
+    Tagesstände schützen vor einem geleerten oder verschlüsselten Ordner `sicherungen/`, die Monatsstände reichen rund
+    13 Monate zurück. Die Zahl richtet sich nach Ständen, nicht nach der Uhr – eine verstellte Uhr löscht nichts.
+  - **Status:** `daten/sicherung-extern.php` (Dokument `sicherung-extern`, wie `sicherung` eine Datei neben der
+    Datenbank; nur Zeit, Ergebnis, Meldung, Zahl und Größe der Stände – nie Ziel, Ausgabe von restic oder Geheimnisse).
+    `sicherung_extern_stand()` in `lib/diagnose.php` macht daraus die Karte „Externe Kopie“ (Sicherheit → System) und den
+    Punkt „Externe Datensicherung“ der Konfigurationsprüfung: Warnung, solange nicht eingerichtet, fehlgeschlagen, der
+    letzte erfolgreiche Lauf älter als 36 Stunden ist oder seine Zeit mehr als eine Stunde in der Zukunft liegt
+    (vorgestellte Uhr). `letzter` ist die Zeit des eigenen Laufs, nicht die des neuesten Stands im Repository – ein Stand
+    aus der Zukunft bliebe sonst für immer der neueste. Nur `jetzt` schreibt „in Ordnung“; ein erfolgreiches `pruefen`
+    lässt den Status stehen (ein Fehler von `jetzt` bleibt sichtbar), ein gescheitertes schreibt seinen Fehler. Die
+    Kundenseite liefert den Status nicht aus. Im Dateibetrieb liegt die Statusdatei im Archiv der Sicherung und zählt
+    dort als ein Datensatz; das Skript ersetzt sie deshalb nur unter der Sperre von `sichern.sh` (wartet bis zu
+    60 Sekunden, schreibt danach trotzdem).
+  - **Die Karte ist ein Hinweis, kein Beleg:** `daten/` ist in den Containern beschreibbar (nach der Datentrennung auch
+    im Container der Kundenseite), wer dort als Benutzer der Anwendung schreibt, kann „aktuell“ fälschen. Der Beleg ist
+    `sicherung-extern.sh status` (liest nur das Repository, nie die Statusdatei) bzw. `pruefen` als root auf dem Server.
+  - **Grenze:** Wer den Server übernimmt, hat Schlüssel und Passwort und kann die Kopie löschen. Dagegen stehen die
+    automatischen Snapshots der Storage Box und das Unterkonto (Anleitung, Abschnitt 2) – nicht das Skript.
+  - **Geprüft** mit restic 0.12.1, 0.16.4 und 0.18.1 (`tests/deploy/test_sicherung_extern.sh`); nicht geprüft: echte
+    Storage Box, Server, systemd.
 - Nicht gesichert: `mail-schluessel.php` und `daten-anmeldung/vault/`. Nach Wiederherstellung auf neuem Server das
   Postfach-Passwort neu eingeben bzw. `konten.sh mail-einrichten` erneut ausführen.
 - Wiederherstellung: [`docs/datenbank.md`](../datenbank.md#sicherung-und-wiederherstellung), Keycloak:
