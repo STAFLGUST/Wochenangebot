@@ -896,7 +896,7 @@ Jede Code-Datei beginnt mit einem Kopfkommentar; dessen erste Aussage steht hier
 | `bestand_parser.test.js` | bestand | Unit-Test: Der Bestands-Parser der App (stock-core.js) liefert für die Test-Bestandsliste exakt dieselben Summen wie die unabhängige Referenzauswertung (tests/fixtures/bestand/master_stock.json). |
 | `dateiablage.php` | plattform | Reine Funktionen und Tabellen der Dateiablage (app/api/lib/dateiablage.php) ohne Server |
 | `dateiablage_zip.php` | plattform | Hilfsskript für tests/unit/test_dateiablage_zip.py zu app/api/lib/dateiablage.php. |
-| `merge.test.js` | angebot | Unit-Test: Drei-Wege-Abgleich beim gemeinsamen Bearbeiten des Entwurfs (OfferCore.mergeModels). |
+| `merge.test.js` | angebot | Unit-Test: Drei-Wege-Abgleich beim gemeinsamen Bearbeiten des Entwurfs (OfferCore.mergeModels) und Aufbau nach Angebotskategorien mit eigener Gruppe je Angebot (OfferCore.nachKategorien). |
 | `stock_prices.php` | bestand | Isolated calendar/history selection tests, no server or production storage. |
 | `stock_prices.test.js` | bestand | Unit-Test: Preisvergleich, Wochenpreise und Summenzeile der Bestandsliste (StockCore aus app/assets/stock-core.js). |
 | `test_adressen.py` | plattform | Adressverzeichnis der CRM-Karte |

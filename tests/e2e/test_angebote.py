@@ -8,6 +8,7 @@ import sys
 from umgebung import shot
 from umgebung import BASE  # Testserver je Gruppe (parallel)
 import json, re
+from types import SimpleNamespace
 from playwright.sync_api import sync_playwright
 from versand_hilfe import veroeffentlichen
 from umgebung import SH, storage_raw, storage_write
@@ -251,11 +252,17 @@ def kopieren_pruefen(a, br, v):
     m.wait_for_function(RUHE); m.screenshot(path=SH + '/angebot-kopieren-mobil.png'); m.close()
 
 
-def gruppe_je_angebot_pruefen(a, br):
+def stand(a):
+    """Modell des Editors: Entwurf, sonst der veröffentlichte Stand"""
+    d = get(a, 'draft')[1]
+    return d['draft'] or d['published']
+
+
+def gruppe_je_angebot_vorbereiten(a):
     """Angebotsgruppe je Angebot (Inhaber 17.11.2026): item.gruppen = {Angebots-ID: Gruppen-ID} stellt einen Artikel in einem
-    Kundenangebot unter eine andere Gruppe; ohne Eintrag gilt groupId (Basiswert, Wochenangebot). Server: nur gültige Einträge,
-    Auflösung je Angebot (nie fremde Zuordnungen, keine leere Gruppe im Wochenangebot), Kopieren, gelöschtes Angebot,
-    Protokoll. Oberfläche: Fenster „Artikel bearbeiten“, Editor je Angebot, Zurücknehmen, Mülltonne (1280 px und 390 px)."""
+    Kundenangebot unter eine andere Gruppe; ohne Eintrag gilt groupId (Basiswert, Wochenangebot). Gemeinsame Testdaten für
+    Server- und Oberflächen-Teil: x und v stehen bei Chefs Culinar unter „Nur bei Chefs“, w bei Bela unter „Nur bei Bela“;
+    dazu ungültige Einträge, die der Server verwerfen muss. Rückgabe: Testdaten und die Antwort von save_draft."""
     CH, HH, BE = 'chefs-culinar', 'handelshof-efs', 'bela'
     d = get(a, 'draft')[1]
     mdl = d['draft'] or d['published']
@@ -271,6 +278,13 @@ def gruppe_je_angebot_pruefen(a, br):
     v['gruppen'] = {CH: 'gx-chefs'}
     w['gruppen'] = {BE: 'gx-bela', CH: 7}
     r = post(a, 'save_draft', {'revision': d['revision'], 'model': mdl})
+    return SimpleNamespace(CH=CH, HH=HH, BE=BE, x=x, v=v, w=w, basis=basis, andere=andere, gname=gname, mdl=mdl, kand=kand, gespeichert=r)
+
+
+def gruppe_je_angebot_server(a, t):
+    """Server: nur gültige Einträge, Auflösung je Angebot (nie fremde Zuordnungen, keine leere Gruppe im Wochenangebot),
+    Änderungsliste des Versands, Veröffentlichen, Kunde, Protokoll, Kopieren, gelöschtes Angebot."""
+    CH, HH, BE, x, v, w, basis, andere, r = t.CH, t.HH, t.BE, t.x, t.v, t.w, t.basis, t.andere, t.gespeichert
     en = {i['id']: i for i in dok('entwurf')['items']}
     check('Gruppe je Angebot: nur gültige Einträge gespeichert (kein Wochenangebot, bekannte Angebote und Gruppen, nicht gleich dem Basiswert)', r[0] == 200
           and en[x['id']].get('gruppen') == {CH: 'gx-chefs'} and en[v['id']].get('gruppen') == {CH: 'gx-chefs'} and en[w['id']].get('gruppen') == {BE: 'gx-bela'}
@@ -290,9 +304,16 @@ def gruppe_je_angebot_pruefen(a, br):
         return oc
 
     aufgeloest(lambda o: get(a, f'offer&angebot={o}&draft=1')[1]['offer'], 'Entwurf')
-    zl = get(a, 'versand_aenderungen')[1]['zeilen']
+    ae = get(a, 'versand_aenderungen')[1]
+    zl = ae['zeilen']
     check('Versand: Änderungsliste nennt die Gruppe je Angebot beim Artikel', any(z['art'] == 'bearbeitet' and z['code'] == x['code']
           and 'Gruppe Wochenangebot Chefs Culinar: wie Basis → Nur bei Chefs' in z['zusatz'] for z in zl), [z for z in zl if z['code'] == x['code']])
+    zeilen = lambda i: [z for z in zl if z['code'] == i['code']]
+    # betrifft eine Zeile nur ein Kundenangebot, zählt sie dort; mit weiteren Änderungen am Artikel (Basiswerte) bei allen ('')
+    nur = lambda z: all(f.startswith('Gruppe ') for f in z['zusatz'].split(' · '))
+    check('Versand: die Zeile zählt beim betroffenen Kundenangebot, nicht beim Wochenangebot', [z['angebot'] for z in zeilen(v)] == [CH]
+          and [z['angebot'] for z in zeilen(w)] == [BE] and [z['angebot'] for z in zeilen(x) if z['art'] == 'bearbeitet'] == [CH if nur(zeilen(x)[0]) else '']
+          and ae['jeAngebot'].get(CH, 0) >= 1 and ae['jeAngebot'].get(BE, 0) >= 1, (zeilen(x), zeilen(v), ae['jeAngebot']))
     a.reload(); a.wait_for_selector('#screen-editor:not([hidden]) tr[data-id]')
     veroeffentlichen(a)
     pub = dok('angebot')
@@ -312,9 +333,44 @@ def gruppe_je_angebot_pruefen(a, br):
     log = json.dumps(get(a, 'log')[1], ensure_ascii=False)
     check('Protokoll: Gruppe je Angebot mit Angebots- und Gruppenname', 'Gruppe Wochenangebot Chefs Culinar' in log and 'Nur bei Chefs' in log and 'wie Basis' in log)
 
-    # Oberfläche: Editor je Angebot, Fenster „Artikel bearbeiten“
+    # Kopieren nimmt die eigene Gruppe mit; nach dem Löschen des Angebots fallen dessen Einträge weg
+    a.reload(); a.wait_for_selector('#screen-editor:not([hidden]) tr[data-id]')
+    of0, d = get(a, 'offers')[1], get(a, 'draft')[1]
+    r = post(a, 'offer_kopieren', {'quelle': CH, 'name': 'Chefs Gruppenkopie', 'rev': of0['rev'], 'revision': d['revision']})
+    neu = (r[1] or {}).get('id', '')
+    en = dok('entwurf') or {'items': []}
+    check('Kopieren: eigene Gruppe des Quellangebots gilt auch in der Kopie (aufgelöst wie die Quelle)', r[0] == 200 and neu
+          and next(i for i in en['items'] if i['id'] == x['id']).get('gruppen') == {CH: 'gx-chefs', neu: 'gx-chefs'}
+          and ohne_kennung(get(a, f'offer&angebot={neu}&draft=1')[1]['offer']) == ohne_kennung(get(a, f'offer&angebot={CH}&draft=1')[1]['offer']), r)
+    cur = get(a, 'offers')[1]
+    r = post_bestaetigt(a, 'offers_save', {'rev': cur['rev'], 'offers': [o for o in cur['offers'] if o['id'] != neu]})
+    # Prüfung der Reste allein über „gruppen“: übrige Einträge der Kopie und den Vermerk „geloescht“ aus den Testdaten nehmen
+    for i in en['items']:
+        for f in ('variants', 'namen'): (i.get(f) or {}).pop(neu, None)
+        ((i.get('sale') or {}).get('offers') or {}).pop(neu, None)
+    (en['meta'].get('werbung') or {}).pop(neu, None)
+    storage_write('entwurf', en)
+    doc = dok('angebote')
+    storage_write('angebote', {**doc, 'geloescht': [k for k in doc.get('geloescht', []) if k != neu]})
+    cur = get(a, 'offers')[1]
+    r2 = post(a, 'offers_save', {'rev': cur['rev'], 'offers': cur['offers'] + [{'id': neu, 'name': 'Chefs Gruppenkopie', 'fallback': 'standard'}]})
+    wieder = next((o['id'] for o in (r2[1] or {}).get('offers', []) if o['name'] == 'Chefs Gruppenkopie'), None)
+    check('Angebot gelöscht: seine ID wird nicht neu vergeben, solange darunter noch Gruppen stehen', r[0] == 200 and r2[0] == 200 and wieder not in (None, neu), (r[0], r2[0], wieder))
+    cur = get(a, 'offers')[1]
+    post_bestaetigt(a, 'offers_save', {'rev': cur['rev'], 'offers': [o for o in cur['offers'] if o['id'] != wieder]})
+    d = get(a, 'draft')[1]
+    r = post(a, 'save_draft', {'revision': d['revision'], 'model': d['draft']})
+    check('… beim nächsten Speichern fallen die Einträge des gelöschten Angebots weg', r[0] == 200
+          and next(i for i in dok('entwurf')['items'] if i['id'] == x['id']).get('gruppen') == {CH: 'gx-chefs'}, r[0])
+    a.reload(); a.wait_for_selector('#screen-editor:not([hidden]) tr[data-id]')
+
+
+def gruppe_je_angebot_oberflaeche(a, br, t):
+    """Oberfläche: Fenster „Artikel bearbeiten“, Editor je Angebot, Zurücknehmen, „Nach oben“, Gruppe entfernen, „Artikel in
+    diese Gruppe“, Mülltonne (1280 px und 390 px)."""
+    CH, HH, x, v, basis, andere, gname, mdl, kand = t.CH, t.HH, t.x, t.v, t.basis, t.andere, t.gname, t.mdl, t.kand
     ed = lambda gid: a.eval_on_selector_all(f'#groups section.gcard[data-gid="{gid}"] tr[data-id]', 'xs => xs.map(e => e.dataset.id)')
-    entw = lambda i: next(k for k in (get(a, 'draft')[1]['draft'] or get(a, 'draft')[1]['published'])['items'] if k['id'] == i['id'])
+    entw = lambda i: next(k for k in stand(a)['items'] if k['id'] == i['id'])
     zeile = f'#groups tr[data-id="{x["id"]}"]'
     tab(a, 'Wochenangebot').click(); a.wait_for_selector(zeile)
     check('Editor Wochenangebot: Artikel unter der Basisgruppe, Gruppe des Kundenangebots fehlt', x['id'] in ed(basis) and a.locator('#groups section.gcard[data-gid="gx-chefs"]').count() == 0)
@@ -332,7 +388,7 @@ def gruppe_je_angebot_pruefen(a, br):
           and sorted(a.eval_on_selector_all('#item-body [name=ogroup]', 'xs => xs.map(e => e.dataset.on)')) == sorted(drin) and a.locator('#item-body [name=oname]').count() == len(drin), drin)
     check('Fenster: eigene Gruppe gewählt und hervorgehoben, sonst „wie Basiswert“ mit Namen der Basisgruppe', a.input_value(sel(CH)) == 'gx-chefs' and 'eigen' in (a.get_attribute(sel(CH), 'class') or '')
           and a.input_value(sel(HH)) == '' and a.text_content(sel(HH) + ' option >> nth=0') == f'wie Basiswert ({gname[basis]})'
-          and a.eval_on_selector(sel(HH), 'e => [...e.options].slice(1).map(o => o.value)') == [g['id'] for g in dok('entwurf')['groups']] if dok('entwurf') else True)
+          and a.eval_on_selector(sel(HH), 'e => [...e.options].slice(1).map(o => o.value)') == [g['id'] for g in stand(a)['groups']])
     a.select_option(sel(HH), andere); wait_saved(a)
     check('Fenster: Gruppe für ein Angebot gewählt – nur dort gespeichert, Basiswert bleibt', entw(x).get('gruppen') == {CH: 'gx-chefs', HH: andere} and entw(x)['groupId'] == basis
           and 'eigen' in (a.get_attribute(sel(HH), 'class') or ''), entw(x).get('gruppen'))
@@ -348,25 +404,34 @@ def gruppe_je_angebot_pruefen(a, br):
     a.click('#item-body [type=submit]'); a.wait_for_selector('#dlg-item', state='hidden')
     # Zurücknehmen in der Liste der unveröffentlichten Änderungen
     a.click('#offen-liste'); a.wait_for_selector('#dlg-publish[open]')
-    check('Liste der Änderungen: Gruppe je Angebot als „Bearbeitet“', 'bearbeitet (1)' in a.inner_text('#publish-body').lower() and a.locator(f'#publish-body [data-rv=changed][data-rid="{x["id"]}"]').count() == 1, a.inner_text('#publish-body')[:200])
+    check('Liste der Änderungen: Gruppe je Angebot als „Bearbeitet“, mit Angebot und Gruppe genannt', 'bearbeitet (1)' in a.inner_text('#publish-body').lower()
+          and a.locator(f'#publish-body [data-rv=changed][data-rid="{x["id"]}"]').count() == 1
+          and 'Gruppe Handelshof, EFS: wie Basis → Nur bei Chefs' in a.text_content('#publish-body .rv-f'), a.inner_text('#publish-body')[:300])
     a.click(f'#publish-body [data-rv=changed][data-rid="{x["id"]}"]'); a.click('#dlg-confirm [data-v="1"]')
     a.wait_for_function("document.querySelector('#publish-body').textContent.includes('Keine Änderungen gegenüber')")
     a.click('#dlg-publish [data-close]'); wait_saved(a)
     check('… zurückgenommen: wieder wie veröffentlicht', entw(x).get('gruppen') == {CH: 'gx-chefs'}, entw(x).get('gruppen'))
     a.click('#btn-undo'); a.wait_for_function(f"document.querySelector('#groups section.gcard[data-gid=\"gx-chefs\"] tr[data-id=\"{x['id']}\"]')"); wait_saved(a)
     check('Rückgängig stellt die eigene Gruppe wieder her', entw(x).get('gruppen') == {CH: 'gx-chefs', HH: 'gx-chefs'}, entw(x).get('gruppen'))
-    # „Nach oben“ innerhalb der Gruppe dieses Angebots: nur der Artikel selbst wandert
+    # „Nach unten“ innerhalb der Gruppe dieses Angebots: nur der Artikel selbst wandert
     tab(a, 'Chefs').click(); a.wait_for_selector('#groups section.gcard[data-gid="gx-chefs"]')
     p_, q_ = ed('gx-chefs')
-    pb = next(i for i in (x, v) if i['id'] == p_)['groupId']
-    tab(a, 'Wochenangebot').click(); a.wait_for_selector(zeile); std_vorher = ed(pb)
+    pb, qb = (next(i for i in (x, v) if i['id'] == k)['groupId'] for k in (p_, q_))
+    stelle = {k['id']: n for n, k in enumerate(stand(a)['items'])}
+    tab(a, 'Wochenangebot').click(); a.wait_for_selector(zeile); std_p, std_q = ed(pb), ed(qb)
     tab(a, 'Chefs').click(); a.wait_for_selector('#groups section.gcard[data-gid="gx-chefs"]')
-    a.click(f'#groups tr[data-id="{q_}"] [data-act=item]'); a.wait_for_selector('#dlg-item[open] [data-ia=up]:not([disabled])')
-    a.click('#item-body [data-ia=up]'); a.wait_for_selector('#dlg-item[open] [data-ia=up][disabled]'); wait_saved(a)
+    a.click(f'#groups tr[data-id="{p_}"] [data-act=item]'); a.wait_for_selector('#dlg-item[open] [data-ia=down]:not([disabled])')
+    a.click('#item-body [data-ia=down]'); a.wait_for_selector('#dlg-item[open] [data-ia=down][disabled]'); wait_saved(a)
     a.click('#item-body [type=submit]'); a.wait_for_selector('#dlg-item', state='hidden')
     chefs_nach = ed('gx-chefs')
     tab(a, 'Wochenangebot').click(); a.wait_for_selector(zeile)
-    check('„Nach oben“ im Kundenangebot: Reihenfolge in dessen Gruppe getauscht, der Nachbar behält seinen Platz im Wochenangebot', chefs_nach == [q_, p_] and ed(pb) == std_vorher, (chefs_nach, ed(pb)[:4]))
+    check('„Nach unten“ im Kundenangebot: Reihenfolge in dessen Gruppe getauscht, der Nachbar behält seinen Platz im Wochenangebot', chefs_nach == [q_, p_] and ed(qb) == std_q, (chefs_nach, ed(qb)[:4]))
+    # Die Stelle ist gemeinsam (keine Reihenfolge je Angebot): der bewegte Artikel steht jetzt hinter dem Nachbarn – im Wochenangebot
+    # rückt er damit in seiner Basisgruppe hinter alle Artikel, die zwischen beiden standen. Bewusst so, hier festgeschrieben.
+    erw = [k for k in std_p if k != p_]
+    erw.insert(next((n for n, k in enumerate(erw) if stelle[k] > stelle[q_]), len(erw)), p_)
+    check('… der bewegte Artikel nimmt seine neue Stelle auch im Wochenangebot ein (gemeinsame Reihenfolge): in seiner Basisgruppe hinter den überholten Artikeln',
+          ed(pb) == erw and erw != std_p, (std_p.index(p_), ed(pb).index(p_), len(std_p)))
     a.click('#btn-undo'); wait_saved(a)
     # „Gruppe aus diesem Angebot entfernen“: Gruppe bleibt, solange ein anderes Angebot sie benutzt
     tab(a, 'Chefs').click(); a.wait_for_selector('#groups section.gcard[data-gid="gx-chefs"]')
@@ -400,36 +465,6 @@ def gruppe_je_angebot_pruefen(a, br):
     check('390 px: Fenster passt, Gruppe unter der Bezeichnung, nichts ragt heraus, keine JS-Fehler', mass[0] <= 390 and mass[1] <= 390 and mass[2] <= 390 and mass[3] and mass[4] >= 36 and not merr, (mass, merr))
     m.locator('#dlg-item .it-namen').scroll_into_view_if_needed(); m.wait_for_function(RUHE); m.screenshot(path=SH + '/gruppe-je-angebot-fenster-390.png'); m.close()
 
-    # Kopieren nimmt die eigene Gruppe mit; nach dem Löschen des Angebots fallen dessen Einträge weg
-    a.reload(); a.wait_for_selector('#screen-editor:not([hidden]) tr[data-id]')
-    of0, d = get(a, 'offers')[1], get(a, 'draft')[1]
-    r = post(a, 'offer_kopieren', {'quelle': HH, 'name': 'Handelshof Gruppenkopie', 'rev': of0['rev'], 'revision': d['revision']})
-    neu = (r[1] or {}).get('id', '')
-    en = dok('entwurf') or {'items': []}
-    check('Kopieren: eigene Gruppe des Quellangebots gilt auch in der Kopie (aufgelöst wie die Quelle)', r[0] == 200 and neu
-          and next(i for i in en['items'] if i['id'] == x['id']).get('gruppen') == {CH: 'gx-chefs', HH: 'gx-chefs', neu: 'gx-chefs'}
-          and ohne_kennung(get(a, f'offer&angebot={neu}&draft=1')[1]['offer']) == ohne_kennung(get(a, f'offer&angebot={HH}&draft=1')[1]['offer']), r)
-    cur = get(a, 'offers')[1]
-    r = post_bestaetigt(a, 'offers_save', {'rev': cur['rev'], 'offers': [o for o in cur['offers'] if o['id'] != neu]})
-    # Prüfung der Reste allein über „gruppen“: übrige Einträge der Kopie und den Vermerk „geloescht“ aus den Testdaten nehmen
-    for i in en['items']:
-        for f in ('variants', 'namen'): (i.get(f) or {}).pop(neu, None)
-        ((i.get('sale') or {}).get('offers') or {}).pop(neu, None)
-    (en['meta'].get('werbung') or {}).pop(neu, None)
-    storage_write('entwurf', en)
-    doc = dok('angebote')
-    storage_write('angebote', {**doc, 'geloescht': [k for k in doc.get('geloescht', []) if k != neu]})
-    cur = get(a, 'offers')[1]
-    r2 = post(a, 'offers_save', {'rev': cur['rev'], 'offers': cur['offers'] + [{'id': neu, 'name': 'Handelshof Gruppenkopie', 'fallback': 'standard'}]})
-    wieder = next((o['id'] for o in (r2[1] or {}).get('offers', []) if o['name'] == 'Handelshof Gruppenkopie'), None)
-    check('Angebot gelöscht: seine ID wird nicht neu vergeben, solange darunter noch Gruppen stehen', r[0] == 200 and r2[0] == 200 and wieder not in (None, neu), (r[0], r2[0], wieder))
-    cur = get(a, 'offers')[1]
-    post_bestaetigt(a, 'offers_save', {'rev': cur['rev'], 'offers': [o for o in cur['offers'] if o['id'] != wieder]})
-    d = get(a, 'draft')[1]
-    r = post(a, 'save_draft', {'revision': d['revision'], 'model': d['draft']})
-    check('… beim nächsten Speichern fallen die Einträge des gelöschten Angebots weg', r[0] == 200
-          and next(i for i in dok('entwurf')['items'] if i['id'] == x['id']).get('gruppen') == {CH: 'gx-chefs', HH: 'gx-chefs'}, r[0])
-    a.reload(); a.wait_for_selector('#screen-editor:not([hidden]) tr[data-id]')
 
 with sync_playwright() as p:
     br = p.chromium.launch()
@@ -821,7 +856,9 @@ with sync_playwright() as p:
     check('zweimal in derselben Sekunde veröffentlicht: verschiedene, steigende Stände', r1[0] == 200 and r2[0] == 200 and p1 and p2 and p2 > p1 and p1[:19] <= p2[:19], (r1[0], r2[0], p1, p2))
     a.reload(); a.wait_for_selector('#screen-editor:not([hidden]) tr[data-id]')
     kopieren_pruefen(a, br, v)
-    gruppe_je_angebot_pruefen(a, br)
+    t = gruppe_je_angebot_vorbereiten(a)
+    gruppe_je_angebot_server(a, t)
+    gruppe_je_angebot_oberflaeche(a, br, t)
     # Mobil
     m = br.new_page(viewport={'width': 390, 'height': 844}, is_mobile=True); m.on('pageerror', lambda x: errs.append('m: ' + str(x)))
     login(m, 'admin', 'Sicheres-Passwort-1'); m.wait_for_timeout(300)

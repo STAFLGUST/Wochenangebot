@@ -69,7 +69,7 @@
     return ids.map((aid, i) => {
       const a = ainfo.get(aid);
       return `<li class="abf-a" data-aid="${esc(aid)}">${fest ? '' : griff('a', 'Artikel ziehen')}
-        <span class="abf-an">${a.code ? `<span class="abf-nr">${esc(a.code)}</span>` : ''}<span class="abf-ab">${esc(a.name)}</span>${a.eigen ? '<span class="abf-eig" title="Eigene Gruppe in diesem Angebot – verschieben ändert sie nur hier">nur hier</span>' : ''}${a.gruppe !== gid ? '<span class="abf-neu">verschoben</span>' : ''}</span>
+        <span class="abf-an">${a.code ? `<span class="abf-nr">${esc(a.code)}</span>` : ''}<span class="abf-ab">${esc(a.name)}</span>${a.eigen ? '<span class="abf-eig" title="Eigene Gruppe in diesem Angebot – verschieben ändert sie nur hier; die Stelle gilt weiter für alle Angebote">nur hier</span>' : ''}${a.gruppe !== gid ? '<span class="abf-neu">verschoben</span>' : ''}</span>
         ${fest ? '' : `${zuHTML(aid, gid)}<span class="abf-btns">${pfeil('a-hoch', 'up', i === 0, `Artikel „${esc(a.name)}“ nach oben`)}${pfeil('a-runter', 'down', i === ids.length - 1, `Artikel „${esc(a.name)}“ nach unten`)}</span>`}</li>`;
     }).join('');
   }
@@ -140,8 +140,12 @@
     start = zustand();
     const ro = nurAnsehen();
     const hinweis = d.sperre ? `<p class="abf-hinweis sperre">${icon('lock', 'sm')}<span>${esc(d.sperre.text)}</span></p>` : '';
+    // „nur hier“: eigene Gruppe in diesem Angebot. Die Stelle bleibt gemeinsam – wer so einen Artikel verschiebt, kann seine
+    // Stelle in der Basisgruppe (Wochenangebot, andere Angebote) mit ändern; das sagt der Hinweis nur, wenn es solche Artikel gibt.
+    const eigene = d.gruppen.some((g) => g.artikel.some((x) => x.eigen))
+      ? ' – Artikel mit „nur hier“ wechseln sie nur hier, ihre Stelle kann sich dabei auch in anderen Angeboten ändern' : '';
     const info2 = !d.gruppen.length ? `<p class="abf-hinweis">${icon('info', 'sm')}<span>Dieses Angebot enthält noch keine Artikel – es gibt nichts zu ordnen.</span></p>`
-      : ro ? '' : `<p class="abf-hinweis">${icon('info', 'sm')}<span>Gilt für alle Angebote: Gruppen und Artikel stehen in jedem Angebot, das sie enthält, an dieser Stelle; ein verschobener Artikel wechselt die Gruppe in allen Angeboten${d.gruppen.some((g) => g.artikel.some((x) => x.eigen)) ? ' – Artikel mit „nur hier“ haben in diesem Angebot eine eigene Gruppe und wechseln sie nur hier' : ''}. Zieht man eine Gruppe in einen anderen Bereich, bekommt sie dessen Bereich. Preise bleiben unverändert.</span></p>`;
+      : ro ? '' : `<p class="abf-hinweis">${icon('info', 'sm')}<span>Gilt für alle Angebote: Gruppen und Artikel stehen in jedem Angebot, das sie enthält, an dieser Stelle; ein verschobener Artikel wechselt die Gruppe in allen Angeboten${eigene}. Zieht man eine Gruppe in einen anderen Bereich, bekommt sie dessen Bereich. Preise bleiben unverändert.</span></p>`;
     body.innerHTML = `<div class="dlg-head"><div><h2 id="abf-titel">${icon('aufbau')}Aufbau des Angebots</h2>
         <p>„${esc(d.angebot)}“: Reihenfolge der Bereiche, Gruppen und Artikel.${ro ? '' : ' Gruppe anklicken zeigt ihre Artikel. Am Griff ziehen oder die Pfeile nutzen – gespeichert wird erst mit „Übernehmen“.'}</p></div>
         <button type="button" class="btn icon ghost" data-close aria-label="Schließen">${icon('x')}</button></div>
