@@ -173,6 +173,7 @@
   function entfernen(it, oid) {
     if (oid === OSTD || followsStd(oid)) { it.variants = it.variants || {}; it.variants[oid] = { status: 'hidden' }; }
     else if (it.variants) { delete it.variants[oid]; dropEmptyVariants(it); }
+    if (it.gruppen) setzeGruppe(it, oid, '');
     invalid.delete(it.id + '|' + oid);
     if (offersOf(it).length) return false;
     model.items.splice(model.items.indexOf(it), 1);
@@ -182,7 +183,7 @@
   /* Angebote, in denen der Artikel ausdrücklich steht: Wochenangebot, eigene Artikellisten und Angebote, die dem
      Wochenangebot folgen, nur mit eigenem Preis (sonst folgen sie dem Wochenangebot und zählen nicht extra) */
   const explizit = (it) => offersOf(it).filter((o) => !followsStd(o) || !!(it.variants && it.variants[o] && it.variants[o].status !== 'hidden'));
-  /* „auch in …“: andere Angebote, in denen der Artikel steht (Merkmale und Gruppe gelten dort ebenso) */
+  /* „auch in …“: andere Angebote, in denen der Artikel steht (Merkmale gelten dort ebenso) */
   const otherOffers = (it) => explizit(it).filter((o) => o !== curOffer);
   /* Bezeichnung je Angebot (Auftrag des Inhabers 03.11.2026): it.name ist der Basiswert (Wochenangebot und jedes Angebot
      ohne eigene Bezeichnung), it.namen[<Kundenangebot>] eine eigene Bezeichnung nur dort – jedes Angebot für sich. Gleiches
@@ -202,6 +203,29 @@
     x.namen = x.namen || {};
     if (!t || t === x.name) delete x.namen[oid]; else x.namen[oid] = t;
     if (!Object.keys(x.namen).length) delete x.namen;
+  }
+  /* Angebotsgruppe je Angebot (Auftrag des Inhabers 17.11.2026), gleiches Muster: it.groupId ist der Basiswert (Wochenangebot
+     und jedes Angebot ohne eigene Gruppe), it.gruppen[<Kundenangebot>] eine eigene Gruppe nur dort. Die Reihenfolge bleibt
+     gemeinsam (Stelle in model.items). Nicht in den Artikelstammdaten – sie kennen die Gruppen des Entwurfs nicht. */
+  const eigenGruppe = (it, oid) => { const g = oid !== OSTD && it.gruppen && it.gruppen[oid]; return g && gById(g) ? g : ''; };
+  const gruppeIn = (it, oid) => eigenGruppe(it, oid) || it.groupId;
+  /* Gruppen, die ein Artikel benutzt (Basiswert und eigene je Angebot): solche Gruppen bleiben erhalten */
+  const gruppenVon = (it) => [it.groupId, ...Object.values(it.gruppen || {})];
+  /* eigene Gruppe setzen; leer oder gleich dem Basiswert = keine eigene */
+  function setzeGruppe(it, oid, gid) {
+    it.gruppen = it.gruppen || {};
+    if (!gid || gid === it.groupId) delete it.gruppen[oid]; else it.gruppen[oid] = gid;
+    if (!Object.keys(it.gruppen).length) delete it.gruppen;
+  }
+  /* Eigene Gruppen, die dem Basiswert gleichen oder die es nicht mehr gibt, fallen weg (wie auf dem Server, clean_model) –
+     sonst zählte der Entwurf Änderungen, die der Server nicht speichert */
+  function gruppenBereinigen() {
+    for (const it of model.items) for (const [o, g] of Object.entries(it.gruppen || {})) if (g === it.groupId || !gById(g)) setzeGruppe(it, o, '');
+  }
+  /* Artikel eines Angebots in Angebotsreihenfolge: Gruppe in diesem Angebot, dann Stelle (wie OfferCore.enrichOffer nach offer_resolve) */
+  function inReihenfolge(items, oid) {
+    const gi = new Map(model.groups.map((g, i) => [g.id, i]));
+    return items.map((it, i) => ({ it, i })).sort((a, b) => (gi.get(gruppeIn(a.it, oid)) ?? 1e9) - (gi.get(gruppeIn(b.it, oid)) ?? 1e9) || a.i - b.i).map((x) => x.it);
   }
   const vChanges = () => (diff && diff.variantChanged ? diff.variantChanged.filter((c) => knownOffer(c.offer)) : []);
   const sChanges = () => (diff && diff.saleChanged ? diff.saleChanged : []);
@@ -247,7 +271,7 @@
      gleichem Namen gibt, und Artikel, die es in beiden gibt (neue/entfernte zeigen „Neu“/„Entfernt“). */
   function aufbauGeaendert() {
     if (!published || !model) return false;
-    const pg = new Map(published.groups.map((g) => [g.id, g.name])), used = new Set(model.items.map((i) => i.groupId));
+    const pg = new Map(published.groups.map((g) => [g.id, g.name])), used = new Set(model.items.flatMap(gruppenVon));
     const mg = new Map(model.groups.filter((g) => used.has(g.id)).map((g) => [g.id, g.name]));
     const sig = (gs, other) => gs.filter((g) => other.get(g.id) === g.name).map((g) => g.id + '\u0001' + (g.section || '')).join('\u0002');
     if (sig(published.groups, mg) !== sig(model.groups.filter((g) => used.has(g.id)), pg)) return true;
@@ -262,13 +286,15 @@
   /* Artikel neu ordnen: ziel = Map(Gruppen-ID → Artikel-IDs in gewünschter Reihenfolge) für die „Anker“ (z. B. alle Artikel des
      gewählten Angebots); jeder Anker kommt in die Gruppe aus ziel. Andere Artikel bleiben in ihrer Gruppe hinter dem letzten Anker
      davor, der dort bleibt. Geändert werden nur die Plätze der Artikel dieser Gruppen in model.items (je Gruppe zählt nur die
-     Reihenfolge, OfferCore.enrichOffer). Rückgabe: false, wenn ziel nicht aufgeht (dann bleibt alles unverändert). */
-  function artikelOrdnen(ziel) {
+     Reihenfolge, OfferCore.enrichOffer). Rückgabe: false, wenn ziel nicht aufgeht (dann bleibt alles unverändert).
+     oid = Angebot, aus dessen Sicht geordnet wird: Anker stehen in ihrer Gruppe dieses Angebots; wechselt ein Anker mit
+     eigener Gruppe dort die Gruppe, ändert sich nur diese – ohne eigene Gruppe wie bisher der Basiswert (alle Angebote). */
+  function artikelOrdnen(ziel, oid = OSTD) {
     const zu = new Map(), byId = new Map(model.items.map((it) => [it.id, it]));
     for (const [g, ids] of ziel) for (const id of ids) { if (!byId.has(id) || zu.has(id)) return false; zu.set(id, g); }
     const kette = new Map(), vorn = new Map(), letzter = new Map();
     for (const it of model.items) {
-      if (zu.has(it.id)) { if (zu.get(it.id) === it.groupId) letzter.set(it.groupId, it.id); continue; }
+      if (zu.has(it.id)) { if (zu.get(it.id) === gruppeIn(it, oid)) letzter.set(zu.get(it.id), it.id); continue; }
       const a = letzter.get(it.groupId), m = a ? kette : vorn, k = a || it.groupId;
       if (!m.has(k)) m.set(k, []);
       m.get(k).push(it);
@@ -282,7 +308,7 @@
       if (folge.length !== plaetze.length) return false;
       plaetze.forEach((p, k) => { neu[p] = folge[k]; });
     }
-    for (const [id, g] of zu) byId.get(id).groupId = g;
+    for (const [id, g] of zu) { const it = byId.get(id); if (eigenGruppe(it, oid)) setzeGruppe(it, oid, g); else it.groupId = g; }
     model.items.splice(0, model.items.length, ...neu);
     return true;
   }
@@ -1094,6 +1120,7 @@
     if (ro) return;
     if (nachKategorienOrdnen()) opts = { ...opts, render: true };   // Aufbau nach Angebotskategorien (falls angelegt)
     werbungBereinigen();
+    gruppenBereinigen();
     diff = C.diffOffers(published, model);
     if (opts.render) renderGroups(); else if (opts.row) updateRow(opts.row);
     renderMhd();
@@ -1372,11 +1399,11 @@
     return `<tr data-id="${esc(it.id)}" class="${st}${werb ? ' e-werb' : ''}${bestandKarteMoeglich(it) ? ' e-karte' : ''}${matchesFilter(it) ? '' : ' hidden-row'}">
       <td class="e-code"><input class="in mono" data-f="code" value="${esc(it.code || '')}" placeholder="—" aria-label="Artikelnummer" maxlength="20"></td>
       <td class="e-name"><div class="e-nmrow">${nameFeld}${st === 'is-new' ? '<span class="newtag">neu</span>' : ''}${werb ? `<button type="button" class="werbtag" data-act="werbung" title="Wird auf der Angebotsseite oben beworben – Werbung bearbeiten">${icon('megaphone', 'sm')}Werbung</button>` : ''}</div>
-        <div class="e-attr">${it.code ? `<span class="e-codem">${esc(it.code)}</span>` : ''}<select class="in chip" data-f="category" aria-label="Fleischart">${CAT_OPTS(it.category)}</select><input class="in chip" data-f="origin" value="${esc(it.origin || '')}" list="dl-origins" placeholder="Herkunft" aria-label="Herkunft" maxlength="60" size="${Math.max(6, Math.min(16, (it.origin || 'Herkunft').length + 1))}"><select class="in chip" data-f="condition" aria-label="Zustand">${COND_OPTS(it.condition)}</select>${auch.length ? `<span class="e-auch" title="Steht auch in: ${esc(auch.map(offerShort).join(', '))} – Merkmale und Gruppe gelten dort ebenso, die Bezeichnung lässt sich je Angebot anpassen">auch in ${auch.length === 1 ? esc(offerShort(auch[0])) : auch.length + ' weiteren'}</span>` : ''}</div></td>
+        <div class="e-attr">${it.code ? `<span class="e-codem">${esc(it.code)}</span>` : ''}<select class="in chip" data-f="category" aria-label="Fleischart">${CAT_OPTS(it.category)}</select><input class="in chip" data-f="origin" value="${esc(it.origin || '')}" list="dl-origins" placeholder="Herkunft" aria-label="Herkunft" maxlength="60" size="${Math.max(6, Math.min(16, (it.origin || 'Herkunft').length + 1))}"><select class="in chip" data-f="condition" aria-label="Zustand">${COND_OPTS(it.condition)}</select>${auch.length ? `<span class="e-auch" title="Steht auch in: ${esc(auch.map(offerShort).join(', '))} – Merkmale gelten dort ebenso, Bezeichnung und Gruppe lassen sich je Angebot anpassen">auch in ${auch.length === 1 ? esc(offerShort(auch[0])) : auch.length + ' weiteren'}</span>` : ''}</div></td>
       ${prevCellHTML(it)}
       ${curOffer === OSTD ? stdCellHTML(it, bad, label, was, alts) : variantCellHTML(it, st)}
       ${stockCellHTML(it)}
-      <td class="e-act"><button type="button" class="ibtn e-rm" data-act="remove" aria-label="${esc(it.name)} aus diesem Angebot entfernen" title="Aus „${esc(offerShort(curOffer))}“ entfernen – andere Angebote bleiben unverändert">${icon('x', 'sm')}</button><button type="button" class="ibtn" data-act="item" aria-label="Details zu ${esc(it.name)}" title="Details, Zusatzpreise, verschieben, entfernen">${icon('dots')}</button></td>
+      <td class="e-act"><button type="button" class="ibtn e-rm" data-act="remove" aria-label="${esc(it.name)} aus diesem Angebot entfernen" title="Aus „${esc(offerShort(curOffer))}“ entfernen – andere Angebote bleiben unverändert">${icon('trash', 'sm')}</button><button type="button" class="ibtn" data-act="item" aria-label="Details zu ${esc(it.name)}" title="Details, Zusatzpreise, verschieben, entfernen">${icon('dots')}</button></td>
     </tr>`;
   }
   function saleBtnHTML(it) {
@@ -1425,7 +1452,7 @@
   }
 
   /* Gruppen mit Artikeln des gewählten Angebots (Reihenfolge und Namen der Gruppen gelten für alle Angebote) */
-  const sichtbareGruppen = () => { const ids = new Set(model.items.filter((i) => inOffer(i, curOffer)).map((i) => i.groupId)); return model.groups.filter((g) => ids.has(g.id)); };
+  const sichtbareGruppen = () => { const ids = new Set(model.items.filter((i) => inOffer(i, curOffer)).map((i) => gruppeIn(i, curOffer))); return model.groups.filter((g) => ids.has(g.id)); };
   function renderWerbungBtn() {
     const e = werbungVon(curOffer), n = $('#werb-n');
     if (!n) return;
@@ -1453,7 +1480,7 @@
     const kat = kategorienAktiv();
     let out = '', sec = null;
     vis.forEach((g, gi) => {
-      const items = mem.filter((i) => i.groupId === g.id);
+      const items = mem.filter((i) => gruppeIn(i, curOffer) === g.id);
       const visible = items.filter(matchesFilter);
       const hide = (filterQ || onlyChanges) && !visible.length;
       const ohneKat = kat && kategorienOhne.has(g.id);
@@ -1539,11 +1566,11 @@
     else if (f === 'origin') it.origin = C.clean(v) || null;
     else if (f === 'vprice') {
       const key = it.id + '|' + curOffer, t = v.trim();
-      if (!t && ownList(curOffer)) {   // eigene Artikelliste: leer hieße „nicht im Angebot“ – entfernen geht über ✕
+      if (!t && ownList(curOffer)) {   // eigene Artikelliste: leer hieße „nicht im Angebot“ – entfernen geht über die Mülltonne der Zeile
         invalid.delete(key);
         el.value = priceToInput(effPrice(it, curOffer));
         el.classList.remove('invalid');
-        toast('Bitte einen Preis oder „a. Anfr.“ eingeben. Zum Entfernen aus diesem Angebot: ✕ am Zeilenende.', 5000);
+        toast('Bitte einen Preis oder „a. Anfr.“ eingeben. Zum Entfernen aus diesem Angebot: Mülltonne am Zeilenende.', 5000);
         return false;
       }
       if (!t) {
@@ -1617,7 +1644,7 @@
       model.items.splice(idx + 1, 0, it);
     } else {
       let idx = -1;
-      model.items.forEach((x, i) => { if (x.groupId === groupId) idx = i; });
+      model.items.forEach((x, i) => { if (gruppeIn(x, curOffer) === groupId) idx = i; });
       if (idx < 0) {
         const gi = model.groups.findIndex((x) => x.id === groupId);
         idx = model.items.findIndex((x) => model.groups.findIndex((y) => y.id === x.groupId) > gi) - 1;
@@ -1660,12 +1687,12 @@
       changed({ render: true });
       $(`[data-gid="${CSS.escape(g.id)}"] [data-act="${act}"]`)?.focus();
     } else if (act === 'g-del') {
-      const mem = model.items.filter((i) => i.groupId === g.id && inOffer(i, curOffer));
+      const mem = model.items.filter((i) => gruppeIn(i, curOffer) === g.id && inOffer(i, curOffer));
       const nur = mem.filter((i) => otherOffers(i).length === 0).length;
       if (mem.length && !(await confirmBox('Gruppe aus diesem Angebot entfernen?', `Die ${plural(mem.length, 'Artikel', 'Artikel')} der Gruppe „${esc(g.name)}“ werden aus „${esc(offerName(curOffer))}“ entfernt.${nur ? ` ${plural(nur, 'Artikel steht', 'Artikel stehen')} in keinem anderen Angebot und ${nur === 1 ? 'wird' : 'werden'} gelöscht.` : ''} Andere Angebote bleiben unverändert.`, 'Entfernen', true))) return;
       pushUndo();
       for (const it of mem) entfernen(it, curOffer);
-      if (!model.items.some((i) => i.groupId === g.id)) model.groups.splice(model.groups.indexOf(g), 1);
+      if (!model.items.some((i) => gruppenVon(i).includes(g.id))) model.groups.splice(model.groups.indexOf(g), 1);   // nicht, solange ein anderes Angebot sie benutzt
       changed({ render: true });
       toast(`Gruppe „${g.name}“ aus „${offerShort(curOffer)}“ entfernt – mit „Rückgängig“ wiederherstellbar.`);
     }
@@ -1709,20 +1736,20 @@
     itemId = id;
     const groups = model.groups.map((g) => `<option value="${esc(g.id)}"${g.id === it.groupId ? ' selected' : ''}>${esc(g.name)}</option>`).join('')
       + (ro ? '' : '<option value="__neu">+ Neue Gruppe …</option>');
-    const sameGroup = model.items.filter((i) => i.groupId === it.groupId && inOffer(i, curOffer));
+    const sameGroup = model.items.filter((i) => gruppeIn(i, curOffer) === gruppeIn(it, curOffer) && inOffer(i, curOffer));
     const pos = sameGroup.indexOf(it);
     const inStd = inOffer(it, OSTD), drin = offersOf(it), eigen = explizit(it);
-    const kundIn = drin.filter((o) => o !== OSTD);   // Kundenangebote mit diesem Artikel: dort eigene Bezeichnung möglich
+    const kundIn = drin.filter((o) => o !== OSTD);   // Kundenangebote mit diesem Artikel: dort eigene Bezeichnung und Gruppe möglich
     $('#item-body').innerHTML = `
       <div class="dlg-head"><div><h2 id="it-title">Artikel bearbeiten</h2><p>${it.cell ? `Aus Excel-Zelle ${esc(it.cell)} · ` : ''}Änderungen werden sofort in den Entwurf übernommen.</p></div>
         <button class="btn icon ghost" type="button" data-close aria-label="Schließen">${icon('x')}</button></div>
       <div class="dlg-body form-grid two">
         <label class="fld"><span>Artikelnummer</span><input name="code" value="${esc(it.code || '')}" maxlength="20" autocomplete="off"></label>
-        <label class="fld"><span>Angebotsgruppe</span><select name="groupId">${groups}</select></label>
+        <label class="fld"><span>${kundIn.length ? 'Angebotsgruppe (Basiswert)' : 'Angebotsgruppe'}</span><select name="groupId">${groups}</select></label>
         <label class="fld span2"><span>${kundIn.length ? 'Bezeichnung (Basiswert)' : 'Bezeichnung'}</span><input name="name" value="${esc(it.name)}" maxlength="200" required autocomplete="off"></label>
-        ${kundIn.length ? `<div class="fld span2 it-namen"><span>Bezeichnung je Angebot</span>
-          <p class="hint">Gilt nur im jeweiligen Angebot – leer = Basiswert (Wochenangebot).</p>
-          ${kundIn.map((o) => `<label class="it-nrow"><span>${esc(offerShort(o))}</span><input name="oname" data-on="${esc(o)}" value="${esc(eigenName(it, o))}" placeholder="${esc(it.name)}" maxlength="200" autocomplete="off" aria-label="Bezeichnung in ${esc(offerShort(o))}"></label>`).join('')}
+        ${kundIn.length ? `<div class="fld span2 it-namen"><span>Bezeichnung und Gruppe je Angebot</span>
+          <p class="hint">Gilt nur im jeweiligen Angebot – leeres Feld bzw. „wie Basiswert“ = Basiswert (Wochenangebot).</p>
+          ${kundIn.map((o) => `<div class="it-nrow"><span>${esc(offerShort(o))}</span><input name="oname" data-on="${esc(o)}" value="${esc(eigenName(it, o))}" placeholder="${esc(it.name)}" maxlength="200" autocomplete="off" aria-label="Bezeichnung in ${esc(offerShort(o))}"><select name="ogroup" data-on="${esc(o)}"${eigenGruppe(it, o) ? ' class="eigen"' : ''} aria-label="Angebotsgruppe in ${esc(offerShort(o))}"><option value="">wie Basiswert (${esc(gById(it.groupId)?.name || '')})</option>${model.groups.map((g) => `<option value="${esc(g.id)}"${g.id === eigenGruppe(it, o) ? ' selected' : ''}>${esc(g.name)}</option>`).join('')}</select></div>`).join('')}
         </div>` : ''}
         <label class="fld"><span>Fleischart</span><select name="category">${CAT_OPTS(it.category)}</select></label>
         <label class="fld"><span>Zustand</span><select name="condition">${COND_OPTS(it.condition)}</select></label>
@@ -1733,7 +1760,7 @@
           <div class="altlist" id="altlist">${(it.altPrices || []).map((p, k) => altRow(p, k)).join('')}</div>
           <div><button type="button" class="btn sm ghost" data-ia="alt-add">${icon('plus', 'sm')}Zusatzpreis</button></div>
         </div>` : ''}
-        <p class="hint span2 it-in" id="item-in">${icon('list', 'sm')} Enthalten in: <strong>${esc(drin.map(offerShort).join(', ') || 'keinem Angebot')}</strong>${drin.length > 1 ? ' – Merkmale und Gruppe gelten in allen diesen Angeboten, die Bezeichnung lässt sich je Angebot anpassen.' : ''}</p>
+        <p class="hint span2 it-in" id="item-in">${icon('list', 'sm')} Enthalten in: <strong>${esc(drin.map(offerShort).join(', ') || 'keinem Angebot')}</strong>${drin.length > 1 ? ' – Merkmale gelten in allen diesen Angeboten, Bezeichnung und Gruppe lassen sich je Angebot anpassen.' : ''}</p>
         <div class="fld span2" id="item-stock"></div>
         <div class="fld span2" id="item-hist"></div>
         <p class="form-err span2" id="item-err" role="alert"></p>
@@ -1788,6 +1815,9 @@
       let last = -1;
       model.items.forEach((x, i) => { if (x.groupId === it.groupId) last = i; });
       model.items.splice(last + 1, 0, it);
+    } else if (el.name === 'ogroup') {   // eigene Gruppe in einem Kundenangebot; die Stelle in der gemeinsamen Reihenfolge bleibt
+      if (!offerDef(el.dataset.on)) return;
+      setzeGruppe(it, el.dataset.on, el.value);
     } else if (el.dataset.alt) {
       const k = +el.closest('.altrow').dataset.k;
       const ap = it.altPrices[k];
@@ -1809,6 +1839,11 @@
     }
     if (JSON.stringify(model) !== snap) { undoStack.push(snap); $('#btn-undo').disabled = false; }
     changed({ render: true });
+    for (const o of dlgItem.querySelectorAll('[name="ogroup"]')) {   // Basiswert geändert oder eigene Gruppe gleich dem Basiswert
+      o.options[0].textContent = `wie Basiswert (${gById(it.groupId)?.name || ''})`;
+      o.value = eigenGruppe(it, o.dataset.on);
+      o.classList.toggle('eigen', !!o.value);
+    }
     if (neueGruppe) {
       const gid = neueGruppe; neueGruppe = null;
       dlgItem.close();
@@ -1840,13 +1875,15 @@
       changed({ render: true });
       openItem(it.id);
     } else if (a === 'up' || a === 'down') {
-      const same = model.items.filter((i) => i.groupId === it.groupId && inOffer(i, curOffer));
+      const same = model.items.filter((i) => gruppeIn(i, curOffer) === gruppeIn(it, curOffer) && inOffer(i, curOffer));
       const k = same.indexOf(it);
       const other = same[a === 'up' ? k - 1 : k + 1];
       if (!other) return;
       pushUndo();
-      const i1 = model.items.indexOf(it), i2 = model.items.indexOf(other);
-      [model.items[i1], model.items[i2]] = [model.items[i2], model.items[i1]];
+      // nur dieser Artikel wandert (vor bzw. hinter den Nachbarn): ein Tausch der Plätze verschöbe den Nachbarn in dessen
+      // Basisgruppe, wenn beide nur in diesem Angebot in derselben Gruppe stehen
+      model.items.splice(model.items.indexOf(it), 1);
+      model.items.splice(model.items.indexOf(other) + (a === 'down' ? 1 : 0), 0, it);
       changed({ render: true });
       openItem(it.id);
     } else if (a === 'to-master') {
@@ -2229,7 +2266,7 @@
   });
 
   /* Neue Angebotsliste vom Server übernehmen (offers_save, Sonderangebote anlegen/löschen): Einträge gelöschter Angebote fallen aus
-     dem Entwurf (Preise, Bezeichnungen, Empfehlungen; der Server verwirft sie beim nächsten Speichern ohnehin). true = Entwurf geändert */
+     dem Entwurf (Preise, Bezeichnungen, Gruppen, Empfehlungen; der Server verwirft sie beim nächsten Speichern ohnehin). true = Entwurf geändert */
   function angeboteUebernehmen(r) {
     offers = r.offers; offersRev = r.rev; stdPublic = r.stdPublic !== false;
     const gone = new Set([OSTD, ...offers.map((o) => o.id)]);
@@ -2237,6 +2274,7 @@
     for (const it of model ? model.items : []) {
       if (it.variants) { for (const k of Object.keys(it.variants)) if (!gone.has(k)) { delete it.variants[k]; dropped = true; } dropEmptyVariants(it); }
       if (it.namen) { for (const k of Object.keys(it.namen)) if (!gone.has(k)) { delete it.namen[k]; dropped = true; } if (!Object.keys(it.namen).length) delete it.namen; }
+      if (it.gruppen) { for (const k of Object.keys(it.gruppen)) if (!gone.has(k)) { delete it.gruppen[k]; dropped = true; } if (!Object.keys(it.gruppen).length) delete it.gruppen; }
       if (it.sale && it.sale.offers) { for (const k of Object.keys(it.sale.offers)) if (!gone.has(k)) { delete it.sale.offers[k]; dropped = true; } if (!Object.keys(it.sale.offers).length) delete it.sale.offers; }
     }
     if (model && model.meta.werbung) for (const k of Object.keys(model.meta.werbung)) if (!gone.has(k)) { delete model.meta.werbung[k]; dropped = true; }
@@ -2279,12 +2317,12 @@
   let ocWahl = new Set(), ocQ = '';
   const ocQuelle = (src) => model.items.filter((it) => { const p = effPrice(it, src); return p && (p.status === 'value' || p.status === 'request'); });
   function ocListe(src, neu) {
-    const l = ocQuelle(src);
+    const l = inReihenfolge(ocQuelle(src), src);
     if (neu) { ocWahl = istSonder(curOffer) ? new Set() : new Set(l.map((it) => it.id)); ocQ = ''; const q = $('#oc-q'); if (q) q.value = ''; }
     const gName = new Map(model.groups.map((g) => [g.id, g.name])), toks = SU.woerter(ocQ);
     let letzte = null;
     const zeilen = l.map((it) => {
-      const g = gName.get(it.groupId) || '', p = effPrice(it, src), hier = inOffer(it, curOffer);
+      const g = gName.get(gruppeIn(it, src)) || '', p = effPrice(it, src), hier = inOffer(it, curOffer);
       const kopf = g !== letzte ? `<li class="oc-g">${esc(g)}</li>` : '';
       letzte = g;
       return `${kopf}<li data-hay="${esc(SU.heu(it.code, nameIn(it, src), g))}"><label class="check"><input type="checkbox" value="${esc(it.id)}"${ocWahl.has(it.id) ? ' checked' : ''}><span class="oc-nr">${esc(it.code || '—')}</span><span class="oc-nm">${esc(nameIn(it, src))}${hier ? ' <small class="muted">· schon hier</small>' : ''}</span><span class="oc-p">${esc(priceShort(p))}</span></label></li>`;
@@ -2497,7 +2535,7 @@
       if (!it || !o) return;
       const keep = { id: it.id, groupId: model.groups.some((g) => g.id === o.groupId) ? o.groupId : it.groupId };
       if (kind === 'price') { it.price = clone(o.price); it.altPrices = clone(o.altPrices || []); if ('priceText' in o) it.priceText = o.priceText; }
-      else Object.assign(it, clone(o), keep);
+      else { for (const k of ['namen', 'gruppen']) if (!(k in o)) delete it[k]; Object.assign(it, clone(o), keep); }   // eigene Bezeichnungen/Gruppen, die es veröffentlicht nicht gab
       invalid.delete(id);
       return;
     }
@@ -4148,7 +4186,11 @@
     for (const a of liste) {
       const p = ps.get(K(a.code));
       const vorh = (pool.get(S.normCode(a.code)) || []).find((x) => !inOffer(x, curOffer));
-      if (vorh) { empfehlungNichtUebernehmen(vorh, curOffer); aufnehmen(vorh, curOffer, p); ids.set(K(a.code), vorh.id); continue; }   // steht schon in einem anderen Angebot
+      if (vorh) {   // steht schon in einem anderen Angebot; „Artikel in diese Gruppe“ gilt dann nur für dieses Angebot
+        empfehlungNichtUebernehmen(vorh, curOffer); aufnehmen(vorh, curOffer, p);
+        if (!std && awFest && gById(awFest)) setzeGruppe(vorh, curOffer, awFest);
+        ids.set(K(a.code), vorh.id); continue;
+      }
       const g = zielGruppe(a, true);
       const m = masterOf(a.code);
       // gepflegte Stammdaten-Bezeichnung unverändert, sonst Vorschlag aus der Bestandsliste (ohne „frisch“, Marke Fleischmeister)
@@ -4159,7 +4201,7 @@
       if (C.CONDITIONS.includes(quelle.condition)) it.condition = quelle.condition;
       if (quelle.origin) it.origin = quelle.origin;
       let at = -1;
-      model.items.forEach((x, i) => { if (x.groupId === g.id) at = i; });
+      model.items.forEach((x, i) => { if (gruppeIn(x, curOffer) === g.id) at = i; });
       model.items.splice(at < 0 ? model.items.length : at + 1, 0, it);
       if (!std) { nurIn(it, curOffer); aufnehmen(it, curOffer, p); }
       ids.set(K(a.code), it.id);
@@ -4234,10 +4276,8 @@
   /* Werbung schalten: Artikel des gewählten Angebots (in der Reihenfolge des Editors) an admin-werbung.js übergeben */
   /* Artikel eines Angebots für das Fenster „Werbung schalten“ (Reihenfolge wie im Editor) */
   function werbKandidaten(oid) {
-    const gi = new Map(model.groups.map((g, i) => [g.id, i]));
-    return model.items.map((it, i) => ({ it, i })).filter((x) => inOffer(x.it, oid))
-      .sort((a, b) => (gi.get(a.it.groupId) ?? 1e9) - (gi.get(b.it.groupId) ?? 1e9) || a.i - b.i)
-      .map(({ it }) => {
+    return inReihenfolge(model.items.filter((it) => inOffer(it, oid)), oid)
+      .map((it) => {
         const sv = C.saleFor(it, oid), p = effPrice(it, oid);
         return { id: it.id, code: it.code || '', name: nameIn(it, oid), merkmale: [it.origin, it.condition !== 'unbekannt' ? C.CONDITION_LABELS[it.condition] : ''].filter(Boolean).join(' · '),
           preis: sv != null ? 'Empfehlung ' + fmtNum.format(sv) + ' €/kg' : p ? priceShort(p) : '' };
@@ -4332,6 +4372,8 @@
   /* ======================= Aufbau des Angebots (Knopf „Editor“, Fenster app/module/angebot/aufbau.js) =======================
      Reihenfolge der Gruppen und ihr Bereich (g.section) sowie Gruppe (it.groupId) und Reihenfolge der Artikel (Stelle in
      model.items) gelten für alle Angebote – wie ↑/↓ an den Gruppen und „Angebotsgruppe“/„Nach oben“ im Artikelfenster.
+     Ausnahme: Artikel mit eigener Gruppe im gewählten Kundenangebot (it.gruppen) stehen dort in dieser Gruppe; verschieben
+     in eine andere Gruppe ändert dann nur die eigene Gruppe (artikelOrdnen).
      Gespeichert wird über den Entwurf (save_draft mit Revision, Recht angebot.bearbeiten auf dem Server). Kundenangebot „folgt
      dem Wochenangebot“: nur ansehen; mit Angebotskategorien ordnen die Stammdaten Bereiche und Gruppen, Artikel bleiben änderbar. */
   function aufbauSperre() {
@@ -4352,7 +4394,7 @@
      Bereiche und Artikel je Gruppe (Vergleich beim Übernehmen) */
   function aufbauDaten() {
     const art = new Map();
-    for (const it of model.items) if (inOffer(it, curOffer)) { if (!art.has(it.groupId)) art.set(it.groupId, []); art.get(it.groupId).push({ id: it.id, code: it.code || '', name: nameIn(it, curOffer) }); }
+    for (const it of model.items) if (inOffer(it, curOffer)) { const g = gruppeIn(it, curOffer); if (!art.has(g)) art.set(g, []); art.get(g).push({ id: it.id, code: it.code || '', name: nameIn(it, curOffer), eigen: !!eigenGruppe(it, curOffer) }); }
     const gruppen = sichtbareGruppen().map((g) => ({ id: g.id, name: g.name, bereich: g.section || '', n: (art.get(g.id) || []).length, artikel: art.get(g.id) || [] }));
     return { angebot: offerName(curOffer), std: curOffer === OSTD, sperre: aufbauSperre(), gruppen,
       stand: JSON.stringify(gruppen.map((g) => [g.id, g.bereich, g.artikel.map((a) => a.id)])) };
@@ -4390,7 +4432,7 @@
     const artGeaendert = neu.some((x) => JSON.stringify(x.artikel) !== artAlt.get(x.id));
     if (gruppenNeu === gruppenAlt && !artGeaendert) return { ok: true, unveraendert: true };
     const vorher = JSON.stringify(model);
-    if (artGeaendert && !artikelOrdnen(new Map(neu.map((x) => [x.id, x.artikel])))) return { fehler: 'Die Artikel ließen sich nicht ordnen – bitte das Fenster neu öffnen.' };
+    if (artGeaendert && !artikelOrdnen(new Map(neu.map((x) => [x.id, x.artikel])), curOffer)) return { fehler: 'Die Artikel ließen sich nicht ordnen – bitte das Fenster neu öffnen.' };
     undoStack.push(vorher);
     if (undoStack.length > 50) undoStack.shift();
     $('#btn-undo').disabled = false;

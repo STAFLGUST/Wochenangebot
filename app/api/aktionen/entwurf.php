@@ -78,7 +78,7 @@ switch ($action) {
                     // einer Gruppe oder Gruppe eines Artikels geändert
                     $d = changes_between($before, $model);
                     $nb = count(array_filter($d, function ($c) { return str_ends_with((string)$c['k'], '|section'); }));
-                    $ng = count(array_filter($d, function ($c) { return str_ends_with((string)$c['k'], '|groupId'); }));
+                    $ng = count(array_filter($d, function ($c) { return str_ends_with((string)$c['k'], '|groupId') || str_contains((string)$c['k'], '|g:'); }));   // auch eigene Gruppe je Angebot
                     audit('draft', 'Aufbau des Angebots geändert (Reihenfolge der Bereiche, Gruppen und Artikel'
                         . ($nb ? ', Bereich bei ' . $nb . ($nb === 1 ? ' Gruppe' : ' Gruppen') . ' neu' : '')
                         . ($ng ? ', Gruppe bei ' . $ng . ($ng === 1 ? ' Artikel' : ' Artikeln') . ' neu' : '') . ')', array_slice($d, 0, 2000));

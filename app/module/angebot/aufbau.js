@@ -5,7 +5,8 @@
    Reihenfolge ändern: Pfeile ↑/↓ (Tastatur, Handy) oder Ziehen am Griff (Maus und Touch über Pointer Events) – ein Bereich
    als Ganzes mit seinen Gruppen, eine Gruppe innerhalb ihres Bereichs oder in einen anderen (bekommt dessen Bereich,
    „Bereich neu“), ein Artikel innerhalb seiner Gruppe oder in eine andere (Ziehen auf eine aufgeklappte Gruppe an die Stelle,
-   auf eine zugeklappte ans Ende; dazu die Auswahl „In Gruppe …“ für Handy und Tastatur, „verschoben“).
+   auf eine zugeklappte ans Ende; dazu die Auswahl „In Gruppe …“ für Handy und Tastatur, „verschoben“). Artikel mit eigener
+   Gruppe in diesem Kundenangebot („nur hier“, admin.js it.gruppen) wechseln die Gruppe nur in diesem Angebot.
    Gespeichert wird erst mit „Übernehmen“ – alles in einem Schritt über den Entwurf (admin.js: WA.angebot.aufbau.uebernehmen →
    save_draft mit Revision, Recht angebot.bearbeiten auf dem Server); hat jemand anderes den Aufbau inzwischen geändert,
    übernimmt das Fenster nichts und zeigt den neuen Stand. „Abbrechen“, × und Escape verwerfen (mit Änderungen schließt
@@ -26,7 +27,7 @@
   let bl = [];           // Blöcke in Angebotsreihenfolge: [{ bereich, ids: [Gruppen-ID …] }]
   let art = new Map();   // Gruppen-ID → [Artikel-ID …] in Reihenfolge
   let info = new Map();  // Gruppen-ID → { name, bereich (beim Öffnen) }
-  let ainfo = new Map(); // Artikel-ID → { code, name, gruppe (beim Öffnen) }
+  let ainfo = new Map(); // Artikel-ID → { code, name, gruppe (beim Öffnen), eigen (eigene Gruppe in diesem Angebot) }
   let offen = new Set(); // aufgeklappte Gruppen
   let start = '';        // Zustand beim Öffnen (Vergleich: geändert?)
   let busy = false;
@@ -68,7 +69,7 @@
     return ids.map((aid, i) => {
       const a = ainfo.get(aid);
       return `<li class="abf-a" data-aid="${esc(aid)}">${fest ? '' : griff('a', 'Artikel ziehen')}
-        <span class="abf-an">${a.code ? `<span class="abf-nr">${esc(a.code)}</span>` : ''}<span class="abf-ab">${esc(a.name)}</span>${a.gruppe !== gid ? '<span class="abf-neu">verschoben</span>' : ''}</span>
+        <span class="abf-an">${a.code ? `<span class="abf-nr">${esc(a.code)}</span>` : ''}<span class="abf-ab">${esc(a.name)}</span>${a.eigen ? '<span class="abf-eig" title="Eigene Gruppe in diesem Angebot – verschieben ändert sie nur hier">nur hier</span>' : ''}${a.gruppe !== gid ? '<span class="abf-neu">verschoben</span>' : ''}</span>
         ${fest ? '' : `${zuHTML(aid, gid)}<span class="abf-btns">${pfeil('a-hoch', 'up', i === 0, `Artikel „${esc(a.name)}“ nach oben`)}${pfeil('a-runter', 'down', i === ids.length - 1, `Artikel „${esc(a.name)}“ nach unten`)}</span>`}</li>`;
     }).join('');
   }
@@ -132,7 +133,7 @@
   function laden(daten) {
     d = daten;
     info = new Map(d.gruppen.map((g) => [g.id, { name: g.name, bereich: g.bereich }]));
-    ainfo = new Map(d.gruppen.flatMap((g) => g.artikel.map((a) => [a.id, { code: a.code, name: a.name, gruppe: g.id }])));
+    ainfo = new Map(d.gruppen.flatMap((g) => g.artikel.map((a) => [a.id, { code: a.code, name: a.name, gruppe: g.id, eigen: !!a.eigen }])));
     art = new Map(d.gruppen.map((g) => [g.id, g.artikel.map((a) => a.id)]));
     offen = new Set([...offen].filter((g) => info.has(g)));
     bl = bloecke(d.gruppen);
@@ -140,7 +141,7 @@
     const ro = nurAnsehen();
     const hinweis = d.sperre ? `<p class="abf-hinweis sperre">${icon('lock', 'sm')}<span>${esc(d.sperre.text)}</span></p>` : '';
     const info2 = !d.gruppen.length ? `<p class="abf-hinweis">${icon('info', 'sm')}<span>Dieses Angebot enthält noch keine Artikel – es gibt nichts zu ordnen.</span></p>`
-      : ro ? '' : `<p class="abf-hinweis">${icon('info', 'sm')}<span>Gilt für alle Angebote: Gruppen und Artikel stehen in jedem Angebot, das sie enthält, an dieser Stelle; ein verschobener Artikel wechselt die Gruppe in allen Angeboten. Zieht man eine Gruppe in einen anderen Bereich, bekommt sie dessen Bereich. Preise bleiben unverändert.</span></p>`;
+      : ro ? '' : `<p class="abf-hinweis">${icon('info', 'sm')}<span>Gilt für alle Angebote: Gruppen und Artikel stehen in jedem Angebot, das sie enthält, an dieser Stelle; ein verschobener Artikel wechselt die Gruppe in allen Angeboten${d.gruppen.some((g) => g.artikel.some((x) => x.eigen)) ? ' – Artikel mit „nur hier“ haben in diesem Angebot eine eigene Gruppe und wechseln sie nur hier' : ''}. Zieht man eine Gruppe in einen anderen Bereich, bekommt sie dessen Bereich. Preise bleiben unverändert.</span></p>`;
     body.innerHTML = `<div class="dlg-head"><div><h2 id="abf-titel">${icon('aufbau')}Aufbau des Angebots</h2>
         <p>„${esc(d.angebot)}“: Reihenfolge der Bereiche, Gruppen und Artikel.${ro ? '' : ' Gruppe anklicken zeigt ihre Artikel. Am Griff ziehen oder die Pfeile nutzen – gespeichert wird erst mit „Übernehmen“.'}</p></div>
         <button type="button" class="btn icon ghost" data-close aria-label="Schließen">${icon('x')}</button></div>

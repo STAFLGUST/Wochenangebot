@@ -2,7 +2,7 @@
 
 <!-- ERZEUGT von `python3 werkzeuge/doku.py erzeugen` – nicht von Hand ändern. Quelle: Funktionen und Kommentare im Code. Die CI prüft, dass diese Datei zum Code passt. -->
 
-58 Dateien, 915 Funktionen – in der Reihenfolge der Datei, **fett** die Abschnitte. Text = erste Aussage des Kommentars direkt über der Funktion (Python: Docstring). Übersicht aller Module: [README.md](README.md).
+58 Dateien, 920 Funktionen – in der Reihenfolge der Datei, **fett** die Abschnitte. Text = erste Aussage des Kommentars direkt über der Funktion (Python: Docstring). Übersicht aller Module: [README.md](README.md).
 
 ## `app/api/lib/angebote.php`
 
@@ -271,7 +271,7 @@ _Importvertrag des Moduls Angebot – Schnittstelle zur Importzentrale (docs/pla
 
 ## `app/api/module/angebot/kopieren.php`
 
-_Angebot · Kundenangebot kopieren (Entscheidung des Inhabers 13.11.2026): ein Angebot als neues Kundenangebot anlegen und dabei alles außer den Kunden mitnehmen – eigene Preise (variants), eigene Bezeichnungen …_
+_Angebot · Kundenangebot kopieren (Entscheidung des Inhabers 13.11.2026): ein Angebot als neues Kundenangebot anlegen und dabei alles außer den Kunden mitnehmen – eigene Preise (variants), eigene Bezeichnungen (namen) …_
 
 - `angebot_kopie_enthalten(it, oid, fallback)` – Gehört ein Artikel (Rohdaten des Entwurfs) zum Angebot?
 - `angebot_kopie_modell(m, quelle, neu)` – Inhalte des Angebots $quelle im Modell unter der neuen ID $neu eintragen (ohne zu prüfen; clean_model folgt).
@@ -466,9 +466,12 @@ _Wochenangebot – Eingabebereich Bearbeitet einen Entwurf auf dem Server (autom
 - `entfernen(it, oid)` – Aus einem Angebot entfernen.
 - `namenBekannt(n)` – nur Einträge bestehender Kundenangebote; null, wenn keiner
 - `setzeName(x, oid, text)` – eigene Bezeichnung setzen; leer oder gleich dem Basiswert = keine eigene
+- `setzeGruppe(it, oid, gid)` – eigene Gruppe setzen; leer oder gleich dem Basiswert = keine eigene
+- `gruppenBereinigen()` – Eigene Gruppen, die dem Basiswert gleichen oder die es nicht mehr gibt, fallen weg (wie auf dem Server, clean_model) – sonst zählte der Entwurf Änderungen, …
+- `inReihenfolge(items, oid)` – Artikel eines Angebots in Angebotsreihenfolge: Gruppe in diesem Angebot, dann Stelle (wie OfferCore.enrichOffer nach offer_resolve)
 - `werbungBereinigen()` – Artikel, die nicht mehr im Angebot stehen, fallen aus dessen Werbung (unbekannte Angebote prüft der Server)
 - `aufbauGeaendert()` – Weicht der Aufbau (Reihenfolge der Gruppen, Bereich je Gruppe, Gruppe und Reihenfolge der Artikel; gilt für alle Angebote) von der veröffentlichten Fassung …
-- `artikelOrdnen(ziel)` – Artikel neu ordnen: ziel = Map(Gruppen-ID → Artikel-IDs in gewünschter Reihenfolge) für die „Anker“ (z. B. alle Artikel des gewählten Angebots); jeder Anker …
+- `artikelOrdnen(ziel, oid)` – Artikel neu ordnen: ziel = Map(Gruppen-ID → Artikel-IDs in gewünschter Reihenfolge) für die „Anker“ (z. B. alle Artikel des gewählten Angebots); jeder Anker …
 - `gruppenOrdnen(anker, reihe)` – Gruppen neu ordnen: „anker“ (IDs) kommen in die Reihenfolge „reihe“; jede andere Gruppe bleibt hinter ihrem Anker davor (Gruppen, die im gewählten Angebot …
 
 **API**
@@ -1290,6 +1293,8 @@ _Mehrere Angebote: Kundenangebote mit eigenen Preisen, eigene Artikelliste je An
 - `dok(name)` – Gespeichertes Dokument (ohne PHP-Schutzzeile) oder None
 - `ohne_kennung(o)` – Aufgelöstes Angebot ohne Name/ID des Angebots – zum Vergleich Quelle ↔ Kopie
 - `kopieren_pruefen(a, br, v)` – Kundenangebot kopieren (Inhaber 13.11.2026): offer_kopieren nimmt alles außer den Kunden mit – eigene Preise, eigene Bezeichnungen, Empfehlungen je Angebot, …
+- `gruppe_je_angebot_pruefen(a, br)` – Angebotsgruppe je Angebot (Inhaber 17.11.2026): item.gruppen = {Angebots-ID: Gruppen-ID} stellt einen Artikel in einem Kundenangebot unter eine andere …
+- `aufgeloest(holen, stand)`
 
 ## `tests/e2e/test_angebotsliste.py`
 

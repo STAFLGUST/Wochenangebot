@@ -13,10 +13,19 @@ if (!defined('WA_API')) { http_response_code(404); exit; }   // nur über api/in
      Eintrag mit dem Standardpreis; variants[<id>] = {status: 'hidden'} blendet einen Artikel dort aus.
    – Sonderangebot (art 'sonder', module/angebot/sonderangebote.php): Kundenangebot mit eigener Artikelliste für ganze
      Kundengruppen (sonderGruppen) mit Gültigkeit (Zeitraum oder KW); sichtbar nur im Zeitraum und nach Veröffentlichung.
-   Kundenpreise verlassen den Server nur aufgelöst und nur für berechtigte Nutzer (offer_resolve). */
+   Bezeichnung und Angebotsgruppe je Kundenangebot (Inhaber 03.11. und 17.11.2026): $item['namen'][<Angebots-ID>] bzw.
+   $item['gruppen'][<Angebots-ID>] gelten nur dort; ohne Eintrag gilt der Basiswert ($item['name'], $item['groupId']),
+   der zugleich das Wochenangebot bestimmt.
+   Kundenpreise, Bezeichnungen und Gruppen anderer Angebote verlassen den Server nur aufgelöst und nur für berechtigte
+   Nutzer (offer_resolve). */
 require_once dirname(__DIR__) . '/module/angebot/sonderangebote.php';
 require_once dirname(__DIR__) . '/module/angebot/design.php';
 const OFFER_STD = 'std';
+/* Felder eines Artikels, die offer_resolve ausliefert (Positivliste). Alles andere – eigene Preise, Bezeichnungen und
+   Sonderpreise anderer Angebote, die Zelladresse der Excel-Datei und jedes Feld, das erst eine spätere Fassung speichert –
+   verlässt den Server nie. So legt auch ein Rückfall auf diese Fassung keine neueren Felder je Angebot offen (GR-002, GR-005, GR-006). */
+const ARTIKEL_FELDER_AUSGELIEFERT = ['id' => 1, 'code' => 1, 'name' => 1, 'nameRaw' => 1, 'category' => 1, 'origin' => 1, 'condition' => 1,
+    'groupId' => 1, 'price' => 1, 'altPrices' => 1];
 const OFFER_DEFAULTS = [
     ['id' => 'chefs-culinar', 'name' => 'Wochenangebot Chefs Culinar', 'fallback' => 'standard'],
     ['id' => 'handelshof-efs', 'name' => 'Wochenangebot Handelshof, EFS', 'fallback' => 'standard'],
@@ -42,6 +51,7 @@ function angebot_ids_mit_resten(array $vorhanden): array
             foreach (array_keys(is_array($it['variants'] ?? null) ? $it['variants'] : []) as $k) $ids[(string)$k] = true;
             foreach (array_keys(is_array($it['sale']['offers'] ?? null) ? $it['sale']['offers'] : []) as $k) $ids[(string)$k] = true;
             foreach (array_keys(is_array($it['namen'] ?? null) ? $it['namen'] : []) as $k) $ids[(string)$k] = true;   // eigene Bezeichnungen
+            foreach (array_keys(is_array($it['gruppen'] ?? null) ? $it['gruppen'] : []) as $k) $ids[(string)$k] = true;   // eigene Angebotsgruppen
         }
         foreach (array_keys(is_array($d['meta']['werbung'] ?? null) ? $d['meta']['werbung'] : []) as $k) $ids[(string)$k] = true;   // Werbung
     }
@@ -236,13 +246,17 @@ function offer_resolve(array $m, array $def, bool $ausverkauftAusblenden = true)
 {
     $std = $def['id'] === OFFER_STD;
     $items = [];
+    $gids = [];
+    foreach ($m['groups'] ?? [] as $g) $gids[$g['id']] = true;
     foreach ($m['items'] ?? [] as $it) {
         $v = $it['variants'][$def['id']] ?? null;
         $emp = empfehlung_fuer($it, $def['id']);
         $sale = $emp ? $emp['preis'] : null;
         $eigenerName = !$std && is_array($it['namen'] ?? null) ? trim((string)($it['namen'][$def['id']] ?? '')) : '';
-        unset($it['variants'], $it['sale'], $it['cell'], $it['namen']);   // Zelladresse der Excel-Datei ist intern; Bezeichnungen anderer Angebote nie
+        $eigeneGruppe = !$std && is_array($it['gruppen'] ?? null) ? ($it['gruppen'][$def['id']] ?? null) : null;
+        $it = array_intersect_key($it, ARTIKEL_FELDER_AUSGELIEFERT);   // alles andere bleibt auf dem Server – auch Felder, die erst eine spätere Fassung kennt
         if ($eigenerName !== '') $it['name'] = $eigenerName;   // eigene Bezeichnung in diesem Angebot, sonst der Basiswert
+        if (is_string($eigeneGruppe) && isset($gids[$eigeneGruppe])) $it['groupId'] = $eigeneGruppe;   // eigene Gruppe in diesem Angebot, sonst der Basiswert
         if ($v && $v['status'] === 'hidden') continue;
         if ($sale !== null && $ausverkauftAusblenden && sold_out($it)) continue;   // Sonderposten ausverkauft
         $regular = $it['price'];
@@ -383,6 +397,15 @@ function clean_model($m, bool $strict): array
         // optional: eigene Bezeichnung je Kundenangebot (ältere Fassungen verwerfen das Feld; dann gilt wieder „name“)
         $namen = angebotsnamen_clean($it['namen'] ?? null, $name, $known);
         if ($namen) $row['namen'] = $namen;
+        // optional: eigene Angebotsgruppe je Kundenangebot (ältere Fassungen verwerfen das Feld; dann gilt wieder „groupId“).
+        // Nur bestehende Kundenangebote und Gruppen; gleich dem Basiswert = kein Eintrag.
+        $eigen = [];
+        foreach (is_array($it['gruppen'] ?? null) ? $it['gruppen'] : [] as $oid => $g) {
+            $oid = (string)$oid;   // numerische Angebots-IDs kommen als Zahl an
+            if ($oid !== OFFER_STD && in_array($oid, $known, true) && is_string($g) && $g !== $gid && isset($gids[$g])) $eigen[$oid] = $g;
+        }
+        ksort($eigen, SORT_STRING);
+        if ($eigen) $row['gruppen'] = $eigen;
         $sale = clean_sale($it['sale'] ?? null, $name, $known);
         if ($sale) $row['sale'] = $sale;
         $items[] = $row;
@@ -390,8 +413,8 @@ function clean_model($m, bool $strict): array
     if ($strict && !$items) throw new InvalidArgumentException('Das Angebot enthält keine Artikel.');
     $werbung = clean_werbung($meta['werbung'] ?? null, $known, $iids);   // optional (ältere Fassungen verwerfen das Feld)
     if ($werbung) $outMeta['werbung'] = $werbung;
-    $used = [];
-    foreach ($items as $it) $used[$it['groupId']] = true;
+    $used = [];   // auch Gruppen, die nur ein Kundenangebot benutzt (gruppen) – sonst verlöre es beim Veröffentlichen seine Überschrift
+    foreach ($items as $it) foreach (array_merge([$it['groupId']], array_values($it['gruppen'] ?? [])) as $g) $used[$g] = true;
     if ($strict) $groups = array_values(array_filter($groups, function ($g) use ($used) { return isset($used[$g['id']]); }));
     $sections = [];
     foreach ($groups as $g) if ($g['section'] !== '' && !in_array($g['section'], $sections, true)) $sections[] = $g['section'];
@@ -483,7 +506,7 @@ function angebot_veroeffentlichen(?array $modell, $revision): array
 function angebot_aufbau_geaendert(array $pub, array $neu): bool
 {
     $pg = []; foreach ($pub['groups'] ?? [] as $g) $pg[(string)$g['id']] = (string)$g['name'];
-    $used = []; foreach ($neu['items'] ?? [] as $it) $used[(string)$it['groupId']] = true;
+    $used = []; foreach ($neu['items'] ?? [] as $it) foreach (array_merge([$it['groupId']], array_values($it['gruppen'] ?? [])) as $g) $used[(string)$g] = true;
     $neuG = array_values(array_filter($neu['groups'] ?? [], fn($g) => isset($used[(string)$g['id']])));
     $mg = []; foreach ($neuG as $g) $mg[(string)$g['id']] = (string)$g['name'];
     $sig = function (array $gs, array $other): string {
@@ -530,7 +553,7 @@ function angebot_aenderungen(?array $pub = null, ?array $dr = null): array
         elseif ($f === '-') { $z['art'] = 'entfernt'; $zeilen[] = $z; }
         elseif (strpos($f, 'v:') === 0) { $oid = substr($f, 2); $z['art'] = $oid === OFFER_STD ? 'sichtbar' : 'angebotspreis'; $z['angebot'] = $oid; $zeilen[] = $z; }
         elseif ($f === 'sale') { $z['art'] = 'empfehlung'; $zeilen[] = $z; }
-        else $jeArtikel[$id][] = $c;   // Preis, Preisbezeichnung, Zusatzpreise, Stammfelder, eigene Bezeichnung je Angebot
+        else $jeArtikel[$id][] = $c;   // Preis, Preisbezeichnung, Zusatzpreise, Stammfelder, eigene Bezeichnung und Gruppe je Angebot
     }
     foreach ($jeArtikel as $liste) {
         $preis = null; $felder = [];
