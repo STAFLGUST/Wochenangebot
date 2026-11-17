@@ -31,7 +31,7 @@ declare(strict_types=1);
        gelöscht; eine Dokumentation mit Fassung lässt sich nicht löschen.
      - Freigeben nur, wenn alle Abschnitte „fertig“ sind, Inhalt haben (Text oder verknüpftes QM-Dokument) und sich
        seit der letzten Fassung etwas geändert hat (qs_vf_abweichung – auch eine neue Version eines verknüpften
-       QM-Dokuments zählt). „Gültig ab“ liegt nie vor der vorigen Fassung.
+       QM-Dokuments zählt). „Gültig ab“ liegt immer nach dem „gültig ab“ der vorigen Fassung (nie derselbe Tag).
      - Der Arbeitsstand (Entwurf der nächsten Fassung) darf frei geändert werden; ein IT-System, das in einer Fassung
        steht, wird nicht gelöscht, sondern „außer Betrieb“ gesetzt.
      - Überprüfung: QS_VF_UEBERPRUEFUNG_MONATE nach der letzten Fassung bzw. „ohne Änderung überprüft“ fällig.
@@ -229,7 +229,8 @@ function qs_vf_inhalt(array $doku, array $dokumente, array $stamm): array
     ksort($personen);
     $kopf = [];
     foreach (QS_VF_KOPF as $f) $kopf[$f] = $doku[$f];
-    return $kopf + ['abschnitte' => $out, 'systeme' => $systeme, 'dokumente' => $doks, 'personen' => $personen];
+    // „teile“ gehört zum Schnappschuss: eine spätere Änderung der Teile ändert Überschriften und Gliederung alter Fassungen nicht (GR-106)
+    return $kopf + ['teile' => QS_VF_TEILE, 'abschnitte' => $out, 'systeme' => $systeme, 'dokumente' => $doks, 'personen' => $personen];
 }
 /* Was hat sich gegenüber einer Fassung geändert? „zeilen“ = Änderungshistorie in Worten, „abschnitte“ = neue und
    geänderte Abschnitte (Kennungen, für die Markierung in der Oberfläche), „dokumente“ = QM-Dokumente mit anderer Version */
@@ -260,7 +261,21 @@ function qs_vf_abweichung(array $neu, array $alt): array
     $altD = $nach($alt['dokumente'] ?? [], 'dok');
     foreach ($neu['dokumente'] as $d) {
         $x = $altD[$d['dok']] ?? null;
-        if ($x === null || (string)($x['version'] ?? '') === (string)$d['version']) continue;
+        if ($x === null) {
+            // Verweis, der bei der letzten Fassung im selben Abschnitt mit demselben Text noch kein Dokument traf (z. B. erst danach
+            // angelegt): jetzt erstmals mit Version – sonst hielte keine Fassung sie je fest (der Abschnittstext ist ja unverändert)
+            $war = false;
+            foreach ($neu['abschnitte'] as $a) foreach ($a['verweise'] as $v) {
+                if (($v['dok'] ?? '') !== $d['dok']) continue;
+                foreach ($altA[(string)$a['id']]['verweise'] ?? [] as $w) if (($w['dok'] ?? '') === '' && (string)($w['text'] ?? '') === (string)$v['text']) $war = true;
+            }
+            if ($war && $d['version'] !== '') {
+                $doks[] = ['dok' => $d['dok'], 'nr' => $d['nr'], 'titel' => $d['titel'], 'alt' => '', 'neu' => (string)$d['version']];
+                $zeilen[] = 'QM-Dokument ' . trim($d['nr'] . ' ' . $d['titel']) . ': jetzt verknüpft, Version ' . $d['version'];
+            }
+            continue;
+        }
+        if ((string)($x['version'] ?? '') === (string)$d['version']) continue;
         $doks[] = ['dok' => $d['dok'], 'nr' => $d['nr'], 'titel' => $d['titel'], 'alt' => (string)($x['version'] ?? ''), 'neu' => (string)$d['version']];
         $zeilen[] = 'QM-Dokument ' . trim($d['nr'] . ' ' . $d['titel']) . ': ' . ($d['version'] === '' ? 'keine gültige Version mehr (bisher Version ' . ($x['version'] ?? '') . ')'
             : 'jetzt Version ' . $d['version'] . (($x['version'] ?? '') !== '' ? ' (bisher Version ' . $x['version'] . ')' : ''));
@@ -290,6 +305,10 @@ function qs_vf_fassung_bilden(array $doku, array $dokumente, array $stamm, array
     if (count($doku['fassungen']) >= QS_VF_MAX_FASSUNGEN) fail('Zu viele Fassungen.', 422);
     $inhalt = qs_vf_inhalt($doku, $dokumente, $stamm);
     if (!$inhalt['abschnitte']) throw new InvalidArgumentException('Die Dokumentation hat noch keine Abschnitte.');
+    // Tippfehler im Jahr (2062 statt 2026) wären nicht mehr zu korrigieren: Fassungen bleiben, jede spätere müsste danach gelten
+    if ($gueltigAb > qs_plus_tage($heute, 366)) throw new InvalidArgumentException('„Gültig ab“ liegt mehr als ein Jahr in der Zukunft (' . qs_de($gueltigAb) . ') – bitte das Datum prüfen.');
+    if (count($inhalt['abschnitte']) !== count($doku['abschnitte']))   // z. B. Teil aus einer neueren Programmversion: nie still aus der Fassung lassen
+        throw new InvalidArgumentException('Mindestens ein Abschnitt gehört zu keinem bekannten Teil. Bitte den Abschnitt einem Teil zuordnen.');
     $offen = [];
     $fertig = []; foreach ($doku['abschnitte'] as $a) $fertig[$a['id']] = $a['fertig'] && ($a['text'] !== '' || $a['verweise']);
     foreach ($inhalt['abschnitte'] as $a) if (empty($fertig[$a['id']])) $offen[] = $a['nr'] . ' ' . $a['titel'];
@@ -300,7 +319,9 @@ function qs_vf_fassung_bilden(array $doku, array $dokumente, array $stamm, array
     if ($letzte !== null) {
         $ab = qs_vf_abweichung($inhalt, is_array($letzte['inhalt'] ?? null) ? $letzte['inhalt'] : []);
         if (!$ab['offen']) throw new InvalidArgumentException('Seit der Fassung ' . (int)$letzte['nr'] . ' hat sich nichts geändert. Zur Bestätigung „Ohne Änderung überprüft“ vermerken.');
-        if ($gueltigAb < (string)($letzte['gueltigAb'] ?? '')) throw new InvalidArgumentException('„Gültig ab“ liegt vor der Fassung ' . (int)$letzte['nr'] . ' (gültig ab ' . qs_de((string)$letzte['gueltigAb']) . ').');
+        // Am selben Tag wie die vorige Fassung wäre jene „gültig bis“ der Vortag ihres eigenen Beginns (qs_vf_gueltig_bis)
+        if ($gueltigAb <= (string)($letzte['gueltigAb'] ?? '')) throw new InvalidArgumentException('„Gültig ab“ muss nach dem Beginn der Fassung ' . (int)$letzte['nr']
+            . ' liegen (gültig ab ' . qs_de((string)$letzte['gueltigAb']) . ') – bitte ein späteres Datum wählen.');
         $aenderungen = $ab['zeilen'];
     }
     $f = ['nr' => (int)($letzte['nr'] ?? 0) + 1, 'datum' => $heute, 'gueltigAb' => $gueltigAb, 'grund' => $grund, 'freigegeben' => qs_wer($me),

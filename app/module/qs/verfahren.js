@@ -269,7 +269,10 @@
         : 'Die Fassung hält den jetzigen Stand fest – mit der heute gültigen Version jedes verknüpften QM-Dokuments. Sie lässt sich danach nicht mehr ändern oder löschen.';
     $('#vg-zeilen').innerHTML = nurPruefen ? '' : zeilen(f ? d.seitFassung.zeilen : ['Erstfassung']);
     $('#vg-fassung').hidden = nurPruefen; $('#vg-notiz-z').hidden = !nurPruefen;
-    $('#vg-grund').value = f ? '' : 'Erstfassung'; $('#vg-ab').value = V.d.heute; $('#vg-notiz').value = '';
+    // „gültig ab“ frühestens am Tag nach dem Beginn der vorigen Fassung (der Server lehnt denselben Tag ab)
+    const ab = f && f.gueltigAb ? new Date(Date.parse(f.gueltigAb + 'T00:00:00Z') + 864e5).toISOString().slice(0, 10) : '';
+    $('#vg-ab').min = ab;
+    $('#vg-grund').value = f ? '' : 'Erstfassung'; $('#vg-ab').value = ab > V.d.heute ? ab : V.d.heute; $('#vg-notiz').value = '';
     $('#vg-ok').textContent = nurPruefen ? 'Überprüfung vermerken' : 'Freigeben';
     $('#vg-ok').disabled = !nurPruefen && offen.length > 0;
     oeffne($('#dlg-vf-freigabe'));
