@@ -170,6 +170,15 @@ def kopieren_pruefen(a, br, v):
     check('Veröffentlichtes meta.design: anonym nichts, der Kunde nur das Design seines Angebots (#379), nie fremde', anon[0] == 200 and kb[0] == 200
           and 'design' not in anon[1]['offer']['meta'] and kb[1]['offer']['meta'].get('design') == nur_bela
           and 'Nur für Bela' not in json.dumps(anon[1]) and 'Nur für Fremd' not in json.dumps(anon[1]) + json.dumps(kb[1]), (anon[0], kb[0]))
+    # Rückfallschutz: Artikelfelder, die diese Fassung nicht kennt (z. B. von einer neueren gespeichert), gehen nie hinaus
+    storage_write('angebot', {**pub, 'items': [{**i, 'zukunft': {'bela': 'nur-bela', 'fremd': 'nur-fremd'}} for i in pub['items']]})
+    anon, kb = Client('198.51.100.67').call('offer'), K.call('offer&angebot=bela')
+    storage_write('angebot', pub)
+    felder = {'id', 'code', 'name', 'nameRaw', 'category', 'origin', 'condition', 'groupId', 'price', 'altPrices', 'sale', 'regular', 'empfehlung'}
+    aus = [i for r in (anon, kb) for i in r[1]['offer']['items']] if anon[0] == 200 and kb[0] == 200 else []
+    check('Veröffentlichtes Angebot: unbekannte Artikelfelder werden nicht ausgeliefert (anonym und Kunde), nur die festen Felder',
+          len(aus) > 0 and 'zukunft' not in json.dumps(anon[1]) + json.dumps(kb[1]) and all(set(i) <= felder for i in aus),
+          (anon[0], kb[0], sorted({k for i in aus for k in i} - felder)))
     log = json.dumps(get(a, 'log')[1], ensure_ascii=False)
     check('… Protokoll „als Kopie von“ mit Inhalt', 'als Kopie von „Wochenangebot Bela“' in log and '1 eigene Bezeichnung' in log)
 

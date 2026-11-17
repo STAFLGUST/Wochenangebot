@@ -273,7 +273,10 @@ neueren Stand hat (`quelle: "version"`, `angebote: null` – Definitionen unbeka
 
 Grenzen: höchstens 5000 Artikel und 1000 Gruppen; IDs `^[A-Za-z0-9_-]+$`; Artikelnummer `^[0-9A-Za-z./-]+$`.
 `variants`, `sale`, `cell`, `namen`, `gruppen` und `meta.werbung` verlassen den Server nie roh – `offer_resolve()` löst sie je Angebot auf und entfernt sie
-(GR-001, GR-002, GR-005).
+(GR-001, GR-002, GR-005). Für Artikel gilt eine Positivliste (`ARTIKEL_FELDER_AUSGELIEFERT` in `lib/angebote.php`): ausgeliefert werden nur
+`id`, `code`, `name`, `nameRaw`, `category`, `origin`, `condition`, `groupId`, `price`, `altPrices` und die aufgelösten Kennzeichen `sale`,
+`regular`, `empfehlung`. Ein neues Artikelfeld, das Kunden sehen sollen, muss dort eingetragen werden; alles andere – auch Felder, die erst
+eine spätere Fassung speichert – bleibt auf dem Server (Rückfallschutz, GR-006).
 
 **`angebote`**: Kundenangebote.
 `{"rev": 4, "offers": [{"id": "kunde-a", "name": "Wochenangebot Kunde A", "fallback": "standard", "gruppen?": ["10"]}], "stdPublic": true, "geloescht?": ["alt-id"], "updatedAt": "…", "updatedBy": "…"}`.
