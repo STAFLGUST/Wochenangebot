@@ -5,7 +5,7 @@
 # CI sind sie Pflicht (WA_RESTIC_PFLICHT=1). Nicht geprüft: echte Storage Box, echtes ssh, systemd.
 set -eu
 REPO=$(cd "$(dirname "$0")/../.." && pwd)
-T=$(mktemp -d); trap 'rm -rf "$T"' EXIT
+T=$(mktemp -d); trap 'chmod -R u+rwx "$T" 2>/dev/null; rm -rf "$T"' EXIT
 PASS=0; FAIL=0
 ok() { if eval "$2"; then PASS=$((PASS + 1)); echo "PASS $1"; else FAIL=$((FAIL + 1)); echo "FAIL $1"; echo "$AUS" | sed 's/^/    /'; fi; }
 I="$T/inst"; S="sh $I/deploy/sicherung-extern.sh"
@@ -182,7 +182,7 @@ ok "Verweis statt des Passworts: pruefen bricht ab" '[ $CODE = 1 ] && echo "$AUS
 rm "$I/.sicherung-extern-passwort"; mv "$T/passwort" "$I/.sicherung-extern-passwort"
 
 # ── beschädigtes Repository (zuletzt: danach ist es unbrauchbar) ──
-for F in "$T/repo/data"/*/*; do truncate -s -1 "$F"; done
+for F in "$T/repo/data"/*/*; do chmod u+w "$F"; truncate -s -1 "$F"; done   # restic legt die Dateien nur lesbar an
 lauf pruefen
 ok "pruefen: beschädigtes Repository ergibt Fehler und Fehlerstatus" '[ $CODE = 1 ] && [ "$(feld ok)" = False ] && feld meldung | grep -q "restic check"'
 
