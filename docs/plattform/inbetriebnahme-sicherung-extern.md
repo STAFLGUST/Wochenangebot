@@ -83,6 +83,8 @@ Ausgehende Verbindungen sind erlaubt; an Firewall, Netzsperre und SSH von außen
    - das **Passwort des Repositorys – nur dieses eine Mal**. Sofort in den Passwortmanager übernehmen **und** ausdrucken
      (Ausdruck in den Tresor bzw. zu den Firmenunterlagen). Ohne dieses Passwort ist die externe Kopie wertlos; es liegt
      sonst nur auf dem Server, der im Ernstfall weg ist. Es enthält keine verwechselbaren Zeichen (kein 0/O, 1/l/I).
+     **Die Ausgabe nicht kopieren oder weitergeben** – auch nicht in einen Chat, eine E-Mail oder ein Bildschirmfoto.
+     Ist das doch geschehen: Passwort wechseln (Abschnitt 4).
    - den öffentlichen Schlüssel und den Befehl zum Hinterlegen,
    - den **Fingerabdruck der Storage Box** (*abgeleitet*): Schon dieser erste Aufruf nimmt Kontakt auf und merkt sich
      den Schlüssel der Gegenstelle ungefragt in `.sicherung-extern-hosts`; ändert er sich später, verweigert die Kopie
@@ -150,6 +152,40 @@ Ausgehende Verbindungen sind erlaubt; an Firewall, Netzsperre und SSH von außen
   `.sicherung-extern-passwort`, `.sicherung-extern-hosts`, `.sicherung-extern-cache/`.
 - **Last:** Jeder neue Stand der Dateiablage wird einmal vollständig gelesen (Prüfsummen), übertragen wird nur, was die
   Storage Box noch nicht hat. Der Lauf hat niedrige Priorität (`Nice`, `IOSchedulingClass=idle`).
+
+### Passwort des Repositorys wechseln (*getestet* lokal und über den SFTP-Weg; an der echten Storage Box *nicht getestet*)
+
+**Wann:** Das Passwort ist an eine Stelle geraten, an die es nicht gehört (Chat, E-Mail, Bildschirmfoto, verlegter
+Ausdruck), jemand, der es kennt, scheidet aus, oder es besteht ein Verdacht.
+
+```
+cd /opt/wochenangebot && sh deploy/sicherung-extern.sh passwort-neu
+```
+
+- Der Befehl erzeugt ein neues Passwort (wie `einrichten`), hinterlegt es im Repository, probiert es aus, ersetzt die
+  Passwortdatei auf dem Server und entfernt erst danach **alle anderen** Schlüssel des Repositorys – den des bisherigen
+  Passworts und auch solche, die jemand von Hand mit `restic key add` angelegt hat. Dann zeigt er das neue Passwort
+  **einmal**. Stände, Timer und Karte bleiben, wie sie sind.
+- **Danach sofort:** neues Passwort in den Passwortmanager (alten Eintrag ersetzen) und neu ausdrucken; den alten
+  Ausdruck vernichten. Die Ausgabe nicht kopieren oder weitergeben.
+- Läuft gerade eine Übertragung, bricht der Befehl ab („läuft bereits – später erneut versuchen“) und ändert nichts.
+- **Abbruch oder Fehler:** Die Passwortdatei auf dem Server öffnet das Repository zu jedem Zeitpunkt, die nächtliche
+  Kopie läuft weiter. Solange kein Passwort angezeigt wurde, ist der Wechsel nicht abgeschlossen und das bisherige
+  Passwort kann noch gelten – den Befehl einfach wiederholen.
+- **Grenze – ältere Snapshots der Storage Box:** Der Wechsel verschlüsselt nichts neu. restic verschlüsselt die Daten
+  mit einem Hauptschlüssel; das Passwort schließt nur die Schlüsseldatei auf, in der er liegt (Ordner `keys/`). Der
+  Hauptschlüssel bleibt beim Wechsel derselbe. Ein Snapshot der Storage Box von vor dem Wechsel enthält noch die alte
+  Schlüsseldatei: Wer das alte Passwort **und** Zugriff auf die Storage Box hat (Hetzner-Konto oder SSH-Schlüssel des
+  Servers), öffnet damit weiter den Snapshot – und mit der alten Schlüsseldatei auch Stände von nach dem Wechsel
+  (*getestet*). Das alte Passwort allein, ohne Zugriff auf die Storage Box, öffnet nichts. Die Lücke schließt sich,
+  sobald die Snapshots von vor dem Wechsel gelöscht sind (*abgeleitet*): Automatische Snapshots ersetzt Hetzner der
+  Reihe nach durch neuere, von Hand angelegte löscht Hetzner nie von selbst – diese in der Hetzner Console löschen
+  ([Hetzner Docs, Storage Box Snapshots](https://docs.hetzner.com/storage/storage-box/snapshots/), gelesen am 17.11.2026).
+- **Reicht nicht**, wenn auch der Zugriff auf die Storage Box in fremde Hände kam (Server übernommen, Hetzner-Konto):
+  Dann braucht es ein neues Repository mit neuem Hauptschlüssel – ein eigener Schritt, den dieser Befehl nicht macht
+  (restic-Dokumentation, [References, „Keys, Encryption and MAC“ und „Threat Model“](https://restic.readthedocs.io/en/stable/100_references.html),
+  gelesen am 17.11.2026: das Passwort lässt sich wechseln, ohne die Daten neu zu verschlüsseln; den Hauptschlüssel
+  wechselt nur `restic copy` in ein neues Repository).
 
 ### Grenzen
 

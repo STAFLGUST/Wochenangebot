@@ -8,6 +8,7 @@
 #   sh /opt/wochenangebot/deploy/sicherung-extern.sh jetzt       # sofort kopieren, danach Aufbewahrung anwenden (ruft auch der Timer auf)
 #   sh /opt/wochenangebot/deploy/sicherung-extern.sh status      # Ziel, Timer, Zahl, Alter und Größe der Stände – aus dem Repository (ändert nichts)
 #   sh /opt/wochenangebot/deploy/sicherung-extern.sh pruefen     # restic check und Rücksicherungsprobe: neuestes Archiv zurückholen, byteweise vergleichen
+#   sh /opt/wochenangebot/deploy/sicherung-extern.sh passwort-neu  # Passwort des Repositorys wechseln (Verdacht, Mitarbeiterwechsel), neues einmal anzeigen
 #   sh /opt/wochenangebot/deploy/sicherung-extern.sh aus         # Timer entfernen; Repository, Schlüssel und Passwort bleiben
 #
 # Ziel: SICHERUNG_EXTERN_ZIEL=<Benutzer>@<Benutzer>.your-storagebox.de in .env (Unterkonto der Storage Box). Das Passwort der
@@ -16,6 +17,10 @@
 # den Sicherungen: .sicherung-extern-schluessel (SSH), .sicherung-extern-passwort (Repository – ohne es ist die externe Kopie
 # wertlos, deshalb zusätzlich außerhalb des Servers aufbewahren), .sicherung-extern-hosts (Schlüssel der Gegenstelle, beim
 # ersten Kontakt gemerkt), .sicherung-extern-cache/ (Zwischenspeicher von restic).
+# Passwortwechsel: neuer Schlüssel ins Repository, Probe, Passwortdatei per Umbenennen ersetzt, erst dann alle anderen Schlüssel
+# entfernt – die Passwortdatei öffnet das Repository deshalb zu jedem Zeitpunkt, auch nach einem Abbruch. Ein abgebrochener
+# Wechsel zeigt kein Passwort; ein erneuter Aufruf bringt ihn zu Ende. Der Hauptschlüssel des Repositorys bleibt derselbe:
+# eine ältere Kopie des Repositorys (Snapshot der Storage Box) lässt sich weiter mit dem alten Passwort öffnen.
 # Entkoppelt von sichern.sh: wartet, bis dessen Sperre (sicherungen/.sperre) frei ist, hält sie aber nicht – eine lange erste
 # Übertragung darf kein Release aufhalten (dessen Sicherung wartet nur 10 Minuten auf die Sperre). Ohne .sperre, *.tmp.
 # Aufbewahrung: je Tag ein Stand für 30 Tage, je Woche einer für 8 Wochen, je Monat einer für 12 Monate. Jeder Stand enthält
@@ -47,6 +52,7 @@ SYSTEMCTL=${WA_SYSTEMCTL:-systemctl}
 UNITS=${WA_UNITS:-/etc/systemd/system}
 FERTIG=1                  # 0 = Lauf, dessen Abbruch einen Fehlerstatus hinterlässt (jetzt, pruefen)
 ARBEIT=""
+NEU=""                    # Zwischendatei eines neuen Passworts, bis sie die Passwortdatei ersetzt
 envwert() { sed -n "s/^$1=//p" "$ENV" 2>/dev/null | tail -1 | tr -d '"'"'"' '; }
 ZIEL=$(envwert SICHERUNG_EXTERN_ZIEL)
 HC_URL=$(envwert HC_SICHERUNG_EXTERN_URL)
@@ -91,6 +97,7 @@ melden() { # ok|fail
 aufraeumen() {
   RC=$?
   [ -z "$ARBEIT" ] || rm -rf "$ARBEIT"
+  [ -z "$NEU" ] || rm -f "$NEU"
   if [ "$FERTIG" -eq 0 ] && [ "$RC" -ne 0 ]; then   # unerwarteter Abbruch: Fehler sichtbar machen
     status false "Abbruch (Code $RC)"
     melden fail
@@ -119,12 +126,32 @@ erfolg() { # zeit-des-stands [warnung]
 }
 # Beginn eines Laufs: nur eingerichtet, nie zwei Läufe gleichzeitig. Die Sperre liegt auf der Passwortdatei, nur lesend
 # geöffnet – so entsteht keine weitere Datei und nichts wird beschrieben.
-lauf_beginnen() {
+lauf_beginnen() { # [1 = Abbruch hinterlässt keinen Fehlerstatus]
   eingerichtet || abbruch "nicht eingerichtet – zuerst: sh deploy/sicherung-extern.sh einrichten"
   exec 8<"$PASSWORT"
-  flock -n 8 || abbruch "ein Lauf der externen Kopie läuft bereits"
-  FERTIG=0
+  flock -n 8 || abbruch "ein Lauf der externen Kopie läuft bereits – später erneut versuchen"
+  FERTIG=${1:-0}
   ARBEIT=$(mktemp -d "$BASIS/.sicherung-extern-arbeit.XXXXXX")
+}
+# Neues Passwort in die Zwischendatei $NEU: im Installationsordner (nur root), unter einem zufälligen, neu angelegten Namen.
+# Ohne leicht verwechselbare Zeichen (0/O, 1/l/I): das Passwort wird auch ausgedruckt und im Ernstfall abgetippt
+passwort_erzeugen() {
+  NEU=$(mktemp "$BASIS/.sicherung-extern-neu.XXXXXX")
+  tr -dc 'A-HJ-NP-Za-km-z2-9' < /dev/urandom | head -c 40 > "$NEU"
+  [ "$(wc -c < "$NEU")" -eq 40 ] || abbruch "Passwort konnte nicht erzeugt werden."
+}
+passwort_zeigen() { # [zusätzliche Zeile]
+  echo "================================================================================"
+  echo "Passwort des Repositorys (wird nur dieses eine Mal angezeigt):"
+  echo
+  echo "    $(cat "$PASSWORT")"
+  echo
+  [ -z "${1:-}" ] || echo "$1"
+  echo "JETZT außerhalb des Servers aufbewahren: im Passwortmanager UND als Ausdruck."
+  echo "Ohne dieses Passwort ist die externe Kopie wertlos – fällt der Server aus, ist es"
+  echo "der einzige Weg an die Daten."
+  echo "Diese Ausgabe nicht kopieren oder weitergeben – auch nicht in einen Chat oder eine E-Mail."
+  echo "================================================================================"
 }
 
 [ "$(id -u)" = 0 ] || [ -n "${WA_OHNE_ROOT:-}" ] || abbruch "als root ausführen."
@@ -144,20 +171,9 @@ case "${1:-status}" in
     done
     [ -e "$SCHLUESSEL" ] || ssh-keygen -q -t ed25519 -N '' -C stafl-sicherung-extern -f "$SCHLUESSEL"
     if [ ! -e "$PASSWORT" ]; then
-      # ohne leicht verwechselbare Zeichen (0/O, 1/l/I): das Passwort wird auch ausgedruckt und im Ernstfall abgetippt
-      NEU=$(mktemp "$BASIS/.sicherung-extern-neu.XXXXXX")
-      tr -dc 'A-HJ-NP-Za-km-z2-9' < /dev/urandom | head -c 40 > "$NEU"
-      [ "$(wc -c < "$NEU")" -eq 40 ] || { rm -f "$NEU"; abbruch "Passwort konnte nicht erzeugt werden."; }
+      passwort_erzeugen
       mv -T "$NEU" "$PASSWORT"
-      echo "================================================================================"
-      echo "Passwort des Repositorys (wird nur dieses eine Mal angezeigt):"
-      echo
-      echo "    $(cat "$PASSWORT")"
-      echo
-      echo "JETZT außerhalb des Servers aufbewahren: im Passwortmanager UND als Ausdruck."
-      echo "Ohne dieses Passwort ist die externe Kopie wertlos – fällt der Server aus, ist es"
-      echo "der einzige Weg an die Daten."
-      echo "================================================================================"
+      passwort_zeigen
     fi
     echo "Öffentlicher Schlüssel für die Storage Box:"
     ssh-keygen -y -f "$SCHLUESSEL"
@@ -251,6 +267,31 @@ UNIT
     echo "Größe des Repositorys: $(($(groesse) / 1048576)) MB"
     echo "Grund eines fehlgeschlagenen Laufs: journalctl -u $TIMER.service -n 30"
     ;;
+  passwort-neu)
+    lauf_beginnen 1   # kein Fehlerstatus: der Wechsel ändert an der Kopie nichts, die Karte bleibt, wie sie ist
+    [ ! -f "$ENV" ] || { exec 7<"$ENV"; flock -n 7 || abbruch "einrichten läuft – später erneut versuchen"; }
+    r unlock >/dev/null 2>&1 || true   # wie bei „jetzt“: die Sperre eines abgebrochenen Laufs ließe das Entfernen der Schlüssel scheitern
+    rm -f "$BASIS"/.sicherung-extern-neu.* 2>/dev/null || true   # Zwischendatei eines hart beendeten Wechsels (kill -9, Stromausfall)
+    passwort_erzeugen
+    # Bis zum Umbenennen gilt allein das bisherige Passwort; scheitert etwas, entfernt aufraeumen() die Zwischendatei
+    r key add --new-password-file "$NEU" >"$ARBEIT/aus" 2>&1 \
+      || { zeigen; abbruch "Passwort nicht gewechselt (Repository erreichbar?) – es gilt weiter das bisherige. Später erneut: sh deploy/sicherung-extern.sh passwort-neu"; }
+    RESTIC_PASSWORD_FILE="$NEU" r cat config >/dev/null 2>&1 \
+      || abbruch "Probe mit dem neuen Passwort gescheitert – es gilt weiter das bisherige. Später erneut: sh deploy/sicherung-extern.sh passwort-neu"
+    # Die Sperre wandert mit: nach dem Umbenennen ist die Zwischendatei die Passwortdatei, auf der ein neuer Lauf sie sucht
+    exec 9<"$NEU"
+    flock -n 9
+    mv -fT "$NEU" "$PASSWORT"
+    # Erst jetzt alle anderen Schlüssel entfernen – den des bisherigen Passworts und Reste abgebrochener Wechsel. Scheitert
+    # das, öffnen beide Passwörter das Repository; gezeigt wird keines, ein erneuter Aufruf wechselt noch einmal und räumt auf.
+    OFFEN="Neues Passwort hinterlegt, aber das bisherige gilt noch und das neue wird nicht angezeigt. Erneut: sh deploy/sicherung-extern.sh passwort-neu"
+    r key list --json >"$ARBEIT/schluessel" 2>"$ARBEIT/aus" || { zeigen; abbruch "$OFFEN"; }
+    ANDERE=$(python3 -c 'import json, re, sys
+for k in json.load(sys.stdin):
+    if not k["current"]: print(re.fullmatch("[0-9a-f]+", k["id"]).group())' < "$ARBEIT/schluessel") || abbruch "$OFFEN"
+    for K in $ANDERE; do r key remove "$K" >"$ARBEIT/aus" 2>&1 || { zeigen; abbruch "$OFFEN"; }; done
+    passwort_zeigen "Das bisherige Passwort gilt nicht mehr: Eintrag im Passwortmanager ersetzen, alten Ausdruck vernichten."
+    ;;
   aus)
     $SYSTEMCTL disable --now "$TIMER.timer" >/dev/null 2>&1 || true
     rm -f "$UNITS/$TIMER.service" "$UNITS/$TIMER.timer"
@@ -258,7 +299,7 @@ UNIT
     echo "Externe Kopie aus: Timer entfernt. Repository, Schlüssel und Passwort bleiben; wieder an: sh deploy/sicherung-extern.sh einrichten"
     ;;
   *)
-    echo "Aufruf: sh deploy/sicherung-extern.sh einrichten|jetzt|status|pruefen|aus" >&2
+    echo "Aufruf: sh deploy/sicherung-extern.sh einrichten|jetzt|status|pruefen|passwort-neu|aus" >&2
     exit 2
     ;;
 esac
