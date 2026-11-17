@@ -1376,7 +1376,7 @@
       ${prevCellHTML(it)}
       ${curOffer === OSTD ? stdCellHTML(it, bad, label, was, alts) : variantCellHTML(it, st)}
       ${stockCellHTML(it)}
-      <td class="e-act"><button type="button" class="ibtn e-rm" data-act="remove" aria-label="${esc(it.name)} aus diesem Angebot entfernen" title="Aus „${esc(offerShort(curOffer))}“ entfernen – andere Angebote bleiben unverändert">${icon('x', 'sm')}</button><button type="button" class="ibtn" data-act="item" aria-label="Details zu ${esc(it.name)}" title="Details, Zusatzpreise, verschieben, entfernen">${icon('dots')}</button></td>
+      <td class="e-act"><button type="button" class="ibtn e-rm" data-act="remove" aria-label="${esc(it.name)} aus diesem Angebot entfernen" title="Aus „${esc(offerShort(curOffer))}“ entfernen – andere Angebote bleiben unverändert">${icon('trash', 'sm')}</button><button type="button" class="ibtn" data-act="item" aria-label="Details zu ${esc(it.name)}" title="Details, Zusatzpreise, verschieben, entfernen">${icon('dots')}</button></td>
     </tr>`;
   }
   function saleBtnHTML(it) {
