@@ -2,7 +2,8 @@
 # Test von deploy/sicherung-extern.sh (externe Kopie der Datensicherung) in einem Wegwerf-Ordner – mit echtem restic gegen ein
 # lokales Repository (WA_SICHERUNG_EXTERN_REPO) und über den SFTP-Weg des Betriebs (Attrappe für ssh, dahinter der echte
 # sftp-server von OpenSSH); systemctl ist ein Platzhalter. Ohne restic bzw. sftp-server werden diese Teile übersprungen, in der
-# CI sind sie Pflicht (WA_RESTIC_PFLICHT=1). Nicht geprüft: echte Storage Box, echtes ssh, systemd.
+# CI sind sie Pflicht (WA_RESTIC_PFLICHT=1). Passwortwechsel (passwort-neu) mit Fehlern und Abbrüchen in jedem Schritt über
+# eine zweite restic-Attrappe. Nicht geprüft: echte Storage Box, echtes ssh, systemd.
 set -eu
 REPO=$(cd "$(dirname "$0")/../.." && pwd)
 T=$(mktemp -d); trap 'chmod -R u+rwx "$T" 2>/dev/null; rm -rf "$T"' EXIT
@@ -36,6 +37,8 @@ lauf status
 ok "status ohne Einrichtung: nicht eingerichtet, nichts angelegt" '[ $CODE = 0 ] && echo "$AUS" | grep -q "nicht eingerichtet" && [ -z "$(ls -A "$I" | grep "^\.sicherung-extern" || true)" ]'
 lauf jetzt
 ok "jetzt ohne Einrichtung: Abbruch ohne Status" '[ $CODE = 1 ] && echo "$AUS" | grep -q "nicht eingerichtet" && [ ! -e "$I/daten/sicherung-extern.php" ]'
+lauf passwort-neu
+ok "passwort-neu ohne Einrichtung: Abbruch, nichts angelegt" '[ $CODE = 1 ] && echo "$AUS" | grep -q "nicht eingerichtet" && [ -z "$(ls -A "$I" | grep "^\.sicherung-extern" || true)" ]'
 lauf einrichten
 ok "einrichten ohne .env: Abbruch" '[ $CODE = 1 ] && echo "$AUS" | grep -q ".env nicht gefunden"'
 : > "$I/.env"
@@ -72,7 +75,7 @@ kb() { find "$T/repo" -type f -printf '%s\n' | awk '{ s += $1 } END { print int(
 # ── Einrichtung ──
 lauf einrichten
 PW=$(cat "$I/.sicherung-extern-passwort")
-ok "einrichten: Passwort (40 Zeichen) einmal angezeigt mit Hinweis, öffentlicher Schlüssel gezeigt" '[ $CODE = 0 ] && [ ${#PW} = 40 ] && echo "$AUS" | grep -qF "$PW" && echo "$AUS" | grep -q "außerhalb des Servers" && echo "$AUS" | grep -q "^ssh-ed25519 "'
+ok "einrichten: Passwort (40 Zeichen) einmal angezeigt mit Hinweis, öffentlicher Schlüssel gezeigt" '[ $CODE = 0 ] && [ ${#PW} = 40 ] && echo "$AUS" | grep -qF "$PW" && echo "$AUS" | grep -q "außerhalb des Servers" && echo "$AUS" | grep -q "nicht kopieren oder weitergeben" && echo "$AUS" | grep -q "^ssh-ed25519 "'
 ok "Schlüssel, Passwort und Zwischenspeicher nur für den Besitzer" '[ "$(stat -c %a "$I/.sicherung-extern-schluessel")" = 600 ] && [ "$(stat -c %a "$I/.sicherung-extern-passwort")" = 600 ] && ! grep -rqF "$PW" "$I/daten" "$I/sicherungen"'
 ok "Repository angelegt, noch kein Status" '[ -f "$T/repo/config" ] && [ ! -e "$I/daten/sicherung-extern.php" ]'
 ok "Timer: Installationsordner, täglich 03:30 nach der Sicherung, aktiviert" 'grep -q "ExecStart=/bin/sh $I/deploy/sicherung-extern.sh jetzt" "$T/units/wochenangebot-sicherung-extern.service" && grep -q "After=.*wochenangebot-sicherung.service" "$T/units/wochenangebot-sicherung-extern.service" && grep -q "OnCalendar=\*-\*-\* 03:30:00" "$T/units/wochenangebot-sicherung-extern.timer" && grep -q "systemctl enable --now wochenangebot-sicherung-extern.timer" "$T/aufrufe"'
@@ -141,6 +144,88 @@ sleep 0.5
 lauf jetzt
 ok "zweiter Lauf gleichzeitig: Abbruch, Status unverändert" '[ $CODE = 1 ] && echo "$AUS" | grep -q "läuft bereits" && [ "$(cat "$I/daten/sicherung-extern.php")" = "$VORHER" ]'
 wait
+
+# ── Passwort wechseln ──
+# alt: restic mit dem bisherigen Passwort; schluessel: Zahl der Schlüssel im Repository; reste: Zwischendateien und Arbeitsordner
+P="$I/.sicherung-extern-passwort"
+cp "$P" "$T/pw-alt"; cp -r "$T/repo/keys" "$T/keys-alt"
+alt() { RESTIC_PASSWORD_FILE="$T/pw-alt" restic --no-cache -r "$T/repo" "$@" >/dev/null 2>&1; }
+schluessel() { find "$T/repo/keys" -type f | wc -l; }
+reste() { find "$I" -maxdepth 1 \( -name '.sicherung-extern-neu*' -o -name '.sicherung-extern-arbeit*' \); }
+VORHER=$(cat "$I/daten/sicherung-extern.php")
+flock -x "$P" sleep 3 &
+sleep 0.5
+lauf passwort-neu
+ok "passwort-neu, während ein Lauf die Sperre hält: Abbruch mit Hinweis (später erneut), nichts geändert" '[ $CODE = 1 ] && echo "$AUS" | grep -q "läuft bereits – später erneut" && cmp -s "$P" "$T/pw-alt" && [ "$(schluessel)" = 1 ] && [ -z "$(reste)" ]'
+wait
+flock -x "$I/.env" sleep 3 &
+sleep 0.5
+lauf passwort-neu
+ok "passwort-neu, während einrichten läuft: Abbruch, nichts geändert" '[ $CODE = 1 ] && echo "$AUS" | grep -q "einrichten läuft – später erneut" && cmp -s "$P" "$T/pw-alt" && [ "$(schluessel)" = 1 ] && [ -z "$(reste)" ]'
+wait
+AUS=$(WA_SICHERUNG_EXTERN_REPO="$T/nicht-da" $S passwort-neu 2>&1) && CODE=0 || CODE=$?
+ok "passwort-neu, Repository nicht erreichbar: Abbruch, Passwortdatei und Status unverändert, keine Zwischendatei, das bisherige Passwort öffnet das Repository" '[ $CODE = 1 ] && echo "$AUS" | grep -q "es gilt weiter das bisherige" && cmp -s "$P" "$T/pw-alt" && [ "$(cat "$I/daten/sicherung-extern.php")" = "$VORHER" ] && [ -z "$(reste)" ] && alt cat config'
+# restic-Attrappe für den Wechsel: „restic <STUB_FEHLER>“ scheitert, statt zu laufen; nach „restic <STUB_ABBRUCH>“ wird das
+# Skript beendet (Abbruch genau nach diesem Schritt); STUB_VERWEIS: während der Probe mit dem neuen Passwort wird die
+# Passwortdatei durch einen Verweis auf STUB_OPFER ersetzt; STUB_LAUF: Befehl, der nach dem Umbenennen (vor „key list“) läuft
+cat > "$T/bin/restic-wechsel" <<'EOF'
+#!/bin/sh
+case " $* " in
+  *" ${STUB_FEHLER:-keiner} "*) exit 1 ;;
+  *" ${STUB_ABBRUCH:-keiner} "*) restic "$@"; kill -TERM "$PPID"; sleep 2; exit 1 ;;
+  *" key list "*) [ -z "${STUB_LAUF:-}" ] || $STUB_LAUF > "$STUB_OPFER.lauf" 2>&1 ;;
+esac
+[ -z "${STUB_VERWEIS:-}" ] || case "$RESTIC_PASSWORD_FILE" in *-neu.*) rm -f "$STUB_VERWEIS"; ln -s "$STUB_OPFER" "$STUB_VERWEIS" ;; esac
+exec restic "$@"
+EOF
+chmod +x "$T/bin/restic-wechsel"
+AUS=$(WA_RESTIC="$T/bin/restic-wechsel" STUB_FEHLER="key add" $S passwort-neu 2>&1) && CODE=0 || CODE=$?
+ok "neuer Schlüssel lässt sich nicht anlegen: alles beim Alten, Zwischendatei entfernt, Status unverändert" '[ $CODE = 1 ] && echo "$AUS" | grep -q "es gilt weiter das bisherige" && cmp -s "$P" "$T/pw-alt" && [ "$(schluessel)" = 1 ] && [ -z "$(reste)" ] && [ "$(cat "$I/daten/sicherung-extern.php")" = "$VORHER" ]'
+AUS=$(WA_RESTIC="$T/bin/restic-wechsel" STUB_ABBRUCH="key add" $S passwort-neu 2>&1) && CODE=0 || CODE=$?
+ok "Abbruch nach dem Anlegen des neuen Schlüssels: Passwortdatei unverändert und gültig, Zwischendatei entfernt, kein Passwort gezeigt, Status unverändert" '[ $CODE != 0 ] && cmp -s "$P" "$T/pw-alt" && alt cat config && [ "$(schluessel)" = 2 ] && [ -z "$(reste)" ] && ! echo "$AUS" | grep -q "Passwort des Repositorys" && [ "$(cat "$I/daten/sicherung-extern.php")" = "$VORHER" ]'
+AUS=$(WA_RESTIC="$T/bin/restic-wechsel" STUB_FEHLER="cat config" $S passwort-neu 2>&1) && CODE=0 || CODE=$?
+ok "Probe mit dem neuen Passwort scheitert: alles beim Alten, Zwischendatei entfernt" '[ $CODE = 1 ] && echo "$AUS" | grep -q "Probe mit dem neuen Passwort gescheitert" && cmp -s "$P" "$T/pw-alt" && alt cat config && [ "$(schluessel)" = 3 ] && [ -z "$(reste)" ]'
+AUS=$(WA_RESTIC="$T/bin/restic-wechsel" STUB_FEHLER="key remove" $S passwort-neu 2>&1) && CODE=0 || CODE=$?
+ok "bisheriger Schlüssel lässt sich nicht entfernen: neues Passwort hinterlegt und gültig, aber nicht gezeigt; das bisherige gilt noch" '[ $CODE = 1 ] && echo "$AUS" | grep -q "das bisherige gilt noch" && ! cmp -s "$P" "$T/pw-alt" && ! echo "$AUS" | grep -qF "$(cat "$P")" && r cat config >/dev/null && alt cat config && [ -z "$(reste)" ]'
+cp "$P" "$T/pw-zwischen"
+AUS=$(WA_RESTIC="$T/bin/restic-wechsel" STUB_ABBRUCH="key list" $S passwort-neu 2>&1) && CODE=0 || CODE=$?
+ok "Abbruch zwischen Umbenennen und Entfernen der alten Schlüssel: nicht ausgesperrt – die Passwortdatei öffnet das Repository, nichts gezeigt, Status unverändert" '[ $CODE != 0 ] && ! cmp -s "$P" "$T/pw-zwischen" && ! echo "$AUS" | grep -qF "$(cat "$P")" && r cat config >/dev/null && [ -f "$P" ] && [ ! -L "$P" ] && [ "$(stat -c %a "$P")" = 600 ] && [ -z "$(reste)" ] && [ "$(cat "$I/daten/sicherung-extern.php")" = "$VORHER" ]'
+lauf jetzt
+ok "jetzt nach einem abgebrochenen Wechsel: läuft mit der Passwortdatei" '[ $CODE = 0 ] && [ "$(feld ok)" = True ]'
+# Sperre eines abgebrochenen restic-Laufs im Repository: restic hängt an einer vollen FIFO und wird hart beendet
+mkfifo "$T/voll"; exec 5<>"$T/voll"
+RESTIC_PASSWORD_FILE="$P" restic --no-cache -r "$T/repo" dump latest "$I/sicherungen/dateien/2026-11-16_023000/a/x.bin" > "$T/voll" 2>/dev/null &
+for _ in $(seq 50); do [ -z "$(ls "$T/repo/locks")" ] || break; sleep 0.2; done
+kill -9 $!; wait; exec 5>&-
+export SPERREN; SPERREN=$(find "$T/repo/locks" -type f | wc -l)
+VORHER=$(cat "$I/daten/sicherung-extern.php")
+echo ORIGINAL > "$T/opfer"; echo REST > "$I/.sicherung-extern-neu.rest"   # Zwischendatei eines hart beendeten Wechsels
+AUS=$(WA_RESTIC="$T/bin/restic-wechsel" STUB_VERWEIS="$P" STUB_OPFER="$T/opfer" STUB_LAUF="$S jetzt" $S passwort-neu 2>&1) && CODE=0 || CODE=$?
+PW=$(cat "$P")
+ok "passwort-neu gelingt, auch nach abgebrochenen Wechseln und mit der Sperre eines abgebrochenen Laufs ($SPERREN) im Repository: neues Passwort (40 Zeichen) genau einmal gezeigt, mit Hinweisen" '[ $CODE = 0 ] && [ "$SPERREN" = 1 ] && [ ${#PW} = 40 ] && [ "$(echo "$AUS" | grep -cF "$PW")" = 1 ] && echo "$AUS" | grep -q "Das bisherige Passwort gilt nicht mehr" && echo "$AUS" | grep -q "außerhalb des Servers" && echo "$AUS" | grep -q "nicht kopieren oder weitergeben" && ! echo "$AUS" | grep -qF -e "$(cat "$T/pw-alt")" -e "$(cat "$T/pw-zwischen")"'
+ok "danach öffnet nur noch das neue Passwort das Repository: ein Schlüssel, das bisherige und die der abgebrochenen Wechsel gelten nicht mehr" 'r cat config >/dev/null && ! alt cat config && ! RESTIC_PASSWORD_FILE="$T/pw-zwischen" restic --no-cache -r "$T/repo" cat config >/dev/null 2>&1 && [ "$(schluessel)" = 1 ]'
+ok "Verweis, der während des Wechsels an die Stelle der Passwortdatei gelegt wird: ersetzt, Ziel unverändert; Passwortdatei nur für den Besitzer, Status unverändert, keine Zwischendatei (auch die eines hart beendeten Wechsels ist entfernt)" '[ "$(cat "$T/opfer")" = ORIGINAL ] && [ -f "$P" ] && [ ! -L "$P" ] && [ "$(stat -c %a "$P")" = 600 ] && [ "$(cat "$I/daten/sicherung-extern.php")" = "$VORHER" ] && [ -z "$(reste)" ] && ! grep -rqF "$PW" "$I/daten" "$I/sicherungen"'
+ok "jetzt, das während des Wechsels nach dem Umbenennen startet: abgelehnt (die Sperre liegt auch auf der neuen Passwortdatei)" 'grep -q "läuft bereits" "$T/opfer.lauf"'
+lauf jetzt
+ok "jetzt nach dem Wechsel: Stand angelegt, Status ok" '[ $CODE = 0 ] && [ "$(feld ok)" = True ] && [ "$(feld staende)" = "$(anzahl)" ]'
+lauf status
+ok "status nach dem Wechsel" '[ $CODE = 0 ] && echo "$AUS" | grep -Eq "Stände: [0-9]+, neuester "'
+lauf pruefen
+ok "pruefen nach dem Wechsel: Archiv zurückgeholt, byteweise gleich" '[ $CODE = 0 ] && echo "$AUS" | grep -q "byteweise gleich"'
+# Aufbewahrte Kopie prüfen (vor dem Vernichten des alten Ausdrucks): verdeckt eingelesen, nie ausgegeben, ändert nichts
+cp "$P" "$T/pw-vor-pruefen"
+AUS=$(printf '  %s \r\n' "$(cat "$P")" | $S passwort-pruefen 2>&1) && CODE=0 || CODE=$?
+ok "passwort-pruefen mit dem richtigen Passwort (auch mit Leerzeichen vom Einfügen): Stimmt, Passwort nicht ausgegeben, nichts geändert" '[ $CODE = 0 ] && echo "$AUS" | grep -q "^Stimmt: " && ! echo "$AUS" | grep -qF "$(cat "$P")" && cmp -s "$P" "$T/pw-vor-pruefen" && [ "$(schluessel)" = 1 ]'
+AUS=$(printf '%sx\n' "$(cat "$P")" | $S passwort-pruefen 2>&1) && CODE=0 || CODE=$?
+ok "passwort-pruefen mit einem Tippfehler: stimmt nicht, Code 1, Passwort nicht ausgegeben" '[ $CODE = 1 ] && echo "$AUS" | grep -q "Stimmt NICHT" && ! echo "$AUS" | grep -qF "$(cat "$P")"'
+AUS=$(cat "$T/pw-alt" | $S passwort-pruefen 2>&1) && CODE=0 || CODE=$?
+ok "passwort-pruefen mit dem bisherigen Passwort bzw. leerer Eingabe: stimmt nicht" '[ $CODE = 1 ] && ! printf "" | $S passwort-pruefen >/dev/null 2>&1'
+# Grenze des Wechsels (steht so in der Anleitung): der Hauptschlüssel bleibt derselbe. Eine Schlüsseldatei von vor dem Wechsel –
+# wie sie in einem älteren Snapshot der Storage Box liegt – öffnet mit dem alten Passwort auch Stände von nach dem Wechsel
+cp "$T/keys-alt"/* "$T/repo/keys/"
+ok "Grenze: alte Schlüsseldatei und altes Passwort öffnen auch den Stand von nach dem Wechsel" 'alt ls latest'
+for F in "$T/keys-alt"/*; do rm -f "$T/repo/keys/${F##*/}"; done
+ok "Gegenprobe: ohne die alte Schlüsseldatei öffnet das alte Passwort nichts" '! alt ls latest && [ "$(schluessel)" = 1 ]'
 
 # ── Fehlerfälle hinterlassen einen Fehlerstatus ──
 AUS=$(WA_SICHERUNG_EXTERN_REPO="$T/nicht-da" $S jetzt 2>&1) && CODE=0 || CODE=$?
@@ -214,6 +299,8 @@ lauf einrichten
 ok "Verweis statt des Passworts: einrichten bricht ab, nichts überschrieben, nichts gezeigt" '[ $CODE = 1 ] && echo "$AUS" | grep -q "keine echte Datei" && [ "$(cat "$T/opfer")" = ORIGINAL ] && ! echo "$AUS" | grep -q ORIGINAL'
 lauf pruefen
 ok "Verweis statt des Passworts: pruefen bricht ab" '[ $CODE = 1 ] && echo "$AUS" | grep -q "nicht eingerichtet"'
+lauf passwort-neu
+ok "Verweis statt des Passworts: passwort-neu bricht ab, Ziel und Repository unverändert" '[ $CODE = 1 ] && echo "$AUS" | grep -q "nicht eingerichtet" && [ "$(cat "$T/opfer")" = ORIGINAL ] && [ "$(schluessel)" = 1 ] && [ -z "$(reste)" ]'
 rm "$I/.sicherung-extern-passwort"; mv "$T/passwort" "$I/.sicherung-extern-passwort"
 
 # ── Uhr war einmal vorgestellt: ein Stand aus der Zukunft bleibt der neueste im Repository ──
@@ -263,6 +350,8 @@ else
   ok "SFTP: jetzt kopiert, Status ok ohne Namen der Gegenstelle" '[ $CODE = 0 ] && [ "$(feld ok)" = True ] && [ "$(feld staende)" = 1 ] && ! grep -q "box.example" "$J/daten/sicherung-extern.php"'
   lauf pruefen
   ok "SFTP: pruefen holt das neueste Archiv zurück, byteweise gleich" '[ $CODE = 0 ] && echo "$AUS" | grep -q "byteweise gleich"'
+  lauf passwort-neu
+  ok "SFTP: passwort-neu wechselt das Passwort (ein Schlüssel auf der Storage Box), neues einmal gezeigt; status liest danach" '[ $CODE = 0 ] && [ "$(cat "$J/.sicherung-extern-passwort")" != "$PW" ] && [ "$(echo "$AUS" | grep -cF "$(cat "$J/.sicherung-extern-passwort")")" = 1 ] && [ "$(find "$T/box/wochenangebot/keys" -type f | wc -l)" = 1 ]'
   lauf status
   ok "SFTP: status zeigt Ziel und Stände" '[ $CODE = 0 ] && echo "$AUS" | grep -q "sftp:benutzer-sub1@box.example:wochenangebot" && echo "$AUS" | grep -q "Stände: 1"'
   touch "$T/box-weg"

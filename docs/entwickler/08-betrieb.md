@@ -212,7 +212,7 @@ Ohne gültigen Schlüssel wirkt nichts davon. Jede neue Weiterleitung (`reverse_
 | `release-zurueck.sh` | Notfall-Rückfall auf den Stand vor dem letzten Release | Inhaber |
 | `sichern.sh` | Datensicherung mit Probeentpacken und Platzprüfung, inkl. Keycloak-Datenbank und Dateiablage; `--jetzt` sofort | Timer `wochenangebot-sicherung` bzw. `aktualisieren.sh` (1×/Tag), Release |
 | `sicherung-einrichten.sh` | eigener Sicherungs-Timer (täglich 02:30) | Inhaber, einmalig |
-| `sicherung-extern.sh` | Externe Kopie von `sicherungen/` auf eine Hetzner Storage Box (restic über SFTP, verschlüsselt, inkrementell): `einrichten` (Schlüssel, Passwort, Repository, Timer) / `jetzt` (kopieren, Aufbewahrung 30 Tage · 8 Wochen · 12 Monate) / `status` (nur lesend) / `pruefen` (`restic check`, Rücksicherungsprobe mit byteweisem Vergleich) / `aus` (Timer entfernen); Anleitung `docs/plattform/inbetriebnahme-sicherung-extern.md` | Inhaber; Timer `wochenangebot-sicherung-extern` (täglich 03:30) |
+| `sicherung-extern.sh` | Externe Kopie von `sicherungen/` auf eine Hetzner Storage Box (restic über SFTP, verschlüsselt, inkrementell): `einrichten` (Schlüssel, Passwort, Repository, Timer) / `jetzt` (kopieren, Aufbewahrung 30 Tage · 8 Wochen · 12 Monate) / `status` (nur lesend) / `pruefen` (`restic check`, Rücksicherungsprobe mit byteweisem Vergleich) / `passwort-neu` (Passwort des Repositorys wechseln, neues einmal anzeigen) / `passwort-pruefen` (aufbewahrte Kopie verdeckt eingeben und vergleichen) / `aus` (Timer entfernen); Anleitung `docs/plattform/inbetriebnahme-sicherung-extern.md` | Inhaber; Timer `wochenangebot-sicherung-extern` (täglich 03:30) |
 | `sicherung-pruefen.py`, `sicherung-pruefen.php` | entpackte Sicherung prüfen | `sichern.sh` |
 | `dateien_sichern.py` | Dateiablage: Stand mit festen Verweisen auf den vorigen, Platzbedarf, Prüfung gegen die Verweise der Daten; `fehlende` für den Betreiber | `sichern.sh`, Betreiber |
 | `datenbank.py` | SQLite: `check`, Migration/Rückkonvertierung (`--offline`), Sicherung, `altdateien` (Altdateien auflisten/archivieren) | `datenbank-umschalten.sh`, `sichern.sh`, `run_e2e.py` |
@@ -398,6 +398,13 @@ Hostname der Testadresse in der bunny-Zone der Kundenseite). Neue Stände werden
   - **Die Karte ist ein Hinweis, kein Beleg:** `daten/` ist in den Containern beschreibbar (nach der Datentrennung auch
     im Container der Kundenseite), wer dort als Benutzer der Anwendung schreibt, kann „aktuell“ fälschen. Der Beleg ist
     `sicherung-extern.sh status` (liest nur das Repository, nie die Statusdatei) bzw. `pruefen` als root auf dem Server.
+  - **Passwort wechseln** (`passwort-neu`, unter derselben Sperre wie ein Lauf; ändert den Status nicht): neuer
+    Schlüssel ins Repository (`restic key add`), Probe mit dem neuen Passwort, Passwortdatei per Umbenennen ersetzt,
+    erst dann alle anderen Schlüssel entfernt (`restic key remove`). In dieser Reihenfolge öffnet die Passwortdatei das
+    Repository zu jedem Zeitpunkt, auch nach einem Abbruch; `restic key passwd` entfernt den alten Schlüssel dagegen,
+    bevor die Datei ersetzt werden kann. Angezeigt wird das neue Passwort erst, wenn das bisherige nicht mehr gilt – ein
+    abgebrochener Wechsel zeigt nichts, ein erneuter Aufruf bringt ihn zu Ende. Der Hauptschlüssel bleibt derselbe:
+    ältere Snapshots der Storage Box lassen sich weiter mit dem alten Passwort öffnen (Anleitung, Abschnitt 4).
   - **Grenze:** Wer den Server übernimmt, hat Schlüssel und Passwort und kann die Kopie löschen. Dagegen stehen die
     automatischen Snapshots der Storage Box und das Unterkonto (Anleitung, Abschnitt 2) – nicht das Skript.
   - **Geprüft** mit restic 0.12.1, 0.16.4 und 0.18.1 (`tests/deploy/test_sicherung_extern.sh`); nicht geprüft: echte
