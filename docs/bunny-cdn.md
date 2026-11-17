@@ -183,8 +183,9 @@ bzw. **Rate Limit** umstellen. Keine Prüfseite („Challenge“) für die Schni
 **Stand 17.11.2026** (Angabe des Inhabers, im bunny-Konto umgestellt; aus dem Repository nicht nachprüfbar): „Rule execution
 mode“ der WAF steht in allen vier Zonen auf **Block**. „Request body limit action“ und „Response body limit action“ bleiben
 auf **Log** – große Importe, Uploads (QM-Dateien) und Exporte überschreiten die Prüfgrenze des Plans und würden mit „Block“
-abgewiesen. Noch offen: Probe nach der Umstellung (anmelden, eine Datei importieren, eine Datei im QM-System hochladen) und
-der Stand der Ratenbegrenzungen (Tabelle oben: zuletzt dokumentiert **Log**). Wird ein eigener Vorgang abgewiesen: Regel unter
+abgewiesen. Umgestellt wurde nur diese eine Einstellung: Ratenbegrenzungen, DDoS-Abwehr und Bot-Erkennung stehen unverändert
+wie in den Tabellen oben (Ratenbegrenzungen also weiter **Log**). Noch offen: Probe nach der Umstellung (anmelden, eine Datei
+importieren, eine Datei im QM-System hochladen), danach die Ratenbegrenzungen auf **Rate Limit**. Wird ein eigener Vorgang abgewiesen: Regel unter
 Shield → WAF → „Triggered Rules“ suchen und einzeln auf „Log“ stellen.
 
 **Rückfall:** In der Zone Shield → WAF ausschalten bzw. DDoS-Empfindlichkeit „Off“; Ratenbegrenzungen löschen. Am Server
