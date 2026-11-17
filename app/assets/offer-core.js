@@ -603,7 +603,9 @@
      – Angebotsgruppe ohne VK-Gruppe: die häufigste VK-Gruppe ihrer Artikel wird gemerkt (g.vk), einmalig.
      – Mehrere Gruppen derselben VK-Gruppe und Gruppen ohne Kategorie behalten ihre bisherige Reihenfolge untereinander;
        Gruppen ohne Kategorie stehen am Ende, ohne Abschnitt.
-     – Artikel stehen danach in der Reihenfolge ihrer Gruppen; innerhalb einer Gruppe bleibt die Reihenfolge.
+     – Artikel stehen danach in der Reihenfolge ihrer Gruppen (Basiswert groupId); innerhalb einer Gruppe bleibt die
+       Reihenfolge. Artikel mit eigener Gruppe je Angebot (it.gruppen), die zwischen Artikeln anderer Basisgruppen stehen,
+       wandern mit ihrem Vorgänger.
      Ändert das Modell an Ort und Stelle. Rückgabe { changed, ohne: [Gruppen-IDs ohne Kategorie] }. */
   function nachKategorien(model, kategorien, vkVon) {
     const out = { changed: false, ohne: [] };
@@ -638,9 +640,17 @@
     }
     if (groups.some((g, i) => g !== model.groups[i])) { model.groups.splice(0, model.groups.length, ...groups); out.changed = true; }
     const neuG = new Map(model.groups.map((g, i) => [g.id, i]));
-    const altI = new Map(model.items.map((it, i) => [it, i]));
     const rang = (it) => (neuG.has(it.groupId) ? neuG.get(it.groupId) : Infinity);
-    const items = model.items.slice().sort((a, b) => rang(a) - rang(b) || altI.get(a) - altI.get(b));
+    // Ein Artikel mit eigener Gruppe in einem Kundenangebot (it.gruppen) bleibt hinter seinem Vorgänger: dort zählt seine Stelle
+    // zwischen Artikeln anderer Basisgruppen – nach der Basisgruppe sortiert, spränge er nach jedem Verschieben zurück.
+    // Steht er am Anfang seiner Basisgruppe (der nächste Artikel ohne eigene Gruppe gehört zu ihr), wandert er wie bisher mit dieser.
+    const bloecke = [];
+    model.items.forEach((it, i) => {
+      const nach = it.gruppen && model.items.slice(i + 1).find((x) => !x.gruppen);
+      if (it.gruppen && bloecke.length && !(nach && nach.groupId === it.groupId)) bloecke[bloecke.length - 1].push(it); else bloecke.push([it]);
+    });
+    const altB = new Map(bloecke.map((b, i) => [b, i]));
+    const items = bloecke.slice().sort((a, b) => rang(a[0]) - rang(b[0]) || altB.get(a) - altB.get(b)).flat();
     if (items.some((it, i) => it !== model.items[i])) { model.items.splice(0, model.items.length, ...items); out.changed = true; }
     if (Array.isArray(model.sections)) {
       const secs = [];
@@ -681,7 +691,7 @@
   /* ======================= Gemeinsames Bearbeiten =======================
      Drei-Wege-Abgleich: base = Stand, auf dem die eigenen Änderungen beruhen; mine = eigener Stand;
      theirs = inzwischen gespeicherter Stand anderer. Ergebnis enthält beide Änderungen – je Feld,
-     je Artikel und je Kundenangebotspreis. Ändern beide dasselbe Feld unterschiedlich, gilt die eigene
+     je Artikel und je Kundenangebot (Preis, Bezeichnung, Gruppe). Ändern beide dasselbe Feld unterschiedlich, gilt die eigene
      Eingabe (conflicts nennt diese Fälle). Gelöschte Artikel/Gruppen bleiben gelöscht. */
   function canon(v) {
     if (v === undefined) return 'u';
@@ -751,16 +761,19 @@
     const groups = mergeList(base.groups, mine.groups, theirs.groups, 'group', conflicts, (b, m, t) => ({ id: m.id, ...mergeFields(b, m, t, ['id'], (f, mv, tv) => conflicts.push({ kind: 'group', id: m.id, name: m.name, field: f, mine: mv, theirs: tv })) }));
     const items = mergeList(base.items, mine.items, theirs.items, 'item', conflicts, (b, m, t) => {
       const c = (f, mv, tv) => conflicts.push({ kind: 'item', id: m.id, name: (m.code ? m.code + ' · ' : '') + m.name, field: f, mine: mv, theirs: tv });
-      const it = { id: m.id, ...mergeFields(b, m, t, ['id', 'variants'], c) };
-      const v = mergeFields((b || {}).variants, m.variants, t.variants, [], (oid, mv, tv) => c('variant:' + oid, mv, tv));
-      if (Object.keys(v).length) it.variants = v;
+      const jeAngebot = { variants: 'variant:', namen: 'name:', gruppen: 'gruppe:' };   // je Angebot getrennt: zwei Personen bearbeiten verschiedene Angebote
+      const it = { id: m.id, ...mergeFields(b, m, t, ['id', ...Object.keys(jeAngebot)], c) };
+      for (const [f, p] of Object.entries(jeAngebot)) {
+        const v = mergeFields((b || {})[f], m[f], t[f], [], (oid, mv, tv) => c(p + oid, mv, tv));
+        if (Object.keys(v).length) it[f] = v;
+      }
       return it;
     });
-    // Artikel brauchen eine vorhandene Gruppe – eine inzwischen gelöschte Gruppe bleibt dann erhalten
+    // Artikel brauchen eine vorhandene Gruppe (Basiswert und eigene je Angebot) – eine inzwischen gelöschte Gruppe bleibt dann erhalten
     const gids = new Set(groups.map((g) => g.id));
-    for (const it of items) {
-      if (gids.has(it.groupId)) continue;
-      const g = [mine, theirs, base].map((x) => (x.groups || []).find((y) => y.id === it.groupId)).find(Boolean);
+    for (const it of items) for (const gid of [it.groupId, ...Object.values(it.gruppen || {})]) {
+      if (gids.has(gid)) continue;
+      const g = [mine, theirs, base].map((x) => (x.groups || []).find((y) => y.id === gid)).find(Boolean);
       if (g) { groups.push(cloneJ(g)); gids.add(g.id); }
     }
     const sections = [];

@@ -2,7 +2,7 @@
 
 <!-- ERZEUGT von `python3 werkzeuge/doku.py erzeugen` – nicht von Hand ändern. Quelle: Funktionen und Kommentare im Code. Die CI prüft, dass diese Datei zum Code passt. -->
 
-58 Dateien, 920 Funktionen – in der Reihenfolge der Datei, **fett** die Abschnitte. Text = erste Aussage des Kommentars direkt über der Funktion (Python: Docstring). Übersicht aller Module: [README.md](README.md).
+58 Dateien, 925 Funktionen – in der Reihenfolge der Datei, **fett** die Abschnitte. Text = erste Aussage des Kommentars direkt über der Funktion (Python: Docstring). Übersicht aller Module: [README.md](README.md).
 
 ## `app/api/lib/angebote.php`
 
@@ -16,6 +16,8 @@ _Angebote, Kundenpreise, Sonderpreise, Datenmodell, gemeinsames Bearbeiten_
 - `offer_gruppen_clean(v, name)` – Kundengruppen eines Angebots (Stammdaten → Angebote): Kunden dieser Gruppen sehen das Angebot ohne eigene Freischaltung
 - `std_public()` – Ist das Standard-Wochenangebot ohne Anmeldung sichtbar?
 - `offer_def(id)`
+- `angebotsgruppen_clean(v, basis, gids, known)` – Eigene Angebotsgruppen eines Artikels ($item['gruppen']): Angebots-ID → Gruppen-ID.
+- `artikel_gruppen_ids(it)` – Gruppen, die ein Artikel benutzt: Basiswert und eigene je Angebot (wie gruppenVon in admin.js) – solche Gruppen bleiben erhalten
 - `clean_variants(v, where, known)`
 - `werbung_bloecke(e)` – Blöcke eines Eintrags in Reihenfolge: erster Block, danach „weitere“ (ungeprüft)
 - `werbung_eintrag(bloecke)` – Blöcke wieder zu einem Eintrag zusammensetzen (leere fallen weg, ein späterer rückt nach vorn); null = keine Werbung
@@ -1293,8 +1295,11 @@ _Mehrere Angebote: Kundenangebote mit eigenen Preisen, eigene Artikelliste je An
 - `dok(name)` – Gespeichertes Dokument (ohne PHP-Schutzzeile) oder None
 - `ohne_kennung(o)` – Aufgelöstes Angebot ohne Name/ID des Angebots – zum Vergleich Quelle ↔ Kopie
 - `kopieren_pruefen(a, br, v)` – Kundenangebot kopieren (Inhaber 13.11.2026): offer_kopieren nimmt alles außer den Kunden mit – eigene Preise, eigene Bezeichnungen, Empfehlungen je Angebot, …
-- `gruppe_je_angebot_pruefen(a, br)` – Angebotsgruppe je Angebot (Inhaber 17.11.2026): item.gruppen = {Angebots-ID: Gruppen-ID} stellt einen Artikel in einem Kundenangebot unter eine andere …
+- `stand(a)` – Modell des Editors: Entwurf, sonst der veröffentlichte Stand
+- `gruppe_je_angebot_vorbereiten(a)` – Angebotsgruppe je Angebot (Inhaber 17.11.2026): item.gruppen = {Angebots-ID: Gruppen-ID} stellt einen Artikel in einem Kundenangebot unter eine andere …
+- `gruppe_je_angebot_server(a, t)` – Server: nur gültige Einträge, Auflösung je Angebot (nie fremde Zuordnungen, keine leere Gruppe im Wochenangebot), Änderungsliste des Versands, …
 - `aufgeloest(holen, stand)`
+- `gruppe_je_angebot_oberflaeche(a, br, t)` – Oberfläche: Fenster „Artikel bearbeiten“, Editor je Angebot, Zurücknehmen, „Nach oben“, Gruppe entfernen, „Artikel in diese Gruppe“, Mülltonne (1280 px und …
 
 ## `tests/e2e/test_angebotsliste.py`
 

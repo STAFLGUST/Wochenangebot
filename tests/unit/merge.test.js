@@ -1,4 +1,5 @@
-// Unit-Test: Drei-Wege-Abgleich beim gemeinsamen Bearbeiten des Entwurfs (OfferCore.mergeModels).
+// Unit-Test: Drei-Wege-Abgleich beim gemeinsamen Bearbeiten des Entwurfs (OfferCore.mergeModels) und Aufbau nach
+// Angebotskategorien mit eigener Gruppe je Angebot (OfferCore.nachKategorien).
 const path = require('path');
 const C = require(path.resolve(__dirname, '..', '..', 'app/assets/offer-core.js'));
 let failed = 0, total = 0;
@@ -97,6 +98,47 @@ const item = (m, id) => m.items.find((x) => x.id === id);
   theirs.items.push({ id: 't2', code: '320', name: 'Bauch', groupId: 'g2', price: P(4), altPrices: [] });
   const r = C.mergeModels(base, mine, theirs);
   check('Gruppe bleibt für neuen Artikel', r.model.groups.some((g) => g.id === 'g2') && !!item(r.model, 't2'));
+}
+{ // eigene Bezeichnung und Gruppe je Angebot: je Angebot getrennt abgeglichen (wie die Kundenpreise)
+  const mine = J(base), theirs = J(base);
+  Object.assign(item(mine, 'a'), { gruppen: { bela: 'g2' }, namen: { bela: 'Hüfte Bela' } });
+  Object.assign(item(theirs, 'a'), { gruppen: { mueller: 'g2' }, namen: { mueller: 'Hüfte Müller' } });
+  const r = C.mergeModels(base, mine, theirs), a = item(r.model, 'a');
+  check('Gruppe und Bezeichnung je Angebot: Eingaben für verschiedene Angebote bleiben beide, kein Konflikt',
+    C.sameModel(a.gruppen, { bela: 'g2', mueller: 'g2' }) && C.sameModel(a.namen, { bela: 'Hüfte Bela', mueller: 'Hüfte Müller' }) && r.conflicts.length === 0, JSON.stringify([a, r.conflicts]));
+  const b1 = J(mine), t2 = J(mine);
+  delete item(t2, 'a').gruppen;
+  item(t2, 'a').namen.bela = 'Hüfte B.';
+  const m2 = J(mine); item(m2, 'a').namen.bela = 'Hüfte für Bela';
+  const r2 = C.mergeModels(b1, m2, t2), a2 = item(r2.model, 'a');
+  check('… fremd entfernte Gruppe entfernt; dasselbe Angebot verschieden geändert: eigene Eingabe gilt, Konflikt gemeldet',
+    !a2.gruppen && a2.namen.bela === 'Hüfte für Bela' && r2.conflicts.length === 1 && r2.conflicts[0].field === 'name:bela', JSON.stringify([a2, r2.conflicts]));
+}
+{ // Gruppe gelöscht, der andere benutzt sie nur als eigene Gruppe eines Kundenangebots → Gruppe bleibt
+  const mine = J(base), theirs = J(base);
+  mine.groups = mine.groups.filter((g) => g.id !== 'g2'); mine.items = mine.items.filter((x) => x.groupId !== 'g2');
+  item(theirs, 'a').gruppen = { bela: 'g2' };
+  const r = C.mergeModels(base, mine, theirs);
+  check('Gruppe bleibt für die eigene Gruppe je Angebot', r.model.groups.some((g) => g.id === 'g2') && item(r.model, 'a').gruppen.bela === 'g2' && !item(r.model, 'c'), JSON.stringify(r.model.groups));
+}
+{ // Aufbau nach Angebotskategorien: ein Artikel mit eigener Gruppe je Angebot bleibt hinter seinem Vorgänger
+  const kat = [{ name: 'A', vk: ['1'] }, { name: 'B', vk: ['2'] }];
+  const neu = () => ({ groups: [{ id: 'ga', name: 'A', vk: '1', section: 'A' }, { id: 'gb', name: 'B', vk: '2', section: 'B' }],
+    items: [{ id: 'a1', groupId: 'ga' }, { id: 'b1', groupId: 'gb' }, { id: 'c', groupId: 'ga', gruppen: { x: 'gb' } }, { id: 'b2', groupId: 'gb' }] });
+  const ids = (m) => m.items.map((i) => i.id).join();
+  const m = neu(), r = C.nachKategorien(m, kat, () => '');   // c steht im Kundenangebot x in Gruppe gb zwischen b1 und b2
+  check('Kategorien: Artikel mit eigener Gruppe behält seine Stelle (springt nicht in den Block der Basisgruppe)', ids(m) === 'a1,b1,c,b2' && !r.changed, ids(m));
+  const o = neu(); delete o.items[2].gruppen;
+  check('Kategorien: ohne eigene Gruppe wie bisher nach der Basisgruppe', C.nachKategorien(o, kat, () => '').changed && ids(o) === 'a1,c,b1,b2', ids(o));
+  const u = neu();
+  C.nachKategorien(u, [kat[1], kat[0]], () => '');
+  check('Kategorien umgestellt: der Artikel wandert mit seinem Vorgänger', ids(u) === 'b1,c,b2,a1', ids(u));
+  const h = { groups: neu().groups, items: [{ id: 'b1', groupId: 'gb' }, { id: 'c', groupId: 'ga', gruppen: { x: 'gb' } }, { id: 'a1', groupId: 'ga' }] };
+  C.nachKategorien(h, kat, () => '');   // c steht am Anfang seiner Basisgruppe ga, nur zufällig hinter b1
+  check('Kategorien: am Anfang seiner Basisgruppe wandert der Artikel wie bisher mit dieser', ids(h) === 'c,a1,b1', ids(h));
+  const z = neu(); z.items.splice(3, 0, { id: 'c2', groupId: 'ga', gruppen: { x: 'gb' } });   // zwei solche Artikel nebeneinander
+  const rz = C.nachKategorien(z, kat, () => '');
+  check('Kategorien: zwei Artikel mit eigener Gruppe nebeneinander bleiben beide stehen', ids(z) === 'a1,b1,c,c2,b2' && !rz.changed, ids(z));
 }
 { // ohne gemeinsame Basis (erster Entwurf) und unverändert
   const r = C.mergeModels(J(base), J(base), J(base));
