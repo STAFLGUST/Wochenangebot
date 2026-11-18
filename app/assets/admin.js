@@ -2395,7 +2395,8 @@
       if (!p || (p.status !== 'value' && p.status !== 'request')) continue;
       const hier = inOffer(it, curOffer), eigen = curOffer === OSTD ? hier : !!(it.variants && it.variants[curOffer] && it.variants[curOffer].status !== 'hidden');
       if (eigen && !all) continue;
-      const np = p.status === 'value' ? { status: 'value', value: Math.round(Math.round(p.value * (1 + pct / 100) / step) * step * 100) / 100 } : { status: 'request' };
+      // Quotient vor dem Runden glätten: 5,50 € −5 % / 0,05 ergibt binär 104,4999… statt 104,5 (wie rundeWieServer in frontend.js)
+      const np = p.status === 'value' ? { status: 'value', value: Math.round(Math.round(Number((p.value * (1 + pct / 100) / step).toPrecision(12))) * step * 100) / 100 } : { status: 'request' };
       if (!hier) empfehlungNichtUebernehmen(it, curOffer);
       aufnehmen(it, curOffer, np);
       invalid.delete(it.id + '|' + curOffer);
