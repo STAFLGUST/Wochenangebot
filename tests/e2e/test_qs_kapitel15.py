@@ -197,6 +197,23 @@ for was, abruf in (('Datei im Ordner 1.5.1', 'qs_datei&id=' + h151), ('Datei im 
 namen = zipn(L, 'qs_ablage_export&kapitel=1.4&alle=1') + zipn(L, f'qs_archiv_zip&dok={H14}')
 check('… Ablage-Export und Ordner-ZIP für „ansehen“ ohne beide, mit „Hand-150“', 'Hand-Zeugnis' not in namen and 'Hand-Akte' not in namen and 'Hand-150' in namen, namen)
 
+# ── Aus dem Eingang einem Entwurf in 1.4 zugeordnet: die Datei behält ihren pfad „QM/1.5 Mitarbeiter/…“ und bleibt geschützt ──
+r = Be.call('qs_dokument_save', {'kapitel': '1.4', 'art': 'A', 'nr': '', 'titel': 'Kontrollanweisung Eingang'})[1]['dokument']
+E14 = r['id']
+fe = hochladen(Be, 'eingang', '', 'Eingang-Akte.pdf', pdf('Eingang-Akte'), {'pfad': 'QM/1.5 Mitarbeiter/Akten'})[1]['datei']
+check('Eingangsdatei mit pfad „…/1.5 Mitarbeiter/…“ dem Entwurf zugeordnet und freigegeben', Be.call('qs_datei_zuordnen', {'dateien': [fe], 'dokument': E14, 'version': r['versionen'][0]['id']})[0] == 200
+      and schritt(E14, 'einreichen', Be) == 200 and schritt(E14, 'pruefen_freigeben', Q) == 200)
+check('… Einzeldownload: „ansehen“ 403, „bearbeiten“ 200', roh(L, 'qs_datei&id=' + fe)[0] == 403 and roh(Be, 'qs_datei&id=' + fe)[0] == 200)
+namen = {n: zipn(c, 'qs_ablage_export&kapitel=1.4&alle=1') + zipn(c, 'qs_ablage_export') for n, c in (('lisa', L), ('bernd', Be))}
+check('… Ablage-Export: Datei der Version fehlt für „ansehen“, für „bearbeiten“ dabei', 'Eingang-Akte' not in namen['lisa'] and 'Hand-150' in namen['lisa']
+      and 'Eingang-Akte' in namen['bernd'], namen)
+st, r = V.call('qs_verfahren_save', {'titel': 'VD Kontrolle', 'gesellschaft': 'Muster GmbH', 'verantwortlich': ''})
+VD2 = r['doku']['id']
+st, r = V.call('qs_verfahren_abschnitt_save', {'doku': VD2, 'teil': 'anwender', 'titel': 'Kontrolle', 'text': 'siehe QM', 'verweise': [dok(E14)['nr']], 'fertig': True})
+check('… Verfahrensdoku mit Verweis darauf freigegeben', st == 200 and V.call('qs_verfahren_freigeben', {'doku': VD2, 'rev': r['doku']['rev'], 'grund': 'Erstfassung', 'gueltigAb': heute[:8] + '01'})[0] == 200)
+zip_ = {n: ' '.join(zipfile.ZipFile(io.BytesIO(roh(c, f'qs_verfahren_export&doku={VD2}{von_bis}')[1])).namelist()) for n, c in (('vf', VF), ('admin', V))}
+check('… ZIP der Verfahrensdoku: Datei fehlt für „verfahren_sehen“, für „bearbeiten“ dabei', 'Eingang-Akte' not in zip_['vf'] and 'Eingang-Akte' in zip_['admin'], zip_)
+
 # ── Protokoll: Vorgänge aus 1.5 ohne Namen ──
 log = json.dumps(A.call('log')[1], ensure_ascii=False)
 check('Protokoll ohne Namen aus 1.5 (sieht, wer „protokoll.sehen“ hat), mit Kapitelnummer', not drin(log, GEHEIM) and '(Kapitel 1.5.1, personenbezogen)' in log

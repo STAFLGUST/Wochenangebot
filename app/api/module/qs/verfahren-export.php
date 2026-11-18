@@ -227,7 +227,7 @@ function qs_vf_dateien_am($liste, string $t): array
     }));
 }
 /* Dateien der verknüpften QM-Dokumente in den Versionen, die die Fassungen festgehalten haben (für das ZIP) */
-function qs_vf_export_dateien(array $teile, array $dokumente, string $wurzel): array
+function qs_vf_export_dateien(array $teile, array $dokumente, string $wurzel, array $me): array
 {
     $nachId = []; foreach ($dokumente as $d) $nachId[(string)$d['id']] = $d;
     $e = []; $gesehen = [];
@@ -236,7 +236,7 @@ function qs_vf_export_dateien(array $teile, array $dokumente, string $wurzel): a
         if ($d === null || (string)$x['version'] === '') continue;
         foreach ((array)($d['versionen'] ?? []) as $v) {
             if ((string)($v['nr'] ?? '') !== (string)$x['version'] || !in_array((string)($v['status'] ?? ''), ['freigegeben', 'ersetzt'], true)) continue;
-            foreach (qs_vf_dateien_am($v['dateien'] ?? [], (string)($t['f']['freigegeben']['t'] ?? '')) as $f) {
+            foreach (qs_dateien_sichtbar(qs_vf_dateien_am($v['dateien'] ?? [], (string)($t['f']['freigegeben']['t'] ?? '')), $me) as $f) {
                 if (isset($gesehen[(string)$f['id']])) continue;
                 $gesehen[(string)$f['id']] = true;
                 $e[] = ['pfad' => $wurzel . '/QM-Dokumente/' . ablage_zip_pfad(trim($x['nr'] . ' ' . $x['titel'])) . '/Version ' . ablage_zip_pfad((string)$x['version']) . '/' . ablage_zip_pfad((string)$f['name']),
@@ -292,7 +292,7 @@ function qs_vf_export(array $doku, array $q, array $me, array $dokumente, array 
         audit('qs', 'QM-System: Verfahrensdokumentation „' . $doku['titel'] . '“ – Export für Prüfungen ' . qs_de($von) . ' – ' . qs_de($bis) . ' (Fassung ' . $nummern . ') als PDF heruntergeladen');
         qs_vf_pdf_senden($pdf, $name . '.pdf', false);
     }
-    $dateien = qs_vf_export_dateien($teile, $dokumente, $name);
+    $dateien = qs_vf_export_dateien($teile, $dokumente, $name, $me);
     audit('qs', 'QM-System: Verfahrensdokumentation „' . $doku['titel'] . '“ – Export für Prüfungen ' . qs_de($von) . ' – ' . qs_de($bis) . ' (Fassung ' . $nummern . ') als ZIP mit ' . count($dateien) . ' Dateien der QM-Dokumente heruntergeladen');
     ablage_zip_senden($name . '.zip', array_merge([['pfad' => $name . '/Verfahrensdokumentation.pdf', 'inhalt' => $pdf]], $dateien));
 }
