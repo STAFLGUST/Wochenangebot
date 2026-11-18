@@ -203,8 +203,9 @@ code, r = O.call('kunden_rundmail', {'ids': ids, 'week': WOCHE0 + 1, 'year': em[
 check('altes Fenster: kunden_rundmail mit Senden-Recht, aber ohne Zugang → 403 mit Hinweis auf „Versand“', code == 403 and 'Versand' in r.get('error', ''), (code, r))
 check('senden mit falscher Woche 409', S.call('versand_senden', {'art': 'woche', 'ids': ids, 'week': WOCHE0, 'year': em['woche']['year']})[0] == 409)
 check('bis hier keine E-Mail verschickt', len(smtp.messages) == n0)
-code, r = S.call('versand_senden', {'art': 'woche', 'ids': ids[:3] + ['gibtsnicht'], 'note': 'Diese Woche: Roastbeef.', 'week': WOCHE0 + 1, 'year': em['woche']['year']})
-check('senden: drei Kunden gesendet, unbekannter Kunde abgewiesen', code == 200 and [x['ok'] for x in r['results']] == [True, True, True, False], (code, r))
+code, r = S.call('versand_senden', {'art': 'woche', 'ids': ids[:3] + ['gibtsnicht', kid['Hofladen Beispielhof']], 'note': 'Diese Woche: Roastbeef.', 'week': WOCHE0 + 1, 'year': em['woche']['year']})
+check('senden: drei Kunden gesendet, unbekannter und inaktiver Kunde abgewiesen', code == 200 and [x['ok'] for x in r['results']] == [True, True, True, False, False]
+      and r['results'][4].get('skipped'), (code, r))
 check('drei E-Mails beim Mailserver, je Kunde eine, mit Zusatztext und Abmelde-Kopf',
       until(lambda: len(smtp.messages) == n0 + 3, 5) and sorted(m_['to'][0] for m_ in smtp.messages[n0:]) == sorted(c['email'] for c in em['empfaenger'][:3])
       and all(f'KW {WOCHE0 + 1}' in m_['subject'] for m_ in smtp.messages[n0:]), [m_['to'] for m_ in smtp.messages[n0:]])
@@ -236,9 +237,10 @@ check('altes Fenster: restposten_info / kunden_restposten ohne Zugang 403', code
 # ---------- Verlauf ----------
 code, vl = Z.call('versand_verlauf')
 arten = [x['art'] for x in vl.get('verlauf', [])]
+# übersprungene Kunden (inaktiv, Angebot nicht freigeschaltet) wurden nicht beschickt – sie zählen nicht als „nicht zugestellt“
 check('Verlauf: neueste zuerst – Sonderposten, Wochenangebot, Veröffentlichungen; mit Mitarbeiter und Anzahl',
       code == 200 and arten[:2] == ['sonderposten', 'woche'] and arten.count('veroeffentlicht') >= 2
-      and (vl['verlauf'][0]['ok'], vl['verlauf'][0]['fehler']) == (2, 1) and (vl['verlauf'][1]['ok'], vl['verlauf'][1]['fehler']) == (3, 0) and vl['verlauf'][1]['von'] == 'Sven Sender'
+      and (vl['verlauf'][0]['ok'], vl['verlauf'][0]['fehler']) == (2, 0) and (vl['verlauf'][1]['ok'], vl['verlauf'][1]['fehler']) == (3, 0) and vl['verlauf'][1]['von'] == 'Sven Sender'
       and vl['verlauf'][1]['titel'] == f'Wochenangebot KW {WOCHE0 + 1}/{em["woche"]["year"]}', vl.get('verlauf'))
 roh = Z.call('versand_verlauf', raw=True)[2]
 check('Verlauf ohne Firmen und Adressen', 'example' not in roh and 'Kantine' not in roh and 'Elbe' not in roh)

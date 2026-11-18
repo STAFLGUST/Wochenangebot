@@ -495,9 +495,9 @@ function wochenmail_senden(array $cfg, array $ids, string $note, int $week, int 
     foreach ($res as $id => $r) if (empty($r['skipped'])) $entries[] = ['kid' => $id, 'firma' => $map[$id]['firma'], 'to' => $map[$id]['email'], 'typ' => 'woche', 'ok' => $r['ok'], 'error' => $r['error'] ?? ''];
     if ($entries) mail_record($entries, $wk);
     $okN = count(array_filter($res, function ($r) { return $r['ok']; }));
-    $bad = array_filter($res, function ($r) { return !$r['ok']; });
+    $bad = array_filter($res, function ($r) { return !$r['ok'] && empty($r['skipped']); });
     if ($res) audit('mail', "Wochenangebot KW {$wk['week']}/{$wk['year']} an $okN Kunden versendet" . ($bad ? ' (' . count($bad) . ' nicht zugestellt)' : ''),
-        array_map(function ($id) use ($res, $map) { $r = $res[$id]; return ['k' => "c$id|woche", 'code' => $map[$id]['nr'] ?? '', 'name' => $map[$id]['firma'], 'f' => 'Wochenangebot', 'from' => '', 'to' => ($map[$id]['email'] ?? '') . ($r['ok'] ? '' : ' – ' . $r['error'])]; }, array_keys($res)));
+        array_map(function ($id) use ($res, $map) { $r = $res[$id]; return ['k' => "c$id|woche", 'code' => $map[$id]['nr'] ?? '', 'name' => $map[$id]['firma'], 'f' => 'Wochenangebot', 'from' => '', 'to' => ($map[$id]['email'] ?? '') . ($r['ok'] ? '' : ' – ' . $r['error'])] + (empty($r['skipped']) ? [] : ['skip' => true]); }, array_keys($res)));
     $out = [];
     foreach ($ids as $id) $out[] = ['id' => $id] + ($res[$id] ?? ['ok' => false, 'error' => 'Kunde nicht gefunden']);
     return $out;
@@ -545,7 +545,7 @@ function sonderposten_senden(array $cfg, array $def, array $ids, string $note, s
     $okN = count(array_filter($res, function ($r) { return $r['ok']; }));
     $bad = array_filter($res, function ($r) { return !$r['ok'] && empty($r['skipped']); });
     if ($res) audit('mail', "Sonderposten {$def['name']} (" . count($items) . " Artikel) an $okN Kunden versendet" . ($bad ? ' (' . count($bad) . ' nicht zugestellt)' : ''),
-        array_map(function ($id) use ($res, $map) { $r = $res[$id]; return ['k' => "c$id|restposten", 'code' => $map[$id]['nr'] ?? '', 'name' => $map[$id]['firma'], 'f' => 'Sonderposten', 'from' => '', 'to' => ($map[$id]['email'] ?? '') . ($r['ok'] ? '' : ' – ' . $r['error'])]; }, array_keys($res)));
+        array_map(function ($id) use ($res, $map) { $r = $res[$id]; return ['k' => "c$id|restposten", 'code' => $map[$id]['nr'] ?? '', 'name' => $map[$id]['firma'], 'f' => 'Sonderposten', 'from' => '', 'to' => ($map[$id]['email'] ?? '') . ($r['ok'] ? '' : ' – ' . $r['error'])] + (empty($r['skipped']) ? [] : ['skip' => true]); }, array_keys($res)));
     $out = [];
     foreach ($ids as $id) $out[] = ['id' => $id] + ($res[$id] ?? ['ok' => false, 'error' => 'Kunde nicht gefunden']);
     return $out;
