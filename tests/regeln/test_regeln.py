@@ -291,7 +291,7 @@ ALT_SCHREIBEND = {
     'user_unlock', 'vertreter_save', 'vkgruppen_save', 'wartung_save',
 }
 ALT_OEFFENTLICH = {
-    'abmelden1', 'app_info', 'kunde_abmelden', 'kunde_abmelden_info', 'kunde_bestellung',
+    'abmelden1', 'kunde_abmelden', 'kunde_abmelden_info', 'kunde_bestellung',
     'kunde_bestellung_detail', 'kunde_bestellungen', 'kunde_login', 'kunde_logout', 'kunde_merkliste',
     'kunde_merkliste_save', 'kunde_passwort', 'kunde_status', 'kunde_token_check', 'kunde_token_set', 'offer',
     'waf_probe',
@@ -301,8 +301,8 @@ ALT_WARTUNG = {
     'kunde_merkliste_save', 'kunde_passwort', 'kunde_token_check', 'kunde_token_set', 'offer',
 }
 
-ALT_ALLE = {  # alle 122 Aktionen vor dem Register; neue Aktionen sind von diesem Vergleich ausgenommen
-    'abmelden1', 'app_info', 'auswertung', 'benachrichtigung_save', 'benachrichtigung_test',
+ALT_ALLE = {  # alle 122 Aktionen vor dem Register ohne app_info (18.11.2026 entfernt); neue Aktionen sind von diesem Vergleich ausgenommen
+    'abmelden1', 'auswertung', 'benachrichtigung_save', 'benachrichtigung_test',
     'bestell_settings_save', 'bestellung', 'bestellung_mail_retry', 'bestellung_save', 'bestellungen',
     'change_password', 'discard_draft', 'draft', 'draft_ping', 'einkauf', 'einkauf_melden', 'einzel_artikel',
     'einzel_detail', 'einzel_liste', 'einzel_loeschen', 'einzel_pdf', 'einzel_save', 'einzel_senden',

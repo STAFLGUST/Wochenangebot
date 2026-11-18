@@ -37,7 +37,7 @@ check('ohne Anmeldung 401', P.call('module_status')[0] == 401)
 code, r = L.call('module_status')
 check('Leser darf die Übersicht sehen', code == 200 and r.get('ok'), (code, r))
 mods = nach_id(r.get('module', []))
-check('alle Module des Registers', set(mods) == {'angebot', 'bestand', 'leergut', 'crm', 'rewe', 'qs', 'einkauf', 'containerimport', 'import', 'hr', 'marketing', 'controlling', 'versand', 'verwaltung', 'sicherheit', 'dashboard', 'plattform', 'mobile'}, sorted(mods))
+check('alle Module des Registers', set(mods) == {'angebot', 'bestand', 'leergut', 'crm', 'rewe', 'qs', 'einkauf', 'containerimport', 'import', 'hr', 'marketing', 'controlling', 'versand', 'verwaltung', 'sicherheit', 'dashboard', 'plattform'}, sorted(mods))
 kacheln = [m['id'] for m in sorted(r['module'], key=lambda m: m['reihenfolge'] or 999) if m['dashboard']]
 check('fünfzehn Kacheln in fester Reihenfolge (Versand vor der Verwaltung, Sicherheit danach)', kacheln == ['angebot', 'bestand', 'leergut', 'crm', 'rewe', 'qs', 'einkauf', 'containerimport', 'import', 'hr', 'marketing', 'controlling', 'versand', 'verwaltung', 'sicherheit'], kacheln)
 gruppen = {m['id']: m['gruppe'] for m in r['module'] if m['dashboard']}

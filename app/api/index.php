@@ -42,7 +42,6 @@
  *   GET  ?action=kundengruppen     Kundengruppen (Stammdaten); POST kundengruppen_save (ganze Liste, Revision)
  *   GET  ?action=vkgruppen         VK-Gruppen (Stammdaten, Artikel über vkGruppe); POST vkgruppen_save
  *   GET  ?action=vertreter         Vertreter (Stammdaten, Kunden über vertreter/vertreter2); POST vertreter_save
- *   GET  ?action=app_info          Grunddaten für die App (Mindestversion, Bestellfunktion, Wartung); docs/app-api.md
  *   GET  ?action=kunde_status      Kunden-Anmeldung auf der Angebotsseite; POST kunde_login | kunde_logout | kunde_passwort
  *   POST ?action=kunde_token_check | kunde_token_set   Passwort über Link aus der E-Mail festlegen (Einladung/Zurücksetzen)
  *   GET  ?action=fw_status | fw_verkehr | fw_export   Schutzzentrale (Administrator); POST fw_save | fw_sperren | fw_freigeben | fw_feed_update | fw_vorlage | fw_import
@@ -181,7 +180,6 @@ try {
     require __DIR__ . '/aktionen/entwurf.php';
     require __DIR__ . '/aktionen/preisverlauf.php';
     require __DIR__ . '/aktionen/auswertung.php';
-    require __DIR__ . '/aktionen/app.php';
     require __DIR__ . '/aktionen/kundengruppen.php';
     require __DIR__ . '/aktionen/einzelangebote.php';
     require __DIR__ . '/aktionen/schutz.php';

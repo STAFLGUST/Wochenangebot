@@ -32,7 +32,6 @@ function geraete_gueltig(array $acc): array
 /* Ist dieser Browser für den Zugang vertraut (und hat noch Versuche)? Liefert den Index in $acc['geraete'] oder null. */
 function geraet_vertraut(array $acc): ?int
 {
-    if (function_exists('app_client') && app_client()) return null;   // die App nutzt keine Cookies
     $t = geraet_token();
     if ($t === '') return null;
     $h = geraet_hash($t);
@@ -65,7 +64,6 @@ function geraet_name(string $ua): string
 function geraet_merken(array &$acc, ?bool &$neu = null): void
 {
     $neu = false;
-    if (function_exists('app_client') && app_client()) return;
     $list = geraete_gueltig($acc);
     // Eine vorhandene Kennung wird nur übernommen, wenn sie für genau diesen Zugang schon vertraut ist – sonst immer eine neue
     // (eine von außen untergeschobene Kennung wäre dem Angreifer bekannt). Melden sich mehrere Zugänge im selben Browser an,

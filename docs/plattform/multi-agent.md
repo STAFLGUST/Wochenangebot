@@ -15,7 +15,6 @@ Jedes Modul in `regeln/module.toml` nennt seinen Agenten (`agent`). Startbesetzu
 | verwaltung | verwaltung, import | Verwaltungsdateien laut Register |
 | plattform | plattform | Kern, `regeln/`, CI, Betrieb – **koordinationspflichtig** |
 | prüfung (H) | – | nichts; prüft PRs (Tests, Sicherheit, Änderungsfolgen), schreibt Befunde |
-| mobile | mobile | Server-Schnittstelle der App (`regeln/aktionen/mobile.toml`, `tests/e2e/test_app_api.py`); die App selbst ist entfernt |
 
 ## Werkzeug `werkzeuge/regeln.py`
 
