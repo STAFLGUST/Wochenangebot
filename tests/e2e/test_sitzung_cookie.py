@@ -107,13 +107,26 @@ check('HTTPS: Kundensitzung ist keine Mitarbeitersitzung', j.get('staff') is Fal
 st, j, sc, _ = roh('kunde_status', cookies={ALT: ksid}, ip='198.51.100.74')
 check('HTTPS: Kundensitzung unter altem Namen nicht angenommen', j.get('kunde') is None, j)
 
-# ── App: Sitzung nur über Kopfzeile, kein Cookie ──
+# ── Früherer App-Zugang (X-WA-Client/X-WA-Sitzung) ist geschlossen (Inhaber 18.11.2026): Sitzung nur über das Cookie ──
 app = {'X-WA-Client': 'app'}
-st, j, sc, hd = roh('login', {'username': 'admin', 'password': PW}, ip='198.51.100.75', extra=app)
-app_sid = hd.get('X-WA-Sitzung', '')
-check('HTTPS-App: Anmeldung ohne Sitzungs-Cookie', st == 200 and cookie(sc, NEU)[0] is None and cookie(sc, ALT)[0] is None, sc)
-st, j, sc, hd = roh('status', ip='198.51.100.75', extra={**app, 'X-WA-Sitzung': app_sid})
-check('HTTPS-App: Sitzung über X-WA-Sitzung gültig', bool(app_sid) and j.get('loggedIn') is True, j)
+st, j, sc, hd = roh('status', ip='198.51.100.75', extra={**app, 'X-WA-Sitzung': sid})
+check('Mitarbeiter: gültige Kennung nur in X-WA-Sitzung meldet nicht an', st == 200 and j.get('loggedIn') is False, j)
+check('Mitarbeiter: auch ohne X-WA-Client nicht', roh('status', ip='198.51.100.75', extra={'X-WA-Sitzung': sid})[1].get('loggedIn') is False)
+check('Antwort ohne Kopfzeile X-WA-Sitzung', hd.get('X-WA-Sitzung') is None, hd.get('X-WA-Sitzung'))
+st, j, sc, hd = roh('kunde_status', ip='198.51.100.74', extra={**app, 'X-WA-Sitzung': ksid})
+check('Kunde: gültige Kennung nur in X-WA-Sitzung meldet nicht an', st == 200 and j.get('kunde') is None, j)
+check('mit X-WA-Client gilt das Cookie wie im Browser', roh('status', cookies={NEU: sid}, ip='198.51.100.75', extra=app)[1].get('loggedIn') is True)
+VORGABE = 'vorgegebene-kennung-0123456789abcdef'
+st, j, sc, hd = roh('login', {'username': 'admin', 'password': PW}, ip='198.51.100.75', extra={**app, 'X-WA-Sitzung': VORGABE})
+app_sid = cookie(sc, NEU)[0]
+check('Anmeldung mit X-WA-Client setzt wie im Browser das __Host-Cookie', st == 200 and bool(app_sid) and app_sid != VORGABE, sc)
+check('Anmeldung mit X-WA-Client: Antwort ohne Kopfzeile X-WA-Sitzung', hd.get('X-WA-Sitzung') is None, hd.get('X-WA-Sitzung'))
+check('vorgegebene Kennung wird nie als Sitzung übernommen', not os.path.exists(os.path.join(os.environ['WA_SESSION_DIR'], 'sess_' + VORGABE))
+      and roh('status', ip='198.51.100.75', cookies={NEU: VORGABE})[1].get('loggedIn') is False)
+st, j, _, _ = roh('app_info', ip='198.51.100.69')
+st0, j0, _, _ = roh('gibt_es_nicht', ip='198.51.100.69')
+check('app_info ist eine unbekannte Aktion', st == st0 == 404 and j == j0, (st, j))
+check('Herkunftsprüfung mit X-WA-Client genauso streng', roh('status', ip='198.51.100.68', extra={**app, 'Sec-Fetch-Site': 'cross-site'})[0] == 403)
 
 # ── Firewall erkennt angemeldete Mitarbeiter am neuen Cookie (keine Inhaltsprüfung ihrer Eingaben) ──
 probe = {'notiz': '<script>alert(1)</script>'}
@@ -143,11 +156,11 @@ check('anonyme Anfragen an die öffentlichen Aktionen legen keine Sitzungsdatei 
 check('anonyme Anfragen setzen kein Sitzungs-Cookie', all(not sc for _, (_, _, sc, _) in anon), [(a, sc) for a, (_, _, sc, _) in anon if sc])
 check('anonyme Anfragen werden weiter beantwortet (keine neuen Fehler)', all(st in (200, 401) for _, (st, _, _, _) in anon), [(a, st) for a, (st, _, _, _) in anon])
 
-# App-Clients: dieselbe Lücke fiel ohne Cookie nicht auf, weil die App die Kennung in der Kopfzeile führt
+# Eine erfundene Kennung in X-WA-Sitzung zählt nicht als vorgelegte Sitzung
 vor = sitzungen()
-app_anon = [roh(a, None, ip='198.51.100.79', extra=app) for a in ('offer', 'kunde_status')]
-check('App ohne Kennung: keine Sitzungsdatei und keine Kennung in der Antwort',
-      sitzungen() == vor and all(not h.get('X-WA-Sitzung') for _, _, _, h in app_anon), sorted(sitzungen() - vor))
+app_anon = [roh(a, None, ip='198.51.100.79', extra={**app, 'X-WA-Sitzung': VORGABE}) for a in ('offer', 'kunde_status')]
+check('X-WA-Sitzung ohne Cookie: keine Sitzungsdatei, kein Cookie, keine Kennung in der Antwort',
+      sitzungen() == vor and all(not sc and h.get('X-WA-Sitzung') is None for _, _, sc, h in app_anon), sorted(sitzungen() - vor))
 
 # Mit vorgelegter Kennung bleibt alles wie bisher
 vor = sitzungen()
@@ -156,10 +169,6 @@ ksid2 = cookie(sc, NEU)[0]
 check('Kunden-Anmeldung legt weiter eine Sitzung an (Datei und __Host-Cookie)', st == 200 and bool(ksid2) and len(sitzungen() - vor) == 1, (st, sorted(sitzungen() - vor)))
 check('angemeldeter Kunde wird mit vorgelegter Kennung weiter erkannt',
       (roh('kunde_status', cookies={NEU: ksid2}, ip='198.51.100.74')[1].get('kunde') or {}).get('firma') == 'Cookie Test GmbH')
-st, j, sc, hd = roh('login', {'username': 'admin', 'password': PW}, ip='198.51.100.75', extra=app)
-asid2 = hd.get('X-WA-Sitzung', '')
-check('App-Anmeldung legt weiter eine Sitzung an und nennt die Kennung', st == 200 and bool(asid2)
-      and roh('status', ip='198.51.100.75', extra={**app, 'X-WA-Sitzung': asid2})[1].get('loggedIn') is True, (st, bool(asid2)))
 
 # ── Echter Browser: Chromium behandelt 127.0.0.1 als sicheren Ursprung und speichert dort auch __Host-Cookies ──
 from playwright.sync_api import sync_playwright  # noqa: E402

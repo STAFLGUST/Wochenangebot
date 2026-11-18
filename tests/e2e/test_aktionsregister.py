@@ -55,7 +55,7 @@ check('abmelden1 (Formular aus dem E-Mail-Programm) nicht als JSON-Pflicht abgew
 st, j = anfrage('gibt_es_nicht')
 check('unbekannte Aktion → 404', st == 404 and j.get('error') == 'Unbekannte Aktion.', (st, j))
 check('lesende Aktion per GET nicht abgewiesen (status)', anfrage('status')[0] == 200)
-check('öffentliche Aktion ohne Anmeldung erreichbar (offer, app_info)', anfrage('offer')[0] == 200 and anfrage('app_info')[0] == 200)
+check('öffentliche Aktion ohne Anmeldung erreichbar (offer)', anfrage('offer')[0] == 200)
 check('Mitarbeiter-Aktion ohne Anmeldung abgewiesen (stock)', anfrage('stock')[0] == 401)
 
 print(f'\n{sum(res)}/{len(res)} passed')

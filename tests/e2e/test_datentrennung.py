@@ -138,7 +138,6 @@ try:
     tok = kid + '.' + base64.urlsafe_b64encode(hmac.new(key, ('abmelden|' + kid).encode(), hashlib.sha256).digest()).decode().rstrip('=')[:32]
     P = Client('198.51.100.41')
     check('Kundenseite: Abmeldelink aus der Angebotsmail', P.call('kunde_abmelden_info', {'token': tok})[0] == 200 and P.call('kunde_abmelden', {'token': tok})[0] == 200)
-    check('Kundenseite: Grunddaten für die App', Client().call('app_info')[0] == 200)
     check('Kundenseite: Passwort-Link ungültig (410)', Client().call('kunde_token_check', {'token': 'x' * 40})[0] == 410)
     check('Kundenseite: Falle für Angriffswerkzeuge (404)', Client('203.0.113.41').call('waf_probe&p=wp-login.php')[0] == 404)
     monat = time.strftime('%Y-%m', time.gmtime())

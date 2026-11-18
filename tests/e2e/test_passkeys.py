@@ -99,18 +99,16 @@ class SoftKey:
 class PkClient:
     """Schnittstelle mit Host „localhost:<Port>“ (wie der Browser), eigene IP je Client (Anmeldeversuche je IP)."""
     def __init__(self, ip='192.0.2.1', app=False):
+        """app: sendet die Kennzeichnung der früheren App („X-WA-Client: app“), die keine Wirkung mehr haben darf."""
         self.cookies = http.cookiejar.CookieJar()
         self.http = urllib.request.build_opener(urllib.request.HTTPCookieProcessor(self.cookies))
-        self.csrf, self.ip, self.app, self.sid = '', ip, app, ''
+        self.csrf, self.ip, self.app = '', ip, app
     def call(self, action, data=None):
         h = {'Host': HOST, 'X-Forwarded-For': self.ip, 'Content-Type': 'application/json', 'X-CSRF-Token': self.csrf}
-        if self.app:
-            h['X-WA-Client'] = 'app'
-            if self.sid: h['X-WA-Sitzung'] = self.sid
+        if self.app: h['X-WA-Client'] = 'app'
         req = urllib.request.Request(API + action, data=None if data is None else json.dumps(data).encode(), headers=h)
         try: r = self.http.open(req, timeout=30)
         except urllib.error.HTTPError as e: r = e
-        if r.headers.get('X-WA-Sitzung') is not None: self.sid = r.headers.get('X-WA-Sitzung')
         out = json.loads(r.read())
         if out.get('csrf'): self.csrf = out['csrf']
         return r.code, out
@@ -225,7 +223,7 @@ with sync_playwright() as p:
     st, r = PkClient('192.0.2.2').login('admin', PW)
     check('password login names both methods', r.get('need2fa') and r.get('methods') == ['totp', 'passkey'], r)
     st, r = PkClient('192.0.2.3', app=True).login('admin', PW)
-    check('app gets only the code step', r.get('need2fa') and r.get('methods') == ['totp'], r)
+    check('X-WA-Client: app gets both methods like the browser', r.get('need2fa') and r.get('methods') == ['totp', 'passkey'], r)
 
     # ===== Nur Passkey: Passwort-Anmeldung verlangt den Passkey =====
     confirm(a)
@@ -253,9 +251,9 @@ with sync_playwright() as p:
     check('password alone is no login', c.call('draft')[0] == 401)
     check('TOTP step impossible without app', c.call('login_2fa', {'code': '123456'})[0] == 401)
     st, r = PkClient('192.0.2.5', app=True).login('pia', 'Editor-Zugang-77')
-    check('app: passkey-only user gets clear error', st == 403 and r.get('code') == 'app_totp_required' and 'Authenticator-App' in r.get('error', ''), r)
+    check('X-WA-Client: app: passkey-only user gets the passkey step like the browser', st == 200 and r.get('need2fa') and r.get('methods') == ['passkey'], r)
     st, r = PkClient('192.0.2.6', app=True).call('passkey_login_begin', {})
-    check('app: no passkey login', st == 403 and 'App' in r.get('error', ''), r)
+    check('X-WA-Client: app: passkey login can start', st == 200 and 'options' in r, r)
 
     # ===== Zwei-Faktor-Pflicht: Passkey genügt =====
     confirm(a)
@@ -341,8 +339,13 @@ with sync_playwright() as p:
     check('register without fresh begin rejected', st == 409, (st, r))
     st, r = t.pk_register(k1, 'Bearbeiter-Zugang-1')
     check('same credential twice rejected', st == 409, r)
+    th = PkClient('192.0.2.14', app=True)
+    st, r = th.login('tom', 'Bearbeiter-Zugang-1')
+    check('X-WA-Client: app: password step offers the passkey', st == 200 and r.get('methods') == ['passkey'], r)
+    st, r = th.pk_login(k1, second=True)
+    check('X-WA-Client: app: passkey as second step', st == 200 and r.get('user', {}).get('username') == 'tom', r)
     k2 = SoftKey(-257)
-    st, r = t.pk_register(k2, 'Bearbeiter-Zugang-1', name='Sicherheitsschlüssel')
+    st, r = th.pk_register(k2, 'Bearbeiter-Zugang-1', name='Sicherheitsschlüssel')
     check('register with RS256 key', st == 200 and user('tom')['passkeys'][1]['alg'] == -257 and user('tom')['passkeys'][1]['name'] == 'Sicherheitsschlüssel', r)
     check('transports filtered', user('tom')['passkeys'][0].get('transports') == ['internal'], user('tom')['passkeys'][0].get('transports'))
 
@@ -356,7 +359,7 @@ with sync_playwright() as p:
     check('replay without challenge rejected', st == 401, r)
     st, r = d.call('passkey_login', good)
     check('challenge is single-use', st == 401, r)
-    st, r = PkClient('192.0.2.13').pk_login(k2)
+    st, r = PkClient('192.0.2.13', app=True).pk_login(k2)
     check('API login with RS256 passkey', st == 200 and r['user']['username'] == 'tom', r)
     bad = [('wrong origin', {'origin': 'http://localhost:1'}, 'anderen Seite'), ('wrong challenge', {'challenge': b64u(os.urandom(32))}, 'Anfrage passt nicht'),
            ('wrong type', {'typ': 'webauthn.create'}, 'Ungültige'), ('no user verification', {'flags': 0x01}, 'nicht geprüft'),
