@@ -51,6 +51,8 @@ regexes = [
   '''Angreifer-Kennwort-77''',
   # Platzhalter in .env.example
   '''hier-das-Postfach-Passwort''',
+  # Bestellwünsche: zweiter Bearbeiter, der im Test deaktiviert wird (tests/e2e/test_order_management.py)
+  '''Zweit-Zugang-4711''',
 ]
 
 [[allowlists]]
