@@ -379,7 +379,7 @@ function mkt_csv(array $liste, array $einst, array $kampagnen): string
             $e['format'] !== '' ? $name($einst['formate'], $e['format']) : '', $e['saeule'] !== '' ? $name($einst['saeulen'], $e['saeule']) : '',
             $e['kampagne'] !== '' ? $name($kampagnen, $e['kampagne']) : '', $e['verantwortlichName'], $e['drehtermin'], $e['produktionBis'],
             $e['prioritaet'] === 'hoch' ? 'hoch' : 'normal', $e['ki'] ? 'Ja' : 'Nein', $e['hook'], $e['text'], $e['hashtags'], $e['cta'],
-            $e['freigabe']['von'] ?? '', isset($e['freigabe']['t']) ? substr($e['freigabe']['t'], 0, 10) : '', implode(' ', array_values($e['veroeffentlicht'])),
+            $e['freigabe']['von'] ?? '', isset($e['freigabe']['t']) ? ortstag((string)$e['freigabe']['t']) : '', implode(' ', array_values($e['veroeffentlicht'])),
             $reich ?: '', $inter ?: '']));
     }
     return "\xEF\xBB\xBF" . implode("\r\n", $zeilen) . "\r\n";

@@ -251,6 +251,13 @@ check('CSV (auch nur mit Ansehrecht): BOM, Kopf, alle Beiträge', st == 200 and 
 check('CSV: Werte (Titel, Kanalnamen, Kennzahlen)', any('Woran erkennt man gutes Dry Aged' in z and 'Instagram (Feed)' in z and '"1200"' in z for z in zeilen), zeilen)
 check('CSV: keine Formeln (auch nicht nach Steuerzeichen/Tabulator)', any('"\'=HYPERLINK' in z for z in zeilen) and not any(';"=' in z or ';"\t' in z for z in zeilen))
 check('CSV nur per POST', V.call('marketing_export')[0] == 405)
+# Freigabe um 00:30 Berliner Zeit (23:30 UTC am Vortag): CSV zeigt den Berliner Kalendertag
+doc = dokument('marketing-beitraege')
+fg = next(e for e in doc['liste'] if e.get('freigabe'))
+fg['freigabe']['t'] = '2026-03-14T23:30:00Z'
+storage_write('marketing-beitraege', doc)
+zeile = next(z for z in V.call('marketing_export', {}, raw=True)[2].split('\n') if fg['titel'] in z)
+check('CSV: Freigabedatum als Berliner Kalendertag (00:30 Uhr → 15.03., nicht 14.03.)', '"2026-03-15"' in zeile and '"2026-03-14"' not in zeile, zeile)
 
 # ── Löschen ──
 st, r = A.call('marketing_beitrag_loeschen', {'id': b3['id']})
