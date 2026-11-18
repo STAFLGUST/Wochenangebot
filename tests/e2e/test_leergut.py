@@ -813,6 +813,15 @@ kaputt = DL2.replace('      7.10.26      1 H1', '     31.02.26      1 H1')
 st, r = Bb.call('leergut_dachser_import', {'text': kaputt, 'vorschau': True})
 st2, r2 = Bb.call('leergut_dachser_import', {'text': kaputt})
 check('Dachser: unlesbares Datum → Fehler mit Zeile, Übernehmen 422', st == 200 and len(r['fehler']) == 1 and 'Zustelldatum' in r['fehler'][0]['text'] and st2 == 422, (r, st2))
+DL4 = dachser_liste([('12.10.26', '09900021', 'MINUSMARKT', 'TESTORT', '13.10.26', -2, 'E2', 'R', '09900000021'),
+                     ('12.10.26', '09900022', 'NULLMARKT', 'TESTORT', '13.10.26', 2, 'E2', 'R', '09900000022'),
+                     ('12.10.26', '09900022', 'NULLMARKT', 'TESTORT', '13.10.26', -2, 'E2', 'R', '09900000022')], per='30.11.26', seiten=1)
+n_d = len(abschr())
+st, r = Bb.call('leergut_dachser_import', {'text': DL4})
+ns = nach_sendung()
+check('Dachser: Anzahl −2 → keine Abschreibung, nur Abweichung (erfasst 0); +2 und −2 in einer Sendung → nichts angelegt',
+      st == 200 and len(abschr()) == n_d and '09900000021' not in ns and '09900000022' not in ns and r['zahlen']['neu'] == 0
+      and r['abweichend'] == [{'sendung': '09900000021', 'empfaenger': 'Minusmarkt', 'lm': 'e2', 'erfasst': 0, 'dachser': -2}], r)
 
 # Sehr lange Zeilen gehen nicht mehr durch die Zeilen-Regexe: die Fallzeile „… (.+?)\s+(\d{8,14})\s*$“ brauchte dafür
 # quadratisch viel Rechenzeit (isoliert gemessen 15 s bei 100 KB, 79 s bei 200 KB; bei den zugelassenen 2 MB etwa eine

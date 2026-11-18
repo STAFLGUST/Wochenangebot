@@ -1266,10 +1266,12 @@ function lg_dachser_abgleich(array $l, array $liste, array $me): array
         foreach ($g['menge'] as $id => $n) {
             $bei = null;
             foreach ($nachSendung[$sendung] ?? [] as $i) if (isset($liste[$i]['menge'][$id])) { $bei = $i; break; }
-            if ($bei === null) { $fehlt[$id] = $n; continue; }
-            if ((int)$liste[$bei]['menge'][$id] !== $n) {
+            if ($bei === null && $n > 0) { $fehlt[$id] = $n; continue; }
+            // Summe ≤ 0 nie als Fall anlegen (Abschreibungen brauchen Mengen > 0): negativ nur melden, 0 übergehen
+            $erfasst = $bei === null ? 0 : (int)$liste[$bei]['menge'][$id];
+            if ($erfasst !== $n) {
                 $hatAbw = true;
-                if (count($abw) < 50) $abw[] = ['sendung' => $sendung, 'empfaenger' => $g['empfaenger'], 'lm' => $id, 'erfasst' => (int)$liste[$bei]['menge'][$id], 'dachser' => $n];
+                if (count($abw) < 50) $abw[] = ['sendung' => $sendung, 'empfaenger' => $g['empfaenger'], 'lm' => $id, 'erfasst' => $erfasst, 'dachser' => $n];
             }
         }
         if (!$fehlt) { $z[$hatAbw ? 'abweichend' : 'schon']++; continue; }   // je Sendung genau eine Zahl: neu, ergänzt, abweichend oder schon erfasst
