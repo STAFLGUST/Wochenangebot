@@ -94,6 +94,28 @@ switch ($action) {
             respond(['ok' => true] + eudr_stand());
         }
 
+        /* Original einer eingelesenen Datei (Bericht, GeoJSON) in Teilen hochladen und im Eingang des QM-Systems ablegen
+           (Entscheidung des Inhabers 18.11.2026; Schnittstelle des QM-Systems qs_eingang_hochladen, GR-101). „lieferant“ wird
+           zum Unterordner. Nach dem letzten Teil steht an den Betrieben aus dieser Datei, wo das Original liegt. */
+        case 'containerimport_eudr_original': {
+            $me = eudr_bearbeiter();
+            require_once __DIR__ . '/../lib/dateiablage.php';
+            require_once __DIR__ . '/../module/qs/ablage.php';
+            $b = body();
+            $lieferant = str_replace(['/', '\\'], ' ', eudr_text($b['lieferant'] ?? '', 120, 'Lieferant'));
+            $ablage = qs_eingang_hochladen($me, $b, EUDR_QM_ORDNER . ($lieferant !== '' ? '/' . $lieferant : ''));
+            if (!$ablage['fertig']) respond(['ok' => true, 'fertig' => false, 'upload' => $ablage['upload'], 'empfangen' => $ablage['empfangen']]);
+            if ($ablage['status'] === 'fehler') fail($ablage['grund'], $ablage['code']);
+            $n = with_lock(EUDR_SPERRE, function () use ($ablage, $me) {
+                $doc = eudr_betriebe();
+                [$doc['liste'], $n] = eudr_original_vermerken($doc['liste'], $ablage, $me);
+                if ($n) eudr_betriebe_schreiben($doc);
+                return $n;
+            });
+            audit('containerimport', 'EUDR: Original „' . $ablage['name'] . '“ im Eingang des QM-Systems ' . ($ablage['status'] === 'eingang' ? 'abgelegt' : 'schon vorhanden'));
+            respond(['ok' => true, 'fertig' => true, 'status' => $ablage['status'], 'vermerkt' => $n] + eudr_stand());
+        }
+
         /* Eigene Gegenprüfung (Global Nature Watch, Whisp …) an einem Betrieb ergänzen – wird nie geändert oder gelöscht */
         case 'containerimport_eudr_gegenpruefung': {
             $me = eudr_bearbeiter();

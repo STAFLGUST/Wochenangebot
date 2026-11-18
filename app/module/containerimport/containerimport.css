@@ -47,7 +47,7 @@ body.ci { line-height: 1.45; }
 .ci-legende .ci-ampel { margin: 0 2px 0 8px; }
 .ci-check { display: inline-flex; align-items: center; gap: 8px; font-size: 13.5px; color: var(--r-text-2); cursor: pointer; }
 .ci-check input { width: 16px; height: 16px; margin: 0; accent-color: var(--r-akzent); }
-.ci-archivwahl { min-height: 36px; }
+.ci-archivwahl, .dlg-body > .ci-check { min-height: 36px; }
 .ci-leer { margin: 0; padding: 16px; font-size: 14px; color: var(--r-leise); list-style: none; }
 
 /* Listen */

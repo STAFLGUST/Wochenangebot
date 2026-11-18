@@ -2,17 +2,19 @@
    Lieferketten (Auftrag des Inhabers 18.11.2026; Gestaltung „C2“).
    Ansichten: Sendungen (mit Risikoprofil), Herkunftsbetriebe (Geolokalisierung, Bericht, eigene Gegenprüfung), Karte.
    Daten: containerimport_start (Stand), containerimport_eudr_pruefen (Dateien prüfen, ohne zu speichern),
-   containerimport_eudr_betriebe_save, _gegenpruefung, _sendung_save, _sendung_abschluss (jede Antwort bringt den neuen
+   containerimport_eudr_betriebe_save, _original, _gegenpruefung, _sendung_save, _sendung_abschluss (jede Antwort bringt den neuen
    Stand mit), containerimport_eudr_export (GeoJSON für das EU-Informationssystem).
-   Unterlagen einlesen: Entwaldungsberichte (PDF) liest der Browser mit pdf.js (assets/vendor/pdfjs, eudr-bericht.js) – die
-   Datei verlässt den Rechner nicht, gespeichert werden Name und Prüfsumme; Lieferanten-GeoJSON und eingefügte Koordinaten
-   prüft der Server. Alle Regeln (Umrechnung, Prüfung der Flächen, Risikoprofil) liegen auf dem Server; diese Seite zeigt an.
+   Unterlagen einlesen: Entwaldungsberichte (PDF) liest der Browser mit pdf.js (assets/vendor/pdfjs, eudr-bericht.js);
+   Lieferanten-GeoJSON und eingefügte Koordinaten prüft der Server. Am Betrieb stehen Name und Prüfsumme der Datei. Beim
+   Übernehmen gehen die Originale – wenn angehakt – in Teilen an containerimport_eudr_original und von dort in den Eingang
+   des QM-Systems (Entscheidung des Inhabers 18.11.2026). Alle Regeln (Umrechnung, Prüfung der Flächen, Risikoprofil) liegen auf dem Server; diese Seite zeigt an.
    Fenster schließen nur über ×, „Schließen“ oder Escape (theme.js). Rechte prüft der Server bei jeder Aktion (GR-103);
    ausgeblendete Knöpfe sind nur Anzeige. Kein Inline-Skript (CSP); fremde Texte nur maskiert. */
 'use strict';
 (() => {
   const API = '../../api/';
   const PDFJS = new URL('../../assets/vendor/pdfjs/', document.currentScript.src).href;
+  const TEIL = 2 * 1024 * 1024;            // Bytes je Teil beim Ablegen eines Originals (Base64 bleibt unter der Grenze des Servers)
   const MAX_ANFRAGE = 3 * 1024 * 1024;     // je Durchgang; der Server nimmt 6 MB an, braucht zum Prüfen aber ein Vielfaches an Speicher
   const $ = (s, el = document) => el.querySelector(s);
   const $$ = (s, el = document) => [...el.querySelectorAll(s)];
@@ -199,7 +201,7 @@
           ${feld('Landnutzungsplan', 'b_landnutzung', b.bericht.landnutzung, { wahl: nachweisWahl, aus })}
           ${feld('Umweltgenehmigung', 'b_umwelt', b.bericht.umwelt, { wahl: nachweisWahl, aus })}
         </div>
-        <p class="ci-klein ci-leise">Quelle: ${esc({ bericht: 'Entwaldungsbericht', geojson: 'GeoJSON des Lieferanten', koordinaten: 'eingefügte Koordinaten' }[b.quelle.art])}${b.quelle.datei ? ` „${esc(b.quelle.datei)}“` : ''}${b.quelle.anbieter ? ` · ${esc(b.quelle.anbieter)}` : ''}${b.quelle.lieferant ? ` · von ${esc(b.quelle.lieferant)}` : ''}${b.quelle.bezug ? ` · Bezugssystem ${esc(b.quelle.bezug)}` : ''} · eingelesen ${tag(b.erstellt.t)} von ${esc(b.erstellt.von)}${b.quelle.sha256 ? ` · Prüfsumme <span class="ci-zahlen" title="SHA-256 der Datei: ${esc(b.quelle.sha256)}">${esc(b.quelle.sha256.slice(0, 12))}…</span>` : ''}</p>
+        <p class="ci-klein ci-leise">Quelle: ${esc({ bericht: 'Entwaldungsbericht', geojson: 'GeoJSON des Lieferanten', koordinaten: 'eingefügte Koordinaten' }[b.quelle.art])}${b.quelle.datei ? ` „${esc(b.quelle.datei)}“` : ''}${b.quelle.anbieter ? ` · ${esc(b.quelle.anbieter)}` : ''}${b.quelle.lieferant ? ` · von ${esc(b.quelle.lieferant)}` : ''}${b.quelle.bezug ? ` · Bezugssystem ${esc(b.quelle.bezug)}` : ''} · eingelesen ${tag(b.erstellt.t)} von ${esc(b.erstellt.von)}${b.quelle.sha256 ? ` · Prüfsumme <span class="ci-zahlen" title="SHA-256 der Datei: ${esc(b.quelle.sha256)}">${esc(b.quelle.sha256.slice(0, 12))}…</span> · ${b.quelle.qm ? `Original im QM-System, Eingang, Ordner „${esc(b.quelle.qm.pfad)}“` : 'Original nicht im QM-System abgelegt'}` : ''}</p>
 
         <h3 class="ci-h">Eigene Gegenprüfung der Entwaldung</h3>
         <p class="ci-klein">Unabhängig vom Bericht des Lieferanten: Fläche herunterladen, im Portal hochladen und das Ergebnis hier eintragen.</p>
@@ -378,8 +380,9 @@
     $('#lesen-inhalt').innerHTML = kopf('lesen-titel', 'Unterlagen einlesen', 'Entwaldungsberichte (PDF), GeoJSON-Dateien des Lieferanten oder eine Koordinatenliste')
       + `<div class="dlg-body">
         <div class="ci-raster drei">${feld('Herkunftsland', 'land', s ? s.land : 'PY', { wahl: laenderWahl(), hinweis: 'gilt, wenn die Datei kein Land nennt' })}${feld('Lieferant', 'lieferant', s ? s.lieferant : '')}${feld('Sendung', 'sendung', sendungId, { wahl: sendungen })}</div>
-        <label class="ci-ablage" for="lesen-dateien">${icon('hoch')}<span><strong>Dateien auswählen</strong><small>PDF-Berichte bleiben auf Ihrem Rechner – gelesen werden nur Betrieb und Koordinaten. GeoJSON-Dateien prüft der Server.</small></span>
+        <label class="ci-ablage" for="lesen-dateien">${icon('hoch')}<span><strong>Dateien auswählen</strong><small>PDF-Berichte liest Ihr Browser, GeoJSON-Dateien prüft der Server. Gespeichert werden Betrieb, Umriss, Dateiname und Prüfsumme.</small></span>
           <input type="file" id="lesen-dateien" multiple accept=".pdf,.geojson,.json,application/pdf,application/geo+json,application/json"></label>
+        <label class="ci-check"><input type="checkbox" name="qm" checked>Originaldateien beim Übernehmen im QM-System ablegen (Eingang, Ordner „EUDR“)</label>
         <details class="ci-einfuegen"><summary>Stattdessen eine Koordinatenliste einfügen</summary>
           <div class="ci-raster drei">${feld('Name des Betriebs', 'k_name', '')}${feld('Bezugssystem', 'k_system', 'wgs84', { wahl: [['wgs84', 'WGS84: Längengrad, Breitengrad'], ['utm', 'UTM: Rechtswert, Hochwert']] })}
             ${feld('UTM-Zone und Halbkugel', 'k_zone', '21S', { platz: 'z. B. 21S', hinweis: 'nur bei UTM' })}</div>
@@ -440,7 +443,8 @@
       }
     }
     knopf.disabled = false; knopf.removeAttribute('aria-busy');
-    S.lesen = { sendung: w.sendung, orte: ergebnis.flatMap((d) => d.orte) };
+    S.lesen = { sendung: w.sendung, orte: ergebnis.flatMap((d) => d.orte), qm: w.qm, lieferant: w.lieferant,
+      originale: new Map(dateien.map((d, i) => [vorbereitet[i].sha256, d]).filter(([sha]) => sha)) };
     const gruppe = (d) => `<section class="ci-datei"><h4>${esc(d.datei || 'Eingefügte Koordinaten')}</h4>
       ${d.fehler.map((t) => `<p class="ci-meldung">${icon('warn')} ${esc(t)}</p>`).join('')}${d.hinweise.map((t) => `<p class="ci-meldung neutral">${icon('info')} ${esc(t)}</p>`).join('')}
       ${d.orte.length ? `<ul class="ci-wahl">${d.orte.map((o) => { const i = S.lesen.orte.indexOf(o); return `<li><label><input type="checkbox" data-ort="${i}" checked>
@@ -462,9 +466,39 @@
     if (!gewaehlt.length) return;
     const r = await api('containerimport_eudr_betriebe_save', { sendung: S.lesen.sendung, betriebe: gewaehlt.map((o) => ({ ...o.eingabe, id: o.bekannt, rev: o.bekanntRev })) });
     if (!uebernehmen(r, 'Die Betriebe konnten nicht gespeichert werden')) return;
+    const pruefsummen = new Set(gewaehlt.map((o) => o.quelle.sha256));
+    const originale = S.lesen.qm ? [...S.lesen.originale].filter(([sha]) => pruefsummen.has(sha)) : [];
+    const fehler = [];
+    for (const [i, [sha, datei]] of originale.entries()) {
+      $('#lesen-zahl').textContent = `Originale werden im QM-System abgelegt … ${i + 1} von ${originale.length}`;
+      const meldung = await originalAblegen(datei, sha, S.lesen.lieferant);
+      if (meldung) fehler.push(`${datei.name}: ${meldung}`);
+    }
     $('#dlg-lesen').close();
-    toast(`${plural(gewaehlt.length, 'Betrieb', 'Betriebe')} übernommen${S.lesen.sendung ? ' und der Sendung zugeordnet' : ''}.`);
-    if (S.lesen.sendung) sendungOeffnen(S.lesen.sendung); else if (S.sicht === 'sendungen') { S.sicht = 'betriebe'; zeichnen(); }
+    const text = `${plural(gewaehlt.length, 'Betrieb', 'Betriebe')} übernommen${S.lesen.sendung ? ' und der Sendung zugeordnet' : ''}`;
+    if (fehler.length) toast(`${text}. Nicht im QM-System abgelegt – ${fehler.join('; ')}`, true);
+    else toast(`${text}${originale.length ? `, ${plural(originale.length, 'Original', 'Originale')} im QM-System abgelegt` : ''}.`);
+    if (S.lesen.sendung) sendungOeffnen(S.lesen.sendung); else if (S.sicht === 'sendungen') { S.sicht = 'betriebe'; zeichnen(); } else zeichnen();
+  }
+  /* Bytes als Base64 (in Stücken, damit lange Dateien den Aufrufstapel nicht sprengen) */
+  function base64(bytes) {
+    let text = '';
+    for (let i = 0; i < bytes.length; i += 0x8000) text += String.fromCharCode.apply(null, bytes.subarray(i, i + 0x8000));
+    return btoa(text);
+  }
+  /* Eine Originaldatei in Teilen an den Server geben, der sie im Eingang des QM-Systems ablegt. '' oder die Fehlermeldung.
+     Die Ablage kennt „.geojson“ nicht als Dateiart – solche Dateien heißen dort „.json“. */
+  async function originalAblegen(datei, sha256, lieferant) {
+    const name = datei.name.replace(/\.geojson$/i, '.json');
+    let upload = '';
+    for (let teil = 0; teil * TEIL < Math.max(datei.size, 1); teil++) {
+      const daten = base64(new Uint8Array(await datei.slice(teil * TEIL, (teil + 1) * TEIL).arrayBuffer()));
+      const r = await api('containerimport_eudr_original', { upload, teil, daten, name, groesse: datei.size, sha256, lieferant });
+      if (r.status !== 200 || !r.data.ok) return fehlerText(r, 'Ablage fehlgeschlagen');
+      if (r.data.fertig) { S.d = { ...S.d, ...r.data }; return ''; }
+      upload = r.data.upload;
+    }
+    return 'Die Datei kam nicht vollständig an.';
   }
 
   /* ---------- Laden und Ereignisse ---------- */

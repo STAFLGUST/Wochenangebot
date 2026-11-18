@@ -20,6 +20,11 @@ schreibend = true
 oberflaeche = "containerimport.intern"
 schreibend = true
 
+# Original einer eingelesenen Datei in Teilen hochladen und im Eingang des QM-Systems ablegen
+[aktion.containerimport_eudr_original]
+oberflaeche = "containerimport.intern"
+schreibend = true
+
 # Eigene Gegenprüfung der Entwaldung an einem Betrieb ergänzen
 [aktion.containerimport_eudr_gegenpruefung]
 oberflaeche = "containerimport.intern"

@@ -20,6 +20,7 @@ const EUDR_MAX_PRUEFUNGEN = 50;          // Gegenprüfungen je Betrieb
 const EUDR_NACHWEIS = ['konform', 'nicht_konform', 'unbekannt'];
 const EUDR_DREI = ['ja', 'nein', 'offen'];
 const EUDR_QUELLEN = ['bericht', 'geojson', 'koordinaten'];
+const EUDR_QM_ORDNER = 'EUDR';              // Ordner im Eingang des QM-Systems für die Originale der Lieferantenunterlagen
 const EUDR_FLAECHE_TOLERANZ = 0.05;      // Abweichung berechnete ↔ angegebene Fläche, ab der ein Hinweis erscheint
 const EUDR_BERICHT_MONATE = 12;          // älter darf ein Entwaldungsbericht bei der Schlachtung nicht sein
 
@@ -168,6 +169,7 @@ function eudr_betrieb_pruefen(array $b, ?array $alt): array
     $n = (is_array($b['bericht'] ?? null) ? $b['bericht'] : []) + ($alt['bericht'] ?? []);
     $b += $alt ?? [];
     $q = is_array($b['quelle'] ?? null) ? $b['quelle'] : [];
+    $sha = is_string($q['sha256'] ?? null) && preg_match('/^[0-9a-f]{64}$/', $q['sha256']) ? $q['sha256'] : '';
     $korrekturen = array_merge(array_intersect(array_keys(GEO_KORREKTUREN), is_array($q['korrekturen'] ?? null) ? $q['korrekturen'] : []), $g['korrekturen']);
     $nachweis = fn(string $feld, string $was): string => eudr_wahl($n[$feld] ?? null, EUDR_NACHWEIS, $was, 'unbekannt');
     $jahr = $n['bilderBis'] ?? null;
@@ -183,11 +185,13 @@ function eudr_betrieb_pruefen(array $b, ?array $alt): array
         'quelle' => [
             'art' => eudr_wahl($q['art'] ?? null, EUDR_QUELLEN, 'Quelle', 'koordinaten'),
             'datei' => eudr_text($q['datei'] ?? '', 200, 'Dateiname'),
-            'sha256' => preg_match('/^[0-9a-f]{64}$/', (string)($q['sha256'] ?? '')) ? (string)$q['sha256'] : '',
+            'sha256' => $sha,
             'lieferant' => eudr_text($q['lieferant'] ?? '', 120, 'Lieferant'),
             'anbieter' => eudr_text($q['anbieter'] ?? '', 120, 'Ersteller des Berichts'),
             'bezug' => eudr_text($q['bezug'] ?? '', 40, 'Bezugssystem'),
             'korrekturen' => array_values(array_unique($korrekturen)),
+            // Ablage des Originals im QM-System: setzt nur der Server (eudr_original_vermerken), gilt für genau diese Datei
+            'qm' => $sha !== '' && $sha === ($alt['quelle']['sha256'] ?? '') ? ($alt['quelle']['qm'] ?? null) : null,
         ],
         'bericht' => [
             'datum' => eudr_datum($n['datum'] ?? '', 'Datum der Analyse', true),
@@ -202,6 +206,20 @@ function eudr_betrieb_pruefen(array $b, ?array $alt): array
         'notiz' => eudr_text($b['notiz'] ?? '', 2000, 'Notiz'),
         'aktiv' => (bool)($b['aktiv'] ?? true),
     ];
+}
+
+/* An allen Betrieben, die aus der Datei mit dieser Prüfsumme stammen, vermerken, wo ihr Original im QM-System liegt
+   ($ablage = Antwort von qs_eingang_hochladen). Liefert die geänderte Liste und die Zahl der Betriebe. */
+function eudr_original_vermerken(array $liste, array $ablage, array $me): array
+{
+    $n = 0;
+    foreach ($liste as $i => $b) {
+        if (($b['quelle']['sha256'] ?? '') !== $ablage['sha256']) continue;
+        $liste[$i]['quelle']['qm'] = ['status' => $ablage['status'], 'datei' => (string)($ablage['datei'] ?? ''), 'name' => $ablage['name'], 'pfad' => $ablage['pfad']] + eudr_wer($me);
+        $liste[$i]['rev']++;
+        $n++;
+    }
+    return [$liste, $n];
 }
 
 /* Kennung der Geometrie zum Wiedererkennen derselben Fläche */

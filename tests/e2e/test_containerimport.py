@@ -8,9 +8,12 @@ Speichern, Wiedererkennen, Revision (409); Risikoprofil (kritisch bei fehlerhaft
 Gegenprüfung mit Befund und jüngerer Entwarnung); Abschluss (nie mit kritischem Kriterium, offen nur mit Begründung,
 Schnappschuss bleibt bei späteren Änderungen, GR-106; danach nur noch Sorgfaltserklärung änderbar; wieder öffnen mit Grund);
 Export (Eigenschaften in vorgeschriebener Schreibweise, Fläche als Zahl, fehlerhafte Flächen ausgelassen).
+Originale der Unterlagen im Eingang des QM-Systems (Schnittstelle des QM, nicht doppelt, mehrere Teile, gesperrte Dateiart).
 Oberfläche: Bericht als PDF im Browser lesen (pdf.js, erfundener Bericht im Aufbau des Lieferanten), Erklärung ohne
 Koordinaten wird abgewiesen, Übernehmen, Karte, Fenster, Datei für TRACES; Desktop und 390 px, hell und dunkel; nur ansehen.
 Alle Betriebe sind erfunden (GR-007)."""
+import base64
+import hashlib
 import json
 import math
 import os
@@ -391,7 +394,7 @@ with sync_playwright() as pw:
 
     # Unterlagen einlesen: Bericht (PDF, im Browser gelesen), Lieferanten-GeoJSON, Erklärung ohne Koordinaten
     p.click('#ci-lesen'); p.wait_for_selector('#dlg-lesen[open]')
-    p.select_option('#f-sendung', sid)
+    p.select_option('#f-sendung', sid); p.fill('#f-lieferant', 'Frigorifico/Beispiel')
     p.set_input_files('#lesen-dateien', [pfade['Compliance_Report_Estancia_Beispiel.pdf'], os.path.join(FIX, 'containerimport', 'lieferant.geojson'), pfade['Erklaerung_Lieferant.pdf']])
     p.wait_for_selector('#lesen-ergebnis .ci-datei')
     text = p.inner_text('#lesen-ergebnis')
@@ -407,6 +410,13 @@ with sync_playwright() as pw:
     check('Einlesen: Betrieb aktualisiert (kein Doppelter), Quelle mit Dateiname und Prüfsumme, der Sendung zugeordnet', len(stand()['betriebe']) == 6 and b['quelle']['datei'] == 'Compliance_Report_Estancia_Beispiel.pdf'
           and len(b['quelle']['sha256']) == 64 and b['quelle']['sha256'] != 'a' * 64 and b['region'] == 'BEISPIELDEPARTAMENTO' and b['ort'] == 'MUSTERORT' and b['bericht']['datum'] == '2026-11-04'
           and b['bericht']['bilderBis'] == 2025 and len(b['pruefungen']) == 2 and b['id'] in stand()['sendungen'][0]['betriebe'], b)
+
+    # Original im QM-System: nur die übernommene Datei, im Eingang unter „EUDR/<Lieferant>“ (Schrägstrich im Namen ist kein Ordner)
+    eingang = [f for f in _json(storage_raw('qs-ablage'))['liste'] if f.get('ziel') == 'eingang']
+    check('Original des übernommenen Berichts liegt im Eingang des QM-Systems, am Betrieb vermerkt', len(eingang) == 1 and eingang[0]['name'] == 'Compliance_Report_Estancia_Beispiel.pdf'
+          and eingang[0]['pfad'] == 'EUDR/Frigorifico Beispiel' and eingang[0]['sha256'] == b['quelle']['sha256'] and eingang[0]['hochgeladen']['von'] == 'Ina Import'
+          and b['quelle']['qm']['status'] == 'eingang' and b['quelle']['qm']['datei'] == eingang[0]['id'] and b['quelle']['qm']['pfad'] == 'EUDR/Frigorifico Beispiel', (eingang, b['quelle']))
+    check('Toast nennt die Ablage', 'Original im QM-System abgelegt' in p.inner_text('#ci-toast'), p.inner_text('#ci-toast'))
 
     # Fenster „Sendung“: Risikoprofil, Karte, Datei für TRACES
     p.wait_for_function("document.querySelector('#sendung-karte')?.dataset.karte === 'bereit'")
@@ -476,6 +486,35 @@ with sync_playwright() as pw:
           and v.locator('#dlg-sendung button[type=submit]').count() == 0 and v.locator('#dlg-sendung [data-export-sendung]').count() == 1)
     v.context.close()
     br.close()
+# ---------- Originale im QM-System (Schnittstelle qs_eingang_hochladen) ----------
+def original(c, name, inhalt, lieferant='Frigorifico Beispiel', teil=1 << 20):
+    """Datei in Teilen an containerimport_eudr_original geben; Antwort des letzten Aufrufs."""
+    upload = ''; antwort = (0, {})
+    for nr, ab in enumerate(range(0, max(len(inhalt), 1), teil)):
+        antwort = c.call('containerimport_eudr_original', {'upload': upload, 'teil': nr, 'daten': base64.b64encode(inhalt[ab:ab + teil]).decode(), 'name': name,
+                                                            'groesse': len(inhalt), 'sha256': hashlib.sha256(inhalt).hexdigest(), 'lieferant': lieferant})
+        if antwort[0] != 200 or antwort[1].get('fertig'):
+            break
+        upload = antwort[1]['upload']
+    return antwort
+
+
+check('Original ablegen: nur mit „EUDR bearbeiten“ (403), nicht per GET (405)', original(L, 'x.pdf', REPORT)[0] == 403 and I.call('containerimport_eudr_original')[0] == 405)
+st, r = original(I, 'Compliance_Report_Estancia_Beispiel.pdf', REPORT)
+check('dasselbe Original noch einmal: nicht doppelt abgelegt', st == 200 and r['fertig'] and r['status'] == 'vorhanden' and r['vermerkt'] == 1 and len(r['betriebe']) == 6
+      and len([f for f in _json(storage_raw('qs-ablage'))['liste'] if f.get('ziel') == 'eingang']) == 1, (st, r.get('status'), r.get('error')))
+gross = REPORT + b'%' + b' ' * (2 * 1024 * 1024 + 500)   # über zwei Teile
+st, r = original(I, 'Grosser_Bericht.pdf', gross)
+neu = [f for f in _json(storage_raw('qs-ablage'))['liste'] if f.get('name') == 'Grosser_Bericht.pdf']
+check('Original in mehreren Teilen: vollständig im Eingang, ohne passenden Betrieb kein Vermerk', st == 200 and r['status'] == 'eingang' and r['vermerkt'] == 0 and len(neu) == 1 and neu[0]['groesse'] == len(gross)
+      and neu[0]['sha256'] == hashlib.sha256(gross).hexdigest(), (st, r.get('status'), r.get('error'), neu))
+st, r = original(I, 'lieferant.json', GEOJSON.encode(), lieferant='')
+check('GeoJSON als „.json“, ohne Lieferant direkt im Ordner „EUDR“', st == 200 and r['status'] == 'eingang' and [f['pfad'] for f in _json(storage_raw('qs-ablage'))['liste'] if f['name'] == 'lieferant.json'] == ['EUDR'], (st, r))
+st, r = original(I, 'bericht.exe', b'MZ' + b'0' * 100)
+check('gesperrte Dateiart wird abgewiesen (422)', st == 422, (st, r))
+eingang = A.call('qs_eingang')
+check('QM-System: die Originale erscheinen im Eingang (nur mit qs.bearbeiten)', eingang[0] == 200 and 'Compliance_Report_Estancia_Beispiel.pdf' in json.dumps(eingang[1], ensure_ascii=False) and I.call('qs_eingang')[0] == 403, eingang[0])
+check('Protokoll nennt die Ablage', 'im Eingang des QM-Systems abgelegt' in json.dumps(A.call('log')[1], ensure_ascii=False))
 check('keine JavaScript-Fehler', not errs, errs)
 
 print(f'{sum(res)}/{len(res)} passed')

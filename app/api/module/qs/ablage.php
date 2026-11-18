@@ -277,6 +277,26 @@ function qs_ablage_eintragen(array $neu, array $me, string $wie, array &$erzeugt
     if ($abNeu) qs_ablage_schreiben($ab);
     return [$aus, $doc['liste']];
 }
+/* Schnittstelle für andere Module (GR-101, Schnittstellen statt Durchgriff): eine Datei in Teilen annehmen (lib/dateiablage.php,
+   $b wie bei qs_datei_hochladen: upload, teil, daten, name, groesse, sha256) und nach dem letzten Teil in den Eingang legen –
+   unter dem Ordnerpfad $pfad, von dort sortiert das QM sie ein. Das aufrufende Modul prüft sein eigenes Recht; zuordnen und
+   löschen bleibt qs.bearbeiten. Dieselbe Datei am selben Pfad wird nicht doppelt abgelegt („vorhanden“), eine im Eingang
+   gelöschte nicht erneut („verworfen“). Rückgabe ['fertig' => false, 'upload', 'empfangen'] oder
+   ['fertig' => true, 'status' => eingang|vorhanden|verworfen|fehler, 'datei' (Kennung), 'sha256', 'name', 'pfad', 'grund', 'code']. */
+function qs_eingang_hochladen(array $me, array $b, string $pfad): array
+{
+    $pfad = qs_pfad($pfad);
+    $r = ablage_teil('qs', (string)$me['id'], ['pfad' => $pfad], $b);
+    if (!$r['fertig']) return $r;
+    $datei = $r['datei'];
+    $abgelegt = [(string)$datei['id']]; $erzeugt = []; $gespeichert = [];
+    qs_ablage_aufraeumen($abgelegt, $erzeugt, $gespeichert);   // scheitert das Eintragen, bleibt keine verwaiste Datei zurück
+    [$aus] = with_lock('qs-dokumente', function () use ($datei, $pfad, $me, &$erzeugt) {
+        return qs_ablage_eintragen([['datei' => $datei, 'ziel' => QS_EINGANG, 'version' => '', 'pfad' => $pfad, 'eingang' => $pfad]], $me, 'abgelegt', $erzeugt);
+    });
+    if ($aus[0]['status'] === 'eingang') $gespeichert = array_flip($abgelegt);
+    return ['fertig' => true, 'sha256' => (string)$datei['sha256'], 'name' => (string)$datei['name'], 'pfad' => $pfad] + $aus[0];
+}
 /* Liegt in dieser Version schon eine aktive Datei mit diesem Inhalt (SHA-256, auch Rohfassung)? Kennung oder null */
 function qs_datei_gleich(array $d, int $vi, string $sha): ?string
 {
