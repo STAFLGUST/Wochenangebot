@@ -17,6 +17,7 @@ import hashlib
 import json
 import math
 import os
+import re
 import tempfile
 from playwright.sync_api import sync_playwright
 from kunden_hilfe import Client, B
@@ -463,6 +464,28 @@ with sync_playwright() as pw:
     p.select_option('#ci-karte-sendung', sid); p.wait_for_function("document.querySelectorAll('#ci-karte .ci-k-marke').length === 2")
     check('Karte: Auswahl einer Sendung zeigt nur ihre Betriebe', p.locator('.ci-kartenliste button').count() == 2)
     p.context.close()
+
+    # Herkunftskarte des Servers (Südamerika, Neuseeland): ist /karte/herkunft.pmtiles da, zeichnet die Detailkarte Straßen und
+    # Orte unter die Flächen. Der Testserver kennt keine Byte-Bereiche – die Datei kommt hier aus dem Testauszug der Detailkarte.
+    PM = open(os.path.join(FIX, 'karte', 'hamburg.pmtiles'), 'rb').read()
+
+    def kartendatei(route):
+        m = re.match(r'bytes=(\d+)-(\d*)', route.request.headers.get('range', ''))
+        a, e = (int(m[1]), min(int(m[2] or len(PM) - 1), len(PM) - 1)) if m else (0, len(PM) - 1)
+        route.fulfill(status=206 if m else 200, headers={'Content-Range': f'bytes {a}-{e}/{len(PM)}', 'Accept-Ranges': 'bytes', 'Content-Type': 'application/octet-stream'}, body=PM[a:e + 1])
+
+    d = seite('ina'); d.context.route('**/karte/herkunft.pmtiles', kartendatei)
+    d.reload(); d.wait_for_selector('#ci-app:not([hidden]) #ci-sendungen tr[data-sendung]')
+    d.click('[data-sicht="karte"]'); d.wait_for_selector('#ci-karte[data-karte="bereit"] canvas', timeout=60000)
+    aktiv = [x for x in stand()['betriebe'] if x['aktiv']]
+    check('Herkunftskarte: Detailkarte statt SVG, alle Flächen und eine Marke je Betrieb', d.locator('#ci-karte svg.ci-k-haupt').count() == 0
+          and d.evaluate("(() => { const k = document.querySelector('#ci-karte').staflKarte; return [k.gebiete(), k.anzahl()]; })()") == [len([x for x in aktiv if x['geometrie']['type'] != 'Point']), len(aktiv)])
+    shot(d, os.path.join(SH, 'containerimport-herkunftskarte-1280.png'))
+    d.click('.ci-kartenliste button >> nth=0'); d.wait_for_selector('#betrieb-karte[data-karte="bereit"] canvas', timeout=60000)
+    check('Herkunftskarte im Fenster „Betrieb“: genau diese Fläche, ohne Marken', d.evaluate("(() => { const k = document.querySelector('#betrieb-karte').staflKarte; return [k.gebiete(), k.anzahl()]; })()") == [1, 0])
+    d.keyboard.press('Escape'); d.select_option('#ci-karte-sendung', sid); d.wait_for_selector('#ci-karte[data-karte="bereit"] canvas')
+    check('Herkunftskarte: Auswahl einer Sendung zeichnet neu (eine Karte, nicht zwei übereinander)', d.locator('#ci-karte canvas').count() == 1 and d.evaluate("document.querySelector('#ci-karte').staflKarte.anzahl()") == 2)
+    d.context.close()
 
     # Handy 390 px, dunkel: nichts läuft über den Rand
     m = seite('ina', {'width': 390, 'height': 844}, 'dark'); m.wait_for_selector('#ci-app:not([hidden]) #ci-sendungen tr[data-sendung]')

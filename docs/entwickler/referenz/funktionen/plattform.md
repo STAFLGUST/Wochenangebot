@@ -813,10 +813,10 @@ _Wochenangebot – Eingabebereich, Verwaltung → Rollen und Rechte (nur Adminis
 _STAFL-Plattform – Detailkarte (Straßen, Gebäude, Ortsnamen) vom eigenen Server Gemeinsame Kartenkomponente für die CRM-Karte und die Auswertung der Verwaltung._
 
 - `webgl()`
-- `verfuegbar()` – Kartendatei vorhanden?
+- `verfuegbar(karte)` – Kartendatei vorhanden?
 - `skript(src)`
 - `laden()`
-- `stil(art)`
+- `stil(art, karte)`
 - `geojson(punkte)`
 - `erstellen(el, opt)`
 

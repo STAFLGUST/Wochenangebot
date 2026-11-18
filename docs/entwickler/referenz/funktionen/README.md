@@ -11,9 +11,9 @@ Karte für Entwickler und Agenten: Abschnitte und Funktionen jeder Code-Datei (P
 | [Leergut](leergut.md) | `leergut` | 4 | 131 |
 | [CRM](crm.md) | `crm` | 9 | 177 |
 | [REWE](rewe.md) | `rewe` | 5 | 186 |
-| [Qualitätssicherung](qs.md) | `qs` | 22 | 491 |
+| [Qualitätssicherung](qs.md) | `qs` | 22 | 492 |
 | [Einkauf](einkauf.md) | `einkauf` | 2 | 6 |
-| [Container-Import](containerimport.md) | `containerimport` | 7 | 106 |
+| [Container-Import](containerimport.md) | `containerimport` | 7 | 112 |
 | [HR](hr.md) | `hr` | 11 | 298 |
 | [Marketing](marketing.md) | `marketing` | 4 | 77 |
 | [Controlling](controlling.md) | `controlling` | 17 | 258 |

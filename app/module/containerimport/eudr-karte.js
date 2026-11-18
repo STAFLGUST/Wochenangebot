@@ -1,6 +1,8 @@
-/* STAFL-Plattform · Container-Import · EUDR – Karte der Herkunftsbetriebe als SVG, ohne fremde Kartendienste.
-   Hintergrund: Umrisse der Länder aus ../../assets/karte.json (Natural Earth, Mercator, 100 Einheiten je Grad); die
-   Detailkarte des Servers (assets/detailkarte.js) deckt nur Deutschland ab und hilft für Herkunftsländer nicht.
+/* STAFL-Plattform · Container-Import · EUDR – Karte der Herkunftsbetriebe, ohne fremde Kartendienste.
+   Mit der Herkunftskarte des Servers (Südamerika und Neuseeland, /karte/herkunft.pmtiles)
+   zeichnet die gemeinsame Detailkarte (assets/detailkarte.js) Straßen, Orte und Gewässer, die Flächen liegen darüber.
+   Fehlt die Datei oder kann der Browser kein WebGL, zeichnet diese Datei selbst als SVG:
+   Hintergrund: Umrisse der Länder aus ../../assets/karte.json (Natural Earth, Mercator, 100 Einheiten je Grad).
    Zwei Formen: Übersicht (alle Betriebe als Fläche mit Marke im Mittelpunkt; Rad und Knöpfe zoomen, Ziehen verschiebt,
    Klick auf einen Betrieb ruft beiKlick) und Einzelfläche (Umriss groß mit Eckpunkten, Maßstab und Lage im Land).
    Farbe je Betrieb nach seiner Ampel vom Server (gruen | gelb | rot).
@@ -92,11 +94,26 @@
     el.querySelector('[data-zoom="0"]').addEventListener('click', () => setze(start));
   }
 
+  const FARBE = { gruen: '#3f7a5a', gelb: '#b07d12', rot: '#9b2335' };
+  /* Detailkarte mit Straßen und Orten: Flächen in der Farbe ihrer Ampel, in der Übersicht zusätzlich eine Marke je Betrieb
+     (zusammengefasste Marken grau – eine Gruppe hat keine eigene Ampel) */
+  async function detail(el, opt, betriebe) {
+    const xs = betriebe.flatMap((b) => [b.rahmen[0], b.rahmen[2]]), ys = betriebe.flatMap((b) => [b.rahmen[1], b.rahmen[3]]);
+    const rand = opt.einzeln ? 0.01 : 0.5;
+    el.innerHTML = '';
+    const k = await window.STAFLKarte.erstellen(el, { karte: 'herkunft', farbe: 'grau', beiKlick: opt.beiKlick, rahmen: [Math.min(...xs) - rand, Math.min(...ys) - rand, Math.max(...xs) + rand, Math.max(...ys) + rand],
+      punkte: opt.einzeln ? [] : betriebe.map((b) => ({ id: b.id, lon: b.mitte[0], lat: b.mitte[1], titel: b.name, farbe: FARBE[b.ampel] })) });
+    k.setzeGebiete({ type: 'FeatureCollection', features: betriebe.filter((b) => b.geometrie.type !== 'Point')
+      .map((b) => ({ type: 'Feature', geometry: b.geometrie, properties: { farbe: FARBE[b.ampel], hervor: true } })) });
+  }
+
   async function zeichnen(el, opt) {
     const betriebe = (opt.betriebe || []).filter((b) => b.rahmen.every(Number.isFinite) && Math.abs(b.mitte[1]) <= 85);
     el.classList.add('ci-karte');
     el.dataset.karte = 'laedt';
+    if (el.staflKarte) { el.staflKarte.entfernen(); delete el.staflKarte; el.classList.remove('detailkarte'); }   // vorige Detailkarte dieses Elements
     if (!betriebe.length) { el.innerHTML = '<p class="ci-leer">Keine Fläche zum Anzeigen.</p>'; el.dataset.karte = 'leer'; return; }
+    if (window.STAFLKarte && await window.STAFLKarte.verfuegbar('herkunft')) { try { await detail(el, opt, betriebe); return; } catch (e) { console.warn('Herkunftskarte:', e); el.classList.remove('detailkarte'); el.dataset.karte = 'laedt'; } }
     const k = await ladeLaender();
     const seite = opt.einzeln ? 1.5 : 1.9;
     const start = ausschnitt(betriebe, opt.einzeln ? 0.18 : 0.5, opt.einzeln ? 0.002 : 11, seite);

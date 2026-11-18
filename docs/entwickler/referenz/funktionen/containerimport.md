@@ -2,7 +2,7 @@
 
 <!-- ERZEUGT von `python3 werkzeuge/doku.py erzeugen` – nicht von Hand ändern. Quelle: Funktionen und Kommentare im Code. Die CI prüft, dass diese Datei zum Code passt. -->
 
-7 Dateien, 106 Funktionen – in der Reihenfolge der Datei, **fett** die Abschnitte. Text = erste Aussage des Kommentars direkt über der Funktion (Python: Docstring). Übersicht aller Module: [README.md](README.md).
+7 Dateien, 112 Funktionen – in der Reihenfolge der Datei, **fett** die Abschnitte. Text = erste Aussage des Kommentars direkt über der Funktion (Python: Docstring). Übersicht aller Module: [README.md](README.md).
 
 ## `app/api/aktionen/containerimport.php`
 
@@ -41,6 +41,7 @@ _Container-Import · EUDR (Verordnung (EU) 2023/1115, entwaldungsfreie Lieferket
 
 - `eudr_geometrie_aus(b)` – Geometrie eines Betriebs aus der Eingabe: fertige GeoJSON-Geometrie in WGS84 oder Punktliste mit Bezugssystem („utm“ mit Zone und Halbkugel bzw. „wgs84“).
 - `eudr_betrieb_pruefen(b, alt)` – Felder eines Betriebs aus der Eingabe prüfen (ohne id, rev, Zeitstempel und Gegenprüfungen).
+- `eudr_original_vermerken(liste, ablage, me)` – An allen Betrieben, die aus der Datei mit dieser Prüfsumme stammen, vermerken, wo ihr Original im QM-System liegt ($ablage = Antwort von qs_eingang_hochladen).
 - `eudr_geo_kennung(g)` – Kennung der Geometrie zum Wiedererkennen derselben Fläche
 - `eudr_bekannt_tabelle(liste)` – Nachschlagetabelle der gespeicherten Betriebe zum Wiedererkennen (einmal je Anfrage): Land und Kennung bzw. Umriss → Betrieb
 - `eudr_bekannt(neu, tabelle)` – Gespeicherter Betrieb, der zu einem eingelesenen passt: gleiche Kennung im selben Land, sonst dieselbe Geometrie
@@ -153,6 +154,8 @@ _STAFL-Plattform · Modul Container-Import, Reiter EUDR – Hilfen und Kontrolle
 - `lesenPruefen()`
 - `lesenZahl()`
 - `lesenUebernehmen()`
+- `base64(bytes)` – Bytes als Base64 (in Stücken, damit lange Dateien den Aufrufstapel nicht sprengen)
+- `originalAblegen(datei, sha256, lieferant)` – Eine Originaldatei in Teilen an den Server geben, der sie im Eingang des QM-Systems ablegt. '' oder die Fehlermeldung.
 
 **Laden und Ereignisse**
 
@@ -171,13 +174,14 @@ _STAFL-Plattform · Container-Import · EUDR – Entwaldungsberichte der Liefera
 
 ## `app/module/containerimport/eudr-karte.js`
 
-_STAFL-Plattform · Container-Import · EUDR – Karte der Herkunftsbetriebe als SVG, ohne fremde Kartendienste._
+_STAFL-Plattform · Container-Import · EUDR – Karte der Herkunftsbetriebe, ohne fremde Kartendienste._
 
 - `ausschnitt(betriebe, rand, minGrad, seite)` – Rahmen [x, y, Breite, Höhe] in Karteneinheiten um die Betriebe: Rand anteilig, Mindestbreite in Grad
 - `rund(grenze)` – „Runde“ Strecke für den Maßstab: 1, 2 oder 5 mal Zehnerpotenz, höchstens grenze Meter
 - `svg(box, inhalt, klasse)`
 - `groessen(el)` – Größen, die mit dem Zoom mitgehen müssen (Marken, Eckpunkte), aus der aktuellen Breite des Ausschnitts setzen
 - `bedienung(el, start, beiKlick)` – Zoomen (Rad, Knöpfe) und Verschieben (Ziehen) über die viewBox; ein Antippen ohne Ziehen auf einem Betrieb ruft beiKlick – das Ziel wird beim Drücken …
+- `detail(el, opt, betriebe)` – Detailkarte mit Straßen und Orten: Flächen in der Farbe ihrer Ampel, in der Übersicht zusätzlich eine Marke je Betrieb (zusammengefasste Marken grau – eine …
 - `zeichnen(el, opt)`
 
 ## `tests/e2e/test_containerimport.py`
@@ -209,3 +213,8 @@ _Modul Container-Import, Reiter EUDR (app/module/containerimport/, Oberfläche c
 **Oberfläche**
 
 - `seite(user, vp, schema)`
+- `kartendatei(route)`
+
+**Originale im QM-System (Schnittstelle qs_eingang_hochladen)**
+
+- `original(c, name, inhalt, lieferant, teil)` – Datei in Teilen an containerimport_eudr_original geben; Antwort des letzten Aufrufs.

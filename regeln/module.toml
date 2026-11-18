@@ -305,7 +305,7 @@ hinweise = [
   "Rechte: Modulzugang wie üblich für die Standardrollen; Inhalte erst mit „EUDR ansehen“ (containerimport.eudr_sehen, ohne Standardrolle – Lieferanten- und Herkunftsdaten), speichern mit „EUDR bearbeiten“.",
   "Originale (Entscheidung des Inhabers 18.11.2026): Die eingelesenen Dateien gehen beim Übernehmen in den Eingang des QM-Systems, Ordner „EUDR/<Lieferant>“ – über die Schnittstelle qs_eingang_hochladen (app/api/module/qs/ablage.php), nicht durch Zugriff auf dessen Dokumente (GR-101). Einsortieren und Löschen bleibt dem QM-System (qs.bearbeiten).",
   "Echte Lieferantenunterlagen nie ins Repository (GR-007): Tests nutzen erfundene Betriebe (tests/fixtures/containerimport).",
-  "Karte ohne fremde Kartendienste: Umrisse der Länder aus app/assets/karte.json, Flächen als SVG. Die Detailkarte des Servers deckt nur Deutschland ab.",
+  "Karte ohne fremde Kartendienste (Entscheidung des Inhabers 18.11.2026: um Südamerika und Neuseeland erweitern): zweite Kartendatei /karte/herkunft.pmtiles (Laden über deploy/karte-laden.sh … herkunft – Betrieb, eigener PR des Plattformkerns), gezeichnet von app/assets/detailkarte.js; ohne die Datei Umrisse der Länder aus app/assets/karte.json als SVG. Bei der Freigabe des Moduls bekommt sein Host in deploy/anmeldung/apache-oidc.conf den Alias /karte/herkunft.pmtiles (wie Verwaltung und CRM für karte.pmtiles).",
 ]
 
   [[modul.oberflaeche]]

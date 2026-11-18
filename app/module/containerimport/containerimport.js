@@ -158,7 +158,7 @@
       <span class="ci-legende"><i class="ci-ampel gruen"></i>ohne offenen Punkt <i class="ci-ampel gelb"></i>Nachweis offen <i class="ci-ampel rot"></i>kritisch</span></div>
       <div class="ci-kartenraster"><div class="r-karte" id="ci-karte"></div>
       <ul class="r-karte ci-kartenliste">${liste.map((b) => `<li><button type="button" data-betrieb="${esc(b.id)}"><i class="ci-ampel ${b.ampel}" aria-hidden="true"></i><span><strong>${esc(b.name)}</strong><small>${esc([landName(b.land), b.region].filter(Boolean).join(' · '))} · ${ha(b.flaeche)}</small></span></button></li>`).join('') || '<li class="ci-leer">Keine Betriebe.</li>'}</ul></div>
-      <p class="ci-leise ci-klein">Umrisse der Länder: Natural Earth. Straßen und Satellitenbilder zeigt die Seite nicht – dafür im Betrieb „In OpenStreetMap ansehen“ oder die Gegenprüfung nutzen.</p>`;
+      <p class="ci-leise ci-klein">Straßen und Orte zeigt die Karte, sobald die Herkunftskarte (Südamerika, Neuseeland) auf dem Server geladen ist – sonst nur die Umrisse der Länder (Natural Earth). Satellitenbilder: im Betrieb „In OpenStreetMap ansehen“ oder die Gegenprüfung nutzen.</p>`;
     window.EUDR_KARTE.zeichnen($('#ci-karte'), { betriebe: liste, beiKlick: betriebOeffnen });
   }
 
