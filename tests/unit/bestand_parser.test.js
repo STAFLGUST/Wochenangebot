@@ -63,6 +63,17 @@ const check = (name, ok, info = '') => { n++; console.log((ok ? 'PASS ' : 'FAIL 
   const utf8 = Buffer.from(cb.toString('latin1'), 'utf8');
   const u = StockCore.parseStockWorkbook(await StockCore.readStockWorkbook(utf8.buffer.slice(utf8.byteOffset, utf8.byteOffset + utf8.byteLength), 'b.csv'), 'b.csv');
   check('CSV in UTF-8 gespeichert: gleiche Werte, Umlaute richtig', u.articles.length === 4 && u.articles.find((a) => a.code === '10601').name === 'Testhüfte "Premium", frisch');
+  // ---------- Excel-Datumszellen (WinAB-CSV in Excel als .xlsx gespeichert) ----------
+  const kopf = ['Art. Nr.', 'Bezeichnung', 'Status', 'Ankunft', 'Partie', 'MHD', 'Kolli', 'netto'];
+  const raster = (zeilen) => StockCore.parseStockWorkbook([{ grid: [kopf, ...zeilen] }], 'x.xlsx');
+  const s = raster([[10601, 'Testhüfte', 'eingelagert', 46338, 900002, 46344, 29, 1541], [10823, 'Testbug', 'eingelagert', 46339, 900003, 46350, 4, 41.6],
+    [10823, 'Testbug', 'erfasst', 46346, 900004, null, 5, 120]]);
+  check('Excel-Seriendatum: Ankunft und MHD als Spalten erkannt, MHD 18.11.2026', s.columns.arrival === 3 && s.columns.mhd === 5 && s.columns.lot === 4
+    && s.articles[0].lots[0].mhd === '2026-11-18' && s.articles[0].mhd === '2026-11-18' && s.articles[0].lots[0].arrival === '2026-11-12'
+    && s.incoming[0].arrival === '2026-11-20' && s.stats.noMhd === 0, JSON.stringify([s.columns, s.articles[0].lots[0]]));
+  const fuenf = raster([[10601, 'Testhüfte', 'eingelagert', '12.11.2026', 45123, '18.11.2026', 29, 1541], [10823, 'Testbug', 'eingelagert', '13.11.2026', 45200, '24.11.2026', 4, 41.6]]);
+  check('fünfstellige Partienummern bleiben Partie (nicht Datum)', fuenf.columns.lot === 4 && fuenf.columns.mhd === 5 && fuenf.columns.arrival === 3
+    && fuenf.articles[0].lots[0].lot === '45123', JSON.stringify(fuenf.columns));
   let fehler = '';
   try { await StockCore.readStockWorkbook(new TextEncoder().encode('kein Bestand\nnur Text ohne Trennzeichen').buffer, 'x.txt'); } catch (e) { fehler = e.message; }
   check('weder CSV noch Excel: verständlicher Fehler', /weder eine CSV-Datei noch eine Excel-Datei/.test(fehler), fehler);

@@ -318,21 +318,22 @@
     const maxC = Math.max(...rows.map((x) => x.row.length));
     const prof = [];
     for (let c = 0; c < maxC; c++) {
-      let n = 0, num = 0, int = 0, date = 0, str = 0, code = 0;
+      let n = 0, num = 0, int = 0, date = 0, serial = 0, str = 0, code = 0;
       for (const { row } of rows) {
         const v = row[c];
         if (v == null || v === '') continue;
         n++;
-        if (typeof v === 'number') { num++; if (Number.isInteger(v)) int++; if (toDate(v)) date++; } else { str++; if (toDate(v)) date++; }
+        if (typeof v === 'number') { num++; if (Number.isInteger(v)) int++; if (toDate(v)) date++; else if (Number.isInteger(v) && toDate(v, true)) serial++; } else { str++; if (toDate(v)) date++; }
         if (isCode(v)) code++;
       }
-      prof[c] = { n, num, int, date, str, code };
+      prof[c] = { n, num, int, date, serial, str, code };
     }
     const ok = {
       code: (p) => p.n && p.code / p.n >= 0.6,
       name: (p) => p.n && p.str / p.n >= 0.8,
-      arrival: (p) => p.n && p.date / p.n >= 0.8,
-      mhd: (p) => p.n && p.date / p.n >= 0.8,
+      // Excel-Datumszellen (Seriennummer) nur für Ankunft/MHD – fünfstellige Partie-/Artikelnummern bleiben keine Daten
+      arrival: (p) => p.n && (p.date + p.serial) / p.n >= 0.8,
+      mhd: (p) => p.n && (p.date + p.serial) / p.n >= 0.8,
       lot: (p) => p.n && p.date / p.n < 0.5,
       kolli: (p) => p.n && p.int / p.n >= 0.9,
       kg: (p) => p.n && p.num / p.n >= 0.9,
