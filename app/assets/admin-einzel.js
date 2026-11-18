@@ -32,7 +32,8 @@
     const n = /^\d+(\.\d+)?$/.test(t) ? Number(t) : NaN;
     return Number.isFinite(n) ? n : NaN;
   };
-  const pText = (v) => (v == null || Number.isNaN(v) ? '' : v.toFixed(2).replace('.', ','));
+  const cent = (v) => Math.round(Number((v * 100).toPrecision(15)));   // Cent wie PHP round() auf dem Server (6,835 → 684, 1,005 → 101)
+  const pText = (v) => (v == null || Number.isNaN(v) ? '' : (cent(v) / 100).toFixed(2).replace('.', ','));
   const zText = (v) => (v == null ? '' : String(Math.round(v * 100) / 100).replace('.', ','));
   const STATUS = { entwurf: 'Entwurf', freigegeben: 'Im Portal freigegeben', zurueckgezogen: 'Zurückgezogen' };
   const isoPlus = (days) => { const d = new Date(); d.setDate(d.getDate() + days); return d.toLocaleDateString('sv-SE'); };   // Ortszeit (toISOString wäre UTC)
@@ -269,12 +270,12 @@
     let kg = 0, sum = 0;
     for (const p of ed.positions) {
       const q = p.qty != null ? p.qty : p.partie ? ganz(p.partie) : null;   // Partie ohne Menge: ganze Partie (wie der Server)
-      if (q != null && !Number.isNaN(q)) { kg += q; if (p.price != null && !Number.isNaN(p.price)) sum += Math.round(Math.round(p.price * 100) * q) / 100; }
+      if (q != null && !Number.isNaN(q)) { kg += q; if (p.price != null && !Number.isNaN(p.price)) sum += Math.round(Number((cent(p.price) * q).toPrecision(15))) / 100; }
     }
     return { kg, sum };
   }
   function summeHTML() { const { kg, sum } = summen(); return kg ? `${esc(fmtKg(kg))} kg · Warenwert ca. <strong>${esc(fmt2.format(sum))} €</strong>` : '<span class="muted">Mengen optional</span>'; }
-  const hinzufuegen = (a) => ed.positions.push({ code: a.code, name: a.name, qty: null, price: a.stdPrice && a.stdPrice.status === 'value' ? a.stdPrice.value : null, notiz: '' });
+  const hinzufuegen = (a) => ed.positions.push({ code: a.code, name: a.name, qty: null, price: a.stdPrice && a.stdPrice.status === 'value' ? cent(a.stdPrice.value) / 100 : null, notiz: '' });
 
   /* ---------- Fenster „Artikel hinzufügen“ (gemeinsames Fenster: admin-artikelwahl.js) ---------- */
   const drinSet = () => new Set(ed.positions.map((p) => key(p.code)));
