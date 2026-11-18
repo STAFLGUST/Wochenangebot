@@ -286,26 +286,34 @@ hinweise = ["Fehlmengen-Ansicht und Einkaufsmeldung existieren heute im Eingabeb
 [[modul]]
 id = "containerimport"
 name = "Container-Import"
-beschreibung = "Importcontainer verfolgen: Buchung, Verschiffung, Ankunft, Verzollung und Dokumente"
+beschreibung = "Import von Ware aus Drittländern: EUDR (Herkunftsbetriebe mit Geolokalisierung, Risikoprofil, GeoJSON für TRACES); später Container, Verzollung, Dokumente"
 icon = "container"
 reihenfolge = 65
 dashboard = true
 agent = "containerimport"
-abhaengigkeiten = ["plattform", "verwaltung", "einkauf"]
-testgruppen = []
-pfade = []
-pfade_geplant = ["regeln/aktionen/containerimport.toml", "app/api/module/containerimport/**", "app/module/containerimport/**", "tests/e2e/test_containerimport*.py"]
+abhaengigkeiten = ["plattform", "qs"]   # Originale der Lieferantenunterlagen gehen über qs_eingang_hochladen in den Eingang des QM-Systems
+testgruppen = ["containerimport"]
+pfade = ["regeln/aktionen/containerimport.toml", "app/api/aktionen/containerimport.php", "app/api/module/containerimport/**", "app/module/containerimport/**",
+  "tests/e2e/test_containerimport*.py", "tests/fixtures/containerimport/**"]
+pfade_geplant = []
 hinweise = [
-  "Angelegt auf Wunsch des Inhabers (25.10.2026) als geplante Kachel; Umfang (Sendungsverfolgung, Zoll, Kontingente, Dokumente) vor dem Bau mit dem Inhaber klären.",
+  "Angelegt auf Wunsch des Inhabers (25.10.2026) als geplante Kachel; Auftrag 18.11.2026: Modul bauen, erster Reiter EUDR (Hilfen und Kontrollen zur Verordnung (EU) 2023/1115). Weitere Reiter (Sendungsverfolgung, Zoll, Kontingente, Dokumente) vor dem Bau mit dem Inhaber klären.",
   "Nicht verwechseln mit der Kachel „Import“ (Datenimport, Teil der Verwaltung).",
+  "EUDR: Herkunftsbetriebe (Produktionsorte) mit Umriss in WGS84; eingelesen aus Entwaldungsberichten der Lieferanten (PDF, im Browser gelesen mit pdf.js aus app/assets/vendor/pdfjs; am Betrieb stehen Name und Prüfsumme der Datei), aus Lieferanten-GeoJSON oder eingefügten Koordinaten. Der Server rechnet UTM um, normalisiert und prüft nach den Regeln des EU-Informationssystems (app/api/module/containerimport/geometrie.php).",
+  "Risikoprofil je Sendung als Tabelle von Kriterien (eudr_kriterien); abgeleitete Werte (Fläche, Befunde, Profil) werden nie gespeichert – nur der Schnappschuss einer abgeschlossenen Bewertung (GR-106). Nichts wird gelöscht: archivieren, Gegenprüfungen nur ergänzen.",
+  "Einstufung der Länder (EUDR_LAENDER) nach Durchführungsverordnung (EU) 2025/1093: bei einer Neufassung der Liste anpassen. Eigene Gegenprüfung über Global Nature Watch und Whisp (FAO) – nur Verweise und eingetragene Ergebnisse, kein Abruf fremder Dienste (Content-Security-Policy 'self').",
+  "Rechte: Modulzugang wie üblich für die Standardrollen; Inhalte erst mit „EUDR ansehen“ (containerimport.eudr_sehen, ohne Standardrolle – Lieferanten- und Herkunftsdaten), speichern mit „EUDR bearbeiten“.",
+  "Originale (Entscheidung des Inhabers 18.11.2026): Die eingelesenen Dateien gehen beim Übernehmen in den Eingang des QM-Systems, Ordner „EUDR/<Lieferant>“ – über die Schnittstelle qs_eingang_hochladen (app/api/module/qs/ablage.php), nicht durch Zugriff auf dessen Dokumente (GR-101). Einsortieren und Löschen bleibt dem QM-System (qs.bearbeiten).",
+  "Echte Lieferantenunterlagen nie ins Repository (GR-007): Tests nutzen erfundene Betriebe (tests/fixtures/containerimport).",
+  "Karte ohne fremde Kartendienste (Entscheidung des Inhabers 18.11.2026: um Südamerika und Neuseeland erweitern): zweite Kartendatei /karte/herkunft.pmtiles (Laden über deploy/karte-laden.sh … herkunft – Betrieb, eigener PR des Plattformkerns), gezeichnet von app/assets/detailkarte.js; ohne die Datei Umrisse der Länder aus app/assets/karte.json als SVG. Bei der Freigabe des Moduls bekommt sein Host in deploy/anmeldung/apache-oidc.conf den Alias /karte/herkunft.pmtiles (wie Verwaltung und CRM für karte.pmtiles).",
 ]
 
   [[modul.oberflaeche]]
   id = "intern"
   name = "Container-Import"
   art = "intern"
-  adresse = "https://container-import.dashboard-stafl.de/"
-  entwicklung = "geplant"
+  adresse = "https://container-import.dashboard-stafl.de/module/containerimport/"
+  entwicklung = "in_pruefung"
   freigabe = "keine"
   sperrbar = true   # DNS-Eintrag besteht (25.10.2026); bis zur Freigabe 503-Platzhalter (GR-105)
 

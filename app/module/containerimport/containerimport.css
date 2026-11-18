@@ -1,0 +1,225 @@
+/* STAFL-Plattform · Modul Container-Import (Reiter EUDR) – Gestaltung „C2“
+   Rahmen, Seitenleiste und alle Farben kommen aus ../../assets/rahmen.css (--r-*), Schrift und die Grundform der Fenster
+   (dialog.modal, .dlg-head/.dlg-body/.dlg-foot) aus ../../assets/app.css. Hier nur, was es nur in diesem Modul gibt:
+   Reiter, Listen der Sendungen und Betriebe, Formulare der Fenster, Risikoprofil, Karte (eudr-karte.js) und die
+   Druckfassung des Risikoprofils. Hell und dunkel über die --r-*; Mobil ab 390 px. */
+body.ci { line-height: 1.45; }
+.ci .r-i { width: 18px; height: 18px; }
+.ci-knopf { display: inline-flex; align-items: center; justify-content: center; gap: 8px; min-height: 38px; padding: 0 16px; box-sizing: border-box; border: 1px solid var(--r-linie-2); border-radius: 10px;
+  background: var(--r-flaeche); color: var(--r-text); font: inherit; font-size: 14px; font-weight: 600; white-space: nowrap; text-decoration: none; cursor: pointer; }
+.ci-knopf:hover { background: var(--r-flaeche-2); color: var(--r-text); }
+.ci-knopf.primaer { background: var(--r-akzent); border-color: var(--r-akzent); color: var(--r-akzent-ink); }
+.ci-knopf.primaer:hover { background: var(--r-akzent-hover); border-color: var(--r-akzent-hover); }
+.ci-knopf.klein { min-height: 36px; padding: 0 11px; font-size: 13px; border-radius: 9px; }
+.ci-knopf:disabled { opacity: .5; cursor: not-allowed; }
+.ci-knopf[aria-busy="true"] { opacity: .7; cursor: progress; }
+.ci-knopf .r-i { width: 16px; height: 16px; }
+.ci-marke { display: inline-block; padding: 1px 8px; border-radius: 6px; font-size: 12px; font-weight: 600; line-height: 1.5; white-space: nowrap; background: var(--r-neutral-bg); color: var(--r-neutral); }
+.ci-marke.ok { background: var(--r-ok-bg); color: var(--r-ok); }
+.ci-marke.warn { background: var(--r-warn-bg); color: var(--r-warn); }
+.ci-marke.rot { background: var(--r-rot-bg); color: var(--r-rot); }
+.ci-leise { color: var(--r-leise); }
+.ci-klein { font-size: 13px; }
+.ci-zahlen { font-variant-numeric: tabular-nums; }
+.ci a:not(.ci-knopf) { color: var(--r-akzent-text); text-underline-offset: 3px; }
+.ci-ampel { display: inline-block; flex: none; width: 10px; height: 10px; margin-right: 8px; border-radius: 50%; background: var(--r-neutral); }
+.ci-ampel.gruen { background: var(--r-ok); } .ci-ampel.gelb { background: var(--r-warn); } .ci-ampel.rot { background: var(--r-rot); }
+
+/* Reiter, Hilfe, Leiste über den Listen */
+.ci-reiter { display: flex; gap: 4px; border-bottom: 1px solid var(--r-linie); }
+.ci-reiter button { min-height: 40px; padding: 0 14px; border: 0; border-bottom: 2px solid transparent; background: none; color: var(--r-text-2); font: inherit; font-size: 14px; font-weight: 600; cursor: pointer; }
+.ci-reiter button[aria-selected="true"] { border-bottom-color: var(--r-akzent); color: var(--r-text); }
+.ci-hilfe { padding: 12px 18px; font-size: 14px; }
+.ci-hilfe summary { font-weight: 600; cursor: pointer; }
+.ci-hilfe summary span { font-weight: 400; }
+.ci-hilfe ol { margin: 12px 0 8px; padding-left: 22px; display: grid; gap: 6px; }
+.ci-hilfe p { margin: 0; font-size: 13px; }
+.ci-leisteoben { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 10px 16px; }
+.ci-filter, .ci-knoepfe { display: flex; flex-wrap: wrap; gap: 6px; }
+.ci-chip { display: inline-flex; align-items: center; gap: 6px; min-height: 36px; padding: 0 13px; border: 1px solid var(--r-linie-2); border-radius: 18px; background: var(--r-flaeche); color: var(--r-text-2);
+  font: inherit; font-size: 13.5px; font-weight: 500; cursor: pointer; }
+.ci-chip[aria-pressed="true"] { border-color: var(--r-akzent); box-shadow: inset 0 0 0 1px var(--r-akzent); color: var(--r-text); font-weight: 600; }
+.ci-chip b { font-weight: 600; color: var(--r-leise); font-variant-numeric: tabular-nums; }
+#ci-inhalt { display: flex; flex-direction: column; gap: 12px; min-width: 0; }
+.ci-suchzeile { display: flex; flex-wrap: wrap; align-items: center; gap: 10px 18px; }
+.ci-suchzeile input, .ci-suchzeile select { box-sizing: border-box; width: min(100%, 420px); height: 40px; padding: 0 12px; border: 1px solid var(--r-linie-2); border-radius: 10px; background: var(--r-flaeche); color: var(--r-text); font: inherit; font-size: 16px; }
+.ci-legende { display: inline-flex; flex-wrap: wrap; align-items: center; gap: 4px 6px; font-size: 13px; color: var(--r-text-2); }
+.ci-legende .ci-ampel { margin: 0 2px 0 8px; }
+.ci-check { display: inline-flex; align-items: center; gap: 8px; font-size: 13.5px; color: var(--r-text-2); cursor: pointer; }
+.ci-check input { width: 16px; height: 16px; margin: 0; accent-color: var(--r-akzent); }
+.ci-archivwahl, .dlg-body > .ci-check { min-height: 36px; }
+.ci-leer { margin: 0; padding: 16px; font-size: 14px; color: var(--r-leise); list-style: none; }
+
+/* Listen */
+.ci-tab { width: 100%; border-collapse: collapse; font-size: 14px; }
+.ci-tab th { padding: 10px 14px; text-align: left; font-size: 11px; font-weight: 600; letter-spacing: .06em; text-transform: uppercase; color: var(--r-leise);
+  background: var(--r-flaeche-2); border-bottom: 1px solid var(--r-linie); white-space: nowrap; }
+.ci-tab th:first-child { border-top-left-radius: 15px; } .ci-tab th:last-child { border-top-right-radius: 15px; }
+.ci-tab td { padding: 11px 14px; border-top: 1px solid var(--r-linie); vertical-align: middle; overflow-wrap: anywhere; }
+.ci-tab tbody tr:first-child td { border-top: 0; }
+.ci-tab tbody tr { cursor: pointer; }
+.ci-tab tbody tr:hover, .ci-tab tbody tr:focus-visible { background: var(--r-hover); outline: none; }
+.ci-tab .ci-r { text-align: right; }
+.ci-tab tr.ci-archiv { opacity: .55; }
+.ci-name { display: flex; align-items: center; font-weight: 600; }
+.ci-unter { display: block; font-size: 12.5px; color: var(--r-leise); }
+@media (max-width: 860px) {
+  .ci-tab, .ci-tab tbody, .ci-tab tr, .ci-tab td { display: block; }
+  .ci-tab thead { display: none; }
+  .ci-tab tr { padding: 12px 16px; border-top: 1px solid var(--r-linie); }
+  .ci-tab tbody tr:first-child { border-top: 0; }
+  .ci-tab td { padding: 0; border: 0; }
+  .ci-tab td[data-t] { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: 2px 12px; margin-top: 6px; font-size: 13.5px; text-align: right; }
+  .ci-tab td[data-t]::before { content: attr(data-t); color: var(--r-leise); text-align: left; }
+  .ci-tab td[data-t] .ci-unter { flex-basis: 100%; }
+}
+
+/* Fenster */
+body.ci dialog.modal { width: min(560px, calc(100vw - 32px)); max-height: calc(100dvh - 32px); border: 1px solid var(--r-linie-2); border-radius: 16px; background: var(--r-flaeche); color: var(--r-text);
+  box-shadow: var(--r-schatten-menue); font-family: var(--font); }
+body.ci dialog.modal.ci-breit { width: min(940px, calc(100vw - 32px)); }
+body.ci dialog.modal[open] { display: flex; flex-direction: column; animation: none; }
+body.ci dialog.modal::backdrop { background: var(--r-schleier); -webkit-backdrop-filter: none; backdrop-filter: none; }
+body.ci .dlg { display: flex; flex-direction: column; min-height: 0; flex: 1; }
+body.ci .dlg-head { border-bottom: 1px solid var(--r-linie); }
+body.ci .dlg-head p { color: var(--r-text-2); }
+body.ci .dlg-body { flex: 1; min-height: 0; }
+body.ci .dlg-foot { border-top: 1px solid var(--r-linie); align-items: center; }
+.ci-zu { flex: none; width: 36px; height: 36px; border: 0; border-radius: 9px; display: grid; place-items: center; background: transparent; color: var(--r-text-2); cursor: pointer; }
+.ci-zu:hover { background: var(--r-hover); color: var(--r-text); }
+.ci-h { margin: 22px 0 8px; font-size: 11px; font-weight: 600; letter-spacing: .06em; text-transform: uppercase; color: var(--r-leise); }
+.ci-h span { text-transform: none; letter-spacing: 0; font-weight: 400; }
+.ci-raster { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px 14px; align-content: start; }
+.ci-raster.drei { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+.ci-feld { display: flex; flex-direction: column; gap: 5px; min-width: 0; font-size: 13px; font-weight: 600; }
+.ci-feld.breit { grid-column: 1 / -1; }
+.ci-feld.ci-unten { justify-content: flex-end; }
+.ci-feld small { font-weight: 400; color: var(--r-leise); }
+.ci-feld input, .ci-feld select, .ci-feld textarea { box-sizing: border-box; width: 100%; min-height: 40px; padding: 8px 11px; border: 1px solid var(--r-linie-2); border-radius: 10px; background: var(--r-flaeche); color: var(--r-text);
+  font: inherit; font-size: 16px; font-weight: 400; }
+.ci-feld textarea { resize: vertical; }
+.ci-feld :disabled { background: var(--r-flaeche-2); color: var(--r-text-2); opacity: 1; }
+.ci-feld output { display: flex; align-items: center; min-height: 40px; font-weight: 400; font-size: 15px; font-variant-numeric: tabular-nums; }
+.dlg-body > .ci-feld { margin-top: 14px; }
+.ci-zweispaltig { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 18px; }
+.ci-meldung { display: flex; gap: 8px; margin: 0 0 8px; padding: 9px 12px; border-radius: 10px; font-size: 13.5px; background: var(--r-rot-bg); color: var(--r-rot); }
+.ci-meldung .r-i { flex: none; width: 16px; height: 16px; margin-top: 2px; }
+.ci-meldung.ok { background: var(--r-ok-bg); color: var(--r-ok); }
+.ci-meldung.neutral { background: var(--r-neutral-bg); color: var(--r-text); }
+.ci-befunde, .ci-kriterien, .ci-wahl, .ci-pruefungen { list-style: none; margin: 0; padding: 0; border: 1px solid var(--r-linie); border-radius: 12px; overflow: hidden; font-size: 13.5px; }
+.ci-befunde li, .ci-kriterien li, .ci-wahl li, .ci-pruefungen li { display: flex; align-items: flex-start; gap: 10px; padding: 9px 12px; }
+.ci-befunde li + li, .ci-kriterien li + li, .ci-wahl li + li, .ci-pruefungen li + li { border-top: 1px solid var(--r-linie); }
+.ci-befunde .r-i { flex: none; width: 16px; height: 16px; margin-top: 2px; color: var(--r-text-2); }
+.ci-befunde .fehler { background: var(--r-rot-bg); } .ci-befunde .fehler .r-i { color: var(--r-rot); }
+.ci-kr-stand { flex: none; width: 96px; }
+.ci-kriterien small, .ci-wahl small, .ci-pruefungen small { display: block; font-size: 12.5px; color: var(--r-text-2); }
+.ci-kriterien em { font-style: normal; font-weight: 600; color: var(--r-text); }
+.ci-kriterien li > span:last-child, .ci-pruefungen li > span:nth-child(2) { flex: 1; min-width: 0; }
+.ci-wahl { max-height: 248px; overflow: auto; }
+.ci-wahl li { align-items: center; justify-content: space-between; }
+.ci-wahl label { display: flex; align-items: flex-start; gap: 10px; flex: 1; min-width: 0; cursor: pointer; }
+.ci-wahl input { flex: none; width: 16px; height: 16px; margin: 3px 0 0; accent-color: var(--r-akzent); }
+.ci-wahl .ci-befund.fehler { color: var(--r-rot); }
+.ci-rechts { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 4px 6px; flex: 0 1 auto; max-width: 46%; }
+.ci-vorschlag { display: flex; gap: 10px; margin: 0 0 10px; padding: 11px 14px; border-radius: 12px; font-size: 14px; font-weight: 600; background: var(--r-warn-bg); color: var(--r-text); }
+.ci-vorschlag .r-i { flex: none; margin-top: 1px; color: var(--r-warn); }
+.ci-vorschlag.ok { background: var(--r-ok-bg); } .ci-vorschlag.ok .r-i { color: var(--r-ok); }
+.ci-vorschlag.kritisch { background: var(--r-rot-bg); } .ci-vorschlag.kritisch .r-i { color: var(--r-rot); }
+.ci-abschluss { display: flex; flex-wrap: wrap; align-items: flex-start; gap: 8px 12px; margin: 0 0 16px; padding: 12px 14px; border: 1px solid var(--r-linie); border-radius: 12px; background: var(--r-flaeche-2); font-size: 13.5px; }
+.ci-abschluss small { display: block; margin-top: 4px; color: var(--r-text-2); white-space: pre-wrap; }
+.ci-portale { display: flex; flex-wrap: wrap; gap: 6px; margin: 8px 0 10px; }
+.ci-neu-pruefung { margin-top: 12px; }
+.ci-ablage { display: flex; align-items: center; gap: 14px; margin: 16px 0 10px; padding: 18px; border: 1.5px dashed var(--r-linie-2); border-radius: 14px; cursor: pointer; }
+.ci-ablage:hover, .ci-ablage:focus-within { border-color: var(--r-akzent); background: var(--r-flaeche-2); }
+.ci-ablage > .r-i { flex: none; width: 24px; height: 24px; color: var(--r-akzent-text); }
+.ci-ablage span { flex: 1; min-width: 0; font-size: 14px; }
+.ci-ablage small { display: block; color: var(--r-text-2); font-size: 12.5px; }
+.ci-ablage input { max-width: 44%; font: inherit; font-size: 13px; }
+.ci-einfuegen { margin: 0 0 14px; font-size: 13.5px; }
+.ci-einfuegen summary { min-height: 36px; display: flex; align-items: center; cursor: pointer; color: var(--r-akzent-text); font-weight: 600; }
+.ci-einfuegen .ci-raster { margin: 8px 0 12px; }
+.ci-datei { margin-top: 14px; }
+.ci-datei h4 { margin: 0 0 6px; font-size: 13.5px; font-weight: 600; overflow-wrap: anywhere; }
+.ci-fuss-links { flex-basis: 100%; font-size: 12.5px; color: var(--r-leise); }
+.ci-fuss-links:empty { display: none; }
+
+/* Karte */
+.ci-kartenraster { display: grid; grid-template-columns: minmax(0, 1fr) 280px; gap: 12px; align-items: start; }
+.ci .ci-karte { position: relative; overflow: hidden; background: var(--r-neutral-bg); }
+#ci-karte { aspect-ratio: 1.9; }
+.ci-k-wrap { aspect-ratio: 1.5; border: 1px solid var(--r-linie); border-radius: 12px; }
+.ci-k-wrap.flach { aspect-ratio: 1.9; margin-top: 10px; }
+.ci-karte svg.ci-k-haupt { display: block; width: 100%; height: 100%; cursor: grab; touch-action: none; }
+.ci-k-land { fill: var(--r-flaeche); stroke: var(--r-leise); stroke-width: 1; vector-effect: non-scaling-stroke; }
+.ci-k-flaeche { fill-opacity: .32; stroke-width: 2; vector-effect: non-scaling-stroke; cursor: pointer; fill: var(--r-neutral); stroke: var(--r-neutral); }
+.ci-k-marke { stroke: var(--r-flaeche); stroke-width: 1.5; vector-effect: non-scaling-stroke; cursor: pointer; fill: var(--r-neutral); }
+.ci-k-flaeche.gruen { fill: var(--r-ok); stroke: var(--r-ok); } .ci-k-marke.gruen { fill: var(--r-ok); }
+.ci-k-flaeche.gelb { fill: var(--r-warn); stroke: var(--r-warn); } .ci-k-marke.gelb { fill: var(--r-warn); }
+.ci-k-flaeche.rot { fill: var(--r-rot); stroke: var(--r-rot); } .ci-k-marke.rot { fill: var(--r-rot); }
+.ci-k-ecke { fill: var(--r-flaeche); stroke: var(--r-text); stroke-width: 1; vector-effect: non-scaling-stroke; pointer-events: none; }
+.ci-k-zoom { position: absolute; top: 10px; right: 10px; display: flex; flex-direction: column; border: 1px solid var(--r-linie-2); border-radius: 10px; overflow: hidden; background: var(--r-flaeche); }
+.ci-k-zoom button { width: 36px; height: 36px; border: 0; background: none; color: var(--r-text); font: inherit; font-size: 18px; cursor: pointer; }
+.ci-k-zoom button + button { border-top: 1px solid var(--r-linie); }
+.ci-k-zoom button:hover { background: var(--r-hover); }
+.ci-k-massstab { position: absolute; left: 12px; bottom: 10px; width: calc(100% - 24px); font-size: 11.5px; color: var(--r-text-2); pointer-events: none; }
+.ci-k-massstab span { display: block; height: 5px; margin-bottom: 2px; border: 1px solid var(--r-text-2); border-top: 0; }
+.ci-k-massstab b { font-weight: 500; }
+.ci-k-lage { position: absolute; right: 10px; bottom: 10px; width: 96px; height: 80px; border: 1px solid var(--r-linie-2); border-radius: 8px; overflow: hidden; background: var(--r-neutral-bg); pointer-events: none; }
+.ci-k-lage svg { display: block; width: 100%; height: 100%; }
+.ci-kartenliste { list-style: none; margin: 0; padding: 4px 0; max-height: 520px; overflow: auto; }
+.ci-kartenliste button { display: flex; align-items: center; width: 100%; min-height: 48px; padding: 8px 14px; border: 0; background: none; color: var(--r-text); font: inherit; font-size: 14px; text-align: left; cursor: pointer; }
+.ci-kartenliste button:hover { background: var(--r-hover); }
+.ci-kartenliste li + li { border-top: 1px solid var(--r-linie); }
+.ci-kartenliste small { display: block; font-size: 12.5px; color: var(--r-leise); }
+
+/* Anmeldehinweis, Fehler, Hinweis unten (Toast) */
+.ci-main { flex: 1; }
+.ci-login { box-sizing: border-box; width: 100%; max-width: 420px; margin: 10vh auto 0; padding: 32px 28px; text-align: center;
+  background: var(--r-flaeche); border: 1px solid var(--r-linie); border-radius: 16px; box-shadow: var(--r-schatten); }
+.ci-login h1 { margin: 10px 0 6px; font-size: 22px; font-weight: 700; letter-spacing: -.02em; }
+.ci-login p { margin: 0 0 20px; color: var(--r-text-2); font-size: 14px; }
+.ci .ci-login-i { width: 28px; height: 28px; color: var(--r-akzent-text); }
+.ci-fehler { max-width: 640px; margin: 10vh auto 0; padding: 12px 16px; border-radius: 12px; background: var(--r-flaeche); border: 1px solid var(--r-linie-2); color: var(--r-akzent-text); }
+#ci-app { display: flex; flex-direction: column; gap: 18px; }
+#ci-app[hidden], .ci-login[hidden], .ci-fehler[hidden] { display: none; }
+.ci-toast { position: fixed; z-index: 70; left: 50%; bottom: 24px; transform: translate(-50%, 12px); max-width: min(560px, calc(100vw - 32px)); padding: 11px 16px; border-radius: 12px;
+  background: var(--r-text); color: var(--r-grund); font-size: 14px; opacity: 0; pointer-events: none; transition: opacity .15s, transform .15s; }
+.ci-toast.zeigen { opacity: 1; transform: translate(-50%, 0); }
+.ci-toast.fehler { background: var(--r-rot-flaeche); color: var(--r-rot-ink); }
+.ci-fuss { box-sizing: border-box; width: 100%; max-width: 1120px; margin: 0 auto; padding: 0 40px 24px; font-size: 12.5px; color: var(--r-leise); }
+.ci-druck { display: none; }
+
+@media (max-width: 900px) {
+  .ci-fuss { padding: 0 16px 20px; }
+  .ci-kartenraster { grid-template-columns: minmax(0, 1fr); }
+  #ci-karte { aspect-ratio: 1.2; }
+}
+@media (max-width: 720px) {
+  .ci-zweispaltig, .ci-raster, .ci-raster.drei { grid-template-columns: minmax(0, 1fr); }
+  .ci-kr-stand { width: auto; }
+  .ci-kriterien li, .ci-wahl li { flex-wrap: wrap; }
+  .ci-rechts { max-width: none; justify-content: flex-start; padding-left: 26px; }
+  .ci-ablage { flex-wrap: wrap; } .ci-ablage input { max-width: 100%; }
+}
+@media (max-width: 560px) {
+  body.ci dialog.modal, body.ci dialog.modal.ci-breit { width: 100vw; max-width: 100vw; max-height: calc(100dvh - 24px); margin: auto 0 0; border-radius: 20px 20px 0 0; border-bottom: 0; }
+  body.ci .dlg-foot .ci-knopf { flex: 1; }
+  body.ci .dlg-foot .spacer { display: none; }
+  body.ci .dlg-foot [data-zu] { display: none; }   /* das × im Kopf bleibt */
+  .ci-leisteoben .ci-knopf { flex: 1; }
+  .ci-knoepfe { width: 100%; }
+}
+
+/* Druck: nur das Risikoprofil (containerimport.js füllt #ci-druck vor window.print()) */
+@media print {
+  body.ci { background: #fff; color: #000; }
+  body.ci > *:not(.ci-druck), body.ci dialog { display: none !important; }
+  .ci-druck { display: block; font-size: 10.5pt; line-height: 1.4; }
+  .ci-druck h1 { margin: 0 0 4pt; font-size: 16pt; } .ci-druck h2 { margin: 14pt 0 4pt; font-size: 11.5pt; }
+  .ci-druck p { margin: 0 0 6pt; }
+  .ci-druck table { width: 100%; border-collapse: collapse; }
+  .ci-druck th, .ci-druck td { padding: 3pt 5pt; border: .5pt solid #888; text-align: left; vertical-align: top; }
+  .ci-d-kopf th { width: 26%; font-weight: 600; }
+  .ci-d-tab { font-size: 9pt; } .ci-d-tab tr { break-inside: avoid; }
+  .ci-d-fuss { margin-top: 10pt; font-size: 9pt; color: #444; }
+}

@@ -8,11 +8,14 @@
    Fehlt die Kartendatei, beantwortet der Server (bzw. ein vorgeschaltetes CDN) keine Range-Anfragen oder kann der
    Browser kein WebGL, meldet verfuegbar() false – die Seiten zeichnen dann ihre bisherige Übersichtskarte.
 
+   Zweite Kartendatei „herkunft“ (/karte/herkunft.pmtiles: Südamerika und Neuseeland) für
+   die Herkunftsbetriebe im Container-Import – gewählt über den Namen der Karte, Standard ist „karte“ (Deutschland).
+
    API (global window.STAFLKarte):
-     verfuegbar()                      → Promise<boolean>
+     verfuegbar(karte = 'karte')       → Promise<boolean>
      erstellen(element, optionen)      → Promise<Karte>
-       optionen: { punkte, farbe: 'gruen'|'rot', beiKlick(id, punkt), beiBewegung(), beiLeerklick(), rahmen: [lon1, lat1, lon2, lat2] }
-       punkt:    { id, lon, lat, n (Anzahl), aus (inaktiv), titel }
+       optionen: { karte: 'karte'|'herkunft', punkte, farbe: 'gruen'|'rot'|'grau', beiKlick(id, punkt), beiBewegung(), beiLeerklick(), rahmen: [lon1, lat1, lon2, lat2] }
+       punkt:    { id, lon, lat, n (Anzahl), aus (inaktiv), titel, farbe (eigene Farbe als #rrggbb, sonst die der Karte) }
      Karte: setzePunkte(punkte), passend(), zoom(+1|-1), zentriere(lon, lat, zoom), position(lon, lat) → [x, y],
             markiere(id), anzahl(), groesse(), entfernen(); map (MapLibre). Am Element: element.staflKarte und
             data-karte="laedt" | "bereit" (fertig gezeichnet)
@@ -23,12 +26,13 @@
 (function () {
   'use strict';
   const BASIS = new URL('.', document.currentScript ? document.currentScript.src : location.href).href;   // …/assets/
-  const DATEI = new URL('/karte/karte.pmtiles', location.href).href;
+  const datei = (karte) => new URL('/karte/' + (karte === 'herkunft' ? 'herkunft' : 'karte') + '.pmtiles', location.href).href;
   const DEUTSCHLAND = [5.6, 47.2, 15.3, 55.1];
   const ATTRIBUTION = '<a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">© OpenStreetMap-Mitwirkende</a> · <a href="https://protomaps.com" target="_blank" rel="noopener">Protomaps</a>';
-  const FARBEN = { gruen: ['#3f7a5a', '#2f6147'], rot: ['#9b2335', '#7b1e2b'] };
+  const FARBEN = { gruen: ['#3f7a5a', '#2f6147'], rot: ['#9b2335', '#7b1e2b'], grau: ['#5f6368', '#3c4043'] };
 
-  let pruefung = null, bibliothek = null, protokoll = null;
+  let bibliothek = null, protokoll = null;
+  const pruefung = {};   // je Kartendatei
   const stile = {};
 
   function webgl() {
@@ -37,9 +41,10 @@
   /* Kartendatei vorhanden? (eine kleine Range-Anfrage; nur einmal je Seite). Kommt statt des Abschnitts die ganze Datei
      (Status 200 – z. B. ein vorgeschaltetes CDN, das Range-Anfragen nicht weitergibt), wird der Abruf sofort abgebrochen:
      sonst liefe im Hintergrund ein Download der ganzen Kartendatei (mehrere GB) weiter. Die Karte braucht Abschnitte. */
-  function verfuegbar() {
-    if (!pruefung) {
-      pruefung = !webgl() ? Promise.resolve(false) : (async () => {
+  function verfuegbar(karte) {
+    const DATEI = datei(karte);
+    if (!pruefung[DATEI]) {
+      pruefung[DATEI] = !webgl() ? Promise.resolve(false) : (async () => {
         const abbruch = new AbortController();
         try {
           const r = await fetch(DATEI, { headers: { Range: 'bytes=0-6' }, credentials: 'same-origin', cache: 'no-store', signal: abbruch.signal });
@@ -55,7 +60,7 @@
         }
       })();
     }
-    return pruefung;
+    return pruefung[DATEI];
   }
   function skript(src) {
     return new Promise((ok, fehler) => {
@@ -86,7 +91,7 @@
     const t = document.documentElement.dataset.theme;
     return t ? t === 'dark' : matchMedia('(prefers-color-scheme: dark)').matches;
   };
-  function stil(art) {
+  function stil(art, karte) {
     if (!stile[art]) {
       stile[art] = fetch(BASIS + 'karte/stil-' + art + '.json').then((r) => { if (!r.ok) throw new Error('Kartenstil nicht geladen'); return r.json(); });
     }
@@ -94,7 +99,7 @@
       version: 8,
       glyphs: BASIS + 'karte/schrift/{fontstack}/{range}.pbf',
       sprite: BASIS + 'karte/sprite/' + s.sprite,
-      sources: { protomaps: { type: 'vector', url: 'pmtiles://' + DATEI, attribution: ATTRIBUTION } },
+      sources: { protomaps: { type: 'vector', url: 'pmtiles://' + datei(karte), attribution: ATTRIBUTION } },
       layers: s.layers,
     }));
   }
@@ -105,13 +110,13 @@
       features: (punkte || []).filter((p) => isFinite(p.lon) && isFinite(p.lat)).map((p, i) => ({
         type: 'Feature', id: i + 1,
         geometry: { type: 'Point', coordinates: [p.lon, p.lat] },
-        properties: { key: String(p.id), n: p.n || 1, aus: p.aus ? 1 : 0, titel: p.titel || '' },
+        properties: { key: String(p.id), n: p.n || 1, aus: p.aus ? 1 : 0, titel: p.titel || '', ...(/^#[0-9a-f]{6}$/i.test(p.farbe || '') ? { farbe: p.farbe } : {}) },
       })),
     };
   }
 
   async function erstellen(el, opt) {
-    const [ml, style] = await Promise.all([laden(), stil(dunkel() ? 'dunkel' : 'hell')]);
+    const [ml, style] = await Promise.all([laden(), stil(dunkel() ? 'dunkel' : 'hell', opt.karte)]);
     const [farbe, rand] = FARBEN[opt.farbe] || FARBEN.gruen;
     const halo = dunkel() ? '#141213' : '#ffffff';
     let punkte = opt.punkte || [];
@@ -140,7 +145,7 @@
     const groesse = ['interpolate', ['linear'], ['sqrt', ['get', 'n']], 1, 8, 4, 12, 20, 19, 60, 26];
     map.addLayer({ id: 'punkte-kreis', type: 'circle', source: 'punkte', paint: {
       'circle-radius': groesse,
-      'circle-color': ['case', ['==', ['get', 'aus'], 1], '#9a938c', farbe],
+      'circle-color': ['case', ['==', ['get', 'aus'], 1], '#9a938c', ['coalesce', ['get', 'farbe'], farbe]],
       'circle-stroke-color': ['case', ['boolean', ['feature-state', 'auswahl'], false], rand, halo],
       'circle-stroke-width': ['case', ['boolean', ['feature-state', 'auswahl'], false], 3, 1.6],
       'circle-opacity': 0.92,
