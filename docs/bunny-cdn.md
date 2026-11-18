@@ -126,7 +126,7 @@ Datei: bunny → Zone → „Purge Cache“.
    - `curl -sI https://<adresse>/` → `server: BunnyCDN-…` und `stafl-cdn: erkannt`
    - Sicherheit → Lagebild bzw. Verwaltung → Sicherheit: „Ihre Adresse“ ist die eigene, nicht die von bunny
    - Anmeldung (Keycloak, zweiter Faktor), Kundenlogin, Bestellung, E-Mail-Versand, Import der größten Datei (Zeitlimit
-     60 s), App (iOS/Android), Abmelden
+     60 s), Abmelden
    - nach 30–60 Tagen: Das Zertifikat des Servers wurde verlängert (Caddy-Protokoll oder Ablaufdatum über
      `curl -vk --resolve <adresse>:443:<Server-IP> https://<adresse>/`)
 6. **Force SSL** je Adresse in bunny einschalten (Zone → Hostnames). So leitet bunny http → https um.

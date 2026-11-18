@@ -604,16 +604,16 @@ hinweise = [
 
 [[modul]]
 id = "mobile"
-name = "App (iOS/Android)"
-beschreibung = "Expo-App für Kunden und Mitarbeiter; nutzt dieselbe Schnittstelle wie die Website"
+name = "App-Schnittstelle (ruht)"
+beschreibung = "Server-Schnittstelle für eine native App; die App selbst gibt es derzeit nicht (entfernt 18.11.2026), es gibt nur die Web-App"
 icon = "smartphone"
 dashboard = false
 agent = "mobile"
 abhaengigkeiten = ["angebot", "plattform"]
-testgruppen = ["app_api", "app_web"]
-pfade = ["regeln/aktionen/mobile.toml", "mobile/**", "docs/app-api.md", "docs/app-grundlagen.md", "tests/e2e/test_app_api.py", "tests/e2e/test_app_web.py"]
+testgruppen = ["app_api"]
+pfade = ["regeln/aktionen/mobile.toml", "docs/app-api.md", "docs/app-grundlagen.md", "tests/e2e/test_app_api.py"]
 pfade_geplant = []
-hinweise = ["Die App bündelt app/assets/offer-core.js mit – Änderungen dort betreffen Website und App."]
+hinweise = ["Die native App wurde am 18.11.2026 entfernt (letzter Stand in der Git-Historie vor bba3c1c); die Schnittstelle bleibt bestehen, hat aber derzeit keinen Client."]
 
 # ───────────────────────────── Umgebungen (keine Module) ─────────────────────────────
 

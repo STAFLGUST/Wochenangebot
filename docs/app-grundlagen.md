@@ -32,13 +32,19 @@ auf 5.000 Bestellungen entfällt, damit offene Vorgänge und Wiederholungskennun
 
 Weil ein Store-Konto Kosten und Freigaben braucht, gehen Kunden zuerst über die **Web-App**: das Angebotsportal mit
 Symbol, Vollbild und Offline-Kopie des öffentlichen Angebots, zum Home-Bildschirm hinzugefügt (siehe `LIESMICH.md`).
-Kein Store, keine eigene Update-Pipeline – sie aktualisiert sich mit jedem Release. Die native App (unten) bleibt
-bereit für einen späteren Store-Start.
+Kein Store, keine eigene Update-Pipeline – sie aktualisiert sich mit jedem Release.
 
-## Stand Oktober 2026: native App begonnen
+## Stand 18.11.2026: native App vorerst entfernt
 
-Entscheidung des Inhabers: **native App für iOS und Android, für Kunden und Mitarbeiter** (Ordner `mobile/`,
-Expo/React Native, [mobile/LIESMICH.md](../mobile/LIESMICH.md)). Umgesetzt in der ersten Version:
+Entscheidung des Inhabers: **native App vorerst entfernt, es gibt nur die Web-App.** Der Ordner der App, ihre
+Testgruppe und ihr CI-Auftrag sind aus dem Repository genommen. Der letzte Stand der App liegt in der Git-Historie
+vor diesem Commit (Basis `bba3c1c`). Die Server-Schnittstelle (`app_info`, Sitzung in der Kopfzeile,
+[Schnittstelle für die App](app-api.md)) bleibt bestehen und ruht; sie hat derzeit keinen Client.
+
+## Stand Oktober 2026: native App begonnen (inzwischen entfernt, siehe oben)
+
+Entscheidung des Inhabers damals: **native App für iOS und Android, für Kunden und Mitarbeiter** (Expo/React Native,
+Anleitung im damaligen App-Ordner). Umgesetzt in der ersten Version:
 
 - Anmeldung über die **vorhandenen Sitzungen**; die Kennung steht in der Kopfzeile `X-WA-Sitzung` statt im Cookie
   ([Schnittstelle für die App](app-api.md)). Damit gelten Sperren, Zwei-Faktor, Inaktivitätsfrist, Sitzungsregister und

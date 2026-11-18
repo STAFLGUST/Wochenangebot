@@ -323,7 +323,7 @@ def dateien_md(rw, liste: list) -> str:
 # Karte für Entwickler und Agenten: wo steht was in einer großen Datei, ohne sie ganz zu lesen.
 
 FUNK_ENDUNGEN = {".php": "php", ".js": "js", ".py": "py"}
-FUNK_ORTE = ("app/", "dashboard/", "deploy/", "werkzeuge/", "tests/", ".github/scripts/", "mobile/")
+FUNK_ORTE = ("app/", "dashboard/", "deploy/", "werkzeuge/", "tests/", ".github/scripts/")
 FUNK_EINRUECKUNG = {"php": 4, "js": 2, "py": 8}   # tiefer liegende Funktionen sind lokale Hilfen (JS: Ebene der IIFE)
 FUNK_RE = {
     "php": re.compile(r"^(\s*)(?:(?:public|private|protected|static|final|abstract)\s+)*function\s+&?([A-Za-z_]\w*)\s*\("),

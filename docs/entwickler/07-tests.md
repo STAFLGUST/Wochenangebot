@@ -19,7 +19,6 @@ Server, nie mit echten Daten (GR-007). Keine Erfolgsmeldung ohne tatsächlich au
 | Regelwerk | `werkzeuge/regeln.py`, `tests/regeln/test_regeln.py` | `python3 werkzeuge/regeln.py pruefen` und `python3 tests/regeln/test_regeln.py` | Python (nur Standardbibliothek) |
 | Betrieb/Deploy | `tests/deploy/` | `sh tests/deploy/<datei>.sh` bzw. `python3 tests/deploy/<datei>.py` | Shell, Python, teils Docker |
 | Keycloak-Anmeldung | `tests/oidc/` | `bash tests/oidc/umgebung.sh start` … `stop` | Apache, mod_auth_openidc, PostgreSQL, Java 21 |
-| App (`mobile/`) | `mobile/` | `cd mobile && npm ci && npm run pruefen` | Node.js – steht derzeit **nicht** in `ci.yml` |
 
 ### Ende-zu-Ende-Tests (`tests/run_e2e.py`)
 
@@ -61,8 +60,6 @@ Eine **Gruppe** ist eine Testdatei `tests/e2e/test_<gruppe>.py` mit einem Eintra
   (`revert`, `angebote`, `aufbau`, `sys`). Für sie schaltet der Starter in der App-Kopie des Testordners `AENDERUNGSLISTE_IM_ANGEBOT`
   in `admin.js` ein – vor dem Bereitstellen, damit Versionsnummer und Prüfliste passen. Ausgeliefert ist der Schalter aus
   (Veröffentlichen liegt im Modul Versand); diesen Stand prüft die Gruppe `versand`.
-- `OPTIONAL`: Gruppen, die einen vorherigen Build brauchen (`app_web` braucht `mobile/dist-web`). Fehlt er, überspringt
-  der volle Lauf die Gruppe mit Hinweis.
 
 **Steuerung über Umgebungsvariablen:**
 
@@ -330,8 +327,6 @@ Bei jedem Pull Request und jedem Commit auf `main` läuft `.github/workflows/ci.
 - **Ende-zu-Ende-Tests:** 2 Speicherarten × 3 Teile, je 4 Gruppen parallel (`WA_JOBS=4`); Pflicht-Check
   „Ende-zu-Ende-Tests“ nur grün, wenn alle sechs Teile grün sind.
 - **Anmeldung über Keycloak (nur CI):** `tests/oidc/` vollständig.
-- **App prüfen (iOS, Android, Web):** Typprüfung, Unit-Tests und Bundles der App (`mobile/`), dann die Gruppe `app_web`
-  gegen den Web-Build in beiden Speicherarten (die E2E-Teile überspringen `app_web`, ihnen fehlt der Build).
 - Dazu Anwendungs-Image und Betriebsskripte (`tests/deploy/`).
 - Auf `main` werden die schweren Aufträge übersprungen, wenn der PR genau denselben Inhalt schon vollständig geprüft hat
   ([`docs/release-freigabe.md`](../release-freigabe.md), „Keine Doppelprüfung nach dem Merge“).
