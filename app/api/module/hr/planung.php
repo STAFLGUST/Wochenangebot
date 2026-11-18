@@ -416,7 +416,7 @@ function hr_planung_konflikte(array $e, array $p, array $idx, array $eintraege, 
     }
     foreach ($eintraege as $o) {
         if ($o['person'] === $v || $o['person'] === ($e['vertretung2'] ?? null)) continue;   // Vertretung: eigener Konflikt oben
-        if ($gem = hr_gleichzeitig_weg($e, $p, $o, $idx[$o['person']] ?? null)) $k[] = ['art' => 'abteilung', 'text' => 'Gleichzeitig weg: ' . hr_name($idx[$o['person']]) . ' (' . hr_zeitraum_text($gem[0], $gem[count($gem) - 1]) . ')'];
+        if ($weg = hr_gleichzeitig_weg($e, $p, $o, $idx[$o['person']] ?? null)) $k[] = ['art' => 'abteilung', 'text' => 'Gleichzeitig weg: ' . $weg];
     }
     if ($s = hr_ueberschneidung($sperren, $e['von'], $e['bis'])) $k[] = ['art' => 'sperre', 'text' => 'Urlaubssperre ' . hr_zeitraum_text($s['von'], $s['bis']) . ($s['text'] !== '' ? ' (' . $s['text'] . ')' : '')];
     if ($e['status'] === 'beantragt' && $verfuegbar < 0) $k[] = ['art' => 'rest', 'text' => 'Mehr als der Resturlaub (um ' . hr_tage_text(-$verfuegbar) . ')'];
