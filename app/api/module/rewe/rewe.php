@@ -361,7 +361,7 @@ function rw_team_pruefen($v): array
     return $out;
 }
 
-/* ---------- Kundenstamm der Verwaltung (nur lesend, customers_load): WinAB-Kd.-Nr. → Kunde ---------- */
+/* ---------- Kundenstamm der Verwaltung (nur lesend, customers_load): WinAB-Kd.-Nr. (code_key, ohne führende Nullen wie CRM und Controlling) → Kunde ---------- */
 function rw_kunden(): array
 {
     static $k = null;
@@ -370,15 +370,20 @@ function rw_kunden(): array
     foreach (customers_load()['customers'] as $c) {
         $nr = trim((string)($c['nr'] ?? ''));
         if ($nr === '' || !is_array($c)) continue;
-        $k[$nr] = ['firma' => (string)($c['firma'] ?? ''), 'strasse' => (string)($c['strasse'] ?? ''), 'plz' => (string)($c['plz'] ?? ''),
+        $k[code_key($nr)] = ['firma' => (string)($c['firma'] ?? ''), 'strasse' => (string)($c['strasse'] ?? ''), 'plz' => (string)($c['plz'] ?? ''),
                    'ort' => (string)($c['ort'] ?? ''), 'telefon' => (string)($c['telefon'] ?? ''), 'aktiv' => !array_key_exists('active', $c) || !empty($c['active'])];
     }
     return $k;
 }
+/* Kunde der Verwaltung zur Kd.-Nr. eines Marktes (rw_kunden) oder null */
+function rw_kunde(array $m): ?array
+{
+    return rw_kunden()[code_key((string)($m['kdNr'] ?? ''))] ?? null;
+}
 /* Anzeige eines Marktes: Kundenstamm vor eigenen Feldern (nur leere Stammfelder füllt der Markt auf) */
 function rw_anzeige(array $m): array
 {
-    $k = rw_kunden()[(string)($m['kdNr'] ?? '')] ?? null;
+    $k = rw_kunde($m);
     $f = function (string $kf, string $mf) use ($k, $m) { $v = $k ? trim($k[$kf]) : ''; return $v !== '' ? $v : (string)($m[$mf] ?? ''); };
     return ['name' => $f('firma', 'name'), 'strasse' => $f('strasse', 'strasse'), 'plz' => $f('plz', 'plz'), 'ort' => $f('ort', 'ort'),
             'telefon' => $f('telefon', 'telefon'), 'winab' => $k !== null, 'winabAktiv' => $k ? $k['aktiv'] : null];
@@ -397,7 +402,7 @@ function rw_telefone(array $m): array
     };
     $dazu($m['telefon'] ?? '');
     foreach (is_array($m['ansprechpartner'] ?? null) ? $m['ansprechpartner'] : [] as $k) if (is_array($k)) $dazu($k['telefon'] ?? '');
-    if (!$liste) $dazu(rw_kunden()[(string)($m['kdNr'] ?? '')]['telefon'] ?? '');
+    if (!$liste) $dazu(rw_kunde($m)['telefon'] ?? '');
     return array_values($liste);
 }
 function rw_person_pruefen($v): string
@@ -739,7 +744,7 @@ function rw_markt_felder(array $b, array $stamm, array $alt): array
 function rw_kdnr_frei(array $doc, string $kdNr, string $id): void
 {
     if ($kdNr === '') return;
-    foreach ($doc['liste'] as $m) if (($m['kdNr'] ?? '') === $kdNr && $m['id'] !== $id)
+    foreach ($doc['liste'] as $m) if (($m['kdNr'] ?? '') !== '' && code_key($m['kdNr']) === code_key($kdNr) && $m['id'] !== $id)
         throw new InvalidArgumentException('Kd.-Nr. ' . $kdNr . ' gehört schon zu ' . $m['name'] . '.');
 }
 /* Markt für die Oberfläche */
@@ -1027,8 +1032,8 @@ function rw_paket_pruefen($paket, $zuordnung, array $me): array
             $id = rw_id('m');
             $f = rw_markt_felder(['name' => ($p['name'] ?? '') !== '' ? $p['name'] : ('REWE ' . ($p['ort'] ?? ''))] + array_intersect_key($p, array_flip(array_merge(RW_FELDER_STAMM, RW_FELDER_PFLEGE))), $stamm, []);
             if (($f['kdNr'] ?? '') !== '') {
-                if (isset($kdNrn[$f['kdNr']])) throw new InvalidArgumentException('Kd.-Nr. ' . $f['kdNr'] . ' doppelt');
-                $kdNrn[$f['kdNr']] = true;
+                if (isset($kdNrn[code_key($f['kdNr'])])) throw new InvalidArgumentException('Kd.-Nr. ' . $f['kdNr'] . ' doppelt');
+                $kdNrn[code_key($f['kdNr'])] = true;
             }
             $zu = [];
             foreach ((array)($p['zustaendig'] ?? []) as $h) {

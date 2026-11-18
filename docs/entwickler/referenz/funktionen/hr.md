@@ -2,7 +2,7 @@
 
 <!-- ERZEUGT von `python3 werkzeuge/doku.py erzeugen` – nicht von Hand ändern. Quelle: Funktionen und Kommentare im Code. Die CI prüft, dass diese Datei zum Code passt. -->
 
-11 Dateien, 296 Funktionen – in der Reihenfolge der Datei, **fett** die Abschnitte. Text = erste Aussage des Kommentars direkt über der Funktion (Python: Docstring). Übersicht aller Module: [README.md](README.md).
+11 Dateien, 298 Funktionen – in der Reihenfolge der Datei, **fett** die Abschnitte. Text = erste Aussage des Kommentars direkt über der Funktion (Python: Docstring). Übersicht aller Module: [README.md](README.md).
 
 ## `app/api/aktionen/hr.php`
 
@@ -97,7 +97,7 @@ _Modul HR · Jahresplanung des Urlaubs (Inhaber 03.11.2026, Vorplanung und Einze
 - `hr_planung_daten(pe, jahr)` – Beginn (im Jahr vor dem Planungsjahr) und Stichtag (im Jahr davor oder im Planungsjahr) als Datum
 - `hr_planung_ziel_text(st)` – Ziel in Worten (Mail): höchstens N Urlaubstage unverplant, also mindestens X von Y Tagen
 - `hr_planung_person(p, eintraege, jahr, pe, zusatz)` – Stand einer Person: Anspruch, Ziel (Anspruch weniger der höchstens unverplanten Tage, nie unter 0), geplant = beantragt + genehmigt (dazu der Betriebsurlaub …
-- `hr_vorplanung_eintrag(e, jahr, pe)` – Entstand der Eintrag in der Vorplanung des Jahres? = bis zum Stichtag erfasst (UTC-Zeit, ohne Erfassungszeit: nein)
+- `hr_vorplanung_eintrag(e, jahr, pe)` – Entstand der Eintrag in der Vorplanung des Jahres? = bis zum Stichtag erfasst (Kalendertag in deutscher Zeit wie der Stichtag, ohne Erfassungszeit: nein)
 - `hr_jahresplanung_pruefer(personal, me)` – Welche offenen Anträge stehen für diesen Mitarbeiter unter „Jahresplanung“ statt unter „Anträge“ (Inhaber 17.11.2026)?
 - `hr_einzeltage_hinweis(p, eintraege, e)` – Hinweis beim einzelnen Antrag (hr_antrag): liegt er in der Vorplanung seines Jahres und sind es damit mehr einzelne Urlaubstage als vorgesehen?
 - `hr_einzeltage(p, eintraege, jahr, pe, zusatz)` – Einzelne Urlaubstage der Vorplanung eines Jahres (Inhaber 10.11.2026: höchstens einzeltageMax, der übrige Urlaub möglichst zusammenhängend).
@@ -153,6 +153,7 @@ _Modul HR · Urlaubsverwaltung – Fachlogik (Daten, Feiertage, Urlaubskonto, An
 - `hr_betriebsurlaub(p, eintraege, jahr)` – Betriebsurlaub einer Person in einem Jahr (verpflichtend, Inhaber 10.11.2026): Schließtage, die für sie Arbeitstage sind (kein Feiertag), ohne freie Tage und …
 - `hr_tage_summe(tage, art)` – Summe der Gewichte einer Liste von Tagen (hr_tage)
 - `hr_schnitt_ohne_schliesstage(a, b)` – Tage im Schnitt zweier Zeiträume ohne Schließtage (Kalendertage) – an Schließtagen ist ohnehin jeder weg
+- `hr_gleichzeitig_weg(e, p, o, op)` – „Gleichzeitig weg“ (offene Anträge und Jahresplanung – eine Regel): Tage ohne Schließtage, an denen die Abwesenheit $o eines anderen Mitarbeiters $op im …
 
 **Daten lesen und prüfen**
 
@@ -328,7 +329,8 @@ _STAFL-Plattform · HR · Urlaub Gleittage-Konto (02.11.2026)_
 
 - `korrekturDialog(v)`
 - `zeigeKorrekturen()`
-- `antragTage()` – Arbeitstage des Antrags (Vorschau im Browser; verbindlich rechnet der Server)
+- `antragGeaendert()` – Antrag geändert (Zeitraum, Art, neue Daten): sofort die Zahl des Browsers, die des Servers folgt über antragPruefen
+- `antragTage(nServer)` – Arbeitstage des Antrags anzeigen (Vorschau im Browser; verbindlich rechnet der Server). nServer: Zahl aus der Server-Vorschau (antragPruefen) – kennt …
 - `antragPruefen()`
 
 **Vorplanung (Inhaber 10.11.2026): mehrere Zeiträume des nächsten Jahres auf einmal**

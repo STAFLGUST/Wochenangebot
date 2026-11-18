@@ -54,12 +54,18 @@ def woche():
 
 smtp, A, K, K2, kid, payload, nr = setup()
 mails = lambda a, t='': [m for m in smtp.messages if a in m['to'] and t in m['subject']]   # noqa: E731
-ab7 = berlin().hour >= 7   # automatischer Wochenbericht frühestens ab 7 Uhr (Ortszeit des Servers)
+# Automatischer Wochenbericht frühestens ab 7 Uhr (Ortszeit des Servers). Der Server entscheidet beim Aufruf: Stunde direkt davor
+# und danach lesen; liegt 7 Uhr dazwischen, nur die von der Uhrzeit unabhängige Aussage prüfen.
+def ab7():
+    return berlin().hour >= 7
+
 
 # Erster Statusaufruf eines Mitarbeiters: Woche nur vermerkt, kein Bericht (keine Überraschungs-Mail nach dem Einspielen)
+vor7 = ab7()
 A.call('status')
+nach7 = ab7()
 b0 = (doc('sicherheit-bereitschaft') or {}).get('bericht', {})
-check('erster Aufruf: Woche vermerkt (ab 7 Uhr), kein Versand', (b0.get('woche') == woche()) == ab7 and not b0.get('verlauf'), b0)
+check('erster Aufruf: Woche vermerkt (ab 7 Uhr), kein Versand', (vor7 != nach7 or (b0.get('woche') == woche()) == nach7) and not b0.get('verlauf'), b0)
 
 for u, n, r, p, extra in (('bea', 'Bea Bearbeiterin', 'editor', 'Kollegin-Zugang-3', {}),
                           ('nina', 'Nina Notfall', 'editor', 'Notfall-Zugang-7', {'grant': ['sicherheit.notfall']}),
@@ -221,8 +227,15 @@ check('E-Mail: Abschnitte, Notfall, Link, kein Passwort', m and all(t in m['text
 # automatischer Versand: Woche zurückstellen → nächste Statusabfrage eines Mitarbeiters sendet genau einmal
 d = doc('sicherheit-bereitschaft'); d['bericht']['woche'] = '2020-W01'; storage_write('sicherheit-bereitschaft', d)
 vor = len(mails('it@example.org', 'Sicherheit: Wochenbericht'))
+vor7 = ab7()
 Be.call('status'); Sv.call('status')
-if ab7:
+nach7 = ab7()
+if vor7 != nach7:   # 7 Uhr während der Aufrufe: versendet oder nicht, aber höchstens einmal
+    gesendet = doc('sicherheit-bereitschaft')['bericht']['woche'] == woche()
+    if gesendet:
+        until(lambda: len(mails('it@example.org', 'Sicherheit: Wochenbericht')) > vor, 10)
+    check('um 7 Uhr: höchstens ein automatischer Bericht', len(mails('it@example.org', 'Sicherheit: Wochenbericht')) == vor + gesendet)
+elif nach7:
     until(lambda: len(mails('it@example.org', 'Sicherheit: Wochenbericht')) > vor, 10)
     d = doc('sicherheit-bereitschaft')['bericht']
     check('automatisch: genau ein Bericht, Woche vermerkt, im Verlauf „automatisch“', len(mails('it@example.org', 'Sicherheit: Wochenbericht')) == vor + 1 and d['woche'] == woche()

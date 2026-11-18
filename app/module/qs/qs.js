@@ -49,6 +49,7 @@
 
   /* ---------- Formate und Hilfen ---------- */
   const datum = (iso) => (iso ? `${iso.slice(8, 10)}.${iso.slice(5, 7)}.${iso.slice(0, 4)}` : '');
+  const ortstag = (t) => { const d = new Date(t); return isNaN(d) ? '' : d.toLocaleDateString('sv-SE', { timeZone: 'Europe/Berlin' }); };   // Kalendertag in deutscher Zeit (wie ortstag() im Server), ungültig → ''
   const zeitpunkt = (t) => { const d = new Date(t); return isNaN(d) ? '' : window.STAFL_FORMAT.datumZeit(d); };   // 02.11.2026, 14:05 wie überall
   const zahl = (n) => window.STAFL_FORMAT.zahl(n, 0, 2);   // echtes Minus wie überall (format.js)
   const darf = (r) => !!(S.d && S.d.rechte && S.d.rechte[r]);
@@ -852,7 +853,7 @@
     const nw = S.d.nachweise.filter((n) => n.pruefung === p.id);
     $('#pr-nachweise').innerHTML = nw.length ? `<table class="qm-tabelle qm-karten"><thead><tr><th>Datum</th><th>Ergebnis</th><th>Bemerkung</th><th>Durchgeführt</th><th>Maßnahme</th><th></th></tr></thead><tbody>${nw.map((n) => {
       const m = n.massnahme ? S.d.massnahmen.find((x) => x.id === n.massnahme) : null;
-      const nach = n.erfasst && n.erfasst.t.slice(0, 10) > n.datum;
+      const nach = !!(n.erfasst && n.erfasst.t) && ortstag(n.erfasst.t) > n.datum;
       const eigenN = n.erfasst && String(n.erfasst.vonId) === String(S.d.ich.id);
       return `<tr${n.storno ? ' class="qm-storniert"' : ''}><td data-label="Datum">${esc(datum(n.datum))}${nach ? ' ' + chip('nachgetragen') : ''}</td>
         <td data-label="Ergebnis">${chip(S.d.ergebnisse[n.ergebnis] || n.ergebnis, n.ergebnis === 'io' ? 'gruen' : 'rot')}</td>

@@ -644,6 +644,20 @@ with sync_playwright() as p:
     eigen_tab()
     check('Angebotskategorien: Artikel mit eigener Gruppe im Kundenangebot „Nach unten“ – Stelle bleibt nach Speichern und erneutem Laden',
           vor_k == [ec['id'], eg['id']] and ed_ge() == [eg['id'], ec['id']] and kunde_ge() == [eg['id'], ec['id']], (vor_k, ed_ge(), kunde_ge()))
+    # „gespeichert“ erst, wenn auch die Wiederholung nach einem Konflikt (409) gespeichert hat – hier scheitert sie
+    speicherungen = []
+    def speichern_stoeren(route):
+        speicherungen.append(1)
+        route.fulfill(status=409 if len(speicherungen) == 1 else 500, json={'ok': False, 'error': 'Testfehler beim Speichern'})
+    a.locator('#offer-bar [data-offer="std"]').first.click(); oeffnen(a)
+    g0 = fenster(a)[0][1][0]
+    a.click(f'#abf-liste .abf-g[data-gid="{g0}"] [data-ab="g-auf"]')
+    a.click(f'#abf-liste .abf-a[data-aid="{dlg_art(a, g0)[0]}"] [data-ab="a-runter"]')
+    a.route('**/api/?action=save_draft*', speichern_stoeren)
+    a.click('#abf-ok'); a.wait_for_selector('#toast.show:has-text("Aufbau übernommen")')
+    t = a.inner_text('#toast')
+    check('Übernehmen nach Konflikt mit gescheiterter Wiederholung: Hinweis „noch nicht gespeichert“', len(speicherungen) == 2 and 'noch nicht gespeichert' in t, (len(speicherungen), t))
+    a.unroute('**/api/?action=save_draft*')
     check('keine Skriptfehler', not errors, errors[:3])
     br.close()
 

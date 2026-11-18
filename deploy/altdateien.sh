@@ -5,7 +5,7 @@
 # Datenbank. Sie zeigen also nur einen veralteten Stand mit personenbezogenen Daten.
 #   sh deploy/altdateien.sh zeigen       – auflisten, ändert nichts
 #   sh deploy/altdateien.sh archivieren  – Sicherung, Archiv sicherungen/altdateien-<Zeit>.tar.gz (geprüft), dann entfernen
-# Läuft nur bei aktivem SQLite mit fehlerfreier Datenbank. Die Anwendung bleibt in Betrieb: sie greift im SQLite-Betrieb
+# Läuft nur bei aktivem SQLite mit fehlerfreier Datenbank; archivieren zusätzlich nur mit nicht getrennten Daten. Die Anwendung bleibt in Betrieb: sie greift im SQLite-Betrieb
 # nur noch auf die Datenbank und die Statusdateien zu (app/api/storage.php), nie auf diese Dateien.
 # Bleiben stehen: Datenbank (.sqlite/, .sqlite-active), Postfach-Schlüssel, Statusdateien (sicherung, sicherung-extern, deployment),
 # index.php, geo/ und alle Sperr- und Punktdateien. Anleitung: docs/datenbank.md („Alte Datendateien aufräumen“).
@@ -13,8 +13,9 @@ set -eu
 cd "$(dirname "$0")/.."
 AKTION=${1:-}
 case "$AKTION" in zeigen|archivieren) ;; *) echo "Aufruf: sh deploy/altdateien.sh zeigen|archivieren"; exit 1 ;; esac
-# Getrennte Daten (ADR-007 Stufe 2): Altdateien nur mit allen Daten in einem Ordner (interne Altdateien hat die Trennung schon mitgenommen)
-if [ -f daten/.daten-getrennt ]; then
+# Getrennte Daten (ADR-007 Stufe 2): archivieren nur mit allen Daten in einem Ordner (interne Altdateien hat die Trennung schon
+# mitgenommen); zeigen liest nur und darf auch dann laufen
+if [ "$AKTION" = archivieren ] && [ -f daten/.daten-getrennt ]; then
   echo "Abbruch, nichts geändert: Die Daten sind getrennt (daten-intern/). Erst sh deploy/daten-trennen.sh zusammenfuehren,"
   echo "dann aufräumen, danach wieder sh deploy/daten-trennen.sh trennen."
   exit 1

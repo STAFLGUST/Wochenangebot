@@ -1090,4 +1090,15 @@ with sync_playwright() as p:
     br.close()
 check('keine JavaScript-Fehler', not errors, errors[:3])
 
+# ── KW mit Vorjahr über den Jahreswechsel: 30.12.2020 liegt in KW 53/2020, 2021 hat keine KW 53 (am Ende: ändert den Datenbestand) ──
+POS_KW = [(dt.date(2020, 12, 30), '2000001', '40100', 1, 10.0, 5.0, 50.0, 4.0), (dt.date(2021, 12, 29), '2000001', '40100', 1, 20.0, 5.0, 100.0, 4.0)]
+DATEN_KW, TEILE_KW = lesen(POS_KW)
+st, v = pruefen(INA, DATEN_KW, upload='5' * 32)
+assert st == 200 and all(teil(INA, k, TEILE_KW[k], upload='5' * 32)[0] == 200 for k in v['teile']), v
+assert uebernehmen(INA, DATEN_KW, v['stand'], upload='5' * 32)[0] == 200
+st, r = auswertung(SAM, von='2021-12', bis='2021-12', nach='kw', vj='1')
+vj_zeilen = sum((z['vj'] or {}).get('umsatz', 0) for z in r['zeilen'])
+check('KW mit Vorjahr: KW 53 des Vorjahres steht in der letzten KW (Summe der Zeilen = Vorjahressumme)', st == 200 and r['summeVj']['umsatz'] == 5000
+      and vj_zeilen == r['summeVj']['umsatz'] and [z['schluessel'] for z in r['zeilen']] == ['2021-W52'], (st, r.get('summeVj'), [(z['schluessel'], z['vj']) for z in r.get('zeilen', [])]))
+
 print(f'\n{sum(res)}/{len(res)} passed')

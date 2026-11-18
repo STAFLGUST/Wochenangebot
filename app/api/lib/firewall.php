@@ -487,12 +487,13 @@ function fw_zahlen(int $sekunden): array
    Anfragen gesperrter Adressen – für das Lagebild (Modul Sicherheit) */
 function fw_stunden(): array
 {
-    $jetzt = time();
+    // volle Uhrstunden wie die Beschriftung im Lagebild (volle UTC-Stunden sind zugleich volle Stunden deutscher Zeit)
+    $ab = intdiv(time(), 3600) * 3600 - 23 * 3600;
     $out = array_fill(0, 24, ['angriffe' => 0, 'abgewiesen' => 0]);
     foreach (fw_verkehr_alle() as $e) {
-        $alter = $jetzt - (int)($e['t'] ?? 0);
-        if ($alter < 0 || $alter >= 86400) continue;
-        $i = 23 - intdiv($alter, 3600);
+        $t = (int)($e['t'] ?? 0);
+        if ($t < $ab || $t >= $ab + 86400) continue;
+        $i = intdiv($t - $ab, 3600);
         $w = (string)($e['why'] ?? ''); $n = (int)($e['n'] ?? 1);
         if (strpos($w, 'Firewall:') === 0 || strpos($w, 'Falle:') === 0) $out[$i]['angriffe'] += $n;
         elseif (strpos($w, 'Gesperrt:') === 0) $out[$i]['abgewiesen'] += $n;

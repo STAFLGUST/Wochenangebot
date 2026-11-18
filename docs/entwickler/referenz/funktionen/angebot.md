@@ -2,7 +2,7 @@
 
 <!-- ERZEUGT von `python3 werkzeuge/doku.py erzeugen` – nicht von Hand ändern. Quelle: Funktionen und Kommentare im Code. Die CI prüft, dass diese Datei zum Code passt. -->
 
-58 Dateien, 926 Funktionen – in der Reihenfolge der Datei, **fett** die Abschnitte. Text = erste Aussage des Kommentars direkt über der Funktion (Python: Docstring). Übersicht aller Module: [README.md](README.md).
+58 Dateien, 928 Funktionen – in der Reihenfolge der Datei, **fett** die Abschnitte. Text = erste Aussage des Kommentars direkt über der Funktion (Python: Docstring). Übersicht aller Module: [README.md](README.md).
 
 ## `app/api/lib/angebote.php`
 
@@ -1330,6 +1330,36 @@ _Aufbau des Angebots (Knopf „Editor“ in „Angebot bearbeiten“, Wunsch des
 - `gespeichert(pg)`
 - `oeffnen(pg)`
 
+**Testdaten: eine Gruppe ohne Bereich, ein Kundenangebot mit eigener Artikelliste, Nutzer**
+
+**Knopf**
+
+**Fenster: Aufbau in Angebotsreihenfolge**
+
+**Pfeile, dann „Abbrechen“ speichert nichts**
+
+**Ziehen (Maus): Bereich als Ganzes, Gruppe im Bereich, Gruppe in einen anderen Bereich**
+
+**Übernehmen**
+
+**Veröffentlichen: Dialog nennt den Aufbau; Wirkung auf Seite, Liste, Tabelle; alte Version unverändert**
+
+**Revisionskonflikt mit einem zweiten Bearbeiter**
+
+**Kundenangebote**
+
+**Artikel: aufklappen, umsortieren, verschieben**
+
+**Eigene Gruppe je Angebot (Inhaber 17.11.2026): verschieben ändert nur die Gruppe dieses Angebots**
+
+**Ohne Bearbeitungsrecht: kein Knopf, Server 403**
+
+**Handy 390 px, hell und dunkel; Touch-Ziehen**
+
+**Angebotskategorien der Stammdaten: Reihenfolge kommt von dort, Fenster nur zum Ansehen**
+
+- `speichern_stoeren(route)`
+
 ## `tests/e2e/test_bestellung.py`
 
 _Bestellwunsch aus dem Portal_
@@ -1449,6 +1479,7 @@ _Einzelangebote (Angebot bearbeiten → Einzelangebote)_
 **Oberfläche**
 
 - `ed_count(pg)`
+- `wochenpreis_6835(route)` – Preise rundet der Browser wie der Server: Wochenpreis 6,835 → 6,84; Summe 1,005 € × 100 kg = 101,00 € (nicht 100,00 €)
 
 ## `tests/e2e/test_fehlerpruefung.py`
 

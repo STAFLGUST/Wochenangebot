@@ -329,6 +329,28 @@ offen = {a['id']: a for a in r['offen']}
 a = offen.get(ANTRAG1, {})
 check('offener Antrag mit Konto, Vertretung und gleichzeitig Abwesenden', a.get('tage') == 3 and a.get('vertretungName') == 'Lena Leser'
       and any('Lena Leser' in x for x in a.get('kollegen', [])) and a.get('notiz') == 'Skiurlaub', a)
+# „Gleichzeitig weg“ nach derselben Regel wie die Jahresplanung (HR4): keine freien Tage, keine Mitarbeiter außerhalb des Urlaubsplans,
+# ohne Abteilung keine gemeinsame Abteilung
+rev = P.call('mitarbeiter_hr')[1]['rev']
+hr(ids['andre-vierzig'], abteilung='Verwaltung'); PP = hr(ids['paul'], abteilung=''); PO = hr(ids['otto'], abteilung='')
+ab_ = dokument('hr-abwesenheiten')
+ab_['eintraege'] += [{'id': 'hr4-x', 'person': PL, 'art': 'X', 'von': iso(FEB + dt.timedelta(days=2)), 'bis': iso(FEB + dt.timedelta(days=2)), 'status': 'genehmigt', 'notiz': '', 'quelle': 'personalstelle'},
+                     {'id': 'hr4-a', 'person': PA, 'art': 'U', 'von': iso(FEB), 'bis': iso(FEB + dt.timedelta(days=2)), 'status': 'genehmigt', 'notiz': '', 'quelle': 'personalstelle'},
+                     {'id': 'hr4-o', 'person': PO, 'art': 'U', 'von': iso(FEB), 'bis': iso(FEB), 'status': 'genehmigt', 'notiz': '', 'quelle': 'personalstelle'},
+                     {'id': 'hr4-p', 'person': PP, 'art': 'U', 'von': iso(FEB), 'bis': iso(FEB), 'status': 'beantragt', 'notiz': '', 'quelle': 'antrag'}]
+ab_['rev'] = ab_.get('rev', 0) + 1
+storage_write('hr-abwesenheiten', ab_)
+hr(ids['andre-vierzig'], aktiv=False)
+of_ = {a_['id']: a_ for a_ in P.call('hr_verwaltung&jahr=' + str(Y))[1]['offen']}
+check('Gleichzeitig weg wie in der Jahresplanung: ohne freie Tage, ohne Inaktive, leere Abteilung ist keine gemeinsame',
+      not any((FEB + dt.timedelta(days=2)).strftime('%d.%m.%Y') in x for x in of_[ANTRAG1]['kollegen']) and not any('Andre' in x for x in of_[ANTRAG1]['kollegen'])
+      and any('Lena Leser' in x for x in of_[ANTRAG1]['kollegen']) and of_['hr4-p']['kollegen'] == [], (of_[ANTRAG1]['kollegen'], of_['hr4-p']['kollegen']))
+ab_ = dokument('hr-abwesenheiten')
+ab_['eintraege'] = [e_ for e_ in ab_['eintraege'] if not e_['id'].startswith('hr4-')]
+ab_['rev'] = ab_.get('rev', 0) + 1
+storage_write('hr-abwesenheiten', ab_)
+rev = P.call('mitarbeiter_hr')[1]['rev']
+hr(ids['andre-vierzig'], abteilung='Lager', aktiv=True)
 check('Ablehnen ohne Grund: 422', P.call('hr_entscheiden', {'id': ANTRAG1, 'entscheidung': 'abgelehnt'})[0] == 422)
 check('Genehmigen', P.call('hr_entscheiden', {'id': ANTRAG1, 'entscheidung': 'genehmigt'})[0] == 200)
 check('zweimal entscheiden: 409', P.call('hr_entscheiden', {'id': ANTRAG1, 'entscheidung': 'abgelehnt', 'grund': 'x'})[0] == 409)
@@ -681,6 +703,21 @@ st, _ = zimp(P, True, v['stand'])
 check('… eine andere Person übernimmt die Zeile', st == 200 and len(ze('Pia Personal')) == 1 and len(ze('Quentin Quer')) == 1)
 st, v = zimp(PI)
 check('… eigene frühere Übernahme wird bei erneutem Import nicht ersetzt', st == 200 and v['zahlen']['entfaellt'] == 1, v['zahlen'])
+# gleichnamiger Mitarbeiter kommt dazu: Quentin ist mehrdeutig, wird übersprungen – seine frühere Übernahme bleibt (HR2)
+q_alt = ze('Quentin Quer')
+pz_ = dokument('hr-personal')
+pz_['personen'].append({'id': 'pquentin2', 'nutzer': None, 'vorname': 'Quentin', 'nachname': 'Quer', 'abteilung': 'Lager', 'pos': 47, 'aktiv': True})
+pz_['rev'] = pz_.get('rev', 0) + 1
+storage_write('hr-personal', pz_)
+st, v = zimp(P)
+st2, _ = zimp(P, True, v['stand'])
+check('… gleichnamiger Mitarbeiter dazu: Quentin übersprungen, seine frühere Übernahme bleibt, Pia ersetzt', st == 200 and st2 == 200
+      and any(z['name'] == 'Quentin Quer' and 'mehrfach' in z['text'] for z in v['zeilen']) and v['zahlen']['entfaellt'] == 1
+      and len(q_alt) == 1 and ze('Quentin Quer') == q_alt and len(ze('Pia Personal')) == 1, (v['zahlen'], q_alt, ze('Quentin Quer')))
+pz_ = dokument('hr-personal')
+pz_['personen'] = [p_ for p_ in pz_['personen'] if p_['id'] != 'pquentin2']
+pz_['rev'] = pz_.get('rev', 0) + 1
+storage_write('hr-personal', pz_)
 # Excel-Planung (Urlaubsplanung) gibt es nicht mehr: weder als Importart noch als Aktion
 weg = (PI.call('import_pruefen', {'art': 'urlaubsplanung', 'daten': {'blaetter': []}}), P.call('hr_import_pruefen', {'daten': {'blaetter': []}})[0],
        P.call('hr_import_uebernehmen', {'daten': {'blaetter': []}})[0], [x['id'] for x in P.call('import_arten')[1]['arten']])
@@ -1253,6 +1290,21 @@ check('… Mitarbeiter nicht mehr im Urlaubsplan: sein offener Antrag steht wied
       [a_['planung'] for a_ in vi_ if a_['id'] in (PI_, PJ_)] == [False, False] and zahlen_(vi_, P.call('hr_start')[1])
       and not any(a_['id'] in (PI_, PJ_) for a_ in P.call(f'hr_planung&jahr={Y}')[1]['antraege']), [(a_['id'], a_['planung']) for a_ in vi_])
 rev = P.call('mitarbeiter_hr')[1]['rev']; hr(ids['fritz'], aktiv=True)
+# Stichtag in deutscher Zeit (HR6): 31.12. 23:30 zählt noch zur Vorplanung, 01.01. 00:30 (UTC noch 31.12.) nicht mehr
+ab_ = dokument('hr-abwesenheiten'); t_alt_ = {}
+for e_ in ab_['eintraege']:
+    if e_['id'] in (PI_, PJ_):
+        t_alt_[e_['id']] = e_['erfasst']['t']
+        e_['erfasst']['t'] = f'{Y - 1}-12-31T22:30:00Z' if e_['id'] == PI_ else f'{Y - 1}-12-31T23:30:00Z'
+ab_['rev'] = ab_.get('rev', 0) + 1
+storage_write('hr-abwesenheiten', ab_)
+vz_ = {a_['id']: a_['planung'] for a_ in offen_p_()}
+check('Stichtag 31.12. in deutscher Zeit: 23:30 noch Vorplanung, 00:30 am 01.01. nicht mehr', (vz_.get(PI_), vz_.get(PJ_)) == (True, False), (vz_.get(PI_), vz_.get(PJ_)))
+ab_ = dokument('hr-abwesenheiten')
+for e_ in ab_['eintraege']:
+    if e_['id'] in t_alt_: e_['erfasst']['t'] = t_alt_[e_['id']]
+ab_['rev'] = ab_.get('rev', 0) + 1
+storage_write('hr-abwesenheiten', ab_)
 st, r, raw_ = P.call(f'hr_planung&jahr={Y}', raw=True)
 an_ = {a_['id']: a_ for a_ in r['antraege']}
 pp_ = {p_['id']: p_ for p_ in r['personen']}
@@ -2513,12 +2565,15 @@ with sync_playwright() as p:
     pe_ = next(p_ for p_ in v_['personen'] if p_['nutzer'] == ids['erika'])
     rev = v_['rev']; hr(ids['erika'], jahr=J, anspruch=(pe_['jahre'].get(str(J)) or {}).get('anspruch'), uebertrag=3)
     k_e = E.call('hr_start')[1]['konto']
-    check('Konto: 3 Tage Übertrag verfallen in 20 Tagen', k_e['verfaellt'] == 3 and k_e['frist'] == frist.isoformat(), k_e)
+    # Betriebsurlaub 24.12./31.12. (je ½ Tag, wenn Werktag) bis zum Verfallstag verbraucht Übertrag – ab Anfang Dezember weniger als 3
+    n_vf = 3 - 0.5 * sum(1 for d_ in (dt.date(J, 12, 24), dt.date(J, 12, 31)) if d_.weekday() < 5 and d_ <= frist)
+    t_vf = f'{n_vf:g}'.replace('.', ',') + ' Tage'
+    check(f'Konto: {t_vf} Übertrag verfallen in 20 Tagen', k_e['verfaellt'] == n_vf and k_e['frist'] == frist.isoformat(), k_e)
     for breite in (1280, 390):
         ctx, pg = anmelden('erika', 'Editor-Zugang-77', '198.51.100.3', breite, verfall_hinweis=True)
         pg.goto(B + '/module/hr/'); pg.wait_for_selector('#dlg-verfall[open]')
         t_ = pg.text_content('#verfall-text')
-        check(f'{breite}px: Pop-up „Resturlaub verfällt bald“ mit Tagen und Datum, ohne waagerechtes Scrollen', '3 Tage' in t_ and frist.strftime('%d.%m.%Y') in t_
+        check(f'{breite}px: Pop-up „Resturlaub verfällt bald“ mit Tagen und Datum, ohne waagerechtes Scrollen', t_vf in t_ and frist.strftime('%d.%m.%Y') in t_
               and pg.is_visible('#verfall-planen') and pg.evaluate('document.documentElement.scrollWidth <= window.innerWidth + 1'), t_)
         pg.screenshot(path=os.path.join(SH, f'hr_verfall_hinweis_{breite}.png'))
         if breite == 1280:
@@ -2567,6 +2622,18 @@ with sync_playwright() as p:
         check(f'{breite}px: kein waagerechtes Scrollen der Seite', breit)
         pg.screenshot(path=os.path.join(SH, f'hr_mein_{breite}.png'), full_page=True)
         if breite == 1280:
+            # Antrag im Folgejahr über Ostern, Seite zeigt das laufende Jahr: Tagezahl wie der Server (Feiertage des Folgejahres, HR5)
+            o_von, o_bis = dt.date(Y, 3, 20), dt.date(Y, 4, 26)   # enthält in jedem Jahr Karfreitag und Ostermontag
+            n_os = E.call('hr_antrag_pruefen', {'zeitraeume': [{'von': iso(o_von), 'bis': iso(o_bis)}]})[1]['zeitraeume'][0]['tage']
+            for f_, d_ in (('#antrag-von', o_von), ('#antrag-bis', o_bis)):
+                pg.fill(f_, iso(d_)); pg.dispatch_event(f_, 'change')
+            try: pg.wait_for_function(f"document.querySelector('#antrag-tage').textContent.startsWith('{n_os:g} Tage')", timeout=5000); ok_os = True
+            except Exception: ok_os = False
+            check('Antrag im Folgejahr über Ostern: Tagezahl wie der Server (ohne Karfreitag und Ostermontag)', ok_os and str(Y) not in pg.text_content('#mein-titel'),
+                  (n_os, pg.text_content('#antrag-tage')))
+            for f_ in ('#antrag-von', '#antrag-bis'):
+                pg.fill(f_, ''); pg.dispatch_event(f_, 'change')
+            pg.wait_for_function("document.querySelector('#antrag-tage').textContent === ''")
             pg.click('[data-jahr="1"]')
             pg.wait_for_function(f'document.querySelector("#mein-titel").textContent.includes("{Y}")')
             tag_ = montag(Y, 9)

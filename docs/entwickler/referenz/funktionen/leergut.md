@@ -2,7 +2,7 @@
 
 <!-- ERZEUGT von `python3 werkzeuge/doku.py erzeugen` – nicht von Hand ändern. Quelle: Funktionen und Kommentare im Code. Die CI prüft, dass diese Datei zum Code passt. -->
 
-4 Dateien, 130 Funktionen – in der Reihenfolge der Datei, **fett** die Abschnitte. Text = erste Aussage des Kommentars direkt über der Funktion (Python: Docstring). Übersicht aller Module: [README.md](README.md).
+4 Dateien, 131 Funktionen – in der Reihenfolge der Datei, **fett** die Abschnitte. Text = erste Aussage des Kommentars direkt über der Funktion (Python: Docstring). Übersicht aller Module: [README.md](README.md).
 
 ## `app/api/aktionen/leergut.php`
 
@@ -37,6 +37,7 @@ _Leergut · Leergutkonten und Abstimmung_
 - `lg_text(v, max, was)`
 - `lg_datum(v, was, pflicht)`
 - `lg_wahl(v, erlaubt, was)`
+- `lg_zahltext(v)` – Zahl als Text → PHP-Schreibweise: Punkte sind nur in deutschen Dreiergruppen („1.234,5“) Tausenderpunkte, sonst Dezimalzeichen („5.50“).
 - `lg_ganz(v, was, negativ)` – Ganze Zahl (Stück).
 - `lg_mengen(v, lmIds, was, negativ)` – Mengen je Lademittel: { e2: 12, h1: 1 } – nur bekannte Lademittel, leere und 0 entfallen
 - `lg_betrag(v, was)`

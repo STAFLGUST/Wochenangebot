@@ -87,8 +87,10 @@ switch ($action) {
             [$hy, $hw] = array_map('intval', explode('-', $id));
             audit('history', 'Preisverlauf: KW ' . $hw . '/' . $hy . ' entfernt');
             store_delete('historie/' . $id);
-            $del = store_read('historie_geloescht') ?? [];
-            if (!in_array($id, $del, true)) { $del[] = $id; store_write('historie_geloescht', $del); }
+            with_lock('historie_geloescht', function () use ($id) {
+                $del = store_read('historie_geloescht') ?? [];
+                if (!in_array($id, $del, true)) { $del[] = $id; store_write('historie_geloescht', $del); }
+            });
             respond(['ok' => true]);
         }
 }

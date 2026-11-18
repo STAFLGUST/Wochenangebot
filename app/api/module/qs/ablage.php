@@ -430,7 +430,7 @@ function qs_ablage_eintraege(array $dokumente, array $stamm, string $kapitel, bo
             elseif (!$alle || $st === 'verworfen') continue;
             elseif ($st === 'ersetzt') $unter = '/_ältere Versionen/Version ' . ($v['nr'] ?? '?');
             else $unter = '/_Entwurf';
-            foreach (qs_dateien_aktiv($v['dateien'] ?? []) as $f) $e[] = ['pfad' => $ordner . $unter . '/' . ablage_zip_pfad((string)$f['name']), 'bereich' => 'qs', 'id' => (string)$f['id']];
+            foreach (qs_dateien_sichtbar(qs_dateien_aktiv($v['dateien'] ?? []), $me) as $f) $e[] = ['pfad' => $ordner . $unter . '/' . ablage_zip_pfad((string)$f['name']), 'bereich' => 'qs', 'id' => (string)$f['id']];
         }
     }
     array_unshift($e, ['pfad' => $wurzel . '/' . QS_IMPORT_LISTE, 'inhalt' => qs_csv_dokumente($gewaehlt, $stamm, $heute)]);

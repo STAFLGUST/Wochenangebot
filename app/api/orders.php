@@ -18,7 +18,7 @@ function angebot_startseite(array $me): array
     $neu = []; $meine = 0;
     foreach (store_read('bestellungen') ?? [] as $o) {
         $w = $o['workflow'] ?? 'neu';
-        if ($w === 'neu') $neu[] = substr((string)($o['t'] ?? ''), 0, 10);
+        if ($w === 'neu') $neu[] = ortstag((string)($o['t'] ?? ''));
         elseif (in_array($w, ['in_bearbeitung', 'bestaetigt'], true) && (string)($o['assignee'] ?? '') === (string)$me['id']) $meine++;
     }
     $out = [];
@@ -102,7 +102,8 @@ function orders_action(string $action): bool
                 $allowed = ['neu'=>['in_bearbeitung','storniert'], 'in_bearbeitung'=>['neu','bestaetigt','storniert'], 'bestaetigt'=>['in_bearbeitung','erledigt','storniert'], 'erledigt'=>[], 'storniert'=>[]];
                 if (!in_array($state, ORDER_STATES, true) || ($state !== $from && !in_array($state, $allowed[$from] ?? [], true))) fail('Dieser Statuswechsel ist nicht möglich.', 422);
                 $assignee = (string)($b['assignee'] ?? '');
-                if ($assignee !== '') {
+                // nur eine geänderte Zuweisung prüfen: ein inzwischen deaktivierter Bearbeiter darf den Vorgang nicht blockieren
+                if ($assignee !== '' && $assignee !== (string)($o['assignee'] ?? '')) {
                     $valid = false;
                     foreach (users_load() as $u) if ($u['id'] === $assignee && !empty($u['active']) && may($u, 'bestellungen.bearbeiten')) $valid = true;
                     if (!$valid) fail('Bitte einen aktiven Bearbeiter wählen.', 422);

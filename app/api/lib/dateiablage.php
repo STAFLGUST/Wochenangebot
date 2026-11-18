@@ -455,6 +455,17 @@ function ablage_zip_senden(string $dateiname, array $eintraege): void
 {
     @set_time_limit(0);
     $fehlend = []; $liste = []; $gesehen = [];
+    // gleiche Pfade unterscheiden (Windows: ohne Groß-/Kleinschreibung)
+    $eindeutig = function (string $basis) use (&$gesehen): string {
+        $pfad = $basis; $n = 1;
+        while (isset($gesehen[mb_strtolower($pfad)])) {
+            $n++;
+            $punkt = strrpos($basis, '.'); $schnitt = strrpos($basis, '/');
+            $pfad = ($punkt !== false && $punkt > (int)$schnitt) ? substr($basis, 0, $punkt) . " ($n)" . substr($basis, $punkt) : "$basis ($n)";
+        }
+        $gesehen[mb_strtolower($pfad)] = true;
+        return $pfad;
+    };
     foreach ($eintraege as $e) {
         $pfad = (string)$e['pfad'];
         if (isset($e['id'])) {
@@ -463,20 +474,12 @@ function ablage_zip_senden(string $dateiname, array $eintraege): void
             if (filesize($p) >= 0xFFFFFFFF) throw new RuntimeException('ZIP-Export: Eintrag ab 4 GB nicht vorgesehen (' . $pfad . ')');
             $e['datei'] = $p;
         }
-        // gleiche Pfade unterscheiden (Windows: ohne Groß-/Kleinschreibung)
-        $basis = $pfad; $n = 1;
-        while (isset($gesehen[mb_strtolower($pfad)])) {
-            $n++;
-            $punkt = strrpos($basis, '.'); $schnitt = strrpos($basis, '/');
-            $pfad = ($punkt !== false && $punkt > (int)$schnitt) ? substr($basis, 0, $punkt) . " ($n)" . substr($basis, $punkt) : "$basis ($n)";
-        }
-        $gesehen[mb_strtolower($pfad)] = true;
-        $e['pfad'] = $pfad;
+        $e['pfad'] = $eindeutig($pfad);
         $liste[] = $e;
     }
     if ($fehlend) {
         $wurzel = strpos((string)($liste[0]['pfad'] ?? ''), '/') !== false ? explode('/', (string)$liste[0]['pfad'])[0] . '/' : '';
-        $liste[] = ['pfad' => $wurzel . 'Hinweise.txt', 'inhalt' => "Folgende Dateien fehlen in der Ablage und sind nicht enthalten:\r\n" . implode("\r\n", $fehlend) . "\r\n"];
+        $liste[] = ['pfad' => $eindeutig($wurzel . 'Hinweise.txt'), 'inhalt' => "Folgende Dateien fehlen in der Ablage und sind nicht enthalten:\r\n" . implode("\r\n", $fehlend) . "\r\n"];
     }
     if (session_status() === PHP_SESSION_ACTIVE) session_write_close();   // sonst wartet jede weitere Anfrage der Sitzung auf das Ende des Exports
     header('Content-Type: application/zip');

@@ -1,7 +1,8 @@
 """ZIP-Export der Dateiablage (app/api/lib/dateiablage.php, ablage_zip_senden) über die Grenzen des klassischen ZIP-Formats:
 kleines Archiv ohne Zip64-Felder; Versatz über 4 GB (18 Dateien zu 250 MB, als Lücken-Dateien ohne Platz auf der Platte) mit
 Umlauten in den Namen und genau 65535 Einträge mit Zip64-Feldern, 65534 noch ohne; eine Datei, die während des Exports
-verschwindet, fehlt im Archiv, das gültig bleibt. Geprüft mit Pythons zipfile (Prüfsummen aller Einträge) und Info-ZIP unzip
+verschwindet, fehlt im Archiv, das gültig bleibt; der Vermerk fehlender Dateien
+bekommt neben einer eigenen „Hinweise.txt“ einen eindeutigen Namen. Geprüft mit Pythons zipfile (Prüfsummen aller Einträge) und Info-ZIP unzip
 (prüft auch, dass lokaler und zentraler Name gleich gelesen werden).
 
 Prüfung beim Hochladen (ablage_zip_pruefen): die eigenen Exporte, Archive von Pythons zipfile (auch 65535 Einträge ohne Zip64,
@@ -137,6 +138,13 @@ with tempfile.TemporaryDirectory() as tmp:
     namen = z.namelist()
     check('Datei verschwindet während des Exports: fehlt im Archiv, Archiv gültig, im Protokoll vermerkt', namen == ['QM-System/1.4 Qualität/Datei 31.pdf', 'QM-System/1.4 Qualität/Datei 32.pdf']
           and z.testzip() is None and unzip_test(os.path.join(tmp, 'weg.zip'))[0] and 'Datei 30.pdf' in log, (namen, log))
+
+    fehlt = {'pfad': 'QM-System/Fehlt.pdf', 'bereich': 'qs', 'id': 'ab' + '9' * 18}
+    z, _, _ = export(tmp, [{'pfad': 'QM-System/Hinweise.txt', 'inhalt': 'eigene Hinweise'}, fehlt], os.path.join(tmp, 'hinweise.zip'))
+    namen = z.namelist()
+    check('eigene „Hinweise.txt“ und fehlende Datei: Namen eindeutig, eigene Datei bleibt, Vermerk unter neuem Namen',
+          len(namen) == len(set(namen)) == 2 and z.read('QM-System/Hinweise.txt') == b'eigene Hinweise'
+          and b'QM-System/Fehlt.pdf' in z.read('QM-System/Hinweise (2).txt'), namen)
 
     # ── Prüfung beim Hochladen: echte Archive anderer Packer werden angenommen ──
     def zipfile_bytes(eintraege, kommentar=b''):

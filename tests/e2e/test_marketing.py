@@ -14,6 +14,7 @@ import datetime as dt
 import json
 import os
 import sys
+from zoneinfo import ZoneInfo
 
 from playwright.sync_api import sync_playwright
 
@@ -251,6 +252,13 @@ check('CSV (auch nur mit Ansehrecht): BOM, Kopf, alle Beiträge', st == 200 and 
 check('CSV: Werte (Titel, Kanalnamen, Kennzahlen)', any('Woran erkennt man gutes Dry Aged' in z and 'Instagram (Feed)' in z and '"1200"' in z for z in zeilen), zeilen)
 check('CSV: keine Formeln (auch nicht nach Steuerzeichen/Tabulator)', any('"\'=HYPERLINK' in z for z in zeilen) and not any(';"=' in z or ';"\t' in z for z in zeilen))
 check('CSV nur per POST', V.call('marketing_export')[0] == 405)
+# Freigabe um 00:30 Berliner Zeit (23:30 UTC am Vortag): CSV zeigt den Berliner Kalendertag
+doc = dokument('marketing-beitraege')
+fg = next(e for e in doc['liste'] if e.get('freigabe'))
+fg['freigabe']['t'] = '2026-03-14T23:30:00Z'
+storage_write('marketing-beitraege', doc)
+zeile = next(z for z in V.call('marketing_export', {}, raw=True)[2].split('\n') if fg['titel'] in z)
+check('CSV: Freigabedatum als Berliner Kalendertag (00:30 Uhr → 15.03., nicht 14.03.)', '"2026-03-15"' in zeile and '"2026-03-14"' not in zeile, zeile)
 
 # ── Löschen ──
 st, r = A.call('marketing_beitrag_loeschen', {'id': b3['id']})
@@ -265,6 +273,17 @@ check('Protokoll: Beiträge, Kampagnen, Einstellungen, Export, Löschen', 'Beitr
       and 'Einstellungen gespeichert' in txt and 'CSV' in txt and 'gelöscht' in txt, txt[:400])
 check('Protokoll ohne Texte, Skripte und Kommentare', 'Szene 1' not in txt and 'Hook kürzer' not in txt and 'Neuer Text' not in txt)
 check('eigene Dokumente geschrieben (Beiträge, Kampagnen, Einstellungen)', all(dokument(n) for n in ('marketing-beitraege', 'marketing-kampagnen', 'marketing-einstellungen')))
+
+# Veröffentlicht um 00:30 Berliner Zeit genau vor 30 Tagen (UTC noch am Vortag): zählt zu „Veröffentlicht – letzte 30 Tage“
+BERLIN = ZoneInfo('Europe/Berlin')
+HEUTE_B = dt.datetime.now(BERLIN).date()
+doc = dokument('marketing-beitraege')
+vo = next(e for e in doc['liste'] if e['status'] == 'veroeffentlicht')
+vo['veroeffentlichtAm'] = dt.datetime.combine(HEUTE_B - dt.timedelta(days=30), dt.time(0, 30), BERLIN).astimezone(dt.timezone.utc).strftime('%Y-%m-%dT%H:%M:%SZ')
+storage_write('marketing-beitraege', doc)
+VEROEFF30 = sum(1 for e in doc['liste'] if e['status'] == 'veroeffentlicht'
+                and (dt.datetime.fromisoformat(e['veroeffentlichtAm'].replace('Z', '+00:00')).astimezone(BERLIN).date().isoformat() if e.get('veroeffentlichtAm')
+                     else (e.get('veroeffentlichung') or '')[:10]) >= (HEUTE_B - dt.timedelta(days=30)).isoformat())
 
 # ── Oberfläche ──
 with sync_playwright() as p:
@@ -284,6 +303,8 @@ with sync_playwright() as p:
     ub = pg.inner_text('#tab-uebersicht')
     check('Übersicht: Kennzahlen, nächste Veröffentlichungen, Kanal-Mix', 'Diese Woche' in ub and 'Zur Freigabe' in ub and 'Nächste Veröffentlichungen' in ub
           and 'Karussell: 4 Grillfehler' in ub and 'Kanäle – nächste 4 Wochen' in ub, ub[:600])
+    kpi_v = pg.locator('#tab-uebersicht .mkt-wert').filter(has_text='letzte 30 Tage').locator('b').inner_text()
+    check('Übersicht: „Veröffentlicht – letzte 30 Tage“ nach Berliner Kalendertag (00:30 Uhr vor 30 Tagen zählt mit)', kpi_v == str(VEROEFF30), (kpi_v, VEROEFF30))
     check('Einstellungen-Reiter für Bearbeiter ausgeblendet', pg.is_hidden('#mkt-tabs [data-tab="einstellungen"]'))
     pg.fill('#idee-titel', 'Story: Frage der Woche an die Community'); pg.click('#idee-form button[type="submit"]')
     pg.wait_for_function("document.querySelector('#mkt-toast').textContent.includes('Idee gespeichert')")
@@ -291,9 +312,12 @@ with sync_playwright() as p:
     pg.screenshot(path=os.path.join(SH, 'marketing_uebersicht_1440.png'), full_page=True)
 
     pg.click('#mkt-tabs button[data-tab="kalender"]'); pg.wait_for_selector('.mkt-monat')
+    tag5 = f'.mkt-tag:not(.anders)[data-tag="{TAG(5)}"]'
+    if pg.locator(tag5).count() == 0:   # in fünf Tagen schon im nächsten Monat: dorthin blättern
+        pg.click('[data-kal="vor"]'); pg.wait_for_selector(tag5)
     chip = pg.locator(f'.mkt-chip[data-oeffnen="{b2["id"]}"]')
-    check('Kalender: Beitrag am geplanten Tag', chip.count() == 1 and pg.locator(f'.mkt-tag[data-tag="{TAG(5)}"] .mkt-chip[data-oeffnen="{b2["id"]}"]').count() == 1
-          or TAG(5)[:7] != HEUTE.isoformat()[:7], chip.count())
+    check('Kalender: Beitrag am geplanten Tag', chip.count() == 1 and pg.locator(f'{tag5} .mkt-chip[data-oeffnen="{b2["id"]}"]').count() == 1, chip.count())
+    pg.click('[data-kal="heute"]'); pg.wait_for_selector('.mkt-tag.heute:not(.anders)')
     check('Kalender: „Ohne Termin“ mit der neuen Idee', 'Story: Frage der Woche' in pg.inner_text('.mkt-ohne'))
     pg.screenshot(path=os.path.join(SH, 'marketing_kalender_1440.png'), full_page=True)
     pg.click('.mkt-umschalter button[data-kal="woche"]'); pg.wait_for_selector('.mkt-woche')

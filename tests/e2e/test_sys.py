@@ -1,10 +1,10 @@
 import sys
 from versand_hilfe import veroeffentlichen
 from umgebung import BASE  # Testserver je Gruppe (parallel)
-import re, json, time
+import os, re, json, time
 from playwright.sync_api import sync_playwright, expect
 B = BASE
-from umgebung import SH, FIX, REPO, WORK
+from umgebung import SH, FIX, REPO, WORK, datenordner, storage_sqlite
 from testdaten import de, preis, preise, artikel, bestand_kg, excel_preis
 results = []
 def check(n, c, info=''):
@@ -210,7 +210,15 @@ with sync_playwright() as p:
     check('API publish without login → 401', r.status == 401)
     r = op.request.get(B + '/data/angebot.php'); check('data file not readable', r.status == 404 and 'items' not in r.text(), r.status)
     r = op.request.get(B + '/data/nutzer.php'); check('user hashes not readable', 'hash' not in r.text() and r.status == 404, r.status)
-    r = op.request.get(B + '/data/protokoll/' + time.strftime('%Y-%m') + '.php'); check('log not readable', r.status == 404 and 'login' not in r.text(), r.status)
+    # nur eine vorhandene Datei sagt etwas aus: Protokoll-Monatsdatei nach UTC-Monat (protokoll.php)
+    monat = 'protokoll/' + time.strftime('%Y-%m', time.gmtime())
+    # (/data/ sperrt im Betrieb die .htaccess; der PHP-Testserver kennt sie nicht und prüft nur die Sperrzeile der Datei)
+    if storage_sqlite() or datenordner(monat) != os.environ['UDATA']:
+        print('INFO log not readable: entfällt im SQLite-Speicher bzw. bei getrennten Daten (keine Protokolldatei unter /data/)')
+    else:
+        f = os.path.join(os.environ['UDATA'], monat + '.php')
+        eintraege = open(f, encoding='utf-8').read().split('\n', 1)[1] if os.path.isfile(f) else ''
+        r = op.request.get(B + '/data/' + monat + '.php'); check('log exists and is not readable', eintraege.startswith('[{') and r.status == 404 and eintraege[:40] not in r.text(), r.status)
     r = op.request.get(B + '/api/?action=offer&draft=1'); check('draft preview needs login', r.status == 401)
     other.close()
 

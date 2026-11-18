@@ -35,6 +35,8 @@
   const timeOnly = (iso) => (iso ? new Date(iso).toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' }) : '');
   const FOLD = { 'ä': 'a', 'ö': 'o', 'ü': 'u', 'ß': 's', 'é': 'e', 'è': 'e', 'ê': 'e', 'á': 'a', 'à': 'a', 'ó': 'o', 'ô': 'o', 'í': 'i', 'ú': 'u', 'ç': 'c', 'ñ': 'n', 'œ': 'o' };
   const fold = (s) => String(s ?? '').toLowerCase().replace(/[^\u0000-\u007f]/g, (c) => FOLD[c] ?? c);   // Vergleich von Namen und Spaltenköpfen
+  const ausschreiben = (s) => String(s ?? '').toLowerCase().replace(/ä/g, 'ae').replace(/ö/g, 'oe').replace(/ü/g, 'ue').replace(/ß/g, 'ss');   // Umlaute für Kennungen (Benutzername, Angebotskennung)
+  const glatt = (x) => Math.round(Number(x.toPrecision(15)));   // runden nach Glätten der Binärdarstellung: 104,4999… → 105 wie PHP round()
   const SU = window.STAFL_SUCHE;   // alle Suchfelder: eine Regel (assets/suche.js) – Umlaute auch ausgeschrieben, mehrere Wörter, Nummern
   const store = {
     get(k, d) { try { const v = localStorage.getItem('wochenangebot.' + k); return v == null ? d : JSON.parse(v); } catch { return d; } },
@@ -2102,7 +2104,7 @@
      Kunden einer zugeordneten Kundengruppe sehen das Angebot ohne eigene Freischaltung (Server: customer_offers). */
   let offerEdit = null, ofDirty = false, ofKg = [], ofKunden = null, ofPick = null;
   const slug = (t) => {
-    const x = fold(t).replace(/^wochenangebot\s*/, '').replace(/ä/g, 'ae').replace(/ö/g, 'oe').replace(/ü/g, 'ue').replace(/ß/g, 'ss').replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 32) || 'angebot';
+    const x = fold(ausschreiben(t)).replace(/^wochenangebot\s*/, '').replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 32) || 'angebot';
     return /^e-/.test(x) || /^\d+$/.test(x) ? `angebot-${x}`.slice(0, 40) : x;   // „e-…“ gehört Einzelangeboten, reine Zahlen gehen in JSON-Schlüsseln kaputt
   };
   function openOffers() { setView('angebote'); }
@@ -2395,7 +2397,8 @@
       if (!p || (p.status !== 'value' && p.status !== 'request')) continue;
       const hier = inOffer(it, curOffer), eigen = curOffer === OSTD ? hier : !!(it.variants && it.variants[curOffer] && it.variants[curOffer].status !== 'hidden');
       if (eigen && !all) continue;
-      const np = p.status === 'value' ? { status: 'value', value: Math.round(Math.round(p.value * (1 + pct / 100) / step) * step * 100) / 100 } : { status: 'request' };
+      // Quotient vor dem Runden glätten: 5,50 € −5 % / 0,05 ergibt binär 104,4999… statt 104,5 (wie rundeWieServer in frontend.js)
+      const np = p.status === 'value' ? { status: 'value', value: Math.round(glatt(p.value * (1 + pct / 100) / step) * step * 100) / 100 } : { status: 'request' };
       if (!hier) empfehlungNichtUebernehmen(it, curOffer);
       aufnehmen(it, curOffer, np);
       invalid.delete(it.id + '|' + curOffer);
@@ -4432,10 +4435,11 @@
   async function aufbauUebernehmen(neu, stand) {
     if (ro || !model) return { fehler: 'Sie dürfen dieses Angebot nicht bearbeiten.' };
     let wer = '';
+    const ruhe = async () => { for (let i = 0; i < 150 && (saving || queued || pulling); i++) await new Promise((r) => setTimeout(r, 100)); };
     try {
       clearTimeout(saveTimer);
       if (!saving && savePending()) await saveNow();
-      for (let i = 0; i < 150 && (saving || queued || pulling); i++) await new Promise((r) => setTimeout(r, 100));
+      await ruhe();
       const d = await api('draft_ping', { body: {} });
       wer = d.savedBy || '';
       if (d.revision !== revision) await pullRemote();
@@ -4467,6 +4471,7 @@
     saveNote = { type: 'aufbau' };
     changed({ render: true });
     await saveNow();
+    await ruhe();   // nach einem Konflikt (409) läuft die Wiederholung ohne await weiter
     return { ok: true, gespeichert: !saveError };
   }
 
@@ -5174,7 +5179,7 @@
 
   window.WA = {
     importLeser: IMPORT_LESER,
-    $, $$, api, esc, icon, toast, confirmBox, dateTime, timeOnly, plural, fold, SU, fmtNum, fmtInt, csvCell, ROLE_LABEL, offerName, offerShort,
+    $, $$, api, esc, icon, toast, confirmBox, dateTime, timeOnly, plural, fold, SU, fmtNum, fmtInt, csvCell, ROLE_LABEL, offerName, offerShort, ausschreiben, glatt,
     loadOffers, pendingCount, setView, renderWartungBanner, wartungBis, OSTD, may,
     // offers: Kundenangebote (Freischaltung beim Kunden, Verwaltung) – Sonderangebote gelten nur über Kundengruppen (sonderangebote)
     get me() { return me; }, get offers() { return kundenAngebote(); }, get stdPublic() { return stdPublic; },

@@ -662,6 +662,30 @@ with sync_playwright() as p:
     a.select_option(r0 + ' [data-f="partie"]', 'P-0001'); a.click('#ez-save'); a.wait_for_function("!document.querySelector('#ez-dirty') || document.querySelector('#ez-dirty').hidden")
     a.click('#ez-zurueck'); a.wait_for_selector('#view-einzel tr[data-ez]')
 
+    # Preise rundet der Browser wie der Server: Wochenpreis 6,835 → 6,84; Summe 1,005 € × 100 kg = 101,00 € (nicht 100,00 €)
+    def wochenpreis_6835(route):
+        r = route.fetch(); j = r.json()
+        for x in j['articles']:
+            if x.get('code') == '10601': x['stdPrice'] = {'status': 'value', 'value': 6.835}
+        route.fulfill(response=r, json=j)
+    a.route('**/api/?action=einzel_artikel*', wochenpreis_6835)
+    a.click('#vt-edit'); a.wait_for_selector('#view-edit:not([hidden])'); a.click('#vt-einzel'); a.wait_for_selector('#view-einzel tr[data-ez]')   # Artikel neu laden
+    a.click('#ez-neu'); a.wait_for_selector('#ez-kunde')
+    a.click('#ez-kunde'); a.fill('#ez-kunde', 'kantine einzel'); a.wait_for_selector('#ez-kunde-list li.akt[data-kid]'); a.press('#ez-kunde', 'Enter'); a.wait_for_selector('#ez-kunde-list', state='hidden')
+    a.click('#ez-add'); a.wait_for_selector('#dlg-ez-pick[open]'); a.click('#ezp-grp [data-grp="1600"]'); a.wait_for_selector('#ezp-list tr[data-code="10601"]')
+    a.check('#ezp-list [data-sel="10601"]'); a.click('#ezp-ok'); a.wait_for_selector(r0 + ' [data-f="price"]')
+    check('Wochenpreis 6,835 als 6,84 vorbelegt (wie der Server speichert)', a.input_value(r0 + ' [data-f="price"]') == '6,84', a.input_value(r0 + ' [data-f="price"]'))
+    a.fill(r0 + ' [data-f="price"]', '1,005'); a.fill(r0 + ' [data-f="qty"]', '100'); a.press(r0 + ' [data-f="qty"]', 'Tab')
+    summe_browser = a.inner_text('#ez-summe')
+    with a.expect_response(lambda x: 'action=einzel_save' in x.url) as ri:
+        a.click('#ez-save')
+    srv = (ri.value.json().get('angebot') or {}).get('summen')
+    check('Warenwert im Browser gleich der Serverantwort (101,00 €)', '101,00 €' in summe_browser and srv == {'kg': 100, 'summe': 101.0}, (summe_browser, srv))
+    a.unroute('**/api/?action=einzel_artikel*'); a.wait_for_selector('#ez-del')
+    a.click('#ez-del'); a.click('#dlg-confirm .btn.primary'); a.wait_for_selector('#view-einzel tr[data-ez]')   # wieder entfernen: die folgenden Prüfungen öffnen das neueste Angebot
+    a.click('#vt-edit'); a.wait_for_selector('#view-edit:not([hidden])'); a.click('#vt-einzel'); a.wait_for_selector('#view-einzel tr[data-ez]')   # echte Wochenpreise neu laden
+    a.wait_for_function("!document.querySelector('#toast').classList.contains('show')")
+
     a.set_viewport_size({'width': 390, 'height': 820}); a.emulate_media(color_scheme='dark')   # mobil im dunklen Modus
     a.locator('#view-einzel tr[data-ez]').first.click(); a.wait_for_selector('#ez-pos')
     over = a.evaluate('document.documentElement.scrollWidth - document.documentElement.clientWidth')

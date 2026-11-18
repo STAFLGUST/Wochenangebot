@@ -152,6 +152,32 @@ function qs_dateien_sichtbar(array $dateien, array $me): array
     if (may($me, 'qs.bearbeiten')) return $dateien;
     return array_values(array_filter($dateien, function (array $f): bool { return !array_filter(explode('/', (string)($f['pfad'] ?? '')), 'qs_name_geschuetzt'); }));
 }
+/* Dokument für $me: Dateien geschützter Ordner (z. B. „1.5 Mitarbeiter“) an Versionen und ältere am Dokument (qs_ordner_dateien) nur für
+   Bearbeiter, ihre Namen auch nicht in den Verlaufstexten („Datei entfernt: …“) – wie beim Herunterladen (qs_dateien_sichtbar) */
+function qs_dok_dateien_sichtbar(array $d, array $me): array
+{
+    if (may($me, 'qs.bearbeiten')) return $d;
+    $weg = [];
+    $sichtbar = function (array $alle) use ($me, &$weg): array {
+        $da = qs_dateien_sichtbar($alle, $me);
+        foreach (array_diff(array_column($alle, 'name'), array_column($da, 'name')) as $n) if ((string)$n !== '') $weg[] = (string)$n;
+        return $da;
+    };
+    foreach ((array)($d['versionen'] ?? []) as $i => $v) if (isset($v['dateien'])) $d['versionen'][$i]['dateien'] = $sichtbar((array)$v['dateien']);
+    $alt = qs_ordner_dateien($d, []);
+    if ($alt) $d = array_replace($d, ['dateien' => $sichtbar($alt)]);
+    if (!$weg) return $d;
+    // nur ganze Namen ersetzen: „Plan“ nicht mitten in „Planung“
+    usort($weg, function ($a, $b) { return strlen($b) - strlen($a); });
+    $re = '/(?<![\p{L}\p{N}])(?:' . implode('|', array_map(function ($n) { return preg_quote($n, '/'); }, $weg)) . ')(?![\p{L}\p{N}])/u';
+    $ohne = function (array $e) use ($re): array {
+        foreach ((array)($e['verlauf'] ?? []) as $k => $l) $e['verlauf'][$k]['was'] = (string)preg_replace($re, 'personenbezogene Datei', (string)($l['was'] ?? ''));
+        return $e;
+    };
+    $d = $ohne($d);
+    foreach ((array)($d['versionen'] ?? []) as $i => $v) $d['versionen'][$i] = $ohne($v);
+    return $d;
+}
 /* Die eine Stelle für alle Lesewege (Liste, Suche, Zahlen, CSV, Dateien, Ordnerbaum, ZIP, Bericht, Verfahrensdoku): lädt die genannten
    Listen (dokumente, handbuch, pruefplan, nachweise, massnahmen) und gibt zurück, was $me davon sieht. Mit qs.bearbeiten alles; sonst aus
    geschützten Kapiteln nur die eigenen Prüfungen (qs_pruefung_meine) mit ihren Nachweisen und die eigenen Maßnahmen (qs_massnahme_meine) –
@@ -495,14 +521,15 @@ function qs_ueberpruefung(array $d, int $monate, string $heute): ?array
     $g = qs_ver_index($d, ['freigegeben']);
     if ($g === null) return null;
     $seit = (string)($d['versionen'][$g]['datum'] ?? '');
-    $u = substr((string)($d['ueberprueft']['t'] ?? ''), 0, 10);
+    $u = ortstag((string)($d['ueberprueft']['t'] ?? ''));
     if ($u !== '' && $u > $seit) $seit = $u;
     if ($seit === '') return ['seit' => '', 'faelligAb' => '', 'faellig' => true];
     $ab = qs_plus_monate($seit, $monate);
     return ['seit' => $seit, 'faelligAb' => $ab, 'faellig' => $ab <= $heute];
 }
-function qs_dok_aus(array $d, int $monate, string $heute): array
+function qs_dok_aus(array $d, int $monate, string $heute, array $me): array
 {
+    $d = qs_dok_dateien_sichtbar($d, $me);
     return $d + ['zustand' => qs_dok_status($d), 'ueberpruefung' => qs_ueberpruefung($d, $monate, $heute)];
 }
 /* Neuer Entwurf (Version ohne Nummer) */
@@ -621,7 +648,7 @@ function qs_faelligkeit(array $p, array $eigene, string $heute): array
     $kal = isset(QS_KALENDER[$iv]) && !empty($p['aktiv']);
     $erledigt = [];
     if ($kal) foreach ($eigene as $n) if ($n['datum'] <= $heute) $erledigt[qs_periode(QS_KALENDER[$iv], $n['datum'])] = true;
-    $ab = (string)($p['start'] ?? '') ?: substr((string)($p['erstellt']['t'] ?? $heute), 0, 10);
+    $ab = (string)($p['start'] ?? '') ?: ortstag((string)($p['erstellt']['t'] ?? $heute));
     $f['monate'] = qs_monatsverlauf($eigene, $heute, $kal ? $iv : null, $ab, $erledigt);
     return $f;
 }
@@ -638,7 +665,7 @@ function qs_faelligkeit_kern(array $p, array $eigene, string $heute): array
         $erledigt = [];
         foreach ($eigene as $n) if ($n['datum'] <= $heute) $erledigt[qs_periode($art, $n['datum'])] = true;
         $ab = (string)($p['start'] ?? '');
-        if ($ab === '') $ab = substr((string)($p['erstellt']['t'] ?? $heute), 0, 10);
+        if ($ab === '') $ab = ortstag((string)($p['erstellt']['t'] ?? $heute));
         if ($ab > $heute) {   // beginnt erst später
             $erste = qs_perioden($iv, $ab, qs_plus_tage($ab, 40))[0] ?? null;
             $out['naechste'] = $erste ? $erste[1] : $ab; $out['restTage'] = qs_tage_bis($heute, $out['naechste']); $out['ampel'] = 'gruen';
@@ -828,7 +855,7 @@ function qs_csv_massnahmen(array $liste): string
         $z[] = [$m['nr'], QS_QUELLEN[$m['quelle']] ?? $m['quelle'], $m['bezug'], $m['kapitel'], $m['anforderung'] ?? '', $m['bewertung'] ?? '', $m['feststellung'],
                 $m['korrektur'], $m['korrekturVerantwortlich'] ?? '', qs_de((string)($m['korrekturFrist'] ?? '')), qs_de((string)($m['korrekturErledigt'] ?? '')), $m['nachweisDoku'] ?? '',
                 $m['ursache'], $m['massnahme'], $m['zustaendig'], qs_de((string)$m['frist']), qs_de((string)($m['erledigtAm'] ?? '')), QS_MASSN_STATUS[$m['status']] ?? $m['status'],
-                $m['freigabeVon'] ?? '', qs_de((string)($m['freigabeDatum'] ?? '')), qs_de(substr((string)($w['t'] ?? ''), 0, 10)), $w['von'] ?? '', $w['notiz'] ?? ''];
+                $m['freigabeVon'] ?? '', qs_de((string)($m['freigabeDatum'] ?? '')), qs_de(ortstag((string)($w['t'] ?? ''))), $w['von'] ?? '', $w['notiz'] ?? ''];
     }
     return qs_csv(['Nr.', 'Quelle', 'Bezug', 'Kapitel', 'IFS-Anforderung', 'Bewertung', 'Feststellung', 'Korrektur', 'Korrektur verantwortlich', 'Korrektur bis', 'Korrektur erledigt',
                    'Nachweis', 'Ursache', 'Korrekturmaßnahme', 'Zuständig', 'Frist', 'Umgesetzt am', 'Status', 'Freigabe durch', 'Freigabedatum', 'Wirksam am', 'Wirksamkeit geprüft von', 'Wirksamkeit'], $z);

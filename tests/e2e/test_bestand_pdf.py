@@ -200,6 +200,20 @@ st, body = pdf_roh(A, {'rows': [{'c': '10913'}], 'mhd': True})
 tx, _ = pdf_text(body)
 check('PDF der MHD-Liste: Bezeichnung der Warenwirtschaft (Bestandsliste), keine Merkmale, nicht die Angebotsbezeichnung', st == 200 and 'Testfilet, Färse, frisch' in tx
       and 'Filetköpfe aus Stammdaten' not in tx and 'Rind · AR · frisch' not in tx, [x for x in tx if 'Filet' in x or 'AR' in x][:4])
+# Viele Warengruppen zu je einem Artikel: jede Gruppensumme bringt etwas Abstand – die Seiteneinteilung muss ihn mitrechnen
+st, body = pdf_roh(A, {'rows': [z for i in range(60) for z in ({'g': f'Gruppe {i:02d}'}, {'c': '10913'})]})
+unten = []   # je Seite: unterste Kante aller Tabellenflächen (PDF-Koordinaten, 0 = Blattunterkante)
+for m in re.finditer(rb'stream\r?\n', body):
+    try:
+        inhalt = zlib.decompressobj().decompress(body[m.end():])
+    except zlib.error:
+        continue
+    if b' Tj' not in inhalt:
+        continue
+    flaechen = [float(y) for y in re.findall(rb'[\d.]+ ([\d.]+) [\d.]+ [\d.]+ re f', inhalt)]
+    unten.append(min(flaechen))
+# Fußlinie bei 28 pt, unterer Rand 38 pt (bestand-pdf.php: $MB)
+check('PDF mit vielen Gruppensummen: keine Tabellenzeile läuft in die Fußzeile', st == 200 and len(unten) >= 3 and all(u >= 37.9 for u in unten), unten)
 G = Client('198.51.100.6'); G.call('login', {'username': 'admin', 'password': PW}); G.csrf = ''
 check('ohne CSRF-Schutzwert: abgewiesen', G.call('stock_pdf', {'rows': []})[0] == 403)
 check('keine JavaScript-Fehler', not errors, errors)

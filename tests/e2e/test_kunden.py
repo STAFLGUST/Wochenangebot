@@ -285,6 +285,8 @@ with sync_playwright() as p:
     check('search filters list', a.locator('#view-kunden tr[data-kid]').count() == 1)
     a.fill('#k-q', '')
     a.click('#k-add'); a.wait_for_selector('#dlg-kunde[open]')
+    a.fill('#kunde-body [name=firma]', 'Müller & Söhne GmbH')
+    check('username suggestion spells out umlauts', a.input_value('#kunde-body [name=username]') == 'mueller.soehne', a.input_value('#kunde-body [name=username]'))
     a.fill('#kunde-body [name=firma]', 'Hotel Seeblick & Co. KG')
     check('username suggested from firma', a.input_value('#kunde-body [name=username]') == 'hotel.seeblick', a.input_value('#kunde-body [name=username]'))
     a.fill('#kunde-body [name=ansprechpartner]', 'Herr Test'); a.fill('#kunde-body [name=email]', 'kueche@example.org')

@@ -2,7 +2,7 @@
 
 <!-- ERZEUGT von `python3 werkzeuge/doku.py erzeugen` – nicht von Hand ändern. Quelle: Funktionen und Kommentare im Code. Die CI prüft, dass diese Datei zum Code passt. -->
 
-22 Dateien, 489 Funktionen – in der Reihenfolge der Datei, **fett** die Abschnitte. Text = erste Aussage des Kommentars direkt über der Funktion (Python: Docstring). Übersicht aller Module: [README.md](README.md).
+22 Dateien, 491 Funktionen – in der Reihenfolge der Datei, **fett** die Abschnitte. Text = erste Aussage des Kommentars direkt über der Funktion (Python: Docstring). Übersicht aller Module: [README.md](README.md).
 
 ## `app/api/aktionen/qs.php`
 
@@ -11,7 +11,7 @@ _Aktionen: QM-System (Oberfläche qs.intern, Daten und Regeln in app/api/module/
 - `qs_index(doc, id, was)` – Index eines Eintrags einer Liste oder 404
 - `qs_rev_pruefen(b, alt, was)` – Veralteter Stand eines Eintrags → 409 mit dem aktuellen Eintrag
 - `qs_dok_name(d)`
-- `qs_dok_antwort(d)`
+- `qs_dok_antwort(d)` – Antwort an den angemeldeten Mitarbeiter (auch aus organigramm.php): Dateien wie in qs_start gefiltert
 
 ## `app/api/module/qs/ablage.php`
 
@@ -161,6 +161,7 @@ _Qualitätssicherung · QM-System (IFS Wholesale)_
 - `qs_name_geschuetzt(name)` – Ordnername mit geschützter Nummer vorn („1.5 Mitarbeiter“, „_1.5.1_Zeugnisse“, auch „alt_1.5 …“ und „Kopie von 1.5 …“ wie in der Ordnerablage üblich; nicht …
 - `qs_geschuetzt(e, stamm)` – Eintrag (Dokument, Abschnitt, Prüfung, Maßnahme) geschützt?
 - `qs_dateien_sichtbar(dateien, me)` – Dateien eines Ordners, die $me sieht (Ordnerbaum, Ordner-ZIP, Ablage-Export, qs_datei): mit qs.bearbeiten alle, sonst keine aus einem Unterordner mit …
+- `qs_dok_dateien_sichtbar(d, me)` – Dokument für $me: Dateien geschützter Ordner (z. B. „1.5 Mitarbeiter“) an Versionen und ältere am Dokument (qs_ordner_dateien) nur für Bearbeiter, ihre Namen …
 - `qs_sichtbar(me, ...namen)` – Die eine Stelle für alle Lesewege (Liste, Suche, Zahlen, CSV, Dateien, Ordnerbaum, ZIP, Bericht, Verfahrensdoku): lädt die genannten Listen (dokumente, …
 - `qs_dok_sichtbar(d, me)`
 - `qs_protokoll_name(e, name)` – Name im Protokoll: aus geschützten Kapiteln nur die Kapitelnummer – das Protokoll sieht, wer „protokoll.sehen“ hat, nicht nur „bearbeiten“
@@ -215,7 +216,7 @@ _Qualitätssicherung · QM-System (IFS Wholesale)_
 - `qs_naechste_nr(d)`
 - `qs_dok_status(d)` – Zustand eines Dokuments für Übersicht und Filter
 - `qs_ueberpruefung(d, monate, heute)` – Überprüfung: seit (letzte Freigabe oder „ohne Änderung überprüft“), fällig ab (+ N Monate), fällig ja/nein.
-- `qs_dok_aus(d, monate, heute)`
+- `qs_dok_aus(d, monate, heute, me)`
 - `qs_entwurf(me, aenderungen, grund)` – Neuer Entwurf (Version ohne Nummer)
 
 **Handbuch**
@@ -279,7 +280,7 @@ _QM-System · Verfahrensdokumentation_
 - `qs_vf_pdf_lauf(doku, teile, alle, k, gesamt)` – Ein Durchlauf.
 - `qs_vf_pdf(doku, teile, alle, k)`
 - `qs_vf_dateien_am(liste, t)` – Dateien einer Version, wie sie zum Zeitpunkt $t (Freigabe der Fassung, ISO-UTC wie now()) dort hingen: vorher abgelegt und damals noch nicht entfernt.
-- `qs_vf_export_dateien(teile, dokumente, wurzel)` – Dateien der verknüpften QM-Dokumente in den Versionen, die die Fassungen festgehalten haben (für das ZIP)
+- `qs_vf_export_dateien(teile, dokumente, wurzel, me)` – Dateien der verknüpften QM-Dokumente in den Versionen, die die Fassungen festgehalten haben (für das ZIP)
 - `qs_vf_export(doku, q, me, dokumente, stamm)` – Export ausführen und senden (endet immer).
 - `qs_vf_pdf_senden(pdf, name, inline)`
 
@@ -648,6 +649,7 @@ _Qualitätssicherung (Modul qs, Oberfläche qs.intern unter /module/qs/) – QM-
 - `text(pg, sel)`
 - `anmelden(user, pw, ip, breite, thema, hoehe, ziel)`
 - `toast(pg, inhalt)`
+- `nachts_erfasst(erfasst_t)`
 
 ## `tests/e2e/test_qs_ablage.py`
 

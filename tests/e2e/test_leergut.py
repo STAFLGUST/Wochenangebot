@@ -117,7 +117,7 @@ check('Bewegung: unbekannter Partner 404', Bb.call('leergut_bewegung_save', {**B
 for name, b in (('ohne Datum', {'datum': ''}), ('Datum 31.02.', {'datum': '2026-02-31'}), ('Datum deutsch', {'datum': '10.01.2026'}),
                 ('negative Menge', {'abgang': {'e2': -3}}), ('Kommazahl', {'abgang': {'e2': 2.5}}), ('Text statt Zahl', {'zugang': {'h1': 'zwei'}}),
                 ('unbekanntes Lademittel', {'abgang': {'zz': 1}}), ('keine Menge', {'abgang': {}, 'zugang': {'e2': 0}}), ('Art unbekannt', {'typ': 'geschenk'}),
-                ('zu große Menge', {'abgang': {'e2': 2000000}})):
+                ('zu große Menge', {'abgang': {'e2': 2000000}}), ('Kommazahl als Text mit Punkt „2.5“', {'abgang': {'e2': '2.5'}})):
     st, r = Bb.call('leergut_bewegung_save', {**BW, **b})
     check(f'Bewegung: {name} → 422', st == 422 and r.get('error'), (st, r))
 st, r = Bb.call('leergut_bewegung_save', BW)
@@ -176,6 +176,17 @@ st, r = Bb.call('leergut_abstimmung_save', {'partner': p2['id'], 'stichtag': '20
 check('Partner ohne Frist: keine Frist, keine Ampel', st == 200 and r['abstimmung']['fristBis'] == '' and r['abstimmung']['ampel'] == '', r)
 st, r = Bb.call('leergut_abstimmung_save', {**AB, 'stichtag': '2026-03-31', 'eingang': '2099-01-01', 'saldo': {}, 'fristBis': '2099-01-15'})
 check('Frist von Hand, Ampel grün', st == 200 and r['abstimmung']['fristBis'] == '2099-01-15' and r['abstimmung']['ampel'] == 'gruen', r)
+BW2 = {'partner': p2['id'], 'typ': 'bewegung', 'zugang': {}, 'text': ''}
+Bb.call('leergut_bewegung_save', {**BW2, 'datum': '2026-10-20', 'abgang': {'e2': 10}, 'beleg': 'LS-2001'})
+AB2 = {'partner': p2['id'], 'stichtag': '2026-10-31', 'eingang': '2026-11-02', 'saldo': {'e2': 10}}
+a3 = Bb.call('leergut_abstimmung_save', AB2)[1]['abstimmung']
+Bb.call('leergut_bewegung_save', {**BW2, 'datum': '2026-10-28', 'abgang': {'e2': 5}, 'beleg': 'LS-2002'})   # später erfasst, zurückdatiert
+st, r = Bb.call('leergut_abstimmung_save', {**AB2, 'id': a3['id'], 'rev': a3['rev'], 'status': 'widersprochen'})
+a3b = r.get('abstimmung', {})
+check('Schnappschuss bleibt beim Ändern des Status (GR-106): eigen E2 10 wie bei Erfassung, heute 15', st == 200 and a3['eigen'] == {'e2': 10}
+      and a3b['eigen'] == {'e2': 10} and a3b['eigenJetzt'] == {'e2': 15}, (a3, r))
+st, r = Bb.call('leergut_abstimmung_save', {**AB2, 'id': a3['id'], 'rev': a3b['rev'], 'stichtag': '2026-10-30', 'status': 'widersprochen'})
+check('Schnappschuss neu bei geändertem Stichtag (E2 15)', st == 200 and r['abstimmung']['eigen'] == {'e2': 15}, r)
 
 # ── Dachser-Abschreibungen ──
 AS = {'zugestellt': '2026-04-08', 'auftrag': '2026-04-07', 'empfaenger': 'Testmarkt GmbH', 'empfaengerNr': '0001', 'ort': 'Teststadt', 'sendung': '0400000001',
@@ -228,6 +239,12 @@ neu = [{**x, 'wert': 4.5} if x['id'] == 'e2' else ({**x, 'name': 'H1 grau', 'wer
 st, r = V.call('leergut_lademittel_save', {'lademittel': neu})
 check('Lademittel: Wert und Name geändert, neues mit Kennung aus dem Namen', st == 200 and r['lademittel'][0]['wert'] == 4.5 and r['lademittel'][1]['name'] == 'H1 grau'
       and r['lademittel'][1]['wert'] == 45.0 and r['lademittel'][-1]['id'] == 'dolavbox', r)
+lm1 = r['lademittel']
+st, r2 = V.call('leergut_lademittel_save', {'lademittel': [{**x, 'wert': '5.50'} if x['id'] == 'e2' else ({**x, 'wert': '1.234,56'} if x['id'] == 'h1' else x) for x in lm1]})
+check('Lademittel: Wert „5.50“ (Dezimalpunkt) → 5,50 €, „1.234,56“ → 1.234,56 €', st == 200 and r2['lademittel'][0]['wert'] == 5.5 and r2['lademittel'][1]['wert'] == 1234.56, r2)
+check('Lademittel: Wert „1,234.56“ (Komma und Punkt vertauscht) → 422',
+      V.call('leergut_lademittel_save', {'lademittel': [{**x, 'wert': '1,234.56'} if x['id'] == 'h1' else x for x in lm1]})[0] == 422)
+V.call('leergut_lademittel_save', {'lademittel': lm1})
 check('Lademittel entfernen → 422 (deaktivieren statt löschen)', V.call('leergut_lademittel_save', {'lademittel': r['lademittel'][1:]})[0] == 422)
 check('Lademittel: doppelt → 422', V.call('leergut_lademittel_save', {'lademittel': r['lademittel'] + [{'id': 'e2', 'name': 'E2'}]})[0] == 422)
 check('Lademittel: negativer Wert → 422', V.call('leergut_lademittel_save', {'lademittel': [{**r['lademittel'][0], 'wert': -1}] + r['lademittel'][1:]})[0] == 422)
@@ -796,6 +813,15 @@ kaputt = DL2.replace('      7.10.26      1 H1', '     31.02.26      1 H1')
 st, r = Bb.call('leergut_dachser_import', {'text': kaputt, 'vorschau': True})
 st2, r2 = Bb.call('leergut_dachser_import', {'text': kaputt})
 check('Dachser: unlesbares Datum → Fehler mit Zeile, Übernehmen 422', st == 200 and len(r['fehler']) == 1 and 'Zustelldatum' in r['fehler'][0]['text'] and st2 == 422, (r, st2))
+DL4 = dachser_liste([('12.10.26', '09900021', 'MINUSMARKT', 'TESTORT', '13.10.26', -2, 'E2', 'R', '09900000021'),
+                     ('12.10.26', '09900022', 'NULLMARKT', 'TESTORT', '13.10.26', 2, 'E2', 'R', '09900000022'),
+                     ('12.10.26', '09900022', 'NULLMARKT', 'TESTORT', '13.10.26', -2, 'E2', 'R', '09900000022')], per='30.11.26', seiten=1)
+n_d = len(abschr())
+st, r = Bb.call('leergut_dachser_import', {'text': DL4})
+ns = nach_sendung()
+check('Dachser: Anzahl −2 → keine Abschreibung, nur Abweichung (erfasst 0); +2 und −2 in einer Sendung → nichts angelegt',
+      st == 200 and len(abschr()) == n_d and '09900000021' not in ns and '09900000022' not in ns and r['zahlen']['neu'] == 0
+      and r['abweichend'] == [{'sendung': '09900000021', 'empfaenger': 'Minusmarkt', 'lm': 'e2', 'erfasst': 0, 'dachser': -2}], r)
 
 # Sehr lange Zeilen gehen nicht mehr durch die Zeilen-Regexe: die Fallzeile „… (.+?)\s+(\d{8,14})\s*$“ brauchte dafür
 # quadratisch viel Rechenzeit (isoliert gemessen 15 s bei 100 KB, 79 s bei 200 KB; bei den zugelassenen 2 MB etwa eine

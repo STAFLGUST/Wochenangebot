@@ -85,7 +85,8 @@ function vs_verlauf(int $monate = 2): array
             $art = str_ends_with($k, '|woche') ? 'woche' : (str_ends_with($k, '|restposten') ? 'sonderposten' : '');
             if ($art === '') continue;
             $ok = 0; $bad = 0;
-            foreach ($e['d'] as $d) { if (strpos((string)($d['to'] ?? ''), ' – ') === false) $ok++; else $bad++; }
+            // übersprungene Kunden (inaktiv, nicht freigeschaltet) wurden nicht beschickt – weder gesendet noch „nicht zugestellt“
+            foreach ($e['d'] as $d) { if (!empty($d['skip'])) continue; if (strpos((string)($d['to'] ?? ''), ' – ') === false) $ok++; else $bad++; }
             $titel = preg_match('/^(.*?) an \d+ Kunden versendet/u', (string)$e['s'], $m) ? $m[1] : ($art === 'woche' ? 'Wochenangebot' : 'Sonderposten');
             $roh[] = ['t' => (string)$e['t'], 'art' => $art, 'titel' => $titel, 'von' => (string)($e['n'] ?? ''), 'u' => (string)($e['u'] ?? ''), 'ok' => $ok, 'fehler' => $bad];
         }

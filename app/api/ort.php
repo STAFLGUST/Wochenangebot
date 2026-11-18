@@ -144,9 +144,12 @@ function ort_build($in, string $out, string $date): array
         rewind($fl);
         stream_copy_to_stream($fl, $fo);
         rewind($fo);
-        fwrite($fo, ORT_GUARD . 'ORT1' . pack('NNN', $n4, $n6, $nl) . substr(str_pad($date, 10), 0, 10));
-        fclose($fo); $fo = null;
-        rename($tmp, $out);
+        $kopf = fwrite($fo, ORT_GUARD . 'ORT1' . pack('NNN', $n4, $n6, $nl) . substr(str_pad($date, 10), 0, 10));
+        $zu = fclose($fo); $fo = null;
+        clearstatcache(true, $tmp);
+        // nur vollständig geschrieben ersetzen (volle Platte: kurze Schreibvorgänge ergeben eine kürzere Datei), sonst bleibt die bisherige aktiv
+        if ($kopf !== ORT_OFF || !$zu || filesize($tmp) !== ORT_OFF + $n4 * 12 + $n6 * 20 + $nl * ORT_REC || !@rename($tmp, $out))
+            throw new RuntimeException('Die Ortsdaten konnten nicht gespeichert werden.');
         return ['v4' => $n4, 'v6' => $n6, 'orte' => $nl];
     } finally {
         if ($fo) fclose($fo);

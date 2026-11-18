@@ -38,7 +38,8 @@ function qs_rev_pruefen(array $b, array $alt, string $was): void
         respond(['ok' => false, 'code' => 'konflikt', 'error' => "$was wurde inzwischen von " . ($alt['geaendert']['von'] ?? 'jemand anderem') . ' geändert. Bitte neu laden.', 'eintrag' => $alt], 409);
 }
 function qs_dok_name(array $d): string { return trim(($d['nr'] !== '' ? $d['nr'] . ' ' : '') . $d['titel']); }
-function qs_dok_antwort(array $d): array { return qs_dok_aus($d, (int)qs_stamm()['einstellungen']['ueberpruefungMonate'], qs_heute()); }
+// Antwort an den angemeldeten Mitarbeiter (auch aus organigramm.php): Dateien wie in qs_start gefiltert
+function qs_dok_antwort(array $d): array { return qs_dok_aus($d, (int)qs_stamm()['einstellungen']['ueberpruefungMonate'], qs_heute(), current_user() ?? []); }
 switch ($action) {
         /* Start: Stammdaten, Dokumente, Handbuch, Prüfplan mit Fälligkeiten, neueste Nachweise, Maßnahmen, eigene Rechte */
         case 'qs_start': {
@@ -57,7 +58,7 @@ switch ($action) {
                      'arten' => QS_ARTEN, 'gelenkt' => QS_GELENKT, 'verStatus' => QS_VER_STATUS, 'intervalle' => QS_INTERVALLE, 'ergebnisse' => QS_ERGEBNIS,
                      'quellen' => QS_QUELLEN, 'bewertungen' => QS_BEWERTUNG, 'massnStatus' => QS_MASSN_STATUS,
                      'kapitel' => $stamm['kapitel'], 'personen' => $stamm['personen'], 'einstellungen' => $stamm['einstellungen'], 'mitarbeiter' => qs_mitarbeiter(),
-                     'dokumente' => array_map(function ($d) use ($monate, $heute) { return qs_dok_aus($d, $monate, $heute); }, $dokumente),
+                     'dokumente' => array_map(function ($d) use ($monate, $heute, $me) { return qs_dok_aus($d, $monate, $heute, $me); }, $dokumente),
                      'ablageZahlen' => qs_ablage_uebersicht($dokumente), 'eingangZahl' => may($me, 'qs.bearbeiten') ? qs_ablage_belegt(null, qs_ablage_zahlen()) : 0,
                      'handbuch' => $handbuch,
                      'pruefungen' => qs_pruefungen_aus($plan, $nachweise, $heute),

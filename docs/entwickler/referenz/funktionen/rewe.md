@@ -2,7 +2,7 @@
 
 <!-- ERZEUGT von `python3 werkzeuge/doku.py erzeugen` – nicht von Hand ändern. Quelle: Funktionen und Kommentare im Code. Die CI prüft, dass diese Datei zum Code passt. -->
 
-5 Dateien, 185 Funktionen – in der Reihenfolge der Datei, **fett** die Abschnitte. Text = erste Aussage des Kommentars direkt über der Funktion (Python: Docstring). Übersicht aller Module: [README.md](README.md).
+5 Dateien, 186 Funktionen – in der Reihenfolge der Datei, **fett** die Abschnitte. Text = erste Aussage des Kommentars direkt über der Funktion (Python: Docstring). Übersicht aller Module: [README.md](README.md).
 
 ## `app/api/aktionen/rewe.php`
 
@@ -94,9 +94,10 @@ _REWE · Vordisposition Dry Aged_
 - `rw_name(u)`
 - `rw_team_pruefen(v)` – Team speichern: {Nutzer-ID: {alle, export}} – nur Mitarbeiter im Team (rw_personen)
 
-**Kundenstamm der Verwaltung (nur lesend, customers_load): WinAB-Kd.-Nr. → Kunde**
+**Kundenstamm der Verwaltung (nur lesend, customers_load): WinAB-Kd.-Nr. (code_key, ohne führende Nullen wie CRM und Controlling) → Kunde**
 
 - `rw_kunden()`
+- `rw_kunde(m)` – Kunde der Verwaltung zur Kd.-Nr. eines Marktes (rw_kunden) oder null
 - `rw_anzeige(m)` – Anzeige eines Marktes: Kundenstamm vor eigenen Feldern (nur leere Stammfelder füllt der Markt auf)
 - `rw_telefone(m)` – Telefonnummern für die Marktzeile in „Meine Woche“ (Inhaber 12.11.2026): zuerst die der Marktakte (Telefon des Marktes, dann die der Ansprechpartner), nur …
 - `rw_person_pruefen(v)`

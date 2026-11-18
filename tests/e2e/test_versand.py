@@ -203,8 +203,9 @@ code, r = O.call('kunden_rundmail', {'ids': ids, 'week': WOCHE0 + 1, 'year': em[
 check('altes Fenster: kunden_rundmail mit Senden-Recht, aber ohne Zugang → 403 mit Hinweis auf „Versand“', code == 403 and 'Versand' in r.get('error', ''), (code, r))
 check('senden mit falscher Woche 409', S.call('versand_senden', {'art': 'woche', 'ids': ids, 'week': WOCHE0, 'year': em['woche']['year']})[0] == 409)
 check('bis hier keine E-Mail verschickt', len(smtp.messages) == n0)
-code, r = S.call('versand_senden', {'art': 'woche', 'ids': ids[:3] + ['gibtsnicht'], 'note': 'Diese Woche: Roastbeef.', 'week': WOCHE0 + 1, 'year': em['woche']['year']})
-check('senden: drei Kunden gesendet, unbekannter Kunde abgewiesen', code == 200 and [x['ok'] for x in r['results']] == [True, True, True, False], (code, r))
+code, r = S.call('versand_senden', {'art': 'woche', 'ids': ids[:3] + ['gibtsnicht', kid['Hofladen Beispielhof']], 'note': 'Diese Woche: Roastbeef.', 'week': WOCHE0 + 1, 'year': em['woche']['year']})
+check('senden: drei Kunden gesendet, unbekannter und inaktiver Kunde abgewiesen', code == 200 and [x['ok'] for x in r['results']] == [True, True, True, False, False]
+      and r['results'][4].get('skipped'), (code, r))
 check('drei E-Mails beim Mailserver, je Kunde eine, mit Zusatztext und Abmelde-Kopf',
       until(lambda: len(smtp.messages) == n0 + 3, 5) and sorted(m_['to'][0] for m_ in smtp.messages[n0:]) == sorted(c['email'] for c in em['empfaenger'][:3])
       and all(f'KW {WOCHE0 + 1}' in m_['subject'] for m_ in smtp.messages[n0:]), [m_['to'] for m_ in smtp.messages[n0:]])
@@ -236,9 +237,10 @@ check('altes Fenster: restposten_info / kunden_restposten ohne Zugang 403', code
 # ---------- Verlauf ----------
 code, vl = Z.call('versand_verlauf')
 arten = [x['art'] for x in vl.get('verlauf', [])]
+# übersprungene Kunden (inaktiv, Angebot nicht freigeschaltet) wurden nicht beschickt – sie zählen nicht als „nicht zugestellt“
 check('Verlauf: neueste zuerst – Sonderposten, Wochenangebot, Veröffentlichungen; mit Mitarbeiter und Anzahl',
       code == 200 and arten[:2] == ['sonderposten', 'woche'] and arten.count('veroeffentlicht') >= 2
-      and (vl['verlauf'][0]['ok'], vl['verlauf'][0]['fehler']) == (2, 1) and (vl['verlauf'][1]['ok'], vl['verlauf'][1]['fehler']) == (3, 0) and vl['verlauf'][1]['von'] == 'Sven Sender'
+      and (vl['verlauf'][0]['ok'], vl['verlauf'][0]['fehler']) == (2, 0) and (vl['verlauf'][1]['ok'], vl['verlauf'][1]['fehler']) == (3, 0) and vl['verlauf'][1]['von'] == 'Sven Sender'
       and vl['verlauf'][1]['titel'] == f'Wochenangebot KW {WOCHE0 + 1}/{em["woche"]["year"]}', vl.get('verlauf'))
 roh = Z.call('versand_verlauf', raw=True)[2]
 check('Verlauf ohne Firmen und Adressen', 'example' not in roh and 'Kantine' not in roh and 'Elbe' not in roh)
@@ -364,6 +366,33 @@ with sync_playwright() as pw:
     check('Stand: Schritt 2 erledigt', 'erledigt' in s.inner_text('#vs-s2'))
     s.click('[data-sonderposten="grosshandel"]'); s.wait_for_selector('#dlg-send[open] .vs-artikel li')
     check('Fenster „Sonderposten“: Artikel mit Preis in €/kg, 2 Empfänger', '€/kg' in s.inner_text('#dlg-send .vs-artikel') and s.locator('#dlg-send [data-wahl]').count() == 2)
+    # Doppelklick während der Passwortbestätigung: nur ein Versand (BE3). Erste Sendung verlangt die Bestätigung, die Antwort
+    # auf „reauth“ wird zurückgehalten, bis beide Absendungen ausgelöst sind.
+    s.route('**/api/?action=versand_senden*', lambda r: r.fulfill(status=403, content_type='application/json',
+            body=json.dumps({'ok': False, 'code': 'confirmation_required', 'error': 'Bitte bestätigen Sie diese Aktion mit Ihrem aktuellen Passwort.'})), times=1)
+    gehalten, frei = [], [True]
+    s.route('**/api/?action=reauth*', lambda r: r.continue_() if frei[0] else gehalten.append(r))
+    s.click('#send-jetzt'); s.wait_for_selector('#send-pw')
+    s.fill('#send-pw', 'falsches-Passwort-1'); s.click('#send-jetzt'); s.wait_for_selector('#send-meldung:not(.ok):not([hidden])')
+    check('falsches Passwort: Meldung, Knopf wieder frei, nichts gesendet', s.is_enabled('#send-jetzt') and s.locator('#send-pw').count() == 1
+          and s.locator('#dlg-send .vs-erg.ok').count() == 0, s.inner_text('#send-meldung'))
+    frei[0] = False
+    s.fill('#send-pw', USERS['sven'][2])
+    n3 = len(smtp.messages)
+    with s.expect_request(lambda r: 'action=reauth' in r.url):
+        s.evaluate("() => { const f = document.querySelector('#send-inhalt'); f.requestSubmit(); f.requestSubmit(); }")
+    check('während der Passwortprüfung: Knopf gesperrt („Wird gesendet …“)', s.is_disabled('#send-jetzt') and 'Wird gesendet' in s.inner_text('#send-jetzt'), s.inner_text('#send-jetzt'))
+    s.screenshot(path=SH + '/versand-bestaetigen-laeuft.png')
+    s.set_viewport_size({'width': 390, 'height': 844}); s.screenshot(path=SH + '/versand-bestaetigen-laeuft-mobil.png'); s.set_viewport_size({'width': 1280, 'height': 900})
+    frei[0] = True
+    for r in gehalten: r.continue_()
+    s.wait_for_selector('#send-meldung.ok:not([hidden])', timeout=20000); s.wait_for_function("!document.querySelector('#dlg-send').dataset.busy")
+    s.check('#send-alle'); s.click('#send-jetzt'); s.wait_for_function("document.querySelector('#send-meldung').textContent.includes('2 E-Mails gesendet') && !document.querySelector('#dlg-send').dataset.busy")
+    s.unroute('**/api/?action=reauth*')
+    until(lambda: len(smtp.messages) >= n3 + 4, 5)
+    an = sorted(m_['to'][0] for m_ in smtp.messages[n3:])
+    check('Doppelklick bei der Passwortbestätigung: je Kunde genau eine E-Mail, danach regulär erneut gesendet',
+          an == sorted(['dispo@grosshandel-beispiel.example', 'markt@testmarkt-elbe.example'] * 2), an)
     s.keyboard.press('Escape'); s.wait_for_selector('#dlg-send', state='hidden')
     s.context.close()
 

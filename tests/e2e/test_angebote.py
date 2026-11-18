@@ -623,6 +623,16 @@ with sync_playwright() as p:
     check('copy toast', 'übernommen' in a.inner_text('#toast'), a.inner_text('#toast'))
     a.click('#btn-undo'); a.wait_for_timeout(300)
     check('copy undoable', row(a, '10823').locator('input[data-f=vprice]').input_value() == '')
+    # Halbwerte runden auf (Gleitkomma-Rest knapp unter der halben Stufe): 5,50 € −5 % auf 0,05 → 5,25 (fest eingetragen)
+    tab(a, 'Wochenangebot').click(); a.wait_for_selector('#offer-head:has-text("Wochenangebot")')
+    i = row(a, '10701').locator('input[data-f=price]'); alt = i.input_value(); i.fill('5,5'); i.press('Tab'); wait_saved(a)
+    tab(a, 'Bela').click(); a.click('[data-ob=copy]'); a.wait_for_selector('#dlg-offer-copy[open]')
+    a.fill('#offer-copy-body [name=pct]', '-5'); a.select_option('#offer-copy-body [name=round]', '0.05'); a.click('#offer-copy-body [type=submit]'); wait_saved(a)
+    check('copy: 5,50 € −5 % rounded to 0,05 gives 5,25', row(a, '10701').locator('input[data-f=vprice]').input_value() == '5,25', row(a, '10701').locator('input[data-f=vprice]').input_value())
+    a.click('#btn-undo'); a.wait_for_function("!document.querySelector('tr[data-id]:has(input[data-f=\"code\"][value=\"10701\"]) input[data-f=vprice]').value")
+    a.click('#btn-undo'); tab(a, 'Wochenangebot').click(); a.wait_for_selector('#offer-head:has-text("Wochenangebot")'); wait_saved(a)
+    check('… week price restored by undo', row(a, '10701').locator('input[data-f=price]').input_value() == alt, (row(a, '10701').locator('input[data-f=price]').input_value(), alt))
+    tab(a, 'Bela').click(); a.wait_for_selector('#offer-head:has-text("Bela")')
     veroeffentlichen(a)
     ids = {x['id']: x['name'] for x in get(a, 'offers')[1]['offers']}
     metro = next(k for k, v in ids.items() if 'Metro' in v)
@@ -819,6 +829,15 @@ with sync_playwright() as p:
     a.click('#vt-edit'); a.wait_for_selector('#view-edit:not([hidden]) tr[data-id]')
     check('admin deletes offer: tab gone', tab(a, 'Metro').count() == 0)
     r = get(a, f'offer&angebot={metro}'); check('deleted offer not deliverable (404)', r[0] == 404, r[0])
+    # Kennung eines neuen Angebots aus dem Namen: Umlaute ausgeschrieben, nicht nur gefaltet
+    a.click('[data-ob=manage]'); a.wait_for_selector('#view-angebote:not([hidden]) tr[data-oi]')
+    a.click('[data-ofa=add]'); a.locator('#view-angebote [data-of=name]').last.fill('Wochenangebot Bäckerei Müller')
+    a.click('[data-ofa=save]'); bestaetigt(a, 'Angebote gespeichert')
+    ids = [o['id'] for o in get(a, 'offers')[1]['offers']]
+    check('new offer id spells out umlauts (baeckerei-mueller)', 'baeckerei-mueller' in ids, ids)
+    a.locator('#view-angebote tr[data-oi]:has(input[value*="Bäckerei"]) [data-ofa=del]').click(); a.click('#dlg-confirm [data-v="1"]')
+    a.click('[data-ofa=save]'); bestaetigt(a, 'Angebote gespeichert')
+    a.click('#vt-edit'); a.wait_for_selector('#view-edit:not([hidden]) tr[data-id]')
     # Gleichnamiges Angebot neu anlegen: die alte ID (mit Kundenpreis 19,50 im veröffentlichten Angebot) wird nie wiederverwendet
     cur = get(a, 'offers')[1]
     r = post(a, 'offers_save', {'rev': cur['rev'], 'offers': cur['offers'] + [{'id': metro, 'name': 'Wochenangebot Metro', 'fallback': 'hidden'}]})

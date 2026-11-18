@@ -160,10 +160,16 @@ function lg_wahl($v, array $erlaubt, string $was): string
     if (!in_array($v, $erlaubt, true)) throw new InvalidArgumentException("$was: ungültige Auswahl.");
     return $v;
 }
+/* Zahl als Text → PHP-Schreibweise: Punkte sind nur in deutschen Dreiergruppen („1.234,5“) Tausenderpunkte, sonst Dezimalzeichen („5.50“). */
+function lg_zahltext(string $v): string
+{
+    if (preg_match('/^-?\d{1,3}(\.\d{3})+(,\d+)?$/', $v)) $v = str_replace('.', '', $v);
+    return str_replace(',', '.', $v);
+}
 /* Ganze Zahl (Stück). Erlaubt auch Texte mit deutscher Schreibweise („1.234“). */
 function lg_ganz($v, string $was, bool $negativ): int
 {
-    if (is_string($v)) { $v = str_replace(['.', ' ', "\u{a0}"], '', trim($v)); $v = str_replace(',', '.', $v); }
+    if (is_string($v)) $v = lg_zahltext(str_replace([' ', "\u{a0}"], '', trim($v)));
     if (is_bool($v) || !is_numeric($v) || (float)$v != round((float)$v)) throw new InvalidArgumentException("$was: bitte eine ganze Zahl angeben.");
     $n = (int)round((float)$v);
     if (!$negativ && $n < 0) throw new InvalidArgumentException("$was: bitte eine Zahl ab 0 angeben.");
@@ -188,7 +194,7 @@ function lg_mengen($v, array $lmIds, string $was, bool $negativ): array
 function lg_betrag($v, string $was): ?float
 {
     if ($v === null || $v === '') return null;
-    if (is_string($v)) { $v = str_replace(['.', ' ', '€', "\u{a0}"], '', trim($v)); $v = str_replace(',', '.', $v); }
+    if (is_string($v)) $v = lg_zahltext(str_replace([' ', '€', "\u{a0}"], '', trim($v)));
     if (is_bool($v) || !is_numeric($v) || (float)$v < 0 || (float)$v > 100000) throw new InvalidArgumentException("$was: bitte einen Betrag ab 0 angeben.");
     return round((float)$v, 2);
 }
@@ -1260,10 +1266,12 @@ function lg_dachser_abgleich(array $l, array $liste, array $me): array
         foreach ($g['menge'] as $id => $n) {
             $bei = null;
             foreach ($nachSendung[$sendung] ?? [] as $i) if (isset($liste[$i]['menge'][$id])) { $bei = $i; break; }
-            if ($bei === null) { $fehlt[$id] = $n; continue; }
-            if ((int)$liste[$bei]['menge'][$id] !== $n) {
+            if ($bei === null && $n > 0) { $fehlt[$id] = $n; continue; }
+            // Summe ≤ 0 nie als Fall anlegen (Abschreibungen brauchen Mengen > 0): negativ nur melden, 0 übergehen
+            $erfasst = $bei === null ? 0 : (int)$liste[$bei]['menge'][$id];
+            if ($erfasst !== $n) {
                 $hatAbw = true;
-                if (count($abw) < 50) $abw[] = ['sendung' => $sendung, 'empfaenger' => $g['empfaenger'], 'lm' => $id, 'erfasst' => (int)$liste[$bei]['menge'][$id], 'dachser' => $n];
+                if (count($abw) < 50) $abw[] = ['sendung' => $sendung, 'empfaenger' => $g['empfaenger'], 'lm' => $id, 'erfasst' => $erfasst, 'dachser' => $n];
             }
         }
         if (!$fehlt) { $z[$hatAbw ? 'abweichend' : 'schon']++; continue; }   // je Sendung genau eine Zahl: neu, ergänzt, abweichend oder schon erfasst

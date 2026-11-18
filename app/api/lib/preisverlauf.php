@@ -77,8 +77,11 @@ function preisverlauf_lesbar(): bool
 }
 function history_undelete(string $id): void
 {
-    $del = store_read('historie_geloescht') ?? [];
-    if (in_array($id, $del, true)) store_write('historie_geloescht', array_values(array_diff($del, [$id])));
+    // innerste Sperre (Veröffentlichen und Import rufen dies in ihrer eigenen Sperre auf)
+    with_lock('historie_geloescht', function () use ($id) {
+        $del = store_read('historie_geloescht') ?? [];
+        if (in_array($id, $del, true)) store_write('historie_geloescht', array_values(array_diff($del, [$id])));
+    });
 }
 function clean_history_items($items): array
 {

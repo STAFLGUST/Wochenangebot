@@ -126,11 +126,12 @@ function hr_planung_person(array $p, array $eintraege, int $jahr, array $pe, arr
             'einzeltage' => hr_einzeltage($p, $eintraege, $jahr, $pe, $zusatz), 'einzeltageMax' => $pe['einzeltageMax']];
 }
 
-/* Entstand der Eintrag in der Vorplanung des Jahres? = bis zum Stichtag erfasst (UTC-Zeit, ohne Erfassungszeit: nein) */
+/* Entstand der Eintrag in der Vorplanung des Jahres? = bis zum Stichtag erfasst (Kalendertag in deutscher Zeit wie der Stichtag,
+   ohne Erfassungszeit: nein) */
 function hr_vorplanung_eintrag(array $e, int $jahr, array $pe): bool
 {
-    $t = (string)($e['erfasst']['t'] ?? '');
-    return $t !== '' && substr($t, 0, 10) <= hr_planung_daten($pe, $jahr)['stichtag'];
+    $t = ortstag((string)($e['erfasst']['t'] ?? ''));
+    return $t !== '' && $t <= hr_planung_daten($pe, $jahr)['stichtag'];
 }
 /* Welche offenen Anträge stehen für diesen Mitarbeiter unter „Jahresplanung“ statt unter „Anträge“ (Inhaber 17.11.2026)?
    Rückgabe: Prüfer fn(Eintrag): bool. Nur die Personalstelle hat den Reiter; dorthin gehören offene Urlaubsanträge der
@@ -413,11 +414,9 @@ function hr_planung_konflikte(array $e, array $p, array $idx, array $eintraege, 
             if ($l['frei']) $k[] = ['art' => 'vertretung', 'text' => 'Zusätzliche Vertretung ' . hr_name($vp2) . ' arbeitet an diesen Tagen nicht (' . hr_daten_text($l['frei']) . ')'];
         }
     }
-    if (trim((string)$p['abteilung']) !== '') foreach ($eintraege as $o) {
-        if ($o['id'] === $e['id'] || $o['person'] === $e['person'] || $o['person'] === $v || $o['person'] === ($e['vertretung2'] ?? null) || $o['art'] === 'X' || !in_array($o['status'], HR_AKTIV, true) || !hr_planung_schnitt($o, $e)) continue;
-        $op = $idx[$o['person']] ?? null;
-        $gem = hr_schnitt_ohne_schliesstage($o, $e);   // nur am 24.12./31.12. zusammen weg: Betrieb ohnehin geschlossen
-        if ($op && $op['aktiv'] && $op['abteilung'] === $p['abteilung'] && $gem) $k[] = ['art' => 'abteilung', 'text' => 'Gleichzeitig weg: ' . hr_name($op) . ' (' . hr_zeitraum_text($gem[0], $gem[count($gem) - 1]) . ')'];
+    foreach ($eintraege as $o) {
+        if ($o['person'] === $v || $o['person'] === ($e['vertretung2'] ?? null)) continue;   // Vertretung: eigener Konflikt oben
+        if ($weg = hr_gleichzeitig_weg($e, $p, $o, $idx[$o['person']] ?? null)) $k[] = ['art' => 'abteilung', 'text' => 'Gleichzeitig weg: ' . $weg];
     }
     if ($s = hr_ueberschneidung($sperren, $e['von'], $e['bis'])) $k[] = ['art' => 'sperre', 'text' => 'Urlaubssperre ' . hr_zeitraum_text($s['von'], $s['bis']) . ($s['text'] !== '' ? ' (' . $s['text'] . ')' : '')];
     if ($e['status'] === 'beantragt' && $verfuegbar < 0) $k[] = ['art' => 'rest', 'text' => 'Mehr als der Resturlaub (um ' . hr_tage_text(-$verfuegbar) . ')'];

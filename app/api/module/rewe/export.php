@@ -200,7 +200,8 @@ function rw_export_xlsx(array $a, array $stamm, string $wer): string
              'Ohne Berechnung', 'Erfasst von', 'Notiz', 'Nachtrag', 'Dauerauftrag'];   // Spalte „Dauerauftrag“ seit 12.11.2026 (am Ende, ältere Spalten unverändert)
     $z = [[[$titel, 2]], [['Lieferwoche ' . $zeitraum . ' · erstellt ' . date('d.m.Y H:i') . ' von ' . $wer . ' · ' . $a['maerkte'] . ' Einzelaufträge (je Markt einer), ' . count($a['zeilen']) . ' Positionen', 3]], [], $kopf];
     foreach ($a['zeilen'] as $r) {
-        $z[] = [$r['auftrag'], $r['lieferweg'], $a['kwText'], ctype_digit($r['kdNr']) && $r['kdNr'] !== '' ? (int)$r['kdNr'] : $r['kdNr'], ctype_digit($r['reweNr']) && $r['reweNr'] !== '' ? (int)$r['reweNr'] : $r['reweNr'],
+        // Nummern als Zahl nur ohne führende Null – sonst Text, damit „0012345“ in WinAB nicht zu 12345 wird
+        $z[] = [$r['auftrag'], $r['lieferweg'], $a['kwText'], preg_match('/^[1-9]\d*$/', $r['kdNr']) ? (int)$r['kdNr'] : $r['kdNr'], preg_match('/^[1-9]\d*$/', $r['reweNr']) ? (int)$r['reweNr'] : $r['reweNr'],
                 $r['markt'], $r['plz'], $r['ort'], $r['strasse'], $r['nr'], $r['artikel'], $r['menge'], $r['einheit'], $r['ohneBerechnung'] ? 'ja' : 'nein',
                 $r['zustaendig'], $r['notiz'], $r['nachtrag'] ? 'ja' : '', $r['auto'] ? 'automatisch' : ($r['quelle'] === 'dauer' ? 'ja' : '')];
     }

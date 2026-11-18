@@ -19,7 +19,8 @@ from playwright.sync_api import sync_playwright
 
 from kunden_hilfe import Client
 from umgebung import SH
-from qs_hilfe import PW, check, ende, pdf, hochladen, roh, nutzer, anmelden, text, ohne_scrollen
+from umgebung import storage_write
+from qs_hilfe import PW, check, ende, pdf, hochladen, roh, nutzer, anmelden, text, ohne_scrollen, speicher, neu_zaehlen
 
 NUTZER = (('lisa', 'Lisa Lesen', 'viewer', 'Leserin-Konto-12', {'grant': ['qs.sehen']}),
           ('nina', 'Nina Nachweis', 'viewer', 'Nachweis-Konto-23', {'grant': ['qs.nachweis']}),
@@ -196,6 +197,43 @@ for was, abruf in (('Datei im Ordner 1.5.1', 'qs_datei&id=' + h151), ('Datei im 
     check(f'Kapitel 1.4, {was}: „ansehen“ 403, „bearbeiten“ 200', roh(L, abruf)[0] == 403 and roh(Be, abruf)[0] == 200)
 namen = zipn(L, 'qs_ablage_export&kapitel=1.4&alle=1') + zipn(L, f'qs_archiv_zip&dok={H14}')
 check('… Ablage-Export und Ordner-ZIP für „ansehen“ ohne beide, mit „Hand-150“', 'Hand-Zeugnis' not in namen and 'Hand-Akte' not in namen and 'Hand-150' in namen, namen)
+
+# ── Ältere Dateien am Dokument (qs-dokumente, „dateien“, GR-006) im Unterordner „1.5 Mitarbeiter“: auch in qs_start nur für Bearbeiter ──
+alt = {n: hochladen(Be, 'eingang', '', n + '.pdf', pdf(n), {'pfad': p})[1]['datei'] for n, p in (('Alt-Akte', 'Akten/1.5 Mitarbeiter'), ('Plan', 'Akten/1.5 Mitarbeiter'),
+                                                                                             ('Alt-Liste', 'Akten/1.50 Sonstiges'))}
+ab = speicher('qs-ablage'); alte = [f for f in ab['liste'] if f['id'] in alt.values()]
+ab['liste'] = [f for f in ab['liste'] if f['id'] not in alt.values()]; storage_write('qs-ablage', ab)
+d_ = speicher('qs-dokumente'); x_ = next(x for x in d_['liste'] if x['id'] == H14)
+x_['dateien'] = [{**{k: v for k, v in f.items() if k != 'ziel'}, 'name': 'Plan' if f['name'] == 'Plan.pdf' else f['name']} for f in alte]
+x_['verlauf'] = x_.get('verlauf', []) + [{'t': '2026-11-02T08:00:00+00:00', 'von': 'Bernd Bearbeiter', 'was': f'Planung angepasst; Datei entfernt: {n}'} for n in ('Alt-Akte.pdf', 'Plan', 'Alt-Liste.pdf')]
+storage_write('qs-dokumente', d_)
+neu_zaehlen(Be)
+sl, sb = json.dumps(L.call('qs_start')[1], ensure_ascii=False), json.dumps(Be.call('qs_start')[1], ensure_ascii=False)
+check('ältere Dateien am Dokument „Ablage Personal“: qs_start „ansehen“ ohne Name und pfad aus „1.5 Mitarbeiter“ (auch im Verlauf), „Alt-Liste“ bleibt',
+      'Alt-Akte' not in sl and 'Akten/1.5 Mitarbeiter' not in sl and 'Datei entfernt: Plan' not in sl and 'Alt-Liste.pdf' in sl, re.findall(r'.{60}(?:Alt-Akte|Akten/1\.5 |entfernt: Plan).{20}', sl))
+check('… Verlaufstext nur ganze Namen ersetzt („Planung“ bleibt), „bearbeiten“ sieht alles',
+      'Planung angepasst; Datei entfernt: personenbezogene Datei' in sl and 'Alt-Akte.pdf' in sb and 'Akten/1.5 Mitarbeiter' in sb and 'Datei entfernt: Plan"' in sb)
+
+# ── Aus dem Eingang einem Entwurf in 1.4 zugeordnet: die Datei behält ihren pfad „QM/1.5 Mitarbeiter/…“ und bleibt geschützt ──
+r = Be.call('qs_dokument_save', {'kapitel': '1.4', 'art': 'A', 'nr': '', 'titel': 'Kontrollanweisung Eingang'})[1]['dokument']
+E14 = r['id']
+fe = hochladen(Be, 'eingang', '', 'Eingang-Akte.pdf', pdf('Eingang-Akte'), {'pfad': 'QM/1.5 Mitarbeiter/Akten'})[1]['datei']
+check('Eingangsdatei mit pfad „…/1.5 Mitarbeiter/…“ dem Entwurf zugeordnet und freigegeben', Be.call('qs_datei_zuordnen', {'dateien': [fe], 'dokument': E14, 'version': r['versionen'][0]['id']})[0] == 200
+      and schritt(E14, 'einreichen', Be) == 200 and schritt(E14, 'pruefen_freigeben', Q) == 200)
+check('… Einzeldownload: „ansehen“ 403, „bearbeiten“ 200', roh(L, 'qs_datei&id=' + fe)[0] == 403 and roh(Be, 'qs_datei&id=' + fe)[0] == 200)
+dl, db = dok(E14, L), dok(E14, Be)
+check('… Dokumentliste (qs_start, auch Grundlage der Einzelansicht): Name der Datei fehlt für „ansehen“, für „bearbeiten“ dabei',
+      'Eingang-Akte' not in json.dumps(L.call('qs_start')[1], ensure_ascii=False) and [f['name'] for f in dl['versionen'][0]['dateien']] == []
+      and [f['name'] for f in db['versionen'][0]['dateien']] == ['Eingang-Akte.pdf'], (dl['versionen'][0]['dateien'], db['versionen'][0]['dateien']))
+namen = {n: zipn(c, 'qs_ablage_export&kapitel=1.4&alle=1') + zipn(c, 'qs_ablage_export') for n, c in (('lisa', L), ('bernd', Be))}
+check('… Ablage-Export: Datei der Version fehlt für „ansehen“, für „bearbeiten“ dabei', 'Eingang-Akte' not in namen['lisa'] and 'Hand-150' in namen['lisa']
+      and 'Eingang-Akte' in namen['bernd'], namen)
+st, r = V.call('qs_verfahren_save', {'titel': 'VD Kontrolle', 'gesellschaft': 'Muster GmbH', 'verantwortlich': ''})
+VD2 = r['doku']['id']
+st, r = V.call('qs_verfahren_abschnitt_save', {'doku': VD2, 'teil': 'anwender', 'titel': 'Kontrolle', 'text': 'siehe QM', 'verweise': [dok(E14)['nr']], 'fertig': True})
+check('… Verfahrensdoku mit Verweis darauf freigegeben', st == 200 and V.call('qs_verfahren_freigeben', {'doku': VD2, 'rev': r['doku']['rev'], 'grund': 'Erstfassung', 'gueltigAb': heute[:8] + '01'})[0] == 200)
+zip_ = {n: ' '.join(zipfile.ZipFile(io.BytesIO(roh(c, f'qs_verfahren_export&doku={VD2}{von_bis}')[1])).namelist()) for n, c in (('vf', VF), ('admin', V))}
+check('… ZIP der Verfahrensdoku: Datei fehlt für „verfahren_sehen“, für „bearbeiten“ dabei', 'Eingang-Akte' not in zip_['vf'] and 'Eingang-Akte' in zip_['admin'], zip_)
 
 # ── Protokoll: Vorgänge aus 1.5 ohne Namen ──
 log = json.dumps(A.call('log')[1], ensure_ascii=False)

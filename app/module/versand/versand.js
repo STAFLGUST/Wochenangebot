@@ -323,15 +323,19 @@
     const ids = [...s.wahl];
     if (!ids.length || s.laeuft) return;
     s.note = $('#send-note').value;
-    if (s.pw) {   // Bestätigung mit Passwort (ohne zentrale Anmeldung)
-      const pw = $('#send-pw').value;
-      const pr = await api('reauth', { password: pw });
-      if (pr.status !== 200) { s.meldung = [fehlerText(pr, 'Passwort nicht bestätigt'), false]; sendZeichnen(); $('#send-pw').focus(); return; }
-      s.pw = false;
-    }
+    const pw = s.pw ? $('#send-pw').value : '';
+    // Sofort sperren – ein zweites Absenden während der Passwortprüfung schickte sonst jede E-Mail doppelt
     s.laeuft = true; s.meldung = null; s.stand = `0/${ids.length}`;
     $('#dlg-send').dataset.busy = '1';
     sendZeichnen();
+    if (s.pw) {   // Bestätigung mit Passwort (ohne zentrale Anmeldung)
+      const pr = await api('reauth', { password: pw });
+      if (pr.status !== 200) {
+        s.laeuft = false; delete $('#dlg-send').dataset.busy;
+        s.meldung = [fehlerText(pr, 'Passwort nicht bestätigt'), false]; sendZeichnen(); $('#send-pw').focus(); return;
+      }
+      s.pw = false;
+    }
     let ok = 0, bad = 0, abbruch = '';
     for (let i = 0; i < ids.length && !abbruch; i += TEIL) {
       const teil = ids.slice(i, i + TEIL);

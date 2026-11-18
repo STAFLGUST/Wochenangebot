@@ -71,8 +71,12 @@ ln -s ../angebot.php daten/kunden/verweis.php
 lauf archivieren
 ok "Verknüpfung im Datenordner: Abbruch, Altdateien bleiben, kein Archiv" '[ $CODE = 1 ] && [ -f daten/angebot.php ] && [ -f daten/kunden/k1.php ] && [ -z "$(ls sicherungen/altdateien-* 2>/dev/null)" ]'
 
-neu; touch "$T/i/daten/.daten-getrennt"; : > "$T/aufrufe"; lauf zeigen
-ok "getrennte Daten (ADR-007 Stufe 2): Abbruch mit Weg über zusammenfuehren, nichts aufgerufen" '[ $CODE = 1 ] && echo "$AUS" | grep -q "daten-trennen.sh zusammenfuehren" && [ ! -s "$T/aufrufe" ]'
+neu; python3 deploy/datenbank.py migrate daten --offline >/dev/null; touch "$T/i/daten/.daten-getrennt"; : > "$T/aufrufe"
+VORHER=$(stand)
+lauf zeigen
+ok "getrennte Daten (ADR-007 Stufe 2): zeigen listet trotzdem und ändert nichts" '[ $CODE = 0 ] && echo "$AUS" | grep -q "3 old data files" && [ "$(stand)" = "$VORHER" ] && [ ! -s "$T/aufrufe" ]'
+lauf archivieren
+ok "getrennte Daten: archivieren bricht ab mit Weg über zusammenfuehren, nichts aufgerufen" '[ $CODE = 1 ] && echo "$AUS" | grep -q "daten-trennen.sh zusammenfuehren" && [ ! -s "$T/aufrufe" ] && [ "$(stand)" = "$VORHER" ] && [ ! -d sicherungen ]'
 rm -f "$T/i/daten/.daten-getrennt"
 
 lauf unsinn

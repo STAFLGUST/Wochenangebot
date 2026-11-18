@@ -45,7 +45,7 @@ function qs_bericht_kalender(array $p, array $eigene, string $von, string $bis, 
     $out = ['faellig' => 0, 'erfuellt' => 0, 'versaeumt' => 0, 'bereiche' => [], 'monate' => []];
     $erledigt = [];
     foreach ($eigene as $n) if ($n['datum'] <= $bis) $erledigt[qs_periode($art, $n['datum'])] = true;
-    $ab = (string)($p['start'] ?? '') ?: substr((string)($p['erstellt']['t'] ?? $heute), 0, 10);
+    $ab = (string)($p['start'] ?? '') ?: ortstag((string)($p['erstellt']['t'] ?? $heute));
     $vonAb = max($von, $ab);
     if ($vonAb > $bis) return $out;
     $lauf = null;
@@ -90,8 +90,8 @@ function qs_bericht_fristen(array $p, array $eigene, string $von, string $bis): 
 /* Abschluss einer Maßnahme (Datum) – wirksam: Wirksamkeitsprüfung, verworfen: letzte Änderung */
 function qs_bericht_abschluss(array $m): string
 {
-    if (($m['status'] ?? '') === 'wirksam') return substr((string)($m['wirksamkeit']['t'] ?? ''), 0, 10);
-    if (($m['status'] ?? '') === 'verworfen') return substr((string)($m['geaendert']['t'] ?? ''), 0, 10);
+    if (($m['status'] ?? '') === 'wirksam') return ortstag((string)($m['wirksamkeit']['t'] ?? ''));
+    if (($m['status'] ?? '') === 'verworfen') return ortstag((string)($m['geaendert']['t'] ?? ''));
     return '';
 }
 
@@ -153,7 +153,7 @@ function qs_bericht_daten(array $stamm, array $dokumente, array $handbuch, array
     $mz = ['erfasst' => 0, 'abgeschlossen' => 0, 'offen' => 0, 'ueberfaellig' => 0];
     $mListe = [];
     foreach ($massnahmen as $m) {
-        $erf = substr((string)($m['erfasst']['t'] ?? ''), 0, 10);
+        $erf = ortstag((string)($m['erfasst']['t'] ?? ''));
         $abg = qs_bericht_abschluss($m);
         $offen = !in_array($m['status'] ?? 'offen', QS_MASSN_ABGESCHLOSSEN, true);
         if ($erf > $bis || (!$offen && $abg !== '' && $abg < $von)) continue;
@@ -187,9 +187,9 @@ function qs_bericht_daten(array $stamm, array $dokumente, array $handbuch, array
                                      'geprueft' => (string)($k['geprueft'] ?? ($v['geprueft']['von'] ?? '')), 'freigegeben' => (string)($k['freigegeben'] ?? ($v['freigegeben']['von'] ?? ''))];
             $dz['freigaben']++;
         }
-        $u = substr((string)($d['ueberprueft']['t'] ?? ''), 0, 10);
+        $u = ortstag((string)($d['ueberprueft']['t'] ?? ''));
         if ($imZeitraum($u)) { $vorgaenge[] = $basis + ['vorgang' => 'ueberprueft', 'datum' => $u, 'von' => (string)($d['ueberprueft']['von'] ?? ''), 'notiz' => (string)($d['ueberprueft']['notiz'] ?? '')]; $dz['ueberprueft']++; }
-        $e = substr((string)($d['eingezogen']['t'] ?? ''), 0, 10);
+        $e = ortstag((string)($d['eingezogen']['t'] ?? ''));
         if ($imZeitraum($e)) { $vorgaenge[] = $basis + ['vorgang' => 'eingezogen', 'datum' => $e, 'von' => (string)($d['eingezogen']['von'] ?? ''), 'notiz' => (string)($d['eingezogen']['grund'] ?? '')]; $dz['eingezogen']++; }
         $ue = qs_ueberpruefung($d, $monateU, $heute);
         if ($ue && $ue['faellig']) { $faellig[] = $basis + ['seit' => $ue['seit'], 'faelligAb' => $ue['faelligAb']]; $dz['faellig']++; }

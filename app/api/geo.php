@@ -111,8 +111,9 @@ function geo_build($in4, $in6, string $out, string $date): array
     if ($n4 < 10000 || $n6 < 1000) throw new RuntimeException('Die Länderdaten sind unvollständig.');
     $tmp = $out . '.' . bin2hex(random_bytes(4)) . '.tmp';
     if (!is_dir(dirname($out))) @mkdir(dirname($out), 0775, true);
-    file_put_contents($tmp, GEO_GUARD . 'GEO2' . pack('NN', $n4, $n6) . substr(str_pad($date, 10), 0, 10) . $v4 . $v6);
-    rename($tmp, $out);
+    $inhalt = GEO_GUARD . 'GEO2' . pack('NN', $n4, $n6) . substr(str_pad($date, 10), 0, 10) . $v4 . $v6;
+    // nur vollständig geschrieben ersetzen (volle Platte): sonst bleibt die bisherige Datenbank aktiv
+    if (file_put_contents($tmp, $inhalt) !== strlen($inhalt) || !@rename($tmp, $out)) { @unlink($tmp); throw new RuntimeException('Die Länderdaten konnten nicht gespeichert werden.'); }
     return ['v4' => $n4, 'v6' => $n6];
 }
 
