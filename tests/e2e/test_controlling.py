@@ -565,9 +565,15 @@ with sync_playwright() as p:
     check('Filter Abteilung', st == 200 and [x['name'] for x in r['personen']] == ['Bernd Beispiel'] and r['summe']['saldoOk'] == -30)
     st, r = AR.call('controlling_arbeitszeit&von=2026-09&bis=2026-10&abt=_')
     check('Filter „ohne Abteilung“', st == 200 and [x['name'] for x in r['personen']] == ['Carla Ohnenr'])
-    st, r = AR.call('controlling_arbeitszeit_detail&p=' + P_ANNA + '&von=2026-09&bis=' + heute.strftime('%Y-%m'))
-    check('Pop-up: alle Tage des Mitarbeiters (neueste zuerst), heute „laufend“ ohne Fehler, zählt nicht', st == 200 and r['person']['name'] == 'Anna Muster' and len(r['tage']) == 9
-          and r['tage'][0]['d'] == heute.isoformat() and r['tage'][0]['laufend'] is True and r['tage'][0]['fehler'] == [] and r['summe']['laufend'] == 1 and r['summe']['saldoOk'] == 60, r.get('tage', [])[:1])
+    # höchstens 36 Monate je Anfrage (Server): ab 09/2029 beginnt der Zeitraum später, die festen Tage davor fallen heraus
+    _j, _m = divmod(heute.year * 12 + heute.month - 1 - 35, 12)
+    von_d = max('2026-09', f'{_j}-{_m + 1:02d}')
+    anna = {'2026-09-01': 0, '2026-09-02': 60, '2026-09-03': None, '2026-09-04': 0, '2026-09-05': 0, '2026-10-01': 0, '2026-10-02': None, '2026-10-05': 0}   # Saldo ohne Fehler (None = Stempelfehler)
+    anna = {d: s for d, s in anna.items() if d[:7] >= von_d}
+    st, r = AR.call('controlling_arbeitszeit_detail&p=' + P_ANNA + '&von=' + von_d + '&bis=' + heute.strftime('%Y-%m'))
+    check('Pop-up: alle Tage des Mitarbeiters (neueste zuerst), heute „laufend“ ohne Fehler, zählt nicht', st == 200 and r['person']['name'] == 'Anna Muster' and len(r['tage']) == 1 + len(anna)
+          and [t['d'] for t in r['tage']] == [heute.isoformat()] + sorted(anna, reverse=True)
+          and r['tage'][0]['laufend'] is True and r['tage'][0]['fehler'] == [] and r['summe']['laufend'] == 1 and r['summe']['saldoOk'] == sum(s or 0 for s in anna.values()), (st, r.get('error'), r.get('tage', [])[:1]))
     check('ungültige Anfragen: 422', all(AR.call(q)[0] == 422 for q in ('controlling_arbeitszeit&von=2026-13', 'controlling_arbeitszeit&von=2026-10&bis=2026-09',
                                                                           'controlling_arbeitszeit&von=2023-01&bis=2026-01', 'controlling_arbeitszeit_detail&p=' + 'p' + '0' * 12,
                                                                           'controlling_arbeitszeit_detail&p=../x')))
