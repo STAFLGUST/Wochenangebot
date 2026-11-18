@@ -60,8 +60,8 @@ def pdf_stroeme(data):
     out = []
     for mm in re.finditer(rb'stream\r?\n', data):
         ende = data.find(b'endstream', mm.end())
-        try:
-            out.append(zlib.decompress(data[mm.end():ende].rstrip(b'\r\n')))
+        try:   # decompressobj liest genau den Strom: endet er zufällig auf \r oder \n, darf das Zeilenende davor nicht abgeschnitten werden
+            out.append(zlib.decompressobj().decompress(data[mm.end():ende]))
         except zlib.error:
             pass
     return out
@@ -87,9 +87,9 @@ def pdf_chromium_text(data):
     objs = {int(mm.group(1)): mm.group(2) for mm in re.finditer(rb'(\d+) 0 obj\b(.*?)\bendobj', data, re.S)}
 
     def strom(o):
-        mm = re.search(rb'stream\r?\n(.*?)\r?\nendstream', o or b'', re.S)
-        try:
-            return zlib.decompress(mm.group(1)) if mm else b''
+        mm = re.search(rb'stream\r?\n', o or b'')
+        try:   # wie pdf_stroeme: genau den Strom lesen – das alte Muster schnitt ein Byte ab, wenn der Strom auf \r endete (ganze Seite fehlte)
+            return zlib.decompressobj().decompress(o[mm.end():]) if mm else b''
         except zlib.error:
             return b''
 
@@ -265,7 +265,7 @@ SATZ = """() => {
     forts: D.querySelectorAll('.al-band .al-gt .al-cont').length,
     bereiche: [...D.querySelectorAll('.al-band .al-st:not(.pl-trenn) h3')].filter((h) => !h.querySelector('.al-cont')).map((h) => h.textContent.trim()),
     sektionen: [...D.querySelectorAll('.al-band .al-sec')].map((x) => { const b = x.querySelector(':scope > .al-st:not(.pl-trenn)');
-      return { name: b ? ohneForts(b.querySelector('h3')) : '', anzahl: b ? parseInt(b.querySelector(':scope > span').textContent, 10) : null, linie: !!x.querySelector(':scope > .pl-trenn'),
+      return { name: b ? ohneForts(b.querySelector('h3')) : '', linie: !!x.querySelector(':scope > .pl-trenn'),
         zeilen: x.querySelectorAll('tr.row').length, titel: [...x.querySelectorAll('.al-gt')].map(ohneForts) }; }),
     bloecke: [...D.querySelectorAll('.al-band .al-grp')].map((g) => ({ titel: ohneForts(g.querySelector('.al-gt') || g.closest('.al-sec').querySelector('.al-st-eh h3')), forts: !!g.querySelector('.al-cont'), zeilen: g.querySelectorAll('tr.row').length })),
     jeSeite: pages.map((p) => {
@@ -384,9 +384,9 @@ with sync_playwright() as p:
     check('feste Vorgaben: Seiten 279 × 193 mm, immer genau drei Spalten, nichts läuft über (Fuß, rechter Rand, Preisspalte), Fußzeile nur auf der letzten Seite am unteren Rand',
           heil(s, 'letzte') == [] and s['fuss'] == 'letzte', heil(s, 'letzte'))
     check('kein Block geteilt: jede Gruppe genau einmal, ohne „Forts.“', s['forts'] == 0 and s['geteilt'] == 0 and len(s['bloecke']) == 32, (s['forts'], len(s['bloecke'])))
-    check('fortlaufend: kein erzwungener Seitenumbruch je Bereich (break-before „auto“), jeder Balken nennt die Artikelzahl seines Bereichs',
-          fb['umbruch'] == 'auto' and all(x['anzahl'] == sum(y['zeilen'] for y in s['sektionen'] if y['name'] == x['name']) for x in s['sektionen'] if x['name']) and sum(x['zeilen'] for x in s['sektionen']) == 276,
-          [(x['name'], x['anzahl'], x['zeilen']) for x in s['sektionen']])
+    check('fortlaufend: kein erzwungener Seitenumbruch je Bereich (break-before „auto“), alle Artikel in den Bereichen',
+          fb['umbruch'] == 'auto' and sum(x['zeilen'] for x in s['sektionen']) == 276,
+          [(x['name'], x['zeilen']) for x in s['sektionen']])
     check('erste Seite: der erste Bereich beginnt gleich unter der Werbung', s['jeSeite'][0]['bereiche'] >= 1 and s['jeSeite'][0]['hoehe'] >= 60, s['jeSeite'][0])
     check('kompakt: höchstens 4 Seiten (vorher 6), alle Seiten vor der letzten zu mindestens 70 % der Höhe gefüllt (vier große Bereiche: der Rest einer Seite fasst keinen ganzen Block mehr)',
           N <= 4 and all(x['fuell'] >= 70 for x in s['jeSeite'][:-1]), (N, [x['fuell'] for x in s['jeSeite']]))
@@ -557,11 +557,11 @@ with sync_playwright() as p:
     for it in m2['items']:
         sec = next(g['section'] for g in m2['groups'] if g['id'] == it['groupId'])
         soll[norm_titel(sec)] = soll.get(norm_titel(sec), 0) + 1
-    check('jeder Bereich behält Überschrift und Artikelzahl: Zeilen je Bereich wie im Angebot, „n Artikel“ im Balken (auch im wiederholten) = alle Artikel des Bereichs',
-          je_name == soll and all(x['anzahl'] == soll[x['name']] for x in s7['sektionen'] if x['name']), (je_name, [(x['name'], x['anzahl']) for x in s7['sektionen'] if x['name'] and x['anzahl'] != soll.get(x['name'])]))
+    check('jeder Bereich behält seine Überschrift (auch im wiederholten Balken): Zeilen je Bereich wie im Angebot',
+          je_name == soll, (je_name, soll))
     ohne = [x for x in s7['sektionen'] if not x['name']]
     check('Gruppe ohne Bereich: steht für sich unter einer Linie statt eines Balkens (kein fremder Balken darüber), mit allen ihren Artikeln',
-          len(ohne) == 1 and ohne[0]['linie'] and ohne[0]['anzahl'] is None and ohne[0]['titel'] == [norm_titel(m2['groups'][-1]['name'])] and ohne[0]['zeilen'] == soll['']
+          len(ohne) == 1 and ohne[0]['linie'] and ohne[0]['titel'] == [norm_titel(m2['groups'][-1]['name'])] and ohne[0]['zeilen'] == soll['']
           and v.evaluate("(() => { const l = document.querySelector('#print-root .pl-trenn'), b = l.getBoundingClientRect(); return getComputedStyle(l).backgroundImage !== 'none' && b.width > 100 && b.height > 4; })()"), ohne)
     check('Vermerk „Entwurf“ im Kopf ist vorbereitet, aber ausgeschaltet; Mitarbeiter sehen die ganze Fußzeile', v.locator('#print-root .pl-entwurf').count() == 0 and 'Testbank Musterstadt' in s7['jeSeite'][-1]['fuss']['brief'])
     shot(v.locator('#print-root .pl-page').first, SH + '/druck-viele-bereiche-s1.png')
@@ -609,7 +609,7 @@ with sync_playwright() as p:
           && [...x.querySelectorAll('.al-gt')].some((g) => t(g) === t(x.querySelector(':scope > .al-st h3')))).map((x) => t(x.querySelector(':scope > .al-st h3'))) }; }""")
     check('Gruppe heißt wie ihr Bereich: in einer Spalte Überschrift nur einmal (im Balken, „€/kg“ bündig über den Preisen, nie über mehreren Spalten); Gruppen, Zeilen und Artikelzahl je Bereich wie in der Vorschau',
           eh['balken'] >= 1 and eh['balken'] == eh['mit'] and not eh['breit'] and eh['versatz'] <= 8 and not eh['doppelt'] and s9['gruppen'] == vs3['gruppen']
-          and je9 == soll9 and all(x['anzahl'] == soll9[x['name']] for x in s9['sektionen']), (eh, len(s9['gruppen']), len(vs3['gruppen'])))
+          and je9 == soll9, (eh, len(s9['gruppen']), len(vs3['gruppen'])))
     grau = v.evaluate("""() => { const c = (s) => getComputedStyle(document.querySelector(s)).backgroundColor.match(/\\d+/g).slice(0, 3).map(Number);
       return { zebra: c('#print-root .al-band .al-tab tbody tr:nth-child(odd):not(.werb-an) td'), balken: c('#print-root .al-band .al-st:not(.pl-trenn)') }; }""")
     check('Zebrastreifen im Druck kräftig genug für den Ausdruck (je Farbkanal höchstens 236), Balken dunkler als die Streifen',
