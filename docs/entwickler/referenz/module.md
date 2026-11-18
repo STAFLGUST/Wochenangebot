@@ -163,11 +163,11 @@ Agent: `dashboard` · hängt ab von `plattform` · Testgruppen: `dashboard`
 | --- | --- | --- | --- | --- |
 | `dashboard.start` Mitarbeiter-Dashboard | intern | https://dashboard-stafl.de/ | fertig | produktiv |
 
-## App (iOS/Android) (`mobile`)
+## App-Schnittstelle (ruht) (`mobile`)
 
-Expo-App für Kunden und Mitarbeiter; nutzt dieselbe Schnittstelle wie die Website
+Server-Schnittstelle für eine native App; die App selbst gibt es derzeit nicht (entfernt 18.11.2026), es gibt nur die Web-App
 
-Agent: `mobile` · hängt ab von `angebot`, `plattform` · Testgruppen: `app_api`, `app_web`
+Agent: `mobile` · hängt ab von `angebot`, `plattform` · Testgruppen: `app_api`
 
 ## Plattformkern (`plattform`)
 

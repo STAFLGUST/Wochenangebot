@@ -1,6 +1,6 @@
 <?php
 declare(strict_types=1);
-/* Aktionen: Grunddaten für die App (iOS/Android, Ordner mobile/). Beschreibung: docs/app-api.md
+/* Aktionen: Grunddaten für eine native App (Schnittstelle ruht, derzeit kein Client). Beschreibung: docs/app-api.md
    Wird von api/index.php im globalen Gültigkeitsbereich eingebunden; jede Aktion endet mit respond()/fail(). */
 if (!defined('WA_API')) { http_response_code(404); exit; }   // nur über api/index.php nutzbar
 

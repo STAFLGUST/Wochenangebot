@@ -1,6 +1,10 @@
 # Schnittstelle für die App (iOS/Android)
 
-Die App im Ordner `mobile/` nutzt dieselbe Schnittstelle wie die Website (`/api/?action=…`, JSON, HTTPS) und
+> **Derzeit kein Client – die Schnittstelle ruht.** Die native App wurde am 18.11.2026 aus dem Repository entfernt
+> (Entscheidung des Inhabers, es gibt nur die Web-App; siehe [app-grundlagen.md](app-grundlagen.md)). Die Aktionen und
+> der App-Zugriff im Server bleiben bestehen und werden weiter getestet (`tests/e2e/test_app_api.py`).
+
+Eine App nutzt dieselbe Schnittstelle wie die Website (`/api/?action=…`, JSON, HTTPS) und
 dieselben Geschäftsregeln: Preise, Fracht, Freischaltungen und Rechte prüft nur der Server. Für die Bestellaktionen
 gilt zusätzlich [Bestell-API, Antwortformat 1](bestell-api-v1.md).
 

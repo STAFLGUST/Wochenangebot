@@ -328,7 +328,7 @@ Spalten: **Art** – lesend, schreibend (nur POST) oder post (GET liest, POST sc
 | `start_favoriten_save` | `dashboard.start` | schreibend | – | siehe Datei | `app/api/aktionen/module.php` |
 | `start_heute` | `dashboard.start` | lesend | – | siehe Datei | `app/api/aktionen/module.php` |
 
-## App (iOS/Android) (`mobile`)
+## App-Schnittstelle (ruht) (`mobile`)
 
 | Aktion | Oberfläche | Art | Kennzeichen | Prüfung im Code | Datei |
 | --- | --- | --- | --- | --- | --- |

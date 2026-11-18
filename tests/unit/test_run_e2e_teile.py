@@ -2,7 +2,7 @@
 
     python3 tests/unit/test_run_e2e_teile.py
 
-Prüft: jede Gruppe in genau einem Teil (für 1–6 Teile), unabhängig von Eingabereihenfolge und vorhandenem Build,
+Prüft: jede Gruppe in genau einem Teil (für 1–6 Teile), unabhängig von der Eingabereihenfolge,
 ähnliche Laufzeit je Teil, ungültige WA_TEIL-Angaben, neue Gruppen ohne Gewicht, Zusammenspiel mit ci.yml
 (Liste „teil“ = 1…n und Nenner in WA_TEIL = n), Testlauf mit WA_TEIL wählt genau die Gruppen des Teils.
 """
@@ -39,15 +39,13 @@ for n in range(1, 7):
 t3 = r.teile(alle, 3)
 ok('deterministisch (zweimal gleich)', r.teile(alle, 3) == t3)
 ok('unabhängig von der Reihenfolge', r.teile(list(reversed(alle)), 3) == t3)
-ok('optionale Gruppe (app_web) hat festen Teil', any('app_web' in teil for teil in t3))
 ok('Doppelte Namen zählen einmal', sorted(sum(r.teile(alle + alle[:5], 3), [])) == sorted(alle))
 lasten3 = [sum(r.gewicht(g) for g in teil) for teil in t3]
 ok(f'3 Teile: höchstens 5 % Unterschied {lasten3}', max(lasten3) <= 1.05 * min(lasten3))
 
 neu = r.teile(alle + ['ganz_neue_gruppe'], 3)
 ok('neue Gruppe ohne Gewicht wird einem Teil zugeordnet', sum(teil.count('ganz_neue_gruppe') for teil in neu) == 1)
-ok('alle Gruppen haben ein Gewicht (außer optionalen)', all(g in r.GEWICHT or g in r.OPTIONAL for g in alle),
-   [g for g in alle if g not in r.GEWICHT and g not in r.OPTIONAL])
+ok('alle Gruppen haben ein Gewicht', all(g in r.GEWICHT for g in alle), [g for g in alle if g not in r.GEWICHT])
 ok('keine Gewichte für entfernte Gruppen', all(g in r.SUITES for g in r.GEWICHT), [g for g in r.GEWICHT if g not in r.SUITES])
 
 ok('WA_TEIL leer → alle', r.teil_lesen('') is None)

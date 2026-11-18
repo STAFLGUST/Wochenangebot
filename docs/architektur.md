@@ -184,12 +184,12 @@ Neue Seiten mit eigener Hintergrund-Farbfläche tragen deren Klasse in die Liste
 
 Schriften liegen in `app/assets/fonts/` (Geist, Geist Mono; Lizenz daneben), eingebunden in `app.css`. Kein Build-Schritt. Skripte und Stylesheets werden in den HTML-Seiten **ohne** `?v=` eingebunden; Versionsnummern und Prüfliste der Dateiprüfung erzeugt der Server beim Einspielen (`deploy/bereitstellen.py`). Die CI prüft, dass alle Einbindungen existieren und keine Nummern bzw. keine Prüfliste im Repository stehen (`werkzeuge/asset_versionen.py`, `werkzeuge/integritaet.py`); `--zeigen` zeigt, was der Server erzeugen würde.
 
-## App (`mobile/`)
+## App-Schnittstelle (ohne App)
 
-Expo/React Native (TypeScript) für iOS und Android, eigener Build (`npm ci`), wird nicht auf den Server ausgeliefert
-(der Container bindet nur `app/` ein). Nutzt die Schnittstelle wie die Website, Sitzung über die Kopfzeile
-`X-WA-Sitzung` ([app-api.md](app-api.md)). `offer-core.js` wird mitgebündelt (Metro `watchFolders`), damit
-Merklisten-Schlüssel identisch sind. Aufbau und Veröffentlichung: [mobile/LIESMICH.md](../mobile/LIESMICH.md).
+Die native App für iOS und Android wurde am 18.11.2026 entfernt; es gibt nur die Web-App (PWA, `app/manifest.json`,
+`app/sw.js`). Die Server-Schnittstelle für eine App bleibt bestehen und ruht: `app_info` und die Sitzung über die
+Kopfzeile `X-WA-Sitzung` ([app-api.md](app-api.md), Testgruppe `app_api`). Letzter Stand der App:
+[app-grundlagen.md](app-grundlagen.md).
 
 ## Dashboard (`dashboard/`)
 
@@ -257,6 +257,5 @@ Bestandsdaten, exakte Wochenpreise, ETA-Quelle und kompatible Erweiterungen:
   (veröffentlicht den gespeicherten Entwurf über das Modul Versand – für Gruppen, die „veröffentlicht“ nur als Zwischenschritt brauchen).
   Die Gruppen `revert`, `angebote`, `aufbau` und `sys` schalten in ihrer App-Kopie die Liste der Änderungen im Eingabebereich ein
   (`LISTE_IM_ANGEBOT` in `run_e2e.py`, Schalter `AENDERUNGSLISTE_IM_ANGEBOT` in `admin.js`); den ausgelieferten Stand prüft die Gruppe `versand`.
-- App: `cd mobile && npm test` (Jest), `npm run typecheck`, `npm run export:native`; Gruppe `app_web` testet den Web-Build der App gegen den Testserver (nur wenn `mobile/dist-web` gebaut ist).
 - `tests/unit/*.test.js` (Node), `tests/deploy/*` (Sicherung, Release-Modus, Release-Prüfungen, Datenbank).
 - CI (`.github/workflows/ci.yml`): Syntax, Regelwerk und Modulgrenzen (`werkzeuge/regeln.py`), Einbindungen ohne Versionsnummern, Prüfliste nicht im Repository, Ports, Secrets, Abhängigkeiten, E2E in beiden Speicherarten (je 3 Teile, `WA_TEIL`). Auf `main` Übernahme der Prüfung aus dem Pull Request bei gleichem Inhalt (`.github/scripts/ci_nachweis.py`); Paketvorrat und Downloads im Zwischenspeicher (`zwischenspeicher.yml`, `.github/scripts/testumgebung.sh`, `apt_vorrat.py`); Trockenlauf des Nachweises: `ci-nachweis.yml`.
