@@ -179,6 +179,15 @@ function hr_schnitt_ohne_schliesstage(array $a, array $b): array
     return $o;
 }
 
+/* „Gleichzeitig weg“ (offene Anträge und Jahresplanung – eine Regel): Tage ohne Schließtage, an denen die Abwesenheit $o eines anderen
+   Mitarbeiters $op im Urlaubsplan und derselben Abteilung (hr_gleiche_abteilung, leer nie gleich) mit dem Antrag $e von $p zusammenfällt.
+   Freie Tage zählen nicht. Für die Anzeige nur Name und Tage, nie die Art. */
+function hr_gleichzeitig_weg(array $e, array $p, array $o, ?array $op): array
+{
+    if ($o['bis'] < $e['von'] || $o['von'] > $e['bis'] || !$op || !$op['aktiv'] || $o['person'] === $e['person'] || $o['art'] === 'X' || !in_array($o['status'], HR_AKTIV, true) || !hr_gleiche_abteilung($op, $p)) return [];
+    return hr_schnitt_ohne_schliesstage($o, $e);   // nur am 24.12./31.12. zusammen weg: Betrieb ohnehin geschlossen
+}
+
 /* ---------------- Daten lesen und prüfen ---------------- */
 
 function hr_person_norm(array $p): array
@@ -850,10 +859,7 @@ function hr_offene_antraege(array $personal, array $abw, array $me): array
         $aus['planung'] = $inPlanung($e);
         $aus['kollegen'] = [];
         foreach ($abw['eintraege'] as $o) {
-            if ($o['id'] === $e['id'] || $o['person'] === $e['person'] || !in_array($o['status'], HR_AKTIV, true) || $o['bis'] < $e['von'] || $o['von'] > $e['bis']) continue;
-            $op = $idx[$o['person']] ?? null;
-            $gem = hr_schnitt_ohne_schliesstage($o, $e);   // nur am 24.12./31.12. zusammen weg: Betrieb ohnehin geschlossen
-            if ($op && $op['abteilung'] === $p['abteilung'] && $gem) $aus['kollegen'][] = hr_name($op) . ' (' . hr_zeitraum_text($gem[0], $gem[count($gem) - 1]) . ')';
+            if ($gem = hr_gleichzeitig_weg($e, $p, $o, $idx[$o['person']] ?? null)) $aus['kollegen'][] = hr_name($idx[$o['person']]) . ' (' . hr_zeitraum_text($gem[0], $gem[count($gem) - 1]) . ')';
         }
         $offen[] = $aus;
     }

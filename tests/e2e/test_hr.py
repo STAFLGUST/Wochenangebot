@@ -329,6 +329,28 @@ offen = {a['id']: a for a in r['offen']}
 a = offen.get(ANTRAG1, {})
 check('offener Antrag mit Konto, Vertretung und gleichzeitig Abwesenden', a.get('tage') == 3 and a.get('vertretungName') == 'Lena Leser'
       and any('Lena Leser' in x for x in a.get('kollegen', [])) and a.get('notiz') == 'Skiurlaub', a)
+# „Gleichzeitig weg“ nach derselben Regel wie die Jahresplanung (HR4): keine freien Tage, keine Mitarbeiter außerhalb des Urlaubsplans,
+# ohne Abteilung keine gemeinsame Abteilung
+rev = P.call('mitarbeiter_hr')[1]['rev']
+hr(ids['andre-vierzig'], abteilung='Verwaltung'); PP = hr(ids['paul'], abteilung=''); PO = hr(ids['otto'], abteilung='')
+ab_ = dokument('hr-abwesenheiten')
+ab_['eintraege'] += [{'id': 'hr4-x', 'person': PL, 'art': 'X', 'von': iso(FEB + dt.timedelta(days=2)), 'bis': iso(FEB + dt.timedelta(days=2)), 'status': 'genehmigt', 'notiz': '', 'quelle': 'personalstelle'},
+                     {'id': 'hr4-a', 'person': PA, 'art': 'U', 'von': iso(FEB), 'bis': iso(FEB + dt.timedelta(days=2)), 'status': 'genehmigt', 'notiz': '', 'quelle': 'personalstelle'},
+                     {'id': 'hr4-o', 'person': PO, 'art': 'U', 'von': iso(FEB), 'bis': iso(FEB), 'status': 'genehmigt', 'notiz': '', 'quelle': 'personalstelle'},
+                     {'id': 'hr4-p', 'person': PP, 'art': 'U', 'von': iso(FEB), 'bis': iso(FEB), 'status': 'beantragt', 'notiz': '', 'quelle': 'antrag'}]
+ab_['rev'] = ab_.get('rev', 0) + 1
+storage_write('hr-abwesenheiten', ab_)
+hr(ids['andre-vierzig'], aktiv=False)
+of_ = {a_['id']: a_ for a_ in P.call('hr_verwaltung&jahr=' + str(Y))[1]['offen']}
+check('Gleichzeitig weg wie in der Jahresplanung: ohne freie Tage, ohne Inaktive, leere Abteilung ist keine gemeinsame',
+      not any((FEB + dt.timedelta(days=2)).strftime('%d.%m.%Y') in x for x in of_[ANTRAG1]['kollegen']) and not any('Andre' in x for x in of_[ANTRAG1]['kollegen'])
+      and any('Lena Leser' in x for x in of_[ANTRAG1]['kollegen']) and of_['hr4-p']['kollegen'] == [], (of_[ANTRAG1]['kollegen'], of_['hr4-p']['kollegen']))
+ab_ = dokument('hr-abwesenheiten')
+ab_['eintraege'] = [e_ for e_ in ab_['eintraege'] if not e_['id'].startswith('hr4-')]
+ab_['rev'] = ab_.get('rev', 0) + 1
+storage_write('hr-abwesenheiten', ab_)
+rev = P.call('mitarbeiter_hr')[1]['rev']
+hr(ids['andre-vierzig'], abteilung='Lager', aktiv=True)
 check('Ablehnen ohne Grund: 422', P.call('hr_entscheiden', {'id': ANTRAG1, 'entscheidung': 'abgelehnt'})[0] == 422)
 check('Genehmigen', P.call('hr_entscheiden', {'id': ANTRAG1, 'entscheidung': 'genehmigt'})[0] == 200)
 check('zweimal entscheiden: 409', P.call('hr_entscheiden', {'id': ANTRAG1, 'entscheidung': 'abgelehnt', 'grund': 'x'})[0] == 409)

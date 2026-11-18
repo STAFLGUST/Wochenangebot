@@ -413,11 +413,9 @@ function hr_planung_konflikte(array $e, array $p, array $idx, array $eintraege, 
             if ($l['frei']) $k[] = ['art' => 'vertretung', 'text' => 'Zusätzliche Vertretung ' . hr_name($vp2) . ' arbeitet an diesen Tagen nicht (' . hr_daten_text($l['frei']) . ')'];
         }
     }
-    if (trim((string)$p['abteilung']) !== '') foreach ($eintraege as $o) {
-        if ($o['id'] === $e['id'] || $o['person'] === $e['person'] || $o['person'] === $v || $o['person'] === ($e['vertretung2'] ?? null) || $o['art'] === 'X' || !in_array($o['status'], HR_AKTIV, true) || !hr_planung_schnitt($o, $e)) continue;
-        $op = $idx[$o['person']] ?? null;
-        $gem = hr_schnitt_ohne_schliesstage($o, $e);   // nur am 24.12./31.12. zusammen weg: Betrieb ohnehin geschlossen
-        if ($op && $op['aktiv'] && $op['abteilung'] === $p['abteilung'] && $gem) $k[] = ['art' => 'abteilung', 'text' => 'Gleichzeitig weg: ' . hr_name($op) . ' (' . hr_zeitraum_text($gem[0], $gem[count($gem) - 1]) . ')'];
+    foreach ($eintraege as $o) {
+        if ($o['person'] === $v || $o['person'] === ($e['vertretung2'] ?? null)) continue;   // Vertretung: eigener Konflikt oben
+        if ($gem = hr_gleichzeitig_weg($e, $p, $o, $idx[$o['person']] ?? null)) $k[] = ['art' => 'abteilung', 'text' => 'Gleichzeitig weg: ' . hr_name($idx[$o['person']]) . ' (' . hr_zeitraum_text($gem[0], $gem[count($gem) - 1]) . ')'];
     }
     if ($s = hr_ueberschneidung($sperren, $e['von'], $e['bis'])) $k[] = ['art' => 'sperre', 'text' => 'Urlaubssperre ' . hr_zeitraum_text($s['von'], $s['bis']) . ($s['text'] !== '' ? ' (' . $s['text'] . ')' : '')];
     if ($e['status'] === 'beantragt' && $verfuegbar < 0) $k[] = ['art' => 'rest', 'text' => 'Mehr als der Resturlaub (um ' . hr_tage_text(-$verfuegbar) . ')'];
