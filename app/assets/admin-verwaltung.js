@@ -9,7 +9,7 @@
   'use strict';
   const W = window.WA;
   const F = window.STAFL_FORMAT;   // Zahlen und Einheiten wie auf allen Seiten (app/assets/format.js)
-  const { $, $$, api, esc, icon, toast, confirmBox, dateTime, timeOnly, plural, fold, SU, fmtNum, fmtInt, csvCell, ROLE_LABEL, offerName, offerShort, loadOffers, pendingCount, setView, OSTD, may } = W;
+  const { $, $$, api, esc, icon, toast, confirmBox, dateTime, timeOnly, plural, fold, SU, fmtNum, fmtInt, csvCell, ROLE_LABEL, offerName, offerShort, loadOffers, pendingCount, setView, OSTD, may, ausschreiben } = W;
   const isAdmin = () => W.me && W.me.role === 'admin';
   // Vertraute Geräte (Browser, auf denen sich der Zugang angemeldet hat; kommen auch bei einer fremd ausgelösten Sperre durch)
   const geraeteText = (g) => `${plural(g.length, 'Gerät', 'Geräte')}: ${g.slice(0, 3).map((x) => `${x.name}, zuletzt ${dateTime(x.zuletzt)}`).join(' · ')}${g.length > 3 ? ' …' : ''}`;
@@ -131,7 +131,7 @@
   });
   /* Benutzername aus Vor- und Nachname wie auf dem Server (benutzername_vorschlag): „vorname-nachname“, Umlaute ae/oe/ue/ss */
   function unameVorschlag(vor, nach) {
-    const teil = (x) => String(x || '').toLowerCase().trim().replace(/ä/g, 'ae').replace(/ö/g, 'oe').replace(/ü/g, 'ue').replace(/ß/g, 'ss')
+    const teil = (x) => ausschreiben(x).trim()
       .normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '');
     const basis = [teil(vor), teil(nach)].filter(Boolean).join('-').slice(0, 32).replace(/-+$/, '');
     if (basis.length < 2) return '';
@@ -717,7 +717,7 @@
   });
   $('#view-kunden').addEventListener('keydown', (e) => { if (e.key === 'Enter' && e.target.matches('tr[data-kid]')) openKunde(e.target.dataset.kid); });
   /* Vorschlag für den Benutzernamen aus der Firma */
-  const unameFrom = (t) => fold(String(t ?? '').toLowerCase().replace(/ä/g, 'ae').replace(/ö/g, 'oe').replace(/ü/g, 'ue').replace(/ß/g, 'ss')).replace(/\b(gmbh|co|kg|ag|ug|ohg|e\.?k|mbh|und|&)\b/g, ' ').replace(/[^a-z0-9]+/g, '.').replace(/^\.+|\.+$/g, '').slice(0, 32);
+  const unameFrom = (t) => fold(ausschreiben(t)).replace(/\b(gmbh|co|kg|ag|ug|ohg|e\.?k|mbh|und|&)\b/g, ' ').replace(/[^a-z0-9]+/g, '.').replace(/^\.+|\.+$/g, '').slice(0, 32);
   function openKunde(id) {
     const c = id ? kunden.find((x) => x.id === id) : null;
     editKid = id;

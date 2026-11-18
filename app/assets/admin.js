@@ -35,6 +35,7 @@
   const timeOnly = (iso) => (iso ? new Date(iso).toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' }) : '');
   const FOLD = { 'ä': 'a', 'ö': 'o', 'ü': 'u', 'ß': 's', 'é': 'e', 'è': 'e', 'ê': 'e', 'á': 'a', 'à': 'a', 'ó': 'o', 'ô': 'o', 'í': 'i', 'ú': 'u', 'ç': 'c', 'ñ': 'n', 'œ': 'o' };
   const fold = (s) => String(s ?? '').toLowerCase().replace(/[^\u0000-\u007f]/g, (c) => FOLD[c] ?? c);   // Vergleich von Namen und Spaltenköpfen
+  const ausschreiben = (s) => String(s ?? '').toLowerCase().replace(/ä/g, 'ae').replace(/ö/g, 'oe').replace(/ü/g, 'ue').replace(/ß/g, 'ss');   // Umlaute für Kennungen (Benutzername, Angebotskennung)
   const glatt = (x) => Math.round(Number(x.toPrecision(15)));   // runden nach Glätten der Binärdarstellung: 104,4999… → 105 wie PHP round()
   const SU = window.STAFL_SUCHE;   // alle Suchfelder: eine Regel (assets/suche.js) – Umlaute auch ausgeschrieben, mehrere Wörter, Nummern
   const store = {
@@ -2103,7 +2104,7 @@
      Kunden einer zugeordneten Kundengruppe sehen das Angebot ohne eigene Freischaltung (Server: customer_offers). */
   let offerEdit = null, ofDirty = false, ofKg = [], ofKunden = null, ofPick = null;
   const slug = (t) => {
-    const x = fold(String(t ?? '').toLowerCase().replace(/ä/g, 'ae').replace(/ö/g, 'oe').replace(/ü/g, 'ue').replace(/ß/g, 'ss')).replace(/^wochenangebot\s*/, '').replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 32) || 'angebot';
+    const x = fold(ausschreiben(t)).replace(/^wochenangebot\s*/, '').replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 32) || 'angebot';
     return /^e-/.test(x) || /^\d+$/.test(x) ? `angebot-${x}`.slice(0, 40) : x;   // „e-…“ gehört Einzelangeboten, reine Zahlen gehen in JSON-Schlüsseln kaputt
   };
   function openOffers() { setView('angebote'); }
@@ -5178,7 +5179,7 @@
 
   window.WA = {
     importLeser: IMPORT_LESER,
-    $, $$, api, esc, icon, toast, confirmBox, dateTime, timeOnly, plural, fold, SU, fmtNum, fmtInt, csvCell, ROLE_LABEL, offerName, offerShort, glatt,
+    $, $$, api, esc, icon, toast, confirmBox, dateTime, timeOnly, plural, fold, SU, fmtNum, fmtInt, csvCell, ROLE_LABEL, offerName, offerShort, ausschreiben, glatt,
     loadOffers, pendingCount, setView, renderWartungBanner, wartungBis, OSTD, may,
     // offers: Kundenangebote (Freischaltung beim Kunden, Verwaltung) – Sonderangebote gelten nur über Kundengruppen (sonderangebote)
     get me() { return me; }, get offers() { return kundenAngebote(); }, get stdPublic() { return stdPublic; },
