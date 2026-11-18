@@ -2513,12 +2513,15 @@ with sync_playwright() as p:
     pe_ = next(p_ for p_ in v_['personen'] if p_['nutzer'] == ids['erika'])
     rev = v_['rev']; hr(ids['erika'], jahr=J, anspruch=(pe_['jahre'].get(str(J)) or {}).get('anspruch'), uebertrag=3)
     k_e = E.call('hr_start')[1]['konto']
-    check('Konto: 3 Tage Übertrag verfallen in 20 Tagen', k_e['verfaellt'] == 3 and k_e['frist'] == frist.isoformat(), k_e)
+    # Betriebsurlaub 24.12./31.12. (je ½ Tag, wenn Werktag) bis zum Verfallstag verbraucht Übertrag – ab Anfang Dezember weniger als 3
+    n_vf = 3 - 0.5 * sum(1 for d_ in (dt.date(J, 12, 24), dt.date(J, 12, 31)) if d_.weekday() < 5 and d_ <= frist)
+    t_vf = f'{n_vf:g}'.replace('.', ',') + ' Tage'
+    check(f'Konto: {t_vf} Übertrag verfallen in 20 Tagen', k_e['verfaellt'] == n_vf and k_e['frist'] == frist.isoformat(), k_e)
     for breite in (1280, 390):
         ctx, pg = anmelden('erika', 'Editor-Zugang-77', '198.51.100.3', breite, verfall_hinweis=True)
         pg.goto(B + '/module/hr/'); pg.wait_for_selector('#dlg-verfall[open]')
         t_ = pg.text_content('#verfall-text')
-        check(f'{breite}px: Pop-up „Resturlaub verfällt bald“ mit Tagen und Datum, ohne waagerechtes Scrollen', '3 Tage' in t_ and frist.strftime('%d.%m.%Y') in t_
+        check(f'{breite}px: Pop-up „Resturlaub verfällt bald“ mit Tagen und Datum, ohne waagerechtes Scrollen', t_vf in t_ and frist.strftime('%d.%m.%Y') in t_
               and pg.is_visible('#verfall-planen') and pg.evaluate('document.documentElement.scrollWidth <= window.innerWidth + 1'), t_)
         pg.screenshot(path=os.path.join(SH, f'hr_verfall_hinweis_{breite}.png'))
         if breite == 1280:
