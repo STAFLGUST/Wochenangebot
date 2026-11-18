@@ -501,8 +501,21 @@ function qs_ueberpruefung(array $d, int $monate, string $heute): ?array
     $ab = qs_plus_monate($seit, $monate);
     return ['seit' => $seit, 'faelligAb' => $ab, 'faellig' => $ab <= $heute];
 }
-function qs_dok_aus(array $d, int $monate, string $heute): array
+function qs_dok_aus(array $d, int $monate, string $heute, array $me): array
 {
+    // Dateinamen geschützter Ordner (z. B. „1.5 Mitarbeiter“) nur für Bearbeiter – wie beim Herunterladen (qs_dateien_sichtbar),
+    // auch in den Verlaufstexten („Datei zugeordnet: …“)
+    $weg = [];
+    foreach ((array)($d['versionen'] ?? []) as $i => $v) {
+        $da = qs_dateien_sichtbar((array)($v['dateien'] ?? []), $me);
+        foreach (array_diff(array_column((array)($v['dateien'] ?? []), 'name'), array_column($da, 'name')) as $n) $weg[(string)$n] = 'personenbezogene Datei';
+        if (isset($v['dateien'])) $d['versionen'][$i]['dateien'] = $da;
+    }
+    if ($weg) {
+        $ohne = function (array $e) use ($weg): array { foreach ((array)($e['verlauf'] ?? []) as $k => $l) $e['verlauf'][$k]['was'] = strtr((string)($l['was'] ?? ''), $weg); return $e; };
+        $d = $ohne($d);
+        foreach ($d['versionen'] as $i => $v) $d['versionen'][$i] = $ohne($v);
+    }
     return $d + ['zustand' => qs_dok_status($d), 'ueberpruefung' => qs_ueberpruefung($d, $monate, $heute)];
 }
 /* Neuer Entwurf (Version ohne Nummer) */

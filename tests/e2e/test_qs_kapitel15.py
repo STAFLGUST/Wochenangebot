@@ -204,6 +204,10 @@ fe = hochladen(Be, 'eingang', '', 'Eingang-Akte.pdf', pdf('Eingang-Akte'), {'pfa
 check('Eingangsdatei mit pfad „…/1.5 Mitarbeiter/…“ dem Entwurf zugeordnet und freigegeben', Be.call('qs_datei_zuordnen', {'dateien': [fe], 'dokument': E14, 'version': r['versionen'][0]['id']})[0] == 200
       and schritt(E14, 'einreichen', Be) == 200 and schritt(E14, 'pruefen_freigeben', Q) == 200)
 check('… Einzeldownload: „ansehen“ 403, „bearbeiten“ 200', roh(L, 'qs_datei&id=' + fe)[0] == 403 and roh(Be, 'qs_datei&id=' + fe)[0] == 200)
+dl, db = dok(E14, L), dok(E14, Be)
+check('… Dokumentliste (qs_start, auch Grundlage der Einzelansicht): Name der Datei fehlt für „ansehen“, für „bearbeiten“ dabei',
+      'Eingang-Akte' not in json.dumps(L.call('qs_start')[1], ensure_ascii=False) and [f['name'] for f in dl['versionen'][0]['dateien']] == []
+      and [f['name'] for f in db['versionen'][0]['dateien']] == ['Eingang-Akte.pdf'], (dl['versionen'][0]['dateien'], db['versionen'][0]['dateien']))
 namen = {n: zipn(c, 'qs_ablage_export&kapitel=1.4&alle=1') + zipn(c, 'qs_ablage_export') for n, c in (('lisa', L), ('bernd', Be))}
 check('… Ablage-Export: Datei der Version fehlt für „ansehen“, für „bearbeiten“ dabei', 'Eingang-Akte' not in namen['lisa'] and 'Hand-150' in namen['lisa']
       and 'Eingang-Akte' in namen['bernd'], namen)
