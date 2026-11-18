@@ -39,6 +39,9 @@ function body(): array
     return $data;
 }
 function now(): string { return gmdate('Y-m-d\TH:i:s\Z'); }
+/* Kalendertag in Ortszeit zu einem Zeitstempel aus now() (UTC). Nie substr($t, 0, 10): das ist der UTC-Tag – kurz nach
+   Mitternacht deutscher Zeit also noch der Vortag. Leer oder unlesbar → '' */
+function ortstag(string $t): string { $s = $t === '' ? false : strtotime($t); return $s === false ? '' : date('Y-m-d', $s); }
 /* Monat (UTC, „JJJJ-MM“) relativ zum aktuellen bzw. zu $t – unabhängig von der eingestellten Zeitzone (Monatsdateien des
    Protokolls sind nach UTC benannt; strtotime('first day of …') rechnet dagegen in Ortszeit) */
 function utc_monat(int $versatz = 0, ?int $t = null): string { $t ??= time(); return gmdate('Y-m', gmmktime(0, 0, 0, (int)gmdate('n', $t) + $versatz, 1, (int)gmdate('Y', $t))); }
