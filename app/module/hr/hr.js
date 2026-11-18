@@ -174,7 +174,7 @@
         ${e.notiz || ent ? `<span class="mehr">${esc([e.notiz, ent].filter(Boolean).join(' · '))}</span>` : ''}</li>`;
     }).join('') : `<li class="leer">Kein Urlaub in ${d.jahr}.</li>`;
     artSetzen(S.art);
-    antragTage();
+    antragGeaendert();
     zeigeMiniKalender();
     zeigeKorrekturen();
   }
@@ -270,7 +270,7 @@
     $('#antrag').scrollIntoView({ behavior: 'smooth', block: 'start' });
     const erste = $('#vp-liste .vp-von'); if (erste) erste.focus();
   });
-  $('#antrag-art').addEventListener('click', (e) => { const b = e.target.closest('[data-art]'); if (b) { artSetzen(b.dataset.art); antragTage(); } });
+  $('#antrag-art').addEventListener('click', (e) => { const b = e.target.closest('[data-art]'); if (b) { artSetzen(b.dataset.art); antragGeaendert(); } });
 
   /* ---------- Mein Jahr: Mini-Kalender aller eigenen Abwesenheiten ----------
      Tage wie im Urlaubskonto: U, K, G nur an Arbeitstagen der Person (ohne Feiertage und freie Tage), freie Tage (x)
@@ -353,15 +353,17 @@
       ${k.erledigt ? `<span class="mehr">Personalstelle${k.erledigt.antwort ? ': ' + esc(k.erledigt.antwort) : ' hat die Meldung erledigt.'}</span>` : ''}</li>`).join('');
   }
 
-  /* Arbeitstage des Antrags (Vorschau im Browser; verbindlich rechnet der Server). nServer: Zahl aus der Server-Vorschau
+  /* Antrag geändert (Zeitraum, Art, neue Daten): sofort die Zahl des Browsers, die des Servers folgt über antragPruefen */
+  function antragGeaendert() {
+    meldung($('#antrag-meldung'), '');   // eine Meldung zum vorigen Absenden gilt nach einer Änderung der Daten nicht mehr
+    antragPruefen();                       // Vertretung da? (Server; ohne gültigen Zeitraum ausgeblendet)
+    antragTage();
+  }
+  /* Arbeitstage des Antrags anzeigen (Vorschau im Browser; verbindlich rechnet der Server). nServer: Zahl aus der Server-Vorschau
      (antragPruefen) – kennt Feiertage jedes Jahres und freie Tage, der Browser nur die des angezeigten Jahres */
   function antragTage(nServer) {
     const von = $('#antrag-von').value, bis = $('#antrag-bis').value, d = S.start;
     const out = $('#antrag-tage'), server = typeof nServer === 'number';
-    if (!server) {
-      meldung($('#antrag-meldung'), '');   // eine Meldung zum vorigen Absenden gilt nach einer Änderung der Daten nicht mehr
-      antragPruefen();                       // Vertretung da? (Server; ohne gültigen Zeitraum ausgeblendet)
-    }
     if (!von || !bis || !d || !d.ich) { out.textContent = ''; return; }
     if (bis < von) { out.textContent = 'Das Ende liegt vor dem Beginn.'; return; }
     let n = 0, betrieb = 0;
@@ -380,8 +382,8 @@
     out.textContent = n ? `${tageText(n)} Urlaub${betrieb ? ' (24./31.12. zählt automatisch)' : ''}`
       : betrieb ? '24.12. und 31.12.: Betrieb geschlossen – zählt automatisch, kein Antrag nötig.' : 'Im Zeitraum liegen keine Arbeitstage.';
   }
-  $('#antrag-von').addEventListener('change', () => { if (!$('#antrag-bis').value || $('#antrag-bis').value < $('#antrag-von').value) $('#antrag-bis').value = $('#antrag-von').value; antragTage(); });
-  $('#antrag-bis').addEventListener('change', antragTage);
+  $('#antrag-von').addEventListener('change', () => { if (!$('#antrag-bis').value || $('#antrag-bis').value < $('#antrag-von').value) $('#antrag-bis').value = $('#antrag-von').value; antragGeaendert(); });
+  $('#antrag-bis').addEventListener('change', antragGeaendert);
   $('#antrag-vertretung').addEventListener('change', antragPruefen);
 
   /* Vertretungsprüfung im einzelnen Antrag (Inhaber 10.11.2026): schon vor dem Absenden fragt die Seite den Server, ob die
