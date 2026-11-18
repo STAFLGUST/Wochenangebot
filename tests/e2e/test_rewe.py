@@ -176,7 +176,7 @@ x3 = LE.call('rewe_markt&id=' + m3['id'])[1]['markt']
 check('Kd.-Nr. mit führender Null im Kundenstamm: Markt trotzdem zugeordnet (Name, Anschrift, Telefon)', x3['winab'] is True and x3['name'] == 'REWE Markt GmbH'
       and x3['ort'] == 'Stammstadt' and x3['telefone'] == ['040 333'], {k: x3.get(k) for k in ('winab', 'name', 'ort', 'telefone')})
 assert A.call('kunde_save', {'id': kd3['id'], 'rev': A.call('kunden')[1]['rev'], 'nr': '1799003'})[0] == 200
-st, r = LE.call('rewe_markt_save', {'kdNr': '1799004', 'name': 'REWE Dauerdorf', 'ort': 'Dauerdorf', 'lieferweg': 'direkt', 'zustaendig': ids['mark'],
+st, r = LE.call('rewe_markt_save', {'kdNr': '1799004', 'reweNr': '040004', 'name': 'REWE Dauerdorf', 'ort': 'Dauerdorf', 'lieferweg': 'direkt', 'zustaendig': ids['mark'],
                                     'dauer': {'rhythmus': 2, 'mengen': {'rb': 1, 'fk': 1}, 'ab': ABFRAGE}, 'abfragetag': 'do',
                                     'ansprechpartner': [{'name': 'Frau Dauer', 'rolle': 'Metzgerei', 'telefon': '040 4', 'email': 'dauer@example.org'}]})
 m4 = r.get('markt', {})
@@ -375,6 +375,7 @@ zeilen = [[c.value for c in row] for row in ws.iter_rows(min_row=5, max_row=8)]
 check('Excel: Blätter und Kopfzeile', wb.sheetnames == ['WinAB-Erfassung', 'Je Lieferweg', 'Je Mitarbeiter'] and kopf[:6] == ['Auftrag', 'Lieferweg', 'Liefer-KW', 'Kd.-Nr. (WinAB)', 'REWE-Markt-Nr.', 'Markt'], kopf)
 check('Excel: vier Positionen in zwei Aufträgen, Kd.-Nr. als Zahl, WinAB-Nummer, Menge, ohne Berechnung', [z[0] for z in zeilen] == [1, 1, 2, 2] and zeilen[0][3] == 1799001
       and zeilen[0][9] == '10001' and zeilen[0][11] == 2 and zeilen[0][13] == 'ja' and zeilen[3][10] == 'Filetkopf extra' and zeilen[3][11] == 1, zeilen)
+check('Excel: REWE-Markt-Nr. mit führender Null bleibt Text (040004, nicht 40004)', zeilen[2][4] == '040004' and ws.cell(row=7, column=5).data_type == 's', zeilen[2][4])
 lw_kopf = [c.value for c in wb['Je Lieferweg'][3]][:6]
 check('Excel: Spaltenköpfe „Je Lieferweg“ mit „Filetkopf extra“, Mengen wie gespeichert (kein enthaltener Filetkopf dazugerechnet)',
       lw_kopf == ['Lieferweg', 'Märkte', 'Roastbeef Dry Aged', 'Filetkopf extra', 'Vac. Set', None][:len(lw_kopf)]
