@@ -1,6 +1,7 @@
 """Testgruppe geo: Ländersperre im Modul Sicherheit (Einstellungen → Ländersperre, Dialog) – Länderliste nach Kontinenten,
 Schnellauswahl (Kontinente, EU, EWR, DACH, Nachbarn, NATO, G7, BRICS), Suche, Selbstaussperr-Schutz, Zusammenfassung,
-Statistik (Firewall & Sperren). Dazu die Daten der Schnellauswahl (app/module/sicherheit/laendergruppen.json)."""
+Statistik (Firewall & Sperren). Dazu die Daten der Schnellauswahl (app/module/sicherheit/laendergruppen.json) und das Update der Länder- und
+Ortsdaten bei voller Platte (bisherige Datei bleibt aktiv)."""
 import sys
 from umgebung import shot
 from umgebung import BASE  # Testserver je Gruppe (parallel)
@@ -211,5 +212,43 @@ with sync_playwright() as p:
     m.screenshot(path=SH + '/geo-gruppen-mobil.png')
     check('no JS errors', not errs, errs)
     br.close()
+# ---------- Update der Länder- und Ortsdaten bei voller Platte: Ausnahme, die bisherige Datei bleibt aktiv (ohne Server) ----------
+# Datenträger voll:// mit begrenztem freien Platz – Schreiben darüber hinaus bleibt kurz wie bei voller Platte
+VOLL = subprocess.run(['php', '-r', r'''require $argv[1] . '/app/api/geo.php'; require $argv[1] . '/app/api/ort.php';
+class Voll {
+    static array $d = []; static int $frei = 0; public $context; private string $p; private int $pos = 0;
+    function stream_open(string $p, string $m): bool { $this->p = $p; if (strpbrk($m, 'wxc')) self::$d[$p] = ''; return isset(self::$d[$p]); }
+    function stream_write(string $s): int { $n = min(strlen($s), self::$frei); self::$frei -= $n;
+        self::$d[$this->p] = substr_replace(str_pad(self::$d[$this->p], $this->pos, "\0"), substr($s, 0, $n), $this->pos, $n); $this->pos += $n; return $n; }
+    function stream_read(int $n): string { $r = substr(self::$d[$this->p], $this->pos, $n); $this->pos += strlen($r); return $r; }
+    function stream_eof(): bool { return $this->pos >= strlen(self::$d[$this->p]); }
+    function stream_seek(int $o, int $w): bool { $this->pos = $w === SEEK_SET ? $o : ($w === SEEK_CUR ? $this->pos + $o : strlen(self::$d[$this->p]) + $o); return true; }
+    function stream_tell(): int { return $this->pos; }
+    function stream_stat(): array { return ['size' => strlen(self::$d[$this->p])]; }
+    function stream_flush(): bool { return true; }
+    function url_stat(string $p, int $f) { return isset(self::$d[$p]) ? ['size' => strlen(self::$d[$p]), 'mode' => 0100644] : ($p === 'voll://geo' ? ['mode' => 040755] : false); }
+    function rename(string $a, string $b): bool { self::$d[$b] = self::$d[$a]; unset(self::$d[$a]); return true; }
+    function unlink(string $p): bool { unset(self::$d[$p]); return true; }
+}
+stream_wrapper_register('voll', 'Voll');
+function csv(callable $zeile, int $n) { $f = fopen('php://temp', 'w+b'); for ($i = 0; $i < $n; $i++) fwrite($f, $zeile($i) . "\n"); rewind($f); return $f; }
+$v4 = fn($i) => long2ip(0x01000000 + $i * 4) . ',' . long2ip(0x01000000 + $i * 4 + 1);
+$v6 = fn($i) => sprintf('2a00:%x::', $i * 2) . ',' . sprintf('2a00:%x::ffff', $i * 2);
+$ergebnis = [];
+foreach ([['geo', 'voll://geo/laender.dat.php', fn($o) => geo_build(csv(fn($i) => $v4($i) . ',DE', 10000), csv(fn($i) => $v6($i) . ',DE', 1000), $o, '2026-01-01')],
+          ['ort', 'voll://geo/orte.dat.php', fn($o) => ort_build(csv(fn($i) => ($i < 100000 ? $v4($i) : $v6($i - 100000)) . ',EU,DE,Hamburg,Hamburg,53.55,10.0', 110000), $o, '2026-01-01')]] as [$name, $ziel, $bau]) {
+    Voll::$d = [$ziel => 'alte Daten']; Voll::$frei = 50000;
+    try { $bau($ziel); $ergebnis[$name . ' voll'] = 'keine Ausnahme'; } catch (RuntimeException $e) { $ergebnis[$name . ' voll'] = 'Ausnahme'; }
+    $ergebnis[$name . ' voll alt'] = Voll::$d === [$ziel => 'alte Daten'] ? 'unverändert' : array_map('strlen', Voll::$d);
+    Voll::$frei = PHP_INT_MAX;
+    $r = $bau($ziel);
+    $ergebnis[$name . ' frei'] = count(Voll::$d) === 1 && substr(Voll::$d[$ziel], 0, strlen(GEO_GUARD)) === GEO_GUARD && strlen(Voll::$d[$ziel]) > 100000 ? $r : array_map('strlen', Voll::$d);
+}
+echo json_encode($ergebnis), "\n";
+''', REPO], capture_output=True, text=True)
+voll = json.loads(VOLL.stdout or '{}')
+for n, t in (('geo', 'Länderdaten (geo_build)'), ('ort', 'Ortsdaten (ort_build)')):
+    check(f'{t}: Platte voll → Ausnahme, bisherige Datei unverändert', voll.get(n + ' voll') == 'Ausnahme' and voll.get(n + ' voll alt') == 'unverändert', (voll, VOLL.stderr[-300:]))
+    check(f'{t}: mit Platz wie bisher ersetzt', isinstance(voll.get(n + ' frei'), dict) and voll[n + ' frei'].get('v4'), voll.get(n + ' frei'))
 print(f'{sum(res)}/{len(res)} passed')
 sys.exit(0 if all(res) else 1)
