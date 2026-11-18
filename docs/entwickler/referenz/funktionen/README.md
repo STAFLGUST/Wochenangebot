@@ -6,19 +6,19 @@ Karte für Entwickler und Agenten: Abschnitte und Funktionen jeder Code-Datei (P
 
 | Modul | Kennung | Dateien | Funktionen |
 | --- | --- | --- | --- |
-| [Angebot](angebot.md) | `angebot` | 58 | 926 |
+| [Angebot](angebot.md) | `angebot` | 58 | 928 |
 | [Bestand](bestand.md) | `bestand` | 9 | 72 |
-| [Leergut](leergut.md) | `leergut` | 4 | 130 |
+| [Leergut](leergut.md) | `leergut` | 4 | 131 |
 | [CRM](crm.md) | `crm` | 9 | 177 |
 | [REWE](rewe.md) | `rewe` | 5 | 185 |
-| [Qualitätssicherung](qs.md) | `qs` | 22 | 489 |
+| [Qualitätssicherung](qs.md) | `qs` | 22 | 490 |
 | [Einkauf](einkauf.md) | `einkauf` | 2 | 6 |
-| [HR](hr.md) | `hr` | 11 | 296 |
+| [HR](hr.md) | `hr` | 11 | 297 |
 | [Marketing](marketing.md) | `marketing` | 4 | 77 |
 | [Controlling](controlling.md) | `controlling` | 17 | 258 |
 | [Versand](versand.md) | `versand` | 4 | 31 |
 | [Verwaltung](verwaltung.md) | `verwaltung` | 22 | 235 |
-| [Sicherheit](sicherheit.md) | `sicherheit` | 5 | 108 |
+| [Sicherheit](sicherheit.md) | `sicherheit` | 5 | 109 |
 | [Dashboard](dashboard.md) | `dashboard` | 2 | 45 |
 | [App (iOS/Android)](mobile.md) | `mobile` | 2 | 8 |
-| [Plattformkern](plattform.md) | `plattform` | 123 | 1248 |
+| [Plattformkern](plattform.md) | `plattform` | 123 | 1249 |

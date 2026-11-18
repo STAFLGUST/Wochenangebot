@@ -94,7 +94,7 @@ _REWE · Vordisposition Dry Aged_
 - `rw_name(u)`
 - `rw_team_pruefen(v)` – Team speichern: {Nutzer-ID: {alle, export}} – nur Mitarbeiter im Team (rw_personen)
 
-**Kundenstamm der Verwaltung (nur lesend, customers_load): WinAB-Kd.-Nr. → Kunde**
+**Kundenstamm der Verwaltung (nur lesend, customers_load): WinAB-Kd.-Nr. (code_key, ohne führende Nullen wie CRM und Controlling) → Kunde**
 
 - `rw_kunden()`
 - `rw_anzeige(m)` – Anzeige eines Marktes: Kundenstamm vor eigenen Feldern (nur leere Stammfelder füllt der Markt auf)

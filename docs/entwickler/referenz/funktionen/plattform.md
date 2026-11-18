@@ -2,7 +2,7 @@
 
 <!-- ERZEUGT von `python3 werkzeuge/doku.py erzeugen` – nicht von Hand ändern. Quelle: Funktionen und Kommentare im Code. Die CI prüft, dass diese Datei zum Code passt. -->
 
-123 Dateien, 1248 Funktionen – in der Reihenfolge der Datei, **fett** die Abschnitte. Text = erste Aussage des Kommentars direkt über der Funktion (Python: Docstring). Übersicht aller Module: [README.md](README.md).
+123 Dateien, 1249 Funktionen – in der Reihenfolge der Datei, **fett** die Abschnitte. Text = erste Aussage des Kommentars direkt über der Funktion (Python: Docstring). Übersicht aller Module: [README.md](README.md).
 
 ## `.github/scripts/apt_vorrat.py`
 
@@ -316,6 +316,7 @@ _Antworten, Eingaben, Datenprüfung_
 - `fail(msg, status)`
 - `body()`
 - `now()`
+- `ortstag(t)` – Kalendertag in Ortszeit zu einem Zeitstempel aus now() (UTC).
 - `utc_monat(versatz, t)` – Monat (UTC, „JJJJ-MM“) relativ zum aktuellen bzw. zu $t – unabhängig von der eingestellten Zeitzone (Monatsdateien des Protokolls sind nach UTC benannt; …
 
 **Textsuche**
