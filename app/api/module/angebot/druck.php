@@ -75,7 +75,7 @@ function druck_fuss(): array
     return $c + ['eigen' => $eigen, 'updatedAt' => $g['updatedAt'] ?? null, 'updatedBy' => (string)($g['updatedBy'] ?? '')];
 }
 /* Angemeldet im Sinne der Fußzeile: Mitarbeiter oder Kunde mit eigenem Passwort. Ohne vorgelegte Sitzungskennung
-   (Cookie im Browser, Kopfzeile in der App) wird keine Sitzung begonnen – das öffentliche Wochenangebot bleibt ohne
+   (Cookie) wird keine Sitzung begonnen – das öffentliche Wochenangebot bleibt ohne
    Anmeldung abrufbar.
    Mit Cookie beginnt PHP die Sitzung; dabei schickt es sonst von sich aus „Cache-Control: no-store …“ (Cache-Begrenzer
    „nocache“). Das öffentliche Angebot wäre dann für jeden Besucher mit Sitzungs-Cookie nicht mehr speicherbar und die

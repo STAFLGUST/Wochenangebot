@@ -576,7 +576,7 @@ abhaengigkeiten = []
 testgruppen = ["einheit", "rollen", "rollen_host", "stilllegung", "anmeldeseite", "users", "nutzer_anlegen", "auth_hardening", "security", "passkeys", "geraete", "passwortpruefung",
   "admin_confirmation", "admin_confirmation_ui", "bestaetigung", "geo", "geo_ip", "schutz", "sicherheit_it",
   "sicherheit_freigaben", "sicherheit_druck", "integritaet", "storage", "benachrichtigung", "mail_intern", "postausgang", "datentrennung", "rechte", "testumgebung",
-  "app_api", "sitzung_cookie", "herkunft", "modulverwaltung", "oidc_kern", "oidc_dashboard", "anmeldebremse", "aktionsregister", "module_status", "modul_wartung", "protokoll", "ablage_grenzen"]
+  "sitzung_cookie", "herkunft", "modulverwaltung", "oidc_kern", "oidc_dashboard", "anmeldebremse", "aktionsregister", "module_status", "modul_wartung", "protokoll", "ablage_grenzen"]
 pfade = [
   "regeln/aktionen/plattform.toml",
   "app/.htaccess", "app/data/**", "app/api/index.php", "app/api/postausgang.php", "app/api/config.php", "app/api/storage.php", "app/api/mail.php",
@@ -601,19 +601,6 @@ hinweise = [
   entwicklung = "fertig"
   freigabe = "produktiv"   # Inbetriebnahme Schritt 6 (Freigabe des Inhabers mit dem Merge)
   sperrbar = false
-
-[[modul]]
-id = "mobile"
-name = "App-Schnittstelle (ruht)"
-beschreibung = "Server-Schnittstelle für eine native App; die App selbst gibt es derzeit nicht (entfernt 18.11.2026), es gibt nur die Web-App"
-icon = "smartphone"
-dashboard = false
-agent = "mobile"
-abhaengigkeiten = ["angebot", "plattform"]
-testgruppen = ["app_api"]
-pfade = ["regeln/aktionen/mobile.toml", "docs/app-api.md", "docs/app-grundlagen.md", "tests/e2e/test_app_api.py"]
-pfade_geplant = []
-hinweise = ["Die native App wurde am 18.11.2026 entfernt (letzter Stand in der Git-Historie vor bba3c1c); die Schnittstelle bleibt bestehen, hat aber derzeit keinen Client."]
 
 # ───────────────────────────── Umgebungen (keine Module) ─────────────────────────────
 

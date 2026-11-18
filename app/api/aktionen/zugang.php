@@ -164,15 +164,10 @@ switch ($action) {
                 fail('Benutzername oder Passwort ist nicht korrekt.', 401);
             }
             if (has_second_factor($u)) {
-                // Die App kennt nur den Code aus der Authenticator-App (keine Passkeys)
-                if (app_client() && empty($u['totp'])) {
-                    audit('login_fail', 'Anmeldung in der App nicht möglich – nur Passkey eingerichtet', [], $who);
-                    respond(['ok' => false, 'code' => 'app_totp_required', 'error' => 'Für die Anmeldung in der App ist die Authenticator-App nötig. Bitte im Eingabebereich im Browser unter „Zwei-Faktor-Anmeldung“ einrichten.'], 403);
-                }
                 // zweiter Schritt: Code aus der Authenticator-App oder Passkey (gesperrte Zugänge: siehe oben)
                 session_regenerate_id(true);
                 $_SESSION = ['pend' => ['uid' => $u['id'], 'sv' => (int)$u['sv'], 't' => time(), 'n' => 0, 'lk' => false, 'gh' => (string)$x['gh']]];
-                $methods = array_values(array_filter([!empty($u['totp']) ? 'totp' : null, has_passkeys($u) && !app_client() ? 'passkey' : null]));
+                $methods = array_values(array_filter([!empty($u['totp']) ? 'totp' : null, has_passkeys($u) ? 'passkey' : null]));
                 respond(['ok' => true, 'need2fa' => true, 'methods' => $methods]);
             }
             attempts_record(true, 'mitarbeiter', (string)$u['username']);

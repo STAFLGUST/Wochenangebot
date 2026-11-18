@@ -5,58 +5,35 @@ if (!defined('WA_API')) { http_response_code(404); exit; }   // nur über api/in
 
 /* ---------------- Sitzung ---------------- */
 
-/* App-Zugriff (docs/app-api.md): Die App sendet „X-WA-Client: app“ und trägt die Sitzungskennung in der Kopfzeile
-   „X-WA-Sitzung“ statt in einem Cookie; jede Antwort nennt die aktuelle Kennung (nach der Anmeldung neu vergeben,
-   nach dem Abmelden leer). Es sind dieselben Sitzungen wie im Browser: gleiche Anmeldung, Zwei-Faktor, Sperren,
-   CSRF-Prüfung, Abmeldung nach Inaktivität und Widerruf durch Administratoren – kein zusätzlicher Zugangsschlüssel.
-   Fremde Webseiten können diese Kopfzeilen nicht setzen (keine CORS-Freigabe). */
-function app_client(): bool { return strtolower(trim((string)($_SERVER['HTTP_X_WA_CLIENT'] ?? ''))) === 'app'; }
-$APP_SITZUNG = false;
-function app_session_header(): void
-{
-    global $APP_SITZUNG;
-    if (!$APP_SITZUNG || headers_sent()) return;
-    header('X-WA-Sitzung: ' . (session_status() === PHP_SESSION_ACTIVE ? session_id() : ''));
-    header('Cache-Control: no-store');
-}
-
 /* Name des Sitzungs-Cookies (Mitarbeiter und Kunden). Über HTTPS mit Präfix „__Host-“: der Browser nimmt das Cookie
    nur vom Server selbst an (Secure, Pfad /, ohne Domain) – eine Nachbar-Subdomain wie test.<Domain> kann es weder setzen
    noch überschreiben (GR-108, ADR-003 Befund B-1). Über einfaches HTTP (nur lokale Tests) ohne Präfix, weil Browser
    „__Host-“ dort verwerfen. Das frühere Cookie ohne Präfix wird über HTTPS nicht mehr gelesen, sondern gelöscht. */
 const SITZUNG_COOKIE = 'WA_ADMIN';
 function sitzung_cookie_name(): string { return (is_https() ? '__Host-' : '') . SITZUNG_COOKIE; }
-/* Liegt überhaupt eine Sitzung vor – läuft schon eine oder legt der Aufrufer eine Kennung vor (Browser im Cookie,
-   App in der Kopfzeile, wie start_session() sie liest)? Nur dann nachsehen; sonst legte jede anonyme Anfrage eine
+/* Liegt überhaupt eine Sitzung vor – läuft schon eine oder legt der Browser eine Kennung im Cookie vor (wie
+   start_session() sie liest)? Nur dann nachsehen; sonst legte jede anonyme Anfrage eine
    Sitzungsdatei an und bekäme ein Cookie (Befund 15.11.2026). */
 function sitzung_vorhanden(): bool
 {
     if (session_status() === PHP_SESSION_ACTIVE) return true;
-    if (app_client()) return !empty($_SERVER['HTTP_X_WA_SITZUNG']);   // App: Kennung nur aus der Kopfzeile
     // Das alte Cookie ohne Präfix zählt mit, damit start_session() es weiter im Browser löscht (GR-108)
     return !empty($_COOKIE[sitzung_cookie_name()]) || !empty($_COOKIE[SITZUNG_COOKIE]);
 }
 
 function start_session(): void
 {
-    global $CFG, $APP_SITZUNG;
+    global $CFG;
     if (session_status() === PHP_SESSION_ACTIVE) return;
     $https = is_https();
     ini_set('session.use_strict_mode', '1');
     ini_set('session.use_only_cookies', '1');
-    if (app_client()) {
-        // Kennung nur aus der Kopfzeile; unbekannte Kennungen verwirft PHP (strict mode) und vergibt eine neue
-        ini_set('session.use_cookies', '0');
-        $sid = (string)($_SERVER['HTTP_X_WA_SITZUNG'] ?? '');
-        if (preg_match('/^[A-Za-z0-9,-]{22,256}$/D', $sid)) session_id($sid);
-        $APP_SITZUNG = true;
-    }
     session_name(sitzung_cookie_name());
     session_set_cookie_params(['lifetime' => 0, 'path' => '/', 'secure' => $https, 'httponly' => true, 'samesite' => 'Strict']);
     // Altes Cookie ohne Präfix (vor dem Umstieg gesetzt oder von einer Nachbar-Subdomain untergeschoben) nie übernehmen,
     // sondern im Browser löschen. Ein Cookie einer Nachbar-Subdomain mit Domain-Angabe lässt sich so nicht löschen – es
     // wird aber ohnehin nicht gelesen.
-    if ($https && !$APP_SITZUNG && isset($_COOKIE[SITZUNG_COOKIE]) && !headers_sent()) {
+    if ($https && isset($_COOKIE[SITZUNG_COOKIE]) && !headers_sent()) {
         setcookie(SITZUNG_COOKIE, '', ['expires' => 1, 'path' => '/', 'secure' => true, 'httponly' => true, 'samesite' => 'Strict']);
     }
     $max = (int)sec()['idleMinutes'] * 60;

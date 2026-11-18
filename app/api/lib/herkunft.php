@@ -6,7 +6,7 @@ if (!defined('WA_API')) { http_response_code(404); exit; }   // nur über api/in
    Seite (gleicher Host) kommen. Browser melden die Herkunft in `Sec-Fetch-Site`; `same-site` (z. B. von
    test.angebot-stafl.de) und `cross-site` werden abgewiesen – SameSite-Cookies schützen nur gegen fremde Domains, nicht
    gegen Nachbar-Subdomains. Für Anfragen, die etwas ändern können (alles außer GET/HEAD), muss zusätzlich ein
-   mitgesendeter `Origin` genau der eigene sein. Ohne diese Kopfzeilen (App, ältere Browser, Server-zu-Server) gilt
+   mitgesendeter `Origin` genau der eigene sein. Ohne diese Kopfzeilen (ältere Browser, Server-zu-Server) gilt
    unverändert der bisherige Schutz: CSRF-Token, JSON-Pflicht, SameSite=Strict. Ausnahmen nur über das Registerfeld
    `fremde_herkunft` (Ein-Klick-Abmeldung aus dem E-Mail-Programm). Ergänzt die CSRF-Prüfung, ersetzt sie nicht. */
 
@@ -43,7 +43,7 @@ function herkunft_pruefen(?array $aktion, string $method): void
    dashboard.start mit den Aktionen der Startseite) – beantwortet nur ihr eigener
    Host. Auf einem solchen Host gibt es außer ihnen nur die Grundaktionen der Plattform, die auch während einer Wartung
    erreichbar bleiben (Status, Abmelden, Modulübersicht) – ebenso auf dem Dashboard-Host (host_nur_grundaktionen).
-   Angebot, Verwaltung und Bestand teilen sich weiter den Eingabebereich (Aktionen unter angebot.eingabe). Ohne Angabe des Webservers (angebot-stafl.de, App, Testserver) gilt
+   Angebot, Verwaltung und Bestand teilen sich weiter den Eingabebereich (Aktionen unter angebot.eingabe). Ohne Angabe des Webservers (angebot-stafl.de, Testserver) gilt
    das Bisherige. Ergänzt die Rechteprüfung jeder Aktion (GR-103), ersetzt sie nicht. */
 function host_eigene_seite(string $oberflaeche): bool
 {

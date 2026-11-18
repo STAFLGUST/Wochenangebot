@@ -38,16 +38,23 @@ Kein Store, keine eigene Update-Pipeline – sie aktualisiert sich mit jedem Rel
 
 Entscheidung des Inhabers: **native App vorerst entfernt, es gibt nur die Web-App.** Der Ordner der App, ihre
 Testgruppe und ihr CI-Auftrag sind aus dem Repository genommen. Der letzte Stand der App liegt in der Git-Historie
-vor diesem Commit (Basis `bba3c1c`). Die Server-Schnittstelle (`app_info`, Sitzung in der Kopfzeile,
-[Schnittstelle für die App](app-api.md)) bleibt bestehen und ruht; sie hat derzeit keinen Client.
+vor diesem Commit (Basis `bba3c1c`).
+
+**Server-Zugang am 18.11.2026 geschlossen** (Entscheidung des Inhabers „bitte schließen“): Die Aktion `app_info`, die
+Anmeldung ohne Cookie über die Kopfzeilen `X-WA-Client`/`X-WA-Sitzung` und die Sonderfälle für App-Clients bei Passkey
+und Zwei-Faktor sind entfernt. Sitzungen gelten nur noch über das Cookie; die Kopfzeilen haben keine Wirkung mehr (geprüft
+in den Testgruppen `sitzung_cookie` und `passkeys`). Wer später wieder eine native App will, findet die App in der
+Git-Historie vor `bba3c1c` und die Server-Schnittstelle samt Beschreibung (`docs/app-api.md`) und Tests
+(`tests/e2e/test_app_api.py`) vor dem Commit „App-Zugang über Kopfzeile geschlossen“. Ein neuer Zugang wäre eine eigene
+Sicherheitsentscheidung (siehe „Bewusste Grenzen“ unten).
 
 ## Stand Oktober 2026: native App begonnen (inzwischen entfernt, siehe oben)
 
 Entscheidung des Inhabers damals: **native App für iOS und Android, für Kunden und Mitarbeiter** (Expo/React Native,
 Anleitung im damaligen App-Ordner). Umgesetzt in der ersten Version:
 
-- Anmeldung über die **vorhandenen Sitzungen**; die Kennung steht in der Kopfzeile `X-WA-Sitzung` statt im Cookie
-  ([Schnittstelle für die App](app-api.md)). Damit gelten Sperren, Zwei-Faktor, Inaktivitätsfrist, Sitzungsregister und
+- Anmeldung über die **vorhandenen Sitzungen**; die Kennung stand in der Kopfzeile `X-WA-Sitzung` statt im Cookie
+  (Zugang inzwischen geschlossen, siehe oben). Damit gelten Sperren, Zwei-Faktor, Inaktivitätsfrist, Sitzungsregister und
   Widerruf unverändert; es gibt keine neuen langlebigen Zugangsschlüssel und keine CORS-Freigabe.
 - `app_info` mit Mindestversion (Zwang zum Aktualisieren), Bestellfunktion, Wartung, Links.
 - Kunden: Angebot, Merkliste (abgeglichen), Bestellwunsch mit Fracht und `requestId`, eigene Bestellwünsche,

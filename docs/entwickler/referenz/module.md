@@ -163,17 +163,11 @@ Agent: `dashboard` · hängt ab von `plattform` · Testgruppen: `dashboard`
 | --- | --- | --- | --- | --- |
 | `dashboard.start` Mitarbeiter-Dashboard | intern | https://dashboard-stafl.de/ | fertig | produktiv |
 
-## App-Schnittstelle (ruht) (`mobile`)
-
-Server-Schnittstelle für eine native App; die App selbst gibt es derzeit nicht (entfernt 18.11.2026), es gibt nur die Web-App
-
-Agent: `mobile` · hängt ab von `angebot`, `plattform` · Testgruppen: `app_api`
-
 ## Plattformkern (`plattform`)
 
 Anmeldung, Sitzungen, Rechte, Sicherheit, Speicherschicht, E-Mail, Protokoll, Betrieb, CI und Regelwerk
 
-Agent: `plattform` · Testgruppen: `einheit`, `rollen`, `rollen_host`, `stilllegung`, `anmeldeseite`, `users`, `nutzer_anlegen`, `auth_hardening`, `security`, `passkeys`, `geraete`, `passwortpruefung`, `admin_confirmation`, `admin_confirmation_ui`, `bestaetigung`, `geo`, `geo_ip`, `schutz`, `sicherheit_it`, `sicherheit_freigaben`, `sicherheit_druck`, `integritaet`, `storage`, `benachrichtigung`, `mail_intern`, `postausgang`, `datentrennung`, `rechte`, `testumgebung`, `app_api`, `sitzung_cookie`, `herkunft`, `modulverwaltung`, `oidc_kern`, `oidc_dashboard`, `anmeldebremse`, `aktionsregister`, `module_status`, `modul_wartung`, `protokoll`, `ablage_grenzen`
+Agent: `plattform` · Testgruppen: `einheit`, `rollen`, `rollen_host`, `stilllegung`, `anmeldeseite`, `users`, `nutzer_anlegen`, `auth_hardening`, `security`, `passkeys`, `geraete`, `passwortpruefung`, `admin_confirmation`, `admin_confirmation_ui`, `bestaetigung`, `geo`, `geo_ip`, `schutz`, `sicherheit_it`, `sicherheit_freigaben`, `sicherheit_druck`, `integritaet`, `storage`, `benachrichtigung`, `mail_intern`, `postausgang`, `datentrennung`, `rechte`, `testumgebung`, `sitzung_cookie`, `herkunft`, `modulverwaltung`, `oidc_kern`, `oidc_dashboard`, `anmeldebremse`, `aktionsregister`, `module_status`, `modul_wartung`, `protokoll`, `ablage_grenzen`
 
 | Oberfläche | Art | Adresse | Entwicklung | Freigabe |
 | --- | --- | --- | --- | --- |

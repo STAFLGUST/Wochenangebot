@@ -533,7 +533,7 @@ Leiste senkrecht, schmal ist sie eine waagerechte Spur. Mit `body.bereich-import
   `#dlg-kunde-pw`, `#dlg-kunde-link` (Passwort per E-Mail-Link). Kundenangebote (`?angebot=…`) nur nach Anmeldung –
   ohne Anmeldung antwortet der Server 401 und die Seite öffnet die Anmeldung.
 - **Merkliste:** `localStorage` `wochenangebot.merkliste`; angemeldete Kunden zusätzlich am Konto
-  (`kunde_merkliste`, `kunde_merkliste_save`). Die Schlüssel kommen aus `offer-core.js` und sind mit der App identisch.
+  (`kunde_merkliste`, `kunde_merkliste_save`). Die Schlüssel kommen aus `offer-core.js`.
 - **Bestellwunsch:** Mengen je Kunde und Angebot im Browser, Leiste `#orderbar`, Dialog `#dlg-order`, Senden mit
   `kunde_bestellung` und `requestId` (Wiederholung ohne Doppelbestellung). Angezeigte Summen sind „ca.“ – Preise und
   Summen rechnet nur der Server (GR-004). „Meine Bestellwünsche“: `#dlg-customer-orders`.
