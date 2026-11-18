@@ -6,6 +6,12 @@
 #   cd /opt/wochenangebot && sh deploy/karte-laden.sh           # laden bzw. aktualisieren (dauert je nach Leitung 10–40 Minuten)
 #   cd /opt/wochenangebot && sh deploy/karte-laden.sh entfernen # Detailkarte entfernen (die Seiten zeigen wieder die Übersichtskarte)
 #
+# Zweite Karte „herkunft“ für die Herkunftsbetriebe im Container-Import (EUDR): Südamerika und Neuseeland
+# (deploy/karte/herkunft.geojson) bis Zoomstufe 12 (Straßen, Orte, Gewässer – ohne Gebäude; KARTE_HERKUNFT_ZOOM ändert das).
+# Zuerst immer prüfen: der Probelauf nennt die Größe.
+#   sh deploy/karte-laden.sh pruefen herkunft · sh deploy/karte-laden.sh laden herkunft · sh deploy/karte-laden.sh entfernen herkunft
+# Ziel: daten-karte/herkunft.pmtiles, ausgeliefert als /karte/herkunft.pmtiles auf dem Host des Container-Imports.
+#
 # Quelle: täglicher Gesamtstand von Protomaps (OpenStreetMap, ODbL), Ausschnitt Deutschland mit ca. 20 km Rand
 # (deploy/karte/deutschland.geojson) bis Zoomstufe 15 (Gebäude und alle Straßen). Werkzeug: go-pmtiles (Protomaps,
 # BSD-3) als Container mit fester Version und Prüfsumme. Ziel: daten-karte/karte.pmtiles (nicht in den Sicherungen –
@@ -18,10 +24,17 @@ CURL=${CURL:-curl}
 WERKZEUG=${KARTE_WERKZEUG:-protomaps/go-pmtiles:v1.31.2@sha256:06574f01f55a78f78f887bc7ebf729a5c093c0d6e17d9876300cfcb0758b59d3}
 QUELLE=${KARTE_QUELLE:-https://build.protomaps.com}
 METADATEN=${KARTE_METADATEN:-https://build-metadata.protomaps.dev/builds.json}
-MAXZOOM=15
-MIN_GROESSE_MB=${KARTE_MIN_MB:-500}          # kleiner = abgebrochener Download
-PLATZ_GB=${KARTE_PLATZ_GB:-14}               # neue Datei (ca. 5–6 GB) neben der alten plus Reserve
 MODUS=${1:-laden}
+KARTE=${2:-deutschland}
+# Je Karte: Region, Dateiname, Vermerk des Stands, Zoomstufe, Mindestgröße (kleiner = abgebrochener Download), nötiger Platz
+case "$KARTE" in
+  deutschland) REGION=deutschland.geojson; DATEI=karte; VERMERK=stand.txt; MAXZOOM=15; NAME="Detailkarte"; GEBIET="Deutschland"
+    MIN_GROESSE_MB=${KARTE_MIN_MB:-500}; PLATZ_GB=${KARTE_PLATZ_GB:-14} ;;      # neue Datei (ca. 5–6 GB) neben der alten plus Reserve
+  herkunft) REGION=herkunft.geojson; DATEI=herkunft; VERMERK=herkunft-stand.txt; MAXZOOM=${KARTE_HERKUNFT_ZOOM:-12}; NAME="Herkunftskarte"; GEBIET="Südamerika und Neuseeland"
+    MIN_GROESSE_MB=${KARTE_MIN_MB:-100}; PLATZ_GB=${KARTE_PLATZ_GB:-30} ;;      # Größe vorab unbekannt: der Probelauf nennt sie
+  *) echo "Aufruf: sh deploy/karte-laden.sh [pruefen|laden|entfernen] [deutschland|herkunft]" >&2; exit 2 ;;
+esac
+printf '%s' "$MAXZOOM" | grep -Eq '^(1[0-5]|[5-9])$' || { echo "Abbruch: Zoomstufe $MAXZOOM ungültig (5 bis 15)." >&2; exit 1; }
 abbruch() { echo "Abbruch: $*" >&2; exit 1; }
 # daten-karte ist im Lade-Container beschreibbar: ein dort untergeschobener Verweis darf root nie auf eine andere Datei
 # des Servers umlenken (gleiche Regel wie status_schreiben() in deploy/sichern.sh und ablegen() in deploy/postfach-schluessel.sh).
@@ -31,13 +44,13 @@ vermerken() {
   TMP=$(mktemp "$(pwd)/.stand.XXXXXX") || abbruch "Zwischendatei nicht anlegbar."
   printf '%s\n' "$2" > "$TMP" && chmod 644 "$TMP" && mv -fT "$TMP" "$1" || { rm -f "$TMP"; abbruch "Stand nicht vermerkt."; }
 }
-case "$MODUS" in laden|pruefen|entfernen) ;; *) echo "Aufruf: sh deploy/karte-laden.sh [pruefen|laden|entfernen]" >&2; exit 2 ;; esac
-[ -f .env ] && [ -f docker-compose.yml ] && [ -f deploy/karte/deutschland.geojson ] || abbruch "Bitte im Installationsordner ausführen: cd /opt/wochenangebot"
+case "$MODUS" in laden|pruefen|entfernen) ;; *) echo "Aufruf: sh deploy/karte-laden.sh [pruefen|laden|entfernen] [deutschland|herkunft]" >&2; exit 2 ;; esac
+[ -f .env ] && [ -f docker-compose.yml ] && [ -f "deploy/karte/$REGION" ] || abbruch "Bitte im Installationsordner ausführen: cd /opt/wochenangebot"
 ZIEL=daten-karte
 
 if [ "$MODUS" = entfernen ]; then
-  rm -f "$ZIEL/karte.pmtiles" "$ZIEL/karte.neu.pmtiles" "$ZIEL/stand.txt"
-  echo "entfernt:  Detailkarte (CRM-Karte und Auswertung zeigen wieder die Übersichtskarte)"
+  rm -f "$ZIEL/$DATEI.pmtiles" "$ZIEL/$DATEI.neu.pmtiles" "$ZIEL/$VERMERK"
+  echo "entfernt:  $NAME (die Seiten zeigen wieder die Übersichtskarte)"
   exit 0
 fi
 
@@ -52,37 +65,37 @@ if [ -z "$STAND" ]; then
   STAND=$(printf '%s' "$liste" | python3 -c 'import json,re,sys; k=[b["key"] for b in json.load(sys.stdin) if re.fullmatch(r"\d{8}\.pmtiles", str(b.get("key","")))]; print(sorted(k)[-1] if k else "")')
 fi
 printf '%s' "$STAND" | grep -Eq '^[0-9]{8}\.pmtiles$' || abbruch "Kein gültiger Kartenstand gefunden ('$STAND')."
-BISHER=$(cat "$ZIEL/stand.txt" 2>/dev/null || echo keiner)
+BISHER=$(cat "$ZIEL/$VERMERK" 2>/dev/null || echo keiner)
 
 frei_gb=$(df -Pk "$ZIEL" | awk 'NR == 2 { printf "%d", $4 / 1048576 }')
 echo "Kartenstand: ${STAND%.pmtiles} (bisher: ${BISHER%.pmtiles}) · freier Platz: ${frei_gb} GB"
 
-# Gemeinsame Argumente: Ausschnitt Deutschland, bis Zoomstufe 15
+# Gemeinsame Argumente: Ausschnitt der gewählten Karte bis zu ihrer Zoomstufe
 lauf() {
   $DOCKER run --rm --network bridge -v "$(pwd)/$ZIEL:/daten" -v "$(pwd)/deploy/karte:/region:ro" "$WERKZEUG" \
-    extract "$QUELLE/$STAND" "$@" --region=/region/deutschland.geojson --maxzoom=$MAXZOOM --download-threads=4
+    extract "$QUELLE/$STAND" "$@" --region="/region/$REGION" --maxzoom="$MAXZOOM" --download-threads=4
 }
 
 if [ "$MODUS" = pruefen ]; then
   lauf /daten/probe.pmtiles --dry-run || abbruch "Probelauf fehlgeschlagen."
-  echo "Nur geprüft – nichts geladen. Laden mit: sh deploy/karte-laden.sh"
+  echo "Nur geprüft – nichts geladen. Laden mit: sh deploy/karte-laden.sh laden $KARTE"
   exit 0
 fi
 
-[ "$STAND" != "$BISHER" ] || [ ! -s "$ZIEL/karte.pmtiles" ] || { echo "unverändert: Detailkarte ist schon auf dem Stand ${STAND%.pmtiles}"; exit 0; }
+[ "$STAND" != "$BISHER" ] || [ ! -s "$ZIEL/$DATEI.pmtiles" ] || { echo "unverändert: $NAME ist schon auf dem Stand ${STAND%.pmtiles}"; exit 0; }
 [ "$frei_gb" -ge "$PLATZ_GB" ] || abbruch "Zu wenig freier Platz (${frei_gb} GB, nötig mindestens ${PLATZ_GB} GB) – zuerst: sh deploy/speicher.sh"
-rm -f "$ZIEL/karte.neu.pmtiles"
-echo "lade:      Ausschnitt Deutschland bis Zoomstufe $MAXZOOM – das dauert eine Weile …"
-lauf /daten/karte.neu.pmtiles || { rm -f "$ZIEL/karte.neu.pmtiles"; abbruch "Laden fehlgeschlagen – die bisherige Karte bleibt unverändert."; }
+rm -f "$ZIEL/$DATEI.neu.pmtiles"
+echo "lade:      Ausschnitt $GEBIET bis Zoomstufe $MAXZOOM – das dauert eine Weile …"
+lauf "/daten/$DATEI.neu.pmtiles" || { rm -f "$ZIEL/$DATEI.neu.pmtiles"; abbruch "Laden fehlgeschlagen – die bisherige Karte bleibt unverändert."; }
 
 # Prüfen: echtes Ergebnis des Laufs, Größe plausibel, Kopf „PMTiles“ Version 3, das Werkzeug kann die Datei lesen
-echt "$ZIEL/karte.neu.pmtiles"
-groesse_mb=$(( $(wc -c < "$ZIEL/karte.neu.pmtiles") / 1048576 ))
-[ "$groesse_mb" -ge "$MIN_GROESSE_MB" ] || { rm -f "$ZIEL/karte.neu.pmtiles"; abbruch "Neue Karte nur ${groesse_mb} MB – unvollständig, verworfen."; }
-[ "$(head -c 7 "$ZIEL/karte.neu.pmtiles")" = PMTiles ] || { rm -f "$ZIEL/karte.neu.pmtiles"; abbruch "Neue Karte hat kein PMTiles-Format – verworfen."; }
-$DOCKER run --rm -v "$(pwd)/$ZIEL:/daten:ro" "$WERKZEUG" show /daten/karte.neu.pmtiles >/dev/null 2>&1 \
-  || { rm -f "$ZIEL/karte.neu.pmtiles"; abbruch "Neue Karte nicht lesbar – verworfen."; }
-chmod 644 "$ZIEL/karte.neu.pmtiles"
-mv -fT "$ZIEL/karte.neu.pmtiles" "$ZIEL/karte.pmtiles"   # im selben Ordner: sofortiger Austausch, -T ersetzt auch einen Verweis
-vermerken "$ZIEL/stand.txt" "$STAND"
-echo "geladen:   Detailkarte Stand ${STAND%.pmtiles}, ${groesse_mb} MB – CRM-Karte und Auswertung zeigen ab dem nächsten Öffnen Straßen und Gebäude."
+echt "$ZIEL/$DATEI.neu.pmtiles"
+groesse_mb=$(( $(wc -c < "$ZIEL/$DATEI.neu.pmtiles") / 1048576 ))
+[ "$groesse_mb" -ge "$MIN_GROESSE_MB" ] || { rm -f "$ZIEL/$DATEI.neu.pmtiles"; abbruch "Neue Karte nur ${groesse_mb} MB – unvollständig, verworfen."; }
+[ "$(head -c 7 "$ZIEL/$DATEI.neu.pmtiles")" = PMTiles ] || { rm -f "$ZIEL/$DATEI.neu.pmtiles"; abbruch "Neue Karte hat kein PMTiles-Format – verworfen."; }
+$DOCKER run --rm -v "$(pwd)/$ZIEL:/daten:ro" "$WERKZEUG" show "/daten/$DATEI.neu.pmtiles" >/dev/null 2>&1 \
+  || { rm -f "$ZIEL/$DATEI.neu.pmtiles"; abbruch "Neue Karte nicht lesbar – verworfen."; }
+chmod 644 "$ZIEL/$DATEI.neu.pmtiles"
+mv -fT "$ZIEL/$DATEI.neu.pmtiles" "$ZIEL/$DATEI.pmtiles"   # im selben Ordner: sofortiger Austausch, -T ersetzt auch einen Verweis
+vermerken "$ZIEL/$VERMERK" "$STAND"
+echo "geladen:   $NAME ($GEBIET) Stand ${STAND%.pmtiles}, ${groesse_mb} MB – die Karten zeigen ab dem nächsten Öffnen Straßen und Orte."

@@ -593,6 +593,7 @@ Jede Code-Datei beginnt mit einem Kopfkommentar; dessen erste Aussage steht hier
 | --- | --- | --- |
 | `adressen.py` | plattform | Adressverzeichnis für die CRM-Karte aus OpenStreetMap (ODbL) |
 | `deutschland.geojson` | plattform | – |
+| `herkunft.geojson` | plattform | – |
 
 ## `docs/`
 
