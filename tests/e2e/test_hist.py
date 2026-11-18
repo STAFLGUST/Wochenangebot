@@ -409,6 +409,15 @@ with sync_playwright() as p:
     sw = a.evaluate('document.documentElement.scrollWidth'); check('mobile no h-scroll', sw <= 390, sw)
     fruehere_wochen_pruefen(a, br, errs)
     wochenablage_pruefen(a)
+    # Eine entfernte Woche aus einer Veröffentlichung legt history_list nicht aus versionen/* wieder an; ein Import bringt sie zurück
+    pw = next(w for w in api_get(a, 'history_list')[1]['weeks'] if w['origin'] == 'Veröffentlichung')
+    check('published week deleted', api_post_bestaetigt(a, 'history_delete', {'id': pw['id']})[0] == 200)
+    ids = [w['id'] for w in api_get(a, 'history_list')[1]['weeks']]
+    check('deleted week stays deleted after history_list', pw['id'] not in ids and pw['id'] in (dok('historie_geloescht') or []), ids)
+    r = api_post_bestaetigt(a, 'history_import', {'week': pw['week'], 'year': pw['year'], 'source': 'Wieder.xlsx',
+                                                  'items': [{'code': '10601', 'name': 'Roastbeef', 'price': {'status': 'value', 'value': 20}}]})
+    ids = [w['id'] for w in api_get(a, 'history_list')[1]['weeks']]
+    check('import restores deleted week', r[0] == 200 and pw['id'] in ids and pw['id'] not in (dok('historie_geloescht') or []), (r, ids))
     check('no JS errors', not errs, errs)
     br.close()
 print(f'{sum(res)}/{len(res)} passed')
