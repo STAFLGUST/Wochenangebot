@@ -122,7 +122,10 @@ function umsatz_zeitschluessel(string $nach, string $m, int $tag, int $verschieb
         case 'jahr': return sprintf('%04d', $j);
         case 'kw':
             $t = (int)mktime(12, 0, 0, (int)substr($m, 5, 2), $tag, (int)substr($m, 0, 4));
-            return sprintf('%04d-W%02d', (int)date('o', $t) + $verschieben, (int)date('W', $t));
+            $iso = (int)date('o', $t) + $verschieben; $w = (int)date('W', $t);
+            // KW 53 des Vorjahres in die letzte KW eines Zieljahres ohne KW 53 (28.12. liegt immer in der letzten KW) – sonst fehlte sie in den Zeilen
+            if ($verschieben) $w = min($w, (int)date('W', (int)mktime(12, 0, 0, 12, 28, $iso)));
+            return sprintf('%04d-W%02d', $iso, $w);
     }
     throw new LogicException('Keine zeitliche Gliederung.');
 }
