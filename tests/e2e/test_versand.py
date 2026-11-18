@@ -364,6 +364,33 @@ with sync_playwright() as pw:
     check('Stand: Schritt 2 erledigt', 'erledigt' in s.inner_text('#vs-s2'))
     s.click('[data-sonderposten="grosshandel"]'); s.wait_for_selector('#dlg-send[open] .vs-artikel li')
     check('Fenster „Sonderposten“: Artikel mit Preis in €/kg, 2 Empfänger', '€/kg' in s.inner_text('#dlg-send .vs-artikel') and s.locator('#dlg-send [data-wahl]').count() == 2)
+    # Doppelklick während der Passwortbestätigung: nur ein Versand (BE3). Erste Sendung verlangt die Bestätigung, die Antwort
+    # auf „reauth“ wird zurückgehalten, bis beide Absendungen ausgelöst sind.
+    s.route('**/api/?action=versand_senden*', lambda r: r.fulfill(status=403, content_type='application/json',
+            body=json.dumps({'ok': False, 'code': 'confirmation_required', 'error': 'Bitte bestätigen Sie diese Aktion mit Ihrem aktuellen Passwort.'})), times=1)
+    gehalten, frei = [], [True]
+    s.route('**/api/?action=reauth*', lambda r: r.continue_() if frei[0] else gehalten.append(r))
+    s.click('#send-jetzt'); s.wait_for_selector('#send-pw')
+    s.fill('#send-pw', 'falsches-Passwort-1'); s.click('#send-jetzt'); s.wait_for_selector('#send-meldung:not(.ok):not([hidden])')
+    check('falsches Passwort: Meldung, Knopf wieder frei, nichts gesendet', s.is_enabled('#send-jetzt') and s.locator('#send-pw').count() == 1
+          and s.locator('#dlg-send .vs-erg.ok').count() == 0, s.inner_text('#send-meldung'))
+    frei[0] = False
+    s.fill('#send-pw', USERS['sven'][2])
+    n3 = len(smtp.messages)
+    with s.expect_request(lambda r: 'action=reauth' in r.url):
+        s.evaluate("() => { const f = document.querySelector('#send-inhalt'); f.requestSubmit(); f.requestSubmit(); }")
+    check('während der Passwortprüfung: Knopf gesperrt („Wird gesendet …“)', s.is_disabled('#send-jetzt') and 'Wird gesendet' in s.inner_text('#send-jetzt'), s.inner_text('#send-jetzt'))
+    s.screenshot(path=SH + '/versand-bestaetigen-laeuft.png')
+    s.set_viewport_size({'width': 390, 'height': 844}); s.screenshot(path=SH + '/versand-bestaetigen-laeuft-mobil.png'); s.set_viewport_size({'width': 1280, 'height': 900})
+    frei[0] = True
+    for r in gehalten: r.continue_()
+    s.wait_for_selector('#send-meldung.ok:not([hidden])', timeout=20000); s.wait_for_function("!document.querySelector('#dlg-send').dataset.busy")
+    s.check('#send-alle'); s.click('#send-jetzt'); s.wait_for_function("document.querySelector('#send-meldung').textContent.includes('2 E-Mails gesendet') && !document.querySelector('#dlg-send').dataset.busy")
+    s.unroute('**/api/?action=reauth*')
+    until(lambda: len(smtp.messages) >= n3 + 4, 5)
+    an = sorted(m_['to'][0] for m_ in smtp.messages[n3:])
+    check('Doppelklick bei der Passwortbestätigung: je Kunde genau eine E-Mail, danach regulär erneut gesendet',
+          an == sorted(['dispo@grosshandel-beispiel.example', 'markt@testmarkt-elbe.example'] * 2), an)
     s.keyboard.press('Escape'); s.wait_for_selector('#dlg-send', state='hidden')
     s.context.close()
 
