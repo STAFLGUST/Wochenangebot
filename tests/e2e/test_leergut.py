@@ -176,6 +176,17 @@ st, r = Bb.call('leergut_abstimmung_save', {'partner': p2['id'], 'stichtag': '20
 check('Partner ohne Frist: keine Frist, keine Ampel', st == 200 and r['abstimmung']['fristBis'] == '' and r['abstimmung']['ampel'] == '', r)
 st, r = Bb.call('leergut_abstimmung_save', {**AB, 'stichtag': '2026-03-31', 'eingang': '2099-01-01', 'saldo': {}, 'fristBis': '2099-01-15'})
 check('Frist von Hand, Ampel grün', st == 200 and r['abstimmung']['fristBis'] == '2099-01-15' and r['abstimmung']['ampel'] == 'gruen', r)
+BW2 = {'partner': p2['id'], 'typ': 'bewegung', 'zugang': {}, 'text': ''}
+Bb.call('leergut_bewegung_save', {**BW2, 'datum': '2026-10-20', 'abgang': {'e2': 10}, 'beleg': 'LS-2001'})
+AB2 = {'partner': p2['id'], 'stichtag': '2026-10-31', 'eingang': '2026-11-02', 'saldo': {'e2': 10}}
+a3 = Bb.call('leergut_abstimmung_save', AB2)[1]['abstimmung']
+Bb.call('leergut_bewegung_save', {**BW2, 'datum': '2026-10-28', 'abgang': {'e2': 5}, 'beleg': 'LS-2002'})   # später erfasst, zurückdatiert
+st, r = Bb.call('leergut_abstimmung_save', {**AB2, 'id': a3['id'], 'rev': a3['rev'], 'status': 'widersprochen'})
+a3b = r.get('abstimmung', {})
+check('Schnappschuss bleibt beim Ändern des Status (GR-106): eigen E2 10 wie bei Erfassung, heute 15', st == 200 and a3['eigen'] == {'e2': 10}
+      and a3b['eigen'] == {'e2': 10} and a3b['eigenJetzt'] == {'e2': 15}, (a3, r))
+st, r = Bb.call('leergut_abstimmung_save', {**AB2, 'id': a3['id'], 'rev': a3b['rev'], 'stichtag': '2026-10-30', 'status': 'widersprochen'})
+check('Schnappschuss neu bei geändertem Stichtag (E2 15)', st == 200 and r['abstimmung']['eigen'] == {'e2': 15}, r)
 
 # ── Dachser-Abschreibungen ──
 AS = {'zugestellt': '2026-04-08', 'auftrag': '2026-04-07', 'empfaenger': 'Testmarkt GmbH', 'empfaengerNr': '0001', 'ort': 'Teststadt', 'sendung': '0400000001',

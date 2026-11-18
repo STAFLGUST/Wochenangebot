@@ -149,7 +149,9 @@ switch ($action) {
                 elseif (count($doc['liste']) >= LG_MAX_ABSTIMMUNGEN) fail('Zu viele Abstimmungen.', 422);
                 $a = lg_abstimmung_pruefen($b, $alt, $stamm);
                 $np = lg_nach_partner(lg_doc('leergut-bewegungen')['liste']);
-                $a['eigen'] = lg_saldo_bis($np[$a['partner']] ?? [], $a['stichtag']);   // Schnappschuss unseres Saldos (GR-106)
+                // Schnappschuss unseres Saldos (GR-106): nur beim Erfassen bzw. bei anderem Stichtag oder Partner neu, sonst bleibt der Stand der Erfassung
+                if ($alt === null || !isset($alt['eigen']) || $alt['stichtag'] !== $a['stichtag'] || $alt['partner'] !== $a['partner'])
+                    $a['eigen'] = lg_saldo_bis($np[$a['partner']] ?? [], $a['stichtag']);
                 if ($alt === null) {
                     $a = ['id' => lg_id('a')] + $a + ['erfasst' => lg_wer($me), 'verlauf' => []];
                     lg_verlauf($a, $me, 'erfasst (' . LG_ABST_STATUS[$a['status']] . ')');
