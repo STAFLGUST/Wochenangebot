@@ -63,7 +63,7 @@ const check = (name, ok, info = '') => { n++; console.log((ok ? 'PASS ' : 'FAIL 
   const utf8 = Buffer.from(cb.toString('latin1'), 'utf8');
   const u = StockCore.parseStockWorkbook(await StockCore.readStockWorkbook(utf8.buffer.slice(utf8.byteOffset, utf8.byteOffset + utf8.byteLength), 'b.csv'), 'b.csv');
   check('CSV in UTF-8 gespeichert: gleiche Werte, Umlaute richtig', u.articles.length === 4 && u.articles.find((a) => a.code === '10601').name === 'Testhüfte "Premium", frisch');
-  // ---------- Excel-Datumszellen (WinAB-CSV in Excel als .xlsx gespeichert) ----------
+  // ---------- Excel-Datumszellen (WinAB-CSV in Excel als .xlsx gespeichert) und unmögliche Kalenderdaten ----------
   const kopf = ['Art. Nr.', 'Bezeichnung', 'Status', 'Ankunft', 'Partie', 'MHD', 'Kolli', 'netto'];
   const raster = (zeilen) => StockCore.parseStockWorkbook([{ grid: [kopf, ...zeilen] }], 'x.xlsx');
   const s = raster([[10601, 'Testhüfte', 'eingelagert', 46338, 900002, 46344, 29, 1541], [10823, 'Testbug', 'eingelagert', 46339, 900003, 46350, 4, 41.6],
@@ -74,6 +74,13 @@ const check = (name, ok, info = '') => { n++; console.log((ok ? 'PASS ' : 'FAIL 
   const fuenf = raster([[10601, 'Testhüfte', 'eingelagert', '12.11.2026', 45123, '18.11.2026', 29, 1541], [10823, 'Testbug', 'eingelagert', '13.11.2026', 45200, '24.11.2026', 4, 41.6]]);
   check('fünfstellige Partienummern bleiben Partie (nicht Datum)', fuenf.columns.lot === 4 && fuenf.columns.mhd === 5 && fuenf.columns.arrival === 3
     && fuenf.articles[0].lots[0].lot === '45123', JSON.stringify(fuenf.columns));
+  check('unmögliche Kalenderdaten → kein Datum (wie der Server)', StockCore.toDate('31.04.2026') === null && StockCore.toDate('29.02.2027') === null
+    && StockCore.toDate(31042026) === null && StockCore.toDate('29.02.2028') === '2028-02-29' && StockCore.toDate('30.04.2026') === '2026-04-30');
+  const tipp = raster([[10601, 'Testhüfte', 'eingelagert', '12.11.2026', 900002, '31.04.2026', 29, 1541],
+    ...[3, 4, 5, 6].map((i) => [10820 + i, 'Testbug', 'eingelagert', '13.11.2026', 900010 + i, '24.11.2026', 4, 41.6]),
+    [10823, 'Testbug', 'erfasst', '31.04.2026', 900004, '', 5, 120]]);
+  check('Tippfehler im MHD: Partie ohne MHD mit Hinweis, Zugang ohne Ankunft', tipp.articles[0].lots[0].mhd === null && tipp.stats.noMhd === 1 && tipp.incoming[0].arrival === null,
+    JSON.stringify([tipp.articles[0].lots[0], tipp.stats, tipp.incoming[0]]));
   let fehler = '';
   try { await StockCore.readStockWorkbook(new TextEncoder().encode('kein Bestand\nnur Text ohne Trennzeichen').buffer, 'x.txt'); } catch (e) { fehler = e.message; }
   check('weder CSV noch Excel: verständlicher Fehler', /weder eine CSV-Datei noch eine Excel-Datei/.test(fehler), fehler);

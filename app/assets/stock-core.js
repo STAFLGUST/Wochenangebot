@@ -267,13 +267,14 @@
     marke: ['marke'],
   };
   const pad = (n) => String(n).padStart(2, '0');
+  // Nur echte Kalendertage (kein 31.04.) – wie clean_date auf dem Server
+  const ymd = (y, m, d) => { const t = new Date(Date.UTC(y, m - 1, d)); return t.getUTCMonth() === m - 1 && t.getUTCDate() === d ? `${y}-${pad(m)}-${pad(d)}` : null; };
   function toDate(v, allowSerial) {
     if (v == null || v === '') return null;
     if (typeof v === 'number') {
       if (Number.isInteger(v) && v >= 1010000 && v <= 31129999) {        // TTMMJJJJ als Zahl
         const d = Math.floor(v / 1e6), m = Math.floor(v / 1e4) % 100, y = v % 1e4;
-        if (y >= 2000 && y <= 2100 && m >= 1 && m <= 12 && d >= 1 && d <= 31) return `${y}-${pad(m)}-${pad(d)}`;
-        return null;
+        return y >= 2000 && y <= 2100 ? ymd(y, m, d) : null;
       }
       if (allowSerial && v >= 36526 && v <= 73051) {                     // Excel-Seriendatum
         const dt = new Date(Math.round((v - 25569) * 864e5));
@@ -284,8 +285,7 @@
     const m = String(v).trim().match(/^(\d{1,2})\.(\d{1,2})\.(\d{2}|\d{4})$/);
     if (!m) return null;
     const y = m[3].length === 2 ? 2000 + +m[3] : +m[3];
-    if (+m[2] < 1 || +m[2] > 12 || +m[1] < 1 || +m[1] > 31) return null;
-    return `${y}-${pad(m[2])}-${pad(m[1])}`;
+    return ymd(y, +m[2], +m[1]);
   }
   function toNum(v) {
     if (typeof v === 'number') return Number.isFinite(v) ? v : null;
