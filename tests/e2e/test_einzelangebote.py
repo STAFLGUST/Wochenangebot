@@ -683,6 +683,8 @@ with sync_playwright() as p:
     check('Warenwert im Browser gleich der Serverantwort (101,00 €)', '101,00 €' in summe_browser and srv == {'kg': 100, 'summe': 101.0}, (summe_browser, srv))
     a.unroute('**/api/?action=einzel_artikel*'); a.wait_for_selector('#ez-del')
     a.click('#ez-del'); a.click('#dlg-confirm .btn.primary'); a.wait_for_selector('#view-einzel tr[data-ez]')   # wieder entfernen: die folgenden Prüfungen öffnen das neueste Angebot
+    a.click('#vt-edit'); a.wait_for_selector('#view-edit:not([hidden])'); a.click('#vt-einzel'); a.wait_for_selector('#view-einzel tr[data-ez]')   # echte Wochenpreise neu laden
+    a.wait_for_function("!document.querySelector('#toast').classList.contains('show')")
 
     a.set_viewport_size({'width': 390, 'height': 820}); a.emulate_media(color_scheme='dark')   # mobil im dunklen Modus
     a.locator('#view-einzel tr[data-ez]').first.click(); a.wait_for_selector('#ez-pos')
