@@ -240,7 +240,10 @@ for cid in ('dashboard', 'angebot', 'verwaltung', 'bestand', 'hr', 'crm', 'marke
           c.get('publicClient') is False and c.get('directAccessGrantsEnabled') is False and c.get('implicitFlowEnabled') is False
           and c.get('serviceAccountsEnabled') is False and c.get('attributes', {}).get('pkce.code.challenge.method') == 'S256'
           and all('*' not in u for u in c.get('redirectUris', ['*'])) and c.get('webOrigins') == [], c.get('redirectUris'))
-    check(f'Client {cid}: Back-Channel-Logout eingerichtet', c.get('attributes', {}).get('backchannel.logout.url', '').startswith(f'https://{cid}.stafl.test'))
+    # Host = Name des Clients – außer beim Container-Import (Adresse mit Bindestrich, Client ohne: der Name steht in OIDC_SECRET_…)
+    _host = {'containerimport': 'container-import'}.get(cid, cid)
+    check(f'Client {cid}: Back-Channel-Logout eingerichtet (eigener Host)', c.get('attributes', {}).get('backchannel.logout.url', '') == f'https://{_host}.stafl.test:{PORT}/oidc/callback?logout=backchannel',
+          c.get('attributes', {}).get('backchannel.logout.url'))
     check(f'Client {cid}: Standard nur Passwort (zweiter Faktor je Konto), Anmeldemethoden im Claim amr',
           c.get('attributes', {}).get('minimum.acr.value') == 'pwd' and any(m.get('protocolMapper') == 'oidc-amr-mapper' for m in c.get('protocolMappers', [])),
           (c.get('attributes', {}).get('minimum.acr.value'), [m.get('protocolMapper') for m in c.get('protocolMappers', [])]))
