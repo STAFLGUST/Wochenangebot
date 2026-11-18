@@ -85,6 +85,22 @@ AUS=$(sh "$REPO/deploy/karte-laden.sh" 2>&1) && CODE=0 || CODE=$?
 ok "ohne Docker: klarer Abbruch" '[ $CODE = 1 ] && echo "$AUS" | grep -q "Docker ist nicht erreichbar"'
 rm -f "$T/ohne-docker"
 
+# Zweite Karte „herkunft“ (Südamerika und Neuseeland, Container-Import): eigene Region, Datei und Stand, die Detailkarte bleibt
+cp "$REPO/deploy/karte/herkunft.geojson" deploy/karte/
+: > "$T/aufrufe"
+AUS=$(sh "$REPO/deploy/karte-laden.sh" pruefen herkunft) && CODE=0 || CODE=$?
+ok "herkunft prüfen: Region Südamerika und Neuseeland, Zoomstufe 12, nichts geschrieben" '[ $CODE = 0 ] && grep -q -- "--region=/region/herkunft.geojson --maxzoom=12" "$T/aufrufe" && [ ! -e daten-karte/herkunft.pmtiles ] && echo "$AUS" | grep -q "laden herkunft"'
+alt=$(md5sum daten-karte/karte.pmtiles)
+AUS=$(sh "$REPO/deploy/karte-laden.sh" laden herkunft) && CODE=0 || CODE=$?
+ok "herkunft laden: eigene Datei und eigener Stand, Detailkarte unberührt" '[ $CODE = 0 ] && [ "$(head -c 7 daten-karte/herkunft.pmtiles)" = PMTiles ] && [ "$(cat daten-karte/herkunft-stand.txt)" = 20261026.pmtiles ] && [ "$(md5sum daten-karte/karte.pmtiles)" = "$alt" ] && [ "$(stat -c %a daten-karte/herkunft.pmtiles)" = 644 ] && [ ! -e daten-karte/herkunft.neu.pmtiles ]'
+: > "$T/aufrufe"
+AUS=$(KARTE_HERKUNFT_ZOOM=10 KARTE_STAND=20261027.pmtiles sh "$REPO/deploy/karte-laden.sh" pruefen herkunft) && CODE=0 || CODE=$?
+ok "herkunft: Zoomstufe einstellbar, unsinnige abgelehnt" '[ $CODE = 0 ] && grep -q -- "--maxzoom=10" "$T/aufrufe" && ! KARTE_HERKUNFT_ZOOM="12 --x" sh "$REPO/deploy/karte-laden.sh" pruefen herkunft >/dev/null 2>&1'
+AUS=$(sh "$REPO/deploy/karte-laden.sh" entfernen herkunft) && CODE=0 || CODE=$?
+ok "herkunft entfernen: nur die Herkunftskarte" '[ $CODE = 0 ] && [ ! -e daten-karte/herkunft.pmtiles ] && [ ! -e daten-karte/herkunft-stand.txt ] && [ -e daten-karte/karte.pmtiles ]'
+AUS=$(sh "$REPO/deploy/karte-laden.sh" laden mond 2>&1) && CODE=0 || CODE=$?
+ok "unbekannte Karte abgelehnt" '[ $CODE = 2 ]'
+
 AUS=$(sh "$REPO/deploy/karte-laden.sh" entfernen) && CODE=0 || CODE=$?
 ok "entfernen: Datei und Stand weg" '[ $CODE = 0 ] && [ ! -e daten-karte/karte.pmtiles ] && [ ! -e daten-karte/stand.txt ]'
 AUS=$(cd "$T" && sh "$REPO/deploy/karte-laden.sh" 2>&1) && CODE=0 || CODE=$?
