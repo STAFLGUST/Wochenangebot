@@ -177,7 +177,7 @@ Lesende Aktionen setzen bei Bedarf `header('Cache-Control: no-store')`; `require
 
 | Funktion | Zweck |
 | --- | --- |
-| `respond(array $data, int $status = 200)` | `store_commit()`, App-Sitzungskopfzeile (`app_session_header`), Statuscode, JSON (`JSON_UNESCAPED_UNICODE`), `exit` |
+| `respond(array $data, int $status = 200)` | `store_commit()`, Statuscode, JSON (`JSON_UNESCAPED_UNICODE`), `exit` |
 | `fail(string $msg, int $status = 400)` | `respond(['ok' => false, 'error' => $msg], $status)` |
 | `body()` | `php://input` lesen, über 6 MB → 413, kein JSON-Objekt → 400 „Ungültige Anfrage.“ |
 | `s($v, int $max, bool $allowEmpty = true)` | Text, Zahl → bereinigter Text (Leerraum zusammengefasst, getrimmt, auf `$max` Zeichen gekürzt); anderes → `null`; leer und `$allowEmpty = false` → `null` |
@@ -434,7 +434,7 @@ die schwächste Stufe. Übernommene Änderungen stehen feldweise im Protokoll (`
 Bezeichnungen wie bei `security_save`/`fw_save`), und der Importdialog zeigt vorher dieselbe Tabelle „jetzt/danach“ wie
 der Vorlagendialog. Adress- und Länderlisten überträgt eine Datei nie.
 
-## 3.9 Bestell-API und App-API
+## 3.9 Bestell-API
 
 - **Bestell-API v1** (`orders.php`, `order_outbox.php`): Aktionen `bestellungen`, `bestellung`, `bestellung_save`,
   `bestellung_mail_retry` (Mitarbeiter, Rechte `bestellungen.sehen`/`.bearbeiten`) und `kunde_bestellungen`,
@@ -442,9 +442,8 @@ der Vorlagendialog. Adress- und Länderlisten überträgt eine Datei nie.
   `respond()`/`fail()`. Den Bestellwunsch selbst (`kunde_bestellung`) nimmt `aktionen/kundenportal.php` an. Preise und
   Summen berechnet nur der Server aus dem veröffentlichten Angebot des Kunden (GR-004). Format:
   [bestell-api-v1.md](../bestell-api-v1.md).
-- **App-API** (ruht, derzeit kein Client; die native App ist entfernt): Eine App nutzt dieselben Aktionen. Statt Cookie sendet sie `X-WA-Client: app` und die Sitzungskennung
-  in `X-WA-Sitzung`; `respond()` gibt die aktuelle Kennung zurück (`app_session_header`). `app_info` liefert
-  Mindestversion, Bestellfunktion, Wartung. Details: [app-api.md](../app-api.md).
+- Die frühere **App-API** (Sitzung über `X-WA-Client`/`X-WA-Sitzung`, Aktion `app_info`) ist seit 18.11.2026 geschlossen;
+  Sitzungen gelten nur über das Cookie. Geschichte: [app-grundlagen.md](../app-grundlagen.md).
 
 ## 3.10 Konfiguration
 
@@ -485,7 +484,7 @@ Vom Apache-Modul mod_auth_openidc gesetzt (nur auf Keycloak-Hosts, nie aus Kopfz
 `OIDC_CLAIM_acr`, `OIDC_CLAIM_amr`.
 
 Gelesene Kopfzeilen (vom Browser bzw. Proxy, also nicht vertrauenswürdig ohne Prüfung): `Host`, `Origin`,
-`Sec-Fetch-Site`, `X-CSRF-Token`, `X-WA-Client`, `X-WA-Sitzung`, `X-Forwarded-For` (nur von vertrauten Proxys),
+`Sec-Fetch-Site`, `X-CSRF-Token`, `X-Forwarded-For` (nur von vertrauten Proxys),
 `X-Forwarded-Proto` (in `is_https()`), `If-None-Match`, `User-Agent`.
 
 Geheimnisse gehören in `.env` auf dem Server, nie ins Repository (GR-007). Betrieb und Compose-Dateien:

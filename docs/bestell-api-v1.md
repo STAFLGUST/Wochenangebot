@@ -43,4 +43,4 @@ für Mitarbeiter sichtbar. Nach Verlust einer Antwort hilft außerdem die eigene
 `delivery: eingegangen` – gespeichert, die E-Mails verschickt in Kürze der Dienst `postausgang`; ein Postfachausfall führt
 nicht zu 502. Ist die Kopie an den Kunden eingeschaltet, nennt `copyPlanned` die Adresse (`copy` bleibt `null`, bis sie
 verschickt ist). Clients, die `eingegangen` nicht kennen, behandeln es wie eine erfolgreiche Übermittlung – das ist richtig.
-`bestellfunktion` in `kunde_status`/`app_info` ist dort nur `true`, wenn sich der Dienst in den letzten 15 Minuten gemeldet hat.
+`bestellfunktion` in `kunde_status` ist dort nur `true`, wenn sich der Dienst in den letzten 15 Minuten gemeldet hat.

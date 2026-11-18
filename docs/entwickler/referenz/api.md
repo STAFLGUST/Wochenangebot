@@ -6,7 +6,7 @@ Aufruf: `/api/?action=<aktion>` (GET lesend, POST mit JSON und `X-CSRF-Token` sc
 
 Spalten: **Art** – lesend, schreibend (nur POST) oder post (GET liest, POST schreibt); **Kennzeichen** – öffentlich (ohne Mitarbeiteranmeldung), Kunden-Wartung, wartungsfrei, fremde Herkunft, eigene Anmeldung (siehe [regeln/aktionen/LIESMICH.md](../../../regeln/aktionen/LIESMICH.md)).
 
-316 Aktionen in 16 Modulen.
+315 Aktionen in 15 Modulen.
 
 ## Angebot (`angebot`)
 
@@ -327,12 +327,6 @@ Spalten: **Art** – lesend, schreibend (nur POST) oder post (GET liest, POST sc
 | --- | --- | --- | --- | --- | --- |
 | `start_favoriten_save` | `dashboard.start` | schreibend | – | siehe Datei | `app/api/aktionen/module.php` |
 | `start_heute` | `dashboard.start` | lesend | – | siehe Datei | `app/api/aktionen/module.php` |
-
-## App-Schnittstelle (ruht) (`mobile`)
-
-| Aktion | Oberfläche | Art | Kennzeichen | Prüfung im Code | Datei |
-| --- | --- | --- | --- | --- | --- |
-| `app_info` | `angebot.kunden` | lesend | öffentlich | – | `app/api/aktionen/app.php` |
 
 ## Plattformkern (`plattform`)
 
