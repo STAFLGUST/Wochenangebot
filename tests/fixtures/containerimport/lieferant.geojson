@@ -1,0 +1,7 @@
+{"type":"FeatureCollection","features":[
+{"type":"Feature","properties":{"ProducerName":"Ganadera Ejemplo S.A.","ProducerCountry":"PY","ProductionPlace":"Estancia Ejemplo Norte","Area":150.12},"geometry":{"type":"Polygon","coordinates":[[[-57.0100001,-23.5000001],[-57.0100001,-23.5100004],[-56.9953004,-23.5100004],[-56.9953004,-23.5000001],[-57.0100001,-23.5000001]]]}},
+{"type":"Feature","properties":{"ProducerName":"Ganadera Ejemplo S.A.","ProducerCountry":"PY","ProductionPlace":"Estancia Ejemplo Acht"},"geometry":{"type":"Polygon","coordinates":[[[-57.1,-23.6],[-57.08,-23.62],[-57.08,-23.6],[-57.1,-23.62],[-57.1,-23.6]]]}},
+{"type":"Feature","properties":{"producername":"Ganadera Ejemplo S.A.","productionplace":"Corral Ejemplo","Area":"3"},"geometry":{"type":"Point","coordinates":[-57.2,-23.7]}},
+{"type":"Feature","properties":{"ProductionPlace":"Estancia Vertauscht","ProducerCountry":"PY"},"geometry":{"type":"Polygon","coordinates":[[[-23.5,-57.0],[-23.51,-57.0],[-23.51,-56.99],[-23.5,-57.0]]]}},
+{"type":"Feature","properties":{"ProductionPlace":"Weg Ejemplo"},"geometry":{"type":"LineString","coordinates":[[-57.0,-23.5],[-57.1,-23.6]]}}
+]}

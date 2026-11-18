@@ -72,6 +72,7 @@ SUITES['benachrichtigung'] = SUITES['bestellung']
 SUITES['einkauf'] = SUITES['bestellung']
 SUITES['sicherheit_it'] = SUITES['bestellung']
 SUITES['versand'] = SUITES['kunden_mail']
+SUITES['containerimport'] = (8790, 'data-seed', True)
 SUITES['angebotsliste'] = (8790, 'data-seed', True)
 SUITES['rechte'] = SUITES['kunden_mail']
 SUITES['web_app'] = (8790, 'data-seed', True)
@@ -165,7 +166,7 @@ GEWICHT = {
     'passkeys': 28, 'kunden': 28, 'revert': 26, 'hist': 25, 'master': 25, 'sidenav': 24, 'gemeinsam': 22,
     'geo': 21, 'einzelangebote': 20, 'stock': 18, 'editor_aux': 18, 'bestellung': 18, 'frontend': 18,
     'vkgruppen': 16, 'restposten': 15, 'kunden_mail': 15, 'p0': 15, 'schutz': 15, 'rechte': 14,
-    'fehlerpruefung': 14, 'kundengruppen': 13, 'importzentrale': 13, 'versand': 12, 'kundenimport': 12,
+    'fehlerpruefung': 14, 'kundengruppen': 13, 'importzentrale': 13, 'versand': 12, 'containerimport': 10, 'kundenimport': 12,
     'sicherheit_druck': 11, 'angebotsliste': 11, 'stock_overview': 11, 'sicherheit_it': 10, 'auswertung': 9,
     'benachrichtigung': 9, 'vertreter': 9, 'admin_confirmation': 8, 'einkauf': 8, 'wartung': 7,
     'order_management_ui': 7, 'nutzer_anlegen': 7, 'mhd_mail': 6, 'mail_intern': 5, 'postausgang': 9, 'datentrennung': 6, 'auth_hardening': 7, 'web_app': 7, 'dashboard': 6,
@@ -307,8 +308,10 @@ ZUSATZ = {'dashboard': [('dashboard', 'dashboard')], 'einheit': [('dashboard', '
 
 # Testzustand des Modulregisters für einzelne Gruppen: um Testfreigabe und Produktivfreigabe der Modulverwaltung zu
 # prüfen, braucht die Gruppe ein Modul „in Prüfung“ ohne Freigabe und ein fertiges, nicht freigegebenes Modul. Dafür stellt sie
-# in ihrer App-Kopie REWE zurück auf „in Prüfung“ (produktiv seit 30.10.2026) und Einkauf auf „fertig“. Nur die Kopie im Testordner.
-REGISTER_TEST = {'modulverwaltung': [("'rewe' => [", 'in_pruefung', 'keine'), ("'einkauf' => [", 'fertig')]}
+# in ihrer App-Kopie REWE zurück auf „in Prüfung“ (produktiv seit 30.10.2026) und Einkauf auf „fertig“. Als nur geplantes Modul
+# (keine Testfreigabe möglich) dient ihr der Container-Import – seit 18.11.2026 in Prüfung, deshalb hier zurück auf „geplant“.
+# Nur die Kopie im Testordner.
+REGISTER_TEST = {'modulverwaltung': [("'rewe' => [", 'in_pruefung', 'keine'), ("'einkauf' => [", 'fertig'), ("'containerimport' => [", 'geplant', 'keine')]}
 
 
 # Liste der unveröffentlichten Änderungen mit „Rückgängig“ im Eingabebereich: seit 13.11.2026 ausgeschaltet (Veröffentlichen liegt im

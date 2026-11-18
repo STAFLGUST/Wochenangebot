@@ -2,7 +2,7 @@
 
 <!-- ERZEUGT von `python3 werkzeuge/doku.py erzeugen` – nicht von Hand ändern. Quelle: Funktionen und Kommentare im Code. Die CI prüft, dass diese Datei zum Code passt. -->
 
-22 Dateien, 491 Funktionen – in der Reihenfolge der Datei, **fett** die Abschnitte. Text = erste Aussage des Kommentars direkt über der Funktion (Python: Docstring). Übersicht aller Module: [README.md](README.md).
+22 Dateien, 492 Funktionen – in der Reihenfolge der Datei, **fett** die Abschnitte. Text = erste Aussage des Kommentars direkt über der Funktion (Python: Docstring). Übersicht aller Module: [README.md](README.md).
 
 ## `app/api/aktionen/qs.php`
 
@@ -50,6 +50,7 @@ _QM-System · Dokumentenablage_
 - `qs_datei_eintragen(d, vi, me, f, erzeugt)` – Datei $f in die Version $vi eintragen.
 - `qs_ablage_vermerk(d, vi, me, namen, wie)` – Ein Verlaufseintrag je Vorgang: im Entwurf an der Version, an freigegebenen Versionen auch am Dokument (nachgetragen)
 - `qs_ablage_eintragen(neu, me, wie, erzeugt)` – Hochgeladene Dateien eintragen (Kern für Upload und Ordner-Import, ohne fail()).
+- `qs_eingang_hochladen(me, b, pfad)` – Schnittstelle für andere Module (GR-101, Schnittstellen statt Durchgriff): eine Datei in Teilen annehmen (lib/dateiablage.php, $b wie bei qs_datei_hochladen: …
 - `qs_datei_gleich(d, vi, sha)` – Liegt in dieser Version schon eine aktive Datei mit diesem Inhalt (SHA-256, auch Rohfassung)?
 
 **Eingang**

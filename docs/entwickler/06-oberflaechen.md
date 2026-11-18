@@ -829,6 +829,15 @@ Caddy setzt auf allen Hosts `script-src 'self'` (ohne `'unsafe-inline'`), `conne
 - **Keine Inline-Skripte**, keine `onclick="…"`-Attribute, kein `javascript:`-Link. Ereignisse mit `addEventListener`,
   bevorzugt als Delegation über `data-*` (`data-act`, `data-close`, `data-v`).
 - Keine Skripte, Schriften oder Daten von fremden Servern; Bibliotheken liegen unter `app/assets/vendor/`.
+- **Zweite Kartendatei „herkunft“** (Südamerika und Neuseeland, `/karte/herkunft.pmtiles`; Laden und Auslieferung: Kapitel Betrieb):
+  `STAFLKarte.verfuegbar('herkunft')` und `erstellen(el, { karte: 'herkunft', … })`; Punkte können eine eigene Farbe tragen
+  (`farbe: '#rrggbb'`). Genutzt vom Container-Import (`app/module/containerimport/eudr-karte.js`), der ohne die Datei selbst
+  als SVG zeichnet. Den Alias der Datei bekommt der Host des Container-Imports mit seiner Freigabe.
+- **PDF im Browser lesen:** pdf.js (Mozilla, Apache-2.0, Fassung für ältere Browser) unter `vendor/pdfjs/` – als ES-Modul
+  mit Endung `.js`, erst bei Bedarf geladen (`import()`), Worker vom eigenen Host (`GlobalWorkerOptions.workerSrc`),
+  `isEvalSupported: false` (passt zu `script-src 'self'`). Bisher nur im Container-Import: Entwaldungsberichte der
+  Lieferanten werden im Browser gelesen (`app/module/containerimport/eudr-bericht.js`); das Original geht beim Übernehmen über
+  `containerimport_eudr_original` in den Eingang des QM-Systems (Schnittstelle `qs_eingang_hochladen`, Ordner „EUDR/<Lieferant>“).
 - **Karten:** `app/assets/detailkarte.js` (`window.STAFLKarte`) – `verfuegbar()` prüft WebGL und `/karte/karte.pmtiles`
   (Range-Anfrage, 206 mit Kopf „PMTiles“), `erstellen(element, { punkte, farbe, beiKlick, beiBewegung, beiLeerklick })` lädt
   MapLibre als ES-Modul (`vendor/maplibre/maplibre-gl.js`, Worker per `setWorkerUrl` vom eigenen Host – passt zu

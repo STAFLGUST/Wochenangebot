@@ -6,7 +6,7 @@ Aufruf: `/api/?action=<aktion>` (GET lesend, POST mit JSON und `X-CSRF-Token` sc
 
 Spalten: **Art** – lesend, schreibend (nur POST) oder post (GET liest, POST schreibt); **Kennzeichen** – öffentlich (ohne Mitarbeiteranmeldung), Kunden-Wartung, wartungsfrei, fremde Herkunft, eigene Anmeldung (siehe [regeln/aktionen/LIESMICH.md](../../../regeln/aktionen/LIESMICH.md)).
 
-315 Aktionen in 15 Modulen.
+323 Aktionen in 16 Modulen.
 
 ## Angebot (`angebot`)
 
@@ -195,6 +195,19 @@ Spalten: **Art** – lesend, schreibend (nur POST) oder post (GET liest, POST sc
 | --- | --- | --- | --- | --- | --- |
 | `einkauf` | `angebot.eingabe` | lesend | – | Recht einkauf.sehen | `app/api/aktionen/einkauf.php` |
 | `einkauf_melden` | `angebot.eingabe` | schreibend | – | Recht einkauf.melden | `app/api/aktionen/einkauf.php` |
+
+## Container-Import (`containerimport`)
+
+| Aktion | Oberfläche | Art | Kennzeichen | Prüfung im Code | Datei |
+| --- | --- | --- | --- | --- | --- |
+| `containerimport_eudr_betriebe_save` | `containerimport.intern` | schreibend | – | – | `app/api/aktionen/containerimport.php` |
+| `containerimport_eudr_export` | `containerimport.intern` | lesend | – | – | `app/api/aktionen/containerimport.php` |
+| `containerimport_eudr_gegenpruefung` | `containerimport.intern` | schreibend | – | – | `app/api/aktionen/containerimport.php` |
+| `containerimport_eudr_original` | `containerimport.intern` | schreibend | – | – | `app/api/aktionen/containerimport.php` |
+| `containerimport_eudr_pruefen` | `containerimport.intern` | schreibend | – | – | `app/api/aktionen/containerimport.php` |
+| `containerimport_eudr_sendung_abschluss` | `containerimport.intern` | schreibend | – | – | `app/api/aktionen/containerimport.php` |
+| `containerimport_eudr_sendung_save` | `containerimport.intern` | schreibend | – | – | `app/api/aktionen/containerimport.php` |
+| `containerimport_start` | `containerimport.intern` | lesend | – | – | `app/api/aktionen/containerimport.php` |
 
 ## HR (`hr`)
 

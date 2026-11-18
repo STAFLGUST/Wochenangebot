@@ -78,13 +78,13 @@ Agent: `einkauf` · hängt ab von `plattform`, `verwaltung`, `bestand` · Testgr
 
 ## Container-Import (`containerimport`)
 
-Importcontainer verfolgen: Buchung, Verschiffung, Ankunft, Verzollung und Dokumente
+Import von Ware aus Drittländern: EUDR (Herkunftsbetriebe mit Geolokalisierung, Risikoprofil, GeoJSON für TRACES); später Container, Verzollung, Dokumente
 
-Agent: `containerimport` · hängt ab von `plattform`, `verwaltung`, `einkauf`
+Agent: `containerimport` · hängt ab von `plattform`, `qs` · Testgruppen: `containerimport`
 
 | Oberfläche | Art | Adresse | Entwicklung | Freigabe |
 | --- | --- | --- | --- | --- |
-| `containerimport.intern` Container-Import | intern | https://container-import.dashboard-stafl.de/ | geplant | keine |
+| `containerimport.intern` Container-Import | intern | https://container-import.dashboard-stafl.de/module/containerimport/ | in_pruefung | keine |
 
 ## Import (`import`)
 

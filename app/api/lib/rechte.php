@@ -89,6 +89,8 @@ const PERMS = [
     'leergut.sehen'            => ['g' => 'Leergut', 'l' => 'Leergutkonten ansehen: Salden, Bewegungen, Abstimmungen mit Fristen, Dachser-Abschreibungen, Bilanz, CSV', 'k' => 'sehen', 'd' => [], 'r' => []],
     'leergut.bearbeiten'       => ['g' => 'Leergut', 'l' => 'Leergut buchen: Bewegungen buchen und stornieren, Auszüge erfassen und bestätigen/widersprechen, Abschreibungen und Inventur pflegen', 'k' => 'machen', 'd' => [], 'r' => ['leergut.sehen']],
     'leergut.verwalten'        => ['g' => 'Leergut', 'l' => 'Leergut verwalten: Partner und Lademittel mit Werten pflegen, Datenpaket übernehmen', 'k' => 'machen', 'd' => [], 'r' => ['leergut.bearbeiten']],
+    'containerimport.eudr_sehen'      => ['g' => 'Container-Import', 'l' => 'EUDR ansehen: Sendungen, Herkunftsbetriebe mit Karte, Risikoprofil, Dateien prüfen, GeoJSON für TRACES', 'k' => 'sehen', 'd' => [], 'r' => []],
+    'containerimport.eudr_bearbeiten' => ['g' => 'Container-Import', 'l' => 'EUDR bearbeiten: Herkunftsbetriebe einlesen und pflegen, Sendungen anlegen, Gegenprüfungen eintragen, Risikobewertung abschließen', 'k' => 'machen', 'd' => [], 'r' => ['containerimport.eudr_sehen']],
     // Modul REWE (30.10.2026): ohne Standardrollen – Administratoren vergeben die Rechte (Kundenkontakte und Mengen der Märkte)
     'rewe.sehen'               => ['g' => 'REWE', 'l' => 'REWE: eigene Liste und Akten der eigenen Märkte ansehen (Wochenverlauf, Notizen)', 'k' => 'sehen', 'd' => [], 'r' => []],
     'rewe.bearbeiten'          => ['g' => 'REWE', 'l' => 'REWE: eigene Märkte abfragen (Bestellungen der Woche), Notizen, Wiedervorlagen, Kaufbereitschaft, Dauerauftrag, Ansprechpartner', 'k' => 'machen', 'd' => [], 'r' => ['rewe.sehen']],
