@@ -215,6 +215,8 @@ with sync_playwright() as p:
 # ---------- Update der Länder- und Ortsdaten bei voller Platte: Ausnahme, die bisherige Datei bleibt aktiv (ohne Server) ----------
 # Datenträger voll:// mit begrenztem freien Platz – Schreiben darüber hinaus bleibt kurz wie bei voller Platte
 VOLL = subprocess.run(['php', '-r', r'''require $argv[1] . '/app/api/geo.php'; require $argv[1] . '/app/api/ort.php';
+// Warnungen nur als Meldungstext: eine Stack-Ausgabe (z. B. Xdebug) könnte die Binärdaten aus file_put_contents mit nach stderr schreiben
+set_error_handler(function (int $n, string $s, string $f, int $l): bool { if (error_reporting() & $n) fwrite(STDERR, "$s ($f:$l)\n"); return true; });
 class Voll {
     static array $d = []; static int $frei = 0; public $context; private string $p; private int $pos = 0;
     function stream_open(string $p, string $m): bool { $this->p = $p; if (strpbrk($m, 'wxc')) self::$d[$p] = ''; return isset(self::$d[$p]); }
@@ -245,7 +247,7 @@ foreach ([['geo', 'voll://geo/laender.dat.php', fn($o) => geo_build(csv(fn($i) =
     $ergebnis[$name . ' frei'] = count(Voll::$d) === 1 && substr(Voll::$d[$ziel], 0, strlen(GEO_GUARD)) === GEO_GUARD && strlen(Voll::$d[$ziel]) > 100000 ? $r : array_map('strlen', Voll::$d);
 }
 echo json_encode($ergebnis), "\n";
-''', REPO], capture_output=True, text=True)
+''', REPO], capture_output=True, text=True, errors='replace')
 voll = json.loads(VOLL.stdout or '{}')
 for n, t in (('geo', 'Länderdaten (geo_build)'), ('ort', 'Ortsdaten (ort_build)')):
     check(f'{t}: Platte voll → Ausnahme, bisherige Datei unverändert', voll.get(n + ' voll') == 'Ausnahme' and voll.get(n + ' voll alt') == 'unverändert', (voll, VOLL.stderr[-300:]))
