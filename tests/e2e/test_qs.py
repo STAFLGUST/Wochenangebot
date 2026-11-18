@@ -622,17 +622,22 @@ with sync_playwright() as p:
     check('Prüfung: Nachweis mit verknüpfter Maßnahme', pg.locator('#pr-nachweise tbody tr').count() == 1 and pg.locator('#pr-nachweise [data-massn-auf]').count() == 1)
     pg.screenshot(path=os.path.join(SH, 'qs_pruefung_1280.png'))
     pg.click('#pr-knoepfe [data-schliessen]')
-    # „nachgetragen“ nach dem Erfassungstag in Ortszeit: erfasst 31.10. 23:30 UTC = 01.11. 00:30 in Berlin, Nachweis vom 31.10.
-    def nachts_erfasst(route):
-        r = route.fetch(); j = r.json()
-        for n in j.get('nachweise', []):
-            if n.get('bemerkung') == 'Fliegengitter beschädigt':
-                n['datum'] = '2026-10-31'; n['erfasst']['t'] = '2026-10-31T23:30:00Z'
-        route.fulfill(response=r, json=j)
-    pg2 = ctx.new_page(); pg2.route('**/api/?action=qs_start*', nachts_erfasst)
-    pg2.goto(B + '/module/qs/#pruefplan'); pg2.click(f'{bg} .qm-plan-titel'); pg2.wait_for_selector('#dlg-pruefung[open] #pr-nachweise tbody tr')
-    check('Prüfung: Nachweis vom 31.10., erfasst 01.11. 00:30 Ortszeit → „nachgetragen“', 'nachgetragen' in text(pg2, '#pr-nachweise tbody tr'), text(pg2, '#pr-nachweise tbody tr'))
-    pg2.close()
+    # „nachgetragen“ nach dem Erfassungstag in Ortszeit: erfasst 31.10. 23:30 UTC = 01.11. 00:30 in Berlin, Nachweis vom 31.10.;
+    # ohne lesbaren Erfassungszeitpunkt nie „nachgetragen“
+    for erfasst_t, erwartet, was in (('2026-10-31T23:30:00Z', True, 'erfasst 01.11. 00:30 Ortszeit → „nachgetragen“'), ('', False, 'ohne Erfassungszeitpunkt → nicht „nachgetragen“'),
+                                     ('kaputt', False, 'unlesbarer Erfassungszeitpunkt → nicht „nachgetragen“')):
+        def nachts_erfasst(erfasst_t):
+            def umleiten(route):
+                r = route.fetch(); j = r.json()
+                for n in j.get('nachweise', []):
+                    if n.get('bemerkung') == 'Fliegengitter beschädigt':
+                        n['datum'] = '2026-10-31'; n['erfasst']['t'] = erfasst_t
+                route.fulfill(response=r, json=j)
+            return umleiten
+        pg2 = ctx.new_page(); pg2.route('**/api/?action=qs_start*', nachts_erfasst(erfasst_t))
+        pg2.goto(B + '/module/qs/#pruefplan'); pg2.click(f'{bg} .qm-plan-titel'); pg2.wait_for_selector('#dlg-pruefung[open] #pr-nachweise tbody tr')
+        check(f'Prüfung: Nachweis vom 31.10., {was}', ('nachgetragen' in text(pg2, '#pr-nachweise tbody tr')) == erwartet, text(pg2, '#pr-nachweise tbody tr'))
+        pg2.close()
     pg.click(f'{we} .qm-plan-titel'); pg.wait_for_selector('#dlg-pruefung[open] #pr-versaeumt .qm-chip.rot')
     check('Prüfung arbeitstäglich: versäumte Tage mit Datum, Quote', 'versäumt' in text(pg, '#pr-versaeumt') and 'erfüllt' in text(pg, '#pr-meta'))
     pg.click('#pr-knoepfe [data-schliessen]')

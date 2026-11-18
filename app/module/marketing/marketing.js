@@ -64,6 +64,7 @@
 
   /* ---------- Datum ---------- */
   const iso = (d) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+  const ortstag = (t) => { const d = new Date(t); return isNaN(d) ? '' : d.toLocaleDateString('sv-SE', { timeZone: 'Europe/Berlin' }); };   // Kalendertag in deutscher Zeit (wie ortstag() im Server), ungültig → ''
   const ausIso = (s) => { const [y, m, d] = s.slice(0, 10).split('-').map(Number); return new Date(y, m - 1, d); };
   const heute = () => S.d.heute;
   const plusTage = (s, n) => { const d = ausIso(s); d.setDate(d.getDate() + n); return iso(d); };
@@ -237,7 +238,7 @@
     const ueber = B.filter(ueberfaellig).sort((a, b) => (a.veroeffentlichung || a.produktionBis).localeCompare(b.veroeffentlichung || b.produktionBis));
     const meine = aktiv.filter((e) => e.verantwortlich === S.d.ich && !['veroeffentlicht'].includes(e.status)).sort((a, b) => (a.veroeffentlichung || '9').localeCompare(b.veroeffentlichung || '9')).slice(0, 8);
     const seit30 = plusTage(h, -30);
-    const veroeff30 = B.filter((e) => e.status === 'veroeffentlicht' && (e.veroeffentlichtAm ? iso(new Date(e.veroeffentlichtAm)) : datumVon(e)) >= seit30).length;
+    const veroeff30 = B.filter((e) => e.status === 'veroeffentlicht' && (e.veroeffentlichtAm ? ortstag(e.veroeffentlichtAm) : datumVon(e)) >= seit30).length;
     const vier = aktiv.filter((e) => e.veroeffentlichung && datumVon(e) >= h && datumVon(e) <= bis28);
     const E = S.d.einstellungen;
     const kanalMix = E.kanaele.filter((k) => k.aktiv !== false).map((k) => [k.name, vier.filter((e) => e.kanaele.includes(k.id)).length]);
