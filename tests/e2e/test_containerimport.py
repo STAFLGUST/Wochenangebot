@@ -1,6 +1,7 @@
 """Modul Container-Import, Reiter EUDR (app/module/containerimport/, Oberfläche containerimport.intern, Auftrag des Inhabers
 18.11.2026): Herkunftsbetriebe mit Geolokalisierung, Sendungen, Risikoprofil, GeoJSON für das EU-Informationssystem.
-Geprüft: Register (in Prüfung, nicht freigegeben; Testfreigabe); Rechte serverseitig (ohne Anmeldung kein Zugriff, ohne „EUDR
+Geprüft: Register (fertig und produktiv unter container-import.dashboard-stafl.de, Kachel verfügbar, keine Testfreigabe über die
+Modulverwaltung, ohne Tester-Eintrag erreichbar); Rechte serverseitig (ohne Anmeldung kein Zugriff, ohne „EUDR
 ansehen“ 403, nur ansehen: kein Speichern, ohne CSRF 403, GET auf schreibende Aktion 405); Dateien prüfen ohne zu speichern
 (Lieferanten-GeoJSON mit Fehlerbildern: Selbstüberschneidung, vertauschte Koordinaten, Linie, falsch geschriebene
 Eigenschaften, Fläche als Text; Bericht mit UTM-Koordinaten gegen eine unabhängige Umrechnung; Runden auf 6 Stellen, Umlauf);
@@ -78,11 +79,14 @@ SENDUNG = {'id': '', 'rev': 0, 'nummer': 'FB26-001', 'lieferant': 'Frigorifico B
 A = Client('198.51.100.2')
 check('Administrator angemeldet', A.call('login', {'username': 'admin', 'password': PW})[0] == 200)
 
-# ---------- Register und Testfreigabe ----------
+# ---------- Register: produktiv (Entscheidung des Inhabers 18.11.2026) ----------
 cm = next((m for m in A.call('module_status')[1]['module'] if m['id'] == 'containerimport'), None)
-check('Register: Container-Import in Prüfung, nicht freigegeben, Kachel ohne Zugang',
-      cm and cm['oberflaechen'][0]['entwicklung'] == 'in_pruefung' and cm['oberflaechen'][0]['freigabe'] == 'keine' and not cm['kachel']['zugang'], cm)
-check('nicht freigegeben: Aktionen 404, auch für den Administrator', A.call('containerimport_start')[0] == 404)
+check('Register: Container-Import fertig und produktiv, Adresse container-import.dashboard-stafl.de/module/containerimport/, Kachel verfügbar',
+      cm and cm['oberflaechen'][0]['entwicklung'] == 'fertig' and cm['oberflaechen'][0]['freigabe'] == 'produktiv'
+      and cm['kachel']['status'] == 'verfuegbar' and cm['kachel']['zugang'] is True and cm['kachel']['ziel'] == 'containerimport.intern'
+      and cm['kachel']['adresse'] == 'https://container-import.dashboard-stafl.de/module/containerimport/', cm)
+st, r = A.call('modul_freigabe_save', {'bereich': 'containerimport.intern', 'freigabe': 'test', 'grund': 'Test'})
+check('Produktivbereich: keine Testfreigabe über die Modulverwaltung (nur über ein Release)', st == 422, (st, r))
 
 USERS = {'ina': ('Ina Import', 'editor', 'Editor-Zugang-88', ['containerimport.eudr_sehen', 'containerimport.eudr_bearbeiten']),
          'lea': ('Lea Leser', 'viewer', 'Leser-Zugang-55', ['containerimport.eudr_sehen']),
@@ -93,10 +97,6 @@ for user, (name, role, pw, grant) in USERS.items():
     uid[user] = next(u['id'] for u in A.call('users')[1]['users'] if u['username'] == user)
     if grant:
         A.call('user_save', {'id': uid[user], 'name': name, 'role': role, 'active': True, 'grant': grant, 'deny': []})
-st, r = A.call('modul_freigabe_save', {'bereich': 'containerimport.intern', 'freigabe': 'test', 'grund': 'Test EUDR'})
-check('Testfreigabe möglich (Code in Prüfung)', st == 200, (st, r))
-st, r = A.call('modul_tester_save', {'bereich': 'containerimport.intern', 'tester': list(uid.values())})
-check('Tester eingetragen', st == 200, (st, r))
 
 
 def login(user):
@@ -110,7 +110,7 @@ I, L, O = login('ina'), login('lea'), login('ole')
 
 # ---------- Rechte ----------
 st, r = Client('198.51.100.30').call('containerimport_start')
-check('ohne Anmeldung: kein Zugriff (in der Testfreigabe verborgen: 404, sonst 401)', st in (401, 404) and 'betriebe' not in r, (st, r))
+check('ohne Anmeldung: kein Zugriff (401)', st == 401 and 'betriebe' not in r, (st, r))
 st, r = O.call('containerimport_start')
 check('Modulzugang ohne „EUDR ansehen“: 403', st == 403 and 'Berechtigung' in r.get('error', ''), (st, r))
 check('ohne „EUDR ansehen“: auch prüfen und exportieren 403', O.call('containerimport_eudr_pruefen', {'dateien': [DATEI]})[0] == 403 and O.call('containerimport_eudr_export&sendung=x')[0] == 403)

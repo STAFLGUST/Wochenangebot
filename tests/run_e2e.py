@@ -309,7 +309,7 @@ ZUSATZ = {'dashboard': [('dashboard', 'dashboard')], 'einheit': [('dashboard', '
 # Testzustand des Modulregisters für einzelne Gruppen: um Testfreigabe und Produktivfreigabe der Modulverwaltung zu
 # prüfen, braucht die Gruppe ein Modul „in Prüfung“ ohne Freigabe und ein fertiges, nicht freigegebenes Modul. Dafür stellt sie
 # in ihrer App-Kopie REWE zurück auf „in Prüfung“ (produktiv seit 30.10.2026) und Einkauf auf „fertig“. Als nur geplantes Modul
-# (keine Testfreigabe möglich) dient ihr der Container-Import – seit 18.11.2026 in Prüfung, deshalb hier zurück auf „geplant“.
+# (keine Testfreigabe möglich) dient ihr der Container-Import – produktiv seit 18.11.2026, deshalb hier zurück auf „geplant“.
 # Nur die Kopie im Testordner.
 REGISTER_TEST = {'modulverwaltung': [("'rewe' => [", 'in_pruefung', 'keine'), ("'einkauf' => [", 'fertig'), ("'containerimport' => [", 'geplant', 'keine')]}
 
