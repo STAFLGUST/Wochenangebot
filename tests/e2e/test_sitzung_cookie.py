@@ -116,6 +116,9 @@ check('Antwort ohne Kopfzeile X-WA-Sitzung', hd.get('X-WA-Sitzung') is None, hd.
 st, j, sc, hd = roh('kunde_status', ip='198.51.100.74', extra={**app, 'X-WA-Sitzung': ksid})
 check('Kunde: gültige Kennung nur in X-WA-Sitzung meldet nicht an', st == 200 and j.get('kunde') is None, j)
 check('mit X-WA-Client gilt das Cookie wie im Browser', roh('status', cookies={NEU: sid}, ip='198.51.100.75', extra=app)[1].get('loggedIn') is True)
+# die Kennung gilt auch nicht aus der Adresse (kein „trans sid“): gleicher Client, gleiche Kennung, nur als Abfrageparameter
+check('gültige Kennung als Abfrageparameter meldet nicht an',
+      all(roh(f'status&{name}={sid}', ip='198.51.100.75')[1].get('loggedIn') is False for name in (NEU, ALT, 'PHPSESSID')))
 VORGABE = 'vorgegebene-kennung-0123456789abcdef'
 st, j, sc, hd = roh('login', {'username': 'admin', 'password': PW}, ip='198.51.100.75', extra={**app, 'X-WA-Sitzung': VORGABE})
 app_sid = cookie(sc, NEU)[0]

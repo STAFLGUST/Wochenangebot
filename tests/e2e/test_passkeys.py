@@ -359,7 +359,7 @@ with sync_playwright() as p:
     check('replay without challenge rejected', st == 401, r)
     st, r = d.call('passkey_login', good)
     check('challenge is single-use', st == 401, r)
-    st, r = PkClient('192.0.2.13', app=True).pk_login(k2)
+    st, r = PkClient('192.0.2.13').pk_login(k2)
     check('API login with RS256 passkey', st == 200 and r['user']['username'] == 'tom', r)
     bad = [('wrong origin', {'origin': 'http://localhost:1'}, 'anderen Seite'), ('wrong challenge', {'challenge': b64u(os.urandom(32))}, 'Anfrage passt nicht'),
            ('wrong type', {'typ': 'webauthn.create'}, 'Ungültige'), ('no user verification', {'flags': 0x01}, 'nicht geprüft'),
