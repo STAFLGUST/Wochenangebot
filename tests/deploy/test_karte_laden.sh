@@ -89,15 +89,29 @@ rm -f "$T/ohne-docker"
 cp "$REPO/deploy/karte/herkunft.geojson" deploy/karte/
 : > "$T/aufrufe"
 AUS=$(sh "$REPO/deploy/karte-laden.sh" pruefen herkunft) && CODE=0 || CODE=$?
-ok "herkunft prüfen: Region Südamerika und Neuseeland, Zoomstufe 12, nichts geschrieben" '[ $CODE = 0 ] && grep -q -- "--region=/region/herkunft.geojson --maxzoom=12" "$T/aufrufe" && [ ! -e daten-karte/herkunft.pmtiles ] && echo "$AUS" | grep -q "laden herkunft"'
+ok "herkunft prüfen: Region Südamerika und Neuseeland, Zoomstufe 14, nichts geschrieben" '[ $CODE = 0 ] && grep -q -- "--region=/region/herkunft.geojson --maxzoom=14" "$T/aufrufe" && [ ! -e daten-karte/herkunft.pmtiles ] && echo "$AUS" | grep -q "Laden mit: sh .*laden herkunft" && echo "$AUS" | grep -q "Zoomstufe: 14 (bisher: keine)"'
 alt=$(md5sum daten-karte/karte.pmtiles)
 AUS=$(sh "$REPO/deploy/karte-laden.sh" laden herkunft) && CODE=0 || CODE=$?
-ok "herkunft laden: eigene Datei und eigener Stand, Detailkarte unberührt" '[ $CODE = 0 ] && [ "$(head -c 7 daten-karte/herkunft.pmtiles)" = PMTiles ] && [ "$(cat daten-karte/herkunft-stand.txt)" = 20261026.pmtiles ] && [ "$(md5sum daten-karte/karte.pmtiles)" = "$alt" ] && [ "$(stat -c %a daten-karte/herkunft.pmtiles)" = 644 ] && [ ! -e daten-karte/herkunft.neu.pmtiles ]'
+ok "herkunft laden: eigene Datei, eigener Stand, Zoomstufe vermerkt, Detailkarte unberührt" '[ $CODE = 0 ] && [ "$(head -c 7 daten-karte/herkunft.pmtiles)" = PMTiles ] && [ "$(cat daten-karte/herkunft-stand.txt)" = 20261026.pmtiles ] && [ "$(cat daten-karte/herkunft-zoom.txt)" = 14 ] && [ "$(md5sum daten-karte/karte.pmtiles)" = "$alt" ] && [ "$(stat -c %a daten-karte/herkunft.pmtiles)" = 644 ] && [ ! -e daten-karte/herkunft.neu.pmtiles ]'
 : > "$T/aufrufe"
-AUS=$(KARTE_HERKUNFT_ZOOM=10 KARTE_STAND=20261027.pmtiles sh "$REPO/deploy/karte-laden.sh" pruefen herkunft) && CODE=0 || CODE=$?
-ok "herkunft: Zoomstufe einstellbar, unsinnige abgelehnt" '[ $CODE = 0 ] && grep -q -- "--maxzoom=10" "$T/aufrufe" && ! KARTE_HERKUNFT_ZOOM="12 --x" sh "$REPO/deploy/karte-laden.sh" pruefen herkunft >/dev/null 2>&1'
+AUS=$(sh "$REPO/deploy/karte-laden.sh" laden herkunft) && CODE=0 || CODE=$?
+ok "herkunft erneut laden: gleicher Stand und gleiche Zoomstufe – nichts zu tun" '[ $CODE = 0 ] && echo "$AUS" | grep -q "unverändert" && ! grep -q " extract " "$T/aufrufe"'
+AUS=$(KARTE_HERKUNFT_ZOOM=10 sh "$REPO/deploy/karte-laden.sh" pruefen herkunft) && CODE=0 || CODE=$?
+ok "herkunft: Zoomstufe einstellbar, der Hinweis zum Laden nennt sie, unsinnige abgelehnt" '[ $CODE = 0 ] && grep -q -- "--maxzoom=10" "$T/aufrufe" && echo "$AUS" | grep -q "Laden mit: KARTE_HERKUNFT_ZOOM=10 sh .*laden herkunft" && ! KARTE_HERKUNFT_ZOOM="12 --x" sh "$REPO/deploy/karte-laden.sh" pruefen herkunft >/dev/null 2>&1'
+: > "$T/aufrufe"
+AUS=$(KARTE_HERKUNFT_ZOOM=12 sh "$REPO/deploy/karte-laden.sh" laden herkunft) && CODE=0 || CODE=$?
+ok "herkunft: andere Zoomstufe lädt auch bei gleichem Kartenstand neu" '[ $CODE = 0 ] && grep -q -- " extract .*--maxzoom=12" "$T/aufrufe" && [ "$(cat daten-karte/herkunft-zoom.txt)" = 12 ] && echo "$AUS" | grep -q "Zoomstufe 12"'
+: > "$T/aufrufe"
+AUS=$(KARTE_STAND=20261027.pmtiles sh "$REPO/deploy/karte-laden.sh" laden herkunft) && CODE=0 || CODE=$?
+ok "herkunft: Aktualisierung ohne Angabe bleibt bei der gemerkten Zoomstufe" '[ $CODE = 0 ] && grep -q -- " extract .*--maxzoom=12" "$T/aufrufe" && [ "$(cat daten-karte/herkunft-stand.txt)" = 20261027.pmtiles ] && [ "$(cat daten-karte/herkunft-zoom.txt)" = 12 ]'
+rm daten-karte/herkunft-zoom.txt; : > "$T/aufrufe"   # Karte aus der Fassung ohne Vermerk der Zoomstufe
+AUS=$(KARTE_STAND=20261027.pmtiles sh "$REPO/deploy/karte-laden.sh" laden herkunft) && CODE=0 || CODE=$?
+ok "herkunft: Karte ohne vermerkte Zoomstufe wird einmal neu geladen (Stufe 14)" '[ $CODE = 0 ] && grep -q -- " extract .*--maxzoom=14" "$T/aufrufe" && [ "$(cat daten-karte/herkunft-zoom.txt)" = 14 ]'
+echo geheim > "$T/opfer"; rm daten-karte/herkunft-zoom.txt; ln -s "$T/opfer" daten-karte/herkunft-zoom.txt
+AUS=$(sh "$REPO/deploy/karte-laden.sh" pruefen herkunft 2>&1) && CODE=0 || CODE=$?
+ok "herkunft: untergeschobener Verweis als Zoom-Vermerk wird nicht gelesen" '[ $CODE = 0 ] && echo "$AUS" | grep -q "Zoomstufe: 14 (bisher: keine)" && ! echo "$AUS" | grep -q geheim'
 AUS=$(sh "$REPO/deploy/karte-laden.sh" entfernen herkunft) && CODE=0 || CODE=$?
-ok "herkunft entfernen: nur die Herkunftskarte" '[ $CODE = 0 ] && [ ! -e daten-karte/herkunft.pmtiles ] && [ ! -e daten-karte/herkunft-stand.txt ] && [ -e daten-karte/karte.pmtiles ]'
+ok "herkunft entfernen: nur die Herkunftskarte, mit beiden Vermerken" '[ $CODE = 0 ] && [ ! -e daten-karte/herkunft.pmtiles ] && [ ! -e daten-karte/herkunft-stand.txt ] && [ ! -e daten-karte/herkunft-zoom.txt ] && [ ! -L daten-karte/herkunft-zoom.txt ] && [ -e daten-karte/karte.pmtiles ] && [ "$(cat "$T/opfer")" = geheim ]'
 AUS=$(sh "$REPO/deploy/karte-laden.sh" laden mond 2>&1) && CODE=0 || CODE=$?
 ok "unbekannte Karte abgelehnt" '[ $CODE = 2 ]'
 
