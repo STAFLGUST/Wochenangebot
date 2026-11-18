@@ -650,13 +650,15 @@
       + f('', 'Heute', 'background:var(--hr-heute);box-shadow:inset 2px 0 0 var(--hr-akzent-ink),inset -2px 0 0 var(--hr-akzent-ink)');
   }
   /* Spalte „heute“ in den sichtbaren Bereich holen (am Handy scrollt die Tabelle waagerecht): nur wenn sie verdeckt ist,
-     dann mittig rechts neben die festen Namen */
+     dann mittig rechts neben die festen Namen. Gemessen wird am Bildschirm: die Kopfzellen kleben (sticky), ihr
+     offsetLeft zählt deshalb nicht ab der Tabelle, sondern ab einem Element außerhalb des Rahmens. */
   function heuteSichtbar() {
     const th = $('#kal-plan thead th.heute'), box = $('#kal-plan').parentElement, name = $('#kal-plan thead th.name');
     if (!th || !box || box.scrollWidth <= box.clientWidth) return;
-    const links = name ? name.offsetWidth : 0, sicht = box.clientWidth - links;
-    if (th.offsetLeft - links >= box.scrollLeft && th.offsetLeft + th.offsetWidth <= box.scrollLeft + box.clientWidth) return;
-    box.scrollLeft = Math.max(0, th.offsetLeft - links - (sicht - th.offsetWidth) / 2);
+    const r = th.getBoundingClientRect(), innen = box.getBoundingClientRect().left + box.clientLeft;
+    const links = name ? name.getBoundingClientRect().right : innen, rechts = innen + box.clientWidth;
+    if (r.left >= links && r.right <= rechts) return;
+    box.scrollLeft = Math.max(0, box.scrollLeft + r.left - links - (rechts - links - r.width) / 2);
   }
   /* Ansicht „Monat“ oder „± 2 Wochen“ um einen Tag (Standard heute, Pfeile verschieben um eine Woche) und Filter nach
      Abteilungen. Beides merkt sich nur dieser Browser (Bequemlichkeit, keine Berechtigung – der Server liefert
