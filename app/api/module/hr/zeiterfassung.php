@@ -94,7 +94,7 @@ function hr_zeit_zuordnen(array $l, array $personal, array $users): array
         if ($p['nutzer'] !== null && isset($users[$p['nutzer']])) $namen = array_merge($namen, hr_konto_namen($users[$p['nutzer']]));
         foreach (array_unique($namen) as $k) if ($k !== '') $nachName[$k][$p['id']] = $p;
     }
-    $zu = []; $neu = []; $mehrdeutig = []; $aehnlich = [];
+    $zu = []; $neu = []; $mehrdeutig = []; $aehnlich = []; $mehrdeutigIds = [];
     foreach ($l['personen'] as $wer => $x) {
         $treffer = $x['nr'] !== '' ? array_values($nachNr[$x['nr']] ?? []) : [];
         if (!$treffer) {
@@ -104,7 +104,7 @@ function hr_zeit_zuordnen(array $l, array $personal, array $users): array
             // Der Treffer erscheint dann als „ähnlich“-Hinweis (Abstand 0) und wird nie automatisch zugeordnet.
             if ($x['nr'] !== '') $treffer = array_values(array_filter($treffer, function ($p) { return ($p['personalnummer'] ?? '') === ''; }));
         }
-        if (count($treffer) > 1) { $mehrdeutig[$wer] = $x['name']; continue; }
+        if (count($treffer) > 1) { $mehrdeutig[$wer] = $x['name']; foreach ($treffer as $t) $mehrdeutigIds[$t['id']] = true; continue; }
         if ($treffer) { $zu[$wer] = $treffer[0]; continue; }
         $neu[$wer] = $x;
         // ähnliche Namen (Schreibweise, z. B. Ulrich ↔ Ullrich) als Hinweis – nie automatisch zuordnen
@@ -113,7 +113,7 @@ function hr_zeit_zuordnen(array $l, array $personal, array $users): array
             if (levenshtein(hr_namekey($x['name']), hr_namekey(hr_name($p))) <= 2) $aehnlich[$wer][] = hr_name($p);
         }
     }
-    return [$zu, $neu, $mehrdeutig, $aehnlich];
+    return [$zu, $neu, $mehrdeutig, $aehnlich, $mehrdeutigIds];
 }
 
 /* Plan der Übernahme (ohne zu speichern) */
@@ -125,7 +125,7 @@ function hr_zeit_planen(array $e, ?array $me = null): array
     $personal = hr_personal(); $abw = hr_abwesenheiten();
     $eigen = $me ? hr_eigene_ids($personal, $me) : [];
     $users = []; foreach (users_load() as $u) $users[(string)$u['id']] = $u;
-    [$zu, $neu, $mehrdeutig, $aehnlich] = hr_zeit_zuordnen($l, $personal, $users);
+    [$zu, $neu, $mehrdeutig, $aehnlich, $mehrdeutigIds] = hr_zeit_zuordnen($l, $personal, $users);
     $abteilungen = !empty($e['optionen']['abteilungen']);
     // Abteilung aus dem Bericht: ohne Stammdaten wie im Bericht, mit Stammdaten nur eine dort bekannte (sonst Hinweis)
     $abtListe = hr_abteilungen(); $abtFremd = [];
@@ -148,8 +148,9 @@ function hr_zeit_planen(array $e, ?array $me = null): array
     foreach ($neu as $wer => $x) $neuAbt[$wer] = $abtWert($x['abteilung']) ?? ['abteilung' => '', 'abteilungNr' => null];
     // zuvor aus der Zeiterfassung übernommene Einträge im Zeitraum des Berichts werden ersetzt
     $rv = $l['von']; $rb = $l['bis'];
-    $alt = $rv === null ? [] : array_values(array_filter($abw['eintraege'], function ($x) use ($rv, $rb, $eigen) {
-        return ($x['quelle'] ?? '') === 'zeiterfassung' && $x['von'] >= $rv && $x['bis'] <= $rb && !isset($eigen[$x['person']]);   // nur ganz im Zeitraum (Rest bleibt), nie die eigenen
+    // nie die eigenen und nie die von Mitarbeitern, deren Zeilen als mehrdeutig übersprungen werden (sonst gingen sie verloren)
+    $alt = $rv === null ? [] : array_values(array_filter($abw['eintraege'], function ($x) use ($rv, $rb, $eigen, $mehrdeutigIds) {
+        return ($x['quelle'] ?? '') === 'zeiterfassung' && $x['von'] >= $rv && $x['bis'] <= $rb && !isset($eigen[$x['person']]) && !isset($mehrdeutigIds[$x['person']]);   // nur ganz im Zeitraum (Rest bleibt)
     }));
     $altIds = array_column($alt, 'id');
     $bleibt = array_values(array_filter($abw['eintraege'], function ($x) use ($altIds) { return !in_array($x['id'], $altIds, true); }));

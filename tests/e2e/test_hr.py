@@ -681,6 +681,21 @@ st, _ = zimp(P, True, v['stand'])
 check('… eine andere Person übernimmt die Zeile', st == 200 and len(ze('Pia Personal')) == 1 and len(ze('Quentin Quer')) == 1)
 st, v = zimp(PI)
 check('… eigene frühere Übernahme wird bei erneutem Import nicht ersetzt', st == 200 and v['zahlen']['entfaellt'] == 1, v['zahlen'])
+# gleichnamiger Mitarbeiter kommt dazu: Quentin ist mehrdeutig, wird übersprungen – seine frühere Übernahme bleibt (HR2)
+q_alt = ze('Quentin Quer')
+pz_ = dokument('hr-personal')
+pz_['personen'].append({'id': 'pquentin2', 'nutzer': None, 'vorname': 'Quentin', 'nachname': 'Quer', 'abteilung': 'Lager', 'pos': 47, 'aktiv': True})
+pz_['rev'] = pz_.get('rev', 0) + 1
+storage_write('hr-personal', pz_)
+st, v = zimp(P)
+st2, _ = zimp(P, True, v['stand'])
+check('… gleichnamiger Mitarbeiter dazu: Quentin übersprungen, seine frühere Übernahme bleibt, Pia ersetzt', st == 200 and st2 == 200
+      and any(z['name'] == 'Quentin Quer' and 'mehrfach' in z['text'] for z in v['zeilen']) and v['zahlen']['entfaellt'] == 1
+      and len(q_alt) == 1 and ze('Quentin Quer') == q_alt and len(ze('Pia Personal')) == 1, (v['zahlen'], q_alt, ze('Quentin Quer')))
+pz_ = dokument('hr-personal')
+pz_['personen'] = [p_ for p_ in pz_['personen'] if p_['id'] != 'pquentin2']
+pz_['rev'] = pz_.get('rev', 0) + 1
+storage_write('hr-personal', pz_)
 # Excel-Planung (Urlaubsplanung) gibt es nicht mehr: weder als Importart noch als Aktion
 weg = (PI.call('import_pruefen', {'art': 'urlaubsplanung', 'daten': {'blaetter': []}}), P.call('hr_import_pruefen', {'daten': {'blaetter': []}})[0],
        P.call('hr_import_uebernehmen', {'daten': {'blaetter': []}})[0], [x['id'] for x in P.call('import_arten')[1]['arten']])
