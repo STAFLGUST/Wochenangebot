@@ -83,4 +83,11 @@ check('status change keeps unchanged assignment to deactivated user',r[0]==200 a
 r=e.call('bestellung_save',{'nr':failed_nr,'revision':r[1]['order']['revision'],'workflow':'bestaetigt','assignee':'','note':''})
 check('assignment can be cleared',r[0]==200)
 check('new assignment to deactivated user still rejected',e.call('bestellung_save',{'nr':failed_nr,'revision':r[1]['order']['revision'],'workflow':'bestaetigt','assignee':zweit,'note':''})[0]==422)
+# Startseite „Heute für Sie“: „ältester vom …“ nennt den Berliner Tag, nicht den UTC-Tag (OS1)
+from umgebung import storage_raw, storage_write
+alle=json.loads(storage_raw('bestellungen').split('?>\n',1)[-1])
+alle.append({'nr':'B-NACHT-1','t':'2026-11-17T23:30:00Z','firma':'Nacht','workflow':'neu','positions':[],'total':0,'totalQty':0})
+storage_write('bestellungen',alle)
+punkte=[p for p in a.call('start_heute')[1].get('punkte',[]) if p.get('modul')=='angebot' and p.get('anzahl')==1 and p.get('ziel')=='orders' and 'Neuer' in p.get('titel','')]
+check('start page: oldest new order dated by Berlin day',[p['detail'] for p in punkte]==['ältester vom 18.11.'])
 print(f'{sum(res)}/{len(res)} passed');sys.exit(0 if all(res) else 1)

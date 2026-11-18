@@ -18,7 +18,7 @@ function angebot_startseite(array $me): array
     $neu = []; $meine = 0;
     foreach (store_read('bestellungen') ?? [] as $o) {
         $w = $o['workflow'] ?? 'neu';
-        if ($w === 'neu') $neu[] = substr((string)($o['t'] ?? ''), 0, 10);
+        if ($w === 'neu') $neu[] = ortstag((string)($o['t'] ?? ''));
         elseif (in_array($w, ['in_bearbeitung', 'bestaetigt'], true) && (string)($o['assignee'] ?? '') === (string)$me['id']) $meine++;
     }
     $out = [];
