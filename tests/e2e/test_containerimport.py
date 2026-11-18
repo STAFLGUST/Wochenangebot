@@ -123,6 +123,7 @@ I.csrf = csrf
 check('schreibende Aktionen per GET: 405', [I.call(a)[0] for a in ('containerimport_eudr_pruefen', 'containerimport_eudr_betriebe_save', 'containerimport_eudr_sendung_save')] == [405] * 3)
 st, r = I.call('containerimport_start')
 check('bearbeiten: Stand mit Ländern und Portalen', st == 200 and r['rechte']['bearbeiten'] and r['laender']['PY'] == {'name': 'Paraguay', 'klasse': 'standard'}
+      and r['laender']['NZ'] == {'name': 'Neuseeland', 'klasse': None}   # wählbar, Einstufung nicht hinterlegt
       and set(r['portale']) == {'gnw', 'whisp', 'sonst'} and r['portale']['gnw']['name'] == 'Global Nature Watch', (st, r))
 
 # ---------- Dateien prüfen (ohne zu speichern) ----------

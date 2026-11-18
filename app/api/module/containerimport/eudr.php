@@ -25,7 +25,8 @@ const EUDR_FLAECHE_TOLERANZ = 0.05;      // Abweichung berechnete ↔ angegebene
 const EUDR_BERICHT_MONATE = 12;          // älter darf ein Entwaldungsbericht bei der Schlachtung nicht sein
 
 /* Einstufung der Herkunftsländer (Art. 29; Durchführungsverordnung (EU) 2025/1093) und grober Rahmen [West, Süd, Ost, Nord]
-   für die Lageprüfung. Nur Länder, deren Einstufung belegt ist – alle anderen meldet das Profil als „nachsehen“. */
+   für die Lageprüfung. Eine Klasse steht nur dort, wo die Einstufung belegt ist; Länder ohne Klasse (null) sind wählbar, das Profil meldet sie wie
+   alle nicht genannten als „nachsehen“. */
 const EUDR_LAENDER_STAND = 'Durchführungsverordnung (EU) 2025/1093';
 const EUDR_LAENDER = [
     'PY' => ['name' => 'Paraguay', 'klasse' => 'standard', 'rahmen' => [-62.7, -27.7, -54.2, -19.2]],
@@ -37,6 +38,7 @@ const EUDR_LAENDER = [
     'PE' => ['name' => 'Peru', 'klasse' => 'standard'],
     'MX' => ['name' => 'Mexiko', 'klasse' => 'standard'],
     'UY' => ['name' => 'Uruguay', 'klasse' => null, 'rahmen' => [-58.5, -35.0, -53.0, -30.0]],
+    'NZ' => ['name' => 'Neuseeland', 'klasse' => null],
     'BY' => ['name' => 'Belarus', 'klasse' => 'hoch'],
     'KP' => ['name' => 'Nordkorea', 'klasse' => 'hoch'],
     'MM' => ['name' => 'Myanmar', 'klasse' => 'hoch'],
