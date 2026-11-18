@@ -237,7 +237,7 @@
     const ueber = B.filter(ueberfaellig).sort((a, b) => (a.veroeffentlichung || a.produktionBis).localeCompare(b.veroeffentlichung || b.produktionBis));
     const meine = aktiv.filter((e) => e.verantwortlich === S.d.ich && !['veroeffentlicht'].includes(e.status)).sort((a, b) => (a.veroeffentlichung || '9').localeCompare(b.veroeffentlichung || '9')).slice(0, 8);
     const seit30 = plusTage(h, -30);
-    const veroeff30 = B.filter((e) => e.status === 'veroeffentlicht' && (e.veroeffentlichtAm ? e.veroeffentlichtAm.slice(0, 10) : datumVon(e)) >= seit30).length;
+    const veroeff30 = B.filter((e) => e.status === 'veroeffentlicht' && (e.veroeffentlichtAm ? iso(new Date(e.veroeffentlichtAm)) : datumVon(e)) >= seit30).length;
     const vier = aktiv.filter((e) => e.veroeffentlichung && datumVon(e) >= h && datumVon(e) <= bis28);
     const E = S.d.einstellungen;
     const kanalMix = E.kanaele.filter((k) => k.aktiv !== false).map((k) => [k.name, vier.filter((e) => e.kanaele.includes(k.id)).length]);

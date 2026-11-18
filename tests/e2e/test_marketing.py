@@ -14,6 +14,7 @@ import datetime as dt
 import json
 import os
 import sys
+from zoneinfo import ZoneInfo
 
 from playwright.sync_api import sync_playwright
 
@@ -273,6 +274,17 @@ check('Protokoll: Beiträge, Kampagnen, Einstellungen, Export, Löschen', 'Beitr
 check('Protokoll ohne Texte, Skripte und Kommentare', 'Szene 1' not in txt and 'Hook kürzer' not in txt and 'Neuer Text' not in txt)
 check('eigene Dokumente geschrieben (Beiträge, Kampagnen, Einstellungen)', all(dokument(n) for n in ('marketing-beitraege', 'marketing-kampagnen', 'marketing-einstellungen')))
 
+# Veröffentlicht um 00:30 Berliner Zeit genau vor 30 Tagen (UTC noch am Vortag): zählt zu „Veröffentlicht – letzte 30 Tage“
+BERLIN = ZoneInfo('Europe/Berlin')
+HEUTE_B = dt.datetime.now(BERLIN).date()
+doc = dokument('marketing-beitraege')
+vo = next(e for e in doc['liste'] if e['status'] == 'veroeffentlicht')
+vo['veroeffentlichtAm'] = dt.datetime.combine(HEUTE_B - dt.timedelta(days=30), dt.time(0, 30), BERLIN).astimezone(dt.timezone.utc).strftime('%Y-%m-%dT%H:%M:%SZ')
+storage_write('marketing-beitraege', doc)
+VEROEFF30 = sum(1 for e in doc['liste'] if e['status'] == 'veroeffentlicht'
+                and (dt.datetime.fromisoformat(e['veroeffentlichtAm'].replace('Z', '+00:00')).astimezone(BERLIN).date().isoformat() if e.get('veroeffentlichtAm')
+                     else (e.get('veroeffentlichung') or '')[:10]) >= (HEUTE_B - dt.timedelta(days=30)).isoformat())
+
 # ── Oberfläche ──
 with sync_playwright() as p:
     br = p.chromium.launch()
@@ -291,6 +303,8 @@ with sync_playwright() as p:
     ub = pg.inner_text('#tab-uebersicht')
     check('Übersicht: Kennzahlen, nächste Veröffentlichungen, Kanal-Mix', 'Diese Woche' in ub and 'Zur Freigabe' in ub and 'Nächste Veröffentlichungen' in ub
           and 'Karussell: 4 Grillfehler' in ub and 'Kanäle – nächste 4 Wochen' in ub, ub[:600])
+    kpi_v = pg.locator('#tab-uebersicht .mkt-wert').filter(has_text='letzte 30 Tage').locator('b').inner_text()
+    check('Übersicht: „Veröffentlicht – letzte 30 Tage“ nach Berliner Kalendertag (00:30 Uhr vor 30 Tagen zählt mit)', kpi_v == str(VEROEFF30), (kpi_v, VEROEFF30))
     check('Einstellungen-Reiter für Bearbeiter ausgeblendet', pg.is_hidden('#mkt-tabs [data-tab="einstellungen"]'))
     pg.fill('#idee-titel', 'Story: Frage der Woche an die Community'); pg.click('#idee-form button[type="submit"]')
     pg.wait_for_function("document.querySelector('#mkt-toast').textContent.includes('Idee gespeichert')")
