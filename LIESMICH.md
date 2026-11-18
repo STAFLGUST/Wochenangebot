@@ -4,7 +4,7 @@
 Code erzeugte Referenz stehen in [`docs/entwickler/`](docs/entwickler/README.md).
 
 - `app/` – Website, Eingabebereich (`/admin/`) und PHP-API
-- `mobile/` – App für iOS und Android (Kunden und Mitarbeiter), siehe `mobile/LIESMICH.md`; Schnittstelle: `docs/app-api.md`
+- Native App für iOS und Android: am 18.11.2026 entfernt (es gibt nur die Web-App, siehe unten); die Server-Schnittstelle ruht, siehe `docs/app-api.md`
 - `Caddyfile`, `docker-compose.yml` – Webserver mit automatischem HTTPS und IP-Freigabe
 - `deploy/` – automatische Aktualisierung auf dem Server
 - `regeln/`, `werkzeuge/regeln.py` – Regelwerk der STAFL-Plattform (Module, Datenverantwortung, Rechte, Geschäftsregeln, Wartung), von der CI geprüft; Zielbild und Roadmap: `docs/plattform/`

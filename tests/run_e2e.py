@@ -110,9 +110,6 @@ SUITES['passwortpruefung'] = (8790, 'data-seed', True, {   # Datenleck-Prüfung 
     'MAIL_SMTP_HOST': '127.0.0.1', 'MAIL_SMTP_PORT': '2526', 'MAIL_SMTP_SECURE': 'none', 'MAIL_SMTP_USER': 'portal@example.org',
     'MAIL_SMTP_PASS': 'Test-Postfach-1', 'MAIL_FROM': 'angebot@example.org', 'MAIL_FROM_NAME': 'Standard-Fleisch',
     'MAIL_REPLY_TO': 'verkauf@example.org', 'WA_URL': 'http://127.0.0.1:8790'})
-SUITES['app_web'] = SUITES['bestellung']   # App (mobile/) als Web-Build; braucht mobile/dist-web
-# Gruppen, die einen vorherigen Build brauchen: im vollen Lauf nur, wenn der Build vorliegt (sonst Hinweis)
-OPTIONAL = {'app_web': os.path.join(REPO, 'mobile', 'dist-web', 'index.html')}
 SUITES['passkeys'] = (8790, 'data-seed', True)
 SUITES['modul_wartung'] = (8790, 'data-seed', True)   # Wartung je Oberfläche (GR-107)
 SUITES['module_status'] = (8790, 'data-seed', True)   # Modulzustand zur Laufzeit (GR-102)
@@ -441,14 +438,9 @@ def main():
     except ValueError as e:
         sys.exit(str(e))
     names = sys.argv[1:] or list(SUITES)
-    if teil:   # Aufteilung über alle Gruppen (auch optionale), damit sie nicht davon abhängt, ob ein Build vorliegt
+    if teil:
         names = [n for n in names if n in teile(names, teil[1])[teil[0] - 1]]
         print(f'Teil {teil[0]}/{teil[1]}: {len(names)} Gruppen ({sum(gewicht(n) for n in names)} s geschätzt): {" ".join(names)}')
-    if not sys.argv[1:]:
-        for n, f in OPTIONAL.items():
-            if n in names and not os.path.isfile(f):
-                print(f'Hinweis: Gruppe {n} übersprungen – Build fehlt ({os.path.relpath(f, REPO)}; siehe tests/README.md)')
-        names = [n for n in names if n not in OPTIONAL or os.path.isfile(OPTIONAL[n])]
     unknown = [n for n in names if n not in SUITES]
     if unknown: sys.exit('Unbekannte Testgruppe: ' + ', '.join(unknown))
     if not names: sys.exit('Keine Testgruppe ausgewählt')

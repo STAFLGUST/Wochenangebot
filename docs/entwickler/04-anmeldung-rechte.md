@@ -560,7 +560,7 @@ Kunden sind eine eigene, externe Nutzergruppe (Dokument `kunden`, Zugang im Feld
   `angebot.eingabe` (der Modulzugang wirkt dort seit 15.11.2026 über das Modul der Aktion, siehe 4.4 – elf Aktionen
   bleiben als `zugang_gemeinsam` ausgenommen). Eine echte Trennung braucht eigene Oberflächen je Modul im
   Aktionsregister und einen Eingabebereich, der auf jedem Host nur die Daten seines Moduls lädt.
-- Die App kennt nur die lokale Anmeldung (Kopfzeile `X-WA-Sitzung`, Basisadresse z. B. `https://angebot-stafl.de`);
+- Die App-Schnittstelle (derzeit ohne Client) kennt nur die lokale Anmeldung (Kopfzeile `X-WA-Sitzung`, Basisadresse z. B. `https://angebot-stafl.de`);
   dort ist die Mitarbeiteranmeldung stillgelegt (410). Die Anmeldung über OIDC für Apps ist geplant (ADR-003 §2).
 
 Stand: 2026-11-15

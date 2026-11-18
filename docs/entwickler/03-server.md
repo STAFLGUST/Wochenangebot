@@ -442,7 +442,7 @@ der Vorlagendialog. Adress- und Länderlisten überträgt eine Datei nie.
   `respond()`/`fail()`. Den Bestellwunsch selbst (`kunde_bestellung`) nimmt `aktionen/kundenportal.php` an. Preise und
   Summen berechnet nur der Server aus dem veröffentlichten Angebot des Kunden (GR-004). Format:
   [bestell-api-v1.md](../bestell-api-v1.md).
-- **App-API:** Die App nutzt dieselben Aktionen. Statt Cookie sendet sie `X-WA-Client: app` und die Sitzungskennung
+- **App-API** (ruht, derzeit kein Client; die native App ist entfernt): Eine App nutzt dieselben Aktionen. Statt Cookie sendet sie `X-WA-Client: app` und die Sitzungskennung
   in `X-WA-Sitzung`; `respond()` gibt die aktuelle Kennung zurück (`app_session_header`). `app_info` liefert
   Mindestversion, Bestellfunktion, Wartung. Details: [app-api.md](../app-api.md).
 
