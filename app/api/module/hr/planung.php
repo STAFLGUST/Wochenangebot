@@ -126,11 +126,12 @@ function hr_planung_person(array $p, array $eintraege, int $jahr, array $pe, arr
             'einzeltage' => hr_einzeltage($p, $eintraege, $jahr, $pe, $zusatz), 'einzeltageMax' => $pe['einzeltageMax']];
 }
 
-/* Entstand der Eintrag in der Vorplanung des Jahres? = bis zum Stichtag erfasst (UTC-Zeit, ohne Erfassungszeit: nein) */
+/* Entstand der Eintrag in der Vorplanung des Jahres? = bis zum Stichtag erfasst (Kalendertag in deutscher Zeit wie der Stichtag,
+   ohne Erfassungszeit: nein) */
 function hr_vorplanung_eintrag(array $e, int $jahr, array $pe): bool
 {
-    $t = (string)($e['erfasst']['t'] ?? '');
-    return $t !== '' && substr($t, 0, 10) <= hr_planung_daten($pe, $jahr)['stichtag'];
+    $t = ortstag((string)($e['erfasst']['t'] ?? ''));
+    return $t !== '' && $t <= hr_planung_daten($pe, $jahr)['stichtag'];
 }
 /* Welche offenen Anträge stehen für diesen Mitarbeiter unter „Jahresplanung“ statt unter „Anträge“ (Inhaber 17.11.2026)?
    Rückgabe: Prüfer fn(Eintrag): bool. Nur die Personalstelle hat den Reiter; dorthin gehören offene Urlaubsanträge der

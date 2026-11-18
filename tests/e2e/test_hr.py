@@ -1290,6 +1290,21 @@ check('… Mitarbeiter nicht mehr im Urlaubsplan: sein offener Antrag steht wied
       [a_['planung'] for a_ in vi_ if a_['id'] in (PI_, PJ_)] == [False, False] and zahlen_(vi_, P.call('hr_start')[1])
       and not any(a_['id'] in (PI_, PJ_) for a_ in P.call(f'hr_planung&jahr={Y}')[1]['antraege']), [(a_['id'], a_['planung']) for a_ in vi_])
 rev = P.call('mitarbeiter_hr')[1]['rev']; hr(ids['fritz'], aktiv=True)
+# Stichtag in deutscher Zeit (HR6): 31.12. 23:30 zählt noch zur Vorplanung, 01.01. 00:30 (UTC noch 31.12.) nicht mehr
+ab_ = dokument('hr-abwesenheiten'); t_alt_ = {}
+for e_ in ab_['eintraege']:
+    if e_['id'] in (PI_, PJ_):
+        t_alt_[e_['id']] = e_['erfasst']['t']
+        e_['erfasst']['t'] = f'{Y - 1}-12-31T22:30:00Z' if e_['id'] == PI_ else f'{Y - 1}-12-31T23:30:00Z'
+ab_['rev'] = ab_.get('rev', 0) + 1
+storage_write('hr-abwesenheiten', ab_)
+vz_ = {a_['id']: a_['planung'] for a_ in offen_p_()}
+check('Stichtag 31.12. in deutscher Zeit: 23:30 noch Vorplanung, 00:30 am 01.01. nicht mehr', (vz_.get(PI_), vz_.get(PJ_)) == (True, False), (vz_.get(PI_), vz_.get(PJ_)))
+ab_ = dokument('hr-abwesenheiten')
+for e_ in ab_['eintraege']:
+    if e_['id'] in t_alt_: e_['erfasst']['t'] = t_alt_[e_['id']]
+ab_['rev'] = ab_.get('rev', 0) + 1
+storage_write('hr-abwesenheiten', ab_)
 st, r, raw_ = P.call(f'hr_planung&jahr={Y}', raw=True)
 an_ = {a_['id']: a_ for a_ in r['antraege']}
 pp_ = {p_['id']: p_ for p_ in r['personen']}
