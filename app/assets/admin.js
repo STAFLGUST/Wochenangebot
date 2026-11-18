@@ -1506,7 +1506,6 @@
         <div class="ghead">
           <div class="g-t"><input class="in g-name" data-gf="name" value="${esc(g.name)}" aria-label="Name der Angebotsgruppe" maxlength="200">
             <div class="g-sub">${unter}</div></div>
-          <span class="g-count">${plural(items.length, 'Artikel', 'Artikel')}</span>
           <span class="g-actions">
             ${kat ? '' : `<button type="button" class="ibtn" data-act="g-up" aria-label="Gruppe nach oben"${gi === 0 ? ' disabled' : ''}>${icon('up')}</button>
             <button type="button" class="ibtn" data-act="g-down" aria-label="Gruppe nach unten"${gi === vis.length - 1 ? ' disabled' : ''}>${icon('down')}</button>`}

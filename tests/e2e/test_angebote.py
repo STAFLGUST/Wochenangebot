@@ -374,6 +374,8 @@ def gruppe_je_angebot_oberflaeche(a, br, t):
     zeile = f'#groups tr[data-id="{x["id"]}"]'
     tab(a, 'Wochenangebot').click(); a.wait_for_selector(zeile)
     check('Editor Wochenangebot: Artikel unter der Basisgruppe, Gruppe des Kundenangebots fehlt', x['id'] in ed(basis) and a.locator('#groups section.gcard[data-gid="gx-chefs"]').count() == 0)
+    check('Gruppenkopf im Editor: keine Artikelzahl mehr (Wunsch des Inhabers 18.11.2026)',
+          a.locator('.ghead').count() >= 1 and a.locator('.ghead .g-count').count() == 0 and not re.search(r'\d+ Artikel', ' '.join(a.locator('.ghead').all_inner_texts())))
     check('Artikelzeile: Mülltonne statt X zum Entfernen aus dem Angebot', a.get_attribute(f'{zeile} [data-act=remove] use', 'href') == '#i-trash' and a.locator('symbol#i-trash').count() == 1)
     tab(a, 'Chefs').click(); a.wait_for_selector('#groups section.gcard[data-gid="gx-chefs"]')
     check('Editor Kundenangebot: Artikel unter der eigenen Gruppe mit ihrer Überschrift', set(ed('gx-chefs')) == {x['id'], v['id']} and x['id'] not in ed(basis)

@@ -58,7 +58,6 @@
 #print-root .pl-doc .al-st h3 { margin: 0; font-size: 15px; font-weight: 650; line-height: 1.25; letter-spacing: -.005em; text-transform: none; }
 #print-root .pl-doc .al-st > span { flex: none; font-size: 12px; color: #55554e; white-space: nowrap; }   /* auf dem dunkleren Balken noch 4,5 : 1 */
 #print-root .pl-doc .al-st.al-st-eh { padding-right: 6px; }   /* Balken mit „€/kg“ (Gruppe heißt wie ihr Bereich, eine Spalte): „€/kg“ bündig mit den Preisen */
-#print-root .pl-doc .al-st.al-st-eh > span:not(.al-eh) { margin-left: auto; }
 #print-root .pl-doc .al-st > .al-eh { font-size: 13px; font-weight: 650; color: #111; }
 #print-root .pl-doc .al-cols { display: grid; grid-template-columns: repeat(var(--k, 3), minmax(0, 1fr)); column-gap: var(--ab-spalte); align-items: start; }
 /* Text-Abschnitt des Designs: Überschrift und Text über die ganze Breite, Linie links in der Akzentfarbe */
