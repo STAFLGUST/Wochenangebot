@@ -24,9 +24,10 @@ function sec_log_entries(int $days): array
 function sec_timeline(array $entries): array
 {
     $days = [];
-    for ($i = 13; $i >= 0; $i--) $days[gmdate('Y-m-d', time() - $i * 86400)] = ['staff' => 0, 'kunde' => 0, 'reauth' => 0, 'geo' => 0, 'ok' => 0];
+    // deutsche Kalendertage; Kalenderrechnung statt 86400 s, sonst fehlt bzw. doppelt sich ein Tag an der Zeitumstellung
+    for ($i = 13; $i >= 0; $i--) $days[date('Y-m-d', strtotime("today -$i days"))] = ['staff' => 0, 'kunde' => 0, 'reauth' => 0, 'geo' => 0, 'ok' => 0];
     foreach ($entries as $e) {
-        $d = substr((string)$e['t'], 0, 10);
+        $d = ortstag((string)$e['t']);
         if (!isset($days[$d])) continue;
         if ($e['a'] === 'login_fail') $days[$d]['staff']++;
         elseif ($e['a'] === 'kunde_login_fail') $days[$d]['kunde']++;

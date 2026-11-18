@@ -11,6 +11,7 @@ Befund) mit Esc/Schließen und Fokus, Notfall auslösen in Schritten (Wirkung �
 Vorlage „Notfall“ startet den Notfallmodus, Dashboard-Hinweis im Notfall; hell/dunkel, Desktop und 390 px (Dialog als Blatt
 von unten); keine JavaScript-Fehler. Nur synthetische Testdaten.
 """
+import datetime as dt
 import json
 import sys
 import time
@@ -88,6 +89,15 @@ stunden = A.call('sicherheit_lage')[1]['lage']['stunden']
 soll = 22 - (int(time.time()) // 3600 - t0 // 3600)   # Stundenwechsel während des Aufrufs: der Eintrag rückt einen Balken nach links
 check('Lagebild: Angriff eine Minute vor der vollen Stunde zählt im Balken der Vorstunde', [i for i, x in enumerate(stunden) if x['angriffe'] >= 1000] == [soll],
       [(i, x['angriffe']) for i, x in enumerate(stunden) if x['angriffe']])
+# Verlauf 14 Tage nach deutschem Kalendertag: 23:30 UTC des Vortags ist 0:30 (Winter) bzw. 1:30 (Sommer) Ortszeit des heutigen Tags
+heute = dt.date.today()
+t = dt.datetime.combine(heute - dt.timedelta(days=1), dt.time(23, 30), dt.timezone.utc)
+vorher = {x['d']: x['staff'] for x in A.call('sicherheit_lage')[1]['lage']['timeline']}
+monat = 'protokoll/' + t.strftime('%Y-%m')
+storage_write(monat, (doc(monat) or []) + [{'t': t.strftime('%Y-%m-%dT%H:%M:%SZ'), 'u': 'erik', 'n': '', 'r': '', 'ip': '203.0.113.91', 'a': 'login_fail', 's': 'Test Ortstag'}])
+nachher = {x['d']: x['staff'] for x in A.call('sicherheit_lage')[1]['lage']['timeline']}
+check('Lagebild: Verlauf zählt Fehlanmeldung kurz nach Mitternacht beim deutschen Tag', nachher.get(str(heute), 0) - vorher.get(str(heute), 0) == 1
+      and nachher.get(str(heute - dt.timedelta(days=1))) == vorher.get(str(heute - dt.timedelta(days=1))), (str(heute), vorher, nachher))
 st, r = A.call('sicherheit_ereignisse')
 check('Ereignisse: Standard 7 Tage, Arten mit Zahlen', st == 200 and r['tage'] == 7 and {x['key'] for x in r['arten']} == {'anmeldung', 'kunden', 'konten', 'einstellungen', 'notfall'}, r.get('arten'))
 check('Ereignisse: Fehlanmeldung als Warnung', any(e['a'] == 'login_fail' and e['stufe'] == 'warn' and e['ip'] == '203.0.113.77' for e in r['ereignisse']))
