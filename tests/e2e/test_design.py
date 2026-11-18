@@ -126,10 +126,13 @@ with sync_playwright() as pw:
         t.close()
     for schema in ('light', 'dark'):
         t = page(1280, 900, schema)
-        werte = t.evaluate(KONTRAST, ['.al-st > span'])
         t.click('#modebar [data-mode=liste]'); t.wait_for_selector('table.grid tr.row .cond-unbekannt')
-        werte += t.evaluate(KONTRAST, ['.g-row .g-meta', '.cond-unbekannt'])
-        check(f'{schema}: kleine graue Zusätze (Artikelzahl, „Nicht angegeben“) mit Kontrast ≥ 4,5:1', all(w >= 4.5 for _, w in werte), werte)
+        ohne = t.locator('.g-row .g-meta').count()   # ohne Suche steht keine Artikelzahl am Gruppenkopf (Wunsch des Inhabers 18.11.2026)
+        werte = t.evaluate(KONTRAST, ['.cond-unbekannt'])
+        t.fill('#q', 'filet'); t.wait_for_selector('.g-row .g-meta')
+        werte += t.evaluate(KONTRAST, ['.g-row .g-meta'])
+        check(f'{schema}: Gruppenkopf ohne bloße Artikelzahl, bei einer Suche „x von y Artikeln“; kleine graue Zusätze mit Kontrast ≥ 4,5:1',
+              ohne == 0 and ' von ' in t.locator('.g-row .g-meta').first.inner_text() and len(werte) >= 2 and all(w >= 4.5 for _, w in werte), (ohne, werte))
         t.close()
     # Angebot ohne Artikel: eigener Hinweis statt „Prüfen Sie die Schreibweise …“ (Antwort nachgestellt, ohne Offline-Speicher)
     import json as _json

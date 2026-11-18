@@ -520,7 +520,8 @@ function thHTML(key, label, cls) {
 function groupHeaderInfo(list) {
   const shown = new Map();
   for (const i of list) shown.set(i.groupId, (shown.get(i.groupId) || 0) + 1);
-  return (gid) => { const s = shown.get(gid) || 0, t = DATA.groupTotal.get(gid) || 0; return s === t ? plural(t, 'Artikel', 'Artikel') : `${s} von ${t} Artikeln`; };
+  // Nur bei einer Suche/einem Filter: „3 von 12 Artikeln“. Die bloße Artikelzahl je Gruppe steht nirgends mehr (Wunsch des Inhabers 18.11.2026)
+  return (gid) => { const s = shown.get(gid) || 0, t = DATA.groupTotal.get(gid) || 0; return s === t ? '' : `${s} von ${t} Artikeln`; };
 }
 
 function renderTable(list, grouped) {
@@ -530,7 +531,7 @@ function renderTable(list, grouped) {
   for (const it of list) {
     if (grouped) {
       if (it.section !== sec) { sec = it.section; if (sec) rows.push(`<tr class="s-row"><th colspan="${KORDER ? 8 : 7}" scope="colgroup"><div class="s-in">${esc(sec)}</div></th></tr>`); }
-      if (it.groupId !== grp) { grp = it.groupId; rows.push(`<tr class="g-row"><th colspan="${KORDER ? 8 : 7}" scope="colgroup"><div class="g-in"><span class="g-name">${esc(it.group)}</span><span class="g-meta">${info(grp)}</span></div></th></tr>`); }
+      if (it.groupId !== grp) { grp = it.groupId; rows.push(`<tr class="g-row"><th colspan="${KORDER ? 8 : 7}" scope="colgroup"><div class="g-in"><span class="g-name">${esc(it.group)}</span>${info(grp) ? `<span class="g-meta">${info(grp)}</span>` : ''}</div></th></tr>`); }
     }
     rows.push(`<tr class="row${empfAn(it) ? ' werb-an' : ''}" data-id="${it.id}">
       <td class="c-fav">${starHTML(it)}</td>
@@ -721,9 +722,8 @@ function renderListe(list, grouped) {
   const m = DATA.meta || {};
   const head = `<div class="al-head">${PL_LOGO}<div class="al-ht"><h2>${esc(m.offerName && m.offerName !== 'Wochenangebot' && !m.einzel ? m.offerName + ' · ' : '')}${esc(plTitle())}</h2><span>${stand ? 'Stand ' + esc(stand) + ' · ' : ''}Preise in € je kg</span></div></div>${werbungHTML(false)}`;
   const bandHTML = (k) => (band) => `<div class="al-band" style="--k:${k}">${band.map(({ sec, c, cols }) => {
-    const n = sec.units.reduce((a, u) => a + u.items.length, 0);
     // Abschnitt ohne Namen neben einem benannten: unsichtbarer Platzhalter, damit die Blöcke der Zeile oben bündig beginnen
-    const kopf = sec.name ? `<div class="al-st"><h3>${plGroupName(sec.name)}</h3><span>${plural(n, 'Artikel', 'Artikel')}</span></div>`
+    const kopf = sec.name ? `<div class="al-st"><h3>${plGroupName(sec.name)}</h3></div>`
       : band.some((x) => x.sec.name) ? '<div class="al-st al-st-leer" aria-hidden="true"><h3>&nbsp;</h3></div>' : '';
     // allein in der Zeile: Band über die ganze Breite, Spalten so breit wie in den anderen Zeilen (übrige bleiben frei)
     const breite = band.length === 1 ? k : c;
@@ -774,12 +774,11 @@ function buildPrintListe(list, grouped, scopeText) {
     host: $('#print-root'), kopf, werbung: scopeText || !grouped ? '' : werbungHTML(false, true),   // Werbung wie am Bildschirm: nur im gesamten Angebot
     fuss: f, hinweis: druckHinweis(), modus: FUSS_PARAM || (f && f.modus) || 'letzte', stufe: STUFE_PARAM, raster: plRaster(),
     bereiche: abschnitte.flatMap((a, ab) => (a.art === 'text' ? [{ fest: plTextHTML(a), kopf: !!a.kopf, ab }] : plSections(a.units).map((sec) => {
-      const n = sec.units.reduce((x, u) => x + u.items.length, 0);
       return {
         k: a.spalten, ab, name: sec.name,
         // einzige Gruppe heißt wie ihr Bereich: steht der Bereich in einer Spalte, „€/kg“ im Balken statt eines zweiten Kopfes (angebot-druck.js, Wunsch 16.11.2026)
         kopfImBalken: sec.units.length === 1 && sec.units[0].items[0].group === sec.name,
-        balken: (forts, eh) => `<div class="al-st${eh ? ' al-st-eh' : ''}"><h3>${plGroupName(sec.name)}${forts ? ' <span class="al-cont">Forts.</span>' : ''}</h3><span>${plural(n, 'Artikel', 'Artikel')}</span>${eh ? '<span class="al-eh">€/kg</span>' : ''}</div>`,
+        balken: (forts, eh) => `<div class="al-st${eh ? ' al-st-eh' : ''}"><h3>${plGroupName(sec.name)}${forts ? ' <span class="al-cont">Forts.</span>' : ''}</h3>${eh ? '<span class="al-eh">€/kg</span>' : ''}</div>`,
         gruppen: sec.units.map((u) => ({ n: u.items.length, verteilen: u.key === 'all', block: (von, bis, forts, ohneKopf) => plBlockHTML({ u, items: u.items.slice(von, bis), cont: forts, ohneKopf }, 'print') })),
       };
     }))),
@@ -806,7 +805,7 @@ function renderCards(list, grouped) {
   const flush = () => { if (buf.length) { out += `<div class="cards">${buf.join('')}</div></div>`; buf = []; } };
   for (const it of list) {
     if (it.section !== sec) { flush(); if (sec !== null) out += '</section>'; sec = it.section; grp = null; out += `<section class="cards-section">${sec ? `<h2>${esc(sec)}</h2>` : ''}`; }
-    if (it.groupId !== grp) { flush(); grp = it.groupId; out += `<div class="cards-group"><h3>${esc(it.group)} <span>${info(grp)}</span></h3>`; }
+    if (it.groupId !== grp) { flush(); grp = it.groupId; out += `<div class="cards-group"><h3>${esc(it.group)}${info(grp) ? ` <span>${info(grp)}</span>` : ''}</h3>`; }
     buf.push(cardHTML(it, true));
   }
   flush();

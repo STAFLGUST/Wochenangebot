@@ -30,6 +30,8 @@ with sync_playwright() as pw:
     check('title follows the offer week, not the imported title (KW 45 instead of 43)', 'Freibleibendes Angebot für die KW 45 - 2026' in _kopf and 'KW 43' not in _kopf, _kopf)
     _kw.close(); storage_write('angebot', _doc)
     check('sections as headings', pg.locator('.al-st').count() == 4 and 'Eigene Zerlegung' in pg.locator('.al-st').first.inner_text(), pg.locator('.al-st').count())
+    check('section bars carry no article count any more (owner 18.11.2026): only the heading',
+          not _re.search(r'\d+ Artikel', ' '.join(pg.locator('.al-st').all_inner_texts())) and pg.locator('.al-st > span').count() == 0, pg.locator('.al-st').first.inner_text())
     check('one block per group, every article exactly once', pg.locator('.al-grp').count() >= 30 and pg.locator('.al tr.row').count() == 276
           and len(set(pg.eval_on_selector_all('.al tr.row', 'rs => rs.map(r => r.dataset.id)'))) == 276, (pg.locator('.al-grp').count(), pg.locator('.al tr.row').count()))
     check('group header with €/kg over the price column and a rule', '€/kg' in pg.locator('.al-h .al-eh').first.inner_text()

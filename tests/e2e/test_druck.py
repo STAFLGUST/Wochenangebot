@@ -363,6 +363,8 @@ with sync_playwright() as p:
       sonder: document.querySelectorAll('#list .al-band .al-sale').length, anfrage: document.querySelectorAll('#list .al-band td.al-np').length, alle: document.querySelectorAll('#list tr.row').length,
       hinweis: (document.querySelector('#list .al-note') || {}).innerText || '' })""")
     s = satz(pg)
+    balken = pg.evaluate("() => [...document.querySelectorAll('#print-root .al-st')].map((b) => b.textContent)")
+    check('Druck: Balken der Bereiche ohne Artikelzahl (Wunsch des Inhabers 18.11.2026)', len(balken) >= 4 and not any(re.search(r'\d+ Artikel', b) for b in balken), balken[:3])
     check('Druck-DOM: jeder Artikel der Angebotsansicht genau einmal, in derselben Reihenfolge', len(schirm['zeilen']) == 276 and s['zeilen'] == schirm['zeilen'], (len(s['zeilen']), len(schirm['zeilen'])))
     check('Druck-DOM: dieselben Gruppen und Bereiche in derselben Reihenfolge', s['gruppen'] == schirm['gruppen'] and len(s['gruppen']) == 32 and s['bereiche'] == schirm['bereiche'] and len(s['bereiche']) == 4,
           (len(s['gruppen']), len(schirm['gruppen']), s['bereiche']))
