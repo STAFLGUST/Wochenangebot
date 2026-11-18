@@ -2,7 +2,7 @@
 
 <!-- ERZEUGT von `python3 werkzeuge/doku.py erzeugen` – nicht von Hand ändern. Quelle: Funktionen und Kommentare im Code. Die CI prüft, dass diese Datei zum Code passt. -->
 
-22 Dateien, 490 Funktionen – in der Reihenfolge der Datei, **fett** die Abschnitte. Text = erste Aussage des Kommentars direkt über der Funktion (Python: Docstring). Übersicht aller Module: [README.md](README.md).
+22 Dateien, 491 Funktionen – in der Reihenfolge der Datei, **fett** die Abschnitte. Text = erste Aussage des Kommentars direkt über der Funktion (Python: Docstring). Übersicht aller Module: [README.md](README.md).
 
 ## `app/api/aktionen/qs.php`
 
@@ -161,6 +161,7 @@ _Qualitätssicherung · QM-System (IFS Wholesale)_
 - `qs_name_geschuetzt(name)` – Ordnername mit geschützter Nummer vorn („1.5 Mitarbeiter“, „_1.5.1_Zeugnisse“, auch „alt_1.5 …“ und „Kopie von 1.5 …“ wie in der Ordnerablage üblich; nicht …
 - `qs_geschuetzt(e, stamm)` – Eintrag (Dokument, Abschnitt, Prüfung, Maßnahme) geschützt?
 - `qs_dateien_sichtbar(dateien, me)` – Dateien eines Ordners, die $me sieht (Ordnerbaum, Ordner-ZIP, Ablage-Export, qs_datei): mit qs.bearbeiten alle, sonst keine aus einem Unterordner mit …
+- `qs_dok_dateien_sichtbar(d, me)` – Dokument für $me: Dateien geschützter Ordner (z. B. „1.5 Mitarbeiter“) an Versionen und ältere am Dokument (qs_ordner_dateien) nur für Bearbeiter, ihre Namen …
 - `qs_sichtbar(me, ...namen)` – Die eine Stelle für alle Lesewege (Liste, Suche, Zahlen, CSV, Dateien, Ordnerbaum, ZIP, Bericht, Verfahrensdoku): lädt die genannten Listen (dokumente, …
 - `qs_dok_sichtbar(d, me)`
 - `qs_protokoll_name(e, name)` – Name im Protokoll: aus geschützten Kapiteln nur die Kapitelnummer – das Protokoll sieht, wer „protokoll.sehen“ hat, nicht nur „bearbeiten“
@@ -648,7 +649,7 @@ _Qualitätssicherung (Modul qs, Oberfläche qs.intern unter /module/qs/) – QM-
 - `text(pg, sel)`
 - `anmelden(user, pw, ip, breite, thema, hoehe, ziel)`
 - `toast(pg, inhalt)`
-- `nachts_erfasst(route)` – „nachgetragen“ nach dem Erfassungstag in Ortszeit: erfasst 31.10. 23:30 UTC = 01.11. 00:30 in Berlin, Nachweis vom 31.10.
+- `nachts_erfasst(erfasst_t)`
 
 ## `tests/e2e/test_qs_ablage.py`
 

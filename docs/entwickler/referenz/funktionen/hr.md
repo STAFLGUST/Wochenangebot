@@ -2,7 +2,7 @@
 
 <!-- ERZEUGT von `python3 werkzeuge/doku.py erzeugen` – nicht von Hand ändern. Quelle: Funktionen und Kommentare im Code. Die CI prüft, dass diese Datei zum Code passt. -->
 
-11 Dateien, 297 Funktionen – in der Reihenfolge der Datei, **fett** die Abschnitte. Text = erste Aussage des Kommentars direkt über der Funktion (Python: Docstring). Übersicht aller Module: [README.md](README.md).
+11 Dateien, 298 Funktionen – in der Reihenfolge der Datei, **fett** die Abschnitte. Text = erste Aussage des Kommentars direkt über der Funktion (Python: Docstring). Übersicht aller Module: [README.md](README.md).
 
 ## `app/api/aktionen/hr.php`
 
@@ -329,7 +329,8 @@ _STAFL-Plattform · HR · Urlaub Gleittage-Konto (02.11.2026)_
 
 - `korrekturDialog(v)`
 - `zeigeKorrekturen()`
-- `antragTage(nServer)` – Arbeitstage des Antrags (Vorschau im Browser; verbindlich rechnet der Server). nServer: Zahl aus der Server-Vorschau (antragPruefen) – kennt Feiertage jedes …
+- `antragGeaendert()` – Antrag geändert (Zeitraum, Art, neue Daten): sofort die Zahl des Browsers, die des Servers folgt über antragPruefen
+- `antragTage(nServer)` – Arbeitstage des Antrags anzeigen (Vorschau im Browser; verbindlich rechnet der Server). nServer: Zahl aus der Server-Vorschau (antragPruefen) – kennt …
 - `antragPruefen()`
 
 **Vorplanung (Inhaber 10.11.2026): mehrere Zeiträume des nächsten Jahres auf einmal**

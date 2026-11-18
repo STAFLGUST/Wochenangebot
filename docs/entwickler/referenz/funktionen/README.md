@@ -10,10 +10,10 @@ Karte für Entwickler und Agenten: Abschnitte und Funktionen jeder Code-Datei (P
 | [Bestand](bestand.md) | `bestand` | 9 | 72 |
 | [Leergut](leergut.md) | `leergut` | 4 | 131 |
 | [CRM](crm.md) | `crm` | 9 | 177 |
-| [REWE](rewe.md) | `rewe` | 5 | 185 |
-| [Qualitätssicherung](qs.md) | `qs` | 22 | 490 |
+| [REWE](rewe.md) | `rewe` | 5 | 186 |
+| [Qualitätssicherung](qs.md) | `qs` | 22 | 491 |
 | [Einkauf](einkauf.md) | `einkauf` | 2 | 6 |
-| [HR](hr.md) | `hr` | 11 | 297 |
+| [HR](hr.md) | `hr` | 11 | 298 |
 | [Marketing](marketing.md) | `marketing` | 4 | 77 |
 | [Controlling](controlling.md) | `controlling` | 17 | 258 |
 | [Versand](versand.md) | `versand` | 4 | 31 |
