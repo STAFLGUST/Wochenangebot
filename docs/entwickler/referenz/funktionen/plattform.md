@@ -2,7 +2,7 @@
 
 <!-- ERZEUGT von `python3 werkzeuge/doku.py erzeugen` – nicht von Hand ändern. Quelle: Funktionen und Kommentare im Code. Die CI prüft, dass diese Datei zum Code passt. -->
 
-123 Dateien, 1248 Funktionen – in der Reihenfolge der Datei, **fett** die Abschnitte. Text = erste Aussage des Kommentars direkt über der Funktion (Python: Docstring). Übersicht aller Module: [README.md](README.md).
+123 Dateien, 1246 Funktionen – in der Reihenfolge der Datei, **fett** die Abschnitte. Text = erste Aussage des Kommentars direkt über der Funktion (Python: Docstring). Übersicht aller Module: [README.md](README.md).
 
 ## `.github/scripts/apt_vorrat.py`
 
@@ -650,10 +650,8 @@ _Mitarbeiter-Sitzung, Rollen, Passwortbestätigung, CSRF_
 
 **Sitzung**
 
-- `app_client()` – App-Zugriff (docs/app-api.md): Die App sendet „X-WA-Client: app“ und trägt die Sitzungskennung in der Kopfzeile „X-WA-Sitzung“ statt in einem Cookie; jede …
-- `app_session_header()`
 - `sitzung_cookie_name()`
-- `sitzung_vorhanden()` – Liegt überhaupt eine Sitzung vor – läuft schon eine oder legt der Aufrufer eine Kennung vor (Browser im Cookie, App in der Kopfzeile, wie start_session() sie …
+- `sitzung_vorhanden()` – Liegt überhaupt eine Sitzung vor – läuft schon eine oder legt der Browser eine Kennung im Cookie vor (wie start_session() sie liest)?
 - `start_session()`
 - `bg_request()` – Automatische Abfragen im Hintergrund (Abgleich mit anderen Bearbeitern) zählen nicht als Aktivität – die Abmeldung nach Inaktivität bleibt wirksam.
 - `current_user()`
@@ -1487,7 +1485,7 @@ _Passkeys (WebAuthn) für Mitarbeiter-Zugänge._
 - `sign(data)`
 - `register(opts, origin, rp, flags, typ, challenge, fmt, cose, name)`
 - `assertion(opts, origin, rp, flags, typ, challenge, count, handle, bad_sig)`
-- `__init__(ip, app)`
+- `__init__(ip, app)` – app: sendet die Kennzeichnung der früheren App („X-WA-Client: app“), die keine Wirkung mehr haben darf.
 - `call(action, data)`
 - `login(name, pw)`
 - `cookie()`

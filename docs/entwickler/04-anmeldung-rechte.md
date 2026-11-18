@@ -250,18 +250,17 @@ braucht, setzt `lokale_anmeldung = true`.
 `start_session()` setzt `Secure` (über HTTPS), `Path=/`, kein `Domain`, `HttpOnly`, `SameSite=Strict`,
 `session.use_strict_mode`. Über einfaches HTTP (lokale Tests) fehlt das Präfix, weil Browser `__Host-` dort verwerfen.
 Ein altes `WA_ADMIN` ohne Präfix wird über HTTPS nicht gelesen, sondern gelöscht. **Nie** ein Cookie mit
-`Domain=dashboard-stafl.de` setzen. Die App nutzt statt Cookie die Kopfzeile `X-WA-Sitzung` ([app-api.md](../app-api.md)).
+`Domain=dashboard-stafl.de` setzen. Eine Sitzung gilt nur über dieses Cookie; die Kopfzeilen der früheren App
+(`X-WA-Client`, `X-WA-Sitzung`) haben seit 18.11.2026 keine Wirkung mehr.
 
 **Keine Sitzung ohne vorgelegte Kennung (seit 15.11.2026).** `start_session()` legt für jede neue Kennung sofort eine
 Sitzungsdatei an und schickt ein Cookie. Deshalb rufen `current_user()` (`lib/sitzung.php`), `current_customer()`
 (`lib/kunden.php`), `fw_mitarbeiter()` (`lib/firewall.php`) und `druck_angemeldet()` (`module/angebot/druck.php`) es nur
 auf, wenn `sitzung_vorhanden()` wahr ist: Es läuft schon eine Sitzung, oder der Aufrufer legt eine Kennung vor – im
-Browser das Sitzungs-Cookie (auch das alte `WA_ADMIN` ohne Präfix, damit es weiter gelöscht wird), in der App die
-Kopfzeile `X-WA-Sitzung`. Vorher legte jede anonyme Anfrage an eine öffentliche Aktion (`kunde_status`, `offer`,
+Browser das Sitzungs-Cookie (auch das alte `WA_ADMIN` ohne Präfix, damit es weiter gelöscht wird). Vorher legte jede anonyme Anfrage an eine öffentliche Aktion (`kunde_status`, `offer`,
 `kunde_merkliste`, `kunde_logout`) eine leere Sitzungsdatei an, die bis zum Ende der Leerlaufzeit liegen blieb.
 Wer eine Sitzung **anlegen** will (`login`, `kunde_login`, `kunde_token_set`, Passkeys, OIDC), ruft `start_session()`
-weiterhin unbedingt auf – für angemeldete Nutzer ändert sich nichts. Geprüft in `tests/e2e/test_sitzung_cookie.py`
-und `tests/e2e/test_app_api.py`.
+weiterhin unbedingt auf – für angemeldete Nutzer ändert sich nichts. Geprüft in `tests/e2e/test_sitzung_cookie.py`.
 
 ### Sitzungsregister
 
@@ -560,7 +559,5 @@ Kunden sind eine eigene, externe Nutzergruppe (Dokument `kunden`, Zugang im Feld
   `angebot.eingabe` (der Modulzugang wirkt dort seit 15.11.2026 über das Modul der Aktion, siehe 4.4 – elf Aktionen
   bleiben als `zugang_gemeinsam` ausgenommen). Eine echte Trennung braucht eigene Oberflächen je Modul im
   Aktionsregister und einen Eingabebereich, der auf jedem Host nur die Daten seines Moduls lädt.
-- Die App-Schnittstelle (derzeit ohne Client) kennt nur die lokale Anmeldung (Kopfzeile `X-WA-Sitzung`, Basisadresse z. B. `https://angebot-stafl.de`);
-  dort ist die Mitarbeiteranmeldung stillgelegt (410). Die Anmeldung über OIDC für Apps ist geplant (ADR-003 §2).
 
 Stand: 2026-11-15

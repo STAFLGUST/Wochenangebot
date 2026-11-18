@@ -24,7 +24,6 @@ Eintrag – das Dashboard liest das Register, es gibt keine fest programmierte L
 | verwaltung | Stammdaten, Benutzer/Rechte (Oberfläche), Module & Wartung | `verwaltung.…/`, `/import/`, `/system/` (nie sperrbar) |
 | dashboard | Einstieg, keine Kachel | `dashboard-stafl.de` (nie sperrbar) |
 | plattform | Kern, keine Kachel | – |
-| mobile | App, keine Kachel | nutzt die API wie die Website |
 
 **Betrieb (ADR-007):** Das eine Image läuft in zwei Containern – `app` nur für die öffentliche Kundenseite (ohne
 Anmelde-Geheimnisse, ohne Netzweg zu Keycloak, gehärtet) und `app-mitarbeiter` für alle Mitarbeiter-Hosts. Der Code bleibt
@@ -156,7 +155,7 @@ Umsetzung (Phase 5):
   Noch offen: Durchsetzung „Aktion nur auf ihrem Host“ (GR-109), sobald es mehrere Hosts gibt.
 - Modulübergreifend nur über `vertrag.php` des Eigentümers (PHP-Funktionen mit festen Ein-/Ausgaben). Änderungen nur
   erweitern; Vertragstests je Funktion im Eigentümer-Modul. Beschreibung der Verträge unter `docs/plattform/schnittstellen/`.
-- Externe Schnittstellen (Bestell-API v1, App-API) bleiben versioniert wie heute.
+- Externe Schnittstellen (Bestell-API v1) bleiben versioniert wie heute.
 
 ## 8. Sicherheit (Querschnitt)
 

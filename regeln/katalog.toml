@@ -57,13 +57,14 @@ id = "GR-004"
 titel = "Bestellpreise rechnet nur der Server"
 beschreibung = "Preise und Summen eines Bestellwunsches berechnet ausschließlich der Server aus dem veröffentlichten Angebot des Kunden; vom Browser gesendete Preise werden ignoriert."
 verantwortlich = "angebot"
-module = ["angebot", "mobile"]
+module = ["angebot"]
 daten = ["bestellungen"]
 tests = ["e2e:bestellung", "e2e:order_management"]
 quelle = "AGENTS.md"
 status = "verbindlich"
-version = 1
+version = 2
 seit = "2026-10-21"
+geaendert = "2026-11-18: Modul mobile entfernt (App-Zugang geschlossen, Entscheidung des Inhabers 18.11.2026)"
 
 [[regel]]
 id = "GR-005"
@@ -272,14 +273,15 @@ id = "GR-110"
 titel = "Mitarbeiteranmeldung nur über den zentralen Identitätsanbieter"
 beschreibung = "Neue Mitarbeiter-Oberflächen bauen keine eigene Anmeldung, Passwort- oder Passkey-Prüfung, sondern nutzen OpenID Connect mit Keycloak (Realm mitarbeiter, Passkey oder zweiter Faktor Pflicht). Token bleiben auf dem Server; jede Anwendung ist ein eigener Client. Rechte prüft weiterhin unser Server je Aktion (GR-103). Externe Realms (QS-Portal) werden von Mitarbeiter-Anwendungen abgewiesen."
 verantwortlich = "plattform"
-module = ["dashboard", "angebot", "bestand", "crm", "rewe", "qs", "einkauf", "verwaltung", "plattform", "mobile"]
+module = ["dashboard", "angebot", "bestand", "crm", "rewe", "qs", "einkauf", "verwaltung", "plattform"]
 daten = ["nutzer"]
 tests = ["ci:Anmeldung über Keycloak prüfen", "datei:tests/oidc/test_oidc.py", "e2e:oidc_kern"]   # Ablauf in der CI umgesetzt (Roadmap 7b); produktiv erst mit Freigabe
 quelle = "AGENTS.md"
 status = "geplant"
 phase = 6
-version = 1
+version = 2
 seit = "2026-10-21"
+geaendert = "2026-11-18: Modul mobile entfernt (App-Zugang geschlossen, Entscheidung des Inhabers 18.11.2026)"
 
 [[regel]]
 id = "GR-111"

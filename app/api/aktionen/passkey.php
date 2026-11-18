@@ -4,8 +4,6 @@ declare(strict_types=1);
    Wird von api/index.php im globalen Gültigkeitsbereich eingebunden; jede Aktion endet mit respond()/fail(). */
 if (!defined('WA_API')) { http_response_code(404); exit; }   // nur über api/index.php nutzbar
 
-const PASSKEY_APP_FEHLER = 'In der App ist die Anmeldung mit Passkey nicht möglich – bitte den Code aus der Authenticator-App verwenden.';
-
 switch ($action) {
         case 'passkey_list': {
             $me = require_auth();
@@ -19,7 +17,6 @@ switch ($action) {
             $me = current_user();
             if (!$me) fail('Bitte erneut anmelden.', 401);
             require_csrf();
-            if (app_client()) fail(PASSKEY_APP_FEHLER, 403);
             unset($_SESSION['pkReg']);
             if (!empty($me['mustChange'])) fail('Bitte zuerst ein eigenes Passwort festlegen.', 403);
             $me = confirm_password($me, (string)(body()['password'] ?? ''));
@@ -32,7 +29,6 @@ switch ($action) {
             $me = current_user();
             if (!$me) fail('Bitte erneut anmelden.', 401);
             require_csrf();
-            if (app_client()) fail(PASSKEY_APP_FEHLER, 403);
             $p = passkey_take('pkReg');
             if (!$p || ($p['uid'] ?? '') !== $me['id'] || (int)($p['sv'] ?? -1) !== (int)$me['sv']) fail('Bitte die Einrichtung neu starten.', 409);
             $b = body();
@@ -95,7 +91,6 @@ switch ($action) {
         case 'passkey_login_begin': {
             start_session();
             attempts_check();
-            if (app_client()) fail(PASSKEY_APP_FEHLER, 403);
             $second = !empty(body()['second']);
             $u = null;
             if ($second) {
@@ -116,7 +111,6 @@ switch ($action) {
         case 'passkey_login': {
             start_session();
             attempts_check();
-            if (app_client()) fail(PASSKEY_APP_FEHLER, 403);
             $ch = passkey_take('pkAuth');
             if (!$ch) fail('Die Anfrage ist abgelaufen. Bitte erneut versuchen.', 401);
             $second = !empty($ch['second']);

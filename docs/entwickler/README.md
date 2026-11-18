@@ -41,8 +41,8 @@ Code passt oder eine Code-Datei keinen beschreibenden Kopfkommentar hat (`python
 - [`docs/plattform/`](../plattform/README.md) – Zielarchitektur, Entscheidungen (ADR), Roadmap, Arbeiten mit mehreren Agenten
 - [`tests/README.md`](../../tests/README.md) – alle Testgruppen mit Inhalt
 - [`docs/release-freigabe.md`](../release-freigabe.md), [`docs/datenbank.md`](../datenbank.md) – Betrieb
-- [`docs/app-grundlagen.md`](../app-grundlagen.md), [`docs/app-api.md`](../app-api.md) – Grundlagen und ruhende Schnittstelle der
-  (am 18.11.2026 entfernten) nativen App; es gibt nur die Web-App
+- [`docs/app-grundlagen.md`](../app-grundlagen.md) – Geschichte der (am 18.11.2026 entfernten) nativen App und ihres
+  geschlossenen Server-Zugangs; es gibt nur die Web-App
 - [`docs/bestell-api-v1.md`](../bestell-api-v1.md), [`docs/bestell-mailversand.md`](../bestell-mailversand.md) – Bestellungen
 - [`LIESMICH.md`](../../LIESMICH.md) – Funktionen aus Sicht der Anwender
 

@@ -78,7 +78,6 @@ Jede Code-Datei beginnt mit einem Kopfkommentar; dessen erste Aussage steht hier
 | --- | --- | --- |
 | `angebote.php` | angebot | Aktionen: Angebote (öffentlich und Eingabebereich) Wird von api/index.php im globalen Gültigkeitsbereich eingebunden; jede Aktion endet mit respond()/fail(). |
 | `anmeldekonten.php` | plattform | Aktionen: Konten der zentralen Anmeldung (Keycloak) aus Verwaltung → Mitarbeiter (nur Administratoren). anmeldekonto (lesen) |
-| `app.php` | plattform | Aktionen: Grunddaten für eine native App (Schnittstelle ruht, derzeit kein Client). |
 | `auswertung.php` | verwaltung | Aktionen: Auswertung (Karte der Kunden-Anmeldungen) und Aktualisieren der Ortsdaten Wird von api/index.php im globalen Gültigkeitsbereich eingebunden; jede Aktion endet mit respond()/fail(). |
 | `bestand.php` | bestand | Aktionen: Bestand und Stammdaten Wird von api/index.php im globalen Gültigkeitsbereich eingebunden; jede Aktion endet mit respond()/fail(). |
 | `controlling.php` | controlling | Aktionen: Controlling (Oberfläche controlling.intern, Fachlogik in app/api/module/controlling/) Rechte (GR-103): controlling.zugang – Modul öffnen (Register, standardmäßig niemand); controlling.umsatz_sehen – … |
@@ -599,8 +598,7 @@ Jede Code-Datei beginnt mit einem Kopfkommentar; dessen erste Aussage steht hier
 
 | Datei | Modul | Inhalt |
 | --- | --- | --- |
-| `app-api.md` | mobile | Schnittstelle für die App (iOS/Android) |
-| `app-grundlagen.md` | mobile | Grundlage für eine Kunden- und Mitarbeiter-App |
+| `app-grundlagen.md` | plattform | Grundlage für eine Kunden- und Mitarbeiter-App |
 | `architektur.md` | plattform | Architektur – was liegt wo |
 | `bestand-wochenpreise.md` | bestand | Bestand: Wochenpreise und erwartete Zugänge |
 | `bestell-api-v1.md` | angebot | Bestell-API, Antwortformat 1 |
@@ -652,7 +650,6 @@ Jede Code-Datei beginnt mit einem Kopfkommentar; dessen erste Aussage steht hier
 | `hr.md` | plattform | Funktionen: HR (`hr`) |
 | `leergut.md` | plattform | Funktionen: Leergut (`leergut`) |
 | `marketing.md` | plattform | Funktionen: Marketing (`marketing`) |
-| `mobile.md` | plattform | Funktionen: App-Schnittstelle (ruht) (`mobile`) |
 | `plattform.md` | plattform | Funktionen: Plattformkern (`plattform`) |
 | `qs.md` | plattform | Funktionen: Qualitätssicherung (`qs`) |
 | `rewe.md` | plattform | Funktionen: REWE (`rewe`) |
@@ -706,7 +703,6 @@ Jede Code-Datei beginnt mit einem Kopfkommentar; dessen erste Aussage steht hier
 | `hr.toml` | hr | Aktionen des Moduls „hr“ |
 | `leergut.toml` | leergut | Aktionen des Moduls „leergut“ |
 | `marketing.toml` | marketing | Aktionen des Moduls „marketing“ |
-| `mobile.toml` | mobile | Aktionen des Moduls „mobile“ |
 | `plattform.toml` | plattform | Aktionen des Moduls „plattform“ |
 | `qs.toml` | qs | Aktionen des Moduls „qs“ (QM-System nach IFS Wholesale): gelenkte Dokumente mit Versionen und Freigabe nach dem 4-Augen-Prinzip, QM-Handbuch (Abschnitte je Kapitel), Prüfplan mit Nachweisen und Fälligkeiten, … |
 | `rewe.toml` | rewe | Aktionen des Moduls „rewe“ |
@@ -773,7 +769,6 @@ Jede Code-Datei beginnt mit einem Kopfkommentar; dessen erste Aussage steht hier
 | `test_angebotsliste.py` | angebot | Angebotsliste (Standardansicht der Angebotsseite) |
 | `test_anmeldebremse.py` | plattform | Fehlversuchsbremse je Adresse (lib/protokoll.php), Abmelden mit CSRF und Bedrohungsliste ohne Nebenwirkung beim Lesen. - Eine erfolgreiche Anmeldung nimmt nur die Fehlversuche für denselben Namen zurück (eigene … |
 | `test_anmeldeseite.py` | plattform | Testgruppe anmeldeseite |
-| `test_app_api.py` | mobile | Schnittstelle für die App (docs/app-api.md) |
 | `test_aufbau.py` | angebot | Aufbau des Angebots (Knopf „Editor“ in „Angebot bearbeiten“, Wunsch des Inhabers 11.11.2026, Artikel 12.11.2026) |
 | `test_auswertung.py` | verwaltung | Auswertung: Karte der Kunden-Anmeldungen. |
 | `test_auth_hardening.py` | plattform | Direkte HTTP-Regressionen |
