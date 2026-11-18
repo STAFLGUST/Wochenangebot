@@ -49,13 +49,16 @@ def tag(n):
 
 
 # ── Rechenkern mit festem Stichtag (ohne Server) ──
-PHP = r"""define('WA_API', 1);
+PHP = r"""define('WA_API', 1); date_default_timezone_set('Europe/Berlin');   // wie api/index.php
+require $argv[1] . '/app/api/lib/kern.php';
 require $argv[1] . '/app/api/module/hr/urlaub.php';
 require $argv[1] . '/app/api/module/qs/qs.php';
 require $argv[1] . '/app/api/module/qs/bericht.php';
 $f = json_decode(file_get_contents('php://stdin'), true); $o = [];
 if (isset($f['monate'])) $o['monate'] = array_map(function ($x) { return qs_plus_monate($x[0], $x[1]); }, $f['monate']);
 if (isset($f['faellig'])) { $x = $f['faellig']; $o['faellig'] = qs_faelligkeit($x['p'], qs_nachweise_nach_pruefung($x['n'])[$x['p']['id']] ?? [], $x['heute']); }
+if (isset($f['ueberpruefung'])) $o['ueberpruefung'] = qs_ueberpruefung($f['ueberpruefung'], 36, '2026-11-15');
+if (isset($f['csvMassnahmen'])) $o['csv'] = qs_csv_massnahmen($f['csvMassnahmen']);
 if (isset($f['zeitraum'])) foreach ($f['zeitraum'] as $z) { try { qs_bericht_zeitraum($z[0], $z[1], $z[2]); $o['zeitraum'][] = 'ok'; } catch (InvalidArgumentException $e) { $o['zeitraum'][] = $e->getMessage(); } }
 if (isset($f['bericht'])) { $b = $f['bericht'];
   $o['bericht'] = qs_bericht_daten($b['stamm'], $b['dokumente'], $b['handbuch'], $b['plan'], $b['nachweise'], $b['massnahmen'], $b['namen'], $b['von'], $b['bis'], $b['heute']);
@@ -199,6 +202,28 @@ z = kern({'zeitraum': [['2026-01-01', '2027-01-16', '2027-01-15'], ['2026-02-01'
                        ['2025-01-15', '2027-01-15', '2027-01-15'], ['2026-02-30', '2026-03-01', '2027-01-15'], ['', '2026-03-01', '2027-01-15']]}).get('zeitraum', [])
 check('Zeitraum: nicht in der Zukunft, Von ≤ Bis, höchstens zwei Jahre (730 Tage ok), gültiges Datum, Pflicht',
       len(z) == 6 and 'Zukunft' in z[0] and 'Von muss vor Bis' in z[1] and 'zwei Jahre' in z[2] and z[3] == 'ok' and 'gültiges Datum' in z[4] and 'bitte ein Datum' in z[5], z)
+
+# Zeitstempel sind UTC, Kalendertage gelten in Ortszeit: 31.10. 23:30 UTC ist der 01.11. 00:30 in Berlin
+NACHT = '2026-10-31T23:30:00Z'
+PN = {'id': 'pN', 'kapitel': '1.4', 'titel': 'Monatlich ab Anlage', 'intervall': 'monatlich', 'start': '', 'aktiv': True, 'erstellt': {'t': NACHT}}
+f = kern({'faellig': {'p': PN, 'n': [], 'heute': '2026-11-15'}}).get('faellig', {})
+check('Ortszeit: monatlich ohne Startdatum, angelegt 01.11. 00:30 (31.10. UTC) – Oktober nicht versäumt, Ampel nicht rot',
+      f.get('versaeumtAnzahl') == 0 and f.get('ampel') == 'gruen' and [m['faellig'] for m in f.get('monate', []) if m['m'] == '2026-10'] == [0], f)
+MN = [{'id': 'mN1', 'nr': '2026-101', 'quelle': 'intern', 'kapitel': '1.4', 'feststellung': 'nachts erfasst', 'massnahme': '', 'zustaendig': '', 'frist': '', 'status': 'offen',
+       'erfasst': {'t': NACHT}},
+      {'id': 'mN2', 'nr': '2026-102', 'quelle': 'intern', 'kapitel': '1.4', 'feststellung': 'nachts wirksam', 'massnahme': '', 'zustaendig': '', 'frist': '', 'status': 'wirksam',
+       'erfasst': {'t': '2026-08-01T08:00:00Z'}, 'wirksamkeit': {'t': '2026-09-30T22:30:00Z', 'notiz': ''}}]
+DN = [{'id': 'dN', 'kapitel': '1.4', 'nr': '1.4-F09', 'titel': 'Nachts', 'art': 'F', 'versionen': [V_(1, '2020-01-01', 'freigegeben')],
+       'ueberprueft': {'t': NACHT, 'von': 'Quinn', 'notiz': ''}, 'eingezogen': {'t': '2026-09-30T22:30:00Z', 'von': 'Quinn', 'grund': 'alt'}}]
+b = bericht([PN], [], '2026-10-01', '2026-10-31', '2026-11-15', massnahmen=MN, dokumente=DN)
+check('Ortszeit im Bericht Oktober: Prüfung erst ab 01.11. fällig, Maßnahme vom 01.11. nicht, am 01.10. wirksame dabei, Einziehung 01.10., Überprüfung 01.11. nicht',
+      [(x['id'], x.get('faellig')) for x in b.get('pruefungen', [])] in ([], [('pN', 0)]) and [m['nr'] for m in b.get('massnahmen', [])] == ['2026-102']
+      and [m['abgeschlossen'] for m in b['massnahmen']] == ['2026-10-01'] and [(x['datum'], x['vorgang']) for x in b['dokumente']['vorgaenge']] == [('2026-10-01', 'eingezogen')], b)
+u = kern({'ueberpruefung': {**DN[0], 'eingezogen': None}}).get('ueberpruefung', {})
+check('Ortszeit: Überprüfung am 01.11. 00:30 gilt seit 01.11.', u.get('seit') == '2026-11-01' and u.get('faelligAb') == '2029-11-01', u)
+MC = {'bezug': '', 'korrektur': '', 'ursache': '', 'erledigtAm': ''}
+c = kern({'csvMassnahmen': [{**MN[1], **MC}]}).get('csv', '')
+check('Ortszeit: CSV der Maßnahmen mit Wirksamkeit am 01.10.2026', '"01.10.2026"' in c and '30.09.2026' not in c, c[-300:])
 
 # ── Schnittstelle ──
 A = Client('198.51.100.2')

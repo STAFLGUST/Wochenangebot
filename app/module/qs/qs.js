@@ -852,7 +852,7 @@
     const nw = S.d.nachweise.filter((n) => n.pruefung === p.id);
     $('#pr-nachweise').innerHTML = nw.length ? `<table class="qm-tabelle qm-karten"><thead><tr><th>Datum</th><th>Ergebnis</th><th>Bemerkung</th><th>Durchgeführt</th><th>Maßnahme</th><th></th></tr></thead><tbody>${nw.map((n) => {
       const m = n.massnahme ? S.d.massnahmen.find((x) => x.id === n.massnahme) : null;
-      const nach = n.erfasst && n.erfasst.t.slice(0, 10) > n.datum;
+      const nach = n.erfasst && window.STAFL_FORMAT.datum(n.erfasst.t).split('.').reverse().join('-') > n.datum;   // Erfassungstag in Ortszeit, nicht UTC
       const eigenN = n.erfasst && String(n.erfasst.vonId) === String(S.d.ich.id);
       return `<tr${n.storno ? ' class="qm-storniert"' : ''}><td data-label="Datum">${esc(datum(n.datum))}${nach ? ' ' + chip('nachgetragen') : ''}</td>
         <td data-label="Ergebnis">${chip(S.d.ergebnisse[n.ergebnis] || n.ergebnis, n.ergebnis === 'io' ? 'gruen' : 'rot')}</td>

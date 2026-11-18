@@ -495,7 +495,7 @@ function qs_ueberpruefung(array $d, int $monate, string $heute): ?array
     $g = qs_ver_index($d, ['freigegeben']);
     if ($g === null) return null;
     $seit = (string)($d['versionen'][$g]['datum'] ?? '');
-    $u = substr((string)($d['ueberprueft']['t'] ?? ''), 0, 10);
+    $u = ortstag((string)($d['ueberprueft']['t'] ?? ''));
     if ($u !== '' && $u > $seit) $seit = $u;
     if ($seit === '') return ['seit' => '', 'faelligAb' => '', 'faellig' => true];
     $ab = qs_plus_monate($seit, $monate);
@@ -621,7 +621,7 @@ function qs_faelligkeit(array $p, array $eigene, string $heute): array
     $kal = isset(QS_KALENDER[$iv]) && !empty($p['aktiv']);
     $erledigt = [];
     if ($kal) foreach ($eigene as $n) if ($n['datum'] <= $heute) $erledigt[qs_periode(QS_KALENDER[$iv], $n['datum'])] = true;
-    $ab = (string)($p['start'] ?? '') ?: substr((string)($p['erstellt']['t'] ?? $heute), 0, 10);
+    $ab = (string)($p['start'] ?? '') ?: ortstag((string)($p['erstellt']['t'] ?? $heute));
     $f['monate'] = qs_monatsverlauf($eigene, $heute, $kal ? $iv : null, $ab, $erledigt);
     return $f;
 }
@@ -638,7 +638,7 @@ function qs_faelligkeit_kern(array $p, array $eigene, string $heute): array
         $erledigt = [];
         foreach ($eigene as $n) if ($n['datum'] <= $heute) $erledigt[qs_periode($art, $n['datum'])] = true;
         $ab = (string)($p['start'] ?? '');
-        if ($ab === '') $ab = substr((string)($p['erstellt']['t'] ?? $heute), 0, 10);
+        if ($ab === '') $ab = ortstag((string)($p['erstellt']['t'] ?? $heute));
         if ($ab > $heute) {   // beginnt erst später
             $erste = qs_perioden($iv, $ab, qs_plus_tage($ab, 40))[0] ?? null;
             $out['naechste'] = $erste ? $erste[1] : $ab; $out['restTage'] = qs_tage_bis($heute, $out['naechste']); $out['ampel'] = 'gruen';
@@ -828,7 +828,7 @@ function qs_csv_massnahmen(array $liste): string
         $z[] = [$m['nr'], QS_QUELLEN[$m['quelle']] ?? $m['quelle'], $m['bezug'], $m['kapitel'], $m['anforderung'] ?? '', $m['bewertung'] ?? '', $m['feststellung'],
                 $m['korrektur'], $m['korrekturVerantwortlich'] ?? '', qs_de((string)($m['korrekturFrist'] ?? '')), qs_de((string)($m['korrekturErledigt'] ?? '')), $m['nachweisDoku'] ?? '',
                 $m['ursache'], $m['massnahme'], $m['zustaendig'], qs_de((string)$m['frist']), qs_de((string)($m['erledigtAm'] ?? '')), QS_MASSN_STATUS[$m['status']] ?? $m['status'],
-                $m['freigabeVon'] ?? '', qs_de((string)($m['freigabeDatum'] ?? '')), qs_de(substr((string)($w['t'] ?? ''), 0, 10)), $w['von'] ?? '', $w['notiz'] ?? ''];
+                $m['freigabeVon'] ?? '', qs_de((string)($m['freigabeDatum'] ?? '')), qs_de(ortstag((string)($w['t'] ?? ''))), $w['von'] ?? '', $w['notiz'] ?? ''];
     }
     return qs_csv(['Nr.', 'Quelle', 'Bezug', 'Kapitel', 'IFS-Anforderung', 'Bewertung', 'Feststellung', 'Korrektur', 'Korrektur verantwortlich', 'Korrektur bis', 'Korrektur erledigt',
                    'Nachweis', 'Ursache', 'Korrekturmaßnahme', 'Zuständig', 'Frist', 'Umgesetzt am', 'Status', 'Freigabe durch', 'Freigabedatum', 'Wirksam am', 'Wirksamkeit geprüft von', 'Wirksamkeit'], $z);
