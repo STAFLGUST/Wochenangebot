@@ -717,7 +717,7 @@
   });
   $('#view-kunden').addEventListener('keydown', (e) => { if (e.key === 'Enter' && e.target.matches('tr[data-kid]')) openKunde(e.target.dataset.kid); });
   /* Vorschlag für den Benutzernamen aus der Firma */
-  const unameFrom = (t) => fold(t).replace(/ä/g, 'ae').replace(/ö/g, 'oe').replace(/ü/g, 'ue').replace(/ß/g, 'ss').replace(/\b(gmbh|co|kg|ag|ug|ohg|e\.?k|mbh|und|&)\b/g, ' ').replace(/[^a-z0-9]+/g, '.').replace(/^\.+|\.+$/g, '').slice(0, 32);
+  const unameFrom = (t) => fold(String(t ?? '').toLowerCase().replace(/ä/g, 'ae').replace(/ö/g, 'oe').replace(/ü/g, 'ue').replace(/ß/g, 'ss')).replace(/\b(gmbh|co|kg|ag|ug|ohg|e\.?k|mbh|und|&)\b/g, ' ').replace(/[^a-z0-9]+/g, '.').replace(/^\.+|\.+$/g, '').slice(0, 32);
   function openKunde(id) {
     const c = id ? kunden.find((x) => x.id === id) : null;
     editKid = id;

@@ -2102,7 +2102,7 @@
      Kunden einer zugeordneten Kundengruppe sehen das Angebot ohne eigene Freischaltung (Server: customer_offers). */
   let offerEdit = null, ofDirty = false, ofKg = [], ofKunden = null, ofPick = null;
   const slug = (t) => {
-    const x = fold(t).replace(/^wochenangebot\s*/, '').replace(/ä/g, 'ae').replace(/ö/g, 'oe').replace(/ü/g, 'ue').replace(/ß/g, 'ss').replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 32) || 'angebot';
+    const x = fold(String(t ?? '').toLowerCase().replace(/ä/g, 'ae').replace(/ö/g, 'oe').replace(/ü/g, 'ue').replace(/ß/g, 'ss')).replace(/^wochenangebot\s*/, '').replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 32) || 'angebot';
     return /^e-/.test(x) || /^\d+$/.test(x) ? `angebot-${x}`.slice(0, 40) : x;   // „e-…“ gehört Einzelangeboten, reine Zahlen gehen in JSON-Schlüsseln kaputt
   };
   function openOffers() { setView('angebote'); }

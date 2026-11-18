@@ -829,6 +829,15 @@ with sync_playwright() as p:
     a.click('#vt-edit'); a.wait_for_selector('#view-edit:not([hidden]) tr[data-id]')
     check('admin deletes offer: tab gone', tab(a, 'Metro').count() == 0)
     r = get(a, f'offer&angebot={metro}'); check('deleted offer not deliverable (404)', r[0] == 404, r[0])
+    # Kennung eines neuen Angebots aus dem Namen: Umlaute ausgeschrieben, nicht nur gefaltet
+    a.click('[data-ob=manage]'); a.wait_for_selector('#view-angebote:not([hidden]) tr[data-oi]')
+    a.click('[data-ofa=add]'); a.locator('#view-angebote [data-of=name]').last.fill('Wochenangebot Bäckerei Müller')
+    a.click('[data-ofa=save]'); bestaetigt(a, 'Angebote gespeichert')
+    ids = [o['id'] for o in get(a, 'offers')[1]['offers']]
+    check('new offer id spells out umlauts (baeckerei-mueller)', 'baeckerei-mueller' in ids, ids)
+    a.locator('#view-angebote tr[data-oi]:has(input[value*="Bäckerei"]) [data-ofa=del]').click(); a.click('#dlg-confirm [data-v="1"]')
+    a.click('[data-ofa=save]'); bestaetigt(a, 'Angebote gespeichert')
+    a.click('#vt-edit'); a.wait_for_selector('#view-edit:not([hidden]) tr[data-id]')
     # Gleichnamiges Angebot neu anlegen: die alte ID (mit Kundenpreis 19,50 im veröffentlichten Angebot) wird nie wiederverwendet
     cur = get(a, 'offers')[1]
     r = post(a, 'offers_save', {'rev': cur['rev'], 'offers': cur['offers'] + [{'id': metro, 'name': 'Wochenangebot Metro', 'fallback': 'hidden'}]})
