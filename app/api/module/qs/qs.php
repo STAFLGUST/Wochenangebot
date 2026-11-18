@@ -152,6 +152,32 @@ function qs_dateien_sichtbar(array $dateien, array $me): array
     if (may($me, 'qs.bearbeiten')) return $dateien;
     return array_values(array_filter($dateien, function (array $f): bool { return !array_filter(explode('/', (string)($f['pfad'] ?? '')), 'qs_name_geschuetzt'); }));
 }
+/* Dokument für $me: Dateien geschützter Ordner (z. B. „1.5 Mitarbeiter“) an Versionen und ältere am Dokument (qs_ordner_dateien) nur für
+   Bearbeiter, ihre Namen auch nicht in den Verlaufstexten („Datei entfernt: …“) – wie beim Herunterladen (qs_dateien_sichtbar) */
+function qs_dok_dateien_sichtbar(array $d, array $me): array
+{
+    if (may($me, 'qs.bearbeiten')) return $d;
+    $weg = [];
+    $sichtbar = function (array $alle) use ($me, &$weg): array {
+        $da = qs_dateien_sichtbar($alle, $me);
+        foreach (array_diff(array_column($alle, 'name'), array_column($da, 'name')) as $n) if ((string)$n !== '') $weg[] = (string)$n;
+        return $da;
+    };
+    foreach ((array)($d['versionen'] ?? []) as $i => $v) if (isset($v['dateien'])) $d['versionen'][$i]['dateien'] = $sichtbar((array)$v['dateien']);
+    $alt = qs_ordner_dateien($d, []);
+    if ($alt) $d = array_replace($d, ['dateien' => $sichtbar($alt)]);
+    if (!$weg) return $d;
+    // nur ganze Namen ersetzen: „Plan“ nicht mitten in „Planung“
+    usort($weg, function ($a, $b) { return strlen($b) - strlen($a); });
+    $re = '/(?<![\p{L}\p{N}])(?:' . implode('|', array_map(function ($n) { return preg_quote($n, '/'); }, $weg)) . ')(?![\p{L}\p{N}])/u';
+    $ohne = function (array $e) use ($re): array {
+        foreach ((array)($e['verlauf'] ?? []) as $k => $l) $e['verlauf'][$k]['was'] = (string)preg_replace($re, 'personenbezogene Datei', (string)($l['was'] ?? ''));
+        return $e;
+    };
+    $d = $ohne($d);
+    foreach ((array)($d['versionen'] ?? []) as $i => $v) $d['versionen'][$i] = $ohne($v);
+    return $d;
+}
 /* Die eine Stelle für alle Lesewege (Liste, Suche, Zahlen, CSV, Dateien, Ordnerbaum, ZIP, Bericht, Verfahrensdoku): lädt die genannten
    Listen (dokumente, handbuch, pruefplan, nachweise, massnahmen) und gibt zurück, was $me davon sieht. Mit qs.bearbeiten alles; sonst aus
    geschützten Kapiteln nur die eigenen Prüfungen (qs_pruefung_meine) mit ihren Nachweisen und die eigenen Maßnahmen (qs_massnahme_meine) –
@@ -503,19 +529,7 @@ function qs_ueberpruefung(array $d, int $monate, string $heute): ?array
 }
 function qs_dok_aus(array $d, int $monate, string $heute, array $me): array
 {
-    // Dateinamen geschützter Ordner (z. B. „1.5 Mitarbeiter“) nur für Bearbeiter – wie beim Herunterladen (qs_dateien_sichtbar),
-    // auch in den Verlaufstexten („Datei zugeordnet: …“)
-    $weg = [];
-    foreach ((array)($d['versionen'] ?? []) as $i => $v) {
-        $da = qs_dateien_sichtbar((array)($v['dateien'] ?? []), $me);
-        foreach (array_diff(array_column((array)($v['dateien'] ?? []), 'name'), array_column($da, 'name')) as $n) $weg[(string)$n] = 'personenbezogene Datei';
-        if (isset($v['dateien'])) $d['versionen'][$i]['dateien'] = $da;
-    }
-    if ($weg) {
-        $ohne = function (array $e) use ($weg): array { foreach ((array)($e['verlauf'] ?? []) as $k => $l) $e['verlauf'][$k]['was'] = strtr((string)($l['was'] ?? ''), $weg); return $e; };
-        $d = $ohne($d);
-        foreach ($d['versionen'] as $i => $v) $d['versionen'][$i] = $ohne($v);
-    }
+    $d = qs_dok_dateien_sichtbar($d, $me);
     return $d + ['zustand' => qs_dok_status($d), 'ueberpruefung' => qs_ueberpruefung($d, $monate, $heute)];
 }
 /* Neuer Entwurf (Version ohne Nummer) */
