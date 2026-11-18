@@ -349,7 +349,7 @@ _STAFL-Plattform · HR · Urlaub Gleittage-Konto (02.11.2026)_
 **Kalender / Monatsplan**
 
 - `kalLegende(sicht, abt)`
-- `heuteSichtbar()` – Spalte „heute“ in den sichtbaren Bereich holen (am Handy scrollt die Tabelle waagerecht): nur wenn sie verdeckt ist, dann mittig rechts neben die festen Namen
+- `heuteSichtbar()` – Spalte „heute“ in den sichtbaren Bereich holen (am Handy scrollt die Tabelle waagerecht): nur wenn sie verdeckt ist, dann mittig rechts neben die festen Namen.
 - `kalZusammen(daten, von, bis)` – Monatsdaten zu einem Plan zusammenführen: Tage im Zeitraum, Mitarbeiter je Abteilung in der Reihenfolge des Servers, Kürzel je Datum (der Server liefert je …
 - `ladeKalender()`
 - `kalFilter(alle)`
