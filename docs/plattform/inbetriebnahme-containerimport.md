@@ -45,7 +45,8 @@ Die Kartendatei selbst lädt `sh deploy/karte-laden.sh laden herkunft` (geladen 
 | Seite öffnet, zeigt aber „keine Berechtigung“ | „EUDR ansehen“ fehlt (Schritt 5). |
 | Karte zeigt nur Länderumrisse | Die Kartendienste antworten nicht (Netz des Arbeitsplatzes, Dienst gestört) **und** die Kartendatei des Servers kommt nicht an. Browser-Konsole ansehen: eine Meldung zur Content-Security-Policy heißt, die Adresse fehlt im `Caddyfile` (Zuordnung `csp_karten`). |
 | Karte mit Satellitenbild, aber ohne die Ebene „Straßen und Orte“ | Schritt 4 fehlt, oder die Kartendatei ist nicht geladen (`ls -l daten-karte/herkunft.pmtiles`). |
-| Bildauswertung fehlt im Fenster „Betrieb“ | Dienste nicht erreichbar (wie oben) oder der Betrieb ist nur ein Punkt. „Nicht möglich“ nennt den Grund. |
+| In der Auswahl „Ebenen“ fehlt ein Eintrag | Dieser Dienst hat beim Öffnen der Karte nicht innerhalb von acht Sekunden geantwortet. Die Karte prüft beim nächsten Öffnen neu (Ansicht wechseln oder Seite neu laden). |
+| Bildauswertung fehlt im Fenster „Betrieb“ | Walddienst oder Waldverlust nicht erreichbar (wie oben) oder der Betrieb ist nur ein Punkt. „Nicht möglich“ nennt den Grund. |
 
 ## 5. Rückfall
 

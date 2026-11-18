@@ -21,7 +21,7 @@
      erstellen(element, optionen)      → Promise<Karte>
        optionen: { karte: 'karte'|'herkunft'|null (keine Kartendatei, nur mit raster),
                    raster: [{ id, kacheln: [Adresse mit {z}/{x}/{y} oder {bbox-epsg-3857}], maxzoom, deckkraft, quelle (HTML), sichtbar }] in Zeichenreihenfolge,
-                   punkte, farbe: 'gruen'|'rot'|'grau', beiKlick(id, punkt), beiBewegung(), beiLeerklick(), rahmen: [lon1, lat1, lon2, lat2] }
+                   punkte, farbe: 'gruen'|'rot'|'grau', beiKlick(id, punkt), beiBewegung(), beiLeerklick(lon, lat), rahmen: [lon1, lat1, lon2, lat2] }
        punkt:    { id, lon, lat, n (Anzahl), aus (inaktiv), titel, farbe (eigene Farbe als #rrggbb, sonst die der Karte) }
      Karte: setzePunkte(punkte), passend(), zoom(+1|-1), zentriere(lon, lat, zoom), position(lon, lat) → [x, y],
             markiere(id), anzahl(), groesse(), entfernen(); map (MapLibre). Am Element: element.staflKarte und
@@ -100,27 +100,34 @@
     const t = document.documentElement.dataset.theme;
     return t ? t === 'dark' : matchMedia('(prefers-color-scheme: dark)').matches;
   };
+  /* Ebenen der Kartendatei über einem Bild: Hintergrund, Linien und Beschriftung (Flächen würden das Bild verdecken);
+     Straßen halb durchsichtig und ohne Rand, damit das Bild lesbar bleibt */
+  const ueberBild = (layers) => layers.filter((l) => l.type === 'background' || l.type === 'symbol' || (l.type === 'line' && !l.id.includes('casing')))
+    .map((l) => (l.type === 'line' ? { ...l, paint: { ...l.paint, 'line-opacity': 0.5 } } : l));
   /* Stil der Karte. Ohne Rasterebenen: die Kartendatei mit allen Ebenen. Mit Rasterebenen: Hintergrund, die Bilder in der
-     gegebenen Reihenfolge, darüber aus der Kartendatei nur Linien und Beschriftung (Flächen würden die Bilder verdecken). */
+     gegebenen Reihenfolge, darüber – wenn eine Kartendatei gewählt ist – Linien und Beschriftung. */
   function stil(art, karte, raster) {
     if (!stile[art]) {
       stile[art] = fetch(BASIS + 'karte/stil-' + art + '.json').then((r) => { if (!r.ok) throw new Error('Kartenstil nicht geladen'); return r.json(); });
     }
-    return stile[art].then((s) => ({
-      version: 8,
-      glyphs: BASIS + 'karte/schrift/{fontstack}/{range}.pbf',
-      sprite: BASIS + 'karte/sprite/' + s.sprite,
-      sources: {
-        ...(karte ? { protomaps: { type: 'vector', url: 'pmtiles://' + datei(karte), attribution: ATTRIBUTION } } : {}),
-        ...Object.fromEntries(raster.map((r) => ['raster-' + r.id, { type: 'raster', tiles: r.kacheln, tileSize: 256, maxzoom: r.maxzoom || 14, attribution: r.quelle || '' }])),
-      },
-      layers: raster.length ? [
-        { id: 'hintergrund', type: 'background', paint: { 'background-color': art === 'dunkel' ? '#1d1b1c' : '#e8e4de' } },
-        ...raster.map((r) => ({ id: 'raster-' + r.id, type: 'raster', source: 'raster-' + r.id,
-          layout: { visibility: r.sichtbar === false ? 'none' : 'visible' }, paint: { 'raster-opacity': r.deckkraft === undefined ? 1 : r.deckkraft } })),
-        ...(karte ? s.layers.filter((l) => l.type === 'line' || l.type === 'symbol') : []),
-      ] : s.layers,
-    }));
+    return stile[art].then((s) => {
+      const [hintergrund, ...darueber] = ueberBild(s.layers);
+      return {
+        version: 8,
+        glyphs: BASIS + 'karte/schrift/{fontstack}/{range}.pbf',
+        sprite: BASIS + 'karte/sprite/' + s.sprite,
+        sources: {
+          ...(karte ? { protomaps: { type: 'vector', url: 'pmtiles://' + datei(karte), attribution: ATTRIBUTION } } : {}),
+          ...Object.fromEntries(raster.map((r) => ['raster-' + r.id, { type: 'raster', tiles: r.kacheln, tileSize: 256, maxzoom: r.maxzoom || 14, attribution: r.quelle || '' }])),
+        },
+        layers: raster.length ? [
+          hintergrund,
+          ...raster.map((r) => ({ id: 'raster-' + r.id, type: 'raster', source: 'raster-' + r.id,
+            layout: { visibility: r.sichtbar === false ? 'none' : 'visible' }, paint: { 'raster-opacity': r.deckkraft === undefined ? 1 : r.deckkraft } })),
+          ...(karte ? darueber : []),
+        ] : s.layers,
+      };
+    });
   }
 
   function geojson(punkte) {
@@ -158,8 +165,9 @@
     map.on('idle', () => { el.dataset.karte = 'bereit'; });
     map.on('movestart', () => { el.dataset.karte = 'laedt'; });
     map.on('dataloading', () => { el.dataset.karte = 'laedt'; });
-    // Fehlende Schriftbereiche (seltene Schriftzeichen) und Symbole leise übergehen – die Karte bleibt nutzbar
-    map.on('error', (e) => { const m = String(e && e.error && e.error.message || ''); if (!/glyph|sprite|image/i.test(m) && window.console) console.warn('Karte:', m); });
+    // Fehlende Schriftbereiche (seltene Schriftzeichen) und Symbole leise übergehen – die Karte bleibt nutzbar.
+    // Neu zeichnen: nach einer nicht geladenen Kachel prüft die Karte sonst nicht mehr, ob sie fertig ist („load“, „idle“ blieben aus).
+    map.on('error', (e) => { const m = String(e && e.error && e.error.message || ''); if (!/glyph|sprite|image/i.test(m) && window.console) console.warn('Karte:', m); map.triggerRepaint(); });
     map.on('styleimagemissing', () => {});
     await new Promise((ok) => map.once('load', ok));
     if (raster.length) {   // Bilder: Maßstab dazu; die langen Quellenangaben der Dienste eingeklappt (ⓘ öffnet sie)
@@ -181,8 +189,8 @@
       'text-field': ['case', ['>', ['get', 'n'], 99], '99+', ['to-string', ['get', 'n']]],
       'text-font': ['Noto Sans Medium'], 'text-size': 11, 'text-allow-overlap': true, 'text-ignore-placement': true,
     }, paint: { 'text-color': '#ffffff' } });
-    // Flächen (Gebiete) unter den Beschriftungen der Grundkarte, ihre Namen unter den Punkten
-    const ersteSchrift = ((map.getStyle().layers || []).find((l) => l.type === 'symbol') || {}).id;
+    // Flächen (Gebiete) unter den Beschriftungen der Grundkarte – ohne Grundkarte unter den Punkten; ihre Namen unter den Punkten
+    const ersteSchrift = ((map.getStyle().layers || []).find((l) => l.type === 'symbol' && l.source !== 'punkte') || { id: 'punkte-kreis' }).id;
     let gebieteDa = false, gebieteZahl = 0;
     function setzeGebiete(sammlung) {
       const fs = (sammlung && sammlung.features) || [];
@@ -248,7 +256,7 @@
     map.on('mouseenter', 'punkte-kreis', () => { map.getCanvas().style.cursor = 'pointer'; });
     map.on('mouseleave', 'punkte-kreis', () => { map.getCanvas().style.cursor = ''; });
     if (opt.beiBewegung) map.on('move', opt.beiBewegung);
-    if (opt.beiLeerklick) map.on('click', (e) => { if (!map.queryRenderedFeatures(e.point, { layers: ['punkte-kreis'] }).length) opt.beiLeerklick(); });
+    if (opt.beiLeerklick) map.on('click', (e) => { if (!map.queryRenderedFeatures(e.point, { layers: ['punkte-kreis'] }).length) opt.beiLeerklick(e.lngLat.lng, e.lngLat.lat); });
     return k;
   }
 

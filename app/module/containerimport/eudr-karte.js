@@ -103,7 +103,13 @@
   }
 
   const FARBE = { gruen: '#3f7a5a', gelb: '#b07d12', rot: '#9b2335' };
+  /* Liegt der Punkt im Ring? (Strahl nach rechts, gerade/ungerade) */
+  const innen = (ring, x, y) => ring.reduce((drin, [x1, y1], i) => {
+    const [x2, y2] = ring[(i + 1) % ring.length];
+    return (y1 > y) !== (y2 > y) && x < (x2 - x1) * (y - y1) / (y2 - y1) + x1 ? !drin : drin;
+  }, false);
   const FARBE_BILD = { gruen: '#6ee7a0', gelb: '#ffd166', rot: '#ff6b81' };   // auf dem Satellitenbild: heller, sonst verschwindet der Umriss
+  const KNOEPFE = '<button type="button" data-zoom="+" aria-label="Vergrößern">+</button><button type="button" data-zoom="-" aria-label="Verkleinern">−</button><button type="button" data-zoom="0" aria-label="Ganze Ansicht" title="Ganze Ansicht">⌂</button>';
 
   /* Ebenen fremder Dienste in Zeichenreihenfolge. Jede Adresse muss in der Content-Security-Policy des Hosts stehen
      (Caddyfile, Zuordnung csp_karten) – sonst meldet pruefeDienste „nicht erreichbar“ und die Karte kommt ohne Bilder. */
@@ -117,19 +123,33 @@
       quelle: '<a href="https://s2maps.eu" target="_blank" rel="noopener">Sentinel-2 cloudless – https://s2maps.eu</a> by <a href="https://eox.at" target="_blank" rel="noopener">EOX IT Services GmbH</a> (Contains modified Copernicus Sentinel data 2016 &amp; 2017)' },
     { id: 'wald2020', name: 'Wald Ende 2020 (EU)', farbe: '#4d9221', kacheln: [WALD], maxzoom: 15, deckkraft: 0.4,
       quelle: '<a href="https://forest-observatory.ec.europa.eu/forest/" target="_blank" rel="noopener">Wald 2020: © Europäische Union, JRC (GFC 2020 v3)</a>' },
-    ...(bis ? [{ id: 'verlust', name: `Waldverlust 2021–${bis}`, farbe: '#e45796', kacheln: [verlust(bis)], maxzoom: 12,
-      quelle: '<a href="https://www.globalforestwatch.org" target="_blank" rel="noopener">Waldverlust: Hansen/UMD/Google/USGS/NASA über Global Forest Watch (CC BY 4.0)</a>' }] : []),
+    { id: 'verlust', name: `Waldverlust 2021–${bis}`, farbe: '#e45796', kacheln: [verlust(bis)], maxzoom: 12,
+      quelle: '<a href="https://www.globalforestwatch.org" target="_blank" rel="noopener">Waldverlust: Hansen/UMD/Google/USGS/NASA über Global Forest Watch (CC BY 4.0)</a>' },
   ];
+  const karten = new Set();   // Elemente mit Detailkarte, zum Aufräumen in zeichnen()
   const an = { satellit: true, wald2020: true, verlust: true, grund: true };   // Auswahl der Ebenen, gilt für alle Karten der Seite
+  const PROBE = '0,0,1000,1000';   // kleiner Ausschnitt für die Probe des Walddienstes – ein Bild der ganzen Welt braucht dort sechs Sekunden
   let dienste = null;
-  /* Einmal je Seite: Lässt sich das Satellitenbild abrufen (Netz, Content-Security-Policy)? Bis zu welchem Jahr reicht der
-     Waldverlust? Der Dienst lehnt ein Endjahr ohne Daten ab (422) – so findet die Karte ohne Pflege das jüngste Jahr. */
+  /* Welche Dienste antworten (Netz, Content-Security-Policy)? Je Dienst eine Probe mit acht Sekunden Frist, alle zugleich –
+     ein stummer Dienst kostet die Karte höchstens diese Frist und nur seine Ebene. Bis zu welchem Jahr reicht der
+     Waldverlust? Der Dienst lehnt ein Endjahr ohne Daten ab (422) – so findet die Karte ohne Pflege das jüngste Jahr.
+     Gemerkt wird nur ein vollständiges Ergebnis; nach einem Ausfall prüft die nächste Karte neu.
+     → { ebenen: erreichbare Ebenen in Zeichenreihenfolge, bis: letztes Jahr des Waldverlusts | null, rechenbar: Bildauswertung möglich } */
   function pruefeDienste() {
-    const ok = (adresse) => fetch(adresse, { credentials: 'omit' }).then((r) => r.ok, () => false);
+    const probe = (adresse) => fetch(adresse, { credentials: 'omit', signal: window.EUDR_AUSWERTUNG.frist(8000) }).then((r) => r.status, () => 0);
+    const letztesJahr = async () => {
+      for (let jahr = new Date().getFullYear(); jahr >= 2021; jahr--) {
+        const status = await probe(verlust(jahr).replace('{z}/{x}/{y}', '0/0/0'));
+        if (status !== 422) return status === 200 ? jahr : null;
+      }
+      return null;
+    };
     dienste = dienste || (async () => {
-      if (!await ok(SATELLIT.replace('{z}/{y}/{x}', '0/0/0'))) return { bild: false, bis: null };
-      for (let jahr = new Date().getFullYear(); jahr >= 2021; jahr--) if (await ok(verlust(jahr).replace('{z}/{x}/{y}', '0/0/0'))) return { bild: true, bis: jahr };
-      return { bild: true, bis: null };
+      const [satellit, wald2020, bis] = await Promise.all([
+        probe(SATELLIT.replace('{z}/{y}/{x}', '0/0/0')).then((s) => s === 200), probe(WALD.replace('{bbox-epsg-3857}', PROBE)).then((s) => s === 200), letztesJahr()]);
+      const da = { satellit, wald2020, verlust: !!bis };
+      if (!satellit || !wald2020 || !bis) dienste = null;
+      return { ebenen: ebenen(bis).filter((e) => da[e.id]), bis, rechenbar: wald2020 && !!bis };
     })();
     return dienste;
   }
@@ -137,7 +157,7 @@
   /* Bildauswertung einer Fläche (eudr-auswertung.js) aus denselben Diensten – null, wenn sie nicht erreichbar sind */
   async function auswerten(geometrie) {
     const dienst = await pruefeDienste();
-    if (!dienst.bild || !dienst.bis) return null;
+    if (!dienst.rechenbar) return null;
     return window.EUDR_AUSWERTUNG.rechnen(geometrie, dienst.bis, {
       wald: (rahmen, punkte) => `${WALD_WMS}&BBOX=${rahmen.join(',')}&WIDTH=${punkte}&HEIGHT=${punkte}`,
       verlustRoh: (z, x, y) => `${VERLUST}${z}/${x}/${y}.png`,
@@ -151,19 +171,23 @@
     const xs = betriebe.flatMap((b) => [b.rahmen[0], b.rahmen[2]]), ys = betriebe.flatMap((b) => [b.rahmen[1], b.rahmen[3]]);
     const rand = opt.einzeln ? 0.01 : 0.5;
     const rahmen = [Math.min(...xs) - rand, Math.min(...ys) - rand, Math.max(...xs) + rand, Math.max(...ys) + rand];
-    const bilder = dienst.bild ? ebenen(dienst.bis) : [], farbe = dienst.bild ? FARBE_BILD : FARBE;
+    const bilder = dienst.ebenen, aufBild = bilder.some((e) => e.id === 'satellit'), farbe = aufBild ? FARBE_BILD : FARBE;
     el.innerHTML = '';
     const k = await window.STAFLKarte.erstellen(el, { karte: vektor ? 'herkunft' : null, raster: bilder.map((e) => ({ ...e, sichtbar: an[e.id] })),
       farbe: 'grau', beiKlick: opt.beiKlick, rahmen,
+      beiLeerklick: opt.beiKlick && ((lon, lat) => {   // Klick in eine Fläche öffnet ihren Betrieb – wie in der SVG-Zeichnung
+        const b = betriebe.find((x) => polygone(x.geometrie).some((p) => innen(p[0], lon, lat)));
+        if (b) opt.beiKlick(b.id, b);
+      }),
       punkte: opt.einzeln ? [] : betriebe.map((b) => ({ id: b.id, lon: b.mitte[0], lat: b.mitte[1], titel: b.name, farbe: farbe[b.ampel] })) });
+    karten.add(el);
     k.setzeGebiete({ type: 'FeatureCollection', features: betriebe.filter((b) => b.geometrie.type !== 'Point')
-      .map((b) => ({ type: 'Feature', geometry: b.geometrie, properties: { farbe: farbe[b.ampel], hervor: !dienst.bild } })) });
+      .map((b) => ({ type: 'Feature', geometry: b.geometrie, properties: { farbe: farbe[b.ampel], hervor: !aufBild } })) });
     const schalter = [...bilder, ...(vektor && bilder.length ? [{ id: 'grund', name: 'Straßen und Orte' }] : [])];
     if (!an.grund) k.zeige('grund', false);
     el.insertAdjacentHTML('beforeend', (schalter.length ? `<details class="ci-k-ebenen"${el.clientWidth >= 520 ? ' open' : ''}><summary>Ebenen</summary>${schalter.map((e) =>
       `<label><input type="checkbox" value="${e.id}"${an[e.id] ? ' checked' : ''}>${e.farbe ? `<i style="background:${e.farbe}"></i>` : ''}${esc(e.name)}</label>`).join('')}</details>` : '')
-      + '<div class="ci-k-zoom"><button type="button" data-zoom="+" aria-label="Vergrößern">+</button><button type="button" data-zoom="-" aria-label="Verkleinern">−</button><button type="button" data-zoom="0" aria-label="Ganze Ansicht" title="Ganze Ansicht">⌂</button>'
-      + (el.requestFullscreen ? '<button type="button" data-zoom="v" aria-label="Karte groß zeigen" title="Karte groß zeigen">⛶</button>' : '') + '</div>');
+      + `<div class="ci-k-zoom">${KNOEPFE}${el.requestFullscreen ? '<button type="button" data-zoom="v" aria-label="Karte groß zeigen" title="Karte groß zeigen">⛶</button>' : ''}</div>`);
     el.querySelector('.ci-k-zoom').addEventListener('click', (e) => {
       const z = (e.target.closest('button') || {}).dataset;
       if (!z) return;
@@ -179,16 +203,18 @@
     const betriebe = (opt.betriebe || []).filter((b) => b.rahmen.every(Number.isFinite) && Math.abs(b.mitte[1]) <= 85);
     el.classList.add('ci-karte');
     el.dataset.karte = 'laedt';
-    if (el.staflKarte) { el.staflKarte.entfernen(); delete el.staflKarte; el.classList.remove('detailkarte'); }   // vorige Detailkarte dieses Elements
+    for (const alt of karten) {   // vorige Detailkarte dieses Elements und Karten, deren Element nicht mehr auf der Seite ist (Fenster neu aufgebaut): der Browser hält nur wenige Karten zugleich
+      if (alt !== el && alt.isConnected) continue;
+      alt.staflKarte.entfernen(); delete alt.staflKarte; alt.classList.remove('detailkarte'); karten.delete(alt);
+    }
     if (!betriebe.length) { el.innerHTML = '<p class="ci-leer">Keine Fläche zum Anzeigen.</p>'; el.dataset.karte = 'leer'; return; }
     if (window.STAFLKarte && window.STAFLKarte.webgl()) {
       const [dienst, vektor] = await Promise.all([pruefeDienste(), window.STAFLKarte.verfuegbar('herkunft')]);
-      if (dienst.bild || vektor) { try { await detail(el, opt, betriebe, dienst, vektor); return; } catch (e) { console.warn('Karte der Herkunftsbetriebe:', e); el.classList.remove('detailkarte'); el.dataset.karte = 'laedt'; } }
+      if (dienst.ebenen.length || vektor) { try { await detail(el, opt, betriebe, dienst, vektor); return; } catch (e) { console.warn('Karte der Herkunftsbetriebe:', e); el.classList.remove('detailkarte'); el.dataset.karte = 'laedt'; } }
     }
     const k = await ladeLaender();
     const seite = opt.einzeln ? 1.5 : 1.9;
     const start = ausschnitt(betriebe, opt.einzeln ? 0.18 : 0.5, opt.einzeln ? 0.002 : 11, seite);
-    const knoepfe = '<div class="ci-k-zoom"><button type="button" data-zoom="+" aria-label="Vergrößern">+</button><button type="button" data-zoom="-" aria-label="Verkleinern">−</button><button type="button" data-zoom="0" aria-label="Ganze Ansicht" title="Ganze Ansicht">⌂</button></div>';
     let zusatz = '';
     if (opt.einzeln) {
       const b = betriebe[0], lat = b.mitte[1] * Math.PI / 180;
@@ -196,7 +222,7 @@
       zusatz = `<div class="ci-k-massstab" data-meter="${(111320 * Math.cos(lat) / 100).toFixed(4)}"><span></span><b></b></div>`
         + `<div class="ci-k-lage">${svg(lage, land(k) + `<circle class="ci-k-marke ${b.ampel}" cx="${px(b.mitte[0]).toFixed(2)}" cy="${py(b.mitte[1]).toFixed(2)}" r="${(lage[2] / 28).toFixed(2)}"/>`, 'ci-k-klein')}</div>`;
     }
-    el.innerHTML = svg(start, land(k) + betriebe.map((b) => flaeche(b, opt.einzeln)).join('') + (opt.einzeln ? '' : betriebe.map(marke).join('')), 'ci-k-haupt') + knoepfe + zusatz;
+    el.innerHTML = svg(start, land(k) + betriebe.map((b) => flaeche(b, opt.einzeln)).join('') + (opt.einzeln ? '' : betriebe.map(marke).join('')), 'ci-k-haupt') + `<div class="ci-k-zoom">${KNOEPFE}</div>` + zusatz;
     groessen(el);
     bedienung(el, start, opt.beiKlick);
     el.dataset.karte = 'bereit';

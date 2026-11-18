@@ -225,12 +225,12 @@
     window.EUDR_KARTE.zeichnen($('#betrieb-karte'), { betriebe: [b], einzeln: true });
     auswertungZeigen(b, darf);
   }
+  const WALD_AB_HA = 0.5;   // ab so viel Verlust auf Wald von 2020 schlägt die Bildauswertung „Befund“ vor (Mindestgröße eines Waldes nach der EUDR)
   /* Bildauswertung im Fenster „Betrieb“: Wald Ende 2020 und Waldverlust seit 2021 in der Fläche – eine Schätzung aus den
      Kartenbildern (eudr-auswertung.js). Ohne erreichbare Kartendienste oder für einen Punkt bleibt der Abschnitt verborgen.
      „Übernehmen“ füllt nur das Formular der Gegenprüfung; eingetragen wird erst mit dessen Knopf. */
   async function auswertungZeigen(b, darf) {
     const el = $('#betrieb-auswertung');
-    if (b.geometrie.type === 'Point') return;
     let e;
     try { e = await window.EUDR_KARTE.auswerten(b.geometrie); } catch (f) { e = { fehler: true }; }
     if (!el.isConnected || !e) return;   // Fenster inzwischen neu aufgebaut oder Dienste nicht erreichbar
@@ -241,21 +241,23 @@
     }
     const h = (v) => `${F.zahl(v, 1, 1)} ha`, jahre = Object.entries(e.jahre).filter(([, v]) => v >= 0.05);
     const passt = Math.abs(e.flaecheHa - b.flaeche) <= 0.03 * b.flaeche;
-    el.dataset.verlust = e.verlustHa.toFixed(2); el.dataset.aufWald = e.verlustAufWaldHa.toFixed(2);
+    const befund = e.verlustAufWaldHa >= WALD_AB_HA;
+    el.dataset.verlust = e.verlustHa.toFixed(2); el.dataset.ergebnis = befund ? 'befund' : 'ohne_befund';
     el.dataset.text = `Bildauswertung im Container-Import: Wald Ende 2020 ${h(e.waldHa)}, Waldverlust 2021–${e.bis} ${h(e.verlustHa)}, davon ${h(e.verlustAufWaldHa)} auf Wald von 2020 (JRC GFC 2020, GFW Tree cover loss).`;
     el.innerHTML = `<p><strong>Bildauswertung der Fläche</strong> <span class="ci-leise">· Schätzung aus den Kartenbildern, kein Nachweis</span></p>
       <dl><dt>Wald Ende 2020 (Karte der EU)</dt><dd>${h(e.waldHa)} · ${F.zahl(e.flaecheHa ? e.waldHa / e.flaecheHa * 100 : 0, 0, 0)} % der Fläche</dd>
-        <dt>Waldverlust 2021–${e.bis}</dt><dd>${e.verlustHa >= 0.05 ? `${marke(h(e.verlustHa), e.verlustAufWaldHa >= 0.5 ? 'rot' : 'warn')} davon ${h(e.verlustAufWaldHa)} auf Wald von 2020${jahre.length ? ` <small>${jahre.map(([j, v]) => `${j}: ${F.zahl(v, 1, 1)}`).join(' · ')}</small>` : ''}` : marke('keiner erkannt', 'ok')}</dd>
+        <dt>Waldverlust 2021–${e.bis}</dt><dd>${e.verlustHa >= 0.05 ? `${marke(h(e.verlustHa), befund ? 'rot' : 'warn')} davon ${h(e.verlustAufWaldHa)} auf Wald von 2020${jahre.length ? ` <small>${jahre.map(([j, v]) => `${j}: ${F.zahl(v, 1, 1)}`).join(' · ')}</small>` : ''}` : marke('keiner erkannt', 'ok')}</dd>
         <dt>Verlust bis 2020 (vor dem Stichtag)</dt><dd>${h(e.vorherHa)}</dd></dl>
       <p class="ci-klein ci-leise">Ausgewertet ${h(e.flaecheHa)} (berechnete Fläche ${ha(b.flaeche)})${passt ? '' : ' – <strong>weicht ab, Ergebnis mit Vorsicht lesen</strong>'}. Quellen: Wald 2020 der EU-Kommission (JRC, 10 m), Baumverlust der Universität Maryland über Global Forest Watch (30 m). Baumverlust ist nicht immer Entwaldung (Brand, Ernte von Plantagen); kleine Werte können Rauschen sein.</p>
       ${darf ? '<button class="ci-knopf klein" type="button" id="betrieb-auswertung-nehmen">Werte in die Gegenprüfung übernehmen</button>' : ''}`;
   }
-  /* Werte der Bildauswertung in das Formular der Gegenprüfung schreiben (Portal „Andere Quelle“); Befund ab 0,5 ha Verlust auf
-     Wald von 2020 vorgeschlagen (Mindestgröße eines Waldes nach der EUDR) – der Bearbeiter entscheidet und trägt selbst ein */
+  /* Werte der Bildauswertung in das Formular der Gegenprüfung schreiben (Portal „Andere Quelle“) – mit dem Vorschlag
+     „Befund“ ab WALD_AB_HA; der Bearbeiter entscheidet und trägt selbst ein. Das Feld „Baumverlust“ nur mit Befund füllen:
+     der Server wertet jede Zahl über 0 dort als kritisch (eudr_betrieb_bewertung); die Zahlen stehen ohnehin in der Bemerkung. */
   function auswertungNehmen() {
     const d = $('#betrieb-auswertung').dataset, w = $('#betrieb-inhalt').elements;
-    w.p_portal.value = 'sonst'; w.p_ergebnis.value = Number(d.aufWald) >= 0.5 ? 'befund' : 'ohne_befund';
-    w.p_verlustHa.value = zahlText(d.verlust); w.p_bemerkung.value = d.text;
+    w.p_portal.value = 'sonst'; w.p_ergebnis.value = d.ergebnis;
+    w.p_verlustHa.value = d.ergebnis === 'befund' ? zahlText(d.verlust) : ''; w.p_bemerkung.value = d.text;
     w.p_bemerkung.focus();
   }
   /* Felder des Fensters als Betrieb für den Server */
