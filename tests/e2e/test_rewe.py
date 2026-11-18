@@ -389,6 +389,13 @@ check('nach dem Export: exportiert mit Name, Zeilen und Stück', ab['exportiert'
 st, r = M.call('rewe_antwort', {'markt': m3['id'], 'kw': ABFRAGE, 'status': 'bestellt', 'mengen': {'rb': 1}})
 check('Änderung nach dem Export ist ein Nachtrag', st == 200 and r['antwort']['nachtrag'] is True, r)
 check('Abschluss zählt den Nachtrag', SA.call(f'rewe_abschluss&kw={ABFRAGE}')[1]['abschluss']['nachtraege'] == 1)
+req = urllib.request.Request(B + '/api/?action=rewe_export', data=json.dumps({'kw': ABFRAGE}).encode(),
+                             headers={'X-Forwarded-For': SA.ip, 'Content-Type': 'application/json', 'X-CSRF-Token': SA.csrf})
+ws2 = load_workbook(io.BytesIO(SA.http.open(req).read()))['WinAB-Erfassung']
+nach = [(row[3], row[16]) for row in ws2.iter_rows(min_row=5, values_only=True) if row[16] == 'ja']
+ab = SA.call(f'rewe_abschluss&kw={ABFRAGE}')[1]['abschluss']
+check('zweites Excel derselben Woche: Nachtrag steht drin (Spalte Nachtrag „ja“), danach keiner mehr offen, exportiert mit 5 Zeilen',
+      nach == [(1799003, 'ja')] and ab['nachtraege'] == 0 and ab['exportiert']['zeilen'] == 5, (nach, ab['nachtraege'], ab['exportiert']))
 st, r = SA.call('rewe_erfasst', {'kw': ABFRAGE, 'erfasst': True})
 check('in WinAB erfasst (mit Name), zurücknehmbar', st == 200 and r['erfasst']['von'] == 'Sabi Summe' and SA.call('rewe_erfasst', {'kw': ABFRAGE, 'erfasst': False})[1]['erfasst'] is None, r)
 prot = json.dumps(A.call('log')[1], ensure_ascii=False)
