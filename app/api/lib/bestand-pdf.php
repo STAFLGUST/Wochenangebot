@@ -66,9 +66,11 @@ function stock_pdf(array $st, array $zeilen, string $zusatz = '', bool $mhdListe
 
     // Seiten vorab einteilen (für „Seite x von y“): Kopf auf Seite 1 höher (Logo, Legende)
     $kopf1 = 92; $kopfN = 50; $tabKopf = 22;
+    // Zeilenhöhe samt Abstand – dieselbe für Seiteneinteilung und Zeichnen
+    $hoehe = fn(array $t): float => $RH + (['g' => 4, 'sum' => 3][$t['t']] ?? 0);
     $seiten = [[]]; $y = $MT + $kopf1 + $tabKopf;
     foreach ($teile as $i => $t) {
-        $h = $t['t'] === 'g' ? $RH + 4 : $RH;
+        $h = $hoehe($t);
         $naechste = $teile[$i + 1] ?? null;
         $mit = $t['t'] === 'g' && $naechste && $naechste['t'] === 'a' ? $RH : 0;   // Gruppenkopf nie allein am Seitenende
         if ($y + $h + $mit > $H - $MB) { $seiten[] = []; $y = $MT + $kopfN + $tabKopf; }
@@ -112,7 +114,7 @@ function stock_pdf(array $st, array $zeilen, string $zusatz = '', bool $mhdListe
             if ($t['t'] === 'g') {
                 $pdf->rect($x0, $y + 2, $x1 - $x0, $RH, '#efece8');
                 $pdf->text($cCode, $y + 13, $fit($t['label'], 9, $x1 - $x0 - 10, true), 9, true, '#1b1a18');
-                $y += $RH + 4; continue;
+                $y += $hoehe($t); continue;
             }
             if ($t['t'] === 'sum' || $t['t'] === 'total') {
                 $pdf->rect($x0, $y, $x1 - $x0, $RH, $t['t'] === 'total' ? '#e4e0da' : '#f5f3f0');
@@ -120,7 +122,7 @@ function stock_pdf(array $st, array $zeilen, string $zusatz = '', bool $mhdListe
                 $pdf->text($cCode, $y + 10.6, $fit($t['label'], $FS, $cKg - 80 - $cCode, true), $FS, true, '#1b1a18');
                 $pdf->text($cKg, $y + 10.6, $kg($t['kg']), $FS, true, '#1b1a18', 'r');
                 $pdf->text($cMkg, $y + 10.6, $kg($t['mkg']), $FS, true, '#1b1a18', 'r');
-                $y += $RH + ($t['t'] === 'sum' ? 3 : 0); continue;
+                $y += $hoehe($t); continue;
             }
             $a = $t['a']; $f = STOCK_PDF_FARBEN[$t['stufe']] ?? null;
             if ($f) $pdf->rect($cMhd, $y + .6, $x1 - $cMhd, $RH - 1.2, $f[0]);
@@ -134,7 +136,7 @@ function stock_pdf(array $st, array $zeilen, string $zusatz = '', bool $mhdListe
             $pdf->text($cMhd + 4, $y + 10.6, !empty($a['mhd']) ? date('d.m.Y', strtotime($a['mhd'])) : '—', $FS, (bool)$f, $f[1] ?? '#1b1a18');
             $pdf->text($cMkg, $y + 10.6, $a['mhdKg'] !== null ? $kg((float)$a['mhdKg']) : '—', $FS, true, $f[1] ?? '#1b1a18', 'r');
             $pdf->line($x0, $y + $RH, $x1, $y + $RH, .3, '#e2ded8');
-            $y += $RH;
+            $y += $hoehe($t);
         }
         // Fußzeile
         $pdf->line($x0, $H - $MB + 10, $x1, $H - $MB + 10, .4, '#c9c4bd');
