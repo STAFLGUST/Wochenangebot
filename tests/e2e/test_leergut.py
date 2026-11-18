@@ -117,7 +117,7 @@ check('Bewegung: unbekannter Partner 404', Bb.call('leergut_bewegung_save', {**B
 for name, b in (('ohne Datum', {'datum': ''}), ('Datum 31.02.', {'datum': '2026-02-31'}), ('Datum deutsch', {'datum': '10.01.2026'}),
                 ('negative Menge', {'abgang': {'e2': -3}}), ('Kommazahl', {'abgang': {'e2': 2.5}}), ('Text statt Zahl', {'zugang': {'h1': 'zwei'}}),
                 ('unbekanntes Lademittel', {'abgang': {'zz': 1}}), ('keine Menge', {'abgang': {}, 'zugang': {'e2': 0}}), ('Art unbekannt', {'typ': 'geschenk'}),
-                ('zu große Menge', {'abgang': {'e2': 2000000}})):
+                ('zu große Menge', {'abgang': {'e2': 2000000}}), ('Kommazahl als Text mit Punkt „2.5“', {'abgang': {'e2': '2.5'}})):
     st, r = Bb.call('leergut_bewegung_save', {**BW, **b})
     check(f'Bewegung: {name} → 422', st == 422 and r.get('error'), (st, r))
 st, r = Bb.call('leergut_bewegung_save', BW)
@@ -228,6 +228,12 @@ neu = [{**x, 'wert': 4.5} if x['id'] == 'e2' else ({**x, 'name': 'H1 grau', 'wer
 st, r = V.call('leergut_lademittel_save', {'lademittel': neu})
 check('Lademittel: Wert und Name geändert, neues mit Kennung aus dem Namen', st == 200 and r['lademittel'][0]['wert'] == 4.5 and r['lademittel'][1]['name'] == 'H1 grau'
       and r['lademittel'][1]['wert'] == 45.0 and r['lademittel'][-1]['id'] == 'dolavbox', r)
+lm1 = r['lademittel']
+st, r2 = V.call('leergut_lademittel_save', {'lademittel': [{**x, 'wert': '5.50'} if x['id'] == 'e2' else ({**x, 'wert': '1.234,56'} if x['id'] == 'h1' else x) for x in lm1]})
+check('Lademittel: Wert „5.50“ (Dezimalpunkt) → 5,50 €, „1.234,56“ → 1.234,56 €', st == 200 and r2['lademittel'][0]['wert'] == 5.5 and r2['lademittel'][1]['wert'] == 1234.56, r2)
+check('Lademittel: Wert „1,234.56“ (Komma und Punkt vertauscht) → 422',
+      V.call('leergut_lademittel_save', {'lademittel': [{**x, 'wert': '1,234.56'} if x['id'] == 'h1' else x for x in lm1]})[0] == 422)
+V.call('leergut_lademittel_save', {'lademittel': lm1})
 check('Lademittel entfernen → 422 (deaktivieren statt löschen)', V.call('leergut_lademittel_save', {'lademittel': r['lademittel'][1:]})[0] == 422)
 check('Lademittel: doppelt → 422', V.call('leergut_lademittel_save', {'lademittel': r['lademittel'] + [{'id': 'e2', 'name': 'E2'}]})[0] == 422)
 check('Lademittel: negativer Wert → 422', V.call('leergut_lademittel_save', {'lademittel': [{**r['lademittel'][0], 'wert': -1}] + r['lademittel'][1:]})[0] == 422)
