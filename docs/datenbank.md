@@ -99,7 +99,7 @@ Stand vor dem 16.11.2026) liegt die Dateiablage wieder im Archiv, im SQLite-Betr
 **Getrennte Daten (ADR-007 Stufe 2a):** Nach `deploy/daten-trennen.sh trennen` gibt es je Lauf zwei Archive vom selben
 Zeitpunkt: `daten-<Zeit>.tar.gz` (nach `daten/`) und `intern-<Zeit>.tar.gz` (nach `daten-intern/`, mit eigener Datenbank im
 SQLite-Betrieb). Beide gehören zusammen; nie Archive verschiedener Zeitpunkte mischen. Umschalten (`datenbank-umschalten.sh`)
-und Altdateien (`altdateien.sh`) brechen bei getrennten Daten ab: erst `daten-trennen.sh zusammenfuehren`, danach wieder
+und das Archivieren der Altdateien (`altdateien.sh archivieren`; `zeigen` liest nur und läuft weiter) brechen bei getrennten Daten ab: erst `daten-trennen.sh zusammenfuehren`, danach wieder
 `trennen`. Ab Trennstufe 2 (Stufe 2b) gehören auch Kundenstamm (`kundenstamm`), Bestand, Stammdaten und Postfach-Zugänge zum
 Archiv `intern-…`; `daten-…` enthält vom Kundendokument nur die Portalfelder – beide Archive zusammen ergeben den vollständigen Stand. Ab Trennstufe 3
 stehen veröffentlichte Dokumente (Angebote, Einstellungen) in beiden Archiven; maßgeblich ist der Stand in `intern-…`.
