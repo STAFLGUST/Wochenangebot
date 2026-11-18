@@ -1,5 +1,5 @@
 """Testgruppe order_management: Bestellverwaltung über die API – Rechte, Statusübergänge, Revision, Kundenansicht."""
-import sys
+import json, sys
 from kunden_hilfe import Client
 from order_setup import setup, PW
 
@@ -71,4 +71,16 @@ check('mail outage still retains order',k.call('kunde_bestellung',failed)[0]==50
 r=k.call('kunde_bestellung',failed)
 check('retry after mail outage returns stored failed delivery',r[0]==200 and r[1]['replayed'] and r[1]['delivery']=='fehler')
 check('mail outage retry adds no second order',a.call('bestellungen')[1]['total']==2)
+# Zuweisung an einen inzwischen deaktivierten Mitarbeiter blockiert die Weiterbearbeitung nicht (AS4)
+a.call('user_save',{'username':'zweit.test','name':'Zweit Test','role':'editor','active':True,'password':'Zweit-Zugang-4711','mustChange':False})
+zweit={u['username']:u['id'] for u in a.call('users')[1]['users']}['zweit.test']
+failed_nr=a.call('bestellungen&workflow=neu')[1]['orders'][0]['nr']; o2=e.call('bestellung&nr='+failed_nr)[1]['order']
+r=e.call('bestellung_save',{'nr':failed_nr,'revision':o2['revision'],'workflow':'in_bearbeitung','assignee':zweit,'note':''})
+check('assign to second editor',r[0]==200)
+check('deactivate second editor',a.call('user_save',{'id':zweit,'name':'Zweit Test','role':'editor','active':False})[0]==200)
+r=e.call('bestellung_save',{'nr':failed_nr,'revision':r[1]['order']['revision'],'workflow':'bestaetigt','assignee':zweit,'note':''})
+check('status change keeps unchanged assignment to deactivated user',r[0]==200 and r[1]['order']['assignee']==zweit and r[1]['order']['workflow']=='bestaetigt')
+r=e.call('bestellung_save',{'nr':failed_nr,'revision':r[1]['order']['revision'],'workflow':'bestaetigt','assignee':'','note':''})
+check('assignment can be cleared',r[0]==200)
+check('new assignment to deactivated user still rejected',e.call('bestellung_save',{'nr':failed_nr,'revision':r[1]['order']['revision'],'workflow':'bestaetigt','assignee':zweit,'note':''})[0]==422)
 print(f'{sum(res)}/{len(res)} passed');sys.exit(0 if all(res) else 1)
