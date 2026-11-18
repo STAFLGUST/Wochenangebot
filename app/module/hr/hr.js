@@ -353,12 +353,15 @@
       ${k.erledigt ? `<span class="mehr">Personalstelle${k.erledigt.antwort ? ': ' + esc(k.erledigt.antwort) : ' hat die Meldung erledigt.'}</span>` : ''}</li>`).join('');
   }
 
-  /* Arbeitstage des Antrags (Vorschau im Browser; verbindlich rechnet der Server) */
-  function antragTage() {
+  /* Arbeitstage des Antrags (Vorschau im Browser; verbindlich rechnet der Server). nServer: Zahl aus der Server-Vorschau
+     (antragPruefen) – kennt Feiertage jedes Jahres und freie Tage, der Browser nur die des angezeigten Jahres */
+  function antragTage(nServer) {
     const von = $('#antrag-von').value, bis = $('#antrag-bis').value, d = S.start;
-    const out = $('#antrag-tage');
-    meldung($('#antrag-meldung'), '');   // eine Meldung zum vorigen Absenden gilt nach einer Änderung der Daten nicht mehr
-    antragPruefen();                       // Vertretung da? (Server; ohne gültigen Zeitraum ausgeblendet)
+    const out = $('#antrag-tage'), server = typeof nServer === 'number';
+    if (!server) {
+      meldung($('#antrag-meldung'), '');   // eine Meldung zum vorigen Absenden gilt nach einer Änderung der Daten nicht mehr
+      antragPruefen();                       // Vertretung da? (Server; ohne gültigen Zeitraum ausgeblendet)
+    }
     if (!von || !bis || !d || !d.ich) { out.textContent = ''; return; }
     if (bis < von) { out.textContent = 'Das Ende liegt vor dem Beginn.'; return; }
     let n = 0, betrieb = 0;
@@ -367,6 +370,7 @@
       if (!d.ich.arbeitstage.includes(w) || (d.feiertage || {})[iso(t)]) continue;
       if ((d.schliesstage || {})[iso(t)]) betrieb++; else n++;   // 24.12./31.12.: Betriebsurlaub, zählt automatisch
     }
+    if (server) n = nServer;
     const g = d.gleitKonto;
     if (n && S.art === 'G') {
       const frei = g ? g.verfuegbar : 0;
@@ -391,6 +395,7 @@
     const r = await api('hr_antrag_pruefen', { art: S.art, zeitraeume: [{ von, bis, vertretung: vt, vertretung2: v2 }] });
     if (nr !== pruefNr || r.status !== 200) { if (nr === pruefNr) out.hidden = true; return; }
     const z = r.data.zeitraeume[0], st = [z.vertretung, z.vertretung2].filter(Boolean);
+    antragTage(z.tage);
     let text = '', art = '';
     const weg = st.find((v) => v.status === 'abwesend');
     if (weg) { text = weg.text; art = 'fehler'; }

@@ -2607,6 +2607,18 @@ with sync_playwright() as p:
         check(f'{breite}px: kein waagerechtes Scrollen der Seite', breit)
         pg.screenshot(path=os.path.join(SH, f'hr_mein_{breite}.png'), full_page=True)
         if breite == 1280:
+            # Antrag im Folgejahr über Ostern, Seite zeigt das laufende Jahr: Tagezahl wie der Server (Feiertage des Folgejahres, HR5)
+            o_von, o_bis = dt.date(Y, 3, 20), dt.date(Y, 4, 26)   # enthält in jedem Jahr Karfreitag und Ostermontag
+            n_os = E.call('hr_antrag_pruefen', {'zeitraeume': [{'von': iso(o_von), 'bis': iso(o_bis)}]})[1]['zeitraeume'][0]['tage']
+            for f_, d_ in (('#antrag-von', o_von), ('#antrag-bis', o_bis)):
+                pg.fill(f_, iso(d_)); pg.dispatch_event(f_, 'change')
+            try: pg.wait_for_function(f"document.querySelector('#antrag-tage').textContent.startsWith('{n_os:g} Tage')", timeout=5000); ok_os = True
+            except Exception: ok_os = False
+            check('Antrag im Folgejahr über Ostern: Tagezahl wie der Server (ohne Karfreitag und Ostermontag)', ok_os and str(Y) not in pg.text_content('#mein-titel'),
+                  (n_os, pg.text_content('#antrag-tage')))
+            for f_ in ('#antrag-von', '#antrag-bis'):
+                pg.fill(f_, ''); pg.dispatch_event(f_, 'change')
+            pg.wait_for_function("document.querySelector('#antrag-tage').textContent === ''")
             pg.click('[data-jahr="1"]')
             pg.wait_for_function(f'document.querySelector("#mein-titel").textContent.includes("{Y}")')
             tag_ = montag(Y, 9)
