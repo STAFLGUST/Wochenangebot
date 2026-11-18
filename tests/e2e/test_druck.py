@@ -607,7 +607,7 @@ with sync_playwright() as p:
         versatz: Math.max(0, ...mit.map((x) => Math.abs(x.querySelector('.al-st-eh > .al-eh').getBoundingClientRect().right - Math.max(...[...x.querySelectorAll('td.c-price')].map((td) => td.getBoundingClientRect().right))))),
         doppelt: secs.filter((x) => spalten(x) === 1 && !x.querySelector('.al-cont') && x.querySelector(':scope > .al-st:not(.pl-trenn) h3')
           && [...x.querySelectorAll('.al-gt')].some((g) => t(g) === t(x.querySelector(':scope > .al-st h3')))).map((x) => t(x.querySelector(':scope > .al-st h3'))) }; }""")
-    check('Gruppe heißt wie ihr Bereich: in einer Spalte Überschrift nur einmal (im Balken, „€/kg“ bündig über den Preisen, nie über mehreren Spalten); Gruppen, Zeilen und Artikelzahl je Bereich wie in der Vorschau',
+    check('Gruppe heißt wie ihr Bereich: in einer Spalte Überschrift nur einmal (im Balken, „€/kg“ bündig über den Preisen, nie über mehreren Spalten); Gruppen und Zeilen je Bereich wie in der Vorschau',
           eh['balken'] >= 1 and eh['balken'] == eh['mit'] and not eh['breit'] and eh['versatz'] <= 8 and not eh['doppelt'] and s9['gruppen'] == vs3['gruppen']
           and je9 == soll9, (eh, len(s9['gruppen']), len(vs3['gruppen'])))
     grau = v.evaluate("""() => { const c = (s) => getComputedStyle(document.querySelector(s)).backgroundColor.match(/\\d+/g).slice(0, 3).map(Number);
