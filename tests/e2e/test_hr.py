@@ -2613,6 +2613,14 @@ with sync_playwright() as p:
           const n = document.querySelector('#kal-plan thead th.name').getBoundingClientRect(), r = th.getBoundingClientRect(), b = box.getBoundingClientRect();
           return r.left >= n.right - 1 && r.right <= b.right + 1; }''')
         check(f'{breite}px: Spalte „heute“ ohne Wischen sichtbar (rechts neben den Namen)', sichtbar)
+        # unabhängig vom Datum: „heute“ liegt 5 px unter den festen Namen, „Heute“ baut den Kalender neu auf und holt die Spalte hervor
+        pg.evaluate('''() => { const th = document.querySelector('#kal-plan thead th.heute'), box = document.querySelector('#kal-plan').parentElement;
+          th.dataset.alt = '1'; box.scrollLeft += th.getBoundingClientRect().left - document.querySelector('#kal-plan thead th.name').getBoundingClientRect().right + 5; }''')
+        pg.click('#kal-heute'); pg.wait_for_function("(() => { const th = document.querySelector('#kal-plan thead th.heute'); return th && !th.dataset.alt; })()")
+        check(f'{breite}px: Spalte „heute“ knapp unter den Namen verdeckt – nach dem Neuaufbau wieder ganz sichtbar', pg.evaluate('''() => {
+          const th = document.querySelector('#kal-plan thead th.heute'), box = document.querySelector('#kal-plan').parentElement;
+          const n = document.querySelector('#kal-plan thead th.name').getBoundingClientRect(), r = th.getBoundingClientRect(), b = box.getBoundingClientRect();
+          return r.left >= n.right - 1 && r.right <= b.right + 1; }'''))
         check(f'{breite}px: ± 2 Wochen auch für Mitarbeiter – nur die eigene Abteilung (ein Balken, keine Abteilungs-Auswahl), Seite ohne waagerechtes Scrollen',
               pg.locator('#kal-filter [data-abt]').count() == 0 and pg.locator('#kal-plan tr.abt').count() == 1
               and pg.evaluate('document.documentElement.scrollWidth <= window.innerWidth + 1'),
