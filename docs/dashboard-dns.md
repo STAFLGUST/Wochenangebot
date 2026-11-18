@@ -26,8 +26,12 @@ zu welchem Host gehört, steht jetzt in `regeln/module.toml`; die CI prüft Cadd
 Stand 25.10.2026 (Übersicht der DNS-Verwaltung vom Inhaber): CNAME → `dashboard-stafl.de` für `www`, `angebot`, `login`,
 `verwaltung`, `bestand`, `hr`, `crm`, `marketing`, `rewe`, `qs`, `einkauf`, `controlling`, `leergut`, `container-import` und
 `test`; A-Eintrag `@` zum VPS. Freigegeben (über Keycloak): `angebot`, `verwaltung`, `bestand`, `hr`, `crm`, `marketing`, später `sicherheit` (26.10.), `controlling` (28.10.)
-`leergut` (29.10.2026), `rewe` (30.10.2026) und `qs` (Qualitätssicherung, Entscheidung des Inhabers 30.10.2026). 503-Platzhalter bis zur Freigabe (GR-105): `einkauf`, `container-import`, `test`.
+`leergut` (29.10.2026), `rewe` (30.10.2026) und `qs` (Qualitätssicherung, Entscheidung des Inhabers 30.10.2026). 503-Platzhalter bis zur Freigabe (GR-105): `einkauf`, `test`.
 
 Stand 13.11.2026: neue Adresse `versand.dashboard-stafl.de` (Modul Versand, freigegeben mit dem Merge). Der DNS-Eintrag
 `versand` besteht noch nicht; weil der Server inzwischen hinter bunny.net steht (`docs/bunny-cdn.md`), gilt für ihn eine eigene
 Reihenfolge – `docs/plattform/inbetriebnahme-versand.md`.
+
+Stand 18.11.2026: `container-import.dashboard-stafl.de` freigegeben (Modul Container-Import · EUDR, Entscheidung des Inhabers,
+produktiv mit dem Merge). Der DNS-Eintrag besteht seit 25.10.2026 und zeigt seit der Umstellung auf bunny.net auf die Zone
+`stafl-dashboard-2`; am DNS ändert sich nichts – Ablauf: `docs/plattform/inbetriebnahme-containerimport.md`.

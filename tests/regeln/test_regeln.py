@@ -376,9 +376,11 @@ class EchtesRegelwerk(unittest.TestCase):
         # Startumfang (Pflichtmodule) plus die vom Inhaber angelegten Module HR, Marketing, Controlling, Sicherheit
         self.assertEqual(set(kacheln), {"angebot", "bestand", "leergut", "crm", "rewe", "qs", "einkauf", "containerimport", "import", "verwaltung", "hr", "marketing", "controlling", "sicherheit", "versand"})
         self.assertTrue(set(rw.module["dashboard"]["pflichtmodule"]) <= set(kacheln))
-        # Container-Import (Reiter EUDR gebaut 18.11.2026): in Prüfung, nicht freigegeben; DNS besteht → 503-Platzhalter (GR-105)
+        # Container-Import (Reiter EUDR): Entscheidung des Inhabers 18.11.2026 „gleich Vollgas“ (Keycloak-Client, Caddy, produktiv
+        # mit dem Merge) – eigener Host mit DNS
         o = rw.modul("containerimport")["oberflaeche"][0]
-        self.assertEqual((o["entwicklung"], o["freigabe"], o.get("dns", True)), ("in_pruefung", "keine", True))
+        self.assertEqual((o["entwicklung"], o["freigabe"], o.get("dns", True), o["adresse"]),
+                         ("fertig", "produktiv", True, "https://container-import.dashboard-stafl.de/module/containerimport/"))
         # Leergut: Auftrag des Inhabers 29.10.2026 (Keycloak-Client, Caddy, produktiv mit dem Merge) – eigener Host mit DNS
         o = rw.modul("leergut")["oberflaeche"][0]
         self.assertEqual((o["entwicklung"], o["freigabe"], o.get("dns", True), o["adresse"]),

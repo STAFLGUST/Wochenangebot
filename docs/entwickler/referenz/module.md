@@ -84,7 +84,7 @@ Agent: `containerimport` · hängt ab von `plattform`, `qs` · Testgruppen: `con
 
 | Oberfläche | Art | Adresse | Entwicklung | Freigabe |
 | --- | --- | --- | --- | --- |
-| `containerimport.intern` Container-Import | intern | https://container-import.dashboard-stafl.de/module/containerimport/ | in_pruefung | keine |
+| `containerimport.intern` Container-Import | intern | https://container-import.dashboard-stafl.de/module/containerimport/ | fertig | produktiv |
 
 ## Import (`import`)
 

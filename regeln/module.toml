@@ -305,7 +305,8 @@ hinweise = [
   "Rechte: Modulzugang wie üblich für die Standardrollen; Inhalte erst mit „EUDR ansehen“ (containerimport.eudr_sehen, ohne Standardrolle – Lieferanten- und Herkunftsdaten), speichern mit „EUDR bearbeiten“.",
   "Originale (Entscheidung des Inhabers 18.11.2026): Die eingelesenen Dateien gehen beim Übernehmen in den Eingang des QM-Systems, Ordner „EUDR/<Lieferant>“ – über die Schnittstelle qs_eingang_hochladen (app/api/module/qs/ablage.php), nicht durch Zugriff auf dessen Dokumente (GR-101). Einsortieren und Löschen bleibt dem QM-System (qs.bearbeiten).",
   "Echte Lieferantenunterlagen nie ins Repository (GR-007): Tests nutzen erfundene Betriebe (tests/fixtures/containerimport).",
-  "Karte ohne fremde Kartendienste (Entscheidung des Inhabers 18.11.2026: um Südamerika und Neuseeland erweitern): zweite Kartendatei /karte/herkunft.pmtiles (Laden über deploy/karte-laden.sh … herkunft – Betrieb, eigener PR des Plattformkerns), gezeichnet von app/assets/detailkarte.js; ohne die Datei Umrisse der Länder aus app/assets/karte.json als SVG. Bei der Freigabe des Moduls bekommt sein Host in deploy/anmeldung/apache-oidc.conf den Alias /karte/herkunft.pmtiles (wie Verwaltung und CRM für karte.pmtiles).",
+  "Freigegeben mit dem Merge (Entscheidung des Inhabers 18.11.2026 „gleich Vollgas“, ohne vorherige Testfreigabe): container-import.dashboard-stafl.de mit eigenem Keycloak-Client „containerimport“ (Stand 19); / und /admin/ führen zu /module/containerimport/. Aktionen containerimport_* nur auf diesem Host (GR-109, lib/herkunft.php), dort außer ihnen nur Status und Abmelden. Nur dieser Host liefert die Herkunftskarte aus (/karte/herkunft.pmtiles). Modulzugang wie üblich für die Standardrollen; Inhalte erst mit „EUDR ansehen“.",
+  "Karte ohne fremde Kartendienste (Entscheidung des Inhabers 18.11.2026: um Südamerika und Neuseeland erweitern): zweite Kartendatei /karte/herkunft.pmtiles (Laden über deploy/karte-laden.sh … herkunft – Betrieb, eigener PR des Plattformkerns), gezeichnet von app/assets/detailkarte.js; ohne die Datei Umrisse der Länder aus app/assets/karte.json als SVG. Den Alias /karte/herkunft.pmtiles hat nur der Host des Moduls (deploy/anmeldung/apache-oidc.conf).",
 ]
 
   [[modul.oberflaeche]]
@@ -313,9 +314,9 @@ hinweise = [
   name = "Container-Import"
   art = "intern"
   adresse = "https://container-import.dashboard-stafl.de/module/containerimport/"
-  entwicklung = "in_pruefung"
-  freigabe = "keine"
-  sperrbar = true   # DNS-Eintrag besteht (25.10.2026); bis zur Freigabe 503-Platzhalter (GR-105)
+  entwicklung = "fertig"
+  freigabe = "produktiv"   # mit dem Merge dieses PR durch den Inhaber (Entscheidung 18.11.2026 „gleich Vollgas“); DNS-Eintrag container-import besteht seit 25.10.2026
+  sperrbar = true
 
 [[modul]]
 id = "import"

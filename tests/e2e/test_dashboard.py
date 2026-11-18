@@ -154,7 +154,7 @@ check('Favoriten gespeichert (ohne Doppelte), am Konto (auch in einer neuen Sitz
 check('Favoriten: leere Liste erlaubt (bewusst keine)', E.call('start_favoriten_save', {'favoriten': []})[1].get('favoriten') == [] and E2.call('start_heute')[1]['favoriten'] == [])
 check('Favoriten: null = zurück zum Standard', E.call('start_favoriten_save', {'favoriten': None})[0] == 200 and E2.call('start_heute')[1]['favoriten'] is None)
 # Freigegebene Anwendungen in der Reihenfolge des Registers (Seitenleiste „Anwendungen“)
-FREI = ['angebot', 'bestand', 'leergut', 'crm', 'rewe', 'qs', 'hr', 'marketing', 'controlling']
+FREI = ['angebot', 'bestand', 'leergut', 'crm', 'rewe', 'qs', 'containerimport', 'hr', 'marketing', 'controlling']
 fehler = []
 
 
@@ -368,8 +368,8 @@ with sync_playwright() as pw:
           and L[''][0]['id'] == 'start' and L[''][0]['aktiv'] == 'page' and L[''][0]['href'] == './', list(L))
     check('Seitenleiste: freigegebene Anwendungen in der Reihenfolge des Registers als Verweise', [e['id'] for e in L['Anwendungen']] == FREI
           and all(e['tag'] == 'A' and not e['aktiv'] for e in L['Anwendungen']), [e['id'] for e in L['Anwendungen']])
-    check('Seitenleiste: Einkauf und Container-Import unter „In Entwicklung“, ohne Verweis, mit „Bald“',
-          [e['id'] for e in L['In Entwicklung']] == ['einkauf', 'containerimport'] and all(e['tag'] == 'SPAN' and e['aus'] == 'true' and not e['href']
+    check('Seitenleiste: Einkauf unter „In Entwicklung“, ohne Verweis, mit „Bald“ (Container-Import seit 18.11.2026 freigegeben)',
+          [e['id'] for e in L['In Entwicklung']] == ['einkauf'] and all(e['tag'] == 'SPAN' and e['aus'] == 'true' and not e['href']
           and e['bald'] == 'Bald' and 'bald verfügbar' in e['label'] for e in L['In Entwicklung']), L['In Entwicklung'])
     check('Seitenleiste: Import, Versand, Verwaltung, Sicherheit unten unter „Verwaltung & Daten“ (Versand direkt über der Verwaltung)', [e['id'] for e in L['Verwaltung & Daten']] == ['import', 'versand', 'verwaltung', 'sicherheit'])
     ziele = {e['id']: e['href'] for g in L.values() for e in g}
@@ -651,8 +651,8 @@ with sync_playwright() as pw:
     ang = next(e for e in L['Anwendungen'] if e['id'] == 'angebot')
     check('Bearbeiter: Seitenleiste ohne Controlling; Angebot ohne Verweis mit Stand „Wartung“', 'controlling' not in [e['id'] for g in L.values() for e in g]
           and ang['tag'] == 'SPAN' and ang['aus'] == 'true' and ang['stand'] == 'Wartung' and '(Wartung)' in ang['label'], ang)
-    check('Bearbeiter: Bestand, Leergut, CRM, REWE, Qualitätssicherung, HR, Marketing verfügbar, Import und Verwaltung unten', [e['id'] for e in L['Anwendungen'] if e['tag'] == 'A']
-          == ['bestand', 'leergut', 'crm', 'rewe', 'qs', 'hr', 'marketing'] and [e['id'] for e in L['Verwaltung & Daten']] == ['import', 'verwaltung'], L)
+    check('Bearbeiter: Bestand, Leergut, CRM, REWE, Qualitätssicherung, Container-Import, HR, Marketing verfügbar, Import und Verwaltung unten', [e['id'] for e in L['Anwendungen'] if e['tag'] == 'A']
+          == ['bestand', 'leergut', 'crm', 'rewe', 'qs', 'containerimport', 'hr', 'marketing'] and [e['id'] for e in L['Verwaltung & Daten']] == ['import', 'verwaltung'], L)
     pg.screenshot(path=os.path.join(SH, 'dashboard_wartung_bearbeiter.png'), full_page=True)
     ctx.close()
     ctx, pg = anmelden(br, 'admin', PW, '198.51.100.44')

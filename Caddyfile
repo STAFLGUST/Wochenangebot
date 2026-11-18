@@ -182,8 +182,8 @@ login.dashboard-stafl.de {
 	}
 }
 
-# Dashboard, Mitarbeiter-Eingabe, Verwaltung, Bestand, HR, CRM, Marketing, Sicherheit, Controlling, Leergut, REWE, Qualitätssicherung und Versand: dieselbe Anwendung, je Host eigener Client und eigene Sitzung (GR-108)
-dashboard-stafl.de, angebot.dashboard-stafl.de, verwaltung.dashboard-stafl.de, bestand.dashboard-stafl.de, hr.dashboard-stafl.de, crm.dashboard-stafl.de, marketing.dashboard-stafl.de, sicherheit.dashboard-stafl.de, controlling.dashboard-stafl.de, leergut.dashboard-stafl.de, rewe.dashboard-stafl.de, qs.dashboard-stafl.de, versand.dashboard-stafl.de {
+# Dashboard, Mitarbeiter-Eingabe, Verwaltung, Bestand, HR, CRM, Marketing, Sicherheit, Controlling, Leergut, REWE, Qualitätssicherung, Versand und Container-Import: dieselbe Anwendung, je Host eigener Client und eigene Sitzung (GR-108)
+dashboard-stafl.de, angebot.dashboard-stafl.de, verwaltung.dashboard-stafl.de, bestand.dashboard-stafl.de, hr.dashboard-stafl.de, crm.dashboard-stafl.de, marketing.dashboard-stafl.de, sicherheit.dashboard-stafl.de, controlling.dashboard-stafl.de, leergut.dashboard-stafl.de, rewe.dashboard-stafl.de, qs.dashboard-stafl.de, versand.dashboard-stafl.de, container-import.dashboard-stafl.de {
 	import cdn
 	encode zstd gzip
 	header {
@@ -213,7 +213,7 @@ dashboard-stafl.de, angebot.dashboard-stafl.de, verwaltung.dashboard-stafl.de, b
 # STAFL-Plattform: vorbereitete Modul-Domains ohne öffentlich erreichbare Anwendung (GR-105).
 # Erst nach fertiger Anmeldung, Rechteprüfung und geprüfter Release-Freigabe pro Modul routen.
 # Bis dahin: keine Weiterleitung an die produktive Angebots-API oder interne Container.
-einkauf.dashboard-stafl.de, container-import.dashboard-stafl.de {
+einkauf.dashboard-stafl.de {
 	import cdn
 	encode zstd gzip
 	header {

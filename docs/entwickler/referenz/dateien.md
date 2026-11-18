@@ -686,6 +686,7 @@ Jede Code-Datei beginnt mit einem Kopfkommentar; dessen erste Aussage steht hier
 | `adr-007-kundencontainer.md` | plattform | ADR-007: Kundenseite in eigenem Container |
 | `bestandsaufnahme.md` | plattform | Bestandsaufnahme (Phase 0) – Stand 21.10.2026 |
 | `inbetriebnahme-anmeldung.md` | plattform | Inbetriebnahme der zentralen Anmeldung (Keycloak) – Ablaufplan |
+| `inbetriebnahme-containerimport.md` | plattform | Inbetriebnahme: Modul „Container-Import“ (container-import.dashboard-stafl.de) |
 | `inbetriebnahme-sicherung-extern.md` | plattform | Inbetriebnahme: Externe Kopie der Datensicherung (Hetzner Storage Box) |
 | `inbetriebnahme-versand.md` | versand | Inbetriebnahme: Modul „Versand“ (versand.dashboard-stafl.de) |
 | `modul-sicherheit.md` | sicherheit | Modul Sicherheit (sicherheit.dashboard-stafl.de) |

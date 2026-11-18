@@ -832,7 +832,7 @@ Caddy setzt auf allen Hosts `script-src 'self'` (ohne `'unsafe-inline'`), `conne
 - **Zweite Kartendatei „herkunft“** (Südamerika und Neuseeland, `/karte/herkunft.pmtiles`; Laden und Auslieferung: Kapitel Betrieb):
   `STAFLKarte.verfuegbar('herkunft')` und `erstellen(el, { karte: 'herkunft', … })`; Punkte können eine eigene Farbe tragen
   (`farbe: '#rrggbb'`). Genutzt vom Container-Import (`app/module/containerimport/eudr-karte.js`), der ohne die Datei selbst
-  als SVG zeichnet. Den Alias der Datei bekommt der Host des Container-Imports mit seiner Freigabe.
+  als SVG zeichnet. Den Alias der Datei hat nur der Host des Container-Imports (`deploy/anmeldung/apache-oidc.conf`).
 - **PDF im Browser lesen:** pdf.js (Mozilla, Apache-2.0, Fassung für ältere Browser) unter `vendor/pdfjs/` – als ES-Modul
   mit Endung `.js`, erst bei Bedarf geladen (`import()`), Worker vom eigenen Host (`GlobalWorkerOptions.workerSrc`),
   `isEvalSupported: false` (passt zu `script-src 'self'`). Bisher nur im Container-Import: Entwaldungsberichte der

@@ -210,7 +210,9 @@ Auftragsverarbeitung mit bunny sind offen (Inhaber).
   **Eingeschaltet am 04.11.2026 in `stafl-dashboard-1` und geprüft:** Abschnitte kommen mit 206 (auch mitten in der Datei,
   unter 0,2 s), bunny speichert nichts (jede Anfrage „MISS“), ohne Anmeldung leitet die Datei weiterhin zur Anmeldung um
   (302), CRM-Karte und Auswertung zeigen wieder die Detailkarte. Neue Kartenhosts gehören in diese Zone oder brauchen dort
-  dieselbe Einstellung. Kommt trotzdem einmal die ganze Datei, bricht die Seite den Abruf sofort ab
+  dieselbe Einstellung. Das gilt seit 18.11.2026 für `container-import.dashboard-stafl.de` (Zone `stafl-dashboard-2`, Herkunftskarte
+  `/karte/herkunft.pmtiles` für den Container-Import): ohne die Einstellung in `stafl-dashboard-2` zeigt die Karte dort nur die
+  Länderumrisse (`docs/plattform/inbetriebnahme-containerimport.md`). Kommt trotzdem einmal die ganze Datei, bricht die Seite den Abruf sofort ab
   (`app/assets/detailkarte.js`, Hinweis in der Browser-Konsole). **Rückfall:** Einstellung ausschalten – die Seiten zeigen
   dann wieder die Übersichtskarte.
 

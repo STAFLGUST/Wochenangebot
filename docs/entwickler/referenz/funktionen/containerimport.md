@@ -192,7 +192,7 @@ _Modul Container-Import, Reiter EUDR (app/module/containerimport/, Oberfläche c
 - `utm_nach_wgs84(rechts, hoch, zone, sued)` – Unabhängige Gegenrechnung (Krüger-Reihen nach Karney) – der Server rechnet mit einer anderen Formel.
 - `pdf_bauen(seiten)` – Einfache PDF-Datei aus Textstücken je Seite [(x, y, Text), …] – für den erfundenen Bericht.
 
-**Register und Testfreigabe**
+**Register: produktiv (Entscheidung des Inhabers 18.11.2026)**
 
 - `login(user)`
 

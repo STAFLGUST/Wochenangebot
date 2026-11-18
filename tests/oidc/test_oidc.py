@@ -41,6 +41,7 @@ LG = f'https://leergut.stafl.test:{PORT}'   # Modul Leergut (Stand 11, Auftrag d
 RW = f'https://rewe.stafl.test:{PORT}'   # Modul REWE (Stand 12, Auftrag des Inhabers 30.10.2026)
 QS = f'https://qs.stafl.test:{PORT}'   # Modul Qualitätssicherung (Stand 13, Auftrag des Inhabers 30.10.2026)
 VS = f'https://versand.stafl.test:{PORT}'   # Modul Versand (Stand 18, Auftrag des Inhabers 13.11.2026)
+CIM = f'https://container-import.stafl.test:{PORT}'   # Modul Container-Import (Stand 19, Entscheidung des Inhabers 18.11.2026)
 LEGACY = f'http://127.0.0.1:{os.environ.get("APACHE_PORT", "8280")}'
 NZ = f'http://127.0.0.1:{os.environ.get("NOTZUGANG_PORT", "8290")}'   # Notzugang über einen SSH-Tunnel (ADR-007 Regel 6)
 KC = f'http://127.0.0.1:{os.environ.get("KC_PORT", "8180")}'
@@ -233,19 +234,22 @@ check('Realm: nur HTTPS, Anmeldesitzung 4 Std. Leerlauf / 10 Std. höchstens',
       realm.get('sslRequired') == 'all' and realm.get('ssoSessionIdleTimeout') == 14400 and realm.get('ssoSessionMaxLifespan') == 36000)
 _, _, text = anfrage(KC + '/admin/realms/mitarbeiter/clients', kopf={'Authorization': 'Bearer ' + tok})
 clients = {c['clientId']: c for c in (json.loads(text) if text.startswith('[') else [])}
-for cid in ('dashboard', 'angebot', 'verwaltung', 'bestand', 'hr', 'crm', 'marketing', 'sicherheit', 'controlling', 'leergut', 'rewe', 'qs', 'versand'):
+for cid in ('dashboard', 'angebot', 'verwaltung', 'bestand', 'hr', 'crm', 'marketing', 'sicherheit', 'controlling', 'leergut', 'rewe', 'qs', 'versand', 'containerimport'):
     c = clients.get(cid, {})
     check(f'Client {cid}: vertraulich, nur Code-Ablauf, PKCE S256, exakte Weiterleitung, kein CORS',
           c.get('publicClient') is False and c.get('directAccessGrantsEnabled') is False and c.get('implicitFlowEnabled') is False
           and c.get('serviceAccountsEnabled') is False and c.get('attributes', {}).get('pkce.code.challenge.method') == 'S256'
           and all('*' not in u for u in c.get('redirectUris', ['*'])) and c.get('webOrigins') == [], c.get('redirectUris'))
-    check(f'Client {cid}: Back-Channel-Logout eingerichtet', c.get('attributes', {}).get('backchannel.logout.url', '').startswith(f'https://{cid}.stafl.test'))
+    # Host = Name des Clients – außer beim Container-Import (Adresse mit Bindestrich, Client ohne: der Name steht in OIDC_SECRET_…)
+    _host = {'containerimport': 'container-import'}.get(cid, cid)
+    check(f'Client {cid}: Back-Channel-Logout eingerichtet (eigener Host)', c.get('attributes', {}).get('backchannel.logout.url', '') == f'https://{_host}.stafl.test:{PORT}/oidc/callback?logout=backchannel',
+          c.get('attributes', {}).get('backchannel.logout.url'))
     check(f'Client {cid}: Standard nur Passwort (zweiter Faktor je Konto), Anmeldemethoden im Claim amr',
           c.get('attributes', {}).get('minimum.acr.value') == 'pwd' and any(m.get('protocolMapper') == 'oidc-amr-mapper' for m in c.get('protocolMappers', [])),
           (c.get('attributes', {}).get('minimum.acr.value'), [m.get('protocolMapper') for m in c.get('protocolMappers', [])]))
 check('Realm: eigener Anmeldeablauf mit Stufen (Passwort, zweiter Faktor)', realm.get('browserFlow') == 'mitarbeiter-browser', realm.get('browserFlow'))
 _log = open(os.path.join(WORK, 'realm-aktualisieren.log'), encoding='utf-8').read()
-check('Realm auf aktuellem Stand (realm-aktualisieren beim Start, Protokoll)', 'Realm aktuell (Stand 18' in _log, _log[-300:])
+check('Realm auf aktuellem Stand (realm-aktualisieren beim Start, Protokoll)', 'Realm aktuell (Stand 19' in _log, _log[-300:])
 # Stand 15: Passwortregeln aus der Anwendung – beim Start ist sie hier nicht über APP_PHP erreichbar: Hinweis, nichts geändert, kein Abbruch
 check('Stand 15: ohne lesbare Anwendung Hinweis statt Abbruch, Passwortregeln unverändert',
       'Einstellungen der Anwendung nicht lesbar' in _log and 'konten.sh richtlinien' in _log and realm.get('failureFactor') == 5, _log[-500:])
@@ -311,6 +315,11 @@ check('Stand 18: Client „versand“ nachträglich angelegt, Geheimnisse in .en
       and GEHEIM['OIDC_SECRET_VERSAND'] not in _log, _log[-500:])
 check('Client „versand“: Geheimnis aus .env übernommen, kein Platzhalter, Rücksprung nur auf den eigenen Host',
       clients.get('versand', {}).get('secret') not in (None, '@GEHEIM_VERSAND@') and clients.get('versand', {}).get('redirectUris') == [VS + '/oidc/callback'])
+check('Stand 19: Client „containerimport“ nachträglich angelegt, Geheimnisse in .env erzeugt (ohne Anzeige)',
+      'angelegt:  Client containerimport' in _log and 'erzeugt:   OIDC_SECRET_CONTAINERIMPORT in .env' in _log and 'erzeugt:   OIDC_CRYPTO_CONTAINERIMPORT in .env' in _log
+      and GEHEIM['OIDC_SECRET_CONTAINERIMPORT'] not in _log, _log[-500:])
+check('Client „containerimport“: Geheimnis aus .env übernommen, kein Platzhalter, Rücksprung nur auf den eigenen Host',
+      clients.get('containerimport', {}).get('secret') not in (None, '@GEHEIM_CONTAINERIMPORT@') and clients.get('containerimport', {}).get('redirectUris') == [CIM + '/oidc/callback'])
 check('Stand 8: Client „konten“ (Mitarbeiterkonten aus der Verwaltung) nachträglich angelegt, nur Geheimnis (kein Sitzungsschlüssel), nicht angezeigt',
       'angelegt:  Client konten' in _log and 'erzeugt:   OIDC_SECRET_KONTEN in .env' in _log and 'OIDC_CRYPTO_KONTEN' not in _log
       and GEHEIM['OIDC_SECRET_KONTEN'] not in _log and 'gesetzt:   Recht view-users' in _log and 'manage-users' not in _log, _log[-600:])
@@ -635,7 +644,20 @@ for pfad in ('/', '/admin/', '/admin'):
     check(f'Versand {pfad}: Weiterleitung zum Versand (/module/versand/), kein Eingabebereich auf dem Versand-Host',
           code == 302 and (kopf.get('Location') or '').endswith('/module/versand/'), (code, kopf.get('Location')))
 check('Versand: Stylesheets ohne Anmeldung (Abmeldeseite)', anfrage(VS + '/assets/app.css')[0] == 200 and anfrage(VS + '/dashboard/abgemeldet.html')[0] == 200)
-for h in (D, A, W, B, HR, CRM, MKT, SIC, CTL, LG, RW, QS, VS):
+code, kopf, _ = anfrage(CIM + '/module/containerimport/', kopf=SEITE)
+check('Container-Import ohne Anmeldung → Keycloak, eigener Client und eigene Rücksprungadresse',
+      code in (302, 303) and urllib.parse.parse_qs(urllib.parse.urlparse(kopf.get('Location') or '').query).get('client_id') == ['containerimport']
+      and urllib.parse.parse_qs(urllib.parse.urlparse(kopf.get('Location') or '').query).get('redirect_uri') == [CIM + '/oidc/callback'], kopf.get('Location'))
+check('Container-Import: Schnittstelle ohne Anmeldung 401 (auch containerimport_start, containerimport_eudr_export)',
+      all(anfrage(CIM + '/api/?action=' + a)[0] == 401 for a in ('status', 'containerimport_start', 'containerimport_eudr_export&sendung=x')))
+for pfad in ('/', '/admin/', '/admin'):
+    code, kopf, _ = anfrage(CIM + pfad, kopf=SEITE)
+    check(f'Container-Import {pfad}: Weiterleitung zum Container-Import (/module/containerimport/), kein Eingabebereich auf dem Host des Container-Imports',
+          code == 302 and (kopf.get('Location') or '').endswith('/module/containerimport/'), (code, kopf.get('Location')))
+check('Container-Import: Stylesheets ohne Anmeldung (Abmeldeseite)', anfrage(CIM + '/assets/app.css')[0] == 200 and anfrage(CIM + '/dashboard/abgemeldet.html')[0] == 200)
+code, kopf, _ = anfrage(CIM + '/karte/herkunft.pmtiles', kopf={'Range': 'bytes=0-6', **SEITE})
+check('Herkunftskarte: ohne Anmeldung nicht abrufbar (Weiterleitung zu Keycloak)', code in (302, 303, 401), (code, kopf.get('Location', '')[:80]))
+for h in (D, A, W, B, HR, CRM, MKT, SIC, CTL, LG, RW, QS, VS, CIM):
     code, kopf, text = anfrage(h + '/oidc/callback?' + urllib.parse.urlencode({'state': 'abgelaufen-oder-fremder-tab', 'code': 'x'}), kopf=SEITE)
     check(f'Rückkehr von der Anmeldung ohne passenden Zustand ({h.split("//")[1].split(".")[0]}): Weiterleitung zum Host statt „Bad Request“',
           code in (302, 303) and (kopf.get('Location') or '').startswith(h + '/'), (code, kopf.get('Location'), text[:80]))
@@ -1164,6 +1186,17 @@ with sync_playwright() as pw:
     code, kopf, _ = anfrage(CRM + '/karte/karte.pmtiles', kopf={'Range': 'bytes=0-6', **SEITE})
     check('Detailkarte: ohne Anmeldung nicht abrufbar (Weiterleitung zu Keycloak)', code in (302, 303, 401) and code != 206, (code, kopf.get('Location', '')[:80]))
     check('Detailkarte: nicht auf dem Angebots-Host (404)', pa.evaluate("fetch('/karte/karte.pmtiles', {headers: {Range: 'bytes=0-6'}}).then(r => r.status)") == 404)
+    # Herkunftskarte (Südamerika und Neuseeland, hier derselbe Testauszug): nur auf dem Host des Container-Imports und nur mit
+    # Anmeldung; dessen Aktionen beantwortet nur sein Host (GR-109) – Erika hat den Modulzugang, aber kein „EUDR ansehen“ (403)
+    check('Herkunftskarte: nicht auf dem CRM-Host (404)', pc.evaluate("fetch('/karte/herkunft.pmtiles', {headers: {Range: 'bytes=0-6'}}).then(r => r.status)") == 404)
+    pk = eigene_seite(ctx.new_page()); pk.goto(CIM + '/module/containerimport/'); pk.wait_for_url(lambda u: u.startswith(CIM + '/module/containerimport/'))
+    code, kopf = pk.evaluate("fetch('/karte/herkunft.pmtiles', {headers: {Range: 'bytes=0-6'}}).then(async r => [r.status, await r.text()])")
+    check('Herkunftskarte: auf dem Host des Container-Imports mit Anmeldung als Byte-Bereich (206, PMTiles)', code == 206 and kopf == 'PMTiles', (code, kopf))
+    check('Herkunftskarte: die Detailkarte für Deutschland liefert dieser Host nicht aus (404)', pk.evaluate("fetch('/karte/karte.pmtiles', {headers: {Range: 'bytes=0-6'}}).then(r => r.status)") == 404)
+    code = pk.evaluate("fetch('/api/?action=containerimport_start').then(r => r.status)")
+    check('GR-109: containerimport_start auf dem eigenen Host erreichbar (403 ohne „EUDR ansehen“), auf dem CRM-Host 404',
+          code == 403 and pc.evaluate("fetch('/api/?action=containerimport_start').then(r => r.status)") == 404, code)
+    pk.close()
     pc.click('#crm-tabs button[data-tab="karte"]')
     ok_km, diag = karte_bereit(pc, '#km-detail')
     n_km = pc.evaluate("document.querySelector('#km-detail').staflKarte.anzahl()") if ok_km else 0

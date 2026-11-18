@@ -44,8 +44,11 @@ gruppen = {m['id']: m['gruppe'] for m in r['module'] if m['dashboard']}
 check('Bereich je Kachel aus dem Register: Import, Versand, Verwaltung und Sicherheit unter „Verwaltung & Daten“, alle anderen Anwendungen',
       {k for k, g in gruppen.items() if g == 'verwaltung'} == {'import', 'versand', 'verwaltung', 'sicherheit'} and all(g in ('anwendungen', 'verwaltung') for g in gruppen.values())
       and all(m['gruppe'] is None for m in r['module'] if not m['dashboard']), gruppen)
-k = mods.get('containerimport', {}).get('kachel') or {}
-check('containerimport: angelegt, aber nicht nutzbar (Status Entwicklungsstand, ohne Zugang)', k.get('status') == 'entwicklungsstand' and not k.get('zugang'), k)
+ci = mods['containerimport']
+check('Container-Import freigegeben (container-import.dashboard-stafl.de, Entscheidung des Inhabers 18.11.2026): Kachel verfügbar, Adresse /module/containerimport/ auf dem eigenen Host',
+      ci['kachel']['ziel'] == 'containerimport.intern' and ci['kachel']['zugang'] is True and ci['kachel']['status'] == 'verfuegbar'
+      and ci['kachel']['adresse'] == 'https://container-import.dashboard-stafl.de/module/containerimport/'
+      and (lambda o: o['entwicklung'] == 'fertig' and o['freigabe'] == 'produktiv')(ob(ci, 'intern')), ci['kachel'])
 lg = mods['leergut']
 check('Leergut freigegeben (leergut.dashboard-stafl.de, Auftrag des Inhabers 29.10.2026): Kachel verfügbar, Adresse /module/leergut/ auf dem eigenen Host',
       lg['kachel']['ziel'] == 'leergut.intern' and lg['kachel']['zugang'] is True and lg['kachel']['status'] == 'verfuegbar'
