@@ -80,4 +80,20 @@ assert 'Strict-Transport-Security "max-age=31536000"' in mitarbeiter
 # Kundenportal behält seine separate Route; eine Testadresse gibt es nicht mehr (GR-111, 15.11.2026).
 assert "{$DOMAIN}, www.{$DOMAIN} {" in caddy
 assert "test.{$DOMAIN}" not in caddy and "test.dashboard-stafl.de" not in caddy
-print("OK: ein Modul-Host ist 503-Platzhalter; Anmeldung (mit Prüfung vor jeder Seite), Dashboard, Mitarbeiter-Eingabe, Verwaltung, Bestand, HR, CRM, Marketing, Sicherheit, Controlling, Leergut, REWE, Qualitätssicherung, Versand und Container-Import nur mit der Ergänzungsdatei.")
+# Fremde Kartendienste (Satellitenbild, Wald 2020, Waldverlust): nur der Container-Import lässt sie zu, nur für Bilder und
+# Abrufe, und genau die Adressen, die seine Karte nutzt (Entscheidung des Inhabers 18.11.2026).
+karte_js = Path("app/module/containerimport/eudr-karte.js").read_text(encoding="utf-8")
+genutzt = sorted(set(re.findall(r"['`](https://[a-z0-9.-]+)/", karte_js)))   # Adressen der Abrufe; Verweise der Quellenangaben stehen in href="…"
+zuordnung = re.search(r"map \{host\} \{csp_karten\} \{\n\t\t(\S+) \"([^\"]*)\"\n\t\tdefault \"\"\n\t\}", caddy)
+assert zuordnung, "Caddyfile: Zuordnung csp_karten fehlt"
+assert zuordnung.group(1) == "container-import.dashboard-stafl.de", zuordnung.group(1)
+assert sorted(zuordnung.group(2).split()) == genutzt == ["https://ies-ows.jrc.ec.europa.eu", "https://tiles.globalforestwatch.org", "https://tiles.maps.eox.at"], (zuordnung.group(2), genutzt)
+assert caddy.count("map {host}") == 1 and caddy.count("{csp_karten}") == 3   # die Zuordnung selbst, img-src, connect-src
+richtlinien = re.findall(r'Content-Security-Policy "([^"]+)"', caddy)
+mit = [r for r in richtlinien if "{csp_karten}" in r]
+assert len(mit) == 1 and "img-src 'self' data: blob:{csp_karten};" in mit[0] and "connect-src 'self'{csp_karten};" in mit[0] and "script-src 'self';" in mit[0], mit
+for r in richtlinien:   # nirgends eine fremde Adresse fest eingetragen – außer der Anmeldung als Formularziel
+    assert set(re.findall(r"https://[^\s;\"]+", r)) <= {"https://login.dashboard-stafl.de"}, r
+assert "csp_karten" not in site("einkauf.dashboard-stafl.de") and "csp_karten" not in site("{$DOMAIN}, www.{$DOMAIN}")
+
+print("OK: ein Modul-Host ist 503-Platzhalter; Anmeldung (mit Prüfung vor jeder Seite), Dashboard, Mitarbeiter-Eingabe, Verwaltung, Bestand, HR, CRM, Marketing, Sicherheit, Controlling, Leergut, REWE, Qualitätssicherung, Versand und Container-Import nur mit der Ergänzungsdatei; fremde Kartendienste nur beim Container-Import.")

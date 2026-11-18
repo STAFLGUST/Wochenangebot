@@ -158,7 +158,7 @@
       <span class="ci-legende"><i class="ci-ampel gruen"></i>ohne offenen Punkt <i class="ci-ampel gelb"></i>Nachweis offen <i class="ci-ampel rot"></i>kritisch</span></div>
       <div class="ci-kartenraster"><div class="r-karte" id="ci-karte"></div>
       <ul class="r-karte ci-kartenliste">${liste.map((b) => `<li><button type="button" data-betrieb="${esc(b.id)}"><i class="ci-ampel ${b.ampel}" aria-hidden="true"></i><span><strong>${esc(b.name)}</strong><small>${esc([landName(b.land), b.region].filter(Boolean).join(' · '))} · ${ha(b.flaeche)}</small></span></button></li>`).join('') || '<li class="ci-leer">Keine Betriebe.</li>'}</ul></div>
-      <p class="ci-leise ci-klein">Straßen und Orte zeigt die Karte, sobald die Herkunftskarte (Südamerika, Neuseeland) auf dem Server geladen ist – sonst nur die Umrisse der Länder (Natural Earth). Satellitenbilder: im Betrieb „In OpenStreetMap ansehen“ oder die Gegenprüfung nutzen.</p>`;
+      <p class="ci-leise ci-klein">Grün: Wald Ende 2020 laut Karte der EU-Kommission (JRC) – ein Hinweis, kein Nachweis. Pink: Waldverlust seit 2021 (Universität Maryland über Global Forest Watch, 30 m). Pink innerhalb einer Fläche heißt: genau hinsehen und die Gegenprüfung machen. Das Satellitenbild ist von 2016 und zeigt nicht den heutigen Zustand. Die Bilder kommen direkt von EOX, der EU-Kommission und Global Forest Watch.</p>`;
     window.EUDR_KARTE.zeichnen($('#ci-karte'), { betriebe: liste, beiKlick: betriebOeffnen });
   }
 
@@ -205,6 +205,7 @@
 
         <h3 class="ci-h">Eigene Gegenprüfung der Entwaldung</h3>
         <p class="ci-klein">Unabhängig vom Bericht des Lieferanten: Fläche herunterladen, im Portal hochladen und das Ergebnis hier eintragen.</p>
+        <div class="ci-auswertung" id="betrieb-auswertung" hidden></div>
         <div class="ci-portale"><button class="ci-knopf klein" type="button" data-export-betrieb="${esc(id)}">${icon('runter')}Fläche als GeoJSON</button>
           ${portale.filter(([, p]) => p.url).map(([, p]) => `<a class="ci-knopf klein" href="${esc(p.url)}" target="_blank" rel="noopener noreferrer" title="${esc(p.hinweis)}">${icon('aus')}${esc(p.name)}</a>`).join('')}</div>
         ${pruefungen.length ? `<ul class="ci-pruefungen">${pruefungen.map((p) => `<li>${marke(p.ergebnis === 'befund' ? 'Befund' : 'ohne Befund', p.ergebnis === 'befund' ? 'rot' : 'ok')}<span><strong>${esc(S.d.portale[p.portal].name)}</strong> · ${tag(p.datum)}${p.verlustHa === null ? '' : ` · Baumverlust ${ha(p.verlustHa)}`}${p.bemerkung ? `<small>${esc(p.bemerkung)}</small>` : ''}</span><span class="ci-leise ci-klein">${esc(p.von)}</span></li>`).join('')}</ul>` : '<p class="ci-leise ci-klein">Noch keine Gegenprüfung eingetragen.</p>'}
@@ -222,6 +223,40 @@
         <button class="ci-knopf" type="button" data-zu>Schließen</button>${darf ? '<button class="ci-knopf primaer" type="submit">Speichern</button>' : ''}</div>`;
     oeffnen($('#dlg-betrieb'));
     window.EUDR_KARTE.zeichnen($('#betrieb-karte'), { betriebe: [b], einzeln: true });
+    auswertungZeigen(b, darf);
+  }
+  /* Bildauswertung im Fenster „Betrieb“: Wald Ende 2020 und Waldverlust seit 2021 in der Fläche – eine Schätzung aus den
+     Kartenbildern (eudr-auswertung.js). Ohne erreichbare Kartendienste oder für einen Punkt bleibt der Abschnitt verborgen.
+     „Übernehmen“ füllt nur das Formular der Gegenprüfung; eingetragen wird erst mit dessen Knopf. */
+  async function auswertungZeigen(b, darf) {
+    const el = $('#betrieb-auswertung');
+    if (b.geometrie.type === 'Point') return;
+    let e;
+    try { e = await window.EUDR_KARTE.auswerten(b.geometrie); } catch (f) { e = { fehler: true }; }
+    if (!el.isConnected || !e) return;   // Fenster inzwischen neu aufgebaut oder Dienste nicht erreichbar
+    el.hidden = false;
+    if (e.fehler || e.zuGross) {
+      el.innerHTML = `<p class="ci-klein ci-leise">Bildauswertung nicht möglich: ${e.fehler ? 'ein Kartendienst hat nicht geantwortet.' : 'die Fläche ist dafür zu groß (mehr als rund 35 × 35 km).'}</p>`;
+      return;
+    }
+    const h = (v) => `${F.zahl(v, 1, 1)} ha`, jahre = Object.entries(e.jahre).filter(([, v]) => v >= 0.05);
+    const passt = Math.abs(e.flaecheHa - b.flaeche) <= 0.03 * b.flaeche;
+    el.dataset.verlust = e.verlustHa.toFixed(2); el.dataset.aufWald = e.verlustAufWaldHa.toFixed(2);
+    el.dataset.text = `Bildauswertung im Container-Import: Wald Ende 2020 ${h(e.waldHa)}, Waldverlust 2021–${e.bis} ${h(e.verlustHa)}, davon ${h(e.verlustAufWaldHa)} auf Wald von 2020 (JRC GFC 2020, GFW Tree cover loss).`;
+    el.innerHTML = `<p><strong>Bildauswertung der Fläche</strong> <span class="ci-leise">· Schätzung aus den Kartenbildern, kein Nachweis</span></p>
+      <dl><dt>Wald Ende 2020 (Karte der EU)</dt><dd>${h(e.waldHa)} · ${F.zahl(e.flaecheHa ? e.waldHa / e.flaecheHa * 100 : 0, 0, 0)} % der Fläche</dd>
+        <dt>Waldverlust 2021–${e.bis}</dt><dd>${e.verlustHa >= 0.05 ? `${marke(h(e.verlustHa), e.verlustAufWaldHa >= 0.5 ? 'rot' : 'warn')} davon ${h(e.verlustAufWaldHa)} auf Wald von 2020${jahre.length ? ` <small>${jahre.map(([j, v]) => `${j}: ${F.zahl(v, 1, 1)}`).join(' · ')}</small>` : ''}` : marke('keiner erkannt', 'ok')}</dd>
+        <dt>Verlust bis 2020 (vor dem Stichtag)</dt><dd>${h(e.vorherHa)}</dd></dl>
+      <p class="ci-klein ci-leise">Ausgewertet ${h(e.flaecheHa)} (berechnete Fläche ${ha(b.flaeche)})${passt ? '' : ' – <strong>weicht ab, Ergebnis mit Vorsicht lesen</strong>'}. Quellen: Wald 2020 der EU-Kommission (JRC, 10 m), Baumverlust der Universität Maryland über Global Forest Watch (30 m). Baumverlust ist nicht immer Entwaldung (Brand, Ernte von Plantagen); kleine Werte können Rauschen sein.</p>
+      ${darf ? '<button class="ci-knopf klein" type="button" id="betrieb-auswertung-nehmen">Werte in die Gegenprüfung übernehmen</button>' : ''}`;
+  }
+  /* Werte der Bildauswertung in das Formular der Gegenprüfung schreiben (Portal „Andere Quelle“); Befund ab 0,5 ha Verlust auf
+     Wald von 2020 vorgeschlagen (Mindestgröße eines Waldes nach der EUDR) – der Bearbeiter entscheidet und trägt selbst ein */
+  function auswertungNehmen() {
+    const d = $('#betrieb-auswertung').dataset, w = $('#betrieb-inhalt').elements;
+    w.p_portal.value = 'sonst'; w.p_ergebnis.value = Number(d.aufWald) >= 0.5 ? 'befund' : 'ohne_befund';
+    w.p_verlustHa.value = zahlText(d.verlust); w.p_bemerkung.value = d.text;
+    w.p_bemerkung.focus();
   }
   /* Felder des Fensters als Betrieb für den Server */
   function betriebAusFenster(b, w) {
@@ -544,6 +579,7 @@
     if (t.closest('#sendung-archiv')) { sendungSpeichern({ aktiv: !sendung(sid).aktiv }).then((ok) => ok && $('#dlg-sendung').close()); return; }
     if (t.closest('#betrieb-archiv')) { betriebSpeichern({ aktiv: !betrieb($('#betrieb-inhalt').dataset.id).aktiv }); return; }
     if (t.closest('#betrieb-pruefung')) { pruefungEintragen(); return; }
+    if (t.closest('#betrieb-auswertung-nehmen')) { auswertungNehmen(); return; }
     if (t.closest('#lesen-pruefen')) { lesenPruefen(); return; }
   });
   document.addEventListener('keydown', (e) => {

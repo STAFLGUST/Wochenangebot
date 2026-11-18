@@ -4,17 +4,24 @@
    (ODbL) als eine PMTiles-Datei unter /karte/karte.pmtiles auf demselben Host (deploy/karte-laden.sh, nur mit
    Anmeldung erreichbar). Darstellung: MapLibre GL (BSD-3) und pmtiles (BSD-3) aus app/assets/vendor/, Stil
    app/assets/karte/stil-*.json (werkzeuge/karte_stil.mjs), Schriften und Symbole aus app/assets/karte/.
-   Keine fremden Kartendienste: alle Anfragen gehen an den eigenen Host (Content-Security-Policy 'self').
+   Ohne die Angabe „raster“ keine fremden Kartendienste: alle Anfragen gehen an den eigenen Host (Content-Security-Policy 'self').
    Fehlt die Kartendatei, beantwortet der Server (bzw. ein vorgeschaltetes CDN) keine Range-Anfragen oder kann der
    Browser kein WebGL, meldet verfuegbar() false – die Seiten zeichnen dann ihre bisherige Übersichtskarte.
 
    Zweite Kartendatei „herkunft“ (/karte/herkunft.pmtiles: Südamerika und Neuseeland) für
    die Herkunftsbetriebe im Container-Import – gewählt über den Namen der Karte, Standard ist „karte“ (Deutschland).
 
+   Rasterebenen fremder Dienste (optionen.raster – Satellitenbild, Waldkarten): nur für Seiten, deren Host sie in seiner
+   Content-Security-Policy zulässt (Caddyfile: nur der Container-Import). Mit Rasterebenen zeichnet die Kartendatei nur noch
+   Linien und Beschriftung (Straßen, Gewässer, Orte) darüber; mit karte: null entfällt sie ganz.
+
    API (global window.STAFLKarte):
      verfuegbar(karte = 'karte')       → Promise<boolean>
+     webgl()                           → boolean (kann der Browser die Karte überhaupt zeichnen?)
      erstellen(element, optionen)      → Promise<Karte>
-       optionen: { karte: 'karte'|'herkunft', punkte, farbe: 'gruen'|'rot'|'grau', beiKlick(id, punkt), beiBewegung(), beiLeerklick(), rahmen: [lon1, lat1, lon2, lat2] }
+       optionen: { karte: 'karte'|'herkunft'|null (keine Kartendatei, nur mit raster),
+                   raster: [{ id, kacheln: [Adresse mit {z}/{x}/{y} oder {bbox-epsg-3857}], maxzoom, deckkraft, quelle (HTML), sichtbar }] in Zeichenreihenfolge,
+                   punkte, farbe: 'gruen'|'rot'|'grau', beiKlick(id, punkt), beiBewegung(), beiLeerklick(), rahmen: [lon1, lat1, lon2, lat2] }
        punkt:    { id, lon, lat, n (Anzahl), aus (inaktiv), titel, farbe (eigene Farbe als #rrggbb, sonst die der Karte) }
      Karte: setzePunkte(punkte), passend(), zoom(+1|-1), zentriere(lon, lat, zoom), position(lon, lat) → [x, y],
             markiere(id), anzahl(), groesse(), entfernen(); map (MapLibre). Am Element: element.staflKarte und
@@ -22,6 +29,8 @@
             setzeGebiete(sammlung | null): Flächen unter den Punkten (z. B. Nielsen-Gebiete) – GeoJSON-Features mit
               properties { farbe, hervor (true = betont), text (Beschriftung, \n erlaubt), beschriftung: [lon, lat] };
             gebiete() → Anzahl gezeigter Flächen; rahmen([lon1, lat1, lon2, lat2]) zeigt einen Ausschnitt
+            zeige(id, an) blendet eine Rasterebene ein oder aus, mit id 'grund' Linien und Beschriftung der Kartendatei;
+              sichtbar(id) → boolean
    ========================================================================== */
 (function () {
   'use strict';
@@ -91,7 +100,9 @@
     const t = document.documentElement.dataset.theme;
     return t ? t === 'dark' : matchMedia('(prefers-color-scheme: dark)').matches;
   };
-  function stil(art, karte) {
+  /* Stil der Karte. Ohne Rasterebenen: die Kartendatei mit allen Ebenen. Mit Rasterebenen: Hintergrund, die Bilder in der
+     gegebenen Reihenfolge, darüber aus der Kartendatei nur Linien und Beschriftung (Flächen würden die Bilder verdecken). */
+  function stil(art, karte, raster) {
     if (!stile[art]) {
       stile[art] = fetch(BASIS + 'karte/stil-' + art + '.json').then((r) => { if (!r.ok) throw new Error('Kartenstil nicht geladen'); return r.json(); });
     }
@@ -99,8 +110,16 @@
       version: 8,
       glyphs: BASIS + 'karte/schrift/{fontstack}/{range}.pbf',
       sprite: BASIS + 'karte/sprite/' + s.sprite,
-      sources: { protomaps: { type: 'vector', url: 'pmtiles://' + datei(karte), attribution: ATTRIBUTION } },
-      layers: s.layers,
+      sources: {
+        ...(karte ? { protomaps: { type: 'vector', url: 'pmtiles://' + datei(karte), attribution: ATTRIBUTION } } : {}),
+        ...Object.fromEntries(raster.map((r) => ['raster-' + r.id, { type: 'raster', tiles: r.kacheln, tileSize: 256, maxzoom: r.maxzoom || 14, attribution: r.quelle || '' }])),
+      },
+      layers: raster.length ? [
+        { id: 'hintergrund', type: 'background', paint: { 'background-color': art === 'dunkel' ? '#1d1b1c' : '#e8e4de' } },
+        ...raster.map((r) => ({ id: 'raster-' + r.id, type: 'raster', source: 'raster-' + r.id,
+          layout: { visibility: r.sichtbar === false ? 'none' : 'visible' }, paint: { 'raster-opacity': r.deckkraft === undefined ? 1 : r.deckkraft } })),
+        ...(karte ? s.layers.filter((l) => l.type === 'line' || l.type === 'symbol') : []),
+      ] : s.layers,
     }));
   }
 
@@ -116,9 +135,12 @@
   }
 
   async function erstellen(el, opt) {
-    const [ml, style] = await Promise.all([laden(), stil(dunkel() ? 'dunkel' : 'hell', opt.karte)]);
+    const raster = opt.raster || [];
+    const karte = opt.karte === null && raster.length ? null : (opt.karte || 'karte');
+    const [ml, style] = await Promise.all([laden(), stil(dunkel() ? 'dunkel' : 'hell', karte, raster)]);
     const [farbe, rand] = FARBEN[opt.farbe] || FARBEN.gruen;
     const halo = dunkel() ? '#141213' : '#ffffff';
+    const grund = karte && raster.length ? style.layers.filter((l) => l.source === 'protomaps').map((l) => l.id) : [];   // Linien und Beschriftung über den Bildern
     let punkte = opt.punkte || [];
     el.classList.add('detailkarte');
     const map = new ml.Map({
@@ -140,6 +162,11 @@
     map.on('error', (e) => { const m = String(e && e.error && e.error.message || ''); if (!/glyph|sprite|image/i.test(m) && window.console) console.warn('Karte:', m); });
     map.on('styleimagemissing', () => {});
     await new Promise((ok) => map.once('load', ok));
+    if (raster.length) {   // Bilder: Maßstab dazu; die langen Quellenangaben der Dienste eingeklappt (ⓘ öffnet sie)
+      map.addControl(new ml.ScaleControl({ unit: 'metric', maxWidth: 110 }), 'bottom-left');
+      const quellen = el.querySelector('.maplibregl-ctrl-attrib');
+      if (quellen) { quellen.classList.remove('maplibregl-compact-show'); quellen.removeAttribute('open'); }
+    }
     map.addSource('punkte', { type: 'geojson', data: geojson(punkte), cluster: true, clusterRadius: 34, clusterMaxZoom: 12,
       clusterProperties: { n: ['+', ['get', 'n']], aus: ['min', ['get', 'aus']] } });
     const groesse = ['interpolate', ['linear'], ['sqrt', ['get', 'n']], 1, 8, 4, 12, 20, 19, 60, 26];
@@ -169,6 +196,8 @@
       map.addSource('gebiete-text', { type: 'geojson', data: texte });
       map.addLayer({ id: 'gebiete-flaeche', type: 'fill', source: 'gebiete', paint: {
         'fill-color': ['get', 'farbe'], 'fill-opacity': ['case', ['==', ['get', 'hervor'], 1], 0.2, 0.12] } }, ersteSchrift);
+      // Auf einem Bild braucht der Umriss einen hellen Rand, sonst verschwindet er im Wald
+      if (raster.length) map.addLayer({ id: 'gebiete-rand', type: 'line', source: 'gebiete', paint: { 'line-color': '#ffffff', 'line-width': 5, 'line-opacity': 0.85 } }, ersteSchrift);
       map.addLayer({ id: 'gebiete-linie', type: 'line', source: 'gebiete', paint: {
         'line-color': ['get', 'farbe'], 'line-width': ['case', ['==', ['get', 'hervor'], 1], 2.6, 1.2], 'line-opacity': 0.9 } }, ersteSchrift);
       map.addLayer({ id: 'gebiete-text', type: 'symbol', source: 'gebiete-text', layout: {
@@ -200,6 +229,8 @@
       setzeGebiete,
       gebiete() { return gebieteZahl; },
       rahmen(b) { map.fitBounds([[b[0], b[1]], [b[2], b[3]]], { padding: 40, duration: 300 }); },
+      zeige(id, an) { for (const l of id === 'grund' ? grund : ['raster-' + id]) if (map.getLayer(l)) map.setLayoutProperty(l, 'visibility', an ? 'visible' : 'none'); },
+      sichtbar(id) { const l = id === 'grund' ? grund[0] : 'raster-' + id; return !!(l && map.getLayer(l)) && map.getLayoutProperty(l, 'visibility') !== 'none'; },
       groesse() { map.resize(); },
       entfernen() { try { map.remove(); } catch (e) { /* schon entfernt */ } },
     };
@@ -221,5 +252,5 @@
     return k;
   }
 
-  window.STAFLKarte = { verfuegbar, erstellen };
+  window.STAFLKarte = { verfuegbar, webgl, erstellen };
 })();

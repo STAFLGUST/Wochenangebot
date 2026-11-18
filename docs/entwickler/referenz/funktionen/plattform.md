@@ -816,7 +816,7 @@ _STAFL-Plattform – Detailkarte (Straßen, Gebäude, Ortsnamen) vom eigenen Ser
 - `verfuegbar(karte)` – Kartendatei vorhanden?
 - `skript(src)`
 - `laden()`
-- `stil(art, karte)`
+- `stil(art, karte, raster)` – Stil der Karte.
 - `geojson(punkte)`
 - `erstellen(el, opt)`
 

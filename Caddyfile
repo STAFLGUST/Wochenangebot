@@ -185,13 +185,21 @@ login.dashboard-stafl.de {
 # Dashboard, Mitarbeiter-Eingabe, Verwaltung, Bestand, HR, CRM, Marketing, Sicherheit, Controlling, Leergut, REWE, Qualitätssicherung, Versand und Container-Import: dieselbe Anwendung, je Host eigener Client und eigene Sitzung (GR-108)
 dashboard-stafl.de, angebot.dashboard-stafl.de, verwaltung.dashboard-stafl.de, bestand.dashboard-stafl.de, hr.dashboard-stafl.de, crm.dashboard-stafl.de, marketing.dashboard-stafl.de, sicherheit.dashboard-stafl.de, controlling.dashboard-stafl.de, leergut.dashboard-stafl.de, rewe.dashboard-stafl.de, qs.dashboard-stafl.de, versand.dashboard-stafl.de, container-import.dashboard-stafl.de {
 	import cdn
+	# Kartenbilder fremder Dienste – nur für den Container-Import (EUDR: Satellitenbild von EOX, Wald 2020 der EU-Kommission,
+	# Waldverlust von Global Forest Watch; Entscheidung des Inhabers 18.11.2026). Alle anderen Adressen laden weiter nur vom
+	# eigenen Host. Erlaubt sind nur Bilder und Abrufe (img-src, connect-src), nie Skripte. Die Liste muss zu den Adressen in
+	# app/module/containerimport/eudr-karte.js passen (tests/deploy/test_dashboard_domains.py prüft das).
+	map {host} {csp_karten} {
+		container-import.dashboard-stafl.de " https://tiles.maps.eox.at https://ies-ows.jrc.ec.europa.eu https://tiles.globalforestwatch.org"
+		default ""
+	}
 	encode zstd gzip
 	header {
 		Strict-Transport-Security "max-age=31536000"
 		X-Content-Type-Options "nosniff"
 		X-Frame-Options "SAMEORIGIN"
 		Referrer-Policy "same-origin"
-		Content-Security-Policy "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self' data:; connect-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self' https://login.dashboard-stafl.de; frame-ancestors 'self'; upgrade-insecure-requests"
+		Content-Security-Policy "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:{csp_karten}; font-src 'self' data:; connect-src 'self'{csp_karten}; object-src 'none'; base-uri 'self'; form-action 'self' https://login.dashboard-stafl.de; frame-ancestors 'self'; upgrade-insecure-requests"
 		Permissions-Policy "camera=(), microphone=(), geolocation=(), payment=(), usb=(), interest-cohort=()"
 		Cross-Origin-Resource-Policy "same-origin"
 		X-Robots-Tag "noindex, nofollow"
