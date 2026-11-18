@@ -4433,10 +4433,11 @@
   async function aufbauUebernehmen(neu, stand) {
     if (ro || !model) return { fehler: 'Sie dürfen dieses Angebot nicht bearbeiten.' };
     let wer = '';
+    const ruhe = async () => { for (let i = 0; i < 150 && (saving || queued || pulling); i++) await new Promise((r) => setTimeout(r, 100)); };
     try {
       clearTimeout(saveTimer);
       if (!saving && savePending()) await saveNow();
-      for (let i = 0; i < 150 && (saving || queued || pulling); i++) await new Promise((r) => setTimeout(r, 100));
+      await ruhe();
       const d = await api('draft_ping', { body: {} });
       wer = d.savedBy || '';
       if (d.revision !== revision) await pullRemote();
@@ -4468,6 +4469,7 @@
     saveNote = { type: 'aufbau' };
     changed({ render: true });
     await saveNow();
+    await ruhe();   // nach einem Konflikt (409) läuft die Wiederholung ohne await weiter
     return { ok: true, gespeichert: !saveError };
   }
 
