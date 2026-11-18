@@ -195,6 +195,7 @@ try {
     require __DIR__ . '/aktionen/rewe.php';
     require __DIR__ . '/aktionen/qs.php';
     require __DIR__ . '/aktionen/versand.php';   // Modul Versand: veröffentlichen und an Kunden senden
+    require __DIR__ . '/aktionen/containerimport.php';   // Modul Container-Import: EUDR
     fail('Unbekannte Aktion.', 404);
 } catch (InvalidArgumentException $e) {
     store_rollback();

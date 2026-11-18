@@ -829,6 +829,10 @@ Caddy setzt auf allen Hosts `script-src 'self'` (ohne `'unsafe-inline'`), `conne
 - **Keine Inline-Skripte**, keine `onclick="…"`-Attribute, kein `javascript:`-Link. Ereignisse mit `addEventListener`,
   bevorzugt als Delegation über `data-*` (`data-act`, `data-close`, `data-v`).
 - Keine Skripte, Schriften oder Daten von fremden Servern; Bibliotheken liegen unter `app/assets/vendor/`.
+- **PDF im Browser lesen:** pdf.js (Mozilla, Apache-2.0, Fassung für ältere Browser) unter `vendor/pdfjs/` – als ES-Modul
+  mit Endung `.js`, erst bei Bedarf geladen (`import()`), Worker vom eigenen Host (`GlobalWorkerOptions.workerSrc`),
+  `isEvalSupported: false` (passt zu `script-src 'self'`). Bisher nur im Container-Import: Entwaldungsberichte der
+  Lieferanten werden im Browser gelesen (`app/module/containerimport/eudr-bericht.js`), die Datei wird nicht hochgeladen.
 - **Karten:** `app/assets/detailkarte.js` (`window.STAFLKarte`) – `verfuegbar()` prüft WebGL und `/karte/karte.pmtiles`
   (Range-Anfrage, 206 mit Kopf „PMTiles“), `erstellen(element, { punkte, farbe, beiKlick, beiBewegung, beiLeerklick })` lädt
   MapLibre als ES-Modul (`vendor/maplibre/maplibre-gl.js`, Worker per `setWorkerUrl` vom eigenen Host – passt zu

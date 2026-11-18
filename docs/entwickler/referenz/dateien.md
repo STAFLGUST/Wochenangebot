@@ -80,6 +80,7 @@ Jede Code-Datei beginnt mit einem Kopfkommentar; dessen erste Aussage steht hier
 | `anmeldekonten.php` | plattform | Aktionen: Konten der zentralen Anmeldung (Keycloak) aus Verwaltung → Mitarbeiter (nur Administratoren). anmeldekonto (lesen) |
 | `auswertung.php` | verwaltung | Aktionen: Auswertung (Karte der Kunden-Anmeldungen) und Aktualisieren der Ortsdaten Wird von api/index.php im globalen Gültigkeitsbereich eingebunden; jede Aktion endet mit respond()/fail(). |
 | `bestand.php` | bestand | Aktionen: Bestand und Stammdaten Wird von api/index.php im globalen Gültigkeitsbereich eingebunden; jede Aktion endet mit respond()/fail(). |
+| `containerimport.php` | containerimport | Aktionen: Modul Container-Import, Reiter EUDR – Herkunftsbetriebe mit Geolokalisierung, Sendungen, Risikoprofil und GeoJSON-Datei für das EU-Informationssystem (Oberfläche containerimport.intern; Funktionen in … |
 | `controlling.php` | controlling | Aktionen: Controlling (Oberfläche controlling.intern, Fachlogik in app/api/module/controlling/) Rechte (GR-103): controlling.zugang – Modul öffnen (Register, standardmäßig niemand); controlling.umsatz_sehen – … |
 | `crm.php` | crm | Aktionen: CRM · Vertrieb (Oberfläche crm.intern, Daten und Regeln in app/api/module/crm/crm.php) Rechte (GR-103): crm.sehen – Kunden, Kundenblätter, Wiedervorlagen, Pipeline, Auswertung, Karte ansehen (crm_karte); … |
 | `einkauf.php` | einkauf | Aktionen: Einkauf (Fehlmengen aus offenen Bestellwünschen) Wird von api/index.php im globalen Gültigkeitsbereich eingebunden; jede Aktion endet mit respond()/fail(). |
@@ -167,6 +168,13 @@ Jede Code-Datei beginnt mit einem Kopfkommentar; dessen erste Aussage steht hier
 | --- | --- | --- |
 | `import.php` | bestand | Importvertrag des Moduls Bestand – Schnittstelle zur Importzentrale (docs/plattform/schnittstellen/import.md). |
 | `verlauf.php` | bestand | Modul Bestand · Bestandsverlauf (Auftrag des Inhabers 02.11.2026): bei jedem Übernehmen der Bestandsliste (Bestand → Bestandsliste hochladen, Aktion stock_import, Importzentrale) wird ein Tagesstand gespeichert – je … |
+
+## `app/api/module/containerimport/`
+
+| Datei | Modul | Inhalt |
+| --- | --- | --- |
+| `eudr.php` | containerimport | Container-Import · EUDR (Verordnung (EU) 2023/1115, entwaldungsfreie Lieferketten) |
+| `geometrie.php` | containerimport | Container-Import · Geometrie der Produktionsorte (EUDR): reine Rechenfunktionen ohne Speicherzugriff. |
 
 ## `app/api/module/controlling/`
 
@@ -370,6 +378,16 @@ Jede Code-Datei beginnt mit einem Kopfkommentar; dessen erste Aussage steht hier
 | Datei | Modul | Inhalt |
 | --- | --- | --- |
 | `bestandsliste.css` | bestand | Bestand – Stile der Bestandsliste im Eingabebereich, die das Modul Bestand selbst pflegt (eingebunden in app/admin/index.html). |
+
+## `app/module/containerimport/`
+
+| Datei | Modul | Inhalt |
+| --- | --- | --- |
+| `containerimport.css` | containerimport | STAFL-Plattform · Modul Container-Import (Reiter EUDR) – Gestaltung „C2“ Rahmen, Seitenleiste und alle Farben kommen aus ../../assets/rahmen.css (--r-*), Schrift und die Grundform der Fenster (dialog.modal, … |
+| `containerimport.js` | containerimport | STAFL-Plattform · Modul Container-Import, Reiter EUDR – Hilfen und Kontrollen zur EU-Verordnung über entwaldungsfreie Lieferketten (Auftrag des Inhabers 18.11.2026; Gestaltung „C2“). |
+| `eudr-bericht.js` | containerimport | STAFL-Plattform · Container-Import · EUDR – Entwaldungsberichte der Lieferanten lesen (reine Funktionen, kein DOM). |
+| `eudr-karte.js` | containerimport | STAFL-Plattform · Container-Import · EUDR – Karte der Herkunftsbetriebe als SVG, ohne fremde Kartendienste. |
+| `index.html` | containerimport | Reiter des Moduls: zuerst EUDR, weitere (Container, Verzollung, Dokumente) folgen |
 
 ## `app/module/controlling/`
 
@@ -643,6 +661,7 @@ Jede Code-Datei beginnt mit einem Kopfkommentar; dessen erste Aussage steht hier
 | `README.md` | plattform | Referenz: Funktionen je Modul |
 | `angebot.md` | plattform | Funktionen: Angebot (`angebot`) |
 | `bestand.md` | plattform | Funktionen: Bestand (`bestand`) |
+| `containerimport.md` | plattform | Funktionen: Container-Import (`containerimport`) |
 | `controlling.md` | plattform | Funktionen: Controlling (`controlling`) |
 | `crm.md` | plattform | Funktionen: CRM (`crm`) |
 | `dashboard.md` | plattform | Funktionen: Dashboard (`dashboard`) |
@@ -696,6 +715,7 @@ Jede Code-Datei beginnt mit einem Kopfkommentar; dessen erste Aussage steht hier
 | `LIESMICH.md` | plattform | Aktionsregister |
 | `angebot.toml` | angebot | Aktionen des Moduls „angebot“ |
 | `bestand.toml` | bestand | Aktionen des Moduls „bestand“ |
+| `containerimport.toml` | containerimport | Aktionen des Moduls „containerimport“ |
 | `controlling.toml` | controlling | Aktionen des Moduls „controlling“: gemeinsamer Start und je Bereich eigene Aktionen controlling_<bereich>_… (heute Umsatzstatistik; geplant OP-Konten, Liquidität). |
 | `crm.toml` | crm | Aktionen des Moduls „crm“ |
 | `dashboard.toml` | dashboard | Aktionen des Moduls „dashboard“ |
@@ -776,6 +796,7 @@ Jede Code-Datei beginnt mit einem Kopfkommentar; dessen erste Aussage steht hier
 | `test_bestaetigung.py` | plattform | Sicherheit (Modul) → Einstellungen → Passwortbestätigung: je Aktion einstellbar, ob das Passwort verlangt wird; feste Aktionen (Zugänge, Rechte, Sicherheit, Postfach) immer mit Bestätigung; Gültigkeitsdauer … |
 | `test_bestand_pdf.py` | bestand | Bestand: Marke je Partie (Spalte E der WinAB-Liste, Überschrift „Marke“ eine Spalte rechts davon), dezente MHD-Farben (hell/dunkel) und PDF ohne Preise, erfassten Bestand, Gesamt verfügbar und erwartete Zugänge. |
 | `test_bestellung.py` | angebot | Bestellwunsch aus dem Portal |
+| `test_containerimport.py` | containerimport | Modul Container-Import, Reiter EUDR (app/module/containerimport/, Oberfläche containerimport.intern, Auftrag des Inhabers 18.11.2026) |
 | `test_controlling.py` | controlling | Controlling (Modul controlling, Oberfläche controlling.intern unter /module/controlling/) – Bereich Umsatzstatistik, Reiter Monatsmeldung |
 | `test_controlling_umsatzdaten.py` | controlling | Controlling · Umsatzdaten der Warenwirtschaft |
 | `test_crm.py` | crm | CRM · Vertrieb (Modul crm, Oberfläche crm.intern unter /module/crm/). |

@@ -1,0 +1,94 @@
+<!doctype html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex, nofollow">
+<meta name="color-scheme" content="light dark">
+<title>STAFL-Plattform · Container-Import</title>
+<link rel="icon" href="../../assets/icons/favicon-32.png" sizes="32x32" type="image/png">
+<script src="../../assets/theme.js"></script>
+<script src="../../assets/format.js"></script>
+<script src="../../assets/suche.js"></script>
+<link rel="stylesheet" href="../../assets/app.css">
+<link rel="stylesheet" href="../../assets/rahmen.css">
+<link rel="stylesheet" href="containerimport.css">
+</head>
+<body class="ci r" data-rahmen="containerimport">
+<div class="r-app">
+<nav class="r-leiste" id="r-leiste" aria-label="Hauptnavigation" hidden></nav>
+<div class="r-inhalt">
+  <main class="ci-main r-seite">
+    <section class="ci-login" id="ci-login" hidden>
+      <svg class="r-i ci-login-i" aria-hidden="true"><use href="#i-lock"/></svg>
+      <h1>Bitte anmelden</h1>
+      <p>Der Container-Import steht nach der Anmeldung als Mitarbeiter zur Verfügung.</p>
+      <a class="ci-knopf primaer" href="../../admin/">Zur Anmeldung</a>
+    </section>
+    <p class="ci-fehler" id="ci-err" role="alert" hidden></p>
+
+    <section id="ci-app" hidden>
+      <header class="r-seitenkopf">
+        <div><h1>Container-Import</h1><p class="r-unterzeile" id="ci-unterzeile"></p></div>
+        <div class="r-aktionen">
+          <button class="r-rund" id="ci-neu" type="button" aria-label="Stand neu laden" title="Stand neu laden"><svg class="r-i" aria-hidden="true"><use href="#i-neu"/></svg></button>
+          <button class="r-rund" id="ci-theme" type="button" aria-label="Dunkles Design einschalten" title="Hell / Dunkel"><svg class="r-i" aria-hidden="true"><use href="#i-moon"/></svg></button>
+        </div>
+      </header>
+
+      <!-- Reiter des Moduls: zuerst EUDR, weitere (Container, Verzollung, Dokumente) folgen -->
+      <div class="ci-reiter" role="tablist" aria-label="Bereiche"><button type="button" role="tab" aria-selected="true" id="ci-reiter-eudr">EUDR</button></div>
+
+      <details class="r-karte ci-hilfe">
+        <summary>So gehen Sie vor <span class="ci-leise">· EU-Verordnung über entwaldungsfreie Lieferketten (EUDR)</span></summary>
+        <ol>
+          <li><strong>Sendung anlegen</strong> – Auftragsnummer, Lieferant, Ware, Schlachtlose.</li>
+          <li><strong>Unterlagen einlesen</strong> – Entwaldungsberichte (PDF) oder GeoJSON des Lieferanten. Die Umrisse werden umgerechnet und so geprüft, wie es das EU-Informationssystem (TRACES) tut.</li>
+          <li><strong>Selbst gegenprüfen</strong> – jede Fläche in Global Nature Watch oder Whisp ansehen und das Ergebnis am Betrieb eintragen.</li>
+          <li><strong>Risiko bewerten</strong> – das Risikoprofil zeigt, was fehlt. Erst wenn nichts mehr offen ist, die Bewertung abschließen.</li>
+          <li><strong>GeoJSON bei TRACES hochladen</strong>, Sorgfaltserklärung abgeben und die Referenznummer an der Sendung eintragen.</li>
+        </ol>
+        <p class="ci-leise">Stichtag für Entwaldung ist der 31.12.2020. Bei Rindern verlangt die Verordnung die Lage aller Betriebe, in denen die Tiere gehalten wurden. Unterlagen fünf Jahre aufbewahren.</p>
+      </details>
+
+      <div class="ci-leisteoben">
+        <div class="ci-filter" id="ci-sichten" role="group" aria-label="Ansicht"></div>
+        <div class="ci-knoepfe" id="ci-knoepfe"></div>
+      </div>
+      <section id="ci-inhalt" aria-live="polite"></section>
+    </section>
+  </main>
+  <footer class="ci-fuss">STAFL-Plattform · Standard-Fleisch</footer>
+</div>
+</div>
+
+<!-- Fenster schließen nur über ×, „Schließen“ oder Escape – nie durch einen Klick daneben (theme.js) -->
+<dialog class="modal ci-breit" id="dlg-sendung" aria-labelledby="sendung-titel"><form class="dlg" id="sendung-inhalt" autocomplete="off" novalidate></form></dialog>
+<dialog class="modal ci-breit" id="dlg-betrieb" aria-labelledby="betrieb-titel"><form class="dlg" id="betrieb-inhalt" autocomplete="off" novalidate></form></dialog>
+<dialog class="modal ci-breit" id="dlg-lesen" aria-labelledby="lesen-titel"><form class="dlg" id="lesen-inhalt" autocomplete="off" novalidate></form></dialog>
+<dialog class="modal" id="dlg-abschluss" aria-labelledby="abschluss-titel"><form class="dlg" id="abschluss-inhalt" autocomplete="off" novalidate></form></dialog>
+<div class="ci-toast" id="ci-toast" role="status" aria-live="polite"></div>
+<!-- Druckfassung des Risikoprofils (nur beim Drucken sichtbar) -->
+<section class="ci-druck" id="ci-druck" aria-hidden="true"></section>
+
+<svg width="0" height="0" class="ci-symbole" aria-hidden="true">
+  <symbol id="i-plus" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></symbol>
+  <symbol id="i-hoch" viewBox="0 0 24 24"><path d="M12 16V4M7 9l5-5 5 5"/><path d="M4 16v3.5h16V16"/></symbol>
+  <symbol id="i-runter" viewBox="0 0 24 24"><path d="M12 4v12M7 11l5 5 5-5"/><path d="M4 16v3.5h16V16"/></symbol>
+  <symbol id="i-druck" viewBox="0 0 24 24"><path d="M7 8.5V3.5h10v5"/><rect x="3.5" y="8.5" width="17" height="8.5" rx="2"/><path d="M7 14h10v6.5H7z"/></symbol>
+  <symbol id="i-haken" viewBox="0 0 24 24"><path d="m5 12.5 4.5 4.5L19 7.5"/></symbol>
+  <symbol id="i-info" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 11v5.5M12 7.6v.2"/></symbol>
+  <symbol id="i-warn" viewBox="0 0 24 24"><path d="M12 3.5 21.5 20h-19z"/><path d="M12 10v4.5M12 17v.2"/></symbol>
+  <symbol id="i-aus" viewBox="0 0 24 24"><path d="M14 4h6v6M20 4l-9 9"/><path d="M18 14v5.5H4.5V6H10"/></symbol>
+  <symbol id="i-x" viewBox="0 0 24 24"><path d="M6 6l12 12M18 6 6 18"/></symbol>
+  <symbol id="i-lock" viewBox="0 0 24 24"><rect x="5" y="10.5" width="14" height="9.5" rx="2"/><path d="M8 10.5V8a4 4 0 0 1 8 0v2.5"/></symbol>
+  <symbol id="i-moon" viewBox="0 0 24 24"><path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z"/></symbol>
+  <symbol id="i-sun" viewBox="0 0 24 24"><circle cx="12" cy="12" r="4"/><path d="M12 2.5v2M12 19.5v2M4.6 4.6 6 6M18 18l1.4 1.4M2.5 12h2M19.5 12h2M4.6 19.4 6 18M18 6l1.4-1.4"/></symbol>
+  <symbol id="i-neu" viewBox="0 0 24 24"><path d="M20 12a8 8 0 1 1-2.6-5.9"/><path d="M20 4.5v4.2h-4.2"/></symbol>
+</svg>
+<script src="../../assets/rahmen.js"></script>
+<script src="eudr-bericht.js"></script>
+<script src="eudr-karte.js"></script>
+<script src="containerimport.js"></script>
+</body>
+</html>
