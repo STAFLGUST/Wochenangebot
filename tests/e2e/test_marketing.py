@@ -312,9 +312,12 @@ with sync_playwright() as p:
     pg.screenshot(path=os.path.join(SH, 'marketing_uebersicht_1440.png'), full_page=True)
 
     pg.click('#mkt-tabs button[data-tab="kalender"]'); pg.wait_for_selector('.mkt-monat')
+    tag5 = f'.mkt-tag:not(.anders)[data-tag="{TAG(5)}"]'
+    if pg.locator(tag5).count() == 0:   # in fünf Tagen schon im nächsten Monat: dorthin blättern
+        pg.click('[data-kal="vor"]'); pg.wait_for_selector(tag5)
     chip = pg.locator(f'.mkt-chip[data-oeffnen="{b2["id"]}"]')
-    check('Kalender: Beitrag am geplanten Tag', chip.count() == 1 and pg.locator(f'.mkt-tag[data-tag="{TAG(5)}"] .mkt-chip[data-oeffnen="{b2["id"]}"]').count() == 1
-          or TAG(5)[:7] != HEUTE.isoformat()[:7], chip.count())
+    check('Kalender: Beitrag am geplanten Tag', chip.count() == 1 and pg.locator(f'{tag5} .mkt-chip[data-oeffnen="{b2["id"]}"]').count() == 1, chip.count())
+    pg.click('[data-kal="heute"]'); pg.wait_for_selector('.mkt-tag.heute:not(.anders)')
     check('Kalender: „Ohne Termin“ mit der neuen Idee', 'Story: Frage der Woche' in pg.inner_text('.mkt-ohne'))
     pg.screenshot(path=os.path.join(SH, 'marketing_kalender_1440.png'), full_page=True)
     pg.click('.mkt-umschalter button[data-kal="woche"]'); pg.wait_for_selector('.mkt-woche')
