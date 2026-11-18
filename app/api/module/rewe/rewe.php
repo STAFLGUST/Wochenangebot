@@ -375,10 +375,15 @@ function rw_kunden(): array
     }
     return $k;
 }
+/* Kunde der Verwaltung zur Kd.-Nr. eines Marktes (rw_kunden) oder null */
+function rw_kunde(array $m): ?array
+{
+    return rw_kunden()[code_key((string)($m['kdNr'] ?? ''))] ?? null;
+}
 /* Anzeige eines Marktes: Kundenstamm vor eigenen Feldern (nur leere Stammfelder füllt der Markt auf) */
 function rw_anzeige(array $m): array
 {
-    $k = rw_kunden()[code_key((string)($m['kdNr'] ?? ''))] ?? null;
+    $k = rw_kunde($m);
     $f = function (string $kf, string $mf) use ($k, $m) { $v = $k ? trim($k[$kf]) : ''; return $v !== '' ? $v : (string)($m[$mf] ?? ''); };
     return ['name' => $f('firma', 'name'), 'strasse' => $f('strasse', 'strasse'), 'plz' => $f('plz', 'plz'), 'ort' => $f('ort', 'ort'),
             'telefon' => $f('telefon', 'telefon'), 'winab' => $k !== null, 'winabAktiv' => $k ? $k['aktiv'] : null];
@@ -397,7 +402,7 @@ function rw_telefone(array $m): array
     };
     $dazu($m['telefon'] ?? '');
     foreach (is_array($m['ansprechpartner'] ?? null) ? $m['ansprechpartner'] : [] as $k) if (is_array($k)) $dazu($k['telefon'] ?? '');
-    if (!$liste) $dazu(rw_kunden()[code_key((string)($m['kdNr'] ?? ''))]['telefon'] ?? '');
+    if (!$liste) $dazu(rw_kunde($m)['telefon'] ?? '');
     return array_values($liste);
 }
 function rw_person_pruefen($v): string
