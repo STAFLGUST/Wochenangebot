@@ -293,14 +293,16 @@ switch ($action) {
             $b = body();
             $kw = rw_kw($b['kw'] ?? '');
             rw_dauer_auto_vermerken($kw, rw_dauer_automatisch($kw, true));   // spätestens jetzt: fällige Daueraufträge bestellen
-            // Lesen und „exportiert“ unter einer Sperre: eine Antwort dazwischen stünde sonst weder im Excel noch als Nachtrag
-            $a = with_lock('rewe-maerkte', function () use ($kw, $me) {
+            // Lesen, Datei bauen und „exportiert“ unter einer Sperre: eine Antwort dazwischen stünde sonst weder im Excel noch als Nachtrag;
+            // vermerkt wird erst nach dem Bau – scheitert er, bleiben die Nachtrag-Kennzeichen
+            [$a, $datei] = with_lock('rewe-maerkte', function () use ($kw, $me) {
                 $a = rw_abschluss($kw);
-                if ($a['zeilen']) rw_abschluss_setzen($kw, 'exportiert', rw_wer($me) + ['zeilen' => count($a['zeilen']), 'stueck' => array_sum(array_column($a['zeilen'], 'menge'))]);
-                return $a;
+                if (!$a['zeilen']) return [$a, null];
+                $datei = rw_export_xlsx($a, rw_stamm(), (string)$me['name']);
+                rw_abschluss_setzen($kw, 'exportiert', rw_wer($me) + ['zeilen' => count($a['zeilen']), 'stueck' => array_sum(array_column($a['zeilen'], 'menge'))]);
+                return [$a, $datei];
             });
             if (!$a['zeilen']) fail('In dieser Woche gibt es keine Bestellungen.', 422);
-            $datei = rw_export_xlsx($a, rw_stamm(), (string)$me['name']);
             audit('rewe', 'REWE: Excel für WinAB erstellt – ' . rw_kw_text($kw) . ', ' . $a['maerkte'] . ' Einzelaufträge, ' . count($a['zeilen']) . ' Positionen');
             rw_xlsx_senden($datei, 'REWE_WinAB_' . str_replace('-', '_KW', $kw) . '.xlsx');
         }
