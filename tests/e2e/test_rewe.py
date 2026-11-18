@@ -161,6 +161,7 @@ m1 = r.get('markt', {})
 check('Markt 1 angelegt (Nord, Mark, ab Abfragewoche, nicht im Kundenstamm)', st == 200 and m1['lieferwegName'] == 'Zentrallager Nord' and m1['zustaendigName'] == 'Mark Markt'
       and m1['zustaendigHist'][0]['ab'] == ABFRAGE and m1['winab'] is False and m1['kauf'] == 'regelmaessig', r)
 check('Kd.-Nr. doppelt → 422', LE.call('rewe_markt_save', {**M1, 'ort': 'Anderswo'})[0] == 422)
+check('Kd.-Nr. doppelt mit führender Null (01799001 = 1799001) → 422', LE.call('rewe_markt_save', {**M1, 'kdNr': '0' + M1['kdNr'], 'ort': 'Anderswo'})[0] == 422)
 st, r = LE.call('rewe_markt_save', {'kdNr': '1799002', 'name': 'REWE Evistadt', 'ort': 'Evistadt', 'strasse': 'Evi-Weg 2', 'lieferweg': SUED, 'zustaendig': ids['evi'], 'kauf': 'interessiert'})
 m2 = r.get('markt', {})
 check('Markt 2 angelegt (Süd, Evi, Kaufbereitschaft beim Anlegen „interessiert“)', st == 200 and m2['zustaendigName'] == 'Evi Eins' and m2['kauf'] == 'interessiert', r)
@@ -168,6 +169,13 @@ st, r = LE.call('rewe_markt_save', {'kdNr': '1799003', 'lieferweg': NORD, 'zusta
 m3 = r.get('markt', {})
 check('Markt 3 nur mit Kd.-Nr.: Name, Anschrift und Telefon aus dem Kundenstamm', st == 200 and m3['winab'] is True and m3['name'] == 'REWE Markt GmbH'
       and m3['ort'] == 'Stammstadt' and m3['strasse'] == 'Stammstraße 3' and m3['telefon'] == '040 333', r)
+# Kundenstamm mit führender Null (01799003), Markt mit 1799003: dieselbe WinAB-Nummer (wie CRM und Controlling über code_key)
+kd3 = next(c for c in A.call('kunden')[1]['customers'] if c['nr'] == '1799003')
+assert A.call('kunde_save', {'id': kd3['id'], 'rev': A.call('kunden')[1]['rev'], 'nr': '01799003'})[0] == 200
+x3 = LE.call('rewe_markt&id=' + m3['id'])[1]['markt']
+check('Kd.-Nr. mit führender Null im Kundenstamm: Markt trotzdem zugeordnet (Name, Anschrift, Telefon)', x3['winab'] is True and x3['name'] == 'REWE Markt GmbH'
+      and x3['ort'] == 'Stammstadt' and x3['telefone'] == ['040 333'], {k: x3.get(k) for k in ('winab', 'name', 'ort', 'telefone')})
+assert A.call('kunde_save', {'id': kd3['id'], 'rev': A.call('kunden')[1]['rev'], 'nr': '1799003'})[0] == 200
 st, r = LE.call('rewe_markt_save', {'kdNr': '1799004', 'name': 'REWE Dauerdorf', 'ort': 'Dauerdorf', 'lieferweg': 'direkt', 'zustaendig': ids['mark'],
                                     'dauer': {'rhythmus': 2, 'mengen': {'rb': 1, 'fk': 1}, 'ab': ABFRAGE}, 'abfragetag': 'do',
                                     'ansprechpartner': [{'name': 'Frau Dauer', 'rolle': 'Metzgerei', 'telefon': '040 4', 'email': 'dauer@example.org'}]})
@@ -595,6 +603,10 @@ st, r = LE.call('rewe_import', {'paket': kaputt, 'vorschau': True})
 check('Vorschau mit Fehlern je Markt (Lieferweg, Kd.-Nr. doppelt, bestellt ohne Menge)', st == 200 and len(r['fehler']) == 3 and 'Musterdorf' in r['fehler'][0]
       and 'doppelt' in r['fehler'][1] and 'ohne Menge' in r['fehler'][2], r['fehler'])
 check('mit Fehlern nichts übernommen (422)', LE.call('rewe_import', {'paket': kaputt, 'ersetzen': True})[0] == 422)
+null = json.loads(json.dumps(PAKET))
+null['maerkte'][2]['kdNr'] = '0' + null['maerkte'][0]['kdNr']
+fz = LE.call('rewe_import', {'paket': null, 'vorschau': True})[1]['fehler']
+check('Datenpaket: Kd.-Nr. mit führender Null gilt als doppelt', len(fz) == 1 and 'doppelt' in fz[0], fz)
 zu = {'Liste A': ids['mark'], 'Liste B': ids['evi']}
 st, r = LE.call('rewe_import', {'paket': PAKET, 'zuordnung': zu, 'vorschau': True})
 check('Vorschau: Zahlen, Listen, nicht leer', st == 200 and r['zahlen']['maerkte'] == 4 and r['zahlen']['antworten'] == 11 and r['zahlen']['bestellungen'] == 6
