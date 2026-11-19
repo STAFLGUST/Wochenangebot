@@ -295,7 +295,8 @@ Für Handy und Tastatur verschiebt die Auswahl „In Gruppe …“ (`[data-zu]`)
 das Fenster `data-geaendert` (erstes Escape warnt, `theme.js`).
 
 Woher Gruppe und Reihenfolge eines Artikels kommen: aus dem Entwurf selbst – `it.groupId` und die Stelle in `model.items`
-(je Gruppe zählt nur die Reihenfolge, `OfferCore.enrichOffer`), nicht aus den Stammdaten.
+(je Gruppe zählt nur die Reihenfolge, `OfferCore.enrichOffer`), in Angeboten mit eigener Artikelliste `model.reihen`, nicht
+aus den Stammdaten.
 
 Jedes Angebot für sich (Inhaber 19.11.2026, Schritt 1): Bezeichnung, Gruppe und Gruppen (Name, Bereich, VK-Gruppe,
 Reihenfolge) ändern sich nur im gewählten Angebot. „Familie“ (`familie(oid)`): das Wochenangebot mit den Angeboten, die ihm
@@ -311,7 +312,16 @@ Oberfläche (Gruppenkarte `data-gid`, Fenster „Editor“) umzurechnen.
 Das Fenster „Editor“ tauscht nur die Plätze der eigenen Gruppen in `model.groups` (andere bleiben stehen); „Aufbau
 zurücknehmen“ nutzt weiter `gruppenOrdnen` und ist global. Beim Verschieben eines Artikels wird nicht getrennt – nur seine
 Gruppe im Angebot ändert sich. Das Artikelfenster eines Kundenangebots zeigt oben Gruppe und Bezeichnung dieses Angebots
-(Auswahl `gruppenDes(oid)`), darunter die weiteren Kundenangebote, und keine Felder des Wochenpreises.
+(Auswahl `gruppenDes(oid)`), darunter die weiteren Kundenangebote, keine Felder des Wochenpreises, aber die Zusatzpreise dieses
+Angebots (`zusatzpreise(it)` = `variants[oid].alt`, Wochenangebot `it.altPrices`; ein neuer Preis in der Zeile behält sie,
+`altVon`). Weitere Wege nur im gewählten Angebot (Schritt 2): „Duplizieren“ legt die Kopie im Kundenangebot nur dort an
+(`nurIn`, mit dessen Bezeichnung, Gruppe und Preis), im Wochenangebot nicht in Angeboten mit eigener Artikelliste;
+„Bearbeitung zurücknehmen“ (`revertChange('changed')`) setzt Bezeichnung und Gruppe nur im gewählten Angebot zurück
+(`setzeJeAngebot`, Stammfelder wie Fleischart bleiben gemeinsam, Angebotspreis und Empfehlung haben eigene Zeilen);
+„Empfehlung entfernen“ setzt `sale.offers[oid] = {status: none}` (ohne Empfehlung in allen Angeboten fällt `sale` weg), ein
+geänderter Empfehlungspreis oben ändert ein anderes Angebot auf „wie oben“ nicht, wenn dessen Zeile unberührt blieb (es
+bekommt seinen bisherigen Wert als eigenen); „Stammdaten anwenden“ überschreibt keine eigene Bezeichnung eines Angebots
+(`namenAusStamm`/`namenSetzen`: nur Basiswert und Angebote ohne eigene; im Stammdaten-Fenster ausdrücklich geänderte gelten).
 
 Ausnahme, Angebotsgruppe je Angebot (Inhaber 17.11.2026, Muster wie die Bezeichnung je Angebot): `it.gruppen[<Kundenangebot>]`
 stellt einen Artikel nur in diesem Angebot unter eine andere Gruppe – gewählt im Artikelfenster unter „Bezeichnung und Gruppe
@@ -321,21 +331,25 @@ Angebot entfernen“, „Nach oben/unten“, die Liste „Aus anderem Angebot ü
 „nur hier“). Regel im Code: im Kontext eines Angebots immer `gruppeIn(it, oid)`; `it.groupId` nur für den Basiswert
 (Wochenangebot, Stammdaten-Vorschläge, Zurücknehmen, Export, Kategorien).
 
-Die Stelle in `model.items` bleibt gemeinsam – es gibt keine Reihenfolge je Angebot. „Nach oben/unten“ verschiebt nur den
-Artikel selbst vor bzw. hinter seinen Nachbarn; alle anderen Artikel behalten ihre Stelle in jedem Angebot. **Bekannte Grenze:**
-Der bewegte Artikel selbst kann dabei seine Stelle innerhalb seiner Basisgruppe (Wochenangebot, andere Angebote) ändern, wenn
-er im Kundenangebot in einer eigenen Gruppe steht – er steht dann in der Liste hinter bzw. vor einem Artikel einer anderen
-Basisgruppe (Test `angebote`: eine Zeile nach unten im Kundenangebot = ans Ende der Basisgruppe im Wochenangebot). Das gilt
-ebenso für das Ordnen im Fenster „Editor“ und ist ohne Reihenfolge je Angebot nicht vermeidbar; der Hinweis im Fenster sagt
-es, sobald es „nur hier“-Artikel gibt. `aufbauGeaendert()` und `angebot_aufbau_geaendert()` (Server, gleiche Regel)
-vergleichen die Reihenfolge deshalb je Angebot – Wochenangebot und jedes Angebot mit eigenen Gruppen: Umordnen innerhalb
+Reihenfolge der Artikel je Angebot (Inhaber 19.11.2026, Schritt 2): Ein Angebot mit eigener Artikelliste hat seine eigene
+Reihenfolge in `model.reihen[oid]` (Datenformat in [05-daten.md](05-daten.md)); das Wochenangebot und Angebote, die ihm folgen,
+ordnet die Stelle in `model.items`. Lesen immer über `inReihenfolge(items, oid)` bzw. `folge(oid)` (Artikel des Angebots,
+Gruppe, dann Stelle) – Zeilen je Gruppe, Artikelfenster, Fenster „Editor“, Werbung, „Aus anderem Angebot übernehmen“.
+Schreiben: im Angebot mit eigener Artikelliste nur `model.reihen` – „Nach oben/unten“ (`setzeReihe`), Fenster „Editor“
+(`artikelOrdnen(ziel, oid)`), andere Gruppe im Artikelfenster und Duplizieren (`einreihen`: ans Ende der Gruppe bzw. hinter
+das Original); im Wochenangebot die gemeinsame Stelle über `stelleAendern(fn)`, das vorher die Reihenfolge jedes Angebots mit
+eigener Artikelliste festhält, falls `fn` sie änderte. Später aufgenommene Artikel stehen ohne Eintrag hinten in ihrer Gruppe.
+`reihenBereinigen()` (in `changed()`) hält die Listen wie der Server (`angebotsreihen_clean`). Ein Angebot, das dem
+Wochenangebot folgt, ordnet weiter mit ihm. `aufbauGeaendert()` und `angebot_aufbau_geaendert()` (Server, gleiche Regel)
+vergleichen die Reihenfolge je Angebot – Wochenangebot, jedes Angebot mit eigenen Gruppen und jedes mit `reihen`: Umordnen innerhalb
 einer eigenen Gruppe zählt als Aufbau-Änderung, auch wenn das Wochenangebot gleich bleibt; Artikel, deren eigene Gruppe selbst
 geändert ist, zählen dort als „Bearbeitet“ (im Versand beim betroffenen Angebot) und nicht doppelt als Aufbau. „Aufbau
-zurücknehmen“ (`revertChange('aufbau')`) stellt dazu die veröffentlichte Reihenfolge auch über Gruppen hinweg wieder her.
+zurücknehmen“ (`revertChange('aufbau')`) stellt dazu die veröffentlichte Reihenfolge auch über Gruppen hinweg wieder her,
+dazu `reihen` wie veröffentlicht (gilt für alle Angebote).
 Mit Angebotskategorien sortiert `OfferCore.nachKategorien` nach der Basisgruppe; ein Artikel mit `gruppen`, der zwischen
 Artikeln anderer Basisgruppen steht, bleibt dabei hinter seinem Vorgänger (sonst spränge er nach jedem `changed()` zurück) –
-am Anfang seiner Basisgruppe wandert er wie bisher mit dieser. `OfferCore.mergeModels` gleicht `gruppen` und
-`namen` je Angebot ab (wie `variants`) und behält eine gleichzeitig gelöschte Gruppe, die ein Artikel nur über `gruppen`
+am Anfang seiner Basisgruppe wandert er wie bisher mit dieser. `OfferCore.mergeModels` gleicht `gruppen`,
+`namen` und `reihen` je Angebot ab (wie `variants`) und behält eine gleichzeitig gelöschte Gruppe, die ein Artikel nur über `gruppen`
 benutzt. `gruppenBereinigen()` (in `changed()`) entfernt Einträge, die dem Basiswert gleichen oder deren Gruppe fehlt;
 eine Gruppe wird nicht gelöscht, solange ein Angebot sie benutzt (`gruppenVon`). Aufgelöst wird nur auf dem Server (`offer_resolve`).
 In den Artikelstammdaten gibt es das Feld nicht – sie kennen die Gruppen des Entwurfs nicht.

@@ -2,7 +2,7 @@
 
 <!-- ERZEUGT von `python3 werkzeuge/doku.py erzeugen` – nicht von Hand ändern. Quelle: Funktionen und Kommentare im Code. Die CI prüft, dass diese Datei zum Code passt. -->
 
-60 Dateien, 945 Funktionen – in der Reihenfolge der Datei, **fett** die Abschnitte. Text = erste Aussage des Kommentars direkt über der Funktion (Python: Docstring). Übersicht aller Module: [README.md](README.md).
+60 Dateien, 957 Funktionen – in der Reihenfolge der Datei, **fett** die Abschnitte. Text = erste Aussage des Kommentars direkt über der Funktion (Python: Docstring). Übersicht aller Module: [README.md](README.md).
 
 ## `app/api/lib/angebote.php`
 
@@ -19,6 +19,8 @@ _Angebote, Kundenpreise, Sonderpreise, Datenmodell, gemeinsames Bearbeiten_
 - `angebotsgruppen_clean(v, basis, gids, known)` – Eigene Angebotsgruppen eines Artikels ($item['gruppen']): Angebots-ID → Gruppen-ID.
 - `artikel_gruppen_ids(it)` – Gruppen, die ein Artikel benutzt: Basiswert und eigene je Angebot (wie gruppenVon in admin.js) – solche Gruppen bleiben erhalten
 - `clean_variants(v, where, known)`
+- `angebotsreihen_clean(v, items)` – Reihenfolge der Artikel je Angebot (Inhaber 19.11.2026): $model['reihen'] = {<Angebots-ID>: [Artikel-IDs]} – nur Angebote mit eigener Artikelliste, nur …
+- `angebot_reihe(items, reihe)` – Artikel in der Reihenfolge eines Angebots: die in $reihe genannten zuerst in dieser Reihenfolge, die übrigen (später aufgenommenen) dahinter in ihrer …
 - `werbung_bloecke(e)` – Blöcke eines Eintrags in Reihenfolge: erster Block, danach „weitere“ (ungeprüft)
 - `werbung_eintrag(bloecke)` – Blöcke wieder zu einem Eintrag zusammensetzen (leere fallen weg, ein späterer rückt nach vorn); null = keine Werbung
 - `werbung_block_clean(e, iids)`
@@ -273,7 +275,7 @@ _Importvertrag des Moduls Angebot – Schnittstelle zur Importzentrale (docs/pla
 
 ## `app/api/module/angebot/kopieren.php`
 
-_Angebot · Kundenangebot kopieren (Entscheidung des Inhabers 13.11.2026): ein Angebot als neues Kundenangebot anlegen und dabei alles außer den Kunden mitnehmen – eigene Preise (variants), eigene Bezeichnungen (namen) …_
+_Angebot · Kundenangebot kopieren (Entscheidung des Inhabers 13.11.2026): ein Angebot als neues Kundenangebot anlegen und dabei alles außer den Kunden mitnehmen – eigene Preise mit Zusatzpreisen (variants), eigene …_
 
 - `angebot_kopie_enthalten(it, oid, fallback)` – Gehört ein Artikel (Rohdaten des Entwurfs) zum Angebot?
 - `angebot_kopie_modell(m, quelle, neu)` – Inhalte des Angebots $quelle im Modell unter der neuen ID $neu eintragen (ohne zu prüfen; clean_model folgt).
@@ -475,6 +477,9 @@ _Wochenangebot – Eingabebereich Bearbeitet einen Entwurf auf dem Server (autom
 - `inEigeneGruppen(oid, neu)` – Neu aufgenommene Artikel eines Angebots mit eigener Artikelliste: hat es schon eine Gruppe gleichen Namens (etwa eine getrennte Kopie), kommen sie dorthin – …
 - `gruppenDes(oid)` – Gruppen eines Angebots (Auswahl im Artikelfenster): die seiner Artikel – bzw. seiner Familie
 - `inReihenfolge(items, oid)` – Artikel eines Angebots in Angebotsreihenfolge: Gruppe in diesem Angebot, dann Stelle (wie OfferCore.enrichOffer nach offer_resolve)
+- `stelleAendern(fn)` – Gemeinsame Stelle (model.items) ändern – fn ordnet für das Wochenangebot und Angebote, die ihm folgen.
+- `einreihen(oid, it, nach)` – Artikel it im Angebot oid (eigene Artikelliste) hinter nach stellen, ohne nach ans Ende seiner Gruppe dort – nur dort
+- `reihenBereinigen()` – Reihenfolgen wie auf dem Server (angebotsreihen_clean): nur Angebote mit eigener Artikelliste, nur ihre Artikel, jede ID einmal.
 - `werbungBereinigen()` – Artikel, die nicht mehr im Angebot stehen, fallen aus dessen Werbung (unbekannte Angebote prüft der Server)
 - `aufbauGeaendert()` – Weicht der Aufbau (Reihenfolge der Gruppen, Bereich je Gruppe, Gruppe und Reihenfolge der Artikel) von der veröffentlichten Fassung ab? Verglichen werden nur …
 - `artikelOrdnen(ziel, oid)` – Artikel neu ordnen: ziel = Map(Gruppen-ID → Artikel-IDs in gewünschter Reihenfolge) für die „Anker“ (z. B. alle Artikel des gewählten Angebots); jeder Anker …
@@ -588,6 +593,7 @@ _Wochenangebot – Eingabebereich Bearbeitet einen Entwurf auf dem Server (autom
 **Artikel-Dialog**
 
 - `openItem(id)`
+- `zusatzpreise(it, anlegen)` – Zusatzpreise im gewählten Angebot: Wochenangebot it.altPrices, Kundenangebot die seines eigenen Preises (variants[<id>].alt, Inhaber 19.11.2026 – jedes …
 
 **Angebote (Standard + Kundenangebote)**
 
@@ -758,7 +764,7 @@ _Wochenangebot – Eingabebereich Bearbeitet einen Entwurf auf dem Server (autom
 - `loadMaster(force)`
 - `masterOf(code)`
 - `draftByCode(m)`
-- `namenSetzen(it, e)` – Bezeichnungen je Angebot eines Stammsatzes auf einen Artikel des Angebots übertragen (nur bestehende Angebote)
+- `namenSetzen(it, e, nur)` – Stammdaten auf einen Artikel übertragen (nach den Feldern M_FIELDS): eigene Bezeichnung gleich dem neuen Basiswert fällt weg (wie auf dem Server), Angebote …
 - `applyMasterTo(m, onlyCode)` – Stammdaten auf Artikel anwenden (nur eindeutige Artikelnummern)
 - `migrateMaster()` – Stammdaten an die Regeln anpassen (einmalig je Änderung der Regeln, danach ohne Wirkung)
 - `addFromDraft()`
@@ -1318,7 +1324,7 @@ _Jedes Angebot für sich (Inhaber 19.11.2026, Schritt 1)_
 
 - `check(n, c, i)`
 - `entwurf()`
-- `sicht(oid)` – Aufgelöstes Angebot im Entwurf: Gruppen (Name, Bereich) in Reihenfolge, je Artikel Gruppe, Bezeichnung, Preis, Zusatzpreise
+- `sicht(oid, entwurf)` – Aufgelöstes Angebot (Entwurf bzw. veröffentlicht): Gruppen (Name, Bereich) in Reihenfolge, je Artikel Gruppe, Bezeichnung, Preis, Zusatzpreise, Empfehlung; …
 - `gname(oid, iid)`
 
 **Testdaten: Bela und Edeka mit eigener Artikelliste, alle Artikel auch im Wochenangebot**
@@ -1328,6 +1334,33 @@ _Jedes Angebot für sich (Inhaber 19.11.2026, Schritt 1)_
 - `zu()`
 - `karte(gid, feld, wert)`
 - `karte_von(iid)`
+
+**Bela → Wochenangebot**
+
+**Wochenangebot → Edeka (Edeka benutzt G3, H1, H2 noch gemeinsam mit dem Wochenangebot)**
+
+**Schritt 2: Reihenfolge der Artikel je Angebot**
+
+- `reihe(oid, ids, entwurf)`
+
+**Zusatzpreise je Angebot**
+
+- `zusatz(feld, label, preis)`
+
+**Duplizieren nur im gewählten Angebot**
+
+- `neue(vorher)`
+
+**Veröffentlichen: Kunden sehen Reihenfolge und Zusatzpreise ihres Angebots**
+
+**Änderung zurücknehmen (Liste der Änderungen) nur im gewählten Angebot**
+
+- `zeile_name(oid, iid, text)`
+- `zuruecknehmen(iid)`
+
+**Empfehlung je Angebot**
+
+- `empfehlung(iid)`
 
 ## `tests/e2e/test_angebotsliste.py`
 
