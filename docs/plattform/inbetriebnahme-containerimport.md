@@ -138,3 +138,19 @@ Lieferanten mit genau einer Partienummer. Kein Schritt auf dem Server, keine Mig
   Speichern erhalten, sodass ein Rückfall von einem späteren Schritt auf diesen nichts mehr verliert.
 - **Geplant, je eigener Schritt:** Schlachthöfe unter dem Lieferanten, Farmer-Kartei mit Prüfung je Container, Verbindung
   zum Bestand über die Partienummer, Auswertung je Lieferant, Tracking der Container.
+
+## 9. Schlachthöfe unter dem Lieferanten (ab dem Release mit den Schlachthöfen)
+
+Entscheidung des Inhabers 19.11.2026: Der Lieferant ist der Produzent, ihm gehören Schlachthöfe, an sie liefern die Farmer.
+Kein Schritt auf dem Server, keine Migration, keine neuen Rechte.
+
+- **Anlegen:** Ansicht „Schlachthöfe“ → „Neuer Schlachthof“: Name, Lieferant (Vorschlag der Stammdaten anklicken), Land, Ort,
+  Zulassungsnummer. Der Name ist je Lieferant nur einmal vergeben.
+- **Am Container:** Im Fenster „Container“ steht das Feld „Schlachthof“. Zur Wahl stehen nur die Schlachthöfe des gewählten
+  Lieferanten. Wechselt der Lieferant, muss der Schlachthof neu gewählt werden.
+- **Umbenennen:** Container mit offener Bewertung zeigen sofort den neuen Namen, abgeschlossene behalten den von damals.
+- **Archivieren statt löschen:** Ein archivierter Schlachthof bleibt an seinen Containern, lässt sich aber nicht neu wählen.
+- **Container von vorher** haben keinen Schlachthof. Er lässt sich jederzeit eintragen, nach dem Abschluss der Bewertung einmal.
+- **Rückfall:** `sh /opt/wochenangebot/deploy/release-zurueck.sh`. Die Vorversion zeigt die Schlachthöfe nicht, behält sie aber
+  beim Speichern eines Containers (unbekannte Felder bleiben seit Abschnitt 8 erhalten). Das Dokument der Schlachthöfe bleibt
+  unberührt liegen.

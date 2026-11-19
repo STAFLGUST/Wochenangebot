@@ -858,6 +858,13 @@ Caddy setzt auf allen Hosts `script-src 'self'` (ohne `'unsafe-inline'`), `conne
   jeder Antwort). Was nach dem Abschluss der Bewertung änderbar bleibt, steht an einer Stelle: `eudr_sendung_laufend`.
   Einträgen von vorher fehlende Felder ergänzt `eudr_sendungen()` beim Lesen (`EUDR_SENDUNG_VORGABEN`). Felder in Fenstern
   haben keine Kennung (`id`) – mehrere Fenster haben Felder gleichen Namens; ansprechen über `#dlg-… [name=…]`.
+  **Schlachthöfe** (Stammdaten unter dem Lieferanten, Entscheidung des Inhabers 19.11.2026): eigene Dateien
+  `schlachthoefe.js` und `app/api/module/containerimport/schlachthoefe.php`, damit `containerimport.js` und `eudr.php` nicht
+  weiter wachsen. `containerimport.js` ruft `window.CI_SCHLACHTHOEFE(h)` einmal auf und gibt seine Helfer mit; neue Ansichten
+  folgen diesem Muster. Die Regel „gleicher Lieferant“ (Nummer der Stammdaten, sonst Name) steht auf dem Server
+  (`ci_lieferant_gleich`) und zum Filtern der Auswahl noch einmal in `schlachthoefe.js` – beide zusammen ändern. Der Name des
+  Schlachthofs steht am Container mit (`schlachthofName`); eine Umbenennung schreibt `ci_schlachthof_speichern` in alle
+  Container mit offener Bewertung (GR-106: abgeschlossene bleiben).
   **Whisp-Abfrage** (Knopf „In Whisp prüfen“ im Fenster „Farmer“): Anders als die Karte ruft hier der **Server** den
   fremden Dienst ab (`app/api/module/containerimport/whisp.php`, Aktion `containerimport_eudr_whisp`) – der Schlüssel
   `WHISP_API_KEY` darf nie in den Browser. Hinaus geht nur der Umriss; die Seite fragt alle drei Sekunden nach, bis Whisp

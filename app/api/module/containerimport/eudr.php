@@ -13,6 +13,7 @@ declare(strict_types=1);
    Abgeleitete Werte (Fläche, Mittelpunkt, Befunde, Risikoprofil) werden bei jedem Lesen neu berechnet und nie gespeichert –
    ausgenommen der Schnappschuss einer abgeschlossenen Bewertung. Geometrie: geometrie.php. */
 if (!defined('WA_API')) { http_response_code(404); exit; }   // nur über api/index.php nutzbar
+require __DIR__ . '/schlachthoefe.php';   // Schlachthöfe unter dem Lieferanten (eigene Datei, gleiche Helfer)
 
 const EUDR_SPERRE = 'containerimport-eudr-betriebe';   // eine Sperre für beide Dokumente (Sendungen verweisen auf Betriebe)
 const EUDR_MAX_BETRIEBE = 2000;
@@ -24,8 +25,8 @@ const EUDR_MAX_ORTE_JE_DATEI = 1000;
 const EUDR_MAX_PRUEFUNGEN = 50;          // Gegenprüfungen je Betrieb
 /* Stand eines Containers auf seinem Weg (Reihenfolge = Ablauf); wird von Hand gesetzt, auch nach dem Abschluss der Bewertung */
 const EUDR_STAENDE = ['gekauft' => 'gekauft', 'unterwegs' => 'unterwegs', 'dokumente' => 'Dokumente da', 'angekommen' => 'angekommen'];
-/* Felder, die Einträgen aus der Zeit vor dem Container als Mittelpunkt fehlen – eudr_sendungen ergänzt sie beim Lesen */
-const EUDR_SENDUNG_VORGABEN = ['partie' => '', 'akte' => '', 'lieferantNr' => '', 'stand' => 'gekauft'];
+/* Felder, die älteren Einträgen fehlen (vor dem Container als Mittelpunkt, vor den Schlachthöfen) – eudr_sendungen ergänzt sie beim Lesen */
+const EUDR_SENDUNG_VORGABEN = ['partie' => '', 'akte' => '', 'lieferantNr' => '', 'stand' => 'gekauft', 'schlachthof' => '', 'schlachthofName' => ''];
 const EUDR_NACHWEIS = ['konform', 'nicht_konform', 'unbekannt'];
 const EUDR_DREI = ['ja', 'nein', 'offen'];
 const EUDR_QUELLEN = ['bericht', 'geojson', 'koordinaten'];
@@ -423,12 +424,14 @@ function eudr_sendung_pruefen(array $b, array $betriebIds, ?array $alt): array
     $von = eudr_datum($b['schlachtVon'] ?? '', 'Schlachtung von'); $bis = eudr_datum($b['schlachtBis'] ?? '', 'Schlachtung bis');
     if ($von !== '' && $bis !== '' && $bis < $von) throw new InvalidArgumentException('Schlachtung: „bis“ liegt vor „von“.');
     $n = is_array($b['nachweis'] ?? null) ? $b['nachweis'] : [];
+    $lieferant = eudr_lieferant($b, $alt);
     $aktiv = !array_key_exists('aktiv', $b) || (bool)$b['aktiv'];
     return [
         // Pflicht – nur ein Eintrag von vorher darf ohne Partienummer ins Archiv
         'partie' => eudr_text($b['partie'] ?? '', 20, 'Partienummer', $aktiv || !$alt || $alt['partie'] !== ''),
         'nummer' => eudr_text($b['nummer'] ?? '', 60, 'Auftragsnummer des Lieferanten'),
-        ...eudr_lieferant($b, $alt),
+        ...$lieferant,
+        ...ci_schlachthof_am_container($b, $lieferant, $alt),
         ...eudr_sendung_laufend($b, $alt),
         'land' => eudr_land($b['land'] ?? ''),
         'ware' => eudr_text($b['ware'] ?? '', 160, 'Ware'),
@@ -687,6 +690,7 @@ function eudr_stand(): array
         'betriebe' => $betriebe,
         'sendungen' => array_map(fn($s) => eudr_sendung_sicht($s, $betriebe), eudr_sendungen()['liste']),
         'laender' => array_map(fn($l) => ['name' => $l['name'], 'klasse' => $l['klasse']], EUDR_LAENDER),
+        'schlachthoefe' => ci_schlachthoefe()['liste'],
         'portale' => EUDR_PORTALE, 'staende' => EUDR_STAENDE, 'heute' => date('Y-m-d'),
     ];
 }

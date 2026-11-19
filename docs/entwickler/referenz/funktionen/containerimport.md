@@ -2,7 +2,7 @@
 
 <!-- ERZEUGT von `python3 werkzeuge/doku.py erzeugen` – nicht von Hand ändern. Quelle: Funktionen und Kommentare im Code. Die CI prüft, dass diese Datei zum Code passt. -->
 
-11 Dateien, 146 Funktionen – in der Reihenfolge der Datei, **fett** die Abschnitte. Text = erste Aussage des Kommentars direkt über der Funktion (Python: Docstring). Übersicht aller Module: [README.md](README.md).
+14 Dateien, 162 Funktionen – in der Reihenfolge der Datei, **fett** die Abschnitte. Text = erste Aussage des Kommentars direkt über der Funktion (Python: Docstring). Übersicht aller Module: [README.md](README.md).
 
 ## `app/api/aktionen/containerimport.php`
 
@@ -105,6 +105,16 @@ _Container-Import · Geometrie der Produktionsorte (EUDR): reine Rechenfunktione
 - `geo_pruefen(g)` – Geometrie nach den Regeln des EU-Informationssystems prüfen.
 - `geo_punktzahl(g)` – Zahl der Punkte einer Geometrie (für die Obergrenzen je Anfrage und im Speicher)
 
+## `app/api/module/containerimport/schlachthoefe.php`
+
+_STAFL-Plattform · Modul Container-Import – Schlachthöfe_
+
+- `ci_schlachthoefe()` – Dokument der Schlachthöfe
+- `ci_lieferant_gleich(a, b)` – Gehören zwei Einträge (Container, Schlachthof) zum selben Lieferanten?
+- `ci_schlachthof_pruefen(b, alt)` – Felder eines Schlachthofs aus der Eingabe prüfen (ohne id, rev und Zeitstempel)
+- `ci_schlachthof_speichern(b, me)` – Schlachthof anlegen oder ändern (innerhalb der Sperre EUDR_SPERRE aufrufen).
+- `ci_schlachthof_am_container(b, lieferant, alt)` – Schlachthof eines Containers aus der Eingabe: leer oder ein Schlachthof desselben Lieferanten; sein Name wird am Container mitgespeichert.
+
 ## `app/api/module/containerimport/whisp.php`
 
 _Container-Import · EUDR_
@@ -136,6 +146,7 @@ _STAFL-Plattform · Modul Container-Import – Container (ein Einkauf bei einem 
 - `feld(label, name, wert, o)`
 - `werte(form)` – Werte aller benannten Felder eines Formulars als Objekt (Kontrollkästchen mit gleichem Namen als Liste)
 - `oeffnen(dlg)`
+- `lieferantFeld(s, aus, neu, kennung)` – Feld „Lieferant“ mit den Vorschlägen der Stammdaten (Fenster „Container“ und „Schlachthof“); kennung = id der Vorschlagsliste
 
 **Seite**
 
@@ -159,6 +170,7 @@ _STAFL-Plattform · Modul Container-Import – Container (ein Einkauf bei einem 
 
 - `sendungOeffnen(id)`
 - `sendungAusFenster()`
+- `schlachthofWahlNeu()` – Lieferant im Fenster geändert: zur Wahl stehen nur seine Schlachthöfe; der gewählte bleibt, wenn er dazugehört
 - `sendungSpeichern(zusatz)`
 - `abschlussOeffnen(id, wiederOeffnen)` – Fenster „Bewertung abschließen“ bzw. „wieder öffnen“
 - `abschlussSenden()`
@@ -224,6 +236,15 @@ _Container-Import · EUDR_
 
 - `deuten({…}, abHa)`
 
+## `app/module/containerimport/schlachthoefe.js`
+
+_STAFL-Plattform · Modul Container-Import – Schlachthöfe_
+
+- `wahl(lieferant, aktuell)` – Auswahl im Fenster „Container“: aktive Schlachthöfe des Lieferanten; der gespeicherte bleibt wählbar, auch archiviert
+- `sicht()`
+- `fenster(id)`
+- `speichern(zusatz)`
+
 ## `tests/e2e/test_containerimport.py`
 
 _Modul Container-Import, Reiter EUDR (app/module/containerimport/, Oberfläche containerimport.intern, Auftrag des Inhabers 18.11.2026)_
@@ -261,6 +282,34 @@ _Modul Container-Import, Reiter EUDR (app/module/containerimport/, Oberfläche c
 **Originale im QM-System (Schnittstelle qs_eingang_hochladen)**
 
 - `original(c, name, inhalt, lieferant, teil)` – Datei in Teilen an containerimport_eudr_original geben; Antwort des letzten Aufrufs.
+
+## `tests/e2e/test_containerimport_schlachthof.py`
+
+_Container-Import: Schlachthöfe als Stammdaten unter dem Lieferanten (Aktion containerimport_schlachthof_save, app/api/module/containerimport/schlachthoefe.php, Oberfläche app/module/containerimport/schlachthoefe.js)._
+
+- `check(n, c, i)`
+
+**Nutzer und Stammdaten**
+
+- `login(user)`
+- `hoefe(r)`
+- `container(r, partie)`
+
+**Rechte**
+
+**Anlegen und ändern**
+
+**Schlachthof am Container**
+
+**Archivieren**
+
+**Umbenennen: offene Container folgen, abgeschlossene nicht (GR-106)**
+
+**Ältere Container ohne das Feld (GR-006), Nachtragen nach dem Abschluss, Felder einer späteren Version**
+
+**Oberfläche**
+
+- `seite(user, vp, schema)`
 
 ## `tests/e2e/test_containerimport_whisp.py`
 

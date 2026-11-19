@@ -170,8 +170,9 @@ switch ($action) {
                     eudr_rev_pruefen($b, $alt, 'Der Container');
                 } elseif (count($doc['liste']) >= EUDR_MAX_SENDUNGEN) fail('Zu viele Container.', 422);
                 if ($alt && !empty($alt['abschluss'])) {
-                    // einem Eintrag von vorher lässt sich die Partienummer auch nach dem Abschluss nachtragen – einmal
-                    $neu = eudr_sendung_laufend($b, $alt) + ($alt['partie'] === '' ? ['partie' => eudr_text($b['partie'] ?? '', 20, 'Partienummer')] : []) + $alt;
+                    // was einem älteren Eintrag noch fehlt, lässt sich auch nach dem Abschluss nachtragen – einmal: Partienummer, Schlachthof
+                    $neu = eudr_sendung_laufend($b, $alt) + ($alt['partie'] === '' ? ['partie' => eudr_text($b['partie'] ?? '', 20, 'Partienummer')] : [])
+                        + ($alt['schlachthof'] === '' ? ci_schlachthof_am_container($b, $alt, null) : []) + $alt;
                 } else {
                     $ids = array_column(eudr_betriebe()['liste'], 'id');
                     // „+ $alt“ am Ende: Felder, die dieser Stand nicht kennt (nach einem Rückfall von einer neueren Version), bleiben erhalten
@@ -186,6 +187,15 @@ switch ($action) {
             });
             audit('containerimport', 'Container „' . eudr_container_name($s) . '“ gespeichert');
             respond(['ok' => true, 'id' => $s['id']] + eudr_stand());
+        }
+
+        /* Schlachthof anlegen oder ändern (Stammdaten unter dem Lieferanten; archivieren statt löschen) */
+        case 'containerimport_schlachthof_save': {
+            $me = eudr_bearbeiter();
+            $b = body();
+            $h = with_lock(EUDR_SPERRE, fn() => ci_schlachthof_speichern($b, $me));
+            audit('containerimport', 'Schlachthof „' . $h['name'] . '“ gespeichert');
+            respond(['ok' => true, 'id' => $h['id']] + eudr_stand());
         }
 
         /* Bewertung abschließen (Ergebnis, Begründung, Schnappschuss von Profil und Betrieben) oder wieder öffnen (mit Grund).

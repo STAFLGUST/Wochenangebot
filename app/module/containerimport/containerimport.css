@@ -91,6 +91,7 @@ body.ci .dlg-foot { border-top: 1px solid var(--r-linie); align-items: center; }
 .ci-h span { text-transform: none; letter-spacing: 0; font-weight: 400; }
 .ci-raster { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px 14px; align-content: start; }
 .ci-raster.drei { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+.ci-raster.drei .ci-feld.zwei { grid-column: span 2; }
 .ci-feld { display: flex; flex-direction: column; gap: 5px; min-width: 0; font-size: 13px; font-weight: 600; }
 .ci-feld.breit { grid-column: 1 / -1; }
 .ci-feld.ci-unten { justify-content: flex-end; }
@@ -208,6 +209,7 @@ body.ci .dlg-foot { border-top: 1px solid var(--r-linie); align-items: center; }
 }
 @media (max-width: 720px) {
   .ci-zweispaltig, .ci-raster, .ci-raster.drei { grid-template-columns: minmax(0, 1fr); }
+  .ci-raster.drei .ci-feld.zwei { grid-column: auto; }
   .ci-kr-stand { width: auto; }
   .ci-kriterien li, .ci-wahl li { flex-wrap: wrap; }
   .ci-rechts { max-width: none; justify-content: flex-start; padding-left: 26px; }
