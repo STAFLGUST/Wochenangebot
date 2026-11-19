@@ -1180,6 +1180,18 @@
     }
   }
   const unsaved = () => saving || saveTimer && $('#save-state').classList.contains('pending') || !!saveError;
+  /* Entwurf sicher gespeichert – oder Fehler (Export für WinAB: nie einen älteren Stand als „Entwurf“ ausgeben). Anders als
+     saveNow() wartet es auf ein laufendes Speichern und meldet Scheitern; die letzte Eingabe im Feld zählt mit. */
+  async function entwurfGespeichert() {
+    const a = document.activeElement;
+    if (a && a.matches && a.matches('.in')) a.dispatchEvent(new Event('change', { bubbles: true }));
+    for (let i = 0; i < 3 && unsaved(); i++) {
+      await saveNow();
+      while (saving) await new Promise((r) => setTimeout(r, 100));   // auch ein danach angestoßenes Speichern (queued)
+    }
+    if (unsaved()) throw new Error(`Der Entwurf ist nicht gespeichert${saveError ? ` (${saveError})` : ''} – bitte im Angebot prüfen und erneut versuchen.`);
+    return revision;
+  }
   let conflictTries = 0;
 
   /* ======================= Gemeinsames Bearbeiten =======================
@@ -5203,11 +5215,14 @@
       sonder: { uebernehmen: (r) => { if (angeboteUebernehmen(r)) changed({ render: true }); }, artikel: (id) => memberCount(id),
         oeffnen(id) { if (!knownOffer(id)) return false; setView('edit'); setOffer(id); return true; }, bearbeiten: null,
         stand: sonderStand, text: sonderText },
-      // Export für WinAB (app/module/angebot/winab-export.js): Woche des Entwurfs und des veröffentlichten Stands, je „KW n/JJJJ“ oder leer
-      wochen: () => ({ entwurf: model && model.meta.week ? wkLong(model.meta) : '', veroeffentlicht: published && published.meta.week ? wkLong(published.meta) : '' }),
       druck: { adresse: () => (model ? pvUrl(curOffer) : ''), name: () => offerName(curOffer),
         adresseFuer: (oid, entwurf) => (entwurf ? pvUrl(oid || OSTD) : angebotsseite('?' + (oid && oid !== OSTD ? 'angebot=' + encodeURIComponent(oid) + '&' : '') + 't=' + Date.now())),
-        async bereit() { const a = document.activeElement; if (a && a.matches && a.matches('.in')) a.dispatchEvent(new Event('change', { bubbles: true })); if (unsaved()) await saveNow(); } } },
+        async bereit() { const a = document.activeElement; if (a && a.matches && a.matches('.in')) a.dispatchEvent(new Event('change', { bubbles: true })); if (unsaved()) await saveNow(); } },
+      // Export für WinAB (app/module/angebot/winab-export.js): Woche des Entwurfs und des veröffentlichten Stands („KW n/JJJJ“ oder
+      // leer), Zahl offener Änderungen; gespeichert() speichert sicher und liefert die Revision des Entwurfs (sonst Fehler)
+      winab: { gespeichert: entwurfGespeichert,
+        wochen: () => ({ entwurf: model && model.meta.week && model.meta.year ? wkLong(model.meta) : '',
+          veroeffentlicht: published && published.meta.week && published.meta.year ? wkLong(published.meta) : '' }) } },
   };
 
   /* Höhe der Kopfleiste für die links angeheftete Navigation */

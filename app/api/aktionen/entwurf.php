@@ -122,12 +122,13 @@ switch ($action) {
         }
 
         /* Export für WinAB: Wochenangebot als CSV (Artikelnummer;Preis, höchster Preis je Nummer) – veröffentlichter Stand
-           oder mit { entwurf: true } der gespeicherte Entwurf; nur mit eigenem Recht, im Protokoll vermerkt
-           (module/angebot/winab-export.php) */
+           oder mit { entwurf: true, revision? } der gespeicherte Entwurf (Revision passt nicht mehr: 409); nur mit eigenem
+           Recht, im Protokoll vermerkt (module/angebot/winab-export.php) */
         case 'angebot_winab_export': {
             $me = require_perm('angebot.winab_export', true);
             require_once dirname(__DIR__) . '/module/angebot/winab-export.php';
-            $r = winab_export((body()['entwurf'] ?? false) === true);
+            $b = body();
+            $r = winab_export(($b['entwurf'] ?? false) === true, is_int($b['revision'] ?? null) ? $b['revision'] : null);
             audit('offers', ($r['entwurf'] ? 'Entwurf des Wochenangebots ' : 'Wochenangebot ') . ($r['woche'] !== '' ? $r['woche'] . ' ' : '') . 'für WinAB exportiert – ' . $r['anzahl'] . ' Artikel'
                 . ($r['ohnePreis'] ? ', ' . $r['ohnePreis'] . ' ohne Preis ausgelassen' : '') . ($r['doppelt'] ? ', ' . $r['doppelt'] . '× doppelt (höchster Preis)' : ''));
             header('Cache-Control: private, no-store');

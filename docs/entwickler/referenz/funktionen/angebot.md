@@ -2,7 +2,7 @@
 
 <!-- ERZEUGT von `python3 werkzeuge/doku.py erzeugen` – nicht von Hand ändern. Quelle: Funktionen und Kommentare im Code. Die CI prüft, dass diese Datei zum Code passt. -->
 
-59 Dateien, 930 Funktionen – in der Reihenfolge der Datei, **fett** die Abschnitte. Text = erste Aussage des Kommentars direkt über der Funktion (Python: Docstring). Übersicht aller Module: [README.md](README.md).
+59 Dateien, 931 Funktionen – in der Reihenfolge der Datei, **fett** die Abschnitte. Text = erste Aussage des Kommentars direkt über der Funktion (Python: Docstring). Übersicht aller Module: [README.md](README.md).
 
 ## `app/api/lib/angebote.php`
 
@@ -309,8 +309,8 @@ _STAFL-Plattform · Angebot · Sonderangebote (Auftrag des Inhabers 13.11.2026):
 _Export des Wochenangebots für WinAB (Auftrag des Inhabers 05.11.2026)_
 
 - `winab_preis(v)` – Preis für WinAB: 26,1 → „26,10“, 12.345 → „12,345“
-- `winab_zeilen(pub)` – Zeilen [Artikelnummer, Preis] aus einem Angebotsmodell – Entwurf oder veröffentlicht (höchster Preis je Nummer) – und Zählung
-- `winab_export(entwurf)` – Datei für den Download: Name, Inhalt und Zahlen.
+- `winab_zeilen(modell)` – Zeilen [Artikelnummer, Preis] aus einem Angebotsmodell – Entwurf oder veröffentlicht (höchster Preis je Nummer) – und Zählung
+- `winab_export(entwurf, revision)` – Datei für den Download: Name, Inhalt und Zahlen.
 
 ## `app/api/module/angebot/wochen.php`
 
@@ -536,6 +536,7 @@ _Wochenangebot – Eingabebereich Bearbeitet einen Entwurf auf dem Server (autom
 - `editorsHTML()`
 - `changed(opts)`
 - `saveNow()`
+- `entwurfGespeichert()` – Entwurf sicher gespeichert – oder Fehler (Export für WinAB: nie einen älteren Stand als „Entwurf“ ausgeben).
 
 **Gemeinsames Bearbeiten**
 

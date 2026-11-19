@@ -277,10 +277,46 @@ with sync_playwright() as p:
     check('mobil: „Export für WinAB“ im Import ohne seitliches Scrollen, Knopf ≥ 44 px mit Namen für Vorleser', m.evaluate('document.documentElement.scrollWidth') <= 390
           and bx['width'] >= 44 and bx['height'] >= 44 and 'Export für WinAB' in (mx.get_attribute('aria-label') or ''), bx)
     m.screenshot(path=SH + '/winab-export-import-390.png')
+    # Entwurf-Export aus dem Editor heraus: die letzte Eingabe wird erst sicher gespeichert – scheitert das, keine Datei
+    ed = br.new_page(viewport={'width': 1440, 'height': 950}); ed.on('pageerror', lambda x: errs.append('ed: ' + str(x)))
+    login(ed, 'admin', 'Sicheres-Passwort-1')
+    downloads = []; ed.on('download', lambda d: downloads.append(d))
+    ed.fill('#groups tr[data-id="w6"] input[data-f="price"]', '6,5')
+    with ed.expect_download() as dl:
+        ed.click('#vt-importe'); ed.click('[data-imp-export="winab_entwurf"]')
+    t6 = open(dl.value.path(), 'rb').read().decode('ascii')
+    check('WinAB Entwurf: eben getippter Preis wird vor dem Export gespeichert und steht in der Datei', f"{c[4]['code']};6,50\r\n" in t6, t6)
+    ed.wait_for_selector('[data-imp-export="winab_entwurf"]:not([disabled])')
+    ed.click('#vt-edit'); ed.wait_for_selector('#groups tr[data-id="w6"] input[data-f="price"]')
+    ed.route('**/api/?action=save_draft*', lambda rt: rt.fulfill(status=500, json={'ok': False, 'error': 'Testfehler beim Speichern'}))
+    n_vorher = len(downloads)
+    ed.fill('#groups tr[data-id="w6"] input[data-f="price"]', '7,5')
+    ed.click('#vt-importe'); ed.click('[data-imp-export="winab_entwurf"]')
+    ed.wait_for_selector('#toast.show:has-text("Der Entwurf ist nicht gespeichert")')
+    ed.wait_for_selector('[data-imp-export="winab_entwurf"]:not([disabled])')
+    check('WinAB Entwurf: Speichern scheitert – keine Datei, Meldung statt älterer Preise', len(downloads) == n_vorher and 'Testfehler' in ed.inner_text('#toast'), ed.inner_text('#toast'))
+    ed.unroute('**/api/?action=save_draft*'); ed.close()   # lokal gesicherte Eingabe (7,50) nicht in die nächsten Schritte tragen
+    # Server: veralteter Stand des Entwurfs (inzwischen geändert/verworfen/veröffentlicht) → 409; ohne Recht 403 auch mit „entwurf“
+    rev = get(a, 'draft')[1]['revision']
+    r = post(a, 'angebot_winab_export', {'entwurf': True, 'revision': rev - 1})
+    check('WinAB Entwurf: Revision passt nicht mehr – 409 statt Datei', r[0] == 409 and 'csv' not in r[1] and 'inzwischen' in r[1].get('error', ''), r[0])
+    r = post(a, 'angebot_winab_export', {'entwurf': True, 'revision': rev})
+    check('WinAB Entwurf: passende Revision – Datei des Entwurfs', r[0] == 200 and r[1]['entwurf'] is True, r[0])
+    e2 = br.new_page(); login(e2, 'eddi', 'Bearbeiter-Zugang-1')
+    check('WinAB Entwurf: ohne Recht 403', post(e2, 'angebot_winab_export', {'entwurf': True})[0] == 403); e2.close()
     # Ohne offenen Entwurf ist der Arbeitsstand der veröffentlichte: „Entwurf“ liefert ihn und sagt das
-    post(a, 'publish', {'model': wd, 'revision': get(a, 'draft')[1]['revision']}); r = post(a, 'angebot_winab_export', {'entwurf': True})
+    # den gespeicherten Entwurf veröffentlichen (wie der Knopf) – offene Fenster haben dann nichts Eigenes mehr zu speichern
+    r = post(a, 'publish', {'revision': get(a, 'draft')[1]['revision']}); check('WinAB: Entwurf KW 46 veröffentlicht', r[0] == 200, r)
+    soll_p = soll_e.replace(f"{c[4]['code']};5,1234", f"{c[4]['code']};6,50")
+    ed = br.new_page(viewport={'width': 1440, 'height': 950}); ed.on('pageerror', lambda x: errs.append('ed: ' + str(x))); login(ed, 'admin', 'Sicheres-Passwort-1')
+    with ed.expect_download():
+        ed.click('#vt-importe'); ed.click('[data-imp-export="winab_entwurf"]')
+    ed.wait_for_selector('#toast.show:has-text("kein offener Entwurf")')
+    check('WinAB Entwurf: ohne offenen Entwurf sagt die Rückmeldung „veröffentlichter Stand“', 'aus dem veröffentlichten Wochenangebot KW 46/2026' in ed.inner_text('#toast'), ed.inner_text('#toast'))
+    ed.close()
+    r = post(a, 'angebot_winab_export', {'entwurf': True})
     check('WinAB: nach dem Veröffentlichen liefert „Entwurf“ den veröffentlichten Stand (KW 46/2026, entwurf: false)', r[0] == 200 and r[1]['entwurf'] is False and r[1]['woche'] == 'KW 46/2026'
-          and r[1]['csv'] == soll_e, {k: v for k, v in (r[1] or {}).items() if k != 'csv'})
+          and r[1]['csv'] == soll_p, {k: v for k, v in (r[1] or {}).items() if k != 'csv'})
     # Ohne Artikel mit Preis: keine Datei (422)
     wm['items'] = [art(c[3], 'w5', price={'status': 'request'})]
     post(a, 'publish', {'model': wm, 'revision': get(a, 'draft')[1]['revision']}); r = post(a, 'angebot_winab_export', {})

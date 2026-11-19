@@ -23,11 +23,11 @@ function winab_preis(float $v): string
 }
 
 /* Zeilen [Artikelnummer, Preis] aus einem Angebotsmodell – Entwurf oder veröffentlicht (höchster Preis je Nummer) – und Zählung */
-function winab_zeilen(array $pub): array
+function winab_zeilen(array $modell): array
 {
     $beste = [];   // code_key → [Nummer, Preis]
     $ohnePreis = 0; $ohneNummer = 0; $doppelt = 0;
-    foreach (offer_resolve($pub, offer_def(OFFER_STD))['items'] as $it) {
+    foreach (offer_resolve($modell, offer_def(OFFER_STD))['items'] as $it) {
         $code = trim((string)($it['code'] ?? ''));
         $preise = [];
         foreach (array_merge([$it['price'] ?? null], is_array($it['altPrices'] ?? null) ? $it['altPrices'] : []) as $p) {
@@ -46,19 +46,24 @@ function winab_zeilen(array $pub): array
 }
 
 /* Datei für den Download: Name, Inhalt und Zahlen. $entwurf: der gespeicherte Entwurf statt des veröffentlichten Stands
-   (ohne offenen Entwurf der veröffentlichte). 422 ohne Angebot oder ohne Preise */
-function winab_export(bool $entwurf = false): array
+   (ohne offenen Entwurf der veröffentlichte). $revision: Stand des Entwurfs, den der Browser kennt – passt er nicht mehr
+   (inzwischen gespeichert, verworfen oder veröffentlicht), 409 statt einer Datei mit anderen Preisen als angezeigt.
+   422 ohne Angebot oder ohne Preise */
+function winab_export(bool $entwurf = false, ?int $revision = null): array
 {
     $dr = $entwurf ? store_read('entwurf') : null;
-    $entwurf = is_array($dr);
-    $pub = $dr ?? store_read('angebot');
-    if (!is_array($pub) || !is_array($pub['items'] ?? null)) fail('Es ist noch kein Wochenangebot veröffentlicht.', 422);
-    $r = winab_zeilen($pub);
-    if (!$r['zeilen']) fail('Im ' . ($entwurf ? 'Entwurf des Wochenangebots' : 'veröffentlichten Wochenangebot') . ' steht kein Artikel mit Preis.', 422);
-    $w = (int)($pub['meta']['week'] ?? 0); $y = (int)($pub['meta']['year'] ?? 0);
+    if ($entwurf && $revision !== null && draft_rev($dr) !== $revision) {
+        fail('Der Entwurf wurde inzwischen geändert, verworfen oder veröffentlicht – bitte die Seite neu laden und erneut exportieren.', 409);
+    }
+    $ausEntwurf = is_array($dr);
+    $modell = $dr ?? store_read('angebot');
+    if (!is_array($modell) || !is_array($modell['items'] ?? null)) fail('Es ist noch kein Wochenangebot veröffentlicht.', 422);
+    $r = winab_zeilen($modell);
+    if (!$r['zeilen']) fail('Im ' . ($ausEntwurf ? 'Entwurf des Wochenangebots' : 'veröffentlichten Wochenangebot') . ' steht kein Artikel mit Preis.', 422);
+    $w = (int)($modell['meta']['week'] ?? 0); $y = (int)($modell['meta']['year'] ?? 0);
     $csv = "Artikelnummer;Preis\r\n";
     foreach ($r['zeilen'] as [$code, $preis]) $csv .= $code . ';' . winab_preis($preis) . "\r\n";
     return ['datei' => 'ImportPreise.csv', 'csv' => $csv,
             'anzahl' => count($r['zeilen']), 'ohnePreis' => $r['ohnePreis'], 'ohneNummer' => $r['ohneNummer'], 'doppelt' => $r['doppelt'],
-            'woche' => $w && $y ? "KW $w/$y" : '', 'entwurf' => $entwurf, 'veroeffentlicht' => $entwurf ? null : ($pub['publishedAt'] ?? null)];
+            'woche' => $w && $y ? "KW $w/$y" : '', 'entwurf' => $ausEntwurf, 'veroeffentlicht' => $ausEntwurf ? null : ($modell['publishedAt'] ?? null)];
 }
