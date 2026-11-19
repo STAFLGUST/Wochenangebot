@@ -458,11 +458,19 @@ function eudr_sendung_laufend(array $b, ?array $alt): array
 {
     $alt = ($alt ?? []) + EUDR_SENDUNG_VORGABEN + ['container' => ''];
     return [
-        'stand' => eudr_wahl($b['stand'] ?? null, array_keys(EUDR_STAENDE), 'Stand', $alt['stand']),
-        'container' => eudr_text($b['container'] ?? $alt['container'], 40, 'Containernummer'),
+        ...ci_reise($b, $alt),
         'akte' => eudr_text($b['akte'] ?? $alt['akte'], 40, 'Aktennummer'),
         'dds' => eudr_dds_pruefen(is_array($b['dds'] ?? null) ? $b['dds'] : []),
         'notiz' => eudr_text($b['notiz'] ?? '', 2000, 'Notiz'),
+    ];
+}
+/* Stand und Containernummer aus der Eingabe (ohne Eingabe bleibt der gespeicherte Wert) – die eine Stelle für alle, die sie
+   pflegen: das Fenster „Container“ (eudr_sendung_laufend) und das Fenster „Tracking“ (containerimport_tracking_save). */
+function ci_reise(array $b, array $alt): array
+{
+    return [
+        'stand' => eudr_wahl($b['stand'] ?? null, array_keys(EUDR_STAENDE), 'Stand', $alt['stand']),
+        'container' => eudr_text($b['container'] ?? $alt['container'], 40, 'Containernummer'),
     ];
 }
 /* Was einem älteren Eintrag noch fehlt, lässt sich auch nach dem Abschluss der Bewertung nachtragen – einmal, solange das

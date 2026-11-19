@@ -135,27 +135,29 @@
   const zahlText = (v) => (v === null || v === undefined || v === '' ? '' : String(v).replace('.', ','));
 
   /* ---------- Seite ---------- */
+  /* Kopf und der gewählte Reiter. Gezeichnet wird nur der sichtbare Bereich (die Karte braucht ein Element mit Breite). */
   function zeichnen() {
-    const d = S.d, aktiv = d.betriebe.filter((b) => b.aktiv), offen = d.sendungen.filter((s) => s.aktiv && !s.abschluss);
-    $('#ci-unterzeile').textContent = `${offen.length} Container in Prüfung · ${aktiv.length} Farmer`;
-    const sichten = [['sendungen', 'Container', d.sendungen.filter((s) => s.aktiv).length], ['schlachthoefe', 'Schlachthöfe', d.schlachthoefe.filter((x) => x.aktiv).length], ['betriebe', 'Farmer', aktiv.length], ['karte', 'Karte', null]];
+    const d = S.d;
+    $('#ci-unterzeile').textContent = `${d.sendungen.filter((s) => s.aktiv && !s.abschluss).length} Container in Prüfung · ${d.betriebe.filter((b) => b.aktiv).length} Farmer`;
+    for (const b of $$('[data-reiter]')) b.setAttribute('aria-selected', String(b.dataset.reiter === S.reiter));
+    for (const el of $$('[data-bereich]')) el.hidden = el.dataset.bereich !== S.reiter;
+    REITER[S.reiter]();
+  }
+  function eudrZeichnen() {
+    const d = S.d;
+    const sichten = [['sendungen', 'Container', d.sendungen.filter((s) => s.aktiv).length], ['schlachthoefe', 'Schlachthöfe', d.schlachthoefe.filter((x) => x.aktiv).length], ['betriebe', 'Farmer', d.betriebe.filter((b) => b.aktiv).length], ['karte', 'Karte', null]];
     $('#ci-sichten').innerHTML = sichten.map(([k, t, n]) => `<button class="ci-chip" type="button" data-sicht="${k}" aria-pressed="${S.sicht === k}">${t}${n === null ? '' : ` <b>${n}</b>`}</button>`).join('');
     $('#ci-knoepfe').innerHTML = d.rechte.bearbeiten
       ? `<button class="ci-knopf" type="button" id="ci-lesen">${icon('hoch')}Unterlagen einlesen</button><button class="ci-knopf primaer" type="button" id="ci-sendung-neu">${icon('plus')}Neuer Container</button>` : '';
-    sichtZeichnen();
-    if (REITER[S.reiter]) REITER[S.reiter]();
+    SICHTEN[S.sicht]();
   }
-  /* Reiter des Moduls: EUDR zeichnet diese Datei, weitere Dateien tragen ihre Zeichenfunktion ein (Brücke STAFL_CI) */
-  const REITER = {};
-  function reiterZeigen() {
-    for (const b of $$('[data-reiter]')) b.setAttribute('aria-selected', String(b.dataset.reiter === S.reiter));
-    for (const el of $$('[data-bereich]')) el.hidden = el.dataset.bereich !== S.reiter;
-    if (REITER[S.reiter]) REITER[S.reiter]();
-  }
+  /* Reiter des Moduls: Zeichenfunktion je Reiter; weitere Dateien tragen ihre ein (Brücke STAFL_CI) */
+  const REITER = { eudr: eudrZeichnen };
   const SICHTEN = { sendungen: sendungenSicht, betriebe: betriebeSicht, karte: karteSicht };   // weitere Dateien tragen ihre Ansicht ein (Brücke STAFL_CI)
-  const sichtZeichnen = () => SICHTEN[S.sicht]();
 
-  const suchfeld = (platz, name) => `<input type="search" id="ci-suche" value="${esc(S.suche[S.sicht])}" placeholder="${platz}" aria-label="${name} durchsuchen">`;
+  /* Suchfeld einer Liste; schluessel = Platz des Suchtexts in S.suche (Vorgabe: die Ansicht). Tippen zeichnet den Reiter neu
+     und behält den Fokus (ein Hörer für alle Suchfelder, siehe unten). */
+  const suchfeld = (platz, name, schluessel = S.sicht, id = 'ci-suche') => `<input type="search" id="${id}" data-suche="${schluessel}" value="${esc(S.suche[schluessel])}" placeholder="${platz}" aria-label="${name} durchsuchen">`;
   const suchzeile = (platz, name) => `<div class="ci-suchzeile">${suchfeld(platz, name)}</div>`;
   function sendungenSicht() {
     const liste = S.d.sendungen.filter((s) => (s.aktiv || S.archiv) && SU.findet(S.suche.sendungen, s.partie, s.akte, s.container, s.nummer, s.lieferant, s.lieferantNr, s.schlachthofName, s.ware, landName(s.land), s.dds.referenz))
@@ -670,7 +672,7 @@
     const zu = t.closest('[data-zu]');
     if (zu) { zu.closest('dialog').close(); return; }
     const reiter = t.closest('[data-reiter]');
-    if (reiter) { S.reiter = reiter.dataset.reiter; reiterZeigen(); return; }
+    if (reiter) { S.reiter = reiter.dataset.reiter; zeichnen(); return; }
     const chip = t.closest('[data-sicht]');
     if (chip) { S.sicht = chip.dataset.sicht; zeichnen(); return; }
     if (t.closest('#ci-neu')) { laden(true).then((ok) => ok && toast('Stand neu geladen.')); return; }
@@ -703,11 +705,11 @@
     e.target.click();     // Zeile einer Liste öffnen wie mit der Maus
   });
   document.addEventListener('input', (e) => {
-    if (e.target.id !== 'ci-suche') return;
-    S.suche[S.sicht] = e.target.value;
-    const stelle = e.target.selectionStart;
-    sichtZeichnen();
-    $('#ci-suche').focus(); $('#ci-suche').setSelectionRange(stelle, stelle);
+    const { suche } = e.target.dataset, { id, selectionStart: stelle } = e.target;
+    if (suche === undefined) return;
+    S.suche[suche] = e.target.value;
+    REITER[S.reiter]();
+    $('#' + id).focus(); $('#' + id).setSelectionRange(stelle, stelle);
   });
   document.addEventListener('change', (e) => {
     if (e.target.id === 'ci-archiv') { S.archiv = e.target.checked; zeichnen(); }

@@ -294,7 +294,7 @@ agent = "containerimport"
 abhaengigkeiten = ["plattform", "qs", "verwaltung"]   # qs: Originale der Lieferantenunterlagen gehen über qs_eingang_hochladen in den Eingang des QM-Systems · verwaltung: Lieferant eines Containers aus den Stammdaten (lieferanten_kurz)
 testgruppen = ["containerimport", "containerimport_whisp", "containerimport_schlachthof", "containerimport_tracking"]
 pfade = ["regeln/aktionen/containerimport.toml", "app/api/aktionen/containerimport.php", "app/api/module/containerimport/**", "app/module/containerimport/**",
-  "tests/e2e/test_containerimport*.py", "tests/fixtures/containerimport/**"]
+  "tests/e2e/test_containerimport*.py", "tests/e2e/containerimport_hilfe.py", "tests/fixtures/containerimport/**"]
 pfade_geplant = []
 hinweise = [
   "Angelegt auf Wunsch des Inhabers (25.10.2026) als geplante Kachel; Auftrag 18.11.2026: Modul bauen, erster Reiter EUDR (Hilfen und Kontrollen zur Verordnung (EU) 2023/1115). Weitere Reiter (Sendungsverfolgung, Zoll, Kontingente, Dokumente) vor dem Bau mit dem Inhaber klären.",

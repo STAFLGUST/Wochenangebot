@@ -783,6 +783,7 @@ Jede Code-Datei beginnt mit einem Kopfkommentar; dessen erste Aussage steht hier
 | Datei | Modul | Inhalt |
 | --- | --- | --- |
 | `auth_helpers.py` | plattform | HTTP-Client und Zeitsteuerung ausschließlich für isolierte Testdaten/Sitzungen. |
+| `containerimport_hilfe.py` | containerimport | Gemeinsame Hilfen für die Testgruppen des Moduls Container-Import (containerimport_*) |
 | `kunden_hilfe.py` | plattform | HTTP-Client mit eigener Sitzung für API-Tests (IP über X-Forwarded-For, wie hinter dem eigenen Proxy). |
 | `order_setup.py` | angebot | Gemeinsame Vorbereitung der Bestell-Testgruppen |
 | `qs_hilfe.py` | plattform | Gemeinsame Hilfen der Tests zur Dokumentenablage des QM-Systems (test_qs_eingang.py, test_qs_import.py) |

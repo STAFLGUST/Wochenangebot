@@ -9,47 +9,17 @@ ein- und ausblenden, Fenster mit Vorschlag der Reederei nach dem Kürzel, Verwei
 abgerufen), Leser ohne Speichern, Handy 390 px. Alle Namen und Nummern sind erfunden (GR-007)."""
 import datetime
 import os
-import re
 from playwright.sync_api import sync_playwright
-from kunden_hilfe import Client, B
+from containerimport_hilfe import check, ende, nutzer_anlegen, container, seite as seite_oeffnen
 from umgebung import SH, shot, storage_raw, storage_write, _json
 
-PW = 'Sicheres-Passwort-1'
-res = []
-
-
-def check(n, c, i=''):
-    res.append(bool(c)); print(('PASS ' if c else 'FAIL ') + n + (('  ' + str(i)[:400]) if i and not c else ''))
-
-
-A = Client('198.51.100.2')
-check('Administrator angemeldet', A.call('login', {'username': 'admin', 'password': PW})[0] == 200)
-USERS = {'ina': ('Ina Import', 'editor', 'Editor-Zugang-88', ['containerimport.eudr_sehen', 'containerimport.eudr_bearbeiten']),
-         'lea': ('Lea Leser', 'viewer', 'Leser-Zugang-55', ['containerimport.eudr_sehen'])}
-for user, (name, role, pw, grant) in USERS.items():
-    A.call('user_save', {'id': '', 'name': name, 'username': user, 'role': role, 'active': True, 'password': pw, 'mustChange': False})
-    nr = next(u['id'] for u in A.call('users')[1]['users'] if u['username'] == user)
-    A.call('user_save', {'id': nr, 'name': name, 'role': role, 'active': True, 'grant': grant, 'deny': []})
-
-
-def login(user):
-    c = Client('198.51.100.' + str(10 + list(USERS).index(user)))
-    code, r = c.call('login', {'username': user, 'password': USERS[user][2]})
-    assert code == 200, (user, code, r)
-    return c
-
-
-I, L = login('ina'), login('lea')
+A, I, L = nutzer_anlegen()
 HEUTE = datetime.date.fromisoformat(I.call('containerimport_start')[1]['heute'])
 
 
 def tag(n):
     """Datum n Tage ab heute (Datum des Servers) als JJJJ-MM-TT."""
     return (HEUTE + datetime.timedelta(days=n)).isoformat()
-
-
-def container(r, partie):
-    return next((s for s in r.get('sendungen', []) if s['partie'] == partie), {})
 
 
 def anlegen(partie, **mehr):
@@ -64,12 +34,16 @@ def tracking(c, **angaben):
     return st, r, container(r, c['partie'])
 
 
+def vorbereiten(c, **angaben):
+    """Tracking für die Oberfläche unten setzen – muss gelingen."""
+    st, r, c = tracking(c, **angaben)
+    assert st == 200, (st, r)
+    return c
+
+
 # ---------- Stand und Rechte ----------
 c1 = anlegen('P-280001', container='MSKU 907032 3')
-r = I.call('containerimport_start')[1]
-check('Stand: Reedereien zur Auswahl mit Verweis und Kürzeln; ein neuer Container hat leere Angaben zum Tracking',
-      r['reedereien']['maersk']['url'].startswith('https://www.maersk.com/') and 'MSKU' in r['reedereien']['maersk']['kuerzel'] and r['reedereien']['sonst']['url'] == ''
-      and [c1.get(k) for k in ('schiff', 'reederei', 'bl', 'abgangshafen', 'zielhafen', 'etd', 'eta')] == [''] * 7, c1)
+check('ein neuer Container hat leere Angaben zum Tracking', [c1.get(k) for k in ('schiff', 'reederei', 'bl', 'abgangshafen', 'zielhafen', 'etd', 'eta')] == [''] * 7, c1)
 check('nur ansehen: Speichern 403', L.call('containerimport_tracking_save', {'id': c1['id'], 'rev': c1['rev'], 'schiff': 'X'})[0] == 403)
 csrf = I.csrf; I.csrf = ''
 check('ohne CSRF: 403', I.call('containerimport_tracking_save', {'id': c1['id'], 'rev': c1['rev'], 'schiff': 'X'})[0] == 403)
@@ -82,8 +56,8 @@ ANGABEN = {'schiff': 'Beispiel Express', 'reederei': 'maersk', 'bl': 'BL-TEST-00
 st, r, c1 = tracking(c1, **ANGABEN)
 check('Tracking gespeichert: Schiff, Reederei, Konnossement, Häfen, Abfahrt, Ankunft und Stand stehen am Container',
       st == 200 and {k: c1.get(k) for k in ANGABEN} == ANGABEN and c1.get('container') == 'MSKU 907032 3' and c1.get('rev') == 2, (st, r.get('error'), c1))
-check('ungültig: Reederei außerhalb der Liste, kein Datum, Ankunft vor Abfahrt, Stand außerhalb der Liste – je 422, nichts gespeichert',
-      [tracking(c1, **x)[0] for x in ({'reederei': 'gibtesnicht'}, {'eta': '12.12.2026'}, {'etd': tag(5), 'eta': tag(4)}, {'stand': 'verschollen'})] == [422] * 4
+check('ungültig: Reederei außerhalb der Liste, kein Datum, Datum als Zahl oder Liste, Ankunft vor Abfahrt, Stand außerhalb der Liste – je 422, nichts gespeichert',
+      [tracking(c1, **x)[0] for x in ({'reederei': 'gibtesnicht'}, {'eta': '12.12.2026'}, {'eta': 20261212}, {'etd': [tag(1)]}, {'etd': tag(5), 'eta': tag(4)}, {'stand': 'verschollen'})] == [422] * 6
       and container(I.call('containerimport_start')[1], 'P-280001') == c1)
 check('veralteter Stand: 409', I.call('containerimport_tracking_save', {'id': c1['id'], 'rev': 1, 'schiff': 'X'})[0] == 409)
 st, r, c1 = tracking(c1, eta=tag(14))
@@ -101,9 +75,10 @@ check('Container im Reiter EUDR gespeichert (älterer Stand der Seite ohne die F
       st == 200 and c1.get('ware') == 'Rindfleisch, gekühlt, ohne Knochen' and c1.get('schiff') == 'Beispiel Express' and c1.get('eta') == tag(12), (st, r.get('error'), c1))
 st, r = I.call('containerimport_eudr_sendung_abschluss', {'id': c1['id'], 'rev': c1['rev'], 'ergebnis': 'nicht_vernachlaessigbar', 'begruendung': 'Unterlagen fehlen noch – Test des Trackings.'})
 c1 = container(r, 'P-280001')
-st, r, c1 = tracking(c1, eta=tag(13), schiff='Beispiel Express II')
-check('nach dem Abschluss der Bewertung: Tracking weiter pflegbar, die Bewertung bleibt abgeschlossen', st == 200 and c1.get('eta') == tag(13) and c1.get('schiff') == 'Beispiel Express II' and c1.get('abschluss'), (st, r.get('error')))
-doc = _json(storage_raw('containerimport-eudr-sendungen'))
+bewertung = (c1.get('abschluss'), c1.get('profil'))
+st, r, c1 = tracking(c1, eta=tag(13), schiff='Beispiel Express II', stand='dokumente')
+check('nach dem Abschluss der Bewertung: Tracking weiter pflegbar, Abschluss und Risikoprofil bleiben unverändert (GR-106)',
+      st == 200 and c1.get('eta') == tag(13) and c1.get('schiff') == 'Beispiel Express II' and bewertung[0] and (c1.get('abschluss'), c1.get('profil')) == bewertung, (st, r.get('error')))
 c2 = anlegen('P-280002')
 doc = _json(storage_raw('containerimport-eudr-sendungen'))
 for k in ('schiff', 'reederei', 'bl', 'abgangshafen', 'zielhafen', 'etd', 'eta'):
@@ -116,13 +91,10 @@ verlauf = str(A.call('log')[1])
 check('Protokoll nennt das Speichern des Trackings', 'Tracking des Containers „P-280001“ gespeichert' in verlauf, verlauf[:300])
 
 # Für die Liste: überfällig, bald, angekommen, ohne Ankunft
-tracking(c2, schiff='Altbestand', eta='', stand='gekauft')
-c3 = anlegen('P-280003', container='HLXU 123456 7')
-tracking(c3, schiff='Fracht <b>Stern</b>', reederei='hapag', abgangshafen='Montevideo', zielhafen='Rotterdam', etd=tag(-30), eta=tag(-2), stand='unterwegs')
-c4 = anlegen('P-280004')
-tracking(c4, schiff='Morgenfähre', reederei='sonst', zielhafen='Hamburg', eta=tag(1), stand='unterwegs')
-c5 = anlegen('P-280005')
-tracking(c5, schiff='Schon Da', zielhafen='Hamburg', eta=tag(-20), stand='angekommen')
+c2 = vorbereiten(c2, schiff='Altbestand', eta='', stand='gekauft')
+c3 = vorbereiten(anlegen('P-280003', container='HLXU 123456 7'), schiff='Fracht <b>Stern</b>', reederei='hapag', abgangshafen='Montevideo', zielhafen='Rotterdam', etd=tag(-30), eta=tag(-2), stand='unterwegs')
+vorbereiten(anlegen('P-280004'), schiff='Morgenfähre', reederei='sonst', zielhafen='Hamburg', eta=tag(1), stand='unterwegs')
+vorbereiten(anlegen('P-280005'), schiff='Schon Da', zielhafen='Hamburg', eta=tag(-20), stand='angekommen')
 
 # ---------- Oberfläche ----------
 with sync_playwright() as pw:
@@ -130,13 +102,7 @@ with sync_playwright() as pw:
     errs, fremd = [], []
 
     def seite(user, vp=None, schema='light'):
-        ctx = br.new_context(viewport=vp or {'width': 1280, 'height': 900}, color_scheme=schema)
-        ctx.route(re.compile(r'^https?://(?!127\.0\.0\.1[:/])'), lambda route: (fremd.append(route.request.url), route.abort()))   # Tests rufen nie fremde Server ab
-        pg = ctx.new_page(); pg.on('pageerror', lambda e: errs.append(str(e)))
-        pg.goto(B + '/admin/'); pg.wait_for_selector('#screen-auth:not([hidden])')
-        pg.fill('#au-user', user); pg.fill('#pw1', USERS[user][2]); pg.click('#auth-submit'); pg.wait_for_selector('#screen-editor:not([hidden])')
-        pg.goto(B + '/module/containerimport/'); pg.wait_for_selector('#ci-app:not([hidden])')
-        return pg
+        return seite_oeffnen(br, user, errs, fremd, vp, schema)
 
     zeilen = "[...document.querySelectorAll('#ci-tracking tbody tr')].map(r => r.cells[0].querySelector('.ci-name').textContent + '|' + r.cells[4].querySelector('.ci-marke').textContent)"
     p = seite('ina')
@@ -165,12 +131,13 @@ with sync_playwright() as pw:
           and p.locator('#tracking-verweis').count() == 0 and p.input_value('#dlg-tracking [name=reederei]') == '')
     p.fill('#dlg-tracking [name=container]', 'MSKU 907032 3'); p.fill('#dlg-tracking [name=zielhafen]', 'Hamburg'); p.fill('#dlg-tracking [name=eta]', tag(30))
     p.select_option('#dlg-tracking [name=stand]', 'unterwegs'); p.click('#dlg-tracking button[type=submit]')
-    p.wait_for_function("document.querySelector('#dlg-tracking [name=reederei]')?.value === 'maersk'")
+    p.wait_for_function("document.querySelector('#dlg-tracking').innerText.includes('vermutlich Maersk')")
+    p.fill('#dlg-tracking [name=eta]', tag(30)); p.click('#dlg-tracking button[type=submit]'); p.wait_for_selector('#ci-toast.zeigen:not(.fehler)')
     c2 = container(I.call('containerimport_start')[1], 'P-280002')
-    check('gespeichert: Angaben am Container; die Reederei wird nach dem Kürzel der Containernummer vorgeschlagen, aber nicht von selbst gespeichert',
+    check('gespeichert: Angaben am Container; die Reederei wird nach dem Kürzel der Containernummer nur als Hinweis vorgeschlagen und auch beim erneuten Speichern nicht von selbst gespeichert',
           [c2[k] for k in ('container', 'zielhafen', 'eta', 'stand', 'reederei')] == ['MSKU 907032 3', 'Hamburg', tag(30), 'unterwegs', '']
-          and 'Vorschlag nach dem Kürzel' in p.inner_text('#dlg-tracking') and p.evaluate("document.querySelector('#dlg-tracking').open"), c2)
-    p.click('#dlg-tracking button[type=submit]'); p.wait_for_selector('#tracking-verweis')
+          and p.input_value('#dlg-tracking [name=reederei]') == '' and p.evaluate("document.querySelector('#dlg-tracking').open"), c2)
+    p.select_option('#dlg-tracking [name=reederei]', 'maersk'); p.click('#dlg-tracking button[type=submit]'); p.wait_for_selector('#tracking-verweis')
     check('Reederei gespeichert: Verweis zur Sendungsverfolgung mit der Containernummer, öffnet ein neues Fenster ohne Rückbezug',
           p.get_attribute('#tracking-verweis', 'href') == 'https://www.maersk.com/tracking/MSKU9070323' and p.get_attribute('#tracking-verweis', 'target') == '_blank'
           and p.get_attribute('#tracking-verweis', 'rel') == 'noopener noreferrer' and container(I.call('containerimport_start')[1], 'P-280002')['reederei'] == 'maersk', p.get_attribute('#tracking-verweis', 'href'))
@@ -203,5 +170,4 @@ with sync_playwright() as pw:
     check('die Seite hat keine fremden Server abgerufen (auch nicht die Reedereien)', fremd == [], fremd)
 
 check('keine JavaScript-Fehler', not errs, errs)
-print(f'{sum(res)}/{len(res)} passed')
-raise SystemExit(0 if all(res) else 1)
+ende()

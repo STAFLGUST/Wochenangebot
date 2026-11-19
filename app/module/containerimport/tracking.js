@@ -1,7 +1,8 @@
 /* STAFL-Plattform · Modul Container-Import – Reiter „Tracking“: wo ist der Container, wann kommt er an (Auftrag des
    Inhabers 19.11.2026). Liste der Container mit Schiff, Reederei, Route, geplanter Abfahrt und Ankunft („in 12 Tagen“,
    „überfällig“), Suche, Fenster zum Pflegen und ein Verweis zur Sendungsverfolgung der Reederei.
-   Erste Stufe ohne fremde Dienste: alle Angaben werden von Hand gepflegt; die Seite fragt nirgends ab. Der Verweis öffnet
+   Erste Stufe ohne fremde Dienste: alle Angaben werden von Hand gepflegt; die Seite fragt nirgends ab. Die Reederei wird
+   aus dem Kürzel der Containernummer nur vorgeschlagen (Hinweis am Feld) – gespeichert wird, was gewählt ist. Der Verweis öffnet
    die Seite der Reederei in einem neuen Fenster und legt die Containernummer in die Zwischenablage.
    Hilfen und Zustand kommen über die Brücke window.STAFL_CI (containerimport.js lädt zuerst); die Datei trägt ihren Reiter
    dort ein und hängt ihre eigenen Ereignisse an. Regeln (Datum, Auswahl der Reederei) prüft der Server:
@@ -10,10 +11,11 @@
 (() => {
   'use strict';
   const C = window.STAFL_CI;
-  const { S, $, esc, SU, feld, kopf, werte, marke, tag, api, uebernehmen, toast, oeffnen, sendung, HINWEIS_NUMMER } = C;
-  const T = { suche: '', angekommene: false };
+  const { S, $, esc, SU, feld, kopf, werte, marke, tag, api, uebernehmen, toast, oeffnen, sendung, suchfeld, HINWEIS_NUMMER } = C;
+  S.suche.tracking = '';
+  let angekommene = false;   // auch angekommene Container zeigen
   const HAEFEN = ['Hamburg', 'Rotterdam', 'Bremerhaven', 'Antwerpen', 'Wilhelmshaven'];
-  const nummer = (text) => text.replace(/[\s./-]+/g, '').toUpperCase();
+  const nummer = (text) => text.replace(/[\s./-]+/g, '').toUpperCase();   // Containernummer ohne Gliederung, wie eudr_containernummer auf dem Server
   /* Reederei, die das Kürzel der Containernummer nahelegt (nur ein Vorschlag: gemietete Container tragen fremde Kürzel) */
   const vorschlag = (container) => Object.keys(S.d.reedereien).find((k) => S.d.reedereien[k].kuerzel.includes(nummer(container).slice(0, 4))) || '';
   const verweis = (s) => {
@@ -33,8 +35,8 @@
 
   function zeichnen() {
     const alle = S.d.sendungen.filter((s) => s.aktiv), unterwegs = alle.filter((s) => s.stand !== 'angekommen');
-    const liste = (T.angekommene ? alle : unterwegs)
-      .filter((s) => SU.findet(T.suche, s.partie, s.akte, s.container, s.nummer, s.schiff, s.bl, s.abgangshafen, s.zielhafen, s.lieferant, s.ware, (S.d.reedereien[s.reederei] || {}).name))
+    const liste = (angekommene ? alle : unterwegs)
+      .filter((s) => SU.findet(S.suche.tracking, s.partie, s.akte, s.container, s.nummer, s.schiff, s.bl, s.abgangshafen, s.zielhafen, s.lieferant, s.ware, (S.d.reedereien[s.reederei] || {}).name))
       .sort((a, b) => (a.stand === 'angekommen') - (b.stand === 'angekommen') || (a.eta || '9999').localeCompare(b.eta || '9999') || b.erstellt.t.localeCompare(a.erstellt.t));
     const zeiten = unterwegs.map((s) => s.eta).filter(Boolean).sort(), ueberfaellig = zeiten.filter((t) => t < S.d.heute).length, naechste = zeiten[ueberfaellig];
     const zeile = (s) => {
@@ -49,11 +51,11 @@
     };
     $('#ci-bereich-tracking').innerHTML = `<p class="ci-t-lage">${unterwegs.length === 1 ? '1 Container ist' : `${unterwegs.length} Container sind`} noch nicht angekommen${ueberfaellig ? ` · ${ueberfaellig} überfällig` : ''}${naechste ? ` · nächste Ankunft ${tag(naechste)}` : ''}.
         <span class="ci-leise">Alle Angaben werden von Hand gepflegt – die Seite fragt weder Reederei noch Hafen ab.</span></p>
-      <div class="ci-suchzeile"><input type="search" id="ci-t-suche" value="${esc(T.suche)}" placeholder="Partie, Containernummer, Schiff, Hafen, Lieferant" aria-label="Tracking durchsuchen">
-        <label class="ci-check"><input type="checkbox" id="ci-t-angekommene"${T.angekommene ? ' checked' : ''}>Angekommene anzeigen</label></div>`
+      <div class="ci-suchzeile">${suchfeld('Partie, Containernummer, Schiff, Hafen, Lieferant', 'Tracking', 'tracking', 'ci-t-suche')}
+        <label class="ci-check"><input type="checkbox" id="ci-t-angekommene"${angekommene ? ' checked' : ''}>Angekommene anzeigen</label></div>`
       + (liste.length
         ? `<div class="r-karte"><table class="ci-tab" id="ci-tracking"><thead><tr><th scope="col">Container</th><th scope="col">Schiff</th><th scope="col">Route</th><th scope="col">Abfahrt</th><th scope="col">Ankunft</th><th scope="col">Stand</th></tr></thead><tbody>${liste.map(zeile).join('')}</tbody></table></div>`
-        : `<div class="r-karte"><p class="ci-leer">${T.suche ? 'Kein Container passt zur Suche.' : alle.length ? 'Alle Container sind angekommen.' : 'Noch kein Container. Container legen Sie im Reiter „EUDR“ an.'}</p></div>`);
+        : `<div class="r-karte"><p class="ci-leer">${S.suche.tracking ? 'Kein Container passt zur Suche.' : alle.length ? 'Alle Container sind angekommen.' : 'Noch kein Container. Container legen Sie im Reiter „EUDR“ an.'}</p></div>`);
   }
 
   function fenster(id) {
@@ -67,14 +69,14 @@
       + `<div class="dlg-body">
         <div class="ci-raster">
           ${feld('Containernummer', 'container', s.container, { aus, platz: 'z. B. MSKU 907032 3', hinweis: HINWEIS_NUMMER[s.containerPruefung] })}${feld('Stand', 'stand', s.stand, { wahl: Object.entries(S.d.staende), aus })}
-          ${feld('Schiff', 'schiff', s.schiff, { aus, platz: 'Name des Schiffs' })}${feld('Reederei', 'reederei', s.reederei || vor, { wahl: reedereien, aus, hinweis: vor ? 'Vorschlag nach dem Kürzel der Containernummer – bitte prüfen.' : '' })}
+          ${feld('Schiff', 'schiff', s.schiff, { aus, platz: 'Name des Schiffs' })}${feld('Reederei', 'reederei', s.reederei, { wahl: reedereien, aus, hinweis: vor ? `Nach dem Kürzel der Containernummer vermutlich ${S.d.reedereien[vor].name} – bitte wählen.` : '' })}
           ${feld('Abgangshafen', 'abgangshafen', s.abgangshafen, { aus, platz: 'z. B. Santos' })}${feld('Zielhafen', 'zielhafen', s.zielhafen, { aus, liste: 'ci-t-haefen', platz: 'z. B. Hamburg' })}
           ${feld('Abfahrt (geplant)', 'etd', s.etd, { typ: 'date', aus })}${feld('Ankunft (geplant)', 'eta', s.eta, { typ: 'date', aus })}
           ${feld('Konnossement (B/L)', 'bl', s.bl, { aus, breit: true, platz: 'Nummer des Konnossements – viele Reedereien verfolgen auch darüber' })}
         </div>
         <datalist id="ci-t-haefen">${HAEFEN.map((h) => `<option value="${h}">`).join('')}</datalist>
-        <p class="ci-klein ci-leise">${url ? `Die Sendungsverfolgung öffnet die Seite von ${esc(r.name)} in einem neuen Fenster; die Containernummer liegt dann in der Zwischenablage.`
-          : 'Mit Containernummer und Reederei erscheint hier nach dem Speichern der Verweis zur Sendungsverfolgung der Reederei.'}</p>
+        <p class="ci-klein ci-leise">${url ? `Die Sendungsverfolgung öffnet die Seite von ${esc(r.name)} in einem neuen Fenster und legt die Containernummer zum Einfügen in die Zwischenablage, wenn der Browser das zulässt.`
+          : r && !r.url ? 'Für diese Reederei ist keine Sendungsverfolgung hinterlegt.' : 'Mit Containernummer und Reederei erscheint hier nach dem Speichern der Verweis zur Sendungsverfolgung der Reederei.'}</p>
       </div>
       <div class="dlg-foot">${url ? `<a class="ci-knopf" id="tracking-verweis" href="${esc(url)}" target="_blank" rel="noopener noreferrer" data-nummer="${esc(nummer(s.container))}">Sendungsverfolgung der Reederei</a>` : ''}
         <span class="spacer"></span>
@@ -84,7 +86,7 @@
 
   async function speichern() {
     const form = $('#tracking-inhalt'), w = werte(form), alt = sendung(form.dataset.id);
-    const r = await api('containerimport_tracking_save', { id: alt.id, rev: alt.rev, container: w.container, stand: w.stand, schiff: w.schiff, reederei: w.reederei, bl: w.bl, abgangshafen: w.abgangshafen, zielhafen: w.zielhafen, etd: w.etd, eta: w.eta });
+    const r = await api('containerimport_tracking_save', { id: alt.id, rev: alt.rev, ...w });   // die Felder des Fensters heißen wie die Angaben
     if (!uebernehmen(r, 'Das Tracking konnte nicht gespeichert werden')) return;
     toast('Tracking gespeichert.');
     fenster(r.data.id);
@@ -97,14 +99,7 @@
     if (zeile) fenster(zeile.dataset.tracking);
     if (link && navigator.clipboard) navigator.clipboard.writeText(link.dataset.nummer).then(() => toast('Containernummer kopiert.'), () => {});
   });
-  document.addEventListener('input', (e) => {
-    if (e.target.id !== 'ci-t-suche') return;
-    T.suche = e.target.value;
-    const stelle = e.target.selectionStart;
-    zeichnen();
-    $('#ci-t-suche').focus(); $('#ci-t-suche').setSelectionRange(stelle, stelle);
-  });
   document.addEventListener('change', (e) => {
-    if (e.target.id === 'ci-t-angekommene') { T.angekommene = e.target.checked; zeichnen(); }
+    if (e.target.id === 'ci-t-angekommene') { angekommene = e.target.checked; zeichnen(); }
   });
 })();

@@ -196,7 +196,7 @@ switch ($action) {
                 $doc = eudr_sendungen();
                 [$i, $alt] = eudr_sendung_holen($doc, $b['id'] ?? '');
                 eudr_rev_pruefen($b, $alt, 'Der Container');
-                $doc['liste'][$i] = ['rev' => $alt['rev'] + 1, 'geaendert' => eudr_wer($me)] + ci_tracking_pruefen($b, $alt) + $alt;
+                $doc['liste'][$i] = ['rev' => $alt['rev'] + 1, 'geaendert' => eudr_wer($me)] + ci_reise($b, $alt) + ci_tracking_pruefen($b, $alt) + $alt;
                 eudr_sendungen_schreiben($doc);
                 return $doc['liste'][$i];
             });

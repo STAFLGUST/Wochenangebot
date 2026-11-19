@@ -869,8 +869,10 @@ Caddy setzt auf allen Hosts `script-src 'self'` (ohne `'unsafe-inline'`), `conne
   (GR-106). Was sich nach dem Abschluss noch einmal nachtragen lässt, steht in `eudr_sendung_nachtrag`.
   **Reiter „Tracking“** (Auftrag des Inhabers 19.11.2026): `tracking.js` und `app/api/module/containerimport/tracking.php`.
   Die Reiter stehen in `index.html` (`data-reiter`), ihre Inhalte in Bereichen (`data-bereich`); `containerimport.js` schaltet
-  um (`reiterZeigen`) und ruft nach jedem neuen Stand die Zeichenfunktion des gewählten Reiters, die sich in
-  `STAFL_CI.reiter` einträgt. Die Angaben des Trackings sind Felder am Container (`CI_TRACKING_VORGABEN`); gespeichert wird
+  in `zeichnen()` um und ruft die Zeichenfunktion des gewählten Reiters aus `REITER` (EUDR: `eudrZeichnen`; weitere tragen
+  sich über `STAFL_CI.reiter` ein) – gezeichnet wird nur der sichtbare Bereich. Suchfelder kommen aus `suchfeld(…,
+  schluessel, id)`; ein Hörer für alle merkt den Text in `S.suche[schluessel]` und behält den Fokus. Stand und
+  Containernummer prüft für alle Schreiber `ci_reise`. Die Angaben des Trackings sind Felder am Container (`CI_TRACKING_VORGABEN`); gespeichert wird
   über `containerimport_tracking_save`, das nur diese Felder, den Stand und die Containernummer anfasst – auch nach dem
   Abschluss der Bewertung. Die Reedereien mit ihren Verweisen stehen an einer Stelle (`CI_REEDEREIEN`). Erste Stufe: die
   Seite ruft keinen fremden Dienst ab; der Verweis ist ein gewöhnlicher Link in ein neues Fenster.
