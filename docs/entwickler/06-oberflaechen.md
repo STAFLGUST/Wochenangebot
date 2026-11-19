@@ -343,7 +343,8 @@ des Angebots, sonst gemeinsame Stelle), auf dem Server `angebot_reihe`. Lesen im
 Invariante: Jeder Artikel eines Angebots mit eigener Artikelliste hat eine Stelle – `stellenErgaenzen()` gibt fehlenden eine
 hinter den bisherigen (in der bisherigen Reihenfolge, ändert also nichts Sichtbares) und entfernt ungültige; es läuft beim Laden
 der Angebote (`loadOffers`, auch für einen Entwurf ohne Stellen), nach „Entwurf verwerfen“ und am Anfang von `changed()` vor
-`nachKategorienOrdnen`. Damit ändert kein Umordnen von `model.items` (Wochenangebot, Angebotskategorien, Abgleich) ein
+`nachKategorienOrdnen` – beim Laden und beim Abgleich (`pullOnce`) ebenso auf dem Stand des Servers (`base`, `theirs`), damit
+der Abgleich keinen Entwurf nur wegen ergänzter Stellen speichert. Damit ändert kein Umordnen von `model.items` (Wochenangebot, Angebotskategorien, Abgleich) ein
 Kundenangebot. Schreiben: im Angebot mit eigener Artikelliste nur `it.stellen` – „Nach oben/unten“ und Fenster „Editor“
 (`stellenSetzen(oid, liste)`, `artikelOrdnen(ziel, oid)`), andere Gruppe im Artikelfenster und Duplizieren (`einreihen`: ans Ende
 der Gruppe bzw. hinter das Original); im Wochenangebot direkt `model.items`. Ein Angebot, das dem Wochenangebot folgt, ordnet

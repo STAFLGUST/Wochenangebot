@@ -313,17 +313,19 @@
   /* Stellen wie auf dem Server (angebotsstellen_clean): nur Angebote mit eigener Artikelliste, nur ihre Artikel, ganze Zahlen.
      Fehlende Stellen kommen hinter die bisherigen, in der bisherigen Reihenfolge – die Reihenfolge ändert sich dadurch nie, und
      Änderungsliste, Protokoll und Versand vergleichen nur die aufgelöste Reihenfolge. Läuft vor jedem Umordnen der gemeinsamen
-     Stelle (changed, loadOffers). Unbekannte Angebote bleiben bis zu ihrer Bereinigung (ohneGeloeschte). */
-  function stellenErgaenzen() {
-    if (!model) return;
-    for (const it of model.items) {
+     Stelle (changed, loadOffers) – auf dem Entwurf und gleich auf dem Stand des Servers (base, Abgleich in pullOnce), sonst
+     speicherte der Abgleich einen Entwurf nur wegen der ergänzten Stellen. Unbekannte Angebote bleiben bis zu ihrer
+     Bereinigung (ohneGeloeschte). */
+  function stellenErgaenzen(m = model) {
+    if (!m) return;
+    for (const it of m.items) {
       if (!it.stellen) continue;
       for (const [o, v] of Object.entries(it.stellen)) if (!Number.isInteger(v) || (knownOffer(o) && !(ownList(o) && inOffer(it, o)))) delete it.stellen[o];
       if (!Object.keys(it.stellen).length) delete it.stellen;
     }
     for (const { id: o } of offers) {
       if (!ownList(o)) continue;
-      const l = C.angebotsFolge(model.items.filter((it) => inOffer(it, o)), [], o, () => null);   // nur nach Stelle (ohne Gruppen)
+      const l = C.angebotsFolge(m.items.filter((it) => inOffer(it, o)), [], o, () => null);   // nur nach Stelle (ohne Gruppen)
       let max = -1;
       for (const it of l) if (it.stellen && Number.isInteger(it.stellen[o])) max = Math.max(max, it.stellen[o]);
       for (const it of l) if (!(it.stellen && Number.isInteger(it.stellen[o]))) it.stellen = { ...(it.stellen || {}), [o]: ++max };
@@ -1332,6 +1334,7 @@
     {
       const d = await api('draft', { query: '&bg=1' });
       const theirs = d.draft ? strip(d.draft) : d.published ? strip(d.published) : emptyModel();
+      if (!ro) stellenErgaenzen(theirs);   // wie base: ergänzte Stellen sind keine eigene Änderung
       published = d.published ? strip(d.published) : null;
       // neu veröffentlicht (im Modul Versand oder in einem anderen Fenster): Preisverlauf beim nächsten Öffnen neu laden
       const stand = d.published ? d.published.publishedAt || null : null;
@@ -2102,7 +2105,7 @@
     offersRev = r.rev || 0;
     stdPublic = r.stdPublic !== false;
     if (!knownOffer(curOffer)) curOffer = OSTD;
-    if (!ro) stellenErgaenzen();   // auch für einen geladenen Entwurf ohne Stellen und neue Angebote mit eigener Artikelliste
+    if (!ro) { stellenErgaenzen(); stellenErgaenzen(base); }   // auch für einen Entwurf ohne Stellen und neue Angebote mit eigener Artikelliste
   }
   /* Adresse der Angebotsseite auf diesem Host (Angebotsseite, Vorschau, Kundenangebot). Ausdrücklich index.html statt „../“:
      Auf den Hosts der zentralen Anmeldung (angebot.dashboard-stafl.de) leitet der Webserver „/“ in den Eingabebereich um

@@ -478,7 +478,7 @@ _Wochenangebot – Eingabebereich Bearbeitet einen Entwurf auf dem Server (autom
 - `gruppenDes(oid)` – Gruppen eines Angebots (Auswahl im Artikelfenster): die seiner Artikel – bzw. seiner Familie
 - `stellenSetzen(oid, liste)` – Reihenfolge im Angebot oid (eigene Artikelliste) festlegen: liste zuerst, übrige Artikel des Angebots dahinter wie bisher
 - `einreihen(oid, it, nach)` – Artikel it im Angebot oid (eigene Artikelliste) hinter nach stellen, ohne nach ans Ende seiner Gruppe dort – nur dort
-- `stellenErgaenzen()` – Stellen wie auf dem Server (angebotsstellen_clean): nur Angebote mit eigener Artikelliste, nur ihre Artikel, ganze Zahlen.
+- `stellenErgaenzen(m)` – Stellen wie auf dem Server (angebotsstellen_clean): nur Angebote mit eigener Artikelliste, nur ihre Artikel, ganze Zahlen.
 - `werbungBereinigen()` – Artikel, die nicht mehr im Angebot stehen, fallen aus dessen Werbung (unbekannte Angebote prüft der Server)
 - `aufbauGeaendert()` – Weicht der Aufbau (Reihenfolge der Gruppen, Bereich je Gruppe, Gruppe und Reihenfolge der Artikel) von der veröffentlichten Fassung ab? Verglichen werden nur …
 - `artikelOrdnen(ziel, oid)` – Artikel neu ordnen: ziel = Map(Gruppen-ID → Artikel-IDs in gewünschter Reihenfolge) für die „Anker“ (z. B. alle Artikel des gewählten Angebots); jeder Anker …
