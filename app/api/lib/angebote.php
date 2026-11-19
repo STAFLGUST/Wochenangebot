@@ -594,7 +594,10 @@ function angebot_aufbau_geaendert(array $pub, array $neu): bool
     foreach ([$pub, $neu] as $m) foreach ($m['items'] ?? [] as $it) {
         foreach (array_keys(($it['gruppen'] ?? []) + ($it['stellen'] ?? [])) as $oid) $oids[(string)$oid] = true;   // eigene Gruppe bzw. Reihenfolge
     }
-    foreach (array_keys($oids) as $oid) if ($reihe($pub, $ni, (string)$oid) !== $reihe($neu, $pi, (string)$oid)) return true;
+    foreach (array_keys($oids) as $oid) {
+        if ($oid !== OFFER_STD && !offer_def((string)$oid)) continue;   // gelöschtes Angebot: seine alte Reihenfolge zählt nicht
+        if ($reihe($pub, $ni, (string)$oid) !== $reihe($neu, $pi, (string)$oid)) return true;
+    }
     return false;
 }
 /* Unveröffentlichte Änderungen des Entwurfs als Zeilen für die Liste „Veröffentlichen“ (Modul Versand). Grundlage ist

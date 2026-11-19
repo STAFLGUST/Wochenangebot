@@ -393,7 +393,7 @@
     };
     const pi = new Map(published.items.map((i) => [i.id, i])), mi = new Map(model.items.map((i) => [i.id, i]));
     const oids = new Set([OSTD, ...[published, model].flatMap((m) => m.items.flatMap((it) => [...Object.keys(it.gruppen || {}), ...Object.keys(it.stellen || {})]))]);
-    return [...oids].some((oid) => reihe(published, mi, oid) !== reihe(model, pi, oid));
+    return [...oids].some((oid) => (oid === OSTD || knownOffer(oid)) && reihe(published, mi, oid) !== reihe(model, pi, oid));   // gelöschte Angebote zählen nicht
   }
   /* Artikel neu ordnen: ziel = Map(Gruppen-ID → Artikel-IDs in gewünschter Reihenfolge) für die „Anker“ (z. B. alle Artikel des
      gewählten Angebots); jeder Anker kommt in die Gruppe aus ziel. Andere Artikel bleiben in ihrer Basisgruppe hinter dem letzten
@@ -1272,6 +1272,7 @@
       saveError = null;
       conflictTries = 0;
       setSaveState(C.sameModel(base, model) ? 'saved' : 'pending');
+      if (!C.sameModel(base, model) && !queued) { clearTimeout(saveTimer); saveTimer = setTimeout(saveNow, 700); }   // während des Speicherns geändert (z. B. ergänzte Stellen): nachspeichern
       if (pendingRemote) renderRemote();
     } catch (e) {
       if (e.status === 409 && conflictTries < 3) {
