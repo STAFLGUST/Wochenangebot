@@ -495,7 +495,7 @@
   }
   /* Unterschiede zwischen zwei Modellen (z. B. Entwurf ↔ veröffentlicht) */
   /* Kundenpreis eines Artikels als Vergleichswert (ohne Kennzeichen „aus Vorwoche“) */
-  const variantSig = (v) => (!v ? '' : v.status === 'value' ? 'v' + v.value : v.status);
+  const variantSig = (v) => (!v ? '' : (v.status === 'value' ? 'v' + v.value : v.status) + (v.alt && v.alt.length ? '/' + priceSig({ price: v.alt[0], altPrices: v.alt.slice(1) }) : ''));   // mit Zusatzpreisen des Angebots
   /* Empfehlung (früher „Sonderpreis“) je Artikel: sale = {value: Empfehlungspreis | mark: true (ohne Preisänderung),
      offers?: {<Angebot>: {value} | {status: 'mark'} | {status: 'none'}}} – Grundwert für alle Angebote, je Angebot änderbar.
      empfehlungFor: null = keine Empfehlung, sonst {preis: Zahl | null (nur hervorheben)}; saleFor: nur der Preis. */
@@ -758,6 +758,8 @@
     // Werbung je Angebot getrennt abgleichen (zwei Personen bearbeiten verschiedene Angebote)
     const wb = mergeFields((base.meta || {}).werbung, (mine.meta || {}).werbung, (theirs.meta || {}).werbung, [], (oid, mv, tv) => conflicts.push({ kind: 'meta', id: 'werbung:' + oid, name: 'Werbung', field: 'werbung', mine: mv, theirs: tv }));
     if (Object.keys(wb).length) meta.werbung = wb;
+    // Reihenfolge der Artikel je Angebot (model.reihen) ebenso je Angebot
+    const rh = mergeFields(base.reihen, mine.reihen, theirs.reihen, [], (oid, mv, tv) => conflicts.push({ kind: 'meta', id: 'reihe:' + oid, name: 'Reihenfolge', field: 'reihe', mine: mv, theirs: tv }));
     const groups = mergeList(base.groups, mine.groups, theirs.groups, 'group', conflicts, (b, m, t) => ({ id: m.id, ...mergeFields(b, m, t, ['id'], (f, mv, tv) => conflicts.push({ kind: 'group', id: m.id, name: m.name, field: f, mine: mv, theirs: tv })) }));
     const items = mergeList(base.items, mine.items, theirs.items, 'item', conflicts, (b, m, t) => {
       const c = (f, mv, tv) => conflicts.push({ kind: 'item', id: m.id, name: (m.code ? m.code + ' · ' : '') + m.name, field: f, mine: mv, theirs: tv });
@@ -779,6 +781,7 @@
     const sections = [];
     for (const g of groups) if (g.section && !sections.includes(g.section)) sections.push(g.section);
     const out = { ...cloneJ(mine), meta, sections, groups, items };
+    if (Object.keys(rh).length) out.reihen = rh; else delete out.reihen;
     const before = new Map((mine.items || []).map((x) => [x.id, canon(x)]));
     const remoteItems = items.filter((x) => before.get(x.id) !== canon(x)).map((x) => x.id);
     const removed = (mine.items || []).filter((x) => !items.some((y) => y.id === x.id)).map((x) => x.id);

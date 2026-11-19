@@ -129,12 +129,17 @@ with sync_playwright() as p:
     check('Artikel-Dialog: Bezeichnung in Bela', bl == ['Roastbeef Bela'], bl)
     a.keyboard.press('Escape'); a.wait_for_function("!document.querySelector('#dlg-item').open")
     a.click('#offer-bar [data-offer="std"]'); a.wait_for_selector('#offer-bar [data-offer="std"][aria-selected="true"]')
-    # Entwurf weicht ab (Bela) → in den Stammdaten „abweichend“ → übernehmen
+    # Basiswert im Entwurf weicht ab → in den Stammdaten „abweichend“ → übernehmen: Basiswert wie in den Stammdaten, die eigene
+    # Bezeichnung in Bela bleibt (jedes Angebot für sich, Inhaber 19.11.2026), Edeka behält die gleiche aus den Stammdaten
+    rs = a.locator('tr[data-id]:has(input[data-f="code"][value="10601"])').first.locator('input[data-f=name]'); rs.fill('Roastbeef Basis geändert'); rs.press('Tab')
+    until_names(a, 'std', '10601', ['Roastbeef Basis geändert']); wait_saved(a)
     a.click('#vt-master'); a.fill('#ms-q', '10601'); a.wait_for_selector('.mtab tr[data-mcode="10601"] .m-diff')
     check('offer status abweichend', a.locator('.mtab tr[data-mcode="10601"] .m-diff').count() == 1)
     a.click('.mtab tr[data-mcode="10601"] button.m-diff'); a.wait_for_selector('.mtab tr[data-mcode="10601"] .m-ok')
-    bl = until_names(a, 'bela', '10601', ['Roastbeef Färse Fleischmeister'])
-    check('apply single → ✓ (Stammdaten gelten wieder)', bl == ['Roastbeef Färse Fleischmeister'], bl)
+    st_ = until_names(a, 'std', '10601', ['Roastbeef Färse Fleischmeister'])
+    bl, _ = offer_names(a, 'bela', '10601'); ed, _ = offer_names(a, 'edeka', '10601')
+    check('apply single → ✓ (Stammdaten gelten wieder für den Basiswert), eigene Bezeichnung in Bela bleibt', st_ == ['Roastbeef Färse Fleischmeister']
+          and bl == ['Roastbeef Bela'] and ed == ['Roastbeef Edeka-Spezial'], (st_, bl, ed))
     a.click('#vt-edit'); wait_saved(a)
     # Neuer Stammsatz mit Vorschlag aus Bestand (Bestand importieren)
     master = json.load(open(FIX + '/bestand/master_stock.json'))
