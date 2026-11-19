@@ -295,12 +295,24 @@ Für Handy und Tastatur verschiebt die Auswahl „In Gruppe …“ (`[data-zu]`)
 das Fenster `data-geaendert` (erstes Escape warnt, `theme.js`).
 
 Woher Gruppe und Reihenfolge eines Artikels kommen: aus dem Entwurf selbst – `it.groupId` und die Stelle in `model.items`
-(je Gruppe zählt nur die Reihenfolge, `OfferCore.enrichOffer`), nicht aus den Stammdaten. Beides ist für alle Angebote
-gemeinsam, wie „Angebotsgruppe (Basiswert)“ und „Nach oben/unten“ im Artikelfenster (`openItem`), das dieselben Felder ändert.
+(je Gruppe zählt nur die Reihenfolge, `OfferCore.enrichOffer`), nicht aus den Stammdaten.
+
+Jedes Angebot für sich (Inhaber 19.11.2026, Schritt 1): Bezeichnung, Gruppe und Gruppen (Name, Bereich, VK-Gruppe,
+Reihenfolge) ändern sich nur im gewählten Angebot. „Familie“ (`familie(oid)`): das Wochenangebot mit den Angeboten, die ihm
+folgen, oder ein Angebot mit eigener Artikelliste. Alle Wege des Editors setzen Bezeichnung und Gruppe eines Artikels über
+`setzeJeAngebot(it, oid, 'name'|'gruppe', wert)` (Zeile, Artikelfenster, `artikelOrdnen` für das Fenster „Editor“,
+`inEigeneGruppen` beim Hinzufügen): im Kundenangebot mit Artikel auch anderswo der eigene Wert, sonst der Basiswert – vorher
+halten Angebote mit eigener Artikelliste ihren bisherigen Wert fest. Vor einer Änderung an einer Gruppe trennt
+`gruppenTrennen(nur)` gemeinsam genutzte Gruppen (Kopie direkt hinter dem Original, im selben Rückgängig-Schritt);
+`gruppeNach(zu, gid)` rechnet Kennungen aus der Oberfläche (Gruppenkarte `data-gid`, Fenster „Editor“) auf die Kopie um.
+Das Fenster „Editor“ tauscht nur die Plätze der eigenen Gruppen in `model.groups` (andere bleiben stehen); „Aufbau
+zurücknehmen“ nutzt weiter `gruppenOrdnen` und ist global. Beim Verschieben eines Artikels wird nicht getrennt – nur seine
+Gruppe im Angebot ändert sich. Das Artikelfenster eines Kundenangebots zeigt oben Gruppe und Bezeichnung dieses Angebots
+(Auswahl `gruppenDes(oid)`), darunter die weiteren Kundenangebote, und keine Felder des Wochenpreises.
 
 Ausnahme, Angebotsgruppe je Angebot (Inhaber 17.11.2026, Muster wie die Bezeichnung je Angebot): `it.gruppen[<Kundenangebot>]`
 stellt einen Artikel nur in diesem Angebot unter eine andere Gruppe – gewählt im Artikelfenster unter „Bezeichnung und Gruppe
-je Angebot“ (`[name=ogroup]`, erste Auswahl „wie Basiswert“). `gruppeIn(it, oid)` liefert die Gruppe im Angebot (eigene, sonst
+je Angebot“ (`[name=ogroup]`, erste Auswahl „wie Basiswert“; im Kundenangebot selbst oben „Angebotsgruppe in …“). `gruppeIn(it, oid)` liefert die Gruppe im Angebot (eigene, sonst
 `groupId`); danach richten sich im Editor eines Kundenangebots die sichtbaren Gruppen, die Zeilen je Gruppe, „Gruppe aus diesem
 Angebot entfernen“, „Nach oben/unten“, die Liste „Aus anderem Angebot übernehmen“, die Werbung und dieses Fenster (Kennzeichen
 „nur hier“). Regel im Code: im Kontext eines Angebots immer `gruppeIn(it, oid)`; `it.groupId` nur für den Basiswert

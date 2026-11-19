@@ -796,6 +796,7 @@ Jede Code-Datei beginnt mit einem Kopfkommentar; dessen erste Aussage steht hier
 | `test_aktionsregister.py` | plattform | Aktionsregister (regeln/aktionen/*.toml → app/api/lib/aktionen-liste.php) wirkt im API-Einstieg für jede Aktion. |
 | `test_angebot_design.py` | angebot | Design je Angebot (Inhaber 16.11.2026, GR-010) |
 | `test_angebote.py` | angebot | Mehrere Angebote: Kundenangebote mit eigenen Preisen, eigene Artikelliste je Angebot (Artikel hinzufügen wie im Einzelangebot, entfernen nur im gewählten Angebot, Umstellung „folgt dem Wochenangebot“ → eigene Liste), … |
+| `test_angebote_getrennt.py` | angebot | Jedes Angebot für sich (Inhaber 19.11.2026, Schritt 1) |
 | `test_angebotskategorien.py` | verwaltung | Angebotskategorien (Stammdaten der Verwaltung, Inhaber 05.11.2026) |
 | `test_angebotsliste.py` | angebot | Angebotsliste (Standardansicht der Angebotsseite) |
 | `test_anmeldebremse.py` | plattform | Fehlversuchsbremse je Adresse (lib/protokoll.php), Abmelden mit CSRF und Bedrohungsliste ohne Nebenwirkung beim Lesen. - Eine erfolgreiche Anmeldung nimmt nur die Fehlversuche für denselben Namen zurück (eigene … |
