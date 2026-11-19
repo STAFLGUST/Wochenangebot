@@ -21,7 +21,9 @@ body.ci { line-height: 1.45; }
 .ci-leise { color: var(--r-leise); }
 .ci-klein { font-size: 13px; }
 .ci-zahlen { font-variant-numeric: tabular-nums; }
-.ci a:not(.ci-knopf) { color: var(--r-akzent-text); text-underline-offset: 3px; }
+/* Linkfarbe nur im eigenen Inhalt (Seite und eigene Fenster) – nie für den gemeinsamen Rahmen: body.ci umschließt auch die
+   Seitenleiste und die Suche, deren Schrift sonst rot würde (Hinweis des Inhabers 19.11.2026) */
+.ci-main a:not(.ci-knopf), .ci dialog.modal a:not(.ci-knopf) { color: var(--r-akzent-text); text-underline-offset: 3px; }
 .ci-ampel { display: inline-block; flex: none; width: 10px; height: 10px; margin-right: 8px; border-radius: 50%; background: var(--r-neutral); }
 .ci-ampel.gruen { background: var(--r-ok); } .ci-ampel.gelb { background: var(--r-warn); } .ci-ampel.rot { background: var(--r-rot); }
 
