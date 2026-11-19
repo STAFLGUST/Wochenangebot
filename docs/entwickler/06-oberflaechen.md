@@ -806,6 +806,12 @@ Registersymbole (`icon` in `regeln/module.toml`) über `ICON` in `dashboard.js` 
   Kästchen `.check`/`.opt` 20 px in einer mindestens 36 px hohen Zeile. Nie waagerechtes Scrollen der Seite – breite
   Tabellen scrollen in ihrer Karte; Auswahlfelder, deren Text sonst abgeschnitten würde, bekommen auf schmalen
   Bildschirmen eine eigene Zeile (Sortierung der Kundenseite ≤ 480 px).
+- **Die Schrift der Seitenleiste gehört dem Rahmen** (Vorgabe des Inhabers 16. und 19.11.2026: hell immer schwarz): Die
+  Körperklasse eines Moduls (`body.ci`, `body.qm` …) umschließt auch die Seitenleiste und die Suche. Eine Linkfarbe für das
+  ganze Modul (`.modul a { color: … }`) färbt deshalb deren Einträge mit. Linkfarben eines Moduls gelten nur im eigenen
+  Inhalt (z. B. `.ci-main a`, `.ci dialog.modal a`). Zusätzlich setzt `rahmen.css` die Farbe der Einträge und der Treffer
+  der Suche mit Vorrang (`.r-app .r-leiste a.r-eintrag`, `dialog.r-palette a.r-palette-treffer`); die Gruppen `qs` und
+  `containerimport` prüfen die Farbe der Einträge.
 - **Fingerbedienung auf allen Seiten im Rahmen** (`rahmen.css`, Prüfung am Handy 10.11.2026): Eingabefelder, Auswahlen
   und Textfelder haben bei `pointer: coarse` mindestens 16 px Schrift (sonst zoomt iOS beim Antippen hinein; Kundenseite
   ebenso in `app.css`), `.btn.sm` ist 36 px hoch. Module ergänzen eigene kleine Knöpfe (Chips, Segmente, Sortierköpfe,
