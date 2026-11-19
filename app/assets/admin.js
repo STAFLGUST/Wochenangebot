@@ -1373,7 +1373,9 @@
     if (aufbauGeaendert()) parts.push('Aufbau geändert');
     offenHinweis = parts.length ? 'Unveröffentlichte Änderungen: ' + parts.join(' · ') : '';
   }
-  const pendingCount = () => (!model ? 0 : !published ? model.items.length : diff.added.length + diff.removed.length + diff.priceChanged.length + diff.changed.length + vChanges().length + sChanges().length + wChanges().length + (metaChanged() ? 1 : 0) + (aufbauGeaendert() ? 1 : 0));
+  // diff ist nur ein Zwischenspeicher von diffOffers(published, model) – fehlt er noch (z. B. Importzentrale vor dem ersten
+  // Zeichnen des Editors), hier berechnen statt abzubrechen
+  const pendingCount = () => (!model ? 0 : !published ? model.items.length : (diff = diff || C.diffOffers(published, model)).added.length + diff.removed.length + diff.priceChanged.length + diff.changed.length + vChanges().length + sChanges().length + wChanges().length + (metaChanged() ? 1 : 0) + (aufbauGeaendert() ? 1 : 0));
   /* früher Zahl am Knopf „Veröffentlichen“: jetzt die Zahl in der Statuszeile (nur wenn dort gerade der gespeicherte Stand steht) */
   function updatePublishBtn() {
     if (lastSaveState[0] === 'saved' || lastSaveState[0] === 'clean') setSaveState(lastSaveState[0], lastSaveState[1]);
