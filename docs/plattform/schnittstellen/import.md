@@ -105,14 +105,14 @@ Heute: `angebot_preise` (app/module/angebot/preisimport.js, preisimport.css).
 Dateien für andere Programme stehen als letzte Gruppe „Export“ in der Liste der Importzentrale (Auftrag des Inhabers
 19.11.2026). Der Eigentümer meldet sie an und erzeugt die Datei selbst – die Zentrale kennt weder Aktion noch Inhalt:
 
-`window.WA.importExporte.push({ id, name, kurz, beschreibung, format, recht, start() })` – Datei beim Eigentümer
-(`app/module/<modul>/…`; vor `admin-import.js` geladen: `(W.importExporte = W.importExporte || []).push(…)`).
-Die Zentrale zeigt die Zeile nur mit `recht` (Anzeige; die Aktion des Eigentümers prüft Recht und Modulzugang selbst,
-GR-103), macht den Menüpunkt Import auch für Nutzer ohne Importrecht sichtbar und sperrt den Knopf „Herunterladen“,
+`(W.importExporte = W.importExporte || {})[<id>] = { name, kurz, beschreibung, format, recht, start() }` – Datei beim
+Eigentümer (`app/module/<modul>/…`; die Ladereihenfolge zu `admin-import.js` ist gleich).
+`recht` ist eine Liste, alle sind nötig – Fachrecht und Modulzugang des Eigentümers, wie bei den Importarten. Die Zentrale
+zeigt die Zeile nur damit (Anzeige; die Aktion des Eigentümers prüft Recht und Modulzugang selbst, GR-103), macht den Menüpunkt Import auch für Nutzer ohne Importrecht sichtbar und sperrt den Knopf „Herunterladen“,
 solange `start()` läuft. Fehler meldet `start()` selbst.
 
-Heute: `winab` – Export für WinAB (`app/module/angebot/winab-export.js`, Aktion `angebot_winab_export`, Recht
-`angebot.winab_export`, Datei `ImportPreise.csv`).
+Heute: `winab` – Export für WinAB (`app/module/angebot/winab-export.js`, Aktion `angebot_winab_export`, Rechte
+`angebot.winab_export` und `angebot.zugang`, Datei `ImportPreise.csv`).
 
 ## Aktionen der Zentrale
 

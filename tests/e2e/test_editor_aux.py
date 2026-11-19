@@ -178,6 +178,7 @@ with sync_playwright() as p:
     erw = {c[0]['code']: 12.5, c[1]['code']: 9.25, c[4]['code']: 5.1234, sp['code']: 15.5}
     soll = 'Artikelnummer;Preis\r\n' + ''.join(f'{k};{wb(erw[k])}\r\n' for k in sorted(erw, key=nat))
     post(a, 'user_save', {'name': 'Wina', 'username': 'wina', 'role': 'viewer', 'active': True, 'password': 'Leserin-Zugang-1', 'mustChange': False, 'grant': ['angebot.winab_export']})
+    wina_id = next(u['id'] for u in get(a, 'users')[1]['users'] if u['username'] == 'wina')
     post(a, 'user_save', {'name': 'Eddi', 'username': 'eddi', 'role': 'editor', 'active': True, 'password': 'Bearbeiter-Zugang-1', 'mustChange': False})
     w = br.new_page(viewport={'width': 1440, 'height': 950}); w.on('pageerror', lambda e: errs.append('wina: ' + str(e)))
     login(w, 'wina', 'Leserin-Zugang-1')
@@ -194,14 +195,19 @@ with sync_playwright() as p:
           and w.text_content('.imp-art[data-export="winab"] .imp-format') == 'CSV' and w.locator('#view-importe .imp-art[data-art]').count() == 0
           and w.locator('#view-importe .ed-empty, #view-importe .imp-intro').count() == 0, w.inner_text('#view-importe'))
     w.screenshot(path=SH + '/winab-export-import.png')
+    gesperrt = []   # Zustand des Knopfs, während der Server die Datei erzeugt
+    def beim_abruf(route): gesperrt.append(w.locator('[data-imp-export="winab"]').is_disabled()); route.continue_()
+    w.route('**/api/?action=angebot_winab_export*', beim_abruf)
     with w.expect_download() as dl:
         w.click('[data-imp-export="winab"]')
     d = dl.value; inhalt = open(d.path(), 'rb').read()
+    w.unroute('**/api/?action=angebot_winab_export*')
     check('WinAB: Datei heißt immer „ImportPreise.csv“ (ohne KW)', d.suggested_filename == 'ImportPreise.csv', d.suggested_filename)
     check('WinAB: Kopfzeile, je Nummer eine Zeile mit höchstem Preis (auch führende Null, Zusatzpreis), Sonderpreis wie beim Kunden, ohne ausgeblendete und Preis auf Anfrage, Komma, CRLF, ohne BOM',
           inhalt == soll.encode('ascii'), (inhalt.decode('latin-1'), soll))
     w.wait_for_selector('#toast.show:has-text("ImportPreise.csv")')
     w.wait_for_selector('[data-imp-export="winab"]:not([disabled])')
+    check('WinAB: Knopf während des Abrufs gesperrt (kein doppelter Export), danach wieder frei', gesperrt == [True], gesperrt)
     t = w.inner_text('#toast')
     check('WinAB: Rückmeldung mit Anzahl, doppelten und ausgelassenen Artikeln', '4 Artikel' in t and 'KW 45/2026' in t and '2× doppelt' in t and '1 Artikel ohne Preis' in t, t)
     r = post(w, 'angebot_winab_export', {})
@@ -217,7 +223,7 @@ with sync_playwright() as p:
     nb.close()
     e = br.new_page(viewport={'width': 1440, 'height': 950}); login(e, 'eddi', 'Bearbeiter-Zugang-1')
     e.click('#vt-importe'); e.wait_for_selector('#view-importe .imp-art[data-art]')
-    check('WinAB: ohne Recht kein Eintrag im Import (auch nicht als Bearbeiter mit Importen) und 403', e.locator('#view-importe [data-imp-export], #view-importe .imp-art[data-export], #btn-winab').count() == 0
+    check('WinAB: ohne Recht kein Eintrag im Import (auch nicht als Bearbeiter mit Importen) und 403', e.locator('#view-importe [data-imp-export], #btn-winab').count() == 0
           and 'Export' not in e.eval_on_selector_all('#view-importe .imp-gruppe h2', 'hs => hs.map((h) => h.textContent)') and post(e, 'angebot_winab_export', {})[0] == 403)
     anon = br.new_page(); anon.goto(B + '/admin/'); anon.wait_for_selector('#screen-auth:not([hidden])')
     check('WinAB: ohne Anmeldung 401', anon.evaluate("async () => (await fetch('../api/?action=angebot_winab_export', {method: 'POST', headers: {'Content-Type': 'application/json'}, body: '{}'})).status") == 401)
@@ -228,6 +234,11 @@ with sync_playwright() as p:
     check('WinAB: Administrator sieht den Export im Import, als letzte Gruppe nach den Importen',
           a.eval_on_selector_all('#view-importe .imp-gruppe h2', 'hs => hs.map((h) => h.textContent)')[-1] == 'Export' and a.locator('#view-importe .imp-intro').count() == 1)
     a.screenshot(path=SH + '/winab-export-import-admin.png', full_page=True)
+    # Modulzugang Angebot entzogen: trotz Recht kein Eintrag und kein Menüpunkt Import (wie bei den Importarten), Server 403
+    r = post(a, 'user_save', {'id': wina_id, 'name': 'Wina', 'role': 'viewer', 'active': True, 'grant': ['angebot.winab_export'], 'deny': ['angebot.zugang']})
+    w.reload(); w.wait_for_function("document.querySelector('#menu-user') && document.querySelector('#menu-user').textContent.length > 0 && !!(window.WA && window.WA.importSichtbar)")
+    check('WinAB: ohne Modulzugang Angebot kein Eintrag, kein Menüpunkt Import und 403 – trotz Recht', r[0] == 200 and w.evaluate('window.WA.importSichtbar()') is False
+          and not w.locator('#vt-importe').is_visible() and post(w, 'angebot_winab_export', {})[0] == 403, r[0])
     for x in (w, e, anon): x.close()
     # Mobil
     m = br.new_context(viewport={'width': 390, 'height': 844}, is_mobile=True).new_page()

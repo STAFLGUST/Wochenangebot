@@ -2,15 +2,15 @@
    statt in der Werkzeugleiste des Wochenangebots, Datei immer „ImportPreise.csv“).
    Lädt das veröffentlichte Wochenangebot als CSV für WinAB herunter (Artikelnummer;Preis, je Nummer der höchste Preis).
    Datei, Dateiname und Zahlen erzeugt der Server (Aktion angebot_winab_export, module/angebot/winab-export.php) – nur mit
-   dem Recht „angebot.winab_export“ (GR-103). Angezeigt wird der Eintrag von der Importzentrale (admin-import.js, Gruppe
-   „Export“, window.WA.importExporte) nur mit diesem Recht. Unveröffentlichte Änderungen im Entwurf sind nicht enthalten –
+   dem Recht „angebot.winab_export“ und dem Modulzugang Angebot (GR-103). Angezeigt wird der Eintrag von der Importzentrale
+   (admin-import.js, Gruppe „Export“, window.WA.importExporte) nur mit beidem. Unveröffentlichte Änderungen im Entwurf sind nicht enthalten –
    das sagt die Rückmeldung. Wird von admin/index.html nach admin.js geladen. */
 (function () {
   'use strict';
   const W = window.WA;
   if (!W) return;
-  (W.importExporte = W.importExporte || []).push({
-    id: 'winab', name: 'Export für WinAB', format: 'CSV', recht: 'angebot.winab_export',
+  (W.importExporte = W.importExporte || {}).winab = {
+    name: 'Export für WinAB', format: 'CSV', recht: ['angebot.winab_export', 'angebot.zugang'],   // wie der Server: Recht und Modulzugang
     kurz: 'Preise des veröffentlichten Wochenangebots als Datei „ImportPreise.csv“',
     beschreibung: 'Veröffentlichtes Wochenangebot als CSV für WinAB herunterladen: Artikelnummer;Preis – steht ein Artikel mehrfach im Angebot, der höhere Preis',
     async start() {
@@ -27,5 +27,5 @@
         if (!ex.wartung && ex.status !== 401) W.toast(ex.message || String(ex), 7000);
       }
     },
-  });
+  };
 })();

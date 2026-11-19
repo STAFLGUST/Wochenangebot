@@ -2,7 +2,7 @@
 
 <!-- ERZEUGT von `python3 werkzeuge/doku.py erzeugen` – nicht von Hand ändern. Quelle: Funktionen und Kommentare im Code. Die CI prüft, dass diese Datei zum Code passt. -->
 
-58 Dateien, 928 Funktionen – in der Reihenfolge der Datei, **fett** die Abschnitte. Text = erste Aussage des Kommentars direkt über der Funktion (Python: Docstring). Übersicht aller Module: [README.md](README.md).
+58 Dateien, 929 Funktionen – in der Reihenfolge der Datei, **fett** die Abschnitte. Text = erste Aussage des Kommentars direkt über der Funktion (Python: Docstring). Übersicht aller Module: [README.md](README.md).
 
 ## `app/api/lib/angebote.php`
 
@@ -1442,6 +1442,7 @@ _Testgruppe editor_aux_
 
 - `art(src, nid, **f)`
 - `wb(v)`
+- `beim_abruf(route)`
 
 ## `tests/e2e/test_einzelangebote.py`
 

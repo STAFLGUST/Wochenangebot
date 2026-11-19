@@ -16,8 +16,9 @@
    Optionen vom Typ „liste“ setzt nur sie (ctx.setzen → neue Vorschau, die bisherige bleibt bis dahin abgeblendet stehen).
    Kopf, Optionen, Fuß und Übernahme bleiben einheitlich; „fuss“ und „knopf“ der Vorschau beschriften den Fuß.
    Exporte: Dateien für andere Programme (heute: Preise für WinAB) stehen als letzte Gruppe „Export“ in derselben Liste.
-   Der Eigentümer meldet sie an (window.WA.importExporte: { id, name, kurz, beschreibung, format, recht, start() }) und
-   erzeugt die Datei selbst; die Zentrale zeigt nur die Zeile (mit dem Recht) und sperrt den Knopf, solange start() läuft.
+   Der Eigentümer meldet sie an (window.WA.importExporte[id] = { name, kurz, beschreibung, format, recht, start() }) und
+   erzeugt die Datei selbst; die Zentrale zeigt nur die Zeile (mit allen Rechten aus „recht“, wie bei den Importarten Fachrecht
+   und Modulzugang des Eigentümers) und sperrt den Knopf, solange start() läuft.
    Vertrag: docs/plattform/schnittstellen/import.md
    ========================================================================== */
 (function () {
@@ -29,8 +30,8 @@
      Importarten. Der Test „importzentrale“ prüft, dass die Liste zu import_arten passt. */
   const RECHTE = ['kunden.bearbeiten', 'stammdaten.bearbeiten', 'bestand.importieren', 'preisverlauf.bearbeiten', 'angebot.bearbeiten', 'hr.verwalten',
     'controlling.umsatz_importieren', 'controlling.arbeitszeit_importieren'];
-  W.importExporte = W.importExporte || [];   // Exporte der Eigentümer (z. B. module/angebot/winab-export.js)
-  const exporte = () => W.importExporte.filter((x) => may(x.recht));
+  W.importExporte = W.importExporte || {};   // Exporte der Eigentümer (z. B. module/angebot/winab-export.js)
+  const exporte = () => Object.entries(W.importExporte).filter(([, x]) => x.recht.every(may));
   W.importSichtbar = () => RECHTE.some((p) => may(p)) || exporte().length > 0;
 
   const maxBytes = (art) => (art.maxMb || 30) * 1024 * 1024;   // je Importart (Server: maxMb, Standard 30 MB)
@@ -104,10 +105,10 @@
       </div>`;
   }
   /* Zeile eines Exports: wie ein Import, aber ohne Ablagefenster – der Knopf lädt die Datei des Eigentümers herunter */
-  const exportHTML = (x) => `<div class="imp-art" data-export="${esc(x.id)}">
+  const exportHTML = ([id, x]) => `<div class="imp-art" data-export="${esc(id)}">
         <div class="imp-zeile"><div class="imp-text"><h3>${esc(x.name)}</h3><p title="${esc(x.beschreibung)}">${esc(x.kurz)}</p></div>
         <span class="imp-format">${esc(x.format)}</span>
-        <div class="imp-aktion"><button type="button" class="btn sm" data-imp-export="${esc(x.id)}" aria-label="Herunterladen: ${esc(x.name)}">${icon('download', 'sm')}<span class="imp-knopftext">Herunterladen</span></button></div></div>
+        <div class="imp-aktion"><button type="button" class="btn sm" data-imp-export="${esc(id)}" aria-label="Herunterladen: ${esc(x.name)}">${icon('download', 'sm')}<span class="imp-knopftext">Herunterladen</span></button></div></div>
       </div>`;
   /* Ablagefenster auf- bzw. zuklappen (immer nur eines offen) */
   function umschalten(id) {
@@ -362,9 +363,8 @@
     }
     const xb = e.target.closest('[data-imp-export]');
     if (xb) {
-      if (xb.disabled) return;
       xb.disabled = true;   // Knopf gesperrt, solange der Eigentümer die Datei erzeugt (start() meldet Fehler selbst)
-      Promise.resolve(exporte().find((x) => x.id === xb.dataset.impExport)?.start()).finally(() => { xb.disabled = false; });
+      Promise.resolve(W.importExporte[xb.dataset.impExport]?.start()).finally(() => { xb.disabled = false; });
       return;
     }
     const ed = e.target.closest('[data-imp-editor]');
