@@ -138,7 +138,8 @@ veraltet. Teilskripte folgen alle demselben Muster:
 ```
 
 Weitere Anknüpfungspunkte: `W.importLeser.<art>` (Leser für die Importzentrale, z. B. `zeiterfassung` in
-`verwaltung-hr.js`), `W.importSichtbar` (`admin-import.js`), `W.hr` (`verwaltung-hr.js`, von
+`verwaltung-hr.js`), `W.importExporte` (Exporte in der Gruppe „Export“ der Importzentrale, z. B. `winab-export.js`),
+`W.importSichtbar` (`admin-import.js`), `W.hr` (`verwaltung-hr.js`, von
 `admin-verwaltung.js` genutzt), `W.csvZeilen`/`W.csvText` (`admin-verwaltung.js`).
 
 **Achtung Reihenfolge:** `admin-verwaltung.js` **ersetzt** `W.views` (`W.views = { users: …, orders: …, … }`), alle
@@ -237,11 +238,13 @@ Schnittstelle `WA.angebot.sonder` (`uebernehmen`, `oeffnen`, `bearbeiten`, `stan
 
 ### Export für WinAB
 
-Knopf „Export für WinAB“ (`#btn-winab`) in der Werkzeugleiste: sichtbar nur mit dem Recht `angebot.winab_export` und nur
-beim Wochenangebot (eine Zeile in `renderWerbungBtn()`, `admin.js`); den Klick behandelt `app/module/angebot/winab-export.js`.
-Die Datei erzeugt der Server (Aktion `angebot_winab_export`, POST mit CSRF, `module/angebot/winab-export.php`) aus dem
+Eintrag „Export für WinAB“ im Bereich Import (Verwaltung → Import, Gruppe „Export“; bis 19.11.2026 ein Knopf in der
+Werkzeugleiste des Angebots): `app/module/angebot/winab-export.js` meldet ihn in `W.importExporte` an, die Importzentrale
+(`admin-import.js`) zeigt die Zeile nur mit dem Recht `angebot.winab_export` – auch wenn der Nutzer sonst nichts importieren
+darf (`W.importSichtbar`) – und ruft beim Klick `start()` auf. Die Datei erzeugt der Server (Aktion `angebot_winab_export`, POST mit CSRF, `module/angebot/winab-export.php`) aus dem
 **veröffentlichten** Wochenangebot über `offer_resolve()` – also mit Sonderpreisen und ohne ausgeblendete oder ausverkaufte
-Artikel – und gibt `{datei, csv, anzahl, doppelt, ohnePreis, woche}` zurück; der Browser speichert `csv` als Datei.
+Artikel – und gibt `{datei, csv, anzahl, doppelt, ohnePreis, woche}` zurück; der Browser speichert `csv` unter `datei` – immer
+`ImportPreise.csv` (Auftrag des Inhabers 19.11.2026, ohne Woche).
 Je Artikelnummer (`code_key`) eine Zeile mit dem höchsten Preis aus Preis und Zusatzpreisen; Format `Artikelnummer;Preis`
 mit Kopfzeile, Dezimalkomma, CRLF, ohne BOM. Jeder Export steht im Protokoll (Bereich „Angebote“).
 

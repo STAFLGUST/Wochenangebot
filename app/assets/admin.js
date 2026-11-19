@@ -1472,7 +1472,6 @@
     n.hidden = !e;
     n.textContent = e ? String(werbArtikelZahl(e)) + (werbBloecke(e).length > 1 ? ' · 2×' : '') : '';
     $('#btn-werbung').classList.toggle('on', !!e);
-    $('#btn-winab').hidden = !(may('angebot.winab_export') && curOffer === OSTD);   // Export für WinAB (module/angebot/winab-export.js)
     aufbauKnopf();
   }
   function renderGroups() {

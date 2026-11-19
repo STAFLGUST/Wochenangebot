@@ -8,6 +8,7 @@ declare(strict_types=1);
    - Ohne Preis („auf Anfrage“) oder ohne Artikelnummer: nicht in der Datei (gezählt für die Rückmeldung).
    - Format: Kopfzeile „Artikelnummer;Preis“, Semikolon, Preis mit Dezimalkomma ohne Tausenderpunkt (mindestens 2, höchstens
      4 Nachkommastellen), Zeilenende CRLF, ohne BOM (nur ASCII), sortiert nach Artikelnummer.
+   - Dateiname: immer „ImportPreise.csv“ (Auftrag des Inhabers 19.11.2026) – ohne Woche, die steht in Rückmeldung und Protokoll.
    Recht angebot.winab_export (ohne Standardrollen), Aktion angebot_winab_export in aktionen/entwurf.php (Protokoll). */
 if (!defined('WA_API')) { http_response_code(404); exit; }   // nur über api/index.php nutzbar
 
@@ -51,7 +52,7 @@ function winab_export(): array
     $w = (int)($pub['meta']['week'] ?? 0); $y = (int)($pub['meta']['year'] ?? 0);
     $csv = "Artikelnummer;Preis\r\n";
     foreach ($r['zeilen'] as [$code, $preis]) $csv .= $code . ';' . winab_preis($preis) . "\r\n";
-    return ['datei' => 'WinAB_Wochenangebot' . ($w && $y ? sprintf('_KW%02d-%04d', $w, $y) : '') . '.csv', 'csv' => $csv,
+    return ['datei' => 'ImportPreise.csv', 'csv' => $csv,
             'anzahl' => count($r['zeilen']), 'ohnePreis' => $r['ohnePreis'], 'ohneNummer' => $r['ohneNummer'], 'doppelt' => $r['doppelt'],
             'woche' => $w && $y ? "KW $w/$y" : '', 'veroeffentlicht' => $pub['publishedAt'] ?? null];
 }
