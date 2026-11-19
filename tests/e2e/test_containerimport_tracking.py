@@ -10,22 +10,15 @@ abgerufen), Leser ohne Speichern, Handy 390 px. Alle Namen und Nummern sind erfu
 import datetime
 import os
 from playwright.sync_api import sync_playwright
-from containerimport_hilfe import check, ende, nutzer_anlegen, container, seite as seite_oeffnen
+from containerimport_hilfe import check, ende, nutzer_anlegen, container, container_anlegen, kalender, seite as seite_oeffnen
 from umgebung import SH, shot, storage_raw, storage_write, _json
 
 A, I, L = nutzer_anlegen()
-HEUTE = datetime.date.fromisoformat(I.call('containerimport_start')[1]['heute'])
-
-
-def tag(n):
-    """Datum n Tage ab heute (Datum des Servers) als JJJJ-MM-TT."""
-    return (HEUTE + datetime.timedelta(days=n)).isoformat()
+tag = kalender(I)
 
 
 def anlegen(partie, **mehr):
-    st, r = I.call('containerimport_eudr_sendung_save', {'id': '', 'rev': 0, 'partie': partie, 'lieferant': 'Frigorifico Beispiel', 'land': 'PY', 'ware': 'Rindfleisch, gekühlt', **mehr})
-    assert st == 200, (st, r)
-    return container(r, partie)
+    return container_anlegen(I, partie, **mehr)
 
 
 def tracking(c, **angaben):
@@ -132,7 +125,10 @@ with sync_playwright() as pw:
     p.fill('#dlg-tracking [name=container]', 'MSKU 907032 3'); p.fill('#dlg-tracking [name=zielhafen]', 'Hamburg'); p.fill('#dlg-tracking [name=eta]', tag(30))
     p.select_option('#dlg-tracking [name=stand]', 'unterwegs'); p.click('#dlg-tracking button[type=submit]')
     p.wait_for_function("document.querySelector('#dlg-tracking').innerText.includes('vermutlich Maersk')")
-    p.fill('#dlg-tracking [name=eta]', tag(30)); p.click('#dlg-tracking button[type=submit]'); p.wait_for_selector('#ci-toast.zeigen:not(.fehler)')
+    p.fill('#dlg-tracking [name=eta]', tag(30))
+    with p.expect_response(lambda r: 'action=containerimport_tracking_save' in r.url):   # die Meldung des vorigen Speicherns steht noch – auf die Antwort warten, nicht auf die Meldung
+        p.click('#dlg-tracking button[type=submit]')
+    p.wait_for_selector('#ci-toast.zeigen:not(.fehler)')
     c2 = container(I.call('containerimport_start')[1], 'P-280002')
     check('gespeichert: Angaben am Container; die Reederei wird nach dem Kürzel der Containernummer nur als Hinweis vorgeschlagen und auch beim erneuten Speichern nicht von selbst gespeichert',
           [c2[k] for k in ('container', 'zielhafen', 'eta', 'stand', 'reederei')] == ['MSKU 907032 3', 'Hamburg', tag(30), 'unterwegs', '']

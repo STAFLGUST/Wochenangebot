@@ -178,3 +178,27 @@ Dienste. Kein Schritt auf dem Server, keine Migration, keine neuen Rechte (anseh
   über die HVCC-Schnittstelle oder einen Tracking-Dienst – jeweils erst nach Entscheidung des Inhabers.
 - **Rückfall:** `sh /opt/wochenangebot/deploy/release-zurueck.sh`. Die Vorversion zeigt den Reiter nicht, behält die Angaben
   aber beim Speichern eines Containers.
+
+## 11. Tracking: Ankunft in Hamburg aus der Liste des Hafens (ab dem Release mit der Hafenliste)
+
+Zustimmung des Inhabers 19.11.2026. Kein Schritt auf dem Server, keine Einstellung, kein Schlüssel.
+
+- **Was passiert:** Hat ein Container, der noch nicht angekommen ist, einen Schiffsnamen und als Zielhafen Hamburg, ruft der
+  Server die öffentliche Seite `https://www.hafen-hamburg.de/en/all-vessels/expected-vessels/` ab – höchstens alle zwei
+  Stunden, nach einem Fehlschlag frühestens nach 15 Minuten. Steht das Schiff dort, zeigt der Reiter „Tracking“ bestätigte
+  Ankunft, Liegeplatz und Terminal neben der geplanten Ankunft.
+- **Grenzen:** Gelesen werden die nächsten 24 Ankünfte (erste Seite der Liste) – ein Schiff erscheint also erst kurz vor der
+  Ankunft, je nach Verkehr etwa einen Tag vorher. Zugeordnet wird über den Schiffsnamen – er muss stimmen – und nur bei
+  Zielhafen Hamburg: Ein Container nach Rotterdam bekommt keine Hamburger Ankunft gezeigt, auch wenn sein Schiff Hamburg
+  anläuft. Eine Meldung verschwindet zwölf Stunden nach der gemeldeten Ankunft. Aufgefrischt wird beim Öffnen der Seite, mit
+  „Stand neu laden“, nach dem Speichern des Trackings und sonst frühestens alle 15 Minuten, sobald jemand in der Seite arbeitet –
+  die Uhrzeit des Stands steht in der Hinweiszeile. Sie ist ein Hinweis: Stand und geplante
+  Ankunft ändert weiter nur ein Mensch.
+- **Was hinausgeht:** nur der Abruf der Seite vom Server. Keine Containernummer, kein Schiffsname, keine Angaben zu
+  Mitarbeitern. Der Abruf nennt als Absender „STAFL-Plattform (Standard-Fleisch, Container-Import)“, damit der Hafen sieht,
+  wer abruft.
+- **Nach dem Release einmal ansehen:** Container mit einem Schiff anlegen, das gerade auf der Seite des Hafens steht (Zielhafen
+  Hamburg), Reiter „Tracking“ öffnen. Unter der Kopfzeile muss „Ankünfte in Hamburg laut Hafen Hamburg (HVCC), Stand …“ stehen
+  und am Container die Meldung. Steht dort „ließ sich nicht lesen“ oder „nicht erreichbar“, bitte an Claude melden.
+- **Abschalten:** nicht nötig – ohne passenden Container wird nichts abgerufen. Rückfall: `sh /opt/wochenangebot/deploy/release-zurueck.sh`
+  (die Vorversion kennt die Meldungen nicht; das Dokument bleibt liegen).

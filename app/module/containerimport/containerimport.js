@@ -53,6 +53,16 @@
   }
   function fehler(text) { $('#ci-login').hidden = true; $('#ci-app').hidden = true; $('#ci-err').hidden = false; $('#ci-err').textContent = text; }
   function zeigeAnmeldung() { $$('dialog[open]').forEach((d) => d.close()); $('#ci-login').hidden = false; $('#ci-app').hidden = true; }
+  /* Neu zeichnen, ohne die Tastatur zu stören: Fokus und Schreibmarke gehen an das Element mit derselben id zurück
+     (Suchfeld beim Tippen, Listenzeile bei einer Antwort im Hintergrund) */
+  function fokusBehalten(zeichne) {
+    const a = document.activeElement, id = a && a.id, stelle = a && a.selectionStart;
+    zeichne();
+    const neu = id && document.getElementById(id);
+    if (!neu || neu === document.activeElement) return;
+    neu.focus();
+    if (typeof stelle === 'number') neu.setSelectionRange(stelle, stelle);
+  }
   /* Antwort einer speichernden Aktion: neuen Stand übernehmen. false = Fehler (Meldung gezeigt) */
   function uebernehmen(r, fallback) {
     if (r.status === 401) { zeigeAnmeldung(); return false; }
@@ -705,11 +715,10 @@
     e.target.click();     // Zeile einer Liste öffnen wie mit der Maus
   });
   document.addEventListener('input', (e) => {
-    const { suche } = e.target.dataset, { id, selectionStart: stelle } = e.target;
+    const { suche } = e.target.dataset;
     if (suche === undefined) return;
     S.suche[suche] = e.target.value;
-    REITER[S.reiter]();
-    $('#' + id).focus(); $('#' + id).setSelectionRange(stelle, stelle);
+    fokusBehalten(REITER[S.reiter]);
   });
   document.addEventListener('change', (e) => {
     if (e.target.id === 'ci-archiv') { S.archiv = e.target.checked; zeichnen(); }
@@ -728,7 +737,7 @@
 
   /* Brücke für weitere Dateien des Moduls (schlachthoefe.js): dieselben Hilfen und derselbe Zustand, keine zweite Kopie.
      Eine Datei trägt ihre Ansicht in sichten oder ihren Reiter in reiter ein und hängt ihre eigenen Ereignisse an (docs/entwickler/06-oberflaechen.md). */
-  window.STAFL_CI = { S, $, esc, icon, SU, feld, kopf, werte, marke, tag, api, uebernehmen, toast, oeffnen, sendung, landName, laenderWahl, lieferantFeld, lieferantAus, suchfeld, archivSchalter,
+  window.STAFL_CI = { S, $, esc, icon, SU, feld, kopf, werte, marke, tag, api, uebernehmen, toast, oeffnen, sendung, landName, laenderWahl, lieferantFeld, lieferantAus, suchfeld, fokusBehalten, archivSchalter,
     HINWEIS_NUMMER, sichten: SICHTEN, reiter: REITER };
 
   /* ---------- Start (nach dem Laden aller Dateien des Moduls) ---------- */
