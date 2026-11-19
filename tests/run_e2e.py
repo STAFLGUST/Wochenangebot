@@ -86,6 +86,7 @@ SUITES['kundengruppen'] = (8790, 'data-seed', True)
 SUITES['einzelangebote'] = SUITES['bestellung']
 SUITES['vkgruppen'] = (8790, 'data-seed', True)
 SUITES['angebotskategorien'] = (8790, 'data-seed', True)   # Stammdaten Angebotskategorien und Aufbau des Angebots danach
+SUITES['angebote_getrennt'] = (8790, 'data-seed', True)   # Angebot: jedes Angebot für sich – Preise, Bezeichnung und Angebotsgruppen nur im gewählten Angebot (Inhaber 19.11.2026)
 SUITES['aufbau'] = (8790, 'data-seed', True)   # Angebot: Knopf „Editor“, Reihenfolge der Bereiche und Gruppen (app/module/angebot/aufbau.js)
 SUITES['druck'] = (8790, 'data-seed', True)   # Angebot: Druckfassung „Angebotsansicht“, Fußzeile des Briefbogens, Knopf „Drucken“ (app/assets/angebot-druck.js)
 SUITES['sonderangebote'] = SUITES['bestellung']   # Angebot: Sonderangebote für Kundengruppen mit Gültigkeit (module/angebot/sonderangebote.php); Test-Mailserver für den Bestellwunsch
@@ -205,6 +206,7 @@ GEWICHT = {
     'qs_kapitel15': 15,   # geschätzt (November 2026), noch ohne CI-Median
     'protokoll': 6,   # geschätzt (Oktober 2026), noch ohne CI-Median
     'angebotskategorien': 12,   # geschätzt (November 2026), noch ohne CI-Median
+    'angebote_getrennt': 30,   # geschätzt (November 2026), noch ohne CI-Median
     'aufbau': 50,   # geschätzt (November 2026, mit Artikeln lokal 57 s), noch ohne CI-Median
     'druck': 45,   # geschätzt (November 2026), noch ohne CI-Median
     'sonderangebote': 45,   # geschätzt (November 2026), noch ohne CI-Median
