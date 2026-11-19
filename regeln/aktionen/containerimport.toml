@@ -30,6 +30,11 @@ schreibend = true
 oberflaeche = "containerimport.intern"
 schreibend = true
 
+# Whisp (FAO) für einen Betrieb abfragen: starten oder Stand holen; speichert nichts (POST wegen CSRF, der Umriss geht an Whisp)
+[aktion.containerimport_eudr_whisp]
+oberflaeche = "containerimport.intern"
+schreibend = true
+
 # Sendung anlegen oder ändern
 [aktion.containerimport_eudr_sendung_save]
 oberflaeche = "containerimport.intern"

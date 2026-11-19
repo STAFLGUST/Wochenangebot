@@ -2,7 +2,7 @@
 declare(strict_types=1);
 /* Aktionen: Modul Container-Import, Reiter EUDR – Herkunftsbetriebe mit Geolokalisierung, Sendungen, Risikoprofil und
    GeoJSON-Datei für das EU-Informationssystem (Oberfläche containerimport.intern; Funktionen in
-   app/api/module/containerimport/eudr.php und geometrie.php).
+   app/api/module/containerimport/eudr.php und geometrie.php), Abfrage von Whisp für die Gegenprüfung (whisp.php).
    Rechte (GR-103): Modulzugang containerimport.zugang für jede Aktion; Inhalte (ansehen, Dateien prüfen, exportieren) mit
    containerimport.eudr_sehen, alles, was speichert, mit containerimport.eudr_bearbeiten. Nichts wird gelöscht (archivieren, Gegenprüfungen nur ergänzen);
    eine abgeschlossene Bewertung hält Profil und Betriebe als Schnappschuss fest (GR-106).
@@ -35,8 +35,10 @@ switch ($action) {
         /* Stand der Seite: Betriebe und Sendungen mit Befunden und Risikoprofil, Länder, Portale, eigene Rechte */
         case 'containerimport_start': {
             $me = eudr_leser();
+            require_once __DIR__ . '/../module/containerimport/whisp.php';
             header('Cache-Control: no-store');
-            respond(['ok' => true, 'name' => $me['name'], 'rechte' => ['bearbeiten' => may($me, 'containerimport.eudr_bearbeiten')]] + eudr_stand());
+            $darf = may($me, 'containerimport.eudr_bearbeiten');
+            respond(['ok' => true, 'name' => $me['name'], 'rechte' => ['bearbeiten' => $darf, 'whisp' => $darf && whisp_eingerichtet()]] + eudr_stand());
         }
 
         /* Dateien prüfen, ohne zu speichern: Lieferanten-GeoJSON, gelesene Berichte, eingefügte Koordinaten (POST wegen Inhalt) */
@@ -132,6 +134,24 @@ switch ($action) {
             });
             audit('containerimport', 'EUDR: Gegenprüfung für „' . $name . '“ eingetragen');
             respond(['ok' => true] + eudr_stand());
+        }
+
+        /* Whisp (FAO) für einen Betrieb abfragen: mit „id“ starten (nur der Umriss geht an Whisp), mit „token“ den Stand holen.
+           Antwort: fertig + ergebnis (Eigenschaften der Fläche) oder token + prozent. Speichert nichts – die Oberfläche zeigt
+           das Ergebnis als Vorschlag für die Gegenprüfung. Ohne WHISP_API_KEY in .env ist die Abfrage aus (503). */
+        case 'containerimport_eudr_whisp': {
+            eudr_bearbeiter();
+            require_once __DIR__ . '/../module/containerimport/whisp.php';
+            if (!whisp_eingerichtet()) fail('Die Abfrage von Whisp ist nicht eingerichtet.', 503);
+            $b = body();
+            if (session_status() === PHP_SESSION_ACTIVE) session_write_close();   // sonst wartet jede weitere Anfrage der Sitzung, solange Whisp nicht antwortet
+            if (isset($b['token'])) respond(['ok' => true] + whisp_stand(is_string($b['token']) ? $b['token'] : ''));
+            $liste = eudr_betriebe()['liste'];
+            $i = eudr_stelle($liste, is_string($b['id'] ?? null) ? $b['id'] : '');
+            if ($i === null) fail('Betrieb nicht gefunden.', 404);
+            if ($liste[$i]['geometrie']['type'] === 'Point') fail('Whisp braucht einen Umriss – für einen einzelnen Punkt wäre das Ergebnis nicht die Fläche des Betriebs.', 422);
+            audit('containerimport', 'EUDR: Umriss von „' . $liste[$i]['name'] . '“ zur Prüfung an Whisp gesendet');   // vor dem Versand: auch ein abgelehnter Umriss hat das Haus verlassen
+            respond(['ok' => true] + whisp_starten($liste[$i]['geometrie']));
         }
 
         /* Sendung anlegen oder ändern. Nach dem Abschluss lassen sich nur noch Sorgfaltserklärung und Notiz ergänzen. */

@@ -2,7 +2,7 @@
 
 <!-- ERZEUGT von `python3 werkzeuge/doku.py erzeugen` – nicht von Hand ändern. Quelle: Funktionen und Kommentare im Code. Die CI prüft, dass diese Datei zum Code passt. -->
 
-8 Dateien, 123 Funktionen – in der Reihenfolge der Datei, **fett** die Abschnitte. Text = erste Aussage des Kommentars direkt über der Funktion (Python: Docstring). Übersicht aller Module: [README.md](README.md).
+11 Dateien, 139 Funktionen – in der Reihenfolge der Datei, **fett** die Abschnitte. Text = erste Aussage des Kommentars direkt über der Funktion (Python: Docstring). Übersicht aller Module: [README.md](README.md).
 
 ## `app/api/aktionen/containerimport.php`
 
@@ -98,13 +98,25 @@ _Container-Import · Geometrie der Produktionsorte (EUDR): reine Rechenfunktione
 - `geo_pruefen(g)` – Geometrie nach den Regeln des EU-Informationssystems prüfen.
 - `geo_punktzahl(g)` – Zahl der Punkte einer Geometrie (für die Obergrenzen je Anfrage und im Speicher)
 
+## `app/api/module/containerimport/whisp.php`
+
+_Container-Import · EUDR_
+
+- `whisp_schluessel()`
+- `whisp_eingerichtet()`
+- `whisp_http(methode, pfad, inhalt)` – Eine Anfrage an Whisp: [Status, JSON\|null]; Status 0 = nicht erreichbar.
+- `whisp_antwort(status, json)` – Antwort von Whisp für die Oberfläche: ['fertig' => true, 'ergebnis' => …] oder ['fertig' => false, 'token', 'prozent'].
+- `whisp_starten(geometrie)` – Abfrage für einen Umriss starten – die Funktion bekommt nur die Geometrie, Namen kann sie nicht versenden
+- `whisp_stand(token)` – Stand einer gestarteten Abfrage
+- `whisp_ergebnis(daten)` – Eigenschaften der ersten Fläche aus dem Ergebnis – nur einfache Werte mit harmlosen Namen (die Oberfläche maskiert sie zusätzlich); der zurückgelieferte …
+
 ## `app/module/containerimport/containerimport.js`
 
 _STAFL-Plattform · Modul Container-Import, Reiter EUDR – Hilfen und Kontrollen zur EU-Verordnung über entwaldungsfreie Lieferketten (Auftrag des Inhabers 18.11.2026; Gestaltung „C2“)._
 
 **Aufruf der API: wirft nie, liefert { status, data }**
 
-- `api(action, body, query)`
+- `api(action, body, query, sperre)`
 - `toast(text, fehlerhaft)`
 - `fehler(text)`
 - `zeigeAnmeldung()`
@@ -129,7 +141,9 @@ _STAFL-Plattform · Modul Container-Import, Reiter EUDR – Hilfen und Kontrolle
 
 - `betriebOeffnen(id)`
 - `auswertungZeigen(b, darf)` – Bildauswertung im Fenster „Betrieb“: Wald Ende 2020 und Waldverlust seit 2021 in der Fläche – eine Schätzung aus den Kartenbildern (eudr-auswertung.js).
-- `auswertungNehmen()` – Werte der Bildauswertung in das Formular der Gegenprüfung schreiben (Portal „Andere Quelle“) – mit dem Vorschlag „Befund“ ab WALD_AB_HA; der Bearbeiter …
+- `vorschlagNehmen(d, portal)` – Vorschlag (Bildauswertung oder Whisp) in das Formular der Gegenprüfung schreiben; der Bearbeiter entscheidet und trägt selbst ein. dataset: ergebnis ('' = …
+- `whispPruefen()` – Whisp für den geöffneten Betrieb abfragen (Server: containerimport_eudr_whisp).
+- `whispZeigen(el, ergebnis, b)` – Ergebnis von Whisp als Vorschlag zeigen (Deutung: eudr-whisp.js); „Übernehmen“ füllt nur das Formular
 - `betriebAusFenster(b, w)` – Felder des Fensters als Betrieb für den Server
 - `betriebSpeichern(zusatz)`
 - `pruefungEintragen()`
@@ -197,6 +211,12 @@ _STAFL-Plattform · Container-Import · EUDR – Karte der Herkunftsbetriebe._
 - `detail(el, opt, betriebe, dienst, vektor)` – Detailkarte: Bilder (wenn erreichbar), Straßen und Orte (wenn die Herkunftskarte geladen ist), darüber die Flächen in der Farbe ihrer Ampel; in der Übersicht …
 - `zeichnen(el, opt)`
 
+## `app/module/containerimport/eudr-whisp.js`
+
+_Container-Import · EUDR_
+
+- `deuten({…}, abHa)`
+
 ## `tests/e2e/test_containerimport.py`
 
 _Modul Container-Import, Reiter EUDR (app/module/containerimport/, Oberfläche containerimport.intern, Auftrag des Inhabers 18.11.2026)_
@@ -234,3 +254,27 @@ _Modul Container-Import, Reiter EUDR (app/module/containerimport/, Oberfläche c
 **Originale im QM-System (Schnittstelle qs_eingang_hochladen)**
 
 - `original(c, name, inhalt, lieferant, teil)` – Datei in Teilen an containerimport_eudr_original geben; Antwort des letzten Aufrufs.
+
+## `tests/e2e/test_containerimport_whisp.py`
+
+_Container-Import · EUDR_
+
+- `check(n, c, i)`
+
+**nachgebautes Whisp**
+
+- `log_message(*a)`
+- `antwort(status, inhalt)`
+- `bedienen()`
+
+**Nutzer und Betriebe**
+
+- `login(user)`
+
+**Rechte**
+
+**Abfrage: starten, nachfragen, Ergebnis**
+
+**Fehler von Whisp**
+
+- `seite(user, vp, schema)`

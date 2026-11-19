@@ -48,7 +48,7 @@ const EUDR_LAENDER = [
 /* Portale für die eigene Gegenprüfung der Entwaldung (unabhängig vom Bericht des Lieferanten) */
 const EUDR_PORTALE = [
     'gnw' => ['name' => 'Global Nature Watch', 'url' => 'https://www.globalnaturewatch.org/', 'hinweis' => 'Fläche als GeoJSON hochladen; Baumverlust seit 2021 und Warnmeldungen ansehen.'],
-    'whisp' => ['name' => 'Whisp (FAO)', 'url' => 'https://whisp.openforis.org/', 'hinweis' => 'GeoJSON hochladen; für Rinder zählt die Spalte „Risk_Livestock“.'],
+    'whisp' => ['name' => 'Whisp (FAO)', 'url' => 'https://whisp.openforis.org/', 'hinweis' => 'GeoJSON hochladen; für Rinder gibt Whisp noch kein eigenes Risiko aus – Baumbestand 2020 und Störungen nach 2020 ansehen.'],
     'sonst' => ['name' => 'Andere Quelle', 'url' => '', 'hinweis' => ''],
 ];
 

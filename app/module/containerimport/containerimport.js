@@ -3,7 +3,8 @@
    Ansichten: Sendungen (mit Risikoprofil), Herkunftsbetriebe (Geolokalisierung, Bericht, eigene Gegenprüfung), Karte.
    Daten: containerimport_start (Stand), containerimport_eudr_pruefen (Dateien prüfen, ohne zu speichern),
    containerimport_eudr_betriebe_save, _original, _gegenpruefung, _sendung_save, _sendung_abschluss (jede Antwort bringt den neuen
-   Stand mit), containerimport_eudr_export (GeoJSON für das EU-Informationssystem).
+   Stand mit), containerimport_eudr_export (GeoJSON für das EU-Informationssystem), containerimport_eudr_whisp (Whisp für
+   einen Betrieb abfragen; speichert nichts, Deutung in eudr-whisp.js).
    Unterlagen einlesen: Entwaldungsberichte (PDF) liest der Browser mit pdf.js (assets/vendor/pdfjs, eudr-bericht.js);
    Lieferanten-GeoJSON und eingefügte Koordinaten prüft der Server. Am Betrieb stehen Name und Prüfsumme der Datei. Beim
    Übernehmen gehen die Originale – wenn angehakt – in Teilen an containerimport_eudr_original und von dort in den Eingang
@@ -25,16 +26,16 @@
   const S = { csrf: '', d: null, sicht: 'sendungen', suche: '', archiv: false, karteSendung: '', lesen: null, toast: 0, sendet: false };
 
   /* ---------- Aufruf der API: wirft nie, liefert { status, data } ---------- */
-  async function api(action, body, query = '') {
-    if (body && S.sendet) return { status: 0, data: { error: 'Bitte einen Moment – die letzte Eingabe wird noch verarbeitet.' } };   // kein Doppeltes durch Doppelklick
-    if (body) S.sendet = true;
+  async function api(action, body, query = '', sperre = true) {   // sperre = false: Abfrage im Hintergrund, hält keine Eingabe auf
+    if (sperre && body && S.sendet) return { status: 0, data: { error: 'Bitte einen Moment – die letzte Eingabe wird noch verarbeitet.' } };   // kein Doppeltes durch Doppelklick
+    if (body && sperre) S.sendet = true;
     let res;
     try {
       res = await fetch(API + '?action=' + action + query, {
         method: body ? 'POST' : 'GET', credentials: 'same-origin', cache: 'no-store',
         headers: body ? { 'Content-Type': 'application/json', 'X-CSRF-Token': S.csrf } : {}, body: body ? JSON.stringify(body) : undefined,
       });
-    } catch { return { status: 0, data: {} }; } finally { if (body) S.sendet = false; }
+    } catch { return { status: 0, data: {} }; } finally { if (body && sperre) S.sendet = false; }
     let data = null;
     try { data = await res.json(); } catch { /* keine JSON-Antwort */ }
     return { status: res.status, data: data || {} };
@@ -207,8 +208,10 @@
         <p class="ci-klein">Unabhängig vom Bericht des Lieferanten: Fläche herunterladen, im Portal hochladen und das Ergebnis hier eintragen.</p>
         <div class="ci-auswertung" id="betrieb-auswertung" hidden></div>
         <div class="ci-portale"><button class="ci-knopf klein" type="button" data-export-betrieb="${esc(id)}">${icon('runter')}Fläche als GeoJSON</button>
-          ${portale.filter(([, p]) => p.url).map(([, p]) => `<a class="ci-knopf klein" href="${esc(p.url)}" target="_blank" rel="noopener noreferrer" title="${esc(p.hinweis)}">${icon('aus')}${esc(p.name)}</a>`).join('')}</div>
-        ${pruefungen.length ? `<ul class="ci-pruefungen">${pruefungen.map((p) => `<li>${marke(p.ergebnis === 'befund' ? 'Befund' : 'ohne Befund', p.ergebnis === 'befund' ? 'rot' : 'ok')}<span><strong>${esc(S.d.portale[p.portal].name)}</strong> · ${tag(p.datum)}${p.verlustHa === null ? '' : ` · Baumverlust ${ha(p.verlustHa)}`}${p.bemerkung ? `<small>${esc(p.bemerkung)}</small>` : ''}</span><span class="ci-leise ci-klein">${esc(p.von)}</span></li>`).join('')}</ul>` : '<p class="ci-leise ci-klein">Noch keine Gegenprüfung eingetragen.</p>'}
+          ${portale.filter(([, p]) => p.url).map(([, p]) => `<a class="ci-knopf klein" href="${esc(p.url)}" target="_blank" rel="noopener noreferrer" title="${esc(p.hinweis)}">${icon('aus')}${esc(p.name)}</a>`).join('')}
+          ${S.d.rechte.whisp && b.geometrie.type !== 'Point' ? '<button class="ci-knopf klein" type="button" id="betrieb-whisp" title="Schickt den Umriss (ohne Namen) an Whisp und zeigt das Ergebnis hier">In Whisp prüfen</button>' : ''}</div>
+        <div class="ci-auswertung" id="betrieb-whisp-ergebnis" hidden></div>
+        ${pruefungen.length ? `<ul class="ci-pruefungen">${pruefungen.map((p) => `<li>${befundMarke(p.ergebnis)}<span><strong>${esc(S.d.portale[p.portal].name)}</strong> · ${tag(p.datum)}${p.verlustHa === null ? '' : ` · Baumverlust ${ha(p.verlustHa)}`}${p.bemerkung ? `<small>${esc(p.bemerkung)}</small>` : ''}</span><span class="ci-leise ci-klein">${esc(p.von)}</span></li>`).join('')}</ul>` : '<p class="ci-leise ci-klein">Noch keine Gegenprüfung eingetragen.</p>'}
         ${darf ? `<div class="ci-raster drei ci-neu-pruefung">
           ${feld('Portal', 'p_portal', 'gnw', { wahl: portale.map(([k, p]) => [k, p.name]) })}
           ${feld('Geprüft am', 'p_datum', S.d.heute, { typ: 'date' })}
@@ -242,7 +245,7 @@
     const h = (v) => `${F.zahl(v, 1, 1)} ha`, jahre = Object.entries(e.jahre).filter(([, v]) => v >= 0.05);
     const passt = Math.abs(e.flaecheHa - b.flaeche) <= 0.03 * b.flaeche;
     const befund = e.verlustAufWaldHa >= WALD_AB_HA;
-    el.dataset.verlust = e.verlustHa.toFixed(2); el.dataset.ergebnis = befund ? 'befund' : 'ohne_befund';
+    el.dataset.verlust = befund ? e.verlustHa.toFixed(2) : ''; el.dataset.ergebnis = befund ? 'befund' : 'ohne_befund';
     el.dataset.text = `Bildauswertung im Container-Import: Wald Ende 2020 ${h(e.waldHa)}, Waldverlust 2021–${e.bis} ${h(e.verlustHa)}, davon ${h(e.verlustAufWaldHa)} auf Wald von 2020 (JRC GFC 2020, GFW Tree cover loss).`;
     el.innerHTML = `<p><strong>Bildauswertung der Fläche</strong> <span class="ci-leise">· Schätzung aus den Kartenbildern, kein Nachweis</span></p>
       <dl><dt>Wald Ende 2020 (Karte der EU)</dt><dd>${h(e.waldHa)} · ${F.zahl(e.flaecheHa ? e.waldHa / e.flaecheHa * 100 : 0, 0, 0)} % der Fläche</dd>
@@ -251,14 +254,56 @@
       <p class="ci-klein ci-leise">Ausgewertet ${h(e.flaecheHa)} (berechnete Fläche ${ha(b.flaeche)})${passt ? '' : ' – <strong>weicht ab, Ergebnis mit Vorsicht lesen</strong>'}. Quellen: Wald 2020 der EU-Kommission (JRC, 10 m), Baumverlust der Universität Maryland über Global Forest Watch (30 m). Baumverlust ist nicht immer Entwaldung (Brand, Ernte von Plantagen); kleine Werte können Rauschen sein.</p>
       ${darf ? '<button class="ci-knopf klein" type="button" id="betrieb-auswertung-nehmen">Werte in die Gegenprüfung übernehmen</button>' : ''}`;
   }
-  /* Werte der Bildauswertung in das Formular der Gegenprüfung schreiben (Portal „Andere Quelle“) – mit dem Vorschlag
-     „Befund“ ab WALD_AB_HA; der Bearbeiter entscheidet und trägt selbst ein. Das Feld „Baumverlust“ nur mit Befund füllen:
-     der Server wertet jede Zahl über 0 dort als kritisch (eudr_betrieb_bewertung); die Zahlen stehen ohnehin in der Bemerkung. */
-  function auswertungNehmen() {
-    const d = $('#betrieb-auswertung').dataset, w = $('#betrieb-inhalt').elements;
-    w.p_portal.value = 'sonst'; w.p_ergebnis.value = d.ergebnis;
-    w.p_verlustHa.value = d.ergebnis === 'befund' ? zahlText(d.verlust) : ''; w.p_bemerkung.value = d.text;
+  /* Vorschlag (Bildauswertung oder Whisp) in das Formular der Gegenprüfung schreiben; der Bearbeiter entscheidet und trägt
+     selbst ein. dataset: ergebnis ('' = kein Vorschlag: die Auswahl wird leer, damit nicht still „ohne Befund“ gespeichert wird), verlust (nur mit Befund gefüllt: der Server wertet
+     jede Zahl über 0 im Feld „Baumverlust“ als kritisch, eudr_betrieb_bewertung – die Zahlen stehen in der Bemerkung), text. */
+  function vorschlagNehmen(d, portal) {
+    const w = $('#betrieb-inhalt').elements;
+    w.p_portal.value = portal;
+    w.p_ergebnis.value = d.ergebnis;
+    w.p_verlustHa.value = zahlText(d.verlust); w.p_bemerkung.value = d.text;
     w.p_bemerkung.focus();
+  }
+  const befundMarke = (ergebnis) => marke(ergebnis === 'befund' ? 'Befund' : 'ohne Befund', ergebnis === 'befund' ? 'rot' : 'ok');
+  const WHISP_PAUSE = 3000, WHISP_VERSUCHE = 100, WHISP_FEHLVERSUCHE = 3;   // alle drei Sekunden nachfragen, höchstens fünf Minuten; so viele Aussetzer in Folge sind erlaubt
+  /* Whisp für den geöffneten Betrieb abfragen (Server: containerimport_eudr_whisp). Die Auswertung läuft bei Whisp; die Seite
+     fragt nach, bis sie fertig ist – solange das Fenster offen ist. Ein einzelner Aussetzer (Netz, Drosselung) verwirft den
+     Vorgang nicht. Die Vorgangsnummer geht per POST (nicht in die Adresse: mit ihr lässt sich das Ergebnis bei Whisp ohne
+     Anmeldung abrufen) – deshalb ohne die Eingabesperre von api(). */
+  async function whispPruefen() {
+    const el = $('#betrieb-whisp-ergebnis'), knopf = $('#betrieb-whisp'), b = betrieb($('#betrieb-inhalt').dataset.id);
+    const warte = (prozent) => { el.innerHTML = `<p class="ci-klein ci-leise" role="status">Whisp wertet die Fläche aus${prozent ? ` (${prozent} %)` : ''} … Das dauert meist unter einer Minute.</p>`; };
+    const offen = () => el.isConnected && $('#dlg-betrieb').open;   // Fenster weder neu aufgebaut noch geschlossen
+    knopf.disabled = true; el.hidden = false; warte();
+    let r = await api('containerimport_eudr_whisp', { id: b.id }, '', false);
+    const token = r.data.token;
+    for (let n = 0, fehl = 0; r.status === 200 && !r.data.fertig && n < WHISP_VERSUCHE && offen(); n++) {
+      warte(r.data.prozent);
+      await new Promise((weiter) => setTimeout(weiter, WHISP_PAUSE));
+      const s = await api('containerimport_eudr_whisp', { token }, '', false);
+      if (s.status === 200) { r = s; fehl = 0; } else if (++fehl >= WHISP_FEHLVERSUCHE) r = s;
+    }
+    if (!el.isConnected) return;
+    knopf.disabled = false;
+    if (r.status === 200 && r.data.fertig) whispZeigen(el, r.data.ergebnis, b);
+    else if (!offen()) el.hidden = true;   // geschlossen: beim nächsten Öffnen ist das Fenster ohnehin neu
+    else el.innerHTML = `<p class="ci-klein"><strong>Whisp:</strong> ${esc(r.status === 200 ? 'Die Auswertung dauert ungewöhnlich lange. Bitte später erneut versuchen.' : fehlerText(r, 'Abfrage nicht möglich. Bitte später erneut versuchen.'))}</p>`;
+  }
+  /* Ergebnis von Whisp als Vorschlag zeigen (Deutung: eudr-whisp.js); „Übernehmen“ füllt nur das Formular */
+  function whispZeigen(el, ergebnis, b) {
+    const e = window.EUDR_WHISP.deuten(ergebnis, WALD_AB_HA);
+    const passt = e.flaeche === null || Math.abs(e.flaeche - b.flaeche) <= 0.03 * b.flaeche;
+    const jaNein = (v, farbeBeiJa) => (v === null ? marke('unbekannt') : marke(v ? 'ja' : 'nein', v ? farbeBeiJa : 'ok'));
+    const wert = (v) => `${F.zahl(v, 1, 1)} ${esc(e.einheit)}`;
+    el.dataset.ergebnis = e.vorschlag || ''; el.dataset.verlust = e.verlustHa === null ? '' : e.verlustHa.toFixed(2); el.dataset.text = e.text;
+    el.innerHTML = `<p><strong>Ergebnis von Whisp</strong> <span class="ci-leise">· Auswertung der FAO aus öffentlichen Karten, kein Nachweis</span></p>
+      <dl><dt>Baumbestand Ende 2020</dt><dd>${jaNein(e.wald, 'ok')}</dd>
+        <dt>Störung vor 2020</dt><dd>${jaNein(e.vorher, 'ok')}</dd>
+        <dt>Störung nach 2020</dt><dd>${jaNein(e.nachher, 'rot')}${e.stoerungen.length ? ` <small>${e.stoerungen.slice(0, 6).map(([k, v]) => `${esc(k)}: ${wert(v)}`).join(' · ')}</small>` : ''}</dd>
+        ${e.risiken.length ? `<dt>Risiko laut Whisp</dt><dd>${e.risiken.map(([k, v]) => `${esc(k)}: ${esc(v)}`).join(' · ')}</dd>` : ''}
+        <dt>Vorschlag</dt><dd>${e.vorschlag ? befundMarke(e.vorschlag) : `${marke('kein Vorschlag', 'warn')} bitte selbst beurteilen`}</dd></dl>
+      <p class="ci-klein ci-leise">${e.flaeche === null ? '' : `Ausgewertet ${wert(e.flaeche)}${e.land ? ` in ${esc(e.land)}` : ''} (berechnete Fläche ${ha(b.flaeche)})${passt ? '' : ' – <strong>weicht ab, Ergebnis mit Vorsicht lesen</strong>'}. `}„Ja“ heißt bei Whisp: mehr als rund 10 % der Fläche (Störung vor 2020: mehr als die Hälfte). ${e.rind ? '' : 'Für Rinder gibt Whisp kein eigenes Risiko aus; der Vorschlag folgt der Regel für Ackerkulturen. '}Störungen sind auch Brand und Ernte.</p>
+      <button class="ci-knopf klein" type="button" id="betrieb-whisp-nehmen">Werte in die Gegenprüfung übernehmen</button>`;
   }
   /* Felder des Fensters als Betrieb für den Server */
   function betriebAusFenster(b, w) {
@@ -277,6 +322,7 @@
   }
   async function pruefungEintragen() {
     const id = $('#betrieb-inhalt').dataset.id, w = werte($('#betrieb-inhalt'));
+    if (!w.p_ergebnis) { toast('Bitte das Ergebnis wählen – dafür gab es keinen Vorschlag.', true); $('#betrieb-inhalt').elements.p_ergebnis.focus(); return; }
     const r = await api('containerimport_eudr_gegenpruefung', { id, portal: w.p_portal, datum: w.p_datum, ergebnis: w.p_ergebnis, verlustHa: w.p_verlustHa, bemerkung: w.p_bemerkung });
     if (!uebernehmen(r, 'Die Gegenprüfung konnte nicht eingetragen werden')) return;
     toast('Gegenprüfung eingetragen.');
@@ -581,7 +627,9 @@
     if (t.closest('#sendung-archiv')) { sendungSpeichern({ aktiv: !sendung(sid).aktiv }).then((ok) => ok && $('#dlg-sendung').close()); return; }
     if (t.closest('#betrieb-archiv')) { betriebSpeichern({ aktiv: !betrieb($('#betrieb-inhalt').dataset.id).aktiv }); return; }
     if (t.closest('#betrieb-pruefung')) { pruefungEintragen(); return; }
-    if (t.closest('#betrieb-auswertung-nehmen')) { auswertungNehmen(); return; }
+    if (t.closest('#betrieb-auswertung-nehmen')) { vorschlagNehmen($('#betrieb-auswertung').dataset, 'sonst'); return; }
+    if (t.closest('#betrieb-whisp')) { whispPruefen(); return; }
+    if (t.closest('#betrieb-whisp-nehmen')) { vorschlagNehmen($('#betrieb-whisp-ergebnis').dataset, 'whisp'); return; }
     if (t.closest('#lesen-pruefen')) { lesenPruefen(); return; }
   });
   document.addEventListener('keydown', (e) => {

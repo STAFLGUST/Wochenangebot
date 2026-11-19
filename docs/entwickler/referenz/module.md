@@ -80,7 +80,7 @@ Agent: `einkauf` · hängt ab von `plattform`, `verwaltung`, `bestand` · Testgr
 
 Import von Ware aus Drittländern: EUDR (Herkunftsbetriebe mit Geolokalisierung, Risikoprofil, GeoJSON für TRACES); später Container, Verzollung, Dokumente
 
-Agent: `containerimport` · hängt ab von `plattform`, `qs` · Testgruppen: `containerimport`
+Agent: `containerimport` · hängt ab von `plattform`, `qs` · Testgruppen: `containerimport`, `containerimport_whisp`
 
 | Oberfläche | Art | Adresse | Entwicklung | Freigabe |
 | --- | --- | --- | --- | --- |

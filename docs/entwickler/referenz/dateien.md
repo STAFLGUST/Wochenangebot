@@ -175,6 +175,7 @@ Jede Code-Datei beginnt mit einem Kopfkommentar; dessen erste Aussage steht hier
 | --- | --- | --- |
 | `eudr.php` | containerimport | Container-Import · EUDR (Verordnung (EU) 2023/1115, entwaldungsfreie Lieferketten) |
 | `geometrie.php` | containerimport | Container-Import · Geometrie der Produktionsorte (EUDR): reine Rechenfunktionen ohne Speicherzugriff. |
+| `whisp.php` | containerimport | Container-Import · EUDR |
 
 ## `app/api/module/controlling/`
 
@@ -388,6 +389,7 @@ Jede Code-Datei beginnt mit einem Kopfkommentar; dessen erste Aussage steht hier
 | `eudr-auswertung.js` | containerimport | STAFL-Plattform · Container-Import · EUDR – Bildauswertung einer Fläche |
 | `eudr-bericht.js` | containerimport | STAFL-Plattform · Container-Import · EUDR – Entwaldungsberichte der Lieferanten lesen (reine Funktionen, kein DOM). |
 | `eudr-karte.js` | containerimport | STAFL-Plattform · Container-Import · EUDR – Karte der Herkunftsbetriebe. |
+| `eudr-whisp.js` | containerimport | Container-Import · EUDR |
 | `index.html` | containerimport | Reiter des Moduls: zuerst EUDR, weitere (Container, Verzollung, Dokumente) folgen |
 
 ## `app/module/controlling/`
@@ -800,6 +802,7 @@ Jede Code-Datei beginnt mit einem Kopfkommentar; dessen erste Aussage steht hier
 | `test_bestand_pdf.py` | bestand | Bestand: Marke je Partie (Spalte E der WinAB-Liste, Überschrift „Marke“ eine Spalte rechts davon), dezente MHD-Farben (hell/dunkel) und PDF ohne Preise, erfassten Bestand, Gesamt verfügbar und erwartete Zugänge. |
 | `test_bestellung.py` | angebot | Bestellwunsch aus dem Portal |
 | `test_containerimport.py` | containerimport | Modul Container-Import, Reiter EUDR (app/module/containerimport/, Oberfläche containerimport.intern, Auftrag des Inhabers 18.11.2026) |
+| `test_containerimport_whisp.py` | containerimport | Container-Import · EUDR |
 | `test_controlling.py` | controlling | Controlling (Modul controlling, Oberfläche controlling.intern unter /module/controlling/) – Bereich Umsatzstatistik, Reiter Monatsmeldung |
 | `test_controlling_umsatzdaten.py` | controlling | Controlling · Umsatzdaten der Warenwirtschaft |
 | `test_crm.py` | crm | CRM · Vertrieb (Modul crm, Oberfläche crm.intern unter /module/crm/). |

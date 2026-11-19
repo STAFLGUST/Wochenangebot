@@ -471,6 +471,8 @@ der Vorlagendialog. Adress- und Länderlisten überträgt eine Datei nie.
 | `DOMAIN` | `mail.php` | Domain, falls `WA_URL` fehlt | – |
 | `WA_PWNED_URL` | `lib/nutzer.php` | nur Tests: Adresse der Datenleck-Prüfung | `PW_LEAK_URL` |
 | `WA_ORT_URL` | `ort.php` | nur Tests: Quelle der Ortsdatenbank | `ORT_URL` |
+| `WHISP_API_KEY` | `module/containerimport/whisp.php` | Zugangsschlüssel für Whisp (FAO); nur im Mitarbeiter-Container | leer = Abfrage aus |
+| `WA_WHISP_URL` | `module/containerimport/whisp.php` | nur Tests: Adresse von Whisp | `WHISP_URL` |
 | `WA_OIDC` | `lib/oidc.php` | `1` = Keycloak-Host (vom Webserver gesetzt) | aus |
 | `WA_OIDC_ISSUER` | `lib/oidc.php` | erwarteter Aussteller (`iss`) | – (ohne Wert keine Identität) |
 | `WA_OIDC_ACR` | `lib/oidc.php` | Anmeldestärke, die als zweiter Faktor zählt | `mfa` |

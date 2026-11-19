@@ -849,6 +849,16 @@ Caddy setzt auf allen Hosts `script-src 'self'` (ohne `'unsafe-inline'`), `conne
   von 2020 „Befund“ vor und füllt nur dann das Feld „Baumverlust“ – der Server wertet dort jede Zahl über 0 als kritisch.
   Der Test prüft mit bekannten Mustern und gegen die Flächenrechnung des Servers; der Lauf mit `WA_KARTE_ECHT=1` schreibt
   zusätzlich das Ergebnis einer Probefläche ins Protokoll (zum Nachrechnen bei geänderten Diensten).
+  **Whisp-Abfrage** (Knopf „In Whisp prüfen“ im Fenster „Betrieb“): Anders als die Karte ruft hier der **Server** den
+  fremden Dienst ab (`app/api/module/containerimport/whisp.php`, Aktion `containerimport_eudr_whisp`) – der Schlüssel
+  `WHISP_API_KEY` darf nie in den Browser. Hinaus geht nur der Umriss; die Seite fragt alle drei Sekunden nach, bis Whisp
+  fertig ist. `eudr-whisp.js` (`EUDR_WHISP.deuten`) macht aus den Eigenschaften einen Vorschlag; `vorschlagNehmen` in
+  `containerimport.js` füllt das Formular – für Bildauswertung und Whisp gleich. Gespeichert wird nichts. Für Rinder gibt
+  Whisp noch kein eigenes Risiko aus; kommt die Spalte `risk_cattle`, hat sie in `deuten` schon Vorrang. `deuten` ist
+  vorsichtig: „ohne Befund“ nur ohne merkliche Störung nach 2020, bei unerwartetem Format kein Vorschlag – dann wird die
+  Auswahl „Ergebnis“ leer und `pruefungEintragen` verlangt eine Wahl. Die Vorgangsnummer geht per POST statt in die Adresse
+  (mit ihr lässt sich das Ergebnis bei Whisp ohne Anmeldung abrufen); deshalb der Schalter `sperre` in `api()`. Tests: Gruppe
+  `containerimport_whisp` mit nachgebautem Dienst; gegen das echte Whisp lässt sich nur mit Schlüssel prüfen.
 - **Zweite Kartendatei „herkunft“** (Südamerika und Neuseeland, `/karte/herkunft.pmtiles`; Laden und Auslieferung: Kapitel Betrieb):
   `STAFLKarte.verfuegbar('herkunft')` und `erstellen(el, { karte: 'herkunft', … })`; Punkte können eine eigene Farbe tragen
   (`farbe: '#rrggbb'`). Genutzt vom Container-Import (`app/module/containerimport/eudr-karte.js`), der ohne die Datei selbst
