@@ -177,6 +177,10 @@ with sync_playwright() as p:
     def wb(v): t = f'{v:.4f}'.replace('.', ','); return re.sub(r'(,\d\d)0{1,2}$', r'\1', t)
     erw = {c[0]['code']: 12.5, c[1]['code']: 9.25, c[4]['code']: 5.1234, sp['code']: 15.5}
     soll = 'Artikelnummer;Preis\r\n' + ''.join(f'{k};{wb(erw[k])}\r\n' for k in sorted(erw, key=nat))
+    # Entwurf der Folgewoche (Inhaber 19.11.2026: die Preise der neuen Woche exportieren, bevor sie veröffentlicht sind): andere KW, ein Preis höher
+    wd = json.loads(json.dumps(wm)); wd['meta'].update(week=46); wd['items'][1]['price'] = wert(13.75)
+    r = post(a, 'save_draft', {'model': wd, 'revision': get(a, 'draft')[1]['revision']}); check('WinAB: Entwurf KW 46/2026 gespeichert, nicht veröffentlicht', r[0] == 200, r)
+    soll_e = soll.replace(f"{c[0]['code']};12,50", f"{c[0]['code']};13,75")
     post(a, 'user_save', {'name': 'Wina', 'username': 'wina', 'role': 'viewer', 'active': True, 'password': 'Leserin-Zugang-1', 'mustChange': False, 'grant': ['angebot.winab_export']})
     wina_id = next(u['id'] for u in get(a, 'users')[1]['users'] if u['username'] == 'wina')
     post(a, 'user_save', {'name': 'Eddi', 'username': 'eddi', 'role': 'editor', 'active': True, 'password': 'Bearbeiter-Zugang-1', 'mustChange': False})
@@ -190,11 +194,21 @@ with sync_playwright() as p:
     w.click('#dlg-stock-item .dlg-head [data-close]'); w.wait_for_selector('#dlg-stock-item:not([open])', state='attached')
     # Bereich Import: eigene Gruppe „Export“ – auch für jemanden, der sonst nichts importieren darf (Leserolle nur mit diesem Recht)
     w.click('#vt-importe'); w.wait_for_selector('#view-importe [data-imp-export="winab"]')
-    check('WinAB: im Bereich Import in der Gruppe „Export“ (Leserolle mit dem Recht: Menüpunkt sichtbar, keine Importe, kein „Keine Importe verfügbar“)',
-          w.text_content('#view-importe .imp-gruppe:has([data-imp-export="winab"]) h2') == 'Export' and 'Export für WinAB' in w.inner_text('#view-importe .imp-art[data-export="winab"]')
+    titel = w.eval_on_selector_all('#view-importe .imp-gruppe:has([data-imp-export="winab"]) :is(h2, h3)', 'hs => hs.map((h) => h.textContent)')
+    check('WinAB: im Bereich Import in der Gruppe „Export“ zwei Einträge mit ihrer Woche – Entwurf und Veröffentlicht (Leserolle mit dem Recht: Menüpunkt sichtbar, keine Importe, kein „Keine Importe verfügbar“)',
+          titel == ['Export', 'Export für WinAB – Entwurf (KW 46/2026)', 'Export für WinAB – Veröffentlicht (KW 45/2026)']
+          and 'noch nicht veröffentlicht' in w.inner_text('.imp-art[data-export="winab_entwurf"]') and 'Kunden' in w.inner_text('.imp-art[data-export="winab"]')
           and w.text_content('.imp-art[data-export="winab"] .imp-format') == 'CSV' and w.locator('#view-importe .imp-art[data-art]').count() == 0
           and w.locator('#view-importe .ed-empty, #view-importe .imp-intro').count() == 0, w.inner_text('#view-importe'))
     w.screenshot(path=SH + '/winab-export-import.png')
+    with w.expect_download() as dl:
+        w.click('[data-imp-export="winab_entwurf"]')
+    d = dl.value; inhalt = open(d.path(), 'rb').read()
+    check('WinAB Entwurf: Datei „ImportPreise.csv“ mit den Preisen des Entwurfs (13,75 statt 12,50)', d.suggested_filename == 'ImportPreise.csv' and inhalt == soll_e.encode('ascii'), (d.suggested_filename, inhalt.decode('latin-1')))
+    w.wait_for_selector('#toast.show:has-text("KW 46/2026")')
+    t = w.inner_text('#toast')
+    check('WinAB Entwurf: Rückmeldung nennt den Entwurf, seine Woche und dass er noch nicht veröffentlicht ist', 'aus dem Entwurf KW 46/2026' in t and 'noch nicht veröffentlicht' in t and '4 Artikel' in t, t)
+    w.wait_for_selector('[data-imp-export="winab_entwurf"]:not([disabled])')
     gesperrt = []   # Zustand des Knopfs, während der Server die Datei erzeugt
     def beim_abruf(route): gesperrt.append(w.locator('[data-imp-export="winab"]').is_disabled()); route.continue_()
     w.route('**/api/?action=angebot_winab_export*', beim_abruf)
@@ -205,13 +219,18 @@ with sync_playwright() as p:
     check('WinAB: Datei heißt immer „ImportPreise.csv“ (ohne KW)', d.suggested_filename == 'ImportPreise.csv', d.suggested_filename)
     check('WinAB: Kopfzeile, je Nummer eine Zeile mit höchstem Preis (auch führende Null, Zusatzpreis), Sonderpreis wie beim Kunden, ohne ausgeblendete und Preis auf Anfrage, Komma, CRLF, ohne BOM',
           inhalt == soll.encode('ascii'), (inhalt.decode('latin-1'), soll))
-    w.wait_for_selector('#toast.show:has-text("ImportPreise.csv")')
+    w.wait_for_selector('#toast.show:has-text("veröffentlichten Wochenangebot KW 45/2026")')
     w.wait_for_selector('[data-imp-export="winab"]:not([disabled])')
     check('WinAB: Knopf während des Abrufs gesperrt (kein doppelter Export), danach wieder frei', gesperrt == [True], gesperrt)
     t = w.inner_text('#toast')
-    check('WinAB: Rückmeldung mit Anzahl, doppelten und ausgelassenen Artikeln', '4 Artikel' in t and 'KW 45/2026' in t and '2× doppelt' in t and '1 Artikel ohne Preis' in t, t)
+    check('WinAB: Rückmeldung mit Datei, Anzahl, doppelten und ausgelassenen Artikeln – und dass der Entwurf nicht enthalten ist', 'ImportPreise.csv' in t and '4 Artikel' in t and 'KW 45/2026' in t
+          and '2× doppelt' in t and '1 Artikel ohne Preis' in t and 'unveröffentlichte Änderungen im Entwurf sind nicht enthalten' in t, t)
     r = post(w, 'angebot_winab_export', {})
-    check('WinAB: Schnittstelle liefert Zahlen (4 Zeilen, 2 doppelt, 1 ohne Preis) und den festen Dateinamen', r[0] == 200 and r[1]['anzahl'] == 4 and r[1]['doppelt'] == 2 and r[1]['ohnePreis'] == 1
+    check('WinAB: Schnittstelle ohne Angabe liefert wie bisher den veröffentlichten Stand – Zahlen (4 Zeilen, 2 doppelt, 1 ohne Preis), fester Dateiname', r[0] == 200 and r[1]['anzahl'] == 4
+          and r[1]['doppelt'] == 2 and r[1]['ohnePreis'] == 1 and r[1]['datei'] == 'ImportPreise.csv' and r[1]['entwurf'] is False and r[1]['woche'] == 'KW 45/2026' and r[1]['csv'] == soll,
+          {k: v for k, v in (r[1] or {}).items() if k != 'csv'})
+    r = post(w, 'angebot_winab_export', {'entwurf': True})
+    check('WinAB: Schnittstelle mit „entwurf“ liefert den gespeicherten Entwurf (KW 46/2026)', r[0] == 200 and r[1]['entwurf'] is True and r[1]['woche'] == 'KW 46/2026' and r[1]['csv'] == soll_e
           and r[1]['datei'] == 'ImportPreise.csv', {k: v for k, v in (r[1] or {}).items() if k != 'csv'})
     post(a, 'user_save', {'name': 'Nobe', 'username': 'nobe', 'role': 'editor', 'active': True, 'password': 'Ohne-Bestand-Zugang-1', 'mustChange': False, 'deny': ['bestand.sehen']})
     nb = br.new_page(viewport={'width': 1440, 'height': 950}); nb.on('pageerror', lambda x: errs.append('nobe: ' + str(x))); login(nb, 'nobe', 'Ohne-Bestand-Zugang-1')
@@ -228,11 +247,13 @@ with sync_playwright() as p:
     anon = br.new_page(); anon.goto(B + '/admin/'); anon.wait_for_selector('#screen-auth:not([hidden])')
     check('WinAB: ohne Anmeldung 401', anon.evaluate("async () => (await fetch('../api/?action=angebot_winab_export', {method: 'POST', headers: {'Content-Type': 'application/json'}, body: '{}'})).status") == 401)
     lg = json.dumps(a.evaluate("async () => (await (await fetch('../api/?action=log')).json())"), ensure_ascii=False)
-    check('WinAB: Export im Protokoll', 'Wochenangebot KW 45/2026 für WinAB exportiert – 4 Artikel' in lg, re.findall(r'[^"]*WinAB[^"]*', lg)[:2])
+    check('WinAB: Export im Protokoll – mit Woche, der Entwurf als Entwurf gekennzeichnet', 'Wochenangebot KW 45/2026 für WinAB exportiert – 4 Artikel' in lg
+          and 'Entwurf des Wochenangebots KW 46/2026 für WinAB exportiert – 4 Artikel' in lg, re.findall(r'[^"]*WinAB[^"]*', lg)[:4])
     a.reload(); a.wait_for_selector('#screen-editor:not([hidden]) tr[data-id]')
     a.click('#vt-importe'); a.wait_for_selector('#view-importe [data-imp-export="winab"]')
-    check('WinAB: Administrator sieht den Export im Import, als letzte Gruppe nach den Importen',
-          a.eval_on_selector_all('#view-importe .imp-gruppe h2', 'hs => hs.map((h) => h.textContent)')[-1] == 'Export' and a.locator('#view-importe .imp-intro').count() == 1)
+    check('WinAB: Administrator sieht beide Exporte im Import, als letzte Gruppe nach den Importen',
+          a.eval_on_selector_all('#view-importe .imp-gruppe h2', 'hs => hs.map((h) => h.textContent)')[-1] == 'Export' and a.locator('#view-importe .imp-intro').count() == 1
+          and a.locator('#view-importe .imp-gruppe:last-child [data-imp-export]').count() == 2)
     a.screenshot(path=SH + '/winab-export-import-admin.png', full_page=True)
     # Modulzugang Angebot entzogen: trotz Recht kein Eintrag und kein Menüpunkt Import (wie bei den Importarten), Server 403
     r = post(a, 'user_save', {'id': wina_id, 'name': 'Wina', 'role': 'viewer', 'active': True, 'grant': ['angebot.winab_export'], 'deny': ['angebot.zugang']})
@@ -256,6 +277,10 @@ with sync_playwright() as p:
     check('mobil: „Export für WinAB“ im Import ohne seitliches Scrollen, Knopf ≥ 44 px mit Namen für Vorleser', m.evaluate('document.documentElement.scrollWidth') <= 390
           and bx['width'] >= 44 and bx['height'] >= 44 and 'Export für WinAB' in (mx.get_attribute('aria-label') or ''), bx)
     m.screenshot(path=SH + '/winab-export-import-390.png')
+    # Ohne offenen Entwurf ist der Arbeitsstand der veröffentlichte: „Entwurf“ liefert ihn und sagt das
+    post(a, 'publish', {'model': wd, 'revision': get(a, 'draft')[1]['revision']}); r = post(a, 'angebot_winab_export', {'entwurf': True})
+    check('WinAB: nach dem Veröffentlichen liefert „Entwurf“ den veröffentlichten Stand (KW 46/2026, entwurf: false)', r[0] == 200 and r[1]['entwurf'] is False and r[1]['woche'] == 'KW 46/2026'
+          and r[1]['csv'] == soll_e, {k: v for k, v in (r[1] or {}).items() if k != 'csv'})
     # Ohne Artikel mit Preis: keine Datei (422)
     wm['items'] = [art(c[3], 'w5', price={'status': 'request'})]
     post(a, 'publish', {'model': wm, 'revision': get(a, 'draft')[1]['revision']}); r = post(a, 'angebot_winab_export', {})

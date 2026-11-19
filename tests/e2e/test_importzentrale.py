@@ -268,8 +268,8 @@ with sync_playwright() as p:
     check('Navigation: Import als erster Punkt unter Verwaltung', a.locator('#vt-importe').is_visible() and y('#side-admin') < y('#vt-importe') < y('#vt-orders'))
     a.click('#vt-importe'); a.wait_for_selector('#view-importe .imp-art[data-art="kunden"]')
     gruppen = a.eval_on_selector_all('#view-importe .imp-gruppe', 'gs => gs.map((g) => [g.querySelector("h2").textContent, [...g.querySelectorAll(".imp-art")].map((x) => x.dataset.art)])')
-    check('Liste: alle Importarten, nach Bereich gruppiert; danach die Gruppe „Export“ (Export für WinAB, Test editor_aux)', a.locator('#view-importe .imp-art[data-art]').count() == len(ALLE)
-          and [g for g, _ in gruppen] == ['Stammdaten', 'Angebot und Bestand', 'Personal', 'Controlling', 'Export'] and a.locator('#view-importe [data-imp-export]').count() == 1
+    check('Liste: alle Importarten, nach Bereich gruppiert; danach die Gruppe „Export“ (Export für WinAB aus Entwurf und veröffentlichtem Stand, Test editor_aux)', a.locator('#view-importe .imp-art[data-art]').count() == len(ALLE)
+          and [g for g, _ in gruppen] == ['Stammdaten', 'Angebot und Bestand', 'Personal', 'Controlling', 'Export'] and a.locator('#view-importe [data-imp-export]').count() == 2
           and dict(gruppen)['Stammdaten'] == ['kunden', 'kundengruppen', 'vertreter', 'stammdaten', 'vkgruppen', 'versandarten', 'lieferanten'] and 'bestand' in dict(gruppen)['Angebot und Bestand'], gruppen)
     zb = a.inner_text('#view-importe .imp-art[data-art="bestand"]')
     check('Zeile: Name, Kurztext (ganze Beschreibung im Hinweis), Dateiart, Knopf', 'Bestandsliste aus WinAB' in zb and a.text_content('.imp-art[data-art="bestand"] .imp-format') == 'CSV / Excel'

@@ -34,7 +34,7 @@ schreibend = true
 [aktion.angebot_woche]
 oberflaeche = "angebot.eingabe"
 
-# Export für WinAB (Recht angebot.winab_export): veröffentlichtes Wochenangebot als CSV, POST wegen Protokolleintrag
+# Export für WinAB (Recht angebot.winab_export): Wochenangebot als CSV – veröffentlicht oder Entwurf, POST wegen Protokolleintrag
 [aktion.angebot_winab_export]
 oberflaeche = "angebot.eingabe"
 schreibend = true

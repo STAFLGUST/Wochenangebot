@@ -109,10 +109,12 @@ Dateien für andere Programme stehen als letzte Gruppe „Export“ in der Liste
 Eigentümer (`app/module/<modul>/…`; die Ladereihenfolge zu `admin-import.js` ist gleich).
 `recht` ist eine Liste, alle sind nötig – Fachrecht und Modulzugang des Eigentümers, wie bei den Importarten. Die Zentrale
 zeigt die Zeile nur damit (Anzeige; die Aktion des Eigentümers prüft Recht und Modulzugang selbst, GR-103), macht den Menüpunkt Import auch für Nutzer ohne Importrecht sichtbar und sperrt den Knopf „Herunterladen“,
-solange `start()` läuft. Fehler meldet `start()` selbst.
+solange `start()` läuft. Fehler meldet `start()` selbst. `name` und `kurz` liest die Zentrale bei jedem Zeichnen der Liste neu
+(dürfen sich also ändern, z. B. mit der Woche).
 
-Heute: `winab` – Export für WinAB (`app/module/angebot/winab-export.js`, Aktion `angebot_winab_export`, Rechte
-`angebot.winab_export` und `angebot.zugang`, Datei `ImportPreise.csv`).
+Heute: `winab_entwurf` und `winab` – Export für WinAB aus dem Entwurf bzw. dem veröffentlichten Stand
+(`app/module/angebot/winab-export.js`, Aktion `angebot_winab_export`, Rechte `angebot.winab_export` und `angebot.zugang`,
+Datei `ImportPreise.csv`).
 
 ## Aktionen der Zentrale
 

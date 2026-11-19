@@ -238,15 +238,20 @@ Schnittstelle `WA.angebot.sonder` (`uebernehmen`, `oeffnen`, `bearbeiten`, `stan
 
 ### Export für WinAB
 
-Eintrag „Export für WinAB“ im Bereich Import (Verwaltung → Import, Gruppe „Export“; bis 19.11.2026 ein Knopf in der
-Werkzeugleiste des Angebots): `app/module/angebot/winab-export.js` meldet ihn in `W.importExporte.winab` an, die Importzentrale
-(`admin-import.js`) zeigt die Zeile nur mit dem Recht `angebot.winab_export` und dem Modulzugang `angebot.zugang` – auch wenn der Nutzer sonst nichts importieren
-darf (`W.importSichtbar`) – und ruft beim Klick `start()` auf. Die Datei erzeugt der Server (Aktion `angebot_winab_export`, POST mit CSRF, `module/angebot/winab-export.php`) aus dem
-**veröffentlichten** Wochenangebot über `offer_resolve()` – also mit Sonderpreisen und ohne ausgeblendete oder ausverkaufte
-Artikel – und gibt `{datei, csv, anzahl, doppelt, ohnePreis, woche}` zurück; der Browser speichert `csv` unter `datei` – immer
-`ImportPreise.csv` (Auftrag des Inhabers 19.11.2026, ohne Woche).
-Je Artikelnummer (`code_key`) eine Zeile mit dem höchsten Preis aus Preis und Zusatzpreisen; Format `Artikelnummer;Preis`
-mit Kopfzeile, Dezimalkomma, CRLF, ohne BOM. Jeder Export steht im Protokoll (Bereich „Angebote“).
+Zwei Einträge „Export für WinAB“ im Bereich Import (Verwaltung → Import, Gruppe „Export“; bis 19.11.2026 ein Knopf in der
+Werkzeugleiste des Angebots): „Entwurf (KW n/JJJJ)“ und „Veröffentlicht (KW n/JJJJ)“. `app/module/angebot/winab-export.js`
+meldet sie in `W.importExporte.winab_entwurf` und `W.importExporte.winab` an (Woche aus `W.angebot.wochen()`, `admin.js`), die
+Importzentrale (`admin-import.js`) zeigt die Zeilen nur mit dem Recht `angebot.winab_export` und dem Modulzugang
+`angebot.zugang` – auch wenn der Nutzer sonst nichts importieren darf (`W.importSichtbar`) – und ruft beim Klick `start()` auf.
+Vor dem Export des Entwurfs wird wie vor dem Drucken gespeichert (`W.angebot.druck.bereit()`).
+
+Die Datei erzeugt der Server (Aktion `angebot_winab_export`, POST mit CSRF, `module/angebot/winab-export.php`): ohne Angabe
+aus dem **veröffentlichten** Wochenangebot, mit `{entwurf: true}` aus dem **gespeicherten Entwurf** (ohne offenen Entwurf
+ebenfalls aus dem veröffentlichten). Beides läuft über `offer_resolve()` – also mit Sonderpreisen und ohne ausgeblendete oder
+ausverkaufte Artikel. Antwort: `{datei, csv, anzahl, doppelt, ohnePreis, woche, entwurf}` – `entwurf` und `woche` sagen, was
+wirklich in der Datei steht; der Browser speichert `csv` unter `datei`, immer `ImportPreise.csv` (Auftrag des Inhabers
+19.11.2026, ohne Woche). Je Artikelnummer (`code_key`) eine Zeile mit dem höchsten Preis aus Preis und Zusatzpreisen; Format
+`Artikelnummer;Preis` mit Kopfzeile, Dezimalkomma, CRLF, ohne BOM. Jeder Export steht im Protokoll (Bereich „Angebote“).
 
 ### Werbung schalten
 

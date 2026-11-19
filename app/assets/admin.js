@@ -5203,6 +5203,8 @@
       sonder: { uebernehmen: (r) => { if (angeboteUebernehmen(r)) changed({ render: true }); }, artikel: (id) => memberCount(id),
         oeffnen(id) { if (!knownOffer(id)) return false; setView('edit'); setOffer(id); return true; }, bearbeiten: null,
         stand: sonderStand, text: sonderText },
+      // Export für WinAB (app/module/angebot/winab-export.js): Woche des Entwurfs und des veröffentlichten Stands, je „KW n/JJJJ“ oder leer
+      wochen: () => ({ entwurf: model && model.meta.week ? wkLong(model.meta) : '', veroeffentlicht: published && published.meta.week ? wkLong(published.meta) : '' }),
       druck: { adresse: () => (model ? pvUrl(curOffer) : ''), name: () => offerName(curOffer),
         adresseFuer: (oid, entwurf) => (entwurf ? pvUrl(oid || OSTD) : angebotsseite('?' + (oid && oid !== OSTD ? 'angebot=' + encodeURIComponent(oid) + '&' : '') + 't=' + Date.now())),
         async bereit() { const a = document.activeElement; if (a && a.matches && a.matches('.in')) a.dispatchEvent(new Event('change', { bubbles: true })); if (unsaved()) await saveNow(); } } },
