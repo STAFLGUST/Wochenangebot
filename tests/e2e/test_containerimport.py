@@ -117,13 +117,15 @@ st, r = O.call('containerimport_start')
 check('Modulzugang ohne „EUDR ansehen“: 403', st == 403 and 'Berechtigung' in r.get('error', ''), (st, r))
 check('ohne „EUDR ansehen“: auch prüfen und exportieren 403', O.call('containerimport_eudr_pruefen', {'dateien': [DATEI]})[0] == 403 and O.call('containerimport_eudr_export&sendung=x')[0] == 403)
 st, r = L.call('containerimport_start')
-check('nur ansehen: Stand ohne Recht zu bearbeiten, leer', st == 200 and r['rechte'] == {'bearbeiten': False} and r['betriebe'] == [] and r['sendungen'] == [], (st, r))
+check('nur ansehen: Stand ohne Recht zu bearbeiten, leer', st == 200 and r['rechte'] == {'bearbeiten': False, 'whisp': False} and r['betriebe'] == [] and r['sendungen'] == [], (st, r))
 check('nur ansehen: Speichern 403', [L.call(a, {})[0] for a in ('containerimport_eudr_betriebe_save', 'containerimport_eudr_sendung_save', 'containerimport_eudr_gegenpruefung', 'containerimport_eudr_sendung_abschluss')] == [403] * 4)
 csrf = I.csrf; I.csrf = ''
 check('Speichern ohne CSRF: 403', I.call('containerimport_eudr_sendung_save', SENDUNG)[0] == 403)
 I.csrf = csrf
 check('schreibende Aktionen per GET: 405', [I.call(a)[0] for a in ('containerimport_eudr_pruefen', 'containerimport_eudr_betriebe_save', 'containerimport_eudr_sendung_save')] == [405] * 3)
 st, r = I.call('containerimport_start')
+check('Whisp-Abfrage ohne Zugangsschlüssel auf dem Server: nicht angeboten, Aktion 503', r['rechte'] == {'bearbeiten': True, 'whisp': False}
+      and I.call('containerimport_eudr_whisp', {'id': 'x'})[0] == 503 and L.call('containerimport_eudr_whisp', {'id': 'x'})[0] == 403, r.get('rechte'))
 check('bearbeiten: Stand mit Ländern und Portalen', st == 200 and r['rechte']['bearbeiten'] and r['laender']['PY'] == {'name': 'Paraguay', 'klasse': 'standard'}
       and r['laender']['NZ'] == {'name': 'Neuseeland', 'klasse': None}   # wählbar, Einstufung nicht hinterlegt
       and set(r['portale']) == {'gnw', 'whisp', 'sonst'} and r['portale']['gnw']['name'] == 'Global Nature Watch', (st, r))
@@ -558,6 +560,7 @@ with sync_playwright() as pw:
     ort = k.evaluate("(m) => { const k = document.querySelector('#ci-karte'), r = k.getBoundingClientRect(), p = k.staflKarte.position(m[0] + 0.004, m[1] + 0.003); return [r.left + p[0], r.top + p[1]]; }", nord['mitte'])
     k.mouse.click(ort[0], ort[1]); k.wait_for_selector('#dlg-betrieb[open] #betrieb-karte[data-karte="bereit"] canvas', timeout=60000)
     check('Karte mit Bildern: Klick in eine Fläche öffnet ihren Betrieb', k.inner_text('#betrieb-titel') == 'Estancia Ejemplo Norte', k.inner_text('#betrieb-titel'))
+    check('Fenster „Betrieb“ ohne Whisp-Schlüssel: kein Knopf „In Whisp prüfen“', k.locator('#betrieb-whisp').count() == 0)
     check('Fenster „Betrieb“: dieselbe Auswahl der Ebenen, genau diese Fläche', k.evaluate(ebenen % '#betrieb-karte') == {'satellit': True, 'wald2020': False, 'verlust': True, 'grund': False}
           and not k.is_checked('#betrieb-karte .ci-k-ebenen input[value="wald2020"]') and k.evaluate("document.querySelector('#betrieb-karte').staflKarte.gebiete()") == 1)
     k.evaluate("window.altesFenster = document.querySelector('#betrieb-karte')")

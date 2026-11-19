@@ -72,3 +72,35 @@ im Browser. Dafür ist kein Schritt auf dem Server nötig – das Release genüg
   das der Dienst liefert (am 18.11.2026: 2025); die Karte findet es selbst.
 - **Bildauswertung:** eine Schätzung, kein Nachweis. Sie trägt nichts ein und ändert kein Risikoprofil.
 - **Rückfall:** `sh /opt/wochenangebot/deploy/release-zurueck.sh`. Die Karte zeigt dann wieder Herkunftskarte bzw. Umrisse.
+
+## 7. Whisp automatisch abfragen (ab dem Release mit der Whisp-Abfrage)
+
+Auftrag des Inhabers 19.11.2026. Im Fenster „Betrieb“ schickt der Knopf „In Whisp prüfen“ den Umriss an Whisp (FAO) und zeigt
+das Ergebnis als Vorschlag für die Gegenprüfung. Ohne Schlüssel auf dem Server gibt es den Knopf nicht – das Release allein
+ändert also nichts.
+
+**Einrichten (einmal, Serverkonsole, Ordner `/opt/wochenangebot`):**
+
+1. Bei Whisp anmelden (`https://whisp.openforis.org/`), auf der Kontoseite den Schlüssel erzeugen. Er wird nur einmal
+   vollständig gezeigt. Ein neu erzeugter Schlüssel macht den alten sofort ungültig.
+2. In `.env` eine Zeile ergänzen: `WHISP_API_KEY=<Schlüssel>` (nie ins Repository, nie in einen Chat).
+3. `docker compose up -d app-mitarbeiter`
+4. Prüfen: Betrieb öffnen → „In Whisp prüfen“ → nach kurzer Zeit „Ergebnis von Whisp“.
+
+**Jährlich:** Der Schlüssel gilt 365 Tage. Danach meldet der Knopf „Whisp lehnt den Zugangsschlüssel ab“ – Schritte 1 bis 3 wiederholen.
+
+**Abschalten:** Zeile in `.env` leeren, Schritt 3. Der Knopf verschwindet.
+
+- **Was an Whisp geht:** nur der Umriss der Fläche, ohne Namen und Kennung, mit dem Schlüssel des Kontos. Whisp wertet mit
+  Google Earth Engine aus. Für das Verzeichnis der Verarbeitungstätigkeiten: FAO (Whisp) und Google als Empfänger der Umrisse
+  von Lieferantenbetrieben. Jeder Versand steht im Aktivitätsprotokoll.
+- **Was zurückkommt:** Baumbestand Ende 2020, Störungen vor und nach 2020, Flächen je Datensatz, Risiko für Dauerkulturen,
+  Ackerkulturen und Holz. **Für Rinder gibt Whisp noch kein eigenes Risiko aus** (Stand 19.11.2026, angekündigt). Der
+  Vorschlag folgt deshalb der Regel, die Whisp für Ackerkulturen nutzt: Baumbestand 2020 und Störung danach = Befund.
+  „Ja“ heißt bei Whisp mehr als rund 10 % der Fläche – auf großen Betrieben ist das viel. Zeigt ein Datensatz ab 0,5 ha
+  Störung nach 2020, macht die Seite deshalb keinen Vorschlag.
+- **Nichts wird von selbst eingetragen.** Erst „Gegenprüfung eintragen“ speichert.
+- **Grenzen von Whisp** (am 19.11.2026 abgerufen): höchstens 100.000 ha je Fläche; die Auswertung dauert Sekunden bis Minuten.
+- *Getestet* mit nachgebautem Dienst (Gruppe `containerimport_whisp`). *Am echten Dienst geprüft* nur ohne Schlüssel:
+  Adressen, Antwortformat laut Beschreibung der Schnittstelle, Ablehnung ohne und mit falschem Schlüssel. **Der erste echte
+  Abruf ist Schritt 4** – weicht das Ergebnis vom Erwarteten ab, bitte die Anzeige als Bildschirmfoto zurückmelden.

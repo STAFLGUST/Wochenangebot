@@ -73,6 +73,8 @@ SUITES['einkauf'] = SUITES['bestellung']
 SUITES['sicherheit_it'] = SUITES['bestellung']
 SUITES['versand'] = SUITES['kunden_mail']
 SUITES['containerimport'] = (8790, 'data-seed', True)
+SUITES['containerimport_whisp'] = (8790, 'data-seed', True, {   # Abfrage von Whisp (nachgebauter Dienst auf dem Hilfsport, Testschlüssel)
+    'WA_WHISP_URL': 'http://127.0.0.1:{AUX}/api', 'WHISP_API_KEY': 'nur-fuer-den-test'})
 SUITES['angebotsliste'] = (8790, 'data-seed', True)
 SUITES['rechte'] = SUITES['kunden_mail']
 SUITES['web_app'] = (8790, 'data-seed', True)

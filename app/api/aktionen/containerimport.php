@@ -35,8 +35,10 @@ switch ($action) {
         /* Stand der Seite: Betriebe und Sendungen mit Befunden und Risikoprofil, Länder, Portale, eigene Rechte */
         case 'containerimport_start': {
             $me = eudr_leser();
+            require_once __DIR__ . '/../module/containerimport/whisp.php';
             header('Cache-Control: no-store');
-            respond(['ok' => true, 'name' => $me['name'], 'rechte' => ['bearbeiten' => may($me, 'containerimport.eudr_bearbeiten')]] + eudr_stand());
+            $darf = may($me, 'containerimport.eudr_bearbeiten');
+            respond(['ok' => true, 'name' => $me['name'], 'rechte' => ['bearbeiten' => $darf, 'whisp' => $darf && whisp_eingerichtet()]] + eudr_stand());
         }
 
         /* Dateien prüfen, ohne zu speichern: Lieferanten-GeoJSON, gelesene Berichte, eingefügte Koordinaten (POST wegen Inhalt) */
@@ -132,6 +134,25 @@ switch ($action) {
             });
             audit('containerimport', 'EUDR: Gegenprüfung für „' . $name . '“ eingetragen');
             respond(['ok' => true] + eudr_stand());
+        }
+
+        /* Whisp (FAO) für einen Betrieb abfragen: mit „id“ starten (nur der Umriss geht an Whisp), mit „token“ den Stand holen.
+           Antwort: fertig + ergebnis (Eigenschaften der Fläche) oder token + prozent. Speichert nichts – die Oberfläche zeigt
+           das Ergebnis als Vorschlag für die Gegenprüfung. Ohne WHISP_API_KEY in .env ist die Abfrage aus (503). */
+        case 'containerimport_eudr_whisp': {
+            eudr_bearbeiter();
+            require_once __DIR__ . '/../module/containerimport/whisp.php';
+            if (!whisp_eingerichtet()) fail('Die Abfrage von Whisp ist nicht eingerichtet.', 503);
+            $b = body();
+            if (isset($b['token'])) respond(['ok' => true] + whisp_stand(is_string($b['token']) ? $b['token'] : ''));
+            $liste = eudr_betriebe()['liste'];
+            $i = eudr_stelle($liste, is_string($b['id'] ?? null) ? $b['id'] : '');
+            if ($i === null) fail('Betrieb nicht gefunden.', 404);
+            $betrieb = eudr_betrieb_sicht($liste[$i]);
+            if (($betrieb['flaeche'] ?? 0) > WHISP_MAX_HA) fail('Die Fläche ist für Whisp zu groß (mehr als ' . number_format(WHISP_MAX_HA, 0, ',', '.') . ' ha).', 422);
+            $antwort = whisp_starten($betrieb);
+            audit('containerimport', 'EUDR: Umriss von „' . $betrieb['name'] . '“ zur Prüfung an Whisp gesendet');
+            respond(['ok' => true] + $antwort);
         }
 
         /* Sendung anlegen oder ändern. Nach dem Abschluss lassen sich nur noch Sorgfaltserklärung und Notiz ergänzen. */
