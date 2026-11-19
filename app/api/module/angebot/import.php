@@ -323,7 +323,8 @@ function angebot_preise_uebernehmen(array $e, array $me): array
                     $label = $model['items'][$a['i']]['price']['label'] ?? '';
                     $model['items'][$a['i']]['price'] = ['status' => 'value', 'value' => $a['wert']] + ($label !== '' ? ['label' => $label] : []);
                 } else {
-                    $model['items'][$a['i']]['variants'][$oid] = ['status' => 'value', 'value' => $a['wert']];
+                    $zp = $model['items'][$a['i']]['variants'][$oid]['alt'] ?? null;   // Zusatzpreise des Angebots bleiben (wie altPrices)
+                    $model['items'][$a['i']]['variants'][$oid] = ['status' => 'value', 'value' => $a['wert']] + (is_array($zp) ? ['alt' => $zp] : []);
                 }
                 $preise++;
             }

@@ -1,15 +1,16 @@
 <?php
 declare(strict_types=1);
 /* Angebot · Kundenangebot kopieren (Entscheidung des Inhabers 13.11.2026): ein Angebot als neues Kundenangebot anlegen und
-   dabei alles außer den Kunden mitnehmen – eigene Preise (variants), eigene Bezeichnungen (namen) und Angebotsgruppen
-   (gruppen), Empfehlungen und Sonderposten je Angebot (sale.offers), Werbung (meta.werbung), das Design
+   dabei alles außer den Kunden mitnehmen – eigene Preise mit Zusatzpreisen (variants), eigene Bezeichnungen (namen),
+   Angebotsgruppen (gruppen) und Reihenfolge der Artikel (stellen), Empfehlungen und Sonderposten je Angebot (sale.offers), Werbung (meta.werbung), das Design
    (module/angebot/design.php) und die Regel der Artikelliste (fallback). Damit kommen auch
    ausgeblendete Artikel richtig mit: bei „eigener Artikelliste“ fehlt ihr Eintrag, bei „folgt dem Wochenangebot“ steht dort
    {status: hidden} – beides wird genau so übernommen. Kundengruppen bleiben leer (jede Gruppe gehört zu höchstens einem
    Angebot); Kunden sehen die Kopie erst mit zugeordneter Kundengruppe und nach dem Veröffentlichen.
    Quelle Wochenangebot: neues Angebot mit eigener Artikelliste aus allen Artikeln des Wochenangebots, der Wochenpreis wird
-   eigener Preis (ohne Preis → „auf Anfrage“, wie beim Hinzufügen im Editor; Zusatzpreise entfallen wie in jedem
-   Kundenangebot), dazu Empfehlungen und Werbung des Wochenangebots. Eigene Bezeichnungen gibt es im Wochenangebot nicht.
+   eigener Preis (ohne Preis → „auf Anfrage“, wie beim Hinzufügen im Editor), die Zusatzpreise des Wochenangebots werden
+   Zusatzpreise der Kopie (variants[<neu>].alt), dazu Empfehlungen und Werbung des Wochenangebots. Eigene Bezeichnungen und
+   Stellen gibt es im Wochenangebot nicht – die Kopie zeigt die Reihenfolge des Wochenangebots.
    Ablauf unter den Sperren entwurf → angebote (dieselbe Reihenfolge wie der Preisimport, module/angebot/import.php): erst
    alles prüfen – Revision des Entwurfs (409 wie save_draft), Stand der Angebotsliste (409 wie offers_save), Quelle (404),
    Name, höchstens OFFER_MAX –, dann die neue ID wie offers_save bilden (nie die ID eines gelöschten Angebots), Angebotsliste
@@ -40,8 +41,9 @@ function angebot_kopie_modell(array $m, string $quelle, string $neu): array
             if (angebot_kopie_enthalten($it, OFFER_STD, 'standard')) {
                 $p = is_array($it['price'] ?? null) ? $it['price'] : [];
                 $wert = $p['value'] ?? null;
-                $m['items'][$i]['variants'][$neu] = ($p['status'] ?? '') === 'value' && (is_int($wert) || is_float($wert))
-                    ? ['status' => 'value', 'value' => (float)$wert] : ['status' => 'request'];
+                $alt = is_array($it['altPrices'] ?? null) ? $it['altPrices'] : [];   // Zusatzpreise (geprüft in clean_model)
+                $m['items'][$i]['variants'][$neu] = (($p['status'] ?? '') === 'value' && (is_int($wert) || is_float($wert))
+                    ? ['status' => 'value', 'value' => (float)$wert] : ['status' => 'request']) + ($alt ? ['alt' => $alt] : []);
             }
         } else {
             $v = is_array($it['variants'] ?? null) ? ($it['variants'][$quelle] ?? null) : null;
@@ -50,6 +52,8 @@ function angebot_kopie_modell(array $m, string $quelle, string $neu): array
             if (is_string($nm) && trim($nm) !== '') { $m['items'][$i]['namen'][$neu] = $nm; $z['namen']++; }
             $gr = is_array($it['gruppen'] ?? null) ? ($it['gruppen'][$quelle] ?? null) : null;
             if (is_string($gr)) $m['items'][$i]['gruppen'][$neu] = $gr;   // eigene Angebotsgruppe (geprüft in clean_model)
+            $st = is_array($it['stellen'] ?? null) ? ($it['stellen'][$quelle] ?? null) : null;
+            if (is_int($st)) $m['items'][$i]['stellen'][$neu] = $st;   // Reihenfolge der Artikel (nur eigene Artikelliste, clean_model)
         }
         $so = is_array($it['sale'] ?? null) && is_array($it['sale']['offers'] ?? null) ? ($it['sale']['offers'][$quelle] ?? null) : null;
         if (is_array($so)) { $m['items'][$i]['sale']['offers'][$neu] = $so; $z['empfehlungen']++; }

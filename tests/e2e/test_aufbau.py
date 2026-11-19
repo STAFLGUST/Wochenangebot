@@ -534,6 +534,8 @@ with sync_playwright() as p:
     ec['gruppen'] = {EIGEN: GE}
     kopf = [i for i in mb['items'] if i['groupId'] == GB_ and i is not ec] + [ec, ne, eg]
     mb['items'] = kopf + [i for i in mb['items'] if i not in kopf]
+    for i in mb['items']:
+        i.pop('stellen', None)   # Reihenfolge je Angebot aus den Schritten oben verwerfen: hier gilt die eben gebaute gemeinsame
     assert gi[GB_] < gi[GE] and A.call('save_draft', {'model': mb, 'revision': rb})[0] == 200
     a.reload(); a.wait_for_selector('#screen-editor:not([hidden]) tr[data-id]')
     veroeffentlichen(a)
@@ -545,8 +547,8 @@ with sync_playwright() as p:
     oeffnen(a)
     a.click(f'#abf-liste .abf-g[data-gid="{GE}"] [data-ab="g-auf"]')
     hinweis = a.inner_text('#dlg-aufbau .abf-hinweis')
-    check('eigene Gruppe: Hinweis sagt, dass die Stelle in der Gruppe noch für alle Angebote gilt', dlg_art(a, GE) == [ec['id'], eg['id']]
-          and 'stehen in anderen Angeboten in einer anderen Gruppe' in hinweis and 'Gemeinsam bleibt nur die Stelle eines Artikels in seiner Gruppe' in hinweis, hinweis)
+    check('eigene Gruppe: Hinweis „nur hier“, keine gemeinsame Stelle mehr (Reihenfolge je Angebot, Inhaber 19.11.2026)', dlg_art(a, GE) == [ec['id'], eg['id']]
+          and 'stehen in anderen Angeboten in einer anderen Gruppe' in hinweis and 'Gemeinsam bleibt' not in hinweis, hinweis)
     shot(a.locator('#dlg-aufbau'), SH + '/aufbau-nur-hier-1280.png')
     a.click(f'#abf-liste .abf-a[data-aid="{ec["id"]}"] [data-ab="a-runter"]')
     a.click('#abf-ok'); a.wait_for_selector('#dlg-aufbau', state='hidden'); gespeichert(a)

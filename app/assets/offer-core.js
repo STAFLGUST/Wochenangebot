@@ -495,7 +495,7 @@
   }
   /* Unterschiede zwischen zwei Modellen (z. B. Entwurf ↔ veröffentlicht) */
   /* Kundenpreis eines Artikels als Vergleichswert (ohne Kennzeichen „aus Vorwoche“) */
-  const variantSig = (v) => (!v ? '' : v.status === 'value' ? 'v' + v.value : v.status);
+  const variantSig = (v) => (!v ? '' : (v.status === 'value' ? 'v' + v.value : v.status) + (v.alt && v.alt.length ? '/' + priceSig({ price: v.alt[0], altPrices: v.alt.slice(1) }) : ''));   // mit Zusatzpreisen des Angebots
   /* Empfehlung (früher „Sonderpreis“) je Artikel: sale = {value: Empfehlungspreis | mark: true (ohne Preisänderung),
      offers?: {<Angebot>: {value} | {status: 'mark'} | {status: 'none'}}} – Grundwert für alle Angebote, je Angebot änderbar.
      empfehlungFor: null = keine Empfehlung, sonst {preis: Zahl | null (nur hervorheben)}; saleFor: nur der Preis. */
@@ -513,6 +513,17 @@
   function saleFor(it, oid) { const e = empfehlungFor(it, oid); return e ? e.preis : null; }
   const saleSig = (s) => (!s || (typeof s.value !== 'number' && !s.mark) ? '' : (typeof s.value === 'number' ? 'v' + s.value : 'm')
     + Object.keys(s.offers || {}).sort().map((k) => k + ':' + (s.offers[k].status === 'none' || s.offers[k].status === 'mark' ? s.offers[k].status : s.offers[k].value)).join(','));
+  /* Artikel eines Angebots in Angebotsreihenfolge (Inhaber 19.11.2026, jedes Angebot für sich): nach der Gruppe in diesem
+     Angebot (gruppe(it) → Gruppen-ID, Reihenfolge von groups), darin nach der Stelle des Angebots (it.stellen[oid], nur Angebote
+     mit eigener Artikelliste); Artikel ohne Stelle dahinter in ihrer gemeinsamen Reihenfolge (Stelle in items). Wochenangebot
+     und Angebote, die ihm folgen, haben keine Stellen – dort ordnet items. Gleiche Regel auf dem Server: angebot_reihe. */
+  function angebotsFolge(items, groups, oid, gruppe) {
+    const gi = new Map(groups.map((g, i) => [g.id, i]));
+    const stelle = (it) => { const s = it.stellen && it.stellen[oid]; return Number.isInteger(s) ? s : Infinity; };
+    const vor = (a, b) => (a === b ? 0 : a < b ? -1 : 1);
+    return items.map((it, i) => ({ it, i, g: gi.has(gruppe(it)) ? gi.get(gruppe(it)) : Infinity, s: stelle(it) }))
+      .sort((a, b) => vor(a.g, b.g) || vor(a.s, b.s) || a.i - b.i).map((x) => x.it);
+  }
   /* eigene Bezeichnungen und Gruppen je Angebot (it.namen, it.gruppen) als Vergleichstext */
   const eigenSig = (it) => ['namen', 'gruppen'].map((f) => { const n = it[f] || {}; return Object.keys(n).sort().map((k) => k + '=' + n[k]).join('|'); }).join('\u0000');
   function diffOffers(oldM, newM) {
@@ -761,7 +772,7 @@
     const groups = mergeList(base.groups, mine.groups, theirs.groups, 'group', conflicts, (b, m, t) => ({ id: m.id, ...mergeFields(b, m, t, ['id'], (f, mv, tv) => conflicts.push({ kind: 'group', id: m.id, name: m.name, field: f, mine: mv, theirs: tv })) }));
     const items = mergeList(base.items, mine.items, theirs.items, 'item', conflicts, (b, m, t) => {
       const c = (f, mv, tv) => conflicts.push({ kind: 'item', id: m.id, name: (m.code ? m.code + ' · ' : '') + m.name, field: f, mine: mv, theirs: tv });
-      const jeAngebot = { variants: 'variant:', namen: 'name:', gruppen: 'gruppe:' };   // je Angebot getrennt: zwei Personen bearbeiten verschiedene Angebote
+      const jeAngebot = { variants: 'variant:', namen: 'name:', gruppen: 'gruppe:', stellen: 'stelle:' };   // je Angebot getrennt: zwei Personen bearbeiten verschiedene Angebote
       const it = { id: m.id, ...mergeFields(b, m, t, ['id', ...Object.keys(jeAngebot)], c) };
       for (const [f, p] of Object.entries(jeAngebot)) {
         const v = mergeFields((b || {})[f], m[f], t[f], [], (oid, mv, tv) => c(p + oid, mv, tv));
@@ -788,7 +799,7 @@
   const api = {
     CATEGORY_ORDER, CONDITIONS, CONDITION_LABELS, PRICE_STATUS_LABELS,
     xlsxReadWorkbook, parseOfferWorkbook, parseOfferGrid, parsePrice, suggestAttributes,
-    enrichOffer, isoWeekRange, diffOffers, validateModel, clean, stripFrisch, nameVorschlag, titelMitKw, nachKategorien, normalizeItem, ORIGIN_CODES, mergeModels, sameModel: same, saleFor, empfehlungFor,
+    enrichOffer, isoWeekRange, angebotsFolge, diffOffers, validateModel, clean, stripFrisch, nameVorschlag, titelMitKw, nachKategorien, normalizeItem, ORIGIN_CODES, mergeModels, sameModel: same, saleFor, empfehlungFor,
   };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   else root.OfferCore = api;
