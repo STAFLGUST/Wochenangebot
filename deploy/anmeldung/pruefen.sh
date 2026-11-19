@@ -187,7 +187,7 @@ d = json.load(open(sys.argv[1])); basis = json.load(open(sys.argv[2]))['services
 app, ma, was = s['app'], s['app-mitarbeiter'], sys.argv[3]
 ziele = lambda x: {v['target'] for v in x.get('volumes', [])}
 if was == 'kunden-geheimnisse':
-    assert not [k for k in app['environment'] if k.startswith('OIDC_') or k.startswith('WA_KONTEN')], app['environment'].keys()
+    assert not [k for k in app['environment'] if k.startswith(('OIDC_', 'WA_KONTEN', 'WHISP_'))], app['environment'].keys()
 elif was == 'kunden-dateien':
     # Anwendung, Datenordner und die beiden Härtungsdateien (nur lesend) – kein Dashboard, keine Keycloak-Hosts, keine Geheimnisse
     assert ziele(app) == {'/var/www/html', '/var/www/html/data', '/usr/local/etc/php/kunde.d/zz-kunde.ini',

@@ -10,7 +10,6 @@ declare(strict_types=1);
 if (!defined('WA_API')) { http_response_code(404); exit; }   // nur über api/index.php nutzbar
 
 const WHISP_URL = 'https://whisp.openforis.org/api';
-const WHISP_MAX_HA = 100000;      // größte Fläche je Abfrage (maxPlotAreaHa aus /api/config)
 const WHISP_TOKEN = '/^[A-Za-z0-9_-]{6,128}$/';   // Vorgangsnummer – wird Teil der Adresse, deshalb streng geprüft
 const WHISP_MAX_FELDER = 300;     // höchstens so viele Eigenschaften reicht der Server an die Oberfläche weiter
 
@@ -24,8 +23,7 @@ function whisp_http(string $methode, string $pfad, ?array $inhalt = null): array
     if ($inhalt !== null) $kopf[] = 'Content-Type: application/json';
     $ctx = stream_context_create(['http' => ['method' => $methode, 'header' => implode("\r\n", $kopf),
         'content' => $inhalt === null ? '' : json_encode($inhalt, JSON_UNESCAPED_SLASHES | JSON_THROW_ON_ERROR),
-        'timeout' => 20, 'ignore_errors' => true, 'follow_location' => 0, 'max_redirects' => 0, 'user_agent' => 'STAFL-Plattform'],
-        'ssl' => ['verify_peer' => true, 'verify_peer_name' => true]]);
+        'timeout' => 20, 'ignore_errors' => true, 'follow_location' => 0, 'max_redirects' => 0, 'user_agent' => 'STAFL-Plattform']]);
     $http_response_header = [];
     $roh = @file_get_contents((getenv('WA_WHISP_URL') ?: WHISP_URL) . $pfad, false, $ctx, 0, 8 * 1024 * 1024);   // WA_WHISP_URL nur in den Tests
     $status = preg_match('#^HTTP/\S+\s+(\d{3})#', (string)($http_response_header[0] ?? ''), $m) ? (int)$m[1] : 0;
@@ -37,7 +35,7 @@ function whisp_http(string $methode, string $pfad, ?array $inhalt = null): array
    Alles andere endet mit einer verständlichen Meldung (fail). */
 function whisp_antwort(int $status, ?array $json): array
 {
-    $code = is_string($json['code'] ?? null) ? $json['code'] : '';
+    $code = is_string($json['code'] ?? null) && preg_match('/^[a-z_]{1,60}$/', $json['code']) ? $json['code'] : '';   // fremder Text: nur das erwartete Muster
     if ($status === 200 && $code === 'analysis_completed') return ['fertig' => true, 'ergebnis' => whisp_ergebnis($json['data'] ?? null)];
     if ($status === 202) {
         $token = $json['data']['token'] ?? '';
@@ -51,18 +49,18 @@ function whisp_antwort(int $status, ?array $json): array
         $status === 429 => 'Whisp nimmt gerade keine weiteren Abfragen an. Bitte in einigen Minuten erneut versuchen.',
         $status === 404 => 'Whisp kennt diese Abfrage nicht mehr. Bitte neu starten.',
         $status === 408 || $code === 'analysis_timeout' => 'Whisp hat die Auswertung nach Zeitüberschreitung abgebrochen. Bitte erneut versuchen.',
-        $code === 'validation_plot_too_large' => 'Die Fläche ist für Whisp zu groß.',
+        $code === 'validation_plot_too_large' => 'Die Fläche ist für Whisp zu groß (Grenze von Whisp: 100.000 ha, Stand 11/2026).',
         str_starts_with($code, 'validation_') => 'Whisp nimmt diesen Umriss nicht an (' . $code . ').',
         default => 'Whisp meldet einen Fehler. Bitte später erneut versuchen.',
     }, $status === 401 ? 503 : 502);
 }
 
-/* Abfrage für einen Betrieb starten (nur der Umriss geht hinaus) */
-function whisp_starten(array $betrieb): array
+/* Abfrage für einen Umriss starten – die Funktion bekommt nur die Geometrie, Namen kann sie nicht versenden */
+function whisp_starten(array $geometrie): array
 {
     return whisp_antwort(...whisp_http('POST', '/submit/geojson', [
         'type' => 'FeatureCollection',
-        'features' => [['type' => 'Feature', 'properties' => new stdClass(), 'geometry' => $betrieb['geometrie']]],
+        'features' => [['type' => 'Feature', 'properties' => new stdClass(), 'geometry' => $geometrie]],
         'analysisOptions' => ['async' => true, 'unitType' => 'ha'],
     ]));
 }

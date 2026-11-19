@@ -2,7 +2,7 @@
 
 <!-- ERZEUGT von `python3 werkzeuge/doku.py erzeugen` – nicht von Hand ändern. Quelle: Funktionen und Kommentare im Code. Die CI prüft, dass diese Datei zum Code passt. -->
 
-11 Dateien, 138 Funktionen – in der Reihenfolge der Datei, **fett** die Abschnitte. Text = erste Aussage des Kommentars direkt über der Funktion (Python: Docstring). Übersicht aller Module: [README.md](README.md).
+11 Dateien, 139 Funktionen – in der Reihenfolge der Datei, **fett** die Abschnitte. Text = erste Aussage des Kommentars direkt über der Funktion (Python: Docstring). Übersicht aller Module: [README.md](README.md).
 
 ## `app/api/aktionen/containerimport.php`
 
@@ -106,7 +106,7 @@ _Container-Import · EUDR_
 - `whisp_eingerichtet()`
 - `whisp_http(methode, pfad, inhalt)` – Eine Anfrage an Whisp: [Status, JSON\|null]; Status 0 = nicht erreichbar.
 - `whisp_antwort(status, json)` – Antwort von Whisp für die Oberfläche: ['fertig' => true, 'ergebnis' => …] oder ['fertig' => false, 'token', 'prozent'].
-- `whisp_starten(betrieb)` – Abfrage für einen Betrieb starten (nur der Umriss geht hinaus)
+- `whisp_starten(geometrie)` – Abfrage für einen Umriss starten – die Funktion bekommt nur die Geometrie, Namen kann sie nicht versenden
 - `whisp_stand(token)` – Stand einer gestarteten Abfrage
 - `whisp_ergebnis(daten)` – Eigenschaften der ersten Fläche aus dem Ergebnis – nur einfache Werte mit harmlosen Namen (die Oberfläche maskiert sie zusätzlich); der zurückgelieferte …
 
@@ -142,7 +142,8 @@ _STAFL-Plattform · Modul Container-Import, Reiter EUDR – Hilfen und Kontrolle
 - `betriebOeffnen(id)`
 - `auswertungZeigen(b, darf)` – Bildauswertung im Fenster „Betrieb“: Wald Ende 2020 und Waldverlust seit 2021 in der Fläche – eine Schätzung aus den Kartenbildern (eudr-auswertung.js).
 - `vorschlagNehmen(d, portal)` – Vorschlag (Bildauswertung oder Whisp) in das Formular der Gegenprüfung schreiben; der Bearbeiter entscheidet und trägt selbst ein. dataset: ergebnis ('' = …
-- `whispPruefen()` – Whisp für den geöffneten Betrieb abfragen (Server: containerimport_eudr_whisp) und das Ergebnis als Vorschlag zeigen (Deutung: eudr-whisp.js).
+- `whispPruefen()` – Whisp für den geöffneten Betrieb abfragen (Server: containerimport_eudr_whisp).
+- `whispZeigen(el, ergebnis, b)` – Ergebnis von Whisp als Vorschlag zeigen (Deutung: eudr-whisp.js); „Übernehmen“ füllt nur das Formular
 - `betriebAusFenster(b, w)` – Felder des Fensters als Betrieb für den Server
 - `betriebSpeichern(zusatz)`
 - `pruefungEintragen()`
@@ -214,7 +215,7 @@ _STAFL-Plattform · Container-Import · EUDR – Karte der Herkunftsbetriebe._
 
 _Container-Import · EUDR_
 
-- `deuten({…})`
+- `deuten({…}, abHa)`
 
 ## `tests/e2e/test_containerimport.py`
 

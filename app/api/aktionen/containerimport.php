@@ -2,7 +2,7 @@
 declare(strict_types=1);
 /* Aktionen: Modul Container-Import, Reiter EUDR – Herkunftsbetriebe mit Geolokalisierung, Sendungen, Risikoprofil und
    GeoJSON-Datei für das EU-Informationssystem (Oberfläche containerimport.intern; Funktionen in
-   app/api/module/containerimport/eudr.php und geometrie.php).
+   app/api/module/containerimport/eudr.php und geometrie.php), Abfrage von Whisp für die Gegenprüfung (whisp.php).
    Rechte (GR-103): Modulzugang containerimport.zugang für jede Aktion; Inhalte (ansehen, Dateien prüfen, exportieren) mit
    containerimport.eudr_sehen, alles, was speichert, mit containerimport.eudr_bearbeiten. Nichts wird gelöscht (archivieren, Gegenprüfungen nur ergänzen);
    eine abgeschlossene Bewertung hält Profil und Betriebe als Schnappschuss fest (GR-106).
@@ -144,15 +144,14 @@ switch ($action) {
             require_once __DIR__ . '/../module/containerimport/whisp.php';
             if (!whisp_eingerichtet()) fail('Die Abfrage von Whisp ist nicht eingerichtet.', 503);
             $b = body();
+            if (session_status() === PHP_SESSION_ACTIVE) session_write_close();   // sonst wartet jede weitere Anfrage der Sitzung, solange Whisp nicht antwortet
             if (isset($b['token'])) respond(['ok' => true] + whisp_stand(is_string($b['token']) ? $b['token'] : ''));
             $liste = eudr_betriebe()['liste'];
             $i = eudr_stelle($liste, is_string($b['id'] ?? null) ? $b['id'] : '');
             if ($i === null) fail('Betrieb nicht gefunden.', 404);
-            $betrieb = eudr_betrieb_sicht($liste[$i]);
-            if (($betrieb['flaeche'] ?? 0) > WHISP_MAX_HA) fail('Die Fläche ist für Whisp zu groß (mehr als ' . number_format(WHISP_MAX_HA, 0, ',', '.') . ' ha).', 422);
-            $antwort = whisp_starten($betrieb);
-            audit('containerimport', 'EUDR: Umriss von „' . $betrieb['name'] . '“ zur Prüfung an Whisp gesendet');
-            respond(['ok' => true] + $antwort);
+            if ($liste[$i]['geometrie']['type'] === 'Point') fail('Whisp braucht einen Umriss – für einen einzelnen Punkt wäre das Ergebnis nicht die Fläche des Betriebs.', 422);
+            audit('containerimport', 'EUDR: Umriss von „' . $liste[$i]['name'] . '“ zur Prüfung an Whisp gesendet');   // vor dem Versand: auch ein abgelehnter Umriss hat das Haus verlassen
+            respond(['ok' => true] + whisp_starten($liste[$i]['geometrie']));
         }
 
         /* Sendung anlegen oder ändern. Nach dem Abschluss lassen sich nur noch Sorgfaltserklärung und Notiz ergänzen. */

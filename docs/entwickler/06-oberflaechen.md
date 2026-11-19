@@ -854,7 +854,10 @@ Caddy setzt auf allen Hosts `script-src 'self'` (ohne `'unsafe-inline'`), `conne
   `WHISP_API_KEY` darf nie in den Browser. Hinaus geht nur der Umriss; die Seite fragt alle drei Sekunden nach, bis Whisp
   fertig ist. `eudr-whisp.js` (`EUDR_WHISP.deuten`) macht aus den Eigenschaften einen Vorschlag; `vorschlagNehmen` in
   `containerimport.js` füllt das Formular – für Bildauswertung und Whisp gleich. Gespeichert wird nichts. Für Rinder gibt
-  Whisp noch kein eigenes Risiko aus; kommt die Spalte `risk_cattle`, hat sie in `deuten` schon Vorrang. Tests: Gruppe
+  Whisp noch kein eigenes Risiko aus; kommt die Spalte `risk_cattle`, hat sie in `deuten` schon Vorrang. `deuten` ist
+  vorsichtig: „ohne Befund“ nur ohne merkliche Störung nach 2020, bei unerwartetem Format kein Vorschlag – dann wird die
+  Auswahl „Ergebnis“ leer und `pruefungEintragen` verlangt eine Wahl. Die Vorgangsnummer geht per POST statt in die Adresse
+  (mit ihr lässt sich das Ergebnis bei Whisp ohne Anmeldung abrufen); deshalb der Schalter `sperre` in `api()`. Tests: Gruppe
   `containerimport_whisp` mit nachgebautem Dienst; gegen das echte Whisp lässt sich nur mit Schlüssel prüfen.
 - **Zweite Kartendatei „herkunft“** (Südamerika und Neuseeland, `/karte/herkunft.pmtiles`; Laden und Auslieferung: Kapitel Betrieb):
   `STAFLKarte.verfuegbar('herkunft')` und `erstellen(el, { karte: 'herkunft', … })`; Punkte können eine eigene Farbe tragen

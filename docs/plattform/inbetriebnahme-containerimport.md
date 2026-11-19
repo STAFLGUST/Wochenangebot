@@ -77,7 +77,8 @@ im Browser. Dafür ist kein Schritt auf dem Server nötig – das Release genüg
 
 Auftrag des Inhabers 19.11.2026. Im Fenster „Betrieb“ schickt der Knopf „In Whisp prüfen“ den Umriss an Whisp (FAO) und zeigt
 das Ergebnis als Vorschlag für die Gegenprüfung. Ohne Schlüssel auf dem Server gibt es den Knopf nicht – das Release allein
-ändert also nichts.
+ändert fachlich also nichts. Weil sich die Container-Beschreibung ändert, startet dieses Release aber alle Container neu
+(`deploy/freigabe-einspielen.sh`: kurze Unterbrechung aller Adressen, auch der Kundenseite) – den Zeitpunkt entsprechend wählen.
 
 **Einrichten (einmal, Serverkonsole, Ordner `/opt/wochenangebot`):**
 
@@ -95,10 +96,12 @@ das Ergebnis als Vorschlag für die Gegenprüfung. Ohne Schlüssel auf dem Serve
   Google Earth Engine aus. Für das Verzeichnis der Verarbeitungstätigkeiten: FAO (Whisp) und Google als Empfänger der Umrisse
   von Lieferantenbetrieben. Jeder Versand steht im Aktivitätsprotokoll.
 - **Was zurückkommt:** Baumbestand Ende 2020, Störungen vor und nach 2020, Flächen je Datensatz, Risiko für Dauerkulturen,
-  Ackerkulturen und Holz. **Für Rinder gibt Whisp noch kein eigenes Risiko aus** (Stand 19.11.2026, angekündigt). Der
-  Vorschlag folgt deshalb der Regel, die Whisp für Ackerkulturen nutzt: Baumbestand 2020 und Störung danach = Befund.
-  „Ja“ heißt bei Whisp mehr als rund 10 % der Fläche – auf großen Betrieben ist das viel. Zeigt ein Datensatz ab 0,5 ha
-  Störung nach 2020, macht die Seite deshalb keinen Vorschlag.
+  Ackerkulturen und Holz. **Für Rinder gibt Whisp noch kein eigenes Risiko aus** (Stand 19.11.2026, angekündigt).
+- **Vorschlag der Seite:** „Befund“, wenn Whisp Baumbestand 2020 und eine Störung danach meldet (die Regel, die Whisp für
+  Ackerkulturen nutzt). „Ohne Befund“ nur, wenn außerdem kein Datensatz eine Störung nach 2020 ab 0,5 ha zeigt – „ja“ heißt
+  bei Whisp mehr als rund 10 % der Fläche, auf großen Betrieben sind das viele Hektar. In allen anderen Fällen macht die
+  Seite keinen Vorschlag; das Feld „Ergebnis“ bleibt dann leer und muss gewählt werden. Störungen sind auch Brand und Ernte.
+- **Nur Umrisse:** Für einen Betrieb mit nur einem Punkt gibt es den Knopf nicht (Whisp würde nur die Stelle auswerten).
 - **Nichts wird von selbst eingetragen.** Erst „Gegenprüfung eintragen“ speichert.
 - **Grenzen von Whisp** (am 19.11.2026 abgerufen): höchstens 100.000 ha je Fläche; die Auswertung dauert Sekunden bis Minuten.
 - *Getestet* mit nachgebautem Dienst (Gruppe `containerimport_whisp`). *Am echten Dienst geprüft* nur ohne Schlüssel:
