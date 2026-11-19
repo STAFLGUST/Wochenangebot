@@ -170,8 +170,7 @@ switch ($action) {
                     eudr_rev_pruefen($b, $alt, 'Der Container');
                 } elseif (count($doc['liste']) >= EUDR_MAX_SENDUNGEN) fail('Zu viele Container.', 422);
                 if ($alt && !empty($alt['abschluss'])) {
-                    // einem Eintrag von vorher lässt sich die Partienummer auch nach dem Abschluss nachtragen – einmal
-                    $neu = eudr_sendung_laufend($b, $alt) + ($alt['partie'] === '' ? ['partie' => eudr_text($b['partie'] ?? '', 20, 'Partienummer')] : []) + $alt;
+                    $neu = eudr_sendung_laufend($b, $alt) + eudr_sendung_nachtrag($b, $alt) + $alt;
                 } else {
                     $ids = array_column(eudr_betriebe()['liste'], 'id');
                     // „+ $alt“ am Ende: Felder, die dieser Stand nicht kennt (nach einem Rückfall von einer neueren Version), bleiben erhalten
@@ -186,6 +185,15 @@ switch ($action) {
             });
             audit('containerimport', 'Container „' . eudr_container_name($s) . '“ gespeichert');
             respond(['ok' => true, 'id' => $s['id']] + eudr_stand());
+        }
+
+        /* Schlachthof anlegen oder ändern (Stammdaten unter dem Lieferanten; archivieren statt löschen) */
+        case 'containerimport_schlachthof_save': {
+            $me = eudr_bearbeiter();
+            $b = body();
+            $h = with_lock(EUDR_SPERRE, fn() => ci_schlachthof_speichern($b, $me));
+            audit('containerimport', 'Schlachthof „' . $h['name'] . '“ gespeichert');
+            respond(['ok' => true, 'id' => $h['id']] + eudr_stand());
         }
 
         /* Bewertung abschließen (Ergebnis, Begründung, Schnappschuss von Profil und Betrieben) oder wieder öffnen (mit Grund).
@@ -206,6 +214,7 @@ switch ($action) {
                 } else {
                     if (!empty($s['abschluss'])) fail('Die Bewertung ist bereits abgeschlossen.', 409);
                     $s['abschluss'] = eudr_abschluss($s, $b, array_map('eudr_betrieb_sicht', eudr_betriebe()['liste']), $me);
+                    $s['schlachthofName'] = ci_schlachthof_namen()[$s['schlachthof']] ?? $s['schlachthofName'];   // ab jetzt der Name von heute (GR-106)
                 }
                 $s['rev']++; $s['geaendert'] = eudr_wer($me);
                 $doc['liste'][$i] = $s;

@@ -3,7 +3,8 @@
    18. und 19.11.2026; Gestaltung „C2“).
    Begriffe: die Seite sagt „Container“ und „Farmer“; im Code und in den Daten heißen sie „sendung“ und „betrieb“
    (bestehende Daten und Aktionsnamen, siehe app/api/module/containerimport/eudr.php).
-   Ansichten: Container (Lieferant, Nummern, Stand, Risikoprofil), Farmer (Geolokalisierung, Bericht, eigene Gegenprüfung), Karte.
+   Ansichten: Container (Lieferant, Schlachthof, Nummern, Stand, Risikoprofil), Schlachthöfe (Stammdaten unter dem Lieferanten,
+   eigene Datei schlachthoefe.js über die Brücke window.STAFL_CI), Farmer (Geolokalisierung, Bericht, eigene Gegenprüfung), Karte.
    Daten: containerimport_start (Stand), containerimport_eudr_pruefen (Dateien prüfen, ohne zu speichern),
    containerimport_eudr_betriebe_save, _original, _gegenpruefung, _sendung_save, _sendung_abschluss (jede Antwort bringt den neuen
    Stand mit), containerimport_eudr_export (GeoJSON für das EU-Informationssystem), containerimport_eudr_whisp (Whisp für
@@ -74,6 +75,20 @@
      Containers, auch wenn der Lieferant dort inzwischen fehlt – nur ein genau so gewählter Text verknüpft. */
   const lieferantText = (l) => `${l.name} (${l.nr})`;
   const lieferantWahl = (s) => (s && s.lieferantNr && !S.d.lieferanten.some((l) => l.nr === s.lieferantNr) ? [{ nr: s.lieferantNr, name: s.lieferant }, ...S.d.lieferanten] : S.d.lieferanten);
+  /* Eingabe im Feld „Lieferant“ → { lieferantNr, lieferant }; alt = der gespeicherte Eintrag (Container oder Schlachthof) */
+  const lieferantAus = (text, alt) => {
+    const g = lieferantWahl(alt).find((l) => lieferantText(l).toLowerCase() === text.toLowerCase());
+    return { lieferantNr: g ? g.nr : '', lieferant: g ? g.name : text };   // ohne Treffer freier Text ohne Verknüpfung
+  };
+  /* Gleicher Lieferant = gleicher Schlüssel: mit Nummer der Stammdaten die Nummer, sonst der Name (wie ci_lieferant_schluessel
+     auf dem Server). Danach richtet sich, welche Schlachthöfe im Fenster „Container“ zur Wahl stehen: die aktiven des
+     Lieferanten; der gespeicherte bleibt wählbar, auch archiviert. */
+  const lieferantSchluessel = (x) => (x.lieferantNr ? 'nr:' + x.lieferantNr : 'name:' + x.lieferant.toLowerCase());
+  function schlachthofWahl(lieferant, aktuell) {
+    const k = lieferantSchluessel(lieferant);
+    const liste = S.d.schlachthoefe.filter((x) => (x.aktiv && lieferantSchluessel(x) === k) || x.id === aktuell).sort((a, b) => a.name.localeCompare(b.name, 'de'));
+    return [['', liste.length ? '— kein Schlachthof —' : '— für diesen Lieferanten ist keiner angelegt —'], ...liste.map((x) => [x.id, x.name + (x.zulassung ? ` · ${x.zulassung}` : '') + (x.aktiv ? '' : ' (archiviert)')])];
+  }
   const landName = (code) => (S.d.laender[code] ? S.d.laender[code].name : code);
   const betrieb = (id) => S.d.betriebe.find((b) => b.id === id);
   const sendung = (id) => S.d.sendungen.find((s) => s.id === id);
@@ -94,7 +109,7 @@
     if (o.wahl) eingabe = `<select ${attr}>${o.wahl.map(([v, t]) => `<option value="${esc(v)}"${String(wert ?? '') === String(v) ? ' selected' : ''}>${esc(t)}</option>`).join('')}</select>`;
     else if (o.lang) eingabe = `<textarea ${attr} rows="${o.lang}">${esc(wert ?? '')}</textarea>`;
     else eingabe = `<input ${attr} type="${o.typ || 'text'}" value="${esc(wert ?? '')}"${o.typ === 'date' ? ` max="2099-12-31"` : ''}${o.platz ? ` placeholder="${esc(o.platz)}"` : ''}${o.zahl ? ' inputmode="decimal"' : ''}${o.liste ? ` list="${o.liste}"` : ''}>`;
-    return `<label class="ci-feld${o.breit ? ' breit' : ''}"><span>${esc(label)}</span>${eingabe}${o.hinweis ? `<small>${esc(o.hinweis)}</small>` : ''}</label>`;
+    return `<label class="ci-feld${o.breit ? ' breit' : ''}${o.zwei ? ' zwei' : ''}"><span>${esc(label)}</span>${eingabe}${o.hinweis ? `<small>${esc(o.hinweis)}</small>` : ''}</label>`;
   }
   /* Werte aller benannten Felder eines Formulars als Objekt (Kontrollkästchen mit gleichem Namen als Liste) */
   function werte(form) {
@@ -108,33 +123,43 @@
   /* Auswahl der Länder; ein gespeicherter Code außerhalb der Liste (z. B. aus einem GeoJSON) bleibt wählbar */
   const laenderWahl = (aktuell) => [...Object.entries(S.d.laender).map(([c, l]) => [c, `${l.name} (${c})`]), ...(aktuell && !S.d.laender[aktuell] ? [[aktuell, aktuell]] : [])].sort((a, b) => a[1].localeCompare(b[1], 'de'));
   function oeffnen(dlg) { if (!dlg.open) dlg.showModal(); }
+  /* Feld „Lieferant“ mit den Vorschlägen der Stammdaten (Fenster „Container“ und „Schlachthof“); kennung = id der Vorschlagsliste */
+  function lieferantFeld(s, aus, neu, kennung) {
+    const darf = S.d.rechte.bearbeiten, verknuepft = lieferantWahl(s).find((l) => l.nr === s.lieferantNr);   // die Stammdaten bekommt nur, wer bearbeiten darf
+    const hinweis = verknuepft ? `Stammdaten Nr. ${s.lieferantNr}${!darf || S.d.lieferanten.includes(verknuepft) ? '' : ' – dort nicht mehr vorhanden'}`
+      : !darf ? 'Nicht mit den Stammdaten verknüpft.' : S.d.lieferanten.length ? (neu ? 'Aus den Stammdaten wählen: Namen tippen und den Vorschlag anklicken.' : 'Nicht mit den Stammdaten verknüpft – Namen tippen und den Vorschlag anklicken.') : 'In der Verwaltung sind noch keine Lieferanten eingelesen – freier Text.';
+    return feld('Lieferant', 'lieferant', verknuepft && !aus ? lieferantText(verknuepft) : s.lieferant, { aus, liste: kennung, hinweis })
+      + `<datalist id="${kennung}">${lieferantWahl(s).map((l) => `<option value="${esc(lieferantText(l))}">`).join('')}</datalist>`;
+  }
   const zahlText = (v) => (v === null || v === undefined || v === '' ? '' : String(v).replace('.', ','));
 
   /* ---------- Seite ---------- */
   function zeichnen() {
     const d = S.d, aktiv = d.betriebe.filter((b) => b.aktiv), offen = d.sendungen.filter((s) => s.aktiv && !s.abschluss);
     $('#ci-unterzeile').textContent = `${offen.length} Container in Prüfung · ${aktiv.length} Farmer`;
-    const sichten = [['sendungen', 'Container', d.sendungen.filter((s) => s.aktiv).length], ['betriebe', 'Farmer', aktiv.length], ['karte', 'Karte', null]];
+    const sichten = [['sendungen', 'Container', d.sendungen.filter((s) => s.aktiv).length], ['schlachthoefe', 'Schlachthöfe', d.schlachthoefe.filter((x) => x.aktiv).length], ['betriebe', 'Farmer', aktiv.length], ['karte', 'Karte', null]];
     $('#ci-sichten').innerHTML = sichten.map(([k, t, n]) => `<button class="ci-chip" type="button" data-sicht="${k}" aria-pressed="${S.sicht === k}">${t}${n === null ? '' : ` <b>${n}</b>`}</button>`).join('');
     $('#ci-knoepfe').innerHTML = d.rechte.bearbeiten
       ? `<button class="ci-knopf" type="button" id="ci-lesen">${icon('hoch')}Unterlagen einlesen</button><button class="ci-knopf primaer" type="button" id="ci-sendung-neu">${icon('plus')}Neuer Container</button>` : '';
     sichtZeichnen();
   }
-  const sichtZeichnen = () => ({ sendungen: sendungenSicht, betriebe: betriebeSicht, karte: karteSicht })[S.sicht]();
+  const SICHTEN = { sendungen: sendungenSicht, betriebe: betriebeSicht, karte: karteSicht };   // weitere Dateien tragen ihre Ansicht ein (Brücke STAFL_CI)
+  const sichtZeichnen = () => SICHTEN[S.sicht]();
 
-  const suchfeld = (platz, name) => `<div class="ci-suchzeile"><input type="search" id="ci-suche" value="${esc(S.suche[S.sicht])}" placeholder="${platz}" aria-label="${name} durchsuchen"></div>`;
+  const suchfeld = (platz, name) => `<input type="search" id="ci-suche" value="${esc(S.suche[S.sicht])}" placeholder="${platz}" aria-label="${name} durchsuchen">`;
+  const suchzeile = (platz, name) => `<div class="ci-suchzeile">${suchfeld(platz, name)}</div>`;
   function sendungenSicht() {
-    const liste = S.d.sendungen.filter((s) => (s.aktiv || S.archiv) && SU.findet(S.suche.sendungen, s.partie, s.akte, s.container, s.nummer, s.lieferant, s.lieferantNr, s.ware, landName(s.land), s.dds.referenz))
+    const liste = S.d.sendungen.filter((s) => (s.aktiv || S.archiv) && SU.findet(S.suche.sendungen, s.partie, s.akte, s.container, s.nummer, s.lieferant, s.lieferantNr, s.schlachthofName, s.ware, landName(s.land), s.dds.referenz))
       .sort((a, b) => b.erstellt.t.localeCompare(a.erstellt.t));
     const zeile = (s) => `<tr data-sendung="${esc(s.id)}" tabindex="0" class="${s.aktiv ? '' : 'ci-archiv'}">
       <td><span class="ci-name">${esc(s.name)}</span><span class="ci-unter">${esc([s.akte && `Akte ${s.akte}`, s.container && `Container ${s.container}`].filter(Boolean).join(' · ') || '—')}</span></td>
-      <td data-t="Lieferant"><span>${esc(s.lieferant)}</span><span class="ci-unter">${esc(landName(s.land))}${s.lieferantNr ? ` · Nr. ${esc(s.lieferantNr)}` : ' · nicht mit den Stammdaten verknüpft'}</span></td>
+      <td data-t="Lieferant"><span>${esc(s.lieferant)}</span><span class="ci-unter">${esc(landName(s.land))}${s.lieferantNr ? ` · Nr. ${esc(s.lieferantNr)}` : ' · nicht mit den Stammdaten verknüpft'}${s.schlachthofName ? ` · ${esc(s.schlachthofName)}` : ''}</span></td>
       <td data-t="Ware"><span>${esc(s.ware || '—')}</span><span class="ci-unter">${s.mengeKg === null ? '' : F.kg(s.mengeKg)}${s.lose ? ` · Lose ${esc(s.lose)}` : ''}</span></td>
       <td data-t="Stand">${marke(S.d.staende[s.stand], s.stand === 'angekommen' ? 'ok' : '')}</td>
       <td data-t="Farmer" class="ci-r">${s.betriebe.length}</td>
       <td data-t="Risikoprofil">${profilMarke(s.profil)}</td>
       <td data-t="Bewertung">${s.abschluss ? marke(ERGEBNIS[s.abschluss.ergebnis][0], ERGEBNIS[s.abschluss.ergebnis][1]) + `<span class="ci-unter">${tag(s.abschluss.wer.t)} · ${esc(s.abschluss.wer.von)}</span>` : '<span class="ci-leise">in Prüfung</span>'}${s.dds.referenz ? `<span class="ci-unter">Sorgfaltserklärung <span class="ci-zahlen">${esc(s.dds.referenz)}</span></span>` : ''}</td></tr>`;
-    $('#ci-inhalt').innerHTML = (S.d.sendungen.length ? suchfeld('Partie, Akte, Containernummer, Lieferant, Ware', 'Container') : '') + (liste.length
+    $('#ci-inhalt').innerHTML = (S.d.sendungen.length ? suchzeile('Partie, Akte, Containernummer, Lieferant, Schlachthof, Ware', 'Container') : '') + (liste.length
       ? `<div class="r-karte"><table class="ci-tab" id="ci-sendungen"><thead><tr><th scope="col">Partie</th><th scope="col">Lieferant</th><th scope="col">Ware</th><th scope="col">Stand</th><th scope="col" class="ci-r">Farmer</th><th scope="col">Risikoprofil</th><th scope="col">Bewertung</th></tr></thead><tbody>${liste.map(zeile).join('')}</tbody></table></div>`
       : `<div class="r-karte"><p class="ci-leer">${S.d.sendungen.length ? 'Kein Container passt zur Suche.' : 'Noch kein Container. Legen Sie einen Container an und lesen Sie die Unterlagen des Lieferanten ein.'}</p></div>`) + archivSchalter();
   }
@@ -156,7 +181,7 @@
         <td data-t="Gegenprüfung">${marke(p[0], p[1])}<span class="ci-unter">${esc(pruefungText(b))}</span></td>
         <td data-t="Container" class="ci-r">${n}</td></tr>`;
     };
-    $('#ci-inhalt').innerHTML = suchfeld('Name, Erzeuger, Kennung, Region, Lieferant', 'Farmer')
+    $('#ci-inhalt').innerHTML = suchzeile('Name, Erzeuger, Kennung, Region, Lieferant', 'Farmer')
       + (liste.length
         ? `<div class="r-karte"><table class="ci-tab" id="ci-betriebe"><thead><tr><th scope="col">Farmer</th><th scope="col">Lage</th><th scope="col">Kennung</th><th scope="col" class="ci-r">Fläche</th><th scope="col">Geolokalisierung</th><th scope="col">Bericht Entwaldung</th><th scope="col">Eigene Prüfung</th><th scope="col" class="ci-r">Container</th></tr></thead><tbody>${liste.map(zeile).join('')}</tbody></table></div>`
         : `<div class="r-karte"><p class="ci-leer">${S.d.betriebe.length ? 'Kein Farmer passt zur Suche.' : 'Noch kein Farmer. Über „Unterlagen einlesen“ kommen Berichte und GeoJSON-Dateien der Lieferanten herein.'}</p></div>`)
@@ -350,27 +375,26 @@
       nachweis: { erklaerung: '', rueckverfolgung: 'offen', haltung: 'offen', legalitaet: 'offen' }, dds: { referenz: '', datum: '' }, notiz: '', aktiv: true, abschluss: null } : sendung(id);
     if (!s) return;
     const darf = S.d.rechte.bearbeiten, zu = !!s.abschluss, aus = !darf || zu;
+    const nachtragbar = (wert) => aus && !(darf && wert === '');   // gesperrt – außer es fehlt noch: dann einmal nachtragen (eudr_sendung_nachtrag)
     const waehlbar = S.d.betriebe.filter((b) => b.aktiv || s.betriebe.includes(b.id)).sort((a, b) => a.name.localeCompare(b.name, 'de'));
     const gezeigt = zu ? s.abschluss.betriebe : waehlbar;
     const betriebe = gezeigt.length
       ? `<ul class="ci-wahl">${gezeigt.map((b) => `<li><label><input type="checkbox" name="betriebe" data-liste value="${esc(b.id)}"${zu || s.betriebe.includes(b.id) ? ' checked' : ''}${aus ? ' disabled' : ''}>
           <span><strong>${esc(b.name)}</strong><small>${esc([b.erzeuger, landName(b.land), b.region].filter(Boolean).join(' · '))} · ${ha(b.flaeche)}</small></span></label>${marke(GEO[b.stand][0], GEO[b.stand][1])}</li>`).join('')}</ul>`
       : '<p class="ci-leise ci-klein">Noch keine Farmer vorhanden – zuerst die Unterlagen des Lieferanten einlesen.</p>';
-    const verknuepft = lieferantWahl(s).find((l) => l.nr === s.lieferantNr);   // die Stammdaten bekommt nur, wer bearbeiten darf
-    const lieferantHinweis = verknuepft ? `Stammdaten Nr. ${s.lieferantNr}${!darf || S.d.lieferanten.includes(verknuepft) ? '' : ' – dort nicht mehr vorhanden'}`
-      : S.d.lieferanten.length ? (neu ? 'Aus den Stammdaten wählen: Namen tippen und den Vorschlag anklicken.' : 'Nicht mit den Stammdaten verknüpft – Namen tippen und den Vorschlag anklicken.') : 'In der Verwaltung sind noch keine Lieferanten eingelesen – freier Text.';
+    const hofWahl = zu && s.schlachthof ? [[s.schlachthof, s.schlachthofName]] : schlachthofWahl(s, s.schlachthof);   // nach dem Abschluss der Name von damals
     const abschluss = zu ? `<div class="ci-abschluss">${marke(ERGEBNIS[s.abschluss.ergebnis][0], ERGEBNIS[s.abschluss.ergebnis][1])}<span>Bewertung abgeschlossen am ${tag(s.abschluss.wer.t)} von ${esc(s.abschluss.wer.von)}${s.abschluss.begruendung ? `<small>${esc(s.abschluss.begruendung)}</small>` : ''}</span></div>` : '';
     $('#sendung-inhalt').dataset.id = s.id;
     $('#sendung-inhalt').innerHTML = kopf('sendung-titel', neu ? 'Neuer Container' : `Container ${s.name}`, neu ? '' : `${esc(s.lieferant)} · ${esc(landName(s.land))}`)
       + `<div class="dlg-body">${abschluss}
         <div class="ci-raster drei">
-          ${feld('Partienummer', 'partie', s.partie, { aus: aus && !(darf && s.partie === ''), platz: 'interne Referenz des Einkaufs' })}${feld('Aktennummer', 'akte', s.akte, { aus: !darf })}${feld('Containernummer', 'container', s.container, { aus: !darf, platz: 'z. B. MSKU 907032 3', hinweis: HINWEIS_NUMMER[s.containerPruefung] })}
-          ${feld('Lieferant', 'lieferant', verknuepft && !aus ? lieferantText(verknuepft) : s.lieferant, { aus, liste: 'ci-lieferanten', hinweis: lieferantHinweis })}${feld('Herkunftsland', 'land', s.land, { wahl: laenderWahl(s.land), aus })}${feld('Stand', 'stand', s.stand, { wahl: Object.entries(S.d.staende), aus: !darf })}
-          ${feld('Ware', 'ware', s.ware, { aus, platz: 'z. B. Rindfleisch, gekühlt, ohne Knochen' })}${feld('Zolltarifnummer', 'hs', s.hs, { aus, platz: 'z. B. 0201' })}${feld('Menge netto (kg)', 'mengeKg', zahlText(s.mengeKg), { zahl: true, aus })}
-          ${feld('Auftragsnummer des Lieferanten', 'nummer', s.nummer, { aus, platz: 'z. B. FB26-001' })}${feld('Schlachtung von', 'schlachtVon', s.schlachtVon, { typ: 'date', aus })}${feld('Schlachtung bis', 'schlachtBis', s.schlachtBis, { typ: 'date', aus })}
-          ${feld('Schlachtlose', 'lose', s.lose, { aus, breit: true, platz: 'z. B. 2101, 2102, 2103' })}
+          ${feld('Partienummer', 'partie', s.partie, { aus: nachtragbar(s.partie), platz: 'interne Referenz des Einkaufs' })}${feld('Aktennummer', 'akte', s.akte, { aus: !darf })}${feld('Containernummer', 'container', s.container, { aus: !darf, platz: 'z. B. MSKU 907032 3', hinweis: HINWEIS_NUMMER[s.containerPruefung] })}
+          ${lieferantFeld(s, aus, neu, 'ci-lieferanten')}${feld('Schlachthof', 'schlachthof', s.schlachthof, { wahl: hofWahl, aus: nachtragbar(s.schlachthof) })}${feld('Herkunftsland', 'land', s.land, { wahl: laenderWahl(s.land), aus })}
+          ${feld('Stand', 'stand', s.stand, { wahl: Object.entries(S.d.staende), aus: !darf })}${feld('Ware', 'ware', s.ware, { aus, platz: 'z. B. Rindfleisch, gekühlt, ohne Knochen' })}${feld('Zolltarifnummer', 'hs', s.hs, { aus, platz: 'z. B. 0201' })}
+          ${feld('Menge netto (kg)', 'mengeKg', zahlText(s.mengeKg), { zahl: true, aus })}${feld('Schlachtung von', 'schlachtVon', s.schlachtVon, { typ: 'date', aus })}${feld('Schlachtung bis', 'schlachtBis', s.schlachtBis, { typ: 'date', aus })}
+          ${feld('Auftragsnummer des Lieferanten', 'nummer', s.nummer, { aus, platz: 'z. B. FB26-001' })}
+          ${feld('Schlachtlose', 'lose', s.lose, { aus, zwei: true, platz: 'z. B. 2101, 2102, 2103' })}
         </div>
-        <datalist id="ci-lieferanten">${lieferantWahl(s).map((l) => `<option value="${esc(lieferantText(l))}">`).join('')}</datalist>
 
         <h3 class="ci-h">Farmer dieses Containers</h3>${betriebe}
         ${!neu && gezeigt.some((b) => s.betriebe.includes(b.id)) ? '<div class="ci-k-wrap flach" id="sendung-karte"></div>' : ''}
@@ -401,13 +425,24 @@
   }
   function sendungAusFenster() {
     const f = $('#sendung-inhalt'), w = werte(f), alt = sendung(f.dataset.id);
-    const gewaehlt = lieferantWahl(alt).find((l) => lieferantText(l).toLowerCase() === w.lieferant.toLowerCase());   // sonst freier Text ohne Verknüpfung
     return {
       id: f.dataset.id, rev: alt ? alt.rev : 0, aktiv: alt ? alt.aktiv : true, partie: w.partie, akte: w.akte, container: w.container, stand: w.stand, nummer: w.nummer,
-      lieferantNr: gewaehlt ? gewaehlt.nr : '', lieferant: w.lieferant, land: w.land, ware: w.ware, hs: w.hs, mengeKg: w.mengeKg,
+      ...lieferantAus(w.lieferant, alt), schlachthof: w.schlachthof, land: w.land, ware: w.ware, hs: w.hs, mengeKg: w.mengeKg,
       schlachtVon: w.schlachtVon, schlachtBis: w.schlachtBis, lose: w.lose, betriebe: w.betriebe || [], notiz: w.notiz,
       nachweis: { erklaerung: w.n_erklaerung, rueckverfolgung: w.n_rueckverfolgung, haltung: w.n_haltung, legalitaet: w.n_legalitaet }, dds: { referenz: w.d_referenz, datum: w.d_datum },
     };
+  }
+  /* Lieferant im Fenster geändert: zur Wahl stehen nur seine Schlachthöfe; der gewählte bleibt, wenn er dazugehört */
+  function schlachthofWahlNeu() {
+    const f = $('#sendung-inhalt'), sel = $('[name=schlachthof]', f), vorher = sel.value, alt = sendung(f.dataset.id);
+    const lieferant = lieferantAus($('[name=lieferant]', f).value.trim(), alt), gespeichert = alt && S.d.schlachthoefe.find((x) => x.id === alt.schlachthof);
+    // der gespeicherte Schlachthof bleibt wählbar (auch archiviert), solange der Lieferant wieder seiner ist
+    const aktuell = gespeichert && lieferantSchluessel(gespeichert) === lieferantSchluessel(lieferant) ? gespeichert.id : '';
+    sel.innerHTML = schlachthofWahl(lieferant, aktuell).map(([v, t]) => `<option value="${esc(v)}">${esc(t)}</option>`).join('');
+    // die Wahl bleibt, wenn sie zum Lieferanten gehört; eine dadurch verdrängte Wahl kommt zurück, sobald er wieder ihrer ist
+    const wunsch = vorher || sel.dataset.verdraengt || '';
+    sel.value = [...sel.options].some((o) => o.value === wunsch) ? wunsch : '';
+    sel.dataset.verdraengt = sel.value ? '' : wunsch;
   }
   async function sendungSpeichern(zusatz = {}) {
     const r = await api('containerimport_eudr_sendung_save', { ...sendungAusFenster(), ...zusatz });
@@ -461,7 +496,7 @@
     const zeile = (k, v) => (v ? `<tr><th scope="row">${esc(k)}</th><td>${v}</td></tr>` : '');
     $('#ci-druck').innerHTML = `<h1>Risikoprofil EUDR · Container ${esc(s.name)}</h1>
       <p>Verordnung (EU) 2023/1115 · Standard-Fleisch · gedruckt am ${F.datumZeit(new Date())} von ${esc(S.d.name)}</p>
-      <table class="ci-d-kopf">${zeile('Partienummer', esc(s.partie))}${zeile('Aktennummer', esc(s.akte))}${zeile('Lieferant', esc(s.lieferant + (s.lieferantNr ? ` (Nr. ${s.lieferantNr})` : '')))}${zeile('Auftragsnummer des Lieferanten', esc(s.nummer))}${zeile('Herkunftsland', esc(landName(s.land)))}${zeile('Ware', esc([s.ware, s.hs && `Zolltarifnummer ${s.hs}`].filter(Boolean).join(' · ')))}${zeile('Menge', s.mengeKg === null ? '' : F.kg(s.mengeKg))}
+      <table class="ci-d-kopf">${zeile('Partienummer', esc(s.partie))}${zeile('Aktennummer', esc(s.akte))}${zeile('Lieferant', esc(s.lieferant + (s.lieferantNr ? ` (Nr. ${s.lieferantNr})` : '')))}${zeile('Schlachthof', esc(s.schlachthofName))}${zeile('Auftragsnummer des Lieferanten', esc(s.nummer))}${zeile('Herkunftsland', esc(landName(s.land)))}${zeile('Ware', esc([s.ware, s.hs && `Zolltarifnummer ${s.hs}`].filter(Boolean).join(' · ')))}${zeile('Menge', s.mengeKg === null ? '' : F.kg(s.mengeKg))}
         ${zeile('Containernummer', esc(s.container))}${zeile('Schlachtung', s.schlachtVon ? `${tag(s.schlachtVon)}${s.schlachtBis ? ` bis ${tag(s.schlachtBis)}` : ''}` : '')}${zeile('Schlachtlose', esc(s.lose))}${zeile('Sorgfaltserklärung', esc([s.dds.referenz, s.dds.datum && tag(s.dds.datum)].filter(Boolean).join(' · ')))}</table>
       <h2>Farmer</h2>
       <table class="ci-d-tab"><thead><tr><th>Farmer</th><th>Erzeuger</th><th>Lage</th><th>Kennung</th><th>Fläche</th><th>Geolokalisierung</th><th>Bericht</th><th>Eigene Prüfung</th></tr></thead><tbody>
@@ -652,8 +687,9 @@
     if (t.closest('#lesen-pruefen')) { lesenPruefen(); return; }
   });
   document.addEventListener('keydown', (e) => {
-    const zeile = e.key === 'Enter' && e.target.matches('tr[data-betrieb], tr[data-sendung]') ? e.target : null;
-    if (zeile) (zeile.dataset.betrieb ? betriebOeffnen(zeile.dataset.betrieb) : sendungOeffnen(zeile.dataset.sendung));
+    if (e.key !== 'Enter' || !e.target.matches('tr[tabindex]')) return;
+    e.preventDefault();   // sonst träfe derselbe Tastendruck den Knopf „Schließen“ des eben geöffneten Fensters
+    e.target.click();     // Zeile einer Liste öffnen wie mit der Maus
   });
   document.addEventListener('input', (e) => {
     if (e.target.id !== 'ci-suche') return;
@@ -664,6 +700,8 @@
   });
   document.addEventListener('change', (e) => {
     if (e.target.id === 'ci-archiv') { S.archiv = e.target.checked; zeichnen(); }
+    if (e.target.name === 'lieferant' && e.target.form === $('#sendung-inhalt')) schlachthofWahlNeu();
+    if (e.target.name === 'schlachthof') e.target.dataset.verdraengt = '';   // von Hand gewählt (auch „kein Schlachthof“): nichts mehr zurückholen
     if (e.target.id === 'ci-karte-sendung') { S.karteSendung = e.target.value; karteSicht(); }
     if (e.target.dataset.ort !== undefined) lesenZahl();
     if (e.target.id === 'lesen-dateien' && e.target.files.length) lesenPruefen();
@@ -675,8 +713,12 @@
   $('#ci-theme').addEventListener('click', () => { document.documentElement.setAttribute('data-theme', dunkel() ? 'light' : 'dark'); themaKnopf(); });
   document.addEventListener('stafl-theme', themaKnopf);
 
-  /* ---------- Start ---------- */
-  (async () => {
+  /* Brücke für weitere Dateien des Moduls (schlachthoefe.js): dieselben Hilfen und derselbe Zustand, keine zweite Kopie.
+     Eine Datei trägt ihre Ansicht in sichten ein und hängt ihre eigenen Ereignisse an (docs/entwickler/06-oberflaechen.md). */
+  window.STAFL_CI = { S, $, esc, icon, SU, feld, kopf, werte, api, uebernehmen, toast, oeffnen, landName, laenderWahl, lieferantFeld, lieferantAus, suchfeld, archivSchalter, sichten: SICHTEN };
+
+  /* ---------- Start (nach dem Laden aller Dateien des Moduls) ---------- */
+  document.addEventListener('DOMContentLoaded', async () => {
     themaKnopf();
     const st = await api('status');
     if (st.status !== 200) { fehler(fehlerText(st, 'Der Container-Import ist gerade nicht erreichbar')); return; }
@@ -684,5 +726,5 @@
     S.csrf = st.data.csrf || '';
     if (window.STAFL_THEME) { window.STAFL_THEME.konto(st.data.user, S.csrf, API); themaKnopf(); }
     await laden(false);
-  })();
+  });
 })();

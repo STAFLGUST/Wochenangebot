@@ -41,6 +41,11 @@ schreibend = true
 oberflaeche = "containerimport.intern"
 schreibend = true
 
+# Schlachthof anlegen oder ändern (Stammdaten unter dem Lieferanten)
+[aktion.containerimport_schlachthof_save]
+oberflaeche = "containerimport.intern"
+schreibend = true
+
 # Risikobewertung eines Containers abschließen oder wieder öffnen
 [aktion.containerimport_eudr_sendung_abschluss]
 oberflaeche = "containerimport.intern"
