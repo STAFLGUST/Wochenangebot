@@ -30,7 +30,7 @@ dem Release: `curl -sI https://container-import.dashboard-stafl.de/` muss ohne Z
 | 1 | **Release freigeben** (`docs/release-freigabe.md`). Caddyfile und Compose-Datei sind geändert, die Container starten neu. Bis Schritt 2 erledigt ist, meldet nur die neue Adresse bei der Anmeldung einen Fehler; alle anderen Adressen arbeiten normal. | GitHub | Ablauf wie bei jedem Release; für diesen Stand nicht ausgeführt |
 | 2 | **Anmeldung (Keycloak):** `cd /opt/wochenangebot && sh deploy/anmeldung/konten.sh realm-aktualisieren` – erwartet: „angelegt: Client containerimport“, „erzeugt: OIDC_SECRET_CONTAINERIMPORT in .env“, „erzeugt: OIDC_CRYPTO_CONTAINERIMPORT in .env“, am Ende „Realm aktuell (Stand 19 …)“. Danach `docker compose up -d app-mitarbeiter`. Geheimnisse werden nie angezeigt. | Server | getestet nur in der CI (Keycloak-Prüfung); auf dem Server nicht ausgeführt |
 | 3 | **Adresse prüfen:** `https://container-import.dashboard-stafl.de/` öffnen → Anmeldung → Seite „Container-Import“ mit dem Reiter EUDR. | Browser | Seite getestet (Testgruppe `containerimport`); über bunny abgeleitet |
-| 4 | **Karte (bunny):** Zone `stafl-dashboard-2` → Caching → General → **„Optimize for large object delivery“ einschalten**. Ohne diese Einstellung gibt bunny die Abschnitts-Anfragen der Kartendatei nicht weiter, und die Karte zeigt nur die Länderumrisse (Befund 04.11.2026 bei der Detailkarte, `docs/bunny-cdn.md` Abschnitt 6). Die Einstellung gilt für alle Adressen dieser Zone, nicht nur für den Container-Import. Danach EUDR → Karte öffnen: Straßen und Orte in Südamerika bzw. Neuseeland. | bunny.net | abgeleitet, nicht getestet (in `stafl-dashboard-1` seit 04.11.2026 so in Betrieb) |
+| 4 | **Straßen und Orte auf der Karte (bunny, freiwillig):** Zone `stafl-dashboard-2` → Caching → General → **„Optimize for large object delivery“ einschalten**. Satellitenbild, Wald 2020 und Waldverlust brauchen das nicht – sie kommen direkt von den drei Kartendiensten (Abschnitt 6). Ohne die Einstellung fehlt nur die Ebene „Straßen und Orte“ aus der Kartendatei des Servers (bunny gibt deren Abschnitts-Anfragen sonst nicht weiter, Befund 04.11.2026, `docs/bunny-cdn.md` Abschnitt 6). Die Einstellung gilt für alle Adressen dieser Zone, nicht nur für den Container-Import. | bunny.net | abgeleitet, nicht getestet (in `stafl-dashboard-1` seit 04.11.2026 so in Betrieb); am 18.11.2026 im Konto nachgesehen: aus |
 | 5 | **Rechte vergeben:** Verwaltung → Rollen und Rechte (Bereich „Container-Import“) oder beim Mitarbeiter als Ausnahme „erlauben“: „EUDR ansehen“, „EUDR bearbeiten“. | Verwaltung | Rechte getestet (Testgruppe `containerimport`) |
 
 Die Kartendatei selbst lädt `sh deploy/karte-laden.sh laden herkunft` (geladen am 18.11.2026, Zoomstufe 14).
@@ -43,10 +43,32 @@ Die Kartendatei selbst lädt `sh deploy/karte-laden.sh laden herkunft` (geladen 
 | Schritt 3: Anmeldung meldet einen Fehler zum Client oder zur Rücksprungadresse | Schritt 2 fehlt oder `docker compose up -d app-mitarbeiter` wurde nicht ausgeführt. |
 | Schritt 3: „502“ von bunny oder Zertifikatsfehler | Der Server hat für die Adresse doch kein gültiges Zertifikat. `docker compose logs --since 15m caddy \| grep -i container-import` ansehen; Vorgehen dann wie in `inbetriebnahme-versand.md`, Abschnitt 3 und 4. |
 | Seite öffnet, zeigt aber „keine Berechtigung“ | „EUDR ansehen“ fehlt (Schritt 5). |
-| Karte zeigt nur Länderumrisse | Schritt 4 fehlt, oder die Kartendatei ist nicht geladen (`ls -l daten-karte/herkunft.pmtiles`). In der Browser-Konsole steht ein Hinweis, wenn statt eines Abschnitts die ganze Datei kam. |
+| Karte zeigt nur Länderumrisse | Die Kartendienste antworten nicht (Netz des Arbeitsplatzes, Dienst gestört) **und** die Kartendatei des Servers kommt nicht an. Browser-Konsole ansehen: eine Meldung zur Content-Security-Policy heißt, die Adresse fehlt im `Caddyfile` (Zuordnung `csp_karten`). |
+| Karte mit Satellitenbild, aber ohne die Ebene „Straßen und Orte“ | Schritt 4 fehlt, oder die Kartendatei ist nicht geladen (`ls -l daten-karte/herkunft.pmtiles`). |
+| In der Auswahl „Ebenen“ fehlt ein Eintrag | Dieser Dienst hat beim Öffnen der Karte nicht innerhalb von acht Sekunden geantwortet. Die Karte prüft beim nächsten Öffnen neu (Ansicht wechseln oder Seite neu laden). |
+| Bildauswertung fehlt im Fenster „Betrieb“ | Walddienst oder Waldverlust nicht erreichbar (wie oben) oder der Betrieb ist nur ein Punkt. „Nicht möglich“ nennt den Grund. |
 
 ## 5. Rückfall
 
 `sh /opt/wochenangebot/deploy/release-zurueck.sh` stellt den Stand vor dem Release wieder her; die Adresse ist dann wieder
 Platzhalter. Stehen bleiben dürfen der Keycloak-Client `containerimport`, die neuen Zeilen in `.env` und die Einstellung bei
 bunny. Erfasste Herkunftsbetriebe und Sendungen bleiben im Speicher; der alte Stand zeigt sie nicht an und ändert sie nicht.
+
+## 6. Karte: Satellitenbild und Waldflächen (ab dem Release mit der Kartenerweiterung)
+
+Entscheidung des Inhabers 18.11.2026: Satellitenbild und Waldflächen wie in Global Nature Watch und Whisp, Kartendaten direkt
+im Browser. Dafür ist kein Schritt auf dem Server nötig – das Release genügt.
+
+- **Was der Browser abruft:** Satellitenbild (EOX, Sentinel-2 cloudless 2016), Wald Ende 2020 (EU-Kommission/JRC),
+  Waldverlust seit 2021 (Global Forest Watch). Nur auf `container-import.dashboard-stafl.de`; alle anderen Adressen der
+  Plattform laden weiter nichts von fremden Servern (*getestet*: das echte `Caddyfile` mit Caddy 2.11.9 gestartet und die
+  Kopfzeilen je Adresse abgerufen; in der CI prüft `tests/deploy/test_dashboard_domains.py` den Text).
+- **Was die Dienste sehen:** die Adresse des Arbeitsplatzes, die Herkunft `container-import.dashboard-stafl.de` und den
+  angesehenen Kartenausschnitt. Keine Anmeldedaten, keine Namen von Betrieben. Für das Verzeichnis der
+  Verarbeitungstätigkeiten: drei weitere Empfänger technischer Verbindungsdaten der Mitarbeiter (EOX IT Services GmbH,
+  Österreich; Europäische Kommission; World Resources Institute, USA).
+- **Stand der Bilder:** Das Satellitenbild ist von 2016 – der einzige Jahrgang, den EOX Unternehmen ohne Entgelt überlässt.
+  Aktuelle Jahrgänge (auch 2020 zum Vergleich) gibt es dort gegen Entgelt. Der Waldverlust reicht bis zum jüngsten Jahr,
+  das der Dienst liefert (am 18.11.2026: 2025); die Karte findet es selbst.
+- **Bildauswertung:** eine Schätzung, kein Nachweis. Sie trägt nichts ein und ändert kein Risikoprofil.
+- **Rückfall:** `sh /opt/wochenangebot/deploy/release-zurueck.sh`. Die Karte zeigt dann wieder Herkunftskarte bzw. Umrisse.

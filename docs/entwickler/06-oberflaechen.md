@@ -829,6 +829,26 @@ Caddy setzt auf allen Hosts `script-src 'self'` (ohne `'unsafe-inline'`), `conne
 - **Keine Inline-Skripte**, keine `onclick="…"`-Attribute, kein `javascript:`-Link. Ereignisse mit `addEventListener`,
   bevorzugt als Delegation über `data-*` (`data-act`, `data-close`, `data-v`).
 - Keine Skripte, Schriften oder Daten von fremden Servern; Bibliotheken liegen unter `app/assets/vendor/`.
+- **Einzige Ausnahme: Kartenbilder im Container-Import** (Entscheidung des Inhabers 18.11.2026). Nur für
+  `container-import.dashboard-stafl.de` ergänzt das `Caddyfile` über die Zuordnung `csp_karten` drei Adressen in `img-src`
+  und `connect-src` (nie in `script-src`): `tiles.maps.eox.at` (Satellitenbild), `ies-ows.jrc.ec.europa.eu` (Wald 2020 der
+  EU-Kommission), `tiles.globalforestwatch.org` (Waldverlust). `app/module/containerimport/eudr-karte.js` übergibt sie der
+  Detailkarte als `raster: [{ id, kacheln, maxzoom, deckkraft, quelle, sichtbar }]`; `karte.zeige(id, an)` schaltet Ebenen,
+  `'grund'` die Linien und Beschriftungen der Kartendatei. Vor dem Zeichnen prüft die Seite jeden Dienst einzeln
+  (`pruefeDienste`, acht Sekunden Frist, alle zugleich): die Karte zeigt die Ebenen, deren Dienst antwortet; ein Ausfall
+  wird nicht gemerkt, die nächste Karte prüft neu. Auf Hosts ohne die Freigabe bleibt es bei der Karte ohne Bilder.
+  Karten, deren Element nicht mehr auf der Seite ist, baut `zeichnen()` ab (der Browser hält nur rund 16 WebGL-Karten). Abrufe gehen ohne Cookies und ohne
+  Referer hinaus; die Dienste sehen die Adresse des Betrachters, die Herkunft `container-import.dashboard-stafl.de` und den
+  Kartenausschnitt. Neue Adresse: in `eudr-karte.js` und im `Caddyfile` eintragen – `tests/deploy/test_dashboard_domains.py`
+  prüft, dass beide übereinstimmen und kein anderer Host fremde Adressen zulässt. Tests rufen die Dienste nie ab
+  (`tests/e2e/test_containerimport.py`, `kartendienste()`); Ansicht mit echten Diensten von Hand:
+  `WA_KARTE_ECHT=1 python3 tests/run_e2e.py containerimport` (Bildschirmfotos `containerimport-karte-echt-*.png`).
+  **Bildauswertung** (`eudr-auswertung.js`, `EUDR_KARTE.auswerten(geometrie)`): zählt Wald 2020 und Waldverlust seit 2021
+  in einer Fläche auf dem Raster der Zoomstufe 12 (512 Punkte je Kachel), je Zeile mit der wahren Punktfläche gewichtet.
+  Braucht nur den Walddienst und den Waldverlust, nicht das Satellitenbild. „Übernehmen“ schlägt ab 0,5 ha Verlust auf Wald
+  von 2020 „Befund“ vor und füllt nur dann das Feld „Baumverlust“ – der Server wertet dort jede Zahl über 0 als kritisch.
+  Der Test prüft mit bekannten Mustern und gegen die Flächenrechnung des Servers; der Lauf mit `WA_KARTE_ECHT=1` schreibt
+  zusätzlich das Ergebnis einer Probefläche ins Protokoll (zum Nachrechnen bei geänderten Diensten).
 - **Zweite Kartendatei „herkunft“** (Südamerika und Neuseeland, `/karte/herkunft.pmtiles`; Laden und Auslieferung: Kapitel Betrieb):
   `STAFLKarte.verfuegbar('herkunft')` und `erstellen(el, { karte: 'herkunft', … })`; Punkte können eine eigene Farbe tragen
   (`farbe: '#rrggbb'`). Genutzt vom Container-Import (`app/module/containerimport/eudr-karte.js`), der ohne die Datei selbst

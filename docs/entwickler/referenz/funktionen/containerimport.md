@@ -2,7 +2,7 @@
 
 <!-- ERZEUGT von `python3 werkzeuge/doku.py erzeugen` – nicht von Hand ändern. Quelle: Funktionen und Kommentare im Code. Die CI prüft, dass diese Datei zum Code passt. -->
 
-7 Dateien, 112 Funktionen – in der Reihenfolge der Datei, **fett** die Abschnitte. Text = erste Aussage des Kommentars direkt über der Funktion (Python: Docstring). Übersicht aller Module: [README.md](README.md).
+8 Dateien, 123 Funktionen – in der Reihenfolge der Datei, **fett** die Abschnitte. Text = erste Aussage des Kommentars direkt über der Funktion (Python: Docstring). Übersicht aller Module: [README.md](README.md).
 
 ## `app/api/aktionen/containerimport.php`
 
@@ -128,6 +128,8 @@ _STAFL-Plattform · Modul Container-Import, Reiter EUDR – Hilfen und Kontrolle
 **Fenster „Herkunftsbetrieb“**
 
 - `betriebOeffnen(id)`
+- `auswertungZeigen(b, darf)` – Bildauswertung im Fenster „Betrieb“: Wald Ende 2020 und Waldverlust seit 2021 in der Fläche – eine Schätzung aus den Kartenbildern (eudr-auswertung.js).
+- `auswertungNehmen()` – Werte der Bildauswertung in das Formular der Gegenprüfung schreiben (Portal „Andere Quelle“) – mit dem Vorschlag „Befund“ ab WALD_AB_HA; der Bearbeiter …
 - `betriebAusFenster(b, w)` – Felder des Fensters als Betrieb für den Server
 - `betriebSpeichern(zusatz)`
 - `pruefungEintragen()`
@@ -162,6 +164,15 @@ _STAFL-Plattform · Modul Container-Import, Reiter EUDR – Hilfen und Kontrolle
 - `laden(still)`
 - `themaKnopf()`
 
+## `app/module/containerimport/eudr-auswertung.js`
+
+_STAFL-Plattform · Container-Import · EUDR – Bildauswertung einer Fläche_
+
+- `frist(ms)` – Abbruchsignal nach ms Millisekunden (AbortSignal.timeout fehlt in älteren Browsern)
+- `bild(adresse)` – Bild ohne Farbanpassung laden – sonst könnte der Browser das Jahr im Blaukanal um eins verschieben.
+- `leinwand(w, h)`
+- `rechnen(geometrie, bis, quellen)`
+
 ## `app/module/containerimport/eudr-bericht.js`
 
 _STAFL-Plattform · Container-Import · EUDR – Entwaldungsberichte der Lieferanten lesen (reine Funktionen, kein DOM)._
@@ -174,14 +185,16 @@ _STAFL-Plattform · Container-Import · EUDR – Entwaldungsberichte der Liefera
 
 ## `app/module/containerimport/eudr-karte.js`
 
-_STAFL-Plattform · Container-Import · EUDR – Karte der Herkunftsbetriebe, ohne fremde Kartendienste._
+_STAFL-Plattform · Container-Import · EUDR – Karte der Herkunftsbetriebe._
 
 - `ausschnitt(betriebe, rand, minGrad, seite)` – Rahmen [x, y, Breite, Höhe] in Karteneinheiten um die Betriebe: Rand anteilig, Mindestbreite in Grad
 - `rund(grenze)` – „Runde“ Strecke für den Maßstab: 1, 2 oder 5 mal Zehnerpotenz, höchstens grenze Meter
 - `svg(box, inhalt, klasse)`
 - `groessen(el)` – Größen, die mit dem Zoom mitgehen müssen (Marken, Eckpunkte), aus der aktuellen Breite des Ausschnitts setzen
 - `bedienung(el, start, beiKlick)` – Zoomen (Rad, Knöpfe) und Verschieben (Ziehen) über die viewBox; ein Antippen ohne Ziehen auf einem Betrieb ruft beiKlick – das Ziel wird beim Drücken …
-- `detail(el, opt, betriebe)` – Detailkarte mit Straßen und Orten: Flächen in der Farbe ihrer Ampel, in der Übersicht zusätzlich eine Marke je Betrieb (zusammengefasste Marken grau – eine …
+- `pruefeDienste()` – Welche Dienste antworten (Netz, Content-Security-Policy)?
+- `auswerten(geometrie)` – Bildauswertung einer Fläche (eudr-auswertung.js) aus denselben Diensten – null, wenn sie nicht erreichbar sind
+- `detail(el, opt, betriebe, dienst, vektor)` – Detailkarte: Bilder (wenn erreichbar), Straßen und Orte (wenn die Herkunftskarte geladen ist), darüber die Flächen in der Farbe ihrer Ampel; in der Übersicht …
 - `zeichnen(el, opt)`
 
 ## `tests/e2e/test_containerimport.py`
@@ -212,7 +225,10 @@ _Modul Container-Import, Reiter EUDR (app/module/containerimport/, Oberfläche c
 
 **Oberfläche**
 
-- `seite(user, vp, schema)`
+- `png(punkt)` – PNG mit 512 × 512 Bildpunkten, punkt(x, y) → (R, G, B, A)
+- `kartendienste(abrufe, ohne, verlust)` – Antwortet wie die drei Dienste, mit CORS-Freigabe: Kacheln der Karte als Testbild; für die Bildauswertung die Muster (Wald als WMS mit 512 Punkten, Verlust …
+- `antwort(route)`
+- `seite(user, vp, schema, dienste)`
 - `kartendatei(route)`
 
 **Originale im QM-System (Schnittstelle qs_eingang_hochladen)**

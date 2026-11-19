@@ -17,6 +17,8 @@ import base64
 import hashlib
 import json
 import math
+import struct
+import zlib
 import os
 import re
 import tempfile
@@ -353,8 +355,38 @@ with sync_playwright() as pw:
     br = pw.chromium.launch()
     errs = []
 
-    def seite(user, vp=None, schema='light'):
+    # Kartendienste (Satellitenbild, Wald 2020, Waldverlust): Tests rufen nie fremde Server ab (einzige Ausnahme: von Hand mit
+    # WA_KARTE_ECHT, nur Bildschirmfotos). Ohne Angabe sind die Dienste
+    # „nicht erreichbar“ (die Karte zeichnet dann wie ohne Netz), sonst antwortet kartendienste() mit einem Testbild.
+    DIENSTE = re.compile(r'^https://(tiles\.maps\.eox\.at|ies-ows\.jrc\.ec\.europa\.eu|tiles\.globalforestwatch\.org)/')
+    BILD = base64.b64decode('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==')   # 1 × 1 Punkt, PNG
+
+    def png(punkt):
+        """PNG mit 512 × 512 Bildpunkten, punkt(x, y) → (R, G, B, A)"""
+        zeilen = b''.join(b'\x00' + bytes(k for x in range(512) for k in punkt(x, y)) for y in range(512))
+        teil = lambda art, daten: struct.pack('>I', len(daten)) + art + daten + struct.pack('>I', zlib.crc32(art + daten))
+        return b'\x89PNG\r\n\x1a\n' + teil(b'IHDR', struct.pack('>IIBBBBB', 512, 512, 8, 6, 0, 0, 0)) + teil(b'IDAT', zlib.compress(zeilen)) + teil(b'IEND', b'')
+
+    # Muster für die Bildauswertung, je Kachel gleich: Wald 2020 in der linken Hälfte; Verlust 2022 in den Zeilen 100–199
+    # (100/512 der Kachel), Verlust 2019 – vor dem Stichtag – in den Zeilen 300–349 (50/512). Kodierung wie die Dienste.
+    WALD_BILD = png(lambda x, y: (77, 146, 33, 255) if x < 256 else (0, 0, 0, 0))
+    VERLUST_BILD = png(lambda x, y: (255, 0, 22, 255) if 100 <= y < 200 else (255, 0, 19, 255) if 300 <= y < 350 else (0, 0, 0, 0))
+
+    def kartendienste(abrufe, ohne=(), verlust=VERLUST_BILD):
+        """Antwortet wie die drei Dienste, mit CORS-Freigabe: Kacheln der Karte als Testbild; für die Bildauswertung die Muster
+        (Wald als WMS mit 512 Punkten, Verlust unverarbeitet ohne Zusatz); ein Endjahr ohne Daten lehnt der Dienst ab (422)."""
+        def antwort(route):
+            u = route.request.url; abrufe.append(u)
+            if any(teil(u) if callable(teil) else teil in u for teil in ohne): return route.abort()
+            jahr = re.search(r'end_year=(\d+)', u)
+            if jahr and int(jahr[1]) > 2025: return route.fulfill(status=422, headers={'Access-Control-Allow-Origin': '*'}, body='{}')
+            bild = WALD_BILD if 'WIDTH=512' in u else verlust if re.search(r'/dynamic/12/\d+/\d+\.png$', u) else BILD
+            route.fulfill(status=200, headers={'Access-Control-Allow-Origin': '*', 'Content-Type': 'image/png'}, body=bild)
+        return antwort
+
+    def seite(user, vp=None, schema='light', dienste=None):
         ctx = br.new_context(viewport=vp or {'width': 1280, 'height': 900}, color_scheme=schema, accept_downloads=True)
+        ctx.route(DIENSTE, dienste or (lambda route: route.abort()))
         pg = ctx.new_page(); pg.on('pageerror', lambda e: errs.append(str(e)))
         pg.goto(B + '/admin/'); pg.wait_for_selector('#screen-auth:not([hidden])')
         pg.fill('#au-user', user); pg.fill('#pw1', USERS[user][2]); pg.click('#auth-submit'); pg.wait_for_selector('#screen-editor:not([hidden])')
@@ -487,6 +519,169 @@ with sync_playwright() as pw:
     d.keyboard.press('Escape'); d.select_option('#ci-karte-sendung', sid); d.wait_for_selector('#ci-karte[data-karte="bereit"] canvas')
     check('Herkunftskarte: Auswahl einer Sendung zeichnet neu (eine Karte, nicht zwei übereinander)', d.locator('#ci-karte canvas').count() == 1 and d.evaluate("document.querySelector('#ci-karte').staflKarte.anzahl()") == 2)
     d.context.close()
+
+    # Karte mit Satellitenbild und Waldebenen (Auftrag des Inhabers 18.11.2026): drei fremde Dienste, vom Browser direkt abgerufen
+    abrufe, alle = [], []
+    k = seite('ina', dienste=kartendienste(abrufe)); k.on('request', lambda r: alle.append(r.url))
+    k.reload(); k.wait_for_selector('#ci-app:not([hidden]) #ci-sendungen tr[data-sendung]')
+    k.click('[data-sicht="karte"]'); k.wait_for_selector('#ci-karte[data-karte="bereit"] canvas', timeout=60000)
+    ebenen = "(() => { const k = document.querySelector('%s').staflKarte; return Object.fromEntries(['satellit', 'wald2020', 'verlust', 'grund'].map((e) => [e, k.sichtbar(e)])); })()"
+    check('Karte mit Bildern: Satellitenbild, Wald 2020 und Waldverlust bis zum jüngsten Jahr mit Daten; ohne Herkunftskarte kein Schalter „Straßen und Orte“',
+          k.locator('#ci-karte .ci-k-ebenen label').all_inner_texts() == ['Satellitenbild (2016)', 'Wald Ende 2020 (EU)', 'Waldverlust 2021–2025']
+          and k.evaluate(ebenen % '#ci-karte') == {'satellit': True, 'wald2020': True, 'verlust': True, 'grund': False}
+          and k.locator('#ci-karte svg.ci-k-haupt').count() == 0, (k.locator('#ci-karte .ci-k-ebenen label').all_inner_texts(), k.evaluate(ebenen % '#ci-karte')))
+    check('Karte mit Bildern: Flächen und Marken wie bisher', k.evaluate("(() => { const k = document.querySelector('#ci-karte').staflKarte; return [k.gebiete(), k.anzahl()]; })()")
+          == [len([x for x in aktiv if x['geometrie']['type'] != 'Point']), len(aktiv)])
+    kacheln = [u for u in abrufe if not re.search(r'/0/0/0\.', u)]   # ohne die Proben
+    check('Kartendienste: Satellitenbild 2016 von EOX, Wald 2020 der EU als WMS je Kachel, Waldverlust ab 2021 gefiltert und eingefärbt',
+          any(re.search(r'^https://tiles\.maps\.eox\.at/wmts/1\.0\.0/s2cloudless_3857/default/g/\d+/\d+/\d+\.jpg$', u) for u in kacheln)
+          and any('LAYERS=gfc2020_v3' in u and 'CRS=EPSG:3857' in u and re.search(r'BBOX=-?[\d.]+,-?[\d.]+,-?[\d.]+,-?[\d.]+&', u) for u in kacheln)
+          and any(re.search(r'^https://tiles\.globalforestwatch\.org/umd_tree_cover_loss/latest/dynamic/\d+/\d+/\d+\.png\?start_year=2021&end_year=2025&render_type=true_color$', u) for u in kacheln), kacheln[:6])
+    check('Kartendienste: Proben vor dem Zeichnen (Satellitenbild erreichbar? jüngstes Jahr des Waldverlusts)',
+          any('s2cloudless_3857/default/g/0/0/0.jpg' in u for u in abrufe) and [re.search(r'end_year=(\d+)', u)[1] for u in abrufe if '/dynamic/0/0/0.png' in u][-1] == '2025')
+    check('Karte: keine Anfrage an andere fremde Adressen als die drei Dienste', all(u.startswith(B) or DIENSTE.match(u) or u.startswith(('blob:', 'data:')) for u in alle),
+          [u for u in alle if not (u.startswith(B) or DIENSTE.match(u) or u.startswith(('blob:', 'data:')))][:3])
+    shot(k, os.path.join(SH, 'containerimport-karte-bilder-1280.png'))
+    k.uncheck('#ci-karte .ci-k-ebenen input[value="wald2020"]')
+    check('Ebenenschalter: Wald 2020 ausgeblendet, die anderen bleiben', k.evaluate(ebenen % '#ci-karte') == {'satellit': True, 'wald2020': False, 'verlust': True, 'grund': False})
+    zoom = lambda: k.evaluate("document.querySelector('#ci-karte').staflKarte.map.getZoom()")
+    z0 = zoom()   # jeder Klick setzt die Karte sofort auf „lädt“; „bereit“ heißt: Bewegung zu Ende
+    k.click('#ci-karte .ci-k-zoom [data-zoom="+"]'); k.wait_for_selector('#ci-karte[data-karte="bereit"]'); z1 = zoom()
+    k.click('#ci-karte .ci-k-zoom [data-zoom="0"]'); k.wait_for_selector('#ci-karte[data-karte="bereit"]'); z2 = zoom()
+    check('Zoomknöpfe: vergrößern, zurück genau zur Ansicht vom Anfang, Knopf für die große Karte; Maßstab; Quellenangaben eingeklappt',
+          abs(z1 - z0 - 1) < 0.01 and abs(z2 - z0) < 0.01 and k.locator('#ci-karte .ci-k-zoom [data-zoom="v"]').count() == 1 and k.locator('#ci-karte .maplibregl-ctrl-scale').count() == 1
+          and k.locator('#ci-karte .maplibregl-ctrl-attrib.maplibregl-compact-show').count() == 0
+          and 'EOX IT Services GmbH' in k.locator('#ci-karte .maplibregl-ctrl-attrib').inner_html() and 'Global Forest Watch' in k.locator('#ci-karte .maplibregl-ctrl-attrib').inner_html(), (z0, z1, z2))
+    # Klick in eine Fläche öffnet ihren Betrieb: auf die Fläche zoomen, in ihre Mitte klicken
+    nord = next(x for x in aktiv if x['name'] == 'Estancia Ejemplo Norte')
+    k.evaluate("(m) => document.querySelector('#ci-karte').staflKarte.map.jumpTo({ center: m, zoom: 12 })", nord['mitte']); k.wait_for_selector('#ci-karte[data-karte="bereit"]')
+    ort = k.evaluate("(m) => { const k = document.querySelector('#ci-karte'), r = k.getBoundingClientRect(), p = k.staflKarte.position(m[0] + 0.004, m[1] + 0.003); return [r.left + p[0], r.top + p[1]]; }", nord['mitte'])
+    k.mouse.click(ort[0], ort[1]); k.wait_for_selector('#dlg-betrieb[open] #betrieb-karte[data-karte="bereit"] canvas', timeout=60000)
+    check('Karte mit Bildern: Klick in eine Fläche öffnet ihren Betrieb', k.inner_text('#betrieb-titel') == 'Estancia Ejemplo Norte', k.inner_text('#betrieb-titel'))
+    check('Fenster „Betrieb“: dieselbe Auswahl der Ebenen, genau diese Fläche', k.evaluate(ebenen % '#betrieb-karte') == {'satellit': True, 'wald2020': False, 'verlust': True, 'grund': False}
+          and not k.is_checked('#betrieb-karte .ci-k-ebenen input[value="wald2020"]') and k.evaluate("document.querySelector('#betrieb-karte').staflKarte.gebiete()") == 1)
+    k.evaluate("window.altesFenster = document.querySelector('#betrieb-karte')")
+    k.keyboard.press('Escape'); k.click('.ci-kartenliste button >> nth=1'); k.wait_for_selector('#betrieb-karte[data-karte="bereit"] canvas', timeout=60000)
+    check('Fenster neu aufgebaut: die Karte des vorigen Fensters ist abgebaut (der Browser hält nur wenige Karten zugleich)',
+          k.evaluate("!window.altesFenster.isConnected && !window.altesFenster.querySelector('canvas') && !window.altesFenster.staflKarte"))
+    k.keyboard.press('Escape'); k.click('.ci-kartenliste button >> nth=0'); k.wait_for_selector('#betrieb-karte[data-karte="bereit"] canvas', timeout=60000)
+    shot(k, os.path.join(SH, 'containerimport-karte-betrieb-1280.png'))
+
+    # Bildauswertung: Wald 2020 und Waldverlust seit 2021 in der Fläche. Probe mit einer Fläche, die genau eine Kachel der
+    # Zoomstufe 12 bedeckt – die Anteile der Muster sind dann bekannt, die Fläche rechnet der Server unabhängig (Ellipsoid).
+    kx, ky = 1399, 2324   # Kachel in Paraguay
+    lon = lambda x: x / 4096 * 360 - 180
+    lat = lambda y: math.degrees(math.atan(math.sinh(math.pi * (1 - 2 * y / 4096))))
+    ecken = [[lon(kx), lat(ky)], [lon(kx + 1), lat(ky)], [lon(kx + 1), lat(ky + 1)], [lon(kx), lat(ky + 1)]]
+    st, r = L.call('containerimport_eudr_pruefen', {'dateien': [{'art': 'koordinaten', 'datei': '', 'land': 'PY', 'ort': {'name': 'Kachel', 'koordinaten': {'system': 'wgs84', 'punkte': ecken}}}]})
+    soll = r['dateien'][0]['orte'][0]['flaeche']
+    e = k.evaluate('(g) => window.EUDR_KARTE.auswerten(g)', {'type': 'Polygon', 'coordinates': [ecken + [ecken[0]]]})
+    nah = lambda ist, erwartet, toleranz=0.003: abs(ist - erwartet) <= toleranz * erwartet
+    check('Bildauswertung: gezählte Fläche = Fläche des Servers (unter 0,3 % Abweichung)', st == 200 and nah(e['flaecheHa'], soll), (e['flaecheHa'], soll))
+    check('Bildauswertung: Wald 2020 auf der Hälfte der Fläche', nah(e['waldHa'], soll / 2), (e['waldHa'], soll / 2))
+    check('Bildauswertung: Verlust 2022 zählt (100/512 der Fläche), die Hälfte davon auf Wald von 2020, nur dem Jahr 2022 zugeordnet',
+          nah(e['verlustHa'], soll * 100 / 512) and nah(e['verlustAufWaldHa'], soll * 50 / 512) and nah(e['jahre']['2022'], soll * 100 / 512)
+          and [j for j, v in e['jahre'].items() if v > 0] == ['2022'] and sorted(e['jahre']) == ['2021', '2022', '2023', '2024', '2025'], e)
+    check('Bildauswertung: Verlust 2019 liegt vor dem Stichtag – eigens ausgewiesen, nicht als Verlust seit 2021', nah(e['vorherHa'], soll * 50 / 512), e['vorherHa'])
+    gross = [[-57.0, -23.0], [-56.4, -23.0], [-56.4, -23.6], [-57.0, -23.6], [-57.0, -23.0]]
+    check('Bildauswertung: zu große Fläche wird nicht gröber geschätzt, sondern abgelehnt; ein Punkt hat keine Fläche',
+          k.evaluate('(g) => window.EUDR_KARTE.auswerten(g)', {'type': 'Polygon', 'coordinates': [gross]}) == {'zuGross': True}
+          and k.evaluate('(g) => window.EUDR_KARTE.auswerten(g)', {'type': 'Point', 'coordinates': [-57, -23]}) is None)
+    k.wait_for_selector('#betrieb-auswertung:not([hidden]) dl')
+    text = k.inner_text('#betrieb-auswertung')
+    check('Fenster „Betrieb“: Bildauswertung mit Wald 2020, Verlust je Jahr, Kontrollfläche und dem Hinweis „kein Nachweis“',
+          'kein Nachweis' in text and 'Wald Ende 2020' in text and 'Waldverlust 2021–2025' in text and 'Ausgewertet' in text and 'weicht ab' not in text and '2022:' in text, text)
+    pruefungen = lambda: len(next(x for x in stand()['betriebe'] if x['id'] == k.evaluate("document.querySelector('#betrieb-inhalt').dataset.id"))['pruefungen'])
+    vorher = pruefungen()
+    offen = next(x for x in stand()['betriebe'] if x['id'] == k.evaluate("document.querySelector('#betrieb-inhalt').dataset.id"))
+    erwartet = k.evaluate('(g) => window.EUDR_KARTE.auswerten(g)', offen['geometrie'])
+    k.click('#betrieb-auswertung-nehmen')
+    w = k.evaluate("(() => { const w = document.querySelector('#betrieb-inhalt').elements; return [w.p_portal.value, w.p_ergebnis.value, w.p_verlustHa.value, w.p_bemerkung.value]; })()")
+    check('Bildauswertung übernehmen: füllt nur das Formular der Gegenprüfung (Andere Quelle, Verlust in ha, Bemerkung mit Quellen), trägt nichts ein',
+          w[0] == 'sonst' and w[2] == ('%.2f' % erwartet['verlustHa']).replace('.', ',') and 'JRC GFC 2020' in w[3] and len(w[3]) <= 500
+          and pruefungen() == vorher, w)
+    check('Bildauswertung übernehmen: mindestens 0,5 ha Verlust auf Wald von 2020 → Vorschlag „Befund“, rot markiert',
+          erwartet['verlustAufWaldHa'] >= 0.5 and w[1] == 'befund' and k.locator('#betrieb-auswertung dd .ci-marke.rot').count() == 1, (erwartet['verlustAufWaldHa'], w[1]))
+    shot(k.locator('#dlg-betrieb'), os.path.join(SH, 'containerimport-bildauswertung-1280.png'))
+    k.context.close()
+
+    betriebMitBild = lambda pg: (pg.click('[data-sicht="karte"]'), pg.wait_for_selector('#ci-karte[data-karte="bereit"] canvas', timeout=60000),
+                                 pg.click('.ci-kartenliste button >> nth=0'), pg.wait_for_selector('#betrieb-auswertung:not([hidden])', timeout=60000))
+    # Verlust nur außerhalb des Waldes von 2020 (rechte Hälfte): kein Befund; das Feld „Baumverlust“ bleibt leer, weil der
+    # Server dort jede Zahl über 0 als kritisch wertet – der eingetragene Vorschlag darf den Betrieb nicht rot machen
+    k = seite('ina', dienste=kartendienste([], verlust=png(lambda x, y: (255, 0, 22, 255) if x >= 256 and y < 256 else (0, 0, 0, 0)))); betriebMitBild(k)
+    text = k.inner_text('#betrieb-auswertung'); nr = k.evaluate("document.querySelector('#betrieb-inhalt').dataset.id"); k.click('#betrieb-auswertung-nehmen')
+    w = k.evaluate("(() => { const w = document.querySelector('#betrieb-inhalt').elements; return [w.p_ergebnis.value, w.p_verlustHa.value]; })()")
+    gezaehlt = len(next(x for x in stand()['betriebe'] if x['id'] == nr)['pruefungen'])
+    k.click('#betrieb-pruefung'); k.wait_for_function("(n) => document.querySelectorAll('#dlg-betrieb .ci-pruefungen li').length === n + 1", arg=gezaehlt)
+    nach = next(x for x in stand()['betriebe'] if x['id'] == nr)
+    check('Bildauswertung, Verlust nur außerhalb des Waldes von 2020: Vorschlag „ohne Befund“, Feld „Baumverlust“ leer; eingetragen bleibt die Gegenprüfung in Ordnung',
+          'davon 0,0 ha auf Wald von 2020' in text and w == ['ohne_befund', ''] and len(nach['pruefungen']) == gezaehlt + 1 and nach['bewertung']['gegenpruefung'] == 'ok'
+          and any('Bildauswertung im Container-Import' in x['bemerkung'] and x['portal'] == 'sonst' for x in nach['pruefungen']), (text, w, nach['bewertung'], len(nach['pruefungen'])))
+    k.context.close()
+
+    # Der Walddienst besteht die Probe, liefert dann aber keine Kacheln: die Karte wird trotzdem fertig, die Auswertung meldet es
+    k = seite('ina', dienste=kartendienste([], ohne=(lambda u: 'ies-ows' in u and 'BBOX=0,0,1000,1000' not in u,))); betriebMitBild(k)
+    check('Bildauswertung, ein Dienst antwortet nicht: Meldung statt Zahlen, nichts zu übernehmen',
+          'Bildauswertung nicht möglich' in k.inner_text('#betrieb-auswertung') and 'nicht geantwortet' in k.inner_text('#betrieb-auswertung')
+          and k.locator('#betrieb-auswertung dl, #betrieb-auswertung-nehmen').count() == 0, k.inner_text('#betrieb-auswertung'))
+    k.context.close()
+
+    # Satellitenbild und Walddienst fallen aus: die Karte zeigt, was erreichbar ist; die Auswertung braucht den Walddienst
+    k = seite('ina', dienste=kartendienste([], ohne=('eox.at',)))
+    k.click('[data-sicht="karte"]'); k.wait_for_selector('#ci-karte[data-karte="bereit"] canvas', timeout=60000)
+    check('Satellitenbild nicht erreichbar: Karte mit Wald 2020 und Waldverlust', k.locator('#ci-karte .ci-k-ebenen label').all_inner_texts() == ['Wald Ende 2020 (EU)', 'Waldverlust 2021–2025'])
+    k.click('.ci-kartenliste button >> nth=0'); k.wait_for_selector('#betrieb-auswertung:not([hidden]) dl', timeout=60000)
+    check('Satellitenbild nicht erreichbar: die Bildauswertung rechnet trotzdem', 'Wald Ende 2020' in k.inner_text('#betrieb-auswertung'))
+    k.context.close()
+
+    k = seite('ina', dienste=kartendienste([], ohne=('ies-ows',)))
+    k.click('[data-sicht="karte"]'); k.wait_for_selector('#ci-karte[data-karte="bereit"] canvas', timeout=60000)
+    k.click('.ci-kartenliste button >> nth=0'); k.wait_for_selector('#betrieb-karte[data-karte="bereit"] canvas', timeout=60000)
+    check('Walddienst nicht erreichbar: Karte ohne diese Ebene, keine Bildauswertung',
+          k.locator('#ci-karte .ci-k-ebenen label').all_inner_texts() == ['Satellitenbild (2016)', 'Waldverlust 2021–2025'] and k.is_hidden('#betrieb-auswertung'))
+    k.context.close()
+
+    abrufe = []
+    k = seite('ina', dienste=kartendienste(abrufe, ohne=('globalforestwatch',)))
+    k.click('[data-sicht="karte"]'); k.wait_for_selector('#ci-karte[data-karte="bereit"] canvas', timeout=60000)
+    check('Waldverlust-Dienst nicht erreichbar: Karte mit Satellitenbild und Wald 2020, ohne dritte Ebene',
+          k.locator('#ci-karte .ci-k-ebenen label').all_inner_texts() == ['Satellitenbild (2016)', 'Wald Ende 2020 (EU)'])
+    k.context.close()
+
+    k = seite('ina', dienste=kartendienste([])); k.context.route('**/karte/herkunft.pmtiles', kartendatei)
+    k.click('[data-sicht="karte"]'); k.wait_for_selector('#ci-karte[data-karte="bereit"] canvas', timeout=60000)
+    check('Bilder und Herkunftskarte zusammen: Straßen und Orte als vierte Ebene über den Bildern',
+          k.locator('#ci-karte .ci-k-ebenen label').all_inner_texts()[-1] == 'Straßen und Orte' and k.evaluate(ebenen % '#ci-karte')['grund'] is True)
+    k.uncheck('#ci-karte .ci-k-ebenen input[value="grund"]')
+    check('Straßen und Orte lassen sich abschalten', k.evaluate(ebenen % '#ci-karte')['grund'] is False)
+    k.context.close()
+
+    k = seite('ina', {'width': 390, 'height': 844}, 'dark', dienste=kartendienste([]))
+    k.wait_for_selector('#ci-app:not([hidden])'); k.click('[data-sicht="karte"]'); k.wait_for_selector('#ci-karte[data-karte="bereit"] canvas', timeout=60000)
+    check('Karte mit Bildern, Handy 390 px: Ebenen eingeklappt, nichts läuft über den Rand',
+          k.evaluate("!document.querySelector('#ci-karte .ci-k-ebenen').open && document.documentElement.scrollWidth <= window.innerWidth + 1"))
+    k.click('#ci-karte .ci-k-ebenen summary')
+    shot(k, os.path.join(SH, 'containerimport-karte-bilder-390-dunkel.png'))
+    k.context.close()
+
+    if os.environ.get('WA_KARTE_ECHT'):   # nur von Hand: Bildschirmfotos mit den echten Diensten (braucht Netz), keine Prüfung
+        k = seite('ina', dienste=lambda route: route.continue_())
+        k.click('[data-sicht="karte"]'); k.wait_for_selector('#ci-karte[data-karte="bereit"] canvas', timeout=120000)
+        shot(k, os.path.join(SH, 'containerimport-karte-echt-uebersicht.png'))
+        k.click('.ci-kartenliste button >> nth=0'); k.wait_for_selector('#betrieb-karte[data-karte="bereit"] canvas', timeout=120000)
+        shot(k, os.path.join(SH, 'containerimport-karte-echt-betrieb.png'))
+        k.wait_for_selector('#betrieb-auswertung:not([hidden])', timeout=120000)
+        print('Bildauswertung mit echten Diensten:', k.inner_text('#dlg-betrieb h2, #dlg-betrieb .dlg-head').split('\n')[0], '|', k.inner_text('#betrieb-auswertung').replace('\n', ' | '))
+        k.locator('#betrieb-auswertung').scroll_into_view_if_needed(); shot(k, os.path.join(SH, 'containerimport-karte-echt-auswertung.png'))
+        probe = [[-56.25, -22.85], [-56.15, -22.85], [-56.15, -22.95], [-56.25, -22.95], [-56.25, -22.85]]   # Gegend mit viel Verlust, zum Nachrechnen
+        print('Bildauswertung Probefläche:', json.dumps(k.evaluate('(g) => window.EUDR_KARTE.auswerten(g)', {'type': 'Polygon', 'coordinates': [probe]})))
+        k.context.close()
+        k = seite('ina', dienste=lambda route: route.continue_()); k.context.route('**/karte/herkunft.pmtiles', kartendatei)   # Straßen und Orte über dem Bild: der Testauszug kennt nur Hamburg
+        k.click('[data-sicht="karte"]'); k.wait_for_selector('#ci-karte[data-karte="bereit"] canvas', timeout=120000)
+        k.evaluate("document.querySelector('#ci-karte').staflKarte.map.jumpTo({ center: [9.99, 53.55], zoom: 12.5 })"); k.wait_for_selector('#ci-karte[data-karte="bereit"]', timeout=120000)
+        shot(k, os.path.join(SH, 'containerimport-karte-echt-strassen.png'))
+        k.context.close()
 
     # Handy 390 px, dunkel: nichts läuft über den Rand
     m = seite('ina', {'width': 390, 'height': 844}, 'dark'); m.wait_for_selector('#ci-app:not([hidden]) #ci-sendungen tr[data-sendung]')
