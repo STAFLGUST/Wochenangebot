@@ -326,7 +326,7 @@ REGISTER_TEST = {'modulverwaltung': [("'rewe' => [", 'in_pruefung', 'keine'), ("
 # Modul Versand, Schalter AENDERUNGSLISTE_IM_ANGEBOT in app/assets/admin.js), aber weiter vorhanden. Diese Gruppen prüfen die
 # Liste und das Zurücknehmen und schalten sie dafür in ihrer App-Kopie ein – so bleibt der Schalter benutzbar. Nur die Kopie im
 # Testordner; den ausgelieferten Stand (ohne Liste) prüft die Gruppe „versand“.
-LISTE_IM_ANGEBOT = {'revert', 'angebote', 'aufbau', 'sys'}
+LISTE_IM_ANGEBOT = {'revert', 'angebote', 'aufbau', 'sys', 'angebote_getrennt'}
 LISTE_AUS, LISTE_AN = 'const AENDERUNGSLISTE_IM_ANGEBOT = false;', 'const AENDERUNGSLISTE_IM_ANGEBOT = true;'
 
 
