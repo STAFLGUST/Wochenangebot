@@ -867,6 +867,13 @@ Caddy setzt auf allen Hosts `script-src 'self'` (ohne `'unsafe-inline'`), `conne
   Filtern der Auswahl in `containerimport.js` (`lieferantSchluessel`) – beide zusammen ändern. Den Namen des Schlachthofs
   löst `eudr_sendung_sicht` für Container mit offener Bewertung beim Lesen auf; festgeschrieben wird er beim Abschluss
   (GR-106). Was sich nach dem Abschluss noch einmal nachtragen lässt, steht in `eudr_sendung_nachtrag`.
+  **Reiter „Tracking“** (Auftrag des Inhabers 19.11.2026): `tracking.js` und `app/api/module/containerimport/tracking.php`.
+  Die Reiter stehen in `index.html` (`data-reiter`), ihre Inhalte in Bereichen (`data-bereich`); `containerimport.js` schaltet
+  um (`reiterZeigen`) und ruft nach jedem neuen Stand die Zeichenfunktion des gewählten Reiters, die sich in
+  `STAFL_CI.reiter` einträgt. Die Angaben des Trackings sind Felder am Container (`CI_TRACKING_VORGABEN`); gespeichert wird
+  über `containerimport_tracking_save`, das nur diese Felder, den Stand und die Containernummer anfasst – auch nach dem
+  Abschluss der Bewertung. Die Reedereien mit ihren Verweisen stehen an einer Stelle (`CI_REEDEREIEN`). Erste Stufe: die
+  Seite ruft keinen fremden Dienst ab; der Verweis ist ein gewöhnlicher Link in ein neues Fenster.
   **Whisp-Abfrage** (Knopf „In Whisp prüfen“ im Fenster „Farmer“): Anders als die Karte ruft hier der **Server** den
   fremden Dienst ab (`app/api/module/containerimport/whisp.php`, Aktion `containerimport_eudr_whisp`) – der Schlüssel
   `WHISP_API_KEY` darf nie in den Browser. Hinaus geht nur der Umriss; die Seite fragt alle drei Sekunden nach, bis Whisp

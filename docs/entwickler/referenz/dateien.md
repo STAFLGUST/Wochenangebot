@@ -176,6 +176,7 @@ Jede Code-Datei beginnt mit einem Kopfkommentar; dessen erste Aussage steht hier
 | `eudr.php` | containerimport | Container-Import: Container (ein Einkauf bei einem Lieferanten, eine Partienummer) mit ihren Farmern und der Prüfung nach der EUDR (Verordnung (EU) 2023/1115, entwaldungsfreie Lieferketten) |
 | `geometrie.php` | containerimport | Container-Import · Geometrie der Produktionsorte (EUDR): reine Rechenfunktionen ohne Speicherzugriff. |
 | `schlachthoefe.php` | containerimport | STAFL-Plattform · Modul Container-Import – Schlachthöfe |
+| `tracking.php` | containerimport | STAFL-Plattform · Modul Container-Import – Tracking: wo ist der Container, wann kommt er an (Auftrag des Inhabers 19.11.2026: eigener Reiter neben EUDR; Schiffsname eintragen; wissen, wann der Container z. |
 | `whisp.php` | containerimport | Container-Import · EUDR |
 
 ## `app/api/module/controlling/`
@@ -391,8 +392,9 @@ Jede Code-Datei beginnt mit einem Kopfkommentar; dessen erste Aussage steht hier
 | `eudr-bericht.js` | containerimport | STAFL-Plattform · Container-Import · EUDR – Entwaldungsberichte der Lieferanten lesen (reine Funktionen, kein DOM). |
 | `eudr-karte.js` | containerimport | STAFL-Plattform · Container-Import · EUDR – Karte der Herkunftsbetriebe. |
 | `eudr-whisp.js` | containerimport | Container-Import · EUDR |
-| `index.html` | containerimport | Reiter des Moduls: zuerst EUDR, weitere (Container, Verzollung, Dokumente) folgen |
+| `index.html` | containerimport | Reiter des Moduls: EUDR und Tracking; weitere (Verzollung, Dokumente) folgen |
 | `schlachthoefe.js` | containerimport | STAFL-Plattform · Modul Container-Import – Schlachthöfe |
+| `tracking.js` | containerimport | STAFL-Plattform · Modul Container-Import – Reiter „Tracking“: wo ist der Container, wann kommt er an (Auftrag des Inhabers 19.11.2026). |
 
 ## `app/module/controlling/`
 
@@ -805,6 +807,7 @@ Jede Code-Datei beginnt mit einem Kopfkommentar; dessen erste Aussage steht hier
 | `test_bestellung.py` | angebot | Bestellwunsch aus dem Portal |
 | `test_containerimport.py` | containerimport | Modul Container-Import, Reiter EUDR (app/module/containerimport/, Oberfläche containerimport.intern, Auftrag des Inhabers 18.11.2026) |
 | `test_containerimport_schlachthof.py` | containerimport | Container-Import: Schlachthöfe als Stammdaten unter dem Lieferanten (Aktion containerimport_schlachthof_save, app/api/module/containerimport/schlachthoefe.php, Oberfläche app/module/containerimport/schlachthoefe.js). |
+| `test_containerimport_tracking.py` | containerimport | Container-Import: Reiter „Tracking“ (Aktion containerimport_tracking_save, app/api/module/containerimport/tracking.php, Oberfläche app/module/containerimport/tracking.js) – erste Stufe ohne fremde Dienste. |
 | `test_containerimport_whisp.py` | containerimport | Container-Import · EUDR |
 | `test_controlling.py` | controlling | Controlling (Modul controlling, Oberfläche controlling.intern unter /module/controlling/) – Bereich Umsatzstatistik, Reiter Monatsmeldung |
 | `test_controlling_umsatzdaten.py` | controlling | Controlling · Umsatzdaten der Warenwirtschaft |

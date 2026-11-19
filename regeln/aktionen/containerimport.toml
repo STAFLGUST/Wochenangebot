@@ -41,6 +41,11 @@ schreibend = true
 oberflaeche = "containerimport.intern"
 schreibend = true
 
+# Tracking eines Containers pflegen (Schiff, Reederei, Häfen, Abfahrt, Ankunft, Stand, Containernummer)
+[aktion.containerimport_tracking_save]
+oberflaeche = "containerimport.intern"
+schreibend = true
+
 # Schlachthof anlegen oder ändern (Stammdaten unter dem Lieferanten)
 [aktion.containerimport_schlachthof_save]
 oberflaeche = "containerimport.intern"

@@ -5,6 +5,7 @@
    (bestehende Daten und Aktionsnamen, siehe app/api/module/containerimport/eudr.php).
    Ansichten: Container (Lieferant, Schlachthof, Nummern, Stand, Risikoprofil), Schlachthöfe (Stammdaten unter dem Lieferanten,
    eigene Datei schlachthoefe.js über die Brücke window.STAFL_CI), Farmer (Geolokalisierung, Bericht, eigene Gegenprüfung), Karte.
+   Reiter: EUDR (diese Ansichten) und Tracking (Schiff, Häfen, Ankunft – eigene Datei tracking.js, trägt sich in REITER ein).
    Daten: containerimport_start (Stand), containerimport_eudr_pruefen (Dateien prüfen, ohne zu speichern),
    containerimport_eudr_betriebe_save, _original, _gegenpruefung, _sendung_save, _sendung_abschluss (jede Antwort bringt den neuen
    Stand mit), containerimport_eudr_export (GeoJSON für das EU-Informationssystem), containerimport_eudr_whisp (Whisp für
@@ -27,7 +28,7 @@
   const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
   const icon = (n) => `<svg class="r-i" aria-hidden="true"><use href="#i-${n}"/></svg>`;
   const plural = (n, ein, viele) => `${n} ${n === 1 ? ein : viele}`;
-  const S = { csrf: '', d: null, sicht: 'sendungen', suche: { sendungen: '', betriebe: '' }, archiv: false, karteSendung: '', lesen: null, toast: 0, sendet: false };
+  const S = { csrf: '', d: null, reiter: 'eudr', sicht: 'sendungen', suche: { sendungen: '', betriebe: '' }, archiv: false, karteSendung: '', lesen: null, toast: 0, sendet: false };
 
   /* ---------- Aufruf der API: wirft nie, liefert { status, data } ---------- */
   async function api(action, body, query = '', sperre = true) {   // sperre = false: Abfrage im Hintergrund, hält keine Eingabe auf
@@ -142,6 +143,14 @@
     $('#ci-knoepfe').innerHTML = d.rechte.bearbeiten
       ? `<button class="ci-knopf" type="button" id="ci-lesen">${icon('hoch')}Unterlagen einlesen</button><button class="ci-knopf primaer" type="button" id="ci-sendung-neu">${icon('plus')}Neuer Container</button>` : '';
     sichtZeichnen();
+    if (REITER[S.reiter]) REITER[S.reiter]();
+  }
+  /* Reiter des Moduls: EUDR zeichnet diese Datei, weitere Dateien tragen ihre Zeichenfunktion ein (Brücke STAFL_CI) */
+  const REITER = {};
+  function reiterZeigen() {
+    for (const b of $$('[data-reiter]')) b.setAttribute('aria-selected', String(b.dataset.reiter === S.reiter));
+    for (const el of $$('[data-bereich]')) el.hidden = el.dataset.bereich !== S.reiter;
+    if (REITER[S.reiter]) REITER[S.reiter]();
   }
   const SICHTEN = { sendungen: sendungenSicht, betriebe: betriebeSicht, karte: karteSicht };   // weitere Dateien tragen ihre Ansicht ein (Brücke STAFL_CI)
   const sichtZeichnen = () => SICHTEN[S.sicht]();
@@ -660,6 +669,8 @@
     const t = e.target;
     const zu = t.closest('[data-zu]');
     if (zu) { zu.closest('dialog').close(); return; }
+    const reiter = t.closest('[data-reiter]');
+    if (reiter) { S.reiter = reiter.dataset.reiter; reiterZeigen(); return; }
     const chip = t.closest('[data-sicht]');
     if (chip) { S.sicht = chip.dataset.sicht; zeichnen(); return; }
     if (t.closest('#ci-neu')) { laden(true).then((ok) => ok && toast('Stand neu geladen.')); return; }
@@ -714,8 +725,9 @@
   document.addEventListener('stafl-theme', themaKnopf);
 
   /* Brücke für weitere Dateien des Moduls (schlachthoefe.js): dieselben Hilfen und derselbe Zustand, keine zweite Kopie.
-     Eine Datei trägt ihre Ansicht in sichten ein und hängt ihre eigenen Ereignisse an (docs/entwickler/06-oberflaechen.md). */
-  window.STAFL_CI = { S, $, esc, icon, SU, feld, kopf, werte, api, uebernehmen, toast, oeffnen, landName, laenderWahl, lieferantFeld, lieferantAus, suchfeld, archivSchalter, sichten: SICHTEN };
+     Eine Datei trägt ihre Ansicht in sichten oder ihren Reiter in reiter ein und hängt ihre eigenen Ereignisse an (docs/entwickler/06-oberflaechen.md). */
+  window.STAFL_CI = { S, $, esc, icon, SU, feld, kopf, werte, marke, tag, api, uebernehmen, toast, oeffnen, sendung, landName, laenderWahl, lieferantFeld, lieferantAus, suchfeld, archivSchalter,
+    HINWEIS_NUMMER, sichten: SICHTEN, reiter: REITER };
 
   /* ---------- Start (nach dem Laden aller Dateien des Moduls) ---------- */
   document.addEventListener('DOMContentLoaded', async () => {

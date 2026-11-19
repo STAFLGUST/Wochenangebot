@@ -16,6 +16,7 @@ declare(strict_types=1);
    eudr_text oder eudr_liste); neue Funktionen, die nicht zur EUDR gehören, heißen ci_ (Container-Import). */
 if (!defined('WA_API')) { http_response_code(404); exit; }   // nur über api/index.php nutzbar
 require __DIR__ . '/schlachthoefe.php';   // Schlachthöfe unter dem Lieferanten (eigene Datei, gleiche Helfer)
+require __DIR__ . '/tracking.php';        // Reiter Tracking: Schiff, Reederei, Häfen, Abfahrt und Ankunft am Container
 
 const EUDR_SPERRE = 'containerimport-eudr-betriebe';   // eine Sperre für beide Dokumente (Sendungen verweisen auf Betriebe)
 const EUDR_MAX_BETRIEBE = 2000;
@@ -81,7 +82,7 @@ function eudr_betriebe(): array { return eudr_liste(store_read('containerimport-
 function eudr_sendungen(): array
 {
     $doc = eudr_liste(store_read('containerimport-eudr-sendungen'));
-    $doc['liste'] = array_map(fn($s) => $s + EUDR_SENDUNG_VORGABEN, $doc['liste']);
+    $doc['liste'] = array_map(fn($s) => $s + EUDR_SENDUNG_VORGABEN + CI_TRACKING_VORGABEN, $doc['liste']);
     return $doc;
 }
 /* Herkunftsbetriebe speichern */
@@ -711,6 +712,6 @@ function eudr_stand(): array
         'sendungen' => array_map(fn($s) => eudr_sendung_sicht($s, $betriebe, $hofNamen), eudr_sendungen()['liste']),
         'laender' => array_map(fn($l) => ['name' => $l['name'], 'klasse' => $l['klasse']], EUDR_LAENDER),
         'schlachthoefe' => $hoefe,
-        'portale' => EUDR_PORTALE, 'staende' => EUDR_STAENDE, 'heute' => date('Y-m-d'),
+        'portale' => EUDR_PORTALE, 'staende' => EUDR_STAENDE, 'reedereien' => CI_REEDEREIEN, 'heute' => date('Y-m-d'),
     ];
 }

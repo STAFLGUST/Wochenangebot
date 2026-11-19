@@ -36,9 +36,10 @@
         </div>
       </header>
 
-      <!-- Reiter des Moduls: zuerst EUDR, weitere (Container, Verzollung, Dokumente) folgen -->
-      <div class="ci-reiter" role="tablist" aria-label="Bereiche"><button type="button" role="tab" aria-selected="true" id="ci-reiter-eudr">EUDR</button></div>
+      <!-- Reiter des Moduls: EUDR und Tracking; weitere (Verzollung, Dokumente) folgen -->
+      <div class="ci-reiter" role="tablist" aria-label="Bereiche"><button type="button" role="tab" aria-selected="true" id="ci-reiter-eudr" data-reiter="eudr">EUDR</button><button type="button" role="tab" aria-selected="false" id="ci-reiter-tracking" data-reiter="tracking">Tracking</button></div>
 
+      <div class="ci-bereich" data-bereich="eudr">
       <details class="r-karte ci-hilfe">
         <summary>So gehen Sie vor <span class="ci-leise">· EU-Verordnung über entwaldungsfreie Lieferketten (EUDR)</span></summary>
         <ol>
@@ -56,6 +57,8 @@
         <div class="ci-knoepfe" id="ci-knoepfe"></div>
       </div>
       <section id="ci-inhalt" aria-live="polite"></section>
+      </div>
+      <section class="ci-bereich" id="ci-bereich-tracking" data-bereich="tracking" aria-live="polite" hidden></section>
     </section>
   </main>
   <footer class="ci-fuss">STAFL-Plattform · Standard-Fleisch</footer>
@@ -64,6 +67,7 @@
 
 <!-- Fenster schließen nur über ×, „Schließen“ oder Escape – nie durch einen Klick daneben (theme.js) -->
 <dialog class="modal ci-breit" id="dlg-sendung" aria-labelledby="sendung-titel"><form class="dlg" id="sendung-inhalt" autocomplete="off" novalidate></form></dialog>
+<dialog class="modal" id="dlg-tracking" aria-labelledby="tracking-titel"><form class="dlg" id="tracking-inhalt" autocomplete="off" novalidate></form></dialog>
 <dialog class="modal" id="dlg-schlachthof" aria-labelledby="schlachthof-titel"><form class="dlg" id="schlachthof-inhalt" autocomplete="off" novalidate></form></dialog>
 <dialog class="modal ci-breit" id="dlg-betrieb" aria-labelledby="betrieb-titel"><form class="dlg" id="betrieb-inhalt" autocomplete="off" novalidate></form></dialog>
 <dialog class="modal ci-breit" id="dlg-lesen" aria-labelledby="lesen-titel"><form class="dlg" id="lesen-inhalt" autocomplete="off" novalidate></form></dialog>
@@ -95,5 +99,6 @@
 <script src="eudr-whisp.js"></script>
 <script src="containerimport.js"></script>
 <script src="schlachthoefe.js"></script>
+<script src="tracking.js"></script>
 </body>
 </html>

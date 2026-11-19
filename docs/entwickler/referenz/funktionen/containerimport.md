@@ -2,7 +2,7 @@
 
 <!-- ERZEUGT von `python3 werkzeuge/doku.py erzeugen` – nicht von Hand ändern. Quelle: Funktionen und Kommentare im Code. Die CI prüft, dass diese Datei zum Code passt. -->
 
-14 Dateien, 167 Funktionen – in der Reihenfolge der Datei, **fett** die Abschnitte. Text = erste Aussage des Kommentars direkt über der Funktion (Python: Docstring). Übersicht aller Module: [README.md](README.md).
+17 Dateien, 180 Funktionen – in der Reihenfolge der Datei, **fett** die Abschnitte. Text = erste Aussage des Kommentars direkt über der Funktion (Python: Docstring). Übersicht aller Module: [README.md](README.md).
 
 ## `app/api/aktionen/containerimport.php`
 
@@ -118,6 +118,12 @@ _STAFL-Plattform · Modul Container-Import – Schlachthöfe_
 - `ci_schlachthof_lieferant_wechseln(alt, neu)` – Folgen eines Lieferantenwechsels am Schlachthof für seine Container (Regel siehe ci_schlachthof_speichern).
 - `ci_schlachthof_am_container(b, lieferant, bisher)` – Schlachthof eines Containers aus der Eingabe: leer oder ein Schlachthof desselben Lieferanten ($lieferant = Eintrag mit lieferantNr und lieferant).
 
+## `app/api/module/containerimport/tracking.php`
+
+_STAFL-Plattform · Modul Container-Import – Tracking: wo ist der Container, wann kommt er an (Auftrag des Inhabers 19.11.2026: eigener Reiter neben EUDR; Schiffsname eintragen; wissen, wann der Container z._
+
+- `ci_tracking_pruefen(b, alt)` – Angaben des Trackings aus der Eingabe prüfen.
+
 ## `app/api/module/containerimport/whisp.php`
 
 _Container-Import · EUDR_
@@ -156,6 +162,7 @@ _STAFL-Plattform · Modul Container-Import – Container (ein Einkauf bei einem 
 **Seite**
 
 - `zeichnen()`
+- `reiterZeigen()`
 - `sendungenSicht()`
 - `betriebeSicht()`
 - `karteSicht()`
@@ -249,6 +256,15 @@ _STAFL-Plattform · Modul Container-Import – Schlachthöfe_
 - `fenster(id)`
 - `speichern(zusatz)`
 
+## `app/module/containerimport/tracking.js`
+
+_STAFL-Plattform · Modul Container-Import – Reiter „Tracking“: wo ist der Container, wann kommt er an (Auftrag des Inhabers 19.11.2026)._
+
+- `ankunft(s)` – Ankunft in Worten: [Text, Farbe der Marke]
+- `zeichnen()`
+- `fenster(id)`
+- `speichern()`
+
 ## `tests/e2e/test_containerimport.py`
 
 _Modul Container-Import, Reiter EUDR (app/module/containerimport/, Oberfläche containerimport.intern, Auftrag des Inhabers 18.11.2026)_
@@ -312,6 +328,27 @@ _Container-Import: Schlachthöfe als Stammdaten unter dem Lieferanten (Aktion co
 **Umbenennen: offene Container folgen, abgeschlossene nicht (GR-106)**
 
 **Ältere Container ohne das Feld (GR-006), Nachtragen nach dem Abschluss, Felder einer späteren Version**
+
+**Oberfläche**
+
+- `seite(user, vp, schema)`
+
+## `tests/e2e/test_containerimport_tracking.py`
+
+_Container-Import: Reiter „Tracking“ (Aktion containerimport_tracking_save, app/api/module/containerimport/tracking.php, Oberfläche app/module/containerimport/tracking.js) – erste Stufe ohne fremde Dienste._
+
+- `check(n, c, i)`
+- `login(user)`
+- `tag(n)` – Datum n Tage ab heute (Datum des Servers) als JJJJ-MM-TT.
+- `container(r, partie)`
+- `anlegen(partie, **mehr)`
+- `tracking(c, **angaben)` – Tracking speichern → (Status, Antwort, der Container danach).
+
+**Stand und Rechte**
+
+**Speichern**
+
+**Zusammenspiel mit dem Reiter EUDR**
 
 **Oberfläche**
 
