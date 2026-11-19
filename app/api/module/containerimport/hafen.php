@@ -60,7 +60,6 @@ function ci_hafen_hh_lesen(string $html): array
    angekündigte Länge mit dem Ende der Verbindung. */
 function ci_hafen_hh_abrufen(): array
 {
-    $ende = microtime(true) + CI_HAFEN_ZEITLIMIT;
     $ctx = stream_context_create(['http' => ['method' => 'GET', 'header' => "Accept: text/html\r\nAccept-Language: en", 'timeout' => CI_HAFEN_WARTEN, 'ignore_errors' => true,
         'follow_location' => 0, 'max_redirects' => 0, 'user_agent' => 'STAFL-Plattform (Standard-Fleisch, Container-Import)']]);
     $http_response_header = [];
@@ -70,7 +69,9 @@ function ci_hafen_hh_abrufen(): array
         if ($fh) fclose($fh);
         return [[], $status === 0 ? 'Hafen Hamburg ist gerade nicht erreichbar.' : 'Hafen Hamburg antwortet mit einem Fehler (' . $status . ').'];
     }
-    $laenge = preg_match('/^Content-Length:\s*(\d+)\s*$/mi', implode("\n", $http_response_header), $m) ? (int)$m[1] : null;
+    $kopf = implode("\n", $http_response_header);
+    $laenge = !preg_match('/^Transfer-Encoding:/mi', $kopf) && preg_match('/^Content-Length:\s*(\d+)\s*$/mi', $kopf, $m) ? (int)$m[1] : null;   // stückweise Antworten entpackt PHP – dort zählt das Ende der Verbindung
+    $ende = microtime(true) + CI_HAFEN_ZEITLIMIT;
     $ziel = min($laenge ?? CI_HAFEN_MAX_BYTE, CI_HAFEN_MAX_BYTE);
     $roh = '';
     while (!feof($fh) && strlen($roh) < $ziel && ($rest = $ende - microtime(true)) > 0) {
