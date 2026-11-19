@@ -15,7 +15,7 @@
 (() => {
   'use strict';
   const C = window.STAFL_CI, F = window.STAFL_FORMAT;
-  const { S, $, esc, SU, feld, kopf, werte, marke, tag, api, uebernehmen, toast, oeffnen, sendung, suchfeld, fokusBehalten, HINWEIS_NUMMER } = C;
+  const { S, $, esc, SU, feld, kopf, werte, marke, tag, api, uebernehmen, toast, oeffnen, sendung, titel, suchfeld, fokusBehalten, HINWEIS_NUMMER } = C;
   S.suche.tracking = '';
   let angekommene = false;   // auch angekommene Container zeigen
   let hafenGefragtUm = 0;    // wann die Seite den Server zuletzt um das Auffrischen der Hafenliste gebeten hat (0 = jetzt fällig)
@@ -69,7 +69,7 @@
     const zeile = (s) => {
       const [text, farbe] = ankunft(s), r = S.d.reedereien[s.reederei], m = S.d.hafen.meldungen[s.id];
       return `<tr id="ci-tz-${esc(s.id)}" data-tracking="${esc(s.id)}" tabindex="0">
-        <td><span class="ci-name">${esc(s.name)}</span><span class="ci-unter">${s.container ? `<span class="ci-zahlen">${esc(s.container)}</span>` : 'Containernummer fehlt'}</span></td>
+        <td><span class="ci-name">${esc(titel(s))}</span><span class="ci-unter">${s.container ? `<span class="ci-zahlen">${esc(s.container)}</span>` : 'Containernummer fehlt'}</span></td>
         <td data-t="Schiff"><span>${esc(s.schiff || '—')}</span><span class="ci-unter">${esc(r ? r.name : '')}</span></td>
         <td data-t="Route"><span>${esc(s.abgangshafen || '—')} → ${esc(s.zielhafen || '—')}</span><span class="ci-unter">${esc([s.lieferant, s.ware].filter(Boolean).join(' · '))}</span></td>
         <td data-t="Abfahrt" class="ci-fest">${tag(s.etd)}</td>
@@ -93,7 +93,7 @@
     const reedereien = [['', '— bitte wählen —'], ...Object.entries(S.d.reedereien).map(([k, x]) => [k, x.name])];
     const form = $('#tracking-inhalt');
     form.dataset.id = s.id;
-    form.innerHTML = kopf('tracking-titel', `Tracking ${s.name}`, esc([s.lieferant, s.ware].filter(Boolean).join(' · ')))
+    form.innerHTML = kopf('tracking-titel', `Tracking ${titel(s)}`, esc([s.lieferant, s.ware].filter(Boolean).join(' · ')))
       + `<div class="dlg-body">
         ${meldung}
         <div class="ci-raster">

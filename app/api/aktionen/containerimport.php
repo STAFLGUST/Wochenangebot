@@ -56,13 +56,15 @@ switch ($action) {
             respond(['ok' => true, 'dateien' => $ergebnis]);
         }
 
-        /* Betriebe anlegen oder ändern (einzeln aus dem Fenster oder mehrere nach dem Einlesen); „sendung“ ordnet sie zu */
+        /* Betriebe anlegen oder ändern (einzeln aus dem Fenster oder mehrere nach dem Einlesen); „sendung“ ordnet sie zu.
+           Ein neuer Farmer bekommt die nächste eigene Nummer; die Nummer aus den Papieren ist je Land eindeutig (422). Container
+           mit offener Bewertung, die eine gespeicherte Nummer vermerkt haben, bekommen den Farmer zugeordnet. */
         case 'containerimport_eudr_betriebe_save': {
             $me = eudr_bearbeiter();
             $b = body();
             $eingaben = $b['betriebe'] ?? null;
             if (!is_array($eingaben) || !$eingaben || !array_is_list($eingaben) || count($eingaben) > EUDR_MAX_ORTE_JE_DATEI) fail('Keine Farmer zum Speichern.', 422);
-            $gespeichert = with_lock(EUDR_SPERRE, function () use ($b, $eingaben, $me) {
+            [$gespeichert, $zugeordnet] = with_lock(EUDR_SPERRE, function () use ($b, $eingaben, $me) {
                 $doc = eudr_betriebe();
                 $sendungen = eudr_sendungen();
                 $ziel = null;
@@ -78,8 +80,11 @@ switch ($action) {
                     $alt = $i !== null ? $doc['liste'][$i] : null;
                     if ($alt) eudr_rev_pruefen($e, $alt, 'Der Farmer „' . $alt['name'] . '“');
                     elseif (count($doc['liste']) >= EUDR_MAX_BETRIEBE) fail('Zu viele Farmer.', 422);
-                    $neu = ['id' => $alt['id'] ?? eudr_id('b')] + eudr_betrieb_pruefen($e, $alt)
+                    $neu = ['id' => $alt['id'] ?? eudr_id('b'), 'nr' => $alt['nr'] ?? max([0, ...array_column($doc['liste'], 'nr')]) + 1] + eudr_betrieb_pruefen($e, $alt)
                         + ['pruefungen' => $alt['pruefungen'] ?? [], 'erstellt' => $alt['erstellt'] ?? eudr_wer($me), 'rev' => (int)($alt['rev'] ?? 0) + 1, 'geaendert' => eudr_wer($me)];
+                    // nur eine neue oder geänderte Nummer prüfen: Doppelte aus der Zeit vor dieser Regel blockieren keine andere Änderung
+                    $anderer = !$alt || ci_nummer_schluessel($alt['land'], $alt['kennung']) !== ci_nummer_schluessel($neu['land'], $neu['kennung']) ? ci_nummer_vergeben($doc['liste'], $neu, $i) : null;
+                    if ($anderer) fail('Die Nummer „' . $neu['kennung'] . '“ aus den Papieren hat in ' . (EUDR_LAENDER[$neu['land']]['name'] ?? $neu['land']) . ' schon der Farmer „' . $anderer['name'] . '“ (' . ci_farmer_nr($anderer['nr']) . ').', 422);
                     if ($i === null) $doc['liste'][] = $neu; else $doc['liste'][$i] = $neu;
                     $gespeichert[] = $neu;
                 }
@@ -90,11 +95,13 @@ switch ($action) {
                     $s['betriebe'] = array_values(array_unique(array_merge($s['betriebe'], array_column($gespeichert, 'id'))));
                     $s['rev']++; $s['geaendert'] = eudr_wer($me);
                     $sendungen['liste'][$ziel] = $s;
-                    eudr_sendungen_schreiben($sendungen);
                 }
-                return $gespeichert;
+                [$sendungen['liste'], $zugeordnet] = ci_offene_nummern_zuordnen($sendungen['liste'], $gespeichert, $me);
+                if ($ziel !== null || $zugeordnet) eudr_sendungen_schreiben($sendungen);
+                return [$gespeichert, $zugeordnet];
             });
-            audit('containerimport', 'EUDR: ' . (count($gespeichert) === 1 ? 'Farmer „' . $gespeichert[0]['name'] . '“' : count($gespeichert) . ' Farmer') . ' gespeichert');
+            audit('containerimport', 'EUDR: ' . (count($gespeichert) === 1 ? 'Farmer „' . $gespeichert[0]['name'] . '“' : count($gespeichert) . ' Farmer') . ' gespeichert'
+                . ($zugeordnet ? '; vermerkte Farmer-Nummern an ' . $zugeordnet . ' Container' . ($zugeordnet === 1 ? '' : 'n') . ' zugeordnet' : ''));
             respond(['ok' => true] + eudr_stand());
         }
 
@@ -156,6 +163,16 @@ switch ($action) {
             respond(['ok' => true] + whisp_starten($liste[$i]['geometrie']));
         }
 
+        /* Farmer-Nummern aus den Papieren für das Fenster „Container“ auflösen, ohne zu speichern (Vorschau vor dem Übernehmen):
+           je Nummer der bekannte Farmer im Land des Containers oder „neu“. „betriebe“ und „offeneNummern“ = Stand des Fensters
+           (auch eines noch nicht gespeicherten Containers). Gespeichert wird mit dem Container (eudr_sendung_pruefen). */
+        case 'containerimport_eudr_nummern': {
+            eudr_leser(true);
+            $b = body();
+            $ids = is_array($b['betriebe'] ?? null) ? array_values(array_filter($b['betriebe'], 'is_string')) : [];
+            respond(['ok' => true, 'zeilen' => ci_nummern_aufloesen(ci_nummern_lesen($b['nummern'] ?? ''), eudr_land($b['land'] ?? ''), $ids, ci_nummern_lesen($b['offeneNummern'] ?? []), eudr_betriebe()['liste'])]);
+        }
+
         /* Container anlegen oder ändern. Die Partienummer ist Pflicht und je Container eindeutig. Nach dem Abschluss der
            Bewertung lassen sich noch Stand, Container- und Aktennummer, Sorgfaltserklärung und Notiz ändern – der Container
            reist weiter, die Bewertung selbst bleibt, wie sie abgeschlossen wurde. */
@@ -172,9 +189,8 @@ switch ($action) {
                 if ($alt && !empty($alt['abschluss'])) {
                     $neu = eudr_sendung_laufend($b, $alt) + eudr_sendung_nachtrag($b, $alt) + $alt;
                 } else {
-                    $ids = array_column(eudr_betriebe()['liste'], 'id');
                     // „+ $alt“ am Ende: Felder, die dieser Stand nicht kennt (nach einem Rückfall von einer neueren Version), bleiben erhalten
-                    $neu = ['id' => $alt['id'] ?? eudr_id('s')] + eudr_sendung_pruefen($b, $ids, $alt)
+                    $neu = ['id' => $alt['id'] ?? eudr_id('s')] + eudr_sendung_pruefen($b, eudr_betriebe()['liste'], $alt)
                         + ['abschluss' => null, 'fruehere' => $alt['fruehere'] ?? [], 'erstellt' => $alt['erstellt'] ?? eudr_wer($me)] + ($alt ?? []);
                 }
                 if (eudr_partie_vergeben($doc['liste'], $neu['partie'], $i)) fail('Die Partienummer „' . $neu['partie'] . '“ ist schon bei einem anderen Container vergeben (archivierte zählen mit).', 422);

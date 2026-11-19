@@ -3,8 +3,11 @@
    18. und 19.11.2026; Gestaltung „C2“).
    Begriffe: die Seite sagt „Container“ und „Farmer“; im Code und in den Daten heißen sie „sendung“ und „betrieb“
    (bestehende Daten und Aktionsnamen, siehe app/api/module/containerimport/eudr.php).
-   Ansichten: Container (Lieferant, Schlachthof, Nummern, Stand, Risikoprofil), Schlachthöfe (Stammdaten unter dem Lieferanten,
-   eigene Datei schlachthoefe.js über die Brücke window.STAFL_CI), Farmer (Geolokalisierung, Bericht, eigene Gegenprüfung), Karte.
+   Ansichten: Container (Akten- und Partienummer vorn, Lieferant, Schlachthof, Stand, Gesamtprüfung der Farmer, Risikoprofil),
+   Schlachthöfe (Stammdaten unter dem Lieferanten, eigene Datei schlachthoefe.js über die Brücke window.STAFL_CI), Farmer
+   (Gesamtübersicht mit eigener Nummer, Nummer aus den Papieren und Containern; Geolokalisierung, Bericht, Gegenprüfung), Karte.
+   Farmer je Container (Inhaber 19.11.2026): Nummern aus den Papieren einfügen → Vorschau (containerimport_eudr_nummern) →
+   ins Fenster übernehmen → mit dem Container speichern; unbekannte Nummern stehen als „Unterlagen fehlen“ am Container.
    Reiter: EUDR (diese Ansichten) und Tracking (Schiff, Häfen, Ankunft – eigene Datei tracking.js, trägt sich in REITER ein).
    Daten: containerimport_start (Stand), containerimport_eudr_pruefen (Dateien prüfen, ohne zu speichern),
    containerimport_eudr_betriebe_save, _original, _gegenpruefung, _sendung_save, _sendung_abschluss (jede Antwort bringt den neuen
@@ -28,7 +31,7 @@
   const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
   const icon = (n) => `<svg class="r-i" aria-hidden="true"><use href="#i-${n}"/></svg>`;
   const plural = (n, ein, viele) => `${n} ${n === 1 ? ein : viele}`;
-  const S = { csrf: '', d: null, reiter: 'eudr', sicht: 'sendungen', suche: { sendungen: '', betriebe: '' }, archiv: false, karteSendung: '', lesen: null, toast: 0, sendet: false };
+  const S = { csrf: '', d: null, reiter: 'eudr', sicht: 'sendungen', suche: { sendungen: '', betriebe: '' }, archiv: false, karteSendung: '', lesen: null, nummern: [], toast: 0, sendet: false };
 
   /* ---------- Aufruf der API: wirft nie, liefert { status, data } ---------- */
   async function api(action, body, query = '', sperre = true) {   // sperre = false: Abfrage im Hintergrund, hält keine Eingabe auf
@@ -103,6 +106,16 @@
   const landName = (code) => (S.d.laender[code] ? S.d.laender[code].name : code);
   const betrieb = (id) => S.d.betriebe.find((b) => b.id === id);
   const sendung = (id) => S.d.sendungen.find((s) => s.id === id);
+  /* Wie ein Container überschrieben ist: Akten- und Partienummer gleichrangig vorn (die Aktennummer nennt das Haus „Container“);
+     ältere Einträge ohne beide nach der Auftragsnummer (name vom Server) */
+  const titel = (s) => [s.akte && `Akte ${s.akte}`, s.partie && `Partie ${s.partie}`].filter(Boolean).join(' · ') || s.name;
+  /* Eigene Nummer eines Farmers; Schnappschüsse von vor dieser Nummer nehmen die des gespeicherten Farmers */
+  const farmerNr = (b) => b.farmerNr || (betrieb(b.id) || {}).farmerNr || '';
+  const containerVon = (id) => S.d.sendungen.filter((s) => s.betriebe.includes(id));
+  /* Gesamtprüfung der Farmer eines Containers (farmerPruefung vom Server): wie viele in Ordnung und was fehlt */
+  const THEMA = { geo: 'Umriss', entwaldung: 'Entwaldung', gegenpruefung: 'eigene Prüfung', gebiete: 'Schutzgebiete', legalitaet: 'Legalität' };
+  const farmerStand = (p) => (p.gesamt ? `${p.inOrdnung} von ${p.gesamt} in Ordnung` : 'kein Farmer');
+  const farmerFehlt = (p) => [p.ohneUnterlagen && `Unterlagen fehlen: ${p.ohneUnterlagen}`, ...Object.entries(p.themen).map(([k, n]) => `${THEMA[k]} offen: ${n}`)].filter(Boolean).join(' · ');
   const profilMarke = (p) => {
     const n = p.kriterien.filter((k) => k.stand === p.stand).length;
     return p.stand === 'ok' ? marke('kein Risiko erkennbar', 'ok') : marke(`${plural(n, 'Punkt', 'Punkte')} ${STAND[p.stand][0]}`, STAND[p.stand][1]);
@@ -170,41 +183,49 @@
   const suchfeld = (platz, name, schluessel = S.sicht, id = 'ci-suche') => `<input type="search" id="${id}" data-suche="${schluessel}" value="${esc(S.suche[schluessel])}" placeholder="${platz}" aria-label="${name} durchsuchen">`;
   const suchzeile = (platz, name) => `<div class="ci-suchzeile">${suchfeld(platz, name)}</div>`;
   function sendungenSicht() {
-    const liste = S.d.sendungen.filter((s) => (s.aktiv || S.archiv) && SU.findet(S.suche.sendungen, s.partie, s.akte, s.container, s.nummer, s.lieferant, s.lieferantNr, s.schlachthofName, s.ware, landName(s.land), s.dds.referenz))
+    const liste = S.d.sendungen.filter((s) => (s.aktiv || S.archiv) && SU.findet(S.suche.sendungen, s.partie, s.akte, s.container, s.nummer, s.lieferant, s.lieferantNr, s.schlachthofName, s.ware, landName(s.land), s.dds.referenz, s.offeneNummern))
       .sort((a, b) => b.erstellt.t.localeCompare(a.erstellt.t));
     const zeile = (s) => `<tr data-sendung="${esc(s.id)}" tabindex="0" class="${s.aktiv ? '' : 'ci-archiv'}">
-      <td><span class="ci-name">${esc(s.name)}</span><span class="ci-unter">${esc([s.akte && `Akte ${s.akte}`, s.container && `Container ${s.container}`].filter(Boolean).join(' · ') || '—')}</span></td>
+      <td><span class="ci-name">${esc(titel(s))}</span><span class="ci-unter">${s.container ? `Container <span class="ci-zahlen">${esc(s.container)}</span>` : '—'}</span></td>
       <td data-t="Lieferant"><span>${esc(s.lieferant)}</span><span class="ci-unter">${esc(landName(s.land))}${s.lieferantNr ? ` · Nr. ${esc(s.lieferantNr)}` : ' · nicht mit den Stammdaten verknüpft'}${s.schlachthofName ? ` · ${esc(s.schlachthofName)}` : ''}</span></td>
       <td data-t="Ware"><span>${esc(s.ware || '—')}</span><span class="ci-unter">${s.mengeKg === null ? '' : F.kg(s.mengeKg)}${s.lose ? ` · Lose ${esc(s.lose)}` : ''}</span></td>
       <td data-t="Stand">${marke(S.d.staende[s.stand], s.stand === 'angekommen' ? 'ok' : '')}</td>
-      <td data-t="Farmer" class="ci-r">${s.betriebe.length}</td>
+      <td data-t="Farmer"><span class="ci-name"><i class="ci-ampel ${s.farmerPruefung.ampel}" aria-hidden="true"></i>${farmerStand(s.farmerPruefung)}</span><span class="ci-unter">${esc(farmerFehlt(s.farmerPruefung))}</span></td>
       <td data-t="Risikoprofil">${profilMarke(s.profil)}</td>
       <td data-t="Bewertung">${s.abschluss ? marke(ERGEBNIS[s.abschluss.ergebnis][0], ERGEBNIS[s.abschluss.ergebnis][1]) + `<span class="ci-unter">${tag(s.abschluss.wer.t)} · ${esc(s.abschluss.wer.von)}</span>` : '<span class="ci-leise">in Prüfung</span>'}${s.dds.referenz ? `<span class="ci-unter">Sorgfaltserklärung <span class="ci-zahlen">${esc(s.dds.referenz)}</span></span>` : ''}</td></tr>`;
     $('#ci-inhalt').innerHTML = (S.d.sendungen.length ? suchzeile('Partie, Akte, Containernummer, Lieferant, Schlachthof, Ware', 'Container') : '') + (liste.length
-      ? `<div class="r-karte"><table class="ci-tab" id="ci-sendungen"><thead><tr><th scope="col">Partie</th><th scope="col">Lieferant</th><th scope="col">Ware</th><th scope="col">Stand</th><th scope="col" class="ci-r">Farmer</th><th scope="col">Risikoprofil</th><th scope="col">Bewertung</th></tr></thead><tbody>${liste.map(zeile).join('')}</tbody></table></div>`
+      ? `<div class="r-karte"><table class="ci-tab" id="ci-sendungen"><thead><tr><th scope="col">Akte · Partie</th><th scope="col">Lieferant</th><th scope="col">Ware</th><th scope="col">Stand</th><th scope="col">Farmer geprüft</th><th scope="col">Risikoprofil</th><th scope="col">Bewertung</th></tr></thead><tbody>${liste.map(zeile).join('')}</tbody></table></div>`
       : `<div class="r-karte"><p class="ci-leer">${S.d.sendungen.length ? 'Kein Container passt zur Suche.' : 'Noch kein Container. Legen Sie einen Container an und lesen Sie die Unterlagen des Lieferanten ein.'}</p></div>`) + archivSchalter();
   }
   const archivSchalter = () => `<label class="ci-check ci-archivwahl"><input type="checkbox" id="ci-archiv"${S.archiv ? ' checked' : ''}>Archivierte anzeigen</label>`;
 
+  /* Container einer Zeile der Gesamtübersicht: Akten- und Partienummer, darunter die Lieferanten */
+  const containerZelle = (cs) => `<td data-t="Container">${cs.length ? cs.map((s) => esc(titel(s)).split(' · ').map((x) => `<span class="ci-nb">${x}</span>`).join(' · ')).join('<br>') : '—'}<span class="ci-unter">${esc([...new Set(cs.map((s) => s.lieferant))].join(', '))}</span></td>`;
+  /* Gesamtübersicht aller Farmer: Ampel, eigene Nummer und Nummer aus den Papieren, Prüfstand, Container (mit Lieferant);
+     dazu je vermerkte Nummer ohne Unterlagen eine Zeile, die den Container öffnet. Suche über alles davon. */
   function betriebeSicht() {
-    const woerter = S.suche.betriebe;
-    const liste = S.d.betriebe.filter((b) => (b.aktiv || S.archiv) && SU.findet(woerter, b.name, b.erzeuger, b.kennung, b.region, b.ort, landName(b.land), b.quelle.lieferant))
-      .sort((a, b) => a.name.localeCompare(b.name, 'de'));
-    const zeile = (b) => {
-      const n = S.d.sendungen.filter((s) => s.betriebe.includes(b.id)).length, p = PRUEFUNG[b.bewertung.gegenpruefung];
+    const woerter = S.suche.betriebe, sichtbar = (s) => s && (s.aktiv || S.archiv);
+    const liste = S.d.betriebe.map((b) => [b, containerVon(b.id)]).filter(([b, cs]) => (b.aktiv || S.archiv) && SU.findet(woerter, b.name, b.erzeuger, b.farmerNr, b.kennung, b.region, b.ort, landName(b.land), b.quelle.lieferant, cs.map(titel), cs.map((s) => s.lieferant)))
+      .sort(([a], [b]) => a.name.localeCompare(b.name, 'de'));
+    const offen = S.d.offeneNummern.map((o) => [o, o.sendungen.map(sendung).filter(sichtbar)]).filter(([o, cs]) => cs.length && SU.findet(woerter, 'Unterlagen fehlen', o.nummer, landName(o.land), cs.map(titel), cs.map((s) => s.lieferant)));
+    const offenZeile = ([o, cs]) => `<tr data-sendung="${esc(cs[0].id)}" tabindex="0">
+        <td><span class="ci-name"><i class="ci-ampel rot" aria-hidden="true"></i>Unterlagen fehlen</span><span class="ci-unter">noch kein Farmer angelegt</span></td>
+        <td data-t="Nummern" class="ci-fest"><span class="ci-zahlen">—</span><span class="ci-unter">Papiere <span class="ci-zahlen">${esc(o.nummer)}</span></span></td>
+        <td data-t="Lage">${esc(landName(o.land))}</td><td data-t="Geolokalisierung">${marke('fehlt', 'rot')}</td><td data-t="Bericht">—</td><td data-t="Gegenprüfung">—</td>${containerZelle(cs)}</tr>`;
+    const zeile = ([b, cs]) => {
+      const p = PRUEFUNG[b.bewertung.gegenpruefung];
       return `<tr data-betrieb="${esc(b.id)}" tabindex="0" class="${b.aktiv ? '' : 'ci-archiv'}">
         <td><span class="ci-name"><i class="ci-ampel ${b.ampel}" aria-hidden="true"></i>${esc(b.name)}</span><span class="ci-unter">${esc(b.erzeuger || '—')}</span></td>
+        <td data-t="Nummern" class="ci-fest"><span class="ci-zahlen">${esc(b.farmerNr)}</span><span class="ci-unter">${b.kennung ? `Papiere <span class="ci-zahlen">${esc(b.kennung)}</span>` : 'ohne Nummer aus den Papieren'}</span></td>
         <td data-t="Lage"><span>${esc(landName(b.land))}</span><span class="ci-unter">${esc([b.region, b.ort].filter(Boolean).join(' · '))}</span></td>
-        <td data-t="Kennung" class="ci-zahlen">${esc(b.kennung || '—')}</td>
-        <td data-t="Fläche" class="ci-r ci-zahlen">${ha(b.flaeche)}</td>
         <td data-t="Geolokalisierung">${marke(GEO[b.stand][0], GEO[b.stand][1])}</td>
         <td data-t="Bericht">${marke(NACHWEIS[b.bericht.entwaldung][0], NACHWEIS[b.bericht.entwaldung][1])}<span class="ci-unter">${b.bericht.datum ? tag(b.bericht.datum) : ''}</span></td>
         <td data-t="Gegenprüfung">${marke(p[0], p[1])}<span class="ci-unter">${esc(pruefungText(b))}</span></td>
-        <td data-t="Container" class="ci-r">${n}</td></tr>`;
+        ${containerZelle(cs)}</tr>`;
     };
-    $('#ci-inhalt').innerHTML = suchzeile('Name, Erzeuger, Kennung, Region, Lieferant', 'Farmer')
-      + (liste.length
-        ? `<div class="r-karte"><table class="ci-tab" id="ci-betriebe"><thead><tr><th scope="col">Farmer</th><th scope="col">Lage</th><th scope="col">Kennung</th><th scope="col" class="ci-r">Fläche</th><th scope="col">Geolokalisierung</th><th scope="col">Bericht Entwaldung</th><th scope="col">Eigene Prüfung</th><th scope="col" class="ci-r">Container</th></tr></thead><tbody>${liste.map(zeile).join('')}</tbody></table></div>`
+    $('#ci-inhalt').innerHTML = suchzeile('Name, Farmer-Nummer, Nummer aus den Papieren, Container, Lieferant', 'Farmer')
+      + (liste.length || offen.length
+        ? `<div class="r-karte"><table class="ci-tab" id="ci-betriebe"><thead><tr><th scope="col">Farmer</th><th scope="col">Nummern</th><th scope="col">Lage</th><th scope="col">Geolokalisierung</th><th scope="col">Bericht Entwaldung</th><th scope="col">Eigene Prüfung</th><th scope="col">Container</th></tr></thead><tbody>${liste.map(zeile).join('')}${offen.map(offenZeile).join('')}</tbody></table></div>`
         : `<div class="r-karte"><p class="ci-leer">${S.d.betriebe.length ? 'Kein Farmer passt zur Suche.' : 'Noch kein Farmer. Über „Unterlagen einlesen“ kommen Berichte und GeoJSON-Dateien der Lieferanten herein.'}</p></div>`)
       + archivSchalter();
   }
@@ -212,7 +233,7 @@
   function karteSicht() {
     const s = S.karteSendung ? sendung(S.karteSendung) : null;
     const liste = S.d.betriebe.filter((b) => b.aktiv && (!s || s.betriebe.includes(b.id)));
-    const wahl = [['', 'Alle Farmer'], ...S.d.sendungen.filter((x) => x.aktiv).map((x) => [x.id, `Container ${x.name}`])];
+    const wahl = [['', 'Alle Farmer'], ...S.d.sendungen.filter((x) => x.aktiv).map((x) => [x.id, titel(x)])];
     $('#ci-inhalt').innerHTML = `<div class="ci-suchzeile"><select id="ci-karte-sendung" aria-label="Farmer eines Containers zeigen">${wahl.map(([v, t]) => `<option value="${esc(v)}"${v === S.karteSendung ? ' selected' : ''}>${esc(t)}</option>`).join('')}</select>
       <span class="ci-legende"><i class="ci-ampel gruen"></i>ohne offenen Punkt <i class="ci-ampel gelb"></i>Nachweis offen <i class="ci-ampel rot"></i>kritisch</span></div>
       <div class="ci-kartenraster"><div class="r-karte" id="ci-karte"></div>
@@ -233,8 +254,10 @@
     const pruefungen = [...(b.pruefungen || [])].sort((x, y) => y.datum.localeCompare(x.datum));
     const portale = Object.entries(S.d.portale);
     $('#betrieb-inhalt').dataset.id = id;
-    $('#betrieb-inhalt').innerHTML = kopf('betrieb-titel', b.name, `${esc(landName(b.land))}${b.kennung ? ` · Kennung ${esc(b.kennung)}` : ''} · ${ha(b.flaeche)} · ${plural(b.punkte, 'Punkt', 'Punkte')}`)
+    const cs = containerVon(id);
+    $('#betrieb-inhalt').innerHTML = kopf('betrieb-titel', b.name, `${esc(b.farmerNr)}${b.kennung ? ` · Papiere ${esc(b.kennung)}` : ''} · ${esc(landName(b.land))} · ${ha(b.flaeche)} · ${plural(b.punkte, 'Punkt', 'Punkte')}`)
       + `<div class="dlg-body">
+        <p class="ci-klein">${cs.length ? `In ${plural(cs.length, 'Container', 'Containern')}: ${cs.map((s) => esc(titel(s))).join(', ')}` : 'Noch keinem Container zugeordnet.'}</p>
         <div class="ci-zweispaltig"><div>
           <div class="ci-k-wrap" id="betrieb-karte"></div>
           <p class="ci-klein ci-leise">Mittelpunkt ${b.mitte[1].toLocaleString('de-DE', { maximumFractionDigits: 5 })}° / ${b.mitte[0].toLocaleString('de-DE', { maximumFractionDigits: 5 })}° ·
@@ -243,7 +266,7 @@
         </div><div class="ci-raster">
           ${feld('Name des Farmers', 'name', b.name, { breit: true, aus })}
           ${feld('Erzeuger (Eigentümer)', 'erzeuger', b.erzeuger, { breit: true, aus })}
-          ${feld('Land', 'land', b.land, { wahl: laenderWahl(b.land), aus })}${feld('Kennung', 'kennung', b.kennung, { aus, hinweis: 'z. B. SIGOR-Nummer' })}
+          ${feld('Land', 'land', b.land, { wahl: laenderWahl(b.land), aus })}${feld('Nummer aus den Papieren', 'kennung', b.kennung, { aus, hinweis: 'z. B. SIGOR-Nummer – je Land eindeutig' })}
           ${feld('Region', 'region', b.region, { aus })}${feld('Ort', 'ort', b.ort, { aus })}
           ${feld('Angegebene Fläche (ha)', 'flaecheAngabe', zahlText(b.flaecheAngabe), { zahl: true, aus })}
           <div class="ci-feld"><span>Berechnete Fläche</span><output>${ha(b.geometrie.type === 'Point' ? null : b.flaeche)}</output></div>
@@ -390,23 +413,62 @@
   /* ---------- Fenster „Container“ ---------- */
   const kriterien = (p) => `<ul class="ci-kriterien">${p.kriterien.map((k) => `<li class="${k.stand}"><span class="ci-kr-stand">${marke(STAND[k.stand][0], STAND[k.stand][1])}</span>
     <span><strong>${esc(k.titel)}</strong><small>${esc(k.text)}${k.betriebe.length ? ` <em>${esc(k.betriebe.join(', '))}</em>` : ''}</small></span></li>`).join('')}</ul>`;
+  /* Farmer im Fenster „Container“: zugeordnete und vermerkte Nummern ohne Unterlagen (angehakt – abhaken und speichern
+     entfernt sie), darunter aufgeklappt die übrigen aktiven Farmer zur Wahl. Nach dem Abschluss die Farmer des Schnappschusses. */
+  function farmerListe(s, ids, offen, aus) {
+    const zu = !!s.abschluss;
+    const zeile = (b, an) => `<li><label><input type="checkbox" name="betriebe" data-liste value="${esc(b.id)}"${an ? ' checked' : ''}${aus ? ' disabled' : ''}>
+        <span><strong><i class="ci-ampel ${b.ampel}" aria-hidden="true"></i>${esc(b.name)}</strong><small>${esc([farmerNr(b), b.kennung && `Nr. ${b.kennung}`, b.erzeuger, landName(b.land), b.region].filter(Boolean).join(' · '))} · ${ha(b.flaeche)}</small></span></label>${marke(GEO[b.stand][0], GEO[b.stand][1])}</li>`;
+    const offenZeile = (n) => `<li><label><input type="checkbox" name="offeneNummern" data-liste value="${esc(n)}" checked${aus ? ' disabled' : ''}>
+        <span><strong><i class="ci-ampel rot" aria-hidden="true"></i>Nr. ${esc(n)}</strong><small>Nummer aus den Papieren – noch kein Farmer mit Unterlagen angelegt</small></span></label>${marke('Unterlagen fehlen', 'rot')}</li>`;
+    const zugeordnet = zu ? s.abschluss.betriebe : ids.map(betrieb).filter(Boolean);
+    const weitere = zu ? [] : S.d.betriebe.filter((b) => b.aktiv && !ids.includes(b.id)).sort((a, b) => a.name.localeCompare(b.name, 'de'));
+    return (zugeordnet.length || offen.length ? `<ul class="ci-wahl">${zugeordnet.map((b) => zeile(b, true)).join('')}${offen.map(offenZeile).join('')}</ul>`
+      : `<p class="ci-leise ci-klein">${S.d.betriebe.length ? 'Noch kein Farmer zugeordnet.' : 'Noch keine Farmer vorhanden – zuerst die Unterlagen des Lieferanten einlesen.'}</p>`)
+      + (weitere.length && !aus ? `<details class="ci-einfuegen"><summary>Weitere Farmer wählen (${weitere.length})</summary><ul class="ci-wahl">${weitere.map((b) => zeile(b, false)).join('')}</ul></details>` : '');
+  }
+  const NUMMER_STAND = { bekannt: ['wird zugeordnet', 'ok'], zugeordnet: ['schon zugeordnet', ''], neu: ['unbekannt – Unterlagen fehlen', 'warn'], offen: ['schon vermerkt', ''], doppelt: ['doppelt', ''] };
+  /* Eingefügte Nummern prüfen lassen (speichert nichts) und als Vorschau zeigen */
+  async function nummernPruefen() {
+    const f = $('#sendung-inhalt'), w = werte(f), text = $('#nummern-text').value;
+    if (!text.trim()) { toast('Bitte Nummern aus den Papieren einfügen.', true); return; }
+    const r = await api('containerimport_eudr_nummern', { land: w.land, betriebe: w.betriebe || [], offeneNummern: w.offeneNummern || [], nummern: text });
+    if (r.status === 401) { zeigeAnmeldung(); return; }
+    if (r.status !== 200 || !r.data.ok) { toast(fehlerText(r, 'Die Nummern konnten nicht geprüft werden'), true); return; }
+    S.nummern = r.data.zeilen;
+    const zahl = (st) => S.nummern.filter((z) => z.status === st).length;
+    $('#nummern-vorschau').innerHTML = `<ul class="ci-wahl">${S.nummern.map((z) => `<li><span><strong>Nr. ${esc(z.nummer)}</strong><small>${z.betrieb ? esc(`${z.farmerNr} · ${z.name}${z.aktiv ? '' : ' (archiviert)'}`) : 'kein Farmer mit dieser Nummer'}</small></span>${marke(...NUMMER_STAND[z.status])}</li>`).join('')}</ul>
+      <p class="ci-klein">${plural(zahl('bekannt'), 'Farmer wird', 'Farmer werden')} zugeordnet, ${plural(zahl('neu'), 'Nummer wird', 'Nummern werden')} als „Unterlagen fehlen“ vermerkt.
+        <button class="ci-knopf klein primaer" type="button" id="nummern-ok"${zahl('bekannt') + zahl('neu') ? '' : ' disabled'}>In den Container übernehmen</button></p>`;
+  }
+  /* Vorschau ins Fenster übernehmen; gespeichert wird mit „Speichern“ (der Server löst die Nummern dabei erneut auf) */
+  function nummernUebernehmen() {
+    const f = $('#sendung-inhalt'), w = werte(f);
+    const ids = [...new Set([...(w.betriebe || []), ...S.nummern.filter((z) => z.betrieb).map((z) => z.betrieb)])];
+    const offen = [...(w.offeneNummern || []), ...S.nummern.filter((z) => z.status === 'neu').map((z) => z.nummer)];
+    $('#sendung-farmer').innerHTML = farmerListe(sendung(f.dataset.id) || { abschluss: null }, ids, offen, false);
+    $('#nummern-text').value = ''; S.nummern = [];
+    $('#nummern-vorschau').innerHTML = `<p class="ci-meldung neutral">${icon('info')} Übernommen – zum Festhalten den Container speichern.</p>`;
+  }
   function sendungOeffnen(id) {
     const neu = !id;
-    const s = neu ? { id: '', rev: 0, partie: '', akte: '', container: '', stand: 'gekauft', nummer: '', lieferant: '', lieferantNr: '', land: 'PY', ware: '', hs: '', mengeKg: null, schlachtVon: '', schlachtBis: '', lose: '', betriebe: [],
+    const s = neu ? { id: '', rev: 0, partie: '', akte: '', container: '', stand: 'gekauft', nummer: '', lieferant: '', lieferantNr: '', land: 'PY', ware: '', hs: '', mengeKg: null, schlachtVon: '', schlachtBis: '', lose: '', betriebe: [], offeneNummern: [],
       nachweis: { erklaerung: '', rueckverfolgung: 'offen', haltung: 'offen', legalitaet: 'offen' }, dds: { referenz: '', datum: '' }, notiz: '', aktiv: true, abschluss: null } : sendung(id);
     if (!s) return;
     const darf = S.d.rechte.bearbeiten, zu = !!s.abschluss, aus = !darf || zu;
     const nachtragbar = (wert) => aus && !(darf && wert === '');   // gesperrt – außer es fehlt noch: dann einmal nachtragen (eudr_sendung_nachtrag)
-    const waehlbar = S.d.betriebe.filter((b) => b.aktiv || s.betriebe.includes(b.id)).sort((a, b) => a.name.localeCompare(b.name, 'de'));
-    const gezeigt = zu ? s.abschluss.betriebe : waehlbar;
-    const betriebe = gezeigt.length
-      ? `<ul class="ci-wahl">${gezeigt.map((b) => `<li><label><input type="checkbox" name="betriebe" data-liste value="${esc(b.id)}"${zu || s.betriebe.includes(b.id) ? ' checked' : ''}${aus ? ' disabled' : ''}>
-          <span><strong>${esc(b.name)}</strong><small>${esc([b.erzeuger, landName(b.land), b.region].filter(Boolean).join(' · '))} · ${ha(b.flaeche)}</small></span></label>${marke(GEO[b.stand][0], GEO[b.stand][1])}</li>`).join('')}</ul>`
-      : '<p class="ci-leise ci-klein">Noch keine Farmer vorhanden – zuerst die Unterlagen des Lieferanten einlesen.</p>';
+    const gezeigt = zu ? s.abschluss.betriebe : s.betriebe.map(betrieb).filter(Boolean);
+    const p = s.farmerPruefung;
+    const betriebe = (neu ? '' : `<p class="ci-gesamt"><i class="ci-ampel ${p.ampel}" aria-hidden="true"></i><span><strong>Gesamtprüfung: ${farmerStand(p)}</strong><small>${esc(farmerFehlt(p) || (p.gesamt ? 'Alle Farmer geprüft und in Ordnung.' : 'Diesem Container ist noch kein Farmer zugeordnet.'))}</small></span></p>`)
+      + `<div id="sendung-farmer">${farmerListe(s, s.betriebe, s.offeneNummern, aus)}</div>`
+      + (darf && !zu ? `<div class="ci-nummern"><label class="ci-feld breit" for="nummern-text"><span>Farmer-Nummern aus den Papieren einfügen</span>
+          <textarea id="nummern-text" rows="3" placeholder="je Zeile eine Nummer, z. B. aus der Liste des Lieferanten"></textarea>
+          <small>Bekannte Farmer werden zugeordnet; für unbekannte Nummern wird vermerkt, dass die Unterlagen fehlen. Sie werden zugeordnet, sobald ein Farmer mit dieser Nummer angelegt ist.</small></label>
+          <button class="ci-knopf klein" type="button" id="nummern-pruefen">Nummern prüfen</button><div id="nummern-vorschau" aria-live="polite"></div></div>` : '');
     const hofWahl = zu && s.schlachthof ? [[s.schlachthof, s.schlachthofName]] : schlachthofWahl(s, s.schlachthof);   // nach dem Abschluss der Name von damals
     const abschluss = zu ? `<div class="ci-abschluss">${marke(ERGEBNIS[s.abschluss.ergebnis][0], ERGEBNIS[s.abschluss.ergebnis][1])}<span>Bewertung abgeschlossen am ${tag(s.abschluss.wer.t)} von ${esc(s.abschluss.wer.von)}${s.abschluss.begruendung ? `<small>${esc(s.abschluss.begruendung)}</small>` : ''}</span></div>` : '';
     $('#sendung-inhalt').dataset.id = s.id;
-    $('#sendung-inhalt').innerHTML = kopf('sendung-titel', neu ? 'Neuer Container' : `Container ${s.name}`, neu ? '' : `${esc(s.lieferant)} · ${esc(landName(s.land))}`)
+    $('#sendung-inhalt').innerHTML = kopf('sendung-titel', neu ? 'Neuer Container' : titel(s), neu ? '' : `${esc(s.lieferant)} · ${esc(landName(s.land))}`)
       + `<div class="dlg-body">${abschluss}
         <div class="ci-raster drei">
           ${feld('Partienummer', 'partie', s.partie, { aus: nachtragbar(s.partie), platz: 'interne Referenz des Einkaufs' })}${feld('Aktennummer', 'akte', s.akte, { aus: !darf })}${feld('Containernummer', 'container', s.container, { aus: !darf, platz: 'z. B. MSKU 907032 3', hinweis: HINWEIS_NUMMER[s.containerPruefung] })}
@@ -418,7 +480,7 @@
         </div>
 
         <h3 class="ci-h">Farmer dieses Containers</h3>${betriebe}
-        ${!neu && gezeigt.some((b) => s.betriebe.includes(b.id)) ? '<div class="ci-k-wrap flach" id="sendung-karte"></div>' : ''}
+        ${!neu && gezeigt.length ? '<div class="ci-k-wrap flach" id="sendung-karte"></div>' : ''}
 
         <h3 class="ci-h">Nachweise des Lieferanten</h3>
         <div class="ci-raster">
@@ -442,14 +504,14 @@
         <button class="ci-knopf" type="button" data-zu>Schließen</button>${darf ? '<button class="ci-knopf primaer" type="submit">Speichern</button>' : ''}</div>`;
     oeffnen($('#dlg-sendung'));
     const karte = $('#sendung-karte');
-    if (karte) window.EUDR_KARTE.zeichnen(karte, { betriebe: gezeigt.filter((b) => s.betriebe.includes(b.id)) });
+    if (karte) window.EUDR_KARTE.zeichnen(karte, { betriebe: gezeigt });
   }
   function sendungAusFenster() {
     const f = $('#sendung-inhalt'), w = werte(f), alt = sendung(f.dataset.id);
     return {
       id: f.dataset.id, rev: alt ? alt.rev : 0, aktiv: alt ? alt.aktiv : true, partie: w.partie, akte: w.akte, container: w.container, stand: w.stand, nummer: w.nummer,
       ...lieferantAus(w.lieferant, alt), schlachthof: w.schlachthof, land: w.land, ware: w.ware, hs: w.hs, mengeKg: w.mengeKg,
-      schlachtVon: w.schlachtVon, schlachtBis: w.schlachtBis, lose: w.lose, betriebe: w.betriebe || [], notiz: w.notiz,
+      schlachtVon: w.schlachtVon, schlachtBis: w.schlachtBis, lose: w.lose, betriebe: w.betriebe || [], offeneNummern: w.offeneNummern || [], notiz: w.notiz,
       nachweis: { erklaerung: w.n_erklaerung, rueckverfolgung: w.n_rueckverfolgung, haltung: w.n_haltung, legalitaet: w.n_legalitaet }, dds: { referenz: w.d_referenz, datum: w.d_datum },
     };
   }
@@ -464,6 +526,9 @@
     const wunsch = vorher || sel.dataset.verdraengt || '';
     sel.value = [...sel.options].some((o) => o.value === wunsch) ? wunsch : '';
     sel.dataset.verdraengt = sel.value ? '' : wunsch;
+    // neuer Container ohne Wahl: den zuletzt beim Lieferanten benutzten Schlachthof vorschlagen
+    const zuletzt = !alt && !sel.value && S.d.sendungen.filter((x) => x.schlachthof && lieferantSchluessel(x) === lieferantSchluessel(lieferant)).sort((a, b) => b.erstellt.t.localeCompare(a.erstellt.t))[0];
+    if (zuletzt && [...sel.options].some((o) => o.value === zuletzt.schlachthof)) sel.value = zuletzt.schlachthof;
   }
   async function sendungSpeichern(zusatz = {}) {
     const r = await api('containerimport_eudr_sendung_save', { ...sendungAusFenster(), ...zusatz });
@@ -479,9 +544,9 @@
     $('#abschluss-inhalt').dataset.id = id;
     $('#abschluss-inhalt').dataset.art = wiederOeffnen ? 'oeffnen' : 'abschluss';
     $('#abschluss-inhalt').innerHTML = wiederOeffnen
-      ? kopf('abschluss-titel', 'Bewertung wieder öffnen', `Container ${esc(s.name)}`) + `<div class="dlg-body">${feld('Grund', 'grund', '', { lang: 3, breit: true, hinweis: 'Der bisherige Abschluss bleibt im Verlauf des Containers erhalten.' })}</div>
+      ? kopf('abschluss-titel', 'Bewertung wieder öffnen', esc(titel(s))) + `<div class="dlg-body">${feld('Grund', 'grund', '', { lang: 3, breit: true, hinweis: 'Der bisherige Abschluss bleibt im Verlauf des Containers erhalten.' })}</div>
         <div class="dlg-foot"><button class="ci-knopf" type="button" data-zu>Abbrechen</button><button class="ci-knopf primaer" type="submit">Wieder öffnen</button></div>`
-      : kopf('abschluss-titel', 'Bewertung abschließen', `Container ${esc(s.name)}`) + `<div class="dlg-body">
+      : kopf('abschluss-titel', 'Bewertung abschließen', esc(titel(s))) + `<div class="dlg-body">
         <p class="ci-vorschlag ${p.stand}">${icon(p.stand === 'ok' ? 'haken' : 'warn')}<span>${esc(p.vorschlag)}</span></p>
         ${feld('Ergebnis der Risikobewertung', 'ergebnis', p.vernachlaessigbar === 'ja' ? 'vernachlaessigbar' : 'nicht_vernachlaessigbar', { breit: true, wahl: [
           ...(p.vernachlaessigbar === 'nein' ? [] : [['vernachlaessigbar', 'Risiko vernachlässigbar – Sorgfaltserklärung wird abgegeben']]), ['nicht_vernachlaessigbar', 'Risiko nicht vernachlässigbar – Ware wird nicht in Verkehr gebracht']] })}
@@ -515,13 +580,13 @@
   function drucken(id) {
     const s = sendung(id), bs = s.abschluss ? s.abschluss.betriebe : S.d.betriebe.filter((b) => s.betriebe.includes(b.id));
     const zeile = (k, v) => (v ? `<tr><th scope="row">${esc(k)}</th><td>${v}</td></tr>` : '');
-    $('#ci-druck').innerHTML = `<h1>Risikoprofil EUDR · Container ${esc(s.name)}</h1>
+    $('#ci-druck').innerHTML = `<h1>Risikoprofil EUDR · ${esc(titel(s))}</h1>
       <p>Verordnung (EU) 2023/1115 · Standard-Fleisch · gedruckt am ${F.datumZeit(new Date())} von ${esc(S.d.name)}</p>
       <table class="ci-d-kopf">${zeile('Partienummer', esc(s.partie))}${zeile('Aktennummer', esc(s.akte))}${zeile('Lieferant', esc(s.lieferant + (s.lieferantNr ? ` (Nr. ${s.lieferantNr})` : '')))}${zeile('Schlachthof', esc(s.schlachthofName))}${zeile('Auftragsnummer des Lieferanten', esc(s.nummer))}${zeile('Herkunftsland', esc(landName(s.land)))}${zeile('Ware', esc([s.ware, s.hs && `Zolltarifnummer ${s.hs}`].filter(Boolean).join(' · ')))}${zeile('Menge', s.mengeKg === null ? '' : F.kg(s.mengeKg))}
         ${zeile('Containernummer', esc(s.container))}${zeile('Schlachtung', s.schlachtVon ? `${tag(s.schlachtVon)}${s.schlachtBis ? ` bis ${tag(s.schlachtBis)}` : ''}` : '')}${zeile('Schlachtlose', esc(s.lose))}${zeile('Sorgfaltserklärung', esc([s.dds.referenz, s.dds.datum && tag(s.dds.datum)].filter(Boolean).join(' · ')))}</table>
       <h2>Farmer</h2>
-      <table class="ci-d-tab"><thead><tr><th>Farmer</th><th>Erzeuger</th><th>Lage</th><th>Kennung</th><th>Fläche</th><th>Geolokalisierung</th><th>Bericht</th><th>Eigene Prüfung</th></tr></thead><tbody>
-        ${bs.map((b) => `<tr><td>${esc(b.name)}</td><td>${esc(b.erzeuger)}</td><td>${esc([landName(b.land), b.region, b.ort].filter(Boolean).join(', '))}<br>${b.mitte[1]}° / ${b.mitte[0]}°</td><td>${esc(b.kennung)}</td><td>${ha(b.flaeche)}</td><td>${esc(GEO[b.stand][0])}</td><td>${esc(NACHWEIS[b.bericht.entwaldung][0])}${b.bericht.datum ? `, ${tag(b.bericht.datum)}` : ''}</td><td>${esc(PRUEFUNG[b.bewertung.gegenpruefung][0])}${b.pruefungenAktuell.length ? `<br>${esc(pruefungText(b))}` : ''}</td></tr>`).join('') || '<tr><td colspan="8">Keine Farmer zugeordnet.</td></tr>'}</tbody></table>
+      <table class="ci-d-tab"><thead><tr><th>Farmer</th><th>Erzeuger</th><th>Lage</th><th>Nummern</th><th>Fläche</th><th>Geolokalisierung</th><th>Bericht</th><th>Eigene Prüfung</th></tr></thead><tbody>
+        ${bs.map((b) => `<tr><td>${esc(b.name)}</td><td>${esc(b.erzeuger)}</td><td>${esc([landName(b.land), b.region, b.ort].filter(Boolean).join(', '))}<br>${b.mitte[1]}° / ${b.mitte[0]}°</td><td>${esc([farmerNr(b), b.kennung].filter(Boolean).join(' / '))}</td><td>${ha(b.flaeche)}</td><td>${esc(GEO[b.stand][0])}</td><td>${esc(NACHWEIS[b.bericht.entwaldung][0])}${b.bericht.datum ? `, ${tag(b.bericht.datum)}` : ''}</td><td>${esc(PRUEFUNG[b.bewertung.gegenpruefung][0])}${b.pruefungenAktuell.length ? `<br>${esc(pruefungText(b))}` : ''}</td></tr>`).join('') || '<tr><td colspan="8">Keine Farmer zugeordnet.</td></tr>'}</tbody></table>
       <h2>Kriterien</h2>
       <table class="ci-d-tab"><thead><tr><th>Kriterium</th><th>Stand</th><th>Feststellung</th></tr></thead><tbody>${s.profil.kriterien.map((k) => `<tr><td>${esc(k.titel)}</td><td>${esc(STAND[k.stand][0])}</td><td>${esc(k.text)}${k.betriebe.length ? ` (${esc(k.betriebe.join(', '))})` : ''}</td></tr>`).join('')}</tbody></table>
       <h2>Ergebnis</h2>
@@ -534,7 +599,7 @@
   function lesenOeffnen(sendungId = '') {
     S.lesen = null;
     const s = sendungId ? sendung(sendungId) : null;
-    const sendungen = [['', '– keinem Container zuordnen –'], ...S.d.sendungen.filter((x) => x.aktiv && !x.abschluss).map((x) => [x.id, `${x.name} · ${x.lieferant}`])];
+    const sendungen = [['', '– keinem Container zuordnen –'], ...S.d.sendungen.filter((x) => x.aktiv && !x.abschluss).map((x) => [x.id, `${titel(x)} · ${x.lieferant}`])];
     $('#lesen-inhalt').innerHTML = kopf('lesen-titel', 'Unterlagen einlesen', 'Entwaldungsberichte (PDF), GeoJSON-Dateien des Lieferanten oder eine Koordinatenliste')
       + `<div class="dlg-body">
         <div class="ci-raster drei">${feld('Herkunftsland', 'land', s ? s.land : 'PY', { wahl: laenderWahl(), hinweis: 'gilt, wenn die Datei kein Land nennt' })}${feld('Lieferant', 'lieferant', s ? s.lieferant : '')}${feld('Container', 'sendung', sendungId, { wahl: sendungen })}</div>
@@ -608,7 +673,7 @@
       ${d.orte.length ? `<ul class="ci-wahl">${d.orte.map((o) => { const i = S.lesen.orte.indexOf(o); return `<li><label><input type="checkbox" data-ort="${i}" checked>
         <span><strong>${esc(o.name)}</strong><small>${esc([o.erzeuger, landName(o.land), o.region, o.kennung && `Kennung ${o.kennung}`].filter(Boolean).join(' · '))} · ${ha(o.flaeche)}${o.flaecheAngabe ? ` (angegeben ${ha(o.flaecheAngabe)})` : ''} · ${plural(o.punkte, 'Punkt', 'Punkte')}</small>
         ${o.befunde.map((b) => `<small class="ci-befund ${b.stufe}">${esc(b.text)}</small>`).join('')}</span></label>
-        <span class="ci-rechts">${marke(GEO[o.stand][0], GEO[o.stand][1])}${marke(o.bekannt ? 'aktualisiert vorhandenen Farmer' : 'neu', o.bekannt ? '' : 'ok')}</span></li>`; }).join('')}</ul>` : ''}</section>`;
+        <span class="ci-rechts">${marke(GEO[o.stand][0], GEO[o.stand][1])}${marke(o.bekannt ? `aktualisiert ${o.farmerNr}` : 'neu', o.bekannt ? '' : 'ok')}</span></li>`; }).join('')}</ul>` : ''}</section>`;
     $('#lesen-ergebnis').innerHTML = lokal.map((t) => `<p class="ci-meldung">${icon('warn')} ${esc(t)}</p>`).join('') + ergebnis.map(gruppe).join('');
     lesenZahl();
   }
@@ -708,6 +773,8 @@
     if (t.closest('#betrieb-whisp')) { whispPruefen(); return; }
     if (t.closest('#betrieb-whisp-nehmen')) { vorschlagNehmen($('#betrieb-whisp-ergebnis').dataset, 'whisp'); return; }
     if (t.closest('#lesen-pruefen')) { lesenPruefen(); return; }
+    if (t.closest('#nummern-pruefen')) { nummernPruefen(); return; }
+    if (t.closest('#nummern-ok')) { nummernUebernehmen(); return; }
   });
   document.addEventListener('keydown', (e) => {
     if (e.key !== 'Enter' || !e.target.matches('tr[tabindex]')) return;
@@ -737,7 +804,7 @@
 
   /* Brücke für weitere Dateien des Moduls (schlachthoefe.js): dieselben Hilfen und derselbe Zustand, keine zweite Kopie.
      Eine Datei trägt ihre Ansicht in sichten oder ihren Reiter in reiter ein und hängt ihre eigenen Ereignisse an (docs/entwickler/06-oberflaechen.md). */
-  window.STAFL_CI = { S, $, esc, icon, SU, feld, kopf, werte, marke, tag, api, uebernehmen, toast, oeffnen, sendung, landName, laenderWahl, lieferantFeld, lieferantAus, suchfeld, fokusBehalten, archivSchalter,
+  window.STAFL_CI = { S, $, esc, icon, SU, feld, kopf, werte, marke, tag, api, uebernehmen, toast, oeffnen, sendung, titel, landName, laenderWahl, lieferantFeld, lieferantAus, suchfeld, fokusBehalten, archivSchalter,
     HINWEIS_NUMMER, sichten: SICHTEN, reiter: REITER };
 
   /* ---------- Start (nach dem Laden aller Dateien des Moduls) ---------- */

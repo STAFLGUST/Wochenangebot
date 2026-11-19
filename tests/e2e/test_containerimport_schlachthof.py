@@ -253,7 +253,7 @@ with sync_playwright() as pw:
           p.evaluate(wahl) == ['— kein Schlachthof —', 'Werk <b>Sur</b> · UY-7', 'Werk Asunción · UY-2'] and p.input_value('#dlg-sendung [name=schlachthof]') == '', p.evaluate(wahl))
     p.fill('#dlg-sendung [name=partie]', 'P-270010'); p.select_option('#dlg-sendung [name=schlachthof]', neu['id'])
     shot(p, os.path.join(SH, 'containerimport-container-schlachthof-1280.png'))
-    p.click('#dlg-sendung button[type=submit]'); p.wait_for_function("document.querySelector('#sendung-titel')?.textContent === 'Container P-270010'")
+    p.click('#dlg-sendung button[type=submit]'); p.wait_for_function("document.querySelector('#sendung-titel')?.textContent === 'Partie P-270010'")
     c10 = container(I.call('containerimport_start')[1], 'P-270010')
     check('Container aus dem Fenster gespeichert: Schlachthof steht am Container und bleibt im Fenster gewählt', c10.get('schlachthof') == neu['id'] and c10.get('schlachthofName') == 'Werk <b>Sur</b>'
           and p.input_value('#dlg-sendung [name=schlachthof]') == neu['id'], c10)

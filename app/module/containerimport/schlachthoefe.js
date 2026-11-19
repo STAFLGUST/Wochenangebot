@@ -9,7 +9,7 @@
 (() => {
   'use strict';
   const C = window.STAFL_CI;
-  const { S, $, esc, icon, SU, feld, kopf, werte, api, uebernehmen, toast, oeffnen, landName, laenderWahl, lieferantFeld, lieferantAus, suchfeld, archivSchalter } = C;
+  const { S, $, esc, icon, SU, feld, kopf, werte, api, uebernehmen, toast, oeffnen, landName, laenderWahl, lieferantFeld, lieferantAus, suchfeld, archivSchalter, titel } = C;
   S.suche.schlachthoefe = '';
   const hof = (id) => S.d.schlachthoefe.find((x) => x.id === id);
   const containerVon = (id) => S.d.sendungen.filter((s) => s.schlachthof === id);
@@ -47,7 +47,7 @@
           ${feld('Notiz', 'notiz', x.notiz, { lang: 2, aus })}
         </div>
         ${neu ? '' : `<h3 class="ci-h">Container dieses Schlachthofs</h3>${container.length
-          ? `<ul class="ci-wahl">${container.map((s) => `<li><span><strong>${esc(s.name)}</strong><small>${esc([S.d.staende[s.stand], s.ware, s.container && `Container ${s.container}`].filter(Boolean).join(' · '))}</small></span></li>`).join('')}</ul>`
+          ? `<ul class="ci-wahl">${container.map((s) => `<li><span><strong>${esc(titel(s))}</strong><small>${esc([S.d.staende[s.stand], s.ware, s.container && `Container ${s.container}`].filter(Boolean).join(' · '))}</small></span></li>`).join('')}</ul>`
           : '<p class="ci-leise ci-klein">Noch kein Container. Den Schlachthof wählen Sie im Fenster des Containers.</p>'}`}
       </div>
       <div class="dlg-foot"><span class="spacer"></span>
