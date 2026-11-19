@@ -1,24 +1,18 @@
 /* STAFL-Plattform · Modul Container-Import – Schlachthöfe: Stammdaten unter dem Lieferanten (Entscheidung des Inhabers
-   19.11.2026: dem Lieferanten gehören Schlachthöfe, an sie liefern die Farmer). Ansicht „Schlachthöfe“ mit Suche, Fenster
-   zum Anlegen und Ändern, Auswahl des Schlachthofs im Fenster „Container“.
-   Eigene Datei, damit containerimport.js nicht weiter wächst: containerimport.js ruft window.CI_SCHLACHTHOEFE(h) einmal auf
-   und gibt seine Helfer mit (Zustand S, API-Aufruf, Bausteine für Fenster und Formulare). Zurück kommen die Ansicht, das
-   Fenster und die Auswahl. Regeln (Name je Lieferant eindeutig, Schlachthof nur beim eigenen Lieferanten, Umbenennung geht
-   an offene Container) liegen auf dem Server: app/api/module/containerimport/schlachthoefe.php.
-   Daten: containerimport_schlachthof_save (die Antwort bringt den neuen Stand mit). Fremde Texte nur maskiert. */
-'use strict';
-window.CI_SCHLACHTHOEFE = (h) => {
-  const { S, $, esc, icon, SU, feld, kopf, werte, api, uebernehmen, toast, oeffnen, landName, laenderWahl, lieferantFeld, lieferantAus, suchfeld, archivSchalter } = h;
+   19.11.2026: dem Lieferanten gehören Schlachthöfe, an sie liefern die Farmer). Ansicht „Schlachthöfe“ mit Suche und das
+   Fenster zum Anlegen und Ändern. Die Auswahl des Schlachthofs im Fenster „Container“ liegt in containerimport.js.
+   Eigene Datei, damit containerimport.js nicht weiter wächst: Hilfen und Zustand kommen über die Brücke window.STAFL_CI
+   (containerimport.js lädt zuerst); die Datei trägt ihre Ansicht dort ein und hängt ihre eigenen Ereignisse an.
+   Regeln (Name je Lieferant eindeutig, Lieferant mit Containern bleibt) liegen auf dem Server:
+   app/api/module/containerimport/schlachthoefe.php. Daten: containerimport_schlachthof_save (die Antwort bringt den neuen
+   Stand mit). Fremde Texte nur maskiert. */
+(() => {
+  'use strict';
+  const C = window.STAFL_CI;
+  const { S, $, esc, icon, SU, feld, kopf, werte, api, uebernehmen, toast, oeffnen, landName, laenderWahl, lieferantFeld, lieferantAus, suchfeld, archivSchalter } = C;
+  S.suche.schlachthoefe = '';
   const hof = (id) => S.d.schlachthoefe.find((x) => x.id === id);
-  /* Gleicher Lieferant? Mit Nummer der Stammdaten zählt die Nummer, sonst der Name – wie ci_lieferant_gleich auf dem Server */
-  const gleich = (a, b) => (a.lieferantNr || b.lieferantNr ? a.lieferantNr === b.lieferantNr : a.lieferant.toLowerCase() === b.lieferant.toLowerCase());
   const containerVon = (id) => S.d.sendungen.filter((s) => s.schlachthof === id);
-
-  /* Auswahl im Fenster „Container“: aktive Schlachthöfe des Lieferanten; der gespeicherte bleibt wählbar, auch archiviert */
-  function wahl(lieferant, aktuell) {
-    const liste = S.d.schlachthoefe.filter((x) => (x.aktiv && gleich(x, lieferant)) || x.id === aktuell).sort((a, b) => a.name.localeCompare(b.name, 'de'));
-    return [['', liste.length ? '— kein Schlachthof —' : '— für diesen Lieferanten ist keiner angelegt —'], ...liste.map((x) => [x.id, x.name + (x.zulassung ? ` · ${x.zulassung}` : '') + (x.aktiv ? '' : ' (archiviert)')])];
-  }
 
   function sicht() {
     const darf = S.d.rechte.bearbeiten;
@@ -47,7 +41,7 @@ window.CI_SCHLACHTHOEFE = (h) => {
     form.innerHTML = kopf('schlachthof-titel', neu ? 'Neuer Schlachthof' : x.name, neu ? '' : `${esc(x.lieferant)} · ${esc(landName(x.land))}`)
       + `<div class="dlg-body">
         <div class="ci-raster">
-          ${feld('Name', 'name', x.name, { aus, platz: 'z. B. Werk Asunción' })}${lieferantFeld(x, aus, neu)}
+          ${feld('Name', 'name', x.name, { aus, platz: 'z. B. Werk Asunción' })}${lieferantFeld(x, aus, neu, 'ci-lieferanten-hof')}
           ${feld('Land', 'land', x.land, { wahl: laenderWahl(x.land), aus })}${feld('Ort', 'ort', x.ort, { aus })}
           ${feld('Zulassungsnummer', 'zulassung', x.zulassung, { aus, platz: 'Betriebsnummer für die Einfuhr in die EU', hinweis: 'Steht im Genusstauglichkeitskennzeichen und in der Veterinärbescheinigung.' })}
           ${feld('Notiz', 'notiz', x.notiz, { lang: 2, aus })}
@@ -70,5 +64,12 @@ window.CI_SCHLACHTHOEFE = (h) => {
     $('#dlg-schlachthof').close();
   }
 
-  return { sicht, fenster, speichern, wahl, hof };
-};
+  C.sichten.schlachthoefe = sicht;
+  $('#schlachthof-inhalt').addEventListener('submit', (e) => { e.preventDefault(); speichern(); });
+  document.addEventListener('click', (e) => {
+    const t = e.target, zeile = t.closest('tr[data-schlachthof]');
+    if (t.closest('#ci-schlachthof-neu')) fenster('');
+    else if (t.closest('#schlachthof-archiv')) speichern({ aktiv: !hof($('#schlachthof-inhalt').dataset.id).aktiv });
+    else if (zeile) fenster(zeile.dataset.schlachthof);
+  });
+})();

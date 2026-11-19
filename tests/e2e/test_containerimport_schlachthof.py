@@ -54,6 +54,17 @@ def container(r, partie):
     return next((s for s in r.get('sendungen', []) if s['partie'] == partie), {})
 
 
+def hof_speichern(daten):
+    """Schlachthof speichern → (Status, Antwort, der gespeicherte Eintrag)."""
+    st, r = I.call('containerimport_schlachthof_save', daten)
+    return st, r, next((h for h in r.get('schlachthoefe', []) if h['id'] == r.get('id')), {})
+
+
+def abschliessen(c, **mehr):
+    """Bewertung eines Containers abschließen (oder mit oeffnen=True, grund=… wieder öffnen) → (Status, Antwort)."""
+    return I.call('containerimport_eudr_sendung_abschluss', {'id': c['id'], 'rev': c['rev'], 'ergebnis': 'nicht_vernachlaessigbar', 'begruendung': 'Unterlagen fehlen noch – Test der Schlachthöfe.', **mehr})
+
+
 # ---------- Rechte ----------
 check('Stand: zu Beginn kein Schlachthof – auch wer nur ansehen darf, bekommt die Liste', I.call('containerimport_start')[1].get('schlachthoefe') == [] and L.call('containerimport_start')[1].get('schlachthoefe') == [])
 check('nur ansehen: Speichern 403', L.call('containerimport_schlachthof_save', HOF)[0] == 403)
@@ -122,7 +133,7 @@ asu = next(h for h in r['schlachthoefe'] if h['id'] == asu['id'])
 # ---------- Umbenennen: offene Container folgen, abgeschlossene nicht (GR-106) ----------
 st, r = I.call('containerimport_eudr_sendung_save', {**CONTAINER, 'partie': 'P-270004', 'schlachthof': asu['id']})
 c4 = container(r, 'P-270004')
-st, r = I.call('containerimport_eudr_sendung_abschluss', {'id': c4['id'], 'rev': c4['rev'], 'ergebnis': 'nicht_vernachlaessigbar', 'begruendung': 'Unterlagen fehlen noch – Test der Schlachthöfe.'})
+st, r = abschliessen(c4)
 check('Bewertung eines Containers abgeschlossen (Vorbereitung)', st == 200 and container(r, 'P-270004').get('abschluss'), (st, r.get('error')))
 st, r = I.call('containerimport_schlachthof_save', {**asu, 'name': 'Werk Asunción Norte'})
 asu = hoefe(r).get('Werk Asunción Norte', {})
@@ -133,10 +144,29 @@ st, r = I.call('containerimport_eudr_sendung_save', {**c4, 'schlachthof': '', 's
 c4 = container(r, 'P-270004')
 check('nach dem Abschluss bleibt der Schlachthof, wie er abgeschlossen wurde (der Stand lässt sich weiter pflegen)', st == 200 and c4.get('schlachthof') == asu['id'] and c4.get('schlachthofName') == 'Werk Asunción' and c4.get('stand') == 'unterwegs', (st, r.get('error')))
 
+# Wieder öffnen: ab dann wieder der aktuelle Name; Lieferant eines Schlachthofs mit Containern bleibt
+st, r, probe = hof_speichern({**HOF, 'name': 'Werk Probe', 'lieferantNr': '70020', 'zulassung': ''})
+st, r = I.call('containerimport_eudr_sendung_save', {**CONTAINER, 'partie': 'P-270006', 'lieferantNr': '70020', 'schlachthof': probe['id']})
+st, r = abschliessen(container(r, 'P-270006'))
+st, r, probe = hof_speichern({**probe, 'name': 'Werk Probe Neu'})
+c6 = container(r, 'P-270006')
+st, r = abschliessen(c6, oeffnen=True, grund='Schlachthof wurde umbenannt')
+check('Bewertung wieder geöffnet: der Container zeigt wieder den aktuellen Namen des Schlachthofs', c6.get('schlachthofName') == 'Werk Probe' and st == 200 and container(r, 'P-270006').get('schlachthofName') == 'Werk Probe Neu', (st, r.get('error')))
+st, r, _ = hof_speichern({**probe, 'lieferantNr': '70012'})
+check('Lieferant eines Schlachthofs wechseln, an dem schon Container stehen: 422', st == 422 and 'Container zugeordnet' in r.get('error', ''), (st, r))
+st, r, frei = hof_speichern({**frei, 'lieferant': 'Lieferant ohne Stammdaten GmbH'})
+c2 = container(r, 'P-270002')
+check('Lieferant als freier Text am Schlachthof berichtigt: sein offener Container bekommt den neuen Namen mit und bleibt speicherbar',
+      st == 200 and c2.get('lieferant') == 'Lieferant ohne Stammdaten GmbH' and I.call('containerimport_eudr_sendung_save', {**c2, 'stand': 'unterwegs'})[0] == 200, (st, r.get('error'), c2.get('lieferant')))
+st, r, frei = hof_speichern({**frei, 'lieferant': 'Lieferant ohne Stammdaten'})
+check('… und wieder zurück', st == 200 and container(r, 'P-270002').get('lieferant') == 'Lieferant ohne Stammdaten', (st, r.get('error')))
+I.call('containerimport_eudr_sendung_save', {**container(r, 'P-270006'), 'aktiv': False})   # die Oberfläche unten arbeitet ohne diesen Container und seinen Schlachthof
+hof_speichern({**probe, 'aktiv': False})
+
 # ---------- Ältere Container ohne das Feld (GR-006), Nachtragen nach dem Abschluss, Felder einer späteren Version ----------
 st, r = I.call('containerimport_eudr_sendung_save', {**CONTAINER, 'partie': 'P-270005'})
 c5 = container(r, 'P-270005')
-I.call('containerimport_eudr_sendung_abschluss', {'id': c5['id'], 'rev': c5['rev'], 'ergebnis': 'nicht_vernachlaessigbar', 'begruendung': 'Unterlagen fehlen noch – Test der Schlachthöfe.'})
+abschliessen(c5)
 doc = _json(storage_raw('containerimport-eudr-sendungen'))
 for s in doc['liste']:
     if s['partie'] in ('P-270003', 'P-270005'):
@@ -184,14 +214,14 @@ with sync_playwright() as pw:
     p.fill('#ci-suche', 'gibt es nicht'); p.wait_for_selector('#ci-inhalt .ci-leer')
     check('Suche ohne Treffer sagt das', p.inner_text('#ci-inhalt .ci-leer') == 'Kein Schlachthof passt zur Suche.')
     p.fill('#ci-suche', ''); p.wait_for_selector('#ci-schlachthoefe')
-    p.check('#ci-archiv'); p.wait_for_function("document.querySelectorAll('#ci-schlachthoefe tbody tr').length === 4")
-    check('„Archivierte anzeigen“ zeigt auch den archivierten Schlachthof', 'Werk Concepción' in p.inner_text('#ci-schlachthoefe'))
+    p.check('#ci-archiv'); p.wait_for_function("document.querySelectorAll('#ci-schlachthoefe tbody tr').length === 5")
+    check('„Archivierte anzeigen“ zeigt auch die archivierten Schlachthöfe', 'Werk Concepción' in p.inner_text('#ci-schlachthoefe') and 'Werk Probe Neu' in p.inner_text('#ci-schlachthoefe'))
     p.uncheck('#ci-archiv'); p.wait_for_function("document.querySelectorAll('#ci-schlachthoefe tbody tr').length === 3")
 
     # Neuer Schlachthof aus dem Fenster
     p.click('#ci-schlachthof-neu'); p.wait_for_selector('#dlg-schlachthof[open]')
     check('Fenster „Neuer Schlachthof“: Lieferanten der Stammdaten als Vorschläge', p.inner_text('#schlachthof-titel') == 'Neuer Schlachthof'
-          and p.eval_on_selector_all('#ci-lieferanten-hof option', 'os => os.map(o => o.value)') == ['Carnes del Sur Ltda. (70020)', 'Frigorifico Beispiel S.A. (70012)'])
+          and p.eval_on_selector_all('#dlg-schlachthof datalist option', 'os => os.map(o => o.value)') == ['Carnes del Sur Ltda. (70020)', 'Frigorifico Beispiel S.A. (70012)'])
     p.fill('#dlg-schlachthof [name=name]', 'Werk <b>Sur</b>'); p.fill('#dlg-schlachthof [name=lieferant]', 'carnes del sur ltda. (70020)'); p.select_option('#dlg-schlachthof [name=land]', 'UY')
     p.fill('#dlg-schlachthof [name=ort]', 'Montevideo'); p.fill('#dlg-schlachthof [name=zulassung]', 'UY-7')
     shot(p, os.path.join(SH, 'containerimport-schlachthof-fenster-1280.png'))
@@ -200,7 +230,9 @@ with sync_playwright() as pw:
     check('Schlachthof aus dem Fenster gespeichert: mit den Stammdaten verknüpft (Vorschlag zählt ohne Rücksicht auf Groß- und Kleinschreibung), Name als Text angezeigt',
           [neu[k] for k in ('name', 'lieferantNr', 'lieferant', 'land', 'ort')] == ['Werk <b>Sur</b>', '70020', 'Carnes del Sur Ltda.', 'UY', 'Montevideo']
           and 'Werk <b>Sur</b>' in p.inner_text('#ci-schlachthoefe') and p.locator('#ci-schlachthoefe b').count() == 0, neu)
-    p.click(f'[data-schlachthof="{asu["id"]}"]'); p.wait_for_selector('#dlg-schlachthof[open]')
+    p.focus(f'[data-schlachthof="{asu["id"]}"]'); p.keyboard.press('Enter'); p.wait_for_selector('#dlg-schlachthof[open]')
+    p.keyboard.up('Enter')
+    check('Zeile mit der Eingabetaste geöffnet: das Fenster bleibt offen (derselbe Tastendruck schließt es nicht wieder)', p.evaluate("document.querySelector('#dlg-schlachthof').open"))
     check('Fenster eines Schlachthofs nennt seine Container', p.inner_text('#schlachthof-titel') == 'Werk Asunción Norte' and all(x in p.inner_text('#dlg-schlachthof') for x in ('P-270001', 'P-270004', 'P-270005')), p.inner_text('#dlg-schlachthof'))
     p.fill('#dlg-schlachthof [name=name]', 'Werk Asunción'); p.fill('#dlg-schlachthof [name=lieferant]', 'Carnes del Sur Ltda. (70020)'); p.click('#dlg-schlachthof button[type=submit]')
     p.wait_for_selector('#ci-toast.zeigen.fehler')
@@ -226,6 +258,13 @@ with sync_playwright() as pw:
     check('Container aus dem Fenster gespeichert: Schlachthof steht am Container und bleibt im Fenster gewählt', c10.get('schlachthof') == neu['id'] and c10.get('schlachthofName') == 'Werk <b>Sur</b>'
           and p.input_value('#dlg-sendung [name=schlachthof]') == neu['id'], c10)
     p.click('#dlg-sendung [data-zu]')
+    p.click('#ci-sendungen tr:has-text("P-270001")'); p.wait_for_selector('#dlg-sendung[open]')
+    p.fill('#dlg-sendung [name=lieferant]', 'Carnes del Sur Ltda. (70020)'); p.locator('#dlg-sendung [name=lieferant]').blur()
+    p.wait_for_function(wahl + ".includes('Werk Asunción · UY-2')")
+    p.fill('#dlg-sendung [name=lieferant]', 'Frigorifico Beispiel S.A. (70012)'); p.locator('#dlg-sendung [name=lieferant]').blur()
+    p.wait_for_function(wahl + ".includes('Werk Asunción Norte · PY-38')")
+    check('Lieferant im Fenster gewechselt und wieder zurück: der gespeicherte Schlachthof ist wieder gewählt, nichts geht still verloren', p.input_value('#dlg-sendung [name=schlachthof]') == asu['id'])
+    p.click('#dlg-sendung [data-zu]')
     p.click('#ci-sendungen tr:has-text("P-270004")'); p.wait_for_selector('#dlg-sendung[open]')
     check('abgeschlossener Container: Schlachthof gesperrt, mit dem Namen von damals', p.is_disabled('#dlg-sendung [name=schlachthof]') and p.evaluate(wahl) == ['Werk Asunción'], p.evaluate(wahl))
     p.click('#dlg-sendung [data-zu]')
@@ -237,6 +276,8 @@ with sync_playwright() as pw:
     check('nur ansehen: Liste und Fenster ohne Knöpfe zum Anlegen, Speichern und Archivieren, Felder gesperrt',
           le.locator('#ci-schlachthof-neu').count() == 0 and le.locator('#dlg-schlachthof button[type=submit]').count() == 0 and le.locator('#schlachthof-archiv').count() == 0
           and le.is_disabled('#dlg-schlachthof [name=name]') and le.input_value('#dlg-schlachthof [name=lieferant]') == 'Frigorifico Beispiel S.A.')
+    le.click('#dlg-schlachthof [data-zu]'); le.click(f'[data-schlachthof="{frei["id"]}"]'); le.wait_for_selector('#dlg-schlachthof[open]')
+    check('nur ansehen, Lieferant als freier Text: Hinweis ohne falsche Aussage über die Stammdaten', 'Nicht mit den Stammdaten verknüpft.' in le.inner_text('#dlg-schlachthof') and 'noch keine Lieferanten' not in le.inner_text('#dlg-schlachthof'))
     le.context.close()
 
     m = seite('ina', {'width': 390, 'height': 844}, 'dark')

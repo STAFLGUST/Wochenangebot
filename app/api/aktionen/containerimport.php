@@ -170,9 +170,7 @@ switch ($action) {
                     eudr_rev_pruefen($b, $alt, 'Der Container');
                 } elseif (count($doc['liste']) >= EUDR_MAX_SENDUNGEN) fail('Zu viele Container.', 422);
                 if ($alt && !empty($alt['abschluss'])) {
-                    // was einem älteren Eintrag noch fehlt, lässt sich auch nach dem Abschluss nachtragen – einmal: Partienummer, Schlachthof
-                    $neu = eudr_sendung_laufend($b, $alt) + ($alt['partie'] === '' ? ['partie' => eudr_text($b['partie'] ?? '', 20, 'Partienummer')] : [])
-                        + ($alt['schlachthof'] === '' ? ci_schlachthof_am_container($b, $alt, null) : []) + $alt;
+                    $neu = eudr_sendung_laufend($b, $alt) + eudr_sendung_nachtrag($b, $alt) + $alt;
                 } else {
                     $ids = array_column(eudr_betriebe()['liste'], 'id');
                     // „+ $alt“ am Ende: Felder, die dieser Stand nicht kennt (nach einem Rückfall von einer neueren Version), bleiben erhalten
@@ -216,6 +214,7 @@ switch ($action) {
                 } else {
                     if (!empty($s['abschluss'])) fail('Die Bewertung ist bereits abgeschlossen.', 409);
                     $s['abschluss'] = eudr_abschluss($s, $b, array_map('eudr_betrieb_sicht', eudr_betriebe()['liste']), $me);
+                    $s['schlachthofName'] = ci_schlachthof_namen()[$s['schlachthof']] ?? $s['schlachthofName'];   // ab jetzt der Name von heute (GR-106)
                 }
                 $s['rev']++; $s['geaendert'] = eudr_wer($me);
                 $doc['liste'][$i] = $s;

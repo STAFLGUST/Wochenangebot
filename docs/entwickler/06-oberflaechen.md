@@ -860,11 +860,13 @@ Caddy setzt auf allen Hosts `script-src 'self'` (ohne `'unsafe-inline'`), `conne
   haben keine Kennung (`id`) – mehrere Fenster haben Felder gleichen Namens; ansprechen über `#dlg-… [name=…]`.
   **Schlachthöfe** (Stammdaten unter dem Lieferanten, Entscheidung des Inhabers 19.11.2026): eigene Dateien
   `schlachthoefe.js` und `app/api/module/containerimport/schlachthoefe.php`, damit `containerimport.js` und `eudr.php` nicht
-  weiter wachsen. `containerimport.js` ruft `window.CI_SCHLACHTHOEFE(h)` einmal auf und gibt seine Helfer mit; neue Ansichten
-  folgen diesem Muster. Die Regel „gleicher Lieferant“ (Nummer der Stammdaten, sonst Name) steht auf dem Server
-  (`ci_lieferant_gleich`) und zum Filtern der Auswahl noch einmal in `schlachthoefe.js` – beide zusammen ändern. Der Name des
-  Schlachthofs steht am Container mit (`schlachthofName`); eine Umbenennung schreibt `ci_schlachthof_speichern` in alle
-  Container mit offener Bewertung (GR-106: abgeschlossene bleiben).
+  weiter wachsen. Weitere Dateien des Moduls nutzen die Brücke `window.STAFL_CI` (wie `STAFL_QS`): `containerimport.js` lädt
+  zuerst und stellt Hilfen und Zustand bereit, die Datei trägt ihre Ansicht in `STAFL_CI.sichten` ein und hängt ihre eigenen
+  Ereignisse an; gestartet wird erst mit `DOMContentLoaded`. Neue Ansichten folgen diesem Muster. Die Regel „gleicher
+  Lieferant“ (Nummer der Stammdaten, sonst Name) steht als Schlüssel auf dem Server (`ci_lieferant_schluessel`) und zum
+  Filtern der Auswahl in `containerimport.js` (`lieferantSchluessel`) – beide zusammen ändern. Den Namen des Schlachthofs
+  löst `eudr_sendung_sicht` für Container mit offener Bewertung beim Lesen auf; festgeschrieben wird er beim Abschluss
+  (GR-106). Was sich nach dem Abschluss noch einmal nachtragen lässt, steht in `eudr_sendung_nachtrag`.
   **Whisp-Abfrage** (Knopf „In Whisp prüfen“ im Fenster „Farmer“): Anders als die Karte ruft hier der **Server** den
   fremden Dienst ab (`app/api/module/containerimport/whisp.php`, Aktion `containerimport_eudr_whisp`) – der Schlüssel
   `WHISP_API_KEY` darf nie in den Browser. Hinaus geht nur der Umriss; die Seite fragt alle drei Sekunden nach, bis Whisp

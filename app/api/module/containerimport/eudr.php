@@ -11,7 +11,9 @@ declare(strict_types=1);
    nach dem Abschluss – einem Schnappschuss von Profil und Farmern, GR-106).
    Nichts wird gelöscht: Farmer und Container werden archiviert, Gegenprüfungen nur ergänzt.
    Abgeleitete Werte (Fläche, Mittelpunkt, Befunde, Risikoprofil) werden bei jedem Lesen neu berechnet und nie gespeichert –
-   ausgenommen der Schnappschuss einer abgeschlossenen Bewertung. Geometrie: geometrie.php. */
+   ausgenommen der Schnappschuss einer abgeschlossenen Bewertung. Geometrie: geometrie.php. 
+   Vorsilben: eudr_ tragen die Funktionen aus der Zeit, als das Modul nur den Reiter EUDR hatte (auch allgemeine Helfer wie
+   eudr_text oder eudr_liste); neue Funktionen, die nicht zur EUDR gehören, heißen ci_ (Container-Import). */
 if (!defined('WA_API')) { http_response_code(404); exit; }   // nur über api/index.php nutzbar
 require __DIR__ . '/schlachthoefe.php';   // Schlachthöfe unter dem Lieferanten (eigene Datei, gleiche Helfer)
 
@@ -431,7 +433,7 @@ function eudr_sendung_pruefen(array $b, array $betriebIds, ?array $alt): array
         'partie' => eudr_text($b['partie'] ?? '', 20, 'Partienummer', $aktiv || !$alt || $alt['partie'] !== ''),
         'nummer' => eudr_text($b['nummer'] ?? '', 60, 'Auftragsnummer des Lieferanten'),
         ...$lieferant,
-        ...ci_schlachthof_am_container($b, $lieferant, $alt),
+        ...ci_schlachthof_am_container($b, $lieferant, $alt['schlachthof'] ?? ''),
         ...eudr_sendung_laufend($b, $alt),
         'land' => eudr_land($b['land'] ?? ''),
         'ware' => eudr_text($b['ware'] ?? '', 160, 'Ware'),
@@ -461,6 +463,20 @@ function eudr_sendung_laufend(array $b, ?array $alt): array
         'dds' => eudr_dds_pruefen(is_array($b['dds'] ?? null) ? $b['dds'] : []),
         'notiz' => eudr_text($b['notiz'] ?? '', 2000, 'Notiz'),
     ];
+}
+/* Was einem älteren Eintrag noch fehlt, lässt sich auch nach dem Abschluss der Bewertung nachtragen – einmal, solange das
+   Feld leer ist: die Partienummer (Einträge von vor dem Container als Mittelpunkt) und der Schlachthof. */
+function eudr_sendung_nachtrag(array $b, array $alt): array
+{
+    return ($alt['partie'] === '' ? ['partie' => eudr_text($b['partie'] ?? '', 20, 'Partienummer')] : [])
+        + ($alt['schlachthof'] === '' ? ci_schlachthof_am_container($b, $alt, '') : []);
+}
+/* Schlüssel des Lieferanten eines Eintrags (Container, Schlachthof): mit Nummer der Stammdaten die Nummer, sonst der Name
+   ohne Rücksicht auf Groß- und Kleinschreibung. Gleicher Schlüssel = gleicher Lieferant; dieselbe Regel filtert in
+   containerimport.js (lieferantSchluessel) die Auswahl der Schlachthöfe. */
+function ci_lieferant_schluessel(array $x): string
+{
+    return $x['lieferantNr'] !== '' ? 'nr:' . $x['lieferantNr'] : 'name:' . mb_strtolower($x['lieferant']);
 }
 /* Lieferant eines Containers: mit „lieferantNr“ aus den Stammdaten der Verwaltung (Schnittstelle lieferanten_kurz, GR-101).
    Der Name wird mitgespeichert und bei jedem Speichern vor dem Abschluss aus den Stammdaten aufgefrischt – so bleibt der
@@ -658,10 +674,12 @@ function eudr_abschluss(array $s, array $eingabe, array $sichten, array $me): ar
 }
 
 /* Sendung für die Oberfläche: mit Profil – bei abgeschlossener Bewertung dem gespeicherten Schnappschuss; frühere
-   Abschlüsse nur mit Ergebnis, Begründung und Grund */
-function eudr_sendung_sicht(array $s, array $betriebe): array
+   Abschlüsse nur mit Ergebnis, Begründung und Grund. Der Name des Schlachthofs ($hofNamen: Kennung → Name) ist bei offener
+   Bewertung der aktuelle, nach dem Abschluss der festgeschriebene. */
+function eudr_sendung_sicht(array $s, array $betriebe, array $hofNamen): array
 {
     $s['fruehere'] = array_map(fn($f) => array_diff_key($f, ['profil' => 1, 'betriebe' => 1]), $s['fruehere'] ?? []);   // Schnappschüsse bleiben gespeichert
+    if (empty($s['abschluss'])) $s['schlachthofName'] = $hofNamen[$s['schlachthof']] ?? $s['schlachthofName'];
     return $s + ['name' => eudr_container_name($s), 'containerPruefung' => eudr_containernummer($s['container']), 'profil' => !empty($s['abschluss']) ? $s['abschluss']['profil'] : eudr_profil($s, eudr_sendung_betriebe($s, $betriebe))];
 }
 
@@ -686,11 +704,13 @@ function eudr_geojson(array $bs): array
 function eudr_stand(): array
 {
     $betriebe = array_map('eudr_betrieb_sicht', eudr_betriebe()['liste']);
+    $hoefe = ci_schlachthoefe()['liste'];
+    $hofNamen = array_column($hoefe, 'name', 'id');
     return [
         'betriebe' => $betriebe,
-        'sendungen' => array_map(fn($s) => eudr_sendung_sicht($s, $betriebe), eudr_sendungen()['liste']),
+        'sendungen' => array_map(fn($s) => eudr_sendung_sicht($s, $betriebe, $hofNamen), eudr_sendungen()['liste']),
         'laender' => array_map(fn($l) => ['name' => $l['name'], 'klasse' => $l['klasse']], EUDR_LAENDER),
-        'schlachthoefe' => ci_schlachthoefe()['liste'],
+        'schlachthoefe' => $hoefe,
         'portale' => EUDR_PORTALE, 'staende' => EUDR_STAENDE, 'heute' => date('Y-m-d'),
     ];
 }

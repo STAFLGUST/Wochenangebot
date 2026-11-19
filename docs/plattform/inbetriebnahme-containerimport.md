@@ -149,6 +149,10 @@ Kein Schritt auf dem Server, keine Migration, keine neuen Rechte.
 - **Am Container:** Im Fenster „Container“ steht das Feld „Schlachthof“. Zur Wahl stehen nur die Schlachthöfe des gewählten
   Lieferanten. Wechselt der Lieferant, muss der Schlachthof neu gewählt werden.
 - **Umbenennen:** Container mit offener Bewertung zeigen sofort den neuen Namen, abgeschlossene behalten den von damals.
+- **Lieferant eines Schlachthofs:** Stehen schon Container daran und ist der Lieferant mit den Stammdaten verknüpft, lässt er
+  sich nicht mehr wechseln. Für einen anderen Lieferanten einen eigenen Schlachthof anlegen. Solange der Lieferant freier
+  Text ist, lässt er sich berichtigen oder mit den Stammdaten verknüpfen – die Container dieses Schlachthofs mit offener
+  Bewertung bekommen den Lieferanten dann mit.
 - **Archivieren statt löschen:** Ein archivierter Schlachthof bleibt an seinen Containern, lässt sich aber nicht neu wählen.
 - **Container von vorher** haben keinen Schlachthof. Er lässt sich jederzeit eintragen, nach dem Abschluss der Bewertung einmal.
 - **Rückfall:** `sh /opt/wochenangebot/deploy/release-zurueck.sh`. Die Vorversion zeigt die Schlachthöfe nicht, behält sie aber

@@ -2,7 +2,7 @@
 
 <!-- ERZEUGT von `python3 werkzeuge/doku.py erzeugen` – nicht von Hand ändern. Quelle: Funktionen und Kommentare im Code. Die CI prüft, dass diese Datei zum Code passt. -->
 
-14 Dateien, 162 Funktionen – in der Reihenfolge der Datei, **fett** die Abschnitte. Text = erste Aussage des Kommentars direkt über der Funktion (Python: Docstring). Übersicht aller Module: [README.md](README.md).
+14 Dateien, 167 Funktionen – in der Reihenfolge der Datei, **fett** die Abschnitte. Text = erste Aussage des Kommentars direkt über der Funktion (Python: Docstring). Übersicht aller Module: [README.md](README.md).
 
 ## `app/api/aktionen/containerimport.php`
 
@@ -60,6 +60,8 @@ _Container-Import: Container (ein Einkauf bei einem Lieferanten, eine Partienumm
 
 - `eudr_sendung_pruefen(b, betriebIds, alt)` – Felder einer Sendung aus der Eingabe prüfen (ohne id, rev, Zeitstempel und Abschluss)
 - `eudr_sendung_laufend(b, alt)` – Angaben, die sich mit der Reise des Containers ändern – sie bleiben auch nach dem Abschluss der Bewertung pflegbar.
+- `eudr_sendung_nachtrag(b, alt)` – Was einem älteren Eintrag noch fehlt, lässt sich auch nach dem Abschluss der Bewertung nachtragen – einmal, solange das Feld leer ist: die Partienummer …
+- `ci_lieferant_schluessel(x)` – Schlüssel des Lieferanten eines Eintrags (Container, Schlachthof): mit Nummer der Stammdaten die Nummer, sonst der Name ohne Rücksicht auf Groß- und …
 - `eudr_lieferant(b, alt)` – Lieferant eines Containers: mit „lieferantNr“ aus den Stammdaten der Verwaltung (Schnittstelle lieferanten_kurz, GR-101).
 - `eudr_lieferant_name(stamm)` – Name eines Lieferanten der Stammdaten; ohne Namen der Kurzname, ohne beides „Lieferant <Nummer>“
 - `eudr_lieferanten()` – Lieferanten zur Auswahl am Container: nur Nummer und Name, nach Name sortiert
@@ -77,7 +79,7 @@ _Container-Import: Container (ein Einkauf bei einem Lieferanten, eine Partienumm
 - `eudr_profil(s, bs)` – Risikoprofil einer Sendung: alle Kriterien, Gesamtstand (das schlechteste Kriterium) und ein Vorschlag.
 - `eudr_sendung_betriebe(s, sichten)` – Betriebe einer Sendung als Sichten: nach dem Abschluss der Schnappschuss, sonst der aktuelle Stand
 - `eudr_abschluss(s, eingabe, sichten, me)` – Abschluss einer Bewertung aus der Eingabe: Ergebnis, Begründung, Bearbeiter und Schnappschuss von Profil und Betrieben (GR-106).
-- `eudr_sendung_sicht(s, betriebe)` – Sendung für die Oberfläche: mit Profil – bei abgeschlossener Bewertung dem gespeicherten Schnappschuss; frühere Abschlüsse nur mit Ergebnis, Begründung und …
+- `eudr_sendung_sicht(s, betriebe, hofNamen)` – Sendung für die Oberfläche: mit Profil – bei abgeschlossener Bewertung dem gespeicherten Schnappschuss; frühere Abschlüsse nur mit Ergebnis, Begründung und …
 
 **GeoJSON für das EU-Informationssystem**
 
@@ -110,10 +112,11 @@ _Container-Import · Geometrie der Produktionsorte (EUDR): reine Rechenfunktione
 _STAFL-Plattform · Modul Container-Import – Schlachthöfe_
 
 - `ci_schlachthoefe()` – Dokument der Schlachthöfe
-- `ci_lieferant_gleich(a, b)` – Gehören zwei Einträge (Container, Schlachthof) zum selben Lieferanten?
+- `ci_schlachthof_namen()` – Namen aller Schlachthöfe nach ihrer Kennung
 - `ci_schlachthof_pruefen(b, alt)` – Felder eines Schlachthofs aus der Eingabe prüfen (ohne id, rev und Zeitstempel)
 - `ci_schlachthof_speichern(b, me)` – Schlachthof anlegen oder ändern (innerhalb der Sperre EUDR_SPERRE aufrufen).
-- `ci_schlachthof_am_container(b, lieferant, alt)` – Schlachthof eines Containers aus der Eingabe: leer oder ein Schlachthof desselben Lieferanten; sein Name wird am Container mitgespeichert.
+- `ci_schlachthof_lieferant_wechseln(alt, neu)` – Folgen eines Lieferantenwechsels am Schlachthof für seine Container (Regel siehe ci_schlachthof_speichern).
+- `ci_schlachthof_am_container(b, lieferant, bisher)` – Schlachthof eines Containers aus der Eingabe: leer oder ein Schlachthof desselben Lieferanten ($lieferant = Eintrag mit lieferantNr und lieferant).
 
 ## `app/api/module/containerimport/whisp.php`
 
@@ -140,6 +143,8 @@ _STAFL-Plattform · Modul Container-Import – Container (ein Einkauf bei einem 
 - `uebernehmen(r, fallback)` – Antwort einer speichernden Aktion: neuen Stand übernehmen. false = Fehler (Meldung gezeigt)
 
 **Formate und Bezeichnungen**
+
+- `schlachthofWahl(lieferant, aktuell)`
 
 **Bausteine für Fenster und Formulare**
 
@@ -240,7 +245,6 @@ _Container-Import · EUDR_
 
 _STAFL-Plattform · Modul Container-Import – Schlachthöfe_
 
-- `wahl(lieferant, aktuell)` – Auswahl im Fenster „Container“: aktive Schlachthöfe des Lieferanten; der gespeicherte bleibt wählbar, auch archiviert
 - `sicht()`
 - `fenster(id)`
 - `speichern(zusatz)`
@@ -294,6 +298,8 @@ _Container-Import: Schlachthöfe als Stammdaten unter dem Lieferanten (Aktion co
 - `login(user)`
 - `hoefe(r)`
 - `container(r, partie)`
+- `hof_speichern(daten)` – Schlachthof speichern → (Status, Antwort, der gespeicherte Eintrag).
+- `abschliessen(c, **mehr)` – Bewertung eines Containers abschließen (oder mit oeffnen=True, grund=… wieder öffnen) → (Status, Antwort).
 
 **Rechte**
 
