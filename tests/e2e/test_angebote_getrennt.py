@@ -1,10 +1,12 @@
 """Jedes Angebot für sich (Inhaber 19.11.2026, Schritt 1): Bearbeitungen im Angebotseditor wirken nur auf das gewählte
-Angebot – Preise, Bezeichnung und Angebotsgruppen (Name, Bereich, Reihenfolge, Zuordnung der Artikel). Kundenangebot „Bela“
-mit eigener Artikelliste, Artikel auch im Wochenangebot. Wochenangebot → Bela: Gruppe umbenennen, Artikel in eine andere
-Gruppe (Artikelfenster), Bezeichnung in der Zeile. Bela → Wochenangebot: Artikelfenster ohne Wochenpreis, Preis in der
-Zeile, Gruppe und Bezeichnung im Artikelfenster (Auswahl nur mit Gruppen von Bela), Gruppe umbenennen (Rückgängig in einem
-Schritt), Bereich, Reihenfolge der Gruppen und Artikel in eine andere Gruppe im Fenster „Editor“. Geprüft wird die
-aufgelöste Sicht beider Angebote über die Schnittstelle (offer&draft=1). Bildschirmfotos 1280/390 px. Nur Testdaten."""
+Angebot – Preise, Bezeichnung und Angebotsgruppen (Name, Bereich, Reihenfolge, Zuordnung der Artikel). Kundenangebote „Bela“
+und „Edeka“ mit eigener Artikelliste, ihre Artikel auch im Wochenangebot. Bela → Wochenangebot: Artikelfenster ohne
+Wochenpreis, Gruppenauswahl nur mit Gruppen von Bela, Gruppe und Bezeichnung im Artikelfenster, Preis in der Zeile, Gruppe
+umbenennen (Trennen und Umbenennen in einem Rückgängig-Schritt), Bereich, zweite Änderung an derselben Gruppenkarte,
+Reihenfolge der Gruppen und Artikel in eine andere Gruppe im Fenster „Editor“, „Artikel hinzufügen“ ohne doppelte
+Überschrift. Wochenangebot → Edeka: Gruppe umbenennen, Bereich, Artikel in eine andere Gruppe, Bezeichnung in der Zeile,
+Reihenfolge der Gruppen (↓). Geprüft wird die aufgelöste Sicht der Angebote über die Schnittstelle (offer&draft=1).
+Bildschirmfotos Artikelfenster in Bela 1280/390 px. Nur Testdaten."""
 import sys
 
 from playwright.sync_api import sync_playwright
@@ -13,7 +15,7 @@ from kunden_hilfe import Client
 from umgebung import BASE, SH, shot, until
 
 PW = 'Sicheres-Passwort-1'
-BE = 'bela'
+BE, ED = 'bela', 'edeka'
 res = []
 
 
@@ -43,25 +45,29 @@ def gname(oid, iid):
     return sicht(oid)['artikel'][iid][0]
 
 
-# ---------- Testdaten: Bela mit eigener Artikelliste; Artikel x, y (Gruppe G1), z (G2), w (G3) auch im Wochenangebot ----------
+# ---------- Testdaten: Bela und Edeka mit eigener Artikelliste, alle Artikel auch im Wochenangebot ----------
+# Bela: x, y (Gruppe G1), z (G2) – Bearbeitungen in Bela. Edeka: w (G3), h1, h2 (H1, H2: im Wochenangebot benachbart) –
+# Bearbeitungen im Wochenangebot; so trennt jede Richtung Gruppen, die beide Seiten noch gemeinsam nutzen.
 of = A.call('offers')[1]
-assert A.call('offers_save', {'rev': of['rev'], 'offers': [{**o, 'fallback': 'hidden'} if o['id'] == BE else o for o in of['offers']]})[0] == 200
+assert A.call('offers_save', {'rev': of['rev'], 'offers': [{**o, 'fallback': 'hidden'} if o['id'] in (BE, ED) else o for o in of['offers']]})[0] == 200
 m, rev = entwurf()
-anz = {}
-for i in m['items']:
-    anz[i['groupId']] = anz.get(i['groupId'], 0) + 1
 frei = [i for i in m['items'] if i.get('code') and not i.get('variants') and not i.get('namen') and not i.get('gruppen') and not i.get('sale')]
-G = [g['id'] for g in m['groups'] if anz.get(g['id'], 0) >= 2 and sum(1 for i in frei if i['groupId'] == g['id']) >= 2]
-G1, G2, G3, G4 = G[0], G[1], G[2], G[3]
+nfrei = {}
+for i in frei:
+    nfrei[i['groupId']] = nfrei.get(i['groupId'], 0) + 1
+sichtbar = [g['id'] for g in m['groups'] if any(i['groupId'] == g['id'] for i in m['items'])]
+H1, H2 = next((a, b) for a, b in zip(sichtbar, sichtbar[1:]) if nfrei.get(a) and nfrei.get(b))
+G1, G2, G3, G4 = [g for g in sichtbar if nfrei.get(g, 0) >= 2 and g not in (H1, H2)][:4]
 GN = {g['id']: g['name'] for g in m['groups']}
 x, y = [i for i in frei if i['groupId'] == G1][:2]
 z = next(i for i in frei if i['groupId'] == G2)
 w = next(i for i in frei if i['groupId'] == G3)
-for i, p in ((x, 11.5), (y, 12.5), (z, 13.5), (w, 14.5)):
-    i['variants'] = {BE: {'status': 'value', 'value': p}}
+h1, h2 = (next(i for i in frei if i['groupId'] == h) for h in (H1, H2))
+for i, o, p in ((x, BE, 11.5), (y, BE, 12.5), (z, BE, 13.5), (w, ED, 14.5), (h1, ED, 15.5), (h2, ED, 16.5)):
+    i['variants'] = {o: {'status': 'value', 'value': p}}
 assert A.call('save_draft', {'model': m, 'revision': rev})[0] == 200
-STD0, BE0 = sicht('std'), sicht(BE)
-assert all(BE0['artikel'][i['id']][0] == GN[i['groupId']] for i in (x, y, z, w)), BE0['artikel']
+BE0, ED0 = sicht(BE), sicht(ED)
+assert all(BE0['artikel'][i['id']][0] == GN[i['groupId']] for i in (x, y, z)) and [g for g, _ in ED0['gruppen']].index(GN[H1]) + 1 == [g for g, _ in ED0['gruppen']].index(GN[H2]), ED0['gruppen']
 
 errors = []
 with sync_playwright() as p:
@@ -88,34 +94,6 @@ with sync_playwright() as p:
 
     def karte_von(iid):
         return a.evaluate(f"document.querySelector('#groups tr[data-id=\"{iid}\"]').closest('section.gcard').dataset.gid")
-
-    # ---------- Wochenangebot → Bela (Bela benutzt G3 mit w noch gemeinsam) ----------
-    angebot('std', w['id'])
-    karte(G3, 'name', 'Std G3 neu')
-    until(lambda: gname('std', w['id']) == 'Std G3 neu')
-    check('Wochenangebot: Gruppe umbenannt – in Bela heißt sie wie bisher', gname('std', w['id']) == 'Std G3 neu' and gname(BE, w['id']) == GN[G3],
-          (gname('std', w['id']), gname(BE, w['id'])))
-    ruhig()
-    karte(G3, 'section', 'Std-Bereich')
-    until(lambda: ('Std G3 neu', 'Std-Bereich') in sicht('std')['gruppen'])
-    check('Wochenangebot: Bereich der Gruppe geändert – in Bela unverändert', ('Std G3 neu', 'Std-Bereich') in sicht('std')['gruppen']
-          and not any(s == 'Std-Bereich' for _, s in sicht(BE)['gruppen']), sicht(BE)['gruppen'])
-    ruhig()
-    fenster(w['id'])
-    a.select_option('#item-body [name=groupId]', G4)
-    until(lambda: gname('std', w['id']) == GN[G4]); ruhig()
-    check('Wochenangebot: Artikel im Artikelfenster in eine andere Gruppe – in Bela bleibt er in seiner Gruppe', gname('std', w['id']) == GN[G4]
-          and gname(BE, w['id']) == GN[G3], (gname('std', w['id']), gname(BE, w['id'])))
-    if a.locator('#dlg-item[open]').count():
-        zu()
-    a.wait_for_selector(f'#groups tr[data-id="{w["id"]}"] [data-f=name]')
-    nm = a.locator(f'#groups tr[data-id="{w["id"]}"] [data-f=name]')
-    nm.fill('Std Bezeichnung w'); nm.evaluate('e => e.blur()')
-    until(lambda: sicht('std')['artikel'][w['id']][1] == 'Std Bezeichnung w'); ruhig()
-    check('Wochenangebot: Bezeichnung in der Zeile geändert – Bela behält die bisherige', sicht('std')['artikel'][w['id']][1] == 'Std Bezeichnung w'
-          and sicht(BE)['artikel'][w['id']][1] == w['name'], sicht(BE)['artikel'][w['id']])
-    check('… alle übrigen Artikel von Bela unverändert', {k: v for k, v in sicht(BE)['artikel'].items() if k != w['id']}
-          == {k: v for k, v in BE0['artikel'].items() if k != w['id']})
 
     # ---------- Bela → Wochenangebot ----------
     S0 = sicht('std')
@@ -168,7 +146,7 @@ with sync_playwright() as p:
     # Fenster „Editor“ (Aufbau): Reihenfolge der Gruppen und Artikel in eine andere Gruppe
     vor = [g for g, _ in sicht(BE)['gruppen']]
     a.click('#btn-aufbau'); a.wait_for_selector('#dlg-aufbau[open] #abf-liste')
-    a.locator('#abf-liste .abf-g [data-ab="g-runter"]:not([disabled])').first.click()
+    a.locator('#abf-liste [data-ab="g-runter"]:not([disabled]), #abf-liste [data-ab="b-runter"]:not([disabled])').first.click()
     a.click('#abf-ok'); a.wait_for_selector('#dlg-aufbau', state='hidden')
     until(lambda: [g for g, _ in sicht(BE)['gruppen']] != vor); ruhig()
     check('Bela, Editor: Reihenfolge der Gruppen geändert – Wochenangebot behält seine Reihenfolge', [g for g, _ in sicht(BE)['gruppen']] != vor and sicht('std') == S0,
@@ -181,6 +159,47 @@ with sync_playwright() as p:
     until(lambda: gname(BE, y['id']) == gname(BE, z['id'])); ruhig()
     check('Bela, Editor: Artikel in eine andere Gruppe – Wochenangebot unverändert', gname(BE, y['id']) == gname(BE, z['id']) and sicht('std') == S0,
           (gname('std', y['id']), S0['artikel'][y['id']][0]))
+
+    # „Artikel hinzufügen“ in Bela: ein Artikel des Wochenangebots kommt in Belas eigene Gruppe gleichen Namens (keine doppelte Überschrift)
+    v2 = [i for i in frei if i['groupId'] == G2][1]
+    a.click('#btn-add-art'); a.wait_for_selector('#dlg-ez-pick[open] #ezp-q')
+    a.fill('#ezp-q', v2['code']); a.wait_for_selector(f'#ezp-list tr[data-code="{v2["code"]}"]'); a.click(f'#ezp-list tr[data-code="{v2["code"]}"] .ezp-n')
+    a.fill(f'#ezp-list [data-preis="{v2["code"]}"]', '7,70')
+    a.click('#ezp-ok'); a.wait_for_selector('#dlg-ez-pick', state='hidden')
+    until(lambda: v2['id'] in sicht(BE)['artikel']); ruhig()
+    namen = [g for g, _ in sicht(BE)['gruppen']]
+    check('Bela: hinzugefügter Artikel steht in Belas Gruppe gleichen Namens – keine Überschrift doppelt, Wochenangebot unverändert',
+          gname(BE, v2['id']) == GN[G2] and len(namen) == len(set(namen)) and sicht('std') == S0, namen)
+
+    check('… Edeka bleibt bei allen Bearbeitungen in Bela unverändert', sicht(ED) == ED0)
+
+    # ---------- Wochenangebot → Edeka (Edeka benutzt G3, H1, H2 noch gemeinsam mit dem Wochenangebot) ----------
+    angebot('std', w['id'])
+    karte(G3, 'name', 'Std G3 neu')
+    until(lambda: gname('std', w['id']) == 'Std G3 neu'); ruhig()
+    check('Wochenangebot: Gruppe umbenannt – in Edeka heißt sie wie bisher', gname('std', w['id']) == 'Std G3 neu' and gname(ED, w['id']) == GN[G3],
+          (gname('std', w['id']), gname(ED, w['id'])))
+    karte(G3, 'section', 'Std-Bereich')
+    until(lambda: ('Std G3 neu', 'Std-Bereich') in sicht('std')['gruppen']); ruhig()
+    check('Wochenangebot: Bereich der Gruppe geändert – in Edeka unverändert', not any(b == 'Std-Bereich' for _, b in sicht(ED)['gruppen']), sicht(ED)['gruppen'])
+    fenster(w['id'])
+    a.select_option('#item-body [name=groupId]', G4)
+    until(lambda: gname('std', w['id']) == GN[G4]); ruhig()
+    check('Wochenangebot: Artikel im Artikelfenster in eine andere Gruppe – in Edeka bleibt er in seiner Gruppe', gname(ED, w['id']) == GN[G3], gname(ED, w['id']))
+    zu()
+    nm = a.locator(f'#groups tr[data-id="{w["id"]}"] [data-f=name]')
+    nm.fill('Std Bezeichnung w'); nm.evaluate('e => e.blur()')
+    until(lambda: sicht('std')['artikel'][w['id']][1] == 'Std Bezeichnung w'); ruhig()
+    check('Wochenangebot: Bezeichnung in der Zeile geändert – Edeka behält die bisherige', sicht(ED)['artikel'][w['id']][1] == w['name'], sicht(ED)['artikel'][w['id']])
+    # Reihenfolge der Gruppen (↓ an der Gruppenkarte H1, im Wochenangebot direkt vor H2)
+    vor_std = [g for g, _ in sicht('std')['gruppen']]
+    a.click(f'#groups section.gcard[data-gid="{H1}"] [data-act="g-down"]')
+    until(lambda: [g for g, _ in sicht('std')['gruppen']] != vor_std); ruhig()
+    std_g, ed_g = [g for g, _ in sicht('std')['gruppen']], [g for g, _ in sicht(ED)['gruppen']]
+    check('Wochenangebot: Reihenfolge der Gruppen geändert – Edeka behält seine Reihenfolge', std_g.index(GN[H2]) < std_g.index(GN[H1])
+          and ed_g.index(GN[H1]) < ed_g.index(GN[H2]), (std_g, ed_g))
+    check('… Gruppe, Bezeichnung und Preis aller Artikel von Edeka unverändert', {k: v[2] for k, v in sicht(ED)['artikel'].items()} == {k: v[2] for k, v in ED0['artikel'].items()}
+          and {k: v[:2] for k, v in sicht(ED)['artikel'].items()} == {k: v[:2] for k, v in ED0['artikel'].items()})
     check('keine Skriptfehler', not errors, errors[:3])
 
     m390 = br.new_page(viewport={'width': 390, 'height': 844}, is_mobile=True)
@@ -196,5 +215,5 @@ with sync_playwright() as p:
     m390.screenshot(path=SH + '/angebote-getrennt-fenster-390.png')
     br.close()
 
-print(f'\n{sum(res)}/{len(res)} bestanden')
+print(f'{sum(res)}/{len(res)} passed')
 sys.exit(0 if all(res) else 1)

@@ -5,8 +5,9 @@
    Reihenfolge ändern: Pfeile ↑/↓ (Tastatur, Handy) oder Ziehen am Griff (Maus und Touch über Pointer Events) – ein Bereich
    als Ganzes mit seinen Gruppen, eine Gruppe innerhalb ihres Bereichs oder in einen anderen (bekommt dessen Bereich,
    „Bereich neu“), ein Artikel innerhalb seiner Gruppe oder in eine andere (Ziehen auf eine aufgeklappte Gruppe an die Stelle,
-   auf eine zugeklappte ans Ende; dazu die Auswahl „In Gruppe …“ für Handy und Tastatur, „verschoben“). Artikel mit eigener
-   Gruppe in diesem Kundenangebot („nur hier“, admin.js it.gruppen) wechseln die Gruppe nur in diesem Angebot.
+   auf eine zugeklappte ans Ende; dazu die Auswahl „In Gruppe …“ für Handy und Tastatur, „verschoben“). Alles gilt nur für das
+   gewählte Angebot (Inhaber 19.11.2026: gemeinsam genutzte Gruppen trennt admin.js vorher, gruppenTrennen); gemeinsam bleibt
+   nur die Stelle eines Artikels in model.items. „nur hier“ = eigene Gruppe in diesem Kundenangebot (it.gruppen).
    Gespeichert wird erst mit „Übernehmen“ – alles in einem Schritt über den Entwurf (admin.js: WA.angebot.aufbau.uebernehmen →
    save_draft mit Revision, Recht angebot.bearbeiten auf dem Server); hat jemand anderes den Aufbau inzwischen geändert,
    übernimmt das Fenster nichts und zeigt den neuen Stand. „Abbrechen“, × und Escape verwerfen (mit Änderungen schließt
@@ -140,12 +141,11 @@
     start = zustand();
     const ro = nurAnsehen();
     const hinweis = d.sperre ? `<p class="abf-hinweis sperre">${icon('lock', 'sm')}<span>${esc(d.sperre.text)}</span></p>` : '';
-    // „nur hier“: eigene Gruppe in diesem Angebot. Die Stelle bleibt gemeinsam – wer so einen Artikel verschiebt, kann seine
-    // Stelle in der Basisgruppe (Wochenangebot, andere Angebote) mit ändern; das sagt der Hinweis nur, wenn es solche Artikel gibt.
+    // „nur hier“: eigene Gruppe in diesem Angebot (it.gruppen); erklärt nur, wenn es solche Artikel gibt
     const eigene = d.gruppen.some((g) => g.artikel.some((x) => x.eigen))
-      ? ' – Artikel mit „nur hier“ wechseln sie nur hier, ihre Stelle kann sich dabei auch in anderen Angeboten ändern' : '';
+      ? ' (Artikel mit „nur hier“ stehen in anderen Angeboten in einer anderen Gruppe)' : '';
     const info2 = !d.gruppen.length ? `<p class="abf-hinweis">${icon('info', 'sm')}<span>Dieses Angebot enthält noch keine Artikel – es gibt nichts zu ordnen.</span></p>`
-      : ro ? '' : `<p class="abf-hinweis">${icon('info', 'sm')}<span>Gilt für alle Angebote: Gruppen und Artikel stehen in jedem Angebot, das sie enthält, an dieser Stelle; ein verschobener Artikel wechselt die Gruppe in allen Angeboten${eigene}. Zieht man eine Gruppe in einen anderen Bereich, bekommt sie dessen Bereich. Preise bleiben unverändert.</span></p>`;
+      : ro ? '' : `<p class="abf-hinweis">${icon('info', 'sm')}<span>Gilt nur für dieses Angebot${d.std ? ' und Angebote, die ihm folgen' : ''}${eigene}. Gemeinsam bleibt nur die Stelle eines Artikels in seiner Gruppe. Zieht man eine Gruppe in einen anderen Bereich, bekommt sie dessen Bereich. Preise bleiben unverändert.</span></p>`;
     body.innerHTML = `<div class="dlg-head"><div><h2 id="abf-titel">${icon('aufbau')}Aufbau des Angebots</h2>
         <p>„${esc(d.angebot)}“: Reihenfolge der Bereiche, Gruppen und Artikel.${ro ? '' : ' Gruppe anklicken zeigt ihre Artikel. Am Griff ziehen oder die Pfeile nutzen – gespeichert wird erst mit „Übernehmen“.'}</p></div>
         <button type="button" class="btn icon ghost" data-close aria-label="Schließen">${icon('x')}</button></div>
@@ -186,7 +186,7 @@
       dlg.close();
       toast(r.unveraendert ? 'Aufbau unverändert – nichts gespeichert.' : r.gespeichert === false
         ? 'Aufbau übernommen – der Entwurf ist noch nicht gespeichert (Hinweis oben).'
-        : 'Aufbau übernommen und im Entwurf gespeichert – gilt für alle Angebote, für Kunden sichtbar nach „Veröffentlichen“.', 6000);
+        : 'Aufbau übernommen und im Entwurf gespeichert – gilt nur für dieses Angebot, für Kunden sichtbar nach „Veröffentlichen“.', 6000);
       return;
     }
     if (r && r.konflikt) {

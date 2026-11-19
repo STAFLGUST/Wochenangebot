@@ -50,9 +50,14 @@ def im_angebot(it, oid):
     return not (v and v.get('status') == 'hidden')
 
 
+def gruppe_in(it, oid):
+    """Gruppe eines Artikels in einem Angebot: eigene (it.gruppen) oder Basiswert – wie gruppeIn in admin.js"""
+    return (it.get('gruppen') or {}).get(oid) or it['groupId'] if oid != 'std' else it['groupId']
+
+
 def bloecke(m, oid='std'):
     """Erwarteter Aufbau: [(Bereich, [Gruppen-IDs])] der Gruppen mit Artikeln des Angebots, aufeinanderfolgend gleicher Bereich"""
-    used = {it['groupId'] for it in m['items'] if im_angebot(it, oid)}
+    used = {gruppe_in(it, oid) for it in m['items'] if im_angebot(it, oid)}
     out = []
     for g in m['groups']:
         if g['id'] not in used:
@@ -81,13 +86,13 @@ def quoten(t):
 
 def art_reihe(m, gid, oid='std'):
     """Artikel-IDs einer Gruppe im Angebot in Reihenfolge des Entwurfs"""
-    return [i['id'] for i in m['items'] if i['groupId'] == gid and im_angebot(i, oid)]
+    return [i['id'] for i in m['items'] if gruppe_in(i, oid) == gid and im_angebot(i, oid)]
 
 
 def angebot_reihe(m, oid=None):
     """Artikel in Angebotsreihenfolge wie OfferCore.enrichOffer (Gruppe, dann Stelle); oid=None: alle Artikel des Modells"""
     gi = {g['id']: k for k, g in enumerate(m['groups'])}
-    its = [(gi.get(i['groupId'], 10 ** 6), k, i['id']) for k, i in enumerate(m['items']) if oid is None or im_angebot(i, oid)]
+    its = [(gi.get(gruppe_in(i, oid or 'std'), 10 ** 6), k, i['id']) for k, i in enumerate(m['items']) if oid is None or im_angebot(i, oid)]
     return [x[2] for x in sorted(its)]
 
 
@@ -198,7 +203,7 @@ with sync_playwright() as p:
     z = a.locator(f'#abf-liste .abf-g[data-gid="{g1["id"]}"]')
     check('Gruppe mit Name und Artikelzahl, eingerückt unter ihrem Bereich', g1['name'] in z.inner_text() and f'{n1} Artikel' in z.inner_text()
           and z.locator('.abf-gn').bounding_box()['x'] >= a.locator('#abf-liste .abf-bt').first.bounding_box()['x'] + 16)
-    check('Hinweis: gilt für alle Angebote; Titel und Knöpfe', 'Gilt für alle Angebote' in a.inner_text('#dlg-aufbau') and 'Aufbau des Angebots' in a.inner_text('#abf-titel')
+    check('Hinweis: gilt nur für dieses Angebot; Titel und Knöpfe', 'Gilt nur für dieses Angebot und Angebote, die ihm folgen' in a.inner_text('#dlg-aufbau') and 'Aufbau des Angebots' in a.inner_text('#abf-titel')
           and a.locator('#abf-ok').is_visible() and a.locator('#dlg-aufbau .dlg-foot [data-close]').inner_text().strip() == 'Abbrechen')
     check('erster Bereich ohne ↑, letzter ohne ↓', a.locator('#abf-liste > .abf-ber').first.locator('.abf-bk [data-ab="b-hoch"]').is_disabled()
           and a.locator('#abf-liste > .abf-ber').last.locator('.abf-bk [data-ab="b-runter"]').is_disabled())
@@ -265,7 +270,7 @@ with sync_playwright() as p:
     check('Editor zeigt die neue Reihenfolge mit Bereichsüberschriften', ed[0] == flach(ERW) and ed[1] == [b.lower() for b, _ in ERW if b], ed[1])
     check('Feld „Bereich“ der verschobenen Gruppe gesetzt', a.locator(f'#groups section.gcard[data-gid="{OHNE_G}"] [data-gf="section"]').input_value() == ERW[1][0])
     log = json.dumps(A.call('log')[1], ensure_ascii=False)
-    check('Protokoll: Aufbau des Angebots geändert (Bereich bei 1 Gruppe neu)', 'Aufbau des Angebots geändert (Reihenfolge der Bereiche, Gruppen und Artikel, Bereich bei 1 Gruppe neu)' in log)
+    check('Protokoll: Aufbau des Angebots geändert (Bereich bei 1 Gruppe neu)', 'Aufbau des Angebots geändert (Reihenfolge der Bereiche, Gruppen und Artikel, Bereich bei 1 Gruppe neu' in log, log[:400])
     check('Knopf „Veröffentlichen“ nennt den geänderten Aufbau', 'Aufbau geändert' in (a.get_attribute('#offen-zahl, #offen-liste', 'title') or ''), a.get_attribute('#offen-zahl, #offen-liste', 'title'))
     vorschau = A.call('offer&draft=1')[1]['offer']
     check('Vorschau (Entwurf): Gruppen in neuer Reihenfolge', [g['id'] for g in vorschau['groups']] == flach(ERW))
@@ -364,8 +369,8 @@ with sync_playwright() as p:
     neu = flach(fenster(a))
     a.click('#abf-ok'); a.wait_for_selector('#dlg-aufbau', state='hidden'); gespeichert(a)
     m4, _ = entwurf(A)
-    check('eigene Artikelliste: Reihenfolge gespeichert (gilt für alle Angebote), übrige Gruppen bleiben bei ihrem Vorgänger',
-          flach(bloecke(m4, EIGEN)) == neu and set(gruppen_reihe(m4)) == set(gruppen_reihe(mvor)) and len(gruppen_reihe(m4)) == len(gruppen_reihe(mvor)))
+    check('eigene Artikelliste: Reihenfolge gespeichert – nur dort, das Wochenangebot behält seine Reihenfolge (Inhaber 19.11.2026)',
+          flach(bloecke(m4, EIGEN)) == neu and bloecke(m4) == bloecke(mvor), (flach(bloecke(m4, EIGEN)), neu))
     dr = A.call(f'offer&draft=1&angebot={EIGEN}')[1]['offer']
     check('Kundenangebot (Vorschau): Gruppen in neuer Reihenfolge, Kundenpreis aufgelöst', [g['id'] for g in dr['groups']] == neu
           and all(i['price'].get('value') == 12.5 for i in dr['items']))
@@ -486,19 +491,20 @@ with sync_playwright() as p:
     # ---------- Eigene Gruppe je Angebot (Inhaber 17.11.2026): verschieben ändert nur die Gruppe dieses Angebots ----------
     mg, rg = entwurf(A)
     eig = [i for i in mg['items'] if im_angebot(i, EIGEN)]
-    gx, basis_x = eig[0], eig[0]['groupId']
-    gy = next(i for i in eig if i['groupId'] != basis_x)
-    ziel = next((i['groupId'] for i in eig if i['groupId'] not in (basis_x, gy['groupId'])), None)
-    gx['gruppen'] = {EIGEN: gy['groupId']}
+    gx, basis_x = eig[0], gruppe_in(eig[0], EIGEN)   # Gruppen im Kundenangebot (nach dem Trennen eigene Kopien)
+    gy = next(i for i in eig if gruppe_in(i, EIGEN) != basis_x)
+    ziel = next((gruppe_in(i, EIGEN) for i in eig if gruppe_in(i, EIGEN) not in (basis_x, gruppe_in(gy, EIGEN))), None)
+    GYE = gruppe_in(gy, EIGEN)
+    gx['gruppen'] = {EIGEN: GYE}
     assert ziel and A.call('save_draft', {'model': mg, 'revision': rg})[0] == 200
     a.reload(); a.wait_for_selector('#screen-editor:not([hidden]) tr[data-id]')
-    a.locator(f'#offer-bar [data-offer="{EIGEN}"]').first.click(); a.wait_for_selector(f'#groups section.gcard[data-gid="{gy["groupId"]}"] tr[data-id="{gx["id"]}"]')
+    a.locator(f'#offer-bar [data-offer="{EIGEN}"]').first.click(); a.wait_for_selector(f'#groups section.gcard[data-gid="{GYE}"] tr[data-id="{gx["id"]}"]')
     oeffnen(a)
-    a.click(f'#abf-liste .abf-g[data-gid="{gy["groupId"]}"] [data-ab="g-auf"]')
+    a.click(f'#abf-liste .abf-g[data-gid="{GYE}"] [data-ab="g-auf"]')
     check('eigene Gruppe: Artikel steht im Fenster unter der Gruppe dieses Angebots, gekennzeichnet „nur hier“; Hinweis nennt es',
-          set(dlg_art(a, gy['groupId'])) == {gx['id'], gy['id']} and basis_x not in flach(fenster(a))
-          and a.locator('#abf-liste .abf-eig').count() == 1 and a.locator(f'#abf-liste .abf-a[data-aid="{gx["id"]}"] .abf-eig').count() == 1
-          and 'wechseln sie nur hier' in a.inner_text('#dlg-aufbau'), dlg_art(a, gy['groupId']))
+          set(dlg_art(a, GYE)) == {gx['id'], gy['id']} and basis_x not in flach(fenster(a))
+          and a.locator(f'#abf-liste .abf-a[data-aid="{gx["id"]}"] .abf-eig').count() == 1
+          and 'stehen in anderen Angeboten in einer anderen Gruppe' in a.inner_text('#dlg-aufbau'), dlg_art(a, GYE))
     a.select_option(f'#abf-liste .abf-a[data-aid="{gx["id"]}"] select', ziel)
     a.click('#abf-ok'); a.wait_for_selector('#dlg-aufbau', state='hidden'); gespeichert(a)
     mh, _ = entwurf(A)
@@ -508,9 +514,9 @@ with sync_playwright() as p:
           and all(i['groupId'] == vor[i['id']] for i in mh['items']), (xh.get('gruppen'), xh['groupId']))
     oe, os_ = A.call(f'offer&draft=1&angebot={EIGEN}')[1]['offer'], A.call('offer&draft=1')[1]['offer']
     check('… aufgelöst: im Kundenangebot unter der neuen Gruppe, im Wochenangebot unter der Basisgruppe',
-          next(i for i in oe['items'] if i['id'] == gx['id'])['groupId'] == ziel and next(i for i in os_['items'] if i['id'] == gx['id'])['groupId'] == basis_x)
+          next(i for i in oe['items'] if i['id'] == gx['id'])['groupId'] == ziel and next(i for i in os_['items'] if i['id'] == gx['id'])['groupId'] == gx['groupId'])
     check('Protokoll: Aufbau nennt die neue Gruppe (auch eigene Gruppe je Angebot)', 'Gruppe bei 1 Artikel neu' in json.dumps(A.call('log')[1], ensure_ascii=False))
-    a.locator('#offer-bar [data-offer="std"]').first.click(); a.wait_for_selector(f'#groups section.gcard[data-gid="{basis_x}"] tr[data-id="{gx["id"]}"]')
+    a.locator('#offer-bar [data-offer="std"]').first.click(); a.wait_for_selector(f'#groups section.gcard[data-gid="{gx["groupId"]}"] tr[data-id="{gx["id"]}"]')
 
     # Ordnen innerhalb einer eigenen Gruppe: nur dieses Angebot ändert sich. Konstellation: ec steht mit Basisgruppe GB_ nur im
     # Kundenangebot in GE; davor in der Liste alle übrigen Artikel von GB_, dahinter ne (GE, nicht im Kundenangebot) und eg (GE).
@@ -536,8 +542,8 @@ with sync_playwright() as p:
     oeffnen(a)
     a.click(f'#abf-liste .abf-g[data-gid="{GE}"] [data-ab="g-auf"]')
     hinweis = a.inner_text('#dlg-aufbau .abf-hinweis')
-    check('eigene Gruppe: Hinweis sagt, dass die Stelle für alle Angebote gilt', dlg_art(a, GE) == [ec['id'], eg['id']] and 'wechseln sie nur hier' in hinweis
-          and 'Stelle kann sich dabei auch in anderen Angeboten ändern' in hinweis, hinweis)
+    check('eigene Gruppe: Hinweis sagt, dass die Stelle in der Gruppe noch für alle Angebote gilt', dlg_art(a, GE) == [ec['id'], eg['id']]
+          and 'stehen in anderen Angeboten in einer anderen Gruppe' in hinweis and 'Gemeinsam bleibt nur die Stelle eines Artikels in seiner Gruppe' in hinweis, hinweis)
     shot(a.locator('#dlg-aufbau'), SH + '/aufbau-nur-hier-1280.png')
     a.click(f'#abf-liste .abf-a[data-aid="{ec["id"]}"] [data-ab="a-runter"]')
     a.click('#abf-ok'); a.wait_for_selector('#dlg-aufbau', state='hidden'); gespeichert(a)
@@ -555,7 +561,7 @@ with sync_playwright() as p:
     a.set_viewport_size({'width': 390, 'height': 844})
     oeffnen(a)
     w = a.evaluate("(() => { const d = document.querySelector('#dlg-aufbau'); return [d.scrollWidth, d.clientWidth, document.documentElement.scrollWidth]; })()")
-    check('390 px: Fenster mit dem Hinweis „nur hier“ ohne waagerechtes Scrollen', w[0] <= w[1] and w[2] <= 390 and 'wechseln sie nur hier' in a.inner_text('#dlg-aufbau'), w)
+    check('390 px: Fenster mit dem Hinweis „nur hier“ ohne waagerechtes Scrollen', w[0] <= w[1] and w[2] <= 390 and 'stehen in anderen Angeboten in einer anderen Gruppe' in a.inner_text('#dlg-aufbau'), w)
     shot(a, SH + '/aufbau-nur-hier-390.png')
     a.click('#dlg-aufbau .dlg-foot [data-close]'); a.wait_for_selector('#dlg-aufbau', state='hidden')
     a.set_viewport_size({'width': 1440, 'height': 950})
