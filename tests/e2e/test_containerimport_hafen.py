@@ -19,7 +19,7 @@ import os
 import threading
 import zoneinfo
 from playwright.sync_api import sync_playwright
-from containerimport_hilfe import check, ende, nutzer_anlegen, container, container_anlegen, kalender, seite as seite_oeffnen
+from containerimport_hilfe import check, ende, nutzer_anlegen, container, container_anlegen, kalender, stand, seite as seite_oeffnen
 from umgebung import AUX_PORT, FIX, SH, shot, storage_raw, storage_write, _json
 
 A, I, L = nutzer_anlegen()
@@ -107,13 +107,9 @@ def haengt_dort():
     return SPIEL['da'].wait(10)
 
 
-def stand():
-    return I.call('containerimport_start')[1]
-
-
 # ---------- Rechte, kein Abruf ohne Bedarf ----------
 c1 = anlegen('P-290001', schiff='Beispiel Express', zielhafen='Rotterdam', eta=tag(1), stand='unterwegs')
-check('Stand: noch nie abgerufen, keine Meldungen', stand()['hafen'] == {'abgerufen': '', 'gelesen': '', 'fehler': '', 'anzahl': 0, 'meldungen': {}}, stand().get('hafen'))
+check('Stand: noch nie abgerufen, keine Meldungen', stand(I)['hafen'] == {'abgerufen': '', 'gelesen': '', 'fehler': '', 'anzahl': 0, 'meldungen': {}}, stand(I).get('hafen'))
 csrf = I.csrf; I.csrf = ''
 check('ohne CSRF: 403', I.call('containerimport_tracking_hafen', {})[0] == 403)
 I.csrf = csrf
@@ -127,7 +123,7 @@ c3 = anlegen('P-290003', schiff='Fracht & Stern', zielhafen='Hamburg', stand='un
 c4 = anlegen('P-290004', schiff='Pier Probe', zielhafen='Hamburg', stand='angekommen')
 c5 = anlegen('P-290005', schiff='Nicht In Der Liste', zielhafen='Hamburg', stand='unterwegs')
 MIT_MELDUNG = {c2['id'], c3['id'], c4['id']}
-vorher = container(stand(), 'P-290002')
+vorher = container(stand(I), 'P-290002')
 st, r, neu = abruf(wer=L)
 h = r.get('hafen', {})
 an = SPIEL['anfragen'][-1] if SPIEL['anfragen'] else {}
@@ -146,8 +142,8 @@ check('Sonderzeichen im Namen, Uhrzeit nach Mitternacht (12:30 am = 00:30), fehl
       m.get(c3['id']) == {'schiff': 'Fracht & Stern', 'ankunft': ankunft(1, '00:30'), 'liegeplatz': 'Europakai', 'terminal': 'HHLA-CTT'}
       and m.get(c4['id']) == {'schiff': 'Pier Probe', 'ankunft': ankunft(1, '18:00'), 'liegeplatz': 'Neuhöfer Pier', 'terminal': ''}, m)
 check('die Antwort bringt nur die Meldungen: nicht den Stand der Container und nichts aus der fremden Liste, das nicht zu uns gehört',
-      set(r) == {'ok', 'geholt', 'hafen'} and 'Massengut' not in str(r) and 'Unlesbar' not in str(r) and 'Massengut' not in str(stand()), sorted(r))
-check('die Meldung ändert keinen Container: geplante Ankunft, Stand und Revision bleiben', container(stand(), 'P-290002') == vorher, container(stand(), 'P-290002'))
+      set(r) == {'ok', 'geholt', 'hafen'} and 'Massengut' not in str(r) and 'Unlesbar' not in str(r) and 'Massengut' not in str(stand(I)), sorted(r))
+check('die Meldung ändert keinen Container: geplante Ankunft, Stand und Revision bleiben', container(stand(I), 'P-290002') == vorher, container(stand(I), 'P-290002'))
 st, r, neu = abruf()
 check('innerhalb der Frist: kein zweiter Abruf, die Meldungen bleiben', st == 200 and r.get('geholt') is False and neu == 0 and set(r['hafen']['meldungen']) == MIT_MELDUNG)
 
@@ -161,7 +157,7 @@ check('nach einem Fehlschlag nicht sofort wieder (Frist von 15 Minuten)', r.get(
 st, r, neu = abruf('fremd')
 check('Seite mit geändertem Aufbau: Meldung „ließ sich nicht lesen“, alter Stand bleibt', st == 200 and 'nicht lesen' in r['hafen']['fehler'] and set(r['hafen']['meldungen']) == MIT_MELDUNG, r.get('hafen'))
 gespeichert(lambda d: [x.update(ankunft=ankunft(-1, '09:00')) for x in d['schiffe'] if x['schiff'] == 'Fracht & Stern'])
-check('eine Meldung verfällt zwölf Stunden nach ihrer Ankunft: kein „wird erwartet“ für ein Schiff von gestern', set(stand()['hafen']['meldungen']) == {c2['id'], c4['id']}, stand()['hafen']['meldungen'])
+check('eine Meldung verfällt zwölf Stunden nach ihrer Ankunft: kein „wird erwartet“ für ein Schiff von gestern', set(stand(I)['hafen']['meldungen']) == {c2['id'], c4['id']}, stand(I)['hafen']['meldungen'])
 gespeichert(lambda d: d.update(schiffe={'hamburg': {'liste': d['schiffe']}, 'x': 'Text', 'y': {'schiff': 'Beispiel Express'}}))
 st, r = I.call('containerimport_start')
 check('anders geschnittener Zwischenspeicher (spätere Version, dann Rückfall): das Modul startet, nur ohne Meldungen', st == 200 and r['hafen']['meldungen'] == {} and r['hafen']['anzahl'] == 0, (st, r.get('error'), r.get('hafen')))
@@ -195,7 +191,7 @@ with haengend():
     c6 = anlegen('P-290006', schiff='Pier Probe', zielhafen='Hamburg', stand='unterwegs')
 faden.join(20)
 st, r, neu = haengend_antwort.get('antwort', (0, {}, 0))
-check('der hängende Abruf kommt danach an und legt sein Ergebnis ab', st == 200 and r.get('geholt') is True and r['hafen']['fehler'] == '' and stand()['hafen']['gelesen'] == r['hafen']['gelesen'], (st, r))
+check('der hängende Abruf kommt danach an und legt sein Ergebnis ab', st == 200 and r.get('geholt') is True and r['hafen']['fehler'] == '' and stand(I)['hafen']['gelesen'] == r['hafen']['gelesen'], (st, r))
 check('seine Antwort kennt auch den Container, der während des Abrufs dazukam', set(r['hafen']['meldungen']) == MIT_MELDUNG | {c6['id']}, r.get('hafen'))
 
 # ---------- Oberfläche ----------

@@ -67,7 +67,7 @@ a.ci-knopf { text-decoration: none; }
   background: var(--r-flaeche-2); border-bottom: 1px solid var(--r-linie); white-space: nowrap; }
 .ci-tab th:first-child { border-top-left-radius: 15px; } .ci-tab th:last-child { border-top-right-radius: 15px; }
 .ci-tab td { padding: 11px 14px; border-top: 1px solid var(--r-linie); vertical-align: middle; overflow-wrap: anywhere; }
-.ci-tab td[data-t="Lage"], .ci-tab td[data-t="Container"] { overflow-wrap: break-word; } .ci-nb { white-space: nowrap; }   /* ganze Wörter: Ländernamen und Nummern nicht mitten im Wort trennen */
+.ci-tab td.ci-woerter { overflow-wrap: break-word; } .ci-nb { white-space: nowrap; }   /* ganze Wörter: Ländernamen und Nummern nicht mitten im Wort trennen */
 .ci-tab tbody tr:first-child td { border-top: 0; }
 .ci-tab tbody tr { cursor: pointer; }
 .ci-tab tbody tr:hover, .ci-tab tbody tr:focus-visible { background: var(--r-hover); outline: none; }

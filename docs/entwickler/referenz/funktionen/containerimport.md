@@ -2,7 +2,7 @@
 
 <!-- ERZEUGT von `python3 werkzeuge/doku.py erzeugen` – nicht von Hand ändern. Quelle: Funktionen und Kommentare im Code. Die CI prüft, dass diese Datei zum Code passt. -->
 
-21 Dateien, 227 Funktionen – in der Reihenfolge der Datei, **fett** die Abschnitte. Text = erste Aussage des Kommentars direkt über der Funktion (Python: Docstring). Übersicht aller Module: [README.md](README.md).
+22 Dateien, 230 Funktionen – in der Reihenfolge der Datei, **fett** die Abschnitte. Text = erste Aussage des Kommentars direkt über der Funktion (Python: Docstring). Übersicht aller Module: [README.md](README.md).
 
 ## `app/api/aktionen/containerimport.php`
 
@@ -20,8 +20,7 @@ _Container-Import: Container (ein Einkauf bei einem Lieferanten, eine Partienumm
 
 - `eudr_liste(d)` – Inhalt eines Dokuments als ['rev', 'liste'] (fehlt es, leer)
 - `eudr_fortschreiben(doc)` – Dokument für das Schreiben fortschreiben: Revision erhöhen, Zeitstempel setzen
-- `eudr_betriebe()` – Dokument der Herkunftsbetriebe.
-- `ci_farmer_nr(nr)` – Eigene Farmer-Nummer zum Anzeigen: „F-“ unterscheidet sie von den Nummern aus den Papieren (meist nur Ziffern)
+- `eudr_betriebe()` – Dokument der Herkunftsbetriebe mit der eigenen Farmer-Nummer „nr“ = Stelle + 1. Annahme: die Liste wächst nur am Ende, nichts wird gelöscht oder umsortiert …
 - `eudr_sendungen()` – Dokument der Sendungen
 - `eudr_betriebe_schreiben(doc)` – Herkunftsbetriebe speichern
 - `eudr_sendungen_schreiben(doc)` – Sendungen speichern
@@ -44,11 +43,8 @@ _Container-Import: Container (ein Einkauf bei einem Lieferanten, eine Partienumm
 - `eudr_betrieb_pruefen(b, alt)` – Felder eines Betriebs aus der Eingabe prüfen (ohne id, rev, Zeitstempel und Gegenprüfungen).
 - `eudr_original_vermerken(liste, ablage, me)` – An allen Betrieben, die aus der Datei mit dieser Prüfsumme stammen, vermerken, wo ihr Original im QM-System liegt ($ablage = Antwort von qs_eingang_hochladen).
 - `eudr_geo_kennung(g)` – Kennung der Geometrie zum Wiedererkennen derselben Fläche
-- `ci_nummer_norm(nummer)` – Nummer zum Vergleichen: ohne Rücksicht auf Groß- und Kleinschreibung, Leerzeichen, Punkte und Striche – „P-100“ und „p 100“, „12.345“ und „12 345“ sind …
-- `ci_nummer_schluessel(land, nummer)` – Schlüssel einer Nummer aus den Papieren: im Herkunftsland eindeutig ('' = keine Nummer)
 - `eudr_bekannt_tabelle(liste)` – Nachschlagetabelle der gespeicherten Betriebe zum Wiedererkennen (einmal je Anfrage): Nummer aus den Papieren bzw. Umriss → Betrieb
 - `eudr_bekannt(neu, tabelle)` – Gespeicherter Betrieb, der zu einem eingelesenen passt: gleiche Nummer aus den Papieren im selben Land, sonst dieselbe Geometrie
-- `ci_nummer_vergeben(liste, b, ausser)` – Anderer Farmer mit derselben Nummer aus den Papieren im selben Land (archivierte zählen mit; null = keiner).
 - `eudr_pruefungen_aktuell(b)` – Jüngste Gegenprüfung je Portal (nur diese zählt im Risikoprofil)
 - `eudr_betrieb_sicht(b)` – Betrieb für die Oberfläche: gespeicherte Felder plus abgeleitete Kennzahlen und Befunde. stand: „fehler“ (Geolokalisierung so nicht einreichbar), „hinweis“ …
 - `eudr_betrieb_bewertung(b, geoStand)` – Bewertung eines Betriebs je Thema (ok \| offen \| kritisch): das Risikoprofil der Sendung und die Farbe auf der Karte lesen sie hier ab. Was erst mit der …
@@ -71,14 +67,6 @@ _Container-Import: Container (ein Einkauf bei einem Lieferanten, eine Partienumm
 - `eudr_lieferant_name(stamm)` – Name eines Lieferanten der Stammdaten; ohne Namen der Kurzname, ohne beides „Lieferant <Nummer>“
 - `eudr_lieferanten()` – Lieferanten zur Auswahl am Container: nur Nummer und Name, nach Name sortiert
 - `eudr_partie_vergeben(liste, partie, ausser)` – Ist die Partienummer schon bei einem anderen Container vergeben (auch bei einem archivierten)?
-
-**Farmer-Nummern am Container**
-
-- `ci_nummern_lesen(v)` – Farmer-Nummern aus der Eingabe: Text (je Zeile, durch Komma, Semikolon oder Tabulator getrennt – so kommen sie aus einer Liste oder Tabelle) oder Liste.
-- `ci_nummern_aufloesen(nummern, land, ids, offen, betriebe)` – Farmer-Nummern eines Containers im Land $land auflösen – dieselbe Regel für die Vorschau und das Speichern.
-- `ci_offene_nummern_zuordnen(liste, betriebe, me)` – Gespeicherte Farmer ($betriebe) den Containern zuordnen, die ihre Nummer aus den Papieren vermerkt haben – nur Container mit offener Bewertung …
-- `ci_farmer_pruefung(bs, offen)` – Gesamtprüfung der Farmer eines Containers ($bs = Sichten, nach dem Abschluss der Schnappschuss): wie viele in Ordnung (Ampel grün), wie viele Nummern ohne …
-- `ci_offene_nummern(sendungen)` – Vermerkte Nummern aller Container für die Gesamtübersicht: je Nummer (im Land) einmal, mit den Containern, die sie nennen
 - `eudr_container_name(s)` – Wie ein Container heißt: seine Partienummer; ältere Einträge ohne Partienummer nach der Auftragsnummer
 - `eudr_containernummer(text)` – Containernummer nach ISO 6346 (vier Buchstaben, sechs Ziffern, Prüfziffer) einordnen: '' leer, 'ok', 'pruefziffer' (Tippfehler?) oder 'format'.
 - `eudr_dds_pruefen(dds)` – Angaben zur Sorgfaltserklärung im EU-Informationssystem (auch nach dem Abschluss änderbar)
@@ -101,6 +89,23 @@ _Container-Import: Container (ein Einkauf bei einem Lieferanten, eine Partienumm
 **Stand für die Oberfläche**
 
 - `eudr_stand()` – Alle Betriebe und Sendungen mit abgeleiteten Werten, dazu Länder und Portale
+
+## `app/api/module/containerimport/farmer.php`
+
+_STAFL-Plattform · Modul Container-Import – Farmer-Nummern am Container (Auftrag des Inhabers 19.11.2026)._
+
+- `ci_farmer_nr(nr)` – Eigene Farmer-Nummer zum Anzeigen: „F-“ unterscheidet sie von den Nummern aus den Papieren (meist nur Ziffern)
+- `ci_nummer_norm(nummer)` – Nummer zum Vergleichen: ohne Rücksicht auf Groß- und Kleinschreibung, Leerzeichen, Punkte und Striche – „P-100“ und „p 100“, „12.345“ und „12 345“ sind …
+- `ci_nummer_schluessel(land, nummer)` – Schlüssel einer Nummer aus den Papieren: im Herkunftsland eindeutig ('' = keine Nummer, auch bei „-“ oder „.“)
+- `ci_nummern_index(liste)` – Nummern aus den Papieren der Farmer $liste: Schlüssel → Stelle des ersten Farmers damit (einmal je Anfrage bauen).
+- `ci_nummer_vergeben(index, schluessel, ausser)` – Stelle eines anderen Farmers mit dieser Nummer aus den Papieren (archivierte zählen mit; null = keiner oder keine Nummer).
+- `ci_nummern_lesen(v)` – Farmer-Nummern aus der Eingabe: Text (je Zeile, durch Komma, Semikolon oder Tabulator getrennt – so kommen sie aus einer Liste oder Tabelle) oder Liste.
+- `ci_nummern_aufloesen(nummern, land, ids, offen, betriebe, index)` – Farmer-Nummern eines Containers im Land $land auflösen – dieselbe Regel für die Vorschau und das Speichern.
+- `ci_nummern_anwenden(ids, zeilen)` – Aufgelöste Nummern ($zeilen) an einem Container mit den Farmern $ids übernehmen: gefundene Farmer kommen dazu, vermerkt bleiben nur die unbekannten Nummern → …
+- `ci_offene_nummern_zuordnen(liste, betriebe, me)` – Gespeicherte Farmer ($betriebe) den Containern zuordnen, die ihre Nummer aus den Papieren vermerkt haben – nur Container mit offener Bewertung, die nicht …
+- `ci_doppelte_nummern_melden(dateien)` – Neue Farmer eines Einlese-Durchgangs (alle Dateien, $dateien = Ergebnisse von eudr_datei_pruefen) mit derselben Nummer aus den Papieren: das zweite Vorkommen …
+- `ci_farmer_pruefung(bs, offen)` – Gesamtprüfung der Farmer eines Containers ($bs = Sichten, nach dem Abschluss der Schnappschuss): wie viele in Ordnung (Ampel grün), wie viele Nummern ohne …
+- `ci_offene_nummern(sendungen, index)` – Vermerkte Nummern aller Container für die Gesamtübersicht: je Nummer (im Land) einmal, mit den Containern, die sie nennen.
 
 ## `app/api/module/containerimport/geometrie.php`
 
@@ -307,6 +312,7 @@ _Gemeinsame Hilfen für die Testgruppen des Moduls Container-Import (containerim
 - `ende()` – Zusammenfassung ausgeben und mit dem Ergebnis der Gruppe enden.
 - `nutzer_anlegen()` – Administrator anmelden und die beiden Nutzer des Moduls anlegen → (Administrator, Ina, Lea) als angemeldete Clients.
 - `login(user)`
+- `stand(client)` – Stand der Seite (containerimport_start) so, wie dieser Nutzer ihn sieht.
 - `kalender(client)` – → tag(n): Datum n Tage ab heute (Datum des Servers) als JJJJ-MM-TT.
 - `container_anlegen(client, partie, **mehr)` – Container mit dieser Partienummer anlegen – muss gelingen.
 - `container(r, partie)` – Container mit dieser Partienummer aus einer Antwort ({} = nicht dabei).
@@ -355,9 +361,12 @@ _Modul Container-Import, Reiter EUDR (app/module/containerimport/, Oberfläche c
 _Container-Import: Farmer je Container (Auftrag des Inhabers 19.11.2026) – eigene fortlaufende Farmer-Nummer neben der Nummer aus den Papieren (Kennung), Farmer über die Nummern aus den Papieren einem Container …_
 
 - `farmer(name, kennung, x, land, y, **mehr)` – Farmer mit kleinem Umriss (Westecke x/y) und Nummer aus den Papieren.
-- `stand(c)`
 - `betrieb(name, r)`
 - `speichern(*betriebe, sendung)`
+
+**Eigene Farmer-Nummer, Nummer aus den Papieren**
+
+- `ort(name, kennung, x)`
 
 ## `tests/e2e/test_containerimport_hafen.py`
 
@@ -376,7 +385,6 @@ _Container-Import · Tracking: bestätigte Ankunft in Hamburg aus der öffentlic
 - `abruf(modus, wer)` – Aktion aufrufen → (Status, Antwort, neue Anfragen beim Hafen).
 - `haengend()` – Solange der Block läuft, antwortet der Nachbau nicht. haengt_dort() wartet, bis eine Anfrage dort angekommen ist; am Ende des Blocks antwortet er wieder.
 - `haengt_dort()`
-- `stand()`
 
 **Rechte, kein Abruf ohne Bedarf**
 

@@ -21,7 +21,7 @@
     const zeile = (x) => `<tr data-schlachthof="${esc(x.id)}" tabindex="0" class="${x.aktiv ? '' : 'ci-archiv'}">
       <td><span class="ci-name">${esc(x.name)}</span><span class="ci-unter">${x.zulassung ? `Zulassung <span class="ci-zahlen">${esc(x.zulassung)}</span>` : '—'}</span></td>
       <td data-t="Lieferant"><span>${esc(x.lieferant)}</span><span class="ci-unter">${x.lieferantNr ? `Nr. ${esc(x.lieferantNr)}` : 'nicht mit den Stammdaten verknüpft'}</span></td>
-      <td data-t="Lage"><span>${esc(landName(x.land))}</span><span class="ci-unter">${esc(x.ort)}</span></td>
+      <td data-t="Lage" class="ci-woerter"><span>${esc(landName(x.land))}</span><span class="ci-unter">${esc(x.ort)}</span></td>
       <td data-t="Container" class="ci-r">${containerVon(x.id).length}</td></tr>`;
     $('#ci-inhalt').innerHTML = `<div class="ci-suchzeile">${S.d.schlachthoefe.length ? suchfeld('Name, Zulassungsnummer, Ort, Lieferant', 'Schlachthöfe') : ''}
         ${darf ? `<button class="ci-knopf" type="button" id="ci-schlachthof-neu">${icon('plus')}Neuer Schlachthof</button>` : ''}</div>`

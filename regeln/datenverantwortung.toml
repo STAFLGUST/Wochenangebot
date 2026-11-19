@@ -906,7 +906,7 @@ name = "containerimport-eudr-betriebe"
 eigentuemer = "containerimport"
 bereich = "intern"
 schutz = "vertraulich"
-beschreibung = "Container-Import: Farmer (im Code „betrieb“, früher „Herkunftsbetriebe“) der Lieferanten (eigene fortlaufende Nummer, Name, Erzeuger, Land, Nummer aus den Papieren (Kennung), Umriss in WGS84, Quelle mit Dateiname und Prüfsumme, Angaben des Entwaldungsberichts, eigene Gegenprüfungen)"
+beschreibung = "Container-Import: Farmer (im Code „betrieb“, früher „Herkunftsbetriebe“) der Lieferanten (eigene fortlaufende Nummer F-0001 = Stelle in der Liste, angezeigt, nicht gespeichert; Name, Erzeuger, Land, Nummer aus den Papieren (Kennung), Umriss in WGS84, Quelle mit Dateiname und Prüfsumme, Angaben des Entwaldungsberichts, eigene Gegenprüfungen)"
 
 [[dokument]]
 name = "containerimport-eudr-sendungen"

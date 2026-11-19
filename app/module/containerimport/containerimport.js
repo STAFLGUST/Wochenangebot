@@ -108,14 +108,16 @@
   const sendung = (id) => S.d.sendungen.find((s) => s.id === id);
   /* Wie ein Container überschrieben ist: Akten- und Partienummer gleichrangig vorn (die Aktennummer nennt das Haus „Container“);
      ältere Einträge ohne beide nach der Auftragsnummer (name vom Server) */
-  const titel = (s) => [s.akte && `Akte ${s.akte}`, s.partie && `Partie ${s.partie}`].filter(Boolean).join(' · ') || s.name;
+  const titelTeile = (s) => { const t = [s.akte && `Akte ${s.akte}`, s.partie && `Partie ${s.partie}`].filter(Boolean); return t.length ? t : [s.name]; };
+  const titel = (s) => titelTeile(s).join(' · ');
   /* Eigene Nummer eines Farmers; Schnappschüsse von vor dieser Nummer nehmen die des gespeicherten Farmers */
   const farmerNr = (b) => b.farmerNr || (betrieb(b.id) || {}).farmerNr || '';
   const containerVon = (id) => S.d.sendungen.filter((s) => s.betriebe.includes(id));
   /* Gesamtprüfung der Farmer eines Containers (farmerPruefung vom Server): wie viele in Ordnung und was fehlt */
   const THEMA = { geo: 'Umriss', entwaldung: 'Entwaldung', gegenpruefung: 'eigene Prüfung', gebiete: 'Schutzgebiete', legalitaet: 'Legalität' };
   const farmerStand = (p) => (p.gesamt ? `${p.inOrdnung} von ${p.gesamt} in Ordnung` : 'kein Farmer');
-  const farmerFehlt = (p) => [p.ohneUnterlagen && `Unterlagen fehlen: ${p.ohneUnterlagen}`, ...Object.entries(p.themen).map(([k, n]) => `${THEMA[k]} offen: ${n}`)].filter(Boolean).join(' · ');
+  const farmerFehlt = (p) => [p.ohneUnterlagen && `Unterlagen fehlen: ${p.ohneUnterlagen}`,
+    ...Object.entries(p.themen).flatMap(([k, stufen]) => Object.entries(stufen).map(([stufe, n]) => `${THEMA[k]} ${stufe}: ${n}`))].filter(Boolean).join(' · ');
   const profilMarke = (p) => {
     const n = p.kriterien.filter((k) => k.stand === p.stand).length;
     return p.stand === 'ok' ? marke('kein Risiko erkennbar', 'ok') : marke(`${plural(n, 'Punkt', 'Punkte')} ${STAND[p.stand][0]}`, STAND[p.stand][1]);
@@ -200,7 +202,7 @@
   const archivSchalter = () => `<label class="ci-check ci-archivwahl"><input type="checkbox" id="ci-archiv"${S.archiv ? ' checked' : ''}>Archivierte anzeigen</label>`;
 
   /* Container einer Zeile der Gesamtübersicht: Akten- und Partienummer, darunter die Lieferanten */
-  const containerZelle = (cs) => `<td data-t="Container">${cs.length ? cs.map((s) => esc(titel(s)).split(' · ').map((x) => `<span class="ci-nb">${x}</span>`).join(' · ')).join('<br>') : '—'}<span class="ci-unter">${esc([...new Set(cs.map((s) => s.lieferant))].join(', '))}</span></td>`;
+  const containerZelle = (cs) => `<td data-t="Container" class="ci-woerter">${cs.length ? cs.map((s) => titelTeile(s).map((x) => `<span class="ci-nb">${esc(x)}</span>`).join(' · ')).join('<br>') : '—'}<span class="ci-unter">${esc([...new Set(cs.map((s) => s.lieferant))].join(', '))}</span></td>`;
   /* Gesamtübersicht aller Farmer: Ampel, eigene Nummer und Nummer aus den Papieren, Prüfstand, Container (mit Lieferant);
      dazu je vermerkte Nummer ohne Unterlagen eine Zeile, die den Container öffnet. Suche über alles davon. */
   function betriebeSicht() {
@@ -211,13 +213,13 @@
     const offenZeile = ([o, cs]) => `<tr data-sendung="${esc(cs[0].id)}" tabindex="0">
         <td><span class="ci-name"><i class="ci-ampel rot" aria-hidden="true"></i>Unterlagen fehlen</span><span class="ci-unter">noch kein Farmer angelegt</span></td>
         <td data-t="Nummern" class="ci-fest"><span class="ci-zahlen">—</span><span class="ci-unter">Papiere <span class="ci-zahlen">${esc(o.nummer)}</span></span></td>
-        <td data-t="Lage">${esc(landName(o.land))}</td><td data-t="Geolokalisierung">${marke('fehlt', 'rot')}</td><td data-t="Bericht">—</td><td data-t="Gegenprüfung">—</td>${containerZelle(cs)}</tr>`;
+        <td data-t="Lage" class="ci-woerter">${esc(landName(o.land))}</td><td data-t="Geolokalisierung">${marke('fehlt', 'rot')}</td><td data-t="Bericht">—</td><td data-t="Gegenprüfung">—</td>${containerZelle(cs)}</tr>`;
     const zeile = ([b, cs]) => {
       const p = PRUEFUNG[b.bewertung.gegenpruefung];
       return `<tr data-betrieb="${esc(b.id)}" tabindex="0" class="${b.aktiv ? '' : 'ci-archiv'}">
         <td><span class="ci-name"><i class="ci-ampel ${b.ampel}" aria-hidden="true"></i>${esc(b.name)}</span><span class="ci-unter">${esc(b.erzeuger || '—')}</span></td>
         <td data-t="Nummern" class="ci-fest"><span class="ci-zahlen">${esc(b.farmerNr)}</span><span class="ci-unter">${b.kennung ? `Papiere <span class="ci-zahlen">${esc(b.kennung)}</span>` : 'ohne Nummer aus den Papieren'}</span></td>
-        <td data-t="Lage"><span>${esc(landName(b.land))}</span><span class="ci-unter">${esc([b.region, b.ort].filter(Boolean).join(' · '))}</span></td>
+        <td data-t="Lage" class="ci-woerter"><span>${esc(landName(b.land))}</span><span class="ci-unter">${esc([b.region, b.ort].filter(Boolean).join(' · '))}</span></td>
         <td data-t="Geolokalisierung">${marke(GEO[b.stand][0], GEO[b.stand][1])}</td>
         <td data-t="Bericht">${marke(NACHWEIS[b.bericht.entwaldung][0], NACHWEIS[b.bericht.entwaldung][1])}<span class="ci-unter">${b.bericht.datum ? tag(b.bericht.datum) : ''}</span></td>
         <td data-t="Gegenprüfung">${marke(p[0], p[1])}<span class="ci-unter">${esc(pruefungText(b))}</span></td>

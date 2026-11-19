@@ -122,12 +122,14 @@ st, r = Client('198.51.100.30').call('containerimport_start')
 check('ohne Anmeldung: kein Zugriff (401)', st == 401 and 'betriebe' not in r, (st, r))
 st, r = O.call('containerimport_start')
 check('Modulzugang ohne „EUDR ansehen“: 403', st == 403 and 'Berechtigung' in r.get('error', ''), (st, r))
-check('ohne „EUDR ansehen“: auch prüfen und exportieren 403', O.call('containerimport_eudr_pruefen', {'dateien': [DATEI]})[0] == 403 and O.call('containerimport_eudr_export&sendung=x')[0] == 403)
+check('ohne „EUDR ansehen“: auch prüfen, Farmer-Nummern auflösen und exportieren 403', O.call('containerimport_eudr_pruefen', {'dateien': [DATEI]})[0] == 403
+      and O.call('containerimport_eudr_nummern', {'land': 'PY', 'nummern': '1'})[0] == 403 and O.call('containerimport_eudr_export&sendung=x')[0] == 403)
 st, r = L.call('containerimport_start')
 check('nur ansehen: Stand ohne Recht zu bearbeiten, leer', st == 200 and r['rechte'] == {'bearbeiten': False, 'whisp': False} and r['betriebe'] == [] and r['sendungen'] == [], (st, r))
 check('nur ansehen: Speichern 403', [L.call(a, {})[0] for a in ('containerimport_eudr_betriebe_save', 'containerimport_eudr_sendung_save', 'containerimport_eudr_gegenpruefung', 'containerimport_eudr_sendung_abschluss')] == [403] * 4)
 csrf = I.csrf; I.csrf = ''
 check('Speichern ohne CSRF: 403', I.call('containerimport_eudr_sendung_save', SENDUNG)[0] == 403)
+check('Farmer-Nummern auflösen ohne CSRF: 403', I.call('containerimport_eudr_nummern', {'land': 'PY', 'nummern': '1'})[0] == 403)
 I.csrf = csrf
 check('schreibende Aktionen per GET: 405', [I.call(a)[0] for a in ('containerimport_eudr_pruefen', 'containerimport_eudr_betriebe_save', 'containerimport_eudr_sendung_save')] == [405] * 3)
 st, r = I.call('containerimport_start')

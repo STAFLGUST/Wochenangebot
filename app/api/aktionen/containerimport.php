@@ -43,13 +43,14 @@ switch ($action) {
                 'lieferanten' => $darf ? eudr_lieferanten() : []] + eudr_stand());   // Stammdaten nur zum Auswählen und nur hier, nicht in jeder Antwort
         }
 
-        /* Dateien prüfen, ohne zu speichern: Lieferanten-GeoJSON, gelesene Berichte, eingefügte Koordinaten (POST wegen Inhalt) */
+        /* Dateien prüfen, ohne zu speichern: Lieferanten-GeoJSON, gelesene Berichte, eingefügte Koordinaten (POST wegen Inhalt).
+           Steht eine Nummer aus den Papieren in diesem Durchgang bei zwei neuen Farmern, ist das zweite Vorkommen ein Fehler. */
         case 'containerimport_eudr_pruefen': {
             eudr_leser(true);
             $dateien = body()['dateien'] ?? null;
             if (!is_array($dateien) || !$dateien || !array_is_list($dateien) || count($dateien) > 50) fail('Bitte 1 bis 50 Dateien auswählen.', 422);
             $bekannt = eudr_bekannt_tabelle(eudr_betriebe()['liste']);
-            $ergebnis = array_map(fn($d) => eudr_datei_pruefen(is_array($d) ? $d : [], $bekannt), $dateien);
+            $ergebnis = ci_doppelte_nummern_melden(array_map(fn($d) => eudr_datei_pruefen(is_array($d) ? $d : [], $bekannt), $dateien));
             $punkte = 0;
             foreach ($ergebnis as $datei) foreach ($datei['orte'] as $ort) $punkte += $ort['punkte'];
             if ($punkte > EUDR_MAX_PUNKTE_ANFRAGE) fail('Zu viele Punkte in einem Durchgang – bitte die Dateien einzeln einlesen.', 422);
@@ -57,7 +58,7 @@ switch ($action) {
         }
 
         /* Betriebe anlegen oder ändern (einzeln aus dem Fenster oder mehrere nach dem Einlesen); „sendung“ ordnet sie zu.
-           Ein neuer Farmer bekommt die nächste eigene Nummer; die Nummer aus den Papieren ist je Land eindeutig (422). Container
+           Ein neuer Farmer bekommt die nächste eigene Nummer (seine Stelle); die Nummer aus den Papieren ist je Land eindeutig (422). Container
            mit offener Bewertung, die eine gespeicherte Nummer vermerkt haben, bekommen den Farmer zugeordnet. */
         case 'containerimport_eudr_betriebe_save': {
             $me = eudr_bearbeiter();
@@ -73,6 +74,8 @@ switch ($action) {
                     if (!empty($s['abschluss'])) fail('Die Bewertung dieses Containers ist abgeschlossen. Bitte zuerst wieder öffnen.', 409);
                 }
                 $gespeichert = [];
+                $vorher = count($doc['liste']);   // Farmer ab dieser Stelle legt erst dieser Durchgang an
+                $index = ci_nummern_index($doc['liste']);
                 foreach ($eingaben as $e) {
                     if (!is_array($e)) throw new InvalidArgumentException('Ungültiger Farmer.');
                     $i = ($e['id'] ?? '') !== '' ? eudr_stelle($doc['liste'], (string)$e['id']) : null;
@@ -80,13 +83,20 @@ switch ($action) {
                     $alt = $i !== null ? $doc['liste'][$i] : null;
                     if ($alt) eudr_rev_pruefen($e, $alt, 'Der Farmer „' . $alt['name'] . '“');
                     elseif (count($doc['liste']) >= EUDR_MAX_BETRIEBE) fail('Zu viele Farmer.', 422);
-                    $neu = ['id' => $alt['id'] ?? eudr_id('b'), 'nr' => $alt['nr'] ?? max([0, ...array_column($doc['liste'], 'nr')]) + 1] + eudr_betrieb_pruefen($e, $alt)
+                    $neu = ['id' => $alt['id'] ?? eudr_id('b')] + eudr_betrieb_pruefen($e, $alt)
                         + ['pruefungen' => $alt['pruefungen'] ?? [], 'erstellt' => $alt['erstellt'] ?? eudr_wer($me), 'rev' => (int)($alt['rev'] ?? 0) + 1, 'geaendert' => eudr_wer($me)];
                     // nur eine neue oder geänderte Nummer prüfen: Doppelte aus der Zeit vor dieser Regel blockieren keine andere Änderung
-                    $anderer = !$alt || ci_nummer_schluessel($alt['land'], $alt['kennung']) !== ci_nummer_schluessel($neu['land'], $neu['kennung']) ? ci_nummer_vergeben($doc['liste'], $neu, $i) : null;
-                    if ($anderer) fail('Die Nummer „' . $neu['kennung'] . '“ aus den Papieren hat in ' . (EUDR_LAENDER[$neu['land']]['name'] ?? $neu['land']) . ' schon der Farmer „' . $anderer['name'] . '“ (' . ci_farmer_nr($anderer['nr']) . ').', 422);
-                    if ($i === null) $doc['liste'][] = $neu; else $doc['liste'][$i] = $neu;
-                    $gespeichert[] = $neu;
+                    $k = ci_nummer_schluessel($neu['land'], $neu['kennung']);
+                    $geaendert = !$alt || ci_nummer_schluessel($alt['land'], $alt['kennung']) !== $k;
+                    $j = $geaendert ? ci_nummer_vergeben($index, $k, $i) : null;
+                    if ($j !== null) fail('Die Nummer „' . $neu['kennung'] . '“ aus den Papieren ' . ($j >= $vorher
+                        ? 'steht in dieser Auswahl zweimal (auch bei „' . $doc['liste'][$j]['name'] . '“). Bitte nur einmal übernehmen.'
+                        : 'hat in ' . (EUDR_LAENDER[$neu['land']]['name'] ?? $neu['land']) . ' schon der Farmer „' . $doc['liste'][$j]['name'] . '“ (' . ci_farmer_nr($j + 1) . ').'), 422);
+                    $i ??= count($doc['liste']);
+                    $doc['liste'][$i] = ['nr' => $i + 1] + $neu;   // nr nur für Meldungen und Zuordnung, gespeichert wird sie nie
+                    $gespeichert[] = $doc['liste'][$i];
+                    if (!$alt) { if ($k !== '') $index[$k] ??= $i; }
+                    elseif ($geaendert) $index = ci_nummern_index($doc['liste']);   // selten: Nummer eines Farmers geändert
                 }
                 if (array_sum(array_map(fn($x) => geo_punktzahl($x['geometrie']), $doc['liste'])) > EUDR_MAX_PUNKTE) fail('Die Umrisse aller Farmer zusammen sind zu umfangreich. Bitte den Umriss vereinfachen lassen oder an den Administrator wenden.', 422);
                 eudr_betriebe_schreiben($doc);
@@ -170,7 +180,8 @@ switch ($action) {
             eudr_leser(true);
             $b = body();
             $ids = is_array($b['betriebe'] ?? null) ? array_values(array_filter($b['betriebe'], 'is_string')) : [];
-            respond(['ok' => true, 'zeilen' => ci_nummern_aufloesen(ci_nummern_lesen($b['nummern'] ?? ''), eudr_land($b['land'] ?? ''), $ids, ci_nummern_lesen($b['offeneNummern'] ?? []), eudr_betriebe()['liste'])]);
+            $liste = eudr_betriebe()['liste'];
+            respond(['ok' => true, 'zeilen' => ci_nummern_aufloesen(ci_nummern_lesen($b['nummern'] ?? ''), eudr_land($b['land'] ?? ''), $ids, ci_nummern_lesen($b['offeneNummern'] ?? []), $liste, ci_nummern_index($liste))]);
         }
 
         /* Container anlegen oder ändern. Die Partienummer ist Pflicht und je Container eindeutig. Nach dem Abschluss der
