@@ -2,11 +2,11 @@
 
 <!-- ERZEUGT von `python3 werkzeuge/doku.py erzeugen` – nicht von Hand ändern. Quelle: Funktionen und Kommentare im Code. Die CI prüft, dass diese Datei zum Code passt. -->
 
-11 Dateien, 139 Funktionen – in der Reihenfolge der Datei, **fett** die Abschnitte. Text = erste Aussage des Kommentars direkt über der Funktion (Python: Docstring). Übersicht aller Module: [README.md](README.md).
+11 Dateien, 143 Funktionen – in der Reihenfolge der Datei, **fett** die Abschnitte. Text = erste Aussage des Kommentars direkt über der Funktion (Python: Docstring). Übersicht aller Module: [README.md](README.md).
 
 ## `app/api/aktionen/containerimport.php`
 
-_Aktionen: Modul Container-Import, Reiter EUDR – Herkunftsbetriebe mit Geolokalisierung, Sendungen, Risikoprofil und GeoJSON-Datei für das EU-Informationssystem (Oberfläche containerimport.intern; Funktionen in …_
+_Aktionen: Modul Container-Import – Container (im Code „sendung“) mit Lieferant, Partie-, Akten- und Containernummer und Stand; Reiter EUDR – Farmer (im Code „betrieb“) mit Geolokalisierung, Risikoprofil und …_
 
 - `eudr_leser(post)` – Mitarbeiter mit Modulzugang und dem Recht anzusehen (lesende Aktionen; $post = Aktion kommt als POST mit CSRF)
 - `eudr_bearbeiter()` – Mitarbeiter mit Modulzugang und dem Recht zu bearbeiten (schreibende Aktionen)
@@ -14,7 +14,7 @@ _Aktionen: Modul Container-Import, Reiter EUDR – Herkunftsbetriebe mit Geoloka
 
 ## `app/api/module/containerimport/eudr.php`
 
-_Container-Import · EUDR (Verordnung (EU) 2023/1115, entwaldungsfreie Lieferketten)_
+_Container-Import: Container (ein Einkauf bei einem Lieferanten, eine Partienummer) mit ihren Farmern und der Prüfung nach der EUDR (Verordnung (EU) 2023/1115, entwaldungsfreie Lieferketten)_
 
 **Speicher**
 
@@ -58,7 +58,11 @@ _Container-Import · EUDR (Verordnung (EU) 2023/1115, entwaldungsfreie Lieferket
 
 **Sendungen**
 
-- `eudr_sendung_pruefen(b, betriebIds)` – Felder einer Sendung aus der Eingabe prüfen (ohne id, rev, Zeitstempel und Abschluss)
+- `eudr_sendung_pruefen(b, betriebIds, alt)` – Felder einer Sendung aus der Eingabe prüfen (ohne id, rev, Zeitstempel und Abschluss)
+- `eudr_lieferant(b, alt)` – Lieferant eines Containers: mit „lieferantNr“ aus den Stammdaten der Verwaltung (Schnittstelle lieferanten_kurz, GR-101) – der Name wird als Schnappschuss …
+- `eudr_lieferanten()` – Lieferanten zur Auswahl am Container: nur Nummer, Name und Kurzname, nach Name sortiert
+- `eudr_container_name(s)` – Wie ein Container heißt: seine Partienummer; ältere Einträge ohne Partienummer nach der Auftragsnummer
+- `eudr_containernummer(text)` – Containernummer nach ISO 6346 (vier Buchstaben, sechs Ziffern, Prüfziffer) einordnen: '' leer, 'ok', 'pruefziffer' (Tippfehler?) oder 'format'.
 - `eudr_dds_pruefen(dds)` – Angaben zur Sorgfaltserklärung im EU-Informationssystem (auch nach dem Abschluss änderbar)
 
 **Risikoprofil**
@@ -112,7 +116,7 @@ _Container-Import · EUDR_
 
 ## `app/module/containerimport/containerimport.js`
 
-_STAFL-Plattform · Modul Container-Import, Reiter EUDR – Hilfen und Kontrollen zur EU-Verordnung über entwaldungsfreie Lieferketten (Auftrag des Inhabers 18.11.2026; Gestaltung „C2“)._
+_STAFL-Plattform · Modul Container-Import – Container (ein Einkauf bei einem Lieferanten, eine Partienummer) mit ihren Farmern; Reiter EUDR_
 
 **Aufruf der API: wirft nie, liefert { status, data }**
 
@@ -128,7 +132,7 @@ _STAFL-Plattform · Modul Container-Import, Reiter EUDR – Hilfen und Kontrolle
 
 - `feld(label, name, wert, o)`
 - `werte(form)` – Werte aller benannten Felder eines Formulars als Objekt (Kontrollkästchen mit gleichem Namen als Liste)
-- `oeffnen(dlg)`
+- `oeffnen(dlg)` – Fenster öffnen.
 
 **Seite**
 
@@ -137,7 +141,7 @@ _STAFL-Plattform · Modul Container-Import, Reiter EUDR – Hilfen und Kontrolle
 - `betriebeSicht()`
 - `karteSicht()`
 
-**Fenster „Herkunftsbetrieb“**
+**Fenster „Farmer“**
 
 - `betriebOeffnen(id)`
 - `auswertungZeigen(b, darf)` – Bildauswertung im Fenster „Betrieb“: Wald Ende 2020 und Waldverlust seit 2021 in der Fläche – eine Schätzung aus den Kartenbildern (eudr-auswertung.js).

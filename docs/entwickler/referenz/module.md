@@ -78,9 +78,9 @@ Agent: `einkauf` · hängt ab von `plattform`, `verwaltung`, `bestand` · Testgr
 
 ## Container-Import (`containerimport`)
 
-Import von Ware aus Drittländern: EUDR (Herkunftsbetriebe mit Geolokalisierung, Risikoprofil, GeoJSON für TRACES); später Container, Verzollung, Dokumente
+Import von Ware aus Drittländern: Container (Lieferant, Partie-, Akten- und Containernummer, Stand) mit ihren Farmern; EUDR (Geolokalisierung, Risikoprofil, GeoJSON für TRACES); später Schlachthöfe, Tracking, Verzollung, Dokumente
 
-Agent: `containerimport` · hängt ab von `plattform`, `qs` · Testgruppen: `containerimport`, `containerimport_whisp`
+Agent: `containerimport` · hängt ab von `plattform`, `qs`, `verwaltung` · Testgruppen: `containerimport`, `containerimport_whisp`
 
 | Oberfläche | Art | Adresse | Entwicklung | Freigabe |
 | --- | --- | --- | --- | --- |

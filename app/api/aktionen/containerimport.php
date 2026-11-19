@@ -1,6 +1,7 @@
 <?php
 declare(strict_types=1);
-/* Aktionen: Modul Container-Import, Reiter EUDR – Herkunftsbetriebe mit Geolokalisierung, Sendungen, Risikoprofil und
+/* Aktionen: Modul Container-Import – Container (im Code „sendung“) mit Lieferant, Partie-, Akten- und Containernummer und
+   Stand; Reiter EUDR – Farmer (im Code „betrieb“) mit Geolokalisierung, Risikoprofil und
    GeoJSON-Datei für das EU-Informationssystem (Oberfläche containerimport.intern; Funktionen in
    app/api/module/containerimport/eudr.php und geometrie.php), Abfrage von Whisp für die Gegenprüfung (whisp.php).
    Rechte (GR-103): Modulzugang containerimport.zugang für jede Aktion; Inhalte (ansehen, Dateien prüfen, exportieren) mit
@@ -27,7 +28,7 @@ function eudr_bearbeiter(): array
 function eudr_sendung_holen(array $doc, $id): array
 {
     $i = eudr_stelle($doc['liste'], is_string($id) ? $id : '');
-    if ($i === null) fail('Sendung nicht gefunden.', 404);
+    if ($i === null) fail('Container nicht gefunden.', 404);
     return [$i, $doc['liste'][$i]];
 }
 
@@ -38,7 +39,8 @@ switch ($action) {
             require_once __DIR__ . '/../module/containerimport/whisp.php';
             header('Cache-Control: no-store');
             $darf = may($me, 'containerimport.eudr_bearbeiten');
-            respond(['ok' => true, 'name' => $me['name'], 'rechte' => ['bearbeiten' => $darf, 'whisp' => $darf && whisp_eingerichtet()]] + eudr_stand());
+            respond(['ok' => true, 'name' => $me['name'], 'rechte' => ['bearbeiten' => $darf, 'whisp' => $darf && whisp_eingerichtet()],
+                'lieferanten' => eudr_lieferanten()] + eudr_stand());   // Stammdaten nur hier, nicht in jeder Antwort – die Seite behält sie
         }
 
         /* Dateien prüfen, ohne zu speichern: Lieferanten-GeoJSON, gelesene Berichte, eingefügte Koordinaten (POST wegen Inhalt) */
@@ -59,29 +61,29 @@ switch ($action) {
             $me = eudr_bearbeiter();
             $b = body();
             $eingaben = $b['betriebe'] ?? null;
-            if (!is_array($eingaben) || !$eingaben || !array_is_list($eingaben) || count($eingaben) > EUDR_MAX_ORTE_JE_DATEI) fail('Keine Betriebe zum Speichern.', 422);
+            if (!is_array($eingaben) || !$eingaben || !array_is_list($eingaben) || count($eingaben) > EUDR_MAX_ORTE_JE_DATEI) fail('Keine Farmer zum Speichern.', 422);
             $gespeichert = with_lock(EUDR_SPERRE, function () use ($b, $eingaben, $me) {
                 $doc = eudr_betriebe();
                 $sendungen = eudr_sendungen();
                 $ziel = null;
                 if (($b['sendung'] ?? '') !== '') {
                     [$ziel, $s] = eudr_sendung_holen($sendungen, $b['sendung']);
-                    if (!empty($s['abschluss'])) fail('Die Bewertung dieser Sendung ist abgeschlossen. Bitte zuerst wieder öffnen.', 409);
+                    if (!empty($s['abschluss'])) fail('Die Bewertung dieses Containers ist abgeschlossen. Bitte zuerst wieder öffnen.', 409);
                 }
                 $gespeichert = [];
                 foreach ($eingaben as $e) {
-                    if (!is_array($e)) throw new InvalidArgumentException('Ungültiger Betrieb.');
+                    if (!is_array($e)) throw new InvalidArgumentException('Ungültiger Farmer.');
                     $i = ($e['id'] ?? '') !== '' ? eudr_stelle($doc['liste'], (string)$e['id']) : null;
-                    if (($e['id'] ?? '') !== '' && $i === null) fail('Betrieb nicht gefunden.', 404);
+                    if (($e['id'] ?? '') !== '' && $i === null) fail('Farmer nicht gefunden.', 404);
                     $alt = $i !== null ? $doc['liste'][$i] : null;
-                    if ($alt) eudr_rev_pruefen($e, $alt, 'Der Betrieb „' . $alt['name'] . '“');
-                    elseif (count($doc['liste']) >= EUDR_MAX_BETRIEBE) fail('Zu viele Betriebe.', 422);
+                    if ($alt) eudr_rev_pruefen($e, $alt, 'Der Farmer „' . $alt['name'] . '“');
+                    elseif (count($doc['liste']) >= EUDR_MAX_BETRIEBE) fail('Zu viele Farmer.', 422);
                     $neu = ['id' => $alt['id'] ?? eudr_id('b')] + eudr_betrieb_pruefen($e, $alt)
                         + ['pruefungen' => $alt['pruefungen'] ?? [], 'erstellt' => $alt['erstellt'] ?? eudr_wer($me), 'rev' => (int)($alt['rev'] ?? 0) + 1, 'geaendert' => eudr_wer($me)];
                     if ($i === null) $doc['liste'][] = $neu; else $doc['liste'][$i] = $neu;
                     $gespeichert[] = $neu;
                 }
-                if (array_sum(array_map(fn($x) => geo_punktzahl($x['geometrie']), $doc['liste'])) > EUDR_MAX_PUNKTE) fail('Die Umrisse aller Betriebe zusammen sind zu umfangreich. Bitte den Umriss vereinfachen lassen oder an den Administrator wenden.', 422);
+                if (array_sum(array_map(fn($x) => geo_punktzahl($x['geometrie']), $doc['liste'])) > EUDR_MAX_PUNKTE) fail('Die Umrisse aller Farmer zusammen sind zu umfangreich. Bitte den Umriss vereinfachen lassen oder an den Administrator wenden.', 422);
                 eudr_betriebe_schreiben($doc);
                 if ($ziel !== null) {
                     $s = $sendungen['liste'][$ziel];
@@ -92,7 +94,7 @@ switch ($action) {
                 }
                 return $gespeichert;
             });
-            audit('containerimport', 'EUDR: ' . (count($gespeichert) === 1 ? 'Herkunftsbetrieb „' . $gespeichert[0]['name'] . '“' : count($gespeichert) . ' Herkunftsbetriebe') . ' gespeichert');
+            audit('containerimport', 'EUDR: ' . (count($gespeichert) === 1 ? 'Farmer „' . $gespeichert[0]['name'] . '“' : count($gespeichert) . ' Farmer') . ' gespeichert');
             respond(['ok' => true] + eudr_stand());
         }
 
@@ -125,8 +127,8 @@ switch ($action) {
             $name = with_lock(EUDR_SPERRE, function () use ($b, $me) {
                 $doc = eudr_betriebe();
                 $i = eudr_stelle($doc['liste'], is_string($b['id'] ?? null) ? $b['id'] : '');
-                if ($i === null) fail('Betrieb nicht gefunden.', 404);
-                if (count($doc['liste'][$i]['pruefungen'] ?? []) >= EUDR_MAX_PRUEFUNGEN) fail('Zu viele Gegenprüfungen an diesem Betrieb.', 422);
+                if ($i === null) fail('Farmer nicht gefunden.', 404);
+                if (count($doc['liste'][$i]['pruefungen'] ?? []) >= EUDR_MAX_PRUEFUNGEN) fail('Zu viele Gegenprüfungen an diesem Farmer.', 422);
                 $doc['liste'][$i]['pruefungen'][] = eudr_pruefung_pruefen($b, $me);
                 $doc['liste'][$i]['rev']++; $doc['liste'][$i]['geaendert'] = eudr_wer($me);
                 eudr_betriebe_schreiben($doc);
@@ -148,13 +150,15 @@ switch ($action) {
             if (isset($b['token'])) respond(['ok' => true] + whisp_stand(is_string($b['token']) ? $b['token'] : ''));
             $liste = eudr_betriebe()['liste'];
             $i = eudr_stelle($liste, is_string($b['id'] ?? null) ? $b['id'] : '');
-            if ($i === null) fail('Betrieb nicht gefunden.', 404);
-            if ($liste[$i]['geometrie']['type'] === 'Point') fail('Whisp braucht einen Umriss – für einen einzelnen Punkt wäre das Ergebnis nicht die Fläche des Betriebs.', 422);
+            if ($i === null) fail('Farmer nicht gefunden.', 404);
+            if ($liste[$i]['geometrie']['type'] === 'Point') fail('Whisp braucht einen Umriss – für einen einzelnen Punkt wäre das Ergebnis nicht die Fläche des Farmers.', 422);
             audit('containerimport', 'EUDR: Umriss von „' . $liste[$i]['name'] . '“ zur Prüfung an Whisp gesendet');   // vor dem Versand: auch ein abgelehnter Umriss hat das Haus verlassen
             respond(['ok' => true] + whisp_starten($liste[$i]['geometrie']));
         }
 
-        /* Sendung anlegen oder ändern. Nach dem Abschluss lassen sich nur noch Sorgfaltserklärung und Notiz ergänzen. */
+        /* Container anlegen oder ändern. Die Partienummer ist Pflicht und je Container eindeutig. Nach dem Abschluss der
+           Bewertung lassen sich noch Stand, Container- und Aktennummer, Sorgfaltserklärung und Notiz ändern – der Container
+           reist weiter, die Bewertung selbst bleibt, wie sie abgeschlossen wurde. */
         case 'containerimport_eudr_sendung_save': {
             $me = eudr_bearbeiter();
             $b = body();
@@ -163,21 +167,26 @@ switch ($action) {
                 $alt = null; $i = null;
                 if (($b['id'] ?? '') !== '') {
                     [$i, $alt] = eudr_sendung_holen($doc, $b['id']);
-                    eudr_rev_pruefen($b, $alt, 'Die Sendung');
-                } elseif (count($doc['liste']) >= EUDR_MAX_SENDUNGEN) fail('Zu viele Sendungen.', 422);
+                    eudr_rev_pruefen($b, $alt, 'Der Container');
+                } elseif (count($doc['liste']) >= EUDR_MAX_SENDUNGEN) fail('Zu viele Container.', 422);
                 if ($alt && !empty($alt['abschluss'])) {
-                    $neu = ['dds' => eudr_dds_pruefen(is_array($b['dds'] ?? null) ? $b['dds'] : []), 'notiz' => eudr_text($b['notiz'] ?? '', 2000, 'Notiz')] + $alt;
+                    $neu = ['dds' => eudr_dds_pruefen(is_array($b['dds'] ?? null) ? $b['dds'] : []), 'notiz' => eudr_text($b['notiz'] ?? '', 2000, 'Notiz'),
+                        'stand' => eudr_wahl($b['stand'] ?? null, array_keys(EUDR_STAENDE), 'Stand', $alt['stand'] ?? 'gekauft'),
+                        'container' => eudr_text($b['container'] ?? $alt['container'], 40, 'Containernummer'), 'akte' => eudr_text($b['akte'] ?? ($alt['akte'] ?? ''), 40, 'Aktennummer')] + $alt;
                 } else {
                     $ids = array_column(eudr_betriebe()['liste'], 'id');
-                    $neu = ['id' => $alt['id'] ?? eudr_id('s')] + eudr_sendung_pruefen($b, $ids)
+                    $neu = ['id' => $alt['id'] ?? eudr_id('s')] + eudr_sendung_pruefen($b, $ids, $alt)
                         + ['abschluss' => null, 'fruehere' => $alt['fruehere'] ?? [], 'erstellt' => $alt['erstellt'] ?? eudr_wer($me)];
+                    foreach ($doc['liste'] as $k => $x) {
+                        if ($k !== $i && mb_strtolower((string)($x['partie'] ?? '')) === mb_strtolower($neu['partie'])) fail('Die Partienummer „' . $neu['partie'] . '“ ist schon bei einem anderen Container vergeben.', 422);
+                    }
                 }
                 $neu['rev'] = (int)($alt['rev'] ?? 0) + 1; $neu['geaendert'] = eudr_wer($me);
                 if ($i === null) $doc['liste'][] = $neu; else $doc['liste'][$i] = $neu;
                 eudr_sendungen_schreiben($doc);
                 return $neu;
             });
-            audit('containerimport', 'EUDR: Sendung „' . $s['nummer'] . '“ gespeichert');
+            audit('containerimport', 'Container „' . eudr_container_name($s) . '“ gespeichert');
             respond(['ok' => true, 'id' => $s['id']] + eudr_stand());
         }
 
@@ -189,7 +198,7 @@ switch ($action) {
             $s = with_lock(EUDR_SPERRE, function () use ($b, $me) {
                 $doc = eudr_sendungen();
                 [$i, $s] = eudr_sendung_holen($doc, $b['id'] ?? '');
-                eudr_rev_pruefen($b, $s, 'Die Sendung');
+                eudr_rev_pruefen($b, $s, 'Der Container');
                 if (!empty($b['oeffnen'])) {
                     if (empty($s['abschluss'])) fail('Die Bewertung ist nicht abgeschlossen.', 409);
                     $grund = eudr_text($b['grund'] ?? '', 500, 'Grund', true);
@@ -205,7 +214,7 @@ switch ($action) {
                 eudr_sendungen_schreiben($doc);
                 return $s;
             });
-            audit('containerimport', 'EUDR: Bewertung der Sendung „' . $s['nummer'] . '“ ' . ($s['abschluss'] ? 'abgeschlossen (' . ($s['abschluss']['ergebnis'] === 'vernachlaessigbar' ? 'Risiko vernachlässigbar' : 'Risiko nicht vernachlässigbar') . ')' : 'wieder geöffnet'));
+            audit('containerimport', 'EUDR: Bewertung des Containers „' . eudr_container_name($s) . '“ ' . ($s['abschluss'] ? 'abgeschlossen (' . ($s['abschluss']['ergebnis'] === 'vernachlaessigbar' ? 'Risiko vernachlässigbar' : 'Risiko nicht vernachlässigbar') . ')' : 'wieder geöffnet'));
             respond(['ok' => true] + eudr_stand());
         }
 
@@ -216,12 +225,12 @@ switch ($action) {
             $betriebe = array_map('eudr_betrieb_sicht', eudr_betriebe()['liste']);
             if (isset($_GET['betrieb'])) {
                 $bs = array_values(array_filter($betriebe, fn($x) => $x['id'] === $_GET['betrieb']));
-                if (!$bs) fail('Betrieb nicht gefunden.', 404);
+                if (!$bs) fail('Farmer nicht gefunden.', 404);
                 $name = $bs[0]['kennung'] !== '' ? $bs[0]['kennung'] : $bs[0]['name'];
             } else {
                 [, $s] = eudr_sendung_holen(eudr_sendungen(), $_GET['sendung'] ?? '');
                 $bs = eudr_sendung_betriebe($s, $betriebe);
-                $name = $s['nummer'];
+                $name = eudr_container_name($s);
             }
             $datei = 'EUDR_' . trim((string)preg_replace('/[^A-Za-z0-9_-]+/', '_', $name), '_') . '.geojson';
             respond(['ok' => true, 'datei' => $datei] + eudr_geojson($bs));

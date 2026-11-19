@@ -91,7 +91,7 @@
     const text = zeilenListe.map((z) => z.stuecke.map((t) => t.s).join(' ')).join('\n');
     const listen = text.split(/Coordinates of farm\s*\d*:?/i).slice(1);
     if (!listen.length) return null;
-    if (listen.length > 1) return { fehler: 'Der Bericht enthält mehrere Flächen – bitte je Betrieb einen Bericht oder ein GeoJSON einlesen.' };
+    if (listen.length > 1) return { fehler: 'Der Bericht enthält mehrere Flächen – bitte je Farmer einen Bericht oder ein GeoJSON einlesen.' };
     const liste = punkte(listen[0]);
     if (!liste || liste.length < 3 || !liste.every(utm)) return { fehler: 'Die Koordinatenliste lässt sich nicht sicher lesen (Lücke in der Nummerierung oder unplausible Werte) – bitte die Koordinaten von Hand einfügen.' };
     const s = stammdaten(zeilenListe);

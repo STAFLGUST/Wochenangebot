@@ -1,6 +1,9 @@
-/* STAFL-Plattform · Modul Container-Import, Reiter EUDR – Hilfen und Kontrollen zur EU-Verordnung über entwaldungsfreie
-   Lieferketten (Auftrag des Inhabers 18.11.2026; Gestaltung „C2“).
-   Ansichten: Sendungen (mit Risikoprofil), Herkunftsbetriebe (Geolokalisierung, Bericht, eigene Gegenprüfung), Karte.
+/* STAFL-Plattform · Modul Container-Import – Container (ein Einkauf bei einem Lieferanten, eine Partienummer) mit ihren
+   Farmern; Reiter EUDR: Hilfen und Kontrollen zur EU-Verordnung über entwaldungsfreie Lieferketten (Aufträge des Inhabers
+   18. und 19.11.2026; Gestaltung „C2“).
+   Begriffe: die Seite sagt „Container“ und „Farmer“; im Code und in den Daten heißen sie „sendung“ und „betrieb“
+   (bestehende Daten und Aktionsnamen, siehe app/api/module/containerimport/eudr.php).
+   Ansichten: Container (Lieferant, Nummern, Stand, Risikoprofil), Farmer (Geolokalisierung, Bericht, eigene Gegenprüfung), Karte.
    Daten: containerimport_start (Stand), containerimport_eudr_pruefen (Dateien prüfen, ohne zu speichern),
    containerimport_eudr_betriebe_save, _original, _gegenpruefung, _sendung_save, _sendung_abschluss (jede Antwort bringt den neuen
    Stand mit), containerimport_eudr_export (GeoJSON für das EU-Informationssystem), containerimport_eudr_whisp (Whisp für
@@ -23,7 +26,7 @@
   const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
   const icon = (n) => `<svg class="r-i" aria-hidden="true"><use href="#i-${n}"/></svg>`;
   const plural = (n, ein, viele) => `${n} ${n === 1 ? ein : viele}`;
-  const S = { csrf: '', d: null, sicht: 'sendungen', suche: '', archiv: false, karteSendung: '', lesen: null, toast: 0, sendet: false };
+  const S = { csrf: '', d: null, sicht: 'sendungen', suche: { sendungen: '', betriebe: '' }, archiv: false, karteSendung: '', lesen: null, toast: 0, sendet: false };
 
   /* ---------- Aufruf der API: wirft nie, liefert { status, data } ---------- */
   async function api(action, body, query = '', sperre = true) {   // sperre = false: Abfrage im Hintergrund, hält keine Eingabe auf
@@ -66,6 +69,11 @@
   const GEO = { ok: ['einreichbar', 'ok'], hinweis: ['einreichbar · Hinweis', ''], fehler: ['fehlerhaft', 'rot'] };
   const DREI = [['offen', 'noch offen'], ['ja', 'ja, belegt'], ['nein', 'nein']];
   const ERGEBNIS = { vernachlaessigbar: ['Risiko vernachlässigbar', 'ok'], nicht_vernachlaessigbar: ['Risiko nicht vernachlässigbar', 'rot'] };
+  const WEG = { gekauft: '', unterwegs: '', dokumente: '', angekommen: 'ok' };   // Farbe der Marke je Stand des Containers
+  const HINWEIS_NUMMER = { pruefziffer: 'Die Prüfziffer passt nicht – Tippfehler?', format: 'Üblich sind vier Buchstaben und sieben Ziffern, z. B. MSKU 907032 3.' };
+  /* Lieferant der Stammdaten als Text für das Eingabefeld und zurück: „Name (Nummer)“ */
+  const lieferantText = (l) => `${l.name || l.kurz || 'Lieferant'} (${l.nr})`;
+  const lieferantNach = (text) => S.d.lieferanten.find((l) => lieferantText(l) === text);
   const landName = (code) => (S.d.laender[code] ? S.d.laender[code].name : code);
   const betrieb = (id) => S.d.betriebe.find((b) => b.id === id);
   const sendung = (id) => S.d.sendungen.find((s) => s.id === id);
@@ -85,7 +93,7 @@
     let eingabe;
     if (o.wahl) eingabe = `<select ${attr}>${o.wahl.map(([v, t]) => `<option value="${esc(v)}"${String(wert ?? '') === String(v) ? ' selected' : ''}>${esc(t)}</option>`).join('')}</select>`;
     else if (o.lang) eingabe = `<textarea ${attr} rows="${o.lang}">${esc(wert ?? '')}</textarea>`;
-    else eingabe = `<input ${attr} type="${o.typ || 'text'}" value="${esc(wert ?? '')}"${o.typ === 'date' ? ` max="2099-12-31"` : ''}${o.platz ? ` placeholder="${esc(o.platz)}"` : ''}${o.zahl ? ' inputmode="decimal"' : ''}>`;
+    else eingabe = `<input ${attr} type="${o.typ || 'text'}" value="${esc(wert ?? '')}"${o.typ === 'date' ? ` max="2099-12-31"` : ''}${o.platz ? ` placeholder="${esc(o.platz)}"` : ''}${o.zahl ? ' inputmode="decimal"' : ''}${o.liste ? ` list="${o.liste}"` : ''}>`;
     return `<label class="ci-feld${o.breit ? ' breit' : ''}" for="f-${name}"><span>${esc(label)}</span>${eingabe}${o.hinweis ? `<small>${esc(o.hinweis)}</small>` : ''}</label>`;
   }
   /* Werte aller benannten Felder eines Formulars als Objekt (Kontrollkästchen mit gleichem Namen als Liste) */
@@ -99,37 +107,45 @@
   }
   /* Auswahl der Länder; ein gespeicherter Code außerhalb der Liste (z. B. aus einem GeoJSON) bleibt wählbar */
   const laenderWahl = (aktuell) => [...Object.entries(S.d.laender).map(([c, l]) => [c, `${l.name} (${c})`]), ...(aktuell && !S.d.laender[aktuell] ? [[aktuell, aktuell]] : [])].sort((a, b) => a[1].localeCompare(b[1], 'de'));
-  function oeffnen(dlg) { if (!dlg.open) dlg.showModal(); }
+  /* Fenster öffnen. Der Inhalt geschlossener Fenster wird dabei geleert: mehrere Fenster haben Felder gleichen Namens
+     (Lieferant, Land, Notiz) – blieben sie stehen, gäbe es ihre Kennung doppelt und eine Beschriftung zeigte auf das falsche Feld. */
+  function oeffnen(dlg) {
+    for (const f of $$('dialog:not([open]) > form')) if (f.parentElement !== dlg) f.innerHTML = '';
+    if (!dlg.open) dlg.showModal();
+  }
   const zahlText = (v) => (v === null || v === undefined || v === '' ? '' : String(v).replace('.', ','));
 
   /* ---------- Seite ---------- */
   function zeichnen() {
     const d = S.d, aktiv = d.betriebe.filter((b) => b.aktiv), offen = d.sendungen.filter((s) => s.aktiv && !s.abschluss);
-    $('#ci-unterzeile').textContent = `EUDR · ${plural(offen.length, 'Sendung', 'Sendungen')} in Prüfung · ${plural(aktiv.length, 'Herkunftsbetrieb', 'Herkunftsbetriebe')}`;
-    const sichten = [['sendungen', 'Sendungen', d.sendungen.filter((s) => s.aktiv).length], ['betriebe', 'Herkunftsbetriebe', aktiv.length], ['karte', 'Karte', null]];
+    $('#ci-unterzeile').textContent = `${offen.length} Container in Prüfung · ${aktiv.length} Farmer`;
+    const sichten = [['sendungen', 'Container', d.sendungen.filter((s) => s.aktiv).length], ['betriebe', 'Farmer', aktiv.length], ['karte', 'Karte', null]];
     $('#ci-sichten').innerHTML = sichten.map(([k, t, n]) => `<button class="ci-chip" type="button" data-sicht="${k}" aria-pressed="${S.sicht === k}">${t}${n === null ? '' : ` <b>${n}</b>`}</button>`).join('');
     $('#ci-knoepfe').innerHTML = d.rechte.bearbeiten
-      ? `<button class="ci-knopf" type="button" id="ci-lesen">${icon('hoch')}Unterlagen einlesen</button><button class="ci-knopf primaer" type="button" id="ci-sendung-neu">${icon('plus')}Neue Sendung</button>` : '';
+      ? `<button class="ci-knopf" type="button" id="ci-lesen">${icon('hoch')}Unterlagen einlesen</button><button class="ci-knopf primaer" type="button" id="ci-sendung-neu">${icon('plus')}Neuer Container</button>` : '';
     ({ sendungen: sendungenSicht, betriebe: betriebeSicht, karte: karteSicht })[S.sicht]();
   }
 
+  const suchfeld = (platz, name) => `<div class="ci-suchzeile"><input type="search" id="ci-suche" value="${esc(S.suche[S.sicht])}" placeholder="${platz}" aria-label="${name} durchsuchen"></div>`;
   function sendungenSicht() {
-    const liste = S.d.sendungen.filter((s) => s.aktiv || S.archiv).sort((a, b) => b.erstellt.t.localeCompare(a.erstellt.t));
+    const liste = S.d.sendungen.filter((s) => (s.aktiv || S.archiv) && SU.findet(S.suche.sendungen, s.partie, s.akte, s.container, s.nummer, s.lieferant, s.lieferantNr, s.ware, landName(s.land), s.dds.referenz))
+      .sort((a, b) => b.erstellt.t.localeCompare(a.erstellt.t));
     const zeile = (s) => `<tr data-sendung="${esc(s.id)}" tabindex="0" class="${s.aktiv ? '' : 'ci-archiv'}">
-      <td><span class="ci-name">${esc(s.nummer)}</span><span class="ci-unter">${esc(s.lieferant)} · ${esc(landName(s.land))}</span></td>
+      <td><span class="ci-name">${esc(s.name)}</span><span class="ci-unter">${esc([s.akte && `Akte ${s.akte}`, s.container && `Container ${s.container}`].filter(Boolean).join(' · ') || '—')}</span></td>
+      <td data-t="Lieferant"><span>${esc(s.lieferant)}</span><span class="ci-unter">${esc(landName(s.land))}${s.lieferantNr ? ` · Nr. ${esc(s.lieferantNr)}` : ' · nicht mit den Stammdaten verknüpft'}</span></td>
       <td data-t="Ware"><span>${esc(s.ware || '—')}</span><span class="ci-unter">${s.mengeKg === null ? '' : F.kg(s.mengeKg)}${s.lose ? ` · Lose ${esc(s.lose)}` : ''}</span></td>
-      <td data-t="Betriebe" class="ci-r">${s.betriebe.length}</td>
+      <td data-t="Stand">${marke(S.d.staende[s.stand], WEG[s.stand])}</td>
+      <td data-t="Farmer" class="ci-r">${s.betriebe.length}</td>
       <td data-t="Risikoprofil">${profilMarke(s.profil)}</td>
-      <td data-t="Bewertung">${s.abschluss ? marke(ERGEBNIS[s.abschluss.ergebnis][0], ERGEBNIS[s.abschluss.ergebnis][1]) + `<span class="ci-unter">${tag(s.abschluss.wer.t)} · ${esc(s.abschluss.wer.von)}</span>` : '<span class="ci-leise">in Prüfung</span>'}</td>
-      <td data-t="Sorgfaltserklärung">${s.dds.referenz ? `<span class="ci-zahlen">${esc(s.dds.referenz)}</span>` : '<span class="ci-leise">—</span>'}</td></tr>`;
-    $('#ci-inhalt').innerHTML = liste.length
-      ? `<div class="r-karte"><table class="ci-tab" id="ci-sendungen"><thead><tr><th scope="col">Sendung</th><th scope="col">Ware</th><th scope="col" class="ci-r">Betriebe</th><th scope="col">Risikoprofil</th><th scope="col">Bewertung</th><th scope="col">Sorgfaltserklärung</th></tr></thead><tbody>${liste.map(zeile).join('')}</tbody></table></div>${archivSchalter()}`
-      : `<div class="r-karte"><p class="ci-leer">Noch keine Sendung. Legen Sie eine Sendung an und lesen Sie die Unterlagen des Lieferanten ein.</p></div>${archivSchalter()}`;
+      <td data-t="Bewertung">${s.abschluss ? marke(ERGEBNIS[s.abschluss.ergebnis][0], ERGEBNIS[s.abschluss.ergebnis][1]) + `<span class="ci-unter">${tag(s.abschluss.wer.t)} · ${esc(s.abschluss.wer.von)}</span>` : '<span class="ci-leise">in Prüfung</span>'}${s.dds.referenz ? `<span class="ci-unter">Sorgfaltserklärung <span class="ci-zahlen">${esc(s.dds.referenz)}</span></span>` : ''}</td></tr>`;
+    $('#ci-inhalt').innerHTML = (S.d.sendungen.length ? suchfeld('Partie, Akte, Containernummer, Lieferant, Ware', 'Container') : '') + (liste.length
+      ? `<div class="r-karte"><table class="ci-tab" id="ci-sendungen"><thead><tr><th scope="col">Partie</th><th scope="col">Lieferant</th><th scope="col">Ware</th><th scope="col">Stand</th><th scope="col" class="ci-r">Farmer</th><th scope="col">Risikoprofil</th><th scope="col">Bewertung</th></tr></thead><tbody>${liste.map(zeile).join('')}</tbody></table></div>`
+      : `<div class="r-karte"><p class="ci-leer">${S.d.sendungen.length ? 'Kein Container passt zur Suche.' : 'Noch kein Container. Legen Sie einen Container an und lesen Sie die Unterlagen des Lieferanten ein.'}</p></div>`) + archivSchalter();
   }
   const archivSchalter = () => `<label class="ci-check ci-archivwahl"><input type="checkbox" id="ci-archiv"${S.archiv ? ' checked' : ''}>Archivierte anzeigen</label>`;
 
   function betriebeSicht() {
-    const woerter = S.suche;
+    const woerter = S.suche.betriebe;
     const liste = S.d.betriebe.filter((b) => (b.aktiv || S.archiv) && SU.findet(woerter, b.name, b.erzeuger, b.kennung, b.region, b.ort, landName(b.land), b.quelle.lieferant))
       .sort((a, b) => a.name.localeCompare(b.name, 'de'));
     const zeile = (b) => {
@@ -142,28 +158,28 @@
         <td data-t="Geolokalisierung">${marke(GEO[b.stand][0], GEO[b.stand][1])}</td>
         <td data-t="Bericht">${marke(NACHWEIS[b.bericht.entwaldung][0], NACHWEIS[b.bericht.entwaldung][1])}<span class="ci-unter">${b.bericht.datum ? tag(b.bericht.datum) : ''}</span></td>
         <td data-t="Gegenprüfung">${marke(p[0], p[1])}<span class="ci-unter">${esc(pruefungText(b))}</span></td>
-        <td data-t="Sendungen" class="ci-r">${n}</td></tr>`;
+        <td data-t="Container" class="ci-r">${n}</td></tr>`;
     };
-    $('#ci-inhalt').innerHTML = `<div class="ci-suchzeile"><input type="search" id="ci-suche" value="${esc(woerter)}" placeholder="Name, Erzeuger, Kennung, Region, Lieferant" aria-label="Herkunftsbetriebe durchsuchen"></div>`
+    $('#ci-inhalt').innerHTML = suchfeld('Name, Erzeuger, Kennung, Region, Lieferant', 'Farmer')
       + (liste.length
-        ? `<div class="r-karte"><table class="ci-tab" id="ci-betriebe"><thead><tr><th scope="col">Betrieb</th><th scope="col">Lage</th><th scope="col">Kennung</th><th scope="col" class="ci-r">Fläche</th><th scope="col">Geolokalisierung</th><th scope="col">Bericht Entwaldung</th><th scope="col">Eigene Prüfung</th><th scope="col" class="ci-r">Sendungen</th></tr></thead><tbody>${liste.map(zeile).join('')}</tbody></table></div>`
-        : `<div class="r-karte"><p class="ci-leer">${S.d.betriebe.length ? 'Kein Betrieb passt zur Suche.' : 'Noch kein Herkunftsbetrieb. Über „Unterlagen einlesen“ kommen Berichte und GeoJSON-Dateien der Lieferanten herein.'}</p></div>`)
+        ? `<div class="r-karte"><table class="ci-tab" id="ci-betriebe"><thead><tr><th scope="col">Farmer</th><th scope="col">Lage</th><th scope="col">Kennung</th><th scope="col" class="ci-r">Fläche</th><th scope="col">Geolokalisierung</th><th scope="col">Bericht Entwaldung</th><th scope="col">Eigene Prüfung</th><th scope="col" class="ci-r">Container</th></tr></thead><tbody>${liste.map(zeile).join('')}</tbody></table></div>`
+        : `<div class="r-karte"><p class="ci-leer">${S.d.betriebe.length ? 'Kein Farmer passt zur Suche.' : 'Noch kein Farmer. Über „Unterlagen einlesen“ kommen Berichte und GeoJSON-Dateien der Lieferanten herein.'}</p></div>`)
       + archivSchalter();
   }
 
   function karteSicht() {
     const s = S.karteSendung ? sendung(S.karteSendung) : null;
     const liste = S.d.betriebe.filter((b) => b.aktiv && (!s || s.betriebe.includes(b.id)));
-    const wahl = [['', 'Alle Herkunftsbetriebe'], ...S.d.sendungen.filter((x) => x.aktiv).map((x) => [x.id, `Sendung ${x.nummer}`])];
-    $('#ci-inhalt').innerHTML = `<div class="ci-suchzeile"><select id="ci-karte-sendung" aria-label="Betriebe einer Sendung zeigen">${wahl.map(([v, t]) => `<option value="${esc(v)}"${v === S.karteSendung ? ' selected' : ''}>${esc(t)}</option>`).join('')}</select>
+    const wahl = [['', 'Alle Farmer'], ...S.d.sendungen.filter((x) => x.aktiv).map((x) => [x.id, `Container ${x.name}`])];
+    $('#ci-inhalt').innerHTML = `<div class="ci-suchzeile"><select id="ci-karte-sendung" aria-label="Farmer eines Containers zeigen">${wahl.map(([v, t]) => `<option value="${esc(v)}"${v === S.karteSendung ? ' selected' : ''}>${esc(t)}</option>`).join('')}</select>
       <span class="ci-legende"><i class="ci-ampel gruen"></i>ohne offenen Punkt <i class="ci-ampel gelb"></i>Nachweis offen <i class="ci-ampel rot"></i>kritisch</span></div>
       <div class="ci-kartenraster"><div class="r-karte" id="ci-karte"></div>
-      <ul class="r-karte ci-kartenliste">${liste.map((b) => `<li><button type="button" data-betrieb="${esc(b.id)}"><i class="ci-ampel ${b.ampel}" aria-hidden="true"></i><span><strong>${esc(b.name)}</strong><small>${esc([landName(b.land), b.region].filter(Boolean).join(' · '))} · ${ha(b.flaeche)}</small></span></button></li>`).join('') || '<li class="ci-leer">Keine Betriebe.</li>'}</ul></div>
+      <ul class="r-karte ci-kartenliste">${liste.map((b) => `<li><button type="button" data-betrieb="${esc(b.id)}"><i class="ci-ampel ${b.ampel}" aria-hidden="true"></i><span><strong>${esc(b.name)}</strong><small>${esc([landName(b.land), b.region].filter(Boolean).join(' · '))} · ${ha(b.flaeche)}</small></span></button></li>`).join('') || '<li class="ci-leer">Keine Farmer.</li>'}</ul></div>
       <p class="ci-leise ci-klein">Grün: Wald Ende 2020 laut Karte der EU-Kommission (JRC) – ein Hinweis, kein Nachweis. Pink: Waldverlust seit 2021 (Universität Maryland über Global Forest Watch, 30 m). Pink innerhalb einer Fläche heißt: genau hinsehen und die Gegenprüfung machen. Das Satellitenbild ist von 2016 und zeigt nicht den heutigen Zustand. Die Bilder kommen direkt von EOX, der EU-Kommission und Global Forest Watch.</p>`;
     window.EUDR_KARTE.zeichnen($('#ci-karte'), { betriebe: liste, beiKlick: betriebOeffnen });
   }
 
-  /* ---------- Fenster „Herkunftsbetrieb“ ---------- */
+  /* ---------- Fenster „Farmer“ ---------- */
   function betriebOeffnen(id) {
     const b = betrieb(id);
     if (!b) return;
@@ -183,7 +199,7 @@
             <a href="https://www.openstreetmap.org/?mlat=${b.mitte[1]}&amp;mlon=${b.mitte[0]}#map=12/${b.mitte[1]}/${b.mitte[0]}" target="_blank" rel="noopener noreferrer">In OpenStreetMap ansehen</a></p>
           <h3 class="ci-h">Prüfung der Geolokalisierung</h3>${befunde}
         </div><div class="ci-raster">
-          ${feld('Name des Betriebs', 'name', b.name, { breit: true, aus })}
+          ${feld('Name des Farmers', 'name', b.name, { breit: true, aus })}
           ${feld('Erzeuger (Eigentümer)', 'erzeuger', b.erzeuger, { breit: true, aus })}
           ${feld('Land', 'land', b.land, { wahl: laenderWahl(b.land), aus })}${feld('Kennung', 'kennung', b.kennung, { aus, hinweis: 'z. B. SIGOR-Nummer' })}
           ${feld('Region', 'region', b.region, { aus })}${feld('Ort', 'ort', b.ort, { aus })}
@@ -316,8 +332,8 @@
   async function betriebSpeichern(zusatz = {}) {
     const id = $('#betrieb-inhalt').dataset.id, b = betrieb(id);
     const r = await api('containerimport_eudr_betriebe_save', { betriebe: [{ ...betriebAusFenster(b, werte($('#betrieb-inhalt'))), ...zusatz }] });
-    if (!uebernehmen(r, 'Der Betrieb konnte nicht gespeichert werden')) return;
-    toast('Betrieb gespeichert.');
+    if (!uebernehmen(r, 'Der Farmer konnte nicht gespeichert werden')) return;
+    toast('Farmer gespeichert.');
     betriebOeffnen(id);
   }
   async function pruefungEintragen() {
@@ -334,7 +350,7 @@
     <span><strong>${esc(k.titel)}</strong><small>${esc(k.text)}${k.betriebe.length ? ` <em>${esc(k.betriebe.join(', '))}</em>` : ''}</small></span></li>`).join('')}</ul>`;
   function sendungOeffnen(id) {
     const neu = !id;
-    const s = neu ? { id: '', rev: 0, nummer: '', lieferant: '', land: 'PY', ware: '', hs: '', mengeKg: null, container: '', schlachtVon: '', schlachtBis: '', lose: '', betriebe: [],
+    const s = neu ? { id: '', rev: 0, name: '', partie: '', akte: '', container: '', containerPruefung: '', stand: 'gekauft', nummer: '', lieferant: '', lieferantNr: '', land: 'PY', ware: '', hs: '', mengeKg: null, schlachtVon: '', schlachtBis: '', lose: '', betriebe: [],
       nachweis: { erklaerung: '', rueckverfolgung: 'offen', haltung: 'offen', legalitaet: 'offen' }, dds: { referenz: '', datum: '' }, notiz: '', aktiv: true, abschluss: null } : sendung(id);
     if (!s) return;
     const darf = S.d.rechte.bearbeiten, zu = !!s.abschluss, aus = !darf || zu;
@@ -343,25 +359,30 @@
     const betriebe = gezeigt.length
       ? `<ul class="ci-wahl">${gezeigt.map((b) => `<li><label><input type="checkbox" name="betriebe" data-liste value="${esc(b.id)}"${zu || s.betriebe.includes(b.id) ? ' checked' : ''}${aus ? ' disabled' : ''}>
           <span><strong>${esc(b.name)}</strong><small>${esc([b.erzeuger, landName(b.land), b.region].filter(Boolean).join(' · '))} · ${ha(b.flaeche)}</small></span></label>${marke(GEO[b.stand][0], GEO[b.stand][1])}</li>`).join('')}</ul>`
-      : '<p class="ci-leise ci-klein">Noch keine Herkunftsbetriebe vorhanden – zuerst die Unterlagen des Lieferanten einlesen.</p>';
+      : '<p class="ci-leise ci-klein">Noch keine Farmer vorhanden – zuerst die Unterlagen des Lieferanten einlesen.</p>';
+    const stamm = s.lieferantNr ? S.d.lieferanten.find((l) => l.nr === s.lieferantNr) : null;
+    const lieferantHinweis = s.lieferantNr ? `Stammdaten Nr. ${s.lieferantNr}${stamm ? '' : ' – dort nicht mehr vorhanden'}`
+      : S.d.lieferanten.length ? (neu ? 'Aus den Stammdaten wählen: Namen tippen und den Vorschlag anklicken.' : 'Nicht mit den Stammdaten verknüpft – Namen tippen und den Vorschlag anklicken.') : 'In der Verwaltung sind noch keine Lieferanten eingelesen – freier Text.';
     const abschluss = zu ? `<div class="ci-abschluss">${marke(ERGEBNIS[s.abschluss.ergebnis][0], ERGEBNIS[s.abschluss.ergebnis][1])}<span>Bewertung abgeschlossen am ${tag(s.abschluss.wer.t)} von ${esc(s.abschluss.wer.von)}${s.abschluss.begruendung ? `<small>${esc(s.abschluss.begruendung)}</small>` : ''}</span></div>` : '';
     $('#sendung-inhalt').dataset.id = s.id;
-    $('#sendung-inhalt').innerHTML = kopf('sendung-titel', neu ? 'Neue Sendung' : `Sendung ${s.nummer}`, neu ? '' : `${esc(s.lieferant)} · ${esc(landName(s.land))}`)
+    $('#sendung-inhalt').innerHTML = kopf('sendung-titel', neu ? 'Neuer Container' : `Container ${s.name}`, neu ? '' : `${esc(s.lieferant)} · ${esc(landName(s.land))}`)
       + `<div class="dlg-body">${abschluss}
         <div class="ci-raster drei">
-          ${feld('Auftragsnummer', 'nummer', s.nummer, { aus, platz: 'z. B. FB26-001' })}${feld('Lieferant', 'lieferant', s.lieferant, { aus })}${feld('Herkunftsland', 'land', s.land, { wahl: laenderWahl(s.land), aus })}
+          ${feld('Partienummer', 'partie', s.partie, { aus, platz: 'interne Referenz des Einkaufs' })}${feld('Aktennummer', 'akte', s.akte, { aus: !darf })}${feld('Containernummer', 'container', s.container, { aus: !darf, platz: 'z. B. MSKU 907032 3', hinweis: HINWEIS_NUMMER[s.containerPruefung] })}
+          ${feld('Lieferant', 'lieferant', stamm ? lieferantText(stamm) : s.lieferant, { aus, liste: 'ci-lieferanten', hinweis: lieferantHinweis })}${feld('Herkunftsland', 'land', s.land, { wahl: laenderWahl(s.land), aus })}${feld('Stand', 'stand', s.stand, { wahl: Object.entries(S.d.staende), aus: !darf })}
           ${feld('Ware', 'ware', s.ware, { aus, platz: 'z. B. Rindfleisch, gekühlt, ohne Knochen' })}${feld('Zolltarifnummer', 'hs', s.hs, { aus, platz: 'z. B. 0201' })}${feld('Menge netto (kg)', 'mengeKg', zahlText(s.mengeKg), { zahl: true, aus })}
-          ${feld('Container', 'container', s.container, { aus })}${feld('Schlachtung von', 'schlachtVon', s.schlachtVon, { typ: 'date', aus })}${feld('Schlachtung bis', 'schlachtBis', s.schlachtBis, { typ: 'date', aus })}
+          ${feld('Auftragsnummer des Lieferanten', 'nummer', s.nummer, { aus, platz: 'z. B. FB26-001' })}${feld('Schlachtung von', 'schlachtVon', s.schlachtVon, { typ: 'date', aus })}${feld('Schlachtung bis', 'schlachtBis', s.schlachtBis, { typ: 'date', aus })}
           ${feld('Schlachtlose', 'lose', s.lose, { aus, breit: true, platz: 'z. B. 2101, 2102, 2103' })}
         </div>
+        <datalist id="ci-lieferanten">${S.d.lieferanten.map((l) => `<option value="${esc(lieferantText(l))}">`).join('')}</datalist>
 
-        <h3 class="ci-h">Herkunftsbetriebe dieser Sendung</h3>${betriebe}
+        <h3 class="ci-h">Farmer dieses Containers</h3>${betriebe}
         ${!neu && gezeigt.some((b) => s.betriebe.includes(b.id)) ? '<div class="ci-k-wrap flach" id="sendung-karte"></div>' : ''}
 
         <h3 class="ci-h">Nachweise des Lieferanten</h3>
         <div class="ci-raster">
           ${feld('Erklärung des Lieferanten zur EUDR vom', 'n_erklaerung', s.nachweis.erklaerung, { typ: 'date', aus })}
-          ${feld('Zuordnung Schlachtlos → Betrieb belegt?', 'n_rueckverfolgung', s.nachweis.rueckverfolgung, { wahl: DREI, aus })}
+          ${feld('Zuordnung Schlachtlos → Farmer belegt?', 'n_rueckverfolgung', s.nachweis.rueckverfolgung, { wahl: DREI, aus })}
           ${feld('Alle Haltungsbetriebe erfasst (Geburt, Aufzucht, Mast)?', 'n_haltung', s.nachweis.haltung, { wahl: DREI, aus })}
           ${feld('Nachweise zur Legalität liegen vor (Landtitel, Genehmigungen)?', 'n_legalitaet', s.nachweis.legalitaet, { wahl: DREI, aus })}
         </div>
@@ -384,16 +405,19 @@
   }
   function sendungAusFenster() {
     const f = $('#sendung-inhalt'), w = werte(f), alt = sendung(f.dataset.id);
+    // Lieferant: der gewählte Vorschlag der Stammdaten; unverändert bleibt die gespeicherte Verknüpfung; sonst freier Text
+    const stamm = lieferantNach(w.lieferant), unveraendert = alt && alt.lieferantNr && w.lieferant === alt.lieferant;
     return {
-      id: f.dataset.id, rev: alt ? alt.rev : 0, aktiv: alt ? alt.aktiv : true, nummer: w.nummer, lieferant: w.lieferant, land: w.land, ware: w.ware, hs: w.hs, mengeKg: w.mengeKg, container: w.container,
+      id: f.dataset.id, rev: alt ? alt.rev : 0, aktiv: alt ? alt.aktiv : true, partie: w.partie, akte: w.akte, container: w.container, stand: w.stand, nummer: w.nummer,
+      lieferantNr: stamm ? stamm.nr : unveraendert ? alt.lieferantNr : '', lieferant: stamm ? stamm.name : w.lieferant, land: w.land, ware: w.ware, hs: w.hs, mengeKg: w.mengeKg,
       schlachtVon: w.schlachtVon, schlachtBis: w.schlachtBis, lose: w.lose, betriebe: w.betriebe || [], notiz: w.notiz,
       nachweis: { erklaerung: w.n_erklaerung, rueckverfolgung: w.n_rueckverfolgung, haltung: w.n_haltung, legalitaet: w.n_legalitaet }, dds: { referenz: w.d_referenz, datum: w.d_datum },
     };
   }
   async function sendungSpeichern(zusatz = {}) {
     const r = await api('containerimport_eudr_sendung_save', { ...sendungAusFenster(), ...zusatz });
-    if (!uebernehmen(r, 'Die Sendung konnte nicht gespeichert werden')) return false;
-    toast('Sendung gespeichert.');
+    if (!uebernehmen(r, 'Der Container konnte nicht gespeichert werden')) return false;
+    toast('Container gespeichert.');
     sendungOeffnen(r.data.id);
     return true;
   }
@@ -404,15 +428,15 @@
     $('#abschluss-inhalt').dataset.id = id;
     $('#abschluss-inhalt').dataset.art = wiederOeffnen ? 'oeffnen' : 'abschluss';
     $('#abschluss-inhalt').innerHTML = wiederOeffnen
-      ? kopf('abschluss-titel', 'Bewertung wieder öffnen', `Sendung ${esc(s.nummer)}`) + `<div class="dlg-body">${feld('Grund', 'grund', '', { lang: 3, breit: true, hinweis: 'Der bisherige Abschluss bleibt im Verlauf der Sendung erhalten.' })}</div>
+      ? kopf('abschluss-titel', 'Bewertung wieder öffnen', `Container ${esc(s.name)}`) + `<div class="dlg-body">${feld('Grund', 'grund', '', { lang: 3, breit: true, hinweis: 'Der bisherige Abschluss bleibt im Verlauf des Containers erhalten.' })}</div>
         <div class="dlg-foot"><button class="ci-knopf" type="button" data-zu>Abbrechen</button><button class="ci-knopf primaer" type="submit">Wieder öffnen</button></div>`
-      : kopf('abschluss-titel', 'Bewertung abschließen', `Sendung ${esc(s.nummer)}`) + `<div class="dlg-body">
+      : kopf('abschluss-titel', 'Bewertung abschließen', `Container ${esc(s.name)}`) + `<div class="dlg-body">
         <p class="ci-vorschlag ${p.stand}">${icon(p.stand === 'ok' ? 'haken' : 'warn')}<span>${esc(p.vorschlag)}</span></p>
         ${feld('Ergebnis der Risikobewertung', 'ergebnis', p.vernachlaessigbar === 'ja' ? 'vernachlaessigbar' : 'nicht_vernachlaessigbar', { breit: true, wahl: [
           ...(p.vernachlaessigbar === 'nein' ? [] : [['vernachlaessigbar', 'Risiko vernachlässigbar – Sorgfaltserklärung wird abgegeben']]), ['nicht_vernachlaessigbar', 'Risiko nicht vernachlässigbar – Ware wird nicht in Verkehr gebracht']] })}
         ${feld('Begründung', 'begruendung', '', { lang: 4, breit: true, hinweis: { ja: 'Was wurde geprüft, was wurde unternommen?', begruendung: 'Für „vernachlässigbar“ Pflicht, weil noch Punkte offen sind: Warum ist das Risiko trotzdem vernachlässigbar?',
           nein: 'Solange ein Kriterium kritisch ist, kann das Risiko nicht als vernachlässigbar bewertet werden.' }[p.vernachlaessigbar] })}
-        <p class="ci-klein ci-leise">Mit dem Abschluss werden Risikoprofil und Betriebe so festgehalten, wie sie jetzt sind. Spätere Änderungen an den Betrieben ändern diese Bewertung nicht.</p></div>
+        <p class="ci-klein ci-leise">Mit dem Abschluss werden Risikoprofil und Farmer so festgehalten, wie sie jetzt sind. Spätere Änderungen an den Farmern ändern diese Bewertung nicht. Stand, Container- und Aktennummer lassen sich weiter pflegen.</p></div>
         <div class="dlg-foot"><button class="ci-knopf" type="button" data-zu>Abbrechen</button><button class="ci-knopf primaer" type="submit">Abschließen</button></div>`;
     oeffnen($('#dlg-abschluss'));
   }
@@ -440,13 +464,13 @@
   function drucken(id) {
     const s = sendung(id), bs = s.abschluss ? s.abschluss.betriebe : S.d.betriebe.filter((b) => s.betriebe.includes(b.id));
     const zeile = (k, v) => (v ? `<tr><th scope="row">${esc(k)}</th><td>${v}</td></tr>` : '');
-    $('#ci-druck').innerHTML = `<h1>Risikoprofil EUDR · Sendung ${esc(s.nummer)}</h1>
+    $('#ci-druck').innerHTML = `<h1>Risikoprofil EUDR · Container ${esc(s.name)}</h1>
       <p>Verordnung (EU) 2023/1115 · Standard-Fleisch · gedruckt am ${F.datumZeit(new Date())} von ${esc(S.d.name)}</p>
-      <table class="ci-d-kopf">${zeile('Lieferant', esc(s.lieferant))}${zeile('Herkunftsland', esc(landName(s.land)))}${zeile('Ware', esc([s.ware, s.hs && `Zolltarifnummer ${s.hs}`].filter(Boolean).join(' · ')))}${zeile('Menge', s.mengeKg === null ? '' : F.kg(s.mengeKg))}
-        ${zeile('Container', esc(s.container))}${zeile('Schlachtung', s.schlachtVon ? `${tag(s.schlachtVon)}${s.schlachtBis ? ` bis ${tag(s.schlachtBis)}` : ''}` : '')}${zeile('Schlachtlose', esc(s.lose))}${zeile('Sorgfaltserklärung', esc([s.dds.referenz, s.dds.datum && tag(s.dds.datum)].filter(Boolean).join(' · ')))}</table>
-      <h2>Herkunftsbetriebe</h2>
-      <table class="ci-d-tab"><thead><tr><th>Betrieb</th><th>Erzeuger</th><th>Lage</th><th>Kennung</th><th>Fläche</th><th>Geolokalisierung</th><th>Bericht</th><th>Eigene Prüfung</th></tr></thead><tbody>
-        ${bs.map((b) => `<tr><td>${esc(b.name)}</td><td>${esc(b.erzeuger)}</td><td>${esc([landName(b.land), b.region, b.ort].filter(Boolean).join(', '))}<br>${b.mitte[1]}° / ${b.mitte[0]}°</td><td>${esc(b.kennung)}</td><td>${ha(b.flaeche)}</td><td>${esc(GEO[b.stand][0])}</td><td>${esc(NACHWEIS[b.bericht.entwaldung][0])}${b.bericht.datum ? `, ${tag(b.bericht.datum)}` : ''}</td><td>${esc(PRUEFUNG[b.bewertung.gegenpruefung][0])}${b.pruefungenAktuell.length ? `<br>${esc(pruefungText(b))}` : ''}</td></tr>`).join('') || '<tr><td colspan="8">Keine Betriebe zugeordnet.</td></tr>'}</tbody></table>
+      <table class="ci-d-kopf">${zeile('Partienummer', esc(s.partie))}${zeile('Aktennummer', esc(s.akte))}${zeile('Lieferant', esc(s.lieferant + (s.lieferantNr ? ` (Nr. ${s.lieferantNr})` : '')))}${zeile('Auftragsnummer des Lieferanten', esc(s.nummer))}${zeile('Herkunftsland', esc(landName(s.land)))}${zeile('Ware', esc([s.ware, s.hs && `Zolltarifnummer ${s.hs}`].filter(Boolean).join(' · ')))}${zeile('Menge', s.mengeKg === null ? '' : F.kg(s.mengeKg))}
+        ${zeile('Containernummer', esc(s.container))}${zeile('Schlachtung', s.schlachtVon ? `${tag(s.schlachtVon)}${s.schlachtBis ? ` bis ${tag(s.schlachtBis)}` : ''}` : '')}${zeile('Schlachtlose', esc(s.lose))}${zeile('Sorgfaltserklärung', esc([s.dds.referenz, s.dds.datum && tag(s.dds.datum)].filter(Boolean).join(' · ')))}</table>
+      <h2>Farmer</h2>
+      <table class="ci-d-tab"><thead><tr><th>Farmer</th><th>Erzeuger</th><th>Lage</th><th>Kennung</th><th>Fläche</th><th>Geolokalisierung</th><th>Bericht</th><th>Eigene Prüfung</th></tr></thead><tbody>
+        ${bs.map((b) => `<tr><td>${esc(b.name)}</td><td>${esc(b.erzeuger)}</td><td>${esc([landName(b.land), b.region, b.ort].filter(Boolean).join(', '))}<br>${b.mitte[1]}° / ${b.mitte[0]}°</td><td>${esc(b.kennung)}</td><td>${ha(b.flaeche)}</td><td>${esc(GEO[b.stand][0])}</td><td>${esc(NACHWEIS[b.bericht.entwaldung][0])}${b.bericht.datum ? `, ${tag(b.bericht.datum)}` : ''}</td><td>${esc(PRUEFUNG[b.bewertung.gegenpruefung][0])}${b.pruefungenAktuell.length ? `<br>${esc(pruefungText(b))}` : ''}</td></tr>`).join('') || '<tr><td colspan="8">Keine Farmer zugeordnet.</td></tr>'}</tbody></table>
       <h2>Kriterien</h2>
       <table class="ci-d-tab"><thead><tr><th>Kriterium</th><th>Stand</th><th>Feststellung</th></tr></thead><tbody>${s.profil.kriterien.map((k) => `<tr><td>${esc(k.titel)}</td><td>${esc(STAND[k.stand][0])}</td><td>${esc(k.text)}${k.betriebe.length ? ` (${esc(k.betriebe.join(', '))})` : ''}</td></tr>`).join('')}</tbody></table>
       <h2>Ergebnis</h2>
@@ -459,15 +483,15 @@
   function lesenOeffnen(sendungId = '') {
     S.lesen = null;
     const s = sendungId ? sendung(sendungId) : null;
-    const sendungen = [['', '– keiner Sendung zuordnen –'], ...S.d.sendungen.filter((x) => x.aktiv && !x.abschluss).map((x) => [x.id, `${x.nummer} · ${x.lieferant}`])];
+    const sendungen = [['', '– keinem Container zuordnen –'], ...S.d.sendungen.filter((x) => x.aktiv && !x.abschluss).map((x) => [x.id, `${x.name} · ${x.lieferant}`])];
     $('#lesen-inhalt').innerHTML = kopf('lesen-titel', 'Unterlagen einlesen', 'Entwaldungsberichte (PDF), GeoJSON-Dateien des Lieferanten oder eine Koordinatenliste')
       + `<div class="dlg-body">
-        <div class="ci-raster drei">${feld('Herkunftsland', 'land', s ? s.land : 'PY', { wahl: laenderWahl(), hinweis: 'gilt, wenn die Datei kein Land nennt' })}${feld('Lieferant', 'lieferant', s ? s.lieferant : '')}${feld('Sendung', 'sendung', sendungId, { wahl: sendungen })}</div>
-        <label class="ci-ablage" for="lesen-dateien">${icon('hoch')}<span><strong>Dateien auswählen</strong><small>PDF-Berichte liest Ihr Browser, GeoJSON-Dateien prüft der Server. Gespeichert werden Betrieb, Umriss, Dateiname und Prüfsumme.</small></span>
+        <div class="ci-raster drei">${feld('Herkunftsland', 'land', s ? s.land : 'PY', { wahl: laenderWahl(), hinweis: 'gilt, wenn die Datei kein Land nennt' })}${feld('Lieferant', 'lieferant', s ? s.lieferant : '')}${feld('Container', 'sendung', sendungId, { wahl: sendungen })}</div>
+        <label class="ci-ablage" for="lesen-dateien">${icon('hoch')}<span><strong>Dateien auswählen</strong><small>PDF-Berichte liest Ihr Browser, GeoJSON-Dateien prüft der Server. Gespeichert werden Farmer, Umriss, Dateiname und Prüfsumme.</small></span>
           <input type="file" id="lesen-dateien" multiple accept=".pdf,.geojson,.json,application/pdf,application/geo+json,application/json"></label>
         <label class="ci-check"><input type="checkbox" name="qm" checked>Originaldateien beim Übernehmen im QM-System ablegen (Eingang, Ordner „EUDR“)</label>
         <details class="ci-einfuegen"><summary>Stattdessen eine Koordinatenliste einfügen</summary>
-          <div class="ci-raster drei">${feld('Name des Betriebs', 'k_name', '')}${feld('Bezugssystem', 'k_system', 'wgs84', { wahl: [['wgs84', 'WGS84: Längengrad, Breitengrad'], ['utm', 'UTM: Rechtswert, Hochwert']] })}
+          <div class="ci-raster drei">${feld('Name des Farmers', 'k_name', '')}${feld('Bezugssystem', 'k_system', 'wgs84', { wahl: [['wgs84', 'WGS84: Längengrad, Breitengrad'], ['utm', 'UTM: Rechtswert, Hochwert']] })}
             ${feld('UTM-Zone und Halbkugel', 'k_zone', '21S', { platz: 'z. B. 21S', hinweis: 'nur bei UTM' })}</div>
           ${feld('Koordinaten', 'k_text', '', { lang: 4, breit: true, platz: 'je Punkt zwei Zahlen, z. B.  -57.000000, -23.500000', hinweis: 'Dezimalpunkt; Punkte durch Zeilenumbruch oder Komma getrennt' })}</details>
         <div id="lesen-ergebnis" aria-live="polite"></div>
@@ -533,14 +557,14 @@
       ${d.orte.length ? `<ul class="ci-wahl">${d.orte.map((o) => { const i = S.lesen.orte.indexOf(o); return `<li><label><input type="checkbox" data-ort="${i}" checked>
         <span><strong>${esc(o.name)}</strong><small>${esc([o.erzeuger, landName(o.land), o.region, o.kennung && `Kennung ${o.kennung}`].filter(Boolean).join(' · '))} · ${ha(o.flaeche)}${o.flaecheAngabe ? ` (angegeben ${ha(o.flaecheAngabe)})` : ''} · ${plural(o.punkte, 'Punkt', 'Punkte')}</small>
         ${o.befunde.map((b) => `<small class="ci-befund ${b.stufe}">${esc(b.text)}</small>`).join('')}</span></label>
-        <span class="ci-rechts">${marke(GEO[o.stand][0], GEO[o.stand][1])}${marke(o.bekannt ? 'aktualisiert vorhandenen Betrieb' : 'neu', o.bekannt ? '' : 'ok')}</span></li>`; }).join('')}</ul>` : ''}</section>`;
+        <span class="ci-rechts">${marke(GEO[o.stand][0], GEO[o.stand][1])}${marke(o.bekannt ? 'aktualisiert vorhandenen Farmer' : 'neu', o.bekannt ? '' : 'ok')}</span></li>`; }).join('')}</ul>` : ''}</section>`;
     $('#lesen-ergebnis').innerHTML = lokal.map((t) => `<p class="ci-meldung">${icon('warn')} ${esc(t)}</p>`).join('') + ergebnis.map(gruppe).join('');
     lesenZahl();
   }
   function lesenZahl() {
     const n = $$('#lesen-ergebnis [data-ort]:checked').length;
     $('#lesen-ok').disabled = !n || !S.d.rechte.bearbeiten;
-    $('#lesen-ok').textContent = n ? `${plural(n, 'Betrieb', 'Betriebe')} übernehmen` : 'Übernehmen';
+    $('#lesen-ok').textContent = n ? `${n} Farmer übernehmen` : 'Übernehmen';
     $('#lesen-zahl').textContent = S.lesen && S.lesen.orte.some((o) => o.stand === 'fehler') ? 'Fehlerhafte Flächen werden mit ihrem Befund gespeichert, aber nicht an TRACES übergeben.' : '';
   }
   async function lesenUebernehmen() {
@@ -548,7 +572,7 @@
     const gewaehlt = $$('#lesen-ergebnis [data-ort]:checked').map((el) => S.lesen.orte[Number(el.dataset.ort)]);
     if (!gewaehlt.length) return;
     const r = await api('containerimport_eudr_betriebe_save', { sendung: S.lesen.sendung, betriebe: gewaehlt.map((o) => ({ ...o.eingabe, id: o.bekannt, rev: o.bekanntRev })) });
-    if (!uebernehmen(r, 'Die Betriebe konnten nicht gespeichert werden')) return;
+    if (!uebernehmen(r, 'Die Farmer konnten nicht gespeichert werden')) return;
     const pruefsummen = new Set(gewaehlt.map((o) => o.quelle.sha256));
     const originale = S.lesen.qm ? [...S.lesen.originale].filter(([sha]) => pruefsummen.has(sha)) : [];
     const fehler = [];
@@ -558,7 +582,7 @@
       if (meldung) fehler.push(`${datei.name}: ${meldung}`);
     }
     $('#dlg-lesen').close();
-    const text = `${plural(gewaehlt.length, 'Betrieb', 'Betriebe')} übernommen${S.lesen.sendung ? ' und der Sendung zugeordnet' : ''}`;
+    const text = `${gewaehlt.length} Farmer übernommen${S.lesen.sendung ? ' und dem Container zugeordnet' : ''}`;
     if (fehler.length) toast(`${text}. Nicht im QM-System abgelegt – ${fehler.join('; ')}`, true);
     else toast(`${text}${originale.length ? `, ${plural(originale.length, 'Original', 'Originale')} im QM-System abgelegt` : ''}.`);
     if (S.lesen.sendung) sendungOeffnen(S.lesen.sendung); else if (S.sicht === 'sendungen') { S.sicht = 'betriebe'; zeichnen(); } else zeichnen();
@@ -638,9 +662,9 @@
   });
   document.addEventListener('input', (e) => {
     if (e.target.id !== 'ci-suche') return;
-    S.suche = e.target.value;
+    S.suche[S.sicht] = e.target.value;
     const stelle = e.target.selectionStart;
-    betriebeSicht();
+    ({ sendungen: sendungenSicht, betriebe: betriebeSicht })[S.sicht]();
     $('#ci-suche').focus(); $('#ci-suche').setSelectionRange(stelle, stelle);
   });
   document.addEventListener('change', (e) => {

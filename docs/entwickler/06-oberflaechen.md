@@ -849,7 +849,14 @@ Caddy setzt auf allen Hosts `script-src 'self'` (ohne `'unsafe-inline'`), `conne
   von 2020 „Befund“ vor und füllt nur dann das Feld „Baumverlust“ – der Server wertet dort jede Zahl über 0 als kritisch.
   Der Test prüft mit bekannten Mustern und gegen die Flächenrechnung des Servers; der Lauf mit `WA_KARTE_ECHT=1` schreibt
   zusätzlich das Ergebnis einer Probefläche ins Protokoll (zum Nachrechnen bei geänderten Diensten).
-  **Whisp-Abfrage** (Knopf „In Whisp prüfen“ im Fenster „Betrieb“): Anders als die Karte ruft hier der **Server** den
+  **Container und Farmer** (Entscheidung des Inhabers 19.11.2026): die Seite sagt „Container“ und „Farmer“, Code, Aktionen
+  und Daten sagen weiter `sendung` und `betrieb` (bestehende Daten, GR-006) – beim Lesen des Codes also übersetzen. Der
+  Container trägt Partie-, Akten- und Containernummer, Stand und Lieferant. Den Lieferanten wählt man über ein Feld mit
+  Vorschlagsliste (`feld(…, { liste })`, `lieferantText`/`lieferantNach`): nur ein genau gewählter Vorschlag verknüpft mit
+  den Stammdaten (`lieferantNr`), alles andere bleibt freier Text. Die Stammdaten kommen nur mit `containerimport_start`
+  (nicht in jeder Antwort). `oeffnen()` leert den Inhalt geschlossener Fenster, weil mehrere Fenster Felder gleichen Namens
+  haben – sonst gäbe es Kennungen doppelt.
+  **Whisp-Abfrage** (Knopf „In Whisp prüfen“ im Fenster „Farmer“): Anders als die Karte ruft hier der **Server** den
   fremden Dienst ab (`app/api/module/containerimport/whisp.php`, Aktion `containerimport_eudr_whisp`) – der Schlüssel
   `WHISP_API_KEY` darf nie in den Browser. Hinaus geht nur der Umriss; die Seite fragt alle drei Sekunden nach, bis Whisp
   fertig ist. `eudr-whisp.js` (`EUDR_WHISP.deuten`) macht aus den Eigenschaften einen Vorschlag; `vorschlagNehmen` in

@@ -603,7 +603,7 @@ beschreibung = "Abteilungen des Betriebs (Nummer, Bezeichnung); die HR-Angaben d
 name = "lieferanten"
 eigentuemer = "verwaltung"
 bereich = "intern"
-leser = ["leergut"]   # nur Nummer, Name, Kurzname und Versandart über lieferanten_kurz (Namen und Versandart der WinAB-Lieferanten)
+leser = ["leergut", "containerimport"]   # nur Nummer, Name, Kurzname und Versandart über lieferanten_kurz (Leergut: Namen und Versandart der WinAB-Lieferanten; Container-Import: Lieferant eines Containers, Inhaber 19.11.2026)
 schutz = "vertraulich"
 dynamisch = true
 beschreibung = "Lieferanten aus dem Lieferanten-Export der Warenwirtschaft (Adresse, Konto, Kondition, Umsätze, Versandart, GLN)"
@@ -906,11 +906,11 @@ name = "containerimport-eudr-betriebe"
 eigentuemer = "containerimport"
 bereich = "intern"
 schutz = "vertraulich"
-beschreibung = "Container-Import · EUDR: Herkunftsbetriebe der Lieferanten (Name, Erzeuger, Land, Kennung, Umriss in WGS84, Quelle mit Dateiname und Prüfsumme, Angaben des Entwaldungsberichts, eigene Gegenprüfungen)"
+beschreibung = "Container-Import: Farmer (im Code „betrieb“, früher „Herkunftsbetriebe“) der Lieferanten (Name, Erzeuger, Land, Kennung, Umriss in WGS84, Quelle mit Dateiname und Prüfsumme, Angaben des Entwaldungsberichts, eigene Gegenprüfungen)"
 
 [[dokument]]
 name = "containerimport-eudr-sendungen"
 eigentuemer = "containerimport"
 bereich = "intern"
 schutz = "vertraulich"
-beschreibung = "Container-Import · EUDR: Sendungen (Auftragsnummer, Lieferant, Ware, Lose, zugeordnete Betriebe, Nachweise, Referenz der Sorgfaltserklärung) und abgeschlossene Risikobewertungen mit Schnappschuss von Profil und Betrieben"
+beschreibung = "Container-Import: Container (im Code „sendung“; Partie-, Akten- und Containernummer, Lieferant mit Nummer der Stammdaten und Name als Schnappschuss, Stand, Auftragsnummer, Ware, Lose, zugeordnete Farmer, Nachweise, Referenz der Sorgfaltserklärung) und abgeschlossene Risikobewertungen mit Schnappschuss von Profil und Betrieben"

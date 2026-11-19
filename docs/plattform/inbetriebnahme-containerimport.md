@@ -107,3 +107,23 @@ das Ergebnis als Vorschlag für die Gegenprüfung. Ohne Schlüssel auf dem Serve
 - *Getestet* mit nachgebautem Dienst (Gruppe `containerimport_whisp`). *Am echten Dienst geprüft* nur ohne Schlüssel:
   Adressen, Antwortformat laut Beschreibung der Schnittstelle, Ablehnung ohne und mit falschem Schlüssel. **Der erste echte
   Abruf ist Schritt 4** – weicht das Ergebnis vom Erwarteten ab, bitte die Anzeige als Bildschirmfoto zurückmelden.
+
+## 8. Container als Mittelpunkt (ab dem Release mit dem Umbau)
+
+Entscheidung des Inhabers 19.11.2026: Im Mittelpunkt steht der Container, so wie eingekauft wird – ein Einkauf bei einem
+Lieferanten mit genau einer Partienummer. Kein Schritt auf dem Server, keine Migration.
+
+- **Begriffe:** „Sendung“ heißt jetzt „Container“, „Herkunftsbetrieb“ heißt „Farmer“. Bestehende Einträge bleiben erhalten.
+- **Neue Angaben am Container:** Partienummer (Pflicht, je Container eindeutig), Aktennummer, Containernummer, Stand
+  (gekauft, unterwegs, Dokumente da, angekommen). Die Auftragsnummer des Lieferanten ist keine Pflicht mehr.
+- **Lieferant aus den Stammdaten:** Im Feld „Lieferant“ den Namen tippen und den Vorschlag anklicken. Die Vorschläge kommen
+  aus Verwaltung → Lieferanten (Export der Warenwirtschaft). Steht der Lieferant dort noch nicht, bleibt der getippte Name
+  als freier Text; die Liste zeigt dann „nicht mit den Stammdaten verknüpft“.
+- **Einträge von vorher:** Sie haben noch keine Partienummer und heißen in der Liste nach ihrer Auftragsnummer. Beim nächsten
+  Speichern verlangt die Seite die Partienummer; dabei auch den Lieferanten aus den Vorschlägen wählen.
+- **Nach dem Abschluss der Bewertung** lassen sich Stand, Container- und Aktennummer weiter pflegen – der Container reist
+  weiter. Partienummer, Lieferant und die bewerteten Angaben bleiben, wie sie abgeschlossen wurden.
+- **Rückfall:** `sh /opt/wochenangebot/deploy/release-zurueck.sh`. Die Vorversion liest die Container weiter (sie zeigt die
+  neuen Felder nicht und nennt sie wieder „Sendung“). Ein Container ohne Auftragsnummer erscheint dort ohne Namen.
+- **Geplant, je eigener Schritt:** Schlachthöfe unter dem Lieferanten, Farmer-Kartei mit Prüfung je Container, Verbindung
+  zum Bestand über die Partienummer, Auswertung je Lieferant, Tracking der Container.

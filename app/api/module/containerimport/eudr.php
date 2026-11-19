@@ -1,10 +1,15 @@
 <?php
 declare(strict_types=1);
-/* Container-Import · EUDR (Verordnung (EU) 2023/1115, entwaldungsfreie Lieferketten): Herkunftsbetriebe mit Geolokalisierung,
-   Sendungen, Risikoprofil und GeoJSON-Datei für das EU-Informationssystem (TRACES).
-   Dokumente: containerimport-eudr-betriebe (Produktionsorte, Umriss in WGS84), containerimport-eudr-sendungen (Sendungen mit
-   ihren Betrieben, Nachweisen und – nach dem Abschluss – einem Schnappschuss von Profil und Betrieben, GR-106).
-   Nichts wird gelöscht: Betriebe und Sendungen werden archiviert, Gegenprüfungen nur ergänzt.
+/* Container-Import: Container (ein Einkauf bei einem Lieferanten, eine Partienummer) mit ihren Farmern und der Prüfung nach
+   der EUDR (Verordnung (EU) 2023/1115, entwaldungsfreie Lieferketten): Geolokalisierung, Risikoprofil und GeoJSON-Datei für
+   das EU-Informationssystem (TRACES).
+   Begriffe (Entscheidung des Inhabers 19.11.2026): die Oberfläche sagt „Container“ und „Farmer“. Im Code, in den Namen der
+   Aktionen und in den gespeicherten Daten heißen sie weiter „sendung“ und „betrieb“ – so bleiben bestehende Daten lesbar
+   und ein Rückfall auf die Vorversion möglich (GR-006).
+   Dokumente: containerimport-eudr-betriebe (Farmer: Produktionsorte, Umriss in WGS84), containerimport-eudr-sendungen
+   (Container mit Lieferant aus den Stammdaten, Partie-, Akten- und Containernummer, Stand, ihren Farmern, Nachweisen und –
+   nach dem Abschluss – einem Schnappschuss von Profil und Farmern, GR-106).
+   Nichts wird gelöscht: Farmer und Container werden archiviert, Gegenprüfungen nur ergänzt.
    Abgeleitete Werte (Fläche, Mittelpunkt, Befunde, Risikoprofil) werden bei jedem Lesen neu berechnet und nie gespeichert –
    ausgenommen der Schnappschuss einer abgeschlossenen Bewertung. Geometrie: geometrie.php. */
 if (!defined('WA_API')) { http_response_code(404); exit; }   // nur über api/index.php nutzbar
@@ -17,6 +22,8 @@ const EUDR_MAX_FRUEHERE = 5;             // frühere Abschlüsse je Sendung, die
 const EUDR_MAX_SENDUNGEN = 5000;
 const EUDR_MAX_ORTE_JE_DATEI = 1000;
 const EUDR_MAX_PRUEFUNGEN = 50;          // Gegenprüfungen je Betrieb
+/* Stand eines Containers auf seinem Weg (Reihenfolge = Ablauf); wird von Hand gesetzt, auch nach dem Abschluss der Bewertung */
+const EUDR_STAENDE = ['gekauft' => 'gekauft', 'unterwegs' => 'unterwegs', 'dokumente' => 'Dokumente da', 'angekommen' => 'angekommen'];
 const EUDR_NACHWEIS = ['konform', 'nicht_konform', 'unbekannt'];
 const EUDR_DREI = ['ja', 'nein', 'offen'];
 const EUDR_QUELLEN = ['bericht', 'geojson', 'koordinaten'];
@@ -176,7 +183,7 @@ function eudr_betrieb_pruefen(array $b, ?array $alt): array
     $nachweis = fn(string $feld, string $was): string => eudr_wahl($n[$feld] ?? null, EUDR_NACHWEIS, $was, 'unbekannt');
     $jahr = $n['bilderBis'] ?? null;
     return [
-        'name' => eudr_text($b['name'] ?? '', 120, 'Name des Betriebs', true),
+        'name' => eudr_text($b['name'] ?? '', 120, 'Name des Farmers', true),
         'erzeuger' => eudr_text($b['erzeuger'] ?? '', 120, 'Erzeuger'),
         'land' => eudr_land($b['land'] ?? ''),
         'kennung' => eudr_text($b['kennung'] ?? '', 40, 'Kennung'),
@@ -402,22 +409,25 @@ function eudr_datei_pruefen(array $d, array $bekannt): array
 
 /* ---------- Sendungen ---------- */
 /* Felder einer Sendung aus der Eingabe prüfen (ohne id, rev, Zeitstempel und Abschluss) */
-function eudr_sendung_pruefen(array $b, array $betriebIds): array
+function eudr_sendung_pruefen(array $b, array $betriebIds, ?array $alt = null): array
 {
     $ids = is_array($b['betriebe'] ?? null) ? array_values(array_unique(array_filter($b['betriebe'], 'is_string'))) : [];
-    foreach ($ids as $id) if (!in_array($id, $betriebIds, true)) throw new InvalidArgumentException('Ein gewählter Herkunftsbetrieb ist nicht (mehr) vorhanden. Bitte neu laden.');
+    foreach ($ids as $id) if (!in_array($id, $betriebIds, true)) throw new InvalidArgumentException('Ein gewählter Farmer ist nicht (mehr) vorhanden. Bitte neu laden.');
     $von = eudr_datum($b['schlachtVon'] ?? '', 'Schlachtung von'); $bis = eudr_datum($b['schlachtBis'] ?? '', 'Schlachtung bis');
     if ($von !== '' && $bis !== '' && $bis < $von) throw new InvalidArgumentException('Schlachtung: „bis“ liegt vor „von“.');
     $n = is_array($b['nachweis'] ?? null) ? $b['nachweis'] : [];
     $dds = is_array($b['dds'] ?? null) ? $b['dds'] : [];
     return [
-        'nummer' => eudr_text($b['nummer'] ?? '', 60, 'Auftragsnummer', true),
-        'lieferant' => eudr_text($b['lieferant'] ?? '', 120, 'Lieferant', true),
+        'partie' => eudr_text($b['partie'] ?? '', 20, 'Partienummer', true),
+        'akte' => eudr_text($b['akte'] ?? '', 40, 'Aktennummer'),
+        'container' => eudr_text($b['container'] ?? '', 40, 'Containernummer'),
+        'nummer' => eudr_text($b['nummer'] ?? '', 60, 'Auftragsnummer des Lieferanten'),
+        'stand' => eudr_wahl($b['stand'] ?? null, array_keys(EUDR_STAENDE), 'Stand', 'gekauft'),
+    ] + eudr_lieferant($b, $alt) + [
         'land' => eudr_land($b['land'] ?? ''),
         'ware' => eudr_text($b['ware'] ?? '', 160, 'Ware'),
         'hs' => eudr_text($b['hs'] ?? '', 12, 'Zolltarifnummer'),
         'mengeKg' => eudr_zahl($b['mengeKg'] ?? null, 'Menge'),
-        'container' => eudr_text($b['container'] ?? '', 40, 'Container'),
         'schlachtVon' => $von, 'schlachtBis' => $bis,
         'lose' => eudr_text($b['lose'] ?? '', 200, 'Lose'),
         'betriebe' => $ids,
@@ -431,6 +441,44 @@ function eudr_sendung_pruefen(array $b, array $betriebIds): array
         'notiz' => eudr_text($b['notiz'] ?? '', 2000, 'Notiz'),
         'aktiv' => !array_key_exists('aktiv', $b) || (bool)$b['aktiv'],
     ];
+}
+/* Lieferant eines Containers: mit „lieferantNr“ aus den Stammdaten der Verwaltung (Schnittstelle lieferanten_kurz, GR-101) –
+   der Name wird als Schnappschuss mitgespeichert, damit ältere Stände und spätere Umbenennungen den Container lesbar lassen.
+   Ohne Nummer bleibt der Name freier Text (Lieferant fehlt noch in den Stammdaten). Eine schon gespeicherte Nummer bleibt
+   gültig, auch wenn der Lieferant inzwischen aus den Stammdaten verschwunden ist. */
+function eudr_lieferant(array $b, ?array $alt): array
+{
+    $nr = eudr_text($b['lieferantNr'] ?? '', 20, 'Lieferant');
+    if ($nr === '') return ['lieferantNr' => '', 'lieferant' => eudr_text($b['lieferant'] ?? '', 120, 'Lieferant', true)];
+    if ($alt && ($alt['lieferantNr'] ?? '') === $nr) return ['lieferantNr' => $nr, 'lieferant' => $alt['lieferant']];
+    $stamm = lieferanten_kurz()[$nr] ?? null;
+    if (!$stamm) throw new InvalidArgumentException('Der gewählte Lieferant steht nicht (mehr) in den Stammdaten. Bitte neu laden.');
+    return ['lieferantNr' => $nr, 'lieferant' => $stamm['name'] !== '' ? $stamm['name'] : ($stamm['kurz'] !== '' ? $stamm['kurz'] : 'Lieferant ' . $nr)];
+}
+/* Lieferanten zur Auswahl am Container: nur Nummer, Name und Kurzname, nach Name sortiert */
+function eudr_lieferanten(): array
+{
+    $liste = array_map(fn($l) => ['nr' => $l['nr'], 'name' => $l['name'], 'kurz' => $l['kurz']], array_values(lieferanten_kurz()));
+    usort($liste, fn($a, $b) => strcasecmp($a['name'], $b['name']) ?: strcmp($a['nr'], $b['nr']));
+    return $liste;
+}
+/* Wie ein Container heißt: seine Partienummer; ältere Einträge ohne Partienummer nach der Auftragsnummer */
+function eudr_container_name(array $s): string { return ($s['partie'] ?? '') !== '' ? $s['partie'] : (string)($s['nummer'] ?? ''); }
+/* Containernummer nach ISO 6346 (vier Buchstaben, sechs Ziffern, Prüfziffer) einordnen: '' leer, 'ok', 'pruefziffer' (Tippfehler?)
+   oder 'format'. Nur ein Hinweis – gespeichert wird, was eingegeben wurde. */
+function eudr_containernummer(string $text): string
+{
+    $n = strtoupper((string)preg_replace('/[\s.\/-]+/', '', $text));
+    if ($n === '') return '';
+    if (!preg_match('/^[A-Z]{4}[0-9]{7}$/', $n)) return 'format';
+    $summe = 0;
+    for ($i = 0; $i < 10; $i++) {
+        $z = $n[$i];
+        if ($z >= 'A') { $k = ord($z) - 65; $wert = 10 + $k + intdiv($k + 9, 10); }   // A=10, B=12 … K=21, L=23 … U=32, V=34 … (Vielfache von 11 ausgelassen)
+        else $wert = (int)$z;
+        $summe += $wert << $i;
+    }
+    return $summe % 11 % 10 === (int)$n[10] ? 'ok' : 'pruefziffer';
 }
 /* Angaben zur Sorgfaltserklärung im EU-Informationssystem (auch nach dem Abschluss änderbar) */
 function eudr_dds_pruefen(array $dds): array
@@ -468,47 +516,47 @@ function eudr_kriterien(): array
             $laender = implode(', ', array_map($name, $codes));
             if (in_array('hoch', $klassen, true)) return eudr_kriterium('land', $titel, 'kritisch', "$laender: ein Land mit hohem Risiko – verstärkte Prüfung nötig.");
             $fremd = eudr_namen($bs, fn($b) => $b['land'] !== $s['land']);
-            if ($fremd) return eudr_kriterium('land', $titel, 'offen', 'Diese Betriebe liegen laut ihren Angaben nicht in ' . $name($s['land']) . ' – Herkunftsland der Sendung klären.', $fremd);
+            if ($fremd) return eudr_kriterium('land', $titel, 'offen', 'Diese Farmer liegen laut ihren Angaben nicht in ' . $name($s['land']) . ' – Herkunftsland des Containers klären.', $fremd);
             if ($klassen === ['standard']) return eudr_kriterium('land', $titel, 'hinweis', "$laender: Standardrisiko – volle Sorgfaltspflicht mit Risikobewertung (keine Vereinfachung).");
             if ($klassen === ['niedrig']) return eudr_kriterium('land', $titel, 'ok', "$laender: niedriges Risiko – vereinfachte Sorgfaltspflicht.");
             return eudr_kriterium('land', $titel, 'offen', "Für $laender ist keine Einstufung hinterlegt – bitte in der Länderliste der EU nachsehen.");
         },
         'geo' => function (array $s, array $bs): array {
-            $titel = 'Geolokalisierung der Herkunftsbetriebe';
-            if (!$bs) return eudr_kriterium('geo', $titel, 'kritisch', 'Der Sendung ist kein Herkunftsbetrieb zugeordnet – ohne Geolokalisierung ist keine Sorgfaltserklärung möglich.');
+            $titel = 'Geolokalisierung der Farmer';
+            if (!$bs) return eudr_kriterium('geo', $titel, 'kritisch', 'Dem Container ist kein Farmer zugeordnet – ohne Geolokalisierung ist keine Sorgfaltserklärung möglich.');
             $fehler = eudr_bewertet($bs, 'geo', 'kritisch');
             if ($fehler) return eudr_kriterium('geo', $titel, 'kritisch', 'Die Geolokalisierung ist fehlerhaft und würde vom EU-Informationssystem abgelehnt – beim Lieferanten korrigieren lassen.', $fehler);
             $hinweise = eudr_namen($bs, fn($b) => $b['stand'] === 'hinweis');
-            return eudr_kriterium('geo', $titel, $hinweise ? 'hinweis' : 'ok', count($bs) . ' ' . (count($bs) === 1 ? 'Betrieb' : 'Betriebe') . ' mit einreichbarer Geolokalisierung' . ($hinweise ? ' – Hinweise beachten.' : '.'), $hinweise);
+            return eudr_kriterium('geo', $titel, $hinweise ? 'hinweis' : 'ok', count($bs) . ' Farmer mit einreichbarer Geolokalisierung' . ($hinweise ? ' – Hinweise beachten.' : '.'), $hinweise);
         },
-        'rueckverfolgung' => fn(array $s, array $bs): array => eudr_kriterium('rueckverfolgung', 'Rückverfolgung Los → Betrieb', ['ja' => 'ok', 'nein' => 'kritisch', 'offen' => 'offen'][$s['nachweis']['rueckverfolgung']],
-            ['ja' => 'Die Unterlagen belegen, aus welchen Betrieben die Tiere der Schlachtlose stammen.', 'nein' => 'Die Lose lassen sich den Betrieben nicht zuordnen.',
-             'offen' => 'Noch nicht belegt, welche Schlachtlose' . ($s['lose'] !== '' ? ' (' . $s['lose'] . ')' : '') . ' aus welchem Betrieb stammen – Zuordnung beim Lieferanten anfordern.'][$s['nachweis']['rueckverfolgung']]),
+        'rueckverfolgung' => fn(array $s, array $bs): array => eudr_kriterium('rueckverfolgung', 'Rückverfolgung Los → Farmer', ['ja' => 'ok', 'nein' => 'kritisch', 'offen' => 'offen'][$s['nachweis']['rueckverfolgung']],
+            ['ja' => 'Die Unterlagen belegen, von welchen Farmern die Tiere der Schlachtlose stammen.', 'nein' => 'Die Lose lassen sich den Farmern nicht zuordnen.',
+             'offen' => 'Noch nicht belegt, welche Schlachtlose' . ($s['lose'] !== '' ? ' (' . $s['lose'] . ')' : '') . ' von welchem Farmer stammen – Zuordnung beim Lieferanten anfordern.'][$s['nachweis']['rueckverfolgung']]),
         'haltung' => fn(array $s, array $bs): array => eudr_kriterium('haltung', 'Alle Haltungsbetriebe erfasst', ['ja' => 'ok', 'nein' => 'kritisch', 'offen' => 'offen'][$s['nachweis']['haltung']],
             ['ja' => 'Alle Betriebe, in denen die Tiere gehalten wurden (Geburt, Aufzucht, Mast), sind erfasst.', 'nein' => 'Es fehlen Betriebe, in denen die Tiere gehalten wurden.',
              'offen' => 'Bei Rindern verlangt die Verordnung die Geolokalisierung aller Betriebe, in denen die Tiere gehalten wurden – Bestätigung beim Lieferanten anfordern.'][$s['nachweis']['haltung']]),
         'entwaldung' => function (array $s, array $bs): array {
             $titel = 'Entwaldungsfrei seit 31.12.2020 (Bericht des Lieferanten)';
-            if (!$bs) return eudr_kriterium('entwaldung', $titel, 'offen', 'Ohne Herkunftsbetrieb nicht bewertbar.');
+            if (!$bs) return eudr_kriterium('entwaldung', $titel, 'offen', 'Ohne Farmer nicht bewertbar.');
             $nicht = eudr_bewertet($bs, 'entwaldung', 'kritisch');
             if ($nicht) return eudr_kriterium('entwaldung', $titel, 'kritisch', 'Der Bericht weist Entwaldung nach dem Stichtag aus.', $nicht);
             $ohne = eudr_bewertet($bs, 'entwaldung', 'offen');
-            if ($ohne) return eudr_kriterium('entwaldung', $titel, 'offen', 'Für diese Betriebe liegt kein Nachweis der Entwaldungsfreiheit vor.', $ohne);
+            if ($ohne) return eudr_kriterium('entwaldung', $titel, 'offen', 'Für diese Farmer liegt kein Nachweis der Entwaldungsfreiheit vor.', $ohne);
             $tag = $s['schlachtVon'] !== '' ? $s['schlachtVon'] : date('Y-m-d');
             $alt = eudr_namen($bs, fn($b) => $b['bericht']['datum'] === '' || $b['bericht']['datum'] < date('Y-m-d', strtotime($tag . ' -' . EUDR_BERICHT_MONATE . ' months')));
             if ($alt) return eudr_kriterium('entwaldung', $titel, 'offen', 'Der Bericht ist undatiert oder älter als ' . EUDR_BERICHT_MONATE . ' Monate vor der Schlachtung – aktuellen Bericht anfordern.', $alt);
             $luecke = eudr_namen($bs, fn($b) => $b['bericht']['bilderBis'] !== null && $b['bericht']['bilderBis'] < (int)substr($tag, 0, 4) - 1);
             if ($luecke) return eudr_kriterium('entwaldung', $titel, 'offen', 'Die ausgewerteten Satellitenbilder enden mehr als ein Jahr vor der Schlachtung – der Zeitraum danach ist nicht belegt.', $luecke);
-            return eudr_kriterium('entwaldung', $titel, 'ok', 'Alle Betriebe laut Bericht ohne Entwaldung seit dem Stichtag.');
+            return eudr_kriterium('entwaldung', $titel, 'ok', 'Alle Farmer laut Bericht ohne Entwaldung seit dem Stichtag.');
         },
         'gegenpruefung' => function (array $s, array $bs): array {
             $titel = 'Eigene Gegenprüfung der Entwaldung';
-            if (!$bs) return eudr_kriterium('gegenpruefung', $titel, 'offen', 'Ohne Herkunftsbetrieb nicht bewertbar.');
+            if (!$bs) return eudr_kriterium('gegenpruefung', $titel, 'offen', 'Ohne Farmer nicht bewertbar.');
             $befund = eudr_bewertet($bs, 'gegenpruefung', 'kritisch');
             if ($befund) return eudr_kriterium('gegenpruefung', $titel, 'kritisch', 'Die eigene Prüfung zeigt Baumverlust oder Warnmeldungen seit dem Stichtag – mit dem Lieferanten klären.', $befund);
             $ohne = eudr_bewertet($bs, 'gegenpruefung', 'offen');
-            if ($ohne) return eudr_kriterium('gegenpruefung', $titel, 'offen', 'Noch nicht unabhängig geprüft – Fläche in Global Nature Watch oder Whisp ansehen und das Ergebnis am Betrieb eintragen.', $ohne);
-            return eudr_kriterium('gegenpruefung', $titel, 'ok', 'Alle Betriebe unabhängig geprüft, ohne Befund.');
+            if ($ohne) return eudr_kriterium('gegenpruefung', $titel, 'offen', 'Noch nicht unabhängig geprüft – Fläche in Global Nature Watch oder Whisp ansehen und das Ergebnis am Farmer eintragen.', $ohne);
+            return eudr_kriterium('gegenpruefung', $titel, 'ok', 'Alle Farmer unabhängig geprüft, ohne Befund.');
         },
         'gebiete' => function (array $s, array $bs): array {
             $titel = 'Schutzgebiete und indigene Gebiete';
@@ -579,7 +627,8 @@ function eudr_abschluss(array $s, array $eingabe, array $sichten, array $me): ar
 function eudr_sendung_sicht(array $s, array $betriebe): array
 {
     $s['fruehere'] = array_map(fn($f) => array_diff_key($f, ['profil' => 1, 'betriebe' => 1]), $s['fruehere'] ?? []);   // Schnappschüsse bleiben gespeichert
-    return $s + ['profil' => !empty($s['abschluss']) ? $s['abschluss']['profil'] : eudr_profil($s, eudr_sendung_betriebe($s, $betriebe))];
+    $s += ['partie' => '', 'akte' => '', 'lieferantNr' => '', 'stand' => 'gekauft'];   // Einträge aus der Zeit vor dem Container als Mittelpunkt
+    return $s + ['name' => eudr_container_name($s), 'containerPruefung' => eudr_containernummer($s['container']), 'profil' => !empty($s['abschluss']) ? $s['abschluss']['profil'] : eudr_profil($s, eudr_sendung_betriebe($s, $betriebe))];
 }
 
 /* ---------- GeoJSON für das EU-Informationssystem ---------- */
@@ -607,6 +656,6 @@ function eudr_stand(): array
         'betriebe' => $betriebe,
         'sendungen' => array_map(fn($s) => eudr_sendung_sicht($s, $betriebe), eudr_sendungen()['liste']),
         'laender' => array_map(fn($l) => ['name' => $l['name'], 'klasse' => $l['klasse']], EUDR_LAENDER),
-        'portale' => EUDR_PORTALE, 'heute' => date('Y-m-d'),
+        'portale' => EUDR_PORTALE, 'staende' => EUDR_STAENDE, 'heute' => date('Y-m-d'),
     ];
 }

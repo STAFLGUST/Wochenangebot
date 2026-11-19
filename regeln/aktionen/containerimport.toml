@@ -1,4 +1,5 @@
-# Aktionen des Moduls „containerimport“: Reiter EUDR – Herkunftsbetriebe, Sendungen, Risikoprofil, GeoJSON für TRACES.
+# Aktionen des Moduls „containerimport“: Container (im Code „sendung“) mit ihren Farmern (im Code „betrieb“); Reiter EUDR – Risikoprofil, GeoJSON für TRACES.
+# Die Namen der Aktionen bleiben, wie sie sind (bestehende Aufrufe, GR-006).
 # Erklärung der Felder: regeln/aktionen/LIESMICH.md · nach Änderungen: python3 werkzeuge/regeln.py erzeugen
 # Alle Aktionen gibt es nur auf dem Host des Moduls (GR-109); der Modulzugang containerimport.zugang gilt für jede Aktion,
 # Inhalte verlangen containerimport.eudr_sehen, alles Speichernde containerimport.eudr_bearbeiten (GR-103).
@@ -6,7 +7,7 @@
 schema = 1
 modul = "containerimport"
 
-# Stand: Betriebe und Sendungen mit Befunden und Risikoprofil, Länder, Portale, eigene Rechte
+# Stand: Farmer und Container mit Befunden und Risikoprofil, Länder, Portale, Lieferanten der Stammdaten, eigene Rechte
 [aktion.containerimport_start]
 oberflaeche = "containerimport.intern"
 
@@ -15,7 +16,7 @@ oberflaeche = "containerimport.intern"
 oberflaeche = "containerimport.intern"
 schreibend = true
 
-# Herkunftsbetriebe anlegen oder ändern, optional einer Sendung zuordnen
+# Farmer anlegen oder ändern, optional einem Container zuordnen
 [aktion.containerimport_eudr_betriebe_save]
 oberflaeche = "containerimport.intern"
 schreibend = true
@@ -35,16 +36,16 @@ schreibend = true
 oberflaeche = "containerimport.intern"
 schreibend = true
 
-# Sendung anlegen oder ändern
+# Container anlegen oder ändern (Lieferant aus den Stammdaten, Partie-, Akten- und Containernummer, Stand)
 [aktion.containerimport_eudr_sendung_save]
 oberflaeche = "containerimport.intern"
 schreibend = true
 
-# Risikobewertung einer Sendung abschließen oder wieder öffnen
+# Risikobewertung eines Containers abschließen oder wieder öffnen
 [aktion.containerimport_eudr_sendung_abschluss]
 oberflaeche = "containerimport.intern"
 schreibend = true
 
-# GeoJSON-Datei für das EU-Informationssystem (Sendung oder einzelner Betrieb)
+# GeoJSON-Datei für das EU-Informationssystem (Container oder einzelner Farmer)
 [aktion.containerimport_eudr_export]
 oberflaeche = "containerimport.intern"

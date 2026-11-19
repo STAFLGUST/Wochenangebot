@@ -24,7 +24,7 @@ import re
 import tempfile
 from playwright.sync_api import sync_playwright
 from kunden_hilfe import Client, B
-from umgebung import SH, FIX, shot, storage_raw, _json
+from umgebung import SH, FIX, shot, storage_raw, storage_write, _json
 
 PW = 'Sicheres-Passwort-1'
 res = []
@@ -74,7 +74,7 @@ ORT = {'name': 'Estancia Beispiel', 'erzeuger': 'AGROGANADERA MUSTER S.A.', 'lan
 BERICHT = {'art': 'bericht', 'datei': 'Compliance_Report_Estancia_Beispiel.pdf', 'sha256': 'a' * 64, 'anbieter': 'Hendata & Global Canopy', 'bezug': 'UTM 21S', 'lieferant': 'Frigorifico Beispiel', 'ort': ORT}
 GEOJSON = open(os.path.join(FIX, 'containerimport', 'lieferant.geojson'), encoding='utf-8').read()
 DATEI = {'art': 'geojson', 'datei': 'lieferant.geojson', 'sha256': 'b' * 64, 'land': 'PY', 'lieferant': 'Frigorifico Beispiel', 'text': GEOJSON}
-SENDUNG = {'id': '', 'rev': 0, 'nummer': 'FB26-001', 'lieferant': 'Frigorifico Beispiel', 'land': 'PY', 'ware': 'Rindfleisch, gekühlt, ohne Knochen', 'hs': '0201', 'mengeKg': '12.345,60',
+SENDUNG = {'id': '', 'rev': 0, 'partie': 'P-260001', 'akte': 'AK-2026-014', 'stand': 'unterwegs', 'nummer': 'FB26-001', 'lieferantNr': '', 'lieferant': 'Frigorifico Beispiel', 'land': 'PY', 'ware': 'Rindfleisch, gekühlt, ohne Knochen', 'hs': '0201', 'mengeKg': '12.345,60',
            'container': 'TEST 123456-7', 'schlachtVon': '2026-11-02', 'schlachtBis': '2026-11-05', 'lose': '2101, 2102, 2103', 'betriebe': [], 'notiz': '',
            'nachweis': {'erklaerung': '', 'rueckverfolgung': 'offen', 'haltung': 'offen', 'legalitaet': 'offen'}, 'dds': {'referenz': '', 'datum': ''}}
 
@@ -89,6 +89,13 @@ check('Register: Container-Import fertig und produktiv, Adresse container-import
       and cm['kachel']['adresse'] == 'https://container-import.dashboard-stafl.de/module/containerimport/', cm)
 st, r = A.call('modul_freigabe_save', {'bereich': 'containerimport.intern', 'freigabe': 'test', 'grund': 'Test'})
 check('Produktivbereich: keine Testfreigabe über die Modulverwaltung (nur über ein Release)', st == 422, (st, r))
+
+# Lieferanten in den Stammdaten der Verwaltung (wie nach dem Einlesen aus der Warenwirtschaft) – mit Angaben, die der
+# Container-Import nie sehen darf (Umsatz, Ort)
+LIEFERANTEN = [{'nr': '70012', 'name': 'Frigorifico Beispiel S.A.', 'kurz': 'FRIGOBSP', 'ort': 'Asunción', 'umsatzJahr': '1.234.567,89 €'},
+               {'nr': '70020', 'name': 'Carnes del Sur Ltda.', 'kurz': 'CARNESUR', 'ort': 'Montevideo'}, {'nr': '70031', 'name': '', 'kurz': 'OHNENAME'}]
+st, r = A.call('lieferanten_save', {'rev': 0, 'groups': LIEFERANTEN, 'quelle': 'Test'})
+check('Stammdaten: drei Lieferanten in der Verwaltung angelegt', st == 200 and len(r.get('groups', [])) == 3, (st, r.get('error')))
 
 USERS = {'ina': ('Ina Import', 'editor', 'Editor-Zugang-88', ['containerimport.eudr_sehen', 'containerimport.eudr_bearbeiten']),
          'lea': ('Lea Leser', 'viewer', 'Leser-Zugang-55', ['containerimport.eudr_sehen']),
@@ -126,6 +133,9 @@ check('schreibende Aktionen per GET: 405', [I.call(a)[0] for a in ('containerimp
 st, r = I.call('containerimport_start')
 check('Whisp-Abfrage ohne Zugangsschlüssel auf dem Server: nicht angeboten, Aktion 503', r['rechte'] == {'bearbeiten': True, 'whisp': False}
       and I.call('containerimport_eudr_whisp', {'id': 'x'})[0] == 503 and L.call('containerimport_eudr_whisp', {'id': 'x'})[0] == 403, r.get('rechte'))
+check('Stand: Lieferanten der Stammdaten zur Auswahl – nur Nummer, Name und Kurzname, nach Name sortiert; Stände des Containers',
+      r['lieferanten'] == [{'nr': '70031', 'name': '', 'kurz': 'OHNENAME'}, {'nr': '70020', 'name': 'Carnes del Sur Ltda.', 'kurz': 'CARNESUR'}, {'nr': '70012', 'name': 'Frigorifico Beispiel S.A.', 'kurz': 'FRIGOBSP'}]
+      and list(r['staende']) == ['gekauft', 'unterwegs', 'dokumente', 'angekommen'] and 'Asunción' not in json.dumps(r, ensure_ascii=False) and '1.234.567' not in json.dumps(r), r.get('lieferanten'))
 check('bearbeiten: Stand mit Ländern und Portalen', st == 200 and r['rechte']['bearbeiten'] and r['laender']['PY'] == {'name': 'Paraguay', 'klasse': 'standard'}
       and r['laender']['NZ'] == {'name': 'Neuseeland', 'klasse': None}   # wählbar, Einstufung nicht hinterlegt
       and set(r['portale']) == {'gnw', 'whisp', 'sonst'} and r['portale']['gnw']['name'] == 'Global Nature Watch', (st, r))
@@ -166,7 +176,7 @@ FORMEN = json.dumps({'type': 'FeatureCollection', 'features': [
 st, r = L.call('containerimport_eudr_pruefen', {'dateien': [{**DATEI, 'datei': 'formen.geojson', 'text': FORMEN},
                                                            {'art': 'koordinaten', 'datei': '', 'land': 'UY', 'ort': {'name': 'Campo Ejemplo', 'koordinaten': {'system': 'wgs84', 'punkte': [[-56, -32], [-55.99, -32], [-55.99, -32.01], [-56, -32.01]]}}}]})
 fo = {o['name']: o for d in r.get('dateien', []) for o in d['orte']}
-check('Formen: Loch ist ein Fehler, zwei Teilflächen bleiben ein Betrieb, mehrere Punkte werden einzelne Betriebe mit Ersatznamen', st == 200 and [b['code'] for b in fo['Mit Loch']['befunde']] == ['loch']
+check('Formen: Loch ist ein Fehler, zwei Teilflächen bleiben ein Farmer, mehrere Punkte werden einzelne Farmer mit Ersatznamen', st == 200 and [b['code'] for b in fo['Mit Loch']['befunde']] == ['loch']
       and fo['Zwei Teile']['geometrie']['type'] == 'MultiPolygon' and fo['Zwei Teile']['stand'] == 'ok' and 100 < fo['Zwei Teile']['flaeche'] < 120
       and {'Fläche 3.1 aus formen.geojson', 'Fläche 3.2 aus formen.geojson'} <= set(fo), (st, {k: (v['stand'], v['flaeche'], v['befunde']) for k, v in fo.items()}))
 campo = fo.get('Campo Ejemplo', {})
@@ -178,15 +188,47 @@ check('Prüfen speichert nichts', L.call('containerimport_start')[1]['betriebe']
 # ---------- Sendung und Betriebe speichern ----------
 st, r = I.call('containerimport_eudr_sendung_save', SENDUNG)
 sid = r.get('id')
-check('Sendung angelegt, Menge in deutscher Schreibweise gelesen', st == 200 and r['sendungen'][0]['nummer'] == 'FB26-001' and r['sendungen'][0]['mengeKg'] == 12345.6, (st, r))
-check('Sendung: Pflichtfelder und Datumsfolge geprüft (422)', I.call('containerimport_eudr_sendung_save', {**SENDUNG, 'nummer': ''})[0] == 422
+check('Container angelegt, Menge in deutscher Schreibweise gelesen', st == 200 and r['sendungen'][0]['nummer'] == 'FB26-001' and r['sendungen'][0]['mengeKg'] == 12345.6, (st, r))
+c = (r.get('sendungen') or [{}])[0]
+check('Container: Partie-, Akten- und Containernummer, Stand; heißt nach seiner Partienummer; Lieferant als freier Text ohne Verknüpfung',
+      [c.get(k) for k in ('partie', 'akte', 'container', 'stand', 'name', 'lieferantNr', 'lieferant')] == ['P-260001', 'AK-2026-014', 'TEST 123456-7', 'unterwegs', 'P-260001', '', 'Frigorifico Beispiel'], c)
+check('Containernummer: falsche Prüfziffer als Hinweis, gespeichert wird die Eingabe', c.get('containerPruefung') == 'pruefziffer', c.get('containerPruefung'))
+check('Partienummer ist je Container eindeutig, auch bei anderer Schreibweise (422)', I.call('containerimport_eudr_sendung_save', {**SENDUNG, 'partie': 'p-260001'})[0] == 422)
+check('Stand außerhalb der Liste 422, unbekannter Lieferant der Stammdaten 422', I.call('containerimport_eudr_sendung_save', {**SENDUNG, 'partie': 'P-9', 'stand': 'verschollen'})[0] == 422
+      and I.call('containerimport_eudr_sendung_save', {**SENDUNG, 'partie': 'P-9', 'lieferantNr': '99999'})[0] == 422)
+st, r = I.call('containerimport_eudr_sendung_save', {'id': '', 'rev': 0, 'partie': 'P-260003', 'lieferantNr': '70012', 'lieferant': 'wird ersetzt', 'land': 'PY', 'container': 'msku 907032-3'})
+c3 = next((x for x in r.get('sendungen', []) if x['partie'] == 'P-260003'), {})
+check('Container mit Lieferant aus den Stammdaten: Name aus den Stammdaten, Stand „gekauft“, Auftragsnummer nicht nötig, Containernummer gültig',
+      st == 200 and [c3.get(k) for k in ('lieferantNr', 'lieferant', 'stand', 'nummer', 'containerPruefung', 'name')] == ['70012', 'Frigorifico Beispiel S.A.', 'gekauft', '', 'ok', 'P-260003'], (st, r.get('error'), c3))
+st, r = I.call('containerimport_eudr_sendung_save', {'id': '', 'rev': 0, 'partie': 'P-260004', 'lieferantNr': '70031', 'land': 'UY'})
+check('Lieferant ohne Namen in den Stammdaten: der Kurzname steht am Container', st == 200 and next(x for x in r['sendungen'] if x['partie'] == 'P-260004')['lieferant'] == 'OHNENAME', (st, r.get('error')))
+# Lieferant verschwindet aus den Stammdaten: die gespeicherte Verknüpfung bleibt beim nächsten Speichern, eine neue geht nicht
+A.call('lieferanten_save', {'rev': 1, 'groups': LIEFERANTEN[1:], 'quelle': 'Test'})
+st, r = I.call('containerimport_eudr_sendung_save', {**c3, 'akte': 'AK-3'})
+c3 = next((x for x in r.get('sendungen', []) if x['partie'] == 'P-260003'), {})
+check('Lieferant nicht mehr in den Stammdaten: Verknüpfung und Name bleiben am Container, neu wählen lässt er sich nicht',
+      st == 200 and c3.get('lieferantNr') == '70012' and c3.get('lieferant') == 'Frigorifico Beispiel S.A.' and c3.get('akte') == 'AK-3'
+      and I.call('containerimport_eudr_sendung_save', {**SENDUNG, 'partie': 'P-9', 'lieferantNr': '70012'})[0] == 422, (st, r.get('error'), c3))
+A.call('lieferanten_save', {'rev': 2, 'groups': LIEFERANTEN, 'quelle': 'Test'})
+# Eintrag aus der Zeit vor dem Umbau (ohne Partienummer, Akte, Stand, Verknüpfung): bleibt lesbar, heißt nach der Auftragsnummer
+doc = _json(storage_raw('containerimport-eudr-sendungen'))
+alt = next(x for x in doc['liste'] if x['partie'] == 'P-260004')
+for k in ('partie', 'akte', 'stand', 'lieferantNr'): del alt[k]
+alt['nummer'] = 'ALT-77'
+storage_write('containerimport-eudr-sendungen', doc)
+c4 = next(x for x in I.call('containerimport_start')[1]['sendungen'] if x['nummer'] == 'ALT-77')
+check('Eintrag aus der Zeit vor dem Umbau: lesbar, heißt nach der Auftragsnummer, Stand „gekauft“, nicht verknüpft', [c4[k] for k in ('name', 'partie', 'akte', 'stand', 'lieferantNr')] == ['ALT-77', '', '', 'gekauft', ''], c4)
+check('Eintrag aus der Zeit vor dem Umbau: Speichern verlangt die Partienummer, danach heißt er nach ihr', I.call('containerimport_eudr_sendung_save', c4)[0] == 422
+      and next(x for x in I.call('containerimport_eudr_sendung_save', {**c4, 'partie': 'P-260004', 'aktiv': False})[1]['sendungen'] if x['id'] == c4['id'])['name'] == 'P-260004')
+I.call('containerimport_eudr_sendung_save', {**next(x for x in I.call('containerimport_start')[1]['sendungen'] if x['partie'] == 'P-260003'), 'aktiv': False})
+check('Container: Pflichtfelder und Datumsfolge geprüft (422)', I.call('containerimport_eudr_sendung_save', {**SENDUNG, 'partie': ''})[0] == 422 and I.call('containerimport_eudr_sendung_save', {**SENDUNG, 'partie': 'P-9', 'lieferant': ''})[0] == 422
       and I.call('containerimport_eudr_sendung_save', {**SENDUNG, 'schlachtBis': '2026-11-01'})[0] == 422 and I.call('containerimport_eudr_sendung_save', {**SENDUNG, 'betriebe': ['gibt-es-nicht']})[0] == 422)
 alle = [o['eingabe'] for o in list(orte.values()) + [bo]]   # wie die Oberfläche: genau das, was die Prüfung als Eingabe liefert
 st, r = I.call('containerimport_eudr_betriebe_save', {'sendung': sid, 'betriebe': alle})
 ids = {b['name']: b['id'] for b in r.get('betriebe', [])}
-check('Betriebe gespeichert und der Sendung zugeordnet', st == 200 and len(ids) == 5 and set(r['sendungen'][0]['betriebe']) == set(ids.values()), (st, r.get('error'), ids))
+check('Farmer gespeichert und dem Container zugeordnet', st == 200 and len(ids) == 5 and set(r['sendungen'][0]['betriebe']) == set(ids.values()), (st, r.get('error'), ids))
 st, r = L.call('containerimport_eudr_pruefen', {'dateien': [DATEI, BERICHT]})
-check('erneutes Einlesen erkennt die Betriebe wieder (Kennung bzw. Umriss)', st == 200 and [o['bekannt'] for d in r['dateien'] for o in d['orte']] == [ids[o['name']] for d in r['dateien'] for o in d['orte']], r)
+check('erneutes Einlesen erkennt die Farmer wieder (Kennung bzw. Umriss)', st == 200 and [o['bekannt'] for d in r['dateien'] for o in d['orte']] == [ids[o['name']] for d in r['dateien'] for o in d['orte']], r)
 
 
 def stand(c=None):
@@ -202,30 +244,30 @@ def betrieb(name):
 
 
 s = stand()['sendungen'][0]
-check('Risikoprofil: fehlerhafte Geolokalisierung ist kritisch und nennt die Betriebe', s['profil']['stand'] == 'kritisch' and profil(s)['geo'] == 'kritisch'
+check('Risikoprofil: fehlerhafte Geolokalisierung ist kritisch und nennt die Farmer', s['profil']['stand'] == 'kritisch' and profil(s)['geo'] == 'kritisch'
       and set(next(k for k in s['profil']['kriterien'] if k['id'] == 'geo')['betriebe']) == {'Estancia Ejemplo Acht', 'Estancia Vertauscht'}, s['profil'])
 check('Risikoprofil: Paraguay Standardrisiko (Hinweis), Nachweise offen', profil(s)['land'] == 'hinweis' and [profil(s)[k] for k in ('rueckverfolgung', 'haltung', 'legalitaet', 'erklaerung', 'gegenpruefung')] == ['offen'] * 5, profil(s))
 check('Abschluss „vernachlässigbar“ mit kritischem Kriterium: 422', I.call('containerimport_eudr_sendung_abschluss', {'id': sid, 'rev': s['rev'], 'ergebnis': 'vernachlaessigbar', 'begruendung': 'x' * 40})[0] == 422)
 st, r = I.call('containerimport_eudr_export&sendung=' + sid)
 props = [f['properties'] for f in r.get('geojson', {}).get('features', [])]
-check('Export: nur einreichbare Flächen, fehlerhafte ausgelassen', st == 200 and r['datei'] == 'EUDR_FB26-001.geojson' and len(props) == 3 and set(r['ausgelassen']) == {'Estancia Ejemplo Acht', 'Estancia Vertauscht'}, (st, r))
+check('Export: nur einreichbare Flächen, fehlerhafte ausgelassen', st == 200 and r['datei'] == 'EUDR_P-260001.geojson' and len(props) == 3 and set(r['ausgelassen']) == {'Estancia Ejemplo Acht', 'Estancia Vertauscht'}, (st, r))
 check('Export: Eigenschaften in vorgeschriebener Schreibweise, Fläche als Zahl, Kennung im Ortsnamen',
       all(set(p) == {'ProducerName', 'ProducerCountry', 'ProductionPlace', 'Area'} and isinstance(p['Area'], (int, float)) and p['ProducerCountry'] == 'PY' for p in props)
       and 'Estancia Beispiel (990010001)' in [p['ProductionPlace'] for p in props], props)
 check('Export: Umrisse geschlossen, 6 Nachkommastellen', all(f['geometry']['coordinates'][0][0] == f['geometry']['coordinates'][0][-1] and all(round(v, 6) == v for p in f['geometry']['coordinates'][0] for v in p)
                                                           for f in r['geojson']['features'] if f['geometry']['type'] == 'Polygon'))
 st, r = L.call('containerimport_eudr_export&betrieb=' + ids['Estancia Beispiel'])
-check('Export eines einzelnen Betriebs (für die Gegenprüfung)', st == 200 and r['datei'] == 'EUDR_990010001.geojson' and len(r['geojson']['features']) == 1, (st, r))
-check('Export: unbekannte Sendung 404', I.call('containerimport_eudr_export&sendung=nein')[0] == 404)
+check('Export eines einzelnen Farmers (für die Gegenprüfung)', st == 200 and r['datei'] == 'EUDR_990010001.geojson' and len(r['geojson']['features']) == 1, (st, r))
+check('Export: unbekannter Container 404', I.call('containerimport_eudr_export&sendung=nein')[0] == 404)
 
 # Sendung auf die beiden einreichbaren Flächen beschränken; Revision schützt vor überschriebenen Änderungen
 gut = [ids['Estancia Ejemplo Norte'], ids['Estancia Beispiel']]
-check('Sendung mit veraltetem Stand: 409', I.call('containerimport_eudr_sendung_save', {**SENDUNG, 'id': sid, 'rev': s['rev'] - 1, 'betriebe': gut})[0] == 409)
+check('Container mit veraltetem Stand: 409', I.call('containerimport_eudr_sendung_save', {**SENDUNG, 'id': sid, 'rev': s['rev'] - 1, 'betriebe': gut})[0] == 409)
 st, r = I.call('containerimport_eudr_sendung_save', {**SENDUNG, 'id': sid, 'rev': s['rev'], 'betriebe': gut})
 s = r['sendungen'][0]
-check('Profil ohne die fehlerhaften Flächen: nicht mehr kritisch, Entwaldung offen (ein Betrieb ohne Bericht)', st == 200 and s['profil']['stand'] == 'offen' and profil(s)['geo'] == 'hinweis' and profil(s)['entwaldung'] == 'offen', s['profil'])
+check('Profil ohne die fehlerhaften Flächen: nicht mehr kritisch, Entwaldung offen (ein Farmer ohne Bericht)', st == 200 and s['profil']['stand'] == 'offen' and profil(s)['geo'] == 'hinweis' and profil(s)['entwaldung'] == 'offen', s['profil'])
 nb = betrieb('Estancia Ejemplo Norte')
-check('Betrieb mit veraltetem Stand: 409', I.call('containerimport_eudr_betriebe_save', {'betriebe': [{**nb, 'rev': nb['rev'] - 1}]})[0] == 409)
+check('Farmer mit veraltetem Stand: 409', I.call('containerimport_eudr_betriebe_save', {'betriebe': [{**nb, 'rev': nb['rev'] - 1}]})[0] == 409)
 st, r = I.call('containerimport_eudr_betriebe_save', {'betriebe': [{**nb, 'flaecheAngabe': '166,2', 'bericht': {**nb['bericht'], 'datum': '2026-10-20', 'entwaldung': 'konform', 'schutzgebiet': 'konform', 'indigen': 'konform', 'bilderBis': 2023}}]})
 s = r['sendungen'][0]
 check('Bericht nachgetragen: Satellitenbilder enden zu früh → Entwaldung bleibt offen', st == 200 and profil(s)['entwaldung'] == 'offen' and 'Satellitenbilder' in next(k for k in s['profil']['kriterien'] if k['id'] == 'entwaldung')['text'], s['profil'])
@@ -243,20 +285,20 @@ check('erneutes Einlesen überschreibt nur, was die Datei kennt: Kennung, Berich
       and nb['flaecheAngabe'] == 150.12 and len(stand()['betriebe']) == 5, nb)
 
 # Land, Legalität, Zahlen, Datum, Grenzen
-st, r = I.call('containerimport_eudr_sendung_save', {**SENDUNG, 'nummer': 'FB26-002'})
+st, r = I.call('containerimport_eudr_sendung_save', {**SENDUNG, 'partie': 'P-260002', 'nummer': 'FB26-002'})
 s2 = next(x for x in r['sendungen'] if x['nummer'] == 'FB26-002')
-check('Sendung ohne Herkunftsbetrieb: Geolokalisierung kritisch, „vernachlässigbar“ ausgeschlossen', profil(s2)['geo'] == 'kritisch' and s2['profil']['vernachlaessigbar'] == 'nein', s2['profil'])
+check('Container ohne Farmer: Geolokalisierung kritisch, „vernachlässigbar“ ausgeschlossen', profil(s2)['geo'] == 'kritisch' and s2['profil']['vernachlaessigbar'] == 'nein', s2['profil'])
 fremd = {'name': 'Fazenda Exemplo', 'land': 'BR', 'geometrie': {'type': 'Polygon', 'coordinates': [[[-55, -15], [-54.99, -15], [-54.99, -15.01], [-55, -15]]]}}
 st, r = I.call('containerimport_eudr_betriebe_save', {'sendung': s2['id'], 'betriebe': [fremd]})
 s2 = next(x for x in r['sendungen'] if x['nummer'] == 'FB26-002')
-check('Betrieb in einem anderen Land als die Sendung: Einstufung offen, Betrieb genannt', st == 200 and profil(s2)['land'] == 'offen' and next(k for k in s2['profil']['kriterien'] if k['id'] == 'land')['betriebe'] == ['Fazenda Exemplo'], s2['profil'])
+check('Farmer in einem anderen Land als die Container: Einstufung offen, Farmer genannt', st == 200 and profil(s2)['land'] == 'offen' and next(k for k in s2['profil']['kriterien'] if k['id'] == 'land')['betriebe'] == ['Fazenda Exemplo'], s2['profil'])
 fb = betrieb('Fazenda Exemplo')
 r = I.call('containerimport_eudr_betriebe_save', {'betriebe': [{**fb, 'land': 'RU'}]})[1]
 s2 = next(x for x in r['sendungen'] if x['nummer'] == 'FB26-002')
-check('Betrieb in einem Land mit hohem Risiko: kritisch, auch wenn die Sendung ein anderes Land nennt', profil(s2)['land'] == 'kritisch', s2['profil'])
+check('Farmer in einem Land mit hohem Risiko: kritisch, auch wenn die Container ein anderes Land nennt', profil(s2)['land'] == 'kritisch', s2['profil'])
 fb = betrieb('Fazenda Exemplo')
 I.call('containerimport_eudr_betriebe_save', {'betriebe': [{**fb, 'land': 'PY', 'geometrie': {'type': 'Polygon', 'coordinates': [[[-57.5, -23], [-57.49, -23], [-57.49, -23.01], [-57.5, -23]]]}, 'bericht': {**fb['bericht'], 'umwelt': 'nicht_konform'}}]})
-I.call('containerimport_eudr_sendung_save', {**SENDUNG, 'id': s2['id'], 'rev': s2['rev'], 'nummer': 'FB26-002', 'betriebe': [fb['id']], 'nachweis': {**SENDUNG['nachweis'], 'legalitaet': 'ja'}})
+I.call('containerimport_eudr_sendung_save', {**SENDUNG, 'id': s2['id'], 'rev': s2['rev'], 'partie': 'P-260002', 'nummer': 'FB26-002', 'betriebe': [fb['id']], 'nachweis': {**SENDUNG['nachweis'], 'legalitaet': 'ja'}})
 s2 = next(x for x in stand()['sendungen'] if x['nummer'] == 'FB26-002')
 check('Umweltgenehmigung laut Bericht nicht konform: Legalität kritisch, auch mit „Nachweise liegen vor“', profil(s2)['legalitaet'] == 'kritisch' and betrieb('Fazenda Exemplo')['ampel'] == 'rot', s2['profil'])
 fb = betrieb('Fazenda Exemplo')
@@ -265,23 +307,23 @@ check('Zahl „0.125“ bleibt 0,125 (kein Tausenderpunkt), „1.234,5“ ist 12
       and I.call('containerimport_eudr_betriebe_save', {'betriebe': [{**betrieb('Fazenda Exemplo'), 'flaecheAngabe': '1.234,5'}]})[0] == 200 and betrieb('Fazenda Exemplo')['flaecheAngabe'] == 1234.5, betrieb('Fazenda Exemplo')['flaecheAngabe'])
 fb = betrieb('Fazenda Exemplo')
 check('Datum in der Zukunft wird abgewiesen (Bericht, Erklärung, Sorgfaltserklärung)', I.call('containerimport_eudr_betriebe_save', {'betriebe': [{**fb, 'bericht': {**fb['bericht'], 'datum': '2062-01-01'}}]})[0] == 422
-      and I.call('containerimport_eudr_sendung_save', {**SENDUNG, 'id': s2['id'], 'rev': s2['rev'], 'nachweis': {**SENDUNG['nachweis'], 'erklaerung': '2062-01-01'}})[0] == 422
-      and I.call('containerimport_eudr_sendung_save', {**SENDUNG, 'id': s2['id'], 'rev': s2['rev'], 'dds': {'referenz': 'x', 'datum': '2062-01-01'}})[0] == 422)
+      and I.call('containerimport_eudr_sendung_save', {**SENDUNG, 'partie': 'P-260002', 'id': s2['id'], 'rev': s2['rev'], 'nachweis': {**SENDUNG['nachweis'], 'erklaerung': '2062-01-01'}})[0] == 422
+      and I.call('containerimport_eudr_sendung_save', {**SENDUNG, 'partie': 'P-260002', 'id': s2['id'], 'rev': s2['rev'], 'dds': {'referenz': 'x', 'datum': '2062-01-01'}})[0] == 422)
 riesig = {'name': 'Riesig', 'land': 'PY', 'geometrie': {'type': 'Polygon', 'coordinates': [[[1e308, 1e308], [-1e308, 1e308], [-1e308, -1e308], [1e308, 1e308]]]}}
 viele = {'name': 'Viele Punkte', 'land': 'PY', 'geometrie': {'type': 'Polygon', 'coordinates': [[[-57 + i * 1e-5, -23 - (i % 2) * 1e-3] for i in range(5001)] + [[-57, -23]]]}}
 check('unsinnig große Zahlen und zu viele Punkte werden nicht gespeichert (422), der Stand bleibt lesbar', I.call('containerimport_eudr_betriebe_save', {'betriebe': [riesig]})[0] == 422
       and I.call('containerimport_eudr_betriebe_save', {'betriebe': [viele]})[0] == 422 and len(stand()['betriebe']) == 6)
 I.call('containerimport_eudr_betriebe_save', {'betriebe': [{**fb, 'aktiv': False}]})
-I.call('containerimport_eudr_sendung_save', {**SENDUNG, 'id': s2['id'], 'rev': s2['rev'], 'nummer': 'FB26-002', 'betriebe': [], 'aktiv': False})
+I.call('containerimport_eudr_sendung_save', {**SENDUNG, 'id': s2['id'], 'rev': s2['rev'], 'partie': 'P-260002', 'nummer': 'FB26-002', 'betriebe': [], 'aktiv': False})
 
 # ---------- Eigene Gegenprüfung ----------
 P = {'portal': 'gnw', 'datum': '2026-11-10', 'ergebnis': 'ohne_befund', 'verlustHa': '0', 'bemerkung': 'kein Baumverlust seit 2021'}
-check('Gegenprüfung: Datum in der Zukunft und unbekanntes Portal 422, unbekannter Betrieb 404', I.call('containerimport_eudr_gegenpruefung', {**P, 'id': gut[0], 'datum': '2099-01-01'})[0] == 422
+check('Gegenprüfung: Datum in der Zukunft und unbekanntes Portal 422, unbekannter Farmer 404', I.call('containerimport_eudr_gegenpruefung', {**P, 'id': gut[0], 'datum': '2099-01-01'})[0] == 422
       and I.call('containerimport_eudr_gegenpruefung', {**P, 'id': gut[0], 'portal': 'x'})[0] == 422 and I.call('containerimport_eudr_gegenpruefung', {**P, 'id': 'nein'})[0] == 404)
 I.call('containerimport_eudr_gegenpruefung', {**P, 'id': gut[0]})
 st, r = I.call('containerimport_eudr_gegenpruefung', {**P, 'id': gut[1], 'portal': 'whisp', 'ergebnis': 'befund', 'verlustHa': '2,5', 'bemerkung': 'Risk_Livestock: high'})
 s = r['sendungen'][0]
-check('Gegenprüfung mit Befund: kritisch, Betrieb rot', st == 200 and profil(s)['gegenpruefung'] == 'kritisch' and betrieb('Estancia Beispiel')['ampel'] == 'rot' and betrieb('Estancia Beispiel')['pruefungen'][0]['von'] == 'Ina Import', s['profil'])
+check('Gegenprüfung mit Befund: kritisch, Farmer rot', st == 200 and profil(s)['gegenpruefung'] == 'kritisch' and betrieb('Estancia Beispiel')['ampel'] == 'rot' and betrieb('Estancia Beispiel')['pruefungen'][0]['von'] == 'Ina Import', s['profil'])
 r = I.call('containerimport_eudr_gegenpruefung', {**P, 'id': gut[1], 'portal': 'whisp', 'datum': '2026-11-12', 'bemerkung': 'Fläche war 2020 schon Weide, mit Lieferant geklärt'})[1]
 check('jüngere Prüfung desselben Portals ohne Befund zählt; die ältere bleibt stehen', profil(r['sendungen'][0])['gegenpruefung'] == 'ok' and len(betrieb('Estancia Beispiel')['pruefungen']) == 2 and betrieb('Estancia Beispiel')['bewertung']['gegenpruefung'] == 'ok'
       and betrieb('Estancia Beispiel')['ampel'] == 'gelb', betrieb('Estancia Beispiel')['bewertung'])   # gelb: Landnutzungsplan und Umweltgenehmigung ohne Angabe
@@ -302,19 +344,22 @@ check('Abschluss mit veraltetem Stand 409, unbekanntes Ergebnis 422', I.call('co
       and I.call('containerimport_eudr_sendung_abschluss', {'id': sid, 'rev': s['rev'], 'ergebnis': 'egal'})[0] == 422)
 st, r = I.call('containerimport_eudr_sendung_abschluss', {'id': sid, 'rev': s['rev'], 'ergebnis': 'vernachlaessigbar', 'begruendung': 'Alle Nachweise geprüft.'})
 s = r['sendungen'][0]
-check('Bewertung abgeschlossen: Ergebnis, Bearbeiter, Schnappschuss von Profil und Betrieben', st == 200 and s['abschluss']['ergebnis'] == 'vernachlaessigbar' and s['abschluss']['wer']['von'] == 'Ina Import'
+check('Bewertung abgeschlossen: Ergebnis, Bearbeiter, Schnappschuss von Profil und Farmern', st == 200 and s['abschluss']['ergebnis'] == 'vernachlaessigbar' and s['abschluss']['wer']['von'] == 'Ina Import'
       and s['abschluss']['profil']['stand'] == 'ok' and len(s['abschluss']['betriebe']) == 2, (st, r.get('error')))
 nb = betrieb('Estancia Ejemplo Norte')
 I.call('containerimport_eudr_betriebe_save', {'betriebe': [{**nb, 'name': 'Estancia Umbenannt', 'bericht': {**nb['bericht'], 'entwaldung': 'nicht_konform'}}]})
 s = stand()['sendungen'][0]
-check('spätere Änderung am Betrieb ändert die abgeschlossene Bewertung nicht (GR-106)', s['profil']['stand'] == 'ok' and 'Estancia Ejemplo Norte' in [b['name'] for b in s['abschluss']['betriebe']]
+check('spätere Änderung am Farmer ändert die abgeschlossene Bewertung nicht (GR-106)', s['profil']['stand'] == 'ok' and 'Estancia Ejemplo Norte' in [b['name'] for b in s['abschluss']['betriebe']]
       and betrieb('Estancia Umbenannt')['ampel'] == 'rot', s['profil'])
 r = I.call('containerimport_eudr_export&sendung=' + sid)[1]
-check('Export einer abgeschlossenen Sendung nutzt den Schnappschuss', any(f['properties']['ProductionPlace'].startswith('Estancia Ejemplo Norte') for f in r['geojson']['features']), r)
-st, r = I.call('containerimport_eudr_sendung_save', {**SENDUNG, 'id': sid, 'rev': s['rev'], 'nummer': 'ANDERS', 'betriebe': [], 'dds': {'referenz': '26DEABC123456', 'datum': '2026-11-16'}, 'notiz': 'DDS abgegeben'})
+check('Export eines abgeschlossenen Containers nutzt den Schnappschuss', any(f['properties']['ProductionPlace'].startswith('Estancia Ejemplo Norte') for f in r['geojson']['features']), r)
+st, r = I.call('containerimport_eudr_sendung_save', {**SENDUNG, 'id': sid, 'rev': s['rev'], 'nummer': 'ANDERS', 'partie': 'P-ANDERS', 'lieferantNr': '70020', 'betriebe': [], 'dds': {'referenz': '26DEABC123456', 'datum': '2026-11-16'}, 'notiz': 'DDS abgegeben',
+                                                     'stand': 'angekommen', 'container': 'MSKU 907032 3', 'akte': 'AK-2026-014/2'})
 s = r['sendungen'][0]
+check('nach dem Abschluss: der Container reist weiter – Stand, Container- und Aktennummer bleiben änderbar; Partienummer und Lieferant nicht',
+      [s[k] for k in ('stand', 'container', 'akte', 'partie', 'lieferantNr', 'lieferant')] == ['angekommen', 'MSKU 907032 3', 'AK-2026-014/2', 'P-260001', '', 'Frigorifico Beispiel'], s)
 check('nach dem Abschluss: nur Sorgfaltserklärung und Notiz änderbar', st == 200 and s['nummer'] == 'FB26-001' and len(s['betriebe']) == 2 and s['dds'] == {'referenz': '26DEABC123456', 'datum': '2026-11-16'} and s['notiz'] == 'DDS abgegeben' and s['abschluss'], s)
-check('abgeschlossen: Betriebe zuordnen 409, erneut abschließen 409, öffnen ohne Grund 422', I.call('containerimport_eudr_betriebe_save', {'sendung': sid, 'betriebe': [bo]})[0] == 409
+check('abgeschlossen: Farmer zuordnen 409, erneut abschließen 409, öffnen ohne Grund 422', I.call('containerimport_eudr_betriebe_save', {'sendung': sid, 'betriebe': [bo]})[0] == 409
       and I.call('containerimport_eudr_sendung_abschluss', {'id': sid, 'rev': s['rev'], 'ergebnis': 'vernachlaessigbar'})[0] == 409
       and I.call('containerimport_eudr_sendung_abschluss', {'id': sid, 'rev': s['rev'], 'oeffnen': True, 'grund': ''})[0] == 422)
 st, r = I.call('containerimport_eudr_sendung_abschluss', {'id': sid, 'rev': s['rev'], 'oeffnen': True, 'grund': 'Betrieb nachträglich auffällig'})
@@ -327,9 +372,9 @@ check('wieder geöffnet: der Schnappschuss bleibt gespeichert (GR-106), wird abe
 nb = betrieb('Estancia Umbenannt')
 I.call('containerimport_eudr_betriebe_save', {'betriebe': [{**nb, 'name': 'Estancia Ejemplo Norte', 'bericht': {**nb['bericht'], 'entwaldung': 'konform'}}]})
 st, r = I.call('containerimport_eudr_betriebe_save', {'betriebe': [{**betrieb('Estancia Vertauscht'), 'aktiv': False}]})
-check('Betrieb archivieren statt löschen', st == 200 and not betrieb('Estancia Vertauscht')['aktiv'] and len(stand()['betriebe']) == 6)
+check('Farmer archivieren statt löschen', st == 200 and not betrieb('Estancia Vertauscht')['aktiv'] and len(stand()['betriebe']) == 6)
 verlauf = json.dumps(A.call('log')[1], ensure_ascii=False)
-check('Protokoll: Speichern, Gegenprüfung, Abschluss und Wiederöffnen', all(t in verlauf for t in ('EUDR: 5 Herkunftsbetriebe gespeichert', 'EUDR: Sendung „FB26-001“ gespeichert', 'Gegenprüfung für „Estancia Beispiel“',
+check('Protokoll: Speichern, Gegenprüfung, Abschluss und Wiederöffnen', all(t in verlauf for t in ('EUDR: 5 Farmer gespeichert', 'Container „P-260001“ gespeichert', 'EUDR: Bewertung des Containers „P-260001“ abgeschlossen', 'Gegenprüfung für „Estancia Beispiel“',
                                                                                        'abgeschlossen (Risiko vernachlässigbar)', 'wieder geöffnet')), verlauf[:600])
 
 # ---------- Oberfläche ----------
@@ -424,80 +469,111 @@ with sync_playwright() as pw:
       return f;
     }''')
     check('Berichtsleser: „Non-compliant“ in jeder Schreibweise, zerrissene Koordinaten, zwei Flächen oder zwei Zonen ergeben nie still einen falschen Wert', fehl == [], fehl)
-    check('Oberfläche: Sendung mit Risikoprofil in der Liste, Reiter EUDR', 'FB26-001' in p.inner_text('#ci-sendungen') and p.get_attribute('#ci-reiter-eudr', 'aria-selected') == 'true'
+    check('Oberfläche: Container mit Risikoprofil in der Liste, Reiter EUDR', 'P-260001' in p.inner_text('#ci-sendungen') and p.get_attribute('#ci-reiter-eudr', 'aria-selected') == 'true'
           and 'kein Risiko erkennbar' in p.inner_text('#ci-sendungen') and '26DEABC123456' in p.inner_text('#ci-sendungen'), p.inner_text('#ci-sendungen'))
     shot(p, os.path.join(SH, 'containerimport-sendungen-1280.png'))
 
+    # Neuer Container aus dem Fenster: Lieferant aus den Stammdaten wählen, drei Nummern, Stand
+    gespeichert = "document.querySelector('#sendung-titel')?.textContent === 'Container P-260010' && document.querySelector('#dlg-sendung').innerText.includes('%s')"
+    p.click('#ci-sendung-neu'); p.wait_for_selector('#dlg-sendung[open]')
+    check('Fenster „Neuer Container“: Stände zur Auswahl, Lieferanten der Stammdaten als Vorschläge',
+          p.eval_on_selector_all('#f-stand option', 'os => os.map(o => o.textContent)') == ['gekauft', 'unterwegs', 'Dokumente da', 'angekommen']
+          and p.eval_on_selector_all('#ci-lieferanten option', 'os => os.map(o => o.value)') == ['OHNENAME (70031)', 'Carnes del Sur Ltda. (70020)', 'Frigorifico Beispiel S.A. (70012)'])
+    p.fill('#f-partie', 'P-260010'); p.fill('#f-akte', 'AK-10'); p.fill('#f-container', 'MSKU 907032 4'); p.fill('#f-lieferant', 'Carnes del Sur Ltda. (70020)')
+    p.select_option('#f-land', 'UY'); p.select_option('#f-stand', 'unterwegs')
+    p.click('#dlg-sendung button[type=submit]'); p.wait_for_function(gespeichert % 'Stammdaten Nr. 70020')
+    c = next(x for x in stand()['sendungen'] if x['partie'] == 'P-260010')
+    check('Neuer Container gespeichert: mit dem Lieferanten der Stammdaten verknüpft, Name von dort, Stand „unterwegs“',
+          [c[k] for k in ('lieferantNr', 'lieferant', 'akte', 'stand', 'land')] == ['70020', 'Carnes del Sur Ltda.', 'AK-10', 'unterwegs', 'UY'], c)
+    check('Fenster „Container“: Hinweis auf die falsche Prüfziffer der Containernummer', 'Prüfziffer passt nicht' in p.inner_text('#dlg-sendung'))
+    shot(p.locator('#dlg-sendung'), os.path.join(SH, 'containerimport-container-fenster-1280.png'))
+    p.fill('#f-lieferant', 'Lieferant ohne Stammdaten'); p.fill('#f-container', 'MSKU 907032 3')
+    p.click('#dlg-sendung button[type=submit]'); p.wait_for_function(gespeichert % 'Nicht mit den Stammdaten verknüpft')
+    c = next(x for x in stand()['sendungen'] if x['partie'] == 'P-260010')
+    check('Lieferant als freier Text: gespeichert ohne Verknüpfung, das Fenster sagt es; gültige Containernummer ohne Hinweis',
+          c['lieferantNr'] == '' and c['lieferant'] == 'Lieferant ohne Stammdaten' and c['containerPruefung'] == 'ok' and 'Prüfziffer' not in p.inner_text('#dlg-sendung'), c)
+    p.click('#dlg-sendung .dlg-foot [data-zu]'); p.wait_for_selector('#dlg-sendung', state='hidden')
+    p.fill('#ci-suche', 'ak-10 ohne'); p.wait_for_function("document.querySelectorAll('#ci-sendungen tbody tr').length === 1")
+    zeile = p.inner_text('#ci-sendungen tbody tr')
+    check('Liste der Container: Suche über Akte und Lieferant; Zeile mit Partie, Akte, Containernummer, Stand und dem Hinweis „nicht verknüpft“',
+          all(t in zeile for t in ('P-260010', 'Akte AK-10', 'Container MSKU 907032 3', 'unterwegs', 'nicht mit den Stammdaten verknüpft', 'Uruguay')), zeile)
+    p.fill('#ci-suche', 'gibt es nicht'); p.wait_for_selector('#ci-inhalt .ci-leer')
+    check('Liste der Container: Suche ohne Treffer sagt das', p.inner_text('#ci-inhalt .ci-leer') == 'Kein Container passt zur Suche.' and p.input_value('#ci-suche') == 'gibt es nicht')
+    p.fill('#ci-suche', ''); p.wait_for_selector('#ci-sendungen tbody tr')
+    I.call('containerimport_eudr_sendung_save', {**c, 'aktiv': False})   # die folgenden Prüfungen arbeiten mit dem ersten Container
+    p.click('#ci-neu'); p.wait_for_function("document.querySelectorAll('#ci-sendungen tbody tr').length === 1")
+
     # Unterlagen einlesen: Bericht (PDF, im Browser gelesen), Lieferanten-GeoJSON, Erklärung ohne Koordinaten
     p.click('#ci-lesen'); p.wait_for_selector('#dlg-lesen[open]')
+    check('Fenster: Feldkennungen sind eindeutig, auch wenn vorher ein anderes Fenster mit gleichnamigen Feldern offen war', p.evaluate("['f-lieferant', 'f-land'].every((id) => document.querySelectorAll('#' + id).length === 1)"))
     p.select_option('#f-sendung', sid); p.fill('#f-lieferant', 'Frigorifico/Beispiel')
     p.set_input_files('#lesen-dateien', [pfade['Compliance_Report_Estancia_Beispiel.pdf'], os.path.join(FIX, 'containerimport', 'lieferant.geojson'), pfade['Erklaerung_Lieferant.pdf']])
     p.wait_for_selector('#lesen-ergebnis .ci-datei')
     text = p.inner_text('#lesen-ergebnis')
     check('Einlesen: Bericht im Browser gelesen (Name, Erzeuger über zwei Zeilen, Kennung, Fläche)', all(t in text for t in ('Estancia Beispiel', 'AGROGANADERA MUSTER S.A.', 'Kennung 990010001', '300,24 ha', 'angegeben 300,20 ha')), text)
     check('Einlesen: Erklärung ohne Koordinaten wird abgewiesen, Linie gemeldet', 'Erklaerung_Lieferant.pdf: Keine Koordinatenliste' in text and 'LineString' in text, text)
-    check('Einlesen: vorhandene Betriebe werden erkannt, Fehlerhaftes ist markiert', text.count('aktualisiert vorhandenen Betrieb') == 5 and text.count('fehlerhaft') >= 2 and 'überschneidet sich selbst' in text, text)
+    check('Einlesen: vorhandene Farmer werden erkannt, Fehlerhaftes ist markiert', text.count('aktualisiert vorhandenen Farmer') == 5 and text.count('fehlerhaft') >= 2 and 'überschneidet sich selbst' in text, text)
     shot(p.locator('#dlg-lesen'), os.path.join(SH, 'containerimport-einlesen-1280.png'))
     for nr in p.eval_on_selector_all('#lesen-ergebnis [data-ort]', 'els => els.map((e, i) => [i, e.closest("li").innerText]).filter(([, t]) => !t.includes("Estancia Beispiel")).map(([i]) => i)'):
         p.uncheck(f'#lesen-ergebnis [data-ort="{nr}"]')
-    check('Einlesen: Knopf zählt die Auswahl', p.inner_text('#lesen-ok') == '1 Betrieb übernehmen', p.inner_text('#lesen-ok'))
+    check('Einlesen: Knopf zählt die Auswahl', p.inner_text('#lesen-ok') == '1 Farmer übernehmen', p.inner_text('#lesen-ok'))
     p.click('#lesen-ok'); p.wait_for_selector('#dlg-sendung[open]')
     b = betrieb('Estancia Beispiel')
-    check('Einlesen: Betrieb aktualisiert (kein Doppelter), Quelle mit Dateiname und Prüfsumme, der Sendung zugeordnet', len(stand()['betriebe']) == 6 and b['quelle']['datei'] == 'Compliance_Report_Estancia_Beispiel.pdf'
+    check('Einlesen: Farmer aktualisiert (kein Doppelter), Quelle mit Dateiname und Prüfsumme, dem Container zugeordnet', len(stand()['betriebe']) == 6 and b['quelle']['datei'] == 'Compliance_Report_Estancia_Beispiel.pdf'
           and len(b['quelle']['sha256']) == 64 and b['quelle']['sha256'] != 'a' * 64 and b['region'] == 'BEISPIELDEPARTAMENTO' and b['ort'] == 'MUSTERORT' and b['bericht']['datum'] == '2026-11-04'
           and b['bericht']['bilderBis'] == 2025 and len(b['pruefungen']) == 2 and b['id'] in stand()['sendungen'][0]['betriebe'], b)
 
     # Original im QM-System: nur die übernommene Datei, im Eingang unter „EUDR/<Lieferant>“ (Schrägstrich im Namen ist kein Ordner)
     eingang = [f for f in _json(storage_raw('qs-ablage'))['liste'] if f.get('ziel') == 'eingang']
-    check('Original des übernommenen Berichts liegt im Eingang des QM-Systems, am Betrieb vermerkt', len(eingang) == 1 and eingang[0]['name'] == 'Compliance_Report_Estancia_Beispiel.pdf'
+    check('Original des übernommenen Berichts liegt im Eingang des QM-Systems, am Farmer vermerkt', len(eingang) == 1 and eingang[0]['name'] == 'Compliance_Report_Estancia_Beispiel.pdf'
           and eingang[0]['pfad'] == 'EUDR/Frigorifico Beispiel' and eingang[0]['sha256'] == b['quelle']['sha256'] and eingang[0]['hochgeladen']['von'] == 'Ina Import'
           and b['quelle']['qm']['status'] == 'eingang' and b['quelle']['qm']['datei'] == eingang[0]['id'] and b['quelle']['qm']['pfad'] == 'EUDR/Frigorifico Beispiel', (eingang, b['quelle']))
     check('Toast nennt die Ablage', 'Original im QM-System abgelegt' in p.inner_text('#ci-toast'), p.inner_text('#ci-toast'))
 
     # Fenster „Sendung“: Risikoprofil, Karte, Datei für TRACES
     p.wait_for_function("document.querySelector('#sendung-karte')?.dataset.karte === 'bereit'")
-    check('Sendung: Risikoprofil mit allen Kriterien und Vorschlag, Karte mit zwei Flächen', p.locator('#dlg-sendung .ci-kriterien li').count() == len(stand()['sendungen'][0]['profil']['kriterien']) and p.locator('#dlg-sendung .ci-vorschlag').count() == 1
+    check('Container: Risikoprofil mit allen Kriterien und Vorschlag, Karte mit zwei Flächen', p.locator('#dlg-sendung .ci-kriterien li').count() == len(stand()['sendungen'][0]['profil']['kriterien']) and p.locator('#dlg-sendung .ci-vorschlag').count() == 1
           and p.locator('#sendung-karte .ci-k-flaeche').count() == 2 and p.locator('#sendung-karte .ci-k-land').count() == 1)
     shot(p.locator('#dlg-sendung'), os.path.join(SH, 'containerimport-sendung-1280.png'))
     with p.expect_download() as dl:
         p.click('#dlg-sendung [data-export-sendung]')
     datei = json.load(open(dl.value.path(), encoding='utf-8'))
-    check('Sendung: „GeoJSON für TRACES“ lädt die Datei', dl.value.suggested_filename == 'EUDR_FB26-001.geojson' and datei['type'] == 'FeatureCollection' and len(datei['features']) == 2, datei)
+    check('Container: „GeoJSON für TRACES“ lädt die Datei', dl.value.suggested_filename == 'EUDR_P-260001.geojson' and datei['type'] == 'FeatureCollection' and len(datei['features']) == 2, datei)
     p.fill('#f-d_referenz', '26DEXYZ000111'); p.click('#dlg-sendung button[type=submit]')
-    p.wait_for_function("document.querySelector('#ci-toast').textContent.includes('Sendung gespeichert')")
-    check('Sendung: Speichern aus dem Fenster', stand()['sendungen'][0]['dds']['referenz'] == '26DEXYZ000111')
+    p.wait_for_function("document.querySelector('#ci-toast').textContent.includes('Container gespeichert')")
+    check('Container: Speichern aus dem Fenster', stand()['sendungen'][0]['dds']['referenz'] == '26DEXYZ000111')
     p.click('#sendung-druck')
     druck = p.text_content('#ci-druck')
-    check('Risikoprofil drucken: Druckfassung mit Sendung, Betrieben und Kriterien', all(t in druck for t in ('Risikoprofil EUDR · Sendung FB26-001', 'Estancia Beispiel', 'Rückverfolgung Los → Betrieb', '26DEXYZ000111')), druck[:300])
+    check('Risikoprofil drucken: Druckfassung mit Container, Farmern und Kriterien', all(t in druck for t in ('Risikoprofil EUDR · Container P-260001', 'Partienummer', 'AK-2026-014/2', 'MSKU 907032 3', 'Estancia Beispiel', 'Rückverfolgung Los → Farmer', '26DEXYZ000111')), druck[:300])
     p.click('#dlg-sendung .dlg-foot [data-zu]'); p.wait_for_selector('#dlg-sendung', state='hidden')
 
     # Herkunftsbetriebe, Fenster „Betrieb“ mit Umriss, Gegenprüfung
     p.click('[data-sicht="betriebe"]'); p.wait_for_selector('#ci-betriebe tr[data-betrieb]')
-    check('Betriebe: Liste ohne Archivierte, Suche mit Umlaut-Regel', p.locator('#ci-betriebe tbody tr').count() == 4)
+    check('Farmer: Liste ohne Archivierte, Suche mit Umlaut-Regel', p.locator('#ci-betriebe tbody tr').count() == 4)
     p.fill('#ci-suche', 'muster beispiel'); p.wait_for_function("document.querySelectorAll('#ci-betriebe tbody tr').length === 1")
     shot(p, os.path.join(SH, 'containerimport-betriebe-1280.png'))
     p.click('#ci-betriebe tr[data-betrieb]'); p.wait_for_selector('#dlg-betrieb[open]')
     p.wait_for_function("document.querySelector('#betrieb-karte')?.dataset.karte === 'bereit'")
-    check('Betrieb: Umriss mit vier Eckpunkten, Maßstab, Lage im Land; Verweise auf Global Nature Watch und Whisp', p.locator('#betrieb-karte .ci-k-ecke').count() == 4 and p.inner_text('#betrieb-karte .ci-k-massstab').strip() in ('500 m', '1 km')
+    check('Farmer: Umriss mit vier Eckpunkten, Maßstab, Lage im Land; Verweise auf Global Nature Watch und Whisp', p.locator('#betrieb-karte .ci-k-ecke').count() == 4 and p.inner_text('#betrieb-karte .ci-k-massstab').strip() in ('500 m', '1 km')
           and p.locator('#betrieb-karte .ci-k-lage svg').count() == 1 and p.eval_on_selector_all('#dlg-betrieb .ci-portale a', 'as => as.map(a => a.hostname)') == ['www.globalnaturewatch.org', 'whisp.openforis.org']
           and p.eval_on_selector_all('#dlg-betrieb a[target=_blank]', 'as => as.every(a => a.rel.includes("noopener"))'))
     p.select_option('#f-p_portal', 'gnw'); p.fill('#f-p_bemerkung', 'ohne Auffälligkeit'); p.click('#betrieb-pruefung')
     p.wait_for_function("document.querySelectorAll('#dlg-betrieb .ci-pruefungen li').length === 3")
-    check('Betrieb: Gegenprüfung aus dem Fenster eingetragen', len(betrieb('Estancia Beispiel')['pruefungen']) == 3)
+    check('Farmer: Gegenprüfung aus dem Fenster eingetragen', len(betrieb('Estancia Beispiel')['pruefungen']) == 3)
     shot(p.locator('#dlg-betrieb'), os.path.join(SH, 'containerimport-betrieb-1280.png'))
     p.keyboard.press('Escape'); p.wait_for_selector('#dlg-betrieb', state='hidden')
 
     # Karte
     p.fill('#ci-suche', ''); p.click('[data-sicht="karte"]'); p.wait_for_function("document.querySelector('#ci-karte')?.dataset.karte === 'bereit'")
-    check('Karte: Marke je aktivem Betrieb, Farbe nach Ampel', p.locator('#ci-karte .ci-k-marke').count() == 4 and p.locator('#ci-karte .ci-k-marke.gelb').count() >= 1 and p.locator('#ci-karte .ci-k-marke.rot').count() >= 1)
+    check('Karte: Marke je aktivem Farmer, Farbe nach Ampel', p.locator('#ci-karte .ci-k-marke').count() == 4 and p.locator('#ci-karte .ci-k-marke.gelb').count() >= 1 and p.locator('#ci-karte .ci-k-marke.rot').count() >= 1)
     shot(p, os.path.join(SH, 'containerimport-karte-1280.png'))
     oben = p.locator('#ci-karte .ci-k-marke').last   # die zuletzt gezeichnete Marke liegt oben (Betriebe können sich überdecken)
     name = oben.locator('title').text_content()
     oben.click(); p.wait_for_selector('#dlg-betrieb[open]')
-    check('Karte: Klick auf eine Marke öffnet diesen Betrieb', p.inner_text('#betrieb-titel') == name, (p.inner_text('#betrieb-titel'), name))
+    check('Karte: Klick auf eine Marke öffnet diesen Farmer', p.inner_text('#betrieb-titel') == name, (p.inner_text('#betrieb-titel'), name))
     p.keyboard.press('Escape'); p.wait_for_selector('#dlg-betrieb', state='hidden')
     p.select_option('#ci-karte-sendung', sid); p.wait_for_function("document.querySelectorAll('#ci-karte .ci-k-marke').length === 2")
-    check('Karte: Auswahl einer Sendung zeigt nur ihre Betriebe', p.locator('.ci-kartenliste button').count() == 2)
+    check('Karte: Auswahl einer Container zeigt nur ihre Farmer', p.locator('.ci-kartenliste button').count() == 2)
     p.context.close()
 
     # Herkunftskarte des Servers (Südamerika, Neuseeland): ist /karte/herkunft.pmtiles da, zeichnet die Detailkarte Straßen und
@@ -513,13 +589,13 @@ with sync_playwright() as pw:
     d.reload(); d.wait_for_selector('#ci-app:not([hidden]) #ci-sendungen tr[data-sendung]')
     d.click('[data-sicht="karte"]'); d.wait_for_selector('#ci-karte[data-karte="bereit"] canvas', timeout=60000)
     aktiv = [x for x in stand()['betriebe'] if x['aktiv']]
-    check('Herkunftskarte: Detailkarte statt SVG, alle Flächen und eine Marke je Betrieb', d.locator('#ci-karte svg.ci-k-haupt').count() == 0
+    check('Herkunftskarte: Detailkarte statt SVG, alle Flächen und eine Marke je Farmer', d.locator('#ci-karte svg.ci-k-haupt').count() == 0
           and d.evaluate("(() => { const k = document.querySelector('#ci-karte').staflKarte; return [k.gebiete(), k.anzahl()]; })()") == [len([x for x in aktiv if x['geometrie']['type'] != 'Point']), len(aktiv)])
     shot(d, os.path.join(SH, 'containerimport-herkunftskarte-1280.png'))
     d.click('.ci-kartenliste button >> nth=0'); d.wait_for_selector('#betrieb-karte[data-karte="bereit"] canvas', timeout=60000)
-    check('Herkunftskarte im Fenster „Betrieb“: genau diese Fläche, ohne Marken', d.evaluate("(() => { const k = document.querySelector('#betrieb-karte').staflKarte; return [k.gebiete(), k.anzahl()]; })()") == [1, 0])
+    check('Herkunftskarte im Fenster „Farmer“: genau diese Fläche, ohne Marken', d.evaluate("(() => { const k = document.querySelector('#betrieb-karte').staflKarte; return [k.gebiete(), k.anzahl()]; })()") == [1, 0])
     d.keyboard.press('Escape'); d.select_option('#ci-karte-sendung', sid); d.wait_for_selector('#ci-karte[data-karte="bereit"] canvas')
-    check('Herkunftskarte: Auswahl einer Sendung zeichnet neu (eine Karte, nicht zwei übereinander)', d.locator('#ci-karte canvas').count() == 1 and d.evaluate("document.querySelector('#ci-karte').staflKarte.anzahl()") == 2)
+    check('Herkunftskarte: Auswahl einer Container zeichnet neu (eine Karte, nicht zwei übereinander)', d.locator('#ci-karte canvas').count() == 1 and d.evaluate("document.querySelector('#ci-karte').staflKarte.anzahl()") == 2)
     d.context.close()
 
     # Karte mit Satellitenbild und Waldebenen (Auftrag des Inhabers 18.11.2026): drei fremde Dienste, vom Browser direkt abgerufen
@@ -559,9 +635,9 @@ with sync_playwright() as pw:
     k.evaluate("(m) => document.querySelector('#ci-karte').staflKarte.map.jumpTo({ center: m, zoom: 12 })", nord['mitte']); k.wait_for_selector('#ci-karte[data-karte="bereit"]')
     ort = k.evaluate("(m) => { const k = document.querySelector('#ci-karte'), r = k.getBoundingClientRect(), p = k.staflKarte.position(m[0] + 0.004, m[1] + 0.003); return [r.left + p[0], r.top + p[1]]; }", nord['mitte'])
     k.mouse.click(ort[0], ort[1]); k.wait_for_selector('#dlg-betrieb[open] #betrieb-karte[data-karte="bereit"] canvas', timeout=60000)
-    check('Karte mit Bildern: Klick in eine Fläche öffnet ihren Betrieb', k.inner_text('#betrieb-titel') == 'Estancia Ejemplo Norte', k.inner_text('#betrieb-titel'))
-    check('Fenster „Betrieb“ ohne Whisp-Schlüssel: kein Knopf „In Whisp prüfen“', k.locator('#betrieb-whisp').count() == 0)
-    check('Fenster „Betrieb“: dieselbe Auswahl der Ebenen, genau diese Fläche', k.evaluate(ebenen % '#betrieb-karte') == {'satellit': True, 'wald2020': False, 'verlust': True, 'grund': False}
+    check('Karte mit Bildern: Klick in eine Fläche öffnet ihren Farmer', k.inner_text('#betrieb-titel') == 'Estancia Ejemplo Norte', k.inner_text('#betrieb-titel'))
+    check('Fenster „Farmer“ ohne Whisp-Schlüssel: kein Knopf „In Whisp prüfen“', k.locator('#betrieb-whisp').count() == 0)
+    check('Fenster „Farmer“: dieselbe Auswahl der Ebenen, genau diese Fläche', k.evaluate(ebenen % '#betrieb-karte') == {'satellit': True, 'wald2020': False, 'verlust': True, 'grund': False}
           and not k.is_checked('#betrieb-karte .ci-k-ebenen input[value="wald2020"]') and k.evaluate("document.querySelector('#betrieb-karte').staflKarte.gebiete()") == 1)
     k.evaluate("window.altesFenster = document.querySelector('#betrieb-karte')")
     k.keyboard.press('Escape'); k.click('.ci-kartenliste button >> nth=1'); k.wait_for_selector('#betrieb-karte[data-karte="bereit"] canvas', timeout=60000)
@@ -592,7 +668,7 @@ with sync_playwright() as pw:
           and k.evaluate('(g) => window.EUDR_KARTE.auswerten(g)', {'type': 'Point', 'coordinates': [-57, -23]}) is None)
     k.wait_for_selector('#betrieb-auswertung:not([hidden]) dl')
     text = k.inner_text('#betrieb-auswertung')
-    check('Fenster „Betrieb“: Bildauswertung mit Wald 2020, Verlust je Jahr, Kontrollfläche und dem Hinweis „kein Nachweis“',
+    check('Fenster „Farmer“: Bildauswertung mit Wald 2020, Verlust je Jahr, Kontrollfläche und dem Hinweis „kein Nachweis“',
           'kein Nachweis' in text and 'Wald Ende 2020' in text and 'Waldverlust 2021–2025' in text and 'Ausgewertet' in text and 'weicht ab' not in text and '2022:' in text, text)
     pruefungen = lambda: len(next(x for x in stand()['betriebe'] if x['id'] == k.evaluate("document.querySelector('#betrieb-inhalt').dataset.id"))['pruefungen'])
     vorher = pruefungen()
@@ -692,7 +768,7 @@ with sync_playwright() as pw:
     check('390 px: Liste ohne Querlauf', breit(m))
     shot(m, os.path.join(SH, 'containerimport-sendungen-390-dunkel.png'))
     m.click('#ci-sendungen tr[data-sendung]'); m.wait_for_selector('#dlg-sendung[open]')
-    check('390 px: Fenster „Sendung“ passt in die Breite, Tippflächen ab 36 px', m.evaluate("document.querySelector('#dlg-sendung').getBoundingClientRect().width <= window.innerWidth")
+    check('390 px: Fenster „Container“ passt in die Breite, Tippflächen ab 36 px', m.evaluate("document.querySelector('#dlg-sendung').getBoundingClientRect().width <= window.innerWidth")
           and m.eval_on_selector_all('#dlg-sendung button, #dlg-sendung select, #dlg-sendung input:not([type=checkbox])', 'els => els.filter(e => e.offsetParent).every(e => e.getBoundingClientRect().height >= 36)'))
     shot(m, os.path.join(SH, 'containerimport-sendung-390-dunkel.png'))
     m.keyboard.press('Escape'); m.click('[data-sicht="karte"]'); m.wait_for_function("document.querySelector('#ci-karte')?.dataset.karte === 'bereit'")
@@ -702,7 +778,7 @@ with sync_playwright() as pw:
 
     # Nur ansehen
     v = seite('lea'); v.wait_for_selector('#ci-app:not([hidden]) #ci-sendungen tr[data-sendung]')
-    check('nur ansehen: keine Knöpfe „Unterlagen einlesen“ und „Neue Sendung“', v.locator('#ci-lesen').count() == 0 and v.locator('#ci-sendung-neu').count() == 0)
+    check('nur ansehen: keine Knöpfe „Unterlagen einlesen“ und „Neue Container“', v.locator('#ci-lesen').count() == 0 and v.locator('#ci-sendung-neu').count() == 0)
     v.click('#ci-sendungen tr[data-sendung]'); v.wait_for_selector('#dlg-sendung[open]')
     check('nur ansehen: Felder gesperrt, kein „Speichern“, Export bleibt', v.eval_on_selector_all('#dlg-sendung input, #dlg-sendung select, #dlg-sendung textarea', 'els => els.every(e => e.disabled)')
           and v.locator('#dlg-sendung button[type=submit]').count() == 0 and v.locator('#dlg-sendung [data-export-sendung]').count() == 1)
@@ -728,7 +804,7 @@ check('dasselbe Original noch einmal: nicht doppelt abgelegt', st == 200 and r['
 gross = REPORT + b'%' + b' ' * (2 * 1024 * 1024 + 500)   # über zwei Teile
 st, r = original(I, 'Grosser_Bericht.pdf', gross)
 neu = [f for f in _json(storage_raw('qs-ablage'))['liste'] if f.get('name') == 'Grosser_Bericht.pdf']
-check('Original in mehreren Teilen: vollständig im Eingang, ohne passenden Betrieb kein Vermerk', st == 200 and r['status'] == 'eingang' and r['vermerkt'] == 0 and len(neu) == 1 and neu[0]['groesse'] == len(gross)
+check('Original in mehreren Teilen: vollständig im Eingang, ohne passenden Farmer kein Vermerk', st == 200 and r['status'] == 'eingang' and r['vermerkt'] == 0 and len(neu) == 1 and neu[0]['groesse'] == len(gross)
       and neu[0]['sha256'] == hashlib.sha256(gross).hexdigest(), (st, r.get('status'), r.get('error'), neu))
 st, r = original(I, 'lieferant.json', GEOJSON.encode(), lieferant='')
 check('GeoJSON als „.json“, ohne Lieferant direkt im Ordner „EUDR“', st == 200 and r['status'] == 'eingang' and [f['pfad'] for f in _json(storage_raw('qs-ablage'))['liste'] if f['name'] == 'lieferant.json'] == ['EUDR'], (st, r))
