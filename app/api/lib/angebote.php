@@ -53,6 +53,7 @@ function angebot_ids_mit_resten(array $vorhanden): array
             foreach (array_keys(is_array($it['namen'] ?? null) ? $it['namen'] : []) as $k) $ids[(string)$k] = true;   // eigene Bezeichnungen
             foreach (array_keys(is_array($it['gruppen'] ?? null) ? $it['gruppen'] : []) as $k) $ids[(string)$k] = true;   // eigene Angebotsgruppen
         }
+        foreach (array_keys(is_array($d['reihen'] ?? null) ? $d['reihen'] : []) as $k) $ids[(string)$k] = true;   // Reihenfolge je Angebot
         foreach (array_keys(is_array($d['meta']['werbung'] ?? null) ? $d['meta']['werbung'] : []) as $k) $ids[(string)$k] = true;   // Werbung
     }
     foreach (customers_load()['customers'] as $c) foreach (is_array($c['angebote'] ?? null) ? $c['angebote'] : [] as $k) $ids[(string)$k] = true;
@@ -124,9 +125,46 @@ function clean_variants($v, string $where, array $known): array
             $row['value'] = round($x, 4);
         }
         if (!empty($p['carried'])) $row['carried'] = true;
+        // optional: Zusatzpreise nur in diesem Angebot (wie altPrices, höchstens 5; ältere Fassungen verwerfen das Feld)
+        $alt = [];
+        if ($st !== 'hidden') foreach (array_slice(is_array($p['alt'] ?? null) ? $p['alt'] : [], 0, 5) as $ap) $alt[] = clean_price($ap, $where);
+        if ($alt) $row['alt'] = $alt;
         $out[$oid] = $row;
     }
     return $out;
+}
+/* Reihenfolge der Artikel je Angebot (Inhaber 19.11.2026): $model['reihen'] = {<Angebots-ID>: [Artikel-IDs]} – nur Angebote mit
+   eigener Artikelliste, nur Artikel dieses Angebots, jede ID einmal. Optional: ältere Fassungen verwerfen das Feld, dann zeigt
+   das Angebot wieder die gemeinsame Reihenfolge (Stelle in items). Das Wochenangebot und Angebote, die ihm folgen, ordnet items. */
+function angebotsreihen_clean($v, array $items): array
+{
+    $out = [];
+    if (!is_array($v)) return $out;
+    foreach (offers_load()['offers'] as $o) {
+        $oid = (string)$o['id'];
+        $ids = $v[$oid] ?? null;
+        if (($o['fallback'] ?? 'standard') !== 'hidden' || !is_array($ids)) continue;
+        $drin = [];
+        foreach ($items as $it) { $x = $it['variants'][$oid] ?? null; if (is_array($x) && $x['status'] !== 'hidden') $drin[(string)$it['id']] = true; }
+        $l = []; $da = [];
+        foreach (array_slice($ids, 0, 5000) as $id) if (is_string($id) && isset($drin[$id]) && !isset($da[$id])) { $da[$id] = true; $l[] = $id; }
+        if ($l) $out[$oid] = $l;
+    }
+    ksort($out, SORT_STRING);
+    return $out;
+}
+/* Artikel in der Reihenfolge eines Angebots: die in $reihe genannten zuerst in dieser Reihenfolge, die übrigen (später
+   aufgenommenen) dahinter in ihrer gemeinsamen Reihenfolge. Die Kundenseite ordnet danach je Gruppe (OfferCore.enrichOffer);
+   gleiche Regel im Editor (inReihenfolge in admin.js). */
+function angebot_reihe(array $items, $reihe): array
+{
+    if (!is_array($reihe) || !$reihe) return $items;
+    $pos = [];
+    foreach (array_values($reihe) as $k => $id) if (!isset($pos[(string)$id])) $pos[(string)$id] = $k;
+    $x = [];
+    foreach (array_values($items) as $i => $it) $x[] = [$pos[(string)($it['id'] ?? '')] ?? count($reihe) + $i, $it];
+    usort($x, fn($a, $b) => $a[0] <=> $b[0]);
+    return array_column($x, 1);
 }
 /* Werbung je Angebot: $model['meta']['werbung'] = {<Angebots-ID>: {titel, text?, artikel: [{id, text?}], weitere?: [{titel,
    text?, artikel}]}} – Artikel, die im Angebot oben in einem farbigen Block stehen und in der Liste hervorgehoben sind.
@@ -265,6 +303,9 @@ function offer_resolve(array $m, array $def, bool $ausverkauftAusblenden = true)
     $items = [];
     $gids = [];
     foreach ($m['groups'] ?? [] as $g) $gids[$g['id']] = true;
+    // eigene Reihenfolge eines Angebots mit eigener Artikelliste; ausgeliefert wird sie nie (nur die geordneten Artikel)
+    if (!$std && ($def['fallback'] ?? 'standard') === 'hidden') $m['items'] = angebot_reihe($m['items'] ?? [], $m['reihen'][$def['id']] ?? null);
+    unset($m['reihen']);
     foreach ($m['items'] ?? [] as $it) {
         $v = $it['variants'][$def['id']] ?? null;
         $emp = empfehlung_fuer($it, $def['id']);
@@ -282,7 +323,7 @@ function offer_resolve(array $m, array $def, bool $ausverkauftAusblenden = true)
         } elseif ($v) {
             $regular = $v['status'] === 'value' ? ['status' => 'value', 'value' => $v['value']] : ['status' => 'request'];
             $it['price'] = $regular;
-            $it['altPrices'] = [];
+            $it['altPrices'] = $v['alt'] ?? [];   // Zusatzpreise dieses Angebots (nie die des Wochenangebots)
         } elseif (($def['fallback'] ?? 'standard') === 'hidden') {
             continue;   // eigene Artikelliste: ohne eigenen Eintrag nicht im Angebot – auch nicht mit Sonderpreis
         }
@@ -429,7 +470,8 @@ function clean_model($m, bool $strict): array
     if ($strict) $groups = array_values(array_filter($groups, function ($g) use ($used) { return isset($used[$g['id']]); }));
     $sections = [];
     foreach ($groups as $g) if ($g['section'] !== '' && !in_array($g['section'], $sections, true)) $sections[] = $g['section'];
-    return ['meta' => $outMeta, 'sections' => $sections, 'groups' => $groups, 'items' => $items];
+    $reihen = angebotsreihen_clean($m['reihen'] ?? null, $items);   // optional (ältere Fassungen verwerfen das Feld)
+    return ['meta' => $outMeta, 'sections' => $sections, 'groups' => $groups, 'items' => $items] + ($reihen ? ['reihen' => $reihen] : []);
 }
 
 /* ---------------- Gemeinsames Bearbeiten des Entwurfs ----------------
@@ -533,7 +575,7 @@ function angebot_aufbau_geaendert(array $pub, array $neu): bool
     $reihe = function (array $m, array $other, string $oid) use ($eigen): string {
         $gi = []; foreach ($m['groups'] ?? [] as $i => $g) $gi[(string)$g['id']] = $i;
         $x = [];
-        foreach ($m['items'] ?? [] as $i => $it) {
+        foreach (angebot_reihe($m['items'] ?? [], $oid === OFFER_STD ? null : ($m['reihen'][$oid] ?? null)) as $i => $it) {
             $a = $other[(string)$it['id']] ?? null;
             if ($a === null || $eigen($a, $oid) !== $eigen($it, $oid)) continue;
             $g = $eigen($it, $oid) !== '' ? $eigen($it, $oid) : (string)$it['groupId'];
@@ -545,7 +587,10 @@ function angebot_aufbau_geaendert(array $pub, array $neu): bool
     $jeId = function (array $m): array { $o = []; foreach ($m['items'] ?? [] as $it) $o[(string)$it['id']] = $it; return $o; };
     $pi = $jeId($pub); $ni = $jeId($neu);
     $oids = [OFFER_STD => true];
-    foreach ([$pub, $neu] as $m) foreach ($m['items'] ?? [] as $it) foreach (array_keys($it['gruppen'] ?? []) as $oid) $oids[(string)$oid] = true;
+    foreach ([$pub, $neu] as $m) {
+        foreach ($m['items'] ?? [] as $it) foreach (array_keys($it['gruppen'] ?? []) as $oid) $oids[(string)$oid] = true;
+        foreach (array_keys($m['reihen'] ?? []) as $oid) $oids[(string)$oid] = true;   // eigene Reihenfolge je Angebot
+    }
     foreach (array_keys($oids) as $oid) if ($reihe($pub, $ni, (string)$oid) !== $reihe($neu, $pi, (string)$oid)) return true;
     return false;
 }

@@ -157,7 +157,7 @@ function variant_text($v, string $oid = ''): string
     if ($oid === OFFER_STD) return is_array($v) && ($v['status'] ?? '') === 'hidden' ? 'ausgeblendet' : 'sichtbar';
     if (!is_array($v)) return 'ohne eigenen Preis';
     if (($v['status'] ?? '') === 'hidden') return 'ausgeblendet';
-    return price_text($v);
+    return price_text($v) . (!empty($v['alt']) && is_array($v['alt']) ? ' · ' . alts_text($v['alt']) : '');   // mit Zusatzpreisen des Angebots
 }
 function alts_text($alts): string
 {
