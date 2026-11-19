@@ -158,3 +158,23 @@ Kein Schritt auf dem Server, keine Migration, keine neuen Rechte.
 - **Rückfall:** `sh /opt/wochenangebot/deploy/release-zurueck.sh`. Die Vorversion zeigt die Schlachthöfe nicht, behält sie aber
   beim Speichern eines Containers (unbekannte Felder bleiben seit Abschnitt 8 erhalten). Das Dokument der Schlachthöfe bleibt
   unberührt liegen.
+
+## 10. Reiter „Tracking“ (ab dem Release mit dem Tracking)
+
+Auftrag des Inhabers 19.11.2026: sehen, wo ein Container ist und wann er ankommt, mit Schiffsname. Erste Stufe ohne fremde
+Dienste. Kein Schritt auf dem Server, keine Migration, keine neuen Rechte (ansehen mit „EUDR ansehen“, speichern mit
+„EUDR bearbeiten“).
+
+- **Pflegen:** Reiter „Tracking“ → Container anklicken: Containernummer, Stand, Schiff, Reederei, Abgangs- und Zielhafen,
+  geplante Abfahrt und Ankunft, Konnossement. Das geht auch, wenn die EUDR-Bewertung schon abgeschlossen ist.
+- **Liste:** zeigt alle Container, die noch nicht angekommen sind, nach Ankunft sortiert – überfällige zuerst. „Angekommene
+  anzeigen“ blendet die übrigen ein.
+- **Sendungsverfolgung der Reederei:** Mit Containernummer und Reederei erscheint im Fenster ein Verweis. Er öffnet die Seite
+  der Reederei in einem neuen Fenster und legt die Containernummer in die Zwischenablage. Die Adressen stehen in
+  `app/api/module/containerimport/tracking.php` (`CI_REEDEREIEN`) und sind beim Bau nicht einzeln geprüft worden – stimmt
+  eine nicht mehr, dort anpassen.
+- **Was die Seite nicht tut:** Sie fragt weder Reederei noch Hafen ab. Ankunftszeiten ändern sich also nur, wenn jemand sie
+  einträgt. Geplant: bestätigte Ankunft in Hamburg aus der öffentlichen Liste des Hafens (HVCC), später die lange Vorausschau
+  über die HVCC-Schnittstelle oder einen Tracking-Dienst – jeweils erst nach Entscheidung des Inhabers.
+- **Rückfall:** `sh /opt/wochenangebot/deploy/release-zurueck.sh`. Die Vorversion zeigt den Reiter nicht, behält die Angaben
+  aber beim Speichern eines Containers.

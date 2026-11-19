@@ -41,6 +41,14 @@ body.ci { line-height: 1.45; }
 .ci-chip[aria-pressed="true"] { border-color: var(--r-akzent); box-shadow: inset 0 0 0 1px var(--r-akzent); color: var(--r-text); font-weight: 600; }
 .ci-chip b { font-weight: 600; color: var(--r-leise); font-variant-numeric: tabular-nums; }
 #ci-inhalt { display: flex; flex-direction: column; gap: 12px; min-width: 0; }
+/* Reiter: je ein Bereich, der nicht gewählte ist ausgeblendet */
+.ci-bereich { display: flex; flex-direction: column; gap: 18px; min-width: 0; }
+.ci-bereich[hidden] { display: none; }
+#ci-bereich-tracking { gap: 12px; }
+.ci-t-lage { margin: 0; font-size: 14px; }
+.ci-t-lage .ci-leise { display: block; margin-top: 2px; font-size: 13px; }
+a.ci-knopf { text-decoration: none; }
+.ci-tab td.ci-fest { white-space: nowrap; }
 .ci-suchzeile { display: flex; flex-wrap: wrap; align-items: center; gap: 10px 18px; }
 .ci-suchzeile input, .ci-suchzeile select { box-sizing: border-box; width: min(100%, 420px); height: 40px; padding: 0 12px; border: 1px solid var(--r-linie-2); border-radius: 10px; background: var(--r-flaeche); color: var(--r-text); font: inherit; font-size: 16px; }
 .ci-legende { display: inline-flex; flex-wrap: wrap; align-items: center; gap: 4px 6px; font-size: 13px; color: var(--r-text-2); }

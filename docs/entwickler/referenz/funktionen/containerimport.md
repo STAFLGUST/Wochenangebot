@@ -2,7 +2,7 @@
 
 <!-- ERZEUGT von `python3 werkzeuge/doku.py erzeugen` – nicht von Hand ändern. Quelle: Funktionen und Kommentare im Code. Die CI prüft, dass diese Datei zum Code passt. -->
 
-14 Dateien, 167 Funktionen – in der Reihenfolge der Datei, **fett** die Abschnitte. Text = erste Aussage des Kommentars direkt über der Funktion (Python: Docstring). Übersicht aller Module: [README.md](README.md).
+18 Dateien, 185 Funktionen – in der Reihenfolge der Datei, **fett** die Abschnitte. Text = erste Aussage des Kommentars direkt über der Funktion (Python: Docstring). Übersicht aller Module: [README.md](README.md).
 
 ## `app/api/aktionen/containerimport.php`
 
@@ -60,6 +60,7 @@ _Container-Import: Container (ein Einkauf bei einem Lieferanten, eine Partienumm
 
 - `eudr_sendung_pruefen(b, betriebIds, alt)` – Felder einer Sendung aus der Eingabe prüfen (ohne id, rev, Zeitstempel und Abschluss)
 - `eudr_sendung_laufend(b, alt)` – Angaben, die sich mit der Reise des Containers ändern – sie bleiben auch nach dem Abschluss der Bewertung pflegbar.
+- `ci_reise(b, alt)` – Stand und Containernummer aus der Eingabe (ohne Eingabe bleibt der gespeicherte Wert) – die eine Stelle für alle, die sie pflegen: das Fenster „Container“ …
 - `eudr_sendung_nachtrag(b, alt)` – Was einem älteren Eintrag noch fehlt, lässt sich auch nach dem Abschluss der Bewertung nachtragen – einmal, solange das Feld leer ist: die Partienummer …
 - `ci_lieferant_schluessel(x)` – Schlüssel des Lieferanten eines Eintrags (Container, Schlachthof): mit Nummer der Stammdaten die Nummer, sonst der Name ohne Rücksicht auf Groß- und …
 - `eudr_lieferant(b, alt)` – Lieferant eines Containers: mit „lieferantNr“ aus den Stammdaten der Verwaltung (Schnittstelle lieferanten_kurz, GR-101).
@@ -118,6 +119,12 @@ _STAFL-Plattform · Modul Container-Import – Schlachthöfe_
 - `ci_schlachthof_lieferant_wechseln(alt, neu)` – Folgen eines Lieferantenwechsels am Schlachthof für seine Container (Regel siehe ci_schlachthof_speichern).
 - `ci_schlachthof_am_container(b, lieferant, bisher)` – Schlachthof eines Containers aus der Eingabe: leer oder ein Schlachthof desselben Lieferanten ($lieferant = Eintrag mit lieferantNr und lieferant).
 
+## `app/api/module/containerimport/tracking.php`
+
+_STAFL-Plattform · Modul Container-Import – Tracking: wo ist der Container, wann kommt er an (Auftrag des Inhabers 19.11.2026: eigener Reiter neben EUDR; Schiffsname eintragen; wissen, wann der Container z._
+
+- `ci_tracking_pruefen(b, alt)` – Angaben des Trackings aus der Eingabe prüfen (genau die Felder aus CI_TRACKING_VORGABEN).
+
 ## `app/api/module/containerimport/whisp.php`
 
 _Container-Import · EUDR_
@@ -155,7 +162,8 @@ _STAFL-Plattform · Modul Container-Import – Container (ein Einkauf bei einem 
 
 **Seite**
 
-- `zeichnen()`
+- `zeichnen()` – Kopf und der gewählte Reiter.
+- `eudrZeichnen()`
 - `sendungenSicht()`
 - `betriebeSicht()`
 - `karteSicht()`
@@ -249,6 +257,26 @@ _STAFL-Plattform · Modul Container-Import – Schlachthöfe_
 - `fenster(id)`
 - `speichern(zusatz)`
 
+## `app/module/containerimport/tracking.js`
+
+_STAFL-Plattform · Modul Container-Import – Reiter „Tracking“: wo ist der Container, wann kommt er an (Auftrag des Inhabers 19.11.2026)._
+
+- `ankunft(s)` – Ankunft in Worten: [Text, Farbe der Marke]
+- `zeichnen()`
+- `fenster(id)`
+- `speichern()`
+
+## `tests/e2e/containerimport_hilfe.py`
+
+_Gemeinsame Hilfen für die Testgruppen des Moduls Container-Import (containerimport_*)_
+
+- `check(n, c, i)` – Eine Prüfung: Name, Ergebnis, bei Fehlschlag ein Hinweis zur Fehlersuche.
+- `ende()` – Zusammenfassung ausgeben und mit dem Ergebnis der Gruppe enden.
+- `nutzer_anlegen()` – Administrator anmelden und die beiden Nutzer des Moduls anlegen → (Administrator, Ina, Lea) als angemeldete Clients.
+- `login(user)`
+- `container(r, partie)` – Container mit dieser Partienummer aus einer Antwort ({} = nicht dabei).
+- `seite(br, user, errs, fremd, vp, schema)` – Seite des Moduls für einen Nutzer öffnen; JavaScript-Fehler landen in errs, Anfragen nach außen in fremd.
+
 ## `tests/e2e/test_containerimport.py`
 
 _Modul Container-Import, Reiter EUDR (app/module/containerimport/, Oberfläche containerimport.intern, Auftrag des Inhabers 18.11.2026)_
@@ -312,6 +340,25 @@ _Container-Import: Schlachthöfe als Stammdaten unter dem Lieferanten (Aktion co
 **Umbenennen: offene Container folgen, abgeschlossene nicht (GR-106)**
 
 **Ältere Container ohne das Feld (GR-006), Nachtragen nach dem Abschluss, Felder einer späteren Version**
+
+**Oberfläche**
+
+- `seite(user, vp, schema)`
+
+## `tests/e2e/test_containerimport_tracking.py`
+
+_Container-Import: Reiter „Tracking“ (Aktion containerimport_tracking_save, app/api/module/containerimport/tracking.php, Oberfläche app/module/containerimport/tracking.js) – erste Stufe ohne fremde Dienste._
+
+- `tag(n)` – Datum n Tage ab heute (Datum des Servers) als JJJJ-MM-TT.
+- `anlegen(partie, **mehr)`
+- `tracking(c, **angaben)` – Tracking speichern → (Status, Antwort, der Container danach).
+- `vorbereiten(c, **angaben)` – Tracking für die Oberfläche unten setzen – muss gelingen.
+
+**Stand und Rechte**
+
+**Speichern**
+
+**Zusammenspiel mit dem Reiter EUDR**
 
 **Oberfläche**
 

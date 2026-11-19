@@ -16,6 +16,7 @@ declare(strict_types=1);
    eudr_text oder eudr_liste); neue Funktionen, die nicht zur EUDR gehören, heißen ci_ (Container-Import). */
 if (!defined('WA_API')) { http_response_code(404); exit; }   // nur über api/index.php nutzbar
 require __DIR__ . '/schlachthoefe.php';   // Schlachthöfe unter dem Lieferanten (eigene Datei, gleiche Helfer)
+require __DIR__ . '/tracking.php';        // Reiter Tracking: Schiff, Reederei, Häfen, Abfahrt und Ankunft am Container
 
 const EUDR_SPERRE = 'containerimport-eudr-betriebe';   // eine Sperre für beide Dokumente (Sendungen verweisen auf Betriebe)
 const EUDR_MAX_BETRIEBE = 2000;
@@ -81,7 +82,7 @@ function eudr_betriebe(): array { return eudr_liste(store_read('containerimport-
 function eudr_sendungen(): array
 {
     $doc = eudr_liste(store_read('containerimport-eudr-sendungen'));
-    $doc['liste'] = array_map(fn($s) => $s + EUDR_SENDUNG_VORGABEN, $doc['liste']);
+    $doc['liste'] = array_map(fn($s) => $s + EUDR_SENDUNG_VORGABEN + CI_TRACKING_VORGABEN, $doc['liste']);
     return $doc;
 }
 /* Herkunftsbetriebe speichern */
@@ -457,11 +458,19 @@ function eudr_sendung_laufend(array $b, ?array $alt): array
 {
     $alt = ($alt ?? []) + EUDR_SENDUNG_VORGABEN + ['container' => ''];
     return [
-        'stand' => eudr_wahl($b['stand'] ?? null, array_keys(EUDR_STAENDE), 'Stand', $alt['stand']),
-        'container' => eudr_text($b['container'] ?? $alt['container'], 40, 'Containernummer'),
+        ...ci_reise($b, $alt),
         'akte' => eudr_text($b['akte'] ?? $alt['akte'], 40, 'Aktennummer'),
         'dds' => eudr_dds_pruefen(is_array($b['dds'] ?? null) ? $b['dds'] : []),
         'notiz' => eudr_text($b['notiz'] ?? '', 2000, 'Notiz'),
+    ];
+}
+/* Stand und Containernummer aus der Eingabe (ohne Eingabe bleibt der gespeicherte Wert) – die eine Stelle für alle, die sie
+   pflegen: das Fenster „Container“ (eudr_sendung_laufend) und das Fenster „Tracking“ (containerimport_tracking_save). */
+function ci_reise(array $b, array $alt): array
+{
+    return [
+        'stand' => eudr_wahl($b['stand'] ?? null, array_keys(EUDR_STAENDE), 'Stand', $alt['stand']),
+        'container' => eudr_text($b['container'] ?? $alt['container'], 40, 'Containernummer'),
     ];
 }
 /* Was einem älteren Eintrag noch fehlt, lässt sich auch nach dem Abschluss der Bewertung nachtragen – einmal, solange das
@@ -711,6 +720,6 @@ function eudr_stand(): array
         'sendungen' => array_map(fn($s) => eudr_sendung_sicht($s, $betriebe, $hofNamen), eudr_sendungen()['liste']),
         'laender' => array_map(fn($l) => ['name' => $l['name'], 'klasse' => $l['klasse']], EUDR_LAENDER),
         'schlachthoefe' => $hoefe,
-        'portale' => EUDR_PORTALE, 'staende' => EUDR_STAENDE, 'heute' => date('Y-m-d'),
+        'portale' => EUDR_PORTALE, 'staende' => EUDR_STAENDE, 'reedereien' => CI_REEDEREIEN, 'heute' => date('Y-m-d'),
     ];
 }

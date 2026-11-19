@@ -187,6 +187,23 @@ switch ($action) {
             respond(['ok' => true, 'id' => $s['id']] + eudr_stand());
         }
 
+        /* Tracking eines Containers pflegen: Schiff, Reederei, Konnossement, Häfen, Abfahrt, Ankunft, dazu Stand und
+           Containernummer. Geht auch nach dem Abschluss der Bewertung und ändert nichts an ihr. */
+        case 'containerimport_tracking_save': {
+            $me = eudr_bearbeiter();
+            $b = body();
+            $s = with_lock(EUDR_SPERRE, function () use ($b, $me) {
+                $doc = eudr_sendungen();
+                [$i, $alt] = eudr_sendung_holen($doc, $b['id'] ?? '');
+                eudr_rev_pruefen($b, $alt, 'Der Container');
+                $doc['liste'][$i] = ['rev' => $alt['rev'] + 1, 'geaendert' => eudr_wer($me)] + ci_reise($b, $alt) + ci_tracking_pruefen($b, $alt) + $alt;
+                eudr_sendungen_schreiben($doc);
+                return $doc['liste'][$i];
+            });
+            audit('containerimport', 'Tracking des Containers „' . eudr_container_name($s) . '“ gespeichert');
+            respond(['ok' => true, 'id' => $s['id']] + eudr_stand());
+        }
+
         /* Schlachthof anlegen oder ändern (Stammdaten unter dem Lieferanten; archivieren statt löschen) */
         case 'containerimport_schlachthof_save': {
             $me = eudr_bearbeiter();
