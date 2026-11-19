@@ -270,7 +270,10 @@ with sync_playwright() as p:
     check('Editor zeigt die neue Reihenfolge mit Bereichsüberschriften', ed[0] == flach(ERW) and ed[1] == [b.lower() for b, _ in ERW if b], ed[1])
     check('Feld „Bereich“ der verschobenen Gruppe gesetzt', a.locator(f'#groups section.gcard[data-gid="{OHNE_G}"] [data-gf="section"]').input_value() == ERW[1][0])
     log = json.dumps(A.call('log')[1], ensure_ascii=False)
-    check('Protokoll: Aufbau des Angebots geändert (Bereich bei 1 Gruppe neu)', 'Aufbau des Angebots geändert (Reihenfolge der Bereiche, Gruppen und Artikel, Bereich bei 1 Gruppe neu' in log, log[:400])
+    # Wochenangebot ändert den Bereich einer Gruppe, die das Testangebot mit eigener Liste mitnutzt: das Testangebot behält
+    # seine Gruppe als Kopie (Inhaber 19.11.2026) – im Protokoll „Gruppe bei 3 Artikeln neu“
+    check('Protokoll: Aufbau des Angebots geändert (Bereich bei 1 Gruppe neu, Testangebot behält seine Gruppe)',
+          'Aufbau des Angebots geändert (Reihenfolge der Bereiche, Gruppen und Artikel, Bereich bei 1 Gruppe neu, Gruppe bei 3 Artikeln neu)' in log, log[:400])
     check('Knopf „Veröffentlichen“ nennt den geänderten Aufbau', 'Aufbau geändert' in (a.get_attribute('#offen-zahl, #offen-liste', 'title') or ''), a.get_attribute('#offen-zahl, #offen-liste', 'title'))
     vorschau = A.call('offer&draft=1')[1]['offer']
     check('Vorschau (Entwurf): Gruppen in neuer Reihenfolge', [g['id'] for g in vorschau['groups']] == flach(ERW))

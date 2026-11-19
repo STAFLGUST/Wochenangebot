@@ -186,7 +186,7 @@
       dlg.close();
       toast(r.unveraendert ? 'Aufbau unverändert – nichts gespeichert.' : r.gespeichert === false
         ? 'Aufbau übernommen – der Entwurf ist noch nicht gespeichert (Hinweis oben).'
-        : 'Aufbau übernommen und im Entwurf gespeichert – gilt nur für dieses Angebot, für Kunden sichtbar nach „Veröffentlichen“.', 6000);
+        : 'Aufbau übernommen und im Entwurf gespeichert – gilt nur für dieses Angebot (nur die Stelle eines Artikels innerhalb seiner Gruppe ist noch gemeinsam), für Kunden sichtbar nach „Veröffentlichen“.', 6000);
       return;
     }
     if (r && r.konflikt) {

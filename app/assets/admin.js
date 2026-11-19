@@ -1638,7 +1638,7 @@
     if (f === 'code') { const c = v.trim(); it.code = c || null; el.value = c; }
     else if (f === 'name') {
       const typed = C.clean(v);
-      if (!typed) { el.value = it.name; toast('Die Bezeichnung darf nicht leer sein.'); return false; }
+      if (!typed) { el.value = nameIn(it, curOffer); toast('Die Bezeichnung darf nicht leer sein.'); return false; }
       const n = typed;   // Bezeichnung ohne Einschränkung, auch mit „frisch“ (Inhaber 05.11.2026) – der Zustand bleibt eigenes Feld
       el.value = n;
       if (it.condition === 'unbekannt' && C.stripFrisch(n) !== n) it.condition = 'frisch';
@@ -1703,6 +1703,7 @@
     const gcard = el.closest('[data-gid]');
     if (gcard && el.dataset.gf) {
       let g = gById(gcard.dataset.gid);
+      if (followsStd(curOffer)) { el.value = g[el.dataset.gf] || ''; toast(`„${offerShort(curOffer)}“ folgt dem Wochenangebot – Gruppen bitte dort ändern.`, 5000); return; }
       const v = C.clean(el.value);
       if (el.dataset.gf === 'name' && !v) { el.value = g.name; toast('Die Gruppe braucht einen Namen.'); return; }
       pushUndo();
@@ -1769,6 +1770,7 @@
     if (act === 'copy') { openCopy(); return; }
     if (!g) return;
     if (act === 'add-item') { openArtikelwahl({ gruppe: g.id }); return; }
+    if ((act === 'g-up' || act === 'g-down') && followsStd(curOffer)) { toast(`„${offerShort(curOffer)}“ folgt dem Wochenangebot – Gruppen bitte dort ordnen.`, 5000); return; }
     if (act === 'g-up' || act === 'g-down') {
       // getauscht wird mit der benachbarten Gruppe dieses Angebots; gemeinsam genutzte Gruppen werden vorher getrennt
       const vis = sichtbareGruppen(), k = vis.indexOf(g);
@@ -4558,7 +4560,9 @@
     const vorher = JSON.stringify(model);
     // Reihenfolge oder Bereiche der Gruppen geändert: gemeinsam genutzte Gruppen des Angebots vorher trennen. Ein verschobener
     // Artikel wechselt nur hier die Gruppe (artikelOrdnen → setzeJeAngebot), die Gruppe selbst ändert sich dabei nicht.
-    const zu = gruppenNeu !== gruppenAlt ? gruppenTrennen(ids) : new Map();
+    const platz = new Map(model.groups.map((g, i) => [g.id, i]));   // nur Gruppen trennen, deren Platz oder Bereich sich ändert
+    const anders = new Set(ordnung.filter((g, i) => platz.get(g.id) !== i || (bereich.has(g.id) && bereich.get(g.id) !== (g.section || ''))).map((g) => g.id));
+    const zu = anders.size ? gruppenTrennen(anders) : new Map();
     const nid = (id) => zu.get(id) || id;
     if (artGeaendert && !artikelOrdnen(new Map(neu.map((x) => [nid(x.id), x.artikel])), curOffer)) { model = JSON.parse(vorher); return { fehler: 'Die Artikel ließen sich nicht ordnen – bitte das Fenster neu öffnen.' }; }
     undoStack.push(vorher);

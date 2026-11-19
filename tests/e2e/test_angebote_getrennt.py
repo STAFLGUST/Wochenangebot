@@ -217,6 +217,12 @@ with sync_playwright() as p:
     until(lambda: gname('std', t['id']) == 'Std G4'); ruhig()
     check('Wochenangebot: Gruppe umbenannt – folgendes Angebot übernimmt den Namen, Edeka und Bela behalten ihren',
           gname(FOLGT, t['id']) == 'Std G4' and gname(ED, t['id']) == GN[G4] and gname(BE, t['id']) == 'Bela G4', (gname(FOLGT, t['id']), gname(ED, t['id'])))
+    # Im folgenden Angebot ändert eine Gruppenkarte das Wochenangebot nicht (Hinweis statt Änderung)
+    angebot(FOLGT, t['id'])
+    karte(karte_von(t['id']), 'name', 'Folgt G4')
+    a.wait_for_selector('#toast.show:has-text("folgt dem Wochenangebot")')
+    check('Folgendes Angebot: Gruppe umbenennen ändert das Wochenangebot nicht (Hinweis)', gname('std', t['id']) == 'Std G4' and gname(FOLGT, t['id']) == 'Std G4'
+          and a.input_value(f'#groups section.gcard[data-gid="{karte_von(t["id"])}"] [data-gf=name]') == 'Std G4', gname('std', t['id']))
     check('keine Skriptfehler', not errors, errors[:3])
 
     m390 = br.new_page(viewport={'width': 390, 'height': 844}, is_mobile=True)
