@@ -411,9 +411,9 @@ def gruppe_je_angebot_oberflaeche(a, br, t):
     # Zurücknehmen in der Liste der unveröffentlichten Änderungen
     a.click('#offen-liste'); a.wait_for_selector('#dlg-publish[open]')
     check('Liste der Änderungen: Gruppe je Angebot als „Bearbeitet“, mit Angebot und Gruppe genannt', 'bearbeitet (1)' in a.inner_text('#publish-body').lower()
-          and a.locator(f'#publish-body [data-rv=changed][data-rid="{x["id"]}"]').count() == 1
+          and a.locator(f'#publish-body [data-rv=changed][data-rid="{x["id"]}|{HH}"]').count() == 1
           and 'Gruppe Handelshof, EFS: wie Basis → Nur bei Chefs' in a.text_content('#publish-body .rv-f'), a.inner_text('#publish-body')[:300])
-    a.click(f'#publish-body [data-rv=changed][data-rid="{x["id"]}"]'); a.click('#dlg-confirm [data-v="1"]')
+    a.click(f'#publish-body [data-rv=changed][data-rid="{x["id"]}|{HH}"]'); a.click('#dlg-confirm [data-v="1"]')
     a.wait_for_function("document.querySelector('#publish-body').textContent.includes('Keine Änderungen gegenüber')")
     a.click('#dlg-publish [data-close]'); wait_saved(a)
     check('… zurückgenommen: wieder wie veröffentlicht', entw(x).get('gruppen') == {CH: 'gx-chefs'}, entw(x).get('gruppen'))

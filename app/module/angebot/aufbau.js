@@ -7,7 +7,7 @@
    „Bereich neu“), ein Artikel innerhalb seiner Gruppe oder in eine andere (Ziehen auf eine aufgeklappte Gruppe an die Stelle,
    auf eine zugeklappte ans Ende; dazu die Auswahl „In Gruppe …“ für Handy und Tastatur, „verschoben“). Alles gilt nur für das
    gewählte Angebot (Inhaber 19.11.2026: gemeinsam genutzte Gruppen trennt admin.js vorher, gruppenTrennen; ein Angebot mit
-   eigener Artikelliste ordnet seine Artikel in model.reihen). „nur hier“ = eigene Gruppe in diesem Kundenangebot (it.gruppen).
+   eigener Artikelliste ordnet seine Artikel über it.stellen). „nur hier“ = eigene Gruppe in diesem Kundenangebot (it.gruppen).
    Gespeichert wird erst mit „Übernehmen“ – alles in einem Schritt über den Entwurf (admin.js: WA.angebot.aufbau.uebernehmen →
    save_draft mit Revision, Recht angebot.bearbeiten auf dem Server); hat jemand anderes den Aufbau inzwischen geändert,
    übernimmt das Fenster nichts und zeigt den neuen Stand. „Abbrechen“, × und Escape verwerfen (mit Änderungen schließt

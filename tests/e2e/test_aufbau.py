@@ -534,7 +534,8 @@ with sync_playwright() as p:
     ec['gruppen'] = {EIGEN: GE}
     kopf = [i for i in mb['items'] if i['groupId'] == GB_ and i is not ec] + [ec, ne, eg]
     mb['items'] = kopf + [i for i in mb['items'] if i not in kopf]
-    mb.pop('reihen', None)   # Reihenfolge je Angebot aus den Schritten oben verwerfen: hier gilt die eben gebaute gemeinsame
+    for i in mb['items']:
+        i.pop('stellen', None)   # Reihenfolge je Angebot aus den Schritten oben verwerfen: hier gilt die eben gebaute gemeinsame
     assert gi[GB_] < gi[GE] and A.call('save_draft', {'model': mb, 'revision': rb})[0] == 200
     a.reload(); a.wait_for_selector('#screen-editor:not([hidden]) tr[data-id]')
     veroeffentlichen(a)
