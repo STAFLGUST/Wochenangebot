@@ -532,6 +532,11 @@ with sync_playwright() as p:
     lf = pg.evaluate("""() => { const t = document.createElement('span'); t.style.color = 'var(--r-text)'; document.querySelector('#r-leiste').append(t); const soll = getComputedStyle(t).color; t.remove();
       return { soll, ist: [...new Set([...document.querySelectorAll('#r-leiste a.r-eintrag')].map((a) => getComputedStyle(a).color))] }; }""")
     check('Seitenleiste: Einträge schwarz wie in allen Modulen (Textfarbe der Leiste), nicht in der Linkfarbe des QM-Systems', lf['ist'] == [lf['soll']], lf)
+    pg.evaluate('window.STAFL_RAHMEN.sucheOeffnen()'); pg.wait_for_selector('#r-palette[open] a.r-palette-treffer')
+    tf = pg.evaluate("""() => { const t = document.createElement('span'); t.style.color = 'var(--r-text)'; document.querySelector('#r-palette').append(t); const soll = getComputedStyle(t).color; t.remove();
+      return { soll, ist: [...new Set([...document.querySelectorAll('#r-palette a.r-palette-treffer')].map((a) => getComputedStyle(a).color))] }; }""")
+    check('Suche des Rahmens: Treffer ebenfalls schwarz, nicht in der Linkfarbe des QM-Systems', tf['ist'] == [tf['soll']], tf)
+    pg.keyboard.press('Escape'); pg.wait_for_selector('#r-palette:not([open])', state='attached')
     pg.hover('#r-leiste a[data-modul="qs"]'); pg.wait_for_function("document.querySelector('.r-app').classList.contains('r-auf')")
     pg.screenshot(path=os.path.join(SH, 'qs_leiste_offen_1280.png'))
     pg.mouse.move(900, 600); pg.wait_for_function("!document.querySelector('.r-app').classList.contains('r-auf')")

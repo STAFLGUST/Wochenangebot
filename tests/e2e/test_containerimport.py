@@ -465,6 +465,19 @@ with sync_playwright() as pw:
     o.context.close()
 
     p = seite('ina'); p.wait_for_selector('#ci-app:not([hidden]) #ci-sendungen tr[data-sendung]')
+    p.wait_for_selector('#r-leiste a.r-eintrag[data-modul="containerimport"]', state='attached')
+    lf = p.evaluate("""() => { const t = document.createElement('span'); t.style.color = 'var(--r-text)'; document.querySelector('#r-leiste').append(t); const soll = getComputedStyle(t).color; t.remove();
+      return { soll, ist: [...new Set([...document.querySelectorAll('#r-leiste a.r-eintrag')].map((a) => getComputedStyle(a).color))] }; }""")
+    check('Seitenleiste: Einträge in der Textfarbe des Rahmens (hell: schwarz), nicht in der Linkfarbe des Moduls', lf['ist'] == [lf['soll']], lf)
+    p.evaluate('window.STAFL_RAHMEN.sucheOeffnen()'); p.wait_for_selector('#r-palette[open] a.r-palette-treffer')
+    tf = p.evaluate("""() => { const t = document.createElement('span'); t.style.color = 'var(--r-text)'; document.querySelector('#r-palette').append(t); const soll = getComputedStyle(t).color; t.remove();
+      return { soll, ist: [...new Set([...document.querySelectorAll('#r-palette a.r-palette-treffer')].map((a) => getComputedStyle(a).color))] }; }""")
+    check('Suche des Rahmens: Treffer ebenfalls in der Textfarbe des Rahmens', tf['ist'] == [tf['soll']], tf)
+    p.keyboard.press('Escape'); p.wait_for_selector('#r-palette:not([open])', state='attached')
+    p.wait_for_selector('.r-app.r-bereit:not(.r-fest):not(.r-auf)')
+    p.hover('#r-leiste a[data-modul="containerimport"]'); p.wait_for_function("document.querySelector('.r-app').classList.contains('r-auf')")
+    shot(p, os.path.join(SH, 'containerimport-leiste-offen-1280.png'))
+    p.mouse.move(700, 500); p.wait_for_function("!document.querySelector('.r-app').classList.contains('r-auf')")
 
     # Berichtsleser: Fehlbilder dürfen nie still einen falschen Wert liefern (erfundene Textstücke, im Browser ausgewertet)
     fehl = p.evaluate('''() => {
@@ -572,6 +585,9 @@ with sync_playwright() as pw:
     p.fill('#ci-suche', 'muster beispiel'); p.wait_for_function("document.querySelectorAll('#ci-betriebe tbody tr').length === 1")
     shot(p, os.path.join(SH, 'containerimport-betriebe-1280.png'))
     p.click('#ci-betriebe tr[data-betrieb]'); p.wait_for_selector('#dlg-betrieb[open]')
+    check('Links im eigenen Fenster behalten die Linkfarbe des Moduls (nur der Rahmen ist ausgenommen)',
+          p.evaluate("""() => { const t = document.createElement('span'); t.style.color = 'var(--r-akzent-text)'; document.querySelector('#dlg-betrieb').append(t); const soll = getComputedStyle(t).color; t.remove();
+            return getComputedStyle(document.querySelector('#dlg-betrieb a[href*="openstreetmap"]')).color === soll; }"""))
     p.wait_for_function("document.querySelector('#betrieb-karte')?.dataset.karte === 'bereit'")
     check('Farmer: Umriss mit vier Eckpunkten, Maßstab, Lage im Land; Verweise auf Global Nature Watch und Whisp', p.locator('#betrieb-karte .ci-k-ecke').count() == 4 and p.inner_text('#betrieb-karte .ci-k-massstab').strip() in ('500 m', '1 km')
           and p.locator('#betrieb-karte .ci-k-lage svg').count() == 1 and p.eval_on_selector_all('#dlg-betrieb .ci-portale a', 'as => as.map(a => a.hostname)') == ['www.globalnaturewatch.org', 'whisp.openforis.org']
