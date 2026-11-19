@@ -204,6 +204,15 @@ switch ($action) {
             respond(['ok' => true, 'id' => $s['id']] + eudr_stand());
         }
 
+        /* Tracking: Liste „Expected vessels“ von Hafen Hamburg auffrischen, wenn ein Container sie braucht und die Frist um
+           ist (hafen.php). Ändert keinen Container – auch wer nur ansehen darf, stößt das an (POST wegen CSRF). */
+        case 'containerimport_tracking_hafen': {
+            eudr_leser(true);
+            if (session_status() === PHP_SESSION_ACTIVE) session_write_close();   // sonst wartet jede weitere Anfrage der Sitzung auf den Abruf
+            $abgerufen = with_lock('containerimport-hafenmeldungen', fn() => ci_hafen_auffrischen(eudr_sendungen()['liste']));
+            respond(['ok' => true, 'abgerufen' => $abgerufen] + eudr_stand());
+        }
+
         /* Schlachthof anlegen oder ändern (Stammdaten unter dem Lieferanten; archivieren statt löschen) */
         case 'containerimport_schlachthof_save': {
             $me = eudr_bearbeiter();

@@ -920,3 +920,10 @@ eigentuemer = "containerimport"
 bereich = "intern"
 schutz = "vertraulich"
 beschreibung = "Container-Import: Schlachthöfe als Stammdaten unter dem Lieferanten (Name, Lieferant mit Nummer der Stammdaten und Name, Land, Ort, Zulassungsnummer, Notiz); Container verweisen darauf. Nichts wird gelöscht (archivieren)."
+[[dokument]]
+name = "containerimport-hafenmeldungen"
+eigentuemer = "containerimport"
+bereich = "intern"
+schutz = "intern"
+beschreibung = "Container-Import · Tracking: zuletzt abgerufene öffentliche Liste „Expected vessels“ von Hafen Hamburg (Schiff, Ankunft, Liegeplatz, Terminal) mit Abrufzeit und Fehlertext. Zwischenspeicher – lässt sich jederzeit neu abrufen; enthält nichts Eigenes."
+

@@ -46,6 +46,11 @@ schreibend = true
 oberflaeche = "containerimport.intern"
 schreibend = true
 
+# Tracking: Ankünfte in Hamburg aus der öffentlichen Liste des Hafens auffrischen (POST wegen CSRF; ändert keinen Container)
+[aktion.containerimport_tracking_hafen]
+oberflaeche = "containerimport.intern"
+schreibend = true
+
 # Schlachthof anlegen oder ändern (Stammdaten unter dem Lieferanten)
 [aktion.containerimport_schlachthof_save]
 oberflaeche = "containerimport.intern"

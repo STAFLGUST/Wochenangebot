@@ -876,6 +876,14 @@ Caddy setzt auf allen Hosts `script-src 'self'` (ohne `'unsafe-inline'`), `conne
   über `containerimport_tracking_save`, das nur diese Felder, den Stand und die Containernummer anfasst – auch nach dem
   Abschluss der Bewertung. Die Reedereien mit ihren Verweisen stehen an einer Stelle (`CI_REEDEREIEN`). Erste Stufe: die
   Seite ruft keinen fremden Dienst ab; der Verweis ist ein gewöhnlicher Link in ein neues Fenster.
+  **Ankunft in Hamburg** (zweite Stufe des Trackings, Zustimmung des Inhabers 19.11.2026): `hafen.php` ruft die öffentliche
+  Liste „Expected vessels“ von Hafen Hamburg ab (nur der Server, nie der Browser; höchstens alle zwei Stunden und nur bei
+  Bedarf), liest je Schiff Ankunft, Liegeplatz und Terminal (`ci_hafen_lesen`: Überschrift `<h3>Datum | Liegeplatz,
+  Terminal</h3>` und `<h2>Name</h2>`) und legt sie mit Abrufzeit in `containerimport-hafenmeldungen` ab. Abgerufenes steht
+  nie in den Feldern des Containers: `ci_hafen_sicht` stellt es beim Lesen über den Schiffsnamen dazu (`hafen` im Stand).
+  `tracking.js` bittet einmal je Besuch des Reiters um Auffrischen (`containerimport_tracking_hafen`). Ändert die Seite des
+  Hafens ihren Aufbau, meldet die Oberfläche „ließ sich nicht lesen“ – dann `ci_hafen_lesen` und die Vorlage
+  `tests/fixtures/containerimport/hafen-hamburg.html` anpassen. In Tests zeigt `WA_HAFEN_HH_URL` auf einen Nachbau.
   **Whisp-Abfrage** (Knopf „In Whisp prüfen“ im Fenster „Farmer“): Anders als die Karte ruft hier der **Server** den
   fremden Dienst ab (`app/api/module/containerimport/whisp.php`, Aktion `containerimport_eudr_whisp`) – der Schlüssel
   `WHISP_API_KEY` darf nie in den Browser. Hinaus geht nur der Umriss; die Seite fragt alle drei Sekunden nach, bis Whisp
