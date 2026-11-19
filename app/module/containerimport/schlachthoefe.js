@@ -9,7 +9,7 @@
 (() => {
   'use strict';
   const C = window.STAFL_CI;
-  const { S, $, esc, icon, SU, feld, kopf, werte, api, uebernehmen, toast, oeffnen, landName, laenderWahl, lieferantFeld, lieferantAus, suchfeld, archivSchalter } = C;
+  const { S, $, esc, icon, SU, feld, kopf, werte, api, uebernehmen, toast, oeffnen, landName, laenderWahl, lieferantFeld, lieferantAus, suchfeld, archivSchalter, titel } = C;
   S.suche.schlachthoefe = '';
   const hof = (id) => S.d.schlachthoefe.find((x) => x.id === id);
   const containerVon = (id) => S.d.sendungen.filter((s) => s.schlachthof === id);
@@ -21,7 +21,7 @@
     const zeile = (x) => `<tr data-schlachthof="${esc(x.id)}" tabindex="0" class="${x.aktiv ? '' : 'ci-archiv'}">
       <td><span class="ci-name">${esc(x.name)}</span><span class="ci-unter">${x.zulassung ? `Zulassung <span class="ci-zahlen">${esc(x.zulassung)}</span>` : '—'}</span></td>
       <td data-t="Lieferant"><span>${esc(x.lieferant)}</span><span class="ci-unter">${x.lieferantNr ? `Nr. ${esc(x.lieferantNr)}` : 'nicht mit den Stammdaten verknüpft'}</span></td>
-      <td data-t="Lage"><span>${esc(landName(x.land))}</span><span class="ci-unter">${esc(x.ort)}</span></td>
+      <td data-t="Lage" class="ci-woerter"><span>${esc(landName(x.land))}</span><span class="ci-unter">${esc(x.ort)}</span></td>
       <td data-t="Container" class="ci-r">${containerVon(x.id).length}</td></tr>`;
     $('#ci-inhalt').innerHTML = `<div class="ci-suchzeile">${S.d.schlachthoefe.length ? suchfeld('Name, Zulassungsnummer, Ort, Lieferant', 'Schlachthöfe') : ''}
         ${darf ? `<button class="ci-knopf" type="button" id="ci-schlachthof-neu">${icon('plus')}Neuer Schlachthof</button>` : ''}</div>`
@@ -47,7 +47,7 @@
           ${feld('Notiz', 'notiz', x.notiz, { lang: 2, aus })}
         </div>
         ${neu ? '' : `<h3 class="ci-h">Container dieses Schlachthofs</h3>${container.length
-          ? `<ul class="ci-wahl">${container.map((s) => `<li><span><strong>${esc(s.name)}</strong><small>${esc([S.d.staende[s.stand], s.ware, s.container && `Container ${s.container}`].filter(Boolean).join(' · '))}</small></span></li>`).join('')}</ul>`
+          ? `<ul class="ci-wahl">${container.map((s) => `<li><span><strong>${esc(titel(s))}</strong><small>${esc([S.d.staende[s.stand], s.ware, s.container && `Container ${s.container}`].filter(Boolean).join(' · '))}</small></span></li>`).join('')}</ul>`
           : '<p class="ci-leise ci-klein">Noch kein Container. Den Schlachthof wählen Sie im Fenster des Containers.</p>'}`}
       </div>
       <div class="dlg-foot"><span class="spacer"></span>

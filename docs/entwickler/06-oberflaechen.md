@@ -921,6 +921,17 @@ Caddy setzt auf allen Hosts `script-src 'self'` (ohne `'unsafe-inline'`), `conne
   Filtern der Auswahl in `containerimport.js` (`lieferantSchluessel`) – beide zusammen ändern. Den Namen des Schlachthofs
   löst `eudr_sendung_sicht` für Container mit offener Bewertung beim Lesen auf; festgeschrieben wird er beim Abschluss
   (GR-106). Was sich nach dem Abschluss noch einmal nachtragen lässt, steht in `eudr_sendung_nachtrag`.
+  **Farmer je Container** (Auftrag des Inhabers 19.11.2026): Der Server gibt jedem Farmer die eigene Nummer `farmerNr`
+  (F-0001, Stelle in der Liste, nicht gespeichert) und jedem Container `farmerPruefung` (gesamt, in Ordnung, ohne Unterlagen,
+  je Thema der Bewertung die Zahl der Farmer je Stufe `kritisch`/`offen`, Ampel) und `offeneNummern` (Nummern aus den Papieren
+  ohne Farmer); `containerimport_start` liefert zusätzlich `offeneNummern` aller Container für die Gesamtübersicht (ohne
+  Nummern, zu denen es inzwischen einen Farmer gibt). Serverseitig steht das alles in
+  `app/api/module/containerimport/farmer.php`. Im Fenster „Container“ zeichnet `farmerListe` die
+  zugeordneten Farmer und vermerkten Nummern als Kontrollkästchen (`betriebe`, `offeneNummern`); „Nummern prüfen“ fragt
+  `containerimport_eudr_nummern` (speichert nichts, Regel `ci_nummern_aufloesen`), „Übernehmen“ ändert nur das Fenster,
+  gespeichert wird mit dem Container – der Server löst die Nummern dabei erneut auf. Überschriften und Listen nennen den
+  Container über `titel(s)` („Akte … · Partie …“, Teile aus `titelTeile(s)`, Brücke `STAFL_CI.titel`); `s.name` bleibt die Partienummer (Dateiname
+  des Exports, Protokoll).
   **Reiter „Tracking“** (Auftrag des Inhabers 19.11.2026): `tracking.js` und `app/api/module/containerimport/tracking.php`.
   Die Reiter stehen in `index.html` (`data-reiter`), ihre Inhalte in Bereichen (`data-bereich`); `containerimport.js` schaltet
   in `zeichnen()` um und ruft die Zeichenfunktion des gewählten Reiters aus `REITER` (EUDR: `eudrZeichnen`; weitere tragen

@@ -10,6 +10,7 @@ declare(strict_types=1);
    (Container mit Lieferant aus den Stammdaten, Partie-, Akten- und Containernummer, Stand, ihren Farmern, Nachweisen und –
    nach dem Abschluss – einem Schnappschuss von Profil und Farmern, GR-106).
    Nichts wird gelöscht: Farmer und Container werden archiviert, Gegenprüfungen nur ergänzt.
+   Farmer-Nummern (eigene Nummer, Nummer aus den Papieren, vermerkte Nummern am Container, Gesamtprüfung): farmer.php.
    Abgeleitete Werte (Fläche, Mittelpunkt, Befunde, Risikoprofil) werden bei jedem Lesen neu berechnet und nie gespeichert –
    ausgenommen der Schnappschuss einer abgeschlossenen Bewertung. Geometrie: geometrie.php. 
    Vorsilben: eudr_ tragen die Funktionen aus der Zeit, als das Modul nur den Reiter EUDR hatte (auch allgemeine Helfer wie
@@ -18,6 +19,7 @@ if (!defined('WA_API')) { http_response_code(404); exit; }   // nur über api/in
 require __DIR__ . '/schlachthoefe.php';   // Schlachthöfe unter dem Lieferanten (eigene Datei, gleiche Helfer)
 require __DIR__ . '/tracking.php';        // Reiter Tracking: Schiff, Reederei, Häfen, Abfahrt und Ankunft am Container
 require __DIR__ . '/hafen.php';           // Tracking: Ankunft in Hamburg aus der öffentlichen Liste des Hafens
+require __DIR__ . '/farmer.php';          // Farmer-Nummern am Container und Gesamtprüfung der Farmer
 
 const EUDR_SPERRE = 'containerimport-eudr-betriebe';   // eine Sperre für beide Dokumente (Sendungen verweisen auf Betriebe)
 const EUDR_MAX_BETRIEBE = 2000;
@@ -30,7 +32,7 @@ const EUDR_MAX_PRUEFUNGEN = 50;          // Gegenprüfungen je Betrieb
 /* Stand eines Containers auf seinem Weg (Reihenfolge = Ablauf); wird von Hand gesetzt, auch nach dem Abschluss der Bewertung */
 const EUDR_STAENDE = ['gekauft' => 'gekauft', 'unterwegs' => 'unterwegs', 'dokumente' => 'Dokumente da', 'angekommen' => 'angekommen'];
 /* Felder, die älteren Einträgen fehlen (vor dem Container als Mittelpunkt, vor den Schlachthöfen) – eudr_sendungen ergänzt sie beim Lesen */
-const EUDR_SENDUNG_VORGABEN = ['partie' => '', 'akte' => '', 'lieferantNr' => '', 'stand' => 'gekauft', 'schlachthof' => '', 'schlachthofName' => ''];
+const EUDR_SENDUNG_VORGABEN = ['partie' => '', 'akte' => '', 'lieferantNr' => '', 'stand' => 'gekauft', 'schlachthof' => '', 'schlachthofName' => '', 'offeneNummern' => []];
 const EUDR_NACHWEIS = ['konform', 'nicht_konform', 'unbekannt'];
 const EUDR_DREI = ['ja', 'nein', 'offen'];
 const EUDR_QUELLEN = ['bericht', 'geojson', 'koordinaten'];
@@ -77,8 +79,14 @@ function eudr_fortschreiben(array $doc): array
 {
     return ['rev' => (int)($doc['rev'] ?? 0) + 1, 'updatedAt' => now()] + $doc;
 }
-/* Dokument der Herkunftsbetriebe */
-function eudr_betriebe(): array { return eudr_liste(store_read('containerimport-eudr-betriebe')); }
+/* Dokument der Herkunftsbetriebe mit der eigenen Farmer-Nummer „nr“ = Stelle + 1. Annahme: die Liste wächst nur am Ende,
+   nichts wird gelöscht oder umsortiert (archivieren) – so bleibt die Nummer fest. Nie gespeichert (eudr_betriebe_schreiben). */
+function eudr_betriebe(): array
+{
+    $doc = eudr_liste(store_read('containerimport-eudr-betriebe'));
+    foreach ($doc['liste'] as $i => $b) $doc['liste'][$i]['nr'] = $i + 1;
+    return $doc;
+}
 /* Dokument der Sendungen */
 function eudr_sendungen(): array
 {
@@ -87,7 +95,11 @@ function eudr_sendungen(): array
     return $doc;
 }
 /* Herkunftsbetriebe speichern */
-function eudr_betriebe_schreiben(array $doc): void { store_write('containerimport-eudr-betriebe', eudr_fortschreiben($doc)); }
+function eudr_betriebe_schreiben(array $doc): void
+{
+    $doc['liste'] = array_map(fn($b) => array_diff_key($b, ['nr' => 1]), $doc['liste']);   // abgeleitet (eudr_betriebe)
+    store_write('containerimport-eudr-betriebe', eudr_fortschreiben($doc));
+}
 /* Sendungen speichern */
 function eudr_sendungen_schreiben(array $doc): void { store_write('containerimport-eudr-sendungen', eudr_fortschreiben($doc)); }
 /* Neue Kennung mit Vorsilbe (b = Betrieb, s = Sendung) */
@@ -246,20 +258,19 @@ function eudr_original_vermerken(array $liste, array $ablage, array $me): array
 /* Kennung der Geometrie zum Wiedererkennen derselben Fläche */
 function eudr_geo_kennung(array $g): string { return sha1((string)json_encode($g['coordinates'])); }
 
-/* Nachschlagetabelle der gespeicherten Betriebe zum Wiedererkennen (einmal je Anfrage): Land und Kennung bzw. Umriss → Betrieb */
+/* Nachschlagetabelle der gespeicherten Betriebe zum Wiedererkennen (einmal je Anfrage): Nummer aus den Papieren bzw. Umriss → Betrieb */
 function eudr_bekannt_tabelle(array $liste): array
 {
     $tabelle = [];
-    foreach ($liste as $b) {
-        if ($b['kennung'] !== '') $tabelle['k ' . $b['land'] . ' ' . $b['kennung']] ??= $b;
-        $tabelle['g ' . eudr_geo_kennung($b['geometrie'])] ??= $b;
-    }
+    foreach (ci_nummern_index($liste) as $k => $i) $tabelle['k ' . $k] = $liste[$i];
+    foreach ($liste as $b) $tabelle['g ' . eudr_geo_kennung($b['geometrie'])] ??= $b;
     return $tabelle;
 }
-/* Gespeicherter Betrieb, der zu einem eingelesenen passt: gleiche Kennung im selben Land, sonst dieselbe Geometrie */
+/* Gespeicherter Betrieb, der zu einem eingelesenen passt: gleiche Nummer aus den Papieren im selben Land, sonst dieselbe Geometrie */
 function eudr_bekannt(array $neu, array $tabelle): ?array
 {
-    return ($neu['kennung'] !== '' ? $tabelle['k ' . $neu['land'] . ' ' . $neu['kennung']] ?? null : null) ?? $tabelle['g ' . eudr_geo_kennung($neu['geometrie'])] ?? null;
+    $k = ci_nummer_schluessel($neu['land'], $neu['kennung']);
+    return ($k !== '' ? $tabelle['k ' . $k] ?? null : null) ?? $tabelle['g ' . eudr_geo_kennung($neu['geometrie'])] ?? null;
 }
 
 /* Jüngste Gegenprüfung je Portal (nur diese zählt im Risikoprofil) */
@@ -292,6 +303,7 @@ function eudr_betrieb_sicht(array $b): array
     $stand = in_array('fehler', $stufen, true) ? 'fehler' : ($stufen ? 'hinweis' : 'ok');
     $bewertung = eudr_betrieb_bewertung($b, $stand);
     return $b + [
+        'farmerNr' => isset($b['nr']) ? ci_farmer_nr($b['nr']) : '',   // ohne nr: beim Einlesen ein neuer Farmer, der seine Nummer erst beim Speichern bekommt
         'flaeche' => $k['flaeche'] ?? ($angabe ?: GEO_PUNKT_HA), 'mitte' => $k['mitte'], 'rahmen' => $k['rahmen'], 'punkte' => $k['punkte'],
         'befunde' => $befunde, 'stand' => $stand, 'bewertung' => $bewertung, 'pruefungenAktuell' => eudr_pruefungen_aktuell($b),
         'ampel' => in_array('kritisch', $bewertung, true) ? 'rot' : (in_array('offen', $bewertung, true) ? 'gelb' : 'gruen'),
@@ -409,7 +421,7 @@ function eudr_datei_pruefen(array $d, array $bekannt): array
             $b = eudr_betrieb_pruefen($ort + ['name' => $ersatz], null);
             $alt = eudr_bekannt($b, $bekannt);
             $eingabe = ['geometrie' => $b['geometrie'], 'quelle' => $b['quelle']] + array_diff_key($ort, ['koordinaten' => 1]) + ($alt ? [] : ['name' => $ersatz]);
-            if ($alt) $b = eudr_betrieb_pruefen($eingabe, $alt);
+            if ($alt) $b = ['nr' => $alt['nr']] + eudr_betrieb_pruefen($eingabe, $alt);
         } catch (InvalidArgumentException $e) {
             $aus['fehler'][] = (is_string($ort['name'] ?? null) ? $ort['name'] . ': ' : '') . $e->getMessage();
             continue;
@@ -420,11 +432,17 @@ function eudr_datei_pruefen(array $d, array $bekannt): array
 }
 
 /* ---------- Sendungen ---------- */
-/* Felder einer Sendung aus der Eingabe prüfen (ohne id, rev, Zeitstempel und Abschluss) */
-function eudr_sendung_pruefen(array $b, array $betriebIds, ?array $alt): array
+/* Felder einer Sendung aus der Eingabe prüfen (ohne id, rev, Zeitstempel und Abschluss); $betriebe = gespeicherte Farmer.
+   Vermerkte Farmer-Nummern („offeneNummern“, ohne Eingabe die gespeicherten) werden jedes Mal neu aufgelöst: Gibt es den
+   Farmer inzwischen, wird er zugeordnet und der Vermerk entfällt. */
+function eudr_sendung_pruefen(array $b, array $betriebe, ?array $alt): array
 {
     $ids = is_array($b['betriebe'] ?? null) ? array_values(array_unique(array_filter($b['betriebe'], 'is_string'))) : [];
+    $betriebIds = array_column($betriebe, 'id');
     foreach ($ids as $id) if (!in_array($id, $betriebIds, true)) throw new InvalidArgumentException('Ein gewählter Farmer ist nicht (mehr) vorhanden. Bitte neu laden.');
+    $land = eudr_land($b['land'] ?? '');
+    $zeilen = ci_nummern_aufloesen(ci_nummern_lesen(array_key_exists('offeneNummern', $b) ? $b['offeneNummern'] : $alt['offeneNummern'] ?? []), $land, $ids, [], $betriebe, ci_nummern_index($betriebe));
+    ['betriebe' => $ids, 'offeneNummern' => $offen] = ci_nummern_anwenden($ids, $zeilen);
     $von = eudr_datum($b['schlachtVon'] ?? '', 'Schlachtung von'); $bis = eudr_datum($b['schlachtBis'] ?? '', 'Schlachtung bis');
     if ($von !== '' && $bis !== '' && $bis < $von) throw new InvalidArgumentException('Schlachtung: „bis“ liegt vor „von“.');
     $n = is_array($b['nachweis'] ?? null) ? $b['nachweis'] : [];
@@ -437,13 +455,14 @@ function eudr_sendung_pruefen(array $b, array $betriebIds, ?array $alt): array
         ...$lieferant,
         ...ci_schlachthof_am_container($b, $lieferant, $alt['schlachthof'] ?? ''),
         ...eudr_sendung_laufend($b, $alt),
-        'land' => eudr_land($b['land'] ?? ''),
+        'land' => $land,
         'ware' => eudr_text($b['ware'] ?? '', 160, 'Ware'),
         'hs' => eudr_text($b['hs'] ?? '', 12, 'Zolltarifnummer'),
         'mengeKg' => eudr_zahl($b['mengeKg'] ?? null, 'Menge'),
         'schlachtVon' => $von, 'schlachtBis' => $bis,
         'lose' => eudr_text($b['lose'] ?? '', 200, 'Lose'),
         'betriebe' => $ids,
+        'offeneNummern' => $offen,
         'nachweis' => [
             'erklaerung' => eudr_datum($n['erklaerung'] ?? '', 'Lieferantenerklärung vom', true),
             'rueckverfolgung' => eudr_wahl($n['rueckverfolgung'] ?? null, EUDR_DREI, 'Rückverfolgung', 'offen'),
@@ -513,16 +532,16 @@ function eudr_lieferanten(): array
     usort($liste, fn($a, $b) => strcasecmp($a['name'], $b['name']) ?: strcmp($a['nr'], $b['nr']));
     return $liste;
 }
-/* Ist die Partienummer schon bei einem anderen Container vergeben (auch bei einem archivierten)? Verglichen wird ohne
-   Rücksicht auf Groß- und Kleinschreibung, Leerzeichen und Striche – „P-100“, „p 100“ und „P–100“ sind dieselbe Partie. */
+/* Ist die Partienummer schon bei einem anderen Container vergeben (auch bei einem archivierten)? Verglichen wird wie alle
+   Nummern (ci_nummer_norm) – „P-100“, „p 100“ und „P–100“ sind dieselbe Partie. */
 function eudr_partie_vergeben(array $liste, string $partie, ?int $ausser): bool
 {
-    $schluessel = fn(string $p) => mb_strtolower((string)preg_replace('/[\s\x{00A0}\x{2010}-\x{2015}_.\/-]+/u', '', $p));
-    $k = $schluessel($partie);
+    $k = ci_nummer_norm($partie);
     if ($k === '') return false;
-    foreach ($liste as $i => $x) if ($i !== $ausser && $schluessel($x['partie']) === $k) return true;
+    foreach ($liste as $i => $x) if ($i !== $ausser && ci_nummer_norm($x['partie']) === $k) return true;
     return false;
 }
+
 /* Wie ein Container heißt: seine Partienummer; ältere Einträge ohne Partienummer nach der Auftragsnummer */
 function eudr_container_name(array $s): string { return $s['partie'] !== '' ? $s['partie'] : $s['nummer']; }
 /* Containernummer nach ISO 6346 (vier Buchstaben, sechs Ziffern, Prüfziffer) einordnen: '' leer, 'ok', 'pruefziffer' (Tippfehler?)
@@ -584,9 +603,12 @@ function eudr_kriterien(): array
         },
         'geo' => function (array $s, array $bs): array {
             $titel = 'Geolokalisierung der Farmer';
-            if (!$bs) return eudr_kriterium('geo', $titel, 'kritisch', 'Dem Container ist kein Farmer zugeordnet – ohne Geolokalisierung ist keine Sorgfaltserklärung möglich.');
             $fehler = eudr_bewertet($bs, 'geo', 'kritisch');
-            if ($fehler) return eudr_kriterium('geo', $titel, 'kritisch', 'Die Geolokalisierung ist fehlerhaft und würde vom EU-Informationssystem abgelehnt – beim Lieferanten korrigieren lassen.', $fehler);
+            $offen = array_map(fn($n) => 'Nr. ' . $n, $s['offeneNummern']);
+            if ($fehler || $offen) return eudr_kriterium('geo', $titel, 'kritisch', implode(' ', array_filter([
+                $offen ? 'Zu diesen Farmer-Nummern aus den Papieren fehlen die Unterlagen mit der Geolokalisierung – beim Lieferanten anfordern.' : '',
+                $fehler ? 'Die Geolokalisierung ist fehlerhaft und würde vom EU-Informationssystem abgelehnt – beim Lieferanten korrigieren lassen.' : ''])), [...$fehler, ...$offen]);
+            if (!$bs) return eudr_kriterium('geo', $titel, 'kritisch', 'Dem Container ist kein Farmer zugeordnet – ohne Geolokalisierung ist keine Sorgfaltserklärung möglich.');
             $hinweise = eudr_namen($bs, fn($b) => $b['stand'] === 'hinweis');
             return eudr_kriterium('geo', $titel, $hinweise ? 'hinweis' : 'ok', count($bs) . ' Farmer mit einreichbarer Geolokalisierung' . ($hinweise ? ' – Hinweise beachten.' : '.'), $hinweise);
         },
@@ -690,7 +712,9 @@ function eudr_sendung_sicht(array $s, array $betriebe, array $hofNamen): array
 {
     $s['fruehere'] = array_map(fn($f) => array_diff_key($f, ['profil' => 1, 'betriebe' => 1]), $s['fruehere'] ?? []);   // Schnappschüsse bleiben gespeichert
     if (empty($s['abschluss'])) $s['schlachthofName'] = $hofNamen[$s['schlachthof']] ?? $s['schlachthofName'];
-    return $s + ['name' => eudr_container_name($s), 'containerPruefung' => eudr_containernummer($s['container']), 'profil' => !empty($s['abschluss']) ? $s['abschluss']['profil'] : eudr_profil($s, eudr_sendung_betriebe($s, $betriebe))];
+    $bs = eudr_sendung_betriebe($s, $betriebe);
+    return $s + ['name' => eudr_container_name($s), 'containerPruefung' => eudr_containernummer($s['container']), 'profil' => !empty($s['abschluss']) ? $s['abschluss']['profil'] : eudr_profil($s, $bs),
+        'farmerPruefung' => ci_farmer_pruefung($bs, $s['offeneNummern'])];
 }
 
 /* ---------- GeoJSON für das EU-Informationssystem ---------- */
@@ -720,6 +744,7 @@ function eudr_stand(): array
     return [
         'betriebe' => $betriebe,
         'sendungen' => array_map(fn($s) => eudr_sendung_sicht($s, $betriebe, $hofNamen), $sendungen),
+        'offeneNummern' => ci_offene_nummern($sendungen, ci_nummern_index($betriebe)),
         'laender' => array_map(fn($l) => ['name' => $l['name'], 'klasse' => $l['klasse']], EUDR_LAENDER),
         'schlachthoefe' => $hoefe,
         'hafen' => ci_hafen_sicht($sendungen),

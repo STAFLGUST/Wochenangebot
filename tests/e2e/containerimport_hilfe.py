@@ -1,5 +1,5 @@
 """Gemeinsame Hilfen für die Testgruppen des Moduls Container-Import (containerimport_*): Ergebnis sammeln, die beiden
-Nutzer anlegen (Ina darf bearbeiten, Lea nur ansehen), anmelden, Container anlegen, Tage ab heute, die Seite des Moduls im
+Nutzer anlegen (Ina darf bearbeiten, Lea nur ansehen), anmelden, Stand der Seite, Container anlegen, Tage ab heute, die Seite des Moduls im
 Browser öffnen.
 Vorbild: qs_hilfe.py. Die Seite ruft in Tests nie fremde Server ab – jede Anfrage nach außen wird abgebrochen und gemerkt."""
 import datetime
@@ -41,9 +41,14 @@ def login(user):
     return c
 
 
+def stand(client):
+    """Stand der Seite (containerimport_start) so, wie dieser Nutzer ihn sieht."""
+    return client.call('containerimport_start')[1]
+
+
 def kalender(client):
     """→ tag(n): Datum n Tage ab heute (Datum des Servers) als JJJJ-MM-TT."""
-    heute = datetime.date.fromisoformat(client.call('containerimport_start')[1]['heute'])
+    heute = datetime.date.fromisoformat(stand(client)['heute'])
     return lambda n: (heute + datetime.timedelta(days=n)).isoformat()
 
 

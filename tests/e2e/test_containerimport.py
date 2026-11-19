@@ -122,12 +122,14 @@ st, r = Client('198.51.100.30').call('containerimport_start')
 check('ohne Anmeldung: kein Zugriff (401)', st == 401 and 'betriebe' not in r, (st, r))
 st, r = O.call('containerimport_start')
 check('Modulzugang ohne „EUDR ansehen“: 403', st == 403 and 'Berechtigung' in r.get('error', ''), (st, r))
-check('ohne „EUDR ansehen“: auch prüfen und exportieren 403', O.call('containerimport_eudr_pruefen', {'dateien': [DATEI]})[0] == 403 and O.call('containerimport_eudr_export&sendung=x')[0] == 403)
+check('ohne „EUDR ansehen“: auch prüfen, Farmer-Nummern auflösen und exportieren 403', O.call('containerimport_eudr_pruefen', {'dateien': [DATEI]})[0] == 403
+      and O.call('containerimport_eudr_nummern', {'land': 'PY', 'nummern': '1'})[0] == 403 and O.call('containerimport_eudr_export&sendung=x')[0] == 403)
 st, r = L.call('containerimport_start')
 check('nur ansehen: Stand ohne Recht zu bearbeiten, leer', st == 200 and r['rechte'] == {'bearbeiten': False, 'whisp': False} and r['betriebe'] == [] and r['sendungen'] == [], (st, r))
 check('nur ansehen: Speichern 403', [L.call(a, {})[0] for a in ('containerimport_eudr_betriebe_save', 'containerimport_eudr_sendung_save', 'containerimport_eudr_gegenpruefung', 'containerimport_eudr_sendung_abschluss')] == [403] * 4)
 csrf = I.csrf; I.csrf = ''
 check('Speichern ohne CSRF: 403', I.call('containerimport_eudr_sendung_save', SENDUNG)[0] == 403)
+check('Farmer-Nummern auflösen ohne CSRF: 403', I.call('containerimport_eudr_nummern', {'land': 'PY', 'nummern': '1'})[0] == 403)
 I.csrf = csrf
 check('schreibende Aktionen per GET: 405', [I.call(a)[0] for a in ('containerimport_eudr_pruefen', 'containerimport_eudr_betriebe_save', 'containerimport_eudr_sendung_save')] == [405] * 3)
 st, r = I.call('containerimport_start')
@@ -507,7 +509,7 @@ with sync_playwright() as pw:
     shot(p, os.path.join(SH, 'containerimport-sendungen-1280.png'))
 
     # Neuer Container aus dem Fenster: Lieferant aus den Stammdaten wählen, drei Nummern, Stand
-    gespeichert = "document.querySelector('#sendung-titel')?.textContent === 'Container P-260010' && document.querySelector('#dlg-sendung').innerText.includes('%s')"
+    gespeichert = "document.querySelector('#sendung-titel')?.textContent === 'Akte AK-10 · Partie P-260010' && document.querySelector('#dlg-sendung').innerText.includes('%s')"
     p.click('#ci-sendung-neu'); p.wait_for_selector('#dlg-sendung[open]')
     check('Fenster „Neuer Container“: Stände zur Auswahl, Lieferanten der Stammdaten als Vorschläge',
           p.eval_on_selector_all('#dlg-sendung [name=stand] option', 'os => os.map(o => o.textContent)') == ['gekauft', 'unterwegs', 'Dokumente da', 'angekommen']
@@ -544,7 +546,7 @@ with sync_playwright() as pw:
     text = p.inner_text('#lesen-ergebnis')
     check('Einlesen: Bericht im Browser gelesen (Name, Erzeuger über zwei Zeilen, Kennung, Fläche)', all(t in text for t in ('Estancia Beispiel', 'AGROGANADERA MUSTER S.A.', 'Kennung 990010001', '300,24 ha', 'angegeben 300,20 ha')), text)
     check('Einlesen: Erklärung ohne Koordinaten wird abgewiesen, Linie gemeldet', 'Erklaerung_Lieferant.pdf: Keine Koordinatenliste' in text and 'LineString' in text, text)
-    check('Einlesen: vorhandene Farmer werden erkannt, Fehlerhaftes ist markiert', text.count('aktualisiert vorhandenen Farmer') == 5 and text.count('fehlerhaft') >= 2 and 'überschneidet sich selbst' in text, text)
+    check('Einlesen: vorhandene Farmer werden erkannt (mit ihrer Nummer), Fehlerhaftes ist markiert', text.count('aktualisiert F-0') == 5 and text.count('fehlerhaft') >= 2 and 'überschneidet sich selbst' in text, text)
     shot(p.locator('#dlg-lesen'), os.path.join(SH, 'containerimport-einlesen-1280.png'))
     for nr in p.eval_on_selector_all('#lesen-ergebnis [data-ort]', 'els => els.map((e, i) => [i, e.closest("li").innerText]).filter(([, t]) => !t.includes("Estancia Beispiel")).map(([i]) => i)'):
         p.uncheck(f'#lesen-ergebnis [data-ort="{nr}"]')
@@ -576,7 +578,7 @@ with sync_playwright() as pw:
     check('Container: Speichern aus dem Fenster', stand()['sendungen'][0]['dds']['referenz'] == '26DEXYZ000111')
     p.click('#sendung-druck')
     druck = p.text_content('#ci-druck')
-    check('Risikoprofil drucken: Druckfassung mit Container, Farmern und Kriterien', all(t in druck for t in ('Risikoprofil EUDR · Container P-260001', 'Partienummer', 'AK-2026-014/2', 'MSKU 907032 3', 'Estancia Beispiel', 'Rückverfolgung Los → Farmer', '26DEXYZ000111')), druck[:300])
+    check('Risikoprofil drucken: Druckfassung mit Container, Farmern und Kriterien', all(t in druck for t in ('Risikoprofil EUDR · Akte AK-2026-014/2 · Partie P-260001', 'Partienummer', 'AK-2026-014/2', 'MSKU 907032 3', 'Estancia Beispiel', 'Rückverfolgung Los → Farmer', '26DEXYZ000111')), druck[:300])
     p.click('#dlg-sendung .dlg-foot [data-zu]'); p.wait_for_selector('#dlg-sendung', state='hidden')
 
     # Herkunftsbetriebe, Fenster „Betrieb“ mit Umriss, Gegenprüfung

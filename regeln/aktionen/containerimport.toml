@@ -36,6 +36,11 @@ schreibend = true
 oberflaeche = "containerimport.intern"
 schreibend = true
 
+# Farmer-Nummern aus den Papieren für einen Container auflösen, ohne zu speichern (Vorschau; POST wegen Inhalt)
+[aktion.containerimport_eudr_nummern]
+oberflaeche = "containerimport.intern"
+schreibend = true
+
 # Container anlegen oder ändern (Lieferant aus den Stammdaten, Partie-, Akten- und Containernummer, Stand)
 [aktion.containerimport_eudr_sendung_save]
 oberflaeche = "containerimport.intern"

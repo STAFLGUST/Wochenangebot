@@ -136,8 +136,9 @@ Lieferanten mit genau einer Partienummer. Kein Schritt auf dem Server, keine Mig
   Vorversion schreibt nur Felder, die sie kennt. Nach einem Rückfall also offene Container nicht speichern, bis die neue
   Version wieder läuft. Abgeschlossene Container sind nicht betroffen. Ab dieser Version bleiben unbekannte Felder beim
   Speichern erhalten, sodass ein Rückfall von einem späteren Schritt auf diesen nichts mehr verliert.
-- **Geplant, je eigener Schritt:** Schlachthöfe unter dem Lieferanten, Farmer-Kartei mit Prüfung je Container, Verbindung
-  zum Bestand über die Partienummer, Auswertung je Lieferant, Tracking der Container.
+- **Inzwischen umgesetzt:** Schlachthöfe unter dem Lieferanten (Abschnitt 9), Tracking der Container (Abschnitte 10 und 11),
+  Farmer je Container (Abschnitt 12).
+- **Geplant, je eigener Schritt:** Verbindung zum Bestand über die Partienummer, Auswertung je Lieferant.
 
 ## 9. Schlachthöfe unter dem Lieferanten (ab dem Release mit den Schlachthöfen)
 
@@ -202,3 +203,34 @@ Zustimmung des Inhabers 19.11.2026. Kein Schritt auf dem Server, keine Einstellu
   und am Container die Meldung. Steht dort „ließ sich nicht lesen“ oder „nicht erreichbar“, bitte an Claude melden.
 - **Abschalten:** nicht nötig – ohne passenden Container wird nichts abgerufen. Rückfall: `sh /opt/wochenangebot/deploy/release-zurueck.sh`
   (die Vorversion kennt die Meldungen nicht; das Dokument bleibt liegen).
+
+## 12. Farmer je Container (ab dem Release mit den Farmer-Nummern)
+
+Auftrag des Inhabers 19.11.2026: Schlachthöfe und Farmer nur einmal anlegen, je Container die Farmer der Sendung festhalten,
+eine Gesamtprüfung je Container und eine Übersicht aller Farmer. Kein Schritt auf dem Server, keine Migration, keine neuen
+Rechte.
+
+- **Zwei Nummern je Farmer:** die eigene Farmer-Nummer (F-0001, F-0002 …, fortlaufend, nie wiederverwendet) und die Nummer aus
+  den Papieren des Lieferanten (z. B. SIGOR-Nummer). Die Nummer aus den Papieren gibt es je Land nur einmal; „12.345“ und
+  „12 345“ gelten als dieselbe, „-“ oder „.“ gelten als keine Nummer. Die eigene Nummer ergibt sich aus der Reihenfolge, in
+  der die Farmer angelegt wurden, und wird nicht gespeichert – auch bestehende Farmer haben sie sofort. Stehen beim Einlesen
+  zwei neue Farmer mit derselben Nummer aus den Papieren in einer Auswahl, meldet die Vorschau den zweiten als Fehler und
+  übernimmt nur den ersten.
+- **Farmer einem Container zuordnen:** Fenster „Container“ → „Farmer-Nummern aus den Papieren einfügen“ (je Zeile eine
+  Nummer, auch aus Excel kopiert) → „Nummern prüfen“ → Vorschau → „In den Container übernehmen“ → „Speichern“. Bekannte
+  Farmer werden zugeordnet. Zu unbekannten Nummern steht am Container „Unterlagen fehlen“; sobald ein Farmer mit dieser
+  Nummer angelegt wird (Bericht einlesen oder von Hand), wird er dem Container von selbst zugeordnet – nur bei offener
+  Bewertung. Eine vermerkte Nummer entfernt man durch Abhaken und Speichern.
+- **Gesamtprüfung:** In der Containerliste und im Fenster steht, wie viele Farmer in Ordnung sind und was fehlt (z. B.
+  „1 von 14 in Ordnung · Unterlagen fehlen: 2 · Entwaldung kritisch: 1 · eigene Prüfung offen: 12“). Fehlende Unterlagen machen die Geolokalisierung im
+  Risikoprofil kritisch – „Risiko vernachlässigbar“ geht dann nicht.
+- **Übersicht der Farmer:** Ansicht „Farmer“ mit beiden Nummern, Ampel, Prüfstand und den Containern (Akte · Partie), dazu
+  die Nummern ohne Unterlagen. Die Suche findet auch über die Nummern, die Akten- und Partienummer und den Lieferanten.
+- **Akte und Partie vorn:** Listen und Überschriften nennen „Akte … · Partie …“. Beim neuen Container ist der zuletzt beim
+  Lieferanten benutzte Schlachthof vorgeschlagen.
+- **Rückfall:** `sh /opt/wochenangebot/deploy/release-zurueck.sh`. Die Vorversion liest alles weiter. Sie zeigt die eigenen
+  Nummern und die vermerkten Nummern nicht; die eigene Nummer ist nicht gespeichert und nach der Rückkehr dieselbe (sie
+  ergibt sich aus der Stelle des Farmers in der Liste). Vermerkte Nummern bleiben am Container. Während des Rückfalls
+  Container mit „Unterlagen fehlen“ nicht abschließen: die Vorversion kennt den Vermerk nicht und hielte die Bewertung
+  ohne ihn fest. In der Vorversion angelegte Farmer werden einem Container mit vermerkter Nummer erst zugeordnet, wenn
+  dieser Container nach der Rückkehr das nächste Mal gespeichert wird.

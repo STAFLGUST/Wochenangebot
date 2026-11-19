@@ -104,23 +104,23 @@ with sync_playwright() as pw:
     check('Reiter „Tracking“ gewählt: die Ansichten des Reiters EUDR sind verborgen', p.get_attribute('#ci-reiter-tracking', 'aria-selected') == 'true' and p.get_attribute('#ci-reiter-eudr', 'aria-selected') == 'false'
           and p.is_hidden('#ci-sichten') and p.is_hidden('#ci-inhalt'))
     check('Liste: nicht Angekommene nach Ankunft – überfällig zuerst, dann morgen, in 13 Tagen, zuletzt ohne Ankunft',
-          p.evaluate(zeilen) == ['P-280003|seit 2 Tagen überfällig', 'P-280004|morgen', 'P-280001|in 13 Tagen', 'P-280002|Ankunft offen'], p.evaluate(zeilen))
+          p.evaluate(zeilen) == ['Partie P-280003|seit 2 Tagen überfällig', 'Partie P-280004|morgen', 'Partie P-280001|in 13 Tagen', 'Partie P-280002|Ankunft offen'], p.evaluate(zeilen))
     check('Kopfzeile nennt Zahl, Überfällige und die nächste Ankunft (morgen, nicht die überfällige); fremder Text im Schiffsnamen erscheint als Text',
           '4 Container sind noch nicht angekommen · 1 überfällig · nächste Ankunft ' + datetime.date.fromisoformat(tag(1)).strftime('%d.%m.%Y') in p.inner_text('.ci-t-lage')
           and 'Fracht <b>Stern</b>' in p.inner_text('#ci-tracking') and p.locator('#ci-tracking b').count() == 0 and 'Montevideo → Rotterdam' in p.inner_text('#ci-tracking'), p.inner_text('.ci-t-lage'))
     shot(p, os.path.join(SH, 'containerimport-tracking-1280.png'))
     p.check('#ci-t-angekommene'); p.wait_for_function("document.querySelectorAll('#ci-tracking tbody tr').length === 5")
-    check('„Angekommene anzeigen“: der angekommene Container steht am Ende', p.evaluate(zeilen)[-1] == 'P-280005|angekommen', p.evaluate(zeilen))
+    check('„Angekommene anzeigen“: der angekommene Container steht am Ende', p.evaluate(zeilen)[-1] == 'Partie P-280005|angekommen', p.evaluate(zeilen))
     p.uncheck('#ci-t-angekommene'); p.wait_for_function("document.querySelectorAll('#ci-tracking tbody tr').length === 4")
     p.fill('#ci-t-suche', 'rotterdam'); p.wait_for_function("document.querySelectorAll('#ci-tracking tbody tr').length === 1")
-    check('Suche findet über den Hafen und behält den Fokus', p.evaluate(zeilen) == ['P-280003|seit 2 Tagen überfällig'] and p.evaluate('document.activeElement.id') == 'ci-t-suche')
+    check('Suche findet über den Hafen und behält den Fokus', p.evaluate(zeilen) == ['Partie P-280003|seit 2 Tagen überfällig'] and p.evaluate('document.activeElement.id') == 'ci-t-suche')
     p.fill('#ci-t-suche', 'gibt es nicht'); p.wait_for_selector('#ci-bereich-tracking .ci-leer')
     check('Suche ohne Treffer sagt das', p.inner_text('#ci-bereich-tracking .ci-leer') == 'Kein Container passt zur Suche.')
     p.fill('#ci-t-suche', ''); p.wait_for_selector('#ci-tracking')
 
     # Fenster: Vorschlag der Reederei, Speichern, Verweis
     p.focus(f'[data-tracking="{c2["id"]}"]'); p.keyboard.press('Enter'); p.wait_for_selector('#dlg-tracking[open]')
-    check('Fenster „Tracking“ mit der Eingabetaste geöffnet; ohne Containernummer kein Verweis und kein Vorschlag', p.inner_text('#tracking-titel') == 'Tracking P-280002'
+    check('Fenster „Tracking“ mit der Eingabetaste geöffnet; ohne Containernummer kein Verweis und kein Vorschlag', p.inner_text('#tracking-titel') == 'Tracking Partie P-280002'
           and p.locator('#tracking-verweis').count() == 0 and p.input_value('#dlg-tracking [name=reederei]') == '')
     p.fill('#dlg-tracking [name=container]', 'MSKU 907032 3'); p.fill('#dlg-tracking [name=zielhafen]', 'Hamburg'); p.fill('#dlg-tracking [name=eta]', tag(30))
     p.select_option('#dlg-tracking [name=stand]', 'unterwegs'); p.click('#dlg-tracking button[type=submit]')
@@ -141,7 +141,7 @@ with sync_playwright() as pw:
     p.fill('#dlg-tracking [name=etd]', tag(40)); p.click('#dlg-tracking button[type=submit]'); p.wait_for_selector('#ci-toast.zeigen.fehler')
     check('Fehler des Servers erscheint als Meldung, das Fenster bleibt offen', 'Ankunft liegt vor der Abfahrt' in p.inner_text('#ci-toast') and p.evaluate("document.querySelector('#dlg-tracking').open"))
     p.click('#dlg-tracking [data-zu]')
-    check('Liste nach dem Speichern: neue Ankunft eingeordnet', p.evaluate(zeilen) == ['P-280003|seit 2 Tagen überfällig', 'P-280004|morgen', 'P-280001|in 13 Tagen', 'P-280002|in 30 Tagen'], p.evaluate(zeilen))
+    check('Liste nach dem Speichern: neue Ankunft eingeordnet', p.evaluate(zeilen) == ['Partie P-280003|seit 2 Tagen überfällig', 'Partie P-280004|morgen', 'Partie P-280001|in 13 Tagen', 'Partie P-280002|in 30 Tagen'], p.evaluate(zeilen))
     p.click('#ci-reiter-eudr'); p.wait_for_selector('#ci-sendungen')
     check('zurück zum Reiter EUDR: Liste der Container wieder da, Tracking verborgen', p.is_visible('#ci-sendungen') and p.is_hidden('#ci-bereich-tracking'))
     p.context.close()

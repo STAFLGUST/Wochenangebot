@@ -67,6 +67,7 @@ a.ci-knopf { text-decoration: none; }
   background: var(--r-flaeche-2); border-bottom: 1px solid var(--r-linie); white-space: nowrap; }
 .ci-tab th:first-child { border-top-left-radius: 15px; } .ci-tab th:last-child { border-top-right-radius: 15px; }
 .ci-tab td { padding: 11px 14px; border-top: 1px solid var(--r-linie); vertical-align: middle; overflow-wrap: anywhere; }
+.ci-tab td.ci-woerter { overflow-wrap: break-word; } .ci-nb { white-space: nowrap; }   /* ganze Wörter: Ländernamen und Nummern nicht mitten im Wort trennen */
 .ci-tab tbody tr:first-child td { border-top: 0; }
 .ci-tab tbody tr { cursor: pointer; }
 .ci-tab tbody tr:hover, .ci-tab tbody tr:focus-visible { background: var(--r-hover); outline: none; }
@@ -150,6 +151,11 @@ body.ci .dlg-foot { border-top: 1px solid var(--r-linie); align-items: center; }
 .ci-einfuegen { margin: 0 0 14px; font-size: 13.5px; }
 .ci-einfuegen summary { min-height: 36px; display: flex; align-items: center; cursor: pointer; color: var(--r-akzent-text); font-weight: 600; }
 .ci-einfuegen .ci-raster { margin: 8px 0 12px; }
+.ci-gesamt { display: flex; align-items: flex-start; gap: 2px; margin: 0 0 10px; font-size: 13.5px; }
+.ci-gesamt .ci-ampel { margin-top: 4px; } .ci-gesamt small { display: block; font-size: 12.5px; color: var(--r-text-2); }
+.ci-wahl strong .ci-ampel { margin-right: 6px; }
+.ci-nummern { margin: 12px 0 0; } .ci-nummern textarea { min-height: 72px; } .ci-nummern #nummern-vorschau { margin-top: 10px; }
+.ci-nummern #nummern-vorschau p { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px; margin: 8px 0 0; }
 .ci-datei { margin-top: 14px; }
 .ci-datei h4 { margin: 0 0 6px; font-size: 13.5px; font-weight: 600; overflow-wrap: anywhere; }
 .ci-fuss-links { flex-basis: 100%; font-size: 12.5px; color: var(--r-leise); }

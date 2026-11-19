@@ -906,14 +906,14 @@ name = "containerimport-eudr-betriebe"
 eigentuemer = "containerimport"
 bereich = "intern"
 schutz = "vertraulich"
-beschreibung = "Container-Import: Farmer (im Code „betrieb“, früher „Herkunftsbetriebe“) der Lieferanten (Name, Erzeuger, Land, Kennung, Umriss in WGS84, Quelle mit Dateiname und Prüfsumme, Angaben des Entwaldungsberichts, eigene Gegenprüfungen)"
+beschreibung = "Container-Import: Farmer (im Code „betrieb“, früher „Herkunftsbetriebe“) der Lieferanten (eigene fortlaufende Nummer F-0001 = Stelle in der Liste, angezeigt, nicht gespeichert; Name, Erzeuger, Land, Nummer aus den Papieren (Kennung), Umriss in WGS84, Quelle mit Dateiname und Prüfsumme, Angaben des Entwaldungsberichts, eigene Gegenprüfungen)"
 
 [[dokument]]
 name = "containerimport-eudr-sendungen"
 eigentuemer = "containerimport"
 bereich = "intern"
 schutz = "vertraulich"
-beschreibung = "Container-Import: Container (im Code „sendung“; Partie-, Akten- und Containernummer, Lieferant mit Nummer der Stammdaten und Name als Schnappschuss, Schlachthof, Stand, Tracking (Schiff, Reederei, Konnossement, Häfen, Abfahrt, Ankunft), Auftragsnummer, Ware, Lose, zugeordnete Farmer, Nachweise, Referenz der Sorgfaltserklärung) und abgeschlossene Risikobewertungen mit Schnappschuss von Profil und Betrieben"
+beschreibung = "Container-Import: Container (im Code „sendung“; Partie-, Akten- und Containernummer, Lieferant mit Nummer der Stammdaten und Name als Schnappschuss, Schlachthof, Stand, Tracking (Schiff, Reederei, Konnossement, Häfen, Abfahrt, Ankunft), Auftragsnummer, Ware, Lose, zugeordnete Farmer, Farmer-Nummern ohne Unterlagen, Nachweise, Referenz der Sorgfaltserklärung) und abgeschlossene Risikobewertungen mit Schnappschuss von Profil und Betrieben"
 [[dokument]]
 name = "containerimport-schlachthoefe"
 eigentuemer = "containerimport"
