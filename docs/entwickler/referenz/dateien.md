@@ -80,7 +80,7 @@ Jede Code-Datei beginnt mit einem Kopfkommentar; dessen erste Aussage steht hier
 | `anmeldekonten.php` | plattform | Aktionen: Konten der zentralen Anmeldung (Keycloak) aus Verwaltung → Mitarbeiter (nur Administratoren). anmeldekonto (lesen) |
 | `auswertung.php` | verwaltung | Aktionen: Auswertung (Karte der Kunden-Anmeldungen) und Aktualisieren der Ortsdaten Wird von api/index.php im globalen Gültigkeitsbereich eingebunden; jede Aktion endet mit respond()/fail(). |
 | `bestand.php` | bestand | Aktionen: Bestand und Stammdaten Wird von api/index.php im globalen Gültigkeitsbereich eingebunden; jede Aktion endet mit respond()/fail(). |
-| `containerimport.php` | containerimport | Aktionen: Modul Container-Import, Reiter EUDR – Herkunftsbetriebe mit Geolokalisierung, Sendungen, Risikoprofil und GeoJSON-Datei für das EU-Informationssystem (Oberfläche containerimport.intern; Funktionen in … |
+| `containerimport.php` | containerimport | Aktionen: Modul Container-Import – Container (im Code „sendung“) mit Lieferant, Partie-, Akten- und Containernummer und Stand; Reiter EUDR – Farmer (im Code „betrieb“) mit Geolokalisierung, Risikoprofil und … |
 | `controlling.php` | controlling | Aktionen: Controlling (Oberfläche controlling.intern, Fachlogik in app/api/module/controlling/) Rechte (GR-103): controlling.zugang – Modul öffnen (Register, standardmäßig niemand); controlling.umsatz_sehen – … |
 | `crm.php` | crm | Aktionen: CRM · Vertrieb (Oberfläche crm.intern, Daten und Regeln in app/api/module/crm/crm.php) Rechte (GR-103): crm.sehen – Kunden, Kundenblätter, Wiedervorlagen, Pipeline, Auswertung, Karte ansehen (crm_karte); … |
 | `einkauf.php` | einkauf | Aktionen: Einkauf (Fehlmengen aus offenen Bestellwünschen) Wird von api/index.php im globalen Gültigkeitsbereich eingebunden; jede Aktion endet mit respond()/fail(). |
@@ -173,7 +173,7 @@ Jede Code-Datei beginnt mit einem Kopfkommentar; dessen erste Aussage steht hier
 
 | Datei | Modul | Inhalt |
 | --- | --- | --- |
-| `eudr.php` | containerimport | Container-Import · EUDR (Verordnung (EU) 2023/1115, entwaldungsfreie Lieferketten) |
+| `eudr.php` | containerimport | Container-Import: Container (ein Einkauf bei einem Lieferanten, eine Partienummer) mit ihren Farmern und der Prüfung nach der EUDR (Verordnung (EU) 2023/1115, entwaldungsfreie Lieferketten) |
 | `geometrie.php` | containerimport | Container-Import · Geometrie der Produktionsorte (EUDR): reine Rechenfunktionen ohne Speicherzugriff. |
 | `whisp.php` | containerimport | Container-Import · EUDR |
 
@@ -385,7 +385,7 @@ Jede Code-Datei beginnt mit einem Kopfkommentar; dessen erste Aussage steht hier
 | Datei | Modul | Inhalt |
 | --- | --- | --- |
 | `containerimport.css` | containerimport | STAFL-Plattform · Modul Container-Import (Reiter EUDR) – Gestaltung „C2“ Rahmen, Seitenleiste und alle Farben kommen aus ../../assets/rahmen.css (--r-*), Schrift und die Grundform der Fenster (dialog.modal, … |
-| `containerimport.js` | containerimport | STAFL-Plattform · Modul Container-Import, Reiter EUDR – Hilfen und Kontrollen zur EU-Verordnung über entwaldungsfreie Lieferketten (Auftrag des Inhabers 18.11.2026; Gestaltung „C2“). |
+| `containerimport.js` | containerimport | STAFL-Plattform · Modul Container-Import – Container (ein Einkauf bei einem Lieferanten, eine Partienummer) mit ihren Farmern; Reiter EUDR |
 | `eudr-auswertung.js` | containerimport | STAFL-Plattform · Container-Import · EUDR – Bildauswertung einer Fläche |
 | `eudr-bericht.js` | containerimport | STAFL-Plattform · Container-Import · EUDR – Entwaldungsberichte der Lieferanten lesen (reine Funktionen, kein DOM). |
 | `eudr-karte.js` | containerimport | STAFL-Plattform · Container-Import · EUDR – Karte der Herkunftsbetriebe. |
