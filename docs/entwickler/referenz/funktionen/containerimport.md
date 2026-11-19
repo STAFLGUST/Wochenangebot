@@ -2,7 +2,7 @@
 
 <!-- ERZEUGT von `python3 werkzeuge/doku.py erzeugen` – nicht von Hand ändern. Quelle: Funktionen und Kommentare im Code. Die CI prüft, dass diese Datei zum Code passt. -->
 
-20 Dateien, 211 Funktionen – in der Reihenfolge der Datei, **fett** die Abschnitte. Text = erste Aussage des Kommentars direkt über der Funktion (Python: Docstring). Übersicht aller Module: [README.md](README.md).
+21 Dateien, 227 Funktionen – in der Reihenfolge der Datei, **fett** die Abschnitte. Text = erste Aussage des Kommentars direkt über der Funktion (Python: Docstring). Übersicht aller Module: [README.md](README.md).
 
 ## `app/api/aktionen/containerimport.php`
 
@@ -20,7 +20,8 @@ _Container-Import: Container (ein Einkauf bei einem Lieferanten, eine Partienumm
 
 - `eudr_liste(d)` – Inhalt eines Dokuments als ['rev', 'liste'] (fehlt es, leer)
 - `eudr_fortschreiben(doc)` – Dokument für das Schreiben fortschreiben: Revision erhöhen, Zeitstempel setzen
-- `eudr_betriebe()` – Dokument der Herkunftsbetriebe
+- `eudr_betriebe()` – Dokument der Herkunftsbetriebe.
+- `ci_farmer_nr(nr)` – Eigene Farmer-Nummer zum Anzeigen: „F-“ unterscheidet sie von den Nummern aus den Papieren (meist nur Ziffern)
 - `eudr_sendungen()` – Dokument der Sendungen
 - `eudr_betriebe_schreiben(doc)` – Herkunftsbetriebe speichern
 - `eudr_sendungen_schreiben(doc)` – Sendungen speichern
@@ -43,8 +44,11 @@ _Container-Import: Container (ein Einkauf bei einem Lieferanten, eine Partienumm
 - `eudr_betrieb_pruefen(b, alt)` – Felder eines Betriebs aus der Eingabe prüfen (ohne id, rev, Zeitstempel und Gegenprüfungen).
 - `eudr_original_vermerken(liste, ablage, me)` – An allen Betrieben, die aus der Datei mit dieser Prüfsumme stammen, vermerken, wo ihr Original im QM-System liegt ($ablage = Antwort von qs_eingang_hochladen).
 - `eudr_geo_kennung(g)` – Kennung der Geometrie zum Wiedererkennen derselben Fläche
-- `eudr_bekannt_tabelle(liste)` – Nachschlagetabelle der gespeicherten Betriebe zum Wiedererkennen (einmal je Anfrage): Land und Kennung bzw. Umriss → Betrieb
-- `eudr_bekannt(neu, tabelle)` – Gespeicherter Betrieb, der zu einem eingelesenen passt: gleiche Kennung im selben Land, sonst dieselbe Geometrie
+- `ci_nummer_norm(nummer)` – Nummer zum Vergleichen: ohne Rücksicht auf Groß- und Kleinschreibung, Leerzeichen, Punkte und Striche – „P-100“ und „p 100“, „12.345“ und „12 345“ sind …
+- `ci_nummer_schluessel(land, nummer)` – Schlüssel einer Nummer aus den Papieren: im Herkunftsland eindeutig ('' = keine Nummer)
+- `eudr_bekannt_tabelle(liste)` – Nachschlagetabelle der gespeicherten Betriebe zum Wiedererkennen (einmal je Anfrage): Nummer aus den Papieren bzw. Umriss → Betrieb
+- `eudr_bekannt(neu, tabelle)` – Gespeicherter Betrieb, der zu einem eingelesenen passt: gleiche Nummer aus den Papieren im selben Land, sonst dieselbe Geometrie
+- `ci_nummer_vergeben(liste, b, ausser)` – Anderer Farmer mit derselben Nummer aus den Papieren im selben Land (archivierte zählen mit; null = keiner).
 - `eudr_pruefungen_aktuell(b)` – Jüngste Gegenprüfung je Portal (nur diese zählt im Risikoprofil)
 - `eudr_betrieb_sicht(b)` – Betrieb für die Oberfläche: gespeicherte Felder plus abgeleitete Kennzahlen und Befunde. stand: „fehler“ (Geolokalisierung so nicht einreichbar), „hinweis“ …
 - `eudr_betrieb_bewertung(b, geoStand)` – Bewertung eines Betriebs je Thema (ok \| offen \| kritisch): das Risikoprofil der Sendung und die Farbe auf der Karte lesen sie hier ab. Was erst mit der …
@@ -58,7 +62,7 @@ _Container-Import: Container (ein Einkauf bei einem Lieferanten, eine Partienumm
 
 **Sendungen**
 
-- `eudr_sendung_pruefen(b, betriebIds, alt)` – Felder einer Sendung aus der Eingabe prüfen (ohne id, rev, Zeitstempel und Abschluss)
+- `eudr_sendung_pruefen(b, betriebe, alt)` – Felder einer Sendung aus der Eingabe prüfen (ohne id, rev, Zeitstempel und Abschluss); $betriebe = gespeicherte Farmer.
 - `eudr_sendung_laufend(b, alt)` – Angaben, die sich mit der Reise des Containers ändern – sie bleiben auch nach dem Abschluss der Bewertung pflegbar.
 - `ci_reise(b, alt)` – Stand und Containernummer aus der Eingabe (ohne Eingabe bleibt der gespeicherte Wert) – die eine Stelle für alle, die sie pflegen: das Fenster „Container“ …
 - `eudr_sendung_nachtrag(b, alt)` – Was einem älteren Eintrag noch fehlt, lässt sich auch nach dem Abschluss der Bewertung nachtragen – einmal, solange das Feld leer ist: die Partienummer …
@@ -67,6 +71,14 @@ _Container-Import: Container (ein Einkauf bei einem Lieferanten, eine Partienumm
 - `eudr_lieferant_name(stamm)` – Name eines Lieferanten der Stammdaten; ohne Namen der Kurzname, ohne beides „Lieferant <Nummer>“
 - `eudr_lieferanten()` – Lieferanten zur Auswahl am Container: nur Nummer und Name, nach Name sortiert
 - `eudr_partie_vergeben(liste, partie, ausser)` – Ist die Partienummer schon bei einem anderen Container vergeben (auch bei einem archivierten)?
+
+**Farmer-Nummern am Container**
+
+- `ci_nummern_lesen(v)` – Farmer-Nummern aus der Eingabe: Text (je Zeile, durch Komma, Semikolon oder Tabulator getrennt – so kommen sie aus einer Liste oder Tabelle) oder Liste.
+- `ci_nummern_aufloesen(nummern, land, ids, offen, betriebe)` – Farmer-Nummern eines Containers im Land $land auflösen – dieselbe Regel für die Vorschau und das Speichern.
+- `ci_offene_nummern_zuordnen(liste, betriebe, me)` – Gespeicherte Farmer ($betriebe) den Containern zuordnen, die ihre Nummer aus den Papieren vermerkt haben – nur Container mit offener Bewertung …
+- `ci_farmer_pruefung(bs, offen)` – Gesamtprüfung der Farmer eines Containers ($bs = Sichten, nach dem Abschluss der Schnappschuss): wie viele in Ordnung (Ampel grün), wie viele Nummern ohne …
+- `ci_offene_nummern(sendungen)` – Vermerkte Nummern aller Container für die Gesamtübersicht: je Nummer (im Land) einmal, mit den Containern, die sie nennen
 - `eudr_container_name(s)` – Wie ein Container heißt: seine Partienummer; ältere Einträge ohne Partienummer nach der Auftragsnummer
 - `eudr_containernummer(text)` – Containernummer nach ISO 6346 (vier Buchstaben, sechs Ziffern, Prüfziffer) einordnen: '' leer, 'ok', 'pruefziffer' (Tippfehler?) oder 'format'.
 - `eudr_dds_pruefen(dds)` – Angaben zur Sorgfaltserklärung im EU-Informationssystem (auch nach dem Abschluss änderbar)
@@ -181,7 +193,7 @@ _STAFL-Plattform · Modul Container-Import – Container (ein Einkauf bei einem 
 - `zeichnen()` – Kopf und der gewählte Reiter.
 - `eudrZeichnen()`
 - `sendungenSicht()`
-- `betriebeSicht()`
+- `betriebeSicht()` – Gesamtübersicht aller Farmer: Ampel, eigene Nummer und Nummer aus den Papieren, Prüfstand, Container (mit Lieferant); dazu je vermerkte Nummer ohne …
 - `karteSicht()`
 
 **Fenster „Farmer“**
@@ -197,6 +209,9 @@ _STAFL-Plattform · Modul Container-Import – Container (ein Einkauf bei einem 
 
 **Fenster „Container“**
 
+- `farmerListe(s, ids, offen, aus)` – Farmer im Fenster „Container“: zugeordnete und vermerkte Nummern ohne Unterlagen (angehakt – abhaken und speichern entfernt sie), darunter aufgeklappt die …
+- `nummernPruefen()` – Eingefügte Nummern prüfen lassen (speichert nichts) und als Vorschau zeigen
+- `nummernUebernehmen()` – Vorschau ins Fenster übernehmen; gespeichert wird mit „Speichern“ (der Server löst die Nummern dabei erneut auf)
 - `sendungOeffnen(id)`
 - `sendungAusFenster()`
 - `schlachthofWahlNeu()` – Lieferant im Fenster geändert: zur Wahl stehen nur seine Schlachthöfe; der gewählte bleibt, wenn er dazugehört
@@ -334,6 +349,15 @@ _Modul Container-Import, Reiter EUDR (app/module/containerimport/, Oberfläche c
 **Originale im QM-System (Schnittstelle qs_eingang_hochladen)**
 
 - `original(c, name, inhalt, lieferant, teil)` – Datei in Teilen an containerimport_eudr_original geben; Antwort des letzten Aufrufs.
+
+## `tests/e2e/test_containerimport_farmer.py`
+
+_Container-Import: Farmer je Container (Auftrag des Inhabers 19.11.2026) – eigene fortlaufende Farmer-Nummer neben der Nummer aus den Papieren (Kennung), Farmer über die Nummern aus den Papieren einem Container …_
+
+- `farmer(name, kennung, x, land, y, **mehr)` – Farmer mit kleinem Umriss (Westecke x/y) und Nummer aus den Papieren.
+- `stand(c)`
+- `betrieb(name, r)`
+- `speichern(*betriebe, sendung)`
 
 ## `tests/e2e/test_containerimport_hafen.py`
 
