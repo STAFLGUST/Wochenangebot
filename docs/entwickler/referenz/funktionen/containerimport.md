@@ -2,7 +2,7 @@
 
 <!-- ERZEUGT von `python3 werkzeuge/doku.py erzeugen` – nicht von Hand ändern. Quelle: Funktionen und Kommentare im Code. Die CI prüft, dass diese Datei zum Code passt. -->
 
-11 Dateien, 143 Funktionen – in der Reihenfolge der Datei, **fett** die Abschnitte. Text = erste Aussage des Kommentars direkt über der Funktion (Python: Docstring). Übersicht aller Module: [README.md](README.md).
+11 Dateien, 146 Funktionen – in der Reihenfolge der Datei, **fett** die Abschnitte. Text = erste Aussage des Kommentars direkt über der Funktion (Python: Docstring). Übersicht aller Module: [README.md](README.md).
 
 ## `app/api/aktionen/containerimport.php`
 
@@ -59,8 +59,11 @@ _Container-Import: Container (ein Einkauf bei einem Lieferanten, eine Partienumm
 **Sendungen**
 
 - `eudr_sendung_pruefen(b, betriebIds, alt)` – Felder einer Sendung aus der Eingabe prüfen (ohne id, rev, Zeitstempel und Abschluss)
-- `eudr_lieferant(b, alt)` – Lieferant eines Containers: mit „lieferantNr“ aus den Stammdaten der Verwaltung (Schnittstelle lieferanten_kurz, GR-101) – der Name wird als Schnappschuss …
-- `eudr_lieferanten()` – Lieferanten zur Auswahl am Container: nur Nummer, Name und Kurzname, nach Name sortiert
+- `eudr_sendung_laufend(b, alt)` – Angaben, die sich mit der Reise des Containers ändern – sie bleiben auch nach dem Abschluss der Bewertung pflegbar.
+- `eudr_lieferant(b, alt)` – Lieferant eines Containers: mit „lieferantNr“ aus den Stammdaten der Verwaltung (Schnittstelle lieferanten_kurz, GR-101).
+- `eudr_lieferant_name(stamm)` – Name eines Lieferanten der Stammdaten; ohne Namen der Kurzname, ohne beides „Lieferant <Nummer>“
+- `eudr_lieferanten()` – Lieferanten zur Auswahl am Container: nur Nummer und Name, nach Name sortiert
+- `eudr_partie_vergeben(liste, partie, ausser)` – Ist die Partienummer schon bei einem anderen Container vergeben (auch bei einem archivierten)?
 - `eudr_container_name(s)` – Wie ein Container heißt: seine Partienummer; ältere Einträge ohne Partienummer nach der Auftragsnummer
 - `eudr_containernummer(text)` – Containernummer nach ISO 6346 (vier Buchstaben, sechs Ziffern, Prüfziffer) einordnen: '' leer, 'ok', 'pruefziffer' (Tippfehler?) oder 'format'.
 - `eudr_dds_pruefen(dds)` – Angaben zur Sorgfaltserklärung im EU-Informationssystem (auch nach dem Abschluss änderbar)
@@ -132,7 +135,7 @@ _STAFL-Plattform · Modul Container-Import – Container (ein Einkauf bei einem 
 
 - `feld(label, name, wert, o)`
 - `werte(form)` – Werte aller benannten Felder eines Formulars als Objekt (Kontrollkästchen mit gleichem Namen als Liste)
-- `oeffnen(dlg)` – Fenster öffnen.
+- `oeffnen(dlg)`
 
 **Seite**
 
@@ -144,7 +147,7 @@ _STAFL-Plattform · Modul Container-Import – Container (ein Einkauf bei einem 
 **Fenster „Farmer“**
 
 - `betriebOeffnen(id)`
-- `auswertungZeigen(b, darf)` – Bildauswertung im Fenster „Betrieb“: Wald Ende 2020 und Waldverlust seit 2021 in der Fläche – eine Schätzung aus den Kartenbildern (eudr-auswertung.js).
+- `auswertungZeigen(b, darf)` – Bildauswertung im Fenster „Farmer“: Wald Ende 2020 und Waldverlust seit 2021 in der Fläche – eine Schätzung aus den Kartenbildern (eudr-auswertung.js).
 - `vorschlagNehmen(d, portal)` – Vorschlag (Bildauswertung oder Whisp) in das Formular der Gegenprüfung schreiben; der Bearbeiter entscheidet und trägt selbst ein. dataset: ergebnis ('' = …
 - `whispPruefen()` – Whisp für den geöffneten Betrieb abfragen (Server: containerimport_eudr_whisp).
 - `whispZeigen(el, ergebnis, b)` – Ergebnis von Whisp als Vorschlag zeigen (Deutung: eudr-whisp.js); „Übernehmen“ füllt nur das Formular
@@ -152,7 +155,7 @@ _STAFL-Plattform · Modul Container-Import – Container (ein Einkauf bei einem 
 - `betriebSpeichern(zusatz)`
 - `pruefungEintragen()`
 
-**Fenster „Sendung“**
+**Fenster „Container“**
 
 - `sendungOeffnen(id)`
 - `sendungAusFenster()`

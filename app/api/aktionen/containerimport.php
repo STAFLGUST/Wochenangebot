@@ -40,7 +40,7 @@ switch ($action) {
             header('Cache-Control: no-store');
             $darf = may($me, 'containerimport.eudr_bearbeiten');
             respond(['ok' => true, 'name' => $me['name'], 'rechte' => ['bearbeiten' => $darf, 'whisp' => $darf && whisp_eingerichtet()],
-                'lieferanten' => eudr_lieferanten()] + eudr_stand());   // Stammdaten nur hier, nicht in jeder Antwort – die Seite behält sie
+                'lieferanten' => $darf ? eudr_lieferanten() : []] + eudr_stand());   // Stammdaten nur zum Auswählen und nur hier, nicht in jeder Antwort
         }
 
         /* Dateien prüfen, ohne zu speichern: Lieferanten-GeoJSON, gelesene Berichte, eingefügte Koordinaten (POST wegen Inhalt) */
@@ -170,17 +170,15 @@ switch ($action) {
                     eudr_rev_pruefen($b, $alt, 'Der Container');
                 } elseif (count($doc['liste']) >= EUDR_MAX_SENDUNGEN) fail('Zu viele Container.', 422);
                 if ($alt && !empty($alt['abschluss'])) {
-                    $neu = ['dds' => eudr_dds_pruefen(is_array($b['dds'] ?? null) ? $b['dds'] : []), 'notiz' => eudr_text($b['notiz'] ?? '', 2000, 'Notiz'),
-                        'stand' => eudr_wahl($b['stand'] ?? null, array_keys(EUDR_STAENDE), 'Stand', $alt['stand'] ?? 'gekauft'),
-                        'container' => eudr_text($b['container'] ?? $alt['container'], 40, 'Containernummer'), 'akte' => eudr_text($b['akte'] ?? ($alt['akte'] ?? ''), 40, 'Aktennummer')] + $alt;
+                    // einem Eintrag von vorher lässt sich die Partienummer auch nach dem Abschluss nachtragen – einmal
+                    $neu = eudr_sendung_laufend($b, $alt) + ($alt['partie'] === '' ? ['partie' => eudr_text($b['partie'] ?? '', 20, 'Partienummer')] : []) + $alt;
                 } else {
                     $ids = array_column(eudr_betriebe()['liste'], 'id');
+                    // „+ $alt“ am Ende: Felder, die dieser Stand nicht kennt (nach einem Rückfall von einer neueren Version), bleiben erhalten
                     $neu = ['id' => $alt['id'] ?? eudr_id('s')] + eudr_sendung_pruefen($b, $ids, $alt)
-                        + ['abschluss' => null, 'fruehere' => $alt['fruehere'] ?? [], 'erstellt' => $alt['erstellt'] ?? eudr_wer($me)];
-                    foreach ($doc['liste'] as $k => $x) {
-                        if ($k !== $i && mb_strtolower((string)($x['partie'] ?? '')) === mb_strtolower($neu['partie'])) fail('Die Partienummer „' . $neu['partie'] . '“ ist schon bei einem anderen Container vergeben.', 422);
-                    }
+                        + ['abschluss' => null, 'fruehere' => $alt['fruehere'] ?? [], 'erstellt' => $alt['erstellt'] ?? eudr_wer($me)] + ($alt ?? []);
                 }
+                if (eudr_partie_vergeben($doc['liste'], $neu['partie'], $i)) fail('Die Partienummer „' . $neu['partie'] . '“ ist schon bei einem anderen Container vergeben (archivierte zählen mit).', 422);
                 $neu['rev'] = (int)($alt['rev'] ?? 0) + 1; $neu['geaendert'] = eudr_wer($me);
                 if ($i === null) $doc['liste'][] = $neu; else $doc['liste'][$i] = $neu;
                 eudr_sendungen_schreiben($doc);

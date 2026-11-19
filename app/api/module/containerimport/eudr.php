@@ -24,6 +24,8 @@ const EUDR_MAX_ORTE_JE_DATEI = 1000;
 const EUDR_MAX_PRUEFUNGEN = 50;          // Gegenprüfungen je Betrieb
 /* Stand eines Containers auf seinem Weg (Reihenfolge = Ablauf); wird von Hand gesetzt, auch nach dem Abschluss der Bewertung */
 const EUDR_STAENDE = ['gekauft' => 'gekauft', 'unterwegs' => 'unterwegs', 'dokumente' => 'Dokumente da', 'angekommen' => 'angekommen'];
+/* Felder, die Einträgen aus der Zeit vor dem Container als Mittelpunkt fehlen – eudr_sendungen ergänzt sie beim Lesen */
+const EUDR_SENDUNG_VORGABEN = ['partie' => '', 'akte' => '', 'lieferantNr' => '', 'stand' => 'gekauft'];
 const EUDR_NACHWEIS = ['konform', 'nicht_konform', 'unbekannt'];
 const EUDR_DREI = ['ja', 'nein', 'offen'];
 const EUDR_QUELLEN = ['bericht', 'geojson', 'koordinaten'];
@@ -73,7 +75,12 @@ function eudr_fortschreiben(array $doc): array
 /* Dokument der Herkunftsbetriebe */
 function eudr_betriebe(): array { return eudr_liste(store_read('containerimport-eudr-betriebe')); }
 /* Dokument der Sendungen */
-function eudr_sendungen(): array { return eudr_liste(store_read('containerimport-eudr-sendungen')); }
+function eudr_sendungen(): array
+{
+    $doc = eudr_liste(store_read('containerimport-eudr-sendungen'));
+    $doc['liste'] = array_map(fn($s) => $s + EUDR_SENDUNG_VORGABEN, $doc['liste']);
+    return $doc;
+}
 /* Herkunftsbetriebe speichern */
 function eudr_betriebe_schreiben(array $doc): void { store_write('containerimport-eudr-betriebe', eudr_fortschreiben($doc)); }
 /* Sendungen speichern */
@@ -409,21 +416,20 @@ function eudr_datei_pruefen(array $d, array $bekannt): array
 
 /* ---------- Sendungen ---------- */
 /* Felder einer Sendung aus der Eingabe prüfen (ohne id, rev, Zeitstempel und Abschluss) */
-function eudr_sendung_pruefen(array $b, array $betriebIds, ?array $alt = null): array
+function eudr_sendung_pruefen(array $b, array $betriebIds, ?array $alt): array
 {
     $ids = is_array($b['betriebe'] ?? null) ? array_values(array_unique(array_filter($b['betriebe'], 'is_string'))) : [];
     foreach ($ids as $id) if (!in_array($id, $betriebIds, true)) throw new InvalidArgumentException('Ein gewählter Farmer ist nicht (mehr) vorhanden. Bitte neu laden.');
     $von = eudr_datum($b['schlachtVon'] ?? '', 'Schlachtung von'); $bis = eudr_datum($b['schlachtBis'] ?? '', 'Schlachtung bis');
     if ($von !== '' && $bis !== '' && $bis < $von) throw new InvalidArgumentException('Schlachtung: „bis“ liegt vor „von“.');
     $n = is_array($b['nachweis'] ?? null) ? $b['nachweis'] : [];
-    $dds = is_array($b['dds'] ?? null) ? $b['dds'] : [];
+    $aktiv = !array_key_exists('aktiv', $b) || (bool)$b['aktiv'];
     return [
-        'partie' => eudr_text($b['partie'] ?? '', 20, 'Partienummer', true),
-        'akte' => eudr_text($b['akte'] ?? '', 40, 'Aktennummer'),
-        'container' => eudr_text($b['container'] ?? '', 40, 'Containernummer'),
+        // Pflicht – nur ein Eintrag von vorher darf ohne Partienummer ins Archiv
+        'partie' => eudr_text($b['partie'] ?? '', 20, 'Partienummer', $aktiv || !$alt || $alt['partie'] !== ''),
         'nummer' => eudr_text($b['nummer'] ?? '', 60, 'Auftragsnummer des Lieferanten'),
-        'stand' => eudr_wahl($b['stand'] ?? null, array_keys(EUDR_STAENDE), 'Stand', 'gekauft'),
-    ] + eudr_lieferant($b, $alt) + [
+        ...eudr_lieferant($b, $alt),
+        ...eudr_sendung_laufend($b, $alt),
         'land' => eudr_land($b['land'] ?? ''),
         'ware' => eudr_text($b['ware'] ?? '', 160, 'Ware'),
         'hs' => eudr_text($b['hs'] ?? '', 12, 'Zolltarifnummer'),
@@ -437,33 +443,59 @@ function eudr_sendung_pruefen(array $b, array $betriebIds, ?array $alt = null): 
             'haltung' => eudr_wahl($n['haltung'] ?? null, EUDR_DREI, 'Haltungsbetriebe', 'offen'),
             'legalitaet' => eudr_wahl($n['legalitaet'] ?? null, EUDR_DREI, 'Legalität', 'offen'),
         ],
-        'dds' => eudr_dds_pruefen($dds),
-        'notiz' => eudr_text($b['notiz'] ?? '', 2000, 'Notiz'),
-        'aktiv' => !array_key_exists('aktiv', $b) || (bool)$b['aktiv'],
+        'aktiv' => $aktiv,
     ];
 }
-/* Lieferant eines Containers: mit „lieferantNr“ aus den Stammdaten der Verwaltung (Schnittstelle lieferanten_kurz, GR-101) –
-   der Name wird als Schnappschuss mitgespeichert, damit ältere Stände und spätere Umbenennungen den Container lesbar lassen.
-   Ohne Nummer bleibt der Name freier Text (Lieferant fehlt noch in den Stammdaten). Eine schon gespeicherte Nummer bleibt
-   gültig, auch wenn der Lieferant inzwischen aus den Stammdaten verschwunden ist. */
+/* Angaben, die sich mit der Reise des Containers ändern – sie bleiben auch nach dem Abschluss der Bewertung pflegbar.
+   Stand, Container- und Aktennummer behalten ohne Eingabe ihren Wert. */
+function eudr_sendung_laufend(array $b, ?array $alt): array
+{
+    $alt = ($alt ?? []) + EUDR_SENDUNG_VORGABEN + ['container' => ''];
+    return [
+        'stand' => eudr_wahl($b['stand'] ?? null, array_keys(EUDR_STAENDE), 'Stand', $alt['stand']),
+        'container' => eudr_text($b['container'] ?? $alt['container'], 40, 'Containernummer'),
+        'akte' => eudr_text($b['akte'] ?? $alt['akte'], 40, 'Aktennummer'),
+        'dds' => eudr_dds_pruefen(is_array($b['dds'] ?? null) ? $b['dds'] : []),
+        'notiz' => eudr_text($b['notiz'] ?? '', 2000, 'Notiz'),
+    ];
+}
+/* Lieferant eines Containers: mit „lieferantNr“ aus den Stammdaten der Verwaltung (Schnittstelle lieferanten_kurz, GR-101).
+   Der Name wird mitgespeichert und bei jedem Speichern vor dem Abschluss aus den Stammdaten aufgefrischt – so bleibt der
+   Container auch für ältere Stände lesbar. Fehlt der Lieferant dort inzwischen, bleibt die gespeicherte Verknüpfung mit
+   ihrem Namen gültig. Ohne Nummer ist der Name freier Text (Lieferant steht noch nicht in den Stammdaten). */
 function eudr_lieferant(array $b, ?array $alt): array
 {
     $nr = eudr_text($b['lieferantNr'] ?? '', 20, 'Lieferant');
     if ($nr === '') return ['lieferantNr' => '', 'lieferant' => eudr_text($b['lieferant'] ?? '', 120, 'Lieferant', true)];
-    if ($alt && ($alt['lieferantNr'] ?? '') === $nr) return ['lieferantNr' => $nr, 'lieferant' => $alt['lieferant']];
     $stamm = lieferanten_kurz()[$nr] ?? null;
-    if (!$stamm) throw new InvalidArgumentException('Der gewählte Lieferant steht nicht (mehr) in den Stammdaten. Bitte neu laden.');
-    return ['lieferantNr' => $nr, 'lieferant' => $stamm['name'] !== '' ? $stamm['name'] : ($stamm['kurz'] !== '' ? $stamm['kurz'] : 'Lieferant ' . $nr)];
+    if ($stamm) return ['lieferantNr' => $nr, 'lieferant' => eudr_lieferant_name($stamm)];
+    if ($alt && $alt['lieferantNr'] === $nr) return ['lieferantNr' => $nr, 'lieferant' => $alt['lieferant']];
+    throw new InvalidArgumentException('Der gewählte Lieferant steht nicht (mehr) in den Stammdaten. Bitte neu laden.');
 }
-/* Lieferanten zur Auswahl am Container: nur Nummer, Name und Kurzname, nach Name sortiert */
+/* Name eines Lieferanten der Stammdaten; ohne Namen der Kurzname, ohne beides „Lieferant <Nummer>“ */
+function eudr_lieferant_name(array $stamm): string
+{
+    return $stamm['name'] !== '' ? $stamm['name'] : ($stamm['kurz'] !== '' ? $stamm['kurz'] : 'Lieferant ' . $stamm['nr']);
+}
+/* Lieferanten zur Auswahl am Container: nur Nummer und Name, nach Name sortiert */
 function eudr_lieferanten(): array
 {
-    $liste = array_map(fn($l) => ['nr' => $l['nr'], 'name' => $l['name'], 'kurz' => $l['kurz']], array_values(lieferanten_kurz()));
+    $liste = array_map(fn($l) => ['nr' => $l['nr'], 'name' => eudr_lieferant_name($l)], array_values(lieferanten_kurz()));
     usort($liste, fn($a, $b) => strcasecmp($a['name'], $b['name']) ?: strcmp($a['nr'], $b['nr']));
     return $liste;
 }
+/* Ist die Partienummer schon bei einem anderen Container vergeben (auch bei einem archivierten)? Verglichen wird ohne
+   Rücksicht auf Groß- und Kleinschreibung, Leerzeichen und Striche – „P-100“, „p 100“ und „P–100“ sind dieselbe Partie. */
+function eudr_partie_vergeben(array $liste, string $partie, ?int $ausser): bool
+{
+    $schluessel = fn(string $p) => mb_strtolower((string)preg_replace('/[\s\x{00A0}\x{2010}-\x{2015}_.\/-]+/u', '', $p));
+    $k = $schluessel($partie);
+    if ($k === '') return false;
+    foreach ($liste as $i => $x) if ($i !== $ausser && $schluessel($x['partie']) === $k) return true;
+    return false;
+}
 /* Wie ein Container heißt: seine Partienummer; ältere Einträge ohne Partienummer nach der Auftragsnummer */
-function eudr_container_name(array $s): string { return ($s['partie'] ?? '') !== '' ? $s['partie'] : (string)($s['nummer'] ?? ''); }
+function eudr_container_name(array $s): string { return $s['partie'] !== '' ? $s['partie'] : $s['nummer']; }
 /* Containernummer nach ISO 6346 (vier Buchstaben, sechs Ziffern, Prüfziffer) einordnen: '' leer, 'ok', 'pruefziffer' (Tippfehler?)
    oder 'format'. Nur ein Hinweis – gespeichert wird, was eingegeben wurde. */
 function eudr_containernummer(string $text): string
@@ -627,7 +659,6 @@ function eudr_abschluss(array $s, array $eingabe, array $sichten, array $me): ar
 function eudr_sendung_sicht(array $s, array $betriebe): array
 {
     $s['fruehere'] = array_map(fn($f) => array_diff_key($f, ['profil' => 1, 'betriebe' => 1]), $s['fruehere'] ?? []);   // Schnappschüsse bleiben gespeichert
-    $s += ['partie' => '', 'akte' => '', 'lieferantNr' => '', 'stand' => 'gekauft'];   // Einträge aus der Zeit vor dem Container als Mittelpunkt
     return $s + ['name' => eudr_container_name($s), 'containerPruefung' => eudr_containernummer($s['container']), 'profil' => !empty($s['abschluss']) ? $s['abschluss']['profil'] : eudr_profil($s, eudr_sendung_betriebe($s, $betriebe))];
 }
 

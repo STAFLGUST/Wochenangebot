@@ -852,10 +852,12 @@ Caddy setzt auf allen Hosts `script-src 'self'` (ohne `'unsafe-inline'`), `conne
   **Container und Farmer** (Entscheidung des Inhabers 19.11.2026): die Seite sagt „Container“ und „Farmer“, Code, Aktionen
   und Daten sagen weiter `sendung` und `betrieb` (bestehende Daten, GR-006) – beim Lesen des Codes also übersetzen. Der
   Container trägt Partie-, Akten- und Containernummer, Stand und Lieferant. Den Lieferanten wählt man über ein Feld mit
-  Vorschlagsliste (`feld(…, { liste })`, `lieferantText`/`lieferantNach`): nur ein genau gewählter Vorschlag verknüpft mit
-  den Stammdaten (`lieferantNr`), alles andere bleibt freier Text. Die Stammdaten kommen nur mit `containerimport_start`
-  (nicht in jeder Antwort). `oeffnen()` leert den Inhalt geschlossener Fenster, weil mehrere Fenster Felder gleichen Namens
-  haben – sonst gäbe es Kennungen doppelt.
+  Vorschlagsliste (`feld(…, { liste })`, `lieferantText`, `lieferantWahl`): nur ein genau gewählter Vorschlag verknüpft mit
+  den Stammdaten (`lieferantNr`), alles andere bleibt freier Text. Der Server frischt den Namen bei jedem Speichern vor dem
+  Abschluss aus den Stammdaten auf (`eudr_lieferant`). Die Stammdaten kommen nur mit `containerimport_start` (nicht in
+  jeder Antwort). Was nach dem Abschluss der Bewertung änderbar bleibt, steht an einer Stelle: `eudr_sendung_laufend`.
+  Einträgen von vorher fehlende Felder ergänzt `eudr_sendungen()` beim Lesen (`EUDR_SENDUNG_VORGABEN`). Felder in Fenstern
+  haben keine Kennung (`id`) – mehrere Fenster haben Felder gleichen Namens; ansprechen über `#dlg-… [name=…]`.
   **Whisp-Abfrage** (Knopf „In Whisp prüfen“ im Fenster „Farmer“): Anders als die Karte ruft hier der **Server** den
   fremden Dienst ab (`app/api/module/containerimport/whisp.php`, Aktion `containerimport_eudr_whisp`) – der Schlüssel
   `WHISP_API_KEY` darf nie in den Browser. Hinaus geht nur der Umriss; die Seite fragt alle drei Sekunden nach, bis Whisp

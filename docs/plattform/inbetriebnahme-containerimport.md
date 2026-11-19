@@ -120,10 +120,21 @@ Lieferanten mit genau einer Partienummer. Kein Schritt auf dem Server, keine Mig
   aus Verwaltung → Lieferanten (Export der Warenwirtschaft). Steht der Lieferant dort noch nicht, bleibt der getippte Name
   als freier Text; die Liste zeigt dann „nicht mit den Stammdaten verknüpft“.
 - **Einträge von vorher:** Sie haben noch keine Partienummer und heißen in der Liste nach ihrer Auftragsnummer. Beim nächsten
-  Speichern verlangt die Seite die Partienummer; dabei auch den Lieferanten aus den Vorschlägen wählen.
+  Speichern verlangt die Seite die Partienummer; dabei auch den Lieferanten aus den Vorschlägen wählen. Archivieren geht auch
+  ohne Partienummer. Ist die Bewertung schon abgeschlossen, lässt sich die Partienummer einmal nachtragen.
+- **Partienummer nur einmal:** Verglichen wird ohne Rücksicht auf Groß- und Kleinschreibung, Leerzeichen und Striche
+  („P-100“ und „p 100“ sind dieselbe Partie). Archivierte Container zählen mit.
+- **Name des Lieferanten:** Er wird am Container mitgespeichert und bei jedem Speichern aus den Stammdaten aufgefrischt, bis
+  die Bewertung abgeschlossen ist. Danach bleibt er, wie er war.
+- **Wer die Vorschläge sieht:** Nur wer bearbeiten darf, bekommt die Liste der Lieferanten (Nummer und Name). Wer nur ansehen
+  darf, sieht den Lieferanten am Container.
 - **Nach dem Abschluss der Bewertung** lassen sich Stand, Container- und Aktennummer weiter pflegen – der Container reist
   weiter. Partienummer, Lieferant und die bewerteten Angaben bleiben, wie sie abgeschlossen wurden.
 - **Rückfall:** `sh /opt/wochenangebot/deploy/release-zurueck.sh`. Die Vorversion liest die Container weiter (sie zeigt die
-  neuen Felder nicht und nennt sie wieder „Sendung“). Ein Container ohne Auftragsnummer erscheint dort ohne Namen.
+  neuen Felder nicht und nennt sie wieder „Sendung“). **Achtung:** Wer in der Vorversion einen Container speichert, dessen
+  Bewertung noch offen ist, verliert dort Partienummer, Aktennummer, Stand und die Verknüpfung zum Lieferanten – die
+  Vorversion schreibt nur Felder, die sie kennt. Nach einem Rückfall also offene Container nicht speichern, bis die neue
+  Version wieder läuft. Abgeschlossene Container sind nicht betroffen. Ab dieser Version bleiben unbekannte Felder beim
+  Speichern erhalten, sodass ein Rückfall von einem späteren Schritt auf diesen nichts mehr verliert.
 - **Geplant, je eigener Schritt:** Schlachthöfe unter dem Lieferanten, Farmer-Kartei mit Prüfung je Container, Verbindung
   zum Bestand über die Partienummer, Auswertung je Lieferant, Tracking der Container.

@@ -69,11 +69,11 @@
   const GEO = { ok: ['einreichbar', 'ok'], hinweis: ['einreichbar · Hinweis', ''], fehler: ['fehlerhaft', 'rot'] };
   const DREI = [['offen', 'noch offen'], ['ja', 'ja, belegt'], ['nein', 'nein']];
   const ERGEBNIS = { vernachlaessigbar: ['Risiko vernachlässigbar', 'ok'], nicht_vernachlaessigbar: ['Risiko nicht vernachlässigbar', 'rot'] };
-  const WEG = { gekauft: '', unterwegs: '', dokumente: '', angekommen: 'ok' };   // Farbe der Marke je Stand des Containers
   const HINWEIS_NUMMER = { pruefziffer: 'Die Prüfziffer passt nicht – Tippfehler?', format: 'Üblich sind vier Buchstaben und sieben Ziffern, z. B. MSKU 907032 3.' };
-  /* Lieferant der Stammdaten als Text für das Eingabefeld und zurück: „Name (Nummer)“ */
-  const lieferantText = (l) => `${l.name || l.kurz || 'Lieferant'} (${l.nr})`;
-  const lieferantNach = (text) => S.d.lieferanten.find((l) => lieferantText(l) === text);
+  /* Lieferant im Eingabefeld: „Name (Nummer)“. Zur Wahl stehen die Stammdaten und die gespeicherte Verknüpfung des
+     Containers, auch wenn der Lieferant dort inzwischen fehlt – nur ein genau so gewählter Text verknüpft. */
+  const lieferantText = (l) => `${l.name} (${l.nr})`;
+  const lieferantWahl = (s) => (s && s.lieferantNr && !S.d.lieferanten.some((l) => l.nr === s.lieferantNr) ? [{ nr: s.lieferantNr, name: s.lieferant }, ...S.d.lieferanten] : S.d.lieferanten);
   const landName = (code) => (S.d.laender[code] ? S.d.laender[code].name : code);
   const betrieb = (id) => S.d.betriebe.find((b) => b.id === id);
   const sendung = (id) => S.d.sendungen.find((s) => s.id === id);
@@ -89,12 +89,12 @@
   const kopf = (id, titel, unter = '') => `<div class="dlg-head"><div><h2 id="${id}">${esc(titel)}</h2>${unter ? `<p>${unter}</p>` : ''}</div>
     <button class="ci-zu" type="button" data-zu aria-label="Schließen">${icon('x')}</button></div>`;
   function feld(label, name, wert, o = {}) {
-    const attr = `name="${name}" id="f-${name}"${o.aus ? ' disabled' : ''}`;
+    const attr = `name="${name}"${o.aus ? ' disabled' : ''}`;
     let eingabe;
     if (o.wahl) eingabe = `<select ${attr}>${o.wahl.map(([v, t]) => `<option value="${esc(v)}"${String(wert ?? '') === String(v) ? ' selected' : ''}>${esc(t)}</option>`).join('')}</select>`;
     else if (o.lang) eingabe = `<textarea ${attr} rows="${o.lang}">${esc(wert ?? '')}</textarea>`;
     else eingabe = `<input ${attr} type="${o.typ || 'text'}" value="${esc(wert ?? '')}"${o.typ === 'date' ? ` max="2099-12-31"` : ''}${o.platz ? ` placeholder="${esc(o.platz)}"` : ''}${o.zahl ? ' inputmode="decimal"' : ''}${o.liste ? ` list="${o.liste}"` : ''}>`;
-    return `<label class="ci-feld${o.breit ? ' breit' : ''}" for="f-${name}"><span>${esc(label)}</span>${eingabe}${o.hinweis ? `<small>${esc(o.hinweis)}</small>` : ''}</label>`;
+    return `<label class="ci-feld${o.breit ? ' breit' : ''}"><span>${esc(label)}</span>${eingabe}${o.hinweis ? `<small>${esc(o.hinweis)}</small>` : ''}</label>`;
   }
   /* Werte aller benannten Felder eines Formulars als Objekt (Kontrollkästchen mit gleichem Namen als Liste) */
   function werte(form) {
@@ -107,12 +107,7 @@
   }
   /* Auswahl der Länder; ein gespeicherter Code außerhalb der Liste (z. B. aus einem GeoJSON) bleibt wählbar */
   const laenderWahl = (aktuell) => [...Object.entries(S.d.laender).map(([c, l]) => [c, `${l.name} (${c})`]), ...(aktuell && !S.d.laender[aktuell] ? [[aktuell, aktuell]] : [])].sort((a, b) => a[1].localeCompare(b[1], 'de'));
-  /* Fenster öffnen. Der Inhalt geschlossener Fenster wird dabei geleert: mehrere Fenster haben Felder gleichen Namens
-     (Lieferant, Land, Notiz) – blieben sie stehen, gäbe es ihre Kennung doppelt und eine Beschriftung zeigte auf das falsche Feld. */
-  function oeffnen(dlg) {
-    for (const f of $$('dialog:not([open]) > form')) if (f.parentElement !== dlg) f.innerHTML = '';
-    if (!dlg.open) dlg.showModal();
-  }
+  function oeffnen(dlg) { if (!dlg.open) dlg.showModal(); }
   const zahlText = (v) => (v === null || v === undefined || v === '' ? '' : String(v).replace('.', ','));
 
   /* ---------- Seite ---------- */
@@ -123,8 +118,9 @@
     $('#ci-sichten').innerHTML = sichten.map(([k, t, n]) => `<button class="ci-chip" type="button" data-sicht="${k}" aria-pressed="${S.sicht === k}">${t}${n === null ? '' : ` <b>${n}</b>`}</button>`).join('');
     $('#ci-knoepfe').innerHTML = d.rechte.bearbeiten
       ? `<button class="ci-knopf" type="button" id="ci-lesen">${icon('hoch')}Unterlagen einlesen</button><button class="ci-knopf primaer" type="button" id="ci-sendung-neu">${icon('plus')}Neuer Container</button>` : '';
-    ({ sendungen: sendungenSicht, betriebe: betriebeSicht, karte: karteSicht })[S.sicht]();
+    sichtZeichnen();
   }
+  const sichtZeichnen = () => ({ sendungen: sendungenSicht, betriebe: betriebeSicht, karte: karteSicht })[S.sicht]();
 
   const suchfeld = (platz, name) => `<div class="ci-suchzeile"><input type="search" id="ci-suche" value="${esc(S.suche[S.sicht])}" placeholder="${platz}" aria-label="${name} durchsuchen"></div>`;
   function sendungenSicht() {
@@ -134,7 +130,7 @@
       <td><span class="ci-name">${esc(s.name)}</span><span class="ci-unter">${esc([s.akte && `Akte ${s.akte}`, s.container && `Container ${s.container}`].filter(Boolean).join(' · ') || '—')}</span></td>
       <td data-t="Lieferant"><span>${esc(s.lieferant)}</span><span class="ci-unter">${esc(landName(s.land))}${s.lieferantNr ? ` · Nr. ${esc(s.lieferantNr)}` : ' · nicht mit den Stammdaten verknüpft'}</span></td>
       <td data-t="Ware"><span>${esc(s.ware || '—')}</span><span class="ci-unter">${s.mengeKg === null ? '' : F.kg(s.mengeKg)}${s.lose ? ` · Lose ${esc(s.lose)}` : ''}</span></td>
-      <td data-t="Stand">${marke(S.d.staende[s.stand], WEG[s.stand])}</td>
+      <td data-t="Stand">${marke(S.d.staende[s.stand], s.stand === 'angekommen' ? 'ok' : '')}</td>
       <td data-t="Farmer" class="ci-r">${s.betriebe.length}</td>
       <td data-t="Risikoprofil">${profilMarke(s.profil)}</td>
       <td data-t="Bewertung">${s.abschluss ? marke(ERGEBNIS[s.abschluss.ergebnis][0], ERGEBNIS[s.abschluss.ergebnis][1]) + `<span class="ci-unter">${tag(s.abschluss.wer.t)} · ${esc(s.abschluss.wer.von)}</span>` : '<span class="ci-leise">in Prüfung</span>'}${s.dds.referenz ? `<span class="ci-unter">Sorgfaltserklärung <span class="ci-zahlen">${esc(s.dds.referenz)}</span></span>` : ''}</td></tr>`;
@@ -245,7 +241,7 @@
     auswertungZeigen(b, darf);
   }
   const WALD_AB_HA = 0.5;   // ab so viel Verlust auf Wald von 2020 schlägt die Bildauswertung „Befund“ vor (Mindestgröße eines Waldes nach der EUDR)
-  /* Bildauswertung im Fenster „Betrieb“: Wald Ende 2020 und Waldverlust seit 2021 in der Fläche – eine Schätzung aus den
+  /* Bildauswertung im Fenster „Farmer“: Wald Ende 2020 und Waldverlust seit 2021 in der Fläche – eine Schätzung aus den
      Kartenbildern (eudr-auswertung.js). Ohne erreichbare Kartendienste oder für einen Punkt bleibt der Abschnitt verborgen.
      „Übernehmen“ füllt nur das Formular der Gegenprüfung; eingetragen wird erst mit dessen Knopf. */
   async function auswertungZeigen(b, darf) {
@@ -345,12 +341,12 @@
     betriebOeffnen(id);
   }
 
-  /* ---------- Fenster „Sendung“ ---------- */
+  /* ---------- Fenster „Container“ ---------- */
   const kriterien = (p) => `<ul class="ci-kriterien">${p.kriterien.map((k) => `<li class="${k.stand}"><span class="ci-kr-stand">${marke(STAND[k.stand][0], STAND[k.stand][1])}</span>
     <span><strong>${esc(k.titel)}</strong><small>${esc(k.text)}${k.betriebe.length ? ` <em>${esc(k.betriebe.join(', '))}</em>` : ''}</small></span></li>`).join('')}</ul>`;
   function sendungOeffnen(id) {
     const neu = !id;
-    const s = neu ? { id: '', rev: 0, name: '', partie: '', akte: '', container: '', containerPruefung: '', stand: 'gekauft', nummer: '', lieferant: '', lieferantNr: '', land: 'PY', ware: '', hs: '', mengeKg: null, schlachtVon: '', schlachtBis: '', lose: '', betriebe: [],
+    const s = neu ? { id: '', rev: 0, partie: '', akte: '', container: '', stand: 'gekauft', nummer: '', lieferant: '', lieferantNr: '', land: 'PY', ware: '', hs: '', mengeKg: null, schlachtVon: '', schlachtBis: '', lose: '', betriebe: [],
       nachweis: { erklaerung: '', rueckverfolgung: 'offen', haltung: 'offen', legalitaet: 'offen' }, dds: { referenz: '', datum: '' }, notiz: '', aktiv: true, abschluss: null } : sendung(id);
     if (!s) return;
     const darf = S.d.rechte.bearbeiten, zu = !!s.abschluss, aus = !darf || zu;
@@ -360,21 +356,21 @@
       ? `<ul class="ci-wahl">${gezeigt.map((b) => `<li><label><input type="checkbox" name="betriebe" data-liste value="${esc(b.id)}"${zu || s.betriebe.includes(b.id) ? ' checked' : ''}${aus ? ' disabled' : ''}>
           <span><strong>${esc(b.name)}</strong><small>${esc([b.erzeuger, landName(b.land), b.region].filter(Boolean).join(' · '))} · ${ha(b.flaeche)}</small></span></label>${marke(GEO[b.stand][0], GEO[b.stand][1])}</li>`).join('')}</ul>`
       : '<p class="ci-leise ci-klein">Noch keine Farmer vorhanden – zuerst die Unterlagen des Lieferanten einlesen.</p>';
-    const stamm = s.lieferantNr ? S.d.lieferanten.find((l) => l.nr === s.lieferantNr) : null;
-    const lieferantHinweis = s.lieferantNr ? `Stammdaten Nr. ${s.lieferantNr}${stamm ? '' : ' – dort nicht mehr vorhanden'}`
+    const verknuepft = lieferantWahl(s).find((l) => l.nr === s.lieferantNr);   // die Stammdaten bekommt nur, wer bearbeiten darf
+    const lieferantHinweis = verknuepft ? `Stammdaten Nr. ${s.lieferantNr}${!darf || S.d.lieferanten.includes(verknuepft) ? '' : ' – dort nicht mehr vorhanden'}`
       : S.d.lieferanten.length ? (neu ? 'Aus den Stammdaten wählen: Namen tippen und den Vorschlag anklicken.' : 'Nicht mit den Stammdaten verknüpft – Namen tippen und den Vorschlag anklicken.') : 'In der Verwaltung sind noch keine Lieferanten eingelesen – freier Text.';
     const abschluss = zu ? `<div class="ci-abschluss">${marke(ERGEBNIS[s.abschluss.ergebnis][0], ERGEBNIS[s.abschluss.ergebnis][1])}<span>Bewertung abgeschlossen am ${tag(s.abschluss.wer.t)} von ${esc(s.abschluss.wer.von)}${s.abschluss.begruendung ? `<small>${esc(s.abschluss.begruendung)}</small>` : ''}</span></div>` : '';
     $('#sendung-inhalt').dataset.id = s.id;
     $('#sendung-inhalt').innerHTML = kopf('sendung-titel', neu ? 'Neuer Container' : `Container ${s.name}`, neu ? '' : `${esc(s.lieferant)} · ${esc(landName(s.land))}`)
       + `<div class="dlg-body">${abschluss}
         <div class="ci-raster drei">
-          ${feld('Partienummer', 'partie', s.partie, { aus, platz: 'interne Referenz des Einkaufs' })}${feld('Aktennummer', 'akte', s.akte, { aus: !darf })}${feld('Containernummer', 'container', s.container, { aus: !darf, platz: 'z. B. MSKU 907032 3', hinweis: HINWEIS_NUMMER[s.containerPruefung] })}
-          ${feld('Lieferant', 'lieferant', stamm ? lieferantText(stamm) : s.lieferant, { aus, liste: 'ci-lieferanten', hinweis: lieferantHinweis })}${feld('Herkunftsland', 'land', s.land, { wahl: laenderWahl(s.land), aus })}${feld('Stand', 'stand', s.stand, { wahl: Object.entries(S.d.staende), aus: !darf })}
+          ${feld('Partienummer', 'partie', s.partie, { aus: aus && !(darf && s.partie === ''), platz: 'interne Referenz des Einkaufs' })}${feld('Aktennummer', 'akte', s.akte, { aus: !darf })}${feld('Containernummer', 'container', s.container, { aus: !darf, platz: 'z. B. MSKU 907032 3', hinweis: HINWEIS_NUMMER[s.containerPruefung] })}
+          ${feld('Lieferant', 'lieferant', verknuepft && !aus ? lieferantText(verknuepft) : s.lieferant, { aus, liste: 'ci-lieferanten', hinweis: lieferantHinweis })}${feld('Herkunftsland', 'land', s.land, { wahl: laenderWahl(s.land), aus })}${feld('Stand', 'stand', s.stand, { wahl: Object.entries(S.d.staende), aus: !darf })}
           ${feld('Ware', 'ware', s.ware, { aus, platz: 'z. B. Rindfleisch, gekühlt, ohne Knochen' })}${feld('Zolltarifnummer', 'hs', s.hs, { aus, platz: 'z. B. 0201' })}${feld('Menge netto (kg)', 'mengeKg', zahlText(s.mengeKg), { zahl: true, aus })}
           ${feld('Auftragsnummer des Lieferanten', 'nummer', s.nummer, { aus, platz: 'z. B. FB26-001' })}${feld('Schlachtung von', 'schlachtVon', s.schlachtVon, { typ: 'date', aus })}${feld('Schlachtung bis', 'schlachtBis', s.schlachtBis, { typ: 'date', aus })}
           ${feld('Schlachtlose', 'lose', s.lose, { aus, breit: true, platz: 'z. B. 2101, 2102, 2103' })}
         </div>
-        <datalist id="ci-lieferanten">${S.d.lieferanten.map((l) => `<option value="${esc(lieferantText(l))}">`).join('')}</datalist>
+        <datalist id="ci-lieferanten">${lieferantWahl(s).map((l) => `<option value="${esc(lieferantText(l))}">`).join('')}</datalist>
 
         <h3 class="ci-h">Farmer dieses Containers</h3>${betriebe}
         ${!neu && gezeigt.some((b) => s.betriebe.includes(b.id)) ? '<div class="ci-k-wrap flach" id="sendung-karte"></div>' : ''}
@@ -405,11 +401,10 @@
   }
   function sendungAusFenster() {
     const f = $('#sendung-inhalt'), w = werte(f), alt = sendung(f.dataset.id);
-    // Lieferant: der gewählte Vorschlag der Stammdaten; unverändert bleibt die gespeicherte Verknüpfung; sonst freier Text
-    const stamm = lieferantNach(w.lieferant), unveraendert = alt && alt.lieferantNr && w.lieferant === alt.lieferant;
+    const gewaehlt = lieferantWahl(alt).find((l) => lieferantText(l).toLowerCase() === w.lieferant.toLowerCase());   // sonst freier Text ohne Verknüpfung
     return {
       id: f.dataset.id, rev: alt ? alt.rev : 0, aktiv: alt ? alt.aktiv : true, partie: w.partie, akte: w.akte, container: w.container, stand: w.stand, nummer: w.nummer,
-      lieferantNr: stamm ? stamm.nr : unveraendert ? alt.lieferantNr : '', lieferant: stamm ? stamm.name : w.lieferant, land: w.land, ware: w.ware, hs: w.hs, mengeKg: w.mengeKg,
+      lieferantNr: gewaehlt ? gewaehlt.nr : '', lieferant: w.lieferant, land: w.land, ware: w.ware, hs: w.hs, mengeKg: w.mengeKg,
       schlachtVon: w.schlachtVon, schlachtBis: w.schlachtBis, lose: w.lose, betriebe: w.betriebe || [], notiz: w.notiz,
       nachweis: { erklaerung: w.n_erklaerung, rueckverfolgung: w.n_rueckverfolgung, haltung: w.n_haltung, legalitaet: w.n_legalitaet }, dds: { referenz: w.d_referenz, datum: w.d_datum },
     };
@@ -664,7 +659,7 @@
     if (e.target.id !== 'ci-suche') return;
     S.suche[S.sicht] = e.target.value;
     const stelle = e.target.selectionStart;
-    ({ sendungen: sendungenSicht, betriebe: betriebeSicht })[S.sicht]();
+    sichtZeichnen();
     $('#ci-suche').focus(); $('#ci-suche').setSelectionRange(stelle, stelle);
   });
   document.addEventListener('change', (e) => {

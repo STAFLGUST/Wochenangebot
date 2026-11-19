@@ -133,9 +133,9 @@ check('schreibende Aktionen per GET: 405', [I.call(a)[0] for a in ('containerimp
 st, r = I.call('containerimport_start')
 check('Whisp-Abfrage ohne Zugangsschlüssel auf dem Server: nicht angeboten, Aktion 503', r['rechte'] == {'bearbeiten': True, 'whisp': False}
       and I.call('containerimport_eudr_whisp', {'id': 'x'})[0] == 503 and L.call('containerimport_eudr_whisp', {'id': 'x'})[0] == 403, r.get('rechte'))
-check('Stand: Lieferanten der Stammdaten zur Auswahl – nur Nummer, Name und Kurzname, nach Name sortiert; Stände des Containers',
-      r['lieferanten'] == [{'nr': '70031', 'name': '', 'kurz': 'OHNENAME'}, {'nr': '70020', 'name': 'Carnes del Sur Ltda.', 'kurz': 'CARNESUR'}, {'nr': '70012', 'name': 'Frigorifico Beispiel S.A.', 'kurz': 'FRIGOBSP'}]
-      and list(r['staende']) == ['gekauft', 'unterwegs', 'dokumente', 'angekommen'] and 'Asunción' not in json.dumps(r, ensure_ascii=False) and '1.234.567' not in json.dumps(r), r.get('lieferanten'))
+check('Stand: Lieferanten der Stammdaten zur Auswahl – nur Nummer und Name, nach Name sortiert, nur für Bearbeiter; Stände des Containers',
+      r['lieferanten'] == [{'nr': '70020', 'name': 'Carnes del Sur Ltda.'}, {'nr': '70012', 'name': 'Frigorifico Beispiel S.A.'}, {'nr': '70031', 'name': 'OHNENAME'}]
+      and L.call('containerimport_start')[1]['lieferanten'] == [] and list(r['staende']) == ['gekauft', 'unterwegs', 'dokumente', 'angekommen'] and 'Asunción' not in json.dumps(r, ensure_ascii=False) and '1.234.567' not in json.dumps(r), r.get('lieferanten'))
 check('bearbeiten: Stand mit Ländern und Portalen', st == 200 and r['rechte']['bearbeiten'] and r['laender']['PY'] == {'name': 'Paraguay', 'klasse': 'standard'}
       and r['laender']['NZ'] == {'name': 'Neuseeland', 'klasse': None}   # wählbar, Einstufung nicht hinterlegt
       and set(r['portale']) == {'gnw', 'whisp', 'sonst'} and r['portale']['gnw']['name'] == 'Global Nature Watch', (st, r))
@@ -193,7 +193,8 @@ c = (r.get('sendungen') or [{}])[0]
 check('Container: Partie-, Akten- und Containernummer, Stand; heißt nach seiner Partienummer; Lieferant als freier Text ohne Verknüpfung',
       [c.get(k) for k in ('partie', 'akte', 'container', 'stand', 'name', 'lieferantNr', 'lieferant')] == ['P-260001', 'AK-2026-014', 'TEST 123456-7', 'unterwegs', 'P-260001', '', 'Frigorifico Beispiel'], c)
 check('Containernummer: falsche Prüfziffer als Hinweis, gespeichert wird die Eingabe', c.get('containerPruefung') == 'pruefziffer', c.get('containerPruefung'))
-check('Partienummer ist je Container eindeutig, auch bei anderer Schreibweise (422)', I.call('containerimport_eudr_sendung_save', {**SENDUNG, 'partie': 'p-260001'})[0] == 422)
+check('Partienummer ist je Container eindeutig, auch bei anderer Schreibweise (klein, Leerzeichen, anderer Strich, geschütztes Leerzeichen): 422',
+      [I.call('containerimport_eudr_sendung_save', {**SENDUNG, 'partie': x})[0] for x in ('p-260001', 'P 260001', 'P–260001', 'P-260001\u00a0')] == [422] * 4)
 check('Stand außerhalb der Liste 422, unbekannter Lieferant der Stammdaten 422', I.call('containerimport_eudr_sendung_save', {**SENDUNG, 'partie': 'P-9', 'stand': 'verschollen'})[0] == 422
       and I.call('containerimport_eudr_sendung_save', {**SENDUNG, 'partie': 'P-9', 'lieferantNr': '99999'})[0] == 422)
 st, r = I.call('containerimport_eudr_sendung_save', {'id': '', 'rev': 0, 'partie': 'P-260003', 'lieferantNr': '70012', 'lieferant': 'wird ersetzt', 'land': 'PY', 'container': 'msku 907032-3'})
@@ -209,17 +210,27 @@ c3 = next((x for x in r.get('sendungen', []) if x['partie'] == 'P-260003'), {})
 check('Lieferant nicht mehr in den Stammdaten: Verknüpfung und Name bleiben am Container, neu wählen lässt er sich nicht',
       st == 200 and c3.get('lieferantNr') == '70012' and c3.get('lieferant') == 'Frigorifico Beispiel S.A.' and c3.get('akte') == 'AK-3'
       and I.call('containerimport_eudr_sendung_save', {**SENDUNG, 'partie': 'P-9', 'lieferantNr': '70012'})[0] == 422, (st, r.get('error'), c3))
-A.call('lieferanten_save', {'rev': 2, 'groups': LIEFERANTEN, 'quelle': 'Test'})
+# Lieferant wird in den Stammdaten umbenannt: ein Container in Arbeit übernimmt den Namen beim nächsten Speichern
+A.call('lieferanten_save', {'rev': 2, 'groups': [{**LIEFERANTEN[0], 'name': 'Frigorifico Beispiel Nuevo S.A.'}] + LIEFERANTEN[1:], 'quelle': 'Test'})
+st, r = I.call('containerimport_eudr_sendung_save', c3)
+c3 = next((x for x in r.get('sendungen', []) if x['partie'] == 'P-260003'), {})
+check('Lieferant in den Stammdaten umbenannt: der Container in Arbeit übernimmt den neuen Namen beim Speichern', st == 200 and c3.get('lieferant') == 'Frigorifico Beispiel Nuevo S.A.', (st, r.get('error'), c3))
+A.call('lieferanten_save', {'rev': 3, 'groups': LIEFERANTEN, 'quelle': 'Test'})
 # Eintrag aus der Zeit vor dem Umbau (ohne Partienummer, Akte, Stand, Verknüpfung): bleibt lesbar, heißt nach der Auftragsnummer
 doc = _json(storage_raw('containerimport-eudr-sendungen'))
 alt = next(x for x in doc['liste'] if x['partie'] == 'P-260004')
 for k in ('partie', 'akte', 'stand', 'lieferantNr'): del alt[k]
-alt['nummer'] = 'ALT-77'
+alt['nummer'] = 'ALT-77'; alt['spaeter'] = {'schlachthof': 'x1'}   # ein Feld, das erst eine spätere Version kennt
 storage_write('containerimport-eudr-sendungen', doc)
 c4 = next(x for x in I.call('containerimport_start')[1]['sendungen'] if x['nummer'] == 'ALT-77')
 check('Eintrag aus der Zeit vor dem Umbau: lesbar, heißt nach der Auftragsnummer, Stand „gekauft“, nicht verknüpft', [c4[k] for k in ('name', 'partie', 'akte', 'stand', 'lieferantNr')] == ['ALT-77', '', '', 'gekauft', ''], c4)
-check('Eintrag aus der Zeit vor dem Umbau: Speichern verlangt die Partienummer, danach heißt er nach ihr', I.call('containerimport_eudr_sendung_save', c4)[0] == 422
-      and next(x for x in I.call('containerimport_eudr_sendung_save', {**c4, 'partie': 'P-260004', 'aktiv': False})[1]['sendungen'] if x['id'] == c4['id'])['name'] == 'P-260004')
+st, r = I.call('containerimport_eudr_sendung_save', {**c4, 'aktiv': False})
+c4 = next((x for x in r.get('sendungen', []) if x['id'] == c4['id']), c4)
+check('Eintrag aus der Zeit vor dem Umbau: lässt sich ohne Partienummer archivieren, Wiederherstellen und Speichern verlangen sie', st == 200 and c4['aktiv'] is False and c4['partie'] == ''
+      and I.call('containerimport_eudr_sendung_save', {**c4, 'aktiv': True})[0] == 422, (st, r.get('error')))
+check('Eintrag aus der Zeit vor dem Umbau: mit Partienummer heißt er nach ihr; Felder einer späteren Version bleiben beim Speichern erhalten',
+      next(x for x in I.call('containerimport_eudr_sendung_save', {**c4, 'partie': 'P-260004'})[1]['sendungen'] if x['id'] == c4['id'])['name'] == 'P-260004'
+      and next(x for x in _json(storage_raw('containerimport-eudr-sendungen'))['liste'] if x['id'] == c4['id'])['spaeter'] == {'schlachthof': 'x1'})
 I.call('containerimport_eudr_sendung_save', {**next(x for x in I.call('containerimport_start')[1]['sendungen'] if x['partie'] == 'P-260003'), 'aktiv': False})
 check('Container: Pflichtfelder und Datumsfolge geprüft (422)', I.call('containerimport_eudr_sendung_save', {**SENDUNG, 'partie': ''})[0] == 422 and I.call('containerimport_eudr_sendung_save', {**SENDUNG, 'partie': 'P-9', 'lieferant': ''})[0] == 422
       and I.call('containerimport_eudr_sendung_save', {**SENDUNG, 'schlachtBis': '2026-11-01'})[0] == 422 and I.call('containerimport_eudr_sendung_save', {**SENDUNG, 'betriebe': ['gibt-es-nicht']})[0] == 422)
@@ -291,11 +302,11 @@ check('Container ohne Farmer: Geolokalisierung kritisch, „vernachlässigbar“
 fremd = {'name': 'Fazenda Exemplo', 'land': 'BR', 'geometrie': {'type': 'Polygon', 'coordinates': [[[-55, -15], [-54.99, -15], [-54.99, -15.01], [-55, -15]]]}}
 st, r = I.call('containerimport_eudr_betriebe_save', {'sendung': s2['id'], 'betriebe': [fremd]})
 s2 = next(x for x in r['sendungen'] if x['nummer'] == 'FB26-002')
-check('Farmer in einem anderen Land als die Container: Einstufung offen, Farmer genannt', st == 200 and profil(s2)['land'] == 'offen' and next(k for k in s2['profil']['kriterien'] if k['id'] == 'land')['betriebe'] == ['Fazenda Exemplo'], s2['profil'])
+check('Farmer in einem anderen Land als der Container: Einstufung offen, Farmer genannt', st == 200 and profil(s2)['land'] == 'offen' and next(k for k in s2['profil']['kriterien'] if k['id'] == 'land')['betriebe'] == ['Fazenda Exemplo'], s2['profil'])
 fb = betrieb('Fazenda Exemplo')
 r = I.call('containerimport_eudr_betriebe_save', {'betriebe': [{**fb, 'land': 'RU'}]})[1]
 s2 = next(x for x in r['sendungen'] if x['nummer'] == 'FB26-002')
-check('Farmer in einem Land mit hohem Risiko: kritisch, auch wenn die Container ein anderes Land nennt', profil(s2)['land'] == 'kritisch', s2['profil'])
+check('Farmer in einem Land mit hohem Risiko: kritisch, auch wenn der Container ein anderes Land nennt', profil(s2)['land'] == 'kritisch', s2['profil'])
 fb = betrieb('Fazenda Exemplo')
 I.call('containerimport_eudr_betriebe_save', {'betriebe': [{**fb, 'land': 'PY', 'geometrie': {'type': 'Polygon', 'coordinates': [[[-57.5, -23], [-57.49, -23], [-57.49, -23.01], [-57.5, -23]]]}, 'bericht': {**fb['bericht'], 'umwelt': 'nicht_konform'}}]})
 I.call('containerimport_eudr_sendung_save', {**SENDUNG, 'id': s2['id'], 'rev': s2['rev'], 'partie': 'P-260002', 'nummer': 'FB26-002', 'betriebe': [fb['id']], 'nachweis': {**SENDUNG['nachweis'], 'legalitaet': 'ja'}})
@@ -358,7 +369,16 @@ st, r = I.call('containerimport_eudr_sendung_save', {**SENDUNG, 'id': sid, 'rev'
 s = r['sendungen'][0]
 check('nach dem Abschluss: der Container reist weiter – Stand, Container- und Aktennummer bleiben änderbar; Partienummer und Lieferant nicht',
       [s[k] for k in ('stand', 'container', 'akte', 'partie', 'lieferantNr', 'lieferant')] == ['angekommen', 'MSKU 907032 3', 'AK-2026-014/2', 'P-260001', '', 'Frigorifico Beispiel'], s)
-check('nach dem Abschluss: nur Sorgfaltserklärung und Notiz änderbar', st == 200 and s['nummer'] == 'FB26-001' and len(s['betriebe']) == 2 and s['dds'] == {'referenz': '26DEABC123456', 'datum': '2026-11-16'} and s['notiz'] == 'DDS abgegeben' and s['abschluss'], s)
+check('nach dem Abschluss: Sorgfaltserklärung und Notiz änderbar, Auftragsnummer und Farmer nicht', st == 200 and s['nummer'] == 'FB26-001' and len(s['betriebe']) == 2 and s['dds'] == {'referenz': '26DEABC123456', 'datum': '2026-11-16'} and s['notiz'] == 'DDS abgegeben' and s['abschluss'], s)
+# abgeschlossener Eintrag aus der Zeit vor dem Umbau: die Partienummer lässt sich nachtragen – einmal, und nur eine freie
+doc = _json(storage_raw('containerimport-eudr-sendungen'))
+next(x for x in doc['liste'] if x['id'] == sid)['partie'] = ''
+storage_write('containerimport-eudr-sendungen', doc)
+s = next(x for x in stand()['sendungen'] if x['id'] == sid)
+st4 = I.call('containerimport_eudr_sendung_save', {**s, 'partie': 'p 260004'})[0]
+s = next(x for x in I.call('containerimport_eudr_sendung_save', {**s, 'partie': 'P-260001'})[1]['sendungen'] if x['id'] == sid)
+s = next(x for x in I.call('containerimport_eudr_sendung_save', {**s, 'partie': 'P-NOCHMAL'})[1]['sendungen'] if x['id'] == sid)
+check('abgeschlossener Eintrag von vorher: Partienummer nachtragen geht einmal, eine vergebene 422, die Bewertung bleibt abgeschlossen', st4 == 422 and s['partie'] == 'P-260001' and s['name'] == 'P-260001' and s['abschluss'], (st4, s['partie']))
 check('abgeschlossen: Farmer zuordnen 409, erneut abschließen 409, öffnen ohne Grund 422', I.call('containerimport_eudr_betriebe_save', {'sendung': sid, 'betriebe': [bo]})[0] == 409
       and I.call('containerimport_eudr_sendung_abschluss', {'id': sid, 'rev': s['rev'], 'ergebnis': 'vernachlaessigbar'})[0] == 409
       and I.call('containerimport_eudr_sendung_abschluss', {'id': sid, 'rev': s['rev'], 'oeffnen': True, 'grund': ''})[0] == 422)
@@ -477,17 +497,17 @@ with sync_playwright() as pw:
     gespeichert = "document.querySelector('#sendung-titel')?.textContent === 'Container P-260010' && document.querySelector('#dlg-sendung').innerText.includes('%s')"
     p.click('#ci-sendung-neu'); p.wait_for_selector('#dlg-sendung[open]')
     check('Fenster „Neuer Container“: Stände zur Auswahl, Lieferanten der Stammdaten als Vorschläge',
-          p.eval_on_selector_all('#f-stand option', 'os => os.map(o => o.textContent)') == ['gekauft', 'unterwegs', 'Dokumente da', 'angekommen']
-          and p.eval_on_selector_all('#ci-lieferanten option', 'os => os.map(o => o.value)') == ['OHNENAME (70031)', 'Carnes del Sur Ltda. (70020)', 'Frigorifico Beispiel S.A. (70012)'])
-    p.fill('#f-partie', 'P-260010'); p.fill('#f-akte', 'AK-10'); p.fill('#f-container', 'MSKU 907032 4'); p.fill('#f-lieferant', 'Carnes del Sur Ltda. (70020)')
-    p.select_option('#f-land', 'UY'); p.select_option('#f-stand', 'unterwegs')
+          p.eval_on_selector_all('#dlg-sendung [name=stand] option', 'os => os.map(o => o.textContent)') == ['gekauft', 'unterwegs', 'Dokumente da', 'angekommen']
+          and p.eval_on_selector_all('#ci-lieferanten option', 'os => os.map(o => o.value)') == ['Carnes del Sur Ltda. (70020)', 'Frigorifico Beispiel S.A. (70012)', 'OHNENAME (70031)'])
+    p.fill('#dlg-sendung [name=partie]', 'P-260010'); p.fill('#dlg-sendung [name=akte]', 'AK-10'); p.fill('#dlg-sendung [name=container]', 'MSKU 907032 4'); p.fill('#dlg-sendung [name=lieferant]', 'Carnes del Sur Ltda. (70020)')
+    p.select_option('#dlg-sendung [name=land]', 'UY'); p.select_option('#dlg-sendung [name=stand]', 'unterwegs')
     p.click('#dlg-sendung button[type=submit]'); p.wait_for_function(gespeichert % 'Stammdaten Nr. 70020')
     c = next(x for x in stand()['sendungen'] if x['partie'] == 'P-260010')
     check('Neuer Container gespeichert: mit dem Lieferanten der Stammdaten verknüpft, Name von dort, Stand „unterwegs“',
           [c[k] for k in ('lieferantNr', 'lieferant', 'akte', 'stand', 'land')] == ['70020', 'Carnes del Sur Ltda.', 'AK-10', 'unterwegs', 'UY'], c)
     check('Fenster „Container“: Hinweis auf die falsche Prüfziffer der Containernummer', 'Prüfziffer passt nicht' in p.inner_text('#dlg-sendung'))
     shot(p.locator('#dlg-sendung'), os.path.join(SH, 'containerimport-container-fenster-1280.png'))
-    p.fill('#f-lieferant', 'Lieferant ohne Stammdaten'); p.fill('#f-container', 'MSKU 907032 3')
+    p.fill('#dlg-sendung [name=lieferant]', 'Lieferant ohne Stammdaten'); p.fill('#dlg-sendung [name=container]', 'MSKU 907032 3')
     p.click('#dlg-sendung button[type=submit]'); p.wait_for_function(gespeichert % 'Nicht mit den Stammdaten verknüpft')
     c = next(x for x in stand()['sendungen'] if x['partie'] == 'P-260010')
     check('Lieferant als freier Text: gespeichert ohne Verknüpfung, das Fenster sagt es; gültige Containernummer ohne Hinweis',
@@ -505,8 +525,7 @@ with sync_playwright() as pw:
 
     # Unterlagen einlesen: Bericht (PDF, im Browser gelesen), Lieferanten-GeoJSON, Erklärung ohne Koordinaten
     p.click('#ci-lesen'); p.wait_for_selector('#dlg-lesen[open]')
-    check('Fenster: Feldkennungen sind eindeutig, auch wenn vorher ein anderes Fenster mit gleichnamigen Feldern offen war', p.evaluate("['f-lieferant', 'f-land'].every((id) => document.querySelectorAll('#' + id).length === 1)"))
-    p.select_option('#f-sendung', sid); p.fill('#f-lieferant', 'Frigorifico/Beispiel')
+    p.select_option('#dlg-lesen [name=sendung]', sid); p.fill('#dlg-lesen [name=lieferant]', 'Frigorifico/Beispiel')
     p.set_input_files('#lesen-dateien', [pfade['Compliance_Report_Estancia_Beispiel.pdf'], os.path.join(FIX, 'containerimport', 'lieferant.geojson'), pfade['Erklaerung_Lieferant.pdf']])
     p.wait_for_selector('#lesen-ergebnis .ci-datei')
     text = p.inner_text('#lesen-ergebnis')
@@ -539,7 +558,7 @@ with sync_playwright() as pw:
         p.click('#dlg-sendung [data-export-sendung]')
     datei = json.load(open(dl.value.path(), encoding='utf-8'))
     check('Container: „GeoJSON für TRACES“ lädt die Datei', dl.value.suggested_filename == 'EUDR_P-260001.geojson' and datei['type'] == 'FeatureCollection' and len(datei['features']) == 2, datei)
-    p.fill('#f-d_referenz', '26DEXYZ000111'); p.click('#dlg-sendung button[type=submit]')
+    p.fill('#dlg-sendung [name=d_referenz]', '26DEXYZ000111'); p.click('#dlg-sendung button[type=submit]')
     p.wait_for_function("document.querySelector('#ci-toast').textContent.includes('Container gespeichert')")
     check('Container: Speichern aus dem Fenster', stand()['sendungen'][0]['dds']['referenz'] == '26DEXYZ000111')
     p.click('#sendung-druck')
@@ -557,7 +576,7 @@ with sync_playwright() as pw:
     check('Farmer: Umriss mit vier Eckpunkten, Maßstab, Lage im Land; Verweise auf Global Nature Watch und Whisp', p.locator('#betrieb-karte .ci-k-ecke').count() == 4 and p.inner_text('#betrieb-karte .ci-k-massstab').strip() in ('500 m', '1 km')
           and p.locator('#betrieb-karte .ci-k-lage svg').count() == 1 and p.eval_on_selector_all('#dlg-betrieb .ci-portale a', 'as => as.map(a => a.hostname)') == ['www.globalnaturewatch.org', 'whisp.openforis.org']
           and p.eval_on_selector_all('#dlg-betrieb a[target=_blank]', 'as => as.every(a => a.rel.includes("noopener"))'))
-    p.select_option('#f-p_portal', 'gnw'); p.fill('#f-p_bemerkung', 'ohne Auffälligkeit'); p.click('#betrieb-pruefung')
+    p.select_option('#dlg-betrieb [name=p_portal]', 'gnw'); p.fill('#dlg-betrieb [name=p_bemerkung]', 'ohne Auffälligkeit'); p.click('#betrieb-pruefung')
     p.wait_for_function("document.querySelectorAll('#dlg-betrieb .ci-pruefungen li').length === 3")
     check('Farmer: Gegenprüfung aus dem Fenster eingetragen', len(betrieb('Estancia Beispiel')['pruefungen']) == 3)
     shot(p.locator('#dlg-betrieb'), os.path.join(SH, 'containerimport-betrieb-1280.png'))
@@ -573,7 +592,7 @@ with sync_playwright() as pw:
     check('Karte: Klick auf eine Marke öffnet diesen Farmer', p.inner_text('#betrieb-titel') == name, (p.inner_text('#betrieb-titel'), name))
     p.keyboard.press('Escape'); p.wait_for_selector('#dlg-betrieb', state='hidden')
     p.select_option('#ci-karte-sendung', sid); p.wait_for_function("document.querySelectorAll('#ci-karte .ci-k-marke').length === 2")
-    check('Karte: Auswahl einer Container zeigt nur ihre Farmer', p.locator('.ci-kartenliste button').count() == 2)
+    check('Karte: Auswahl eines Containers zeigt nur seine Farmer', p.locator('.ci-kartenliste button').count() == 2)
     p.context.close()
 
     # Herkunftskarte des Servers (Südamerika, Neuseeland): ist /karte/herkunft.pmtiles da, zeichnet die Detailkarte Straßen und
@@ -595,7 +614,7 @@ with sync_playwright() as pw:
     d.click('.ci-kartenliste button >> nth=0'); d.wait_for_selector('#betrieb-karte[data-karte="bereit"] canvas', timeout=60000)
     check('Herkunftskarte im Fenster „Farmer“: genau diese Fläche, ohne Marken', d.evaluate("(() => { const k = document.querySelector('#betrieb-karte').staflKarte; return [k.gebiete(), k.anzahl()]; })()") == [1, 0])
     d.keyboard.press('Escape'); d.select_option('#ci-karte-sendung', sid); d.wait_for_selector('#ci-karte[data-karte="bereit"] canvas')
-    check('Herkunftskarte: Auswahl einer Container zeichnet neu (eine Karte, nicht zwei übereinander)', d.locator('#ci-karte canvas').count() == 1 and d.evaluate("document.querySelector('#ci-karte').staflKarte.anzahl()") == 2)
+    check('Herkunftskarte: Auswahl eines Containers zeichnet neu (eine Karte, nicht zwei übereinander)', d.locator('#ci-karte canvas').count() == 1 and d.evaluate("document.querySelector('#ci-karte').staflKarte.anzahl()") == 2)
     d.context.close()
 
     # Karte mit Satellitenbild und Waldebenen (Auftrag des Inhabers 18.11.2026): drei fremde Dienste, vom Browser direkt abgerufen
