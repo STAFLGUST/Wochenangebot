@@ -2,7 +2,7 @@
 
 <!-- ERZEUGT von `python3 werkzeuge/doku.py erzeugen` – nicht von Hand ändern. Quelle: Funktionen und Kommentare im Code. Die CI prüft, dass diese Datei zum Code passt. -->
 
-60 Dateien, 957 Funktionen – in der Reihenfolge der Datei, **fett** die Abschnitte. Text = erste Aussage des Kommentars direkt über der Funktion (Python: Docstring). Übersicht aller Module: [README.md](README.md).
+60 Dateien, 964 Funktionen – in der Reihenfolge der Datei, **fett** die Abschnitte. Text = erste Aussage des Kommentars direkt über der Funktion (Python: Docstring). Übersicht aller Module: [README.md](README.md).
 
 ## `app/api/lib/angebote.php`
 
@@ -19,8 +19,8 @@ _Angebote, Kundenpreise, Sonderpreise, Datenmodell, gemeinsames Bearbeiten_
 - `angebotsgruppen_clean(v, basis, gids, known)` – Eigene Angebotsgruppen eines Artikels ($item['gruppen']): Angebots-ID → Gruppen-ID.
 - `artikel_gruppen_ids(it)` – Gruppen, die ein Artikel benutzt: Basiswert und eigene je Angebot (wie gruppenVon in admin.js) – solche Gruppen bleiben erhalten
 - `clean_variants(v, where, known)`
-- `angebotsreihen_clean(v, items)` – Reihenfolge der Artikel je Angebot (Inhaber 19.11.2026): $model['reihen'] = {<Angebots-ID>: [Artikel-IDs]} – nur Angebote mit eigener Artikelliste, nur …
-- `angebot_reihe(items, reihe)` – Artikel in der Reihenfolge eines Angebots: die in $reihe genannten zuerst in dieser Reihenfolge, die übrigen (später aufgenommenen) dahinter in ihrer …
+- `angebotsstellen_clean(v, vars, eigen)` – Reihenfolge der Artikel je Angebot (Inhaber 19.11.2026): $item['stellen'] = {<Angebots-ID>: Stelle (ganze Zahl)} – nur Angebote mit eigener Artikelliste …
+- `angebot_reihe(items, oid)` – Artikel in der Reihenfolge des Angebots $oid: mit Stelle ($it['stellen'][$oid]) nach ihr, die übrigen dahinter in ihrer gemeinsamen Reihenfolge.
 - `werbung_bloecke(e)` – Blöcke eines Eintrags in Reihenfolge: erster Block, danach „weitere“ (ungeprüft)
 - `werbung_eintrag(bloecke)` – Blöcke wieder zu einem Eintrag zusammensetzen (leere fallen weg, ein späterer rückt nach vorn); null = keine Werbung
 - `werbung_block_clean(e, iids)`
@@ -476,10 +476,9 @@ _Wochenangebot – Eingabebereich Bearbeitet einen Entwurf auf dem Server (autom
 - `gruppenTrennen(nur, oid)` – Gruppen trennen, bevor das Angebot oid eine Gruppe ändert (Name, Bereich, VK-Gruppe, Reihenfolge; nur = Gruppen-IDs): Nutzt eine andere Familie die Gruppe …
 - `inEigeneGruppen(oid, neu)` – Neu aufgenommene Artikel eines Angebots mit eigener Artikelliste: hat es schon eine Gruppe gleichen Namens (etwa eine getrennte Kopie), kommen sie dorthin – …
 - `gruppenDes(oid)` – Gruppen eines Angebots (Auswahl im Artikelfenster): die seiner Artikel – bzw. seiner Familie
-- `inReihenfolge(items, oid)` – Artikel eines Angebots in Angebotsreihenfolge: Gruppe in diesem Angebot, dann Stelle (wie OfferCore.enrichOffer nach offer_resolve)
-- `stelleAendern(fn)` – Gemeinsame Stelle (model.items) ändern – fn ordnet für das Wochenangebot und Angebote, die ihm folgen.
+- `stellenSetzen(oid, liste)` – Reihenfolge im Angebot oid (eigene Artikelliste) festlegen: liste zuerst, übrige Artikel des Angebots dahinter wie bisher
 - `einreihen(oid, it, nach)` – Artikel it im Angebot oid (eigene Artikelliste) hinter nach stellen, ohne nach ans Ende seiner Gruppe dort – nur dort
-- `reihenBereinigen()` – Reihenfolgen wie auf dem Server (angebotsreihen_clean): nur Angebote mit eigener Artikelliste, nur ihre Artikel, jede ID einmal.
+- `stellenErgaenzen()` – Stellen wie auf dem Server (angebotsstellen_clean): nur Angebote mit eigener Artikelliste, nur ihre Artikel, ganze Zahlen.
 - `werbungBereinigen()` – Artikel, die nicht mehr im Angebot stehen, fallen aus dessen Werbung (unbekannte Angebote prüft der Server)
 - `aufbauGeaendert()` – Weicht der Aufbau (Reihenfolge der Gruppen, Bereich je Gruppe, Gruppe und Reihenfolge der Artikel) von der veröffentlichten Fassung ab? Verglichen werden nur …
 - `artikelOrdnen(ziel, oid)` – Artikel neu ordnen: ziel = Map(Gruppen-ID → Artikel-IDs in gewünschter Reihenfolge) für die „Anker“ (z. B. alle Artikel des gewählten Angebots); jeder Anker …
@@ -593,7 +592,8 @@ _Wochenangebot – Eingabebereich Bearbeitet einen Entwurf auf dem Server (autom
 **Artikel-Dialog**
 
 - `openItem(id)`
-- `zusatzpreise(it, anlegen)` – Zusatzpreise im gewählten Angebot: Wochenangebot it.altPrices, Kundenangebot die seines eigenen Preises (variants[<id>].alt, Inhaber 19.11.2026 – jedes …
+- `zusatzpreise(it, oid)` – Zusatzpreise im Angebot oid: Wochenangebot it.altPrices, Kundenangebot die seines eigenen Preises (variants[<id>].alt, Inhaber 19.11.2026 – jedes Angebot für …
+- `zusatzpreiseSetzen(it, oid, l)`
 
 **Angebote (Standard + Kundenangebote)**
 
@@ -635,6 +635,7 @@ _Wochenangebot – Eingabebereich Bearbeitet einen Entwurf auf dem Server (autom
 
 - `openPublish()`
 - `changedFields(o, it)`
+- `bearbeitetIn(o, it)`
 - `revertChange(kind, id)` – Eine einzelne Änderung gegenüber der veröffentlichten Fassung zurücknehmen
 - `revertText(kind, id)`
 
@@ -754,6 +755,7 @@ _Wochenangebot – Eingabebereich Bearbeitet einen Entwurf auf dem Server (autom
 
 **Empfehlung (früher „Sonderpreis“; mit Preis: Sonderposten solange der Vorrat reicht)**
 
+- `empfModus(sl, oid)` – Auswahl einer Zeile im Empfehlungsfenster aus der Empfehlung sl (it.sale); eine neue Empfehlung gilt nur im gerade bearbeiteten Angebot, sonst „keine …
 - `openSale(id)`
 - `mhdList()`
 - `renderMhd()`
@@ -764,7 +766,7 @@ _Wochenangebot – Eingabebereich Bearbeitet einen Entwurf auf dem Server (autom
 - `loadMaster(force)`
 - `masterOf(code)`
 - `draftByCode(m)`
-- `namenSetzen(it, e, nur)` – Stammdaten auf einen Artikel übertragen (nach den Feldern M_FIELDS): eigene Bezeichnung gleich dem neuen Basiswert fällt weg (wie auf dem Server), Angebote …
+- `namenNachStamm(it, e, name, ausdruecklich)` – Bezeichnungen je Angebot, die ein Artikel nach dem Übernehmen eines Stammsatzes e hat (reine Funktion; name = sein Basiswert danach).
 - `applyMasterTo(m, onlyCode)` – Stammdaten auf Artikel anwenden (nur eindeutige Artikelnummern)
 - `migrateMaster()` – Stammdaten an die Regeln anpassen (einmalig je Änderung der Regeln, danach ohne Wirkung)
 - `addFromDraft()`
@@ -1044,6 +1046,7 @@ _Wochenangebot – gemeinsamer Kern für Frontend und Eingabebereich - Excel-Les
 - `matchKey(it, groups)`
 - `empfehlungFor(it, oid)` – Empfehlung (früher „Sonderpreis“) je Artikel: sale = {value: Empfehlungspreis \| mark: true (ohne Preisänderung), offers?: {<Angebot>: {value} \| {status: …
 - `saleFor(it, oid)`
+- `angebotsFolge(items, groups, oid, gruppe)` – Artikel eines Angebots in Angebotsreihenfolge (Inhaber 19.11.2026, jedes Angebot für sich): nach der Gruppe in diesem Angebot (gruppe(it) → Gruppen-ID, …
 - `diffOffers(oldM, newM)`
 - `validateModel(m)` – Prüft ein Modell vor dem Speichern/Veröffentlichen
 - `stripFrisch(name)` – „frisch“ gehört in den Zustand, nicht in die Bezeichnung.
@@ -1356,11 +1359,20 @@ _Jedes Angebot für sich (Inhaber 19.11.2026, Schritt 1)_
 **Änderung zurücknehmen (Liste der Änderungen) nur im gewählten Angebot**
 
 - `zeile_name(oid, iid, text)`
-- `zuruecknehmen(iid)`
+- `zuruecknehmen(iid, oid)` – „Rückgängig“ der Zeile „Bearbeitet“ – je Angebot, in dem die Bearbeitung liegt (oid); ohne oid: der einzige Knopf
 
 **Empfehlung je Angebot**
 
 - `empfehlung(iid)`
+
+**Angebotskategorien ordnen die gemeinsame Stelle neu – Bela behält seine Reihenfolge**
+
+**Prüfung auf dem Server (ohne Browser): Stellen und Zusatzpreise je Angebot**
+
+- `art(mm, iid)`
+- `speichern(mm)`
+- `angebote_setzen(fn)`
+- `kopieren(quelle, name)` – Angebot kopieren: Stellen und Zusatzpreise kommen mit; aus dem Wochenangebot werden dessen Zusatzpreise die der Kopie
 
 ## `tests/e2e/test_angebotsliste.py`
 
