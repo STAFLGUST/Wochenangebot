@@ -121,7 +121,9 @@ with sync_playwright() as p:
     check('Kundenangebot: leeren = wieder Basiswert', cc == ['Roastbeef Färse Fleischmeister'] and rcc.locator('input[data-f=oname]').input_value() == 'Roastbeef Färse Fleischmeister' and rcc.locator('.e-eigen').count() == 0, cc)
     # Artikel-Dialog: Feld je Angebot
     rcc.locator('[data-act=item]').click(); a.wait_for_selector('#dlg-item[open]')
-    check('Artikel-Dialog: Basiswert und Felder je Kundenangebot', a.locator('#item-body [name=oname]').count() == 4 and a.input_value('#item-body [name=oname][data-on="edeka"]') == 'Roastbeef Edeka-Spezial')
+    check('Artikel-Dialog: Bezeichnung dieses Angebots oben, Felder der weiteren Kundenangebote darunter', a.locator('#item-body [name=oname]').count() == 3
+          and a.locator('#item-body [name=oname][data-on="chefs-culinar"]').count() == 0 and a.input_value('#item-body [name=name]') == 'Roastbeef Färse Fleischmeister'
+          and a.input_value('#item-body [name=oname][data-on="edeka"]') == 'Roastbeef Edeka-Spezial')
     a.fill('#item-body [name=oname][data-on="bela"]', 'Roastbeef Bela'); a.press('#item-body [name=oname][data-on="bela"]', 'Tab'); wait_saved(a)
     bl, _ = offer_names(a, 'bela', '10601')
     check('Artikel-Dialog: Bezeichnung in Bela', bl == ['Roastbeef Bela'], bl)

@@ -226,6 +226,70 @@
   function gruppenBereinigen() {
     for (const it of model.items) for (const [o, g] of Object.entries(it.gruppen || {})) if (g === it.groupId || !gById(g)) setzeGruppe(it, o, '');
   }
+  /* Jedes Angebot für sich (Inhaber 19.11.2026): Bezeichnung, Angebotsgruppen und Preise eines Angebots ändern kein anderes.
+     Eigenständig sind das Wochenangebot und jedes Angebot mit eigener Artikelliste (auch Sonderangebote); Angebote, die dem
+     Wochenangebot folgen, gehören bis zu ihrer Umstellung zu ihm. familie(oid) = das eigenständige Angebot, zu dem oid gehört. */
+  const familie = (oid) => (ownList(oid) ? oid : OSTD);
+  /* Bezeichnung (feld 'name') bzw. Angebotsgruppe ('gruppe') eines Artikels im gewählten Angebot oid setzen. Steht der Artikel
+     auch in einem anderen Angebot, wird es im Kundenangebot dessen eigener Wert. Im Wochenangebot (oder wenn er nur hier steht)
+     ändert sich der Basiswert; vorher behält jedes Angebot mit eigener Artikelliste, das ihn bisher nutzte, den alten Wert als
+     eigenen (direkt gesetzt – setzeName/setzeGruppe verwerfen einen Wert gleich dem Basiswert). Ausdrückliche Felder anderer
+     Angebote (Artikelfenster, data-on) und das Leeren in der Zeile setzen direkt über setzeName/setzeGruppe. */
+  const JE = { name: { eigen: eigenName, setze: setzeName, je: 'namen', basis: 'name' }, gruppe: { eigen: eigenGruppe, setze: setzeGruppe, je: 'gruppen', basis: 'groupId' } };
+  const eigenerWert = (it, oid) => oid !== OSTD && offersOf(it).some((o) => o !== oid);   // im Kundenangebot gilt ein eigener Wert
+  function setzeJeAngebot(it, oid, feld, wert) {
+    const { eigen, setze, je, basis } = JE[feld], alt = it[basis];
+    if (eigenerWert(it, oid)) { setze(it, oid, wert); return; }
+    if (alt !== wert) for (const o of offersOf(it)) if (o !== oid && ownList(o) && !eigen(it, o)) it[je] = { ...(it[je] || {}), [o]: alt };
+    if (oid !== OSTD) setze(it, oid, '');
+    it[basis] = wert;
+    for (const o of Object.keys(it[je] || {})) if (it[je][o] === wert) setze(it, o, '');   // gleich dem Basiswert = kein eigener (wie clean_model)
+  }
+  const alleAngebote = () => [OSTD, ...offers.map((o) => o.id)];
+  /* Gruppen trennen, bevor das Angebot oid eine Gruppe ändert (Name, Bereich, VK-Gruppe, Reihenfolge; nur = Gruppen-IDs): Nutzt
+     eine andere Familie die Gruppe mit, bekommt ein Kundenangebot eine eigene Kopie direkt hinter dem Original (so bleibt
+     jede Reihenfolge) und seine Artikel zeigen über it.gruppen darauf; die anderen bleiben unberührt. Ändert das
+     Wochenangebot, behält es das Original und jede andere Familie bekommt ihre Kopie. Nicht beim Verschieben eines Artikels
+     (das ändert nur dessen Gruppe im Angebot). Im selben Rückgängig-Schritt aufrufen. Rückgabe: Map(alte → neue Gruppe) für oid. */
+  function gruppenTrennen(nur, oid = curOffer) {
+    const f = familie(oid), alle = alleAngebote(), nutzer = new Map();
+    for (const it of model.items) for (const o of alle) {
+      if (!inOffer(it, o)) continue;
+      const g = gruppeIn(it, o);
+      if (!nur.has(g)) continue;
+      if (!nutzer.has(g)) nutzer.set(g, new Set());
+      nutzer.get(g).add(familie(o));
+    }
+    const fuer = new Map(), kopien = new Map(), zu = new Map();   // fuer: '<Familie>|<Gruppe>' → Kopie
+    for (const g of model.groups) {
+      const n = nutzer.get(g.id);
+      if (!n || n.size < 2 || !n.has(f)) continue;
+      const neu = (f === OSTD ? [...n].filter((x) => x !== OSTD) : [f]).map((x) => { const k = { ...clone(g), id: uid('g') }; fuer.set(x + '|' + g.id, k.id); return k; });
+      kopien.set(g.id, neu);
+      if (f !== OSTD) zu.set(g.id, neu[0].id);
+    }
+    if (!fuer.size) return zu;
+    model.groups.splice(0, model.groups.length, ...model.groups.flatMap((g) => [g, ...(kopien.get(g.id) || [])]));
+    for (const it of model.items) for (const o of alle) {
+      const k = inOffer(it, o) && fuer.get(familie(o) + '|' + gruppeIn(it, o));
+      if (k) it.gruppen = { ...(it.gruppen || {}), [o]: k };
+    }
+    return zu;
+  }
+  /* Neu aufgenommene Artikel eines Angebots mit eigener Artikelliste: hat es schon eine Gruppe gleichen Namens (etwa eine
+     getrennte Kopie), kommen sie dorthin – sonst stünde dieselbe Überschrift zweimal im Angebot */
+  function inEigeneGruppen(oid, neu) {
+    if (!ownList(oid) || !neu.length) return;
+    const ids = new Set(neu.map((i) => i.id)), name = new Map();
+    for (const it of model.items) if (!ids.has(it.id) && inOffer(it, oid)) { const g = gById(gruppeIn(it, oid)); if (g && !name.has(g.name)) name.set(g.name, g.id); }
+    for (const it of neu) { const g = gById(gruppeIn(it, oid)), z = g && name.get(g.name); if (z && z !== g.id) setzeJeAngebot(it, oid, 'gruppe', z); }
+  }
+  /* Gruppen eines Angebots (Auswahl im Artikelfenster): die seiner Artikel – bzw. seiner Familie */
+  function gruppenDes(oid) {
+    const f = familie(oid), alle = [OSTD, ...offers.map((o) => o.id)].filter((o) => familie(o) === f), ids = new Set();
+    for (const it of model.items) for (const o of alle) if (inOffer(it, o)) ids.add(gruppeIn(it, o));
+    return model.groups.filter((g) => ids.has(g.id));
+  }
   /* Artikel eines Angebots in Angebotsreihenfolge: Gruppe in diesem Angebot, dann Stelle (wie OfferCore.enrichOffer nach offer_resolve) */
   function inReihenfolge(items, oid) {
     const gi = new Map(model.groups.map((g, i) => [g.id, i]));
@@ -270,7 +334,7 @@
     const a = (published.meta && published.meta.werbung) || {}, b = model.meta.werbung || {};
     return [...new Set([...Object.keys(a), ...Object.keys(b)])].filter((oid) => knownOffer(oid) && !C.sameModel(a[oid], b[oid]));
   };
-  /* Weicht der Aufbau (Reihenfolge der Gruppen, Bereich je Gruppe, Gruppe und Reihenfolge der Artikel; gilt für alle Angebote)
+  /* Weicht der Aufbau (Reihenfolge der Gruppen, Bereich je Gruppe, Gruppe und Reihenfolge der Artikel)
      von der veröffentlichten Fassung ab? Verglichen werden nur Gruppen mit Artikeln, die es veröffentlicht und im Entwurf mit
      gleichem Namen gibt, und Artikel, die es in beiden gibt (neue/entfernte zeigen „Neu“/„Entfernt“). Die Reihenfolge wird
      je Angebot verglichen – Wochenangebot und jedes Angebot mit eigenen Gruppen (it.gruppen): dort kann sie sich auch ändern,
@@ -300,9 +364,9 @@
      sonst änderte sich die Reihenfolge im Wochenangebot). Geändert werden nur die Plätze der Artikel dieser Gruppen in
      model.items (je Gruppe zählt nur die Reihenfolge, OfferCore.enrichOffer). Rückgabe: false, wenn ziel nicht aufgeht (dann
      bleibt alles unverändert).
-     oid = Angebot, aus dessen Sicht geordnet wird: Anker stehen in ihrer Gruppe dieses Angebots; wechselt ein Anker mit
-     eigener Gruppe dort die Gruppe, ändert sich nur diese – ohne eigene Gruppe wie bisher der Basiswert (alle Angebote). */
-  function artikelOrdnen(ziel, oid = OSTD) {
+     oid = Angebot, aus dessen Sicht geordnet wird: wechselt ein Anker die Gruppe, gilt das nur dort (setzeJeAngebot);
+     oid = null (Zurücknehmen): Basiswert direkt. */
+  function artikelOrdnen(ziel, oid = null) {
     const zu = new Map(), byId = new Map(model.items.map((it) => [it.id, it]));
     for (const [g, ids] of ziel) for (const id of ids) { if (!byId.has(id) || zu.has(id)) return false; zu.set(id, g); }
     const kette = new Map(), vorn = new Map(), letzter = new Map();
@@ -321,7 +385,7 @@
       if (folge.length !== plaetze.length) return false;
       plaetze.forEach((p, k) => { neu[p] = folge[k]; });
     }
-    for (const [id, g] of zu) { const it = byId.get(id); if (eigenGruppe(it, oid)) setzeGruppe(it, oid, g); else it.groupId = g; }
+    for (const [id, g] of zu) { const it = byId.get(id); if (oid === null) it.groupId = g; else if (gruppeIn(it, oid) !== g) setzeJeAngebot(it, oid, 'gruppe', g); }
     model.items.splice(0, model.items.length, ...neu);
     return true;
   }
@@ -1419,7 +1483,7 @@
     const werb = werbAn(it);
     // Kundenangebot: das Feld bearbeitet die Bezeichnung nur in diesem Angebot (leer = Basiswert aus dem Wochenangebot).
     // Steht der Artikel nur hier (ohne eigene Bezeichnung), ist seine Bezeichnung der Basiswert selbst.
-    const eig = eigenName(it, curOffer), kd = curOffer !== OSTD && (!!eig || offersOf(it).length > 1);
+    const eig = eigenName(it, curOffer), kd = !!eig || eigenerWert(it, curOffer);
     const nameFeld = kd
       ? `<input class="in e-nm${eig ? ' e-nm-eigen' : ''}" data-f="oname" value="${esc(eig || it.name)}" placeholder="${esc(it.name)}" aria-label="Bezeichnung in ${esc(offerShort(curOffer))}" title="${eig ? `Eigene Bezeichnung in „${esc(offerShort(curOffer))}“ – Basiswert: ${esc(it.name)}. Leeren = Basiswert.` : `Bezeichnung nur in „${esc(offerShort(curOffer))}“ ändern – die anderen Angebote bleiben unverändert.`}" maxlength="200">${eig ? `<span class="e-eigen" title="Eigene Bezeichnung in „${esc(offerShort(curOffer))}“ – Basiswert: ${esc(it.name)}">eigene</span>` : ''}`
       : `<input class="in e-nm" data-f="name" value="${esc(it.name)}" aria-label="Bezeichnung" maxlength="200">`;
@@ -1478,7 +1542,7 @@
     if (focusF) nr.querySelector(`[data-f="${focusF}"]`)?.focus();
   }
 
-  /* Gruppen mit Artikeln des gewählten Angebots (Reihenfolge und Namen der Gruppen gelten für alle Angebote) */
+  /* Gruppen mit Artikeln des gewählten Angebots in dessen Reihenfolge (Stelle in model.groups) */
   const sichtbareGruppen = () => { const ids = new Set(model.items.filter((i) => inOffer(i, curOffer)).map((i) => gruppeIn(i, curOffer))); return model.groups.filter((g) => ids.has(g.id)); };
   function renderWerbungBtn() {
     const e = werbungVon(curOffer), n = $('#werb-n');
@@ -1574,12 +1638,13 @@
     if (f === 'code') { const c = v.trim(); it.code = c || null; el.value = c; }
     else if (f === 'name') {
       const typed = C.clean(v);
-      if (!typed) { el.value = it.name; toast('Die Bezeichnung darf nicht leer sein.'); return false; }
+      if (!typed) { el.value = nameIn(it, curOffer); toast('Die Bezeichnung darf nicht leer sein.'); return false; }
       const n = typed;   // Bezeichnung ohne Einschränkung, auch mit „frisch“ (Inhaber 05.11.2026) – der Zustand bleibt eigenes Feld
       el.value = n;
       if (it.condition === 'unbekannt' && C.stripFrisch(n) !== n) it.condition = 'frisch';
-      it.name = n;
-      delete it.nameRaw;
+      const basis = it.name;
+      setzeJeAngebot(it, curOffer, 'name', n);   // im Kundenangebot mit Artikel auch anderswo: eigene Bezeichnung
+      if (it.name !== basis) delete it.nameRaw;
       if (autoAttr.has(it.id)) { const g = gById(it.groupId); Object.assign(it, C.suggestAttributes(n, g ? g.name : '', g ? g.section : '')); }
     } else if (f === 'oname') {   // eigene Bezeichnung in einem Kundenangebot (Zeile: das gewählte, Artikel-Dialog: data-on)
       const oid = el.dataset.on || curOffer;
@@ -1637,10 +1702,13 @@
     }
     const gcard = el.closest('[data-gid]');
     if (gcard && el.dataset.gf) {
-      const g = gById(gcard.dataset.gid);
+      let g = gById(gcard.dataset.gid);
+      if (followsStd(curOffer)) { el.value = g[el.dataset.gf] || ''; toast(`„${offerShort(curOffer)}“ folgt dem Wochenangebot – Gruppen bitte dort ändern.`, 5000); return; }
       const v = C.clean(el.value);
       if (el.dataset.gf === 'name' && !v) { el.value = g.name; toast('Die Gruppe braucht einen Namen.'); return; }
       pushUndo();
+      g = gById(gruppenTrennen(new Set([g.id])).get(g.id) || g.id);   // gemeinsam genutzt: dieses Angebot bekommt eine eigene
+      gcard.dataset.gid = g.id;   // weitere Eingaben in derselben Karte (ohne Neuzeichnen) treffen die Kopie
       if (el.dataset.gf === 'vk') { if (v) g.vk = v; else delete g.vk; } else g[el.dataset.gf] = v;
       changed({ render: el.dataset.gf === 'section' || el.dataset.gf === 'vk' });
       renderMetaInfo();
@@ -1690,7 +1758,7 @@
     }
     const act = b.dataset.act;
     const gcard = b.closest('[data-gid]');
-    const g = gcard && gById(gcard.dataset.gid);
+    let g = gcard && gById(gcard.dataset.gid);
     const tr = b.closest('tr[data-id]');
     if (act === 'item' && tr) { openItem(tr.dataset.id); return; }
     if (act === 'bestand' && tr) { openBestandKarte(iById(tr.dataset.id)); return; }
@@ -1702,11 +1770,15 @@
     if (act === 'copy') { openCopy(); return; }
     if (!g) return;
     if (act === 'add-item') { openArtikelwahl({ gruppe: g.id }); return; }
+    if ((act === 'g-up' || act === 'g-down') && followsStd(curOffer)) { toast(`„${offerShort(curOffer)}“ folgt dem Wochenangebot – Gruppen bitte dort ordnen.`, 5000); return; }
     if (act === 'g-up' || act === 'g-down') {
-      // Reihenfolge gilt für alle Angebote; getauscht wird mit der benachbarten Gruppe dieses Angebots
-      const vis = sichtbareGruppen(), k = vis.indexOf(g), o = vis[act === 'g-up' ? k - 1 : k + 1];
+      // getauscht wird mit der benachbarten Gruppe dieses Angebots; gemeinsam genutzte Gruppen werden vorher getrennt
+      const vis = sichtbareGruppen(), k = vis.indexOf(g);
+      let o = vis[act === 'g-up' ? k - 1 : k + 1];
       if (!o) return;
       pushUndo();
+      const zu = gruppenTrennen(new Set([g.id, o.id]));   // Kopien stehen direkt hinter dem Original: Tauschen ändert kein anderes Angebot
+      [g, o] = [g, o].map((x) => gById(zu.get(x.id) || x.id));
       const i1 = model.groups.indexOf(g), i2 = model.groups.indexOf(o);
       [model.groups[i1], model.groups[i2]] = [model.groups[i2], model.groups[i1]];
       changed({ render: true });
@@ -1759,27 +1831,31 @@
     const it = iById(id);
     if (!it) return;
     itemId = id;
-    const groups = model.groups.map((g) => `<option value="${esc(g.id)}"${g.id === it.groupId ? ' selected' : ''}>${esc(g.name)}</option>`).join('')
+    // Bezeichnung und Gruppe oben gelten im gewählten Angebot (Kundenangebot: setzeJeAngebot); Auswahl nur mit dessen Gruppen
+    const hier = curOffer !== OSTD, gHier = gruppeIn(it, curOffer), ihre = gruppenDes(curOffer);
+    const groups = (ihre.some((g) => g.id === gHier) ? ihre : [...ihre, gById(gHier)].filter(Boolean)).map((g) => `<option value="${esc(g.id)}"${g.id === gHier ? ' selected' : ''}>${esc(g.name)}</option>`).join('')
       + (ro ? '' : '<option value="__neu">+ Neue Gruppe …</option>');
-    const sameGroup = model.items.filter((i) => gruppeIn(i, curOffer) === gruppeIn(it, curOffer) && inOffer(i, curOffer));
+    const sameGroup = model.items.filter((i) => gruppeIn(i, curOffer) === gHier && inOffer(i, curOffer));
     const pos = sameGroup.indexOf(it);
     const inStd = inOffer(it, OSTD), drin = offersOf(it), eigen = explizit(it);
-    const kundIn = drin.filter((o) => o !== OSTD);   // Kundenangebote mit diesem Artikel: dort eigene Bezeichnung und Gruppe möglich
+    const kundIn = drin.filter((o) => o !== OSTD && o !== curOffer);   // weitere Kundenangebote mit diesem Artikel: dort eigene Bezeichnung und Gruppe
+    const im = hier ? ` in „${esc(offerShort(curOffer))}“` : kundIn.length ? ' (Basiswert)' : '';
     $('#item-body').innerHTML = `
       <div class="dlg-head"><div><h2 id="it-title">Artikel bearbeiten</h2><p>${it.cell ? `Aus Excel-Zelle ${esc(it.cell)} · ` : ''}Änderungen werden sofort in den Entwurf übernommen.</p></div>
         <button class="btn icon ghost" type="button" data-close aria-label="Schließen">${icon('x')}</button></div>
       <div class="dlg-body form-grid two">
         <label class="fld"><span>Artikelnummer</span><input name="code" value="${esc(it.code || '')}" maxlength="20" autocomplete="off"></label>
-        <label class="fld"><span>${kundIn.length ? 'Angebotsgruppe (Basiswert)' : 'Angebotsgruppe'}</span><select name="groupId">${groups}</select></label>
-        <label class="fld span2"><span>${kundIn.length ? 'Bezeichnung (Basiswert)' : 'Bezeichnung'}</span><input name="name" value="${esc(it.name)}" maxlength="200" required autocomplete="off"></label>
-        ${kundIn.length ? `<div class="fld span2 it-namen"><span>Bezeichnung und Gruppe je Angebot</span>
+        <label class="fld"><span>Angebotsgruppe${im}</span><select name="groupId">${groups}</select></label>
+        <label class="fld span2"><span>Bezeichnung${im}</span><input name="name" value="${esc(nameIn(it, curOffer))}" maxlength="200" required autocomplete="off"></label>
+        ${kundIn.length ? `<div class="fld span2 it-namen"><span>${hier ? 'Bezeichnung und Gruppe in weiteren Angeboten' : 'Bezeichnung und Gruppe je Angebot'}</span>
           <p class="hint">Gilt nur im jeweiligen Angebot – leeres Feld bzw. „wie Basiswert“ = Basiswert (Wochenangebot).</p>
-          ${kundIn.map((o) => `<div class="it-nrow"><span>${esc(offerShort(o))}</span><input name="oname" data-on="${esc(o)}" value="${esc(eigenName(it, o))}" placeholder="${esc(it.name)}" maxlength="200" autocomplete="off" aria-label="Bezeichnung in ${esc(offerShort(o))}"><select name="ogroup" data-on="${esc(o)}"${eigenGruppe(it, o) ? ' class="eigen"' : ''} aria-label="Angebotsgruppe in ${esc(offerShort(o))}"><option value="">wie Basiswert (${esc(gById(it.groupId)?.name || '')})</option>${model.groups.map((g) => `<option value="${esc(g.id)}"${g.id === eigenGruppe(it, o) ? ' selected' : ''}>${esc(g.name)}</option>`).join('')}</select></div>`).join('')}
+          ${kundIn.map((o) => `<div class="it-nrow"><span>${esc(offerShort(o))}</span><input name="oname" data-on="${esc(o)}" value="${esc(eigenName(it, o))}" placeholder="${esc(it.name)}" maxlength="200" autocomplete="off" aria-label="Bezeichnung in ${esc(offerShort(o))}"><select name="ogroup" data-on="${esc(o)}"${eigenGruppe(it, o) ? ' class="eigen"' : ''} aria-label="Angebotsgruppe in ${esc(offerShort(o))}"><option value="">wie Basiswert (${esc(gById(it.groupId)?.name || '')})</option>${gruppenDes(o).map((g) => `<option value="${esc(g.id)}"${g.id === eigenGruppe(it, o) ? ' selected' : ''}>${esc(g.name)}</option>`).join('')}</select></div>`).join('')}
         </div>` : ''}
         <label class="fld"><span>Fleischart</span><select name="category">${CAT_OPTS(it.category)}</select></label>
         <label class="fld"><span>Zustand</span><select name="condition">${COND_OPTS(it.condition)}</select></label>
         <label class="fld"><span>Herkunft</span><input name="origin" value="${esc(it.origin || '')}" list="dl-origins" placeholder="nicht angegeben" maxlength="60"></label>
-        ${inStd ? `<label class="fld"><span>${curOffer === OSTD ? 'Preis €/kg' : 'Preis Wochenangebot €/kg'}</span><input name="price" value="${esc(invalid.get(it.id) ?? priceToInput(it.price))}" placeholder="ohne Preis" inputmode="decimal"></label>
+        ${hier ? `<p class="hint span2">Der Preis in „${esc(offerShort(curOffer))}“ steht in der Zeile (Spalte Preis) und gilt nur dort.</p>` : ''}
+        ${inStd && !hier ? `<label class="fld"><span>Preis €/kg</span><input name="price" value="${esc(invalid.get(it.id) ?? priceToInput(it.price))}" placeholder="ohne Preis" inputmode="decimal"></label>
         <label class="fld"><span>Bezeichnung des Preises (optional)</span><input name="priceLabel" value="${esc(it.price.label || '')}" placeholder="z. B. Schiffsware" maxlength="40"></label>
         <div class="fld span2"><span>Zusatzpreise im Wochenangebot (z. B. Flugware)</span>
           <div class="altlist" id="altlist">${(it.altPrices || []).map((p, k) => altRow(p, k)).join('')}</div>
@@ -1825,21 +1901,23 @@
     } else if (el.name === 'priceLabel') {
       const l = C.clean(el.value);
       if (l) it.price.label = l; else delete it.price.label;
-    } else if (el.name === 'groupId') {
+    } else if (el.name === 'groupId') {   // Gruppe im gewählten Angebot (setzeJeAngebot) – die Zielgruppe selbst ändert sich nicht
       let ziel = el.value;
-      if (ziel === '__neu') {   // neue Angebotsgruppe direkt hinter der bisherigen; Name in der Gruppenüberschrift ändern
-        const alt = gById(it.groupId);
+      if (ziel === '__neu') {   // neue Angebotsgruppe (nur dieses Angebots) direkt hinter der bisherigen; Name in der Gruppenüberschrift ändern
+        const alt = gById(gruppeIn(it, curOffer));
         const g = { id: uid('g'), name: 'Neue Gruppe', section: alt ? alt.section || '' : '' };
         model.groups.splice(alt ? model.groups.indexOf(alt) + 1 : model.groups.length, 0, g);
         ziel = g.id;
         neueGruppe = g.id;
       }
-      const idx = model.items.indexOf(it);
-      model.items.splice(idx, 1);
-      it.groupId = ziel;
-      let last = -1;
-      model.items.forEach((x, i) => { if (x.groupId === it.groupId) last = i; });
-      model.items.splice(last + 1, 0, it);
+      const basis = it.groupId;
+      setzeJeAngebot(it, curOffer, 'gruppe', ziel);
+      if (it.groupId !== basis) {   // Basiswert geändert: ans Ende der neuen Gruppe
+        model.items.splice(model.items.indexOf(it), 1);
+        let last = -1;
+        model.items.forEach((x, i) => { if (x.groupId === it.groupId) last = i; });
+        model.items.splice(last + 1, 0, it);
+      }
     } else if (el.name === 'ogroup') {   // eigene Gruppe in einem Kundenangebot; die Stelle in der gemeinsamen Reihenfolge bleibt
       if (!offerDef(el.dataset.on)) return;
       setzeGruppe(it, el.dataset.on, el.value);
@@ -2404,6 +2482,7 @@
     if (!ocWahl.size) { toast('Bitte mindestens einen Artikel wählen.'); return; }
     pushUndo();
     let n = 0;
+    const neuHier = [];
     for (const it of model.items) {
       if (!ocWahl.has(it.id)) continue;
       const p = effPrice(it, src);   // null = nicht im Quellangebot
@@ -2412,11 +2491,12 @@
       if (eigen && !all) continue;
       // Quotient vor dem Runden glätten: 5,50 € −5 % / 0,05 ergibt binär 104,4999… statt 104,5 (wie rundeWieServer in frontend.js)
       const np = p.status === 'value' ? { status: 'value', value: Math.round(glatt(p.value * (1 + pct / 100) / step) * step * 100) / 100 } : { status: 'request' };
-      if (!hier) empfehlungNichtUebernehmen(it, curOffer);
+      if (!hier) { empfehlungNichtUebernehmen(it, curOffer); neuHier.push(it); }
       aufnehmen(it, curOffer, np);
       invalid.delete(it.id + '|' + curOffer);
       n++;
     }
+    inEigeneGruppen(curOffer, neuHier);
     dlgCopy.close();
     changed({ render: true });
     toast(n ? `${plural(n, 'Artikel', 'Artikel')} aus „${offerShort(src)}“ übernommen${pct ? ` (${F.veraenderung(pct / 100)})` : ''}.` : 'Keine Artikel übernommen.');
@@ -2509,7 +2589,7 @@
       const wc = wChanges();
       if (wc.length) body += sec(`Werbung (${wc.length})`, `<ul class="plist">${wc.map((oid) => { const w = werbungVon(oid); return `<li><span><b class="ob-tag">${esc(offerShort(oid))}</b> ${w ? esc(werbBloecke(w).map((b, i) => b.titel || (i ? window.WA.werbung.TITEL2 : window.WA.werbung.TITEL)).join(' · ')) : 'Werbung beendet'}</span><span>${w ? esc(plural(werbArtikelZahl(w), 'Artikel', 'Artikel')) : ''}</span>${rv('werbung', oid)}</li>`; }).join('')}</ul>`);
       const ab = aufbauGeaendert();   // Reihenfolge/Bereiche (Knopf „Editor“, ↑/↓); mit Angebotskategorien ordnen die Stammdaten
-      if (ab) body += sec('Aufbau', `<ul class="plist"><li><span>Reihenfolge der Bereiche, Gruppen oder Artikel geändert</span><span>gilt für alle Angebote</span>${kategorienAktiv() ? '' : rv('aufbau', 'aufbau')}</li></ul>`);
+      if (ab) body += sec('Aufbau', `<ul class="plist"><li><span>Reihenfolge der Bereiche, Gruppen oder Artikel geändert</span><span>Zurücknehmen gilt für alle Angebote</span>${kategorienAktiv() ? '' : rv('aufbau', 'aufbau')}</li></ul>`);
       if (!metaChanged() && !diff.priceChanged.length && !diff.added.length && !diff.changed.length && !diff.removed.length && !vc.length && !sc.length && !wc.length && !ab) body += '<p class="notice">Keine Änderungen gegenüber der veröffentlichten Fassung.</p>';
     }
     if (v.warnings.length) body += `<p class="hint">${v.warnings.map(esc).join('<br>')}</p>`;
@@ -2539,7 +2619,7 @@
       // Artikel, die es in beiden gibt: wieder in ihrer veröffentlichten Gruppe (falls vorhanden) und Reihenfolge
       const da = new Set(model.items.map((i) => i.id)), ziel = new Map();
       for (const it of published.items) if (da.has(it.id) && gById(it.groupId)) { if (!ziel.has(it.groupId)) ziel.set(it.groupId, []); ziel.get(it.groupId).push(it.id); }
-      artikelOrdnen(ziel);
+      artikelOrdnen(ziel, null);   // Zurücknehmen: Basiswert direkt
       // Dazu die gemeinsamen Artikel über alle Gruppen in veröffentlichter Reihenfolge: mit eigenen Gruppen je Angebot
       // (it.gruppen) zählt sie auch zwischen Artikeln verschiedener Basisgruppen. Neue bleiben hinter ihrem Vorgänger der Gruppe.
       const stelle = new Map(published.items.map((it, i) => [it.id, i])), letzter = new Map(), kette = new Map(), vorn = [];
@@ -4248,6 +4328,7 @@
       if (!std) { nurIn(it, curOffer); aufnehmen(it, curOffer, p); }
       ids.set(K(a.code), it.id);
     }
+    if (!(awFest && gById(awFest))) inEigeneGruppen(curOffer, [...ids.values()].map(iById));
     return ids;
   }
   async function openArtikelwahl(opt = {}) {
@@ -4412,10 +4493,10 @@
   $('#btn-werbung').addEventListener('click', openWerbung);
 
   /* ======================= Aufbau des Angebots (Knopf „Editor“, Fenster app/module/angebot/aufbau.js) =======================
-     Reihenfolge der Gruppen und ihr Bereich (g.section) sowie Gruppe (it.groupId) und Reihenfolge der Artikel (Stelle in
-     model.items) gelten für alle Angebote – wie ↑/↓ an den Gruppen und „Angebotsgruppe“/„Nach oben“ im Artikelfenster.
-     Ausnahme: Artikel mit eigener Gruppe im gewählten Kundenangebot (it.gruppen) stehen dort in dieser Gruppe; verschieben
-     in eine andere Gruppe ändert dann nur die eigene Gruppe (artikelOrdnen).
+     Reihenfolge der Gruppen, ihr Bereich (g.section) und die Gruppe der Artikel gelten nur für das gewählte Angebot (Inhaber
+     19.11.2026): gemeinsam genutzte Gruppen werden vorher getrennt (gruppenTrennen), die Gruppen des Angebots tauschen nur
+     ihre Plätze in model.groups, ein Artikel wechselt die Gruppe über setzeJeAngebot. Gemeinsam bleibt die Stelle der Artikel
+     (model.items) – Reihenfolge je Angebot folgt in einem späteren Schritt.
      Gespeichert wird über den Entwurf (save_draft mit Revision, Recht angebot.bearbeiten auf dem Server). Kundenangebot „folgt
      dem Wochenangebot“: nur ansehen; mit Angebotskategorien ordnen die Stammdaten Bereiche und Gruppen, Artikel bleiben änderbar. */
   function aufbauSperre() {
@@ -4467,7 +4548,9 @@
     if (reihe.length !== ids.size || new Set(reihe).size !== ids.size || !reihe.every((id) => ids.has(id))
       || artNeu.length !== alleArt.size || new Set(artNeu).size !== alleArt.size || !artNeu.every((id) => alleArt.has(id))) return { fehler: 'Der Aufbau ist unvollständig – bitte das Fenster neu öffnen.' };
     const bereich = new Map(neu.map((x) => [x.id, C.clean(x.bereich || '')]));
-    const ordnung = gruppenOrdnen(ids, reihe);
+    // Gruppen des Angebots tauschen nur ihre Plätze in model.groups – Gruppen anderer Angebote bleiben, wo sie sind
+    const plaetze = (anker, folge) => { const out = model.groups.slice(); let k = 0; model.groups.forEach((g, i) => { if (anker.has(g.id)) out[i] = gById(folge[k++]); }); return out; };
+    const ordnung = plaetze(ids, reihe);
     const gruppenNeu = JSON.stringify(ordnung.map((g) => [g.id, bereich.has(g.id) ? bereich.get(g.id) : g.section || '']));
     const gruppenAlt = JSON.stringify(model.groups.map((g) => [g.id, g.section || '']));
     if (sp && sp.art === 'kategorien' && gruppenNeu !== gruppenAlt) return { konflikt: true, grund: 'kategorien', daten: jetzt };   // Gruppen ordnen dann die Stammdaten
@@ -4475,12 +4558,18 @@
     const artGeaendert = neu.some((x) => JSON.stringify(x.artikel) !== artAlt.get(x.id));
     if (gruppenNeu === gruppenAlt && !artGeaendert) return { ok: true, unveraendert: true };
     const vorher = JSON.stringify(model);
-    if (artGeaendert && !artikelOrdnen(new Map(neu.map((x) => [x.id, x.artikel])), curOffer)) return { fehler: 'Die Artikel ließen sich nicht ordnen – bitte das Fenster neu öffnen.' };
+    // Reihenfolge oder Bereiche der Gruppen geändert: gemeinsam genutzte Gruppen des Angebots vorher trennen. Ein verschobener
+    // Artikel wechselt nur hier die Gruppe (artikelOrdnen → setzeJeAngebot), die Gruppe selbst ändert sich dabei nicht.
+    const platz = new Map(model.groups.map((g, i) => [g.id, i]));   // nur Gruppen trennen, deren Platz oder Bereich sich ändert
+    const anders = new Set(ordnung.filter((g, i) => platz.get(g.id) !== i || (bereich.has(g.id) && bereich.get(g.id) !== (g.section || ''))).map((g) => g.id));
+    const zu = anders.size ? gruppenTrennen(anders) : new Map();
+    const nid = (id) => zu.get(id) || id;
+    if (artGeaendert && !artikelOrdnen(new Map(neu.map((x) => [nid(x.id), x.artikel])), curOffer)) { model = JSON.parse(vorher); return { fehler: 'Die Artikel ließen sich nicht ordnen – bitte das Fenster neu öffnen.' }; }
     undoStack.push(vorher);
     if (undoStack.length > 50) undoStack.shift();
     $('#btn-undo').disabled = false;
-    model.groups.splice(0, model.groups.length, ...ordnung);
-    for (const g of model.groups) if (bereich.has(g.id)) g.section = bereich.get(g.id);
+    model.groups.splice(0, model.groups.length, ...plaetze(new Set([...ids].map(nid)), reihe.map(nid)));
+    for (const [id, b] of bereich) gById(nid(id)).section = b;
     saveNote = { type: 'aufbau' };
     changed({ render: true });
     await saveNow();

@@ -385,12 +385,16 @@ def gruppe_je_angebot_oberflaeche(a, br, t):
     sel = lambda o: f'#item-body [name=ogroup][data-on="{o}"]'
     drin = [o['id'] for o in get(a, 'offers')[1]['offers'] if any(k['id'] == x['id'] for k in get(a, f'offer&angebot={o["id"]}&draft=1')[1]['offer']['items'])]
     txt = a.text_content('#item-body')
-    check('Fenster: „Angebotsgruppe (Basiswert)“, je Kundenangebot Bezeichnung und Gruppe, Hinweis angepasst', 'Angebotsgruppe (Basiswert)' in txt and 'Bezeichnung und Gruppe je Angebot' in txt
+    # Jedes Angebot für sich (Inhaber 19.11.2026): oben Gruppe und Bezeichnung des gewählten Angebots, darunter die weiteren Kundenangebote
+    weitere = [o for o in drin if o != CH]
+    check('Fenster: oben „Angebotsgruppe in …“ des gewählten Angebots, darunter Bezeichnung und Gruppe der weiteren Kundenangebote, Hinweis angepasst',
+          'Angebotsgruppe in „' in txt and 'Bezeichnung und Gruppe in weiteren Angeboten' in txt
           and 'Bezeichnung und Gruppe lassen sich je Angebot anpassen' in txt and 'Merkmale und Gruppe gelten' not in txt
-          and sorted(a.eval_on_selector_all('#item-body [name=ogroup]', 'xs => xs.map(e => e.dataset.on)')) == sorted(drin) and a.locator('#item-body [name=oname]').count() == len(drin), drin)
-    check('Fenster: eigene Gruppe gewählt und hervorgehoben, sonst „wie Basiswert“ mit Namen der Basisgruppe', a.input_value(sel(CH)) == 'gx-chefs' and 'eigen' in (a.get_attribute(sel(CH), 'class') or '')
+          and sorted(a.eval_on_selector_all('#item-body [name=ogroup]', 'xs => xs.map(e => e.dataset.on)')) == sorted(weitere) and a.locator('#item-body [name=oname]').count() == len(weitere), drin)
+    hh_opt = a.eval_on_selector(sel(HH), 'e => [...e.options].slice(1).map(o => o.value)')
+    check('Fenster: eigene Gruppe oben gewählt, sonst „wie Basiswert“ mit Namen der Basisgruppe; Auswahl nur mit Gruppen des Angebots', a.input_value('#item-body [name=groupId]') == 'gx-chefs'
           and a.input_value(sel(HH)) == '' and a.text_content(sel(HH) + ' option >> nth=0') == f'wie Basiswert ({gname[basis]})'
-          and a.eval_on_selector(sel(HH), 'e => [...e.options].slice(1).map(o => o.value)') == [g['id'] for g in stand(a)['groups']])
+          and {basis, andere, 'gx-chefs'} <= set(hh_opt) and set(hh_opt) <= {g['id'] for g in stand(a)['groups']}, hh_opt)
     a.select_option(sel(HH), andere); wait_saved(a)
     check('Fenster: Gruppe für ein Angebot gewählt – nur dort gespeichert, Basiswert bleibt', entw(x).get('gruppen') == {CH: 'gx-chefs', HH: andere} and entw(x)['groupId'] == basis
           and 'eigen' in (a.get_attribute(sel(HH), 'class') or ''), entw(x).get('gruppen'))
@@ -400,9 +404,9 @@ def gruppe_je_angebot_oberflaeche(a, br, t):
     tab(a, 'Handelshof').click(); a.wait_for_selector(zeile)
     check('Editor: im zweiten Angebot unter der dort gewählten Gruppe', x['id'] in ed(andere) and x['id'] not in ed(basis))
     a.click(f'{zeile} [data-act=item]'); a.wait_for_selector('#dlg-item[open] [name=ogroup]')
-    a.select_option(sel(HH), basis); wait_saved(a)
-    check('Fenster: Basisgruppe gewählt = keine eigene Gruppe („wie Basiswert“)', a.input_value(sel(HH)) == '' and entw(x).get('gruppen') == {CH: 'gx-chefs'}, entw(x).get('gruppen'))
-    a.select_option(sel(HH), 'gx-chefs'); wait_saved(a)
+    a.select_option('#item-body [name=groupId]', basis); wait_saved(a)
+    check('Fenster: Basisgruppe gewählt = keine eigene Gruppe', a.input_value('#item-body [name=groupId]') == basis and entw(x).get('gruppen') == {CH: 'gx-chefs'}, entw(x).get('gruppen'))
+    a.select_option('#item-body [name=groupId]', 'gx-chefs'); wait_saved(a)
     a.click('#item-body [type=submit]'); a.wait_for_selector('#dlg-item', state='hidden')
     # Zurücknehmen in der Liste der unveröffentlichten Änderungen
     a.click('#offen-liste'); a.wait_for_selector('#dlg-publish[open]')

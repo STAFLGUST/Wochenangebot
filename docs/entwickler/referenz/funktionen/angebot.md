@@ -2,7 +2,7 @@
 
 <!-- ERZEUGT von `python3 werkzeuge/doku.py erzeugen` – nicht von Hand ändern. Quelle: Funktionen und Kommentare im Code. Die CI prüft, dass diese Datei zum Code passt. -->
 
-59 Dateien, 931 Funktionen – in der Reihenfolge der Datei, **fett** die Abschnitte. Text = erste Aussage des Kommentars direkt über der Funktion (Python: Docstring). Übersicht aller Module: [README.md](README.md).
+60 Dateien, 945 Funktionen – in der Reihenfolge der Datei, **fett** die Abschnitte. Text = erste Aussage des Kommentars direkt über der Funktion (Python: Docstring). Übersicht aller Module: [README.md](README.md).
 
 ## `app/api/lib/angebote.php`
 
@@ -470,9 +470,13 @@ _Wochenangebot – Eingabebereich Bearbeitet einen Entwurf auf dem Server (autom
 - `setzeName(x, oid, text)` – eigene Bezeichnung setzen; leer oder gleich dem Basiswert = keine eigene
 - `setzeGruppe(it, oid, gid)` – eigene Gruppe setzen; leer oder gleich dem Basiswert = keine eigene
 - `gruppenBereinigen()` – Eigene Gruppen, die dem Basiswert gleichen oder die es nicht mehr gibt, fallen weg (wie auf dem Server, clean_model) – sonst zählte der Entwurf Änderungen, …
+- `setzeJeAngebot(it, oid, feld, wert)`
+- `gruppenTrennen(nur, oid)` – Gruppen trennen, bevor das Angebot oid eine Gruppe ändert (Name, Bereich, VK-Gruppe, Reihenfolge; nur = Gruppen-IDs): Nutzt eine andere Familie die Gruppe …
+- `inEigeneGruppen(oid, neu)` – Neu aufgenommene Artikel eines Angebots mit eigener Artikelliste: hat es schon eine Gruppe gleichen Namens (etwa eine getrennte Kopie), kommen sie dorthin – …
+- `gruppenDes(oid)` – Gruppen eines Angebots (Auswahl im Artikelfenster): die seiner Artikel – bzw. seiner Familie
 - `inReihenfolge(items, oid)` – Artikel eines Angebots in Angebotsreihenfolge: Gruppe in diesem Angebot, dann Stelle (wie OfferCore.enrichOffer nach offer_resolve)
 - `werbungBereinigen()` – Artikel, die nicht mehr im Angebot stehen, fallen aus dessen Werbung (unbekannte Angebote prüft der Server)
-- `aufbauGeaendert()` – Weicht der Aufbau (Reihenfolge der Gruppen, Bereich je Gruppe, Gruppe und Reihenfolge der Artikel; gilt für alle Angebote) von der veröffentlichten Fassung …
+- `aufbauGeaendert()` – Weicht der Aufbau (Reihenfolge der Gruppen, Bereich je Gruppe, Gruppe und Reihenfolge der Artikel) von der veröffentlichten Fassung ab? Verglichen werden nur …
 - `artikelOrdnen(ziel, oid)` – Artikel neu ordnen: ziel = Map(Gruppen-ID → Artikel-IDs in gewünschter Reihenfolge) für die „Anker“ (z. B. alle Artikel des gewählten Angebots); jeder Anker …
 - `gruppenOrdnen(anker, reihe)` – Gruppen neu ordnen: „anker“ (IDs) kommen in die Reihenfolge „reihe“; jede andere Gruppe bleibt hinter ihrem Anker davor (Gruppen, die im gewählten Angebot …
 
@@ -1308,6 +1312,23 @@ _Mehrere Angebote: Kundenangebote mit eigenen Preisen, eigene Artikelliste je An
 - `aufgeloest(holen, stand)`
 - `gruppe_je_angebot_oberflaeche(a, br, t)` – Oberfläche: Fenster „Artikel bearbeiten“, Editor je Angebot, Zurücknehmen, „Nach oben“, Gruppe entfernen, „Artikel in diese Gruppe“, Mülltonne (1280 px und …
 
+## `tests/e2e/test_angebote_getrennt.py`
+
+_Jedes Angebot für sich (Inhaber 19.11.2026, Schritt 1)_
+
+- `check(n, c, i)`
+- `entwurf()`
+- `sicht(oid)` – Aufgelöstes Angebot im Entwurf: Gruppen (Name, Bereich) in Reihenfolge, je Artikel Gruppe, Bezeichnung, Preis, Zusatzpreise
+- `gname(oid, iid)`
+
+**Testdaten: Bela und Edeka mit eigener Artikelliste, alle Artikel auch im Wochenangebot**
+
+- `angebot(oid, iid)`
+- `fenster(iid)`
+- `zu()`
+- `karte(gid, feld, wert)`
+- `karte_von(iid)`
+
 ## `tests/e2e/test_angebotsliste.py`
 
 _Angebotsliste (Standardansicht der Angebotsseite)_
@@ -1322,6 +1343,7 @@ _Aufbau des Angebots (Knopf „Editor“ in „Angebot bearbeiten“, Wunsch des
 - `check(n, c, i)`
 - `entwurf(cl)`
 - `im_angebot(it, oid)`
+- `gruppe_in(it, oid)` – Gruppe eines Artikels in einem Angebot: eigene (it.gruppen) oder Basiswert – wie gruppeIn in admin.js
 - `bloecke(m, oid)` – Erwarteter Aufbau: [(Bereich, [Gruppen-IDs])] der Gruppen mit Artikeln des Angebots, aufeinanderfolgend gleicher Bereich
 - `fenster(pg)`
 - `editor(pg)` – Editor: Gruppen-IDs in Reihenfolge und Bereichsüberschriften
