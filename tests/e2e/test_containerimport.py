@@ -469,6 +469,12 @@ with sync_playwright() as pw:
     lf = p.evaluate("""() => { const t = document.createElement('span'); t.style.color = 'var(--r-text)'; document.querySelector('#r-leiste').append(t); const soll = getComputedStyle(t).color; t.remove();
       return { soll, ist: [...new Set([...document.querySelectorAll('#r-leiste a.r-eintrag')].map((a) => getComputedStyle(a).color))] }; }""")
     check('Seitenleiste: Einträge in der Textfarbe des Rahmens (hell: schwarz), nicht in der Linkfarbe des Moduls', lf['ist'] == [lf['soll']], lf)
+    p.evaluate('window.STAFL_RAHMEN.sucheOeffnen()'); p.wait_for_selector('#r-palette[open] a.r-palette-treffer')
+    tf = p.evaluate("""() => { const t = document.createElement('span'); t.style.color = 'var(--r-text)'; document.querySelector('#r-palette').append(t); const soll = getComputedStyle(t).color; t.remove();
+      return { soll, ist: [...new Set([...document.querySelectorAll('#r-palette a.r-palette-treffer')].map((a) => getComputedStyle(a).color))] }; }""")
+    check('Suche des Rahmens: Treffer ebenfalls in der Textfarbe des Rahmens', tf['ist'] == [tf['soll']], tf)
+    p.keyboard.press('Escape'); p.wait_for_selector('#r-palette:not([open])', state='attached')
+    p.wait_for_selector('.r-app.r-bereit:not(.r-fest):not(.r-auf)')
     p.hover('#r-leiste a[data-modul="containerimport"]'); p.wait_for_function("document.querySelector('.r-app').classList.contains('r-auf')")
     shot(p, os.path.join(SH, 'containerimport-leiste-offen-1280.png'))
     p.mouse.move(700, 500); p.wait_for_function("!document.querySelector('.r-app').classList.contains('r-auf')")

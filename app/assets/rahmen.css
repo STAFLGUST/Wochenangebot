@@ -135,8 +135,10 @@ body.r { margin: 0; min-height: 100vh; min-height: 100dvh; background: var(--r-g
   color: var(--r-text); font-size: 13px; font-weight: 500; line-height: 1.25; text-decoration: none; }
 a.r-eintrag:hover { background: var(--r-hover); color: var(--r-text); }
 /* Die Schrift der Leiste und der Suche gehört dem Rahmen: Die Linkfarbe eines Moduls („.modul a“) darf sie nie umfärben
-   (QM-System 16.11.2026, Container-Import 19.11.2026) – deshalb mit Vorrang vor solchen Regeln. */
-.r-app .r-leiste a.r-eintrag, dialog.r-palette a.r-palette-treffer { color: var(--r-text); }
+   (QM-System 16.11.2026, Container-Import 19.11.2026). Bewusst mit !important: Jede Regel ohne es verliert gegen eine
+   Modulregel mit genug Selektoren (z. B. zwei :not()). Hover und aktiver Eintrag setzen dieselbe Farbe, gesperrte Einträge
+   sind span – die Regel überschreibt also nichts Gewolltes. */
+.r-leiste a.r-eintrag, .r-palette a.r-palette-treffer { color: var(--r-text) !important; }
 a.r-eintrag[aria-current="page"] { background: var(--r-aktiv); box-shadow: var(--r-schatten-aktiv); font-weight: 600; }
 .r-eintrag .r-i { color: var(--r-m, var(--r-text-2)); }
 .r-text { flex: 1; min-width: 0; overflow-wrap: anywhere; }
