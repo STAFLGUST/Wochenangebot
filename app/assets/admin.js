@@ -1180,6 +1180,18 @@
     }
   }
   const unsaved = () => saving || saveTimer && $('#save-state').classList.contains('pending') || !!saveError;
+  /* Entwurf sicher gespeichert – oder Fehler (Export für WinAB: nie einen älteren Stand als „Entwurf“ ausgeben). Anders als
+     saveNow() wartet es auf ein laufendes Speichern und meldet Scheitern; die letzte Eingabe im Feld zählt mit. */
+  async function entwurfGespeichert() {
+    const a = document.activeElement;
+    if (a && a.matches && a.matches('.in')) a.dispatchEvent(new Event('change', { bubbles: true }));
+    for (let i = 0; i < 3 && unsaved(); i++) {
+      await saveNow();
+      while (saving) await new Promise((r) => setTimeout(r, 100));   // auch ein danach angestoßenes Speichern (queued)
+    }
+    if (unsaved()) throw new Error(`Der Entwurf ist nicht gespeichert${saveError ? ` (${saveError})` : ''} – bitte im Angebot prüfen und erneut versuchen.`);
+    return revision;
+  }
   let conflictTries = 0;
 
   /* ======================= Gemeinsames Bearbeiten =======================
@@ -1361,7 +1373,9 @@
     if (aufbauGeaendert()) parts.push('Aufbau geändert');
     offenHinweis = parts.length ? 'Unveröffentlichte Änderungen: ' + parts.join(' · ') : '';
   }
-  const pendingCount = () => (!model ? 0 : !published ? model.items.length : diff.added.length + diff.removed.length + diff.priceChanged.length + diff.changed.length + vChanges().length + sChanges().length + wChanges().length + (metaChanged() ? 1 : 0) + (aufbauGeaendert() ? 1 : 0));
+  // diff ist nur ein Zwischenspeicher von diffOffers(published, model) – fehlt er noch (z. B. Importzentrale vor dem ersten
+  // Zeichnen des Editors), hier berechnen statt abzubrechen
+  const pendingCount = () => (!model ? 0 : !published ? model.items.length : (diff = diff || C.diffOffers(published, model)).added.length + diff.removed.length + diff.priceChanged.length + diff.changed.length + vChanges().length + sChanges().length + wChanges().length + (metaChanged() ? 1 : 0) + (aufbauGeaendert() ? 1 : 0));
   /* früher Zahl am Knopf „Veröffentlichen“: jetzt die Zahl in der Statuszeile (nur wenn dort gerade der gespeicherte Stand steht) */
   function updatePublishBtn() {
     if (lastSaveState[0] === 'saved' || lastSaveState[0] === 'clean') setSaveState(lastSaveState[0], lastSaveState[1]);
@@ -1472,7 +1486,6 @@
     n.hidden = !e;
     n.textContent = e ? String(werbArtikelZahl(e)) + (werbBloecke(e).length > 1 ? ' · 2×' : '') : '';
     $('#btn-werbung').classList.toggle('on', !!e);
-    $('#btn-winab').hidden = !(may('angebot.winab_export') && curOffer === OSTD);   // Export für WinAB (module/angebot/winab-export.js)
     aufbauKnopf();
   }
   function renderGroups() {
@@ -5206,7 +5219,12 @@
         stand: sonderStand, text: sonderText },
       druck: { adresse: () => (model ? pvUrl(curOffer) : ''), name: () => offerName(curOffer),
         adresseFuer: (oid, entwurf) => (entwurf ? pvUrl(oid || OSTD) : angebotsseite('?' + (oid && oid !== OSTD ? 'angebot=' + encodeURIComponent(oid) + '&' : '') + 't=' + Date.now())),
-        async bereit() { const a = document.activeElement; if (a && a.matches && a.matches('.in')) a.dispatchEvent(new Event('change', { bubbles: true })); if (unsaved()) await saveNow(); } } },
+        async bereit() { const a = document.activeElement; if (a && a.matches && a.matches('.in')) a.dispatchEvent(new Event('change', { bubbles: true })); if (unsaved()) await saveNow(); } },
+      // Export für WinAB (app/module/angebot/winab-export.js): Woche des Entwurfs und des veröffentlichten Stands („KW n/JJJJ“ oder
+      // leer), Zahl offener Änderungen; gespeichert() speichert sicher und liefert die Revision des Entwurfs (sonst Fehler)
+      winab: { gespeichert: entwurfGespeichert,
+        wochen: () => ({ entwurf: model && model.meta.week && model.meta.year ? wkLong(model.meta) : '',
+          veroeffentlicht: published && published.meta.week && published.meta.year ? wkLong(published.meta) : '' }) } },
   };
 
   /* Höhe der Kopfleiste für die links angeheftete Navigation */

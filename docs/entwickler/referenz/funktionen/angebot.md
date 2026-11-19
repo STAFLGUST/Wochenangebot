@@ -2,7 +2,7 @@
 
 <!-- ERZEUGT von `python3 werkzeuge/doku.py erzeugen` – nicht von Hand ändern. Quelle: Funktionen und Kommentare im Code. Die CI prüft, dass diese Datei zum Code passt. -->
 
-58 Dateien, 928 Funktionen – in der Reihenfolge der Datei, **fett** die Abschnitte. Text = erste Aussage des Kommentars direkt über der Funktion (Python: Docstring). Übersicht aller Module: [README.md](README.md).
+59 Dateien, 931 Funktionen – in der Reihenfolge der Datei, **fett** die Abschnitte. Text = erste Aussage des Kommentars direkt über der Funktion (Python: Docstring). Übersicht aller Module: [README.md](README.md).
 
 ## `app/api/lib/angebote.php`
 
@@ -309,8 +309,8 @@ _STAFL-Plattform · Angebot · Sonderangebote (Auftrag des Inhabers 13.11.2026):
 _Export des Wochenangebots für WinAB (Auftrag des Inhabers 05.11.2026)_
 
 - `winab_preis(v)` – Preis für WinAB: 26,1 → „26,10“, 12.345 → „12,345“
-- `winab_zeilen(pub)` – Zeilen [Artikelnummer, Preis] aus einem veröffentlichten Angebotsmodell (höchster Preis je Nummer) und Zählung
-- `winab_export()` – Datei für den Download: Name, Inhalt und Zahlen; 422 ohne veröffentlichtes Angebot oder ohne Preise
+- `winab_zeilen(modell)` – Zeilen [Artikelnummer, Preis] aus einem Angebotsmodell – Entwurf oder veröffentlicht (höchster Preis je Nummer) – und Zählung
+- `winab_export(entwurf, revision)` – Datei für den Download: Name, Inhalt und Zahlen.
 
 ## `app/api/module/angebot/wochen.php`
 
@@ -536,6 +536,7 @@ _Wochenangebot – Eingabebereich Bearbeitet einen Entwurf auf dem Server (autom
 - `editorsHTML()`
 - `changed(opts)`
 - `saveNow()`
+- `entwurfGespeichert()` – Entwurf sicher gespeichert – oder Fehler (Export für WinAB: nie einen älteren Stand als „Entwurf“ ausgeben).
 
 **Gemeinsames Bearbeiten**
 
@@ -1210,6 +1211,12 @@ _STAFL-Plattform · Angebot · Reiter „Sonderangebote“ im Eingabebereich (un
 - `modus(m)`
 - `speichern(b, meldung, fehler)` – Speichern über den Server (Prüfung dort); danach Angebotsliste im Editor und diese Liste neu
 
+## `app/module/angebot/winab-export.js`
+
+_STAFL-Plattform · Angebot · „Export für WinAB“ im Bereich Import (Auftrag des Inhabers 05.11.2026; seit 19.11.2026 dort statt in der Werkzeugleiste des Wochenangebots, Datei immer „ImportPreise.csv“)._
+
+- `laden(entwurf)`
+
 ## `app/sw.js`
 
 _Web-App (zum Home-Bildschirm hinzugefügt)_
@@ -1442,6 +1449,7 @@ _Testgruppe editor_aux_
 
 - `art(src, nid, **f)`
 - `wb(v)`
+- `beim_abruf(route)`
 
 ## `tests/e2e/test_einzelangebote.py`
 

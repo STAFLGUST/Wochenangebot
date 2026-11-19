@@ -15,6 +15,10 @@
    (window.WA.importDarstellung[art] = { html(ctx), binden(root, ctx) }), zeigt sie die Vorschau statt Zahlen und Zeilen;
    Optionen vom Typ „liste“ setzt nur sie (ctx.setzen → neue Vorschau, die bisherige bleibt bis dahin abgeblendet stehen).
    Kopf, Optionen, Fuß und Übernahme bleiben einheitlich; „fuss“ und „knopf“ der Vorschau beschriften den Fuß.
+   Exporte: Dateien für andere Programme (heute: Preise für WinAB) stehen als letzte Gruppe „Export“ in derselben Liste.
+   Der Eigentümer meldet sie an (window.WA.importExporte[id] = { name, kurz, beschreibung, format, recht, start() }) und
+   erzeugt die Datei selbst; die Zentrale zeigt nur die Zeile (mit allen Rechten aus „recht“, wie bei den Importarten Fachrecht
+   und Modulzugang des Eigentümers) und sperrt den Knopf, solange start() läuft.
    Vertrag: docs/plattform/schnittstellen/import.md
    ========================================================================== */
 (function () {
@@ -26,7 +30,9 @@
      Importarten. Der Test „importzentrale“ prüft, dass die Liste zu import_arten passt. */
   const RECHTE = ['kunden.bearbeiten', 'stammdaten.bearbeiten', 'bestand.importieren', 'preisverlauf.bearbeiten', 'angebot.bearbeiten', 'hr.verwalten',
     'controlling.umsatz_importieren', 'controlling.arbeitszeit_importieren'];
-  W.importSichtbar = () => RECHTE.some((p) => may(p));
+  W.importExporte = W.importExporte || {};   // Exporte der Eigentümer (z. B. module/angebot/winab-export.js)
+  const exporte = () => Object.entries(W.importExporte).filter(([, x]) => x.recht.every(may));
+  W.importSichtbar = () => RECHTE.some((p) => may(p)) || exporte().length > 0;
 
   const maxBytes = (art) => (art.maxMb || 30) * 1024 * 1024;   // je Importart (Server: maxMb, Standard 30 MB)
   /* Kennung eines Importlaufs mit Teilen: 32 Hex-Zeichen, zufällig */
@@ -98,6 +104,12 @@
         <div class="imp-aktion">${knopf}</div></div>${fenster}
       </div>`;
   }
+  /* Zeile eines Exports: wie ein Import, aber ohne Ablagefenster – der Knopf lädt die Datei des Eigentümers herunter */
+  const exportHTML = ([id, x]) => `<div class="imp-art" data-export="${esc(id)}">
+        <div class="imp-zeile"><div class="imp-text"><h3>${esc(x.name)}</h3><p title="${esc(x.beschreibung)}">${esc(x.kurz)}</p></div>
+        <span class="imp-format">${esc(x.format)}</span>
+        <div class="imp-aktion"><button type="button" class="btn sm" data-imp-export="${esc(id)}" aria-label="Herunterladen: ${esc(x.name)}">${icon('download', 'sm')}<span class="imp-knopftext">Herunterladen</span></button></div></div>
+      </div>`;
   /* Ablagefenster auf- bzw. zuklappen (immer nur eines offen) */
   function umschalten(id) {
     offen = offen === id ? '' : id;
@@ -107,17 +119,18 @@
     else view().querySelector(`[data-imp-waehlen="${id}"]`)?.focus();
   }
   function renderListe() {
-    const h = view();
-    if (!arten.length) { h.innerHTML = '<div class="ed-empty"><h3>Keine Importe verfügbar</h3><p>Für Importe fehlt Ihnen die Berechtigung. Bitte an einen Administrator wenden.</p></div>'; return; }
+    const h = view(), ex = exporte();
+    if (!arten.length && !ex.length) { h.innerHTML = '<div class="ed-empty"><h3>Keine Importe verfügbar</h3><p>Für Importe fehlt Ihnen die Berechtigung. Bitte an einen Administrator wenden.</p></div>'; return; }
     const gruppen = new Map();
     for (const a of arten) {
       const g = GRUPPE[a.eigentuemer] || a.eigentuemerName;
       if (!gruppen.has(g)) gruppen.set(g, []);
       gruppen.get(g).push(a);
     }
-    h.innerHTML = `<p class="imp-intro">Import anklicken und die Datei hineinziehen oder auswählen – die Vorschau zeigt vor dem Übernehmen, was neu ist, sich ändert oder entfällt. Jede Übernahme steht im Protokoll.</p>
+    h.innerHTML = `${arten.length ? '<p class="imp-intro">Import anklicken und die Datei hineinziehen oder auswählen – die Vorschau zeigt vor dem Übernehmen, was neu ist, sich ändert oder entfällt. Jede Übernahme steht im Protokoll.</p>' : ''}
       <div class="imp-liste">${[...gruppen].map(([g, liste]) => `<section class="imp-gruppe" aria-labelledby="imp-g-${esc(liste[0].id)}">
-        <h2 id="imp-g-${esc(liste[0].id)}">${esc(g)}</h2>${liste.map(zeileHTML).join('')}</section>`).join('')}</div>
+        <h2 id="imp-g-${esc(liste[0].id)}">${esc(g)}</h2>${liste.map(zeileHTML).join('')}</section>`).join('')}
+        ${ex.length ? `<section class="imp-gruppe" aria-labelledby="imp-g-export"><h2 id="imp-g-export">Export</h2>${ex.map(exportHTML).join('')}</section>` : ''}</div>
       ${arten.some((a) => a.bestaetigung) ? `<p class="imp-hinweis">${icon('lock', 'sm')}Übernahme mit Passwortbestätigung</p>` : ''}`;
   }
 
@@ -347,6 +360,12 @@
     if (zl && !e.target.closest('button, a, input')) {
       const z = zl.closest('.imp-art[data-ablage]');
       if (z) { umschalten(z.dataset.art); return; }
+    }
+    const xb = e.target.closest('[data-imp-export]');
+    if (xb) {
+      xb.disabled = true;   // Knopf gesperrt, solange der Eigentümer die Datei erzeugt (start() meldet Fehler selbst)
+      Promise.resolve(W.importExporte[xb.dataset.impExport]?.start()).finally(() => { xb.disabled = false; });
+      return;
     }
     const ed = e.target.closest('[data-imp-editor]');
     if (ed) {

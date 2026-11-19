@@ -1,6 +1,7 @@
 """Testgruppe editor_aux: Hilfen im Angebotseditor – Vergleich mit der Vorwoche, Bestand im Editor und Suche in
 „Artikel hinzufügen“ (ohne Vorauswahl „nur mit Bestand“; die frühere Leiste „Bestand ohne Preis“ ist entfallen) sowie
-„Export für WinAB“ (Recht angebot.winab_export: CSV des veröffentlichten Wochenangebots, je Nummer der höchste Preis)
+„Export für WinAB“ (Recht angebot.winab_export: Eintrag im Bereich Import, Datei „ImportPreise.csv“ aus dem veröffentlichten
+Wochenangebot, je Nummer der höchste Preis)
 sowie die Artikelkarte des Bestands im Angebot (Klick auf den Bestand oder eine freie Fläche der Artikelzeile)."""
 import sys
 from umgebung import BASE  # Testserver je Gruppe (parallel)
@@ -176,35 +177,61 @@ with sync_playwright() as p:
     def wb(v): t = f'{v:.4f}'.replace('.', ','); return re.sub(r'(,\d\d)0{1,2}$', r'\1', t)
     erw = {c[0]['code']: 12.5, c[1]['code']: 9.25, c[4]['code']: 5.1234, sp['code']: 15.5}
     soll = 'Artikelnummer;Preis\r\n' + ''.join(f'{k};{wb(erw[k])}\r\n' for k in sorted(erw, key=nat))
-    cur = a.evaluate("async () => (await (await fetch('../api/?action=offers')).json())")
-    r = post(a, 'offers_save', {'rev': cur['rev'], 'offers': cur['offers'] + [{'id': 'wtest', 'name': 'Wochenangebot Test', 'fallback': 'hidden'}]})
-    check('WinAB: Kundenangebot zum Umschalten angelegt', r[0] == 200, r)
+    # Entwurf der Folgewoche (Inhaber 19.11.2026: die Preise der neuen Woche exportieren, bevor sie veröffentlicht sind): andere KW, ein Preis höher
+    wd = json.loads(json.dumps(wm)); wd['meta'].update(week=46); wd['items'][1]['price'] = wert(13.75)
+    r = post(a, 'save_draft', {'model': wd, 'revision': get(a, 'draft')[1]['revision']}); check('WinAB: Entwurf KW 46/2026 gespeichert, nicht veröffentlicht', r[0] == 200, r)
+    soll_e = soll.replace(f"{c[0]['code']};12,50", f"{c[0]['code']};13,75")
     post(a, 'user_save', {'name': 'Wina', 'username': 'wina', 'role': 'viewer', 'active': True, 'password': 'Leserin-Zugang-1', 'mustChange': False, 'grant': ['angebot.winab_export']})
+    wina_id = next(u['id'] for u in get(a, 'users')[1]['users'] if u['username'] == 'wina')
     post(a, 'user_save', {'name': 'Eddi', 'username': 'eddi', 'role': 'editor', 'active': True, 'password': 'Bearbeiter-Zugang-1', 'mustChange': False})
     w = br.new_page(viewport={'width': 1440, 'height': 950}); w.on('pageerror', lambda e: errs.append('wina: ' + str(e)))
     login(w, 'wina', 'Leserin-Zugang-1')
-    w.wait_for_selector('#btn-winab:not([hidden])')
-    check('WinAB: Knopf mit Recht beim Wochenangebot sichtbar (auch Leserolle)', w.locator('#btn-winab').is_visible() and 'Export für WinAB' in w.inner_text('#btn-winab'))
-    w.locator('#offer-bar [data-offer="wtest"]').click(); w.wait_for_selector('#btn-winab[hidden]', state='attached')
-    check('WinAB: beim Kundenangebot ausgeblendet', not w.locator('#btn-winab').is_visible())
-    w.locator('#offer-bar [data-offer="std"]').click(); w.wait_for_selector('#btn-winab:not([hidden])')
-    shot_box = w.locator('.ed-toolbar'); shot_box.screenshot(path=SH + '/winab-export-knopf.png')
+    check('WinAB: kein Knopf mehr in der Werkzeugleiste des Angebots (Inhaber 19.11.2026: im Bereich Import)', w.locator('#btn-winab').count() == 0 and 'WinAB' not in w.inner_text('.ed-toolbar'))
     w.wait_for_selector('#groups:not(.no-stock) tr[data-id]:has(input[data-f="code"][value="10601"]) button.e-bst')
     w.locator('tr[data-id]:has(input[data-f="code"][value="10601"]) button.e-bst').first.click(); w.wait_for_selector('#dlg-stock-item[open] .lottab')
     check('Karte (Leserolle mit bestand.sehen): Partien ohne EK-Spalte, auch in der Nur-Ansicht', w.locator('#dlg-stock-item .lottab tbody tr').count() == 2
           and w.locator('#dlg-stock-item th:text-is("EK-Preis")').count() == 0 and '20,00' not in w.inner_text('#dlg-stock-item .lottab'))
     w.click('#dlg-stock-item .dlg-head [data-close]'); w.wait_for_selector('#dlg-stock-item:not([open])', state='attached')
+    # Bereich Import: eigene Gruppe „Export“ – auch für jemanden, der sonst nichts importieren darf (Leserolle nur mit diesem Recht)
+    w.click('#vt-importe'); w.wait_for_selector('#view-importe [data-imp-export="winab"]')
+    titel = w.eval_on_selector_all('#view-importe .imp-gruppe:has([data-imp-export="winab"]) :is(h2, h3)', 'hs => hs.map((h) => h.textContent)')
+    check('WinAB: im Bereich Import in der Gruppe „Export“ zwei Einträge mit ihrer Woche – Entwurf und Veröffentlicht (Leserolle mit dem Recht: Menüpunkt sichtbar, keine Importe, kein „Keine Importe verfügbar“)',
+          titel == ['Export', 'Export für WinAB – Entwurf (KW 46/2026)', 'Export für WinAB – Veröffentlicht (KW 45/2026)']
+          and 'noch nicht veröffentlicht' in w.inner_text('.imp-art[data-export="winab_entwurf"]') and 'Kunden' in w.inner_text('.imp-art[data-export="winab"]')
+          and w.text_content('.imp-art[data-export="winab"] .imp-format') == 'CSV' and w.locator('#view-importe .imp-art[data-art]').count() == 0
+          and w.locator('#view-importe .ed-empty, #view-importe .imp-intro').count() == 0, w.inner_text('#view-importe'))
+    w.screenshot(path=SH + '/winab-export-import.png')
     with w.expect_download() as dl:
-        w.click('#btn-winab')
+        w.click('[data-imp-export="winab_entwurf"]')
     d = dl.value; inhalt = open(d.path(), 'rb').read()
-    check('WinAB: Dateiname mit KW', d.suggested_filename == 'WinAB_Wochenangebot_KW45-2026.csv', d.suggested_filename)
+    check('WinAB Entwurf: Datei „ImportPreise.csv“ mit den Preisen des Entwurfs (13,75 statt 12,50)', d.suggested_filename == 'ImportPreise.csv' and inhalt == soll_e.encode('ascii'), (d.suggested_filename, inhalt.decode('latin-1')))
+    w.wait_for_selector('#toast.show:has-text("KW 46/2026")')
+    t = w.inner_text('#toast')
+    check('WinAB Entwurf: Rückmeldung nennt den Entwurf, seine Woche und dass er noch nicht veröffentlicht ist', 'aus dem Entwurf KW 46/2026' in t and 'noch nicht veröffentlicht' in t and '4 Artikel' in t, t)
+    w.wait_for_selector('[data-imp-export="winab_entwurf"]:not([disabled])')
+    gesperrt = []   # Zustand des Knopfs, während der Server die Datei erzeugt
+    def beim_abruf(route): gesperrt.append(w.locator('[data-imp-export="winab"]').is_disabled()); route.continue_()
+    w.route('**/api/?action=angebot_winab_export*', beim_abruf)
+    with w.expect_download() as dl:
+        w.click('[data-imp-export="winab"]')
+    d = dl.value; inhalt = open(d.path(), 'rb').read()
+    w.unroute('**/api/?action=angebot_winab_export*')
+    check('WinAB: Datei heißt immer „ImportPreise.csv“ (ohne KW)', d.suggested_filename == 'ImportPreise.csv', d.suggested_filename)
     check('WinAB: Kopfzeile, je Nummer eine Zeile mit höchstem Preis (auch führende Null, Zusatzpreis), Sonderpreis wie beim Kunden, ohne ausgeblendete und Preis auf Anfrage, Komma, CRLF, ohne BOM',
           inhalt == soll.encode('ascii'), (inhalt.decode('latin-1'), soll))
-    w.wait_for_selector('#toast.show:has-text("WinAB_Wochenangebot_KW45-2026.csv")')
+    w.wait_for_selector('#toast.show:has-text("veröffentlichten Wochenangebot KW 45/2026")')
+    w.wait_for_selector('[data-imp-export="winab"]:not([disabled])')
+    check('WinAB: Knopf während des Abrufs gesperrt (kein doppelter Export), danach wieder frei', gesperrt == [True], gesperrt)
     t = w.inner_text('#toast')
-    check('WinAB: Rückmeldung mit Anzahl, doppelten und ausgelassenen Artikeln', '4 Artikel' in t and 'KW 45/2026' in t and '2× doppelt' in t and '1 Artikel ohne Preis' in t, t)
+    check('WinAB: Rückmeldung mit Datei, Anzahl, doppelten und ausgelassenen Artikeln – und dass der Entwurf nicht enthalten ist', 'ImportPreise.csv' in t and '4 Artikel' in t and 'KW 45/2026' in t
+          and '2× doppelt' in t and '1 Artikel ohne Preis' in t and 'unveröffentlichte Änderungen im Entwurf sind nicht enthalten' in t, t)
     r = post(w, 'angebot_winab_export', {})
-    check('WinAB: Schnittstelle liefert Zahlen (4 Zeilen, 2 doppelt, 1 ohne Preis)', r[0] == 200 and r[1]['anzahl'] == 4 and r[1]['doppelt'] == 2 and r[1]['ohnePreis'] == 1, {k: v for k, v in (r[1] or {}).items() if k != 'csv'})
+    check('WinAB: Schnittstelle ohne Angabe liefert wie bisher den veröffentlichten Stand – Zahlen (4 Zeilen, 2 doppelt, 1 ohne Preis), fester Dateiname', r[0] == 200 and r[1]['anzahl'] == 4
+          and r[1]['doppelt'] == 2 and r[1]['ohnePreis'] == 1 and r[1]['datei'] == 'ImportPreise.csv' and r[1]['entwurf'] is False and r[1]['woche'] == 'KW 45/2026' and r[1]['csv'] == soll,
+          {k: v for k, v in (r[1] or {}).items() if k != 'csv'})
+    r = post(w, 'angebot_winab_export', {'entwurf': True})
+    check('WinAB: Schnittstelle mit „entwurf“ liefert den gespeicherten Entwurf (KW 46/2026)', r[0] == 200 and r[1]['entwurf'] is True and r[1]['woche'] == 'KW 46/2026' and r[1]['csv'] == soll_e
+          and r[1]['datei'] == 'ImportPreise.csv', {k: v for k, v in (r[1] or {}).items() if k != 'csv'})
     post(a, 'user_save', {'name': 'Nobe', 'username': 'nobe', 'role': 'editor', 'active': True, 'password': 'Ohne-Bestand-Zugang-1', 'mustChange': False, 'deny': ['bestand.sehen']})
     nb = br.new_page(viewport={'width': 1440, 'height': 950}); nb.on('pageerror', lambda x: errs.append('nobe: ' + str(x))); login(nb, 'nobe', 'Ohne-Bestand-Zugang-1')
     nr = nb.locator('tr[data-id]:has(input[data-f="code"][value="10601"])').first
@@ -214,13 +241,25 @@ with sync_playwright() as p:
           and nb.locator('tr.e-karte').count() == 0 and nb.evaluate("async () => (await fetch('../api/?action=stock')).status") == 403)
     nb.close()
     e = br.new_page(viewport={'width': 1440, 'height': 950}); login(e, 'eddi', 'Bearbeiter-Zugang-1')
-    check('WinAB: ohne Recht kein Knopf (auch nicht als Bearbeiter) und 403', not e.locator('#btn-winab').is_visible() and post(e, 'angebot_winab_export', {})[0] == 403)
+    e.click('#vt-importe'); e.wait_for_selector('#view-importe .imp-art[data-art]')
+    check('WinAB: ohne Recht kein Eintrag im Import (auch nicht als Bearbeiter mit Importen) und 403', e.locator('#view-importe [data-imp-export], #btn-winab').count() == 0
+          and 'Export' not in e.eval_on_selector_all('#view-importe .imp-gruppe h2', 'hs => hs.map((h) => h.textContent)') and post(e, 'angebot_winab_export', {})[0] == 403)
     anon = br.new_page(); anon.goto(B + '/admin/'); anon.wait_for_selector('#screen-auth:not([hidden])')
     check('WinAB: ohne Anmeldung 401', anon.evaluate("async () => (await fetch('../api/?action=angebot_winab_export', {method: 'POST', headers: {'Content-Type': 'application/json'}, body: '{}'})).status") == 401)
     lg = json.dumps(a.evaluate("async () => (await (await fetch('../api/?action=log')).json())"), ensure_ascii=False)
-    check('WinAB: Export im Protokoll', 'Wochenangebot KW 45/2026 für WinAB exportiert – 4 Artikel' in lg, re.findall(r'[^"]*WinAB[^"]*', lg)[:2])
+    check('WinAB: Export im Protokoll – mit Woche, der Entwurf als Entwurf gekennzeichnet', 'Wochenangebot KW 45/2026 für WinAB exportiert – 4 Artikel' in lg
+          and 'Entwurf des Wochenangebots KW 46/2026 für WinAB exportiert – 4 Artikel' in lg, re.findall(r'[^"]*WinAB[^"]*', lg)[:4])
     a.reload(); a.wait_for_selector('#screen-editor:not([hidden]) tr[data-id]')
-    check('WinAB: Administrator sieht den Knopf', a.locator('#btn-winab').is_visible())
+    a.click('#vt-importe'); a.wait_for_selector('#view-importe [data-imp-export="winab"]')
+    check('WinAB: Administrator sieht beide Exporte im Import, als letzte Gruppe nach den Importen',
+          a.eval_on_selector_all('#view-importe .imp-gruppe h2', 'hs => hs.map((h) => h.textContent)')[-1] == 'Export' and a.locator('#view-importe .imp-intro').count() == 1
+          and a.locator('#view-importe .imp-gruppe:last-child [data-imp-export]').count() == 2)
+    a.screenshot(path=SH + '/winab-export-import-admin.png', full_page=True)
+    # Modulzugang Angebot entzogen: trotz Recht kein Eintrag und kein Menüpunkt Import (wie bei den Importarten), Server 403
+    r = post(a, 'user_save', {'id': wina_id, 'name': 'Wina', 'role': 'viewer', 'active': True, 'grant': ['angebot.winab_export'], 'deny': ['angebot.zugang']})
+    w.reload(); w.wait_for_function("document.querySelector('#menu-user') && document.querySelector('#menu-user').textContent.length > 0 && !!(window.WA && window.WA.importSichtbar)")
+    check('WinAB: ohne Modulzugang Angebot kein Eintrag, kein Menüpunkt Import und 403 – trotz Recht', r[0] == 200 and w.evaluate('window.WA.importSichtbar()') is False
+          and not w.locator('#vt-importe').is_visible() and post(w, 'angebot_winab_export', {})[0] == 403, r[0])
     for x in (w, e, anon): x.close()
     # Mobil
     m = br.new_context(viewport={'width': 390, 'height': 844}, is_mobile=True).new_page()
@@ -233,8 +272,51 @@ with sync_playwright() as p:
     check('mobil: Artikelkarte öffnet aus dem Angebot, ohne seitliches Scrollen der Seite', m.evaluate('document.documentElement.scrollWidth') <= 390
           and m.locator('#dlg-stock-item .lottab tbody tr').count() == 2)
     m.click('#dlg-stock-item .dlg-head [data-close]'); m.wait_for_selector('#dlg-stock-item:not([open])', state='attached')
-    m.wait_for_selector('#btn-winab:not([hidden])')
-    check('mobile: „Export für WinAB“ in der Werkzeugleiste ohne seitliches Scrollen', m.locator('#btn-winab').is_visible() and m.evaluate('document.documentElement.scrollWidth') <= 390)
+    m.click('#vt-importe'); m.wait_for_selector('#view-importe [data-imp-export="winab"]')
+    mx = m.locator('[data-imp-export="winab"]'); mx.scroll_into_view_if_needed(); bx = mx.bounding_box()
+    check('mobil: „Export für WinAB“ im Import ohne seitliches Scrollen, Knopf ≥ 44 px mit Namen für Vorleser', m.evaluate('document.documentElement.scrollWidth') <= 390
+          and bx['width'] >= 44 and bx['height'] >= 44 and 'Export für WinAB' in (mx.get_attribute('aria-label') or ''), bx)
+    m.screenshot(path=SH + '/winab-export-import-390.png')
+    # Entwurf-Export aus dem Editor heraus: die letzte Eingabe wird erst sicher gespeichert – scheitert das, keine Datei
+    ed = br.new_page(viewport={'width': 1440, 'height': 950}); ed.on('pageerror', lambda x: errs.append('ed: ' + str(x)))
+    login(ed, 'admin', 'Sicheres-Passwort-1')
+    downloads = []; ed.on('download', lambda d: downloads.append(d))
+    ed.fill('#groups tr[data-id="w6"] input[data-f="price"]', '6,5')
+    with ed.expect_download() as dl:
+        ed.click('#vt-importe'); ed.click('[data-imp-export="winab_entwurf"]')
+    t6 = open(dl.value.path(), 'rb').read().decode('ascii')
+    check('WinAB Entwurf: eben getippter Preis wird vor dem Export gespeichert und steht in der Datei', f"{c[4]['code']};6,50\r\n" in t6, t6)
+    ed.wait_for_selector('[data-imp-export="winab_entwurf"]:not([disabled])')
+    ed.click('#vt-edit'); ed.wait_for_selector('#groups tr[data-id="w6"] input[data-f="price"]')
+    ed.route('**/api/?action=save_draft*', lambda rt: rt.fulfill(status=500, json={'ok': False, 'error': 'Testfehler beim Speichern'}))
+    n_vorher = len(downloads)
+    ed.fill('#groups tr[data-id="w6"] input[data-f="price"]', '7,5')
+    ed.click('#vt-importe'); ed.click('[data-imp-export="winab_entwurf"]')
+    ed.wait_for_selector('#toast.show:has-text("Der Entwurf ist nicht gespeichert")')
+    ed.wait_for_selector('[data-imp-export="winab_entwurf"]:not([disabled])')
+    check('WinAB Entwurf: Speichern scheitert – keine Datei, Meldung statt älterer Preise', len(downloads) == n_vorher and 'Testfehler' in ed.inner_text('#toast'), ed.inner_text('#toast'))
+    ed.unroute('**/api/?action=save_draft*'); ed.close()   # lokal gesicherte Eingabe (7,50) nicht in die nächsten Schritte tragen
+    # Server: veralteter Stand des Entwurfs (inzwischen geändert/verworfen/veröffentlicht) → 409; ohne Recht 403 auch mit „entwurf“
+    rev = get(a, 'draft')[1]['revision']
+    r = post(a, 'angebot_winab_export', {'entwurf': True, 'revision': rev - 1})
+    check('WinAB Entwurf: Revision passt nicht mehr – 409 statt Datei', r[0] == 409 and 'csv' not in r[1] and 'inzwischen' in r[1].get('error', ''), r[0])
+    r = post(a, 'angebot_winab_export', {'entwurf': True, 'revision': rev})
+    check('WinAB Entwurf: passende Revision – Datei des Entwurfs', r[0] == 200 and r[1]['entwurf'] is True, r[0])
+    e2 = br.new_page(); login(e2, 'eddi', 'Bearbeiter-Zugang-1')
+    check('WinAB Entwurf: ohne Recht 403', post(e2, 'angebot_winab_export', {'entwurf': True})[0] == 403); e2.close()
+    # Ohne offenen Entwurf ist der Arbeitsstand der veröffentlichte: „Entwurf“ liefert ihn und sagt das
+    # den gespeicherten Entwurf veröffentlichen (wie der Knopf) – offene Fenster haben dann nichts Eigenes mehr zu speichern
+    r = post(a, 'publish', {'revision': get(a, 'draft')[1]['revision']}); check('WinAB: Entwurf KW 46 veröffentlicht', r[0] == 200, r)
+    soll_p = soll_e.replace(f"{c[4]['code']};5,1234", f"{c[4]['code']};6,50")
+    ed = br.new_page(viewport={'width': 1440, 'height': 950}); ed.on('pageerror', lambda x: errs.append('ed: ' + str(x))); login(ed, 'admin', 'Sicheres-Passwort-1')
+    with ed.expect_download():
+        ed.click('#vt-importe'); ed.click('[data-imp-export="winab_entwurf"]')
+    ed.wait_for_selector('#toast.show:has-text("kein offener Entwurf")')
+    check('WinAB Entwurf: ohne offenen Entwurf sagt die Rückmeldung „veröffentlichter Stand“', 'aus dem veröffentlichten Wochenangebot KW 46/2026' in ed.inner_text('#toast'), ed.inner_text('#toast'))
+    ed.close()
+    r = post(a, 'angebot_winab_export', {'entwurf': True})
+    check('WinAB: nach dem Veröffentlichen liefert „Entwurf“ den veröffentlichten Stand (KW 46/2026, entwurf: false)', r[0] == 200 and r[1]['entwurf'] is False and r[1]['woche'] == 'KW 46/2026'
+          and r[1]['csv'] == soll_p, {k: v for k, v in (r[1] or {}).items() if k != 'csv'})
     # Ohne Artikel mit Preis: keine Datei (422)
     wm['items'] = [art(c[3], 'w5', price={'status': 'request'})]
     post(a, 'publish', {'model': wm, 'revision': get(a, 'draft')[1]['revision']}); r = post(a, 'angebot_winab_export', {})

@@ -375,7 +375,7 @@ Jede Code-Datei beginnt mit einem Kopfkommentar; dessen erste Aussage steht hier
 | `preisimport.js` | angebot | STAFL-Plattform · Angebot · Darstellung der Vorschau „Artikelpreise (CSV)“ in der Importzentrale (Verwaltung → Import). |
 | `sonderangebote.css` | angebot | STAFL-Plattform · Angebot · Sonderangebote (app/module/angebot/sonderangebote.js) |
 | `sonderangebote.js` | angebot | STAFL-Plattform · Angebot · Reiter „Sonderangebote“ im Eingabebereich (unter „Einzelangebote“, Auftrag des Inhabers 13.11.2026). |
-| `winab-export.js` | angebot | STAFL-Plattform · Angebot · Knopf „Export für WinAB“ in der Werkzeugleiste des Wochenangebots (Auftrag des Inhabers 05.11.2026). |
+| `winab-export.js` | angebot | STAFL-Plattform · Angebot · „Export für WinAB“ im Bereich Import (Auftrag des Inhabers 05.11.2026; seit 19.11.2026 dort statt in der Werkzeugleiste des Wochenangebots, Datei immer „ImportPreise.csv“). |
 
 ## `app/module/bestand/`
 
