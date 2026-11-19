@@ -299,12 +299,15 @@ Woher Gruppe und Reihenfolge eines Artikels kommen: aus dem Entwurf selbst – `
 
 Jedes Angebot für sich (Inhaber 19.11.2026, Schritt 1): Bezeichnung, Gruppe und Gruppen (Name, Bereich, VK-Gruppe,
 Reihenfolge) ändern sich nur im gewählten Angebot. „Familie“ (`familie(oid)`): das Wochenangebot mit den Angeboten, die ihm
-folgen, oder ein Angebot mit eigener Artikelliste. Alle Wege des Editors setzen Bezeichnung und Gruppe eines Artikels über
-`setzeJeAngebot(it, oid, 'name'|'gruppe', wert)` (Zeile, Artikelfenster, `artikelOrdnen` für das Fenster „Editor“,
-`inEigeneGruppen` beim Hinzufügen): im Kundenangebot mit Artikel auch anderswo der eigene Wert, sonst der Basiswert – vorher
-halten Angebote mit eigener Artikelliste ihren bisherigen Wert fest. Vor einer Änderung an einer Gruppe trennt
-`gruppenTrennen(nur)` gemeinsam genutzte Gruppen (Kopie direkt hinter dem Original, im selben Rückgängig-Schritt);
-`gruppeNach(zu, gid)` rechnet Kennungen aus der Oberfläche (Gruppenkarte `data-gid`, Fenster „Editor“) auf die Kopie um.
+folgen, oder ein Angebot mit eigener Artikelliste. Im gewählten Angebot setzen die Wege des Editors Bezeichnung und Gruppe
+eines Artikels über `setzeJeAngebot(it, oid, 'name'|'gruppe', wert)` (Artikelfenster, Basisfeld der Zeile, `artikelOrdnen`
+für das Fenster „Editor“, `inEigeneGruppen` beim Hinzufügen): im Kundenangebot mit Artikel auch anderswo (`eigenerWert`) der
+eigene Wert, sonst der Basiswert – vorher halten Angebote mit eigener Artikelliste ihren bisherigen Wert fest. Ausdrückliche
+Felder eines Angebots (Zeile `oname`, Artikelfenster mit `data-on`, feste Gruppe beim Hinzufügen) setzen direkt über
+`setzeName`/`setzeGruppe`. Vor einer Änderung an einer Gruppe trennt `gruppenTrennen(nur, oid)`: ein Kundenangebot bekommt
+eine eigene Kopie direkt hinter dem Original (andere Angebote bleiben unberührt), ändert das Wochenangebot, bekommt jede andere
+Familie ihre Kopie – im selben Rückgängig-Schritt. Rückgabe: `Map(alte → neue Gruppe)` des Angebots, um Kennungen aus der
+Oberfläche (Gruppenkarte `data-gid`, Fenster „Editor“) umzurechnen.
 Das Fenster „Editor“ tauscht nur die Plätze der eigenen Gruppen in `model.groups` (andere bleiben stehen); „Aufbau
 zurücknehmen“ nutzt weiter `gruppenOrdnen` und ist global. Beim Verschieben eines Artikels wird nicht getrennt – nur seine
 Gruppe im Angebot ändert sich. Das Artikelfenster eines Kundenangebots zeigt oben Gruppe und Bezeichnung dieses Angebots

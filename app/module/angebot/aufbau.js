@@ -70,7 +70,7 @@
     return ids.map((aid, i) => {
       const a = ainfo.get(aid);
       return `<li class="abf-a" data-aid="${esc(aid)}">${fest ? '' : griff('a', 'Artikel ziehen')}
-        <span class="abf-an">${a.code ? `<span class="abf-nr">${esc(a.code)}</span>` : ''}<span class="abf-ab">${esc(a.name)}</span>${a.eigen ? '<span class="abf-eig" title="Eigene Gruppe in diesem Angebot – verschieben ändert sie nur hier; die Stelle gilt weiter für alle Angebote">nur hier</span>' : ''}${a.gruppe !== gid ? '<span class="abf-neu">verschoben</span>' : ''}</span>
+        <span class="abf-an">${a.code ? `<span class="abf-nr">${esc(a.code)}</span>` : ''}<span class="abf-ab">${esc(a.name)}</span>${a.eigen ? '<span class="abf-eig" title="Eigene Gruppe in diesem Angebot – die Stelle innerhalb der Gruppe gilt noch für alle Angebote">nur hier</span>' : ''}${a.gruppe !== gid ? '<span class="abf-neu">verschoben</span>' : ''}</span>
         ${fest ? '' : `${zuHTML(aid, gid)}<span class="abf-btns">${pfeil('a-hoch', 'up', i === 0, `Artikel „${esc(a.name)}“ nach oben`)}${pfeil('a-runter', 'down', i === ids.length - 1, `Artikel „${esc(a.name)}“ nach unten`)}</span>`}</li>`;
     }).join('');
   }

@@ -65,6 +65,9 @@ w = next(i for i in frei if i['groupId'] == G3)
 h1, h2 = (next(i for i in frei if i['groupId'] == h) for h in (H1, H2))
 for i, o, p in ((x, BE, 11.5), (y, BE, 12.5), (z, BE, 13.5), (w, ED, 14.5), (h1, ED, 15.5), (h2, ED, 16.5)):
     i['variants'] = {o: {'status': 'value', 'value': p}}
+# t: Gruppe G4, gemeinsam im Wochenangebot, in Bela und in Edeka (drei Familien an einer Gruppe)
+t = next(i for i in frei if i['groupId'] == G4)
+t['variants'] = {BE: {'status': 'value', 'value': 17.5}, ED: {'status': 'value', 'value': 18.5}}
 assert A.call('save_draft', {'model': m, 'revision': rev})[0] == 200
 BE0, ED0 = sicht(BE), sicht(ED)
 assert all(BE0['artikel'][i['id']][0] == GN[i['groupId']] for i in (x, y, z)) and [g for g, _ in ED0['gruppen']].index(GN[H1]) + 1 == [g for g, _ in ED0['gruppen']].index(GN[H2]), ED0['gruppen']
@@ -200,6 +203,20 @@ with sync_playwright() as p:
           and ed_g.index(GN[H1]) < ed_g.index(GN[H2]), (std_g, ed_g))
     check('… Gruppe, Bezeichnung und Preis aller Artikel von Edeka unverändert', {k: v[2] for k, v in sicht(ED)['artikel'].items()} == {k: v[2] for k, v in ED0['artikel'].items()}
           and {k: v[:2] for k, v in sicht(ED)['artikel'].items()} == {k: v[:2] for k, v in ED0['artikel'].items()})
+    # Drei Angebote an einer Gruppe: Umbenennen in Bela trennt nur Bela ab – Edeka bleibt auch im Entwurf unberührt
+    angebot(BE, t['id'])
+    karte(karte_von(t['id']), 'name', 'Bela G4')
+    until(lambda: gname(BE, t['id']) == 'Bela G4'); ruhig()
+    ti = next(i for i in entwurf()[0]['items'] if i['id'] == t['id'])
+    check('Gruppe in Bela umbenannt, die auch Edeka nutzt: nur Bela bekommt eine Kopie, Edeka im Entwurf unverändert (kein eigener Eintrag)',
+          gname(ED, t['id']) == GN[G4] and gname('std', t['id']) == GN[G4] and ED not in (ti.get('gruppen') or {}), ti.get('gruppen'))
+    # Angebot, das dem Wochenangebot folgt, übernimmt eine Umbenennung im Wochenangebot (bis Schritt 2); Edeka behält den Namen
+    FOLGT = next(o['id'] for o in A.call('offers')[1]['offers'] if o.get('fallback') == 'standard')
+    angebot('std', t['id'])
+    karte(karte_von(t['id']), 'name', 'Std G4')
+    until(lambda: gname('std', t['id']) == 'Std G4'); ruhig()
+    check('Wochenangebot: Gruppe umbenannt – folgendes Angebot übernimmt den Namen, Edeka und Bela behalten ihren',
+          gname(FOLGT, t['id']) == 'Std G4' and gname(ED, t['id']) == GN[G4] and gname(BE, t['id']) == 'Bela G4', (gname(FOLGT, t['id']), gname(ED, t['id'])))
     check('keine Skriptfehler', not errors, errors[:3])
 
     m390 = br.new_page(viewport={'width': 390, 'height': 844}, is_mobile=True)

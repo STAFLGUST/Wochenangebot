@@ -230,50 +230,52 @@
      Eigenständig sind das Wochenangebot und jedes Angebot mit eigener Artikelliste (auch Sonderangebote); Angebote, die dem
      Wochenangebot folgen, gehören bis zu ihrer Umstellung zu ihm. familie(oid) = das eigenständige Angebot, zu dem oid gehört. */
   const familie = (oid) => (ownList(oid) ? oid : OSTD);
-  /* Bezeichnung (feld 'name') bzw. Angebotsgruppe ('gruppe') eines Artikels in Angebot oid setzen – alle Wege des Editors.
-     Steht der Artikel auch in einem anderen Angebot, wird es im Kundenangebot dessen eigener Wert. Im Wochenangebot (oder wenn
-     er nur hier steht) ändert sich der Basiswert; vorher behält jedes Angebot mit eigener Artikelliste, das ihn bisher nutzte,
-     seinen Wert als eigenen (direkt gesetzt – setzeName/setzeGruppe verwerfen einen Wert gleich dem Basiswert). */
+  /* Bezeichnung (feld 'name') bzw. Angebotsgruppe ('gruppe') eines Artikels im gewählten Angebot oid setzen. Steht der Artikel
+     auch in einem anderen Angebot, wird es im Kundenangebot dessen eigener Wert. Im Wochenangebot (oder wenn er nur hier steht)
+     ändert sich der Basiswert; vorher behält jedes Angebot mit eigener Artikelliste, das ihn bisher nutzte, den alten Wert als
+     eigenen (direkt gesetzt – setzeName/setzeGruppe verwerfen einen Wert gleich dem Basiswert). Ausdrückliche Felder anderer
+     Angebote (Artikelfenster, data-on) und das Leeren in der Zeile setzen direkt über setzeName/setzeGruppe. */
+  const JE = { name: { eigen: eigenName, setze: setzeName, je: 'namen', basis: 'name' }, gruppe: { eigen: eigenGruppe, setze: setzeGruppe, je: 'gruppen', basis: 'groupId' } };
+  const eigenerWert = (it, oid) => oid !== OSTD && offersOf(it).some((o) => o !== oid);   // im Kundenangebot gilt ein eigener Wert
   function setzeJeAngebot(it, oid, feld, wert) {
-    const [eigen, wertIn, setze, je, basis] = feld === 'name' ? [eigenName, nameIn, setzeName, 'namen', 'name'] : [eigenGruppe, gruppeIn, setzeGruppe, 'gruppen', 'groupId'];
-    const andere = offersOf(it).filter((o) => o !== oid);
-    if (oid !== OSTD && andere.length) { setze(it, oid, wert); return; }
-    for (const o of andere) if (ownList(o) && !eigen(it, o)) it[je] = { ...(it[je] || {}), [o]: wertIn(it, o) };
+    const { eigen, setze, je, basis } = JE[feld], alt = it[basis];
+    if (eigenerWert(it, oid)) { setze(it, oid, wert); return; }
+    if (alt !== wert) for (const o of offersOf(it)) if (o !== oid && ownList(o) && !eigen(it, o)) it[je] = { ...(it[je] || {}), [o]: alt };
     if (oid !== OSTD) setze(it, oid, '');
     it[basis] = wert;
     for (const o of Object.keys(it[je] || {})) if (it[je][o] === wert) setze(it, o, '');   // gleich dem Basiswert = kein eigener (wie clean_model)
   }
-  /* Gruppen trennen: jede Gruppe gehört genau einer Familie. Benutzen mehrere die Gruppe (nur = Set der zu prüfenden Gruppen-IDs,
-     sonst alle), behält das Wochenangebot bzw. das erste Angebot das Original; jedes andere bekommt eine Kopie direkt hinter dem
-     Original (so bleibt die Reihenfolge jedes Angebots, auch wenn nur eine Gruppe getrennt wird), seine Artikel zeigen über
-     it.gruppen darauf. Danach ordnet jedes Angebot nur noch seine eigenen Gruppen (Plätze tauschen, aufbauUebernehmen, ↑/↓).
-     Vor jeder Änderung an einer Gruppe aufrufen (Name, Bereich, VK-Gruppe, Reihenfolge), im selben Rückgängig-Schritt – nicht
-     beim Verschieben eines Artikels: das ändert nur dessen Gruppe im Angebot, und eine Trennung zeigte andere Angebote, die
-     die Zielgruppe mitbenutzen, ohne Not als geändert. Rückgabe: Map('<Familie>|<alte Gruppe>' → neue Gruppe), umrechnen mit gruppeNach. */
-  function gruppenTrennen(nur) {
-    const alle = [OSTD, ...offers.map((o) => o.id)], nutzer = new Map();
+  const alleAngebote = () => [OSTD, ...offers.map((o) => o.id)];
+  /* Gruppen trennen, bevor das Angebot oid eine Gruppe ändert (Name, Bereich, VK-Gruppe, Reihenfolge; nur = Gruppen-IDs): Nutzt
+     eine andere Familie die Gruppe mit, bekommt ein Kundenangebot eine eigene Kopie direkt hinter dem Original (so bleibt
+     jede Reihenfolge) und seine Artikel zeigen über it.gruppen darauf; die anderen bleiben unberührt. Ändert das
+     Wochenangebot, behält es das Original und jede andere Familie bekommt ihre Kopie. Nicht beim Verschieben eines Artikels
+     (das ändert nur dessen Gruppe im Angebot). Im selben Rückgängig-Schritt aufrufen. Rückgabe: Map(alte → neue Gruppe) für oid. */
+  function gruppenTrennen(nur, oid = curOffer) {
+    const f = familie(oid), alle = alleAngebote(), nutzer = new Map();
     for (const it of model.items) for (const o of alle) {
       if (!inOffer(it, o)) continue;
       const g = gruppeIn(it, o);
-      if (nur && !nur.has(g)) continue;
+      if (!nur.has(g)) continue;
       if (!nutzer.has(g)) nutzer.set(g, new Set());
       nutzer.get(g).add(familie(o));
     }
-    const zu = new Map(), kopien = new Map();
+    const fuer = new Map(), kopien = new Map(), zu = new Map();   // fuer: '<Familie>|<Gruppe>' → Kopie
     for (const g of model.groups) {
       const n = nutzer.get(g.id);
-      if (!n || n.size < 2) continue;
-      const eigner = n.has(OSTD) ? OSTD : n.values().next().value;
-      kopien.set(g.id, [...n].filter((f) => f !== eigner).map((f) => { const k = { ...clone(g), id: uid('g') }; zu.set(f + '|' + g.id, k.id); return k; }));
+      if (!n || n.size < 2 || !n.has(f)) continue;
+      const neu = (f === OSTD ? [...n].filter((x) => x !== OSTD) : [f]).map((x) => { const k = { ...clone(g), id: uid('g') }; fuer.set(x + '|' + g.id, k.id); return k; });
+      kopien.set(g.id, neu);
+      if (f !== OSTD) zu.set(g.id, neu[0].id);
     }
-    if (zu.size) model.groups.splice(0, model.groups.length, ...model.groups.flatMap((g) => [g, ...(kopien.get(g.id) || [])]));
-    if (zu.size) for (const it of model.items) for (const o of alle) {
-      const k = inOffer(it, o) && zu.get(familie(o) + '|' + gruppeIn(it, o));
+    if (!fuer.size) return zu;
+    model.groups.splice(0, model.groups.length, ...model.groups.flatMap((g) => [g, ...(kopien.get(g.id) || [])]));
+    for (const it of model.items) for (const o of alle) {
+      const k = inOffer(it, o) && fuer.get(familie(o) + '|' + gruppeIn(it, o));
       if (k) it.gruppen = { ...(it.gruppen || {}), [o]: k };
     }
     return zu;
   }
-  const gruppeNach = (zu, gid, oid = curOffer) => zu.get(familie(oid) + '|' + gid) || gid;
   /* Neu aufgenommene Artikel eines Angebots mit eigener Artikelliste: hat es schon eine Gruppe gleichen Namens (etwa eine
      getrennte Kopie), kommen sie dorthin – sonst stünde dieselbe Überschrift zweimal im Angebot */
   function inEigeneGruppen(oid, neu) {
@@ -332,7 +334,7 @@
     const a = (published.meta && published.meta.werbung) || {}, b = model.meta.werbung || {};
     return [...new Set([...Object.keys(a), ...Object.keys(b)])].filter((oid) => knownOffer(oid) && !C.sameModel(a[oid], b[oid]));
   };
-  /* Weicht der Aufbau (Reihenfolge der Gruppen, Bereich je Gruppe, Gruppe und Reihenfolge der Artikel; gilt für alle Angebote)
+  /* Weicht der Aufbau (Reihenfolge der Gruppen, Bereich je Gruppe, Gruppe und Reihenfolge der Artikel)
      von der veröffentlichten Fassung ab? Verglichen werden nur Gruppen mit Artikeln, die es veröffentlicht und im Entwurf mit
      gleichem Namen gibt, und Artikel, die es in beiden gibt (neue/entfernte zeigen „Neu“/„Entfernt“). Die Reihenfolge wird
      je Angebot verglichen – Wochenangebot und jedes Angebot mit eigenen Gruppen (it.gruppen): dort kann sie sich auch ändern,
@@ -1481,7 +1483,7 @@
     const werb = werbAn(it);
     // Kundenangebot: das Feld bearbeitet die Bezeichnung nur in diesem Angebot (leer = Basiswert aus dem Wochenangebot).
     // Steht der Artikel nur hier (ohne eigene Bezeichnung), ist seine Bezeichnung der Basiswert selbst.
-    const eig = eigenName(it, curOffer), kd = curOffer !== OSTD && (!!eig || offersOf(it).length > 1);
+    const eig = eigenName(it, curOffer), kd = !!eig || eigenerWert(it, curOffer);
     const nameFeld = kd
       ? `<input class="in e-nm${eig ? ' e-nm-eigen' : ''}" data-f="oname" value="${esc(eig || it.name)}" placeholder="${esc(it.name)}" aria-label="Bezeichnung in ${esc(offerShort(curOffer))}" title="${eig ? `Eigene Bezeichnung in „${esc(offerShort(curOffer))}“ – Basiswert: ${esc(it.name)}. Leeren = Basiswert.` : `Bezeichnung nur in „${esc(offerShort(curOffer))}“ ändern – die anderen Angebote bleiben unverändert.`}" maxlength="200">${eig ? `<span class="e-eigen" title="Eigene Bezeichnung in „${esc(offerShort(curOffer))}“ – Basiswert: ${esc(it.name)}">eigene</span>` : ''}`
       : `<input class="in e-nm" data-f="name" value="${esc(it.name)}" aria-label="Bezeichnung" maxlength="200">`;
@@ -1704,8 +1706,8 @@
       const v = C.clean(el.value);
       if (el.dataset.gf === 'name' && !v) { el.value = g.name; toast('Die Gruppe braucht einen Namen.'); return; }
       pushUndo();
-      g = gById(gruppeNach(gruppenTrennen(new Set([g.id])), g.id));   // gemeinsam genutzt: dieses Angebot bekommt eine eigene
-      gcard.dataset.gid = g.id;
+      g = gById(gruppenTrennen(new Set([g.id])).get(g.id) || g.id);   // gemeinsam genutzt: dieses Angebot bekommt eine eigene
+      gcard.dataset.gid = g.id;   // weitere Eingaben in derselben Karte (ohne Neuzeichnen) treffen die Kopie
       if (el.dataset.gf === 'vk') { if (v) g.vk = v; else delete g.vk; } else g[el.dataset.gf] = v;
       changed({ render: el.dataset.gf === 'section' || el.dataset.gf === 'vk' });
       renderMetaInfo();
@@ -1773,8 +1775,8 @@
       let o = vis[act === 'g-up' ? k - 1 : k + 1];
       if (!o) return;
       pushUndo();
-      const zu = gruppenTrennen(new Set(vis.map((x) => x.id)));
-      [g, o] = [g, o].map((x) => gById(gruppeNach(zu, x.id)));
+      const zu = gruppenTrennen(new Set([g.id, o.id]));   // Kopien stehen direkt hinter dem Original: Tauschen ändert kein anderes Angebot
+      [g, o] = [g, o].map((x) => gById(zu.get(x.id) || x.id));
       const i1 = model.groups.indexOf(g), i2 = model.groups.indexOf(o);
       [model.groups[i1], model.groups[i2]] = [model.groups[i2], model.groups[i1]];
       changed({ render: true });
@@ -1938,7 +1940,6 @@
     }
     if (JSON.stringify(model) !== snap) { undoStack.push(snap); $('#btn-undo').disabled = false; }
     changed({ render: true });
-    if (el.name === 'groupId' && !neueGruppe) openItem(it.id);   // Auswahl mit den Kennungen nach dem Trennen
     for (const o of dlgItem.querySelectorAll('[name="ogroup"]')) {   // Basiswert geändert oder eigene Gruppe gleich dem Basiswert
       o.options[0].textContent = `wie Basiswert (${gById(it.groupId)?.name || ''})`;
       o.value = eigenGruppe(it, o.dataset.on);
@@ -2616,7 +2617,7 @@
       // Artikel, die es in beiden gibt: wieder in ihrer veröffentlichten Gruppe (falls vorhanden) und Reihenfolge
       const da = new Set(model.items.map((i) => i.id)), ziel = new Map();
       for (const it of published.items) if (da.has(it.id) && gById(it.groupId)) { if (!ziel.has(it.groupId)) ziel.set(it.groupId, []); ziel.get(it.groupId).push(it.id); }
-      artikelOrdnen(ziel);
+      artikelOrdnen(ziel, null);   // Zurücknehmen: Basiswert direkt
       // Dazu die gemeinsamen Artikel über alle Gruppen in veröffentlichter Reihenfolge: mit eigenen Gruppen je Angebot
       // (it.gruppen) zählt sie auch zwischen Artikeln verschiedener Basisgruppen. Neue bleiben hinter ihrem Vorgänger der Gruppe.
       const stelle = new Map(published.items.map((it, i) => [it.id, i])), letzter = new Map(), kette = new Map(), vorn = [];
@@ -4558,7 +4559,7 @@
     // Reihenfolge oder Bereiche der Gruppen geändert: gemeinsam genutzte Gruppen des Angebots vorher trennen. Ein verschobener
     // Artikel wechselt nur hier die Gruppe (artikelOrdnen → setzeJeAngebot), die Gruppe selbst ändert sich dabei nicht.
     const zu = gruppenNeu !== gruppenAlt ? gruppenTrennen(ids) : new Map();
-    const nid = (id) => gruppeNach(zu, id);
+    const nid = (id) => zu.get(id) || id;
     if (artGeaendert && !artikelOrdnen(new Map(neu.map((x) => [nid(x.id), x.artikel])), curOffer)) { model = JSON.parse(vorher); return { fehler: 'Die Artikel ließen sich nicht ordnen – bitte das Fenster neu öffnen.' }; }
     undoStack.push(vorher);
     if (undoStack.length > 50) undoStack.shift();
