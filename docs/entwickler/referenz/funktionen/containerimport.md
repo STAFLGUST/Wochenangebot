@@ -2,7 +2,7 @@
 
 <!-- ERZEUGT von `python3 werkzeuge/doku.py erzeugen` – nicht von Hand ändern. Quelle: Funktionen und Kommentare im Code. Die CI prüft, dass diese Datei zum Code passt. -->
 
-20 Dateien, 201 Funktionen – in der Reihenfolge der Datei, **fett** die Abschnitte. Text = erste Aussage des Kommentars direkt über der Funktion (Python: Docstring). Übersicht aller Module: [README.md](README.md).
+20 Dateien, 206 Funktionen – in der Reihenfolge der Datei, **fett** die Abschnitte. Text = erste Aussage des Kommentars direkt über der Funktion (Python: Docstring). Übersicht aller Module: [README.md](README.md).
 
 ## `app/api/aktionen/containerimport.php`
 
@@ -113,12 +113,13 @@ _Container-Import · Geometrie der Produktionsorte (EUDR): reine Rechenfunktione
 _STAFL-Plattform · Modul Container-Import – Tracking, zweite Stufe: bestätigte Ankunft in Hamburg aus der öffentlichen Liste „Expected vessels“ von Hafen Hamburg (Quelle dort_
 
 - `ci_schiff_schluessel(name)` – Schiffsname für den Vergleich: nur Buchstaben und Ziffern, groß – „MSC San-Francisco“ = „msc san francisco“
-- `ci_hafen_lesen(html)` – Einträge aus dem HTML der Liste: je Schiff eine Überschrift „November 19, 2026, 3:00 pm \| Liegeplatz, Terminal“ und darunter der Name.
-- `ci_hafen_abrufen()` – Die Liste abrufen: [Einträge, Fehlertext].
+- `ci_hafen_hh_lesen(html)` – Einträge aus dem HTML der Liste: je Schiff eine Überschrift „November 19, 2026, 3:00 pm \| Liegeplatz, Terminal“ und darunter der Name.
+- `ci_hafen_hh_abrufen()` – Die Liste abrufen: [Einträge, Fehlertext].
 - `ci_hafen_meldungen()` – Gespeicherte Meldungen: ['abgerufen' => Zeit des letzten Versuchs\|'', 'gelesen' => Zeit des letzten gelungenen Abrufs\|'', 'fehler' => Text\|'', 'schiffe' => …
-- `ci_hafen_gefragt(sendungen)` – Braucht gerade ein Container die Liste?
+- `ci_hafen_betrifft(s)` – Gehört die Hamburger Liste zu diesem Container?
+- `ci_hafen_noetig(sendungen)` – Braucht gerade ein Container die Liste?
 - `ci_hafen_auffrischen(sendungen)` – Liste auffrischen, wenn sie gebraucht wird und die Frist um ist.
-- `ci_hafen_sicht(sendungen)` – Meldungen für die Oberfläche: nur was zu unseren Containern gehört (Kennung des Containers → Ankunft, Liegeplatz, Terminal), dazu Zeit und Ergebnis des …
+- `ci_hafen_sicht(sendungen)` – Meldungen für die Oberfläche: nur was zu unseren Containern gehört (Kennung des Containers → Schiff, Ankunft, Liegeplatz, Terminal), dazu Zeit und Ergebnis …
 
 ## `app/api/module/containerimport/schlachthoefe.php`
 
@@ -275,7 +276,7 @@ _STAFL-Plattform · Modul Container-Import – Reiter „Tracking“: wo ist der
 
 - `ankunft(s)` – Ankunft in Worten: [Text, Farbe der Marke]
 - `hafenHinweis()`
-- `hafenAuffrischen()` – Einmal je Besuch: Server bitten, die Hafenliste aufzufrischen (im Hintergrund, hält keine Eingabe auf)
+- `hafenAuffrischen()` – Einmal je Besuch: Server bitten, die Hafenliste aufzufrischen.
 - `zeichnen()`
 - `fenster(id)`
 - `speichern()`
@@ -288,6 +289,8 @@ _Gemeinsame Hilfen für die Testgruppen des Moduls Container-Import (containerim
 - `ende()` – Zusammenfassung ausgeben und mit dem Ergebnis der Gruppe enden.
 - `nutzer_anlegen()` – Administrator anmelden und die beiden Nutzer des Moduls anlegen → (Administrator, Ina, Lea) als angemeldete Clients.
 - `login(user)`
+- `kalender(client)` – → tag(n): Datum n Tage ab heute (Datum des Servers) als JJJJ-MM-TT.
+- `container_anlegen(client, partie, **mehr)` – Container mit dieser Partienummer anlegen – muss gelingen.
 - `container(r, partie)` – Container mit dieser Partienummer aus einer Antwort ({} = nicht dabei).
 - `seite(br, user, errs, fremd, vp, schema)` – Seite des Moduls für einen Nutzer öffnen; JavaScript-Fehler landen in errs, Anfragen nach außen in fremd.
 
@@ -333,21 +336,26 @@ _Modul Container-Import, Reiter EUDR (app/module/containerimport/, Oberfläche c
 
 _Container-Import · Tracking: bestätigte Ankunft in Hamburg aus der öffentlichen Liste „Expected vessels“ von Hafen Hamburg (app/api/module/containerimport/hafen.php, Aktion containerimport_tracking_hafen, Anzeige in …_
 
-- `tag(n)`
 - `im_format_der_seite(n)`
+- `ankunft(n, uhr)` – Ankunft, wie der Server sie ablegt: Ortszeit Hamburg mit Zeitzone.
 
 **nachgebaute Seite des Hafens**
 
 - `log_message(*a)`
 - `do_GET()`
 - `anlegen(partie, **tracking)`
-- `frist_abgelaufen()` – Den letzten Abruf drei Stunden zurücklegen, damit der Server wieder abrufen darf.
+- `gespeichert(aendern)` – Das gespeicherte Dokument der Meldungen ändern (aendern bekommt es als dict).
+- `abruf(modus, wer)` – Aktion aufrufen → (Status, Antwort, neue Anfragen beim Hafen).
+- `haengen()` – Ab jetzt antwortet der Nachbau erst, wenn der Test SPIEL['weiter'] setzt; SPIEL['da'] meldet die Ankunft der Anfrage.
+- `stand()`
 
 **Rechte, kein Abruf ohne Bedarf**
 
 **Abruf, Lesen, Zuordnen**
 
-**Fehlschläge**
+**Fehlschläge, Verfall**
+
+**ein hängender Abruf hält nichts auf**
 
 **Oberfläche**
 
@@ -387,7 +395,6 @@ _Container-Import: Schlachthöfe als Stammdaten unter dem Lieferanten (Aktion co
 
 _Container-Import: Reiter „Tracking“ (Aktion containerimport_tracking_save, app/api/module/containerimport/tracking.php, Oberfläche app/module/containerimport/tracking.js) – erste Stufe ohne fremde Dienste._
 
-- `tag(n)` – Datum n Tage ab heute (Datum des Servers) als JJJJ-MM-TT.
 - `anlegen(partie, **mehr)`
 - `tracking(c, **angaben)` – Tracking speichern → (Status, Antwort, der Container danach).
 - `vorbereiten(c, **angaben)` – Tracking für die Oberfläche unten setzen – muss gelingen.

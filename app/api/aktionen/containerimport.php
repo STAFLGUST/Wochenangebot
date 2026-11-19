@@ -205,12 +205,14 @@ switch ($action) {
         }
 
         /* Tracking: Liste „Expected vessels“ von Hafen Hamburg auffrischen, wenn ein Container sie braucht und die Frist um
-           ist (hafen.php). Ändert keinen Container – auch wer nur ansehen darf, stößt das an (POST wegen CSRF). */
+           ist (hafen.php). Ändert keinen Container – auch wer nur ansehen darf, stößt das an (POST wegen CSRF). Läuft im
+           Hintergrund der Seite und liefert deshalb nur die Meldungen, nicht den ganzen Stand. */
         case 'containerimport_tracking_hafen': {
             eudr_leser(true);
             if (session_status() === PHP_SESSION_ACTIVE) session_write_close();   // sonst wartet jede weitere Anfrage der Sitzung auf den Abruf
-            $abgerufen = with_lock('containerimport-hafenmeldungen', fn() => ci_hafen_auffrischen(eudr_sendungen()['liste']));
-            respond(['ok' => true, 'abgerufen' => $abgerufen] + eudr_stand());
+            $sendungen = eudr_sendungen()['liste'];
+            $abgerufen = ci_hafen_auffrischen($sendungen);
+            respond(['ok' => true, 'abgerufen' => $abgerufen, 'hafen' => ci_hafen_sicht($sendungen)]);
         }
 
         /* Schlachthof anlegen oder ändern (Stammdaten unter dem Lieferanten; archivieren statt löschen) */

@@ -1,6 +1,8 @@
 """Gemeinsame Hilfen für die Testgruppen des Moduls Container-Import (containerimport_*): Ergebnis sammeln, die beiden
-Nutzer anlegen (Ina darf bearbeiten, Lea nur ansehen), anmelden, die Seite des Moduls im Browser öffnen.
+Nutzer anlegen (Ina darf bearbeiten, Lea nur ansehen), anmelden, Container anlegen, Tage ab heute, die Seite des Moduls im
+Browser öffnen.
 Vorbild: qs_hilfe.py. Die Seite ruft in Tests nie fremde Server ab – jede Anfrage nach außen wird abgebrochen und gemerkt."""
+import datetime
 import re
 from kunden_hilfe import Client, B
 
@@ -37,6 +39,19 @@ def login(user):
     code, r = c.call('login', {'username': user, 'password': USERS[user][2]})
     assert code == 200, (user, code, r)
     return c
+
+
+def kalender(client):
+    """→ tag(n): Datum n Tage ab heute (Datum des Servers) als JJJJ-MM-TT."""
+    heute = datetime.date.fromisoformat(client.call('containerimport_start')[1]['heute'])
+    return lambda n: (heute + datetime.timedelta(days=n)).isoformat()
+
+
+def container_anlegen(client, partie, **mehr):
+    """Container mit dieser Partienummer anlegen – muss gelingen."""
+    st, r = client.call('containerimport_eudr_sendung_save', {'id': '', 'rev': 0, 'partie': partie, 'lieferant': 'Frigorifico Beispiel', 'land': 'PY', 'ware': 'Rindfleisch, gekühlt', **mehr})
+    assert st == 200, (st, r)
+    return container(r, partie)
 
 
 def container(r, partie):

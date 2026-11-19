@@ -10,22 +10,15 @@ abgerufen), Leser ohne Speichern, Handy 390 px. Alle Namen und Nummern sind erfu
 import datetime
 import os
 from playwright.sync_api import sync_playwright
-from containerimport_hilfe import check, ende, nutzer_anlegen, container, seite as seite_oeffnen
+from containerimport_hilfe import check, ende, nutzer_anlegen, container, container_anlegen, kalender, seite as seite_oeffnen
 from umgebung import SH, shot, storage_raw, storage_write, _json
 
 A, I, L = nutzer_anlegen()
-HEUTE = datetime.date.fromisoformat(I.call('containerimport_start')[1]['heute'])
-
-
-def tag(n):
-    """Datum n Tage ab heute (Datum des Servers) als JJJJ-MM-TT."""
-    return (HEUTE + datetime.timedelta(days=n)).isoformat()
+tag = kalender(I)
 
 
 def anlegen(partie, **mehr):
-    st, r = I.call('containerimport_eudr_sendung_save', {'id': '', 'rev': 0, 'partie': partie, 'lieferant': 'Frigorifico Beispiel', 'land': 'PY', 'ware': 'Rindfleisch, gekühlt', **mehr})
-    assert st == 200, (st, r)
-    return container(r, partie)
+    return container_anlegen(I, partie, **mehr)
 
 
 def tracking(c, **angaben):

@@ -925,5 +925,6 @@ name = "containerimport-hafenmeldungen"
 eigentuemer = "containerimport"
 bereich = "intern"
 schutz = "intern"
-beschreibung = "Container-Import · Tracking: zuletzt abgerufene öffentliche Liste „Expected vessels“ von Hafen Hamburg (Schiff, Ankunft, Liegeplatz, Terminal) mit Abrufzeit und Fehlertext. Zwischenspeicher – lässt sich jederzeit neu abrufen; enthält nichts Eigenes."
+beschreibung = "Container-Import · Tracking: zuletzt abgerufene öffentliche Liste „Expected vessels“ von Hafen Hamburg (Schiff, Ankunft, Liegeplatz, Terminal) mit Abrufzeit und Fehlertext. Zwischenspeicher – lässt sich jederzeit neu abrufen und darf neu geschnitten werden (z. B. je Quelle); enthält nichts Eigenes."
+dynamisch = true   # Name als Konstante CI_HAFEN_DOKUMENT (module/containerimport/hafen.php)
 

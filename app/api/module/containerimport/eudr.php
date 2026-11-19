@@ -721,7 +721,8 @@ function eudr_stand(): array
         'betriebe' => $betriebe,
         'sendungen' => array_map(fn($s) => eudr_sendung_sicht($s, $betriebe, $hofNamen), $sendungen),
         'laender' => array_map(fn($l) => ['name' => $l['name'], 'klasse' => $l['klasse']], EUDR_LAENDER),
-        'schlachthoefe' => $hoefe, 'hafen' => ci_hafen_sicht($sendungen),
+        'schlachthoefe' => $hoefe,
+        'hafen' => ci_hafen_sicht($sendungen),
         'portale' => EUDR_PORTALE, 'staende' => EUDR_STAENDE, 'reedereien' => CI_REEDEREIEN, 'heute' => date('Y-m-d'),
     ];
 }

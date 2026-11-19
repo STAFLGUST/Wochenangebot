@@ -75,7 +75,8 @@ SUITES['versand'] = SUITES['kunden_mail']
 SUITES['containerimport'] = (8790, 'data-seed', True)
 SUITES['containerimport_schlachthof'] = SUITES['containerimport']
 SUITES['containerimport_tracking'] = SUITES['containerimport']
-SUITES['containerimport_hafen'] = (8790, 'data-seed', True, {'WA_HAFEN_HH_URL': 'http://127.0.0.1:{AUX}/expected'})   # nachgebaute Seite des Hafens auf dem Hilfsport
+SUITES['containerimport_hafen'] = (8790, 'data-seed', True, {   # nachgebaute Seite des Hafens auf dem Hilfsport; zwei Arbeiter: ein Abruf hängt, ein zweiter Aufruf läuft
+    'WA_HAFEN_HH_URL': 'http://127.0.0.1:{AUX}/expected', 'PHP_CLI_SERVER_WORKERS': '2'})
 SUITES['containerimport_whisp'] = (8790, 'data-seed', True, {   # Abfrage von Whisp (nachgebauter Dienst auf dem Hilfsport, Testschlüssel)
     'WA_WHISP_URL': 'http://127.0.0.1:{AUX}/api', 'WHISP_API_KEY': 'nur-fuer-den-test'})
 SUITES['angebotsliste'] = (8790, 'data-seed', True)
@@ -356,6 +357,7 @@ def run_in(name, slot):
     port, aux, smtp1, smtp2 = ports(slot)
     base = f'http://127.0.0.1:{port}'
     php_env = {k: v for k, v in os.environ.items() if not k.startswith('MAIL_') and k not in ('WA_URL', 'DOMAIN')}
+    php_env['WA_HAFEN_HH_URL'] = 'http://127.0.0.1:9/kein-abruf-in-tests'   # keine Gruppe ruft je den echten Hafen ab (Container-Import, hafen.php); geschlossener Port
     php_env.update(extra[0] if extra else {})
     if 'MAIL_SMTP_PORT' in php_env: php_env['MAIL_SMTP_PORT'] = str(smtp1)
     if 'WA_URL' in php_env: php_env['WA_URL'] = base
