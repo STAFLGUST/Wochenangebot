@@ -3,9 +3,9 @@
    „überfällig“), Suche, Fenster zum Pflegen und ein Verweis zur Sendungsverfolgung der Reederei.
    Die Angaben am Container werden von Hand gepflegt. Dazu stellt der Server die Meldung von Hafen Hamburg (öffentliche
    Liste „Expected vessels“, die nächsten Ankünfte): bestätigte Ankunft, Liegeplatz und Terminal eines Schiffs, das bei einem
-   Container mit Zielhafen Hamburg eingetragen ist (S.d.hafen, hafen.php). Die Seite stößt das Auffrischen einmal je Besuch
-   des Reiters im Hintergrund an (containerimport_tracking_hafen liefert nur die Meldungen); der Server entscheidet, ob er
-   wirklich abruft. Die Meldung ist ein Hinweis – sie ändert weder Stand noch geplante Ankunft. Die Reederei wird
+   Container mit Zielhafen Hamburg eingetragen ist (S.d.hafen, hafen.php). Die Seite bittet beim ersten Zeichnen, nach
+   „Stand neu laden“, nach dem Speichern des Trackings und sonst frühestens alle 15 Minuten im Hintergrund um das Auffrischen
+   (containerimport_tracking_hafen liefert nur die Meldungen); der Server entscheidet, ob er wirklich abruft. Die Meldung ist ein Hinweis – sie ändert weder Stand noch geplante Ankunft. Die Reederei wird
    aus dem Kürzel der Containernummer nur vorgeschlagen (Hinweis am Feld) – gespeichert wird, was gewählt ist. Der Verweis öffnet
    die Seite der Reederei in einem neuen Fenster und legt die Containernummer in die Zwischenablage.
    Hilfen und Zustand kommen über die Brücke window.STAFL_CI (containerimport.js lädt zuerst); die Datei trägt ihren Reiter
@@ -15,10 +15,11 @@
 (() => {
   'use strict';
   const C = window.STAFL_CI, F = window.STAFL_FORMAT;
-  const { S, $, esc, SU, feld, kopf, werte, marke, tag, api, uebernehmen, toast, oeffnen, sendung, suchfeld, HINWEIS_NUMMER } = C;
+  const { S, $, esc, SU, feld, kopf, werte, marke, tag, api, uebernehmen, toast, oeffnen, sendung, suchfeld, fokusBehalten, HINWEIS_NUMMER } = C;
   S.suche.tracking = '';
   let angekommene = false;   // auch angekommene Container zeigen
-  let hafenAngestossen = false;  // Auffrischen der Hafenliste in diesem Besuch schon angestoßen
+  let hafenGefragtUm = 0;    // wann die Seite den Server zuletzt um das Auffrischen der Hafenliste gebeten hat (0 = jetzt fällig)
+  const HAFEN_PAUSE = 15 * 60 * 1000;   // frühestens so lange danach wieder – der Server begrenzt die Abrufe ohnehin
   const HAEFEN = ['Hamburg', 'Rotterdam', 'Bremerhaven', 'Antwerpen', 'Wilhelmshaven'];
   const nummer = (text) => text.replace(/[\s./-]+/g, '').toUpperCase();   // Containernummer ohne Gliederung, wie eudr_containernummer auf dem Server
   /* Reederei, die das Kürzel der Containernummer nahelegt (nur ein Vorschlag: gemietete Container tragen fremde Kürzel) */
@@ -46,21 +47,16 @@
     if (h.gelesen) return `Ankünfte in Hamburg laut Hafen Hamburg (HVCC), Stand ${F.datumZeit(h.gelesen)}: ${h.anzahl === 1 ? 'das nächste Schiff' : `die nächsten ${h.anzahl} Schiffe`}.`;
     return 'Abfahrt und Ankunft werden von Hand gepflegt. Für Container mit Schiff und Zielhafen Hamburg zeigt die Seite zusätzlich die Meldung von Hafen Hamburg, sobald das Schiff dort unter den nächsten Ankünften steht.';
   }
-  /* Einmal je Besuch: Server bitten, die Hafenliste aufzufrischen. Läuft im Hintergrund und fasst deshalb nur die eigenen
+  /* Server bitten, die Hafenliste aufzufrischen (wann: siehe Kopf). Läuft im Hintergrund und fasst deshalb nur die eigenen
      Meldungen an – nie den übrigen Stand (eine inzwischen gespeicherte Änderung bliebe sonst auf der Strecke) und nur den
      eigenen Reiter. Fehler bleiben still: Die Liste ist ein Zusatz. */
   async function hafenAuffrischen() {
-    if (hafenAngestossen) return;
-    hafenAngestossen = true;
+    if (Date.now() - hafenGefragtUm < HAFEN_PAUSE) return;
+    hafenGefragtUm = Date.now();
     const r = await api('containerimport_tracking_hafen', {}, '', false);
-    if (!r.data.hafen || r.data.hafen.abgerufen === S.d.hafen.abgerufen) return;   // nichts Neues: nichts anfassen
+    if (!r.data.hafen || JSON.stringify(r.data.hafen) === JSON.stringify(S.d.hafen)) return;   // nichts Neues: nichts anfassen
     S.d.hafen = r.data.hafen;
-    if (S.reiter !== 'tracking') return;
-    /* neu zeichnen, ohne die Tastatur zu stören: wer gerade sucht, tippt weiter; wer auf einer Zeile steht, bleibt dort */
-    const a = document.activeElement, zeile = a && a.dataset.tracking, suche = a && a.id === 'ci-t-suche' ? a.selectionStart : null;
-    zeichnen();
-    if (suche !== null) { $('#ci-t-suche').focus(); $('#ci-t-suche').setSelectionRange(suche, suche); }
-    if (zeile) document.querySelectorAll('tr[data-tracking]').forEach((tr) => { if (tr.dataset.tracking === zeile) tr.focus(); });
+    if (S.reiter === 'tracking') fokusBehalten(zeichnen);
   }
 
   function zeichnen() {
@@ -72,7 +68,7 @@
     const zeiten = unterwegs.map((s) => s.eta).filter(Boolean).sort(), ueberfaellig = zeiten.filter((t) => t < S.d.heute).length, naechste = zeiten[ueberfaellig];
     const zeile = (s) => {
       const [text, farbe] = ankunft(s), r = S.d.reedereien[s.reederei], m = S.d.hafen.meldungen[s.id];
-      return `<tr data-tracking="${esc(s.id)}" tabindex="0">
+      return `<tr id="ci-tz-${esc(s.id)}" data-tracking="${esc(s.id)}" tabindex="0">
         <td><span class="ci-name">${esc(s.name)}</span><span class="ci-unter">${s.container ? `<span class="ci-zahlen">${esc(s.container)}</span>` : 'Containernummer fehlt'}</span></td>
         <td data-t="Schiff"><span>${esc(s.schiff || '—')}</span><span class="ci-unter">${esc(r ? r.name : '')}</span></td>
         <td data-t="Route"><span>${esc(s.abgangshafen || '—')} → ${esc(s.zielhafen || '—')}</span><span class="ci-unter">${esc([s.lieferant, s.ware].filter(Boolean).join(' · '))}</span></td>
@@ -120,6 +116,7 @@
   async function speichern() {
     const form = $('#tracking-inhalt'), w = werte(form), alt = sendung(form.dataset.id);
     const r = await api('containerimport_tracking_save', { id: alt.id, rev: alt.rev, ...w });   // die Felder des Fensters heißen wie die Angaben
+    hafenGefragtUm = 0;   // ein neues Schiff oder der Zielhafen Hamburg soll gleich seine Meldung bekommen
     if (!uebernehmen(r, 'Das Tracking konnte nicht gespeichert werden')) return;
     toast('Tracking gespeichert.');
     fenster(r.data.id);
@@ -129,7 +126,7 @@
   $('#tracking-inhalt').addEventListener('submit', (e) => { e.preventDefault(); speichern(); });
   document.addEventListener('click', (e) => {
     const zeile = e.target.closest('tr[data-tracking]'), link = e.target.closest('#tracking-verweis');
-    if (e.target.closest('#ci-neu')) hafenAngestossen = false;   // „Stand neu laden“ fragt auch die Hafenliste wieder an
+    if (e.target.closest('#ci-neu')) hafenGefragtUm = 0;   // „Stand neu laden“ fragt auch die Hafenliste wieder an
     if (zeile) fenster(zeile.dataset.tracking);
     if (link && navigator.clipboard) navigator.clipboard.writeText(link.dataset.nummer).then(() => toast('Containernummer kopiert.'), () => {});
   });

@@ -190,7 +190,9 @@ Zustimmung des Inhabers 19.11.2026. Kein Schritt auf dem Server, keine Einstellu
 - **Grenzen:** Gelesen werden die nächsten 24 Ankünfte (erste Seite der Liste) – ein Schiff erscheint also erst kurz vor der
   Ankunft, je nach Verkehr etwa einen Tag vorher. Zugeordnet wird über den Schiffsnamen – er muss stimmen – und nur bei
   Zielhafen Hamburg: Ein Container nach Rotterdam bekommt keine Hamburger Ankunft gezeigt, auch wenn sein Schiff Hamburg
-  anläuft. Eine Meldung verschwindet zwölf Stunden nach der gemeldeten Ankunft. Sie ist ein Hinweis: Stand und geplante
+  anläuft. Eine Meldung verschwindet zwölf Stunden nach der gemeldeten Ankunft. Aufgefrischt wird beim Öffnen der Seite, mit
+  „Stand neu laden“, nach dem Speichern des Trackings und sonst frühestens alle 15 Minuten, sobald jemand in der Seite arbeitet –
+  die Uhrzeit des Stands steht in der Hinweiszeile. Sie ist ein Hinweis: Stand und geplante
   Ankunft ändert weiter nur ein Mensch.
 - **Was hinausgeht:** nur der Abruf der Seite vom Server. Keine Containernummer, kein Schiffsname, keine Angaben zu
   Mitarbeitern. Der Abruf nennt als Absender „STAFL-Plattform (Standard-Fleisch, Container-Import)“, damit der Hafen sieht,

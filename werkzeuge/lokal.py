@@ -58,6 +58,7 @@ def main(argv=None) -> int:
     print(f"Kundenseite {adresse}/ · Eingabebereich {adresse}/admin/ (admin / {a.passwort}) · Dashboard {adresse}/dashboard/")
     print("Ohne zentrale Anmeldung (Keycloak): Mitarbeiter melden sich hier mit Passwort an. Beenden mit Strg+C.")
     env = {k: v for k, v in os.environ.items() if not k.startswith("MAIL_")}
+    env.setdefault("WA_HAFEN_HH_URL", "http://127.0.0.1:9/kein-abruf-lokal")   # Container-Import: die lokale Seite ruft Hafen Hamburg nicht ab (zum Ausprobieren die echte Adresse setzen)
     try:
         return subprocess.call(["php", "-d", f"session.save_path={sitzungen}", "-S", f"127.0.0.1:{a.port}"], cwd=app, env=env)
     except KeyboardInterrupt:

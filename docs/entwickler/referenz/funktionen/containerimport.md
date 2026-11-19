@@ -2,7 +2,7 @@
 
 <!-- ERZEUGT von `python3 werkzeuge/doku.py erzeugen` – nicht von Hand ändern. Quelle: Funktionen und Kommentare im Code. Die CI prüft, dass diese Datei zum Code passt. -->
 
-20 Dateien, 206 Funktionen – in der Reihenfolge der Datei, **fett** die Abschnitte. Text = erste Aussage des Kommentars direkt über der Funktion (Python: Docstring). Übersicht aller Module: [README.md](README.md).
+20 Dateien, 211 Funktionen – in der Reihenfolge der Datei, **fett** die Abschnitte. Text = erste Aussage des Kommentars direkt über der Funktion (Python: Docstring). Übersicht aller Module: [README.md](README.md).
 
 ## `app/api/aktionen/containerimport.php`
 
@@ -115,9 +115,11 @@ _STAFL-Plattform · Modul Container-Import – Tracking, zweite Stufe: bestätig
 - `ci_schiff_schluessel(name)` – Schiffsname für den Vergleich: nur Buchstaben und Ziffern, groß – „MSC San-Francisco“ = „msc san francisco“
 - `ci_hafen_hh_lesen(html)` – Einträge aus dem HTML der Liste: je Schiff eine Überschrift „November 19, 2026, 3:00 pm \| Liegeplatz, Terminal“ und darunter der Name.
 - `ci_hafen_hh_abrufen()` – Die Liste abrufen: [Einträge, Fehlertext].
-- `ci_hafen_meldungen()` – Gespeicherte Meldungen: ['abgerufen' => Zeit des letzten Versuchs\|'', 'gelesen' => Zeit des letzten gelungenen Abrufs\|'', 'fehler' => Text\|'', 'schiffe' => …
-- `ci_hafen_betrifft(s)` – Gehört die Hamburger Liste zu diesem Container?
+- `ci_hafen_meldungen()` – Gespeicherte Meldungen: ['abgerufen' => Zeit des letzten beendeten Abrufs\|'', 'gelesen' => Zeit des letzten gelungenen\|'', 'fehler' => Text\|'', 'versuch' => …
+- `ci_hafen_ablegen(neu)` – Felder des Dokuments ändern, der Rest bleibt stehen (unter Sperre gelesen und geschrieben)
+- `ci_hafen_hh_betrifft(s)` – Gehört die Hamburger Liste zu diesem Container?
 - `ci_hafen_noetig(sendungen)` – Braucht gerade ein Container die Liste?
+- `ci_hafen_alter(t)` – Sekunden seit einem Zeitstempel aus now(); '' oder Unlesbares zählt als sehr lange her
 - `ci_hafen_auffrischen(sendungen)` – Liste auffrischen, wenn sie gebraucht wird und die Frist um ist.
 - `ci_hafen_sicht(sendungen)` – Meldungen für die Oberfläche: nur was zu unseren Containern gehört (Kennung des Containers → Schiff, Ankunft, Liegeplatz, Terminal), dazu Zeit und Ergebnis …
 
@@ -160,6 +162,7 @@ _STAFL-Plattform · Modul Container-Import – Container (ein Einkauf bei einem 
 - `toast(text, fehlerhaft)`
 - `fehler(text)`
 - `zeigeAnmeldung()`
+- `fokusBehalten(zeichne)` – Neu zeichnen, ohne die Tastatur zu stören: Fokus und Schreibmarke gehen an das Element mit derselben id zurück (Suchfeld beim Tippen, Listenzeile bei einer …
 - `uebernehmen(r, fallback)` – Antwort einer speichernden Aktion: neuen Stand übernehmen. false = Fehler (Meldung gezeigt)
 
 **Formate und Bezeichnungen**
@@ -276,7 +279,7 @@ _STAFL-Plattform · Modul Container-Import – Reiter „Tracking“: wo ist der
 
 - `ankunft(s)` – Ankunft in Worten: [Text, Farbe der Marke]
 - `hafenHinweis()`
-- `hafenAuffrischen()` – Einmal je Besuch: Server bitten, die Hafenliste aufzufrischen.
+- `hafenAuffrischen()` – Server bitten, die Hafenliste aufzufrischen (wann: siehe Kopf).
 - `zeichnen()`
 - `fenster(id)`
 - `speichern()`
@@ -345,8 +348,10 @@ _Container-Import · Tracking: bestätigte Ankunft in Hamburg aus der öffentlic
 - `do_GET()`
 - `anlegen(partie, **tracking)`
 - `gespeichert(aendern)` – Das gespeicherte Dokument der Meldungen ändern (aendern bekommt es als dict).
+- `faellig(modus)` – Der nächste Aufruf ruft wieder ab (letzter Abruf vor Jahren), der Nachbau antwortet im angegebenen Modus.
 - `abruf(modus, wer)` – Aktion aufrufen → (Status, Antwort, neue Anfragen beim Hafen).
-- `haengen()` – Ab jetzt antwortet der Nachbau erst, wenn der Test SPIEL['weiter'] setzt; SPIEL['da'] meldet die Ankunft der Anfrage.
+- `haengend()` – Solange der Block läuft, antwortet der Nachbau nicht. haengt_dort() wartet, bis eine Anfrage dort angekommen ist; am Ende des Blocks antwortet er wieder.
+- `haengt_dort()`
 - `stand()`
 
 **Rechte, kein Abruf ohne Bedarf**

@@ -409,6 +409,7 @@ def run_in(name, slot):
         wait_port(port)
         env = {**os.environ, 'TZ': 'Europe/Berlin', 'UDATA': data, 'UINTERN': intern, 'WA_WORK': WORK, 'WA_SESSION_DIR': sessions,   # Tests rechnen wie der Server in deutscher Zeit
                **({'WA_DATEN_INTERN': php_env['WA_DATEN_INTERN']} if 'WA_DATEN_INTERN' in php_env else {}),   # Server-Werkzeuge der Tests wie der Server
+               'WA_HAFEN_HH_URL': php_env['WA_HAFEN_HH_URL'],   # auch Zweitserver, die ein Test selbst startet, rufen den echten Hafen nie ab
                'WA_BASE': base, 'WA_AUX_PORT': str(aux), 'WA_SMTP_PORT': str(smtp1), 'WA_SMTP_PORT2': str(smtp2)}
         t0 = time.time()
         p = subprocess.run([sys.executable, os.path.join(REPO, 'tests', 'e2e', f'test_{name}.py')], cwd=os.path.join(REPO, 'tests', 'e2e'),

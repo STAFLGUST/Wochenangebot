@@ -210,9 +210,8 @@ switch ($action) {
         case 'containerimport_tracking_hafen': {
             eudr_leser(true);
             if (session_status() === PHP_SESSION_ACTIVE) session_write_close();   // sonst wartet jede weitere Anfrage der Sitzung auf den Abruf
-            $sendungen = eudr_sendungen()['liste'];
-            $abgerufen = ci_hafen_auffrischen($sendungen);
-            respond(['ok' => true, 'abgerufen' => $abgerufen, 'hafen' => ci_hafen_sicht($sendungen)]);
+            $geholt = ci_hafen_auffrischen(eudr_sendungen()['liste']);
+            respond(['ok' => true, 'geholt' => $geholt, 'hafen' => ci_hafen_sicht(eudr_sendungen()['liste'])]);   // Container nach dem Abruf neu lesen: Er kann lange dauern
         }
 
         /* Schlachthof anlegen oder ändern (Stammdaten unter dem Lieferanten; archivieren statt löschen) */

@@ -125,7 +125,10 @@ with sync_playwright() as pw:
     p.fill('#dlg-tracking [name=container]', 'MSKU 907032 3'); p.fill('#dlg-tracking [name=zielhafen]', 'Hamburg'); p.fill('#dlg-tracking [name=eta]', tag(30))
     p.select_option('#dlg-tracking [name=stand]', 'unterwegs'); p.click('#dlg-tracking button[type=submit]')
     p.wait_for_function("document.querySelector('#dlg-tracking').innerText.includes('vermutlich Maersk')")
-    p.fill('#dlg-tracking [name=eta]', tag(30)); p.click('#dlg-tracking button[type=submit]'); p.wait_for_selector('#ci-toast.zeigen:not(.fehler)')
+    p.fill('#dlg-tracking [name=eta]', tag(30))
+    with p.expect_response(lambda r: 'action=containerimport_tracking_save' in r.url):   # die Meldung des vorigen Speicherns steht noch – auf die Antwort warten, nicht auf die Meldung
+        p.click('#dlg-tracking button[type=submit]')
+    p.wait_for_selector('#ci-toast.zeigen:not(.fehler)')
     c2 = container(I.call('containerimport_start')[1], 'P-280002')
     check('gespeichert: Angaben am Container; die Reederei wird nach dem Kürzel der Containernummer nur als Hinweis vorgeschlagen und auch beim erneuten Speichern nicht von selbst gespeichert',
           [c2[k] for k in ('container', 'zielhafen', 'eta', 'stand', 'reederei')] == ['MSKU 907032 3', 'Hamburg', tag(30), 'unterwegs', '']
