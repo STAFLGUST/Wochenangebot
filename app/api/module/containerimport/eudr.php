@@ -20,6 +20,7 @@ require __DIR__ . '/schlachthoefe.php';   // Schlachthöfe unter dem Lieferanten
 require __DIR__ . '/tracking.php';        // Reiter Tracking: Schiff, Reederei, Häfen, Abfahrt und Ankunft am Container
 require __DIR__ . '/hafen.php';           // Tracking: Ankunft in Hamburg aus der öffentlichen Liste des Hafens
 require __DIR__ . '/farmer.php';          // Farmer-Nummern am Container und Gesamtprüfung der Farmer
+require __DIR__ . '/dokumente.php';       // Dokumente je Container (Dateiablage, GoBD)
 
 const EUDR_SPERRE = 'containerimport-eudr-betriebe';   // eine Sperre für beide Dokumente (Sendungen verweisen auf Betriebe)
 const EUDR_MAX_BETRIEBE = 2000;
@@ -749,5 +750,6 @@ function eudr_stand(): array
         'schlachthoefe' => $hoefe,
         'hafen' => ci_hafen_sicht($sendungen),
         'portale' => EUDR_PORTALE, 'staende' => EUDR_STAENDE, 'reedereien' => CI_REEDEREIEN, 'heute' => date('Y-m-d'),
+        'dokumente' => ci_dokumente_zahlen(ci_dokumente()), 'dokRegeln' => ci_dok_regeln(),
     ];
 }

@@ -935,6 +935,23 @@ Die einzige Beschreibung der Regeln; Code-Kommentare verweisen hierher.
   ersetzen (die Archivdateien hängen dann an Kennungen, die es nicht mehr gibt); und sie erlaubt, ein Ordner-Dokument, dessen Dateien nur in
   `qs-ablage` liegen, zu einem gelenkten Dokument zu machen – danach zeigt der Ordnerbaum diese Dateien nicht mehr.
 
+### Container-Import: Dokumente je Container (`module/containerimport/dokumente.php`, seit 20.11.2026)
+
+- **`containerimport-dokumente`**: `{"rev", "updatedAt", "liste": [{"id", "sendung", "arten": ["<Art>", …], "name", "endung", "mime",
+  "groesse", "sha256", "hochgeladen": {"t", "von", "vonId"}, "schnappschuss": {"partie", "akte", "container", "lieferant", "nummer"},
+  "verlauf": [{"t", "von", "vonId", "was": "arten", "alt": […], "neu": […]}], "entfernt"?: {"t", "von", "vonId", "grund"}}],
+  "checkliste": [{"sendung", "art", "noetig": true|false, "t", "von", "vonId"}]}`. Die Dateien liegen in der Dateiablage (Bereich
+  `containerimport`); `id`, `groesse` und `sha256` sind der Verweis, den die Sicherung erkennt (`deploy/dateien_sichern.py`).
+- **Arten:** Schlüssel aus `CI_DOKUMENTARTEN` (nie umbenennen, nur ergänzen), mindestens einer je Datei, gespeichert in der
+  Reihenfolge dieser Liste; die erste bestimmt den Ordner im ZIP. Unbekannte Schlüssel einer späteren Version zeigt die Oberfläche
+  mit ihrem Schlüssel. Der Vorschlag aus dem Dateinamen (`CI_DOK_VORSCHLAEGE`, JavaScript-Muster) wird nie gespeichert.
+- **Nur anhängen:** Dateien werden nie gelöscht oder überschrieben; Arten ändern schreibt `verlauf`, Entfernen `entfernt` (Grund
+  Pflicht), die Checkliste hängt Vermerke an – je Container und Art gilt der letzte. Felder einer späteren Version bleiben beim
+  Schreiben erhalten (GR-006). Grenzen: 300 Dateien je Container, 20 000 im Dokument (jeder Schreibvorgang schreibt das ganze
+  Dokument; darüber teilen, etwa je Jahr).
+- **Rückfall:** Eine ältere Fassung kennt das Dokument nicht; Dateien und Metadaten bleiben unberührt. Das Dokument der Container
+  (`containerimport-eudr-sendungen`) ändert sich durch Dokumente nicht.
+
 ## 5.4 Datenverantwortung (GR-101)
 
 Jedes Dokument hat **genau einen Eigentümer** (ein Modul). Eingetragen in `regeln/datenverantwortung.toml`:

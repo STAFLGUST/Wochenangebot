@@ -179,6 +179,8 @@
   /* Reiter des Moduls: Zeichenfunktion je Reiter; weitere Dateien tragen ihre ein (Brücke STAFL_CI) */
   const REITER = { eudr: eudrZeichnen };
   const SICHTEN = { sendungen: sendungenSicht, betriebe: betriebeSicht, karte: karteSicht };   // weitere Dateien tragen ihre Ansicht ein (Brücke STAFL_CI)
+  /* Haken für weitere Dateien (dokumente.js): Zusatz in der Zeile eines Containers, Bereich im Fenster „Container“ */
+  const HAKEN = { zeile: () => '', fenster: () => {} };
 
   /* Suchfeld einer Liste; schluessel = Platz des Suchtexts in S.suche (Vorgabe: die Ansicht). Tippen zeichnet den Reiter neu
      und behält den Fokus (ein Hörer für alle Suchfelder, siehe unten). */
@@ -188,7 +190,7 @@
     const liste = S.d.sendungen.filter((s) => (s.aktiv || S.archiv) && SU.findet(S.suche.sendungen, s.partie, s.akte, s.container, s.nummer, s.lieferant, s.lieferantNr, s.schlachthofName, s.ware, landName(s.land), s.dds.referenz, s.offeneNummern))
       .sort((a, b) => b.erstellt.t.localeCompare(a.erstellt.t));
     const zeile = (s) => `<tr data-sendung="${esc(s.id)}" tabindex="0" class="${s.aktiv ? '' : 'ci-archiv'}">
-      <td><span class="ci-name">${esc(titel(s))}</span><span class="ci-unter">${s.container ? `Container <span class="ci-zahlen">${esc(s.container)}</span>` : '—'}</span></td>
+      <td><span class="ci-name">${esc(titel(s))}</span><span class="ci-unter">${s.container ? `Container <span class="ci-zahlen">${esc(s.container)}</span>` : '—'}</span>${HAKEN.zeile(s)}</td>
       <td data-t="Lieferant"><span>${esc(s.lieferant)}</span><span class="ci-unter">${esc(landName(s.land))}${s.lieferantNr ? ` · Nr. ${esc(s.lieferantNr)}` : ' · nicht mit den Stammdaten verknüpft'}${s.schlachthofName ? ` · ${esc(s.schlachthofName)}` : ''}</span></td>
       <td data-t="Ware"><span>${esc(s.ware || '—')}</span><span class="ci-unter">${s.mengeKg === null ? '' : F.kg(s.mengeKg)}${s.lose ? ` · Lose ${esc(s.lose)}` : ''}</span></td>
       <td data-t="Stand">${marke(S.d.staende[s.stand], s.stand === 'angekommen' ? 'ok' : '')}</td>
@@ -480,6 +482,7 @@
           ${feld('Auftragsnummer des Lieferanten', 'nummer', s.nummer, { aus, platz: 'z. B. FB26-001' })}
           ${feld('Schlachtlose', 'lose', s.lose, { aus, zwei: true, platz: 'z. B. 2101, 2102, 2103' })}
         </div>
+        ${neu ? '' : '<section class="ci-dok" id="sendung-dokumente" aria-labelledby="dok-titel"></section>'}
 
         <h3 class="ci-h">Farmer dieses Containers</h3>${betriebe}
         ${!neu && gezeigt.length ? '<div class="ci-k-wrap flach" id="sendung-karte"></div>' : ''}
@@ -505,6 +508,7 @@
         ${darf && !neu ? (zu ? '<button class="ci-knopf" type="button" id="sendung-oeffnen">Bewertung wieder öffnen</button>' : `<button class="ci-knopf" type="button" id="sendung-archiv">${s.aktiv ? 'Archivieren' : 'Wiederherstellen'}</button><button class="ci-knopf" type="button" id="sendung-abschliessen">Bewertung abschließen</button>`) : ''}
         <button class="ci-knopf" type="button" data-zu>Schließen</button>${darf ? '<button class="ci-knopf primaer" type="submit">Speichern</button>' : ''}</div>`;
     oeffnen($('#dlg-sendung'));
+    if (!neu) HAKEN.fenster(s);
     const karte = $('#sendung-karte');
     if (karte) window.EUDR_KARTE.zeichnen(karte, { betriebe: gezeigt });
   }
@@ -804,10 +808,10 @@
   $('#ci-theme').addEventListener('click', () => { document.documentElement.setAttribute('data-theme', dunkel() ? 'light' : 'dark'); themaKnopf(); });
   document.addEventListener('stafl-theme', themaKnopf);
 
-  /* Brücke für weitere Dateien des Moduls (schlachthoefe.js): dieselben Hilfen und derselbe Zustand, keine zweite Kopie.
+  /* Brücke für weitere Dateien des Moduls (schlachthoefe.js, tracking.js, dokumente.js): dieselben Hilfen und derselbe Zustand, keine zweite Kopie.
      Eine Datei trägt ihre Ansicht in sichten oder ihren Reiter in reiter ein und hängt ihre eigenen Ereignisse an (docs/entwickler/06-oberflaechen.md). */
   window.STAFL_CI = { S, $, esc, icon, SU, feld, kopf, werte, marke, tag, api, uebernehmen, toast, oeffnen, sendung, titel, landName, laenderWahl, lieferantFeld, lieferantAus, suchfeld, fokusBehalten, archivSchalter,
-    HINWEIS_NUMMER, sichten: SICHTEN, reiter: REITER };
+    base64, HINWEIS_NUMMER, sichten: SICHTEN, reiter: REITER, haken: HAKEN };
 
   /* ---------- Start (nach dem Laden aller Dateien des Moduls) ---------- */
   document.addEventListener('DOMContentLoaded', async () => {

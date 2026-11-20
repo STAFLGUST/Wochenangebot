@@ -921,6 +921,14 @@ bereich = "intern"
 schutz = "vertraulich"
 beschreibung = "Container-Import: Schlachthöfe als Stammdaten unter dem Lieferanten (Name, Lieferant mit Nummer der Stammdaten und Name, Land, Ort, Zulassungsnummer, Notiz); Container verweisen darauf. Nichts wird gelöscht (archivieren)."
 [[dokument]]
+name = "containerimport-dokumente"
+eigentuemer = "containerimport"
+bereich = "intern"
+schutz = "vertraulich"
+dynamisch = true   # Name als Konstante CI_DOK_DOKUMENT (module/containerimport/dokumente.php)
+beschreibung = "Container-Import: Dokumente je Container (Metadaten): je Datei Kennung in der Dateiablage (Bereich containerimport), Container, Dokumentarten (eine oder mehrere), Originalname, Dateiart, MIME-Typ, Größe, SHA-256, hochgeladen (wann, wer mit Kennung), Schnappschuss von Partie, Akte, Containernummer und Lieferant beim Hochladen, Verlauf der Änderungen der Arten, entfernt (wann, wer, Grund); dazu die Vermerke der Checkliste je Container (nicht nötig / wieder nötig, wer, wann). Die Dateien selbst liegen in der Dateiablage (lib/dateiablage.php)"
+historie = "GoBD: nie gelöscht oder überschrieben; Arten ändern, Entfernen und Checkliste nur als Vermerk mit wer/wann (Entfernen mit Grund); Schnappschuss des Containers beim Hochladen (GR-106)"
+[[dokument]]
 name = "containerimport-hafenmeldungen"
 eigentuemer = "containerimport"
 bereich = "intern"

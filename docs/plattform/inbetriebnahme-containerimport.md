@@ -234,3 +234,52 @@ Rechte.
   Container mit „Unterlagen fehlen“ nicht abschließen: die Vorversion kennt den Vermerk nicht und hielte die Bewertung
   ohne ihn fest. In der Vorversion angelegte Farmer werden einem Container mit vermerkter Nummer erst zugeordnet, wenn
   dieser Container nach der Rückkehr das nächste Mal gespeichert wird.
+
+## 13. Dokumente je Container (ab dem Release mit den Container-Dokumenten)
+
+Auftrag des Inhabers 20.11.2026: alle Unterlagen eines Containers am Container ablegen – mehrere Dateien, meist PDF, auch
+Word, Excel und E-Mails –, mit Mini-Vorschau, GoBD-konform und richtig zugeordnet. Kein Schritt auf dem Server, keine
+Migration, keine neuen Rechte. Die Dateien liegen in der Dateiablage der Plattform (Bereich `containerimport`) und kommen
+mit jeder Sicherung mit.
+
+- **Wo:** Fenster „Container“ → Bereich „Dokumente“ (unter den Stammdaten). Dateien hierher ziehen oder auswählen, mehrere auf
+  einmal. Erlaubt sind PDF, Word (.doc, .docx), Excel (.xls, .xlsx, .xlsm, .xlsb), OpenDocument (.odt, .ods) und E-Mails
+  (.eml, .msg); der Server prüft, dass der Inhalt zur Endung passt. In der Liste der Container steht je Container „7 Dokumente
+  · 1 fehlt“.
+- **Dokumentarten:** Kaufbestätigung, Proforma-Rechnung, Handelsrechnung, Packliste, Lot-Nummernliste / Rückverfolgbarkeit,
+  Gesundheitszertifikat, Echtheitszertifikat (Hilton, Angus), Quotenzertifikat (Mercosur-Kontingent), Ursprungszeugnis, B/L
+  (Konnossement), Salmonellen-Zertifikat, Halal-Zertifikat, EUDR-Dokument (Sorgfaltserklärung), Versicherungsanmeldung,
+  Spedition / Buchungsbestätigung, Shipment details, Kalkulation, E-Mail / Schriftverkehr, Sonstiges. Eine Datei kann mehrere
+  Arten tragen (Sammel-PDF des Lieferanten mit Rechnung, Packliste, Zertifikaten und B/L). Die Art schlägt der Dateiname vor
+  (z. B. „proforma“, „invoice“, „bill of lading“, „DOCS_…“, „Kalkulation“, .eml) – nur ein Vorschlag, vor dem Hochladen änderbar.
+  Ohne Vorschlag muss eine Art gewählt werden.
+- **Checkliste:** Kaufbestätigung, Handelsrechnung, Packliste, Lot-Nummernliste, Gesundheitszertifikat, Echtheitszertifikat,
+  Ursprungszeugnis, B/L, Versicherungsanmeldung, EUDR-Dokument und Kalkulation stehen je Container als „fehlt“ oder
+  „vorhanden“. Was bei einem Container nicht gebraucht wird, lässt sich als „nicht nötig“ vermerken (und wieder aufheben).
+- **Rechte:** Ansehen und Herunterladen (auch der Kalkulation) und das ZIP mit „EUDR ansehen“; Hochladen, Arten ändern,
+  Entfernen und die Checkliste mit „EUDR bearbeiten“ (Entscheidung des Inhabers 20.11.2026: keine Sonderregel für die Kalkulation).
+- **Nachreichen:** auch an abgeschlossenen und archivierten Containern – Unterlagen kommen oft später.
+- **ZIP:** „ZIP herunterladen“ liefert alle Dateien des Containers im Originalformat, je Dokumentart ein Ordner (eine
+  Sammel-PDF liegt im Ordner ihrer ersten Art), entfernte Dateien unter `_entfernt/`, dazu `index.csv` mit allen Angaben.
+
+### Verfahrensdokumentation (GoBD) – Dokumente je Container
+
+Dieser Abschnitt beschreibt das technische Verfahren. Der Inhaber ergänzt die GoBD-Verfahrensdokumentation im QM-System
+um diesen Abschnitt (Zuständigkeiten, Aufbewahrungsfristen, interne Kontrollen).
+
+| Anforderung | Umsetzung |
+|---|---|
+| Unveränderbarkeit | Eine abgelegte Datei wird nie überschrieben oder geändert; jede Datei bekommt eine eigene Kennung (`ci_dokument_hochladen`, `lib/dateiablage.php`). Dieselbe Datei (gleiche Prüfsumme) kann am selben Container nicht ein zweites Mal liegen. |
+| Nachweis der Unverändertheit | SHA-256 der Datei wird beim Hochladen auf dem Server berechnet und mit der Prüfsumme des Browsers verglichen; sie steht in den Metadaten und in `index.csv`. |
+| Wer, wann | Name und Nutzerkennung, Zeitpunkt in UTC – beim Hochladen, Ändern der Arten, Entfernen und bei jedem Vermerk der Checkliste. |
+| Zuordnung | Je Datei die Kennung des Containers und ein Schnappschuss von Partie, Akte, Containernummer, Lieferant und Auftragsnummer zum Zeitpunkt des Hochladens. Spätere Änderungen am Container ändern den Schnappschuss nicht (GR-106). |
+| Änderungen | Arten ändern ist ein Vermerk im Verlauf der Datei (alt, neu, wer, wann); die Datei selbst bleibt. |
+| Löschen | Gibt es nicht. „Entfernen“ ist ein Vermerk mit Pflicht-Grund; die Datei bleibt in der Ablage, abrufbar über „Entfernte anzeigen“ und im ZIP unter `_entfernt/`. Nichts wird automatisch gelöscht. |
+| Protokoll | Hochladen, Arten ändern, Entfernen, Checkliste und ZIP-Export stehen zusätzlich im Aktivitätsprotokoll (ohne Dateinamen und Gründe – die stehen in den Metadaten, wie im QM-System). |
+| Originalformat, Lesbarkeit | Dateien bleiben im Originalformat (keine Umwandlung). Herunterladen einzeln oder als ZIP mit `index.csv` (Datenträgerüberlassung bei einer Betriebsprüfung). |
+| Zugriff | Nur angemeldete Mitarbeiter mit Modulzugang und „EUDR ansehen“; Auslieferung nur über die Aktionen mit Rechteprüfung, nie als Datei des Webservers. |
+| Sicherung | Die Dateien liegen unter `dateien/containerimport/` und kommen mit jeder Sicherung in einen eigenen Stand (`deploy/dateien_sichern.py`; die Metadaten verweisen mit Kennung, Größe und Prüfsumme darauf). |
+
+- **Rückfall:** `sh /opt/wochenangebot/deploy/release-zurueck.sh`. Die Vorversion zeigt den Bereich „Dokumente“ nicht, ändert
+  aber nichts daran: Metadaten und Dateien bleiben unberührt und sind nach der Rückkehr wieder da. Das Dokument der Container
+  wird von den Dokumenten nicht verändert.

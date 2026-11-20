@@ -296,4 +296,67 @@ switch ($action) {
             $datei = 'EUDR_' . trim((string)preg_replace('/[^A-Za-z0-9_-]+/', '_', $name), '_') . '.geojson';
             respond(['ok' => true, 'datei' => $datei] + eudr_geojson($bs));
         }
+
+        /* Dokumente je Container (module/containerimport/dokumente.php, GoBD): Dateien eines Containers (GET sendung), auch
+           entfernte, und die Vermerke seiner Checkliste. Protokoll ohne Dateinamen und Gründe (wie im QM-System). */
+        case 'containerimport_dokumente': {
+            eudr_leser();
+            header('Cache-Control: no-store');
+            [, $s] = eudr_sendung_holen(eudr_sendungen(), $_GET['sendung'] ?? '');
+            respond(ci_dokumente_antwort(ci_dokumente(), $s['id']));
+        }
+
+        /* Datei in Teilen hochladen (sendung, arten und die Felder von ablage_teil). Überschreibt nie – jede Datei bekommt eine neue Kennung. */
+        case 'containerimport_dokument_hochladen': {
+            $me = eudr_bearbeiter();
+            $r = ci_dokument_hochladen($me, body());
+            if (!$r['fertig']) respond(['ok' => true, 'fertig' => false, 'upload' => $r['upload'], 'empfangen' => $r['empfangen']]);
+            $e = $r['eintrag'];
+            audit('containerimport', 'Dokument (' . ci_dok_artnamen($e['arten']) . ', ' . round($e['groesse'] / 1024) . ' KB) am Container „' . eudr_container_name($r['container']) . '“ abgelegt');
+            respond(['fertig' => true, 'id' => $e['id']] + ci_dokumente_antwort($r['doc'], $e['sendung']));
+        }
+
+        /* Dokumentarten einer Datei ändern – Vermerk im Verlauf, nie stilles Überschreiben */
+        case 'containerimport_dokument_arten': {
+            $me = eudr_bearbeiter();
+            $b = body();
+            [$f, $doc] = with_lock(EUDR_SPERRE, fn() => ci_dokument_arten_aendern($b, $me));
+            $v = end($f['verlauf']);
+            audit('containerimport', 'Dokument am Container „' . eudr_container_name($f['schnappschuss']) . '“: Arten von ' . ci_dok_artnamen($v['alt']) . ' zu ' . ci_dok_artnamen($v['neu']) . ' geändert');
+            respond(ci_dokumente_antwort($doc, $f['sendung']));
+        }
+
+        /* Datei als entfernt vermerken (Grund Pflicht) – sie bleibt in der Ablage und abrufbar */
+        case 'containerimport_dokument_entfernen': {
+            $me = eudr_bearbeiter();
+            $b = body();
+            [$f, $doc] = with_lock(EUDR_SPERRE, fn() => ci_dokument_entfernen($b, $me));
+            audit('containerimport', 'Dokument (' . ci_dok_artnamen($f['arten']) . ') am Container „' . eudr_container_name($f['schnappschuss']) . '“ als entfernt vermerkt');
+            respond(ci_dokumente_antwort($doc, $f['sendung']));
+        }
+
+        /* Punkt der Checkliste als „nicht nötig“ vermerken oder wieder als nötig (sendung, art, noetig) */
+        case 'containerimport_dokument_checkliste': {
+            $me = eudr_bearbeiter();
+            $b = body();
+            [$s, $doc] = with_lock(EUDR_SPERRE, fn() => ci_dokument_checkliste($b, $me));
+            audit('containerimport', 'Checkliste der Dokumente am Container „' . eudr_container_name($s) . '“: ' . ci_dok_artname($b['art']) . ($b['noetig'] ? ' wieder nötig' : ' nicht nötig'));
+            respond(ci_dokumente_antwort($doc, $s['id']));
+        }
+
+        /* Eine Datei herunterladen (GET id), auch eine entfernte; die Vorschau der PDF lädt sie ebenso */
+        case 'containerimport_dokument': {
+            eudr_leser();
+            [, $f] = ci_dok_holen(ci_dokumente(), $_GET['id'] ?? '');
+            ablage_senden(CI_DOK_BEREICH, $f['id'], $f['name'], $f['mime']);
+        }
+
+        /* Alle Dateien eines Containers als ZIP (GET sendung): Ordner je erster Dokumentart, entfernte unter _entfernt, index.csv */
+        case 'containerimport_dokumente_zip': {
+            eudr_leser();
+            [, $s] = eudr_sendung_holen(eudr_sendungen(), $_GET['sendung'] ?? '');
+            $dateien = array_values(array_filter(ci_dokumente()['liste'], fn($f) => $f['sendung'] === $s['id']));
+            audit('containerimport', 'Dokumente des Containers „' . eudr_container_name($s) . '“ als ZIP exportiert (' . count($dateien) . ' Dateien)');
+            ablage_zip_senden(ablage_zip_pfad('Dokumente ' . eudr_container_name($s)) . '.zip', ci_dokumente_zip_eintraege($s, $dateien));
+        }
 }

@@ -981,6 +981,16 @@ Caddy setzt auf allen Hosts `script-src 'self'` (ohne `'unsafe-inline'`), `conne
   bekommt eigene Funktionen `ci_hafen_<kürzel>_…` (Adresse, Lesen, Abrufen, Betrifft); Frist und Sperrablauf sind schon
   unabhängig von Hamburg, Dokument und Sicht tragen heute genau eine Quelle. Neu zeichnen nach einer Antwort im Hintergrund
   immer über `fokusBehalten` aus der Brücke `window.STAFL_CI` (Fokus geht an das Element mit derselben `id` zurück).
+  **Dokumente je Container** (Auftrag des Inhabers 20.11.2026): `dokumente.js` und `dokumente.css`, Server
+  `app/api/module/containerimport/dokumente.php` (Regeln und GoBD: Kapitel Daten, Inbetriebnahme Abschnitt 13). Eingehängt über
+  zwei Haken der Brücke: `STAFL_CI.haken.zeile(s)` (Zähler in der Liste der Container) und `STAFL_CI.haken.fenster(s)` (füllt
+  `#sendung-dokumente` im Fenster „Container“, lädt die Dateien mit `containerimport_dokumente`). Der Bereich liegt im Formular
+  des Containers: keine Felder mit `name`, nur Knöpfe vom Typ `button`, die Eingabetaste im Feld „Grund“ wird abgefangen.
+  Hochladen in Teilen zu 2 MB nacheinander mit Fortschritt; die Prüfsumme rechnet der Browser vorher (Doppelte erkennt er schon
+  vor dem Hochladen, der Server ein zweites Mal). Mini-Vorschau: erste Seite einer PDF mit pdf.js, nur für sichtbare Kacheln
+  (`IntersectionObserver`) und nacheinander, aus dem Inhalt der Aktion `containerimport_dokument`; gezeichnete Seiten bleiben
+  für die Sitzung im Speicher. Die Zuordnungstabelle des Vorschlags (`STAFL_CI.dokVorschlag`) prüft die Gruppe
+  `containerimport_dokumente` als Tabelle.
   **Whisp-Abfrage** (Knopf „In Whisp prüfen“ im Fenster „Farmer“): Anders als die Karte ruft hier der **Server** den
   fremden Dienst ab (`app/api/module/containerimport/whisp.php`, Aktion `containerimport_eudr_whisp`) – der Schlüssel
   `WHISP_API_KEY` darf nie in den Browser. Hinaus geht nur der Umriss; die Seite fragt alle drei Sekunden nach, bis Whisp
