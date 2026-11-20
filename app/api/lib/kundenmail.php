@@ -1,6 +1,9 @@
 <?php
 declare(strict_types=1);
-/* E-Mails an Kunden, Abmelden, Bestellwunsch-Vorlagen, Einmal-Links, Versand */
+/* E-Mails an Kunden, Abmelden, Bestellwunsch-Vorlagen, Einmal-Links, Versand. Gehört dem Modul Angebot (regeln/module.toml);
+   das Modul Versand sendet darüber. Wochen-Mail optional „mit Preisänderung“ (Inhaber 20.11.2026, mail_preis_wahl): Links mit
+   vergleich=vorwoche, je Angebot die Übersicht der Änderungen (angebot_vorwoche_mail, module/angebot/vorwoche.php) und der Link
+   „Nur Änderungen“ (vergleich=aenderungen); ohne Schalter wie bisher. */
 if (!defined('WA_API')) { http_response_code(404); exit; }   // nur über api/index.php nutzbar
 
 /* ---------------- E-Mail an Kunden ---------------- */
@@ -25,14 +28,29 @@ function mail_week(): ?array
     $w = (int)($o['meta']['week'] ?? 0); $y = (int)($o['meta']['year'] ?? 0);
     if (!$o || $w < 1 || $y < 2000) return null;
     $mo = (new DateTimeImmutable())->setISODate($y, $w);
-    return ['week' => $w, 'year' => $y, 'from' => $mo->format('d.m.'), 'to' => $mo->modify('+6 days')->format('d.m.Y'), 'publishedAt' => $o['publishedAt'] ?? null];
+    return ['week' => $w, 'year' => $y, 'from' => $mo->format('d.m.'), 'to' => $mo->modify('+6 days')->format('d.m.Y'), 'publishedAt' => $o['publishedAt'] ?? null,
+            'vorwoche' => is_array($o['meta']['vorwoche'] ?? null) ? ['kw' => $o['meta']['vorwoche']['kw'], 'jahr' => $o['meta']['vorwoche']['jahr']] : null];   // Vergleichswoche (Zusatz „Preisänderung“)
 }
-function mail_offer_links(array $c): array
+/* Links zu den Angeboten eines Kunden: [Name, Adresse, Angebots-ID]; $zusatz hängt einen Parameter an (z. B. vergleich=vorwoche) */
+function mail_offer_links(array $c, string $zusatz = ''): array
 {
     $base = mail_base_url();
     $out = [];
-    foreach (customer_offers($c) as $id) { $d = offer_def($id); if ($d) $out[] = [$d['name'], $base . '/' . ($id === OFFER_STD ? '' : '?angebot=' . rawurlencode($id))]; }
+    foreach (customer_offers($c) as $id) {
+        $d = offer_def($id);
+        $q = array_filter([$id === OFFER_STD ? '' : 'angebot=' . rawurlencode($id), $zusatz]);
+        if ($d) $out[] = [$d['name'], $base . '/' . ($q ? '?' . implode('&', $q) : ''), $id];
+    }
     return $out;
+}
+const MAIL_PREIS_AUS = ['an' => false, 'uebersicht' => false, 'kurz' => false];
+/* Zusatz „Preisänderung zur Vorwoche“ eines Wochenversands (Modul Versand, Inhaber 20.11.2026): nur echte Wahrheitswerte,
+   Unterpunkte nur mit eingeschaltetem Schalter. Gilt nur für diesen Versand – gespeichert wird nichts. Einmal an der Grenze
+   (aktionen/versand.php); die Funktionen dahinter erhalten nur die normalisierte Wahl. */
+function mail_preis_wahl($p): array
+{
+    $an = is_array($p) && ($p['an'] ?? null) === true;
+    return ['an' => $an, 'uebersicht' => $an && ($p['uebersicht'] ?? null) === true, 'kurz' => $an && ($p['kurz'] ?? null) === true];
 }
 function mail_footer(string $kind): string
 {
@@ -242,23 +260,28 @@ function mail_tpl_bestellung(array $o, bool $copy): array
 }
 
 /* Wochenangebot / Angebotslink: [Betreff, Text, HTML] */
-function mail_tpl_angebot(array $c, string $note, ?array $wk): array
+function mail_tpl_angebot(array $c, string $note, ?array $wk, array $preis = MAIL_PREIS_AUS): array
 {
     global $CFG;
-    $links = mail_offer_links($c);
     $kw = $wk ? "KW {$wk['week']}/{$wk['year']}" : '';
     $subject = ($kw ? "Wochenangebot $kw" : 'Ihr Angebot') . ' – ' . $CFG['company'];
     $intro = $wk ? "unser Angebot für KW {$wk['week']} ({$wk['from']} – {$wk['to']}) ist online." : 'hier ist der Link zu Ihrem Angebot.';
     $user = $c['login']['username'] ?? '';
     $sig = mail_settings()['signature'];
+    // je Angebot: Name, Link (mit Preisänderung: vergleich=vorwoche), Link „Nur Änderungen“, Übersicht [Text, HTML]
+    $kurz = $preis['kurz'] ? mail_offer_links($c, 'vergleich=aenderungen') : [];
+    $zeilen = [];
+    foreach (mail_offer_links($c, $preis['an'] ? 'vergleich=vorwoche' : '') as $i => [$n, $u, $oid])
+        $zeilen[] = ['name' => $n, 'url' => $u, 'kurz' => $kurz[$i][1] ?? null, 'block' => $preis['uebersicht'] ? angebot_vorwoche_mail($oid, $n) : null];
     $t = mail_greeting($c) . "\n\n" . $intro . "\n\n" . ($note !== '' ? $note . "\n\n" : '');
-    foreach ($links as [$n, $u]) $t .= "$n:\n$u\n\n";
+    foreach ($zeilen as $z) $t .= ($z['block'][0] ?? '') . "{$z['name']}:\n{$z['url']}\n" . ($z['kurz'] ? "Nur Änderungen: {$z['kurz']}\n" : '') . "\n";
     if ($user !== '') $t .= "Anmeldung mit Ihrer Benutzerkennung: $user\nPasswort vergessen? Antworten Sie einfach auf diese E-Mail.\n\n";
     $ab = abmelde_url($c);
     $t .= $sig . "\n\n-- \n" . mail_footer('angebot') . "\nVom Wochenangebot abmelden: $ab\n";
     $h = '<p style="margin:0 0 14px;">' . mail_h(mail_greeting($c)) . '</p><p style="margin:0 0 14px;">' . mail_h($intro) . '</p>'
         . ($note !== '' ? '<p style="margin:0 0 14px;padding:12px 14px;background:#f7efe9;border-radius:8px;">' . nl2br(mail_h($note)) . '</p>' : '');
-    foreach ($links as [$n, $u]) $h .= mail_button($u, $n . ' ansehen');
+    foreach ($zeilen as $z) $h .= ($z['block'][1] ?? '') . mail_button($z['url'], $z['name'] . ' ansehen')
+        . ($z['kurz'] ? '<p style="margin:-4px 0 12px;font-size:12.5px;"><a href="' . mail_h($z['kurz']) . '" style="color:#5f574f;">Nur Änderungen ansehen</a></p>' : '');
     if ($user !== '') $h .= '<p style="margin:14px 0 0;font-size:13px;color:#4a443e;">Anmeldung mit Ihrer Benutzerkennung <strong>' . mail_h($user) . '</strong>. Passwort vergessen? Antworten Sie einfach auf diese E-Mail.</p>';
     $abBtn = '<p style="max-width:560px;margin:10px auto 0;text-align:center;"><a href="' . mail_h($ab) . '" style="display:inline-block;padding:7px 14px;border:1px solid #cfc6bb;border-radius:8px;color:#5f574f;font-size:12px;text-decoration:none;">Vom Wochenangebot abmelden</a></p>';
     return [$subject, $t, mail_layout($subject, $h, $sig, mail_footer('angebot'), $abBtn)];
@@ -426,10 +449,10 @@ function mail_record(array $entries, ?array $wk = null): void
     });
 }
 const MAIL_TYP = ['woche' => 'Wochenangebot', 'angebot' => 'Angebotslink', 'invite' => 'Einladung', 'reset' => 'Passwort-Link', 'test' => 'Testmail', 'hinweis' => 'Hinweis Abmeldung', 'bestellung' => 'Bestellwunsch', 'bestellkopie' => 'Kopie Bestellwunsch', 'restposten' => 'Sonderposten', 'benachrichtigung' => 'Benachrichtigung', 'einkauf' => 'Einkaufsbedarf', 'einzelangebot' => 'Einzelangebot', 'zugang' => 'Zugangsdaten Mitarbeiter'];
-function mail_job_for(array $c, string $typ, string $note = '', ?array $wk = null): array
+function mail_job_for(array $c, string $typ, string $note = '', ?array $wk = null, array $preis = MAIL_PREIS_AUS): array
 {
     if (empty($c['email'])) throw new InvalidArgumentException("Für „{$c['firma']}“ ist keine E-Mail-Adresse hinterlegt.");
-    [$sub, $txt, $html] = mail_tpl_angebot($c, $note, $wk);
+    [$sub, $txt, $html] = mail_tpl_angebot($c, $note, $wk, $preis);
     // Ein-Klick-Abmeldung im E-Mail-Programm (RFC 8058) – erwartet u. a. von Gmail/Yahoo bei regelmäßigen Sendungen
     $one = mail_base_url() . '/api/?action=abmelden1&t=' . rawurlencode(abmelde_token($c['id']));
     return ['to' => $c['email'], 'name' => $c['ansprechpartner'] ?: $c['firma'], 'subject' => $sub, 'text' => $txt, 'html' => $html,
@@ -473,7 +496,7 @@ function wochenmail_empfaenger(): array
 }
 /* Wochenangebot an höchstens 20 Kunden senden (ein Teil): Ergebnis je Kunden-ID in der Reihenfolge von $ids.
    $week/$year müssen zur veröffentlichten Woche passen (sonst 409 – inzwischen wurde neu veröffentlicht). */
-function wochenmail_senden(array $cfg, array $ids, string $note, int $week, int $year): array
+function wochenmail_senden(array $cfg, array $ids, string $note, int $week, int $year, array $preis = MAIL_PREIS_AUS): array
 {
     $wk = mail_week();
     if (!$wk) fail('Es ist noch kein Angebot veröffentlicht.', 409);
@@ -486,7 +509,7 @@ function wochenmail_senden(array $cfg, array $ids, string $note, int $week, int 
         $map[$c['id']] = $c;
         $why = wochenmail_grund($c);
         if ($why !== '') { $res[$c['id']] = ['ok' => false, 'error' => $why, 'skipped' => true]; continue; }
-        $jobs[$c['id']] = mail_job_for($c, 'woche', $note, $wk);
+        $jobs[$c['id']] = mail_job_for($c, 'woche', $note, $wk, $preis);
     }
     @set_time_limit(180);
     ignore_user_abort(true);
@@ -496,7 +519,7 @@ function wochenmail_senden(array $cfg, array $ids, string $note, int $week, int 
     if ($entries) mail_record($entries, $wk);
     $okN = count(array_filter($res, function ($r) { return $r['ok']; }));
     $bad = array_filter($res, function ($r) { return !$r['ok'] && empty($r['skipped']); });
-    if ($res) audit('mail', "Wochenangebot KW {$wk['week']}/{$wk['year']} an $okN Kunden versendet" . ($bad ? ' (' . count($bad) . ' nicht zugestellt)' : ''),
+    if ($res) audit('mail', "Wochenangebot KW {$wk['week']}/{$wk['year']}" . ($preis['an'] ? ' mit Preisänderung' : '') . " an $okN Kunden versendet" . ($bad ? ' (' . count($bad) . ' nicht zugestellt)' : ''),
         array_map(function ($id) use ($res, $map) { $r = $res[$id]; return ['k' => "c$id|woche", 'code' => $map[$id]['nr'] ?? '', 'name' => $map[$id]['firma'], 'f' => 'Wochenangebot', 'from' => '', 'to' => ($map[$id]['email'] ?? '') . ($r['ok'] ? '' : ' – ' . $r['error'])] + (empty($r['skipped']) ? [] : ['skip' => true]); }, array_keys($res)));
     $out = [];
     foreach ($ids as $id) $out[] = ['id' => $id] + ($res[$id] ?? ['ok' => false, 'error' => 'Kunde nicht gefunden']);

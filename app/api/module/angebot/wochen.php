@@ -21,6 +21,7 @@ declare(strict_types=1);
    Definition, wenn die Ablage sie kennt, sonst mit der heutigen. Sonderposten bleiben sichtbar, auch wenn sie heute
    ausverkauft sind (der Bestand von damals ist nicht bekannt).
    Die Ablage ist intern (regeln/datenverantwortung.toml): die Kundenseite liest sie nie. Ältere Fassungen ignorieren sie.
+   Die Preisänderung zur Vorwoche (module/angebot/vorwoche.php) liest die Vorwoche über angebot_woche_modell.
    Schreibt nur eigene Dokumente (angebot-woche/*), liest angebot, angebote, versionen/*, historie/*. */
 if (!defined('WA_API')) { http_response_code(404); exit; }   // nur über api/index.php nutzbar
 
@@ -41,6 +42,13 @@ function angebot_woche_definition(array $o): array
     if (is_string($o['art'] ?? null) && $o['art'] !== '') $d['art'] = $o['art'];
     if (is_array($o['gueltig'] ?? null)) $d['gueltig'] = $o['gueltig'];
     return $d;
+}
+/* Damalige Angebotsdefinitionen einer Wochenablage (null = unbekannt) als [ID => Definition] */
+function angebot_woche_damals(?array $defs): array
+{
+    $out = [];
+    foreach ($defs ?? [] as $d) if (is_array($d) && isset($d['id'])) $out[(string)$d['id']] = angebot_woche_definition($d);
+    return $out;
 }
 /* Angebotsdefinitionen als Schnappschuss (GR-106) */
 function angebot_woche_definitionen(): array
@@ -144,8 +152,7 @@ function angebot_woche(string $woche, string $oid): array
     }
     if (!is_array($modell)) { $modell = null; $quelle = null; }
     // Definition des Angebots: damals (Ablage), sonst heute; gab es das Angebot in dieser Woche nicht, kein Angebot (fehlt)
-    $damals = [];
-    foreach (is_array($defs) ? $defs : [] as $d) if (is_array($d) && isset($d['id'])) $damals[(string)$d['id']] = angebot_woche_definition($d);
+    $damals = angebot_woche_damals($defs);
     $heute = offer_def($oid);
     $fehlt = false; $einstellung = 'heute';
     if ($oid === OFFER_STD) $def = $heute;

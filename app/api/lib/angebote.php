@@ -21,6 +21,7 @@ if (!defined('WA_API')) { http_response_code(404); exit; }   // nur über api/in
    Nutzer (offer_resolve). */
 require_once dirname(__DIR__) . '/module/angebot/sonderangebote.php';
 require_once dirname(__DIR__) . '/module/angebot/design.php';
+require_once dirname(__DIR__) . '/module/angebot/vorwoche.php';
 const OFFER_STD = 'std';
 /* Felder eines Artikels, die offer_resolve ausliefert (Positivliste). Alles andere – eigene Preise, Bezeichnungen und
    Sonderpreise anderer Angebote, die Zelladresse der Excel-Datei und jedes Feld, das erst eine spätere Fassung speichert –
@@ -340,7 +341,7 @@ function offer_resolve(array $m, array $def, bool $ausverkauftAusblenden = true)
     foreach ($m['groups'] as $g) if (($g['section'] ?? '') !== '' && !in_array($g['section'], $secs, true)) $secs[] = $g['section'];
     $m['sections'] = $secs;
     $m['items'] = $items;
-    unset($m['meta']['source'], $m['meta']['sheetName']);   // Dateiname/Blatt der Excel-Datei sind intern
+    unset($m['meta']['source'], $m['meta']['sheetName'], $m['meta']['vorwoche']);   // Dateiname/Blatt der Excel-Datei sind intern; Vorwoche nur über angebot_vorwoche (module/angebot/vorwoche.php)
     // Werbung: nur der Eintrag dieses Angebots und nur Artikel, die ausgeliefert werden – nie die anderer Angebote.
     // Bis zu zwei Blöcke (erster im Eintrag, zweiter in „weitere“); ein leerer erster Block rückt den zweiten nach vorn.
     $w = is_array($m['meta']['werbung'] ?? null) ? ($m['meta']['werbung'][$def['id']] ?? null) : null;
@@ -521,6 +522,8 @@ function angebot_veroeffentlichen(?array $modell, $revision): array
         $staende = design_staende($model);   // Design je Angebot als Schnappschuss (module/angebot/design.php, GR-106)
         if ($staende) $model['meta']['design'] = $staende;
         require_once dirname(__DIR__) . '/module/angebot/wochen.php';   // Wochenablage angebot-woche/<JJJJ-WW>
+        try { $model = angebot_vorwoche_stempeln($model); }   // Preisänderung zur Vorwoche als Schnappschuss (module/angebot/vorwoche.php)
+        catch (Throwable $e) { error_log('[wochenangebot] Preisänderung zur Vorwoche: ' . $e->getMessage()); }   // ein Zusatz: veröffentlicht wird dann ohne Vergleich
         if ($prev) {
             $id = gmdate('Ymd-His') . '-' . bin2hex(random_bytes(3));
             store_write('versionen/' . $id, $prev);

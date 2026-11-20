@@ -8,7 +8,10 @@
    „Fußzeile im Druck“ (Menü ⋯, nur Administratoren; der Server prüft das beim Speichern): drei Spalten und zwei Zeilen des
    Briefbogens, die Wahl „auf jeder Seite“ / „nur auf der letzten Seite“ und der Schalter „Bankangaben nur für angemeldete
    Nutzer“ – Aktionen druck_fuss / druck_fuss_save (api/module/angebot/druck.php). Leere Felder = Vorgabe aus dem Impressum.
-   Für andere Module: WA.angebot.druck.drucken({ angebot, entwurf, name, knopf }) druckt ein beliebiges Angebot in derselben Fassung.
+   Pfeil daneben (#btn-drucken-zusatz, Menü „Zusatz“, Inhaber 20.11.2026): „Mit Preisänderung drucken“ (vergleich=vorwoche, je
+   Artikel ▼/▲/neu zur Vorwoche, Aufbau unverändert) und „Nur Änderungen drucken“ (vergleich=aenderungen). „Drucken“ selbst druckt
+   weiter ohne – die Preisänderung ist nur eine Zusatzfunktion; gespeichert wird nichts.
+   Für andere Module: WA.angebot.druck.drucken({ angebot, entwurf, name, knopf, vergleich }) druckt ein beliebiges Angebot in derselben Fassung.
    Wird von admin/index.html nach admin.js geladen. */
 (function () {
   'use strict';
@@ -23,7 +26,7 @@
      Druckfassung, öffnet den Druckdialog und meldet sich (postMessage {wa: 'druck', stand: 'bereit' | 'gedruckt' | 'fehler'}).
      Auch für andere Module (WA.angebot.druck.drucken), z. B. die Liste „Angebote dieser Woche“ im Versand:
      angebot = Kennung (ohne Angabe das Wochenangebot, „e-…“ = Einzelangebot), entwurf = true druckt den Entwurf statt des
-     veröffentlichten Stands; knopf wird währenddessen gesperrt. */
+     veröffentlichten Stands; knopf wird währenddessen gesperrt; vergleich = 'vorwoche' | 'aenderungen' (sonst ohne). */
   let frame = null, uhr = 0, aktiv = null;
   function fertig() {
     clearTimeout(uhr);
@@ -43,7 +46,8 @@
     frame.title = 'Druckfassung des Angebots';
     frame.setAttribute('aria-hidden', 'true');
     frame.tabIndex = -1;
-    frame.src = url + (url.includes('?') ? '&' : '?') + 'drucken=liste';
+    const vergleich = o.vergleich === 'vorwoche' || o.vergleich === 'aenderungen' ? 'vergleich=' + o.vergleich + '&' : '';
+    frame.src = url + (url.includes('?') ? '&' : '?') + vergleich + 'drucken=liste';
     document.body.append(frame);
     toast(`Druckfassung${o.name ? ` von „${o.name}“` : ''} wird vorbereitet${o.entwurf ? ' (Entwurf, wie in der Vorschau)' : ''} …`, 4000);
     // die Seite meldet „bereit“ (Druckdialog öffnet sich) bzw. „gedruckt“; ohne Meldung (z. B. Sitzung beendet) wieder freigeben
@@ -57,18 +61,41 @@
     if (e.data.stand === 'fehler') { fertig(); toast('Die Druckfassung konnte nicht geladen werden. Bitte erneut versuchen.', 6000); }
   });
   // Knopf „Drucken“: das gewählte Angebot, wie die Vorschau es zeigt – vorher den Entwurf speichern
-  btn.addEventListener('click', async () => {
+  async function druckeGewaehlt(vergleich) {
     if (btn.disabled) return;
     btn.disabled = true;
     try {
       await D.bereit();
       btn.disabled = false;
-      drucken({ adresse: D.adresse(), name: D.name(), entwurf: true, knopf: btn });
+      drucken({ adresse: D.adresse(), name: D.name(), entwurf: true, knopf: btn, vergleich });
     } catch (e) {
       btn.disabled = false;
       if (e && e.status !== 401) toast((e && e.message) || 'Drucken nicht möglich.', 6000);
     }
-  });
+  }
+  btn.addEventListener('click', () => druckeGewaehlt(''));
+
+  /* ---------- Menü „Zusatz“ am Pfeil neben „Drucken“ ---------- */
+  const zBtn = $('#btn-drucken-zusatz'), zMenu = $('#menu-drucken');
+  if (zBtn && zMenu) {
+    const zeigen = (offen) => {
+      zMenu.hidden = !offen; zBtn.setAttribute('aria-expanded', String(offen));
+      if (offen) zMenu.querySelector('button').focus();
+    };
+    zBtn.addEventListener('click', () => zeigen(zMenu.hidden));
+    document.addEventListener('click', (e) => { if (!zMenu.hidden && !e.target.closest('#druck-zusatz')) zeigen(false); });
+    zMenu.addEventListener('keydown', (e) => {
+      const items = [...zMenu.querySelectorAll('button')], i = items.indexOf(document.activeElement);
+      if (e.key === 'ArrowDown' || e.key === 'ArrowUp') { e.preventDefault(); items[(i + (e.key === 'ArrowDown' ? 1 : items.length - 1)) % items.length].focus(); }
+      if (e.key === 'Escape') { zeigen(false); zBtn.focus(); }
+    });
+    zMenu.addEventListener('click', (e) => {
+      const b = e.target.closest('[data-druck]');
+      if (!b) return;
+      zeigen(false);
+      druckeGewaehlt(b.dataset.druck);
+    });
+  }
 
   /* ---------- Fußzeile im Druck (nur Administratoren) ---------- */
   const dlg = $('#dlg-druck-fuss'), body = $('#druck-fuss-body');

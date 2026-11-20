@@ -5,6 +5,9 @@
    Entwurf, wenn nur ein gespeichertes Design je Angebot offen ist – Zeilen der Art „design“),
    versand_empfaenger / versand_vorschau / versand_senden (Wochenangebot bzw. Sonderposten eines Angebots, in Teilen zu zehn),
    versand_verlauf (aus dem Protokoll, ohne Kundennamen).
+   Wochenangebot, Zusatz „Preisänderung zur Vorwoche zeigen“ (Inhaber 20.11.2026, Vergleichswoche d.woche.vorwoche): beim Öffnen immer aus, gilt nur für diesen
+   Versand (über die erneute Anmeldung nur in der sessionStorage-Auswahl); preis = {an, uebersicht, kurz} an versand_vorschau und
+   versand_senden – Links mit vergleich=vorwoche, Übersicht der Änderungen und Link „Nur Änderungen“ berechnet der Server.
    Bestätigung beim Senden wie überall: unter der zentralen Anmeldung erneute Anmeldung (reauth_required, Rücksprung hierher –
    die Auswahl bleibt in sessionStorage), sonst Passwort im Fenster (confirmation_required → reauth).
    Vorschau und Drucken eines Angebots öffnen die Angebotsseite des Eingabebereichs (Entwurf, ?vorschau=1 bzw. zusätzlich
@@ -262,7 +265,7 @@
     const chips = w ? [['*', 'Alle', liste.length]].concat(Object.keys(namen).map((k) => [k, k === 'std' ? 'Wochenangebot' : kurz(k), liste.filter((c) => c.angebote.includes(k)).length]).filter((x) => x[2])) : [];
     const sicht = liste.filter((c) => s.filter === '*' || c.angebote.includes(s.filter));
     const titel = w ? `Wochenangebot ${kw(d.woche)} senden` : `Sonderposten „${d.offer.name}“ senden`;
-    const text = w ? 'Jeder Kunde bekommt eine eigene E-Mail mit den Links zu seinen Angeboten – ohne Preise in der E-Mail.'
+    const text = w ? `Jeder Kunde bekommt eine eigene E-Mail mit den Links zu seinen Angeboten – ${s.preis.an && s.preis.uebersicht ? 'mit einer kurzen Übersicht der Preisänderungen.' : 'ohne Preise in der E-Mail.'}`
       : `Nur an Kunden, denen dieses Angebot freigeschaltet ist. Die E-Mail nennt die ${plural(d.items.length, 'Sonderposten', 'Sonderposten')} mit Preis.`;
     const zeile = (c) => {
       const erg = s.ergebnis[c.id];
@@ -279,6 +282,7 @@
         ${liste.length ? `<div class="vs-empf"><div class="vs-empf-kopf"><label class="vs-check"><input type="checkbox" id="send-alle"${s.laeuft ? ' disabled' : ''}> <span id="send-zahl"></span></label>${aus.length ? `<span class="vs-leise">${aus.length} nicht berücksichtigt</span>` : ''}</div>
           <ul>${sicht.map(zeile).join('')}</ul></div>` : '<p class="vs-hinweis neutral">' + icon('info') + '<span>Kein Kunde mit E-Mail-Adresse, aktivem Zugang und freigeschaltetem Angebot.</span></p>'}
         ${aus.length ? `<details class="vs-aus"><summary>${plural(aus.length, 'Kunde', 'Kunden')} nicht berücksichtigt</summary><ul>${aus.map(([f, g]) => `<li>${esc(f)} – ${esc(g)}</li>`).join('')}</ul></details>` : ''}
+        ${w ? zusatzHTML(s, d) : ''}
         <label class="vs-feld">Zusatztext <small>optional, erscheint in jeder E-Mail</small><textarea id="send-note" maxlength="1000" placeholder="z. B. Diese Woche besonders günstig: Roastbeef."${s.laeuft ? ' disabled' : ''}>${esc(s.note)}</textarea></label>
         ${s.pw ? '<label class="vs-feld">Passwort zur Bestätigung<input type="password" id="send-pw" autocomplete="current-password"></label>' : ''}
         <div class="vs-mail" id="send-vorschau" hidden><dl><dt>Betreff</dt><dd id="send-betreff"></dd><dt>Vorschau für</dt><dd id="send-fuer"></dd></dl><iframe id="send-frame" sandbox="" title="Vorschau der E-Mail"></iframe></div>
@@ -286,6 +290,14 @@
       <div class="dlg-foot"><span class="vs-fuss-links"><button class="vs-knopf klein" type="button" id="send-prev"${liste.length ? '' : ' disabled'}>${icon('auge')}Vorschau der E-Mail</button></span>
         <button class="vs-knopf" type="button" data-close>${s.fertig ? 'Schließen' : 'Abbrechen'}</button><button class="vs-knopf primaer" type="submit" id="send-jetzt">${icon('mail')}<span id="send-knopf"></span></button></div>`;
     sendZahl();
+  }
+  /* Zusatz „Preisänderung zur Vorwoche“ (nur Wochenangebot): Schalter und zwei Unterpunkte; ohne Vorwoche gesperrt */
+  function zusatzHTML(s, d) {
+    const p = s.preis, vw = d.woche && d.woche.vorwoche, aus = s.laeuft || !vw, chk = (id, an, txt, klein) => `<label class="vs-check vs-zusatz-zeile"><input type="checkbox" id="${id}"${an ? ' checked' : ''}${aus ? ' disabled' : ''}><span>${txt}${klein ? `<small>${klein}</small>` : ''}</span></label>`;
+    return `<fieldset class="vs-zusatz"><legend>Zusatz</legend>
+      ${chk('send-preis', p.an, 'Preisänderung zur Vorwoche zeigen', vw ? `Die Links zeigen je Artikel ▼ günstiger, ▲ teurer oder neu gegenüber KW ${esc(vw.kw)} – nur für diesen Versand.` : 'Für den veröffentlichten Stand gibt es keine Vorwoche zum Vergleich.')}
+      ${p.an ? `<div class="vs-zusatz-unter">${chk('send-preis-uebersicht', p.uebersicht, 'Kurze Übersicht der Änderungen in die E-Mail', 'Je Angebot: Anzahl günstiger, teurer, neu und die fünf größten Veränderungen.')}
+        ${chk('send-preis-kurz', p.kurz, 'Kurzfassung „Nur Änderungen“ verlinken', 'Zusätzlicher Link, der nur geänderte und neue Artikel zeigt.')}</div>` : ''}</fieldset>`;
   }
   function sendZahl() {
     const s = S.send, n = s.wahl.size;
@@ -304,15 +316,18 @@
     if (!w && !d.items.length) { toast('In diesem Angebot sind keine Sonderposten veröffentlicht (oder alle ohne Bestand).', true); return; }
     const liste = w ? d.empfaenger : d.recipients.filter((c) => !c.reason);
     const vor = merk ? liste.filter((c) => merk.ids.includes(c.id)) : w ? liste.filter((c) => c.passwort && !c.gesendet) : liste;
+    const mp = merk && merk.preis && d.woche && d.woche.vorwoche ? merk.preis : {};   // nur über die erneute Anmeldung; sonst beim Öffnen immer aus
     S.send = { art, angebot: angebot || '', daten: d, wahl: new Set(vor.map((c) => c.id)), filter: '*', note: merk ? merk.note : '', ergebnis: {}, laeuft: false, stand: '', pw: false, fertig: false,
+      preis: { an: mp.an === true, uebersicht: mp.an === true && mp.uebersicht === true, kurz: mp.an === true && mp.kurz === true },
       meldung: merk ? ['Bestätigt. Bitte den Versand jetzt mit „Senden“ auslösen.', true] : null };
     sendZeichnen();
     $('#dlg-send').showModal();
   }
   async function vorschau() {
     const s = S.send, id = [...s.wahl][0] || ((s.art === 'woche' ? s.daten.empfaenger : s.daten.recipients)[0] || {}).id;
-    const r = await api('versand_vorschau', { art: s.art, angebot: s.angebot, id, note: $('#send-note').value });
+    const r = await api('versand_vorschau', { art: s.art, angebot: s.angebot, id, note: $('#send-note').value, ...(s.art === 'woche' ? { preis: s.preis } : {}) });
     if (r.status !== 200 || !r.data.ok) { const m = $('#send-meldung'); m.hidden = false; m.className = 'vs-meldung'; m.textContent = fehlerText(r, 'Vorschau nicht geladen'); return; }
+    if (r.data.hinweis) { const m = $('#send-meldung'); m.hidden = false; m.className = 'vs-meldung'; m.textContent = r.data.hinweis; }   // Übersicht nur mit Zugang zum Angebot
     $('#send-vorschau').hidden = false;
     $('#send-betreff').textContent = r.data.subject; $('#send-fuer').textContent = `${r.data.firma} · ${r.data.to}`;
     $('#send-frame').srcdoc = r.data.html;
@@ -339,10 +354,10 @@
     let ok = 0, bad = 0, abbruch = '';
     for (let i = 0; i < ids.length && !abbruch; i += TEIL) {
       const teil = ids.slice(i, i + TEIL);
-      const body = w ? { art: 'woche', ids: teil, note: s.note, week: d.woche.week, year: d.woche.year } : { art: 'sonderposten', angebot: s.angebot, ids: teil, note: s.note, publishedAt: d.publishedAt };
+      const body = w ? { art: 'woche', ids: teil, note: s.note, week: d.woche.week, year: d.woche.year, preis: s.preis } : { art: 'sonderposten', angebot: s.angebot, ids: teil, note: s.note, publishedAt: d.publishedAt };
       const r = await api('versand_senden', body);
       if (r.status === 403 && r.data.code === 'reauth_required' && typeof r.data.anmelden === 'string' && r.data.anmelden.startsWith('/oidc/')) {
-        try { sessionStorage.setItem(MERK, JSON.stringify({ art: s.art, angebot: s.angebot, ids: ids.slice(i), note: s.note })); } catch { /* ohne Speicher: Auswahl erneut treffen */ }
+        try { sessionStorage.setItem(MERK, JSON.stringify({ art: s.art, angebot: s.angebot, ids: ids.slice(i), note: s.note, preis: s.preis })); } catch { /* ohne Speicher: Auswahl erneut treffen */ }
         location.assign(r.data.anmelden + encodeURIComponent(location.href));
         return;
       }
@@ -389,6 +404,15 @@
     const s = S.send;
     if (e.target.id === 'send-alle') for (const b of $$('#send-inhalt [data-wahl]')) { b.checked = e.target.checked; if (b.checked) s.wahl.add(b.dataset.wahl); else s.wahl.delete(b.dataset.wahl); }
     if (e.target.dataset.wahl) { if (e.target.checked) s.wahl.add(e.target.dataset.wahl); else s.wahl.delete(e.target.dataset.wahl); }
+    const pz = { 'send-preis': 'an', 'send-preis-uebersicht': 'uebersicht', 'send-preis-kurz': 'kurz' }[e.target.id];
+    if (pz) {
+      s.preis[pz] = e.target.checked;
+      if (pz === 'an') { s.preis.uebersicht = e.target.checked; s.preis.kurz = false; }   // Übersicht: Vorgabe an, sobald der Schalter an ist
+      s.note = $('#send-note').value; sendZeichnen();
+      const neu = $('#' + e.target.id); if (neu) neu.focus();
+      $('#send-vorschau').hidden = true;   // eine sichtbare Vorschau wäre jetzt veraltet
+      return;
+    }
     sendZahl();
   });
   $('#send-inhalt').addEventListener('submit', (e) => { e.preventDefault(); senden(); });
@@ -408,6 +432,6 @@
     if (!(await laden(false))) return;
     let merk = null;
     try { merk = JSON.parse(sessionStorage.getItem(MERK) || 'null'); sessionStorage.removeItem(MERK); } catch { merk = null; }
-    if (merk && (merk.art === 'woche' || merk.art === 'sonderposten') && Array.isArray(merk.ids)) sendOeffnen(merk.art, merk.angebot, { ids: merk.ids.filter((x) => typeof x === 'string'), note: String(merk.note || '') });
+    if (merk && (merk.art === 'woche' || merk.art === 'sonderposten') && Array.isArray(merk.ids)) sendOeffnen(merk.art, merk.angebot, { ids: merk.ids.filter((x) => typeof x === 'string'), note: String(merk.note || ''), preis: merk.preis && typeof merk.preis === 'object' ? merk.preis : null });
   })();
 })();

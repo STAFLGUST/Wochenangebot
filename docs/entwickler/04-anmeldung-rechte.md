@@ -431,6 +431,13 @@ und `history_prev` (Recht `preisverlauf.sehen`) liefern sie nicht, und `history_
 `historie/*`. Nur die Vorwochenpreise je Kundenangebot gehen in `history_prev` zusätzlich mit `angebot.zugang` heraus
 (GR-002). Frühere Wochen (`angebot_woche`) verlangen für die Quelle Preisverlauf `preisverlauf.sehen`, der Abgleich des
 Entwurfs samt Anwesenheitsliste (`draft_ping`) `angebot.zugang`.
+**Preisänderung zur Vorwoche (seit 20.11.2026):** `offer&vergleich=vorwoche` hat kein eigenes Recht, sondern dieselben
+Prüfungen wie `offer` – öffentlich nur das Wochenangebot (dessen Änderungen, nie Kundenpreise), Kundenangebote nur für
+angemeldete Kunden mit Freischaltung bzw. Mitarbeiter mit `angebot.zugang`, die Vorschau (`draft=1`) nur mit
+`angebot.zugang`; Einzelangebote nie. Der Versandschalter `preis` braucht `wochenangebot.senden` wie der Versand selbst.
+Die Übersicht der Änderungen nennt Kundenpreise: in der Vorschau (`versand_vorschau`) erscheint sie nur mit
+`modul_zugang_frei($me, 'angebot')`, sonst kommt die Vorschau ohne Übersicht mit `hinweis` (die E-Mail an den Kunden enthält
+sie trotzdem – er sieht nur sein eigenes Angebot).
 
 **Abgeleitete Angaben hängen am selben Recht wie die Angabe selbst.** Unterdrückt eine Antwort eine Zahl, weil das Recht
 fehlt, darf sie auch nicht als Summe, Zähler, Warnhinweis, Sortierung oder Fehlertext wieder auftauchen – wer die Anfrage

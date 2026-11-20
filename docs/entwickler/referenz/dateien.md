@@ -132,7 +132,7 @@ Jede Code-Datei beginnt mit einem Kopfkommentar; dessen erste Aussage steht hier
 | `integritaet.php` | plattform | Dateiprüfung (wie ein Datei-Scanner gegen Schadcode): vergleicht die Programmdateien mit der Prüfliste der freigegebenen Fassung (integritaet-liste.php, beim Einspielen aus dem freigegebenen Commit erzeugt von … |
 | `kern.php` | plattform | Antworten, Eingaben, Datenprüfung |
 | `kunden.php` | verwaltung | Kundenstammdaten und Kunden-Sitzung |
-| `kundenmail.php` | angebot | E-Mails an Kunden, Abmelden, Bestellwunsch-Vorlagen, Einmal-Links, Versand |
+| `kundenmail.php` | angebot | E-Mails an Kunden, Abmelden, Bestellwunsch-Vorlagen, Einmal-Links, Versand. |
 | `laden.php` | plattform | Grundlagen laden: Einstellungen, Speicherschicht und alle Funktionen der Fachbereiche – gemeinsam für den API-Einstieg (api/index.php) und den Dienst „postausgang“ (api/postausgang.php, ADR-007). |
 | `module-liste.php` | plattform | ERZEUGT von `python3 werkzeuge/regeln.py erzeugen` aus regeln/module.toml und regeln/wartung.toml – nicht von Hand ändern. |
 | `module.php` | plattform | Modulzustand zur Laufzeit: wer darf welche Oberfläche nutzen (GR-102)? Grundlage ist ausschließlich die erzeugte Liste lib/module-liste.php (Modulregister regeln/module.toml und Entscheidungstabelle regeln/wartung.toml). |
@@ -159,6 +159,7 @@ Jede Code-Datei beginnt mit einem Kopfkommentar; dessen erste Aussage steht hier
 | `import.php` | angebot | Importvertrag des Moduls Angebot – Schnittstelle zur Importzentrale (docs/plattform/schnittstellen/import.md). - Preisverlauf: frühere Angebotslisten (.xlsx) als Wochen im Preisverlauf. |
 | `kopieren.php` | angebot | Angebot · Kundenangebot kopieren (Entscheidung des Inhabers 13.11.2026): ein Angebot als neues Kundenangebot anlegen und dabei alles außer den Kunden mitnehmen – eigene Preise mit Zusatzpreisen (variants), eigene … |
 | `sonderangebote.php` | angebot | STAFL-Plattform · Angebot · Sonderangebote (Auftrag des Inhabers 13.11.2026): ein Angebot für ganze Kundengruppen mit Gültigkeit – Zeitraum (von–bis, beide Tage eingeschlossen) oder Kalenderwoche (Montag bis Sonntag … |
+| `vorwoche.php` | angebot | Angebot · Preisänderung zur Vorwoche (Inhaber 20.11.2026 |
 | `winab-export.php` | angebot | Export des Wochenangebots für WinAB (Auftrag des Inhabers 05.11.2026) |
 | `wochen.php` | angebot | Angebot · Frühere Wochen ansehen und Wochenablage (Wünsche des Inhabers 13.11.2026): das veröffentlichte Angebot einer Kalenderwoche – Wochenangebot oder ein Kundenangebot – nur für Mitarbeiter mit Modulzugang … |
 
@@ -275,6 +276,7 @@ Jede Code-Datei beginnt mit einem Kopfkommentar; dessen erste Aussage steht hier
 | `admin.js` | angebot | Wochenangebot – Eingabebereich Bearbeitet einen Entwurf auf dem Server (automatisch gespeichert). |
 | `angebot-druck.css` | angebot | Angebot · Druckfassung „Angebotsansicht“ (A4 quer, mit Design auch hoch) der Angebotsseite – gesetzt von assets/angebot-druck.js. |
 | `angebot-druck.js` | angebot | Angebot · Satz der Druckfassung „Angebotsansicht“ (A4) für die Angebotsseite (frontend.js, Wunsch des Inhabers 13.11.2026). |
+| `angebot-vorwoche.js` | angebot | Angebot · Preisänderung zur Vorwoche auf der Angebotsseite (frontend.js, Inhaber 20.11.2026): nur mit ?vergleich=vorwoche bzw. =aenderungen. |
 | `app.css` | angebot | Designsystem „Klar“: neutrale Flächen, ein Akzent (Bordeaux), Geist / Geist Mono (lokal eingebunden, SIL Open Font License, assets/fonts/LICENSE-Geist.txt – keine Verbindung zu fremden Servern) |
 | `bestaetigt.js` | angebot | Rücksprungseite der Bestätigung im eigenen Fenster (admin/bestaetigt.html): meldet dem Eingabebereich, dass die erneute Anmeldung bei der STAFL-Anmeldung abgeschlossen ist, und schließt das Fenster. |
 | `detailkarte.js` | plattform | STAFL-Plattform – Detailkarte (Straßen, Gebäude, Ortsnamen) vom eigenen Server Gemeinsame Kartenkomponente für die CRM-Karte und die Auswertung der Verwaltung. |
@@ -864,6 +866,7 @@ Jede Code-Datei beginnt mit einem Kopfkommentar; dessen erste Aussage steht hier
 | `test_passkeys.py` | plattform | Passkeys (WebAuthn) für Mitarbeiter-Zugänge. |
 | `test_passwortpruefung.py` | plattform | Datenleck-Prüfung der Passwörter („Pwned Passwords“, nachgebauter Dienst auf AUX_PORT): standardmäßig aus; eingeschaltet werden betroffene Passwörter beim Festlegen abgelehnt (Mitarbeiter, Kunden), bestehende bei der … |
 | `test_postausgang.py` | plattform | Testgruppe postausgang |
+| `test_preisaenderung.py` | angebot | Angebot „mit Preisänderung“ (Inhaber 20.11.2026): je Artikel die Veränderung zur Vorwoche (▼ günstiger, ▲ teurer, neu) als Zusatzfunktion – auf der Angebotsseite und im Druck nur mit ?vergleich=vorwoche bzw. … |
 | `test_protokoll.py` | plattform | Aufbewahrung des Aktivitätsprotokolls (lib/protokoll.php, PROTOKOLL_MONATE = 6; Inhaber 25.10.2026). |
 | `test_qs.py` | qs | Qualitätssicherung (Modul qs, Oberfläche qs.intern unter /module/qs/) – QM-System |
 | `test_qs_ablage.py` | qs | Qualitätssicherung – Dokumentenablage (QM-System Bauabschnitt 2) |

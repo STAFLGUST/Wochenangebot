@@ -77,6 +77,14 @@
         <button class="btn" type="button" id="btn-ez-druck" title="Einzelangebot drucken oder als PDF speichern – mit dem Druckdialog der Angebotsseite"><svg class="i" aria-hidden="true"><use href="#i-print"/></svg><span class="lbl">Drucken / PDF</span></button>
         <button class="btn" type="button" id="btn-ez-mail" title="Einzelangebot per E-Mail an den Kunden senden"><svg class="i" aria-hidden="true"><use href="#i-mail"/></svg><span class="lbl">Per E-Mail senden</span></button>
         <button class="btn" type="button" id="btn-drucken" title="Gewähltes Angebot drucken oder als PDF speichern – der Entwurf in der Angebotsansicht, wie in der Vorschau"><svg class="i" aria-hidden="true"><use href="#i-print"/></svg><span class="lbl">Drucken</span></button>
+        <div class="menu-wrap" id="druck-zusatz">
+          <button class="btn icon ghost" type="button" id="btn-drucken-zusatz" aria-haspopup="menu" aria-expanded="false" aria-controls="menu-drucken" aria-label="Drucken mit Zusatz" title="Zusatz: mit Preisänderung zur Vorwoche drucken"><svg class="i" aria-hidden="true"><use href="#i-down"/></svg></button>
+          <div class="menu" id="menu-drucken" role="menu" hidden aria-label="Zusatz">
+            <div class="menu-titel">Zusatz</div>
+            <button role="menuitem" type="button" data-druck="vorwoche"><svg class="i" aria-hidden="true"><use href="#i-print"/></svg>Mit Preisänderung drucken</button>
+            <button role="menuitem" type="button" data-druck="aenderungen"><svg class="i" aria-hidden="true"><use href="#i-print"/></svg>Nur Änderungen drucken</button>
+          </div>
+        </div>
         <div class="menu-wrap">
           <button class="btn icon ghost" id="btn-more" type="button" aria-haspopup="menu" aria-expanded="false" aria-label="Weitere Aktionen"><svg class="i" aria-hidden="true"><use href="#i-more"/></svg></button>
           <div class="menu" id="menu-more" role="menu" hidden>

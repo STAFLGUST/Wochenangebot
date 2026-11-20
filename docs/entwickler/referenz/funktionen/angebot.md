@@ -2,7 +2,7 @@
 
 <!-- ERZEUGT von `python3 werkzeuge/doku.py erzeugen` – nicht von Hand ändern. Quelle: Funktionen und Kommentare im Code. Die CI prüft, dass diese Datei zum Code passt. -->
 
-60 Dateien, 964 Funktionen – in der Reihenfolge der Datei, **fett** die Abschnitte. Text = erste Aussage des Kommentars direkt über der Funktion (Python: Docstring). Übersicht aller Module: [README.md](README.md).
+62 Dateien, 982 Funktionen – in der Reihenfolge der Datei, **fett** die Abschnitte. Text = erste Aussage des Kommentars direkt über der Funktion (Python: Docstring). Übersicht aller Module: [README.md](README.md).
 
 ## `app/api/lib/angebote.php`
 
@@ -115,14 +115,15 @@ _Fracht: Mindestmenge für frachtfreie Lieferung, Frachtanteil je Staffel (unter
 
 ## `app/api/lib/kundenmail.php`
 
-_E-Mails an Kunden, Abmelden, Bestellwunsch-Vorlagen, Einmal-Links, Versand_
+_E-Mails an Kunden, Abmelden, Bestellwunsch-Vorlagen, Einmal-Links, Versand._
 
 **E-Mail an Kunden**
 
 - `mail_settings()`
 - `require_mail(intern)` – $intern: E-Mail nur an Mitarbeiter → internes Postfach (ohne eigenes: Kunden-Postfach), mail_cfg_intern()
 - `mail_week()`
-- `mail_offer_links(c)`
+- `mail_offer_links(c, zusatz)` – Links zu den Angeboten eines Kunden: [Name, Adresse, Angebots-ID]; $zusatz hängt einen Parameter an (z. B. vergleich=vorwoche)
+- `mail_preis_wahl(p)` – Zusatz „Preisänderung zur Vorwoche“ eines Wochenversands (Modul Versand, Inhaber 20.11.2026): nur echte Wahrheitswerte, Unterpunkte nur mit eingeschaltetem …
 - `mail_footer(kind)`
 
 **Abmelden vom Wochenangebot**
@@ -144,7 +145,7 @@ _E-Mails an Kunden, Abmelden, Bestellwunsch-Vorlagen, Einmal-Links, Versand_
 - `de_num(v, dec)`
 - `de_qty(v)` – Menge immer mit 2 Nachkommastellen wie überall (12,50 kg; app/assets/format.js)
 - `mail_tpl_bestellung(o, copy)` – Mail an uns bzw. Kopie an den Kunden: [Betreff, Text, HTML]
-- `mail_tpl_angebot(c, note, wk)` – Wochenangebot / Angebotslink: [Betreff, Text, HTML]
+- `mail_tpl_angebot(c, note, wk, preis)` – Wochenangebot / Angebotslink: [Betreff, Text, HTML]
 - `restposten_items(def)` – Sonderposten eines Angebots – nur dessen Artikel und Preise: [Betreff, Text, HTML]
 - `mail_tpl_restposten(c, def, items, note)`
 - `restposten_reason(c, oid)` – Wer bekommt die Sonderposten eines Angebots?
@@ -154,14 +155,14 @@ _E-Mails an Kunden, Abmelden, Bestellwunsch-Vorlagen, Einmal-Links, Versand_
 - `testpost_ablegen(cfg, jobs)` – Testumgebung: Nachrichten nur speichern (Testpostfach, die letzten 100) – nie an echte Empfänger
 - `mail_send_many(cfg, jobs)` – Mehrere Nachrichten über eine Verbindung; Ergebnis je Auftrag
 - `mail_record(entries, wk)` – Versand an Kunden vermerken (letzte E-Mail, Wochenversand) und ins Versandprotokoll schreiben
-- `mail_job_for(c, typ, note, wk)`
+- `mail_job_for(c, typ, note, wk, preis)`
 
 **Versand an Kunden (Schnittstelle des Angebots)**
 
 - `wochenmail_grund(c)` – Warum bekommt ein Kunde die Wochen-Mail nicht? '' = er bekommt sie
 - `versand_kunde_zeile(c, grund, wk)` – Empfänger als Zeile der Liste: nur, was die Auswahl braucht (keine Anschrift, keine Zugangsdaten)
 - `wochenmail_empfaenger()` – Empfänger des Wochenangebots: woche (mail_week oder null), empfaenger (bekommen die Mail), ausgeschlossen (mit Grund)
-- `wochenmail_senden(cfg, ids, note, week, year)` – Wochenangebot an höchstens 20 Kunden senden (ein Teil): Ergebnis je Kunden-ID in der Reihenfolge von $ids.
+- `wochenmail_senden(cfg, ids, note, week, year, preis)` – Wochenangebot an höchstens 20 Kunden senden (ein Teil): Ergebnis je Kunden-ID in der Reihenfolge von $ids.
 - `sonderposten_empfaenger(def)` – Sonderposten eines Angebots: Artikel (wie veröffentlicht), Empfänger (nur Kunden dieses Angebots, GR-005) mit Grund, Stand
 - `sonderposten_senden(cfg, def, ids, note, publishedAt)` – Sonderposten an höchstens 200 Kunden des Angebots senden (ein Teil): Ergebnis je Kunden-ID.
 - `ksess_begrenzen(r, kid)` – Register auf die Obergrenzen kürzen: erst je Zugang, dann insgesamt (die zuletzt benutzten bleiben)
@@ -306,6 +307,19 @@ _STAFL-Plattform · Angebot · Sonderangebote (Auftrag des Inhabers 13.11.2026):
 - `sonder_speichern(me, b)` – Anlegen bzw. ändern (Name, Kundengruppen, Gültigkeit) und vorzeitig beenden/fortsetzen.
 - `sonder_loeschen(me, b)` – Löschen (Eingabe {rev, id}).
 
+## `app/api/module/angebot/vorwoche.php`
+
+_Angebot · Preisänderung zur Vorwoche (Inhaber 20.11.2026_
+
+- `angebot_vorwoche_kw(m)` – KW vor der Woche des Modells als [kw, jahr] (auch über den Jahreswechsel, ISO-Wochen), sonst null
+- `angebot_gruppen_namen(m)` – Gruppen-ID → Name eines Modells oder aufgelösten Angebots
+- `angebot_vorwoche_schluessel(it, gname)` – Vergleichsschlüssel eines Artikels, vom genauesten zum gröbsten
+- `angebot_vorwoche_zuordnen(vorher, jetzt)` – Artikel von $jetzt den Artikeln von $vorher zuordnen: [Artikel-ID => Preis der Vorwoche \| null (ohne Preis)]; ohne Treffer fehlt die ID. Ein Schlüssel zählt …
+- `angebot_vorwoche_stempeln(model)` – Beim Veröffentlichen (unter der Sperre „entwurf“, vor dem Schreiben): Schnappschuss der Vorwoche ins Modell.
+- `angebot_vorwoche(model, def, offer)` – Änderungen eines aufgelösten Angebots ($offer = offer_resolve($model, $def)) gegen die Vorwoche: {kw, jahr, aenderungen: {Artikel-ID: {art: 'neu'} \| {art: …
+- `angebot_vorwoche_mail(oid, name)` – Übersicht der Änderungen eines Angebots für die Wochen-Mail als [Text, HTML] (E-Mail-taugliches HTML mit Inline-Styles, Farben wie auf der Angebotsseite), …
+- `angebot_vorwoche_block(name, kw, off, aend, top)`
+
 ## `app/api/module/angebot/winab-export.php`
 
 _Export des Wochenangebots für WinAB (Auftrag des Inhabers 05.11.2026)_
@@ -320,6 +334,7 @@ _Angebot · Frühere Wochen ansehen und Wochenablage (Wünsche des Inhabers 13.1
 
 - `angebot_woche_kw(m)` – KW eines gespeicherten Angebots als „JJJJ-WW“ (nur gültige ISO-Wochen), sonst null
 - `angebot_woche_definition(o)` – Eine Angebotsdefinition so, wie offer_resolve sie braucht: ID, Name, Regel der Artikelliste, bei Sonderangeboten Art und Gültigkeit (Kopf „gültig von … bis …
+- `angebot_woche_damals(defs)` – Damalige Angebotsdefinitionen einer Wochenablage (null = unbekannt) als [ID => Definition]
 - `angebot_woche_definitionen()` – Angebotsdefinitionen als Schnappschuss (GR-106)
 - `angebot_woche_ablegen(model)` – Beim Veröffentlichen (angebot_veroeffentlichen, unter der Sperre „entwurf“): neuen Stand je KW ablegen, ersetzt dieselbe KW
 - `angebot_woche_retten(v)` – Vor dem Löschen einer alten Version (keep_versions): in die Ablage retten, wenn diese KW dort keinen neueren Stand hat
@@ -1143,6 +1158,9 @@ _STAFL-Plattform · Angebot · Drucken aus „Angebot bearbeiten“ und Einstell
 
 - `fertig()`
 - `drucken(opt)`
+- `druckeGewaehlt(vergleich)` – Knopf „Drucken“: das gewählte Angebot, wie die Vorschau es zeigt – vorher den Entwurf speichern
+
+**Menü „Zusatz“ am Pfeil neben „Drucken“**
 
 **Fußzeile im Druck (nur Administratoren)**
 
@@ -1690,6 +1708,35 @@ _Testgruppe p0: Ersteinrichtung gesperrt (leeres System, WA_INSTALLED, kaputte N
 - `system_neu()` – 5) Sicherungs-Status im Modul Sicherheit, Reiter System (bis 27.10.2026 Verwaltung → System)
 - `karte_zeigen(name, status, **felder)`
 - `extern_zeigen(name, stufe, status)` – 5b) Externe Kopie der Datensicherung (deploy/sicherung-extern.sh schreibt sicherung-extern.php neben die Datenbank)
+
+## `tests/e2e/test_preisaenderung.py`
+
+_Angebot „mit Preisänderung“ (Inhaber 20.11.2026): je Artikel die Veränderung zur Vorwoche (▼ günstiger, ▲ teurer, neu) als Zusatzfunktion – auf der Angebotsseite und im Druck nur mit ?vergleich=vorwoche bzw. …_
+
+- `check(n, c, i)`
+
+**Kundenangebote, Kunden, Versender**
+
+- `kunde(user)`
+- `veroeffentlichen(m)`
+
+**KW 43 (Vorwoche): Seed mit Kundenpreisen für D (A, B), eigener Liste H (G, U, OC1, OC2), X im Wochenangebot ausgeblendet**
+
+**KW 44: G günstiger, T teurer, U gleich, D nur für Kunde A günstiger, N neu; alle Artikel-IDs neu (wie ein neuer Excel-Import)**
+
+**Aktion offer**
+
+**Versand**
+
+**Oberfläche**
+
+- `satz(pg)`
+- `zurueck(pg)`
+- `laden(pg, pfad)`
+
+**Angebot bearbeiten: Drucken und Menü „Zusatz“**
+
+- `drucke(ausloesen)`
 
 ## `tests/e2e/test_restposten.py`
 

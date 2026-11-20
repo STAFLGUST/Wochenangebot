@@ -2855,7 +2855,7 @@
   const menuBtn = $('#btn-more'), menu = $('#menu-more');
   const setMenu = (open) => { menu.hidden = !open; menuBtn.setAttribute('aria-expanded', open); if (open) menu.querySelector('button').focus(); };
   menuBtn.addEventListener('click', () => setMenu(menu.hidden));
-  document.addEventListener('click', (e) => { if (!menu.hidden && !e.target.closest('.menu-wrap')) setMenu(false); });
+  document.addEventListener('click', (e) => { if (!menu.hidden && !e.target.closest('#menu-more, #btn-more')) setMenu(false); });
   menu.addEventListener('keydown', (e) => {
     const items = $$('button', menu), i = items.indexOf(document.activeElement);
     if (e.key === 'ArrowDown') { e.preventDefault(); items[(i + 1) % items.length].focus(); }
