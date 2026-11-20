@@ -141,13 +141,14 @@ jobs:
           python3 -m venv /tmp/adressen
           /tmp/adressen/bin/pip install -q --no-deps --only-binary=:all: --require-hashes -r deploy/karte/requirements.txt
           /tmp/adressen/bin/python tests/unit/test_adressen.py
-      - name: Unit-Tests CI-Werkzeuge (Aufteilung der Testgruppen, Nachweis nach dem Merge, Paketvorrat, Entwickler-Doku, Image-Updates)
+      - name: Unit-Tests CI-Werkzeuge (Aufteilung der Testgruppen, Nachweis nach dem Merge, Paketvorrat, Entwickler-Doku, Image-Updates, Geodaten-Katalog)
         run: |
           python3 tests/unit/test_run_e2e_teile.py
           python3 tests/unit/test_ci_nachweis.py
           python3 tests/unit/test_apt_vorrat.py
           python3 tests/unit/test_doku.py
           python3 tests/unit/test_images_aktualisieren.py
+          python3 tests/unit/test_eudr_geodatenkatalog.py
       - name: Workflows prüfen (actionlint)
         run: |
           curl -sSLf -o /tmp/al.tgz "https://github.com/rhysd/actionlint/releases/download/v${ACTIONLINT_VERSION}/actionlint_${ACTIONLINT_VERSION}_linux_amd64.tar.gz"

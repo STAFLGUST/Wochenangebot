@@ -36,6 +36,15 @@ switch ($action) {
                 'lieferanten' => $darf ? eudr_lieferanten() : []] + eudr_stand());   // Stammdaten nur zum Auswählen und nur hier, nicht in jeder Antwort
         }
 
+        /* Geodaten-Katalog GEOS-EUDR (Thünen-Institut, MIT-Lizenz): öffentliche Metadaten offener Geodatensätze zu Wald, nur
+           lesen, Recht wie die übrige EUDR-Ansicht. Die Datei schreibt nur werkzeuge/eudr_geodatenkatalog.py. */
+        case 'containerimport_eudr_geodaten': {
+            eudr_leser();
+            $katalog = json_decode((string)@file_get_contents(__DIR__ . '/../module/containerimport/geodatenkatalog.json'), true);
+            if (!is_array($katalog)) fail('Der Geodaten-Katalog ist nicht lesbar.', 500);
+            respond(['ok' => true] + $katalog);
+        }
+
         /* Dateien prüfen, ohne zu speichern: Lieferanten-GeoJSON, gelesene Berichte, eingefügte Koordinaten (POST wegen Inhalt).
            Steht eine Nummer aus den Papieren in diesem Durchgang bei zwei neuen Farmern, ist das zweite Vorkommen ein Fehler. */
         case 'containerimport_eudr_pruefen': {

@@ -1,0 +1,1172 @@
+{
+ "schema": 1,
+ "quelle": {
+  "name": "GEOS-EUDR: A curated metadatabase for supporting EUDR supply chain monitoring",
+  "url": "https://github.com/GEOS-EUDR-RepoHub/Metadatabase-Geodata-EUDR",
+  "lizenz": "MIT",
+  "lizenzdatei": "geodatenkatalog-LIZENZ.txt",
+  "urheber": "Thünen-Institut, GEOS-EUDR: Juliana Freitas Beyer, Margret Köthke, Melvin Lippe"
+ },
+ "themen": [
+  {
+   "id": "ForestCover_TreeExtent",
+   "name": "Wald und Baumbedeckung (Forest/Tree Cover)",
+   "version": "1.0",
+   "datei": "ForestCover_TreeExtent_GeosEDUR_Thuenen_v1.0.tsv",
+   "eintraege": 22,
+   "quelleCommit": "4b95506",
+   "abgerufen": "2026-11-20",
+   "zitiervorschlag": "Freitas Beyer, J., Köthke, M., & Lippe, M. (2026). GEOS-EUDR: Dataset Catalog - Forest Metadata (Version 1.0). Zenodo. https://zenodo.org/records/20698510"
+  }
+ ],
+ "eintraege": [
+  {
+   "id": "FNF01",
+   "thema": "ForestCover_TreeExtent",
+   "name": "JRC GFC 2020 v2 and v3 - Global Forest Cover map for year 2020",
+   "hinweis": null,
+   "hersteller": "JRC (Joint Research Centre)",
+   "zitat": "Bourgoin et al., 2024 (v2 dataset); Bourgoin et al., 2025 (v3 dataset)",
+   "links": {
+    "veroeffentlichung": [
+     {
+      "text": "v3",
+      "url": "https://op.europa.eu/fr/publication-detail/-/publication/70cd35b9-4da7-11f1-8095-01aa75ed71a1/language-en"
+     }
+    ],
+    "gee": [
+     {
+      "text": "V2",
+      "url": "https://developers.google.com/earth-engine/datasets/catalog/JRC_GFC2020_V2"
+     },
+     {
+      "text": "V3",
+      "url": "https://developers.google.com/earth-engine/datasets/catalog/JRC_GFC2020_V3?hl=de"
+     }
+    ],
+    "andere": [
+     {
+      "text": "V2",
+      "url": "https://data.jrc.ec.europa.eu/dataset/e554d6fb-6340-45d5-9309-332337e5bc26"
+     },
+     {
+      "text": "V3",
+      "url": "https://data.jrc.ec.europa.eu/dataset/8c561543-31df-4e1b-9994-e529afecaf54#dataaccess"
+     }
+    ]
+   },
+   "klassen": "Forest, Non-forest",
+   "walddefinition": "The definition of forest in the map aligns with the forest definition by the Food and Agriculture Organization (⩾ 5m, ⩾ 0.5ha, ⩾ 10%). Some areas of non-forest tree-based systems are included in the forest class.",
+   "eudrKonform": "ja",
+   "ausdehnung": "Global",
+   "aufloesungM": "10",
+   "vonJahr": "2020",
+   "bisJahr": "2020",
+   "zeitlich": "annual",
+   "sensor": "Publicly available global datasets on land cover, land use, and tree characteristics, mostly from remote sensing (~10–30 m) combined with stratification layers on ecological zones from FAO and global forest loss drivers from the University of Maryland (UMD) to produce a refined dataset near 2020. In total 18 datasets were used",
+   "methode": "Composite Map/Map-based synthesis/Ensemble",
+   "kategorie": "Rule-based, Expert-driven",
+   "validierung": {
+    "ansatz": "Final accuracy was assessed using a randomly stratified sampling.",
+    "referenz": "The data was collected via crowdsourcing by IIASA (GeoWiki interface)",
+    "stichproben": "Version 2-> 20,379; Version 3-> 21,612"
+   },
+   "genauigkeit": {
+    "oa": "Version 2 -> 91.5% (preliminary) ; Version 3-> 92.8%",
+    "paUa": "[Target class = Forest Class/Tree cover] Version 2: Producer's Accuracy (Omission error) - 8.2%; User's Accuracy (Commission error) - 18% . Version 3: Producer's Accuracy (Omission error) - 10.6%; User's Accuracy (Commission error) - 13.1%",
+    "weitere": "Risk probability, Accuracy per region (Africa, North and Central America, South America, Asia, Europe, Oceania, Russia federation",
+    "zusatz": "Version 2 -> Probability of overestimating of forest area (18%); Probability of underestimation of forest area (8.2%). Global estimates do not reflect regional or local accuracy, which declines in dry, open forests and areas with fragmented forest–non-forest mosaics; Version 3 -> Overall, V3 improves classification accuracy compared to V2 across most land-use categories, with particularly strong gains for tree-related classes. Accuracy increases are most notable for agricultural trees, trees outside forests, and urban trees, while previously problematic categories such as trees inside forests and other wooded land also show clear improvements, although they remain more uncertain due to difficulties in visual interpretation and boundary detection."
+   },
+   "grenzen": "• Commission errors: Non-forest areas, especially scrub and other wooded land, are sometimes misclassified as forest.\n• Regional accuracy limitations: Reduced accuracy in open and dry forest regions (e.g., eastern Brazil, central Australia).\n• Underestimation risk: Sparse or dry forests may be omitted due to tree-height thresholds.\n• Environmental and technical effects: Cloud cover, terrain shadowing, and occasional geolocation misalignment affect accuracy, particularly in tropical regions.\n• Unstocked forest areas: Approximately 0.6% (~25 Mha) of areas classified as forest are temporarily unstocked due to management activities or natural disturbances (e.g., fire).\n• Spatial artefacts: Blocky patterns are present due to the resolution of input layers."
+  },
+  {
+   "id": "FNF02",
+   "thema": "ForestCover_TreeExtent",
+   "name": "GFT 2020 (v1) - Global Forest Types for year 2020",
+   "hinweis": null,
+   "hersteller": "JRC",
+   "zitat": "Bourgoin et al., 2026",
+   "links": {
+    "veroeffentlichung": [
+     {
+      "text": "v1",
+      "url": "https://op.europa.eu/fr/publication-detail/-/publication/70cd35b9-4da7-11f1-8095-01aa75ed71a1/language-en"
+     }
+    ],
+    "gee": [
+     {
+      "text": null,
+      "url": "https://developers.google.com/earth-engine/datasets/catalog/JRC_GFC2020_subtypes_V1"
+     }
+    ],
+    "andere": [
+     {
+      "text": null,
+      "url": "https://forobs.jrc.ec.europa.eu/GFT"
+     }
+    ]
+   },
+   "klassen": "Naturally Regenerating Forest; Primary forest; Planted/Plantation Forest",
+   "walddefinition": "The definition of forest in the map aligns with the forest definition by the Food and Agriculture Organization (⩾ 5m, ⩾ 0.5ha, ⩾ 10%). Some areas of non-forest tree-based systems are included in the 3 forest classes.",
+   "eudrKonform": "ja",
+   "ausdehnung": "Global",
+   "aufloesungM": "10",
+   "vonJahr": "2020",
+   "bisJahr": "2020",
+   "zeitlich": "annual",
+   "sensor": "Available global datasets that works as proxies or the four main forest types (primary forest, naturally regenerating forest, planted forest, plantation forest). The base forest layer is the JRC GFC 2020 v3",
+   "methode": "Composite Map/Map-based synthesis/Ensemble",
+   "kategorie": "Rule-based, Expert-driven",
+   "validierung": {
+    "ansatz": "NR - This is a derived product built on GFC2020, dedicated technical report including full accuracy assessment is not yet available (09.06.2026)",
+    "referenz": "NR",
+    "stichproben": "NR"
+   },
+   "genauigkeit": {
+    "oa": "NR",
+    "paUa": "NR",
+    "weitere": "NR",
+    "zusatz": "NR"
+   },
+   "grenzen": "• Planted and plantation forests - Widespread underestimation of planted and plantation forests, reported in parts of Brazil, Indonesia, and several other regions. - Local overestimation of plantations where primary forest is underestimated.\n• Primary and naturally regenerating forests - Underestimation of primary forest in multiple tropical regions. - Misclassification between primary and naturally regenerating forests, producing inconsistent or mixed patterns.\n• Spatial artifacts - Presence of blocky patterns affecting plantation and forest classes across several regions. - Geometric and processing artifacts linked to input layers, reducing local map consistency.\n• Regional variability - Data quality and class reliability vary by region, with some areas more affected by systematic biases and artifacts than others."
+  },
+  {
+   "id": "FNF03",
+   "thema": "ForestCover_TreeExtent",
+   "name": "ESA WC - World Cover for year 2020 (v100) and year 2021 (v200)",
+   "hinweis": null,
+   "hersteller": "European Space Agency (ESA)",
+   "zitat": "Zanaga et al. 2021 (v100); Zanaga et al. 2022 (v200)",
+   "links": {
+    "veroeffentlichung": [
+     {
+      "text": null,
+      "url": "https://esa-worldcover.s3.eu-central-1.amazonaws.com/v200/2021/docs/WorldCover_PUM_V2.0.pdf"
+     }
+    ],
+    "gee": [
+     {
+      "text": "Year 2020 (v100)",
+      "url": "https://developers.google.com/earth-engine/datasets/catalog/ESA_WorldCover_v100?hl=de"
+     },
+     {
+      "text": "Year 2021 (v200)",
+      "url": "https://developers.google.com/earth-engine/datasets/catalog/ESA_WorldCover_v200"
+     }
+    ],
+    "andere": [
+     {
+      "text": null,
+      "url": "https://esa-worldcover.org/en"
+     }
+    ]
+   },
+   "klassen": "Tree cover, Shrubland, Grassland, Cropland, Built-up, Bare / sparse vegetation, Snow and Ice, Permanent water bodies, Herbaceous Wetland, Mangrove and Moss and lichen",
+   "walddefinition": "(⩾ 5m, ⩾ NR, ⩾ 10%). Plantation and areas with planted trees for afforestation are included in the forest class.",
+   "eudrKonform": "nein_unklar",
+   "ausdehnung": "Global",
+   "aufloesungM": "10",
+   "vonJahr": "2020",
+   "bisJahr": "2021",
+   "zeitlich": "annual",
+   "sensor": "Sentinel-2 (S2) - surface reflectance and Sentinel-1 (S1)- VV and VH backscatter",
+   "methode": "Gradient boosting decision tree algorithm (CatBoost) (Prokhorenkova et al., 2018)",
+   "kategorie": "Supervised Classical Machine Learning (ML)",
+   "validierung": {
+    "ansatz": "The WorldCover products were validated using the CGLS-LC dataset following CEOS WGCV LPV guidelines. Validation employed stratified random sampling, with 100×100 m primary sampling units divided into 10×10 secondary units. Sites with high likelihood of land cover change were revisited using very high-resolution imagery (Google, Bing, ESRI) and Sentinel-2 to ensure accurate visual interpretation.",
+    "referenz": "CGLS-LC validation dataset (Copernicus Global Land Service – Land Cover product) Reference years: 2019, 2020, 2021",
+    "stichproben": "Validation: Primary sample units (PSU): 21,624; Secondary sample units (SSU): 2,162,366; Updates for recent years included revisiting 2,860 points for 2020 and 4,410 points for 2021, with ~2,200 random sites and ~2,210 targeted high-change sites"
+   },
+   "genauigkeit": {
+    "oa": "76.7 ± 0.5%",
+    "paUa": "[Target class = Forest Class/Tree cover] Producer's Accuracy (Omission error) - 88.6%; User's Accuracy (Commision error) - 90.7%",
+    "weitere": "NR",
+    "zusatz": "All continents show overall accuracy above 72%. Higher accuracies observed for tree cover, snow/ice, cropland, water bodies, and bare/sparse vegetation; moderate for grassland and built-up; lower for shrubs, wetlands, and moss/lichen. Lower continental accuracies (e.g., Oceania, parts of Eurasia) attributed to class confusions such as shrubland vs. grassland and trees vs. grassland."
+   },
+   "grenzen": "• Cloud artifacts: appear in regions with persistent or high cloud cover.\n• Hard borders: visible in areas with high class confusion, often along Sentinel-2 orbit or block boundaries due to differing observation densities.\n• Water misclassification: occurs on glaciers, ice sheets, and mountain shadows.\n• Spectral confusion: irrigated agriculture and herbaceous wetlands can be misclassified because of high spectral similarity."
+  },
+  {
+   "id": "FNF04",
+   "thema": "ForestCover_TreeExtent",
+   "name": "ESRI-10m - ESRI Global Land Use Land Cover from Sentinel-2",
+   "hinweis": null,
+   "hersteller": "Impact Observatory (IO), in cooperation with ESRI and Microsoft AI for Earth",
+   "zitat": "Karra et al. 2021",
+   "links": {
+    "veroeffentlichung": [
+     {
+      "text": null,
+      "url": "https://ieeexplore.ieee.org/document/9553499"
+     }
+    ],
+    "gee": [
+     {
+      "text": null,
+      "url": "https://gee-community-catalog.org/projects/S2TSLULC/"
+     }
+    ],
+    "andere": [
+     {
+      "text": null,
+      "url": "https://www.arcgis.com/home/item.html?id=d6642f8a4f6d4685a24ae2dc0c73d4ac"
+     }
+    ]
+   },
+   "klassen": "Water, trees, flooded vegetation, crops, built area, bare ground, snow/ice, clouds, rangeland",
+   "walddefinition": "(⩾ 4.57m, ⩾ NR, ⩾ NR). Other wooded land/savannas, plantations, swamps or mangroves may be included in the forest class.",
+   "eudrKonform": "nein_unklar",
+   "ausdehnung": "Global",
+   "aufloesungM": "10",
+   "vonJahr": "2017",
+   "bisJahr": "2023",
+   "zeitlich": "annual",
+   "sensor": "Sentinel-2 L2A surface reflectance data at 10m resolution",
+   "methode": "Deep learning model (convolutional neural network for image segmentation)",
+   "kategorie": "Deep Learning",
+   "validierung": {
+    "ansatz": "15% of training data set aside at the end of each epoch; supplemented with expert-labeled gold standard tiles.",
+    "referenz": "Gold standard human-labeled tiles (24,000 5×5 km areas; period not specified)",
+    "stichproben": "24,000 tiles (15% of training data)"
+   },
+   "genauigkeit": {
+    "oa": "75% average OA; 85% (across ten classes on holdout validation)",
+    "paUa": "Only reported for certain regions (California, Costa Rica, Belgium and Laos)",
+    "weitere": "NR",
+    "zusatz": "NR"
+   },
+   "grenzen": "• Incomplete imagery for 2017: fewer input images may reduce the accuracy of class assignments compared to 2018–2023.\n• Class confusion: crops can be misclassified as grasses, and there is confusion with flooded vegetation."
+  },
+  {
+   "id": "FNF05",
+   "thema": "ForestCover_TreeExtent",
+   "name": "Dynamic World - Near Real Time LULC (from 2015-06-27 to present)",
+   "hinweis": null,
+   "hersteller": "World Resources Institute Google (WIR)",
+   "zitat": "Brown et al. 2022",
+   "links": {
+    "veroeffentlichung": [
+     {
+      "text": null,
+      "url": "https://www.nature.com/articles/s41597-022-01307-4"
+     }
+    ],
+    "gee": [
+     {
+      "text": null,
+      "url": "https://developers.google.com/earth-engine/datasets/catalog/GOOGLE_DYNAMICWORLD_V1"
+     }
+    ],
+    "andere": [
+     {
+      "text": null,
+      "url": "https://github.com/google/dynamicworld"
+     }
+    ]
+   },
+   "klassen": "Water, trees, grass, flooded vegetation, crops, shrub & scrub, built area, bare ground, snow/ice",
+   "walddefinition": "(⩾ NR, ⩾ NR, ⩾ NR). Areas of plantations, wooded vegetation, dense green shrubs, tall vegetation within savannas, swamps, and burned or mixed areas may be included in forest class.",
+   "eudrKonform": "nein_unklar",
+   "ausdehnung": "Global",
+   "aufloesungM": "10",
+   "vonJahr": "2015",
+   "bisJahr": "2024",
+   "zeitlich": "Near-real-time (2-5 days)",
+   "sensor": "Sentinel-2 L1C images",
+   "methode": "Semi-supervised deep learning (supervised label data to train Fully Convolutional Neural Network",
+   "kategorie": "Deep Learning",
+   "validierung": {
+    "ansatz": "Balanced random sampling of ten image-markup pairs per biome per hemisphere; each Sentinel-2 tile annotated independently by three experts and one non-expert to enable cross-expert QA.",
+    "referenz": "Sentinel-2 tiles with expert and non-expert annotations; reference years ~2017 (stratification based on NASA MCD12Q1, NLCD 2016, MapBiomas 2017)",
+    "stichproben": "Tile-level validation samples: 409 Sentinel-2 tiles Pixel-level validation samples (reference units): 68,137,571 pixels with expert consensus"
+   },
+   "genauigkeit": {
+    "oa": "73.8% (label agreement)",
+    "paUa": "[Target class = Forest Class/Tree cover] Producer's Accuracy (Omission error) - 93.20%; User's Accuracy (Commision error) - 70.20%",
+    "weitere": "Inter-annotator agreement; expert–expert consistency; agreement between machine labeling and expert consensus under multiple voting schemes",
+    "zusatz": "Compared to other LULC products, Dynamic World showed +7.5% higher agreement than ESA CGLS ProbaV 2019 at higher spatial resolution (10 m vs 100 m), and 1.2% lower agreement compared to LCMAP 2017. Metrics focus on label agreement rather than traditional confusion-matrix-based accuracy."
+   },
+   "grenzen": "• Biome performance variability: performs best in temperate and tree-dominated biomes, with greater confusion in arid shrublands and rangelands, especially between crops and shrubs.\n• Grassland and crop classification errors: underestimates grasslands (30.1% vs 50% by non-experts) and slightly underestimates crops (88.9% vs 93.7% by non-experts).\n• Cloud and shadow misclassification: missed clouds may be labeled as snow & ice, and missed shadows as water, despite conservative masking efforts."
+  },
+  {
+   "id": "FNF06",
+   "thema": "ForestCover_TreeExtent",
+   "name": "GLC-FCS30D - Global 30-meter Land Cover Change Dataset (version 1 and 2)",
+   "hinweis": null,
+   "hersteller": "International Research Center of Big Data for Sustainable Development Goals (CBAS)",
+   "zitat": "Zhang and Zhao 2023 (v1); Zhang and Zhao 2025 (v2)",
+   "links": {
+    "veroeffentlichung": [
+     {
+      "text": null,
+      "url": "https://essd.copernicus.org/articles/16/1353/2024/"
+     }
+    ],
+    "gee": [
+     {
+      "text": "Official",
+      "url": "https://gee-community-catalog.org/projects/glc_fcs/"
+     },
+     {
+      "text": "Third person exploration",
+      "url": "https://gee-community-catalog.org/tutorials/examples/glc_fcs30d_lulc/#3-calculating-and-exporting-landcover-statistics"
+     }
+    ],
+    "andere": [
+     {
+      "text": "version 1",
+      "url": "https://zenodo.org/records/8239305"
+     },
+     {
+      "text": "version 2 – not yet available on GEE catalog",
+      "url": "https://zenodo.org/records/15063683"
+     }
+    ]
+   },
+   "klassen": "Level-1 classes are: Rainfed cropland, Irrigated cropland, Evergreen broadleaved forest, Deciduous broadleaved forest, Evergreen needleleaved forest, Deciduous needleleaved forest, Mixed-leaf forest, Shrubland, Grassland, Lichens and mosses, Inland wetland, Coastal wetland, Impervious surface, Sparse vegetation, Bare areas, Water body, Permanent snow and ice",
+   "walddefinition": "(⩾ NR, ⩾ NR, ⩾ 15%). May incluse savanna and woody savanna into forest class.",
+   "eudrKonform": "nein_unklar",
+   "ausdehnung": "Global",
+   "aufloesungM": "30",
+   "vonJahr": "2000",
+   "bisJahr": "2022",
+   "zeitlich": "annual",
+   "sensor": "All available Landsat imagery from 1984 to 2022 – covering the Landsat 5 Thematic Mapper (TM), Landsat 7 Enhanced Thematic Mapper Plus (ETM+), Landsat 8 Operational Land Imager (OLI), and Landsat 9 OLI missions",
+   "methode": "Continuous change detection (CCD) time-series algorithm proposed by Zhu and Woodcock (2014b) with the local adaptive updating method",
+   "kategorie": "Rule-based / Threshold-based",
+   "validierung": {
+    "ansatz": "Stratified random sampling based on landscape heterogeneity, population density, and Köppen climate groups; land-cover type determined via independent interpretation of high-resolution aerial imagery, multitemporal Landsat images, and ancillary data, followed by senior expert quality control.",
+    "referenz": "GLC_FCS30D (2020); LCMAP_Val (30 m, period not specified); LUCAS (2006–2018, 3-year intervals)",
+    "stichproben": "GLC_FCS30D: 84,526; LCMAP_Val: 24,971; LUCAS: 1,090,863"
+   },
+   "genauigkeit": {
+    "oa": "Global validation (2020) achieved 80.88% O.A. for the 10-class system and 73.04% O.A. for the finer 17-class LCCS level-1 system.",
+    "paUa": "[Target class = Forest Class/Tree cover] Producer's Accuracy (Omission error) - 92.83%; User's Accuracy (Commision error) - 86.35%",
+    "weitere": "Standard errors via post-stratified estimator",
+    "zusatz": "Using third-party datasets, mean O.A. was 79.50% over CONUS (LCMAP_Val, 1985–2018) and 81.91% over the EU (LUCAS, 2006–2018). Cropland and forest consistently showed high P.A. and U.A. (cropland >85% P.A. and >93% U.A.). Accuracy assessment followed Pontus Olofsson (2014) guidelines, combining site-specific confusion-matrix-based accuracy with area estimation."
+   },
+   "grenzen": "• Dependence on observation density: reliability decreases in areas with sparse valid satellite observations.\n• Cloud and snow interference: cloudy or snowy regions increase uncertainty in detecting the timing of land-cover changes.\n• Sparse historical data: limited satellite data availability before the year 2000 reduces accuracy for early periods.\n• Climate-sensitive changes: land-cover changes influenced by climate are more difficult to capture accurately."
+  },
+  {
+   "id": "FNF07",
+   "thema": "ForestCover_TreeExtent",
+   "name": "FROM-GLC10 - Finer Resolution Observation and Monitoring of Global Land Cover",
+   "hinweis": null,
+   "hersteller": "Department of Earth System Science, Tsinghua University",
+   "zitat": "Chen et al. 2019",
+   "links": {
+    "veroeffentlichung": [
+     {
+      "text": null,
+      "url": "https://www.sciencedirect.com/science/article/pii/S2095927319301380?via%3Dihub"
+     }
+    ],
+    "gee": [
+     {
+      "text": null,
+      "url": "https://gee-community-catalog.org/projects/glc10/"
+     }
+    ],
+    "andere": [
+     {
+      "text": null,
+      "url": "https://www.dess.tsinghua.edu.cn/info/1120/1418.htm"
+     }
+    ]
+   },
+   "klassen": "Cropland, forest, grass, shrub, water, impervious, bareland, snow/ice, cloud",
+   "walddefinition": "(⩾ NR, ⩾ NR, ⩾ NR).",
+   "eudrKonform": "nein_unklar",
+   "ausdehnung": "Global",
+   "aufloesungM": "10",
+   "vonJahr": "2017",
+   "bisJahr": "2017",
+   "zeitlich": "annual",
+   "sensor": "Sentinel-2",
+   "methode": "Random Forest Classifier",
+   "kategorie": "Supervised Classical Machine Learning (ML)",
+   "validierung": {
+    "ansatz": "Multi-seasonal sampling from Landsat 8 images; land-cover types at different seasons interpreted and split into training and validation sets.",
+    "referenz": "Landsat 8 images (2014–2015)",
+    "stichproben": "~140,000 sample units at >38,000 locations"
+   },
+   "genauigkeit": {
+    "oa": "72.76% (global, validated against 2015 validation sample)",
+    "paUa": "[Target class = Forest Class/Tree cover]Producer's Accuracy (Omission error) -84.20%; User's Accuracy (Commision error) - 83.47%",
+    "weitere": null,
+    "zusatz": "Validation used the 2015 global 30-m resolution sample set. The 2017 FROM-GLC30 map was also compared to the same 2015 sample, achieving 72.43% O.A. FROM-GLC10 showed finer spatial detail, improving distinction between forest, shrub, and grassland classes."
+   },
+   "grenzen": "NR"
+  },
+  {
+   "id": "FNF08",
+   "thema": "ForestCover_TreeExtent",
+   "name": "Forest Height - GLAD ARD - Thematic map of Global Land Cover and Land Use Change",
+   "hinweis": null,
+   "hersteller": "Global Land Analysis and Discovery (GLAD) laboratory in the Department of Geographical Sciences at the University of Maryland USA (UMD)",
+   "zitat": "Potapov et al., 2022",
+   "links": {
+    "veroeffentlichung": [
+     {
+      "text": null,
+      "url": "https://www.frontiersin.org/journals/remote-sensing/articles/10.3389/frsen.2022.856903/full"
+     }
+    ],
+    "gee": [
+     {
+      "text": null,
+      "url": "https://glad.earthengine.app/view/glcluc-2000-2020#lon=0;lat=0;zoom=3"
+     }
+    ],
+    "andere": [
+     {
+      "text": "Info",
+      "url": "https://glad.umd.edu/dataset/GLCLUC2020"
+     },
+     {
+      "text": "Download",
+      "url": "https://glad.umd.edu/users/Potapov/GLCLUC2020/Forest_height_2020/"
+     }
+    ]
+   },
+   "klassen": "Forest height( in meters) and non-forest (or no data)",
+   "walddefinition": "(⩾ 5m*, ⩾ 0.5ha, ⩾ NR). Forest class includes areas of wildland, managed, and planted tree cover, including agroforestry and orchards, but excludes temporally unstocked forest areas. (*) Woody vegetation starts from 3m.",
+   "eudrKonform": "nein_unklar",
+   "ausdehnung": "Global",
+   "aufloesungM": "30",
+   "vonJahr": "2000",
+   "bisJahr": "2020",
+   "zeitlich": "annual, but only 2 years, 2000 AND 2020",
+   "sensor": "Global Ecosystem Dynamics Investigation (GEDI, https://gedi.umd.edu/) lidar forest structure measurements and 2000-2020 Landsat analysis-ready data time-series",
+   "methode": "Regression tree ensembles",
+   "kategorie": "Supervised Classical Machine Learning (ML)",
+   "validierung": {
+    "ansatz": "Comparison of 2020 forest height map with GEDI RH95 metric values within stable forests (≥5 m tree height in 2000 and 2020, no disturbance).",
+    "referenz": "GEDI Collection 2 RH95 (April 2019 – September 2020)",
+    "stichproben": "104.7 million GEDI footprints"
+   },
+   "genauigkeit": {
+    "oa": "NA (Not expressed as a thematic percentage; forest height model accuracy evaluated in meters)",
+    "paUa": null,
+    "weitere": "RMSE, MAE, R²",
+    "zusatz": "Year 2019 forest height map validated against GEDI Collection 1: RMSE = 6.6 m, MAE = 4.45 m, R² = 0.62; airborne lidar: RMSE = 9.07 m, MAE = 6.36 m, R² = 0.61. Year 2020 map validated against GEDI Collection 2 RH95 (stable forests): RMSE = 6.75 m, MAE = 4.76 m, R² = 0.53. Validation limited to forest pixels ≥5 m (map) and ≥3 m (GEDI)."
+   },
+   "grenzen": "• Challenges with sparse or open canopy forests: GEDI-calibrated forest height maps reveal forests ≥5 m in height within open-canopy regions and savannas that WorldCover classifies as shrubland."
+  },
+  {
+   "id": "FNF09",
+   "thema": "ForestCover_TreeExtent",
+   "name": "Forest Extent - GLAD ARD - Thematic map of Global Land Cover and Land Use Change",
+   "hinweis": null,
+   "hersteller": "Global Land Analysis and Discovery (GLAD) laboratory in the Department of Geographical Sciences at the University of Maryland USA (UMD GLAD)",
+   "zitat": "Potapov et al., 2022",
+   "links": {
+    "veroeffentlichung": [
+     {
+      "text": null,
+      "url": "https://www.frontiersin.org/journals/remote-sensing/articles/10.3389/frsen.2022.856903/full"
+     }
+    ],
+    "gee": [
+     {
+      "text": null,
+      "url": "https://glad.earthengine.app/view/glcluc-2000-2020#lon=0;lat=0;zoom=3"
+     }
+    ],
+    "andere": [
+     {
+      "text": "Info",
+      "url": "https://glad.umd.edu/dataset/GLCLUC2020"
+     },
+     {
+      "text": "Download",
+      "url": "https://glad.umd.edu/users/Potapov/GLCLUC2020/Forest_extent_2020/"
+     }
+    ]
+   },
+   "klassen": "Forest, non-forest",
+   "walddefinition": "(⩾ 5m, ⩾ 0.5ha, ⩾ NR). Forest class includes areas of wildland, managed, and planted tree cover, including agroforestry and orchards, but excludes temporally unstocked forest areas.",
+   "eudrKonform": "nein_unklar",
+   "ausdehnung": "Global",
+   "aufloesungM": "30",
+   "vonJahr": "2000",
+   "bisJahr": "2020",
+   "zeitlich": "annual, but only 2 years, 2000 AND 2020",
+   "sensor": "Dataset based on Forest height",
+   "methode": "Binary thresholding of canopy height",
+   "kategorie": "Rule-based/Threshold-based",
+   "validierung": {
+    "ansatz": "Stratified sampling across five forest-change strata (stable non-forest, stable forest, forest loss, forest gain, disturbed/adjacent pixels); pixels interpreted independently by two experts using Landsat GLAD ARD 16-day time series, annual/bimonthly composites, and high-resolution imagery from Google Earth.",
+    "referenz": "Landsat GLAD ARD and high-resolution imagery (period not explicitly stated)",
+    "stichproben": "1,000 sample pixels (200 per stratum)"
+   },
+   "genauigkeit": {
+    "oa": "97.2% (Forest extent 2020)",
+    "paUa": "[Target class = Forest Class/Tree cover] Producer's Accuracy (Omission error) - 94.8%; User's Accuracy (Commision error) -94.6%",
+    "weitere": null,
+    "zusatz": "Validation based on sample-based assessment of forest extent maps for 2000 and 2020, including stable forest class. Standard error for both overall accuracies: ±0.7%. High accuracy observed across both temporal products."
+   },
+   "grenzen": "• Continuous variables mapping: Forest height and similar metrics are challenging to estimate with medium-resolution optical data; tree height models may saturate above 30 m.\n• Reporting limitations: Map-based estimates alone are insufficient for national or international reporting due to unknown spatial and temporal error variability; probability-based sampling is recommended.\n• Country-level forest area differences: The map underestimates forest area in Brazil, Canada, and Australia (~0.5 million km² each) and shows much lower forest cover in Somalia, Botswana, and Namibia compared to FAO FRA. Conversely, forest area is overestimated in Indonesia, DRC, and Central African Republic.\n• Forest definition inconsistencies: Differences in national forest definitions and the exclusion of agroforestry and tree crops from FAO FRA estimates contribute to discrepancies.\n• Overestimation by other products: ESA WorldCover 2020 overestimates forest area globally by 6–7%, driven by non-forest tundra regions misclassified as forest.\n• Continuous vs discrete mapping: Continuous forest height data better capture vegetation structure and carbon storage than discrete land cover classifications."
+  },
+  {
+   "id": "FNF10",
+   "thema": "ForestCover_TreeExtent",
+   "name": "GEDI-Height-2019 - Global Forest Canopy Height from GEDI & Landsat",
+   "hinweis": null,
+   "hersteller": "Global Land Analysis and Discovery (GLAD) laboratory in the Department of Geographical Sciences at the University of Maryland USA (UMD GLAD)",
+   "zitat": "Potapov et al., 2020",
+   "links": {
+    "veroeffentlichung": [
+     {
+      "text": null,
+      "url": "https://www.sciencedirect.com/science/article/pii/S0034425720305381"
+     }
+    ],
+    "gee": [
+     {
+      "text": null,
+      "url": "https://gee-community-catalog.org/projects/gfch/"
+     }
+    ],
+    "andere": [
+     {
+      "text": null,
+      "url": "https://glad.umd.edu/dataset/gedi/"
+     }
+    ]
+   },
+   "klassen": "Forest and non-forest classes, where forests contains different tree heights (Pixel values: 0-60 Forest canopy height, meters, 101 Water, 102 Snow/ice ,103 No data)",
+   "walddefinition": "(⩾ 0m*, ⩾ NR, ⩾ NR). Mapping tree cover including plantation, agroforestry, managed and planted trees, etc. (*) Minimum Tree height can be set by the user.",
+   "eudrKonform": "nein_unklar",
+   "ausdehnung": "Global",
+   "aufloesungM": "30",
+   "vonJahr": "2019",
+   "bisJahr": "2019 (April-October)",
+   "zeitlich": "annual",
+   "sensor": "The Global Ecosystem Dynamics Investigation (GEDI) lidar instrument onboard the International Space Station and Landsat",
+   "methode": "Regression Tree model",
+   "kategorie": "Supervised Classical Machine Learning (ML)",
+   "validierung": {
+    "ansatz": "Comparison of Landsat-derived forest height products with reference data (GEDI RH95 and ALS canopy height) at pixel/grid scale; forest detection accuracy quantified by transforming both datasets into binary forest/non-forest classes for multiple thresholds (≥3 m, ≥5 m, ≥10 m); 10% of GEDI observations set aside for validation; per-tile random sampling applied.",
+    "referenz": "GEDI RH95 gridded to Landsat pixels (2019); ALS canopy height (selected areas in USA, Mexico, DRC, Australia; period not explicitly stated)",
+    "stichproben": "13.4 million GEDI validation samples; additional ALS validation samples (number not specified)"
+   },
+   "genauigkeit": {
+    "oa": "Overall Accuracy (by threshold and reference dataset): Forest ≥3 m: 83.0% (GEDI), 87.6% (ALS) Forest ≥5 m: 87.8% (GEDI), 88.1% (ALS)",
+    "paUa": "[Target class = Forest Class/Tree cover] Producer's Accuracy (Omission error) -66.7%; User's Accuracy (Commision error) - 89.0%",
+    "weitere": "Height accuracy metrics (2019 map): GEDI Collection 1: RMSE = 6.6 m; MAE = 4.45 m; R² = 0.62 ALS: RMSE = 9.07 m; MAE = 6.36 m; R² = 0.61",
+    "zusatz": "Accuracy assessed using binary forest/non-forest thresholds (≥3 m, ≥5 m, ≥10 m). Higher uncertainty observed when compared with ALS data. Mean height difference of −3.8 m indicates systematic underestimation of forest height. Underestimation is stronger in short forests (~3 m) and tall forests (>21 m)."
+   },
+   "grenzen": "• GEDI data overestimation on slopes: Forest heights are overestimated in temperate and subtropical mountain grasslands (e.g., New Zealand, Lesotho).\n• Urban height confounding: Tree heights over cities and suburbs may be mixed with building heights.\n• GEDI calibration uncertainties: Errors in geolocation and land surface height estimation can contribute to map inaccuracies.\n• Model saturation: The forest height model saturates above 30 m, underrepresenting the tallest trees."
+  },
+  {
+   "id": "FNF11",
+   "thema": "ForestCover_TreeExtent",
+   "name": "PALSAR-2 FNF v2.0.0 - Global 4-class PALSAR-2/PALSAR Forest/Non-Forest Map",
+   "hinweis": null,
+   "hersteller": "Japan Aerospace Exploration Agency (JAXA)",
+   "zitat": "Shimada et al. 2014",
+   "links": {
+    "veroeffentlichung": [
+     {
+      "text": null,
+      "url": "https://www.eorc.jaxa.jp/ALOS/en/dataset/pdf/DatasetDescription_PALSAR2_FNF_v200a.pdf"
+     }
+    ],
+    "gee": [
+     {
+      "text": null,
+      "url": "https://developers.google.com/earth-engine/datasets/catalog/JAXA_ALOS_PALSAR_YEARLY_FNF4#description"
+     }
+    ],
+    "andere": [
+     {
+      "text": null,
+      "url": "https://www.eorc.jaxa.jp/ALOS/en/dataset/fnf_e.htm"
+     }
+    ]
+   },
+   "klassen": "Forest, non-forest, and water area.",
+   "walddefinition": "(⩾ 5m, ⩾ 0.5ha, ⩾ 10%). Forest class includes some plantations (e.g., rubberwood, cork oak, christmas tree plantations and etc.), and planted trees/forests.",
+   "eudrKonform": "ja",
+   "ausdehnung": "Global",
+   "aufloesungM": "25",
+   "vonJahr": "2017",
+   "bisJahr": "2020",
+   "zeitlich": "annual",
+   "sensor": "L-band Synthetic Aperture Radar sensors on the Advanced Land Observing Satellite-2 (ALOS-2 PALSAR-2), the Advanced Land Observing Satellite (ALOS PALSAR) and the Japanese Earth Resources Satellite-1 (JERS-1 SAR)",
+   "methode": "Random Forest machine learning-based classification",
+   "kategorie": "Supervised Classical Machine Learning (ML)",
+   "validierung": {
+    "ansatz": "Visual interpretation of 40 m radius circles centered on target points in Google Earth; non-forest categories combined for evaluation; validity calculated against these interpreted points.",
+    "referenz": "Google Earth imagery (period not specified)",
+    "stichproben": "NR"
+   },
+   "genauigkeit": {
+    "oa": "≥ 86% (three-category case, 2017–2020)",
+    "paUa": "NR",
+    "weitere": "Four-category case: ≥ 76% overall accuracy (2017–2020) Kappa coefficient: 0.68–0.94",
+    "zusatz": "Accuracy assessed for two classification schemes: a four-category case and a simplified three-category case (forest classes merged). The three-category aggregation increased overall accuracy by approximately 5–10% compared to the previous version. Validation performed for four consecutive years (2017–2020)."
+   },
+   "grenzen": "NR"
+  },
+  {
+   "id": "FNF12",
+   "thema": "ForestCover_TreeExtent",
+   "name": "GLCLU - GLAD 2019 - Global land cover and land use 2019, version 1.0",
+   "hinweis": null,
+   "hersteller": "Global Land Analysis and Discovery (GLAD) laboratory in the Department of Geographical Sciences at the University of Maryland USA (UMD GLAD)",
+   "zitat": "Hansen et al., 2022",
+   "links": {
+    "veroeffentlichung": [
+     {
+      "text": null,
+      "url": "https://iopscience.iop.org/article/10.1088/1748-9326/ac46ec"
+     }
+    ],
+    "gee": [
+     {
+      "text": null,
+      "url": "https://glad.earthengine.app/view/global-land-cover-land-use-v1#lon=0;lat=0;zoom=3"
+     }
+    ],
+    "andere": [
+     {
+      "text": null,
+      "url": "https://glad.umd.edu/dataset/global-land-cover-land-use-v1"
+     }
+    ]
+   },
+   "klassen": "Bare ground, Semi-arid vegetation, Dense short vegetation, Open or short tree cover, Dense and tall tree cover, Wetland, Permanent surface water, Permanent ice, Built-up land, Cropland, Treed land use, Other land use",
+   "walddefinition": "(⩾ 3m, ⩾ NR ⩾ 10%). Forest defined as woody vegetation.",
+   "eudrKonform": "nein_unklar",
+   "ausdehnung": "Global",
+   "aufloesungM": "30",
+   "vonJahr": "2019",
+   "bisJahr": "2019",
+   "zeitlich": "annual",
+   "sensor": "Landsat 16-day Composite Imagery",
+   "methode": "Several approaches used for different land cover class: Global regression tree, Regional classification trees, Locally calibrated regression trees, Regional QA models of water and snow/ice, Regional deep learning convolution neural networks, and Global/regional hybrid decision tree",
+   "kategorie": "Hybrid",
+   "validierung": {
+    "ansatz": "A probability-based stratified random sampling design was implemented across 19 strata derived from 30 m continuous and discrete land-cover classes. Fifty sample points were allocated to each stratum with equal inclusion probability at the global level. Accuracy assessment and area estimation were conducted following standard stratified estimation procedures, with global accuracy metrics reported alongside standard errors to quantify sampling variability.",
+    "referenz": "Google Earth imagery and MODIS time-series data (250 m red, NIR, SWIR bands; NDVI, NDWI; period not explicitly stated)",
+    "stichproben": "NR but the intended arrangement is: 19 strata; 50 sample points per stratum; total ~950 samples"
+   },
+   "genauigkeit": {
+    "oa": "78.35% (±1.86 SE)",
+    "paUa": "[Target class = Forest Class/Tree cover] Producer's Accuracy (Omission error) -58.90% (open tree cover) and 87.36% (dense tree cover); User's Accuracy (Commision error) - 70% (open tree cover) and 78% (dense tree cover)",
+    "weitere": "Standard Error (SE): 1.86 Area estimates derived from stratified sample",
+    "zusatz": "NR"
+   },
+   "grenzen": "NR"
+  },
+  {
+   "id": "FNF13",
+   "thema": "ForestCover_TreeExtent",
+   "name": "CHM-1m - Meta/WRI Global Canopy Height",
+   "hinweis": null,
+   "hersteller": "Meta Sustainability and WIR",
+   "zitat": "Tolan et al., 2023",
+   "links": {
+    "veroeffentlichung": [
+     {
+      "text": null,
+      "url": "https://arxiv.org/pdf/2304.07213v2"
+     }
+    ],
+    "gee": [
+     {
+      "text": null,
+      "url": "https://gee-community-catalog.org/projects/meta_trees/"
+     }
+    ],
+    "andere": [
+     {
+      "text": null,
+      "url": "https://registry.opendata.aws/dataforgood-fb-forests/"
+     }
+    ]
+   },
+   "klassen": "Canopy Height",
+   "walddefinition": "(⩾ 1m*, ⩾ NR, ⩾ NR). Tree cover mapping.",
+   "eudrKonform": "nein_unklar",
+   "ausdehnung": "Global",
+   "aufloesungM": "1",
+   "vonJahr": "2009",
+   "bisJahr": "2020",
+   "zeitlich": "single layer combined years 2009 - 2020",
+   "sensor": "Maxar Vivid imagery (including WorldView-2, WorldView-3, and QuickBird-2) was used as the primary optical data source for model training and inference. These high-resolution satellite images were mosaicked to achieve near-global coverage. Airborne LiDAR data were used as high-resolution reference data for training, and spaceborne LiDAR from the GEDI mission provided calibration and large-scale correction",
+   "methode": "Self-Supervised learning and simple convolution network",
+   "kategorie": "Deep Learning",
+   "validierung": {
+    "ansatz": "Model evaluation incorporated canopy height, segmentation, and tree instance metrics, using a dataset split into training (80%), calibration (10%), and set-aside validation (10%) subsets. Calibration metrics were computed after each epoch using non-overlapping tiles. Segmentation accuracy uncertainty was estimated via 10,000-iteration bootstrapping to account for the cluster sampling design. All metrics were evaluated at both the global scale and across UN geoscheme regions.",
+    "referenz": "Validation performed using a human-annotated dataset derived from randomly sampled GEDI footprints (RH95 > 3 m) from a global set-aside validation set, independent of aerial lidar training data. Accuracy also evaluated against NEON test data and region-specific datasets (e.g., São Paulo, France)",
+    "stichproben": "NR. NEON ALS images; split 80% training / 10% calibration / 10% validation"
+   },
+   "genauigkeit": {
+    "oa": "74% (±0.006) IOU- (Intersection over Union) since it measures human-annotated labels",
+    "paUa": "[Target class = Forest Class/Tree cover] Producer's Accuracy (Omission error) -77% ±0.008; User's Accuracy (Commision error) - 88% ±0.006)",
+    "weitere": "Canopy height metrics: MAE; R²-block (computed on 50 × 50 pixel / 30 × 30 m blocks); edge accuracy reported separately",
+    "zusatz": "NR"
+   },
+   "grenzen": "• The availability of recent ALS training data is limited in geographic scope. While self-supervised learning and the GEDI-based corrective model improve generalization and reduce test error, increased geographic availability of ALS remains necessary to further validate the proposed maps in new areas.\n• The generated maps are limited by variations in input imagery, particularly in view angle, sun angle, acquisition times and dates, and optical aerosol.\n• Terrain slope appears to influence predicted height since it affects the length of the shadow an individual tree casts.\n• Currently, the ability to conduct tree height change detection assessments is limited by the need for improved input image processing to better align differences between image pairs.\n• As indicated in Section 4.4, there is a bias towards underestimating canopy height for taller trees, particularly in the Brazilian states of So Paulo and Espirito Santo. This effect may be due to the relative scarcity of the highest heights in the training data and requires further investigation."
+  },
+  {
+   "id": "FNF14",
+   "thema": "ForestCover_TreeExtent",
+   "name": "ETH - 2020 - High-resolution canopy height model of the Earth",
+   "hinweis": null,
+   "hersteller": "EcoVision Lab, Photogrammetry and Remote Sensing, ETH Zürich",
+   "zitat": "Lang et al., 2023",
+   "links": {
+    "veroeffentlichung": [
+     {
+      "text": null,
+      "url": "https://www.nature.com/articles/s41559-023-02206-6"
+     }
+    ],
+    "gee": [
+     {
+      "text": null,
+      "url": "https://nlang.users.earthengine.app/view/global-canopy-height-2020"
+     }
+    ],
+    "andere": [
+     {
+      "text": null,
+      "url": "https://langnico.github.io/globalcanopyheight/"
+     }
+    ]
+   },
+   "klassen": "Canopy Height",
+   "walddefinition": "(⩾ 0m*, ⩾ NR, ⩾ NR). Tree cover mapping. (*) Minimum Tree height can be set by the user.",
+   "eudrKonform": "nein_unklar",
+   "ausdehnung": "Global",
+   "aufloesungM": "10",
+   "vonJahr": "2020",
+   "bisJahr": "2020",
+   "zeitlich": "annual",
+   "sensor": "Sentinel-2 and GEDI LIDAR–derived canopy top height (RH98)",
+   "methode": "Convolutional neural networks (CNNs)",
+   "kategorie": "Deep Learning",
+   "validierung": {
+    "ansatz": "Global evaluation using spatial holdout at Sentinel-2 tile level; 20% of 100 × 100 km Sentinel-2 tiles reserved for validation and 80% used for training; independent secondary evaluation against airborne LiDAR canopy-top heights.",
+    "referenz": "GEDI footprints with Sentinel-2 image patches (April–August 2019/2020; Sentinel-2 data mainly May–September 2020); additional reference from LVIS RH98 and ALS-derived canopy height models",
+    "stichproben": "Total dataset: 600 million samples, extracted as 15×15 pixel Sentinel-2 patches around GEDI footprints acquired between April and August 2019–2020. Validation split: 20% of Sentinel-2 tiles (100×100 km each) held out for validation"
+   },
+   "genauigkeit": {
+    "oa": null,
+    "paUa": null,
+    "weitere": "RMSE: 6.0 m (all samples), average RMSE (height-balanced): 7.3 m MAE: not explicitly reported Mean Error (ME / bias): 1.3 m (all samples), -1.8 m (height-balanced)",
+    "zusatz": "Validation focuses on canopy height estimates. Height balancing was applied across 5-m intervals to reduce bias for taller canopies. Slight overestimation occurs for low canopy heights. All metrics derived from the full validation dataset."
+   },
+   "grenzen": "• Effective spatial resolution lower than nominal: Each 10 m pixel effectively reflects the largest canopy-top height within a ~25 m GEDI footprint, reducing the ability to resolve individual vegetation features.\n• Sparse supervision and geolocation errors: Limited GEDI coverage and 15–20 m geolocation uncertainty obscure fine-scale canopy height variations and introduce noise between adjacent pixels.\n• Tiling artifacts and systematic offsets: Tile borders, especially at high latitudes, show inconsistencies, potentially degrading absolute height estimates for locally unique vegetation structures.\n• Overestimation in low-canopy areas: Canopy heights under 5 m tend to be overestimated, despite accurate tall canopy mapping.\n• Persistent cloud cover artifacts: Minor map artifacts occur in regions with high cloud frequency.\n• High predictive uncertainty in specific regions: Tropical areas (e.g., Papua New Guinea) and northern latitudes (e.g., Alaska) exhibit high uncertainty.\n• Optical-only limitations: Reliance solely on optical imagery constrains the accuracy of canopy height estimation, suggesting the need for integrating additional environmental predictors.\n• Potential for future improvement: Super-resolution methods, updated GEDI versions, and uncertainty-based filtering could enhance small-feature preservation and reduce biased estimates."
+  },
+  {
+   "id": "FNF15",
+   "thema": "ForestCover_TreeExtent",
+   "name": "GFCC30TCC-v4 - Global Forest Cover Change (GFCC) Tree Cover Multi-Year Global",
+   "hinweis": null,
+   "hersteller": "National Aeronautics and Space Administration (NASA)",
+   "zitat": "Sexton et al., 2013",
+   "links": {
+    "veroeffentlichung": [
+     {
+      "text": null,
+      "url": "https://lcluc.umd.edu/metadata/global-30m-landsat-tree-canopy-version-3"
+     }
+    ],
+    "gee": [
+     {
+      "text": null,
+      "url": "https://gee-community-catalog.org/projects/global_tcc/"
+     }
+    ],
+    "andere": [
+     {
+      "text": null,
+      "url": "https://e4ftl01.cr.usgs.gov/MEASURES/GFCC30TC.003/"
+     }
+    ]
+   },
+   "klassen": "Tree cover",
+   "walddefinition": "(⩾ 5m, ⩾ NR, ⩾ 0%*). Mapping of woody vegetation. (*) Minimum canopy cover can be set by the user.",
+   "eudrKonform": "nein_unklar",
+   "ausdehnung": "Global",
+   "aufloesungM": "30",
+   "vonJahr": "2000",
+   "bisJahr": "2015",
+   "zeitlich": "5-years",
+   "sensor": "The product is derived from all seven bands of Landsat 5 Thematic Mapper (TM) and/or Landsat 7 Enhanced Thematic Mapper Plus (ETM+) and Sentinel-2 imagery",
+   "methode": "Continuous field modeling approach (Tree cover was mapped using a continuous field modeling approach, in which Landsat spectral information and ancillary data were used to rescale the coarse-resolution MODIS VCF tree cover estimates to a finer 30 m resolution)",
+   "kategorie": "Deep Learning",
+   "validierung": {
+    "ansatz": "Cross-validation-based accuracy against lidar measurements, 10-fold cross-validation fo pixel-level uncertainty assessment, and a parallel validation assessment using MODIS VCF.",
+    "referenz": "Lidar measurements (period not explicitly stated); consistency check against MODIS VCF Tree Cover (2000–2005).",
+    "stichproben": "NR; validation performed via 10-fold cross-validation using the full training dataset (no independent validation sample size specified)"
+   },
+   "genauigkeit": {
+    "oa": null,
+    "paUa": null,
+    "weitere": "RMSE: 17.4% (Landsat-based estimates) vs 16.8% (MODIS VCF)",
+    "zusatz": "Assessment limited to North and Central America. Rescaling MODIS to Landsat resolution caused minimal loss of thematic information. Uncertainties largely inherited from MODIS training data; regression slopes <1 and intercepts >0 indicate underestimation of high tree cover (>80%). Ancillary data (crop probability and non-forest masks) helped reduce overestimation in agricultural areas."
+   },
+   "grenzen": "NR"
+  },
+  {
+   "id": "FNF16",
+   "thema": "ForestCover_TreeExtent",
+   "name": "LCFM v1 - Copernicus Global Land Cover and Tropical Forest Mapping and Monitoring service",
+   "hinweis": null,
+   "hersteller": "JRC - Copernicus Land Monitoring Service",
+   "zitat": "European Union's Copernicus Land Monitoring Service information, 2025",
+   "links": {
+    "veroeffentlichung": [
+     {
+      "text": null,
+      "url": "https://sdi.eea.europa.eu/catalogue/srv/api/records/602507b2-96c7-47bb-b79d-7ba25e97d0a9/formatters/xsl-view?output=pdf&language=eng&approved=true"
+     }
+    ],
+    "gee": [],
+    "andere": [
+     {
+      "text": null,
+      "url": "https://land.copernicus.eu/en/products/global-dynamic-land-cover/land-cover-2020-raster-10-m-global-annual"
+     }
+    ]
+   },
+   "klassen": "Tree cover, Shrubland, Grassland, Cropland, Herbaceous wetland, Mangroves, Moss and lichen, Bare / sparse vegetation, Built-up, Permanent water bodies, Snow and ice, Unclassifiable",
+   "walddefinition": "(⩾ NR, ⩾ NR, ⩾ 50%). Geographic area dominated by trees such as areas with planted trees for afforestation and other plantations (e.g. oil palm, olive trees). It may include some mangrove areas.",
+   "eudrKonform": "nein_unklar",
+   "ausdehnung": "Global",
+   "aufloesungM": "10",
+   "vonJahr": "2020",
+   "bisJahr": "2020",
+   "zeitlich": "annual",
+   "sensor": "Copernicus Sentinel-1 L3 Monthly Mosaics; Copernicus Sentinel-2 L2A; Copernicus GLO-30 Digital Elevation Model (DEM); AgERA5 V1; Land Cover Map Training Data (LCM-TD)",
+   "methode": "EvoNet based land cover model training and global inference (algorithm method that combines the advantages of CNNs with traditional pixel-based classifiers within a single integrated framework)",
+   "kategorie": "Deep Learning",
+   "validierung": {
+    "ansatz": "The validation followed a blind, probability-based response design in which 1-hectare spatial assessment units (containing 100 pixels of 10 m × 10 m) were interpreted independently of the map’s predicted classes. Each pixel within the hectare was assigned a reference land-cover code according to the product’s class definitions, using both the pixel-level signal and surrounding contextual information to support consistent interpretation. Validation was conducted on the native LCM-10 product in its original UTM projection to ensure perfect spatial alignment with Sentinel-2 pixels and equal-area assessment globally, thereby avoiding distortions or resampling errors from reprojection. This design enabled the estimation of class-specific omission and commission errors at a standardized spatial unit.",
+    "referenz": "An independent probability-based sample selected using a global hexagonal DGGS (H3) grid generated visual interpretation of sampled locations",
+    "stichproben": "The accuracy assessment used 10,702 validation samples (1 ha each) for continental, biome, and country-level metrics, and a double-interpreted subset of 1,070 samples (overlapping with the larger set) to compute the global accuracy metrics"
+   },
+   "genauigkeit": {
+    "oa": "80.10% ± 0.20%",
+    "paUa": "[Target class = Forest Class/Tree cover] Producer's Accuracy (Omission error) - 90.9%; User's Accuracy (Commision error) - 83.39%",
+    "weitere": "NR",
+    "zusatz": "Most land-cover classes met or exceeded target performance levels. However, some class-specific weaknesses were identified through user’s and producer’s accuracy metrics and analysis of the confusion matrices. Grassland (class 30) and Herbaceous Wetland (class 50) exhibited low producer’s accuracy, indicating omission errors. Moss and Lichen (class 70) and Built-up areas (class 90) showed low user’s accuracy, reflecting commission errors. Shrubland (class 20) was the only class with low performance in both user’s and producer’s accuracy, suggesting both omission and commission issues."
+   },
+   "grenzen": "• Global overall accuracy of LCM-10 2020 V1 is 80.10% ± 0.20%, below the target of 85%.\n• Only 6 out of 11 classes meet the 75% accuracy threshold; fails secondary validation requirement of ≥75% accuracy for at least two-thirds of classes.\n• Herbaceous Wetland narrowly misses the 75% User Accuracy target.\n• Shrubland and Grassland show high confusion with each other and Tree Cover, especially in mixed or semi-arid/tropical ecotones.\n• Moss and Lichen have high commission errors, with Grassland and Bare/Sparse Vegetation often misclassified as this class.\n• Built-up areas exhibit high commission errors due to misclassification of low-density residential areas, gardens, bare surfaces, and unpaved roads."
+  },
+  {
+   "id": "FNF17",
+   "thema": "ForestCover_TreeExtent",
+   "name": "Global Forest Watch (GFW) - Hansen Global Forest Change Data v1.11",
+   "hinweis": "The dataset provides forest extent only for the year 2000, along with forest loss and gain data up to 2023. However, it does not include forest status for intermediate years. Because of inconsistencies in the data, a reliable “current forest cover” cannot be derived by simply subtracting losses and adding gains to the 2000 baseline.",
+   "hersteller": "Global Land Analysis and Discovery (GLAD) laborator, Department of Geographical Sciences (UMD), University of Maryland USA and Global Forest Watch (GFW)",
+   "zitat": "Hansen et al., 2013",
+   "links": {
+    "veroeffentlichung": [
+     {
+      "text": null,
+      "url": "https://www.science.org/doi/10.1126/science.1244693"
+     }
+    ],
+    "gee": [
+     {
+      "text": null,
+      "url": "https://developers.google.com/earth-engine/tutorials/tutorial_forest_02"
+     },
+     {
+      "text": null,
+      "url": "https://glad.earthengine.app/view/global-forest-change#bl=off;old=off;dl=1;lon=30.11785364822165;lat=15.104446959612913;zoom=2"
+     }
+    ],
+    "andere": [
+     {
+      "text": null,
+      "url": "https://storage.googleapis.com/earthenginepartners-hansen/GFC-2023-v1.11/download.html"
+     },
+     {
+      "text": null,
+      "url": "https://www.globalforestwatch.org/map/"
+     }
+    ]
+   },
+   "klassen": "Treecover2000 (in%); gain, loss, Landsat band cloud-free image composite (8 classes-bands), datamask and lossyear",
+   "walddefinition": "(⩾ 5m, ⩾ NR, ⩾ 10%). Primarily mapping of tree cover with vegetation greater than 5 meters in height taking form of natural forests or plantations.",
+   "eudrKonform": "nein_unklar",
+   "ausdehnung": "Global",
+   "aufloesungM": "30",
+   "vonJahr": "2000",
+   "bisJahr": "2023 (in GFW available until 2025 forest loss)",
+   "zeitlich": "annual",
+   "sensor": "Landsat 7 Enhanced Thematic Mapper Plus (ETM+) scenes",
+   "methode": "Bagged decision tree (bootstrap aggregating)",
+   "kategorie": "Supervised Classical Machine Learning (ML)",
+   "validierung": {
+    "ansatz": "Probability-based stratified random sampling across five biomes and three sub-strata per biome (no change, loss, gain); each 120 m sample block interpreted into quartiles of reference change using time-series Landsat, MODIS, VHR imagery (QuickBird, Google Earth), and LiDAR (GLAS/ICESat-1).",
+    "referenz": "Very high-resolution imagery (QuickBird, Google Earth), Landsat, MODIS, NASA GLAS LiDAR; period not explicitly stated",
+    "stichproben": "1,500 sample blocks (150 no change, 90 loss, 60 gain per biome)"
+   },
+   "genauigkeit": {
+    "oa": "Loss -> 99.6% (0.7% SE); Gain -> 99.7% (0.6% SE)",
+    "paUa": "Forest gain: User’s Accuracy = 82%, Producer’s Accuracy = 48%; Commission errors = 13%, Omission errors = 12%",
+    "weitere": "NR",
+    "zusatz": "Overall accuracy of >80% for forest loss globally. High uncertainty for tropical forest gain (95% CI: 0.01–0.35% of land area). Possible overestimation of boreal forest gain. Validation at 120 m pixel scale; accuracy varies by biome."
+   },
+   "grenzen": "• High uncertainty in tropical forest gain estimates: The 95% confidence interval for bias ranges from 0.01% to 0.35% of land area.\n• Potential overestimation of boreal forest gain.\n• Validation resolution constraints: While robust at the 120 m pixel scale, finer-scale accuracy or small-scale changes may be less certain."
+  },
+  {
+   "id": "FNF18",
+   "thema": "ForestCover_TreeExtent",
+   "name": "GEM-Forest: A Global satellite EMbedding–based map of forests and tree crops for 2020 (GEM-FnF2020 and GEM-TC2020)",
+   "hinweis": null,
+   "hersteller": "Google DeepMind (Alpha Earth Foundation - AEF)",
+   "zitat": "Paluba et al. 2026",
+   "links": {
+    "veroeffentlichung": [
+     {
+      "text": null,
+      "url": "https://egusphere.copernicus.org/preprints/2026/egusphere-2026-1401/"
+     }
+    ],
+    "gee": [
+     {
+      "text": null,
+      "url": "https://gee-community-catalog.org/projects/gem_forest/?h=tree+cover"
+     }
+    ],
+    "andere": [
+     {
+      "text": null,
+      "url": "https://doi.org/10.5281/zenodo.18921586"
+     }
+    ]
+   },
+   "klassen": "GEM-FnF2020 uses a binary classification scheme distinguishing non-forest (0) and forest (1). GEM-TC2020 applies a multi-class scheme including non-forest/other (0), forest (1), and tree crops (2), where tree crops comprise oil palm, rubber, coconut, other palm species, and European perennial crops such as olives and fruit orchards.",
+   "walddefinition": "The definition of forest in the map aligns with the forest definition by the Food and Agriculture Organization (⩾ 5m, ⩾ 0.5ha, ⩾ 10%). GEM-Forest distinguishes agricultural tree crops, including oil palm, rubber, coconut, other palms, and European crops such as olives and fruit orchards, to reduce confusion with natural forests.",
+   "eudrKonform": "ja",
+   "ausdehnung": "Global",
+   "aufloesungM": "10",
+   "vonJahr": "2020 (transferable to 2017–2025 via released model weights)",
+   "bisJahr": "2020",
+   "zeitlich": "annual",
+   "sensor": "The main input is the Google DeepMind AlphaEarth Foundation Satellite Embedding dataset, which provides 64-dimensional feature vectors at 10 m resolution representing multi-sensor, multi-temporal Earth observation signals aggregated annually (2017–2025). The embeddings are generated by a deep learning model integrating optical (Landsat, Sentinel-2) and radar (Sentinel-1) data, trained using auxiliary radar, LiDAR (GEDI), environmental (e.g., DEM, ERA5-Land, GRACE), and geolocated reference datasets.",
+   "methode": "Google DeepMind Alpha Earth Foundation (AEF) model and a Linear Support Vector Machine classifier (selected from 8 ML models tested)",
+   "kategorie": "Hybrid (Deep Learning + Supervised Machine Learning)",
+   "validierung": {
+    "ansatz": "Accuracy was evaluated using standard metrics, including overall accuracy, class-specific F-scores, macro and weighted F-scores, and omission/commission errors to quantify under- and over-classification. Tree crop performance was assessed using overall accuracy and commission errors. All assessments were conducted on raw outputs without applying the 0.5 ha forest majority filter. Forest/non-forest results were further examined through targeted visual interpretation of misclassified samples using high-resolution imagery and multi-temporal optical and radar data. Errors were grouped into thematic categories (e.g., transitional vegetation, forest edges, shrub–tree confusion, and urban or fragmented landscapes) to distinguish true model errors from definition or labeling inconsistencies. Tree crop validation used independent datasets for major plantation types in tropical regions and land-cover-based reference data for European orchards, refined through high-resolution visual checks. The product was also compared with multiple global forest and tree cover datasets to assess consistency across existing benchmarks.",
+    "referenz": "Forest / non-forest validation JRC Validation dataset for global forest cover 2020 (v2), used in the GFC2020 validation framework FAO Global Administrative Unit Layer (GAUL) (for spatial consistency filtering) Error / misclassification assessment Subset derived from the main JRC validation dataset (used for omission/commission error analysis) High-resolution imagery from Google Earth Pro (GEP) Sentinel-1 radar time series Sentinel-2 optical time series Tropical tree crop validation Global and regional oil palm datasets (industrial and smallholder plantations) Ecuador oil palm plantation dataset (industrial-scale reference areas) Monoculture rubber plantation dataset (Southeast Asia) Coconut palm plantation datasets (global distribution, including canopy density variation) Extended palm species datasets (non-coconut palms) European tree crop validation CORINE Land Cover 2018 (European Environment Agency) CORINE classes: Olive plantations (class 223) Fruit and berry plantations (class 222) High-resolution imagery from Google Earth Pro (used for temporal confirmation) Cross-dataset comparison (benchmarking only, not direct validation) Hansen Global Forest Change (GFC) 2020 PALSAR-2/PALSAR Forest/Non-Forest Map (2020) Copernicus Global Land Cover Layers (2019) IPCC Aboveground Biomass Tier 1 forest classification dataset ESA WorldCover (2020) GFC2020 v2 GFC2020 v3",
+    "stichproben": "Approximately 21,000 samples (forest and non-forest classes) plus eight tree-crop validation datasets."
+   },
+   "genauigkeit": {
+    "oa": "91% (FNF); >85% (most tree crops)",
+    "paUa": "Omission and Commision errors for Forest and Non-forest classes startified by classifier type (see publication text)",
+    "weitere": "macro F-score = 0.90",
+    "zusatz": "The forest/non-forest model trained without explicit tree crop data achieved similar or slightly better overall performance on the main validation dataset (OA ~91–92%, macro F1 ~0.90–0.91). However, targeted analysis in plantation-dominated regions and dedicated tree crop validation revealed substantial weaknesses, with high forest commission errors, indicating systematic confusion between forests and tree crops. These findings show that relying only on global forest/non-forest validation is insufficient, as tree crops are underrepresented and misclassified, motivating the use of dedicated tree crop data and a separate subclass in the final classification scheme."
+   },
+   "grenzen": "• Tree crop composition: The class mainly includes oil palm, rubber, coconut, and European fruit/olive orchards.\n• Exclusions: Cocoa and coffee plantations are not included due to limited global training data and the difficulty of identifying shaded cultivation systems using Earth Observation data.\n• Regional and class-specific performance: Accuracy varies by region, with European tree crops showing lower performance (approximately 45–66%) due to fragmented parcels and limited training samples. Misclassifications are also common in transitional vegetation such as sparse woodlands, shrub–tree mosaics, and forest edges.\n• Validation data: The model performs well on global forest/non-forest labels and eight tree crop validation datasets, though additional regional validation would further improve robustness, particularly for heterogeneous landscapes.\n• Forest regrowth definition: Recently cleared areas and early-stage regrowth below height-based forest thresholds (e.g., 5 m) are classified as non-forest, differing from FAO and EUDR conventions that may include regrowing forests.\n• Urban land cover artifacts: Some commission errors may occur in urban areas where GAIA and FADSL masks do not fully capture built-up extent.\n• Temporal constraint: The dataset is only available for the 2017–2025 AEF coverage window, limiting its applicability outside this period."
+  },
+  {
+   "id": "FNF19",
+   "thema": "ForestCover_TreeExtent",
+   "name": "Global Natural and Planted Forests",
+   "hinweis": null,
+   "hersteller": "Xiao et al. 2024 (Researchers)",
+   "zitat": "Xiao et al. 2024",
+   "links": {
+    "veroeffentlichung": [
+     {
+      "text": null,
+      "url": "https://spj.science.org/doi/10.34133/remotesensing.0204"
+     }
+    ],
+    "gee": [
+     {
+      "text": null,
+      "url": "https://gee-community-catalog.org/projects/global_ftype/#key-features"
+     }
+    ],
+    "andere": [
+     {
+      "text": null,
+      "url": "https://zenodo.org/records/10701417"
+     }
+    ]
+   },
+   "klassen": "Natural forests, planted (artificial) forests and non-forest areas.",
+   "walddefinition": "(⩾ NR, ⩾ NR, ⩾ NR).",
+   "eudrKonform": "nein_unklar",
+   "ausdehnung": "Global",
+   "aufloesungM": "30",
+   "vonJahr": "2021",
+   "bisJahr": "2021",
+   "zeitlich": "annual",
+   "sensor": "Landsat 4-8 Tier 1 SR images (1985-2021) for classification. Auxiliary data for deriving natural and planted forest classes: The 2021 European Space Agency WorldCover product (WorldCover 2021), ALOS Global Digital Surface Model (AW3D30), Forest height 2020 (Potapov et al. 2022), Sentinel 1 (VV, VH) and GlobalSurfaceWater.",
+   "methode": "Time-series change detection method applied to Landsat imagery, using a locally adaptive random forest (RF) classifier to distinguish planted forests from natural forests according to differences in disturbance frequency",
+   "kategorie": "Supervised Classical Machine Learning (ML)",
+   "validierung": {
+    "ansatz": "Validation relied on visually interpreted reference data from high-resolution Google Earth imagery, combined with a 2-rank sampling design over 5° × 5° grids and selected 0.5° × 0.5° map sheets. A total of 17,665 stratified samples were generated and quality-controlled using clear interpretation rules for natural, planted, and non-forest classes. Classification accuracy was then evaluated using a confusion matrix with overall accuracy, user’s accuracy, and producer’s accuracy.",
+    "referenz": "Visual interpretation of very high-resolution imagery from Google Earth ( independently interpreted validation). Additionally compared dataset with FAO statistics and SDPT (spatial dataset of planted trees) maps.",
+    "stichproben": "17,665 samples, comprising 4,207 natural forest, 4,304 planted forest, and 9,154 non-forest reference points."
+   },
+   "genauigkeit": {
+    "oa": "0.85",
+    "paUa": "Nonforest: Producer's Accuracy (Omission error) - 97%; User's Accuracy (Commision error) - 96%; Natural Forests:Producer's Accuracy (Omission error) - 91%; User's Accuracy (Commision error) - 68%; Planted Forests: Producer's Accuracy (Omission error) - 53%; User's Accuracy (Commision error) - 84%;",
+    "weitere": "OA, PA, UA accuracies for each 6 continents (see their publication)",
+    "zusatz": "Natural forest estimates show very strong agreement with FAO statistics (correlation coefficient r = 0.99), while planted forest estimates show larger discrepancies, indicated by a slope of 1.2432 compared to FAO data. Comparison with SDPT dataset revealed substantial differences in estimated planted forest extent, mainly driven by differences in spatial resolution, methodological approaches, and temporal coverage."
+   },
+   "grenzen": "• Imbalanced training data, with insufficient samples for some forest types and regions, despite augmentation strategies that were computationally limited.\n• Mislabeled training samples, caused by difficult-to-distinguish land cover types and imperfect filtering rules, introducing classification errors.\n• Sensitivity to classification thresholds, where parameter choices can either worsen imbalance or increase mislabeling.\n• Residual image contamination, especially cloud and shadow effects in optical imagery, leading to local misclassification and noise in the final map."
+  },
+  {
+   "id": "FNF20",
+   "thema": "ForestCover_TreeExtent",
+   "name": "Natural forests of the world 2020 - probability maps, version 1",
+   "hinweis": null,
+   "hersteller": "Google DeepMind",
+   "zitat": "Neumann et al. 2025",
+   "links": {
+    "veroeffentlichung": [
+     {
+      "text": null,
+      "url": "https://www.nature.com/articles/s41597-025-06097-z"
+     }
+    ],
+    "gee": [
+     {
+      "text": null,
+      "url": "https://developers.google.com/earth-engine/datasets/catalog/projects_nature-trace_assets_forest_typology_natural_forest_2020_v1_0_collection#citations"
+     }
+    ],
+    "andere": [
+     {
+      "text": null,
+      "url": "https://plus.figshare.com/articles/dataset/Natural_forests_of_the_world_2020_-_probability_maps/28881731"
+     }
+    ]
+   },
+   "klassen": "Natural forest probabilities (scaled to [0-250]).",
+   "walddefinition": "The definition of forest in the map aligns with the forest definition by the Food and Agriculture Organization (⩾ 5m, ⩾ 0.5ha, ⩾ 10%). The map shows how likely each area is to be natural forest, including primary forests, naturally regenerating secondary forests, managed natural forests, and degraded forests that remain unconverted to other land uses. It separates these from planted forests, tree plantations, and other types of land cover. The definition of \"forest\" was adapted to remote sensing application, as some characteristics of “naturally regenerating” forests cannot be reliably captured using Earth observation data alone.",
+   "eudrKonform": "ja",
+   "ausdehnung": "Global",
+   "aufloesungM": "10",
+   "vonJahr": "2020",
+   "bisJahr": "2020",
+   "zeitlich": "annual",
+   "sensor": "For each sample location, a training example was constructed by combining multi-temporal Sentinel-2 multispectral data, elevation and topographic information from FABDEM, and the geographic coordinates of the sample.",
+   "methode": "The method integrates multiple labeled datasets to train a global deep learning model that maps the likelihood of natural forest. It leverages satellite data by combining spectral signals, time-series patterns, and spatial texture to improve classification. Training labels were built by merging multiple global forest datasets (e.g., natural forest maps, old-growth inventories, and probabilistic products) to define an initial natural forest class, then refining it by removing recently deforested or likely non-natural areas, applying a forest mask based on tree height and disturbance/forest-type maps, and finally excluding overlaps with planted forests and tree crops as ambiguous. The dataset employed a Multi-modal Temporal-Spatial Vision Transformer (MTSViT), an adaptation of the Vision Transformer, to integrate multi-temporal and multi-modal satellite data by treating spatial image patches as sequences for classification. The MTSViT is a specific type of neural network model. Calibration has been applied for the purpose of improving the reliability of predicted probabilities by aligning the model’s confidence estimates with observed outcomes, thereby reducing overconfidence in the outputs.",
+   "kategorie": "Hybrid (Rule-based + Deep Learning)",
+   "validierung": {
+    "ansatz": "The model was evaluated using a statistically rigorous, stratified accuracy assessment based on an updated Global Forest Management (GFM) validation dataset (2020), harmonized into a binary classification (natural forest vs. other) and aggregated to plot level for consistency with the dataset design.",
+    "referenz": "Global Forest Management (GFM) validation dataset, updated to 2020 (originally based on 2015 data with re-assessment of changes from 2015–2020 using Global Forest Change data and high-resolution imagery). For comparison they also used other maps (UMD IPCC, GFT2020, SBTN v1.1, Forest Persistence v0.",
+    "stichproben": "2,072 total plots (800 natural forest 1,272 other)"
+   },
+   "genauigkeit": {
+    "oa": "92.2% ± 0.6% (at optimal probability threshold t = 0.52). They also report overall accuracy (OA) both for the compared maps and disaggregated by continent.",
+    "paUa": "R eported overall PA and UA both for the compared maps and disaggregated by continent at optimal probability threshold t = 0.52 .",
+    "weitere": "User’s Accuracy (UA) and Producer’s Accuracy (PA) evaluated across probability thresholds 95% confidence intervals (±1.96 × standard error) Standard error reported for OA and comparisons across datasets Analysis of commission and omission errors at extreme probability thresholds Continent-level OA assessment (regional performance variation)",
+    "zusatz": "Error analysis highlighted ambiguity in mixed/edge cases (e.g., plantations vs. natural forest, sparse forest near agriculture or settlements)"
+   },
+   "grenzen": "• Agroforestry and mixed landscapes: Complex systems (e.g., shaded plantations like cocoa and smallholder mosaics) can resemble natural forest in satellite data, leading to misclassification, especially in parts of Southeast Asia and Latin America.\n• Planted vs. natural forest confusion: Remote sensing struggles to separate planted forests from naturally regenerating or old forests, particularly in boreal and some temperate regions where long-rotation plantations and low-diversity natural forests look similar; this can lead to overestimation of natural forest (e.g., Scandinavia, parts of the US, and orchards such as in northern Turkey).\n• Sparse forest ambiguity: Ecosystems like savannas lie close to classification thresholds (tree height and canopy cover), making their classification uncertain and difficult to validate.\n• Post-disturbance uncertainty: Areas affected by recent fires or logging are difficult to classify because satellite data cannot reliably indicate whether they will naturally regenerate or be converted to other land uses.\n• Other sources of confusion: Urban green spaces (large parks) and planted tree belts may meet forest criteria but are not truly natural forests, leading to additional misclassification.\n• Input data limitations: The final map depends on multiple training datasets with differing methods, resolutions, time periods, and even model-derived labels; despite harmonization efforts, inconsistencies and errors in these sources can propagate into the final product."
+  },
+  {
+   "id": "FNF21",
+   "thema": "ForestCover_TreeExtent",
+   "name": "Global 2020 Forest Classification for IPCC Aboveground Biomass Tier 1 Estimates, V1",
+   "hinweis": null,
+   "hersteller": "Department of Geographical Sciences at the University of Maryland USA (UMD)",
+   "zitat": "Hunka et al. 2020",
+   "links": {
+    "veroeffentlichung": [
+     {
+      "text": null,
+      "url": "https://www.nature.com/articles/s41597-024-03930-9"
+     }
+    ],
+    "gee": [
+     {
+      "text": null,
+      "url": "https://developers.google.com/earth-engine/datasets/catalog/NASA_ORNL_global_forest_classification_2020_V1#citations"
+     }
+    ],
+    "andere": []
+   },
+   "klassen": "Primary Forest, Young Secondary Forest (<=20 years), Old Secondary Forest (>20 years)",
+   "walddefinition": "The datasets adopts the IPCC / UNFCCC forest definition framework, meaning forests are defined as land areas that meet specific structural thresholds of woody vegetation and are consistent with national greenhouse gas inventory (NGHGI) definitions. Forests are included if they meet (or are expected to reach) the following criteria: Minimum area: 0.05–1 hectare Minimum tree height (at maturity): 2–5 meters Minimum canopy cover / crown closure (at maturity): 10–30% Vegetation type: woody vegetation consistent with national forest definitions Development stage inclusion: - Young or growing forest stands - Areas expected to naturally reach the above thresholds. Summary: (2 - 5m, ⩾ 0.05 - 1ha, ⩾ 10 - 30%)",
+   "eudrKonform": "nein_unklar",
+   "ausdehnung": "Global",
+   "aufloesungM": "~30",
+   "vonJahr": "2020",
+   "bisJahr": "2020",
+   "zeitlich": "annual",
+   "sensor": "Publicly available global datasets on land cover, land use, land management and tree characteristics, mostly from remote sensing (~10–300 m) from the periods of 1982 to 2022. In total 12 datasets were used. These datasets were used to determine global forest status/condition classes.",
+   "methode": "The classification was derived by combining multiple Earth observation datasets on tree cover, height, age, and land use from 2000–2020 using Boolean rules. It was designed to minimize false positives by excluding uncertain pixels, resulting in a conservative estimate of global forest extent.",
+   "kategorie": "Composite Map/Map-based synthesis/Ensemble",
+   "validierung": {
+    "ansatz": "No formal validation was conducted due to the lack of a suitable global reference dataset; the approach instead relies on a conservative classification strategy designed to minimize false positives.",
+    "referenz": "NR",
+    "stichproben": "NR"
+   },
+   "genauigkeit": {
+    "oa": "NR",
+    "paUa": "NR",
+    "weitere": "NR",
+    "zusatz": "NR"
+   },
+   "grenzen": "• Conservative forest extent: The mapped ~3.26 billion ha likely underestimates true forest area due to strict rules designed to avoid false positives, excluding many borderline or uncertain areas.\n• Threshold-related exclusions: Combining a ≥5 m tree height threshold with tree cover masks removes substantial forest areas (e.g., regions with lower canopy cover), meaning some valid forests may be omitted.\n• Exclusion of certain forest types: Planted forests are intentionally excluded, and young or regenerating forests (expected to meet forest criteria) are often missing due to lack of reliable data.\n• Disturbance-related misclassification: Some naturally disturbed forests (e.g., from fire or wind) may be wrongly excluded because it is difficult to distinguish natural from human-driven disturbances using EO data.\n• Inclusion errors remain possible: Some non-natural systems (e.g., agroforestry or planted trees not captured in plantation datasets) may still be incorrectly included.\n• Uncertainty in forest classes: Old secondary forests are particularly uncertain, as they are largely defined by exclusion (i.e., not primary or young), making this class heterogeneous and less reliable.\n• Dependence on input datasets: The classification fully relies on the quality and agreement of multiple underlying datasets, each with its own limitations and inconsistencies.\n• Lack of validation data: There is no independent global reference dataset to rigorously validate the classification, limiting confidence in its accuracy.\n• Conceptual ambiguity: Definitions of forest types (e.g., “primary forest”) vary in the literature, making it difficult to ensure that EO-based classifications truly reflect ecological reality."
+  },
+  {
+   "id": "FNF22",
+   "thema": "ForestCover_TreeExtent",
+   "name": "Forest Typology (ForTy) v1 dataset (Preprint, submitted to \"Scientific Data\")",
+   "hinweis": null,
+   "hersteller": "Google DeepMind",
+   "zitat": "Neumann et al. 2026",
+   "links": {
+    "veroeffentlichung": [
+     {
+      "text": null,
+      "url": "https://eartharxiv.org/repository/view/13130/"
+     }
+    ],
+    "gee": [
+     {
+      "text": null,
+      "url": "https://nature-trace.projects.earthengine.app/view/forest-typology-2020"
+     }
+    ],
+    "andere": [
+     {
+      "text": null,
+      "url": "https://plus.figshare.com/articles/dataset/_i_Forest_Typology_2020_v1_i_/32288616"
+     }
+    ]
+   },
+   "klassen": "They adopted a six-class forest typology that maps to EUDR regulatory requirements: Primary forest; Naturally regenerating forest; Planted forest; Plantation forest; Tree crops and agroforestry. Definitions for each class is provided in the related publication.",
+   "walddefinition": "The definition of forest in the map aligns with the forest definition by the Food and Agriculture Organization (⩾ 5m, ⩾ 0.5ha, ⩾ 10%).",
+   "eudrKonform": "ja",
+   "ausdehnung": "Global",
+   "aufloesungM": "10",
+   "vonJahr": "2020",
+   "bisJahr": "2020",
+   "zeitlich": "annual",
+   "sensor": "The core data source is AlphaEarth Foundations embeddings, which integrates multi-source, multi-temporal satellite observations. Contributing satellite missions include: Sentinel-1 (SAR) Sentinel-2 (multispectral) Landsat ALOS PALSAR-2 These inputs are fused into annual per-pixel embeddings at 10 m spatial resolution. Additionally, Copernicus DEM provides topographic data (used only in Model-1).",
+   "methode": "Stage 1 (baseline model): Trained on curated expert labels (mainly GFM), harmonized into a 6-class scheme using auxiliary datasets (e.g., WorldCover) and manual/heuristic corrections. Stage 2 (scaling & refinement): Expands to 1.2M samples by combining Stage 1 predictions with multiple geospatial datasets through rule-based fusion (e.g., natural forest maps, land cover, regional data, and change detection). Stage 3 (temporal consistency): Uses multi-year predictions (2019–2024) to smooth noise and preserve real land-cover changes via temporal rules. Overall strategy: A multi-stage, semi-supervised pipeline combining expert data, pseudo-labeling, rule-based integration, and temporal modeling, further improved through active learning loops and ensemble deep learning (Swin Transformer).",
+   "kategorie": "Hybrid (primarily Deep Learning–based supervised ML with rule-based and expert-driven components).",
+   "validierung": {
+    "ansatz": "A global, expert-based accuracy assessment was conducted using a stratified random sampling design on Geo-Wiki, where two experts independently interpreted high-resolution imagery and multi-sensor time series at 10 m resolution, with disagreements resolved through consensus and accuracy estimated using stratified statistical estimators.",
+    "referenz": "Global Validation of Forest Types (GVFT) dataset Built using Geo-Wiki platform Annotation period: 2020 (validation labels updated to 2020 conditions) Based on expert interpretation of very high-resolution imagery and multi-temporal Sentinel/Landsat data",
+    "stichproben": "9,100 initial sample sites 8,190 final validated consensus samples (used for accuracy reporting)"
+   },
+   "genauigkeit": {
+    "oa": "90.2% ± 0.3% (six-class forest typology scheme) 93.9% ± 0.3% (natural forest + planted aggregation) 94.8% ± 0.3% (binary natural forest vs. other) 95.5% ± 0.3% (forest vs. non-forest classification)",
+    "paUa": "Primary forest (UA 77.9% ±1.1; PA 88.5% ±1.1), NatReg (UA 81.1% ±1.2; PA 65.8% ±1.4), Planted (UA 65.1% ±1.8; PA 52.6% ±3.7), Plantation (UA 74.4% ±3.1; PA 60.4% ±3.2), Tree crops (UA 76.9% ±2.8; PA 52.1% ±4.2), and Other (UA 95.4% ±0.4; PA 97.3% ±0.2).",
+    "weitere": "F1-score (harmonic mean of UA and PA): Primary forest: 82.9% Naturally regenerating forest: 72.6% Planted forest: 58.2% Plantation: 66.7% TreeCrop: 62.1% Other: 96.4% Standard errors (SE) reported for OA, UA, and PA 95% confidence intervals derived as 1.96 × SE Stratified OA, UA, and PA estimates Threshold-dependent performance curves (UA vs PA trade-offs)",
+    "zusatz": "Per-continent accuracy assessments Confusion matrices per sampling stratum Comparison against other global forest maps (e.g., JRC GFC, ESA WorldCover, ALOS PALSAR)"
+   },
+   "grenzen": "• Classification boundary uncertainty: Forest type separation is inherently uncertain because classes (e.g., primary vs. naturally regenerating forest) are inferred from indirect satellite proxies, and mature secondary forests can look identical to primary forests. Planted forests and agroforestry systems are especially difficult, often overlapping spectrally with other forest types and leading to misclassification.\n• Definition-related ambiguity: FAO-based definitions include management intent and temporary states (e.g., harvested but unstocked plantations), which cannot be directly observed in satellite data; as a result, some areas classified as “other land” may still meet forest definitions.\n• Temporal limitations: The map represents conditions for 2020 using annual composites, so late-year changes and recent disturbances (e.g., fires, logging) may be missed or misclassified, particularly in post-fire recovery areas.\n• Spatial resolution constraints: At 10 m resolution, mixed pixels and small-scale heterogeneity (e.g., smallholder landscapes or narrow forest patches) can lead to ambiguous or inconsistent classification near thresholds.\n• Calibration limitations: Reported class probabilities are ensemble outputs without full post-hoc calibration, meaning they may not represent true probabilistic confidence and may require additional regional calibration for precise quantitative use."
+  }
+ ]
+}
