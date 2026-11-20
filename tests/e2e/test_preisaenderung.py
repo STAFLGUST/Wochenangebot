@@ -56,11 +56,11 @@ A.call('user_save', {'id': sid, 'name': 'Sina Sender', 'role': 'viewer', 'active
 S = Client('198.51.100.21')
 assert S.call('login', {'username': 'sina', 'password': 'Leser-Zugang-55'})[0] == 200
 # Versender ohne Zugang zum Angebot: die Übersicht (Kundenpreise) erscheint in seiner Vorschau nicht
-A.call('user_save', {'id': '', 'name': 'Otto Ohnepreis', 'username': 'otto', 'role': 'viewer', 'active': True, 'password': 'Leser-Zugang-56', 'mustChange': False})
+A.call('user_save', {'id': '', 'name': 'Otto Ohnepreis', 'username': 'otto', 'role': 'viewer', 'active': True, 'password': 'Leser-Zugang-55', 'mustChange': False})
 oid_ = next(u['id'] for u in A.call('users')[1]['users'] if u['username'] == 'otto')
 A.call('user_save', {'id': oid_, 'name': 'Otto Ohnepreis', 'role': 'viewer', 'active': True, 'grant': ['versand.zugang', 'wochenangebot.senden'], 'deny': ['angebot.zugang']})
 O = Client('198.51.100.22')
-assert O.call('login', {'username': 'otto', 'password': 'Leser-Zugang-56'})[0] == 200
+assert O.call('login', {'username': 'otto', 'password': 'Leser-Zugang-55'})[0] == 200
 
 
 def kunde(user):
