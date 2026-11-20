@@ -6,8 +6,8 @@
    versand_empfaenger / versand_vorschau / versand_senden (Wochenangebot bzw. Sonderposten eines Angebots, in Teilen zu zehn),
    versand_verlauf (aus dem Protokoll, ohne Kundennamen).
    Wochenangebot, Zusatz „Preisänderung zur Vorwoche zeigen“ (Inhaber 20.11.2026, Vergleichswoche d.woche.vorwoche): beim Öffnen immer aus, gilt nur für diesen
-   Versand (über die erneute Anmeldung nur in der sessionStorage-Auswahl); preis = {an, uebersicht, kurz} an versand_vorschau und
-   versand_senden – Links mit vergleich=vorwoche, Übersicht der Änderungen und Link „Nur Änderungen“ berechnet der Server.
+   Versand (über die erneute Anmeldung nur in der sessionStorage-Auswahl); preis = {an, uebersicht, kurz, darstellung} an
+   versand_vorschau und versand_senden – Links mit vergleich=vorwoche (Darstellung „Nur Pfeil“: vergleich=pfeil), Übersicht der Änderungen und Link „Nur Änderungen“ berechnet der Server.
    Bestätigung beim Senden wie überall: unter der zentralen Anmeldung erneute Anmeldung (reauth_required, Rücksprung hierher –
    die Auswahl bleibt in sessionStorage), sonst Passwort im Fenster (confirmation_required → reauth).
    Vorschau und Drucken eines Angebots öffnen die Angebotsseite des Eingabebereichs (Entwurf, ?vorschau=1 bzw. zusätzlich
@@ -291,12 +291,15 @@
         <button class="vs-knopf" type="button" data-close>${s.fertig ? 'Schließen' : 'Abbrechen'}</button><button class="vs-knopf primaer" type="submit" id="send-jetzt">${icon('mail')}<span id="send-knopf"></span></button></div>`;
     sendZahl();
   }
-  /* Zusatz „Preisänderung zur Vorwoche“ (nur Wochenangebot): Schalter und zwei Unterpunkte; ohne Vorwoche gesperrt */
+  /* Zusatz „Preisänderung zur Vorwoche“ (nur Wochenangebot): Schalter, Darstellung (Betrag | nur Pfeil) und zwei Unterpunkte;
+     ohne Vorwoche gesperrt */
   function zusatzHTML(s, d) {
     const p = s.preis, vw = d.woche && d.woche.vorwoche, aus = s.laeuft || !vw, chk = (id, an, txt, klein) => `<label class="vs-check vs-zusatz-zeile"><input type="checkbox" id="${id}"${an ? ' checked' : ''}${aus ? ' disabled' : ''}><span>${txt}${klein ? `<small>${klein}</small>` : ''}</span></label>`;
+    const rad = (wert, txt) => `<label class="vs-check vs-zusatz-zeile"><input type="radio" name="send-preis-darstellung" id="send-preis-${wert}" value="${wert}"${p.darstellung === wert ? ' checked' : ''}${aus ? ' disabled' : ''}><span>${txt}</span></label>`;
     return `<fieldset class="vs-zusatz"><legend>Zusatz</legend>
       ${chk('send-preis', p.an, 'Preisänderung zur Vorwoche zeigen', vw ? `Die Links zeigen je Artikel ▼ günstiger, ▲ teurer oder neu gegenüber KW ${esc(vw.kw)} – nur für diesen Versand.` : 'Für den veröffentlichten Stand gibt es keine Vorwoche zum Vergleich.')}
-      ${p.an ? `<div class="vs-zusatz-unter">${chk('send-preis-uebersicht', p.uebersicht, 'Kurze Übersicht der Änderungen in die E-Mail', 'Je Angebot: Anzahl günstiger, teurer, neu und die fünf größten Veränderungen.')}
+      ${p.an ? `<div class="vs-zusatz-unter"><div class="vs-zusatz-wahl" role="radiogroup" aria-labelledby="send-preis-darstellung-titel"><span id="send-preis-darstellung-titel">Darstellung</span>${rad('betrag', 'Betrag (▼ 2,00)')}${rad('pfeil', 'Nur Pfeil')}</div>
+        ${chk('send-preis-uebersicht', p.uebersicht, 'Kurze Übersicht der Änderungen in die E-Mail', 'Je Angebot: Anzahl günstiger, teurer, neu und die fünf größten Veränderungen.')}
         ${chk('send-preis-kurz', p.kurz, 'Kurzfassung „Nur Änderungen“ verlinken', 'Zusätzlicher Link, der nur geänderte und neue Artikel zeigt.')}</div>` : ''}</fieldset>`;
   }
   function sendZahl() {
@@ -318,7 +321,7 @@
     const vor = merk ? liste.filter((c) => merk.ids.includes(c.id)) : w ? liste.filter((c) => c.passwort && !c.gesendet) : liste;
     const mp = merk && merk.preis && d.woche && d.woche.vorwoche ? merk.preis : {};   // nur über die erneute Anmeldung; sonst beim Öffnen immer aus
     S.send = { art, angebot: angebot || '', daten: d, wahl: new Set(vor.map((c) => c.id)), filter: '*', note: merk ? merk.note : '', ergebnis: {}, laeuft: false, stand: '', pw: false, fertig: false,
-      preis: { an: mp.an === true, uebersicht: mp.an === true && mp.uebersicht === true, kurz: mp.an === true && mp.kurz === true },
+      preis: { an: mp.an === true, uebersicht: mp.an === true && mp.uebersicht === true, kurz: mp.an === true && mp.kurz === true, darstellung: mp.an === true && mp.darstellung === 'pfeil' ? 'pfeil' : 'betrag' },
       meldung: merk ? ['Bestätigt. Bitte den Versand jetzt mit „Senden“ auslösen.', true] : null };
     sendZeichnen();
     $('#dlg-send').showModal();
@@ -404,10 +407,10 @@
     const s = S.send;
     if (e.target.id === 'send-alle') for (const b of $$('#send-inhalt [data-wahl]')) { b.checked = e.target.checked; if (b.checked) s.wahl.add(b.dataset.wahl); else s.wahl.delete(b.dataset.wahl); }
     if (e.target.dataset.wahl) { if (e.target.checked) s.wahl.add(e.target.dataset.wahl); else s.wahl.delete(e.target.dataset.wahl); }
-    const pz = { 'send-preis': 'an', 'send-preis-uebersicht': 'uebersicht', 'send-preis-kurz': 'kurz' }[e.target.id];
+    const pz = { 'send-preis': 'an', 'send-preis-uebersicht': 'uebersicht', 'send-preis-kurz': 'kurz' }[e.target.id] || (e.target.name === 'send-preis-darstellung' ? 'darstellung' : '');
     if (pz) {
-      s.preis[pz] = e.target.checked;
-      if (pz === 'an') { s.preis.uebersicht = e.target.checked; s.preis.kurz = false; }   // Übersicht: Vorgabe an, sobald der Schalter an ist
+      s.preis[pz] = pz === 'darstellung' ? e.target.value : e.target.checked;
+      if (pz === 'an') { s.preis.uebersicht = e.target.checked; s.preis.kurz = false; s.preis.darstellung = 'betrag'; }   // Übersicht: Vorgabe an, sobald der Schalter an ist
       s.note = $('#send-note').value; sendZeichnen();
       const neu = $('#' + e.target.id); if (neu) neu.focus();
       $('#send-vorschau').hidden = true;   // eine sichtbare Vorschau wäre jetzt veraltet

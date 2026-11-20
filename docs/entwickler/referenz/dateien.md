@@ -276,7 +276,7 @@ Jede Code-Datei beginnt mit einem Kopfkommentar; dessen erste Aussage steht hier
 | `admin.js` | angebot | Wochenangebot – Eingabebereich Bearbeitet einen Entwurf auf dem Server (automatisch gespeichert). |
 | `angebot-druck.css` | angebot | Angebot · Druckfassung „Angebotsansicht“ (A4 quer, mit Design auch hoch) der Angebotsseite – gesetzt von assets/angebot-druck.js. |
 | `angebot-druck.js` | angebot | Angebot · Satz der Druckfassung „Angebotsansicht“ (A4) für die Angebotsseite (frontend.js, Wunsch des Inhabers 13.11.2026). |
-| `angebot-vorwoche.js` | angebot | Angebot · Preisänderung zur Vorwoche auf der Angebotsseite (frontend.js, Inhaber 20.11.2026): nur mit ?vergleich=vorwoche bzw. =aenderungen. |
+| `angebot-vorwoche.js` | angebot | Angebot · Preisänderung zur Vorwoche auf der Angebotsseite (frontend.js, Inhaber 20.11.2026): nur mit ?vergleich=vorwoche, =pfeil bzw. =aenderungen. |
 | `app.css` | angebot | Designsystem „Klar“: neutrale Flächen, ein Akzent (Bordeaux), Geist / Geist Mono (lokal eingebunden, SIL Open Font License, assets/fonts/LICENSE-Geist.txt – keine Verbindung zu fremden Servern) |
 | `bestaetigt.js` | angebot | Rücksprungseite der Bestätigung im eigenen Fenster (admin/bestaetigt.html): meldet dem Eingabebereich, dass die erneute Anmeldung bei der STAFL-Anmeldung abgeschlossen ist, und schließt das Fenster. |
 | `detailkarte.js` | plattform | STAFL-Plattform – Detailkarte (Straßen, Gebäude, Ortsnamen) vom eigenen Server Gemeinsame Kartenkomponente für die CRM-Karte und die Auswertung der Verwaltung. |

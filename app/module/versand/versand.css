@@ -184,3 +184,7 @@ a.vs-knopf.nur-symbol { flex: none; }
 .vs-zusatz-zeile small { display: block; margin-top: 2px; font-weight: 400; color: var(--r-leise); }
 .vs-zusatz-zeile input:disabled + span { color: var(--r-leise); cursor: default; }
 .vs-zusatz-unter { display: grid; gap: 10px; margin: 10px 0 0 26px; }
+.vs-zusatz-wahl { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 18px; }
+.vs-zusatz-wahl > span { font-size: 13px; font-weight: 600; color: var(--r-leise); }
+.vs-zusatz-wahl .vs-zusatz-zeile { align-items: center; font-weight: 500; }
+.vs-zusatz-wahl .vs-zusatz-zeile input { margin: 0; }

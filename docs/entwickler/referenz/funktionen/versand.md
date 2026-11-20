@@ -58,7 +58,7 @@ _STAFL-Plattform · Modul Versand – Wochenangebot und Kundenangebote veröffen
 **Fenster „Senden“ (Wochenangebot bzw. Sonderposten eines Angebots)**
 
 - `sendZeichnen()`
-- `zusatzHTML(s, d)` – Zusatz „Preisänderung zur Vorwoche“ (nur Wochenangebot): Schalter und zwei Unterpunkte; ohne Vorwoche gesperrt
+- `zusatzHTML(s, d)` – Zusatz „Preisänderung zur Vorwoche“ (nur Wochenangebot): Schalter, Darstellung (Betrag \| nur Pfeil) und zwei Unterpunkte; ohne Vorwoche gesperrt
 - `sendZahl()`
 - `sendOeffnen(art, angebot, merk)`
 - `vorschau()`

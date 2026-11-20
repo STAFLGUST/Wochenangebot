@@ -254,8 +254,11 @@ Preise des Wochenangebots zurückzufallen) und je Artikel `"vorwoche": {"std": 2
 `false` bzw. fehlender Eintrag = damals nicht im Angebot (neu). Zuordnung zur Vorwoche über Art.-Nr., Bezeichnung und Gruppe
 (Artikel-IDs aus dem Excel-Import sind Zellpositionen), vom genauesten zum gröbsten Schlüssel; ein Schlüssel zählt nur, wenn er
 in Vorwoche und aktuellem Angebot je genau einmal vorkommt. Ausgeliefert wird nur `angebot_vorwoche()` =
-`{kw, jahr, aenderungen: {Artikel-ID: {art: "neu"} | {art: "guenstiger"|"teurer", d, alt}}}` des angefragten Angebots
-(GR-002); unveränderte Artikel fehlen.
+`{kw, jahr, stufen, aenderungen: {Artikel-ID: {art: "neu"} | {art: "guenstiger"|"teurer", d, alt, p, stufe}}}` des angefragten
+Angebots (GR-002); unveränderte Artikel fehlen. `p` = Veränderung in Prozent des Vorwochenpreises (1 Nachkommastelle, mit
+Vorzeichen), `stufe` 1–3 für die Neigung des Pfeils (Darstellung „nur Pfeil“): unter 2 % → 1, ab 2 % → 2, ab 5 % → 3, gerechnet
+am gerundeten `p`; die Grenzen stehen nur in `ANGEBOT_VORWOCHE_STUFEN` und gehen als `stufen` mit (Legende). Nichts davon wird
+gespeichert – beides rechnet `angebot_vorwoche()` bei jeder Anfrage.
 **Nicht verglichen** werden Zusatzpreise (nur der Hauptpreis), Artikel ohne Preis oder „auf Anfrage“ in einer der beiden Wochen
 (auch der Wechsel von „auf Anfrage“ zu einem Preis bekommt keinen Hinweis) und Einzelangebote. Verglichen wird immer mit der
 direkten Vorwoche: wurde sie ausgelassen (kein veröffentlichter Stand dieser KW), gibt es keinen Vergleich – auch nicht mit der

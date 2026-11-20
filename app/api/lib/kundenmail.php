@@ -2,7 +2,7 @@
 declare(strict_types=1);
 /* E-Mails an Kunden, Abmelden, Bestellwunsch-Vorlagen, Einmal-Links, Versand. Gehört dem Modul Angebot (regeln/module.toml);
    das Modul Versand sendet darüber. Wochen-Mail optional „mit Preisänderung“ (Inhaber 20.11.2026, mail_preis_wahl): Links mit
-   vergleich=vorwoche, je Angebot die Übersicht der Änderungen (angebot_vorwoche_mail, module/angebot/vorwoche.php) und der Link
+   vergleich=vorwoche (Darstellung „nur Pfeil“: vergleich=pfeil), je Angebot die Übersicht der Änderungen (angebot_vorwoche_mail, module/angebot/vorwoche.php) und der Link
    „Nur Änderungen“ (vergleich=aenderungen); ohne Schalter wie bisher. */
 if (!defined('WA_API')) { http_response_code(404); exit; }   // nur über api/index.php nutzbar
 
@@ -43,14 +43,16 @@ function mail_offer_links(array $c, string $zusatz = ''): array
     }
     return $out;
 }
-const MAIL_PREIS_AUS = ['an' => false, 'uebersicht' => false, 'kurz' => false];
+const MAIL_PREIS_AUS = ['an' => false, 'uebersicht' => false, 'kurz' => false, 'darstellung' => 'betrag'];
 /* Zusatz „Preisänderung zur Vorwoche“ eines Wochenversands (Modul Versand, Inhaber 20.11.2026): nur echte Wahrheitswerte,
-   Unterpunkte nur mit eingeschaltetem Schalter. Gilt nur für diesen Versand – gespeichert wird nichts. Einmal an der Grenze
+   Unterpunkte nur mit eingeschaltetem Schalter; darstellung 'betrag' (▼ 2,00, Links vergleich=vorwoche) oder 'pfeil' (nur Pfeil,
+   vergleich=pfeil), jeder andere Wert gilt als 'betrag'. Gilt nur für diesen Versand – gespeichert wird nichts. Einmal an der Grenze
    (aktionen/versand.php); die Funktionen dahinter erhalten nur die normalisierte Wahl. */
 function mail_preis_wahl($p): array
 {
     $an = is_array($p) && ($p['an'] ?? null) === true;
-    return ['an' => $an, 'uebersicht' => $an && ($p['uebersicht'] ?? null) === true, 'kurz' => $an && ($p['kurz'] ?? null) === true];
+    return ['an' => $an, 'uebersicht' => $an && ($p['uebersicht'] ?? null) === true, 'kurz' => $an && ($p['kurz'] ?? null) === true,
+            'darstellung' => $an && ($p['darstellung'] ?? null) === 'pfeil' ? 'pfeil' : 'betrag'];
 }
 function mail_footer(string $kind): string
 {
@@ -268,10 +270,10 @@ function mail_tpl_angebot(array $c, string $note, ?array $wk, array $preis = MAI
     $intro = $wk ? "unser Angebot für KW {$wk['week']} ({$wk['from']} – {$wk['to']}) ist online." : 'hier ist der Link zu Ihrem Angebot.';
     $user = $c['login']['username'] ?? '';
     $sig = mail_settings()['signature'];
-    // je Angebot: Name, Link (mit Preisänderung: vergleich=vorwoche), Link „Nur Änderungen“, Übersicht [Text, HTML]
+    // je Angebot: Name, Link (mit Preisänderung: vergleich=vorwoche bzw. =pfeil), Link „Nur Änderungen“, Übersicht [Text, HTML]
     $kurz = $preis['kurz'] ? mail_offer_links($c, 'vergleich=aenderungen') : [];
     $zeilen = [];
-    foreach (mail_offer_links($c, $preis['an'] ? 'vergleich=vorwoche' : '') as $i => [$n, $u, $oid])
+    foreach (mail_offer_links($c, $preis['an'] ? 'vergleich=' . ($preis['darstellung'] === 'pfeil' ? 'pfeil' : 'vorwoche') : '') as $i => [$n, $u, $oid])
         $zeilen[] = ['name' => $n, 'url' => $u, 'kurz' => $kurz[$i][1] ?? null, 'block' => $preis['uebersicht'] ? angebot_vorwoche_mail($oid, $n) : null];
     $t = mail_greeting($c) . "\n\n" . $intro . "\n\n" . ($note !== '' ? $note . "\n\n" : '');
     foreach ($zeilen as $z) $t .= ($z['block'][0] ?? '') . "{$z['name']}:\n{$z['url']}\n" . ($z['kurz'] ? "Nur Änderungen: {$z['kurz']}\n" : '') . "\n";

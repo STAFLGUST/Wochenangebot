@@ -9,7 +9,8 @@
    Briefbogens, die Wahl „auf jeder Seite“ / „nur auf der letzten Seite“ und der Schalter „Bankangaben nur für angemeldete
    Nutzer“ – Aktionen druck_fuss / druck_fuss_save (api/module/angebot/druck.php). Leere Felder = Vorgabe aus dem Impressum.
    Pfeil daneben (#btn-drucken-zusatz, Menü „Zusatz“, Inhaber 20.11.2026): „Mit Preisänderung drucken“ (vergleich=vorwoche, je
-   Artikel ▼/▲/neu zur Vorwoche, Aufbau unverändert) und „Nur Änderungen drucken“ (vergleich=aenderungen). „Drucken“ selbst druckt
+   Artikel ▼/▲/neu zur Vorwoche, Aufbau unverändert), „Mit Preisänderung drucken (nur Pfeil)“ (vergleich=pfeil, geneigter Pfeil
+   statt des Betrags) und „Nur Änderungen drucken“ (vergleich=aenderungen). „Drucken“ selbst druckt
    weiter ohne – die Preisänderung ist nur eine Zusatzfunktion; gespeichert wird nichts.
    Für andere Module: WA.angebot.druck.drucken({ angebot, entwurf, name, knopf, vergleich }) druckt ein beliebiges Angebot in derselben Fassung.
    Wird von admin/index.html nach admin.js geladen. */
@@ -26,7 +27,7 @@
      Druckfassung, öffnet den Druckdialog und meldet sich (postMessage {wa: 'druck', stand: 'bereit' | 'gedruckt' | 'fehler'}).
      Auch für andere Module (WA.angebot.druck.drucken), z. B. die Liste „Angebote dieser Woche“ im Versand:
      angebot = Kennung (ohne Angabe das Wochenangebot, „e-…“ = Einzelangebot), entwurf = true druckt den Entwurf statt des
-     veröffentlichten Stands; knopf wird währenddessen gesperrt; vergleich = 'vorwoche' | 'aenderungen' (sonst ohne). */
+     veröffentlichten Stands; knopf wird währenddessen gesperrt; vergleich = 'vorwoche' | 'pfeil' | 'aenderungen' (sonst ohne). */
   let frame = null, uhr = 0, aktiv = null;
   function fertig() {
     clearTimeout(uhr);
@@ -46,7 +47,7 @@
     frame.title = 'Druckfassung des Angebots';
     frame.setAttribute('aria-hidden', 'true');
     frame.tabIndex = -1;
-    const vergleich = o.vergleich === 'vorwoche' || o.vergleich === 'aenderungen' ? 'vergleich=' + o.vergleich + '&' : '';
+    const vergleich = ['vorwoche', 'pfeil', 'aenderungen'].includes(o.vergleich) ? 'vergleich=' + o.vergleich + '&' : '';
     frame.src = url + (url.includes('?') ? '&' : '?') + vergleich + 'drucken=liste';
     document.body.append(frame);
     toast(`Druckfassung${o.name ? ` von „${o.name}“` : ''} wird vorbereitet${o.entwurf ? ' (Entwurf, wie in der Vorschau)' : ''} …`, 4000);
