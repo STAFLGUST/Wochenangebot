@@ -2,7 +2,7 @@
 
 <!-- ERZEUGT von `python3 werkzeuge/doku.py erzeugen` – nicht von Hand ändern. Quelle: Funktionen und Kommentare im Code. Die CI prüft, dass diese Datei zum Code passt. -->
 
-4 Dateien, 31 Funktionen – in der Reihenfolge der Datei, **fett** die Abschnitte. Text = erste Aussage des Kommentars direkt über der Funktion (Python: Docstring). Übersicht aller Module: [README.md](README.md).
+4 Dateien, 32 Funktionen – in der Reihenfolge der Datei, **fett** die Abschnitte. Text = erste Aussage des Kommentars direkt über der Funktion (Python: Docstring). Übersicht aller Module: [README.md](README.md).
 
 ## `app/api/aktionen/versand.php`
 
@@ -58,6 +58,7 @@ _STAFL-Plattform · Modul Versand – Wochenangebot und Kundenangebote veröffen
 **Fenster „Senden“ (Wochenangebot bzw. Sonderposten eines Angebots)**
 
 - `sendZeichnen()`
+- `zusatzHTML(s, d)` – Zusatz „Preisänderung zur Vorwoche“ (nur Wochenangebot): Schalter und zwei Unterpunkte; ohne Vorwoche gesperrt
 - `sendZahl()`
 - `sendOeffnen(art, angebot, merk)`
 - `vorschau()`

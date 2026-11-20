@@ -625,6 +625,19 @@ Leiste senkrecht, schmal ist sie eine waagerechte Spur. Mit `body.bereich-import
     verschiebt der Seitenumbruch von Chromium Blöcke aus dem unteren Teil der Seite aufs nächste Blatt, wo sie fehlen – am
     Bildschirm sieht man das nicht. `tests/e2e/test_druck.py` liest deshalb den Text aus dem gedruckten PDF.
   - **Hochformat** („Kompakt“, „Tabelle“): Regeln in `app.css`, Fußzeile einmal am Ende (`AngebotDruck.fussHTML`).
+- **Preisänderung zur Vorwoche** (Inhaber 20.11.2026, Zusatzfunktion – ohne Parameter alles wie bisher): `?vergleich=vorwoche`
+  lädt `offer` mit `vergleich=vorwoche` (Antwort `vorwoche = {kw, jahr, preise: {Artikel-ID: Preis|null}}`, fehlende ID = neu),
+  `?vergleich=aenderungen` zeigt dieselbe Ansicht nur mit geänderten und neuen Artikeln („Nur Änderungen“). `preisAenderung()`
+  ist die eine Regel (Cent gerundet; unverändert, ohne Preis: nichts), `vwHTML()` der Hinweis „▼ 2,00“ / „▲ 1,00“ / „neu“
+  (Farben `--vw-g`/`--vw-t`/`--vw-n` in `app.css`, hell und dunkel), `vwLegende()` die Legende. Angebotsansicht: Hinweis rechts
+  in der Bezeichnung (`float`, Name einzeilig abgeschnitten); Karten und Tabelle (auch Bestellansicht): Pille unter dem Preis
+  (`priceHTML`), Legende über der Liste. Druck: Hinweis absolut am Ende der Bezeichnung in der Höhe ihrer letzten Zeile,
+  ~75 % der Zeilenschrift, nur Text (ein Verlauf in der Zeilenfarbe blendet ein überdecktes Namensende aus) – er nimmt keinen
+  Platz, Messung, Seiten und Zeilenhöhen bleiben dieselben (Test `preisaenderung`); Legende in der Kopfzeile neben „Seite x von
+  y“ (der Kopf wird nicht höher). Im Eingabebereich druckt „Drucken“ wie bisher; der Pfeil daneben (`#btn-drucken-zusatz`,
+  Menü `#menu-drucken`) druckt mit `vergleich=vorwoche` bzw. `aenderungen`. Im Versand (Wochenangebot) schaltet der Zusatz
+  „Preisänderung zur Vorwoche zeigen“ die Links, die Übersicht in der E-Mail und den Link „Nur Änderungen“ – nur für diesen
+  Versand, beim Öffnen immer aus.
 - **Wartung:** Kunden und Besucher sehen nur `renderWartung()`; angemeldete Mitarbeiter (`staff`) sehen das Angebot mit
   Banner (GR-009).
 - **Web-App:** `sw.js` speichert nur Startseite, `/assets/`, `manifest.json` und das öffentliche Wochenangebot, immer

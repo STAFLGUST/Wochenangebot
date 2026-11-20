@@ -243,6 +243,16 @@ neueren Stand hat (`quelle: "version"`, `angebote: null` – Definitionen unbeka
  "modell": {…veröffentlichtes Angebot…}}
 ```
 
+**Preisänderung zur Vorwoche** (seit 20.11.2026, `angebot_vorwoche_stempeln` in `module/angebot/wochen.php`): Jede
+Veröffentlichung schreibt die Preise der KW davor als Schnappschuss ins veröffentlichte Angebot – die Kundenseite kann die
+Wochenablage nach der Datentrennung nicht lesen. Zwei optionale Felder (ältere Fassungen ignorieren sie; ein Artikelfeld
+verlässt `offer_resolve` wegen der Positivliste `ARTIKEL_FELDER_AUSGELIEFERT` auch dort nie; `clean_model` verwirft beide, sie
+wandern also nicht in den Entwurf): `meta.vorwoche = {"kw": 43, "jahr": 2026}` (fehlt ohne Vorwoche) und je Artikel
+`"vorwoche": {"std": 25.54 | null, "<Angebot>": 20.0 | null | false}` – `std` gilt für jedes Angebot ohne eigenen Eintrag,
+ein Kundenangebot steht nur da, wo es abweicht; `null` = damals ohne Preis, `false` bzw. fehlender Eintrag = damals nicht im
+Angebot (neu). Zuordnung zur Vorwoche über Art.-Nr., Bezeichnung und Gruppe (Artikel-IDs aus dem Excel-Import sind
+Zellpositionen). Ausgeliefert wird nur `angebot_vorwoche()` = `{kw, jahr, preise}` des angefragten Angebots (GR-002).
+
 ```json
 {"meta": {"week": 2, "year": 2026, "notice": "", "title?": "…", "source?": "…", "sheetName?": "…",
           "werbung?": {"std": {"titel": "Aktion der Woche", "text?": "…", "artikel": [{"id": "i1", "text?": "Top-Preis"}],
