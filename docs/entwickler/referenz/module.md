@@ -80,7 +80,7 @@ Agent: `einkauf` · hängt ab von `plattform`, `verwaltung`, `bestand` · Testgr
 
 Import von Ware aus Drittländern: Container (Lieferant, Partie-, Akten- und Containernummer, Stand) mit ihren Farmern; EUDR (Geolokalisierung, Risikoprofil, GeoJSON für TRACES); später Schlachthöfe, Tracking, Verzollung, Dokumente
 
-Agent: `containerimport` · hängt ab von `plattform`, `qs`, `verwaltung` · Testgruppen: `containerimport`, `containerimport_whisp`, `containerimport_schlachthof`, `containerimport_tracking`, `containerimport_hafen`, `containerimport_farmer`
+Agent: `containerimport` · hängt ab von `plattform`, `qs`, `verwaltung` · Testgruppen: `containerimport`, `containerimport_whisp`, `containerimport_schlachthof`, `containerimport_tracking`, `containerimport_hafen`, `containerimport_farmer`, `containerimport_geodaten`
 
 | Oberfläche | Art | Adresse | Entwicklung | Freigabe |
 | --- | --- | --- | --- | --- |

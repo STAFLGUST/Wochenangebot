@@ -5,7 +5,8 @@
    (bestehende Daten und Aktionsnamen, siehe app/api/module/containerimport/eudr.php).
    Ansichten: Container (Akten- und Partienummer vorn, Lieferant, Schlachthof, Stand, Gesamtprüfung der Farmer, Risikoprofil),
    Schlachthöfe (Stammdaten unter dem Lieferanten, eigene Datei schlachthoefe.js über die Brücke window.STAFL_CI), Farmer
-   (Gesamtübersicht mit eigener Nummer, Nummer aus den Papieren und Containern; Geolokalisierung, Bericht, Gegenprüfung), Karte.
+   (Gesamtübersicht mit eigener Nummer, Nummer aus den Papieren und Containern; Geolokalisierung, Bericht, Gegenprüfung), Karte,
+   Geodaten-Katalog (eudr-geodaten.js; Verweise „FNF01“ an Karte, Bildauswertung und Whisp, Katalog-ID und Fassung im Text der Gegenprüfung).
    Farmer je Container (Inhaber 19.11.2026): Nummern aus den Papieren einfügen → Vorschau (containerimport_eudr_nummern) →
    ins Fenster übernehmen → mit dem Container speichern; unbekannte Nummern stehen als „Unterlagen fehlen“ am Container.
    Reiter: EUDR (diese Ansichten) und Tracking (Schiff, Häfen, Ankunft – eigene Datei tracking.js, trägt sich in REITER ein).
@@ -28,6 +29,7 @@
   const $ = (s, el = document) => el.querySelector(s);
   const $$ = (s, el = document) => [...el.querySelectorAll(s)];
   const F = window.STAFL_FORMAT, SU = window.STAFL_SUCHE;
+  const G = { verweis: (id) => window.EUDR_GEODATEN.verweis(id), beleg: (ids) => window.EUDR_GEODATEN.beleg(ids) };   // eudr-geodaten.js lädt nach dieser Datei
   const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
   const icon = (n) => `<svg class="r-i" aria-hidden="true"><use href="#i-${n}"/></svg>`;
   const plural = (n, ein, viele) => `${n} ${n === 1 ? ein : viele}`;
@@ -170,7 +172,7 @@
   }
   function eudrZeichnen() {
     const d = S.d;
-    const sichten = [['sendungen', 'Container', d.sendungen.filter((s) => s.aktiv).length], ['schlachthoefe', 'Schlachthöfe', d.schlachthoefe.filter((x) => x.aktiv).length], ['betriebe', 'Farmer', d.betriebe.filter((b) => b.aktiv).length], ['karte', 'Karte', null]];
+    const sichten = [['sendungen', 'Container', d.sendungen.filter((s) => s.aktiv).length], ['schlachthoefe', 'Schlachthöfe', d.schlachthoefe.filter((x) => x.aktiv).length], ['betriebe', 'Farmer', d.betriebe.filter((b) => b.aktiv).length], ['karte', 'Karte', null], ['geodaten', 'Geodaten-Katalog', null]];
     $('#ci-sichten').innerHTML = sichten.map(([k, t, n]) => `<button class="ci-chip" type="button" data-sicht="${k}" aria-pressed="${S.sicht === k}">${t}${n === null ? '' : ` <b>${n}</b>`}</button>`).join('');
     $('#ci-knoepfe').innerHTML = d.rechte.bearbeiten
       ? `<button class="ci-knopf" type="button" id="ci-lesen">${icon('hoch')}Unterlagen einlesen</button><button class="ci-knopf primaer" type="button" id="ci-sendung-neu">${icon('plus')}Neuer Container</button>` : '';
@@ -240,7 +242,7 @@
       <span class="ci-legende"><i class="ci-ampel gruen"></i>ohne offenen Punkt <i class="ci-ampel gelb"></i>Nachweis offen <i class="ci-ampel rot"></i>kritisch</span></div>
       <div class="ci-kartenraster"><div class="r-karte" id="ci-karte"></div>
       <ul class="r-karte ci-kartenliste">${liste.map((b) => `<li><button type="button" data-betrieb="${esc(b.id)}"><i class="ci-ampel ${b.ampel}" aria-hidden="true"></i><span><strong>${esc(b.name)}</strong><small>${esc([landName(b.land), b.region].filter(Boolean).join(' · '))} · ${ha(b.flaeche)}</small></span></button></li>`).join('') || '<li class="ci-leer">Keine Farmer.</li>'}</ul></div>
-      <p class="ci-leise ci-klein">Grün: Wald Ende 2020 laut Karte der EU-Kommission (JRC) – ein Hinweis, kein Nachweis. Pink: Waldverlust seit 2021 (Universität Maryland über Global Forest Watch, 30 m). Pink innerhalb einer Fläche heißt: genau hinsehen und die Gegenprüfung machen. Das Satellitenbild ist von 2016 und zeigt nicht den heutigen Zustand. Die Bilder kommen direkt von EOX, der EU-Kommission und Global Forest Watch.</p>`;
+      <p class="ci-leise ci-klein">Grün: Wald Ende 2020 laut Karte der EU-Kommission (JRC ${G.verweis('FNF01')}) – ein Hinweis, kein Nachweis. Pink: Waldverlust seit 2021 (Universität Maryland über Global Forest Watch, 30 m ${G.verweis('FNF17')}). Pink innerhalb einer Fläche heißt: genau hinsehen und die Gegenprüfung machen. Das Satellitenbild ist von 2016 und zeigt nicht den heutigen Zustand. Die Bilder kommen direkt von EOX, der EU-Kommission und Global Forest Watch.</p>`;
     window.EUDR_KARTE.zeichnen($('#ci-karte'), { betriebe: liste, beiKlick: betriebOeffnen });
   }
 
@@ -316,9 +318,10 @@
      Kartenbildern (eudr-auswertung.js). Ohne erreichbare Kartendienste oder für einen Punkt bleibt der Abschnitt verborgen.
      „Übernehmen“ füllt nur das Formular der Gegenprüfung; eingetragen wird erst mit dessen Knopf. */
   async function auswertungZeigen(b, darf) {
-    const el = $('#betrieb-auswertung');
+    const el = $('#betrieb-auswertung'), beleg = G.beleg(['FNF01', 'FNF17']);
     let e;
     try { e = await window.EUDR_KARTE.auswerten(b.geometrie); } catch (f) { e = { fehler: true }; }
+    const quellen = await beleg;
     if (!el.isConnected || !e) return;   // Fenster inzwischen neu aufgebaut oder Dienste nicht erreichbar
     el.hidden = false;
     if (e.fehler || e.zuGross) {
@@ -329,12 +332,12 @@
     const passt = Math.abs(e.flaecheHa - b.flaeche) <= 0.03 * b.flaeche;
     const befund = e.verlustAufWaldHa >= WALD_AB_HA;
     el.dataset.verlust = befund ? e.verlustHa.toFixed(2) : ''; el.dataset.ergebnis = befund ? 'befund' : 'ohne_befund';
-    el.dataset.text = `Bildauswertung im Container-Import: Wald Ende 2020 ${h(e.waldHa)}, Waldverlust 2021–${e.bis} ${h(e.verlustHa)}, davon ${h(e.verlustAufWaldHa)} auf Wald von 2020 (JRC GFC 2020, GFW Tree cover loss).`;
+    el.dataset.text = `Bildauswertung im Container-Import: Wald Ende 2020 ${h(e.waldHa)}, Waldverlust 2021–${e.bis} ${h(e.verlustHa)}, davon ${h(e.verlustAufWaldHa)} auf Wald von 2020 (JRC GFC 2020, GFW Tree cover loss; ${quellen}).`;
     el.innerHTML = `<p><strong>Bildauswertung der Fläche</strong> <span class="ci-leise">· Schätzung aus den Kartenbildern, kein Nachweis</span></p>
       <dl><dt>Wald Ende 2020 (Karte der EU)</dt><dd>${h(e.waldHa)} · ${F.zahl(e.flaecheHa ? e.waldHa / e.flaecheHa * 100 : 0, 0, 0)} % der Fläche</dd>
         <dt>Waldverlust 2021–${e.bis}</dt><dd>${e.verlustHa >= 0.05 ? `${marke(h(e.verlustHa), befund ? 'rot' : 'warn')} davon ${h(e.verlustAufWaldHa)} auf Wald von 2020${jahre.length ? ` <small>${jahre.map(([j, v]) => `${j}: ${F.zahl(v, 1, 1)}`).join(' · ')}</small>` : ''}` : marke('keiner erkannt', 'ok')}</dd>
         <dt>Verlust bis 2020 (vor dem Stichtag)</dt><dd>${h(e.vorherHa)}</dd></dl>
-      <p class="ci-klein ci-leise">Ausgewertet ${h(e.flaecheHa)} (berechnete Fläche ${ha(b.flaeche)})${passt ? '' : ' – <strong>weicht ab, Ergebnis mit Vorsicht lesen</strong>'}. Quellen: Wald 2020 der EU-Kommission (JRC, 10 m), Baumverlust der Universität Maryland über Global Forest Watch (30 m). Baumverlust ist nicht immer Entwaldung (Brand, Ernte von Plantagen); kleine Werte können Rauschen sein.</p>
+      <p class="ci-klein ci-leise">Ausgewertet ${h(e.flaecheHa)} (berechnete Fläche ${ha(b.flaeche)})${passt ? '' : ' – <strong>weicht ab, Ergebnis mit Vorsicht lesen</strong>'}. Quellen: Wald 2020 der EU-Kommission (JRC, 10 m ${G.verweis('FNF01')}), Baumverlust der Universität Maryland über Global Forest Watch (30 m ${G.verweis('FNF17')}). Baumverlust ist nicht immer Entwaldung (Brand, Ernte von Plantagen); kleine Werte können Rauschen sein.</p>
       ${darf ? '<button class="ci-knopf klein" type="button" id="betrieb-auswertung-nehmen">Werte in die Gegenprüfung übernehmen</button>' : ''}`;
   }
   /* Vorschlag (Bildauswertung oder Whisp) in das Formular der Gegenprüfung schreiben; der Bearbeiter entscheidet und trägt
@@ -367,14 +370,16 @@
       if (s.status === 200) { r = s; fehl = 0; } else if (++fehl >= WHISP_FEHLVERSUCHE) r = s;
     }
     if (!el.isConnected) return;
-    knopf.disabled = false;
-    if (r.status === 200 && r.data.fertig) whispZeigen(el, r.data.ergebnis, b);
+    if (r.status === 200 && r.data.fertig) await whispZeigen(el, r.data.ergebnis, b);
     else if (!offen()) el.hidden = true;   // geschlossen: beim nächsten Öffnen ist das Fenster ohnehin neu
     else el.innerHTML = `<p class="ci-klein"><strong>Whisp:</strong> ${esc(r.status === 200 ? 'Die Auswertung dauert ungewöhnlich lange. Bitte später erneut versuchen.' : fehlerText(r, 'Abfrage nicht möglich. Bitte später erneut versuchen.'))}</p>`;
+    knopf.disabled = false;   // erst nach dem Ergebnis: whispZeigen wartet auf den Katalog
   }
   /* Ergebnis von Whisp als Vorschlag zeigen (Deutung: eudr-whisp.js); „Übernehmen“ füllt nur das Formular */
-  function whispZeigen(el, ergebnis, b) {
-    const e = window.EUDR_WHISP.deuten(ergebnis, WALD_AB_HA);
+  async function whispZeigen(el, ergebnis, b) {
+    const katalog = window.EUDR_WHISP.katalog(ergebnis.felder), quellen = katalog.length ? await G.beleg(katalog.map(([id]) => id)) : '';
+    if (!el.isConnected) return;
+    const e = window.EUDR_WHISP.deuten(ergebnis, WALD_AB_HA, quellen), nr = new Map(katalog.flatMap(([id, felder]) => felder.map((f) => [f, id])));
     const passt = e.flaeche === null || Math.abs(e.flaeche - b.flaeche) <= 0.03 * b.flaeche;
     const jaNein = (v, farbeBeiJa) => (v === null ? marke('unbekannt') : marke(v ? 'ja' : 'nein', v ? farbeBeiJa : 'ok'));
     const wert = (v) => `${F.zahl(v, 1, 1)} ${esc(e.einheit)}`;
@@ -382,8 +387,9 @@
     el.innerHTML = `<p><strong>Ergebnis von Whisp</strong> <span class="ci-leise">· Auswertung der FAO aus öffentlichen Karten, kein Nachweis</span></p>
       <dl><dt>Baumbestand Ende 2020</dt><dd>${jaNein(e.wald, 'ok')}</dd>
         <dt>Störung vor 2020</dt><dd>${jaNein(e.vorher, 'ok')}</dd>
-        <dt>Störung nach 2020</dt><dd>${jaNein(e.nachher, 'rot')}${e.stoerungen.length ? ` <small>${e.stoerungen.slice(0, 6).map(([k, v]) => `${esc(k)}: ${wert(v)}`).join(' · ')}</small>` : ''}</dd>
+        <dt>Störung nach 2020</dt><dd>${jaNein(e.nachher, 'rot')}${e.stoerungen.length ? ` <small>${e.stoerungen.slice(0, 6).map(([k, v]) => `${esc(k)}: ${wert(v)}${nr.has(k) ? ' ' + G.verweis(nr.get(k)) : ''}`).join(' · ')}</small>` : ''}</dd>
         ${e.risiken.length ? `<dt>Risiko laut Whisp</dt><dd>${e.risiken.map(([k, v]) => `${esc(k)}: ${esc(v)}`).join(' · ')}</dd>` : ''}
+        ${katalog.length ? `<dt>Datengrundlage im Geodaten-Katalog</dt><dd id="betrieb-whisp-katalog">${katalog.map(([id, felder]) => `${G.verweis(id)} <small>${esc(felder.join(', '))}</small>`).join(' ')}<small>Gleiches Produkt; Whisp kann eine neuere Fassung nutzen als der Katalog beschreibt.</small></dd>` : ''}
         <dt>Vorschlag</dt><dd>${e.vorschlag ? befundMarke(e.vorschlag) : `${marke('kein Vorschlag', 'warn')} bitte selbst beurteilen`}</dd></dl>
       <p class="ci-klein ci-leise">${e.flaeche === null ? '' : `Ausgewertet ${wert(e.flaeche)}${e.land ? ` in ${esc(e.land)}` : ''} (berechnete Fläche ${ha(b.flaeche)})${passt ? '' : ' – <strong>weicht ab, Ergebnis mit Vorsicht lesen</strong>'}. `}„Ja“ heißt bei Whisp: mehr als rund 10 % der Fläche (Störung vor 2020: mehr als die Hälfte). ${e.rind ? '' : 'Für Rinder gibt Whisp kein eigenes Risiko aus; der Vorschlag folgt der Regel für Ackerkulturen. '}Störungen sind auch Brand und Ernte.</p>
       <button class="ci-knopf klein" type="button" id="betrieb-whisp-nehmen">Werte in die Gegenprüfung übernehmen</button>`;

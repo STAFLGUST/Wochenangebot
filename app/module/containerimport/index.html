@@ -45,7 +45,7 @@
         <ol>
           <li><strong>Container anlegen</strong> – Partienummer, Lieferant aus den Stammdaten und sein Schlachthof (Ansicht „Schlachthöfe“), Ware; Akten- und Containernummer, sobald sie feststehen. Den Stand (gekauft, unterwegs, Dokumente da, angekommen) pflegen Sie am Container.</li>
           <li><strong>Unterlagen einlesen</strong> – Entwaldungsberichte (PDF) oder GeoJSON des Lieferanten. Die Umrisse werden umgerechnet und so geprüft, wie es das EU-Informationssystem (TRACES) tut.</li>
-          <li><strong>Selbst gegenprüfen</strong> – die Karte zeigt Satellitenbild, Wald Ende 2020 (grün) und Waldverlust seit 2021 (pink); im Fenster des Farmers steht dazu die Bildauswertung in Hektar. Zeigt sie Verlust, die Fläche zusätzlich in Global Nature Watch oder Whisp ansehen. Das Ergebnis am Farmer eintragen.</li>
+          <li><strong>Selbst gegenprüfen</strong> – die Karte zeigt Satellitenbild, Wald Ende 2020 (grün) und Waldverlust seit 2021 (pink); im Fenster des Farmers steht dazu die Bildauswertung in Hektar. Zeigt sie Verlust, die Fläche zusätzlich in Global Nature Watch oder Whisp ansehen. Das Ergebnis am Farmer eintragen. Woher die Karten stammen und wie genau sie sind, steht im Geodaten-Katalog (Verweise wie „FNF01“).</li>
           <li><strong>Risiko bewerten</strong> – das Risikoprofil zeigt, was fehlt. Erst wenn nichts mehr offen ist, die Bewertung abschließen.</li>
           <li><strong>GeoJSON bei TRACES hochladen</strong>, Sorgfaltserklärung abgeben und die Referenznummer am Container eintragen.</li>
         </ol>
@@ -70,6 +70,7 @@
 <dialog class="modal" id="dlg-tracking" aria-labelledby="tracking-titel"><form class="dlg" id="tracking-inhalt" autocomplete="off" novalidate></form></dialog>
 <dialog class="modal" id="dlg-schlachthof" aria-labelledby="schlachthof-titel"><form class="dlg" id="schlachthof-inhalt" autocomplete="off" novalidate></form></dialog>
 <dialog class="modal ci-breit" id="dlg-betrieb" aria-labelledby="betrieb-titel"><form class="dlg" id="betrieb-inhalt" autocomplete="off" novalidate></form></dialog>
+<dialog class="modal ci-breit" id="dlg-geodaten" aria-labelledby="geodaten-titel"><form class="dlg" id="geodaten-inhalt" autocomplete="off" novalidate></form></dialog>
 <dialog class="modal ci-breit" id="dlg-lesen" aria-labelledby="lesen-titel"><form class="dlg" id="lesen-inhalt" autocomplete="off" novalidate></form></dialog>
 <dialog class="modal" id="dlg-abschluss" aria-labelledby="abschluss-titel"><form class="dlg" id="abschluss-inhalt" autocomplete="off" novalidate></form></dialog>
 <div class="ci-toast" id="ci-toast" role="status" aria-live="polite"></div>
@@ -100,5 +101,6 @@
 <script src="containerimport.js"></script>
 <script src="schlachthoefe.js"></script>
 <script src="tracking.js"></script>
+<script src="eudr-geodaten.js"></script>
 </body>
 </html>

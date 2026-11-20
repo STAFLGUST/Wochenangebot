@@ -1,0 +1,142 @@
+{
+ "schema": 1,
+ "quelle": {
+  "name": "Erfundener Testkatalog im Aufbau von GEOS-EUDR",
+  "url": "https://example.org/geos-eudr-test",
+  "lizenz": "MIT",
+  "lizenzdatei": "geodatenkatalog-LIZENZ.txt",
+  "urheber": "Thünen-Institut (Test): Erika Muster"
+ },
+ "themen": [
+  {
+   "id": "Testthema",
+   "name": "Testthema (erfunden)",
+   "version": "9.1",
+   "datei": "Testthema_GeosEUDR_Thuenen_v9.1.tsv",
+   "eintraege": 3,
+   "quelleCommit": "abc1234",
+   "abgerufen": "2026-11-20",
+   "zitiervorschlag": "Muster, E. (2026). Testkatalog (Version 9.1)."
+  }
+ ],
+ "eintraege": [
+  {
+   "id": "FNF01",
+   "thema": "Testthema",
+   "name": "Testwald 2020 (erfunden)",
+   "hinweis": null,
+   "hersteller": "Beispiel-Institut Nord",
+   "zitat": "Beispiel 2026",
+   "links": {
+    "veroeffentlichung": [
+     {
+      "text": "Bericht",
+      "url": "https://example.org/bericht"
+     }
+    ],
+    "gee": [
+     {
+      "text": "V1",
+      "url": "https://example.org/gee/v1"
+     }
+    ],
+    "andere": []
+   },
+   "klassen": "Wald, kein Wald",
+   "walddefinition": "≥ 5 m, ≥ 0,5 ha, ≥ 10 %",
+   "eudrKonform": "ja",
+   "ausdehnung": "Global",
+   "aufloesungM": "10",
+   "vonJahr": "2020",
+   "bisJahr": "2020",
+   "zeitlich": "jährlich",
+   "sensor": "Sentinel-2",
+   "methode": "Schwellenwert",
+   "kategorie": "Rule-based",
+   "validierung": {
+    "ansatz": "Zufallsstichprobe",
+    "referenz": "Testreferenz",
+    "stichproben": "1000"
+   },
+   "genauigkeit": {
+    "oa": "91 %",
+    "paUa": "PA 90 %, UA 85 %",
+    "weitere": null,
+    "zusatz": "NA"
+   },
+   "grenzen": "• Erste Testgrenze.\n• Zweite Testgrenze."
+  },
+  {
+   "id": "FNF03",
+   "thema": "Testthema",
+   "name": "Testbedeckung (erfunden)",
+   "hinweis": null,
+   "hersteller": "Muster-Labor",
+   "zitat": "Beispiel 2026",
+   "links": {
+    "veroeffentlichung": [],
+    "gee": [],
+    "andere": []
+   },
+   "klassen": "Wald, kein Wald",
+   "walddefinition": "NR",
+   "eudrKonform": "teilweise",
+   "ausdehnung": "Global",
+   "aufloesungM": "~30",
+   "vonJahr": "2015",
+   "bisJahr": "2020",
+   "zeitlich": "jährlich",
+   "sensor": "Landsat und Radar",
+   "methode": "Schwellenwert",
+   "kategorie": "Rule-based",
+   "validierung": {
+    "ansatz": "NR",
+    "referenz": "NR",
+    "stichproben": "NR"
+   },
+   "genauigkeit": {
+    "oa": "NR",
+    "paUa": "NR",
+    "weitere": null,
+    "zusatz": "NA"
+   },
+   "grenzen": null
+  },
+  {
+   "id": "FNF17",
+   "thema": "Testthema",
+   "name": "Testverlust (erfunden)",
+   "hinweis": "Nur Verlust, kein Bestand.",
+   "hersteller": "Muster-Labor",
+   "zitat": "Beispiel 2026",
+   "links": {
+    "veroeffentlichung": [],
+    "gee": [],
+    "andere": []
+   },
+   "klassen": "Wald, kein Wald",
+   "walddefinition": "NR",
+   "eudrKonform": "nein_unklar",
+   "ausdehnung": "Global",
+   "aufloesungM": "30",
+   "vonJahr": "2001",
+   "bisJahr": "2023",
+   "zeitlich": "jährlich",
+   "sensor": "Lidar",
+   "methode": "Schwellenwert",
+   "kategorie": "Rule-based",
+   "validierung": {
+    "ansatz": "NR",
+    "referenz": "NR",
+    "stichproben": "NR"
+   },
+   "genauigkeit": {
+    "oa": "NR",
+    "paUa": "NR",
+    "weitere": null,
+    "zusatz": "NA"
+   },
+   "grenzen": "Verlust ist nicht immer Entwaldung."
+  }
+ ]
+}
