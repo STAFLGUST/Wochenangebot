@@ -12,6 +12,8 @@ regexes = [
   '''Gut-Passwort-2026''',
   '''Sicheres-Passwort-1''',
   '''Leserin-Zugang-1''',
+  # Versender ohne Angebotszugang (tests/e2e/test_preisaenderung.py, Stand ee165628)
+  '''Leser-Zugang-56''',
   # Kunden-Zugänge (tests/e2e/test_kunden.py)
   '''Start-Kennwort-42''',
   '''Eigenes-Kennwort-55''',
