@@ -259,7 +259,7 @@ with sync_playwright() as p:
     vws = s1['vw']
     check('Druck: Hinweise an G, T, N, X, kleiner als die Zeilenschrift (etwa 75 %), ganz in der Zelle',
           len(vws) == 4 and all(v['innen'] and 0.7 <= v['anteil'] <= 0.8 for v in vws) and sorted(v['text'] for v in vws) == sorted(['▼ 2,00', '▲ 1,00', 'neu', 'neu']), vws)
-    check('Druck: Legende im Kopf neben „Seite 1 von …“', 'Veränderung zur KW 43' in s1['kopf'] and 'Seite 1 von' in s1['kopf'], s1['kopf'])
+    check('Druck: keine Legende im Kopf, nur „Seite 1 von …“ (Inhaber 20.11.2026)', 'Veränderung zur' not in s1['kopf'] and 'Seite 1 von' in s1['kopf'], s1['kopf'])
     zurueck(pg)
     laden(pg, '/?vergleich=aenderungen')
     ids = pg.evaluate("() => [...document.querySelectorAll('#list .al-band tr.row')].map((r) => r.dataset.id)")
@@ -433,9 +433,9 @@ with sync_playwright() as p:
     shot(pg, SH + '/preisaenderung-pfeil-1280.png')
     s1 = satz(pg)
     n_svg = pg.evaluate("document.querySelectorAll('#print-root td.c-name > .vw svg').length")
-    check('Druck mit Pfeil: dieselben Seiten, Stufe, Füllung und Zeilenhöhen wie ohne; alle Pfeile ganz in der Zelle; Legende im Kopf',
+    check('Druck mit Pfeil: dieselben Seiten, Stufe, Füllung und Zeilenhöhen wie ohne; alle Pfeile ganz in der Zelle; keine Legende im Kopf',
           s1['seiten'] == s0['seiten'] and s1['stufe'] == s0['stufe'] and s1['fuell'] == s0['fuell'] and s1['hoehen'] == s0['hoehen']
-          and n_svg == len(GRENZ) and all(v['innen'] for v in s1['vw']) and 'steiler = stärker' in s1['kopf'], (s0['seiten'], s1['seiten'], n_svg, s1['kopf']))
+          and n_svg == len(GRENZ) and all(v['innen'] for v in s1['vw']) and 'steiler' not in s1['kopf'], (s0['seiten'], s1['seiten'], n_svg, s1['kopf']))
     shot(pg.locator('#print-root .pl-page').first, SH + '/preisaenderung-pfeil-druck.png')
     zurueck(pg)
     m390 = br.new_context(viewport={'width': 390, 'height': 844}, color_scheme='light', is_mobile=True, has_touch=True)

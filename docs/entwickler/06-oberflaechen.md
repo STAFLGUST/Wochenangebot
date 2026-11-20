@@ -638,8 +638,8 @@ Leiste senkrecht, schmal ist sie eine waagerechte Spur. Mit `body.bereich-import
   Angebotsansicht: per CSS rechts in der Bezeichnung (Name einzeilig abgeschnitten); Karten und Tabelle (auch Bestellansicht):
   Pille unter dem Preis (`priceHTML`), Legende über der Liste. Druck: Hinweis absolut am Ende der Bezeichnung in der Höhe ihrer
   letzten Zeile, ~75 % der Zeilenschrift, nur Text (ein Verlauf in der Zeilenfarbe blendet ein überdecktes Namensende aus) – er
-  nimmt keinen Platz, Messung, Seiten und Zeilenhöhen bleiben dieselben (Test `preisaenderung`); Legende in der Kopfzeile neben
-  „Seite x von y“ (der Kopf wird nicht höher). Im Eingabebereich druckt „Drucken“ wie bisher; der Pfeil daneben
+  nimmt keinen Platz, Messung, Seiten und Zeilenhöhen bleiben dieselben (Test `preisaenderung`); im Druck keine Legende
+  (Inhaber 20.11.2026), die Kopfzeile bleibt wie ohne Vergleich. Im Eingabebereich druckt „Drucken“ wie bisher; der Pfeil daneben
   (`#btn-drucken-zusatz`, Menü `#menu-drucken`) druckt mit `vergleich=vorwoche`, `pfeil` („… (nur Pfeil)“) bzw. `aenderungen`. Im Versand (Wochenangebot)
   schaltet der Zusatz „Preisänderung zur Vorwoche zeigen“ (Vergleichswoche `woche.vorwoche` aus `versand_empfaenger`) die Links,
   die Übersicht in der E-Mail und den Link „Nur Änderungen“; die Auswahl „Darstellung: Betrag | Nur Pfeil“ setzt

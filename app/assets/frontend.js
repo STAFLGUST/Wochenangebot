@@ -771,7 +771,7 @@ function buildPrintListe(list, grouped, scopeText) {
      nennt die Woche schon, der Preis je kg steht an jeder Spalte). */
   const zusatz = [scopeText, m.einzel && (m.nr || m.kunde) ? [m.nr ? 'Angebot ' + m.nr : '', m.kunde ? 'für ' + m.kunde : ''].filter(Boolean).join(' ') : ''].filter(Boolean);
   const vermerk = DRUCK_ENTWURF_VERMERK && PREVIEW ? '<span class="pl-entwurf">Entwurf</span> · ' : '';
-  const unterzeile = (n, N) => `${vermerk}${zusatz.map((z) => esc(z) + ' · ').join('')}${Vorwoche.legende('', ' · ')}<span class="pl-sz">Seite ${n} von ${N}</span>`;   // Legende in derselben Zeile: der Kopf wird nicht höher
+  const unterzeile = (n, N) => `${vermerk}${zusatz.map((z) => esc(z) + ' · ').join('')}<span class="pl-sz">Seite ${n} von ${N}</span>`;   // im Druck keine Legende (Inhaber 20.11.2026): die Zeichen erklären sich selbst
   const kopf = (n, N) => (n === 1
     ? `<header class="al-head pl-ph">${PL_LOGO}<div class="al-ht pl-pt"><h1>${esc(titel)}</h1><span>${unterzeile(n, N)}</span></div></header>`
     : `<header class="al-head pl-ph pl-ph2">${PL_LOGO}<div class="al-ht pl-pt"><strong>${esc(titel)}</strong><span>${unterzeile(n, N)}</span></div></header>`);   // Folgeseiten: Logo kleiner
