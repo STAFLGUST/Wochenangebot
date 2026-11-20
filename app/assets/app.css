@@ -1323,3 +1323,27 @@ body:not(.adm):not(.db) .ibtn:hover { background: var(--accent-soft); color: var
 :root[data-darstellung="einfach"] body.kseite::before { display: none !important; }
 /* Angebotsseite: Glas deckend wie bei „Transparenz reduzieren“ */
 :root[data-darstellung="einfach"] body.kseite.kseite.kseite { --glas-kopf: var(--surface); --glas: var(--surface); --glas-leicht: var(--surface-3); --glas-karte: var(--surface); --glas-fenster: var(--surface); --glas-filter: none; --feld: var(--surface); }
+
+/* Preisänderung zur Vorwoche (frontend.js, nur mit ?vergleich=vorwoche|aenderungen; Inhaber 20.11.2026): Pfeil und Zeichen
+   tragen die Bedeutung (auch schwarzweiß), die Farbe unterstützt. Angebotsansicht: kleiner Text rechts in der Bezeichnung, die
+   Bezeichnung wird abgeschnitten statt umbrochen; Karten und Tabelle: Pille unter dem Preis. Druck: angebot-druck.css. */
+:root { --vw-g: #1f5a3c; --vw-g-bg: #e6f1ea; --vw-t: #8c1d2c; --vw-t-bg: #fbf1f2; --vw-n: #7a5418; --vw-n-bg: #f6eddf; }
+@media screen and (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) { --vw-g: #8fd0aa; --vw-g-bg: rgba(143, 208, 170, .12); --vw-t: #f0a3ae; --vw-t-bg: rgba(240, 163, 174, .12); --vw-n: #e0bd7c; --vw-n-bg: rgba(224, 189, 124, .12); }
+}
+@media screen {
+  :root[data-theme="dark"] { --vw-g: #8fd0aa; --vw-g-bg: rgba(143, 208, 170, .12); --vw-t: #f0a3ae; --vw-t-bg: rgba(240, 163, 174, .12); --vw-n: #e0bd7c; --vw-n-bg: rgba(224, 189, 124, .12); }
+}
+.vw { font-size: .78em; font-weight: 600; white-space: nowrap; font-variant-numeric: tabular-nums; letter-spacing: .01em; }
+.vw-guenstiger { color: var(--vw-g); }
+.vw-teurer { color: var(--vw-t); }
+.vw-neu { color: var(--vw-n); }
+.al-tab td.c-name > .vw { float: right; margin-left: 8px; line-height: 2.1; }
+.al-tab td.c-name > .vw + .name-btn { display: block; max-width: 100%; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+.vw-pille { display: inline-block; margin-top: 3px; padding: 1px 7px; border-radius: 999px; font-size: 11.5px; line-height: 1.5; }
+.vw-pille.vw-guenstiger { background: var(--vw-g-bg); }
+.vw-pille.vw-teurer { background: var(--vw-t-bg); }
+.vw-pille.vw-neu { background: var(--vw-n-bg); }
+.vw-leg { white-space: normal; }
+.vw-leg .vw { margin-left: 6px; font-size: inherit; }
+.vw-leiste { margin: 0 0 12px; font-size: 13px; color: var(--muted); }

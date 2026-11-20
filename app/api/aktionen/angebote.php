@@ -32,6 +32,9 @@ switch ($action) {
             }
             $def = offer_def($oid);
             if (!$def) fail('Unbekanntes Angebot.', 404);
+            // optional ?vergleich=vorwoche: Preise der Vorwoche dieses Angebots (module/angebot/wochen.php) – hinter denselben Prüfungen
+            $vergleich = ($_GET['vergleich'] ?? '') === 'vorwoche';
+            if ($vergleich) require_once dirname(__DIR__) . '/module/angebot/wochen.php';
             if (!empty($_GET['draft'])) {
                 require_modulzugang('angebot');
                 $d = store_read('entwurf') ?? store_read('angebot');
@@ -39,7 +42,9 @@ switch ($action) {
                 $o = offer_resolve($d, $def);
                 unset($o['meta']['design']);   // Vorschau: das gespeicherte Design, auch wenn es noch nicht veröffentlicht ist (module/angebot/design.php)
                 if ($ds = design_fuer($o['groups'], $def['design'] ?? null)) $o['meta']['design'] = $ds;
-                respond(['ok' => true, 'company' => $CFG['company'], 'preview' => true, 'offer' => $o, 'fracht' => fracht_public(true)]);
+                // Vorschau: Vergleich wie beim Veröffentlichen, live aus der Wochenablage (nur Mitarbeiter, Mitarbeiterseite)
+                $vw = $vergleich ? ['vorwoche' => angebot_vorwoche(angebot_vorwoche_stempeln($d), $def, $o)] : [];
+                respond(['ok' => true, 'company' => $CFG['company'], 'preview' => true, 'offer' => $o, 'fracht' => fracht_public(true)] + $vw);
             }
             $published = store_read('angebot');
             if ($published === null) fail('Es ist noch kein Angebot veröffentlicht.', 404);
@@ -48,14 +53,15 @@ switch ($action) {
             require_once dirname(__DIR__) . '/module/angebot/druck.php';
             $angemeldet = druck_angemeldet();
             $fracht = fracht_public($angemeldet);
+            $vw = $vergleich ? ['vorwoche' => angebot_vorwoche($published, $def, $offer)] : [];
             if ($oid === OFFER_STD && std_public()) {
                 // ETag über die aufgelöste Antwort: ausverkaufte Sonderposten (Bestand) und Hinweis/Fracht gehören dazu
-                $etag = '"' . hash('sha256', json_encode($offer) . json_encode($fracht) . ':std:3') . '"';
+                $etag = '"' . hash('sha256', json_encode($offer) . json_encode($fracht) . ($vw ? json_encode($vw) : '') . ':std:3') . '"';
                 header('ETag: ' . $etag);
                 if ($angemeldet) header('Cache-Control: private, no-cache');   // Antwort mit Anmeldung nie in fremden Zwischenspeichern
                 if (trim((string)($_SERVER['HTTP_IF_NONE_MATCH'] ?? '')) === $etag) { http_response_code(304); exit; }
             }
-            respond(['ok' => true, 'company' => $CFG['company'], 'offer' => $offer, 'fracht' => $fracht]);
+            respond(['ok' => true, 'company' => $CFG['company'], 'offer' => $offer, 'fracht' => $fracht] + $vw);
         }
 
         /* Artikel für „Artikel hinzufügen“ im Angebot: Stammdaten (VK-Gruppe), Wochenpreis, mit Recht „Bestand ansehen“

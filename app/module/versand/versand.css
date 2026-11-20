@@ -176,3 +176,11 @@ details.vs-aus ul { margin: 6px 0 0; padding-left: 18px; color: var(--r-text-2);
 body.vs dialog.modal.vs-schmal { width: min(480px, calc(100vw - 32px)); }
 .vs-nr .r-i { width: 14px; height: 14px; }
 a.vs-knopf.nur-symbol { flex: none; }
+/* Zusatz „Preisänderung zur Vorwoche“ im Fenster „Wochenangebot senden“ (Inhaber 20.11.2026) */
+.vs-zusatz { margin: 16px 0 0; padding: 10px 12px 12px; border: 1px solid var(--r-linie); border-radius: 12px; }
+.vs-zusatz legend { padding: 0 6px; font-size: 12px; font-weight: 600; letter-spacing: .04em; text-transform: uppercase; color: var(--r-leise); }
+.vs-zusatz-zeile { align-items: flex-start; font-size: 13.5px; }
+.vs-zusatz-zeile input { width: 16px; height: 16px; margin: 2px 0 0; accent-color: var(--r-akzent); flex: none; }
+.vs-zusatz-zeile small { display: block; margin-top: 2px; font-weight: 400; color: var(--r-leise); }
+.vs-zusatz-zeile input:disabled + span { color: var(--r-leise); cursor: default; }
+.vs-zusatz-unter { display: grid; gap: 10px; margin: 10px 0 0 26px; }

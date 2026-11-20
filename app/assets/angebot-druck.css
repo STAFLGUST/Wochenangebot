@@ -142,3 +142,18 @@
   html.druckansicht { color-scheme: light; }
   html.druckansicht #print-root img[src*="logo-standard-fleisch"] { filter: none; }   /* Druck ist immer hell: Logo nicht wie im Dunkelmodus aufhellen */
 }
+
+/* Preisänderung zur Vorwoche (frontend.js, ?vergleich=…): nur farbiger Text, keine Fläche, etwa 75 % der Zeilenschrift. Der
+   Hinweis liegt absolut am rechten Ende der Bezeichnung, in der Höhe ihrer letzten Zeile (statische Lage) – er nimmt keinen
+   Platz: Zeilenhöhe, Messung und Seiten sind dieselben wie ohne Vergleich (test_preisaenderung.py). Reicht die Bezeichnung bis
+   dorthin, blendet ein Verlauf in der Zeilenfarbe ihr Ende aus (abgeschnitten, nicht umbrochen). */
+#print-root .pl-doc .al-tab td { --vw-grund: #fff; }
+#print-root .pl-doc .al-tab tbody tr:nth-child(odd) td { --vw-grund: var(--zebra); }
+#print-root .pl-doc .al-tab tbody tr.row.werb-an td { --vw-grund: var(--accent-soft); }
+#print-root .pl-doc .al-tab td.c-name.mit-vw { position: relative; }
+#print-root .pl-doc .al-tab td.c-name > .vw { position: absolute; right: 4px; padding-left: 1.5em; font-size: .75em; line-height: calc(1.3em / .75); font-weight: 650; white-space: nowrap;
+  background: linear-gradient(to right, transparent, var(--vw-grund) 1.1em); }
+#print-root .pl-doc .vw-guenstiger { color: #1f5a3c; }
+#print-root .pl-doc .vw-teurer { color: #8c1d2c; }
+#print-root .pl-doc .vw-neu { color: #7a5418; }
+#print-root .pl-doc .vw-leg .vw { margin-left: 5px; font-weight: 650; }

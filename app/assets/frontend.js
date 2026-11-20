@@ -24,6 +24,13 @@ const druckMelden = (stand) => { try { if (DRUCK_DIREKT && window.parent !== win
    zeigt statt des Entwurfs den veröffentlichten Stand dieser KW (Aktion angebot_woche – nur Mitarbeiter mit Modulzugang
    Angebot, prüft der Server; Kunden und Besucher bekommen keine Daten) */
 const WOCHE = (() => { const v = PREVIEW ? new URLSearchParams(location.search).get('woche') || '' : ''; return /^\d{4}-\d{2}$/.test(v) ? v : ''; })();
+/* Preisänderung zur Vorwoche (Inhaber 20.11.2026, Zusatzfunktion): nur mit ?vergleich=vorwoche – je Artikel ein kleiner farbiger
+   Hinweis „▼ 2,00“ / „▲ 1,00“ / „neu“, unverändert nichts – bzw. ?vergleich=aenderungen (Kurzfassung „Nur Änderungen“: nur Artikel
+   mit Veränderung oder neu). Die Vorwochenpreise liefert der Server (Aktion offer mit vergleich=vorwoche, nur Preise dieses
+   Angebots, module/angebot/wochen.php). Der Aufbau bleibt gleich: im Druck liegt der Hinweis über dem Ende der Bezeichnung
+   (angebot-druck.css), Zeilenhöhe und Seiten ändern sich nicht. Ohne Parameter alles wie bisher. */
+const VERGLEICH = (() => { const v = new URLSearchParams(location.search).get('vergleich'); return !WOCHE && (v === 'vorwoche' || v === 'aenderungen') ? v : ''; })();
+let VORWOCHE = null;   // {kw, jahr, preise: {Artikel-ID: Preis | null}} – fehlt eine ID, ist der Artikel neu
 /* Kundenangebot (?angebot=edeka): nur nach Anmeldung; ohne Angabe das öffentliche Wochenangebot */
 let OFFER = (() => { const v = new URLSearchParams(location.search).get('angebot') || ''; return /^[a-z0-9-]{1,40}$/.test(v) && v !== 'std' ? v : ''; })();
 let COMPANY = '';
@@ -171,7 +178,7 @@ function offlineHinweis(stand) {
 }
 
 async function loadData() {
-  const quelle = WOCHE ? 'api/?action=angebot_woche&woche=' + WOCHE : 'api/?action=offer' + (PREVIEW ? '&draft=1' : '');
+  const quelle = WOCHE ? 'api/?action=angebot_woche&woche=' + WOCHE : 'api/?action=offer' + (PREVIEW ? '&draft=1' : '') + (VERGLEICH ? '&vergleich=vorwoche' : '');
   const res = await fetch(quelle + (OFFER ? '&angebot=' + encodeURIComponent(OFFER) : ''), { credentials: 'same-origin', cache: 'no-cache' });
   let body = null;
   try { body = await res.json(); } catch { /* keine JSON-Antwort */ }
@@ -185,6 +192,8 @@ async function loadData() {
   COMPANY = body.company || '';
   PUBLISHED_AT = body.offer.publishedAt || body.offer.savedAt || null;
   FRACHT = body.fracht || null;
+  VORWOCHE = VERGLEICH && body.vorwoche && body.vorwoche.preise ? body.vorwoche : null;
+  if (VORWOCHE && VERGLEICH === 'aenderungen') body.offer.items = body.offer.items.filter((it) => preisAenderung(it));
   DATA = prepare(window.OfferCore.enrichOffer(body.offer));
 }
 
@@ -298,14 +307,35 @@ function priceMain(p) {
   if (p.status === 'request') return '<span class="p-req">auf Anfrage</span>';
   return `<span class="p-none" title="In der Angebotsliste ohne Preis${p.raw ? ' („' + esc(p.raw) + '“)' : ''}">ohne Preis</span>`;
 }
+/* Veränderung zur Vorwoche: {art: 'neu'} | {art: 'guenstiger' | 'teurer', d, alt} | null (unverändert, ohne Preis, ohne Vergleich) –
+   dieselbe Regel wie angebot_vorwoche_uebersicht() für die E-Mail (module/angebot/wochen.php) */
+function preisAenderung(it) {
+  if (!VORWOCHE) return null;
+  const pr = VORWOCHE.preise;
+  if (!Object.prototype.hasOwnProperty.call(pr, it.id)) return { art: 'neu' };
+  const alt = pr[it.id];
+  if (alt == null || it.price.status !== 'value') return null;
+  const d = Math.round((it.price.value - alt) * 100) / 100;
+  return d ? { art: d < 0 ? 'guenstiger' : 'teurer', d, alt } : null;
+}
+/* Hinweis je Artikel; cls: vw-pille (Karten, Tabelle – mit Fläche) – Liste und Druck ohne Fläche (app.css, angebot-druck.css) */
+function vwHTML(it, cls = '') {
+  const a = preisAenderung(it);
+  if (!a) return '';
+  const kw = 'KW ' + VORWOCHE.kw;
+  const [zeichen, lang] = a.art === 'neu' ? ['neu', `neu, nicht im Angebot der ${kw}`]
+    : [`${a.d < 0 ? '▼' : '▲'} ${fmtNum.format(Math.abs(a.d))}`, `${a.d < 0 ? 'günstiger' : 'teurer'} um ${fmtNum.format(Math.abs(a.d))} € (${kw}: ${fmtNum.format(a.alt)} €/kg)`];
+  return `<span class="vw vw-${a.art}${cls ? ' ' + cls : ''}" title="${esc(lang)}"><span aria-hidden="true">${zeichen}</span><span class="sr-only">${esc(lang)}</span></span>`;
+}
+const vwLegende = () => (VORWOCHE ? `<span class="vw-leg">${VERGLEICH === 'aenderungen' ? 'Nur Änderungen' : 'Veränderung'} zur KW ${esc(VORWOCHE.kw)}: <span class="vw vw-guenstiger">▼ günstiger</span> <span class="vw vw-teurer">▲ teurer</span> <span class="vw vw-neu">neu</span></span>` : '');
 const priceShort = (p) => (p.status === 'value' ? fmtNum.format(p.value) + ' €/kg' : p.status === 'request' ? 'auf Anfrage' : 'ohne Preis');
 function priceHTML(it) {
   if (it.sale) {
-    return `<span class="price sale" title="Sonderposten – solange der Vorrat reicht">${it.regular != null ? `<s class="p-was">${fmtNum.format(it.regular)} €/kg</s>` : ''}<span>${priceMain(it.price)}</span><span class="sale-note">solange der Vorrat reicht</span></span>`;
+    return `<span class="price sale" title="Sonderposten – solange der Vorrat reicht">${it.regular != null ? `<s class="p-was">${fmtNum.format(it.regular)} €/kg</s>` : ''}<span>${priceMain(it.price)}</span><span class="sale-note">solange der Vorrat reicht</span>${vwHTML(it, 'vw-pille')}</span>`;
   }
   const main = `<span>${it.price.label ? `<span class="pl">${esc(it.price.label)}</span>` : ''}${priceMain(it.price)}</span>`;
   const alts = it.altPrices.map((p) => `<span class="p-alt"><span class="pl">${esc(p.label)}</span>${esc(priceShort(p))}</span>`).join('');
-  return `<span class="price">${main}${alts}</span>`;
+  return `<span class="price">${main}${alts}${vwHTML(it, 'vw-pille')}</span>`;
 }
 
 /* ---------- Werbung: vom Angebot hervorgehobene Artikel (meta.werbung, je Angebot vom Server aufgelöst) ----------
@@ -665,7 +695,7 @@ function plBlockHTML(b, mode) {
   const span = 2 + cols + (screen ? 1 : 0);
   const row = (it) => `<tr class="row${empfAn(it) && !werb ? ' werb-an' : ''}" data-id="${it.id}">
     <td class="c-code">${it.code ? hl(it.code) : ''}</td>
-    <td class="c-name">${screen ? `<button type="button" class="name-btn" data-open="${it.id}" title="Details und Preisvergleich anzeigen">${hl(plName(it))}</button>` : esc(plName(it))}${werbTagHTML(it, 'al-tag', werb)}${it.sale ? '<span class="tag sale al-tag" title="Sonderpreis, solange der Vorrat reicht">Sonderposten</span>' : ''}${partieHTML('al-partie')(it)}</td>
+    <td class="c-name${VORWOCHE ? ' mit-vw' : ''}">${screen ? `${vwHTML(it)}<button type="button" class="name-btn" data-open="${it.id}" title="Details und Preisvergleich anzeigen">${hl(plName(it))}</button>` : esc(plName(it))}${werbTagHTML(it, 'al-tag', werb)}${it.sale ? '<span class="tag sale al-tag" title="Sonderpreis, solange der Vorrat reicht">Sonderposten</span>' : ''}${partieHTML('al-partie')(it)}${screen ? '' : vwHTML(it)}</td>
     ${plCells(it, labels).map((p) => `<td class="c-price${p && p.status !== 'value' ? ' al-np' : ''}">${p ? (it.sale && p === it.price ? `${it.regular != null ? `<s class="p-was al-was">${fmtNum.format(it.regular)}</s>` : ''}<span class="al-sale" title="Sonderposten – solange der Vorrat reicht">${plPrice(p)}</span>` : plPrice(p)) : ''}</td>`).join('')}${screen ? `<td class="c-fav">${starHTML(it)}</td>` : ''}</tr>`;
   const cg = `<colgroup><col class="w-code"><col>${labels.map(() => '<col class="w-price">').join('')}${screen ? '<col class="w-fav">' : ''}</colgroup>`;
   const was = u.items.some((it) => it.sale && it.regular != null) ? ' hat-was' : '';   // ganze Gruppe (auch ihre Teile im Druck): Preisspalte breit genug für „bisher“ und Sonderpreis
@@ -720,7 +750,7 @@ function renderListe(list, grouped) {
   const units = plUnits(list, grouped, Math.max(18, Math.floor((colW - 150) / 6.6)));
   const stand = PUBLISHED_AT ? new Date(PUBLISHED_AT).toLocaleDateString('de-DE', { day: '2-digit', month: '2-digit', year: 'numeric' }) : '';
   const m = DATA.meta || {};
-  const head = `<div class="al-head">${PL_LOGO}<div class="al-ht"><h2>${esc(m.offerName && m.offerName !== 'Wochenangebot' && !m.einzel ? m.offerName + ' · ' : '')}${esc(plTitle())}</h2><span>${stand ? 'Stand ' + esc(stand) + ' · ' : ''}Preise in € je kg</span></div></div>${werbungHTML(false)}`;
+  const head = `<div class="al-head">${PL_LOGO}<div class="al-ht"><h2>${esc(m.offerName && m.offerName !== 'Wochenangebot' && !m.einzel ? m.offerName + ' · ' : '')}${esc(plTitle())}</h2><span>${stand ? 'Stand ' + esc(stand) + ' · ' : ''}Preise in € je kg${VORWOCHE ? ' · ' + vwLegende() : ''}</span></div></div>${werbungHTML(false)}`;
   const bandHTML = (k) => (band) => `<div class="al-band" style="--k:${k}">${band.map(({ sec, c, cols }) => {
     // Abschnitt ohne Namen neben einem benannten: unsichtbarer Platzhalter, damit die Blöcke der Zeile oben bündig beginnen
     const kopf = sec.name ? `<div class="al-st"><h3>${plGroupName(sec.name)}</h3></div>`
@@ -763,7 +793,7 @@ function buildPrintListe(list, grouped, scopeText) {
      nennt die Woche schon, der Preis je kg steht an jeder Spalte). */
   const zusatz = [scopeText, m.einzel && (m.nr || m.kunde) ? [m.nr ? 'Angebot ' + m.nr : '', m.kunde ? 'für ' + m.kunde : ''].filter(Boolean).join(' ') : ''].filter(Boolean);
   const vermerk = DRUCK_ENTWURF_VERMERK && PREVIEW ? '<span class="pl-entwurf">Entwurf</span> · ' : '';
-  const unterzeile = (n, N) => `${vermerk}${zusatz.map((z) => esc(z) + ' · ').join('')}<span class="pl-sz">Seite ${n} von ${N}</span>`;
+  const unterzeile = (n, N) => `${vermerk}${zusatz.map((z) => esc(z) + ' · ').join('')}${VORWOCHE ? vwLegende() + ' · ' : ''}<span class="pl-sz">Seite ${n} von ${N}</span>`;   // Legende in derselben Zeile: der Kopf wird nicht höher
   const kopf = (n, N) => (n === 1
     ? `<header class="al-head pl-ph">${PL_LOGO}<div class="al-ht pl-pt"><h1>${esc(titel)}</h1><span>${unterzeile(n, N)}</span></div></header>`
     : `<header class="al-head pl-ph pl-ph2">${PL_LOGO}<div class="al-ht pl-pt"><strong>${esc(titel)}</strong><span>${unterzeile(n, N)}</span></div></header>`);   // Folgeseiten: Logo kleiner
@@ -831,7 +861,8 @@ function renderEmpty() {
 
 function renderList() {
   const grouped = state.sortKey === 'offer';
-  $('#list').innerHTML = !current.length ? renderEmpty() : state.view === 'cards' ? werbungHTML(true) + renderCards(current, grouped) + hinweisHTML('al-note list-note') : state.view === 'table' ? werbungHTML(true) + renderTable(current, grouped) + hinweisHTML('al-note list-note') : renderListe(current, grouped);
+  const leg = VORWOCHE ? `<p class="vw-leiste">${vwLegende()}</p>` : '';   // Karten und Tabelle: Legende über der Liste (Angebotsansicht: im Kopf)
+  $('#list').innerHTML = !current.length ? renderEmpty() : state.view === 'cards' ? leg + werbungHTML(true) + renderCards(current, grouped) + hinweisHTML('al-note list-note') : state.view === 'table' ? leg + werbungHTML(true) + renderTable(current, grouped) + hinweisHTML('al-note list-note') : renderListe(current, grouped);
 }
 
 function render() {

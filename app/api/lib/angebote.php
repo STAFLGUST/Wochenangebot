@@ -340,7 +340,7 @@ function offer_resolve(array $m, array $def, bool $ausverkauftAusblenden = true)
     foreach ($m['groups'] as $g) if (($g['section'] ?? '') !== '' && !in_array($g['section'], $secs, true)) $secs[] = $g['section'];
     $m['sections'] = $secs;
     $m['items'] = $items;
-    unset($m['meta']['source'], $m['meta']['sheetName']);   // Dateiname/Blatt der Excel-Datei sind intern
+    unset($m['meta']['source'], $m['meta']['sheetName'], $m['meta']['vorwoche']);   // Dateiname/Blatt der Excel-Datei sind intern; Vorwoche nur über angebot_vorwoche
     // Werbung: nur der Eintrag dieses Angebots und nur Artikel, die ausgeliefert werden – nie die anderer Angebote.
     // Bis zu zwei Blöcke (erster im Eintrag, zweiter in „weitere“); ein leerer erster Block rückt den zweiten nach vorn.
     $w = is_array($m['meta']['werbung'] ?? null) ? ($m['meta']['werbung'][$def['id']] ?? null) : null;
@@ -521,6 +521,7 @@ function angebot_veroeffentlichen(?array $modell, $revision): array
         $staende = design_staende($model);   // Design je Angebot als Schnappschuss (module/angebot/design.php, GR-106)
         if ($staende) $model['meta']['design'] = $staende;
         require_once dirname(__DIR__) . '/module/angebot/wochen.php';   // Wochenablage angebot-woche/<JJJJ-WW>
+        $model = angebot_vorwoche_stempeln($model);   // Preisänderung zur Vorwoche als Schnappschuss (module/angebot/wochen.php)
         if ($prev) {
             $id = gmdate('Ymd-His') . '-' . bin2hex(random_bytes(3));
             store_write('versionen/' . $id, $prev);

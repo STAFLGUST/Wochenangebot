@@ -92,6 +92,7 @@ SUITES['aufbau'] = (8790, 'data-seed', True)   # Angebot: Knopf „Editor“, Re
 SUITES['druck'] = (8790, 'data-seed', True)   # Angebot: Druckfassung „Angebotsansicht“, Fußzeile des Briefbogens, Knopf „Drucken“ (app/assets/angebot-druck.js)
 SUITES['sonderangebote'] = SUITES['bestellung']   # Angebot: Sonderangebote für Kundengruppen mit Gültigkeit (module/angebot/sonderangebote.php); Test-Mailserver für den Bestellwunsch
 SUITES['angebot_design'] = (8790, 'data-seed', True)   # Angebot: Design je Angebot – Vorlagen, Raster und Abschnitte für Druck und Kundenseite (module/angebot/design.php)
+SUITES['preisaenderung'] = SUITES['kunden_mail']   # Angebot „mit Preisänderung“ zur Vorwoche (module/angebot/wochen.php): Seite, Druck, Drucken-Menü, Versand; Test-Mailserver
 SUITES['kundenimport'] = SUITES['bestellung']
 SUITES['vertreter'] = SUITES['bestellung']
 SUITES['lieferanten'] = SUITES['bestellung']   # Stammdaten Lieferanten und Versandarten, Versandart am Kunden
