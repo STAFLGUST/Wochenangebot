@@ -2,7 +2,7 @@
 
 <!-- ERZEUGT von `python3 werkzeuge/doku.py erzeugen` – nicht von Hand ändern. Quelle: Funktionen und Kommentare im Code. Die CI prüft, dass diese Datei zum Code passt. -->
 
-61 Dateien, 985 Funktionen – in der Reihenfolge der Datei, **fett** die Abschnitte. Text = erste Aussage des Kommentars direkt über der Funktion (Python: Docstring). Übersicht aller Module: [README.md](README.md).
+62 Dateien, 982 Funktionen – in der Reihenfolge der Datei, **fett** die Abschnitte. Text = erste Aussage des Kommentars direkt über der Funktion (Python: Docstring). Übersicht aller Module: [README.md](README.md).
 
 ## `app/api/lib/angebote.php`
 
@@ -124,8 +124,6 @@ _E-Mails an Kunden, Abmelden, Bestellwunsch-Vorlagen, Einmal-Links, Versand._
 - `mail_week()`
 - `mail_offer_links(c, zusatz)` – Links zu den Angeboten eines Kunden: [Name, Adresse, Angebots-ID]; $zusatz hängt einen Parameter an (z. B. vergleich=vorwoche)
 - `mail_preis_wahl(p)` – Zusatz „Preisänderung zur Vorwoche“ eines Wochenversands (Modul Versand, Inhaber 20.11.2026): nur echte Wahrheitswerte, Unterpunkte nur mit eingeschaltetem …
-- `mail_preis_uebersicht(oid)` – Übersicht der Änderungen eines Angebots aus dem veröffentlichten Stand (Server, nie aus dem Browser): null ohne Vorwoche
-- `mail_preis_block(name, u)` – Übersicht als [Text, HTML] (E-Mail-taugliches HTML mit Inline-Styles; Farben wie auf der Angebotsseite)
 - `mail_footer(kind)`
 
 **Abmelden vom Wochenangebot**
@@ -309,6 +307,19 @@ _STAFL-Plattform · Angebot · Sonderangebote (Auftrag des Inhabers 13.11.2026):
 - `sonder_speichern(me, b)` – Anlegen bzw. ändern (Name, Kundengruppen, Gültigkeit) und vorzeitig beenden/fortsetzen.
 - `sonder_loeschen(me, b)` – Löschen (Eingabe {rev, id}).
 
+## `app/api/module/angebot/vorwoche.php`
+
+_Angebot · Preisänderung zur Vorwoche (Inhaber 20.11.2026_
+
+- `angebot_vorwoche_kw(m)` – KW vor der Woche des Modells als [kw, jahr] (auch über den Jahreswechsel, ISO-Wochen), sonst null
+- `angebot_gruppen_namen(m)` – Gruppen-ID → Name eines Modells oder aufgelösten Angebots
+- `angebot_vorwoche_schluessel(it, gname)` – Vergleichsschlüssel eines Artikels, vom genauesten zum gröbsten
+- `angebot_vorwoche_zuordnen(vorher, jetzt)` – Artikel von $jetzt den Artikeln von $vorher zuordnen: [Artikel-ID => Preis der Vorwoche \| null (ohne Preis)]; ohne Treffer fehlt die ID. Ein Schlüssel zählt …
+- `angebot_vorwoche_stempeln(model)` – Beim Veröffentlichen (unter der Sperre „entwurf“, vor dem Schreiben): Schnappschuss der Vorwoche ins Modell.
+- `angebot_vorwoche(model, def, offer)` – Änderungen eines aufgelösten Angebots ($offer = offer_resolve($model, $def)) gegen die Vorwoche: {kw, jahr, aenderungen: {Artikel-ID: {art: 'neu'} \| {art: …
+- `angebot_vorwoche_mail(oid, name)` – Übersicht der Änderungen eines Angebots für die Wochen-Mail als [Text, HTML] (E-Mail-taugliches HTML mit Inline-Styles, Farben wie auf der Angebotsseite), …
+- `angebot_vorwoche_block(name, kw, off, aend, top)`
+
 ## `app/api/module/angebot/winab-export.php`
 
 _Export des Wochenangebots für WinAB (Auftrag des Inhabers 05.11.2026)_
@@ -323,6 +334,7 @@ _Angebot · Frühere Wochen ansehen und Wochenablage (Wünsche des Inhabers 13.1
 
 - `angebot_woche_kw(m)` – KW eines gespeicherten Angebots als „JJJJ-WW“ (nur gültige ISO-Wochen), sonst null
 - `angebot_woche_definition(o)` – Eine Angebotsdefinition so, wie offer_resolve sie braucht: ID, Name, Regel der Artikelliste, bei Sonderangeboten Art und Gültigkeit (Kopf „gültig von … bis …
+- `angebot_woche_damals(defs)` – Damalige Angebotsdefinitionen einer Wochenablage (null = unbekannt) als [ID => Definition]
 - `angebot_woche_definitionen()` – Angebotsdefinitionen als Schnappschuss (GR-106)
 - `angebot_woche_ablegen(model)` – Beim Veröffentlichen (angebot_veroeffentlichen, unter der Sperre „entwurf“): neuen Stand je KW ablegen, ersetzt dieselbe KW
 - `angebot_woche_retten(v)` – Vor dem Löschen einer alten Version (keep_versions): in die Ablage retten, wenn diese KW dort keinen neueren Stand hat
@@ -330,16 +342,6 @@ _Angebot · Frühere Wochen ansehen und Wochenablage (Wünsche des Inhabers 13.1
 - `angebot_woche_aus_historie(h)` – Preisstand des Preisverlaufs als Angebotsmodell für offer_resolve: Angebotsgruppen aus den gespeicherten Gruppennamen (Reihenfolge wie gespeichert), ohne …
 - `angebot_woche_modell(woche, verz)` – Vollständiger Stand einer KW (mit Kundenpreisen und Werbung) aus Wochenablage, aktuellem Angebot und versionen/* – ohne den Preisverlauf.
 - `angebot_woche(woche, oid)` – Aktion angebot_woche: KW „JJJJ-WW“ und Angebot (leer = Wochenangebot) → aufgelöstes Angebot dieser Woche oder null
-
-**Preisänderung zur Vorwoche (Inhaber 20.11.2026: Angebot „mit Preisänderung“ verschicken und drucken)**
-
-- `angebot_vorwoche_kw(m)` – KW vor der Woche des Modells als [kw, jahr], sonst null
-- `angebot_vorwoche_schluessel(it, gname)` – Vergleichsschlüssel eines aufgelösten Artikels, vom genauesten zum gröbsten (null = trifft nicht zu)
-- `angebot_vorwoche_index(offer)` – Index der Vorwoche eines Angebots: je Stufe Schlüssel → Preis\|null; mehrdeutige Schlüssel → 'mehrdeutig'
-- `angebot_vorwoche_finden(idx, it, gname)` – Preis der Vorwoche eines Artikels: Zahl, null (damals ohne Preis) oder false (damals nicht im Angebot)
-- `angebot_vorwoche_stempeln(model)` – Beim Veröffentlichen (unter der Sperre „entwurf“, vor dem Schreiben): Schnappschuss der Vorwoche ins Modell.
-- `angebot_vorwoche(model, def, offer)` – Vergleich für ein aufgelöstes Angebot ($offer = offer_resolve($model, $def)): {kw, jahr, preise: {Artikel-ID: Preis\|null}} – nur Artikel dieses Angebots, nur …
-- `angebot_vorwoche_uebersicht(offer, vw, top)` – Veränderungen eines aufgelösten Angebots gegen die Vorwoche (E-Mail „mit Preisänderung“): Zähler und die größten Veränderungen [{code, name, alt, neu, diff}] …
 
 ## `app/api/order_outbox.php`
 
@@ -857,8 +859,6 @@ _Wochenangebot – öffentliches Frontend_
 - `starHTML(it)`
 - `tagHTML(it, withBrand)`
 - `priceMain(p)`
-- `preisAenderung(it)` – Veränderung zur Vorwoche: {art: 'neu'} \| {art: 'guenstiger' \| 'teurer', d, alt} \| null (unverändert, ohne Preis, ohne Vergleich) – dieselbe Regel wie …
-- `vwHTML(it, cls)` – Hinweis je Artikel; cls: vw-pille (Karten, Tabelle – mit Fläche) – Liste und Druck ohne Fläche (app.css, angebot-druck.css)
 - `priceHTML(it)`
 
 **Werbung: vom Angebot hervorgehobene Artikel (meta.werbung, je Angebot vom Server aufgelöst)**
@@ -1714,18 +1714,15 @@ _Testgruppe p0: Ersteinrichtung gesperrt (leeres System, WA_INSTALLED, kaputte N
 _Angebot „mit Preisänderung“ (Inhaber 20.11.2026): je Artikel die Veränderung zur Vorwoche (▼ günstiger, ▲ teurer, neu) als Zusatzfunktion – auf der Angebotsseite und im Druck nur mit ?vergleich=vorwoche bzw. …_
 
 - `check(n, c, i)`
-- `doc(name)`
 
 **Kundenangebote, Kunden, Versender**
 
 - `kunde(user)`
 - `veroeffentlichen(m)`
 
-**KW 43 (Vorwoche): Seed mit Kundenpreisen für Artikel D**
+**KW 43 (Vorwoche): Seed mit Kundenpreisen für D (A, B), eigener Liste H (G, U, OC1, OC2), X im Wochenangebot ausgeblendet**
 
 **KW 44: G günstiger, T teurer, U gleich, D nur für Kunde A günstiger, N neu; alle Artikel-IDs neu (wie ein neuer Excel-Import)**
-
-**Datenformat (Schnappschuss im veröffentlichten Angebot)**
 
 **Aktion offer**
 

@@ -159,6 +159,7 @@ Jede Code-Datei beginnt mit einem Kopfkommentar; dessen erste Aussage steht hier
 | `import.php` | angebot | Importvertrag des Moduls Angebot – Schnittstelle zur Importzentrale (docs/plattform/schnittstellen/import.md). - Preisverlauf: frühere Angebotslisten (.xlsx) als Wochen im Preisverlauf. |
 | `kopieren.php` | angebot | Angebot · Kundenangebot kopieren (Entscheidung des Inhabers 13.11.2026): ein Angebot als neues Kundenangebot anlegen und dabei alles außer den Kunden mitnehmen – eigene Preise mit Zusatzpreisen (variants), eigene … |
 | `sonderangebote.php` | angebot | STAFL-Plattform · Angebot · Sonderangebote (Auftrag des Inhabers 13.11.2026): ein Angebot für ganze Kundengruppen mit Gültigkeit – Zeitraum (von–bis, beide Tage eingeschlossen) oder Kalenderwoche (Montag bis Sonntag … |
+| `vorwoche.php` | angebot | Angebot · Preisänderung zur Vorwoche (Inhaber 20.11.2026 |
 | `winab-export.php` | angebot | Export des Wochenangebots für WinAB (Auftrag des Inhabers 05.11.2026) |
 | `wochen.php` | angebot | Angebot · Frühere Wochen ansehen und Wochenablage (Wünsche des Inhabers 13.11.2026): das veröffentlichte Angebot einer Kalenderwoche – Wochenangebot oder ein Kundenangebot – nur für Mitarbeiter mit Modulzugang … |
 
@@ -275,6 +276,7 @@ Jede Code-Datei beginnt mit einem Kopfkommentar; dessen erste Aussage steht hier
 | `admin.js` | angebot | Wochenangebot – Eingabebereich Bearbeitet einen Entwurf auf dem Server (automatisch gespeichert). |
 | `angebot-druck.css` | angebot | Angebot · Druckfassung „Angebotsansicht“ (A4 quer, mit Design auch hoch) der Angebotsseite – gesetzt von assets/angebot-druck.js. |
 | `angebot-druck.js` | angebot | Angebot · Satz der Druckfassung „Angebotsansicht“ (A4) für die Angebotsseite (frontend.js, Wunsch des Inhabers 13.11.2026). |
+| `angebot-vorwoche.js` | angebot | Angebot · Preisänderung zur Vorwoche auf der Angebotsseite (frontend.js, Inhaber 20.11.2026): nur mit ?vergleich=vorwoche bzw. =aenderungen. |
 | `app.css` | angebot | Designsystem „Klar“: neutrale Flächen, ein Akzent (Bordeaux), Geist / Geist Mono (lokal eingebunden, SIL Open Font License, assets/fonts/LICENSE-Geist.txt – keine Verbindung zu fremden Servern) |
 | `bestaetigt.js` | angebot | Rücksprungseite der Bestätigung im eigenen Fenster (admin/bestaetigt.html): meldet dem Eingabebereich, dass die erneute Anmeldung bei der STAFL-Anmeldung abgeschlossen ist, und schließt das Fenster. |
 | `detailkarte.js` | plattform | STAFL-Plattform – Detailkarte (Straßen, Gebäude, Ortsnamen) vom eigenen Server Gemeinsame Kartenkomponente für die CRM-Karte und die Auswertung der Verwaltung. |
