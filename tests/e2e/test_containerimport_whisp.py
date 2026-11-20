@@ -223,8 +223,15 @@ with sync_playwright() as pw:
           and 'Dauerkulturen: hoch' in text and 'Holz: weitere Angaben nötig' in text and 'Ausgewertet 166,3 ha in PRY' in text
           and p.inner_text('#betrieb-whisp-ergebnis dl dd:last-child .ci-marke') == 'Befund' and p.is_enabled('#betrieb-whisp'), text)
     check('Oberfläche: gestartet und zweimal nachgefragt', [x['methode'] for x in SPIEL['anfragen'][vorher:]] == ['POST', 'GET', 'GET'], SPIEL['anfragen'][vorher:])
-    shot(p, os.path.join(SH, 'containerimport-whisp-1280.png'))
+    katalog = p.inner_text('#betrieb-whisp-katalog')
+    check('Oberfläche: Datengrundlage im Geodaten-Katalog – GFC-Felder = FNF17, Verweis an der Störung; RADD ohne Eintrag',
+          katalog.startswith('FNF17') and 'GFC_TC_2020, GFC_loss_after_2020' in katalog and p.locator('#betrieb-whisp-ergebnis [data-geodaten]').evaluate_all('(l) => l.map((b) => b.dataset.geodaten)') == ['FNF17', 'FNF17'], katalog)
+    p.locator('#betrieb-whisp-ergebnis').scroll_into_view_if_needed(); shot(p, os.path.join(SH, 'containerimport-whisp-1280.png'))
+    p.click('#betrieb-whisp-katalog [data-geodaten="FNF17"]'); p.wait_for_selector('#dlg-geodaten[open]')
+    check('Oberfläche: Verweis FNF17 öffnet den Katalogeintrag Hansen/GFW', 'Hansen' in p.inner_text('#geodaten-titel'), p.inner_text('#geodaten-titel'))
+    p.click('#dlg-geodaten [data-zu]'); p.wait_for_function("!document.querySelector('#dlg-geodaten').open")
     p.click('#betrieb-whisp-nehmen'); w = p.evaluate(formular)
+    check('Übernehmen: Bemerkung nennt die Datengrundlage mit Katalog-ID und Fassung', w[3].endswith('; Datengrundlage GEOS-EUDR-Katalog (Thünen-Institut) ForestCover_TreeExtent v1.0: FNF17.'), w[3])
     check('Übernehmen: Portal Whisp, Befund, Baumverlust 12,34 ha, Bemerkung mit Version – noch nichts gespeichert',
           w[:3] == ['whisp', 'befund', '12,34'] and w[3].startswith('Whisp (FAO, Version 3.0.0a22): Baumbestand 2020 ja, Störung vor 2020 nein, Störung nach 2020 ja; Datensätze mit Störung nach 2020: GFC_loss_after_2020 12,3 ha, RADD_after_2020 3,2 ha') and len(w[3]) <= 500
           and next(b for b in I.call('containerimport_start')[1]['betriebe'] if b['id'] == nord['id'])['pruefungen'] == [], w)

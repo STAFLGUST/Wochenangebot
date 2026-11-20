@@ -718,6 +718,13 @@ with sync_playwright() as pw:
           and pruefungen() == vorher, w)
     check('Bildauswertung übernehmen: mindestens 0,5 ha Verlust auf Wald von 2020 → Vorschlag „Befund“, rot markiert',
           erwartet['verlustAufWaldHa'] >= 0.5 and w[1] == 'befund' and k.locator('#betrieb-auswertung dd .ci-marke.rot').count() == 1, (erwartet['verlustAufWaldHa'], w[1]))
+    check('Bildauswertung: Text der Gegenprüfung nennt Datengrundlage mit Katalog-ID und Fassung (GEOS-EUDR v1.0: FNF01, FNF17)',
+          'GEOS-EUDR-Katalog (Thünen-Institut) ForestCover_TreeExtent v1.0: FNF01, FNF17' in w[3], w[3])
+    k.click('#betrieb-auswertung [data-geodaten="FNF01"]'); k.wait_for_selector('#dlg-geodaten[open]')
+    check('Bildauswertung: Verweis FNF01 öffnet den Katalogeintrag JRC GFC 2020 über dem Fenster „Farmer“',
+          k.inner_text('#geodaten-titel').startswith('FNF01 · JRC GFC 2020') and k.evaluate("document.querySelector('#dlg-betrieb').open"), k.inner_text('#geodaten-titel'))
+    k.click('#dlg-geodaten [data-zu]'); k.wait_for_function("!document.querySelector('#dlg-geodaten').open")
+    check('Katalogeintrag geschlossen: Fenster „Farmer“ bleibt offen', k.evaluate("document.querySelector('#dlg-betrieb').open"))
     shot(k.locator('#dlg-betrieb'), os.path.join(SH, 'containerimport-bildauswertung-1280.png'))
     k.context.close()
 
