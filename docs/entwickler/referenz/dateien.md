@@ -81,6 +81,7 @@ Jede Code-Datei beginnt mit einem Kopfkommentar; dessen erste Aussage steht hier
 | `auswertung.php` | verwaltung | Aktionen: Auswertung (Karte der Kunden-Anmeldungen) und Aktualisieren der Ortsdaten Wird von api/index.php im globalen Gültigkeitsbereich eingebunden; jede Aktion endet mit respond()/fail(). |
 | `bestand.php` | bestand | Aktionen: Bestand und Stammdaten Wird von api/index.php im globalen Gültigkeitsbereich eingebunden; jede Aktion endet mit respond()/fail(). |
 | `containerimport.php` | containerimport | Aktionen: Modul Container-Import – Container (im Code „sendung“) mit Lieferant, Partie-, Akten- und Containernummer und Stand; Reiter EUDR – Farmer (im Code „betrieb“) mit Geolokalisierung, Risikoprofil und … |
+| `containerimport_kalkulation.php` | containerimport | Aktionen: Modul Container-Import – Kalkulation je Container (Auftrag des Inhabers 20.11.2026; Rechenkern und Fassungen in app/api/module/containerimport/kalkulation.php). |
 | `controlling.php` | controlling | Aktionen: Controlling (Oberfläche controlling.intern, Fachlogik in app/api/module/controlling/) Rechte (GR-103): controlling.zugang – Modul öffnen (Register, standardmäßig niemand); controlling.umsatz_sehen – … |
 | `crm.php` | crm | Aktionen: CRM · Vertrieb (Oberfläche crm.intern, Daten und Regeln in app/api/module/crm/crm.php) Rechte (GR-103): crm.sehen – Kunden, Kundenblätter, Wiedervorlagen, Pipeline, Auswertung, Karte ansehen (crm_karte); … |
 | `einkauf.php` | einkauf | Aktionen: Einkauf (Fehlmengen aus offenen Bestellwünschen) Wird von api/index.php im globalen Gültigkeitsbereich eingebunden; jede Aktion endet mit respond()/fail(). |
@@ -178,6 +179,7 @@ Jede Code-Datei beginnt mit einem Kopfkommentar; dessen erste Aussage steht hier
 | `farmer.php` | containerimport | STAFL-Plattform · Modul Container-Import – Farmer-Nummern am Container (Auftrag des Inhabers 19.11.2026). |
 | `geometrie.php` | containerimport | Container-Import · Geometrie der Produktionsorte (EUDR): reine Rechenfunktionen ohne Speicherzugriff. |
 | `hafen.php` | containerimport | STAFL-Plattform · Modul Container-Import – Tracking, zweite Stufe: bestätigte Ankunft in Hamburg aus der öffentlichen Liste „Expected vessels“ von Hafen Hamburg (Quelle dort |
+| `kalkulation.php` | containerimport | STAFL-Plattform · Modul Container-Import – Kalkulation je Container (Auftrag des Inhabers 20.11.2026) |
 | `schlachthoefe.php` | containerimport | STAFL-Plattform · Modul Container-Import – Schlachthöfe |
 | `tracking.php` | containerimport | STAFL-Plattform · Modul Container-Import – Tracking: wo ist der Container, wann kommt er an (Auftrag des Inhabers 19.11.2026: eigener Reiter neben EUDR; Schiffsname eintragen; wissen, wann der Container z. |
 | `whisp.php` | containerimport | Container-Import · EUDR |
@@ -396,7 +398,9 @@ Jede Code-Datei beginnt mit einem Kopfkommentar; dessen erste Aussage steht hier
 | `eudr-bericht.js` | containerimport | STAFL-Plattform · Container-Import · EUDR – Entwaldungsberichte der Lieferanten lesen (reine Funktionen, kein DOM). |
 | `eudr-karte.js` | containerimport | STAFL-Plattform · Container-Import · EUDR – Karte der Herkunftsbetriebe. |
 | `eudr-whisp.js` | containerimport | Container-Import · EUDR |
-| `index.html` | containerimport | Reiter des Moduls: EUDR und Tracking; weitere (Verzollung, Dokumente) folgen |
+| `index.html` | containerimport | Reiter des Moduls: EUDR, Tracking und Kalkulation; weitere (Verzollung, Dokumente) folgen |
+| `kalkulation.css` | containerimport | STAFL-Plattform · Modul Container-Import – Reiter „Kalkulation“ (kalkulation.js) |
+| `kalkulation.js` | containerimport | STAFL-Plattform · Modul Container-Import – Reiter „Kalkulation“ (Auftrag des Inhabers 20.11.2026) |
 | `schlachthoefe.js` | containerimport | STAFL-Plattform · Modul Container-Import – Schlachthöfe |
 | `tracking.js` | containerimport | STAFL-Plattform · Modul Container-Import – Reiter „Tracking“: wo ist der Container, wann kommt er an (Auftrag des Inhabers 19.11.2026). |
 
@@ -814,6 +818,7 @@ Jede Code-Datei beginnt mit einem Kopfkommentar; dessen erste Aussage steht hier
 | `test_containerimport.py` | containerimport | Modul Container-Import, Reiter EUDR (app/module/containerimport/, Oberfläche containerimport.intern, Auftrag des Inhabers 18.11.2026) |
 | `test_containerimport_farmer.py` | containerimport | Container-Import: Farmer je Container (Auftrag des Inhabers 19.11.2026) – eigene fortlaufende Farmer-Nummer neben der Nummer aus den Papieren (Kennung), Farmer über die Nummern aus den Papieren einem Container … |
 | `test_containerimport_hafen.py` | containerimport | Container-Import · Tracking: bestätigte Ankunft in Hamburg aus der öffentlichen Liste „Expected vessels“ von Hafen Hamburg (app/api/module/containerimport/hafen.php, Aktion containerimport_tracking_hafen, Anzeige in … |
+| `test_containerimport_kalkulation.py` | containerimport | Container-Import: Kalkulation je Container (Aktionen containerimport_kalkulation_*, app/api/module/containerimport/kalkulation.php, Oberfläche app/module/containerimport/kalkulation.js). |
 | `test_containerimport_schlachthof.py` | containerimport | Container-Import: Schlachthöfe als Stammdaten unter dem Lieferanten (Aktion containerimport_schlachthof_save, app/api/module/containerimport/schlachthoefe.php, Oberfläche app/module/containerimport/schlachthoefe.js). |
 | `test_containerimport_tracking.py` | containerimport | Container-Import: Reiter „Tracking“ (Aktion containerimport_tracking_save, app/api/module/containerimport/tracking.php, Oberfläche app/module/containerimport/tracking.js) – erste Stufe ohne fremde Dienste. |
 | `test_containerimport_whisp.py` | containerimport | Container-Import · EUDR |
@@ -933,6 +938,7 @@ Jede Code-Datei beginnt mit einem Kopfkommentar; dessen erste Aussage steht hier
 | --- | --- | --- |
 | `adressen.php` | plattform | Hilfsskript für tests/unit/test_adressen.py |
 | `bestand_parser.test.js` | bestand | Unit-Test: Der Bestands-Parser der App (stock-core.js) liefert für die Test-Bestandsliste exakt dieselben Summen wie die unabhängige Referenzauswertung (tests/fixtures/bestand/master_stock.json). |
+| `ci_kalkulation.php` | containerimport | Hilfsskript für tests/unit/test_ci_kalkulation.py |
 | `dateiablage.php` | plattform | Reine Funktionen und Tabellen der Dateiablage (app/api/lib/dateiablage.php) ohne Server |
 | `dateiablage_zip.php` | plattform | Hilfsskript für tests/unit/test_dateiablage_zip.py zu app/api/lib/dateiablage.php. |
 | `merge.test.js` | angebot | Unit-Test: Drei-Wege-Abgleich beim gemeinsamen Bearbeiten des Entwurfs (OfferCore.mergeModels) und Aufbau nach Angebotskategorien mit eigener Gruppe je Angebot (OfferCore.nachKategorien). |
@@ -940,6 +946,7 @@ Jede Code-Datei beginnt mit einem Kopfkommentar; dessen erste Aussage steht hier
 | `stock_prices.test.js` | bestand | Unit-Test: Preisvergleich, Wochenpreise und Summenzeile der Bestandsliste (StockCore aus app/assets/stock-core.js). |
 | `test_adressen.py` | plattform | Adressverzeichnis der CRM-Karte |
 | `test_apt_vorrat.py` | plattform | Paketvorrat der CI (.github/scripts/apt_vorrat.py) mit nachgebautem apt-cache. python3 tests/unit/test_apt_vorrat.py Prüft: nur Pakete mit passender SHA-256 aus der (signierten) Paketliste werden übernommen; … |
+| `test_ci_kalkulation.py` | containerimport | Rechenkern der Kalkulation je Container (app/api/module/containerimport/kalkulation.php) gegen von Hand nachgerechnete Erwartungen – jede Formel einzeln, mit erfundenen Zahlen (GR-007). |
 | `test_ci_nachweis.py` | plattform | Nachweis „schon im Pull Request vollständig geprüft“ (.github/scripts/ci_nachweis.py) mit nachgebauter GitHub-API. python3 tests/unit/test_ci_nachweis.py Prüft |
 | `test_dateiablage_zip.py` | plattform | ZIP-Export der Dateiablage (app/api/lib/dateiablage.php, ablage_zip_senden) über die Grenzen des klassischen ZIP-Formats: kleines Archiv ohne Zip64-Felder; Versatz über 4 GB (18 Dateien zu 250 MB, als Lücken-Dateien … |
 | `test_doku.py` | plattform | Werkzeug der Entwickler-Dokumentation (werkzeuge/doku.py) |

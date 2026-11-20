@@ -991,6 +991,22 @@ Caddy setzt auf allen Hosts `script-src 'self'` (ohne `'unsafe-inline'`), `conne
   Auswahl „Ergebnis“ leer und `pruefungEintragen` verlangt eine Wahl. Die Vorgangsnummer geht per POST statt in die Adresse
   (mit ihr lässt sich das Ergebnis bei Whisp ohne Anmeldung abrufen); deshalb der Schalter `sperre` in `api()`. Tests: Gruppe
   `containerimport_whisp` mit nachgebautem Dienst; gegen das echte Whisp lässt sich nur mit Schlüssel prüfen.
+  **Reiter „Kalkulation“** (Auftrag des Inhabers 20.11.2026): `kalkulation.js`/`kalkulation.css`, Aktionen in eigener Datei
+  `app/api/aktionen/containerimport_kalkulation.php` (eingebunden am Ende von `aktionen/containerimport.php`), Regeln in
+  `app/api/module/containerimport/kalkulation.php`. Gerechnet wird nur auf dem Server: `ci_kalkulation_rechnen(eingabe, saetze)`
+  ist eine reine Funktion ohne Speicher (Unit-Test `tests/unit/test_ci_kalkulation.py` über `tests/unit/ci_kalkulation.php`);
+  die Seite schickt bei jeder Eingabe die Felder an `containerimport_kalkulation_rechnen` (speichert nichts) und zeigt die
+  Antwort. Grenze ist `ci_kalkulation_eingabe`: unlesbare Werte → 422; Unvollständiges (Kurs, Gewicht, KN-Code, Vermerk)
+  bleibt speicherbar und erscheint als Prüfhinweis der Stufe `fehler` – dann liefert das Ergebnis keine Zahlen
+  (`vollstaendig: false`) und lässt sich nicht festschreiben. Zahlen nimmt der Server auch als deutschen Text („1.234,5“);
+  die Seite zeigt getippten Text unverändert (`zt` wandelt nur echte Zahlen). Zollsätze nur in `CI_KALK_SAETZE` (Quelle,
+  gültig ab), Zollregime in `CI_KALK_REGIME`, KN-Codes mit Drittlandszoll in `CI_KALK_KN` – Schlüssel nie umbenennen
+  (gespeichert, GR-006). Fassungen: `ci_kalk_speichern` (Entwurf ändern; nach „endgültig“ nur neue Fassung mit Grund),
+  `ci_kalk_festschreiben` (Schnappschuss von Sätzen, Ergebnis und Container, GR-106), `ci_kalk_sicht` (Entwurf frisch
+  gerechnet, endgültige Fassung nie neu gerechnet). Druck über `#ci-druck` mit Klasse `kk-druck` und benannter Seite
+  `@page kalkulation` (A4 quer); `#ci-druck` braucht im Druck `body.ci > #ci-druck.ci-druck` mit `!important`, weil
+  `app.css` beim Drucken alles außer `#print-root` ausblendet. CSV baut der Browser aus der vom Server geprüften Eingabe
+  und dem Ergebnis (Semikolon, Dezimalkomma, BOM).
 - **Zweite Kartendatei „herkunft“** (Südamerika und Neuseeland, `/karte/herkunft.pmtiles`; Laden und Auslieferung: Kapitel Betrieb):
   `STAFLKarte.verfuegbar('herkunft')` und `erstellen(el, { karte: 'herkunft', … })`; Punkte können eine eigene Farbe tragen
   (`farbe: '#rrggbb'`). Genutzt vom Container-Import (`app/module/containerimport/eudr-karte.js`), der ohne die Datei selbst

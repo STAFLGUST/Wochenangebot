@@ -1,0 +1,56 @@
+/* STAFL-Plattform · Modul Container-Import – Reiter „Kalkulation“ (kalkulation.js): Eingabetabellen im eigenen
+   Scrollbereich (am Handy scrollt nur die Tabelle, nie die Seite), Ergebnis mit rechtsbündigen Zahlen, Prüfhinweise und
+   die Druckfassung im A4-Querformat. Farben aus ../../assets/rahmen.css (--r-*), Grundformen aus containerimport.css. */
+#ci-bereich-kalkulation { gap: 14px; }
+#kk-editor { display: flex; flex-direction: column; gap: 14px; min-width: 0; }
+.kk-titel { display: flex; flex-wrap: wrap; align-items: baseline; gap: 6px 10px; margin: 0; font-size: 20px; }
+.kk-titel .ci-leise { font-size: 14px; font-weight: 400; }
+.kk-block { min-width: 0; padding: 14px 16px; }
+.kk-block h3, .kk-block > summary { margin: 0 0 10px; font-size: 15px; font-weight: 600; }
+.kk-block > summary { cursor: pointer; margin: 0; }
+.kk-block[open] > summary { margin-bottom: 10px; }
+.kk-block h3 .ci-leise, .kk-block summary .ci-leise { font-size: 13px; font-weight: 400; }
+.kk-raster { grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); }
+.kk-mit { display: flex; align-items: center; gap: 6px; }
+.kk-mit input { min-width: 0; flex: 1; }
+.kk-mit select { flex: none; width: auto; }
+.kk-mit i { font-style: normal; font-size: 13px; color: var(--r-leise); white-space: nowrap; }
+.kk-check { align-self: end; min-height: 40px; }
+.kk-scroll { max-width: 100%; overflow-x: auto; -webkit-overflow-scrolling: touch; }
+.kk-tab { border-collapse: collapse; font-size: 13.5px; }
+.kk-tab th { padding: 6px 8px; text-align: left; font-size: 11px; font-weight: 600; color: var(--r-leise); background: var(--r-flaeche-2); border-bottom: 1px solid var(--r-linie); white-space: nowrap; }
+.kk-tab td { padding: 5px 8px; border-top: 1px solid var(--r-linie); vertical-align: top; }
+.kk-tab input, .kk-tab select { box-sizing: border-box; width: 92px; height: 34px; padding: 0 8px; border: 1px solid var(--r-linie-2); border-radius: 8px; background: var(--r-flaeche); color: var(--r-text); font: inherit; font-size: 14px; }
+.kk-tab select { width: auto; max-width: 190px; }
+.kk-tab input.breit { width: 190px; } .kk-tab input.mittel { width: 112px; } .kk-tab input.kurz { width: 52px; text-transform: uppercase; }
+.kk-tab input[type=checkbox] { width: 18px; height: 18px; margin-top: 8px; accent-color: var(--r-akzent); }
+.kk-tab input:disabled, .kk-tab select:disabled { background: var(--r-flaeche-2); color: var(--r-text); opacity: 1; }
+.kk-anders { display: flex; flex-wrap: wrap; align-items: center; gap: 4px; margin-top: 4px; }
+.kk-anders i { font-style: normal; font-size: 12px; color: var(--r-leise); }
+.kk-anders input { width: 70px; } .kk-anders input.breit { width: 190px; }
+.kk-nb { white-space: nowrap; } .kk-nb .ci-knopf + .ci-knopf { margin-left: 4px; }
+.kk-quelle { min-width: 260px; max-width: 420px; font-size: 12.5px; color: var(--r-text-2); }
+.kk-zahlen td, .kk-zahlen th { text-align: right; white-space: nowrap; font-variant-numeric: tabular-nums; }
+.kk-zahlen th:first-child, .kk-zahlen .kk-text, .kk-zahlen tbody th { text-align: left; }
+.kk-zahlen td.kk-text { white-space: normal; min-width: 140px; }
+.kk-zahlen tbody th { font-size: 13px; font-weight: 600; color: var(--r-text-2); background: none; }
+.kk-zahlen tr[data-zeile="rohgewinn"] td, .kk-zahlen tr[data-zeile="ist"] td { font-weight: 700; }
+.kk-hinweise { margin: 0; padding: 0; list-style: none; display: grid; gap: 6px; font-size: 13.5px; }
+.kk-liste { margin: 0; padding-left: 20px; display: grid; gap: 4px; font-size: 14px; }
+.kk-frage { flex-wrap: wrap; gap: 10px; }
+@media (max-width: 640px) {
+  .kk-raster { grid-template-columns: 1fr 1fr; }
+  .kk-block { padding: 12px; }
+}
+@page kalkulation { size: A4 landscape; margin: 10mm; }
+@media print {
+  .ci-druck.kk-druck { page: kalkulation; font-size: 8.5pt; }
+  .kk-druck .r-karte, .kk-druck section { margin: 0 0 6pt; padding: 0; border: 0; box-shadow: none; }
+  .kk-druck h3 { margin: 8pt 0 3pt; font-size: 10.5pt; }
+  .kk-druck .kk-scroll { overflow: visible; }
+  .kk-druck table { width: 100%; font-size: 7.5pt; }
+  .kk-druck th, .kk-druck td { padding: 1.5pt 3pt; }
+  .kk-druck .ci-marke { padding: 0; background: none; font-weight: 700; }
+  .kk-druck .kk-zahlen td, .kk-druck .kk-zahlen th { text-align: right; }
+  .kk-druck .kk-zahlen .kk-text, .kk-druck .kk-zahlen tbody th { text-align: left; }
+}

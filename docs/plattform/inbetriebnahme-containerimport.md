@@ -234,3 +234,48 @@ Rechte.
   Container mit „Unterlagen fehlen“ nicht abschließen: die Vorversion kennt den Vermerk nicht und hielte die Bewertung
   ohne ihn fest. In der Vorversion angelegte Farmer werden einem Container mit vermerkter Nummer erst zugeordnet, wenn
   dieser Container nach der Rückkehr das nächste Mal gespeichert wird.
+
+## 13. Kalkulation je Container (ab dem Release mit der Kalkulation)
+
+Auftrag des Inhabers 20.11.2026: die bisherige Excel-Kalkulation (Hilton, Nicht-Hilton, anteilig Hilton, Ursprungsländer,
+Zollsätze, Mercosur-Kontingent) im Tool nachbauen und prüfen. Kein Schritt auf dem Server, keine Migration, keine neuen
+Rechte: ansehen und rechnen mit „EUDR ansehen“, speichern und festschreiben mit „EUDR bearbeiten“. Neues Dokument
+`containerimport-kalkulationen` (wird beim ersten Speichern angelegt).
+
+- **Bedienung:** Reiter „Kalkulation“ → Container anklicken. Oben der Kopf (Kurs USD je €, Datum, Seefracht in USD oder €,
+  Provision €/t mit Schalter „Einkaufsprovision“, Nachlauf €, Zuschlag €/kg, Zins und Zinstage, Zahlungskosten ‰ und fix,
+  imaginärer Gewinn für den Versicherungswert), dann die **Teile** (z. B. je Abnehmer: Versicherungssatz inkl. Krieg,
+  Rückvergütung % vom VK, WKZ €) und die **Positionen** (Teil, Artikel, R/L, Zollregime, Ursprungsland, KN-Code, Kartons,
+  Brutto, Netto, Preis in USD/kg oder €/kg, Imag. EK, VK). „Anteilig Hilton“: dieselbe Position kopieren und ein anderes
+  Zollregime wählen. Das Ergebnis erscheint bei jeder Eingabe – gerechnet vom Server.
+- **Formeln (in Worten):** Seefracht je kg = Seefracht in € ÷ Netto aller Positionen. Versicherungswert eines Teils =
+  (Warenwert des Teils + Anteil des Teils an der Seefracht nach kg) × (1 + imaginärer Gewinn); Prämie = Versicherungswert ×
+  Satz des Teils; je kg = Prämie ÷ Netto des Teils. Zollwert je kg = Preis in € + Fracht je kg + Versicherung je kg – die
+  Provision nur, wenn sie keine Einkaufsprovision ist (Einkaufsprovisionen gehören nicht zum Zollwert, Art. 71 Abs. 1
+  Buchst. a Ziff. i UZK). Zoll je kg = Zollwert × Wertzoll + spezifischer Zoll (€/100 kg ÷ 100). Einstand je kg = Preis +
+  Fracht + Versicherung + Provision + Zoll + Nebenkosten; Nebenkosten je kg = (Nachlauf + Finanzierung + Zahlungskosten) ÷
+  Netto aller Positionen + Zuschlag; Finanzierung = Warenwert × Zins × Tage ÷ 360; Zahlungskosten = Warenwert × ‰ + fix.
+  Je Teil und gesamt: Ist (Einstand × kg), Soll (Imag. EK × kg), VK-Wert, Rohertrag = VK − Ist, Marge vom VK, Aufschlag auf
+  das Ist (das, was die Excel „% Marge“ nannte), Rohertrag je kg, Rückvergütung, WKZ, Rohgewinn. Ohne VK bei einer Position
+  steht „VK fehlt“ statt einer Marge. Gerundet wird nur in der Anzeige.
+- **Sätze (Stand 20.11.2026, Vorgaben des Inhabers – vor Verwendung in TARIC prüfen):** Hilton-Kontingent 20 %; für Ursprung
+  AR, BR, PY, UY ab 01.05.2026 0 % (vorläufige Anwendung des Interimsabkommens EU-Mercosur,
+  https://commission.europa.eu/topics/trade/eu-mercosur-trade-agreement_en); Mercosur-Kontingent Rindfleisch 7,5 % (99.000 t
+  Schlachtkörperäquivalent; Anrechnung Netto × 1,3 bei Fleisch ohne Knochen; nur AR, BR, PY, UY); Drittlandszoll KN
+  0201 30 00 (frisch/gekühlt, ohne Knochen) 12,8 % + 303,4 €/100 kg und KN 0202 30 90 (gefroren, ohne Knochen) 12,8 % +
+  304,1 €/100 kg (VO (EWG) Nr. 2658/87); EU-Ursprung kein Zoll; „anderer Satz“ frei mit Pflicht-Vermerk. Die Sätze stehen nur in
+  `app/api/module/containerimport/kalkulation.php` (`CI_KALK_SAETZE`); ändert sich einer, dort ändern – Entwürfe rechnen
+  sofort mit dem neuen Satz, festgeschriebene Fassungen nicht. Je Kalkulation lässt sich ein Satz überschreiben, nur mit Vermerk.
+- **Prüfhinweise:** u. a. Hilton- oder Mercosur-Satz für ein Ursprungsland, für das er nicht gilt; EU-Ursprung mit Zoll
+  und umgekehrt; Drittlandszoll ohne passenden KN-Code; Kurs, Datum oder Gewicht fehlt; VK fehlt; Imag. EK weicht mehr als
+  10 % vom Einstand ab; überschriebener Satz. Für Mercosur-Ursprung ohne Hilton zeigt die Seite den Zoll mit und ohne
+  Mercosur-Kontingent nebeneinander.
+- **Fassungen (GoBD):** Eine neue Kalkulation ist ein Entwurf („vorläufig“). „Endgültig festschreiben“ (nur ohne Fehler, mit
+  Rückfrage) hält Eingabe, Sätze, Ergebnis, Container, wer und wann fest – danach unveränderlich. Änderungen nur noch über
+  „Neue Fassung anlegen“ mit Pflicht-Grund; alle Fassungen bleiben ansehbar, gelöscht wird nichts. Anlegen, neue Fassung
+  und Festschreiben stehen im Aktivitätsprotokoll.
+- **Drucken und CSV:** „Drucken“ gibt Kopf, Prüfhinweise und Ergebnis im A4-Querformat aus, „CSV“ eine Datei für Excel
+  (Semikolon, Dezimalkomma). Ein Excel-Export ist nicht eingebaut (die vorhandenen Arbeitsmappen-Erzeuger gehören anderen
+  Modulen).
+- **Rückfall:** `sh /opt/wochenangebot/deploy/release-zurueck.sh`. Die Vorversion zeigt den Reiter nicht und fasst das neue
+  Dokument nicht an; nach der Rückkehr ist alles wieder da.

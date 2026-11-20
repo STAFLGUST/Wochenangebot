@@ -2,7 +2,7 @@
 
 <!-- ERZEUGT von `python3 werkzeuge/doku.py erzeugen` – nicht von Hand ändern. Quelle: Funktionen und Kommentare im Code. Die CI prüft, dass diese Datei zum Code passt. -->
 
-22 Dateien, 230 Funktionen – in der Reihenfolge der Datei, **fett** die Abschnitte. Text = erste Aussage des Kommentars direkt über der Funktion (Python: Docstring). Übersicht aller Module: [README.md](README.md).
+28 Dateien, 275 Funktionen – in der Reihenfolge der Datei, **fett** die Abschnitte. Text = erste Aussage des Kommentars direkt über der Funktion (Python: Docstring). Übersicht aller Module: [README.md](README.md).
 
 ## `app/api/aktionen/containerimport.php`
 
@@ -11,6 +11,12 @@ _Aktionen: Modul Container-Import – Container (im Code „sendung“) mit Lief
 - `eudr_leser(post)` – Mitarbeiter mit Modulzugang und dem Recht anzusehen (lesende Aktionen; $post = Aktion kommt als POST mit CSRF)
 - `eudr_bearbeiter()` – Mitarbeiter mit Modulzugang und dem Recht zu bearbeiten (schreibende Aktionen)
 - `eudr_sendung_holen(doc, id)` – Gespeicherte Sendung nach id (404) samt ihrer Stelle im Dokument
+
+## `app/api/aktionen/containerimport_kalkulation.php`
+
+_Aktionen: Modul Container-Import – Kalkulation je Container (Auftrag des Inhabers 20.11.2026; Rechenkern und Fassungen in app/api/module/containerimport/kalkulation.php)._
+
+- `ci_kalk_container(id)` – Container (404) mit dem Schnappschuss, den eine endgültige Fassung festhält
 
 ## `app/api/module/containerimport/eudr.php`
 
@@ -139,6 +145,36 @@ _STAFL-Plattform · Modul Container-Import – Tracking, zweite Stufe: bestätig
 - `ci_hafen_alter(t)` – Sekunden seit einem Zeitstempel aus now(); '' oder Unlesbares zählt als sehr lange her
 - `ci_hafen_auffrischen(sendungen)` – Liste auffrischen, wenn sie gebraucht wird und die Frist um ist.
 - `ci_hafen_sicht(sendungen)` – Meldungen für die Oberfläche: nur was zu unseren Containern gehört (Kennung des Containers → Schiff, Ankunft, Liegeplatz, Terminal), dazu Zeit und Ergebnis …
+
+## `app/api/module/containerimport/kalkulation.php`
+
+_STAFL-Plattform · Modul Container-Import – Kalkulation je Container (Auftrag des Inhabers 20.11.2026)_
+
+**Eingabe prüfen (Grenze: alles, was vom Browser kommt)**
+
+- `ci_kalk_zahl(v, was, max, min)` – Zahl im Bereich [$min, $max] oder null (leer); Text auch in deutscher Schreibweise („1.234,5“).
+- `ci_kalk_kn(v)` – KN-Code: acht Ziffern (Leerzeichen erlaubt) oder leer
+- `ci_kalkulation_eingabe(b)` – Rohe Eingabe → geprüfte Eingabe.
+- `ci_kalk_liste(v, max, was)` – Liste aus der Eingabe (höchstens $max Einträge, jeder ein Objekt)
+
+**Rechnen (reine Funktion)**
+
+- `ci_kalk_satz(p, datum, tab)` – Satz einer Position: [Schlüssel, Satz, Hinweise] – Schlüssel '' = keiner (Fehler in den Hinweisen)
+- `ci_kalk_satz_text(s)`
+- `ci_kalk_tag(d)`
+- `ci_kalk_teilen(a, b)` – Quotient, 0 bei Nenner 0 (nur wo 0 die richtige Anzeige ist und ein Hinweis den Grund nennt)
+- `ci_kalkulation_rechnen(e, saetze)` – Kalkulation rechnen: geprüfte Eingabe (ci_kalkulation_eingabe) + Sätze (CI_KALK_SAETZE oder Schnappschuss) → Ergebnis.
+- `ci_kalk_summe(eingabe, pos, ids)` – Summen über Positionen ($ids = Stellen): Kartons, Gewichte, Beträge; Soll und VK nur, wenn jede Position sie hat
+- `ci_kalk_ertrag(x, rueckverguetung, wkz)` – Rohertrag (VK − Ist), Marge (vom VK), Aufschlag (vom Ist, wie „% Marge“ der bisherigen Excel), € je kg, Rückvergütung, WKZ und Rohgewinn – alles null ohne …
+
+**Fassungen (Dokument containerimport-kalkulationen)**
+
+- `ci_kalk_dokument()`
+- `ci_kalk_holen(doc, sendung)` – Kalkulation eines Containers aus dem Dokument [Stelle, Eintrag] oder [null, null]
+- `ci_kalk_speichern(doc, sendung, eingabe, rev, grund, me)` – Entwurf speichern.
+- `ci_kalk_festschreiben(doc, sendung, rev, container, me)` – Letzte Fassung endgültig festschreiben: Schnappschuss von Sätzen, Ergebnis und Container (GR-106).
+- `ci_kalk_sicht(k)` – Kalkulation für die Seite: je Fassung Eingabe, Sätze und Ergebnis – ein Entwurf frisch gerechnet mit den aktuellen Sätzen, eine endgültige Fassung genau so, …
+- `ci_kalk_uebersicht(doc)` – Übersicht für den Reiter: je Container Stand und Nummer der letzten Fassung
 
 ## `app/api/module/containerimport/schlachthoefe.php`
 
@@ -285,6 +321,50 @@ _Container-Import · EUDR_
 
 - `deuten({…}, abHa)`
 
+## `app/module/containerimport/kalkulation.js`
+
+_STAFL-Plattform · Modul Container-Import – Reiter „Kalkulation“ (Auftrag des Inhabers 20.11.2026)_
+
+- `antwortOk(r, fallback)`
+
+**Reiter: Liste der Container**
+
+- `startLaden()`
+- `zeichnen()`
+
+**Container öffnen, neue Eingabe**
+
+- `oeffnen(id)`
+- `zeigeFassung(nr)`
+- `neueEingabe()`
+
+**Eingabe**
+
+- `editor()`
+- `lesen()` – Eingabe aus den Feldern (Zahlen als Text – der Server liest auch „1.234,5“)
+- `geaendert(neuZeichnen)`
+- `rechnen()`
+
+**Ergebnis**
+
+- `hinweise(erg)`
+- `ergebnis()`
+
+**Speichern, Fassungen**
+
+- `speichern()`
+- `nachSpeichern(d)`
+- `festschreiben()`
+
+**CSV und Druck**
+
+- `csv()`
+- `drucken()`
+
+**Ereignisse**
+
+- `geaendertStruktur()`
+
 ## `app/module/containerimport/schlachthoefe.js`
 
 _STAFL-Plattform · Modul Container-Import – Schlachthöfe_
@@ -398,6 +478,23 @@ _Container-Import · Tracking: bestätigte Ankunft in Hamburg aus der öffentlic
 
 - `seite(user, vp, schema)`
 
+## `tests/e2e/test_containerimport_kalkulation.py`
+
+_Container-Import: Kalkulation je Container (Aktionen containerimport_kalkulation_*, app/api/module/containerimport/kalkulation.php, Oberfläche app/module/containerimport/kalkulation.js)._
+
+- `laden(client, c)`
+- `speichern(c, rev, eingabe, **mehr)`
+
+**Rechte**
+
+**Rechnen**
+
+**Entwurf, Revision, Festschreiben, Fassungen**
+
+**Oberfläche**
+
+- `seite(user, vp, schema)`
+
 ## `tests/e2e/test_containerimport_schlachthof.py`
 
 _Container-Import: Schlachthöfe als Stammdaten unter dem Lieferanten (Aktion containerimport_schlachthof_save, app/api/module/containerimport/schlachthoefe.php, Oberfläche app/module/containerimport/schlachthoefe.js)._
@@ -469,3 +566,22 @@ _Container-Import · EUDR_
 **Fehler von Whisp**
 
 - `seite(user, vp, schema)`
+
+## `tests/unit/ci_kalkulation.php`
+
+_Hilfsskript für tests/unit/test_ci_kalkulation.py_
+
+- `now()`
+
+## `tests/unit/test_ci_kalkulation.py`
+
+_Rechenkern der Kalkulation je Container (app/api/module/containerimport/kalkulation.php) gegen von Hand nachgerechnete Erwartungen – jede Formel einzeln, mit erfundenen Zahlen (GR-007)._
+
+- `check(name, ok, info)`
+- `rechnen(eingabe, saetze)`
+- `nahe(a, b, eps)`
+- `texte(r, stufe)`
+
+**Grundfall**
+
+- `fall(**aenderung)` – Kopie des Grundfalls mit Änderungen: kopf={…}, pos={stelle: {…}}, teile=[…], positionen=[…], ueberschrieben={…}

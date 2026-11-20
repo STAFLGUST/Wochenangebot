@@ -297,3 +297,5 @@ switch ($action) {
             respond(['ok' => true, 'datei' => $datei] + eudr_geojson($bs));
         }
 }
+
+require __DIR__ . '/containerimport_kalkulation.php';   // Kalkulation je Container (eigene Datei)
