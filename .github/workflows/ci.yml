@@ -134,6 +134,8 @@ jobs:
         run: |
           php tests/unit/dateiablage.php
           python3 tests/unit/test_dateiablage_zip.py
+      - name: Unit-Test Kalkulation je Container (Rechenkern, von Hand nachgerechnete Erwartungen)
+        run: python3 tests/unit/test_ci_kalkulation.py
       - name: Unit-Test gemeinsames Bearbeiten (Abgleich)
         run: node tests/unit/merge.test.js
       - name: Adressverzeichnis der CRM-Karte (Aufbau mit pyosmium, Nachschlagen in PHP, gleiche Schreibweisen-Regeln)
