@@ -1,0 +1,52 @@
+/* STAFL-Plattform · Modul Container-Import – Bereich „Dokumente“ im Fenster eines Containers (dokumente.js): Checkliste,
+   Ablagefläche, Warteschlange mit Fortschritt, Kacheln mit Mini-Vorschau, Verlauf; Zähler in der Liste der Container.
+   Farben und Schrift aus ../../assets/rahmen.css (--r-*), Bausteine (ci-knopf, ci-marke, ci-ablage) aus containerimport.css.
+   Mobil ab 390 px einspaltig. */
+.ci-dok-zahl { display: flex; align-items: center; gap: 4px; }
+.ci-dok-zahl .r-i { width: 13px; height: 13px; }
+.ci-dok-kopf { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-top: 22px; }
+.ci-dok-kopf .ci-h { margin: 0; }
+.ci-dok-check { list-style: none; margin: 10px 0 0; padding: 0; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0 18px; font-size: 13.5px; }
+.ci-dok-check li { display: flex; align-items: center; justify-content: space-between; gap: 8px; min-height: 34px; border-bottom: 1px solid var(--r-linie); }
+.ci-dok-check .ci-rechts { display: inline-flex; align-items: center; gap: 8px; flex: none; }
+.ci-dok-link { min-height: 36px; padding: 0 4px; border: 0; background: none; color: var(--r-akzent-text); font: inherit; font-size: 12.5px; cursor: pointer; text-decoration: underline; text-underline-offset: 3px; }
+.ci-dok-ablage input { min-height: 36px; }
+.ci-dok-ablage.ziel { border-color: var(--r-akzent); background: var(--r-flaeche-2); }
+.ci-dok-warteliste, .ci-dok-kacheln { list-style: none; margin: 0; padding: 0; }
+.ci-dok-warte { padding: 10px 12px; border: 1px solid var(--r-linie); border-radius: 12px; margin-bottom: 8px; font-size: 13.5px; }
+.ci-dok-zeile { display: flex; align-items: flex-start; justify-content: space-between; gap: 8px; }
+.ci-dok-name { min-width: 0; font-weight: 600; overflow-wrap: anywhere; }
+.ci-dok-name small, .ci-dok-text small { display: block; font-weight: 400; font-size: 12.5px; color: var(--r-text-2); }
+.ci-dok-warte summary { margin-top: 6px; font-size: 13px; color: var(--r-akzent-text); cursor: pointer; }
+.ci-dok-arten { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 2px 14px; margin-top: 6px; }
+.ci-dok-arten .ci-check { min-height: 30px; font-size: 13px; }
+.ci-dok-stand { display: flex; align-items: center; gap: 8px; margin-top: 6px; font-size: 12.5px; color: var(--r-text-2); }
+.ci-dok-stand progress { flex: 1; max-width: 260px; height: 8px; accent-color: var(--r-akzent); }
+.ci-dok-fehler { margin: 4px 0 0; color: var(--r-rot); font-size: 12.5px; }
+.ci-dok-knoepfe { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin: 8px 0 12px; }
+.ci-dok-kacheln { display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 10px; margin: 6px 0 10px; }
+.ci-dok-kachel { display: flex; gap: 12px; padding: 10px; border: 1px solid var(--r-linie); border-radius: 12px; background: var(--r-flaeche); min-width: 0; }
+.ci-dok-kachel.weg { opacity: .7; border-style: dashed; }
+.ci-dok-vorschau { flex: none; text-decoration: none; }
+.ci-dok-bild { position: relative; display: grid; place-items: center; width: 64px; height: 86px; border: 1px solid var(--r-linie-2); border-radius: 6px; background: var(--r-flaeche-2); color: var(--r-leise); overflow: hidden; }
+.ci-dok-bild .r-i { width: 26px; height: 26px; }
+.ci-dok-bild canvas { width: 100%; height: 100%; object-fit: cover; object-position: top; background: #fff; }
+.ci-dok-endung { position: absolute; left: 4px; bottom: 4px; padding: 0 4px; border-radius: 4px; background: var(--r-flaeche); color: var(--r-text-2); font-size: 10px; font-weight: 700; letter-spacing: .04em; }
+.ci-dok-bild.gezeichnet .ci-dok-endung { display: none; }
+.ci-dok-text { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 4px; font-size: 13.5px; }
+.ci-dok-text .ci-dok-name { font-weight: 600; }
+.ci-dok-chips { display: flex; flex-wrap: wrap; gap: 4px; }
+.ci-dok-chips .ci-marke { white-space: normal; }
+.ci-dok-text .ci-dok-knoepfe { margin: 0; gap: 4px 12px; }
+.ci-dok-panel { margin-top: 4px; padding-top: 8px; border-top: 1px solid var(--r-linie); }
+.ci-dok-panel .ci-dok-arten { grid-template-columns: minmax(0, 1fr); }
+.ci-dok-panel .ci-dok-knoepfe { margin-top: 8px; }
+.ci-dok-panel input[type="text"] { width: 100%; box-sizing: border-box; }
+.ci-dok-verlauf { margin-top: 8px; font-size: 13px; }
+.ci-dok-verlauf summary { cursor: pointer; color: var(--r-text-2); }
+.ci-dok-verlauf ul { list-style: none; margin: 6px 0 0; padding: 0; max-height: 220px; overflow: auto; }
+.ci-dok-verlauf li { padding: 5px 0; border-top: 1px solid var(--r-linie); overflow-wrap: anywhere; }
+@media (max-width: 600px) {
+  .ci-dok-check, .ci-dok-arten { grid-template-columns: minmax(0, 1fr); }
+  .ci-dok-kacheln { grid-template-columns: minmax(0, 1fr); }
+}

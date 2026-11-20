@@ -2,7 +2,7 @@
 
 <!-- ERZEUGT von `python3 werkzeuge/doku.py erzeugen` – nicht von Hand ändern. Quelle: Funktionen und Kommentare im Code. Die CI prüft, dass diese Datei zum Code passt. -->
 
-26 Dateien, 245 Funktionen – in der Reihenfolge der Datei, **fett** die Abschnitte. Text = erste Aussage des Kommentars direkt über der Funktion (Python: Docstring). Übersicht aller Module: [README.md](README.md).
+29 Dateien, 297 Funktionen – in der Reihenfolge der Datei, **fett** die Abschnitte. Text = erste Aussage des Kommentars direkt über der Funktion (Python: Docstring). Übersicht aller Module: [README.md](README.md).
 
 ## `app/api/aktionen/containerimport.php`
 
@@ -10,7 +10,44 @@ _Aktionen: Modul Container-Import – Container (im Code „sendung“) mit Lief
 
 - `eudr_leser(post)` – Mitarbeiter mit Modulzugang und dem Recht anzusehen (lesende Aktionen; $post = Aktion kommt als POST mit CSRF)
 - `eudr_bearbeiter()` – Mitarbeiter mit Modulzugang und dem Recht zu bearbeiten (schreibende Aktionen)
-- `eudr_sendung_holen(doc, id)` – Gespeicherte Sendung nach id (404) samt ihrer Stelle im Dokument
+
+## `app/api/module/containerimport/dokumente.php`
+
+_STAFL-Plattform · Modul Container-Import – Dokumente je Container (Auftrag des Inhabers 20.11.2026: alle Unterlagen eines Containerordners – Kaufbestätigung, Rechnungen, Zertifikate, B/L, Versicherung, Spedition, …_
+
+**Speicher**
+
+- `ci_dokumente()` – Dokument mit Vorgaben; Felder einer späteren Version bleiben beim Schreiben erhalten (GR-006)
+- `ci_dokumente_schreiben(doc)` – Schreiben (unter EUDR_SPERRE) zählt containerimport-dokumente-zahlen neu – immer beide (Muster qs-ablage-zahlen)
+- `ci_dokumente_zahlen_lesen()` – Zahlen je Container für den Stand der Seite; fehlt das Dokument (vor dem ersten Schreiben), aus containerimport-dokumente
+- `ci_dok_wer(me)` – Stempel mit Nutzer-Kennung: ein Name kann sich ändern, die Kennung nicht
+- `ci_dok_arten(v)` – Arten aus der Eingabe: mindestens eine, alle bekannt; Ergebnis in der Reihenfolge der Liste, ohne Doppelte
+- `ci_dok_artname(art)`
+- `ci_dok_artnamen(arten)`
+- `ci_dok_holen(doc, id)` – Datei nach Kennung (404) samt Stelle
+- `ci_dok_container(sendung)` – Container nach Kennung oder null
+- `ci_dok_grenzen(liste, sendung)` – Grenzen vor dem Hochladen und noch einmal unter der Sperre (zwei gleichzeitige Uploads)
+- `ci_dok_von(liste, sendung)`
+
+**Sichten**
+
+- `ci_dok_regeln()` – Was die Oberfläche zum Hochladen und Anzeigen braucht
+- `ci_dok_nicht_noetig(checkliste, sendung)` – Als „nicht nötig“ vermerkte Arten eines Containers: der letzte Vermerk je Art gilt
+- `ci_dokumente_zahlen(doc)` – Je Container mit Dokumenten oder Vermerken: {anzahl, arten: {art: n}, nichtNoetig: [art]} – aktive Dateien; eine Datei zählt bei jeder ihrer Arten.
+- `ci_dokumente_antwort(doc, sendung)` – Antwort der Aktionen: Zahlen aller Container (leer als {}), Dateien (auch entfernte, älteste zuerst) und Vermerke der Checkliste des einen
+
+**Hochladen, Arten ändern, Entfernen, Checkliste**
+
+- `ci_dokument_hochladen(me, b)` – Einen Teil annehmen ($b wie ablage_teil, dazu sendung und arten).
+- `ci_dokument_arten_aendern(b, me)` – Arten einer Datei ändern: Vermerk im Verlauf (alte und neue Arten); entfernte Dateien bleiben, wie sie sind (409).
+- `ci_dokument_entfernen(b, me)` – Datei als entfernt vermerken (Grund Pflicht); sie bleibt in der Ablage und für Berechtigte abrufbar.
+- `ci_dokument_checkliste(b, me)` – Punkt der Checkliste als „nicht nötig“ vermerken oder wieder als nötig (noetig: true/false) – nur anhängen.
+
+**ZIP für Betriebsprüfung und Datenträgerüberlassung**
+
+- `ci_csv(zeilen)` – shortcut: Kopie von qs_csv_zelle (module/qs) – gehört in eine Plattform-PR als lib/csv.php, dann beide umstellen
+- `ci_dok_zip_name(name)` – Dateiname im ZIP: nur der Stamm wird gekürzt (ablage_zip_pfad, 100 Zeichen), die Endung bleibt
+- `ci_dokumente_zip_eintraege(s, dateien, vermerke)` – Einträge für ablage_zip_senden: <Container>/<erste Art>/<Datei>, entfernte unter <Container>/_entfernt/<erste Art>/, dazu index.csv mit allen Angaben je …
 
 ## `app/api/module/containerimport/eudr.php`
 
@@ -27,6 +64,7 @@ _Container-Import: Container (ein Einkauf bei einem Lieferanten, eine Partienumm
 - `eudr_id(praefix)` – Neue Kennung mit Vorsilbe (b = Betrieb, s = Sendung)
 - `eudr_wer(me)` – Stempel „wann und von wem“
 - `eudr_stelle(liste, id)` – Stelle eines Eintrags in einer Liste nach seiner id (null = nicht vorhanden)
+- `eudr_holen(doc, id, fehlt)` – Eintrag eines Dokuments nach id samt seiner Stelle (404 mit $fehlt): Container, Dateien am Container
 - `eudr_rev_pruefen(eingabe, alt, was)` – Stand, den der Bearbeiter gesehen hat, mit dem gespeicherten vergleichen (409, wenn inzwischen jemand gespeichert hat)
 
 **Prüfen der Eingaben**
@@ -232,19 +270,57 @@ _STAFL-Plattform · Modul Container-Import – Container (ein Einkauf bei einem 
 **Fenster „Unterlagen einlesen“**
 
 - `lesenOeffnen(sendungId)`
-- `pdfSeiten(bytes)` – Textstücke einer PDF-Datei mit ihrer Lage, je Seite (pdf.js vom eigenen Server, erst beim ersten Bericht geladen)
+- `pdfjs()` – pdf.js vom eigenen Server, erst bei der ersten PDF geladen (Berichte, Vorschau der Dokumente)
+- `pdfSeiten(bytes)` – Textstücke einer PDF-Datei mit ihrer Lage, je Seite
 - `dateiVorbereiten(datei, gemeinsam)` – Eine gewählte Datei in die Form bringen, die der Server prüft; { fehler } bei Dateien, die sich nicht lesen lassen
 - `eingefuegt(w, gemeinsam)`
 - `lesenPruefen()`
 - `lesenZahl()`
 - `lesenUebernehmen()`
 - `base64(bytes)` – Bytes als Base64 (in Stücken, damit lange Dateien den Aufrufstapel nicht sprengen)
-- `originalAblegen(datei, sha256, lieferant)` – Eine Originaldatei in Teilen an den Server geben, der sie im Eingang des QM-Systems ablegt. '' oder die Fehlermeldung.
+- `teileHochladen(action, datei, felder, beiTeil, sperre)` – Eine Datei in Teilen an eine Aktion der Dateiablage geben (felder: z. B. sha256, name statt datei.name); beiTeil(data) nach jedem angenommenen Teil.
+- `originalAblegen(datei, sha256, lieferant)` – Originaldatei im Eingang des QM-Systems ablegen: '' oder die Fehlermeldung.
 
 **Laden und Ereignisse**
 
 - `laden(still)`
 - `themaKnopf()`
+
+## `app/module/containerimport/dokumente.js`
+
+_STAFL-Plattform · Modul Container-Import – Bereich „Dokumente“ im Fenster eines Containers (Auftrag des Inhabers 20.11.2026): alle Unterlagen des Containerordners ablegen – PDF, Word, Excel (auch .xls), E-Mail (.eml, …_
+
+- `vorschlag(name)` – Arten aus dem Dateinamen: die erste passende Regel, sonst keine (der Nutzer wählt)
+
+**Zähler in der Liste der Container**
+
+**Fenster „Container“**
+
+- `nachAktion(d, sid)` – Der eine Weg nach jeder Antwort: Zahlen aller Container, Dateien und Vermerke des Containers sid übernehmen, dann die Liste (Zähler) und den Bereich neu …
+- `checkliste(darf)`
+- `warteZeile(w, i)`
+- `kachel(f, darf)`
+- `verlauf()` – Verlauf: Hochladen, Arten geändert, Entfernt, Checkliste – neueste zuerst
+- `zeichnen()`
+
+**Mini-Vorschau: erste Seite einer PDF oder das verkleinerte Bild, nur sichtbare, nacheinander**
+
+- `vorschauBeobachten(el)`
+- `einsetzen(id)`
+- `abarbeiten()`
+- `leinwand(b, h)`
+- `miniatur(id, art)`
+- `pdfSeite(puffer)`
+- `bild(blob)` – Bild über eine Blob-Adresse (der Download ist sandbox/nosniff), gezeichnet auf höchstens BREITE Punkte
+
+**Warteschlange und Hochladen**
+
+- `aufnehmen(dateien)` – Gewählte Dateien in die Warteschlange des Containers sid; wechselt der Container während der Prüfsummen, bricht es ab (die Warteschlange gehört dem vorigen …
+- `hochladen()` – Dateien nacheinander in Teilen (ohne Eingabesperre: der Container bleibt bedienbar); beendete Sitzung → Anmeldung
+
+**Arten ändern, Entfernen, Checkliste**
+
+- `senden(action, body, erfolg)`
 
 ## `app/module/containerimport/eudr-auswertung.js`
 
@@ -364,6 +440,47 @@ _Modul Container-Import, Reiter EUDR (app/module/containerimport/, Oberfläche c
 **Originale im QM-System (Schnittstelle qs_eingang_hochladen)**
 
 - `original(c, name, inhalt, lieferant, teil)` – Datei in Teilen an containerimport_eudr_original geben; Antwort des letzten Aufrufs.
+
+## `tests/e2e/test_containerimport_dokumente.py`
+
+_Container-Import: Dokumente je Container (app/api/module/containerimport/dokumente.php, Oberfläche dokumente.js; Auftrag des Inhabers 20.11.2026)._
+
+**selbst erzeugte Beispieldateien (kein echter Inhalt)**
+
+- `pdf(seiten, text, fuellen)` – Gültige PDF mit Text und farbiger Fläche je Seite; fuellen = Bytes eines unbenutzten Datenstroms (große Datei)
+- `ooxml(teil, text)`
+- `ole(merkmal, n)`
+- `png(breite, hoehe)`
+- `eml()`
+- `hochladen(cli, sendung, name, inhalt, arten, teil, sha)` – In Teilen hochladen wie die Oberfläche → (Status, Antwort des letzten Aufrufs, Zahl der Aufrufe)
+- `roh(cli, query)`
+- `blobs()`
+- `teile_reste()`
+- `liste(cli, sid)`
+
+**Rechte**
+
+**alle Dateiarten des Containerordners**
+
+**falsche und getarnte Arten**
+
+**Checkliste**
+
+**Arten ändern**
+
+**Entfernen**
+
+**Leser, Download**
+
+**ZIP**
+
+**GR-106, Rückfall, Sicherung**
+
+**Bilder, Namen im ZIP, CSV-Injection, fremde Uploads, Zahlen-Dokument**
+
+**Oberfläche**
+
+- `vorschlag(name)`
 
 ## `tests/e2e/test_containerimport_farmer.py`
 

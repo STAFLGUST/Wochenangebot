@@ -20,6 +20,7 @@ require __DIR__ . '/schlachthoefe.php';   // Schlachthöfe unter dem Lieferanten
 require __DIR__ . '/tracking.php';        // Reiter Tracking: Schiff, Reederei, Häfen, Abfahrt und Ankunft am Container
 require __DIR__ . '/hafen.php';           // Tracking: Ankunft in Hamburg aus der öffentlichen Liste des Hafens
 require __DIR__ . '/farmer.php';          // Farmer-Nummern am Container und Gesamtprüfung der Farmer
+require __DIR__ . '/dokumente.php';       // Dokumente je Container (Dateiablage, GoBD)
 
 const EUDR_SPERRE = 'containerimport-eudr-betriebe';   // eine Sperre für beide Dokumente (Sendungen verweisen auf Betriebe)
 const EUDR_MAX_BETRIEBE = 2000;
@@ -111,6 +112,13 @@ function eudr_stelle(array $liste, string $id): ?int
 {
     foreach ($liste as $i => $e) if (($e['id'] ?? '') === $id) return $i;
     return null;
+}
+/* Eintrag eines Dokuments nach id samt seiner Stelle (404 mit $fehlt): Container, Dateien am Container */
+function eudr_holen(array $doc, $id, string $fehlt = 'Container nicht gefunden.'): array
+{
+    $i = eudr_stelle($doc['liste'], is_string($id) ? $id : '');
+    if ($i === null) fail($fehlt, 404);
+    return [$i, $doc['liste'][$i]];
 }
 /* Stand, den der Bearbeiter gesehen hat, mit dem gespeicherten vergleichen (409, wenn inzwischen jemand gespeichert hat) */
 function eudr_rev_pruefen(array $eingabe, array $alt, string $was): void
@@ -749,5 +757,6 @@ function eudr_stand(): array
         'schlachthoefe' => $hoefe,
         'hafen' => ci_hafen_sicht($sendungen),
         'portale' => EUDR_PORTALE, 'staende' => EUDR_STAENDE, 'reedereien' => CI_REEDEREIEN, 'heute' => date('Y-m-d'),
+        'dokumente' => (object)ci_dokumente_zahlen_lesen(), 'dokRegeln' => ci_dok_regeln(),
     ];
 }

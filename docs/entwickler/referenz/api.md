@@ -6,7 +6,7 @@ Aufruf: `/api/?action=<aktion>` (GET lesend, POST mit JSON und `X-CSRF-Token` sc
 
 Spalten: **Art** – lesend, schreibend (nur POST) oder post (GET liest, POST schreibt); **Kennzeichen** – öffentlich (ohne Mitarbeiteranmeldung), Kunden-Wartung, wartungsfrei, fremde Herkunft, eigene Anmeldung (siehe [regeln/aktionen/LIESMICH.md](../../../regeln/aktionen/LIESMICH.md)).
 
-329 Aktionen in 16 Modulen.
+336 Aktionen in 16 Modulen.
 
 ## Angebot (`angebot`)
 
@@ -200,6 +200,13 @@ Spalten: **Art** – lesend, schreibend (nur POST) oder post (GET liest, POST sc
 
 | Aktion | Oberfläche | Art | Kennzeichen | Prüfung im Code | Datei |
 | --- | --- | --- | --- | --- | --- |
+| `containerimport_dokument` | `containerimport.intern` | lesend | – | – | `app/api/aktionen/containerimport.php` |
+| `containerimport_dokument_arten` | `containerimport.intern` | schreibend | – | – | `app/api/aktionen/containerimport.php` |
+| `containerimport_dokument_checkliste` | `containerimport.intern` | schreibend | – | – | `app/api/aktionen/containerimport.php` |
+| `containerimport_dokument_entfernen` | `containerimport.intern` | schreibend | – | – | `app/api/aktionen/containerimport.php` |
+| `containerimport_dokument_hochladen` | `containerimport.intern` | schreibend | – | – | `app/api/aktionen/containerimport.php` |
+| `containerimport_dokumente` | `containerimport.intern` | lesend | – | – | `app/api/aktionen/containerimport.php` |
+| `containerimport_dokumente_zip` | `containerimport.intern` | lesend | – | – | `app/api/aktionen/containerimport.php` |
 | `containerimport_eudr_betriebe_save` | `containerimport.intern` | schreibend | – | – | `app/api/aktionen/containerimport.php` |
 | `containerimport_eudr_export` | `containerimport.intern` | lesend | – | – | `app/api/aktionen/containerimport.php` |
 | `containerimport_eudr_gegenpruefung` | `containerimport.intern` | schreibend | – | – | `app/api/aktionen/containerimport.php` |
