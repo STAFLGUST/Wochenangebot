@@ -74,6 +74,38 @@ schreibend = true
 [aktion.containerimport_eudr_export]
 oberflaeche = "containerimport.intern"
 
+# Dokumente je Container (module/containerimport/dokumente.php): Liste eines Containers samt entfernter Dateien
+[aktion.containerimport_dokumente]
+oberflaeche = "containerimport.intern"
+
+# Datei in Teilen hochladen und mit Dokumentarten und Schnappschuss des Containers ablegen (nie überschreiben)
+[aktion.containerimport_dokument_hochladen]
+oberflaeche = "containerimport.intern"
+schreibend = true
+
+# Dokumentarten einer Datei ändern (Vermerk im Verlauf)
+[aktion.containerimport_dokument_arten]
+oberflaeche = "containerimport.intern"
+schreibend = true
+
+# Datei als entfernt vermerken (Grund Pflicht; die Datei bleibt abrufbar)
+[aktion.containerimport_dokument_entfernen]
+oberflaeche = "containerimport.intern"
+schreibend = true
+
+# Punkt der Checkliste als „nicht nötig“ vermerken oder wieder als nötig (Vermerk, nur anhängen)
+[aktion.containerimport_dokument_checkliste]
+oberflaeche = "containerimport.intern"
+schreibend = true
+
+# Eine Datei herunterladen (auch Grundlage der PDF-Vorschau)
+[aktion.containerimport_dokument]
+oberflaeche = "containerimport.intern"
+
+# Alle Dateien eines Containers als ZIP mit Ordnern je erster Dokumentart und index.csv
+[aktion.containerimport_dokumente_zip]
+oberflaeche = "containerimport.intern"
+
 # Kalkulation je Container (app/api/aktionen/containerimport_kalkulation.php): Stand je Container, Sätze, Auswahllisten
 [aktion.containerimport_kalkulation_start]
 oberflaeche = "containerimport.intern"

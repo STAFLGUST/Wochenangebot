@@ -12,7 +12,7 @@ require_once __DIR__ . '/../module/containerimport/kalkulation.php';
 /* Container (404) mit dem Schnappschuss, den eine endgültige Fassung festhält */
 function ci_kalk_container($id): array
 {
-    [, $s] = eudr_sendung_holen(eudr_sendungen(), $id);
+    [, $s] = eudr_holen(eudr_sendungen(), $id);
     return array_intersect_key($s, ['id' => 1, 'partie' => 1, 'akte' => 1, 'container' => 1, 'lieferant' => 1, 'lieferantNr' => 1, 'land' => 1, 'ware' => 1]);
 }
 

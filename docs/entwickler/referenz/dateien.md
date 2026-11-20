@@ -175,6 +175,7 @@ Jede Code-Datei beginnt mit einem Kopfkommentar; dessen erste Aussage steht hier
 
 | Datei | Modul | Inhalt |
 | --- | --- | --- |
+| `dokumente.php` | containerimport | STAFL-Plattform · Modul Container-Import – Dokumente je Container (Auftrag des Inhabers 20.11.2026: alle Unterlagen eines Containerordners – Kaufbestätigung, Rechnungen, Zertifikate, B/L, Versicherung, Spedition, … |
 | `eudr.php` | containerimport | Container-Import: Container (ein Einkauf bei einem Lieferanten, eine Partienummer) mit ihren Farmern und der Prüfung nach der EUDR (Verordnung (EU) 2023/1115, entwaldungsfreie Lieferketten) |
 | `farmer.php` | containerimport | STAFL-Plattform · Modul Container-Import – Farmer-Nummern am Container (Auftrag des Inhabers 19.11.2026). |
 | `geometrie.php` | containerimport | Container-Import · Geometrie der Produktionsorte (EUDR): reine Rechenfunktionen ohne Speicherzugriff. |
@@ -394,6 +395,8 @@ Jede Code-Datei beginnt mit einem Kopfkommentar; dessen erste Aussage steht hier
 | --- | --- | --- |
 | `containerimport.css` | containerimport | STAFL-Plattform · Modul Container-Import (Reiter EUDR) – Gestaltung „C2“ Rahmen, Seitenleiste und alle Farben kommen aus ../../assets/rahmen.css (--r-*), Schrift und die Grundform der Fenster (dialog.modal, … |
 | `containerimport.js` | containerimport | STAFL-Plattform · Modul Container-Import – Container (ein Einkauf bei einem Lieferanten, eine Partienummer) mit ihren Farmern; Reiter EUDR |
+| `dokumente.css` | containerimport | STAFL-Plattform · Modul Container-Import – Bereich „Dokumente“ im Fenster eines Containers (dokumente.js) |
+| `dokumente.js` | containerimport | STAFL-Plattform · Modul Container-Import – Bereich „Dokumente“ im Fenster eines Containers (Auftrag des Inhabers 20.11.2026): alle Unterlagen des Containerordners ablegen – PDF, Word, Excel (auch .xls), E-Mail (.eml, … |
 | `eudr-auswertung.js` | containerimport | STAFL-Plattform · Container-Import · EUDR – Bildauswertung einer Fläche |
 | `eudr-bericht.js` | containerimport | STAFL-Plattform · Container-Import · EUDR – Entwaldungsberichte der Lieferanten lesen (reine Funktionen, kein DOM). |
 | `eudr-geodaten.js` | containerimport | STAFL-Plattform · Container-Import · EUDR – Geodaten-Katalog: die offene Metadatenbank GEOS-EUDR des Thünen-Instituts (MIT-Lizenz, https://github.com/GEOS-EUDR-RepoHub/Metadatabase-Geodata-EUDR) beschreibt … |
@@ -817,6 +820,7 @@ Jede Code-Datei beginnt mit einem Kopfkommentar; dessen erste Aussage steht hier
 | `test_bestand_pdf.py` | bestand | Bestand: Marke je Partie (Spalte E der WinAB-Liste, Überschrift „Marke“ eine Spalte rechts davon), dezente MHD-Farben (hell/dunkel) und PDF ohne Preise, erfassten Bestand, Gesamt verfügbar und erwartete Zugänge. |
 | `test_bestellung.py` | angebot | Bestellwunsch aus dem Portal |
 | `test_containerimport.py` | containerimport | Modul Container-Import, Reiter EUDR (app/module/containerimport/, Oberfläche containerimport.intern, Auftrag des Inhabers 18.11.2026) |
+| `test_containerimport_dokumente.py` | containerimport | Container-Import: Dokumente je Container (app/api/module/containerimport/dokumente.php, Oberfläche dokumente.js; Auftrag des Inhabers 20.11.2026). |
 | `test_containerimport_farmer.py` | containerimport | Container-Import: Farmer je Container (Auftrag des Inhabers 19.11.2026) – eigene fortlaufende Farmer-Nummer neben der Nummer aus den Papieren (Kennung), Farmer über die Nummern aus den Papieren einem Container … |
 | `test_containerimport_geodaten.py` | containerimport | Container-Import · EUDR |
 | `test_containerimport_hafen.py` | containerimport | Container-Import · Tracking: bestätigte Ankunft in Hamburg aus der öffentlichen Liste „Expected vessels“ von Hafen Hamburg (app/api/module/containerimport/hafen.php, Aktion containerimport_tracking_hafen, Anzeige in … |
