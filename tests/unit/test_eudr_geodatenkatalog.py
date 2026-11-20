@@ -6,8 +6,10 @@ Tabelle im Aufbau der Metadatenbank GEOS-EUDR (tests/fixtures/containerimport/ge
 Prüft: gültige Datei → Einträge mit deutschen Schlüsseln, „NR“/„NA“ erkennbar, leere Zellen null, Einstufung EUDR-konform,
 Verweise mit Beschriftung, Hinweis in eckigen Klammern abgetrennt, Aufzählungen je Zeile; zweiter Lauf ergibt dieselbe
 Datei; weiteres Thema ergänzt, ohne das erste zu ändern; Abbruch ohne zu schreiben bei geänderten Spalten, neuer
-Hauptversion, unbekannter Einstufung, doppelter Item-ID, fehlendem Zitiervorschlag. Dazu der eingecheckte Katalog:
-22 Einträge FNF01–FNF22, Quelle und Lizenztext daneben.
+Hauptversion, unbekannter Einstufung, doppelter Item-ID, fehlendem Zitiervorschlag (neues Thema oder neue Fassung), fehlendem
+Commit; Zeilenumbruch in einer Zelle mit Anführungszeichen bleibt erhalten. Dazu der Aufbau des eingecheckten Katalogs
+(Pflichtfelder, Anzahl je Thema, eindeutige Kennungen, Verweise mit https), Quelle und Lizenztext daneben – ohne feste
+Anzahl, damit eine neue Fassung den Test nicht bricht.
 """
 import contextlib
 import importlib.util
@@ -61,6 +63,24 @@ with tempfile.TemporaryDirectory() as tmp:
     vorher = ziel.read_bytes()
     ok('zweiter Lauf: dieselbe Datei, Zitiervorschlag bleibt', lauf(FIX, *basis)[0] == 0 and ziel.read_bytes() == vorher)
 
+    # neue Fassung desselben Themas: der alte Zitiervorschlag gehört zur alten Fassung
+    neu = tmp / FIX.name.replace('v1.0', 'v1.1'); shutil.copy(FIX, neu)
+    code, f = lauf(neu, *basis)
+    ok('neue Fassung v1.1 ohne --zitat: Abbruch mit Hinweis auf die Fassung, nichts geschrieben', code == 1 and 'neue Fassung v1.1 (bisher v1.0)' in f and ziel.read_bytes() == vorher, f)
+    code, f = lauf(neu, *basis, '--zitat', 'Muster (2026). Testkatalog (Version 1.1).')
+    t = json.loads(ziel.read_text(encoding='utf-8'))['themen'][0]
+    ok('neue Fassung mit --zitat: übernommen', code == 0 and (t['version'], t['zitiervorschlag']) == ('1.1', 'Muster (2026). Testkatalog (Version 1.1).'), (f, t))
+    ziel.write_bytes(vorher)
+    code, f = lauf(FIX, '--ziel', ziel, '--zitat', 'x')
+    ok('ohne --commit: Abbruch, nichts geschrieben (Herkunft nie still leer)', code == 1 and '--commit' in f and ziel.read_bytes() == vorher, f)
+
+    # Zelle mit Anführungszeichen über zwei Zeilen: der Umbruch bleibt, die Zeile zählt einmal
+    mehrzeilig = tmp / 'mehrzeilig' / FIX.name; mehrzeilig.parent.mkdir()
+    mehrzeilig.write_text(FIX.read_text(encoding='utf-8').replace('\tForest, Non-forest\t', '\t"Forest,\nNon-forest"\t', 1), encoding='utf-8')
+    code, f = lauf(mehrzeilig, '--ziel', tmp / 'mehrzeilig.json', '--commit', '4b95506', '--zitat', 'x')
+    km = json.loads((tmp / 'mehrzeilig.json').read_text(encoding='utf-8')) if code == 0 else {}
+    ok('mehrzeilige Zelle: Zeilenumbruch erhalten, zwei Einträge', code == 0 and [e['klassen'] for e in km['eintraege']][0] == 'Forest,\nNon-forest' and len(km['eintraege']) == 2, (f, km.get('eintraege', [{}])[0].get('klassen')))
+
     # weiteres Thema mit gleichem Aufbau: ergänzt, das erste bleibt unverändert
     zweites = tmp / 'Deforestation_TreeLoss_GeosEUDR_Thuenen_v1.2.tsv'
     zweites.write_text(FIX.read_text(encoding='utf-8').replace('TST01', 'DEF01').replace('TST02', 'DEF02'), encoding='utf-8')
@@ -89,11 +109,19 @@ with tempfile.TemporaryDirectory() as tmp:
 # ---------- eingecheckter Katalog ----------
 ort = REPO / 'app/api/module/containerimport'
 k = json.loads((ort / 'geodatenkatalog.json').read_text(encoding='utf-8'))
-ok('eingecheckter Katalog: 22 Einträge FNF01–FNF22 im Thema Forest/Tree Cover v1.0', [e['id'] for e in k['eintraege']] == ['FNF%02d' % n for n in range(1, 23)]
-   and [(t['id'], t['version'], t['eintraege']) for t in k['themen']] == [('ForestCover_TreeExtent', '1.0', 22)])
+THEMA = {'id', 'name', 'version', 'datei', 'eintraege', 'quelleCommit', 'abgerufen', 'zitiervorschlag'}
+EINTRAG = {'id', 'thema', 'name', 'hinweis', 'hersteller', 'zitat', 'links', 'klassen', 'walddefinition', 'eudrKonform', 'ausdehnung', 'aufloesungM',
+           'vonJahr', 'bisJahr', 'zeitlich', 'sensor', 'methode', 'kategorie', 'validierung', 'genauigkeit', 'grenzen'}
+ids = [e['id'] for e in k['eintraege']]
+ok('eingecheckter Katalog: Themen mit Fassung, Commit und Zitiervorschlag', k['schema'] == 1 and k['themen'] and all(set(t) == THEMA and t['version'] and t['zitiervorschlag']
+   and W.re.fullmatch(r'[0-9a-f]{7,40}', t['quelleCommit'] or '') for t in k['themen']), k['themen'])
+ok('eingecheckter Katalog: Einträge mit allen Feldern, Kennung eindeutig, Thema bekannt, Einstufung bekannt',
+   ids and len(set(ids)) == len(ids) and all(set(e) == EINTRAG and e['thema'] in {t['id'] for t in k['themen']} and e['eudrKonform'] in W.KONFORM.values() for e in k['eintraege']))
+ok('eingecheckter Katalog: Anzahl = Summe der Einträge je Thema', len(ids) == sum(t['eintraege'] for t in k['themen'])
+   and all(t['eintraege'] == sum(e['thema'] == t['id'] for e in k['eintraege']) for t in k['themen']))
 ok('Lizenztext (MIT, Thünen-Institut) liegt daneben', (ort / k['quelle']['lizenzdatei']).read_text(encoding='utf-8').startswith('MIT License')
    and 'Thünen-Institute' in (ort / k['quelle']['lizenzdatei']).read_text(encoding='utf-8'))
-ok('alle Verweise mit http(s)', all(l['url'].startswith(('https://', 'http://')) for e in k['eintraege'] for g in e['links'].values() for l in g))
+ok('alle Verweise mit https', all(l['url'].startswith('https://') for e in k['eintraege'] for g in e['links'].values() for l in g))
 
 print(f'{sum(res)}/{len(res)} passed')
 sys.exit(0 if all(res) else 1)

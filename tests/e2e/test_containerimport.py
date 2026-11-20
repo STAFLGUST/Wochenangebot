@@ -718,11 +718,11 @@ with sync_playwright() as pw:
           and pruefungen() == vorher, w)
     check('Bildauswertung übernehmen: mindestens 0,5 ha Verlust auf Wald von 2020 → Vorschlag „Befund“, rot markiert',
           erwartet['verlustAufWaldHa'] >= 0.5 and w[1] == 'befund' and k.locator('#betrieb-auswertung dd .ci-marke.rot').count() == 1, (erwartet['verlustAufWaldHa'], w[1]))
-    check('Bildauswertung: Text der Gegenprüfung nennt Datengrundlage mit Katalog-ID und Fassung (GEOS-EUDR v1.0: FNF01, FNF17)',
-          'GEOS-EUDR-Katalog (Thünen-Institut) ForestCover_TreeExtent v1.0: FNF01, FNF17' in w[3], w[3])
+    check('Bildauswertung: Text der Gegenprüfung nennt Datengrundlage mit Katalog-ID und Fassung (GEOS-EUDR …: FNF01, FNF17)',
+          re.search(r'GEOS-EUDR-Katalog \(Thünen-Institut\) \w+ v\d+\.\d+: FNF01, FNF17\)', w[3]), w[3])
     k.click('#betrieb-auswertung [data-geodaten="FNF01"]'); k.wait_for_selector('#dlg-geodaten[open]')
-    check('Bildauswertung: Verweis FNF01 öffnet den Katalogeintrag JRC GFC 2020 über dem Fenster „Farmer“',
-          k.inner_text('#geodaten-titel').startswith('FNF01 · JRC GFC 2020') and k.evaluate("document.querySelector('#dlg-betrieb').open"), k.inner_text('#geodaten-titel'))
+    check('Bildauswertung: Verweis FNF01 öffnet den Katalogeintrag über dem Fenster „Farmer“',
+          k.inner_text('#geodaten-titel').startswith('FNF01 · ') and k.evaluate("document.querySelector('#dlg-betrieb').open"), k.inner_text('#geodaten-titel'))
     k.click('#dlg-geodaten [data-zu]'); k.wait_for_function("!document.querySelector('#dlg-geodaten').open")
     check('Katalogeintrag geschlossen: Fenster „Farmer“ bleibt offen', k.evaluate("document.querySelector('#dlg-betrieb').open"))
     shot(k.locator('#dlg-betrieb'), os.path.join(SH, 'containerimport-bildauswertung-1280.png'))
@@ -748,6 +748,21 @@ with sync_playwright() as pw:
     check('Bildauswertung, ein Dienst antwortet nicht: Meldung statt Zahlen, nichts zu übernehmen',
           'Bildauswertung nicht möglich' in k.inner_text('#betrieb-auswertung') and 'nicht geantwortet' in k.inner_text('#betrieb-auswertung')
           and k.locator('#betrieb-auswertung dl, #betrieb-auswertung-nehmen').count() == 0, k.inner_text('#betrieb-auswertung'))
+    k.context.close()
+
+    # Geodaten-Katalog nicht erreichbar (500): die Bildauswertung erscheint trotzdem, der Beleg nennt die Kennungen ohne Fassung
+    k = seite('ina', dienste=kartendienste([]))
+    k.route(re.compile(r'/api/\?action=containerimport_eudr_geodaten'), lambda route: route.fulfill(status=500, content_type='application/json', body='{"ok":false,"error":"Der Geodaten-Katalog ist nicht lesbar."}'))
+    betriebMitBild(k); k.wait_for_selector('#betrieb-auswertung:not([hidden]) dl')
+    k.click('#betrieb-auswertung-nehmen')
+    bemerkung = k.evaluate("document.querySelector('#betrieb-inhalt').elements.p_bemerkung.value")
+    check('Katalog nicht erreichbar: Bildauswertung erscheint trotzdem, Beleg „Fassung nicht geladen: FNF01, FNF17“',
+          'Wald Ende 2020' in k.inner_text('#betrieb-auswertung') and 'GEOS-EUDR-Katalog (Thünen-Institut) Fassung nicht geladen: FNF01, FNF17' in bemerkung, bemerkung)
+    k.click('#betrieb-auswertung [data-geodaten="FNF01"]'); k.wait_for_selector('#dlg-geodaten[open]')
+    check('Katalog nicht erreichbar: Verweis öffnet ein Fenster mit Hinweis statt Eintrag', 'gerade nicht erreichbar' in k.inner_text('#dlg-geodaten'), k.inner_text('#dlg-geodaten'))
+    k.click('#dlg-geodaten [data-zu]'); k.keyboard.press('Escape'); k.wait_for_function("!document.querySelector('#dlg-betrieb').open")
+    k.click('[data-sicht="geodaten"]'); k.wait_for_selector('#ci-inhalt .ci-leer:not([role])')
+    check('Katalog nicht erreichbar: Ansicht „Geodaten-Katalog“ meldet es', 'Der Geodaten-Katalog ist gerade nicht erreichbar' in k.inner_text('#ci-inhalt'), k.inner_text('#ci-inhalt'))
     k.context.close()
 
     # Satellitenbild und Walddienst fallen aus: die Karte zeigt, was erreichbar ist; die Auswertung braucht den Walddienst

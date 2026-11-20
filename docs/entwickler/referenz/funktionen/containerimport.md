@@ -2,7 +2,7 @@
 
 <!-- ERZEUGT von `python3 werkzeuge/doku.py erzeugen` – nicht von Hand ändern. Quelle: Funktionen und Kommentare im Code. Die CI prüft, dass diese Datei zum Code passt. -->
 
-26 Dateien, 246 Funktionen – in der Reihenfolge der Datei, **fett** die Abschnitte. Text = erste Aussage des Kommentars direkt über der Funktion (Python: Docstring). Übersicht aller Module: [README.md](README.md).
+26 Dateien, 245 Funktionen – in der Reihenfolge der Datei, **fett** die Abschnitte. Text = erste Aussage des Kommentars direkt über der Funktion (Python: Docstring). Übersicht aller Module: [README.md](README.md).
 
 ## `app/api/aktionen/containerimport.php`
 
@@ -381,15 +381,12 @@ _Container-Import: Farmer je Container (Auftrag des Inhabers 19.11.2026) – eig
 
 _Container-Import · EUDR_
 
-> Testdaten: der eingecheckte Katalog (öffentliche Metadaten); Nutzer erfunden.
-
-**Rechte und Inhalt**
+**Rechte und Aufbau der echten Datei**
 
 **Oberfläche**
 
-- `seite(user, vp, schema)`
+- `seite(user, vp, schema, katalog)` – Seite mit erfundenem Katalog: die Seite lädt ihn erst bei Bedarf, die Umleitung greift also vor dem ersten Abruf.
 - `katalog_zeigen(p)`
-- `boese(route)`
 
 ## `tests/e2e/test_containerimport_hafen.py`
 

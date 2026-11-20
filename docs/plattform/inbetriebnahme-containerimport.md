@@ -247,7 +247,10 @@ neuen Rechte, kein Abruf fremder Server.
   Rohstoffe, regional, national) kündigt das Thünen-Institut an, Aktualisierung etwa vierteljährlich.
 - **Wo:** Reiter EUDR → Ansicht „Geodaten-Katalog“ (Suche, je Eintrag aufklappbar). Unter der Karte, in der Bildauswertung
   und im Ergebnis von Whisp stehen kleine Verweise wie „FNF01“ (Wald 2020 der EU-Kommission, JRC) und „FNF17“ (Waldverlust,
-  Hansen/Global Forest Watch); sie öffnen den Eintrag. Recht wie die übrige EUDR-Ansicht: „EUDR ansehen“.
+  Hansen/Global Forest Watch); sie öffnen den Eintrag. Recht wie die übrige EUDR-Ansicht: „EUDR ansehen“ – das prüft die
+  Aktion `containerimport_eudr_geodaten`. Die Datei selbst liegt im Webroot und ist wie `lib/druck-logo.jpg` auch ohne
+  Anmeldung abrufbar (`/api/module/containerimport/geodatenkatalog.json`): öffentliche Metadaten unter MIT-Lizenz, nie
+  Geschäftsdaten hineinschreiben. Sperren ließe sie sich nur über `app/.htaccess` (koordinationspflichtig, eigener PR).
 - **Beleg in der Gegenprüfung:** Übernimmt man Bildauswertung oder Whisp in die Gegenprüfung, nennt die Bemerkung die
   Datengrundlage mit Katalog, Thema, Fassung und Kennung (z. B. „GEOS-EUDR-Katalog (Thünen-Institut)
   ForestCover_TreeExtent v1.0: FNF01, FNF17“). So belegt die Sorgfaltsprüfung, auf welchen Daten sie steht und wie genau
@@ -257,20 +260,24 @@ neuen Rechte, kein Abruf fremder Server.
   (Stand 11/2026: JRC GFC 2020 V4 statt v2/v3, Hansen v1.13 statt v1.11). Ohne Zuordnung: Global Forest Types (Whisp V2,
   Katalog nur v1), ESRI (Whisp 2024/2025, Katalog bis 2023), ForTy v2, TMF, RADD, GLAD.
 - **Neue Fassung übernehmen** (ein Entwickler, als eigener Pull Request): die Quelle holen und das Werkzeug aufrufen. Es
-  ruft selbst nichts aus dem Netz ab.
+  ruft selbst nichts aus dem Netz ab. Die Quelle schreibt den Dateinamen derzeit `…_GeosEDUR_…` (Tippfehler im Original,
+  Stand v1.0); das Werkzeug nimmt beide Schreibweisen an.
 
   ```sh
   git clone --depth 1 https://github.com/GEOS-EUDR-RepoHub/Metadatabase-Geodata-EUDR /tmp/geos-eudr
   python3 werkzeuge/eudr_geodatenkatalog.py /tmp/geos-eudr/data/<Thema>_GeosEUDR_Thuenen_vX.Y.tsv \
-    --commit "$(git -C /tmp/geos-eudr log -1 --format=%h)" [--zitat "<Suggested Citation aus dem README>"]
+    --commit "$(git -C /tmp/geos-eudr log -1 --format=%h)" --zitat "<Suggested Citation aus dem README>"
   cp /tmp/geos-eudr/LICENSE app/api/module/containerimport/geodatenkatalog-LIZENZ.txt
   ```
 
-  Ein Thema wird ersetzt, andere bleiben. Für ein neues Thema ist `--zitat` Pflicht, sonst bleibt der bisherige
-  Zitiervorschlag. Das Werkzeug bricht ab, ohne etwas zu schreiben, wenn sich der Aufbau ändert (andere Spalten, neue
+  Ein Thema wird ersetzt, andere bleiben. `--commit` ist immer Pflicht (Herkunft jeder Fassung). `--zitat` ist Pflicht für
+  ein neues Thema und für jede neue Fassung; nur beim erneuten Einlesen derselben Fassung bleibt der bisherige
+  Zitiervorschlag. Fehlt eines davon, bricht das Werkzeug mit einer Meldung ab. Das Werkzeug bricht ab, ohne etwas zu schreiben, wenn sich der Aufbau ändert (andere Spalten, neue
   Hauptversion v2.0, unbekannte Einstufung „EUDR forest definition conform?“, doppelte Kennung). Dann Werkzeug,
   Oberfläche und die Zuordnung zu Whisp anpassen. Danach prüfen: `python3 tests/unit/test_eudr_geodatenkatalog.py` und
-  die Gruppe `containerimport_geodaten` (sie erwartet heute genau 22 Einträge; bei mehr Einträgen den Test anpassen).
+  die Gruppe `containerimport_geodaten`. Beide prüfen an der echten Datei nur den Aufbau (keine feste Anzahl, keine
+  Texte); die Oberfläche testet die Gruppe mit einem erfundenen Katalog. Ändern sich die Kennungen FNF01, FNF03, FNF17 oder
+  FNF22, auch `KATALOG` in `eudr-whisp.js` und die Verweise in `containerimport.js` anpassen.
 - **Lizenz und Zitat:** MIT, © 2026 Thünen-Institut, Juliana Freitas Beyer, Margret Köthke, Melvin Lippe. Der Lizenztext
   liegt neben dem Katalog (`app/api/module/containerimport/geodatenkatalog-LIZENZ.txt`), die Ansicht nennt Quelle, Urheber,
   Lizenz, Fassung und Zitiervorschlag: Freitas Beyer, J., Köthke, M., & Lippe, M. (2026). GEOS-EUDR: Dataset Catalog -

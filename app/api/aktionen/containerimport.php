@@ -49,7 +49,6 @@ switch ($action) {
             eudr_leser();
             $katalog = json_decode((string)@file_get_contents(__DIR__ . '/../module/containerimport/geodatenkatalog.json'), true);
             if (!is_array($katalog)) fail('Der Geodaten-Katalog ist nicht lesbar.', 500);
-            header('Cache-Control: private, max-age=3600');
             respond(['ok' => true] + $katalog);
         }
 

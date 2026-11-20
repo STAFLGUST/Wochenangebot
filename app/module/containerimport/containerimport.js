@@ -370,10 +370,10 @@
       if (s.status === 200) { r = s; fehl = 0; } else if (++fehl >= WHISP_FEHLVERSUCHE) r = s;
     }
     if (!el.isConnected) return;
-    knopf.disabled = false;
     if (r.status === 200 && r.data.fertig) await whispZeigen(el, r.data.ergebnis, b);
     else if (!offen()) el.hidden = true;   // geschlossen: beim nächsten Öffnen ist das Fenster ohnehin neu
     else el.innerHTML = `<p class="ci-klein"><strong>Whisp:</strong> ${esc(r.status === 200 ? 'Die Auswertung dauert ungewöhnlich lange. Bitte später erneut versuchen.' : fehlerText(r, 'Abfrage nicht möglich. Bitte später erneut versuchen.'))}</p>`;
+    knopf.disabled = false;   // erst nach dem Ergebnis: whispZeigen wartet auf den Katalog
   }
   /* Ergebnis von Whisp als Vorschlag zeigen (Deutung: eudr-whisp.js); „Übernehmen“ füllt nur das Formular */
   async function whispZeigen(el, ergebnis, b) {

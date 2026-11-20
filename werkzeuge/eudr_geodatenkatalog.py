@@ -12,12 +12,14 @@ Bricht ab, ohne zu schreiben, wenn sich der Aufbau ändert (andere Spalten, Haup
 „EUDR forest definition conform?“, doppelte oder ungültige Item-ID) – dann Werkzeug und Oberfläche anpassen.
 
 Aufruf:
-  python3 werkzeuge/eudr_geodatenkatalog.py <pfad-zur-tsv> [--commit <sha>] [--zitat <Zitiervorschlag>]
+  python3 werkzeuge/eudr_geodatenkatalog.py <pfad-zur-tsv> --commit <sha> [--zitat <Zitiervorschlag>]
                                             [--abgerufen JJJJ-MM-TT] [--ziel <json>]
+--zitat ist Pflicht für ein neues Thema und für jede neue Fassung; nur bei gleicher Fassung bleibt der bisherige Zitiervorschlag.
 """
 import argparse
 import csv
 import datetime
+import io
 import json
 import re
 import sys
@@ -116,8 +118,9 @@ def lesen(pfad):
         raise Abbruch(f'Dateiname {pfad.name!r} folgt nicht dem Muster [Thema]_GeosEUDR_Thuenen_vX.Y.tsv')
     if m['haupt'] != '1':
         raise Abbruch(f'Hauptversion v{m["haupt"]}.{m["neben"]}: neuer Aufbau – Spalten prüfen und das Werkzeug anpassen')
-    roh = pfad.read_text(encoding='utf-8-sig')
-    zeilen = list(csv.reader(roh.splitlines(), delimiter='\t' if '\t' in roh.split('\n', 1)[0] else ','))
+    with pfad.open(encoding='utf-8-sig', newline='') as f:   # newline='': Zeilenumbrüche in Zellen mit Anführungszeichen bleiben erhalten
+        roh = f.read()
+    zeilen = list(csv.reader(io.StringIO(roh, newline=''), delimiter='\t' if '\t' in roh.split('\n', 1)[0] else ','))
     kopf = [re.sub(r'\s+', ' ', k).strip() for k in zeilen[0]] if zeilen else []
     erwartet = [k for k, _ in SPALTEN]
     if kopf != erwartet:
@@ -144,21 +147,22 @@ def lesen(pfad):
 def main(argv=None):
     a = argparse.ArgumentParser(description=__doc__.split('\n\n')[0])
     a.add_argument('tabelle', type=Path)
-    a.add_argument('--commit', default='', help='Commit der Quelle (git log -1 --format=%%h im Klon)')
-    a.add_argument('--zitat', default='', help='Zitiervorschlag aus dem README der Quelle (Pflicht für ein neues Thema)')
+    a.add_argument('--commit', default='', help='Commit der Quelle, Pflicht (git log -1 --format=%%h im Klon)')
+    a.add_argument('--zitat', default='', help='Zitiervorschlag aus dem README der Quelle (Pflicht für ein neues Thema und jede neue Fassung)')
     a.add_argument('--abgerufen', default=datetime.date.today().isoformat())
     a.add_argument('--ziel', type=Path, default=ZIEL)
     o = a.parse_args(argv)
     try:
-        if not re.fullmatch(r'[0-9a-f]{0,40}', o.commit):
-            raise Abbruch('--commit: nur der Hex-Wert des Commits')
+        if not re.fullmatch(r'[0-9a-f]{7,40}', o.commit):
+            raise Abbruch('--commit fehlt oder ist ungültig: Hex-Wert des Commits der Quelle (git log -1 --format=%h im Klon)')
         datetime.date.fromisoformat(o.abgerufen)
         thema, neu = lesen(o.tabelle)
         alt = json.loads(o.ziel.read_text(encoding='utf-8')) if o.ziel.exists() else {'themen': [], 'eintraege': []}
         vorher = next((t for t in alt['themen'] if t['id'] == thema['id']), {})
-        thema.update(quelleCommit=o.commit or None, abgerufen=o.abgerufen, zitiervorschlag=o.zitat or vorher.get('zitiervorschlag'))
-        if not thema['zitiervorschlag']:
-            raise Abbruch('Zitiervorschlag fehlt: --zitat mit dem Text aus „Suggested Citation“ im README der Quelle angeben')
+        if not o.zitat and vorher.get('version') != thema['version']:
+            raise Abbruch(('neue Fassung v' + thema['version'] + ' (bisher v' + vorher['version'] + ')' if vorher else 'neues Thema')
+                          + ': Zitiervorschlag fehlt – --zitat mit dem Text aus „Suggested Citation“ im README der Quelle angeben')
+        thema.update(quelleCommit=o.commit, abgerufen=o.abgerufen, zitiervorschlag=o.zitat or vorher['zitiervorschlag'])
         andere = [e for e in alt['eintraege'] if e['thema'] != thema['id']]
         doppelt = {e['id'] for e in andere} & {e['id'] for e in neu}
         if doppelt:

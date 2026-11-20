@@ -993,14 +993,16 @@ Caddy setzt auf allen Hosts `script-src 'self'` (ohne `'unsafe-inline'`), `conne
   `containerimport_whisp` mit nachgebautem Dienst; gegen das echte Whisp lässt sich nur mit Schlüssel prüfen.
   **Geodaten-Katalog** (Auftrag des Inhabers 20.11.2026): `eudr-geodaten.js` trägt die Ansicht `geodaten` über die Brücke
   ein und liest den Katalog einmal je Seite über `containerimport_eudr_geodaten` (nur lesen, Recht „EUDR ansehen“). Die
-  Daten liegen als `app/api/module/containerimport/geodatenkatalog.json` neben dem Lizenztext; geschrieben wird die Datei
+  Daten liegen als `app/api/module/containerimport/geodatenkatalog.json` neben dem Lizenztext (im Webroot, also auch ohne
+  Anmeldung abrufbar – nur öffentliche Metadaten hineinschreiben); geschrieben wird die Datei
   nur von `werkzeuge/eudr_geodatenkatalog.py` (Spaltenprüfung, Abbruch bei neuem Aufbau). Verweise baut
   `EUDR_GEODATEN.verweis('FNF01')` (Knopf mit `data-geodaten`, ein Hörer öffnet `#dlg-geodaten`, auch über dem Fenster
   „Farmer“); `EUDR_GEODATEN.beleg(ids)` liefert Katalog, Thema, Fassung und Kennungen für die Bemerkung der Gegenprüfung.
   Whisp-Felder ordnet die Tabelle `KATALOG` in `eudr-whisp.js` zu (`EUDR_WHISP.katalog`, nur eindeutige Produkte);
   `deuten(…, quellen)` hängt den Beleg immer vollständig an und kürzt davor (höchstens 500 Zeichen). Alle Katalogtexte
   sind Fremddaten: maskieren, Verweise nur mit `http(s)`, `rel="noopener noreferrer"`. Tests: Gruppe
-  `containerimport_geodaten`, Unit-Test `tests/unit/test_eudr_geodatenkatalog.py`.
+  `containerimport_geodaten` (Oberfläche mit erfundenem Katalog `tests/fixtures/containerimport/geodatenkatalog/katalog-test.json`,
+  an der echten Datei nur der Aufbau), Unit-Test `tests/unit/test_eudr_geodatenkatalog.py`.
 - **Zweite Kartendatei „herkunft“** (Südamerika und Neuseeland, `/karte/herkunft.pmtiles`; Laden und Auslieferung: Kapitel Betrieb):
   `STAFLKarte.verfuegbar('herkunft')` und `erstellen(el, { karte: 'herkunft', … })`; Punkte können eine eigene Farbe tragen
   (`farbe: '#rrggbb'`). Genutzt vom Container-Import (`app/module/containerimport/eudr-karte.js`), der ohne die Datei selbst
