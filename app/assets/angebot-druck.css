@@ -19,7 +19,7 @@
 #print-root .pl-doc { --z: .85039; width: var(--sb, 279mm); margin: 0; border: 0; border-radius: 0; box-shadow: none; padding: 0; background: #fff; color: #0b0b0b; font-family: var(--font); font-variant-numeric: tabular-nums;
   -webkit-backdrop-filter: none; backdrop-filter: none;
   --text: #0b0b0b; --text-2: #4d4648; --muted: #6d6669; --accent: #8c1d2c; --accent-soft: #f9eeef; --accent-line: #ebc6cb; --sale: #c2410c; --sale-bg: #fff1e6;
-  --aus: #e0dfde; --zebra: #ebeae9; --regel: #d4d3d3;
+  --aus: #e0dfde; --zebra: #ebeae9; --regel: #d4d3d3; --vw-g: #1f5a3c; --vw-t: #8c1d2c; --vw-n: #7a5418;
   /* Stufe „normal“: Zeilenhöhe, Abstand zwischen Blöcken / unter dem Balken / zwischen Zeilen von Bereichen / zwischen Spalten / unter dem Kopf, Polster des Balkens */
   --zeile: 24px; --ab-gruppe: 12px; --ab-balken: 8px; --ab-band: 14px; --ab-spalte: 30px; --ab-kopf: 14px; --p-balken: 6px; --logo: 54px; }
 #print-root .pl-doc.pl-kompakt { --zeile: 23px; --ab-gruppe: 10px; --ab-balken: 7px; --ab-band: 12px; --ab-spalte: 28px; --ab-kopf: 12px; --p-balken: 5px; --logo: 52px; }
@@ -143,17 +143,14 @@
   html.druckansicht #print-root img[src*="logo-standard-fleisch"] { filter: none; }   /* Druck ist immer hell: Logo nicht wie im Dunkelmodus aufhellen */
 }
 
-/* Preisänderung zur Vorwoche (frontend.js, ?vergleich=…): nur farbiger Text, keine Fläche, etwa 75 % der Zeilenschrift. Der
-   Hinweis liegt absolut am rechten Ende der Bezeichnung, in der Höhe ihrer letzten Zeile (statische Lage) – er nimmt keinen
-   Platz: Zeilenhöhe, Messung und Seiten sind dieselben wie ohne Vergleich (test_preisaenderung.py). Reicht die Bezeichnung bis
-   dorthin, blendet ein Verlauf in der Zeilenfarbe ihr Ende aus (abgeschnitten, nicht umbrochen). */
+/* Preisänderung zur Vorwoche (assets/angebot-vorwoche.js, ?vergleich=…): nur farbiger Text (Farben --vw-* oben, hell), keine
+   Fläche, etwa 75 % der Zeilenschrift. Der Hinweis steht am Ende der Zelle und liegt absolut am rechten Ende der Bezeichnung, in
+   der Höhe ihrer letzten Zeile (statische Lage) – er nimmt keinen Platz: Zeilenhöhe, Messung und Seiten sind dieselben wie ohne
+   Vergleich (test_preisaenderung.py). Reicht die Bezeichnung bis dorthin, blendet ein Verlauf in der Zeilenfarbe ihr Ende aus. */
 #print-root .pl-doc .al-tab td { --vw-grund: #fff; }
 #print-root .pl-doc .al-tab tbody tr:nth-child(odd) td { --vw-grund: var(--zebra); }
 #print-root .pl-doc .al-tab tbody tr.row.werb-an td { --vw-grund: var(--accent-soft); }
-#print-root .pl-doc .al-tab td.c-name.mit-vw { position: relative; }
+#print-root .pl-doc .al-tab td.c-name:has(> .vw) { position: relative; }
 #print-root .pl-doc .al-tab td.c-name > .vw { position: absolute; right: 4px; padding-left: 1.5em; font-size: .75em; line-height: calc(1.3em / .75); font-weight: 650; white-space: nowrap;
   background: linear-gradient(to right, transparent, var(--vw-grund) 1.1em); }
-#print-root .pl-doc .vw-guenstiger { color: #1f5a3c; }
-#print-root .pl-doc .vw-teurer { color: #8c1d2c; }
-#print-root .pl-doc .vw-neu { color: #7a5418; }
 #print-root .pl-doc .vw-leg .vw { margin-left: 5px; font-weight: 650; }

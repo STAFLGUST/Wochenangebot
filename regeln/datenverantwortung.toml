@@ -40,7 +40,7 @@ trennstufe = 3   # Mitarbeiterseite liest innen, Kundenseite nur die Kopie (ADR-
 leser = ["bestand", "plattform"]
 schutz = "oeffentlich"
 beschreibung = "Veröffentlichtes Wochenangebot; öffentlich nur gefiltert über offer_resolve (GR-001, GR-002)"
-historie = "Jede Veröffentlichung legt eine Version an (versionen/*) und den Preisverlauf (historie/*); seit 20.11.2026 trägt sie die Preise der Vorwoche als Schnappschuss (meta.vorwoche, Artikelfeld vorwoche je Angebot, module/angebot/wochen.php) – ausgeliefert nur über angebot_vorwoche, nur die Preise des angefragten Angebots"
+historie = "Jede Veröffentlichung legt eine Version an (versionen/*) und den Preisverlauf (historie/*); seit 20.11.2026 trägt sie die Preise der Vorwoche als Schnappschuss (meta.vorwoche mit den dabei aufgelösten Angeboten, Artikelfeld vorwoche je Angebot, module/angebot/vorwoche.php) – ausgeliefert nur über angebot_vorwoche, nur die Änderungen des angefragten Angebots"
 
 [[dokument]]
 name = "angebote"

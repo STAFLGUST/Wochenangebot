@@ -5,7 +5,7 @@
    Entwurf, wenn nur ein gespeichertes Design je Angebot offen ist – Zeilen der Art „design“),
    versand_empfaenger / versand_vorschau / versand_senden (Wochenangebot bzw. Sonderposten eines Angebots, in Teilen zu zehn),
    versand_verlauf (aus dem Protokoll, ohne Kundennamen).
-   Wochenangebot, Zusatz „Preisänderung zur Vorwoche zeigen“ (Inhaber 20.11.2026): beim Öffnen immer aus, gilt nur für diesen
+   Wochenangebot, Zusatz „Preisänderung zur Vorwoche zeigen“ (Inhaber 20.11.2026, Vergleichswoche d.woche.vorwoche): beim Öffnen immer aus, gilt nur für diesen
    Versand (über die erneute Anmeldung nur in der sessionStorage-Auswahl); preis = {an, uebersicht, kurz} an versand_vorschau und
    versand_senden – Links mit vergleich=vorwoche, Übersicht der Änderungen und Link „Nur Änderungen“ berechnet der Server.
    Bestätigung beim Senden wie überall: unter der zentralen Anmeldung erneute Anmeldung (reauth_required, Rücksprung hierher –
@@ -293,9 +293,9 @@
   }
   /* Zusatz „Preisänderung zur Vorwoche“ (nur Wochenangebot): Schalter und zwei Unterpunkte; ohne Vorwoche gesperrt */
   function zusatzHTML(s, d) {
-    const p = s.preis, aus = s.laeuft || !d.vorwoche, chk = (id, an, txt, klein) => `<label class="vs-check vs-zusatz-zeile"><input type="checkbox" id="${id}"${an ? ' checked' : ''}${aus ? ' disabled' : ''}><span>${txt}${klein ? `<small>${klein}</small>` : ''}</span></label>`;
+    const p = s.preis, vw = d.woche && d.woche.vorwoche, aus = s.laeuft || !vw, chk = (id, an, txt, klein) => `<label class="vs-check vs-zusatz-zeile"><input type="checkbox" id="${id}"${an ? ' checked' : ''}${aus ? ' disabled' : ''}><span>${txt}${klein ? `<small>${klein}</small>` : ''}</span></label>`;
     return `<fieldset class="vs-zusatz"><legend>Zusatz</legend>
-      ${chk('send-preis', p.an, 'Preisänderung zur Vorwoche zeigen', d.vorwoche ? `Die Links zeigen je Artikel ▼ günstiger, ▲ teurer oder neu gegenüber KW ${esc(d.vorwoche.kw)} – nur für diesen Versand.` : 'Für den veröffentlichten Stand gibt es keine Vorwoche zum Vergleich.')}
+      ${chk('send-preis', p.an, 'Preisänderung zur Vorwoche zeigen', vw ? `Die Links zeigen je Artikel ▼ günstiger, ▲ teurer oder neu gegenüber KW ${esc(vw.kw)} – nur für diesen Versand.` : 'Für den veröffentlichten Stand gibt es keine Vorwoche zum Vergleich.')}
       ${p.an ? `<div class="vs-zusatz-unter">${chk('send-preis-uebersicht', p.uebersicht, 'Kurze Übersicht der Änderungen in die E-Mail', 'Je Angebot: Anzahl günstiger, teurer, neu und die fünf größten Veränderungen.')}
         ${chk('send-preis-kurz', p.kurz, 'Kurzfassung „Nur Änderungen“ verlinken', 'Zusätzlicher Link, der nur geänderte und neue Artikel zeigt.')}</div>` : ''}</fieldset>`;
   }
@@ -316,7 +316,7 @@
     if (!w && !d.items.length) { toast('In diesem Angebot sind keine Sonderposten veröffentlicht (oder alle ohne Bestand).', true); return; }
     const liste = w ? d.empfaenger : d.recipients.filter((c) => !c.reason);
     const vor = merk ? liste.filter((c) => merk.ids.includes(c.id)) : w ? liste.filter((c) => c.passwort && !c.gesendet) : liste;
-    const mp = merk && merk.preis && d.vorwoche ? merk.preis : {};   // nur über die erneute Anmeldung; sonst beim Öffnen immer aus
+    const mp = merk && merk.preis && d.woche && d.woche.vorwoche ? merk.preis : {};   // nur über die erneute Anmeldung; sonst beim Öffnen immer aus
     S.send = { art, angebot: angebot || '', daten: d, wahl: new Set(vor.map((c) => c.id)), filter: '*', note: merk ? merk.note : '', ergebnis: {}, laeuft: false, stand: '', pw: false, fertig: false,
       preis: { an: mp.an === true, uebersicht: mp.an === true && mp.uebersicht === true, kurz: mp.an === true && mp.kurz === true },
       meldung: merk ? ['Bestätigt. Bitte den Versand jetzt mit „Senden“ auslösen.', true] : null };
@@ -327,6 +327,7 @@
     const s = S.send, id = [...s.wahl][0] || ((s.art === 'woche' ? s.daten.empfaenger : s.daten.recipients)[0] || {}).id;
     const r = await api('versand_vorschau', { art: s.art, angebot: s.angebot, id, note: $('#send-note').value, ...(s.art === 'woche' ? { preis: s.preis } : {}) });
     if (r.status !== 200 || !r.data.ok) { const m = $('#send-meldung'); m.hidden = false; m.className = 'vs-meldung'; m.textContent = fehlerText(r, 'Vorschau nicht geladen'); return; }
+    if (r.data.hinweis) { const m = $('#send-meldung'); m.hidden = false; m.className = 'vs-meldung'; m.textContent = r.data.hinweis; }   // Übersicht nur mit Zugang zum Angebot
     $('#send-vorschau').hidden = false;
     $('#send-betreff').textContent = r.data.subject; $('#send-fuer').textContent = `${r.data.firma} · ${r.data.to}`;
     $('#send-frame').srcdoc = r.data.html;

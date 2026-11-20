@@ -11,6 +11,7 @@ declare(strict_types=1);
      versand_senden                      dasselbe Recht mit Bestätigung (Katalog BESTAETIGUNG: kunden_rundmail, kunden_restposten)
    Wochenversand optional mit „preis“ = {an, uebersicht, kurz} (nur true zählt, mail_preis_wahl): Links mit vergleich=vorwoche,
    Übersicht der Änderungen je Angebot (vom Server aus dem veröffentlichten Stand), Link „Nur Änderungen“ – gilt nur für den Aufruf.
+   Die Vorschau zeigt die Übersicht (Kundenpreise) nur Mitarbeitern mit Zugang zum Angebot, sonst ohne Übersicht mit „hinweis“.
    Sonderposten gehen nur an Kunden des jeweiligen Angebots (GR-005, sonderposten_senden).
    Wird von api/index.php im globalen Gültigkeitsbereich eingebunden; jede Aktion endet mit respond()/fail(). */
 if (!defined('WA_API')) { http_response_code(404); exit; }   // nur über api/index.php nutzbar
@@ -68,9 +69,7 @@ switch ($action) {
                 require_perm('wochenangebot.senden');
                 $namen = [];
                 foreach (angebot_stand()['angebote'] as $a) $namen[$a['id']] = $a['name'];
-                // Vergleichswoche des veröffentlichten Stands (Zusatz „Preisänderung zur Vorwoche“; null = keine Vorwoche)
-                $em = wochenmail_empfaenger();
-                respond(['ok' => true, 'art' => 'woche', 'postfach' => $postfach, 'angebote' => $namen, 'vorwoche' => $em['woche']['vorwoche'] ?? null] + $em);
+                respond(['ok' => true, 'art' => 'woche', 'postfach' => $postfach, 'angebote' => $namen] + wochenmail_empfaenger());
             }
             require_perm('sonderposten.senden');
             respond(['ok' => true, 'art' => 'sonderposten', 'postfach' => $postfach] + sonderposten_empfaenger(vs_angebot($_GET['angebot'] ?? '')));
@@ -87,10 +86,18 @@ switch ($action) {
             foreach (customers_load()['customers'] as $x) if ($x['id'] === ($b['id'] ?? '')) $c = $x;
             if (!$c) fail('Kunde nicht gefunden.', 404);
             $note = mb_substr(trim((string)($b['note'] ?? '')), 0, 1000);
-            if ($art === 'woche') [$sub, , $html] = mail_tpl_angebot($c, $note, mail_week(), mail_preis_wahl($b['preis'] ?? null));
-            else { $def = vs_angebot($b['angebot'] ?? ''); [$sub, , $html] = mail_tpl_restposten($c, $def, restposten_items($def), $note); }
+            $hinweis = [];
+            if ($art === 'woche') {
+                $preis = mail_preis_wahl($b['preis'] ?? null);
+                // die Übersicht nennt Kundenpreise: in der Vorschau nur mit Zugang zum Angebot (GR-002, GR-103) – die E-Mail an den Kunden enthält sie
+                if ($preis['uebersicht'] && !modul_zugang_frei($me, 'angebot')) {
+                    $preis['uebersicht'] = false;
+                    $hinweis = ['hinweis' => 'Die Übersicht der Preisänderungen nennt Kundenpreise und erscheint in der Vorschau nur mit Zugang zum Angebot. Die E-Mail an den Kunden enthält sie.'];
+                }
+                [$sub, , $html] = mail_tpl_angebot($c, $note, mail_week(), $preis);
+            } else { $def = vs_angebot($b['angebot'] ?? ''); [$sub, , $html] = mail_tpl_restposten($c, $def, restposten_items($def), $note); }
             header('Cache-Control: no-store');
-            respond(['ok' => true, 'subject' => $sub, 'html' => $html, 'to' => (string)($c['email'] ?? ''), 'firma' => (string)$c['firma']]);
+            respond(['ok' => true, 'subject' => $sub, 'html' => $html, 'to' => (string)($c['email'] ?? ''), 'firma' => (string)$c['firma']] + $hinweis);
         }
 
         /* Senden (ein Teil der Auswahl; die Seite schickt die Kunden in Teilen zu zehn) – mit Bestätigung wie bisher */

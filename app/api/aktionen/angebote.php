@@ -32,9 +32,8 @@ switch ($action) {
             }
             $def = offer_def($oid);
             if (!$def) fail('Unbekanntes Angebot.', 404);
-            // optional ?vergleich=vorwoche: Preise der Vorwoche dieses Angebots (module/angebot/wochen.php) – hinter denselben Prüfungen
+            // optional ?vergleich=vorwoche: Änderungen zur Vorwoche dieses Angebots (module/angebot/vorwoche.php) – hinter denselben Prüfungen
             $vergleich = ($_GET['vergleich'] ?? '') === 'vorwoche';
-            if ($vergleich) require_once dirname(__DIR__) . '/module/angebot/wochen.php';
             if (!empty($_GET['draft'])) {
                 require_modulzugang('angebot');
                 $d = store_read('entwurf') ?? store_read('angebot');

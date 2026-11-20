@@ -1,14 +1,18 @@
 """Angebot „mit Preisänderung“ (Inhaber 20.11.2026): je Artikel die Veränderung zur Vorwoche (▼ günstiger, ▲ teurer, neu) als
 Zusatzfunktion – auf der Angebotsseite und im Druck nur mit ?vergleich=vorwoche bzw. =aenderungen, im Versand nur mit Schalter.
-Geprüft: Schnappschuss beim Veröffentlichen (meta.vorwoche, je Artikel nur abweichende Kundenangebote, Zuordnung über Art.-Nr.
-und Bezeichnung auch bei neuen Artikel-IDs), ohne Vorwoche null; Aktion offer ohne Parameter unverändert (kein „vorwoche“),
-mit Parameter nur {kw, jahr, preise}; öffentliches Wochenangebot ohne Kundenpreise (GR-002), Kundenangebot A nur A-Preise, Kunde
-ohne Recht für B 403 ohne Vorwoche, ohne Anmeldung 401; keine Mengen/MHD/EK (GR-001/GR-008); Vorschau des Entwurfs mit Vergleich;
-Angebotsseite: Hinweise und Legende nur mit Parameter, Kurzfassung „Nur Änderungen“; Druck mit Vergleich: dieselben Seiten, dieselbe
-Stufe, dieselben Zeilenhöhen wie ohne, Hinweis kleiner als die Zeilenschrift und innerhalb der Zelle; Karten am Handy (390 px) mit
-Pille; „Angebot bearbeiten“: „Drucken“ wie bisher, Pfeil mit Menü „Zusatz“; Versand: Empfänger nennen die Vorwoche, Vorschau und
-E-Mail mit Schalter (Übersicht, Links mit vergleich=vorwoche, „Nur Änderungen“), ohne Schalter wie bisher, nur echte
-Wahrheitswerte, Protokoll „mit Preisänderung“; Fenster „Wochenangebot senden“ mit Zusatz; keine JavaScript-Fehler.
+Geprüft über die Aktion offer (Verhalten, nicht das Speicherformat): ohne Vorwoche null; ohne Parameter unverändert (kein
+„vorwoche“), mit Parameter nur {kw, jahr, aenderungen} – nur geänderte und neue Artikel, Zuordnung über Art.-Nr. und Bezeichnung
+auch bei neuen Artikel-IDs; jeder Kunde gegen sein eigenes Angebot der Vorwoche (Kundenangebot A, B, eigene Artikelliste H);
+ein in der Vorwoche im Wochenangebot ausgeblendeter Artikel ist dort „neu“; neue Variante mit vorhandener Art.-Nr. „neu“; gleiche
+Bezeichnung ohne Art.-Nr. in zwei Gruppen getrennt; später angelegtes Angebot ohne Vergleich (nie Wochenangebotspreise);
+öffentlich keine Kundenpreise (GR-002), Kunde ohne Recht 403, ohne Anmeldung 401; keine Mengen/MHD/EK (GR-001/GR-008);
+Vorschau des Entwurfs mit Vergleich; Veröffentlichen scheitert nicht an einer kaputten Vorwoche; Jahreswechsel KW 1 → KW 53.
+Angebotsseite: Hinweise (Klasse, Zeichen) und Legende nur mit Parameter, Kurzfassung „Nur Änderungen“, ohne Vorwoche ein Hinweis
+statt des ganzen Angebots; Druck mit Vergleich: dieselben Seiten, Stufe und Zeilenhöhen wie ohne, Hinweis kleiner als die
+Zeilenschrift und innerhalb der Zelle; Karten am Handy (390 px) mit Pille; „Angebot bearbeiten“: „Drucken“ wie bisher, Pfeil mit
+Menü „Zusatz“, das Menü „⋯“ schließt beim Öffnen; Versand: Vorschau und E-Mail mit Schalter (Übersicht, Links mit
+vergleich=vorwoche, „Nur Änderungen“), ohne Schalter wie bisher, nur echte Wahrheitswerte, Übersicht in der Vorschau nur mit
+Zugang zum Angebot, Protokoll „mit Preisänderung“; Fenster „Wochenangebot senden“ mit Zusatz; keine JavaScript-Fehler.
 Nur Testdaten (Seed-Angebot, erfundene Kunden)."""
 import json
 import re
@@ -19,7 +23,7 @@ from playwright.sync_api import sync_playwright
 
 from kunden_hilfe import Client
 from smtp_test import TestSmtp
-from umgebung import BASE, SH, SMTP_PORT, shot, storage_raw, until
+from umgebung import BASE, SH, SMTP_PORT, shot, storage_write, until
 
 PW = 'Sicheres-Passwort-1'
 res = []
@@ -30,11 +34,6 @@ def check(n, c, i=''):
     print(('PASS ' if c else 'FAIL ') + n + (('  ' + str(i)[:600]) if i and not c else ''))
 
 
-def doc(name):
-    raw = storage_raw(name) or 'null'
-    return json.loads(raw.split('\n', 1)[1] if raw.startswith('<?php') else raw)
-
-
 smtp = TestSmtp(SMTP_PORT, password='Test-Postfach-1')
 A = Client('198.51.100.2')
 assert A.call('login', {'username': 'admin', 'password': PW})[0] == 200
@@ -42,7 +41,8 @@ assert A.call('login', {'username': 'admin', 'password': PW})[0] == 200
 # ---------- Kundenangebote, Kunden, Versender ----------
 cur = A.call('offers')[1]
 assert A.call('offers_save', {'rev': cur['rev'], 'offers': cur['offers'] + [
-    {'id': 'kunde-a', 'name': 'Angebot Kunde A', 'fallback': 'standard'}, {'id': 'kunde-b', 'name': 'Angebot Kunde B', 'fallback': 'standard'}]})[0] == 200
+    {'id': 'kunde-a', 'name': 'Angebot Kunde A', 'fallback': 'standard'}, {'id': 'kunde-b', 'name': 'Angebot Kunde B', 'fallback': 'standard'},
+    {'id': 'kunde-h', 'name': 'Angebot Kunde H', 'fallback': 'hidden'}]})[0] == 200
 kid = {}
 for nr, (firma, ang, user) in enumerate([('Testküche Alpha GmbH', 'kunde-a', 'alpha'), ('Beispielhandel Beta KG', 'kunde-b', 'beta')]):
     rev = A.call('kunden')[1]['rev']
@@ -55,6 +55,12 @@ sid = next(u['id'] for u in A.call('users')[1]['users'] if u['username'] == 'sin
 A.call('user_save', {'id': sid, 'name': 'Sina Sender', 'role': 'viewer', 'active': True, 'grant': ['versand.zugang', 'wochenangebot.senden'], 'deny': []})
 S = Client('198.51.100.21')
 assert S.call('login', {'username': 'sina', 'password': 'Leser-Zugang-55'})[0] == 200
+# Versender ohne Zugang zum Angebot: die Übersicht (Kundenpreise) erscheint in seiner Vorschau nicht
+A.call('user_save', {'id': '', 'name': 'Otto Ohnepreis', 'username': 'otto', 'role': 'viewer', 'active': True, 'password': 'Leser-Zugang-56', 'mustChange': False})
+oid_ = next(u['id'] for u in A.call('users')[1]['users'] if u['username'] == 'otto')
+A.call('user_save', {'id': oid_, 'name': 'Otto Ohnepreis', 'role': 'viewer', 'active': True, 'grant': ['versand.zugang', 'wochenangebot.senden'], 'deny': ['angebot.zugang']})
+O = Client('198.51.100.22')
+assert O.call('login', {'username': 'otto', 'password': 'Leser-Zugang-56'})[0] == 200
 
 
 def kunde(user):
@@ -72,18 +78,27 @@ def veroeffentlichen(m):
     assert st == 200, r
 
 
-# ---------- KW 43 (Vorwoche): Seed mit Kundenpreisen für Artikel D ----------
+# ---------- KW 43 (Vorwoche): Seed mit Kundenpreisen für D (A, B), eigener Liste H (G, U, OC1, OC2), X im Wochenangebot ausgeblendet ----------
 m = deepcopy(A.call('draft')[1].get('published'))
 codes = {}
 for it in m['items']:
     codes[it.get('code')] = codes.get(it.get('code'), 0) + 1
 frei = [i for i, it in enumerate(m['items']) if it.get('code') and codes[it['code']] == 1 and it['price'].get('status') == 'value']
-G, T, U, D = frei[0], frei[1], frei[2], frei[3]
+G, T, U, D, X = frei[0], frei[1], frei[2], frei[3], frei[4]
 alt = {k: m['items'][i]['price']['value'] for k, i in (('G', G), ('T', T), ('U', U), ('D', D))}
-m['items'][D]['variants'] = {'kunde-a': {'status': 'value', 'value': 20.0}, 'kunde-b': {'status': 'value', 'value': 30.0}}
+VAL = lambda v: {'status': 'value', 'value': v}   # noqa: E731
+NUR_H = lambda v: {'std': {'status': 'hidden'}, 'kunde-a': {'status': 'hidden'}, 'kunde-b': {'status': 'hidden'}, 'kunde-h': VAL(v)}   # noqa: E731
+m['items'][D]['variants'] = {'kunde-a': VAL(20.0), 'kunde-b': VAL(30.0)}
+m['items'][G]['variants'] = {'kunde-h': VAL(10.0)}
+m['items'][U]['variants'] = {'kunde-h': VAL(11.0)}
+m['items'][X]['variants'] = {'std': {'status': 'hidden'}}
+g0, g1 = m['groups'][0]['id'], m['groups'][1]['id']
+for oid, gid, v in (('oc1', g0, 7.0), ('oc2', g1, 8.0)):   # gleiche Bezeichnung ohne Art.-Nr. in zwei Gruppen (nur Liste H)
+    m['items'].append({'id': oid, 'code': None, 'name': 'Testartikel ohne Nummer', 'category': 'Rind', 'origin': None, 'condition': 'frisch',
+                       'groupId': gid, 'price': VAL(v), 'altPrices': [], 'variants': NUR_H(v)})
 veroeffentlichen(m)
-check('ohne veröffentlichte Vorwoche (KW 42): Vergleich null, kein Schnappschuss', P.call('offer&vergleich=vorwoche')[1].get('vorwoche', 'fehlt') is None
-      and 'vorwoche' not in doc('angebot')['meta'], P.call('offer&vergleich=vorwoche')[1].get('vorwoche', 'fehlt'))
+check('ohne veröffentlichte Vorwoche (KW 42): Vergleich null', P.call('offer&vergleich=vorwoche')[1].get('vorwoche', 'fehlt') is None,
+      P.call('offer&vergleich=vorwoche')[1].get('vorwoche', 'fehlt'))
 
 # ---------- KW 44: G günstiger, T teurer, U gleich, D nur für Kunde A günstiger, N neu; alle Artikel-IDs neu (wie ein neuer Excel-Import) ----------
 m2 = deepcopy(A.call('draft')[1].get('published'))
@@ -91,25 +106,24 @@ m2['meta']['week'] = 44
 m2['items'][G]['price'] = {'status': 'value', 'value': round(alt['G'] - 2, 2)}
 m2['items'][T]['price'] = {'status': 'value', 'value': round(alt['T'] + 1, 2)}
 m2['items'][T]['name'] = 'Steakhüfte mit Deckel, ca. 6–8 kg, vakuumiert, Reifung 21 Tage, frisch'   # lang: zweizeilig; Zuordnung über die Art.-Nr.
-m2['items'][D]['variants'] = {'kunde-a': {'status': 'value', 'value': 19.0}, 'kunde-b': {'status': 'value', 'value': 30.0}}
+m2['items'][D]['variants'] = {'kunde-a': VAL(19.0), 'kunde-b': VAL(30.0)}
+m2['items'][G]['variants'] = {'kunde-h': VAL(9.0)}
+m2['items'][X]['variants'] = {}
+next(it for it in m2['items'] if it['id'] == 'oc1')['variants'] = NUR_H(6.0)
+# neue Variante mit der Art.-Nr. von U in einer anderen Gruppe (nur Liste H): „neu“, nicht „▲“ gegen U
+m2['items'].append({'id': 'var1', 'code': m2['items'][U]['code'], 'name': 'Variante gefroren', 'category': 'Rind', 'origin': None, 'condition': 'gefroren',
+                    'groupId': g1 if m2['items'][U]['groupId'] != g1 else g0, 'price': VAL(12.0), 'altPrices': [], 'variants': NUR_H(12.0)})
 for it in m2['items']:
     it['id'] = 'k44' + it['id']
     it.pop('vorwoche', None)
 m2['items'].insert(0, {'id': 'neu1', 'code': '99001', 'name': 'Testartikel neu', 'category': 'Rind', 'origin': None, 'condition': 'frisch',
-                       'groupId': m2['items'][0]['groupId'], 'price': {'status': 'value', 'value': 9.99}, 'altPrices': []})
-ID = {k: m2['items'][i + 1]['id'] for k, i in (('G', G), ('T', T), ('U', U), ('D', D))}
+                       'groupId': m2['items'][0]['groupId'], 'price': VAL(9.99), 'altPrices': [], 'variants': {'kunde-h': VAL(5.0)}})
+ID = {k: m2['items'][i + 1]['id'] for k, i in (('G', G), ('T', T), ('U', U), ('D', D), ('X', X))}
 ID['N'] = 'neu1'
 veroeffentlichen(m2)
+NEU = {'art': 'neu'}
+RUNTER = lambda k, d: {'art': 'guenstiger', 'd': d, 'alt': alt[k]}   # noqa: E731
 
-# ---------- Datenformat (Schnappschuss im veröffentlichten Angebot) ----------
-pub = doc('angebot')
-it = {x['id']: x for x in pub['items']}
-abw = [x['id'] for x in pub['items'] if set((x.get('vorwoche') or {}).keys()) - {'std'}]
-check('Schnappschuss: meta.vorwoche = KW 43/2026, Vorwochenpreis je Artikel über Art.-Nr. trotz neuer IDs, neuer Artikel ohne Eintrag',
-      pub['meta'].get('vorwoche') == {'kw': 43, 'jahr': 2026} and it[ID['G']].get('vorwoche') == {'std': alt['G']} and it[ID['U']].get('vorwoche') == {'std': alt['U']}
-      and 'vorwoche' not in it['neu1'] and sum(1 for x in pub['items'] if 'vorwoche' in x) == len(pub['items']) - 1, (pub['meta'].get('vorwoche'), it[ID['G']].get('vorwoche')))
-check('… Kundenangebote nur, wo sie abweichen (klein): nur Artikel D mit eigenen Einträgen für A und B',
-      abw == [ID['D']] and it[ID['D']]['vorwoche'] == {'std': alt['D'], 'kunde-a': 20.0, 'kunde-b': 30.0}, (abw, it[ID['D']].get('vorwoche')))
 d0 = A.call('draft')[1]
 check('… nicht im Entwurf weitergetragen (clean_model verwirft die Felder)', not d0.get('draft') or all('vorwoche' not in x for x in d0['draft']['items']))
 
@@ -119,33 +133,38 @@ check('ohne Parameter: keine „vorwoche“, Artikel ohne Vergleichsfelder, kein
       st == 200 and 'vorwoche' not in ohne and 'vorwoche' not in roh0, [k for k in ohne])
 st, mit, roh1 = P.call('offer&vergleich=vorwoche', raw=True)
 vw = mit.get('vorwoche') or {}
-check('öffentliches Wochenangebot mit vergleich=vorwoche: nur {kw, jahr, preise}, KW 43',
-      st == 200 and set(vw) == {'kw', 'jahr', 'preise'} and vw['kw'] == 43 and vw['jahr'] == 2026, vw.keys())
-pr = vw.get('preise', {})
-check('… Preise der Vorwoche: G, T, U, D mit dem Wochenpreis der KW 43, neuer Artikel fehlt (neu)',
-      pr.get(ID['G']) == alt['G'] and pr.get(ID['T']) == alt['T'] and pr.get(ID['U']) == alt['U'] and pr.get(ID['D']) == alt['D'] and 'neu1' not in pr, {k: pr.get(v) for k, v in ID.items()})
-check('GR-002: öffentlich keine Kundenpreise (20/30 von A/B) und keine Angebotskennungen der Kunden', 20.0 not in pr.values() and 30.0 not in pr.values()
-      and 'kunde-a' not in roh1 and 'kunde-b' not in roh1)
-check('GR-001/GR-008: Vergleich ohne Mengen, Chargen, MHD, EK – nur Zahlen je Artikel-ID',
-      all(v is None or isinstance(v, (int, float)) for v in pr.values()) and not re.search(r'"(kg|menge|mhd|charge|lot|ek|einkauf|bestand)"', roh1, re.I)
+check('öffentliches Wochenangebot mit vergleich=vorwoche: nur {kw, jahr, aenderungen}, KW 43',
+      st == 200 and set(vw) == {'kw', 'jahr', 'aenderungen'} and vw['kw'] == 43 and vw['jahr'] == 2026, vw.keys())
+ae = vw.get('aenderungen', {})
+check('… nur Änderungen: G ▼ 2,00, T ▲ 1,00 (umbenannt, Zuordnung über die Art.-Nr. trotz neuer IDs), N neu, X neu (in KW 43 im Wochenangebot ausgeblendet); U und D unverändert fehlen',
+      ae == {ID['G']: RUNTER('G', -2.0), ID['T']: {'art': 'teurer', 'd': 1.0, 'alt': alt['T']}, 'neu1': NEU, ID['X']: NEU}, ae)
+check('GR-002: öffentlich keine Kundenpreise (20/30 von A/B) und keine Angebotskennungen der Kunden', all(x.get('alt') not in (20.0, 30.0, 10.0) for x in ae.values())
+      and 'kunde-a' not in roh1 and 'kunde-b' not in roh1 and 'kunde-h' not in roh1)
+check('GR-001/GR-008: Vergleich ohne Mengen, Chargen, MHD, EK – je Artikel nur Art, Differenz und Vorwochenpreis',
+      all(set(x) <= {'art', 'd', 'alt'} for x in ae.values()) and not re.search(r'"(kg|menge|mhd|charge|lot|ek|einkauf|bestand)"', roh1, re.I)
       and all('vorwoche' not in x and 'variants' not in x for x in mit['offer']['items']))
 st, a, _ = KA.call('offer&angebot=kunde-a&vergleich=vorwoche', raw=True)
-check('Kundenangebot A: Vorwochenpreis von D ist A-Preis 20,00 (nicht der Wochenpreis), übrige wie das Wochenangebot',
-      st == 200 and a['vorwoche']['preise'].get(ID['D']) == 20.0 and a['vorwoche']['preise'].get(ID['G']) == alt['G'], a.get('vorwoche', {}).get('preise', {}).get(ID['D']))
+aa = (a.get('vorwoche') or {}).get('aenderungen', {})
+check('Kundenangebot A gegen sein eigenes Angebot der Vorwoche: D ▼ 1,00 gegen den A-Preis 20,00, X unverändert (bei A sichtbar), G wie im Wochenangebot',
+      st == 200 and aa.get(ID['D']) == {'art': 'guenstiger', 'd': -1.0, 'alt': 20.0} and ID['X'] not in aa and aa.get(ID['G']) == RUNTER('G', -2.0), aa)
 st, b = KB.call('offer&angebot=kunde-b&vergleich=vorwoche')
-check('Kundenangebot B: D unverändert 30,00 (B-Preis der Vorwoche)', st == 200 and b['vorwoche']['preise'].get(ID['D']) == 30.0)
+check('Kundenangebot B: D unverändert (B-Preis 30,00 in beiden Wochen) fehlt', st == 200 and ID['D'] not in b['vorwoche']['aenderungen'])
+st, h = A.call('offer&angebot=kunde-h&vergleich=vorwoche')
+ah = (h.get('vorwoche') or {}).get('aenderungen', {})
+check('Kundenangebot mit eigener Liste H: G ▼ 1,00 gegen 10,00, N neu, Variante mit vorhandener Art.-Nr. neu, gleiche Bezeichnung ohne Art.-Nr. je Gruppe getrennt (OC1 ▼, OC2 unverändert), U unverändert',
+      st == 200 and ah == {ID['G']: {'art': 'guenstiger', 'd': -1.0, 'alt': 10.0}, 'neu1': NEU, 'k44var1': NEU, 'k44oc1': {'art': 'guenstiger', 'd': -1.0, 'alt': 7.0}}, ah)
 st, x, rx = KA.call('offer&angebot=kunde-b&vergleich=vorwoche', raw=True)
 check('Kunde A fragt Angebot B an: 403, keine Vorwoche, keine B-Preise', st == 403 and 'vorwoche' not in x and '30' not in rx, (st, rx[:200]))
 check('ohne Anmeldung Kundenangebot A mit Vergleich: 401', P.call('offer&angebot=kunde-a&vergleich=vorwoche')[0] == 401)
 check('unbekannter Wert vergleich=alles: kein Vergleich', 'vorwoche' not in P.call('offer&vergleich=alles')[1])
 st, pv = A.call('offer&draft=1&vergleich=vorwoche')
 check('Vorschau (Entwurf, Mitarbeiter): Vergleich wie beim Veröffentlichen (KW 43)', st == 200 and pv.get('preview') and pv['vorwoche']['kw'] == 43
-      and pv['vorwoche']['preise'].get(ID['G']) == alt['G'] and 'neu1' not in pv['vorwoche']['preise'], (st, (pv.get('vorwoche') or {}).get('kw')))
+      and pv['vorwoche']['aenderungen'] == ae, (st, (pv.get('vorwoche') or {}).get('kw')))
 check('Vorschau mit Vergleich ohne Anmeldung: 401/403', P.call('offer&draft=1&vergleich=vorwoche')[0] in (401, 403))
 
 # ---------- Versand ----------
 st, em = S.call('versand_empfaenger&art=woche')
-check('Versand: Empfänger nennen die Vergleichswoche (KW 43)', st == 200 and em.get('vorwoche') == {'kw': 43, 'jahr': 2026}, em.get('vorwoche'))
+check('Versand: Empfänger nennen die Vergleichswoche (KW 43)', st == 200 and em['woche'].get('vorwoche') == {'kw': 43, 'jahr': 2026}, em['woche'].get('vorwoche'))
 st, v0 = S.call('versand_vorschau', {'art': 'woche', 'id': kid['alpha']})
 st1, v1 = S.call('versand_vorschau', {'art': 'woche', 'id': kid['alpha'], 'preis': {'an': True, 'uebersicht': True, 'kurz': True}})
 check('Vorschau ohne Schalter: wie bisher (keine Übersicht, Links ohne vergleich)', st == 200 and 'vergleich=' not in v0['html'] and 'Veränderung zur' not in v0['html'])
@@ -155,6 +174,9 @@ check('Vorschau mit Schalter: Übersicht „▼ 2 günstiger · ▲ 1 teurer · 
       and 'vergleich=aenderungen' in h and 'Nur Änderungen ansehen' in h and '▼ 2,00' in h and '▼ 1,00' in h, re.sub(r'<[^>]+>', ' ', h)[:900])
 st2, v2 = S.call('versand_vorschau', {'art': 'woche', 'id': kid['alpha'], 'preis': {'an': 'ja', 'uebersicht': 1}})
 check('nur echte Wahrheitswerte: {an: "ja"} gilt als aus', st2 == 200 and 'vergleich=' not in v2['html'] and 'Veränderung zur' not in v2['html'])
+st4, v4 = O.call('versand_vorschau', {'art': 'woche', 'id': kid['alpha'], 'preis': {'an': True, 'uebersicht': True, 'kurz': True}})
+check('Versender ohne Zugang zum Angebot: Vorschau ohne Übersicht (keine Kundenpreise), mit Hinweis; Links mit Vergleich bleiben',
+      st4 == 200 and 'Veränderung zur' not in v4['html'] and '2,00' not in v4['html'] and 'vergleich=vorwoche' in v4['html'] and 'Zugang zum Angebot' in v4.get('hinweis', ''), (st4, v4.get('hinweis')))
 st3, v3 = S.call('versand_vorschau', {'art': 'woche', 'id': kid['alpha'], 'preis': {'an': True}})
 check('Schalter ohne Unterpunkte: nur Links mit Vergleich', st3 == 200 and 'vergleich=vorwoche' in v3['html'] and 'Veränderung zur' not in v3['html'] and 'vergleich=aenderungen' not in v3['html'])
 n0 = len(smtp.messages)
@@ -212,12 +234,10 @@ with sync_playwright() as p:
     s0 = satz(pg); zurueck(pg)
     laden(pg, '/?vergleich=vorwoche')
     z = {k: pg.evaluate(ZEILE, v) for k, v in ID.items()}
-    check('Angebotsansicht mit vergleich=vorwoche: G „▼ 2,00“, T „▲ 1,00“, N „neu“, U und D (Wochenangebot unverändert) ohne Hinweis',
-          z['G'] == 'vw-guenstiger|▼ 2,00' and z['T'] == 'vw-teurer|▲ 1,00' and z['N'] == 'vw-neu|neu' and z['U'] == '' and z['D'] == '', z)
+    check('Angebotsansicht mit vergleich=vorwoche: G „▼ 2,00“, T „▲ 1,00“, N und X „neu“, U und D (Wochenangebot unverändert) ohne Hinweis',
+          z['G'] == 'vw-guenstiger|▼ 2,00' and z['T'] == 'vw-teurer|▲ 1,00' and z['N'] == 'vw-neu|neu' and z['X'] == 'vw-neu|neu' and z['U'] == '' and z['D'] == '', z)
     leg = pg.locator('#list .al-head .vw-leg').inner_text()
     check('… Legende im Kopf „Veränderung zur KW 43: ▼ günstiger ▲ teurer neu“', 'Veränderung zur KW 43' in leg and '▼ günstiger' in leg and '▲ teurer' in leg and 'neu' in leg, leg)
-    farbe = pg.evaluate("() => ['guenstiger', 'teurer', 'neu'].map((a) => getComputedStyle(document.querySelector('#list tr.row .vw-' + a)).color)")
-    check('… Farben: günstiger #1f5a3c, teurer #8c1d2c, neu #7a5418', farbe == ['rgb(31, 90, 60)', 'rgb(140, 29, 44)', 'rgb(122, 84, 24)'], farbe)
     shot(pg, SH + '/preisaenderung-1280.png')
     s1 = satz(pg)
     shot(pg.locator('#print-root .pl-page').first, SH + '/preisaenderung-druck-s1.png')
@@ -225,23 +245,23 @@ with sync_playwright() as p:
           s1['seiten'] == s0['seiten'] and s1['stufe'] == s0['stufe'] and s1['fuell'] == s0['fuell'] and s1['hoehen'] == s0['hoehen'] and s1['zeilen'] == s0['zeilen'],
           (s0['seiten'], s1['seiten'], s0['stufe'], s1['stufe'], s0['fuell'], s1['fuell']))
     vws = s1['vw']
-    check('Druck: Hinweise an G, T, N, kleiner als die Zeilenschrift (etwa 75 %), ganz in der Zelle, nur Text (Verlauf nur in der Zeilenfarbe)',
-          len(vws) == 3 and all(v['innen'] and 0.7 <= v['anteil'] <= 0.8 for v in vws) and sorted(v['text'] for v in vws) == sorted(['▼ 2,00', '▲ 1,00', 'neu']), vws)
+    check('Druck: Hinweise an G, T, N, X, kleiner als die Zeilenschrift (etwa 75 %), ganz in der Zelle',
+          len(vws) == 4 and all(v['innen'] and 0.7 <= v['anteil'] <= 0.8 for v in vws) and sorted(v['text'] for v in vws) == sorted(['▼ 2,00', '▲ 1,00', 'neu', 'neu']), vws)
     check('Druck: Legende im Kopf neben „Seite 1 von …“', 'Veränderung zur KW 43' in s1['kopf'] and 'Seite 1 von' in s1['kopf'], s1['kopf'])
     zurueck(pg)
     laden(pg, '/?vergleich=aenderungen')
     ids = pg.evaluate("() => [...document.querySelectorAll('#list .al-band tr.row')].map((r) => r.dataset.id)")
-    check('Kurzfassung „Nur Änderungen“: nur G, T und N (geändert oder neu)', sorted(ids) == sorted([ID['G'], ID['T'], 'neu1']) and 'Nur Änderungen zur KW 43' in pg.locator('.vw-leg').first.inner_text(), ids)
+    check('Kurzfassung „Nur Änderungen“: nur G, T, N und X (geändert oder neu)', sorted(ids) == sorted([ID['G'], ID['T'], 'neu1', ID['X']]) and 'Nur Änderungen zur KW 43' in pg.locator('.vw-leg').first.inner_text(), ids)
     s2 = satz(pg)
-    check('… Druck der Kurzfassung: eine Seite mit den drei Artikeln', s2['seiten'] == 1 and s2['zeilen'] == 3, (s2['seiten'], s2['zeilen']))
+    check('… Druck der Kurzfassung: eine Seite mit den vier Artikeln', s2['seiten'] == 1 and s2['zeilen'] == 4, (s2['seiten'], s2['zeilen']))
     shot(pg.locator('#print-root .pl-page').first, SH + '/preisaenderung-druck-aenderungen.png')
     zurueck(pg)
     # Handy: Karten mit Pille unter dem Preis
     m390 = br.new_context(viewport={'width': 390, 'height': 844}, color_scheme='light', is_mobile=True, has_touch=True)
     h = m390.new_page(); h.on('pageerror', lambda ex: errors.append(str(ex)))
     h.goto(BASE + '/?vergleich=vorwoche#ansicht=karten'); h.wait_for_selector('#list .card')
-    pille = h.evaluate(f"""() => {{ const c = document.querySelector('#list .card[data-id="{ID['G']}"] .vw-pille'); return c ? [c.textContent, getComputedStyle(c).backgroundColor] : null; }}""")
-    check('390 px, Karten: Pille „▼ 2,00“ mit heller Fläche unter dem Preis, Legende über der Liste', pille and '▼ 2,00' in pille[0] and pille[1] == 'rgb(230, 241, 234)'
+    pille = h.evaluate(f"""() => {{ const c = document.querySelector('#list .card[data-id="{ID['G']}"] .price .vw'); return c ? [c.textContent, c.className] : null; }}""")
+    check('390 px, Karten: Pille „▼ 2,00“ (günstiger) unter dem Preis, Legende über der Liste', pille and '▼ 2,00' in pille[0] and 'vw-pille' in pille[1] and 'vw-guenstiger' in pille[1]
           and h.locator('.vw-leiste').count() == 1 and h.evaluate('document.documentElement.scrollWidth <= 390'), pille)
     h.evaluate(f"document.querySelector('#list .card[data-id=\"{ID['G']}\"]').scrollIntoView()")
     shot(h, SH + '/preisaenderung-390-karten.png')
@@ -268,7 +288,9 @@ with sync_playwright() as p:
     fr = drucke(lambda: a.click('#btn-drucken'))
     check('„Drucken“ druckt wie bisher ohne Preisänderung', 'vergleich' not in fr.url and fr.evaluate("document.querySelectorAll('#print-root .vw').length") == 0, fr.url)
     a.wait_for_function("!document.querySelector('#btn-drucken').disabled")
+    a.click('#btn-more'); a.wait_for_selector('#menu-more:not([hidden])')
     a.click('#btn-drucken-zusatz')
+    check('Pfeil „Zusatz“ schließt das offene Menü „⋯“', a.evaluate("document.querySelector('#menu-more').hidden"))
     menue = a.evaluate("() => ({ offen: !document.querySelector('#menu-drucken').hidden, punkte: [...document.querySelectorAll('#menu-drucken [data-druck]')].map((b) => b.textContent.trim()), expanded: document.querySelector('#btn-drucken-zusatz').getAttribute('aria-expanded') })")
     check('Pfeil neben „Drucken“ öffnet das Menü „Zusatz“ mit „Mit Preisänderung drucken“ und „Nur Änderungen drucken“',
           menue['offen'] and menue['punkte'] == ['Mit Preisänderung drucken', 'Nur Änderungen drucken'] and menue['expanded'] == 'true', menue)
@@ -276,11 +298,11 @@ with sync_playwright() as p:
     fr = drucke(lambda: a.click('#menu-drucken [data-druck="vorwoche"]'))
     n = fr.evaluate("document.querySelectorAll('#print-root td.c-name > .vw').length")
     check('„Mit Preisänderung drucken“: Entwurf mit vergleich=vorwoche, Hinweise in der Druckfassung, Menü wieder zu',
-          'vergleich=vorwoche' in fr.url and 'vorschau' in fr.url and n == 3 and a.evaluate("document.querySelector('#menu-drucken').hidden"), (fr.url, n))
+          'vergleich=vorwoche' in fr.url and 'vorschau' in fr.url and n == 4 and a.evaluate("document.querySelector('#menu-drucken').hidden"), (fr.url, n))
     a.wait_for_function("!document.querySelector('#btn-drucken').disabled")
     a.click('#btn-drucken-zusatz')
     fr = drucke(lambda: a.click('#menu-drucken [data-druck="aenderungen"]'))
-    check('„Nur Änderungen drucken“: nur die drei geänderten/neuen Artikel', 'vergleich=aenderungen' in fr.url and fr.evaluate("document.querySelectorAll('#print-root .al-band tr.row').length") == 3, fr.url)
+    check('„Nur Änderungen drucken“: nur die vier geänderten/neuen Artikel', 'vergleich=aenderungen' in fr.url and fr.evaluate("document.querySelectorAll('#print-root .al-band tr.row').length") == 4, fr.url)
 
     # ---------- Versand: Fenster „Wochenangebot senden“ mit Zusatz ----------
     vs = ctx.new_page(); vs.on('pageerror', lambda ex: errors.append(str(ex)))
@@ -303,6 +325,37 @@ with sync_playwright() as p:
     vs.click('#vs-send'); vs.wait_for_selector('#dlg-send[open] #send-preis')
     check('… erneut geöffnet: wieder aus (nicht gemerkt)', not vs.is_checked('#send-preis'))
     br.close()
+
+# ---------- später angelegtes Angebot: kein Vergleich (nie die Preise des Wochenangebots) ----------
+cur = A.call('offers')[1]
+assert A.call('offers_save', {'rev': cur['rev'], 'offers': cur['offers'] + [{'id': 'kunde-spaet', 'name': 'Angebot später', 'fallback': 'standard'}]})[0] == 200
+st, sp = A.call('offer&angebot=kunde-spaet&vergleich=vorwoche')
+check('Angebot nach dem Veröffentlichen angelegt: kein Vergleich (null), Angebot selbst da', st == 200 and sp.get('vorwoche', 'fehlt') is None and sp['offer']['items'], (st, sp.get('vorwoche', 'fehlt')))
+
+# ---------- Veröffentlichen scheitert nicht an einer kaputten Vorwoche ----------
+storage_write('angebot-woche/2026-44', {'format': 1, 'woche': '2026-44', 'stand': '9999-12-31T00:00:00Z', 'quelle': 'veroeffentlichung', 'angebote': None,
+                                         'modell': {'meta': {'week': 44, 'year': 2026}, 'groups': [], 'items': ['kaputt']}})
+m3 = deepcopy(A.call('draft')[1].get('published'))
+m3['meta']['week'] = 45
+d = A.call('draft')[1]
+st, r = A.call('publish', {'model': m3, 'revision': d['revision']})
+check('KW 45 mit kaputter Vorwoche: veröffentlicht (200), ohne Vergleich', st == 200 and P.call('offer&vergleich=vorwoche')[1].get('vorwoche', 'fehlt') is None, (st, r))
+with sync_playwright() as p:
+    br = p.chromium.launch()
+    pg = br.new_page(); pg.on('pageerror', lambda ex: errors.append(str(ex)))
+    pg.goto(BASE + '/?vergleich=aenderungen'); pg.wait_for_selector('#list .empty')
+    txt = pg.locator('#list').inner_text()
+    check('„Nur Änderungen“ ohne Vorwoche: Hinweis statt des ganzen Angebots', 'keinen Vergleich mit der Vorwoche' in txt and pg.locator('#list tr.row, #list .card').count() == 0, txt[:200])
+    br.close()
+
+# ---------- Jahreswechsel: KW 1/2027 vergleicht mit KW 53/2026 ----------
+for wo, ja in ((53, 2026), (1, 2027)):
+    m4 = deepcopy(A.call('draft')[1].get('published'))
+    m4['meta']['week'], m4['meta']['year'] = wo, ja
+    st, r = A.call('publish', {'model': m4, 'revision': A.call('draft')[1]['revision']})
+    assert st == 200, r
+vj = P.call('offer&vergleich=vorwoche')[1].get('vorwoche') or {}
+check('Jahreswechsel: KW 1/2027 vergleicht mit KW 53/2026 (ISO-Wochen), keine Änderungen', vj.get('kw') == 53 and vj.get('jahr') == 2026 and vj.get('aenderungen') == {}, vj)
 
 check('keine JavaScript-Fehler', not errors, errors[:3])
 smtp.close()

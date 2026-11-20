@@ -21,10 +21,7 @@ declare(strict_types=1);
    Definition, wenn die Ablage sie kennt, sonst mit der heutigen. Sonderposten bleiben sichtbar, auch wenn sie heute
    ausverkauft sind (der Bestand von damals ist nicht bekannt).
    Die Ablage ist intern (regeln/datenverantwortung.toml): die Kundenseite liest sie nie. Ältere Fassungen ignorieren sie.
-   Preisänderung zur Vorwoche (Inhaber 20.11.2026, Abschnitt unten): angebot_vorwoche_stempeln() legt beim Veröffentlichen
-   die Preise der Vorwoche je Angebot als Schnappschuss ins Modell (meta.vorwoche, Artikelfeld vorwoche), angebot_vorwoche()
-   liefert daraus nur die Preise des angefragten Angebots (Aktion offer mit vergleich=vorwoche, auch auf der Kundenseite),
-   angebot_vorwoche_uebersicht() die Zähler und größten Veränderungen für die Wochen-Mail.
+   Die Preisänderung zur Vorwoche (module/angebot/vorwoche.php) liest die Vorwoche über angebot_woche_modell.
    Schreibt nur eigene Dokumente (angebot-woche/*), liest angebot, angebote, versionen/*, historie/*. */
 if (!defined('WA_API')) { http_response_code(404); exit; }   // nur über api/index.php nutzbar
 
@@ -45,6 +42,13 @@ function angebot_woche_definition(array $o): array
     if (is_string($o['art'] ?? null) && $o['art'] !== '') $d['art'] = $o['art'];
     if (is_array($o['gueltig'] ?? null)) $d['gueltig'] = $o['gueltig'];
     return $d;
+}
+/* Damalige Angebotsdefinitionen einer Wochenablage (null = unbekannt) als [ID => Definition] */
+function angebot_woche_damals(?array $defs): array
+{
+    $out = [];
+    foreach ($defs ?? [] as $d) if (is_array($d) && isset($d['id'])) $out[(string)$d['id']] = angebot_woche_definition($d);
+    return $out;
 }
 /* Angebotsdefinitionen als Schnappschuss (GR-106) */
 function angebot_woche_definitionen(): array
@@ -148,8 +152,7 @@ function angebot_woche(string $woche, string $oid): array
     }
     if (!is_array($modell)) { $modell = null; $quelle = null; }
     // Definition des Angebots: damals (Ablage), sonst heute; gab es das Angebot in dieser Woche nicht, kein Angebot (fehlt)
-    $damals = [];
-    foreach (is_array($defs) ? $defs : [] as $d) if (is_array($d) && isset($d['id'])) $damals[(string)$d['id']] = angebot_woche_definition($d);
+    $damals = angebot_woche_damals($defs);
     $heute = offer_def($oid);
     $fehlt = false; $einstellung = 'heute';
     if ($oid === OFFER_STD) $def = $heute;
@@ -167,126 +170,4 @@ function angebot_woche(string $woche, string $oid): array
             'quelle' => $offer ? $quelle : null, 'stand' => $offer ? ($offer['publishedAt'] ?? null) : null, 'artikel' => $offer ? count($offer['items']) : 0,
             'einstellung' => $einstellung, 'fehlt' => $fehlt, 'offer' => $offer, 'vorige' => $vorige, 'naechste' => $naechste, 'erste' => $verz['wochen'][0] ?? null,
             'angebote' => $angebote];
-}
-
-/* ---------- Preisänderung zur Vorwoche (Inhaber 20.11.2026: Angebot „mit Preisänderung“ verschicken und drucken) ----------
-   Vorwoche = die KW vor meta.week/year des Angebots, Stand aus angebot_woche_modell (Wochenablage, aktuelles Angebot,
-   versionen/* – nie der Preisverlauf). Weil die Kundenseite nach der Datentrennung keine internen Dokumente lesen kann, wird der
-   Vergleich beim Veröffentlichen (angebot_veroeffentlichen, Mitarbeiterseite) als Schnappschuss ins Modell geschrieben (GR-106):
-   meta.vorwoche = {kw, jahr} und je Artikel vorwoche = {Angebots-ID: Preis | null (ohne Preis) | false (nicht im Angebot)}.
-   Der Eintrag „std“ gilt für jedes Angebot ohne eigenen Eintrag; ein Kundenangebot bekommt nur einen, wenn er abweicht (klein).
-   Fehlt der Eintrag ganz, war der Artikel neu. Beide Felder liefert offer_resolve nie aus (Artikel nur über die Positivliste
-   ARTIKEL_FELDER_AUSGELIEFERT – auch in älteren Fassungen –, meta.vorwoche entfernt), clean_model verwirft sie (kein Weitertragen
-   in den Entwurf). Aufgelöst wird je Angebot mit dessen damaliger Definition (sonst der heutigen), zugeordnet über Art.-Nr.,
-   Bezeichnung und Gruppe wie diffOffers im Editor (Artikel-IDs aus dem Excel-Import sind Zellpositionen, nicht stabil). */
-
-/* KW vor der Woche des Modells als [kw, jahr], sonst null */
-function angebot_vorwoche_kw(array $m): ?array
-{
-    if (!angebot_woche_kw($m)) return null;
-    $d = (new DateTimeImmutable())->setISODate($m['meta']['year'], $m['meta']['week'])->modify('-7 days');
-    return [(int)$d->format('W'), (int)$d->format('o')];
-}
-
-/* Vergleichsschlüssel eines aufgelösten Artikels, vom genauesten zum gröbsten (null = trifft nicht zu) */
-function angebot_vorwoche_schluessel(array $it, array $gname): array
-{
-    $n = mb_strtolower(preg_replace('/\s+/u', ' ', trim((string)($it['name'] ?? ''))));
-    $c = trim((string)($it['code'] ?? ''));
-    $g = mb_strtolower(trim((string)($gname[$it['groupId'] ?? ''] ?? '')));
-    return $c !== '' ? ["cng:$c|$n|$g", "cn:$c|$n", "c:$c", null] : [null, null, null, "n:$n"];
-}
-/* Index der Vorwoche eines Angebots: je Stufe Schlüssel → Preis|null; mehrdeutige Schlüssel → 'mehrdeutig' */
-function angebot_vorwoche_index(array $offer): array
-{
-    $gname = []; foreach ($offer['groups'] ?? [] as $g) $gname[$g['id']] = $g['name'];
-    $idx = [[], [], [], []];
-    foreach ($offer['items'] as $it) {
-        $p = $it['price'] ?? null;
-        $wert = is_array($p) && ($p['status'] ?? '') === 'value' ? (float)$p['value'] : null;
-        foreach (angebot_vorwoche_schluessel($it, $gname) as $i => $k) if ($k !== null) $idx[$i][$k] = array_key_exists($k, $idx[$i]) ? 'mehrdeutig' : $wert;
-    }
-    return $idx;
-}
-/* Preis der Vorwoche eines Artikels: Zahl, null (damals ohne Preis) oder false (damals nicht im Angebot) */
-function angebot_vorwoche_finden(array $idx, array $it, array $gname)
-{
-    foreach (angebot_vorwoche_schluessel($it, $gname) as $i => $k)
-        if ($k !== null && array_key_exists($k, $idx[$i]) && $idx[$i][$k] !== 'mehrdeutig') return $idx[$i][$k];
-    return false;
-}
-
-/* Beim Veröffentlichen (unter der Sperre „entwurf“, vor dem Schreiben): Schnappschuss der Vorwoche ins Modell. Alte Einträge
-   werden immer entfernt; gibt es die Vorwoche nicht, bleibt das Modell ohne Vergleich. */
-function angebot_vorwoche_stempeln(array $model): array
-{
-    unset($model['meta']['vorwoche']);
-    foreach ($model['items'] ?? [] as $i => $it) unset($model['items'][$i]['vorwoche']);
-    $vk = angebot_vorwoche_kw($model);
-    [$alt, , $defs] = $vk ? angebot_woche_modell(history_id($vk[0], $vk[1])) : [null, null, null];
-    if (!is_array($alt) || !is_array($alt['items'] ?? null)) return $model;
-    $damals = [];
-    foreach (is_array($defs) ? $defs : [] as $d) if (is_array($d) && isset($d['id'])) $damals[(string)$d['id']] = angebot_woche_definition($d);
-    $pos = []; foreach ($model['items'] as $i => $it) $pos[(string)$it['id']] = $i;
-    $gname = []; foreach ($model['groups'] ?? [] as $g) $gname[$g['id']] = $g['name'];
-    // Wochenangebot: jeder Artikel des Modells (auch die dort ausgeblendeten – Grundlage für die Angebote ohne eigenen Eintrag)
-    $std = angebot_vorwoche_index(offer_resolve($alt, offer_def(OFFER_STD), false));
-    foreach ($model['items'] as $i => $it) { $v = angebot_vorwoche_finden($std, $it, $gname); if ($v !== false) $model['items'][$i]['vorwoche'] = [OFFER_STD => $v]; }
-    foreach (offers_load()['offers'] as $o) {
-        if (!is_array($o) || !isset($o['id'])) continue;
-        $def = angebot_woche_definition($o);
-        $idx = angebot_vorwoche_index(offer_resolve($alt, $damals[$def['id']] ?? $def, false));
-        $jetzt = offer_resolve($model, $def, false);
-        $jg = []; foreach ($jetzt['groups'] as $g) $jg[$g['id']] = $g['name'];
-        foreach ($jetzt['items'] as $it) {
-            $i = $pos[(string)$it['id']] ?? null;
-            if ($i === null) continue;
-            $v = angebot_vorwoche_finden($idx, $it, $jg);
-            $m = $model['items'][$i]['vorwoche'] ?? [];
-            $basis = array_key_exists(OFFER_STD, $m) ? $m[OFFER_STD] : false;   // null = damals ohne Preis (nicht „??“: null ≠ fehlt)
-            if ($v !== $basis) $model['items'][$i]['vorwoche'][$def['id']] = $v;
-        }
-    }
-    $model['meta']['vorwoche'] = ['kw' => $vk[0], 'jahr' => $vk[1]];
-    return $model;
-}
-
-/* Vergleich für ein aufgelöstes Angebot ($offer = offer_resolve($model, $def)): {kw, jahr, preise: {Artikel-ID: Preis|null}}
-   – nur Artikel dieses Angebots, nur Preise dieses Angebots (GR-002); fehlt eine ID, ist der Artikel neu. Ohne Vorwoche
-   oder bei Einzelangeboten null. Liest nur das Modell (auch auf der Kundenseite nutzbar). */
-function angebot_vorwoche(array $model, array $def, array $offer): ?array
-{
-    $vw = $model['meta']['vorwoche'] ?? null;
-    if (!is_array($vw) || !is_int($vw['kw'] ?? null) || !is_int($vw['jahr'] ?? null) || strncmp((string)$def['id'], 'e-', 2) === 0) return null;
-    $da = []; foreach ($offer['items'] as $it) $da[(string)$it['id']] = true;
-    $preise = [];
-    foreach ($model['items'] ?? [] as $it) {
-        $id = (string)($it['id'] ?? '');
-        if (!isset($da[$id])) continue;
-        $m = is_array($it['vorwoche'] ?? null) ? $it['vorwoche'] : [];
-        $v = array_key_exists($def['id'], $m) ? $m[$def['id']] : (array_key_exists(OFFER_STD, $m) ? $m[OFFER_STD] : false);
-        if ($v !== false) $preise[$id] = is_int($v) || is_float($v) ? (float)$v : null;
-    }
-    return ['kw' => $vw['kw'], 'jahr' => $vw['jahr'], 'preise' => (object)$preise];
-}
-
-/* Veränderungen eines aufgelösten Angebots gegen die Vorwoche (E-Mail „mit Preisänderung“): Zähler und die größten
-   Veränderungen [{code, name, alt, neu, diff}] nach Betrag – dieselbe Regel wie preisVergleich() in assets/frontend.js */
-function angebot_vorwoche_uebersicht(array $offer, array $vw, int $top = 5): array
-{
-    $n = ['guenstiger' => 0, 'teurer' => 0, 'neu' => 0];
-    $liste = [];
-    $preise = (array)$vw['preise'];
-    foreach ($offer['items'] as $it) {
-        $id = (string)$it['id'];
-        if (!array_key_exists($id, $preise)) { $n['neu']++; continue; }
-        $neu = ($it['price']['status'] ?? '') === 'value' ? (float)$it['price']['value'] : null;
-        if ($neu === null || $preise[$id] === null) continue;
-        $d = round($neu - $preise[$id], 2);
-        if ($d == 0) continue;
-        $n[$d < 0 ? 'guenstiger' : 'teurer']++;
-        $liste[] = ['code' => (string)($it['code'] ?? ''), 'name' => (string)$it['name'], 'alt' => $preise[$id], 'neu' => $neu, 'diff' => $d];
-    }
-    usort($liste, fn($a, $b) => abs($b['diff']) <=> abs($a['diff']));
-    return $n + ['top' => array_slice($liste, 0, $top)];
 }

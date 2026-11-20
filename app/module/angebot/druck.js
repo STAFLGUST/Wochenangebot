@@ -80,7 +80,7 @@
   if (zBtn && zMenu) {
     const zeigen = (offen) => {
       zMenu.hidden = !offen; zBtn.setAttribute('aria-expanded', String(offen));
-      if (offen) { const m = $('#menu-more'); if (m && !m.hidden) { m.hidden = true; $('#btn-more').setAttribute('aria-expanded', 'false'); } zMenu.querySelector('button').focus(); }
+      if (offen) zMenu.querySelector('button').focus();
     };
     zBtn.addEventListener('click', () => zeigen(zMenu.hidden));
     document.addEventListener('click', (e) => { if (!zMenu.hidden && !e.target.closest('#druck-zusatz')) zeigen(false); });
