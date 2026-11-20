@@ -626,8 +626,11 @@ Leiste senkrecht, schmal ist sie eine waagerechte Spur. Mit `body.bereich-import
     Bildschirm sieht man das nicht. `tests/e2e/test_druck.py` liest deshalb den Text aus dem gedruckten PDF.
   - **Hochformat** („Kompakt“, „Tabelle“): Regeln in `app.css`, Fußzeile einmal am Ende (`AngebotDruck.fussHTML`).
 - **Preisänderung zur Vorwoche** (Inhaber 20.11.2026, Zusatzfunktion – ohne Parameter alles wie bisher): `?vergleich=vorwoche`
-  lädt `offer` mit `vergleich=vorwoche` (Antwort `vorwoche = {kw, jahr, aenderungen: {Artikel-ID: {art, d?, alt?}}}`, nur
-  geänderte und neue Artikel – die Regel rechnet nur der Server, `module/angebot/vorwoche.php`), `?vergleich=aenderungen` zeigt
+  lädt `offer` mit `vergleich=vorwoche` (Antwort `vorwoche = {kw, jahr, stufen, aenderungen: {Artikel-ID: {art, d?, alt?, p?, stufe?}}}`,
+  nur geänderte und neue Artikel – die Regel rechnet nur der Server, `module/angebot/vorwoche.php`), `?vergleich=pfeil` lädt
+  dasselbe, zeigt aber statt „▼ 2,00“ nur einen Pfeil (Inline-SVG, `currentColor`, je `stufe` 30°/60°/90° gegen die Waagerechte
+  geneigt, teurer nach oben; Prozent nur im `title`/`sr-only`; Legende „↑ teurer ↓ günstiger · steiler = stärker (ab 2 % /
+  ab 5 %)“ mit den Grenzen aus `stufen`), `?vergleich=aenderungen` zeigt
   dieselbe Ansicht nur mit diesen Artikeln („Nur Änderungen“; ohne Vorwoche bzw. ohne Änderung ein Hinweis statt des ganzen
   Angebots). `assets/angebot-vorwoche.js` (`window.Vorwoche`) schlägt nur nach: `Vorwoche.html(it)` ist der Hinweis
   „▼ 2,00“ / „▲ 1,00“ / „neu“, `Vorwoche.legende()` die Legende – beide `''` ohne Vergleich (Farben `--vw-g`/`--vw-t`/`--vw-n`
@@ -637,9 +640,11 @@ Leiste senkrecht, schmal ist sie eine waagerechte Spur. Mit `body.bereich-import
   letzten Zeile, ~75 % der Zeilenschrift, nur Text (ein Verlauf in der Zeilenfarbe blendet ein überdecktes Namensende aus) – er
   nimmt keinen Platz, Messung, Seiten und Zeilenhöhen bleiben dieselben (Test `preisaenderung`); Legende in der Kopfzeile neben
   „Seite x von y“ (der Kopf wird nicht höher). Im Eingabebereich druckt „Drucken“ wie bisher; der Pfeil daneben
-  (`#btn-drucken-zusatz`, Menü `#menu-drucken`) druckt mit `vergleich=vorwoche` bzw. `aenderungen`. Im Versand (Wochenangebot)
+  (`#btn-drucken-zusatz`, Menü `#menu-drucken`) druckt mit `vergleich=vorwoche`, `pfeil` („… (nur Pfeil)“) bzw. `aenderungen`. Im Versand (Wochenangebot)
   schaltet der Zusatz „Preisänderung zur Vorwoche zeigen“ (Vergleichswoche `woche.vorwoche` aus `versand_empfaenger`) die Links,
-  die Übersicht in der E-Mail und den Link „Nur Änderungen“ – nur für diesen
+  die Übersicht in der E-Mail und den Link „Nur Änderungen“; die Auswahl „Darstellung: Betrag | Nur Pfeil“ setzt
+  `preis.darstellung` (Server: nur `betrag`/`pfeil`, `mail_preis_wahl`) – „Nur Pfeil“ ändert nur die Links (`vergleich=pfeil`),
+  Übersicht und „Nur Änderungen“ bleiben mit Beträgen – nur für diesen
   Versand, beim Öffnen immer aus.
 - **Wartung:** Kunden und Besucher sehen nur `renderWartung()`; angemeldete Mitarbeiter (`staff`) sehen das Angebot mit
   Banner (GR-009).

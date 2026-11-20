@@ -13,6 +13,9 @@ Zeilenschrift und innerhalb der Zelle; Karten am Handy (390 px) mit Pille; „An
 Menü „Zusatz“, das Menü „⋯“ schließt beim Öffnen; Versand: Vorschau und E-Mail mit Schalter (Übersicht, Links mit
 vergleich=vorwoche, „Nur Änderungen“), ohne Schalter wie bisher, nur echte Wahrheitswerte, Übersicht in der Vorschau nur mit
 Zugang zum Angebot, Protokoll „mit Preisänderung“; Fenster „Wochenangebot senden“ mit Zusatz; keine JavaScript-Fehler.
+Darstellung „nur Pfeil“ (Zusatzversion, Inhaber 20.11.2026): p (Prozent) und stufe 1–3 an den Grenzen 2 % und 5 % in beide
+Richtungen; ?vergleich=pfeil zeigt geneigte Pfeile (30°/60°/90°) ohne Beträge, Druck mit denselben Seiten und Zeilenhöhen wie ohne;
+Menü „Zusatz“ mit „(nur Pfeil)“; Versand mit Darstellung „Nur Pfeil“ → Links mit vergleich=pfeil, unbekannter Wert verworfen.
 Nur Testdaten (Seed-Angebot, erfundene Kunden)."""
 import json
 import re
@@ -123,6 +126,7 @@ ID['N'] = 'neu1'
 veroeffentlichen(m2)
 NEU = {'art': 'neu'}
 RUNTER = lambda k, d: {'art': 'guenstiger', 'd': d, 'alt': alt[k]}   # noqa: E731
+OHNE_PS = lambda ae: {k: {f: w for f, w in v.items() if f not in ('p', 'stufe')} for k, v in ae.items()}   # noqa: E731  p und stufe: Abschnitt „nur Pfeil“
 
 d0 = A.call('draft')[1]
 check('… nicht im Entwurf weitergetragen (clean_model verwirft die Felder)', not d0.get('draft') or all('vorwoche' not in x for x in d0['draft']['items']))
@@ -133,24 +137,24 @@ check('ohne Parameter: keine „vorwoche“, Artikel ohne Vergleichsfelder, kein
       st == 200 and 'vorwoche' not in ohne and 'vorwoche' not in roh0, [k for k in ohne])
 st, mit, roh1 = P.call('offer&vergleich=vorwoche', raw=True)
 vw = mit.get('vorwoche') or {}
-check('öffentliches Wochenangebot mit vergleich=vorwoche: nur {kw, jahr, aenderungen}, KW 43',
-      st == 200 and set(vw) == {'kw', 'jahr', 'aenderungen'} and vw['kw'] == 43 and vw['jahr'] == 2026, vw.keys())
+check('öffentliches Wochenangebot mit vergleich=vorwoche: nur {kw, jahr, stufen, aenderungen}, KW 43, Stufengrenzen 2 % und 5 %',
+      st == 200 and set(vw) == {'kw', 'jahr', 'stufen', 'aenderungen'} and vw['kw'] == 43 and vw['jahr'] == 2026 and vw['stufen'] == [2, 5], vw.keys())
 ae = vw.get('aenderungen', {})
 check('… nur Änderungen: G ▼ 2,00, T ▲ 1,00 (umbenannt, Zuordnung über die Art.-Nr. trotz neuer IDs), N neu, X neu (in KW 43 im Wochenangebot ausgeblendet); U und D unverändert fehlen',
-      ae == {ID['G']: RUNTER('G', -2.0), ID['T']: {'art': 'teurer', 'd': 1.0, 'alt': alt['T']}, 'neu1': NEU, ID['X']: NEU}, ae)
+      OHNE_PS(ae) == {ID['G']: RUNTER('G', -2.0), ID['T']: {'art': 'teurer', 'd': 1.0, 'alt': alt['T']}, 'neu1': NEU, ID['X']: NEU}, ae)
 check('GR-002: öffentlich keine Kundenpreise (20/30 von A/B) und keine Angebotskennungen der Kunden', all(x.get('alt') not in (20.0, 30.0, 10.0) for x in ae.values())
       and 'kunde-a' not in roh1 and 'kunde-b' not in roh1 and 'kunde-h' not in roh1)
-check('GR-001/GR-008: Vergleich ohne Mengen, Chargen, MHD, EK – je Artikel nur Art, Differenz und Vorwochenpreis',
-      all(set(x) <= {'art', 'd', 'alt'} for x in ae.values()) and not re.search(r'"(kg|menge|mhd|charge|lot|ek|einkauf|bestand)"', roh1, re.I)
+check('GR-001/GR-008: Vergleich ohne Mengen, Chargen, MHD, EK – je Artikel nur Art, Differenz, Vorwochenpreis, Prozent und Stufe',
+      all(set(x) <= {'art', 'd', 'alt', 'p', 'stufe'} for x in ae.values()) and not re.search(r'"(kg|menge|mhd|charge|lot|ek|einkauf|bestand)"', roh1, re.I)
       and all('vorwoche' not in x and 'variants' not in x for x in mit['offer']['items']))
 st, a, _ = KA.call('offer&angebot=kunde-a&vergleich=vorwoche', raw=True)
-aa = (a.get('vorwoche') or {}).get('aenderungen', {})
+aa = OHNE_PS((a.get('vorwoche') or {}).get('aenderungen', {}))
 check('Kundenangebot A gegen sein eigenes Angebot der Vorwoche: D ▼ 1,00 gegen den A-Preis 20,00, X unverändert (bei A sichtbar), G wie im Wochenangebot',
       st == 200 and aa.get(ID['D']) == {'art': 'guenstiger', 'd': -1.0, 'alt': 20.0} and ID['X'] not in aa and aa.get(ID['G']) == RUNTER('G', -2.0), aa)
 st, b = KB.call('offer&angebot=kunde-b&vergleich=vorwoche')
 check('Kundenangebot B: D unverändert (B-Preis 30,00 in beiden Wochen) fehlt', st == 200 and ID['D'] not in b['vorwoche']['aenderungen'])
 st, h = A.call('offer&angebot=kunde-h&vergleich=vorwoche')
-ah = (h.get('vorwoche') or {}).get('aenderungen', {})
+ah = OHNE_PS((h.get('vorwoche') or {}).get('aenderungen', {}))
 check('Kundenangebot mit eigener Liste H: G ▼ 1,00 gegen 10,00, N neu, Variante mit vorhandener Art.-Nr. neu, gleiche Bezeichnung ohne Art.-Nr. je Gruppe getrennt (OC1 ▼, OC2 unverändert), U unverändert',
       st == 200 and ah == {ID['G']: {'art': 'guenstiger', 'd': -1.0, 'alt': 10.0}, 'neu1': NEU, 'k44var1': NEU, 'k44oc1': {'art': 'guenstiger', 'd': -1.0, 'alt': 7.0}}, ah)
 st, x, rx = KA.call('offer&angebot=kunde-b&vergleich=vorwoche', raw=True)
@@ -179,6 +183,14 @@ check('Versender ohne Zugang zum Angebot: Vorschau ohne Übersicht (keine Kunden
       st4 == 200 and 'Veränderung zur' not in v4['html'] and '2,00' not in v4['html'] and 'vergleich=vorwoche' in v4['html'] and 'Zugang zum Angebot' in v4.get('hinweis', ''), (st4, v4.get('hinweis')))
 st3, v3 = S.call('versand_vorschau', {'art': 'woche', 'id': kid['alpha'], 'preis': {'an': True}})
 check('Schalter ohne Unterpunkte: nur Links mit Vergleich', st3 == 200 and 'vergleich=vorwoche' in v3['html'] and 'Veränderung zur' not in v3['html'] and 'vergleich=aenderungen' not in v3['html'])
+st5, v5 = S.call('versand_vorschau', {'art': 'woche', 'id': kid['alpha'], 'preis': {'an': True, 'uebersicht': True, 'kurz': True, 'darstellung': 'pfeil'}})
+h5 = v5.get('html', '')
+check('Darstellung „Nur Pfeil“: Links mit vergleich=pfeil, „Nur Änderungen“ und Übersicht weiter mit Beträgen',
+      st5 == 200 and 'vergleich=pfeil' in h5 and 'vergleich=vorwoche' not in h5 and 'vergleich=aenderungen' in h5 and '▼ 2,00' in h5, re.findall(r'vergleich=\w+', h5))
+st6, v6 = S.call('versand_vorschau', {'art': 'woche', 'id': kid['alpha'], 'preis': {'an': True, 'darstellung': 'pfeil&x=1'}})
+st7, v7 = S.call('versand_vorschau', {'art': 'woche', 'id': kid['alpha'], 'preis': {'darstellung': 'pfeil'}})
+check('unbekannte Darstellung verworfen (Betrag, vergleich=vorwoche); „Nur Pfeil“ ohne Schalter: Links ohne Vergleich',
+      st6 == 200 and 'vergleich=vorwoche' in v6['html'] and 'pfeil' not in v6['html'] and st7 == 200 and 'vergleich=' not in v7['html'])
 n0 = len(smtp.messages)
 st, r = S.call('versand_senden', {'art': 'woche', 'ids': [kid['alpha']], 'week': 44, 'year': 2026, 'preis': {'an': True, 'uebersicht': True}})
 st_b, r_b = S.call('versand_senden', {'art': 'woche', 'ids': [kid['beta']], 'week': 44, 'year': 2026})
@@ -292,13 +304,19 @@ with sync_playwright() as p:
     a.click('#btn-drucken-zusatz')
     check('Pfeil „Zusatz“ schließt das offene Menü „⋯“', a.evaluate("document.querySelector('#menu-more').hidden"))
     menue = a.evaluate("() => ({ offen: !document.querySelector('#menu-drucken').hidden, punkte: [...document.querySelectorAll('#menu-drucken [data-druck]')].map((b) => b.textContent.trim()), expanded: document.querySelector('#btn-drucken-zusatz').getAttribute('aria-expanded') })")
-    check('Pfeil neben „Drucken“ öffnet das Menü „Zusatz“ mit „Mit Preisänderung drucken“ und „Nur Änderungen drucken“',
-          menue['offen'] and menue['punkte'] == ['Mit Preisänderung drucken', 'Nur Änderungen drucken'] and menue['expanded'] == 'true', menue)
+    check('Pfeil neben „Drucken“ öffnet das Menü „Zusatz“: Mit Preisänderung · Mit Preisänderung (nur Pfeil) · Nur Änderungen',
+          menue['offen'] and menue['punkte'] == ['Mit Preisänderung drucken', 'Mit Preisänderung drucken (nur Pfeil)', 'Nur Änderungen drucken'] and menue['expanded'] == 'true', menue)
     shot(a, SH + '/preisaenderung-drucken-menue.png')
     fr = drucke(lambda: a.click('#menu-drucken [data-druck="vorwoche"]'))
     n = fr.evaluate("document.querySelectorAll('#print-root td.c-name > .vw').length")
     check('„Mit Preisänderung drucken“: Entwurf mit vergleich=vorwoche, Hinweise in der Druckfassung, Menü wieder zu',
           'vergleich=vorwoche' in fr.url and 'vorschau' in fr.url and n == 4 and a.evaluate("document.querySelector('#menu-drucken').hidden"), (fr.url, n))
+    a.wait_for_function("!document.querySelector('#btn-drucken').disabled")
+    a.click('#btn-drucken-zusatz')
+    fr = drucke(lambda: a.click('#menu-drucken [data-druck="pfeil"]'))
+    pf = fr.evaluate("() => ({ svg: document.querySelectorAll('#print-root td.c-name > .vw svg').length, text: [...document.querySelectorAll('#print-root td.c-name > .vw > [aria-hidden]')].map((x) => x.textContent.trim()) })")
+    check('„Mit Preisänderung drucken (nur Pfeil)“: vergleich=pfeil, Pfeile an G und T ohne Betrag, N und X „neu“',
+          'vergleich=pfeil' in fr.url and pf['svg'] == 2 and sorted(pf['text']) == ['', '', 'neu', 'neu'], (fr.url, pf))
     a.wait_for_function("!document.querySelector('#btn-drucken').disabled")
     a.click('#btn-drucken-zusatz')
     fr = drucke(lambda: a.click('#menu-drucken [data-druck="aenderungen"]'))
@@ -318,9 +336,19 @@ with sync_playwright() as p:
         vs.click('#send-prev')
     body = json.loads(rv.value.request.post_data or '{}')
     vs.wait_for_selector('#send-vorschau:not([hidden])')
-    check('… Vorschau schickt preis = {an, uebersicht, kurz} und zeigt die Übersicht', body.get('preis') == {'an': True, 'uebersicht': True, 'kurz': False}
+    check('… Vorschau schickt preis = {an, uebersicht, kurz, darstellung: betrag} und zeigt die Übersicht', body.get('preis') == {'an': True, 'uebersicht': True, 'kurz': False, 'darstellung': 'betrag'}
           and 'Veränderung zur KW 43' in vs.frame_locator('#send-frame').locator('body').inner_text(), body.get('preis'))
     shot(vs.locator('#dlg-send'), SH + '/preisaenderung-versand.png')
+    vs.check('#send-preis-pfeil')
+    vs.wait_for_selector('#send-vorschau[hidden]', state='attached')
+    with vs.expect_response(lambda r: 'versand_vorschau' in r.url) as rv:
+        vs.click('#send-prev')
+    body = json.loads(rv.value.request.post_data or '{}')
+    vs.wait_for_selector('#send-vorschau:not([hidden])')
+    check('… Darstellung „Nur Pfeil“: preis.darstellung = pfeil, Link in der Vorschau mit vergleich=pfeil',
+          (body.get('preis') or {}).get('darstellung') == 'pfeil' and vs.is_checked('#send-preis-pfeil')
+          and vs.frame_locator('#send-frame').locator('a[href*="vergleich=pfeil"]').count() >= 1, body.get('preis'))
+    shot(vs.locator('#dlg-send'), SH + '/preisaenderung-versand-pfeil.png')
     vs.keyboard.press('Escape')
     vs.click('#vs-send'); vs.wait_for_selector('#dlg-send[open] #send-preis')
     check('… erneut geöffnet: wieder aus (nicht gemerkt)', not vs.is_checked('#send-preis'))
@@ -356,6 +384,70 @@ for wo, ja in ((53, 2026), (1, 2027)):
     assert st == 200, r
 vj = P.call('offer&vergleich=vorwoche')[1].get('vorwoche') or {}
 check('Jahreswechsel: KW 1/2027 vergleicht mit KW 53/2026 (ISO-Wochen), keine Änderungen', vj.get('kw') == 53 and vj.get('jahr') == 2026 and vj.get('aenderungen') == {}, vj)
+
+# ---------- Darstellung „nur Pfeil“: Stufen an den Grenzen (unter 2 %, 2 bis unter 5 %, ab 5 %), Seite und Druck ----------
+GRENZ = {'g19': (9.81, -1.9, 1), 'g20': (9.80, -2.0, 2), 'g49': (9.51, -4.9, 2), 'g50': (9.50, -5.0, 3),
+         't19': (10.19, 1.9, 1), 't20': (10.20, 2.0, 2), 't49': (10.49, 4.9, 2), 't50': (10.50, 5.0, 3),
+         't196': (10.40, 2.0, 1, 10.20)}   # 10,20 → 10,40 = +1,96 %: angezeigt 2,0 %, Stufe aber am ungerundeten Wert → 1
+m5 = deepcopy(A.call('draft')[1].get('published'))
+m5['meta']['week'], m5['meta']['year'] = 2, 2027
+for n, k in enumerate(GRENZ):
+    m5['items'].insert(n, {'id': 'gr-' + k, 'code': f'9920{n + 1}', 'name': f'Grenztest {k}', 'category': 'Rind', 'origin': None, 'condition': 'frisch',
+                           'groupId': m5['groups'][0]['id'], 'price': VAL(GRENZ[k][3] if len(GRENZ[k]) > 3 else 10.0), 'altPrices': [], 'variants': {}})
+veroeffentlichen(m5)
+m6 = deepcopy(A.call('draft')[1].get('published'))
+m6['meta']['week'] = 3
+for it in m6['items']:
+    it.pop('vorwoche', None)
+    if it['id'].startswith('gr-'):
+        it['price'] = VAL(GRENZ[it['id'][3:]][0])
+veroeffentlichen(m6)
+ag = (P.call('offer&vergleich=vorwoche')[1].get('vorwoche') or {}).get('aenderungen', {})
+ist = {k[3:]: (v['art'], v.get('p'), v.get('stufe')) for k, v in ag.items()}
+soll = {k: ('guenstiger' if k[0] == 'g' else 'teurer', v[1], v[2]) for k, v in GRENZ.items()}
+check('p (Prozent, 1 Nachkommastelle) und stufe an den Grenzen: 1,9 % → 1, 2,0 % → 2, 4,9 % → 2, 5,0 % → 3 (günstiger und teurer); 1,96 % (angezeigt 2,0 %) → 1', ist == soll, ist)
+WINKEL = """() => [...document.querySelectorAll('#list tr.row')].filter((r) => r.dataset.id.startsWith('gr-')).map((r) => {
+  const v = r.querySelector('.vw'), s = v && v.querySelector('svg'), m = s && new DOMMatrix(getComputedStyle(s).transform);
+  return [r.dataset.id.slice(3), m ? Math.round(Math.atan2(m.b, m.a) * 180 / Math.PI) : null, v ? v.querySelector('[aria-hidden]').textContent.trim() : null, v ? v.title : ''];
+})"""
+with sync_playwright() as p:
+    br = p.chromium.launch()
+    ctx = br.new_context(viewport={'width': 1280, 'height': 900}, color_scheme='light')
+    ctx.add_init_script(INIT)
+    pg = ctx.new_page(); pg.on('pageerror', lambda ex: errors.append(str(ex)))
+    laden(pg, '/')
+    check('ohne Parameter weiter ohne Hinweise', pg.locator('.vw').count() == 0)
+    s0 = satz(pg); zurueck(pg)
+    laden(pg, '/?vergleich=pfeil')
+    w = {k: (g, t, ti) for k, g, t, ti in pg.evaluate(WINKEL)}
+    soll_w = {k: (-1 if k[0] == 't' else 1) * {1: 30, 2: 60, 3: 90}[v[2]] for k, v in GRENZ.items()}
+    check('Seite mit vergleich=pfeil: Pfeile mit drei Neigungen (30°, 60°, 90°), teurer nach oben, günstiger nach unten',
+          {k: v[0] for k, v in w.items()} == soll_w and {abs(x) for x in soll_w.values()} == {30, 60, 90}, w)
+    keine = pg.evaluate("() => [...document.querySelectorAll('#list .vw [aria-hidden]')].every((x) => !/[▼▲0-9]/.test(x.textContent))")
+    check('… keine Beträge (nur Pfeil oder „neu“), Prozent im Titel für Tooltip und Screenreader', keine and all(v[1] == '' for v in w.values())
+          and 'teurer um 1,9 %' in w['t19'][2] and 'günstiger um 5,0 %' in w['g50'][2], w.get('t19'))
+    leg = pg.locator('#list .al-head .vw-leg')
+    check('… Legende „teurer · günstiger · neu · steiler = stärker (ab 2 % / ab 5 %)“ mit zwei Pfeilen', 'steiler = stärker (ab 2 % / ab 5 %)' in leg.inner_text() and 'neu' in leg.inner_text()
+          and leg.locator('svg').count() == 2, leg.inner_text())
+    pg.evaluate("document.querySelector('#list tr.row[data-id=\"gr-g19\"]').scrollIntoView({block: 'center'})")
+    shot(pg, SH + '/preisaenderung-pfeil-1280.png')
+    s1 = satz(pg)
+    n_svg = pg.evaluate("document.querySelectorAll('#print-root td.c-name > .vw svg').length")
+    check('Druck mit Pfeil: dieselben Seiten, Stufe, Füllung und Zeilenhöhen wie ohne; alle Pfeile ganz in der Zelle; Legende im Kopf',
+          s1['seiten'] == s0['seiten'] and s1['stufe'] == s0['stufe'] and s1['fuell'] == s0['fuell'] and s1['hoehen'] == s0['hoehen']
+          and n_svg == len(GRENZ) and all(v['innen'] for v in s1['vw']) and 'steiler = stärker' in s1['kopf'], (s0['seiten'], s1['seiten'], n_svg, s1['kopf']))
+    shot(pg.locator('#print-root .pl-page').first, SH + '/preisaenderung-pfeil-druck.png')
+    zurueck(pg)
+    m390 = br.new_context(viewport={'width': 390, 'height': 844}, color_scheme='light', is_mobile=True, has_touch=True)
+    h = m390.new_page(); h.on('pageerror', lambda ex: errors.append(str(ex)))
+    h.goto(BASE + '/?vergleich=pfeil#ansicht=karten'); h.wait_for_selector('#list .card')
+    pille = h.evaluate("() => { const c = document.querySelector('#list .card[data-id=\"gr-t50\"] .price .vw'); return c ? [c.className, c.querySelectorAll('svg').length, c.querySelector('[aria-hidden]').textContent] : null; }")
+    check('390 px, Karten: Pfeil in der Pille, ohne Betrag, keine waagerechte Rollleiste', pille and 'vw-pille' in pille[0] and 'vw-pfeil' in pille[0] and pille[1] == 1
+          and pille[2].strip() == '' and h.evaluate('document.documentElement.scrollWidth <= 390'), pille)
+    h.evaluate("document.querySelector('#list .card[data-id=\"gr-g19\"]').scrollIntoView()")
+    shot(h, SH + '/preisaenderung-pfeil-390.png')
+    m390.close()
+    br.close()
 
 check('keine JavaScript-Fehler', not errors, errors[:3])
 smtp.close()

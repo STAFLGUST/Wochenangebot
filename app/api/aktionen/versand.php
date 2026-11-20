@@ -9,7 +9,8 @@ declare(strict_types=1);
      versand_veroeffentlichen            angebot.veroeffentlichen; veröffentlicht den gespeicherten Entwurf, Revision Pflicht (409)
      versand_empfaenger, _vorschau       wochenangebot.senden bzw. sonderposten.senden (Firmen und E-Mail-Adressen)
      versand_senden                      dasselbe Recht mit Bestätigung (Katalog BESTAETIGUNG: kunden_rundmail, kunden_restposten)
-   Wochenversand optional mit „preis“ = {an, uebersicht, kurz} (nur true zählt, mail_preis_wahl): Links mit vergleich=vorwoche,
+   Wochenversand optional mit „preis“ = {an, uebersicht, kurz, darstellung} (nur true zählt, darstellung 'betrag' | 'pfeil',
+   mail_preis_wahl): Links mit vergleich=vorwoche bzw. =pfeil,
    Übersicht der Änderungen je Angebot (vom Server aus dem veröffentlichten Stand), Link „Nur Änderungen“ – gilt nur für den Aufruf.
    Die Vorschau zeigt die Übersicht (Kundenpreise) nur Mitarbeitern mit Zugang zum Angebot, sonst ohne Übersicht mit „hinweis“.
    Sonderposten gehen nur an Kunden des jeweiligen Angebots (GR-005, sonderposten_senden).

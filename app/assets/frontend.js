@@ -24,10 +24,11 @@ const druckMelden = (stand) => { try { if (DRUCK_DIREKT && window.parent !== win
    zeigt statt des Entwurfs den veröffentlichten Stand dieser KW (Aktion angebot_woche – nur Mitarbeiter mit Modulzugang
    Angebot, prüft der Server; Kunden und Besucher bekommen keine Daten) */
 const WOCHE = (() => { const v = PREVIEW ? new URLSearchParams(location.search).get('woche') || '' : ''; return /^\d{4}-\d{2}$/.test(v) ? v : ''; })();
-/* Preisänderung zur Vorwoche (Inhaber 20.11.2026, Zusatzfunktion): ?vergleich=vorwoche – je Artikel ▼/▲/neu – bzw.
-   ?vergleich=aenderungen (Kurzfassung „Nur Änderungen“: nur Artikel mit Veränderung oder neu). Die Änderungen liefert der
+/* Preisänderung zur Vorwoche (Inhaber 20.11.2026, Zusatzfunktion): ?vergleich=vorwoche – je Artikel ▼/▲/neu –,
+   ?vergleich=pfeil (ganzes Angebot, nur ein geneigter Pfeil statt des Betrags) bzw. ?vergleich=aenderungen (Kurzfassung „Nur
+   Änderungen“: nur Artikel mit Veränderung oder neu). Die Änderungen liefert der
    Server, assets/angebot-vorwoche.js (window.Vorwoche) zeichnet sie. Ohne Parameter alles wie bisher. */
-const VERGLEICH = (() => { const v = new URLSearchParams(location.search).get('vergleich'); return !WOCHE && (v === 'vorwoche' || v === 'aenderungen') ? v : ''; })();
+const VERGLEICH = (() => { const v = new URLSearchParams(location.search).get('vergleich'); return !WOCHE && ['vorwoche', 'pfeil', 'aenderungen'].includes(v) ? v : ''; })();
 /* Kundenangebot (?angebot=edeka): nur nach Anmeldung; ohne Angabe das öffentliche Wochenangebot */
 let OFFER = (() => { const v = new URLSearchParams(location.search).get('angebot') || ''; return /^[a-z0-9-]{1,40}$/.test(v) && v !== 'std' ? v : ''; })();
 let COMPANY = '';
@@ -189,7 +190,7 @@ async function loadData() {
   COMPANY = body.company || '';
   PUBLISHED_AT = body.offer.publishedAt || body.offer.savedAt || null;
   FRACHT = body.fracht || null;
-  Vorwoche.setzen(VERGLEICH ? body.vorwoche : null, VERGLEICH === 'aenderungen');
+  Vorwoche.setzen(VERGLEICH ? body.vorwoche : null, VERGLEICH);
   if (VERGLEICH === 'aenderungen') body.offer.items = body.offer.items.filter(Vorwoche.geaendert);   // ohne Vorwoche leer: renderEmpty sagt es
   DATA = prepare(window.OfferCore.enrichOffer(body.offer));
 }

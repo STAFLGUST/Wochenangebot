@@ -18,9 +18,14 @@ declare(strict_types=1);
    Art.-Nr. Bezeichnung+Gruppe, Bezeichnung. Ein Schlüssel zählt nur, wenn er in Vorwoche und aktuellem Angebot je genau einmal
    vorkommt (eine neue Variante mit vorhandener Art.-Nr. ist „neu“). Bezeichnung und Gruppe normalisiert wie keyPart in
    assets/offer-core.js (Kleinschreibung, nur a–z, 0–9, äöüß).
+   Neigung des Pfeils (Darstellung „nur Pfeil“, ?vergleich=pfeil): je geänderter Artikel p = Veränderung in Prozent des
+   Vorwochenpreises (1 Nachkommastelle, mit Vorzeichen) und stufe 1–3 nach ANGEBOT_VORWOCHE_STUFEN (gerechnet am ungerundeten Wert).
    Nicht verglichen: Zusatzpreise (nur der Hauptpreis), Artikel ohne Preis oder „auf Anfrage“ in einer der Wochen (kein
    Hinweis), Einzelangebote; gibt es die direkte Vorwoche nicht (ausgelassene KW), gibt es keinen Vergleich. */
 if (!defined('WA_API')) { http_response_code(404); exit; }   // nur über api/index.php nutzbar
+
+/* Grenzen der Pfeil-Stufen in Prozent (Inhaber 20.11.2026, anpassbar): unter 2 % leicht (1), ab 2 % mittel (2), ab 5 % stark (3) */
+const ANGEBOT_VORWOCHE_STUFEN = [2.0, 5.0];
 
 /* KW vor der Woche des Modells als [kw, jahr] (auch über den Jahreswechsel, ISO-Wochen), sonst null */
 function angebot_vorwoche_kw(array $m): ?array
@@ -106,7 +111,7 @@ function angebot_vorwoche_stempeln(array $model): array
 }
 
 /* Änderungen eines aufgelösten Angebots ($offer = offer_resolve($model, $def)) gegen die Vorwoche:
-   {kw, jahr, aenderungen: {Artikel-ID: {art: 'neu'} | {art: 'guenstiger'|'teurer', d, alt}}} – nur Artikel dieses Angebots,
+   {kw, jahr, stufen, aenderungen: {Artikel-ID: {art: 'neu'} | {art: 'guenstiger'|'teurer', d, alt, p, stufe}}} – nur Artikel dieses Angebots,
    nur Preise dieses Angebots (GR-002); unveränderte und preislose Artikel fehlen. Ohne Vorwoche, bei Einzelangeboten und für
    Angebote, die beim Stempeln unbekannt waren, null. Liest nur das Modell (auch auf der Kundenseite nutzbar). */
 function angebot_vorwoche(array $model, array $def, array $offer): ?array
@@ -125,9 +130,15 @@ function angebot_vorwoche(array $model, array $def, array $offer): ?array
         if ($alt === false) { $aend[$id] = ['art' => 'neu']; continue; }
         if ((!is_int($alt) && !is_float($alt)) || ($it['price']['status'] ?? '') !== 'value') continue;
         $d = round((float)$it['price']['value'] - $alt, 2);
-        if ($d != 0) $aend[$id] = ['art' => $d < 0 ? 'guenstiger' : 'teurer', 'd' => $d, 'alt' => (float)$alt];
+        if ($d == 0) continue;
+        // Stufe am ungerundeten Wert („unter 2 %“ heißt unter 2 %, Inhaber 20.11.2026); angezeigt wird p auf eine Stelle.
+        // Vorwochenpreis 0 oder kleiner: keine Prozentangabe, stärkste Stufe.
+        $roh = $alt > 0 ? round($d / $alt * 100, 6) : null;
+        $p = $roh === null ? null : round($roh, 1);
+        $stufe = $roh === null ? 3 : 1 + count(array_filter(ANGEBOT_VORWOCHE_STUFEN, fn($g) => abs($roh) >= $g));
+        $aend[$id] = ['art' => $d < 0 ? 'guenstiger' : 'teurer', 'd' => $d, 'alt' => (float)$alt, 'p' => $p, 'stufe' => $stufe];
     }
-    return ['kw' => $vw['kw'], 'jahr' => $vw['jahr'], 'aenderungen' => (object)$aend];
+    return ['kw' => $vw['kw'], 'jahr' => $vw['jahr'], 'stufen' => ANGEBOT_VORWOCHE_STUFEN, 'aenderungen' => (object)$aend];
 }
 
 /* Übersicht der Änderungen eines Angebots für die Wochen-Mail als [Text, HTML] (E-Mail-taugliches HTML mit Inline-Styles,
