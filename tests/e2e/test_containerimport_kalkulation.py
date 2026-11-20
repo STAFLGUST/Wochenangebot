@@ -2,10 +2,13 @@
 Oberfläche app/module/containerimport/kalkulation.js). Die Formeln selbst prüft tests/unit/test_ci_kalkulation.py.
 Geprüft: Rechte (ansehen und rechnen mit „EUDR ansehen“, speichern/festschreiben nur mit „EUDR bearbeiten“, ohne Recht 403,
 CSRF, kein GET); rechnen speichert nichts und nimmt vom Browser gesendete Ergebnisse nicht an; Entwurf anlegen und ändern,
-Revision (409), ungültige Eingabe (422); festschreiben nur vollständig, danach unveränderlich (Schnappschuss von Sätzen,
-Ergebnis und Container, GR-106), neue Fassung nur mit Grund, Fassungen bleiben; ältere Einträge ohne neue Felder (GR-006)
-und Felder einer späteren Version bleiben; Prüfhinweise; Protokoll. Oberfläche: Reiter, Liste, Eingabe mit Rechnung des
-Servers, Speichern, Festschreiben mit Rückfrage, neue Fassung, Leser ohne Bearbeiten, CSV, Druckansicht, Handy 390 px.
+Revision (409), ungültige Eingabe (422); unmögliche Kombination (Hilton für ZA) ist ein Fehler; festschreiben nur
+vollständig, danach unveränderlich (Ergebnis mit den wirksamen Sätzen und Container nur einmal gespeichert, GR-106), neue
+Fassung nur mit Grund, Fassungen bleiben; ältere Einträge ohne neue Felder (GR-006) lesbar und festschreibbar (gespeichert
+wird die geprüfte Eingabe), Felder einer späteren Version bleiben; Prüfhinweise; Protokoll. Oberfläche: Reiter, Liste,
+Eingabe mit Rechnung des Servers, Speichern, Festschreiben mit Rückfrage, neue Fassung, Leser ohne Bearbeiten, CSV (exakte
+Zeile, Schutz vor Formeln, ungespeicherte Änderungen gekennzeichnet), Druckansicht (A4 quer, danach geleert, der EUDR-Druck
+bleibt hochkant), Handy 390 px.
 Alle Namen und Zahlen sind erfunden (GR-007)."""
 import copy
 import os
@@ -66,7 +69,8 @@ check('rechnen (auch nur ansehen): Einstand 8,8484 €/kg vom Server, vom Browse
 check('rechnen speichert nichts', storage_raw(DOK) in (None, '', b'') or not _json(storage_raw(DOK)).get('liste'))
 falsch = copy.deepcopy(EINGABE); falsch['positionen'][0]['land'] = 'ZA'
 st, r = I.call('containerimport_kalkulation_rechnen', {'eingabe': falsch})
-check('Prüfhinweis: Hilton für Ursprung ZA', st == 200 and any('gibt es nicht für Ursprung ZA' in h['text'] and h['pos'] == 0 for h in r['ergebnis']['hinweise']), r)
+check('Hilton für Ursprung ZA: Fehler an Position 1, unvollständig', st == 200 and not r['ergebnis']['vollstaendig']
+      and any(h['stufe'] == 'fehler' and 'gibt es nicht für Ursprung ZA' in h['text'] and h['pos'] == 0 for h in r['ergebnis']['hinweise']), r)
 check('rechnen mit ungültiger Eingabe: 422 mit Meldung', I.call('containerimport_kalkulation_rechnen', {'eingabe': {**EINGABE, 'kopf': {**EINGABE['kopf'], 'zins': 'viel'}}})[0] == 422)
 
 # ---------- Entwurf, Revision, Festschreiben, Fassungen ----------
@@ -92,17 +96,19 @@ check('veralteter Stand beim Festschreiben: 409', I.call('containerimport_kalkul
 st, r = I.call('containerimport_kalkulation_festschreiben', {'sendung': c1['id'], 'rev': k['rev']})
 k = r.get('kalkulation') or {}
 f1 = (k.get('fassungen') or [{}])[0]
-check('festgeschrieben: endgültig mit wer/wann, Schnappschuss von Sätzen, Ergebnis und Container',
-      st == 200 and f1['stand'] == 'endgueltig' and f1['endgueltig']['wer']['von'] == 'Ina Import' and f1['endgueltig']['saetze']['mercosur']['wert'] == 7.5
-      and abs(f1['endgueltig']['ergebnis']['gesamt']['ist'] - 8848.4) < 1e-6 and f1['endgueltig']['container']['partie'] == 'P-470001', (st, r.get('error')))
+gespeichert = _json(storage_raw(DOK))['liste'][0]['fassungen'][0]
+check('festgeschrieben: endgültig mit wer/wann und Container, Ergebnis mit den wirksamen Sätzen – jedes nur einmal gespeichert',
+      st == 200 and f1['stand'] == 'endgueltig' and f1['endgueltig']['wer']['von'] == 'Ina Import' and f1['ergebnis']['saetze']['mercosur']['wert'] == 7.5
+      and abs(f1['ergebnis']['gesamt']['ist'] - 8848.4) < 1e-6 and f1['endgueltig']['container']['partie'] == 'P-470001'
+      and set(gespeichert['endgueltig']) == {'wer', 'container'} and 'saetze' in gespeichert['ergebnis'] and set(f1['endgueltig']) == {'wer', 'container'}, (st, r.get('error'), gespeichert.get('endgueltig')))
 check('endgültige Fassung erneut festschreiben: 409', I.call('containerimport_kalkulation_festschreiben', {'sendung': c1['id'], 'rev': k['rev']})[0] == 409)
 geaendert = copy.deepcopy(EINGABE); geaendert['positionen'][0]['netto'] = 900
 st, r = speichern(c1, k['rev'], geaendert)
-check('nach dem Festschreiben ohne Grund: 422, nichts geändert', st == 422 and 'Grund' in r.get('error', '') and laden(I, c1)[1]['kalkulation']['fassungen'] == laden(I, c1)[1]['kalkulation']['fassungen'][:1])
+check('nach dem Festschreiben ohne Grund: 422, nichts geändert', st == 422 and 'Grund' in r.get('error', '') and len(laden(I, c1)[1]['kalkulation']['fassungen']) == 1)
 
 # Schnappschuss: die endgültige Fassung wird nie neu gerechnet (Sätze im Code könnten sich ändern)
 doc = _json(storage_raw(DOK))
-doc['liste'][0]['fassungen'][0]['endgueltig']['ergebnis']['gesamt']['ist'] = 1234.5
+doc['liste'][0]['fassungen'][0]['ergebnis']['gesamt']['ist'] = 1234.5
 doc['liste'][0]['zukunft'] = {'feld': 'einer späteren Version'}
 storage_write(DOK, doc)
 check('endgültige Fassung zeigt ihren Schnappschuss (nicht neu gerechnet, GR-106)', laden(L, c1)[1]['kalkulation']['fassungen'][0]['ergebnis']['gesamt']['ist'] == 1234.5)
@@ -126,6 +132,11 @@ storage_write(DOK, doc)
 st, r = laden(I, c2)
 f = r['kalkulation']['fassungen'][0] if st == 200 else {}
 check('älterer Entwurf ohne neue Felder: lesbar und gerechnet (Vorgaben für fehlende Felder)', st == 200 and f['ergebnis']['vollstaendig'] and f['eingabe']['kopf']['provisionEinkauf'] is True, (st, r))
+st, r = I.call('containerimport_kalkulation_festschreiben', {'sendung': c2['id'], 'rev': r['kalkulation']['rev']})
+alt = next(x for x in _json(storage_raw(DOK))['liste'] if x['sendung'] == c2['id'])['fassungen'][0]
+check('älterer Entwurf ohne neue Felder festschreiben: gespeichert wird die geprüfte Eingabe (neue Felder mit Vorgabe, Zahlen als Zahlen)',
+      st == 200 and alt['stand'] == 'endgueltig' and alt['eingabe']['kopf']['provisionEinkauf'] is True and alt['eingabe']['kopf']['zahlFix'] == 0
+      and alt['eingabe']['kopf']['nachlaufKg'] == 0 and not alt['eingabe']['ueberschrieben'] and alt['eingabe']['kopf']['kurs'] == 1.25 and alt['ergebnis']['vollstaendig'], (st, r.get('error'), alt.get('eingabe')))
 verlauf = str(A.call('log')[1])
 check('Protokoll: angelegt, festgeschrieben, neue Fassung mit Grund', all(t in verlauf for t in ('Kalkulation des Containers „P-470001“: angelegt', 'Fassung 1 endgültig festgeschrieben',
                                                                                               'Fassung 2 angelegt (Grund: Endgültige Gewichte laut Packliste)', 'Fassung 2 endgültig festgeschrieben')), verlauf[:400])
@@ -141,7 +152,7 @@ with sync_playwright() as pw:
     pg = seite('ina')
     pg.click('#ci-reiter-kalkulation'); pg.wait_for_selector('#kk-liste')
     zeilen = pg.evaluate("[...document.querySelectorAll('#kk-liste tbody tr')].map(r => r.cells[0].querySelector('.ci-name').textContent + '|' + r.cells[2].textContent.trim())")
-    check('Reiter „Kalkulation“: Container mit Stand der Kalkulation', 'Partie P-470001|Fassung 2 · endgültig' in zeilen and 'Partie P-470002|Fassung 1 · vorläufig' in zeilen, zeilen)
+    check('Reiter „Kalkulation“: Container mit Stand der Kalkulation', 'Partie P-470001|Fassung 2 · endgültig' in zeilen and 'Partie P-470002|Fassung 1 · endgültig' in zeilen, zeilen)
     c3 = container_anlegen(I, 'P-470003', land='UY')
     pg.click('#ci-neu'); pg.wait_for_selector(f'tr[data-kalk="{c3["id"]}"]')
     pg.click(f'tr[data-kalk="{c3["id"]}"]'); pg.wait_for_selector('#kk-editor')
@@ -157,7 +168,9 @@ with sync_playwright() as pw:
         pg.fill(zeile + f'[data-f={f}]', w)
     check('Ursprung der neuen Position vom Container übernommen', pg.input_value(zeile + '[data-f=land]') == 'UY')
     pg.wait_for_function("document.querySelector('#kk-pos-ergebnis') && document.querySelector('#kk-pos-ergebnis tbody tr').innerText.includes('8,8484')")
-    check('Ergebnis vom Server: Einstand 8,8484 €/kg, Wert Ist 8.848,40 €, VK fehlt nicht', '8.848,40' in pg.inner_text('#kk-teil-ergebnis') and pg.is_visible('#kk-ungespeichert'))
+    teil = pg.inner_text('#kk-teil-ergebnis')
+    check('Ergebnis vom Server: Wert Ist 8.848,40 €, VK-Wert 10.000,00 € (kein „VK fehlt“), als ungespeichert markiert',
+          '8.848,40' in teil and '10.000,00' in teil and 'VK fehlt' not in teil and pg.is_visible('#kk-ungespeichert'), teil)
     pg.click(zeile + '[data-kk-kopie]'); pg.wait_for_selector('tr[data-pos="1"]')
     pg.select_option('tr[data-pos="1"] [data-f=regime]', 'mercosur')
     pg.wait_for_function("document.querySelector('#kk-kontingente') && document.querySelector('#kk-kontingente').innerText.includes('Anteilig Hilton')")
@@ -178,27 +191,50 @@ with sync_playwright() as pw:
     shot(pg, os.path.join(SH, 'containerimport-kalkulation-ergebnis-1280.png'))
     with pg.expect_download() as dl:
         pg.click('#kk-csv')
-    text = open(dl.value.path(), encoding='utf-8-sig').read()
-    check('CSV: Kopfzeile, Position mit Komma als Dezimalzeichen, Summen je Teil', text.startswith('"Pos";"Teil";"Artikel"') and ';8,8484' in text and '"Wert Ist (Einstand)";8848,4' in text
-          and dl.value.suggested_filename == 'Kalkulation_P-470003_Fassung_1.csv', text[:300])
+    zeilen = open(dl.value.path(), encoding='utf-8-sig', newline='').read().split('\r\n')
+    check('CSV: Stand, Kopfzeile, Position genau (Komma, ohne Tausenderpunkt, höchstens 6 Stellen), Summen je Teil, Dateiname',
+          zeilen[0].startswith('"Kalkulation Partie P-470003";"Fassung 1 · vorläufig";"erstellt ') and zeilen[1] == '' and zeilen[2].startswith('"Pos";"Teil";"Artikel";"R/L"')
+          and zeilen[3] == '1;"Teil 1";"Roastbeef";"";"Hilton-Kontingent";"Hilton-Kontingent, Ursprung Mercosur";"UY";"02013000";40;1080;1000;10;"USD";8;0,8;0,0484;0;8,8484;0;8,8484;0;8,8484;8848,4;;;10;10000'
+          and '"Wert Ist (Einstand)";8848,4;8848,4' in zeilen and dl.value.suggested_filename == 'Kalkulation_P-470003_Fassung_1.csv', zeilen[:5])
     pg.evaluate("window.print = () => { window.__gedruckt = true; }")
     pg.click('#kk-druck')
     pg.emulate_media(media='print')
-    check('Druckansicht: Kalkulation mit Ergebnis in der Druckfassung (A4 quer)', pg.evaluate("window.__gedruckt === true && document.querySelector('#ci-druck').classList.contains('kk-druck')")
-          and 'Kalkulation Partie P-470003' in pg.inner_text('#ci-druck') and '8,8484' in pg.inner_text('#ci-druck') and pg.is_hidden('#ci-app'))
+    check('Druckansicht: Kalkulation mit Ergebnis in eigenem Block der Druckfassung (A4 quer)', pg.evaluate("window.__gedruckt === true && !!document.querySelector('#ci-druck > .kk-druck')")
+          and 'Kalkulation Partie P-470003' in pg.inner_text('#ci-druck') and 'Fassung 1 · vorläufig' in pg.inner_text('#ci-druck') and '8,8484' in pg.inner_text('#ci-druck') and pg.is_hidden('#ci-app'))
     pdf = pg.pdf(prefer_css_page_size=True)
     with open(os.path.join(SH, 'containerimport-kalkulation-druck.pdf'), 'wb') as datei:
         datei.write(pdf)
     seiten = re.findall(rb'/MediaBox \[0 0 ([\d.]+) ([\d.]+)\]', pdf)
     check('Druck im Querformat A4 (842 × 595 pt) und nicht leer', seiten and all(abs(float(w) - 841.9) < 1 and abs(float(h) - 595) < 1 for w, h in seiten), seiten)
+    pg.evaluate("window.dispatchEvent(new Event('afterprint'))")
+    check('nach dem Druck: Druckfassung geleert', pg.evaluate("document.querySelector('#ci-druck').innerHTML === ''"))
+    pg.evaluate("window.dispatchEvent(new Event('beforeprint'))")
+    check('Drucken über das Browsermenü im Reiter: Druckfassung frisch erzeugt', pg.evaluate("!!document.querySelector('#ci-druck > .kk-druck')") and '8,8484' in pg.inner_text('#ci-druck'))
     pg.emulate_media(media='screen')
+    pg.click('#ci-reiter-eudr'); pg.click(f'tr[data-sendung="{c3["id"]}"]'); pg.wait_for_selector('#dlg-sendung[open]')
+    pg.click('#sendung-druck')   # ohne afterprint (window.print ist ersetzt): der EUDR-Druck darf nichts von der Kalkulation erben
+    pg.emulate_media(media='print')
+    seiten = re.findall(rb'/MediaBox \[0 0 ([\d.]+) ([\d.]+)\]', pg.pdf(prefer_css_page_size=True))
+    check('danach EUDR-Risikoprofil drucken: ohne Kalkulation, hochkant', 'Risikoprofil EUDR' in pg.inner_text('#ci-druck') and pg.locator('#ci-druck .kk-druck').count() == 0
+          and seiten and all(float(w) < float(h) for w, h in seiten), seiten)
+    pg.emulate_media(media='screen')
+    pg.click('#dlg-sendung .dlg-foot [data-zu]'); pg.wait_for_selector('#dlg-sendung', state='hidden')
+    pg.click('#ci-reiter-kalkulation'); pg.wait_for_selector('#kk-editor')
     pg.click('#kk-fest'); pg.wait_for_selector('#kk-fest-ja')
     check('Festschreiben fragt nach', 'unveränderlich' in pg.inner_text('.kk-frage'))
     pg.click('#kk-fest-ja'); pg.wait_for_selector('#kk-neu')
     check('festgeschrieben: Felder gesperrt, „Neue Fassung anlegen“', pg.is_disabled('[data-k=kurs]') and pg.is_disabled(zeile + '[data-f=netto]') and pg.locator('#kk-speichern').count() == 0
           and laden(I, c3)[1]['kalkulation']['fassungen'][0]['stand'] == 'endgueltig')
     pg.click('#kk-neu'); pg.wait_for_selector('#kk-grund')
-    pg.fill('[data-k=nachlauf]', '100')
+    pg.fill('[data-k=nachlauf]', '100'); pg.fill(zeile + '[data-f=artikel]', '=HYPERLINK("https://beispiel.invalid","x")')
+    pg.wait_for_function("document.querySelector('#kk-pos-ergebnis') && document.querySelector('#kk-pos-ergebnis').innerText.includes('HYPERLINK') && document.querySelector('#kk-ergebnis').innerText.includes('Nachlauf 100,00')")
+    with pg.expect_download() as dl:
+        pg.click('#kk-csv')
+    text = open(dl.value.path(), encoding='utf-8-sig').read()
+    check('CSV mit ungespeicherten Änderungen: gekennzeichnet (Stand und Dateiname), Formel als Text mit Apostroph',
+          text.startswith('"Kalkulation Partie P-470003";"neue Fassung, nicht gespeichert · mit ungespeicherten Änderungen"') and dl.value.suggested_filename == 'Kalkulation_P-470003_Fassung_neu_ungespeichert.csv'
+          and '"\'=HYPERLINK(""https://beispiel.invalid"",""x"")"' in text and ';"=HYPERLINK' not in text, text[:400])
+    pg.fill(zeile + '[data-f=artikel]', 'Roastbeef')
     pg.click('#kk-speichern'); pg.wait_for_selector('#ci-toast.zeigen.fehler')
     check('neue Fassung ohne Grund: Meldung, nichts gespeichert', 'Grund' in pg.inner_text('#ci-toast') and len(laden(I, c3)[1]['kalkulation']['fassungen']) == 1)
     pg.fill('#kk-grund', 'Nachlauf ergänzt')

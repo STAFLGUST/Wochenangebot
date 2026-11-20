@@ -44,7 +44,7 @@
 }
 @page kalkulation { size: A4 landscape; margin: 10mm; }
 @media print {
-  .ci-druck.kk-druck { page: kalkulation; font-size: 8.5pt; }
+  .kk-druck { page: kalkulation; font-size: 8.5pt; }   /* eigener Block in #ci-druck: der EUDR-Druck ersetzt ihn und bleibt hochkant */
   .kk-druck .r-karte, .kk-druck section { margin: 0 0 6pt; padding: 0; border: 0; box-shadow: none; }
   .kk-druck h3 { margin: 8pt 0 3pt; font-size: 10.5pt; }
   .kk-druck .kk-scroll { overflow: visible; }

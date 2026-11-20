@@ -82,7 +82,7 @@ Für jedes Modul mit Kachel entsteht `<modul>.zugang` (lib/rechte.php, `perms_ka
 | `leergut.sehen` | Leergut | Leergut | sehen | Leergutkonten ansehen: Salden, Bewegungen, Abstimmungen mit Fristen, Dachser-Abschreibungen, Bilanz, CSV | – | – |
 | `leergut.bearbeiten` | Leergut | Leergut | bearbeiten | Leergut buchen: Bewegungen buchen und stornieren, Auszüge erfassen und bestätigen/widersprechen, Abschreibungen und Inventur pflegen | – | `leergut.sehen` |
 | `leergut.verwalten` | Leergut | Leergut | bearbeiten | Leergut verwalten: Partner und Lademittel mit Werten pflegen, Datenpaket übernehmen | – | `leergut.bearbeiten` |
-| `containerimport.eudr_sehen` | Container-Import | Container-Import | sehen | EUDR ansehen: Sendungen, Herkunftsbetriebe mit Karte, Risikoprofil, Dateien prüfen, GeoJSON für TRACES | – | – |
+| `containerimport.eudr_sehen` | Container-Import | Container-Import | sehen | EUDR ansehen: Sendungen, Herkunftsbetriebe mit Karte, Risikoprofil, Dateien prüfen, GeoJSON für TRACES – umfasst auch die Container-Dokumente und die Kalkulation je Container mit Einkaufs- und Verkaufspreisen, Margen, Rückvergütung und WKZ | – | – |
 | `containerimport.eudr_bearbeiten` | Container-Import | Container-Import | bearbeiten | EUDR bearbeiten: Herkunftsbetriebe einlesen und pflegen, Sendungen anlegen, Gegenprüfungen eintragen, Risikobewertung abschließen | – | `containerimport.eudr_sehen` |
 | `rewe.sehen` | REWE | REWE | sehen | REWE: eigene Liste und Akten der eigenen Märkte ansehen (Wochenverlauf, Notizen) | – | – |
 | `rewe.bearbeiten` | REWE | REWE | bearbeiten | REWE: eigene Märkte abfragen (Bestellungen der Woche), Notizen, Wiedervorlagen, Kaufbereitschaft, Dauerauftrag, Ansprechpartner | – | `rewe.sehen` |

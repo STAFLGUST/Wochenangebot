@@ -6,19 +6,30 @@ declare(strict_types=1);
    Drittlandszoll, EU-Ursprung oder ein anderer Satz – „anteilig Hilton“ = derselbe Artikel in mehreren Positionen.
    Eine Regel, nur auf dem Server: ci_kalkulation_rechnen ist eine reine Funktion (Eingabe + Sätze → Ergebnis, kein
    Speicher, intern ungerundet, gerundet wird nur in der Anzeige) – Unit-Test tests/unit/test_ci_kalkulation.py.
-   Formeln (Seefracht und Preise in USD werden mit dem Kurs USD je € umgerechnet):
-     Fracht/kg      = Seefracht € / Netto aller Positionen
-     Vers.-Wert Teil = (Warenwert € des Teils + Seefracht € × kg-Anteil des Teils) × (1 + imaginärer Gewinn %)
-     Vers./kg       = Prämie des Teils (Vers.-Wert × Satz %) / Netto des Teils
-     Zollwert/kg    = Preis € + Fracht/kg + Vers./kg (+ Provision/kg nur, wenn sie keine Einkaufsprovision ist: Art. 71
-                      Abs. 1 Buchst. a Ziff. i UZK nimmt Einkaufsprovisionen aus dem Zollwert)
-     Zoll/kg        = Zollwert/kg × Wertzoll % + spezifischer Zoll €/100 kg / 100
-     Einstand/kg    = Preis € + Fracht/kg + Vers./kg + Provision/kg + Zoll/kg + Nebenkosten/kg
-     Nebenkosten/kg = (Nachlauf + Finanzierung + Zahlungskosten) / Netto aller Positionen + Zuschlag €/kg;
-                      Finanzierung = Warenwert € × Zins % × Tage / 360; Zahlungskosten = Warenwert € × ‰ / 1000 + fix
+   Rechenschritte (je eine Funktion):
+     1 Sätze anwenden (ci_kalk_saetze_anwenden): überschriebene Sätze der Kalkulation – leeres Feld = Vorgabe des Satzes
+     2 Prüfen (ci_kalk_pruefen): Datum, Kurs, Gewicht, je Position Ursprung ↔ Zollregime ↔ Datum ↔ KN-Code. Unmögliche
+       Kombinationen (Hilton/Mercosur-Kontingent für ein anderes Land, Mercosur-Kontingent vor dem Start, „EU-Ursprung“
+       für ein Nicht-EU-Land) sind Fehler: die Kalkulation ist dann unvollständig und lässt sich nicht festschreiben
+     3 Kosten des Containers (ci_kalk_kosten), Seefracht und Preise in USD mit dem Kurs USD je € umgerechnet:
+         Fracht/kg      = Seefracht € / Netto aller Positionen
+         Nebenkosten/kg = (Nachlauf + Finanzierung + Zahlungskosten) / Netto aller Positionen + Zuschlag €/kg;
+                          Finanzierung = Warenwert € × Zins % × Tage / 360; Zahlungskosten = Warenwert € × ‰ / 1000 + fix
+     4 Position (ci_kalk_position):
+         Vers./kg       = (Preis € + Fracht/kg) × (1 + imaginärer Gewinn %) × Versicherung % des Teils – die Prämie des
+                          Teils verteilt sich nach Wert (Warenwert + Frachtanteil der Position), nicht nach kg
+         Zollwert/kg    = Preis € + Fracht/kg + Vers./kg (+ Provision/kg nur, wenn sie keine Einkaufsprovision ist: Art. 71
+                          Abs. 1 Buchst. a Ziff. i UZK nimmt Einkaufsprovisionen aus dem Zollwert)
+         Zoll/kg        = Zollwert/kg × Wertzoll % + spezifischer Zoll €/100 kg / 100 (ci_kalk_zoll_kg)
+         Einstand/kg    = Preis € + Fracht/kg + Vers./kg + Provision/kg + Zoll/kg + Nebenkosten/kg
+     5 Auswertung (ci_kalk_auswertung) je Teil und gesamt:
+         Vers.-Wert Teil = (Warenwert € des Teils + Fracht/kg × Netto des Teils) × (1 + imaginärer Gewinn %);
+                          Prämie = Vers.-Wert × Satz % = Summe Vers./kg × Netto der Positionen des Teils
+         Rohertrag = VK − Ist, Rohgewinn = Rohertrag − Rückvergütung (% vom VK) − WKZ; dazu Zoll je Regime,
+         Schlachtkörperäquivalent, Vergleich mit/ohne Mercosur-Kontingent, anteilig Hilton (ci_kalk_kontingente, ci_kalk_anteilig)
    Sätze stehen nur in CI_KALK_SAETZE (mit Quelle) – je Kalkulation überschreibbar mit Pflicht-Vermerk. Ein Entwurf rechnet
-   mit dem Stand dieser Tabelle; „endgültig festschreiben“ hält Eingabe, Sätze, Ergebnis und Container fest (GR-106).
-   Danach ändert nur eine neue Fassung mit Grund etwas; Fassungen werden nie gelöscht (GoBD).
+   mit dem Stand dieser Tabelle; „endgültig festschreiben“ hält Eingabe und Ergebnis (darin die wirksamen Sätze) sowie den
+   Container fest (GR-106). Danach ändert nur eine neue Fassung mit Grund etwas; Fassungen werden nie gelöscht (GoBD).
    Dokument: containerimport-kalkulationen (eigene Sperre). Aktionen: app/api/aktionen/containerimport_kalkulation.php. */
 if (!defined('WA_API')) { http_response_code(404); exit; }
 
@@ -28,6 +39,8 @@ const CI_KALK_MAX_TEILE = 12;
 const CI_KALK_MAX_FASSUNGEN = 100;
 const CI_KALK_IMAG_TOLERANZ = 0.10;   // Imag. EK weicht ab hier vom Einstand ab → Hinweis
 const CI_KALK_SKE_OHNE_KNOCHEN = 1.3; // Schlachtkörperäquivalent je kg Fleisch ohne Knochen (Anrechnung auf das Mercosur-Kontingent)
+const CI_KALK_MAX_KURS = 10.0;        // USD je €
+const CI_KALK_MAX_PREIS = 1000.0;     // € bzw. USD je kg (Preis, Imag. EK, VK)
 
 const CI_KALK_HILTON_LAENDER = ['AR', 'AU', 'BR', 'CA', 'NZ', 'PY', 'US', 'UY'];
 const CI_KALK_MERCOSUR = ['AR', 'BR', 'PY', 'UY'];
@@ -41,27 +54,28 @@ const CI_KALK_REGIME = [
     'eu' => 'EU-Ursprung (kein Zoll)',
     'anderer' => 'Anderer Satz',
 ];
-/* KN-Codes mit hinterlegtem Drittlandszoll → Satz in CI_KALK_SAETZE */
+/* KN-Codes (Rindfleisch ohne Knochen) mit hinterlegtem Drittlandszoll → Satz in CI_KALK_SAETZE */
 const CI_KALK_KN = [
     '02013000' => ['text' => '0201 30 00', 'name' => 'frisch oder gekühlt, ohne Knochen', 'satz' => 'drittland_frisch'],
     '02023090' => ['text' => '0202 30 90', 'name' => 'gefroren, ohne Knochen', 'satz' => 'drittland_gefroren'],
 ];
 const CI_KALK_TARIC = 'vor Verwendung in TARIC prüfen';
-/* Zollsätze an einer Stelle: Wertzoll in %, spezifischer Zoll in € je 100 kg, Quelle, gültig ab (leer = ohne Datum).
-   Vorgaben des Inhabers vom 20.11.2026 – jeder Satz ist vor Verwendung in TARIC zu prüfen (CI_KALK_TARIC). Ändert sich ein
-   Satz, hier ändern: Entwürfe rechnen sofort damit, festgeschriebene Fassungen behalten ihren Schnappschuss. */
+/* Zollsätze an einer Stelle: Wertzoll in %, spezifischer Zoll in € je 100 kg, Quelle, gültig ab (leer = ohne Datum), Ursprung
+   (Länder, für die der Satz gilt; Prüfung in ci_kalk_position_pruefen). Vorgaben des Inhabers vom 20.11.2026 – jeder Satz ist
+   vor Verwendung in TARIC zu prüfen (CI_KALK_TARIC). Ändert sich ein Satz, hier ändern: Entwürfe rechnen sofort damit,
+   festgeschriebene Fassungen behalten ihren Schnappschuss. */
 const CI_KALK_SAETZE = [
-    'hilton' => ['name' => 'Hilton-Kontingent', 'wert' => 20.0, 'spez' => 0.0, 'ab' => '',
-        'quelle' => 'Zollkontingent für hochwertiges Rindfleisch („Hilton“), Kontingentszollsatz 20 %; Ursprung AR, AU, BR, CA, NZ, PY, US, UY'],
-    'hilton_mercosur' => ['name' => 'Hilton-Kontingent, Ursprung Mercosur', 'wert' => 0.0, 'spez' => 0.0, 'ab' => '2026-05-01',
-        'quelle' => 'Vorläufige Anwendung des Interimsabkommens EU-Mercosur ab 01.05.2026: Hilton-Kontingent für Ursprung AR, BR, PY, UY zollfrei (https://commission.europa.eu/topics/trade/eu-mercosur-trade-agreement_en)'],
-    'mercosur' => ['name' => 'Mercosur-Kontingent Rindfleisch', 'wert' => 7.5, 'spez' => 0.0, 'ab' => '2026-05-01',
-        'quelle' => 'Interimsabkommen EU-Mercosur: Kontingent 99.000 t Schlachtkörperäquivalent, Kontingentszollsatz 7,5 %; nur Ursprung AR, BR, PY, UY mit Ursprungsnachweis und Kontingentszertifikat (https://commission.europa.eu/topics/trade/eu-mercosur-trade-agreement_en)'],
+    'hilton' => ['name' => 'Hilton-Kontingent', 'wert' => 20.0, 'spez' => 0.0, 'ab' => '', 'laender' => CI_KALK_HILTON_LAENDER,
+        'quelle' => 'Zollkontingent für hochwertiges Rindfleisch („Hilton“), Kontingentszollsatz 20 %'],
+    'hilton_mercosur' => ['name' => 'Hilton-Kontingent, Ursprung Mercosur', 'wert' => 0.0, 'spez' => 0.0, 'ab' => '2026-05-01', 'laender' => CI_KALK_MERCOSUR,
+        'quelle' => 'Vorläufige Anwendung des Interimsabkommens EU-Mercosur ab 01.05.2026: Hilton-Kontingent für Ursprung Mercosur zollfrei (https://commission.europa.eu/topics/trade/eu-mercosur-trade-agreement_en)'],
+    'mercosur' => ['name' => 'Mercosur-Kontingent Rindfleisch', 'wert' => 7.5, 'spez' => 0.0, 'ab' => '2026-05-01', 'laender' => CI_KALK_MERCOSUR,
+        'quelle' => 'Interimsabkommen EU-Mercosur: Kontingent 99.000 t Schlachtkörperäquivalent, Kontingentszollsatz 7,5 %; nur mit Ursprungsnachweis und Kontingentszertifikat (https://commission.europa.eu/topics/trade/eu-mercosur-trade-agreement_en)'],
     'drittland_frisch' => ['name' => 'Drittlandszoll KN 0201 30 00 (frisch oder gekühlt, ohne Knochen)', 'wert' => 12.8, 'spez' => 303.4, 'ab' => '',
         'quelle' => 'Gemeinsamer Zolltarif, VO (EWG) Nr. 2658/87 Anhang I (Kombinierte Nomenklatur): 12,8 % + 303,4 €/100 kg'],
     'drittland_gefroren' => ['name' => 'Drittlandszoll KN 0202 30 90 (gefroren, ohne Knochen)', 'wert' => 12.8, 'spez' => 304.1, 'ab' => '',
         'quelle' => 'Gemeinsamer Zolltarif, VO (EWG) Nr. 2658/87 Anhang I (Kombinierte Nomenklatur): 12,8 % + 304,1 €/100 kg'],
-    'eu' => ['name' => 'EU-Ursprung', 'wert' => 0.0, 'spez' => 0.0, 'ab' => '', 'quelle' => 'Ware mit Ursprung in der EU: kein Zoll'],
+    'eu' => ['name' => 'EU-Ursprung', 'wert' => 0.0, 'spez' => 0.0, 'ab' => '', 'laender' => CI_KALK_EU, 'quelle' => 'Ware mit Ursprung in der EU: kein Zoll'],
 ];
 
 /* Eingabe einer neuen Kalkulation */
@@ -69,18 +83,24 @@ const CI_KALK_VORGABE_KOPF = ['kurs' => null, 'datum' => '', 'seefracht' => 0.0,
     'nachlauf' => 0.0, 'nachlaufKg' => 0.0, 'zins' => 0.0, 'tage' => 70, 'zahlPromille' => 1.5, 'zahlFix' => 50.0, 'imagGewinn' => 10.0];
 
 /* ---------- Eingabe prüfen (Grenze: alles, was vom Browser kommt) ---------- */
-/* Zahl im Bereich [$min, $max] oder null (leer); Text auch in deutscher Schreibweise („1.234,5“). Nicht gerundet. */
-function ci_kalk_zahl($v, string $was, float $max, float $min = 0.0): ?float
+/* Zahl von 0 bis $max oder null (leer); Text auch deutsch („1.234,5“, eudr_zahl_text). Ein einzelner Punkt vor genau drei
+   Ziffern („9.875“) gilt dort als Tausendertrenner – liegt die Zahl damit über $max, war wohl ein Dezimalpunkt gemeint:
+   abgelehnt mit eigener Meldung statt still falsch gelesen. Nicht gerundet. */
+function ci_kalk_zahl($v, string $was, float $max): ?float
 {
-    if ($v === null || $v === '') return null;
-    if (is_string($v)) {
-        $v = str_replace([' ', "\u{a0}"], '', trim($v));
-        if (preg_match('/^-?\d{1,3}(\.\d{3})+(,\d+)?$/', $v)) $v = str_replace('.', '', $v);
-        $v = str_replace(',', '.', $v);
-    }
-    if (is_bool($v) || !is_numeric($v) || !is_finite((float)$v) || (float)$v < $min || (float)$v > $max)
-        throw new InvalidArgumentException("$was: bitte eine Zahl von " . str_replace('.', ',', (string)$min) . ' bis ' . number_format($max, 0, ',', '.') . ' angeben.');
-    return (float)$v;
+    $z = eudr_zahl_text($v);
+    if ($z === null) return null;
+    if (!is_bool($z) && is_numeric($z) && (float)$z >= 0 && (float)$z <= $max) return (float)$z;
+    if (is_string($v) && preg_match('/^\d{1,3}\.\d{3}$/', trim($v)))
+        throw new InvalidArgumentException("$was: „" . trim($v) . '“ – Punkt als Tausendertrenner mehrdeutig, bitte Komma als Dezimalzeichen verwenden (' . str_replace('.', ',', trim($v)) . ').');
+    throw new InvalidArgumentException("$was: bitte eine Zahl von 0 bis " . number_format($max, 0, ',', '.') . ' angeben.');
+}
+/* Zinstage: ganze Zahl (ein Komma würde sonst still abgeschnitten) */
+function ci_kalk_tage($v): int
+{
+    $tage = ci_kalk_zahl($v, 'Zinstage', 3650) ?? 0.0;
+    if (floor($tage) !== $tage) throw new InvalidArgumentException('Zinstage: bitte ganze Tage angeben.');
+    return (int)$tage;
 }
 /* KN-Code: acht Ziffern (Leerzeichen erlaubt) oder leer */
 function ci_kalk_kn($v): string
@@ -95,8 +115,8 @@ function ci_kalkulation_eingabe(array $b): array
 {
     $k = is_array($b['kopf'] ?? null) ? $b['kopf'] : [];
     $kopf = [
-        'kurs' => ci_kalk_zahl($k['kurs'] ?? null, 'Kurs USD/€', 1000),
-        'datum' => eudr_datum($k['datum'] ?? '', 'Datum'),
+        'kurs' => ci_kalk_zahl($k['kurs'] ?? null, 'Kurs USD/€', CI_KALK_MAX_KURS),
+        'datum' => eudr_datum($k['datum'] ?? '', 'Datum der Zollanmeldung'),
         'seefracht' => ci_kalk_zahl($k['seefracht'] ?? null, 'Seefracht', 1e7) ?? 0.0,
         'seefrachtWaehrung' => eudr_wahl($k['seefrachtWaehrung'] ?? '', ['USD', 'EUR'], 'Währung der Seefracht', 'USD'),
         'provisionT' => ci_kalk_zahl($k['provisionT'] ?? null, 'Provision €/t', 1e5) ?? 0.0,
@@ -104,7 +124,7 @@ function ci_kalkulation_eingabe(array $b): array
         'nachlauf' => ci_kalk_zahl($k['nachlauf'] ?? null, 'Nachlauf €', 1e7) ?? 0.0,
         'nachlaufKg' => ci_kalk_zahl($k['nachlaufKg'] ?? null, 'Zuschlag Nachlauf €/kg', 100) ?? 0.0,
         'zins' => ci_kalk_zahl($k['zins'] ?? null, 'Zinssatz %', 100) ?? 0.0,
-        'tage' => (int)(ci_kalk_zahl($k['tage'] ?? null, 'Zinstage', 3650) ?? 0),
+        'tage' => ci_kalk_tage($k['tage'] ?? null),
         'zahlPromille' => ci_kalk_zahl($k['zahlPromille'] ?? null, 'Zahlungskosten ‰', 1000) ?? 0.0,
         'zahlFix' => ci_kalk_zahl($k['zahlFix'] ?? null, 'Zahlungskosten fix €', 1e6) ?? 0.0,
         'imagGewinn' => ci_kalk_zahl($k['imagGewinn'] ?? null, 'Imaginärer Gewinn %', 100) ?? 0.0,
@@ -130,20 +150,21 @@ function ci_kalkulation_eingabe(array $b): array
             'kartons' => ci_kalk_zahl($p['kartons'] ?? null, "$was: Kartons", 1e6) ?? 0.0,
             'brutto' => ci_kalk_zahl($p['brutto'] ?? null, "$was: Brutto kg", 1e7) ?? 0.0,
             'netto' => ci_kalk_zahl($p['netto'] ?? null, "$was: Netto kg", 1e7) ?? 0.0,
-            'preis' => ci_kalk_zahl($p['preis'] ?? null, "$was: Preis", 1e4) ?? 0.0,
+            'preis' => ci_kalk_zahl($p['preis'] ?? null, "$was: Preis", CI_KALK_MAX_PREIS) ?? 0.0,
             'waehrung' => eudr_wahl($p['waehrung'] ?? '', ['USD', 'EUR'], "$was: Währung", 'USD'),
-            'imagEk' => ci_kalk_zahl($p['imagEk'] ?? null, "$was: Imag. EK", 1e4),
-            'vk' => ci_kalk_zahl($p['vk'] ?? null, "$was: VK", 1e4),
+            'imagEk' => ci_kalk_zahl($p['imagEk'] ?? null, "$was: Imag. EK", CI_KALK_MAX_PREIS),
+            'vk' => ci_kalk_zahl($p['vk'] ?? null, "$was: VK", CI_KALK_MAX_PREIS),
             // nur für „anderer Satz“
             'wertzoll' => $regime === 'anderer' ? ci_kalk_zahl($p['wertzoll'] ?? null, "$was: Wertzoll %", 1000) ?? 0.0 : 0.0,
             'spezifisch' => $regime === 'anderer' ? ci_kalk_zahl($p['spezifisch'] ?? null, "$was: spezifischer Zoll €/100 kg", 1e5) ?? 0.0 : 0.0,
             'vermerk' => $regime === 'anderer' ? eudr_text($p['vermerk'] ?? '', 300, "$was: Vermerk zum Satz") : ''];
     }
+    // Überschriebene Sätze: leeres Feld (null) = Vorgabe des Satzes
     $ueber = [];
     foreach (is_array($b['ueberschrieben'] ?? null) ? $b['ueberschrieben'] : [] as $key => $u) {
         if (!isset(CI_KALK_SAETZE[$key]) || !is_array($u)) throw new InvalidArgumentException('Unbekannter Zollsatz.');
         $name = CI_KALK_SAETZE[$key]['name'];
-        $ueber[$key] = ['wert' => ci_kalk_zahl($u['wert'] ?? null, "$name: Wertzoll %", 1000) ?? 0.0, 'spez' => ci_kalk_zahl($u['spez'] ?? null, "$name: €/100 kg", 1e5) ?? 0.0,
+        $ueber[$key] = ['wert' => ci_kalk_zahl($u['wert'] ?? null, "$name: Wertzoll %", 1000), 'spez' => ci_kalk_zahl($u['spez'] ?? null, "$name: €/100 kg", 1e5),
             'vermerk' => eudr_text($u['vermerk'] ?? '', 300, "$name: Vermerk")];
     }
     return ['kopf' => $kopf, 'teile' => array_values($teile), 'positionen' => $positionen, 'ueberschrieben' => $ueber, 'notiz' => eudr_text($b['notiz'] ?? '', 2000, 'Notiz')];
@@ -156,163 +177,179 @@ function ci_kalk_liste($v, int $max, string $was): array
     return $v;
 }
 
-/* ---------- Rechnen (reine Funktion) ---------- */
-/* Satz einer Position: [Schlüssel, Satz, Hinweise] – Schlüssel '' = keiner (Fehler in den Hinweisen) */
-function ci_kalk_satz(array $p, string $datum, array $tab): array
+/* ---------- Rechnen (reine Funktionen) ---------- */
+/* Kalkulation rechnen: geprüfte Eingabe (ci_kalkulation_eingabe) + Sätze (CI_KALK_SAETZE oder Schnappschuss) → Ergebnis.
+   Mit einem Fehler in den Hinweisen ist das Ergebnis „unvollständig“ und enthält keine Zahlen. */
+function ci_kalkulation_rechnen(array $e, array $saetze): array
+{
+    [$tab, $hinweise] = ci_kalk_saetze_anwenden($saetze, $e['ueberschrieben']);
+    $hinweise = [...$hinweise, ...ci_kalk_pruefen($e, $tab)];
+    if (in_array('fehler', array_column($hinweise, 'stufe'), true)) return ['vollstaendig' => false, 'hinweise' => $hinweise, 'saetze' => $tab];
+    $kosten = ci_kalk_kosten($e);
+    $teile = array_column($e['teile'], null, 'id');
+    $kgTeil = [];
+    foreach ($e['positionen'] as $p) $kgTeil[$p['teil']] = ($kgTeil[$p['teil']] ?? 0.0) + $p['netto'];
+    $pos = [];
+    foreach ($e['positionen'] as $p)
+        $pos[] = ci_kalk_position($p, $e['kopf'], $kosten, $teile[$p['teil']], ci_kalk_satz($p, $e['kopf']['datum'], $tab)) + ['anteilTeil' => ci_kalk_teilen($p['netto'], $kgTeil[$p['teil']])];
+    [$teilErgebnisse, $gesamt] = ci_kalk_auswertung($e, $pos, $kosten);
+    return ['vollstaendig' => true, 'hinweise' => [...$hinweise, ...ci_kalk_ergebnis_pruefen($e, $pos, $teilErgebnisse)], 'saetze' => $tab,
+        'positionen' => $pos, 'teile' => $teilErgebnisse, 'gesamt' => $gesamt] + ci_kalk_kontingente($e, $pos, $tab) + ['anteilig' => ci_kalk_anteilig($e['positionen'])];
+}
+/* Prüfhinweis: stufe fehler (Kalkulation unvollständig) | warnung | hinweis; pos = Stelle der Position oder null */
+function ci_kalk_hinweis(string $stufe, string $text, ?int $pos = null): array { return ['stufe' => $stufe, 'text' => $text, 'pos' => $pos]; }
+
+/* Schritt 1 – Sätze anwenden: überschriebene Sätze der Kalkulation über die Tabelle legen. Leeres Feld = Vorgabe des Satzes;
+   ein Vermerk ohne Werte überschreibt nichts (bleibt als Hinweis sichtbar). Werte ohne Vermerk = Fehler.
+   Liefert [wirksame Sätze, Hinweise]; ein überschriebener Satz trägt seine Vorgabe und den Vermerk mit. */
+function ci_kalk_saetze_anwenden(array $saetze, array $ueberschrieben): array
+{
+    $hinweise = [];
+    foreach ($ueberschrieben as $key => $u) {
+        if (!isset($saetze[$key])) continue;
+        $vorgabe = $saetze[$key];
+        if ($u['wert'] === null && $u['spez'] === null) {
+            if ($u['vermerk'] !== '') $hinweise[] = ci_kalk_hinweis('hinweis', "{$vorgabe['name']}: Vorgabe " . ci_kalk_satz_text($vorgabe) . " beibehalten – {$u['vermerk']}");
+            continue;
+        }
+        $satz = ['wert' => $u['wert'] ?? $vorgabe['wert'], 'spez' => $u['spez'] ?? $vorgabe['spez']];
+        $hinweise[] = $u['vermerk'] === '' ? ci_kalk_hinweis('fehler', "{$vorgabe['name']}: überschriebener Satz ohne Vermerk.")
+            : ci_kalk_hinweis('warnung', "{$vorgabe['name']}: Satz überschrieben – " . ci_kalk_satz_text($satz) . ' statt ' . ci_kalk_satz_text($vorgabe) . " ({$u['vermerk']}).");
+        $saetze[$key] = $satz + ['vermerk' => $u['vermerk'], 'vorgabe' => ['wert' => $vorgabe['wert'], 'spez' => $vorgabe['spez']]] + $vorgabe;
+    }
+    return [$saetze, $hinweise];
+}
+
+/* Schritt 2 – Prüfen: was fehlt oder nicht zusammenpasst, bevor gerechnet wird */
+function ci_kalk_pruefen(array $e, array $tab): array
+{
+    $k = $e['kopf'];
+    $h = [];
+    if ($k['datum'] === '') $h[] = ci_kalk_hinweis('fehler', 'Datum der Zollanmeldung fehlt – es bestimmt Satz und Stichtag (Art. 85 UZK).');
+    $usd = $k['seefrachtWaehrung'] === 'USD' || in_array('USD', array_column($e['positionen'], 'waehrung'), true);
+    if ($usd && (float)$k['kurs'] <= 0) $h[] = ci_kalk_hinweis('fehler', 'Kurs USD/€ fehlt.');
+    if (!$e['positionen']) $h[] = ci_kalk_hinweis('fehler', 'Noch keine Position.');
+    elseif (array_sum(array_column($e['positionen'], 'netto')) <= 0) $h[] = ci_kalk_hinweis('fehler', 'Summe Netto ist 0 kg – Fracht und Nebenkosten lassen sich nicht je kg verteilen.');
+    foreach ($e['positionen'] as $i => $p) array_push($h, ...ci_kalk_position_pruefen($p, $i, $k['datum'], $tab));
+    return $h;
+}
+/* Ursprung ↔ Zollregime ↔ Datum ↔ KN-Code einer Position */
+function ci_kalk_position_pruefen(array $p, int $i, string $datum, array $tab): array
 {
     $land = $p['land'];
+    $x = fn(string $stufe, string $text) => ci_kalk_hinweis($stufe, $text, $i);
+    if ($land === '') return [$x('fehler', 'Ursprungsland fehlt.')];
+    $eu = in_array($land, CI_KALK_EU, true);
+    $mercosur = in_array($land, CI_KALK_MERCOSUR, true);
     $h = [];
-    if ($land === '') return ['', null, [['fehler', 'Ursprungsland fehlt.']]];
-    if ($p['regime'] !== 'eu' && in_array($land, CI_KALK_EU, true)) $h[] = ['warnung', "Ursprung $land liegt in der EU – dann fällt kein Zoll an (Zollregime „EU-Ursprung“)."];
+    if ($p['regime'] !== 'eu' && $eu) $h[] = $x('warnung', "Ursprung $land liegt in der EU – dann fällt kein Zoll an (Zollregime „EU-Ursprung“).");
+    if ($p['netto'] <= 0) $h[] = $x('warnung', 'Position ohne Nettogewicht.');
     switch ($p['regime']) {
         case 'hilton':
-            if (!in_array($land, CI_KALK_HILTON_LAENDER, true)) $h[] = ['warnung', "Das Hilton-Kontingent gibt es nicht für Ursprung $land (nur " . implode(', ', CI_KALK_HILTON_LAENDER) . ').'];
-            $mercosur = in_array($land, CI_KALK_MERCOSUR, true);
-            if ($mercosur && $datum !== '' && $datum < $tab['hilton_mercosur']['ab']) $h[] = ['hinweis', 'Vor dem ' . ci_kalk_tag($tab['hilton_mercosur']['ab']) . ' gilt im Hilton-Kontingent auch für Ursprung ' . $land . ' der Satz von ' . ci_kalk_satz_text($tab['hilton']) . '.'];
-            $key = $mercosur && $datum >= $tab['hilton_mercosur']['ab'] ? 'hilton_mercosur' : 'hilton';
-            return [$key, $tab[$key], $h];
+            if (!in_array($land, CI_KALK_HILTON_LAENDER, true)) $h[] = $x('fehler', "Das Hilton-Kontingent gibt es nicht für Ursprung $land (nur " . implode(', ', CI_KALK_HILTON_LAENDER) . ').');
+            elseif ($mercosur && $datum !== '' && $datum < $tab['hilton_mercosur']['ab'])
+                $h[] = $x('hinweis', 'Vor dem ' . ci_kalk_tag($tab['hilton_mercosur']['ab']) . " gilt im Hilton-Kontingent auch für Ursprung $land der Satz von " . ci_kalk_satz_text($tab['hilton']) . '.');
+            break;
         case 'mercosur':
-            if (!in_array($land, CI_KALK_MERCOSUR, true)) $h[] = ['warnung', "Das Mercosur-Kontingent gilt nur für Ursprung AR, BR, PY, UY – nicht für $land."];
-            if ($datum !== '' && $datum < $tab['mercosur']['ab']) $h[] = ['warnung', 'Das Mercosur-Kontingent gilt erst ab dem ' . ci_kalk_tag($tab['mercosur']['ab']) . '.'];
-            if (!isset(CI_KALK_KN[$p['kn']])) $h[] = ['warnung', 'Anrechnung auf das Kontingent mit Faktor ' . str_replace('.', ',', (string)CI_KALK_SKE_OHNE_KNOCHEN) . ' (ohne Knochen) – für diesen KN-Code nicht hinterlegt, bitte prüfen.'];
-            return ['mercosur', $tab['mercosur'], $h];
+            if (!$mercosur) $h[] = $x('fehler', 'Das Mercosur-Kontingent gilt nur für Ursprung ' . implode(', ', CI_KALK_MERCOSUR) . " – nicht für $land.");
+            if ($datum !== '' && $datum < $tab['mercosur']['ab']) $h[] = $x('fehler', 'Das Mercosur-Kontingent gilt erst ab dem ' . ci_kalk_tag($tab['mercosur']['ab']) . '.');
+            if (!isset(CI_KALK_KN[$p['kn']])) $h[] = $x('hinweis', 'Schlachtkörperäquivalent (Faktor ' . str_replace('.', ',', (string)CI_KALK_SKE_OHNE_KNOCHEN) . ') nur für KN '
+                . ci_kalk_kn_text() . ' hinterlegt – Anrechnung auf das Kontingent für diesen KN-Code bitte selbst ermitteln.');
+            break;
         case 'drittland':
-            if (!isset(CI_KALK_KN[$p['kn']])) return ['', null, [['fehler', 'Drittlandszoll ist nur für KN 0201 30 00 und 0202 30 90 hinterlegt – bitte KN-Code prüfen oder „anderer Satz“ wählen.']]];
-            if (in_array($land, CI_KALK_MERCOSUR, true)) $h[] = ['hinweis', "Ursprung $land: mit Kontingentszertifikat wäre das Mercosur-Kontingent möglich (Vergleich unten)."];
-            $key = CI_KALK_KN[$p['kn']]['satz'];
-            return [$key, $tab[$key], $h];
+            if (!isset(CI_KALK_KN[$p['kn']])) $h[] = $x('fehler', 'Drittlandszoll ist nur für KN ' . ci_kalk_kn_text() . ' hinterlegt – bitte KN-Code prüfen oder „anderer Satz“ wählen.');
+            elseif ($mercosur) $h[] = $x('hinweis', "Ursprung $land: mit Kontingentszertifikat wäre das Mercosur-Kontingent möglich (Vergleich unten).");
+            break;
         case 'eu':
-            if (!in_array($land, CI_KALK_EU, true)) $h[] = ['warnung', "Ursprung $land liegt nicht in der EU – Zoll fällt an."];
-            return ['eu', $tab['eu'], $h];
+            if (!$eu) $h[] = $x('fehler', "Ursprung $land liegt nicht in der EU – bitte das passende Zollregime wählen.");
+            break;
         default:   // anderer
-            if ($p['vermerk'] === '') return ['', null, [['fehler', 'Anderer Satz: bitte einen Vermerk eintragen (woher der Satz stammt).']]];
-            $h[] = ['hinweis', 'Anderer Satz: ' . ci_kalk_satz_text(['wert' => $p['wertzoll'], 'spez' => $p['spezifisch']]) . ' – ' . $p['vermerk']];
-            return ['anderer', ['name' => 'Anderer Satz', 'wert' => $p['wertzoll'], 'spez' => $p['spezifisch'], 'ab' => '', 'quelle' => $p['vermerk']], $h];
+            $h[] = $p['vermerk'] === '' ? $x('fehler', 'Anderer Satz: bitte einen Vermerk eintragen (woher der Satz stammt).')
+                : $x('hinweis', 'Anderer Satz: ' . ci_kalk_satz_text(['wert' => $p['wertzoll'], 'spez' => $p['spezifisch']]) . ' – ' . $p['vermerk']);
+    }
+    return $h;
+}
+/* Wirksamer Satz einer Position mit Schlüssel; null, wenn keiner wählbar ist (ci_kalk_position_pruefen meldet den Grund) */
+function ci_kalk_satz(array $p, string $datum, array $tab): ?array
+{
+    switch ($p['regime']) {
+        case 'drittland': return ci_kalk_drittland_satz($p['kn'], $tab);
+        case 'anderer': return ['key' => 'anderer', 'name' => 'Anderer Satz', 'wert' => $p['wertzoll'], 'spez' => $p['spezifisch'], 'ab' => '', 'quelle' => $p['vermerk']];
+        case 'hilton':
+            $key = in_array($p['land'], CI_KALK_MERCOSUR, true) && $datum >= $tab['hilton_mercosur']['ab'] ? 'hilton_mercosur' : 'hilton';
+            return ['key' => $key] + $tab[$key];
+        default: return ['key' => $p['regime']] + $tab[$p['regime']];   // mercosur, eu
     }
 }
+/* Drittlandszoll nach KN-Code (auch für den Vergleich mit dem Mercosur-Kontingent); null für einen nicht hinterlegten Code */
+function ci_kalk_drittland_satz(string $kn, array $tab): ?array
+{
+    $key = CI_KALK_KN[$kn]['satz'] ?? null;
+    return $key === null ? null : ['key' => $key] + $tab[$key];
+}
+/* Zoll je kg: Wertzoll % vom Zollwert + spezifischer Zoll €/100 kg */
+function ci_kalk_zoll_kg(float $zollwertKg, array $satz): float { return $zollwertKg * $satz['wert'] / 100 + $satz['spez'] / 100; }
 function ci_kalk_satz_text(array $s): string
 {
     $z = fn(float $v) => rtrim(rtrim(number_format($v, 3, ',', '.'), '0'), ',');
     return $z($s['wert']) . ' %' . ($s['spez'] > 0 ? ' + ' . $z($s['spez']) . ' €/100 kg' : '');
 }
+function ci_kalk_kn_text(): string { return implode(' und ', array_column(CI_KALK_KN, 'text')); }
 function ci_kalk_tag(string $d): string { return $d === '' ? '' : substr($d, 8, 2) . '.' . substr($d, 5, 2) . '.' . substr($d, 0, 4); }
 /* Quotient, 0 bei Nenner 0 (nur wo 0 die richtige Anzeige ist und ein Hinweis den Grund nennt) */
 function ci_kalk_teilen(float $a, float $b): float { return $b > 0 ? $a / $b : 0.0; }
+function ci_kalk_eur(float $betrag, string $waehrung, float $kurs): float { return $waehrung === 'USD' ? $betrag / $kurs : $betrag; }
 
-/* Kalkulation rechnen: geprüfte Eingabe (ci_kalkulation_eingabe) + Sätze (CI_KALK_SAETZE oder Schnappschuss) → Ergebnis.
-   Mit einem Fehler in den Hinweisen (Kurs, Gewicht, KN-Code …) ist das Ergebnis „unvollständig“ und enthält keine Zahlen. */
-function ci_kalkulation_rechnen(array $e, array $saetze): array
+/* Schritt 3 – Kosten des Containers: Seefracht, Provision und Nebenkosten je kg (für alle Positionen gleich) */
+function ci_kalk_kosten(array $e): array
 {
     $k = $e['kopf'];
-    $hinweise = [];
-    $melde = function (string $stufe, string $text, ?int $pos = null) use (&$hinweise) { $hinweise[] = ['stufe' => $stufe, 'text' => $text, 'pos' => $pos]; };
-    $tab = $saetze;
-    foreach ($e['ueberschrieben'] as $key => $u) {
-        if (!isset($tab[$key])) continue;
-        $vorgabe = $tab[$key];
-        if ($u['vermerk'] === '') $melde('fehler', $vorgabe['name'] . ': überschriebener Satz ohne Vermerk.');
-        else $melde('warnung', $vorgabe['name'] . ': Satz überschrieben – ' . ci_kalk_satz_text($u) . ' statt ' . ci_kalk_satz_text($vorgabe) . ' (' . $u['vermerk'] . ').');
-        $tab[$key] = ['wert' => $u['wert'], 'spez' => $u['spez'], 'vermerk' => $u['vermerk'], 'vorgabe' => ['wert' => $vorgabe['wert'], 'spez' => $vorgabe['spez']]] + $vorgabe;
-    }
-    if ($k['datum'] === '') $melde('fehler', 'Datum der Kalkulation fehlt (bestimmt u. a. den Satz im Hilton-Kontingent).');
-    $usd = $k['seefrachtWaehrung'] === 'USD' || in_array('USD', array_column($e['positionen'], 'waehrung'), true);
-    $kurs = (float)($k['kurs'] ?? 0);
-    if ($usd && $kurs <= 0) $melde('fehler', 'Kurs USD/€ fehlt.');
+    $kurs = (float)$k['kurs'];
     $gesamtKg = array_sum(array_column($e['positionen'], 'netto'));
-    if (!$e['positionen']) $melde('fehler', 'Noch keine Position.');
-    elseif ($gesamtKg <= 0) $melde('fehler', 'Summe Netto ist 0 kg – Fracht und Nebenkosten lassen sich nicht je kg verteilen.');
-    $satz = [];
-    foreach ($e['positionen'] as $i => $p) {
-        [$key, $s, $h] = ci_kalk_satz($p, $k['datum'], $tab);
-        $satz[$i] = $key === '' ? null : ['key' => $key] + $s;
-        foreach ($h as [$stufe, $text]) $melde($stufe, $text, $i);
-        if ($p['netto'] <= 0) $melde('warnung', 'Position ohne Nettogewicht.', $i);
-    }
-    if (in_array('fehler', array_column($hinweise, 'stufe'), true)) return ['vollstaendig' => false, 'hinweise' => $hinweise, 'saetze' => $tab];
-
-    $eur = fn(float $betrag, string $waehrung) => $waehrung === 'USD' ? $betrag / $kurs : $betrag;
-    $seefracht = $eur($k['seefracht'], $k['seefrachtWaehrung']);
-    $frachtKg = $seefracht / $gesamtKg;
-    $provKg = $k['provisionT'] / 1000;
-    // Teile: Gewicht, Warenwert, Versicherung
-    $T = [];
-    foreach ($e['teile'] as $t) $T[$t['id']] = ['kg' => 0.0, 'ww' => 0.0];
-    foreach ($e['positionen'] as $p) { $T[$p['teil']]['kg'] += $p['netto']; $T[$p['teil']]['ww'] += $eur($p['preis'], $p['waehrung']) * $p['netto']; }
-    $warenwert = array_sum(array_column($T, 'ww'));
-    foreach ($e['teile'] as $t) {
-        $x = &$T[$t['id']];
-        $x['frachtanteil'] = $seefracht * $x['kg'] / $gesamtKg;
-        $x['versWert'] = ($x['ww'] + $x['frachtanteil']) * (1 + $k['imagGewinn'] / 100);
-        $x['praemie'] = $x['versWert'] * $t['versicherung'] / 100;
-        $x['versKg'] = ci_kalk_teilen($x['praemie'], $x['kg']);
-        if ($x['kg'] <= 0) $melde('warnung', 'Teil „' . $t['name'] . '“ hat kein Nettogewicht.');
-        unset($x);
-    }
+    $seefracht = ci_kalk_eur($k['seefracht'], $k['seefrachtWaehrung'], $kurs);
+    $warenwert = array_sum(array_map(fn($p) => ci_kalk_eur($p['preis'], $p['waehrung'], $kurs) * $p['netto'], $e['positionen']));
     $finanzierung = $warenwert * $k['zins'] / 100 * $k['tage'] / 360;
     $zahlung = $warenwert * $k['zahlPromille'] / 1000 + $k['zahlFix'];
-    $nebenKg = ($k['nachlauf'] + $finanzierung + $zahlung) / $gesamtKg + $k['nachlaufKg'];
+    return ['seefracht' => $seefracht, 'frachtKg' => $seefracht / $gesamtKg, 'provisionKg' => $k['provisionT'] / 1000, 'finanzierung' => $finanzierung,
+        'zahlungskosten' => $zahlung, 'nachlauf' => $k['nachlauf'], 'nebenkostenKg' => ($k['nachlauf'] + $finanzierung + $zahlung) / $gesamtKg + $k['nachlaufKg']];
+}
 
-    $pos = [];
-    foreach ($e['positionen'] as $i => $p) {
-        $s = $satz[$i];
-        $preisEur = $eur($p['preis'], $p['waehrung']);
-        $versKg = $T[$p['teil']]['versKg'];
-        $zollwertKg = $preisEur + $frachtKg + $versKg + ($k['provisionEinkauf'] ? 0.0 : $provKg);
-        $zollKg = $zollwertKg * $s['wert'] / 100 + $s['spez'] / 100;
-        $vorNk = $preisEur + $frachtKg + $versKg + $provKg + $zollKg;
-        $einstand = $vorNk + $nebenKg;
-        if ($p['imagEk'] !== null && abs($p['imagEk'] - $einstand) > CI_KALK_IMAG_TOLERANZ * $einstand)
-            $melde('warnung', 'Imag. EK ' . number_format($p['imagEk'], 2, ',', '.') . ' €/kg weicht mehr als 10 % vom Einstand ' . number_format($einstand, 2, ',', '.') . ' €/kg ab.', $i);
-        $pos[] = ['satz' => $s['key'], 'satzName' => $s['name'], 'wertzoll' => $s['wert'], 'spezifisch' => $s['spez'],
-            'preisEur' => $preisEur, 'betragUsd' => $p['waehrung'] === 'USD' ? $p['preis'] * $p['netto'] : null, 'warenwert' => $preisEur * $p['netto'],
-            'anteilTeil' => ci_kalk_teilen($p['netto'], $T[$p['teil']]['kg']),
-            'frachtKg' => $frachtKg, 'versKg' => $versKg, 'provisionKg' => $provKg, 'zollwertKg' => $zollwertKg, 'zollKg' => $zollKg, 'zoll' => $zollKg * $p['netto'],
-            'einstandVorNkKg' => $vorNk, 'nebenkostenKg' => $nebenKg, 'einstandKg' => $einstand, 'ist' => $einstand * $p['netto'],
-            'soll' => $p['imagEk'] === null ? null : $p['imagEk'] * $p['netto'], 'vkWert' => $p['vk'] === null ? null : $p['vk'] * $p['netto'],
-            'ske' => $s['key'] === 'mercosur' ? $p['netto'] * CI_KALK_SKE_OHNE_KNOCHEN : null];
-    }
+/* Schritt 4 – Position: Einstand je kg und Werte ($teil = Teil der Eingabe, $satz = ci_kalk_satz) */
+function ci_kalk_position(array $p, array $kopf, array $kosten, array $teil, array $satz): array
+{
+    $preisEur = ci_kalk_eur($p['preis'], $p['waehrung'], (float)$kopf['kurs']);
+    $versKg = ($preisEur + $kosten['frachtKg']) * (1 + $kopf['imagGewinn'] / 100) * $teil['versicherung'] / 100;
+    $zollwertKg = $preisEur + $kosten['frachtKg'] + $versKg + ($kopf['provisionEinkauf'] ? 0.0 : $kosten['provisionKg']);
+    $zollKg = ci_kalk_zoll_kg($zollwertKg, $satz);
+    $vorNk = $preisEur + $kosten['frachtKg'] + $versKg + $kosten['provisionKg'] + $zollKg;
+    $einstand = $vorNk + $kosten['nebenkostenKg'];
+    return ['satz' => $satz['key'], 'satzName' => $satz['name'], 'wertzoll' => $satz['wert'], 'spezifisch' => $satz['spez'],
+        'preisEur' => $preisEur, 'betragUsd' => $p['waehrung'] === 'USD' ? $p['preis'] * $p['netto'] : null, 'warenwert' => $preisEur * $p['netto'],
+        'frachtKg' => $kosten['frachtKg'], 'versKg' => $versKg, 'provisionKg' => $kosten['provisionKg'], 'zollwertKg' => $zollwertKg, 'zollKg' => $zollKg,
+        'zoll' => $zollKg * $p['netto'], 'einstandVorNkKg' => $vorNk, 'nebenkostenKg' => $kosten['nebenkostenKg'], 'einstandKg' => $einstand,
+        'ist' => $einstand * $p['netto'], 'soll' => $p['imagEk'] === null ? null : $p['imagEk'] * $p['netto'], 'vkWert' => $p['vk'] === null ? null : $p['vk'] * $p['netto'],
+        // Schlachtkörperäquivalent nur für Fleisch ohne Knochen (bekannte KN-Codes), sonst unbekannt
+        'ske' => $p['regime'] === 'mercosur' && isset(CI_KALK_KN[$p['kn']]) ? $p['netto'] * CI_KALK_SKE_OHNE_KNOCHEN : null];
+}
+
+/* Schritt 5 – Auswertung je Teil und gesamt: Summen, Versicherungswert und Prämie, Ertrag. Liefert [Teile, Gesamt];
+   ein Teil ohne Positionen verhindert keinen Gesamtertrag. */
+function ci_kalk_auswertung(array $e, array $pos, array $kosten): array
+{
     $teile = [];
     foreach ($e['teile'] as $t) {
         $ids = array_keys(array_filter($e['positionen'], fn($p) => $p['teil'] === $t['id']));
-        $x = ci_kalk_summe($e['positionen'], $pos, $ids) + array_intersect_key($T[$t['id']], ['frachtanteil' => 1, 'versWert' => 1, 'praemie' => 1, 'versKg' => 1]);
-        if ($ids && $x['vkWert'] === null) $melde('hinweis', 'Teil „' . $t['name'] . '“: VK fehlt – kein Rohertrag.');
-        $teile[] = ['id' => $t['id'], 'positionen' => count($ids)] + ci_kalk_ertrag($x, $t['rueckverguetung'] * ($x['vkWert'] ?? 0) / 100, $t['wkz']);
+        $summe = ci_kalk_summe($e['positionen'], $pos, $ids);
+        $frachtanteil = $kosten['frachtKg'] * $summe['netto'];
+        $versWert = ($summe['warenwert'] + $frachtanteil) * (1 + $e['kopf']['imagGewinn'] / 100);
+        $teile[] = ['id' => $t['id'], 'positionen' => count($ids), 'frachtanteil' => $frachtanteil, 'versWert' => $versWert, 'praemie' => $versWert * $t['versicherung'] / 100]
+            + ci_kalk_ertrag($summe, $t['rueckverguetung'] * ($summe['vkWert'] ?? 0) / 100, $t['wkz']);
     }
+    $mitPositionen = array_filter($teile, fn($t) => $t['positionen'] > 0);
     $gesamt = ci_kalk_summe($e['positionen'], $pos, array_keys($pos));
-    $mitPositionen = array_filter($teile, fn($t) => $t['positionen'] > 0);   // ein leerer Teil verhindert keinen Gesamtertrag
     if (in_array(null, array_column($mitPositionen, 'rohertrag'), true)) $gesamt['vkWert'] = null;
-    $gesamt = ci_kalk_ertrag($gesamt, array_sum(array_column($mitPositionen, 'rueckverguetung')), array_sum(array_column($mitPositionen, 'wkz')));
-    $gesamt += ['seefracht' => $seefracht, 'frachtKg' => $frachtKg, 'provisionKg' => $provKg, 'finanzierung' => $finanzierung, 'zahlungskosten' => $zahlung,
-        'nachlauf' => $k['nachlauf'], 'nebenkostenKg' => $nebenKg];
-
-    // Kontingente, Zoll je Regime, Vergleich mit/ohne Mercosur-Kontingent, anteilig Hilton
-    $zollRegime = $kg = [];
-    foreach ($e['positionen'] as $i => $p) {
-        $zollRegime[$p['regime']] = ($zollRegime[$p['regime']] ?? 0.0) + $pos[$i]['zoll'];
-        $kg[$p['regime']] = ($kg[$p['regime']] ?? 0.0) + $p['netto'];
-    }
-    $vergleich = ['kg' => 0.0, 'mitQuote' => 0.0, 'ohneQuote' => 0.0, 'positionen' => 0];
-    foreach ($e['positionen'] as $i => $p) {
-        if (!in_array($p['regime'], ['mercosur', 'drittland'], true) || !in_array($p['land'], CI_KALK_MERCOSUR, true) || !isset(CI_KALK_KN[$p['kn']])) continue;
-        $dl = $tab[CI_KALK_KN[$p['kn']]['satz']]; $mq = $tab['mercosur']; $zw = $pos[$i]['zollwertKg'];
-        $vergleich['kg'] += $p['netto']; $vergleich['positionen']++;
-        $vergleich['mitQuote'] += ($zw * $mq['wert'] / 100 + $mq['spez'] / 100) * $p['netto'];
-        $vergleich['ohneQuote'] += ($zw * $dl['wert'] / 100 + $dl['spez'] / 100) * $p['netto'];
-    }
-    $vergleich['ersparnis'] = $vergleich['ohneQuote'] - $vergleich['mitQuote'];
-    $artikel = [];
-    foreach ($e['positionen'] as $p) {
-        $a = mb_strtolower(trim($p['artikel']));
-        $artikel[$a]['artikel'] ??= $p['artikel'];
-        $artikel[$a]['regime'][$p['regime']] = ($artikel[$a]['regime'][$p['regime']] ?? 0.0) + $p['netto'];
-    }
-    $anteilig = array_values(array_filter($artikel, fn($a) => count($a['regime']) > 1));
-    foreach ($anteilig as &$a) $a['anteilHilton'] = ci_kalk_teilen($a['regime']['hilton'] ?? 0.0, array_sum($a['regime']));
-    unset($a);
-    return ['vollstaendig' => true, 'hinweise' => $hinweise, 'saetze' => $tab, 'positionen' => $pos, 'teile' => $teile, 'gesamt' => $gesamt,
-        'zollJeRegime' => $zollRegime, 'kgJeRegime' => $kg,
-        'kontingente' => ['hilton' => $kg['hilton'] ?? 0.0, 'mercosur' => $kg['mercosur'] ?? 0.0, 'mercosurSke' => array_sum(array_filter(array_column($pos, 'ske')))],
-        'vergleich' => $vergleich['positionen'] ? $vergleich : null, 'anteilig' => $anteilig];
+    $gesamt = ci_kalk_ertrag($gesamt, array_sum(array_column($mitPositionen, 'rueckverguetung')), array_sum(array_column($mitPositionen, 'wkz'))) + $kosten;
+    return [$teile, $gesamt];
 }
 /* Summen über Positionen ($ids = Stellen): Kartons, Gewichte, Beträge; Soll und VK nur, wenn jede Position sie hat */
 function ci_kalk_summe(array $eingabe, array $pos, array $ids): array
@@ -339,6 +376,56 @@ function ci_kalk_ertrag(array $x, float $rueckverguetung, float $wkz): array
         'rueckverguetung' => $roh === null ? null : $rueckverguetung, 'wkz' => $roh === null ? null : $wkz,
         'rohgewinn' => $roh === null ? null : $roh - $rueckverguetung - $wkz] + $x;
 }
+/* Prüfhinweise zum Ergebnis: Imag. EK weicht vom Einstand ab, Teil ohne Gewicht, Teil ohne vollständigen VK */
+function ci_kalk_ergebnis_pruefen(array $e, array $pos, array $teile): array
+{
+    $h = [];
+    foreach ($e['positionen'] as $i => $p) {
+        $einstand = $pos[$i]['einstandKg'];
+        if ($p['imagEk'] !== null && abs($p['imagEk'] - $einstand) > CI_KALK_IMAG_TOLERANZ * $einstand)
+            $h[] = ci_kalk_hinweis('warnung', 'Imag. EK ' . number_format($p['imagEk'], 2, ',', '.') . ' €/kg weicht mehr als ' . round(CI_KALK_IMAG_TOLERANZ * 100) . ' % vom Einstand '
+                . number_format($einstand, 2, ',', '.') . ' €/kg ab.', $i);
+    }
+    foreach ($e['teile'] as $n => $t) {
+        if ($teile[$n]['netto'] <= 0) $h[] = ci_kalk_hinweis('warnung', 'Teil „' . $t['name'] . '“ hat kein Nettogewicht.');
+        if ($teile[$n]['positionen'] && $teile[$n]['vkWert'] === null) $h[] = ci_kalk_hinweis('hinweis', 'Teil „' . $t['name'] . '“: VK fehlt – kein Rohertrag.');
+    }
+    return $h;
+}
+/* Zoll und Netto je Zollregime, Schlachtkörperäquivalent im Mercosur-Kontingent (null, wenn es für eine Position nicht
+   bekannt ist) und Vergleich mit/ohne Mercosur-Kontingent für Ursprung Mercosur außerhalb von Hilton */
+function ci_kalk_kontingente(array $e, array $pos, array $tab): array
+{
+    $zoll = $kg = $ske = [];
+    $vergleich = ['kg' => 0.0, 'mitQuote' => 0.0, 'ohneQuote' => 0.0, 'positionen' => 0];
+    foreach ($e['positionen'] as $i => $p) {
+        $regime = $p['regime'];
+        $zoll[$regime] = ($zoll[$regime] ?? 0.0) + $pos[$i]['zoll'];
+        $kg[$regime] = ($kg[$regime] ?? 0.0) + $p['netto'];
+        if ($regime === 'mercosur') $ske[] = $pos[$i]['ske'];
+        $drittland = ci_kalk_drittland_satz($p['kn'], $tab);
+        if (!in_array($regime, ['mercosur', 'drittland'], true) || !in_array($p['land'], CI_KALK_MERCOSUR, true) || $drittland === null) continue;
+        $vergleich['kg'] += $p['netto'];
+        $vergleich['positionen']++;
+        $vergleich['mitQuote'] += ci_kalk_zoll_kg($pos[$i]['zollwertKg'], $tab['mercosur']) * $p['netto'];
+        $vergleich['ohneQuote'] += ci_kalk_zoll_kg($pos[$i]['zollwertKg'], $drittland) * $p['netto'];
+    }
+    $vergleich['ersparnis'] = $vergleich['ohneQuote'] - $vergleich['mitQuote'];
+    return ['zollJeRegime' => $zoll, 'kgJeRegime' => $kg, 'mercosurSke' => in_array(null, $ske, true) ? null : array_sum($ske),
+        'vergleich' => $vergleich['positionen'] ? $vergleich : null];
+}
+/* Anteilig Hilton: Artikel (Schreibweise egal) in mehr als einem Zollregime, mit kg je Regime und Anteil im Hilton-Kontingent */
+function ci_kalk_anteilig(array $positionen): array
+{
+    $artikel = [];
+    foreach ($positionen as $p) {
+        $a = mb_strtolower(trim($p['artikel']));
+        $artikel[$a]['artikel'] ??= $p['artikel'];
+        $artikel[$a]['regime'][$p['regime']] = ($artikel[$a]['regime'][$p['regime']] ?? 0.0) + $p['netto'];
+    }
+    $mehrere = array_filter($artikel, fn($a) => count($a['regime']) > 1);
+    return array_values(array_map(fn($a) => $a + ['anteilHilton' => ci_kalk_teilen($a['regime']['hilton'] ?? 0.0, array_sum($a['regime']))], $mehrere));
+}
 
 /* ---------- Fassungen (Dokument containerimport-kalkulationen) ---------- */
 const CI_KALK_STAENDE = ['entwurf' => 'vorläufig', 'endgueltig' => 'endgültig'];
@@ -357,8 +444,7 @@ function ci_kalk_holen(array $doc, string $sendung): array
 function ci_kalk_speichern(array $doc, string $sendung, array $eingabe, int $rev, string $grund, array $me): array
 {
     [$i, $alt] = ci_kalk_holen($doc, $sendung);
-    if ($alt && (int)$alt['rev'] !== $rev) fail('Die Kalkulation wurde inzwischen von jemand anderem geändert. Bitte neu laden.', 409);
-    if (!$alt && $rev !== 0) fail('Die Kalkulation wurde inzwischen von jemand anderem geändert. Bitte neu laden.', 409);
+    eudr_rev_pruefen(['rev' => $rev], $alt ?? [], 'Die Kalkulation');
     $fassungen = $alt['fassungen'] ?? [];
     $letzte = $fassungen ? $fassungen[count($fassungen) - 1] : null;
     if ($letzte && $letzte['stand'] === 'entwurf') {
@@ -377,37 +463,37 @@ function ci_kalk_speichern(array $doc, string $sendung, array $eingabe, int $rev
     return [$doc, $neu, $art];
 }
 
-/* Letzte Fassung endgültig festschreiben: Schnappschuss von Sätzen, Ergebnis und Container (GR-106). Nur ein vollständiges
-   Ergebnis lässt sich festschreiben. Liefert [Dokument, Kalkulation]. */
+/* Letzte Fassung endgültig festschreiben (GR-106): die Fassung hält dann ihre geprüfte Eingabe (Felder späterer Versionen
+   mit ihrer Vorgabe), ihr Ergebnis (darin die wirksamen Sätze, ergebnis.saetze) und unter endgueltig wer, wann und den
+   Container. Nur ein vollständiges Ergebnis lässt sich festschreiben. Liefert [Dokument, Kalkulation]. */
 function ci_kalk_festschreiben(array $doc, string $sendung, int $rev, array $container, array $me): array
 {
     [$i, $k] = ci_kalk_holen($doc, $sendung);
     if (!$k) fail('Für diesen Container gibt es noch keine Kalkulation.', 404);
-    if ((int)$k['rev'] !== $rev) fail('Die Kalkulation wurde inzwischen von jemand anderem geändert. Bitte neu laden.', 409);
+    eudr_rev_pruefen(['rev' => $rev], $k, 'Die Kalkulation');
     $n = count($k['fassungen']) - 1;
     $f = $k['fassungen'][$n];
     if ($f['stand'] !== 'entwurf') fail('Diese Fassung ist bereits endgültig.', 409);
-    $ergebnis = ci_kalkulation_rechnen(ci_kalkulation_eingabe($f['eingabe']), CI_KALK_SAETZE);
+    $eingabe = ci_kalkulation_eingabe($f['eingabe']);
+    $ergebnis = ci_kalkulation_rechnen($eingabe, CI_KALK_SAETZE);
     if (!$ergebnis['vollstaendig']) throw new InvalidArgumentException('Die Kalkulation ist unvollständig: ' . implode(' ', array_column(array_filter($ergebnis['hinweise'], fn($h) => $h['stufe'] === 'fehler'), 'text')));
-    $f['stand'] = 'endgueltig';
-    $f['endgueltig'] = ['wer' => eudr_wer($me), 'saetze' => CI_KALK_SAETZE, 'ergebnis' => $ergebnis, 'container' => $container];
-    $k['fassungen'][$n] = $f;
+    $k['fassungen'][$n] = ['stand' => 'endgueltig', 'eingabe' => $eingabe, 'ergebnis' => $ergebnis, 'endgueltig' => ['wer' => eudr_wer($me), 'container' => $container]] + $f;
     $k['rev']++;
     $doc['liste'][$i] = $k;
     return [$doc, $k];
 }
 
-/* Kalkulation für die Seite: je Fassung Eingabe, Sätze und Ergebnis – ein Entwurf frisch gerechnet mit den aktuellen
-   Sätzen, eine endgültige Fassung genau so, wie sie festgeschrieben wurde. */
+/* Kalkulation für die Seite: je Fassung Eingabe und Ergebnis (mit den wirksamen Sätzen) – ein Entwurf frisch gerechnet mit
+   den aktuellen Sätzen, eine endgültige Fassung genau so, wie sie festgeschrieben wurde. */
 function ci_kalk_sicht(array $k): array
 {
     $k['fassungen'] = array_map(function (array $f) {
-        if ($f['stand'] === 'endgueltig') return $f + ['ergebnis' => $f['endgueltig']['ergebnis']];
+        if ($f['stand'] === 'endgueltig') return $f + ['ergebnis' => $f['endgueltig']['ergebnis'] ?? null];   // ?? : Probestände vor dem Merge hielten es unter endgueltig
         try {
             $f['eingabe'] = ci_kalkulation_eingabe($f['eingabe']);   // ältere Einträge bekommen neue Felder mit ihrer Vorgabe (GR-006)
-            return $f + ['ergebnis' => ci_kalkulation_rechnen($f['eingabe'], CI_KALK_SAETZE)];
+            return ['ergebnis' => ci_kalkulation_rechnen($f['eingabe'], CI_KALK_SAETZE)] + $f;
         } catch (InvalidArgumentException $e) {
-            return $f + ['ergebnis' => ['vollstaendig' => false, 'hinweise' => [['stufe' => 'fehler', 'text' => $e->getMessage(), 'pos' => null]], 'saetze' => CI_KALK_SAETZE]];
+            return ['ergebnis' => ['vollstaendig' => false, 'hinweise' => [ci_kalk_hinweis('fehler', $e->getMessage())], 'saetze' => CI_KALK_SAETZE]] + $f;
         }
     }, $k['fassungen']);
     return $k;
