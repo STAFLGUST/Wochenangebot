@@ -105,3 +105,26 @@ oberflaeche = "containerimport.intern"
 # Alle Dateien eines Containers als ZIP mit Ordnern je erster Dokumentart und index.csv
 [aktion.containerimport_dokumente_zip]
 oberflaeche = "containerimport.intern"
+
+# Kalkulation je Container (app/api/aktionen/containerimport_kalkulation.php): Stand je Container, Sätze, Auswahllisten
+[aktion.containerimport_kalkulation_start]
+oberflaeche = "containerimport.intern"
+
+# Kalkulation eines Containers mit allen Fassungen
+[aktion.containerimport_kalkulation_laden]
+oberflaeche = "containerimport.intern"
+
+# Kalkulation rechnen, ohne zu speichern (POST wegen Inhalt)
+[aktion.containerimport_kalkulation_rechnen]
+oberflaeche = "containerimport.intern"
+schreibend = true
+
+# Entwurf speichern oder neue Fassung (mit Grund) anlegen
+[aktion.containerimport_kalkulation_speichern]
+oberflaeche = "containerimport.intern"
+schreibend = true
+
+# Letzte Fassung endgültig festschreiben (Schnappschuss, danach unveränderlich)
+[aktion.containerimport_kalkulation_festschreiben]
+oberflaeche = "containerimport.intern"
+schreibend = true

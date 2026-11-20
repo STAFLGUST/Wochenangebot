@@ -943,4 +943,11 @@ bereich = "intern"
 schutz = "intern"
 beschreibung = "Container-Import · Tracking: zuletzt abgerufene öffentliche Liste „Expected vessels“ von Hafen Hamburg (Schiff, Ankunft, Liegeplatz, Terminal) mit Abrufzeit und Fehlertext. Zwischenspeicher – lässt sich jederzeit neu abrufen und darf neu geschnitten werden (z. B. je Quelle); enthält nichts Eigenes."
 dynamisch = true   # Name als Konstante CI_HAFEN_DOKUMENT (module/containerimport/hafen.php)
+[[dokument]]
+name = "containerimport-kalkulationen"
+eigentuemer = "containerimport"
+bereich = "intern"
+schutz = "vertraulich"
+beschreibung = "Container-Import · Kalkulation je Container: Fassungen mit Eingabe (Kurs, Seefracht, Provision, Nebenkosten, Teile mit Abnehmer, Positionen mit Zollregime, Ursprung, KN-Code, Gewichten, Einkaufs-, Imag.- und Verkaufspreisen, überschriebene Sätze mit Vermerk), Stand (vorläufig/endgültig), Grund einer neuen Fassung, wer/wann; endgültige Fassungen mit Schnappschuss von Sätzen, Ergebnis und Container (GR-106). Nichts wird gelöscht (GoBD)."
+dynamisch = true   # Name als Konstante CI_KALK_DOKUMENT (module/containerimport/kalkulation.php)
 

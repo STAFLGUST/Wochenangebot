@@ -14,6 +14,7 @@
 <link rel="stylesheet" href="../../assets/rahmen.css">
 <link rel="stylesheet" href="containerimport.css">
 <link rel="stylesheet" href="dokumente.css">
+<link rel="stylesheet" href="kalkulation.css">
 </head>
 <body class="ci r" data-rahmen="containerimport">
 <div class="r-app">
@@ -37,8 +38,8 @@
         </div>
       </header>
 
-      <!-- Reiter des Moduls: EUDR und Tracking; weitere (Verzollung, Dokumente) folgen -->
-      <div class="ci-reiter" role="tablist" aria-label="Bereiche"><button type="button" role="tab" aria-selected="true" aria-controls="ci-bereich-eudr" id="ci-reiter-eudr" data-reiter="eudr">EUDR</button><button type="button" role="tab" aria-selected="false" aria-controls="ci-bereich-tracking" id="ci-reiter-tracking" data-reiter="tracking">Tracking</button></div>
+      <!-- Reiter des Moduls: EUDR, Tracking und Kalkulation; weitere (Verzollung, Dokumente) folgen -->
+      <div class="ci-reiter" role="tablist" aria-label="Bereiche"><button type="button" role="tab" aria-selected="true" aria-controls="ci-bereich-eudr" id="ci-reiter-eudr" data-reiter="eudr">EUDR</button><button type="button" role="tab" aria-selected="false" aria-controls="ci-bereich-tracking" id="ci-reiter-tracking" data-reiter="tracking">Tracking</button><button type="button" role="tab" aria-selected="false" aria-controls="ci-bereich-kalkulation" id="ci-reiter-kalkulation" data-reiter="kalkulation">Kalkulation</button></div>
 
       <div class="ci-bereich" id="ci-bereich-eudr" data-bereich="eudr" role="tabpanel" aria-labelledby="ci-reiter-eudr">
       <details class="r-karte ci-hilfe">
@@ -60,6 +61,7 @@
       <section id="ci-inhalt" aria-live="polite"></section>
       </div>
       <section class="ci-bereich" id="ci-bereich-tracking" data-bereich="tracking" role="tabpanel" aria-labelledby="ci-reiter-tracking" hidden></section>
+      <section class="ci-bereich" id="ci-bereich-kalkulation" data-bereich="kalkulation" role="tabpanel" aria-labelledby="ci-reiter-kalkulation" hidden></section>
     </section>
   </main>
   <footer class="ci-fuss">STAFL-Plattform · Standard-Fleisch</footer>
@@ -105,5 +107,6 @@
 <script src="tracking.js"></script>
 <script src="eudr-geodaten.js"></script>
 <script src="dokumente.js"></script>
+<script src="kalkulation.js"></script>
 </body>
 </html>

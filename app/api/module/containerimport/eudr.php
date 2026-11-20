@@ -156,14 +156,20 @@ function eudr_wahl($v, array $erlaubt, string $was, ?string $standard = null): s
 /* Zahl ab 0 oder null (leer); Text auch in deutscher Schreibweise („1.234,5“) */
 function eudr_zahl($v, string $was): ?float
 {
-    if ($v === null || $v === '') return null;
-    if (is_string($v)) {
-        $v = str_replace([' ', "\u{a0}"], '', trim($v));
-        if (preg_match('/^[1-9]\d{0,2}(\.\d{3})+(,\d+)?$/', $v)) $v = str_replace('.', '', $v);
-        $v = str_replace(',', '.', $v);
-    }
+    $v = eudr_zahl_text($v);
+    if ($v === null) return null;
     if (is_bool($v) || !is_numeric($v) || (float)$v < 0 || (float)$v > 1e9) throw new InvalidArgumentException("$was: bitte eine Zahl ab 0 angeben.");
     return round((float)$v, 3);
+}
+/* Eingabe einer Zahl lesbar für is_numeric: deutscher Text „1.234,5“ → „1234.5“, „0,5“ → „0.5“; Punkte gelten nur in
+   Dreiergruppen nach einer Ziffer 1–9 als Tausendertrenner („0.500“ bleibt 0,5). Leer → null, keine Zeichenkette → unverändert. */
+function eudr_zahl_text($v)
+{
+    if (!is_string($v)) return $v;
+    if ($v === '') return null;
+    $v = str_replace([' ', "\u{a0}"], '', trim($v));
+    if (preg_match('/^[1-9]\d{0,2}(\.\d{3})+(,\d+)?$/', $v)) $v = str_replace('.', '', $v);
+    return str_replace(',', '.', $v);
 }
 /* Zweistelliger Ländercode in Großbuchstaben */
 function eudr_land($v): string

@@ -359,3 +359,5 @@ switch ($action) {
             ablage_zip_senden(ablage_zip_pfad('Dokumente ' . eudr_container_name($s)) . '.zip', ci_dokumente_zip_eintraege($s, $dateien, ci_dok_von($doc['checkliste'], $s['id'])));
         }
 }
+
+require __DIR__ . '/containerimport_kalkulation.php';   // Kalkulation je Container (eigene Datei)

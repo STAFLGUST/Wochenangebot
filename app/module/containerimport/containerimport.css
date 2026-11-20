@@ -261,7 +261,7 @@ body.ci .dlg-foot { border-top: 1px solid var(--r-linie); align-items: center; }
 @media print {
   body.ci { background: #fff; color: #000; }
   body.ci > *:not(.ci-druck), body.ci dialog { display: none !important; }
-  .ci-druck { display: block; font-size: 10.5pt; line-height: 1.4; }
+  body.ci > #ci-druck.ci-druck { display: block !important; font-size: 10.5pt; line-height: 1.4; }   /* !important: app.css blendet beim Druck alles außer #print-root aus */
   .ci-druck h1 { margin: 0 0 4pt; font-size: 16pt; } .ci-druck h2 { margin: 14pt 0 4pt; font-size: 11.5pt; }
   .ci-druck p { margin: 0 0 6pt; }
   .ci-druck table { width: 100%; border-collapse: collapse; }

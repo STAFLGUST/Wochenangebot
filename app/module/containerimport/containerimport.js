@@ -582,12 +582,16 @@
     const r = await api('containerimport_eudr_export', null, query);
     if (r.status !== 200 || !r.data.ok) { toast(fehlerText(r, 'Die Datei konnte nicht erzeugt werden'), true); return; }
     if (!r.data.geojson.features.length) { toast('Keine einreichbare Fläche – bitte zuerst die Fehler der Geolokalisierung klären.', true); return; }
+    herunterladen(r.data.datei, new Blob([JSON.stringify(r.data.geojson)], { type: 'application/geo+json' }));
+    toast(r.data.ausgelassen.length ? `Datei erzeugt – ohne ${r.data.ausgelassen.join(', ')} (Geolokalisierung fehlerhaft).` : `${r.data.datei} erzeugt.`, r.data.ausgelassen.length > 0);
+  }
+  /* Datei zum Speichern anbieten (GeoJSON für TRACES, CSV der Kalkulation) */
+  function herunterladen(name, blob) {
     const a = document.createElement('a');
-    a.href = URL.createObjectURL(new Blob([JSON.stringify(r.data.geojson)], { type: 'application/geo+json' }));
-    a.download = r.data.datei;
+    a.href = URL.createObjectURL(blob);
+    a.download = name;
     document.body.appendChild(a); a.click(); a.remove();
     setTimeout(() => URL.revokeObjectURL(a.href), 10000);
-    toast(r.data.ausgelassen.length ? `Datei erzeugt – ohne ${r.data.ausgelassen.join(', ')} (Geolokalisierung fehlerhaft).` : `${r.data.datei} erzeugt.`, r.data.ausgelassen.length > 0);
   }
   function drucken(id) {
     const s = sendung(id), bs = s.abschluss ? s.abschluss.betriebe : S.d.betriebe.filter((b) => s.betriebe.includes(b.id));
@@ -828,7 +832,7 @@
   /* Brücke für weitere Dateien des Moduls (schlachthoefe.js, tracking.js, dokumente.js): dieselben Hilfen und derselbe Zustand, keine zweite Kopie.
      Eine Datei trägt ihre Ansicht in sichten oder ihren Reiter in reiter ein und hängt ihre eigenen Ereignisse an (docs/entwickler/06-oberflaechen.md). */
   window.STAFL_CI = { S, $, esc, icon, SU, feld, kopf, werte, marke, tag, api, uebernehmen, toast, oeffnen, sendung, titel, landName, laenderWahl, lieferantFeld, lieferantAus, suchfeld, fokusBehalten, archivSchalter,
-    hex, fehlerText, pdfjs, teileHochladen, zeigeAnmeldung, HINWEIS_NUMMER, sichten: SICHTEN, reiter: REITER, haken: HAKEN };
+    hex, fehlerText, pdfjs, teileHochladen, zeigeAnmeldung, herunterladen, HINWEIS_NUMMER, sichten: SICHTEN, reiter: REITER, haken: HAKEN };
 
   /* ---------- Start (nach dem Laden aller Dateien des Moduls) ---------- */
   document.addEventListener('DOMContentLoaded', async () => {
