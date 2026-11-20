@@ -949,7 +949,12 @@ Die einzige Beschreibung der Regeln; Code-Kommentare verweisen hierher.
   Pflicht), die Checkliste hängt Vermerke an – je Container und Art gilt der letzte. Felder einer späteren Version bleiben beim
   Schreiben erhalten (GR-006). Grenzen: 300 Dateien je Container, 20 000 im Dokument (jeder Schreibvorgang schreibt das ganze
   Dokument; darüber teilen, etwa je Jahr).
-- **Rückfall:** Eine ältere Fassung kennt das Dokument nicht; Dateien und Metadaten bleiben unberührt. Das Dokument der Container
+- **`containerimport-dokumente-zahlen`** (abgeleitet): `{"rev", "je": {"<sendung>": {"anzahl", "arten": {"<Art>": n},
+  "nichtNoetig": ["<Art>"]}}}` – aktive Dateien je Container, eine Datei zählt bei jeder ihrer Arten. Geschrieben nur von
+  `ci_dokumente_schreiben()` zusammen mit `containerimport-dokumente` (unter `EUDR_SPERRE`, Muster `qs-ablage-zahlen`); der Stand der
+  Seite (`eudr_stand`) liest nur dieses Dokument. Fehlt es, zählt `ci_dokumente_zahlen_lesen()` aus dem Hauptdokument; das
+  nächste Schreiben legt es wieder an.
+- **Rückfall:** Eine ältere Fassung kennt die Dokumente nicht; Dateien und Metadaten bleiben unberührt. Das Dokument der Container
   (`containerimport-eudr-sendungen`) ändert sich durch Dokumente nicht.
 
 ## 5.4 Datenverantwortung (GR-101)

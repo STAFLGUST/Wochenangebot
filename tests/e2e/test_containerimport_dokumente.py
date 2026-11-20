@@ -5,7 +5,7 @@ ohne echten Inhalt (GR-007).
 Geprüft: Rechte (ohne Anmeldung 401, ohne „EUDR ansehen“ 403 für Liste, Download und ZIP; nur ansehen: alles sehen und
 herunterladen, auch die Kalkulation, aber nicht hochladen, Arten ändern, entfernen oder die Checkliste ändern; GET auf
 schreibende Aktion); Hochladen in Teilen (PDF mehrseitig über 5 MB, .xls und .doc und .msg mit OLE-Kopf, .xlsx, .docx, .eml
-mit Base64-Bild) mit SHA-256, Größe, MIME-Typ, wer/wann und Schnappschuss von Partie, Akte, Containernummer und Lieferant
+mit Base64-Bild, Bilder .png und .jpg) mit SHA-256, Größe, MIME-Typ, wer/wann und Schnappschuss von Partie, Akte, Containernummer und Lieferant
 (GR-106, bleibt nach einer Änderung des Containers); falsche und getarnte Arten abgelehnt (Programm als .pdf, HTML als .eml,
 ZIP als .xls, .zip und .exe am Container) ohne Reste; doppelte Datei; mehrere Arten je Datei (Sammel-PDF) und Zähler je Art;
 ungültige Arten; Checkliste mit „nicht nötig“ und „wieder nötig“ als Vermerk; Arten ändern im Verlauf; Entfernen nur mit
@@ -13,9 +13,13 @@ Grund, Datei bleibt abrufbar, doppelt 409, danach keine Art-Änderung; Nachreich
 (attachment, nosniff, Inhalt gleich, unbekannt 404); ZIP mit Ordner je erster Art, _entfernt, index.csv mit allen Arten und
 Prüfsummen; Protokoll ohne Dateinamen und Gründe; Speicherung unter dateien/containerimport/ ohne Reste in .teile, Verweise
 für die Sicherung erkannt (deploy/dateien_sichern.py verweise und aufbauen); Rückfall: das Dokument der Container bleibt
-unberührt, Felder einer späteren Version bleiben. Oberfläche: Vorschlag der Arten aus dem Dateinamen (Tabelle), Auswahl und
-Ziehen-und-Ablegen mehrerer Dateien, Pflicht zur Art, Fortschritt, Kacheln, PDF-Vorschau gezeichnet, Arten ändern, Entfernen
-mit und ohne Grund, „Entfernte anzeigen“, Zähler in der Liste, Leseransicht, 1280 und 390 px, keine JavaScript-Fehler.
+unberührt, Felder einer späteren Version bleiben; „upload“ als Zahl; Upload-Kennung eines anderen Containers oder Nutzers;
+ZIP mit checkliste.csv, langen Namen (Endung bleibt) und gleichen Namen, CSV-Injection in index.csv neutralisiert;
+containerimport-dokumente-zahlen (mitgeführt, gelesen, fehlt → aus dem Hauptdokument). Vorschlag der Arten aus dem Dateinamen
+(Tabelle gegen die Regeln des Servers). Oberfläche: Auswahl und Ziehen-und-Ablegen mehrerer Dateien, Pflicht zur Art,
+Fortschritt, Kacheln, PDF- und Bild-Vorschau gezeichnet, Arten ändern, Entfernen mit und ohne Grund, „Entfernte anzeigen“,
+Zähler in der Liste folgt den Aktionen, 401 beim Hochladen zeigt die Anmeldung, Leseransicht, 1280 und 390 px (hell und
+dunkel, Miniatur sichtbar), keine JavaScript-Fehler.
 """
 import base64
 import csv
@@ -24,6 +28,7 @@ import hashlib
 import io
 import json
 import os
+import re
 import shutil
 import struct
 import subprocess
@@ -158,7 +163,8 @@ check('ohne „EUDR ansehen“: Liste, ZIP und Hochladen 403', [liste(O, c1['id'
 check('nur ansehen: Hochladen 403', hochladen(L, c1['id'], 'a.pdf', pdf(1, 'x'), ['sonst'])[0] == 403)
 check('GET auf eine schreibende Aktion wird abgelehnt', I.call('containerimport_dokument_hochladen')[0] in (403, 405))
 check('unbekannter Container: Liste 404, Hochladen 404', liste(I, 'gibt-es-nicht')[0] == 404 and hochladen(I, 'gibt-es-nicht', 'a.pdf', pdf(1, 'x'), ['sonst'])[0] == 404)
-check('leere Liste eines neuen Containers', liste(I, c1['id']) == (200, {'ok': True, 'dokumente': [], 'dokDateien': [], 'dokVermerke': []}), liste(I, c1['id']))
+check('leere Liste eines neuen Containers (Zahlen als Objekt)', liste(I, c1['id']) == (200, {'ok': True, 'dokumente': {}, 'dokDateien': [], 'dokVermerke': []}), liste(I, c1['id']))
+check('Stand der Seite ohne Dokumente: Zahlen als Objekt', I.call('containerimport_start')[1]['dokumente'] == {})
 
 # ---------- alle Dateiarten des Containerordners ----------
 ids = {}
@@ -183,16 +189,20 @@ z = d['dokumente'][c1['id']]
 check('Zähler je Art: eine Datei zählt bei jeder ihrer Arten', z['anzahl'] == 8 and z['arten'] == {'kaufbestaetigung': 1, 'handelsrechnung': 1, 'packliste': 1, 'gesundheit': 1, 'ursprung': 1, 'bl': 1,
       'shipment': 1, 'versicherung': 1, 'kalkulation': 1, 'email': 2, 'spedition': 1, 'echtheit': 1} and z['nichtNoetig'] == [], z)
 check('Stand der Seite bringt Zähler und Regeln (Arten, Vorschläge, Endungen)', (lambda s: s['dokumente'][c1['id']]['anzahl'] == 8 and len(s['dokRegeln']['arten']) == 19
-      and 'eml' in s['dokRegeln']['endungen'] and s['dokRegeln']['vorschlaege'][0][1] == ['email'])(I.call('containerimport_start')[1]))
+      and {'eml', 'jpg', 'jpeg', 'png'} <= set(s['dokRegeln']['endungen']) and s['dokRegeln']['vorschlaege'][0][1] == ['email'])(I.call('containerimport_start')[1]))
 check('Dateien liegen als .bin unter dateien/containerimport/, keine Reste unter .teile', len(blobs()) == 8 and not teile_reste()
       and all(open(os.path.join(ABLAGE, 'containerimport', i[:2], i + '.bin'), 'rb').read() == DATEIEN[n][0] for n, i in ids.items()), (len(blobs()), teile_reste()))
 
 # ---------- falsche und getarnte Arten ----------
 for name, inhalt, text in [('rechnung.pdf', b'MZ\x90\0' + b'\0' * 2000, 'passt nicht'), ('mail.eml', b'<html><script>alert(1)</script></html>', 'passt nicht'),
+                           ('foto.png', b'<svg xmlns="http://www.w3.org/2000/svg"><script>alert(1)</script></svg>', 'passt nicht'), ('foto.jpg', b'GIF89a' + b'\0' * 100, 'passt nicht'),
                            ('tabelle.xls', ooxml('xl/workbook.xml', 'x'), 'passt nicht'), ('archiv.zip', ooxml('a.xml', 'x'), 'PDF-, Word-, Excel-'),
                            ('programm.exe', b'MZ' + b'\0' * 100, 'PDF-, Word-, Excel-'), ('notiz.txt', b'Text', 'PDF-, Word-, Excel-')]:
     st, r, _ = hochladen(I, c1['id'], name, inhalt, ['sonst'])
     check(f'abgelehnt: {name}', st == 422 and text in r.get('error', ''), (st, r))
+st, r = I.call('containerimport_dokument_hochladen', {'sendung': c1['id'], 'arten': ['sonst'], 'name': 'archiv.zip', 'groesse': 200, 'upload': 0, 'teil': 0,
+                                                      'daten': base64.b64encode(ooxml('a.xml', 'x')[:200]).decode()})
+check('„upload“ als Zahl umgeht die Prüfung des ersten Teils nicht (Endung)', st == 422 and 'PDF-, Word-, Excel-' in r.get('error', ''), (st, r))
 check('abgelehnte Dateien hinterlassen nichts', len(blobs()) == 8 and not teile_reste() and liste(I, c1['id'])[1]['dokumente'][c1['id']]['anzahl'] == 8)
 st, r, _ = hochladen(I, c1['id'], 'Kopie.pdf', DATEIEN['G-CONF-0001.pdf'][0], ['kaufbestaetigung'])
 check('dieselbe Datei noch einmal am selben Container: 422, nichts abgelegt', st == 422 and 'liegt schon' in r.get('error', '') and len(blobs()) == 8, r)
@@ -250,7 +260,7 @@ code, kopf, inhalt = roh(L, 'containerimport_dokumente_zip&sendung=' + c1['id'])
 zf = zipfile.ZipFile(io.BytesIO(inhalt))
 namen = sorted(zf.namelist())
 w = 'Dokumente P-DOK-1/'
-check('ZIP: Ordner je erster Art, entfernte unter _entfernt, index.csv', code == 200 and namen == sorted([w + 'index.csv', w + 'Kaufbestätigung/G-CONF-0001.pdf', w + 'Handelsrechnung/DOCS_TEST_0001.pdf',
+check('ZIP: Ordner je erster Art, entfernte unter _entfernt, index.csv', code == 200 and namen == sorted([w + 'index.csv', w + 'checkliste.csv', w + 'Kaufbestätigung/G-CONF-0001.pdf', w + 'Handelsrechnung/DOCS_TEST_0001.pdf',
       w + 'Shipment details/shipment_details.xls', w + 'Versicherungsanmeldung/Meldung_Containerversicherung.docx', w + 'Kalkulation/Kalkulation Test.xlsx',
       w + 'Spedition - Buchungsbestätigung/Spedition Mail.eml', w + '_entfernt/E-Mail - Schriftverkehr/Nachricht.msg', w + 'Echtheitszertifikat (Hilton, Angus)/Altes Zertifikat.doc']), namen)
 check('ZIP: Inhalte unverändert (Originalformat)', zf.read(w + 'Handelsrechnung/DOCS_TEST_0001.pdf') == GROSS and zf.read(w + '_entfernt/E-Mail - Schriftverkehr/Nachricht.msg') == DATEIEN['Nachricht.msg'][0])
@@ -261,6 +271,10 @@ check('index.csv: alle Arten, Prüfsumme, Schnappschuss, Verlauf, Entfernen mit 
       and zeile['DOCS_TEST_0001.pdf'][5] == hashlib.sha256(GROSS).hexdigest() and zeile['DOCS_TEST_0001.pdf'][9] == 'A-7001'
       and 'Shipment details → Shipment details, Sonstiges' in zeile['shipment_details.xls'][12] and zeile['Nachricht.msg'][15] == 'Doppelt abgelegt (Test)'
       and zeile['Nachricht.msg'][16] == '_entfernt/E-Mail - Schriftverkehr/Nachricht.msg', idx[:3])
+ckl = list(csv.reader(io.StringIO(zf.read(w + 'checkliste.csv').decode('utf-8-sig')), delimiter=';'))
+check('checkliste.csv: alle Vermerke der Checkliste mit Art, nötig/nicht nötig, wer und wann', ckl[0] == ['Dokumentart', 'Vermerk', 'vermerkt von', 'vermerkt am (UTC)']
+      and [r[:3] for r in ckl[1:]] == [['Lot-Nummernliste / Rückverfolgbarkeit', 'nicht nötig', 'Ina Import'], ['EUDR-Dokument (Sorgfaltserklärung)', 'nicht nötig', 'Ina Import'],
+                                       ['EUDR-Dokument (Sorgfaltserklärung)', 'nötig', 'Ina Import']] and all(r[3].endswith('Z') for r in ckl[1:]), ckl)
 log = json.dumps(A.call('log')[1], ensure_ascii=False)
 check('Protokoll: Ablegen, Arten ändern, Entfernen, Checkliste, ZIP – ohne Dateinamen und Gründe',
       all(t in log for t in ('am Container „P-DOK-1“ abgelegt', 'Arten von Shipment details zu Shipment details, Sonstiges geändert', 'als entfernt vermerkt',
@@ -295,6 +309,54 @@ try:
 finally:
     shutil.rmtree(ziel, ignore_errors=True)
 
+# ---------- Bilder, Namen im ZIP, CSV-Injection, fremde Uploads, Zahlen-Dokument ----------
+c3 = container_anlegen(I, 'P-DOK-3')
+st, r, _ = hochladen(I, c3['id'], 'Foto Zertifikat.png', png(300, 200), ['echtheit'])
+st2, r2, _ = hochladen(I, c3['id'], 'Foto Zertifikat.jpg', b'\xff\xd8\xff\xe0' + os.urandom(800), ['echtheit'])   # Kopf eines JPEG
+check('Bilder (.png, .jpg) werden angenommen', st == 200 and st2 == 200 and [f['mime'] for f in r2['dokDateien']] == ['image/png', 'image/jpeg'], (st, st2, r2.get('error')))
+LANG = 'Nachricht der Spedition zum Container ' + 'Ablage ' * 10 + 'Nachtrag Nr. 1234567.msg'
+LANG = LANG[:109] + '.msg'
+check('Testname hat 113 Zeichen', len(LANG) == 113)
+hochladen(I, c3['id'], LANG, ole('lang'), ['email'])
+hochladen(I, c3['id'], 'Rechnung.pdf', pdf(1, 'Rechnung eins'), ['handelsrechnung'])
+hochladen(I, c3['id'], 'rechnung.PDF', pdf(1, 'Rechnung zwei'), ['handelsrechnung', 'packliste'])
+st, r, _ = hochladen(I, c3['id'], '=HYPERLINK(1+1).pdf', pdf(1, 'Formel'), ['sonst'])
+fid = r.get('id')
+I.call('containerimport_dokument_entfernen', {'id': fid, 'grund': '=HYPERLINK(2+2)'})
+I.call('containerimport_dokument_checkliste', {'sendung': c3['id'], 'art': 'lot', 'noetig': False})
+zf3 = zipfile.ZipFile(io.BytesIO(roh(L, 'containerimport_dokumente_zip&sendung=' + c3['id'])[2]))
+w3 = 'Dokumente P-DOK-3/'
+idx3 = {r[0]: r for r in csv.reader(io.StringIO(zf3.read(w3 + 'index.csv').decode('utf-8-sig')), delimiter=';')}
+pfade = {r[1]: r[16] for r in idx3.values()}
+check('ZIP: langer Name behält die Endung (nur der Stamm gekürzt), Pfad im ZIP = Spalte in index.csv',
+      pfade[LANG].endswith('.msg') and pfade[LANG] == 'E-Mail - Schriftverkehr/' + LANG[:100].rstrip(' .') + '.msg' and w3 + pfade[LANG] in zf3.namelist(), pfade.get(LANG))
+check('ZIP: gleich benannte Dateien derselben ersten Art werden unterschieden, index.csv nennt den Pfad',
+      {pfade['Rechnung.pdf'], pfade['rechnung.PDF']} == {'Handelsrechnung/Rechnung.pdf', 'Handelsrechnung/rechnung (2).PDF'}
+      and all(w3 + pfade[n] in zf3.namelist() for n in ('Rechnung.pdf', 'rechnung.PDF')), pfade)
+check('index.csv: Formeln im Dateinamen und im Grund neutralisiert (CSV-Injection)', idx3[fid][1] == "'=HYPERLINK(1+1).pdf" and idx3[fid][15] == "'=HYPERLINK(2+2)", idx3.get(fid))
+ckl3 = list(csv.reader(io.StringIO(zf3.read(w3 + 'checkliste.csv').decode('utf-8-sig')), delimiter=';'))
+check('checkliste.csv nur mit den Vermerken dieses Containers', [r[:2] for r in ckl3[1:]] == [['Lot-Nummernliste / Rückverfolgbarkeit', 'nicht nötig']], ckl3)
+# Upload-Kennung gehört zu Nutzer, Container und Arten
+inhalt = pdf(1, 'fremder Upload')
+kopf = {'arten': ['sonst'], 'name': 'fremd.pdf', 'groesse': len(inhalt), 'sha256': hashlib.sha256(inhalt).hexdigest()}
+st, r = I.call('containerimport_dokument_hochladen', {**kopf, 'sendung': c3['id'], 'upload': '', 'teil': 0, 'daten': base64.b64encode(inhalt[:300]).decode()})
+weiter = lambda cli, sid: cli.call('containerimport_dokument_hochladen', {**kopf, 'sendung': sid, 'upload': r['upload'], 'teil': 1, 'daten': base64.b64encode(inhalt[300:]).decode()})
+fremd_c, fremd_n = weiter(I, c2['id']), weiter(A, c3['id'])
+check('Upload-Kennung eines anderen Containers oder Nutzers wird abgelehnt', fremd_c[0] == 422 and fremd_n[0] == 422 and 'anderen Datei' in fremd_c[1].get('error', '')
+      and 'anderen Datei' in fremd_n[1].get('error', ''), (fremd_c, fremd_n))
+check('… derselbe Upload mit eigenem Container gelingt danach', (lambda x: x[0] == 200 and x[1].get('fertig'))(weiter(I, c3['id'])))
+# Zahlen-Dokument: der Stand der Seite liest nur containerimport-dokumente-zahlen
+zahlen = _json(storage_raw('containerimport-dokumente-zahlen'))
+start = I.call('containerimport_start')[1]['dokumente']
+check('containerimport-dokumente-zahlen wird beim Schreiben mitgeführt (gleich dem Stand der Seite)', zahlen['je'] == start and start[c3['id']]['anzahl'] == 6
+      and start[c3['id']]['nichtNoetig'] == ['lot'] and zahlen['rev'] == _json(storage_raw('containerimport-dokumente'))['rev'], (zahlen, start.get(c3['id'])))
+storage_write('containerimport-dokumente-zahlen', {'rev': 1, 'je': {c3['id']: {'anzahl': 99, 'arten': {}, 'nichtNoetig': []}}})
+check('Stand der Seite liest das Zahlen-Dokument, nicht alle Dateien', I.call('containerimport_start')[1]['dokumente'][c3['id']]['anzahl'] == 99)
+storage_write('containerimport-dokumente-zahlen', {})
+check('fehlt das Zahlen-Dokument (Altbestand), zählt der Stand aus containerimport-dokumente', I.call('containerimport_start')[1]['dokumente'] == start)
+I.call('containerimport_dokument_checkliste', {'sendung': c3['id'], 'art': 'lot', 'noetig': True})
+check('nächstes Schreiben legt es wieder an', _json(storage_raw('containerimport-dokumente-zahlen'))['je'][c3['id']]['nichtNoetig'] == [])
+
 # ---------- Oberfläche ----------
 VORSCHLAEGE = {
     'G-CONF-2026-0001.pdf': ['kaufbestaetigung'], 'Order confirmation 4711.pdf': ['kaufbestaetigung'], 'proforma_invoice_123.pdf': ['proforma'],
@@ -305,13 +367,24 @@ VORSCHLAEGE = {
     'Certificado cupo Mercosur.pdf': ['quote'], 'Certificate of origin.pdf': ['ursprung'], 'Original Invoice.pdf': ['handelsrechnung'], 'Salmonella.pdf': ['salmonellen'],
     'Halal.pdf': ['halal'], 'Commercial invoice 99.pdf': ['handelsrechnung'], 'factura 1.pdf': ['handelsrechnung'], 'Packing list.pdf': ['packliste'],
     'Romaneo lote 5.pdf': ['lot'], 'Trazabilidad.pdf': ['lot'], 'EUDR DDS 2026.pdf': ['eudr'], 'scan_0001.pdf': [], 'Pilot.pdf': [], 'Tabelle.xlsx': [],
+    # „Hilton“/„Angus“ stehen auch auf anderen Papieren: die Art des Papiers gewinnt; „confirm“ allein ist keine Kaufbestätigung
+    'Commercial Invoice Hilton 2026-11.pdf': ['handelsrechnung'], 'Packing list Angus.pdf': ['packliste'], 'Bill of Lading Hilton.pdf': ['bl'],
+    'Certificado de origen Hilton.pdf': ['ursprung'], 'Mercosur quota certificate Hilton.pdf': ['quote'], 'Insurance confirmation.pdf': ['versicherung'],
+    'Angus certificate No 1.pdf': ['echtheit'], 'Payment confirmation.pdf': [], 'Purchase confirmation 12.pdf': ['kaufbestaetigung'], 'IMG_0001.jpg': [],
 }
+REGELN = I.call('containerimport_start')[1]['dokRegeln']['vorschlaege']   # Muster in der Schreibweise von JavaScript, hier mit re geprüft
+
+
+def vorschlag(name):
+    return next((arten for muster, arten in REGELN if re.search(muster, name.lower())), [])
+
+
+vor = {n: vorschlag(n) for n in VORSCHLAEGE}
+check('Vorschlag der Arten aus dem Dateinamen (Tabelle)', vor == VORSCHLAEGE, {k: v for k, v in vor.items() if VORSCHLAEGE[k] != v})
 errs, fremd = [], []
 with sync_playwright() as pw:
     br = pw.chromium.launch()
     p = seite_oeffnen(br, 'ina', errs, fremd)
-    vor = p.evaluate('(namen) => Object.fromEntries(namen.map((n) => [n, window.STAFL_CI.dokVorschlag(n)]))', list(VORSCHLAEGE))
-    check('Vorschlag der Arten aus dem Dateinamen (Tabelle)', vor == VORSCHLAEGE, {k: v for k, v in vor.items() if VORSCHLAEGE[k] != v})
     zeile = lambda sid: p.inner_text(f'tr[data-sendung="{sid}"] .ci-dok-zahl')
     check('Liste: Zähler am Container (Dokumente, fehlende Platzhalter)', zeile(c1['id']) == '7 Dokumente · 1 fehlt' and zeile(c2['id']).startswith('1 Dokument · '), [zeile(c1['id']), zeile(c2['id'])])
     p.click(f'tr[data-sendung="{c2["id"]}"]'); p.wait_for_selector('#dlg-sendung[open] .ci-dok-kachel')
@@ -322,7 +395,7 @@ with sync_playwright() as pw:
                                         {'name': 'Spedition Mail.eml', 'mimeType': 'message/rfc822', 'buffer': DATEIEN['Spedition Mail.eml'][0]},
                                         {'name': 'scan_0001.pdf', 'mimeType': 'application/pdf', 'buffer': pdf(1, 'Scan')},
                                         {'name': 'G-CONF-0001.pdf', 'mimeType': 'application/pdf', 'buffer': DATEIEN['G-CONF-0001.pdf'][0]},
-                                        {'name': 'bild.png', 'mimeType': 'image/png', 'buffer': png(8, 8)}])
+                                        {'name': 'notiz.txt', 'mimeType': 'text/plain', 'buffer': b'Notiz'}])
     p.wait_for_selector('.ci-dok-warte >> nth=5')
     warte = p.locator('.ci-dok-warte')
     check('Warteschlange: Vorschläge gesetzt (Sammel-PDF mit fünf Arten), ohne Treffer Pflicht zur Wahl, Doppelte und fremde Art gesperrt',
@@ -350,6 +423,17 @@ with sync_playwright() as pw:
     p.wait_for_selector('.ci-dok-warte input[data-art=gesundheit]:checked', state='attached')
     p.click('#dok-hochladen'); p.wait_for_function("document.querySelectorAll('.ci-dok-kachel').length === 6")
     check('Ziehen und Ablegen: Datei mit vorgeschlagener Art abgelegt', any(f['name'] == 'Health certificate.pdf' and f['arten'] == ['gesundheit'] for f in liste(I, c2['id'])[1]['dokDateien']))
+    # Foto eines Zertifikats (vom Browser erzeugtes JPEG): Vorschlag aus „Hilton“, Miniatur verkleinert gezeichnet
+    jpg = p.evaluate("""() => { const c = document.createElement('canvas'); c.width = 900; c.height = 600; const g = c.getContext('2d');
+        g.fillStyle = '#2050c0'; g.fillRect(0, 0, 900, 600); g.fillStyle = '#ffffff'; g.fillRect(100, 100, 300, 200); return c.toDataURL('image/jpeg', 0.9).split(',')[1]; }""")
+    p.set_input_files('#dok-dateien', [{'name': 'Foto Hilton certificate.jpg', 'mimeType': 'image/jpeg', 'buffer': base64.b64decode(jpg)}])
+    p.wait_for_selector('.ci-dok-warte input[data-art=echtheit]:checked', state='attached')
+    p.click('#dok-hochladen'); p.wait_for_function("document.querySelectorAll('.ci-dok-kachel').length === 7")
+    p.locator('.ci-dok-bild[data-endung=jpg]').scroll_into_view_if_needed()
+    p.wait_for_selector('.ci-dok-bild.gezeichnet[data-endung=jpg] canvas')
+    foto = p.evaluate("""() => { const c = document.querySelector('.ci-dok-bild[data-endung=jpg] canvas'), d = c.getContext('2d').getImageData(0, 0, c.width, c.height).data;
+        let blau = 0; for (let i = 0; i < d.length; i += 4) if (d[i + 2] > 150 && d[i] < 80) blau++; return [c.width, c.height, blau]; }""")
+    check('Bild: Miniatur verkleinert gezeichnet (240 × 160, Inhalt sichtbar)', foto[:2] == [240, 160] and foto[2] > 5000, foto)
     shot(p, os.path.join(SH, 'containerimport-dokumente-1280.png'))
     # Arten ändern, Entfernen
     kachel = p.locator('.ci-dok-kachel', has_text='scan_0001.pdf')
@@ -359,15 +443,23 @@ with sync_playwright() as pw:
     kachel.locator('[data-entfernen]').click(); p.keyboard.press('Enter'); p.wait_for_selector('#ci-toast.zeigen.fehler')
     check('Entfernen ohne Grund: Hinweis, Container wird nicht gespeichert', 'Grund' in p.inner_text('#ci-toast') and p.evaluate("document.querySelector('#dlg-sendung').open"))
     p.fill('#dok-grund', 'Falscher Container (Test)'); p.click('[data-entfernen-ok]'); p.wait_for_selector('#dok-entfernte')
-    check('Entfernt: Kachel verschwindet, „Entfernte anzeigen“ zeigt sie mit Grund', p.locator('.ci-dok-kachel').count() == 5)
+    check('Entfernt: Kachel verschwindet, „Entfernte anzeigen“ zeigt sie mit Grund', p.locator('.ci-dok-kachel').count() == 6)
     p.check('#dok-entfernte'); p.wait_for_selector('.ci-dok-kachel.weg')
     check('Entfernte anzeigen: Grund sichtbar, Verlauf mit allen Vorgängen', 'Falscher Container (Test)' in p.inner_text('.ci-dok-kachel.weg')
           and all(t in p.text_content('.ci-dok-verlauf') for t in ('abgelegt', '„scan_0001.pdf“: Arten Sonstiges → Lot-Nummernliste', 'entfernt: Falscher Container')))
+    fehlen_vorher = int(re.search(r'(\d+) fehl', zeile(c2['id'])).group(1))
     p.locator('.ci-dok-check li', has_text='Versicherungsanmeldung').locator('[data-noetig]').click()
     p.wait_for_function("[...document.querySelectorAll('.ci-dok-check li')].some((li) => li.innerText.includes('Versicherungsanmeldung') && li.innerText.includes('wieder nötig'))")
     check('Checkliste: „nicht nötig“ in der Oberfläche vermerkt', 'versicherung' in liste(I, c2['id'])[1]['dokumente'][c2['id']]['nichtNoetig'])
     check('ZIP-Knopf verweist auf den Export des Containers', p.get_attribute('#dok-zip', 'href').endswith('containerimport_dokumente_zip&sendung=' + c2['id']))
-    p.click('#dlg-sendung [data-zu]')
+    check('Zähler in der Liste folgt den Aktionen im Fenster („nicht nötig“ ohne neues Laden)', f'{fehlen_vorher - 1} fehl' in zeile(c2['id']), zeile(c2['id']))
+    # beendete Sitzung während des Hochladens: Anmeldung statt „fehlgeschlagen (401)“
+    p.route(lambda url: 'action=containerimport_dokument_hochladen' in url,
+            lambda route: route.fulfill(status=401, content_type='application/json', body='{"ok":false,"error":"Nicht angemeldet."}'))
+    p.set_input_files('#dok-dateien', [{'name': 'Halal.pdf', 'mimeType': 'application/pdf', 'buffer': pdf(1, 'Halal')}])
+    p.wait_for_selector('.ci-dok-warte input[data-art=halal]:checked', state='attached')
+    p.click('#dok-hochladen'); p.wait_for_selector('#ci-login:not([hidden])')
+    check('401 beim Hochladen: Anmeldung gezeigt, keine Fehlermeldung mit Statuscode', p.is_hidden('#ci-app') and '401' not in (p.text_content('#ci-toast') or ''))
     p.context.close()
 
     le = seite_oeffnen(br, 'lea', errs, fremd)
@@ -379,11 +471,19 @@ with sync_playwright() as pw:
 
     m = seite_oeffnen(br, 'ina', errs, fremd, {'width': 390, 'height': 844}, 'dark')
     m.click(f'tr[data-sendung="{c1["id"]}"]'); m.wait_for_selector('#dlg-sendung[open] .ci-dok-kachel')
-    m.locator('#sendung-dokumente').scroll_into_view_if_needed()
+    m.locator('#sendung-dokumente .ci-dok-kachel >> nth=0').scroll_into_view_if_needed()
+    m.wait_for_selector('#sendung-dokumente .ci-dok-bild.gezeichnet canvas')
     check('Handy 390 px: Bereich ohne waagerechtes Scrollen, Kacheln einspaltig', m.evaluate("""() => { const d = document.querySelector('#sendung-dokumente'), k = [...d.querySelectorAll('.ci-dok-kachel')];
         return document.documentElement.scrollWidth <= window.innerWidth && d.scrollWidth <= d.clientWidth && k.every((x) => Math.abs(x.offsetWidth - k[0].offsetWidth) <= 1 && x.offsetLeft === k[0].offsetLeft); }"""))
-    shot(m.locator('#dlg-sendung'), os.path.join(SH, 'containerimport-dokumente-390-dunkel.png'))
+    shot(m, os.path.join(SH, 'containerimport-dokumente-390-dunkel.png'))
     m.context.close()
+    h = seite_oeffnen(br, 'lea', errs, fremd, {'width': 390, 'height': 844})
+    h.click(f'tr[data-sendung="{c3["id"]}"]'); h.wait_for_selector('#dlg-sendung[open] .ci-dok-kachel')
+    h.locator('#sendung-dokumente .ci-dok-kachel >> nth=0').scroll_into_view_if_needed()
+    h.wait_for_selector('#sendung-dokumente .ci-dok-bild.gezeichnet[data-endung=png] canvas')
+    check('Handy 390 px hell (Leser): Miniatur des Bildes gezeichnet', h.locator('.ci-dok-bild.gezeichnet').count() >= 1)
+    shot(h, os.path.join(SH, 'containerimport-dokumente-390-hell-leser.png'))
+    h.context.close()
     br.close()
 check('die Seite hat keine fremden Server abgerufen', fremd == [], fremd)
 check('keine JavaScript-Fehler', not errs, errs)

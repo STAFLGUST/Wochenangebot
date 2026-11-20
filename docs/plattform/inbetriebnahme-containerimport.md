@@ -243,15 +243,17 @@ Migration, keine neuen Rechte. Die Dateien liegen in der Dateiablage der Plattfo
 mit jeder Sicherung mit.
 
 - **Wo:** Fenster „Container“ → Bereich „Dokumente“ (unter den Stammdaten). Dateien hierher ziehen oder auswählen, mehrere auf
-  einmal. Erlaubt sind PDF, Word (.doc, .docx), Excel (.xls, .xlsx, .xlsm, .xlsb), OpenDocument (.odt, .ods) und E-Mails
-  (.eml, .msg); der Server prüft, dass der Inhalt zur Endung passt. In der Liste der Container steht je Container „7 Dokumente
+  einmal. Erlaubt sind PDF, Word (.doc, .docx), Excel (.xls, .xlsx, .xlsm, .xlsb), OpenDocument (.odt, .ods), E-Mails
+  (.eml, .msg) und Bilder (.jpg, .jpeg, .png, z. B. ein Handyfoto eines Zertifikats); der Server prüft, dass der Inhalt zur
+  Endung passt. In der Liste der Container steht je Container „7 Dokumente
   · 1 fehlt“.
 - **Dokumentarten:** Kaufbestätigung, Proforma-Rechnung, Handelsrechnung, Packliste, Lot-Nummernliste / Rückverfolgbarkeit,
   Gesundheitszertifikat, Echtheitszertifikat (Hilton, Angus), Quotenzertifikat (Mercosur-Kontingent), Ursprungszeugnis, B/L
   (Konnossement), Salmonellen-Zertifikat, Halal-Zertifikat, EUDR-Dokument (Sorgfaltserklärung), Versicherungsanmeldung,
   Spedition / Buchungsbestätigung, Shipment details, Kalkulation, E-Mail / Schriftverkehr, Sonstiges. Eine Datei kann mehrere
   Arten tragen (Sammel-PDF des Lieferanten mit Rechnung, Packliste, Zertifikaten und B/L). Die Art schlägt der Dateiname vor
-  (z. B. „proforma“, „invoice“, „bill of lading“, „DOCS_…“, „Kalkulation“, .eml) – nur ein Vorschlag, vor dem Hochladen änderbar.
+  (z. B. „proforma“, „invoice“, „bill of lading“, „DOCS_…“, „Kalkulation“, .eml; „Hilton“ oder „Angus“ nur, wenn sonst nichts
+  passt) – nur ein Vorschlag, vor dem Hochladen änderbar.
   Ohne Vorschlag muss eine Art gewählt werden.
 - **Checkliste:** Kaufbestätigung, Handelsrechnung, Packliste, Lot-Nummernliste, Gesundheitszertifikat, Echtheitszertifikat,
   Ursprungszeugnis, B/L, Versicherungsanmeldung, EUDR-Dokument und Kalkulation stehen je Container als „fehlt“ oder
@@ -260,7 +262,8 @@ mit jeder Sicherung mit.
   Entfernen und die Checkliste mit „EUDR bearbeiten“ (Entscheidung des Inhabers 20.11.2026: keine Sonderregel für die Kalkulation).
 - **Nachreichen:** auch an abgeschlossenen und archivierten Containern – Unterlagen kommen oft später.
 - **ZIP:** „ZIP herunterladen“ liefert alle Dateien des Containers im Originalformat, je Dokumentart ein Ordner (eine
-  Sammel-PDF liegt im Ordner ihrer ersten Art), entfernte Dateien unter `_entfernt/`, dazu `index.csv` mit allen Angaben.
+  Sammel-PDF liegt im Ordner ihrer ersten Art), entfernte Dateien unter `_entfernt/`, dazu `index.csv` mit allen Angaben je
+  Datei und `checkliste.csv` mit allen Vermerken der Checkliste (Art, nötig/nicht nötig, wer, wann).
 
 ### Verfahrensdokumentation (GoBD) – Dokumente je Container
 
@@ -276,7 +279,7 @@ um diesen Abschnitt (Zuständigkeiten, Aufbewahrungsfristen, interne Kontrollen)
 | Änderungen | Arten ändern ist ein Vermerk im Verlauf der Datei (alt, neu, wer, wann); die Datei selbst bleibt. |
 | Löschen | Gibt es nicht. „Entfernen“ ist ein Vermerk mit Pflicht-Grund; die Datei bleibt in der Ablage, abrufbar über „Entfernte anzeigen“ und im ZIP unter `_entfernt/`. Nichts wird automatisch gelöscht. |
 | Protokoll | Hochladen, Arten ändern, Entfernen, Checkliste und ZIP-Export stehen zusätzlich im Aktivitätsprotokoll (ohne Dateinamen und Gründe – die stehen in den Metadaten, wie im QM-System). |
-| Originalformat, Lesbarkeit | Dateien bleiben im Originalformat (keine Umwandlung). Herunterladen einzeln oder als ZIP mit `index.csv` (Datenträgerüberlassung bei einer Betriebsprüfung). |
+| Originalformat, Lesbarkeit | Dateien bleiben im Originalformat (keine Umwandlung). Herunterladen einzeln oder als ZIP mit `index.csv` und `checkliste.csv` (Datenträgerüberlassung bei einer Betriebsprüfung); lange Dateinamen werden im ZIP nur im Stamm gekürzt, die Endung bleibt. |
 | Zugriff | Nur angemeldete Mitarbeiter mit Modulzugang und „EUDR ansehen“; Auslieferung nur über die Aktionen mit Rechteprüfung, nie als Datei des Webservers. |
 | Sicherung | Die Dateien liegen unter `dateien/containerimport/` und kommen mit jeder Sicherung in einen eigenen Stand (`deploy/dateien_sichern.py`; die Metadaten verweisen mit Kennung, Größe und Prüfsumme darauf). |
 

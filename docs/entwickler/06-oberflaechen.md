@@ -986,11 +986,14 @@ Caddy setzt auf allen Hosts `script-src 'self'` (ohne `'unsafe-inline'`), `conne
   zwei Haken der Brücke: `STAFL_CI.haken.zeile(s)` (Zähler in der Liste der Container) und `STAFL_CI.haken.fenster(s)` (füllt
   `#sendung-dokumente` im Fenster „Container“, lädt die Dateien mit `containerimport_dokumente`). Der Bereich liegt im Formular
   des Containers: keine Felder mit `name`, nur Knöpfe vom Typ `button`, die Eingabetaste im Feld „Grund“ wird abgefangen.
-  Hochladen in Teilen zu 2 MB nacheinander mit Fortschritt; die Prüfsumme rechnet der Browser vorher (Doppelte erkennt er schon
-  vor dem Hochladen, der Server ein zweites Mal). Mini-Vorschau: erste Seite einer PDF mit pdf.js, nur für sichtbare Kacheln
-  (`IntersectionObserver`) und nacheinander, aus dem Inhalt der Aktion `containerimport_dokument`; gezeichnete Seiten bleiben
-  für die Sitzung im Speicher. Die Zuordnungstabelle des Vorschlags (`STAFL_CI.dokVorschlag`) prüft die Gruppe
-  `containerimport_dokumente` als Tabelle.
+  Hochladen in Teilen zu 2 MB nacheinander mit Fortschritt über `STAFL_CI.teileHochladen(action, datei, felder, beiTeil, sperre)`
+  (dieselbe Schleife wie die Originale im QM-System; beendete Sitzung → Anmeldung); die Prüfsumme rechnet der Browser vorher
+  (`STAFL_CI.hex`; Doppelte erkennt er schon vor dem Hochladen, der Server ein zweites Mal). Mini-Vorschau: erste Seite einer PDF
+  mit pdf.js (`STAFL_CI.pdfjs()`) bzw. ein Bild (.jpg, .png) verkleinert über eine Blob-Adresse, nur für sichtbare Kacheln
+  (`IntersectionObserver`) und nacheinander, aus dem Inhalt der Aktion `containerimport_dokument`; gezeichnete Miniaturen
+  bleiben für die Sitzung im Speicher. Eigene Daten nur im Zustand `D` von `dokumente.js` (S.d bleibt der Stand der Seite);
+  jede Antwort läuft durch `nachAktion` (Liste und Bereich neu zeichnen). Die Zuordnungstabelle des Vorschlags prüft die
+  Gruppe `containerimport_dokumente` in Python gegen die Regeln aus `containerimport_start`.
   **Whisp-Abfrage** (Knopf „In Whisp prüfen“ im Fenster „Farmer“): Anders als die Karte ruft hier der **Server** den
   fremden Dienst ab (`app/api/module/containerimport/whisp.php`, Aktion `containerimport_eudr_whisp`) – der Schlüssel
   `WHISP_API_KEY` darf nie in den Browser. Hinaus geht nur der Umriss; die Seite fragt alle drei Sekunden nach, bis Whisp

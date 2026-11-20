@@ -1,41 +1,42 @@
 /* STAFL-Plattform · Modul Container-Import – Bereich „Dokumente“ im Fenster eines Containers (Auftrag des Inhabers
-   20.11.2026): alle Unterlagen des Containerordners ablegen – PDF, Word, Excel (auch .xls) und E-Mail (.eml, .msg), mehrere
-   auf einmal per Auswahl oder Ziehen und Ablegen, mit Fortschritt. Je Datei eine oder mehrere Dokumentarten (Sammel-PDF);
-   die Arten schlägt der Dateiname vor (Regeln vom Server, S.d.dokRegeln.vorschlaege – nur ein Vorschlag, immer änderbar).
+   20.11.2026): alle Unterlagen des Containerordners ablegen – PDF, Word, Excel (auch .xls), E-Mail (.eml, .msg) und Bilder
+   (.jpg, .png; erlaubte Endungen vom Server), mehrere auf einmal per Auswahl oder Ziehen und Ablegen, mit Fortschritt. Je
+   Datei eine oder mehrere Dokumentarten (Sammel-PDF); die Arten schlägt der Dateiname vor (Regeln vom Server,
+   S.d.dokRegeln.vorschlaege – nur ein Vorschlag, immer änderbar).
    Checkliste der Platzhalter je Container („fehlt“, Anzahl, „nicht nötig“), Kacheln mit Mini-Vorschau (PDF: erste Seite mit
-   pdf.js aus assets/vendor/pdfjs, nur sichtbare und nacheinander, aus dem über die Aktion geladenen Inhalt; sonst Symbol mit
+   pdf.js, Bild: verkleinert – nur sichtbare und nacheinander, aus dem über die Aktion geladenen Inhalt; sonst Symbol mit
    Endung), Arten ändern und Entfernen (Grund Pflicht) als Vermerk, „Entfernte anzeigen“, Verlauf, ZIP des Containers.
    In der Liste der Container ein kurzer Zähler. Regeln, Rechte und GoBD liegen auf dem Server
    (app/api/module/containerimport/dokumente.php); ausgeblendete Knöpfe sind nur Anzeige.
-   Hilfen und Zustand kommen über die Brücke window.STAFL_CI (containerimport.js lädt zuerst); die Datei hängt sich an deren
-   Haken (zeile, fenster) und an eigene Ereignisse. Der Bereich liegt im Formular des Containers: keine Felder mit name,
-   nur Knöpfe vom Typ „button“. Fremde Texte nur maskiert. */
+   Hilfen und Zustand kommen über die Brücke window.STAFL_CI (containerimport.js lädt zuerst, auch Hochladen in Teilen und
+   pdf.js); die Datei hängt sich an deren Haken (zeile, fenster) und an eigene Ereignisse. Eigene Daten nur in D: S.d bleibt
+   der Stand der Seite. Der Bereich liegt im Formular des Containers: keine Felder mit name, nur Knöpfe vom Typ „button“.
+   Fremde Texte nur maskiert. */
 (() => {
   'use strict';
   const C = window.STAFL_CI, F = window.STAFL_FORMAT;
-  const { S, $, esc, icon, marke, api, uebernehmen, toast, base64 } = C;
+  const { S, $, esc, icon, marke, api, toast } = C;
   const API = '../../api/';
-  const PDFJS = new URL('../../assets/vendor/pdfjs/', document.currentScript.src).href;
-  const TEIL = 2 * 1024 * 1024;   // Bytes je Teil (Base64 bleibt unter der Grenze des Servers)
-  /* Zustand des offenen Containers: Dateien und Vermerke vom Server, Warteschlange der gewählten Dateien, offene Bearbeitung */
-  const D = { sendung: '', dateien: null, vermerke: [], fehler: '', warte: [], laedt: false, entfernte: false, arten: '', entfernen: '' };
-  const vorschauen = new Map();   // Kennung → gezeichnete erste Seite (canvas) oder null (nicht lesbar)
+  const VORSCHAU_MAX = 15 * 1024 * 1024;   // größere Dateien zeichnet die Kachel nicht (der Browser lädt sie dafür ganz)
+  const BILD = ['jpg', 'jpeg', 'png'];
+  /* Zustand des offenen Containers: Dateien und Vermerke vom Server, Warteschlange der gewählten Dateien, offene Bearbeitung;
+     zahlen: Antwort der letzten Aktion, gilt bis zum nächsten Stand der Seite (basis = dessen Zahlen) */
+  const D = { sendung: '', dateien: null, vermerke: [], fehler: '', warte: [], laedt: false, entfernte: false, arten: '', entfernen: '', zahlen: null };
+  const vorschauen = new Map();   // Kennung → gezeichnete Miniatur (canvas) oder null (nicht lesbar)
   const R = () => S.d.dokRegeln;
   const artName = (a) => (R().arten[a] || { name: a }).name;
   const pflicht = () => Object.keys(R().arten).filter((a) => R().arten[a].checkliste);
-  const zahlen = (sid) => ({ anzahl: 0, arten: {}, nichtNoetig: [], ...(S.d.dokumente[sid] || {}) });
+  const zahlen = (sid) => ({ anzahl: 0, arten: {}, nichtNoetig: [], ...((D.zahlen && D.zahlen.basis === S.d.dokumente ? D.zahlen.je : S.d.dokumente)[sid] || {}) });
   const fehlen = (sid) => { const z = zahlen(sid); return pflicht().filter((a) => !z.arten[a] && !z.nichtNoetig.includes(a)); };
   const groesse = (b) => (b < 1048576 ? `${F.zahl(Math.max(1, Math.round(b / 1024)), 0, 0)} KB` : `${F.zahl(b / 1048576, 1, 1)} MB`);
   const endung = (name) => (/\.([a-z0-9]+)$/i.exec(name) || ['', ''])[1].toLowerCase();
-  const fehlerText = (r, fallback) => (r.data && r.data.error) || (r.status === 0 ? 'Keine Verbindung zum Server.' : `${fallback} (${r.status}).`);
-  const hex = (puffer) => [...new Uint8Array(puffer)].map((b) => b.toString(16).padStart(2, '0')).join('');
+  const erlaubt = () => R().endungen.map((e) => '.' + e).join(', ');
 
   /* Arten aus dem Dateinamen: die erste passende Regel, sonst keine (der Nutzer wählt) */
   function vorschlag(name) {
     const n = name.toLowerCase(), r = R().vorschlaege.find(([muster]) => new RegExp(muster).test(n));
     return r ? [...r[1]] : [];
   }
-  C.dokVorschlag = vorschlag;   // für Tests der Zuordnungstabelle
 
   /* ---------- Zähler in der Liste der Container ---------- */
   C.haken.zeile = (s) => {
@@ -50,11 +51,18 @@
     zeichnen();
     const r = await api('containerimport_dokumente', null, '&sendung=' + encodeURIComponent(s.id));
     if (D.sendung !== s.id) return;
-    if (r.status !== 200 || !r.data.ok) D.fehler = fehlerText(r, 'Die Dokumente konnten nicht geladen werden');
-    else annehmen(r.data);
+    if (r.status === 200 && r.data.ok) { nachAktion(r.data, s.id); return; }
+    D.fehler = C.fehlerText(r, 'Die Dokumente konnten nicht geladen werden');
     zeichnen();
   };
-  function annehmen(d) { D.dateien = d.dokDateien; D.vermerke = d.dokVermerke; S.d.dokumente = d.dokumente; }
+  /* Der eine Weg nach jeder Antwort: Zahlen aller Container, Dateien und Vermerke des Containers sid übernehmen, dann die
+     Liste (Zähler) und den Bereich neu zeichnen */
+  function nachAktion(d, sid) {
+    D.zahlen = { basis: S.d.dokumente, je: d.dokumente };
+    if (sid === D.sendung) { D.dateien = d.dokDateien; D.vermerke = d.dokVermerke; }
+    C.reiter[S.reiter]();
+    zeichnen();
+  }
 
   /* Auswahl der Arten als Kästchen (data-art; kein name, damit das Formular des Containers sie nicht mitnimmt) */
   const artenWahl = (gewaehlt, kennung) => `<div class="ci-dok-arten" data-wahl="${esc(kennung)}">${Object.keys(R().arten).map((a) =>
@@ -81,9 +89,9 @@
   }
 
   function kachel(f, darf) {
-    const weg = f.entfernt, pdf = f.endung === 'pdf' && f.groesse <= R().vorschauMax;
+    const weg = f.entfernt, vorschau = (f.endung === 'pdf' || BILD.includes(f.endung)) && f.groesse <= VORSCHAU_MAX;
     const url = `${API}?action=containerimport_dokument&id=${encodeURIComponent(f.id)}`;
-    const bild = pdf ? `<div class="ci-dok-bild" data-pdf="${esc(f.id)}"><span class="ci-dok-endung">PDF</span></div>`
+    const bild = vorschau ? `<div class="ci-dok-bild" data-vorschau="${esc(f.id)}" data-endung="${esc(f.endung)}"><span class="ci-dok-endung">${esc(f.endung.toUpperCase())}</span></div>`
       : `<div class="ci-dok-bild"><span class="ci-dok-endung">${esc(f.endung.toUpperCase())}</span>${icon('dok')}</div>`;
     const bearbeiten = D.arten === f.id ? `<div class="ci-dok-panel">${artenWahl(f.arten, 'k' + f.id)}<div class="ci-dok-knoepfe"><button class="ci-knopf klein" type="button" data-arten-zu>Abbrechen</button><button class="ci-knopf klein primaer" type="button" data-arten-speichern="${esc(f.id)}">Arten speichern</button></div></div>`
       : D.entfernen === f.id ? `<div class="ci-dok-panel"><label class="ci-feld breit"><span>Grund für das Entfernen</span><input type="text" id="dok-grund" maxlength="500" placeholder="z. B. falscher Container, doppelt"><small>Die Datei bleibt abrufbar und erscheint unter „Entfernte anzeigen“.</small></label>
@@ -120,7 +128,7 @@
     el.innerHTML = `<div class="ci-dok-kopf"><h3 class="ci-h" id="dok-titel">Dokumente${D.dateien ? ` <span class="ci-leise">· ${alle.length - weg}</span>` : ''}</h3>
         ${alle.length ? `<a class="ci-knopf klein" href="${zip}" download id="dok-zip">${icon('runter')}ZIP herunterladen</a>` : ''}</div>`
       + (D.fehler ? `<p class="ci-meldung">${icon('warn')} ${esc(D.fehler)}</p>` : !D.dateien ? '<p class="ci-leise ci-klein">Dokumente werden geladen …</p>' : checkliste(darf)
-        + (darf ? `<label class="ci-ablage ci-dok-ablage" for="dok-dateien">${icon('hoch')}<span><strong>Dateien hierher ziehen oder auswählen</strong><small>PDF, Word, Excel (auch .xls) und E-Mails (.eml, .msg), mehrere auf einmal. Die Art schlägt der Dateiname vor; eine Sammel-PDF kann mehrere Arten tragen. Nichts wird überschrieben.</small></span>
+        + (darf ? `<label class="ci-ablage ci-dok-ablage" for="dok-dateien">${icon('hoch')}<span><strong>Dateien hierher ziehen oder auswählen</strong><small>PDF, Word, Excel, E-Mails und Fotos (${esc(erlaubt())}), mehrere auf einmal. Die Art schlägt der Dateiname vor; eine Sammel-PDF kann mehrere Arten tragen. Nichts wird überschrieben.</small></span>
             <input type="file" id="dok-dateien" multiple accept="${R().endungen.map((e) => '.' + e).join(',')}"></label>` : '')
         + (D.warte.length ? `<ul class="ci-dok-warteliste">${D.warte.map(warteZeile).join('')}</ul>
             <div class="ci-dok-knoepfe">${offen.length ? `<button class="ci-knopf primaer" type="button" id="dok-hochladen"${D.laedt || offen.some((w) => !w.arten.length) ? ' disabled' : ''}>${icon('hoch')}${offen.length === 1 ? 'Datei hochladen' : `${offen.length} Dateien hochladen`}</button>` : ''}${D.laedt ? '' : '<button class="ci-knopf klein" type="button" id="dok-warte-leeren">Liste leeren</button>'}</div>` : '')
@@ -130,21 +138,23 @@
     vorschauBeobachten(el);
   }
 
-  /* ---------- Mini-Vorschau der PDF: erste Seite, nur sichtbare, nacheinander ---------- */
+  /* ---------- Mini-Vorschau: erste Seite einer PDF oder das verkleinerte Bild, nur sichtbare, nacheinander ---------- */
+  const BREITE = 2 * 120;   // doppelte Auflösung der Kachel für scharfe Anzeige
   const schlange = [];
   let laeuft = false;
   const beobachter = 'IntersectionObserver' in window ? new IntersectionObserver((eintraege) => {
-    for (const e of eintraege) if (e.isIntersecting) { beobachter.unobserve(e.target); schlange.push(e.target.dataset.pdf); }
+    for (const e of eintraege) if (e.isIntersecting) { beobachter.unobserve(e.target); schlange.push([e.target.dataset.vorschau, e.target.dataset.endung]); }
     abarbeiten();
   }) : null;
   function vorschauBeobachten(el) {
-    for (const b of el.querySelectorAll('[data-pdf]')) {
-      if (vorschauen.has(b.dataset.pdf)) einsetzen(b.dataset.pdf);
+    if (beobachter) beobachter.disconnect();   // Kacheln des vorigen Zeichnens
+    for (const b of el.querySelectorAll('[data-vorschau]')) {
+      if (vorschauen.has(b.dataset.vorschau)) einsetzen(b.dataset.vorschau);
       else if (beobachter) beobachter.observe(b);
     }
   }
   function einsetzen(id) {
-    const c = vorschauen.get(id), b = document.querySelector(`.ci-dok-bild[data-pdf="${CSS.escape(id)}"]`);
+    const c = vorschauen.get(id), b = document.querySelector(`.ci-dok-bild[data-vorschau="${CSS.escape(id)}"]`);
     if (!b) return;
     if (c) { b.replaceChildren(c); b.classList.add('gezeichnet'); } else b.classList.add('ohne');
   }
@@ -152,56 +162,65 @@
     if (laeuft) return;
     laeuft = true;
     while (schlange.length) {
-      const id = schlange.shift();
-      if (!vorschauen.has(id)) vorschauen.set(id, await ersteSeite(id));
+      const [id, art] = schlange.shift();
+      if (!vorschauen.has(id)) vorschauen.set(id, await miniatur(id, art));
       einsetzen(id);
     }
     laeuft = false;
   }
-  async function ersteSeite(id) {
+  function leinwand(b, h) {
+    const c = document.createElement('canvas');
+    c.width = Math.ceil(b); c.height = Math.ceil(h);
+    return c;
+  }
+  async function miniatur(id, art) {
     try {
       const res = await fetch(`${API}?action=containerimport_dokument&id=${encodeURIComponent(id)}`, { credentials: 'same-origin', cache: 'no-store' });
       if (!res.ok) return null;
-      const pdfjs = await import(PDFJS + 'pdf.min.js');
-      pdfjs.GlobalWorkerOptions.workerSrc = PDFJS + 'pdf.worker.min.js';
-      const aufgabe = pdfjs.getDocument({ data: new Uint8Array(await res.arrayBuffer()), isEvalSupported: false });
-      const seite = await (await aufgabe.promise).getPage(1);
-      const vp = seite.getViewport({ scale: 2 * 120 / seite.getViewport({ scale: 1 }).width });   // doppelte Auflösung für scharfe Anzeige
-      const c = document.createElement('canvas');
-      c.width = Math.ceil(vp.width); c.height = Math.ceil(vp.height);
-      await seite.render({ canvasContext: c.getContext('2d'), viewport: vp }).promise;
-      await aufgabe.destroy();
-      return c;
+      return art === 'pdf' ? await pdfSeite(await res.arrayBuffer()) : await bild(await res.blob());
     } catch (e) { console.warn('Vorschau nicht möglich:', id, e); return null; }
+  }
+  async function pdfSeite(puffer) {
+    const aufgabe = (await C.pdfjs()).getDocument({ data: new Uint8Array(puffer), isEvalSupported: false });
+    try {
+      const seite = await (await aufgabe.promise).getPage(1);
+      const vp = seite.getViewport({ scale: BREITE / seite.getViewport({ scale: 1 }).width });
+      const c = leinwand(vp.width, vp.height);
+      await seite.render({ canvasContext: c.getContext('2d'), viewport: vp }).promise;
+      return c;
+    } finally { await aufgabe.destroy(); }
+  }
+  /* Bild über eine Blob-Adresse (der Download ist sandbox/nosniff), gezeichnet auf höchstens BREITE Punkte */
+  async function bild(blob) {
+    const url = URL.createObjectURL(blob), img = new Image();
+    try {
+      img.src = url;
+      await img.decode();
+      const m = Math.min(1, BREITE / img.naturalWidth), c = leinwand(img.naturalWidth * m, img.naturalHeight * m);
+      c.getContext('2d').drawImage(img, 0, 0, c.width, c.height);
+      return c;
+    } finally { URL.revokeObjectURL(url); }
   }
 
   /* ---------- Warteschlange und Hochladen ---------- */
+  /* Gewählte Dateien in die Warteschlange des Containers sid; wechselt der Container während der Prüfsummen, bricht es ab
+     (die Warteschlange gehört dem vorigen Container) */
   async function aufnehmen(dateien) {
-    const vorhanden = new Map((D.dateien || []).filter((f) => !f.entfernt).map((f) => [f.sha256, f.name]));
+    const sid = D.sendung, vorhanden = new Map((D.dateien || []).filter((f) => !f.entfernt).map((f) => [f.sha256, f.name]));
     for (const datei of dateien) {
-      const w = { datei, sendung: D.sendung, arten: vorschlag(datei.name), offen: false, stand: 'wartet', empfangen: 0, fehler: '', gesperrt: '', sha: '' };
-      if (!R().endungen.includes(endung(datei.name))) w.gesperrt = 'Diese Dateiart kann nicht abgelegt werden (erlaubt: PDF, Word, Excel, E-Mail).';
+      const w = { datei, sendung: sid, arten: vorschlag(datei.name), offen: false, stand: 'wartet', empfangen: 0, fehler: '', gesperrt: '', sha: '' };
+      if (!R().endungen.includes(endung(datei.name))) w.gesperrt = `Diese Dateiart kann nicht abgelegt werden (erlaubt: ${erlaubt()}).`;
       else if (!datei.size) w.gesperrt = 'Die Datei ist leer.';
       else {
-        w.sha = hex(await crypto.subtle.digest('SHA-256', await datei.arrayBuffer()));
+        w.sha = C.hex(await crypto.subtle.digest('SHA-256', await datei.arrayBuffer()));
+        if (D.sendung !== sid) return;
         if (vorhanden.has(w.sha) || D.warte.some((x) => x.sha === w.sha)) w.gesperrt = `Liegt schon an diesem Container${vorhanden.has(w.sha) ? ` („${vorhanden.get(w.sha)}“)` : ''}.`;
       }
       D.warte.push(w);
     }
     zeichnen();
   }
-  async function eineDatei(w) {
-    let upload = '';
-    for (let teil = 0; teil * TEIL < w.datei.size; teil++) {
-      const daten = base64(new Uint8Array(await w.datei.slice(teil * TEIL, (teil + 1) * TEIL).arrayBuffer()));
-      const r = await api('containerimport_dokument_hochladen', { sendung: w.sendung, arten: w.arten, upload, teil, daten, name: w.datei.name, groesse: w.datei.size, sha256: w.sha }, '', false);
-      if (r.status !== 200 || !r.data.ok) return fehlerText(r, 'Das Hochladen ist fehlgeschlagen');
-      if (r.data.fertig) { if (D.sendung === w.sendung) annehmen(r.data); else S.d.dokumente = r.data.dokumente; return ''; }
-      upload = r.data.upload; w.empfangen = r.data.empfangen;
-      zeichnen();
-    }
-    return 'Die Datei kam nicht vollständig an.';
-  }
+  /* Dateien nacheinander in Teilen (ohne Eingabesperre: der Container bleibt bedienbar); beendete Sitzung → Anmeldung */
   async function hochladen() {
     if (D.laedt) return;
     D.laedt = true;
@@ -209,13 +228,15 @@
     let ok = 0;
     for (const w of liste) {
       w.stand = 'laedt'; w.empfangen = 0; zeichnen();
-      w.fehler = await eineDatei(w);
+      const r = await C.teileHochladen('containerimport_dokument_hochladen', w.datei, { sendung: w.sendung, arten: w.arten, sha256: w.sha },
+        (d) => { w.empfangen = d.empfangen; zeichnen(); }, false);
+      if (r.status === 401) { D.laedt = false; w.stand = 'wartet'; C.zeigeAnmeldung(); return; }
+      w.fehler = r.data.fertig ? '' : C.fehlerText(r, 'Das Hochladen ist fehlgeschlagen');
       w.stand = w.fehler ? 'fehler' : 'fertig';
-      if (!w.fehler) ok++;
+      if (!w.fehler) { ok++; nachAktion(r.data, w.sendung); }
     }
     D.laedt = false;
     D.warte = D.warte.filter((w) => w.stand !== 'fertig');
-    C.reiter[S.reiter]();   // Zähler in der Liste der Container
     zeichnen();
     const falsch = liste.length - ok;
     toast(falsch ? `${ok} von ${liste.length} Dateien abgelegt – ${falsch} mit Fehler (siehe Liste).` : ok === 1 ? 'Datei abgelegt.' : `${ok} Dateien abgelegt.`, falsch > 0);
@@ -223,11 +244,11 @@
 
   /* ---------- Arten ändern, Entfernen, Checkliste ---------- */
   async function senden(action, body, erfolg) {
-    const r = await api(action, body);
-    if (!uebernehmen(r, 'Das konnte nicht gespeichert werden')) return;
-    annehmen(r.data);
+    const sid = D.sendung, r = await api(action, body);
+    if (r.status === 401) { C.zeigeAnmeldung(); return; }
+    if (r.status !== 200 || !r.data.ok) { toast(C.fehlerText(r, 'Das konnte nicht gespeichert werden'), true); return; }
     D.arten = ''; D.entfernen = '';
-    zeichnen();
+    nachAktion(r.data, sid);
     toast(erfolg);
   }
 

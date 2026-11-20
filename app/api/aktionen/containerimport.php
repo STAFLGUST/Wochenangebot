@@ -24,13 +24,6 @@ function eudr_bearbeiter(): array
     require_modulzugang('containerimport', true);
     return $me;
 }
-/* Gespeicherte Sendung nach id (404) samt ihrer Stelle im Dokument */
-function eudr_sendung_holen(array $doc, $id): array
-{
-    $i = eudr_stelle($doc['liste'], is_string($id) ? $id : '');
-    if ($i === null) fail('Container nicht gefunden.', 404);
-    return [$i, $doc['liste'][$i]];
-}
 
 switch ($action) {
         /* Stand der Seite: Betriebe und Sendungen mit Befunden und Risikoprofil, Länder, Portale, eigene Rechte */
@@ -70,7 +63,7 @@ switch ($action) {
                 $sendungen = eudr_sendungen();
                 $ziel = null;
                 if (($b['sendung'] ?? '') !== '') {
-                    [$ziel, $s] = eudr_sendung_holen($sendungen, $b['sendung']);
+                    [$ziel, $s] = eudr_holen($sendungen, $b['sendung']);
                     if (!empty($s['abschluss'])) fail('Die Bewertung dieses Containers ist abgeschlossen. Bitte zuerst wieder öffnen.', 409);
                 }
                 $gespeichert = [];
@@ -194,7 +187,7 @@ switch ($action) {
                 $doc = eudr_sendungen();
                 $alt = null; $i = null;
                 if (($b['id'] ?? '') !== '') {
-                    [$i, $alt] = eudr_sendung_holen($doc, $b['id']);
+                    [$i, $alt] = eudr_holen($doc, $b['id']);
                     eudr_rev_pruefen($b, $alt, 'Der Container');
                 } elseif (count($doc['liste']) >= EUDR_MAX_SENDUNGEN) fail('Zu viele Container.', 422);
                 if ($alt && !empty($alt['abschluss'])) {
@@ -221,7 +214,7 @@ switch ($action) {
             $b = body();
             $s = with_lock(EUDR_SPERRE, function () use ($b, $me) {
                 $doc = eudr_sendungen();
-                [$i, $alt] = eudr_sendung_holen($doc, $b['id'] ?? '');
+                [$i, $alt] = eudr_holen($doc, $b['id'] ?? '');
                 eudr_rev_pruefen($b, $alt, 'Der Container');
                 $doc['liste'][$i] = ['rev' => $alt['rev'] + 1, 'geaendert' => eudr_wer($me)] + ci_reise($b, $alt) + ci_tracking_pruefen($b, $alt) + $alt;
                 eudr_sendungen_schreiben($doc);
@@ -257,7 +250,7 @@ switch ($action) {
             $b = body();
             $s = with_lock(EUDR_SPERRE, function () use ($b, $me) {
                 $doc = eudr_sendungen();
-                [$i, $s] = eudr_sendung_holen($doc, $b['id'] ?? '');
+                [$i, $s] = eudr_holen($doc, $b['id'] ?? '');
                 eudr_rev_pruefen($b, $s, 'Der Container');
                 if (!empty($b['oeffnen'])) {
                     if (empty($s['abschluss'])) fail('Die Bewertung ist nicht abgeschlossen.', 409);
@@ -289,7 +282,7 @@ switch ($action) {
                 if (!$bs) fail('Farmer nicht gefunden.', 404);
                 $name = $bs[0]['kennung'] !== '' ? $bs[0]['kennung'] : $bs[0]['name'];
             } else {
-                [, $s] = eudr_sendung_holen(eudr_sendungen(), $_GET['sendung'] ?? '');
+                [, $s] = eudr_holen(eudr_sendungen(), $_GET['sendung'] ?? '');
                 $bs = eudr_sendung_betriebe($s, $betriebe);
                 $name = eudr_container_name($s);
             }
@@ -302,7 +295,7 @@ switch ($action) {
         case 'containerimport_dokumente': {
             eudr_leser();
             header('Cache-Control: no-store');
-            [, $s] = eudr_sendung_holen(eudr_sendungen(), $_GET['sendung'] ?? '');
+            [, $s] = eudr_holen(eudr_sendungen(), $_GET['sendung'] ?? '');
             respond(ci_dokumente_antwort(ci_dokumente(), $s['id']));
         }
 
@@ -319,9 +312,7 @@ switch ($action) {
         /* Dokumentarten einer Datei ändern – Vermerk im Verlauf, nie stilles Überschreiben */
         case 'containerimport_dokument_arten': {
             $me = eudr_bearbeiter();
-            $b = body();
-            [$f, $doc] = with_lock(EUDR_SPERRE, fn() => ci_dokument_arten_aendern($b, $me));
-            $v = end($f['verlauf']);
+            [$f, $doc, $v] = ci_dokument_arten_aendern(body(), $me);
             audit('containerimport', 'Dokument am Container „' . eudr_container_name($f['schnappschuss']) . '“: Arten von ' . ci_dok_artnamen($v['alt']) . ' zu ' . ci_dok_artnamen($v['neu']) . ' geändert');
             respond(ci_dokumente_antwort($doc, $f['sendung']));
         }
@@ -329,8 +320,7 @@ switch ($action) {
         /* Datei als entfernt vermerken (Grund Pflicht) – sie bleibt in der Ablage und abrufbar */
         case 'containerimport_dokument_entfernen': {
             $me = eudr_bearbeiter();
-            $b = body();
-            [$f, $doc] = with_lock(EUDR_SPERRE, fn() => ci_dokument_entfernen($b, $me));
+            [$f, $doc] = ci_dokument_entfernen(body(), $me);
             audit('containerimport', 'Dokument (' . ci_dok_artnamen($f['arten']) . ') am Container „' . eudr_container_name($f['schnappschuss']) . '“ als entfernt vermerkt');
             respond(ci_dokumente_antwort($doc, $f['sendung']));
         }
@@ -338,9 +328,8 @@ switch ($action) {
         /* Punkt der Checkliste als „nicht nötig“ vermerken oder wieder als nötig (sendung, art, noetig) */
         case 'containerimport_dokument_checkliste': {
             $me = eudr_bearbeiter();
-            $b = body();
-            [$s, $doc] = with_lock(EUDR_SPERRE, fn() => ci_dokument_checkliste($b, $me));
-            audit('containerimport', 'Checkliste der Dokumente am Container „' . eudr_container_name($s) . '“: ' . ci_dok_artname($b['art']) . ($b['noetig'] ? ' wieder nötig' : ' nicht nötig'));
+            [$s, $doc, $v] = ci_dokument_checkliste(body(), $me);
+            audit('containerimport', 'Checkliste der Dokumente am Container „' . eudr_container_name($s) . '“: ' . ci_dok_artname($v['art']) . ($v['noetig'] ? ' wieder nötig' : ' nicht nötig'));
             respond(ci_dokumente_antwort($doc, $s['id']));
         }
 
@@ -351,12 +340,13 @@ switch ($action) {
             ablage_senden(CI_DOK_BEREICH, $f['id'], $f['name'], $f['mime']);
         }
 
-        /* Alle Dateien eines Containers als ZIP (GET sendung): Ordner je erster Dokumentart, entfernte unter _entfernt, index.csv */
+        /* Alle Dateien eines Containers als ZIP (GET sendung): Ordner je erster Dokumentart, entfernte unter _entfernt, index.csv, checkliste.csv */
         case 'containerimport_dokumente_zip': {
             eudr_leser();
-            [, $s] = eudr_sendung_holen(eudr_sendungen(), $_GET['sendung'] ?? '');
-            $dateien = array_values(array_filter(ci_dokumente()['liste'], fn($f) => $f['sendung'] === $s['id']));
+            [, $s] = eudr_holen(eudr_sendungen(), $_GET['sendung'] ?? '');
+            $doc = ci_dokumente();
+            $dateien = ci_dok_von($doc['liste'], $s['id']);
             audit('containerimport', 'Dokumente des Containers „' . eudr_container_name($s) . '“ als ZIP exportiert (' . count($dateien) . ' Dateien)');
-            ablage_zip_senden(ablage_zip_pfad('Dokumente ' . eudr_container_name($s)) . '.zip', ci_dokumente_zip_eintraege($s, $dateien));
+            ablage_zip_senden(ablage_zip_pfad('Dokumente ' . eudr_container_name($s)) . '.zip', ci_dokumente_zip_eintraege($s, $dateien, ci_dok_von($doc['checkliste'], $s['id'])));
         }
 }

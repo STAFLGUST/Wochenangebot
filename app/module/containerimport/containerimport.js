@@ -623,11 +623,15 @@
     oeffnen($('#dlg-lesen'));
   }
   const hex = (puffer) => [...new Uint8Array(puffer)].map((b) => b.toString(16).padStart(2, '0')).join('');
-  /* Textstücke einer PDF-Datei mit ihrer Lage, je Seite (pdf.js vom eigenen Server, erst beim ersten Bericht geladen) */
+  /* pdf.js vom eigenen Server, erst bei der ersten PDF geladen (Berichte, Vorschau der Dokumente) */
+  async function pdfjs() {
+    const m = await import(PDFJS + 'pdf.min.js');
+    m.GlobalWorkerOptions.workerSrc = PDFJS + 'pdf.worker.min.js';
+    return m;
+  }
+  /* Textstücke einer PDF-Datei mit ihrer Lage, je Seite */
   async function pdfSeiten(bytes) {
-    const pdfjs = await import(PDFJS + 'pdf.min.js');
-    pdfjs.GlobalWorkerOptions.workerSrc = PDFJS + 'pdf.worker.min.js';
-    const aufgabe = pdfjs.getDocument({ data: bytes, isEvalSupported: false }), doc = await aufgabe.promise;
+    const aufgabe = (await pdfjs()).getDocument({ data: bytes, isEvalSupported: false }), doc = await aufgabe.promise;
     const seiten = [];
     for (let n = 1; n <= doc.numPages; n++) {
       const inhalt = await (await doc.getPage(n)).getTextContent();
@@ -715,19 +719,26 @@
     for (let i = 0; i < bytes.length; i += 0x8000) text += String.fromCharCode.apply(null, bytes.subarray(i, i + 0x8000));
     return btoa(text);
   }
-  /* Eine Originaldatei in Teilen an den Server geben, der sie im Eingang des QM-Systems ablegt. '' oder die Fehlermeldung.
-     Die Ablage kennt „.geojson“ nicht als Dateiart – solche Dateien heißen dort „.json“. */
-  async function originalAblegen(datei, sha256, lieferant) {
-    const name = datei.name.replace(/\.geojson$/i, '.json');
+  /* Eine Datei in Teilen an eine Aktion der Dateiablage geben (felder: z. B. sha256, name statt datei.name); beiTeil(data)
+     nach jedem angenommenen Teil. Liefert die letzte Antwort { status, data }: fertig mit data.fertig, sonst der Fehler. */
+  async function teileHochladen(action, datei, felder, beiTeil = null, sperre = true) {
     let upload = '';
     for (let teil = 0; teil * TEIL < Math.max(datei.size, 1); teil++) {
       const daten = base64(new Uint8Array(await datei.slice(teil * TEIL, (teil + 1) * TEIL).arrayBuffer()));
-      const r = await api('containerimport_eudr_original', { upload, teil, daten, name, groesse: datei.size, sha256, lieferant });
-      if (r.status !== 200 || !r.data.ok) return fehlerText(r, 'Ablage fehlgeschlagen');
-      if (r.data.fertig) { S.d = { ...S.d, ...r.data }; return ''; }
+      const r = await api(action, { name: datei.name, groesse: datei.size, ...felder, upload, teil, daten }, '', sperre);
+      if (r.status !== 200 || !r.data.ok || r.data.fertig) return r;
       upload = r.data.upload;
+      if (beiTeil) beiTeil(r.data);
     }
-    return 'Die Datei kam nicht vollständig an.';
+    return { status: 200, data: { error: 'Die Datei kam nicht vollständig an.' } };
+  }
+  /* Originaldatei im Eingang des QM-Systems ablegen: '' oder die Fehlermeldung. Die Ablage kennt „.geojson“ nicht als
+     Dateiart – solche Dateien heißen dort „.json“. */
+  async function originalAblegen(datei, sha256, lieferant) {
+    const r = await teileHochladen('containerimport_eudr_original', datei, { name: datei.name.replace(/\.geojson$/i, '.json'), sha256, lieferant });
+    if (!r.data.fertig) return fehlerText(r, 'Ablage fehlgeschlagen');
+    S.d = { ...S.d, ...r.data };
+    return '';
   }
 
   /* ---------- Laden und Ereignisse ---------- */
@@ -811,7 +822,7 @@
   /* Brücke für weitere Dateien des Moduls (schlachthoefe.js, tracking.js, dokumente.js): dieselben Hilfen und derselbe Zustand, keine zweite Kopie.
      Eine Datei trägt ihre Ansicht in sichten oder ihren Reiter in reiter ein und hängt ihre eigenen Ereignisse an (docs/entwickler/06-oberflaechen.md). */
   window.STAFL_CI = { S, $, esc, icon, SU, feld, kopf, werte, marke, tag, api, uebernehmen, toast, oeffnen, sendung, titel, landName, laenderWahl, lieferantFeld, lieferantAus, suchfeld, fokusBehalten, archivSchalter,
-    base64, HINWEIS_NUMMER, sichten: SICHTEN, reiter: REITER, haken: HAKEN };
+    hex, fehlerText, pdfjs, teileHochladen, zeigeAnmeldung, HINWEIS_NUMMER, sichten: SICHTEN, reiter: REITER, haken: HAKEN };
 
   /* ---------- Start (nach dem Laden aller Dateien des Moduls) ---------- */
   document.addEventListener('DOMContentLoaded', async () => {

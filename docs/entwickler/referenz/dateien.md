@@ -394,7 +394,7 @@ Jede Code-Datei beginnt mit einem Kopfkommentar; dessen erste Aussage steht hier
 | `containerimport.css` | containerimport | STAFL-Plattform · Modul Container-Import (Reiter EUDR) – Gestaltung „C2“ Rahmen, Seitenleiste und alle Farben kommen aus ../../assets/rahmen.css (--r-*), Schrift und die Grundform der Fenster (dialog.modal, … |
 | `containerimport.js` | containerimport | STAFL-Plattform · Modul Container-Import – Container (ein Einkauf bei einem Lieferanten, eine Partienummer) mit ihren Farmern; Reiter EUDR |
 | `dokumente.css` | containerimport | STAFL-Plattform · Modul Container-Import – Bereich „Dokumente“ im Fenster eines Containers (dokumente.js) |
-| `dokumente.js` | containerimport | STAFL-Plattform · Modul Container-Import – Bereich „Dokumente“ im Fenster eines Containers (Auftrag des Inhabers 20.11.2026): alle Unterlagen des Containerordners ablegen – PDF, Word, Excel (auch .xls) und E-Mail … |
+| `dokumente.js` | containerimport | STAFL-Plattform · Modul Container-Import – Bereich „Dokumente“ im Fenster eines Containers (Auftrag des Inhabers 20.11.2026): alle Unterlagen des Containerordners ablegen – PDF, Word, Excel (auch .xls), E-Mail (.eml, … |
 | `eudr-auswertung.js` | containerimport | STAFL-Plattform · Container-Import · EUDR – Bildauswertung einer Fläche |
 | `eudr-bericht.js` | containerimport | STAFL-Plattform · Container-Import · EUDR – Entwaldungsberichte der Lieferanten lesen (reine Funktionen, kein DOM). |
 | `eudr-karte.js` | containerimport | STAFL-Plattform · Container-Import · EUDR – Karte der Herkunftsbetriebe. |
