@@ -175,7 +175,7 @@ GEWICHT = {
     'passkeys': 28, 'kunden': 28, 'revert': 26, 'hist': 25, 'master': 25, 'sidenav': 24, 'gemeinsam': 22,
     'geo': 21, 'einzelangebote': 20, 'stock': 18, 'editor_aux': 18, 'bestellung': 18, 'frontend': 18,
     'vkgruppen': 16, 'restposten': 15, 'kunden_mail': 15, 'p0': 15, 'schutz': 15, 'rechte': 14,
-    'fehlerpruefung': 14, 'kundengruppen': 13, 'importzentrale': 13, 'versand': 12, 'containerimport': 10, 'containerimport_whisp': 30, 'containerimport_schlachthof': 20, 'containerimport_tracking': 20, 'containerimport_farmer': 20, 'containerimport_hafen': 20, 'kundenimport': 12,
+    'fehlerpruefung': 14, 'kundengruppen': 13, 'importzentrale': 13, 'versand': 12, 'containerimport': 10, 'containerimport_whisp': 30, 'containerimport_schlachthof': 20, 'containerimport_tracking': 20, 'containerimport_farmer': 20, 'containerimport_hafen': 20, 'preisaenderung': 20, 'kundenimport': 12,
     'sicherheit_druck': 11, 'angebotsliste': 11, 'stock_overview': 11, 'sicherheit_it': 10, 'auswertung': 9,
     'benachrichtigung': 9, 'vertreter': 9, 'admin_confirmation': 8, 'einkauf': 8, 'wartung': 7,
     'order_management_ui': 7, 'nutzer_anlegen': 7, 'mhd_mail': 6, 'mail_intern': 5, 'postausgang': 9, 'datentrennung': 6, 'auth_hardening': 7, 'web_app': 7, 'dashboard': 6,
