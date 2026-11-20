@@ -297,8 +297,8 @@
     const p = s.preis, vw = d.woche && d.woche.vorwoche, aus = s.laeuft || !vw, chk = (id, an, txt, klein) => `<label class="vs-check vs-zusatz-zeile"><input type="checkbox" id="${id}"${an ? ' checked' : ''}${aus ? ' disabled' : ''}><span>${txt}${klein ? `<small>${klein}</small>` : ''}</span></label>`;
     const rad = (wert, txt) => `<label class="vs-check vs-zusatz-zeile"><input type="radio" name="send-preis-darstellung" id="send-preis-${wert}" value="${wert}"${p.darstellung === wert ? ' checked' : ''}${aus ? ' disabled' : ''}><span>${txt}</span></label>`;
     return `<fieldset class="vs-zusatz"><legend>Zusatz</legend>
-      ${chk('send-preis', p.an, 'Preisänderung zur Vorwoche zeigen', vw ? `Die Links zeigen je Artikel ▼ günstiger, ▲ teurer oder neu gegenüber KW ${esc(vw.kw)} – nur für diesen Versand.` : 'Für den veröffentlichten Stand gibt es keine Vorwoche zum Vergleich.')}
-      ${p.an ? `<div class="vs-zusatz-unter"><div class="vs-zusatz-wahl" role="radiogroup" aria-labelledby="send-preis-darstellung-titel"><span id="send-preis-darstellung-titel">Darstellung</span>${rad('betrag', 'Betrag (▼ 2,00)')}${rad('pfeil', 'Nur Pfeil')}</div>
+      ${chk('send-preis', p.an, 'Preisänderung zur Vorwoche zeigen', vw ? `Die Links zeigen je Artikel günstiger, teurer oder neu gegenüber KW ${esc(vw.kw)} – nur für diesen Versand.` : 'Für den veröffentlichten Stand gibt es keine Vorwoche zum Vergleich.')}
+      ${p.an ? `<div class="vs-zusatz-unter"><div class="vs-zusatz-wahl" role="radiogroup" aria-labelledby="send-preis-darstellung-titel"><span id="send-preis-darstellung-titel">Darstellung</span>${rad('betrag', 'Betrag (▼ 2,00)')}${rad('pfeil', 'Nur Pfeil')}<small>gilt für die Links; Übersicht und Kurzfassung zeigen Beträge</small></div>
         ${chk('send-preis-uebersicht', p.uebersicht, 'Kurze Übersicht der Änderungen in die E-Mail', 'Je Angebot: Anzahl günstiger, teurer, neu und die fünf größten Veränderungen.')}
         ${chk('send-preis-kurz', p.kurz, 'Kurzfassung „Nur Änderungen“ verlinken', 'Zusätzlicher Link, der nur geänderte und neue Artikel zeigt.')}</div>` : ''}</fieldset>`;
   }

@@ -35,7 +35,7 @@
       const kopf = `${nur ? 'Nur Änderungen' : 'Veränderung'} zur KW ${Number(vw.kw)}:`;
       const ab = (vw.stufen || []).map((g) => 'ab ' + root.STAFL_FORMAT.zahl(g, 0, 1) + ' %').join(' / ');
       return `${vor}<span class="vw-leg">${kopf} ${pfeil
-        ? `<span class="vw vw-teurer vw-pfeil">${pfeilSVG('teurer', 3)} teurer</span> <span class="vw vw-guenstiger vw-pfeil">${pfeilSVG('guenstiger', 3)} günstiger</span> · steiler = stärker${ab ? ` (${ab})` : ''}`
+        ? `<span class="vw vw-teurer vw-pfeil">${pfeilSVG('teurer', 3)} teurer</span> <span class="vw vw-guenstiger vw-pfeil">${pfeilSVG('guenstiger', 3)} günstiger</span> <span class="vw vw-neu">neu</span> · steiler = stärker${ab ? ` (${ab})` : ''}`
         : '<span class="vw vw-guenstiger">▼ günstiger</span> <span class="vw vw-teurer">▲ teurer</span> <span class="vw vw-neu">neu</span>'}</span>${nach}`;
     },
   };

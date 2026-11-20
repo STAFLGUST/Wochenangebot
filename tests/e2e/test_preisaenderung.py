@@ -387,12 +387,13 @@ check('Jahreswechsel: KW 1/2027 vergleicht mit KW 53/2026 (ISO-Wochen), keine Ä
 
 # ---------- Darstellung „nur Pfeil“: Stufen an den Grenzen (unter 2 %, 2 bis unter 5 %, ab 5 %), Seite und Druck ----------
 GRENZ = {'g19': (9.81, -1.9, 1), 'g20': (9.80, -2.0, 2), 'g49': (9.51, -4.9, 2), 'g50': (9.50, -5.0, 3),
-         't19': (10.19, 1.9, 1), 't20': (10.20, 2.0, 2), 't49': (10.49, 4.9, 2), 't50': (10.50, 5.0, 3)}
+         't19': (10.19, 1.9, 1), 't20': (10.20, 2.0, 2), 't49': (10.49, 4.9, 2), 't50': (10.50, 5.0, 3),
+         't196': (10.40, 2.0, 1, 10.20)}   # 10,20 → 10,40 = +1,96 %: angezeigt 2,0 %, Stufe aber am ungerundeten Wert → 1
 m5 = deepcopy(A.call('draft')[1].get('published'))
 m5['meta']['week'], m5['meta']['year'] = 2, 2027
 for n, k in enumerate(GRENZ):
     m5['items'].insert(n, {'id': 'gr-' + k, 'code': f'9920{n + 1}', 'name': f'Grenztest {k}', 'category': 'Rind', 'origin': None, 'condition': 'frisch',
-                           'groupId': m5['groups'][0]['id'], 'price': VAL(10.0), 'altPrices': [], 'variants': {}})
+                           'groupId': m5['groups'][0]['id'], 'price': VAL(GRENZ[k][3] if len(GRENZ[k]) > 3 else 10.0), 'altPrices': [], 'variants': {}})
 veroeffentlichen(m5)
 m6 = deepcopy(A.call('draft')[1].get('published'))
 m6['meta']['week'] = 3
@@ -403,8 +404,8 @@ for it in m6['items']:
 veroeffentlichen(m6)
 ag = (P.call('offer&vergleich=vorwoche')[1].get('vorwoche') or {}).get('aenderungen', {})
 ist = {k[3:]: (v['art'], v.get('p'), v.get('stufe')) for k, v in ag.items()}
-soll = {k: ('guenstiger' if k[0] == 'g' else 'teurer', p_, st_) for k, (_, p_, st_) in GRENZ.items()}
-check('p (Prozent, 1 Nachkommastelle) und stufe an den Grenzen: 1,9 % → 1, 2,0 % → 2, 4,9 % → 2, 5,0 % → 3 (günstiger und teurer)', ist == soll, ist)
+soll = {k: ('guenstiger' if k[0] == 'g' else 'teurer', v[1], v[2]) for k, v in GRENZ.items()}
+check('p (Prozent, 1 Nachkommastelle) und stufe an den Grenzen: 1,9 % → 1, 2,0 % → 2, 4,9 % → 2, 5,0 % → 3 (günstiger und teurer); 1,96 % (angezeigt 2,0 %) → 1', ist == soll, ist)
 WINKEL = """() => [...document.querySelectorAll('#list tr.row')].filter((r) => r.dataset.id.startsWith('gr-')).map((r) => {
   const v = r.querySelector('.vw'), s = v && v.querySelector('svg'), m = s && new DOMMatrix(getComputedStyle(s).transform);
   return [r.dataset.id.slice(3), m ? Math.round(Math.atan2(m.b, m.a) * 180 / Math.PI) : null, v ? v.querySelector('[aria-hidden]').textContent.trim() : null, v ? v.title : ''];
@@ -419,22 +420,22 @@ with sync_playwright() as p:
     s0 = satz(pg); zurueck(pg)
     laden(pg, '/?vergleich=pfeil')
     w = {k: (g, t, ti) for k, g, t, ti in pg.evaluate(WINKEL)}
-    soll_w = {k: (-1 if k[0] == 't' else 1) * {1: 30, 2: 60, 3: 90}[st_] for k, (_, _, st_) in GRENZ.items()}
+    soll_w = {k: (-1 if k[0] == 't' else 1) * {1: 30, 2: 60, 3: 90}[v[2]] for k, v in GRENZ.items()}
     check('Seite mit vergleich=pfeil: Pfeile mit drei Neigungen (30°, 60°, 90°), teurer nach oben, günstiger nach unten',
           {k: v[0] for k, v in w.items()} == soll_w and {abs(x) for x in soll_w.values()} == {30, 60, 90}, w)
     keine = pg.evaluate("() => [...document.querySelectorAll('#list .vw [aria-hidden]')].every((x) => !/[▼▲0-9]/.test(x.textContent))")
     check('… keine Beträge (nur Pfeil oder „neu“), Prozent im Titel für Tooltip und Screenreader', keine and all(v[1] == '' for v in w.values())
           and 'teurer um 1,9 %' in w['t19'][2] and 'günstiger um 5,0 %' in w['g50'][2], w.get('t19'))
     leg = pg.locator('#list .al-head .vw-leg')
-    check('… Legende „teurer · günstiger · steiler = stärker (ab 2 % / ab 5 %)“ mit zwei Pfeilen', 'steiler = stärker (ab 2 % / ab 5 %)' in leg.inner_text()
+    check('… Legende „teurer · günstiger · neu · steiler = stärker (ab 2 % / ab 5 %)“ mit zwei Pfeilen', 'steiler = stärker (ab 2 % / ab 5 %)' in leg.inner_text() and 'neu' in leg.inner_text()
           and leg.locator('svg').count() == 2, leg.inner_text())
     pg.evaluate("document.querySelector('#list tr.row[data-id=\"gr-g19\"]').scrollIntoView({block: 'center'})")
     shot(pg, SH + '/preisaenderung-pfeil-1280.png')
     s1 = satz(pg)
     n_svg = pg.evaluate("document.querySelectorAll('#print-root td.c-name > .vw svg').length")
-    check('Druck mit Pfeil: dieselben Seiten, Stufe, Füllung und Zeilenhöhen wie ohne; 8 Pfeile ganz in der Zelle; Legende im Kopf',
+    check('Druck mit Pfeil: dieselben Seiten, Stufe, Füllung und Zeilenhöhen wie ohne; alle Pfeile ganz in der Zelle; Legende im Kopf',
           s1['seiten'] == s0['seiten'] and s1['stufe'] == s0['stufe'] and s1['fuell'] == s0['fuell'] and s1['hoehen'] == s0['hoehen']
-          and n_svg == 8 and all(v['innen'] for v in s1['vw']) and 'steiler = stärker' in s1['kopf'], (s0['seiten'], s1['seiten'], n_svg, s1['kopf']))
+          and n_svg == len(GRENZ) and all(v['innen'] for v in s1['vw']) and 'steiler = stärker' in s1['kopf'], (s0['seiten'], s1['seiten'], n_svg, s1['kopf']))
     shot(pg.locator('#print-root .pl-page').first, SH + '/preisaenderung-pfeil-druck.png')
     zurueck(pg)
     m390 = br.new_context(viewport={'width': 390, 'height': 844}, color_scheme='light', is_mobile=True, has_touch=True)

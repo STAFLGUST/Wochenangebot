@@ -19,7 +19,7 @@ declare(strict_types=1);
    vorkommt (eine neue Variante mit vorhandener Art.-Nr. ist „neu“). Bezeichnung und Gruppe normalisiert wie keyPart in
    assets/offer-core.js (Kleinschreibung, nur a–z, 0–9, äöüß).
    Neigung des Pfeils (Darstellung „nur Pfeil“, ?vergleich=pfeil): je geänderter Artikel p = Veränderung in Prozent des
-   Vorwochenpreises (1 Nachkommastelle, mit Vorzeichen) und stufe 1–3 nach ANGEBOT_VORWOCHE_STUFEN (gerechnet am gerundeten p).
+   Vorwochenpreises (1 Nachkommastelle, mit Vorzeichen) und stufe 1–3 nach ANGEBOT_VORWOCHE_STUFEN (gerechnet am ungerundeten Wert).
    Nicht verglichen: Zusatzpreise (nur der Hauptpreis), Artikel ohne Preis oder „auf Anfrage“ in einer der Wochen (kein
    Hinweis), Einzelangebote; gibt es die direkte Vorwoche nicht (ausgelassene KW), gibt es keinen Vergleich. */
 if (!defined('WA_API')) { http_response_code(404); exit; }   // nur über api/index.php nutzbar
@@ -131,8 +131,11 @@ function angebot_vorwoche(array $model, array $def, array $offer): ?array
         if ((!is_int($alt) && !is_float($alt)) || ($it['price']['status'] ?? '') !== 'value') continue;
         $d = round((float)$it['price']['value'] - $alt, 2);
         if ($d == 0) continue;
-        $p = $alt > 0 ? round($d / $alt * 100, 1) : null;   // Vorwochenpreis 0: keine Prozentangabe, stärkste Stufe
-        $stufe = $p === null ? 3 : 1 + count(array_filter(ANGEBOT_VORWOCHE_STUFEN, fn($g) => abs($p) >= $g));
+        // Stufe am ungerundeten Wert („unter 2 %“ heißt unter 2 %, Inhaber 20.11.2026); angezeigt wird p auf eine Stelle.
+        // Vorwochenpreis 0 oder kleiner: keine Prozentangabe, stärkste Stufe.
+        $roh = $alt > 0 ? round($d / $alt * 100, 6) : null;
+        $p = $roh === null ? null : round($roh, 1);
+        $stufe = $roh === null ? 3 : 1 + count(array_filter(ANGEBOT_VORWOCHE_STUFEN, fn($g) => abs($roh) >= $g));
         $aend[$id] = ['art' => $d < 0 ? 'guenstiger' : 'teurer', 'd' => $d, 'alt' => (float)$alt, 'p' => $p, 'stufe' => $stufe];
     }
     return ['kw' => $vw['kw'], 'jahr' => $vw['jahr'], 'stufen' => ANGEBOT_VORWOCHE_STUFEN, 'aenderungen' => (object)$aend];
