@@ -396,6 +396,7 @@ Jede Code-Datei beginnt mit einem Kopfkommentar; dessen erste Aussage steht hier
 | `containerimport.js` | containerimport | STAFL-Plattform · Modul Container-Import – Container (ein Einkauf bei einem Lieferanten, eine Partienummer) mit ihren Farmern; Reiter EUDR |
 | `eudr-auswertung.js` | containerimport | STAFL-Plattform · Container-Import · EUDR – Bildauswertung einer Fläche |
 | `eudr-bericht.js` | containerimport | STAFL-Plattform · Container-Import · EUDR – Entwaldungsberichte der Lieferanten lesen (reine Funktionen, kein DOM). |
+| `eudr-geodaten.js` | containerimport | STAFL-Plattform · Container-Import · EUDR – Geodaten-Katalog: die offene Metadatenbank GEOS-EUDR des Thünen-Instituts (MIT-Lizenz, https://github.com/GEOS-EUDR-RepoHub/Metadatabase-Geodata-EUDR) beschreibt … |
 | `eudr-karte.js` | containerimport | STAFL-Plattform · Container-Import · EUDR – Karte der Herkunftsbetriebe. |
 | `eudr-whisp.js` | containerimport | Container-Import · EUDR |
 | `index.html` | containerimport | Reiter des Moduls: EUDR, Tracking und Kalkulation; weitere (Verzollung, Dokumente) folgen |
@@ -817,6 +818,7 @@ Jede Code-Datei beginnt mit einem Kopfkommentar; dessen erste Aussage steht hier
 | `test_bestellung.py` | angebot | Bestellwunsch aus dem Portal |
 | `test_containerimport.py` | containerimport | Modul Container-Import, Reiter EUDR (app/module/containerimport/, Oberfläche containerimport.intern, Auftrag des Inhabers 18.11.2026) |
 | `test_containerimport_farmer.py` | containerimport | Container-Import: Farmer je Container (Auftrag des Inhabers 19.11.2026) – eigene fortlaufende Farmer-Nummer neben der Nummer aus den Papieren (Kennung), Farmer über die Nummern aus den Papieren einem Container … |
+| `test_containerimport_geodaten.py` | containerimport | Container-Import · EUDR |
 | `test_containerimport_hafen.py` | containerimport | Container-Import · Tracking: bestätigte Ankunft in Hamburg aus der öffentlichen Liste „Expected vessels“ von Hafen Hamburg (app/api/module/containerimport/hafen.php, Aktion containerimport_tracking_hafen, Anzeige in … |
 | `test_containerimport_kalkulation.py` | containerimport | Container-Import: Kalkulation je Container (Aktionen containerimport_kalkulation_*, app/api/module/containerimport/kalkulation.php, Oberfläche app/module/containerimport/kalkulation.js). |
 | `test_containerimport_schlachthof.py` | containerimport | Container-Import: Schlachthöfe als Stammdaten unter dem Lieferanten (Aktion containerimport_schlachthof_save, app/api/module/containerimport/schlachthoefe.php, Oberfläche app/module/containerimport/schlachthoefe.js). |
@@ -950,6 +952,7 @@ Jede Code-Datei beginnt mit einem Kopfkommentar; dessen erste Aussage steht hier
 | `test_ci_nachweis.py` | plattform | Nachweis „schon im Pull Request vollständig geprüft“ (.github/scripts/ci_nachweis.py) mit nachgebauter GitHub-API. python3 tests/unit/test_ci_nachweis.py Prüft |
 | `test_dateiablage_zip.py` | plattform | ZIP-Export der Dateiablage (app/api/lib/dateiablage.php, ablage_zip_senden) über die Grenzen des klassischen ZIP-Formats: kleines Archiv ohne Zip64-Felder; Versatz über 4 GB (18 Dateien zu 250 MB, als Lücken-Dateien … |
 | `test_doku.py` | plattform | Werkzeug der Entwickler-Dokumentation (werkzeuge/doku.py) |
+| `test_eudr_geodatenkatalog.py` | containerimport | Geodaten-Katalog des Container-Imports (werkzeuge/eudr_geodatenkatalog.py) – ohne Netz, mit einer kleinen erfundenen Tabelle im Aufbau der Metadatenbank GEOS-EUDR (tests/fixtures/containerimport/geodatenkatalog/). … |
 | `test_images_aktualisieren.py` | plattform | Sicherheitsupdates der Container-Images (werkzeuge/images_aktualisieren.py) – ohne Netz, mit Digests aus einer Datei. python3 tests/unit/test_images_aktualisieren.py Prüft an einer Kopie der echten Dateien |
 | `test_run_e2e_teile.py` | plattform | Aufteilung der E2E-Testgruppen auf CI-Aufträge (tests/run_e2e.py |
 
@@ -959,6 +962,7 @@ Jede Code-Datei beginnt mit einem Kopfkommentar; dessen erste Aussage steht hier
 | --- | --- | --- |
 | `asset_versionen.py` | plattform | Einbindungen der Skripte und Stylesheets in den HTML-Seiten unter app/ und dashboard/ prüfen. |
 | `doku.py` | plattform | Nachschlageteil der Entwickler-Dokumentation aus dem Code erzeugen und prüfen (nur Python-Standardbibliothek). python3 werkzeuge/doku.py erzeugen docs/entwickler/referenz/*.md neu schreiben python3 werkzeuge/doku.py … |
+| `eudr_geodatenkatalog.py` | containerimport | Übernimmt eine Fassung der offenen Metadatenbank GEOS-EUDR (Thünen-Institut, MIT-Lizenz) in den Geodaten-Katalog des Container-Imports (app/api/module/containerimport/geodatenkatalog.json). |
 | `images_aktualisieren.py` | plattform | Sicherheitsupdates der Container-Images: festgelegte Digests auf den neuesten Stand derselben Fassung bringen. |
 | `integritaet.py` | plattform | Prüfliste der Dateiprüfung (app/api/lib/integritaet-liste.php): prüfen, dass sie NICHT im Repository steht. |
 | `karte_auszug.py` | plattform | Kleiner Ausschnitt aus einer Protomaps-Basiskarte (PMTiles, OpenStreetMap-Daten, ODbL) – für Testdaten und lokale Vorschau der Detailkarte. |

@@ -11,6 +11,10 @@ modul = "containerimport"
 [aktion.containerimport_start]
 oberflaeche = "containerimport.intern"
 
+# Geodaten-Katalog GEOS-EUDR (Thünen-Institut, öffentliche Metadaten offener Geodatensätze zu Wald): nur lesen
+[aktion.containerimport_eudr_geodaten]
+oberflaeche = "containerimport.intern"
+
 # Dateien prüfen, ohne zu speichern: Lieferanten-GeoJSON, gelesene Berichte, eingefügte Koordinaten (POST wegen Inhalt)
 [aktion.containerimport_eudr_pruefen]
 oberflaeche = "containerimport.intern"

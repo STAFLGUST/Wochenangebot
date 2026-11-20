@@ -2,7 +2,7 @@
 
 <!-- ERZEUGT von `python3 werkzeuge/doku.py erzeugen` – nicht von Hand ändern. Quelle: Funktionen und Kommentare im Code. Die CI prüft, dass diese Datei zum Code passt. -->
 
-28 Dateien, 295 Funktionen – in der Reihenfolge der Datei, **fett** die Abschnitte. Text = erste Aussage des Kommentars direkt über der Funktion (Python: Docstring). Übersicht aller Module: [README.md](README.md).
+32 Dateien, 310 Funktionen – in der Reihenfolge der Datei, **fett** die Abschnitte. Text = erste Aussage des Kommentars direkt über der Funktion (Python: Docstring). Übersicht aller Module: [README.md](README.md).
 
 ## `app/api/aktionen/containerimport.php`
 
@@ -318,6 +318,15 @@ _STAFL-Plattform · Container-Import · EUDR – Entwaldungsberichte der Liefera
 - `stammdaten(zeilenListe)` – Werte der Tabelle „Farm information summary“: jedes Textstück unter den Überschriften gehört zur nächstgelegenen Spalte
 - `lesen(seiten)` – Bericht lesen. null, wenn die Datei keine Koordinatenliste enthält (dann ist es kein solcher Bericht); { fehler } wenn sie eine enthält, die sich nicht …
 
+## `app/module/containerimport/eudr-geodaten.js`
+
+_STAFL-Plattform · Container-Import · EUDR – Geodaten-Katalog: die offene Metadatenbank GEOS-EUDR des Thünen-Instituts (MIT-Lizenz, https://github.com/GEOS-EUDR-RepoHub/Metadatabase-Geodata-EUDR) beschreibt …_
+
+- `links(liste)`
+- `sicht()`
+- `fenster(id)` – Fenster mit einem Eintrag (aus einem Verweis, auch über dem Fenster „Farmer“)
+- `beleg(ids)` – „GEOS-EUDR-Katalog (Thünen-Institut) ForestCover_TreeExtent v1.0: FNF01, FNF17“ – je Thema mit seiner Fassung
+
 ## `app/module/containerimport/eudr-karte.js`
 
 _STAFL-Plattform · Container-Import · EUDR – Karte der Herkunftsbetriebe._
@@ -336,7 +345,7 @@ _STAFL-Plattform · Container-Import · EUDR – Karte der Herkunftsbetriebe._
 
 _Container-Import · EUDR_
 
-- `deuten({…}, abHa)`
+- `deuten({…}, abHa, quellen)`
 
 ## `app/module/containerimport/kalkulation.js`
 
@@ -466,6 +475,17 @@ _Container-Import: Farmer je Container (Auftrag des Inhabers 19.11.2026) – eig
 **Eigene Farmer-Nummer, Nummer aus den Papieren**
 
 - `ort(name, kennung, x)`
+
+## `tests/e2e/test_containerimport_geodaten.py`
+
+_Container-Import · EUDR_
+
+**Rechte und Aufbau der echten Datei**
+
+**Oberfläche**
+
+- `seite(user, vp, schema, katalog)` – Seite mit erfundenem Katalog: die Seite lädt ihn erst bei Bedarf, die Umleitung greift also vor dem ersten Abruf.
+- `katalog_zeigen(p)`
 
 ## `tests/e2e/test_containerimport_hafen.py`
 
@@ -616,3 +636,22 @@ _Rechenkern der Kalkulation je Container (app/api/module/containerimport/kalkula
 **Gekühlt / gefroren, EU-Ursprung, falsche Länder, Stichtag**
 
 - `fehler_an(r, pos, text)` – unvollständig (nicht festschreibbar) mit genau diesem Fehler an der Position
+
+## `tests/unit/test_eudr_geodatenkatalog.py`
+
+_Geodaten-Katalog des Container-Imports (werkzeuge/eudr_geodatenkatalog.py) – ohne Netz, mit einer kleinen erfundenen Tabelle im Aufbau der Metadatenbank GEOS-EUDR (tests/fixtures/containerimport/geodatenkatalog/). …_
+
+- `ok(name, cond, info)`
+- `lauf(*args)` – Werkzeug aufrufen → (Exit-Code, Fehlerausgabe).
+- `abbruch(name, dateiname, aendern, erwartet)`
+
+## `werkzeuge/eudr_geodatenkatalog.py`
+
+_Übernimmt eine Fassung der offenen Metadatenbank GEOS-EUDR (Thünen-Institut, MIT-Lizenz) in den Geodaten-Katalog des Container-Imports (app/api/module/containerimport/geodatenkatalog.json)._
+
+- `text(roh)` – Zelle als Text: Tabulatoren und Mehrfach-Leerzeichen weg, Aufzählungspunkte je auf eine eigene Zeile; leer → None.
+- `verweise(roh)` – Verweise einer Zelle → [{text, url}]; text ist die Beschriftung vor der Adresse („V2 ->“ → „V2“), Rest am Ende hängt an der letzten.
+- `beschriftung(stueck)`
+- `eintrag(zeile, thema, nr)`
+- `lesen(pfad)` – Tabelle eines Themas → (Thema mit Version, Einträge).
+- `main(argv)`
