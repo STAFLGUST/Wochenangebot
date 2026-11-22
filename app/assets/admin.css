@@ -461,7 +461,7 @@ dialog .st-incoming small, .dlg-body .st-incoming small { font-size: 14px; margi
   .stab td.s-name { padding-right: 6px; }
   .stab tr.st-total td { font-size: 13px; }
   .stab .mhd-skull { margin-right: 2px; }
-  .stab td.s-incoming .btn.sm { height: 28px; padding: 0 8px; font-size: 12px; }
+  .stab td.s-incoming .btn.sm { padding: 0 8px; }   /* Höhe und Schrift wie jeder kleine Knopf */
 }
 @media screen and (min-width: 701px) and (max-width: 1340px) { .stab td { padding: 6px 4px; } .stab th { padding: 9px 2px 7px; } }
 @media (max-width: 700px) {

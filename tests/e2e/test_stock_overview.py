@@ -90,6 +90,11 @@ with sync_playwright() as pw:
     check('bold headings', page.locator('.stab thead th').evaluate_all("els => els.every(e => +getComputedStyle(e).fontWeight >= 700)"))
     check('missing price is dash', row('900004').locator('.s-prev').inner_text() == '—' and row('900005').locator('.s-vk').inner_text() == '—')
     check('deliveries collapsed to button', row('900001').locator('.s-incoming button').inner_text() == 'Zugänge (2)' and page.locator('.stab .st-incoming').count() == 0)
+    # „Zugänge (2)“ so hoch und groß wie jeder andere kleine Knopf des Eingabebereichs (Vergleichsknopf in derselben Ansicht)
+    knopf = page.evaluate("""() => { const m = (e) => [Math.round(e.getBoundingClientRect().height), getComputedStyle(e).fontSize];
+        const v = document.createElement('button'); v.className = 'btn sm'; v.textContent = 'Vergleich'; document.querySelector('#view-stock').append(v);
+        const r = [m(document.querySelector('.stab td.s-incoming .btn.sm')), m(v)]; v.remove(); return r; }""")
+    check('Bestandsliste: kleiner Knopf „Zugänge“ gleich hoch und gleich groß wie überall', knopf[0] == knopf[1], knopf)
     row('900001').locator('[data-incoming]').click(); page.wait_for_selector('#dlg-stock-item[open]')
     check('arrival button opens focused dialog', page.locator('#sa-title').inner_text() == 'Erwartete Zugänge' and page.locator('#dlg-stock-item .zutab tbody tr').count() == 2 and '22.10.2026' in page.locator('#dlg-stock-item').inner_text() and '30,00 kg' in page.locator('#dlg-stock-item').inner_text() and page.locator('#dlg-stock-item .lottab').count() == 0)
     zk = page.locator('#dlg-stock-item .zutab thead th').all_inner_texts()
