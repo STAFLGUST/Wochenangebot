@@ -10,7 +10,7 @@ und freigeben, zurückgeben mit Grund, verwerfen, Schritt passt nicht 409, Versi
 Freigabedatum, vorige Version „ersetzt“); 4-Augen-Prinzip (auch Administratoren); Einziehen; Überprüfung nach 3 Jahren und
 „ohne Änderung überprüft“; Handbuch; Prüfplan (rollende Intervalle mit Vorlauf und Monatsende, „bei Bedarf“, Kalender-Intervalle
 täglich/arbeitstäglich ohne Wochenende und Hamburger Feiertage/wöchentlich/monatlich mit versäumten Perioden, Quote und
-Monatsverlauf, Zuweisung an Mitarbeiter); Nachweise (Zukunft, Abweichung nur mit Bemerkung, nur zugewiesene Kontrollen mit
+Monatsverlauf, „Ab wann“ vor mehr als 1000 Tagen: die letzten 1000 gezählt, „versäumt seit …“, heute fällig, Zuweisung an Mitarbeiter); Nachweise (Zukunft, Abweichung nur mit Bemerkung, nur zugewiesene Kontrollen mit
 „Kontrollen durchführen“, Maßnahme nur mit „bearbeiten“, stornieren nur eigene, storniert zählt nicht); Maßnahmen im Aufbau des
 IFS-Maßnahmenplans (Nummer je Jahr, Bewertung, Korrektur, Ursache, wirksam nur mit Freigaberecht und Notiz, abgeschlossene nur
 mit Freigaberecht ändern); CSV (BOM, keine Formeln, Protokoll); Datenpaket (Format, Vorschau mit Fehlern je Eintrag, nichts halb
@@ -388,6 +388,13 @@ st, r = Be.call('qs_nachweis_save', {'pruefung': p8['id'], 'datum': letzter_vorm
 f = r['pruefung']['faellig']
 check('Nachweis im Vormonat: 1 versäumt, nicht rot, Monatsverlauf Vormonat 1/1', f['versaeumtAnzahl'] == 1 and f['ampel'] in ('gelb', 'gruen')
       and {m['m']: m for m in f['monate']}[letzter_vormonat.strftime('%Y-%m')] == {'m': letzter_vormonat.strftime('%Y-%m'), 'faellig': 1, 'erfuellt': 1, 'abweichung': False}, f)
+# „Ab wann“ vor mehr als 1000 Tagen (z. B. aus der Excel): gezählt werden die letzten 1000 Tage, heute bleibt fällig
+p9 = Q.call('qs_pruefung_save', {**P1, 'titel': 'Kerntemperatur Wareneingang', 'intervall': 'taeglich', 'start': tag(-1500)})[1]['pruefung']
+st, r = Be.call('qs_nachweis_save', {'pruefung': p9['id'], 'datum': tag(-1), 'ergebnis': 'io'})
+f = r['pruefung']['faellig']
+check('täglich ab vor 1500 Tagen, gestern erfüllt: heute offen (gelb), Quote, 998 versäumt seit vor 999 Tagen', st == 200 and f['offen'] is True and f['naechste'] == tag(0)
+      and f['ampel'] == 'gelb' and f['quote'] and f['quote']['erfuellt'] == 1 and f['versaeumtAnzahl'] == 998 and f['versaeumtAb'] == tag(-999) and f['versaeumt'][0] == tag(-2), f)
+check('Start vor höchstens 1000 Tagen: seit Beginn gezählt (ohne versaeumtAb)', p5['faellig']['versaeumtAb'] == '' and p8['faellig']['versaeumtAb'] == '', (p5['faellig'], p8['faellig']))
 
 # ── Maßnahmen (Aufbau des IFS-Maßnahmenplans) ──
 M = {'quelle': 'intern', 'bezug': 'Internes Audit 2026', 'kapitel': '1.1', 'anforderung': '4.8.2', 'bewertung': 'B', 'anforderungText': 'Messgeräte sind zu kalibrieren.',
@@ -646,6 +653,23 @@ with sync_playwright() as p:
     pg.click(f'{we} .qm-plan-titel'); pg.wait_for_selector('#dlg-pruefung[open] #pr-versaeumt .qm-chip.rot')
     check('Prüfung arbeitstäglich: versäumte Tage mit Datum, Quote', 'versäumt' in text(pg, '#pr-versaeumt') and 'erfüllt' in text(pg, '#pr-meta'))
     pg.click('#pr-knoepfe [data-schliessen]')
+    def ab_setzen(route):   # Fälligkeit wie bei „Ab wann“ vor mehr als 1000 Tagen
+        r = route.fetch(); j = r.json()
+        for x in j.get('pruefungen', []):
+            if x.get('titel') == 'Wareneingangsprüfung':
+                x['faellig']['versaeumtAb'] = '2024-02-27'
+        route.fulfill(response=r, json=j)
+    pg2 = ctx.new_page(); pg2.route('**/api/?action=qs_start*', ab_setzen)
+    pg2.goto(B + '/module/qs/#pruefplan'); pg2.wait_for_selector(f'{we} .qm-plan-titel')
+    zeile = text(pg2, we)
+    pg2.click(f'{we} .qm-plan-titel'); pg2.wait_for_selector('#dlg-pruefung[open] #pr-versaeumt .qm-chip.rot')
+    check('nur die letzten 1000 Perioden gezählt: „versäumt seit 27.02.2024“ in Zeile und Prüfung', 'versäumt seit 27.02.2024' in zeile
+          and 'seit 27.02.2024 (frühere nicht gezählt)' in text(pg2, '#pr-versaeumt'), (zeile, text(pg2, '#pr-versaeumt')))
+    pg2.screenshot(path=os.path.join(SH, 'qs_versaeumt_seit_1280.png'))
+    pg2.set_viewport_size({'width': 390, 'height': 844})
+    pg2.wait_for_function('document.documentElement.scrollWidth <= window.innerWidth + 1')
+    pg2.screenshot(path=os.path.join(SH, 'qs_versaeumt_seit_390.png'))
+    pg2.close()
     pg.screenshot(path=os.path.join(SH, 'qs_pruefplan_1280.png'), full_page=True)
     # Prüfung zuweisen
     pg.click('#qm-p-liste .qm-plan-zeile:has-text("Systembewertung") .qm-plan-titel'); pg.wait_for_selector('#dlg-pruefung[open]')

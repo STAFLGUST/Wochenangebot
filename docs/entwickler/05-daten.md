@@ -826,7 +826,8 @@ laufen unter der Sperre `qs-dokumente`. Zuständig/Vertreter sind **Kürzel** (S
   quartal|halbjahr|jaehrlich|zweijaehrlich|dreijaehrlich|anlass", "start": "JJJJ-MM-TT|", "womit", "sollwert", "massnahme", "zustaendig",
   "vertreter", "ausfuehrende": ["<Nutzer-ID>"], "aktiv", "verlauf"}`. Die Antwort ergänzt `faellig`: Kalender-Intervalle (`art: kalender`)
   zählen jede vergangene Periode ohne Nachweis als versäumt (`versaeumt` neueste zuerst, `versaeumtAnzahl`, `quote` über 30 Tage / 12 Wochen /
-  12 Monate, `offen` = laufende Periode ohne Nachweis); arbeitstäglich = Mo–Fr ohne Hamburger Feiertage (`hr_feiertag`). Rollende Intervalle
+  12 Monate, `offen` = laufende Periode ohne Nachweis); liegt `start` mehr als 1000 Perioden zurück, zählen nur die letzten 1000 und
+  `versaeumtAb` nennt den ersten gezählten Tag (Oberfläche, Startseite und CSV: „versäumt seit …“), sonst ist es leer; arbeitstäglich = Mo–Fr ohne Hamburger Feiertage (`hr_feiertag`). Rollende Intervalle
   (`art: rollend`) rechnen ab dem letzten Nachweis, sonst ab `start`, sonst sofort fällig. `monate` = die letzten 6 Monate und der laufende
   (`{"m", "faellig", "erfuellt", "abweichung"}`).
 - **`qs-nachweise`**: `{"id": "n…", "pruefung", "datum", "ergebnis": "io|abweichung", "bemerkung", "durch", "massnahme": "m…|", "erfasst",
