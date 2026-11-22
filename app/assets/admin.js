@@ -5282,8 +5282,11 @@
       master.articles = masterZusammenfuehren(res, master.articles).articles;   // auf den Stand beim Klick anwenden
       clearTimeout(masterTimer);
       while (masterSaving) await new Promise((r) => setTimeout(r, 100));
-      await saveMaster();
-      if (masterErr) { const msg = masterErr; master.articles = vorher; masterErr = null; setMasterState('saved'); $('#msi-err').textContent = msg; $('#msi-ok').disabled = false; return; }
+      if (await saveMaster() === false) {   // nach 409 ist der aktuelle Stand geladen (master ist dann schon dieser) – erneut „Übernehmen“ führt die Datei mit ihm zusammen
+        const msg = masterErr || 'Die Stammdaten wurden inzwischen an anderer Stelle geändert – der aktuelle Stand ist geladen. Bitte erneut „Übernehmen“.';
+        if (masterErr) { master.articles = vorher; masterErr = null; setMasterState('saved'); }
+        $('#msi-err').textContent = msg; $('#msi-ok').disabled = false; return;
+      }
       dlgMI.close();
       toast(`Artikelstammdaten übernommen: ${fmtInt.format(neu.length)} neu, ${fmtInt.format(ergaenzt.length)} ergänzt.`, 5000);
       renderMasterView();
@@ -5347,8 +5350,8 @@
     const nm = namenBekannt(it.namen);   // Bezeichnungen je Angebot gehören dazu
     if (nm) rec.namen = nm; else if (ent) delete ent.namen;
     if (ent) Object.assign(ent, rec); else { master.articles.push(rec); master.articles.sort((x, y) => x.code.localeCompare(y.code, 'de', { numeric: true })); }
-    await saveMaster();
-    toast(masterErr ? `Nicht gespeichert: ${masterErr}` : `Stammdaten für ${it.code} ${ent ? 'aktualisiert' : 'angelegt'}.`);
+    const ok = await saveMaster();   // undefined: läuft nach dem laufenden Speichern
+    toast(ok === false ? `Nicht gespeichert: ${masterErr || 'die Stammdaten wurden inzwischen an anderer Stelle geändert – bitte erneut speichern.'}` : `Stammdaten für ${it.code} ${ent ? 'aktualisiert' : 'angelegt'}.`);
   }
 
   /* ======================= Schnittstelle für admin-verwaltung.js ======================= */

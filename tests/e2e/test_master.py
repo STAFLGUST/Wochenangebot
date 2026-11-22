@@ -1,4 +1,5 @@
-"""Testgruppe master: Artikelstammdaten und Bezeichnungsregeln (Fleischart, Herkunft, Zustand, VK-Gruppe)."""
+"""Testgruppe master: Artikelstammdaten und Bezeichnungsregeln (Fleischart, Herkunft, Zustand, VK-Gruppe); nach 409 (Import,
+„Als Stammdaten speichern“) keine Erfolgsmeldung."""
 import sys
 from umgebung import BASE  # Testserver je Gruppe (parallel)
 import json, re
@@ -167,9 +168,25 @@ with sync_playwright() as p:
     r10823.locator('[data-act=item]').click(); a.wait_for_selector('#dlg-item[open]')
     a.click('#item-body [data-ia=to-master]'); a.wait_for_timeout(1200)
     check('item saved to master', 'Stammdaten für 10823' in a.inner_text('#toast'), a.inner_text('#toast'))
+    # inzwischen an anderer Stelle gespeichert (409): Meldung „Nicht gespeichert“ statt „aktualisiert“
+    m_ = get(a, 'master')['master']; assert post(a, 'master_save', {'rev': m_['rev'], 'articles': m_['articles']})[0] == 200
+    leeren = "document.querySelector('#toast').textContent = ''"
+    a.evaluate(leeren); a.click('#item-body [data-ia=to-master]')
+    a.wait_for_function("/Nicht gespeichert|Stammdaten für 10823/.test(document.querySelector('#toast').textContent)")
+    check('Als Stammdaten speichern nach 409: „Nicht gespeichert“, keine Erfolgsmeldung', 'Nicht gespeichert' in a.inner_text('#toast') and 'aktualisiert.' not in a.inner_text('#toast'), a.inner_text('#toast'))
+    a.evaluate(leeren); a.click('#item-body [data-ia=to-master]'); a.wait_for_function("/Stammdaten für 10823 aktualisiert/.test(document.querySelector('#toast').textContent)")
     a.keyboard.press('Escape')
     a.reload(); a.wait_for_selector('tr[data-id]'); a.click('#vt-master'); a.wait_for_selector('.mtab'); a.fill('#ms-q', '10823'); a.wait_for_selector('.mtab tr[data-mcode="10823"]')
     check('master persisted after reload', master_ent(a, '10823')['condition'] == 'dry-aged' and 'Dry' in a.inner_text('.mtab tr[data-mcode="10823"] .m-cond'))
+    # Import nach 409: Fenster bleibt offen mit Hinweis, nichts gespeichert; erneut „Übernehmen“ speichert auf dem neuen Stand
+    a.set_input_files('#ms-file', FIX + '/stammdaten/artikelstammdaten.csv'); a.wait_for_selector('#dlg-ms-import[open] #msi-ok:not([disabled])')
+    m_ = get(a, 'master')['master']; assert post(a, 'master_save', {'rev': m_['rev'], 'articles': m_['articles']})[0] == 200
+    a.click('#msi-ok'); a.wait_for_function("document.querySelector('#msi-err').textContent || !document.querySelector('#dlg-ms-import').open")
+    check('Stammdaten-Import nach 409: Fenster offen mit Hinweis, nichts gespeichert, keine Erfolgsmeldung', a.locator('#dlg-ms-import[open]').count() == 1
+          and 'inzwischen an anderer Stelle' in a.inner_text('#msi-err') and master_ent(a, '90001') is None and 'übernommen' not in a.inner_text('#toast'), (a.inner_text('#msi-err'), a.inner_text('#toast')))
+    if a.locator('#dlg-ms-import[open]').count():
+        a.click('#msi-ok'); a.wait_for_function("!document.querySelector('#dlg-ms-import').open")
+    check('… erneut „Übernehmen“ speichert auf dem neuen Stand', master_ent(a, '90001') is not None and 'übernommen' in a.inner_text('#toast'), a.inner_text('#toast'))
     # Server prüft die Bezeichnungen je Angebot (Format, leer, Wochenangebot) – Liste per API
     m_ = get(a, 'master')['master']
     arts_ = [dict(x, namen={'std': 'nie', 'edeka': '', 'Böse ID': 'x', 'bela': '  Roastbeef   Bela  ', 'chefs-culinar': 'y' * 250}) if x['code'] == '10701' else x for x in m_['articles']]
