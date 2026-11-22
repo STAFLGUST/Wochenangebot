@@ -14,6 +14,7 @@ mkdir -p "$T/kc" "$T/inst"
 cat > "$T/kcadm" <<'SH'
 #!/bin/sh
 echo "$*" >> "$KC_DIR/aufrufe"
+[ "${KC_CLI_PASSWORD:-}" = test-nur-lokal ] || echo "ohne KC_CLI_PASSWORD: $*" >> "$KC_DIR/aufrufe"
 case "$1 $2" in
   "get users") echo "abc-123" ;;
   "get users/abc-123") cat "$KC_DIR/konto" ;;
@@ -112,6 +113,9 @@ AUS=$(sh "$REPO/deploy/anmeldung/konten.sh" pruefen 2>&1) && CODE=0 || CODE=$?
 ok "ohne Namen: Aufrufhinweis" '[ $CODE = 1 ] && echo "$AUS" | grep -q "Aufruf: konten.sh pruefen <benutzername>"'
 AUS=$(sh "$REPO/deploy/anmeldung/konten.sh" pruefen 'x; rm -rf /' 2>&1) && CODE=0 || CODE=$?
 ok "ungültiger Name abgelehnt, bevor Keycloak gefragt wird" '[ $CODE = 1 ] && echo "$AUS" | grep -q "Benutzername:"'
+
+AUS=$(cat "$T/kc/aufrufe")
+ok "Verwaltungspasswort nur über die Umgebung (KC_CLI_PASSWORD), nie als Argument in der Prozessliste" '[ -n "$AUS" ] && ! grep -q -e test-nur-lokal -e --password -e "ohne KC_CLI_PASSWORD" "$T/kc/aufrufe"'
 
 echo "konten.sh pruefen: $PASS bestanden, $FAIL fehlgeschlagen"
 [ "$FAIL" = 0 ]

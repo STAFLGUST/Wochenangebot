@@ -42,7 +42,7 @@ set -eu
 umask 077
 ENV="$(pwd)/.env"
 # Werkzeug von Keycloak im Container; die Tests setzen KCADM/KC_SERVER auf eine lokale Installation
-KCADM=${KCADM:-docker compose -f docker-compose.yml -f deploy/anmeldung/docker-compose.anmeldung.yml exec -T keycloak /opt/keycloak/bin/kcadm.sh}
+KCADM=${KCADM:-docker compose -f docker-compose.yml -f deploy/anmeldung/docker-compose.anmeldung.yml exec -T -e KC_CLI_PASSWORD keycloak /opt/keycloak/bin/kcadm.sh}
 KC_SERVER=${KC_SERVER:-http://localhost:8080}
 REALM=mitarbeiter
 VERWALTUNG=verwaltung
@@ -74,16 +74,18 @@ startpasswort() { # startpasswort [<Anzahl Zeichen ohne Striche>]
 
 kc_als() { # kc_als <benutzer> <passwort> <kcadm-Befehl…>
   u=$1; p=$2; shift 2
+  # Passwort über die Umgebung (KC_CLI_PASSWORD liest kcadm selbst; docker compose exec -e übernimmt den Wert), nie als
+  # Argument: das stünde in der Prozessliste des Servers
   # Standardeingabe nur bei „-f -“ (Daten über die Eingabe) weiterreichen: docker compose exec liest sie sonst mit und
   # „schluckt“ in Schleifen („… | while read“) die restlichen Zeilen – dann wurde nur der erste Eintrag bearbeitet
   # (im Betrieb: Anmeldemethode nur für das Passwort, nicht für Einmalcode und Passkey → doppelte Code-Abfrage)
   case " $* " in
     *" -f - "*)
       # shellcheck disable=SC2086  # KCADM ist bewusst ein Befehl mit Argumenten
-      $KCADM "$@" --no-config --server "$KC_SERVER" --realm master --user "$u" --password "$p" 2>"$FEHLER" ;;
+      KC_CLI_PASSWORD=$p $KCADM "$@" --no-config --server "$KC_SERVER" --realm master --user "$u" 2>"$FEHLER" ;;
     *)
       # shellcheck disable=SC2086
-      $KCADM "$@" --no-config --server "$KC_SERVER" --realm master --user "$u" --password "$p" 2>"$FEHLER" </dev/null ;;
+      KC_CLI_PASSWORD=$p $KCADM "$@" --no-config --server "$KC_SERVER" --realm master --user "$u" 2>"$FEHLER" </dev/null ;;
   esac
 }
 bereit() { [ -n "${KC_ADMIN_PASSWORD_TEST:-}$(wert KC_VERWALTUNG_PASSWORD)" ] || abbruch "noch kein Verwaltungskonto – zuerst: sh deploy/anmeldung/konten.sh verwaltung"; }
