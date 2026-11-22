@@ -174,6 +174,9 @@ with sync_playwright() as pw:
                         # Angebot am Handy: Zurück-Knopf und sechs Aktionen füllen die Kopfzeile – dort bewusst ohne Logo (admin.css)
                         ohne_logo = name == 'angebot' and breite <= 480
                         check(f'{teil} {tag}: Logo weiß ohne helle Fläche', (lg or ohne_logo) and all(x['bg'] in ('rgba(0, 0, 0, 0)', 'transparent') and ('invert' in x['filter'] or 'weiss' in x['src']) for x in lg), lg)
+                if breite == 1440 and not dunkel and name == 'angebot':   # Haus = „Start“ (Leiste); die Angebotsseite hat das Symbol aus dem Menü
+                    sy = pg.evaluate("['#btn-site', '#menu-more [data-act=open-site]'].map((s) => document.querySelector(s + ' use').getAttribute('href'))")
+                    check('angebot: Knopf „Angebotsseite“ mit demselben Symbol wie „Öffentliche Seite öffnen“, nicht dem Haus von „Start“', sy[0] == sy[1] != '#i-home', sy)
                 if breite == 1440 and not dunkel:
                     check(f'{name}: gemeinsames Zahlenformat geladen (format.js)', pg.evaluate("!!(window.STAFL_FORMAT && window.STAFL_FORMAT.euro)"))
                     check(f'{name}: gemeinsame Suchregel geladen (suche.js)', pg.evaluate("!!(window.STAFL_SUCHE && window.STAFL_SUCHE.findet)"))
