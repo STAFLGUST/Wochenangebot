@@ -510,6 +510,29 @@ class Verstoesse(unittest.TestCase):
                         'pfade = ["app/api/lib/bestand.php", "app/api/lib/angebote.php"]')
         self.assertFehler("mehrdeutig")
 
+    # Fremdcode im Browser braucht einen Herkunftsanker (app/assets/vendor/HERKUNFT.toml) – ohne ihn riet die
+    # Dateiprüfung die Fassung aus dem Dateikopf (für pdf.js „2.0“ aus dem Lizenztext)
+    FREMD = "// fremd\n"
+    ANKER = ('[[fremddatei]]\npfad = "fremd.js"\nname = "Fremd"\nfassung = "1.0"\n'
+             'quelle = "https://beispiel.invalid/fremd-1.0.tgz"\nsha256 = "8b9b3e3d39bf17e9307d476891a7dfd0b305e4338ac0ed7358cad9c1a746e067"\n')
+
+    def test_fremddatei_ohne_herkunftsanker(self):
+        self.p.schreiben(regeln.VENDOR + "/fremd.js", self.FREMD)
+        self.assertFehler(regeln.HERKUNFT + " fehlt")
+        self.p.schreiben(regeln.HERKUNFT, "# noch kein Eintrag\n")
+        self.assertFehler("Fremddatei ohne Herkunftsanker: " + regeln.VENDOR + "/fremd.js")
+
+    def test_fremddatei_mit_falscher_pruefsumme(self):
+        self.p.schreiben(regeln.VENDOR + "/fremd.js", self.FREMD + "// nachträglich geändert\n")
+        self.p.schreiben(regeln.HERKUNFT, self.ANKER)
+        self.assertFehler("Prüfsumme von " + regeln.VENDOR + "/fremd.js passt nicht")
+
+    def test_herkunftsanker_ohne_datei_und_ohne_quelle(self):
+        self.p.schreiben(regeln.VENDOR + "/fremd.js", self.FREMD)
+        self.p.schreiben(regeln.HERKUNFT, self.ANKER + '\n[[fremddatei]]\npfad = "weg.js"\nname = "Weg"\nfassung = ""\nsha256 = "00"\n')
+        self.assertFehler("„weg.js“ ohne quelle")
+        self.assertFehler("„weg.js“ zeigt auf keine Datei")
+
     def test_unregistriertes_dokument(self):
         self.p.schreiben("app/api/lib/neu.php", "<?php\nstore_write('geheimliste', []);\n")
         self.assertFehler("„geheimliste“, das nicht in regeln/datenverantwortung.toml steht")

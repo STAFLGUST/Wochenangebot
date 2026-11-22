@@ -113,9 +113,15 @@ Wichtig: Die Schritte 6–17 sind **Vorprüfungen**. Sie ersetzen nie die Rechte
 | `module/<modul>/` | Fachcode der Module (z. B. `module/hr/urlaub.php`, `module/crm/crm.php`, Importverträge `module/<modul>/import.php`) | neuer Fachcode gehört hierher (`pfade_geplant` in `regeln/module.toml`), nicht in gemeinsame Dateien |
 | `lib/aktionen-liste.php` | Konstante `AKTIONEN`, erzeugt aus `regeln/aktionen/*.toml` | **nie von Hand ändern**: `python3 werkzeuge/regeln.py erzeugen` |
 | `lib/module-liste.php` | `MODULE`, `RECHTE_MODUL`, `MODUL_FREIGABE_ERLAUBT`, `MODUL_REGELN`, erzeugt aus `regeln/module.toml`, `regeln/wartung.toml` | **nie von Hand ändern**; bei Rebase-Konflikt neu erzeugen |
-| `storage.php` | Speicherschicht (3.5) | koordinationspflichtig |
+| `storage.php` | Speicherschicht (3.5) | koordinationspflichtig; Schutz über `SCRIPT_FILENAME`-Prüfung (auch von Wartungsskripten eingebunden, deshalb nicht `WA_API`) |
 | `mail.php`, `geo.php`, `ort.php` | SMTP-Client, Länder- und Ortsdatenbank | Schutz über `SCRIPT_FILENAME`-Prüfung statt `WA_API` |
-| `orders.php`, `order_outbox.php` | Bestell-API v1 und Versandaufträge (3.9) | |
+| `orders.php`, `order_outbox.php`, `config.php` | Bestell-API v1, Versandaufträge (3.9) und Einstellungen | ebenso `SCRIPT_FILENAME`-Prüfung |
+
+Jede PHP-Datei in der Webwurzel trägt eine Selbstsperre: Bibliotheken unter `lib/` und `aktionen/` die `WA_API`-Zeile, die
+eingebundenen Dateien daneben die Zeile
+`if (realpath((string)($_SERVER['SCRIPT_FILENAME'] ?? '')) === __FILE__) { http_response_code(404); exit; }`.
+Ein direkter Aufruf endet damit in 404 statt in einer leeren Antwort (22.11.2026 für `config.php`, `storage.php`,
+`orders.php`, `order_outbox.php` nachgezogen).
 
 Aktionsdateien werden im globalen Gültigkeitsbereich eingebunden: `$action`, `$method`, `$CFG`, `$AKTION` stehen zur
 Verfügung. Jede Aktion steht in `regeln/aktionen/<modul>.toml` (Felder: [regeln/aktionen/LIESMICH.md](../../regeln/aktionen/LIESMICH.md));

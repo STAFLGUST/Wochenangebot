@@ -18,6 +18,8 @@ const INTEGRITAET_MAX_EINTRAEGE = 500;     // gespeicherte/ausgelieferte Befunde
 const INTEGRITAET_VERLAUF = 20;
 /* Dashboard: im Betrieb neben der Webwurzel (/dashboard/), im Testlauf darunter – Prüfliste nennt es dashboard/<pfad> */
 const INTEGRITAET_ZUSATZ = 'dashboard';
+/* Herkunft der Fremddateien im Browser (Name, Fassung, Bezugsquelle, Prüfsumme) – Quelle der Fassungsangabe */
+const INTEGRITAET_HERKUNFT = 'HERKUNFT.toml';
 const INTEGRITAET_AUTO_STUNDEN = 24;       // älter → beim Öffnen der Sicherheitsansicht automatisch prüfen (höchstens 1× am Tag)
 const INTEGRITAET_STUFEN = ['kritisch' => 3, 'warnung' => 2, 'hinweis' => 1];
 /* Ende der Sicherheitsupdates je PHP-Version (php.net/supported-versions, Stand Oktober 2026) */
@@ -312,17 +314,65 @@ function integritaet_komponenten(string $root): array
         $alt = preg_match('~^(\d+)\.~', $v, $m) && (int)$m[1] < 3;
         $out[] = ['name' => 'OpenSSL', 'version' => $v, 'stufe' => $alt ? 'warnung' : 'ok', 'text' => $alt ? 'Version 1.x erhält keine Sicherheitsupdates mehr.' : 'Updates kommen mit dem Container-Image.'];
     }
-    foreach (glob($root . '/assets/vendor/*.{js,css}', GLOB_BRACE) ?: [] as $f) {
+    $herkunft = integritaet_herkunft($root . '/assets/vendor/' . INTEGRITAET_HERKUNFT);
+    foreach (integritaet_vendor($root . '/assets/vendor') as $rel => $f) {
+        $e = $herkunft[$rel] ?? null;
         $head = (string)@file_get_contents($f, false, null, 0, 4096);
-        $name = basename($f);
-        foreach (preg_split('~\R~', $head) ?: [] as $line) {
-            $t = trim(preg_replace('~^\s*(?:/\*+!?|\*+|//+)~', '', $line) ?? '');
-            if (preg_match('~[A-Za-z]{3}~', $t) && !preg_match('~^(?:copyright|licen[cs]ed|url|https?:|@license)~i', $t)) { $name = mb_substr(trim($t, " */"), 0, 60); break; }
+        if ($e) {
+            $name = $e['name'] !== '' ? $e['name'] : $rel;
+            $ver = $e['fassung'];
+            $quelle = $e['quelle'] !== '' ? ' Bezugsquelle ' . $e['quelle'] . '.' : '';
+            $text = ($ver !== '' ? '' : 'Fassung in ' . INTEGRITAET_HERKUNFT . ' nicht angegeben; ') . 'Prüfsumme '
+                  . substr((string)hash_file('sha256', $f), 0, 12) . ' (über die Prüfliste überwacht).' . $quelle;
+        } else {
+            // Rückfall ohne Eintrag: Name und Fassung aus dem Dateikopf – unzuverlässig (bei pdf.js las das Muster „2.0“
+            // aus dem Lizenztext), deshalb immer nur ein Hinweis. regeln.py pruefen verlangt für jede Datei einen Eintrag.
+            $name = $rel;
+            foreach (preg_split('~\R~', $head) ?: [] as $line) {
+                $t = trim(preg_replace('~^\s*(?:/\*+!?|\*+|//+)~', '', $line) ?? '');
+                if (preg_match('~[A-Za-z]{3}~', $t) && !preg_match('~^(?:copyright|licen[cs]ed|url|https?:|@license)~i', $t)) { $name = mb_substr(trim($t, " */"), 0, 60); break; }
+            }
+            $ver = '';
+            $text = 'Kein Eintrag in ' . INTEGRITAET_HERKUNFT . ' (Name und Fassung nicht belegt); Prüfsumme '
+                  . substr((string)hash_file('sha256', $f), 0, 12) . ' (über die Prüfliste überwacht).';
         }
-        $ver = preg_match('~(?:@version|\bversion\b)[\s:=\'"v]*(\d+\.\d+(?:\.\d+)?)|\bv(\d+\.\d+\.\d+)\b|@(\d+\.\d+\.\d+)~i', $head, $m) ? ($m[1] ?: ($m[2] ?? '') ?: ($m[3] ?? '')) : '';
-        $out[] = ['name' => $name, 'version' => $ver !== '' ? $ver : '–', 'stufe' => $ver !== '' ? 'ok' : 'hinweis', 'file' => 'assets/vendor/' . basename($f),
-                  'text' => ($ver !== '' ? '' : 'Version im Dateikopf nicht angegeben; ') . 'Prüfsumme ' . substr((string)hash_file('sha256', $f), 0, 12) . ' (über die Prüfliste überwacht).'];
+        $out[] = ['name' => $name, 'version' => $ver !== '' ? $ver : '–', 'stufe' => $ver !== '' ? 'ok' : 'hinweis',
+                  'file' => 'assets/vendor/' . $rel, 'text' => $text];
     }
+    return $out;
+}
+
+/* Fremddateien im Browser: alle Skripte und Stylesheets unter assets/vendor/, auch in Unterordnern (Rückgabe: Pfad ab
+   vendor/ => absoluter Pfad). Vorher globte die Übersicht nur vendor/*.{js,css} und nannte darum allein qrcode.js. */
+function integritaet_vendor(string $dir): array
+{
+    if (!is_dir($dir)) return [];
+    $out = [];
+    $it = new RecursiveIteratorIterator(new RecursiveDirectoryIterator($dir, FilesystemIterator::SKIP_DOTS));
+    foreach ($it as $f) {
+        if (!$f->isFile() || !preg_match('~\.(?:js|css)$~i', $f->getFilename())) continue;
+        $out[ltrim(str_replace('\\', '/', substr($f->getPathname(), strlen($dir))), '/')] = $f->getPathname();
+    }
+    ksort($out);
+    return $out;
+}
+
+/* Herkunftsanker der Fremddateien (assets/vendor/HERKUNFT.toml): Pfad => [name, fassung, quelle, sha256]. Eigener winziger
+   Leser, weil PHP kein TOML kennt – die Datei enthält nur [[fremddatei]]-Blöcke mit `schlüssel = "wert"`; Aufbau,
+   Vollständigkeit und Prüfsummen prüft `python3 werkzeuge/regeln.py pruefen`. */
+function integritaet_herkunft(string $datei): array
+{
+    $out = []; $e = null;
+    $fertig = function () use (&$out, &$e) {
+        if (is_array($e) && ($e['pfad'] ?? '') !== '') $out[$e['pfad']] = $e + ['name' => '', 'fassung' => '', 'quelle' => '', 'sha256' => ''];
+        $e = null;
+    };
+    foreach (preg_split('~\R~', (string)@file_get_contents($datei)) ?: [] as $zeile) {
+        $z = trim($zeile);
+        if ($z === '[[fremddatei]]') { $fertig(); $e = []; continue; }
+        if ($e !== null && preg_match('~^([a-z0-9_]+)\s*=\s*"([^"]*)"$~', $z, $m)) $e[$m[1]] = $m[2];
+    }
+    $fertig();
     return $out;
 }
 

@@ -16,6 +16,7 @@ Quelle aller Angaben: regeln/*.toml. Erklärung: docs/plattform/multi-agent.md
 from __future__ import annotations
 
 import argparse
+import hashlib
 import itertools
 import json
 import re
@@ -35,6 +36,8 @@ SCHUTZ = ["oeffentlich", "intern", "vertraulich", "geheim"]
 ID_MUSTER = re.compile(r"^[a-z][a-z0-9_]*$")
 GR_MUSTER = re.compile(r"\bGR-\d{3}\b")
 DASHBOARD_DOMAIN = "dashboard-stafl.de"
+VENDOR = "app/assets/vendor"            # Fremdcode im Browser
+HERKUNFT = VENDOR + "/HERKUNFT.toml"   # Herkunftsanker je Fremddatei (Name, Fassung, Bezugsquelle, Prüfsumme)
 
 # Speicherzugriffe im PHP-Code: store_write('name' …), with_lock('name' …), store_read('prefix/' . $x) …
 SCHREIB_RE = re.compile(r"\b(store_write|store_delete|with_lock)\(\s*'([A-Za-z0-9_\-/]+)'(\s*\.)?")
@@ -892,9 +895,51 @@ def pruefe_aktionen(rw: Regelwerk) -> None:
             rw.f(f"{MODULE_LISTE} passt nicht zu regeln/module.toml bzw. regeln/wartung.toml – `python3 werkzeuge/regeln.py erzeugen` ausführen")
 
 
+def pruefe_fremddateien(rw: Regelwerk, liste: list) -> None:
+    """Jede Datei unter app/assets/vendor/ hat einen Herkunftsanker mit passender Prüfsumme (HERKUNFT.toml).
+
+    Ohne Anker gibt es für Fremdcode im Browser keine belegte Fassung: das Fassungsmuster im Dateikopf
+    (app/api/lib/integritaet.php) riet für pdf.js „2.0“ aus dem Lizenztext und meldete das als geprüft.
+    """
+    fremd = [p for p in liste if p.startswith(VENDOR + "/") and p != HERKUNFT]
+    if not fremd:
+        return
+    datei = rw.wurzel / HERKUNFT
+    if not datei.is_file():
+        rw.f(f"{HERKUNFT} fehlt – jede Datei unter {VENDOR}/ braucht Name, Fassung, Bezugsquelle und sha256")
+        return
+    try:
+        eintraege = tomllib.loads(datei.read_text(encoding="utf-8")).get("fremddatei", [])
+    except tomllib.TOMLDecodeError as e:
+        rw.f(f"{HERKUNFT} ist kein gültiges TOML: {e}")
+        return
+    nach_pfad: dict = {}
+    for e in eintraege:
+        pfad = e.get("pfad", "")
+        for feld in ("pfad", "name", "quelle", "sha256"):
+            if not e.get(feld):
+                rw.f(f"{HERKUNFT}: Eintrag „{pfad or '?'}“ ohne {feld}")
+        if "fassung" not in e:
+            rw.f(f"{HERKUNFT}: Eintrag „{pfad or '?'}“ ohne fassung (leer, wenn die Datei keine nennt)")
+        if not pfad:
+            continue
+        if pfad in nach_pfad:
+            rw.f(f"{HERKUNFT}: Eintrag „{pfad}“ steht doppelt")
+        nach_pfad[pfad] = e
+    for p in sorted(fremd):
+        e = nach_pfad.pop(p[len(VENDOR) + 1:], None)
+        if e is None:
+            rw.f(f"Fremddatei ohne Herkunftsanker: {p} – in {HERKUNFT} eintragen (Name, Fassung, Bezugsquelle, sha256)")
+        elif e.get("sha256") != hashlib.sha256((rw.wurzel / p).read_bytes()).hexdigest():
+            rw.f(f"{HERKUNFT}: Prüfsumme von {p} passt nicht – sha256 neu eintragen (`sha256sum {p}`)")
+    for pfad in sorted(nach_pfad):
+        rw.f(f"{HERKUNFT}: Eintrag „{pfad}“ zeigt auf keine Datei unter {VENDOR}/")
+
+
 def pruefen(rw: Regelwerk) -> Regelwerk:
     liste = dateien(rw.wurzel)
     pruefe_module(rw)
+    pruefe_fremddateien(rw, liste)
     pruefe_pfade(rw, liste)
     pruefe_daten(rw, liste)
     pruefe_rechte(rw)

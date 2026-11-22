@@ -649,7 +649,9 @@ Leiste senkrecht, schmal ist sie eine waagerechte Spur. Mit `body.bereich-import
 - **Wartung:** Kunden und Besucher sehen nur `renderWartung()`; angemeldete Mitarbeiter (`staff`) sehen das Angebot mit
   Banner (GR-009).
 - **Web-App:** `sw.js` speichert nur Startseite, `/assets/`, `manifest.json` und das öffentliche Wochenangebot, immer
-  zuerst Netz; offline trägt die Antwort `X-WA-Offline`, die Seite zeigt „Preise ohne Gewähr“.
+  zuerst Netz; offline trägt die Antwort `X-WA-Offline`, die Seite zeigt „Preise ohne Gewähr“. Abfrageparameter liest der
+  Service Worker wie der Server: bei mehrfachem Parameter gilt der **letzte** Wert (`searchParams.getAll(k).pop()` statt
+  `get(k)`, PHP `$_GET`) – sonst stufte er `?action=offer&angebot=std&angebot=k-meier` anders ein als die API.
 - **Nie ausgeliefert** (Server, nicht Oberfläche): Mengen, Chargen, MHD, Einkaufspreise (GR-001, GR-008), Kundenpreise im
   öffentlichen Angebot (GR-002). Die Oberfläche darf solche Felder auch nicht „vorsorglich“ anfordern. Einzige Ausnahme
   (GR-001 Version 2, Inhaber 13.11.2026): im eigenen, freigegebenen Einzelangebot liefert `einzel_model` je ausdrücklich
@@ -904,6 +906,12 @@ Caddy setzt auf allen Hosts `script-src 'self'` (ohne `'unsafe-inline'`), `conne
 - **Keine Inline-Skripte**, keine `onclick="…"`-Attribute, kein `javascript:`-Link. Ereignisse mit `addEventListener`,
   bevorzugt als Delegation über `data-*` (`data-act`, `data-close`, `data-v`).
 - Keine Skripte, Schriften oder Daten von fremden Servern; Bibliotheken liegen unter `app/assets/vendor/`.
+- **Herkunftsanker jeder Fremddatei:** `app/assets/vendor/HERKUNFT.toml` nennt je Datei Name, Fassung, Bezugsquelle (Adresse des
+  offiziellen Pakets) und `sha256`. Die Dateiprüfung (Sicherheit → Dateiprüfung, Abschnitt Komponenten) nimmt Name und Fassung von
+  dort – das frühere Fassungsmuster im Dateikopf ist nur noch Rückfall für Dateien ohne Eintrag und riet für pdf.js „2.0“ aus dem
+  Lizenztext. `python3 werkzeuge/regeln.py pruefen` verlangt für jede Datei unter `app/assets/vendor/` einen Eintrag und vergleicht
+  die Prüfsumme. Neue Bibliothek: Datei ablegen, Eintrag ergänzen (`sha256sum`). Offen bleibt `sha256_quelle` – den Abgleich gegen
+  das veröffentlichte Paket trägt der Inhaber nach (braucht Netzzugang).
 - **Einzige Ausnahme: Kartenbilder im Container-Import** (Entscheidung des Inhabers 18.11.2026). Nur für
   `container-import.dashboard-stafl.de` ergänzt das `Caddyfile` über die Zuordnung `csp_karten` drei Adressen in `img-src`
   und `connect-src` (nie in `script-src`): `tiles.maps.eox.at` (Satellitenbild), `ies-ows.jrc.ec.europa.eu` (Wald 2020 der
