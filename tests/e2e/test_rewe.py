@@ -348,6 +348,17 @@ check('Team wirkt: Sabi sieht den Abschluss, Lea alle Listen (ohne bearbeiten)',
       and L.call('rewe_antwort', AW)[0] == 403)
 pers = {p['name']: p for p in LE.call('rewe_start')[1]['personen']}
 check('Mitarbeiterliste zeigt Team und Rechte getrennt', pers['Sabi Summe']['teamExport'] is True and pers['Sabi Summe']['rechtExport'] is False and pers['Lena Leitung']['rechtExport'] is True, pers.get('Sabi Summe'))
+# Ein ausdrückliches Verbot am Konto geht der Team-Zuweisung vor; „Wochenabschluss“ setzt „alle Listen“ voraus (rechte.php)
+sabi_ = lambda deny: A.call('user_save', {'id': ids['sabi'], 'name': 'Sabi Summe', 'role': 'editor', 'active': True, 'grant': ['rewe.bearbeiten'], 'deny': deny})[0]   # noqa: E731
+lea_ = lambda deny: A.call('user_save', {'id': ids['lea'], 'name': 'Lea Lesen', 'role': 'viewer', 'active': True, 'grant': ['rewe.sehen'], 'deny': deny})[0]   # noqa: E731
+pers_ = lambda n: next(p for p in LE.call('rewe_start')[1]['personen'] if p['name'] == n)   # noqa: E731
+for verbot in (['rewe.exportieren'], ['rewe.alle']):
+    check(f'Verbot {verbot[0]} sperrt den Wochenabschluss trotz Team (403)', sabi_(verbot) == 200 and SA.call('rewe_abschluss')[0] == 403
+          and SA.call('rewe_export', {'kw': ABSCHLUSS})[0] == 403 and SA.call('rewe_start')[1]['rechte']['exportieren'] is False
+          and pers_('Sabi Summe')['export'] is False and pers_('Sabi Summe')['teamExport'] is True)
+check('Verbot rewe.alle sperrt „alle Listen“ trotz Team (403)', lea_(['rewe.alle']) == 200 and L.call('rewe_woche&wer=*')[0] == 403
+      and L.call('rewe_start')[1]['rechte']['alle'] is False and pers_('Lea Lesen')['alle'] is False)
+check('ohne Verbot wirkt das Team wieder', sabi_([]) == 200 and lea_([]) == 200 and SA.call('rewe_abschluss')[0] == 200 and L.call('rewe_woche&wer=*')[0] == 200)
 
 st, r = SA.call(f'rewe_abschluss&kw={ABFRAGE}')
 ab = r.get('abschluss', {})
@@ -623,8 +634,11 @@ check('Vorschau schreibt nichts', len(LE.call('rewe_maerkte')[1]['maerkte']) == 
 check('Liste einem Mitarbeiter ohne „REWE ansehen“ zuordnen → Fehler', LE.call('rewe_import', {'paket': PAKET, 'zuordnung': {'Liste A': ids['otto']}, 'vorschau': True})[1]['fehler'])
 check('Liste einer im Modul ergänzten Mitarbeiterin zuordnen → ohne Fehler', LE.call('rewe_import', {'paket': PAKET, 'zuordnung': {'Liste A': ids['pia']}, 'vorschau': True})[1]['fehler'] == [])
 check('nicht leer ohne „ersetzen“ → 409', LE.call('rewe_import', {'paket': PAKET, 'zuordnung': zu})[0] == 409)
+storage_write('rewe-wochen/2019', {'rev': 3, 'maerkte': {}, 'abschluss': []})   # altes Jahr, nicht im Paket
 st, r = LE.call('rewe_import', {'paket': PAKET, 'zuordnung': zu, 'ersetzen': True})
 check('Datenpaket übernommen (ersetzt)', st == 200 and r['zahlen']['maerkte'] == 4, r)
+check('ersetzt: altes Jahr gelöscht (Löschen erst nach dem Schreiben), Jahr aus dem Paket geschrieben',
+      storage_raw('rewe-wochen/2019') is None and storage_raw('rewe-wochen/2026') is not None)
 d = LE.call('rewe_start')[1]
 check('Lieferwege aus dem Paket (mit Direkt), Team bleibt', [x['id'] for x in d['lieferwege']] == ['nordlager', 'suedlager', 'direkt']
       and next(p for p in d['personen'] if p['name'] == 'Sabi Summe')['teamExport'] is True, d['lieferwege'])

@@ -655,6 +655,9 @@ Datenpaket (`leergut_import`, nur mit `leergut.verwalten`): `{"format": "stafl-l
 [{"schluessel": "…", "name": "…", …}], "bewegungen": [{"partner": "<schluessel>", …}], "abstimmungen": […], "abschreibungen": […],
 "inventur": […]}` – geprüft mit denselben Regeln wie die Eingabemasken; mit Fehlern wird nichts übernommen, in ein Modul mit Daten
 nur mit `ersetzen`. Echte Pakete liegen nie im Repository (GR-007); Beispiel: `tests/fixtures/leergut/datenpaket.json`.
+Reihenfolge (`with_lock` ist im Dateispeicher keine Transaktion): zuerst eine Marke `uebernahme: {"t"}` am alten `leergut-stamm`, dann
+die vier Listen, zuletzt der neue Stamm ohne Marke. Bleibt die Marke nach einem Abbruch stehen, meldet die Vorschau `abgebrochen: true`
+(Hinweis in der Oberfläche); die Vorversion ignoriert das Feld.
 
 WinAB-Datei (`leergut_winab_import`, nur mit `leergut.verwalten`, `vorschau: true` schreibt nichts): `{"bericht": {"datei": "…", "von": "<Übernehmen ab>",
 "bis": "<Stand>", "dateiVon": "<Beginn der Datei>"?, "lfVon": "<Lieferantenbelege ab>"?, "quelle": "csv"?}, "kunden": [{"nr": "9100001", "name": "…"?}],
@@ -688,7 +691,9 @@ Kalenderwochen sind ISO-Wochen „JJJJ-WW“ und meinen die **Lieferwoche**. Men
   "extra"?: true, "extraHinweis"?: "…"}],
   "team": {"u…": {"alle": true, "export": false}}, "mitglieder": ["u…"], "ausgeblendet": ["u…"]}`. Ohne Dokument gelten Direktbelieferung
   und die Artikel Roastbeef, Filetkopf, Vac. Set. Lieferwege und Artikel werden nie entfernt, nur deaktiviert. `team` ist die Zuweisung
-  im Modul („alle Listen“, „Wochenabschluss“) und wirkt zusätzlich zu den Rechten `rewe.alle` und `rewe.exportieren`.
+  im Modul („alle Listen“, „Wochenabschluss“) und wirkt zusätzlich zu den Rechten `rewe.alle` und `rewe.exportieren` – außer bei
+  einem Verbot am Konto: `deny` auf `rewe.alle` sperrt beide Zuweisungen, `deny` auf `rewe.exportieren` den Wochenabschluss
+  (`rw_alle()`, `rw_export()`; wie in `rechte.php` setzt der Wochenabschluss „alle Listen“ voraus).
   **Extra-Artikel** (seit 12.11.2026, Inhaber: „bei jedem Roastbeef Dry Aged ist schon ein Filetkopf dabei“): `extra` und
   `extraHinweis` sind optional und stehen nur im Speicher, wenn sie in den Einstellungen gesetzt wurden. Fehlt `extra`, gilt es für den
   Filetkopf (Kennung `fk` oder Name „Filetkopf“) mit dem Hinweis „1 Filetkopf ist bei jedem Roastbeef Dry Aged schon dabei“ – so auch
@@ -742,7 +747,8 @@ Datenpaket (`rewe_import`, nur mit `rewe.verwalten`, `vorschau: true` schreibt n
 "lieferwege": [{"id", "name", "art", "bestellschluss"?}], "artikel"?: […], "maerkte": [{"kdNr", "name", …, "zustaendig": [{"ab", "liste"}],
 "lieferweg": [{"ab", "id"}], "wochen": {"JJJJ-WW": {"s", "m", "n"}}, "notizen": [{"art", "text"}]}]}` plus `zuordnung` (Listenname →
 Nutzer-ID, nur Mitarbeiter im Team). Mit Fehlern wird nichts übernommen, in ein Modul mit Daten nur mit `ersetzen` (das Team mit
-`team`, `mitglieder` und `ausgeblendet` bleibt). Echte Pakete liegen nie
+`team`, `mitglieder` und `ausgeblendet` bleibt). Nicht mehr enthaltene Jahre `rewe-wochen/<Jahr>` löscht die Übernahme erst nach
+allen Schreibvorgängen (`with_lock` ist im Dateispeicher keine Transaktion). Echte Pakete liegen nie
 im Repository (GR-007); Beispiel: `tests/fixtures/rewe/datenpaket.json`.
 
 ### Qualitätssicherung · QM-System (`module/qs/qs.php`, produktiv seit 30.10.2026)

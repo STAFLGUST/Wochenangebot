@@ -480,8 +480,13 @@ function rw_team(array $me): array
     $t = rw_ausgeblendet($me) ? [] : (rw_team_daten()['team'][(string)$me['id']] ?? []);
     return ['alle' => !empty($t['alle']), 'export' => !empty($t['export'])];
 }
-function rw_alle(array $me): bool { return may($me, 'rewe.alle') || (rw_team($me)['alle'] && rw_sehen($me)); }
-function rw_export(array $me): bool { return may($me, 'rewe.exportieren') || (rw_team($me)['export'] && rw_sehen($me)); }
+// Ein Verbot am Konto sperrt auch die Team-Zuweisung; „Wochenabschluss“ setzt wie in rechte.php „alle Listen“ voraus
+function rw_alle(array $me): bool { return may($me, 'rewe.alle') || (rw_team($me)['alle'] && rw_sehen($me) && !rw_verboten($me, 'rewe.alle')); }
+function rw_export(array $me): bool
+{
+    return may($me, 'rewe.exportieren')
+        || (rw_team($me)['export'] && rw_sehen($me) && !rw_verboten($me, 'rewe.exportieren') && !rw_verboten($me, 'rewe.alle'));
+}
 function rw_eigen(array $m, array $me, string $kw): bool { return rw_zustaendig($m, $kw) === (string)$me['id']; }
 function rw_darf_sehen(array $m, array $me, string $kw = ''): bool
 {
@@ -1093,11 +1098,13 @@ function rw_ab_liste(array $p, string $kw): string
 function rw_paket_uebernehmen(array $erg, bool $ersetzen): void
 {
     if (!rw_leer() && !$ersetzen) fail('Im Modul sind schon Daten. Zum Ersetzen „Vorhandene Daten ersetzen“ wählen.', 409);
-    foreach (rw_wochen_jahre() as $j) store_delete('rewe-wochen/' . $j);
     $alt = rw_stamm();
     // Team (team, mitglieder, ausgeblendet) und unbekannte Felder bleiben (GR-006)
     rw_schreiben('rewe-stamm', ['lieferwege' => $erg['stamm']['lieferwege'], 'artikel' => $erg['stamm']['artikel']] + $alt);
     rw_schreiben('rewe-maerkte', ['rev' => rw_maerkte_doc()['rev'], 'liste' => $erg['maerkte']]);
     rw_schreiben('rewe-verlauf', ['rev' => rw_verlauf_doc()['rev'], 'liste' => $erg['notizen']]);
     foreach ($erg['wochen'] as $j => $maerkte) rw_wochen_schreiben((int)$j, ['rev' => 0, 'maerkte' => $maerkte, 'abschluss' => []]);
+    // Alte Jahre erst zum Schluss löschen (with_lock ist im Dateispeicher keine Transaktion, wie umsatzdaten.php):
+    // ein Abbruch lässt dann höchstens ein altes Jahr zu viel stehen – nie alle Wochendaten gelöscht ohne neuen Stand.
+    foreach (rw_wochen_jahre() as $j) if (!isset($erg['wochen'][$j])) store_delete('rewe-wochen/' . $j);
 }

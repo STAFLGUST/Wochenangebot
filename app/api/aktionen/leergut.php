@@ -325,16 +325,21 @@ switch ($action) {
             $b = body();
             $erg = lg_paket_pruefen($b['paket'] ?? null, $me);
             $leer = lg_leer();
-            if (!empty($b['vorschau'])) respond(['ok' => true, 'zahlen' => $erg['zahlen'], 'fehler' => $erg['fehler'], 'leer' => $leer]);
+            if (!empty($b['vorschau'])) respond(['ok' => true, 'zahlen' => $erg['zahlen'], 'fehler' => $erg['fehler'], 'leer' => $leer,
+                                                 'abgebrochen' => !empty(lg_stamm()['uebernahme'])]);
             if ($erg['fehler']) respond(['ok' => false, 'error' => 'Das Datenpaket enthält Fehler – nichts übernommen.', 'fehler' => $erg['fehler']], 422);
             with_lock('leergut-bewegungen', function () use ($erg, $b) {
                 if (!lg_leer() && empty($b['ersetzen'])) fail('Im Modul sind schon Daten. Zum Ersetzen „Vorhandene Daten ersetzen“ wählen.', 409);
-                $stamm = $erg['stamm']; $stamm['rev'] = lg_stamm()['rev'];
-                lg_schreiben('leergut-stamm', $stamm);
+                // with_lock ist im Dateispeicher keine Transaktion: erst eine Marke am alten Stamm, dann die Listen, der neue
+                // Stamm (ohne Marke) zuletzt. Bricht die Übernahme ab, bleibt die Marke stehen und die Vorschau meldet es.
+                $alt = lg_stamm();
+                lg_schreiben('leergut-stamm', ['uebernahme' => ['t' => now()]] + $alt);
                 foreach (['bewegungen', 'abstimmungen', 'abschreibungen', 'inventur'] as $k) {
                     $alt = lg_doc('leergut-' . $k);
                     lg_schreiben('leergut-' . $k, ['rev' => $alt['rev'], 'liste' => $erg['docs'][$k]]);
                 }
+                $stamm = $erg['stamm']; $stamm['rev'] = lg_stamm()['rev'];
+                lg_schreiben('leergut-stamm', $stamm);
             });
             $z = $erg['zahlen'];
             audit('leergut', 'Leergut: Datenpaket übernommen' . ($leer ? '' : ' (vorhandene Daten ersetzt)') . ' – ' . $z['partner'] . ' Partner, ' . $z['bewegungen'] . ' Bewegungen, '

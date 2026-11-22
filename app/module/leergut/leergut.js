@@ -628,6 +628,7 @@
     $('#lg-e-uebernehmen').disabled = !r.data.leer;
     m.className = 'lg-meldung ok';
     m.textContent = r.data.leer ? 'Das Paket ist fehlerfrei und kann übernommen werden.' : 'Das Paket ist fehlerfrei. Im Modul sind schon Daten – sie werden beim Übernehmen vollständig ersetzt.';
+    if (r.data.abgebrochen) { m.className = 'lg-meldung'; m.textContent = 'Die letzte Übernahme eines Datenpakets wurde abgebrochen, die Daten sind nur teilweise ersetzt. Bitte das Paket erneut übernehmen.'; }
   });
   $('#lg-e-ersetzen').addEventListener('change', (ev) => { $('#lg-e-uebernehmen').disabled = !ev.target.checked; });
   $('#lg-e-uebernehmen').addEventListener('click', async (ev) => {

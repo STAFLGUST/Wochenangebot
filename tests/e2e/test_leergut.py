@@ -294,6 +294,12 @@ check('Saldo aus dem Paket nachgerechnet', konto['saldo'] == {k: n for k, n in e
 abst = [a for a in s['abstimmungen'] if a['partner'] == namen['Beispiel-Spedition']]
 check('Abstimmungen aus dem Paket mit Schnappschuss und Herkunft', abst and all(a.get('herkunft') == 'import' and isinstance(a['eigen'], dict) for a in abst), abst[:1])
 check('Bewegungen aus dem Paket: Herkunft „import“', all(b['quelle'] == 'import' for b in L.call('leergut_konto&partner=' + namen['Beispiel-Spedition'])[1]['bewegungen']))
+# Abgebrochene Übernahme (Dateispeicher ohne Transaktion): die Marke am Stamm bleibt stehen, bis eine Übernahme vollständig ist
+roh_st = json.loads(storage_raw('leergut-stamm').split('?>\n', 1)[-1])
+check('vollständige Übernahme hinterlässt keine Marke', 'uebernahme' not in roh_st and V.call('leergut_import', {'paket': PAKET, 'vorschau': True})[1]['abgebrochen'] is False, roh_st.keys())
+storage_write('leergut-stamm', {**roh_st, 'uebernahme': {'t': '2026-01-01T00:00:00Z'}})
+check('Vorschau meldet die abgebrochene Übernahme', V.call('leergut_import', {'paket': PAKET, 'vorschau': True})[1]['abgebrochen'] is True)
+storage_write('leergut-stamm', roh_st)
 
 # ── WinAB-Bericht „Lademittelbewegungen Kunden“ ──
 # Erfundener Bericht im Aufbau des WinAB-Exports (BIFF wie die echte .XLS): Kopf je Kunde und Lademittel, Bewegungen,
