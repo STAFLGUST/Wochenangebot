@@ -2013,7 +2013,8 @@ dialog.modal.ez-pick { width: min(1280px, calc(100vw - 32px)); height: min(860px
     --nav-akzent: #a3202f;
     --punkt-ok: #1f9a55;
     --blob-a: rgba(143, 167, 196, .2); --blob-b: rgba(226, 165, 74, .17); --blob-c: rgba(63, 122, 90, .14);
-    --r-glas: 28px;
+    --r-glas: 28px;     /* große Karten, Navigation, Fenster */
+    --r-glas-2: 22px;   /* Leisten und kleine Karten */
   }
 }
 @media screen and (prefers-color-scheme: dark) {
@@ -2097,7 +2098,7 @@ dialog.modal.ez-pick { width: min(1280px, calc(100vw - 32px)); height: min(860px
     box-shadow: inset 0 1px 0 var(--glas-glanz), var(--glas-schatten);
   }
   body.adm :is(.gcard, .np-card) { border-radius: var(--r-glas); }
-  body.adm :is(.meta-card, .offer-bar, .st-info, .sec-score, .ed-empty) { border-radius: 22px; }
+  body.adm :is(.meta-card, .offer-bar, .st-info, .sec-score, .ed-empty) { border-radius: var(--r-glas-2); }
   body.adm .sec-card { border-radius: 18px; }
   body.adm .sec-card.bad, body.adm .sec-score.bad { border-color: #f1b4b4; }
   body.adm .st-info.old { border-color: var(--c-aged); }
@@ -2216,13 +2217,13 @@ dialog.modal.ez-pick { width: min(1280px, calc(100vw - 32px)); height: min(860px
 
   /* Werkzeugleiste unter der Kopfzeile: klebende Glasleiste */
   body.adm .ed-toolbar {
-    top: calc(var(--header-h) + 8px); background: var(--glas-kopf); border: 1px solid var(--glas-rand); border-radius: 22px;
+    top: calc(var(--header-h) + 8px); background: var(--glas-kopf); border: 1px solid var(--glas-rand); border-radius: var(--r-glas-2);
     box-shadow: inset 0 1px 0 var(--glas-glanz), var(--glas-schatten); padding: 8px 10px; margin: 18px 0 16px;
   }
   body.adm .ed-toolbar .search input { height: 40px; }
   /* 22 px statt 999 px: einzeilig sieht die Leiste gleich aus, umbrochen (schmale Fenster) bleibt sie ein Rechteck mit
      runden Ecken statt eines Ovals, aus dem die Pillen herausragen */
-  body.adm .sec-nav { top: calc(var(--topbar-h, 60px) + 8px); background: var(--glas-kopf); border: 1px solid var(--glas-rand); border-radius: 22px; box-shadow: inset 0 1px 0 var(--glas-glanz), var(--glas-schatten); }
+  body.adm .sec-nav { top: calc(var(--topbar-h, 60px) + 8px); background: var(--glas-kopf); border: 1px solid var(--glas-rand); border-radius: var(--r-glas-2); box-shadow: inset 0 1px 0 var(--glas-glanz), var(--glas-schatten); }
   body.adm .sec-nav a { border-radius: 999px; border: 0; background: var(--aus); }
   body.adm .sec-nav a:hover { background: var(--glas-stark); }
 
@@ -2235,7 +2236,7 @@ dialog.modal.ez-pick { width: min(1280px, calc(100vw - 32px)); height: min(860px
   body.adm .ob-o[aria-selected="true"] .ob-n { color: var(--text); }   /* Schrift der Seitenleiste nie rot (Inhaber); Markierung über Fläche und Zähler */
   body.adm .ob-z { background: var(--aus); color: var(--text-2); }   /* Zähler: Kontrast ≥ 4,5:1 auf dem Glas */
   body.adm .ob-o[aria-selected="true"] .ob-z { background: var(--accent); color: #fff; }
-  body.adm .ed-head { background: var(--glas-karte); border: 1px solid var(--glas-rand); box-shadow: inset 0 1px 0 var(--glas-glanz), var(--glas-schatten); border-radius: 22px; padding: 12px 18px; }
+  body.adm .ed-head { background: var(--glas-karte); border: 1px solid var(--glas-rand); box-shadow: inset 0 1px 0 var(--glas-glanz), var(--glas-schatten); border-radius: var(--r-glas-2); padding: 12px 18px; }
   body.adm .ed-head .meta-card { background: none; border: 0; box-shadow: none; padding: 0; border-radius: 0; }
   body.adm .ed-chip { background: var(--aus); }
 
@@ -2300,13 +2301,13 @@ dialog.modal.ez-pick { width: min(1280px, calc(100vw - 32px)); height: min(860px
   body.adm .ez-top h2 { font-size: 28px; }
 }
 @media screen and (max-width: 640px) {
-  body.adm { --r-glas: 22px; }
+  body.adm { --r-glas: 22px; --r-glas-2: 18px; }
   body.adm dialog.modal, body.adm dialog.modal.wide { border-radius: 24px 24px 0 0; border-bottom: 0; }
   body.adm dialog.modal.ez-pick { border-radius: 0; }
   body.adm .dlg-head { padding: 20px 18px 12px; }
   body.adm .dlg-body { padding: 16px 18px; }
   body.adm .dlg-foot { padding: 12px 18px 18px; }
-  body.adm .ed-toolbar { border-radius: 18px; }
+  body.adm .ed-toolbar { border-radius: var(--r-glas-2); }
   body.adm .meta-card { padding: 16px; }
   body.adm .gcard.sec-form, body.adm .gcard.sec-block { padding: 14px 16px; }
   body.adm .ez-top h2 { font-size: 24px; }
@@ -2452,6 +2453,7 @@ dialog.modal.pv { width: min(1480px, calc(100vw - 32px)); height: calc(100dvh - 
     --bg: var(--r-grund);
     --glas: var(--r-flaeche); --glas-kopf: var(--r-grund); --glas-karte: var(--r-flaeche); --glas-stark: var(--r-flaeche); --glas-fenster: var(--r-flaeche);
     --glas-rand: var(--r-linie); --glas-glanz: transparent; --glas-schatten: var(--r-schatten); --glas-filter: none;
+    --r-glas: 16px; --r-glas-2: 16px;   /* Karten, Leisten und Fenster rund wie im Rahmen (.r-karte, Suche) */
   }
   body.adm.r::before { display: none; }
   body.adm.r .topbar { padding: 0; }

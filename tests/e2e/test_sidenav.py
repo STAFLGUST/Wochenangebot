@@ -75,13 +75,13 @@ with sync_playwright() as p:
           and css('#topbar .topbar-inner', 'backdropFilter', '::before') == 'none' and css('#topbar .topbar-inner', 'borderBottomWidth', '::before') == '1px'
           and not g.locator('#topbar .brand-logo').is_visible(), (css('#topbar .topbar-inner', 'borderTopLeftRadius'), css('#topbar .topbar-inner', 'backdropFilter', '::before')))
     check('Rahmen: eigene Navigation als deckende Karte ohne Unschärfe', css('.side-nav', 'backdropFilter') == 'none' and css('.side-nav', 'backgroundColor') == 'rgb(255, 255, 255)'
-          and css('.side-nav', 'borderTopLeftRadius') == '28px')
+          and css('.side-nav', 'borderTopLeftRadius') == '16px')
     check('active nav entry 44 px with 14 px radius', g.locator('#vt-edit').bounding_box()['height'] == 44 and css('#vt-edit', 'borderTopLeftRadius') == '14px')
     # „Veröffentlichen“ (früher der farbige Knopf) liegt seit 13.11.2026 im Modul Versand – in der Kopfleiste nur neutrale Knöpfe
     check('top bar: no publish/send buttons any more, „Drucken“ is a neutral pill', g.locator('#btn-publish').count() == 0 and g.locator('#btn-send').count() == 0
           and css('#btn-drucken', 'backgroundImage') == 'none' and css('#btn-drucken', 'borderTopLeftRadius') == '999px')
     check('other top bar buttons are neutral pills', css('#btn-preview', 'backgroundImage') == 'none' and css('#btn-preview', 'borderTopLeftRadius') == '999px')
-    check('group cards 28 px, offer list inside the side navigation card (no card of its own) with the active offer as entry', css('#groups .gcard', 'borderTopLeftRadius') == '28px'
+    check('group cards 16 px (wie die Karten des Rahmens), offer list inside the side navigation card (no card of its own) with the active offer as entry', css('#groups .gcard', 'borderTopLeftRadius') == '16px'
           and g.evaluate("document.querySelector('#offer-bar').parentElement.classList.contains('side-nav')") and css('#offer-bar', 'borderTopLeftRadius') == '0px' and css('#offer-bar', 'backdropFilter') in ('none', '')
           and css('#offer-bar .ob-o[aria-selected="true"]', 'borderTopLeftRadius') == '14px' and g.locator('#offer-bar .ob-o[aria-selected="true"]').bounding_box()['height'] >= 44)
     check('Rahmen: Tabellenkarten deckend', css('#groups .gcard', 'backgroundColor') == 'rgb(255, 255, 255)' and css('#groups .gcard', 'backdropFilter') == 'none', css('#groups .gcard', 'backgroundColor'))
@@ -93,6 +93,9 @@ with sync_playwright() as p:
     folge = g.evaluate("[...document.querySelectorAll('.side-tabs > *')].map((e) => e.id)")
     check('Navigation: „Bestellungen“ vor „Stammdaten“', folge.index('vt-orders') < folge.index('side-stamm'), folge)
     check('price fields 10 px radius', css('#groups tr[data-id] .e-price .in.num', 'borderTopLeftRadius') == '10px')
+    # Rundungen wie im Rahmen (.r-karte 16 px): Karten, Werkzeugleiste, Kopf des Angebots – keine 22/28 px mehr
+    rund = g.evaluate("[...document.querySelectorAll('#view-edit :is(.gcard, .ed-toolbar, .ed-head, .np-card), #view-edit .meta-card:not(.ed-head .meta-card), .side-nav')].filter((e) => e.offsetParent).map((e) => e.className.split(' ')[0] + ' ' + getComputedStyle(e).borderTopLeftRadius)")
+    check('Karten und Leisten des Eingabebereichs 16 px gerundet (wie im Rahmen)', rund and all(r.endswith(' 16px') for r in rund), rund)
     sticky = g.evaluate("(() => { const t = document.querySelector('#view-edit .ed-toolbar'); return [getComputedStyle(t).position, getComputedStyle(t).backgroundColor]; })()")
     check('sticky bars opaque enough to read', sticky[0] == 'sticky' and alpha(sticky[1]) >= .85, sticky)
     g.click('#btn-more'); g.wait_for_selector('#menu-more:not([hidden])')
