@@ -455,7 +455,8 @@ Etikett in der Preiszelle (`saleBtnHTML`/`saleTagHTML`) und Leiste „Kurzes MHD
 Empfehlungspreis optional (leer = `mark: true`, nur hervorheben), je Angebot „wie oben“, „eigener Preis“, „ohne
 Preisänderung“ (`{status: 'mark'}`) oder „keine Empfehlung“ (`{status: 'none'}`). Neu gesetzt steht nur das gewählte
 Angebot auf „wie oben“, alle anderen auf „keine Empfehlung“; `empfehlungNichtUebernehmen()` setzt ein Angebot, in das der
-Artikel später kommt („Artikel hinzufügen“, „Aus anderem Angebot“), ebenfalls auf „keine“. Auswertung je Angebot:
+Artikel später kommt („Artikel hinzufügen“, „Aus anderem Angebot“), ebenfalls auf „keine“ – auf dem Server ebenso der
+Artikelpreise-Import (`angebot_preise_uebernehmen`) für Artikel, die bisher nicht im Kundenangebot standen. Auswertung je Angebot:
 `C.empfehlungFor(it, oid)` (`offer-core.js`; `null` oder `{preis}`), Server `empfehlung_fuer()`.
 
 ### Angebotsauswahl in der Seitenleiste

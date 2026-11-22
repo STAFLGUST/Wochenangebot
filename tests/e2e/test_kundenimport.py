@@ -1,5 +1,7 @@
 """Stammdaten → Angebote mit Kundengruppen (Freischaltung über die Gruppe), Import der Kundenstammdaten aus der
-Warenwirtschaft (CSV, alle Spalten, Aktiv-Regel 18 Monate) und Passwort-Auswahl im Kunden-Dialog. Nur synthetische
+Warenwirtschaft (CSV, alle Spalten, Aktiv-Regel 18 Monate) und Passwort-Auswahl im Kunden-Dialog. Artikelpreise-Import:
+Kunde der neu angelegten Gruppe sieht den Gruppenpreis ohne Sonderposten des Wochenangebots, der Bestellwunsch rechnet
+damit. Nur synthetische
 Testdaten (tests/fixtures/kunden); Datumswerte für die Aktiv-Regel relativ zu heute."""
 import calendar
 import csv
@@ -302,6 +304,11 @@ with sync_playwright() as p:
     akt = f'{jetzt[0]:04d}-{jetzt[1]:02d}'
     basis = (A.call('draft')[1].get('draft') or A.call('draft')[1]['published'])['meta']
     kw_neu = (basis.get('week'), basis.get('year')) != (jetzt[1], jetzt[0])   # Angebotswoche ändert sich nur, wenn der Entwurf eine andere KW hat
+    dr = A.call('draft')[1]; m0 = dr.get('draft') or dr['published']
+    for i in m0['items']:
+        if i.get('code') == '10601':
+            i['sale'] = {'value': 20.0}   # Empfehlung im Wochenangebot – gilt nicht im neuen Angebot der Gruppe 1
+    assert A.call('save_draft', {'model': m0, 'revision': dr['revision']})[0] == 200
     a.click('#of-preise-link'); a.wait_for_selector('#view-importe .imp-art[data-art="angebot_preise"]')
     check('Verweis öffnet die Importzentrale mit „Artikelpreise (CSV)“', a.locator('#view-importe [data-imp-waehlen="angebot_preise"]').is_visible())
     a.set_input_files('#view-importe input[data-imp-datei="angebot_preise"]', PREISE); a.wait_for_selector('#view-importe [data-pi] #pi-hoch')
@@ -389,6 +396,24 @@ with sync_playwright() as p:
           and next(i for i in A.call('draft')[1]['draft']['items'] if i.get('code') == '10601')['price']['value'] == 26.1)
     check('Schnittstelle: leere Preisliste 422', A.call('import_pruefen', {'art': 'angebot_preise', 'daten': {'preise': []}})[0] == 422)
     check('Schnittstelle: frühere Importart „Wochenangebot (Excel)“ gibt es nicht mehr (404)', A.call('import_pruefen', {'art': 'angebot_excel'})[0] == 404)
+    # Kunde der Gruppe 1: Gruppenpreis aus der Datei ohne Sonderposten des Wochenangebots, Bestellwunsch rechnet damit (GR-004)
+    dr = A.call('draft')[1]
+    st, r = A.call('publish', {'model': dr['draft'], 'revision': dr['revision']})
+    if st == 403 and r.get('code') == 'confirmation_required':
+        assert A.call('reauth', {'password': PW})[0] == 200
+        st, r = A.call('publish', {'model': dr['draft'], 'revision': dr['revision']})
+    assert st == 200, r
+    kunde({'firma': 'Gastro Gruppe Eins', 'nr': 'T-1', 'gruppe': '1', 'email': 'k1@example.org', 'angebote': [],
+           'login': {'username': 'gastro.eins', 'password': KPW, 'mustChange': False, 'active': True}})
+    K1 = Client('203.0.113.1'); assert K1.call('kunde_login', {'username': 'gastro.eins', 'password': KPW})[0] == 200
+    ki = next((i for i in K1.call('offer&angebot=' + neu['id'])[1]['offer']['items'] if i.get('code') == '10601'), {})
+    check('Kunde der Gruppe 1: 10601 mit Gruppenpreis 23,00 aus der Datei, kein Sonderposten des Wochenangebots',
+          ki.get('price') == {'status': 'value', 'value': 23.0} and not ki.get('sale') and 'regular' not in ki, ki)
+    st, r = K1.call('kunde_bestellung', {'angebot': neu['id'], 'publishedAt': A.call('draft')[1]['published']['publishedAt'],
+                                         'positions': [{'id': ki.get('id'), 'qty': 2, 'price': 20.0}], 'requestId': 'import-empfehlung-00000001'})
+    bw = next((b for b in doc('bestellungen') if b.get('nr') == r.get('nr')), {}) if st == 200 else {}
+    check('Bestellwunsch der Gruppe 1: 2 kg × 23,00 € = 46,00 €, nicht als Sonderposten', bw.get('total') == 46.0 and bw['positions'][0]['price'] == 23.0
+          and '(Sonderposten)' not in bw['positions'][0]['name'], (st, r, bw.get('positions')))
 
     # ---------- Kunden importieren ----------
     a.click('#vt-kunden'); a.wait_for_selector('#k-list tr[data-kid]')

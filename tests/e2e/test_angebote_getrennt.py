@@ -8,7 +8,9 @@ Reihenfolge der Gruppen und Artikel in eine andere Gruppe im Fenster „Editor�
 Reihenfolge der Gruppen (↓). Geprüft wird die aufgelöste Sicht der Angebote über die Schnittstelle (offer&draft=1).
 Schritt 2: Reihenfolge je Angebot (items[].stellen, auch beim Ordnen nach Angebotskategorien), Zusatzpreise je Angebot,
 Duplizieren, Zurücknehmen je Angebot, Empfehlung; ohne Browser die Prüfung der neuen Felder auf dem Server, Preisimport und
-„Angebot kopieren“. Bildschirmfotos Artikelfenster in Bela 1280/390 px. Nur Testdaten."""
+„Angebot kopieren“. Preisimport übernimmt keine Empfehlung des Wochenangebots in Kundenangebote, in denen der Artikel noch nicht
+stand (eigene Artikelliste, im folgenden Angebot ausgeblendet, vom Import neu angelegt; Kunde und Bestellwunsch: Gruppe
+kundenimport). Bildschirmfotos Artikelfenster in Bela 1280/390 px. Nur Testdaten."""
 import sys
 
 from playwright.sync_api import sync_playwright
@@ -527,6 +529,46 @@ me = entwurf()[0]
 ap = art(me, r1['id'])['altPrices']
 check('Kopie des Wochenangebots: Zusatzpreise des Wochenangebots werden Zusatzpreise der Kopie', ap and art(me, r1['id'])['variants'][KS].get('alt') == ap
       and sicht(KS)['artikel'][r1['id']][3] == ap, (ap, art(me, r1['id'])['variants'][KS]))
+
+
+# ---------- Artikelpreise-Import übernimmt keine Empfehlung des Wochenangebots (wie „Artikel hinzufügen“ im Editor) ----------
+def bestaetigt(aktion, daten):
+    st_, r_ = A.call(aktion, daten)
+    if st_ == 403 and r_.get('code') == 'confirmation_required':
+        assert A.call('reauth', {'password': PW})[0] == 200
+        st_, r_ = A.call(aktion, daten)
+    return st_, r_
+
+
+me = entwurf()[0]
+benutzt = {i['id'] for i in (x, y, z, w, h1, h2, t, r1, r2, r3, q, s, s2, d)}
+nummern = [i.get('code') for i in me['items']]
+e1, e2 = [i for i in me['items'] if i['id'] in {f['id'] for f in frei} - benutzt and nummern.count(i['code']) == 1][:2]
+art(me, e1['id'])['sale'] = {'value': 7.5}   # Empfehlung im Wochenangebot, e1 steht nur dort
+art(me, e1['id'])['variants'] = {FOLGT: {'status': 'hidden'}}   # im folgenden Angebot ausgeblendet
+art(me, e2['id'])['sale'] = {'value': 6.0}   # Gegenprobe: e2 steht schon im folgenden Angebot – dort gilt die Empfehlung weiter
+assert speichern(me)[0] == 200
+kg = A.call('kundengruppen')[1]
+KGF, KGN = '78', '79'
+assert A.call('kundengruppen_save', {'rev': kg['rev'], 'groups': kg['groups'] + [{'nr': KGF, 'name': 'Test Folgt'}, {'nr': KGN, 'name': 'Test Neu'}]})[0] == 200
+angebote_setzen(lambda l: [{**o, 'gruppen': [KGF]} if o['id'] == FOLGT else o for o in l])
+zl = [{'zeile': 2, 'code': e1['code'], 'gruppe': KG, 'preis': 9.5}, {'zeile': 3, 'code': e1['code'], 'gruppe': KGF, 'preis': 9.25},
+      {'zeile': 4, 'code': e1['code'], 'gruppe': KGN, 'preis': 9.75}, {'zeile': 5, 'code': e2['code'], 'gruppe': KGF, 'preis': 8.0}]
+opt = {'gruppen': [KGN]}
+pr = A.call('import_pruefen', {'art': 'angebot_preise', 'daten': {'preise': zl}, 'optionen': opt})[1]
+st_, r_ = bestaetigt('import_uebernehmen', {'art': 'angebot_preise', 'daten': {'preise': zl}, 'optionen': opt, 'stand': pr['stand']})
+NEU = next((o['id'] for o in A.call('offers')[1]['offers'] if o.get('gruppen') == [KGN]), None)
+ohne = lambda oid: sicht(oid)['artikel'].get(e1['id'])   # noqa: E731
+check('Preisimport: Artikel neu in Bela (eigene Artikelliste) mit Kundenpreis, ohne Empfehlung des Wochenangebots',
+      st_ == 200 and ohne(BE) and ohne(BE)[2] == {'status': 'value', 'value': 9.5} and not ohne(BE)[4], (st_, ohne(BE)))
+check('Preisimport: im folgenden Angebot vorher ausgeblendet → Kundenpreis ohne Empfehlung', ohne(FOLGT) and ohne(FOLGT)[2] == {'status': 'value', 'value': 9.25}
+      and not ohne(FOLGT)[4], ohne(FOLGT))
+check('Preisimport: vom Import neu angelegtes Angebot → Kundenpreis ohne Empfehlung', NEU and ohne(NEU) and ohne(NEU)[2] == {'status': 'value', 'value': 9.75}
+      and not ohne(NEU)[4], (NEU, NEU and ohne(NEU)))
+check('Preisimport: Wochenangebot behält die Empfehlung, Gegenprobe e2 behält sie im folgenden Angebot', sicht('std')['artikel'][e1['id']][4]
+      and sicht('std')['artikel'][e1['id']][2] == {'status': 'value', 'value': 7.5} and sicht(FOLGT)['artikel'][e2['id']][4]
+      and art(entwurf()[0], e2['id'])['variants'][FOLGT].get('value') == 8.0, (sicht('std')['artikel'][e1['id']], sicht(FOLGT)['artikel'][e2['id']]))
+
 
 print(f'{sum(res)}/{len(res)} passed')
 sys.exit(0 if all(res) else 1)

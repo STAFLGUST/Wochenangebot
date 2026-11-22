@@ -314,6 +314,8 @@ function angebot_preise_uebernehmen(array $e, array $me): array
         $ids = $plan['neuName'] ? angebote_fuer_gruppen_anlegen($plan['neuName'], (int)$offers['rev'], $me) : [];
         $model = $basis;
         $preise = 0;
+        $eigeneListe = array_fill_keys(array_values($ids), true);   // eben angelegte Angebote: eigene Artikelliste
+        foreach ($offers['offers'] as $o) $eigeneListe[$o['id']] = ($o['fallback'] ?? 'standard') === 'hidden';
         foreach ($plan['ziele'] as $ziel => $z) {
             $ziel = (string)$ziel;
             $oid = strpos($ziel, 'neu:') === 0 ? ($ids[substr($ziel, 4)] ?? null) : $ziel;
@@ -323,6 +325,12 @@ function angebot_preise_uebernehmen(array $e, array $me): array
                     $label = $model['items'][$a['i']]['price']['label'] ?? '';
                     $model['items'][$a['i']]['price'] = ['status' => 'value', 'value' => $a['wert']] + ($label !== '' ? ['label' => $label] : []);
                 } else {
+                    $it = $model['items'][$a['i']];
+                    $v = $it['variants'][$oid] ?? null;
+                    $ausgeblendet = is_array($v) && ($v['status'] ?? '') === 'hidden';
+                    $drin = !empty($eigeneListe[$oid]) ? is_array($v) && !$ausgeblendet : !$ausgeblendet;
+                    // Empfehlung gilt nur, wo sie gesetzt wurde: kommt der Artikel neu ins Angebot, dort „keine Empfehlung“ (wie empfehlungNichtUebernehmen im Editor)
+                    if (!$drin && empfehlung_fuer($it, $oid) !== null && !isset($it['sale']['offers'][$oid])) $model['items'][$a['i']]['sale']['offers'][$oid] = ['status' => 'none'];
                     $zp = $model['items'][$a['i']]['variants'][$oid]['alt'] ?? null;   // Zusatzpreise des Angebots bleiben (wie altPrices)
                     $model['items'][$a['i']]['variants'][$oid] = ['status' => 'value', 'value' => $a['wert']] + (is_array($zp) ? ['alt' => $zp] : []);
                 }
