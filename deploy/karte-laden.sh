@@ -31,6 +31,8 @@ KARTE=${2:-deutschland}
 ZIEL=daten-karte
 # Gemerkte Zoomstufe einer Karte (nur Ziffern einer echten Datei – der Ordner ist im Lade-Container beschreibbar); leer = keine
 zoom_gemerkt() { [ -f "$1" ] && [ ! -L "$1" ] && head -c 2 "$1" | tr -cd '0-9' | grep -Ex '1[0-5]|[5-9]' || true; }
+# Stand-Vermerk lesen, ebenso nur aus einer echten Datei; sonst „keiner“ (gelesen wird vor dem Start des Lade-Containers)
+vermerk_lesen() { [ -f "$1" ] && [ ! -L "$1" ] && cat "$1" 2>/dev/null || echo keiner; }
 # Je Karte: Region, Dateiname, Vermerk des Stands, Zoomstufe, Mindestgröße (kleiner = abgebrochener Download), nötiger Platz
 case "$KARTE" in
   deutschland) REGION=deutschland.geojson; DATEI=karte; VERMERK=stand.txt; MAXZOOM=15; ZOOM_VERMERK=; ZOOM_BISHER=15; NAME="Detailkarte"; GEBIET="Deutschland"
@@ -72,7 +74,7 @@ if [ -z "$STAND" ]; then
   STAND=$(printf '%s' "$liste" | python3 -c 'import json,re,sys; k=[b["key"] for b in json.load(sys.stdin) if re.fullmatch(r"\d{8}\.pmtiles", str(b.get("key","")))]; print(sorted(k)[-1] if k else "")')
 fi
 printf '%s' "$STAND" | grep -Eq '^[0-9]{8}\.pmtiles$' || abbruch "Kein gültiger Kartenstand gefunden ('$STAND')."
-BISHER=$(cat "$ZIEL/$VERMERK" 2>/dev/null || echo keiner)
+BISHER=$(vermerk_lesen "$ZIEL/$VERMERK")
 
 frei_gb=$(df -Pk "$ZIEL" | awk 'NR == 2 { printf "%d", $4 / 1048576 }')
 echo "Kartenstand: ${STAND%.pmtiles} (bisher: ${BISHER%.pmtiles})${ZOOM_VERMERK:+ · Zoomstufe: $MAXZOOM (bisher: ${ZOOM_BISHER:-keine})} · freier Platz: ${frei_gb} GB"

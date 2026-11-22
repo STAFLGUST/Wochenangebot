@@ -4,10 +4,12 @@ mit ihren Nachweisen und eine selbst zugewiesene Maßnahme – nicht mehr.
 
 Geprüft an jedem Leseweg: qs_start (Dokumente, Handbuch, Prüfplan, Nachweise, Maßnahmen, Zahlen je Ordner, Zahl der Nachweise), CSV aller
 drei Listen, Audit-Bericht (Ansicht und Excel), qs_datei, qs_archiv, qs_archiv_zip, qs_ablage_export (auch je Kapitel), Organigramm-Vorschau,
-Verfahrensdoku (qs_verfahren, Antwort nach dem Speichern, PDF des Arbeitsstands, ZIP für Prüfungen), Protokoll ohne Namen; Grenze „1.50“
+Verfahrensdoku (qs_verfahren, Antwort nach dem Speichern, PDF des Arbeitsstands und freigegebener Fassungen samt Änderungszeilen, ZIP für Prüfungen), Protokoll ohne Namen; Grenze „1.50“
 bleibt sichtbar; Ordner „1.5 …“ außerhalb von Kapitel 1.5 ebenso – als Ordner-Dokument (Titel) und als Unterordner (pfad der Datei), aus dem
-Import einer zweiten Firma (Bereich 90, auch „HACCP/1.5 Mitarbeiter/…“) und von Hand in Kapitel 1.4 abgelegt, auch „alt_1.5 …“ und „Kopie von 1.5.1 …“; Oberfläche für „ansehen“ und „Nachweise“ (1280/390 px, keine JavaScript-Fehler). Nur erfundene Testdaten.
+Import einer zweiten Firma (Bereich 90, auch „HACCP/1.5 Mitarbeiter/…“) und von Hand in Kapitel 1.4 abgelegt, Name einer im Entwurf gelöschten
+Datei im Verlauf, auch „alt_1.5 …“ und „Kopie von 1.5.1 …“; Oberfläche für „ansehen“ und „Nachweise“ (1280/390 px, keine JavaScript-Fehler). Nur erfundene Testdaten.
 """
+import datetime
 import io
 import json
 import os
@@ -147,6 +149,18 @@ check('ZIP für Prüfungen: ohne Dateien aus 1.5 für „verfahren_sehen“, mit
 pdf_ = {n: b''.join(zlib.decompress(x) for x in re.findall(rb'stream\n(.*?)\nendstream', roh(c, f'qs_verfahren_export&doku={VD}&fassung=0')[1], re.S))
         for n, c in (('vf', VF), ('admin', V))}
 check('PDF des Arbeitsstands: ohne Titel des 1.5-Dokuments, mit für „bearbeiten“', b'Personalakte Beispiel' not in pdf_['vf'] and b'Personalakte Beispiel' in pdf_['admin'])
+# Audit run-3: auch eine freigegebene Fassung (Schnappschuss mit allen Dokumenten) und ihre gespeicherten Änderungszeilen – gefiltert beim Lesen
+morgen = (datetime.date.fromisoformat(heute) + datetime.timedelta(days=1)).isoformat()
+check('Fassung 2 freigegeben (neuer Abschnitt, 1.5-A01 jetzt Version 2)', V.call('qs_verfahren_freigeben', {'doku': VD, 'rev': r['doku']['rev'], 'grund': 'Zweitfassung',
+                                                                                                         'gueltigAb': morgen})[0] == 200)
+f2 = {n: next(d for d in c.call('qs_verfahren')[1]['dokus'] if d['id'] == VD)['fassungen'][1]['aenderungen'] for n, c in (('vf', VF), ('admin', V))}
+check('qs_verfahren, Änderungen der Fassung 2: ohne Zeile zum 1.5-Dokument für „verfahren_sehen“, mit für „bearbeiten“',
+      not any('Personalakte' in z or '1.5-A01' in z for z in f2['vf']) and any('Personalakte Beispiel' in z for z in f2['admin']) and any('Reisekosten' in z for z in f2['vf']), f2)
+for q_ in ('&fassung=2', '&fassung=1', f'&von={heute[:8]}01&bis={morgen}'):
+    pdf_ = {n: b''.join(zlib.decompress(x) for x in re.findall(rb'stream\n(.*?)\nendstream', roh(c, f'qs_verfahren_export&doku={VD}{q_}')[1], re.S))
+            for n, c in (('vf', VF), ('admin', V))}
+    check(f'PDF ({q_[1:]}): ohne Titel und Version des 1.5-Dokuments für „verfahren_sehen“, mit für „bearbeiten“', b'Personalakte Beispiel' not in pdf_['vf']
+          and b'Version 2 vom' not in pdf_['vf'] and b'Personalakte Beispiel' in pdf_['admin'] and (b'Reisekosten' in pdf_['vf']) == (q_ != '&fassung=1'))
 
 # ── Bereich einer zweiten Firma (Kapitel 90): Kapitelordner „1.5 Mitarbeiter“ wird Ordner-Dokument dieses Titels, tiefer liegt er im pfad ──
 MF = [('Matthies Fleischwaren/1.5 Mitarbeiter', 'Matthies-Akte.pdf'), ('Matthies Fleischwaren/1.50 Sonstiges', 'Matthies-150.pdf'),
@@ -228,6 +242,15 @@ check('… Dokumentliste (qs_start, auch Grundlage der Einzelansicht): Name der 
 namen = {n: zipn(c, 'qs_ablage_export&kapitel=1.4&alle=1') + zipn(c, 'qs_ablage_export') for n, c in (('lisa', L), ('bernd', Be))}
 check('… Ablage-Export: Datei der Version fehlt für „ansehen“, für „bearbeiten“ dabei', 'Eingang-Akte' not in namen['lisa'] and 'Hand-150' in namen['lisa']
       and 'Eingang-Akte' in namen['bernd'], namen)
+# Audit run-3: im Entwurf endgültig gelöscht – der Name steht danach in keiner Liste mehr, nur im Verlauf (Eintrag merkt sich pfad)
+r = Be.call('qs_dokument_save', {'kapitel': '1.4', 'art': 'A', 'nr': '', 'titel': 'Kontrollanweisung Entwurf'})[1]['dokument']
+fg = hochladen(Be, 'eingang', '', 'Eingang-Geloescht.pdf', pdf('Eingang-Geloescht'), {'pfad': 'QM/1.5 Mitarbeiter/Akten'})[1]['datei']
+check('Eingangsdatei mit pfad „…/1.5 Mitarbeiter/…“ dem Entwurf zugeordnet und dort gelöscht',
+      Be.call('qs_datei_zuordnen', {'dateien': [fg], 'dokument': r['id'], 'version': r['versionen'][0]['id']})[0] == 200
+      and Be.call('qs_datei_entfernen', {'datei': fg, 'rev': dok(r['id'])['rev'], 'grund': ''})[0] == 200)
+vl, vb = (json.dumps(dok(r['id'], c)['versionen'][0]['verlauf'], ensure_ascii=False) for c in (L, Be))
+check('… Verlauf: „ansehen“ ohne Namen und pfad („Datei entfernt: personenbezogene Datei“), „bearbeiten“ mit',
+      'Eingang-Geloescht' not in vl and '1.5 Mitarbeiter' not in vl and 'Datei entfernt: personenbezogene Datei' in vl and 'Datei entfernt: Eingang-Geloescht.pdf' in vb, (vl, vb))
 st, r = V.call('qs_verfahren_save', {'titel': 'VD Kontrolle', 'gesellschaft': 'Muster GmbH', 'verantwortlich': ''})
 VD2 = r['doku']['id']
 st, r = V.call('qs_verfahren_abschnitt_save', {'doku': VD2, 'teil': 'anwender', 'titel': 'Kontrolle', 'text': 'siehe QM', 'verweise': [dok(E14)['nr']], 'fertig': True})

@@ -120,7 +120,7 @@ _REWE · Vordisposition Dry Aged_
 - `rw_im_team(u)`
 - `rw_require_perm(recht, schreibend)` – Wie require_perm für die Aktionen des Moduls: „rewe.sehen“ und „rewe.bearbeiten“ gelten auch für im Team ergänzte Mitarbeiter (rw_sehen, rw_bearbeiten), alle …
 - `rw_team(me)` – Alle Listen / Wochenabschluss: Recht der Plattform oder Zuweisung im Team des Moduls (nur im Team, nicht ausgeblendet)
-- `rw_alle(me)`
+- `rw_alle(me)` – Ein Verbot am Konto sperrt auch die Team-Zuweisung; „Wochenabschluss“ setzt wie in rechte.php „alle Listen“ voraus
 - `rw_export(me)`
 - `rw_eigen(m, me, kw)`
 - `rw_darf_sehen(m, me, kw)`

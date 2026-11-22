@@ -3,6 +3,7 @@
  * Einstellungen für die Wochenangebots-API.
  * Diese Datei wird vom Webserver ausgeführt, nicht ausgeliefert.
  */
+if (realpath((string)($_SERVER['SCRIPT_FILENAME'] ?? '')) === __FILE__) { http_response_code(404); exit; }   // nur eingebunden, nie direkt aufrufbar
 return [
     // Firmenname – erscheint im Kopf der Website und auf dem Ausdruck
     'company'        => 'Standard-Fleisch',

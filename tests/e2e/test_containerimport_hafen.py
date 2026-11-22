@@ -9,7 +9,10 @@ Ankunft mit Zeitzone, Liegeplatz, Terminal – „-“ als keine Angabe, Sonderz
 übersprungen, ein ungültiges Byte auf der Seite stört nicht; Zuordnung über den Schiffsnamen ohne Rücksicht auf Schreibweise und
 nur für Container mit Zielhafen Hamburg; ein doppeltes Schiff; die Antwort bringt nur die Meldungen, nie die fremde Liste;
 Frist zwischen zwei Abrufen; Fehlschlag (Fehlerstatus, geänderter Aufbau, nicht erreichbar) als verständliche Meldung, der
-letzte lesbare Stand bleibt; eine Meldung verfällt nach ihrer Ankunft; ein hängender Abruf hält weder einen zweiten Aufruf
+letzte lesbare Stand bleibt; eine stückweise Antwort („chunked“) wird zusammengesetzt, eine abgeschnittene gilt nie als
+vollständig – weder mit angekündigter Länge noch ohne Schlussstück, und ebenso nicht über 2 MiB mit angekündigter
+Länge und ohne („chunked“); eine tröpfelnde Gegenstelle endet nach der Gesamtfrist des Abrufs statt den Webserver-Prozess
+beliebig lange zu binden; eine Meldung verfällt nach ihrer Ankunft; ein hängender Abruf hält weder einen zweiten Aufruf
 noch das Speichern auf; die Meldung ändert keinen Container. Oberfläche: Hinweis, Meldung in Liste und Fenster,
 Fehlermeldung, Leser."""
 import contextlib
@@ -17,6 +20,7 @@ import datetime
 import http.server
 import os
 import threading
+import time
 import zoneinfo
 from playwright.sync_api import sync_playwright
 from containerimport_hilfe import check, ende, nutzer_anlegen, container, container_anlegen, kalender, stand, seite as seite_oeffnen
@@ -39,20 +43,58 @@ def ankunft(n, uhr):
 
 # ---------- nachgebaute Seite des Hafens ----------
 VORLAGE = open(os.path.join(FIX, 'containerimport', 'hafen-hamburg.html'), encoding='utf-8').read()
-SPIEL = {'modus': 'ok', 'haengt': False, 'anfragen': [], 'da': threading.Event(), 'weiter': threading.Event()}   # modus: ok | fehler | fremd | abgeschnitten | offen
+SPIEL = {'modus': 'ok', 'haengt': False, 'anfragen': [], 'da': threading.Event(), 'weiter': threading.Event()}
+# modus: ok | fehler | fremd | abgeschnitten | offen | chunked | chunked-abgeschnitten | zu-gross | zu-gross-chunked | troepfelt
 
 
 class Hafen(http.server.BaseHTTPRequestHandler):
     def log_message(self, *a):
         pass
 
+    def roh(self, bytes_):
+        """Antwort Byte für Byte selbst schreiben (für Modi, die send_response nicht abbilden kann)."""
+        try:
+            self.wfile.write(bytes_); self.wfile.flush()
+        except OSError:   # der Server hat die Verbindung nach seiner Gesamtfrist beendet
+            raise ConnectionError
+
     def do_GET(self):
         SPIEL['anfragen'].append({'pfad': self.path, 'kopf': dict(self.headers), 'laenge': self.headers.get('Content-Length')})
         if SPIEL['haengt']:   # antwortet erst, wenn der Test es erlaubt (höchstens bis kurz vor dem Zeitlimit des Servers)
             SPIEL['da'].set(); SPIEL['weiter'].wait(11)
+        try:
+            if SPIEL['modus'] in ('zu-gross', 'zu-gross-chunked'):   # mehr Inhalt als CI_HAFEN_MAX_BYTE (2 MiB)
+                fuell = b'<p>' + b'x' * 65536 + b'</p>'
+                if SPIEL['modus'] == 'zu-gross':
+                    self.roh(b'HTTP/1.1 200 OK\r\nContent-Type: text/html\r\nContent-Length: %d\r\n\r\n' % (40 * len(fuell)))
+                    for _ in range(40):
+                        self.roh(fuell)
+                else:   # stückweise, ohne angekündigte Länge
+                    self.roh(b'HTTP/1.1 200 OK\r\nContent-Type: text/html\r\nTransfer-Encoding: chunked\r\n\r\n')
+                    for _ in range(40):
+                        self.roh(b'%x\r\n' % len(fuell) + fuell + b'\r\n')
+                    self.roh(b'0\r\n\r\n')
+                return
+            if SPIEL['modus'] == 'troepfelt':   # Kopfzeilen Byte für Byte, zusammen weit über CI_HAFEN_ZEITLIMIT
+                self.roh(b'HTTP/1.1 200 OK\r\n')
+                for b in b'X-Fuell: ' + b'0' * 200 + b'\r\n':
+                    self.roh(bytes([b])); time.sleep(0.2)
+                return
+        except ConnectionError:
+            return
         status = 503 if SPIEL['modus'] == 'fehler' else 200
         text = '<html><body><h1>Wir haben umgebaut</h1></body></html>' if SPIEL['modus'] == 'fremd' else VORLAGE.replace('{T1}', im_format_der_seite(0)).replace('{T2}', im_format_der_seite(1))
         roh = text.encode().replace(b'{ROH}', b'\xfc')
+        if SPIEL['modus'] in ('chunked', 'chunked-abgeschnitten'):   # stückweise Antwort ohne angekündigte Länge
+            try:
+                self.roh(b'HTTP/1.1 200 OK\r\nContent-Type: text/html; charset=utf-8\r\nTransfer-Encoding: chunked\r\n\r\n')
+                for i in range(0, len(roh), 700):   # mehrere Stücke, damit das Zusammensetzen geprüft ist
+                    self.roh(b'%x\r\n' % len(roh[i:i + 700]) + roh[i:i + 700] + b'\r\n')
+                if SPIEL['modus'] == 'chunked':
+                    self.roh(b'0\r\n\r\n')   # chunked-abgeschnitten: ohne Schlussstück endet die Verbindung mitten in der Antwort
+            except ConnectionError:
+                pass
+            return
         laenge = len(roh) + (500 if SPIEL['modus'] == 'abgeschnitten' else 0)   # abgeschnitten: kündigt mehr an, als kommt
         self.send_response(status); self.send_header('Content-Type', 'text/html; charset=utf-8'); self.send_header('Content-Length', str(laenge)); self.end_headers(); self.wfile.write(roh); self.wfile.flush()
         if SPIEL['modus'] == 'offen':   # alles geliefert, aber die Verbindung bleibt stehen
@@ -161,8 +203,32 @@ check('eine Meldung verfällt zwölf Stunden nach ihrer Ankunft: kein „wird er
 gespeichert(lambda d: d.update(schiffe={'hamburg': {'liste': d['schiffe']}, 'x': 'Text', 'y': {'schiff': 'Beispiel Express'}}))
 st, r = I.call('containerimport_start')
 check('anders geschnittener Zwischenspeicher (spätere Version, dann Rückfall): das Modul startet, nur ohne Meldungen', st == 200 and r['hafen']['meldungen'] == {} and r['hafen']['anzahl'] == 0, (st, r.get('error'), r.get('hafen')))
+st, r, neu = abruf('ok')   # der Rückfall-Test hat den Zwischenspeicher geleert: erst wieder einen lesbaren Stand, den die folgenden Fehlschläge behalten müssen
+gelesen = r['hafen']['gelesen']
+check('nach dem Rückfall wieder lesbar: alle Meldungen stehen', st == 200 and r['hafen']['fehler'] == '' and set(r['hafen']['meldungen']) == MIT_MELDUNG, r.get('hafen'))
 st, r, neu = abruf('abgeschnitten')
-check('Antwort kürzer als angekündigt: Fehlschlag statt einer halben Liste als neuem Stand', st == 200 and 'nicht vollständig' in r['hafen']['fehler'] and r['hafen']['gelesen'] == gelesen, r.get('hafen'))
+check('Antwort kürzer als angekündigt: Fehlschlag statt einer halben Liste als neuem Stand',
+      st == 200 and 'nicht vollständig' in r['hafen']['fehler'] and r['hafen']['gelesen'] == gelesen and set(r['hafen']['meldungen']) == MIT_MELDUNG, r.get('hafen'))
+st, r, neu = abruf('chunked')
+# „frisch gelesen“ nicht an einer anderen Uhrzeit prüfen: now() zählt in Sekunden, und zwei Abrufe liegen in derselben.
+# Ein gelungener Abruf setzt gelesen auf abgerufen, ein Fehlschlag lässt gelesen stehen und meldet einen Fehler.
+check('stückweise Antwort ohne angekündigte Länge: die Stücke werden zusammengesetzt und gelesen',
+      st == 200 and neu == 1 and r['hafen']['fehler'] == '' and r['hafen']['gelesen'] == r['hafen']['abgerufen']
+      and set(r['hafen']['meldungen']) == MIT_MELDUNG, r.get('hafen'))
+gelesen = r['hafen']['gelesen']
+st, r, neu = abruf('chunked-abgeschnitten')
+check('stückweise Antwort ohne Schlussstück: Fehlschlag statt einer halben Liste als neuem Stand',
+      st == 200 and 'nicht vollständig' in r['hafen']['fehler'] and r['hafen']['gelesen'] == gelesen and set(r['hafen']['meldungen']) == MIT_MELDUNG, r.get('hafen'))
+for modus in ('zu-gross', 'zu-gross-chunked'):
+    st, r, neu = abruf(modus)
+    check(f'mehr als 2 MiB ({modus}): Fehlschlag statt der abgeschnittenen ersten 2 MiB als neuem Stand',
+          st == 200 and 'unerwartet groß' in r['hafen']['fehler'] and r['hafen']['gelesen'] == gelesen and set(r['hafen']['meldungen']) == MIT_MELDUNG, r.get('hafen'))
+# Gesamtfrist: eine tröpfelnde Gegenstelle darf keinen Webserver-Prozess beliebig lange binden (CI_HAFEN_ZEITLIMIT)
+t0 = time.monotonic()
+st, r, neu = abruf('troepfelt')
+dauer = time.monotonic() - t0
+check('tröpfelnde Gegenstelle: der Abruf endet nach der Gesamtfrist mit einem Fehlschlag, nicht erst mit der Gegenstelle',
+      st == 200 and r['hafen']['fehler'] != '' and dauer < 35 and r['hafen']['gelesen'] == gelesen and set(r['hafen']['meldungen']) == MIT_MELDUNG, (st, round(dauer, 1), r.get('hafen')))
 SPIEL['weiter'].clear()
 st, r, neu = abruf('offen')
 check('alles geliefert, Verbindung bleibt offen: gelesen, ohne auf das Ende der Verbindung zu warten (der Nachbau hält sie noch)',

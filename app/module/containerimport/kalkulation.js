@@ -31,6 +31,15 @@
      'endgueltig' (letzte Fassung, festgeschrieben), 'aelter' (eine frühere Fassung – immer festgeschrieben) */
   const ansicht = () => (K.neu || !fassung() ? 'neu' : K.nr !== letzte() ? 'aelter' : fassung().stand);
   const bearbeitbar = () => K.start.rechte.bearbeiten && ['neu', 'entwurf'].includes(ansicht());
+  /* Container der gezeigten Fassung: für eine festgeschriebene Fassung der Schnappschuss von damals (GR-106) – sonst zeigten
+     Kopfzeile, Druckfassung, CSV und Dateiname nach einer Stammdatenänderung die heutige Partie, den heutigen Lieferanten und
+     die heutige Ware an einer als unveränderlich gekennzeichneten Fassung. Wie bei den Sätzen (f.ergebnis.saetze).
+     Der Rückfall hält Fassungen ohne Schnappschuss lesbar (GR-006). */
+  const containerDerFassung = () => {
+    const a = ansicht(), f = fassung(), heute = sendung(K.id) || K.container || {};
+    const damals = (a === 'endgueltig' || a === 'aelter') && f && f.endgueltig && f.endgueltig.container;
+    return damals ? { ...heute, ...damals } : heute;   // der Schnappschuss schlägt jedes Feld, das er kennt
+  };
   /* Stand in einem Satz (Druckkopf, erste Zeile der CSV) */
   function standText() {
     const f = fassung(), a = ansicht();
@@ -94,7 +103,7 @@
 
   /* ---------- Eingabe ---------- */
   function editor() {
-    const darf = bearbeitbar(), aus = darf ? '' : ' disabled', f = fassung(), a = ansicht(), e = K.e, s = sendung(K.id) || K.container;
+    const darf = bearbeitbar(), aus = darf ? '' : ' disabled', f = fassung(), a = ansicht(), e = K.e, s = containerDerFassung();
     const ein = (name, wert, platz = '', art = 'text') => `<input data-k="${name}" type="${art}" value="${esc(art === 'date' ? wert : zt(wert))}"${art === 'text' ? ' inputmode="decimal"' : ''}${platz ? ` placeholder="${esc(platz)}"` : ''}${aus}>`;
     const kfeld = (label, name, einheit, platz, hilfe = '') => `<label class="ci-feld"><span>${esc(label)}</span><span class="kk-mit">${ein(name, e.kopf[name], platz)}<i>${esc(einheit)}</i></span>${hilfe ? `<small>${esc(hilfe)}</small>` : ''}</label>`;
     const wahl = (attr, wert, liste) => `<select ${attr}${aus}>${liste.map(([v, t]) => `<option value="${esc(v)}"${String(wert) === String(v) ? ' selected' : ''}>${esc(t)}</option>`).join('')}</select>`;
@@ -236,7 +245,7 @@
     return `"${t.replace(/"/g, '""')}"`;
   };
   function csv() {
-    const e = K.norm, erg = K.erg, s = sendung(K.id) || K.container, f = fassung();
+    const e = K.norm, erg = K.erg, s = containerDerFassung(), f = fassung();
     if (!e || !erg || !erg.vollstaendig) { toast('Die Kalkulation ist unvollständig – keine Datei.', true); return; }
     const kopf = ['Pos', 'Teil', 'Artikel', 'R/L', 'Zollregime', 'Satz', 'Ursprung', 'KN', 'Kartons', 'Brutto kg', 'Netto kg', 'Preis', 'Währung', 'Preis €/kg', 'Fracht €/kg', 'Vers. €/kg', 'Provision €/kg', 'Zollwert €/kg', 'Zoll €/kg',
       'Einstand vor NK €/kg', 'Nebenkosten €/kg', 'Einstand €/kg', 'Wert Ist €', 'Imag. EK €/kg', 'Soll €', 'VK €/kg', 'VK-Wert €'];
@@ -251,7 +260,7 @@
   }
   /* Druckfassung in #ci-druck als eigener Block .kk-druck (A4 quer); false ohne Ergebnis */
   function druckInhalt() {
-    const ed = $('#kk-ergebnis'), s = sendung(K.id) || K.container, k = K.e.kopf;
+    const ed = $('#kk-ergebnis'), s = containerDerFassung(), k = K.e.kopf;
     if (!ed || !K.erg || K.erg.fehlerText) return false;
     $('#ci-druck').innerHTML = `<div class="kk-druck"><h1>Kalkulation ${esc(titel(s))}</h1>
       <p>${esc([s.lieferant, s.ware].filter(Boolean).join(' · '))} · ${esc(standText())} · gedruckt ${F.datumZeit(new Date())} von ${esc(S.d.name)}</p>

@@ -2,7 +2,7 @@
 
 <!-- ERZEUGT von `python3 werkzeuge/doku.py erzeugen` – nicht von Hand ändern. Quelle: Funktionen und Kommentare im Code. Die CI prüft, dass diese Datei zum Code passt. -->
 
-123 Dateien, 1247 Funktionen – in der Reihenfolge der Datei, **fett** die Abschnitte. Text = erste Aussage des Kommentars direkt über der Funktion (Python: Docstring). Übersicht aller Module: [README.md](README.md).
+125 Dateien, 1270 Funktionen – in der Reihenfolge der Datei, **fett** die Abschnitte. Text = erste Aussage des Kommentars direkt über der Funktion (Python: Docstring). Übersicht aller Module: [README.md](README.md).
 
 ## `.github/scripts/apt_vorrat.py`
 
@@ -43,6 +43,21 @@ _Länderzuordnung von IP-Adressen (für Ländersperren) Datenquelle: ip-location
 - `geo_inc8(b)` – 8-Byte-Wert + 1 (für zusammenhängende Bereiche)
 - `geo_build(in4, in6, out, date)` – CSV (start,ende,Land) → Binärdatei; benachbarte Bereiche desselben Landes werden zusammengefasst
 - `geo_download(out)` – neueste Länderdaten herunterladen und in den Datenordner schreiben
+
+## `app/api/lib/abruf.php`
+
+_Abrufe nach außen: gemeinsamer Standard für jeden Abruf fremder Dienste (Länderdaten geo.php, Ortsdaten ort.php, Bedrohungsliste lib/firewall.php, Datenleck-Prüfung lib/nutzer.php, Hafen Hamburg und Whisp im Modul …_
+
+- `stream_open(pfad, modus, opt, ge)`
+- `stream_read(n)`
+- `stream_eof()`
+- `stream_stat()`
+- `stream_set_option(o, a, b)`
+- `abruf_frist_strom(fh, ende, max, was)` – Offenen Strom hinter Gesamtfrist ($ende: Zeitpunkt aus microtime) und Mengengrenze legen: gelesen wird aus dem Rückgabewert, der ursprüngliche Strom bleibt …
+- `abruf_text(url, ctx, ende, max)` – Antwort eines Abrufs vollständig lesen – statt file_get_contents, dessen „timeout“ ebenfalls nur je Lesevorgang gilt.
+- `abruf_vollstaendig(neu, min, alt)` – Ist eine heruntergeladene Liste plausibel vollständig und darf den bisherigen Bestand ersetzen?
+- `abruf_http(url, kopfzeilen, frist, maxByte, methode, inhalt)`
+- `abruf_lesen(s, n)` – Höchstens $n Byte aus einem Strom lesen; weniger heißt: die Gegenstelle hat vorher aufgehört (oder die Frist lief ab)
 
 ## `app/api/lib/adressen.php`
 
@@ -183,7 +198,7 @@ _Dateiablage der Plattform (neben der Speicherschicht): hochgeladene Dateien ein
 **Hochladen in Teilen**
 
 - `ablage_teile_ordner()`
-- `ablage_aufraeumen()` – Unvollständige Uploads nach ABLAGE_UPLOAD_STUNDEN entfernen
+- `ablage_aufraeumen(nutzerId)` – Vor einem neuen Upload von $nutzerId (unter der Sperre in ablage_teil): unvollständige Uploads nach ABLAGE_UPLOAD_STUNDEN entfernen und von $nutzerId nur …
 - `ablage_teil(bereich, nutzerId, ziel, b, ablegen)` – Einen Teil annehmen.
 - `ablage_fertig_ablegen(bereich, nutzerId, upload)` – Fertigen Upload (ablage_teil mit $ablegen = false) in die Ablage übernehmen – nur für den Nutzer, der ihn hochgeladen hat.
 - `ablage_platz_reicht(frei, groesse)`
@@ -247,7 +262,8 @@ _Schutzzentrale: Firewall (Angriffsmuster), Sperrliste (von Hand, automatisch, B
 - `fw_guard(action)` – Vor jeder Aktion
 - `fw_nachher(action)`
 - `fw_falle()` – Falle: typische Pfade von Angriffswerkzeugen (wp-login.php, .env, phpMyAdmin …) leitet Caddy hierher
-- `fw_feed_laden()` – Bedrohungsliste herunterladen und prüfen (nur öffentliche Netze, keine eigenen/freigegebenen Adressen)
+- `fw_feed_laden()` – Bedrohungsliste herunterladen und prüfen (nur öffentliche Netze, keine eigenen/freigegebenen Adressen).
+- `fw_feed_vorladen(gewuenscht)` – Bedrohungsliste vor einem gesperrten Abschnitt holen (fw_save, fw_import, fw_vorlage_anwenden).
 - `fw_feed_speichern(netze, quelle)`
 - `fw_feed_index(netze)` – Schneller Index der Bedrohungsliste für die Prüfung vor jeder Anfrage: IPv4 als sortierte, zusammengefasste Bereiche (gepackt: Anfang/Ende je 4 Byte, base64) …
 - `fw_feed_trifft(ip)` – Steht die Adresse auf der Bedrohungsliste?
@@ -300,6 +316,8 @@ _Dateiprüfung (wie ein Datei-Scanner gegen Schadcode): vergleicht die Programmd
 - `integritaet_liste()`
 - `integritaet_pruefen()` – Eine vollständige Prüfung; Ergebnis ohne Dateiinhalte
 - `integritaet_komponenten(root)` – Komponenten mit Version und Stand der Sicherheitsupdates (ohne Abfrage im Internet)
+- `integritaet_vendor(dir)` – .{js,css} und nannte darum allein qrcode.js.
+- `integritaet_herkunft(datei)` – Herkunftsanker der Fremddateien (assets/vendor/HERKUNFT.toml): Pfad => [name, fassung, quelle, sha256].
 - `integritaet_neu(prev, r)` – Neue Befunde (kritisch/Warnung) gegenüber dem vorigen Lauf
 - `integritaet_lauf(auto, me)` – Prüfung ausführen, speichern (letzter Lauf + kurzer Verlauf) und bei neuen Befunden benachrichtigen
 - `integritaet_stand(autoErlaubt)` – Gespeicherter Stand; ist der letzte Lauf älter als 24 Stunden, wird höchstens einmal am Tag automatisch geprüft
@@ -383,7 +401,7 @@ _Notfallmodus (Oberfläche_
 - `notfall_beenden(me, b)` – Beenden (Administrator).
 - `notfall_rueck_felder(dok)` – Felder, die die Vorlage „Notfall“ überhaupt setzt – nur sie darf das Beenden zurücknehmen.
 - `notfall_nachher(d)` – Vom Notfall geschriebener Stand.
-- `notfall_rueck_einstellungen(d)` – Rückweg feldbezogen (nur innerhalb von with_lock(NOTFALL_DOK) aufrufen): nur Felder der Vorlage „Notfall“ und nur, solange sie noch den vom Notfall …
+- `notfall_rueck_einstellungen(d)` – Rückweg feldbezogen (nur innerhalb von with_lock(NOTFALL_DOK) aufrufen; jedes der beiden Dokumente wird zusätzlich unter seiner eigenen Sperre gelesen und …
 - `notfall_ende(wer, einstellungenZurueck, notiz)` – Gemeinsamer Abschluss (auch für das Server-Werkzeug deploy/notfall-aus.php, das dieselbe Funktion aufruft)
 - `notfall_benachrichtigen(titel, facts)` – Sofortige Benachrichtigung nach der Antwort – ohne Bündelpause, auch wenn das Ereignis ausgeschaltet ist, solange Empfänger eingetragen sind (ein Notfall …
 
@@ -526,7 +544,7 @@ _Postausgang von innen (ADR-007, Zielarchitektur Kundenseite Regel 4)_
 - `postausgang_warteschlange()` – Kundenseite: Aufträge nur ablegen, nie selbst senden
 - `postausgang_ablegen(art, daten)` – Auftrag ablegen.
 - `postausgang_liste()`
-- `postausgang_kuerzen(liste)` – Überlauf: zuerst die ältesten Benachrichtigungen und Hinweise verwerfen – Bestellwünsche stehen ohnehin beim Vorgang und werden bei der Durchsicht gefunden
+- `postausgang_kuerzen(liste)`
 - `postausgang_stand()` – Stand des Dienstes: Lebenszeichen und ob ein Postfach eingerichtet ist (die Kundenseite kann das selbst nicht prüfen)
 - `postausgang_versand_bereit()`
 - `postausgang_lauf(jetzt)` – Ein Durchgang des Dienstes: fällige Aufträge abarbeiten, gelegentlich alle Vorgänge prüfen, Lebenszeichen schreiben.
@@ -542,6 +560,7 @@ _Protokoll, Änderungstexte, Anmeldeversuche_
 
 **Protokoll**
 
+- `protokoll_kuerzen(log)` – Monatsdokument auf die Grenzen bringen: älteste Einträge verwerfen und das im Dokument vermerken (ein Eintrag je Monat, er wird fortgeschrieben – sonst …
 - `protokoll_kundenseite()` – Getrenntes Protokoll (ADR-007 Stufe 2d, ab Trennstufe 4): Die Kundenseite (ohne internen Ordner) schreibt ihre Einträge in „kundenprotokoll/JJJJ-MM“ im …
 - `protokoll_beide()`
 - `protokoll_monat(m)` – Einträge eines Monats (zeitlich sortiert) – auf der Mitarbeiterseite ab Trennstufe 4 beide Protokolle zusammen
@@ -1229,6 +1248,8 @@ _Dateiablage des Plattformkerns (app/api/lib/dateiablage.php)_
 - `zip64(daten)` – Ende des Verzeichnisses als Zip64 mit Höchstwerten im klassischen Ende, wie es Packer ab 65535 Einträgen bzw. 4 GB schreiben
 - `dok(did)`
 - `sitzung_frei(query)` – Läuft ein Download (Antwort noch nicht gelesen), antwortet eine weitere Anfrage derselben Sitzung trotzdem
+- `beginnen(name)`
+- `offene(nutzer)`
 
 ## `tests/e2e/test_admin_confirmation.py`
 
@@ -1536,10 +1557,15 @@ _Testgruppe postausgang_
 
 ## `tests/e2e/test_protokoll.py`
 
-_Aufbewahrung des Aktivitätsprotokolls (lib/protokoll.php, PROTOKOLL_MONATE = 6; Inhaber 25.10.2026)._
+_Aufbewahrung und Grenzen des Aktivitätsprotokolls (lib/protokoll.php, PROTOKOLL_MONATE = 6; Inhaber 25.10.2026)._
 
 - `check(n, c, i)`
 - `monat(zurueck)`
+
+**Grenzen des Monatsdokuments: Ringpuffer und Byte-Grenze (Befund 22.11.2026)**
+
+- `fuellen(n, text)`
+- `protokoll()`
 
 ## `tests/e2e/test_rechte.py`
 
@@ -2010,6 +2036,15 @@ _Prüfliste der Dateiprüfung (app/api/lib/integritaet-liste.php): prüfen, dass
 - `git(*args)`
 - `main()`
 
+## `werkzeuge/ip_adressen.py`
+
+_Echte öffentliche IPv4-Adressen im Repository finden (GR-007, AGENTS.md Regel 5)._
+
+- `zu_melden(wert)` – Öffentliche IPv4-Adresse (nicht privat, reserviert, Dokumentation, Mehrfachversand) und nicht erlaubt?
+- `dateien()`
+- `selbsttest()`
+- `main()`
+
 ## `werkzeuge/karte_auszug.py`
 
 _Kleiner Ausschnitt aus einer Protomaps-Basiskarte (PMTiles, OpenStreetMap-Daten, ODbL) – für Testdaten und lokale Vorschau der Detailkarte._
@@ -2122,6 +2157,7 @@ _Regelwerk der STAFL-Plattform prüfen und Änderungsfolgen ermitteln (nur Pytho
 - `kachel_ziel(m)`
 - `module_php(rw)` – Laufzeitfassung des Modulregisters (ohne Code-Pfade, Agenten oder Hinweise) und der Entscheidungstabelle.
 - `pruefe_aktionen(rw)`
+- `pruefe_fremddateien(rw, liste)` – Jede Datei unter app/assets/vendor/ hat einen Herkunftsanker mit passender Prüfsumme (HERKUNFT.toml).
 - `pruefen(rw)`
 
 **Änderungsfolgen**

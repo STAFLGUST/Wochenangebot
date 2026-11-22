@@ -30,6 +30,7 @@ sicherungen_anlegen() {
   ln "$I/sicherungen/dateien/2026-11-15_023000/a/x.bin" "$I/sicherungen/dateien/2026-11-16_023000/a/x.bin"
   : > "$I/sicherungen/.sperre"; echo halb > "$I/sicherungen/daten-2026-11-17_023000.tar.gz.tmp"; echo halb > "$I/sicherungen/dateien/2026-11-17_023000.tmp/y.bin"
   echo GEHEIM-AUSSERHALB > "$T/geheim"; ln -s "$T/geheim" "$I/sicherungen/verweis"
+  echo ALTDATEN-NUR-LOKAL > "$I/sicherungen/altdateien-2026-09-13_120000.tar.gz"   # deploy/altdateien.sh: lokal unbefristet
 }
 sicherungen_anlegen
 
@@ -92,6 +93,7 @@ ok "Status für die Anwendung lesbar, ohne Passwort, Schlüssel und Ziel" '[ "$(
 r restore latest --target "$T/zurueck" >/dev/null
 Z="$T/zurueck$I/sicherungen"
 ok "Stand enthält die Archive byteweise gleich" 'cmp -s "$Z/daten-2026-11-15_023000.tar.gz" "$I/sicherungen/daten-2026-11-15_023000.tar.gz" && cmp -s "$Z/daten-2026-11-16_023000.tar.gz" "$I/sicherungen/daten-2026-11-16_023000.tar.gz"'
+ok "ohne Altdaten-Archiv (lokal unbefristet, auswärts gälte sonst keine Löschfrist)" '[ ! -e "$Z/altdateien-2026-09-13_120000.tar.gz" ] && ! grep -rq ALTDATEN-NUR-LOKAL "$T/zurueck"'
 ok "ohne Sperre und Reste eines Laufs (*.tmp)" '[ ! -e "$Z/.sperre" ] && [ -z "$(find "$Z" -name "*.tmp")" ]'
 ok "Stände der Dateiablage: fester Verweis bleibt einer, Inhalt nur einmal im Repository" '[ "$(stat -c %i "$Z/dateien/2026-11-15_023000/a/x.bin")" = "$(stat -c %i "$Z/dateien/2026-11-16_023000/a/x.bin")" ] && cmp -s "$Z/dateien/2026-11-16_023000/a/x.bin" "$I/sicherungen/dateien/2026-11-16_023000/a/x.bin" && [ "$(kb)" -lt 1300 ]'
 ok "ein Verweis in sicherungen/ bleibt ein Verweis: Inhalt von außerhalb nicht in der Kopie" '[ -L "$Z/verweis" ] && ! grep -rq GEHEIM-AUSSERHALB "$T/zurueck"'

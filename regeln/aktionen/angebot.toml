@@ -166,7 +166,7 @@ oeffentlich = true
 [aktion.kunde_mail]
 oberflaeche = "angebot.eingabe"
 schreibend = true
-zugang_gemeinsam = true   # Kundenzugangs-Mail aus der Kundenverwaltung
+zugang_gemeinsam = true   # Kundenzugangs-Mail aus der Kundenverwaltung; der Zweig type=angebot ruft require_modulzugang('versand') selbst nach
 
 [aktion.kunde_merkliste]
 oberflaeche = "angebot.kunden"

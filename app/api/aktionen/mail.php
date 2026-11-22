@@ -205,8 +205,12 @@ Ausgelöst von: {$me['name']}
                 $job = ['to' => $c['email'], 'name' => $c['ansprechpartner'] ?: $c['firma'], 'subject' => $sub, 'text' => $txt, 'html' => $html];
                 $typ = $purpose;
             } elseif ($type === 'angebot') {
-                if (!customer_offers($c)) fail('Für diesen Kunden ist kein Angebot freigeschaltet.', 422);
-                if (array_key_exists('mailAngebot', $c) && empty($c['mailAngebot'])) fail(!empty($c['abgemeldet']) ? "„{$c['firma']}“ hat sich vom Wochenangebot per E-Mail abgemeldet – es werden keine Angebotsmails mehr gesendet." : "Für „{$c['firma']}“ ist das Wochenangebot per E-Mail ausgeschaltet.", 422);
+                // Das ist derselbe Kundenversand wie im Modul Versand (mail_job_for rendert für jeden Typ die Wochenangebots-Mail) –
+                // deshalb dasselbe Tor und dieselbe Empfängerprüfung wie kunden_rundmail/versand_senden (GR-103). Einladung und
+                // Passwortlink bleiben Sache der Kundenverwaltung (kunden.bearbeiten).
+                require_modulzugang('versand', true);
+                $g = wochenmail_grund($c);
+                if ($g !== '') fail("Für „{$c['firma']}“ ist das nicht möglich: " . $g . '.', 422);
                 $job = mail_job_for($c, 'angebot', mb_substr(trim((string)($b['note'] ?? '')), 0, 1000), mail_week());
                 $typ = 'angebot';
             } else fail('Unbekannte E-Mail-Art.', 422);

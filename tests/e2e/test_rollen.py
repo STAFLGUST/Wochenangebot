@@ -162,10 +162,47 @@ check('Angebotsbereich ohne Verwaltungszugang: Stammdaten, VK-Gruppen, Kategorie
       {a_: AN.call(a_)[0] for a_ in ('master', 'vkgruppen', 'angebotskategorien', 'kunden', 'kundengruppen')})
 code, r = AN.call('abteilungen')
 check('… andere Verwaltungsaktionen bleiben ohne Verwaltungszugang gesperrt', code == 403 and r.get('code') == 'kein_modulzugang' and r.get('modul') == 'verwaltung', (code, r))
+# Sicherheitsfund 22.11.2026: „import“ ist ein Teilmodul der Verwaltung (teil_von). Das Tor maß auch das Modul der
+# Aktion mit der laxen Host-Funktion – „import.zugang“ ersetzte damit den entzogenen „verwaltung.zugang“ für 16
+# modulfremde Verwaltungsaktionen (kunde_save, kunden_import, vertreter_save …). Die Teilmodul-Beziehung wirkt jetzt
+# nur von oben nach unten: der Zugang der Verwaltung gilt für ihr Teilmodul Import, nicht umgekehrt (beide Richtungen
+# geprüft – unten die Gegenprobe). Die Fachrechte hat die Rolle, es fehlt allein „verwaltung.zugang“.
+code, r = A.call('rolle_save', {'name': 'Importstelle', 'rechte': ['import.zugang', 'bestand.zugang', 'bestand.importieren', 'stammdaten.sehen', 'kunden.bearbeiten']})
+IST = r['id']
+assert code == 200 and 'verwaltung.zugang' not in next(x for x in r['rollen'] if x['id'] == IST)['rechte']
+assert A.call('user_save', {'id': '', 'name': 'Ida Import', 'username': 'ida', 'rollen': [IST], 'active': True, 'password': 'Kunden-Zugang-88', 'mustChange': False})[0] == 200
+ID_ = anmelden('ida', 'Kunden-Zugang-88')
+for aktion in ('kunde_save', 'kunden_import', 'vertreter_save', 'abteilungen', 'auswertung'):
+    code, r = ID_.call(aktion, {} if aktion.endswith('_save') or aktion == 'kunden_import' else None)
+    check(f'Teilmodulzugang ersetzt den Verwaltungszugang nicht: {aktion} 403 kein_modulzugang',
+          code == 403 and r.get('code') == 'kein_modulzugang' and r.get('modul') == 'verwaltung' and r.get('seite') is False, (code, r))
+check('… die zugang_gemeinsam-Aktionen bleiben offen (Fachrecht autorisiert)',
+      all(ID_.call(a_)[0] == 200 for a_ in ('kunden', 'kundengruppen')), {a_: ID_.call(a_)[0] for a_ in ('kunden', 'kundengruppen')})
+# Die Importzentrale gehört seither dem Modul „import“: ihre Aktionen laufen mit „import.zugang“ weiter, und sie prüfen
+# selbst streng den Zugang des Daten-Eigentümers – ohne „verwaltung.zugang“ erscheint keine Importart der Verwaltung.
+code, r = ID_.call('import_arten')
+arten = [a_['id'] for a_ in r.get('arten', [])]
+check('Importzentrale mit „import.zugang“ weiter erreichbar, Importarten nur des offenen Eigentümers',
+      code == 200 and 'bestand' in arten and 'kunden' not in arten, (code, arten))
+check('Übernahme einer Verwaltungs-Importart bleibt gesperrt (Eigentümerprüfung)',
+      ID_.call('import_uebernehmen', {'art': 'kunden', 'daten': ''})[0] == 403)
+# Gegenprobe der anderen Richtung: eine Rolle mit „verwaltung.zugang“ ohne „import.zugang“ behält die Importzentrale –
+# der Zugang des Obermoduls gilt für sein Teilmodul (sonst hätte die strenge Prüfung ihr die Zentrale genommen).
+assert A.call('rolle_save', {'id': IST, 'name': 'Importstelle', 'rechte': ['verwaltung.zugang', 'bestand.zugang', 'bestand.importieren', 'stammdaten.sehen', 'kunden.bearbeiten']})[0] == 200
+code, r = ID_.call('import_arten')
+check('Verwaltungszugang genügt für das Teilmodul Import: Zentrale offen, Importarten der Verwaltung dabei',
+      code == 200 and 'kunden' in [a_['id'] for a_ in r.get('arten', [])], (code, [a_['id'] for a_ in r.get('arten', [])]))
+check('… auch die schreibenden Importaktionen kommen durch das Tor (kein „kein_modulzugang“)',
+      ID_.call('import_pruefen', {'art': 'kunden', 'daten': {'rows': []}})[1].get('code') != 'kein_modulzugang',
+      ID_.call('import_pruefen', {'art': 'kunden', 'daten': {'rows': []}}))
+assert A.call('rolle_save', {'id': IST, 'name': 'Importstelle', 'rechte': ['import.zugang', 'verwaltung.zugang', 'bestand.zugang', 'bestand.importieren', 'stammdaten.sehen', 'kunden.bearbeiten']})[0] == 200
+code, r = ID_.call('abteilungen')
+check('Mit Verwaltungszugang wieder offen', code == 200, (code, r))
+
 # Prüfkonten und -rollen wieder entfernen (die Oberflächen-Prüfungen unten zählen Rollen und Mitarbeiter)
-for u_ in ('petra', 'anna'):
+for u_ in ('petra', 'anna', 'ida'):
     assert A.call('user_delete', {'id': next(x['id'] for x in A.call('users')[1]['users'] if x['username'] == u_)})[0] == 200
-check('Prüfrollen wieder löschbar (kein Mitarbeiter mehr)', all(A.call('rolle_loeschen', {'id': r_})[0] == 200 for r_ in (PBZ, AOV)))
+check('Prüfrollen wieder löschbar (kein Mitarbeiter mehr)', all(A.call('rolle_loeschen', {'id': r_})[0] == 200 for r_ in (PBZ, AOV, IST)))
 ms = {m['id']: m for m in L.call('module_status')[1]['module']}
 check('Dashboard: nur Kacheln mit Zugang', ms['bestand']['kachel']['recht'] and ms['bestand']['kachel']['zugang']
       and not ms['angebot']['kachel']['recht'] and not ms['angebot']['kachel']['zugang'] and not ms['hr']['kachel']['recht'], {k: v['kachel']['recht'] for k, v in ms.items() if v['kachel']})

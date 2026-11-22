@@ -8,6 +8,10 @@
  *   GEO_GUARD | "GEO2" | n4 (uint32) | n6 (uint32) | Stand (10 Byte, JJJJ-MM-TT)
  *   n4 × [start uint32 | ende uint32 | Land 2 Byte]          (IPv4)
  *   n6 × [start 8 Byte | ende 8 Byte | Land 2 Byte]           (IPv6, erste 64 Bit)
+ *
+ * Die gemeinsamen Helfer für Abrufe nach außen (abruf_frist_strom, abruf_text, abruf_http, abruf_vollstaendig) stehen seit
+ * 22.11.2026 in lib/abruf.php – sie gehören keinem Fachbereich, und auch der Container-Import braucht sie. Diese Datei lädt
+ * sie als erste, damit jeder bisherige Aufrufer (ort.php, lib/firewall.php, lib/nutzer.php) sie ohne eigenen Weg bekommt.
  */
 declare(strict_types=1);
 if (realpath((string)($_SERVER['SCRIPT_FILENAME'] ?? '')) === __FILE__) { http_response_code(404); exit; }
@@ -16,6 +20,11 @@ const GEO_GUARD = "<?php http_response_code(404); exit; __halt_compiler();";
 const GEO_HEAD = 22;
 const GEO_OFF = 55 + GEO_HEAD; // strlen(GEO_GUARD) + Kopf
 const GEO_PKG = '@ip-location-db/geo-whois-asn-country';
+const GEO_FRIST = 300;           // Gesamtfrist des ganzen Abrufs in Sekunden (Metadaten und beide CSV): großzügig über der üblichen Dauer
+                                 // (rund 25 MB), aber endlich – set_time_limit(180) der Aktion begrenzt nur Rechenzeit, nicht das Warten am Strom
+const GEO_MAX_BYTE = 64 << 20;   // Mengengrenze je CSV; die Quelle liefert heute rund 15 MB
+
+require_once __DIR__ . '/lib/abruf.php';   // gemeinsame Helfer für Abrufe nach außen (abruf_frist_strom, abruf_text, abruf_http, abruf_vollstaendig)
 
 /* aktuelle Datenbank: heruntergeladenes Update (Datenordner) vor mitgelieferter Fassung */
 function geo_file(): ?string
@@ -108,7 +117,9 @@ function geo_build($in4, $in6, string $out, string $date): array
         $prev = [$s, $e, $p[2]];
     }
     if ($prev) { $v6 .= $prev[0] . $prev[1] . $prev[2]; $n6++; }
-    if ($n4 < 10000 || $n6 < 1000) throw new RuntimeException('Die Länderdaten sind unvollständig.');
+    $alt = geo_info();   // bisheriger Bestand (Datenordner oder mitgelieferte Fassung), vor dem Umbenennen gelesen
+    if (!abruf_vollstaendig($n4, 10000, $alt['v4'] ?? null) || !abruf_vollstaendig($n6, 1000, $alt['v6'] ?? null))
+        throw new RuntimeException('Die Länderdaten sind unvollständig.');
     $tmp = $out . '.' . bin2hex(random_bytes(4)) . '.tmp';
     if (!is_dir(dirname($out))) @mkdir(dirname($out), 0775, true);
     $inhalt = GEO_GUARD . 'GEO2' . pack('NN', $n4, $n6) . substr(str_pad($date, 10), 0, 10) . $v4 . $v6;
@@ -120,9 +131,10 @@ function geo_build($in4, $in6, string $out, string $date): array
 /* neueste Länderdaten herunterladen und in den Datenordner schreiben */
 function geo_download(string $out): array
 {
-    $ctx = stream_context_create(['http' => ['timeout' => 60, 'user_agent' => 'Wochenangebot', 'follow_location' => 1], 'ssl' => ['verify_peer' => true]]);
+    $ende = microtime(true) + GEO_FRIST;
+    $ctx = stream_context_create(['http' => ['timeout' => 60, 'user_agent' => 'Wochenangebot', 'follow_location' => 1, 'max_redirects' => 1], 'ssl' => ['verify_peer' => true]]);
     $ver = '2';
-    $meta = @file_get_contents('https://data.jsdelivr.com/v1/packages/npm/' . GEO_PKG . '/resolved?specifier=2', false, $ctx);
+    $meta = abruf_text('https://data.jsdelivr.com/v1/packages/npm/' . GEO_PKG . '/resolved?specifier=2', $ctx, $ende, 65536);
     $j = $meta ? json_decode($meta, true) : null;
     if (is_array($j) && preg_match('/^\d+\.\d+\.\d+$/', (string)($j['version'] ?? ''))) $ver = $j['version'];
     $date = preg_match('/\.(\d{4})(\d{2})(\d{2})\d*$/', $ver, $m) ? "$m[1]-$m[2]-$m[3]" : gmdate('Y-m-d');
@@ -130,7 +142,11 @@ function geo_download(string $out): array
     $in4 = @fopen($base . 'ipv4.csv', 'rb', false, $ctx);
     $in6 = $in4 ? @fopen($base . 'ipv6.csv', 'rb', false, $ctx) : false;
     if (!$in4 || !$in6) throw new RuntimeException('Die Länderdaten konnten nicht heruntergeladen werden.');
-    try { $r = geo_build($in4, $in6, $out, $date); } finally { fclose($in4); fclose($in6); }
+    try {
+        $f4 = abruf_frist_strom($in4, $ende, GEO_MAX_BYTE, 'Länderdaten');
+        $f6 = abruf_frist_strom($in6, $ende, GEO_MAX_BYTE, 'Länderdaten');
+        try { $r = geo_build($f4, $f6, $out, $date); } finally { fclose($f4); fclose($f6); }
+    } finally { fclose($in4); fclose($in6); }
     return $r + ['date' => $date, 'version' => $ver];
 }
 

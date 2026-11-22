@@ -165,6 +165,21 @@ app_anon = [roh(a, None, ip='198.51.100.79', extra={**app, 'X-WA-Sitzung': VORGA
 check('X-WA-Sitzung ohne Cookie: keine Sitzungsdatei, kein Cookie, keine Kennung in der Antwort',
       sitzungen() == vor and all(not sc and h.get('X-WA-Sitzung') is None for _, _, sc, h in app_anon), sorted(sitzungen() - vor))
 
+# Eine erfundene Kennung im Cookie zählt ebenfalls nicht (Befund 22.11.2026): PHP verwirft sie (use_strict_mode),
+# legte aber unter einer neuen Kennung sofort eine Datei an. Das Set-Cookie bleibt (es ist beim Aufruf schon heraus),
+# die leer gebliebene Sitzung wird am Ende der Anfrage wieder entfernt.
+vor = sitzungen()
+erfunden = [(a, roh(a, d, ip='198.51.100.80', cookies={NEU: 'erfundene-kennung-' + str(i)}))
+            for i, (a, d) in enumerate((('offer', None), ('kunde_status', None), ('kunde_merkliste', None)))]
+check('erfundene Kennung im __Host-Cookie: keine Sitzungsdatei', sitzungen() == vor, sorted(sitzungen() - vor))
+check('… Antworten unverändert', all(st in (200, 401) for _, (st, _, _, _) in erfunden), [(a, st) for a, (st, _, _, _) in erfunden])
+vor = sitzungen()
+check('erfundene Kennung im alten Cookie WA_ADMIN: keine Sitzungsdatei',
+      roh('offer', ip='198.51.100.81', cookies={ALT: 'erfundene-kennung-alt'})[0] == 200 and sitzungen() == vor, sorted(sitzungen() - vor))
+vor = sitzungen()
+fehl = roh('kunde_login', {'username': 'niemand', 'password': 'x'}, ip='198.51.100.82')
+check('gescheiterte Kunden-Anmeldung ohne Cookie: keine Sitzungsdatei', fehl[0] in (401, 403, 429) and sitzungen() == vor, (fehl[0], sorted(sitzungen() - vor)))
+
 # Mit vorgelegter Kennung bleibt alles wie bisher
 vor = sitzungen()
 st, j, sc, _ = roh('kunde_login', {'username': 'cookie.kunde', 'password': 'Kunden-Kennwort-7'}, ip='198.51.100.74')

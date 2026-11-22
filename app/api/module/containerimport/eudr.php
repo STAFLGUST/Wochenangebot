@@ -30,6 +30,7 @@ const EUDR_MAX_FRUEHERE = 5;             // frühere Abschlüsse je Sendung, die
 const EUDR_MAX_SENDUNGEN = 5000;
 const EUDR_MAX_ORTE_JE_DATEI = 1000;
 const EUDR_MAX_PRUEFUNGEN = 50;          // Gegenprüfungen je Betrieb
+const EUDR_BEFUNDE_FASSUNG = 1;          // Fassung von geo_pruefen; hochzählen, sobald die Prüfung andere Befunde liefert – dann rechnet der Zwischenspeicher neu
 /* Stand eines Containers auf seinem Weg (Reihenfolge = Ablauf); wird von Hand gesetzt, auch nach dem Abschluss der Bewertung */
 const EUDR_STAENDE = ['gekauft' => 'gekauft', 'unterwegs' => 'unterwegs', 'dokumente' => 'Dokumente da', 'angekommen' => 'angekommen'];
 /* Felder, die älteren Einträgen fehlen (vor dem Container als Mittelpunkt, vor den Schlachthöfen) – eudr_sendungen ergänzt sie beim Lesen */
@@ -95,10 +96,18 @@ function eudr_sendungen(): array
     $doc['liste'] = array_map(fn($s) => $s + EUDR_SENDUNG_VORGABEN + CI_TRACKING_VORGABEN, $doc['liste']);
     return $doc;
 }
-/* Herkunftsbetriebe speichern */
+/* Herkunftsbetriebe speichern. Dabei den Zwischenspeicher der Befunde auffrischen (eudr_geo_befunde): gerechnet wird beim
+   Schreiben, nicht in jeder Antwort des Moduls. */
 function eudr_betriebe_schreiben(array $doc): void
 {
-    $doc['liste'] = array_map(fn($b) => array_diff_key($b, ['nr' => 1]), $doc['liste']);   // abgeleitet (eudr_betriebe)
+    $doc['liste'] = array_map(function (array $b): array {
+        $b = array_diff_key($b, ['nr' => 1]);   // abgeleitet (eudr_betriebe)
+        $kennung = eudr_geo_kennung($b['geometrie']);
+        if (($b['geoBefunde']['kennung'] ?? '') !== $kennung || ($b['geoBefunde']['fassung'] ?? 0) !== EUDR_BEFUNDE_FASSUNG) {
+            $b['geoBefunde'] = ['fassung' => EUDR_BEFUNDE_FASSUNG, 'kennung' => $kennung, 'befunde' => geo_pruefen($b['geometrie'])];
+        }
+        return $b;
+    }, $doc['liste']);
     store_write('containerimport-eudr-betriebe', eudr_fortschreiben($doc));
 }
 /* Sendungen speichern */
@@ -272,6 +281,22 @@ function eudr_original_vermerken(array $liste, array $ablage, array $me): array
 /* Kennung der Geometrie zum Wiedererkennen derselben Fläche */
 function eudr_geo_kennung(array $g): string { return sha1((string)json_encode($g['coordinates'])); }
 
+/* Befunde des Umrisses eines Betriebs. Zwischengespeichert im additiven Feld „geoBefunde“ (Fassung der Prüfung, Kennung der
+   Geometrie, Befunde) – ohne das Feld wird gerechnet, ältere Daten bleiben also lesbar (GR-006). Warum: eudr_stand() bildet
+   eudr_betrieb_sicht über ALLE gespeicherten Farmer ab und läuft in jeder Antwort des Moduls; die Prüfung auf
+   Selbstüberschneidung kostet je Umriss bis zu GEO_MAX_VERGLEICHE Kantenvergleiche. Geschrieben wird der Zwischenspeicher in
+   eudr_betriebe_schreiben; er gilt nur für dieselbe Geometrie und dieselbe Fassung, anders Geschnittenes wird verworfen. */
+function eudr_geo_befunde(array $b): array
+{
+    $c = $b['geoBefunde'] ?? null;
+    $gut = fn($x): bool => is_array($x) && is_string($x['stufe'] ?? null) && is_string($x['code'] ?? null) && is_string($x['text'] ?? null);
+    if (is_array($c) && ($c['fassung'] ?? 0) === EUDR_BEFUNDE_FASSUNG && ($c['kennung'] ?? '') === eudr_geo_kennung($b['geometrie'])
+        && is_array($c['befunde'] ?? null) && array_is_list($c['befunde']) && count(array_filter($c['befunde'], $gut)) === count($c['befunde'])) {
+        return $c['befunde'];
+    }
+    return geo_pruefen($b['geometrie']);
+}
+
 /* Nachschlagetabelle der gespeicherten Betriebe zum Wiedererkennen (einmal je Anfrage): Nummer aus den Papieren bzw. Umriss → Betrieb */
 function eudr_bekannt_tabelle(array $liste): array
 {
@@ -300,7 +325,7 @@ function eudr_pruefungen_aktuell(array $b): array
 function eudr_betrieb_sicht(array $b): array
 {
     $k = geo_kennzahlen($b['geometrie']);
-    $befunde = geo_pruefen($b['geometrie']);
+    $befunde = eudr_geo_befunde($b);
     foreach ($b['quelle']['korrekturen'] ?? [] as $korrektur) $befunde[] = ['stufe' => 'hinweis', 'code' => 'korrektur', 'text' => 'Beim Einlesen korrigiert: ' . GEO_KORREKTUREN[$korrektur] . '.'];
     $land = EUDR_LAENDER[$b['land']] ?? null;
     if (isset($land['rahmen'])) {
@@ -316,7 +341,7 @@ function eudr_betrieb_sicht(array $b): array
     $stufen = array_column($befunde, 'stufe');
     $stand = in_array('fehler', $stufen, true) ? 'fehler' : ($stufen ? 'hinweis' : 'ok');
     $bewertung = eudr_betrieb_bewertung($b, $stand);
-    return $b + [
+    return array_diff_key($b, ['geoBefunde' => 1]) + [   // der Zwischenspeicher der Befunde bleibt auf dem Server
         'farmerNr' => isset($b['nr']) ? ci_farmer_nr($b['nr']) : '',   // ohne nr: beim Einlesen ein neuer Farmer, der seine Nummer erst beim Speichern bekommt
         'flaeche' => $k['flaeche'] ?? ($angabe ?: GEO_PUNKT_HA), 'mitte' => $k['mitte'], 'rahmen' => $k['rahmen'], 'punkte' => $k['punkte'],
         'befunde' => $befunde, 'stand' => $stand, 'bewertung' => $bewertung, 'pruefungenAktuell' => eudr_pruefungen_aktuell($b),
@@ -409,8 +434,11 @@ function eudr_geojson_lesen(string $text, string $datei): array
 /* Eine hochgeladene Datei prüfen, ohne zu speichern: Lieferanten-GeoJSON („text“) oder ein vom Browser gelesener
    Produktionsort („ort“: Bericht oder eingefügte Koordinaten). Liefert die Orte so, wie sie gespeichert würden, mit
    Kennzahlen und Befunden ($bekannt = eudr_bekannt_tabelle der gespeicherten Betriebe), ob es den Betrieb schon gibt („bekannt“ = id – dann zusammengeführt mit dem gespeicherten Stand)
-   und als „eingabe“ genau das, was beim Übernehmen an containerimport_eudr_betriebe_save geht. */
-function eudr_datei_pruefen(array $d, array $bekannt): array
+   und als „eingabe“ genau das, was beim Übernehmen an containerimport_eudr_betriebe_save geht.
+   $punkte zählt die Punkte aller Orte des ganzen Durchgangs (über alle Dateien) mit und bricht mit 422 ab, sobald
+   EUDR_MAX_PUNKTE_ANFRAGE überschritten ist – geprüft wird je Ort vor der Prüfung seines Umrisses, nicht erst, wenn alle
+   Dateien durch sind. */
+function eudr_datei_pruefen(array $d, array $bekannt, int &$punkte): array
 {
     $datei = eudr_text($d['datei'] ?? '', 200, 'Dateiname');
     $land = isset($d['land']) && $d['land'] !== '' ? eudr_land($d['land']) : '';
@@ -440,6 +468,9 @@ function eudr_datei_pruefen(array $d, array $bekannt): array
             $aus['fehler'][] = (is_string($ort['name'] ?? null) ? $ort['name'] . ': ' : '') . $e->getMessage();
             continue;
         }
+        // Budget des Durchgangs halten, bevor die teure Prüfung des Umrisses läuft (eudr_betrieb_sicht → geo_pruefen)
+        $punkte += geo_punktzahl($b['geometrie']);
+        if ($punkte > EUDR_MAX_PUNKTE_ANFRAGE) fail('Zu viele Punkte in einem Durchgang – bitte die Dateien einzeln einlesen.', 422);
         $aus['orte'][] = eudr_betrieb_sicht($b) + ['bekannt' => $alt['id'] ?? '', 'bekanntRev' => $alt['rev'] ?? 0, 'eingabe' => $eingabe];
     }
     return $aus;

@@ -48,7 +48,12 @@ def tag(n):
 # ── Testdaten für „Heute für Sie“: je Modul ein offener Punkt (nur über die Schnittstellen der Module) ──
 # HR: Antrag von Erika (nächstes Jahr), zu entscheiden vom Administrator
 rev = A.call('mitarbeiter_hr')[1]['rev']
-check('HR: Urlaubsanspruch für Erika gesetzt', A.call('mitarbeiter_hr_save', {'nutzer': IDS['erika'], 'rev': rev, 'jahr': HEUTE.year + 1, 'anspruch': 30})[0] == 200)
+# Vertretung nur aus der eigenen Abteilung (Inhaber 22.11.2026): Erika und der Administrator in dieselbe Abteilung
+check('HR: Urlaubsanspruch für Erika gesetzt', A.call('mitarbeiter_hr_save', {'nutzer': IDS['erika'], 'rev': rev, 'jahr': HEUTE.year + 1, 'anspruch': 30,
+                                                                              'abteilung': 'Verwaltung'})[0] == 200)
+rev = A.call('mitarbeiter_hr')[1]['rev']
+check('HR: Administrator in derselben Abteilung (nur daraus ist eine Vertretung wählbar)',
+      A.call('mitarbeiter_hr_save', {'nutzer': ADMIN, 'rev': rev, 'abteilung': 'Verwaltung'})[0] == 200)
 E = Client('198.51.100.3'); E.call('login', {'username': 'erika', 'password': 'Editor-Zugang-77'})
 FEB = date(HEUTE.year + 1, 2, 1)
 while FEB.weekday() != 0:

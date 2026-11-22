@@ -23,7 +23,10 @@ Auch bei SQLite bleiben vier **Seitendateien** Dateien (`STORE_SIDECARS`, gleich
 Länder- und Ortsdatenbank (`geo/`) und die **Dateiablage** (`daten/dateien/`, `lib/dateiablage.php`): hochgeladene Dateien
 der Module als `<bereich>/<xx>/<id>.bin` – in beiden Speicherarten im Dateisystem, nie als `*.php` (die Werkzeuge für
 Sicherungsprüfung und Umschalten behandeln nur `*.php` als Dokumente); unvollständige Uploads unter `dateien/.teile/*.tmp`
-(nicht gesichert, beim nächsten Upload nach 24 h entfernt). Die Metadaten (Name, Größe, SHA-256, wer, wann) stehen im Dokument des Moduls.
+(nicht gesichert, beim nächsten Upload nach 24 h entfernt). Platzreserve: ein Upload beginnt nur, wenn nach ihm und nach allem, was die
+offenen Uploads noch schreiben werden (`groesse` − `empfangen` ihrer Metadaten), `ABLAGE_RESERVE` (5 GB) frei bleibt – geprüft und gebucht
+beim ersten Teil unter einer Sperre auf den Ordner `.teile`; je Nutzer höchstens `ABLAGE_OFFEN_JE_NUTZER` (10) unvollständige Uploads, der
+am längsten ruhende darüber wird verworfen (fertige, noch nicht übernommene Uploads zählen nicht). Die Metadaten (Name, Größe, SHA-256, wer, wann) stehen im Dokument des Moduls.
 
 **Verweis auf eine Datei der Ablage** (Vertrag mit der Sicherung, `deploy/dateien_sichern.py`): ein Eintrag
 `{"id": <Kennung>, "groesse": <Bytes>, "sha256": <64 Hex>}` an beliebiger Stelle eines Dokuments, so wie ihn
@@ -230,7 +233,12 @@ Der Preisverlauf führt **keine Kundenpreise** (`variants`) – nur Artikel, Gru
 `history_week()`, das `variants` aus vor dem 15.11.2026 gespeicherten Wochen herausfiltert – alte Dateien bleiben
 unverändert lesbar (GR-006), eine Migration gibt es nicht. Hat ein Administrator eine Woche aus dem Preisverlauf entfernt
 (`historie_geloescht`), nimmt eine Veröffentlichung derselben KW sie nur wieder auf, wenn der Veröffentlichende
-`preisverlauf.bearbeiten` hat.
+`preisverlauf.bearbeiten` hat. Die Entscheidung „entfernt“ liegt dafür ganz unter der Sperre von `historie_geloescht`:
+`history_delete` löscht das Wochendokument **und** schreibt den Grabstein darin, und `history_backfill()` – das jede
+lesende Preisverlauf-Aktion aufruft – liest vorhandene Wochen und Grabsteine unter derselben Sperre erneut, bevor es eine
+Woche aus `versionen/*` nachträgt. Sonst legte eine gewöhnliche Leseanfrage eine gerade entfernte Woche wieder an
+(Sicherheitsaudit run-3). Die Vorauswahl (`versionen/*`, `angebot` lesen) läuft weiter ohne Sperre, und ohne wirklichen
+Nachtrag wird gar nicht gesperrt – im SQLite-Betrieb ist jede Sperre eine Schreibtransaktion des Bereichs.
 Dazu die **Wochenablage** `angebot-woche/<JJJJ-WW>` (Inhaber 13.11.2026, „je KW dauerhaft“; `module/angebot/wochen.php`):
 der neue Stand je KW, ersetzt den Stand derselben KW, ohne Grenze und ohne automatisches Löschen, intern (nie auf der
 Kundenseite). Die Angebotsdefinitionen enthalten nie Kundengruppen (`gruppen`, `sonderGruppen`); bei Sonderangeboten `art`
@@ -505,6 +513,19 @@ Mitarbeiter sind die Nutzer der Plattform (`users_load()`); HR speichert nur eig
   `hr_antrag_zeitraum` nennt die genauen Tage der gewählten Vertretung nur bei Kollegen der eigenen Abteilung bzw. mit
   `hr.verwalten`/`hr.uebersicht` (Parameter `$me`), sonst nur, dass sie „nicht verfügbar“ ist (Sicherheitsdurchsicht
   15.11.2026; gilt auch für die zusätzliche Vertretung, die Vorschau und die Vorplanung).
+  **Auswahl der Vertretung (Entscheidung des Inhabers 22.11.2026, Sicherheitsaudit run-3):** frei wählbar ist nur, wen der
+  Anfragende im Kalender ohnehin sähe – Kollegen der eigenen Abteilung, oder alle mit `hr.verwalten`/`hr.uebersicht`. Jede
+  andere Person lehnt `hr_antrag_zeitraum` **vor** der Vertretungsprüfung mit derselben neutralen Meldung wie eine
+  unbekannte Person ab („Bitte eine gültige Vertretung wählen.“, 422) und liefert kein Feld `vertretung`. Ein blosses
+  Weglassen des Feldes `status` genügte nicht: schon die drei Textfassungen („nicht verfügbar“ / „arbeitet in dieser Zeit
+  nicht an allen Tagen“ / „ist in dieser Zeit da“) unterscheiden dieselben Fälle, und bei einem Zeitraum von einem Tag ist
+  die Verfügbarkeit genau die verborgene Tagesangabe. `hr_start` liefert die Liste `kollegen` nach derselben Regel, damit
+  die Oberfläche nur anbietet, was der Server annimmt.
+  **Für die Personalstelle wichtig:** `hr_gleiche_abteilung` ist false, sobald eine der beiden Personen keine Abteilung hat
+  (auch bei zwei leeren). Mitarbeiter **ohne Abteilung** können damit gar keine Vertretung selbst wählen – für sie (und für
+  jede abteilungsübergreifende Vertretung) trägt die Personalstelle die feste Vertretung in den Stammdaten ein
+  (`hr-personal.vertretung`, Verwaltung → Mitarbeiter). Die feste Vertretung bleibt immer erlaubt, auch über die
+  Abteilungsgrenze; nur eine frei gewählte **zusätzliche** Vertretung muss aus der eigenen Abteilung kommen.
   Sichtbarkeit im Kalender (`hr_monat` → `hr_zeile`, Antwortfeld `sicht`, seit 11.11.2026; `voll` bleibt für ältere Seiten):
   `voll` = Personalstelle (Art, offene Anträge mit „?“, freie Tage „x“; die eigene Zeile sieht jeder so), `kollege` = nur „A“
   (nur genehmigt, nie der Grund), `urlaub` = Recht `hr.kalender` (sensibel, einzeln vergeben), je Zeile nur für Kollegen der
@@ -612,7 +633,10 @@ Aktionen `controlling_<bereich>_…`. Geplant sind weitere Bereiche (OP-Konten, 
   weist die Übernahme ihn mit 422 ab (die Tage würden sich zu den bleibenden addieren und den Monat bei jeder Übernahme wachsen
   lassen); zusammen mit den bleibenden Tagen gilt weiter `UMSATZDATEN_ZEILEN_MAX`. Die Übernahme schreibt erst die Monate, dann
   das Verzeichnis und löscht entfallene Monate zuletzt (`with_lock` ist im Dateispeicher keine Transaktion): ein Abbruch lässt
-  höchstens einen Monat ohne Verzeichniseintrag zurück. Widersprechen sich Verzeichnis und gespeicherter Monat trotzdem, gilt der
+  höchstens einen Monat ohne Verzeichniseintrag zurück. **Dieselbe Reihenfolge gilt im Bereich Arbeitszeit**
+  (`arbeitszeit_import_uebernehmen`): erst die Jahresdokumente, dann das Verzeichnis, leer gewordene Jahre zuletzt; dazu liest
+  die Auswertung (`az_tage`) nur Jahre, die im Verzeichnis stehen – ein Jahresdokument ohne Verzeichniseintrag zählt nicht und
+  wird vom nächsten Import des Zeitraums überschrieben. Widersprechen sich Verzeichnis und gespeicherter Monat trotzdem, gilt der
   Monat als „geändert“ statt „unverändert“ und der nächste Import schreibt ihn neu. Verglichen wird je Monat über `hash`, übertragen werden nur neue und
   geänderte Monate – dieselbe Datei erneut ändert nichts. Die Auswertung ordnet Vertreter, Kundengruppe, Artikelgruppe und Fleischart
   nach den heutigen Stammdaten zu (die Datei enthält keine Zuordnung); die Umsatzzeilen selbst bleiben unverändert.
@@ -655,6 +679,9 @@ Datenpaket (`leergut_import`, nur mit `leergut.verwalten`): `{"format": "stafl-l
 [{"schluessel": "…", "name": "…", …}], "bewegungen": [{"partner": "<schluessel>", …}], "abstimmungen": […], "abschreibungen": […],
 "inventur": […]}` – geprüft mit denselben Regeln wie die Eingabemasken; mit Fehlern wird nichts übernommen, in ein Modul mit Daten
 nur mit `ersetzen`. Echte Pakete liegen nie im Repository (GR-007); Beispiel: `tests/fixtures/leergut/datenpaket.json`.
+Reihenfolge (`with_lock` ist im Dateispeicher keine Transaktion): zuerst eine Marke `uebernahme: {"t"}` am alten `leergut-stamm`, dann
+die vier Listen, zuletzt der neue Stamm ohne Marke. Bleibt die Marke nach einem Abbruch stehen, meldet die Vorschau `abgebrochen: true`
+(Hinweis in der Oberfläche); die Vorversion ignoriert das Feld.
 
 WinAB-Datei (`leergut_winab_import`, nur mit `leergut.verwalten`, `vorschau: true` schreibt nichts): `{"bericht": {"datei": "…", "von": "<Übernehmen ab>",
 "bis": "<Stand>", "dateiVon": "<Beginn der Datei>"?, "lfVon": "<Lieferantenbelege ab>"?, "quelle": "csv"?}, "kunden": [{"nr": "9100001", "name": "…"?}],
@@ -688,7 +715,9 @@ Kalenderwochen sind ISO-Wochen „JJJJ-WW“ und meinen die **Lieferwoche**. Men
   "extra"?: true, "extraHinweis"?: "…"}],
   "team": {"u…": {"alle": true, "export": false}}, "mitglieder": ["u…"], "ausgeblendet": ["u…"]}`. Ohne Dokument gelten Direktbelieferung
   und die Artikel Roastbeef, Filetkopf, Vac. Set. Lieferwege und Artikel werden nie entfernt, nur deaktiviert. `team` ist die Zuweisung
-  im Modul („alle Listen“, „Wochenabschluss“) und wirkt zusätzlich zu den Rechten `rewe.alle` und `rewe.exportieren`.
+  im Modul („alle Listen“, „Wochenabschluss“) und wirkt zusätzlich zu den Rechten `rewe.alle` und `rewe.exportieren` – außer bei
+  einem Verbot am Konto: `deny` auf `rewe.alle` sperrt beide Zuweisungen, `deny` auf `rewe.exportieren` den Wochenabschluss
+  (`rw_alle()`, `rw_export()`; wie in `rechte.php` setzt der Wochenabschluss „alle Listen“ voraus).
   **Extra-Artikel** (seit 12.11.2026, Inhaber: „bei jedem Roastbeef Dry Aged ist schon ein Filetkopf dabei“): `extra` und
   `extraHinweis` sind optional und stehen nur im Speicher, wenn sie in den Einstellungen gesetzt wurden. Fehlt `extra`, gilt es für den
   Filetkopf (Kennung `fk` oder Name „Filetkopf“) mit dem Hinweis „1 Filetkopf ist bei jedem Roastbeef Dry Aged schon dabei“ – so auch
@@ -742,7 +771,8 @@ Datenpaket (`rewe_import`, nur mit `rewe.verwalten`, `vorschau: true` schreibt n
 "lieferwege": [{"id", "name", "art", "bestellschluss"?}], "artikel"?: […], "maerkte": [{"kdNr", "name", …, "zustaendig": [{"ab", "liste"}],
 "lieferweg": [{"ab", "id"}], "wochen": {"JJJJ-WW": {"s", "m", "n"}}, "notizen": [{"art", "text"}]}]}` plus `zuordnung` (Listenname →
 Nutzer-ID, nur Mitarbeiter im Team). Mit Fehlern wird nichts übernommen, in ein Modul mit Daten nur mit `ersetzen` (das Team mit
-`team`, `mitglieder` und `ausgeblendet` bleibt). Echte Pakete liegen nie
+`team`, `mitglieder` und `ausgeblendet` bleibt). Nicht mehr enthaltene Jahre `rewe-wochen/<Jahr>` löscht die Übernahme erst nach
+allen Schreibvorgängen (`with_lock` ist im Dateispeicher keine Transaktion). Echte Pakete liegen nie
 im Repository (GR-007); Beispiel: `tests/fixtures/rewe/datenpaket.json`.
 
 ### Qualitätssicherung · QM-System (`module/qs/qs.php`, produktiv seit 30.10.2026)
@@ -769,7 +799,7 @@ laufen unter der Sperre `qs-dokumente`. Zuständig/Vertreter sind **Kürzel** (S
   ältere Ordner und externe Dokumente tragen dieselben Einträge am Dokument (`dateien`, ohne `pfad`) – neue Dateien dort stehen in
   `qs-ablage` (unten), die Leser führen beide zusammen (GR-006). Regeln der Ablage: Abschnitt „QM-System: Dokumentenablage“.
   **Vorlagen und Lenkungsangaben** (seit Bauabschnitt 3, `module/qs/vorlagen.php`; Grenzen je Office-Datei: 2000 ZIP-Einträge,
-  30 MB entpackt und 20000 Textelemente je Textteil – darüber gilt die Datei als nicht lesbar): Datei-Einträge optional mit `platzhalter: ["version", …]`
+  30 MB entpackt und 20000 Textelemente je Textteil, geänderte Textteile zusammen höchstens 8 MB – darüber gilt die Datei als nicht lesbar): Datei-Einträge optional mit `platzhalter: ["version", …]`
   (bekannte, noch offene Platzhalter in Word/Excel), `vorlage: {"dokument", "nr", "version"}` (aus einer Vorlage erzeugt), `uebernommen: N`
   (Kopie aus Version N), `roh: "<id>"`, `sha256Roh` (Prüfsumme der Rohfassung) und `ausgefuellt: {"t", "felder"}` (bei der Freigabe bzw. beim Nachtragen ausgefüllte Fassung; `roh` ist
   die Rohfassung mit Platzhaltern, sie bleibt in der Ablage und wird bei „Dateien übernehmen“ kopiert). Vorlagen (Art V) werden nie ausgefüllt.
@@ -836,7 +866,10 @@ Verfahrensdokumentation nach GoBD (`module/qs/verfahren.php`, Aktionen `qs_verfa
   trifft: „jetzt verknüpft“) und liefert die Änderungsliste in Worten; sie wird als `aenderungen` gespeichert. Ohne Abweichung statt
   dessen `ohneAenderung: true` („ohne Änderung überprüft“, Frist 12 Monate).
 - Antwort (`qs_vf_aus`): Fassungen ohne `inhalt`, dazu `gueltigBis`, `seitFassung` (Abweichung) und `ueberpruefung`; den Inhalt einer Fassung
-  liefert nur der Export.
+  liefert nur der Export. Beide Lesewege schicken jede Fassung durch `qs_vf_fassung_sichtbar` (Audit run-3): ohne `qs.bearbeiten` fehlen
+  QM-Dokumente geschützter Kapitel (1.5) in `inhalt.dokumente`, ihre Verweise zeigen nur den Text, und ihre Änderungszeilen („QM-Dokument
+  <Nr> <Titel>: …“, zugeordnet über genau diesen Anfang aus `inhalt.dokumente`) entfallen. Gefiltert wird beim Lesen, gespeichert bleibt
+  der volle Schnappschuss (GR-106) – das gilt so auch für ältere Fassungen.
 - Export (`qs_verfahren_export`, GET `doku`; `module/qs/verfahren-export.php`, PDF über `lib/pdf.php`): `fassung=N` (0 = Arbeitsstand, auf jeder
   Seite als Entwurf gekennzeichnet) oder `von`/`bis` = Export für Prüfungen mit allen Fassungen, die im Zeitraum galten, und der Historie aller
   Fassungen; `dokumente=1` liefert ein ZIP mit den Dateien der verknüpften QM-Dokumente in der Version der jeweiligen Fassung – so,
@@ -876,8 +909,11 @@ Die einzige Beschreibung der Regeln; Code-Kommentare verweisen hierher.
   eigene Prüfung (`qs_pruefung_meine`) mit ihren Nachweisen und die eigene Maßnahme (`qs_massnahme_meine`). Die eine Stelle für alle
   Lesewege ist `qs_sichtbar` (Liste und Suche, Zahlen, CSV, ZIP-Export, Audit-Bericht, Verfahrensdoku samt Export); `qs_dok_sichtbar` gibt
   für Dateien, Ordnerbaum, Ordner-ZIP und Organigramm-Vorschau 403. Das Protokoll nennt bei diesen Vorgängen nur die Kapitelnummer
-  (`qs_protokoll_name`). Freigegebene Fassungen der Verfahrensdoku bleiben vollständige Schnappschüsse (GR-106) und nennen Nummer und
-  Titel verknüpfter Dokumente auch aus 1.5.
+  (`qs_protokoll_name`). Freigegebene Fassungen der Verfahrensdoku bleiben gespeichert vollständige Schnappschüsse (GR-106); ohne
+  `qs.bearbeiten` liefern Oberfläche und Export sie ohne die Dokumente aus 1.5 (`qs_vf_fassung_sichtbar`, auch die Änderungszeilen).
+  Verlaufstexte nennen Dateien aus solchen Unterordnern nur als „personenbezogene Datei“ (`qs_dok_dateien_sichtbar`); weil eine im Entwurf
+  gelöschte Datei in keiner Liste mehr steht, merkt sich ihr Verlaufseintrag `datei` und `pfad` (optional, seit Audit run-3). Ältere
+  Einträge ohne diese Felder bleiben, wie sie sind – eine Bereinigung wäre eine Datenmigration (Freigabe des Inhabers).
 - **`pfad`** (`qs_pfad`): Unterordner relativ zum Ordner-Dokument (Archiv) bzw. zum gewählten Ordner (Eingang). `/`-getrennt, `\` teilt
   ebenfalls, Leerraum zusammengefasst, ohne Steuerzeichen und leere, `.`- und `..`-Teile, je Teil 120 Zeichen, höchstens 12 Teile und
   500 Byte (ganze Teile); leer = Feld fehlt. Nur Anzeige, Ordnerbaum und Suche, nie ein Pfad im Dateisystem; Zuordnen behält ihn.
@@ -921,7 +957,8 @@ Die einzige Beschreibung der Regeln; Code-Kommentare verweisen hierher.
      Sperre neu; weicht das Ergebnis ab (Entwurf inzwischen freigegeben, Version ersetzt, Häkchen fehlt), kommt die Datei in den Eingang.
      Ein Bündel hat höchstens 100 Dateien und 40 MB Word/Excel-Nachträge (deren Lenkung läuft unter der Sperre), beides prüft der Server;
      die Grenze von 1 GB je Bündel hält nur der Browser ein. Word/Excel-Textteile über 8 MB oder mit mehr als 20 000 Textelementen liest das
-     Modul nicht (`qs_xml_ersetzen`, vor dem Suchen gezählt): die Datei wird abgelegt, nur ohne Platzhalter und Lenkungsangaben. Was nicht
+     Modul nicht (`qs_xml_ersetzen`, vor dem Suchen gezählt – öffnende und schließende Tags einzeln, auch bei unausgeglichenem XML), ebenso
+     nicht mehr als 8 MB geänderte Textteile je Datei zusammen (`qs_office_fuellen`): die Datei wird abgelegt, nur ohne Platzhalter und Lenkungsangaben. Was nicht
      abgelegt wird oder nach einem Abbruch nirgends gespeichert ist, entfernt das Ende der Anfrage (`qs_ablage_aufraeumen`, nach einem
      fatalen Fehler mitten in einer SQLite-Transaktion erst nach dem Zurücksetzen).
   9. Im Browser (`ordnerimport.js`): Pfade und Dateinamen zusammengesetzt (NFC, macOS liefert zerlegte Umlaute). Antwort zur Wurzel,
@@ -956,6 +993,39 @@ Die einzige Beschreibung der Regeln; Code-Kommentare verweisen hierher.
   nächste Schreiben legt es wieder an.
 - **Rückfall:** Eine ältere Fassung kennt die Dokumente nicht; Dateien und Metadaten bleiben unberührt. Das Dokument der Container
   (`containerimport-eudr-sendungen`) ändert sich durch Dokumente nicht.
+
+### Container-Import: Befunde der Umrisse zwischengespeichert (`module/containerimport/eudr.php`, seit 22.11.2026)
+
+- **Feld `geoBefunde` je Farmer** in `containerimport-eudr-betriebe` (additiv, GR-006):
+  `{"fassung": <EUDR_BEFUNDE_FASSUNG>, "kennung": "<sha1 der Koordinaten>", "befunde": [{"stufe", "code", "text"}, …]}` – das
+  Ergebnis von `geo_pruefen()` für genau diesen Umriss.
+- **Warum:** `eudr_stand()` bildet `eudr_betrieb_sicht()` über alle gespeicherten Farmer ab und läuft in jeder Antwort des
+  Moduls. Die Prüfung auf Selbstüberschneidung kostet je Umriss bis zu `GEO_MAX_VERGLEICHE` Kantenvergleiche (rund 0,15 s);
+  bei `EUDR_MAX_PUNKTE` wären das bis zu 30 Umrisse je Antwort. Gerechnet wird deshalb beim Schreiben
+  (`eudr_betriebe_schreiben`), gelesen über `eudr_geo_befunde()`.
+- **Gilt nur passend:** andere `fassung` (die Prüfung liefert andere Befunde) oder andere `kennung` (die Geometrie wurde
+  geändert) heißt neu rechnen; dasselbe bei fehlendem oder anders geschnittenem Feld. Ausgeliefert wird es nie – 
+  `eudr_betrieb_sicht()` entfernt es und liefert die Befunde wie bisher unter `befunde`.
+- **Rückfall:** Eine ältere Fassung kennt das Feld nicht, rechnet wie bisher und lässt es beim Schreiben unberührt
+  (`+ ($alt ?? [])`-Muster bzw. unveränderte Felder). Ändert sich `geo_pruefen`, muss `EUDR_BEFUNDE_FASSUNG` hochgezählt werden.
+
+### Container-Import: Gesamtgrenzen der Kalkulationen (`module/containerimport/kalkulation.php`, seit 22.11.2026)
+
+- `containerimport-kalkulationen` wird bei jedem Zugriff ganz gelesen und ganz geschrieben. Die Grenzen je Eintrag (300
+  Positionen, 12 Teile, 100 Fassungen) ergeben zusammen ein Vielfaches der Speichergrenze eines Prozesses (128 MB), deshalb
+  zusätzlich **`CI_KALK_MAX_EINTRAEGE` = 400** und **`CI_KALK_MAX_POSITIONEN_GESAMT` = 9000** (Positionen aller Fassungen aller
+  Einträge). Geprüft in `ci_kalk_speichern` **und** `ci_kalk_festschreiben` (das Festschreiben ergänzt das Ergebnis und
+  vergrößert die Fassung noch einmal); darüber 422 statt eines Speicherabbruchs mit HTTP 500.
+- **Gemessen** (Dateibetrieb, `memory_limit = 128M`): eine endgültige Fassung mit 300 Positionen ist 0,2 MiB JSON, der
+  Spitzenbedarf einer Schreibaktion rund das Achtfache der Dokumentgröße; ab etwa 17 MiB Dokument bricht sie ab. 9000
+  Positionen sind rund 6 MiB Dokument und 48 von 128 MiB Spitzenbedarf.
+- **Antwort der Schreibaktionen** bildet die Übersicht aus dem schon gelesenen Dokument (`ci_kalk_uebersicht($doc)` innerhalb
+  der Sperre), nicht aus einem zweiten vollständigen `store_read`: sonst brach der Vorgang erst **nach** `store_write` ab – die
+  Fassung war gespeichert, der Nutzer sah 500, und jeder weitere Versuch vergrößerte das Dokument.
+- **Aufräumweg:** `deploy/ci-kalkulationen-auslagern.php` (nur auf dem Server). Ohne Angaben zeigt es die Größe je Container;
+  mit `--export <datei>` schreibt es das ganze Dokument als JSON und liest es zur Gegenprobe wieder ein; erst mit
+  `--entfernen <sendung-id>[,…]` entfernt es diese Kalkulationen aus dem Dokument. Ohne geprüften Export wird nichts entfernt –
+  die Exportdatei ist das Archiv dieser Vorgänge (GoBD) und gehört in die Sicherung. Die Anwendung selbst löscht nie eine Fassung.
 
 ## 5.4 Datenverantwortung (GR-101)
 

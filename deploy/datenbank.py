@@ -231,9 +231,12 @@ def snapshot(root, target):
         # DB contains all business records. Operational statuses remain sidecars; markers of the data separation
         # (ADR-007 Stufe 2) and the file store dateien/ (uploaded documents, never in the database) are copied as well.
         # deploy/sichern.sh with deploy/dateien_sichern.py backs dateien/ up on its own and sets WA_SNAPSHOT_OHNE_DATEIEN=1.
+        # Never follow links (write_nofollow): a link planted under one of these names in the writable data directory would
+        # otherwise carry a file of the host into the archive. follow_symlinks=False also covers a swap after the check.
         for name in ('deployment.php', 'index.php', '.daten-getrennt', '.daten-intern'):
-            if (root / name).is_file():
-                shutil.copy2(root / name, target / name)
+            q = root / name
+            if q.is_file() and not q.is_symlink():
+                shutil.copy2(q, target / name, follow_symlinks=False)
         ablage = root / 'dateien'
         if ablage.is_dir() and not ablage.is_symlink() and os.environ.get('WA_SNAPSHOT_OHNE_DATEIEN') != '1':
             for p in sorted(ablage.rglob('*')):

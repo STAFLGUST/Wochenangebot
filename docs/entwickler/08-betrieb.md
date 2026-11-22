@@ -233,12 +233,15 @@ Ohne gültigen Schlüssel wirkt nichts davon. Jede neue Weiterleitung (`reverse_
 `daten/` ist im App-Container beschreibbar. Skripte, die als root laufen, schreiben dort deshalb nie direkt: Statusdateien
 (`sicherung.php`, `sicherung-extern.php`, `deployment.php`) entstehen im Installationsordner und ersetzen den Eintrag nur per Umbenennen, `chown`
 nur mit `-h` bzw. für echte Dateien (`find -type f`); Angaben, denen root folgt (vorheriger Stand für den Rückfall), stehen
-in root-Dateien außerhalb (`.release-vorher`). Code eines Testzweigs läuft nie auf dem Server.
+in root-Dateien außerhalb (`.release-vorher`). Auch gelesen wird dort nur, was eine echte Datei ist: der SQLite-Abzug der
+Sicherung (`datenbank.py snapshot`) überspringt Verweise unter `index.php`, `deployment.php`, `.daten-getrennt` und `.daten-intern`
+und kopiert ohne ihnen zu folgen. Code eines Testzweigs läuft nie auf dem Server.
 
 Dieselbe Regel gilt für **Ordnernamen** und für jeden Ordner, in den ein weniger vertrauter Prozess schreiben darf:
 `daten_trennen.py` legt Zielordner Schritt für Schritt an und bricht ab, sobald eine Komponente ein Verweis ist
 (`ordner_nofollow`, beide Richtungen); `karte-laden.sh` und `adressen-laden.sh` prüfen jedes Ergebnis des Lade-Containers in
-`daten-karte/` auf eine echte Datei (`echt`), tauschen nur mit `mv -fT` aus (folgt keinem Verweis, ersetzt ihn), erzeugen die
+`daten-karte/` auf eine echte Datei (`echt`, auch die Probedatei), lesen Stand-Vermerke nur aus echten Dateien (`vermerk_lesen`,
+sonst „keiner“), tauschen nur mit `mv -fT` aus (folgt keinem Verweis, ersetzt ihn), erzeugen die
 Stand-Vermerke im Installationsordner und setzen sie nur per Umbenennen ein (`vermerken`), machen den Namen der Quelldatei
 unmittelbar vor dem Download frei (der Probelauf des Containers lief vorher) und übernehmen aus der Kopfzeile `last-modified`
 nur harmlose Zeichen; `bereitstellen.py` schreibt nur innerhalb des übergebenen Programmordners (`schreibpfad`, beide

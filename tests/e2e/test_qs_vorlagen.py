@@ -6,7 +6,8 @@ Nummer, alte Nummern aus dem Datenpaket bleiben bei anderen Änderungen, Vorlage
 über mehrere Textstücke verteilten Platzhaltern, Kopfzeile, Bild unverändert, .dotx wird .docx; Excel mit Zellen, Kopf-/Fußzeile
 und „&“; Dateiname aus Nr. und Titel; Lenkungs-Platzhalter bleiben bis zur Freigabe; Fehler: unbekannt, keine Vorlage, ohne
 Freigabe, nur PDF, nicht lesbar ohne Reste, Ordner, beim Ändern, eingezogen); Vorlagen werden bei Freigabe und Nachtragen nie
-ausgefüllt (Grenze: über 20000 Textelemente je Textteil gilt die Datei als nicht lesbar); Freigabe trägt Version, Datum, Kürzel, Änderungen ein (ausgefüllte Fassung neu, Rohfassung bleibt, ZIP mit der
+ausgefüllt (Grenzen: über 20000 Textelemente je Textteil – auch bei nur öffnenden Tags – oder über 8 MB geänderte Textteile zusammen
+gilt die Datei als nicht lesbar); Freigabe trägt Version, Datum, Kürzel, Änderungen ein (ausgefüllte Fassung neu, Rohfassung bleibt, ZIP mit der
 ausgefüllten); Datei ohne Platzhalter bleibt, nicht lesbare Datei hält die Freigabe nicht auf; Nachtragen in freigegebene Version
 füllt sofort; Überarbeitung übernimmt die Rohfassungen als Kopie (Platzhalter erkannt, Löschen im Entwurf lässt die freigegebene
 Version unberührt), zweite Freigabe mit Version 2; Rechte; Protokoll; Oberfläche (Anlegen mit vorgewählter Vorlage und Nummer,
@@ -216,10 +217,38 @@ st, r = neu(Be, kapitel='1.1', art='V', nr='Vorlage Z', titel='Zu viele Textstü
 VZ = r['dokument']
 check('Vorlage mit 20001 Textstücken hochgeladen (ZIP klein)', hochladen(Be, VZ['id'], VZ['versionen'][0]['id'], 'Vorlage.docx', docx([['{{Nr}}'] * 20001]))[0] == 200)
 schritt(Be, VZ['id'], 'einreichen'); schritt(F, VZ['id'], 'pruefen_freigeben')
+
+
+def docx_roh(teile):
+    """Word-Datei aus rohen Textteilen (Name → XML), gepackt – für die Grenzfälle unten"""
+    b = io.BytesIO()
+    with zipfile.ZipFile(b, 'w', zipfile.ZIP_DEFLATED) as z:
+        z.writestr('[Content_Types].xml', '<Types/>')
+        for n, x in teile.items(): z.writestr(n, x)
+    return b.getvalue()
+
+
+# Audit run-3: nur öffnende <w:p> (unausgeglichen) zählt die Vorzählung jetzt mit – vorher sprengte die 12-KB-Datei schon beim Hochladen
+# (Platzhalter-Vorabprüfung) memory_limit 128M. Und eine Gesamtgrenze über alle geänderten Textteile: 14 Kopfzeilen zu je 8,1 MB mit {{Titel}}
+# halten jede Grenze je Teil ein, zusammen sprengten sie beim Ausfüllen den Speicher (Fatal statt „nicht lesbar“)
+WK = f'<w:document {W}><w:body>'
+for vnr, titel, inhalt in (('Vorlage U', 'Unausgeglichen', docx_roh({'word/document.xml': WK + '<w:t>{{Titel}}</w:t>' + '<w:p>' * 1600000 + '</w:body></w:document>'})),
+                           ('Vorlage K', 'Viele Kopfzeilen', docx_roh({'word/document.xml': WK + '<w:p><w:r><w:t>{{Nr}}</w:t></w:r></w:p></w:body></w:document>',
+                                                                       **{f'word/header{i}.xml': f'<w:hdr {W}>' + ('<w:t>{{Titel}}' + 'A' * 900000 + '</w:t>') * 9 + '</w:hdr>'
+                                                                          for i in range(1, 15)}}))):
+    st, r = neu(Be, kapitel='1.1', art='V', nr=vnr, titel=titel)
+    vx = r['dokument']
+    st, r = hochladen(Be, vx['id'], vx['versionen'][0]['id'], 'Vorlage.docx', inhalt)
+    check(f'{vnr} ({titel}, {len(inhalt) // 1024} KB) hochgeladen: 200 statt Speicherabbruch', st == 200, (st, r))
+    schritt(Be, vx['id'], 'einreichen'); schritt(F, vx['id'], 'pruefen_freigeben')
+    if vnr == 'Vorlage U': VU = vx
+    else: VK = vx
 vorher = blobs(); anzahl = len(L.call('qs_start')[1]['dokumente'])
 for name, b, text in (('unbekannte Vorlage', {'vorlage': 'dnix'}, 'gibt es nicht'), ('kein Vorlagen-Dokument', {'vorlage': ALT['id']}, 'keine Vorlage'),
                       ('Vorlage nur mit PDF', {'vorlage': VP['id']}, 'Word- oder Excel'), ('Vorlage nicht lesbar', {'vorlage': VA['id']}, 'keine lesbare'),
                       ('Vorlage über der Grenze von 20000 Textstücken', {'vorlage': VZ['id']}, 'keine lesbare'),
+                      ('Vorlage nur mit öffnenden Absatz-Tags', {'vorlage': VU['id']}, 'keine lesbare'),
+                      ('Vorlage über der Gesamtgrenze der Textteile', {'vorlage': VK['id']}, 'keine lesbare'),
                       ('Ordner aus Vorlage', {'art': 'O', 'vorlage': VF}, 'Formblätter'), ('Vorlage aus Vorlage', {'art': 'V', 'nr': 'Vorlage X', 'vorlage': VF}, 'Formblätter')):
     st, r = neu(Be, **b)
     check(f'Erzeugen: {name} → 422', st == 422 and text in r.get('error', ''), (st, r))

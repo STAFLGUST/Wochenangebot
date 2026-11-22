@@ -113,9 +113,16 @@ Wichtig: Die Schritte 6–17 sind **Vorprüfungen**. Sie ersetzen nie die Rechte
 | `module/<modul>/` | Fachcode der Module (z. B. `module/hr/urlaub.php`, `module/crm/crm.php`, Importverträge `module/<modul>/import.php`) | neuer Fachcode gehört hierher (`pfade_geplant` in `regeln/module.toml`), nicht in gemeinsame Dateien |
 | `lib/aktionen-liste.php` | Konstante `AKTIONEN`, erzeugt aus `regeln/aktionen/*.toml` | **nie von Hand ändern**: `python3 werkzeuge/regeln.py erzeugen` |
 | `lib/module-liste.php` | `MODULE`, `RECHTE_MODUL`, `MODUL_FREIGABE_ERLAUBT`, `MODUL_REGELN`, erzeugt aus `regeln/module.toml`, `regeln/wartung.toml` | **nie von Hand ändern**; bei Rebase-Konflikt neu erzeugen |
-| `storage.php` | Speicherschicht (3.5) | koordinationspflichtig |
+| `storage.php` | Speicherschicht (3.5) | koordinationspflichtig; Schutz über `SCRIPT_FILENAME`-Prüfung (auch von Wartungsskripten eingebunden, deshalb nicht `WA_API`) |
 | `mail.php`, `geo.php`, `ort.php` | SMTP-Client, Länder- und Ortsdatenbank | Schutz über `SCRIPT_FILENAME`-Prüfung statt `WA_API` |
-| `orders.php`, `order_outbox.php` | Bestell-API v1 und Versandaufträge (3.9) | |
+| `lib/abruf.php` | gemeinsame Helfer für Abrufe nach außen (3.8); `geo.php` lädt sie als erste, deshalb braucht kein Modul einen eigenen Einbindeweg | ebenso `SCRIPT_FILENAME`-Prüfung |
+| `orders.php`, `order_outbox.php`, `config.php` | Bestell-API v1, Versandaufträge (3.9) und Einstellungen | ebenso `SCRIPT_FILENAME`-Prüfung |
+
+Jede PHP-Datei in der Webwurzel trägt eine Selbstsperre: Bibliotheken unter `lib/` und `aktionen/` die `WA_API`-Zeile, die
+eingebundenen Dateien daneben die Zeile
+`if (realpath((string)($_SERVER['SCRIPT_FILENAME'] ?? '')) === __FILE__) { http_response_code(404); exit; }`.
+Ein direkter Aufruf endet damit in 404 statt in einer leeren Antwort (22.11.2026 für `config.php`, `storage.php`,
+`orders.php`, `order_outbox.php` nachgezogen).
 
 Aktionsdateien werden im globalen Gültigkeitsbereich eingebunden: `$action`, `$method`, `$CFG`, `$AKTION` stehen zur
 Verfügung. Jede Aktion steht in `regeln/aktionen/<modul>.toml` (Felder: [regeln/aktionen/LIESMICH.md](../../regeln/aktionen/LIESMICH.md));
@@ -284,6 +291,11 @@ Dokumente, die nur die Mitarbeiterseite schreibt und die Kundenseite liest (Ange
 (`store_read`/`store_write`/`with_lock`): Die Speicherschicht schreibt innen und legt die Kopie im gemeinsamen Ordner ab
 (`store_kopie`), die Kundenseite liest die Kopie und kann nicht schreiben (`StoreKeinZugang`). Ein Dokument, das die Kundenseite
 selbst schreibt (Zähler, Sitzungen, Bestellwünsche …), darf nie `veroeffentlicht` sein – die Gruppe `datentrennung` zeigt das.
+Der Postausgang vergleicht jede Kopie mit dem internen Stand (`store_kopien_abgleichen`), stellt eine abweichende wieder her und
+meldet sie als Sicherheitsereignis. Maßgeblich ist allein der **Inhalt**: `store_kopie()` zieht die Kopie nach jedem eigenen
+Schreibvorgang nach. Zeitstempel aus dem gemeinsamen Ordner taugen nicht als Unterscheidung – bis 22.11.2026 unterdrückte ein
+`utime`-Aufruf der Kundenseite die Meldung (Sicherheitsaudit run-3). Eine gelöschte Kopie wird wiederhergestellt, aber nicht
+gemeldet.
 
 **Protokoll (Trennstufe 4, ADR-007 Stufe 2d):** Einträge immer über `audit()` schreiben und über `protokoll_monat($monat)` /
 `protokoll_monate()` lesen – nie `store_read('protokoll/…')` direkt: Ab Stufe 4 liegt das Protokoll der Mitarbeiterseite innen, das
@@ -346,6 +358,10 @@ Nachrichten), `mail_build` (Text/HTML, Anhänge als multipart/mixed; Anhänge mi
   Benachrichtigungen (`notify_flush`) und Abmeldehinweise (`abmelde_melden`) werden als Auftrag abgelegt; der Dienst
   `api/postausgang.php` verschickt sie (`postausgang_lauf`). Neue E-Mails, die eine Aktion der Kundenseite auslöst, müssen
   diesen Weg nehmen – nie `mail_send_many` direkt. `order_enabled()` prüft dort das Lebenszeichen des Dienstes statt des Postfachs.
+  Überlauf (`POSTAUSGANG_MAX` = 500, `postausgang_kuerzen()` beim Ablegen und beim erneuten Einplanen): verworfen wird
+  nach Wiederherstellbarkeit (`POSTAUSGANG_RANG`) – zuerst Abmeldehinweise, dann Bestellwünsche (die findet die
+  Durchsicht beim Vorgang wieder), zuletzt Benachrichtigungen, denn sie sind der einzige Meldeweg der Kundenseite für
+  Sicherheitsereignisse (Befund 22.11.2026). Jeder Verlust steht im Server-Protokoll.
 - **Schlüssel und Bindung:** Mit `WA_GEHEIM_DIR` liegt der Schlüssel in einem eigenen Ordner (nur Mitarbeiterseite und
   Postausgang). Solange er dort liegt, wird ein neu gespeichertes Passwort an Server, Port, Verschlüsselung und Benutzer
   gebunden (`passEnc` Format `v2:`, AEAD); `v1:` bleibt lesbar (`mail_decrypt($enc, $konto)`).
@@ -386,7 +402,8 @@ Eintrag an das Monatsdokument `protokoll/<JJJJ-MM>` (UTC) an:
 - `$a` = Art des Vorgangs, z. B. `publish`, `draft`, `discard`, `offers`, `master`, `stock`, `history`, `customers`,
   `einzelangebot`, `bestellung`, `mail`, `einkauf`, `user`, `security`, `twofa`, `wartung`, `login`, `login_fail`,
   `logout`, `password`, `reauth`, `reauth_fail`, `setup`, `kunde_login`, `kunde_login_fail`, `kunde_password`,
-  `kunde_abmeldung`, `import`, `hr`, `crm`, `modul_freigabe`, `modul_tester`, `oidc_*`, `protokoll_aufbewahrung`.
+  `kunde_abmeldung`, `import`, `hr`, `crm`, `modul_freigabe`, `modul_tester`, `oidc_*`, `protokoll_aufbewahrung`,
+  `protokoll_groesse`.
 - `$merge = true` fasst fortlaufende Vorgänge derselben Person und Art innerhalb von 30 Minuten zusammen
   (`changes_merge`).
 - Kunden: IP nur bei fehlgeschlagener Anmeldung. Vorgänge mit Kundendaten (`LOG_KUNDENDATEN`) und Einträge der Rolle
@@ -408,6 +425,16 @@ Eintrag an das Monatsdokument `protokoll/<JJJJ-MM>` (UTC) an:
   Vorgang `protokoll_aufbewahrung` (nur die Monate, keine Inhalte). Die Ansicht `log` bietet ältere Monate nie an
   (`protokoll_monate()`), auch nicht über `?month=`. Sicherungen enthalten ältere Stände, bis sie selbst ablaufen.
   Leser anderer Auswertungen (Fehlversuche der letzten 7 Tage, Diagnose) sind davon nicht betroffen.
+- **Größe je Monat (Befund 22.11.2026):** `audit()` liest und schreibt das ganze Monatsdokument unter einer gemeinsamen
+  Sperre – jeder Eintrag kostet also so viel, wie der Monat schon groß ist, und jenseits von etwa 18 MiB endet jeder
+  `audit()`-Aufruf im Speicherabbruch (kein `Throwable`, der `catch` greift nicht). Deshalb ist das Monatsdokument ein
+  Ringpuffer wie die übrigen wachsenden Dokumente (`FW_VERKEHR_MAX`, `mailversand`, `anmeldenamen`):
+  `PROTOKOLL_EINTRAEGE_MAX` (20 000 Einträge) **und** `PROTOKOLL_BYTES_MAX` (4 MiB) je Monat – die Zahl der Einträge
+  allein begrenzt die Größe nicht, weil ein Eintrag eine Änderungsliste führen darf. Ein einzelner Eintrag ist auf
+  `PROTOKOLL_TEXT_MAX` (2000 Zeichen im Vorgangstext) und `PROTOKOLL_DETAILS_MAX` (2000 Änderungszeilen) begrenzt.
+  Gekürzt wird in `protokoll_kuerzen()` von den ältesten Einträgen her; ein Vorgang `protokoll_groesse` nennt die Zahl
+  der verworfenen Einträge und wird fortgeschrieben (ein Vermerk je Monat, sonst füllte er selbst das Dokument). Das
+  Format bleibt eine Liste von Einträgen (GR-006): eine Vorversion liest gekürzte Dokumente unverändert weiter.
 
 Fehlversuche bei der Anmeldung zählt `attempts_record()` im Dokument `logins` (Schlüssel: SHA-256 der IPv4-Adresse
 bzw. des IPv6-/64-Netzes, `client_key`); Grenzen aus `config.php` (`max_attempts`, `lock_minutes`).
@@ -423,6 +450,26 @@ bzw. des IPv6-/64-Netzes, `client_key`); Grenzen aus `config.php` (`max_attempts
 | Sitzung, CSRF, Bestätigung, Keycloak | `lib/sitzung.php`, `lib/oidc.php` | [Kapitel 4](04-anmeldung-rechte.md) |
 | Dateiprüfung | `lib/integritaet.php` | Programmdateien gegen die beim Einspielen erzeugte Prüfliste |
 | Diagnose | `lib/diagnose.php` | nur lesend, für Administratoren |
+| Abruf fremder Dienste | `lib/abruf.php` | `abruf_http()`: eine Gesamtfrist über Verbinden, Kopfzeilen und Rumpf |
+
+**Ausgehende Abrufe brauchen eine Gesamtfrist.** Das Feld `timeout` eines PHP-Stroms gilt nur je Schritt: eine Gegenstelle,
+die alle paar Sekunden ein Byte sendet, hält `fopen`/`file_get_contents` beliebig lange offen, und mod_php bricht
+blockierende Lesevorgänge nicht ab (`max_execution_time` greift dort nicht) – der Webserver-Prozess bleibt belegt. Im
+Noch eins dazu: die Kopfzeilen liest `fopen` selbst, und eine Gegenstelle, die den Kopf Byte für Byte tröpfelt, hält es
+beliebig lange fest (nachgestellt: 42 s trotz `timeout` 3). Wer den HTTP-Status braucht, POST sendet oder einer solchen
+Gegenstelle begegnen kann, nimmt deshalb `abruf_http($url, $kopfzeilen, $frist, $maxByte, $methode, $inhalt)`
+(`lib/abruf.php`): eigene Verbindung (`stream_socket_client` mit Teilfrist für den Aufbau, `tls://` mit Prüfung des
+Zertifikats), eigene Anfrage, und alles Lesen durch `abruf_frist_strom` – dort hat jeder Lesevorgang nur die restliche
+Gesamtfrist, eine stumme wie eine tröpfelnde Gegenstelle endet also mit ihr. Keine Weiterleitungen, keine Cookies, nur
+die übergebenen Kopfzeilen; keine PHP-Erweiterung außer dem Kern (cURL ist im Image nicht installiert). Der Rumpf wird
+bei angekündigter Länge genau so lang gelesen (so wartet der Abruf nicht auf das Ende einer offen gehaltenen
+Verbindung), bei `Transfer-Encoding: chunked` Stück für Stück bis zum Schlussstück – fehlt es, war die Antwort halb.
+Der Container-Import führt so beide Abrufe (Hafen Hamburg, Whisp). Rückgabe ist `['status', 'roh', 'fehler']` mit den Kennungen `''` (in Ordnung), `netz` (keine Antwort),
+`halb` (Antwort brach ab oder Frist um) und `gross` (mehr als `$maxByte`); bei jedem Fehler ist `roh` leer, ein halber
+Inhalt wird also nie ausgewertet – eine abgeschnittene Antwort kann nicht still zum neuen Stand werden. Die Vormerkung
+eines laufenden Abrufs muss länger gelten als die Gesamtfrist (`CI_HAFEN_VERSUCH` > `CI_HAFEN_ZEITLIMIT`). Die übrigen
+Abrufe (`lib/nutzer.php`, `lib/firewall.php`, `ort.php`, `geo.php`) holen große Dateien über Stromkontexte und
+`abruf_frist_strom`/`abruf_text`; deren Frist liegt über dem Rumpf, nicht über der Kopfphase.
 
 Sicherheitseinstellungen liest `sec()` einmal je Anfrage: `array_merge(SEC_DEFAULTS, store_read('sicherheit') ?? [])`.
 
@@ -432,7 +479,35 @@ die Datei bei einem unzulässigen Wert mit 422 abgewiesen – `sec_clean`/`fw_cl
 setzen, und der ist bei diesen Feldern (Zwei-Faktor-Pflicht, Passwortlänge, Sitzungsdauer, Kontosperre, Fehlerbremse)
 die schwächste Stufe. Übernommene Änderungen stehen feldweise im Protokoll (`SEC_FELD_LABEL`, `FW_FELD_LABEL` – dieselben
 Bezeichnungen wie bei `security_save`/`fw_save`), und der Importdialog zeigt vorher dieselbe Tabelle „jetzt/danach“ wie
-der Vorlagendialog. Adress- und Länderlisten überträgt eine Datei nie.
+der Vorlagendialog. Adress- und Länderlisten überträgt eine Datei nie – und ebenso nicht die abgeschaltete
+Passwortbestätigung (`bestaetigungAus`, in `FW_NICHT_UEBERTRAGEN`, wirkt auf Export **und** Import): eine unvertraute
+Datei darf keine Sicherheitskontrolle absenken, und der Importdialog zeigt dieses Feld ohnehin nicht an. Geändert wird
+sie nur über `security_save`, das jede Aktion einzeln protokolliert. Beim Umzug auf einen anderen Server ist die Liste
+dort von Hand zu setzen.
+
+**Schutzzustand nur unter Sperre ändern:** Die Dokumente `sicherheit` und `firewall` werden an allen Schreibwegen
+(`security_save`, `fw_save`, `fw_import`, `fw_vorlage_anwenden`, Rückweg des Notfalls) unter `with_lock` des jeweiligen
+Dokuments gelesen **und** geschrieben; der Zwischenspeicher (`$SEC`, `$FWS`) wird dafür unter der Sperre geleert, damit
+der Stand frisch ist. Werden beide geschrieben, immer in derselben Reihenfolge: erst `sicherheit`, dann `firewall`. Der
+Abruf der Bedrohungsliste (`fw_feed_laden`, bis zu 2 × 30 s) liegt **vor** der Sperre (`fw_feed_vorladen`) und nie darin
+– `with_lock` ist im SQLite-Betrieb eine bereichsweite Transaktion und würde andere Schreiber des Bereichs nach
+`PRAGMA busy_timeout` abweisen. Offen bleibt das längere Fenster im Browser: die Oberfläche sendet beim Speichern den
+beim Öffnen geladenen Gesamtstand ohne Versionskennung.
+
+**Abrufe nach außen** (Länderdaten `geo.php`, Ortsdaten `ort.php`, Bedrohungsliste `lib/firewall.php`, Datenleck-Prüfung
+`lib/nutzer.php`, Keycloak `lib/anmeldekonten.php`, Hafen Hamburg `module/containerimport/hafen.php`, Whisp
+`module/containerimport/whisp.php`) halten einen gemeinsamen Standard – die Helfer dafür stehen in `lib/abruf.php`:
+
+| Regel | Warum | Wie |
+| --- | --- | --- |
+| **Gesamtfrist** je Abruf | `timeout` im Stream-Kontext ist nur das Lesezeitlimit **je Lesevorgang**, und PHP zählt Wartezeit in Stream-Aufrufen nicht auf `max_execution_time`: eine tröpfelnde Gegenstelle (ein Byte je Sekunde) hält Arbeitsprozess und Sperre der Aktion beliebig lange fest – `set_time_limit` greift nicht | `abruf_frist_strom($strom, $ende, $max, 'Ortsdaten')` legt sich **unter** den Leser (`fgets`, `fgetcsv`, zlib-Filter) und bricht mit einer Ausnahme ab; für ganze Antworten `abruf_text($url, $ctx, $ende, $max)` statt `file_get_contents` (liefert bei Fristablauf `false`, nie einen abgeschnittenen Text); `abruf_http($url, $kopfzeilen, $frist, $maxByte, …)`, wenn die Frist auch den Verbindungsaufbau und die Kopfzeilen tragen muss |
+| **Mengengrenze** | ein endloser Strom füllt sonst Speicher und Platte | zweites Argument von `abruf_frist_strom`/`abruf_text`; entpackte Ströme zusätzlich je Zeile (`ORT_MAX_ZEILEN`) |
+| **Höchstens eine Weiterleitung** | `follow_location` ohne `max_redirects` folgt bis zu 20 Sprüngen | `'follow_location' => 1, 'max_redirects' => 1` (Keycloak und Hafen Hamburg: beides 0) |
+| **Plausibel vollständig** | ein Abbruch sieht für `fgets`/`fgetcsv` wie das Dateiende aus; eine absolute Mindestzahl erkennt nur den völligen Ausfall, ein Rest von 3 Prozent würde die Sperrdatenbank still ersetzen | `abruf_vollstaendig($neu, $min, $alt)`: mindestens `$min` **und** mindestens die Hälfte des bisherigen Bestands (`geo_info()`, `ort_info()`, `fw_feed_info()`); sonst Ausnahme, und der alte Bestand bleibt aktiv. Die Hälfte, weil eine engere Schranke eine echte Schrumpfung der Quelle dauerhaft abweisen würde – Begründung im Kopf von `lib/abruf.php` |
+| **Alle Quellen** | eine erreichbare von zwei genügte nicht: die Teilmenge einer Quelle wäre still der neue Stand | `fw_feed_laden` verlangt Antworten von allen `FW_FEED_QUELLEN` |
+
+Nach einem abgewiesenen Abruf bleibt der bisherige Stand wirksam (Länderdatenbank, Ortsdaten, Bedrohungsliste); die Aktion
+meldet den Fehlschlag (502) und gibt ihre Sperrdatei frei.
 
 ## 3.9 Bestell-API
 

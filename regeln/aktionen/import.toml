@@ -1,0 +1,26 @@
+# Aktionen des Moduls „import“ (Importzentrale, Kachel Verwaltung → Import). Der Code liegt beim Agenten der
+# Verwaltung (app/api/aktionen/importzentrale.php, app/api/module/verwaltung/importzentrale.php) – eigenes Modul hat
+# die Importzentrale nur für den Modulzugang: ihre Aktionen verlangen „import.zugang“ – oder den Zugang des
+# Obermoduls „verwaltung.zugang“, der für Teilmodule mitgilt (teil_von, rechte.php:modul_zugang_frei). Umgekehrt
+# öffnet „import.zugang“ keine Verwaltungsaktion mehr (GR-103, Sicherheitsfund 22.11.2026).
+# Erklärung der Felder: regeln/aktionen/LIESMICH.md · nach Änderungen: python3 werkzeuge/regeln.py erzeugen
+
+schema = 1
+modul = "import"
+
+# Heute im Eingabebereich; sobald die Oberfläche verwaltung.import
+# (verwaltung.dashboard-stafl.de/import/) eigene Aktionen annimmt, ziehen diese vier dorthin um.
+[aktion.import_arten]
+oberflaeche = "angebot.eingabe"
+
+[aktion.import_pruefen]
+oberflaeche = "angebot.eingabe"
+schreibend = true
+
+[aktion.import_teil]
+oberflaeche = "angebot.eingabe"
+schreibend = true
+
+[aktion.import_uebernehmen]
+oberflaeche = "angebot.eingabe"
+schreibend = true

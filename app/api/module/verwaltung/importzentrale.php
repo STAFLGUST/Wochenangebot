@@ -156,7 +156,8 @@ function import_vorbereiten(array $b): array
     if (!import_darf($me, $a)) fail('Dafür fehlt Ihnen die Berechtigung. Bitte an einen Administrator wenden.', 403);
     // Modulzugang des Eigentümers (GR-103), unabhängig vom Host: die Zentrale liest und schreibt dessen Dokumente, hier
     // gilt also dieselbe Sperre wie für jede andere Aktion dieses Moduls. Der Einstieg prüft das nicht mit – die
-    // Importaktionen gehören dem Modul Verwaltung, der Eigentümer steht erst zur Laufzeit in der Importart.
+    // Importaktionen gehören dem Modul Import (eigener Zugang „import.zugang“), der Eigentümer steht erst zur Laufzeit
+    // in der Importart.
     require_modulzugang((string)$a['eigentuemer'], true);
     if ($a['ablauf'] !== 'zentrale') fail('Dieser Import läuft im Angebotseditor (Vorschau und Rückgängig dort).', 422);
     // Wartung der Oberfläche, zu der die Importaktion des Eigentümers gehört (GR-107): wie bei der Aktion selbst (503)

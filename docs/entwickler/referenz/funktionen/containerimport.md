@@ -2,7 +2,7 @@
 
 <!-- ERZEUGT von `python3 werkzeuge/doku.py erzeugen` – nicht von Hand ändern. Quelle: Funktionen und Kommentare im Code. Die CI prüft, dass diese Datei zum Code passt. -->
 
-35 Dateien, 362 Funktionen – in der Reihenfolge der Datei, **fett** die Abschnitte. Text = erste Aussage des Kommentars direkt über der Funktion (Python: Docstring). Übersicht aller Module: [README.md](README.md).
+35 Dateien, 369 Funktionen – in der Reihenfolge der Datei, **fett** die Abschnitte. Text = erste Aussage des Kommentars direkt über der Funktion (Python: Docstring). Übersicht aller Module: [README.md](README.md).
 
 ## `app/api/aktionen/containerimport.php`
 
@@ -65,7 +65,7 @@ _Container-Import: Container (ein Einkauf bei einem Lieferanten, eine Partienumm
 - `eudr_fortschreiben(doc)` – Dokument für das Schreiben fortschreiben: Revision erhöhen, Zeitstempel setzen
 - `eudr_betriebe()` – Dokument der Herkunftsbetriebe mit der eigenen Farmer-Nummer „nr“ = Stelle + 1. Annahme: die Liste wächst nur am Ende, nichts wird gelöscht oder umsortiert …
 - `eudr_sendungen()` – Dokument der Sendungen
-- `eudr_betriebe_schreiben(doc)` – Herkunftsbetriebe speichern
+- `eudr_betriebe_schreiben(doc)` – Herkunftsbetriebe speichern.
 - `eudr_sendungen_schreiben(doc)` – Sendungen speichern
 - `eudr_id(praefix)` – Neue Kennung mit Vorsilbe (b = Betrieb, s = Sendung)
 - `eudr_wer(me)` – Stempel „wann und von wem“
@@ -88,6 +88,7 @@ _Container-Import: Container (ein Einkauf bei einem Lieferanten, eine Partienumm
 - `eudr_betrieb_pruefen(b, alt)` – Felder eines Betriebs aus der Eingabe prüfen (ohne id, rev, Zeitstempel und Gegenprüfungen).
 - `eudr_original_vermerken(liste, ablage, me)` – An allen Betrieben, die aus der Datei mit dieser Prüfsumme stammen, vermerken, wo ihr Original im QM-System liegt ($ablage = Antwort von qs_eingang_hochladen).
 - `eudr_geo_kennung(g)` – Kennung der Geometrie zum Wiedererkennen derselben Fläche
+- `eudr_geo_befunde(b)` – Befunde des Umrisses eines Betriebs.
 - `eudr_bekannt_tabelle(liste)` – Nachschlagetabelle der gespeicherten Betriebe zum Wiedererkennen (einmal je Anfrage): Nummer aus den Papieren bzw. Umriss → Betrieb
 - `eudr_bekannt(neu, tabelle)` – Gespeicherter Betrieb, der zu einem eingelesenen passt: gleiche Nummer aus den Papieren im selben Land, sonst dieselbe Geometrie
 - `eudr_pruefungen_aktuell(b)` – Jüngste Gegenprüfung je Portal (nur diese zählt im Risikoprofil)
@@ -99,7 +100,7 @@ _Container-Import: Container (ein Einkauf bei einem Lieferanten, eine Partienumm
 
 - `eudr_eigenschaft(eigenschaften, name, falsch)` – Eigenschaft eines GeoJSON-Features lesen.
 - `eudr_geojson_lesen(text, datei)` – Lieferanten-GeoJSON lesen: je Feature ein Produktionsort (MultiPoint wird in Punkte zerlegt).
-- `eudr_datei_pruefen(d, bekannt)` – Eine hochgeladene Datei prüfen, ohne zu speichern: Lieferanten-GeoJSON („text“) oder ein vom Browser gelesener Produktionsort („ort“: Bericht oder eingefügte …
+- `eudr_datei_pruefen(d, bekannt, punkte)` – Eine hochgeladene Datei prüfen, ohne zu speichern: Lieferanten-GeoJSON („text“) oder ein vom Browser gelesener Produktionsort („ort“: Bericht oder eingefügte …
 
 **Sendungen**
 
@@ -160,7 +161,7 @@ _Container-Import · Geometrie der Produktionsorte (EUDR): reine Rechenfunktione
 - `geo_ring_ha(ring)` – Fläche eines Rings in Hektar auf dem WGS84-Ellipsoid, mit Vorzeichen: positiv = gegen den Uhrzeigersinn.
 - `geo_ring_eben(ring)` – Fläche eines Rings in der Ebene (Quadratgrad, mit Vorzeichen) – nur zum Erkennen entarteter Umrisse
 - `geo_schnitt(p, q, r, s)` – Schneiden sich die Strecken p–q und r–s echt (nicht nur an einem gemeinsamen Endpunkt)?
-- `geo_selbstschnitt(ring)` – Erste Selbstüberschneidung eines geschlossenen Rings als [Kante i, Kante j] (Nummern ab 1) oder null.
+- `geo_selbstschnitt(ring, abbruch)` – Erste Selbstüberschneidung eines geschlossenen Rings als [Kante i, Kante j] (Nummern ab 1) oder null.
 - `geo_dorn(ring)` – Kleinster Innenwinkel an einer Ecke unter GEO_DORN_GRAD: Nummer des Punktes (ab 0) oder null
 - `geo_position(v)` – Ist der Wert eine Position [Längengrad, Breitengrad] aus zwei Zahlen in vernünftiger Größe?
 - `geo_ring_normal(ring)` – Ring normalisieren: auf 6 Stellen runden, aufeinanderfolgende Doppelte entfernen, schließen, gegen den Uhrzeigersinn drehen.
@@ -224,6 +225,8 @@ _STAFL-Plattform · Modul Container-Import – Kalkulation je Container (Auftrag
 **Fassungen (Dokument containerimport-kalkulationen)**
 
 - `ci_kalk_dokument()`
+- `ci_kalk_positionen(fassungen)` – Positionen aller Fassungen einer Kalkulation bzw. aller Einträge des Dokuments (ohne den Eintrag an der Stelle $ausser – dessen neue Fassungsliste zählt der …
+- `ci_kalk_positionen_gesamt(doc, ausser)`
 - `ci_kalk_holen(doc, sendung)` – Kalkulation eines Containers aus dem Dokument [Stelle, Eintrag] oder [null, null]
 - `ci_kalk_speichern(doc, sendung, eingabe, rev, grund, me)` – Entwurf speichern.
 - `ci_kalk_festschreiben(doc, sendung, rev, container, me)` – Letzte Fassung endgültig festschreiben (GR-106): die Fassung hält dann ihre geprüfte Eingabe (Felder späterer Versionen mit ihrer Vorgabe), ihr Ergebnis …
@@ -518,6 +521,10 @@ _Modul Container-Import, Reiter EUDR (app/module/containerimport/, Oberfläche c
 
 **Dateien prüfen (ohne zu speichern)**
 
+- `kamm(zacken)` – Umriss mit vielen sich überlappenden Kanten (dünne, schräge Zacken) – ohne echte Selbstüberschneidung, aber quadratisch teuer zu prüfen (erfundene …
+- `kreis(punkte, mitte, radius)` – Gutartiger Umriss gleicher Größe (Gegenprobe zum Kamm).
+- `flaechen(umrisse)`
+
 **Sendung und Betriebe speichern**
 
 - `stand(c)`
@@ -614,6 +621,7 @@ _Container-Import · Tracking: bestätigte Ankunft in Hamburg aus der öffentlic
 **nachgebaute Seite des Hafens**
 
 - `log_message(*a)`
+- `roh(bytes_)` – Antwort Byte für Byte selbst schreiben (für Modi, die send_response nicht abbilden kann).
 - `do_GET()`
 - `anlegen(partie, **tracking)`
 - `gespeichert(aendern)` – Das gespeicherte Dokument der Meldungen ändern (aendern bekommt es als dict).

@@ -196,6 +196,10 @@ ids = [c['id'] for c in em['empfaenger']]
 code, r = S.call('versand_vorschau', {'art': 'woche', 'id': ids[0], 'note': 'Diese Woche: Roastbeef.'})
 check('Vorschau der Wochen-Mail mit Zusatztext', code == 200 and f'KW {WOCHE0 + 1}' in r['subject'] and 'Roastbeef' in r['html'] and r['firma'] == firmen[0], (code, r))
 check('Vorschau ohne Senden-Recht 403', Z.call('versand_vorschau', {'art': 'woche', 'id': ids[0]})[0] == 403)
+# Vorschau nie mit wirksamem Abmeldecode (Befund 22.11.2026; kunden_mail_vorschau seit 15.11.2026) und im Protokoll vermerkt
+check('Vorschau der Wochen-Mail: Abmeldelink nur als Platzhalter', '#abmelden=BEISPIEL' in r['html'] and ('#abmelden=' + ids[0]) not in r['html'],
+      [z for z in r['html'].split('"') if 'abmelden' in z])
+check('Vorschau im Protokoll vermerkt', any(e['a'] == 'mail' and f'Vorschau der Wochenangebots-Mail für „{firmen[0]}“ angesehen' == e['s'] for e in A.call('log')[1]['entries']))
 n0 = len(smtp.messages)
 check('senden ohne Anmeldung 401', P.call('versand_senden', {'art': 'woche', 'ids': ids})[0] == 401)
 check('senden ohne Senden-Recht 403', V.call('versand_senden', {'art': 'woche', 'ids': ids, 'week': WOCHE0 + 1, 'year': em['woche']['year']})[0] == 403)
@@ -221,6 +225,10 @@ code, sp = S.call('versand_empfaenger&art=sonderposten&angebot=grosshandel')
 check('Sonderposten Großhandel: 1 Artikel mit Preis, nur die 2 Kunden dieses Angebots (GR-005)',
       code == 200 and [it['code'] for it in sp['items']] == [ID['code']] and sp['items'][0]['price'] == ID['sale']['value']
       and sorted(c['firma'] for c in sp['recipients']) == ['Großhandel Beispiel KG', 'Testmarkt Elbe'], sp)
+code, rv = S.call('versand_vorschau', {'art': 'sonderposten', 'angebot': 'grosshandel', 'id': sp['recipients'][0]['id']})
+check('Sonderposten-Vorschau: Abmeldelink nur als Platzhalter, im Protokoll vermerkt', code == 200 and '#abmelden=BEISPIEL' in rv['html']
+      and ('#abmelden=' + sp['recipients'][0]['id']) not in rv['html']
+      and any(e['a'] == 'mail' and 'Vorschau der Sonderposten-Mail' in e['s'] for e in A.call('log')[1]['entries']), (code, rv.get('subject')))
 n1 = len(smtp.messages)
 fremd = kid['Beispielkantine Nord GmbH']   # hat nur das Wochenangebot
 code, r = S.call('versand_senden', {'art': 'sonderposten', 'angebot': 'grosshandel', 'ids': [c['id'] for c in sp['recipients']] + [fremd], 'publishedAt': 'falsch'})

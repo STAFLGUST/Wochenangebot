@@ -261,7 +261,18 @@ auf, wenn `sitzung_vorhanden()` wahr ist: Es läuft schon eine Sitzung, oder der
 Browser das Sitzungs-Cookie (auch das alte `WA_ADMIN` ohne Präfix, damit es weiter gelöscht wird). Vorher legte jede anonyme Anfrage an eine öffentliche Aktion (`kunde_status`, `offer`,
 `kunde_merkliste`, `kunde_logout`) eine leere Sitzungsdatei an, die bis zum Ende der Leerlaufzeit liegen blieb.
 Wer eine Sitzung **anlegen** will (`login`, `kunde_login`, `kunde_token_set`, Passkeys, OIDC), ruft `start_session()`
-weiterhin unbedingt auf – für angemeldete Nutzer ändert sich nichts. Geprüft in `tests/e2e/test_sitzung_cookie.py`.
+weiterhin unbedingt auf – für angemeldete Nutzer ändert sich nichts.
+
+**Leer gebliebene Sitzungen werden wieder entfernt (seit 22.11.2026).** `sitzung_vorhanden()` sieht nur, *dass* ein
+Cookie einen Wert hat, nicht ob es die Sitzung gibt. Mit einer frei erfundenen Kennung kam deshalb jede anonyme Anfrage
+weiter zu `start_session()`; PHP verwarf die Kennung (`session.use_strict_mode`), legte aber unter einer neuen sofort
+eine Datei an – eine Datei je Anfrage. `start_session()` merkt jetzt, wenn die vorgelegte Kennung nicht übernommen
+wurde, und entfernt die Sitzung am Ende der Anfrage wieder, solange `$_SESSION` leer geblieben ist
+(`register_shutdown_function` → `session_destroy`). Das deckt auch `kunde_login` und `kunde_token_set` ab, die
+`start_session()` vor der Prüfung der Zugangsdaten aufrufen. Das `Set-Cookie` lässt sich nicht zurücknehmen
+(`session_start()` hat die Kopfzeile schon gesendet, und `header_remove('Set-Cookie')` würde auch das Löschcookie für
+das alte `WA_ADMIN` entfernen) – es bleibt wirkungslos stehen, weil es keine Sitzung benennt. Eine echte Anmeldung
+schreibt `uid` bzw. `kid` in die Sitzung und behält sie. Geprüft in `tests/e2e/test_sitzung_cookie.py`.
 
 ### Sitzungsregister
 
@@ -396,7 +407,19 @@ weist ohne `<modul>.zugang` mit 403 `kein_modulzugang` ab:
    diese Aktion gesperrt (`seite: false`, die Seite bleibt stehen und der Aufrufer zeigt den Fehler).
 
 Ausgenommen: Aktionen der Module `plattform`/`dashboard` (kein Zugangsrecht), `oeffentlich`, `wartung_frei`.
-`modul_host_frei()` lässt auch den Zugang eines Teilmoduls gelten (`teil_von`, z. B. Import → Verwaltung). Der
+Für den **Host** lässt `modul_host_frei()` auch den Zugang eines Teilmoduls gelten (`teil_von`, z. B. Import →
+Verwaltung: die Kachel der Importzentrale liegt auf dem Verwaltungs-Host). Für das **Modul der Aktion** zählt
+`modul_zugang_frei()`, und die Teilmodul-Beziehung wirkt dort **nur von oben nach unten**:
+
+* der Zugang des **Obermoduls** gilt auch für seine Teilmodule – wer `verwaltung.zugang` hat, kommt an die Aktionen der
+  Importzentrale (Modul `import`), ohne dass ihm jemand `import.zugang` einzeln geben muss;
+* der Zugang eines **Teilmoduls** gilt **nie** für das Obermodul – `import.zugang` ohne `verwaltung.zugang` öffnet keine
+  Verwaltungsaktion (Sicherheitsfund 22.11.2026: vorher maß das Tor auch das Modul der Aktion mit der laxen
+  Host-Funktion, und `import.zugang` ersetzte den entzogenen `verwaltung.zugang` bei 16 modulfremden
+  Verwaltungsaktionen, darunter `kunde_save`, `kunden_import` und `vertreter_save`; es blieb nur das Fachrecht).
+
+So verliert keine Rolle etwas, in keiner Richtung; nachgezählt über alle Aktionen des Registers in
+`tests/e2e/test_rollen.py` (beide Richtungen) und `tests/e2e/test_importzentrale.py`. Der
 Modulzugang ersetzt keine Einzelrechte: ein Recht wie `kunden.sehen` kann in mehreren Modulen genutzt werden.
 
 **Der Modulzugang ist eine Berechtigung, keine Anzeigeregel (seit 15.11.2026, Sicherheitsfund):** Vorher wurde nur der
@@ -411,6 +434,9 @@ modulübergreifend; dort autorisiert allein das Fachrecht, geprüft bleibt der M
 (`master`, `master_save`, `vkgruppen`, `angebotskategorien`), Kunden und Kundengruppen (`kunden`, `kundengruppen`) für
 den Angebotseditor sowie Angebotsliste, Kundenzugangs-Mail und Postfach-Kurzinfo (`offers`, `kunde_mail`, `mail_info`)
 für die Kundenverwaltung und die Einkaufsansicht (`einkauf`, `einkauf_melden`), die noch im Angebotsbereich liegt.
+Die Ausnahme für `kunde_mail` gilt der Kundenzugangs-Mail (Einladung, Passwortlink): der Zweig `type=angebot` baut
+dieselbe Wochenangebots-Mail wie der Versand und ruft deshalb selbst `require_modulzugang('versand', true)` nach und
+prüft die Empfänger mit `wochenmail_grund()` wie der Wochenversand (Befund 22.11.2026).
 Die Liste steht als `ZUGANG_GEMEINSAM` in `werkzeuge/regeln.py` – die CI lehnt jeden weiteren Vermerk ab, Erweiterung nur
 im Plattform-PR mit Begründung. Zusätzlich verlangen Aktionen, die Inhalte eines Moduls ausliefern und sonst nur die
 Anmeldung prüfen würden, weiter `require_modulzugang()` (Entwurf `draft`, Versionen, Kundenangebote und Vorschau für
@@ -423,9 +449,11 @@ nichts. Eine eigene Rolle, die ein Fachrecht ohne den Modulzugang seines Moduls 
 stehen in der Rechteübersicht je Modul als „Modul … öffnen“.
 
 **Importzentrale:** `import_vorbereiten()` prüft neben dem Fachrecht `require_modulzugang($a['eigentuemer'])` – die
-Zentrale ruft die Vorschau- und Übernahmefunktionen fremder Module auf, ihre eigenen Aktionen gehören aber dem Modul
-`verwaltung`; der Eigentümer steht erst zur Laufzeit in der Importart. `import_arten` zeigt nur Importarten, deren
-Eigentümer-Modul dem Nutzer offensteht.
+Zentrale ruft die Vorschau- und Übernahmefunktionen fremder Module auf; der Eigentümer steht erst zur Laufzeit in der
+Importart. `import_arten` zeigt nur Importarten, deren Eigentümer-Modul dem Nutzer offensteht. Ihre vier Aktionen
+gehören seit dem 22.11.2026 dem Modul `import` (`regeln/aktionen/import.toml`, Kachel Verwaltung → Import): sie
+verlangen `import.zugang` **oder** den Zugang des Obermoduls `verwaltung.zugang` (Teilmodul, siehe oben) – umgekehrt
+öffnet `import.zugang` keine Verwaltungsaktion mehr.
 **Preisverlauf und frühere Wochen (seit 15.11.2026):** Der Preisverlauf trägt keine Kundenpreise mehr – `history_data`
 und `history_prev` (Recht `preisverlauf.sehen`) liefern sie nicht, und `history_from_model()` schreibt sie nicht in
 `historie/*`. Nur die Vorwochenpreise je Kundenangebot gehen in `history_prev` zusätzlich mit `angebot.zugang` heraus
@@ -445,7 +473,13 @@ bestimmt, fragt sonst Zeile für Zeile ab, was die Antwort einzeln verweigert. B
 15.11.2026: die Importvorschau der Stammdatenlisten zählt entfallende Einträge mit zugeordneten Kunden nur noch mit
 `kunden.sehen` (`gruppen_import_vorschau`, derselbe Schalter `$zaehlt` wie für die Zahl je Zeile); die
 Vertretungsprüfung in HR nennt die genauen Abwesenheitstage nur im Rahmen der Abteilungsgrenze des Kalenders
-(`hr_antrag_zeitraum`).
+(`hr_antrag_zeitraum`). Dasselbe Beispiel ein Schritt weiter (Audit run-3, Entscheidung des Inhabers 22.11.2026): auch
+„verfügbar / nicht verfügbar“ ist eine abgeleitete Angabe – bei einem Zeitraum von einem Tag ist sie genau der verborgene
+Abwesenheitstag. Deshalb reicht es nicht, das Feld `status` wegzulassen; die **Auswahl** ist begrenzt. Als Vertretung
+nimmt der Server nur an, wen der Anfragende im Kalender ohnehin sähe (eigene Abteilung, `hr.verwalten` oder
+`hr.uebersicht`) oder wen die Personalstelle fest hinterlegt hat – sonst 422 mit derselben Meldung wie bei einer
+unbekannten Person. Merkregel: Wer eine Angabe nicht sehen darf, darf sie auch nicht abfragen – die Grenze gehört dorthin,
+wo die Eingabe entsteht, nicht in den Antworttext.
 
 **Versand (seit 13.11.2026):** Veröffentlichen und Senden liegen im Modul `versand` mit eigenem Modulzugang `versand.zugang`
 (`zugang_rollen = []` – keine Standardrolle, nur Administratoren). Die bestehenden Rechte `angebot.veroeffentlichen`,
@@ -464,6 +498,8 @@ Ebenso die alte Vorschau `kunden_mail_vorschau` (seit
 darin die Sonderpreise eines Kundenangebots stehen (GR-002, GR-005, Befund 15.11.2026). Vorschauen zeigen außerdem nie
 einen wirksamen Code: der Kundensatz geht ohne Kennung in die Vorlage (`mail_vorschau_kunde()`, `lib/kundenmail.php`),
 damit `abmelde_url()` den Platzhalter `BEISPIEL` einsetzt – wie `#zugang=BEISPIEL` bei Einladung und Passwort-Link.
+Das gilt ebenso für `versand_vorschau` im Modul Versand (seit 22.11.2026; vorher stand dort der echte, unbefristete
+Abmeldecode des Kunden im Vorschau-HTML). Jeder Abruf der Vorschau steht als Vorgang `mail` im Protokoll.
 
 `angebot.veroeffentlichen` hat bewusst keine Voraussetzung `r`
 auf den Zugang: `rights_close` würde ihn sonst jedem Bearbeiter mitgeben. Folge für die Vergabe: Bearbeiter haben
@@ -477,8 +513,11 @@ stehen in gespeicherten Rollen und in `grant`/`deny`.
 
 **Server vs. Oberfläche:** `me.perms`, `me.modulzugang`, `me.bereich`, Kachelstatus und ausgeblendete Knöpfe sind nur
 Anzeige. Jede Aktion muss so geschrieben sein, als gäbe es die Oberfläche nicht (GR-103). Beispiel aus
-`aktionen/angebote.php`: Einzelangebote sieht ein Mitarbeiter nur mit `require_perm('einzelangebote.sehen')`, auch wenn
-die Aktion `offer` öffentlich ist.
+`aktionen/angebote.php`: Einzelangebote sieht ein Mitarbeiter nur mit `require_modulzugang('angebot')` **und**
+`require_perm('einzelangebote.sehen')`. Weil die Aktion `offer` öffentlich registriert ist, überspringt das zentrale Tor
+sie ganz – jeder Mitarbeiterzweig einer öffentlichen Aktion muss den Modulzugang selbst nachholen (Sicherheitsfund
+22.11.2026: der Zweig für Einzelangebote tat das nicht und gab Kundenpreis und Partie auch ohne `angebot.zugang` und
+auch für Entwürfe heraus; der Zweig für Wochen- und Kundenangebote prüfte schon richtig).
 
 ## 4.5 Freigabe und Wartung je Oberfläche (GR-102, GR-107)
 

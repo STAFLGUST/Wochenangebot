@@ -178,7 +178,7 @@ _Preisverlauf (Wochenstände)_
 - `history_ids()`
 - `history_week(id)` – Eine gespeicherte Woche lesen – ohne Kundenpreise (variants).
 - `history_from_model(m, origin, at)` – Preis-Stand einer Woche aus einem veröffentlichten Angebot (ohne Kundenpreise – wie clean_history_items auf dem Importweg)
-- `history_backfill()` – Bisherige Veröffentlichungen einmalig in den Preisverlauf übernehmen (gelöschte Wochen ausgenommen)
+- `history_backfill()` – Bisherige Veröffentlichungen einmalig in den Preisverlauf übernehmen (gelöschte Wochen ausgenommen).
 - `preisverlauf_lesbar()` – Darf der angemeldete Nutzer den Preisverlauf lesen?
 - `history_undelete(id)`
 - `clean_history_items(items)`

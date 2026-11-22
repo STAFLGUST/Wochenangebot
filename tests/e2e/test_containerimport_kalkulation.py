@@ -15,7 +15,7 @@ import os
 import re
 from playwright.sync_api import sync_playwright
 from kunden_hilfe import Client
-from containerimport_hilfe import check, ende, nutzer_anlegen, container_anlegen, seite as seite_oeffnen
+from containerimport_hilfe import check, ende, nutzer_anlegen, container, container_anlegen, stand, seite as seite_oeffnen
 from umgebung import SH, shot, storage_raw, storage_write, _json
 
 A, I, L = nutzer_anlegen()
@@ -137,6 +137,26 @@ alt = next(x for x in _json(storage_raw(DOK))['liste'] if x['sendung'] == c2['id
 check('älterer Entwurf ohne neue Felder festschreiben: gespeichert wird die geprüfte Eingabe (neue Felder mit Vorgabe, Zahlen als Zahlen)',
       st == 200 and alt['stand'] == 'endgueltig' and alt['eingabe']['kopf']['provisionEinkauf'] is True and alt['eingabe']['kopf']['zahlFix'] == 0
       and alt['eingabe']['kopf']['nachlaufKg'] == 0 and not alt['eingabe']['ueberschrieben'] and alt['eingabe']['kopf']['kurs'] == 1.25 and alt['ergebnis']['vollstaendig'], (st, r.get('error'), alt.get('eingabe')))
+# Gesamtgrenze des Dokuments: es wird bei jedem Zugriff ganz gelesen und ganz geschrieben (CI_KALK_MAX_POSITIONEN_GESAMT)
+c9 = container_anlegen(I, 'P-470009', land='UY')
+st, r = speichern(c9, 0)
+rev9 = r['kalkulation']['rev']
+sicherung = copy.deepcopy(_json(storage_raw(DOK)))
+voll = copy.deepcopy(sicherung)
+voll['liste'].append({'id': 'kvoll', 'sendung': 'svoll', 'rev': 1,
+                      'fassungen': [{'nr': 1, 'stand': 'endgueltig', 'eingabe': {'positionen': [{'artikel': 'Platzhalter'}] * 9000}}]})
+storage_write(DOK, voll)
+st, r = speichern(c9, rev9, grund='Noch eine Fassung')
+check('Bestand über der Gesamtgrenze: speichern mit 422 abgelehnt statt mit einem Speicherabbruch (HTTP 500)',
+      st == 422 and 'auslagern' in r.get('error', ''), (st, r))
+st, r = I.call('containerimport_kalkulation_festschreiben', {'sendung': c9['id'], 'rev': rev9})
+check('Bestand über der Gesamtgrenze: auch festschreiben mit 422 abgelehnt (es vergrößert die Fassung noch einmal)',
+      st == 422 and 'auslagern' in r.get('error', ''), (st, r))
+check('nichts geschrieben: der Bestand ist unverändert', len(_json(storage_raw(DOK))['liste']) == len(voll['liste']))
+storage_write(DOK, sicherung)   # ausgelagert: der Platzhalter ist weg (deploy/ci-kalkulationen-auslagern.php)
+st, r = I.call('containerimport_kalkulation_festschreiben', {'sendung': c9['id'], 'rev': rev9})
+check('nach dem Auslagern wieder festschreibbar', st == 200, (st, r.get('error')))
+
 verlauf = str(A.call('log')[1])
 check('Protokoll: angelegt, festgeschrieben, neue Fassung mit Grund', all(t in verlauf for t in ('Kalkulation des Containers „P-470001“: angelegt', 'Fassung 1 endgültig festgeschrieben',
                                                                                               'Fassung 2 angelegt (Grund: Endgültige Gewichte laut Packliste)', 'Fassung 2 endgültig festgeschrieben')), verlauf[:400])
@@ -246,6 +266,35 @@ with sync_playwright() as pw:
           and k3['fassungen'][1]['eingabe']['kopf']['nachlauf'] == 100 and k3['fassungen'][0]['eingabe']['kopf']['nachlauf'] == 0)
     pg.click('[data-kk-fassung="0"]'); pg.wait_for_selector('[data-kk-fassung="0"][aria-pressed=true]')
     check('ältere Fassung ansehen: gesperrt, Nachlauf 0', pg.is_disabled('[data-k=nachlauf]') and pg.input_value('[data-k=nachlauf]') == '0')
+
+    # GR-106: nach einer Stammdatenänderung zeigt eine festgeschriebene Fassung weiter den Container von damals
+    s3 = container(stand(I), 'P-470003')
+    st, r = I.call('containerimport_eudr_sendung_save', {'id': s3['id'], 'rev': s3['rev'], 'partie': 'P-470099', 'akte': 'AKTE-99',
+                                                         'lieferant': 'Frigorifico Zwei', 'land': s3['land'], 'ware': 'Rindfleisch gefroren'})
+    check('Container umbenannt (Partie, Akte, Lieferant, Ware)', st == 200 and container(r, 'P-470099'), (st, r.get('error')))
+    pg.reload(); pg.wait_for_selector('#ci-app:not([hidden])')
+    pg.click('#ci-reiter-kalkulation'); pg.wait_for_selector('#kk-liste')
+    pg.wait_for_function("document.querySelector('#kk-liste').textContent.includes('P-470099')")
+    pg.click(f'tr[data-kalk="{c3["id"]}"]'); pg.wait_for_selector('#kk-editor')
+    pg.click('[data-kk-fassung="0"]'); pg.wait_for_selector('[data-kk-fassung="0"][aria-pressed=true]')
+    kopf = pg.inner_text('.kk-titel')
+    check('festgeschriebene Fassung: Kopfzeile mit dem Container von damals, nicht mit den heutigen Stammdaten (GR-106)',
+          'Partie P-470003' in kopf and 'P-470099' not in kopf and 'AKTE-99' not in kopf and 'Frigorifico Zwei' not in kopf
+          and 'Rindfleisch gefroren' not in kopf, kopf)
+    with pg.expect_download() as dl:
+        pg.click('#kk-csv')
+    csvText = open(dl.value.path(), encoding='utf-8-sig').read()
+    check('CSV der festgeschriebenen Fassung: Dateiname und erste Zeile mit dem Container von damals',
+          dl.value.suggested_filename == 'Kalkulation_P-470003_Fassung_1.csv' and csvText.startswith('"Kalkulation Partie P-470003";"Fassung 1 · endgültig')
+          and 'P-470099' not in csvText, (dl.value.suggested_filename, csvText[:200]))
+    pg.evaluate("window.print = () => {}")   # die Seite wurde neu geladen, der Ersatz von oben ist weg
+    pg.click('#kk-druck')
+    druck = pg.evaluate("document.querySelector('#ci-druck').textContent")
+    check('Druckfassung der festgeschriebenen Fassung: Container von damals', 'Kalkulation Partie P-470003' in druck and 'P-470099' not in druck
+          and 'Frigorifico Zwei' not in druck, druck[:200])
+    pg.evaluate("window.dispatchEvent(new Event('afterprint'))")
+    pg.click('[data-kk-fassung="1"]'); pg.wait_for_selector('[data-kk-fassung="1"][aria-pressed=true]')
+    check('die offene Fassung zeigt weiter die heutigen Stammdaten', 'P-470099' in pg.inner_text('.kk-titel'), pg.inner_text('.kk-titel'))
     pg.click('#kk-zurueck'); pg.wait_for_selector('#kk-liste')
     pg.context.close()
 

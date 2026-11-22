@@ -5,6 +5,7 @@ Die Prüfliste umfasst auch das Dashboard (Einträge dashboard/<pfad>), das im B
 Der Testserver läuft aus einer Kopie von app/ – nur diese Kopie wird verändert."""
 import json
 import os
+import tomllib
 import shutil
 import subprocess
 import sys
@@ -103,6 +104,16 @@ comp = {x['name']: x for x in R.get('components', [])}
 check('components: PHP version with support end', comp.get('PHP', {}).get('version') == php_ver and comp['PHP']['stufe'] in ('ok', 'warnung', 'kritisch') and ('bis' in comp['PHP']['text'] or 'seit' in comp['PHP']['text']), comp.get('PHP'))
 check('components: SQLite and OpenSSL', 'SQLite' in comp and comp['SQLite']['version'][:1].isdigit() and 'OpenSSL' in comp, list(comp))
 check('components: vendored QR library', any(x.get('file') == 'assets/vendor/qrcode.js' and 'QR' in x['name'] for x in R.get('components', [])), R.get('components'))
+# Jede Fremddatei im Browser steht in der Übersicht (auch in Unterordnern) mit der Fassung aus app/assets/vendor/HERKUNFT.toml –
+# nicht mit einer aus dem Dateikopf geratenen (für pdf.js stand dort „2.0“ aus dem Lizenztext)
+with open(os.path.join(REPO, 'app', 'assets', 'vendor', 'HERKUNFT.toml'), 'rb') as _h: anker = {e['pfad']: e for e in tomllib.load(_h)['fremddatei']}
+vendor = {x['file'][len('assets/vendor/'):]: x for x in R.get('components', []) if str(x.get('file', '')).startswith('assets/vendor/')}
+erwartet = {p for p in anker if p.endswith(('.js', '.css'))}
+check('components: every vendored script and stylesheet listed', set(vendor) == erwartet, sorted(set(vendor) ^ erwartet))
+check('components: versions come from HERKUNFT.toml', all(v['version'] == (anker[p]['fassung'] or '–') for p, v in vendor.items()),
+      {p: v['version'] for p, v in vendor.items()})
+check('components: pdf.js with its real version', vendor.get('pdfjs/pdf.min.js', {}).get('version') == '6.5.438'
+      and vendor['pdfjs/pdf.min.js']['stufe'] == 'ok', vendor.get('pdfjs/pdf.min.js'))
 check('result stored', (doc('integritaet') or {}).get('last', {}).get('ranAt') == R.get('ranAt'))
 time.sleep(1.1)
 code, r2 = A.call('security_integrity')

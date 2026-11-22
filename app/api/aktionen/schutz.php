@@ -33,12 +33,17 @@ switch ($action) {
 
         case 'fw_save': {
             $me = require_admin_confirmation('fw_save');
-            $old = fw();
-            $new = fw_clean(body(), $old);
-            if ($new['feed'] && !fw_feed_info()) {
-                try { fw_feed_laden(); } catch (Throwable $e) { throw new InvalidArgumentException('Die Bedrohungsliste konnte nicht geladen werden – bitte später erneut versuchen oder ohne Bedrohungsliste speichern.'); }
-            }
-            store_write('firewall', $new);
+            $b = body();
+            fw_feed_vorladen((bool)($b['feed'] ?? fw()['feed']));   // Netzabruf vor die Sperre, nie in sie hinein
+            // Lesen, Prüfen und Schreiben unter der Sperre: sonst überschreibt dieser Weg eine gleichzeitige Änderung still
+            [$old, $new] = with_lock('firewall', function () use ($b) {
+                $GLOBALS['FWS'] = null;   // Stand unter der Sperre frisch lesen, nicht aus dem Zwischenspeicher
+                $old = fw();
+                $new = fw_clean($b, $old);
+                if ($new['feed'] && !fw_feed_info()) throw new InvalidArgumentException('Die Bedrohungsliste konnte nicht geladen werden – bitte später erneut versuchen oder ohne Bedrohungsliste speichern.');
+                store_write('firewall', $new);
+                return [$old, $new];
+            });
             $GLOBALS['FWS'] = $new;
             $L = FW_FELD_LABEL;
             $fmt = fn($v) => is_bool($v) ? ($v ? 'an' : 'aus') : (is_array($v) ? implode(', ', $v) : (string)(FW_WAF_MODI[$v] ?? $v));
@@ -119,8 +124,8 @@ switch ($action) {
             $me = require_admin_confirmation('fw_save');
             $x = body()['export'] ?? null;
             if (!is_array($x) || ($x['art'] ?? '') !== 'wochenangebot-sicherheit' || (int)($x['version'] ?? 0) !== 1) throw new InvalidArgumentException('Das ist keine Datei mit Sicherheitseinstellungen dieses Portals.');
-            $oldS = sec(); $oldF = fw();
-            // Adress- und Länderlisten bleiben wie sie sind (eine Datei von einem anderen Server könnte sonst alle aussperren)
+            // Adress- und Länderlisten und die abgeschaltete Passwortbestätigung bleiben wie sie sind (eine Datei von einem
+            // anderen Server könnte sonst alle aussperren bzw. eine Sicherheitskontrolle absenken)
             $datS = array_diff_key(array_intersect_key((array)($x['sicherheit'] ?? []), SEC_DEFAULTS), FW_NICHT_UEBERTRAGEN);
             $datF = array_diff_key(array_intersect_key((array)($x['firewall'] ?? []), FW_DEFAULTS), ['erlaubt' => 1, 'mitschnittBis' => 1]);
             // Unvertraute Datei: jeden Wert gegen seinen Wertebereich prüfen und die Datei abweisen. sec_clean/fw_clean würden
@@ -132,11 +137,21 @@ switch ($action) {
                     : ($bereich === 'bool' ? is_bool($v) : is_int($v) && $v >= (int)explode(':', $bereich)[1] && $v <= (int)explode(':', $bereich)[2]));
                 if (!$gut) throw new InvalidArgumentException("Die Datei enthält für „{$k}“ einen unzulässigen Wert – bitte nicht übernehmen.");
             }
-            $newS = sec_clean(array_merge($oldS, $datS), $oldS, $me);
-            $newF = fw_clean($datF, $oldF);
-            if ($newF['feed'] && !fw_feed_info()) { try { fw_feed_laden(); } catch (Throwable $e) { $newF['feed'] = false; } }
-            store_write('sicherheit', $newS); $GLOBALS['SEC'] = $newS;
-            store_write('firewall', $newF); $GLOBALS['FWS'] = $newF;
+            fw_feed_vorladen((bool)($datF['feed'] ?? fw()['feed']));   // Netzabruf vor die Sperre, nie in sie hinein
+            // Lesen, Prüfen und Schreiben beider Dokumente unter ihrer Sperre, immer in derselben Reihenfolge (erst sicherheit,
+            // dann firewall): sonst schreibt der Import eine gleichzeitige Härtung still wieder zurück
+            [$oldS, $oldF, $newS, $newF] = with_lock('sicherheit', function () use ($datS, $datF, $me) {
+                return with_lock('firewall', function () use ($datS, $datF, $me) {
+                    $GLOBALS['SEC'] = null; $GLOBALS['FWS'] = null;   // Stand unter der Sperre frisch lesen
+                    $oldS = sec(); $oldF = fw();
+                    $newS = sec_clean(array_merge($oldS, $datS), $oldS, $me);
+                    $newF = fw_clean($datF, $oldF);
+                    if ($newF['feed'] && !fw_feed_info()) $newF['feed'] = false;
+                    store_write('sicherheit', $newS); $GLOBALS['SEC'] = $newS;
+                    store_write('firewall', $newF); $GLOBALS['FWS'] = $newF;
+                    return [$oldS, $oldF, $newS, $newF];
+                });
+            });
             // Protokoll feldweise wie security_save und fw_save: jede übernommene Änderung mit alt und neu
             $fmt = fn($v) => is_bool($v) ? ($v ? 'an' : 'aus') : (is_array($v) ? implode(', ', $v) : (string)$v);
             $d = [];

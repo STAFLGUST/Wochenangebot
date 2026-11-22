@@ -672,5 +672,28 @@ check('nur der Zeitraum der Datei ersetzt: Tage davor/danach bleiben', st == 200
       and {(f['d'], f['p']) for f in r['fehler']} == {('2026-10-02', P_ANNA), ('2026-09-04', P_BERND), ('2026-09-03', P_ANNA)}
       and {x['id']: x['saldoOk'] for x in r['personen']}[P_ANNA] == 30, r.get('fehler'))
 
+# Wiederanlauf der Übernahme (Sicherheitsaudit run-3): leer gewordene Jahresdokumente werden erst nach dem Verzeichnis
+# gelöscht (with_lock ist im Dateispeicher keine Transaktion). Deshalb darf es nie einen Verzeichniseintrag ohne Dokument
+# geben; umgekehrt zählt ein Jahresdokument ohne Verzeichniseintrag (abgebrochene Übernahme) nirgends mit.
+idx_ = dokument('controlling-arbeitszeit')
+idx_['jahre']['2024'] = {'von': '2024-06-17', 'bis': '2024-06-17', 'tage': 1}   # Jahr 2024 mit Dokument vorbereiten
+storage_write('controlling-arbeitszeit/2024', {'tage': {P_ANNA + '|2024-06-17': [480, 480, 0, 30, 0, [[360, 840]], [], 0]}})
+storage_write('controlling-arbeitszeit', {**idx_, 'rev': idx_['rev'] + 1})
+st, r = AR.call('controlling_arbeitszeit&von=2024-01&bis=2024-12')
+check('vorbereitetes Jahr 2024 wird gelesen (Verzeichnis und Dokument passen)', st == 200 and r['summe']['tage'] == 1, (st, r.get('summe')))
+D3 = {'blaetter': [{'name': 'Zeitbericht', 'grid': [KOPF, az_zeile('Anna', 'Muster', '30-12-2023', '06:00', '14:30', '08:00', '08:00', '00:00', '101', 'Zerlegung', pause='00:30'),
+                                                    az_zeile('Anna', 'Muster', '02-01-2025', '06:00', '14:30', '08:00', '08:00', '00:00', '101', 'Zerlegung', pause='00:30')]}]}
+st, v3 = zb(ID, D3)
+st3, r3 = zb(ID, D3, v3['stand'])
+idx3_ = dokument('controlling-arbeitszeit')
+check('Jahr wird durch den Import leer: Verzeichniseintrag und Dokument sind beide weg – kein Eintrag ohne Dokument',
+      st3 == 200 and '2024' not in idx3_['jahre'] and dokument('controlling-arbeitszeit/2024') is None
+      and all(dokument(f'controlling-arbeitszeit/{j_}') for j_ in idx3_['jahre']), (st3, sorted(idx3_['jahre']), r3.get('zahlen')))
+storage_write('controlling-arbeitszeit/2024', {'tage': {P_ANNA + '|2024-06-17': [480, 480, 0, 30, 0, [[360, 840]], [], 0]}})   # verwaistes Dokument ohne Verzeichniseintrag
+st, r = AR.call('controlling_arbeitszeit&von=2024-01&bis=2024-12')
+st4, r4 = AR.call('controlling_arbeitszeit_daten')
+check('verwaistes Jahresdokument ohne Verzeichniseintrag zählt nicht (Auswertung und Grunddaten)', st == 200 and r['summe']['tage'] == 0
+      and st4 == 200 and '2024' not in r4['stand']['jahre'], (r.get('summe'), sorted(r4['stand']['jahre'])))
+
 check('keine JavaScript-Fehler', not fehler, fehler)
 print(f'{sum(res)}/{len(res)} passed')

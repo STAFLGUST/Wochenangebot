@@ -77,7 +77,9 @@ jobs:
           php --version | head -1
           find app deploy -name '*.php' ! -path 'app/api/geo/*' -print0 | xargs -0 -n1 php -l
       - name: JavaScript-Syntax
-        run: for f in app/assets/*.js app/assets/vendor/*.js dashboard/*.js tests/unit/*.js; do node --check "$f"; done
+        run: |
+          for f in app/assets/*.js dashboard/*.js tests/unit/*.js; do node --check "$f"; done
+          find app/assets/vendor -name '*.js' -print0 | xargs -0 -n1 node --check   # auch in Unterordnern (maplibre, pmtiles, pdfjs)
       - name: Shell-Skripte (shellcheck)
         run: shellcheck --severity=warning deploy/*.sh deploy/*/*.sh tests/deploy/*.sh
       - name: Caddy-Konfiguration mit echtem Parser prüfen
@@ -119,6 +121,11 @@ jobs:
         run: python3 werkzeuge/asset_versionen.py
       - name: Prüfliste der Dateiprüfung (app/api/lib/integritaet-liste.php)
         run: python3 werkzeuge/integritaet.py
+      - name: Keine echten IP-Adressen im Repository (werkzeuge/ip_adressen.py)
+        # GR-007: Beispieladressen nur aus den Dokumentationsbereichen (RFC 5737); gitleaks sucht Geheimnisse, keine IP-Adressen
+        run: |
+          python3 werkzeuge/ip_adressen.py --selbsttest
+          python3 werkzeuge/ip_adressen.py
       - name: Tests ohne fest eingetragene Ports (parallele Testläufe)
         run: |
           if grep -rnE "127\.0\.0\.1:[0-9]{4}" tests/e2e --include=*.py | grep -v "tests/e2e/umgebung.py"; then

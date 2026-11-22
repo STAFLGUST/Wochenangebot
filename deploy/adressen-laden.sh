@@ -27,6 +27,8 @@ abbruch() { echo "Abbruch: $*" >&2; exit 1; }
 # daten-karte ist im Lade-Container beschreibbar: ein dort untergeschobener Verweis darf root nie auf eine andere Datei
 # des Servers umlenken (gleiche Regel wie status_schreiben() in deploy/sichern.sh und ablegen() in deploy/postfach-schluessel.sh).
 echt() { [ -f "$1" ] && [ ! -L "$1" ] || abbruch "$1 ist kein echtes Ergebnis des Laufs (Verweis oder Sonderdatei) – verworfen."; }
+# Stand-Vermerk lesen, nur aus einer echten Datei; sonst „keiner“ (gelesen wird vor dem Start des Lade-Containers)
+vermerk_lesen() { [ -f "$1" ] && [ ! -L "$1" ] && cat "$1" 2>/dev/null || echo keiner; }
 # Vermerk außerhalb des Container-Ordners erzeugen und nur per Umbenennen einsetzen; mv -fT folgt keinem Verweis, auch keinem auf einen Ordner
 vermerken() {
   TMP=$(mktemp "$(pwd)/.stand.XXXXXX") || abbruch "Zwischendatei nicht anlegbar."
@@ -68,6 +70,7 @@ probe() {
   [ -f tests/fixtures/karte/adressen.osm ] || abbruch "Testdaten für die Probe fehlen (tests/fixtures/karte/adressen.osm)."
   rm -f "$ZIEL/adressen-probe.sqlite"
   umwandeln /probe/adressen.osm /daten/adressen-probe.sqlite || { rm -f "$ZIEL/adressen-probe.sqlite"; abbruch "Probe fehlgeschlagen: Umwandeln im Container funktioniert nicht – nichts geladen, nichts geändert."; }
+  echt "$ZIEL/adressen-probe.sqlite"
   n=$(anzahl_in "$ZIEL/adressen-probe.sqlite"); rm -f "$ZIEL/adressen-probe.sqlite"
   [ "$n" -ge 1 ] || abbruch "Probe fehlgeschlagen: keine Testadressen umgewandelt – nichts geladen, nichts geändert."
   echo "Probe:     Umwandeln im Container funktioniert ($n Testadressen)"
@@ -93,7 +96,7 @@ pruefsumme() {
     if printf '%s' "$s" | grep -Eq '^[0-9a-f]{32}$'; then echo "$s"; return 0; fi
   done
 }
-BISHER=$(cat "$ZIEL/adressen-stand.txt" 2>/dev/null || echo keiner)
+BISHER=$(vermerk_lesen "$ZIEL/adressen-stand.txt")
 frei_gb=$(df -Pk "$ZIEL" | awk 'NR == 2 { printf "%d", $4 / 1048576 }')
 echo "Quelle: $STAND, ${GROESSE} MB (bisher: $BISHER) · freier Platz: ${frei_gb} GB"
 
