@@ -97,8 +97,10 @@ Zwischenspeicher werden nur mit passender Prüfsumme aus der signierten Ubuntu-P
    Release nicht – die Seite lädt Dateien ohne Nummer mit Rückfrage, `aktualisieren.sh` holt die Bereitstellung nach.
 5. Healthcheck wie ein Besucher – mit der Ergänzungsdatei der Anmeldung auch die Mitarbeiter-Hosts
    (`dashboard-stafl.de/api/?action=status` muss ohne Anmeldung mit 401 antworten; 502 heißt: Container `app-mitarbeiter`
-   läuft nicht). Schlägt er fehl: zurück auf den alten Commit, das alte Image wieder aktiv
-   (`stafl-app:release-vorher` → aktiver Name), Container neu erstellt.
+   läuft nicht). Schlägt er fehl – oder scheitert schon das Einspielen (z. B. `docker compose up`: Port belegt, Docker
+   hängt) –: zurück auf den alten Commit, das alte Image wieder aktiv (`stafl-app:release-vorher` → aktiver Name),
+   Container neu erstellt, Status „fehlgeschlagen“, der Release gilt als abgelehnt (kein erneuter Versuch). Scheitert auch
+   der Rückfall, meldet der Status „Sofort prüfen!“ mit dem tatsächlich aktiven Stand.
 6. Nach erfolgreichem Healthcheck: `docker image prune -f` entfernt nur hängende Images ohne Namen (z. B. das von
    `release-vorher` verdrängte). Getaggte und laufende Images sowie Volumes bleiben unberührt; ein Fehler beim Aufräumen
    ändert nichts am erfolgreichen Release (nur ein Hinweis im Protokoll).

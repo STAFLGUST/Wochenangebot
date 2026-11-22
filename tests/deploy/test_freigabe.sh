@@ -53,6 +53,9 @@ echo "compose \$*\${STAFL_APP_VERSION:+ [STAFL_APP_VERSION=\$STAFL_APP_VERSION]}
 # beim Bau: aktiver Commit, ob app/ unverändert ist (wie im Commit oder wie bereitgestellt), und letzte Zeile des Bauplans
 [ "\$1" = build ] && echo "bau-stand \$(git rev-parse HEAD) app-\$({ git diff --quiet HEAD -- app || python3 deploy/bereitstellen.py --pruefen >/dev/null; } && echo alt || echo neu) \$(tail -1 deploy/image/Dockerfile)"
 if [ "\$1" = build ] && [ -f "$T/bau-fehler" ]; then echo "Bau fehlgeschlagen"; exit 1; fi
+# „up“ scheitert einmal, solange $T/up-fehler-einmal existiert, bzw. immer, solange $T/up-fehler existiert
+if [ "\$1" = up ] && [ -f "$T/up-fehler-einmal" ]; then rm -f "$T/up-fehler-einmal"; echo "Error response from daemon: port is already allocated"; exit 1; fi
+if [ "\$1" = up ] && [ -f "$T/up-fehler" ]; then echo "Error response from daemon: port is already allocated"; exit 1; fi
 exit 0
 STUB
 # Docker-Ersatz: gibt Befehle aus; stafl-app:release-vorher fehlt (inspect und tag scheitern), solange $T/kein-vorher
@@ -180,6 +183,25 @@ lauf || true; ok "Ergänzungsdatei der Anmeldung geändert: Container werden neu
 O_SHA=$(commit apache-oidc x "echo '# geändert' >> '$T/src/deploy/anmeldung/apache-oidc.conf'")
 printf '{"release":"%s","ci_ok":["%s"]}' "$O_SHA" "$O_SHA" > "$T/state.json"
 lauf || true; ok "Apache-Konfiguration der Anmeldung geändert: nur die App neu erstellt" '[ "$(kopf)" = "$O_SHA" ] && grep -qx "compose up -d --force-recreate app" "$T/out.txt" && ! grep -qx "compose up -d --force-recreate" "$T/out.txt"'
+
+# docker compose up scheitert beim Einspielen (Port belegt, Docker hängt): zurück auf die Vorversion statt Abbruch ohne Prüfung
+touch "$T/up-fehler-einmal"
+UP_SHA=$(commit compose-up-fehler x "echo '# up' >> '$T/src/docker-compose.yml'")
+printf '{"release":"%s","ci_ok":["%s"]}' "$UP_SHA" "$UP_SHA" > "$T/state.json"
+RC=0; lauf || RC=$?
+ok "compose up scheitert: zurück auf die Vorversion, Status fehlgeschlagen, abgelehnt, .release-vorher unverändert" '[ "$RC" = 1 ] && [ "$(kopf)" = "$O_SHA" ] \
+  && [ "$(st ok)" = False ] && [ "$(st sha)" = "$O_SHA" ] && grep -q "zurückgesetzt" "$B/daten/deployment.php" && [ "$(cat "$B/.release-abgelehnt")" = "$UP_SHA" ] \
+  && grep -q "Einspielen fehlgeschlagen – zurück auf" "$T/out.txt" && [ "$(grep -c "^compose up -d --force-recreate$" "$T/out.txt")" = 2 ] && [ "$(cat "$B/.release-vorher")" = "$C_SHA" ]'
+lauf || true
+ok "… nächster Lauf: nicht schon live gemeldet, abgelehnter Stand nicht erneut versucht" '[ "$(kopf)" = "$O_SHA" ] && ! grep -q "^compose" "$T/out.txt"'
+touch "$T/up-fehler"
+UP2_SHA=$(commit compose-up-fehler-2 x "echo '# up 2' >> '$T/src/docker-compose.yml'")
+printf '{"release":"%s","ci_ok":["%s"]}' "$UP2_SHA" "$UP2_SHA" > "$T/state.json"
+RC=0; lauf || RC=$?
+ok "compose up scheitert auch beim Rückfall: Status Sofort prüfen mit dem tatsächlichen Stand, abgelehnt" '[ "$RC" = 1 ] && [ "$(kopf)" = "$O_SHA" ] \
+  && [ "$(st ok)" = False ] && [ "$(st sha)" = "$O_SHA" ] && grep -q "Rückfall auf die Vorversion gescheitert" "$B/daten/deployment.php" \
+  && [ "$(cat "$B/.release-abgelehnt")" = "$UP2_SHA" ] && [ "$(cat "$B/.release-vorher")" = "$C_SHA" ]'
+rm -f "$T/up-fehler" "$B/.release-abgelehnt"
 
 # Sicherung vor dem Release mit dem Skript des NEUEN Commits (ein defektes altes Skript blockiert die Korrektur nicht)
 ok "temporäres Sicherungsskript steht in .gitignore" 'git -C "$REPO" check-ignore -q deploy/.sichern-release.sh'
@@ -395,9 +417,10 @@ python3 "$B/deploy/datenbank.py" migrate "$B/daten" --offline >/dev/null
 (cd "$B/app" && exec php -S 127.0.0.1:$WEB_PORT >/dev/null 2>&1) & WEB_PID=$!
 printf '{"release":"%s","ci_ok":["%s"]}' "$L_SHA" "$L_SHA" > "$T/state.json"
 lauf || true
-ok "SQLite: inkompatiblen Release vor Codewechsel abweisen" '[ "$(kopf)" = "$H_SHA" ] && grep -q "SQLite aktiv" "$T/out.txt"'
+ok "SQLite: inkompatiblen Release vor Codewechsel abweisen (Status fehlgeschlagen, nicht alle 2 Minuten erneut)" '[ "$(kopf)" = "$H_SHA" ] && grep -q "SQLite aktiv" "$T/out.txt" \
+  && [ "$(st ok)" = False ] && [ "$(cat "$B/.release-abgelehnt")" = "$L_SHA" ]'
 printf '%s\n{"vorher":"%s"}' '<?php http_response_code(404); exit; ?>' "$L_SHA" > "$B/daten/deployment.php"
-printf '%s\n' "$L_SHA" > "$B/.release-vorher"
+printf '%s\n' "$L_SHA" > "$B/.release-vorher"; rm -f "$B/.release-abgelehnt"   # hier zählt nur die Sperre wegen SQLite
 sh "$B/deploy/release-zurueck.sh" > "$T/out.txt" 2>&1 || true
 ok "SQLite: auch manueller Code-Rückfall ist gesperrt" '[ "$(kopf)" = "$H_SHA" ] && grep -q "SQLite aktiv" "$T/out.txt"'
 

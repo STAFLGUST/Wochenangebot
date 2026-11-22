@@ -1,7 +1,7 @@
 #!/bin/sh
 # Release-Modus: spielt nur einen von Hand freigegebenen Commit ein (GitHub-Workflow „Release“),
-# prüft danach die Erreichbarkeit wie ein Besucher und kehrt bei Fehlern automatisch zur Vorversion zurück.
-# Den Stand für den Notfall-Rückfall (.release-vorher) schreibt nur ein erfolgreicher Lauf.
+# prüft danach die Erreichbarkeit wie ein Besucher und kehrt bei Fehlern automatisch zur Vorversion zurück – auch wenn schon das
+# Einspielen scheitert (z. B. docker compose up). Den Stand für den Notfall-Rückfall (.release-vorher) schreibt nur ein erfolgreicher Lauf.
 # Maßgeblich ist der neueste erfolgreiche Release-Lauf (nach Startzeit); ein Stand, der älter ist als der aktive, wird nie
 # automatisch eingespielt (zurück nur von Hand mit deploy/release-zurueck.sh).
 # Wird von aktualisieren.sh aufgerufen, sobald der Release-Modus eingerichtet ist
@@ -118,7 +118,8 @@ bereitstellen() { # Versionsnummern und Prüfliste aus dem aktiven Commit (Skrip
   [ -f deploy/bereitstellen.py ] || return 0
   python3 deploy/bereitstellen.py || echo "Hinweis: Bereitstellung (Versionsnummern/Prüfliste) unvollständig – nächster Versuch beim nächsten Lauf"
 }
-einspielen() { # sha vorher [zurueck]: Code wechseln; Container nur neu erstellen, wenn sich Konfiguration oder Image ändern
+einspielen() { # sha vorher [zurueck]: Code wechseln; Container nur neu erstellen, wenn sich Konfiguration oder Image ändern.
+  # Aufgerufen nur unter if/||, dort wirkt set -e nicht: jeder wichtige Schritt meldet seinen Fehler selbst (return 1)
   if [ -f daten/.sqlite-active ] && ! git cat-file -e "$1:app/api/storage.php" 2>/dev/null; then
     echo "SQLite aktiv: Vor einem Rückfall auf Dateispeicherung erst deploy/datenbank-umschalten.sh rollback ausführen."
     return 1
@@ -127,19 +128,19 @@ einspielen() { # sha vorher [zurueck]: Code wechseln; Container nur neu erstelle
     $DOCKER tag "$BILD_VORHER" "$APP_BILD" || echo "Altes Image $BILD_VORHER nicht gefunden – App läuft mit dem neuen Image"
   elif [ "$BAUEN" = 1 ]; then
     $DOCKER tag "$APP_BILD" "$BILD_VORHER" || true   # für den Rückfall merken
-    $DOCKER tag "$BILD_NEU" "$APP_BILD"
+    $DOCKER tag "$BILD_NEU" "$APP_BILD" || return 1
   fi
-  git reset -q --hard "$1"
+  git reset -q --hard "$1" || return 1
   bereitstellen
   # Container-Konfiguration: Caddyfile, docker-compose.yml und die Ergänzungsdatei der Anmeldung (COMPOSE_FILE in .env);
   # nur das Image geändert: nur die Anwendungs-Container neu erstellen (Keycloak und seine Datenbank laufen weiter)
   # Apache-Konfiguration der Anmeldung (als einzelne Datei eingebunden: nach dem Codewechsel sähe der Container sonst
   # weiter die alte Fassung) → nur den Container der Mitarbeiter-Hosts (bzw. bei älteren Ständen die App) neu erstellen
-  if git diff --name-only "$2" "$1" | grep -qE '^(Caddyfile|docker-compose\.yml|deploy/anmeldung/docker-compose\.anmeldung\.yml)$'; then $COMPOSE up -d --force-recreate
+  if git diff --name-only "$2" "$1" | grep -qE '^(Caddyfile|docker-compose\.yml|deploy/anmeldung/docker-compose\.anmeldung\.yml)$'; then $COMPOSE up -d --force-recreate || return 1
   elif [ "$BAUEN" = 1 ]; then
-    if mitarbeiter_container; then $COMPOSE up -d --force-recreate app app-mitarbeiter; else $COMPOSE up -d --force-recreate app; fi
+    if mitarbeiter_container; then $COMPOSE up -d --force-recreate app app-mitarbeiter || return 1; else $COMPOSE up -d --force-recreate app || return 1; fi
   elif git diff --name-only "$2" "$1" | grep -qx 'deploy/anmeldung/apache-oidc\.conf'; then
-    if mitarbeiter_container; then $COMPOSE up -d --force-recreate app-mitarbeiter; else $COMPOSE up -d --force-recreate app; fi
+    if mitarbeiter_container; then $COMPOSE up -d --force-recreate app-mitarbeiter || return 1; else $COMPOSE up -d --force-recreate app || return 1; fi
   fi
 }
 
@@ -203,21 +204,25 @@ $SICHERN >/dev/null || { status false "$AKTUELL" "$AKTUELL" "$LAUF_ID" "Sicherun
 
 rm -f "$SICHERN_NEU" "$WERKZEUG_NEU"
 
-# 6. Einspielen, prüfen, bei Fehler zurück
-einspielen "$SHA" "$AKTUELL"
-if gesund; then
-  status true "$SHA" "$AKTUELL" "$LAUF_ID" ""
-  melden ok
-  echo "Release eingespielt: $(git log -1 --format='%h %s')"
-  # Aufräumen: nur hängende Images ohne Namen (z. B. das von release-vorher verdrängte); getaggte und laufende Images
-  # sowie Volumes bleiben. Ein Fehler hier ändert nichts am erfolgreichen Release.
-  $DOCKER image prune -f || echo "Hinweis: Aufräumen alter Images fehlgeschlagen – Release ist trotzdem eingespielt."
-  exit 0
+# 6. Einspielen, prüfen, bei Fehler zurück – auch wenn schon das Einspielen scheitert (z. B. compose up: Port belegt, Docker hängt)
+if einspielen "$SHA" "$AKTUELL"; then
+  if gesund; then
+    status true "$SHA" "$AKTUELL" "$LAUF_ID" ""
+    melden ok
+    echo "Release eingespielt: $(git log -1 --format='%h %s')"
+    # Aufräumen: nur hängende Images ohne Namen (z. B. das von release-vorher verdrängte); getaggte und laufende Images
+    # sowie Volumes bleiben. Ein Fehler hier ändert nichts am erfolgreichen Release.
+    $DOCKER image prune -f || echo "Hinweis: Aufräumen alter Images fehlgeschlagen – Release ist trotzdem eingespielt."
+    exit 0
+  fi
+  echo "Healthcheck fehlgeschlagen – zurück auf $AKTUELL"
+else
+  echo "Einspielen fehlgeschlagen – zurück auf $AKTUELL"
 fi
-echo "Healthcheck fehlgeschlagen – zurück auf $AKTUELL"
 echo "$SHA" > "$ABGELEHNT"
-einspielen "$AKTUELL" "$SHA" zurueck
-if gesund; then
+if ! einspielen "$AKTUELL" "$SHA" zurueck; then
+  status false "$(git rev-parse HEAD)" "$SHA" "$LAUF_ID" "Release $SHA fehlerhaft – Rückfall auf die Vorversion gescheitert (Ausgabe im Protokoll). Sofort prüfen!"
+elif gesund; then
   status false "$AKTUELL" "$SHA" "$LAUF_ID" "Release $SHA fehlerhaft – automatisch auf Vorversion zurückgesetzt"
 else
   status false "$AKTUELL" "$SHA" "$LAUF_ID" "Release $SHA fehlerhaft – Rückfall durchgeführt, Seite antwortet aber nicht. Sofort prüfen!"
