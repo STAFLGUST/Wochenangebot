@@ -2318,6 +2318,8 @@ dialog.modal.ez-pick { width: min(1280px, calc(100vw - 32px)); height: min(860px
   body.adm .e-var .vtog { width: 36px; height: 36px; }   /* Ausblenden / Sonderpreis in der Artikelzeile (vorher 26 px) */
   body.adm .alts button { min-height: 32px; padding: 4px 10px; font-size: 13px; }   /* Zusatzpreis-Pille, z. B. „Flugware: …“ (vorher 19 px) */
   body.adm .auth-back { display: inline-flex; align-items: center; justify-content: center; min-height: 36px; }
+  body.adm .etab .e-bst { min-height: 36px; }   /* Bestand in der Artikelzeile (öffnet Partien und Zugänge, vorher 26 px) */
+  body.adm .save-state .link-btn { display: inline-flex; align-items: center; min-height: 36px; }   /* „Zum Versand →“ (vorher 17 px) */
 }
 /* Angebote als Karten (schmal): Standardzeile einheitlich hinterlegt statt Streifen je Zelle (Zellen haben dort
    unterschiedliche Breiten und Abstände); Zeilenhervorhebung unter dem Finger ebenso nur für die ganze Karte */

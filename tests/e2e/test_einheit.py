@@ -198,7 +198,11 @@ with sync_playwright() as pw:
         eingabe: [...document.querySelectorAll('input:not([type=checkbox]):not([type=radio]):not([type=range]):not([type=color]):not([type=file]):not([type=hidden]), select, textarea')]
           .filter((e) => sicht(e) && parseFloat(getComputedStyle(e).fontSize) < 16).map(n).slice(0, 6),
         knopf: [...document.querySelectorAll('.btn.sm')].filter((e) => sicht(e) && e.getBoundingClientRect().height < 32)
-          .map((e) => (e.id || e.textContent.trim().slice(0, 20)) + ' ' + Math.round(e.getBoundingClientRect().height)).slice(0, 6) }; }'''
+          .map((e) => (e.id || e.textContent.trim().slice(0, 20)) + ' ' + Math.round(e.getBoundingClientRect().height)).slice(0, 6),
+        // Tippflächen ≥ 36 px: Bestand in der Angebotszeile, „Zum Versand →“, Verweise im Versand
+        tipp: [...document.querySelectorAll('.e-bst, .save-state .link-btn, .vs-link')].filter(sicht).map((e) => [e.className, Math.round(e.getBoundingClientRect().height)]) }; }'''
+    bestand = json.load(open(os.path.join(os.path.dirname(__file__), '..', 'fixtures', 'bestand', 'summen.json'), encoding='utf-8'))
+    check('Bestand für die Angebotszeilen übernommen (erfundene Testdaten)', A.call('stock_import', {k: bestand[k] for k in ('date', 'source', 'articles', 'incoming')})[0] == 200)
     fctx = br.new_context(viewport={'width': 390, 'height': 844}, is_mobile=True, has_touch=True, locale='de-DE', timezone_id='Europe/Berlin',
                           extra_http_headers={'X-Forwarded-For': '198.51.100.40'})
     fp = fctx.new_page(); fp.on('pageerror', lambda e: fehler.append(f'{fp.url}: {e}'))
@@ -211,6 +215,10 @@ with sync_playwright() as pw:
         fi = fp.evaluate(FINGER)
         check(f'{name} Handy mit Finger: Eingaben ≥ 16 px (kein Hineinzoomen), kleine Knöpfe antippbar', fi['finger'] and not fi['eingabe'] and not fi['knopf'], fi)
         check(f'{name} Handy mit Finger: kein waagerechtes Scrollen', fp.evaluate('document.documentElement.scrollWidth') <= 390)
+        if name in ('angebot', 'versand'):   # Angebot mit Bestand (oben übernommen) zeigt den Bestand-Knopf, der Versand „Im Angebot ansehen“
+            fp.wait_for_selector('.e-bst' if name == 'angebot' else '.vs-link')
+            fi = fp.evaluate(FINGER)
+            check(f'{name} Handy mit Finger: Bestand-Knopf, „Zum Versand“ und Verweise mindestens 36 px hoch', fi['tipp'] and all(h >= 36 for _, h in fi['tipp']), fi['tipp'][:6])
     fctx.close()
     # Fenster (Vorgabe des Inhabers 02.11.2026): auf jeder Seite schließt ein Klick neben ein <dialog> es nie, Escape schließt.
     # Jedes Fenster der Seite wird direkt geöffnet (Inhalt egal – geprüft wird das gemeinsame Verhalten), dann wird an einer
