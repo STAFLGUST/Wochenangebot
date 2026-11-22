@@ -623,6 +623,14 @@ for ordner in ('protokoll', 'dateien'):   # Dokument-Unterordner und Dateiablage
         check(f'zusammenführen: Gegenprobe ohne Verweis ({ordner}/) läuft wie bisher',
               code == 0 and (d / 'protokoll/2026-11.php').is_file() and (d / 'dateien/qs/ab/ab12.bin').read_bytes() == b'PDF-Inhalt', out)
 
+# Sperrdatei als Verweis (daten/ ist im Container beschreibbar): root legt das Ziel auf dem Wirt nie an
+with tempfile.TemporaryDirectory() as t:
+    t = Path(t); d = aufbau(t); i = t / 'daten-intern'
+    (d / '.storage.lock').symlink_to(t / 'wirt-nologin')
+    ergebnisse = [lauf(befehl, str(d), str(i), *extra) for befehl, extra in (('pruefen', ()), ('trennen', ('--offline',)))]
+    check('Sperrdatei als Verweis: pruefen und trennen brechen ab, Ziel nicht angelegt, nichts getrennt',
+          all(code == 1 for code, _ in ergebnisse) and not (t / 'wirt-nologin').exists() and not (d / '.daten-getrennt').exists(), ergebnisse)
+
 # Zwischendateien eines abgebrochenen Schreibvorgangs: sie tragen den vollen Inhalt und dürfen nicht im gemeinsamen Ordner bleiben
 with tempfile.TemporaryDirectory() as t:
     t = Path(t); d = aufbau(t); i = t / 'daten-intern'

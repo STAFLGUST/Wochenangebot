@@ -38,7 +38,7 @@ import time
 import tomllib
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-import datenbank as db  # noqa: E402  GUARD, SIDECARS, SCHEMA, document_path, validate, connect, write_nofollow
+import datenbank as db  # noqa: E402  GUARD, SIDECARS, SCHEMA, document_path, validate, connect, write_nofollow, open_lock
 
 REST = re.compile(r'^(?P<dok>.+\.php)(?:\.neu|\.kopie|\.[0-9a-f]+\.tmp)$')   # Zwischendateien, siehe rest_dateien()
 MARKER_HAUPT = '.daten-getrennt'
@@ -731,12 +731,12 @@ def main():
     if a.befehl != 'pruefen' and not a.offline:
         p.error('Erst die Anwendung stoppen und --offline angeben')
     if a.befehl == 'pruefen':
-        with (haupt / '.storage.lock').open('a') as lock:
+        with db.open_lock(haupt) as lock:
             fcntl.flock(lock, fcntl.LOCK_SH)
             plan(haupt, intern, a.regeln, a.stufe)
         return
     intern.mkdir(mode=0o700, exist_ok=True)
-    with (haupt / '.storage.lock').open('a') as l1, (intern / '.storage.lock').open('a') as l2:
+    with db.open_lock(haupt) as l1, db.open_lock(intern) as l2:
         fcntl.flock(l1, fcntl.LOCK_EX); fcntl.flock(l2, fcntl.LOCK_EX)
         if a.befehl == 'trennen':
             trennen(haupt, intern, a.regeln, a.stufe)
