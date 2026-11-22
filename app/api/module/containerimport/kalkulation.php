@@ -30,13 +30,22 @@ declare(strict_types=1);
    Sätze stehen nur in CI_KALK_SAETZE (mit Quelle) – je Kalkulation überschreibbar mit Pflicht-Vermerk. Ein Entwurf rechnet
    mit dem Stand dieser Tabelle; „endgültig festschreiben“ hält Eingabe und Ergebnis (darin die wirksamen Sätze) sowie den
    Container fest (GR-106). Danach ändert nur eine neue Fassung mit Grund etwas; Fassungen werden nie gelöscht (GoBD).
-   Dokument: containerimport-kalkulationen (eigene Sperre). Aktionen: app/api/aktionen/containerimport_kalkulation.php. */
+   Dokument: containerimport-kalkulationen (eigene Sperre; bei jedem Zugriff ganz gelesen und ganz geschrieben, deshalb die
+   Gesamtgrenzen CI_KALK_MAX_EINTRAEGE und CI_KALK_MAX_POSITIONEN_GESAMT). Aktionen: app/api/aktionen/containerimport_kalkulation.php. */
 if (!defined('WA_API')) { http_response_code(404); exit; }
 
 const CI_KALK_DOKUMENT = 'containerimport-kalkulationen';
 const CI_KALK_MAX_POSITIONEN = 300;
 const CI_KALK_MAX_TEILE = 12;
 const CI_KALK_MAX_FASSUNGEN = 100;
+/* Gesamtgrenzen des Dokuments: es wird bei jedem Zugriff ganz gelesen und ganz geschrieben, die Grenzen je Eintrag ergeben
+   zusammen ein Vielfaches der Speichergrenze (100 Fassungen a 300 Positionen sind allein 20 MiB). Gemessen im Dateibetrieb
+   mit memory_limit = 128M wie im Betrieb: eine endgültige Fassung mit 300 Positionen ist 0,2 MiB JSON, der Spitzenbedarf
+   einer Schreibaktion ist rund das Achtfache der Dokumentgröße, ab etwa 17 MiB Dokument bricht sie ab (PHP-Fatal, HTTP 500).
+   9000 Positionen sind damit rund 6 MiB Dokument und 48 von 128 MiB Spitzenbedarf – mit Abstand zur Grenze. Greift die
+   Grenze, lagert deploy/ci-kalkulationen-auslagern.php alte Kalkulationen nach einem geprüften Export aus. */
+const CI_KALK_MAX_EINTRAEGE = 400;              // Kalkulationen (Container) im Dokument
+const CI_KALK_MAX_POSITIONEN_GESAMT = 9000;     // Positionen aller Fassungen aller Einträge
 const CI_KALK_IMAG_TOLERANZ = 0.10;   // Imag. EK weicht ab hier vom Einstand ab → Hinweis
 const CI_KALK_SKE_OHNE_KNOCHEN = 1.3; // Schlachtkörperäquivalent je kg Fleisch ohne Knochen (Anrechnung auf das Mercosur-Kontingent)
 const CI_KALK_MAX_KURS = 10.0;        // USD je €
@@ -432,6 +441,22 @@ const CI_KALK_STAENDE = ['entwurf' => 'vorläufig', 'endgueltig' => 'endgültig'
 
 function ci_kalk_dokument(): array { return eudr_liste(store_read(CI_KALK_DOKUMENT)); }
 
+/* Positionen aller Fassungen einer Kalkulation bzw. aller Einträge des Dokuments (ohne den Eintrag an der Stelle $ausser –
+   dessen neue Fassungsliste zählt der Aufrufer selbst). Maß für die Größe des Dokuments: eine Position kostet in einer
+   endgültigen Fassung rund 0,7 KiB JSON. */
+function ci_kalk_positionen(array $fassungen): int
+{
+    $n = 0;
+    foreach ($fassungen as $f) $n += count($f['eingabe']['positionen'] ?? []);
+    return $n;
+}
+function ci_kalk_positionen_gesamt(array $doc, ?int $ausser = null): int
+{
+    $n = 0;
+    foreach ($doc['liste'] as $i => $k) if ($i !== $ausser) $n += ci_kalk_positionen($k['fassungen'] ?? []);
+    return $n;
+}
+
 /* Kalkulation eines Containers aus dem Dokument [Stelle, Eintrag] oder [null, null] */
 function ci_kalk_holen(array $doc, string $sendung): array
 {
@@ -457,6 +482,10 @@ function ci_kalk_speichern(array $doc, string $sendung, array $eingabe, int $rev
             'erstellt' => eudr_wer($me), 'geaendert' => eudr_wer($me), 'endgueltig' => null];
         $art = $letzte ? 'fassung' : 'neu';
     }
+    if ($i === null && count($doc['liste']) >= CI_KALK_MAX_EINTRAEGE) fail('Zu viele Kalkulationen in diesem Bestand. Bitte alte Kalkulationen auslagern lassen.', 422);
+    if (ci_kalk_positionen_gesamt($doc, $i) + ci_kalk_positionen($fassungen) > CI_KALK_MAX_POSITIONEN_GESAMT) {
+        fail('Der Bestand der Kalkulationen ist voll (Speichergrenze des Servers). Bitte alte Kalkulationen auslagern lassen.', 422);
+    }
     // „+ ($alt ?? [])“: Felder einer späteren Version bleiben nach einem Rückfall erhalten
     $neu = ['id' => $alt['id'] ?? eudr_id('k'), 'sendung' => $sendung, 'fassungen' => $fassungen, 'rev' => (int)($alt['rev'] ?? 0) + 1] + ($alt ?? []);
     if ($i === null) $doc['liste'][] = $neu; else $doc['liste'][$i] = $neu;
@@ -474,6 +503,11 @@ function ci_kalk_festschreiben(array $doc, string $sendung, int $rev, array $con
     $n = count($k['fassungen']) - 1;
     $f = $k['fassungen'][$n];
     if ($f['stand'] !== 'entwurf') fail('Diese Fassung ist bereits endgültig.', 409);
+    // Das Festschreiben ergänzt das Ergebnis und vergrößert die Fassung noch einmal – ein Bestand über der Grenze
+    // (angelegt vor ihr oder nach einem Rückfall) darf nicht weiter wachsen.
+    if (ci_kalk_positionen_gesamt($doc) > CI_KALK_MAX_POSITIONEN_GESAMT) {
+        fail('Der Bestand der Kalkulationen ist voll (Speichergrenze des Servers). Bitte alte Kalkulationen auslagern lassen.', 422);
+    }
     $eingabe = ci_kalkulation_eingabe($f['eingabe']);
     $ergebnis = ci_kalkulation_rechnen($eingabe, CI_KALK_SAETZE);
     if (!$ergebnis['vollstaendig']) throw new InvalidArgumentException('Die Kalkulation ist unvollständig: ' . implode(' ', array_column(array_filter($ergebnis['hinweise'], fn($h) => $h['stufe'] === 'fehler'), 'text')));

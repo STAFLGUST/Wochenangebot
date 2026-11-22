@@ -49,14 +49,17 @@ switch ($action) {
             $c = ci_kalk_container($b['sendung'] ?? '');
             $eingabe = ci_kalkulation_eingabe(is_array($b['eingabe'] ?? null) ? $b['eingabe'] : []);
             $grund = eudr_text($b['grund'] ?? '', 500, 'Grund');
-            [$k, $art] = with_lock(CI_KALK_DOKUMENT, function () use ($c, $eingabe, $b, $grund, $me) {
+            // Die Übersicht aus dem schon gelesenen Dokument bilden: ein zweites vollständiges store_read brauchte so viel
+            // Speicher, dass die Antwort nach dem Schreiben abbrach – die Fassung war dann gespeichert, der Nutzer sah 500.
+            [$k, $art, $uebersicht] = with_lock(CI_KALK_DOKUMENT, function () use ($c, $eingabe, $b, $grund, $me) {
                 [$doc, $k, $art] = ci_kalk_speichern(ci_kalk_dokument(), $c['id'], $eingabe, (int)($b['rev'] ?? 0), $grund, $me);
-                store_write(CI_KALK_DOKUMENT, eudr_fortschreiben($doc));
-                return [$k, $art];
+                $doc = eudr_fortschreiben($doc);
+                store_write(CI_KALK_DOKUMENT, $doc);
+                return [$k, $art, ci_kalk_uebersicht($doc)];
             });
             $nr = count($k['fassungen']);
             if ($art !== 'entwurf') audit('containerimport', 'Kalkulation des Containers „' . eudr_container_name($c + ['nummer' => '']) . '“: ' . ($art === 'neu' ? 'angelegt' : "Fassung $nr angelegt (Grund: $grund)"));
-            respond(['ok' => true, 'container' => $c, 'kalkulation' => ci_kalk_sicht($k), 'uebersicht' => ci_kalk_uebersicht(ci_kalk_dokument())]);
+            respond(['ok' => true, 'container' => $c, 'kalkulation' => ci_kalk_sicht($k), 'uebersicht' => $uebersicht]);
         }
 
         /* Letzte Fassung endgültig festschreiben (nur vollständig gerechnet; danach unveränderlich) */
@@ -64,12 +67,13 @@ switch ($action) {
             $me = eudr_bearbeiter();
             $b = body();
             $c = ci_kalk_container($b['sendung'] ?? '');
-            $k = with_lock(CI_KALK_DOKUMENT, function () use ($c, $b, $me) {
+            [$k, $uebersicht] = with_lock(CI_KALK_DOKUMENT, function () use ($c, $b, $me) {   // Übersicht aus dem gelesenen Dokument, siehe _speichern
                 [$doc, $k] = ci_kalk_festschreiben(ci_kalk_dokument(), $c['id'], (int)($b['rev'] ?? 0), $c, $me);
-                store_write(CI_KALK_DOKUMENT, eudr_fortschreiben($doc));
-                return $k;
+                $doc = eudr_fortschreiben($doc);
+                store_write(CI_KALK_DOKUMENT, $doc);
+                return [$k, ci_kalk_uebersicht($doc)];
             });
             audit('containerimport', 'Kalkulation des Containers „' . eudr_container_name($c + ['nummer' => '']) . '“: Fassung ' . count($k['fassungen']) . ' endgültig festgeschrieben');
-            respond(['ok' => true, 'container' => $c, 'kalkulation' => ci_kalk_sicht($k), 'uebersicht' => ci_kalk_uebersicht(ci_kalk_dokument())]);
+            respond(['ok' => true, 'container' => $c, 'kalkulation' => ci_kalk_sicht($k), 'uebersicht' => $uebersicht]);
         }
 }
