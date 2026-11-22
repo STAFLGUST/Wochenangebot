@@ -2,7 +2,7 @@
 
 <!-- ERZEUGT von `python3 werkzeuge/doku.py erzeugen` – nicht von Hand ändern. Quelle: Funktionen und Kommentare im Code. Die CI prüft, dass diese Datei zum Code passt. -->
 
-22 Dateien, 492 Funktionen – in der Reihenfolge der Datei, **fett** die Abschnitte. Text = erste Aussage des Kommentars direkt über der Funktion (Python: Docstring). Übersicht aller Module: [README.md](README.md).
+22 Dateien, 494 Funktionen – in der Reihenfolge der Datei, **fett** die Abschnitte. Text = erste Aussage des Kommentars direkt über der Funktion (Python: Docstring). Übersicht aller Module: [README.md](README.md).
 
 ## `app/api/aktionen/qs.php`
 
@@ -152,7 +152,7 @@ _Qualitätssicherung · QM-System (IFS Wholesale)_
 - `qs_schreiben(name, doc)`
 - `qs_id(praefix)`
 - `qs_wer(me)`
-- `qs_verlauf(e, me, was)`
+- `qs_verlauf(e, me, was, datei)` – $datei: betrifft der Eintrag eine Datei mit Ordnerpfad, merkt er sich Name und Ordner (datei, pfad) – so kann qs_dok_dateien_sichtbar den Namen auch dann …
 - `qs_heute()`
 - `qs_dok_ablegen(doc, i, d, me)` – Dokument in qs-dokumente speichern: Stand hochzählen, „geändert“ setzen (unter der Sperre)
 
@@ -319,10 +319,11 @@ _QM-System · Verfahrensdokumentation nach GoBD (Reiter „Verfahrensdoku“ der
 - `qs_vf_ueberpruefung(doku, heute)` – Überprüfung: seit (letzte Fassung oder „ohne Änderung überprüft“), fällig ab (+ 12 Monate).
 - `qs_vf_gueltig_bis(fassungen, i)` – Letzter Tag, an dem die Fassung mit dem Index $i galt (Tag vor „gültig ab“ der nächsten); leer = gilt noch
 - `qs_vf_fassung_bilden(doku, dokumente, stamm, me, grund, gueltigAb, heute)` – Neue Fassung bilden (prüft alle Voraussetzungen, schreibt nicht)
+- `qs_vf_fassung_sichtbar(f, dokumente, me)` – Fassung für $me (beide Lesewege: qs_vf_aus, qs_vf_export): QM-Dokumente, die $me nicht sieht (geschützte Kapitel, qs_sichtbar), ohne Nr., Titel und Version – …
 
 **Antwort für die Oberfläche**
 
-- `qs_vf_aus(doku, dokumente, stamm, heute)` – Dokumentation für die Oberfläche: Abschnitte sortiert mit Nummer, Fassungen ohne Inhalt (den liefert der Export als PDF), Abweichung seit der letzten …
+- `qs_vf_aus(doku, dokumente, stamm, heute, me)` – Dokumentation für die Oberfläche: Abschnitte sortiert mit Nummer, Fassungen ohne Inhalt (den liefert der Export als PDF), Abweichung seit der letzten …
 - `qs_vf_laden(id)` – Dokumentation für eine Änderung laden (unter der Sperre): [Speicher-Dokument, Index, Dokumentation] oder 404
 - `qs_vf_antworten(doku, me)`
 - `qs_vf_ablegen(doc, i, doku, me)` – Dokumentation nach einer Änderung speichern: Stand hochzählen, „geändert“ setzen
@@ -792,6 +793,7 @@ _Qualitätssicherung – Vorlagen und Nummernstruktur (QM-System Bauabschnitt 3,
 - `dok(did)`
 - `schritt(cli, did, s, **extra)`
 - `neu(cli, **b)`
+- `docx_roh(teile)` – Word-Datei aus rohen Textteilen (Name → XML), gepackt – für die Grenzfälle unten
 - `text(pg, sel)`
 - `anmelden(user, pw, ip, breite, thema, hoehe)`
 - `toast(pg, inhalt)`

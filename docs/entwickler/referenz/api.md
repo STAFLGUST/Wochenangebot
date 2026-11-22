@@ -6,7 +6,7 @@ Aufruf: `/api/?action=<aktion>` (GET lesend, POST mit JSON und `X-CSRF-Token` sc
 
 Spalten: **Art** – lesend, schreibend (nur POST) oder post (GET liest, POST schreibt); **Kennzeichen** – öffentlich (ohne Mitarbeiteranmeldung), Kunden-Wartung, wartungsfrei, fremde Herkunft, eigene Anmeldung (siehe [regeln/aktionen/LIESMICH.md](../../../regeln/aktionen/LIESMICH.md)).
 
-341 Aktionen in 16 Modulen.
+341 Aktionen in 17 Modulen.
 
 ## Angebot (`angebot`)
 
@@ -227,6 +227,15 @@ Spalten: **Art** – lesend, schreibend (nur POST) oder post (GET liest, POST sc
 | `containerimport_tracking_hafen` | `containerimport.intern` | schreibend | – | – | `app/api/aktionen/containerimport.php` |
 | `containerimport_tracking_save` | `containerimport.intern` | schreibend | – | – | `app/api/aktionen/containerimport.php` |
 
+## Import (`import`)
+
+| Aktion | Oberfläche | Art | Kennzeichen | Prüfung im Code | Datei |
+| --- | --- | --- | --- | --- | --- |
+| `import_arten` | `angebot.eingabe` | lesend | – | angemeldet | `app/api/aktionen/importzentrale.php` |
+| `import_pruefen` | `angebot.eingabe` | schreibend | – | – | `app/api/aktionen/importzentrale.php` |
+| `import_teil` | `angebot.eingabe` | schreibend | – | – | `app/api/aktionen/importzentrale.php` |
+| `import_uebernehmen` | `angebot.eingabe` | schreibend | – | – | `app/api/aktionen/importzentrale.php` |
+
 ## HR (`hr`)
 
 | Aktion | Oberfläche | Art | Kennzeichen | Prüfung im Code | Datei |
@@ -312,10 +321,6 @@ Spalten: **Art** – lesend, schreibend (nur POST) oder post (GET liest, POST sc
 | `angebotskategorien` | `angebot.eingabe` | lesend | – | angemeldet | `app/api/aktionen/kundengruppen.php` |
 | `angebotskategorien_save` | `angebot.eingabe` | schreibend | – | Recht stammdaten.bearbeiten | `app/api/aktionen/kundengruppen.php` |
 | `auswertung` | `angebot.eingabe` | lesend | – | Recht auswertung.sehen | `app/api/aktionen/auswertung.php` |
-| `import_arten` | `angebot.eingabe` | lesend | – | angemeldet | `app/api/aktionen/importzentrale.php` |
-| `import_pruefen` | `angebot.eingabe` | schreibend | – | – | `app/api/aktionen/importzentrale.php` |
-| `import_teil` | `angebot.eingabe` | schreibend | – | – | `app/api/aktionen/importzentrale.php` |
-| `import_uebernehmen` | `angebot.eingabe` | schreibend | – | – | `app/api/aktionen/importzentrale.php` |
 | `kunde_delete` | `angebot.eingabe` | schreibend | – | Recht kunden.bearbeiten + Bestätigung | `app/api/aktionen/kundenverwaltung.php` |
 | `kunde_save` | `angebot.eingabe` | schreibend | – | Recht kunden.bearbeiten + Bestätigung | `app/api/aktionen/kundenverwaltung.php` |
 | `kunden` | `angebot.eingabe` | lesend | – | Recht kunden.sehen | `app/api/aktionen/kundenverwaltung.php` |

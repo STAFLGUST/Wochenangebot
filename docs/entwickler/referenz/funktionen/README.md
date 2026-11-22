@@ -7,13 +7,13 @@ Karte für Entwickler und Agenten: Abschnitte und Funktionen jeder Code-Datei (P
 | Modul | Kennung | Dateien | Funktionen |
 | --- | --- | --- | --- |
 | [Angebot](angebot.md) | `angebot` | 62 | 982 |
-| [Bestand](bestand.md) | `bestand` | 9 | 72 |
+| [Bestand](bestand.md) | `bestand` | 9 | 74 |
 | [Leergut](leergut.md) | `leergut` | 4 | 131 |
 | [CRM](crm.md) | `crm` | 9 | 177 |
 | [REWE](rewe.md) | `rewe` | 5 | 186 |
-| [Qualitätssicherung](qs.md) | `qs` | 22 | 492 |
+| [Qualitätssicherung](qs.md) | `qs` | 22 | 494 |
 | [Einkauf](einkauf.md) | `einkauf` | 2 | 6 |
-| [Container-Import](containerimport.md) | `containerimport` | 35 | 362 |
+| [Container-Import](containerimport.md) | `containerimport` | 35 | 369 |
 | [HR](hr.md) | `hr` | 11 | 298 |
 | [Marketing](marketing.md) | `marketing` | 4 | 77 |
 | [Controlling](controlling.md) | `controlling` | 17 | 258 |
@@ -21,4 +21,4 @@ Karte für Entwickler und Agenten: Abschnitte und Funktionen jeder Code-Datei (P
 | [Verwaltung](verwaltung.md) | `verwaltung` | 22 | 235 |
 | [Sicherheit](sicherheit.md) | `sicherheit` | 5 | 109 |
 | [Dashboard](dashboard.md) | `dashboard` | 2 | 45 |
-| [Plattformkern](plattform.md) | `plattform` | 123 | 1247 |
+| [Plattformkern](plattform.md) | `plattform` | 125 | 1270 |

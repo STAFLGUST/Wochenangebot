@@ -2,7 +2,7 @@
 
 <!-- ERZEUGT von `python3 werkzeuge/doku.py erzeugen` – nicht von Hand ändern. Quelle: Funktionen und Kommentare im Code. Die CI prüft, dass diese Datei zum Code passt. -->
 
-9 Dateien, 72 Funktionen – in der Reihenfolge der Datei, **fett** die Abschnitte. Text = erste Aussage des Kommentars direkt über der Funktion (Python: Docstring). Übersicht aller Module: [README.md](README.md).
+9 Dateien, 74 Funktionen – in der Reihenfolge der Datei, **fett** die Abschnitte. Text = erste Aussage des Kommentars direkt über der Funktion (Python: Docstring). Übersicht aller Module: [README.md](README.md).
 
 ## `app/api/lib/bestand-pdf.php`
 
@@ -154,5 +154,7 @@ _Isolated calendar/history selection tests, no server or production storage._
 
 - `store_read(name)`
 - `store_names(prefix)`
+- `store_write(name, data)`
+- `with_lock(name, fn)`
 - `now()`
 - `check(name, ok)`

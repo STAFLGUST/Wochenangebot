@@ -111,6 +111,7 @@ Jede Code-Datei beginnt mit einem Kopfkommentar; dessen erste Aussage steht hier
 
 | Datei | Modul | Inhalt |
 | --- | --- | --- |
+| `abruf.php` | plattform | Abrufe nach außen: gemeinsamer Standard für jeden Abruf fremder Dienste (Länderdaten geo.php, Ortsdaten ort.php, Bedrohungsliste lib/firewall.php, Datenleck-Prüfung lib/nutzer.php, Hafen Hamburg und Whisp im Modul … |
 | `adressen.php` | plattform | Adressen → Koordinaten auf dem eigenen Server (Plattformkern, genutzt von der CRM-Karte) Schlägt Straße + Hausnummer + PLZ/Ort in einem Adressverzeichnis aus OpenStreetMap nach (ODbL; erzeugt von … |
 | `aktionen-liste.php` | plattform | ERZEUGT von `python3 werkzeuge/regeln.py erzeugen` aus regeln/aktionen/*.toml – nicht von Hand ändern. |
 | `angebote.php` | angebot | Angebote, Kundenpreise, Sonderpreise, Datenmodell, gemeinsames Bearbeiten |
@@ -523,6 +524,7 @@ Jede Code-Datei beginnt mit einem Kopfkommentar; dessen erste Aussage steht hier
 | `bereitstellen.py` | plattform | Bereitstellung eines Stands |
 | `cdn-netzsperre.sh` | plattform | Netzsperre am Server |
 | `cdn_netzsperre.py` | plattform | Netzsperre am Server |
+| `ci-kalkulationen-auslagern.php` | plattform | Container-Import: Kalkulationen auslagern, wenn das Dokument containerimport-kalkulationen seine Gesamtgrenze erreicht (CI_KALK_MAX_POSITIONEN_GESAMT in app/api/module/containerimport/kalkulation.php). |
 | `dateien_sichern.py` | plattform | Inkrementelle Sicherung der Dateiablage (dateien/<bereich>/<xx>/<id>.bin, lib/dateiablage.php) für deploy/sichern.sh. |
 | `daten-trennen.sh` | plattform | Daten trennen (ADR-007 Stufe 2): interne Dokumente (Personal, Nutzer, CRM, Controlling, QS, Dateiablage …) aus dem gemeinsamen Ordner daten/ in daten-intern/ verschieben, den nur die Mitarbeiterseite … |
 | `daten_trennen.py` | plattform | Daten trennen (ADR-007 Stufe 2): interne Dokumente aus daten/ in daten-intern/ verschieben – bzw. zurückführen. |
@@ -742,6 +744,7 @@ Jede Code-Datei beginnt mit einem Kopfkommentar; dessen erste Aussage steht hier
 | `dashboard.toml` | dashboard | Aktionen des Moduls „dashboard“ |
 | `einkauf.toml` | einkauf | Aktionen des Moduls „einkauf“ |
 | `hr.toml` | hr | Aktionen des Moduls „hr“ |
+| `import.toml` | verwaltung | Aktionen des Moduls „import“ (Importzentrale, Kachel Verwaltung → Import). |
 | `leergut.toml` | leergut | Aktionen des Moduls „leergut“ |
 | `marketing.toml` | marketing | Aktionen des Moduls „marketing“ |
 | `plattform.toml` | plattform | Aktionen des Moduls „plattform“ |
@@ -878,7 +881,7 @@ Jede Code-Datei beginnt mit einem Kopfkommentar; dessen erste Aussage steht hier
 | `test_passwortpruefung.py` | plattform | Datenleck-Prüfung der Passwörter („Pwned Passwords“, nachgebauter Dienst auf AUX_PORT): standardmäßig aus; eingeschaltet werden betroffene Passwörter beim Festlegen abgelehnt (Mitarbeiter, Kunden), bestehende bei der … |
 | `test_postausgang.py` | plattform | Testgruppe postausgang |
 | `test_preisaenderung.py` | angebot | Angebot „mit Preisänderung“ (Inhaber 20.11.2026): je Artikel die Veränderung zur Vorwoche (▼ günstiger, ▲ teurer, neu) als Zusatzfunktion – auf der Angebotsseite und im Druck nur mit ?vergleich=vorwoche bzw. … |
-| `test_protokoll.py` | plattform | Aufbewahrung des Aktivitätsprotokolls (lib/protokoll.php, PROTOKOLL_MONATE = 6; Inhaber 25.10.2026). |
+| `test_protokoll.py` | plattform | Aufbewahrung und Grenzen des Aktivitätsprotokolls (lib/protokoll.php, PROTOKOLL_MONATE = 6; Inhaber 25.10.2026). |
 | `test_qs.py` | qs | Qualitätssicherung (Modul qs, Oberfläche qs.intern unter /module/qs/) – QM-System |
 | `test_qs_ablage.py` | qs | Qualitätssicherung – Dokumentenablage (QM-System Bauabschnitt 2) |
 | `test_qs_bericht.py` | qs | Qualitätssicherung – Audit-Bericht (app/api/module/qs/bericht.php, Aktionen qs_bericht und qs_bericht_excel, Reiter „Audit“). |
@@ -969,6 +972,7 @@ Jede Code-Datei beginnt mit einem Kopfkommentar; dessen erste Aussage steht hier
 | `eudr_geodatenkatalog.py` | containerimport | Übernimmt eine Fassung der offenen Metadatenbank GEOS-EUDR (Thünen-Institut, MIT-Lizenz) in den Geodaten-Katalog des Container-Imports (app/api/module/containerimport/geodatenkatalog.json). |
 | `images_aktualisieren.py` | plattform | Sicherheitsupdates der Container-Images: festgelegte Digests auf den neuesten Stand derselben Fassung bringen. |
 | `integritaet.py` | plattform | Prüfliste der Dateiprüfung (app/api/lib/integritaet-liste.php): prüfen, dass sie NICHT im Repository steht. |
+| `ip_adressen.py` | plattform | Echte öffentliche IPv4-Adressen im Repository finden (GR-007, AGENTS.md Regel 5). |
 | `karte_auszug.py` | plattform | Kleiner Ausschnitt aus einer Protomaps-Basiskarte (PMTiles, OpenStreetMap-Daten, ODbL) – für Testdaten und lokale Vorschau der Detailkarte. |
 | `karte_bauen.py` | verwaltung | Baut die Landkarte für die Auswertung (app/assets/karte.json) aus Natural Earth (gemeinfrei), weitergegeben als TopoJSON im npm-Paket „world-atlas“ (ISC). |
 | `karte_stil.mjs` | plattform | – |
