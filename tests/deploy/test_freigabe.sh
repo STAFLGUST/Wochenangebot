@@ -111,9 +111,11 @@ ok "Seite nach Rückfall erreichbar" 'curl -fsS "http://127.0.0.1:$WEB_PORT/api/
 ok "Rückfall: Prüfliste und Versionsnummern wieder für die Vorversion" 'grep -q "aus Commit $G_SHA" "$LISTE" && python3 "$B/deploy/bereitstellen.py" --pruefen >/dev/null \
   && seite "" | grep -q "assets/frontend.js?v=$(vnr frontend.js)\""'
 lauf || true; ok "defekter Release wird nicht erneut versucht" '[ "$(kopf)" = "$G_SHA" ] && [ "$(cat "$B/.release-abgelehnt")" = "$X_SHA" ]'
-# Status nach dem automatischen Rückfall nennt den abgelehnten Release als „vorher“ – der Notfall-Rückfall darf nie dorthin
+# Status nach dem automatischen Rückfall nennt den abgelehnten Release als „vorher“ – der Notfall-Rückfall darf nie dorthin, sondern
+# auf den Stand vor dem letzten erfolgreichen Release (.release-vorher schreibt nur ein erfolgreicher Lauf)
+ok "automatischer Rückfall: .release-vorher bleibt der Stand vor dem letzten erfolgreichen Release" '[ "$(cat "$B/.release-vorher")" = "$A_SHA" ] && [ "$(st vorher)" = "$X_SHA" ]'
 zurueck || true
-ok "Notfall-Rückfall nach automatischem Rückfall: nie auf den abgelehnten Release" '[ "$(kopf)" = "$G_SHA" ] && grep -q "automatisch zurückgenommen" "$T/out.txt" && [ "$(cat "$B/.release-abgelehnt")" = "$X_SHA" ]'
+ok "Notfall-Rückfall nach automatischem Rückfall: auf den Stand vor dem letzten erfolgreichen Release, nie auf den abgelehnten" '[ "$(kopf)" = "$A_SHA" ] && grep -q "Zurückgesetzt auf" "$T/out.txt" && [ "$(cat "$B/.release-abgelehnt")" = "$G_SHA" ]'
 git -C "$B" reset -q --hard "$G_SHA"   # Ausgangslage der folgenden Prüfungen unabhängig vom Ergebnis oben
 
 rm -f "$B/.release-abgelehnt"
@@ -122,6 +124,7 @@ echo ORIGINAL > "$T/opfer"; chmod 600 "$T/opfer"; rm -f "$B/daten/deployment.php
 ln -s "$T/opfer" "$B/daten/deployment.php"; ln -s "$T/opfer2" "$B/daten/deployment.php.tmp"
 printf '{"release":"%s","ci_ok":["%s"]}' "$X_SHA" "$G_SHA" > "$T/state.json"
 lauf || true; ok "Release ohne erfolgreiche CI abgelehnt" '[ "$(kopf)" = "$G_SHA" ] && grep -q "ohne erfolgreiche CI" "$T/out.txt"'
+ok "abgelehnter Release: .release-vorher unverändert (nicht der aktive Stand)" '[ "$(cat "$B/.release-vorher")" = "$A_SHA" ]'
 ok "Status folgt keinem Verweis in daten/ (Ziel unverändert, Verweis ersetzt)" '[ "$(cat "$T/opfer")" = ORIGINAL ] && [ "$(stat -c %a "$T/opfer")" = 600 ] && [ ! -e "$T/opfer2" ] \
   && [ ! -L "$B/daten/deployment.php" ] && grep -q "ohne erfolgreiche CI" "$B/daten/deployment.php"'
 rm -f "$B/daten/deployment.php.tmp"
@@ -184,6 +187,7 @@ K_SHA=$(commit sichern-kaputt x "sed -i 's/^set -eu\$/set -eu; echo kaputt; exit
 printf '{"release":"%s","ci_ok":["%s"]}' "$K_SHA" "$K_SHA" > "$T/state.json"
 lauf || true
 ok "neues Sicherungsskript defekt: nicht eingespielt" '[ "$(kopf)" = "$O_SHA" ] && [ "$(st ok)" = False ] && grep -q "Sicherung vor dem Release fehlgeschlagen" "$B/daten/deployment.php" && [ ! -e "$B/deploy/.sichern-release.sh" ]'
+ok "Sicherung fehlgeschlagen: .release-vorher unverändert" '[ "$(cat "$B/.release-vorher")" = "$C_SHA" ]'
 git -C "$B" reset -q --hard "$K_SHA"   # Lage wie im Betrieb: aktiver Stand mit defektem Sicherungsskript
 ok "Testvoraussetzung: aktives Sicherungsskript defekt" '! sh "$B/deploy/sichern.sh" --jetzt >/dev/null 2>&1'
 F_SHA=$(commit sichern-repariert x "sed -i 's/^set -eu; echo kaputt; exit 3\$/set -eu/' '$T/src/deploy/sichern.sh'")

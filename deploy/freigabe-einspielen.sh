@@ -1,6 +1,7 @@
 #!/bin/sh
 # Release-Modus: spielt nur einen von Hand freigegebenen Commit ein (GitHub-Workflow „Release“),
 # prüft danach die Erreichbarkeit wie ein Besucher und kehrt bei Fehlern automatisch zur Vorversion zurück.
+# Den Stand für den Notfall-Rückfall (.release-vorher) schreibt nur ein erfolgreicher Lauf.
 # Maßgeblich ist der neueste erfolgreiche Release-Lauf (nach Startzeit); ein Stand, der älter ist als der aktive, wird nie
 # automatisch eingespielt (zurück nur von Hand mit deploy/release-zurueck.sh).
 # Wird von aktualisieren.sh aufgerufen, sobald der Release-Modus eingerichtet ist
@@ -74,8 +75,9 @@ api() { curl -fsS -m 20 -H "Authorization: Bearer $TOKEN" -H "Accept: applicatio
 melden() { [ -n "$HC_URL" ] || return 0; if [ "$1" = ok ]; then curl -fsS -m 10 --retry 3 "$HC_URL" >/dev/null 2>&1 || true; else curl -fsS -m 10 --retry 3 "$HC_URL/fail" >/dev/null 2>&1 || true; fi; }
 status() { # ok sha vorher lauf meldung
   # Vorheriger Stand für den Notfall-Rückfall (release-zurueck.sh) nur in einer root-Datei außerhalb von daten/:
-  # daten/deployment.php kann der Container ändern und ist nur Anzeige
-  printf '%s\n' "$3" > "$BASIS/.release-vorher.tmp" && mv -f "$BASIS/.release-vorher.tmp" "$BASIS/.release-vorher"
+  # daten/deployment.php kann der Container ändern und ist nur Anzeige. Nur nach erfolgreichem Release: ein gescheiterter oder
+  # abgelehnter Lauf ließe sonst den aktiven Stand als „vorher“ zurück, und der Notfall-Rückfall fände den Stand davor nicht mehr
+  if [ "$1" = true ]; then printf '%s\n' "$3" > "$BASIS/.release-vorher.tmp" && mv -f "$BASIS/.release-vorher.tmp" "$BASIS/.release-vorher"; fi
   # daten/ ist im Container beschreibbar: Datei außerhalb anlegen und nur per Umbenennen ersetzen (folgt keinem Verweis)
   ST_TMP=$(mktemp "$BASIS/.status.XXXXXX") || return 0
   printf '%s\n{"t":"%s","ok":%s,"sha":"%s","vorher":"%s","lauf":"%s","meldung":"%s"}' "$GUARD" "$(date -u +%Y-%m-%dT%H:%M:%SZ)" "$1" "$2" "$3" "$4" "$5" > "$ST_TMP"
