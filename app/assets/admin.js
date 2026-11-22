@@ -2977,6 +2977,8 @@
   const wkLabel = (w) => `KW ${w.week}`;   // Achse des Diagramms (kurz); im Text immer wkLong
   const wkLong = (w) => `KW ${w.week}/${w.year}`;
   const numVal = (p) => (p && p.price && p.price.status === 'value' ? p.price.value : null);
+  const centVal = (p) => { const v = numVal(p); return v == null ? null : glatt(v * 100) / 100; };   // Preisverlauf auf Cent wie Anzeige und Bestellung (gespeichert bis 4 Stellen)
+  const histPreis = (p) => (p.status === 'value' ? F.euroKg(p.value) : priceShort(p));
   const fmtDelta = (d) => F.differenz(d, '€/kg', 2, 2);
 
   /* Artikel-Schlüssel über alle Wochen: Artikelnummer; bei mehrfach vergebenen Nummern zusätzlich Bezeichnung + Gruppe */
@@ -3006,7 +3008,7 @@
     });
     const L = weeks.length - 1;
     const series = [...map.values()].map((s) => {
-      s.vals = s.points.map(numVal);
+      s.vals = s.points.map(centVal);
       const nums = s.vals.filter((v) => v != null);
       s.min = nums.length ? Math.min(...nums) : null;
       s.max = nums.length ? Math.max(...nums) : null;
@@ -3183,7 +3185,7 @@
     $('#hist-count').textContent = `${plural(list.length, 'Artikel', 'Artikel')} · ${wkLong(H.weeks[idx[0]])} – ${wkLong(H.weeks[L])}`;
     const rows = list.map((s) => {
       const x = st.get(s);
-      const cur = s.cur ? priceShort(s.cur.price) : '';
+      const cur = s.cur ? histPreis(s.cur.price) : '';
       const d = x.delta;
       return `<tr data-skey="${esc(s.key)}" tabindex="0">
         <td class="h-code">${esc(s.code || '—')}</td>
@@ -3311,7 +3313,7 @@
       const v = s.vals[i];
       const ch = v != null && prev != null ? v - prev : null;
       if (v != null) prev = v;
-      rows.push(`<tr${p ? '' : ' class="muted"'}><td>${esc(wkLong(w))}</td><td class="num">${p ? esc(priceShort(p.price)) : 'nicht im Angebot'}</td>
+      rows.push(`<tr${p ? '' : ' class="muted"'}><td>${esc(wkLong(w))}</td><td class="num">${p ? esc(histPreis(p.price)) : 'nicht im Angebot'}</td>
         <td class="num">${ch == null || Math.abs(ch) < 1e-9 ? '' : `<span class="delta ${ch > 0 ? 'up' : 'down'}">${fmtDelta(ch)}</span>`}</td>
         <td>${p && p.name !== s.name ? esc(p.name) : ''}${p && (p.altPrices || []).length ? `<span class="muted"> ${p.altPrices.map((a) => esc((a.label || '') + ': ' + priceShort(a))).join(' · ')}</span>` : ''}</td>
         <td class="muted">${p && p.group !== s.group ? esc(p.group) : ''}</td></tr>`);
@@ -3322,7 +3324,7 @@
       <div class="dlg-body">
         <div class="ser-range">${rangeSeg()}<span class="muted">${esc(wkLong(W[0]))} – ${esc(wkLong(W[W.length - 1]))}${x.delta ? ` · Änderung <span class="delta ${x.delta > 0 ? 'up' : 'down'}">${fmtDelta(x.delta)}</span>` : ''}</span></div>
         <div class="cmp-stats hstats">
-          <div><span>Aktuell</span><strong>${cur ? esc(priceShort(cur.price)) : '—'}</strong></div>
+          <div><span>Aktuell</span><strong>${cur ? esc(histPreis(cur.price)) : '—'}</strong></div>
           <div><span>Tiefster</span><strong>${F.euroKg(x.min)}</strong></div>
           <div><span>Höchster</span><strong>${F.euroKg(x.max)}</strong></div>
           <div><span>Durchschnitt</span><strong>${x.avg != null ? F.euroKg(Math.round(x.avg * 100) / 100) : '—'}</strong></div>
