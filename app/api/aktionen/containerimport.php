@@ -52,10 +52,10 @@ switch ($action) {
             $dateien = body()['dateien'] ?? null;
             if (!is_array($dateien) || !$dateien || !array_is_list($dateien) || count($dateien) > 50) fail('Bitte 1 bis 50 Dateien auswählen.', 422);
             $bekannt = eudr_bekannt_tabelle(eudr_betriebe()['liste']);
-            $ergebnis = ci_doppelte_nummern_melden(array_map(fn($d) => eudr_datei_pruefen(is_array($d) ? $d : [], $bekannt), $dateien));
-            $punkte = 0;
-            foreach ($ergebnis as $datei) foreach ($datei['orte'] as $ort) $punkte += $ort['punkte'];
-            if ($punkte > EUDR_MAX_PUNKTE_ANFRAGE) fail('Zu viele Punkte in einem Durchgang – bitte die Dateien einzeln einlesen.', 422);
+            $punkte = 0;   // EUDR_MAX_PUNKTE_ANFRAGE prüft eudr_datei_pruefen je Ort mit – nicht erst, wenn alle Dateien geprüft sind
+            $ergebnis = [];
+            foreach ($dateien as $d) $ergebnis[] = eudr_datei_pruefen(is_array($d) ? $d : [], $bekannt, $punkte);
+            $ergebnis = ci_doppelte_nummern_melden($ergebnis);
             respond(['ok' => true, 'dateien' => $ergebnis]);
         }
 

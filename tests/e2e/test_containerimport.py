@@ -185,6 +185,38 @@ campo = fo.get('Campo Ejemplo', {})
 check('eingefügte Koordinaten (WGS84): offener Umriss geschlossen und als Korrektur vermerkt; Land außerhalb der Liste bleibt erhalten', campo.get('land') == 'UY' and campo['quelle']['korrekturen'] == ['offen']
       and [b['code'] for b in campo['befunde']] == ['korrektur'] and campo['eingabe']['quelle']['korrekturen'] == ['offen'] and len(campo['geometrie']['coordinates'][0]) == 5, campo)
 check('Prüfen: ohne Dateien 422', L.call('containerimport_eudr_pruefen', {'dateien': []})[0] == 422)
+
+
+def kamm(zacken):
+    """Umriss mit vielen sich überlappenden Kanten (dünne, schräge Zacken) – ohne echte Selbstüberschneidung, aber
+    quadratisch teuer zu prüfen (erfundene Koordinaten in Paraguay)."""
+    r = []
+    for i in range(zacken):
+        r += [[-57 + i * 1e-5, -23.0], [-57 + i * 1e-5 + 3.0, -20.0], [-57 + i * 1e-5 + 5e-6, -23.0]]
+    return r + [[-57 + zacken * 1e-5, -23.5], [-57.5, -23.5], r[0]]
+
+
+def kreis(punkte, mitte=(-57.0, -23.0), radius=0.5):
+    """Gutartiger Umriss gleicher Größe (Gegenprobe zum Kamm)."""
+    r = [[round(mitte[0] + radius * math.cos(2 * math.pi * i / punkte), 6), round(mitte[1] + radius * math.sin(2 * math.pi * i / punkte), 6)] for i in range(punkte)]
+    return r + [r[0]]
+
+
+def flaechen(umrisse):
+    return json.dumps({'type': 'FeatureCollection', 'features': [
+        {'type': 'Feature', 'properties': {'ProducerCountry': 'PY', 'ProductionPlace': f'Estancia Rechenlast {i + 1}'}, 'geometry': {'type': 'Polygon', 'coordinates': [u]}}
+        for i, u in enumerate(umrisse)]})
+
+
+st, r = L.call('containerimport_eudr_pruefen', {'dateien': [{**DATEI, 'datei': 'kamm.geojson', 'text': flaechen([kamm(1664), kreis(4998)])}]})
+orte = {o['name']: o for o in r.get('dateien', [{}])[0].get('orte', [])}
+check('Umriss mit zu vielen Kantenvergleichen: Fehlerbefund „komplex“ statt beliebig langer Rechenzeit; ein gutartiger Umriss gleicher Größe bleibt in Ordnung',
+      st == 200 and [b['code'] for b in orte.get('Estancia Rechenlast 1', {}).get('befunde', [])] == ['komplex']
+      and orte.get('Estancia Rechenlast 1', {}).get('stand') == 'fehler' and orte.get('Estancia Rechenlast 2', {}).get('stand') == 'ok',
+      (st, {k: (v['stand'], [b['code'] for b in v['befunde']]) for k, v in orte.items()}))
+st, r = L.call('containerimport_eudr_pruefen', {'dateien': [{**DATEI, 'datei': 'viele.geojson', 'text': flaechen([kreis(4998) for _ in range(21)])}]})
+check('Punktbudget einer Anfrage: 422 schon während des Prüfens – nicht erst, wenn alle Flächen geprüft sind',
+      st == 422 and 'Zu viele Punkte' in r.get('error', ''), (st, r.get('error')))
 check('Prüfen speichert nichts', L.call('containerimport_start')[1]['betriebe'] == [])
 
 # ---------- Sendung und Betriebe speichern ----------
@@ -254,6 +286,24 @@ def profil(s):
 
 def betrieb(name):
     return next(b for b in stand()['betriebe'] if b['name'] == name)
+
+
+# Befunde der Umrisse liegen zwischengespeichert im Dokument, damit nicht jede Antwort alle Farmer neu prüft (additives Feld, GR-006)
+gesp = _json(storage_raw('containerimport-eudr-betriebe'))['liste']
+mit = next(b for b in gesp if b['name'] == 'Estancia Vertauscht')
+zwischen = [x['code'] for x in mit['geoBefunde']['befunde']]
+sicht = [x['code'] for x in betrieb('Estancia Vertauscht')['befunde']]
+check('Befunde der Umrisse sind im Dokument zwischengespeichert (Fassung und Kennung der Geometrie), aber nie in der Antwort',
+      all('geoBefunde' in b for b in gesp) and set(mit['geoBefunde']) == {'fassung', 'kennung', 'befunde'}
+      and zwischen and zwischen == sicht[:len(zwischen)] and 'geoBefunde' not in betrieb('Estancia Vertauscht'),
+      (mit.get('geoBefunde'), sicht, 'geoBefunde' in betrieb('Estancia Vertauscht')))
+doc = _json(storage_raw('containerimport-eudr-betriebe'))
+for b in doc['liste']:
+    b['geoBefunde'] = {'fassung': 0, 'kennung': 'veraltet', 'befunde': [{'stufe': 'hinweis', 'code': 'erfunden', 'text': 'darf nicht gezeigt werden'}]}
+storage_write('containerimport-eudr-betriebe', doc)
+check('veralteter oder anders geschnittener Zwischenspeicher wird verworfen und neu gerechnet (GR-006)',
+      [x['code'] for x in betrieb('Estancia Vertauscht')['befunde']] == sicht, [x['code'] for x in betrieb('Estancia Vertauscht')['befunde']])
+storage_write('containerimport-eudr-betriebe', dict(_json(storage_raw('containerimport-eudr-betriebe')), liste=gesp))
 
 
 s = stand()['sendungen'][0]
