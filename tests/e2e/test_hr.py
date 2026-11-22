@@ -1954,6 +1954,21 @@ with sync_playwright() as p:
     r = P.call('hr_verwaltung&jahr=2025')[1]
     eb2 = next(e for e in r['eintraege'] if e['id'] == eb['id'])
     check('Art geändert: Hinweis „vom Urlaub abgezogen“ entfällt, zählt weiter nicht gegen den Urlaub', st == 200 and eb2['urlaubAbzug'] is False and {p_['name']: p_['konto'] for p_ in r['personen']}['Bernd Muster']['genommen'] == 0, (st, x, eb2))
+    # erneuter Import nach Korrekturen der Personalstelle (Storno, geänderte Art): Korrektur geht vor, nichts wird wieder gebucht
+    ek = next(e for e in r['eintraege'] if e['quelle'] == 'zeiterfassung' and e['name'] == 'Erika Editor' and e['art'] == 'K')
+    st_s, _ = P.call('hr_eintrag_save', {'id': ek['id'], 'stornieren': True, 'grund': 'war Urlaub, Zeiterfassung falsch'})
+    st, v5 = zeit(P)
+    zk = {z['name']: z['text'] for z in v5.get('zeilen', []) if 'Korrektur der Personalstelle' in z['text']}
+    check('erneuter Import, Vorschau: Storno und geänderte Art als „abweichend, nicht übernommen (Korrektur der Personalstelle)“', st_s == 200 and st == 200
+          and '10.02.2025 (storniert statt K)' in zk.get('Erika Editor', '') and '05.03.2025 (G statt K)' in zk.get('Bernd Muster', ''), (st_s, st, zk))
+    st, _ = zeit(P, True, v5['stand'])
+    r = P.call('hr_verwaltung&jahr=2025')[1]
+    ze2 = sorted((e['name'], e['art'], e['von'], e['bis'], e['status']) for e in r['eintraege'] if e['quelle'] == 'zeiterfassung')
+    ek2 = next((e for e in r['eintraege'] if e['id'] == ek['id']), None)
+    check('erneuter Import übernommen: Storno samt Grund bleibt, Krankheit nicht wieder genehmigt, geänderte Art bleibt', st == 200 and ek2 and ek2['status'] == 'storniert'
+          and (ek2.get('entscheidung') or {}).get('grund') == 'war Urlaub, Zeiterfassung falsch' and ('Erika Editor', 'K', '2025-02-10', '2025-02-14', 'genehmigt') not in ze2
+          and ('Bernd Muster', 'G', '2025-03-05', '2025-03-05', 'genehmigt') in ze2 and ('Bernd Muster', 'K', '2025-03-05', '2025-03-05', 'genehmigt') not in ze2
+          and ('Carla Probe', 'U', '2025-03-17', '2025-03-18', 'genehmigt') in ze2, (st, ek2, ze2))
 
     # ── Verwaltung → Mitarbeiter (Personalstelle ohne Administratorrechte): nur HR-Angaben ──
     pg.click('#vt-users'); pg.wait_for_selector('#view-users tr[data-hr-uid]')
