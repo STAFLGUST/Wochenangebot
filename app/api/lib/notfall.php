@@ -251,7 +251,8 @@ function notfall_nachher(array $d): array
     $fw = $V['fw']; unset($fw['mitschnittMinuten']);
     return ['sicherheit' => $V['sec'], 'firewall' => $fw];
 }
-/* Rückweg feldbezogen (nur innerhalb von with_lock(NOTFALL_DOK) aufrufen): nur Felder der Vorlage „Notfall“ und nur, solange
+/* Rückweg feldbezogen (nur innerhalb von with_lock(NOTFALL_DOK) aufrufen; jedes der beiden Dokumente wird zusätzlich unter
+   seiner eigenen Sperre gelesen und geschrieben): nur Felder der Vorlage „Notfall“ und nur, solange
    sie noch den vom Notfall geschriebenen Wert haben. Während des Vorfalls geänderte Felder bleiben stehen und werden benannt.
    Liefert [Text, zurückgenommene Felder, beibehaltene Felder, Protokollzeilen]. */
 function notfall_rueck_einstellungen(array $d): array
@@ -263,21 +264,25 @@ function notfall_rueck_einstellungen(array $d): array
         return is_bool($v) ? ($v ? 'an' : 'aus') : (is_array($v) ? implode(', ', $v) : (string)$v);
     };
     foreach (['sicherheit', 'firewall'] as $dok) {
-        $vorher = (array)($d['vorher'][$dok] ?? []);
-        $nachher = (array)($nachherAlle[$dok] ?? []);
-        $jetzt = store_read($dok) ?? [];
-        $neu = $jetzt;
-        foreach (notfall_rueck_felder($dok) as $f) {
-            if (!array_key_exists($f, $nachher)) continue;                      // vom Notfall nicht gesetzt
-            $label = NOTFALL_FELD_LABEL[$f] ?? $f;
-            if (($jetzt[$f] ?? null) !== $nachher[$f]) { $behalten[] = $label; continue; }   // während des Notfalls geändert
-            if (array_key_exists($f, $vorher)) $neu[$f] = $vorher[$f]; else unset($neu[$f]);
-            if (($neu[$f] ?? null) === ($jetzt[$f] ?? null)) continue;          // Wert war schon vorher so
-            $zurueck[] = $label;
-            $zeilen[] = ['k' => 'notfall|' . $dok . '|' . $f, 'code' => '', 'name' => $dok === 'sicherheit' ? 'Sicherheit' : 'Firewall',
-                         'f' => $label, 'from' => $fmt($f, $jetzt[$f] ?? ''), 'to' => $fmt($f, $neu[$f] ?? '')];
-        }
-        if ($neu !== $jetzt) store_write($dok, $neu);
+        // Eigene Sperre je Dokument: der Vergleich „steht hier noch der vom Notfall geschriebene Wert?“ muss beim Schreiben
+        // noch gelten, sonst nimmt der Rückweg eine gleichzeitige Änderung still zurück (Befund 22.11.2026).
+        with_lock($dok, function () use ($dok, $d, $nachherAlle, $fmt, &$zurueck, &$behalten, &$zeilen) {
+            $vorher = (array)($d['vorher'][$dok] ?? []);
+            $nachher = (array)($nachherAlle[$dok] ?? []);
+            $jetzt = store_read($dok) ?? [];
+            $neu = $jetzt;
+            foreach (notfall_rueck_felder($dok) as $f) {
+                if (!array_key_exists($f, $nachher)) continue;                      // vom Notfall nicht gesetzt
+                $label = NOTFALL_FELD_LABEL[$f] ?? $f;
+                if (($jetzt[$f] ?? null) !== $nachher[$f]) { $behalten[] = $label; continue; }   // während des Notfalls geändert
+                if (array_key_exists($f, $vorher)) $neu[$f] = $vorher[$f]; else unset($neu[$f]);
+                if (($neu[$f] ?? null) === ($jetzt[$f] ?? null)) continue;          // Wert war schon vorher so
+                $zurueck[] = $label;
+                $zeilen[] = ['k' => 'notfall|' . $dok . '|' . $f, 'code' => '', 'name' => $dok === 'sicherheit' ? 'Sicherheit' : 'Firewall',
+                             'f' => $label, 'from' => $fmt($f, $jetzt[$f] ?? ''), 'to' => $fmt($f, $neu[$f] ?? '')];
+            }
+            if ($neu !== $jetzt) store_write($dok, $neu);
+        });
     }
     $text = $zurueck ? 'wie vor dem Notfall wiederhergestellt' : 'nichts zurückzunehmen';
     if ($behalten) $text .= ' · während des Notfalls geändert und beibehalten: ' . implode(', ', $behalten);

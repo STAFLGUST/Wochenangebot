@@ -12,8 +12,11 @@ if (!defined('WA_API')) { http_response_code(404); exit; }   // nur über api/in
 
 const FW_DEFAULTS = ['waf' => 'sperren', 'autoSperre' => true, 'treffer' => 5, 'sperrMinuten' => 60, 'fehlerLimit' => 30,
                      'feed' => false, 'mitschnittBis' => 0, 'erlaubt' => []];
-/* Nicht exportiert/importiert: Listen und Schalter, die vom einzelnen Server abhängen (Adressen, Länder) */
-const FW_NICHT_UEBERTRAGEN = ['ipEnabled' => 1, 'adminIps' => 1, 'geoEnabled' => 1, 'geoMode' => 1, 'geoCountries' => 1, 'geoScope' => 1];
+/* Nicht exportiert/importiert: Listen und Schalter, die vom einzelnen Server abhängen (Adressen, Länder) und die
+   abgeschaltete Passwortbestätigung (bestaetigungAus) – eine unvertraute Datei darf keine Sicherheitskontrolle absenken;
+   geändert wird sie nur über security_save, das jede Aktion einzeln protokolliert (Befund 22.11.2026). */
+const FW_NICHT_UEBERTRAGEN = ['ipEnabled' => 1, 'adminIps' => 1, 'geoEnabled' => 1, 'geoMode' => 1, 'geoCountries' => 1, 'geoScope' => 1,
+                              'bestaetigungAus' => 1];
 /* Bezeichnungen der Felder im Protokoll (Firewall speichern und aus Datei übernehmen) */
 const FW_FELD_LABEL = ['waf' => 'Firewall', 'autoSperre' => 'Automatisch sperren', 'treffer' => 'Sperren nach Treffern',
     'sperrMinuten' => 'Sperrdauer (Min.)', 'fehlerLimit' => 'Fehlerbremse (Anfragen/5 Min.)', 'feed' => 'Bedrohungsliste', 'erlaubt' => 'Nie sperren'];
@@ -83,7 +86,9 @@ function fw_fremd(): bool
 function fw_key(string $ip): string
 {
     $bin = @inet_pton($ip);
-    if ($bin !== false && strlen($bin) === 16) return inet_ntop(substr($bin, 0, 8) . str_repeat("\0", 8)) . '/64';
+    // ::ffff:a.b.c.d ist eine einzelne IPv4-Adresse, kein /64-Netz – ohne diese Ausnahme (wie in client_key) fielen alle
+    // so geschriebenen Adressen in den Sammelschlüssel ::/64
+    if ($bin !== false && strlen($bin) === 16 && substr($bin, 0, 12) !== str_repeat("\0", 10) . "\xff\xff") return inet_ntop(substr($bin, 0, 8) . str_repeat("\0", 8)) . '/64';
     return $ip;
 }
 function fw_sperrliste(): array
@@ -296,6 +301,15 @@ function fw_feed_laden(): array
     if (count($netze) < 50) throw new RuntimeException('Die Bedrohungsliste ist unvollständig.');
     return fw_feed_speichern($netze, 'Spamhaus DROP');
 }
+/* Bedrohungsliste vor einem gesperrten Abschnitt holen (fw_save, fw_import, fw_vorlage_anwenden). Der Abruf gehört nie in
+   ein with_lock: im SQLite-Betrieb ist das eine bereichsweite Transaktion, und bis zu 2 × 30 s Netzwartezeit darin würden
+   jeden anderen Schreiber des Bereichs nach PRAGMA busy_timeout abweisen. Fehler bleiben hier stumm – der gesperrte
+   Abschnitt entscheidet an fw_feed_info(), was daraus folgt (Befund 22.11.2026). */
+function fw_feed_vorladen(bool $gewuenscht): void
+{
+    if (!$gewuenscht || fw_feed_info()) return;
+    try { fw_feed_laden(); } catch (Throwable $e) { error_log('[wochenangebot] bedrohungsliste: ' . $e->getMessage()); }
+}
 function fw_feed_speichern(array $netze, string $quelle): array
 {
     $S = sec();
@@ -423,20 +437,27 @@ function fw_vorlage_anwenden(string $k, array $me, bool $notfall = false): array
 {
     $V = FW_VORLAGEN[$k] ?? null;
     if (!$V) throw new InvalidArgumentException('Unbekannte Vorlage.');
-    $oldS = sec();
-    $hinweis = '';
-    try { $newS = sec_clean(array_merge($oldS, $V['sec']), $oldS, $me); }
-    catch (InvalidArgumentException $e) {
-        if (!$notfall) throw $e;
-        $newS = sec_clean(array_merge($oldS, array_diff_key($V['sec'], ['twofa' => 1])), $oldS, $me);
-        $hinweis = ' (Zwei-Faktor-Pflicht unverändert: eigener Zugang ohne zweiten Faktor)';
-    }
-    $newF = fw_clean($V['fw'], fw());
-    if ($newF['feed'] && !fw_feed_info()) {
-        try { fw_feed_laden(); } catch (Throwable $e) { $newF['feed'] = false; }   // ohne Verbindung: Vorlage trotzdem anwenden
-    }
-    store_write('sicherheit', $newS); $GLOBALS['SEC'] = $newS;
-    store_write('firewall', $newF); $GLOBALS['FWS'] = $newF;
+    fw_feed_vorladen(!empty($V['fw']['feed']));   // Netzabruf vor die Sperre, nie in sie hinein
+    // Lesen, Prüfen und Schreiben beider Dokumente unter ihrer Sperre, immer in derselben Reihenfolge (erst sicherheit, dann
+    // firewall): sonst schreibt dieser Weg eine gleichzeitige Härtung (z. B. deploy/ip-freigabe-aus.php) still wieder zurück.
+    [$newS, $newF, $hinweis] = with_lock('sicherheit', function () use ($V, $me, $notfall) {
+        return with_lock('firewall', function () use ($V, $me, $notfall) {
+            $GLOBALS['SEC'] = null; $GLOBALS['FWS'] = null;   // Stand unter der Sperre frisch lesen, nicht aus dem Zwischenspeicher
+            $oldS = sec();
+            $hinweis = '';
+            try { $newS = sec_clean(array_merge($oldS, $V['sec']), $oldS, $me); }
+            catch (InvalidArgumentException $e) {
+                if (!$notfall) throw $e;
+                $newS = sec_clean(array_merge($oldS, array_diff_key($V['sec'], ['twofa' => 1])), $oldS, $me);
+                $hinweis = ' (Zwei-Faktor-Pflicht unverändert: eigener Zugang ohne zweiten Faktor)';
+            }
+            $newF = fw_clean($V['fw'], fw());
+            if ($newF['feed'] && !fw_feed_info()) $newF['feed'] = false;   // ohne Verbindung: Vorlage trotzdem anwenden
+            store_write('sicherheit', $newS); $GLOBALS['SEC'] = $newS;
+            store_write('firewall', $newF); $GLOBALS['FWS'] = $newF;
+            return [$newS, $newF, $hinweis];
+        });
+    });
     if (!empty($V['fw']['feed']) && !$newF['feed']) $hinweis .= ' (Bedrohungsliste nicht erreichbar – aus)';
     return ['sec' => $newS, 'fw' => $newF, 'label' => $V['label'], 'hinweis' => $hinweis];
 }

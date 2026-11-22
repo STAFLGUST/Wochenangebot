@@ -432,7 +432,20 @@ die Datei bei einem unzulässigen Wert mit 422 abgewiesen – `sec_clean`/`fw_cl
 setzen, und der ist bei diesen Feldern (Zwei-Faktor-Pflicht, Passwortlänge, Sitzungsdauer, Kontosperre, Fehlerbremse)
 die schwächste Stufe. Übernommene Änderungen stehen feldweise im Protokoll (`SEC_FELD_LABEL`, `FW_FELD_LABEL` – dieselben
 Bezeichnungen wie bei `security_save`/`fw_save`), und der Importdialog zeigt vorher dieselbe Tabelle „jetzt/danach“ wie
-der Vorlagendialog. Adress- und Länderlisten überträgt eine Datei nie.
+der Vorlagendialog. Adress- und Länderlisten überträgt eine Datei nie – und ebenso nicht die abgeschaltete
+Passwortbestätigung (`bestaetigungAus`, in `FW_NICHT_UEBERTRAGEN`, wirkt auf Export **und** Import): eine unvertraute
+Datei darf keine Sicherheitskontrolle absenken, und der Importdialog zeigt dieses Feld ohnehin nicht an. Geändert wird
+sie nur über `security_save`, das jede Aktion einzeln protokolliert. Beim Umzug auf einen anderen Server ist die Liste
+dort von Hand zu setzen.
+
+**Schutzzustand nur unter Sperre ändern:** Die Dokumente `sicherheit` und `firewall` werden an allen Schreibwegen
+(`security_save`, `fw_save`, `fw_import`, `fw_vorlage_anwenden`, Rückweg des Notfalls) unter `with_lock` des jeweiligen
+Dokuments gelesen **und** geschrieben; der Zwischenspeicher (`$SEC`, `$FWS`) wird dafür unter der Sperre geleert, damit
+der Stand frisch ist. Werden beide geschrieben, immer in derselben Reihenfolge: erst `sicherheit`, dann `firewall`. Der
+Abruf der Bedrohungsliste (`fw_feed_laden`, bis zu 2 × 30 s) liegt **vor** der Sperre (`fw_feed_vorladen`) und nie darin
+– `with_lock` ist im SQLite-Betrieb eine bereichsweite Transaktion und würde andere Schreiber des Bereichs nach
+`PRAGMA busy_timeout` abweisen. Offen bleibt das längere Fenster im Browser: die Oberfläche sendet beim Speichern den
+beim Öffnen geladenen Gesamtstand ohne Versionskennung.
 
 ## 3.9 Bestell-API
 

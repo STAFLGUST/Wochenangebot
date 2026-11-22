@@ -119,6 +119,11 @@ jobs:
         run: python3 werkzeuge/asset_versionen.py
       - name: Prüfliste der Dateiprüfung (app/api/lib/integritaet-liste.php)
         run: python3 werkzeuge/integritaet.py
+      - name: Keine echten IP-Adressen im Repository (werkzeuge/ip_adressen.py)
+        # GR-007: Beispieladressen nur aus den Dokumentationsbereichen (RFC 5737); gitleaks sucht Geheimnisse, keine IP-Adressen
+        run: |
+          python3 werkzeuge/ip_adressen.py --selbsttest
+          python3 werkzeuge/ip_adressen.py
       - name: Tests ohne fest eingetragene Ports (parallele Testläufe)
         run: |
           if grep -rnE "127\.0\.0\.1:[0-9]{4}" tests/e2e --include=*.py | grep -v "tests/e2e/umgebung.py"; then
