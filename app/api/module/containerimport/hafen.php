@@ -16,6 +16,7 @@ declare(strict_types=1);
    davon unabhängig; Dokument und Sicht tragen heute genau eine Quelle. Das Dokument ist ein Zwischenspeicher und darf mit
    einer zweiten Quelle neu geschnitten werden – ci_hafen_meldungen liest deshalb nur Einträge, die es kennt. */
 if (!defined('WA_API')) { http_response_code(404); exit; }
+require_once __DIR__ . '/abruf.php';   // Abruf fremder Dienste mit Gesamtfrist
 
 const CI_HAFEN_DOKUMENT = 'containerimport-hafenmeldungen';
 const CI_HAFEN_HH_URL = 'https://www.hafen-hamburg.de/en/all-vessels/expected-vessels/';
@@ -23,9 +24,8 @@ const CI_HAFEN_FRIST = 2 * 3600;        // Sekunden zwischen zwei Abrufen
 const CI_HAFEN_FRIST_FEHLER = 15 * 60;  // nach einem Fehlschlag
 const CI_HAFEN_MAX = 200;               // gelesene Einträge höchstens
 const CI_HAFEN_MAX_BYTE = 2 * 1024 * 1024;
-const CI_HAFEN_ZEITLIMIT = 20;          // Sekunden für das Lesen der Antwort
-const CI_HAFEN_WARTEN = 12;             // Sekunden je Schritt beim Verbinden und für die Kopfzeilen – der Test mit hängender Gegenstelle bleibt darunter
-const CI_HAFEN_VERSUCH = 120;           // so lange gilt ein begonnener Abruf als laufend; danach ist er abgebrochen (Neustart mitten im Abruf)
+const CI_HAFEN_ZEITLIMIT = 20;          // Sekunden Gesamtfrist des Abrufs (Verbinden, Kopfzeilen, Antwort) – der Test mit hängender Gegenstelle bleibt darunter
+const CI_HAFEN_VERSUCH = 120;           // so lange gilt ein begonnener Abruf als laufend; danach ist er abgebrochen (Neustart mitten im Abruf). Größer als CI_HAFEN_ZEITLIMIT: ein laufender Abruf gilt nie als gescheitert
 const CI_HAFEN_NACHLAUF = 12 * 3600;    // so lange nach der gemeldeten Ankunft gilt eine Meldung noch
 
 /* Schiffsname für den Vergleich: nur Buchstaben und Ziffern, groß – „MSC San-Francisco“ = „msc san francisco“ */
@@ -53,37 +53,22 @@ function ci_hafen_hh_lesen(string $html): array
     return $aus;
 }
 
-/* Die Liste abrufen: [Einträge, Fehlertext]. Keine Weiterleitungen, höchstens 2 MB. Das Zeitlimit des Stroms gilt nur je
-   Schritt – eine tröpfelnde Gegenstelle hielte das Lesen sonst beliebig lange offen; jeder Leseschritt bekommt deshalb nur
-   die Zeit, die vom Zeitlimit noch bleibt (Verbinden und Kopfzeilen begrenzt allein CI_HAFEN_WARTEN je Schritt).
-   Vollständig ist die Antwort mit der angekündigten Länge – eine abgeschnittene wäre sonst still der neue Stand; ohne
-   angekündigte Länge mit dem Ende der Verbindung. */
+/* Die Liste abrufen: [Einträge, Fehlertext]. Keine Weiterleitungen, höchstens CI_HAFEN_MAX_BYTE, eine Gesamtfrist über
+   den ganzen Abruf (ci_abruf – eine tröpfelnde Gegenstelle hielte sonst einen Webserver-Prozess beliebig lange fest).
+   Vollständig ist nur, was ci_abruf ohne Fehler liefert: eine abgeschnittene Antwort (angekündigte Länge nicht erreicht,
+   stückweise Antwort ohne reguläres Ende, mehr als CI_HAFEN_MAX_BYTE) ist ein Fehlschlag und wird nie still der neue
+   Stand – der letzte lesbare bleibt dann mit seiner Zeit stehen (ci_hafen_auffrischen). */
 function ci_hafen_hh_abrufen(): array
 {
-    $ctx = stream_context_create(['http' => ['method' => 'GET', 'header' => "Accept: text/html\r\nAccept-Language: en", 'timeout' => CI_HAFEN_WARTEN, 'ignore_errors' => true,
-        'follow_location' => 0, 'max_redirects' => 0, 'user_agent' => 'STAFL-Plattform (Standard-Fleisch, Container-Import)']]);
-    $http_response_header = [];
-    $fh = @fopen(getenv('WA_HAFEN_HH_URL') ?: CI_HAFEN_HH_URL, 'r', false, $ctx);   // WA_HAFEN_HH_URL nur in den Tests
-    $status = preg_match('#^HTTP/\S+\s+(\d{3})#', (string)($http_response_header[0] ?? ''), $m) ? (int)$m[1] : 0;
-    if (!$fh || $status !== 200) {
-        if ($fh) fclose($fh);
-        return [[], $status === 0 ? 'Hafen Hamburg ist gerade nicht erreichbar.' : 'Hafen Hamburg antwortet mit einem Fehler (' . $status . ').'];
+    $a = ci_abruf(getenv('WA_HAFEN_HH_URL') ?: CI_HAFEN_HH_URL,   // WA_HAFEN_HH_URL nur in den Tests
+        ['User-Agent: STAFL-Plattform (Standard-Fleisch, Container-Import)', 'Accept: text/html', 'Accept-Language: en'],
+        CI_HAFEN_ZEITLIMIT, CI_HAFEN_MAX_BYTE);
+    if ($a['fehler'] === 'gross') return [[], 'Die Antwort von Hafen Hamburg war unerwartet groß.'];
+    if ($a['fehler'] === 'halb') return [[], 'Die Antwort von Hafen Hamburg kam nicht vollständig an.'];
+    if ($a['fehler'] !== '' || $a['status'] !== 200) {
+        return [[], $a['status'] === 0 ? 'Hafen Hamburg ist gerade nicht erreichbar.' : 'Hafen Hamburg antwortet mit einem Fehler (' . $a['status'] . ').'];
     }
-    $kopf = implode("\n", $http_response_header);
-    $laenge = !preg_match('/^Transfer-Encoding:/mi', $kopf) && preg_match('/^Content-Length:\s*(\d+)\s*$/mi', $kopf, $m) ? (int)$m[1] : null;   // stückweise Antworten entpackt PHP – dort zählt das Ende der Verbindung
-    $ende = microtime(true) + CI_HAFEN_ZEITLIMIT;
-    $ziel = min($laenge ?? CI_HAFEN_MAX_BYTE, CI_HAFEN_MAX_BYTE);
-    $roh = '';
-    while (!feof($fh) && strlen($roh) < $ziel && ($rest = $ende - microtime(true)) > 0) {
-        stream_set_timeout($fh, (int)ceil($rest));
-        $teil = fread($fh, 65536);
-        if ($teil === false || stream_get_meta_data($fh)['timed_out']) break;
-        $roh .= $teil;
-    }
-    $ganz = strlen($roh) >= $ziel || ($laenge === null && feof($fh));
-    fclose($fh);
-    if (!$ganz) return [[], 'Die Antwort von Hafen Hamburg kam nicht vollständig an.'];
-    $liste = ci_hafen_hh_lesen($roh);
+    $liste = ci_hafen_hh_lesen($a['roh']);
     return [$liste, $liste ? '' : 'Die Liste von Hafen Hamburg ließ sich nicht lesen – vermutlich hat die Seite ihren Aufbau geändert.'];
 }
 
