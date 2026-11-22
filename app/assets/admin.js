@@ -4217,10 +4217,13 @@
     const w = window.open('', '_blank');
     if (!w) { toast('Druckfenster wurde blockiert – bitte Pop-ups für diese Seite erlauben.'); return; }
     const title = `Bestand vom ${stock.date ? dmy(stock.date) : '?'}${isMhdQuery(stockQ) ? ` – MHD bis ${dmy(isoToday(14))}` : stockQ ? ` – Suche „${stockQ}“` : ''}${Object.keys(stockFilter).length ? ` – Filter: ${filterAlle()}` : ''}`;
+    const schrift = new URL('../assets/fonts/geist-latin-wght-normal.woff2', location.href).href;   // Druckfenster lädt app.css nicht
     w.document.write(`<!doctype html><html lang="de"><head><meta charset="utf-8"><title>${esc(title)}</title><style>
       @page { size: A4 landscape; margin: 10mm; }
+      @font-face { font-family: "Geist"; font-weight: 100 900; src: url("${schrift}") format("woff2"); }
       * { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
-      body { font: 9.5pt/1.3 -apple-system, "Segoe UI", Roboto, Arial, sans-serif; color: #1b1a18; margin: 0; }
+      body { font: 9.5pt/1.3 "Geist", -apple-system, "Segoe UI", Roboto, Arial, sans-serif; color: #1b1a18; margin: 0; }
+      .s-reg { display: inline-flex; flex-direction: column; align-items: flex-end; } .s-eta { font-size: 7.5pt; font-weight: 600; color: #555; } .s-eta.alt { color: #b45309; }
       h1 { font-size: 13pt; margin: 0 0 2px; } .meta { color: #666; font-size: 8.5pt; margin: 0 0 8px; }
       table { width: 100%; border-collapse: collapse; } th, td { padding: 2.5px 5px; border-bottom: .5pt solid #ddd; }
       th { font-size: 8pt; text-align: center; vertical-align: bottom; border-bottom: 1pt solid #999; }
@@ -4234,7 +4237,8 @@
       ${stockTableHTML(res, true).replace(/ tabindex="0"/g, '').replace(/<button[^>]*>/g, '').replace(/<\/button>/g, '')}
       </body></html>`);
     w.document.close();
-    setTimeout(() => { try { w.focus(); w.print(); } catch { /* Fenster geschlossen */ } }, 300);
+    const drucken = () => { try { w.focus(); w.print(); } catch { /* Fenster geschlossen */ } };
+    setTimeout(() => { try { w.document.fonts.ready.then(drucken); } catch { drucken(); } }, 300);   // Schrift erst geladen, dann drucken
   }
 
   /* ======================= Angebot: Vorwoche, Bestand ======================= */

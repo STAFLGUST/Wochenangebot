@@ -106,6 +106,9 @@ with sync_playwright() as pw:
     with page.context.expect_page() as popup: page.click('[data-st=print]')
     printpage = popup.value; printpage.wait_for_load_state()
     check('print includes comparison and deliveries', 'TEST-A' in printpage.inner_text('body') and 'Vorwoche' in printpage.inner_text('body'))
+    # Druckfenster lädt admin.css nicht: Menge und ETA stehen trotzdem untereinander (nicht „50,00 kgETA …“), Schrift Geist wie am Bildschirm
+    druck = printpage.evaluate("async () => { await document.fonts.ready; return [document.body.innerText, getComputedStyle(document.body).fontFamily, document.fonts.check('9.5pt Geist')]; }")
+    check('Druck: Menge und ETA getrennt, Schrift Geist', 'kgETA' not in druck[0] and '50,00 kg\nETA 24.10.2026' in druck[0] and druck[1].split(',')[0].strip('"') == 'Geist' and druck[2], druck[1:])
     printpage.close()
     page.wait_for_function("!document.querySelector('#toast').classList.contains('show')")
     for width in (1440,390):
