@@ -471,6 +471,71 @@ for art in ('dateien', 'sqlite'):
         check(f'{w}: zusammenführen: alles wieder wie auf Stufe 0 (ohne Verlust)', code == 0 and nachher == vorher and dt.leer(i) and not (d / '.daten-getrennt').exists(),
               (out, [n for n in vorher if nachher[n] != vorher[n]]))
 
+# ─────────────── Abbruch beim Aufräumen des Zusammenführens (daten/ schon ohne Kennzeichen, daten-intern noch markiert) ───────────────
+# Erneutes zusammenfuehren vollendet ohne Verlust; ohne Vermerk (Kennzeichen von außen entfernt) repariert es nichts automatisch.
+def abbrechen(name, ab):
+    """dt.<name> scheitert ab dem ab-ten Aufruf wie ein Abbruch (Strom, SSH); liefert die Rücknahme."""
+    echt, n = getattr(dt, name), [0]
+    def f(*a, **k):
+        n[0] += 1
+        if n[0] >= ab:
+            raise OSError('Abbruch (Test)')
+        return echt(*a, **k)
+    setattr(dt, name, f)
+    return lambda: setattr(dt, name, echt)
+
+
+NAMEN = ('kunden', 'bestellung', 'bestand', 'stammdaten', 'mailkonto', 'protokoll/' + MONAT, 'verkehr', 'sicherheit', 'angebot', 'hr-personal', 'nutzer', 'crm-kunden')
+KP = {'t': MONAT + '-02T09:00:00Z', 'a': 'kunde_login'}
+for art in ('dateien', 'sqlite'):
+    # ablage_dateien: 2. Aufruf = Beginn des Aufräumens (gleich nach dem Kennzeichen); dok_loeschen: nach dem Entfernen der internen Kopien
+    for stelle, name, ab in (('gleich nach dem Umschalten', 'ablage_dateien', 2), ('mitten im Aufräumen', 'dok_loeschen', 1)):
+        with tempfile.TemporaryDirectory() as t:
+            t = Path(t); d = aufbau2(t); i = t / 'daten-intern'; w = f'{art}, Abbruch {stelle}'
+            doc(d, 'protokoll/' + MONAT, [{'t': MONAT + '-01T08:00:00Z', 'u': 'erika', 'a': 'customers'}])
+            doc(d, 'verkehr', [{'t': 100, 'ip': '198.51.100.9', 'u': 'erika', 'q': 'action=log'}]); doc(d, 'sicherheit', {'idleMinutes': 30})
+            if art == 'sqlite':
+                subprocess.run([sys.executable, str(DB), 'migrate', str(d), '--offline'], check=True, capture_output=True)
+            vorher = {n: dt.dok_lesen(d, n) for n in NAMEN}
+            vorher['protokoll/' + MONAT] = vorher['protokoll/' + MONAT] + [KP]
+            lauf('trennen', str(d), str(i), '--offline')
+            dt.dok_schreiben(d, 'kundenprotokoll/' + MONAT, [KP])   # die Kundenseite hat seit der Trennung protokolliert
+            ruecknahme = abbrechen(name, ab)
+            try:
+                dt.zusammenfuehren(d.resolve(), i.resolve(), dt.REGELN)
+            except OSError:
+                pass
+            finally:
+                ruecknahme()
+            check(f'{w}: Testvoraussetzung – daten/ ohne Kennzeichen, daten-intern markiert, Vermerk gesetzt',
+                  not (d / '.daten-getrennt').exists() and (i / '.daten-intern').is_file() and (i / '.zusammengefuehrt').is_file())
+            r = php_lib("try { store_read('nutzer'); echo 'gelesen'; } catch (RuntimeException $e) { echo $e->getMessage(); }", d, i)
+            check(f'{w}: Mitarbeiterseite liest in diesem Zustand nicht still falsch', 'widersprüchlich' in r, r)
+            code, out = lauf('pruefen', str(d), str(i))
+            check(f'{w}: pruefen nennt den Abbruch und den Weg', code == 0 and 'erneut zusammenfuehren' in out, out)
+            code, out = lauf('trennen', str(d), str(i), '--offline')
+            check(f'{w}: trennen verweigert (sonst löschte ein späteres zusammenfuehren getrennte Daten)', code == 1 and 'erst erneut zusammenfuehren' in out
+                  and (i / '.zusammengefuehrt').is_file() and not (d / '.daten-getrennt').exists(), out)
+            code, out = lauf('zusammenfuehren', str(d), str(i), '--offline')
+            nachher = {n: dt.dok_lesen(d, n) for n in NAMEN}
+            check(f'{w}: erneutes zusammenfuehren vollendet ohne Verlust', code == 0 and nachher == vorher and dt.leer(i)
+                  and not (d / '.daten-getrennt').exists() and dt.dok_namen(d, 'kundenprotokoll/') == [] and dt.dok_lesen(d, 'kundenstamm') is None,
+                  (out, [n for n in vorher if nachher[n] != vorher[n]]))
+            r = php_lib("echo json_encode([store_stufe(), store_read('hr-personal'), customers_load()['customers'][0]['email']]);", d, i)
+            check(f'{w}: danach liest die Mitarbeiterseite alles aus daten/', r.startswith('[') and json.loads(r) == [0, vorher['hr-personal'], KUNDE['email']], r)
+            code, out = lauf('zusammenfuehren', str(d), str(i), '--offline')
+            check(f'{w}: dritter Aufruf: nichts mehr zusammenzuführen', code == 1 and 'nicht getrennt' in out, out)
+            code, out = lauf('trennen', str(d), str(i), '--offline')
+            check(f'{w}: danach wieder trennbar', code == 0 and (i / '.daten-intern').is_file() and not (i / '.zusammengefuehrt').exists(), out)
+with tempfile.TemporaryDirectory() as t:
+    t = Path(t); d = aufbau2(t); i = t / 'daten-intern'
+    lauf('trennen', str(d), str(i), '--offline')
+    (d / '.daten-getrennt').unlink()   # von außen entfernt (daten/ ist im Kundencontainer beschreibbar), kein Vermerk
+    davor = (baum(d), baum(i))
+    code, out = lauf('zusammenfuehren', str(d), str(i), '--offline')
+    check('Kennzeichen in daten/ ohne Vermerk entfernt: zusammenfuehren repariert nicht automatisch, nichts geändert',
+          code == 1 and 'Nicht automatisch reparieren' in out and (baum(d), baum(i)) == davor, out)
+
 # ─────────────── Wie auf dem Server am 05.11.2026: Stufe 1 → 5 in einem Schritt, danach gleicht der Postausgang die Kopien ab ───────────────
 # Das veröffentlichte Dokument bestellung entsteht innen aus dem Original – es darf dort keine Empfängeradressen behalten, sonst bringt
 # der Abgleich sie in die Kopie zurück (und die Kundenseite sieht 0 Empfänger: Bestellfunktion aus).
