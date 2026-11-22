@@ -2,7 +2,8 @@
 der Testserver ist die Kundenseite (WA_POSTAUSGANG=warteschlange, keine Postfach-Zugangsdaten), ein zweiter PHP-Server auf dem
 Hilfsport die Mitarbeiterseite (Postfach, Schlüssel in WA_GEHEIM_DIR). Der Dienst api/postausgang.php läuft wie im Container
 postausgang mit den Zugangsdaten der Mitarbeiterseite. Geprüft: Bestellwunsch, Wiederholung bei Ausfall, Benachrichtigungen,
-Abmeldehinweis, Bestellfunktion nur mit Lebenszeichen des Dienstes, keine Geheimnisse in den Aufträgen."""
+Abmeldehinweis, Überlauf der Warteschlange (POSTAUSGANG_MAX: Sicherheitsmeldungen weichen zuletzt),
+Bestellfunktion nur mit Lebenszeichen des Dienstes, keine Geheimnisse in den Aufträgen."""
 import base64, hashlib, hmac, http.cookiejar, json, os, shutil, subprocess, sys, time, urllib.error, urllib.request
 from kunden_hilfe import Client
 from smtp_test import TestSmtp
@@ -237,6 +238,29 @@ try:
     dienst()
     m = [x for x in smtp.messages if x['to'] == ['verkauf@example.org']]
     check('Dienst: Abmeldehinweis an den Verkauf', len(m) == 1 and 'Kantine Post' in m[0]['text'] and 'abgemeldet' in m[0]['text'], [x['subject'] for x in smtp.messages])
+
+    # ---------- Überlauf der Warteschlange: die Sicherheitsmeldung weicht zuletzt (Befund 22.11.2026) ----------
+    MAXQ = 500   # POSTAUSGANG_MAX in lib/postausgang.php
+    alarm = [{'id': 'alarm', 'art': 'benachrichtigung', 'items': [{'ev': 'sicherheit', 'title': 'Anmeldesperre (alt)', 'facts': [], 't': '2026-11-04T00:00:00Z'}],
+              't': '2026-11-04T00:00:00Z', 'faellig': 0, 'versuche': 0}]
+    bestellungen = lambda n: [{'id': f'b{i}', 'art': 'bestellung', 'nr': 'B-2099-0001', 't': '2026-11-04T00:00:02Z', 'faellig': 0, 'versuche': 0} for i in range(n)]
+    arten = lambda l: {k: len([a for a in l if a['art'] == k]) for k in ('benachrichtigung', 'hinweis', 'bestellung')}
+    hinweise = [{'id': f'h{i}', 'art': 'hinweis', 'kunde': {'id': kid}, 'ab': True, 't': '2026-11-04T00:00:01Z', 'faellig': 0, 'versuche': 0} for i in range(299)]
+    storage_write('postausgang', {'auftraege': alarm + hinweise + bestellungen(MAXQ - 300)})
+    smtp.messages.clear()
+    code, r = Client('198.51.100.42').call('kunde_abmelden', {'token': tok, 'wieder': True})
+    until(lambda: not any(a['id'] == 'h0' for a in (doc('postausgang') or {}).get('auftraege', [])), 5)
+    a5 = (doc('postausgang') or {}).get('auftraege', [])
+    check('voller Postausgang: der älteste Hinweis weicht, Bestellwünsche und die Meldung bleiben', code == 200 and len(a5) == MAXQ
+          and any(a['id'] == 'alarm' for a in a5) and arten(a5) == {'benachrichtigung': 1, 'hinweis': 299, 'bestellung': 200}, (code, len(a5), arten(a5)))
+    storage_write('postausgang', {'auftraege': alarm + bestellungen(MAXQ - 1)})
+    Y = Client('203.0.113.89')
+    for _ in range(5): Y.call('kunde_login', {'username': 'kantine.post', 'password': 'falsch-falsch-2'})
+    until(lambda: not any(a['id'] == 'b0' for a in (doc('postausgang') or {}).get('auftraege', [])), 5)
+    a6 = (doc('postausgang') or {}).get('auftraege', [])
+    check('ohne Hinweise weicht der älteste Bestellwunsch (die Durchsicht findet ihn wieder), keine der beiden Meldungen', len(a6) == MAXQ
+          and any(a['id'] == 'alarm' for a in a6) and arten(a6) == {'benachrichtigung': 2, 'hinweis': 0, 'bestellung': 498}, (len(a6), arten(a6)))
+    storage_write('postausgang', {'auftraege': []})   # aufgeräumt für die weiteren Prüfungen
 
     # ---------- Postfach-Passwort im Eingabebereich: Schlüssel nur auf der Mitarbeiterseite ----------
     r = A.call('mail_konto_save', {'host': '127.0.0.1', 'port': SMTP_PORT, 'secure': 'none', 'user': 'portal@example.org', 'password': 'Test-Postfach-1',
