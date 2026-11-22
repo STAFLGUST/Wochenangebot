@@ -788,7 +788,9 @@
     if (r.status !== 200 || !r.data.ok) { kStatus('nicht gespeichert'); toast(fehlerText(r, 'Hinweis nicht gespeichert'), true); return; }
     if (K.akte && K.akte.markt.id === m.id) K.akte.markt = r.data.markt;
     if (K.akte && K.akte.markt.id === m.id && $('#kt-hinweis')) kStatus($('#kt-hinweis').value === text ? '✓ gespeichert' : 'noch nicht gespeichert');
-    if (S.woche) { jedeZeile(m.id, (x) => { x.hinweis = r.data.markt.hinweis; }); renderWoche(); }
+    // mit der neuen Revision: sonst meldet „Dauerauftrag ändern“ aus der Zeile einen Konflikt mit der eigenen Änderung
+    if (S.woche) { jedeZeile(m.id, (x) => { x.hinweis = r.data.markt.hinweis; x.rev = r.data.markt.rev; }); renderWoche(); }
+    const lm = S.maerkte && S.maerkte.find((x) => x.id === m.id); if (lm) lm.rev = r.data.markt.rev;
     if ($('#kt-hinweis') && K.akte && K.akte.markt.id === m.id && $('#kt-hinweis').value !== text) K.timer = setTimeout(hinweisSpeichern, 900);   // weitergetippt
   }
   dk.addEventListener('input', (ev) => { if (ev.target.id === 'kt-hinweis') { kStatus('noch nicht gespeichert'); clearTimeout(K.timer); K.timer = setTimeout(hinweisSpeichern, 900); } });

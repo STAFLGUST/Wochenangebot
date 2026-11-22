@@ -861,6 +861,20 @@ with sync_playwright() as p:
     pg.mouse.click(5, 5)
     check('Pop-up aus „Meine Woche“: Beispielstadt, ein Klick daneben schließt nicht', pg.is_visible('#dlg-dauer[open]') and 'alle 2 Wochen' in text(pg, '#dlg-dauer [aria-pressed="true"][data-dd-rh]'))
     pg.click('#dlg-dauer .rw-dialogkopf [data-dd-zu]'); pg.wait_for_selector('#dlg-dauer', state='hidden')
+    # Hinweis in der Marktkarte geändert (Revision +1), danach „Dauerauftrag ändern“ aus der Zeile: kein Konflikt mit der eigenen Änderung
+    pg.click(f'{bz} .rw-mname'); pg.wait_for_selector('#dlg-karte[open] #kt-hinweis')
+    hinweis_alt = pg.input_value('#kt-hinweis')
+    pg.fill('#kt-hinweis', hinweis_alt + '\nRampe 2')
+    pg.wait_for_function("document.querySelector('#kt-hstatus').textContent.includes('gespeichert') && !document.querySelector('#kt-hstatus').textContent.includes('noch nicht')", timeout=8000)
+    pg.keyboard.press('Escape'); pg.wait_for_selector('#dlg-karte', state='hidden')
+    pg.click(f'{bz} [data-dauer-dlg]'); pg.wait_for_selector('#dlg-dauer[open] #dd-titel:has-text("Beispielstadt")')
+    pg.click('#dlg-dauer [data-dd-speichern]')
+    pg.wait_for_function("!document.querySelector('#dlg-dauer').open || document.querySelector('#dd-meldung').textContent !== ''")
+    check('Hinweis geändert, dann Dauerauftrag aus „Meine Woche“ gespeichert: ohne Konflikt mit sich selbst', pg.is_hidden('#dlg-dauer')
+          and 'Rampe 2' in M.call('rewe_markt&id=' + maerkte['Beispielstadt']['id'])[1]['markt']['hinweis'], text(pg, '#dd-meldung') if pg.is_visible('#dlg-dauer') else '')
+    if pg.is_visible('#dlg-dauer'):
+        pg.click('#dlg-dauer .rw-dialogkopf [data-dd-zu]'); pg.wait_for_selector('#dlg-dauer', state='hidden')
+    pg.wait_for_selector('.rw-zeile:has-text("Beispielstadt") [data-s="bestellt"]')
     # Antwort zurücksetzen (wieder offen): erster Klick fragt nach, zweiter setzt zurück; „Rückgängig“ holt sie zurück
     if not pg.locator('.rw-zeile:has-text("Beispielstadt") [data-zurueck]').count():
         pg.click('.rw-zeile:has-text("Beispielstadt") [data-s="kein"]'); pg.wait_for_selector('.rw-zeile:has-text("Beispielstadt") [data-zurueck]')
@@ -891,8 +905,9 @@ with sync_playwright() as p:
     pg.select_option('#mk-tag', 'mi'); pg.click('#mk-form button[type="submit"]'); pg.wait_for_selector('#dlg-markt[open]', state='hidden')
     pg.wait_for_selector('.rw-kv:has-text("Mittwoch")')
     check('Abfragetag geändert', 'Mittwoch' in text(pg, '.rw-kv'))
+    # nur das Raster der Akte zählen: die geschlossene Marktkarte (vorher für Beispielstadt geöffnet) behält ihres im DOM
     check('Marktakte: Dauerauftrag „… + 1 Filetkopf extra“, Wochenverlauf KW 2 „Bestellt 1 Roastbeef Dry Aged + 1 Filetkopf extra“',
-          '1 Roastbeef Dry Aged + 1 Filetkopf extra' in text(pg, '.rw-kv') and pg.locator('.rw-heat i[title="KW 2: Bestellt 1 Roastbeef Dry Aged + 1 Filetkopf extra"]').count() == 1, text(pg, '.rw-kv'))
+          '1 Roastbeef Dry Aged + 1 Filetkopf extra' in text(pg, '.rw-kv') and pg.locator('#rw-akte .rw-heat i[title="KW 2: Bestellt 1 Roastbeef Dry Aged + 1 Filetkopf extra"]').count() == 1, text(pg, '.rw-kv'))
     pg.screenshot(path=os.path.join(SH, 'rewe_akte_1280.png'), full_page=True)
     pg.click('#rw-a-dauer'); pg.wait_for_selector('#dlg-dauer[open] #dd-titel:has-text("Beispielstadt")')
     check('Pop-up aus der Marktakte: „Dauerauftrag · Beispielstadt“', 'Dauerauftrag · Beispielstadt' in text(pg, '#dd-titel'))
