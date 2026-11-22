@@ -13,7 +13,8 @@ switch ($action) {
             if (strncmp($oid, 'e-', 2) === 0) {   // Einzelangebot: nur der Kunde selbst (freigegeben, gültig) oder Mitarbeiter mit Recht
                 $e = einzel_von_kennung($oid);
                 $mitarbeiter = (bool)current_user();   // Mitarbeiter sehen das gespeicherte Design, Kunden das freigegebene (einzel_model)
-                if ($mitarbeiter) { require_perm('einzelangebote.sehen'); if (!$e) fail('Unbekanntes Angebot.', 404); }
+                // Modulzugang hier nachholen: „offer“ ist öffentlich registriert, das zentrale Tor prüft ihn deshalb nie (GR-103, wie unten im Zweig Wochen-/Kundenangebot)
+                if ($mitarbeiter) { require_modulzugang('angebot'); require_perm('einzelangebote.sehen'); if (!$e) fail('Unbekanntes Angebot.', 404); }
                 elseif ($k = current_customer()) {
                     if (!empty($k['login']['mustChange'])) fail('Bitte zuerst ein eigenes Passwort festlegen.', 403);
                     if (!$e || $e['kid'] !== $k['id'] || !einzel_sichtbar($e)) fail('Dieses Angebot ist für Ihren Zugang nicht (mehr) verfügbar.', 403);

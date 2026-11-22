@@ -42,6 +42,18 @@ function start_session(): void
     // fragt, und waren dann trotz „8 Stunden“ abgemeldet (Befund 03.11.2026). Die Leerlaufprüfung selbst bleibt unten.
     ini_set('session.gc_maxlifetime', (string)max(1440, $max + 600));
     session_start();
+    // Die vorgelegte Kennung gab es nicht (use_strict_mode erzeugt dann eine neue, session_start legt die Datei sofort an):
+    // Bleibt die Sitzung bis zum Ende der Anfrage leer, wird sie wieder entfernt – sonst legte jede anonyme Anfrage mit
+    // erfundenem Cookie eine Sitzungsdatei an (Befund 22.11.2026; das Set-Cookie ist schon heraus und bleibt wirkungslos).
+    if (($_COOKIE[session_name()] ?? '') !== session_id()) {
+        register_shutdown_function(function () {
+            if (session_status() !== PHP_SESSION_ACTIVE || !empty($_SESSION)) return;
+            session_destroy();
+            // Die vorgelegte Kennung gilt damit als nicht vorhanden: eine spätere Abschlussfunktion (z. B. fw_nachher →
+            // fw_mitarbeiter) beginnt sonst über sitzung_vorhanden() eine zweite, wieder leere Sitzung.
+            unset($_COOKIE[session_name()], $_COOKIE[SITZUNG_COOKIE]);
+        });
+    }
     // Keycloak-Hosts (Sitzung mit oidcSub): Leerlauf nicht je Adresse, sondern je Anmeldung bei Keycloak über alle
     // Adressen (lib/oidc.php, oidc_leerlauf) – Aktivität in einem anderen Modul zählt mit
     if (!empty($_SESSION['uid']) && empty($_SESSION['oidcSub']) && (time() - (int)($_SESSION['seen'] ?? 0)) > $max) {

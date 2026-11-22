@@ -491,6 +491,7 @@ abhaengigkeiten = ["plattform"]
 testgruppen = ["kunden", "kundengruppen", "vkgruppen", "angebotskategorien", "vertreter", "lieferanten", "abteilungen", "kundenimport", "auswertung", "master", "importzentrale"]
 pfade = [
   "regeln/aktionen/verwaltung.toml",
+  "regeln/aktionen/import.toml",   # Teilmodul „import“ darf selbst keine Pfade haben; Code und Register betreut der Agent der Verwaltung
   "app/api/lib/kunden.php", "app/api/lib/auswertung.php", "app/api/ort.php",
   "app/api/aktionen/kundenverwaltung.php", "app/api/aktionen/kundengruppen.php", "app/api/aktionen/auswertung.php",
   "app/api/aktionen/importzentrale.php",

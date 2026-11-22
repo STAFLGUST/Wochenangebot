@@ -178,6 +178,16 @@ check('anderer Kunde: gesperrt', K2.call('offer&angebot=' + EID)[0] == 403 and E
 check('ohne Anmeldung: Anmeldung nötig', Client().call('offer&angebot=' + EID)[0] == 401)
 check('unbekannte Kennung: gesperrt', K.call('offer&angebot=e-0000000000')[0] == 403)
 check('Leser mit Recht kann das Angebot ansehen', L.call('offer&angebot=' + EID)[0] == 200)
+# Sicherheitsfund 22.11.2026: „offer“ ist öffentlich registriert, das zentrale Tor prüft den Modulzugang nie – der
+# Mitarbeiterzweig für Einzelangebote holte ihn (anders als der Zweig für Wochen- und Kundenangebote) nicht nach.
+assert A.call('user_save', {'id': uid['lea'], 'name': 'Lea Leser', 'role': 'viewer', 'active': True,
+                            'grant': ['kunden.sehen', 'einzelangebote.sehen'], 'deny': ['angebot.zugang']})[0] == 200
+check('Leser ohne Modulzugang Angebot: Einzelangebot auf allen Wegen gesperrt (403)',
+      L.call('offer&angebot=' + EID)[0] == 403 and L.call('einzel_detail&id=' + e1['id'])[0] == 403 and L.call('einzel_liste')[0] == 403,
+      (L.call('offer&angebot=' + EID), L.call('einzel_detail&id=' + e1['id'])[0], L.call('einzel_liste')[0]))
+assert A.call('user_save', {'id': uid['lea'], 'name': 'Lea Leser', 'role': 'viewer', 'active': True,
+                            'grant': ['kunden.sehen', 'einzelangebote.sehen'], 'deny': []})[0] == 200
+check('mit Modulzugang wieder offen', L.call('offer&angebot=' + EID)[0] == 200)
 check('Mitarbeiter ohne Recht: gesperrt', Client('198.51.100.9').call('offer&angebot=' + EID)[0] == 401)
 
 # ---------- Bestellwunsch ----------

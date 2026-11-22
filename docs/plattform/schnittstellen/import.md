@@ -125,8 +125,10 @@ Datei `ImportPreise.csv`).
 | `import_teil` | POST | nur Importarten mit `teile`: `{ art, upload, schluessel, daten, quelle }` → Zwischenablage des Eigentümers (gleiche Prüfungen wie die Vorschau) |
 | `import_uebernehmen` | POST | wie oben plus `stand` (und `upload`) → Übernahme (ggf. Passwortbestätigung) |
 
-Heute auf der Oberfläche `angebot.eingabe` registriert (`regeln/aktionen/verwaltung.toml`); mit der Freigabe von
-`verwaltung.import` ziehen sie dorthin um.
+Die vier Aktionen gehören dem Modul `import` (`regeln/aktionen/import.toml`, seit 22.11.2026) und verlangen damit
+`import.zugang`; den Zugang des **Eigentümers** der Importart prüft `import_vorbereiten()` zusätzlich streng
+(`require_modulzugang($a['eigentuemer'])`). Registriert sind sie heute auf der Oberfläche `angebot.eingabe`; mit der
+Freigabe von `verwaltung.import` ziehen sie dorthin um.
 
 **Neue Importart:** Eintrag in `import_arten_<modul>()` des Eigentümers, Vorschau-/Übernahmefunktion dort, Leser in
 `window.WA.importLeser`, bei Bedarf eine eigene Darstellung in `window.WA.importDarstellung` und – falls ein neues Recht – in

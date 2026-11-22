@@ -342,7 +342,11 @@ function modul_zugang_durchsetzen(?array $aktion): void
     // „seite“ sagt der Oberfläche, ob die ganze Seite gesperrt ist (Host ohne Zugang) oder nur diese eine Aktion eines
     // fremden Moduls – sonst ersetzte ein einzelner Abruf (z. B. Preisverlauf im Bestand) den ganzen Eingabebereich.
     foreach ([[anfrage_modul($aktion), true], [!empty($aktion['zugang_gemeinsam']) ? null : (string)$aktion['modul'], false]] as [$m, $seite]) {
-        if ($m === null || $m === '' || modul_host_frei($u, $m)) continue;
+        if ($m === null || $m === '') continue;
+        // Host: der Zugang des Moduls oder eines Teilmoduls genügt (dessen Kachel liegt auf diesem Host). Modul der Aktion:
+        // genau sein eigener Zugang – der Zugang eines Teilmoduls ist keine Berechtigung für die Daten des Obermoduls
+        // (GR-103, Sicherheitsfund 22.11.2026: „import.zugang“ ersetzte sonst den entzogenen „verwaltung.zugang“).
+        if ($seite ? modul_host_frei($u, $m) : modul_zugang_frei($u, $m)) continue;
         header('Cache-Control: no-store');
         $name = MODULE[$m]['name'] ?? $m;
         respond(['ok' => false, 'code' => 'kein_modulzugang', 'modul' => $m, 'name' => $name, 'seite' => $seite,

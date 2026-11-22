@@ -261,7 +261,18 @@ auf, wenn `sitzung_vorhanden()` wahr ist: Es läuft schon eine Sitzung, oder der
 Browser das Sitzungs-Cookie (auch das alte `WA_ADMIN` ohne Präfix, damit es weiter gelöscht wird). Vorher legte jede anonyme Anfrage an eine öffentliche Aktion (`kunde_status`, `offer`,
 `kunde_merkliste`, `kunde_logout`) eine leere Sitzungsdatei an, die bis zum Ende der Leerlaufzeit liegen blieb.
 Wer eine Sitzung **anlegen** will (`login`, `kunde_login`, `kunde_token_set`, Passkeys, OIDC), ruft `start_session()`
-weiterhin unbedingt auf – für angemeldete Nutzer ändert sich nichts. Geprüft in `tests/e2e/test_sitzung_cookie.py`.
+weiterhin unbedingt auf – für angemeldete Nutzer ändert sich nichts.
+
+**Leer gebliebene Sitzungen werden wieder entfernt (seit 22.11.2026).** `sitzung_vorhanden()` sieht nur, *dass* ein
+Cookie einen Wert hat, nicht ob es die Sitzung gibt. Mit einer frei erfundenen Kennung kam deshalb jede anonyme Anfrage
+weiter zu `start_session()`; PHP verwarf die Kennung (`session.use_strict_mode`), legte aber unter einer neuen sofort
+eine Datei an – eine Datei je Anfrage. `start_session()` merkt jetzt, wenn die vorgelegte Kennung nicht übernommen
+wurde, und entfernt die Sitzung am Ende der Anfrage wieder, solange `$_SESSION` leer geblieben ist
+(`register_shutdown_function` → `session_destroy`). Das deckt auch `kunde_login` und `kunde_token_set` ab, die
+`start_session()` vor der Prüfung der Zugangsdaten aufrufen. Das `Set-Cookie` lässt sich nicht zurücknehmen
+(`session_start()` hat die Kopfzeile schon gesendet, und `header_remove('Set-Cookie')` würde auch das Löschcookie für
+das alte `WA_ADMIN` entfernen) – es bleibt wirkungslos stehen, weil es keine Sitzung benennt. Eine echte Anmeldung
+schreibt `uid` bzw. `kid` in die Sitzung und behält sie. Geprüft in `tests/e2e/test_sitzung_cookie.py`.
 
 ### Sitzungsregister
 
@@ -396,7 +407,11 @@ weist ohne `<modul>.zugang` mit 403 `kein_modulzugang` ab:
    diese Aktion gesperrt (`seite: false`, die Seite bleibt stehen und der Aufrufer zeigt den Fehler).
 
 Ausgenommen: Aktionen der Module `plattform`/`dashboard` (kein Zugangsrecht), `oeffentlich`, `wartung_frei`.
-`modul_host_frei()` lässt auch den Zugang eines Teilmoduls gelten (`teil_von`, z. B. Import → Verwaltung). Der
+Für den **Host** lässt `modul_host_frei()` auch den Zugang eines Teilmoduls gelten (`teil_von`, z. B. Import →
+Verwaltung: die Kachel der Importzentrale liegt auf dem Verwaltungs-Host). Für das **Modul der Aktion** gilt die strenge
+`modul_zugang_frei()` – genau sein eigener Zugang (Sicherheitsfund 22.11.2026: vorher kam eine Rolle mit
+`import.zugang`, aber ohne `verwaltung.zugang`, durch das Tor bei 16 modulfremden Verwaltungsaktionen, darunter
+`kunde_save`, `kunden_import` und `vertreter_save`; es blieb nur das Fachrecht). Der
 Modulzugang ersetzt keine Einzelrechte: ein Recht wie `kunden.sehen` kann in mehreren Modulen genutzt werden.
 
 **Der Modulzugang ist eine Berechtigung, keine Anzeigeregel (seit 15.11.2026, Sicherheitsfund):** Vorher wurde nur der
@@ -423,9 +438,11 @@ nichts. Eine eigene Rolle, die ein Fachrecht ohne den Modulzugang seines Moduls 
 stehen in der Rechteübersicht je Modul als „Modul … öffnen“.
 
 **Importzentrale:** `import_vorbereiten()` prüft neben dem Fachrecht `require_modulzugang($a['eigentuemer'])` – die
-Zentrale ruft die Vorschau- und Übernahmefunktionen fremder Module auf, ihre eigenen Aktionen gehören aber dem Modul
-`verwaltung`; der Eigentümer steht erst zur Laufzeit in der Importart. `import_arten` zeigt nur Importarten, deren
-Eigentümer-Modul dem Nutzer offensteht.
+Zentrale ruft die Vorschau- und Übernahmefunktionen fremder Module auf; der Eigentümer steht erst zur Laufzeit in der
+Importart. `import_arten` zeigt nur Importarten, deren Eigentümer-Modul dem Nutzer offensteht. Ihre vier Aktionen
+gehören seit dem 22.11.2026 dem Modul `import` (`regeln/aktionen/import.toml`, Kachel Verwaltung → Import): sie
+verlangen `import.zugang` statt `verwaltung.zugang` – vorher war es umgekehrt dieser Teilmodul-Zugang, der jede
+Verwaltungsaktion öffnete.
 **Preisverlauf und frühere Wochen (seit 15.11.2026):** Der Preisverlauf trägt keine Kundenpreise mehr – `history_data`
 und `history_prev` (Recht `preisverlauf.sehen`) liefern sie nicht, und `history_from_model()` schreibt sie nicht in
 `historie/*`. Nur die Vorwochenpreise je Kundenangebot gehen in `history_prev` zusätzlich mit `angebot.zugang` heraus
@@ -477,8 +494,11 @@ stehen in gespeicherten Rollen und in `grant`/`deny`.
 
 **Server vs. Oberfläche:** `me.perms`, `me.modulzugang`, `me.bereich`, Kachelstatus und ausgeblendete Knöpfe sind nur
 Anzeige. Jede Aktion muss so geschrieben sein, als gäbe es die Oberfläche nicht (GR-103). Beispiel aus
-`aktionen/angebote.php`: Einzelangebote sieht ein Mitarbeiter nur mit `require_perm('einzelangebote.sehen')`, auch wenn
-die Aktion `offer` öffentlich ist.
+`aktionen/angebote.php`: Einzelangebote sieht ein Mitarbeiter nur mit `require_modulzugang('angebot')` **und**
+`require_perm('einzelangebote.sehen')`. Weil die Aktion `offer` öffentlich registriert ist, überspringt das zentrale Tor
+sie ganz – jeder Mitarbeiterzweig einer öffentlichen Aktion muss den Modulzugang selbst nachholen (Sicherheitsfund
+22.11.2026: der Zweig für Einzelangebote tat das nicht und gab Kundenpreis und Partie auch ohne `angebot.zugang` und
+auch für Entwürfe heraus; der Zweig für Wochen- und Kundenangebote prüfte schon richtig).
 
 ## 4.5 Freigabe und Wartung je Oberfläche (GR-102, GR-107)
 
