@@ -13,6 +13,8 @@
 # anderes Image → beide neu erstellen, nur die Apache-Konfiguration der Anmeldung → nur app-mitarbeiter (ältere Stände: „app“).
 #
 # Danach Versionsnummern und Prüfliste aus dem zurückgeholten Commit (deploy/bereitstellen.py, falls dort vorhanden).
+# Kein Rückfall (nichts geändert), wenn SQLite aktiv ist und der vorherige Stand nur Dateien kennt, oder wenn die Daten weiter
+# getrennt sind, als der vorherige Stand kennt (erst deploy/daten-trennen.sh zusammenfuehren).
 #
 # Für Tests überschreibbar: WA_COMPOSE, WA_DOCKER
 set -eu
@@ -47,6 +49,18 @@ if [ "$VORHER" = "$(cat .release-abgelehnt 2>/dev/null)" ]; then
 fi
 if [ -f daten/.sqlite-active ] && ! git cat-file -e "$VORHER:app/api/storage.php" 2>/dev/null; then
   echo "SQLite aktiv: Zuerst deploy/datenbank-umschalten.sh rollback ausführen."
+  exit 1
+fi
+# Trennstufe (ADR-007): Sind die Daten weiter getrennt, als der vorherige Stand kennt, bräche dort jeder Speicherzugriff ab
+# („Daten sind weiter getrennt“). Stufe der Daten: das höhere der beiden Kennzeichen; Stufe des Stands: DATEN_TRENNSTUFE,
+# ältere Stände ohne die Konstante kennen höchstens Stufe 1 (Stufe 2a) bzw. keine Trennung
+trennstufe() { if [ -f "$1" ]; then awk 'NR == 1 { v = $0 + 0 } END { print (v < 1) ? 1 : int(v) }' "$1"; else echo 0; fi; }
+DATENSTUFE=$(trennstufe daten/.daten-getrennt); I=$(trennstufe daten-intern/.daten-intern); [ "$I" -le "$DATENSTUFE" ] || DATENSTUFE=$I
+ZIELSTUFE=$(git show "$VORHER:app/api/lib/datenbereiche-liste.php" 2>/dev/null | sed -n 's/^const DATEN_TRENNSTUFE = \([0-9][0-9]*\);.*/\1/p' | head -1)
+[ -n "$ZIELSTUFE" ] || { git show "$VORHER:app/api/storage.php" 2>/dev/null | grep -q 'daten-getrennt' && ZIELSTUFE=1 || ZIELSTUFE=0; }
+if [ "$DATENSTUFE" -gt "$ZIELSTUFE" ]; then
+  echo "Daten sind getrennt (Stufe $DATENSTUFE), der vorherige Stand $VORHER kennt nur Stufe $ZIELSTUFE – kein Rückfall, nichts geändert."
+  echo "Zuerst sh deploy/daten-trennen.sh zusammenfuehren (Freigabe, Wartungsfenster), dann erneut sh deploy/release-zurueck.sh."
   exit 1
 fi
 

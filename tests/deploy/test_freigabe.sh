@@ -347,6 +347,22 @@ rm -f "$T/bau-fehler" "$T/kein-vorher"
 cp "$T/env.ohne" "$B/.env"
 zurueck_lage "$ZI_SHA" "$ZC_SHA"; zurueck || true
 ok "Notfall-Rückfall, Image unterscheidet sich ohne COMPOSE_FILE: weder Tag noch Bau noch neue Container" '[ "$(kopf)" = "$ZC_SHA" ] && ! grep -qE "^(compose|docker)" "$T/out.txt"'
+# Trennstufe (ADR-007): Daten weiter getrennt, als der vorherige Stand kennt – dort bräche jeder Speicherzugriff ab
+T4_SHA=$(commit trennstufe-4 x "sed -i 's/^const DATEN_TRENNSTUFE = [0-9]*;/const DATEN_TRENNSTUFE = 4;/' '$T/src/app/api/lib/datenbereiche-liste.php'")
+T5_SHA=$(commit trennstufe-5 x "git -C '$T/src' checkout HEAD~1 -- app/api/lib/datenbereiche-liste.php")
+git -C "$B" fetch -q origin main
+mkdir -p "$B/daten-intern"; echo 5 > "$B/daten-intern/.daten-intern"; echo 5 > "$B/daten/.daten-getrennt"
+zurueck_lage "$T5_SHA" "$T4_SHA"; RC=0; zurueck || RC=$?
+ok "Notfall-Rückfall, Daten weiter getrennt als der vorherige Stand: Abbruch ohne Änderung, Weg genannt" '[ "$RC" = 1 ] && [ "$(kopf)" = "$T5_SHA" ] \
+  && grep -q "kennt nur Stufe 4" "$T/out.txt" && grep -q "daten-trennen.sh zusammenfuehren" "$T/out.txt" && [ ! -e "$B/.release-abgelehnt" ] \
+  && ! grep -qE "^(compose|docker)" "$T/out.txt" && git -C "$B" diff --quiet HEAD'
+rm "$B/daten/.daten-getrennt"   # Kennzeichen außen fehlt (daten/ ist im Container beschreibbar): maßgeblich bleibt das innere
+zurueck_lage "$T5_SHA" "$T4_SHA"; RC=0; zurueck || RC=$?
+ok "… auch wenn nur daten-intern das Kennzeichen trägt" '[ "$RC" = 1 ] && [ "$(kopf)" = "$T5_SHA" ] && grep -q "Stufe 5" "$T/out.txt"'
+echo 4 > "$B/daten-intern/.daten-intern"; echo 4 > "$B/daten/.daten-getrennt"
+zurueck_lage "$T5_SHA" "$T4_SHA"; zurueck || true
+ok "Notfall-Rückfall, Daten auf der Stufe des vorherigen Stands: Rückfall wie bisher" '[ "$(kopf)" = "$T4_SHA" ] && grep -q "Zurückgesetzt auf" "$T/out.txt"'
+rm -rf "$B/daten-intern" "$B/daten/.daten-getrennt"
 
 # Bereitstellung: geänderte Datei → neue Adresse (Browser lädt sie sofort), nur aus Git-Objekten, Nachholen, Übergang
 git -C "$B" reset -q --hard "$ZC_SHA"; python3 "$B/deploy/bereitstellen.py" >/dev/null

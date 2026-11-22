@@ -144,6 +144,9 @@ automatischen Rückfall:
   und Container bleiben unverändert.
 - Gesperrt: Rückfall auf einen abgelehnten bzw. automatisch zurückgenommenen Release (steht nach einem automatischen
   Rückfall als `vorher` im Status) und, solange SQLite aktiv ist, auf Code ohne Speicherschicht (`docs/datenbank.md`).
+- Gesperrt, nichts geändert: Rückfall auf einen Stand, der die Trennstufe der Daten nicht kennt (`DATEN_TRENNSTUFE` des
+  Zielstands kleiner als das höhere der Kennzeichen `daten/.daten-getrennt` und `daten-intern/.daten-intern`) – dort bräche
+  jeder Speicherzugriff ab. Weg: erst `sh deploy/daten-trennen.sh zusammenfuehren` (Freigabe, Wartungsfenster), dann erneut.
 
 ## Was der Lauf nach der Freigabe prüft (`.github/scripts/release-pruefen.sh`)
 
