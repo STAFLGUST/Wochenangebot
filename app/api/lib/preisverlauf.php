@@ -49,7 +49,12 @@ function history_from_model(array $m, string $origin, ?string $at): ?array
     }
     return ['week' => $w, 'year' => $y, 'origin' => $origin, 'source' => (string)($m['meta']['source'] ?? ''), 'savedAt' => $at ?: now(), 'items' => $items];
 }
-/* Bisherige Veröffentlichungen einmalig in den Preisverlauf übernehmen (gelöschte Wochen ausgenommen) */
+/* Bisherige Veröffentlichungen einmalig in den Preisverlauf übernehmen (gelöschte Wochen ausgenommen).
+   Die Vorauswahl läuft ohne Sperre (jede lesende Aktion ruft dies auf; im SQLite-Betrieb ist with_lock eine
+   Schreibtransaktion des Bereichs). Gibt es wirklich etwas nachzutragen, entscheidet die Sperre von
+   historie_geloescht: vorhandene Wochen und Grabsteine werden darunter erneut gelesen und die Wochen in derselben
+   Sperre geschrieben – sonst legt eine Leseanfrage eine gerade entfernte Woche wieder an (history_delete,
+   aktionen/preisverlauf.php; Zusage in lib/angebote.php, GR-103). */
 function history_backfill(): void
 {
     $have = array_flip(history_ids());
@@ -66,7 +71,15 @@ function history_backfill(): void
         if (isset($have[$id]) || isset($deleted[$id])) continue;
         if (!isset($cand[$id]) || strcmp((string)$h['savedAt'], (string)$cand[$id]['savedAt']) > 0) $cand[$id] = $h;
     }
-    foreach ($cand as $id => $h) store_write('historie/' . $id, $h);
+    if (!$cand) return;
+    with_lock('historie_geloescht', function () use ($cand) {
+        $have = array_flip(history_ids());
+        $deleted = array_flip(store_read('historie_geloescht') ?? []);
+        foreach ($cand as $id => $h) {
+            if (isset($have[$id]) || isset($deleted[$id])) continue;
+            store_write('historie/' . $id, $h);
+        }
+    });
 }
 /* Darf der angemeldete Nutzer den Preisverlauf lesen? Gleiche Schranke wie die Aktion history_prev
    (aktionen/preisverlauf.php) – auch für die Quelle Preisverlauf in „Frühere Wochen“ (module/angebot/wochen.php, GR-103) */

@@ -230,7 +230,12 @@ Der Preisverlauf führt **keine Kundenpreise** (`variants`) – nur Artikel, Gru
 `history_week()`, das `variants` aus vor dem 15.11.2026 gespeicherten Wochen herausfiltert – alte Dateien bleiben
 unverändert lesbar (GR-006), eine Migration gibt es nicht. Hat ein Administrator eine Woche aus dem Preisverlauf entfernt
 (`historie_geloescht`), nimmt eine Veröffentlichung derselben KW sie nur wieder auf, wenn der Veröffentlichende
-`preisverlauf.bearbeiten` hat.
+`preisverlauf.bearbeiten` hat. Die Entscheidung „entfernt“ liegt dafür ganz unter der Sperre von `historie_geloescht`:
+`history_delete` löscht das Wochendokument **und** schreibt den Grabstein darin, und `history_backfill()` – das jede
+lesende Preisverlauf-Aktion aufruft – liest vorhandene Wochen und Grabsteine unter derselben Sperre erneut, bevor es eine
+Woche aus `versionen/*` nachträgt. Sonst legte eine gewöhnliche Leseanfrage eine gerade entfernte Woche wieder an
+(Sicherheitsaudit run-3). Die Vorauswahl (`versionen/*`, `angebot` lesen) läuft weiter ohne Sperre, und ohne wirklichen
+Nachtrag wird gar nicht gesperrt – im SQLite-Betrieb ist jede Sperre eine Schreibtransaktion des Bereichs.
 Dazu die **Wochenablage** `angebot-woche/<JJJJ-WW>` (Inhaber 13.11.2026, „je KW dauerhaft“; `module/angebot/wochen.php`):
 der neue Stand je KW, ersetzt den Stand derselben KW, ohne Grenze und ohne automatisches Löschen, intern (nie auf der
 Kundenseite). Die Angebotsdefinitionen enthalten nie Kundengruppen (`gruppen`, `sonderGruppen`); bei Sonderangeboten `art`
