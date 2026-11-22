@@ -108,7 +108,7 @@ jobs:
       - name: Dashboard-Domains nur als geschützte Platzhalter
         run: python3 tests/deploy/test_dashboard_domains.py
       - name: Python-Syntax
-        run: python3 -m py_compile tests/run_e2e.py tests/e2e/*.py tests/regeln/*.py tests/unit/*.py werkzeuge/*.py deploy/*.py .github/scripts/*.py
+        run: python3 -m py_compile tests/run_e2e.py tests/e2e/*.py tests/regeln/*.py tests/unit/*.py werkzeuge/*.py deploy/*.py deploy/karte/*.py tests/deploy/*.py .github/scripts/*.py
       - name: Regelwerk und Modulgrenzen (werkzeuge/regeln.py)
         # Modulregister, Datenverantwortung, Rechte-Zuordnung, Geschäftsregeln, Wartungs-Entscheidungstabelle (regeln/*.toml)
         run: |
