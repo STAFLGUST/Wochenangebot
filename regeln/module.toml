@@ -651,7 +651,8 @@ pfade = ["app/api/lib/nutzer.php", "app/api/lib/rechte.php", "app/api/lib/sicher
 
 [[koordination]]
 bereich = "Speicherschicht, Datenformate und Migrationen"
-pfade = ["app/api/storage.php", "app/api/lib/dateiablage.php", "deploy/datenbank.py", "deploy/datenbank-umschalten.sh", "regeln/datenverantwortung.toml"]
+pfade = ["app/api/storage.php", "app/api/lib/dateiablage.php", "deploy/datenbank.py", "deploy/datenbank-umschalten.sh", "deploy/daten_trennen.py",
+  "deploy/daten-trennen.sh", "regeln/datenverantwortung.toml"]
 
 [[koordination]]
 bereich = "Gemeinsamer API-Einstieg"
@@ -663,10 +664,9 @@ pfade = ["regeln/katalog.toml", "regeln/module.toml", "regeln/wartung.toml", "AG
 
 [[koordination]]
 bereich = "Betrieb: Docker, Caddy, Release und Sicherung"
-pfade = ["Caddyfile", "docker-compose.yml", "deploy/*.sh", "deploy/dateien_sichern.py", "deploy/sicherung-pruefen.*", "deploy/image/**",
-  "deploy/anmeldung/**", ".github/workflows/**", ".github/scripts/**"]
+pfade = ["Caddyfile", "docker-compose.yml", "deploy/**", ".github/workflows/**", ".github/scripts/**"]   # deploy/**: auch Python- und PHP-Werkzeuge
 
 [[koordination]]
 bereich = "Globale Tests und Testdaten"
-pfade = ["tests/run_e2e.py", "tests/e2e/umgebung.py", "tests/e2e/auth_helpers.py", "tests/e2e/testdaten.py",
+pfade = ["tests/run_e2e.py", "tests/e2e/umgebung.py", "tests/e2e/auth_helpers.py", "tests/e2e/testdaten.py", "tests/e2e/kunden_hilfe.py",
   "tests/fixtures/data-seed/**", "tests/fixtures/data-seed-clean/**", "tests/requirements.txt"]
