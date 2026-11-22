@@ -852,8 +852,8 @@ Die Angebotsseite (`app/index.html`, `body.kseite`) nutzt dasselbe Muster im Abs
 schwebende Kapsel (`.topbar` mit `top: 10px` – klebende Tabellenköpfe daher `--header-h + 18px`), Umschalter als Segment
 in einer Glaskapsel, Fleischarten/Filter/Sortierung als Kapseln, Angebotsliste `.al` als Glaskarte (30 px) mit abgerundeten
 Zeilen ohne Spaltenlinien, Fenster und Menüs als Glasfenster. Andere Seiten mit `app.css` (Eingabebereich, Dashboard,
-Module) tragen die Klasse nicht und bleiben unverändert. Einzelheiten zum Eingabebereich (Kapsel, Karten 28 px, klebende
-Leisten fast deckend): [Architektur → Browser](../architektur.md#browser-appassets).
+Module) tragen die Klasse nicht und bleiben unverändert. Einzelheiten zum Eingabebereich (im Rahmen „C2“: Karten, Leisten und
+Fenster 16 px, Hauptknöpfe flach, Fenster ohne Unschärfe; klebende Leisten deckend): [Architektur → Browser](../architektur.md#browser-appassets).
 
 ### Symbole
 
