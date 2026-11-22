@@ -28,6 +28,23 @@ mv "$T/sicherungen" "$T/s2"; touch "$T/sicherungen"   # Ablage nicht anlegbar �
 sh "$T/deploy/sichern.sh" --jetzt >/dev/null 2>&1 || true
 ok "unerwarteter Abbruch hinterlässt Fehlerstatus" '[ "$(feld "$T/daten" ok)" = False ] && grep -q "Abbruch" "$T/daten/sicherung.php"'
 rm "$T/sicherungen"; mv "$T/s2" "$T/sicherungen"
+# Die Anwendung läuft weiter: während des Archivs entsteht ein Dokument (z. B. Protokoll des neuen Monats) bzw. eins verschwindet
+mkdir "$T/bin-waehrend"; ECHT_TAR=$(command -v tar); export ECHT_TAR T
+cat > "$T/bin-waehrend/tar" <<'EOF2'
+#!/bin/sh
+[ "$1" != czf ] || [ ! -f "$T/weg-vorher" ] || rm -f "$T/daten/weg.php"
+"$ECHT_TAR" "$@"; rc=$?
+[ "$1" != czf ] || [ ! -f "$T/neu-danach" ] || printf '%s\n[]' '<?php http_response_code(404); exit; ?>' > "$T/daten/neu-waehrend.php"
+exit $rc
+EOF2
+chmod +x "$T/bin-waehrend/tar"; touch "$T/neu-danach"; sleep 1
+PATH="$T/bin-waehrend:$PATH" sh "$T/deploy/sichern.sh" --jetzt >/dev/null 2>&1 || true
+ok "Dokument entsteht während des Archivs: Sicherung trotzdem in Ordnung" '[ -f "$T/daten/neu-waehrend.php" ] && [ "$(feld "$T/daten" ok)" = True ] && [ "$(feld "$T/daten" fehler)" = 0 ]'
+rm -f "$T/neu-danach" "$T/daten/neu-waehrend.php"
+printf '%s\n[]' '<?php http_response_code(404); exit; ?>' > "$T/daten/weg.php"; touch "$T/weg-vorher"; sleep 1
+PATH="$T/bin-waehrend:$PATH" sh "$T/deploy/sichern.sh" --jetzt >/dev/null 2>&1 || true
+ok "Dokument verschwindet vor dem Archiv: Sicherung trotzdem in Ordnung" '[ ! -e "$T/daten/weg.php" ] && [ "$(feld "$T/daten" ok)" = True ] && [ "$(feld "$T/daten" fehler)" = 0 ]'
+rm -f "$T/weg-vorher"
 # Database backup must use a snapshot and verify its actual contents.
 python3 "$T/deploy/datenbank.py" migrate "$T/daten" --offline >/dev/null
 sleep 1
