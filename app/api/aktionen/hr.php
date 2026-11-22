@@ -36,7 +36,8 @@ function hr_einstellungen_aus(array $einst): array
     return ['sperren' => $einst['sperrenEigene'], 'regelSperren' => $einst['regelSperren'], 'schliesstage' => $einst['schliesstage'],
             'sperrenAuto' => array_merge(hr_regel_sperren($j, $einst['schliesstage']), hr_regel_sperren($j + 1, $einst['schliesstage'])),
             'ferien' => $einst['ferien'], 'regeln' => $einst['regeln'], 'regelnStandard' => HR_REGELN_STANDARD, 'verfallAb' => $einst['verfallAb'],
-            'planung' => array_diff_key(hr_planung_einst(), ['abschluss' => true]), 'ueberziehenMax' => $einst['ueberziehenMax'], 'amStueckMax' => $einst['amStueckMax']];
+            'planung' => array_diff_key(hr_planung_einst(), ['abschluss' => true]), 'ueberziehenMax' => $einst['ueberziehenMax'], 'amStueckMax' => $einst['amStueckMax'],
+            'einstRev' => $einst['rev']];   // Stand für hr_einstellungen_save (409 bei fremder Änderung)
 }
 
 switch ($action) {
@@ -697,8 +698,11 @@ switch ($action) {
             }
             $alt = hr_einstellungen(); $vorher = $alt['uebertragBis'];
             $planungVorher = hr_planung_einst();
-            with_lock('hr-einstellungen', function () use ($sperren, $ferien, $bis, $zusatz, $planung) {
+            $rev = array_key_exists('rev', $b) ? (int)$b['rev'] : null;   // Stand beim Laden; ältere Oberflächen ohne „rev“ wie bisher
+            with_lock('hr-einstellungen', function () use ($sperren, $ferien, $bis, $zusatz, $planung, $rev) {
                 $d = store_read('hr-einstellungen') ?? [];
+                // das Formular ersetzt Sperren, Ferien, Regeln und Planung im Ganzen: nicht über eine fremde Änderung hinweg speichern
+                if ($rev !== null && $rev !== (int)($d['rev'] ?? 0)) fail('Die Urlaubseinstellungen wurden inzwischen von jemand anderem geändert. Bitte die Seite neu laden und Ihre Änderung erneut eintragen.', 409);
                 if ($planung !== null) $zusatz['planung'] = array_merge(is_array($d['planung'] ?? null) ? $d['planung'] : [], $planung);
                 store_write('hr-einstellungen', array_merge($d, ['rev' => (int)($d['rev'] ?? 0) + 1, 'sperren' => $sperren, 'ferien' => $ferien],
                                                             $bis !== null ? ['uebertragBis' => $bis] : [], $zusatz));
@@ -742,7 +746,7 @@ switch ($action) {
                 return $alt;
             });
             if ($vorher !== $an) audit('hr', 'HR: Urlaubsanträge über die Plattform ' . ($an ? 'eingeschaltet' : 'ausgeschaltet'));
-            respond(['ok' => true, 'antraege' => $an]);
+            respond(['ok' => true, 'antraege' => $an, 'einstRev' => hr_einstellungen()['rev']]);
         }
 
         /* Excel für den Steuerberater: ausgewählte Monate eines Jahres im Aufbau der Urlaubsplanung */
@@ -758,7 +762,7 @@ switch ($action) {
             $sa = $alt['steuerberater']; $sn = $neu['steuerberater'];
             if ([$sa['an'], $sa['adresse'], $sa['tag']] !== [$sn['an'], $sn['adresse'], $sn['tag']]) $teile[] = 'Steuerberater automatisch ' . $an($sn['an']) . ', am ' . $sn['tag'] . '.' . ($sn['adresse'] !== '' ? ' an ' . $sn['adresse'] : '');
             if ($teile) audit('hr', 'HR: E-Mail-Einstellungen geändert: ' . implode('; ', $teile));
-            respond(['ok' => true, 'mail' => hr_mail_aus()]);
+            respond(['ok' => true, 'mail' => hr_mail_aus(), 'einstRev' => hr_einstellungen()['rev']]);
         }
         /* Erinnerung „Resturlaub verfällt“ an alle, bei denen Übertrag verfallen würde */
         case 'hr_erinnerung_senden': {

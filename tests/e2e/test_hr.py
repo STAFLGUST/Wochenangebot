@@ -2042,6 +2042,22 @@ with sync_playwright() as p:
         pg.click('#hr-einst [type="submit"]')
     check('Verwaltung → Urlaub: Speichern ohne Fehler', antwort.value.status == 200 and not pg.text_content('#hr-einst-err'), antwort.value.status)
     check('Verwaltung → Urlaub: Ferien gespeichert', len(P.call('mitarbeiter_hr')[1]['ferien']) == 2)
+    # zweite Sitzung der Personalstelle speichert dazwischen: Hinweis (409) statt stillem Überschreiben, ohne „rev“ (ältere Oberfläche) wie bisher
+    v_ = P.call('mitarbeiter_hr')[1]
+    st_b, r_b = P.call('hr_einstellungen_save', {'sperren': v_['sperren'] + [{'von': f'{Y}-12-30', 'bis': f'{Y}-12-30', 'text': 'Inventur'}], 'ferien': v_['ferien'], 'rev': v_['einstRev']})
+    st_c, _ = P.call('hr_einstellungen_save', {'sperren': v_['sperren'], 'ferien': v_['ferien'], 'regeln': 'Andere Regeln', 'rev': v_['einstRev']})
+    check('Verwaltung → Urlaub: zweites Speichern mit altem Stand → 409, Sperre der ersten Sitzung bleibt', st_b == 200 and r_b['einstRev'] == v_['einstRev'] + 1 and st_c == 409
+          and any(s_['text'] == 'Inventur' for s_ in P.call('mitarbeiter_hr')[1]['sperren']) and P.call('mitarbeiter_hr')[1]['regeln'] != 'Andere Regeln', (st_b, st_c))
+    pg.fill('#hr-regeln', '1. Test\nZweite Fassung.')
+    with pg.expect_response(lambda r_: 'action=hr_einstellungen_save' in r_.url) as antwort:
+        pg.click('#hr-einst [type="submit"]')
+    if antwort.value.status == 409:
+        pg.wait_for_function("document.querySelector('#hr-einst-err').textContent !== ''")
+    check('Oberfläche: inzwischen gespeichert → Hinweis, nichts überschrieben', antwort.value.status == 409 and 'inzwischen' in pg.text_content('#hr-einst-err')
+          and any(s_['text'] == 'Inventur' for s_ in P.call('mitarbeiter_hr')[1]['sperren']), (antwort.value.status, pg.text_content('#hr-einst-err')))
+    v_ = P.call('mitarbeiter_hr')[1]
+    assert P.call('hr_einstellungen_save', {'sperren': [s_ for s_ in v_['sperren'] if s_['text'] != 'Inventur'], 'ferien': v_['ferien']})[0] == 200
+    pg.goto(B + '/admin/#urlaub'); pg.reload(); pg.wait_for_selector('#hr-uebertrag-bis')
     check('Verwaltung → Urlaub: Verfallstag vorbelegt (31.03.)', pg.input_value('#hr-uebertrag-bis').endswith('-03-31') and '31.03.' in pg.text_content('#hr-uebertrag-anzeige'))
     pg.fill('#hr-uebertrag-bis', f'{Y}-04-15')
     with pg.expect_response(lambda r_: 'action=hr_einstellungen_save' in r_.url):

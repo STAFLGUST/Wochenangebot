@@ -384,6 +384,7 @@
     $('#hr-mail-err').textContent = '';
     try {
       const r = await api('hr_mail_save', { body: mailWerte() });
+      daten.einstRev = r.einstRev;   // eigene Änderung: das Formular „Urlaub“ bleibt speicherbar
       mailNeu(r.mail);
       toast('E-Mail-Einstellungen gespeichert.');
     } catch (ex) { $('#hr-mail-err').textContent = ex.message; }
@@ -437,7 +438,8 @@
       if ($('#hr-ueberziehen').value === '' || !(ueberziehenMax >= 0 && ueberziehenMax <= 30) || (ueberziehenMax * 2) % 1) { $('#hr-einst-err').textContent = 'Resturlaub überziehen: bitte 0 bis 30 Tage in ganzen oder halben Tagen (0 = nie).'; return; }
       if ($('#hr-plan-einzeltage').value === '' || !Number.isInteger(planung.einzeltageMax) || planung.einzeltageMax < 0 || planung.einzeltageMax > 50) { $('#hr-einst-err').textContent = 'Jahresplanung: einzelne Urlaubstage bitte als ganze Zahl zwischen 0 (keine Prüfung) und 50.'; return; }
       const r = await api('hr_einstellungen_save', { body: { sperren: liste('hr-sperren'), ferien: liste('hr-ferien'), uebertragBis: bis,
-        verfallAb: ab ? Number(ab) : null, regelSperren: $('#hr-regelsperren').checked, schliesstage: $('#hr-schliesstage').checked, ueberziehenMax, amStueckMax, regeln: $('#hr-regeln').value, planung } });
+        verfallAb: ab ? Number(ab) : null, regelSperren: $('#hr-regelsperren').checked, schliesstage: $('#hr-schliesstage').checked, ueberziehenMax, amStueckMax, regeln: $('#hr-regeln').value, planung,
+        rev: daten.einstRev } });   // 409, wenn inzwischen jemand anderes gespeichert hat: Hinweis, nichts überschrieben
       Object.assign(daten, { sperren: r.sperren, ferien: r.ferien, uebertragBis: r.uebertragBis, verfallAb: r.verfallAb, regelSperren: r.regelSperren, schliesstage: r.schliesstage, ueberziehenMax: r.ueberziehenMax, amStueckMax: r.amStueckMax, sperrenAuto: r.sperrenAuto, regeln: r.regeln, planung: r.planung });
       toast('Urlaubseinstellungen gespeichert.');
       renderUrlaub();
@@ -450,7 +452,7 @@
     sw.disabled = true; $('#hr-antraege-err').textContent = '';
     try {
       const r = await api('hr_antraege_save', { body: { an } });
-      if (daten) daten.antraege = r.antraege;
+      if (daten) Object.assign(daten, { antraege: r.antraege, einstRev: r.einstRev });
       $('#hr-antraege-t').textContent = r.antraege ? 'Eingeschaltet' : 'Ausgeschaltet';
       toast(r.antraege ? 'Urlaubsanträge eingeschaltet.' : 'Urlaubsanträge ausgeschaltet.');
     } catch (ex) {
