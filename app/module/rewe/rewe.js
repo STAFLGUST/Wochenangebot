@@ -79,6 +79,7 @@
   const kwPlus = (kw, n) => { const d = montag(kw); d.setUTCDate(d.getUTCDate() + 7 * n); return isoKw(d); };
   const kwText = (kw) => (kw ? `KW ${+kw.slice(5)}/${kw.slice(0, 4)}` : '');
   const kwKurz = (kw) => (kw ? `KW ${+kw.slice(5)}` : '');
+  const stueck = (v) => { const t = String(v).trim(); return /^\d{0,3}$/.test(t) ? Number(t) : NaN; };   // Mengenfeld: ganze Stückzahl 0–999, leer = 0
   const kwOk = (v) => /^\d{4}-\d{2}$/.test(v) && +v.slice(5) >= 1 && +v.slice(5) <= 53;
   function zeitraum(kw) { const a = montag(kw), b = new Date(a); b.setUTCDate(b.getUTCDate() + 6); const f = (d) => d.toISOString().slice(0, 10); return `${datum(f(a)).slice(0, 6)}–${datum(f(b))}`; }
 
@@ -471,8 +472,9 @@
     const t = ev.target;
     if (t.dataset.mzahl) {   // Menge eingetippt
       const m = finde(t.dataset.markt); if (!m || !m.antwort) return;
-      const n = parseInt(t.value.replace(/\D/g, ''), 10);
-      const neu = { ...obj(m.antwort.mengen), [t.dataset.mzahl]: Number.isFinite(n) && n > 0 ? Math.min(n, 999) : 0 };
+      const n = stueck(t.value);
+      if (Number.isNaN(n)) { toast('Bitte eine ganze Stückzahl (0–999) eingeben.', true); renderWoche(); return; }
+      const neu = { ...obj(m.antwort.mengen), [t.dataset.mzahl]: n };
       if (!summe(neu)) { toast('Mindestens eine Menge – sonst „Kein Bedarf“ wählen.', true); renderWoche(); return; }
       sende(m.id, { status: 'bestellt', mengen: neu });
     } else if (t.dataset.notiz) sende(t.dataset.notiz, { notiz: t.value.trim() });
@@ -1010,7 +1012,7 @@
     else if (t.id === 'dd-pbis') e.pauseBis = t.value;
     else if (t.id === 'dd-ende') { e.bisAn = t.checked; if (t.checked && !e.bis) e.bis = kwPlus(e.ab > S.d.abfrage ? e.ab : S.d.abfrage, 11); }
     else if (t.id === 'dd-bis') e.bis = t.value;
-    else if (t.dataset.ddMzahl) { const n = parseInt(t.value.replace(/\D/g, ''), 10); e.mengen[t.dataset.ddMzahl] = Number.isFinite(n) && n > 0 ? Math.min(n, 999) : 0; }
+    else if (t.dataset.ddMzahl) { const n = stueck(t.value); if (Number.isNaN(n)) toast('Bitte eine ganze Stückzahl (0–999) eingeben.', true); else e.mengen[t.dataset.ddMzahl] = n; }
     else return;
     renderDauerDlg();
   });

@@ -813,6 +813,17 @@ with sync_playwright() as p:
     pg.wait_for_function(f"location.hash === '#woche/{naechste}' && document.querySelector('#rw-w-titel').textContent.includes('KW {int(naechste[5:])}')")
     pg.wait_for_selector(f'{zeile} [data-s="bestellt"]')
     pg.click(f'{zeile} [data-s="bestellt"]'); pg.wait_for_selector(f'{zeile} .rw-mzahl')
+    pg.wait_for_function("[...document.querySelectorAll('.rw-zeile')].some(z => z.textContent.includes('Musterdorf') && z.querySelector('[data-s=\"bestellt\"][aria-pressed=\"true\"]') && !z.querySelector('[data-s][disabled]'))")
+    vb0 = next(x for g in M.call(f'rewe_woche&kw={naechste}')[1]['woche']['gruppen'] for x in g['maerkte'] if x['ort'] == 'Musterdorf')['antwort']
+    for falsch_ in ('1,5', '-2'):   # keine stille 15 bzw. 2: nur ganze Stückzahlen 0–999
+        pg.evaluate("document.querySelector('#rw-toast').textContent = ''")
+        pg.fill(f'{zeile} .rw-mzahl >> nth=0', falsch_); pg.press(f'{zeile} .rw-mzahl >> nth=0', 'Enter')
+        pg.wait_for_function("(t) => document.querySelector('#rw-toast').textContent !== '' || [...document.querySelectorAll('.rw-zeile')].some(z => z.textContent.includes('Musterdorf')"
+                             " && z.querySelector('.rw-mzahl') && z.querySelector('.rw-mzahl').value !== t && !z.querySelector('[data-s][disabled]'))", arg=falsch_)
+        vb = next(x for g in M.call(f'rewe_woche&kw={naechste}')[1]['woche']['gruppen'] for x in g['maerkte'] if x['ort'] == 'Musterdorf')['antwort']
+        check(f'Menge „{falsch_}“ eingetippt: Hinweis „ganze Stückzahl“, Menge nicht gespeichert', 'ganze Stückzahl' in text(pg, '#rw-toast')
+              and vb0 and vb['mengen'] == vb0['mengen'], (text(pg, '#rw-toast'), vb0, vb))
+    pg.wait_for_function("[...document.querySelectorAll('.rw-zeile')].some(z => z.textContent.includes('Musterdorf') && z.querySelector('.rw-mzahl') && !z.querySelector('[data-s][disabled]'))")
     pg.fill(f'{zeile} .rw-mzahl >> nth=0', '3'); pg.press(f'{zeile} .rw-mzahl >> nth=0', 'Enter')
     pg.wait_for_function("[...document.querySelectorAll('.rw-zeile')].some(z => z.textContent.includes('Musterdorf') && z.querySelector('.rw-mzahl') && z.querySelector('.rw-mzahl').value === '3' && !z.querySelector('[data-s][disabled]'))")
     vb = next(x for g in M.call(f'rewe_woche&kw={naechste}')[1]['woche']['gruppen'] for x in g['maerkte'] if x['ort'] == 'Musterdorf')['antwort']
@@ -902,6 +913,11 @@ with sync_playwright() as p:
     check('Pop-up: ein Klick daneben schließt nicht (Escape schließt wie überall, Prüfung „einheit“)', pg.is_visible('#dlg-dauer[open]'))
     pg.click('#dlg-dauer [data-dd-rh="1"]'); pg.wait_for_selector('#dlg-dauer [data-dd-rh="1"][aria-pressed="true"]')
     pg.click('#dlg-dauer [data-dd-menge="rb"][data-d="1"]'); pg.wait_for_function("document.querySelector('#dlg-dauer [data-dd-mzahl=\"rb\"]').value === '2'")
+    pg.evaluate("document.querySelector('#rw-toast').textContent = ''")
+    pg.fill('#dlg-dauer [data-dd-mzahl="rb"]', '1,5'); pg.press('#dlg-dauer [data-dd-mzahl="rb"]', 'Tab')
+    pg.wait_for_function("document.querySelector('#rw-toast').textContent !== '' || document.querySelector('#dlg-dauer [data-dd-mzahl=\"rb\"]').value !== '1,5'")
+    check('Pop-up: „1,5“ im Mengenfeld → Hinweis, Menge bleibt 2 (nicht 15)', pg.input_value('#dlg-dauer [data-dd-mzahl="rb"]') == '2'
+          and 'ganze Stückzahl' in text(pg, '#rw-toast'), (pg.input_value('#dlg-dauer [data-dd-mzahl="rb"]'), text(pg, '#rw-toast')))
     pg.screenshot(path=os.path.join(SH, 'rewe_dauer_1280.png'))
     pg.click('#dlg-dauer [data-dd-speichern]'); pg.wait_for_selector('#dlg-dauer', state='hidden')
     pg.wait_for_selector('#rw-d-liste [data-dauer]:has-text("Beispielstadt"):has-text("jede Woche")')
