@@ -972,6 +972,12 @@ with sync_playwright() as p:
         pg.fill('tr[data-pos="0"] [data-p="qty"]', '12,5'); pg.fill('tr[data-pos="0"] [data-p="price"]', '13,90'); pg.fill('[data-k="titel"]', f'Test UI {breite}')
         pg.wait_for_function("document.querySelector('.crm-ez-summe').textContent.includes('173,75')")
         check(f'{breite}px: Summe aus Menge × Preis (Menge mit 2 Stellen wie überall)', '12,50 kg' in pg.inner_text('.crm-ez-summe'), pg.inner_text('.crm-ez-summe'))
+        # Preis mit drei Stellen: der Server rundet 1,005 auf 1,01 €/kg – die Summe vor dem Speichern zeigt schon 101,00 € (wie PDF)
+        pg.fill('tr[data-pos="0"] [data-p="qty"]', '100'); pg.fill('tr[data-pos="0"] [data-p="price"]', '1,005')
+        pg.wait_for_function("document.querySelector('.crm-ez-summe').textContent.includes('100,00 kg')")
+        check(f'{breite}px: Summe 100 kg × 1,005 €/kg = 101,00 € wie Server und PDF', '101,00 €' in pg.inner_text('.crm-ez-summe'), pg.inner_text('.crm-ez-summe'))
+        pg.fill('tr[data-pos="0"] [data-p="qty"]', '12,5'); pg.fill('tr[data-pos="0"] [data-p="price"]', '13,90')
+        pg.wait_for_function("document.querySelector('.crm-ez-summe').textContent.includes('173,75')")
         if breite == 1280:
             pg.click('#dlg-kunde [data-schliessen]'); pg.wait_for_selector('#crm-toast.zeigen')
             check('Schließen mit ungespeichertem Einzelangebot: Warnung, Pop-up bleibt offen', pg.is_visible('#dlg-kunde') and 'nicht gespeichert' in pg.text_content('#crm-toast'))
