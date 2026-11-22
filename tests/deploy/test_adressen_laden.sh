@@ -48,6 +48,8 @@ case "\$quelle" in
   /probe/*) [ -f "$T/probe-fehler" ] && { echo "ImportError: libexpat.so.1" >&2; exit 1; }
             # mit \$T/verweis-quelle legt schon der Probelauf einen Verweis unter dem Namen der Quelldatei an
             [ -f "$T/verweis-quelle" ] && ln -sfn "$T/opfer" "\$daten/adressen-quelle.osm.pbf"
+            # mit \$T/verweis-probe liefert der Probelauf statt der Probedatei einen Verweis auf eine fremde SQLite-Datei
+            [ -f "$T/verweis-probe" ] && { ln -sfn "$T/fremd.sqlite" "\$daten/adressen-probe.sqlite"; exit 0; }
             [ -s "\$(printf '%s\n' "\$@" | grep -m1 ':/probe:ro\$' | cut -d: -f1)/adressen.osm" ] || { echo "Testdaten fehlen" >&2; exit 1; } ;;
   *) [ -f "$T/umwandeln-fehler" ] && exit 1
      [ -s "\$daten/adressen-quelle.osm.pbf" ] || { echo "Quelle fehlt" >&2; exit 1; }
@@ -67,6 +69,10 @@ ok "prüfen: Stand und Größe der Quelle, Prüfsumme abrufbar, freier Platz –
 : > "$T/aufrufe"
 AUS=$(sh "$REPO/deploy/adressen-laden.sh" probe) && CODE=0 || CODE=$?
 ok "probe: Testdaten im Container umgewandelt, nichts geladen, nichts übrig" '[ $CODE = 0 ] && echo "$AUS" | grep -q "Probe:     Umwandeln im Container funktioniert (6 Testadressen)" && grep -q "/probe/adressen.osm /daten/adressen-probe.sqlite" "$T/aufrufe" && ! grep -q -- "-o " "$T/aufrufe" && [ -z "$(ls -A daten-karte)" ]'
+python3 "$REPO/deploy/karte/adressen.py" --json "$REPO/tests/fixtures/karte/adressen.json" "$T/fremd.sqlite" 2>/dev/null; touch "$T/verweis-probe"
+AUS=$(sh "$REPO/deploy/adressen-laden.sh" probe 2>&1) && CODE=0 || CODE=$?
+ok "probe: Verweis statt Probedatei wird nicht gezählt (fremde SQLite-Datei bleibt ungelesen)" '[ $CODE = 1 ] && echo "$AUS" | grep -q "kein echtes Ergebnis" && ! echo "$AUS" | grep -q "Testadressen)"'
+rm -f "$T/verweis-probe" daten-karte/adressen-probe.sqlite
 touch "$T/probe-fehler"; : > "$T/aufrufe"
 AUS=$(sh "$REPO/deploy/adressen-laden.sh" 2>&1) && CODE=0 || CODE=$?
 ok "laden mit kaputtem Werkzeug: Abbruch nach der Probe, vor dem Download (4,5 GB gespart)" '[ $CODE = 1 ] && echo "$AUS" | grep -q "Probe fehlgeschlagen" && ! grep -q -- "-o " "$T/aufrufe" && [ ! -e daten-karte/adressen.sqlite ] && [ -z "$(ls -A daten-karte)" ]'
@@ -136,7 +142,8 @@ rm -f daten-karte/adressen-stand.txt daten-karte/adressen.sqlite
 ln -s "$T/opfer" daten-karte/adressen-stand.txt; ln -s "$T/opfer2" daten-karte/adressen.sqlite
 printf '%s\n' 'Fri, 30 Oct 2026 02:16:18 GMT' > "$T/stand"
 AUS=$(sh "$REPO/deploy/adressen-laden.sh" 2>&1) && CODE=0 || CODE=$?
-ok "Verzeichnis und Stand folgen keinem Verweis in daten-karte (Ziele unverändert, Verweise ersetzt)" '[ $CODE = 0 ] \
+ok "Verzeichnis und Stand folgen keinem Verweis in daten-karte (Ziele unverändert, Verweise ersetzt, Inhalt nicht gelesen)" '[ $CODE = 0 ] \
+  && echo "$AUS" | grep -q "(bisher: keiner)" && ! echo "$AUS" | grep -q ORIGINAL \
   && [ "$(cat "$T/opfer")" = ORIGINAL ] && [ "$(stat -c %a "$T/opfer")" = 600 ] && [ ! -e "$T/opfer2" ] \
   && [ ! -L daten-karte/adressen-stand.txt ] && [ ! -L daten-karte/adressen.sqlite ] \
   && [ "$(cat daten-karte/adressen-stand.txt)" = "Fri, 30 Oct 2026 02:16:18 GMT" ] && [ -z "$(ls -A . | grep "^\.stand\.")" ]'
