@@ -99,10 +99,7 @@ function require_auth(bool $write = false, string $role = 'viewer'): array
     $u = current_user();
     if (!$u) fail('Bitte erneut anmelden.', 401);
     header('Cache-Control: private, no-store');   // Daten nach Anmeldung nie im Browser-Cache ablegen (gemeinsam genutzte Rechner)
-    if ($write) {
-        $tok = $_SERVER['HTTP_X_CSRF_TOKEN'] ?? '';
-        if (!is_string($tok) || !hash_equals((string)($_SESSION['csrf'] ?? ''), $tok)) fail('Sicherheitsprüfung fehlgeschlagen – bitte Seite neu laden.', 403);
-    }
+    if ($write) require_csrf();
     // Passwort und zweiter Faktor prüft auf Keycloak-Hosts Keycloak (Pflicht im Realm), nicht diese Anwendung
     if (!oidc_modus() && !empty($u['mustChange'])) fail('Bitte zuerst ein neues Passwort festlegen.', 403);
     if (!oidc_modus() && twofa_required($u) && !has_second_factor($u)) fail('Bitte zuerst die Zwei-Faktor-Anmeldung einrichten.', 403);
@@ -236,8 +233,10 @@ function keep_current_session(array $u): void
     $sid = (string)($_SESSION['sid'] ?? '');
     sess_remove(function ($k, $v) use ($u, $sid) { return $v['uid'] === $u['id'] && $k !== $sid; });
 }
+/* CSRF-Token der Kopfzeile gegen das der Sitzung; 403 mit code „csrf“, damit eine Oberfläche ein neues Token holen kann */
 function require_csrf(): void
 {
     $tok = $_SERVER['HTTP_X_CSRF_TOKEN'] ?? '';
-    if (!is_string($tok) || !hash_equals((string)($_SESSION['csrf'] ?? ''), $tok)) fail('Sicherheitsprüfung fehlgeschlagen – bitte Seite neu laden.', 403);
+    if (!is_string($tok) || !hash_equals((string)($_SESSION['csrf'] ?? ''), $tok))
+        respond(['ok' => false, 'code' => 'csrf', 'error' => 'Sicherheitsprüfung fehlgeschlagen – bitte Seite neu laden.'], 403);
 }
