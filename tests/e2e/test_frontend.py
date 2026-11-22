@@ -176,6 +176,25 @@ with sync_playwright() as p:
     pg.reload(); pg.wait_for_selector('tr.row'); check('dark persisted', pg.evaluate('document.documentElement.dataset.theme') == 'dark')
     pg.click('#btn-theme')
 
+    # Preise mit mehr als 2 Nachkommastellen (gespeichert bis 4): CSV wie die Anzeige auf Cent
+    def vier_stellen(route):
+        r = route.fetch(); d = r.json()
+        for it in d['offer']['items']:
+            if it.get('code') in ('10601', '10823'):
+                it['price'] = {'status': 'value', 'value': 12.3456 if it['code'] == '10601' else 4.2549}
+        route.fulfill(response=r, json=d)
+    c4 = b.new_context(viewport={'width': 1440, 'height': 960}, accept_downloads=True, service_workers='block')   # sonst beantwortet der Service Worker die Anfrage
+    p4 = c4.new_page(); p4.on('pageerror', lambda e: errs.append(str(e)))
+    p4.route(re.compile(r'/api/\?action=offer'), vier_stellen)
+    p4.goto(URL); p4.wait_for_selector('tr.row')
+    zeile = lambda c: p4.locator('tr.row', has=p4.locator('td.c-code', has_text=re.compile('^' + c + '$')))   # noqa: E731
+    check('4 Stellen: Seite zeigt 12,35 und 4,25', '12,35' in zeile('10601').inner_text() and '4,25' in zeile('10823').inner_text(), zeile('10823').inner_text())
+    p4.click('#btn-more')
+    with p4.expect_download() as d: p4.click('[data-action="csv-all"]')
+    z4 = {l.split(';')[0]: l for l in open(d.value.path(), encoding='utf-8-sig').read().splitlines()}
+    check('CSV: Preise auf Cent wie die Anzeige (12,3456 → 12,35; 4,2549 → 4,25)', ';12,35;' in z4['10601'] and ';4,25;' in z4['10823'] and '12,3456' not in z4['10601'], (z4['10601'], z4['10823']))
+    c4.close()
+
     check('no JS errors', not errs, errs)
 
     # mobile
