@@ -234,7 +234,8 @@ Browser nur an; ob ein Kunde etwas sieht, entscheidet der Server. Die Artikel be
 führt Sonderangebote in `offers` (Angebotsleiste: eigener Abschnitt ohne abgelaufene, Kopf mit Gültigkeit und Knopf
 „Gültigkeit und Gruppen“), lässt sie aber aus Stammdaten → Angebote und aus `WA.offers` (Freischaltung beim Kunden) weg.
 Schnittstelle `WA.angebot.sonder` (`uebernehmen`, `oeffnen`, `bearbeiten`, `stand`, `text`). „Aus anderem Angebot“
-(`openCopy`) zeigt die Artikel des Quellangebots zum Anhaken (für Sonderangebote zunächst keiner, sonst alle).
+(`openCopy`) zeigt die Artikel des Quellangebots zum Anhaken (für Sonderangebote zunächst keiner, sonst alle); gerundet
+wird nur mit Auf-/Abschlag, bei 0 % kommen die Preise unverändert (auch mit 4 Nachkommastellen).
 
 ### Export für WinAB
 
@@ -455,7 +456,8 @@ Etikett in der Preiszelle (`saleBtnHTML`/`saleTagHTML`) und Leiste „Kurzes MHD
 Empfehlungspreis optional (leer = `mark: true`, nur hervorheben), je Angebot „wie oben“, „eigener Preis“, „ohne
 Preisänderung“ (`{status: 'mark'}`) oder „keine Empfehlung“ (`{status: 'none'}`). Neu gesetzt steht nur das gewählte
 Angebot auf „wie oben“, alle anderen auf „keine Empfehlung“; `empfehlungNichtUebernehmen()` setzt ein Angebot, in das der
-Artikel später kommt („Artikel hinzufügen“, „Aus anderem Angebot“), ebenfalls auf „keine“. Auswertung je Angebot:
+Artikel später kommt („Artikel hinzufügen“, „Aus anderem Angebot“), ebenfalls auf „keine“ – auf dem Server ebenso der
+Artikelpreise-Import (`angebot_preise_uebernehmen`) für Artikel, die bisher nicht im Kundenangebot standen. Auswertung je Angebot:
 `C.empfehlungFor(it, oid)` (`offer-core.js`; `null` oder `{preis}`), Server `empfehlung_fuer()`.
 
 ### Angebotsauswahl in der Seitenleiste

@@ -263,7 +263,8 @@ Preise des Wochenangebots zurückzufallen) und je Artikel `"vorwoche": {"std": 2
 (Artikel-IDs aus dem Excel-Import sind Zellpositionen), vom genauesten zum gröbsten Schlüssel; ein Schlüssel zählt nur, wenn er
 in Vorwoche und aktuellem Angebot je genau einmal vorkommt. Ausgeliefert wird nur `angebot_vorwoche()` =
 `{kw, jahr, stufen, aenderungen: {Artikel-ID: {art: "neu"} | {art: "guenstiger"|"teurer", d, alt, p, stufe}}}` des angefragten
-Angebots (GR-002); unveränderte Artikel fehlen. `p` = Veränderung in Prozent des Vorwochenpreises (1 Nachkommastelle, mit
+Angebots (GR-002); unveränderte Artikel fehlen. `d` und `alt` auf Cent wie angezeigt und bestellt (gespeichert sind bis zu 4
+Nachkommastellen: 4,245 → 4,2549 ist keine Änderung, 4,254 → 4,256 ist ▲ 0,01). `p` = Veränderung in Prozent des Vorwochenpreises (1 Nachkommastelle, mit
 Vorzeichen), `stufe` 1–3 für die Neigung des Pfeils (Darstellung „nur Pfeil“): unter 2 % → 1, ab 2 % → 2, ab 5 % → 3, gerechnet
 am ungerundeten Wert (1,96 % ist Stufe 1, angezeigt als 2,0 %); die Grenzen stehen nur in `ANGEBOT_VORWOCHE_STUFEN` und gehen als `stufen` mit (Legende). Nichts davon wird
 gespeichert – beides rechnet `angebot_vorwoche()` bei jeder Anfrage.
@@ -423,7 +424,8 @@ Aus dem Kundenimport (Kundendaten-Export der Warenwirtschaft, `kunden_import_lau
   (`wawiFelder`). Ausgeliefert nur an Nutzer mit `kunden.bearbeiten` (`customer_public($c, true)`), nie an CRM, Kunden,
   E-Mail-Antworten oder ins Protokoll (dort nur die Anzahl).
 - `autoInaktiv`: vom Import deaktiviert (Aktiv-Regel: keine Rechnung, kein Lieferschein und keine Neuanlage in
-  `KUNDEN_AKTIV_MONATE` = 18 Monaten, oder „*“ in der Warenwirtschaft). Nur so gekennzeichnete Kunden aktiviert ein
+  `KUNDEN_AKTIV_MONATE` = 18 Monaten, oder „*“ in der Warenwirtschaft; Stichtag `kunden_aktiv_stichtag()`: heute vor 18 Monaten,
+  am Monatsende höchstens der letzte Tag des Zielmonats – 31.08.2026 → 28.02.2025). Nur so gekennzeichnete Kunden aktiviert ein
   späterer Import wieder. `kunde_save` entfernt das Kennzeichen, sobald der Kunde aktiv ist oder der Status von Hand
   geändert wird.
 - `aktivVonHand`: von Hand wieder aktiviert (`kunde_save`, Wechsel inaktiv → aktiv); der Import deaktiviert den Kunden

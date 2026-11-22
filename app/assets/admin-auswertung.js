@@ -77,12 +77,17 @@
     return [x, y, w, h];
   }
 
+  let laufNr = 0;   // schneller Wechsel des Zeitraums: nur die letzte Anfrage zeichnet (wie pruefNr in admin-import.js)
   async function render() {
     const host = $('#view-auswertung');
+    const nr = ++laufNr;
     if (!data) host.innerHTML = '<div class="loading" style="justify-content:center;padding:48px 0"><div class="spinner"></div>Auswertung wird geladen …</div>';
+    let neu;
     try {
-      [data] = await Promise.all([api('auswertung', { query: '&tage=' + tage }), loadKarte()]);
-    } catch (e) { host.innerHTML = `<div class="err-box">${esc(e.message)}</div>`; return; }
+      [neu] = await Promise.all([api('auswertung', { query: '&tage=' + tage }), loadKarte()]);
+    } catch (e) { if (nr === laufNr) host.innerHTML = `<div class="err-box">${esc(e.message)}</div>`; return; }
+    if (nr !== laufNr) return;
+    data = neu;
     if (kunde && !data.kunden.some((k) => k.id === kunde)) kunde = '';
     sel = null;
     if (detail) { detail.entfernen(); detail = null; }

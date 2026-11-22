@@ -65,13 +65,13 @@ function druck_fuss_gespeichert(): ?array
     $d = store_read('fracht');
     return is_array($d) && is_array($d['druck'] ?? null) ? $d['druck'] : null;
 }
-/* Wirksame Fußzeile: eigene Texte, sonst die Vorgabe; „eigen“ sagt, ob Texte hinterlegt sind */
+/* Wirksame Fußzeile: eigene Texte, jedes leere Feld mit der Vorgabe; „eigen“ sagt, ob Texte hinterlegt sind */
 function druck_fuss(): array
 {
     $g = druck_fuss_gespeichert();
     $c = druck_fuss_clean($g ?? []);
     $eigen = implode('', $c['spalten']) . implode('', $c['zeilen']) !== '';
-    if (!$eigen) { $c['spalten'] = DRUCK_FUSS_VORGABE['spalten']; $c['zeilen'] = DRUCK_FUSS_VORGABE['zeilen']; }
+    foreach (['spalten', 'zeilen'] as $k) foreach ($c[$k] as $i => $t) if ($t === '') $c[$k][$i] = DRUCK_FUSS_VORGABE[$k][$i];
     return $c + ['eigen' => $eigen, 'updatedAt' => $g['updatedAt'] ?? null, 'updatedBy' => (string)($g['updatedBy'] ?? '')];
 }
 /* Angemeldet im Sinne der Fußzeile: Mitarbeiter oder Kunde mit eigenem Passwort. Ohne vorgelegte Sitzungskennung

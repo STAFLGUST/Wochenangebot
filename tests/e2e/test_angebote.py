@@ -1,7 +1,7 @@
 """Mehrere Angebote: Kundenangebote mit eigenen Preisen, eigene Artikelliste je Angebot (Artikel hinzufügen wie im
 Einzelangebot, entfernen nur im gewählten Angebot, Umstellung „folgt dem Wochenangebot“ → eigene Liste), Verwaltung,
-Übernahme, Excel-Import ohne Verlust der Kundenangebote, Veröffentlichen, Auslieferung nur an Berechtigte (Regel:
-Kundenpreise nie öffentlich), Werbung je Angebot (Fenster, Prüfung, Auslieferung nur des eigenen Eintrags, Angebotsseite), zweite Werbung rechts daneben,
+Übernahme (ohne Auf-/Abschlag unverändert, sonst gerundet), Excel-Import ohne Verlust der Kundenangebote, Veröffentlichen, Auslieferung nur an Berechtigte (Regel:
+Kundenpreise nie öffentlich), Werbung je Angebot (Fenster, Prüfung, Auslieferung nur des eigenen Eintrags, Angebotsseite), zweite Werbung als zweiter Block (Texte ohne Richtungsangaben),
 Angebotsauswahl unter den Bereichen der Seitenleiste; Kundenangebot kopieren (alles außer den Kunden, in den Entwurf);
 Angebotsgruppe je Angebot (eigene Gruppe eines Artikels in einem Kundenangebot, Mülltonne in der Artikelzeile)."""
 import sys
@@ -627,6 +627,19 @@ with sync_playwright() as p:
     check('copy toast', 'übernommen' in a.inner_text('#toast'), a.inner_text('#toast'))
     a.click('#btn-undo'); a.wait_for_timeout(300)
     check('copy undoable', row(a, '10823').locator('input[data-f=vprice]').input_value() == '')
+    # Ohne Auf-/Abschlag unverändert: 4,27 € bleibt 4,27 €, obwohl „Runden auf 0,05 €“ voreingestellt ist
+    tab(a, 'Wochenangebot').click(); a.wait_for_selector('#offer-head:has-text("Wochenangebot")')
+    i = row(a, '10701').locator('input[data-f=price]'); alt = i.input_value(); i.fill('4,27'); i.press('Tab'); wait_saved(a)
+    tab(a, 'Bela').click(); a.click('[data-ob=copy]'); a.wait_for_selector('#dlg-offer-copy[open]')
+    hinweis = a.inner_text('#offer-copy-body')
+    shot(a, SH + '/angebot-aus-anderem.png'); vp = a.viewport_size; a.set_viewport_size({'width': 390, 'height': 844}); shot(a, SH + '/angebot-aus-anderem-390.png'); a.set_viewport_size(vp)
+    check('copy dialog: 0 % and 0,05 € preset, hint that only a surcharge/discount rounds', a.input_value('#offer-copy-body [name=pct]') == '0'
+          and a.input_value('#offer-copy-body [name=round]') == '0.05' and 'Gerundet wird nur mit Auf-/Abschlag' in hinweis, hinweis)
+    a.click('#offer-copy-body [type=submit]'); wait_saved(a)
+    check('copy 0 %: 4,27 € taken over unchanged (no rounding)', row(a, '10701').locator('input[data-f=vprice]').input_value() == '4,27', row(a, '10701').locator('input[data-f=vprice]').input_value())
+    a.click('#btn-undo'); a.wait_for_function("!document.querySelector('tr[data-id]:has(input[data-f=\"code\"][value=\"10701\"]) input[data-f=vprice]').value")
+    a.click('#btn-undo'); tab(a, 'Wochenangebot').click(); a.wait_for_selector('#offer-head:has-text("Wochenangebot")'); wait_saved(a)
+    check('… week price restored by undo (0 %)', row(a, '10701').locator('input[data-f=price]').input_value() == alt, (row(a, '10701').locator('input[data-f=price]').input_value(), alt))
     # Halbwerte runden auf (Gleitkomma-Rest knapp unter der halben Stufe): 5,50 € −5 % auf 0,05 → 5,25 (fest eingetragen)
     tab(a, 'Wochenangebot').click(); a.wait_for_selector('#offer-head:has-text("Wochenangebot")')
     i = row(a, '10701').locator('input[data-f=price]'); alt = i.input_value(); i.fill('5,5'); i.press('Tab'); wait_saved(a)
@@ -759,12 +772,16 @@ with sync_playwright() as p:
     sw = pm.evaluate('document.documentElement.scrollWidth'); check('Angebotsseite mobil: Block ohne seitliches Scrollen', sw <= 390, sw)
     pm.screenshot(path=SH + '/werbung-angebotsseite-mobil.png'); pm.close()
     check('kein Excel-Import mehr im Editor (Auftrag des Inhabers 04.11.2026)', a.locator('#btn-import').count() == 0)
-    # Zweite Werbung (Wunsch des Inhabers): „Weitere Werbung“ im Fenster, Reiter, Prüfung, Auslieferung, rechts daneben
+    # Zweite Werbung (Wunsch des Inhabers): „Weitere Werbung“ im Fenster, Reiter, Prüfung, Auslieferung als zweiter Block
     tab(a, 'Wochenangebot').click(); a.wait_for_selector('#werb-n:not([hidden])')
     id701 = row(a, '10701').get_attribute('data-id')
     a.click('#btn-werbung'); a.wait_for_selector('#dlg-werbung[open] [data-wa=neu]')
-    check('Fenster: Knopf „Weitere Werbung“ (rechts daneben), noch keine Reiter', a.locator('#wb-reiter .wb-tab').count() == 0 and 'rechts daneben' in a.inner_text('#wb-reiter'))
+    richtung = re.compile(r'\b(links|rechts|oben|unten)\b', re.I)   # Vorgabe: keine Richtungsangaben (am Handy stehen die Werbungen untereinander)
+    check('Fenster: Knopf „Weitere Werbung“ (als zweiter Werbeblock), noch keine Reiter, Texte ohne Richtungsangaben', a.locator('#wb-reiter .wb-tab').count() == 0
+          and 'als zweiter Werbeblock' in a.inner_text('#wb-reiter') and not richtung.search(a.inner_text('#werbung-body')), a.inner_text('#werbung-body'))
     a.click('[data-wa=neu]'); a.wait_for_selector('#wb-reiter .wb-tab[aria-selected="true"][data-wr="1"]')
+    check('Reiter: „erster Block“ / „zweiter Block“, ohne Richtungsangaben', [a.inner_text(f'#wb-reiter [data-wr="{k}"] small') for k in (0, 1)] == ['erster Block', 'zweiter Block']
+          and not richtung.search(a.inner_text('#werbung-body')), a.inner_text('#wb-reiter'))
     check('… zweiter Reiter aktiv, Überschrift vorbelegt, leer, kein weiterer Knopf', a.input_value('#wb-titel') == 'Aktion der Woche' and a.locator('#wb-liste [data-wid]').count() == 0
           and a.locator('[data-wa=neu]').count() == 0 and 'Werbung 2 entfernen' in a.inner_text('#wb-ende'))
     a.click('#dlg-werbung [data-wa=ok]')
@@ -776,6 +793,7 @@ with sync_playwright() as p:
     check('Reiter wechseln: erste Werbung unverändert', a.input_value('#wb-titel') == 'Aktion der Woche' and a.locator('#wb-liste [data-wid]').count() == 2
           and a.inner_text('#wb-reiter [data-wr="1"] .wb-tz') == '1')
     a.screenshot(path=SH + '/werbung-zwei.png')
+    shot(a, SH + '/werbung-zwei-fenster.png'); vp = a.viewport_size; a.set_viewport_size({'width': 390, 'height': 844}); shot(a, SH + '/werbung-zwei-fenster-390.png'); a.set_viewport_size(vp)
     a.click('#dlg-werbung [data-wa=ok]'); a.wait_for_selector('#dlg-werbung', state='hidden'); wait_saved(a)
     w = (get(a, 'draft')[1]['draft']['meta'] or {}).get('werbung', {}).get('std', {})
     check('Entwurf: zweite Werbung in „weitere“', [x['id'] for x in w.get('artikel', [])] == [id01, id23] and w.get('weitere') == [{'titel': 'Zweite Aktion', 'artikel': [{'id': id701}]}]

@@ -2531,7 +2531,7 @@
           <div class="oc-bar"><div class="search">${icon('search')}<input id="oc-q" type="search" autocomplete="off" placeholder="Artikel finden: Nummer, Bezeichnung, Gruppe …" aria-label="Artikel des Quellangebots suchen"></div>
             <button type="button" class="link-btn" data-oc="alle">Alle</button><button type="button" class="link-btn" data-oc="keine">Keine</button></div>
           <ul class="oc-list" id="oc-list" aria-label="Artikel des Quellangebots"></ul></div>
-        <p class="hint span2">„Auf Anfrage“ wird übernommen, Artikel ohne Preis werden übersprungen. Mit „Rückgängig“ lässt sich die Übernahme zurücknehmen.</p>
+        <p class="hint span2">Gerundet wird nur mit Auf-/Abschlag – ohne werden die Preise unverändert übernommen. „Auf Anfrage“ wird übernommen, Artikel ohne Preis werden übersprungen. Mit „Rückgängig“ lässt sich die Übernahme zurücknehmen.</p>
       </div>
       <div class="dlg-foot"><button type="button" class="btn" data-close>Abbrechen</button><button type="submit" class="btn primary">${icon('copy')}Übernehmen</button></div>`;
     ocListe(ids[0], true);
@@ -2563,8 +2563,8 @@
       if (!p || (p.status !== 'value' && p.status !== 'request')) continue;
       const hier = inOffer(it, curOffer), eigen = curOffer === OSTD ? hier : !!(it.variants && it.variants[curOffer] && it.variants[curOffer].status !== 'hidden');
       if (eigen && !all) continue;
-      // Quotient vor dem Runden glätten: 5,50 € −5 % / 0,05 ergibt binär 104,4999… statt 104,5 (wie rundeWieServer in frontend.js)
-      const np = p.status === 'value' ? { status: 'value', value: Math.round(glatt(p.value * (1 + pct / 100) / step) * step * 100) / 100 } : { status: 'request' };
+      // ohne Auf-/Abschlag unverändert kopieren; Quotient vor dem Runden glätten: 5,50 € −5 % / 0,05 ergibt binär 104,4999… statt 104,5 (wie rundeWieServer in frontend.js)
+      const np = p.status === 'value' ? { status: 'value', value: pct ? Math.round(glatt(p.value * (1 + pct / 100) / step) * step * 100) / 100 : p.value } : { status: 'request' };
       if (!hier) { empfehlungNichtUebernehmen(it, curOffer); neuHier.push(it); }
       aufnehmen(it, curOffer, np);
       invalid.delete(it.id + '|' + curOffer);
@@ -2977,6 +2977,8 @@
   const wkLabel = (w) => `KW ${w.week}`;   // Achse des Diagramms (kurz); im Text immer wkLong
   const wkLong = (w) => `KW ${w.week}/${w.year}`;
   const numVal = (p) => (p && p.price && p.price.status === 'value' ? p.price.value : null);
+  const centVal = (p) => { const v = numVal(p); return v == null ? null : glatt(v * 100) / 100; };   // Preisverlauf auf Cent wie Anzeige und Bestellung (gespeichert bis 4 Stellen)
+  const histPreis = (p) => (p.status === 'value' ? F.euroKg(p.value) : priceShort(p));
   const fmtDelta = (d) => F.differenz(d, '€/kg', 2, 2);
 
   /* Artikel-Schlüssel über alle Wochen: Artikelnummer; bei mehrfach vergebenen Nummern zusätzlich Bezeichnung + Gruppe */
@@ -3006,7 +3008,7 @@
     });
     const L = weeks.length - 1;
     const series = [...map.values()].map((s) => {
-      s.vals = s.points.map(numVal);
+      s.vals = s.points.map(centVal);
       const nums = s.vals.filter((v) => v != null);
       s.min = nums.length ? Math.min(...nums) : null;
       s.max = nums.length ? Math.max(...nums) : null;
@@ -3183,7 +3185,7 @@
     $('#hist-count').textContent = `${plural(list.length, 'Artikel', 'Artikel')} · ${wkLong(H.weeks[idx[0]])} – ${wkLong(H.weeks[L])}`;
     const rows = list.map((s) => {
       const x = st.get(s);
-      const cur = s.cur ? priceShort(s.cur.price) : '';
+      const cur = s.cur ? histPreis(s.cur.price) : '';
       const d = x.delta;
       return `<tr data-skey="${esc(s.key)}" tabindex="0">
         <td class="h-code">${esc(s.code || '—')}</td>
@@ -3311,7 +3313,7 @@
       const v = s.vals[i];
       const ch = v != null && prev != null ? v - prev : null;
       if (v != null) prev = v;
-      rows.push(`<tr${p ? '' : ' class="muted"'}><td>${esc(wkLong(w))}</td><td class="num">${p ? esc(priceShort(p.price)) : 'nicht im Angebot'}</td>
+      rows.push(`<tr${p ? '' : ' class="muted"'}><td>${esc(wkLong(w))}</td><td class="num">${p ? esc(histPreis(p.price)) : 'nicht im Angebot'}</td>
         <td class="num">${ch == null || Math.abs(ch) < 1e-9 ? '' : `<span class="delta ${ch > 0 ? 'up' : 'down'}">${fmtDelta(ch)}</span>`}</td>
         <td>${p && p.name !== s.name ? esc(p.name) : ''}${p && (p.altPrices || []).length ? `<span class="muted"> ${p.altPrices.map((a) => esc((a.label || '') + ': ' + priceShort(a))).join(' · ')}</span>` : ''}</td>
         <td class="muted">${p && p.group !== s.group ? esc(p.group) : ''}</td></tr>`);
@@ -3322,7 +3324,7 @@
       <div class="dlg-body">
         <div class="ser-range">${rangeSeg()}<span class="muted">${esc(wkLong(W[0]))} – ${esc(wkLong(W[W.length - 1]))}${x.delta ? ` · Änderung <span class="delta ${x.delta > 0 ? 'up' : 'down'}">${fmtDelta(x.delta)}</span>` : ''}</span></div>
         <div class="cmp-stats hstats">
-          <div><span>Aktuell</span><strong>${cur ? esc(priceShort(cur.price)) : '—'}</strong></div>
+          <div><span>Aktuell</span><strong>${cur ? esc(histPreis(cur.price)) : '—'}</strong></div>
           <div><span>Tiefster</span><strong>${F.euroKg(x.min)}</strong></div>
           <div><span>Höchster</span><strong>${F.euroKg(x.max)}</strong></div>
           <div><span>Durchschnitt</span><strong>${x.avg != null ? F.euroKg(Math.round(x.avg * 100) / 100) : '—'}</strong></div>
@@ -5135,7 +5137,8 @@
     const name = typed;   // Bezeichnung ohne Einschränkung (auch mit „frisch“); der Zustand ist das eigene Feld
     const condition = f.condition.value;
     const vk = f.vkGruppe.value.trim();
-    if (vk && (!/^[0-9A-Za-z._-]{1,10}$/.test(vk) || (vkg.length && !vkgMap.has(vk)))) { err.textContent = `Die VK-Gruppe „${vk}“ gibt es nicht. Bitte unter Stammdaten → VK-Gruppen anlegen.`; f.vkGruppe.focus(); return; }
+    // nur eine geänderte VK-Gruppe gegen die Liste prüfen (der Import trägt auch fremde ein)
+    if (vk && vk !== (e.vkGruppe || '') && (!/^[0-9A-Za-z._-]{1,10}$/.test(vk) || (vkg.length && !vkgMap.has(vk)))) { err.textContent = `Die VK-Gruppe „${vk}“ gibt es nicht. Bitte unter Stammdaten → VK-Gruppen anlegen.`; f.vkGruppe.focus(); return; }
     const neu = { ...e, name, category: f.category.value, origin: C.clean(f.origin.value) || null, condition };
     if (vk) neu.vkGruppe = vk; else delete neu.vkGruppe;
     delete neu.namen;
@@ -5282,8 +5285,11 @@
       master.articles = masterZusammenfuehren(res, master.articles).articles;   // auf den Stand beim Klick anwenden
       clearTimeout(masterTimer);
       while (masterSaving) await new Promise((r) => setTimeout(r, 100));
-      await saveMaster();
-      if (masterErr) { const msg = masterErr; master.articles = vorher; masterErr = null; setMasterState('saved'); $('#msi-err').textContent = msg; $('#msi-ok').disabled = false; return; }
+      if (await saveMaster() === false) {   // nach 409 ist der aktuelle Stand geladen (master ist dann schon dieser) – erneut „Übernehmen“ führt die Datei mit ihm zusammen
+        const msg = masterErr || 'Die Stammdaten wurden inzwischen an anderer Stelle geändert – der aktuelle Stand ist geladen. Bitte erneut „Übernehmen“.';
+        if (masterErr) { master.articles = vorher; masterErr = null; setMasterState('saved'); }
+        $('#msi-err').textContent = msg; $('#msi-ok').disabled = false; return;
+      }
       dlgMI.close();
       toast(`Artikelstammdaten übernommen: ${fmtInt.format(neu.length)} neu, ${fmtInt.format(ergaenzt.length)} ergänzt.`, 5000);
       renderMasterView();
@@ -5347,8 +5353,8 @@
     const nm = namenBekannt(it.namen);   // Bezeichnungen je Angebot gehören dazu
     if (nm) rec.namen = nm; else if (ent) delete ent.namen;
     if (ent) Object.assign(ent, rec); else { master.articles.push(rec); master.articles.sort((x, y) => x.code.localeCompare(y.code, 'de', { numeric: true })); }
-    await saveMaster();
-    toast(masterErr ? `Nicht gespeichert: ${masterErr}` : `Stammdaten für ${it.code} ${ent ? 'aktualisiert' : 'angelegt'}.`);
+    const ok = await saveMaster();   // undefined: läuft nach dem laufenden Speichern
+    toast(ok === false ? `Nicht gespeichert: ${masterErr || 'die Stammdaten wurden inzwischen an anderer Stelle geändert – bitte erneut speichern.'}` : `Stammdaten für ${it.code} ${ent ? 'aktualisiert' : 'angelegt'}.`);
   }
 
   /* ======================= Schnittstelle für admin-verwaltung.js ======================= */

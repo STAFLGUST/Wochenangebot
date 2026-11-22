@@ -13,7 +13,7 @@ Zeilenschrift und innerhalb der Zelle; Karten am Handy (390 px) mit Pille; „An
 Menü „Zusatz“, das Menü „⋯“ schließt beim Öffnen; Versand: Vorschau und E-Mail mit Schalter (Übersicht, Links mit
 vergleich=vorwoche, „Nur Änderungen“), ohne Schalter wie bisher, nur echte Wahrheitswerte, Übersicht in der Vorschau nur mit
 Zugang zum Angebot, Protokoll „mit Preisänderung“; Fenster „Wochenangebot senden“ mit Zusatz; keine JavaScript-Fehler.
-Darstellung „nur Pfeil“ (Zusatzversion, Inhaber 20.11.2026): p (Prozent) und stufe 1–3 an den Grenzen 2 % und 5 % in beide
+Änderung auf Cent wie angezeigt (4,245 → 4,2549 keine, 4,254 → 4,256 ▲ 0,01). Darstellung „nur Pfeil“ (Zusatzversion, Inhaber 20.11.2026): p (Prozent) und stufe 1–3 an den Grenzen 2 % und 5 % in beide
 Richtungen; ?vergleich=pfeil zeigt geneigte Pfeile (30°/60°/90°) ohne Beträge, Druck mit denselben Seiten und Zeilenhöhen wie ohne;
 Menü „Zusatz“ mit „(nur Pfeil)“; Versand mit Darstellung „Nur Pfeil“ → Links mit vergleich=pfeil, unbekannter Wert verworfen.
 Nur Testdaten (Seed-Angebot, erfundene Kunden)."""
@@ -389,11 +389,16 @@ check('Jahreswechsel: KW 1/2027 vergleicht mit KW 53/2026 (ISO-Wochen), keine Ä
 GRENZ = {'g19': (9.81, -1.9, 1), 'g20': (9.80, -2.0, 2), 'g49': (9.51, -4.9, 2), 'g50': (9.50, -5.0, 3),
          't19': (10.19, 1.9, 1), 't20': (10.20, 2.0, 2), 't49': (10.49, 4.9, 2), 't50': (10.50, 5.0, 3),
          't196': (10.40, 2.0, 1, 10.20)}   # 10,20 → 10,40 = +1,96 %: angezeigt 2,0 %, Stufe aber am ungerundeten Wert → 1
+# gespeichert bis 4 Nachkommastellen, angezeigt und bestellt 2: 4,245 → 4,2549 bleibt 4,25; 4,254 → 4,256 ist 4,25 → 4,26
+RUND = {'rd0': (4.245, 4.2549), 'rd1': (4.254, 4.256)}
 m5 = deepcopy(A.call('draft')[1].get('published'))
 m5['meta']['week'], m5['meta']['year'] = 2, 2027
 for n, k in enumerate(GRENZ):
     m5['items'].insert(n, {'id': 'gr-' + k, 'code': f'9920{n + 1}', 'name': f'Grenztest {k}', 'category': 'Rind', 'origin': None, 'condition': 'frisch',
                            'groupId': m5['groups'][0]['id'], 'price': VAL(GRENZ[k][3] if len(GRENZ[k]) > 3 else 10.0), 'altPrices': [], 'variants': {}})
+for n, k in enumerate(RUND):
+    m5['items'].append({'id': 'rd-' + k, 'code': f'9930{n + 1}', 'name': f'Rundungstest {k}', 'category': 'Rind', 'origin': None, 'condition': 'frisch',
+                        'groupId': m5['groups'][0]['id'], 'price': VAL(RUND[k][0]), 'altPrices': [], 'variants': {}})
 veroeffentlichen(m5)
 m6 = deepcopy(A.call('draft')[1].get('published'))
 m6['meta']['week'] = 3
@@ -401,9 +406,13 @@ for it in m6['items']:
     it.pop('vorwoche', None)
     if it['id'].startswith('gr-'):
         it['price'] = VAL(GRENZ[it['id'][3:]][0])
+    if it['id'].startswith('rd-'):
+        it['price'] = VAL(RUND[it['id'][3:]][1])
 veroeffentlichen(m6)
 ag = (P.call('offer&vergleich=vorwoche')[1].get('vorwoche') or {}).get('aenderungen', {})
-ist = {k[3:]: (v['art'], v.get('p'), v.get('stufe')) for k, v in ag.items()}
+ar = {k[3:]: (v['art'], v.get('d'), v.get('alt')) for k, v in ag.items() if k.startswith('rd-')}
+check('Änderung auf Cent wie angezeigt: 4,245 → 4,2549 (beide 4,25) ohne Hinweis, 4,254 → 4,256 (4,25 → 4,26) ▲ 0,01 gegen 4,25', ar == {'rd1': ('teurer', 0.01, 4.25)}, ar)
+ist = {k[3:]: (v['art'], v.get('p'), v.get('stufe')) for k, v in ag.items() if k.startswith('gr-')}
 soll = {k: ('guenstiger' if k[0] == 'g' else 'teurer', v[1], v[2]) for k, v in GRENZ.items()}
 check('p (Prozent, 1 Nachkommastelle) und stufe an den Grenzen: 1,9 % → 1, 2,0 % → 2, 4,9 % → 2, 5,0 % → 3 (günstiger und teurer); 1,96 % (angezeigt 2,0 %) → 1', ist == soll, ist)
 WINKEL = """() => [...document.querySelectorAll('#list tr.row')].filter((r) => r.dataset.id.startsWith('gr-')).map((r) => {
@@ -432,10 +441,10 @@ with sync_playwright() as p:
     pg.evaluate("document.querySelector('#list tr.row[data-id=\"gr-g19\"]').scrollIntoView({block: 'center'})")
     shot(pg, SH + '/preisaenderung-pfeil-1280.png')
     s1 = satz(pg)
-    n_svg = pg.evaluate("document.querySelectorAll('#print-root td.c-name > .vw svg').length")
+    n_svg = pg.evaluate("document.querySelectorAll('#print-root td.c-name > .vw svg').length")   # Grenzfälle und rd1 (4,25 → 4,26)
     check('Druck mit Pfeil: dieselben Seiten, Stufe, Füllung und Zeilenhöhen wie ohne; alle Pfeile ganz in der Zelle; keine Legende im Kopf',
           s1['seiten'] == s0['seiten'] and s1['stufe'] == s0['stufe'] and s1['fuell'] == s0['fuell'] and s1['hoehen'] == s0['hoehen']
-          and n_svg == len(GRENZ) and all(v['innen'] for v in s1['vw']) and 'steiler' not in s1['kopf'], (s0['seiten'], s1['seiten'], n_svg, s1['kopf']))
+          and n_svg == len(GRENZ) + 1 and all(v['innen'] for v in s1['vw']) and 'steiler' not in s1['kopf'], (s0['seiten'], s1['seiten'], n_svg, s1['kopf']))
     shot(pg.locator('#print-root .pl-page').first, SH + '/preisaenderung-pfeil-druck.png')
     zurueck(pg)
     m390 = br.new_context(viewport={'width': 390, 'height': 844}, color_scheme='light', is_mobile=True, has_touch=True)
