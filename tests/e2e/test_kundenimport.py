@@ -1,7 +1,8 @@
 """Stammdaten → Angebote mit Kundengruppen (Freischaltung über die Gruppe), Import der Kundenstammdaten aus der
 Warenwirtschaft (CSV, alle Spalten, Aktiv-Regel 18 Monate) und Passwort-Auswahl im Kunden-Dialog. Artikelpreise-Import:
 Kunde der neu angelegten Gruppe sieht den Gruppenpreis ohne Sonderposten des Wochenangebots, der Bestellwunsch rechnet
-damit. Kundenimport: Stichtag der Aktiv-Regel am Monatsende. Nur synthetische
+damit. Kundenimport: Firma + PLZ trifft je Lauf nur einen Kunden (zweite Filiale wird eigener Kunde), Stichtag der
+Aktiv-Regel am Monatsende. Nur synthetische
 Testdaten (tests/fixtures/kunden); Datumswerte für die Aktiv-Regel relativ zu heute."""
 import calendar
 import csv
@@ -533,6 +534,19 @@ def bestaetigt(aktion, daten):
         st_, r_ = A.call(aktion, daten)
     return st_, r_
 
+
+# ---------- Abgleich über Firma + PLZ nur einmal je Lauf: zwei Filialen mit gleichem Namen und gleicher PLZ ----------
+st, r = bestaetigt('kunde_save', {'rev': A.call('kunden')[1]['rev'], 'active': True, 'firma': 'Filiale Muster', 'nr': '', 'plz': '20357', 'ort': 'Hamburg',
+                                  'strasse': 'Alte Str. 1', 'angebote': []})
+assert st == 200, r
+fid = r['customer']['id']
+filialen = [{'nr': '7001', 'firma': 'Filiale Muster', 'plz': '20357', 'ort': 'Hamburg', 'strasse': 'Lagerstr. 5'},
+            {'nr': '7002', 'firma': 'Filiale Muster', 'plz': '20357', 'ort': 'Hamburg', 'strasse': 'Marktweg 9'}]
+st, r = bestaetigt('kunden_import', {'rev': A.call('kunden')[1]['rev'], 'rows': filialen, 'quelle': 'filialen.csv'})
+fil = {c.get('nr'): c for c in doc('kunden')['customers'] if c['firma'] == 'Filiale Muster'}
+check('gleiche Firma und PLZ zweimal in der Datei: bestehender Kunde bekommt die erste Nummer, die zweite Filiale wird eigener Kunde',
+      st == 200 and set(fil) == {'7001', '7002'} and fil['7001']['id'] == fid and fil['7001'].get('strasse') == 'Lagerstr. 5' and fil['7002']['id'] != fid,
+      (r.get('stat'), {k: (v['id'], v.get('strasse')) for k, v in fil.items()}))
 
 # ---------- Stichtag der Aktiv-Regel am Monatsende (Funktion direkt, mit festem „heute“) ----------
 PHP = r"""define('WA_API', 1); date_default_timezone_set('Europe/Berlin'); require $argv[1] . '/app/api/module/verwaltung/import.php';

@@ -170,6 +170,8 @@ function kunden_import_lauf(array $b, bool $pruefen, bool $details = false): arr
             if ($x['gruppe'] !== '') { if (isset($gruppen[$nk($x['gruppe'])])) $x['gruppe'] = $gruppen[$nk($x['gruppe'])]; else { $fremd[$x['gruppe']] = ($fremd[$x['gruppe']] ?? 0) + 1; $x['gruppe'] = ''; } }
             foreach (['vertreter', 'vertreter2'] as $f) if ($x[$f] !== '') { if (isset($vertreter[$nk($x[$f])])) $x[$f] = $vertreter[$nk($x[$f])]; else { $fremdV[$x[$f]] = ($fremdV[$x[$f]] ?? 0) + 1; $x[$f] = ''; } }
             $idx = $x['nr'] !== '' && isset($byNr[$x['nr']]) ? $byNr[$x['nr']] : ($byName[mb_strtolower($x['firma']) . '|' . $x['plz']] ?? null);
+            // Firma + PLZ trifft je Lauf nur einmal: eine zweite Zeile mit anderer Nummer (z. B. zweite Filiale) wird eigener Kunde
+            if ($idx !== null && $x['nr'] !== '' && !isset($byNr[$x['nr']])) { unset($byName[mb_strtolower($x['firma']) . '|' . $x['plz']]); $byNr[$x['nr']] = $idx; }
             $wAlt = $idx !== null && is_array($d['customers'][$idx]['wawi'] ?? null) ? $d['customers'][$idx]['wawi'] : [];
             $w = kunden_wawi_neu($wAlt, $r['wawi'] ?? null, $wawiFelder);
             // Aktiv laut Warenwirtschaft (null = Regel nicht angewendet)
