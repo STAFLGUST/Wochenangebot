@@ -17,7 +17,10 @@ declare(strict_types=1);
    Kennzahlen gibt es zweimal: „laut Zeiterfassung“ (alle Tage) und „bereinigt“ (nur Tage ohne Stempelfehler).
 
    Dokumente: ARBEITSZEIT (Verzeichnis: Mitarbeiter, Jahre, Importverlauf, Revision) und ARBEITSZEIT/JJJJ (Tage des Jahres).
-   Ein Import ersetzt den Zeitraum seiner Datei (erster bis letzter Tag); Tage davor und danach bleiben. */
+   Ein Import ersetzt den Zeitraum seiner Datei (erster bis letzter Tag); Tage davor und danach bleiben. Das Verzeichnis
+   entscheidet, welche Jahre gelten: die Übernahme schreibt erst die Jahresdokumente, dann das Verzeichnis und löscht leer
+   gewordene Jahre zuletzt; die Auswertung liest nur Jahre, die im Verzeichnis stehen. Ein abgebrochener Import kann so
+   höchstens ein Jahresdokument ohne Verzeichniseintrag hinterlassen (der nächste Import des Zeitraums überschreibt es). */
 if (!defined('WA_API')) { http_response_code(404); exit; }   // nur über api/index.php nutzbar
 
 const ARBEITSZEIT = 'controlling-arbeitszeit';
@@ -274,6 +277,7 @@ function arbeitszeit_import_uebernehmen(array $e, array $me): array
         $index = az_index();
         if ((int)($e['stand'] ?? -1) !== (int)$index['rev']) fail('Die Arbeitszeitdaten wurden inzwischen geändert. Die Vorschau wird neu geladen.', 409);
         $v = az_vergleich($in);
+        $loeschen = [];
         for ($j = (int)substr($in['von'], 0, 4); $j <= (int)substr($in['bis'], 0, 4); $j++) {
             $jahr = (string)$j;
             $tage = array_filter(az_jahr_lesen($jahr), fn($k) => substr($k, -10) < $in['von'] || substr($k, -10) > $in['bis'], ARRAY_FILTER_USE_KEY);
@@ -284,7 +288,7 @@ function arbeitszeit_import_uebernehmen(array $e, array $me): array
                 $daten = array_map(fn($k) => substr($k, -10), array_keys($tage));
                 $index['jahre'][$jahr] = ['von' => min($daten), 'bis' => max($daten), 'tage' => count($tage)];
             } else {
-                store_delete(ARBEITSZEIT . '/' . $jahr);
+                $loeschen[] = $jahr;   // erst nach dem Verzeichnis löschen (siehe unten)
                 unset($index['jahre'][$jahr]);
             }
         }
@@ -296,6 +300,10 @@ function arbeitszeit_import_uebernehmen(array $e, array $me): array
         $index['importe'] = array_slice($index['importe'], 0, AZ_IMPORTE_MAX);
         $index['rev'] = (int)$index['rev'] + 1;
         store_write(ARBEITSZEIT, $index);
+        // Leer gewordene Jahre erst nach dem Verzeichnis löschen (with_lock ist im Dateispeicher keine Transaktion, nur
+        // eine Sperre): ein Abbruch lässt dann höchstens ein geschriebenes Jahresdokument ohne Verzeichniseintrag zurück –
+        // nie einen Eintrag ohne Dokument. Wie bei den Umsatzdaten (umsatzdaten.php).
+        foreach ($loeschen as $jahr) store_delete(ARBEITSZEIT . '/' . $jahr);
         return ['zahlen' => $zahlen + ['fehler' => count($in['fehler'])], 'stand' => $index['rev']];
     });
     // Protokoll ohne Namen und Stunden (Personaldaten): nur Zeitraum und Anzahl
@@ -342,6 +350,7 @@ function az_tage(array $a, array $index): array
 {
     $out = [];
     for ($j = (int)substr($a['von'], 0, 4); $j <= (int)substr($a['bis'], 0, 4); $j++) {
+        if (!isset($index['jahre'][(string)$j])) continue;   // das Verzeichnis entscheidet: ein Jahresdokument ohne Eintrag (abgebrochener Import) zählt nicht
         foreach (az_jahr_lesen((string)$j) as $k => $t) {
             [$pid, $d] = explode('|', $k);
             $m = substr($d, 0, 7);

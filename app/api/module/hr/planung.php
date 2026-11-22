@@ -15,7 +15,12 @@ declare(strict_types=1);
    Vorplanung (Inhaber 10.11.2026): mit dem Schalter „Vorplanung“ beantragt ein Mitarbeiter mehrere Zeiträume des nächsten
    Jahres auf einmal (hr_vorplanung – alle oder keiner); jeder Zeitraum wird wie ein einzelner Antrag geprüft, auch ob die
    Vertretung da ist (hr_antrag_zeitraum, Vorschau: hr_antrag_pruefen). Feste Vertretung aus den Stammdaten (hr-personal.vertretung,
-   nicht änderbar) und optional eine zusätzliche Vertretung (Eintrag vertretung2) – beide müssen da sein (Inhaber 10.11.2026). In der Vorplanung höchstens einzeltageMax (Standard
+   nicht änderbar) und optional eine zusätzliche Vertretung (Eintrag vertretung2) – beide müssen da sein (Inhaber 10.11.2026).
+   Frei wählbar ist als Vertretung nur, wen der Mitarbeiter im Kalender ohnehin sieht: Kollegen der eigenen Abteilung
+   (Inhaber 22.11.2026 – sonst verrieten schon Status und Text der Prüfung tagegenau die Abwesenheiten fremder Abteilungen).
+   Wichtig für die Personalstelle: wer keine Abteilung hat, hat auch keine gleiche Abteilung (hr_gleiche_abteilung ist dann
+   immer false) – für ihn ist gar keine Vertretung frei wählbar. Abteilungsübergreifende Vertretungen trägt die
+   Personalstelle als feste Vertretung ein (hr-personal.vertretung); die bleibt immer erlaubt. In der Vorplanung höchstens einzeltageMax (Standard
    4) einzelne Urlaubstage, der übrige Urlaub möglichst zusammenhängend: darüber Hinweis an den Mitarbeiter und Konflikt
    „einzeltage“ in der Jahresplanung (die Personalstelle entscheidet einzeln). Vorplanung = bis zum Stichtag erfasst.
    Gespeichert im eigenen Dokument hr-einstellungen, Feld „planung“ (nur erweitert – GR-006): {start, stichtag (MM-TT),
@@ -239,6 +244,10 @@ function hr_vertretung_luecken(array $e, array $p, array $vp, array $eintraege, 
    Rückgabe: {von, bis, tage (Schließtage je ½), fehler (erster Grund zur Ablehnung) und code, hinweise[],
    vertretung und vertretung2: null|{id, name, fest, status da|abwesend|frei, text}}. Ist eine feste Vertretung hinterlegt
    (hr_feste_vertretung), gilt sie statt $vertretung; $vertretung2 ist die optionale zusätzliche Vertretung (Inhaber 10.11.2026).
+   Frei wählbar ist nur, wen der Anfragende im Kalender ohnehin sähe (eigene Abteilung, Personalstelle oder
+   Urlaubsübersicht); jede andere Person wird mit derselben neutralen Meldung wie eine unbekannte abgelehnt (422) – vor
+   jeder Prüfung, denn sonst verrieten Status und Text ihren Kalender (Inhaber 22.11.2026). Ausnahme: die feste Vertretung
+   der Personalstelle. Ohne Abteilung ist damit nur die feste Vertretung möglich (hr_gleiche_abteilung ist dann false).
    $me (angemeldetes Konto): entscheidet wie im Kalender (hr_monat), ob die Antwort die genauen Tage der Vertretung nennen
    darf – eigene Abteilung, Personalstelle (hr.verwalten) oder Urlaubsübersicht (hr.uebersicht). Sonst heißt es nur, dass
    die Vertretung nicht verfügbar ist; ohne $me gilt die engere Sicht. */
@@ -277,7 +286,13 @@ function hr_antrag_zeitraum(array $ich, array $personal, array $eintraege, array
     $pruefe = function ($vid, bool $zusatz) use ($idx, $ich, $von, $bis, $eintraege, $fest, $f, $me, &$r): bool {
         $vp = $idx[(string)$vid] ?? null;
         $wer = $zusatz ? 'zusätzliche Vertretung' : 'Vertretung';
-        if (!$vp || !$vp['aktiv'] || $vp['id'] === $ich['id']) { $f('Bitte eine gültige ' . $wer . ' wählen.', 422); return false; }
+        // Abteilungsgrenze des Kalenders (hr_monat, Inhaber 11.11.2026) schon bei der Auswahl: eine Vertretung, die der
+        // Anfragende dort nicht sähe, wird gar nicht geprüft – sonst verraten schon Status und Text (da|abwesend|frei)
+        // tagegenau ihren Kalender. Die feste Vertretung der Personalstelle bleibt erlaubt. Ablehnung mit derselben
+        // neutralen Meldung wie eine unbekannte Person, damit die Antwort nichts über die Person verrät.
+        $sichtbar = $vp !== null && (($fest !== null && !$zusatz && $vp['id'] === $fest['id'])
+            || hr_gleiche_abteilung($ich, $vp) || ($me !== null && (may($me, 'hr.verwalten') || may($me, 'hr.uebersicht'))));
+        if (!$vp || !$vp['aktiv'] || $vp['id'] === $ich['id'] || !$sichtbar) { $f('Bitte eine gültige ' . $wer . ' wählen.', 422); return false; }
         $l = hr_vertretung_luecken(['von' => $von, 'bis' => $bis], $ich, $vp, $eintraege, true);
         $n = hr_name($vp);
         $v = ['id' => $vp['id'], 'name' => $n, 'fest' => !$zusatz && $fest !== null];

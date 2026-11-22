@@ -505,6 +505,19 @@ Mitarbeiter sind die Nutzer der Plattform (`users_load()`); HR speichert nur eig
   `hr_antrag_zeitraum` nennt die genauen Tage der gewählten Vertretung nur bei Kollegen der eigenen Abteilung bzw. mit
   `hr.verwalten`/`hr.uebersicht` (Parameter `$me`), sonst nur, dass sie „nicht verfügbar“ ist (Sicherheitsdurchsicht
   15.11.2026; gilt auch für die zusätzliche Vertretung, die Vorschau und die Vorplanung).
+  **Auswahl der Vertretung (Entscheidung des Inhabers 22.11.2026, Sicherheitsaudit run-3):** frei wählbar ist nur, wen der
+  Anfragende im Kalender ohnehin sähe – Kollegen der eigenen Abteilung, oder alle mit `hr.verwalten`/`hr.uebersicht`. Jede
+  andere Person lehnt `hr_antrag_zeitraum` **vor** der Vertretungsprüfung mit derselben neutralen Meldung wie eine
+  unbekannte Person ab („Bitte eine gültige Vertretung wählen.“, 422) und liefert kein Feld `vertretung`. Ein blosses
+  Weglassen des Feldes `status` genügte nicht: schon die drei Textfassungen („nicht verfügbar“ / „arbeitet in dieser Zeit
+  nicht an allen Tagen“ / „ist in dieser Zeit da“) unterscheiden dieselben Fälle, und bei einem Zeitraum von einem Tag ist
+  die Verfügbarkeit genau die verborgene Tagesangabe. `hr_start` liefert die Liste `kollegen` nach derselben Regel, damit
+  die Oberfläche nur anbietet, was der Server annimmt.
+  **Für die Personalstelle wichtig:** `hr_gleiche_abteilung` ist false, sobald eine der beiden Personen keine Abteilung hat
+  (auch bei zwei leeren). Mitarbeiter **ohne Abteilung** können damit gar keine Vertretung selbst wählen – für sie (und für
+  jede abteilungsübergreifende Vertretung) trägt die Personalstelle die feste Vertretung in den Stammdaten ein
+  (`hr-personal.vertretung`, Verwaltung → Mitarbeiter). Die feste Vertretung bleibt immer erlaubt, auch über die
+  Abteilungsgrenze; nur eine frei gewählte **zusätzliche** Vertretung muss aus der eigenen Abteilung kommen.
   Sichtbarkeit im Kalender (`hr_monat` → `hr_zeile`, Antwortfeld `sicht`, seit 11.11.2026; `voll` bleibt für ältere Seiten):
   `voll` = Personalstelle (Art, offene Anträge mit „?“, freie Tage „x“; die eigene Zeile sieht jeder so), `kollege` = nur „A“
   (nur genehmigt, nie der Grund), `urlaub` = Recht `hr.kalender` (sensibel, einzeln vergeben), je Zeile nur für Kollegen der
@@ -612,7 +625,10 @@ Aktionen `controlling_<bereich>_…`. Geplant sind weitere Bereiche (OP-Konten, 
   weist die Übernahme ihn mit 422 ab (die Tage würden sich zu den bleibenden addieren und den Monat bei jeder Übernahme wachsen
   lassen); zusammen mit den bleibenden Tagen gilt weiter `UMSATZDATEN_ZEILEN_MAX`. Die Übernahme schreibt erst die Monate, dann
   das Verzeichnis und löscht entfallene Monate zuletzt (`with_lock` ist im Dateispeicher keine Transaktion): ein Abbruch lässt
-  höchstens einen Monat ohne Verzeichniseintrag zurück. Widersprechen sich Verzeichnis und gespeicherter Monat trotzdem, gilt der
+  höchstens einen Monat ohne Verzeichniseintrag zurück. **Dieselbe Reihenfolge gilt im Bereich Arbeitszeit**
+  (`arbeitszeit_import_uebernehmen`): erst die Jahresdokumente, dann das Verzeichnis, leer gewordene Jahre zuletzt; dazu liest
+  die Auswertung (`az_tage`) nur Jahre, die im Verzeichnis stehen – ein Jahresdokument ohne Verzeichniseintrag zählt nicht und
+  wird vom nächsten Import des Zeitraums überschrieben. Widersprechen sich Verzeichnis und gespeicherter Monat trotzdem, gilt der
   Monat als „geändert“ statt „unverändert“ und der nächste Import schreibt ihn neu. Verglichen wird je Monat über `hash`, übertragen werden nur neue und
   geänderte Monate – dieselbe Datei erneut ändert nichts. Die Auswertung ordnet Vertreter, Kundengruppe, Artikelgruppe und Fleischart
   nach den heutigen Stammdaten zu (die Datei enthält keine Zuordnung); die Umsatzzeilen selbst bleiben unverändert.

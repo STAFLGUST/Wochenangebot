@@ -55,8 +55,14 @@ switch ($action) {
             $eigene = [];
             if ($ich) { $frei = hr_freie_tage($abw['eintraege'], $ich['id']); foreach ($abw['eintraege'] as $e) if ($e['person'] === $ich['id']) $eigene[] = hr_eintrag_aus($e, $ich, $frei); }
             usort($eigene, function ($a, $b) { return $b['von'] <=> $a['von']; });
+            // Auswahl der Vertretung: nur Kollegen der eigenen Abteilung (wie der Kalender hr_monat und die Prüfung
+            // hr_antrag_zeitraum, Inhaber 22.11.2026) – die Oberfläche bietet damit nur an, was der Server annimmt.
+            // Ohne eigene Person oder ohne Abteilung bleibt die Liste leer; abteilungsübergreifend trägt die
+            // Personalstelle eine feste Vertretung ein (hr-personal.vertretung, Feld „festeVertretung“).
             $kollegen = [];
-            foreach ($personal['personen'] as $p) if ($p['aktiv'] && (!$ich || $p['id'] !== $ich['id'])) $kollegen[] = ['id' => $p['id'], 'name' => hr_name($p)];
+            foreach ($personal['personen'] as $p)
+                if ($p['aktiv'] && (!$ich || $p['id'] !== $ich['id']) && ($uebersicht || ($ich && hr_gleiche_abteilung($ich, $p))))
+                    $kollegen[] = ['id' => $p['id'], 'name' => hr_name($p)];
             // Zahl am Reiter „Anträge“: was der Mitarbeiter entscheiden kann (ohne eigene); Personalstelle ohne Genehmigungsrecht: alle offenen
             $offen = null; $planungOffen = null;   // planungOffen: Anteil am Reiter „Jahresplanung“ (nur Personalstelle)
             if ($genehmigen || $verwalten) {
