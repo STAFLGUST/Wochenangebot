@@ -146,11 +146,15 @@
     if (i >= 0) S.d.kunden[i] = k; else S.d.kunden.push(k);
     S.byKey.set(k.key, k);
   }
-  async function speichereFelder(key, felder) {
-    const r = await api('crm_kunde_save', { key, felder });
+  /* vorher: Stand von Ansprechpartnern bzw. Notiz beim Öffnen – der Server lehnt mit 409 ab, wenn jemand das Feld inzwischen
+     geändert hat; dann gilt seine Fassung (Liste neu gezeigt, Notiz vom Aufrufer zurückgesetzt) */
+  async function speichereFelder(key, felder, vorher = null) {
+    const r = await api('crm_kunde_save', vorher ? { key, felder, vorher } : { key, felder });
+    const neu = (r.status === 200 || r.status === 409) ? r.data.kunde : null;
+    if (neu) { ersetze(neu); if (basis.key === key) for (const f of Object.keys(vorher || {})) basis[f] = neu.crm[f]; }
+    if (r.status === 409 && neu && vorher && 'kontakte' in vorher && offenKey === key && $('#kontakte')) $('#kontakte').innerHTML = neu.crm.kontakte.map(kontaktZeile).join('');
     if (r.status !== 200) { toast(fehlerText(r, 'Speichern fehlgeschlagen'), true); return null; }
-    ersetze(r.data.kunde);
-    return r.data.kunde;
+    return neu;
   }
 
   /* ---------- Cockpit (cockpit.js): Mein Cockpit, Master-Cockpit ---------- */
@@ -677,6 +681,7 @@
 
   /* ---------- Kundenblatt ---------- */
   let offenKey = '';
+  let basis = {};   // Ansprechpartner und Notiz, wie sie im offenen Kundenblatt stehen (für die Konfliktprüfung beim Speichern)
   function feld(label, name, k, typ = 'text', extra = '') {
     const v = k.crm[name];
     const wertText = typ === 'number' ? zahl(v) : (v ?? '');
@@ -730,6 +735,7 @@
     if (tab) kuTab = tab; else if (offenKey !== key) kuTab = mitUmsatz(k) ? 'uebersicht' : 'kundenblatt';
     if ((kuTab === 'uebersicht' && !mitUmsatz(k)) || (kuTab === 'angebote' && !mitAngeboten(k))) kuTab = 'kundenblatt';
     offenKey = key;
+    basis = { key, kontakte: k.crm.kontakte, notiz: k.crm.notiz };
     const b = darf();
     $('#kunde-kicker').textContent = [k.art === 'interessent' ? 'Interessent' : (k.nr ? 'Kunde ' + k.nr : 'Kunde'), k.crm.segment !== 'Nicht zugeordnet' ? k.crm.segment : '', k.crm.phase].filter(Boolean).join(' · ');
     $('#kunde-titel').textContent = k.firma || 'Kunde';
@@ -823,7 +829,7 @@
       if (name === 'anrufAktiv') v = v === 'Ja';
       if (['potenzialKg', 'preisKg', 'dbKg', 'bestellKg'].includes(name)) v = v.trim() === '' ? null : v.trim();   // deutsche Schreibweise liest der Server (crm_zahl)
       blattStatus('Wird gespeichert …');
-      const k = await speichereFelder(offenKey, { [name]: v });
+      const k = await speichereFelder(offenKey, { [name]: v }, name === 'notiz' ? { notiz: basis.notiz } : null);
       if (k) blattStatus('Gespeichert.', 'ok');
       else { blattStatus('Nicht gespeichert – bitte Eingabe prüfen.', 'fehler'); const alt = S.byKey.get(offenKey); if (alt) el.value = name === 'anrufAktiv' ? (alt.crm.anrufAktiv ? 'Ja' : 'Nein') : zahlOderText(alt.crm[name]); }
       return;
@@ -936,7 +942,7 @@
     if (t.closest('[data-kontakt-weg]')) { t.closest('[data-kontakt]').remove(); return; }
     if (t.closest('[data-kontakte-speichern]')) {
       blattStatus('Ansprechpartner werden gespeichert …');
-      const k = await speichereFelder(offenKey, { kontakte: kontakteAusFormular() });
+      const k = await speichereFelder(offenKey, { kontakte: kontakteAusFormular() }, { kontakte: basis.kontakte });
       if (k) { blattStatus('Ansprechpartner gespeichert.', 'ok'); toast('Ansprechpartner gespeichert.'); $('#kontakte').innerHTML = k.crm.kontakte.map(kontaktZeile).join(''); }
       else blattStatus('Ansprechpartner nicht gespeichert – bitte Eingaben prüfen.', 'fehler');
       return;

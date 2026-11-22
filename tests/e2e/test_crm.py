@@ -173,6 +173,21 @@ check('gleichzeitiges Bearbeiten verschiedener Felder überschreibt nichts', c['
 st, r = Bb.call('crm_kunde_save', {'key': 'kbbb222222222', 'felder': {'kontakte': [{'name': 'Clara Koch', 'funktion': 'Küchenchefin', 'telefon': '0431 1111', 'email': 'c.koch@beispiel.example'},
                                                                                    {'name': '', 'funktion': '', 'telefon': '', 'email': ''}]}})
 check('Ansprechpartner gespeichert, leere Zeile weggelassen', st == 200 and r['kunde']['crm']['kontakte'] == [{'name': 'Clara Koch', 'funktion': 'Küchenchefin', 'telefon': '0431 1111', 'email': 'c.koch@beispiel.example'}], r)
+# Ansprechpartner und Notiz mit dem Stand beim Öffnen („vorher“, nur erweitert): wer als Zweiter speichert, überschreibt nicht still
+alt_k = r['kunde']['crm']['kontakte']
+st1, _ = Bb.call('crm_kunde_save', {'key': 'kbbb222222222', 'felder': {'kontakte': alt_k + [{'name': 'Max Müller'}]}, 'vorher': {'kontakte': alt_k}})
+st2, r2 = X.call('crm_kunde_save', {'key': 'kbbb222222222', 'felder': {'kontakte': alt_k + [{'name': 'Sara Schmidt'}]}, 'vorher': {'kontakte': alt_k}})
+c = dokument('crm-kunden')['eintraege']['kbbb222222222']
+check('Ansprechpartner gleichzeitig ergänzt: zweite Sitzung 409 mit Namen und aktuellem Kundenblatt, erster Eintrag bleibt', st1 == 200 and st2 == 409
+      and r2.get('code') == 'konflikt' and 'Bert Bearbeiter' in r2.get('error', '') and [k['name'] for k in r2['kunde']['crm']['kontakte']] == ['Clara Koch', 'Max Müller']
+      and [k['name'] for k in c['kontakte']] == ['Clara Koch', 'Max Müller'], (st1, st2, r2.get('error'), c.get('kontakte')))
+st1, _ = Bb.call('crm_kunde_save', {'key': 'kbbb222222222', 'felder': {'notiz': 'Bedarf: Grillware'}, 'vorher': {'notiz': ''}})
+st2, r2 = X.call('crm_kunde_save', {'key': 'kbbb222222222', 'felder': {'notiz': 'Bedarf: Suppenfleisch'}, 'vorher': {'notiz': ''}})
+st3, r3 = X.call('crm_kunde_save', {'key': 'kbbb222222222', 'felder': {'notiz': 'Bedarf: Grillware, Suppenfleisch'}, 'vorher': {'notiz': 'Bedarf: Grillware'}})
+check('Gesprächsnotiz: zweite Sitzung mit altem Stand 409, mit aktuellem Stand gespeichert', st1 == 200 and st2 == 409 and st3 == 200
+      and r3['kunde']['crm']['notiz'] == 'Bedarf: Grillware, Suppenfleisch', (st1, st2, st3))
+check('ohne „vorher“ (ältere Oberfläche) wie bisher gespeichert', X.call('crm_kunde_save', {'key': 'kbbb222222222', 'felder': {'notiz': ''}})[0] == 200
+      and dokument('crm-kunden')['eintraege']['kbbb222222222']['notiz'] == '')
 # Zahlen in deutscher Schreibweise: Mengen „1.500“ = 1500 kg, Preise „4.50“ = 4,50 €; unlesbar → 422
 for feld_, ein_, soll_ in (('potenzialKg', '1.500', 1500), ('potenzialKg', '1.234,5', 1234.5), ('bestellKg', '12.000', 12000), ('potenzialKg', '0,5', 0.5),
                            ('preisKg', '4,50', 4.5), ('preisKg', '4.50', 4.5), ('preisKg', '1.234,50', 1234.5), ('dbKg', '1,25', 1.25)):
@@ -320,6 +335,16 @@ with sync_playwright() as p:
     zeile.locator('[data-k="name"]').fill('Dora Disponentin'); zeile.locator('[data-k="telefon"]').fill('040 7654321')
     pg.click('[data-kontakte-speichern]'); pg.wait_for_function("document.querySelector('#blatt-status').textContent === 'Ansprechpartner gespeichert.'")
     check('Ansprechpartner im Kundenblatt hinzugefügt', dokument('crm-kunden')['eintraege']['kaaa111111111']['kontakte'][0]['name'] == 'Dora Disponentin')
+    # zweite Sitzung ergänzt inzwischen einen Ansprechpartner: Hinweis, neue Fassung im Kundenblatt, nichts überschrieben
+    _k = dokument('crm-kunden')['eintraege']['kaaa111111111']['kontakte']
+    st_x, _ = X.call('crm_kunde_save', {'key': 'kaaa111111111', 'felder': {'kontakte': _k + [{'name': 'Erik Einkauf'}]}, 'vorher': {'kontakte': _k}})
+    pg.click('[data-kontakt-neu]'); pg.locator('#kontakte [data-kontakt]').last.locator('[data-k="name"]').fill('Fritz Fahrer')
+    pg.click('[data-kontakte-speichern]'); pg.wait_for_function("document.querySelector('#blatt-status').textContent !== 'Ansprechpartner werden gespeichert …'")
+    namen_ = [k['name'] for k in dokument('crm-kunden')['eintraege']['kaaa111111111']['kontakte']]
+    liste_ = pg.eval_on_selector_all('#kontakte [data-k="name"]', 'e => e.map((x) => x.value)')
+    check('Ansprechpartner von anderer Sitzung ergänzt: Hinweis, Liste mit der neuen Fassung, nichts überschrieben', st_x == 200 and namen_ == ['Dora Disponentin', 'Erik Einkauf']
+          and liste_ == ['Dora Disponentin', 'Erik Einkauf'] and 'nicht gespeichert' in pg.text_content('#blatt-status') and 'inzwischen' in pg.text_content('#crm-toast'),
+          (st_x, namen_, liste_, pg.text_content('#blatt-status')))
     pg.click('#kunde-aktionen [data-ku-tab="verlauf"]'); pg.wait_for_selector('#dlg-kunde[open] #verlauf li')
     check('Knopf „Aktivität“ im Kopf öffnet den Verlauf mit dem Eingabefeld', pg.evaluate("document.activeElement.id") == 'akt-notiz')
     pg.select_option('#akt-art', 'Besuch'); pg.fill('#akt-notiz', 'Kühlhaus besichtigt'); pg.fill('#akt-naechster', 'Preise schicken')
