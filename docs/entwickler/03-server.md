@@ -346,6 +346,10 @@ Nachrichten), `mail_build` (Text/HTML, Anhänge als multipart/mixed; Anhänge mi
   Benachrichtigungen (`notify_flush`) und Abmeldehinweise (`abmelde_melden`) werden als Auftrag abgelegt; der Dienst
   `api/postausgang.php` verschickt sie (`postausgang_lauf`). Neue E-Mails, die eine Aktion der Kundenseite auslöst, müssen
   diesen Weg nehmen – nie `mail_send_many` direkt. `order_enabled()` prüft dort das Lebenszeichen des Dienstes statt des Postfachs.
+  Überlauf (`POSTAUSGANG_MAX` = 500, `postausgang_kuerzen()` beim Ablegen und beim erneuten Einplanen): verworfen wird
+  nach Wiederherstellbarkeit (`POSTAUSGANG_RANG`) – zuerst Abmeldehinweise, dann Bestellwünsche (die findet die
+  Durchsicht beim Vorgang wieder), zuletzt Benachrichtigungen, denn sie sind der einzige Meldeweg der Kundenseite für
+  Sicherheitsereignisse (Befund 22.11.2026). Jeder Verlust steht im Server-Protokoll.
 - **Schlüssel und Bindung:** Mit `WA_GEHEIM_DIR` liegt der Schlüssel in einem eigenen Ordner (nur Mitarbeiterseite und
   Postausgang). Solange er dort liegt, wird ein neu gespeichertes Passwort an Server, Port, Verschlüsselung und Benutzer
   gebunden (`passEnc` Format `v2:`, AEAD); `v1:` bleibt lesbar (`mail_decrypt($enc, $konto)`).
@@ -386,7 +390,8 @@ Eintrag an das Monatsdokument `protokoll/<JJJJ-MM>` (UTC) an:
 - `$a` = Art des Vorgangs, z. B. `publish`, `draft`, `discard`, `offers`, `master`, `stock`, `history`, `customers`,
   `einzelangebot`, `bestellung`, `mail`, `einkauf`, `user`, `security`, `twofa`, `wartung`, `login`, `login_fail`,
   `logout`, `password`, `reauth`, `reauth_fail`, `setup`, `kunde_login`, `kunde_login_fail`, `kunde_password`,
-  `kunde_abmeldung`, `import`, `hr`, `crm`, `modul_freigabe`, `modul_tester`, `oidc_*`, `protokoll_aufbewahrung`.
+  `kunde_abmeldung`, `import`, `hr`, `crm`, `modul_freigabe`, `modul_tester`, `oidc_*`, `protokoll_aufbewahrung`,
+  `protokoll_groesse`.
 - `$merge = true` fasst fortlaufende Vorgänge derselben Person und Art innerhalb von 30 Minuten zusammen
   (`changes_merge`).
 - Kunden: IP nur bei fehlgeschlagener Anmeldung. Vorgänge mit Kundendaten (`LOG_KUNDENDATEN`) und Einträge der Rolle
@@ -408,6 +413,16 @@ Eintrag an das Monatsdokument `protokoll/<JJJJ-MM>` (UTC) an:
   Vorgang `protokoll_aufbewahrung` (nur die Monate, keine Inhalte). Die Ansicht `log` bietet ältere Monate nie an
   (`protokoll_monate()`), auch nicht über `?month=`. Sicherungen enthalten ältere Stände, bis sie selbst ablaufen.
   Leser anderer Auswertungen (Fehlversuche der letzten 7 Tage, Diagnose) sind davon nicht betroffen.
+- **Größe je Monat (Befund 22.11.2026):** `audit()` liest und schreibt das ganze Monatsdokument unter einer gemeinsamen
+  Sperre – jeder Eintrag kostet also so viel, wie der Monat schon groß ist, und jenseits von etwa 18 MiB endet jeder
+  `audit()`-Aufruf im Speicherabbruch (kein `Throwable`, der `catch` greift nicht). Deshalb ist das Monatsdokument ein
+  Ringpuffer wie die übrigen wachsenden Dokumente (`FW_VERKEHR_MAX`, `mailversand`, `anmeldenamen`):
+  `PROTOKOLL_EINTRAEGE_MAX` (20 000 Einträge) **und** `PROTOKOLL_BYTES_MAX` (4 MiB) je Monat – die Zahl der Einträge
+  allein begrenzt die Größe nicht, weil ein Eintrag eine Änderungsliste führen darf. Ein einzelner Eintrag ist auf
+  `PROTOKOLL_TEXT_MAX` (2000 Zeichen im Vorgangstext) und `PROTOKOLL_DETAILS_MAX` (2000 Änderungszeilen) begrenzt.
+  Gekürzt wird in `protokoll_kuerzen()` von den ältesten Einträgen her; ein Vorgang `protokoll_groesse` nennt die Zahl
+  der verworfenen Einträge und wird fortgeschrieben (ein Vermerk je Monat, sonst füllte er selbst das Dokument). Das
+  Format bleibt eine Liste von Einträgen (GR-006): eine Vorversion liest gekürzte Dokumente unverändert weiter.
 
 Fehlversuche bei der Anmeldung zählt `attempts_record()` im Dokument `logins` (Schlüssel: SHA-256 der IPv4-Adresse
 bzw. des IPv6-/64-Netzes, `client_key`); Grenzen aus `config.php` (`max_attempts`, `lock_minutes`).

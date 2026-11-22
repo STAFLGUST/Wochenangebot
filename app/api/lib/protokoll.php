@@ -10,6 +10,40 @@ if (!defined('WA_API')) { http_response_code(404); exit; }   // nur über api/in
    Sicherungen enthalten ältere Stände weiter, bis sie selbst ablaufen. */
 const PROTOKOLL_MONATE = 6;
 
+/* Grenzen je Monatsdokument (Befund 22.11.2026): audit() liest und schreibt das ganze Dokument unter einer gemeinsamen Sperre –
+   ohne Grenze wächst der Preis jedes Eintrags für alle mit, und jenseits von etwa 18 MiB endet jeder audit()-Aufruf im
+   Speicherabbruch (nicht abfangbar). Deshalb ein Ringpuffer wie bei den übrigen wachsenden Dokumenten (FW_VERKEHR_MAX,
+   mailversand 3000, anmeldenamen 5000/20000) und zusätzlich eine Byte-Grenze, weil die Zahl der Einträge die Größe nicht
+   begrenzt (ein Eintrag darf eine Änderungsliste führen). Format unverändert (GR-006): die ältesten Einträge fallen weg,
+   ein Systemeintrag nennt wie viele. */
+const PROTOKOLL_EINTRAEGE_MAX = 20000;          // Einträge je Monatsdokument
+const PROTOKOLL_BYTES_MAX = 4194304;            // 4 MiB je Monatsdokument (Lesen braucht ein Mehrfaches davon im Speicher)
+const PROTOKOLL_TEXT_MAX = 2000;                // Zeichen je Vorgangstext
+const PROTOKOLL_DETAILS_MAX = 2000;             // Änderungszeilen je Eintrag (wie die großen Aufrufer schon selbst kürzen)
+
+/* Monatsdokument auf die Grenzen bringen: älteste Einträge verwerfen und das im Dokument vermerken (ein Eintrag je Monat, er
+   wird fortgeschrieben – sonst füllte der Vermerk selbst das Dokument). */
+function protokoll_kuerzen(array $log): array
+{
+    $weg = 0;
+    if (count($log) > PROTOKOLL_EINTRAEGE_MAX) { $weg = count($log) - PROTOKOLL_EINTRAEGE_MAX; $log = array_slice($log, $weg); }
+    $gross = strlen((string)json_encode($log));
+    while ($gross > PROTOKOLL_BYTES_MAX && count($log) > 1) {
+        $n = min(count($log) - 1, max(1, (int)ceil(count($log) * (1 - PROTOKOLL_BYTES_MAX / $gross))));
+        $log = array_slice($log, $n); $weg += $n;
+        $gross = strlen((string)json_encode($log));
+    }
+    if (!$weg) return $log;
+    $i = null;
+    foreach ($log as $k => $e) if (($e['a'] ?? '') === 'protokoll_groesse') $i = $k;
+    if ($i !== null) $weg += (int)($log[$i]['weg'] ?? 0);
+    $e = ['t' => now(), 'u' => 'system', 'n' => 'System', 'r' => '', 'ip' => '', 'a' => 'protokoll_groesse', 'weg' => $weg,
+          's' => 'Protokoll: ' . $weg . ' ältere Einträge dieses Monats wegen der Größe entfernt (höchstens '
+               . PROTOKOLL_EINTRAEGE_MAX . ' Einträge und ' . (int)(PROTOKOLL_BYTES_MAX / 1048576) . ' MiB)'];
+    if ($i !== null) $log[$i] = $e; else $log[] = $e;
+    return $log;
+}
+
 /* Getrenntes Protokoll (ADR-007 Stufe 2d, ab Trennstufe 4): Die Kundenseite (ohne internen Ordner) schreibt ihre Einträge in
    „kundenprotokoll/JJJJ-MM“ im gemeinsamen Ordner; das Protokoll der Mitarbeiterseite und des Postausgangs liegt innen und ist für
    die Kundenseite nicht lesbar (Änderungen an Kunden, Nutzern, Personal …). Die Mitarbeiterseite liest beide zusammen
@@ -107,22 +141,22 @@ function audit(string $a, string $s, array $d = [], ?array $who = null, bool $me
             $last = $log ? $log[count($log) - 1] : null;
             $u = $who['username'] ?? '';
             if ($merge && $last && $last['a'] === $a && $last['u'] === $u && strtotime($last['t']) > time() - 1800) {
-                $last['d'] = changes_merge($last['d'] ?? [], $d);
+                $last['d'] = array_slice(changes_merge($last['d'] ?? [], $d), 0, PROTOKOLL_DETAILS_MAX);
                 $last['t'] = now();
-                $last['s'] = $s;
+                $last['s'] = mb_substr($s, 0, PROTOKOLL_TEXT_MAX);
                 if (!$last['d']) array_pop($log); else $log[count($log) - 1] = $last;
             } else {
                 if ($merge && !$d) { if ($weg) store_write($doc, $log); return; }
                 // Kunden: IP nur bei fehlgeschlagener Anmeldung (Sicherheit), sonst nicht speichern (wie bei der Auswertung zugesagt)
                 $ip = ($who['role'] ?? '') === 'kunde' && $a !== 'kunde_login_fail' ? '' : client_ip();
-                $e = ['t' => now(), 'u' => $u, 'n' => $who['name'] ?? '', 'r' => $who['role'] ?? '', 'ip' => $ip, 'a' => $a, 's' => $s];
+                $e = ['t' => now(), 'u' => $u, 'n' => $who['name'] ?? '', 'r' => $who['role'] ?? '', 'ip' => $ip, 'a' => $a, 's' => mb_substr($s, 0, PROTOKOLL_TEXT_MAX)];
                 // Nutzer-ID mitschreiben (neues optionales Feld, GR-006): Benutzernamen können nach dem Löschen eines
                 // Mitarbeiters erneut vergeben werden – Leser mit Eigentümerbezug (startseite_zuletzt) brauchen die stabile Identität.
                 if (($who['role'] ?? '') !== 'kunde' && ($who['id'] ?? '') !== '') $e['uid'] = (string)$who['id'];
-                if ($d) $e['d'] = $d;
+                if ($d) $e['d'] = array_slice($d, 0, PROTOKOLL_DETAILS_MAX);
                 $log[] = $e;
             }
-            store_write($doc, $log);
+            store_write($doc, protokoll_kuerzen($log));
         });
         if (function_exists('notify_from_audit')) notify_from_audit($a, $s, $d, $who);
     } catch (Throwable $e) {

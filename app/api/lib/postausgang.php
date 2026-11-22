@@ -8,7 +8,7 @@ declare(strict_types=1);
    Mitarbeiter, lib/benachrichtigung.php), hinweis (Ab-/Wiederanmeldung vom Wochenangebot, lib/kundenmail.php). */
 if (!defined('WA_API')) { http_response_code(404); exit; }   // nur über api/index.php bzw. api/postausgang.php nutzbar
 
-const POSTAUSGANG_MAX = 500;                     // offene Aufträge höchstens (Überlauf: älteste Benachrichtigungen fallen weg)
+const POSTAUSGANG_MAX = 500;                     // offene Aufträge höchstens (Überlauf: postausgang_kuerzen, zuerst die ältesten Hinweise)
 const POSTAUSGANG_WIEDERHOLEN = [60, 300, 1800];   // Bestellwunsch nicht zugestellt: neue Versuche nach 1, 5 und 30 Minuten
 const POSTAUSGANG_BEREIT = 900;                  // ohne Lebenszeichen des Dienstes seit 15 Minuten nimmt das Portal keine Bestellwünsche an
 const POSTAUSGANG_DURCHSICHT = 600;              // alle 10 Minuten alle Vorgänge auf liegengebliebene Versandaufträge prüfen
@@ -38,14 +38,22 @@ function postausgang_liste(): array
     $d = store_read('postausgang');
     return is_array($d['auftraege'] ?? null) ? array_values(array_filter($d['auftraege'], 'is_array')) : [];
 }
-/* Überlauf: zuerst die ältesten Benachrichtigungen und Hinweise verwerfen – Bestellwünsche stehen ohnehin beim Vorgang und
-   werden bei der Durchsicht gefunden */
+/* Überlauf: nach Wiederherstellbarkeit verwerfen, nicht nach Art – zuerst die ältesten Abmeldehinweise (nachrangig, der Zustand
+   ist gespeichert), dann Bestellwünsche (die stehen beim Vorgang und werden bei der Durchsicht gefunden), zuletzt
+   Benachrichtigungen: sie sind der einzige Meldeweg der Kundenseite für Sicherheitsereignisse und nicht wiederherstellbar.
+   Verworfen wird nie stillschweigend – jeder Verlust kommt ins Serverprotokoll (die Kundenseite kann nichts anderes melden). */
+const POSTAUSGANG_RANG = ['hinweis' => 0, 'bestellung' => 1, 'benachrichtigung' => 2];
 function postausgang_kuerzen(array $liste): array
 {
     while (count($liste) > POSTAUSGANG_MAX) {
-        $i = null;
-        foreach ($liste as $k => $a) if (($a['art'] ?? '') !== 'bestellung') { $i = $k; break; }
-        unset($liste[$i ?? array_key_first($liste)]);
+        $i = array_key_first($liste); $r = PHP_INT_MAX;
+        foreach ($liste as $k => $a) {
+            $x = POSTAUSGANG_RANG[$a['art'] ?? ''] ?? 0;   // unbekannte Art: nichts kann sie senden, also zuerst weg
+            if ($x < $r) { $i = $k; $r = $x; }
+            if ($r === 0) break;
+        }
+        error_log('[wochenangebot] Postausgang voll (' . POSTAUSGANG_MAX . '): Auftrag der Art „' . (string)($liste[$i]['art'] ?? '') . '“ verworfen');
+        unset($liste[$i]);
     }
     return array_values($liste);
 }

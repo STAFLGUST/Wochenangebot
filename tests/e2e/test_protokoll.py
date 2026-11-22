@@ -1,9 +1,12 @@
-"""Aufbewahrung des Aktivitätsprotokolls (lib/protokoll.php, PROTOKOLL_MONATE = 6; Inhaber 25.10.2026).
+"""Aufbewahrung und Grenzen des Aktivitätsprotokolls (lib/protokoll.php, PROTOKOLL_MONATE = 6; Inhaber 25.10.2026).
 
 Geprüft (beide Speicherarten): Monatsdokumente „protokoll/JJJJ-MM“ älter als der laufende Monat minus 6 werden beim
 nächsten Protokolleintrag gelöscht, der Grenzmonat und neuere bleiben; im laufenden Monat steht genau ein Vermerk ohne
 Inhalte der gelöschten Monate; die Protokollansicht bietet ältere Monate nie an (auch nicht vor dem Aufräumen und nicht
-über ?month=); Oberfläche „Protokoll“ mit Hinweis zur Aufbewahrung, Desktop und 390 px, ohne JavaScript-Fehler.
+über ?month=); das Monatsdokument ist ein Ringpuffer (PROTOKOLL_EINTRAEGE_MAX = 20 000 Einträge, PROTOKOLL_BYTES_MAX =
+4 MiB, Befund 22.11.2026): die ältesten Einträge fallen weg, der neue Vorgang bleibt, genau ein fortgeschriebener
+Vermerk „protokoll_groesse“; Oberfläche „Protokoll“ mit Hinweis zur Aufbewahrung, Desktop und 390 px, ohne
+JavaScript-Fehler.
 """
 import json
 import sys
@@ -68,6 +71,40 @@ Client('198.51.100.42').call('login', {'username': 'admin', 'password': 'falsch-
 log = A.call('log')[1]['entries']
 check('ein Monat: „1 Monat … (JJJJ-MM)“', any(e['a'] == 'protokoll_aufbewahrung' and e['s'] == f'Protokoll: 1 Monat älter als 6 Monate entfernt ({monat(12)})' for e in log)
       and storage_raw('protokoll/' + monat(12)) is None)
+
+# ---------- Grenzen des Monatsdokuments: Ringpuffer und Byte-Grenze (Befund 22.11.2026) ----------
+MAXE, MAXB = 20000, 4 * 1024 * 1024   # PROTOKOLL_EINTRAEGE_MAX und PROTOKOLL_BYTES_MAX in lib/protokoll.php
+
+
+def fuellen(n, text):
+    storage_write('protokoll/' + JETZT, [{'t': JETZT + '-01T08:00:00+00:00', 'u': 'admin', 'n': 'Administrator', 'r': 'admin', 'ip': '',
+                                          'a': 'draft', 's': text % i} for i in range(n)])
+
+
+def protokoll():
+    raw = storage_raw('protokoll/' + JETZT) or '[]'
+    return json.loads(raw.split('?>\n', 1)[-1])
+
+
+fuellen(MAXE + 50, 'Fuelleintrag %d')
+Client('198.51.100.43').call('login', {'username': 'admin', 'password': 'falsch-falsch-4'})
+log = protokoll()
+gross = [e for e in log if e['a'] == 'protokoll_groesse']
+check(f'mehr als {MAXE} Einträge: die ältesten fallen weg, der neue Vorgang bleibt', len(log) == MAXE + 1 and log[0]['s'] == 'Fuelleintrag 51'
+      and any(e['a'] == 'login_fail' for e in log) and len(gross) == 1 and gross[0]['weg'] == 51 and gross[0]['u'] == 'system'
+      and str(MAXE) in gross[0]['s'], (len(log), log[0]['s'], gross))
+Client('198.51.100.44').call('login', {'username': 'admin', 'password': 'falsch-falsch-5'})
+log = protokoll()
+gross = [e for e in log if e['a'] == 'protokoll_groesse']
+check('weiterer Eintrag: nur ein Vermerk, fortgeschrieben (der Vermerk füllt das Dokument nicht)', len(log) <= MAXE + 1 and len(gross) == 1
+      and gross[0]['weg'] == 53 and any(e['a'] == 'login_fail' for e in log), (len(log), gross))
+# Byte-Grenze: wenige, aber sehr große Einträge (die Zahl der Einträge begrenzt die Größe nicht)
+fuellen(50, 'Grosser Eintrag %d ' + 'X' * 100000)
+Client('198.51.100.45').call('login', {'username': 'admin', 'password': 'falsch-falsch-6'})
+log, roh = protokoll(), storage_raw('protokoll/' + JETZT) or ''
+check('Byte-Grenze je Monatsdokument: gekürzt, neuer Vorgang und Vermerk vorhanden', len(roh) <= MAXB and len(log) < 50
+      and any(e['a'] == 'login_fail' for e in log) and len([e for e in log if e['a'] == 'protokoll_groesse']) == 1, (len(roh), len(log)))
+storage_write('protokoll/' + JETZT, [])   # aufgeräumt für die Oberflächenprüfung
 
 # Oberfläche
 fehler = []

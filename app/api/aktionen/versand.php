@@ -12,7 +12,8 @@ declare(strict_types=1);
    Wochenversand optional mit „preis“ = {an, uebersicht, kurz, darstellung} (nur true zählt, darstellung 'betrag' | 'pfeil',
    mail_preis_wahl): Links mit vergleich=vorwoche bzw. =pfeil,
    Übersicht der Änderungen je Angebot (vom Server aus dem veröffentlichten Stand), Link „Nur Änderungen“ – gilt nur für den Aufruf.
-   Die Vorschau zeigt die Übersicht (Kundenpreise) nur Mitarbeitern mit Zugang zum Angebot, sonst ohne Übersicht mit „hinweis“.
+   Die Vorschau zeigt die Übersicht (Kundenpreise) nur Mitarbeitern mit Zugang zum Angebot, sonst ohne Übersicht mit „hinweis“;
+   sie rendert den Kunden ohne Kennung (mail_vorschau_kunde) – nie ein gültiger Abmeldecode – und steht im Protokoll (Befund 22.11.2026).
    Sonderposten gehen nur an Kunden des jeweiligen Angebots (GR-005, sonderposten_senden).
    Wird von api/index.php im globalen Gültigkeitsbereich eingebunden; jede Aktion endet mit respond()/fail(). */
 if (!defined('WA_API')) { http_response_code(404); exit; }   // nur über api/index.php nutzbar
@@ -87,6 +88,7 @@ switch ($action) {
             foreach (customers_load()['customers'] as $x) if ($x['id'] === ($b['id'] ?? '')) $c = $x;
             if (!$c) fail('Kunde nicht gefunden.', 404);
             $note = mb_substr(trim((string)($b['note'] ?? '')), 0, 1000);
+            $cv = mail_vorschau_kunde($c);   // Vorschau nie mit wirksamem Abmeldecode (lib/kundenmail.php:92-94)
             $hinweis = [];
             if ($art === 'woche') {
                 $preis = mail_preis_wahl($b['preis'] ?? null);
@@ -95,9 +97,11 @@ switch ($action) {
                     $preis['uebersicht'] = false;
                     $hinweis = ['hinweis' => 'Die Übersicht der Preisänderungen nennt Kundenpreise und erscheint in der Vorschau nur mit Zugang zum Angebot. Die E-Mail an den Kunden enthält sie.'];
                 }
-                [$sub, , $html] = mail_tpl_angebot($c, $note, mail_week(), $preis);
-            } else { $def = vs_angebot($b['angebot'] ?? ''); [$sub, , $html] = mail_tpl_restposten($c, $def, restposten_items($def), $note); }
+                [$sub, , $html] = mail_tpl_angebot($cv, $note, mail_week(), $preis);
+            } else { $def = vs_angebot($b['angebot'] ?? ''); [$sub, , $html] = mail_tpl_restposten($cv, $def, restposten_items($def), $note); }
             header('Cache-Control: no-store');
+            // die Vorschau zeigt Kundendaten: wie die Nachbarwege im Protokoll vermerken
+            audit('mail', 'Vorschau der ' . ($art === 'woche' ? 'Wochenangebots-Mail' : 'Sonderposten-Mail') . " für „{$c['firma']}“ angesehen");
             respond(['ok' => true, 'subject' => $sub, 'html' => $html, 'to' => (string)($c['email'] ?? ''), 'firma' => (string)$c['firma']] + $hinweis);
         }
 

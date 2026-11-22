@@ -16,6 +16,10 @@ switch ($action) {
         case 'kunde_login': {
             start_session();
             attempts_check('kunde');
+            // Der gelungene Vorgang zählt hier bewusst nicht gegen die Adressbremse (anders als kunde_abmelden unten): fünf
+            // Anmeldungen je Stunde und Adresse würden Kunden hinter einer gemeinsamen Adresse aussperren, und eine Anmeldung
+            // ist – anders als ein Klick im Abmeldelink – der Alltag. Gegen ungebremstes Protokollwachstum begrenzt sich das
+            // Protokoll selbst (PROTOKOLL_EINTRAEGE_MAX / PROTOKOLL_BYTES_MAX in lib/protokoll.php, Befund 22.11.2026).
             $b = body();
             $name = is_string($b['username'] ?? null) ? strtolower(trim($b['username'])) : '';
             $pw = (string)($b['password'] ?? '');

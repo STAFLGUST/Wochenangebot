@@ -426,6 +426,9 @@ modulübergreifend; dort autorisiert allein das Fachrecht, geprüft bleibt der M
 (`master`, `master_save`, `vkgruppen`, `angebotskategorien`), Kunden und Kundengruppen (`kunden`, `kundengruppen`) für
 den Angebotseditor sowie Angebotsliste, Kundenzugangs-Mail und Postfach-Kurzinfo (`offers`, `kunde_mail`, `mail_info`)
 für die Kundenverwaltung und die Einkaufsansicht (`einkauf`, `einkauf_melden`), die noch im Angebotsbereich liegt.
+Die Ausnahme für `kunde_mail` gilt der Kundenzugangs-Mail (Einladung, Passwortlink): der Zweig `type=angebot` baut
+dieselbe Wochenangebots-Mail wie der Versand und ruft deshalb selbst `require_modulzugang('versand', true)` nach und
+prüft die Empfänger mit `wochenmail_grund()` wie der Wochenversand (Befund 22.11.2026).
 Die Liste steht als `ZUGANG_GEMEINSAM` in `werkzeuge/regeln.py` – die CI lehnt jeden weiteren Vermerk ab, Erweiterung nur
 im Plattform-PR mit Begründung. Zusätzlich verlangen Aktionen, die Inhalte eines Moduls ausliefern und sonst nur die
 Anmeldung prüfen würden, weiter `require_modulzugang()` (Entwurf `draft`, Versionen, Kundenangebote und Vorschau für
@@ -481,6 +484,8 @@ Ebenso die alte Vorschau `kunden_mail_vorschau` (seit
 darin die Sonderpreise eines Kundenangebots stehen (GR-002, GR-005, Befund 15.11.2026). Vorschauen zeigen außerdem nie
 einen wirksamen Code: der Kundensatz geht ohne Kennung in die Vorlage (`mail_vorschau_kunde()`, `lib/kundenmail.php`),
 damit `abmelde_url()` den Platzhalter `BEISPIEL` einsetzt – wie `#zugang=BEISPIEL` bei Einladung und Passwort-Link.
+Das gilt ebenso für `versand_vorschau` im Modul Versand (seit 22.11.2026; vorher stand dort der echte, unbefristete
+Abmeldecode des Kunden im Vorschau-HTML). Jeder Abruf der Vorschau steht als Vorgang `mail` im Protokoll.
 
 `angebot.veroeffentlichen` hat bewusst keine Voraussetzung `r`
 auf den Zugang: `rights_close` würde ihn sonst jedem Bearbeiter mitgeben. Folge für die Vergabe: Bearbeiter haben

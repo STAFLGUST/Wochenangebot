@@ -259,6 +259,27 @@ check('with module access: weekly preview works', O.call('kunden_mail_vorschau',
 code, r = O.call('kunden_mail_vorschau', {'id': K_ok, 'type': 'restposten', 'offer': 'std'})
 check('sale preview needs sonderposten.senden (prices of a customer offer, GR-005)', code == 403 and 'Berechtigung' in r.get('error', ''), (code, r))
 
+# Angebotsmail je Kunde ist derselbe Kundenversand wie im Modul Versand (Befund 22.11.2026): Modulzugang Versand nötig –
+# die Kundenzugangs-Mail (Einladung, Passwortlink) bleibt Sache der Kundenverwaltung
+A.call('user_save', {'id': '', 'name': 'Karla Kundenbetreuung', 'username': 'karla', 'role': 'viewer', 'active': True, 'password': 'Editor-Zugang-77', 'mustChange': False})
+uid_karla = next(u['id'] for u in A.call('users')[1]['users'] if u['username'] == 'karla')
+A.call('user_save', {'id': uid_karla, 'name': 'Karla Kundenbetreuung', 'role': 'viewer', 'active': True, 'grant': ['kunden.bearbeiten'], 'deny': []})
+KB = Client('198.51.100.7'); KB.call('login', {'username': 'karla', 'password': 'Editor-Zugang-77'})
+nk = len(smtp.messages)
+code, r = KB.call('kunde_mail', {'id': K1, 'type': 'angebot'})
+check('customer care without module access Versand: offer mail 403, nothing sent', code == 403 and 'Versand' in r.get('error', '') and len(smtp.messages) == nk, (code, r))
+check('access mail (invitation/password) stays with customer administration', KB.call('kunde_mail', {'id': K1, 'type': 'zugang'})[0] == 200)
+A.call('user_save', {'id': uid_karla, 'name': 'Karla Kundenbetreuung', 'role': 'viewer', 'active': True, 'grant': ['kunden.bearbeiten', 'versand.zugang'], 'deny': []})
+KB.call('login', {'username': 'karla', 'password': 'Editor-Zugang-77'})
+check('with module access Versand: offer mail possible again', KB.call('kunde_mail', {'id': K1, 'type': 'angebot'})[0] == 200)
+# ohne aktiven Zugang keine Angebotsmail – dieselbe Prüfung wie im Versandweg (wochenmail_grund)
+code, r = A.call('kunden')
+A.call('kunde_save', {**base, 'id': K1, 'rev': r['rev'], 'ansprechpartner': '', 'login': {'username': 'gasthaus.muster', 'password': '', 'active': False}})
+code, r = A.call('kunde_mail', {'id': K1, 'type': 'angebot'})
+check('no offer mail without an active portal login (like the weekly send)', code == 422 and 'kein aktiver Zugang' in r.get('error', ''), (code, r))
+code, r = A.call('kunden')
+A.call('kunde_save', {**base, 'id': K1, 'rev': r['rev'], 'ansprechpartner': '', 'login': {'username': 'gasthaus.muster', 'password': '', 'active': True}})
+
 # ---------- Mailserver nicht erreichbar ----------
 smtp.close(); time.sleep(0.2)
 code, r = A.call('kunde_mail', {'id': K1, 'type': 'zugang'})
