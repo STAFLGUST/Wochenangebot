@@ -14,25 +14,39 @@ const PROTOKOLL_MONATE = 6;
    ohne Grenze wächst der Preis jedes Eintrags für alle mit, und jenseits von etwa 18 MiB endet jeder audit()-Aufruf im
    Speicherabbruch (nicht abfangbar). Deshalb ein Ringpuffer wie bei den übrigen wachsenden Dokumenten (FW_VERKEHR_MAX,
    mailversand 3000, anmeldenamen 5000/20000) und zusätzlich eine Byte-Grenze, weil die Zahl der Einträge die Größe nicht
-   begrenzt (ein Eintrag darf eine Änderungsliste führen). Format unverändert (GR-006): die ältesten Einträge fallen weg,
-   ein Systemeintrag nennt wie viele. */
+   begrenzt (ein Eintrag darf eine Änderungsliste führen). Format unverändert (GR-006): die ältesten Einträge fallen weg –
+   gelungene Kundenanmeldungen vor allen anderen (protokoll_verwerfen) –, ein Systemeintrag nennt wie viele. */
 const PROTOKOLL_EINTRAEGE_MAX = 20000;          // Einträge je Monatsdokument
 const PROTOKOLL_BYTES_MAX = 4194304;            // 4 MiB je Monatsdokument (Lesen braucht ein Mehrfaches davon im Speicher)
 const PROTOKOLL_TEXT_MAX = 2000;                // Zeichen je Vorgangstext
 const PROTOKOLL_DETAILS_MAX = 2000;             // Änderungszeilen je Eintrag (wie die großen Aufrufer schon selbst kürzen)
 
-/* Monatsdokument auf die Grenzen bringen: älteste Einträge verwerfen und das im Dokument vermerken (ein Eintrag je Monat, er
-   wird fortgeschrieben – sonst füllte der Vermerk selbst das Dokument). */
+/* $n Einträge verwerfen: zuerst die ältesten gelungenen Kundenanmeldungen, dann die ältesten übrigen; der Vermerk über entfernte
+   Einträge bleibt. Gelungene Anmeldungen sind ungebremst (kundenportal.php) – eine Flut davon verdrängt so nur Anmeldeeinträge,
+   nie Rechte-, Mitarbeiter- oder Sicherheitseinträge wie Fehlanmeldungen mit IP-Adresse (Befund SEC-1, 22.11.2026). */
+function protokoll_verwerfen(array $log, int $n): array
+{
+    $zuerst = $danach = [];
+    foreach ($log as $k => $e) {
+        $a = $e['a'] ?? '';
+        if ($a === 'kunde_login') $zuerst[] = $k; elseif ($a !== 'protokoll_groesse') $danach[] = $k;
+    }
+    return array_values(array_diff_key($log, array_flip(array_slice([...$zuerst, ...$danach], 0, $n))));
+}
+/* Monatsdokument auf die Grenzen bringen: Einträge verwerfen (protokoll_verwerfen) und das im Dokument vermerken (ein Eintrag je
+   Monat, er wird fortgeschrieben – sonst füllte der Vermerk selbst das Dokument). */
 function protokoll_kuerzen(array $log): array
 {
-    $weg = 0;
-    if (count($log) > PROTOKOLL_EINTRAEGE_MAX) { $weg = count($log) - PROTOKOLL_EINTRAEGE_MAX; $log = array_slice($log, $weg); }
+    $vorher = count($log);
+    if (count($log) > PROTOKOLL_EINTRAEGE_MAX) $log = protokoll_verwerfen($log, count($log) - PROTOKOLL_EINTRAEGE_MAX);
     $gross = strlen((string)json_encode($log));
     while ($gross > PROTOKOLL_BYTES_MAX && count($log) > 1) {
-        $n = min(count($log) - 1, max(1, (int)ceil(count($log) * (1 - PROTOKOLL_BYTES_MAX / $gross))));
-        $log = array_slice($log, $n); $weg += $n;
+        $zahl = count($log);
+        $log = protokoll_verwerfen($log, min($zahl - 1, max(1, (int)ceil($zahl * (1 - PROTOKOLL_BYTES_MAX / $gross)))));
+        if (count($log) === $zahl) break;   // nur noch der Vermerk übrig
         $gross = strlen((string)json_encode($log));
     }
+    $weg = $vorher - count($log);
     if (!$weg) return $log;
     $i = null;
     foreach ($log as $k => $e) if (($e['a'] ?? '') === 'protokoll_groesse') $i = $k;
