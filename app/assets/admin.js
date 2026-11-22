@@ -5135,7 +5135,8 @@
     const name = typed;   // Bezeichnung ohne Einschränkung (auch mit „frisch“); der Zustand ist das eigene Feld
     const condition = f.condition.value;
     const vk = f.vkGruppe.value.trim();
-    if (vk && (!/^[0-9A-Za-z._-]{1,10}$/.test(vk) || (vkg.length && !vkgMap.has(vk)))) { err.textContent = `Die VK-Gruppe „${vk}“ gibt es nicht. Bitte unter Stammdaten → VK-Gruppen anlegen.`; f.vkGruppe.focus(); return; }
+    // nur eine geänderte VK-Gruppe gegen die Liste prüfen (der Import trägt auch fremde ein)
+    if (vk && vk !== (e.vkGruppe || '') && (!/^[0-9A-Za-z._-]{1,10}$/.test(vk) || (vkg.length && !vkgMap.has(vk)))) { err.textContent = `Die VK-Gruppe „${vk}“ gibt es nicht. Bitte unter Stammdaten → VK-Gruppen anlegen.`; f.vkGruppe.focus(); return; }
     const neu = { ...e, name, category: f.category.value, origin: C.clean(f.origin.value) || null, condition };
     if (vk) neu.vkGruppe = vk; else delete neu.vkGruppe;
     delete neu.namen;

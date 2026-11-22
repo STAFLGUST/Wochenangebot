@@ -1,5 +1,5 @@
 """Testgruppe master: Artikelstammdaten und Bezeichnungsregeln (Fleischart, Herkunft, Zustand, VK-Gruppe); nach 409 (Import,
-„Als Stammdaten speichern“) keine Erfolgsmeldung."""
+„Als Stammdaten speichern“) keine Erfolgsmeldung; Pop-up mit VK-Gruppe außerhalb der Liste speicherbar."""
 import sys
 from umgebung import BASE  # Testserver je Gruppe (parallel)
 import json, re
@@ -187,6 +187,25 @@ with sync_playwright() as p:
     if a.locator('#dlg-ms-import[open]').count():
         a.click('#msi-ok'); a.wait_for_function("!document.querySelector('#dlg-ms-import').open")
     check('… erneut „Übernehmen“ speichert auf dem neuen Stand', master_ent(a, '90001') is not None and 'übernommen' in a.inner_text('#toast'), a.inner_text('#toast'))
+    # VK-Gruppe außerhalb der Liste (der Import trägt sie trotzdem ein): Pop-up speichert andere Änderungen
+    def schliessen():   # Schließen-Knopf (Escape schlösse im Feld mit Vorschlagsliste erst die Liste); Rückfrage bei Änderungen bestätigen
+        a.click('#master-art-body [data-close]')
+        a.wait_for_function("document.querySelector('#dlg-frage[open]') || !document.querySelector('#dlg-master-art').open")
+        if a.locator('#dlg-frage[open]').count():
+            a.click('#fr-ja')
+        a.wait_for_function("!document.querySelector('#dlg-master-art').open")
+    vg = get(a, 'vkgruppen'); assert post(a, 'vkgruppen_save', {'rev': vg['rev'], 'groups': [{'nr': '1600', 'name': 'Testgruppe Rind'}]})[0] == 200
+    a.reload(); a.wait_for_selector('tr[data-id]'); a.click('#vt-master'); a.wait_for_selector('.mtab')
+    open_art(a, '90001'); a.fill('#master-art-body [name=origin]', 'IRL')
+    a.click('#master-art-body [type=submit]'); a.wait_for_function("!document.querySelector('#dlg-master-art').open || document.querySelector('#ma-err').textContent")
+    e90 = master_ent(a, '90001')
+    check('Pop-up: unveränderte VK-Gruppe außerhalb der Liste (3050) blockiert andere Änderungen nicht', e90.get('origin') == 'IRL' and e90.get('vkGruppe') == '3050', (e90, a.inner_text('#ma-err')))
+    if a.locator('#dlg-master-art[open]').count():
+        schliessen()
+    open_art(a, '90001'); a.fill('#master-art-body [name=vkGruppe]', '4711'); a.click('#master-art-body [type=submit]')
+    a.wait_for_function("/gibt es nicht/.test(document.querySelector('#ma-err').textContent)")
+    check('… eine geänderte VK-Gruppe prüft das Pop-up weiter gegen die Liste', master_ent(a, '90001').get('vkGruppe') == '3050' and a.locator('#dlg-master-art[open]').count() == 1)
+    schliessen()
     # Server prüft die Bezeichnungen je Angebot (Format, leer, Wochenangebot) – Liste per API
     m_ = get(a, 'master')['master']
     arts_ = [dict(x, namen={'std': 'nie', 'edeka': '', 'Böse ID': 'x', 'bela': '  Roastbeef   Bela  ', 'chefs-culinar': 'y' * 250}) if x['code'] == '10701' else x for x in m_['articles']]
