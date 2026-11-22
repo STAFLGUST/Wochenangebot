@@ -1058,7 +1058,7 @@ body.ro .vtog { display: none; }
 
 /* Bestellverwaltung */
 .ord-filter .search { flex: 1 1 260px; max-width: 420px; }
-.ord-filter select.in { width: auto; min-width: 160px; border: 1px solid var(--line); background-color: var(--surface); }
+.ord-filter select.in { width: auto; min-width: 160px; height: 40px; border: 1px solid var(--line); background-color: var(--surface); }   /* so hoch wie die Suche daneben */
 .ordtab tr[data-order-nr] { cursor: pointer; }
 .ordtab tr[data-order-nr]:hover td { background: var(--surface-2); }
 .ordtab td { padding: 9px 10px; vertical-align: top; }

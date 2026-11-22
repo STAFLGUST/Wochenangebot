@@ -158,6 +158,9 @@ with sync_playwright() as pw:
                         pg.wait_for_selector(f'#view-{v}:not([hidden])', timeout=20000)
                         pg.wait_for_function("() => !document.querySelector('.adm-page .loading:not([hidden])')", timeout=20000)
                     teil = f'{name}{"-" + v if v else ""}'
+                    if v == 'orders':   # Werkzeugleiste „Bestellungen“: Suche und Statusauswahl gleich hoch (wie in den anderen Leisten)
+                        hoehen = pg.evaluate("['#orders-filter .search input', '#orders-filter select'].map((s) => Math.round(document.querySelector(s).getBoundingClientRect().height))")
+                        check(f'{teil} {tag}: Suche und Auswahl der Werkzeugleiste gleich hoch', hoehen[0] == hoehen[1], hoehen)
                     pg.screenshot(path=f'{SH}/einheit-{teil}-{tag}.png')
                     pg.evaluate('document.fonts.ready.then(() => true)')
                     weg = pg.evaluate(ABGESCHNITTEN)
