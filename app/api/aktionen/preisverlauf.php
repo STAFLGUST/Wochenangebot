@@ -86,8 +86,10 @@ switch ($action) {
             if (!preg_match('/^\d{4}-\d{2}$/', $id)) fail('Ungültige Woche.');
             [$hy, $hw] = array_map('intval', explode('-', $id));
             audit('history', 'Preisverlauf: KW ' . $hw . '/' . $hy . ' entfernt');
-            store_delete('historie/' . $id);
+            // Entfernen und Grabstein in einer Sperre: sonst legt eine gleichzeitige Leseaktion die Woche
+            // dazwischen wieder an (history_backfill, lib/preisverlauf.php)
             with_lock('historie_geloescht', function () use ($id) {
+                store_delete('historie/' . $id);
                 $del = store_read('historie_geloescht') ?? [];
                 if (!in_array($id, $del, true)) { $del[] = $id; store_write('historie_geloescht', $del); }
             });

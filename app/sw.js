@@ -24,8 +24,9 @@ function art(req) {
   if (req.mode === 'navigate') return p === '/' || p === '/index.html' ? 'seite' : null;
   if (p.startsWith('/assets/')) return 'datei';
   if (p === '/manifest.json') return 'datei';
-  if (p === '/api/' && u.searchParams.get('action') === 'offer' && !u.searchParams.has('draft')
-      && (u.searchParams.get('angebot') || 'std') === 'std' && [...u.searchParams.keys()].every((k) => k === 'action' || k === 'angebot')) return 'angebot';
+  const wert = (k) => u.searchParams.getAll(k).pop();   // bei mehrfachem Parameter gilt der letzte Wert – wie $_GET im Server
+  if (p === '/api/' && wert('action') === 'offer' && !u.searchParams.has('draft')
+      && (wert('angebot') || 'std') === 'std' && [...u.searchParams.keys()].every((k) => k === 'action' || k === 'angebot')) return 'angebot';
   return null;
 }
 /* öffentlich speicherbar: keine privaten Antworten (Kundenangebote sind „private, no-store“) */

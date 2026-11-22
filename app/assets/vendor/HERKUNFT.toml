@@ -1,0 +1,85 @@
+# Herkunftsanker der Fremddateien in app/assets/vendor/
+#
+# Je Datei: Name, Fassung, Bezugsquelle (Adresse des offiziellen Pakets) und die Prüfsumme der Datei, wie sie hier im
+# Repository liegt. Die Dateiprüfung (app/api/lib/integritaet.php) nimmt Name und Fassung von hier – ein Fassungsmuster im
+# Dateikopf ist nur noch Rückfall für Dateien ohne Eintrag und lieferte für pdf.js „2.0“ aus dem Lizenztext.
+# `python3 werkzeuge/regeln.py pruefen` verlangt für jede Datei unter app/assets/vendor/ einen Eintrag und vergleicht sha256.
+#
+# OFFEN (Inhaber): `sha256_quelle` ist noch leer – der Abgleich der Prüfsummen gegen die veröffentlichten Pakete steht aus.
+# Er braucht Netzzugang und gehört nicht in einen Agentenlauf. Bis dahin sichert `sha256` nur, dass sich die Datei im
+# Repository nicht unbemerkt ändert; dass sie der Veröffentlichung entspricht, ist damit noch nicht belegt.
+#
+# Neue Fremddatei: Eintrag hier ergänzen (Pfad relativ zu diesem Ordner), `sha256sum` der Datei eintragen.
+
+[[fremddatei]]
+pfad = "maplibre/maplibre-gl.js"
+name = "MapLibre GL JS"
+fassung = "6.13.0"
+quelle = "https://registry.npmjs.org/maplibre-gl/-/maplibre-gl-6.13.0.tgz"
+sha256 = "389731e8581cc59d484e867b051db73ae034a76f0691d2890a2a1a7d2495bdf3"
+sha256_quelle = ""
+
+[[fremddatei]]
+pfad = "maplibre/maplibre-gl-worker.js"
+name = "MapLibre GL JS (Worker)"
+fassung = "6.13.0"
+quelle = "https://registry.npmjs.org/maplibre-gl/-/maplibre-gl-6.13.0.tgz"
+sha256 = "53a2dd60f76c7b9201a3cc007b755d98ce4b52403843fef5c90c41780fe62e91"
+sha256_quelle = ""
+
+[[fremddatei]]
+pfad = "maplibre/maplibre-gl.css"
+name = "MapLibre GL JS (Stylesheet)"
+fassung = "6.13.0"
+quelle = "https://registry.npmjs.org/maplibre-gl/-/maplibre-gl-6.13.0.tgz"
+sha256 = "20fc3054e6c769ae9502ec5c7ea46dae05b544fdc4fca2108553fb8c07265bf3"
+sha256_quelle = ""
+
+[[fremddatei]]
+pfad = "maplibre/LICENSE.txt"
+name = "MapLibre GL JS (Lizenztext, BSD-3-Clause)"
+fassung = "6.13.0"
+quelle = "https://registry.npmjs.org/maplibre-gl/-/maplibre-gl-6.13.0.tgz"
+sha256 = "ee5fc05a0677eaf69601d2c7db0d9ecd6cc27c3abc1d0733bc9ed34707cf8ef2"
+sha256_quelle = ""
+
+[[fremddatei]]
+pfad = "pmtiles/pmtiles.js"
+name = "pmtiles"
+fassung = "4.5.0"
+quelle = "https://registry.npmjs.org/pmtiles/-/pmtiles-4.5.0.tgz"
+sha256 = "caf981bc46f6327ee7e65d5dc964d89d38a69f60edca2bd4c5c890c21b554c6c"
+sha256_quelle = ""
+
+[[fremddatei]]
+pfad = "pdfjs/pdf.min.js"
+name = "pdf.js (Mozilla)"
+fassung = "6.5.438"
+quelle = "https://registry.npmjs.org/pdfjs-dist/-/pdfjs-dist-6.5.438.tgz"
+sha256 = "522ad2c83bc8a0010e7f0cc60d0892b77c8d2bf2c9702dc12288311d94270f42"
+sha256_quelle = ""
+
+[[fremddatei]]
+pfad = "pdfjs/pdf.worker.min.js"
+name = "pdf.js (Mozilla, Worker)"
+fassung = "6.5.438"
+quelle = "https://registry.npmjs.org/pdfjs-dist/-/pdfjs-dist-6.5.438.tgz"
+sha256 = "b4c8353ded0d88d2e2009574a29eb4e0c3ff7e942ecdf51ef5f71566a9667f31"
+sha256_quelle = ""
+
+[[fremddatei]]
+pfad = "pdfjs/LICENSE.txt"
+name = "pdf.js (Lizenztext, Apache-2.0)"
+fassung = "6.5.438"
+quelle = "https://registry.npmjs.org/pdfjs-dist/-/pdfjs-dist-6.5.438.tgz"
+sha256 = "0d542e0c8804e39aa7f37eb00da5a762149dc682d7829451287e11b938e94594"
+sha256_quelle = ""
+
+# qrcode.js trägt keine Fassung (Einzeldatei von d-project, MIT) – ohne Fassung meldet die Dateiprüfung einen Hinweis.
+[[fremddatei]]
+pfad = "qrcode.js"
+name = "QR Code Generator for JavaScript"
+fassung = ""
+quelle = "http://www.d-project.com/qrcode/index.html"
+sha256 = "18ae399f81182bc9de916e9c77b195df20cc58d6f2d55a62b085a299f1bf1780"
+sha256_quelle = ""

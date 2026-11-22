@@ -288,9 +288,14 @@ Sicherheitseinstellungen abschwächen, die Wartung oder den Notfallmodus beenden
   dann aktuellen Stand – eine zurückgesetzte Änderung erreicht die Kopie nie). Die Kundenseite liest nur die Kopie; schreiben,
   sperren oder löschen bricht ab (`StoreKeinZugang`). Gemessen: Keine Kundenaktion schreibt eines dieser Dokumente.
 - **Abgleich:** Der Postausgang vergleicht bei jedem Durchgang (alle 5 Sekunden) jede Kopie mit dem internen Stand
-  (`store_kopien_abgleichen`). Weicht sie ab, stellt er sie wieder her; ist sie deutlich nach dem internen Stand geschrieben worden
-  (also nicht von der Mitarbeiterseite), meldet er das als Sicherheitsereignis („Veröffentlichte Daten im gemeinsamen Ordner
-  verändert …“, Benachrichtigung „Sicherheitsereignisse“).
+  (`store_kopien_abgleichen`). Weicht sie inhaltlich ab, stellt er sie wieder her und meldet das als Sicherheitsereignis
+  („Veröffentlichte Daten im gemeinsamen Ordner verändert …“, Benachrichtigung „Sicherheitsereignisse“). Maßgeblich ist allein der
+  Inhalt: `store_kopie()` zieht die Kopie nach jedem eigenen Schreibvorgang nach, eine Abweichung ist deshalb fremd oder ein
+  abgebrochener eigener Schreibvorgang (selten, als einmalige Meldung vertretbar). Bis 22.11.2026 entschied zusätzlich ein
+  Zeitstempelvergleich („deutlich nach dem internen Stand geschrieben, also nicht von der Mitarbeiterseite“) – diese Folgerung war
+  nicht haltbar: Dateizeitstempel und `mtime`-Spalte liegen im gemeinsamen Ordner, eine übernommene Kundenseite konnte die Meldung
+  mit einem `utime`-Aufruf unterdrücken (Sicherheitsaudit run-3). Eine **gelöschte** Kopie wird weiter wiederhergestellt, aber
+  nicht gemeldet.
 - **Wirkung:** Was die Mitarbeiterseite und der Postausgang lesen, kann die Kundenseite nicht mehr beeinflussen. Was sie Kunden
   anzeigt, kann eine übernommene Kundenseite ohnehin bestimmen – dauerhaft verändert bleibt davon nichts.
 - **Serverschritt:** wie bisher `sh deploy/daten-trennen.sh trennen` (kopiert die veröffentlichten Dokumente nach innen; die Kopie

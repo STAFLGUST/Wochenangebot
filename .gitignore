@@ -1,6 +1,8 @@
 # Nur auf dem Server – nie ins Repository
 .env
 daten/
+daten-intern/
+daten-geheim/
 daten-anmeldung/
 daten-karte/
 sicherungen/

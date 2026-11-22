@@ -9,6 +9,7 @@
      Auftrag an (kind „offen“). Daraus macht order_outbox_vorbereiten() beim ersten Versand die Aufträge je Empfänger und ergänzt
      den Schnappschuss des Kunden aus den internen Stammdaten (einmalig, GR-106).
    - Je Kunde höchstens ORDER_MAIL_TAG Bestellwünsche am Tag (Versandprotokoll, intern) – auch wenn jemand die Kundenseite übernimmt. */
+if (realpath((string)($_SERVER['SCRIPT_FILENAME'] ?? '')) === __FILE__) { http_response_code(404); exit; }   // nur eingebunden, nie direkt aufrufbar
 const ORDER_MAIL_TAG = 30;
 function order_outbox_job(string $kind, string $to, string $name): array
 {

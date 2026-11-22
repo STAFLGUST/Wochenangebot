@@ -363,15 +363,18 @@ for art in ('dateien', 'sqlite'):
         check(f'{w}: Kundenseite kann Veröffentlichtes nicht schreiben, sperren oder löschen', json.loads(r or 'null') == {'store_write': 'abgelehnt', 'with_lock': 'abgelehnt', 'store_delete': 'abgelehnt'}
               and dt.dok_lesen(d, 'angebot') == {'items': [1]}, r)
         # übernommene Kundenseite verändert die Kopie direkt: Mitarbeiterseite liest weiter innen, der Abgleich stellt her und meldet
+        # ohne jeden Eingriff am Zeitstempel: die Einstufung „fremd“ hängt nur am Inhalt (Audit run-3,
+        # storage/kopien_abgleichen-mtime-meldung-umgehbar – ein touch()/utime der Kundenseite unterdrückte die Meldung)
         dt.dok_schreiben(d, 'sicherheit', {'idleMinutes': 999, 'pwMin': 1})
         if art == 'dateien':
-            os.utime(d / 'sicherheit.php', (time.time() + 60, time.time() + 60))
+            os.utime(d / 'sicherheit.php', (0, 0))
         else:
-            with sqlite3.connect(d / '.sqlite/store.sqlite') as c: c.execute("UPDATE documents SET mtime=mtime+60 WHERE name='sicherheit'")
+            with sqlite3.connect(d / '.sqlite/store.sqlite') as c: c.execute("UPDATE documents SET mtime=0 WHERE name='sicherheit'")
         r = php_lib("echo json_encode(store_read('sicherheit'));", d, i)
         check(f'{w}: Mitarbeiterseite liest unbeirrt den internen Stand', json.loads(r or 'null') == {'idleMinutes': 20, 'pwMin': 14}, r)
         r = php_lib("echo json_encode(store_kopien_abgleichen()); echo json_encode(store_kopien_abgleichen());", d, i)
-        check(f'{w}: Abgleich stellt die Kopie wieder her und erkennt die fremde Änderung', r == '{"sicherheit":true}[]' and dt.dok_lesen(d, 'sicherheit') == {'idleMinutes': 20, 'pwMin': 14}, r)
+        check(f'{w}: Abgleich stellt die Kopie wieder her und meldet die fremde Änderung auch mit zurückgesetztem Zeitstempel',
+              r == '{"sicherheit":true}[]' and dt.dok_lesen(d, 'sicherheit') == {'idleMinutes': 20, 'pwMin': 14}, r)
         dt.dok_loeschen(d, 'firewall')
         r = php_lib("echo json_encode(store_kopien_abgleichen());", d, i)
         check(f'{w}: gelöschte Kopie wird ebenfalls wiederhergestellt', r == '{"firewall":false}' and dt.dok_lesen(d, 'firewall') == {'aktiv': True}, r)

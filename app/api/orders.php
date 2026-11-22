@@ -1,5 +1,6 @@
 <?php
 /* Shared order operations for the website and future app clients. */
+if (realpath((string)($_SERVER['SCRIPT_FILENAME'] ?? '')) === __FILE__) { http_response_code(404); exit; }   // nur eingebunden, nie direkt aufrufbar
 const ORDER_STATES = ['neu', 'in_bearbeitung', 'bestaetigt', 'erledigt', 'storniert'];
 function order_request_hash(array $body): string
 {
