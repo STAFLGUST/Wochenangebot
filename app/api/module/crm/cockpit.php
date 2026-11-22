@@ -168,13 +168,18 @@ function crm_cockpit_vergleich(array $stamm, array $kb, array $r): array
 }
 
 /* Übersicht im Kunden-Pop-up: Umsatz und Menge (365 Tage mit Vorjahr), Monate mit Vorjahr, letzter Kauf, Rhythmus, Preisniveau
-   (nur mit € und kg), Top-Artikel, Signale und „Auffällig bei Artikeln“. Interessenten und Kunden ohne Nummer: keine Umsätze. */
+   (nur mit € und kg), Top-Artikel, Signale und „Auffällig bei Artikeln“. Interessenten und Kunden ohne Nummer: keine Umsätze.
+   Ohne crm.master Zahlen nur für Kunden der eigenen Ansicht (wie im Cockpit, crm_cockpit_ansicht) – sonst ließe sich das gesperrte
+   Master-Cockpit aus den Pop-ups zusammenzählen; Kunden anderer Vertreter wie ohne € und kg („fremd“, Entscheidung 22.11.2026). */
 function crm_kunde_umsatz(array $me, string $key): array
 {
     $r = crm_zahlrechte($me);
     $c = crm_stammkunden()[$key] ?? null;
     $nr = $c ? trim((string)($c['nr'] ?? '')) : '';
-    $o = ['ok' => true, 'key' => $key, 'rechte' => $r, 'stand' => null, 'von' => null, 'vorjahr' => null, 'kunde' => null];
+    $ich = (string)($me['vertreter'] ?? '');
+    $fremd = $c && !$r['master'] && ($ich === '' || !crm_im_bereich($c, ['art' => 'vertreter', 'vertreter' => $ich]));
+    if ($fremd) { $r['euro'] = false; $r['kg'] = false; }
+    $o = ['ok' => true, 'key' => $key, 'rechte' => $r, 'fremd' => $fremd, 'stand' => null, 'von' => null, 'vorjahr' => null, 'kunde' => null];
     if ($nr === '') return $o;
     crm_kundenbild();
     $kb = kundenbild_kunde($nr);

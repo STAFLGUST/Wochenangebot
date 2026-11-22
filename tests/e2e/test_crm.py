@@ -724,13 +724,15 @@ VERA = {'900001', '900002', '900003'}   # Vertreter 11 oder Vertreter 2 = 11 (90
 for u, n, r_, p_, extra in (('vv', 'Vera Verkauf', 'viewer', 'Editor-Zugang-77', {'grant': ['crm.sehen'], 'vertreter': '11'}),
                             ('gf', 'Gesa Führung', 'editor', 'Konto-Passwort-9', {'grant': ['crm.master']}),
                             ('vk', 'Karl Kilo', 'viewer', 'Merk-Kennwort-31', {'grant': ['crm.sehen'], 'deny': ['crm.umsatz_euro'], 'vertreter': '11'}),
-                            ('vn', 'Nina Ohnezahl', 'viewer', 'Weg-Kennwort-42', {'grant': ['crm.sehen'], 'deny': ['crm.umsatz_euro', 'crm.umsatz_kg'], 'vertreter': '11'})):
+                            ('vn', 'Nina Ohnezahl', 'viewer', 'Weg-Kennwort-42', {'grant': ['crm.sehen'], 'deny': ['crm.umsatz_euro', 'crm.umsatz_kg'], 'vertreter': '11'}),
+                            ('vb', 'Volker Verkauf', 'viewer', 'Editor-Zugang-77', {'grant': ['crm.sehen'], 'vertreter': '12'})):
     st, r = A.call('user_save', {'id': '', 'name': n, 'username': u, 'role': r_, 'active': True, 'password': p_, 'mustChange': False, **extra})
     assert st == 200, r
 VV = Client('198.51.100.31'); VV.call('login', {'username': 'vv', 'password': 'Editor-Zugang-77'})
 GF = Client('198.51.100.32'); GF.call('login', {'username': 'gf', 'password': 'Konto-Passwort-9'})
 VK = Client('198.51.100.33'); VK.call('login', {'username': 'vk', 'password': 'Merk-Kennwort-31'})
 VN = Client('198.51.100.34'); VN.call('login', {'username': 'vn', 'password': 'Weg-Kennwort-42'})
+VB = Client('198.51.100.35'); VB.call('login', {'username': 'vb', 'password': 'Editor-Zugang-77'})
 st, d = VV.call('crm_start')
 check('crm_start: eigener Vertreter und Rechte € und kg, kein Master', st == 200 and d['ich'] == '11' and d['rechte']['euro'] and d['rechte']['kg'] and not d['rechte']['master'])
 check('Cockpit ohne Anmeldung 401, ohne CRM-Recht 403', N.call('crm_cockpit')[0] == 401 and O.call('crm_cockpit')[0] == 403 and O.call('crm_kunde_umsatz&key=kaaa111111111')[0] == 403)
@@ -811,6 +813,17 @@ check('Pop-up nur kg: keine Umsätze, kein Preis, kein Preisniveau', st == 200 a
 st, u = VN.call('crm_kunde_umsatz&key=kaaa111111111')
 roh = json.dumps(u)
 check('Pop-up ohne € und kg: Artikel und Signale ohne Zahlen', st == 200 and '"umsatz' not in roh and '"menge' not in roh and u['kunde']['artikel'][0]['nr'] == '700002' and '777777' not in roh)
+# Kunden anderer Vertreter: ohne Master keine Umsätze und Mengen – sonst ließe sich das gesperrte Master-Cockpit aus den Pop-ups nachbauen
+st, u = VB.call('crm_kunde_umsatz&key=kaaa111111111')   # Vertreter 12 öffnet einen Kunden von Vertreter 11
+roh = json.dumps(u)
+st2, u2 = VB.call('crm_kunde_umsatz&key=kbbb222222222')   # eigener Kunde (Vertreter 12, Vertreter 2 = 11)
+st3, u3 = GF.call('crm_kunde_umsatz&key=kaaa111111111')   # Master
+st4, u4 = VV.call('crm_kunde_umsatz&key=kfff666666666')   # Kunde ohne Vertreter
+check('Pop-up, Kunde eines anderen Vertreters ohne Master: keine Umsätze und Mengen, kein Preisniveau, gekennzeichnet', st == 200 and u.get('fremd') is True
+      and '"umsatz' not in roh and '"menge' not in roh and (u.get('kunde') or {}).get('preisniveau') is None and u['rechte']['euro'] is False, roh[:300])
+check('Pop-up: eigener Kunde (auch als Vertreter 2) und Master mit Zahlen; Kunde ohne Vertreter für Verkäufer ohne Zahlen', st2 == 200 and u2.get('fremd') is False
+      and 'umsatz' in u2['kunde']['w']['j365'] and st3 == 200 and u3.get('fremd') is False and 'umsatz' in u3['kunde']['w']['j365']
+      and st4 == 200 and u4.get('fremd') is True and '"umsatz' not in json.dumps(u4), (st2, st3, st4, u2.get('fremd'), u3.get('fremd')))
 roh = json.dumps(VV.call('crm_kunde_umsatz&key=kaaa111111111')[1])
 check('Pop-up ohne Einkaufswerte, DB oder Spanne', '777777' not in roh and '888888' not in roh and '"ek' not in roh.lower())
 st, pz = A.call('controlling_umsatz_pausen&bis=' + E.strftime('%Y-%m'))
@@ -857,6 +870,12 @@ with sync_playwright() as p:
     pg.click('[data-k-chip="signal"]'); pg.wait_for_function("document.querySelectorAll('#k-tabelle tbody tr').length === 3")
     check('UI Kunden „Mit Signal“: Kennzeichen in der Liste', 'Bestellpause' in pg.inner_text('#k-tabelle') and 'kauft weniger' in pg.inner_text('#k-tabelle'))
     pg.click('[data-k-chip="alle"]'); pg.wait_for_function("document.querySelectorAll('#k-tabelle tbody tr').length > 4")
+    pg.click('#k-tabelle button[data-oeffnen="kfff666666666"]'); pg.wait_for_selector('#dlg-kunde[open] [data-ku-panel="uebersicht"] .crm-ck-hinweis')
+    ue = pg.inner_text('[data-ku-panel="uebersicht"]')
+    check('UI Pop-up, Kunde ohne eigenen Vertreter: Hinweis statt Umsätzen und Mengen', 'nur für Kunden Ihres Vertreters' in ue and '€' not in ue and ' kg' not in ue, ue[:400])
+    pg.screenshot(path=os.path.join(SH, 'crm_popup_fremd_1280.png'))
+    pg.set_viewport_size({'width': 390, 'height': 844}); pg.screenshot(path=os.path.join(SH, 'crm_popup_fremd_390.png')); pg.set_viewport_size({'width': 1280, 'height': 900})
+    pg.click('#dlg-kunde [data-schliessen]')
     ctx.close()
 
     ctx, pg = seite('gf', 'Konto-Passwort-9', '198.51.100.32')
