@@ -21,7 +21,9 @@ Storage Box (Form `u123456-sub1`).
   Passwort verlässt den Server nie), inkrementell (nur neue Inhalte werden übertragen) und über **SFTP auf Port 23** mit einem
   eigenen SSH-Schlüssel. Das Passwort der Storage Box kennt das Skript nie.
 - Kopiert wird, was `deploy/sichern.sh` schon geprüft hat: Archive `daten-`/`intern-<Zeit>.tar.gz`, Abzüge der Anmeldung
-  `anmeldung-<Zeit>.dump` und die Stände der Dateiablage `dateien/<Zeit>/`. `sichern.sh` bleibt unverändert.
+  `anmeldung-<Zeit>.dump` und die Stände der Dateiablage `dateien/<Zeit>/`. `sichern.sh` bleibt unverändert. Nicht kopiert
+  wird das Altdaten-Archiv `altdateien-<Zeit>.tar.gz` (`deploy/altdateien.sh`): es wird lokal nicht rotiert und läge auswärts
+  sonst ohne Löschfrist.
 - Ein eigener Timer startet die Kopie **täglich um 03:30 Uhr**, eine Stunde nach der Sicherung von 02:30 Uhr. Läuft die
   Sicherung noch, wartet die Kopie bis zu 10 Minuten.
 - **Aufbewahrung** auf der Storage Box: je Tag ein Stand für 30 Tage, je Woche einer für 8 Wochen, je Monat einer für
@@ -304,7 +306,7 @@ Servers durchspielen, nur mit Passwortmanager und Hetzner-Zugang. Erst dann ist 
 ## 8. Offene Entscheidungen für den Inhaber
 
 - **Löschfristen:** Mit 12 Monatsständen leben gelöschte Daten (z. B. ausgeschiedene Mitarbeiter, gelöschte Kunden) in
-  der externen Kopie bis zu rund 13 Monate weiter, lokal nur 30 Tage. Das ist für eine Sicherung üblich, gehört aber
+  der externen Kopie bis zu rund 13 Monate weiter, lokal nur 30 Tage (das Altdaten-Archiv geht nicht in die externe Kopie). Das ist für eine Sicherung üblich, gehört aber
   ins Löschkonzept. Kürzer geht mit drei Zahlen am Kopf des Skripts (`TAGE`, `WOCHEN`, `MONATE`).
 - **Regelmäßige Prüfung:** `pruefen` läuft nur von Hand. Ein zweiter Timer (z. B. wöchentlich) wäre ein kleiner Nachtrag.
 - **Zweite Aufbewahrung des Passworts:** Wer außer dem Inhaber kommt im Ernstfall an Passwortmanager bzw. Ausdruck?

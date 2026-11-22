@@ -70,7 +70,8 @@ rm -f "$T/verweis" daten-karte/karte.neu.pmtiles
 rm -f daten-karte/stand.txt daten-karte/karte.pmtiles
 ln -s "$T/opfer" daten-karte/stand.txt; ln -s "$T/opfer2" daten-karte/karte.pmtiles
 AUS=$(KARTE_STAND=20261028.pmtiles sh "$REPO/deploy/karte-laden.sh" 2>&1) && CODE=0 || CODE=$?
-ok "Karte und Stand folgen keinem Verweis in daten-karte (Ziele unverändert, Verweise ersetzt)" '[ $CODE = 0 ] \
+ok "Karte und Stand folgen keinem Verweis in daten-karte (Ziele unverändert, Verweise ersetzt, Inhalt nicht gelesen)" '[ $CODE = 0 ] \
+  && echo "$AUS" | grep -q "(bisher: keiner)" && ! echo "$AUS" | grep -q ORIGINAL \
   && [ "$(cat "$T/opfer")" = ORIGINAL ] && [ "$(stat -c %a "$T/opfer")" = 600 ] && [ ! -e "$T/opfer2" ] \
   && [ ! -L daten-karte/stand.txt ] && [ ! -L daten-karte/karte.pmtiles ] && [ "$(cat daten-karte/stand.txt)" = 20261028.pmtiles ] \
   && [ "$(head -c 7 daten-karte/karte.pmtiles)" = PMTiles ] && [ -z "$(ls -A . | grep "^\.stand\.")" ]'
