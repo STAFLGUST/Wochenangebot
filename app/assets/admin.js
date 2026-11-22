@@ -3637,7 +3637,7 @@
     const zahl = (v) => fmtNum.format(v), bereich = (e) => (f.min != null && f.max != null ? `${zahl(f.min)} – ${zahl(f.max)}${e}` : f.min != null ? `ab ${zahl(f.min)}${e}` : `bis ${zahl(f.max)}${e}`);
     if (s.typ === 'text') return `${s.titel} enthält „${f.q}“`;
     if (s.typ === 'zahl') return `${s.titel} ${bereich(' kg')}`;
-    if (s.typ === 'preis') return `${s.titel}: ${[f.art === 'mit' ? 'mit Preis' : f.art === 'ohne' ? 'ohne Preis' : '', f.min != null || f.max != null ? bereich(' €') : ''].filter(Boolean).join(', ')}`;
+    if (s.typ === 'preis') return `${s.titel}: ${[f.art === 'mit' ? 'mit Preis' : f.art === 'ohne' ? 'ohne Preis' : '', f.min != null || f.max != null ? bereich(' €/kg') : ''].filter(Boolean).join(', ')}`;
     if (s.typ === 'mhd') return `${s.titel}: ${[(f.stufen || []).map((x) => MHD_STUFEN.find((m) => m[0] === x)[1]).join(', '), f.von || f.bis ? `${f.von ? 'ab ' + mhdShort(f.von) : ''}${f.von && f.bis ? ' ' : ''}${f.bis ? 'bis ' + mhdShort(f.bis) : ''}` : ''].filter(Boolean).join('; ')}`;
     return `${s.titel}: ${f.art === 'mit' ? 'mit Zugängen' : 'ohne Zugänge'}`;
   }
@@ -3664,7 +3664,7 @@
     const art = (opts) => `<select ${a('art')} aria-label="${esc(s.titel)}">${opts.map(([v, t]) => `<option value="${v}"${(f.art || '') === v ? ' selected' : ''}>${t}</option>`).join('')}</select>`;
     if (s.typ === 'text') return `<input type="search" ${a('q')} value="${esc(f.q || '')}" placeholder="enthält … (${esc(s.ph)})" aria-label="${esc(s.titel)} enthält" autocomplete="off">`;
     if (s.typ === 'zahl') return `<div class="st-fzeile">${num('min', 'von', 'kg')}${num('max', 'bis', 'kg')}</div>`;
-    if (s.typ === 'preis') return `${art([['', 'alle Artikel'], ['mit', 'nur mit Preis'], ['ohne', 'nur ohne Preis']])}<div class="st-fzeile">${num('min', 'von', '€')}${num('max', 'bis', '€')}</div>`;
+    if (s.typ === 'preis') return `${art([['', 'alle Artikel'], ['mit', 'nur mit Preis'], ['ohne', 'nur ohne Preis']])}<div class="st-fzeile">${num('min', 'von', '€/kg')}${num('max', 'bis', '€/kg')}</div>`;
     if (s.typ === 'mhd') return `<div class="st-fstufen">${MHD_STUFEN.map(([v, t]) => `<label class="${v.startsWith('mhd-') ? v : ''}"><input type="checkbox" ${a('stufe')} value="${v}"${(f.stufen || []).includes(v) ? ' checked' : ''}>${v === 'mhd-past' ? SKULL : ''}${t}</label>`).join('')}</div>
       <div class="st-fzeile"><label class="st-fz"><span>ab</span><input type="date" ${a('von')} value="${f.von || ''}" aria-label="MHD ab"></label><label class="st-fz"><span>bis</span><input type="date" ${a('bis')} value="${f.bis || ''}" aria-label="MHD bis"></label></div>`;
     return art([['', 'alle Artikel'], ['mit', 'nur mit erwarteten Zugängen'], ['ohne', 'nur ohne erwartete Zugänge']]);

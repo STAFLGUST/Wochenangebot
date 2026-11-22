@@ -226,6 +226,12 @@ with sync_playwright() as pw:
     check('Summenzeile folgt dem Filter; Zugang ohne EK-Preis „– €“', zeile(su) == schwein and schwein['erfasst']['eur'] == '– €' and schwein['mhd'] == {'kg': '0 kg', 'eur': '0 €'}, (zeile(su), schwein))
     su.click('.st-fleiste [data-fweg="*"]'); su.wait_for_function("document.querySelectorAll('.stab tr.srow').length === 5")
     check('Summenzeile: nach „Alle Filter entfernen“ wieder alle Zeilen', zeile(su) == soll(alle))
+    # Preisfilter in derselben Einheit wie die Spalte (€/kg), auch im Text des gesetzten Filters
+    su.click('.stab th [data-sfilter=vk]'); su.fill('#st-pop input[data-ff=min]', '5')
+    su.wait_for_function("document.querySelector('.st-fleiste') && document.querySelector('.st-fleiste').textContent.includes('ab 5')")
+    einheit = su.evaluate("[[...document.querySelectorAll('#st-pop .st-fz em')].map((e) => e.textContent), document.querySelector('.st-fleiste').textContent]")
+    su.keyboard.press('Escape'); su.click('.st-fleiste [data-fweg="*"]'); su.wait_for_function("document.querySelectorAll('.stab tr.srow').length === 5")
+    check('Bestandsfilter Preis: Felder und Filtertext in €/kg', einheit[0] == ['€/kg', '€/kg'] and 'ab 5,00 €/kg' in einheit[1], einheit)
     # Laptop (1280 px): eine Zeile darf umbrechen, die Seite scrollt nicht seitlich
     su.set_viewport_size({'width': 1280, 'height': 1000}); su.wait_for_function('document.documentElement.clientWidth === 1280')
     check('Summenzeile bei 1280 px ohne waagerechtes Scrollen', su.evaluate('document.documentElement.scrollWidth') <= 1280)
