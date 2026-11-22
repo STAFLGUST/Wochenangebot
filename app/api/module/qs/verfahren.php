@@ -331,12 +331,35 @@ function qs_vf_fassung_bilden(array $doku, array $dokumente, array $stamm, array
     return $f;
 }
 
+/* Fassung für $me (beide Lesewege: qs_vf_aus, qs_vf_export): QM-Dokumente, die $me nicht sieht (geschützte Kapitel, qs_sichtbar), ohne
+   Nr., Titel und Version – im Inhalt wie in den Änderungszeilen. $dokumente: die für $me gefilterte Liste (QM-Dokumente werden nie gelöscht,
+   fehlt eines darin, ist es geschützt). Der gespeicherte Schnappschuss bleibt unverändert (GR-106); gefiltert wird beim Lesen, das gilt so auch
+   für ältere Fassungen. Änderungszeilen sind reiner Text, aber ihr Anfang „QM-Dokument <Nr> <Titel>: “ entsteht in qs_vf_abweichung aus
+   genau diesem inhalt['dokumente'] – daran sind sie zuzuordnen, ohne neues Feld. */
+function qs_vf_fassung_sichtbar(array $f, array $dokumente, array $me): array
+{
+    if (may($me, 'qs.bearbeiten') || !is_array($f['inhalt'] ?? null)) return $f;
+    $da = array_flip(array_map('strval', array_column($dokumente, 'id')));
+    $weg = function ($x) use ($da): bool { return is_array($x) && (string)($x['dok'] ?? '') !== '' && !isset($da[(string)$x['dok']]); };
+    $anfang = [];
+    foreach ((array)($f['inhalt']['dokumente'] ?? []) as $x) if ($weg($x)) $anfang[] = 'QM-Dokument ' . trim($x['nr'] . ' ' . $x['titel']) . ': ';
+    $f['inhalt']['dokumente'] = array_values(array_filter((array)($f['inhalt']['dokumente'] ?? []), function ($x) use ($weg) { return !$weg($x); }));
+    foreach ((array)($f['inhalt']['abschnitte'] ?? []) as $i => $a) foreach ((array)($a['verweise'] ?? []) as $k => $v)
+        if ($weg($v)) $f['inhalt']['abschnitte'][$i]['verweise'][$k] = ['text' => (string)$v['text']] + qs_vf_dok_stand(null);
+    if (is_array($f['aenderungen'] ?? null)) $f['aenderungen'] = array_values(array_filter($f['aenderungen'], function ($z) use ($anfang): bool {
+        foreach ($anfang as $p) if (strncmp((string)$z, $p, strlen($p)) === 0) return false;
+        return true;
+    }));
+    return $f;
+}
+
 /* ---------- Antwort für die Oberfläche ---------- */
 /* Dokumentation für die Oberfläche: Abschnitte sortiert mit Nummer, Fassungen ohne Inhalt (den liefert der Export als
    PDF), Abweichung seit der letzten Fassung, Überprüfung */
-function qs_vf_aus(array $doku, array $dokumente, array $stamm, string $heute): array
+function qs_vf_aus(array $doku, array $dokumente, array $stamm, string $heute, array $me): array
 {
     $doku = qs_vf_normal($doku);
+    $doku['fassungen'] = array_map(function ($f) use ($dokumente, $me) { return qs_vf_fassung_sichtbar($f, $dokumente, $me); }, $doku['fassungen']);
     $abschnitte = $doku['abschnitte'];
     qs_vf_sortieren($abschnitte);
     $nr = qs_vf_nummern($abschnitte);
@@ -365,7 +388,7 @@ function qs_vf_laden($id): array
 }
 function qs_vf_antworten(array $doku, array $me): void
 {
-    respond(['ok' => true, 'doku' => qs_vf_aus($doku, qs_sichtbar($me, 'dokumente')['dokumente'], qs_stamm(), qs_heute())]);
+    respond(['ok' => true, 'doku' => qs_vf_aus($doku, qs_sichtbar($me, 'dokumente')['dokumente'], qs_stamm(), qs_heute(), $me)]);
 }
 /* Dokumentation nach einer Änderung speichern: Stand hochzählen, „geändert“ setzen */
 function qs_vf_ablegen(array &$doc, int $i, array $doku, array $me): array

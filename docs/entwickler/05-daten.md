@@ -839,7 +839,10 @@ Verfahrensdokumentation nach GoBD (`module/qs/verfahren.php`, Aktionen `qs_verfa
   trifft: „jetzt verknüpft“) und liefert die Änderungsliste in Worten; sie wird als `aenderungen` gespeichert. Ohne Abweichung statt
   dessen `ohneAenderung: true` („ohne Änderung überprüft“, Frist 12 Monate).
 - Antwort (`qs_vf_aus`): Fassungen ohne `inhalt`, dazu `gueltigBis`, `seitFassung` (Abweichung) und `ueberpruefung`; den Inhalt einer Fassung
-  liefert nur der Export.
+  liefert nur der Export. Beide Lesewege schicken jede Fassung durch `qs_vf_fassung_sichtbar` (Audit run-3): ohne `qs.bearbeiten` fehlen
+  QM-Dokumente geschützter Kapitel (1.5) in `inhalt.dokumente`, ihre Verweise zeigen nur den Text, und ihre Änderungszeilen („QM-Dokument
+  <Nr> <Titel>: …“, zugeordnet über genau diesen Anfang aus `inhalt.dokumente`) entfallen. Gefiltert wird beim Lesen, gespeichert bleibt
+  der volle Schnappschuss (GR-106) – das gilt so auch für ältere Fassungen.
 - Export (`qs_verfahren_export`, GET `doku`; `module/qs/verfahren-export.php`, PDF über `lib/pdf.php`): `fassung=N` (0 = Arbeitsstand, auf jeder
   Seite als Entwurf gekennzeichnet) oder `von`/`bis` = Export für Prüfungen mit allen Fassungen, die im Zeitraum galten, und der Historie aller
   Fassungen; `dokumente=1` liefert ein ZIP mit den Dateien der verknüpften QM-Dokumente in der Version der jeweiligen Fassung – so,
@@ -879,8 +882,11 @@ Die einzige Beschreibung der Regeln; Code-Kommentare verweisen hierher.
   eigene Prüfung (`qs_pruefung_meine`) mit ihren Nachweisen und die eigene Maßnahme (`qs_massnahme_meine`). Die eine Stelle für alle
   Lesewege ist `qs_sichtbar` (Liste und Suche, Zahlen, CSV, ZIP-Export, Audit-Bericht, Verfahrensdoku samt Export); `qs_dok_sichtbar` gibt
   für Dateien, Ordnerbaum, Ordner-ZIP und Organigramm-Vorschau 403. Das Protokoll nennt bei diesen Vorgängen nur die Kapitelnummer
-  (`qs_protokoll_name`). Freigegebene Fassungen der Verfahrensdoku bleiben vollständige Schnappschüsse (GR-106) und nennen Nummer und
-  Titel verknüpfter Dokumente auch aus 1.5.
+  (`qs_protokoll_name`). Freigegebene Fassungen der Verfahrensdoku bleiben gespeichert vollständige Schnappschüsse (GR-106); ohne
+  `qs.bearbeiten` liefern Oberfläche und Export sie ohne die Dokumente aus 1.5 (`qs_vf_fassung_sichtbar`, auch die Änderungszeilen).
+  Verlaufstexte nennen Dateien aus solchen Unterordnern nur als „personenbezogene Datei“ (`qs_dok_dateien_sichtbar`); weil eine im Entwurf
+  gelöschte Datei in keiner Liste mehr steht, merkt sich ihr Verlaufseintrag `datei` und `pfad` (optional, seit Audit run-3). Ältere
+  Einträge ohne diese Felder bleiben, wie sie sind – eine Bereinigung wäre eine Datenmigration (Freigabe des Inhabers).
 - **`pfad`** (`qs_pfad`): Unterordner relativ zum Ordner-Dokument (Archiv) bzw. zum gewählten Ordner (Eingang). `/`-getrennt, `\` teilt
   ebenfalls, Leerraum zusammengefasst, ohne Steuerzeichen und leere, `.`- und `..`-Teile, je Teil 120 Zeichen, höchstens 12 Teile und
   500 Byte (ganze Teile); leer = Feld fehlt. Nur Anzeige, Ordnerbaum und Suche, nie ein Pfad im Dateisystem; Zuordnen behält ihn.

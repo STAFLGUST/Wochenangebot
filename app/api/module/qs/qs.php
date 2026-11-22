@@ -102,10 +102,13 @@ function qs_schreiben(string $name, array $doc): void
 }
 function qs_id(string $praefix): string { return $praefix . bin2hex(random_bytes(6)); }
 function qs_wer(array $me): array { return ['t' => now(), 'von' => (string)$me['name'], 'vonId' => (string)$me['id']]; }
-function qs_verlauf(array &$e, array $me, string $was): void
+/* $datei: betrifft der Eintrag eine Datei mit Ordnerpfad, merkt er sich Name und Ordner (datei, pfad) – so kann qs_dok_dateien_sichtbar den
+   Namen auch dann ersetzen, wenn die Datei in keiner Liste mehr steht (optionale Felder, GR-006) */
+function qs_verlauf(array &$e, array $me, string $was, array $datei = []): void
 {
     $e['verlauf'] = is_array($e['verlauf'] ?? null) ? $e['verlauf'] : [];
-    $e['verlauf'][] = ['t' => now(), 'von' => (string)$me['name'], 'was' => $was];
+    $e['verlauf'][] = ['t' => now(), 'von' => (string)$me['name'], 'was' => $was]
+        + ((string)($datei['pfad'] ?? '') !== '' ? ['datei' => (string)($datei['name'] ?? ''), 'pfad' => (string)$datei['pfad']] : []);
     if (count($e['verlauf']) > QS_MAX_VERLAUF) $e['verlauf'] = array_slice($e['verlauf'], -QS_MAX_VERLAUF);
 }
 function qs_heute(): string { return date('Y-m-d'); }
@@ -166,12 +169,20 @@ function qs_dok_dateien_sichtbar(array $d, array $me): array
     foreach ((array)($d['versionen'] ?? []) as $i => $v) if (isset($v['dateien'])) $d['versionen'][$i]['dateien'] = $sichtbar((array)$v['dateien']);
     $alt = qs_ordner_dateien($d, []);
     if ($alt) $d = array_replace($d, ['dateien' => $sichtbar($alt)]);
+    // im Entwurf gelöschte Dateien stehen in keiner Liste mehr: Name und Ordner trägt ihr Verlaufseintrag (qs_datei_entfernen, Felder datei/pfad).
+    // shortcut: ältere Einträge ohne diese Felder bleiben lesbar – eine Bereinigung bräuchte eine Datenmigration mit Freigabe des Inhabers
+    foreach (array_merge([$d], (array)($d['versionen'] ?? [])) as $e) foreach ((array)($e['verlauf'] ?? []) as $l)
+        if (is_array($l) && (string)($l['datei'] ?? '') !== '' && !qs_dateien_sichtbar([$l], $me)) $weg[] = (string)$l['datei'];
     if (!$weg) return $d;
     // nur ganze Namen ersetzen: „Plan“ nicht mitten in „Planung“
+    $weg = array_unique($weg);
     usort($weg, function ($a, $b) { return strlen($b) - strlen($a); });
     $re = '/(?<![\p{L}\p{N}])(?:' . implode('|', array_map(function ($n) { return preg_quote($n, '/'); }, $weg)) . ')(?![\p{L}\p{N}])/u';
     $ohne = function (array $e) use ($re): array {
-        foreach ((array)($e['verlauf'] ?? []) as $k => $l) $e['verlauf'][$k]['was'] = (string)preg_replace($re, 'personenbezogene Datei', (string)($l['was'] ?? ''));
+        foreach ((array)($e['verlauf'] ?? []) as $k => $l) {
+            $e['verlauf'][$k]['was'] = (string)preg_replace($re, 'personenbezogene Datei', (string)($l['was'] ?? ''));
+            unset($e['verlauf'][$k]['datei'], $e['verlauf'][$k]['pfad']);
+        }
         return $e;
     };
     $d = $ohne($d);

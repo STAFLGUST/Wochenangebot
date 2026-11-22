@@ -250,6 +250,7 @@ function qs_vf_export_dateien(array $teile, array $dokumente, string $wurzel, ar
 function qs_vf_export(array $doku, array $q, array $me, array $dokumente, array $stamm): void
 {
     $heute = qs_heute();
+    $doku['fassungen'] = array_map(function ($f) use ($dokumente, $me) { return qs_vf_fassung_sichtbar($f, $dokumente, $me); }, $doku['fassungen']);
     $alle = $doku['fassungen'];
     $k = ['heute' => $heute, 'erstellt' => (string)$me['name'], 'von' => '', 'bis' => '', 'stand' => $heute, 'nur' => 0];   // Überprüfungen bis zum Tag „stand“ bzw. nur die der Fassung „nur“
     $basis = 'Verfahrensdokumentation_' . ablage_zip_pfad($doku['gesellschaft'] !== '' ? $doku['gesellschaft'] : $doku['titel']);
