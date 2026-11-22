@@ -166,7 +166,7 @@ function qs_stuecke_ersetzen(array &$seg, array $werte, array &$offen): int
    null, wenn der Teil größer als QS_XML_BYTES_MAX ist oder mehr als QS_XML_STUECKE_MAX Elemente enthält (beides gezählt, bevor gerechnet wird). */
 function qs_xml_ersetzen(string $xml, string $gruppe, string $tt, array $werte, array &$offen, int &$n): ?string
 {
-    $re = '#<' . $gruppe . '(?=[\s>/])[^>]*>|</' . $gruppe . '>|<' . $tt . '(?=[\s>])([^>]*)>(.*?)</' . $tt . '>#s';
+    $re = '#<' . $gruppe . '(?=[\s>/])[^>]*>|</' . $gruppe . '>|<' . $tt . '(?=[\s>])([^>]*)(?<!/)>(.*?)</' . $tt . '>#s';
     if (strpos($xml, '{{') === false) return $xml;
     if (strlen($xml) > QS_XML_BYTES_MAX) return null;
     // öffnende Gruppentags selbst zählen (nicht als 2 × schließende): unausgeglichenes XML trifft sonst weit mehr als gezählt;
