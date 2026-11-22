@@ -34,8 +34,10 @@ if [ "$AKTION" = zeigen ]; then
 fi
 # Erst eine aktuelle Sicherung der Datenbank, dann das Archiv der Altdateien
 sh deploy/sichern.sh --jetzt
+umask 077   # das Archiv entsteht nie für andere lesbar (datenbank.py setzt 0600 erst nach dem Schreiben); erst nach sichern.sh
+[ ! -L sicherungen ] || { echo "Abbruch: sicherungen/ ist ein Verweis – bitte prüfen."; exit 1; }
 mkdir -p sicherungen && chmod 700 sicherungen
 ARCHIV="sicherungen/altdateien-$(date -u +%Y-%m-%d_%H%M%S).tar.gz"
 python3 deploy/datenbank.py altdateien daten --archiv "$ARCHIV"
-echo "Archiv: $(pwd)/$ARCHIV (nur für root lesbar, wird nicht automatisch gelöscht)."
+echo "Archiv: $(pwd)/$ARCHIV (nur für root lesbar, wird nicht automatisch gelöscht, geht nicht in die externe Kopie)."
 echo "Anwendung läuft unverändert weiter. Ansehen: in einen leeren Ordner entpacken, nie zurück nach daten/ kopieren."

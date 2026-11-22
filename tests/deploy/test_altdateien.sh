@@ -71,6 +71,12 @@ ln -s ../angebot.php daten/kunden/verweis.php
 lauf archivieren
 ok "Verknüpfung im Datenordner: Abbruch, Altdateien bleiben, kein Archiv" '[ $CODE = 1 ] && [ -f daten/angebot.php ] && [ -f daten/kunden/k1.php ] && [ -z "$(ls sicherungen/altdateien-* 2>/dev/null)" ]'
 
+# sicherungen/ als Verweis (etwa in einen Ordner außerhalb): Abbruch, bevor das Archiv mit personenbezogenen Daten entsteht
+neu; python3 deploy/datenbank.py migrate daten --offline >/dev/null; mkdir "$T/woanders"; ln -s "$T/woanders" sicherungen
+lauf archivieren
+ok "sicherungen/ ist ein Verweis: Abbruch, Altdateien bleiben, kein Archiv" '[ $CODE = 1 ] && echo "$AUS" | grep -q "ist ein Verweis" && [ -f daten/angebot.php ] && [ -z "$(ls -A "$T/woanders")" ]'
+rm -f sicherungen; rmdir "$T/woanders"
+
 neu; python3 deploy/datenbank.py migrate daten --offline >/dev/null; touch "$T/i/daten/.daten-getrennt"; : > "$T/aufrufe"
 VORHER=$(stand)
 lauf zeigen

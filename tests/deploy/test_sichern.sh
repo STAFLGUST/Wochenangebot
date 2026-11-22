@@ -68,6 +68,14 @@ sleep 1; sh "$T/deploy/sichern.sh" --jetzt >/dev/null
 ok "Status folgt keinem Verweis in daten/ (Ziel unverändert, Verweis ersetzt)" '[ "$(cat "$T/opfer")" = ORIGINAL ] && [ "$(stat -c %a "$T/opfer")" = 600 ] && [ ! -e "$T/opfer2" ] \
   && [ ! -L "$T/daten/sicherung.php" ] && [ "$(feld "$T/daten" ok)" = True ] && [ -z "$(ls -A "$T" | grep "^\.status\.")" ]'
 rm -f "$T/daten/sicherung.php.tmp"
+# SQLite-Abzug: ein unter index.php bzw. .daten-intern (ohne Datentrennung) in daten/ angelegter Verweis trägt nie eine Datei des
+# Wirts ins Archiv – auch nicht still bei grünem Status
+echo ERFUNDENES-WIRTSGEHEIMNIS-NUR-TEST > "$T/wirt-geheim"; chmod 600 "$T/wirt-geheim"; mv "$T/daten/index.php" "$T/index.php.echt"
+ln -s "$T/wirt-geheim" "$T/daten/index.php"; ln -s "$T/wirt-geheim" "$T/daten/.daten-intern"
+sleep 1; sh "$T/deploy/sichern.sh" --jetzt >/dev/null
+LATEST=$(ls -1t "$T"/sicherungen/daten-*.tar.gz | head -1)
+ok "SQLite-Abzug folgt keinem Verweis in daten/: Wirtsdatei nicht im Archiv" '[ "$(feld "$T/daten" ok)" = True ] && ! zcat "$LATEST" | grep -aq ERFUNDENES-WIRTSGEHEIMNIS && ! tar tzf "$LATEST" | grep -Eq "^\./(index\.php|\.daten-intern)$"'
+rm -f "$T/daten/index.php" "$T/daten/.daten-intern"; mv "$T/index.php.echt" "$T/daten/index.php"
 
 # ── Zentrale Anmeldung: Keycloak-Datenbank (echte PostgreSQL-Instanz statt Container; Ersatz für „docker compose“) ──
 PGBIN=$(ls -d /usr/lib/postgresql/*/bin 2>/dev/null | sort -V | tail -1)

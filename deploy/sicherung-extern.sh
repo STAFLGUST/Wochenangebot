@@ -23,7 +23,8 @@
 # Wechsel zeigt kein Passwort; ein erneuter Aufruf bringt ihn zu Ende. Der Hauptschlüssel des Repositorys bleibt derselbe:
 # eine ältere Kopie des Repositorys (Snapshot der Storage Box) lässt sich weiter mit dem alten Passwort öffnen.
 # Entkoppelt von sichern.sh: wartet, bis dessen Sperre (sicherungen/.sperre) frei ist, hält sie aber nicht – eine lange erste
-# Übertragung darf kein Release aufhalten (dessen Sicherung wartet nur 10 Minuten auf die Sperre). Ohne .sperre, *.tmp.
+# Übertragung darf kein Release aufhalten (dessen Sicherung wartet nur 10 Minuten auf die Sperre). Ohne .sperre, *.tmp und ohne
+# altdateien-*.tar.gz (deploy/altdateien.sh: bewusst unbefristet lokal – auswärts gälte sonst keine Löschfrist).
 # Aufbewahrung: je Tag ein Stand für 30 Tage, je Woche einer für 8 Wochen, je Monat einer für 12 Monate. Jeder Stand enthält
 # den ganzen Ordner, also schon bis zu 30 Tage lokale Sicherungen – so reicht die externe Kopie rund 13 Monate zurück.
 # Status: daten/sicherung-extern.php (Karte „Externe Kopie“ unter Sicherheit → System; ohne Ziel und Geheimnisse). Jeder
@@ -235,7 +236,7 @@ UNIT
     # Zukunft (Uhr war einmal vorgestellt) bliebe sonst für immer der neueste, und die Karte würde nie mehr „veraltet“ melden
     BEGINN=$(date -u +%Y-%m-%dT%H:%M:%SZ)
     RC=0
-    r backup --host "$RECHNER" --exclude "$QUELLE/.sperre" --exclude "$QUELLE/.letzter-fehler" --exclude '*.tmp' "$QUELLE" >"$ARBEIT/aus" 2>&1 || RC=$?
+    r backup --host "$RECHNER" --exclude "$QUELLE/.sperre" --exclude "$QUELLE/.letzter-fehler" --exclude '*.tmp' --exclude "$QUELLE/altdateien-*" "$QUELLE" >"$ARBEIT/aus" 2>&1 || RC=$?
     WARNUNG=""
     case $RC in
       0) ;;

@@ -64,6 +64,25 @@ with tempfile.TemporaryDirectory() as tmp:
         check('backup contains complete transaction, never half', values['a'] == values['b'])
     check('snapshot excludes mail encryption key', not (snap / 'mail-schluessel.php').exists())
     check('restored snapshot works with PHP', php(snap, 'echo store_read("new")["value"];').stdout == '42')
+    # Links planted under the copied sidecar names (daten/ is writable in the containers) never carry a host file into the
+    # snapshot; a regular marker is still copied. .daten-intern in daten/ needs no active data separation (sichern.sh).
+    secret = Path(tmp) / 'host-secret'
+    secret.write_text('INVENTED-HOST-SECRET-TEST-ONLY')
+    saved_index = (root / 'index.php').read_bytes() if (root / 'index.php').is_file() else None
+    for name in ('index.php', 'deployment.php', '.daten-intern'):
+        (root / name).unlink(missing_ok=True)
+        (root / name).symlink_to(secret)
+    (root / '.daten-getrennt').write_text('1\n')
+    snap2 = Path(tmp) / 'snapshot-links'
+    r = command(root, 'snapshot', '--output', str(snap2))
+    leaked = [p.name for p in snap2.rglob('*') if p.is_file() and b'INVENTED-HOST-SECRET' in p.read_bytes()]
+    check('snapshot never follows links planted in the data directory', r.returncode == 0 and not leaked
+          and not any((snap2 / n).exists() or (snap2 / n).is_symlink() for n in ('index.php', 'deployment.php', '.daten-intern')))
+    check('snapshot still copies a regular marker file', (snap2 / '.daten-getrennt').read_text() == '1\n')
+    for name in ('index.php', 'deployment.php', '.daten-intern', '.daten-getrennt'):
+        (root / name).unlink()
+    if saved_index is not None:
+        (root / 'index.php').write_bytes(saved_index)
     (root / '.sqlite/store.sqlite').rename(root / '.sqlite/saved.sqlite')
     check('missing active DB fails closed without stale fallback', php(root, 'store_read("angebot");').returncode != 0 and not (root / '.sqlite/store.sqlite').exists())
     (root / '.sqlite/saved.sqlite').rename(root / '.sqlite/store.sqlite')

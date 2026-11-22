@@ -67,7 +67,9 @@ personenbezogenen Daten. Aufräumen (im Projektordner, Anwendung bleibt in Betri
 Beide laufen nur bei aktivem SQLite mit fehlerfreier Datenbank (`datenbank.py check`), sonst Abbruch ohne Änderung.
 Ausgewählt werden genau die Dateien, die auch eine Migration übernehmen würde (`document_path` in `deploy/datenbank.py`):
 Datenbank, Schalter, Postfach-Schlüssel, Statusdateien (`sicherung`, `deployment`), `index.php`, `geo/` sowie Sperr- und
-Punktdateien bleiben stehen. Das Archiv wird nicht automatisch gelöscht (die Rotation betrifft nur `daten-*.tar.gz`).
+Punktdateien bleiben stehen. Das Archiv wird nicht automatisch gelöscht (die Rotation betrifft nur `daten-*.tar.gz`) und geht deshalb nicht in die
+externe Kopie (`deploy/sicherung-extern.sh` schließt `altdateien-*` aus): auswärts gälte sonst keine Löschfrist. Nach der
+Durchsicht von Hand löschen.
 Zum Ansehen in einen leeren Ordner entpacken (`tar -xzf <archiv> -C <leerer-ordner>`), nie zurück nach `daten/` kopieren –
 bei aktivem SQLite wären das wieder veraltete Altdateien. Test: `tests/deploy/test_altdateien.sh`.
 
