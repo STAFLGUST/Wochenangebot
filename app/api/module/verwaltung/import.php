@@ -99,8 +99,14 @@ function kunden_wawi_neu(array $alt, $roh, array $felder): array
     }
     return $neu;
 }
-/* Stichtag der Aktiv-Regel (JJJJ-MM-TT, Ortszeit): heute vor KUNDEN_AKTIV_MONATE Monaten */
-function kunden_aktiv_stichtag(): string { return (new DateTimeImmutable('today'))->modify('-' . KUNDEN_AKTIV_MONATE . ' months')->format('Y-m-d'); }
+/* Stichtag der Aktiv-Regel (JJJJ-MM-TT, Ortszeit): heute vor KUNDEN_AKTIV_MONATE Monaten, am Monatsende höchstens der letzte Tag
+   des Zielmonats (31.08. → 28.02., PHP liefe sonst über auf den 03.03.); $heute nur für Tests */
+function kunden_aktiv_stichtag(?string $heute = null): string
+{
+    $h = new DateTimeImmutable($heute ?? 'today');
+    $z = $h->modify('first day of -' . KUNDEN_AKTIV_MONATE . ' months');
+    return $z->setDate((int)$z->format('Y'), (int)$z->format('n'), min((int)$h->format('j'), (int)$z->format('t')))->format('Y-m-d');
+}
 /* Jüngstes Datum aus letzter Rechnung, letztem Lieferschein (Rechnung ggf. an einen Rechnungsempfänger) und Anlage; '' = keines */
 function kunden_letztes_datum(array $w): string
 {

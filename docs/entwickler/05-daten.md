@@ -424,7 +424,8 @@ Aus dem Kundenimport (Kundendaten-Export der Warenwirtschaft, `kunden_import_lau
   (`wawiFelder`). Ausgeliefert nur an Nutzer mit `kunden.bearbeiten` (`customer_public($c, true)`), nie an CRM, Kunden,
   E-Mail-Antworten oder ins Protokoll (dort nur die Anzahl).
 - `autoInaktiv`: vom Import deaktiviert (Aktiv-Regel: keine Rechnung, kein Lieferschein und keine Neuanlage in
-  `KUNDEN_AKTIV_MONATE` = 18 Monaten, oder „*“ in der Warenwirtschaft). Nur so gekennzeichnete Kunden aktiviert ein
+  `KUNDEN_AKTIV_MONATE` = 18 Monaten, oder „*“ in der Warenwirtschaft; Stichtag `kunden_aktiv_stichtag()`: heute vor 18 Monaten,
+  am Monatsende höchstens der letzte Tag des Zielmonats – 31.08.2026 → 28.02.2025). Nur so gekennzeichnete Kunden aktiviert ein
   späterer Import wieder. `kunde_save` entfernt das Kennzeichen, sobald der Kunde aktiv ist oder der Status von Hand
   geändert wird.
 - `aktivVonHand`: von Hand wieder aktiviert (`kunde_save`, Wechsel inaktiv → aktiv); der Import deaktiviert den Kunden

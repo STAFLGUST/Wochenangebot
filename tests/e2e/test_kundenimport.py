@@ -1,7 +1,7 @@
 """Stammdaten → Angebote mit Kundengruppen (Freischaltung über die Gruppe), Import der Kundenstammdaten aus der
 Warenwirtschaft (CSV, alle Spalten, Aktiv-Regel 18 Monate) und Passwort-Auswahl im Kunden-Dialog. Artikelpreise-Import:
 Kunde der neu angelegten Gruppe sieht den Gruppenpreis ohne Sonderposten des Wochenangebots, der Bestellwunsch rechnet
-damit. Nur synthetische
+damit. Kundenimport: Stichtag der Aktiv-Regel am Monatsende. Nur synthetische
 Testdaten (tests/fixtures/kunden); Datumswerte für die Aktiv-Regel relativ zu heute."""
 import calendar
 import csv
@@ -9,6 +9,7 @@ import datetime
 import io
 import json
 import os
+import subprocess
 import sys
 import urllib.request
 import zoneinfo
@@ -18,7 +19,7 @@ from playwright.sync_api import sync_playwright
 from auth_helpers import expire_session
 from kunden_hilfe import Client
 from smtp_test import TestSmtp
-from umgebung import BASE, FIX, SH, SMTP_PORT, WORK, storage_raw
+from umgebung import BASE, FIX, REPO, SH, SMTP_PORT, WORK, storage_raw
 
 PW = 'Sicheres-Passwort-1'
 KPW = 'Kantine-Kennwort-5'
@@ -522,6 +523,23 @@ with sync_playwright() as p:
     check('Angebote 390 px: kein seitliches Scrollen', over <= 1, over)
     a.screenshot(path=SH + '/stammdaten-angebote-mobil.png')
     br.close()
+
+
+
+def bestaetigt(aktion, daten):
+    st_, r_ = A.call(aktion, daten)
+    if st_ == 403 and r_.get('code') == 'confirmation_required':
+        assert A.call('reauth', {'password': PW})[0] == 200
+        st_, r_ = A.call(aktion, daten)
+    return st_, r_
+
+
+# ---------- Stichtag der Aktiv-Regel am Monatsende (Funktion direkt, mit festem „heute“) ----------
+PHP = r"""define('WA_API', 1); date_default_timezone_set('Europe/Berlin'); require $argv[1] . '/app/api/module/verwaltung/import.php';
+echo json_encode(array_map('kunden_aktiv_stichtag', ['2026-08-31', '2026-08-29', '2026-10-31', '2025-08-29', '2027-08-31', '2026-11-22']));"""
+aus = subprocess.run(['php', '-r', PHP, REPO], capture_output=True, text=True)
+check('Stichtag 18 Monate: am Monatsende der letzte Tag des Zielmonats (31.08.2026 → 28.02.2025, nicht 03.03.2025)',
+      aus.stdout and json.loads(aus.stdout) == ['2025-02-28', '2025-02-28', '2025-04-30', '2024-02-29', '2026-02-28', '2025-05-22'], (aus.stdout, aus.stderr[:300]))
 
 check('keine JavaScript-Fehler', not errors, errors[:3])
 print(f'{sum(res)}/{len(res)} passed')
