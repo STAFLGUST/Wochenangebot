@@ -1254,7 +1254,7 @@ body.ro .sale-tag { cursor: default; }
 .rl-kachel { display: flex; flex-direction: column; align-items: center; gap: 5px; min-height: 44px; padding: 10px 4px 8px; border: 1.5px solid var(--line); border-radius: 10px; background: var(--surface); color: var(--text); font: inherit; cursor: pointer; }
 .rl-kachel:hover { border-color: var(--muted); }
 .rl-kachel.on { border-color: var(--accent); background: var(--accent-soft); }
-.rl-kachel-n { font-size: 11.5px; font-weight: 500; line-height: 1.2; text-align: center; overflow-wrap: normal; word-break: normal; hyphens: manual; }
+.rl-kachel-n { font-size: 11.5px; font-weight: 500; line-height: 1.2; text-align: center; overflow-wrap: normal; word-break: normal; -webkit-hyphens: auto; hyphens: auto; }   /* lange Namen („Qualitätssicherung“) nach Silben trennen statt über die Kachel ragen */
 .rl-kachel-s { font-size: 10.5px; font-weight: 650; }
 /* Modulsymbol in Kachelfarbe (--f aus admin-rollen-vorschau.js) */
 .rl-ico { flex: none; width: 36px; height: 36px; box-sizing: border-box; border-radius: 10px; display: inline-grid; place-items: center; background: var(--f); color: #fff; }

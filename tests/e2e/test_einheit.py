@@ -101,6 +101,10 @@ ARTIKELWAHL = r'''() => { const d = document.querySelector('#dlg-ez-pick'), i = 
   const c = document.createElement('canvas').getContext('2d'); c.font = `${s.fontWeight} ${s.fontSize} ${s.fontFamily}`;
   const reihen = new Set([...d.querySelectorAll('.ezp-foot > .btn')].filter((b) => b.offsetParent).map((b) => Math.round(b.getBoundingClientRect().top)));
   return { platzhalter: Math.ceil(c.measureText(i.placeholder).width), feld: Math.floor(i.clientWidth - parseFloat(s.paddingLeft) - parseFloat(s.paddingRight)), reihen: reihen.size }; }'''
+# Rollen „Auf einen Blick“: Name jeder Kachel innerhalb der Kachel (lange Namen werden getrennt, ragen nicht hinaus)
+KACHELN = r'''() => [...document.querySelectorAll('.rl-kachel')].filter((k) => k.offsetParent).map((k) => { const n = k.querySelector('.rl-kachel-n'), r = document.createRange();
+  r.selectNodeContents(n); const t = r.getBoundingClientRect(), kb = k.getBoundingClientRect(); return [n.textContent.trim(), Math.round(t.left - kb.left), Math.round(kb.right - t.right)]; })
+  .filter((x) => x[1] < 0 || x[2] < 0)'''
 # Pfeil: Form des Symbols (aus dem Sprite der Seite über <use> oder vom Rahmen direkt gezeichnet)
 ZURUECK = r'''() => { const e = document.querySelector('.stafl-zurueck'); if (!e || !e.offsetParent) return null; const s = getComputedStyle(e), r = e.getBoundingClientRect();
   const svg = e.querySelector('svg'), use = svg && svg.querySelector('use'), form = use ? document.querySelector(use.getAttribute('href')) : svg;
@@ -170,6 +174,9 @@ with sync_playwright() as pw:
                         pg.evaluate("document.querySelector('#dlg-ez-pick').close()")
                         check(f'{teil} {tag}: „Artikel hinzufügen“ – Platzhalter passt ins Suchfeld' + (', Knöpfe in einer Reihe' if breite > 900 else ''),
                               aw['platzhalter'] <= aw['feld'] and (breite <= 900 or aw['reihen'] == 1), aw)
+                    if v == 'rollen':   # „Auf einen Blick“: Namen bleiben in ihrer Kachel
+                        raus = pg.evaluate(KACHELN)
+                        check(f'{teil} {tag}: Rollen – Namen der Kacheln ragen nicht über die Kachel', not raus, raus)
                     if v == 'orders':   # Werkzeugleiste „Bestellungen“: Suche und Statusauswahl gleich hoch (wie in den anderen Leisten)
                         hoehen = pg.evaluate("['#orders-filter .search input', '#orders-filter select'].map((s) => Math.round(document.querySelector(s).getBoundingClientRect().height))")
                         check(f'{teil} {tag}: Suche und Auswahl der Werkzeugleiste gleich hoch', hoehen[0] == hoehen[1], hoehen)
