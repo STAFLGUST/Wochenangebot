@@ -176,7 +176,7 @@ with sync_playwright() as p:
     pg.reload(); pg.wait_for_selector('tr.row'); check('dark persisted', pg.evaluate('document.documentElement.dataset.theme') == 'dark')
     pg.click('#btn-theme')
 
-    # Preise mit mehr als 2 Nachkommastellen (gespeichert bis 4): CSV wie die Anzeige auf Cent
+    # Preise mit mehr als 2 Nachkommastellen (gespeichert bis 4): CSV und Preisfilter wie die Anzeige auf Cent
     def vier_stellen(route):
         r = route.fetch(); d = r.json()
         for it in d['offer']['items']:
@@ -193,6 +193,10 @@ with sync_playwright() as p:
     with p4.expect_download() as d: p4.click('[data-action="csv-all"]')
     z4 = {l.split(';')[0]: l for l in open(d.value.path(), encoding='utf-8-sig').read().splitlines()}
     check('CSV: Preise auf Cent wie die Anzeige (12,3456 → 12,35; 4,2549 → 4,25)', ';12,35;' in z4['10601'] and ';4,25;' in z4['10823'] and '12,3456' not in z4['10601'], (z4['10601'], z4['10823']))
+    p4.keyboard.press('Escape')
+    p4.click('.fdrop[data-fd="price"] summary'); p4.fill('#pmin', '4,25'); p4.fill('#pmax', '4,25')
+    p4.wait_for_function("document.querySelectorAll('tr.row').length < 276")
+    check('Preisfilter 4,25–4,25 zeigt den Artikel, der als 4,25 angezeigt wird (gespeichert 4,2549)', zeile('10823').count() == 1, p4.inner_text('#hits'))
     c4.close()
 
     check('no JS errors', not errs, errs)

@@ -247,8 +247,9 @@ function passes(it, skip) {
   }
   if (skip !== 'range' && (state.min != null || state.max != null)) {
     if (it.price.status !== 'value') return false;
-    if (state.min != null && it.price.value < state.min) return false;
-    if (state.max != null && it.price.value > state.max) return false;
+    const pv = rundeWieServer(it.price.value * 100) / 100;   // wie angezeigt und bestellt (gespeichert bis 4 Stellen)
+    if (state.min != null && pv < state.min) return false;
+    if (state.max != null && pv > state.max) return false;
   }
   return true;
 }
