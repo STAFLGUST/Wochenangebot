@@ -688,7 +688,7 @@ Alle drei Seiten haben denselben Aufbau – eine eigenständige IIFE ohne `windo
 5. **Zurück zur Startseite:** gemeinsamer Knopf `.stafl-zurueck` (`app.css`) links im Kopf – `#btn-dashboard` im
    Eingabebereich, `#hr-zurueck`, `#crm-zurueck` auf den Modulseiten (`../../dashboard/`, auf `*.dashboard-stafl.de`
    `https://dashboard-stafl.de/`). Pfeil `#i-back` + „Start“ (seit 06.11.2026, wie der Eintrag der Seitenleiste), 36 px, rund; ≤ 560 px oder mit Klasse `kompakt` nur
-   der Pfeil; im Eingabebereich mit Angebotsaktionen bis 1600 px nur der Pfeil (Platz in der Kopfzeile).
+   der Pfeil – auf jedem Host des Eingabebereichs gleich (seit 22.11.2026 auch auf dem Angebots-Host mit Beschriftung).
 
 Kacheln und Seitenleiste des Dashboards kommen ausschließlich aus `module_status` (Modulregister), Ziele über
 `STAFL_RAHMEN.ziel()` (`rahmen.js`, für die Tests weiter als `window.STAFL_KACHEL_ZIEL`); Stand und Klebeband „Bald“

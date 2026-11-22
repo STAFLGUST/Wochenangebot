@@ -170,7 +170,7 @@ folgt zusätzlich der dunklen Systemeinstellung.
 der Gruppe `einheit`): **Logo** im dunklen Design weiß direkt auf dem Grund (eine Regel in `app.css` für jedes
 `logo-standard-fleisch*`, ebenso `legal.css` und die Anmeldeseite `deploy/anmeldung/theme/stafl/login/resources/css/stafl.css`);
 auf Modulseiten am Handy (≤ 480 px) nur das Bildzeichen. **Zurück-Knopf** `.stafl-zurueck` (`app.css`): Pfeil + „Dashboard“,
-36 px, rund, vor dem Logo; ≤ 560 px nur der Pfeil, im Eingabebereich mit Angebotsaktionen bis 1600 px nur der Pfeil.
+36 px, rund, vor dem Logo; ≤ 560 px nur der Pfeil, auf jedem Host gleich.
 **Waagerecht scrollende Leisten** (Reiter am Handy, Schnellauswahl der Kundenseite) tragen `.stafl-streifen`: Text läuft am
 Rand weich aus, solange in diese Richtung noch etwas folgt. **Hell/Dunkel am Konto** (`theme.js`, Aktion `theme_save`,
 Feld `theme` am Mitarbeiter): jeder Host hat eigenen Browser-Speicher (GR-108), daher übernimmt jede Seite nach dem Status

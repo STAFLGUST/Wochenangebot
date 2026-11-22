@@ -132,7 +132,7 @@ with sync_playwright() as p:
         if j.get('user'):
             j['user'].update({'zentral': True, 'bereich': 'angebot.eingabe', 'dashboard': adresse})
         route.fulfill(response=r, json=j)
-    for w in (1920, 1601, 1440, 1366, 1361, 1280, 1181, 1024, 390):
+    for w in (1920, 1601, 1440, 1366, 1361, 1280, 1181, 1024, 901, 768, 561, 390):
         z = br.new_page(viewport={'width': w, 'height': 844}, is_mobile=w < 500); z.on('pageerror', lambda x: errs.append(str(x)))
         login(z, 'admin', 'Sicheres-Passwort-1')
         z.route('**/api/?action=status*', lambda route: zentral(route, 'https://dashboard-stafl.de/'))
@@ -149,8 +149,8 @@ with sync_playwright() as p:
             check(f'{w}px zentrale Anmeldung: Knopf „Start“ links in der Kopfzeile, Logo nur in der Seitenleiste, Ziel vom Server', z.get_attribute('#btn-dashboard', 'href') == 'https://dashboard-stafl.de/'
                   and lb is None and zb['x'] - tb['x'] <= 40, (zb, lb, tb))
         lbl = z.locator('#btn-dashboard .lbl').bounding_box()
-        if w > 1600:
-            check(f'{w}px breit: Pfeil und Beschriftung „Start“ sichtbar', lbl['width'] > 20 and z.locator('#btn-dashboard .lbl').inner_text() == 'Start'
+        if w > 560:   # gleicher Knopf wie auf Bestand, Verwaltung und allen Modulseiten (app.css: nur am Handy nur der Pfeil)
+            check(f'{w}px: Pfeil und Beschriftung „Start“ sichtbar', lbl['width'] > 20 and z.locator('#btn-dashboard .lbl').inner_text() == 'Start'
                   and z.locator('#btn-dashboard svg use[href="#i-back"]').is_visible(), lbl)
         else:
             check(f'{w}px Beschriftung „Start“ nur für Screenreader, Pfeil (wie auf allen Modulseiten), Fläche ≥ 36 px', lbl['width'] <= 1 and zb['width'] >= 36 and zb['height'] >= 36

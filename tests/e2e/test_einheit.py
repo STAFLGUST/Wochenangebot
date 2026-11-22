@@ -96,7 +96,7 @@ RAHMEN = r'''() => { const n = document.querySelector('#r-leiste'), k = document
            glas: [...document.querySelectorAll('body *')].filter((e) => { const s = getComputedStyle(e); return s.backdropFilter && s.backdropFilter !== 'none' && !/toast/.test(e.id + ' ' + e.className); })
              .map((e) => e.id || String(e.className)).slice(0, 5) }; }'''
 ZURUECK = r'''() => { const e = document.querySelector('.stafl-zurueck'); if (!e || !e.offsetParent) return null; const s = getComputedStyle(e), r = e.getBoundingClientRect();
-  return { h: Math.round(r.height), radius: s.borderTopLeftRadius, font: s.fontSize + ' ' + s.fontWeight, text: e.textContent.trim(), href: e.getAttribute('href'),
+  return { h: Math.round(r.height), w: Math.round(r.width), radius: s.borderTopLeftRadius, font: s.fontSize + ' ' + s.fontWeight, text: e.textContent.trim(), href: e.getAttribute('href'),
            icon: !!e.querySelector('svg use[href="#i-back"]'), pad: s.paddingLeft + ' ' + s.paddingRight, farbe: s.color }; }'''
 
 with sync_playwright() as pw:
@@ -408,10 +408,10 @@ with sync_playwright() as pw:
     check('Ohne Anmeldung nicht speicherbar', Client('198.51.100.77').call('theme_save', {'theme': 'dark'})[0] in (401, 403))
     check('Zurück auf „wie das Gerät“', A.call('theme_save', {'theme': ''})[0] == 200 and A.call('status')[1]['user'].get('theme') == '')
     for breite, je in zurueck.items():
-        # gleiche Form: Höhe, Rundung, Schrift, Schriftfarbe, Pfeil (die Beschriftung kann bei voller Kopfzeile – Angebot – nur für Screenreader sein)
+        # gleiche Form: Höhe, Breite (Pfeil und „Start“, am Handy nur der Pfeil – auf jedem Host gleich), Rundung, Schrift, Schriftfarbe, Pfeil
         # Schriftfarbe: gleicher Farbton (kleine Abweichungen der Textfarbe zwischen Eingabebereich und Modulen zählen nicht)
         ton = lambda c: tuple(round(int(x) / 16) for x in re.findall(r'\d+', c or '')[:3])   # noqa: E731
-        formen = {json.dumps({k: (ton(v) if k == 'farbe' else v) for k, v in (z or {}).items() if k in ('h', 'radius', 'font', 'icon', 'text', 'farbe')}, sort_keys=True) for z in je.values()}
+        formen = {json.dumps({k: (ton(v) if k == 'farbe' else v) for k, v in (z or {}).items() if k in ('h', 'w', 'radius', 'font', 'icon', 'text', 'farbe')}, sort_keys=True) for z in je.values()}
         check(f'{breite} px: Zurück-Knopf auf allen Modulseiten gleich', len(formen) == 1, je)
     check('keine Seitenfehler', not fehler, fehler[:4])
     br.close()

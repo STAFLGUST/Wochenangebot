@@ -35,12 +35,8 @@
 /* Name der Oberfläche nur für Screenreader und Seitentitel – das Logo genügt als Kopf (Wunsch des Inhabers) */
 body.adm .topbar .brand h1 { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; margin: 0; }
 /* Rückweg zum Mitarbeiter-Dashboard (nur unter der zentralen Anmeldung sichtbar, admin.js): gemeinsamer Knopf .stafl-zurueck
-   (app.css). Auf dem Angebots-Host ist die Kopfzeile voller Aktionen – dort bis 1600 px nur der Pfeil. */
+   (app.css) – auf jedem Host gleich wie auf allen Modulseiten: „‹ Start“, nur am Handy (≤ 560 px) der Pfeil */
 body.adm .topbar .stafl-zurueck { margin-right: 4px; }
-@media (max-width: 1600px) {
-  body.adm:not(.bereich-verwaltung) .topbar .stafl-zurueck { width: 36px; padding: 0; }
-  body.adm:not(.bereich-verwaltung) .topbar .stafl-zurueck .lbl { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
-}
 .save-state { justify-self: start; display: inline-flex; align-items: center; gap: 8px; font-size: 13px; color: var(--text-2); min-width: 0; }
 .save-state .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--muted); flex: none; }
 .save-state.saved .dot { background: var(--c-fresh); }
