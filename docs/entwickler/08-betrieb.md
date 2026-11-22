@@ -216,9 +216,9 @@ Ohne gültigen Schlüssel wirkt nichts davon. Jede neue Weiterleitung (`reverse_
 | `datenbank-umschalten.sh` | `migrate` / `rollback` zwischen Dateien und SQLite | Inhaber, nur mit Freigabe und Wartungsfenster |
 | `altdateien.sh` | `zeigen` / `archivieren` der alten Datendateien nach der Umschaltung (nur bei aktivem SQLite, Archiv in `sicherungen/`) | Inhaber, nur mit Freigabe; Anwendung bleibt in Betrieb |
 | `wartung-aus.sh` | Notfall: alle Wartungen beenden | Inhaber |
-| `notzugang.sh` | Notfall: alten Eingabebereich mit eigener Anmeldung öffnen/schließen – nur über einen SSH-Tunnel (`127.0.0.1:8190`) | Inhaber |
+| `notzugang.sh` | Notfall: alten Eingabebereich mit eigener Anmeldung öffnen/schließen – nur über einen SSH-Tunnel (`127.0.0.1:8190`); `.env` ändert sich erst nach erfolgreichem `docker compose up`, jeder Aufruf gleicht den Container ab, `status` fragt auch den laufenden Container | Inhaber |
 | `cdn-netzsperre.sh`, `cdn_netzsperre.py` | Netzsperre: Port 80/443 nur für die Edge-Server von bunny.net (nftables, eigene Tabelle `inet stafl_netzsperre`): `status` / `beobachten` (nur zählen) / `an` (verwerfen, Probe über bunny, sonst zurück auf beobachten) / `aus` (Notfall, sofort) / `aktualisieren` (Liste höchstens alle 6 Stunden, Regeln setzen); Anleitung `docs/bunny-cdn.md`, Abschnitt 7 | Inhaber; Timer `wochenangebot-netzsperre` (alle 30 Min.) |
-| `daten-trennen.sh` | `status` (Stufe und Plan) / `trennen` (auf die höchste Trennstufe des eingespielten Stands: Sicherung, Stopp, `daten_trennen.py`, Start – auch von Stufe 1 auf 2) / `zusammenfuehren` (zurück in einen Ordner, vor einem Rückfall auf ein Release mit niedrigerer Stufe) | Inhaber, nur mit Freigabe und Wartungsfenster |
+| `daten-trennen.sh` | `status` (Stufe und Plan) / `trennen` (auf die höchste Trennstufe des eingespielten Stands: Sicherung, Stopp, `daten_trennen.py`, Start – auch von Stufe 1 auf 2) / `zusammenfuehren` (zurück in einen Ordner, vor einem Rückfall auf ein Release mit niedrigerer Stufe; bricht es beim Aufräumen ab – Vermerk `daten-intern/.zusammengefuehrt`, alle Daten schon in `daten/` –, vollendet ein erneuter Aufruf es ohne neue Sicherung; `trennen` verweigert bis dahin) | Inhaber, nur mit Freigabe und Wartungsfenster |
 | `postfach-schluessel.sh` | `status` / `umziehen` (Schlüssel des Postfach-Passworts nach `daten-geheim/`, Passwörter an Server und Benutzer binden) / `zurueck` (vor einem Rückfall: zurück auf Format v1 und in den Datenordner) | Inhaber, einmalig nach dem Release mit dem Postausgang |
 | `passwort-zuruecksetzen.sh` | Notfall: Passwort eines Nutzers zurücksetzen bzw. Administrator neu anlegen (`--neu`). Mitarbeiter „ohne Anmeldung“ (Feld `zugang` = `false`) werden abgelehnt – eine Anmeldung richtet man in der Verwaltung ein | Inhaber |
 | `ip-freigabe-aus.sh` | Notfall: IP-Freigabe und Ländersperre ausschalten | Inhaber |
@@ -235,7 +235,8 @@ Ohne gültigen Schlüssel wirkt nichts davon. Jede neue Weiterleitung (`reverse_
 nur mit `-h` bzw. für echte Dateien (`find -type f`); Angaben, denen root folgt (vorheriger Stand für den Rückfall), stehen
 in root-Dateien außerhalb (`.release-vorher`). Auch gelesen wird dort nur, was eine echte Datei ist: der SQLite-Abzug der
 Sicherung (`datenbank.py snapshot`) überspringt Verweise unter `index.php`, `deployment.php`, `.daten-getrennt` und `.daten-intern`
-und kopiert ohne ihnen zu folgen. Code eines Testzweigs läuft nie auf dem Server.
+und kopiert ohne ihnen zu folgen; die Sperrdatei `.storage.lock` öffnen `datenbank.py` und `daten_trennen.py` ohne einem Verweis zu
+folgen (nur eine echte Datei), die Datenbank `.sqlite/store.sqlite` nie über einen Verweis. Code eines Testzweigs läuft nie auf dem Server.
 
 Dieselbe Regel gilt für **Ordnernamen** und für jeden Ordner, in den ein weniger vertrauter Prozess schreiben darf:
 `daten_trennen.py` legt Zielordner Schritt für Schritt an und bricht ab, sobald eine Komponente ein Verweis ist

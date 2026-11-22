@@ -83,6 +83,29 @@ with tempfile.TemporaryDirectory() as tmp:
         (root / name).unlink()
     if saved_index is not None:
         (root / 'index.php').write_bytes(saved_index)
+    # .storage.lock and .sqlite planted as links (daten/ is writable in the containers): the root tool never creates the link
+    # target on the host (e.g. /etc/nologin), never hangs on a FIFO and never opens a database outside the data directory
+    victim = Path(tmp) / 'host-nologin'
+    (root / '.storage.lock').unlink(missing_ok=True)
+    (root / '.storage.lock').symlink_to(victim)
+    r = command(root, 'check')
+    check('lock file as link: refused, link target never created', r.returncode != 0 and not victim.exists() and not victim.is_symlink())
+    (root / '.storage.lock').unlink()
+    os.mkfifo(root / '.storage.lock')
+    try:
+        r = subprocess.run([sys.executable, str(REPO / 'deploy/datenbank.py'), 'check', str(root)], capture_output=True, text=True, timeout=20)
+        fifo_ok = r.returncode != 0
+    except subprocess.TimeoutExpired:
+        fifo_ok = False
+    check('lock file as FIFO: refused without hanging', fifo_ok)
+    (root / '.storage.lock').unlink()
+    (root / '.sqlite').rename(Path(tmp) / 'host-db')
+    (root / '.sqlite').symlink_to(Path(tmp) / 'host-db')
+    r = command(root, 'check')
+    check('database directory as link: refused', r.returncode != 0 and 'symbolic link' in r.stderr)
+    (root / '.sqlite').unlink()
+    (Path(tmp) / 'host-db').rename(root / '.sqlite')
+    check('regular lock file and database: check works again', command(root, 'check').returncode == 0)
     (root / '.sqlite/store.sqlite').rename(root / '.sqlite/saved.sqlite')
     check('missing active DB fails closed without stale fallback', php(root, 'store_read("angebot");').returncode != 0 and not (root / '.sqlite/store.sqlite').exists())
     (root / '.sqlite/saved.sqlite').rename(root / '.sqlite/store.sqlite')

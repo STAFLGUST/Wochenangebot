@@ -97,8 +97,10 @@ Zwischenspeicher werden nur mit passender Prüfsumme aus der signierten Ubuntu-P
    Release nicht – die Seite lädt Dateien ohne Nummer mit Rückfrage, `aktualisieren.sh` holt die Bereitstellung nach.
 5. Healthcheck wie ein Besucher – mit der Ergänzungsdatei der Anmeldung auch die Mitarbeiter-Hosts
    (`dashboard-stafl.de/api/?action=status` muss ohne Anmeldung mit 401 antworten; 502 heißt: Container `app-mitarbeiter`
-   läuft nicht). Schlägt er fehl: zurück auf den alten Commit, das alte Image wieder aktiv
-   (`stafl-app:release-vorher` → aktiver Name), Container neu erstellt.
+   läuft nicht). Schlägt er fehl – oder scheitert schon das Einspielen (z. B. `docker compose up`: Port belegt, Docker
+   hängt) –: zurück auf den alten Commit, das alte Image wieder aktiv (`stafl-app:release-vorher` → aktiver Name),
+   Container neu erstellt, Status „fehlgeschlagen“, der Release gilt als abgelehnt (kein erneuter Versuch). Scheitert auch
+   der Rückfall, meldet der Status „Sofort prüfen!“ mit dem tatsächlich aktiven Stand.
 6. Nach erfolgreichem Healthcheck: `docker image prune -f` entfernt nur hängende Images ohne Namen (z. B. das von
    `release-vorher` verdrängte). Getaggte und laufende Images sowie Volumes bleiben unberührt; ein Fehler beim Aufräumen
    ändert nichts am erfolgreichen Release (nur ein Hinweis im Protokoll).
@@ -129,8 +131,8 @@ Server aus dem eingespielten (also freigegebenen, CI-geprüften) Commit:
 
 ## Notfall-Rückfall von Hand (`deploy/release-zurueck.sh`)
 
-`sh /opt/wochenangebot/deploy/release-zurueck.sh` geht auf den Stand vor dem letzten Release zurück (`.release-vorher`
-im Installationsordner, nur root; `daten/deployment.php` ist im Container änderbar und nur Anzeige – fehlt
+`sh /opt/wochenangebot/deploy/release-zurueck.sh` geht auf den Stand vor dem letzten **erfolgreichen** Release zurück (`.release-vorher`
+im Installationsordner, nur root, schreibt nur ein erfolgreicher Lauf – abgelehnte oder gescheiterte Läufe lassen sie unverändert; `daten/deployment.php` ist im Container änderbar und nur Anzeige – fehlt
 `.release-vorher` noch (Releases vor dieser Datei), gilt dessen `vorher` nur, wenn es ein Vorgänger des aktiven Stands ist); Daten bleiben unverändert, der zurückgenommene Stand wird nicht erneut automatisch eingespielt.
 Danach Versionsnummern und Prüfliste des zurückgeholten Stands (`deploy/bereitstellen.py`). Container und Image wie beim
 automatischen Rückfall:
@@ -142,6 +144,9 @@ automatischen Rückfall:
   und Container bleiben unverändert.
 - Gesperrt: Rückfall auf einen abgelehnten bzw. automatisch zurückgenommenen Release (steht nach einem automatischen
   Rückfall als `vorher` im Status) und, solange SQLite aktiv ist, auf Code ohne Speicherschicht (`docs/datenbank.md`).
+- Gesperrt, nichts geändert: Rückfall auf einen Stand, der die Trennstufe der Daten nicht kennt (`DATEN_TRENNSTUFE` des
+  Zielstands kleiner als das höhere der Kennzeichen `daten/.daten-getrennt` und `daten-intern/.daten-intern`) – dort bräche
+  jeder Speicherzugriff ab. Weg: erst `sh deploy/daten-trennen.sh zusammenfuehren` (Freigabe, Wartungsfenster), dann erneut.
 
 ## Was der Lauf nach der Freigabe prüft (`.github/scripts/release-pruefen.sh`)
 

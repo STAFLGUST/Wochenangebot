@@ -41,6 +41,24 @@ ok "zusammenführen: wieder ein Ordner, Dienste gestoppt und gestartet" '[ $CODE
   && grep -qx "docker compose stop app app-mitarbeiter postausgang" "$T/aufrufe" && grep -qx "docker compose start app app-mitarbeiter postausgang" "$T/aufrufe"'
 : > "$T/aufrufe"; lauf zusammenfuehren
 ok "zusammenführen ohne Trennung: nichts zu tun" '[ $CODE = 0 ] && echo "$AUS" | grep -q "nicht getrennt" && [ ! -s "$T/aufrufe" ]'
+# Abbruch beim Aufräumen des Zusammenführens (z. B. SSH getrennt): daten/ ohne Kennzeichen, daten-intern noch markiert
+neu; lauf trennen
+(cd "$T/i" && python3 -c "
+import sys; sys.path.insert(0, 'deploy'); from pathlib import Path; import daten_trennen as dt
+def abbruch(*a): raise OSError('Abbruch (Test)')
+dt.dok_loeschen = abbruch
+try: dt.zusammenfuehren(Path('daten').resolve(), Path('daten-intern').resolve(), dt.REGELN)
+except OSError: pass")
+ok "Testvoraussetzung: Zusammenführen beim Aufräumen abgebrochen" '[ ! -e "$T/i/daten/.daten-getrennt" ] && [ -f "$T/i/daten-intern/.daten-intern" ] && [ -f "$T/i/daten-intern/.zusammengefuehrt" ]'
+: > "$T/aufrufe"; lauf zusammenfuehren
+ok "zusammenführen erneut: vollendet (ohne neue Sicherung, die an den Kennzeichen scheiterte), Dienste gestoppt und gestartet" '[ $CODE = 0 ] && echo "$AUS" | grep -q "vollendet" \
+  && ! grep -q "^sichern" "$T/aufrufe" && grep -qx "docker compose stop app app-mitarbeiter postausgang" "$T/aufrufe" && grep -qx "docker compose start app app-mitarbeiter postausgang" "$T/aufrufe" \
+  && [ -f "$T/i/daten/hr-personal.php" ] && [ ! -e "$T/i/daten-intern/.daten-intern" ] && [ ! -e "$T/i/daten-intern/.zusammengefuehrt" ]'
+# Kennzeichen in daten/ von außen entfernt (ohne Vermerk): nicht „nichts zu tun“, sondern Abbruch, Anwendung bleibt gestoppt
+neu; lauf trennen; rm "$T/i/daten/.daten-getrennt"
+: > "$T/aufrufe"; lauf zusammenfuehren
+ok "Kennzeichen nur in daten-intern: keine Meldung läuft unverändert weiter, sondern Abbruch ohne Änderung" '[ $CODE = 1 ] && ! echo "$AUS" | grep -q "unverändert weiter" \
+  && echo "$AUS" | grep -q "Nicht automatisch reparieren" && [ -f "$T/i/daten-intern/hr-personal.php" ] && ! grep -q "compose start" "$T/aufrufe"'
 neu; printf '%s\n{"x":1}' "$G" > "$T/i/daten-fremd.php"; mkdir -p "$T/i/daten-intern"; printf '%s\n{"x":1}' "$G" > "$T/i/daten-intern/fremd.php"; lauf trennen
 ok "Fehler beim Trennen: Anwendung bleibt gestoppt (kein Start), Hinweis" '[ $CODE = 1 ] && echo "$AUS" | grep -q "bleibt absichtlich gestoppt" \
   && grep -q "compose stop" "$T/aufrufe" && ! grep -q "compose start" "$T/aufrufe" && [ -f "$T/i/daten/hr-personal.php" ]'

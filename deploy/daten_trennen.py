@@ -21,7 +21,8 @@ Dokumente der Umstellung nach daten-intern kopieren und vergleichen, dann die Ke
 daten/.daten-getrennt mit der Stufe – erst damit liest die Anwendung dort), dann im gemeinsamen Ordner bereinigen (Originale entfernen,
 kunden und bestellung auf die Felder der Kundenseite kürzen). Ein Abbruch vor dem Kennzeichen lässt die Anwendung beim alten Stand;
 ein Abbruch danach lässt nur Reste zurück, die ein erneutes `trennen` bereinigt. Zusammenführen umgekehrt (geteilte Dokumente werden
-dabei wieder zusammengesetzt).
+dabei wieder zusammengesetzt); bevor es das Kennzeichen in daten/ entfernt, vermerkt es in daten-intern/.zusammengefuehrt, dass alle
+Daten zurück sind – ein Abbruch danach (beim Aufräumen) wird durch erneutes `zusammenfuehren` vollendet.
 """
 import argparse
 import fcntl
@@ -37,11 +38,12 @@ import time
 import tomllib
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-import datenbank as db  # noqa: E402  GUARD, SIDECARS, SCHEMA, document_path, validate, connect, write_nofollow
+import datenbank as db  # noqa: E402  GUARD, SIDECARS, SCHEMA, document_path, validate, connect, write_nofollow, open_lock
 
 REST = re.compile(r'^(?P<dok>.+\.php)(?:\.neu|\.kopie|\.[0-9a-f]+\.tmp)$')   # Zwischendateien, siehe rest_dateien()
 MARKER_HAUPT = '.daten-getrennt'
 MARKER_INTERN = '.daten-intern'
+ZURUECK = '.zusammengefuehrt'   # in daten-intern: Zusammenführen hat alles zurückkopiert, es fehlt nur das Aufräumen
 REGELN = Path(__file__).resolve().parent.parent / 'regeln' / 'datenverantwortung.toml'
 ZIELSTUFE = 5   # höchste Trennstufe dieses Stands (wie TRENNSTUFE_MAX in werkzeuge/regeln.py, DATEN_TRENNSTUFE in PHP)
 # Neue interne Dokumente der Stufe 2: entstehen beim Trennen aus kunden bzw. bestellung und gehen beim Zusammenführen dort wieder auf
@@ -461,6 +463,8 @@ def plan(haupt, intern, regeln, ziel=ZIELSTUFE):
     bereinigen = ziel >= 2 and bereinigung_noetig(haupt, regeln, intern if (intern / MARKER_INTERN).is_file() else None)
     zustand = 'gemeinsam' if stufe == 0 else f'getrennt, Stufe {stufe}'
     print(f"Zustand: {zustand}; Ziel dieses Stands: Stufe {ziel}; Speicher: {'SQLite' if sqlite_aktiv(haupt) else 'Dateien'}")
+    if (intern / ZURUECK).is_file():
+        print('Zusammenführen wurde beim Aufräumen abgebrochen (alle Daten liegen schon in daten/) – erneut zusammenfuehren vollendet es')
     print(f'Interne Dokumente im gemeinsamen Ordner: {len(zeilen)} in der Datenbank, {len(dateien)} als Datei, {len(ablage)} Dateien in der Ablage')
     for name, _, _ in zeilen[:200]:
         print('  ' + name)
@@ -495,6 +499,8 @@ def trennen(haupt, intern, regeln, ziel=ZIELSTUFE):
                          'Datenbestand – erst archivieren oder entfernen (docs/datenbank.md), dann trennen')
     if stufe > ziel:
         raise ValueError(f'Daten sind schon weiter getrennt (Stufe {stufe}) als dieser Stand (Stufe {ziel}) – mit dem neueren Stand zusammenführen')
+    if (intern / ZURUECK).is_file():   # sonst entstünde ein getrennter Stand, dessen Daten ein späteres zusammenfuehren löscht
+        raise ValueError('Ein Zusammenführen wurde beim Aufräumen abgebrochen – erst erneut zusammenfuehren, dann trennen')
     if stufe == 0:
         if not leer(intern):
             raise ValueError('daten-intern enthält schon Daten – erst prüfen (z. B. Rest eines Abbruchs), dann leeren')
@@ -589,7 +595,13 @@ def bereinigen(haupt, intern, regeln):
 
 
 def zusammenfuehren(haupt, intern, regeln):
+    # Abbruch beim Aufräumen (Schritt 4): alles ist zurückkopiert, daten/ schon ohne Kennzeichen – nur noch aufräumen
+    if (intern / ZURUECK).is_file():
+        return aufraeumen(haupt, intern, regeln, int((intern / ZURUECK).read_text().strip() or 0), [])
     if not (haupt / MARKER_HAUPT).is_file():
+        if (intern / MARKER_INTERN).is_file():
+            raise ValueError('daten-intern ist markiert, daten/ aber ohne Kennzeichen, und kein abgebrochenes Zusammenführen vermerkt '
+                             '– Kennzeichen von außen entfernt? Nicht automatisch reparieren (sh deploy/daten-trennen.sh status)')
         raise ValueError('Daten sind nicht getrennt – nichts zusammenzuführen')
     if not (intern / MARKER_INTERN).is_file():
         raise ValueError('daten-intern ist nicht als interner Datenordner markiert')
@@ -600,10 +612,8 @@ def zusammenfuehren(haupt, intern, regeln):
         raise ValueError(f'Daten sind weiter getrennt (Stufe {stufe}), als dieser Stand kennt – mit dem neueren Stand zusammenführen')
     veroeff = set(veroeffentlicht(regeln, ZIELSTUFE))   # innen maßgeblich, außen eine Kopie: Kopie wird ersetzt, kein Vergleich
     seiten = set(je_seite(regeln, ZIELSTUFE))            # je Seite: beide Fassungen werden vereint
-    ohne = set(GETEILT) | veroeff | seiten
-    dateien = [p.relative_to(intern) for p in sorted(intern.rglob('*.php'))
-               if not any(part.startswith('.') for part in p.relative_to(intern).parts) and p.relative_to(intern).parts[0] != 'dateien'
-               and str(p.relative_to(intern).with_suffix('')) not in ohne]
+    ohne = ohne_vergleich(regeln)
+    dateien = interne_kopien(intern, ohne)
     ablage = ablage_dateien(intern)
     zeilen = []
     if sqlite_aktiv(intern):
@@ -656,11 +666,33 @@ def zusammenfuehren(haupt, intern, regeln):
                 raise ValueError('Vergleich nach dem Zurückführen fehlgeschlagen')
     for rel in dateien + ablage:
         kopieren(intern, haupt, rel)
-    # 3. umschalten (ab hier liest die Anwendung wieder alles aus dem gemeinsamen Ordner)
-    (haupt / MARKER_HAUPT).unlink()
-    # 4. interne Kopien und der Auszug der Kundenseite entfernen; Kennzeichen zuletzt
+    # 3. vermerken, dass alles zurück ist; umschalten und aufräumen (4) übernimmt aufraeumen()
+    kennzeichen(intern / ZURUECK, stufe)
+    aufraeumen(haupt, intern, regeln, stufe, zeilen)
+
+
+def ohne_vergleich(regeln):
+    """Interne Dokumente, die beim Zusammenführen nicht kopiert, sondern vereint bzw. ersetzt werden."""
+    return set(GETEILT) | set(veroeffentlicht(regeln, ZIELSTUFE)) | set(je_seite(regeln, ZIELSTUFE))
+
+
+def interne_kopien(intern, ohne):
+    """Datendateien in daten-intern, die unverändert nach daten/ zurückgehen (ohne Dateiablage, Kennzeichen und ohne)."""
+    return [p.relative_to(intern) for p in sorted(intern.rglob('*.php'))
+            if not any(part.startswith('.') for part in p.relative_to(intern).parts) and p.relative_to(intern).parts[0] != 'dateien'
+            and str(p.relative_to(intern).with_suffix('')) not in ohne]
+
+
+def aufraeumen(haupt, intern, regeln, stufe, zeilen):
+    """4. Schritt des Zusammenführens: interne Kopien und den Auszug der Kundenseite entfernen, Kennzeichen zuletzt. Läuft nur, wenn
+    alles zurückkopiert ist (vermerkt in daten-intern/.zusammengefuehrt); ein Abbruch hier wird durch erneuten Aufruf vollendet."""
+    (haupt / MARKER_HAUPT).unlink(missing_ok=True)   # 3. umschalten: ab hier liest die Anwendung wieder alles aus daten/
+    ohne = ohne_vergleich(regeln)
+    dateien = interne_kopien(intern, ohne)
+    ablage = ablage_dateien(intern)
     if sqlite_aktiv(intern):
-        shutil.rmtree(intern / '.sqlite')
+        if (intern / '.sqlite').is_dir():   # fehlt nur nach einem Abbruch zwischen diesen beiden Schritten
+            shutil.rmtree(intern / '.sqlite')
         (intern / '.sqlite-active').unlink()
     for rel in dateien + ablage:
         (intern / rel).unlink()
@@ -668,14 +700,15 @@ def zusammenfuehren(haupt, intern, regeln):
         if (intern / (n + '.php')).is_file():
             (intern / (n + '.php')).unlink()
     dok_loeschen(haupt, AUSZUG)
-    for n in kprot:
+    for n in dok_namen(haupt, 'kundenprotokoll/'):   # schon ins Protokoll übernommen (Schritt 1b)
         dok_loeschen(haupt, n)
     if (haupt / 'kundenprotokoll').is_dir() and not any((haupt / 'kundenprotokoll').iterdir()):
         (haupt / 'kundenprotokoll').rmdir()
     ordner_aufraeumen(intern, dateien + ablage)
     if (intern / 'dateien').is_dir() and not any((intern / 'dateien').iterdir()):
         (intern / 'dateien').rmdir()
-    (intern / MARKER_INTERN).unlink()
+    (intern / MARKER_INTERN).unlink(missing_ok=True)
+    (intern / ZURUECK).unlink(missing_ok=True)
     print(f'Zusammengeführt (von Stufe {stufe}): {len(zeilen)} Datensätze, {len(dateien)} Datendateien und {len(ablage)} Dateien der Ablage wieder in daten/'
           + ('; Kundendokument und Bestell-Einstellungen wieder vollständig' if stufe >= 2 else ''))
 
@@ -698,12 +731,12 @@ def main():
     if a.befehl != 'pruefen' and not a.offline:
         p.error('Erst die Anwendung stoppen und --offline angeben')
     if a.befehl == 'pruefen':
-        with (haupt / '.storage.lock').open('a') as lock:
+        with db.open_lock(haupt) as lock:
             fcntl.flock(lock, fcntl.LOCK_SH)
             plan(haupt, intern, a.regeln, a.stufe)
         return
     intern.mkdir(mode=0o700, exist_ok=True)
-    with (haupt / '.storage.lock').open('a') as l1, (intern / '.storage.lock').open('a') as l2:
+    with db.open_lock(haupt) as l1, db.open_lock(intern) as l2:
         fcntl.flock(l1, fcntl.LOCK_EX); fcntl.flock(l2, fcntl.LOCK_EX)
         if a.befehl == 'trennen':
             trennen(haupt, intern, a.regeln, a.stufe)
