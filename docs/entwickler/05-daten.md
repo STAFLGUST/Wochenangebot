@@ -957,6 +957,39 @@ Die einzige Beschreibung der Regeln; Code-Kommentare verweisen hierher.
 - **Rückfall:** Eine ältere Fassung kennt die Dokumente nicht; Dateien und Metadaten bleiben unberührt. Das Dokument der Container
   (`containerimport-eudr-sendungen`) ändert sich durch Dokumente nicht.
 
+### Container-Import: Befunde der Umrisse zwischengespeichert (`module/containerimport/eudr.php`, seit 22.11.2026)
+
+- **Feld `geoBefunde` je Farmer** in `containerimport-eudr-betriebe` (additiv, GR-006):
+  `{"fassung": <EUDR_BEFUNDE_FASSUNG>, "kennung": "<sha1 der Koordinaten>", "befunde": [{"stufe", "code", "text"}, …]}` – das
+  Ergebnis von `geo_pruefen()` für genau diesen Umriss.
+- **Warum:** `eudr_stand()` bildet `eudr_betrieb_sicht()` über alle gespeicherten Farmer ab und läuft in jeder Antwort des
+  Moduls. Die Prüfung auf Selbstüberschneidung kostet je Umriss bis zu `GEO_MAX_VERGLEICHE` Kantenvergleiche (rund 0,15 s);
+  bei `EUDR_MAX_PUNKTE` wären das bis zu 30 Umrisse je Antwort. Gerechnet wird deshalb beim Schreiben
+  (`eudr_betriebe_schreiben`), gelesen über `eudr_geo_befunde()`.
+- **Gilt nur passend:** andere `fassung` (die Prüfung liefert andere Befunde) oder andere `kennung` (die Geometrie wurde
+  geändert) heißt neu rechnen; dasselbe bei fehlendem oder anders geschnittenem Feld. Ausgeliefert wird es nie – 
+  `eudr_betrieb_sicht()` entfernt es und liefert die Befunde wie bisher unter `befunde`.
+- **Rückfall:** Eine ältere Fassung kennt das Feld nicht, rechnet wie bisher und lässt es beim Schreiben unberührt
+  (`+ ($alt ?? [])`-Muster bzw. unveränderte Felder). Ändert sich `geo_pruefen`, muss `EUDR_BEFUNDE_FASSUNG` hochgezählt werden.
+
+### Container-Import: Gesamtgrenzen der Kalkulationen (`module/containerimport/kalkulation.php`, seit 22.11.2026)
+
+- `containerimport-kalkulationen` wird bei jedem Zugriff ganz gelesen und ganz geschrieben. Die Grenzen je Eintrag (300
+  Positionen, 12 Teile, 100 Fassungen) ergeben zusammen ein Vielfaches der Speichergrenze eines Prozesses (128 MB), deshalb
+  zusätzlich **`CI_KALK_MAX_EINTRAEGE` = 400** und **`CI_KALK_MAX_POSITIONEN_GESAMT` = 9000** (Positionen aller Fassungen aller
+  Einträge). Geprüft in `ci_kalk_speichern` **und** `ci_kalk_festschreiben` (das Festschreiben ergänzt das Ergebnis und
+  vergrößert die Fassung noch einmal); darüber 422 statt eines Speicherabbruchs mit HTTP 500.
+- **Gemessen** (Dateibetrieb, `memory_limit = 128M`): eine endgültige Fassung mit 300 Positionen ist 0,2 MiB JSON, der
+  Spitzenbedarf einer Schreibaktion rund das Achtfache der Dokumentgröße; ab etwa 17 MiB Dokument bricht sie ab. 9000
+  Positionen sind rund 6 MiB Dokument und 48 von 128 MiB Spitzenbedarf.
+- **Antwort der Schreibaktionen** bildet die Übersicht aus dem schon gelesenen Dokument (`ci_kalk_uebersicht($doc)` innerhalb
+  der Sperre), nicht aus einem zweiten vollständigen `store_read`: sonst brach der Vorgang erst **nach** `store_write` ab – die
+  Fassung war gespeichert, der Nutzer sah 500, und jeder weitere Versuch vergrößerte das Dokument.
+- **Aufräumweg:** `deploy/ci-kalkulationen-auslagern.php` (nur auf dem Server). Ohne Angaben zeigt es die Größe je Container;
+  mit `--export <datei>` schreibt es das ganze Dokument als JSON und liest es zur Gegenprobe wieder ein; erst mit
+  `--entfernen <sendung-id>[,…]` entfernt es diese Kalkulationen aus dem Dokument. Ohne geprüften Export wird nichts entfernt –
+  die Exportdatei ist das Archiv dieser Vorgänge (GoBD) und gehört in die Sicherung. Die Anwendung selbst löscht nie eine Fassung.
+
 ## 5.4 Datenverantwortung (GR-101)
 
 Jedes Dokument hat **genau einen Eigentümer** (ein Modul). Eingetragen in `regeln/datenverantwortung.toml`:

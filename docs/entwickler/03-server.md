@@ -438,6 +438,18 @@ bzw. des IPv6-/64-Netzes, `client_key`); Grenzen aus `config.php` (`max_attempts
 | Sitzung, CSRF, Bestätigung, Keycloak | `lib/sitzung.php`, `lib/oidc.php` | [Kapitel 4](04-anmeldung-rechte.md) |
 | Dateiprüfung | `lib/integritaet.php` | Programmdateien gegen die beim Einspielen erzeugte Prüfliste |
 | Diagnose | `lib/diagnose.php` | nur lesend, für Administratoren |
+| Abruf fremder Dienste | `module/containerimport/abruf.php` | `ci_abruf()`: eine Gesamtfrist über Verbinden, Kopfzeilen und Rumpf |
+
+**Ausgehende Abrufe brauchen eine Gesamtfrist.** Das Feld `timeout` eines PHP-Stroms gilt nur je Schritt: eine Gegenstelle,
+die alle paar Sekunden ein Byte sendet, hält `fopen`/`file_get_contents` beliebig lange offen, und mod_php bricht
+blockierende Lesevorgänge nicht ab (`max_execution_time` greift dort nicht) – der Webserver-Prozess bleibt belegt. Im
+Container-Import führt deshalb `ci_abruf($url, $kopfzeilen, $frist, $maxByte, $methode, $inhalt)` beide Abrufe (Hafen
+Hamburg, Whisp) über cURL mit `CURLOPT_TIMEOUT` als einer Wanduhr-Frist und `CURLOPT_CONNECTTIMEOUT` für den
+Verbindungsaufbau. Es liefert `['status', 'roh', 'fehler']` mit den Kennungen `''` (in Ordnung), `netz` (keine Antwort),
+`halb` (Antwort brach ab oder Frist um) und `gross` (mehr als `$maxByte`); bei jedem Fehler ist `roh` leer, ein halber
+Inhalt wird also nie ausgewertet – eine abgeschnittene Antwort kann nicht still zum neuen Stand werden. Die Vormerkung
+eines laufenden Abrufs muss länger gelten als die Gesamtfrist (`CI_HAFEN_VERSUCH` > `CI_HAFEN_ZEITLIMIT`). Die übrigen
+Abrufe (`lib/nutzer.php`, `lib/firewall.php`, `ort.php`, `geo.php`) nutzen noch Stromkontexte je Schritt.
 
 Sicherheitseinstellungen liest `sec()` einmal je Anfrage: `array_merge(SEC_DEFAULTS, store_read('sicherheit') ?? [])`.
 

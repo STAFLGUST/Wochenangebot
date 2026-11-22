@@ -10,7 +10,12 @@ if (!defined('WA_API')) { http_response_code(404); exit; }   // nur über api/in
 const GEO_A = 6378137.0;                 // WGS84: große Halbachse in Metern
 const GEO_F = 1 / 298.257223563;         // WGS84: Abplattung
 const GEO_STELLEN = 6;                   // das Informationssystem verarbeitet 6 Nachkommastellen
-const GEO_MAX_PUNKTE = 5000;             // je Produktionsort (die Prüfung auf Selbstüberschneidung bleibt damit unter einer Sekunde)
+const GEO_MAX_PUNKTE = 5000;             // je Produktionsort
+const GEO_MAX_VERGLEICHE = 300000;       // Kantenvergleiche je Umriss – die Punktzahl allein hält die Prüfung auf
+                                         // Selbstüberschneidung nicht unter einer Sekunde: sie ist quadratisch in der
+                                         // Punktzahl, und wie viele Kanten einander überlappen, bestimmt allein der
+                                         // Einsender der Datei (gemessen 4,1 s bei 4998 Punkten, gutartige 5000 Punkte
+                                         // brauchen 12 493 Vergleiche). 300 000 sind rund 0,15 s.
 const GEO_MAX_BETRAG = 1e9;              // größere Zahlen sind keine Koordinaten (UTM-Werte bleiben als Fehler „bereich“ lesbar)
 const GEO_PUNKT_HA = 4.0;                // Fläche eines Punktes ohne Angabe (Vorgabe des Informationssystems)
 const GEO_DORN_GRAD = 2.0;               // spitzer Winkel, unter dem eine Ecke als „Dorn“ gemeldet wird
@@ -70,15 +75,23 @@ function geo_schnitt(array $p, array $q, array $r, array $s): bool
 }
 
 /* Erste Selbstüberschneidung eines geschlossenen Rings als [Kante i, Kante j] (Nummern ab 1) oder null.
-   Kanten nach kleinstem Längengrad sortiert: verglichen werden nur Kanten, deren Längen- und Breitenbereiche sich überlappen. */
-function geo_selbstschnitt(array $ring): ?array
+   Kanten nach kleinstem Längengrad sortiert: verglichen werden nur Kanten, deren Längen- und Breitenbereiche sich überlappen.
+   Die Einsparung greift nicht, wenn fast alle Kanten einander überlappen (ein „Kamm“ aus dünnen, schrägen Zacken) – dann ist
+   die Prüfung quadratisch in der Punktzahl. Deshalb ein Budget an Kantenvergleichen (GEO_MAX_VERGLEICHE): reicht es nicht,
+   wird $abbruch gesetzt und der Umriss gilt als nicht prüfbar (Befund „komplex“ in geo_pruefen), statt jede Antwort des
+   Moduls beliebig teuer zu machen. Das Budget gilt je Umriss; mehr als fünf Umrisse können es bei GEO_MAX_PUNKTE nicht
+   ausschöpfen, die Zusage „unter einer Sekunde“ je Produktionsort bleibt damit gewahrt. */
+function geo_selbstschnitt(array $ring, bool &$abbruch = false): ?array
 {
+    $abbruch = false;
     $n = count($ring) - 1;
     $kanten = [];
     for ($i = 0; $i < $n; $i++) $kanten[] = [min($ring[$i][0], $ring[$i + 1][0]), max($ring[$i][0], $ring[$i + 1][0]), $i, min($ring[$i][1], $ring[$i + 1][1]), max($ring[$i][1], $ring[$i + 1][1])];
     usort($kanten, fn($a, $b) => $a[0] <=> $b[0]);
+    $budget = GEO_MAX_VERGLEICHE;
     for ($a = 0; $a < $n; $a++) {
         for ($b = $a + 1; $b < $n && $kanten[$b][0] <= $kanten[$a][1]; $b++) {
+            if (--$budget <= 0) { $abbruch = true; return null; }
             if ($kanten[$b][3] > $kanten[$a][4] || $kanten[$b][4] < $kanten[$a][3]) continue;   // Breitenbereiche getrennt
             $i = min($kanten[$a][2], $kanten[$b][2]); $j = max($kanten[$a][2], $kanten[$b][2]);
             if ($j - $i <= 1 || ($i === 0 && $j === $n - 1)) continue;   // Nachbarkanten teilen sich einen Punkt
@@ -189,6 +202,7 @@ function geo_kennzahlen(array $g): array
 function geo_pruefen(array $g): array
 {
     $befunde = [];
+    $abbruch = false;   // von geo_selbstschnitt gesetzt, wenn das Vergleichsbudget nicht reichte
     $melden = function (string $stufe, string $code, string $text) use (&$befunde): void { $befunde[] = ['stufe' => $stufe, 'code' => $code, 'text' => $text]; };
     $bereich = fn(array $p): bool => abs($p[0]) <= 180 && abs($p[1]) <= 90;
     if ($g['type'] === 'Point') {
@@ -203,8 +217,9 @@ function geo_pruefen(array $g): array
         if (count($ring) < 4) { $melden('fehler', 'punkte', $teil . 'Zu wenige Punkte: eine Fläche braucht mindestens drei verschiedene Eckpunkte.'); continue; }
         $doppelt = count($ring) - 1 - count(array_unique(array_map(fn($p) => $p[0] . ' ' . $p[1], array_slice($ring, 0, -1))));
         if ($doppelt > 0) $melden('fehler', 'beruehrung', $teil . 'Der Umriss läuft ' . ($doppelt === 1 ? 'einen Punkt' : $doppelt . ' Punkte') . ' doppelt an (berührt sich selbst).');
-        $schnitt = geo_selbstschnitt($ring);
-        if ($schnitt) $melden('fehler', 'schnitt', $teil . 'Der Umriss überschneidet sich selbst (Kante ' . $schnitt[0] . ' mit Kante ' . $schnitt[1] . ').');
+        $schnitt = geo_selbstschnitt($ring, $abbruch);
+        if ($abbruch) $melden('fehler', 'komplex', $teil . 'Der Umriss ist zu verschachtelt, um ihn auf Selbstüberschneidung zu prüfen – bitte vom Lieferanten vereinfachen lassen.');
+        elseif ($schnitt) $melden('fehler', 'schnitt', $teil . 'Der Umriss überschneidet sich selbst (Kante ' . $schnitt[0] . ' mit Kante ' . $schnitt[1] . ').');
         elseif (abs(geo_ring_eben($ring)) < GEO_LINIE) $melden('fehler', 'linie', $teil . 'Die Punkte liegen auf einer Linie und ergeben keine Fläche.');
         elseif (($dorn = geo_dorn($ring)) !== null) $melden('hinweis', 'dorn', $teil . 'Sehr spitze Ecke bei Punkt ' . $dorn . ' (Umriss läuft fast auf sich selbst zurück) – bitte auf der Karte ansehen.');
     }
