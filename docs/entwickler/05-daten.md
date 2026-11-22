@@ -789,7 +789,9 @@ laufen unter der Sperre `qs-dokumente`. Zuständig/Vertreter sind **Kürzel** (S
   "zustaendig", "vertreter", "notiz", "eingezogen": {"t", "von", "vonId", "grund"}|null, "ueberprueft": {"t", "von", "vonId", "notiz"}?,
   "versionen": [{"id": "v…", "nr": 3|null, "datum": "JJJJ-MM-TT|", "status": "entwurf|pruefung|geprueft|freigegeben|ersetzt|verworfen",
   "aenderungen", "grund", "erstellt", "bearbeiter": ["<Nutzer-ID>"], "geprueft", "freigegeben", "kuerzel": {"erstellt", "geprueft",
-  "freigegeben"}|null, "quelle": "hand|paket", "verlauf": […]}], "verlauf": […]}`. Gelenkt sind A, F, L, E, V; Ordner (O) und externe
+  "freigegeben"}|null, "lenkung": {"erstellt", "geprueft", "freigegeben"}?, "quelle": "hand|paket", "verlauf": […]}], "verlauf": […]}`.
+  `lenkung` (optional, seit 11/2026) hält die Kürzel der Lenkungsangaben zum Freigabezeitpunkt fest; spätere Nachträge in die Version
+  tragen sie ein (GR-106), ältere Versionen ohne das Feld rechnen wie bisher aus der Verknüpfung. Gelenkt sind A, F, L, E, V; Ordner (O) und externe
   Dokumente (X) haben keine Versionen. Die Versionsnummer entsteht erst bei der Freigabe (höchste + 1), `datum` = Freigabetag; die
   vorige gültige Version wird `ersetzt`. Wer in `bearbeiter` steht, prüft nicht (4-Augen-Prinzip, serverseitig). Die Antwort ergänzt
   `zustand` (`gueltig|entwurf|pruefung|ohne|eingezogen|register`) und `ueberpruefung` (`{"seit", "faelligAb", "faellig"}` – seit der

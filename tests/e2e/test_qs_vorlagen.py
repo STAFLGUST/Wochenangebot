@@ -9,7 +9,8 @@ Freigabe, nur PDF, nicht lesbar ohne Reste, Ordner, beim Ändern, eingezogen); V
 ausgefüllt (Grenzen: über 20000 Textelemente je Textteil – auch bei nur öffnenden Tags – oder über 8 MB geänderte Textteile zusammen
 gilt die Datei als nicht lesbar); Freigabe trägt Version, Datum, Kürzel, Änderungen ein (ausgefüllte Fassung neu, Rohfassung bleibt, ZIP mit der
 ausgefüllten); Datei ohne Platzhalter bleibt, nicht lesbare Datei hält die Freigabe nicht auf; Nachtragen in freigegebene Version
-füllt sofort (leere selbstschließende Textelemente bleiben gültiges XML); Überarbeitung übernimmt die Rohfassungen als Kopie (Platzhalter erkannt, Löschen im Entwurf lässt die freigegebene
+füllt sofort (Kürzel wie bei der Freigabe, auch nach einer Kürzeländerung; leere selbstschließende Textelemente bleiben gültiges
+XML); Überarbeitung übernimmt die Rohfassungen als Kopie (Platzhalter erkannt, Löschen im Entwurf lässt die freigegebene
 Version unberührt), zweite Freigabe mit Version 2; Rechte; Protokoll; Oberfläche (Anlegen mit vorgewählter Vorlage und Nummer,
 Datei im Entwurf mit Herkunft und Platzhaltern, Kapitelwechsel schlägt neue Nummer vor, Vorlagen-Karte, „Dateien übernehmen“,
 1280/390 px hell und dunkel, keine JavaScript-Fehler). Nur erfundene Testdaten.
@@ -323,6 +324,14 @@ except (ElementTree.ParseError, KeyError, zipfile.BadZipFile) as e:
     wt = f'ungültig: {e}'
 check('Nachtragen mit leerem Textelement <w:t xml:space="preserve"/>: gültiges XML, Platzhalter ersetzt', st == 200 and wt == 'Nr: 1.4-F15', (st, wt))
 check('Prüfdatei wieder entfernt (mit Grund)', st == 200 and Q.call('qs_datei_entfernen', {'datei': r['datei'], 'grund': 'nur Test'})[0] == 200)
+# Kürzel der Lenkungsangaben sind ein Schnappschuss der Freigabe (GR-106): Fritz bekommt ein neues Kürzel, ein Nachtrag in Version 1 trägt weiter FF ein
+pers_alt = L.call('qs_start')[1]['personen']
+check('Kürzel von Fritz geändert (FF → FX)', V.call('qs_stamm_save', {'personen': [{**p_, 'id': 'FX'} if p_['id'] == 'FF' else p_ for p_ in pers_alt]})[0] == 200)
+st, r = hochladen(Q, D1, v['id'], 'Aushang 2.docx', docx([['geprüft {{Geprüft}} · freigegeben {{Freigegeben}}']]))
+t = word_text(roh(L, 'qs_datei&id=' + r['datei'])[1]) if st == 200 else ''
+check('Nachtragen nach Kürzeländerung: Kürzel wie bei der Freigabe (FF, nicht FX)', 'geprüft FF · freigegeben FF' in t, (st, t))
+check('Kürzel zurück (FF), Prüfdatei wieder entfernt', V.call('qs_stamm_save', {'personen': pers_alt})[0] == 200
+      and st == 200 and Q.call('qs_datei_entfernen', {'datei': r['datei'], 'grund': 'nur Test'})[0] == 200)
 
 # ── Überarbeitung übernimmt die Rohfassungen ──
 st, r = Be.call('qs_version_save', {'dokument': D1, 'aenderungen': 'Grenzwerte angepasst', 'grund': 'Kundenaudit', 'dateien': True})

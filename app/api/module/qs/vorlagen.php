@@ -61,14 +61,21 @@ function qs_wer_kurz(array $stamm, $wer, $kuerzel): string
     if (is_string($kuerzel) && $kuerzel !== '') return $kuerzel;
     return is_array($wer) ? (string)($wer['von'] ?? '') : '';
 }
+/* Kürzel für erstellt, geprüft, freigegeben: der Schnappschuss `lenkung` der Freigabe (GR-106 – ein späterer Nachtrag trägt dieselben
+   Kürzel ein, auch wenn sich die Verknüpfung inzwischen geändert hat), für ältere Versionen ohne ihn wie bisher berechnet */
+function qs_lenkung_kuerzel(array $v, array $stamm): array
+{
+    if (is_array($v['lenkung'] ?? null)) return $v['lenkung'];
+    $k = is_array($v['kuerzel'] ?? null) ? $v['kuerzel'] : [];
+    $aus = [];
+    foreach (['erstellt', 'geprueft', 'freigegeben'] as $f) $aus[$f] = qs_wer_kurz($stamm, $v[$f] ?? null, $k[$f] ?? null);
+    return $aus;
+}
 function qs_werte_lenkung(array $d, array $v, array $stamm): array
 {
-    $k = is_array($v['kuerzel'] ?? null) ? $v['kuerzel'] : [];
     $dat = (string)($v['datum'] ?? '');
-    return qs_werte_stamm($d, $stamm) + ['version' => (string)($v['nr'] ?? ''), 'datum' => $dat !== '' ? substr($dat, 8, 2) . '.' . substr($dat, 5, 2) . '.' . substr($dat, 0, 4) : '',
-        'erstellt' => qs_wer_kurz($stamm, $v['erstellt'] ?? null, $k['erstellt'] ?? null), 'geprueft' => qs_wer_kurz($stamm, $v['geprueft'] ?? null, $k['geprueft'] ?? null),
-        'freigegeben' => qs_wer_kurz($stamm, $v['freigegeben'] ?? null, $k['freigegeben'] ?? null),
-        'aenderungen' => (string)($v['aenderungen'] ?? ''), 'grund' => (string)($v['grund'] ?? '')];
+    return qs_werte_stamm($d, $stamm) + ['version' => (string)($v['nr'] ?? ''), 'datum' => $dat !== '' ? substr($dat, 8, 2) . '.' . substr($dat, 5, 2) . '.' . substr($dat, 0, 4) : '']
+        + qs_lenkung_kuerzel($v, $stamm) + ['aenderungen' => (string)($v['aenderungen'] ?? ''), 'grund' => (string)($v['grund'] ?? '')];
 }
 
 /* ---------- ZIP lesen und schreiben (Office Open XML) ---------- */
