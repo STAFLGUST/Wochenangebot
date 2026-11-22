@@ -2454,7 +2454,10 @@ dialog.modal.pv { width: min(1480px, calc(100vw - 32px)); height: calc(100dvh - 
     --glas: var(--r-flaeche); --glas-kopf: var(--r-grund); --glas-karte: var(--r-flaeche); --glas-stark: var(--r-flaeche); --glas-fenster: var(--r-flaeche);
     --glas-rand: var(--r-linie); --glas-glanz: transparent; --glas-schatten: var(--r-schatten); --glas-filter: none;
     --r-glas: 16px; --r-glas-2: 16px;   /* Karten, Leisten und Fenster rund wie im Rahmen (.r-karte, Suche) */
+    /* Hauptknöpfe flach in der Akzentfarbe des Rahmens (wie Versand und Anmeldung): kein Verlauf, kein Glühschatten */
+    --primaer: var(--r-akzent); --primaer-hover: var(--r-akzent-hover); --primaer-text: var(--r-akzent-ink); --primaer-schatten: none;
   }
+  body.adm.r :is(.adm-page, dialog) .btn.primary { box-shadow: none; }
   body.adm.r::before { display: none; }
   body.adm.r .topbar { padding: 0; }
   body.adm.r .topbar-inner { max-width: none; border-radius: 0; padding: 12px 24px; }

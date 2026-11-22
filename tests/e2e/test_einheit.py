@@ -160,6 +160,9 @@ with sync_playwright() as pw:
                     weg = pg.evaluate(ABGESCHNITTEN)
                     check(f'{teil} {tag}: kein abgeschnittener Text', not weg, weg)
                     check(f'{teil} {tag}: kein waagerechtes Scrollen', pg.evaluate('document.documentElement.scrollWidth') <= breite)
+                    if bereich:   # Eingabebereich im Rahmen „C2“: Hauptknöpfe flach wie im Versand – kein Verlauf, kein Glühschatten
+                        glanz = pg.evaluate("[...document.querySelectorAll('.btn.primary')].filter((b) => b.offsetParent).map((b) => [b.textContent.trim().slice(0, 24), getComputedStyle(b).backgroundImage, getComputedStyle(b).boxShadow]).filter((x) => x[1] !== 'none' || x[2] !== 'none')")
+                        check(f'{teil} {tag}: Hauptknöpfe flach (ohne Verlauf und Schatten)', not glanz, glanz)
                     if not dunkel:
                         ohne = pg.evaluate("[...document.querySelectorAll('input[placeholder]')].filter((e) => e.offsetParent && getComputedStyle(e).textOverflow !== 'ellipsis').map((e) => e.id || e.name || e.placeholder).slice(0, 6)")
                         check(f'{teil} {tag}: lange Platzhalter enden mit „…“', not ohne, ohne)
