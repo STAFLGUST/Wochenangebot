@@ -2109,8 +2109,9 @@ dialog.modal.ez-pick { width: min(1280px, calc(100vw - 32px)); height: min(860px
   body.adm .role-b.r-viewer { color: var(--text-2); }   /* „Nur ansehen“: Kontrast ≥ 4,5:1 auf dem Glas (hell und dunkel) */
   /* Rundung der Karte auch für Kopf- und letzte Tabellenzeile (Hover-Fläche ragt nicht über die Ecken) */
   body.adm .gcard > .ghead { border-radius: var(--r-glas) var(--r-glas) 0 0; }
-  body.adm .gcard > table:last-child > tbody > tr:last-child > td:first-child { border-bottom-left-radius: var(--r-glas); }
-  body.adm .gcard > table:last-child > tbody > tr:last-child > td:last-child { border-bottom-right-radius: var(--r-glas); }
+  /* nur die unterste Zeile der Tabelle (letzter tbody bzw. tfoot) – nicht die Summenzeile jeder Warengruppe (ein tbody je Gruppe) */
+  body.adm .gcard > table:last-child > :is(tbody, tfoot):last-child > tr:last-child > td:first-child { border-bottom-left-radius: var(--r-glas); }
+  body.adm .gcard > table:last-child > :is(tbody, tfoot):last-child > tr:last-child > td:last-child { border-bottom-right-radius: var(--r-glas); }
   body.adm .gcard.sec-form, body.adm .gcard.sec-block { padding: 18px 22px; }
   body.adm .sec-h { font-size: 16px; font-weight: 650; letter-spacing: -.01em; }
   /* Karte mit aufklappender Kundenliste liegt über den folgenden Karten (Glas bildet eigene Ebenen) */

@@ -205,6 +205,10 @@ with sync_playwright() as pw:
     tf = Decimal(su.inner_text('.stab tfoot .s-total-kg').replace(' kg', '').replace('.', '').replace(',', '.'))
     check('Summenzeile: keine Doppelzählung der Warengruppen-Summen (= Gesamtsumme der Tabelle)', su.locator('.stab tr.wg-sum').count() >= 2
           and zeile(su)['gesamt']['kg'] == ganz(tf) + ' kg' and tf == alle['gesamt']['kg'], (zeile(su)['gesamt'], str(tf)))
+    # Ein tbody je Warengruppe: nur die unterste Zeile der Tabelle hat die runden Ecken der Karte, nicht jede Gruppensumme
+    ecken = su.evaluate("() => [...document.querySelectorAll('.stab tr.wg-sum, .stab tfoot tr')].map((tr) => [tr.className, getComputedStyle(tr.firstElementChild).borderBottomLeftRadius, getComputedStyle(tr.lastElementChild).borderBottomRightRadius])")
+    check('Warengruppen-Summen ohne runde Ecken mitten in der Liste, nur die letzte Zeile gerundet', len(ecken) >= 3
+          and all(e[1:] == ['0px', '0px'] for e in ecken[:-1]) and ecken[-1][0] == 'st-total' and '0px' not in ecken[-1][1:], ecken)
     thema(su, 'light'); su.screenshot(path=os.path.join(SH, 'stock-summenzeile.png'), animations='disabled')
     thema(su, 'dark'); su.screenshot(path=os.path.join(SH, 'stock-summenzeile-dunkel.png'), animations='disabled'); thema(su, 'light')
     # folgt der Suche …
