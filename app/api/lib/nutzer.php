@@ -270,7 +270,7 @@ function pw_datenleck(string $pw): ?int
                                              'header' => "Add-Padding: true\r\n"], 'ssl' => ['verify_peer' => true]]);
     $url = sprintf(getenv('WA_PWNED_URL') ?: PW_LEAK_URL, substr($h, 0, 5));   // WA_PWNED_URL: Tests bzw. Kundenseite (Relais in Caddy, ADR-007)
     $t0 = microtime(true);
-    $body = @file_get_contents($url, false, $ctx, 0, 2 * 1024 * 1024);
+    $body = abruf_text($url, $ctx, microtime(true) + 6, 2 * 1024 * 1024);   // Gesamtfrist: 'timeout' gilt nur je Lesevorgang (geo.php)
     $ok = is_string($body) && $body !== '';
     pw_datenleck_status($ok);
     if (!$ok) { error_log('[wochenangebot] Datenleck-Prüfung nicht erreichbar (' . round(microtime(true) - $t0, 1) . ' s)'); return $cache[$h] = null; }

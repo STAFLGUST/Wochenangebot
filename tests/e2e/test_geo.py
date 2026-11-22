@@ -1,11 +1,12 @@
 """Testgruppe geo: Ländersperre im Modul Sicherheit (Einstellungen → Ländersperre, Dialog) – Länderliste nach Kontinenten,
 Schnellauswahl (Kontinente, EU, EWR, DACH, Nachbarn, NATO, G7, BRICS), Suche, Selbstaussperr-Schutz, Zusammenfassung,
 Statistik (Firewall & Sperren). Dazu die Daten der Schnellauswahl (app/module/sicherheit/laendergruppen.json) und das Update der Länder- und
-Ortsdaten bei voller Platte (bisherige Datei bleibt aktiv)."""
+Ortsdaten bei voller Platte (bisherige Datei bleibt aktiv) sowie die Grenzen der Abrufe nach außen (Gesamtfrist bei
+tröpfelnder Gegenstelle, Mengengrenze, abgebrochener Abruf ersetzt den Bestand nicht)."""
 import sys
 from umgebung import shot
 from umgebung import BASE  # Testserver je Gruppe (parallel)
-import json, os, re, subprocess, time
+import json, os, re, shutil, subprocess, time
 from playwright.sync_api import sync_playwright
 B = BASE
 from umgebung import SH, FIX, REPO, WORK, XL44
@@ -235,9 +236,10 @@ class Voll {
 stream_wrapper_register('voll', 'Voll');
 function csv(callable $zeile, int $n) { $f = fopen('php://temp', 'w+b'); for ($i = 0; $i < $n; $i++) fwrite($f, $zeile($i) . "\n"); rewind($f); return $f; }
 $v4 = fn($i) => long2ip(0x01000000 + $i * 4) . ',' . long2ip(0x01000000 + $i * 4 + 1);
-$v6 = fn($i) => sprintf('2a00:%x::', $i * 2) . ',' . sprintf('2a00:%x::ffff', $i * 2);
+$v6 = fn($i) => sprintf('2a00:%x:%x::', intdiv($i, 4096), ($i % 4096) * 16) . ',' . sprintf('2a00:%x:%x::ffff', intdiv($i, 4096), ($i % 4096) * 16);
 $ergebnis = [];
-foreach ([['geo', 'voll://geo/laender.dat.php', fn($o) => geo_build(csv(fn($i) => $v4($i) . ',DE', 10000), csv(fn($i) => $v6($i) . ',DE', 1000), $o, '2026-01-01')],
+// Länderdaten: mehr als die Hälfte der mitgelieferten Datenbank, sonst weist abruf_vollstaendig den Bau als abgebrochenen Abruf ab
+foreach ([['geo', 'voll://geo/laender.dat.php', fn($o) => geo_build(csv(fn($i) => $v4($i) . ',DE', 170000), csv(fn($i) => $v6($i) . ',DE', 105000), $o, '2026-01-01')],
           ['ort', 'voll://geo/orte.dat.php', fn($o) => ort_build(csv(fn($i) => ($i < 100000 ? $v4($i) : $v6($i - 100000)) . ',EU,DE,Hamburg,Hamburg,53.55,10.0', 110000), $o, '2026-01-01')]] as [$name, $ziel, $bau]) {
     Voll::$d = [$ziel => 'alte Daten']; Voll::$frei = 50000;
     try { $bau($ziel); $ergebnis[$name . ' voll'] = 'keine Ausnahme'; } catch (RuntimeException $e) { $ergebnis[$name . ' voll'] = 'Ausnahme'; }
@@ -252,5 +254,80 @@ voll = json.loads(VOLL.stdout or '{}')
 for n, t in (('geo', 'Länderdaten (geo_build)'), ('ort', 'Ortsdaten (ort_build)')):
     check(f'{t}: Platte voll → Ausnahme, bisherige Datei unverändert', voll.get(n + ' voll') == 'Ausnahme' and voll.get(n + ' voll alt') == 'unverändert', (voll, VOLL.stderr[-300:]))
     check(f'{t}: mit Platz wie bisher ersetzt', isinstance(voll.get(n + ' frei'), dict) and voll[n + ' frei'].get('v4'), voll.get(n + ' frei'))
+# ---------- Grenzen der Abrufe nach außen: Gesamtfrist, Mengengrenze, Plausibilität (ohne Server, ohne Netz) ----------
+TMPA = os.path.join(WORK, 'geo-abruf')
+shutil.rmtree(TMPA, ignore_errors=True)
+os.makedirs(TMPA, exist_ok=True)
+ABRUF = subprocess.run(['php', '-r', r'''require $argv[1] . '/app/api/geo.php'; require $argv[1] . '/app/api/ort.php';
+$DATA = $argv[2];
+/* Attrappen im eigenen Prozess, keine Verbindung nach außen: „tropf“ liefert endlos Bruchstücke ohne Zeilenende
+   (so wartet fgets/fgetcsv beliebig lange, das Lesezeitlimit greift nie), „flut“ endlos gültige Zeilen. */
+class Attrappe {
+    public $context; private bool $flut = false;
+    function stream_open($p, $m, $o, &$g): bool { $this->flut = strpos((string)$p, 'flut') !== false; return true; }
+    function stream_read($n) { if ($this->flut) return str_repeat("1.0.0.0,1.0.0.255,EU,DE,HH,Hamburg,53.55,10.0\n", 64); usleep(20000); return '1.0.0.'; }
+    function stream_eof(): bool { return false; }
+    function stream_stat() { return []; }
+    function stream_set_option($o, $a, $b): bool { return false; }
+}
+stream_wrapper_register('attrappe', 'Attrappe');
+function csv(callable $zeile, int $n) { $f = fopen('php://temp/maxmemory:' . (64 << 20), 'w+b'); for ($i = 0; $i < $n; $i++) fwrite($f, $zeile($i) . "\n"); rewind($f); return $f; }
+$v4 = fn($i) => long2ip(0x0b000000 + $i * 4) . ',' . long2ip(0x0b000000 + $i * 4 + 1);
+$v6 = fn($i) => sprintf('2a01:db8:%x:%x::', intdiv($i, 4096), ($i % 4096) * 16) . ',' . sprintf('2a01:db8:%x:%x:ffff:ffff:ffff:ffff', intdiv($i, 4096), ($i % 4096) * 16);
+$messen = function (callable $f) { $t = microtime(true); try { $r = $f(); } catch (Throwable $x) { $r = $x->getMessage(); } return [$r, round(microtime(true) - $t, 1)]; };
+$frist = fn($quelle, $max, $was, $sek = 1) => abruf_frist_strom(fopen('attrappe://' . $quelle, 'rb'), microtime(true) + $sek, $max, $was);
+$e = [];
+/* Gesamtfrist: tröpfelnde Gegenstelle, Frist 1 s */
+$e['geo frist'] = $messen(function () use ($frist, $DATA) {
+    $a = $frist('tropf', GEO_MAX_BYTE, 'Länderdaten'); $b = $frist('tropf', GEO_MAX_BYTE, 'Länderdaten');
+    try { geo_build($a, $b, $DATA . '/geo/x.dat.php', '2026-01-01'); return 'keine Ausnahme'; } finally { fclose($a); fclose($b); }
+});
+$e['ort frist'] = $messen(function () use ($frist, $DATA) {
+    $a = $frist('tropf', ORT_MAX_BYTE, 'Ortsdaten');
+    try { ort_build($a, $DATA . '/geo/y.dat.php', '2026-01-01'); return 'keine Ausnahme'; } finally { fclose($a); }
+});
+$e['abruf_text frist'] = $messen(fn() => var_export(abruf_text('attrappe://tropf', stream_context_create([]), microtime(true) + 1, 1 << 20), true));
+/* Mengengrenze: endloser Strom gültiger Zeilen, Grenze 4096 Byte, Frist weit weg */
+$e['menge'] = $messen(function () use ($DATA) {
+    $a = abruf_frist_strom(fopen('attrappe://flut', 'rb'), microtime(true) + 120, 4096, 'Ortsdaten');
+    try { ort_build($a, $DATA . '/geo/y.dat.php', '2026-01-01'); return 'keine Ausnahme'; } finally { fclose($a); }
+});
+/* Plausibilität Länderdaten: erst vollständig (mehr als die Hälfte der mitgelieferten Datenbank), dann abgeschnitten */
+$ziel = $DATA . '/geo/laender.dat.php';
+$e['bestand'] = geo_info();
+$e['geo voll'] = geo_build(csv(fn($i) => $v4($i) . ',' . ($i % 2 ? 'FR' : 'DE'), 170000), csv(fn($i) => $v6($i) . ',DE', 105000), $ziel, '2026-11-01');
+$e['geo voll wirkt'] = [geo_info()['v4'], geo_info()['updated'], geo_country('11.6.26.128')];
+$vorher = md5_file($ziel);
+$e['geo abgeschnitten'] = $messen(fn() => geo_build(csv(fn($i) => $v4($i) . ',' . ($i % 2 ? 'FR' : 'DE'), 10001), csv(fn($i) => $v6($i) . ',DE', 1001), $ziel, '2026-11-02'))[0];
+$e['geo abgeschnitten alt'] = [md5_file($ziel) === $vorher ? 'unverändert' : 'ERSETZT', geo_info()['v4'], geo_country('11.6.26.132')];
+$e['geo schrumpfung erlaubt'] = geo_build(csv(fn($i) => $v4($i) . ',DE', 130000), csv(fn($i) => $v6($i) . ',DE', 80000), $ziel, '2026-11-03');
+/* Plausibilität Ortsdaten: dieselbe Prüfung gegen ort_info() */
+$ort = fn(int $n4, int $n6) => csv(fn($i) => ($i < $n4 ? $v4($i) : $v6($i - $n4)) . ',EU,DE,Hamburg,Hamburg,53.55,10.0', $n4 + $n6);
+$e['ort voll'] = ort_build($ort(300000, 30000), $DATA . '/geo/orte.dat.php', '2026-11-01');
+$e['ort abgeschnitten'] = $messen(fn() => ort_build($ort(140000, 14000), $DATA . '/geo/orte.dat.php', '2026-11-02'))[0];
+$e['ort abgeschnitten alt'] = ort_info()['v4'];
+$e['vollstaendig'] = ['10001/334373' => abruf_vollstaendig(10001, 10000, 334373), '300000/334373' => abruf_vollstaendig(300000, 10000, 334373),
+    '167187/334373' => abruf_vollstaendig(167187, 10000, 334373), '167186/334373' => abruf_vollstaendig(167186, 10000, 334373),
+    '9999/ohne' => abruf_vollstaendig(9999, 10000, null), '10000/ohne' => abruf_vollstaendig(10000, 10000, null)];
+echo json_encode($e, JSON_UNESCAPED_UNICODE), "\n";
+''', REPO, TMPA], capture_output=True, text=True, errors='replace')
+ab = json.loads(ABRUF.stdout or '{}')
+dauer = lambda k: ab.get(k, ['', 999])[1]
+check('tröpfelnde Gegenstelle: Länderdaten-Abruf endet mit der Gesamtfrist', 'zu lange gedauert' in str(ab.get('geo frist')) and dauer('geo frist') < 20,
+      (ab.get('geo frist'), ABRUF.stderr[-300:]))
+check('… ebenso der Ortsdaten-Abruf (fgetcsv wartet sonst beliebig lange auf das Zeilenende)', 'zu lange gedauert' in str(ab.get('ort frist')) and dauer('ort frist') < 20, ab.get('ort frist'))
+check('… abruf_text liefert dann keinen abgeschnittenen Text, sondern false', ab.get('abruf_text frist', [''])[0] == 'false' and dauer('abruf_text frist') < 20, ab.get('abruf_text frist'))
+check('endloser Strom: Mengengrenze bricht den Abruf ab', 'unerwartet viele Daten' in str(ab.get('menge')), ab.get('menge'))
+check('mitgelieferte Länderdatenbank gilt als Bestand', (ab.get('bestand') or {}).get('v4', 0) > 300000, ab.get('bestand'))
+check('vollständiger Abruf ersetzt die Länderdatenbank und wirkt', ab.get('geo voll wirkt') == [170000, True, 'DE'], (ab.get('geo voll'), ab.get('geo voll wirkt')))
+check('abgebrochener Abruf (3 % der Bereiche) wird abgewiesen, bisherige Datenbank bleibt wirksam',
+      'unvollständig' in str(ab.get('geo abgeschnitten')) and ab.get('geo abgeschnitten alt') == ['unverändert', 170000, 'FR'],
+      (ab.get('geo abgeschnitten'), ab.get('geo abgeschnitten alt')))
+check('echte Schrumpfung der Quelle (über der Hälfte) geht durch', isinstance(ab.get('geo schrumpfung erlaubt'), dict) and ab['geo schrumpfung erlaubt'].get('v4') == 130000,
+      ab.get('geo schrumpfung erlaubt'))
+check('Ortsdaten: abgebrochener Abruf ebenso abgewiesen, Bestand bleibt', 'unvollständig' in str(ab.get('ort abgeschnitten')) and ab.get('ort abgeschnitten alt') == 300000,
+      (ab.get('ort abgeschnitten'), ab.get('ort abgeschnitten alt')))
+check('Schranke: absolute Mindestzahl und Hälfte des Bestands', list((ab.get('vollstaendig') or {}).values()) == [False, True, True, False, False, True], ab.get('vollstaendig'))
+
 print(f'{sum(res)}/{len(res)} passed')
 sys.exit(0 if all(res) else 1)
