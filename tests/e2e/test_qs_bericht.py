@@ -7,7 +7,7 @@ stornierte Nachweise zählen nie, versäumte Bereiche, Zählung im Monat des Per
 längere Intervalle (eingehalten, verspätet mit Tagen, überfällig zum Stichtag, fällig am Stichtag, noch nie geprüft, vor dem
 Zeitraum erledigt bleibt weg); „bei Bedarf“ und inaktive Prüfungen; Abweichungen mit Maßnahme; Maßnahmen (vor dem Zeitraum
 abgeschlossen bzw. nach dem Stichtag erfasst bleiben weg, wirksam abgeschlossen, verworfen, offen, überfällig); Dokumentenlenkung
-(Freigaben, Überprüfungen, Einziehungen im Zeitraum; gültig, in Arbeit, nie freigegeben, Überprüfung fällig); Handbuch-Änderungen;
+(Freigaben, Überprüfungen, Einziehungen im Zeitraum – auch frühere und wieder aufgehobene aus dem Verlauf; gültig, in Arbeit, nie freigegeben, Überprüfung fällig); Handbuch-Änderungen;
 Zeitraum (Pflicht, gültiges Datum, nicht in der Zukunft, Von ≤ Bis, höchstens zwei Jahre); Excel (Blätter, Werte, Texte mit „=“
 bleiben Text, öffnet in openpyxl). Über die Schnittstelle: Rechte (ohne Anmeldung 401, ohne QM-Recht 403, „ansehen“ genügt),
 Fehler 422, gleiche Versäumnisse wie die Fälligkeit im Prüfplan, Dokumente und Handbuch wie im QM-System, Abweichung mit Maßnahme,
@@ -224,6 +224,19 @@ check('Ortszeit: Überprüfung am 01.11. 00:30 gilt seit 01.11.', u.get('seit') 
 MC = {'bezug': '', 'korrektur': '', 'ursache': '', 'erledigtAm': ''}
 c = kern({'csvMassnahmen': [{**MN[1], **MC}]}).get('csv', '')
 check('Ortszeit: CSV der Maßnahmen mit Wirksamkeit am 01.10.2026', '"01.10.2026"' in c and '30.09.2026' not in c, c[-300:])
+# Die Felder „ueberprueft“/„eingezogen“ halten nur den letzten Stand – frühere Vorgänge stehen im Verlauf
+DV = [{'id': 'dV1', 'kapitel': '1.4', 'nr': '1.4-F10', 'titel': 'Zweimal überprüft', 'art': 'F', 'versionen': [V_(1, '2024-02-01', 'freigegeben')],
+       'ueberprueft': {'t': '2026-03-12T09:00:00Z', 'von': 'Quinn', 'notiz': ''},
+       'verlauf': [{'t': '2025-03-10T09:00:00Z', 'von': 'Quinn', 'was': 'ohne Änderung überprüft: Liste passt'}, {'t': '2026-03-12T09:00:00Z', 'von': 'Quinn', 'was': 'ohne Änderung überprüft'}]},
+      {'id': 'dV2', 'kapitel': '1.4', 'nr': '1.4-F11', 'titel': 'Wieder gültig', 'art': 'F', 'versionen': [V_(1, '2024-01-10', 'freigegeben')], 'eingezogen': None,
+       'verlauf': [{'t': '2025-06-01T08:00:00Z', 'von': 'Quinn', 'was': 'eingezogen: veraltet'}, {'t': '2025-09-01T08:00:00Z', 'von': 'Quinn', 'was': 'wieder gültig'}]}]
+b = bericht([], [], '2025-01-01', '2025-12-31', '2026-11-15', dokumente=DV)
+check('Verlauf im Bericht 2025: frühere Überprüfung (mit Notiz) und wieder aufgehobene Einziehung (mit Grund) zählen',
+      [(x['datum'], x['vorgang'], x['nr'], x['notiz']) for x in b['dokumente']['vorgaenge']] == [('2025-03-10', 'ueberprueft', '1.4-F10', 'Liste passt'), ('2025-06-01', 'eingezogen', '1.4-F11', 'veraltet')]
+      and (b['kennzahlen']['dokumente']['ueberprueft'], b['kennzahlen']['dokumente']['eingezogen']) == (1, 1), b.get('dokumente'))
+b = bericht([], [], '2026-01-01', '2026-11-15', '2026-11-15', dokumente=DV)
+check('Verlauf im Bericht 2026: Überprüfung vom 12.03. einmal (Feld und Verlauf), keine Einziehung',
+      [(x['datum'], x['vorgang']) for x in b['dokumente']['vorgaenge']] == [('2026-03-12', 'ueberprueft')] and b['kennzahlen']['dokumente']['eingezogen'] == 0, b.get('dokumente'))
 
 # ── Schnittstelle ──
 A = Client('198.51.100.2')

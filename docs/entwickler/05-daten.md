@@ -844,7 +844,9 @@ Audit-Bericht (`qs_bericht`, `qs_bericht_excel`, GET `von`/`bis`, höchstens zwe
 liest nur: Kalender-Intervalle je Periode wie die Fälligkeit (gezählt im Monat des Periodenendes; eine Periode zählt, wenn sie zum
 Stichtag `bis` vorbei ist oder schon einen Nachweis hat; Nachweise nach dem Stichtag zählen nicht), längere Intervalle als Fristenkette
 (`eingehalten|verspaetet|ueberfaellig|offen|nie`), Abweichungen mit Maßnahme, Maßnahmen (bis zum Stichtag erfasst, im Zeitraum offen oder
-abgeschlossen; Status Stand heute), Freigaben/Überprüfungen/Einziehungen und Handbuch-Änderungen im Zeitraum. Excel ohne Formeln.
+abgeschlossen; Status Stand heute), Freigaben/Überprüfungen/Einziehungen und Handbuch-Änderungen im Zeitraum. „Ohne Änderung überprüft“
+und Einziehungen kommen aus dem Dokument-`verlauf` (auch frühere und wieder aufgehobene; je Tag einmal), die Felder `ueberprueft` und
+`eingezogen` (nur der letzte Stand) dienen als Rückfall. Excel ohne Formeln.
 
 Verfahrensdokumentation nach GoBD (`module/qs/verfahren.php`, Aktionen `qs_verfahren*`, eigene sensible Rechte `qs.verfahren_sehen` →
 `_bearbeiten` → `_freigeben`):
