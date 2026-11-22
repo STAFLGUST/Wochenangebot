@@ -16,7 +16,6 @@ declare(strict_types=1);
    davon unabhängig; Dokument und Sicht tragen heute genau eine Quelle. Das Dokument ist ein Zwischenspeicher und darf mit
    einer zweiten Quelle neu geschnitten werden – ci_hafen_meldungen liest deshalb nur Einträge, die es kennt. */
 if (!defined('WA_API')) { http_response_code(404); exit; }
-require_once __DIR__ . '/abruf.php';   // Abruf fremder Dienste mit Gesamtfrist
 
 const CI_HAFEN_DOKUMENT = 'containerimport-hafenmeldungen';
 const CI_HAFEN_HH_URL = 'https://www.hafen-hamburg.de/en/all-vessels/expected-vessels/';
@@ -54,13 +53,13 @@ function ci_hafen_hh_lesen(string $html): array
 }
 
 /* Die Liste abrufen: [Einträge, Fehlertext]. Keine Weiterleitungen, höchstens CI_HAFEN_MAX_BYTE, eine Gesamtfrist über
-   den ganzen Abruf (ci_abruf – eine tröpfelnde Gegenstelle hielte sonst einen Webserver-Prozess beliebig lange fest).
-   Vollständig ist nur, was ci_abruf ohne Fehler liefert: eine abgeschnittene Antwort (angekündigte Länge nicht erreicht,
+   den ganzen Abruf (abruf_http in lib/abruf.php – eine tröpfelnde Gegenstelle hielte sonst einen Webserver-Prozess
+   beliebig lange fest). Vollständig ist nur, was abruf_http ohne Fehler liefert: eine abgeschnittene Antwort (angekündigte Länge nicht erreicht,
    stückweise Antwort ohne reguläres Ende, mehr als CI_HAFEN_MAX_BYTE) ist ein Fehlschlag und wird nie still der neue
    Stand – der letzte lesbare bleibt dann mit seiner Zeit stehen (ci_hafen_auffrischen). */
 function ci_hafen_hh_abrufen(): array
 {
-    $a = ci_abruf(getenv('WA_HAFEN_HH_URL') ?: CI_HAFEN_HH_URL,   // WA_HAFEN_HH_URL nur in den Tests
+    $a = abruf_http(getenv('WA_HAFEN_HH_URL') ?: CI_HAFEN_HH_URL,   // WA_HAFEN_HH_URL nur in den Tests
         ['User-Agent: STAFL-Plattform (Standard-Fleisch, Container-Import)', 'Accept: text/html', 'Accept-Language: en'],
         CI_HAFEN_ZEITLIMIT, CI_HAFEN_MAX_BYTE);
     if ($a['fehler'] === 'gross') return [[], 'Die Antwort von Hafen Hamburg war unerwartet groß.'];

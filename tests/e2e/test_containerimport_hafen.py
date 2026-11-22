@@ -9,7 +9,8 @@ Ankunft mit Zeitzone, Liegeplatz, Terminal – „-“ als keine Angabe, Sonderz
 übersprungen, ein ungültiges Byte auf der Seite stört nicht; Zuordnung über den Schiffsnamen ohne Rücksicht auf Schreibweise und
 nur für Container mit Zielhafen Hamburg; ein doppeltes Schiff; die Antwort bringt nur die Meldungen, nie die fremde Liste;
 Frist zwischen zwei Abrufen; Fehlschlag (Fehlerstatus, geänderter Aufbau, nicht erreichbar) als verständliche Meldung, der
-letzte lesbare Stand bleibt; eine abgeschnittene Antwort gilt nie als vollständig – auch nicht über 2 MiB mit angekündigter
+letzte lesbare Stand bleibt; eine stückweise Antwort („chunked“) wird zusammengesetzt, eine abgeschnittene gilt nie als
+vollständig – weder mit angekündigter Länge noch ohne Schlussstück, und ebenso nicht über 2 MiB mit angekündigter
 Länge und ohne („chunked“); eine tröpfelnde Gegenstelle endet nach der Gesamtfrist des Abrufs statt den Webserver-Prozess
 beliebig lange zu binden; eine Meldung verfällt nach ihrer Ankunft; ein hängender Abruf hält weder einen zweiten Aufruf
 noch das Speichern auf; die Meldung ändert keinen Container. Oberfläche: Hinweis, Meldung in Liste und Fenster,
@@ -43,7 +44,7 @@ def ankunft(n, uhr):
 # ---------- nachgebaute Seite des Hafens ----------
 VORLAGE = open(os.path.join(FIX, 'containerimport', 'hafen-hamburg.html'), encoding='utf-8').read()
 SPIEL = {'modus': 'ok', 'haengt': False, 'anfragen': [], 'da': threading.Event(), 'weiter': threading.Event()}
-# modus: ok | fehler | fremd | abgeschnitten | offen | zu-gross | zu-gross-chunked | troepfelt
+# modus: ok | fehler | fremd | abgeschnitten | offen | chunked | chunked-abgeschnitten | zu-gross | zu-gross-chunked | troepfelt
 
 
 class Hafen(http.server.BaseHTTPRequestHandler):
@@ -84,6 +85,16 @@ class Hafen(http.server.BaseHTTPRequestHandler):
         status = 503 if SPIEL['modus'] == 'fehler' else 200
         text = '<html><body><h1>Wir haben umgebaut</h1></body></html>' if SPIEL['modus'] == 'fremd' else VORLAGE.replace('{T1}', im_format_der_seite(0)).replace('{T2}', im_format_der_seite(1))
         roh = text.encode().replace(b'{ROH}', b'\xfc')
+        if SPIEL['modus'] in ('chunked', 'chunked-abgeschnitten'):   # stückweise Antwort ohne angekündigte Länge
+            try:
+                self.roh(b'HTTP/1.1 200 OK\r\nContent-Type: text/html; charset=utf-8\r\nTransfer-Encoding: chunked\r\n\r\n')
+                for i in range(0, len(roh), 700):   # mehrere Stücke, damit das Zusammensetzen geprüft ist
+                    self.roh(b'%x\r\n' % len(roh[i:i + 700]) + roh[i:i + 700] + b'\r\n')
+                if SPIEL['modus'] == 'chunked':
+                    self.roh(b'0\r\n\r\n')   # chunked-abgeschnitten: ohne Schlussstück endet die Verbindung mitten in der Antwort
+            except ConnectionError:
+                pass
+            return
         laenge = len(roh) + (500 if SPIEL['modus'] == 'abgeschnitten' else 0)   # abgeschnitten: kündigt mehr an, als kommt
         self.send_response(status); self.send_header('Content-Type', 'text/html; charset=utf-8'); self.send_header('Content-Length', str(laenge)); self.end_headers(); self.wfile.write(roh); self.wfile.flush()
         if SPIEL['modus'] == 'offen':   # alles geliefert, aber die Verbindung bleibt stehen
@@ -192,8 +203,19 @@ check('eine Meldung verfällt zwölf Stunden nach ihrer Ankunft: kein „wird er
 gespeichert(lambda d: d.update(schiffe={'hamburg': {'liste': d['schiffe']}, 'x': 'Text', 'y': {'schiff': 'Beispiel Express'}}))
 st, r = I.call('containerimport_start')
 check('anders geschnittener Zwischenspeicher (spätere Version, dann Rückfall): das Modul startet, nur ohne Meldungen', st == 200 and r['hafen']['meldungen'] == {} and r['hafen']['anzahl'] == 0, (st, r.get('error'), r.get('hafen')))
+st, r, neu = abruf('ok')   # der Rückfall-Test hat den Zwischenspeicher geleert: erst wieder einen lesbaren Stand, den die folgenden Fehlschläge behalten müssen
+gelesen = r['hafen']['gelesen']
+check('nach dem Rückfall wieder lesbar: alle Meldungen stehen', st == 200 and r['hafen']['fehler'] == '' and set(r['hafen']['meldungen']) == MIT_MELDUNG, r.get('hafen'))
 st, r, neu = abruf('abgeschnitten')
-check('Antwort kürzer als angekündigt: Fehlschlag statt einer halben Liste als neuem Stand', st == 200 and 'nicht vollständig' in r['hafen']['fehler'] and r['hafen']['gelesen'] == gelesen, r.get('hafen'))
+check('Antwort kürzer als angekündigt: Fehlschlag statt einer halben Liste als neuem Stand',
+      st == 200 and 'nicht vollständig' in r['hafen']['fehler'] and r['hafen']['gelesen'] == gelesen and set(r['hafen']['meldungen']) == MIT_MELDUNG, r.get('hafen'))
+st, r, neu = abruf('chunked')
+check('stückweise Antwort ohne angekündigte Länge: die Stücke werden zusammengesetzt und gelesen',
+      st == 200 and r['hafen']['fehler'] == '' and r['hafen']['gelesen'] != gelesen and set(r['hafen']['meldungen']) == MIT_MELDUNG, r.get('hafen'))
+gelesen = r['hafen']['gelesen']
+st, r, neu = abruf('chunked-abgeschnitten')
+check('stückweise Antwort ohne Schlussstück: Fehlschlag statt einer halben Liste als neuem Stand',
+      st == 200 and 'nicht vollständig' in r['hafen']['fehler'] and r['hafen']['gelesen'] == gelesen and set(r['hafen']['meldungen']) == MIT_MELDUNG, r.get('hafen'))
 for modus in ('zu-gross', 'zu-gross-chunked'):
     st, r, neu = abruf(modus)
     check(f'mehr als 2 MiB ({modus}): Fehlschlag statt der abgeschnittenen ersten 2 MiB als neuem Stand',

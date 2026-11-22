@@ -8,7 +8,6 @@ declare(strict_types=1);
    Schnittstelle (Stand 19.11.2026, /api/openapi.json): POST /submit/geojson → 202 mit data.token oder 200 mit Ergebnis;
    GET /status/{token} → 202 in Arbeit, 200 Ergebnis (GeoJSON, Eigenschaften je Fläche in properties). */
 if (!defined('WA_API')) { http_response_code(404); exit; }   // nur über api/index.php nutzbar
-require_once __DIR__ . '/abruf.php';   // Abruf fremder Dienste mit Gesamtfrist
 
 const WHISP_URL = 'https://whisp.openforis.org/api';
 const WHISP_TOKEN = '/^[A-Za-z0-9_-]{6,128}$/';   // Vorgangsnummer – wird Teil der Adresse, deshalb streng geprüft
@@ -20,13 +19,13 @@ function whisp_schluessel(): string { return trim((string)(getenv('WHISP_API_KEY
 function whisp_eingerichtet(): bool { return whisp_schluessel() !== ''; }
 
 /* Eine Anfrage an Whisp: [Status, JSON|null]; Status 0 = nicht erreichbar. Keine Weiterleitungen und eine Gesamtfrist
-   über den ganzen Abruf (ci_abruf): eine tröpfelnde Gegenstelle hielte sonst einen Webserver-Prozess beliebig lange fest.
+   über den ganzen Abruf (abruf_http in lib/abruf.php): eine tröpfelnde Gegenstelle hielte sonst einen Webserver-Prozess beliebig lange fest.
    Eine abgebrochene oder zu große Antwort zählt wie „nicht erreichbar“ – ein halbes JSON wird nie ausgewertet. */
 function whisp_http(string $methode, string $pfad, ?array $inhalt = null): array
 {
     $kopf = ['User-Agent: STAFL-Plattform', 'x-api-key: ' . whisp_schluessel(), 'Accept: application/json'];
     if ($inhalt !== null) $kopf[] = 'Content-Type: application/json';
-    $a = ci_abruf((getenv('WA_WHISP_URL') ?: WHISP_URL) . $pfad, $kopf, WHISP_ZEITLIMIT, WHISP_MAX_BYTE, $methode,   // WA_WHISP_URL nur in den Tests
+    $a = abruf_http((getenv('WA_WHISP_URL') ?: WHISP_URL) . $pfad, $kopf, WHISP_ZEITLIMIT, WHISP_MAX_BYTE, $methode,   // WA_WHISP_URL nur in den Tests
         $inhalt === null ? null : json_encode($inhalt, JSON_UNESCAPED_SLASHES | JSON_THROW_ON_ERROR));
     if ($a['fehler'] !== '') return [0, null];
     $json = $a['roh'] !== '' ? json_decode($a['roh'], true) : null;

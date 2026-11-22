@@ -114,7 +114,8 @@ Wichtig: Die Schritte 6–17 sind **Vorprüfungen**. Sie ersetzen nie die Rechte
 | `lib/aktionen-liste.php` | Konstante `AKTIONEN`, erzeugt aus `regeln/aktionen/*.toml` | **nie von Hand ändern**: `python3 werkzeuge/regeln.py erzeugen` |
 | `lib/module-liste.php` | `MODULE`, `RECHTE_MODUL`, `MODUL_FREIGABE_ERLAUBT`, `MODUL_REGELN`, erzeugt aus `regeln/module.toml`, `regeln/wartung.toml` | **nie von Hand ändern**; bei Rebase-Konflikt neu erzeugen |
 | `storage.php` | Speicherschicht (3.5) | koordinationspflichtig; Schutz über `SCRIPT_FILENAME`-Prüfung (auch von Wartungsskripten eingebunden, deshalb nicht `WA_API`) |
-| `mail.php`, `geo.php`, `ort.php` | SMTP-Client, Länder- und Ortsdatenbank; in `geo.php` auch die gemeinsamen Helfer für Abrufe nach außen (3.8) | Schutz über `SCRIPT_FILENAME`-Prüfung statt `WA_API` |
+| `mail.php`, `geo.php`, `ort.php` | SMTP-Client, Länder- und Ortsdatenbank | Schutz über `SCRIPT_FILENAME`-Prüfung statt `WA_API` |
+| `lib/abruf.php` | gemeinsame Helfer für Abrufe nach außen (3.8); `geo.php` lädt sie als erste, deshalb braucht kein Modul einen eigenen Einbindeweg | ebenso `SCRIPT_FILENAME`-Prüfung |
 | `orders.php`, `order_outbox.php`, `config.php` | Bestell-API v1, Versandaufträge (3.9) und Einstellungen | ebenso `SCRIPT_FILENAME`-Prüfung |
 
 Jede PHP-Datei in der Webwurzel trägt eine Selbstsperre: Bibliotheken unter `lib/` und `aktionen/` die `WA_API`-Zeile, die
@@ -449,18 +450,26 @@ bzw. des IPv6-/64-Netzes, `client_key`); Grenzen aus `config.php` (`max_attempts
 | Sitzung, CSRF, Bestätigung, Keycloak | `lib/sitzung.php`, `lib/oidc.php` | [Kapitel 4](04-anmeldung-rechte.md) |
 | Dateiprüfung | `lib/integritaet.php` | Programmdateien gegen die beim Einspielen erzeugte Prüfliste |
 | Diagnose | `lib/diagnose.php` | nur lesend, für Administratoren |
-| Abruf fremder Dienste | `module/containerimport/abruf.php` | `ci_abruf()`: eine Gesamtfrist über Verbinden, Kopfzeilen und Rumpf |
+| Abruf fremder Dienste | `lib/abruf.php` | `abruf_http()`: eine Gesamtfrist über Verbinden, Kopfzeilen und Rumpf |
 
 **Ausgehende Abrufe brauchen eine Gesamtfrist.** Das Feld `timeout` eines PHP-Stroms gilt nur je Schritt: eine Gegenstelle,
 die alle paar Sekunden ein Byte sendet, hält `fopen`/`file_get_contents` beliebig lange offen, und mod_php bricht
 blockierende Lesevorgänge nicht ab (`max_execution_time` greift dort nicht) – der Webserver-Prozess bleibt belegt. Im
-Container-Import führt deshalb `ci_abruf($url, $kopfzeilen, $frist, $maxByte, $methode, $inhalt)` beide Abrufe (Hafen
-Hamburg, Whisp) über cURL mit `CURLOPT_TIMEOUT` als einer Wanduhr-Frist und `CURLOPT_CONNECTTIMEOUT` für den
-Verbindungsaufbau. Es liefert `['status', 'roh', 'fehler']` mit den Kennungen `''` (in Ordnung), `netz` (keine Antwort),
+Noch eins dazu: die Kopfzeilen liest `fopen` selbst, und eine Gegenstelle, die den Kopf Byte für Byte tröpfelt, hält es
+beliebig lange fest (nachgestellt: 42 s trotz `timeout` 3). Wer den HTTP-Status braucht, POST sendet oder einer solchen
+Gegenstelle begegnen kann, nimmt deshalb `abruf_http($url, $kopfzeilen, $frist, $maxByte, $methode, $inhalt)`
+(`lib/abruf.php`): eigene Verbindung (`stream_socket_client` mit Teilfrist für den Aufbau, `tls://` mit Prüfung des
+Zertifikats), eigene Anfrage, und alles Lesen durch `abruf_frist_strom` – dort hat jeder Lesevorgang nur die restliche
+Gesamtfrist, eine stumme wie eine tröpfelnde Gegenstelle endet also mit ihr. Keine Weiterleitungen, keine Cookies, nur
+die übergebenen Kopfzeilen; keine PHP-Erweiterung außer dem Kern (cURL ist im Image nicht installiert). Der Rumpf wird
+bei angekündigter Länge genau so lang gelesen (so wartet der Abruf nicht auf das Ende einer offen gehaltenen
+Verbindung), bei `Transfer-Encoding: chunked` Stück für Stück bis zum Schlussstück – fehlt es, war die Antwort halb.
+Der Container-Import führt so beide Abrufe (Hafen Hamburg, Whisp). Rückgabe ist `['status', 'roh', 'fehler']` mit den Kennungen `''` (in Ordnung), `netz` (keine Antwort),
 `halb` (Antwort brach ab oder Frist um) und `gross` (mehr als `$maxByte`); bei jedem Fehler ist `roh` leer, ein halber
 Inhalt wird also nie ausgewertet – eine abgeschnittene Antwort kann nicht still zum neuen Stand werden. Die Vormerkung
 eines laufenden Abrufs muss länger gelten als die Gesamtfrist (`CI_HAFEN_VERSUCH` > `CI_HAFEN_ZEITLIMIT`). Die übrigen
-Abrufe (`lib/nutzer.php`, `lib/firewall.php`, `ort.php`, `geo.php`) nutzen noch Stromkontexte je Schritt.
+Abrufe (`lib/nutzer.php`, `lib/firewall.php`, `ort.php`, `geo.php`) holen große Dateien über Stromkontexte und
+`abruf_frist_strom`/`abruf_text`; deren Frist liegt über dem Rumpf, nicht über der Kopfphase.
 
 Sicherheitseinstellungen liest `sec()` einmal je Anfrage: `array_merge(SEC_DEFAULTS, store_read('sicherheit') ?? [])`.
 
@@ -486,15 +495,15 @@ Abruf der Bedrohungsliste (`fw_feed_laden`, bis zu 2 × 30 s) liegt **vor** der 
 beim Öffnen geladenen Gesamtstand ohne Versionskennung.
 
 **Abrufe nach außen** (Länderdaten `geo.php`, Ortsdaten `ort.php`, Bedrohungsliste `lib/firewall.php`, Datenleck-Prüfung
-`lib/nutzer.php`, Keycloak `lib/anmeldekonten.php`, Hafen Hamburg `module/containerimport/hafen.php`) halten einen
-gemeinsamen Standard – die Helfer dafür stehen in `geo.php`:
+`lib/nutzer.php`, Keycloak `lib/anmeldekonten.php`, Hafen Hamburg `module/containerimport/hafen.php`, Whisp
+`module/containerimport/whisp.php`) halten einen gemeinsamen Standard – die Helfer dafür stehen in `lib/abruf.php`:
 
 | Regel | Warum | Wie |
 | --- | --- | --- |
-| **Gesamtfrist** je Abruf | `timeout` im Stream-Kontext ist nur das Lesezeitlimit **je Lesevorgang**, und PHP zählt Wartezeit in Stream-Aufrufen nicht auf `max_execution_time`: eine tröpfelnde Gegenstelle (ein Byte je Sekunde) hält Arbeitsprozess und Sperre der Aktion beliebig lange fest – `set_time_limit` greift nicht | `abruf_frist_strom($strom, $ende, $max, 'Ortsdaten')` legt sich **unter** den Leser (`fgets`, `fgetcsv`, zlib-Filter) und bricht mit einer Ausnahme ab; für ganze Antworten `abruf_text($url, $ctx, $ende, $max)` statt `file_get_contents` (liefert bei Fristablauf `false`, nie einen abgeschnittenen Text) |
+| **Gesamtfrist** je Abruf | `timeout` im Stream-Kontext ist nur das Lesezeitlimit **je Lesevorgang**, und PHP zählt Wartezeit in Stream-Aufrufen nicht auf `max_execution_time`: eine tröpfelnde Gegenstelle (ein Byte je Sekunde) hält Arbeitsprozess und Sperre der Aktion beliebig lange fest – `set_time_limit` greift nicht | `abruf_frist_strom($strom, $ende, $max, 'Ortsdaten')` legt sich **unter** den Leser (`fgets`, `fgetcsv`, zlib-Filter) und bricht mit einer Ausnahme ab; für ganze Antworten `abruf_text($url, $ctx, $ende, $max)` statt `file_get_contents` (liefert bei Fristablauf `false`, nie einen abgeschnittenen Text); `abruf_http($url, $kopfzeilen, $frist, $maxByte, …)`, wenn die Frist auch den Verbindungsaufbau und die Kopfzeilen tragen muss |
 | **Mengengrenze** | ein endloser Strom füllt sonst Speicher und Platte | zweites Argument von `abruf_frist_strom`/`abruf_text`; entpackte Ströme zusätzlich je Zeile (`ORT_MAX_ZEILEN`) |
 | **Höchstens eine Weiterleitung** | `follow_location` ohne `max_redirects` folgt bis zu 20 Sprüngen | `'follow_location' => 1, 'max_redirects' => 1` (Keycloak und Hafen Hamburg: beides 0) |
-| **Plausibel vollständig** | ein Abbruch sieht für `fgets`/`fgetcsv` wie das Dateiende aus; eine absolute Mindestzahl erkennt nur den völligen Ausfall, ein Rest von 3 Prozent würde die Sperrdatenbank still ersetzen | `abruf_vollstaendig($neu, $min, $alt)`: mindestens `$min` **und** mindestens die Hälfte des bisherigen Bestands (`geo_info()`, `ort_info()`, `fw_feed_info()`); sonst Ausnahme, und der alte Bestand bleibt aktiv. Die Hälfte, weil eine engere Schranke eine echte Schrumpfung der Quelle dauerhaft abweisen würde – Begründung im Kopf von `geo.php` |
+| **Plausibel vollständig** | ein Abbruch sieht für `fgets`/`fgetcsv` wie das Dateiende aus; eine absolute Mindestzahl erkennt nur den völligen Ausfall, ein Rest von 3 Prozent würde die Sperrdatenbank still ersetzen | `abruf_vollstaendig($neu, $min, $alt)`: mindestens `$min` **und** mindestens die Hälfte des bisherigen Bestands (`geo_info()`, `ort_info()`, `fw_feed_info()`); sonst Ausnahme, und der alte Bestand bleibt aktiv. Die Hälfte, weil eine engere Schranke eine echte Schrumpfung der Quelle dauerhaft abweisen würde – Begründung im Kopf von `lib/abruf.php` |
 | **Alle Quellen** | eine erreichbare von zwei genügte nicht: die Teilmenge einer Quelle wäre still der neue Stand | `fw_feed_laden` verlangt Antworten von allen `FW_FEED_QUELLEN` |
 
 Nach einem abgewiesenen Abruf bleibt der bisherige Stand wirksam (Länderdatenbank, Ortsdaten, Bedrohungsliste); die Aktion
