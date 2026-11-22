@@ -321,6 +321,18 @@ check('Export: Eigenschaften in vorgeschriebener Schreibweise, Fläche als Zahl,
       and 'Estancia Beispiel (990010001)' in [p['ProductionPlace'] for p in props], props)
 check('Export: Umrisse geschlossen, 6 Nachkommastellen', all(f['geometry']['coordinates'][0][0] == f['geometry']['coordinates'][0][-1] and all(round(v, 6) == v for p in f['geometry']['coordinates'][0] for v in p)
                                                           for f in r['geojson']['features'] if f['geometry']['type'] == 'Polygon'))
+# Farmer am Container stehen in der Reihenfolge der Farmerliste, gleich wie der Container ihre Kennungen speichert; doppelte
+# und unbekannte Kennungen fallen weg (Nachschlagen über eine Tabelle statt Suche in allen Farmern)
+roh = storage_raw('containerimport-eudr-sendungen')
+doc = _json(roh)
+c = next(x for x in doc['liste'] if x['id'] == sid)
+liste = [b['name'] + (' (' + b['kennung'] + ')' if b['kennung'] else '') for b in stand()['betriebe'] if b['id'] in c['betriebe'] and b['stand'] != 'fehler']
+c['betriebe'] = ['bUnbekannt', *reversed(c['betriebe']), c['betriebe'][0]]
+storage_write('containerimport-eudr-sendungen', doc)
+st2, r2 = I.call('containerimport_eudr_export&sendung=' + sid)
+storage_write('containerimport-eudr-sendungen', _json(roh))
+check('Farmer am Container in der Reihenfolge der Farmerliste, ohne doppelte und unbekannte Kennungen',
+      st2 == 200 and [f['properties']['ProductionPlace'] for f in r2['geojson']['features']] == [p['ProductionPlace'] for p in props] == liste and r2['ausgelassen'] == r['ausgelassen'], (st2, r2.get('ausgelassen'), liste))
 st, r = L.call('containerimport_eudr_export&betrieb=' + ids['Estancia Beispiel'])
 check('Export eines einzelnen Farmers (für die Gegenprüfung)', st == 200 and r['datei'] == 'EUDR_990010001.geojson' and len(r['geojson']['features']) == 1, (st, r))
 check('Export: unbekannter Container 404', I.call('containerimport_eudr_export&sendung=nein')[0] == 404)

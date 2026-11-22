@@ -734,11 +734,17 @@ function eudr_profil(array $s, array $bs): array
     ];
 }
 
-/* Betriebe einer Sendung als Sichten: nach dem Abschluss der Schnappschuss, sonst der aktuelle Stand */
-function eudr_sendung_betriebe(array $s, array $sichten): array
+/* Betriebe einer Sendung als Sichten: nach dem Abschluss der Schnappschuss, sonst der aktuelle Stand in der Reihenfolge der
+   Liste $sichten (doppelte und unbekannte Kennungen fallen weg). $stelle = Kennung → Stelle in $sichten; eudr_stand baut die
+   Tabelle einmal für alle Sendungen, sonst Aufwand Sendungen × Betriebe in jeder Antwort. */
+function eudr_sendung_betriebe(array $s, array $sichten, ?array $stelle = null): array
 {
     if (!empty($s['abschluss'])) return $s['abschluss']['betriebe'];
-    return array_values(array_filter($sichten, fn($b) => in_array($b['id'], $s['betriebe'], true)));
+    $stelle ??= array_flip(array_column($sichten, 'id'));
+    $treffer = [];
+    foreach ($s['betriebe'] as $id) if (is_string($id) && isset($stelle[$id])) $treffer[$stelle[$id]] = true;
+    ksort($treffer);
+    return array_map(fn($i) => $sichten[$i], array_keys($treffer));
 }
 
 /* Abschluss einer Bewertung aus der Eingabe: Ergebnis, Begründung, Bearbeiter und Schnappschuss von Profil und Betrieben
@@ -767,11 +773,11 @@ function eudr_schnappschuss_punkte(array $sendungen): int
 /* Sendung für die Oberfläche: mit Profil – bei abgeschlossener Bewertung dem gespeicherten Schnappschuss; frühere
    Abschlüsse nur mit Ergebnis, Begründung und Grund. Der Name des Schlachthofs ($hofNamen: Kennung → Name) ist bei offener
    Bewertung der aktuelle, nach dem Abschluss der festgeschriebene. */
-function eudr_sendung_sicht(array $s, array $betriebe, array $hofNamen): array
+function eudr_sendung_sicht(array $s, array $betriebe, array $hofNamen, array $stelle): array
 {
     $s['fruehere'] = array_map(fn($f) => array_diff_key($f, ['profil' => 1, 'betriebe' => 1]), $s['fruehere'] ?? []);   // Schnappschüsse bleiben gespeichert
     if (empty($s['abschluss'])) $s['schlachthofName'] = $hofNamen[$s['schlachthof']] ?? $s['schlachthofName'];
-    $bs = eudr_sendung_betriebe($s, $betriebe);
+    $bs = eudr_sendung_betriebe($s, $betriebe, $stelle);
     return $s + ['name' => eudr_container_name($s), 'containerPruefung' => eudr_containernummer($s['container']), 'profil' => !empty($s['abschluss']) ? $s['abschluss']['profil'] : eudr_profil($s, $bs),
         'farmerPruefung' => ci_farmer_pruefung($bs, $s['offeneNummern'])];
 }
@@ -800,9 +806,10 @@ function eudr_stand(): array
     $sendungen = eudr_sendungen()['liste'];
     $hoefe = ci_schlachthoefe()['liste'];
     $hofNamen = array_column($hoefe, 'name', 'id');
+    $stelle = array_flip(array_column($betriebe, 'id'));
     return [
         'betriebe' => $betriebe,
-        'sendungen' => array_map(fn($s) => eudr_sendung_sicht($s, $betriebe, $hofNamen), $sendungen),
+        'sendungen' => array_map(fn($s) => eudr_sendung_sicht($s, $betriebe, $hofNamen, $stelle), $sendungen),
         'offeneNummern' => ci_offene_nummern($sendungen, ci_nummern_index($betriebe)),
         'laender' => array_map(fn($l) => ['name' => $l['name'], 'klasse' => $l['klasse']], EUDR_LAENDER),
         'schlachthoefe' => $hoefe,
