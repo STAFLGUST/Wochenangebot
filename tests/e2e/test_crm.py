@@ -173,6 +173,14 @@ check('gleichzeitiges Bearbeiten verschiedener Felder überschreibt nichts', c['
 st, r = Bb.call('crm_kunde_save', {'key': 'kbbb222222222', 'felder': {'kontakte': [{'name': 'Clara Koch', 'funktion': 'Küchenchefin', 'telefon': '0431 1111', 'email': 'c.koch@beispiel.example'},
                                                                                    {'name': '', 'funktion': '', 'telefon': '', 'email': ''}]}})
 check('Ansprechpartner gespeichert, leere Zeile weggelassen', st == 200 and r['kunde']['crm']['kontakte'] == [{'name': 'Clara Koch', 'funktion': 'Küchenchefin', 'telefon': '0431 1111', 'email': 'c.koch@beispiel.example'}], r)
+# Zahlen in deutscher Schreibweise: Mengen „1.500“ = 1500 kg, Preise „4.50“ = 4,50 €; unlesbar → 422
+for feld_, ein_, soll_ in (('potenzialKg', '1.500', 1500), ('potenzialKg', '1.234,5', 1234.5), ('bestellKg', '12.000', 12000), ('potenzialKg', '0,5', 0.5),
+                           ('preisKg', '4,50', 4.5), ('preisKg', '4.50', 4.5), ('preisKg', '1.234,50', 1234.5), ('dbKg', '1,25', 1.25)):
+    st, r = Bb.call('crm_kunde_save', {'key': 'kddd444444444', 'felder': {feld_: ein_}})
+    check(f'Kundenblatt: {feld_} „{ein_}“ → {soll_}', st == 200 and r['kunde']['crm'][feld_] == soll_, (st, r.get('kunde', {}).get('crm', {}).get(feld_), r.get('error')))
+for ein_ in ('1.5.0', '12 kg', '1,2,3'):
+    check(f'Kundenblatt: Potenzial „{ein_}“ unlesbar → 422', Bb.call('crm_kunde_save', {'key': 'kddd444444444', 'felder': {'potenzialKg': ein_}})[0] == 422)
+Bb.call('crm_kunde_save', {'key': 'kddd444444444', 'felder': {'potenzialKg': None, 'bestellKg': None, 'preisKg': None, 'dbKg': None}})
 for name, felder in (('unbekanntes Segment', {'segment': 'Raumfahrt'}), ('ungültiges Datum', {'wiedervorlage': '2026-02-30'}), ('negative Menge', {'potenzialKg': -3}),
                      ('Text statt Zahl', {'dbKg': 'viel'}), ('ungültige E-Mail eines Ansprechpartners', {'kontakte': [{'name': 'A', 'email': 'kein-mail'}]}),
                      ('zu viele Ansprechpartner', {'kontakte': [{'name': f'P{i}'} for i in range(13)]}), ('zu lange Notiz', {'notiz': 'x' * 2001}),
@@ -302,6 +310,11 @@ with sync_playwright() as p:
     pg.fill('#kunde-inhalt input[data-blatt="dbKg"]', 'abc'); pg.press('#kunde-inhalt input[data-blatt="dbKg"]', 'Tab')
     pg.wait_for_function("document.querySelector('#blatt-status').classList.contains('fehler')")
     check('ungültige Zahl: Hinweis, alter Wert bleibt', pg.input_value('#kunde-inhalt input[data-blatt="dbKg"]') == '1,25' and dokument('crm-kunden')['eintraege']['kaaa111111111']['dbKg'] == 1.25)
+    for ein_, soll_ in (('1.500', 1500), ('120,5', 120.5)):   # deutsche Schreibweise mit Tausenderpunkt: 1.500 kg, nicht 1,5 kg
+        pg.fill('#kunde-inhalt input[data-blatt="potenzialKg"]', ein_); pg.press('#kunde-inhalt input[data-blatt="potenzialKg"]', 'Tab')
+        pg.wait_for_function("['Gespeichert.', 'Nicht gespeichert – bitte Eingabe prüfen.'].includes(document.querySelector('#blatt-status').textContent)")
+        check(f'Potenzial „{ein_}“ im Kundenblatt gespeichert als {soll_} kg', dokument('crm-kunden')['eintraege']['kaaa111111111']['potenzialKg'] == soll_,
+              dokument('crm-kunden')['eintraege']['kaaa111111111']['potenzialKg'])
     pg.click('[data-kontakt-neu]')
     zeile = pg.locator('#kontakte [data-kontakt]').last
     zeile.locator('[data-k="name"]').fill('Dora Disponentin'); zeile.locator('[data-k="telefon"]').fill('040 7654321')

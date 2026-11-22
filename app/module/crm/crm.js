@@ -821,7 +821,7 @@
       const name = el.dataset.blatt;
       let v = el.value;
       if (name === 'anrufAktiv') v = v === 'Ja';
-      if (['potenzialKg', 'preisKg', 'dbKg', 'bestellKg'].includes(name)) v = v.trim() === '' ? null : v.trim().replace(',', '.');
+      if (['potenzialKg', 'preisKg', 'dbKg', 'bestellKg'].includes(name)) v = v.trim() === '' ? null : v.trim();   // deutsche Schreibweise liest der Server (crm_zahl)
       blattStatus('Wird gespeichert …');
       const k = await speichereFelder(offenKey, { [name]: v });
       if (k) blattStatus('Gespeichert.', 'ok');
