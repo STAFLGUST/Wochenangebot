@@ -253,7 +253,8 @@ switch ($action) {
         }
 
         /* Bewertung abschließen (Ergebnis, Begründung, Schnappschuss von Profil und Betrieben) oder wieder öffnen (mit Grund).
-           „Vernachlässigbar“ geht nie mit einem kritischen Kriterium, mit offenen Kriterien nur mit Begründung. */
+           „Vernachlässigbar“ geht nie mit einem kritischen Kriterium, mit offenen Kriterien nur mit Begründung. Würden die
+           Schnappschüsse aller Container zusammen EUDR_MAX_PUNKTE_SCHNAPPSCHUESSE überschreiten, 422 statt eines Speicherabbruchs. */
         case 'containerimport_eudr_sendung_abschluss': {
             $me = eudr_bearbeiter();
             $b = body();
@@ -274,6 +275,9 @@ switch ($action) {
                 }
                 $s['rev']++; $s['geaendert'] = eudr_wer($me);
                 $doc['liste'][$i] = $s;
+                // nur beim Abschluss: Wiederöffnen fügt keine Punkte hinzu und muss auch über der Grenze gehen
+                if ($s['abschluss'] && eudr_schnappschuss_punkte($doc['liste']) > EUDR_MAX_PUNKTE_SCHNAPPSCHUESSE)
+                    fail('Die festgehaltenen Umrisse aller abgeschlossenen Bewertungen zusammen sind zu umfangreich – diese Bewertung lässt sich nicht abschließen. Bitte an den Administrator wenden.', 422);
                 eudr_sendungen_schreiben($doc);
                 return $s;
             });

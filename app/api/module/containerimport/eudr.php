@@ -26,6 +26,11 @@ const EUDR_SPERRE = 'containerimport-eudr-betriebe';   // eine Sperre für beide
 const EUDR_MAX_BETRIEBE = 2000;
 const EUDR_MAX_PUNKTE = 150000;          // Punkte aller Betriebe zusammen: jede Antwort rechnet und liefert alle Umrisse (Speichergrenze 128 MB)
 const EUDR_MAX_PUNKTE_ANFRAGE = 100000;  // Punkte aller Flächen einer Prüfung
+/* Punkte aller Umrisse in den Schnappschüssen des Container-Dokuments (Abschlüsse und frühere Abschlüsse zusammen). Jede
+   Aktion des Moduls liest das ganze Dokument, ohne Grenze brach store_read ab rund 400 000 Punkten mit einem Speicherfehler ab
+   (HTTP 500 für das ganze Modul). Gemessen im Dateibetrieb mit memory_limit = 128M und allen Bibliotheken: 100 000 Punkte sind
+   rund 2,8 MiB Dokument und 31 MiB Speicher; mit Farmern an EUDR_MAX_PUNKTE braucht eine Antwort (auch der Abschluss) 86 von 128 MiB. */
+const EUDR_MAX_PUNKTE_SCHNAPPSCHUESSE = 100000;
 const EUDR_MAX_FRUEHERE = 5;             // frühere Abschlüsse je Sendung, die ihren Schnappschuss behalten
 const EUDR_MAX_SENDUNGEN = 5000;
 const EUDR_MAX_ORTE_JE_DATEI = 1000;
@@ -748,6 +753,15 @@ function eudr_abschluss(array $s, array $eingabe, array $sichten, array $me): ar
     if ($ergebnis === 'vernachlaessigbar' && $profil['vernachlaessigbar'] === 'begruendung' && mb_strlen($begruendung) < 20)
         throw new InvalidArgumentException('Es sind noch Punkte offen. Bitte begründen, warum das Risiko trotzdem vernachlässigbar ist (mindestens 20 Zeichen).');
     return ['ergebnis' => $ergebnis, 'begruendung' => $begruendung, 'wer' => eudr_wer($me), 'profil' => $profil, 'betriebe' => $bs];
+}
+/* Punkte der Umrisse, die die Sendungen in ihren Schnappschüssen festhalten (Abschluss und frühere Abschlüsse; ältere frühere
+   ohne Farmer zählen nicht) – für EUDR_MAX_PUNKTE_SCHNAPPSCHUESSE */
+function eudr_schnappschuss_punkte(array $sendungen): int
+{
+    $n = 0;
+    foreach ($sendungen as $s) foreach ([$s['abschluss'] ?? null, ...($s['fruehere'] ?? [])] as $a)
+        foreach ($a['betriebe'] ?? [] as $b) if (is_array($b['geometrie'] ?? null)) $n += geo_punktzahl($b['geometrie']);
+    return $n;
 }
 
 /* Sendung für die Oberfläche: mit Profil – bei abgeschlossener Bewertung dem gespeicherten Schnappschuss; frühere

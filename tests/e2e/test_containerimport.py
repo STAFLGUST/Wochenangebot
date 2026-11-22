@@ -24,7 +24,7 @@ import re
 import tempfile
 from playwright.sync_api import sync_playwright
 from kunden_hilfe import Client, B
-from umgebung import SH, FIX, shot, storage_raw, storage_write, _json
+from umgebung import REPO, SH, FIX, shot, storage_raw, storage_write, _json
 
 PW = 'Sicheres-Passwort-1'
 res = []
@@ -407,9 +407,39 @@ s = r['sendungen'][0]
 check('alle Nachweise da: kein Risiko erkennbar', st == 200 and s['profil']['stand'] == 'ok' and set(profil(s).values()) == {'ok', 'hinweis'} and 'Sorgfaltserklärung kann abgegeben werden' in s['profil']['vorschlag'], s['profil'])
 check('Abschluss mit veraltetem Stand 409, unbekanntes Ergebnis 422', I.call('containerimport_eudr_sendung_abschluss', {'id': sid, 'rev': s['rev'] - 1, 'ergebnis': 'vernachlaessigbar'})[0] == 409
       and I.call('containerimport_eudr_sendung_abschluss', {'id': sid, 'rev': s['rev'], 'ergebnis': 'egal'})[0] == 422)
+# Grenze der Schnappschüsse: jeder Abschluss hält die Umrisse seiner Farmer im Dokument der Container fest, das jede Aktion ganz
+# liest. Ein archivierter Container trägt in einem früheren Abschluss so viele Punkte, dass dieser Abschluss die Grenze um einen
+# Punkt überschreitet (422, nichts gespeichert) bzw. genau erreicht (gelingt).
+GRENZE = int(re.search(r'const EUDR_MAX_PUNKTE_SCHNAPPSCHUESSE = (\d+);', open(os.path.join(REPO, 'app', 'api', 'module', 'containerimport', 'eudr.php'), encoding='utf-8').read())[1])
+
+
+def punktzahl(g):
+    return 1 if g['type'] == 'Point' else sum(len(ring) for p in ([g['coordinates']] if g['type'] == 'Polygon' else g['coordinates']) for ring in p)
+
+
+def gespeicherte_sendung(i):
+    return next(x for x in _json(storage_raw('containerimport-eudr-sendungen'))['liste'] if x['id'] == i)
+
+
+def ballast(n):
+    doc = _json(storage_raw('containerimport-eudr-sendungen'))
+    ring = [[round(-58 + k * 1e-6, 6), -23.0] for k in range(n - 1)] + [[-58.0, -23.0]]
+    doc['liste'] = [x for x in doc['liste'] if x['id'] != 'sBallast'] + ([{**gespeicherte_sendung(sid), 'id': 'sBallast', 'partie': 'P-BALLAST', 'aktiv': False, 'betriebe': [], 'abschluss': None,
+        'fruehere': [{'ergebnis': 'nicht_vernachlaessigbar', 'begruendung': '', 'betriebe': [{'name': 'Ballast', 'geometrie': {'type': 'Polygon', 'coordinates': [ring]}}]}]}] if n else [])
+    storage_write('containerimport-eudr-sendungen', doc)
+
+
+eigene = sum(punktzahl(b['geometrie']) for b in stand()['betriebe'] if b['id'] in gut)
+frei = GRENZE - eigene - sum(punktzahl(b['geometrie']) for x in _json(storage_raw('containerimport-eudr-sendungen'))['liste'] for a in [x.get('abschluss'), *x.get('fruehere', [])] if a for b in a.get('betriebe', []))
+ballast(frei + 1)
 st, r = I.call('containerimport_eudr_sendung_abschluss', {'id': sid, 'rev': s['rev'], 'ergebnis': 'vernachlaessigbar', 'begruendung': 'Alle Nachweise geprüft.'})
+check('Schnappschüsse über der Grenze: Abschluss 422 mit verständlicher Meldung, nichts gespeichert', st == 422 and 'zu umfangreich' in r.get('error', '')
+      and gespeicherte_sendung(sid)['abschluss'] is None and gespeicherte_sendung(sid)['rev'] == s['rev'], (st, r.get('error'), eigene, frei))
+ballast(frei)
+st, r = I.call('containerimport_eudr_sendung_abschluss', {'id': sid, 'rev': s['rev'], 'ergebnis': 'vernachlaessigbar', 'begruendung': 'Alle Nachweise geprüft.'})
+ballast(0)
 s = r['sendungen'][0]
-check('Bewertung abgeschlossen: Ergebnis, Bearbeiter, Schnappschuss von Profil und Farmern', st == 200 and s['abschluss']['ergebnis'] == 'vernachlaessigbar' and s['abschluss']['wer']['von'] == 'Ina Import'
+check('Bewertung abgeschlossen (Schnappschüsse genau an der Grenze): Ergebnis, Bearbeiter, Schnappschuss von Profil und Farmern', st == 200 and s['abschluss']['ergebnis'] == 'vernachlaessigbar' and s['abschluss']['wer']['von'] == 'Ina Import'
       and s['abschluss']['profil']['stand'] == 'ok' and len(s['abschluss']['betriebe']) == 2, (st, r.get('error')))
 nb = betrieb('Estancia Ejemplo Norte')
 I.call('containerimport_eudr_betriebe_save', {'betriebe': [{**nb, 'name': 'Estancia Umbenannt', 'bericht': {**nb['bericht'], 'entwaldung': 'nicht_konform'}}]})

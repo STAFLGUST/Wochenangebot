@@ -1027,6 +1027,21 @@ Die einzige Beschreibung der Regeln; Code-Kommentare verweisen hierher.
   `--entfernen <sendung-id>[,…]` entfernt es diese Kalkulationen aus dem Dokument. Ohne geprüften Export wird nichts entfernt –
   die Exportdatei ist das Archiv dieser Vorgänge (GoBD) und gehört in die Sicherung. Die Anwendung selbst löscht nie eine Fassung.
 
+### Container-Import: Grenze der Schnappschuss-Umrisse (`module/containerimport/eudr.php`, seit 23.11.2026)
+
+- Jeder Abschluss einer Bewertung kopiert die Farmer samt Umriss in `abschluss.betriebe` von `containerimport-eudr-sendungen`,
+  beim Wiederöffnen wandert er nach `fruehere` (die letzten `EUDR_MAX_FRUEHERE` behalten ihre Farmer). Jede Aktion des Moduls
+  liest das ganze Dokument; ohne Grenze brach `store_read` ab rund 400 000 Punkten mit einem Speicherfehler ab (HTTP 500 für
+  Container-Import, Tracking, Dokumente und Kalkulation).
+- **`EUDR_MAX_PUNKTE_SCHNAPPSCHUESSE` = 100 000** Punkte aller Umrisse in Abschlüssen und früheren Abschlüssen zusammen
+  (`eudr_schnappschuss_punkte`), geprüft beim Abschluss; darüber 422 statt eines Speicherabbruchs. Wiederöffnen fügt keine
+  Punkte hinzu und geht immer. Das Datenformat bleibt unverändert (GR-006).
+- **Gemessen** (Dateibetrieb, `memory_limit = 128M`, alle Bibliotheken geladen wie in einer Anfrage): 100 000 Punkte sind rund
+  2,8 MiB Dokument und 31 MiB Speicher; mit Farmern an `EUDR_MAX_PUNKTE` (150 000, allein 54 MiB) braucht der Stand der Seite
+  85 MiB, der Abschluss 86 von 128 MiB.
+- **Greift die Grenze**, lässt sich keine weitere Bewertung abschließen. Abhilfe ist der Umbau „Umrisse der Schnappschüsse in
+  ein eigenes Dokument je Container“ (Entscheidung des Inhabers, Datenformat und Aufbewahrung nach GR-106).
+
 ## 5.4 Datenverantwortung (GR-101)
 
 Jedes Dokument hat **genau einen Eigentümer** (ein Modul). Eingetragen in `regeln/datenverantwortung.toml`:
