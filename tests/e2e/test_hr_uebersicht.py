@@ -139,9 +139,12 @@ eintrag(PL, 'G', MRZ, MRZ)                                                      
 weih = dt.date(Y, 12, 22)
 eintrag(PL, 'K', weih, weih + dt.timedelta(days=6))                                       # über Weihnachten
 erw_weih = sum(1 for i in range(7) if (weih + dt.timedelta(days=i)).weekday() < 5 and (weih + dt.timedelta(days=i)).strftime('%m-%d') not in ('12-25', '12-26'))
-# Lena beantragt zuerst (Vertretung Pflicht): danach ist Andre krank – vorher lehnte der Server ab (Vertretung abwesend, 10.11.2026)
+# Lena beantragt zuerst (Vertretung Pflicht): danach ist Andre krank – vorher lehnte der Server ab (Vertretung abwesend, 10.11.2026).
+# Frei wählbar ist eine Vertretung nur in der eigenen Abteilung (Inhaber 22.11.2026) – Andre dafür kurz in Lenas Abteilung
+hr(ids['andre-vierzig'], abteilung='Verwaltung')
 st, r = L.call('hr_antrag', {'von': iso(AUG), 'bis': iso(AUG + dt.timedelta(days=1)), 'notiz': 'Sommerreise-Notiz', 'vertretung': ids['andre-vierzig']})
 check('Lena beantragt 2 Tage', st == 200, r)
+hr(ids['andre-vierzig'], abteilung='Lager')   # Abteilungsgrenzen prüft dieser Lauf unten im Kalender
 eintrag(PA, 'K', AUG, AUG + dt.timedelta(days=4))                                         # Mo–Fr, 4-Tage-Woche: 4
 storno = eintrag(PA, 'G', AUG + dt.timedelta(days=7), AUG + dt.timedelta(days=7))
 check('stornierter Gleittag', P.call('hr_eintrag_save', {'id': storno, 'stornieren': True})[0] == 200)

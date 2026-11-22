@@ -16,7 +16,9 @@
    zeigt vor dem Absenden, ob die Vertretung da ist. 24.12./31.12.: Betrieb geschlossen, je ½ Urlaubstag (Kalender markiert).
    Vertretung (Inhaber 10.11.2026, 2. Teil): feste Vertretung aus den Stammdaten steht gesperrt im Antrag (hr_start.festeVertretung),
    dazu optional eine zusätzliche Vertretung (Zusatz, kein Pflichtfeld) – beide müssen da sein; „Sie vertreten“ zeigt, wen man
-   vertritt (hr_start.vertretungen). Reiter
+   vertritt (hr_start.vertretungen). Die Auswahllisten zeigen nur, was hr_start in „kollegen“ liefert: seit 22.11.2026 nur
+   Kollegen der eigenen Abteilung (der Server nimmt nichts anderes an; abteilungsübergreifend trägt die Personalstelle eine
+   feste Vertretung ein). Reiter
    „Jahresplanung“ (nur Personalstelle; gesammelt genehmigen mit „Urlaub genehmigen“): Stand je Mitarbeiter, Zeitleiste mit Konflikten, Anträge
    mit Konflikten genehmigen/ablehnen, konfliktfreie gesammelt genehmigen, Erinnerung, Abschluss mit Jahresübersicht.
    Offene Anträge der laufenden Vorplanung stehen für die Personalstelle nur dort (Server: Merkmal „planung“), mit eigener

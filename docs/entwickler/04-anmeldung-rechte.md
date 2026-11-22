@@ -465,7 +465,13 @@ bestimmt, fragt sonst Zeile für Zeile ab, was die Antwort einzeln verweigert. B
 15.11.2026: die Importvorschau der Stammdatenlisten zählt entfallende Einträge mit zugeordneten Kunden nur noch mit
 `kunden.sehen` (`gruppen_import_vorschau`, derselbe Schalter `$zaehlt` wie für die Zahl je Zeile); die
 Vertretungsprüfung in HR nennt die genauen Abwesenheitstage nur im Rahmen der Abteilungsgrenze des Kalenders
-(`hr_antrag_zeitraum`).
+(`hr_antrag_zeitraum`). Dasselbe Beispiel ein Schritt weiter (Audit run-3, Entscheidung des Inhabers 22.11.2026): auch
+„verfügbar / nicht verfügbar“ ist eine abgeleitete Angabe – bei einem Zeitraum von einem Tag ist sie genau der verborgene
+Abwesenheitstag. Deshalb reicht es nicht, das Feld `status` wegzulassen; die **Auswahl** ist begrenzt. Als Vertretung
+nimmt der Server nur an, wen der Anfragende im Kalender ohnehin sähe (eigene Abteilung, `hr.verwalten` oder
+`hr.uebersicht`) oder wen die Personalstelle fest hinterlegt hat – sonst 422 mit derselben Meldung wie bei einer
+unbekannten Person. Merkregel: Wer eine Angabe nicht sehen darf, darf sie auch nicht abfragen – die Grenze gehört dorthin,
+wo die Eingabe entsteht, nicht in den Antworttext.
 
 **Versand (seit 13.11.2026):** Veröffentlichen und Senden liegen im Modul `versand` mit eigenem Modulzugang `versand.zugang`
 (`zugang_rollen = []` – keine Standardrolle, nur Administratoren). Die bestehenden Rechte `angebot.veroeffentlichen`,
