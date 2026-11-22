@@ -3,6 +3,9 @@
  * Ungefährer Ort (Stadt) einer IP-Adresse – für die Karte der Kunden-Anmeldungen (Auswertung)
  * Datenquelle: DB-IP „IP to City Lite“ (CC BY 4.0, https://db-ip.com), monatlich aktualisiert.
  * Namensnennung: „IP Geolocation by DB-IP“ (wird in der Auswertung angezeigt).
+ * Der Abruf hält den Hausstandard aus geo.php: Gesamtfrist über den ganzen Abruf (ORT_FRIST, abruf_frist_strom – das
+ * Lesezeitlimit des Stroms gilt nur je Lesevorgang und hielte die Sperrdatei der Aktion sonst beliebig lange), Mengengrenze
+ * und höchstens eine Weiterleitung; ein abgebrochener Abruf ersetzt den Bestand nicht (abruf_vollstaendig).
  *
  * Binärformat orte.dat.php (im Datenordner; beginnt mit einer PHP-Sperre, damit die Datei im Browser nicht abrufbar ist):
  *   ORT_GUARD | "ORT1" | n4 (uint32) | n6 (uint32) | nOrte (uint32) | Stand (10 Byte, JJJJ-MM-TT)
@@ -18,6 +21,9 @@ const ORT_HEAD = 26;
 const ORT_OFF = 55 + ORT_HEAD;           // strlen(ORT_GUARD) + Kopf
 const ORT_REC = 64;                      // Länge eines Ort-Eintrags
 const ORT_URL = 'https://download.db-ip.com/free/dbip-city-lite-%s.csv.gz';
+const ORT_FRIST = 600;                 // Gesamtfrist des ganzen Abrufs in Sekunden, unter set_time_limit(900) der Aktion (abruf_frist_strom in geo.php)
+const ORT_MAX_BYTE = 512 << 20;        // Mengengrenze der heruntergeladenen (gepackten) Datei; die Quelle liefert heute rund 100 MB
+const ORT_MAX_ZEILEN = 25 * 1000000;   // Mengengrenze der entpackten Zeilen gegen einen endlos entpackenden Strom; die Quelle hat wenige Millionen
 
 function ort_file(): ?string
 {
@@ -108,7 +114,9 @@ function ort_build($in, string $out, string $date): array
             if ($v6) { $buf .= $prev[0] . $prev[1] . pack('N', $prev[2]); $n6++; }
             else { $buf .= pack('NNN', $prev[0], $prev[1], $prev[2]); $n4++; }
         };
+        $zeilen = 0;
         while (($row = fgetcsv($in, 0, ',', '"', '')) !== false) {
+            if (++$zeilen > ORT_MAX_ZEILEN) throw new RuntimeException('Der Abruf der Ortsdaten liefert unerwartet viele Zeilen.');
             if (count($row) < 8) continue;
             $cc = $row[3];
             if (!preg_match('/^[A-Z]{2}$/', $cc)) continue;
@@ -140,7 +148,9 @@ function ort_build($in, string $out, string $date): array
         $flush();
         fwrite($fo, $buf); $buf = '';
         unset($locs);
-        if ($n4 < 100000 || $n6 < 10000) throw new RuntimeException('Die Ortsdaten sind unvollständig.');
+        $vorher = ort_info();   // bisheriger Bestand, vor dem Umbenennen gelesen: ein Bruchteil davon ist ein abgebrochener Abruf
+        if (!abruf_vollstaendig($n4, 100000, $vorher['v4'] ?? null) || !abruf_vollstaendig($n6, 10000, $vorher['v6'] ?? null))
+            throw new RuntimeException('Die Ortsdaten sind unvollständig.');
         rewind($fl);
         stream_copy_to_stream($fl, $fo);
         rewind($fo);
@@ -160,11 +170,21 @@ function ort_build($in, string $out, string $date): array
 /* aktuelle Ortsdaten herunterladen (dieser oder letzter Monat) und in den Datenordner schreiben */
 function ort_download(string $out): array
 {
-    $ctx = stream_context_create(['http' => ['timeout' => 120, 'user_agent' => 'Wochenangebot', 'follow_location' => 1], 'ssl' => ['verify_peer' => true]]);
+    $ctx = stream_context_create(['http' => ['timeout' => 120, 'user_agent' => 'Wochenangebot', 'follow_location' => 1, 'max_redirects' => 1], 'ssl' => ['verify_peer' => true]]);
     foreach ([utc_monat(), utc_monat(-1)] as $m) {
-        $in = @fopen('compress.zlib://' . sprintf(getenv('WA_ORT_URL') ?: ORT_URL, $m), 'rb', false, $ctx);   // WA_ORT_URL nur in den Tests
-        if (!$in) continue;
-        try { return ort_build($in, $out, $m . '-01') + ['date' => $m . '-01']; } finally { fclose($in); }
+        $roh = @fopen(sprintf(getenv('WA_ORT_URL') ?: ORT_URL, $m), 'rb', false, $ctx);   // WA_ORT_URL nur in den Tests
+        if (!$roh) continue;
+        // Entpacken als Filter über dem Fristen-Strom statt compress.zlib:// über der Adresse: nur so liegt die Gesamtfrist
+        // unter dem Entpacker (compress.zlib braucht eine echte Dateikennung und nimmt keinen eigenen Strom).
+        // Ein gepacktes Archiv aus mehreren Teilen würde nur bis zum ersten Teil gelesen – das fängt die
+        // Plausibilitätsprüfung in ort_build ab (der Bestand bleibt dann aktiv).
+        try {
+            $in = abruf_frist_strom($roh, microtime(true) + ORT_FRIST, ORT_MAX_BYTE, 'Ortsdaten');   // je Monatsstand eine eigene Frist
+            if (!@stream_filter_append($in, 'zlib.inflate', STREAM_FILTER_READ, ['window' => 47])) { fclose($in); throw new RuntimeException('Die Ortsdaten ließen sich nicht entpacken.'); }
+            try { return ort_build($in, $out, $m . '-01') + ['date' => $m . '-01']; } finally { fclose($in); }
+        } finally {
+            fclose($roh);
+        }
     }
     throw new RuntimeException('Die Ortsdaten konnten nicht heruntergeladen werden.');
 }

@@ -24,6 +24,7 @@ const FW_FENSTER = 600;          // Treffer zählen 10 Minuten
 const FW_FEHLER_FENSTER = 300;   // Fehlerbremse: 5 Minuten
 /* Bedrohungsliste: Spamhaus DROP – von Kriminellen übernommene bzw. betriebene Netze („Don't Route Or Peer“) */
 const FW_FEED_QUELLEN = ['https://www.spamhaus.org/drop/drop.txt', 'https://www.spamhaus.org/drop/dropv6.txt'];
+const FW_FEED_FRIST = 40;        // Gesamtfrist je Quelle in Sekunden (abruf_text in geo.php); beide zusammen unter set_time_limit(90) der Aktion
 
 /* Angriffsmuster: [Gruppe, Muster]. Geprüft werden Abfrageparameter und – ohne Mitarbeiter-Anmeldung – die Werte im
    JSON-Inhalt. Bewusst eindeutige Muster, damit normale Eingaben (Bemerkungen, Firmennamen) nicht abgewiesen werden. */
@@ -273,14 +274,17 @@ function fw_falle(): void
     exit;
 }
 
-/* Bedrohungsliste herunterladen und prüfen (nur öffentliche Netze, keine eigenen/freigegebenen Adressen) */
+/* Bedrohungsliste herunterladen und prüfen (nur öffentliche Netze, keine eigenen/freigegebenen Adressen).
+   Wie die übrigen Abrufe nach außen (geo.php): Gesamtfrist je Quelle, Mengengrenze, höchstens eine Weiterleitung. Ersetzt
+   wird die gespeicherte Liste nur, wenn alle Quellen geantwortet haben und das Ergebnis plausibel vollständig ist – sonst
+   wäre die Teilmenge einer Quelle still der neue Stand (abruf_vollstaendig). */
 function fw_feed_laden(): array
 {
-    $ctx = stream_context_create(['http' => ['timeout' => 30, 'user_agent' => 'Wochenangebot', 'follow_location' => 1], 'ssl' => ['verify_peer' => true]]);
+    $ctx = stream_context_create(['http' => ['timeout' => 30, 'user_agent' => 'Wochenangebot', 'follow_location' => 1, 'max_redirects' => 1], 'ssl' => ['verify_peer' => true]]);
     $netze = [];
     $ok = 0;
     foreach (FW_FEED_QUELLEN as $url) {
-        $t = @file_get_contents($url, false, $ctx, 0, 2000000);
+        $t = abruf_text($url, $ctx, microtime(true) + FW_FEED_FRIST, 2000000);
         if ($t === false) continue;
         $ok++;
         foreach (preg_split('/\R/', $t) as $z) {
@@ -292,8 +296,8 @@ function fw_feed_laden(): array
             $netze[] = $c;
         }
     }
-    if (!$ok) throw new RuntimeException('Die Bedrohungsliste konnte nicht geladen werden.');
-    if (count($netze) < 50) throw new RuntimeException('Die Bedrohungsliste ist unvollständig.');
+    if ($ok < count(FW_FEED_QUELLEN)) throw new RuntimeException('Die Bedrohungsliste konnte nicht vollständig geladen werden.');
+    if (!abruf_vollstaendig(count($netze), 50, fw_feed_info()['anzahl'] ?? null)) throw new RuntimeException('Die Bedrohungsliste ist unvollständig.');
     return fw_feed_speichern($netze, 'Spamhaus DROP');
 }
 function fw_feed_speichern(array $netze, string $quelle): array

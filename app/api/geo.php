@@ -8,6 +8,10 @@
  *   GEO_GUARD | "GEO2" | n4 (uint32) | n6 (uint32) | Stand (10 Byte, JJJJ-MM-TT)
  *   n4 × [start uint32 | ende uint32 | Land 2 Byte]          (IPv4)
  *   n6 × [start 8 Byte | ende 8 Byte | Land 2 Byte]           (IPv6, erste 64 Bit)
+ *
+ * Hier stehen auch die gemeinsamen Helfer für Abrufe nach außen (abruf_frist_strom, abruf_text, abruf_vollstaendig), die
+ * ort.php, lib/firewall.php und lib/nutzer.php mitbenutzen: diese Datei lädt lib/laden.php als erste, und ort.php holt
+ * sich hier schon geo_inc8 – so braucht es keinen weiteren Einbindeweg für drei kleine Funktionen.
  */
 declare(strict_types=1);
 if (realpath((string)($_SERVER['SCRIPT_FILENAME'] ?? '')) === __FILE__) { http_response_code(404); exit; }
@@ -16,6 +20,100 @@ const GEO_GUARD = "<?php http_response_code(404); exit; __halt_compiler();";
 const GEO_HEAD = 22;
 const GEO_OFF = 55 + GEO_HEAD; // strlen(GEO_GUARD) + Kopf
 const GEO_PKG = '@ip-location-db/geo-whois-asn-country';
+const GEO_FRIST = 300;           // Gesamtfrist des ganzen Abrufs in Sekunden (Metadaten und beide CSV): großzügig über der üblichen Dauer
+                                 // (rund 25 MB), aber endlich – set_time_limit(180) der Aktion begrenzt nur Rechenzeit, nicht das Warten am Strom
+const GEO_MAX_BYTE = 64 << 20;   // Mengengrenze je CSV; die Quelle liefert heute rund 15 MB
+
+/* ---------------- Abrufe nach außen (gemeinsam für geo, ort, Firewall und die Datenleck-Prüfung) ---------------- */
+
+/* Strom mit Gesamtfrist und Mengengrenze. Nötig, weil „timeout“ eines Stroms nur je Lesevorgang gilt: eine tröpfelnde
+   Gegenstelle (ein Byte je Sekunde) sendet immer wieder etwas, und fgets/fgetcsv warten dann beliebig lange auf das Ende
+   einer Zeile – Arbeitsprozess und Sperre des Aufrufers bleiben so lange gehalten (nachgestellt: 150 s trotz
+   set_time_limit(2), weil PHP Wartezeit in Stream-Aufrufen nicht auf max_execution_time zählt). Dieser Strom legt sich
+   unter den Leser und gibt jedem Lesevorgang nur die restliche Frist; sind Frist oder Menge verbraucht, bricht der Abruf mit
+   einer Ausnahme ab – sie trägt durch fgets, fgetcsv und einen zlib-Filter hindurch. Nicht selbst öffnen: abruf_frist_strom. */
+class AbrufFrist
+{
+    public $context;
+    public static array $warten = [];
+    private $fh;
+    private float $ende;
+    private int $max;
+    private int $gelesen = 0;
+    private string $was;
+    public function stream_open($pfad, $modus, $opt, &$ge): bool
+    {
+        $k = substr((string)$pfad, strpos((string)$pfad, '://') + 3);
+        if (!isset(self::$warten[$k])) return false;
+        [$this->fh, $this->ende, $this->max, $this->was] = self::$warten[$k];
+        unset(self::$warten[$k]);   // jeder Strom wird genau einmal geöffnet
+        return true;
+    }
+    public function stream_read($n)
+    {
+        $rest = $this->ende - microtime(true);
+        if ($rest <= 0) throw new RuntimeException('Der Abruf der ' . $this->was . ' hat zu lange gedauert.');
+        if ($this->gelesen > $this->max) throw new RuntimeException('Der Abruf der ' . $this->was . ' liefert unerwartet viele Daten.');
+        @stream_set_timeout($this->fh, (int)ceil($rest));   // so endet auch eine ganz stumme Gegenstelle mit der Frist
+        $teil = fread($this->fh, $n);
+        $this->gelesen += strlen((string)$teil);
+        return $teil;
+    }
+    public function stream_eof(): bool { return feof($this->fh); }
+    public function stream_stat() { return []; }
+    public function stream_set_option($o, $a, $b): bool { return false; }
+}
+if (!in_array('wafrist', stream_get_wrappers(), true)) stream_wrapper_register('wafrist', 'AbrufFrist');
+
+/* Offenen Strom hinter Gesamtfrist ($ende: Zeitpunkt aus microtime) und Mengengrenze legen: gelesen wird aus dem
+   Rückgabewert, der ursprüngliche Strom bleibt dem Aufrufer zum Schließen. */
+function abruf_frist_strom($fh, float $ende, int $max, string $was)
+{
+    static $n = 0;
+    $k = (string)++$n;
+    AbrufFrist::$warten[$k] = [$fh, $ende, $max, $was];
+    $neu = @fopen('wafrist://' . $k, 'rb');
+    if (!$neu) { unset(AbrufFrist::$warten[$k]); throw new RuntimeException('Der Abruf der ' . $was . ' ließ sich nicht beginnen.'); }
+    return $neu;
+}
+
+/* Antwort eines Abrufs vollständig lesen – statt file_get_contents, dessen „timeout“ ebenfalls nur je Lesevorgang gilt.
+   Nach der Gesamtfrist $ende oder über $max Byte gilt der Abruf als fehlgeschlagen: Rückgabe false wie bei einem nicht
+   erreichbaren Dienst, nie ein abgeschnittener Text (der wäre sonst still der neue Stand). */
+function abruf_text(string $url, $ctx, float $ende, int $max): string|false
+{
+    $fh = @fopen($url, 'rb', false, $ctx);
+    if (!$fh) return false;
+    try {
+        $roh = '';
+        while (strlen($roh) < $max && !feof($fh)) {
+            $rest = $ende - microtime(true);
+            if ($rest <= 0) return false;
+            @stream_set_timeout($fh, (int)ceil($rest));
+            $teil = fread($fh, 65536);
+            if ($teil === false || $teil === '' || stream_get_meta_data($fh)['timed_out']) break;
+            $roh .= $teil;
+        }
+        return strlen($roh) >= $max || feof($fh) ? substr($roh, 0, $max) : false;
+    } finally {
+        fclose($fh);
+    }
+}
+
+/* Ist eine heruntergeladene Liste plausibel vollständig und darf den bisherigen Bestand ersetzen?
+   Eine abgebrochene Übertragung – Verbindungsabbruch, abgeschnittener TLS-Strom, abgelaufenes Lesezeitlimit – sieht für
+   fgets/fgetcsv aus wie das Ende der Datei. Die absolute Mindestzahl $min erkennt nur den völligen Ausfall: ein Rest von
+   3 Prozent liegt weit darüber und würde die Sperrdatenbank still durch einen Bruchteil ersetzen. Deshalb zusätzlich gegen
+   den bisherigen Bestand $alt (null = es gibt keinen): weniger als die Hälfte ist kein neuer Stand, sondern ein Rest.
+   Die Hälfte und nicht etwa 0,8: die Quellen schwanken von Monat zu Monat um wenige Prozent, eine enge Schranke würde eine
+   echte Schrumpfung der Oberquelle dauerhaft abweisen – sicher (der alte Bestand bleibt aktiv), aber eben dauerhaft und
+   ohne jede Aktualisierung. Eine Halbierung hat keine der Quellen je gezeigt; träte sie ein, meldet die Oberfläche den
+   Fehlschlag, und der Weg zurück ist, die Datei im Datenordner zu entfernen (dann gilt wieder die mitgelieferte Fassung
+   bzw. gar kein Bestand) oder die Schranke bewusst zu senken. */
+function abruf_vollstaendig(int $neu, int $min, ?int $alt): bool
+{
+    return $neu >= $min && ($alt === null || $neu * 2 >= $alt);
+}
 
 /* aktuelle Datenbank: heruntergeladenes Update (Datenordner) vor mitgelieferter Fassung */
 function geo_file(): ?string
@@ -108,7 +206,9 @@ function geo_build($in4, $in6, string $out, string $date): array
         $prev = [$s, $e, $p[2]];
     }
     if ($prev) { $v6 .= $prev[0] . $prev[1] . $prev[2]; $n6++; }
-    if ($n4 < 10000 || $n6 < 1000) throw new RuntimeException('Die Länderdaten sind unvollständig.');
+    $alt = geo_info();   // bisheriger Bestand (Datenordner oder mitgelieferte Fassung), vor dem Umbenennen gelesen
+    if (!abruf_vollstaendig($n4, 10000, $alt['v4'] ?? null) || !abruf_vollstaendig($n6, 1000, $alt['v6'] ?? null))
+        throw new RuntimeException('Die Länderdaten sind unvollständig.');
     $tmp = $out . '.' . bin2hex(random_bytes(4)) . '.tmp';
     if (!is_dir(dirname($out))) @mkdir(dirname($out), 0775, true);
     $inhalt = GEO_GUARD . 'GEO2' . pack('NN', $n4, $n6) . substr(str_pad($date, 10), 0, 10) . $v4 . $v6;
@@ -120,9 +220,10 @@ function geo_build($in4, $in6, string $out, string $date): array
 /* neueste Länderdaten herunterladen und in den Datenordner schreiben */
 function geo_download(string $out): array
 {
-    $ctx = stream_context_create(['http' => ['timeout' => 60, 'user_agent' => 'Wochenangebot', 'follow_location' => 1], 'ssl' => ['verify_peer' => true]]);
+    $ende = microtime(true) + GEO_FRIST;
+    $ctx = stream_context_create(['http' => ['timeout' => 60, 'user_agent' => 'Wochenangebot', 'follow_location' => 1, 'max_redirects' => 1], 'ssl' => ['verify_peer' => true]]);
     $ver = '2';
-    $meta = @file_get_contents('https://data.jsdelivr.com/v1/packages/npm/' . GEO_PKG . '/resolved?specifier=2', false, $ctx);
+    $meta = abruf_text('https://data.jsdelivr.com/v1/packages/npm/' . GEO_PKG . '/resolved?specifier=2', $ctx, $ende, 65536);
     $j = $meta ? json_decode($meta, true) : null;
     if (is_array($j) && preg_match('/^\d+\.\d+\.\d+$/', (string)($j['version'] ?? ''))) $ver = $j['version'];
     $date = preg_match('/\.(\d{4})(\d{2})(\d{2})\d*$/', $ver, $m) ? "$m[1]-$m[2]-$m[3]" : gmdate('Y-m-d');
@@ -130,7 +231,11 @@ function geo_download(string $out): array
     $in4 = @fopen($base . 'ipv4.csv', 'rb', false, $ctx);
     $in6 = $in4 ? @fopen($base . 'ipv6.csv', 'rb', false, $ctx) : false;
     if (!$in4 || !$in6) throw new RuntimeException('Die Länderdaten konnten nicht heruntergeladen werden.');
-    try { $r = geo_build($in4, $in6, $out, $date); } finally { fclose($in4); fclose($in6); }
+    try {
+        $f4 = abruf_frist_strom($in4, $ende, GEO_MAX_BYTE, 'Länderdaten');
+        $f6 = abruf_frist_strom($in6, $ende, GEO_MAX_BYTE, 'Länderdaten');
+        try { $r = geo_build($f4, $f6, $out, $date); } finally { fclose($f4); fclose($f6); }
+    } finally { fclose($in4); fclose($in6); }
     return $r + ['date' => $date, 'version' => $ver];
 }
 

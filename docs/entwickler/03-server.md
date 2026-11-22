@@ -114,7 +114,7 @@ Wichtig: Die Schritte 6–17 sind **Vorprüfungen**. Sie ersetzen nie die Rechte
 | `lib/aktionen-liste.php` | Konstante `AKTIONEN`, erzeugt aus `regeln/aktionen/*.toml` | **nie von Hand ändern**: `python3 werkzeuge/regeln.py erzeugen` |
 | `lib/module-liste.php` | `MODULE`, `RECHTE_MODUL`, `MODUL_FREIGABE_ERLAUBT`, `MODUL_REGELN`, erzeugt aus `regeln/module.toml`, `regeln/wartung.toml` | **nie von Hand ändern**; bei Rebase-Konflikt neu erzeugen |
 | `storage.php` | Speicherschicht (3.5) | koordinationspflichtig |
-| `mail.php`, `geo.php`, `ort.php` | SMTP-Client, Länder- und Ortsdatenbank | Schutz über `SCRIPT_FILENAME`-Prüfung statt `WA_API` |
+| `mail.php`, `geo.php`, `ort.php` | SMTP-Client, Länder- und Ortsdatenbank; in `geo.php` auch die gemeinsamen Helfer für Abrufe nach außen (3.8) | Schutz über `SCRIPT_FILENAME`-Prüfung statt `WA_API` |
 | `orders.php`, `order_outbox.php` | Bestell-API v1 und Versandaufträge (3.9) | |
 
 Aktionsdateien werden im globalen Gültigkeitsbereich eingebunden: `$action`, `$method`, `$CFG`, `$AKTION` stehen zur
@@ -433,6 +433,21 @@ setzen, und der ist bei diesen Feldern (Zwei-Faktor-Pflicht, Passwortlänge, Sit
 die schwächste Stufe. Übernommene Änderungen stehen feldweise im Protokoll (`SEC_FELD_LABEL`, `FW_FELD_LABEL` – dieselben
 Bezeichnungen wie bei `security_save`/`fw_save`), und der Importdialog zeigt vorher dieselbe Tabelle „jetzt/danach“ wie
 der Vorlagendialog. Adress- und Länderlisten überträgt eine Datei nie.
+
+**Abrufe nach außen** (Länderdaten `geo.php`, Ortsdaten `ort.php`, Bedrohungsliste `lib/firewall.php`, Datenleck-Prüfung
+`lib/nutzer.php`, Keycloak `lib/anmeldekonten.php`, Hafen Hamburg `module/containerimport/hafen.php`) halten einen
+gemeinsamen Standard – die Helfer dafür stehen in `geo.php`:
+
+| Regel | Warum | Wie |
+| --- | --- | --- |
+| **Gesamtfrist** je Abruf | `timeout` im Stream-Kontext ist nur das Lesezeitlimit **je Lesevorgang**, und PHP zählt Wartezeit in Stream-Aufrufen nicht auf `max_execution_time`: eine tröpfelnde Gegenstelle (ein Byte je Sekunde) hält Arbeitsprozess und Sperre der Aktion beliebig lange fest – `set_time_limit` greift nicht | `abruf_frist_strom($strom, $ende, $max, 'Ortsdaten')` legt sich **unter** den Leser (`fgets`, `fgetcsv`, zlib-Filter) und bricht mit einer Ausnahme ab; für ganze Antworten `abruf_text($url, $ctx, $ende, $max)` statt `file_get_contents` (liefert bei Fristablauf `false`, nie einen abgeschnittenen Text) |
+| **Mengengrenze** | ein endloser Strom füllt sonst Speicher und Platte | zweites Argument von `abruf_frist_strom`/`abruf_text`; entpackte Ströme zusätzlich je Zeile (`ORT_MAX_ZEILEN`) |
+| **Höchstens eine Weiterleitung** | `follow_location` ohne `max_redirects` folgt bis zu 20 Sprüngen | `'follow_location' => 1, 'max_redirects' => 1` (Keycloak und Hafen Hamburg: beides 0) |
+| **Plausibel vollständig** | ein Abbruch sieht für `fgets`/`fgetcsv` wie das Dateiende aus; eine absolute Mindestzahl erkennt nur den völligen Ausfall, ein Rest von 3 Prozent würde die Sperrdatenbank still ersetzen | `abruf_vollstaendig($neu, $min, $alt)`: mindestens `$min` **und** mindestens die Hälfte des bisherigen Bestands (`geo_info()`, `ort_info()`, `fw_feed_info()`); sonst Ausnahme, und der alte Bestand bleibt aktiv. Die Hälfte, weil eine engere Schranke eine echte Schrumpfung der Quelle dauerhaft abweisen würde – Begründung im Kopf von `geo.php` |
+| **Alle Quellen** | eine erreichbare von zwei genügte nicht: die Teilmenge einer Quelle wäre still der neue Stand | `fw_feed_laden` verlangt Antworten von allen `FW_FEED_QUELLEN` |
+
+Nach einem abgewiesenen Abruf bleibt der bisherige Stand wirksam (Länderdatenbank, Ortsdaten, Bedrohungsliste); die Aktion
+meldet den Fehlschlag (502) und gibt ihre Sperrdatei frei.
 
 ## 3.9 Bestell-API
 
