@@ -209,11 +209,11 @@ def flaechen(umrisse):
 
 
 st, r = L.call('containerimport_eudr_pruefen', {'dateien': [{**DATEI, 'datei': 'kamm.geojson', 'text': flaechen([kamm(1664), kreis(4998)])}]})
-orte = {o['name']: o for o in r.get('dateien', [{}])[0].get('orte', [])}
+lastorte = {o['name']: o for o in r.get('dateien', [{}])[0].get('orte', [])}
 check('Umriss mit zu vielen Kantenvergleichen: Fehlerbefund „komplex“ statt beliebig langer Rechenzeit; ein gutartiger Umriss gleicher Größe bleibt in Ordnung',
-      st == 200 and [b['code'] for b in orte.get('Estancia Rechenlast 1', {}).get('befunde', [])] == ['komplex']
-      and orte.get('Estancia Rechenlast 1', {}).get('stand') == 'fehler' and orte.get('Estancia Rechenlast 2', {}).get('stand') == 'ok',
-      (st, {k: (v['stand'], [b['code'] for b in v['befunde']]) for k, v in orte.items()}))
+      st == 200 and [b['code'] for b in lastorte.get('Estancia Rechenlast 1', {}).get('befunde', [])] == ['komplex']
+      and lastorte.get('Estancia Rechenlast 1', {}).get('stand') == 'fehler' and lastorte.get('Estancia Rechenlast 2', {}).get('stand') == 'ok',
+      (st, {k: (v['stand'], [b['code'] for b in v['befunde']]) for k, v in lastorte.items()}))
 st, r = L.call('containerimport_eudr_pruefen', {'dateien': [{**DATEI, 'datei': 'viele.geojson', 'text': flaechen([kreis(4998) for _ in range(21)])}]})
 check('Punktbudget einer Anfrage: 422 schon während des Prüfens – nicht erst, wenn alle Flächen geprüft sind',
       st == 422 and 'Zu viele Punkte' in r.get('error', ''), (st, r.get('error')))
@@ -290,19 +290,21 @@ def betrieb(name):
 
 # Befunde der Umrisse liegen zwischengespeichert im Dokument, damit nicht jede Antwort alle Farmer neu prüft (additives Feld, GR-006)
 gesp = _json(storage_raw('containerimport-eudr-betriebe'))['liste']
-mit = next(b for b in gesp if b['name'] == 'Estancia Vertauscht')
+# „Estancia Ejemplo Acht“ und nicht etwa „Estancia Vertauscht“: nur die Selbstüberschneidung kommt aus geo_pruefen und steht
+# damit im Zwischenspeicher – der Befund „lage“ entsteht erst in eudr_betrieb_sicht am Länderrahmen.
+mit = next(b for b in gesp if b['name'] == 'Estancia Ejemplo Acht')
 zwischen = [x['code'] for x in mit['geoBefunde']['befunde']]
-sicht = [x['code'] for x in betrieb('Estancia Vertauscht')['befunde']]
+sicht = [x['code'] for x in betrieb('Estancia Ejemplo Acht')['befunde']]
 check('Befunde der Umrisse sind im Dokument zwischengespeichert (Fassung und Kennung der Geometrie), aber nie in der Antwort',
       all('geoBefunde' in b for b in gesp) and set(mit['geoBefunde']) == {'fassung', 'kennung', 'befunde'}
-      and zwischen and zwischen == sicht[:len(zwischen)] and 'geoBefunde' not in betrieb('Estancia Vertauscht'),
-      (mit.get('geoBefunde'), sicht, 'geoBefunde' in betrieb('Estancia Vertauscht')))
+      and zwischen and zwischen == sicht[:len(zwischen)] and 'geoBefunde' not in betrieb('Estancia Ejemplo Acht'),
+      (mit.get('geoBefunde'), sicht, 'geoBefunde' in betrieb('Estancia Ejemplo Acht')))
 doc = _json(storage_raw('containerimport-eudr-betriebe'))
 for b in doc['liste']:
     b['geoBefunde'] = {'fassung': 0, 'kennung': 'veraltet', 'befunde': [{'stufe': 'hinweis', 'code': 'erfunden', 'text': 'darf nicht gezeigt werden'}]}
 storage_write('containerimport-eudr-betriebe', doc)
 check('veralteter oder anders geschnittener Zwischenspeicher wird verworfen und neu gerechnet (GR-006)',
-      [x['code'] for x in betrieb('Estancia Vertauscht')['befunde']] == sicht, [x['code'] for x in betrieb('Estancia Vertauscht')['befunde']])
+      [x['code'] for x in betrieb('Estancia Ejemplo Acht')['befunde']] == sicht, [x['code'] for x in betrieb('Estancia Ejemplo Acht')['befunde']])
 storage_write('containerimport-eudr-betriebe', dict(_json(storage_raw('containerimport-eudr-betriebe')), liste=gesp))
 
 

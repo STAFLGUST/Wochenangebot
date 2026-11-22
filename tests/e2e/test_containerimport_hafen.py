@@ -210,8 +210,11 @@ st, r, neu = abruf('abgeschnitten')
 check('Antwort kürzer als angekündigt: Fehlschlag statt einer halben Liste als neuem Stand',
       st == 200 and 'nicht vollständig' in r['hafen']['fehler'] and r['hafen']['gelesen'] == gelesen and set(r['hafen']['meldungen']) == MIT_MELDUNG, r.get('hafen'))
 st, r, neu = abruf('chunked')
+# „frisch gelesen“ nicht an einer anderen Uhrzeit prüfen: now() zählt in Sekunden, und zwei Abrufe liegen in derselben.
+# Ein gelungener Abruf setzt gelesen auf abgerufen, ein Fehlschlag lässt gelesen stehen und meldet einen Fehler.
 check('stückweise Antwort ohne angekündigte Länge: die Stücke werden zusammengesetzt und gelesen',
-      st == 200 and r['hafen']['fehler'] == '' and r['hafen']['gelesen'] != gelesen and set(r['hafen']['meldungen']) == MIT_MELDUNG, r.get('hafen'))
+      st == 200 and neu == 1 and r['hafen']['fehler'] == '' and r['hafen']['gelesen'] == r['hafen']['abgerufen']
+      and set(r['hafen']['meldungen']) == MIT_MELDUNG, r.get('hafen'))
 gelesen = r['hafen']['gelesen']
 st, r, neu = abruf('chunked-abgeschnitten')
 check('stückweise Antwort ohne Schlussstück: Fehlschlag statt einer halben Liste als neuem Stand',
