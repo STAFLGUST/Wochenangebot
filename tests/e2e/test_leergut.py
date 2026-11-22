@@ -626,6 +626,30 @@ check('WinAB-Lademittelbestand je Konto: Lieferant aus dem Lieferantenstamm (-1.
       wb.get(must['id']) == [['2550077', -1234]] and wb.get(p6['id']) == [['9100006', 17]] and pz['2550078']['id'] not in wb
       and s['versand'].get(p6['id']) == '1 · Direktlieferung', (wb, s.get('versand')))
 check('WinAB-Lademittelbestand: Leser sieht ihn auch (nur Anzeige, keine Umsätze)', L.call('leergut_start')[1].get('winabBestand', {}).get(must['id']) == [['2550077', -1234]])
+# Führende Null: Konto von Hand mit „0091011“, der .XLS-Bericht liefert die Zahl 91011, die .CSV den Text „0091011“ – derselbe Kunde
+st, r = V.call('leergut_partner_save', {'name': 'Testkunde Null (von Hand)', 'art': 'kunde', 'kundenNr': '0091011', 'lademittel': ['e2']})
+nullk = r.get('partner', {})
+st2, r2 = V.call('leergut_partner_save', {'name': 'Kunde ohne Null', 'art': 'kunde', 'kundenNr': '91011', 'lademittel': ['e2']})
+check('WinAB-Kundennummer mit führender Null: dieselbe Nummer ohne Null ist doppelt (422)', st == 200 and nullk.get('kundenNr') == '0091011'
+      and st2 == 422 and 'Testkunde Null (von Hand)' in r2.get('error', ''), (st, r, st2, r2))
+WN = {'bericht': {'datei': 'Lademittel_Null.XLS', 'von': '2026-01-01', 'bis': '2026-10-15', 'datum': '2026-10-15'},
+      'kunden': [{'nr': '91011', 'name': 'Testkunde Null'}],
+      'belege': [{'kd': '91011', 'art': 'Lieferschein', 'beleg': '510001', 'datum': '2026-05-04', 'abgang': {'e2': 6}, 'zugang': {}}]}
+n0_ = len(V.call('leergut_start')[1]['partner'])
+st, r = V.call('leergut_winab_import', WN)
+s = V.call('leergut_start')[1]
+bn = [b for b in V.call('leergut_konto&partner=' + nullk['id'])[1]['bewegungen'] if b.get('quelle') == 'winab']
+check('WinAB .XLS mit Kundennummer ohne führende Null: kein zweites Konto, Beleg am Konto „0091011“, Nummer unverändert (GR-006)',
+      st == 200 and r['zahlen']['kunden'] == 0 and r['zahlen']['neu'] == 1 and len(s['partner']) == n0_ and [b['abgang'] for b in bn] == [{'e2': 6}]
+      and {p['id']: p['kundenNr'] for p in s['partner']}[nullk['id']] == '0091011', (st, r.get('zahlen'), r.get('neueKunden'), bn))
+st, r = V.call('leergut_winab_import', {**WN, 'bericht': {**WN['bericht'], 'quelle': 'csv', 'dateiVon': '2026-01-01'}, 'kunden': [{'nr': '0091011'}],
+                                        'belege': [{**WN['belege'][0], 'kd': '0091011'}], 'lieferanten': []})
+check('… derselbe Beleg aus der .CSV (Text mit Null): unverändert, nicht doppelt gebucht', st == 200 and r['zahlen']['gleich'] == 1 and r['zahlen']['neu'] == 0
+      and r['zahlen']['ausgeglichen'] == 0 and r['zahlen']['kunden'] == 0, r.get('zahlen'))
+storage_write('kunden', {'rev': 3, 'customers': [{'id': 'klg000000001', 'nr': '9100006', 'firma': 'Fleischerei Beispiel', 'active': True, 'versandart': '1', 'wawi': {'lademittelbestand': 17}},
+                                                 {'id': 'klg000000002', 'nr': '91011', 'firma': 'Testkunde Null', 'active': True, 'wawi': {'lademittelbestand': 4}}]})
+check('WinAB-Lademittelbestand aus dem Kundenstamm auch bei führender Null am Konto', V.call('leergut_start')[1].get('winabBestand', {}).get(nullk['id']) == [['0091011', 4]],
+      V.call('leergut_start')[1].get('winabBestand'))
 # Konto mit „Tausch laut WinAB zählt“: der reine Tausch fällt weg, der gebuchte Beleg wird storniert
 mp = next(p for p in s['partner'] if p['id'] == must['id'])
 st, r = V.call('leergut_partner_save', {'id': mp['id'], 'rev': mp['rev'], 'name': mp['name'], 'art': 'lieferant', 'lademittel': ['e2', 'h1'], 'wareneingangTausch': True})
