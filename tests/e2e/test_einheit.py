@@ -95,6 +95,12 @@ RAHMEN = r'''() => { const n = document.querySelector('#r-leiste'), k = document
            zu: getComputedStyle(n).visibility === 'hidden', kopf: !!k && k.getBoundingClientRect().height > 0, start: n.querySelector('[data-modul="start"]').getAttribute('href'),
            glas: [...document.querySelectorAll('body *')].filter((e) => { const s = getComputedStyle(e); return s.backdropFilter && s.backdropFilter !== 'none' && !/toast/.test(e.id + ' ' + e.className); })
              .map((e) => e.id || String(e.className)).slice(0, 5) }; }'''
+# „Artikel hinzufügen“: Zahl der Knopfreihen im Fuß, Breite des Platzhalters gegen den Platz im Suchfeld (Feld hat beim Öffnen
+# den Fokus – Chrome kürzt den Platzhalter dann ohne „…“)
+ARTIKELWAHL = r'''() => { const d = document.querySelector('#dlg-ez-pick'), i = d.querySelector('#ezp-q'), s = getComputedStyle(i);
+  const c = document.createElement('canvas').getContext('2d'); c.font = `${s.fontWeight} ${s.fontSize} ${s.fontFamily}`;
+  const reihen = new Set([...d.querySelectorAll('.ezp-foot > .btn')].filter((b) => b.offsetParent).map((b) => Math.round(b.getBoundingClientRect().top)));
+  return { platzhalter: Math.ceil(c.measureText(i.placeholder).width), feld: Math.floor(i.clientWidth - parseFloat(s.paddingLeft) - parseFloat(s.paddingRight)), reihen: reihen.size }; }'''
 # Pfeil: Form des Symbols (aus dem Sprite der Seite über <use> oder vom Rahmen direkt gezeichnet)
 ZURUECK = r'''() => { const e = document.querySelector('.stafl-zurueck'); if (!e || !e.offsetParent) return null; const s = getComputedStyle(e), r = e.getBoundingClientRect();
   const svg = e.querySelector('svg'), use = svg && svg.querySelector('use'), form = use ? document.querySelector(use.getAttribute('href')) : svg;
@@ -158,6 +164,12 @@ with sync_playwright() as pw:
                         pg.wait_for_selector(f'#view-{v}:not([hidden])', timeout=20000)
                         pg.wait_for_function("() => !document.querySelector('.adm-page .loading:not([hidden])')", timeout=20000)
                     teil = f'{name}{"-" + v if v else ""}'
+                    if v == 'edit' and name == 'angebot' and not dunkel:   # „Artikel hinzufügen“: eine Knopfreihe (PC), Platzhalter passt ins Feld
+                        pg.click('#btn-add-art'); pg.wait_for_selector('#dlg-ez-pick[open] #ezp-q')
+                        aw = pg.evaluate(ARTIKELWAHL)
+                        pg.evaluate("document.querySelector('#dlg-ez-pick').close()")
+                        check(f'{teil} {tag}: „Artikel hinzufügen“ – Platzhalter passt ins Suchfeld' + (', Knöpfe in einer Reihe' if breite > 900 else ''),
+                              aw['platzhalter'] <= aw['feld'] and (breite <= 900 or aw['reihen'] == 1), aw)
                     if v == 'orders':   # Werkzeugleiste „Bestellungen“: Suche und Statusauswahl gleich hoch (wie in den anderen Leisten)
                         hoehen = pg.evaluate("['#orders-filter .search input', '#orders-filter select'].map((s) => Math.round(document.querySelector(s).getBoundingClientRect().height))")
                         check(f'{teil} {tag}: Suche und Auswahl der Werkzeugleiste gleich hoch', hoehen[0] == hoehen[1], hoehen)

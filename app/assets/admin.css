@@ -1739,7 +1739,8 @@ dialog.modal.ez-pick { width: min(1280px, calc(100vw - 32px)); height: min(860px
 .ezp-tab .ibtn[aria-expanded="true"] { background: var(--accent-soft); color: var(--accent); }
 .ezp-leer { padding: 0 20px; }
 .ezp-foot { align-items: center; }
-.ezp-anz { font-size: 13.5px; color: var(--text-2); }
+.ezp-anz { flex: 1 1 240px; font-size: 13.5px; color: var(--text-2); }   /* Hinweis nimmt den Rest, die Knöpfe bleiben in einer Reihe */
+@media (max-width: 560px) { .ezp-foot > .btn { flex: 1 1 auto; } .ezp-foot > .btn.primary { flex-basis: 100%; } }   /* Handy: Hauptknopf unten über die ganze Breite */
 .ezp-anz b { color: var(--text); }
 .ez-format { margin: 0 0 6px; }
 .ez-pdf-vorschau { margin: 0 0 12px; }
