@@ -418,6 +418,16 @@ with sync_playwright() as p:
                                                   'items': [{'code': '10601', 'name': 'Roastbeef', 'price': {'status': 'value', 'value': 20}}]})
     ids = [w['id'] for w in api_get(a, 'history_list')[1]['weeks']]
     check('import restores deleted week', r[0] == 200 and pw['id'] in ids and pw['id'] not in (dok('historie_geloescht') or []), (r, ids))
+    # Fenster eines Artikels ohne Gruppe, der nicht mehr im Angebot steht: Untertitel ohne leere Teile (kein „· ·“ oder „·“ am Ende)
+    r = api_post_bestaetigt(a, 'history_import', {'week': 37, 'year': 2026, 'source': 'Ohne-Gruppe.xlsx',
+                                                  'items': [{'code': '99001', 'name': 'Testartikel ohne Gruppe', 'price': {'status': 'value', 'value': 9.5}}]})
+    a.set_viewport_size({'width': 1440, 'height': 950}); a.reload(); a.wait_for_selector('tr[data-id]'); a.click('#vt-hist'); a.wait_for_selector('.htab')
+    a.click('#view-hist [data-hrange="Alle"]'); a.fill('#hist-q', 'Testartikel ohne Gruppe')
+    a.wait_for_function("document.querySelectorAll('.htab tbody tr[data-skey]').length === 1")
+    a.click('.htab tbody tr[data-skey]'); a.wait_for_selector('#dlg-series[open]')
+    sub = a.inner_text('#dlg-series .dlg-head p')
+    check('Preisverlauf-Fenster: Untertitel ohne leere Teile (ohne Gruppe, nicht mehr im Angebot)', r[0] == 200 and sub == 'Art.-Nr. 99001 · nicht mehr im Angebot', (r[0], sub))
+    a.keyboard.press('Escape')
     check('no JS errors', not errs, errs)
     br.close()
 print(f'{sum(res)}/{len(res)} passed')

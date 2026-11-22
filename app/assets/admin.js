@@ -3317,7 +3317,7 @@
         <td class="muted">${p && p.group !== s.group ? esc(p.group) : ''}</td></tr>`);
     });
     $('#series-body').innerHTML = `
-      <div class="dlg-head"><div><h2 id="ser-title">${esc(s.name)}</h2><p>${s.code ? 'Art.-Nr. ' + esc(s.code) + ' · ' : ''}${esc(s.group)}${s.inLatest ? '' : ' · nicht mehr im Angebot'}</p></div>
+      <div class="dlg-head"><div><h2 id="ser-title">${esc(s.name)}</h2><p>${[s.code && 'Art.-Nr. ' + esc(s.code), s.group && esc(s.group), !s.inLatest && 'nicht mehr im Angebot'].filter(Boolean).join(' · ')}</p></div>
         <button type="button" class="btn icon ghost" data-close aria-label="Schließen">${icon('x')}</button></div>
       <div class="dlg-body">
         <div class="ser-range">${rangeSeg()}<span class="muted">${esc(wkLong(W[0]))} – ${esc(wkLong(W[W.length - 1]))}${x.delta ? ` · Änderung <span class="delta ${x.delta > 0 ? 'up' : 'down'}">${fmtDelta(x.delta)}</span>` : ''}</span></div>
