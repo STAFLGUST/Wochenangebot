@@ -890,7 +890,7 @@
       }
       toast(pw && body.login ? `Gespeichert. Zugangsdaten für „${r.customer.login.username}“ jetzt sicher an den Kunden weitergeben – das Passwort wird nicht noch einmal angezeigt.` : c ? `Änderungen an „${r.customer.firma}“ gespeichert.` : `Kunde „${r.customer.firma}“ angelegt.`, pw ? 7000 : 3200);
       renderKundenView();
-    } catch (ex) { err.textContent = ex.message; if (ex.status === 409) { kunden = null; } } finally { btn.disabled = false; }
+    } catch (ex) { err.textContent = ex.message; if (ex.status === 409) renderKundenView(); } finally { btn.disabled = false; }   // 409: Liste und Revision neu laden, Fenster bleibt offen
   });
 
   /* ---------- Kundenstammdaten aus der Warenwirtschaft importieren (CSV) ----------

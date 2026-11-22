@@ -1,5 +1,6 @@
 """Kunden: Stammdaten, Freischaltung von Angeboten, Kunden-Anmeldung auf der Angebotsseite.
-Regeln: Kunden sehen nur freigeschaltete Angebote, nie den Eingabebereich; Passwörter nie im Klartext/Hash nach außen."""
+Regeln: Kunden sehen nur freigeschaltete Angebote, nie den Eingabebereich; Passwörter nie im Klartext/Hash nach außen.
+Nach einem 409 beim Speichern lädt die Kundenliste neu und bleibt bedienbar."""
 from umgebung import storage_raw, storage_write
 from umgebung import BASE  # Testserver je Gruppe (parallel)
 import http.cookiejar
@@ -307,6 +308,25 @@ with sync_playwright() as p:
     a.locator('#view-kunden tr[data-kid]:has-text("Ohne Zugang")').click(); a.wait_for_selector('#dlg-kunde[open]')
     check('existing customer w/o login: login section collapsed', a.locator('#kunde-body .k-login').is_hidden())
     a.click('#kunde-body [data-close]'); a.wait_for_timeout(200)
+    # 409 beim Speichern (Kundendaten inzwischen anderswo geändert): Meldung, Liste lädt neu und bleibt bedienbar
+    a.locator('#view-kunden tr[data-kid]:has-text("Ohne Zugang")').click(); a.wait_for_selector('#dlg-kunde[open]')
+    st_, r_ = A.call('kunde_save', {**base, 'rev': A.call('kunden')[1]['rev'], 'firma': 'Zwischendurch GmbH', 'nr': 'K-1009', 'angebote': [], 'login': None})
+    assert st_ == 200, r_
+    a.fill('#kunde-body [name=ort]', 'Lübeck'); a.click('#kunde-body [type=submit]'); a.wait_for_selector('#kunde-err:has-text("inzwischen an anderer Stelle")')
+    a.click('#kunde-body [data-close]')
+    if a.locator('#dlg-frage[open]').count():
+        a.click('#fr-ja')
+    a.wait_for_function("!document.querySelector('#dlg-kunde').open")
+    n_err = len(errs)
+    a.locator('#view-kunden tr[data-kid]:has-text("Gasthaus Muster")').click()
+    try:
+        a.wait_for_selector('#dlg-kunde[open]', timeout=4000); auf = True
+    except Exception:
+        auf = False
+    check('nach 409: anderer Kunde lässt sich öffnen, Liste neu geladen, keine JS-Fehler', auf and a.locator('#view-kunden tr[data-kid]:has-text("Zwischendurch")').count() == 1
+          and len(errs) == n_err, errs[n_err:])
+    if auf:
+        a.click('#kunde-body [data-close]'); a.wait_for_function("!document.querySelector('#dlg-kunde').open")
 
     # Kunde im Browser
     cctx = br.new_context(viewport={'width': 1280, 'height': 900}); c = cctx.new_page(); cerr = []
