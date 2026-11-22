@@ -1274,11 +1274,12 @@ zv_ = zvr_[1].get('zeitraeume') or [{}] * 3
 check('Vorplanungs-Vorschau mit mehreren Zeiträumen: jede fremde Abteilung 422 ohne Status, eigene Abteilung mit Status',
       zvr_[0] == 200 and [z_.get('code') for z_ in zv_[:2]] == [422, 422] and all(z_.get('vertretung') is None for z_ in zv_[:2])
       and 'Andre' not in json.dumps(zv_[:2], ensure_ascii=False) and (zv_[2].get('vertretung') or {}).get('status') == 'da', zv_)
-st, r = E.call('hr_antrag', {'von': iso(N1 + dt.timedelta(days=7)), 'bis': iso(N1 + dt.timedelta(days=7)), 'vertretung': PL})
-PH_ = r['eintrag']['id'] if st == 200 else None   # Erika beantragt (offen)
-st, r = F.call('hr_antrag', {'von': iso(N1 + dt.timedelta(days=7)), 'bis': iso(N1 + dt.timedelta(days=7)), 'vertretung': PE})
-PI_ = r['eintrag']['id'] if st == 200 else None   # Fritz, Vertretung Erika – sie hat dort einen offenen Antrag
-check('Hinweis an den Mitarbeiter: offene Anträge der Vertretung bleiben verborgen (nur Genehmigtes, wie im Kalender)', st == 200 and not r.get('hinweis'), (st, r.get('hinweis')))
+st, r = G.call('hr_antrag', {'von': iso(N1 + dt.timedelta(days=7)), 'bis': iso(N1 + dt.timedelta(days=7)), 'vertretung': PA})
+PH_ = r['eintrag']['id'] if st == 200 else None   # Gerda beantragt (offen) – Lager wie Fritz, Vertretung nur aus der eigenen Abteilung
+st, r = F.call('hr_antrag', {'von': iso(N1 + dt.timedelta(days=7)), 'bis': iso(N1 + dt.timedelta(days=7)), 'vertretung': PGE})
+PI_ = r['eintrag']['id'] if st == 200 else None   # Fritz, Vertretung Gerda – sie hat dort einen offenen Antrag
+check('Hinweis an den Mitarbeiter: offene Anträge der Vertretung bleiben verborgen (nur Genehmigtes, wie im Kalender)', st == 200
+      and r.get('hinweis') == 'Ihre Vertretung Gerda Gleich bekommt keine E-Mail (keine Adresse hinterlegt) – bitte geben Sie selbst Bescheid.', (st, r.get('hinweis')))
 st, r = F.call('hr_antrag', {'von': iso(N1 + dt.timedelta(days=4)), 'bis': iso(N1 + dt.timedelta(days=4)), 'vertretung': PA})
 PJ_ = r['eintrag']['id'] if st == 200 else None   # Freitag – Andre arbeitet Mo–Do
 check('Vertretung in Teilzeit: Hinweis „arbeitet an diesen Tagen nicht“', st == 200 and f'Andre Vierzig arbeitet an diesen Tagen nicht ({(N1 + dt.timedelta(days=4)):%d.%m.%Y})' in (r.get('hinweis') or ''), r.get('hinweis'))
@@ -1328,7 +1329,7 @@ check('… a) Vertretung da, niemand aus der Abteilung weg: konfliktfrei, gesamm
 check('… b) Vertretung selbst abwesend (ohne Grund)', arten_(PB_) == ['vertretung'] and 'Lena Leser ist selbst abwesend' in texte_(PB_) and an_[PB_]['frei'] is False, texte_(PB_))
 check('… d) gleiche Abteilung gleichzeitig weg', 'abteilung' in arten_(PD_) and 'Gleichzeitig weg: Andre Vierzig' in texte_(PD_), texte_(PD_))
 check('… e) Vertretung selbst abwesend, nicht doppelt als Abteilung', arten_(PE_) == ['vertretung'] and 'Andre Vierzig ist selbst abwesend' in texte_(PE_), texte_(PE_))
-check('… Personalstelle sieht auch offene Anträge der Vertretung als Konflikt; Teilzeit-Vertretung', 'Erika Editor ist selbst abwesend' in texte_(PI_)
+check('… Personalstelle sieht auch offene Anträge der Vertretung als Konflikt; Teilzeit-Vertretung', 'Gerda Gleich ist selbst abwesend' in texte_(PI_)
       and 'Andre Vierzig arbeitet an diesen Tagen nicht' in texte_(PJ_) and an_[PJ_]['frei'] is False, (texte_(PI_), texte_(PJ_)))
 check('… genehmigte Einträge der Personalstelle ohne Vertretung: kein Konflikt „keine Vertretung“', 'Keine Vertretung' not in texte_(PC_) and an_[PC_]['status'] == 'genehmigt', texte_(PC_))
 check('… alte offene Anträge ohne Vertretung: Konflikt „Keine Vertretung angegeben“', any(a_['status'] == 'beantragt' and any(k_['text'] == 'Keine Vertretung angegeben' for k_ in a_['konflikte']) for a_ in r['antraege']))
@@ -2349,6 +2350,9 @@ with sync_playwright() as p:
     # ── Jahresplanung (Oberfläche, Inhaber 03.11.2026): Hinweis mit Stand für Mitarbeiter, Vertretung Pflicht im Antrag, Reiter
     #    „Jahresplanung“ für Personalstelle und Genehmigende (Kennzahlen, Zeitleiste, Konflikte, Filter, gesammelt genehmigen,
     #    ablehnen, Erinnerung, Abschluss mit Jahresübersicht, wieder öffnen), Einstellungen in Verwaltung → Urlaub ──
+    # Erika steht seit dem Dialog „Verwaltung → Mitarbeiter“ auf „Vertrieb“ – dort hat sie keine Kollegen; Vertretungen sind aber nur
+    # aus der eigenen Abteilung wählbar (Inhaber 22.11.2026). Für die folgenden Prüfungen wieder in die Abteilung von Lena.
+    rev = P.call('mitarbeiter_hr')[1]['rev']; hr(ids['erika'], abteilung='Verwaltung')
     PLAN_ALT = P.call('mitarbeiter_hr')[1]['planung']
     plan_setzen(start='01-01', stichtag='12-31', unverplantMax=5, vertretungPflicht=True)   # Hinweis an jedem Tag sichtbar, Planungsjahr = Y
     planung = lambda: P.call(f'hr_planung&jahr={Y}')[1]   # noqa: E731
@@ -2797,7 +2801,8 @@ with sync_playwright() as p:
             rev = P.call('mitarbeiter_hr')[1]['rev']
             hr(ids['fritz'], jahr=Y, anspruch=kf_['anspruch'], uebertrag=kf_['uebertrag'])
         ctx.close()
-    for user_, pw_, ip_, wer_ in (('erika', 'Editor-Zugang-77', '198.51.100.3', 'Vertretung'), ('lena', 'Leser-Zugang-77', '198.51.100.4', 'zusätzliche Vertretung')):
+    # zusätzliche Vertretung ist Gerda (Lager wie Fritz) – wählbar ist nur die eigene Abteilung
+    for user_, pw_, ip_, wer_ in (('erika', 'Editor-Zugang-77', '198.51.100.3', 'Vertretung'), ('gerda-gleich', 'Urlaub-Konto-4711', '198.51.100.8', 'zusätzliche Vertretung')):
         ctx, pg = anmelden(user_, pw_, ip_, 390)
         pg.goto(B + '/module/hr/'); pg.wait_for_selector('#mein-vertreten:not([hidden]) li')
         txt_ = pg.text_content('#mein-vertreten')
