@@ -104,7 +104,9 @@
   const admin = () => !!(W.me && W.me.role === 'admin');
   let daten = null;
   function fussForm() {
-    const f = daten.fuss, sp = f.eigen ? f.spalten : ['', '', ''], ze = f.eigen ? f.zeilen : ['', ''], v = daten.vorgabe;
+    const f = daten.fuss, v = daten.vorgabe;
+    const leer = (t, vorgabe) => (f.eigen && t !== vorgabe ? t : '');   // Feld mit der Vorgabe leer zeigen (Vorgabe als Platzhalter)
+    const sp = f.spalten.map((t, i) => leer(t, v.spalten[i])), ze = f.zeilen.map((t, i) => leer(t, v.zeilen[i]));
     const titel = ['Spalte 1 – Firma und Anschrift', 'Spalte 2 – Telefon, Web, E-Mail', 'Spalte 3 – Bank und Steuer'];
     body.innerHTML = `<div class="dlg-head"><div><h2 id="df-titel">${icon('print')}Fußzeile im Druck</h2>
         <p>Steht unter jedem gedruckten Angebot (Wochenangebot, Kundenangebote, Einzelangebote), darüber der Hinweis zu Mengen und Fracht. Leere Felder: es gilt die Vorgabe aus dem Impressum.</p></div>

@@ -9,7 +9,7 @@ Grenzfälle: Gruppe höher als eine Seite (nur sie wird geteilt, gleich große T
 und 190 Positionen, sortierte Liste) gleichmäßig über drei Spalten; echter Druck: PDF A4 quer, Seitenzahl wie gesetzt und
 jede Zeile wirklich im PDF (Text aus dem PDF gelesen); Kopf „Seite x von y“; Fußzeile des Briefbogens mit dem Hinweis
 darüber nur auf der letzten Seite (Vorgabe) oder auf jeder Seite (Einstellung bzw. ?fuss=); Einstellung „Fußzeile im Druck“
-(Rechte 401/403, leer = Vorgabe aus dem Impressum, Bereinigung, Fracht-Einstellung bleibt erhalten, Protokoll);
+(Rechte 401/403, leer = Vorgabe aus dem Impressum – je Feld, auch wenn nur Spalte 3 eingetragen ist –, Bereinigung, Fracht-Einstellung bleibt erhalten, Protokoll);
 Bankangaben nur für angemeldete Nutzer (Server entscheidet; öffentlich ohne Cookie); PDF des Servers mit Fußzeile;
 Hochformat-Layouts mit Fußzeile am Ende; im Eingabebereich Knopf „Drucken“ (links neben „An Kunden senden“/„Veröffentlichen“,
 druckt das gewählte Angebot als Entwurf wie die Vorschau, speichert vorher), „Drucken“ im Vorschaufenster, Schnittstelle
@@ -215,6 +215,13 @@ check('Schalter aus: Bankangaben auch öffentlich', st == 200 and r['fuss']['ban
 check('… steht im Protokoll', 'Bankangaben nur für angemeldete Nutzer' in json.dumps(A.call('log')[1], ensure_ascii=False))
 assert A.call('druck_fuss_save', {'fuss': dict(neu, bankGeschuetzt=True)})[0] == 200
 check('Schalter wieder an: öffentlich ohne Bankangaben', ANON.call('offer')[1]['fracht']['fuss']['spalten'][2] == vorgabe['spalten'][2])
+# Leere Felder: je Feld die Vorgabe (wie im Fenster beschrieben) – nur Spalte 3 eingetragen, Firma, Anschrift und Register bleiben
+st, r = A.call('druck_fuss_save', {'fuss': {'spalten': ['', '', SP3], 'zeilen': ['', ''], 'modus': 'letzte'}})
+oe = ANON.call('offer')[1]['fracht']['fuss']
+check('nur Spalte 3 eingetragen: Spalten 1/2 und Registerzeilen aus der Vorgabe, öffentlich ganz die Vorgabe (Bank geschützt)', st == 200 and r['fuss']['eigen'] is True
+      and r['fuss']['spalten'] == [vorgabe['spalten'][0], vorgabe['spalten'][1], SP3] and r['fuss']['zeilen'] == vorgabe['zeilen']
+      and oe['spalten'] == vorgabe['spalten'] and oe['zeilen'] == vorgabe['zeilen'], (r.get('fuss'), oe))
+assert A.call('druck_fuss_save', {'fuss': neu})[0] == 200
 
 # ---------- Angebot für den Druck: Werbung, Sonderposten, „auf Anfrage“, Zusatzpreis ----------
 d = A.call('draft')[1]
@@ -777,6 +784,14 @@ with sync_playwright() as p:
         a.click('#fr-ja')
     a.wait_for_selector('#dlg-druck-fuss', state='hidden')
     check('Abbrechen speichert nichts', doc('fracht')['druck']['spalten'][0] == SP1)
+    assert A.call('druck_fuss_save', {'fuss': {'spalten': ['', '', SP3], 'zeilen': ['', ''], 'modus': 'letzte'}})[0] == 200
+    a.click('#btn-more'); a.click('#menu-more [data-act="druck-fuss"]'); a.wait_for_selector('#dlg-druck-fuss[open] textarea[name=s0]')
+    df = a.evaluate("() => { const f = document.querySelector('#druck-fuss-body').elements; return [f.s0.value, f.s1.value, f.s2.value, f.z0.value, f.z1.value]; }")
+    check('Fenster nach „nur Spalte 3“: übrige Felder leer (Vorgabe als Platzhalter), Spalte 3 eigene Angabe', df == ['', '', SP3, '', ''], df)
+    a.click('#dlg-druck-fuss .dlg-foot [data-close]')
+    if a.locator('#dlg-frage[open]').count():
+        a.click('#fr-ja')
+    a.wait_for_selector('#dlg-druck-fuss', state='hidden')
     assert A.call('druck_fuss_save', {'fuss': neu})[0] == 200
     ctx.close()
 
