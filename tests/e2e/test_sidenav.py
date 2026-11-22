@@ -157,6 +157,12 @@ with sync_playwright() as p:
                   and z.locator('#btn-dashboard svg use[href="#i-back"]').is_visible(), (lbl, zb))
         check(f'{w}px mit Knopf: Kopfzeile ohne Überlappung, kein waagerechtes Scrollen', not z.evaluate(overlap_js)
               and z.evaluate('document.documentElement.scrollWidth') <= w)
+        # Knöpfe der Kopfzeile untereinander: keiner ragt über seine Fläche oder in den Nachbarn („Drucken“ mit Beschriftung bei 861–1180 px);
+        # der Pfeil „Zusatz“ hängt bewusst an „Drucken“ (druck.css: margin-left −6px)
+        knoepfe = z.evaluate("""() => { const k = [...document.querySelectorAll('#topbar .actions .btn, #topbar .actions .ibtn')].filter((e) => e.offsetParent)
+            .map((e) => { const r = e.getBoundingClientRect(); return [e.id, Math.round(r.left), Math.round(r.right), e.scrollWidth > e.clientWidth + 1]; }).sort((a, b) => a[1] - b[1]);
+          return k.filter((x, i) => x[3] || (i && x[0] !== 'btn-drucken-zusatz' && x[1] < k[i - 1][2] - 1)).map((x) => x[0]); }""")
+        check(f'{w}px: Knöpfe der Kopfzeile ohne Überlappung und ohne überstehende Beschriftung', not knoepfe, knoepfe)
         z.screenshot(path=SH + f'/dashboard-knopf-{w}.png')
         z.evaluate("document.documentElement.dataset.theme = 'dark'")
         z.screenshot(path=SH + f'/dashboard-knopf-{w}-dunkel.png')

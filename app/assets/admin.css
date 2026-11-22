@@ -2344,8 +2344,8 @@ dialog.modal.ez-pick { width: min(1280px, calc(100vw - 32px)); height: min(860px
   body.adm .topbar .btn:not(.icon), body.adm .topbar .btn.ghost:not(.icon) { width: 36px; height: 36px; }
   body.adm .topbar .btn.icon { width: 36px; height: 36px; }
 }
-@media screen and (max-width: 1180px) {
-  body.adm .topbar .btn:not(.primary):not(.icon) { width: 40px; padding: 0; justify-content: center; }
+@media screen and (max-width: 1180px) {   /* nur Symbole – „Drucken“ behält bis 860 px seine Beschriftung (Regel bei 1360 px) und damit seine Breite */
+  body.adm .topbar .btn:not(.primary):not(.icon):not(#btn-drucken) { width: 40px; padding: 0; justify-content: center; }
 }
 
 /* ---------- Vorschau im Eingabebereich (Fenster mit der Angebotsseite) ---------- */
