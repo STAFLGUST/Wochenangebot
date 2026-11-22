@@ -364,6 +364,9 @@ with sync_playwright() as pw:
     zl_ui = pg.evaluate("[...document.querySelectorAll('#db-zuletzt-liste .db-zeile')].map(z => [z.dataset.modul, z.querySelector('.db-zeile-titel').textContent, z.querySelector('.db-zeile-meta').textContent])")
     check('Zuletzt bearbeitet: Text, Modul und Zeit („gerade eben“ / „vor … Min.“)', len(zl_ui) == len(zl) and zl_ui[0][0] == 'crm' and zl_ui[0][2].startswith('CRM · ')
           and all(('gerade eben' in m or 'vor ' in m or 'Uhr' in m) for _, _t, m in zl_ui), zl_ui)
+    # nach zwei Zeilen gekürzt (line-clamp): der volle Text steht im Tooltip (Regel für gekürzte Texte)
+    ohne_titel = pg.evaluate("[...document.querySelectorAll('#db-zuletzt-liste .db-zweizeilig')].filter((e) => e.title !== e.textContent).map((e) => e.textContent)")
+    check('Zuletzt bearbeitet: voller Text jedes Eintrags im Tooltip', zl_ui and not ohne_titel, ohne_titel)
     spalten = pg.evaluate("[document.querySelector('#db-heute').getBoundingClientRect().right < document.querySelector('#db-aktionen').getBoundingClientRect().left, Math.round(document.querySelector('#db-aktionen').getBoundingClientRect().width)]")
     check('1280 px: Heute für Sie links, Schnellaktionen und Zuletzt rechts (320 px)', spalten == [True, 320], spalten)
 
