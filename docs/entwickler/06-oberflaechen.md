@@ -234,7 +234,8 @@ Browser nur an; ob ein Kunde etwas sieht, entscheidet der Server. Die Artikel be
 führt Sonderangebote in `offers` (Angebotsleiste: eigener Abschnitt ohne abgelaufene, Kopf mit Gültigkeit und Knopf
 „Gültigkeit und Gruppen“), lässt sie aber aus Stammdaten → Angebote und aus `WA.offers` (Freischaltung beim Kunden) weg.
 Schnittstelle `WA.angebot.sonder` (`uebernehmen`, `oeffnen`, `bearbeiten`, `stand`, `text`). „Aus anderem Angebot“
-(`openCopy`) zeigt die Artikel des Quellangebots zum Anhaken (für Sonderangebote zunächst keiner, sonst alle).
+(`openCopy`) zeigt die Artikel des Quellangebots zum Anhaken (für Sonderangebote zunächst keiner, sonst alle); gerundet
+wird nur mit Auf-/Abschlag, bei 0 % kommen die Preise unverändert (auch mit 4 Nachkommastellen).
 
 ### Export für WinAB
 

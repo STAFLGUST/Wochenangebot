@@ -2531,7 +2531,7 @@
           <div class="oc-bar"><div class="search">${icon('search')}<input id="oc-q" type="search" autocomplete="off" placeholder="Artikel finden: Nummer, Bezeichnung, Gruppe …" aria-label="Artikel des Quellangebots suchen"></div>
             <button type="button" class="link-btn" data-oc="alle">Alle</button><button type="button" class="link-btn" data-oc="keine">Keine</button></div>
           <ul class="oc-list" id="oc-list" aria-label="Artikel des Quellangebots"></ul></div>
-        <p class="hint span2">„Auf Anfrage“ wird übernommen, Artikel ohne Preis werden übersprungen. Mit „Rückgängig“ lässt sich die Übernahme zurücknehmen.</p>
+        <p class="hint span2">Gerundet wird nur mit Auf-/Abschlag – ohne werden die Preise unverändert übernommen. „Auf Anfrage“ wird übernommen, Artikel ohne Preis werden übersprungen. Mit „Rückgängig“ lässt sich die Übernahme zurücknehmen.</p>
       </div>
       <div class="dlg-foot"><button type="button" class="btn" data-close>Abbrechen</button><button type="submit" class="btn primary">${icon('copy')}Übernehmen</button></div>`;
     ocListe(ids[0], true);
@@ -2563,8 +2563,8 @@
       if (!p || (p.status !== 'value' && p.status !== 'request')) continue;
       const hier = inOffer(it, curOffer), eigen = curOffer === OSTD ? hier : !!(it.variants && it.variants[curOffer] && it.variants[curOffer].status !== 'hidden');
       if (eigen && !all) continue;
-      // Quotient vor dem Runden glätten: 5,50 € −5 % / 0,05 ergibt binär 104,4999… statt 104,5 (wie rundeWieServer in frontend.js)
-      const np = p.status === 'value' ? { status: 'value', value: Math.round(glatt(p.value * (1 + pct / 100) / step) * step * 100) / 100 } : { status: 'request' };
+      // ohne Auf-/Abschlag unverändert kopieren; Quotient vor dem Runden glätten: 5,50 € −5 % / 0,05 ergibt binär 104,4999… statt 104,5 (wie rundeWieServer in frontend.js)
+      const np = p.status === 'value' ? { status: 'value', value: pct ? Math.round(glatt(p.value * (1 + pct / 100) / step) * step * 100) / 100 : p.value } : { status: 'request' };
       if (!hier) { empfehlungNichtUebernehmen(it, curOffer); neuHier.push(it); }
       aufnehmen(it, curOffer, np);
       invalid.delete(it.id + '|' + curOffer);
