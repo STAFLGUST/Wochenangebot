@@ -919,6 +919,13 @@ with sync_playwright() as p:
           and pg.locator('#bw-mengen tr').count() == 3)
     pg.fill('#bw-mengen [data-seite="a"][data-lm="e2"]', 'zwölf'); pg.click('#bw-form [type="submit"]')
     check('Bewegung: Text statt Zahl wird vor dem Senden gemeldet', 'ganze Stückzahlen' in text(pg, '#bw-meldung') and pg.get_attribute('#bw-mengen [data-seite="a"][data-lm="e2"]', 'aria-invalid') == 'true')
+    for falsch_ in ('1.5', '2.50'):   # Punkt nur als Tausenderpunkt wie im Server: kein stilles 15 bzw. 250
+        pg.evaluate("document.querySelector('#bw-meldung').textContent = ''")
+        pg.fill('#bw-mengen [data-seite="a"][data-lm="e2"]', falsch_); pg.click('#bw-form [type="submit"]')
+        pg.wait_for_function("document.querySelector('#bw-meldung').textContent !== '' || !document.querySelector('#dlg-bewegung').open")
+        check(f'Bewegung: „{falsch_}“ ist keine Stückzahl (Saldo danach „?“, nicht gebucht)', 'ganze Stückzahlen' in text(pg, '#bw-meldung')
+              and pg.get_attribute('#bw-mengen [data-seite="a"][data-lm="e2"]', 'aria-invalid') == 'true' and '?' in text(pg, '#bw-mengen [data-danach="e2"]')
+              and pg.is_visible('#dlg-bewegung'), (text(pg, '#bw-meldung'), text(pg, '#bw-mengen [data-danach="e2"]')))
     pg.fill('#bw-mengen [data-seite="a"][data-lm="e2"]', '1.200'); pg.fill('#bw-mengen [data-seite="z"][data-lm="e2"]', '200'); pg.fill('#bw-beleg', 'UI-LS-1')
     check('Bewegung: Saldo danach rechnet mit', vz(saldo_sp['e2'] + 1000) in text(pg, '#bw-mengen [data-danach="e2"]'), text(pg, '#bw-mengen'))
     pg.check('#bw-alle')
