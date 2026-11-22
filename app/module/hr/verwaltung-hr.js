@@ -20,6 +20,7 @@
   const darfHr = () => may('hr.verwalten') && may('hr.zugang');
   const WT = ['Mo', 'Di', 'Mi', 'Do', 'Fr', 'Sa', 'So'];
   const zahl = (n) => window.STAFL_FORMAT.zahl(Math.round(Number(n || 0) * 2) / 2, 0, 1);   // halbe Tage, echtes Minus wie überall
+  const tageText = (n) => `${zahl(n)} ${Math.abs(Math.round(Number(n || 0) * 2) / 2) === 1 ? 'Tag' : 'Tage'}`;   // wie hr.js: „1 Tag“, „−1 Tag“, „0,5 Tage“
   let daten = null;                      // Antwort von mitarbeiter_hr (aktuelles Jahr)
   // Kennzeichen „Resturlaub verfällt nicht“ (Verfall je Mitarbeiter abgeschaltet) in den Listen
   const kVerfall = '<small class="hr-kein-verfall" title="Resturlaub aus dem Vorjahr verfällt nicht">kein Verfall</small>';
@@ -42,7 +43,7 @@
     if (!p) return { abteilung: '', urlaub: '' };
     return {
       abteilung: esc(p.abteilung || ''),
-      urlaub: p.aktiv ? `<span title="Resturlaub ${JAHR}">${esc(zahl(p.konto.rest))} Tage</span>${p.verfall === false ? kVerfall : ''}` : '<span class="muted" title="nicht im Urlaubsplan">–</span>',
+      urlaub: p.aktiv ? `<span title="Resturlaub ${JAHR}">${esc(tageText(p.konto.rest))}</span>${p.verfall === false ? kVerfall : ''}` : '<span class="muted" title="nicht im Urlaubsplan">–</span>',
     };
   }
 
@@ -91,7 +92,7 @@
         <label class="check span2"><input type="checkbox" name="hr_aktiv"${!p || p.aktiv ? ' checked' : ''}${aus}> im Urlaubsplan (Kalender, Export für den Steuerberater)</label>
       </div>
       ${abtL.length ? '' : `<datalist id="hr-abteilungen">${abt.map((a) => `<option value="${esc(a)}">`).join('')}</datalist>`}
-      ${p && p.aktiv ? `<p class="hint" style="margin:0">Urlaub ${JAHR}: ${esc(zahl(p.konto.rest))} Tage Rest · ${esc(zahl(p.konto.genommen))} genommen · ${esc(zahl(p.konto.geplant))} geplant${p.konto.verfaellt > 0 ? ` · ${esc(zahl(p.konto.verfaellt))} Tage Übertrag verfallen nach dem ${esc(tagMonat((p.konto.frist || '').slice(5)))}` : ''}${p.gleitKonto && p.gleitKonto.aktiv ? ` · Gleittage: ${esc(zahl(p.gleitKonto.rest))} Rest (gewähren in HR → Übersicht)` : ''}</p>` : ''}
+      ${p && p.aktiv ? `<p class="hint" style="margin:0">Urlaub ${JAHR}: ${esc(tageText(p.konto.rest))} Rest · ${esc(zahl(p.konto.genommen))} genommen · ${esc(zahl(p.konto.geplant))} geplant${p.konto.verfaellt > 0 ? ` · ${esc(zahl(p.konto.verfaellt))} Tage Übertrag verfallen nach dem ${esc(tagMonat((p.konto.frist || '').slice(5)))}` : ''}${p.gleitKonto && p.gleitKonto.aktiv ? ` · Gleittage: ${esc(zahl(p.gleitKonto.rest))} Rest (gewähren in HR → Übersicht)` : ''}</p>` : ''}
     </fieldset>`;
   }
 
