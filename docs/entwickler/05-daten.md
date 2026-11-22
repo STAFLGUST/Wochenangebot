@@ -1024,7 +1024,8 @@ Die einzige Beschreibung der Regeln; Code-Kommentare verweisen hierher.
   Fassung war gespeichert, der Nutzer sah 500, und jeder weitere Versuch vergrößerte das Dokument.
 - **Aufräumweg:** `deploy/ci-kalkulationen-auslagern.php` (nur auf dem Server). Ohne Angaben zeigt es die Größe je Container;
   mit `--export <datei>` schreibt es das ganze Dokument als JSON und liest es zur Gegenprobe wieder ein; erst mit
-  `--entfernen <sendung-id>[,…]` entfernt es diese Kalkulationen aus dem Dokument. Ohne geprüften Export wird nichts entfernt –
+  `--entfernen <sendung-id>[,…]` entfernt es diese Kalkulationen aus dem Dokument – nur, wenn sie noch genau so im Export stehen
+  (eine seither gespeicherte Fassung bricht ohne Änderung ab; Exportdatei nur für den Besitzer lesbar). Ohne geprüften Export wird nichts entfernt –
   die Exportdatei ist das Archiv dieser Vorgänge (GoBD) und gehört in die Sicherung. Die Anwendung selbst löscht nie eine Fassung.
 
 ## 5.4 Datenverantwortung (GR-101)

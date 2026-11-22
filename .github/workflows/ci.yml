@@ -286,6 +286,7 @@ jobs:
           python3 tests/deploy/test_daten_trennen.py
           sh tests/deploy/test_daten_trennen.sh
           sh tests/deploy/test_notfallwerkzeuge.sh
+          sh tests/deploy/test_ci_auslagern.sh
       - name: Diagnose von Anmeldeproblemen (konten.sh pruefen, mit Platzhalter für Keycloak)
         run: sh tests/deploy/test_konten_pruefen.sh
       - name: Speicherbelegung und Aufräumen (deploy/speicher.sh, mit Platzhalter für docker), Protokollbegrenzung
