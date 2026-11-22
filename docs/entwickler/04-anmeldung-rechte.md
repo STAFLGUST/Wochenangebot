@@ -408,10 +408,18 @@ weist ohne `<modul>.zugang` mit 403 `kein_modulzugang` ab:
 
 Ausgenommen: Aktionen der Module `plattform`/`dashboard` (kein Zugangsrecht), `oeffentlich`, `wartung_frei`.
 Für den **Host** lässt `modul_host_frei()` auch den Zugang eines Teilmoduls gelten (`teil_von`, z. B. Import →
-Verwaltung: die Kachel der Importzentrale liegt auf dem Verwaltungs-Host). Für das **Modul der Aktion** gilt die strenge
-`modul_zugang_frei()` – genau sein eigener Zugang (Sicherheitsfund 22.11.2026: vorher kam eine Rolle mit
-`import.zugang`, aber ohne `verwaltung.zugang`, durch das Tor bei 16 modulfremden Verwaltungsaktionen, darunter
-`kunde_save`, `kunden_import` und `vertreter_save`; es blieb nur das Fachrecht). Der
+Verwaltung: die Kachel der Importzentrale liegt auf dem Verwaltungs-Host). Für das **Modul der Aktion** zählt
+`modul_zugang_frei()`, und die Teilmodul-Beziehung wirkt dort **nur von oben nach unten**:
+
+* der Zugang des **Obermoduls** gilt auch für seine Teilmodule – wer `verwaltung.zugang` hat, kommt an die Aktionen der
+  Importzentrale (Modul `import`), ohne dass ihm jemand `import.zugang` einzeln geben muss;
+* der Zugang eines **Teilmoduls** gilt **nie** für das Obermodul – `import.zugang` ohne `verwaltung.zugang` öffnet keine
+  Verwaltungsaktion (Sicherheitsfund 22.11.2026: vorher maß das Tor auch das Modul der Aktion mit der laxen
+  Host-Funktion, und `import.zugang` ersetzte den entzogenen `verwaltung.zugang` bei 16 modulfremden
+  Verwaltungsaktionen, darunter `kunde_save`, `kunden_import` und `vertreter_save`; es blieb nur das Fachrecht).
+
+So verliert keine Rolle etwas, in keiner Richtung; nachgezählt über alle Aktionen des Registers in
+`tests/e2e/test_rollen.py` (beide Richtungen) und `tests/e2e/test_importzentrale.py`. Der
 Modulzugang ersetzt keine Einzelrechte: ein Recht wie `kunden.sehen` kann in mehreren Modulen genutzt werden.
 
 **Der Modulzugang ist eine Berechtigung, keine Anzeigeregel (seit 15.11.2026, Sicherheitsfund):** Vorher wurde nur der
@@ -444,8 +452,8 @@ stehen in der Rechteübersicht je Modul als „Modul … öffnen“.
 Zentrale ruft die Vorschau- und Übernahmefunktionen fremder Module auf; der Eigentümer steht erst zur Laufzeit in der
 Importart. `import_arten` zeigt nur Importarten, deren Eigentümer-Modul dem Nutzer offensteht. Ihre vier Aktionen
 gehören seit dem 22.11.2026 dem Modul `import` (`regeln/aktionen/import.toml`, Kachel Verwaltung → Import): sie
-verlangen `import.zugang` statt `verwaltung.zugang` – vorher war es umgekehrt dieser Teilmodul-Zugang, der jede
-Verwaltungsaktion öffnete.
+verlangen `import.zugang` **oder** den Zugang des Obermoduls `verwaltung.zugang` (Teilmodul, siehe oben) – umgekehrt
+öffnet `import.zugang` keine Verwaltungsaktion mehr.
 **Preisverlauf und frühere Wochen (seit 15.11.2026):** Der Preisverlauf trägt keine Kundenpreise mehr – `history_data`
 und `history_prev` (Recht `preisverlauf.sehen`) liefern sie nicht, und `history_from_model()` schreibt sie nicht in
 `historie/*`. Nur die Vorwochenpreise je Kundenangebot gehen in `history_prev` zusätzlich mit `angebot.zugang` heraus

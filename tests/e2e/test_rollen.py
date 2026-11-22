@@ -164,8 +164,10 @@ code, r = AN.call('abteilungen')
 check('… andere Verwaltungsaktionen bleiben ohne Verwaltungszugang gesperrt', code == 403 and r.get('code') == 'kein_modulzugang' and r.get('modul') == 'verwaltung', (code, r))
 # Sicherheitsfund 22.11.2026: „import“ ist ein Teilmodul der Verwaltung (teil_von). Das Tor maß auch das Modul der
 # Aktion mit der laxen Host-Funktion – „import.zugang“ ersetzte damit den entzogenen „verwaltung.zugang“ für 16
-# modulfremde Verwaltungsaktionen (kunde_save, kunden_import, vertreter_save …). Die Milderung gilt nur für den Host.
-code, r = A.call('rolle_save', {'name': 'Importstelle', 'rechte': ['import.zugang', 'bestand.zugang', 'bestand.importieren', 'kunden.bearbeiten']})
+# modulfremde Verwaltungsaktionen (kunde_save, kunden_import, vertreter_save …). Die Teilmodul-Beziehung wirkt jetzt
+# nur von oben nach unten: der Zugang der Verwaltung gilt für ihr Teilmodul Import, nicht umgekehrt (beide Richtungen
+# geprüft – unten die Gegenprobe). Die Fachrechte hat die Rolle, es fehlt allein „verwaltung.zugang“.
+code, r = A.call('rolle_save', {'name': 'Importstelle', 'rechte': ['import.zugang', 'bestand.zugang', 'bestand.importieren', 'stammdaten.sehen', 'kunden.bearbeiten']})
 IST = r['id']
 assert code == 200 and 'verwaltung.zugang' not in next(x for x in r['rollen'] if x['id'] == IST)['rechte']
 assert A.call('user_save', {'id': '', 'name': 'Ida Import', 'username': 'ida', 'rollen': [IST], 'active': True, 'password': 'Kunden-Zugang-88', 'mustChange': False})[0] == 200
@@ -184,7 +186,16 @@ check('Importzentrale mit „import.zugang“ weiter erreichbar, Importarten nur
       code == 200 and 'bestand' in arten and 'kunden' not in arten, (code, arten))
 check('Übernahme einer Verwaltungs-Importart bleibt gesperrt (Eigentümerprüfung)',
       ID_.call('import_uebernehmen', {'art': 'kunden', 'daten': ''})[0] == 403)
-assert A.call('rolle_save', {'id': IST, 'name': 'Importstelle', 'rechte': ['import.zugang', 'verwaltung.zugang', 'bestand.zugang', 'bestand.importieren', 'kunden.bearbeiten']})[0] == 200
+# Gegenprobe der anderen Richtung: eine Rolle mit „verwaltung.zugang“ ohne „import.zugang“ behält die Importzentrale –
+# der Zugang des Obermoduls gilt für sein Teilmodul (sonst hätte die strenge Prüfung ihr die Zentrale genommen).
+assert A.call('rolle_save', {'id': IST, 'name': 'Importstelle', 'rechte': ['verwaltung.zugang', 'bestand.zugang', 'bestand.importieren', 'stammdaten.sehen', 'kunden.bearbeiten']})[0] == 200
+code, r = ID_.call('import_arten')
+check('Verwaltungszugang genügt für das Teilmodul Import: Zentrale offen, Importarten der Verwaltung dabei',
+      code == 200 and 'kunden' in [a_['id'] for a_ in r.get('arten', [])], (code, [a_['id'] for a_ in r.get('arten', [])]))
+check('… auch die schreibenden Importaktionen kommen durch das Tor (kein „kein_modulzugang“)',
+      ID_.call('import_pruefen', {'art': 'kunden', 'daten': {'rows': []}})[1].get('code') != 'kein_modulzugang',
+      ID_.call('import_pruefen', {'art': 'kunden', 'daten': {'rows': []}}))
+assert A.call('rolle_save', {'id': IST, 'name': 'Importstelle', 'rechte': ['import.zugang', 'verwaltung.zugang', 'bestand.zugang', 'bestand.importieren', 'stammdaten.sehen', 'kunden.bearbeiten']})[0] == 200
 code, r = ID_.call('abteilungen')
 check('Mit Verwaltungszugang wieder offen', code == 200, (code, r))
 

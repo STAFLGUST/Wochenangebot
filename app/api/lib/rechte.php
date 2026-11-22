@@ -141,9 +141,10 @@ const PERM_ROLES = ['viewer', 'editor'];
    andere (Feld zugang_rollen, z. B. Sicherheit: keine). Die Rechte innerhalb
    eines Moduls (PERMS) hängen nicht davon ab: ein Recht kann auch in einem anderen Modul genutzt werden (z. B. Kunden
    sehen im Angebot). Der Modulzugang ist dabei trotzdem eine Berechtigung und keine Anzeigeregel: ohne ihn läuft keine
-   Aktion des Moduls – auf keinem Host (modul_zugang_durchsetzen prüft Host UND Modul der Aktion). Nur die im
-   Aktionsregister ausdrücklich mit „zugang_gemeinsam“ vermerkten Aktionen des gemeinsamen Eingabebereichs kommen ohne
-   den Zugang ihres eigenen Moduls aus; dort autorisiert allein das Fachrecht (regeln/aktionen/LIESMICH.md). */
+   Aktion des Moduls – auf keinem Host (modul_zugang_durchsetzen prüft Host UND Modul der Aktion). Ohne den eigenen
+   Zugang laufen nur: die im Aktionsregister ausdrücklich mit „zugang_gemeinsam“ vermerkten Aktionen des gemeinsamen
+   Eingabebereichs (dort autorisiert allein das Fachrecht, regeln/aktionen/LIESMICH.md) und die Aktionen eines
+   Teilmoduls für Inhaber des Zugangs seines Obermoduls („teil_von“, siehe modul_zugang_frei) – nie umgekehrt. */
 function perms_katalog(): array
 {
     static $k = null;
@@ -285,14 +286,20 @@ function require_perm_confirmed(string $perm, string $key = ''): array
 }
 
 /* ---------- Modulzugang durchsetzen (GR-103: serverseitig, nicht über die Kachel) ----------
-   Kachel: nur mit eigenem „<modul>.zugang“. Oberfläche (Host): mit dem Zugang des Moduls oder eines Teilmoduls
-   („teil_von“, z. B. Import → Verwaltung: die Importzentrale liegt auf dem Verwaltungs-Host). Module ohne Kachel
-   (Dashboard, Plattformkern) brauchen keinen Zugang. */
+   Teilmodule („teil_von“, heute nur Import → Verwaltung) wirken in genau eine Richtung: der Zugang des Obermoduls
+   gilt auch für sein Teilmodul (wer die Verwaltung öffnen darf, darf auch ihre Importzentrale), der Zugang eines
+   Teilmoduls dagegen nie für das Obermodul. Oberfläche (Host): dort genügt zusätzlich der Zugang eines Teilmoduls,
+   weil dessen Kachel auf diesem Host liegt (modul_host_frei). Module ohne Kachel (Dashboard, Plattformkern)
+   brauchen keinen Zugang. */
 function modul_zugang_frei(?array $u, string $modul, ?array $perms = null): bool
 {
     if (!isset(perms_katalog()["$modul.zugang"])) return true;
     if (!$u) return false;
-    return in_array("$modul.zugang", $perms ?? user_perms($u), true);
+    $p = $perms ?? user_perms($u);
+    // nach oben durch die teil_von-Kette (Zähler nur als Schleifenbremse, falls das Register einmal einen Kreis nennt)
+    for ($m = $modul, $i = count(MODULE); $m !== null && $i-- > 0; $m = MODULE[$m]['teil_von'] ?? null)
+        if (in_array("$m.zugang", $p, true)) return true;
+    return false;
 }
 /* Angemeldet UND Modulzugang „<modul>.zugang“ – unabhängig vom Host der Anfrage (GR-103). Für lesende Aktionen, die
    Inhalte eines Moduls ausliefern und sonst nur die Anmeldung prüfen würden (z. B. Entwurf und Kundenpreise des Angebots,
@@ -344,8 +351,9 @@ function modul_zugang_durchsetzen(?array $aktion): void
     foreach ([[anfrage_modul($aktion), true], [!empty($aktion['zugang_gemeinsam']) ? null : (string)$aktion['modul'], false]] as [$m, $seite]) {
         if ($m === null || $m === '') continue;
         // Host: der Zugang des Moduls oder eines Teilmoduls genügt (dessen Kachel liegt auf diesem Host). Modul der Aktion:
-        // genau sein eigener Zugang – der Zugang eines Teilmoduls ist keine Berechtigung für die Daten des Obermoduls
-        // (GR-103, Sicherheitsfund 22.11.2026: „import.zugang“ ersetzte sonst den entzogenen „verwaltung.zugang“).
+        // sein eigener Zugang oder der des Obermoduls – der Zugang eines Teilmoduls ist dagegen keine Berechtigung für
+        // die Daten des Obermoduls (GR-103, Sicherheitsfund 22.11.2026: „import.zugang“ ersetzte sonst den entzogenen
+        // „verwaltung.zugang“ bei 16 modulfremden Verwaltungsaktionen).
         if ($seite ? modul_host_frei($u, $m) : modul_zugang_frei($u, $m)) continue;
         header('Cache-Control: no-store');
         $name = MODULE[$m]['name'] ?? $m;

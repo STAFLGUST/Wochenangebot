@@ -129,8 +129,9 @@ ZEIT_XLS = {'blaetter': [{'name': 'Bericht', 'grid': [
     ['Vorname', 'Nachname', 'Name (Abwesenheit)', 'Abwesenheitsvergütung', 'Startdatum', 'Enddatum', 'Dauer', 'Mitarbeiternummer', 'Abteilung'],
     ['Petra', 'Pruefdaten', None, None, None, None, None, '', 'Testabteilung'],
     [None, None, 'Urlaub ', 'Bezahlte Abwesenheit', 46324, 46325, '16:00', None, None]]}]}
-# „import.zugang“ gehört zur Rolle, seit die vier Aktionen der Zentrale dem Modul „import“ gehören (22.11.2026)
-st, r = A.call('rolle_save', {'name': 'Zeitstelle', 'rechte': ['import.zugang', 'verwaltung.zugang', 'hr.verwalten']})
+# Ohne „import.zugang“: die vier Aktionen gehören dem Teilmodul „import“ (teil_von = verwaltung), der Zugang des
+# Obermoduls gilt für sie mit (22.11.2026, rechte.php:modul_zugang_frei) – die Zentrale läuft also mit „verwaltung.zugang“.
+st, r = A.call('rolle_save', {'name': 'Zeitstelle', 'rechte': ['verwaltung.zugang', 'hr.verwalten']})
 ZST = r['id']
 check('Rolle mit Personalrecht, ohne HR-Zugang (Modulzugang kommt nicht mit)', st == 200
       and 'hr.zugang' not in next(x for x in r['rollen'] if x['id'] == ZST)['rechte'], r.get('rollen'))
@@ -143,12 +144,10 @@ st1, r1 = P.call('import_pruefen', {'art': 'zeiterfassung', 'daten': ZEIT_XLS, '
 st2, r2 = P.call('import_uebernehmen', {'art': 'zeiterfassung', 'daten': ZEIT_XLS, 'quelle': 'pruefbericht.xlsx', 'stand': None})
 check('… Vorschau und Übernahme 403 (Zugang zum Bereich HR fehlt)', st1 == 403 and st2 == 403 and 'HR' in r1.get('error', ''), (st1, r1, st2, r2))
 check('… keine Abwesenheiten und keine Personen geschrieben', (doc('hr-abwesenheiten'), doc('hr-personal')) == vorher)
-# Umgekehrt ersetzt „import.zugang“ keinen anderen Modulzugang: ohne ihn läuft die Zentrale gar nicht (Fund 22.11.2026)
-assert A.call('rolle_save', {'id': ZST, 'name': 'Zeitstelle', 'rechte': ['verwaltung.zugang', 'hr.verwalten']})[0] == 200
-st3, r3 = P.call('import_pruefen', {'art': 'zeiterfassung', 'daten': ZEIT_XLS, 'quelle': 'pruefbericht.xlsx'})
-check('Ohne „import.zugang“: die Zentrale selbst ist gesperrt (403 kein_modulzugang, Bereich Import)',
-      st3 == 403 and r3.get('code') == 'kein_modulzugang' and r3.get('modul') == 'import', (st3, r3))
-assert A.call('rolle_save', {'id': ZST, 'name': 'Zeitstelle', 'rechte': ['import.zugang', 'verwaltung.zugang', 'hr.verwalten', 'hr.zugang']})[0] == 200
+# Die Zentrale selbst war erreichbar (403 kam vom Eigentümer HR, nicht vom Tor) – belegt den Zugang über das Obermodul
+check('… das Tor der Zentrale war offen (kein „kein_modulzugang“, nur „verwaltung.zugang“ in der Rolle)',
+      r1.get('code') != 'kein_modulzugang' and r2.get('code') != 'kein_modulzugang', (r1.get('code'), r2.get('code')))
+assert A.call('rolle_save', {'id': ZST, 'name': 'Zeitstelle', 'rechte': ['verwaltung.zugang', 'hr.verwalten', 'hr.zugang']})[0] == 200
 check('Mit HR-Zugang: Importart wieder da, Vorschau läuft (nicht an der Berechtigung)', 'zeiterfassung' in ids(P)
       and P.call('import_pruefen', {'art': 'zeiterfassung', 'daten': ZEIT_XLS, 'quelle': 'pruefbericht.xlsx'})[0] != 403, ids(P))
 check('Leser: Preisverlauf 403', L.call('import_pruefen', {'art': 'preisverlauf', 'daten': {'wochen': []}})[0] == 403)

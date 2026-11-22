@@ -126,7 +126,8 @@ Datei `ImportPreise.csv`).
 | `import_uebernehmen` | POST | wie oben plus `stand` (und `upload`) → Übernahme (ggf. Passwortbestätigung) |
 
 Die vier Aktionen gehören dem Modul `import` (`regeln/aktionen/import.toml`, seit 22.11.2026) und verlangen damit
-`import.zugang`; den Zugang des **Eigentümers** der Importart prüft `import_vorbereiten()` zusätzlich streng
+`import.zugang` oder den Zugang des Obermoduls `verwaltung.zugang` (Teilmodul `teil_von`, docs/entwickler/04);
+den Zugang des **Eigentümers** der Importart prüft `import_vorbereiten()` zusätzlich streng
 (`require_modulzugang($a['eigentuemer'])`). Registriert sind sie heute auf der Oberfläche `angebot.eingabe`; mit der
 Freigabe von `verwaltung.import` ziehen sie dorthin um.
 
