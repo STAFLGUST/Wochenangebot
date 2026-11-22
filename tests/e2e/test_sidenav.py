@@ -85,6 +85,10 @@ with sync_playwright() as p:
           and g.evaluate("document.querySelector('#offer-bar').parentElement.classList.contains('side-nav')") and css('#offer-bar', 'borderTopLeftRadius') == '0px' and css('#offer-bar', 'backdropFilter') in ('none', '')
           and css('#offer-bar .ob-o[aria-selected="true"]', 'borderTopLeftRadius') == '14px' and g.locator('#offer-bar .ob-o[aria-selected="true"]').bounding_box()['height'] >= 44)
     check('Rahmen: Tabellenkarten deckend', css('#groups .gcard', 'backgroundColor') == 'rgb(255, 255, 255)' and css('#groups .gcard', 'backdropFilter') == 'none', css('#groups .gcard', 'backgroundColor'))
+    # Schrift der Seitenleiste hell immer schwarz, nie rot (Vorgabe des Inhabers) – auch der Name des gewählten Angebots
+    ob = g.evaluate("""(() => { const c = (s) => { const e = document.querySelector(s); return e ? getComputedStyle(e).color : null; };
+        return [c('#offer-bar .ob-o[aria-selected="true"] .ob-n'), c('#offer-bar .ob-o:not([aria-selected="true"]) .ob-n'), c('#vt-edit')]; })()""")
+    check('Seitenleiste hell: gewähltes Angebot in derselben schwarzen Schrift wie die übrigen Einträge', all(ob) and len(set(ob)) == 1, ob)
     check('price fields 10 px radius', css('#groups tr[data-id] .e-price .in.num', 'borderTopLeftRadius') == '10px')
     sticky = g.evaluate("(() => { const t = document.querySelector('#view-edit .ed-toolbar'); return [getComputedStyle(t).position, getComputedStyle(t).backgroundColor]; })()")
     check('sticky bars opaque enough to read', sticky[0] == 'sticky' and alpha(sticky[1]) >= .85, sticky)
