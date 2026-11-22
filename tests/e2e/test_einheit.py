@@ -199,6 +199,10 @@ with sync_playwright() as pw:
                 if breite == 1440 and not dunkel and name == 'angebot':   # Haus = „Start“ (Leiste); die Angebotsseite hat das Symbol aus dem Menü
                     sy = pg.evaluate("['#btn-site', '#menu-more [data-act=open-site]'].map((s) => document.querySelector(s + ' use').getAttribute('href'))")
                     check('angebot: Knopf „Angebotsseite“ mit demselben Symbol wie „Öffentliche Seite öffnen“, nicht dem Haus von „Start“', sy[0] == sy[1] != '#i-home', sy)
+                    pg.evaluate("document.querySelector('#vt-angebote').click()"); pg.wait_for_selector('#view-angebote:not([hidden]) .hint a')
+                    vw = pg.evaluate("""() => { const ref = document.createElement('button'); ref.className = 'link-btn'; document.querySelector('#view-angebote').append(ref);
+                        const r = [getComputedStyle(ref).color, [...document.querySelectorAll('#view-angebote a')].filter((a) => a.offsetParent).map((a) => a.textContent.trim() + ' | ' + getComputedStyle(a).color)]; ref.remove(); return r; }""")
+                    check('angebot → Angebote: Verweise in der Farbe aller Verweise (nicht Browser-Blau)', vw[1] and all(x.endswith('| ' + vw[0]) for x in vw[1]), vw)
                 if breite == 1440 and not dunkel:
                     check(f'{name}: gemeinsames Zahlenformat geladen (format.js)', pg.evaluate("!!(window.STAFL_FORMAT && window.STAFL_FORMAT.euro)"))
                     check(f'{name}: gemeinsame Suchregel geladen (suche.js)', pg.evaluate("!!(window.STAFL_SUCHE && window.STAFL_SUCHE.findet)"))

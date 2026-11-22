@@ -44,6 +44,7 @@ body.adm .topbar .stafl-zurueck { margin-right: 4px; }
 .save-state.error { color: var(--accent); }
 .save-state.error .dot { background: var(--accent); }
 .save-state .link-btn { font-size: 13px; }
+.hint a { color: var(--accent); text-underline-offset: 3px; text-decoration-thickness: 1px; }   /* Verweise in Hinweisen wie alle Verweise (nicht Browser-Blau) */
 .btn .badge-n { min-width: 20px; height: 20px; padding: 0 6px; border-radius: 999px; background: rgba(255,255,255,.22); font-size: 12px; display: inline-grid; place-items: center; font-variant-numeric: tabular-nums; }
 
 /* Seite */
