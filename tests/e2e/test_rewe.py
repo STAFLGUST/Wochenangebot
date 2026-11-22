@@ -24,6 +24,7 @@ import datetime
 import io
 import json
 import os
+import re
 
 from openpyxl import load_workbook
 from playwright.sync_api import sync_playwright
@@ -896,6 +897,8 @@ with sync_playwright() as p:
     pg.click('#rw-m-tabelle tr:has-text("Beispielstadt")'); pg.wait_for_selector('.rw-heat')
     check('Marktakte: Adresse #markt/<id>, Jahre im Verlauf, Kennzahlen, Ansprechpartner', '#markt/' in pg.url and pg.locator('.rw-heat .jahr').count() >= 2
           and 'Frau Test' in text(pg, '#rw-akte') and 'Nur gereifte Ware' in text(pg, '#rw-akte'))
+    letzte_ = pg.locator('#rw-akte .rw-zahlen div:has-text("Letzte Bestellung") b').inner_text()
+    check('Marktakte: „Letzte Bestellung“ als KW n/JJJJ wie überall', re.fullmatch(r'KW \d{1,2}/\d{4}', letzte_) is not None, letzte_)
     pg.click('#rw-a-notiz'); pg.wait_for_selector('#dlg-notiz[open]')
     pg.select_option('#nz-art', 'telefonat'); pg.fill('#nz-text', 'Vac. Set angeboten'); pg.click('#nz-form button[type="submit"]')
     pg.wait_for_selector('#dlg-notiz[open]', state='hidden'); pg.wait_for_selector('.rw-verlaufsliste li:has-text("Vac. Set angeboten")')

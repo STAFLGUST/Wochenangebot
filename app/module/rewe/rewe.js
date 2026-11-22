@@ -588,7 +588,7 @@
               <div><span>Bestellungen ${esc(jahr)}</span><b>${obj(z[jahr]).lieferungen || 0}</b></div>
               <div><span>Bestellungen ${esc(vorjahr)}</span><b>${obj(z[vorjahr]).lieferungen || 0}</b></div>
               <div><span>Stück ${esc(jahr)}</span><b>${zahl(summe(obj(z[jahr]).mengen))}</b></div>
-              <div><span>Letzte Bestellung</span><b>${esc(z.letzte ? kwKurz(z.letzte) + '/' + z.letzte.slice(2, 4) : '—')}</b></div>
+              <div><span>Letzte Bestellung</span><b>${esc(z.letzte ? kwText(z.letzte) : '—')}</b></div>
             </div>
             <div class="rw-heat">${heat}</div>
             <div class="rw-legende"><span><i class="rw-z b"></i>bestellt</span><span><i class="rw-z"></i>kein Bedarf</span><span><i class="rw-z n"></i>nicht erreicht</span><span><i class="rw-z p"></i>Pause</span><span><i class="rw-z o"></i>keine Angabe</span></div>
@@ -762,7 +762,7 @@
             <div><span>Bestellungen ${esc(jahr)}</span><b>${obj(z[jahr]).lieferungen || 0}</b></div>
             <div><span>Bestellungen ${esc(String(+jahr - 1))}</span><b>${obj(z[String(+jahr - 1)]).lieferungen || 0}</b></div>
             <div><span>Stück ${esc(jahr)}</span><b>${zahl(summe(obj(z[jahr]).mengen))}</b></div>
-            <div><span>Letzte Bestellung</span><b>${esc(z.letzte ? kwKurz(z.letzte) + '/' + z.letzte.slice(2, 4) : '—')}</b></div>
+            <div><span>Letzte Bestellung</span><b>${esc(z.letzte ? kwText(z.letzte) : '—')}</b></div>
           </div>
           <div class="rw-heat">${heatHtml(A)}</div>
           <div class="rw-legende"><span><i class="rw-z b"></i>bestellt</span><span><i class="rw-z"></i>kein Bedarf</span><span><i class="rw-z n"></i>nicht erreicht</span><span><i class="rw-z p"></i>Pause</span><span><i class="rw-z o"></i>keine Angabe</span></div>
