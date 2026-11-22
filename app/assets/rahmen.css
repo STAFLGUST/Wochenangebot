@@ -239,6 +239,10 @@ body.r .stafl-zurueck { height: 36px; padding: 0 12px 0 8px; border: 1px solid v
 body.r .stafl-zurueck:hover { background: var(--r-flaeche-2); color: var(--r-text); }
 body.r .stafl-zurueck.kompakt { width: 36px; padding: 0; }
 @media (max-width: 560px) { body.r .stafl-zurueck { width: 36px; padding: 0; } }
+.r-seitenkopf .stafl-zurueck { margin-bottom: 14px; }   /* über dem Titel (rahmen.js: startKnopf) */
+/* Den Knopf setzt der Rahmen – die Linkfarbe eines Moduls (z. B. „.ci-main a“) färbt ihn nicht um */
+body.r .r-seitenkopf a.stafl-zurueck { color: var(--r-text-2); }
+body.r .r-seitenkopf a.stafl-zurueck:hover { color: var(--r-text); }
 
 /* ── Bausteine für Seiten im Rahmen ── */
 .r-seite { box-sizing: border-box; width: 100%; max-width: 1120px; margin: 0 auto; padding: 32px 40px 56px; display: flex; flex-direction: column; gap: 28px; }

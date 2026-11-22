@@ -686,7 +686,7 @@ Alle drei Seiten haben denselben Aufbau – eine eigenständige IIFE ohne `windo
    404/503/403 der Startaktion in eigene Hinweise („noch nicht freigegeben“, Wartung, fehlendes Recht).
 4. **Reiter** über `location.hash` (`#kalender`, `#cockpit` …), nur wenn der Knopf existiert und sichtbar ist.
 5. **Zurück zur Startseite:** gemeinsamer Knopf `.stafl-zurueck` (`app.css`) links im Kopf – `#btn-dashboard` im
-   Eingabebereich, `#hr-zurueck`, `#crm-zurueck` auf den Modulseiten (`../../dashboard/`, auf `*.dashboard-stafl.de`
+   Eingabebereich, `#hr-zurueck`, `#crm-zurueck` auf den Modulseiten, im Versand und Container-Import vom Rahmen (`../../dashboard/`, auf `*.dashboard-stafl.de`
    `https://dashboard-stafl.de/`). Pfeil `#i-back` + „Start“ (seit 06.11.2026, wie der Eintrag der Seitenleiste), 36 px, rund; ≤ 560 px oder mit Klasse `kompakt` nur
    der Pfeil – auf jedem Host des Eingabebereichs gleich (seit 22.11.2026 auch auf dem Angebots-Host mit Beschriftung).
 
@@ -823,7 +823,8 @@ Glas; Modulfarben nur an den Symbolen.
   gilt sie nur auf der Seite. Im Menü am Handy entfällt der Pin. `schmal`/`data-rahmen-schmal` sind seitdem ohne
   Wirkung (werden übergangen).
 - **„Start“** (gemeinsamer Knopf `.stafl-zurueck`, Beschriftung „Start“) bleibt im Kopf jeder Modulseite; im Rahmen ruhig mit
-  feiner Linie (36 px).
+  feiner Linie (36 px). Seiten mit dem Seitenkopf `.r-seitenkopf` (Versand, Container-Import) setzen ihn nicht selbst:
+  `rahmen.js` (`startKnopf`) stellt ihn über den Titel, Ziel wie der Eintrag „Start“ der Leiste (nicht auf der Startseite).
 - **Unter 900 px** setzt `rahmen.js` eine Kopfzeile mit Menüknopf (`#r-menue`, `aria-expanded`) vor den Inhalt; die
   Leiste wird zum Menü (unsichtbar und nicht per Tab erreichbar, solange zu). Escape, Klick daneben oder Tab aus dem
   Menü schließt es; bewegt wird sie nur beim Öffnen/Schließen (`r-bewegung`), nicht beim Wechsel der Fensterbreite.

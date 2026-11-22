@@ -11,7 +11,8 @@
    (immer breit). Die Wahl gilt am Konto auf jedem Host (Status user.leiste, gespeichert mit theme_save).
    Ziele der Einträge wie bisher die Kacheln: unter dashboard-stafl.de die Adressen der zentralen Anmeldung, in Test- und
    Entwicklungsumgebungen derselbe Pfad auf dem aktuellen Server (nie die Produktion).
-   Modulseiten binden den Rahmen ohne eigenes Skript ein: <body data-rahmen="<modul-id>"> (siehe selbst() unten).
+   Modulseiten binden den Rahmen ohne eigenes Skript ein: <body data-rahmen="<modul-id>"> (siehe selbst() unten). Seiten mit dem
+   Seitenkopf .r-seitenkopf bekommen dort den gemeinsamen Knopf „Start“ (.stafl-zurueck, startKnopf()).
    Suche (Feld „Suchen“ oben in der Leiste, Strg K bzw. ⌘ K): springt zu einer Anwendung; Seiten können weitere Ziele
    ergänzen (STAFL_RAHMEN.suche, Dashboard: Schnellaktionen). Zahlen offener Punkte je Anwendung setzt nur das Dashboard
    (STAFL_RAHMEN.zahlen – Daten der Aktion start_heute, die es nur auf dem Dashboard-Host gibt, GR-109).
@@ -52,6 +53,7 @@
     pfeil: '<path d="m9 5.5 6.5 6.5L9 18.5"/>',
     schliessen: '<path d="M6 6l12 12M18 6 6 18"/>',
     pin: '<path d="M9 3.5h6l-.8 6 3.3 3v1.5h-11V12.5l3.3-3z"/><path d="M12 14v6.5"/>',
+    zurueck: '<path d="m14.5 5.5-6.5 6.5 6.5 6.5"/>',   // wie #i-back der Modulseiten
   };
   const symbol = (name, cls = 'r-i') => `<svg class="${cls}" viewBox="0 0 24 24" aria-hidden="true" focusable="false">${PFADE[name] || PFADE.raster}</svg>`;
 
@@ -187,6 +189,22 @@
     if (kopf) { kopf.hidden = false; kopf.querySelector('.r-marke').setAttribute('href', start); }
   }
 
+  /* „Start“ im Kopf der Seiten aus den Bausteinen des Rahmens (.r-seitenkopf, z. B. Versand, Container-Import): derselbe
+     Knopf .stafl-zurueck wie auf allen Modulseiten, über dem Titel, Ziel = Startseite der Leiste. Nicht auf der Startseite. */
+  function startKnopf(start, aktiv) {
+    const titel = document.querySelector('.r-seitenkopf > :first-child');
+    if (!titel || aktiv === 'start') return;
+    let a = titel.querySelector('.stafl-zurueck');
+    if (!a) {
+      a = document.createElement('a');
+      a.className = 'stafl-zurueck';
+      a.title = 'Zur Startseite'; a.setAttribute('aria-label', 'Zur Startseite');
+      a.innerHTML = `${symbol('zurueck', 'i')}<span class="lbl">Start</span>`;
+      titel.prepend(a);
+    }
+    a.setAttribute('href', start);
+  }
+
   /* Leiste zeichnen.
      o.module   Liste aus module_status (data.module)
      o.aktiv    'start' oder die Modul-ID der Seite
@@ -230,6 +248,7 @@
     aufklappen(false, true);
     leisteBinden(nav);
     mobilkopf(start);
+    startKnopf(start, aktiv);
   }
 
   /* Leiste entfernen (z. B. nach dem Abmelden): Seite wieder ohne Rahmen */

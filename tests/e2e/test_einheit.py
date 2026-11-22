@@ -1,6 +1,6 @@
 """Einheitliches Erscheinungsbild aller Mitarbeiter-Oberflächen (Dashboard, Eingabebereich auf den Bereichs-Hosts Angebot,
-Verwaltung, Bestand, alle Modulseiten – HR, CRM, Controlling, Leergut, Marketing, QS, REWE, Sicherheit –, Abmeldeseite,
-Hinweis „Kein Zugang“): je hell/dunkel und 1440/390 px
+Verwaltung, Bestand, alle Modulseiten – HR, CRM, Controlling, Leergut, Marketing, QS, REWE, Sicherheit, Versand; vom
+Container-Import nur der Zurück-Knopf –, Abmeldeseite, Hinweis „Kein Zugang“): je hell/dunkel und 1440/390 px
 
 - kein waagerechtes Scrollen, kein abgeschnittener Text (Text breiter als sein Kasten bei verdecktem Überlauf, Text
   außerhalb des Bildschirms) – Ausnahmen nur für bewusst gekürzte Zellen mit vollem Text im Tooltip (title),
@@ -95,9 +95,11 @@ RAHMEN = r'''() => { const n = document.querySelector('#r-leiste'), k = document
            zu: getComputedStyle(n).visibility === 'hidden', kopf: !!k && k.getBoundingClientRect().height > 0, start: n.querySelector('[data-modul="start"]').getAttribute('href'),
            glas: [...document.querySelectorAll('body *')].filter((e) => { const s = getComputedStyle(e); return s.backdropFilter && s.backdropFilter !== 'none' && !/toast/.test(e.id + ' ' + e.className); })
              .map((e) => e.id || String(e.className)).slice(0, 5) }; }'''
+# Pfeil: Form des Symbols (aus dem Sprite der Seite über <use> oder vom Rahmen direkt gezeichnet)
 ZURUECK = r'''() => { const e = document.querySelector('.stafl-zurueck'); if (!e || !e.offsetParent) return null; const s = getComputedStyle(e), r = e.getBoundingClientRect();
+  const svg = e.querySelector('svg'), use = svg && svg.querySelector('use'), form = use ? document.querySelector(use.getAttribute('href')) : svg;
   return { h: Math.round(r.height), w: Math.round(r.width), radius: s.borderTopLeftRadius, font: s.fontSize + ' ' + s.fontWeight, text: e.textContent.trim(), href: e.getAttribute('href'),
-           icon: !!e.querySelector('svg use[href="#i-back"]'), pad: s.paddingLeft + ' ' + s.paddingRight, farbe: s.color }; }'''
+           icon: form ? form.innerHTML.trim() : null, pad: s.paddingLeft + ' ' + s.paddingRight, farbe: s.color }; }'''
 
 with sync_playwright() as pw:
     br = pw.chromium.launch()
@@ -131,7 +133,8 @@ with sync_playwright() as pw:
               ('marketing', None, '/module/marketing/', '#mkt-app:not([hidden])', []),
               ('qs', None, '/module/qs/', '#qm-app:not([hidden])', []),
               ('rewe', None, '/module/rewe/', '#rw-app:not([hidden])', []),
-              ('sicherheit', None, '/module/sicherheit/', '#sic-app:not([hidden])', [])]
+              ('sicherheit', None, '/module/sicherheit/', '#sic-app:not([hidden])', []),
+              ('versand', None, '/module/versand/', '#vs-app:not([hidden])', [])]
     zurueck = {}
     for breite in (1440, 390):
         for dunkel in (False, True):
@@ -178,6 +181,10 @@ with sync_playwright() as pw:
                 if name != 'dashboard':
                     zurueck.setdefault(breite, {})[name] = zr
                     check(f'{name} {tag}: Zurück-Knopf zum Dashboard sichtbar', zr is not None and zr['icon'] and zr['href'] and (zr['href'].rstrip('/').endswith('dashboard') or zr['href'] == 'https://dashboard-stafl.de/'), zr)
+            # Container-Import (hell und dunkel wie die übrigen Seiten im Vergleich unten): Seitenkopf aus den Bausteinen des Rahmens – „Start“ setzt rahmen.js
+            pg.goto(B + '/module/containerimport/'); pg.wait_for_selector('#ci-app:not([hidden]) .r-seitenkopf .stafl-zurueck', timeout=20000)
+            zr = zurueck[breite]['containerimport'] = pg.evaluate(ZURUECK)
+            check(f'containerimport {tag}: Zurück-Knopf zum Dashboard sichtbar', zr is not None and zr['icon'] and zr['href'].rstrip('/').endswith('dashboard'), zr)
             ctx.close()
     # Fingerbedienung (Prüfung am Handy 10.11.2026): mit Finger (pointer: coarse) haben Eingabefelder, Auswahlen und Textfelder
     # auf jeder Seite mindestens 16 px Schrift (sonst zoomt iOS beim Antippen hinein) und kleine Knöpfe (.btn.sm) sind sicher
