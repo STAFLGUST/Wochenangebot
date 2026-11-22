@@ -1980,6 +1980,27 @@ with sync_playwright() as p:
     pg.wait_for_function("document.querySelectorAll('#view-users .hr-kein-verfall').length === 0")
     check('… wieder angehakt: verfällt, kein Kennzeichen', {p_['nutzer']: p_ for p_ in P.call('mitarbeiter_hr')[1]['personen'] if p_['nutzer']}[ids['erika']]['verfall'] is True
           and pg.locator('#view-users .hr-kein-verfall').count() == 0)
+    # Zweite Sitzung der Personalstelle ändert denselben Mitarbeiter, während der Dialog offen ist: Hinweis und neue Fassung statt Überschreiben
+    J0_ = dt.date.today().year
+    erika_ = lambda: {p_['nutzer']: p_ for p_ in P.call('mitarbeiter_hr')[1]['personen'] if p_['nutzer']}[ids['erika']]   # noqa: E731
+    pg.click(f'#view-users tr[data-hr-uid="{ids["erika"]}"]'); pg.wait_for_selector('#dlg-hr-person[open]')
+    st_b, _ = P.call('mitarbeiter_hr_save', {'nutzer': ids['erika'], 'rev': P.call('mitarbeiter_hr')[1]['rev'], 'jahr': J0_, 'anspruch': 29})
+    pg.fill('#dlg-hr-person [name="hr_abteilung"]', 'Einkauf'); pg.click('#dlg-hr-person [type="submit"]')
+    pg.wait_for_function("document.querySelector('#dlg-hr-person .form-err').textContent !== '' || !document.querySelector('#dlg-hr-person').open")
+    pe = erika_()
+    check('zweite Sitzung ändert denselben Mitarbeiter: Hinweis, Anspruch nicht überschrieben, neue Fassung im Dialog', st_b == 200 and pg.is_visible('#dlg-hr-person')
+          and 'inzwischen' in pg.text_content('#dlg-hr-person .form-err') and pe['jahre'][str(J0_)]['anspruch'] == 29 and pe['abteilung'] == 'Vertrieb'
+          and pg.input_value('#dlg-hr-person [name="hr_anspruch"]') == '29' and pg.input_value('#dlg-hr-person [name="hr_abteilung"]') == 'Vertrieb', (st_b, pe['abteilung'], pe['jahre']))
+    sicht_ = pg.evaluate("(() => { const e = document.querySelector('#dlg-hr-person .form-err'), r = e.getBoundingClientRect(), b = e.closest('.dlg-body').getBoundingClientRect(); return r.height > 0 && r.top >= b.top && r.bottom <= b.bottom + 1; })()")
+    check('… Hinweis im Dialog sichtbar (nicht unter dem Rand oder auf Höhe 0)', sicht_)
+    pg.locator('#dlg-hr-person').screenshot(path=os.path.join(SH, 'hr_mitarbeiter_konflikt_1280.png'))
+    pg.set_viewport_size({'width': 390, 'height': 844}); pg.screenshot(path=os.path.join(SH, 'hr_mitarbeiter_konflikt_390.png')); pg.set_viewport_size({'width': 1280, 'height': 900})
+    st_b, _ = P.call('mitarbeiter_hr_save', {'nutzer': ids['lena'], 'rev': P.call('mitarbeiter_hr')[1]['rev'], 'pos': 2})
+    pg.fill('#dlg-hr-person [name="hr_abteilung"]', 'Einkauf'); pg.click('#dlg-hr-person [type="submit"]'); pg.wait_for_selector('#dlg-hr-person[open]', state='hidden')
+    pe = erika_()
+    check('… nur ein anderer Mitarbeiter geändert: Speichern klappt ohne Rückfrage, beide Änderungen bleiben', st_b == 200 and pe['abteilung'] == 'Einkauf'
+          and pe['jahre'][str(J0_)]['anspruch'] == 29, (st_b, pe['abteilung'], pe['jahre']))
+    rev = P.call('mitarbeiter_hr')[1]['rev']; hr(ids['erika'], abteilung='Vertrieb', jahr=J0_, anspruch=31)
     pg.screenshot(path=os.path.join(SH, 'hr_verwaltung_personal_1280.png'), full_page=True)
     pg.click('#vt-urlaub'); pg.wait_for_selector('#hr-einst')
     check('Verwaltung → Urlaub: Sperren und Ferien aus der HR', pg.locator('#hr-sperren .hr-zr').count() == 1 and pg.locator('#hr-ferien .hr-zr').count() == 1)

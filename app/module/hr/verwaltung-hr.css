@@ -3,6 +3,8 @@
 .hr-teil { margin: 4px 0 0; padding: 14px 16px 16px; border: 1px solid var(--line); border-radius: var(--r); }
 .hr-teil legend { padding: 0 6px; font-weight: 650; font-size: 14px; }
 .hr-teil .form-grid { gap: 12px; }
+/* Fehlermeldung unter den HR-Angaben: im Raster des scrollenden Dialogs nicht auf Höhe 0 schrumpfen (min-height: 0 aus admin.css) */
+#hr-person-body .form-err { min-height: auto; }
 .hr-tage-feld { display: flex; flex-direction: column; gap: 8px; }
 .hr-lbl { font-size: 11.5px; font-weight: 600; letter-spacing: .04em; text-transform: uppercase; color: var(--muted); }
 .hr-tage { display: flex; flex-wrap: wrap; gap: 6px 14px; }
