@@ -11,7 +11,8 @@ declare(strict_types=1);
    ABLAGE_TEIL_MAX Bytes) eines Uploads unter data/dateien/.teile/, prüft beim letzten Teil Größe, SHA-256 und Dateiart
    (Endung und Dateikopf passen zusammen) und legt die Datei ab – oder lässt sie als fertigen Upload liegen, bis
    ablage_fertig_ablegen() sie übernimmt (gebündeltes Eintragen vieler Dateien). Ein Upload gehört dem Nutzer, der ihn begonnen hat.
-   Ein Upload beginnt nur, wenn danach noch ABLAGE_RESERVE auf der Platte frei bleibt. Ein ZIP-Archiv darf keine Einträge
+   Ein Upload beginnt nur, wenn danach noch ABLAGE_RESERVE auf der Platte frei bleibt – gerechnet mit den Bytes, die andere offene Uploads
+   noch schreiben werden (gebucht beim ersten Teil, unter einer Sperre); je Nutzer höchstens ABLAGE_OFFEN_JE_NUTZER unvollständige Uploads. Ein ZIP-Archiv darf keine Einträge
    gesperrter Arten enthalten (ohne Entpacken: Verzeichnis, lokale Köpfe, Unicode-Pfad; höchstens ABLAGE_ZIP_EINTRAEGE_MAX) – geprüft
    beim letzten Teil, also auch für fertige Uploads, die erst ablage_fertig_ablegen() übernimmt.
    Vom Server erzeugte Dateien (z. B. aus einer Vorlage ausgefüllt) legt ablage_ablegen() ab, ablage_kopieren() legt eine Datei
@@ -29,6 +30,7 @@ const ABLAGE_LESEN_MAX = 25 * 1024 * 1024;      // ablage_lesen() hält die ganz
    der Sicherung (deploy/sichern.sh) – Datenbank, Protokolle und Sicherung brauchen den Platz auch bei voller Ablage */
 const ABLAGE_RESERVE = 5 * 1024 * 1024 * 1024;
 const ABLAGE_UPLOAD_STUNDEN = 24;               // unvollständige Uploads werden danach entfernt
+const ABLAGE_OFFEN_JE_NUTZER = 10;              // unvollständige Uploads je Nutzer (der Ordner-Import lädt 3 gleichzeitig)
 /* Nie erlaubt, auch nicht als Eintrag eines ZIP-Archivs: Arten, die beim Öffnen Code ausführen – im Browser bzw. unter Windows */
 const ABLAGE_GESPERRT = ['html', 'htm', 'xhtml', 'svg', 'js', 'exe', 'com', 'scr', 'msi', 'bat', 'cmd', 'ps1', 'vbs', 'jar', 'hta', 'lnk', 'reg'];
 /* Erlaubte Dateiarten: Endung → [MIME-Typ, Kopfprüfung aus ABLAGE_KOEPFE bzw. „text“/„binaer“]. Unbekannte Endungen bleiben
@@ -273,11 +275,25 @@ function ablage_teile_ordner(): string
     if (!is_dir($o) && !@mkdir($o, 0775, true) && !is_dir($o)) throw new RuntimeException('Ablage nicht beschreibbar');
     return $o;
 }
-/* Unvollständige Uploads nach ABLAGE_UPLOAD_STUNDEN entfernen */
-function ablage_aufraeumen(): void
+/* Vor einem neuen Upload von $nutzerId (unter der Sperre in ablage_teil): unvollständige Uploads nach ABLAGE_UPLOAD_STUNDEN entfernen und
+   von $nutzerId nur ABLAGE_OFFEN_JE_NUTZER − 1 unvollständige behalten (die am längsten ruhenden darüber werden verworfen – so sperrt ein
+   abgebrochener Ordner-Import niemanden aus). Rückgabe: Bytes, die die übrigen unvollständigen Uploads noch schreiben werden. */
+function ablage_aufraeumen(string $nutzerId): float
 {
     $grenze = time() - ABLAGE_UPLOAD_STUNDEN * 3600;
-    foreach (glob(ablage_teile_ordner() . '/*.tmp') ?: [] as $f) if ((int)@filemtime($f) < $grenze) @unlink($f);
+    $offen = [];   // Kennung → [Nutzer, ausstehende Bytes, zuletzt geschrieben]
+    foreach (glob(ablage_teile_ordner() . '/*.tmp') ?: [] as $f) {
+        $t = (int)@filemtime($f);
+        if ($t < $grenze) { @unlink($f); continue; }
+        if (!preg_match('#/([0-9a-f]{24})-meta\.tmp$#D', $f, $m)) continue;
+        $meta = json_decode((string)@file_get_contents($f), true);
+        if (is_array($meta) && empty($meta['fertig']))   // fertige Uploads liegen schon ganz auf der Platte
+            $offen[$m[1]] = [(string)($meta['nutzer'] ?? ''), max(0, (int)($meta['groesse'] ?? 0) - (int)($meta['empfangen'] ?? 0)), $t];
+    }
+    $eigene = array_filter($offen, function (array $u) use ($nutzerId): bool { return $u[0] === $nutzerId; });
+    uasort($eigene, function (array $a, array $b): int { return $a[2] <=> $b[2]; });
+    foreach (array_slice(array_keys($eigene), 0, max(0, count($eigene) - ABLAGE_OFFEN_JE_NUTZER + 1)) as $u) { ablage_upload_verwerfen((string)$u); unset($offen[$u]); }
+    return (float)array_sum(array_column($offen, 1));
 }
 /* Einen Teil annehmen. $b: upload ('' beim ersten Teil), teil (0, 1, …), daten (Base64), name, groesse, sha256 (Hex, optional).
    $ziel: Angaben des Moduls (z. B. Dokument und Version), werden mit dem Upload gemerkt und beim letzten Teil zurückgegeben.
@@ -298,20 +314,26 @@ function ablage_teil(string $bereich, string $nutzerId, array $ziel, array $b, b
     $ordner = ablage_teile_ordner();
     if ($upload === '') {
         if ($teil !== 0) throw new InvalidArgumentException('Ein Upload beginnt mit dem ersten Teil.');
-        ablage_aufraeumen();
         $name = ablage_dateiname($b['name'] ?? '');
         $art = ablage_art($name);
         $groesse = $b['groesse'] ?? null;
         if (!is_int($groesse) || $groesse < 1) throw new InvalidArgumentException('Die Datei ist leer.');
         if ($groesse > ABLAGE_DATEI_MAX) throw new InvalidArgumentException('Die Datei ist zu groß (höchstens ' . ablage_mb(ABLAGE_DATEI_MAX) . ').');
-        $frei = @disk_free_space($ordner);   // false (nicht ermittelbar): wie bisher annehmen
-        if ($frei !== false && !ablage_platz_reicht($frei, $groesse))
-            throw new InvalidArgumentException('Auf dem Server ist nicht genug Speicherplatz für diese Datei frei. Bitte den Administrator informieren.');
         $sha = is_string($b['sha256'] ?? null) ? strtolower($b['sha256']) : '';
         if ($sha !== '' && !preg_match('/^[0-9a-f]{64}$/D', $sha)) throw new InvalidArgumentException('Ungültige Prüfsumme.');
+        // Platz buchen: Prüfung und Anmelden (meta) unter einer Sperre auf den Ordner .teile (keine eigene Datei darin), damit auch
+        // gleichzeitig beginnende Uploads einander mitzählen; die Sperre endet mit $sperre (spätestens beim Verlassen der Funktion)
+        $sperre = @fopen($ordner, 'r');
+        if ($sperre === false || !flock($sperre, LOCK_EX)) throw new RuntimeException('Ablage nicht beschreibbar');
+        $ausstehend = ablage_aufraeumen($nutzerId);
+        $frei = @disk_free_space($ordner);   // false (nicht ermittelbar): wie bisher annehmen
+        if ($frei !== false && !ablage_platz_reicht($frei - $ausstehend, $groesse))
+            throw new InvalidArgumentException('Auf dem Server ist nicht genug Speicherplatz für diese Datei frei. Bitte den Administrator informieren.');
         $upload = bin2hex(random_bytes(12));
         $meta = ['bereich' => $bereich, 'nutzer' => $nutzerId, 'ziel' => $ziel, 'name' => $name, 'art' => $art, 'groesse' => $groesse,
                  'sha256' => $sha, 'naechster' => 0, 'empfangen' => 0, 't' => time()];
+        if (file_put_contents("$ordner/$upload-meta.tmp", json_encode($meta), LOCK_EX) === false) throw new RuntimeException('Ablage nicht beschreibbar');
+        fclose($sperre);
     } else {
         if (!preg_match('/^[0-9a-f]{24}$/D', $upload) || !is_file("$ordner/$upload-meta.tmp")) throw new InvalidArgumentException('Der Upload ist abgelaufen. Bitte die Datei erneut hochladen.');
         $meta = json_decode((string)file_get_contents("$ordner/$upload-meta.tmp"), true);

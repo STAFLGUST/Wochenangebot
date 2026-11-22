@@ -362,7 +362,7 @@ switch ($action) {
                     $v = $d['versionen'][$vi];
                     array_splice($v['dateien'], $k, 1);
                     if (!in_array((string)$me['id'], array_map('strval', (array)($v['bearbeiter'] ?? [])), true)) $v['bearbeiter'][] = (string)$me['id'];
-                    qs_verlauf($v, $me, 'Datei entfernt: ' . $f['name']);
+                    qs_verlauf($v, $me, 'Datei entfernt: ' . $f['name'], $f);   // mit Ordnerpfad: der Listeneintrag ist danach weg
                     $d['versionen'][$vi] = $v;
                 } else {
                     $f['entfernt'] = qs_wer($me) + ['grund' => $grund];
@@ -729,7 +729,7 @@ switch ($action) {
             respond(['ok' => true, 'heute' => $heute, 'teile' => QS_VF_TEILE, 'systemArten' => QS_VF_SYSTEM_ART, 'betrieb' => QS_VF_BETRIEB,
                      'ueberpruefungMonate' => QS_VF_UEBERPRUEFUNG_MONATE,
                      'rechte' => ['bearbeiten' => may($me, 'qs.verfahren_bearbeiten'), 'freigeben' => may($me, 'qs.verfahren_freigeben')],
-                     'dokus' => array_map(function ($d) use ($dokumente, $stamm, $heute) { return qs_vf_aus($d, $dokumente, $stamm, $heute); }, qs_doc(QS_VF_DOKUMENT)['liste'])]);
+                     'dokus' => array_map(function ($d) use ($dokumente, $stamm, $heute, $me) { return qs_vf_aus($d, $dokumente, $stamm, $heute, $me); }, qs_doc(QS_VF_DOKUMENT)['liste'])]);
         }
 
         /* Dokumentation anlegen (muster: mit Mustergliederung), allgemeine Angaben ändern oder – nur ohne Fassung – löschen */

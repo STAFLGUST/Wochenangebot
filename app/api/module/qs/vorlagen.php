@@ -12,7 +12,7 @@ declare(strict_types=1);
    Namen bleiben stehen. Unterstützt: .docx, .dotx, .xlsx, .xltx, .xlsm (Office Open XML); .dotx/.xltx werden beim Erzeugen
    zu .docx/.xlsx. ZIP ohne PHP-Erweiterung „zip“: gelesen werden nur die Textteile, alle anderen Einträge (Bilder, Makros)
    werden unverändert übernommen. Grenzen gegen ZIP-Bomben: höchstens 2000 Einträge, je Textteil 30 MB entpackt; Platzhalter nur in
-   Textteilen bis 8 MB mit höchstens 20000 Textelementen (darüber gilt die Datei als nicht lesbar – sie wird abgelegt, nur ohne
+   Textteilen bis 8 MB mit höchstens 20000 Textelementen, geänderte Textteile zusammen bis 8 MB (darüber gilt die Datei als nicht lesbar – sie wird abgelegt, nur ohne
    Platzhalter und Lenkungsangaben; der Aufwand bleibt nach oben beschränkt). */
 if (!defined('WA_API')) { http_response_code(404); exit; }   // nur über api/index.php nutzbar
 require_once __DIR__ . '/../../lib/dateiablage.php';
@@ -168,7 +168,11 @@ function qs_xml_ersetzen(string $xml, string $gruppe, string $tt, array $werte, 
 {
     $re = '#<' . $gruppe . '(?=[\s>/])[^>]*>|</' . $gruppe . '>|<' . $tt . '(?=[\s>])([^>]*)>(.*?)</' . $tt . '>#s';
     if (strpos($xml, '{{') === false) return $xml;
-    if (strlen($xml) > QS_XML_BYTES_MAX || 2 * substr_count($xml, '</' . $gruppe . '>') + substr_count($xml, '</' . $tt . '>') > QS_XML_STUECKE_MAX) return null;
+    if (strlen($xml) > QS_XML_BYTES_MAX) return null;
+    // öffnende Gruppentags selbst zählen (nicht als 2 × schließende): unausgeglichenes XML trifft sonst weit mehr als gezählt;
+    // preg_match_all ohne Ergebnisfeld legt nichts im Speicher ab – so ist die Zahl eine echte obere Schranke für count($mm)
+    $auf = preg_match_all('#<' . $gruppe . '(?=[\s>/])#', $xml);
+    if ($auf === false || $auf + substr_count($xml, '</' . $gruppe . '>') + substr_count($xml, '</' . $tt . '>') > QS_XML_STUECKE_MAX) return null;
     if (!preg_match_all($re, $xml, $mm, PREG_SET_ORDER | PREG_OFFSET_CAPTURE)) return $xml;
     if (count($mm) > QS_XML_STUECKE_MAX) return null;
     $stapel = [[]]; $aenderungen = [];
@@ -219,7 +223,8 @@ function qs_office_fuellen(string $daten, string $art, array $werte, bool $alsDo
     if ($typ === null) return null;
     $z = qs_zip_lesen($daten);
     if ($z === null || !isset($z['[Content_Types].xml'])) return null;
-    $n = 0; $offen = []; $geaendert = false;
+    // Gesamtgrenze: geänderte Textteile bleiben bis qs_zip_bauen im Speicher – zusammen höchstens QS_XML_BYTES_MAX (viele große Kopfzeilen)
+    $n = 0; $offen = []; $geaendert = false; $budget = QS_XML_BYTES_MAX;
     foreach ($z as $name => $e) {
         $word = $typ === 'word' && preg_match('#^word/(document|header\d*|footer\d*)\.xml$#', $name);
         $strings = $typ === 'excel' && $name === 'xl/sharedStrings.xml';
@@ -235,7 +240,10 @@ function qs_office_fuellen(string $daten, string $art, array $werte, bool $alsDo
         else $neu = str_replace(['wordprocessingml.template.main+xml', 'spreadsheetml.template.main+xml'], ['wordprocessingml.document.main+xml', 'spreadsheetml.sheet.main+xml'], $xml);
         if ($neu === null) return null;   // zu viele Textelemente: wie eine nicht lesbare Datei behandeln
         if ($blatt) $neu = qs_excel_kopf_ersetzen($neu, $werte, $offen, $n);
-        if ($neu !== $xml) { $z[$name]['neu'] = $neu; $geaendert = true; }
+        if ($neu !== $xml) {
+            if (($budget -= strlen($neu)) < 0) return null;   // wie eine nicht lesbare Datei
+            $z[$name]['neu'] = $neu; $geaendert = true;
+        }
         elseif ($n !== $vorher) $geaendert = true;
     }
     return ['daten' => $geaendert ? qs_zip_bauen($z, $daten) : $daten, 'ersetzt' => $n, 'offen' => array_values(array_intersect(array_keys(QS_PLATZHALTER_TEXT), array_keys($offen)))];

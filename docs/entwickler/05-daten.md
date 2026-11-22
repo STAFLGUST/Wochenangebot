@@ -23,7 +23,10 @@ Auch bei SQLite bleiben vier **Seitendateien** Dateien (`STORE_SIDECARS`, gleich
 Länder- und Ortsdatenbank (`geo/`) und die **Dateiablage** (`daten/dateien/`, `lib/dateiablage.php`): hochgeladene Dateien
 der Module als `<bereich>/<xx>/<id>.bin` – in beiden Speicherarten im Dateisystem, nie als `*.php` (die Werkzeuge für
 Sicherungsprüfung und Umschalten behandeln nur `*.php` als Dokumente); unvollständige Uploads unter `dateien/.teile/*.tmp`
-(nicht gesichert, beim nächsten Upload nach 24 h entfernt). Die Metadaten (Name, Größe, SHA-256, wer, wann) stehen im Dokument des Moduls.
+(nicht gesichert, beim nächsten Upload nach 24 h entfernt). Platzreserve: ein Upload beginnt nur, wenn nach ihm und nach allem, was die
+offenen Uploads noch schreiben werden (`groesse` − `empfangen` ihrer Metadaten), `ABLAGE_RESERVE` (5 GB) frei bleibt – geprüft und gebucht
+beim ersten Teil unter einer Sperre auf den Ordner `.teile`; je Nutzer höchstens `ABLAGE_OFFEN_JE_NUTZER` (10) unvollständige Uploads, der
+am längsten ruhende darüber wird verworfen (fertige, noch nicht übernommene Uploads zählen nicht). Die Metadaten (Name, Größe, SHA-256, wer, wann) stehen im Dokument des Moduls.
 
 **Verweis auf eine Datei der Ablage** (Vertrag mit der Sicherung, `deploy/dateien_sichern.py`): ein Eintrag
 `{"id": <Kennung>, "groesse": <Bytes>, "sha256": <64 Hex>}` an beliebiger Stelle eines Dokuments, so wie ihn
@@ -769,7 +772,7 @@ laufen unter der Sperre `qs-dokumente`. Zuständig/Vertreter sind **Kürzel** (S
   ältere Ordner und externe Dokumente tragen dieselben Einträge am Dokument (`dateien`, ohne `pfad`) – neue Dateien dort stehen in
   `qs-ablage` (unten), die Leser führen beide zusammen (GR-006). Regeln der Ablage: Abschnitt „QM-System: Dokumentenablage“.
   **Vorlagen und Lenkungsangaben** (seit Bauabschnitt 3, `module/qs/vorlagen.php`; Grenzen je Office-Datei: 2000 ZIP-Einträge,
-  30 MB entpackt und 20000 Textelemente je Textteil – darüber gilt die Datei als nicht lesbar): Datei-Einträge optional mit `platzhalter: ["version", …]`
+  30 MB entpackt und 20000 Textelemente je Textteil, geänderte Textteile zusammen höchstens 8 MB – darüber gilt die Datei als nicht lesbar): Datei-Einträge optional mit `platzhalter: ["version", …]`
   (bekannte, noch offene Platzhalter in Word/Excel), `vorlage: {"dokument", "nr", "version"}` (aus einer Vorlage erzeugt), `uebernommen: N`
   (Kopie aus Version N), `roh: "<id>"`, `sha256Roh` (Prüfsumme der Rohfassung) und `ausgefuellt: {"t", "felder"}` (bei der Freigabe bzw. beim Nachtragen ausgefüllte Fassung; `roh` ist
   die Rohfassung mit Platzhaltern, sie bleibt in der Ablage und wird bei „Dateien übernehmen“ kopiert). Vorlagen (Art V) werden nie ausgefüllt.
@@ -836,7 +839,10 @@ Verfahrensdokumentation nach GoBD (`module/qs/verfahren.php`, Aktionen `qs_verfa
   trifft: „jetzt verknüpft“) und liefert die Änderungsliste in Worten; sie wird als `aenderungen` gespeichert. Ohne Abweichung statt
   dessen `ohneAenderung: true` („ohne Änderung überprüft“, Frist 12 Monate).
 - Antwort (`qs_vf_aus`): Fassungen ohne `inhalt`, dazu `gueltigBis`, `seitFassung` (Abweichung) und `ueberpruefung`; den Inhalt einer Fassung
-  liefert nur der Export.
+  liefert nur der Export. Beide Lesewege schicken jede Fassung durch `qs_vf_fassung_sichtbar` (Audit run-3): ohne `qs.bearbeiten` fehlen
+  QM-Dokumente geschützter Kapitel (1.5) in `inhalt.dokumente`, ihre Verweise zeigen nur den Text, und ihre Änderungszeilen („QM-Dokument
+  <Nr> <Titel>: …“, zugeordnet über genau diesen Anfang aus `inhalt.dokumente`) entfallen. Gefiltert wird beim Lesen, gespeichert bleibt
+  der volle Schnappschuss (GR-106) – das gilt so auch für ältere Fassungen.
 - Export (`qs_verfahren_export`, GET `doku`; `module/qs/verfahren-export.php`, PDF über `lib/pdf.php`): `fassung=N` (0 = Arbeitsstand, auf jeder
   Seite als Entwurf gekennzeichnet) oder `von`/`bis` = Export für Prüfungen mit allen Fassungen, die im Zeitraum galten, und der Historie aller
   Fassungen; `dokumente=1` liefert ein ZIP mit den Dateien der verknüpften QM-Dokumente in der Version der jeweiligen Fassung – so,
@@ -876,8 +882,11 @@ Die einzige Beschreibung der Regeln; Code-Kommentare verweisen hierher.
   eigene Prüfung (`qs_pruefung_meine`) mit ihren Nachweisen und die eigene Maßnahme (`qs_massnahme_meine`). Die eine Stelle für alle
   Lesewege ist `qs_sichtbar` (Liste und Suche, Zahlen, CSV, ZIP-Export, Audit-Bericht, Verfahrensdoku samt Export); `qs_dok_sichtbar` gibt
   für Dateien, Ordnerbaum, Ordner-ZIP und Organigramm-Vorschau 403. Das Protokoll nennt bei diesen Vorgängen nur die Kapitelnummer
-  (`qs_protokoll_name`). Freigegebene Fassungen der Verfahrensdoku bleiben vollständige Schnappschüsse (GR-106) und nennen Nummer und
-  Titel verknüpfter Dokumente auch aus 1.5.
+  (`qs_protokoll_name`). Freigegebene Fassungen der Verfahrensdoku bleiben gespeichert vollständige Schnappschüsse (GR-106); ohne
+  `qs.bearbeiten` liefern Oberfläche und Export sie ohne die Dokumente aus 1.5 (`qs_vf_fassung_sichtbar`, auch die Änderungszeilen).
+  Verlaufstexte nennen Dateien aus solchen Unterordnern nur als „personenbezogene Datei“ (`qs_dok_dateien_sichtbar`); weil eine im Entwurf
+  gelöschte Datei in keiner Liste mehr steht, merkt sich ihr Verlaufseintrag `datei` und `pfad` (optional, seit Audit run-3). Ältere
+  Einträge ohne diese Felder bleiben, wie sie sind – eine Bereinigung wäre eine Datenmigration (Freigabe des Inhabers).
 - **`pfad`** (`qs_pfad`): Unterordner relativ zum Ordner-Dokument (Archiv) bzw. zum gewählten Ordner (Eingang). `/`-getrennt, `\` teilt
   ebenfalls, Leerraum zusammengefasst, ohne Steuerzeichen und leere, `.`- und `..`-Teile, je Teil 120 Zeichen, höchstens 12 Teile und
   500 Byte (ganze Teile); leer = Feld fehlt. Nur Anzeige, Ordnerbaum und Suche, nie ein Pfad im Dateisystem; Zuordnen behält ihn.
@@ -921,7 +930,8 @@ Die einzige Beschreibung der Regeln; Code-Kommentare verweisen hierher.
      Sperre neu; weicht das Ergebnis ab (Entwurf inzwischen freigegeben, Version ersetzt, Häkchen fehlt), kommt die Datei in den Eingang.
      Ein Bündel hat höchstens 100 Dateien und 40 MB Word/Excel-Nachträge (deren Lenkung läuft unter der Sperre), beides prüft der Server;
      die Grenze von 1 GB je Bündel hält nur der Browser ein. Word/Excel-Textteile über 8 MB oder mit mehr als 20 000 Textelementen liest das
-     Modul nicht (`qs_xml_ersetzen`, vor dem Suchen gezählt): die Datei wird abgelegt, nur ohne Platzhalter und Lenkungsangaben. Was nicht
+     Modul nicht (`qs_xml_ersetzen`, vor dem Suchen gezählt – öffnende und schließende Tags einzeln, auch bei unausgeglichenem XML), ebenso
+     nicht mehr als 8 MB geänderte Textteile je Datei zusammen (`qs_office_fuellen`): die Datei wird abgelegt, nur ohne Platzhalter und Lenkungsangaben. Was nicht
      abgelegt wird oder nach einem Abbruch nirgends gespeichert ist, entfernt das Ende der Anfrage (`qs_ablage_aufraeumen`, nach einem
      fatalen Fehler mitten in einer SQLite-Transaktion erst nach dem Zurücksetzen).
   9. Im Browser (`ordnerimport.js`): Pfade und Dateinamen zusammengesetzt (NFC, macOS liefert zerlegte Umlaute). Antwort zur Wurzel,
