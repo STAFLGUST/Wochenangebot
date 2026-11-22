@@ -183,8 +183,13 @@ with sync_playwright() as p:
     check('Anteile berechnet (V1 26.000 von 39.800 € = 65,3 %, Prozent mit 1 Stelle wie überall), ohne Vertreter und Nummer ohne Stammsatz als Zeilen', '65,3 %' in zeilen and 'ohne Vertreter' in zeilen
           and 'Vertreter V2 (nicht in den Stammdaten)' in zeilen, zeilen[:600])
     check('Stand: aus den importierten Umsatzdaten mit letztem Import', 'importierten Umsatzdaten' in text(pg, '#ctl-u-stand') and 'Ina Import' in text(pg, '#ctl-u-stand'))
+    pg.select_option('#ctl-u-monatskennzahl', 'kg'); pg.wait_for_function("document.querySelector('#ctl-u-diagrammhinweis').textContent.startsWith('Menge')")
+    html_ = pg.inner_html('#ctl-u-diagramm')
+    check('Monatsvergleich Menge: Einheit einmal („… kg“, nie „kg kg“) in Wert und Beschriftung', re.search(r'kg(\s|&nbsp;)+kg', html_) is None and re.search(r'\d(\s|&nbsp;)+kg', html_) is not None, html_[:300])
     pg.select_option('#ctl-u-diagrammart', 'linie'); pg.wait_for_selector('#ctl-u-diagramm polyline')
     check('Liniendiagramm', pg.locator('#ctl-u-diagramm svg[role="img"]').count() == 1)
+    check('Liniendiagramm Menge: Einheit einmal im Tooltip', re.search(r'kg(\s|&nbsp;)+kg', pg.inner_html('#ctl-u-diagramm')) is None)
+    pg.select_option('#ctl-u-monatskennzahl', 'umsatz')
     pg.click('#ctl-u-vertreterfilter summary'); pg.uncheck('#ctl-u-vertreteroptionen [data-vertreter="V2"]')
     pg.wait_for_function("!document.querySelector('#ctl-u-vertreterzeilen').textContent.includes('V2')")
     check('Vertreterfilter wirkt auf Kennzahlen', '27.800,00 €' in text(pg, '#ctl-u-kpis'), text(pg, '#ctl-u-kpis'))
