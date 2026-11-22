@@ -23,7 +23,10 @@ Auch bei SQLite bleiben vier **Seitendateien** Dateien (`STORE_SIDECARS`, gleich
 Länder- und Ortsdatenbank (`geo/`) und die **Dateiablage** (`daten/dateien/`, `lib/dateiablage.php`): hochgeladene Dateien
 der Module als `<bereich>/<xx>/<id>.bin` – in beiden Speicherarten im Dateisystem, nie als `*.php` (die Werkzeuge für
 Sicherungsprüfung und Umschalten behandeln nur `*.php` als Dokumente); unvollständige Uploads unter `dateien/.teile/*.tmp`
-(nicht gesichert, beim nächsten Upload nach 24 h entfernt). Die Metadaten (Name, Größe, SHA-256, wer, wann) stehen im Dokument des Moduls.
+(nicht gesichert, beim nächsten Upload nach 24 h entfernt). Platzreserve: ein Upload beginnt nur, wenn nach ihm und nach allem, was die
+offenen Uploads noch schreiben werden (`groesse` − `empfangen` ihrer Metadaten), `ABLAGE_RESERVE` (5 GB) frei bleibt – geprüft und gebucht
+beim ersten Teil unter einer Sperre auf den Ordner `.teile`; je Nutzer höchstens `ABLAGE_OFFEN_JE_NUTZER` (10) unvollständige Uploads, der
+am längsten ruhende darüber wird verworfen (fertige, noch nicht übernommene Uploads zählen nicht). Die Metadaten (Name, Größe, SHA-256, wer, wann) stehen im Dokument des Moduls.
 
 **Verweis auf eine Datei der Ablage** (Vertrag mit der Sicherung, `deploy/dateien_sichern.py`): ein Eintrag
 `{"id": <Kennung>, "groesse": <Bytes>, "sha256": <64 Hex>}` an beliebiger Stelle eines Dokuments, so wie ihn

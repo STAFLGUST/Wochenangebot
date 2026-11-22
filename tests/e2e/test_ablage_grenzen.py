@@ -9,7 +9,8 @@ abgelegt mit MIME-Typ und gefälscht abgelehnt (z. B. .mp4 mit PDF-Kopf, Windows
 bleiben abgelehnt, auch als Eintrag eines ZIP (Großbuchstaben, Unterordner, Zip64), beschädigtes ZIP-Verzeichnis abgelehnt; Grenze
 genau 250 MB abgelegt (in Teilen, Prüfsumme, Download gleich) und 250 MB + 1 Byte abgelehnt; Download und ZIP-Export sperren die
 Sitzung nicht; Word/Excel über 25 MB werden nicht in den Speicher gelesen (keine Platzhalter, die Freigabe vermerkt den Grund), kleine
-weiterhin; die Überarbeitung übernimmt 250 MB ohne Kopie, Löschen der Übernahme lässt das Original. Der Testserver läuft mit
+weiterhin; die Überarbeitung übernimmt 250 MB ohne Kopie, Löschen der Übernahme lässt das Original; Platzreserve rechnet offene Uploads mit
+(gebucht beim ersten Teil), je Nutzer höchstens 10 unvollständige Uploads. Der Testserver läuft mit
 memory_limit 128M wie im Betrieb (tests/fixtures/php/produktion.ini): lädt der Server eine große Datei ganz in den Speicher, scheitert
 die Gruppe. Nur erfundene Testdaten.
 """
@@ -18,6 +19,7 @@ import hashlib
 import io
 import json
 import os
+import shutil
 import struct
 import time
 import urllib.error
@@ -251,5 +253,36 @@ del inhalt
 st, r = Be.call('qs_datei_hochladen', {'dokument': O, 'version': '', 'name': 'zu groß.mp4', 'groesse': GRENZE + 1, 'sha256': '', 'upload': '', 'teil': 0,
                                        'daten': base64.b64encode(GUELTIG['Rundgang.mp4'][0]).decode()})
 check('250 MB + 1 Byte → 422 schon beim ersten Teil', st == 422 and '250 MB' in r.get('error', ''), r)
+
+# ── Audit run-3: Platzreserve wird beim ersten Teil gebucht – Bytes, die offene Uploads noch schreiben, zählen mit; je Nutzer höchstens
+#    10 unvollständige Uploads (die am längsten ruhenden darüber werden verworfen, fertige gebündelte Uploads nie) ──
+TEILE = os.path.join(ABLAGE, '.teile')
+
+
+def beginnen(name):
+    return Be.call('qs_datei_hochladen', {'dokument': O, 'version': '', 'name': name, 'groesse': MB, 'sha256': '', 'upload': '', 'teil': 0,
+                                          'daten': base64.b64encode(b'%PDF-1.4 Reserve').decode()})
+
+
+def offene(nutzer):
+    m_ = [json.load(open(os.path.join(TEILE, x))) for x in os.listdir(TEILE) if x.endswith('-meta.tmp')]
+    return [x for x in m_ if x.get('nutzer') == nutzer and not x.get('fertig')]
+
+
+fremd = os.path.join(TEILE, 'ab' * 12 + '-meta.tmp')   # offener Upload eines anderen, der noch fast allen freien Platz über der Reserve schreiben wird
+with open(fremd, 'w') as f_:
+    json.dump({'bereich': 'qs', 'nutzer': 'fremd', 'groesse': shutil.disk_usage(TEILE).free - 5 * 1024 ** 3 + 100 * MB, 'empfangen': 0, 'naechster': 0}, f_)
+st, r = beginnen('Reserve.pdf')
+check('Reserve: neuer Upload abgelehnt, solange ein offener Upload den Platz schon gebucht hat (422)', st == 422 and 'Speicherplatz' in r.get('error', ''), (st, r))
+os.remove(fremd)
+st, r = beginnen('Reserve.pdf')
+u0 = r.get('upload', '')
+ich = json.load(open(os.path.join(TEILE, u0 + '-meta.tmp')))['nutzer'] if st == 200 else ''
+check('… ohne ihn angenommen; der erste Teil bucht schon die ganze angemeldete Größe', st == 200 and not r.get('fertig') and len(offene(ich)) == 1, (st, r))
+neue = [beginnen(f'Reserve-{i}.pdf') for i in range(10)]
+check('je Nutzer höchstens 10 unvollständige Uploads: der elfte beginnt, der am längsten ruhende fällt weg', all(x[0] == 200 for x in neue) and len(offene(ich)) == 10,
+      (len(offene(ich)), [x for x in neue if x[0] != 200][:1]))
+for x in os.listdir(TEILE):
+    if any(x.startswith(u) for u in [u0] + [n[1].get('upload', '-') for n in neue]): os.remove(os.path.join(TEILE, x))
 
 print(f'{sum(res)}/{len(res)} passed')
