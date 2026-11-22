@@ -13,7 +13,8 @@ declare(strict_types=1);
    - „lang“: Ist oder ein einzelnes Kommen–Gehen länger als AZ_LANG (vergessenes Gehen, am Folgetag gestempelt)
    - „ohne“: Soll > 0, kein Stempel und keine Abwesenheit
    - „saldo“: Saldo der Zeiterfassung passt nicht zu Ist + Abwesenheit − Soll
-   Der Tag des Imports und spätere Tage gelten als „laufend“ (noch nicht abgeschlossen): nicht gewertet, kein Fehler.
+   Der Tag des Imports und spätere Tage gelten als „laufend“ (noch nicht abgeschlossen): nicht gewertet, kein Fehler, bis ein
+   späterer Import sie wieder enthält. Beginnt die nächste Datei erst danach, warnt die Vorschau; die Kennzahlen nennen offene Tage.
    Kennzahlen gibt es zweimal: „laut Zeiterfassung“ (alle Tage) und „bereinigt“ (nur Tage ohne Stempelfehler).
 
    Dokumente: ARBEITSZEIT (Verzeichnis: Mitarbeiter, Jahre, Importverlauf, Revision) und ARBEITSZEIT/JJJJ (Tage des Jahres).
@@ -259,9 +260,16 @@ function arbeitszeit_import_vorschau(array $e, array $me): array
             . '). Sie werden übernommen, in der Auswertung markiert und nicht in den bereinigten Saldo gerechnet – nichts wird geschätzt.'];
     }
     $laufend = count(array_filter($in['tage'], fn($t) => $t[7] === 1));
-    $h[] = ['stufe' => 'info', 'text' => ($laufend === 1 ? '1 Tag ab heute gilt als noch nicht abgeschlossen und wird erst mit dem nächsten Import gewertet. '
-            : ($laufend ? az_anzahl($laufend) . ' Tage ab heute gelten als noch nicht abgeschlossen und werden erst mit dem nächsten Import gewertet. ' : ''))
+    $h[] = ['stufe' => 'info', 'text' => ($laufend === 1 ? '1 Tag ab heute gilt als noch nicht abgeschlossen und wird erst gewertet, wenn ein späterer Import ihn wieder enthält. '
+            : ($laufend ? az_anzahl($laufend) . ' Tage ab heute gelten als noch nicht abgeschlossen und werden erst gewertet, wenn ein späterer Import sie wieder enthält. ' : ''))
         . 'Gründe von Abwesenheiten (z. B. Urlaub, Krankheit) werden nicht gespeichert, nur die Stunden.'];
+    // ein Import ersetzt nur seinen Zeitraum: offene Tage davor würden sonst nie gewertet (Summen still unvollständig)
+    $offen = [];
+    foreach (array_keys($index['jahre']) as $j)
+        if ((string)$j <= substr($in['von'], 0, 4))
+            foreach (az_jahr_lesen((string)$j) as $k => $t) if (!empty($t[7]) && substr($k, -10) < $in['von']) $offen[] = substr($k, -10);
+    if ($offen) $h[] = ['stufe' => 'warn', 'text' => (count($offen) === 1 ? '1 gespeicherter Tag vor dem Zeitraum der Datei ist' : az_anzahl(count($offen)) . ' gespeicherte Tage vor dem Zeitraum der Datei sind')
+        . ' noch nicht abgeschlossen (ab ' . az_tag(min($offen)) . ') und ' . (count($offen) === 1 ? 'zählt' : 'zählen') . ' so in keiner Summe – bitte den Zeitbericht ab diesem Tag exportieren.'];
     $ohneNr = count(array_filter($in['personen'], fn($p) => $p['nr'] === ''));
     if ($ohneNr) $h[] = ['stufe' => 'info', 'text' => az_anzahl($ohneNr) . ' Mitarbeiter ohne Mitarbeiternummer – sie werden über den Namen zugeordnet. Ändert sich der Name, entsteht ein neuer Eintrag.'];
     if ($n['entfaellt']) $h[] = ['stufe' => 'warn', 'text' => az_anzahl($n['entfaellt']) . ' gespeicherte Tage im Zeitraum stehen nicht mehr in der Datei und werden gelöscht.'];

@@ -252,7 +252,9 @@ switch ($action) {
                     $g = qs_ver_index($d, ['freigegeben']);
                     if ($g !== null) { $d['versionen'][$g]['status'] = 'ersetzt'; qs_verlauf($d['versionen'][$g], $me, "ersetzt durch Version $nr"); }
                     $v['status'] = 'freigegeben'; $v['nr'] = $nr; $v['datum'] = qs_heute(); $v['freigegeben'] = qs_wer($me);
-                    qs_lenkung_eintragen($d, $v, qs_stamm(), $me, $erzeugt);   // Version, Datum, Kürzel in Word-/Excel-Dateien
+                    $st = qs_stamm();
+                    $v['lenkung'] = qs_lenkung_kuerzel($v, $st);   // Schnappschuss für spätere Nachträge in diese Version (GR-106)
+                    qs_lenkung_eintragen($d, $v, $st, $me, $erzeugt);   // Version, Datum, Kürzel in Word-/Excel-Dateien
                     qs_verlauf($v, $me, "freigegeben als Version $nr");
                     qs_verlauf($d, $me, "Version $nr freigegeben");
                     $text = "Version $nr freigegeben";

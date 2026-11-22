@@ -12,7 +12,7 @@ declare(strict_types=1);
      Abweichungen  Nachweise mit Ergebnis „Abweichung“ im Zeitraum mit der zugehörigen Maßnahme; stornierte Nachweise zählen nie
                 (nur ihre Anzahl wird genannt).
      Maßnahmen  erfasst bis zum Stichtag und im Zeitraum noch offen oder abgeschlossen (Status: Stand heute).
-     Dokumente  Freigaben, Überprüfungen ohne Änderung und Einziehungen im Zeitraum; Bestand und „Überprüfung fällig“ Stand heute.
+     Dokumente  Freigaben, Überprüfungen ohne Änderung und Einziehungen im Zeitraum (aus dem Verlauf, auch frühere und wieder aufgehobene); Bestand und „Überprüfung fällig“ Stand heute.
      Handbuch   Änderungen der Abschnitte im Zeitraum.
    qs_bericht_daten() rechnet nur mit übergebenen Daten (prüfbar ohne Speicher); qs_bericht_xlsx() schreibt die Arbeitsmappe
    (Office Open XML ohne PHP-Erweiterung „zip“, ZIP aus qs_zip_bauen in vorlagen.php; Texte als Text, nie als Formel). */
@@ -187,10 +187,21 @@ function qs_bericht_daten(array $stamm, array $dokumente, array $handbuch, array
                                      'geprueft' => (string)($k['geprueft'] ?? ($v['geprueft']['von'] ?? '')), 'freigegeben' => (string)($k['freigegeben'] ?? ($v['freigegeben']['von'] ?? ''))];
             $dz['freigaben']++;
         }
-        $u = ortstag((string)($d['ueberprueft']['t'] ?? ''));
-        if ($imZeitraum($u)) { $vorgaenge[] = $basis + ['vorgang' => 'ueberprueft', 'datum' => $u, 'von' => (string)($d['ueberprueft']['von'] ?? ''), 'notiz' => (string)($d['ueberprueft']['notiz'] ?? '')]; $dz['ueberprueft']++; }
-        $e = ortstag((string)($d['eingezogen']['t'] ?? ''));
-        if ($imZeitraum($e)) { $vorgaenge[] = $basis + ['vorgang' => 'eingezogen', 'datum' => $e, 'von' => (string)($d['eingezogen']['von'] ?? ''), 'notiz' => (string)($d['eingezogen']['grund'] ?? '')]; $dz['eingezogen']++; }
+        $gesehen = [];   // je Vorgang und Tag einmal
+        $vorgang = function (string $art, string $t, string $von, string $notiz) use (&$gesehen, &$vorgaenge, &$dz, $basis, $imZeitraum) {
+            $tag = ortstag($t);
+            if (!$imZeitraum($tag) || isset($gesehen[$art . $tag])) return;
+            $gesehen[$art . $tag] = true;
+            $vorgaenge[] = $basis + ['vorgang' => $art, 'datum' => $tag, 'von' => $von, 'notiz' => $notiz];
+            $dz[$art]++;
+        };
+        // die Felder halten nur den letzten Stand: frühere Überprüfungen und wieder aufgehobene Einziehungen stehen im Verlauf
+        foreach ((array)($d['verlauf'] ?? []) as $l)
+            if (preg_match('/^(ohne Änderung überprüft|eingezogen)(?:: (.*))?$/su', (string)($l['was'] ?? ''), $m))
+                $vorgang($m[1] === 'eingezogen' ? 'eingezogen' : 'ueberprueft', (string)($l['t'] ?? ''), (string)($l['von'] ?? ''), $m[2] ?? '');
+        // Rückfall für Dokumente ohne vollständigen Verlauf (Datenpaket, auf QS_MAX_VERLAUF Einträge gekürzt)
+        $vorgang('ueberprueft', (string)($d['ueberprueft']['t'] ?? ''), (string)($d['ueberprueft']['von'] ?? ''), (string)($d['ueberprueft']['notiz'] ?? ''));
+        $vorgang('eingezogen', (string)($d['eingezogen']['t'] ?? ''), (string)($d['eingezogen']['von'] ?? ''), (string)($d['eingezogen']['grund'] ?? ''));
         $ue = qs_ueberpruefung($d, $monateU, $heute);
         if ($ue && $ue['faellig']) { $faellig[] = $basis + ['seit' => $ue['seit'], 'faelligAb' => $ue['faelligAb']]; $dz['faellig']++; }
     }
