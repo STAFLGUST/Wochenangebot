@@ -136,8 +136,9 @@ function store_roh_schreiben(string $name, string $bereich, ?string $json): void
     if (!rename($tmp, $p)) { @unlink($tmp); throw new RuntimeException('Cannot replace data'); }
 }
 /* Postausgang (und Mitarbeiterseite): alle Kopien mit dem internen Stand vergleichen und abweichende wiederherstellen. Rückgabe:
-   wiederhergestellte Dokumente [Name => verändert durch jemand anderen?] – nachträglich geändert (Zeitstempel der Kopie deutlich
-   nach dem internen Stand) heißt: nicht von der Mitarbeiterseite geschrieben. */
+   wiederhergestellte Dokumente [Name => verändert durch jemand anderen?] – fremd ist jede noch vorhandene Kopie, die vom internen
+   Stand abweicht: store_kopie() zieht sie nach jedem eigenen Schreibvorgang nach. Kein Zeitstempelvergleich – Zeitstempel und
+   mtime-Spalte liegen im gemeinsamen Ordner und damit im Einflussbereich der Kundenseite (ADR-007 Stufe 2c). */
 function store_kopien_abgleichen(): array
 {
     $out = [];
@@ -145,11 +146,11 @@ function store_kopien_abgleichen(): array
     foreach (DATEN_VEROEFFENTLICHT as $n) {
         if (!store_veroeffentlicht($n)) continue;
         $x = with_lock($n, function () use ($n) {
-            [$innen, $ti] = store_roh($n, 'intern');
-            [$aussen, $ta] = store_roh($n, 'haupt');
+            [$innen] = store_roh($n, 'intern');
+            [$aussen] = store_roh($n, 'haupt');
             if ($innen === $aussen || ($innen !== null && $aussen !== null && json_decode($innen, true) === json_decode($aussen, true))) return null;
             store_roh_schreiben($n, 'haupt', $innen);
-            return $aussen !== null && ($innen === null || (int)$ta > (int)$ti + 5);
+            return $aussen !== null;
         });
         if ($x !== null) $out[$n] = $x;
     }

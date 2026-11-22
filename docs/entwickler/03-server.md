@@ -284,6 +284,11 @@ Dokumente, die nur die Mitarbeiterseite schreibt und die Kundenseite liest (Ange
 (`store_read`/`store_write`/`with_lock`): Die Speicherschicht schreibt innen und legt die Kopie im gemeinsamen Ordner ab
 (`store_kopie`), die Kundenseite liest die Kopie und kann nicht schreiben (`StoreKeinZugang`). Ein Dokument, das die Kundenseite
 selbst schreibt (Zähler, Sitzungen, Bestellwünsche …), darf nie `veroeffentlicht` sein – die Gruppe `datentrennung` zeigt das.
+Der Postausgang vergleicht jede Kopie mit dem internen Stand (`store_kopien_abgleichen`), stellt eine abweichende wieder her und
+meldet sie als Sicherheitsereignis. Maßgeblich ist allein der **Inhalt**: `store_kopie()` zieht die Kopie nach jedem eigenen
+Schreibvorgang nach. Zeitstempel aus dem gemeinsamen Ordner taugen nicht als Unterscheidung – bis 22.11.2026 unterdrückte ein
+`utime`-Aufruf der Kundenseite die Meldung (Sicherheitsaudit run-3). Eine gelöschte Kopie wird wiederhergestellt, aber nicht
+gemeldet.
 
 **Protokoll (Trennstufe 4, ADR-007 Stufe 2d):** Einträge immer über `audit()` schreiben und über `protokoll_monat($monat)` /
 `protokoll_monate()` lesen – nie `store_read('protokoll/…')` direkt: Ab Stufe 4 liegt das Protokoll der Mitarbeiterseite innen, das
