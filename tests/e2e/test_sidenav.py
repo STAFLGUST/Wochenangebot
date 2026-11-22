@@ -89,6 +89,9 @@ with sync_playwright() as p:
     ob = g.evaluate("""(() => { const c = (s) => { const e = document.querySelector(s); return e ? getComputedStyle(e).color : null; };
         return [c('#offer-bar .ob-o[aria-selected="true"] .ob-n'), c('#offer-bar .ob-o:not([aria-selected="true"]) .ob-n'), c('#vt-edit')]; })()""")
     check('Seitenleiste hell: gewähltes Angebot in derselben schwarzen Schrift wie die übrigen Einträge', all(ob) and len(set(ob)) == 1, ob)
+    # Bestellwünsche sind keine Stammdaten: „Bestellungen“ steht bei den Arbeitsansichten, vor der Überschrift „Stammdaten“
+    folge = g.evaluate("[...document.querySelectorAll('.side-tabs > *')].map((e) => e.id)")
+    check('Navigation: „Bestellungen“ vor „Stammdaten“', folge.index('vt-orders') < folge.index('side-stamm'), folge)
     check('price fields 10 px radius', css('#groups tr[data-id] .e-price .in.num', 'borderTopLeftRadius') == '10px')
     sticky = g.evaluate("(() => { const t = document.querySelector('#view-edit .ed-toolbar'); return [getComputedStyle(t).position, getComputedStyle(t).backgroundColor]; })()")
     check('sticky bars opaque enough to read', sticky[0] == 'sticky' and alpha(sticky[1]) >= .85, sticky)
