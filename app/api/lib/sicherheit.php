@@ -254,7 +254,7 @@ function sec_clean(array $b, array $old, array $me): array
     foreach (array_slice(is_array($b['adminIps'] ?? null) ? $b['adminIps'] : [], 0, 50) as $c) {
         $c = trim((string)$c);
         if ($c === '') continue;
-        if (!valid_cidr($c)) throw new InvalidArgumentException("„{$c}“ ist keine gültige IP-Adresse oder kein gültiger Bereich (z. B. 80.147.24.150 oder 80.147.24.0/24).");
+        if (!valid_cidr($c)) throw new InvalidArgumentException("„{$c}“ ist keine gültige IP-Adresse oder kein gültiger Bereich (z. B. 203.0.113.7 oder 203.0.113.0/24).");
         $ips[] = $c;
     }
     $ipEnabled = !empty($b['ipEnabled']);

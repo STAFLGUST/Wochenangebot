@@ -130,6 +130,11 @@ check('ungültiger Eintrag abgewiesen', st == 422)
 A.call('fw_save', {'fehlerLimit': 3, 'erlaubt': []})
 codes = [roh('203.0.113.50', 'gibt_es_nicht')[0] for _ in range(4)]
 check('Fehlerbremse: nach 3 fehlerhaften Anfragen gesperrt', codes[:3] == [404, 404, 404] and codes[3] == 403, codes)
+# ::ffff:a.b.c.d ist eine einzelne IPv4-Adresse, kein /64-Netz: ohne die Ausnahme in fw_key (wie in client_key) fielen alle
+# so geschriebenen Adressen in den Sammelschlüssel ::/64 – eine gesperrte Adresse hätte alle anderen mitgesperrt
+codes = [roh('::ffff:203.0.113.51', 'gibt_es_nicht')[0] for _ in range(4)]
+check('Fehlerbremse: IPv4-abgebildete Adresse zählt für sich, nicht als Sammelschlüssel ::/64',
+      codes[3] == 403 and roh('::ffff:198.51.100.51', 'offer')[0] == 200, codes)
 A.call('fw_save', {'fehlerLimit': 30, 'treffer': 5})
 
 # ---------- Sperren und freigeben von Hand ----------
@@ -223,6 +228,14 @@ check('Export enthält keine Adress- und Länderlisten', 'adminIps' not in x['si
 x2 = {**x, 'sicherheit': {**x['sicherheit'], 'adminIps': ['192.0.2.1'], 'ipEnabled': True}}
 st, r = A.call('fw_import', {'export': x2})
 check('Import übernimmt keine Adresslisten (Schutz vor Aussperren)', st == 200 and not doc('sicherheit').get('ipEnabled') and doc('sicherheit').get('adminIps', []) == [], r.get('error'))
+# Abgeschaltete Passwortbestätigung (bestaetigungAus) überträgt eine Datei nie: der Importdialog zeigt das Feld nicht und
+# die feldweise Protokolldifferenz benennt es nicht – eine unvertraute Datei darf keine Sicherheitskontrolle absenken
+storage_write('sicherheit', {**doc('sicherheit'), 'bestaetigungAus': ['kunden_rundmail']})
+check('Export enthält die abgeschaltete Passwortbestätigung nicht', 'bestaetigungAus' not in A.call('fw_export')[1]['export']['sicherheit'])
+x3 = {**x, 'sicherheit': {**x['sicherheit'], 'bestaetigungAus': ['kunde_delete', 'notfall_ausloesen']}}
+st, r = A.call('fw_import', {'export': x3})
+check('Import schaltet keine Passwortbestätigung ab', st == 200 and doc('sicherheit')['bestaetigungAus'] == ['kunden_rundmail'],
+      (st, r.get('error'), doc('sicherheit').get('bestaetigungAus')))
 check('fremde Datei abgewiesen', A.call('fw_import', {'export': {'art': 'etwas', 'version': 1}})[0] == 422)
 check('Protokoll: Import und Vorlage', 'Sicherheitseinstellungen aus Datei übernommen' in json.dumps(A.call('log')[1], ensure_ascii=False))
 dl = [x for e in A.call('log')[1]['entries'] if 'aus Datei übernommen' in e['s'] for x in e.get('d', [])]

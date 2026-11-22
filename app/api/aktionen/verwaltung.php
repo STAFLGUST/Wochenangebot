@@ -69,9 +69,16 @@ switch ($action) {
         case 'security_save': {
             $me = require_admin_confirmation('security_save');
             $b = body();
-            $old = sec();
-            $new = sec_clean($b, $old, $me);
-            store_write('sicherheit', $new);
+            // Lesen, Prüfen und Schreiben unter der Sperre (wie deploy/ip-freigabe-aus.php): sonst überschreibt das Speichern
+            // eine gleichzeitige Änderung des Dokuments still. Der Browser sendet den Gesamtstand – das Fenster zwischen dem
+            // Öffnen der Ansicht und dem Speichern schließt keine Sperre, nur eine Versionskennung (bleibt offen).
+            [$old, $new] = with_lock('sicherheit', function () use ($b, $me) {
+                $GLOBALS['SEC'] = null;   // Stand unter der Sperre frisch lesen, nicht aus dem Zwischenspeicher
+                $old = sec();
+                $new = sec_clean($b, $old, $me);
+                store_write('sicherheit', $new);
+                return [$old, $new];
+            });
             $GLOBALS['SEC'] = $new;
             $L = SEC_FELD_LABEL;
             $GV = ['block' => 'ausgewählte Länder sperren', 'allow' => 'nur ausgewählte Länder erlauben', 'admin' => 'nur Eingabebereich', 'all' => 'ganze Seite'];
