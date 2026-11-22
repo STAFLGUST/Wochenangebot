@@ -26,7 +26,8 @@ const STARTSEITE_FAVORITEN_MAX = 8;
 /* Protokoll-Vorgang → Modul (nur Vorgänge, die in einer Anwendung bearbeitet werden; Anmeldung, Sicherheit u. Ä. fehlen bewusst) */
 const STARTSEITE_PROTOKOLL_MODUL = ['draft' => 'angebot', 'publish' => 'angebot', 'discard' => 'angebot', 'offers' => 'angebot', 'import' => 'angebot',
     'bestellung' => 'angebot', 'history' => 'angebot', 'einzelangebot' => 'crm', 'stock' => 'bestand', 'master' => 'verwaltung', 'customers' => 'verwaltung',
-    'hr' => 'hr', 'qs' => 'qs', 'leergut' => 'leergut', 'rewe' => 'rewe', 'marketing' => 'marketing', 'crm' => 'crm', 'controlling' => 'controlling'];
+    'hr' => 'hr', 'qs' => 'qs', 'leergut' => 'leergut', 'rewe' => 'rewe', 'marketing' => 'marketing', 'crm' => 'crm', 'controlling' => 'controlling',
+    'containerimport' => 'containerimport'];
 /* Schnellaktionen in fester Reihenfolge (die ersten vier wie im Entwurf „C2“): Modul, nötiges Recht ('' = Modulzugang genügt),
    Text, Ziel im Modul (Reiter bzw. „<reiter>/neu“ – das Modul öffnet dann gleich das Fenster zum Anlegen); neu = Plus-Symbol */
 const STARTSEITE_AKTIONEN = [

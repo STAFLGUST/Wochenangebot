@@ -802,6 +802,10 @@ st, hn = N.call('start_heute')
 texte = [x['text'] for x in hn.get('zuletzt', [])]
 check('Zuletzt bearbeitet: nur Zeilen der eigenen Nutzer-ID – Zeilen eines gleichnamigen Vorgängers bleiben verborgen',
       st == 200 and 'Eigener Entwurf' in texte and 'Entwurf des Vorgängers' not in texte, texte)
+st, r = A.call('containerimport_eudr_sendung_save', {'id': '', 'rev': 0, 'partie': 'P-DASH-01', 'lieferantNr': '', 'lieferant': 'Frigorifico Beispiel', 'land': 'PY', 'betriebe': [],
+                                                      'nachweis': {'erklaerung': '', 'rueckverfolgung': 'offen', 'haltung': 'offen', 'legalitaet': 'offen'}, 'dds': {'referenz': '', 'datum': ''}})
+zl = A.call('start_heute')[1].get('zuletzt', [])
+check('Zuletzt bearbeitet: Arbeit im Container-Import erscheint mit ihrem Modul', st == 200 and zl and zl[0] == {**zl[0], 'modul': 'containerimport', 'text': 'Container „P-DASH-01“ gespeichert'}, (st, r.get('error'), zl[:2]))
 
 ok = sum(res)
 print(f'{ok}/{len(res)} passed')
