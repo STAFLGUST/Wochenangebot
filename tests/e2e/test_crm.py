@@ -394,6 +394,7 @@ with sync_playwright() as p:
           pg.locator(pt_haus).count() == 1 and pg.locator('#km-pts .pt[data-plz="20095"]').count() == 0 and pg.locator(pt_strasse).count() == 1)
     check('Karte: Hinweis zur Genauigkeit (Hausnummer, Straße, Postleitzahl) mit Stand des Verzeichnisses',
           '1 auf Hausnummer genau' in kt and '1 an der Straße' in kt and 'am Mittelpunkt der Postleitzahl' in kt and 'OpenStreetMap-Adressverzeichnis' in kt, kt[-400:])
+    check('Karte: Stand des Verzeichnisses als deutsches Datum (TT.MM.JJJJ)', re.search(r'\(Stand \d\d\.\d\d\.\d{4}\)', kt) is not None, kt[-200:])
     pg.locator(pt_strasse).dispatch_event('click'); pg.wait_for_selector('#km-pop:not([hidden])')
     check('Karte: Punkt an der Straße ist als solcher gekennzeichnet', 'Hausnummer nicht gefunden' in pg.inner_text('#km-pop') and 'Testgasse 9' in pg.inner_text('#km-pop'))
     pg.locator(pt_haus).dispatch_event('click')
