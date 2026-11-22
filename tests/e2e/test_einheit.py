@@ -211,6 +211,10 @@ with sync_playwright() as pw:
         .find(([x, y]) => x < r.left || x > r.right || y < r.top || y > r.bottom);
       return p || 'voll'; }'''
     OFFEN = "id => document.getElementById(id).open"
+    # Aussehen eines offenen Fensters (C2): Unschärfe des Hintergrunds, Rundung, Schatten
+    FENSTER_STIL = r'''(id) => { const d = document.getElementById(id), s = getComputedStyle(d);
+      return d.classList.contains('modal') || id === 'r-palette' ? [id, getComputedStyle(d, '::backdrop').backdropFilter, s.borderTopLeftRadius, s.boxShadow] : null; }'''
+    stile = {}
     # Hinweise (Toasts) liegen über einem offenen Fenster (oberste Ebene, theme.js) – sonst lägen sie unter dem unscharfen Hintergrund
     TOAST_OBEN = r'''async () => { const t = document.querySelector('[role="status"].toast, [role="status"][class*="-toast"]');
       const d = document.querySelector('dialog[id]:not([open])'); if (!t || !d) return 'ohne';
@@ -227,11 +231,16 @@ with sync_playwright() as pw:
             if breite == 1440:
                 oben = pg.evaluate(TOAST_OBEN)
                 check(f'{name}: Hinweise (Toast) erscheinen über einem offenen Fenster', oben in (True, 'ohne'), oben)
+            if breite == 1440 and (bereich or name == 'dashboard'):   # Suche (Strg K) wie jedes Fenster
+                pg.wait_for_selector('#r-suche'); pg.keyboard.press('Control+k'); pg.wait_for_selector('#r-palette[open]')
+                stile.setdefault(name, []).append(pg.evaluate(FENSTER_STIL, 'r-palette')); pg.keyboard.press('Escape')
             per_klick, nicht_esc = [], []
             for i in ids:
                 p = pg.evaluate(FENSTER_AUF, i)
                 if p is None:
                     continue
+                if breite == 1440 and bereich and pg.evaluate(FENSTER_STIL, i):
+                    stile.setdefault(name, []).append(pg.evaluate(FENSTER_STIL, i))
                 if p != 'voll':
                     pg.mouse.click(p[0], p[1])
                     if not pg.evaluate(OFFEN, i):
@@ -242,6 +251,11 @@ with sync_playwright() as pw:
             check(f'{name} {breite} px: Klick neben ein Fenster schließt es nicht ({len(ids)} Fenster)', not per_klick, per_klick)
             check(f'{name} {breite} px: Escape schließt jedes Fenster', not nicht_esc, nicht_esc)
         ctx.close()
+    # Fenster und Suche im Eingabebereich wie die Suche des Dashboards (rahmen.css): ohne Unschärfe, gleiche Rundung und Schatten
+    ref = stile['dashboard'][0]
+    for name in ('angebot', 'verwaltung', 'bestand'):
+        abw = [x for x in stile.get(name, []) if x[1:] != ref[1:]]
+        check(f'{name}: Fenster und Suche wie im Rahmen ({len(stile.get(name, []))}: ohne Unschärfe, {ref[2]}, Schatten der Suche)', len(stile.get(name, [])) > 1 and not abw, (ref, abw[:4]))
     # Getippte Eingaben: erstes Escape zeigt den gemeinsamen Hinweis (theme.js), zweites schließt – hier am Formular
     # „Korrektur melden“ (HR) und „Neue Kampagne“ (Marketing) stellvertretend für alle Formularfenster
     ctx, pg = neue_seite(1440, False)

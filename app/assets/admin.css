@@ -2302,7 +2302,7 @@ dialog.modal.ez-pick { width: min(1280px, calc(100vw - 32px)); height: min(860px
 }
 @media screen and (max-width: 640px) {
   body.adm { --r-glas: 22px; --r-glas-2: 18px; }
-  body.adm dialog.modal, body.adm dialog.modal.wide { border-radius: 24px 24px 0 0; border-bottom: 0; }
+  body.adm dialog.modal, body.adm dialog.modal.wide { border-radius: 20px 20px 0 0; border-bottom: 0; }   /* Blatt am Handy wie im Versand */
   body.adm dialog.modal.ez-pick { border-radius: 0; }
   body.adm .dlg-head { padding: 20px 18px 12px; }
   body.adm .dlg-body { padding: 16px 18px; }
@@ -2458,6 +2458,10 @@ dialog.modal.pv { width: min(1480px, calc(100vw - 32px)); height: calc(100dvh - 
     --primaer: var(--r-akzent); --primaer-hover: var(--r-akzent-hover); --primaer-text: var(--r-akzent-ink); --primaer-schatten: none;
   }
   body.adm.r :is(.adm-page, dialog) .btn.primary { box-shadow: none; }
+  /* Fenster wie die Suche (Strg K) und der Versand: deckend, 16 px (--r-glas), Schatten der Menüs, Hintergrund nur
+     abgedunkelt – ohne Unschärfe (gilt auch für die Suche, deren eigene Regel in rahmen.css sonst gegen diese verliert) */
+  body.adm.r dialog.modal { border-color: var(--r-linie-2); box-shadow: var(--r-schatten-menue); }
+  body.adm.r dialog::backdrop { background: var(--r-schleier); -webkit-backdrop-filter: none; backdrop-filter: none; }
   body.adm.r::before { display: none; }
   body.adm.r .topbar { padding: 0; }
   body.adm.r .topbar-inner { max-width: none; border-radius: 0; padding: 12px 24px; }
