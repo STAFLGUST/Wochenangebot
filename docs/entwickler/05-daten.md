@@ -1053,7 +1053,8 @@ Die einzige Beschreibung der Regeln; Code-Kommentare verweisen hierher.
   `{"sendung": "s…", "wer": {"t", "von"}, "betriebe": [<Sichten der Farmer samt "geometrie">]}`. Einmal geschrieben, nie
   geändert oder gelöscht (GoBD, GR-106); die Kennung `a…` ist neu je Abschluss. Höchstens `EUDR_MAX_PUNKTE` Punkte, weil die
   Farmer eines Containers eine Teilmenge aller Farmer sind (gemessen: 150 000 Punkte sind 3,4 MiB, Lesen und Export 48 von
-  128 MiB).
+  128 MiB vor der Prüfsumme über die gespeicherte Form; diese hält die Farmer beim Prüfen kurz ein zweites Mal im Speicher,
+  bei Höchstgröße synthetisch gemessen rund 38 MiB mehr, geschätzt 86–90 von 128 MiB – Stand 23.11.2026).
 - **Am Container** steht nur noch `abschluss.betriebe` ohne `geometrie` und `abschluss.schnappschuss`
   = `{"id", "sha256"}`. `sha256` ist über `json_encode` der Farmer in ihrer gespeicherten Form gebildet (`eudr_schnappschuss_summe`: einmal durch
   `json_decode` und zurück – `-0.0` schreibt `json_encode` als `-0`, gelesen wird daraus `0`, etwa bei der Mitte einer Fläche am
