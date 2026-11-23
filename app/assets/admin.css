@@ -1201,7 +1201,7 @@ body.ro .sale-tag { cursor: default; }
   .adm-top .save-state { grid-column: 1 / -1; grid-row: 2; }
 }
 @media (max-width: 1360px) {
-  .adm-top .actions .btn:not(.primary):not(#btn-drucken) .lbl { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+  .adm-top .actions .btn:not(.primary):not(.mit-text) .lbl { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
 }
 @media (max-width: 480px) { .adm-top .brand > div:not(.brand-mark) { display: none; } }
 /* Angebots-Host am Handy: Zurück-Knopf und sechs Aktionen füllen die Kopfzeile – das Logo läge sonst verdeckt darunter */
@@ -2341,7 +2341,7 @@ dialog.modal.ez-pick { width: min(1280px, calc(100vw - 32px)); height: min(860px
   body.adm .topbar .btn.icon { width: 36px; height: 36px; }
 }
 @media screen and (max-width: 1180px) {   /* nur Symbole – „Drucken“ behält bis 860 px seine Beschriftung (Regel bei 1360 px) und damit seine Breite */
-  body.adm .topbar .btn:not(.primary):not(.icon):not(#btn-drucken) { width: 40px; padding: 0; justify-content: center; }
+  body.adm .topbar .btn:not(.primary):not(.icon):not(.mit-text) { width: 40px; padding: 0; justify-content: center; }
 }
 
 /* ---------- Vorschau im Eingabebereich (Fenster mit der Angebotsseite) ---------- */
