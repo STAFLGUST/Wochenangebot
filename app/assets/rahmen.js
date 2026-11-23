@@ -12,7 +12,8 @@
    Ziele der Einträge wie bisher die Kacheln: unter dashboard-stafl.de die Adressen der zentralen Anmeldung, in Test- und
    Entwicklungsumgebungen derselbe Pfad auf dem aktuellen Server (nie die Produktion).
    Modulseiten binden den Rahmen ohne eigenes Skript ein: <body data-rahmen="<modul-id>"> (siehe selbst() unten). Seiten mit dem
-   Seitenkopf .r-seitenkopf bekommen dort den gemeinsamen Knopf „Start“ (.stafl-zurueck, startKnopf()).
+   Seitenkopf .r-seitenkopf bekommen dort den gemeinsamen Knopf „Start“ (.stafl-zurueck) und das Symbol der Anwendung vor dem
+   Namen – derselbe Kopf wie auf den übrigen Modulseiten (startKnopf()).
    Suche (Feld „Suchen“ oben in der Leiste, Strg K bzw. ⌘ K): springt zu einer Anwendung; Seiten können weitere Ziele
    ergänzen (STAFL_RAHMEN.suche, Dashboard: Schnellaktionen). Zahlen offener Punkte je Anwendung setzt nur das Dashboard
    (STAFL_RAHMEN.zahlen – Daten der Aktion start_heute, die es nur auf dem Dashboard-Host gibt, GR-109).
@@ -190,8 +191,9 @@
   }
 
   /* „Start“ im Kopf der Seiten aus den Bausteinen des Rahmens (.r-seitenkopf, z. B. Versand, Container-Import): derselbe
-     Knopf .stafl-zurueck wie auf allen Modulseiten, über dem Titel, Ziel = Startseite der Leiste. Nicht auf der Startseite. */
-  function startKnopf(start, aktiv) {
+     Knopf .stafl-zurueck wie auf allen Modulseiten vor dem Titel, Ziel = Startseite der Leiste; vor dem Namen das Symbol der
+     Anwendung aus dem Register (Farbe über data-symbol). Nicht auf der Startseite. */
+  function startKnopf(start, aktiv, modul) {
     const titel = document.querySelector('.r-seitenkopf > :first-child');
     if (!titel || aktiv === 'start') return;
     let a = titel.querySelector('.stafl-zurueck');
@@ -203,6 +205,11 @@
       titel.prepend(a);
     }
     a.setAttribute('href', start);
+    const h1 = titel.querySelector('h1');
+    if (modul && h1 && !h1.querySelector('.r-i')) {
+      h1.insertAdjacentHTML('afterbegin', symbol(modul.icon in PFADE ? modul.icon : 'raster'));
+      h1.firstElementChild.dataset.symbol = modul.icon;
+    }
   }
 
   /* Leiste zeichnen.
@@ -248,7 +255,7 @@
     aufklappen(false, true);
     leisteBinden(nav);
     mobilkopf(start);
-    startKnopf(start, aktiv);
+    startKnopf(start, aktiv, alle[aktiv]);
   }
 
   /* Leiste entfernen (z. B. nach dem Abmelden): Seite wieder ohne Rahmen */

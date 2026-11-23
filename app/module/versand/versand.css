@@ -5,12 +5,12 @@
    Liste „Angebote dieser Woche“, der Verlauf und die Fenster „Veröffentlichen“ und „Senden“. Hell und dunkel über die --r-*. */
 body.vs { line-height: 1.45; }
 .vs .r-i { width: 18px; height: 18px; }
-.vs-knopf { display: inline-flex; align-items: center; justify-content: center; gap: 8px; height: 38px; padding: 0 16px; box-sizing: border-box; border: 1px solid var(--r-linie-2); border-radius: 10px;
+.vs-knopf { display: inline-flex; align-items: center; justify-content: center; gap: 8px; height: 36px; padding: 0 16px; box-sizing: border-box; border: 1px solid var(--r-linie-2); border-radius: 999px;
   background: var(--r-flaeche); color: var(--r-text); font: inherit; font-size: 14px; font-weight: 600; white-space: nowrap; text-decoration: none; cursor: pointer; }
 .vs-knopf:hover { background: var(--r-flaeche-2); color: var(--r-text); }
 .vs-knopf.primaer { background: var(--r-akzent); border-color: var(--r-akzent); color: var(--r-akzent-ink); }
 .vs-knopf.primaer:hover { background: var(--r-akzent-hover); border-color: var(--r-akzent-hover); }
-.vs-knopf.klein { height: 32px; padding: 0 11px; font-size: 13px; border-radius: 9px; }
+.vs-knopf.klein { height: 32px; padding: 0 12px; font-size: 13px; }
 .vs-knopf.nur-symbol { width: 34px; height: 34px; padding: 0; }
 .vs-knopf:disabled, .vs-knopf[aria-disabled="true"] { opacity: .5; cursor: not-allowed; }
 .vs-knopf .r-i { width: 16px; height: 16px; }
@@ -18,7 +18,7 @@ body.vs { line-height: 1.45; }
   font-variant-numeric: tabular-nums; background: rgba(255, 255, 255, .22); }
 .vs-link { padding: 0; border: 0; background: none; color: var(--r-akzent-text); font: inherit; font-size: 13px; font-weight: 600; cursor: pointer; text-decoration: none; }
 .vs-link:hover { text-decoration: underline; text-underline-offset: 3px; }
-@media (pointer: coarse) { .vs-link { padding-block: 10px; margin-block: -10px; } }   /* Tippfläche am Handy ≥ 36 px (vorher 19 px), Zeile bleibt gleich hoch */
+@media (pointer: coarse) { .vs-link { padding-block: var(--r-tipp-polster); margin-block: calc(-1 * var(--r-tipp-polster)); } .vs-zusatz-zeile input { width: 20px; height: 20px; } }   /* Tippfläche am Handy ≥ 36 px (vorher 19 px), Zeile bleibt gleich hoch */
 .vs-marke { display: inline-block; padding: 1px 8px; border-radius: 6px; font-size: 12px; font-weight: 600; line-height: 1.5; white-space: nowrap; background: var(--r-neutral-bg); color: var(--r-neutral); }
 .vs-marke.ok { background: var(--r-ok-bg); color: var(--r-ok); }
 .vs-marke.warn { background: var(--r-warn-bg); color: var(--r-warn); }
@@ -74,8 +74,8 @@ body.vs { line-height: 1.45; }
 /* Fenster (Pop-up): schließt nur über ×, „Abbrechen“ oder Escape – nie durch einen Klick daneben */
 body.vs dialog.modal { width: min(680px, calc(100vw - 32px)); border: 1px solid var(--r-linie-2); border-radius: 16px; background: var(--r-flaeche); color: var(--r-text);
   box-shadow: var(--r-schatten-menue); font-family: var(--font); }
+body.vs dialog.modal.vs-schmal { width: min(480px, calc(100vw - 32px)); }
 body.vs dialog.modal[open] { display: flex; flex-direction: column; animation: none; }
-body.vs dialog.modal::backdrop { background: var(--r-schleier); -webkit-backdrop-filter: none; backdrop-filter: none; }
 body.vs .dlg-head { border-bottom: 1px solid var(--r-linie); }
 body.vs .dlg-head p { color: var(--r-text-2); }
 body.vs .dlg-body { flex: 1; min-height: 0; }
@@ -125,7 +125,7 @@ details.vs-aus ul { margin: 6px 0 0; padding-left: 18px; color: var(--r-text-2);
 .vs-erfolg p { margin: 0; max-width: 46ch; color: var(--r-text-2); font-size: 14px; }
 
 @media (max-width: 560px) {
-  body.vs dialog.modal { width: 100vw; max-width: 100vw; max-height: calc(100dvh - 24px); margin: auto 0 0; border-radius: 20px 20px 0 0; border-bottom: 0; }
+  body.vs dialog.modal, body.vs dialog.modal.vs-schmal { width: 100vw; max-width: 100vw; max-height: calc(100dvh - 24px); margin: auto 0 0; border-radius: 20px 20px 0 0; border-bottom: 0; }
   body.vs .dlg-foot .vs-knopf { flex: 1; }
   .vs-fuss-links { flex-basis: 100%; }
   /* Empfänger: Stand und Angebote unter Firma und Adresse statt daneben (sonst bleibt für die Adresse kein Platz) */
@@ -174,7 +174,6 @@ details.vs-aus ul { margin: 6px 0 0; padding-left: 18px; color: var(--r-text-2);
 .vs-knopf[aria-busy="true"] { opacity: .7; cursor: progress; }
 .vs-aend li small { flex-basis: 100%; color: var(--r-leise); font-size: 12.5px; }
 .vs-klein { font-size: 13px; }
-body.vs dialog.modal.vs-schmal { width: min(480px, calc(100vw - 32px)); }
 .vs-nr .r-i { width: 14px; height: 14px; }
 a.vs-knopf.nur-symbol { flex: none; }
 /* Zusatz „Preisänderung zur Vorwoche“ im Fenster „Wochenangebot senden“ (Inhaber 20.11.2026) */

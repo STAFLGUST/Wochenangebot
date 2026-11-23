@@ -45,9 +45,9 @@ body.lg :focus-visible{outline:none;box-shadow:var(--lg-focus)}
 
 /* Leiste mit Reitern und Schnellaktionen */
 .lg-leiste{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;margin:22px 0 14px}
-.lg-tabs{display:flex;gap:4px;width:max-content;max-width:100%;overflow:auto;padding:4px;border-radius:999px;background:var(--lg-chip);scrollbar-width:none}
-.lg-tabs button{height:38px;padding:0 16px;border:0;border-radius:999px;background:transparent;color:var(--lg-muted);font:inherit;font-size:14px;font-weight:650;white-space:nowrap;cursor:pointer}
-.lg-tabs button[aria-selected="true"]{background:var(--lg-card);color:var(--lg-text);box-shadow:0 1px 4px rgba(0,0,0,.12)}
+.lg-tabs{display:flex;gap:4px;width:max-content;max-width:100%;overflow:auto;padding:4px;border-radius:999px;background:var(--r-neutral-bg);scrollbar-width:none}
+.lg-tabs button{height:36px;padding:0 16px;border:0;border-radius:999px;background:transparent;color:var(--r-text-2);font:inherit;font-size:14px;font-weight:600;white-space:nowrap;cursor:pointer}
+.lg-tabs button[aria-selected="true"]{background:var(--r-flaeche);color:var(--r-text);box-shadow:var(--r-schatten-aktiv)}
 .lg-schnell{display:flex;gap:8px;flex-wrap:wrap}
 .lg-schnell .btn{display:inline-flex;align-items:center;gap:7px}
 .lg .btn .i{width:16px;height:16px}
@@ -55,8 +55,8 @@ body.lg :focus-visible{outline:none;box-shadow:var(--lg-focus)}
 
 /* Kennzahlen */
 .lg-kpis{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px;margin-bottom:12px}
-.lg-kpi{min-width:0;padding:14px 16px;border-radius:18px;background:var(--lg-glass);border:1px solid var(--lg-border);box-shadow:inset 0 1px 0 var(--lg-gloss),var(--lg-shadow)}
-.lg-kpi span{display:block;color:var(--lg-muted);font-size:10px;font-weight:750;letter-spacing:.07em;text-transform:uppercase}
+.lg-kpi{min-width:0;padding:14px 16px;border-radius:16px;background:var(--lg-glass);border:1px solid var(--lg-border);box-shadow:inset 0 1px 0 var(--lg-gloss),var(--lg-shadow)}
+.lg-kpi span{display:block;color:var(--r-leise);font-size:13px;font-weight:500}
 .lg-kpi b{display:block;margin:5px 0 2px;font-size:23px;line-height:1.15;font-weight:760;letter-spacing:-.03em;font-variant-numeric:tabular-nums;overflow-wrap:anywhere}
 .lg-kpi small{color:var(--lg-muted);font-size:11px}
 .lg-kpi.warn b{color:var(--lg-rot)}
@@ -88,7 +88,7 @@ textarea.lg-eingabe{height:auto;padding:8px 10px;resize:vertical;line-height:1.4
 /* Tabellen */
 .lg-tabelle-wrap{width:100%;overflow-x:auto}
 .lg-tabelle{width:100%;border-collapse:collapse}
-.lg-tabelle th{padding:9px 8px;background:var(--lg-head-bg);color:var(--lg-head-text);text-align:left;font-size:10px;font-weight:750;letter-spacing:.055em;text-transform:uppercase;border-bottom:1px solid var(--lg-border);white-space:nowrap;vertical-align:bottom}
+.lg-tabelle th{padding:9px 8px;background:var(--lg-head-bg);color:var(--lg-head-text);text-align:left;font-size:11px;font-weight:600;letter-spacing:.06em;text-transform:uppercase;border-bottom:1px solid var(--lg-border);white-space:nowrap;vertical-align:bottom}
 .lg-tabelle th small{display:block;font-size:10.5px;font-weight:600;letter-spacing:0;text-transform:none;opacity:.85}
 .lg-tabelle td{padding:9px 8px;border-bottom:1px solid var(--lg-line);font-size:12.5px;vertical-align:middle}
 .lg-tabelle tbody tr.lg-klick{cursor:pointer}
@@ -173,9 +173,8 @@ textarea.lg-eingabe{height:auto;padding:8px 10px;resize:vertical;line-height:1.4
 .lg-lm-tabelle input.lg-kurz{max-width:90px}   /* Kurzbezeichnung und WinAB-Nr. */
 
 /* Dialoge */
-.lg-dialog{width:min(860px,calc(100vw - 28px));max-height:calc(100dvh - 28px);padding:0;border:1px solid var(--lg-border);border-radius:22px;background:var(--lg-card);color:var(--lg-text);box-shadow:0 28px 80px rgba(0,0,0,.32)}
+.lg-dialog{width:min(860px,calc(100vw - 28px));max-height:calc(100dvh - 28px);padding:0;border:1px solid var(--r-linie-2);border-radius:16px;background:var(--lg-card);color:var(--lg-text);box-shadow:var(--r-schatten-menue)}
 .lg-dialog-klein{width:min(520px,calc(100vw - 28px))}
-.lg-dialog::backdrop{background:rgba(20,16,16,.42);backdrop-filter:blur(4px)}
 .lg-dialog form{padding:18px;display:flex;flex-direction:column;gap:12px}
 .lg-dialogkopf{display:flex;align-items:flex-start;justify-content:space-between;gap:12px}
 .lg-dialogkopf h2{margin:0;font-size:20px}
@@ -231,7 +230,7 @@ textarea.lg-eingabe{height:auto;padding:8px 10px;resize:vertical;line-height:1.4
   .lg-karten tr{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:2px 10px;padding:9px 6px;border-bottom:1px solid var(--lg-line)}
   .lg-karten td[colspan]{grid-column:1/-1}   /* Hinweis- und Gruppenzeilen über die ganze Karte */
   .lg-karten td{display:block;padding:3px 0;border:0;min-width:0;text-align:left!important;white-space:normal}
-  .lg-karten td[data-label]::before{content:attr(data-label);display:block;color:var(--lg-muted);font-size:9.5px;font-weight:750;letter-spacing:.05em;text-transform:uppercase}
+  .lg-karten td[data-label]::before{content:attr(data-label);display:block;color:var(--r-leise);font-size:11px;font-weight:600;letter-spacing:.06em;text-transform:uppercase}
   .lg-karten td.lg-voll{grid-column:1/-1}
   .lg-karten td.lg-voll::before{display:none}
   .lg-karten td:empty{display:none}
@@ -248,10 +247,10 @@ textarea.lg-eingabe{height:auto;padding:8px 10px;resize:vertical;line-height:1.4
   .lg-user-name{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
   .lg-initialen,.lg-rund{width:38px;height:38px}
   .lg-leiste{margin:14px 0 10px}
-  .lg-tabs button{height:36px;padding:0 13px;font-size:13px}
+  .lg-tabs button{padding:0 12px}
   .lg-schnell{width:100%;display:grid;grid-template-columns:1fr 1fr}
   .lg-schnell .btn{justify-content:center}
-  .lg-kpis{gap:7px}.lg-kpi{padding:10px;border-radius:14px}.lg-kpi b{font-size:19px}.lg-kpi span{font-size:11px}
+  .lg-kpis{gap:7px}.lg-kpi{padding:10px}.lg-kpi b{font-size:19px}
   .lg-panel{padding:11px;border-radius:16px}
   .lg-panelkopf h2{font-size:15px}
   .lg-filterzeile{display:grid;grid-template-columns:1fr 1fr;width:100%}
@@ -263,7 +262,7 @@ textarea.lg-eingabe{height:auto;padding:8px 10px;resize:vertical;line-height:1.4
   .lg-saldo .lg-gross{font-size:26px}
   .lg-frist{grid-template-columns:auto minmax(0,1fr)}
   .lg-frist .lg-mengen{grid-column:1/-1}
-  .lg-dialog{width:100vw;max-width:100vw;max-height:94dvh;margin:auto 0 0;border-radius:22px 22px 0 0}
+  .lg-dialog{width:100vw;max-width:100vw;max-height:94dvh;margin:auto 0 0;border-radius:20px 20px 0 0}
   .lg-dialog form{padding:15px}
   .lg-dialog form>.lg-knopfreihe:last-child{margin:0 -15px -15px;padding:8px 15px calc(15px + env(safe-area-inset-bottom))}
   .lg-knopfreihe .btn{min-height:40px}
@@ -326,6 +325,7 @@ textarea.lg-mono{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospac
 :root body.lg.r {
   --lg-bg: var(--r-grund); --lg-text: var(--r-text); --lg-glass: var(--r-flaeche); --lg-kopf: var(--r-grund); --lg-card: var(--r-flaeche);
   --lg-border: var(--r-linie-2); --lg-line: var(--r-linie); --lg-gloss: transparent; --lg-shadow: var(--r-schatten);
+  --lg-head-bg: var(--r-flaeche-2); --lg-head-text: var(--r-leise); --lg-total-bg: var(--r-flaeche-2);   /* Tabellenköpfe wie im Rahmen */
 }
 :root body.lg.r .lg-bg { display: none; }
 body.lg.r .lg-glas { -webkit-backdrop-filter: none; backdrop-filter: none; box-shadow: var(--r-schatten); }
@@ -340,3 +340,5 @@ body.lg.r .lg-rund:hover { background: var(--r-flaeche-2); }
   body.lg.r .lg-seite { padding: 16px 16px 32px; }
   body.lg.r .lg-modul { font-size: 18px; }
 }
+/* Fingerbedienung (Durchsicht 23.11.2026): Knöpfe in Tabellen 36 px, kleine Verweise ≥ 32 px, Kästchen 20 px wie .check (app.css) */
+@media(pointer:coarse){.lg input[type="checkbox"]{width:20px;height:20px}}

@@ -1,6 +1,6 @@
 """Einheitliches Erscheinungsbild aller Mitarbeiter-Oberflächen (Dashboard, Eingabebereich auf den Bereichs-Hosts Angebot,
-Verwaltung, Bestand, alle Modulseiten – HR, CRM, Controlling, Leergut, Marketing, QS, REWE, Sicherheit, Versand; vom
-Container-Import nur der Zurück-Knopf –, Abmeldeseite, Hinweis „Kein Zugang“): je hell/dunkel und 1440/390 px
+Verwaltung, Bestand, alle Modulseiten – HR, CRM, Controlling, Leergut, Marketing, QS, REWE, Sicherheit, Versand,
+Container-Import –, Abmeldeseite, Hinweis „Kein Zugang“): je hell/dunkel und 1440/390 px
 
 - kein waagerechtes Scrollen, kein abgeschnittener Text (Text breiter als sein Kasten bei verdecktem Überlauf, Text
   außerhalb des Bildschirms) – Ausnahmen nur für bewusst gekürzte Zellen mit vollem Text im Tooltip (title),
@@ -105,11 +105,20 @@ ARTIKELWAHL = r'''() => { const d = document.querySelector('#dlg-ez-pick'), i = 
 KACHELN = r'''() => [...document.querySelectorAll('.rl-kachel')].filter((k) => k.offsetParent).map((k) => { const n = k.querySelector('.rl-kachel-n'), r = document.createRange();
   r.selectNodeContents(n); const t = r.getBoundingClientRect(), kb = k.getBoundingClientRect(); return [n.textContent.trim(), Math.round(t.left - kb.left), Math.round(kb.right - t.right)]; })
   .filter((x) => x[1] < 0 || x[2] < 0)'''
+# Hauptknöpfe (sichtbar, auch in Seiten aus den Bausteinen): Fläche und Schrift wie --r-akzent / --r-akzent-ink (Probe-Element)
+HAUPTKNOPF = r'''() => { const p = document.createElement('i'); p.style.cssText = 'background-color:var(--r-akzent);color:var(--r-akzent-ink)'; document.body.append(p);
+  const soll = [getComputedStyle(p).backgroundColor, getComputedStyle(p).color]; p.remove();
+  const k = [...document.querySelectorAll('.btn.primary, .ci-knopf.primaer, .vs-knopf.primaer')].filter((b) => b.offsetParent);
+  return { n: k.length, soll, abw: k.filter((b) => { const s = getComputedStyle(b); return s.backgroundColor !== soll[0] || s.color !== soll[1]; })
+    .map((b) => (b.id || b.textContent.trim().slice(0, 20)) + ' ' + getComputedStyle(b).backgroundColor + ' ' + getComputedStyle(b).color).slice(0, 4) }; }'''
 # Pfeil: Form des Symbols (aus dem Sprite der Seite über <use> oder vom Rahmen direkt gezeichnet)
 ZURUECK = r'''() => { const e = document.querySelector('.stafl-zurueck'); if (!e || !e.offsetParent) return null; const s = getComputedStyle(e), r = e.getBoundingClientRect();
   const svg = e.querySelector('svg'), use = svg && svg.querySelector('use'), form = use ? document.querySelector(use.getAttribute('href')) : svg;
   return { h: Math.round(r.height), w: Math.round(r.width), radius: s.borderTopLeftRadius, font: s.fontSize + ' ' + s.fontWeight, text: e.textContent.trim(), href: e.getAttribute('href'),
-           icon: form ? form.innerHTML.trim() : null, pad: s.paddingLeft + ' ' + s.paddingRight, farbe: s.color }; }'''
+           icon: form ? form.innerHTML.trim() : null, pad: s.paddingLeft + ' ' + s.paddingRight, farbe: s.color,
+           // Kopf: Lage des Knopfs, daneben (nächstes sichtbares Geschwister mit Text) Symbol und Name des Moduls in einer Zeile
+           x: Math.round(r.left), y: Math.round(r.top), titel: (() => { const t = [...e.parentElement.children].find((x) => x !== e && x.offsetParent && x.textContent.trim());
+             if (!t) return null; const q = t.getBoundingClientRect(); return [getComputedStyle(t).fontSize, [...t.querySelectorAll('svg')].some((s) => s.getBoundingClientRect().width > 0), Math.abs((q.top + q.bottom) / 2 - (r.top + r.bottom) / 2) <= 4]; })() }; }'''
 
 with sync_playwright() as pw:
     br = pw.chromium.launch()
@@ -144,7 +153,8 @@ with sync_playwright() as pw:
               ('qs', None, '/module/qs/', '#qm-app:not([hidden])', []),
               ('rewe', None, '/module/rewe/', '#rw-app:not([hidden])', []),
               ('sicherheit', None, '/module/sicherheit/', '#sic-app:not([hidden])', []),
-              ('versand', None, '/module/versand/', '#vs-app:not([hidden])', [])]
+              ('versand', None, '/module/versand/', '#vs-app:not([hidden])', []),
+              ('containerimport', None, '/module/containerimport/', '#ci-app:not([hidden])', [])]
     zurueck = {}
     for breite in (1440, 390):
         for dunkel in (False, True):
@@ -177,6 +187,12 @@ with sync_playwright() as pw:
                     if v == 'rollen':   # „Auf einen Blick“: Namen bleiben in ihrer Kachel
                         raus = pg.evaluate(KACHELN)
                         check(f'{teil} {tag}: Rollen – Namen der Kacheln ragen nicht über die Kachel', not raus, raus)
+                    if v == 'users' and breite == 390 and not dunkel:   # Fehlermeldung im langen Formular „Mitarbeiter anlegen“ sichtbar (Raster scrollt)
+                        pg.click('#user-add'); pg.wait_for_selector('#dlg-user[open] #user-err', state='attached')
+                        fe = pg.evaluate("""() => { const e = document.querySelector('#user-err'), b = e.closest('.dlg-body'); e.textContent = 'Benutzername ist schon vergeben.';
+                          e.scrollIntoView({ block: 'nearest' }); const h = e.getBoundingClientRect().height; e.textContent = ''; return [Math.round(h), b.scrollHeight > b.clientHeight]; }""")
+                        pg.evaluate("document.querySelector('#dlg-user').close()")
+                        check(f'{teil} {tag}: Fehlermeldung im langen Formular sichtbar (nicht auf Höhe 0)', fe[0] >= 15 and fe[1], fe)
                     if v == 'orders':   # Werkzeugleiste „Bestellungen“: Suche und Statusauswahl gleich hoch (wie in den anderen Leisten)
                         hoehen = pg.evaluate("['#orders-filter .search input', '#orders-filter select'].map((s) => Math.round(document.querySelector(s).getBoundingClientRect().height))")
                         check(f'{teil} {tag}: Suche und Auswahl der Werkzeugleiste gleich hoch', hoehen[0] == hoehen[1], hoehen)
@@ -188,6 +204,9 @@ with sync_playwright() as pw:
                     if bereich:   # Eingabebereich im Rahmen „C2“: Hauptknöpfe flach wie im Versand – kein Verlauf, kein Glühschatten
                         glanz = pg.evaluate("[...document.querySelectorAll('.btn.primary')].filter((b) => b.offsetParent).map((b) => [b.textContent.trim().slice(0, 24), getComputedStyle(b).backgroundImage, getComputedStyle(b).boxShadow]).filter((x) => x[1] !== 'none' || x[2] !== 'none')")
                         check(f'{teil} {tag}: Hauptknöpfe flach (ohne Verlauf und Schatten)', not glanz, glanz)
+                    if dunkel and name != 'dashboard':   # Hauptknopf im dunklen Design überall wie Versand und Container-Import (weiße Schrift)
+                        hk = pg.evaluate(HAUPTKNOPF)
+                        check(f'{teil} {tag}: Hauptknöpfe in der Akzentfarbe des Rahmens ({hk["n"]})', not hk['abw'], hk)
                     if not dunkel:
                         ohne = pg.evaluate("[...document.querySelectorAll('input[placeholder]')].filter((e) => e.offsetParent && getComputedStyle(e).textOverflow !== 'ellipsis').map((e) => e.id || e.name || e.placeholder).slice(0, 6)")
                         check(f'{teil} {tag}: lange Platzhalter enden mit „…“', not ohne, ohne)
@@ -210,10 +229,6 @@ with sync_playwright() as pw:
                 if name != 'dashboard':
                     zurueck.setdefault(breite, {})[name] = zr
                     check(f'{name} {tag}: Zurück-Knopf zum Dashboard sichtbar', zr is not None and zr['icon'] and zr['href'] and (zr['href'].rstrip('/').endswith('dashboard') or zr['href'] == 'https://dashboard-stafl.de/'), zr)
-            # Container-Import (hell und dunkel wie die übrigen Seiten im Vergleich unten): Seitenkopf aus den Bausteinen des Rahmens – „Start“ setzt rahmen.js
-            pg.goto(B + '/module/containerimport/'); pg.wait_for_selector('#ci-app:not([hidden]) .r-seitenkopf .stafl-zurueck', timeout=20000)
-            zr = zurueck[breite]['containerimport'] = pg.evaluate(ZURUECK)
-            check(f'containerimport {tag}: Zurück-Knopf zum Dashboard sichtbar', zr is not None and zr['icon'] and zr['href'].rstrip('/').endswith('dashboard'), zr)
             ctx.close()
     # Fingerbedienung (Prüfung am Handy 10.11.2026): mit Finger (pointer: coarse) haben Eingabefelder, Auswahlen und Textfelder
     # auf jeder Seite mindestens 16 px Schrift (sonst zoomt iOS beim Antippen hinein) und kleine Knöpfe (.btn.sm) sind sicher
@@ -246,6 +261,74 @@ with sync_playwright() as pw:
             fi = fp.evaluate(FINGER)
             check(f'{name} Handy mit Finger: Bestand-Knopf, „Zum Versand“ und Verweise mindestens 36 px hoch', fi['tipp'] and all(h >= 36 for _, h in fi['tipp']), fi['tipp'][:6])
     fctx.close()
+    # Bausteine je Reiter jeder Modulseite (Durchsicht 23.11.2026): Tabellenköpfe, Kennzahl-Kacheln, Reiterleiste, Knöpfe,
+    # Beschriftungen und Tippflächen in EINER Form auf allen Modulseiten; Farben als --r-* über ein Probe-Element gelesen. PC 1440
+    # hell, Handy 390 mit Finger – gemessen ohne Bildschirmfoto (ein Ganzseitenfoto hebt in Chromium die Finger-Emulation auf).
+    # Jeder Baustein: JS-Ausdruck (inhalt, sicht, name, tok, finger) → Liste der Abweichungen (null = in Ordnung)
+    BAUSTEINE = {}
+    BAUSTEINE['tabellenkopf'] = r"""[...inhalt.querySelectorAll('thead th')].filter((e) => sicht(e) && !e.closest('.hr-plan')).map((e) => { const s = getComputedStyle(e);
+      return s.fontSize === '11px' && s.fontWeight === '600' && s.textTransform === 'uppercase' && s.color === tok.leise && s.backgroundColor === tok.flaeche2 && !/Mono/.test(s.fontFamily) ? null
+        : name(e) + ' ' + s.fontSize + '/' + s.fontWeight + ' ' + s.textTransform + ' ' + s.color + ' auf ' + s.backgroundColor + ' ' + s.fontFamily.slice(0, 14); })"""
+    BAUSTEINE['kennzahl'] = r"""[...inhalt.querySelectorAll('.lg-kpi, .rw-kpi, .qm-kpi, .ctl-kpi, .crm-wert, .mkt-wert, .hr-wert, .sic-karte')].filter(sicht).map((e) => {
+      const l = e.matches('.sic-karte') ? e.querySelector('.sic-ktitel') : e.querySelector(':scope > span'); if (!l || !sicht(l)) return null;
+      const s = getComputedStyle(l), r = getComputedStyle(e).borderTopLeftRadius, farbig = e.matches('.warn, .bad, .minus');
+      return s.fontSize === '13px' && s.fontWeight === '500' && s.textTransform === 'none' && (farbig || s.color === tok.leise) && r === '16px' ? null
+        : name(e) + ' Beschriftung ' + s.fontSize + '/' + s.fontWeight + ' ' + s.textTransform + ' ' + s.color + ', Kachel ' + r; })"""
+    TITEL = {'tabellenkopf': 'Tabellenköpfe 11 px/600 in Großbuchstaben, Schrift --r-leise auf --r-flaeche-2, in Geist (nicht Mono)',
+             'kennzahl': 'Kennzahl-Kacheln 16 px rund, Beschriftung 13 px/500 in normaler Schreibweise (--r-leise)'}
+    BAUSTEINE['reiterleiste'] = r"""(() => { const l = [...inhalt.querySelectorAll('[role=tablist]')].find(sicht); if (!l) return [];
+      const s = getComputedStyle(l), t = [...l.querySelectorAll('[role=tab]')].filter(sicht), a = t.find((b) => b.getAttribute('aria-selected') === 'true'), out = [];
+      if (s.backgroundColor !== tok.spur || s.borderTopLeftRadius !== '999px' || s.paddingTop !== '4px') out.push(name(l).slice(0, 20) + ' Spur ' + s.backgroundColor + ' r' + s.borderTopLeftRadius + ' p' + s.paddingTop);
+      for (const b of t) { const q = getComputedStyle(b), h = Math.round(b.getBoundingClientRect().height);
+        if (h !== 36 || q.fontSize !== '14px' || q.fontWeight !== '600' || q.borderTopLeftRadius !== '999px') out.push(name(b) + ' ' + h + ' px ' + q.fontSize + '/' + q.fontWeight + ' r' + q.borderTopLeftRadius); }
+      if (a && getComputedStyle(a).backgroundColor !== tok.flaeche) out.push('gewählt ' + name(a) + ' ' + getComputedStyle(a).backgroundColor);
+      return out; })()"""
+    BAUSTEINE['knopf'] = r"""[...inhalt.querySelectorAll('.btn, .ci-knopf, .vs-knopf')].filter((e) => sicht(e) && !e.closest('[role=tablist]')).map((e) => {
+      const r = getComputedStyle(e).borderTopLeftRadius; return r === '999px' ? null : name(e) + ' r' + r; })"""
+    TITEL['reiterleiste'] = 'Reiterleiste als Kapsel (Spur --r-neutral-bg), Reiter 36 px, 14 px/600, gewählt --r-flaeche'
+    TITEL['knopf'] = 'Knöpfe als Kapsel wie überall'
+    BAUSTEINE['kartenbeschriftung'] = r"""(finger ? [...inhalt.querySelectorAll('td[data-label]')].filter(sicht) : []).map((e) => { const b = getComputedStyle(e, '::before');
+      return b.content === 'none' || b.display === 'none' || parseFloat(b.fontSize) >= 11 ? null : name(e).slice(0, 30) + ' ' + b.fontSize; })"""
+    TITEL['kartenbeschriftung'] = 'Beschriftungen der Karten-Tabellen am Handy mindestens 11 px'
+    # Tippflächen mit Finger: Knöpfe, Verweise, Auswahlen, Felder ≥ 32 px hoch (Verweise im Fließtext und Diagramme ausgenommen),
+    # Kästchen ≥ 20 px (wie .check in app.css); Schalter (role=switch) haben ihre eigene Größe
+    BAUSTEINE['tippflaeche'] = r"""(finger ? [...inhalt.querySelectorAll('button, a[href], summary, select, input:not([type=hidden]):not([type=checkbox]):not([type=radio]), [role=button]')] : [])
+      .filter((e) => sicht(e) && !e.closest('svg, .hr-jp-balken, [role=tablist]')).map((e) => { const r = e.getBoundingClientRect(), s = getComputedStyle(e);
+        if (e.tagName === 'A' && s.display === 'inline' && e.closest('p, li, td, small')) return null;
+        return r.height >= 31.5 ? null : name(e) + ' ' + Math.round(r.width) + '×' + Math.round(r.height); })
+      .concat((finger ? [...inhalt.querySelectorAll('input[type=checkbox], input[type=radio]')] : []).filter((e) => sicht(e) && e.getAttribute('role') !== 'switch' && getComputedStyle(e).opacity !== '0')
+        .map((e) => e.getBoundingClientRect().width >= 19.5 ? null : name(e) + ' Kästchen ' + Math.round(e.getBoundingClientRect().width)))"""
+    TITEL['tippflaeche'] = 'Tippflächen mit Finger mindestens 32 px, Kästchen 20 px'
+    TOUR = r"""({ finger }) => { const inhalt = document.querySelector('.r-inhalt');
+      const sicht = (e) => { const r = e.getBoundingClientRect(), s = getComputedStyle(e); return r.width > 1 && r.height > 1 && s.visibility !== 'hidden' && !e.closest('[hidden], dialog, .sr-only, [aria-hidden="true"]'); };
+      const name = (e) => (e.id ? '#' + e.id : e.tagName.toLowerCase() + (typeof e.className === 'string' && e.className.trim() ? '.' + e.className.trim().split(/\s+/).slice(0, 2).join('.') : ''))
+        + ' „' + (e.textContent || e.getAttribute('aria-label') || '').trim().replace(/\s+/g, ' ').slice(0, 24) + '“';
+      const p = document.createElement('i'); p.style.cssText = 'color:var(--r-leise);background-color:var(--r-flaeche-2);border-top:1px solid var(--r-neutral-bg);outline:1px solid var(--r-flaeche)';
+      document.body.append(p); const ps = getComputedStyle(p), tok = { leise: ps.color, flaeche2: ps.backgroundColor, spur: ps.borderTopColor, flaeche: ps.outlineColor }; p.remove();
+      return { /*BAUSTEINE*/ }; }"""
+    TOUR = TOUR.replace('/*BAUSTEINE*/', ', '.join(f"'{k}': ({v}).filter(Boolean)" for k, v in BAUSTEINE.items()))
+    REITER = r"""(i) => { const l = [...document.querySelectorAll('.r-inhalt [role=tablist]')].find((t) => t.offsetParent && !t.closest('dialog'));
+      const t = l ? [...l.querySelectorAll('[role=tab]')].filter((b) => b.offsetParent) : []; if (i >= 0 && t[i]) t[i].click(); return t.length; }"""
+    befund = {}
+    for breite, finger in ((1440, False), (390, True)):
+        tctx = br.new_context(viewport={'width': breite, 'height': 900 if breite > 500 else 844}, is_mobile=finger, has_touch=finger, locale='de-DE',
+                              timezone_id='Europe/Berlin', extra_http_headers={'X-Forwarded-For': '198.51.100.40'})
+        tp = tctx.new_page(); tp.on('pageerror', lambda e: fehler.append(f'{tp.url}: {e}'))
+        tp.goto(B + '/admin/'); tp.wait_for_selector('#screen-auth:not([hidden])')
+        tp.fill('#au-user', 'admin'); tp.fill('#pw1', PW); tp.click('#auth-submit'); tp.wait_for_selector('#screen-auth', state='hidden')
+        for name, bereich, pfad, warte, _ in SEITEN:
+            if not pfad.startswith('/module/'):
+                continue
+            tp.goto(B + pfad); tp.wait_for_selector(warte, timeout=20000); tp.wait_for_selector('.r-app.r-bereit', timeout=20000)
+            for i in range(max(tp.evaluate(REITER, -1), 1)):
+                if tp.evaluate(REITER, i):   # Reiter gewählt; die Daten liegen seit dem Laden der Seite vor, gezeichnet wird im nächsten Bild
+                    tp.wait_for_function(REITER.replace('if (i >= 0 && t[i]) t[i].click(); return t.length;', "return !!t[i] && t[i].getAttribute('aria-selected') === 'true';"), arg=i)
+                tp.evaluate('document.fonts.ready.then(() => new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r))))')
+                for k, v in tp.evaluate(TOUR, {'finger': finger}).items():
+                    befund.setdefault((k, breite, name), []).extend(v)
+        tctx.close()
+    for (k, breite, name), abw in sorted(befund.items()):
+        check(f'{name} {breite} px, alle Reiter: {TITEL[k]}', not abw, sorted(set(abw))[:5])
     # Fenster (Vorgabe des Inhabers 02.11.2026): auf jeder Seite schließt ein Klick neben ein <dialog> es nie, Escape schließt.
     # Jedes Fenster der Seite wird direkt geöffnet (Inhalt egal – geprüft wird das gemeinsame Verhalten), dann wird an einer
     # Stelle außerhalb geklickt (am Handy füllen manche Fenster den Bildschirm – dann nur Escape).
@@ -259,6 +342,14 @@ with sync_playwright() as pw:
     FENSTER_STIL = r'''(id) => { const d = document.getElementById(id), s = getComputedStyle(d);
       return d.classList.contains('modal') || id === 'r-palette' ? [id, getComputedStyle(d, '::backdrop').backdropFilter, s.borderTopLeftRadius, s.boxShadow] : null; }'''
     stile = {}
+    # Form jedes Fensters auf jeder Seite im Rahmen (C2): Schleier, Rundung je Ecke, Linie, Schatten, Lage, Kreuz zum Schließen
+    FENSTER_FORM = r'''(id) => { const d = document.getElementById(id); d.getAnimations().forEach((a) => a.finish()); if (document.activeElement) document.activeElement.blur();
+      const s = getComputedStyle(d), b = getComputedStyle(d, '::backdrop'), r = d.getBoundingClientRect();
+      const x = [...d.querySelectorAll('button[aria-label$="chließen"]')].find((e) => e.offsetParent), xr = x && x.getBoundingClientRect(), xs = x && getComputedStyle(x);
+      return { id, unschaerfe: b.backdropFilter, schleier: b.backgroundColor, rund: [s.borderTopLeftRadius, s.borderTopRightRadius, s.borderBottomRightRadius, s.borderBottomLeftRadius].join(' '),
+               schatten: s.boxShadow, linie: s.borderTopColor, lr: [Math.round(r.left), Math.round(r.right)],
+               kreuz: x ? [Math.round(xr.width), Math.round(xr.height), xs.borderTopLeftRadius, xs.backgroundColor].join(' ') : null }; }'''
+    formen = {}
     # Hinweise (Toasts) liegen über einem offenen Fenster (oberste Ebene, theme.js) – sonst lägen sie unter dem unscharfen Hintergrund
     TOAST_OBEN = r'''async () => { const t = document.querySelector('[role="status"].toast, [role="status"][class*="-toast"]');
       const d = document.querySelector('dialog[id]:not([open])'); if (!t || !d) return 'ohne';
@@ -277,12 +368,15 @@ with sync_playwright() as pw:
                 check(f'{name}: Hinweise (Toast) erscheinen über einem offenen Fenster', oben in (True, 'ohne'), oben)
             if breite == 1440 and (bereich or name == 'dashboard'):   # Suche (Strg K) wie jedes Fenster
                 pg.wait_for_selector('#r-suche'); pg.keyboard.press('Control+k'); pg.wait_for_selector('#r-palette[open]')
-                stile.setdefault(name, []).append(pg.evaluate(FENSTER_STIL, 'r-palette')); pg.keyboard.press('Escape')
+                stile.setdefault(name, []).append(pg.evaluate(FENSTER_STIL, 'r-palette'))
+                formen.setdefault((breite, name), []).append(pg.evaluate(FENSTER_FORM, 'r-palette')); pg.keyboard.press('Escape')
             per_klick, nicht_esc = [], []
             for i in ids:
                 p = pg.evaluate(FENSTER_AUF, i)
                 if p is None:
                     continue
+                if name != 'kundenseite':   # Kundenseite: eigenes Aussehen („Liquid Glass“)
+                    formen.setdefault((breite, name), []).append(pg.evaluate(FENSTER_FORM, i))
                 if breite == 1440 and bereich and pg.evaluate(FENSTER_STIL, i):
                     stile.setdefault(name, []).append(pg.evaluate(FENSTER_STIL, i))
                 if p != 'voll':
@@ -300,6 +394,28 @@ with sync_playwright() as pw:
     for name in ('angebot', 'verwaltung', 'bestand'):
         abw = [x for x in stile.get(name, []) if x[1:] != ref[1:]]
         check(f'{name}: Fenster und Suche wie im Rahmen ({len(stile.get(name, []))}: ohne Unschärfe, {ref[2]}, Schatten der Suche)', len(stile.get(name, [])) > 1 and not abw, (ref, abw[:4]))
+    # Alle Seiten im Rahmen, alle Fenster (Durchsicht 23.11.2026): Bezug ist die Suche des Dashboards (rahmen.css)
+    suche = next(f for f in formen[(1440, 'dashboard')] if f['id'] == 'r-palette')
+    for (breite, name), liste in sorted(formen.items()):
+        glas = [(f['id'], f['unschaerfe'], f['schleier']) for f in liste if f['unschaerfe'] != 'none' or f['schleier'] != suche['schleier']]
+        check(f'{name} {breite} px: Hintergrund jedes Fensters nur abgedunkelt wie bei der Suche, ohne Unschärfe ({len(liste)} Fenster)', not glas, glas[:4])
+        if breite == 390:   # am Handy jedes Fenster über die ganze Breite (Suche und Hinweis „Dashboard als Startseite“ schweben)
+            schmal = [(f['id'], f['lr']) for f in liste if f['id'] not in ('r-palette', 'db-sp') and (abs(f['lr'][0]) > 1 or abs(f['lr'][1] - 390) > 1)]
+            check(f'{name} 390 px: jedes Fenster so breit wie der Bildschirm', not schmal, schmal)
+        # eine Fensterform: PC 16 px mit Linie und Schatten der Suche; Handy Blatt von unten (20 px oben) oder ganz (0 px)
+        if breite == 1440:
+            anders = [(f['id'], f['rund'], f['linie'], f['schatten']) for f in liste if (f['rund'], f['linie'], f['schatten']) != (suche['rund'], suche['linie'], suche['schatten'])]
+        else:
+            anders = [(f['id'], f['rund']) for f in liste if f['id'] not in ('r-palette', 'db-sp') and f['rund'] not in ('20px 20px 0px 0px', '0px 0px 0px 0px')]
+        check(f'{name} {breite} px: Fenster in der Form des Rahmens', not anders, anders[:4])
+        kreuze = {f['kreuz'] for f in liste if f['kreuz']}
+        check(f'{name} {breite} px: Kreuz zum Schließen wie bei der Suche ({suche["kreuz"]})', kreuze <= {suche['kreuz']}, kreuze)
+    ctx, pg = neue_seite(1440, False)   # Menüs im Eingabebereich (Mehr, Drucken) wie Fenster und Suche
+    als_bereich(pg, 'angebot.eingabe'); pg.goto(B + '/admin/'); pg.wait_for_selector('#screen-editor:not([hidden])')
+    me = pg.evaluate("""() => { const m = document.querySelector('#menu-more'); m.hidden = false; const s = getComputedStyle(m);
+      const r = [s.borderTopLeftRadius, s.borderTopColor, s.boxShadow]; m.hidden = true; return r; }""")
+    check('Eingabebereich: Menü „Mehr“ in der Form der Fenster und der Suche', me == [suche['rund'].split(' ')[0], suche['linie'], suche['schatten']], (me, suche))
+    pg.unroute_all(behavior='ignoreErrors'); ctx.close()   # Statusabfrage noch unterwegs: Umleitung ohne Fehler beenden
     # Getippte Eingaben: erstes Escape zeigt den gemeinsamen Hinweis (theme.js), zweites schließt – hier am Formular
     # „Korrektur melden“ (HR) und „Neue Kampagne“ (Marketing) stellvertretend für alle Formularfenster
     ctx, pg = neue_seite(1440, False)
@@ -459,6 +575,12 @@ with sync_playwright() as pw:
         ton = lambda c: tuple(round(int(x) / 16) for x in re.findall(r'\d+', c or '')[:3])   # noqa: E731
         formen = {json.dumps({k: (ton(v) if k == 'farbe' else v) for k, v in (z or {}).items() if k in ('h', 'w', 'radius', 'font', 'icon', 'text', 'farbe')}, sort_keys=True) for z in je.values()}
         check(f'{breite} px: Zurück-Knopf auf allen Modulseiten gleich', len(formen) == 1, je)
+        # Kopf der Modulseiten (Container-Import und Versand aus den Bausteinen des Rahmens, die übrigen mit eigenem Kopf): „Start“ an
+        # derselben Stelle (± 3 px), daneben Symbol und Name gleich groß und mittig zum Knopf
+        mods = {n: z for n, z in je.items() if z and n not in ('angebot', 'verwaltung', 'bestand')}
+        ref = mods['hr']
+        abw = {n: (z['x'], z['y'], z['titel']) for n, z in mods.items() if abs(z['x'] - ref['x']) > 3 or abs(z['y'] - ref['y']) > 3 or z['titel'] != ref['titel'] or not z['titel'][2]}
+        check(f'{breite} px: Kopf aller Modulseiten gleich („Start“ an derselben Stelle, Symbol und Name daneben gleich groß, {len(mods)} Seiten)', len(mods) == 10 and not abw, (ref['x'], ref['y'], ref['titel'], abw))
     check('keine Seitenfehler', not fehler, fehler[:4])
     br.close()
 

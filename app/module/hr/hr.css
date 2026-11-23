@@ -109,10 +109,10 @@ body.hr .hr-kopf .brand-logo { height: 28px; width: auto; }
 .hr-fuss { padding: 0 8px; font-size: 13px; color: var(--hr-muted); }
 
 /* ── Bereiche (Reiter) ── */
-.hr-tabs { display: flex; gap: 4px; padding: 4px; margin-bottom: 24px; border-radius: 999px; background: var(--hr-aus); width: max-content; max-width: 100%; overflow-x: auto; scrollbar-width: none; }
-.hr-tabs button { display: inline-flex; align-items: center; gap: 6px; height: 36px; padding: 0 16px; border: 0; border-radius: 999px; background: none; color: var(--hr-muted);
+.hr-tabs { display: flex; gap: 4px; padding: 4px; margin-bottom: 24px; border-radius: 999px; background: var(--r-neutral-bg); width: max-content; max-width: 100%; overflow-x: auto; scrollbar-width: none; }
+.hr-tabs button { display: inline-flex; align-items: center; gap: 6px; height: 36px; padding: 0 16px; border: 0; border-radius: 999px; background: none; color: var(--r-text-2);
   font: inherit; font-size: 14px; font-weight: 600; cursor: pointer; white-space: nowrap; }
-.hr-tabs button[aria-selected="true"] { background: var(--hr-reiter-aktiv); color: var(--hr-text); box-shadow: 0 1px 3px rgba(0, 0, 0, .1); }
+.hr-tabs button[aria-selected="true"] { background: var(--r-flaeche); color: var(--r-text); box-shadow: var(--r-schatten-aktiv); }
 .hr-tabs button[hidden] { display: none; }
 .hr-zahl { min-width: 20px; height: 20px; padding: 0 6px; border-radius: 10px; background: var(--hr-akzent); color: #fff; font-size: 12px; line-height: 20px; text-align: center; box-sizing: border-box; }
 .hr-zahl[hidden] { display: none; }
@@ -131,9 +131,9 @@ body.hr .hr-kopf .brand-logo { height: 28px; width: auto; }
 
 /* ── Urlaubskonto ── */
 .hr-konto { display: grid; grid-template-columns: 1.4fr repeat(5, 1fr); gap: 12px; margin-bottom: 20px; }
-.hr-wert { padding: 16px 18px; border-radius: 22px; display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+.hr-wert { padding: 16px 18px; border-radius: 16px; display: flex; flex-direction: column; gap: 4px; min-width: 0; }
 .hr-wert b { font-size: 28px; font-weight: 700; letter-spacing: -.02em; font-variant-numeric: tabular-nums; }
-.hr-wert span { font-size: 13px; color: var(--hr-muted); }
+.hr-wert span { font-size: 13px; font-weight: 500; color: var(--r-leise); }
 .hr-wert small { font-size: 12px; color: var(--hr-warn); font-weight: 600; }
 .hr-wert.haupt b { font-size: 40px; color: var(--hr-akzent-ink); }
 .hr-wert.minus b { color: var(--hr-fehler); }
@@ -324,7 +324,7 @@ body.hr .hr-kopf .brand-logo { height: 28px; width: auto; }
 /* ── Tabellen ── */
 .hr-tabelle { width: 100%; border-collapse: collapse; font-size: 14px; }
 .hr-tabelle th, .hr-tabelle td { padding: 10px 14px; text-align: left; border-bottom: 1px solid var(--hr-linie); white-space: nowrap; }
-.hr-tabelle th { font-size: 12px; font-weight: 650; color: var(--hr-muted); text-transform: uppercase; letter-spacing: .04em; background: var(--hr-deckend); position: sticky; top: 0; }
+.hr-tabelle th { font-size: 11px; font-weight: 600; color: var(--r-leise); text-transform: uppercase; letter-spacing: .06em; background: var(--r-flaeche-2); position: sticky; top: 0; }
 .hr-tabelle td.zahl, .hr-tabelle th.zahl { text-align: right; font-variant-numeric: tabular-nums; }
 .hr-tabelle tr.aus td { opacity: .5; }
 .hr-tabelle tbody tr:hover td { background: var(--hr-aus); }
@@ -339,6 +339,7 @@ body.hr .hr-kopf .brand-logo { height: 28px; width: auto; }
 @media (max-width: 640px) {
   .hr-ueb th, .hr-ueb td { padding: 9px 10px; }
   .hr-ueb tbody tr:not(.abt) th, .hr-ueb thead th:first-child, .hr-ueb tfoot th { position: sticky; left: 0; z-index: 1; background: var(--hr-deckend); }   /* Name bleibt beim Wischen stehen */
+  .hr-ueb thead th:first-child { background: var(--r-flaeche-2); }   /* Kopfzelle wie die übrigen Tabellenköpfe */
 }
 .hr-ueb tfoot th, .hr-ueb tfoot td { font-weight: 700; border-bottom: 0; border-top: 2px solid var(--hr-linie); }
 .hr-ueb tfoot th { text-align: left; text-transform: none; letter-spacing: 0; font-size: 14px; color: var(--hr-text); background: none; position: static; }
@@ -362,10 +363,9 @@ body.hr .hr-kopf .brand-logo { height: 28px; width: auto; }
 .hr-filter select { width: auto; min-width: 200px; }
 
 /* ── Dialoge (schließen nur über die Knöpfe oder Esc) ── */
-.hr-dialog { width: min(560px, calc(100vw - 32px)); max-height: calc(100dvh - 32px); padding: 0; border: 1px solid var(--hr-rand); border-radius: 26px;
-  background: var(--hr-deckend); color: var(--hr-text); box-shadow: 0 30px 80px rgba(0, 0, 0, .3); }
+.hr-dialog { width: min(560px, calc(100vw - 32px)); max-height: calc(100dvh - 32px); padding: 0; border: 1px solid var(--r-linie-2); border-radius: 16px;
+  background: var(--hr-deckend); color: var(--hr-text); box-shadow: var(--r-schatten-menue); }
 .hr-dialog.breit { width: min(860px, calc(100vw - 32px)); }
-.hr-dialog::backdrop { background: rgba(20, 16, 16, .38); -webkit-backdrop-filter: blur(4px); backdrop-filter: blur(4px); }
 .hr-dialog form { padding: 24px; display: flex; flex-direction: column; gap: 14px; }
 /* Knopfreihe am Fensterende bleibt beim Scrollen langer Fenster sichtbar (wie in Sicherheit) */
 .hr-dialog form > .hr-knoepfe:last-child{ position:sticky; bottom:0; z-index:2; margin:0 -24px -24px; padding:8px 24px 24px; background:var(--hr-deckend) }
@@ -430,7 +430,7 @@ body.hr .hr-kopf .brand-logo { height: 28px; width: auto; }
   .hr-konto { grid-template-columns: 1fr 1fr; gap: 8px; }
   .hr-konto > :last-child:nth-child(odd) { grid-column: 1 / -1; }   /* wie CRM und Marketing: eine letzte Karte über die volle Breite */
   .hr-wert.haupt { grid-column: span 2; }
-  .hr-wert { padding: 12px 14px; border-radius: 18px; }
+  .hr-wert { padding: 12px 14px; }
   .hr-wert b { font-size: 22px; }
   .hr-wert.haupt b { font-size: 34px; }
   .hr-karte { padding: 18px; border-radius: 22px; }
@@ -472,7 +472,7 @@ body.hr .hr-kopf .brand-logo { height: 28px; width: auto; }
 .hr-gleit-zelle:hover { background: var(--hr-aus-hover); }
 .hr-dialog-gleit { width: min(640px, calc(100vw - 32px)); }
 .hr-konto.klein { grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; margin: 4px 0 14px; }
-.hr-konto.klein .hr-wert { padding: 10px 12px; border-radius: 14px; background: var(--hr-aus); }
+.hr-konto.klein .hr-wert { padding: 10px 12px; background: var(--hr-aus); }
 .hr-konto.klein .hr-wert b, .hr-konto.klein .hr-wert.haupt b { font-size: 22px; }
 .hr-gleit-h { margin: 18px 0 4px; font-size: 15px; }
 #gleit-liste li { gap: 6px 10px; padding: 9px 0; }
@@ -487,7 +487,7 @@ body.hr .hr-kopf .brand-logo { height: 28px; width: auto; }
 }
 /* Fenster am Handy als Blatt von unten – wie in Controlling, Leergut, QS, REWE und Sicherheit */
 @media (max-width: 560px) {
-  .hr-dialog, .hr-dialog.breit, .hr-dialog-gleit { width: 100vw; max-width: 100vw; max-height: 94dvh; margin: auto 0 0; border-radius: 22px 22px 0 0; border-bottom: 0; }
+  .hr-dialog, .hr-dialog.breit, .hr-dialog-gleit { width: 100vw; max-width: 100vw; max-height: 94dvh; margin: auto 0 0; border-radius: 20px 20px 0 0; border-bottom: 0; }
 }
 
 /* ── Jahresplanung (03.11.2026) ──
@@ -555,6 +555,8 @@ body.hr .hr-kopf .brand-logo { height: 28px; width: auto; }
   .hr-zusatz { min-height: 40px; }
   .hr-chip, .hr-modus button { height: 36px; }   /* Abteilungen, Monat / ± 2 Wochen */
   details > summary { min-height: 36px; display: flex; align-items: center; }
+  .hr-tabelle .btn, .hr-liste .btn { height: 36px; }
+  .hr-check input[type="checkbox"] { width: 20px; height: 20px; }
 }
 /* Blättern (Jahr, Monat): Titel schmaler, damit „Weiter“ neben dem Titel bleibt statt allein in die nächste Zeile zu rutschen */
 @media (max-width: 560px) {
@@ -703,7 +705,6 @@ li.hr-jp-leer { grid-column: 1 / -1; padding: 6px 0; }
   .hr-jp-zahlen { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
   .hr-jp-zahlen .hr-wert.haupt { grid-column: 1 / -1; }
   .hr-jp-zahlen .hr-wert:not(.haupt) { padding: 10px 12px; }
-  .hr-jp-zahlen .hr-wert span { font-size: 12px; }
   .hr-jp-aktionen .btn { flex: 1 1 100%; justify-content: center; }
   .hr-jp-zl { --jp-name: 128px; min-width: 760px; }
   .hr-jp-name { padding: 5px 8px; }

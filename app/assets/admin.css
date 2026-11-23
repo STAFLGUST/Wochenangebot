@@ -10,7 +10,7 @@
 .auth-back { font-size: 12.5px; color: var(--muted); text-align: center; }
 /* Sonderposten-Dialog: Hinweiskästen und Abschnitte nicht aneinanderkleben */
 .btn.wide { width: 100%; justify-content: center; height: 42px; }
-.form-err { margin: 0; min-height: 0; color: var(--accent); font-size: 13px; }
+.form-err { margin: 0; color: var(--accent); font-size: 13px; }   /* kein min-height: 0 – im scrollenden Raster fiel die Zeile sonst auf 0 */
 .form-err:empty { display: none; }
 
 /* Formularfelder */
@@ -1201,7 +1201,7 @@ body.ro .sale-tag { cursor: default; }
   .adm-top .save-state { grid-column: 1 / -1; grid-row: 2; }
 }
 @media (max-width: 1360px) {
-  .adm-top .actions .btn:not(.primary):not(#btn-drucken) .lbl { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+  .adm-top .actions .btn:not(.primary):not(.mit-text) .lbl { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
 }
 @media (max-width: 480px) { .adm-top .brand > div:not(.brand-mark) { display: none; } }
 /* Angebots-Host am Handy: Zurück-Knopf und sechs Aktionen füllen die Kopfzeile – das Logo läge sonst verdeckt darunter */
@@ -2011,8 +2011,7 @@ dialog.modal.ez-pick { width: min(1280px, calc(100vw - 32px)); height: min(860px
     --nav-akzent: #a3202f;
     --punkt-ok: #1f9a55;
     --blob-a: rgba(143, 167, 196, .2); --blob-b: rgba(226, 165, 74, .17); --blob-c: rgba(63, 122, 90, .14);
-    --r-glas: 28px;     /* große Karten, Navigation, Fenster */
-    --r-glas-2: 22px;   /* Leisten und kleine Karten */
+    --r-glas: 28px;     /* Karten, Leisten, Navigation, Fenster (im Rahmen 16 px, siehe unten) */
   }
 }
 @media screen and (prefers-color-scheme: dark) {
@@ -2096,7 +2095,7 @@ dialog.modal.ez-pick { width: min(1280px, calc(100vw - 32px)); height: min(860px
     box-shadow: inset 0 1px 0 var(--glas-glanz), var(--glas-schatten);
   }
   body.adm :is(.gcard, .np-card) { border-radius: var(--r-glas); }
-  body.adm :is(.meta-card, .offer-bar, .st-info, .sec-score, .ed-empty) { border-radius: var(--r-glas-2); }
+  body.adm :is(.meta-card, .offer-bar, .st-info, .sec-score, .ed-empty) { border-radius: var(--r-glas); }
   body.adm .sec-card { border-radius: 18px; }
   body.adm .sec-card.bad, body.adm .sec-score.bad { border-color: #f1b4b4; }
   body.adm .st-info.old { border-color: var(--c-aged); }
@@ -2138,7 +2137,6 @@ dialog.modal.ez-pick { width: min(1280px, calc(100vw - 32px)); height: min(860px
     background: var(--primaer); color: var(--primaer-text, #fff); border: 0; font-weight: 600; box-shadow: var(--primaer-schatten);
   }
   body.adm .btn.primary:hover:not(:disabled) { background: var(--primaer-hover, linear-gradient(180deg, #8f1c29, #6e1520)); }
-  body.adm .adm-page .btn.primary, body.adm dialog .btn.primary { box-shadow: inset 0 1px 0 rgba(255, 255, 255, .3), 0 3px 10px rgba(140, 29, 44, .22); }
   body.adm .topbar .btn.primary { padding: 0 20px; }
   body.adm .save-state { font-size: 14px; color: var(--muted); }
   body.adm .save-state.saved .dot { background: var(--punkt-ok); }
@@ -2215,13 +2213,13 @@ dialog.modal.ez-pick { width: min(1280px, calc(100vw - 32px)); height: min(860px
 
   /* Werkzeugleiste unter der Kopfzeile: klebende Glasleiste */
   body.adm .ed-toolbar {
-    top: calc(var(--header-h) + 8px); background: var(--glas-kopf); border: 1px solid var(--glas-rand); border-radius: var(--r-glas-2);
+    top: calc(var(--header-h) + 8px); background: var(--glas-kopf); border: 1px solid var(--glas-rand); border-radius: var(--r-glas);
     box-shadow: inset 0 1px 0 var(--glas-glanz), var(--glas-schatten); padding: 8px 10px; margin: 18px 0 16px;
   }
   body.adm .ed-toolbar .search input { height: 40px; }
   /* 22 px statt 999 px: einzeilig sieht die Leiste gleich aus, umbrochen (schmale Fenster) bleibt sie ein Rechteck mit
      runden Ecken statt eines Ovals, aus dem die Pillen herausragen */
-  body.adm .sec-nav { top: calc(var(--topbar-h, 60px) + 8px); background: var(--glas-kopf); border: 1px solid var(--glas-rand); border-radius: var(--r-glas-2); box-shadow: inset 0 1px 0 var(--glas-glanz), var(--glas-schatten); }
+  body.adm .sec-nav { top: calc(var(--topbar-h, 60px) + 8px); background: var(--glas-kopf); border: 1px solid var(--glas-rand); border-radius: var(--r-glas); box-shadow: inset 0 1px 0 var(--glas-glanz), var(--glas-schatten); }
   body.adm .sec-nav a { border-radius: 999px; border: 0; background: var(--aus); }
   body.adm .sec-nav a:hover { background: var(--glas-stark); }
 
@@ -2234,7 +2232,7 @@ dialog.modal.ez-pick { width: min(1280px, calc(100vw - 32px)); height: min(860px
   body.adm .ob-o[aria-selected="true"] .ob-n { color: var(--text); }   /* Schrift der Seitenleiste nie rot (Inhaber); Markierung über Fläche und Zähler */
   body.adm .ob-z { background: var(--aus); color: var(--text-2); }   /* Zähler: Kontrast ≥ 4,5:1 auf dem Glas */
   body.adm .ob-o[aria-selected="true"] .ob-z { background: var(--accent); color: #fff; }
-  body.adm .ed-head { background: var(--glas-karte); border: 1px solid var(--glas-rand); box-shadow: inset 0 1px 0 var(--glas-glanz), var(--glas-schatten); border-radius: var(--r-glas-2); padding: 12px 18px; }
+  body.adm .ed-head { background: var(--glas-karte); border: 1px solid var(--glas-rand); box-shadow: inset 0 1px 0 var(--glas-glanz), var(--glas-schatten); border-radius: var(--r-glas); padding: 12px 18px; }
   body.adm .ed-head .meta-card { background: none; border: 0; box-shadow: none; padding: 0; border-radius: 0; }
   body.adm .ed-chip { background: var(--aus); }
 
@@ -2248,7 +2246,6 @@ dialog.modal.ez-pick { width: min(1280px, calc(100vw - 32px)); height: min(860px
   body.adm .menu button:hover, body.adm .menu button:focus-visible { background: var(--aus); }
   body.adm .menu hr { border-top-color: var(--linie); }
   body.adm dialog.modal { background: var(--glas-fenster); border: 1px solid var(--glas-rand); border-radius: var(--r-glas); box-shadow: inset 0 1px 0 var(--glas-glanz), 0 24px 64px rgba(20, 12, 10, .22); }
-  body.adm dialog::backdrop { background: rgba(28, 22, 20, .3); -webkit-backdrop-filter: blur(6px); backdrop-filter: blur(6px); }
   body.adm .dlg-head { padding: 22px 24px 14px; border-bottom-color: var(--linie); }
   body.adm .dlg-head h2 { font-size: 20px; font-weight: 700; letter-spacing: -.02em; }
   body.adm .dlg-body { padding: 18px 24px; }
@@ -2299,13 +2296,12 @@ dialog.modal.ez-pick { width: min(1280px, calc(100vw - 32px)); height: min(860px
   body.adm .ez-top h2 { font-size: 28px; }
 }
 @media screen and (max-width: 640px) {
-  body.adm { --r-glas: 22px; --r-glas-2: 18px; }
   body.adm dialog.modal, body.adm dialog.modal.wide { border-radius: 20px 20px 0 0; border-bottom: 0; }   /* Blatt am Handy wie im Versand */
   body.adm dialog.modal.ez-pick { border-radius: 0; }
   body.adm .dlg-head { padding: 20px 18px 12px; }
   body.adm .dlg-body { padding: 16px 18px; }
   body.adm .dlg-foot { padding: 12px 18px 18px; }
-  body.adm .ed-toolbar { border-radius: var(--r-glas-2); }
+  body.adm .ed-toolbar { border-radius: var(--r-glas); }
   body.adm .meta-card { padding: 16px; }
   body.adm .gcard.sec-form, body.adm .gcard.sec-block { padding: 14px 16px; }
   body.adm .ez-top h2 { font-size: 24px; }
@@ -2322,8 +2318,7 @@ dialog.modal.ez-pick { width: min(1280px, calc(100vw - 32px)); height: min(860px
   body.adm .auth-back { display: inline-flex; align-items: center; justify-content: center; min-height: 36px; }
   /* Tippfläche ≥ 36 px ohne höhere Zeile (Polster nach außen wie .dlg .link-btn in app.css): Bestand in der Artikelzeile
      (öffnet Partien und Zugänge, vorher 26 px) und „Zum Versand →“ (vorher 17 px) */
-  body.adm .etab .e-bst { padding-block: 9px; margin-block: -9px; }
-  body.adm .save-state .link-btn { padding-block: 10px; margin-block: -10px; }
+  body.adm :is(.etab .e-bst, .save-state .link-btn) { padding-block: var(--r-tipp-polster); margin-block: calc(-1 * var(--r-tipp-polster)); }
 }
 /* Angebote als Karten (schmal): Standardzeile einheitlich hinterlegt statt Streifen je Zelle (Zellen haben dort
    unterschiedliche Breiten und Abstände); Zeilenhervorhebung unter dem Finger ebenso nur für die ganze Karte */
@@ -2345,7 +2340,7 @@ dialog.modal.ez-pick { width: min(1280px, calc(100vw - 32px)); height: min(860px
   body.adm .topbar .btn.icon { width: 36px; height: 36px; }
 }
 @media screen and (max-width: 1180px) {   /* nur Symbole – „Drucken“ behält bis 860 px seine Beschriftung (Regel bei 1360 px) und damit seine Breite */
-  body.adm .topbar .btn:not(.primary):not(.icon):not(#btn-drucken) { width: 40px; padding: 0; justify-content: center; }
+  body.adm .topbar .btn:not(.primary):not(.icon):not(.mit-text) { width: 40px; padding: 0; justify-content: center; }
 }
 
 /* ---------- Vorschau im Eingabebereich (Fenster mit der Angebotsseite) ---------- */
@@ -2455,15 +2450,15 @@ dialog.modal.pv { width: min(1480px, calc(100vw - 32px)); height: calc(100dvh - 
     --bg: var(--r-grund);
     --glas: var(--r-flaeche); --glas-kopf: var(--r-grund); --glas-karte: var(--r-flaeche); --glas-stark: var(--r-flaeche); --glas-fenster: var(--r-flaeche);
     --glas-rand: var(--r-linie); --glas-glanz: transparent; --glas-schatten: var(--r-schatten); --glas-filter: none;
-    --r-glas: 16px; --r-glas-2: 16px;   /* Karten, Leisten und Fenster rund wie im Rahmen (.r-karte, Suche) */
+    --r-glas: 16px;   /* Karten, Leisten und Fenster rund wie im Rahmen (.r-karte, Suche) */
     /* Hauptknöpfe flach in der Akzentfarbe des Rahmens (wie Versand und Anmeldung): kein Verlauf, kein Glühschatten */
     --primaer: var(--r-akzent); --primaer-hover: var(--r-akzent-hover); --primaer-text: var(--r-akzent-ink); --primaer-schatten: none;
   }
-  body.adm.r :is(.adm-page, dialog) .btn.primary { box-shadow: none; }
-  /* Fenster wie die Suche (Strg K) und der Versand: deckend, 16 px (--r-glas), Schatten der Menüs, Hintergrund nur
-     abgedunkelt – ohne Unschärfe (gilt auch für die Suche, deren eigene Regel in rahmen.css sonst gegen diese verliert) */
+  /* Fenster wie die Suche (Strg K) und der Versand: deckend, 16 px (--r-glas), Schatten der Menüs; den Hintergrund ohne
+     Unschärfe setzt rahmen.css für jede Seite im Rahmen (body.r dialog::backdrop) */
   body.adm.r dialog.modal { border-color: var(--r-linie-2); box-shadow: var(--r-schatten-menue); }
-  body.adm.r dialog::backdrop { background: var(--r-schleier); -webkit-backdrop-filter: none; backdrop-filter: none; }
+  body.adm.r .menu { border-color: var(--r-linie-2); border-radius: 16px; box-shadow: var(--r-schatten-menue); }   /* Menüs wie Fenster und Suche */
+  body.adm.r .menu button { border-radius: 9px; }
   body.adm.r::before { display: none; }
   body.adm.r .topbar { padding: 0; }
   body.adm.r .topbar-inner { max-width: none; border-radius: 0; padding: 12px 24px; }
