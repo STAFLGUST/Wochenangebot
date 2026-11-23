@@ -447,7 +447,7 @@ body.crm { --crm-mhd-vorbei-bg: #d9d6d2; --crm-mhd-vorbei-fg: #1f1d1a; --crm-mhd
 /* ── Cockpit (cockpit.js): Mein Cockpit, Master-Cockpit mit Umschalter (Auftrag des Inhabers 01.11.2026) ── */
 .crm-ck-titel { align-items: flex-end; }
 .crm-ck-titel p { margin-top: 6px; }
-.crm-ck-kicker { display: block; margin-bottom: 4px; font-size: 12px; font-weight: 650; letter-spacing: .08em; text-transform: uppercase; color: var(--crm-modul); }
+.crm-ck-kicker { display: block; margin-bottom: 4px; font-size: 12px; font-weight: 650; letter-spacing: .08em; text-transform: uppercase; color: var(--crm-muted); }   /* Modulfarbe nur an Symbolen (C2) */
 .crm-ck-wahl { margin-left: auto; display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
 .crm-ck-wahl select { width: auto; min-width: 220px; height: 38px; border-radius: 12px; font-size: 14px; }
 .crm-ck-vtwahl { flex-direction: row !important; }
@@ -500,7 +500,6 @@ a.crm-ck-tel { color: var(--crm-text); }
 /* ── Kunden-Pop-up: Kopf mit Reitern, Übersicht ── */
 .crm-ku .crm-dkopf { display: grid; grid-template-columns: minmax(0, 1fr) auto auto; gap: 10px 12px; align-items: start; padding-bottom: 12px; }
 .crm-dkopf-text { min-width: 0; }
-.crm-dkopf-text .crm-ck-kicker { color: var(--crm-muted); }
 .crm-dkopf-aktionen { display: flex; gap: 8px; flex-wrap: wrap; justify-content: flex-end; }
 .crm-dkopf-aktionen .btn { height: 38px; display: inline-flex; align-items: center; text-decoration: none; }
 .crm-ku-reiter { grid-column: 1 / -1; justify-self: start; max-width: 100%; overflow-x: auto; scrollbar-width: none; }
