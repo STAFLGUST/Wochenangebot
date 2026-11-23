@@ -530,9 +530,17 @@ Teilaktualisierungen dasselbe Ergebnis liefern wie ein Neuzeichnen. Messen mit P
     `data-pflicht` (Passwort über den Link aus der E-Mail).
   - Knopfreihe: Nebenaktionen links, „Abbrechen“/„Schließen“, die Hauptaktion (`btn primary`) ganz rechts. „Schließen“ ist
     nie ein Hauptknopf. Die Knopfreihe am Ende eines Formularfensters bleibt beim Scrollen sichtbar (`position: sticky`).
-  - Hauptknopf überall in der gemeinsamen Farbe aus `app.css` (hell Bordeaux, dunkel Rosa mit dunkler Schrift); Initialen
-    im Kopf immer auf Bordeaux (`#8c1d2c`).
-  - Am Handy (≤ 560 px) öffnen Fenster als Blatt von unten (volle Breite, oben gerundet).
+  - Hauptknopf überall in der Akzentfarbe des Rahmens (`rahmen.css`: `body.r .btn.primary` mit `--r-akzent`, hell
+    Bordeaux, dunkel `#b23a4b` mit weißer Schrift – wie Container-Import und Versand); Initialen im Kopf immer auf Bordeaux.
+  - Am Handy (≤ 560 px) öffnen Fenster als Blatt von unten (volle Breite, oben 20 px gerundet; große Fenster ganz).
+  - **Eine Form je Baustein auf allen Seiten im Rahmen** (Durchsicht 23.11.2026, Gruppe `einheit` misst jede Modulseite in
+    jedem Reiter, PC 1440 und Handy 390 mit Finger): Fenster 16 px rund mit Linie `--r-linie-2` und Schatten
+    `--r-schatten-menue`, Hintergrund nur abgedunkelt (`--r-schleier`, eine Regel `body.r dialog::backdrop` in `rahmen.css`,
+    keine Unschärfe); Kreuz 36 px, 9 px rund, ohne Füllung (`rahmen.css`, erkannt an `aria-label` „…schließen“);
+    Reiterleiste als Kapsel mit Spur `--r-neutral-bg`, Reiter 36 px, 14 px/600, gewählt `--r-flaeche`; Tabellenköpfe 11 px/600
+    in Großbuchstaben, `--r-leise` auf `--r-flaeche-2` (am Handy ebenso die Beschriftungen der Karten-Tabellen,
+    `td[data-label]::before`); Kennzahl-Kacheln 16 px rund, Beschriftung 13 px/500 in normaler Schreibweise (`--r-leise`);
+    Knöpfe als Kapsel. Module setzen diese Werte in ihren eigenen Regeln bzw. im Abschnitt „Rahmen „C2““ ihres Stylesheets.
   - Folgenreiche Schritte (Löschen, Zurückziehen, Verwerfen) fragen im eigenen Fenster nach; der Fokus liegt auf „Abbrechen“,
     Escape heißt „nein“.
   - Aufklappmenüs aus `<details>` bekommen `data-menue`: `theme.js` schließt sie mit Escape (Fokus zurück auf den Titel)
@@ -559,7 +567,7 @@ Teilaktualisierungen dasselbe Ergebnis liefern wie ein Neuzeichnen. Messen mit P
   eingesetzt: Werte vorher mit `esc()` maskieren.
 - `toast(msg, ms = 3200)` → `#toast` (`role="status"`, `aria-live="polite"`). Jeder Toast einer Seite (`[role=status]`
   mit Klasse `toast` bzw. `…-toast`) liegt als Popover in der obersten Ebene; `theme.js` holt ihn beim Öffnen eines Fensters
-  erneut nach oben, damit er nicht hinter dem unscharfen Hintergrund verschwindet (Prüfung in `einheit`). Neue Toasts
+  erneut nach oben, damit er nicht hinter dem abgedunkelten Hintergrund verschwindet (Prüfung in `einheit`). Neue Toasts
   deshalb mit `role="status"` und einer Klasse auf `-toast`, unsichtbar über `opacity: 0; pointer-events: none`.
 - `aria-labelledby` jedes Dialogs zeigt auf die `<h2>` im Kopf.
 
@@ -800,8 +808,10 @@ Glas; Modulfarben nur an den Symbolen.
   jeder Seite mit Leiste. Ziele: freie Anwendungen der Leiste plus `suche()`; Umlaute und ß werden beim Vergleich
   vereinheitlicht. Nur Sprünge – Rechte prüft das Ziel.
 - **Aufbau einer Seite:** `<body class="… r">`, darin `<div class="r-app"><nav class="r-leiste" id="r-leiste"
-  aria-label="Hauptnavigation" hidden></nav><div class="r-inhalt">…</div></div>`; Inhalt in `.r-seite` (max. 1120 px),
-  Kopf als `.r-seitenkopf` mit `h1`, `.r-unterzeile` und `.r-aktionen` (runde Knöpfe `.r-rund`).
+  aria-label="Hauptnavigation" hidden></nav><div class="r-inhalt">…</div></div>`; Inhalt in `.r-seite` (Startseite max.
+  1120 px mittig; Modulseiten mit `data-rahmen` volle Breite mit 24 px Rand wie die übrigen Module), Kopf als
+  `.r-seitenkopf` mit `h1`, `.r-unterzeile` und `.r-aktionen` (runde Knöpfe `.r-rund`); auf Modulseiten Name 22 px (Handy
+  18 px) in einer Zeile mit „Start“ und dem Stand daneben.
 - **Modulseiten ohne eigenes Skript:** `<body class="<präfix> r" data-rahmen="<modul-id>">` – `rahmen.js` holt dann `status`
   und `module_status` selbst (beide auf jedem Modul-Host erlaubt, GR-109: `wartung_frei` des Plattformkerns), zeichnet die
   Leiste mit dem eigenen Modul als aktiv, Start = `user.dashboard` (nur `https:`) bzw. `/dashboard/` außerhalb von
@@ -826,7 +836,9 @@ Glas; Modulfarben nur an den Symbolen.
   Wirkung (werden übergangen).
 - **„Start“** (gemeinsamer Knopf `.stafl-zurueck`, Beschriftung „Start“) bleibt im Kopf jeder Modulseite; im Rahmen ruhig mit
   feiner Linie (36 px). Seiten mit dem Seitenkopf `.r-seitenkopf` (Versand, Container-Import) setzen ihn nicht selbst:
-  `rahmen.js` (`startKnopf`) stellt ihn über den Titel, Ziel wie der Eintrag „Start“ der Leiste (nicht auf der Startseite).
+  `rahmen.js` (`startKnopf`) stellt ihn vor den Titel und das Symbol der Anwendung (Registersymbol, Farbe über
+  `data-symbol`) vor den Namen; Ziel wie der Eintrag „Start“ der Leiste (nicht auf der Startseite). Die Gruppe `einheit`
+  vergleicht Lage von „Start“ und Größe des Namens auf allen Modulseiten.
 - **Unter 900 px** setzt `rahmen.js` eine Kopfzeile mit Menüknopf (`#r-menue`, `aria-expanded`) vor den Inhalt; die
   Leiste wird zum Menü (unsichtbar und nicht per Tab erreichbar, solange zu). Escape, Klick daneben oder Tab aus dem
   Menü schließt es; bewegt wird sie nur beim Öffnen/Schließen (`r-bewegung`), nicht beim Wechsel der Fensterbreite.
@@ -889,7 +901,9 @@ Registersymbole (`icon` in `regeln/module.toml`) über `ICON` in `dashboard.js` 
 - **Fingerbedienung auf allen Seiten im Rahmen** (`rahmen.css`, Prüfung am Handy 10.11.2026): Eingabefelder, Auswahlen
   und Textfelder haben bei `pointer: coarse` mindestens 16 px Schrift (sonst zoomt iOS beim Antippen hinein; Kundenseite
   ebenso in `app.css`), `.btn.sm` ist 36 px hoch. Module ergänzen eigene kleine Knöpfe (Chips, Segmente, Sortierköpfe,
-  Namen-Links, Telefonnummern, `summary`) in ihrem Stylesheet auf ≥ 32–36 px. Kennzahlen-Beschriftungen am Handy ≥ 11 px,
+  Namen-Links, Telefonnummern, `summary`) in ihrem Stylesheet auf ≥ 32–36 px, Kästchen auf 20 px; kleine Verweise in einer
+  Zeile bekommen Polster nach außen (`padding-block: var(--r-tipp-polster)` mit gleich großem negativem Rand – die Zeile bleibt
+  gleich hoch). Die Gruppe `einheit` misst Tippflächen (≥ 32 px) und Kästchen (≥ 20 px) in jedem Reiter. Kennzahlen-Beschriftungen am Handy ≥ 11 px,
   Fußnoten ≥ 11,5 px. In Karten-Tabellen (`tr` als Raster) laufen Hinweiszeilen mit `colspan` über die ganze Breite
   (`td[colspan] { grid-column: 1 / -1 }`).
   Texte nennen keine Richtung („links“, „rechts“), die am Handy nicht stimmt – stattdessen „aus der Liste“.
