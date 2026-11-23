@@ -105,6 +105,12 @@ ARTIKELWAHL = r'''() => { const d = document.querySelector('#dlg-ez-pick'), i = 
 KACHELN = r'''() => [...document.querySelectorAll('.rl-kachel')].filter((k) => k.offsetParent).map((k) => { const n = k.querySelector('.rl-kachel-n'), r = document.createRange();
   r.selectNodeContents(n); const t = r.getBoundingClientRect(), kb = k.getBoundingClientRect(); return [n.textContent.trim(), Math.round(t.left - kb.left), Math.round(kb.right - t.right)]; })
   .filter((x) => x[1] < 0 || x[2] < 0)'''
+# Hauptknöpfe (sichtbar, auch in Seiten aus den Bausteinen): Fläche und Schrift wie --r-akzent / --r-akzent-ink (Probe-Element)
+HAUPTKNOPF = r'''() => { const p = document.createElement('i'); p.style.cssText = 'background-color:var(--r-akzent);color:var(--r-akzent-ink)'; document.body.append(p);
+  const soll = [getComputedStyle(p).backgroundColor, getComputedStyle(p).color]; p.remove();
+  const k = [...document.querySelectorAll('.btn.primary, .ci-knopf.primaer, .vs-knopf.primaer')].filter((b) => b.offsetParent);
+  return { n: k.length, soll, abw: k.filter((b) => { const s = getComputedStyle(b); return s.backgroundColor !== soll[0] || s.color !== soll[1]; })
+    .map((b) => (b.id || b.textContent.trim().slice(0, 20)) + ' ' + getComputedStyle(b).backgroundColor + ' ' + getComputedStyle(b).color).slice(0, 4) }; }'''
 # Pfeil: Form des Symbols (aus dem Sprite der Seite über <use> oder vom Rahmen direkt gezeichnet)
 ZURUECK = r'''() => { const e = document.querySelector('.stafl-zurueck'); if (!e || !e.offsetParent) return null; const s = getComputedStyle(e), r = e.getBoundingClientRect();
   const svg = e.querySelector('svg'), use = svg && svg.querySelector('use'), form = use ? document.querySelector(use.getAttribute('href')) : svg;
@@ -188,6 +194,9 @@ with sync_playwright() as pw:
                     if bereich:   # Eingabebereich im Rahmen „C2“: Hauptknöpfe flach wie im Versand – kein Verlauf, kein Glühschatten
                         glanz = pg.evaluate("[...document.querySelectorAll('.btn.primary')].filter((b) => b.offsetParent).map((b) => [b.textContent.trim().slice(0, 24), getComputedStyle(b).backgroundImage, getComputedStyle(b).boxShadow]).filter((x) => x[1] !== 'none' || x[2] !== 'none')")
                         check(f'{teil} {tag}: Hauptknöpfe flach (ohne Verlauf und Schatten)', not glanz, glanz)
+                    if dunkel and name != 'dashboard':   # Hauptknopf im dunklen Design überall wie Versand und Container-Import (weiße Schrift)
+                        hk = pg.evaluate(HAUPTKNOPF)
+                        check(f'{teil} {tag}: Hauptknöpfe in der Akzentfarbe des Rahmens ({hk["n"]})', not hk['abw'], hk)
                     if not dunkel:
                         ohne = pg.evaluate("[...document.querySelectorAll('input[placeholder]')].filter((e) => e.offsetParent && getComputedStyle(e).textOverflow !== 'ellipsis').map((e) => e.id || e.name || e.placeholder).slice(0, 6)")
                         check(f'{teil} {tag}: lange Platzhalter enden mit „…“', not ohne, ohne)

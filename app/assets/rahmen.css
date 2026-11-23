@@ -253,6 +253,11 @@ body.r .stafl-zurueck.kompakt { width: 36px; padding: 0; }
 body.r .r-seitenkopf a.stafl-zurueck { color: var(--r-text-2); }
 body.r .r-seitenkopf a.stafl-zurueck:hover { color: var(--r-text); }
 
+/* ── Hauptknopf (.btn.primary aus app.css) auf jeder Seite im Rahmen in der Akzentfarbe des Rahmens: im dunklen Design wie
+   Container-Import, Versand und Eingabebereich (--r-akzent mit weißer Schrift) statt Rosa mit dunkler Schrift; hell gleich ── */
+body.r .btn.primary { background: var(--r-akzent); border-color: var(--r-akzent); color: var(--r-akzent-ink); }
+body.r .btn.primary:hover { background: var(--r-akzent-hover); border-color: var(--r-akzent-hover); }
+
 /* ── Bausteine für Seiten im Rahmen ── */
 .r-seite { box-sizing: border-box; width: 100%; max-width: 1120px; margin: 0 auto; padding: 32px 40px 56px; display: flex; flex-direction: column; gap: 28px; }
 .r-seitenkopf { display: flex; flex-wrap: wrap; align-items: flex-start; justify-content: space-between; gap: 16px; }
