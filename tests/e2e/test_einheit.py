@@ -345,13 +345,15 @@ with sync_playwright() as pw:
       euro: F.euro(1234.5), euroNeg: F.euro(-3.456), euroNull: F.euro(0), leer: F.euro(null), kachel: F.euroKachel(123456789), kachelKlein: F.euroKachel(9876543.21),
       kg: F.kg(1782.5), kgSumme: F.kgSumme(1782.5), kgKlein: F.kgSumme(12.34), preis: F.euroKg(12.3), preis3: F.euroKg(12.345), preisCent: F.euroKg(4.125),
       prozent: F.prozent(0.1234), plus: F.veraenderung(0.05), minus: F.veraenderung(-0.05), null: F.veraenderung(0), pp: F.pp(0.012),
-      diff: F.differenz(0.5, '€/kg'), datum: F.datum('2026-11-02'), zeit: F.datumZeit('2026-11-02T13:05:00Z'), kw: F.kw(45, 2026) }; }''')
+      diff: F.differenz(0.5, '€/kg'), datum: F.datum('2026-11-02'), zeit: F.datumZeit('2026-11-02T13:05:00Z'), kw: F.kw(45, 2026),
+      glatt: F.glatt ? [1.005 * 100, 4.245 * 100, 2.675 * 100, -1.005 * 100, -100.5, 100.4].map(F.glatt).join(' ') : 'fehlt' }; }''')
     ERWARTET = {'euro': '1.234,50 €', 'euroNeg': '−3,46 €', 'euroNull': '0,00 €', 'leer': '—', 'kachel': '123,46 Mio. €', 'kachelKlein': '9.876.543,21 €',
                 'kg': '1.782,50 kg', 'kgSumme': '1.783 kg', 'kgKlein': '12,3 kg', 'preis': '12,30 €/kg', 'preis3': '12,35 €/kg', 'preisCent': '4,13 €/kg',
                 'prozent': '12,3 %', 'plus': '+5,0 %', 'minus': '−5,0 %', 'null': '±0,0 %', 'pp': '+1,2 Pp',
-                'diff': '+0,50 €/kg', 'datum': '02.11.2026', 'zeit': '02.11.2026, 14:05', 'kw': 'KW 45/2026'}
+                'diff': '+0,50 €/kg', 'datum': '02.11.2026', 'zeit': '02.11.2026, 14:05', 'kw': 'KW 45/2026',
+                'glatt': '101 425 268 -101 -101 100'}   # wie PHP round(): Cent ohne Binärfehler, halbe von der Null weg
     abw = {k: (FORMATE.get(k), v) for k, v in ERWARTET.items() if FORMATE.get(k) != v}
-    check('Zahlenformat: Beträge, kg, €/kg, Prozent, Datum und KW wie vereinbart', not abw, abw)
+    check('Zahlenformat: Beträge, kg, €/kg, Prozent, Datum und KW wie vereinbart, glatt() rundet wie der Server', not abw, abw)
     # Suchregel (10.11.2026): eine Regel für alle Suchfelder (app/assets/suche.js, serverseitig such_passt in lib/kern.php)
     SUCHE = pg.evaluate('''() => { const S = window.STAFL_SUCHE; return {
       umlaut: S.findet('muller', 'Müller GmbH'), ausgeschrieben: S.findet('Mueller', 'Müller GmbH') && S.findet('faerse', 'Färse HV') && S.findet('müller', 'Mueller KG'),

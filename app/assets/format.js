@@ -32,6 +32,12 @@
     var r = Number(Math.round(Number(n + 'e' + stellen)) + 'e-' + stellen);
     return Number.isFinite(r) ? r : n;
   }
+  /* Ganzzahl wie PHP round() auf dem Server, z. B. Cent: erst die Binärdarstellung glätten (1,005 × 100 = 100,4999… → 101),
+     halbe Werte von der Null weg (−100,5 → −101) */
+  function glatt(x) {
+    var r = Math.round(Math.abs(Number(x.toPrecision(15))));
+    return x < 0 ? -r : r;
+  }
   /* Zahl mit min…max Nachkommastellen, echtes Minus; -0 wird 0 */
   function zahl(v, min, max) {
     var n = wert(v);
@@ -87,5 +93,5 @@
   }
   function kw(woche, jahr) { return woche ? 'KW' + NB + woche + (jahr ? '/' + jahr : '') : LEER; }
   window.STAFL_FORMAT = { LEER: LEER, zahl: zahl, euro: euro, euroKachel: euroKachel, euroKg: euroKg, kg: kg, kgSumme: kgSumme,
-    prozent: prozent, veraenderung: veraenderung, pp: pp, differenz: differenz, datum: datum, datumZeit: datumZeit, kw: kw };
+    prozent: prozent, veraenderung: veraenderung, pp: pp, differenz: differenz, datum: datum, datumZeit: datumZeit, kw: kw, glatt: glatt };
 })();
