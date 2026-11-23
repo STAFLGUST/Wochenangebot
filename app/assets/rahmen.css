@@ -248,7 +248,7 @@ body.r .stafl-zurueck { height: 36px; padding: 0 12px 0 8px; border: 1px solid v
 body.r .stafl-zurueck:hover { background: var(--r-flaeche-2); color: var(--r-text); }
 body.r .stafl-zurueck.kompakt { width: 36px; padding: 0; }
 @media (max-width: 560px) { body.r .stafl-zurueck { width: 36px; padding: 0; } }
-.r-seitenkopf .stafl-zurueck { margin-bottom: 14px; }   /* über dem Titel (rahmen.js: startKnopf) */
+.r-seitenkopf .stafl-zurueck { flex: none; }   /* in der Zeile vor dem Titel (rahmen.js: startKnopf) */
 /* Den Knopf setzt der Rahmen – die Linkfarbe eines Moduls (z. B. „.ci-main a“) färbt ihn nicht um */
 body.r .r-seitenkopf a.stafl-zurueck { color: var(--r-text-2); }
 body.r .r-seitenkopf a.stafl-zurueck:hover { color: var(--r-text); }
@@ -275,10 +275,22 @@ body.r .btn.primary:hover { background: var(--r-akzent-hover); border-color: var
 .r-abschnitt > h2, .r-abschnitt-kopf h2 { margin: 0; font-size: 15px; font-weight: 600; }
 .r-abschnitt-kopf { display: flex; align-items: center; justify-content: space-between; gap: 12px; min-height: 24px; }
 .r-karte { background: var(--r-flaeche); border: 1px solid var(--r-linie); border-radius: 16px; box-shadow: var(--r-schatten); }
+/* Modulseiten aus diesen Bausteinen (Container-Import, Versand – erkennbar an data-rahmen) haben den Kopf der übrigen Module:
+   „Start“, Symbol und Name (22 px) in einer Zeile, der Stand daneben; Inhalt über die ganze Breite mit 24 px Rand. Die
+   Startseite (ohne data-rahmen) behält ihren zentrierten Aufbau mit großem Titel. */
+body[data-rahmen] .r-seite { max-width: none; margin: 0; padding: 24px 24px 40px; }
+body[data-rahmen] .r-seitenkopf { flex-wrap: nowrap; }
+body[data-rahmen] .r-seitenkopf > :first-child { flex: 1 1 0; min-width: 0; min-height: 40px; display: flex; flex-wrap: wrap; align-items: center; align-content: center; gap: 4px 12px; }
+body[data-rahmen] .r-seitenkopf h1 { display: inline-flex; align-items: center; gap: 8px; font-size: 22px; letter-spacing: -.01em; }
+body[data-rahmen] .r-seitenkopf h1 .r-i { width: 22px; height: 22px; color: var(--r-m); }
+body[data-rahmen] .r-seitenkopf .r-unterzeile { margin: 0; }
 @media (max-width: 900px) {
   .r-seite { padding: 22px 16px 40px; gap: 22px; }
   .r-seitenkopf h1 { font-size: 26px; }
+  body[data-rahmen] .r-seite { padding: 16px 16px 32px; }
+  body[data-rahmen] .r-seitenkopf h1 { font-size: 18px; }
 }
+@media (max-width: 560px) { body[data-rahmen] .r-seitenkopf h1 .r-i { display: none; } }   /* Handy: nur der Name, wie in den übrigen Modulen */
 @media (prefers-reduced-motion: reduce) {
   .r-app.r-bewegung .r-leiste, .r-app.r-bewegung.r-offen .r-leiste, .r-rund { transition: none; }
 }

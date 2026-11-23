@@ -548,6 +548,7 @@ button.lf-marke:hover { background: var(--sic-bad-bg); }
   .sic-seite { padding: 12px 12px 32px; gap: 16px; }
   .sic-kopf { top: 8px; gap: 8px; padding: 8px; }
   .sic-modul { padding-left: 10px; font-size: 14px; }
+  .sic-modul .i { display: none; }   /* Handy: nur der Name wie in den übrigen Modulen */
   .sic-user { padding: 0 4px; }
   .sic-block, .sic-einst { padding: 14px; border-radius: 20px; }
   .sic-karte { padding: 12px; }

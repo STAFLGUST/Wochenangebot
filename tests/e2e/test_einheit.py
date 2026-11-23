@@ -115,7 +115,10 @@ HAUPTKNOPF = r'''() => { const p = document.createElement('i'); p.style.cssText 
 ZURUECK = r'''() => { const e = document.querySelector('.stafl-zurueck'); if (!e || !e.offsetParent) return null; const s = getComputedStyle(e), r = e.getBoundingClientRect();
   const svg = e.querySelector('svg'), use = svg && svg.querySelector('use'), form = use ? document.querySelector(use.getAttribute('href')) : svg;
   return { h: Math.round(r.height), w: Math.round(r.width), radius: s.borderTopLeftRadius, font: s.fontSize + ' ' + s.fontWeight, text: e.textContent.trim(), href: e.getAttribute('href'),
-           icon: form ? form.innerHTML.trim() : null, pad: s.paddingLeft + ' ' + s.paddingRight, farbe: s.color }; }'''
+           icon: form ? form.innerHTML.trim() : null, pad: s.paddingLeft + ' ' + s.paddingRight, farbe: s.color,
+           // Kopf: Lage des Knopfs, daneben (nächstes sichtbares Geschwister mit Text) Symbol und Name des Moduls in einer Zeile
+           x: Math.round(r.left), y: Math.round(r.top), titel: (() => { const t = [...e.parentElement.children].find((x) => x !== e && x.offsetParent && x.textContent.trim());
+             if (!t) return null; const q = t.getBoundingClientRect(); return [getComputedStyle(t).fontSize, [...t.querySelectorAll('svg')].some((s) => s.getBoundingClientRect().width > 0), Math.abs((q.top + q.bottom) / 2 - (r.top + r.bottom) / 2) <= 4]; })() }; }'''
 
 with sync_playwright() as pw:
     br = pw.chromium.launch()
@@ -496,6 +499,12 @@ with sync_playwright() as pw:
         ton = lambda c: tuple(round(int(x) / 16) for x in re.findall(r'\d+', c or '')[:3])   # noqa: E731
         formen = {json.dumps({k: (ton(v) if k == 'farbe' else v) for k, v in (z or {}).items() if k in ('h', 'w', 'radius', 'font', 'icon', 'text', 'farbe')}, sort_keys=True) for z in je.values()}
         check(f'{breite} px: Zurück-Knopf auf allen Modulseiten gleich', len(formen) == 1, je)
+        # Kopf der Modulseiten (Container-Import und Versand aus den Bausteinen des Rahmens, die übrigen mit eigenem Kopf): „Start“ an
+        # derselben Stelle (± 3 px), daneben Symbol und Name gleich groß und mittig zum Knopf
+        mods = {n: z for n, z in je.items() if z and n not in ('angebot', 'verwaltung', 'bestand')}
+        ref = mods['hr']
+        abw = {n: (z['x'], z['y'], z['titel']) for n, z in mods.items() if abs(z['x'] - ref['x']) > 3 or abs(z['y'] - ref['y']) > 3 or z['titel'] != ref['titel'] or not z['titel'][2]}
+        check(f'{breite} px: Kopf aller Modulseiten gleich („Start“ an derselben Stelle, Symbol und Name daneben gleich groß, {len(mods)} Seiten)', len(mods) == 10 and not abw, (ref['x'], ref['y'], ref['titel'], abw))
     check('keine Seitenfehler', not fehler, fehler[:4])
     br.close()
 
