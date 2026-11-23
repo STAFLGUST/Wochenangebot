@@ -912,6 +912,10 @@ with sync_playwright() as p:
     t = pg.inner_text('#tab-cockpit')
     check('UI Master-Cockpit: Vertrieb gesamt, Vertreter im Vergleich, auffällige Kunden, Kunden ohne Vertreter', 'Vertrieb gesamt' in t and 'vertreter im vergleich' in t.lower()
           and '11 – Vera Vertrieb' in t and 'ohne Vertreter' in t and 'auffällige kunden' in t.lower() and pg.get_attribute('[data-ck-wahl="alle"]', 'aria-pressed') == 'true', t[:600])
+    kf = pg.evaluate("""() => { const k = document.querySelector('#tab-cockpit .crm-ck-kicker'); if (!k) return [null];
+      const p = document.createElement('i'); p.style.color = 'var(--crm-modul)'; k.parentNode.append(p); const modul = getComputedStyle(p).color; p.remove();
+      return [k.textContent, getComputedStyle(k).color, modul]; }""")
+    check('UI Master-Cockpit: Überschrift „Master-Cockpit“ grau, nicht in der Modulfarbe (Modulfarbe nur an Symbolen)', kf[0] == 'Master-Cockpit' and kf[1] != kf[2], kf)
     pg.screenshot(path=os.path.join(SH, 'crm_master_cockpit_1280.png'), full_page=True)
     pg.click('#tab-cockpit .crm-ck-vergleich button[data-ck-wahl="12"]')
     pg.wait_for_function("document.querySelector('#tab-cockpit h1').textContent.includes('Tom Tour')")
