@@ -208,11 +208,14 @@ a.r-eintrag[aria-current="page"] { background: var(--r-aktiv); box-shadow: var(-
   .r-pin { display: none; }   /* das Menü ist ohnehin voll breit */
 }
 
+/* ── Fenster (<dialog>) auf jeder Seite im Rahmen: der Hintergrund ist nur abgedunkelt, nie unscharf (C2: kein Glas).
+   Eine Regel für alle Module (Gewichtung 0,1,3 schlägt die eigenen Fensterregeln der Module, z. B. „.hr-dialog“). ── */
+body.r dialog::backdrop { background: var(--r-schleier); -webkit-backdrop-filter: none; backdrop-filter: none; }
+
 /* ── Suche (Dialog) ── */
 .r-palette { box-sizing: border-box; width: min(560px, calc(100vw - 32px)); max-height: min(520px, calc(100dvh - 120px)); margin: 12vh auto auto; padding: 0;
   border: 1px solid var(--r-linie-2); border-radius: 16px; background: var(--r-flaeche); color: var(--r-text); box-shadow: var(--r-schatten-menue); font-family: var(--font); }
 .r-palette[open] { display: flex; flex-direction: column; }
-.r-palette::backdrop { background: var(--r-schleier); -webkit-backdrop-filter: none; backdrop-filter: none; }   /* kein Glas (C2) */
 .r-palette-feld { display: flex; align-items: center; gap: 10px; padding: 12px 12px 12px 16px; border-bottom: 1px solid var(--r-linie); color: var(--r-leise); }
 .r-palette-feld .r-i { width: 18px; height: 18px; }
 .r-palette-feld input { flex: 1; min-width: 0; height: 32px; border: 0; outline: 0; background: transparent; color: var(--r-text); font: inherit; font-size: 16px; }

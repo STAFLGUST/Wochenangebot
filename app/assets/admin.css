@@ -2248,7 +2248,6 @@ dialog.modal.ez-pick { width: min(1280px, calc(100vw - 32px)); height: min(860px
   body.adm .menu button:hover, body.adm .menu button:focus-visible { background: var(--aus); }
   body.adm .menu hr { border-top-color: var(--linie); }
   body.adm dialog.modal { background: var(--glas-fenster); border: 1px solid var(--glas-rand); border-radius: var(--r-glas); box-shadow: inset 0 1px 0 var(--glas-glanz), 0 24px 64px rgba(20, 12, 10, .22); }
-  body.adm dialog::backdrop { background: rgba(28, 22, 20, .3); -webkit-backdrop-filter: blur(6px); backdrop-filter: blur(6px); }
   body.adm .dlg-head { padding: 22px 24px 14px; border-bottom-color: var(--linie); }
   body.adm .dlg-head h2 { font-size: 20px; font-weight: 700; letter-spacing: -.02em; }
   body.adm .dlg-body { padding: 18px 24px; }
@@ -2460,10 +2459,9 @@ dialog.modal.pv { width: min(1480px, calc(100vw - 32px)); height: calc(100dvh - 
     --primaer: var(--r-akzent); --primaer-hover: var(--r-akzent-hover); --primaer-text: var(--r-akzent-ink); --primaer-schatten: none;
   }
   body.adm.r :is(.adm-page, dialog) .btn.primary { box-shadow: none; }
-  /* Fenster wie die Suche (Strg K) und der Versand: deckend, 16 px (--r-glas), Schatten der Menüs, Hintergrund nur
-     abgedunkelt – ohne Unschärfe (gilt auch für die Suche, deren eigene Regel in rahmen.css sonst gegen diese verliert) */
+  /* Fenster wie die Suche (Strg K) und der Versand: deckend, 16 px (--r-glas), Schatten der Menüs; den Hintergrund ohne
+     Unschärfe setzt rahmen.css für jede Seite im Rahmen (body.r dialog::backdrop) */
   body.adm.r dialog.modal { border-color: var(--r-linie-2); box-shadow: var(--r-schatten-menue); }
-  body.adm.r dialog::backdrop { background: var(--r-schleier); -webkit-backdrop-filter: none; backdrop-filter: none; }
   body.adm.r::before { display: none; }
   body.adm.r .topbar { padding: 0; }
   body.adm.r .topbar-inner { max-width: none; border-radius: 0; padding: 12px 24px; }

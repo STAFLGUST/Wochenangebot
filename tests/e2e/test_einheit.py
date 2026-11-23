@@ -259,6 +259,14 @@ with sync_playwright() as pw:
     FENSTER_STIL = r'''(id) => { const d = document.getElementById(id), s = getComputedStyle(d);
       return d.classList.contains('modal') || id === 'r-palette' ? [id, getComputedStyle(d, '::backdrop').backdropFilter, s.borderTopLeftRadius, s.boxShadow] : null; }'''
     stile = {}
+    # Form jedes Fensters auf jeder Seite im Rahmen (C2): Schleier, Rundung je Ecke, Linie, Schatten, Lage, Kreuz zum Schließen
+    FENSTER_FORM = r'''(id) => { const d = document.getElementById(id); d.getAnimations().forEach((a) => a.finish()); if (document.activeElement) document.activeElement.blur();
+      const s = getComputedStyle(d), b = getComputedStyle(d, '::backdrop'), r = d.getBoundingClientRect();
+      const x = [...d.querySelectorAll('button[aria-label$="chließen"]')].find((e) => e.offsetParent), xr = x && x.getBoundingClientRect(), xs = x && getComputedStyle(x);
+      return { id, unschaerfe: b.backdropFilter, schleier: b.backgroundColor, rund: [s.borderTopLeftRadius, s.borderTopRightRadius, s.borderBottomRightRadius, s.borderBottomLeftRadius].join(' '),
+               schatten: s.boxShadow, linie: s.borderTopColor, lr: [Math.round(r.left), Math.round(r.right)],
+               kreuz: x ? [Math.round(xr.width), Math.round(xr.height), xs.borderTopLeftRadius, xs.backgroundColor].join(' ') : null }; }'''
+    formen = {}
     # Hinweise (Toasts) liegen über einem offenen Fenster (oberste Ebene, theme.js) – sonst lägen sie unter dem unscharfen Hintergrund
     TOAST_OBEN = r'''async () => { const t = document.querySelector('[role="status"].toast, [role="status"][class*="-toast"]');
       const d = document.querySelector('dialog[id]:not([open])'); if (!t || !d) return 'ohne';
@@ -277,12 +285,15 @@ with sync_playwright() as pw:
                 check(f'{name}: Hinweise (Toast) erscheinen über einem offenen Fenster', oben in (True, 'ohne'), oben)
             if breite == 1440 and (bereich or name == 'dashboard'):   # Suche (Strg K) wie jedes Fenster
                 pg.wait_for_selector('#r-suche'); pg.keyboard.press('Control+k'); pg.wait_for_selector('#r-palette[open]')
-                stile.setdefault(name, []).append(pg.evaluate(FENSTER_STIL, 'r-palette')); pg.keyboard.press('Escape')
+                stile.setdefault(name, []).append(pg.evaluate(FENSTER_STIL, 'r-palette'))
+                formen.setdefault((breite, name), []).append(pg.evaluate(FENSTER_FORM, 'r-palette')); pg.keyboard.press('Escape')
             per_klick, nicht_esc = [], []
             for i in ids:
                 p = pg.evaluate(FENSTER_AUF, i)
                 if p is None:
                     continue
+                if name != 'kundenseite':   # Kundenseite: eigenes Aussehen („Liquid Glass“)
+                    formen.setdefault((breite, name), []).append(pg.evaluate(FENSTER_FORM, i))
                 if breite == 1440 and bereich and pg.evaluate(FENSTER_STIL, i):
                     stile.setdefault(name, []).append(pg.evaluate(FENSTER_STIL, i))
                 if p != 'voll':
@@ -300,6 +311,11 @@ with sync_playwright() as pw:
     for name in ('angebot', 'verwaltung', 'bestand'):
         abw = [x for x in stile.get(name, []) if x[1:] != ref[1:]]
         check(f'{name}: Fenster und Suche wie im Rahmen ({len(stile.get(name, []))}: ohne Unschärfe, {ref[2]}, Schatten der Suche)', len(stile.get(name, [])) > 1 and not abw, (ref, abw[:4]))
+    # Alle Seiten im Rahmen, alle Fenster (Durchsicht 23.11.2026): Bezug ist die Suche des Dashboards (rahmen.css)
+    suche = next(f for f in formen[(1440, 'dashboard')] if f['id'] == 'r-palette')
+    for (breite, name), liste in sorted(formen.items()):
+        glas = [(f['id'], f['unschaerfe'], f['schleier']) for f in liste if f['unschaerfe'] != 'none' or f['schleier'] != suche['schleier']]
+        check(f'{name} {breite} px: Hintergrund jedes Fensters nur abgedunkelt wie bei der Suche, ohne Unschärfe ({len(liste)} Fenster)', not glas, glas[:4])
     # Getippte Eingaben: erstes Escape zeigt den gemeinsamen Hinweis (theme.js), zweites schließt – hier am Formular
     # „Korrektur melden“ (HR) und „Neue Kampagne“ (Marketing) stellvertretend für alle Formularfenster
     ctx, pg = neue_seite(1440, False)

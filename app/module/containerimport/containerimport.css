@@ -91,7 +91,6 @@ body.ci dialog.modal { width: min(560px, calc(100vw - 32px)); max-height: calc(1
   box-shadow: var(--r-schatten-menue); font-family: var(--font); }
 body.ci dialog.modal.ci-breit { width: min(940px, calc(100vw - 32px)); }
 body.ci dialog.modal[open] { display: flex; flex-direction: column; animation: none; }
-body.ci dialog.modal::backdrop { background: var(--r-schleier); -webkit-backdrop-filter: none; backdrop-filter: none; }
 body.ci .dlg { display: flex; flex-direction: column; min-height: 0; flex: 1; }
 body.ci .dlg-head { border-bottom: 1px solid var(--r-linie); }
 body.ci .dlg-head p { color: var(--r-text-2); }

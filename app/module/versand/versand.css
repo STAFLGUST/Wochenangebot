@@ -75,7 +75,6 @@ body.vs { line-height: 1.45; }
 body.vs dialog.modal { width: min(680px, calc(100vw - 32px)); border: 1px solid var(--r-linie-2); border-radius: 16px; background: var(--r-flaeche); color: var(--r-text);
   box-shadow: var(--r-schatten-menue); font-family: var(--font); }
 body.vs dialog.modal[open] { display: flex; flex-direction: column; animation: none; }
-body.vs dialog.modal::backdrop { background: var(--r-schleier); -webkit-backdrop-filter: none; backdrop-filter: none; }
 body.vs .dlg-head { border-bottom: 1px solid var(--r-linie); }
 body.vs .dlg-head p { color: var(--r-text-2); }
 body.vs .dlg-body { flex: 1; min-height: 0; }
