@@ -316,6 +316,9 @@ with sync_playwright() as pw:
     for (breite, name), liste in sorted(formen.items()):
         glas = [(f['id'], f['unschaerfe'], f['schleier']) for f in liste if f['unschaerfe'] != 'none' or f['schleier'] != suche['schleier']]
         check(f'{name} {breite} px: Hintergrund jedes Fensters nur abgedunkelt wie bei der Suche, ohne Unschärfe ({len(liste)} Fenster)', not glas, glas[:4])
+        if breite == 390:   # am Handy jedes Fenster über die ganze Breite (Suche und Hinweis „Dashboard als Startseite“ schweben)
+            schmal = [(f['id'], f['lr']) for f in liste if f['id'] not in ('r-palette', 'db-sp') and (abs(f['lr'][0]) > 1 or abs(f['lr'][1] - 390) > 1)]
+            check(f'{name} 390 px: jedes Fenster so breit wie der Bildschirm', not schmal, schmal)
     # Getippte Eingaben: erstes Escape zeigt den gemeinsamen Hinweis (theme.js), zweites schließt – hier am Formular
     # „Korrektur melden“ (HR) und „Neue Kampagne“ (Marketing) stellvertretend für alle Formularfenster
     ctx, pg = neue_seite(1440, False)

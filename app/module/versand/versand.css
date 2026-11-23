@@ -74,6 +74,7 @@ body.vs { line-height: 1.45; }
 /* Fenster (Pop-up): schließt nur über ×, „Abbrechen“ oder Escape – nie durch einen Klick daneben */
 body.vs dialog.modal { width: min(680px, calc(100vw - 32px)); border: 1px solid var(--r-linie-2); border-radius: 16px; background: var(--r-flaeche); color: var(--r-text);
   box-shadow: var(--r-schatten-menue); font-family: var(--font); }
+body.vs dialog.modal.vs-schmal { width: min(480px, calc(100vw - 32px)); }
 body.vs dialog.modal[open] { display: flex; flex-direction: column; animation: none; }
 body.vs .dlg-head { border-bottom: 1px solid var(--r-linie); }
 body.vs .dlg-head p { color: var(--r-text-2); }
@@ -124,7 +125,7 @@ details.vs-aus ul { margin: 6px 0 0; padding-left: 18px; color: var(--r-text-2);
 .vs-erfolg p { margin: 0; max-width: 46ch; color: var(--r-text-2); font-size: 14px; }
 
 @media (max-width: 560px) {
-  body.vs dialog.modal { width: 100vw; max-width: 100vw; max-height: calc(100dvh - 24px); margin: auto 0 0; border-radius: 20px 20px 0 0; border-bottom: 0; }
+  body.vs dialog.modal, body.vs dialog.modal.vs-schmal { width: 100vw; max-width: 100vw; max-height: calc(100dvh - 24px); margin: auto 0 0; border-radius: 20px 20px 0 0; border-bottom: 0; }
   body.vs .dlg-foot .vs-knopf { flex: 1; }
   .vs-fuss-links { flex-basis: 100%; }
   /* Empfänger: Stand und Angebote unter Firma und Adresse statt daneben (sonst bleibt für die Adresse kein Platz) */
@@ -173,7 +174,6 @@ details.vs-aus ul { margin: 6px 0 0; padding-left: 18px; color: var(--r-text-2);
 .vs-knopf[aria-busy="true"] { opacity: .7; cursor: progress; }
 .vs-aend li small { flex-basis: 100%; color: var(--r-leise); font-size: 12.5px; }
 .vs-klein { font-size: 13px; }
-body.vs dialog.modal.vs-schmal { width: min(480px, calc(100vw - 32px)); }
 .vs-nr .r-i { width: 14px; height: 14px; }
 a.vs-knopf.nur-symbol { flex: none; }
 /* Zusatz „Preisänderung zur Vorwoche“ im Fenster „Wochenangebot senden“ (Inhaber 20.11.2026) */
