@@ -311,7 +311,9 @@ Hostname der Testadresse in der bunny-Zone der Kundenseite). Neue Stände werden
 
 - `deploy/sichern.sh` sichert `daten/` (nach der Trennung auch `daten-intern/`) täglich (eigener Timer oder über
   `aktualisieren.sh`) und vor jedem Release; jede Sicherung wird probeweise entpackt und geprüft. Bei SQLite über die
-  Backup-API (konsistenter Snapshot).
+  Backup-API (konsistenter Snapshot). Die Anwendung läuft dabei weiter: ersetzt oder legt sie während des Archivs Dokumente
+  an, endet GNU tar mit Code 1 („file changed as we read it“) – das gilt als Erfolg; abgeschnitten Gelesenes verwirft die
+  Prüfung jeder Datendatei, fehlende Dateien die Zählung vor und nach dem Archiv.
 - Läuft Keycloak, wird dessen Datenbank mitgesichert (`pg_dump`, Inhalt geprüft).
 - **Erst prüfen, dann festschreiben.** Archive und Stand der Dateiablage entstehen als `.tmp`. Erst wenn alle Prüfungen
   bestehen, werden sie gemeinsam umbenannt, danach greift die Aufbewahrung. Ein Fehler entfernt alles dieses Laufs; ältere
