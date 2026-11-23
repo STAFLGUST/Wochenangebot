@@ -46,6 +46,7 @@
   --r-m-start: #8c1d2c; --r-m-sonst: #6a645f;
   --r-breite: 60px;              /* Spalte der Seitenleiste: schmal; festgestellt --r-breite-offen */
   --r-breite-offen: 208px;
+  --r-tipp-polster: 10px;        /* kleine Verweise mit Finger: Polster nach außen, Tippfläche ≥ 36 px ohne höhere Zeile */
 }
 /* Dunkel (Wahl am Konto oder Systemeinstellung): nur andere Werte, gleicher Aufbau */
 @media screen and (prefers-color-scheme: dark) {
