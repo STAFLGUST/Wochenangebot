@@ -176,8 +176,7 @@ function crm_kunde_umsatz(array $me, string $key): array
     $r = crm_zahlrechte($me);
     $c = crm_stammkunden()[$key] ?? null;
     $nr = $c ? trim((string)($c['nr'] ?? '')) : '';
-    $ich = (string)($me['vertreter'] ?? '');
-    $fremd = $c && !$r['master'] && ($ich === '' || !crm_im_bereich($c, ['art' => 'vertreter', 'vertreter' => $ich]));
+    $fremd = $c && !$r['master'] && !crm_im_bereich($c, crm_cockpit_ansicht($me, null));   // eigene Ansicht wie im Cockpit
     if ($fremd) { $r['euro'] = false; $r['kg'] = false; }
     $o = ['ok' => true, 'key' => $key, 'rechte' => $r, 'fremd' => $fremd, 'stand' => null, 'von' => null, 'vorjahr' => null, 'kunde' => null];
     if ($nr === '') return $o;
