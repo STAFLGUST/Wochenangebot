@@ -307,6 +307,7 @@
     if (!k) return;
     const teile = [];
     if (!u.stand) teile.push('<p class="crm-ck-hinweis">Noch keine Umsatzdaten importiert.</p>');
+    else if (u.fremd) teile.push('<p class="crm-ck-hinweis">Umsätze und Mengen zeigt die Übersicht nur für Kunden Ihres Vertreters – für alle Kunden mit dem Recht „CRM: Master-Cockpit“.</p>');
     else if (!x) teile.push(`<p class="crm-ck-hinweis">Keine Umsätze für diesen Kunden in den Umsatzdaten (bis ${c.de(u.stand)}).</p>`);
     if (x) {
       // Hinweise: Bestellpause, kauft weniger, neu

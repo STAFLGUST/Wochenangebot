@@ -144,17 +144,24 @@ switch ($action) {
                 if (!isset($F[$f])) fail('Unbekanntes Feld: ' . substr((string)$f, 0, 40), 422);
                 $neu[$f] = ($F[$f][1])($v);
             }
+            // Listen und Freitext (Ansprechpartner, Notiz) schickt der Browser im Ganzen: mit „vorher“ (Stand beim Öffnen; ältere
+            // Oberflächen ohne das Feld wie bisher) nur speichern, wenn niemand das Feld inzwischen geändert hat
+            $vorher = is_array($b['vorher'] ?? null) ? array_intersect_key($b['vorher'], $neu) : [];
             [, $nr] = crm_firma_nr($key);
             $aktiv = crm_ist_aktiv($key);   // Vergleich mit dem angezeigten Standard (inaktive Kunden: „Aktiv in der Wiedervorlage“ = nein)
-            with_lock('crm-kunden', function () use ($key, $neu, $me, $nr, $aktiv) {
+            $konflikt = with_lock('crm-kunden', function () use ($key, $neu, $me, $nr, $aktiv, $vorher, $F) {
                 $doc = crm_kunden_doc();
                 $alt = $doc['eintraege'][$key] ?? [];
-                $d = crm_protokoll_aenderungen($key, $nr, crm_blatt($alt, $key[0] === 'i', $aktiv), $neu);
-                if (!$d) return;
+                $blatt = crm_blatt($alt, $key[0] === 'i', $aktiv);
+                foreach ($vorher as $f => $v) if ($v != $blatt[$f]) return 'Das Feld „' . $F[$f][0] . '“ wurde inzwischen von ' . ($blatt['geaendertVon'] ?: 'jemand anderem') . ' geändert. Die neue Fassung ist geladen – bitte prüfen und erneut eintragen.';
+                $d = crm_protokoll_aenderungen($key, $nr, $blatt, $neu);
+                if (!$d) return null;
                 $doc['eintraege'][$key] = array_merge($alt, $neu, ['geaendert' => now(), 'geaendertVon' => $me['name']]);
                 crm_schreiben('crm-kunden', $doc);
                 audit('crm', 'CRM: Kundenblätter bearbeitet', $d, null, true);
+                return null;
             });
+            if ($konflikt !== null) respond(['ok' => false, 'code' => 'konflikt', 'error' => $konflikt, 'kunde' => crm_eintrag($key)], 409);
             respond(['ok' => true, 'kunde' => crm_eintrag($key)]);
         }
 

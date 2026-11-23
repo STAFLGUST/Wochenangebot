@@ -107,10 +107,12 @@ function crm_datum($v, string $was): string
     if (!preg_match('/^\d{4}-\d{2}-\d{2}$/', $v) || !checkdate((int)substr($v, 5, 2), (int)substr($v, 8, 2), (int)substr($v, 0, 4))) throw new InvalidArgumentException("$was: bitte ein gültiges Datum angeben.");
     return $v;
 }
-function crm_zahl($v, string $was): ?float
+/* Zahl ab 0 oder null (leer). Deutsche Schreibweise über eudr_zahl_text (gemeinsame Lesehilfe, Container-Import): „1.500“ = 1500,
+   „1.234,5“ = 1234,5. Bei Preisen ($menge = false) gilt ein Punkt ohne Komma als Dezimalzeichen („4.50“, „4.500“ = 4,50 €). */
+function crm_zahl($v, string $was, bool $menge = false): ?float
 {
     if ($v === null || $v === '') return null;
-    if (is_string($v)) $v = str_replace(',', '.', trim($v));
+    if (is_string($v)) $v = !$menge && strpos($v, ',') === false ? trim($v) : eudr_zahl_text($v);
     if (!is_numeric($v)) throw new InvalidArgumentException("$was: bitte eine Zahl angeben.");
     $n = round((float)$v, 2);
     if ($n < 0 || $n > 10000000) throw new InvalidArgumentException("$was: Wert außerhalb des erlaubten Bereichs.");
@@ -163,10 +165,10 @@ function crm_felder(): array
         'rhythmus2' => ['Wann 2', function ($v) { return crm_wahl($v, crm_rhythmen(), 'Wann 2'); }, true],
         'anrufStatus' => ['Erledigt', function ($v) { return crm_wahl($v, CRM_ANRUF, 'Erledigt-Status', false); }, true],
         'anrufAktiv' => ['Aktiv in der Wiedervorlage', function ($v) { if (!is_bool($v)) throw new InvalidArgumentException('Aktiv: ungültiger Wert.'); return $v; }, true],
-        'potenzialKg' => ['Potenzial kg', function ($v) { return crm_zahl($v, 'Potenzial kg'); }, true],
+        'potenzialKg' => ['Potenzial kg', function ($v) { return crm_zahl($v, 'Potenzial kg', true); }, true],
         'preisKg' => ['Nettoverkaufspreis €/kg', function ($v) { return crm_zahl($v, 'Nettoverkaufspreis'); }, true],
         'dbKg' => ['DB €/kg', function ($v) { return crm_zahl($v, 'DB €/kg'); }, true],
-        'bestellKg' => ['Ø Bestellmenge kg', function ($v) { return crm_zahl($v, 'Ø Bestellmenge'); }, true],
+        'bestellKg' => ['Ø Bestellmenge kg', function ($v) { return crm_zahl($v, 'Ø Bestellmenge', true); }, true],
         'letzterAuftrag' => ['Letzter Auftrag', function ($v) { return crm_datum($v, 'Letzter Auftrag'); }, true],
         'letzterKontakt' => ['Letzter Kontakt', function ($v) { return crm_datum($v, 'Letzter Kontakt'); }, true],
         'naechsterSchritt' => ['Nächster Schritt', function ($v) { return crm_text($v, 160, 'Nächster Schritt'); }, false],

@@ -536,7 +536,7 @@ Mitarbeiter sind die Nutzer der Plattform (`users_load()`); HR speichert nur eig
   (`HR_KALENDER_ARTEN`: Art → Kürzel, seit 11.11.2026; in der Oberfläche CSS-Klasse `Uplus`), alles andere „A“ – nie offene Anträge, Notizen, Tage oder Konten. Andere Abteilungen sieht man wie
   `kollege`. Antwortfeld `sicht` = wirksame Sicht, `urlaubAbteilung` = Name der eigenen Abteilung (sonst `null`). Wer „U“
   von „A“ unterscheiden kann, kann Krankheitstage ableiten; deshalb kein Standardrecht.
-- **`hr-einstellungen`**: `{"rev": 1, "sperren": [{"von": "…", "bis": "…", "text": "Inventur"}], "ferien": [ … ], "uebertragBis": "03-31", "antraege": true}` – `uebertragBis` (Verfallstag des Resturlaubs, Monat-Tag) ist optional; fehlt es, gilt der 31.03. `antraege` (Schalter „Urlaubsanträge über die Plattform“, Verwaltung → Urlaub, Aktion `hr_antraege_save`) ist optional; nur `false` schaltet Anträge aus, fehlt es, sind sie eingeschaltet.
+- **`hr-einstellungen`**: `{"rev": 1, "sperren": [{"von": "…", "bis": "…", "text": "Inventur"}], "ferien": [ … ], "uebertragBis": "03-31", "antraege": true}` – `uebertragBis` (Verfallstag des Resturlaubs, Monat-Tag) ist optional; fehlt es, gilt der 31.03. `antraege` (Schalter „Urlaubsanträge über die Plattform“, Verwaltung → Urlaub, Aktion `hr_antraege_save`) ist optional; nur `false` schaltet Anträge aus, fehlt es, sind sie eingeschaltet. `rev` zählt jede Änderung; `hr_einstellungen_save` mit `rev` (Stand beim Laden, in den Antworten als `einstRev`) lehnt einen veralteten Stand mit 409 ab – ohne `rev` (ältere Oberflächen) wie bisher.
   Seit 03.11.2026 zusätzlich optional: `regelSperren` (Sperren aus den Urlaubsregeln – Ostergeschäft: zwei Wochen vor
   Karfreitag, Weihnachtsgeschäft: 30.11. bis 23.12. (seit 11.11.2026; vorher ab dem Montag der letzten Novemberwoche), ohne
   Sonderregelung Dezember bis 24.12. –
@@ -586,6 +586,8 @@ Kundenstammdaten liest das CRM nur über Funktionen der Verwaltung; eigene Dokum
 - **`crm-kunden`**: `{"rev": 5, "updatedAt": "…", "eintraege": {"k0123456789ab": {"segment": "Gastronomie", "phase": "Angebot", "kontakte": [{"name": "…", "funktion": "…", "telefon": "…", "email": "…"}], "anrufStatus": "Offen", "wiedervorlage": "2026-01-12", "geaendert": "…", "geaendertVon": "…"}}}`.
   Schlüssel = Kunden-ID der Verwaltung oder Interessenten-ID (`i…`). `crm_kunde_save` ändert nur die mitgeschickten
   Felder (`array_merge` mit dem gespeicherten Blatt); fehlende liefert beim Lesen `crm_standard()`. Alle Felder mit Prüfung: `crm_felder()`.
+  Ansprechpartner und Notiz ersetzt der Browser im Ganzen; er schickt dazu ihren Stand beim Öffnen als `vorher` mit (optional,
+  nur erweitert) – weicht der gespeicherte Wert ab, antwortet der Server 409 `konflikt` mit dem aktuellen Kunden.
 - **`crm-interessenten`**: `{"rev": 2, "updatedAt": "…", "liste": [{"id": "i0123456789ab", "firma": "…", "ansprechpartner": "…", "strasse": "…", "plz": "…", "ort": "…", "land": "…", "telefon": "…", "email": "…", "vertreter": "", "vertreter2": "", "aktiv": true, "erstellt": "…", "erstelltVon": "…", "geaendert": "…", "geaendertVon": "…"}]}`.
 - **`crm-aktivitaeten`**: `{"rev": 40, "updatedAt": "…", "liste": [{"id": "a…", "key": "k…", "art": "Telefonat", "notiz": "…", "naechster": "…", "faellig": "…", "at": "…", "von": "…", "vonId": "u…", "firma": "Testfirma GmbH", "nr": "10001"}]}`.
   `firma` und `nr` sind Schnappschüsse (GR-106); höchstens 50 000 Einträge, die ältesten fallen weg.
@@ -595,7 +597,8 @@ Kundenstammdaten liest das CRM nur über Funktionen der Verwaltung; eigene Dokum
 Eigene Dokumente, alle unter der Sperre `marketing-beitraege`:
 
 - **`marketing-beitraege`**: `{"rev": 12, "updatedAt": "…", "liste": [{"id": "b0123456789ab", "titel": "…", "status": "freigabe", "prioritaet": "normal", "marke": "standard-fleisch", "kanaele": ["instagram"], "format": "reel", "saeule": "wissen", "kampagne": "k…", "verantwortlich": "u…", "verantwortlichSchnappschuss": "…", "drehtermin": "2026-11-02", "produktionBis": "2026-11-04", "veroeffentlichung": "2026-11-06T18:30", "hook": "…", "text": "…", "hashtags": "…", "cta": "…", "notizen": "…", "checkliste": [{"text": "…", "erledigt": false}], "links": [{"titel": "…", "url": "https://…"}], "ki": false, "freigabe": {"t": "…", "von": "…", "vonId": "u…"}, "veroeffentlicht": {"instagram": "https://…"}, "ergebnisse": {"instagram": {"reichweite": 1200, "interaktionen": 85, "aufrufe": null}}, "kommentare": [{"id": "c…", "t": "…", "von": "…", "vonId": "u…", "text": "…"}], "verlauf": [{"t": "…", "von": "…", "was": "…"}], "rev": 4, "erstellt": {…}, "geaendert": {"t": "…", "von": "…"}}]}`.
-  `rev` je Beitrag schützt vor stillem Überschreiben (409 mit aktuellem Beitrag). `marketing_beitrag_save` prüft und ändert nur
+  `rev` je Beitrag schützt vor stillem Überschreiben (409 mit aktuellem Beitrag). Ein Kommentar erhöht `rev` ebenfalls; der offene
+  Dialog zählt seine Basis nur um den eigenen Kommentar weiter (hat dazwischen jemand gespeichert, meldet das nächste Speichern 409). `marketing_beitrag_save` prüft und ändert nur
   mitgeschickte, geänderte Felder (`mkt_felder_pruefen`); fehlende ergänzt beim Lesen `mkt_beitrag_leer()`, unbekannte bleiben.
   Namen in `freigabe`, `kommentare`, `verlauf` und `verantwortlichSchnappschuss` sind Schnappschüsse (GR-106).
 - **`marketing-kampagnen`**: `{"rev": 2, "liste": [{"id": "k…", "name": "…", "ziel": "…", "von": "…", "bis": "…", "marke": "", "farbe": "#c27a1a", "archiviert": false, "erstellt": {…}}]}`.

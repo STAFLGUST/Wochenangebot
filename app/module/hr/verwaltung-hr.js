@@ -36,6 +36,8 @@
     return daten;
   }
   const person = (uid) => (daten ? daten.personen.find((p) => p.nutzer === uid) : null);
+  // Felder, die das Formular schickt – Vergleich vor einer Wiederholung nach 409 (Revision gilt für die ganze Liste)
+  const stand = (p) => (p ? JSON.stringify([p.abteilung, p.abteilungNr, p.personalnummer, p.pos, p.eintritt, p.vertretung, p.arbeitstage, p.aktiv, p.verfall, p.jahre[String(JAHR)] || null]) : '');
 
   /* ---------- Spalten der Mitarbeiterliste (Administratoren) ---------- */
   function zelle(uid) {
@@ -74,7 +76,7 @@
     // eigene Person: Urlaubsangaben ändert eine andere Person der Personalstelle (Vier-Augen-Prinzip, der Server prüft das)
     const eigen = !!(uid && W.me && W.me.id === uid);
     const aus = eigen ? ' disabled' : '';
-    return `<fieldset class="span2 hr-teil${eigen ? ' hr-eigen' : ''}" id="hr-teil" data-uid="${esc(uid || '')}"><legend>Urlaubsverwaltung</legend>
+    return `<fieldset class="span2 hr-teil${eigen ? ' hr-eigen' : ''}" id="hr-teil" data-uid="${esc(uid || '')}" data-stand="${esc(stand(p))}"><legend>Urlaubsverwaltung</legend>
       ${eigen ? `<p class="hr-eigen-hinweis">${icon('lock', 'sm')}<span>Ihre eigenen Urlaubsangaben (Anspruch, Übertrag, Verfall, Arbeitstage, Urlaubsplan, Personalnummer, Vertretung, Eintritt) ändert eine andere Person der Personalstelle (Vier-Augen-Prinzip). Abteilung und Position können Sie selbst ändern.</span></p>` : ''}
       <div class="form-grid two">
         ${abtFeld}
@@ -123,7 +125,16 @@
     if (abtSel) { if (abtSel.value !== '=') body.abteilungNr = abtSel.value; } else body.abteilung = wert('hr_abteilung');
     let r;
     try { r = await api('mitarbeiter_hr_save', { body }); }
-    catch (ex) { if (ex.status !== 409) throw ex; await laden(); r = await api('mitarbeiter_hr_save', { body: { ...body, rev: daten.rev } }); }
+    catch (ex) {
+      if (ex.status !== 409) throw ex;
+      await laden();
+      // jemand hat inzwischen diesen Mitarbeiter geändert: nicht mit den alten Werten überschreiben, sondern die neue Fassung zeigen
+      if (teil.dataset.uid && stand(person(uid)) !== teil.dataset.stand) {
+        teil.outerHTML = formular(uid);
+        throw Object.assign(new Error('Die Urlaubsangaben wurden inzwischen von jemand anderem geändert. Die neue Fassung ist geladen – bitte prüfen und erneut speichern.'), { status: 409 });
+      }
+      r = await api('mitarbeiter_hr_save', { body: { ...body, rev: daten.rev } });   // nur ein anderer Mitarbeiter war betroffen
+    }
     daten.rev = r.rev;
     if (r.person) { const i = daten.personen.findIndex((p) => p.nutzer === uid); if (i >= 0) daten.personen[i] = r.person; else daten.personen.push(r.person); }
   }
@@ -221,7 +232,7 @@
         e.preventDefault();
         const f = e.target, err = f.querySelector('.form-err');
         err.textContent = '';
-        try { await speichern(f.dataset.uid, f); hrDlg.close(); toast('Gespeichert.'); renderNurHr(host); } catch (ex) { err.textContent = ex.message; }
+        try { await speichern(f.dataset.uid, f); hrDlg.close(); toast('Gespeichert.'); renderNurHr(host); } catch (ex) { err.textContent = ex.message; err.scrollIntoView({ block: 'nearest' }); }
       });
     }
     const p = person(uid);
@@ -374,6 +385,7 @@
     $('#hr-mail-err').textContent = '';
     try {
       const r = await api('hr_mail_save', { body: mailWerte() });
+      daten.einstRev = r.einstRev;   // eigene Änderung: das Formular „Urlaub“ bleibt speicherbar
       mailNeu(r.mail);
       toast('E-Mail-Einstellungen gespeichert.');
     } catch (ex) { $('#hr-mail-err').textContent = ex.message; }
@@ -427,7 +439,8 @@
       if ($('#hr-ueberziehen').value === '' || !(ueberziehenMax >= 0 && ueberziehenMax <= 30) || (ueberziehenMax * 2) % 1) { $('#hr-einst-err').textContent = 'Resturlaub überziehen: bitte 0 bis 30 Tage in ganzen oder halben Tagen (0 = nie).'; return; }
       if ($('#hr-plan-einzeltage').value === '' || !Number.isInteger(planung.einzeltageMax) || planung.einzeltageMax < 0 || planung.einzeltageMax > 50) { $('#hr-einst-err').textContent = 'Jahresplanung: einzelne Urlaubstage bitte als ganze Zahl zwischen 0 (keine Prüfung) und 50.'; return; }
       const r = await api('hr_einstellungen_save', { body: { sperren: liste('hr-sperren'), ferien: liste('hr-ferien'), uebertragBis: bis,
-        verfallAb: ab ? Number(ab) : null, regelSperren: $('#hr-regelsperren').checked, schliesstage: $('#hr-schliesstage').checked, ueberziehenMax, amStueckMax, regeln: $('#hr-regeln').value, planung } });
+        verfallAb: ab ? Number(ab) : null, regelSperren: $('#hr-regelsperren').checked, schliesstage: $('#hr-schliesstage').checked, ueberziehenMax, amStueckMax, regeln: $('#hr-regeln').value, planung,
+        rev: daten.einstRev } });   // 409, wenn inzwischen jemand anderes gespeichert hat: Hinweis, nichts überschrieben
       Object.assign(daten, { sperren: r.sperren, ferien: r.ferien, uebertragBis: r.uebertragBis, verfallAb: r.verfallAb, regelSperren: r.regelSperren, schliesstage: r.schliesstage, ueberziehenMax: r.ueberziehenMax, amStueckMax: r.amStueckMax, sperrenAuto: r.sperrenAuto, regeln: r.regeln, planung: r.planung });
       toast('Urlaubseinstellungen gespeichert.');
       renderUrlaub();
@@ -440,7 +453,7 @@
     sw.disabled = true; $('#hr-antraege-err').textContent = '';
     try {
       const r = await api('hr_antraege_save', { body: { an } });
-      if (daten) daten.antraege = r.antraege;
+      if (daten) Object.assign(daten, { antraege: r.antraege, einstRev: r.einstRev });
       $('#hr-antraege-t').textContent = r.antraege ? 'Eingeschaltet' : 'Ausgeschaltet';
       toast(r.antraege ? 'Urlaubsanträge eingeschaltet.' : 'Urlaubsanträge ausgeschaltet.');
     } catch (ex) {

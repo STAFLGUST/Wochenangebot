@@ -63,10 +63,12 @@
     const ids = sortiertLm(new Set(e.map(([k]) => k)));
     return `<span class="lg-mengen">${ids.map((id) => { const n = obj(m)[id]; return `<span><small>${esc(kurz(id))}</small>${vorzeichen ? vzHtml(n) : zahl(n)}</span>`; }).join('')}</span>`;
   }
-  /* Ganze Zahl aus einer Eingabe („1.200“, „−15“); '' → 0, ungültig → NaN */
+  /* Ganze Zahl aus einer Eingabe („1.200“, „−15“); '' → 0, ungültig → NaN. Punkte nur als Tausenderpunkte in Dreiergruppen wie im
+     Server (lg_zahltext): „1.5“ und „2.50“ sind keine Stückzahlen. */
   function ganz(v) {
-    const t = String(v ?? '').trim().replace(/[\s.]/g, '').replace(/[−–]/g, '-');
+    let t = String(v ?? '').trim().replace(/\s/g, '').replace(/[−–]/g, '-');
     if (t === '') return 0;
+    if (/^[+-]?\d{1,3}(\.\d{3})+$/.test(t)) t = t.replace(/\./g, '');
     return /^[+-]?\d{1,7}$/.test(t) ? parseInt(t, 10) : NaN;
   }
   const delta = (b) => { const d = {}; for (const [k, n] of Object.entries(obj(b.abgang))) d[k] = (d[k] || 0) + n; for (const [k, n] of Object.entries(obj(b.zugang))) d[k] = (d[k] || 0) - n; return d; };
