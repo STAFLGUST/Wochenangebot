@@ -131,9 +131,9 @@ body.hr .hr-kopf .brand-logo { height: 28px; width: auto; }
 
 /* ── Urlaubskonto ── */
 .hr-konto { display: grid; grid-template-columns: 1.4fr repeat(5, 1fr); gap: 12px; margin-bottom: 20px; }
-.hr-wert { padding: 16px 18px; border-radius: 22px; display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+.hr-wert { padding: 16px 18px; border-radius: 16px; display: flex; flex-direction: column; gap: 4px; min-width: 0; }
 .hr-wert b { font-size: 28px; font-weight: 700; letter-spacing: -.02em; font-variant-numeric: tabular-nums; }
-.hr-wert span { font-size: 13px; color: var(--hr-muted); }
+.hr-wert span { font-size: 13px; font-weight: 500; color: var(--r-leise); }
 .hr-wert small { font-size: 12px; color: var(--hr-warn); font-weight: 600; }
 .hr-wert.haupt b { font-size: 40px; color: var(--hr-akzent-ink); }
 .hr-wert.minus b { color: var(--hr-fehler); }
@@ -430,7 +430,7 @@ body.hr .hr-kopf .brand-logo { height: 28px; width: auto; }
   .hr-konto { grid-template-columns: 1fr 1fr; gap: 8px; }
   .hr-konto > :last-child:nth-child(odd) { grid-column: 1 / -1; }   /* wie CRM und Marketing: eine letzte Karte über die volle Breite */
   .hr-wert.haupt { grid-column: span 2; }
-  .hr-wert { padding: 12px 14px; border-radius: 18px; }
+  .hr-wert { padding: 12px 14px; }
   .hr-wert b { font-size: 22px; }
   .hr-wert.haupt b { font-size: 34px; }
   .hr-karte { padding: 18px; border-radius: 22px; }
@@ -472,7 +472,7 @@ body.hr .hr-kopf .brand-logo { height: 28px; width: auto; }
 .hr-gleit-zelle:hover { background: var(--hr-aus-hover); }
 .hr-dialog-gleit { width: min(640px, calc(100vw - 32px)); }
 .hr-konto.klein { grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; margin: 4px 0 14px; }
-.hr-konto.klein .hr-wert { padding: 10px 12px; border-radius: 14px; background: var(--hr-aus); }
+.hr-konto.klein .hr-wert { padding: 10px 12px; background: var(--hr-aus); }
 .hr-konto.klein .hr-wert b, .hr-konto.klein .hr-wert.haupt b { font-size: 22px; }
 .hr-gleit-h { margin: 18px 0 4px; font-size: 15px; }
 #gleit-liste li { gap: 6px 10px; padding: 9px 0; }
@@ -703,7 +703,6 @@ li.hr-jp-leer { grid-column: 1 / -1; padding: 6px 0; }
   .hr-jp-zahlen { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
   .hr-jp-zahlen .hr-wert.haupt { grid-column: 1 / -1; }
   .hr-jp-zahlen .hr-wert:not(.haupt) { padding: 10px 12px; }
-  .hr-jp-zahlen .hr-wert span { font-size: 12px; }
   .hr-jp-aktionen .btn { flex: 1 1 100%; justify-content: center; }
   .hr-jp-zl { --jp-name: 128px; min-width: 760px; }
   .hr-jp-name { padding: 5px 8px; }

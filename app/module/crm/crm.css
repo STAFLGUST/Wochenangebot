@@ -109,8 +109,8 @@ body.crm .crm-kopf .brand-logo { height: 28px; width: auto; }
 
 /* ── Kennzahlen ── */
 .crm-kpis { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 12px; margin-bottom: 20px; }
-.crm-wert { padding: 16px 18px; border-radius: 22px; display: flex; flex-direction: column; gap: 4px; min-width: 0; }
-.crm-wert span { font-size: 13px; color: var(--crm-muted); }
+.crm-wert { padding: 16px 18px; border-radius: 16px; display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+.crm-wert span { font-size: 13px; font-weight: 500; color: var(--r-leise); }
 .crm-wert b { font-size: 28px; font-weight: 700; letter-spacing: -.02em; font-variant-numeric: tabular-nums; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .crm-wert small { font-size: 12px; color: var(--crm-muted); }
 .crm-wert.akzent b { color: var(--crm-akzent-ink); }
@@ -344,7 +344,7 @@ body.crm .crm-kopf .brand-logo { height: 28px; width: auto; }
   .crm-tabs { margin-bottom: 18px; }
   .crm-tabs button { padding: 0 12px; }
   .crm-kpis { grid-template-columns: 1fr 1fr; gap: 8px; }
-  .crm-wert { padding: 12px 14px; border-radius: 18px; }
+  .crm-wert { padding: 12px 14px; }
   .crm-wert b { font-size: 22px; }
   .crm-karte { padding: 16px; border-radius: 22px; }
   .crm-leiste select, .crm-mehrfach { flex: 1 1 140px; min-width: 0; max-width: none; }

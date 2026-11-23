@@ -154,7 +154,7 @@ body.sic .sic-kopf .brand-logo { height: 28px; width: auto; }
 .sic-karten { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; }
 .sic-karten.wirkung { grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); }
 .sic-karten.vier { grid-template-columns: repeat(4, minmax(0, 1fr)); }
-.sic-karte { position: relative; display: flex; gap: 12px; align-items: flex-start; padding: 14px 16px; border-radius: 20px; border: 1px solid var(--sic-rand); background: var(--sic-glass);
+.sic-karte { position: relative; display: flex; gap: 12px; align-items: flex-start; padding: 14px 16px; border-radius: 16px; border: 1px solid var(--sic-rand); background: var(--sic-glass);
   box-shadow: inset 0 1px 0 var(--sic-glanz); color: inherit; font: inherit; text-align: left; min-width: 0; -webkit-backdrop-filter: blur(20px); backdrop-filter: blur(20px); }
 button.sic-karte { cursor: pointer; transition: transform .15s ease, box-shadow .15s ease; }
 button.sic-karte:hover { transform: translateY(-1px); box-shadow: inset 0 1px 0 var(--sic-glanz), 0 8px 24px rgba(0, 0, 0, .08); }
@@ -162,7 +162,7 @@ button.sic-karte:hover { transform: translateY(-1px); box-shadow: inset 0 1px 0 
 .sic-kpunkt { width: 10px; height: 10px; border-radius: 50%; margin-top: 5px; flex: none; background: var(--sic-muted); }
 .sic-karte.ok .sic-kpunkt { background: var(--sic-ok-hell); } .sic-karte.warn .sic-kpunkt { background: var(--sic-warn-hell); } .sic-karte.bad .sic-kpunkt { background: var(--sic-bad-hell); }
 .sic-karte.bad { background: linear-gradient(var(--sic-bad-bg), var(--sic-bad-bg)), var(--sic-glass); }
-.sic-ktitel { font-size: 12.5px; color: var(--sic-muted); font-weight: 500; }
+.sic-ktitel { font-size: 13px; color: var(--r-leise); font-weight: 500; }
 .sic-kwert { font-size: 24px; font-weight: 600; letter-spacing: -.01em; line-height: 1.15; overflow-wrap: anywhere; }
 .sic-kzeile { display: flex; align-items: flex-end; gap: 10px; }
 .sic-mini { width: 64px; height: 26px; margin-left: auto; flex: none; fill: var(--sic-muted); }

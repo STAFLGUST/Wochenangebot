@@ -104,8 +104,8 @@ body.mkt .mkt-kopf .brand-logo { height: 28px; width: auto; }
 
 /* ── Kennzahlen ── */
 .mkt-kpis { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 12px; margin-bottom: 20px; }
-.mkt-wert { padding: 16px 18px; border-radius: 22px; display: flex; flex-direction: column; gap: 4px; min-width: 0; }
-.mkt-wert span { font-size: 13px; color: var(--mkt-muted); }
+.mkt-wert { padding: 16px 18px; border-radius: 16px; display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+.mkt-wert span { font-size: 13px; font-weight: 500; color: var(--r-leise); }
 .mkt-wert b { font-size: 30px; font-weight: 700; letter-spacing: -.02em; font-variant-numeric: tabular-nums; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .mkt-wert small { font-size: 12px; color: var(--mkt-muted); }
 .mkt-wert.akzent b { color: var(--mkt-akzent-ink); }
@@ -266,7 +266,7 @@ body.mkt .mkt-kopf .brand-logo { height: 28px; width: auto; }
   .mkt-tabs { margin-bottom: 18px; }
   .mkt-tabs button { padding: 0 12px; }
   .mkt-kpis { grid-template-columns: 1fr 1fr; gap: 8px; }
-  .mkt-wert { padding: 12px 14px; border-radius: 18px; }
+  .mkt-wert { padding: 12px 14px; }
   .mkt-wert b { font-size: 22px; }
   .mkt-karte { padding: 16px; border-radius: 22px; }
   .mkt-leiste select, .mkt-mehrfach { flex: 1 1 140px; min-width: 0; max-width: none; }

@@ -263,7 +263,13 @@ with sync_playwright() as pw:
     BAUSTEINE['tabellenkopf'] = r"""[...inhalt.querySelectorAll('thead th')].filter((e) => sicht(e) && !e.closest('.hr-plan')).map((e) => { const s = getComputedStyle(e);
       return s.fontSize === '11px' && s.fontWeight === '600' && s.textTransform === 'uppercase' && s.color === tok.leise && s.backgroundColor === tok.flaeche2 ? null
         : name(e) + ' ' + s.fontSize + '/' + s.fontWeight + ' ' + s.textTransform + ' ' + s.color + ' auf ' + s.backgroundColor; })"""
-    TITEL = {'tabellenkopf': 'Tabellenköpfe 11 px/600 in Großbuchstaben, Schrift --r-leise auf --r-flaeche-2'}
+    BAUSTEINE['kennzahl'] = r"""[...inhalt.querySelectorAll('.lg-kpi, .rw-kpi, .qm-kpi, .ctl-kpi, .crm-wert, .mkt-wert, .hr-wert, .sic-karte')].filter(sicht).map((e) => {
+      const l = e.matches('.sic-karte') ? e.querySelector('.sic-ktitel') : e.querySelector(':scope > span'); if (!l || !sicht(l)) return null;
+      const s = getComputedStyle(l), r = getComputedStyle(e).borderTopLeftRadius, farbig = e.matches('.warn, .bad, .minus');
+      return s.fontSize === '13px' && s.fontWeight === '500' && s.textTransform === 'none' && (farbig || s.color === tok.leise) && r === '16px' ? null
+        : name(e) + ' Beschriftung ' + s.fontSize + '/' + s.fontWeight + ' ' + s.textTransform + ' ' + s.color + ', Kachel ' + r; })"""
+    TITEL = {'tabellenkopf': 'Tabellenköpfe 11 px/600 in Großbuchstaben, Schrift --r-leise auf --r-flaeche-2',
+             'kennzahl': 'Kennzahl-Kacheln 16 px rund, Beschriftung 13 px/500 in normaler Schreibweise (--r-leise)'}
     TOUR = r"""({ finger }) => { const inhalt = document.querySelector('.r-inhalt');
       const sicht = (e) => { const r = e.getBoundingClientRect(), s = getComputedStyle(e); return r.width > 1 && r.height > 1 && s.visibility !== 'hidden' && !e.closest('[hidden], dialog, .sr-only, [aria-hidden="true"]'); };
       const name = (e) => (e.id ? '#' + e.id : e.tagName.toLowerCase() + (typeof e.className === 'string' && e.className.trim() ? '.' + e.className.trim().split(/\s+/).slice(0, 2).join('.') : ''))

@@ -55,8 +55,8 @@ body.lg :focus-visible{outline:none;box-shadow:var(--lg-focus)}
 
 /* Kennzahlen */
 .lg-kpis{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px;margin-bottom:12px}
-.lg-kpi{min-width:0;padding:14px 16px;border-radius:18px;background:var(--lg-glass);border:1px solid var(--lg-border);box-shadow:inset 0 1px 0 var(--lg-gloss),var(--lg-shadow)}
-.lg-kpi span{display:block;color:var(--lg-muted);font-size:10px;font-weight:750;letter-spacing:.07em;text-transform:uppercase}
+.lg-kpi{min-width:0;padding:14px 16px;border-radius:16px;background:var(--lg-glass);border:1px solid var(--lg-border);box-shadow:inset 0 1px 0 var(--lg-gloss),var(--lg-shadow)}
+.lg-kpi span{display:block;color:var(--r-leise);font-size:13px;font-weight:500}
 .lg-kpi b{display:block;margin:5px 0 2px;font-size:23px;line-height:1.15;font-weight:760;letter-spacing:-.03em;font-variant-numeric:tabular-nums;overflow-wrap:anywhere}
 .lg-kpi small{color:var(--lg-muted);font-size:11px}
 .lg-kpi.warn b{color:var(--lg-rot)}
@@ -250,7 +250,7 @@ textarea.lg-eingabe{height:auto;padding:8px 10px;resize:vertical;line-height:1.4
   .lg-tabs button{height:36px;padding:0 13px;font-size:13px}
   .lg-schnell{width:100%;display:grid;grid-template-columns:1fr 1fr}
   .lg-schnell .btn{justify-content:center}
-  .lg-kpis{gap:7px}.lg-kpi{padding:10px;border-radius:14px}.lg-kpi b{font-size:19px}.lg-kpi span{font-size:11px}
+  .lg-kpis{gap:7px}.lg-kpi{padding:10px}.lg-kpi b{font-size:19px}
   .lg-panel{padding:11px;border-radius:16px}
   .lg-panelkopf h2{font-size:15px}
   .lg-filterzeile{display:grid;grid-template-columns:1fr 1fr;width:100%}

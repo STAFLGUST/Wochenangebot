@@ -56,8 +56,8 @@ body.qm :focus-visible{outline:none;box-shadow:var(--qm-focus)}
 
 /* Kennzahlen */
 .qm-kpis{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px;margin-bottom:12px}
-.qm-kpi{min-width:0;padding:14px 16px;border-radius:18px;background:var(--qm-glass);border:1px solid var(--qm-border);box-shadow:inset 0 1px 0 var(--qm-gloss),var(--qm-shadow)}
-.qm-kpi span{display:block;color:var(--qm-muted);font-size:10px;font-weight:750;letter-spacing:.07em;text-transform:uppercase}
+.qm-kpi{min-width:0;padding:14px 16px;border-radius:16px;background:var(--qm-glass);border:1px solid var(--qm-border);box-shadow:inset 0 1px 0 var(--qm-gloss),var(--qm-shadow)}
+.qm-kpi span{display:block;color:var(--r-leise);font-size:13px;font-weight:500}
 .qm-kpi b{display:block;margin:5px 0 2px;font-size:23px;line-height:1.15;font-weight:760;letter-spacing:-.03em;font-variant-numeric:tabular-nums;overflow-wrap:anywhere}
 .qm-kpi small{color:var(--qm-muted);font-size:11px}
 .qm-kpi.warn b{color:var(--qm-rot)}
@@ -195,7 +195,7 @@ textarea.qm-eingabe{height:auto;padding:8px 10px;resize:vertical;line-height:1.4
   .qm-tabs button{height:36px;padding:0 13px;font-size:13px}
   .qm-schnell{width:100%;display:grid;grid-template-columns:1fr 1fr}
   .qm-schnell .btn{justify-content:center}
-  .qm-kpis{gap:7px}.qm-kpi{padding:10px;border-radius:14px}.qm-kpi b{font-size:19px}.qm-kpi span{font-size:11px}
+  .qm-kpis{gap:7px}.qm-kpi{padding:10px}.qm-kpi b{font-size:19px}
   .qm-panel{padding:11px;border-radius:16px}
   .qm-panelkopf h2{font-size:15px}
   .qm-filterzeile{display:grid;grid-template-columns:1fr 1fr;width:100%}
