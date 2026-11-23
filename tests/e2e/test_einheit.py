@@ -187,6 +187,12 @@ with sync_playwright() as pw:
                     if v == 'rollen':   # „Auf einen Blick“: Namen bleiben in ihrer Kachel
                         raus = pg.evaluate(KACHELN)
                         check(f'{teil} {tag}: Rollen – Namen der Kacheln ragen nicht über die Kachel', not raus, raus)
+                    if v == 'users' and breite == 390 and not dunkel:   # Fehlermeldung im langen Formular „Mitarbeiter anlegen“ sichtbar (Raster scrollt)
+                        pg.click('#user-add'); pg.wait_for_selector('#dlg-user[open] #user-err', state='attached')
+                        fe = pg.evaluate("""() => { const e = document.querySelector('#user-err'), b = e.closest('.dlg-body'); e.textContent = 'Benutzername ist schon vergeben.';
+                          e.scrollIntoView({ block: 'nearest' }); const h = e.getBoundingClientRect().height; e.textContent = ''; return [Math.round(h), b.scrollHeight > b.clientHeight]; }""")
+                        pg.evaluate("document.querySelector('#dlg-user').close()")
+                        check(f'{teil} {tag}: Fehlermeldung im langen Formular sichtbar (nicht auf Höhe 0)', fe[0] >= 15 and fe[1], fe)
                     if v == 'orders':   # Werkzeugleiste „Bestellungen“: Suche und Statusauswahl gleich hoch (wie in den anderen Leisten)
                         hoehen = pg.evaluate("['#orders-filter .search input', '#orders-filter select'].map((s) => Math.round(document.querySelector(s).getBoundingClientRect().height))")
                         check(f'{teil} {tag}: Suche und Auswahl der Werkzeugleiste gleich hoch', hoehen[0] == hoehen[1], hoehen)
