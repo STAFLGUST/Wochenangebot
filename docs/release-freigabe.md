@@ -77,7 +77,8 @@ Zwischenspeicher werden nur mit passender Prüfsumme aus der signierten Ubuntu-P
 
 ## Was der Server beim Einspielen macht (`deploy/freigabe-einspielen.sh`)
 
-1. Prüft Release-Lauf, CI und dass der Commit auf `main` liegt.
+1. Prüft Release-Lauf, CI und dass der Commit auf `main` liegt; ist SQLite aktiv und kennt der Release nur Dateien (keine
+   Speicherschicht), wird er hier abgelehnt – vor Image-Bau, Sicherung und Codewechsel.
 2. **Anwendungs-Image** (nur wenn das Release Dateien unter `deploy/image/` ändert und `COMPOSE_FILE` in `.env` die
    Ergänzungsdatei `deploy/anmeldung/docker-compose.anmeldung.yml` enthält): baut das Image des neuen Stands vorab
    (`docker compose build --pull app`, als `stafl-app:release-neu`). App-Code und laufende Container bleiben dabei

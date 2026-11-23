@@ -439,14 +439,20 @@ ok "Notfall-Rückfall auf den Stand mit Liste: dessen Liste und Seiten wieder ak
 H_SHA=$ALT_SHA   # aktueller Stand für die folgenden Prüfungen
 
 # Active SQLite must never be silently opened by an old file-only release.
-L_SHA=$(commit ohne-sqlite x "rm '$T/src/app/api/storage.php'")
+# … der Release ändert zugleich das Image (COMPOSE_FILE aktiv): abgelehnt vor Bau, Sicherung und Umtaggen – sonst liefe der
+# Rückfall mit einem release-vorher, das nie für diesen Versuch gemerkt wurde
+L_SHA=$(commit ohne-sqlite x "rm '$T/src/app/api/storage.php'; echo '# Update L' >> '$T/src/deploy/image/Dockerfile'")
 kill "$WEB_PID"; wait "$WEB_PID" 2>/dev/null || true
 python3 "$B/deploy/datenbank.py" migrate "$B/daten" --offline >/dev/null
 (cd "$B/app" && exec php -S 127.0.0.1:$WEB_PORT >/dev/null 2>&1) & WEB_PID=$!
 printf '{"release":"%s","ci_ok":["%s"]}' "$L_SHA" "$L_SHA" > "$T/state.json"
+printf 'COMPOSE_FILE=docker-compose.yml:deploy/anmeldung/docker-compose.anmeldung.yml\n' >> "$B/.env"; N0=$(anzahl)
 lauf || true
 ok "SQLite: inkompatiblen Release vor Codewechsel abweisen (Status fehlgeschlagen, nicht alle 2 Minuten erneut)" '[ "$(kopf)" = "$H_SHA" ] && grep -q "SQLite aktiv" "$T/out.txt" \
   && [ "$(st ok)" = False ] && [ "$(cat "$B/.release-abgelehnt")" = "$L_SHA" ]'
+ok "SQLite: abgelehnt vor Image-Bau, Sicherung und Umtaggen (kein Rückfallweg)" '! grep -qE "^(compose|docker)" "$T/out.txt" && [ "$(anzahl)" = "$N0" ] \
+  && ! grep -q "zurück auf" "$T/out.txt" && git -C "$B" diff --quiet HEAD -- deploy docker-compose.yml'
+cp "$T/env.ohne" "$B/.env"
 printf '%s\n{"vorher":"%s"}' '<?php http_response_code(404); exit; ?>' "$L_SHA" > "$B/daten/deployment.php"
 printf '%s\n' "$L_SHA" > "$B/.release-vorher"; rm -f "$B/.release-abgelehnt"   # hier zählt nur die Sperre wegen SQLite
 sh "$B/deploy/release-zurueck.sh" > "$T/out.txt" 2>&1 || true
