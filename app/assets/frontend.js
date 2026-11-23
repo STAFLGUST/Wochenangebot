@@ -1221,7 +1221,7 @@ function exportCSV(list, suffix) {
     const p = it.price;
     lines.push([
       it.code || '', it.name, it.category, it.origin || '', it.group, it.section, COND_LABEL[it.condition], it.features.join(', '),
-      p.status === 'value' ? F.zahl(p.value, 2, 2).replace(/\./g, '') : '',   // 2 Stellen wie die Anzeige, ohne Tausenderpunkt (CSV)
+      p.status === 'value' ? (rundeWieServer(p.value * 100) / 100).toFixed(2).replace('.', ',') : '',   // Cent wie Anzeige und Bestellung; CSV maschinenlesbar, ohne format.js
       (p.label ? p.label + ': ' : '') + PRICE_STATUS_LABELS[p.status],
       it.altPrices.map((a) => `${a.label}: ${priceShort(a)}`).join(' | '),
       mitGueltigkeit(m) ? (m.gueltigBis ? String(m.gueltigBis).split('-').reverse().join('.') : '') : m.week ? `KW ${m.week}/${m.year ?? ''}` : '',

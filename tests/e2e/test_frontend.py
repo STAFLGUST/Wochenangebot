@@ -177,11 +177,13 @@ with sync_playwright() as p:
     pg.click('#btn-theme')
 
     # Preise mit mehr als 2 Nachkommastellen (gespeichert bis 4): CSV und Preisfilter wie die Anzeige auf Cent
+    VIER = {'10601': 12.3456, '10823': 4.2549, '10701': 1.005}   # 1,005: toFixed allein ergäbe 1,00, der Server rundet auf 1,01
+
     def vier_stellen(route):
         r = route.fetch(); d = r.json()
         for it in d['offer']['items']:
-            if it.get('code') in ('10601', '10823'):
-                it['price'] = {'status': 'value', 'value': 12.3456 if it['code'] == '10601' else 4.2549}
+            if it.get('code') in VIER:
+                it['price'] = {'status': 'value', 'value': VIER[it['code']]}
         route.fulfill(response=r, json=d)
     c4 = b.new_context(viewport={'width': 1440, 'height': 960}, accept_downloads=True, service_workers='block')   # sonst beantwortet der Service Worker die Anfrage
     p4 = c4.new_page(); p4.on('pageerror', lambda e: errs.append(str(e)))
@@ -192,7 +194,8 @@ with sync_playwright() as p:
     p4.click('#btn-more')
     with p4.expect_download() as d: p4.click('[data-action="csv-all"]')
     z4 = {l.split(';')[0]: l for l in open(d.value.path(), encoding='utf-8-sig').read().splitlines()}
-    check('CSV: Preise auf Cent wie die Anzeige (12,3456 → 12,35; 4,2549 → 4,25)', ';12,35;' in z4['10601'] and ';4,25;' in z4['10823'] and '12,3456' not in z4['10601'], (z4['10601'], z4['10823']))
+    check('CSV: Preise auf Cent wie die Anzeige (12,3456 → 12,35; 4,2549 → 4,25; 1,005 → 1,01)', ';12,35;' in z4['10601'] and ';4,25;' in z4['10823'] and '12,3456' not in z4['10601']
+          and ';1,01;' in z4['10701'], (z4['10601'], z4['10823'], z4['10701']))
     p4.keyboard.press('Escape')
     p4.click('.fdrop[data-fd="price"] summary'); p4.fill('#pmin', '4,25'); p4.fill('#pmax', '4,25')
     p4.wait_for_function("document.querySelectorAll('tr.row').length < 276")
