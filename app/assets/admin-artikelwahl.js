@@ -106,7 +106,7 @@
     $('#ez-pick-body').innerHTML = `
       <div class="dlg-head ezp-head">
         <div class="ezp-t"><h2 id="ezp-title">${esc(cfg.titel || 'Artikel hinzufügen')}</h2><p>${cfg.subHTML || esc(cfg.sub || '')}</p></div>
-        <div class="search ezp-q">${icon('search')}<input id="ezp-q" type="search" autocomplete="off" placeholder="${esc(suchPlatzhalter())}" aria-label="Artikel suchen" value="${esc(pk.q)}"></div>
+        <div class="search ezp-q">${icon('search')}<input id="ezp-q" type="search" autocomplete="off" placeholder="${esc(suchPlatzhalter())}" aria-label="Artikel suchen: Nummer, Bezeichnung, Herkunft" value="${esc(pk.q)}"></div>
         <div class="ezp-f">${cfg.meta.bestand ? `<label class="check"><input type="checkbox" id="ezp-bestand"${z().nurBestand ? ' checked' : ''}> nur mit Bestand</label>` : ''}<label class="check"><input type="checkbox" id="ezp-angebot"${z().nurAngebot ? ' checked' : ''}> ${esc(cfg.angebotText || 'nur im Wochenangebot')}</label></div>
         <button class="btn icon ghost ezp-x" type="button" data-pick-close aria-label="Schließen">${icon('x')}</button>
       </div>
@@ -124,10 +124,11 @@
     const q = $('#ezp-q'); q.focus(); if (pk.q) q.select();
   }
   function renderPick() { const b = pickBasis(); renderPickNav(b); renderPickList(b); renderPickFoot(); }
-  /* Suchfeld oben: sucht in der gewählten Gruppe, ohne gewählte Gruppe in allen Gruppen */
+  /* Suchfeld oben: sucht in der gewählten Gruppe, ohne gewählte Gruppe in allen Gruppen. Kurz, weil das Feld beim Öffnen den
+     Fokus hat und Chrome einen Platzhalter dann ohne „…“ abschneidet; wonach gesucht wird, nennt die Beschriftung (aria-label). */
   function suchPlatzhalter() {
     const g = z().grp;
-    return g && g !== ALLE ? `In „${g === OHNE_VK ? 'ohne VK-Gruppe' : vkName(g) || g}“ suchen: Nummer, Bezeichnung, Herkunft …` : 'Artikel in allen Gruppen suchen: Nummer, Bezeichnung, Herkunft …';
+    return g && g !== ALLE ? `In „${g === OHNE_VK ? 'ohne VK-Gruppe' : vkName(g) || g}“ suchen …` : 'Alle Gruppen durchsuchen …';
   }
   /* Gruppenleiste nach dem Suchtext links filtern (Nummer oder Name); die gewählte Gruppe bleibt sichtbar */
   function gruppenFiltern() {

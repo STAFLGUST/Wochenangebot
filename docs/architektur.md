@@ -151,7 +151,9 @@ Angebotsseite im Design „Liquid Glass“ (Abschnitt am Ende von `app.css`, nur
 
 Eingabebereich seit 06.11.2026 im gemeinsamen Rahmen „C2“ (Seitenleiste vor der eigenen Navigation, Abschnitt
 „Rahmen „C2““ ganz am Ende von `admin.css`: Glas-Werte auf die ruhigen Flächen des Rahmens, keine Farbflächen, Kopfzeile flach,
-Logo in der Seitenleiste; die Anmeldekarte `.auth-card` wie die Anmeldeseite von Keycloak). Darunter unverändert die bisherige Gestaltung, deren Werte der Rahmen überschreibt –
+Logo in der Seitenleiste; die Anmeldekarte `.auth-card` wie die Anmeldeseite von Keycloak; seit 22.11.2026 auch Rundungen 16 px
+(`--r-glas`, `--r-glas-2`), Hauptknöpfe flach in `--r-akzent` ohne Schatten (`--primaer*`) und Fenster wie die Suche des Rahmens:
+Hintergrund nur abgedunkelt `--r-schleier` statt unscharf, Schatten `--r-schatten-menue`). Darunter unverändert die bisherige Gestaltung, deren Werte der Rahmen überschreibt –
 Design „Liquid Glass“ (Abschnitt am Ende von `admin.css`, nur `@media screen`, alle Regeln unter `body.adm`):
 eigene Farbwerte für Grund, Glas und Felder (`--glas`, `--glas-kopf`, `--glas-karte`, `--glas-stark`, `--glas-fenster`, `--aus`, `--feld` …),
 drei weiche Farbflächen fest hinter dem Inhalt (`body.adm::before`), Glas mit `backdrop-filter` (Kopfzeilen-Kapsel über
@@ -170,7 +172,7 @@ folgt zusätzlich der dunklen Systemeinstellung.
 der Gruppe `einheit`): **Logo** im dunklen Design weiß direkt auf dem Grund (eine Regel in `app.css` für jedes
 `logo-standard-fleisch*`, ebenso `legal.css` und die Anmeldeseite `deploy/anmeldung/theme/stafl/login/resources/css/stafl.css`);
 auf Modulseiten am Handy (≤ 480 px) nur das Bildzeichen. **Zurück-Knopf** `.stafl-zurueck` (`app.css`): Pfeil + „Dashboard“,
-36 px, rund, vor dem Logo; ≤ 560 px nur der Pfeil, im Eingabebereich mit Angebotsaktionen bis 1600 px nur der Pfeil.
+36 px, rund, vor dem Logo; ≤ 560 px nur der Pfeil, auf jedem Host gleich.
 **Waagerecht scrollende Leisten** (Reiter am Handy, Schnellauswahl der Kundenseite) tragen `.stafl-streifen`: Text läuft am
 Rand weich aus, solange in diese Richtung noch etwas folgt. **Hell/Dunkel am Konto** (`theme.js`, Aktion `theme_save`,
 Feld `theme` am Mitarbeiter): jeder Host hat eigenen Browser-Speicher (GR-108), daher übernimmt jede Seite nach dem Status

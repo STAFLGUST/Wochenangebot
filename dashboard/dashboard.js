@@ -222,7 +222,7 @@
     $('#db-zuletzt-liste').innerHTML = z.map((x) => {
       const m = S.alle[x.modul] || {}, href = modulZiel(x.modul, '');
       const inhalt = `<span class="db-ico klein" data-symbol="${esc(m.icon)}">${R.symbol(m.icon)}</span>`
-        + `<span class="db-zeile-text"><span class="db-zeile-titel db-zweizeilig">${esc(x.text)}</span><span class="db-zeile-meta">${esc([m.name, zeitText(x.zeit)].filter(Boolean).join(' · '))}</span></span>`;
+        + `<span class="db-zeile-text"><span class="db-zeile-titel db-zweizeilig" title="${esc(x.text)}">${esc(x.text)}</span><span class="db-zeile-meta">${esc([m.name, zeitText(x.zeit)].filter(Boolean).join(' · '))}</span></span>`;
       return `<li>${href ? `<a class="db-zeile" href="${esc(href)}" data-modul="${esc(x.modul)}">${inhalt}</a>` : `<span class="db-zeile">${inhalt}</span>`}</li>`;
     }).join('');
   }

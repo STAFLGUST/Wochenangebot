@@ -1,6 +1,6 @@
 """Einheitliches Erscheinungsbild aller Mitarbeiter-Oberflächen (Dashboard, Eingabebereich auf den Bereichs-Hosts Angebot,
-Verwaltung, Bestand, alle Modulseiten – HR, CRM, Controlling, Leergut, Marketing, QS, REWE, Sicherheit –, Abmeldeseite,
-Hinweis „Kein Zugang“): je hell/dunkel und 1440/390 px
+Verwaltung, Bestand, alle Modulseiten – HR, CRM, Controlling, Leergut, Marketing, QS, REWE, Sicherheit, Versand; vom
+Container-Import nur der Zurück-Knopf –, Abmeldeseite, Hinweis „Kein Zugang“): je hell/dunkel und 1440/390 px
 
 - kein waagerechtes Scrollen, kein abgeschnittener Text (Text breiter als sein Kasten bei verdecktem Überlauf, Text
   außerhalb des Bildschirms) – Ausnahmen nur für bewusst gekürzte Zellen mit vollem Text im Tooltip (title),
@@ -95,9 +95,21 @@ RAHMEN = r'''() => { const n = document.querySelector('#r-leiste'), k = document
            zu: getComputedStyle(n).visibility === 'hidden', kopf: !!k && k.getBoundingClientRect().height > 0, start: n.querySelector('[data-modul="start"]').getAttribute('href'),
            glas: [...document.querySelectorAll('body *')].filter((e) => { const s = getComputedStyle(e); return s.backdropFilter && s.backdropFilter !== 'none' && !/toast/.test(e.id + ' ' + e.className); })
              .map((e) => e.id || String(e.className)).slice(0, 5) }; }'''
+# „Artikel hinzufügen“: Zahl der Knopfreihen im Fuß, Breite des Platzhalters gegen den Platz im Suchfeld (Feld hat beim Öffnen
+# den Fokus – Chrome kürzt den Platzhalter dann ohne „…“)
+ARTIKELWAHL = r'''() => { const d = document.querySelector('#dlg-ez-pick'), i = d.querySelector('#ezp-q'), s = getComputedStyle(i);
+  const c = document.createElement('canvas').getContext('2d'); c.font = `${s.fontWeight} ${s.fontSize} ${s.fontFamily}`;
+  const reihen = new Set([...d.querySelectorAll('.ezp-foot > .btn')].filter((b) => b.offsetParent).map((b) => Math.round(b.getBoundingClientRect().top)));
+  return { platzhalter: Math.ceil(c.measureText(i.placeholder).width), feld: Math.floor(i.clientWidth - parseFloat(s.paddingLeft) - parseFloat(s.paddingRight)), reihen: reihen.size }; }'''
+# Rollen „Auf einen Blick“: Name jeder Kachel innerhalb der Kachel (lange Namen werden getrennt, ragen nicht hinaus)
+KACHELN = r'''() => [...document.querySelectorAll('.rl-kachel')].filter((k) => k.offsetParent).map((k) => { const n = k.querySelector('.rl-kachel-n'), r = document.createRange();
+  r.selectNodeContents(n); const t = r.getBoundingClientRect(), kb = k.getBoundingClientRect(); return [n.textContent.trim(), Math.round(t.left - kb.left), Math.round(kb.right - t.right)]; })
+  .filter((x) => x[1] < 0 || x[2] < 0)'''
+# Pfeil: Form des Symbols (aus dem Sprite der Seite über <use> oder vom Rahmen direkt gezeichnet)
 ZURUECK = r'''() => { const e = document.querySelector('.stafl-zurueck'); if (!e || !e.offsetParent) return null; const s = getComputedStyle(e), r = e.getBoundingClientRect();
-  return { h: Math.round(r.height), radius: s.borderTopLeftRadius, font: s.fontSize + ' ' + s.fontWeight, text: e.textContent.trim(), href: e.getAttribute('href'),
-           icon: !!e.querySelector('svg use[href="#i-back"]'), pad: s.paddingLeft + ' ' + s.paddingRight, farbe: s.color }; }'''
+  const svg = e.querySelector('svg'), use = svg && svg.querySelector('use'), form = use ? document.querySelector(use.getAttribute('href')) : svg;
+  return { h: Math.round(r.height), w: Math.round(r.width), radius: s.borderTopLeftRadius, font: s.fontSize + ' ' + s.fontWeight, text: e.textContent.trim(), href: e.getAttribute('href'),
+           icon: form ? form.innerHTML.trim() : null, pad: s.paddingLeft + ' ' + s.paddingRight, farbe: s.color }; }'''
 
 with sync_playwright() as pw:
     br = pw.chromium.launch()
@@ -131,7 +143,8 @@ with sync_playwright() as pw:
               ('marketing', None, '/module/marketing/', '#mkt-app:not([hidden])', []),
               ('qs', None, '/module/qs/', '#qm-app:not([hidden])', []),
               ('rewe', None, '/module/rewe/', '#rw-app:not([hidden])', []),
-              ('sicherheit', None, '/module/sicherheit/', '#sic-app:not([hidden])', [])]
+              ('sicherheit', None, '/module/sicherheit/', '#sic-app:not([hidden])', []),
+              ('versand', None, '/module/versand/', '#vs-app:not([hidden])', [])]
     zurueck = {}
     for breite in (1440, 390):
         for dunkel in (False, True):
@@ -155,11 +168,26 @@ with sync_playwright() as pw:
                         pg.wait_for_selector(f'#view-{v}:not([hidden])', timeout=20000)
                         pg.wait_for_function("() => !document.querySelector('.adm-page .loading:not([hidden])')", timeout=20000)
                     teil = f'{name}{"-" + v if v else ""}'
+                    if v == 'edit' and name == 'angebot' and not dunkel:   # „Artikel hinzufügen“: eine Knopfreihe (PC), Platzhalter passt ins Feld
+                        pg.click('#btn-add-art'); pg.wait_for_selector('#dlg-ez-pick[open] #ezp-q')
+                        aw = pg.evaluate(ARTIKELWAHL)
+                        pg.evaluate("document.querySelector('#dlg-ez-pick').close()")
+                        check(f'{teil} {tag}: „Artikel hinzufügen“ – Platzhalter passt ins Suchfeld' + (', Knöpfe in einer Reihe' if breite > 900 else ''),
+                              aw['platzhalter'] <= aw['feld'] and (breite <= 900 or aw['reihen'] == 1), aw)
+                    if v == 'rollen':   # „Auf einen Blick“: Namen bleiben in ihrer Kachel
+                        raus = pg.evaluate(KACHELN)
+                        check(f'{teil} {tag}: Rollen – Namen der Kacheln ragen nicht über die Kachel', not raus, raus)
+                    if v == 'orders':   # Werkzeugleiste „Bestellungen“: Suche und Statusauswahl gleich hoch (wie in den anderen Leisten)
+                        hoehen = pg.evaluate("['#orders-filter .search input', '#orders-filter select'].map((s) => Math.round(document.querySelector(s).getBoundingClientRect().height))")
+                        check(f'{teil} {tag}: Suche und Auswahl der Werkzeugleiste gleich hoch', hoehen[0] == hoehen[1], hoehen)
                     pg.screenshot(path=f'{SH}/einheit-{teil}-{tag}.png')
                     pg.evaluate('document.fonts.ready.then(() => true)')
                     weg = pg.evaluate(ABGESCHNITTEN)
                     check(f'{teil} {tag}: kein abgeschnittener Text', not weg, weg)
                     check(f'{teil} {tag}: kein waagerechtes Scrollen', pg.evaluate('document.documentElement.scrollWidth') <= breite)
+                    if bereich:   # Eingabebereich im Rahmen „C2“: Hauptknöpfe flach wie im Versand – kein Verlauf, kein Glühschatten
+                        glanz = pg.evaluate("[...document.querySelectorAll('.btn.primary')].filter((b) => b.offsetParent).map((b) => [b.textContent.trim().slice(0, 24), getComputedStyle(b).backgroundImage, getComputedStyle(b).boxShadow]).filter((x) => x[1] !== 'none' || x[2] !== 'none')")
+                        check(f'{teil} {tag}: Hauptknöpfe flach (ohne Verlauf und Schatten)', not glanz, glanz)
                     if not dunkel:
                         ohne = pg.evaluate("[...document.querySelectorAll('input[placeholder]')].filter((e) => e.offsetParent && getComputedStyle(e).textOverflow !== 'ellipsis').map((e) => e.id || e.name || e.placeholder).slice(0, 6)")
                         check(f'{teil} {tag}: lange Platzhalter enden mit „…“', not ohne, ohne)
@@ -168,6 +196,13 @@ with sync_playwright() as pw:
                         # Angebot am Handy: Zurück-Knopf und sechs Aktionen füllen die Kopfzeile – dort bewusst ohne Logo (admin.css)
                         ohne_logo = name == 'angebot' and breite <= 480
                         check(f'{teil} {tag}: Logo weiß ohne helle Fläche', (lg or ohne_logo) and all(x['bg'] in ('rgba(0, 0, 0, 0)', 'transparent') and ('invert' in x['filter'] or 'weiss' in x['src']) for x in lg), lg)
+                if breite == 1440 and not dunkel and name == 'angebot':   # Haus = „Start“ (Leiste); die Angebotsseite hat das Symbol aus dem Menü
+                    sy = pg.evaluate("['#btn-site', '#menu-more [data-act=open-site]'].map((s) => document.querySelector(s + ' use').getAttribute('href'))")
+                    check('angebot: Knopf „Angebotsseite“ mit demselben Symbol wie „Öffentliche Seite öffnen“, nicht dem Haus von „Start“', sy[0] == sy[1] != '#i-home', sy)
+                    pg.evaluate("document.querySelector('#vt-angebote').click()"); pg.wait_for_selector('#view-angebote:not([hidden]) .hint a')
+                    vw = pg.evaluate("""() => { const ref = document.createElement('button'); ref.className = 'link-btn'; document.querySelector('#view-angebote').append(ref);
+                        const r = [getComputedStyle(ref).color, [...document.querySelectorAll('#view-angebote a')].filter((a) => a.offsetParent).map((a) => a.textContent.trim() + ' | ' + getComputedStyle(a).color)]; ref.remove(); return r; }""")
+                    check('angebot → Angebote: Verweise in der Farbe aller Verweise (nicht Browser-Blau)', vw[1] and all(x.endswith('| ' + vw[0]) for x in vw[1]), vw)
                 if breite == 1440 and not dunkel:
                     check(f'{name}: gemeinsames Zahlenformat geladen (format.js)', pg.evaluate("!!(window.STAFL_FORMAT && window.STAFL_FORMAT.euro)"))
                     check(f'{name}: gemeinsame Suchregel geladen (suche.js)', pg.evaluate("!!(window.STAFL_SUCHE && window.STAFL_SUCHE.findet)"))
@@ -175,6 +210,10 @@ with sync_playwright() as pw:
                 if name != 'dashboard':
                     zurueck.setdefault(breite, {})[name] = zr
                     check(f'{name} {tag}: Zurück-Knopf zum Dashboard sichtbar', zr is not None and zr['icon'] and zr['href'] and (zr['href'].rstrip('/').endswith('dashboard') or zr['href'] == 'https://dashboard-stafl.de/'), zr)
+            # Container-Import (hell und dunkel wie die übrigen Seiten im Vergleich unten): Seitenkopf aus den Bausteinen des Rahmens – „Start“ setzt rahmen.js
+            pg.goto(B + '/module/containerimport/'); pg.wait_for_selector('#ci-app:not([hidden]) .r-seitenkopf .stafl-zurueck', timeout=20000)
+            zr = zurueck[breite]['containerimport'] = pg.evaluate(ZURUECK)
+            check(f'containerimport {tag}: Zurück-Knopf zum Dashboard sichtbar', zr is not None and zr['icon'] and zr['href'].rstrip('/').endswith('dashboard'), zr)
             ctx.close()
     # Fingerbedienung (Prüfung am Handy 10.11.2026): mit Finger (pointer: coarse) haben Eingabefelder, Auswahlen und Textfelder
     # auf jeder Seite mindestens 16 px Schrift (sonst zoomt iOS beim Antippen hinein) und kleine Knöpfe (.btn.sm) sind sicher
@@ -185,7 +224,11 @@ with sync_playwright() as pw:
         eingabe: [...document.querySelectorAll('input:not([type=checkbox]):not([type=radio]):not([type=range]):not([type=color]):not([type=file]):not([type=hidden]), select, textarea')]
           .filter((e) => sicht(e) && parseFloat(getComputedStyle(e).fontSize) < 16).map(n).slice(0, 6),
         knopf: [...document.querySelectorAll('.btn.sm')].filter((e) => sicht(e) && e.getBoundingClientRect().height < 32)
-          .map((e) => (e.id || e.textContent.trim().slice(0, 20)) + ' ' + Math.round(e.getBoundingClientRect().height)).slice(0, 6) }; }'''
+          .map((e) => (e.id || e.textContent.trim().slice(0, 20)) + ' ' + Math.round(e.getBoundingClientRect().height)).slice(0, 6),
+        // Tippflächen ≥ 36 px: Bestand in der Angebotszeile, „Zum Versand →“, Verweise im Versand
+        tipp: [...document.querySelectorAll('.e-bst, .save-state .link-btn, .vs-link')].filter(sicht).map((e) => [e.className, Math.round(e.getBoundingClientRect().height)]) }; }'''
+    bestand = json.load(open(os.path.join(os.path.dirname(__file__), '..', 'fixtures', 'bestand', 'summen.json'), encoding='utf-8'))
+    check('Bestand für die Angebotszeilen übernommen (erfundene Testdaten)', A.call('stock_import', {k: bestand[k] for k in ('date', 'source', 'articles', 'incoming')})[0] == 200)
     fctx = br.new_context(viewport={'width': 390, 'height': 844}, is_mobile=True, has_touch=True, locale='de-DE', timezone_id='Europe/Berlin',
                           extra_http_headers={'X-Forwarded-For': '198.51.100.40'})
     fp = fctx.new_page(); fp.on('pageerror', lambda e: fehler.append(f'{fp.url}: {e}'))
@@ -198,6 +241,10 @@ with sync_playwright() as pw:
         fi = fp.evaluate(FINGER)
         check(f'{name} Handy mit Finger: Eingaben ≥ 16 px (kein Hineinzoomen), kleine Knöpfe antippbar', fi['finger'] and not fi['eingabe'] and not fi['knopf'], fi)
         check(f'{name} Handy mit Finger: kein waagerechtes Scrollen', fp.evaluate('document.documentElement.scrollWidth') <= 390)
+        if name in ('angebot', 'versand'):   # Angebot mit Bestand (oben übernommen) zeigt den Bestand-Knopf, der Versand „Im Angebot ansehen“
+            fp.wait_for_selector('.e-bst' if name == 'angebot' else '.vs-link')
+            fi = fp.evaluate(FINGER)
+            check(f'{name} Handy mit Finger: Bestand-Knopf, „Zum Versand“ und Verweise mindestens 36 px hoch', fi['tipp'] and all(h >= 36 for _, h in fi['tipp']), fi['tipp'][:6])
     fctx.close()
     # Fenster (Vorgabe des Inhabers 02.11.2026): auf jeder Seite schließt ein Klick neben ein <dialog> es nie, Escape schließt.
     # Jedes Fenster der Seite wird direkt geöffnet (Inhalt egal – geprüft wird das gemeinsame Verhalten), dann wird an einer
@@ -208,6 +255,10 @@ with sync_playwright() as pw:
         .find(([x, y]) => x < r.left || x > r.right || y < r.top || y > r.bottom);
       return p || 'voll'; }'''
     OFFEN = "id => document.getElementById(id).open"
+    # Aussehen eines offenen Fensters (C2): Unschärfe des Hintergrunds, Rundung, Schatten
+    FENSTER_STIL = r'''(id) => { const d = document.getElementById(id), s = getComputedStyle(d);
+      return d.classList.contains('modal') || id === 'r-palette' ? [id, getComputedStyle(d, '::backdrop').backdropFilter, s.borderTopLeftRadius, s.boxShadow] : null; }'''
+    stile = {}
     # Hinweise (Toasts) liegen über einem offenen Fenster (oberste Ebene, theme.js) – sonst lägen sie unter dem unscharfen Hintergrund
     TOAST_OBEN = r'''async () => { const t = document.querySelector('[role="status"].toast, [role="status"][class*="-toast"]');
       const d = document.querySelector('dialog[id]:not([open])'); if (!t || !d) return 'ohne';
@@ -224,11 +275,16 @@ with sync_playwright() as pw:
             if breite == 1440:
                 oben = pg.evaluate(TOAST_OBEN)
                 check(f'{name}: Hinweise (Toast) erscheinen über einem offenen Fenster', oben in (True, 'ohne'), oben)
+            if breite == 1440 and (bereich or name == 'dashboard'):   # Suche (Strg K) wie jedes Fenster
+                pg.wait_for_selector('#r-suche'); pg.keyboard.press('Control+k'); pg.wait_for_selector('#r-palette[open]')
+                stile.setdefault(name, []).append(pg.evaluate(FENSTER_STIL, 'r-palette')); pg.keyboard.press('Escape')
             per_klick, nicht_esc = [], []
             for i in ids:
                 p = pg.evaluate(FENSTER_AUF, i)
                 if p is None:
                     continue
+                if breite == 1440 and bereich and pg.evaluate(FENSTER_STIL, i):
+                    stile.setdefault(name, []).append(pg.evaluate(FENSTER_STIL, i))
                 if p != 'voll':
                     pg.mouse.click(p[0], p[1])
                     if not pg.evaluate(OFFEN, i):
@@ -239,6 +295,11 @@ with sync_playwright() as pw:
             check(f'{name} {breite} px: Klick neben ein Fenster schließt es nicht ({len(ids)} Fenster)', not per_klick, per_klick)
             check(f'{name} {breite} px: Escape schließt jedes Fenster', not nicht_esc, nicht_esc)
         ctx.close()
+    # Fenster und Suche im Eingabebereich wie die Suche des Dashboards (rahmen.css): ohne Unschärfe, gleiche Rundung und Schatten
+    ref = stile['dashboard'][0]
+    for name in ('angebot', 'verwaltung', 'bestand'):
+        abw = [x for x in stile.get(name, []) if x[1:] != ref[1:]]
+        check(f'{name}: Fenster und Suche wie im Rahmen ({len(stile.get(name, []))}: ohne Unschärfe, {ref[2]}, Schatten der Suche)', len(stile.get(name, [])) > 1 and not abw, (ref, abw[:4]))
     # Getippte Eingaben: erstes Escape zeigt den gemeinsamen Hinweis (theme.js), zweites schließt – hier am Formular
     # „Korrektur melden“ (HR) und „Neue Kampagne“ (Marketing) stellvertretend für alle Formularfenster
     ctx, pg = neue_seite(1440, False)
@@ -391,10 +452,10 @@ with sync_playwright() as pw:
     check('Ohne Anmeldung nicht speicherbar', Client('198.51.100.77').call('theme_save', {'theme': 'dark'})[0] in (401, 403))
     check('Zurück auf „wie das Gerät“', A.call('theme_save', {'theme': ''})[0] == 200 and A.call('status')[1]['user'].get('theme') == '')
     for breite, je in zurueck.items():
-        # gleiche Form: Höhe, Rundung, Schrift, Schriftfarbe, Pfeil (die Beschriftung kann bei voller Kopfzeile – Angebot – nur für Screenreader sein)
+        # gleiche Form: Höhe, Breite (Pfeil und „Start“, am Handy nur der Pfeil – auf jedem Host gleich), Rundung, Schrift, Schriftfarbe, Pfeil
         # Schriftfarbe: gleicher Farbton (kleine Abweichungen der Textfarbe zwischen Eingabebereich und Modulen zählen nicht)
         ton = lambda c: tuple(round(int(x) / 16) for x in re.findall(r'\d+', c or '')[:3])   # noqa: E731
-        formen = {json.dumps({k: (ton(v) if k == 'farbe' else v) for k, v in (z or {}).items() if k in ('h', 'radius', 'font', 'icon', 'text', 'farbe')}, sort_keys=True) for z in je.values()}
+        formen = {json.dumps({k: (ton(v) if k == 'farbe' else v) for k, v in (z or {}).items() if k in ('h', 'w', 'radius', 'font', 'icon', 'text', 'farbe')}, sort_keys=True) for z in je.values()}
         check(f'{breite} px: Zurück-Knopf auf allen Modulseiten gleich', len(formen) == 1, je)
     check('keine Seitenfehler', not fehler, fehler[:4])
     br.close()

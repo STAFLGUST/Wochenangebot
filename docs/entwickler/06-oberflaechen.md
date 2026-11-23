@@ -688,9 +688,9 @@ Alle drei Seiten haben denselben Aufbau – eine eigenständige IIFE ohne `windo
    404/503/403 der Startaktion in eigene Hinweise („noch nicht freigegeben“, Wartung, fehlendes Recht).
 4. **Reiter** über `location.hash` (`#kalender`, `#cockpit` …), nur wenn der Knopf existiert und sichtbar ist.
 5. **Zurück zur Startseite:** gemeinsamer Knopf `.stafl-zurueck` (`app.css`) links im Kopf – `#btn-dashboard` im
-   Eingabebereich, `#hr-zurueck`, `#crm-zurueck` auf den Modulseiten (`../../dashboard/`, auf `*.dashboard-stafl.de`
+   Eingabebereich, `#hr-zurueck`, `#crm-zurueck` auf den Modulseiten, im Versand und Container-Import vom Rahmen (`../../dashboard/`, auf `*.dashboard-stafl.de`
    `https://dashboard-stafl.de/`). Pfeil `#i-back` + „Start“ (seit 06.11.2026, wie der Eintrag der Seitenleiste), 36 px, rund; ≤ 560 px oder mit Klasse `kompakt` nur
-   der Pfeil; im Eingabebereich mit Angebotsaktionen bis 1600 px nur der Pfeil (Platz in der Kopfzeile).
+   der Pfeil – auf jedem Host des Eingabebereichs gleich (seit 22.11.2026 auch auf dem Angebots-Host mit Beschriftung).
 
 Kacheln und Seitenleiste des Dashboards kommen ausschließlich aus `module_status` (Modulregister), Ziele über
 `STAFL_RAHMEN.ziel()` (`rahmen.js`, für die Tests weiter als `window.STAFL_KACHEL_ZIEL`); Stand und Klebeband „Bald“
@@ -825,7 +825,8 @@ Glas; Modulfarben nur an den Symbolen.
   gilt sie nur auf der Seite. Im Menü am Handy entfällt der Pin. `schmal`/`data-rahmen-schmal` sind seitdem ohne
   Wirkung (werden übergangen).
 - **„Start“** (gemeinsamer Knopf `.stafl-zurueck`, Beschriftung „Start“) bleibt im Kopf jeder Modulseite; im Rahmen ruhig mit
-  feiner Linie (36 px).
+  feiner Linie (36 px). Seiten mit dem Seitenkopf `.r-seitenkopf` (Versand, Container-Import) setzen ihn nicht selbst:
+  `rahmen.js` (`startKnopf`) stellt ihn über den Titel, Ziel wie der Eintrag „Start“ der Leiste (nicht auf der Startseite).
 - **Unter 900 px** setzt `rahmen.js` eine Kopfzeile mit Menüknopf (`#r-menue`, `aria-expanded`) vor den Inhalt; die
   Leiste wird zum Menü (unsichtbar und nicht per Tab erreichbar, solange zu). Escape, Klick daneben oder Tab aus dem
   Menü schließt es; bewegt wird sie nur beim Öffnen/Schließen (`r-bewegung`), nicht beim Wechsel der Fensterbreite.
@@ -853,8 +854,8 @@ Die Angebotsseite (`app/index.html`, `body.kseite`) nutzt dasselbe Muster im Abs
 schwebende Kapsel (`.topbar` mit `top: 10px` – klebende Tabellenköpfe daher `--header-h + 18px`), Umschalter als Segment
 in einer Glaskapsel, Fleischarten/Filter/Sortierung als Kapseln, Angebotsliste `.al` als Glaskarte (30 px) mit abgerundeten
 Zeilen ohne Spaltenlinien, Fenster und Menüs als Glasfenster. Andere Seiten mit `app.css` (Eingabebereich, Dashboard,
-Module) tragen die Klasse nicht und bleiben unverändert. Einzelheiten zum Eingabebereich (Kapsel, Karten 28 px, klebende
-Leisten fast deckend): [Architektur → Browser](../architektur.md#browser-appassets).
+Module) tragen die Klasse nicht und bleiben unverändert. Einzelheiten zum Eingabebereich (im Rahmen „C2“: Karten, Leisten und
+Fenster 16 px, Hauptknöpfe flach, Fenster ohne Unschärfe; klebende Leisten deckend): [Architektur → Browser](../architektur.md#browser-appassets).
 
 ### Symbole
 

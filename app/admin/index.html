@@ -72,7 +72,7 @@
       <div class="save-state" id="save-state" role="status" aria-live="polite"></div>
       <div class="actions">
         <button class="btn ghost" type="button" id="btn-undo" disabled title="Letzte Änderung rückgängig (Strg+Z)"><svg class="i" aria-hidden="true"><use href="#i-undo"/></svg><span class="lbl">Rückgängig</span></button>
-        <a class="btn ghost" id="btn-site" href="../index.html" target="_blank" rel="noopener" title="Öffentliche Angebotsseite in neuem Tab öffnen (veröffentlichter Stand)"><svg class="i" aria-hidden="true"><use href="#i-home"/></svg><span class="lbl">Angebotsseite</span></a>
+        <a class="btn ghost" id="btn-site" href="../index.html" target="_blank" rel="noopener" title="Öffentliche Angebotsseite in neuem Tab öffnen (veröffentlichter Stand)"><svg class="i" aria-hidden="true"><use href="#i-link"/></svg><span class="lbl">Angebotsseite</span></a>
         <button class="btn ghost" type="button" id="btn-preview" title="Entwurf des gewählten Angebots so ansehen, wie Kunden ihn nach dem Veröffentlichen sehen"><svg class="i" aria-hidden="true"><use href="#i-eye"/></svg><span class="lbl">Vorschau</span></button>
         <button class="btn" type="button" id="btn-ez-druck" title="Einzelangebot drucken oder als PDF speichern – mit dem Druckdialog der Angebotsseite"><svg class="i" aria-hidden="true"><use href="#i-print"/></svg><span class="lbl">Drucken / PDF</span></button>
         <button class="btn" type="button" id="btn-ez-mail" title="Einzelangebot per E-Mail an den Kunden senden"><svg class="i" aria-hidden="true"><use href="#i-mail"/></svg><span class="lbl">Per E-Mail senden</span></button>
@@ -118,6 +118,7 @@
       <button role="tab" type="button" id="vt-hist" aria-selected="false" aria-controls="view-hist"><svg class="i" aria-hidden="true"><use href="#i-chart"/></svg><span>Preisverlauf</span></button>
       <button role="tab" type="button" id="vt-stock" aria-selected="false" aria-controls="view-stock"><svg class="i" aria-hidden="true"><use href="#i-box"/></svg><span>Bestand</span></button>
       <button role="tab" type="button" id="vt-einkauf" aria-selected="false" aria-controls="view-einkauf"><svg class="i" aria-hidden="true"><use href="#i-cart"/></svg><span>Einkauf</span></button>
+      <button role="tab" type="button" id="vt-orders" aria-selected="false" aria-controls="view-orders" hidden><svg class="i" aria-hidden="true"><use href="#i-file"/></svg><span>Bestellungen</span></button>
       <div class="side-sep" id="side-stamm" aria-hidden="true">Stammdaten</div>
       <button role="tab" type="button" id="vt-master" aria-selected="false" aria-controls="view-master"><svg class="i" aria-hidden="true"><use href="#i-db"/></svg><span>Artikel<span class="m-hide">stammdaten</span></span></button>
       <button role="tab" type="button" id="vt-vkgruppen" aria-selected="false" aria-controls="view-vkgruppen" hidden><svg class="i" aria-hidden="true"><use href="#i-list"/></svg><span>VK-Gruppen</span></button>
@@ -131,7 +132,6 @@
       <button role="tab" type="button" id="vt-abteilungen" aria-selected="false" aria-controls="view-abteilungen" hidden><svg class="i" aria-hidden="true"><use href="#i-users"/></svg><span>Abteilungen</span></button>
       <div class="side-sep" id="side-admin" aria-hidden="true" hidden>Verwaltung</div>
       <button role="tab" type="button" id="vt-importe" aria-selected="false" aria-controls="view-importe" hidden><svg class="i" aria-hidden="true"><use href="#i-upload"/></svg><span>Import</span></button>
-      <button role="tab" type="button" id="vt-orders" aria-selected="false" aria-controls="view-orders" hidden><svg class="i" aria-hidden="true"><use href="#i-file"/></svg><span>Bestellungen</span></button>
       <button role="tab" type="button" id="vt-auswertung" aria-selected="false" aria-controls="view-auswertung" hidden><svg class="i" aria-hidden="true"><use href="#i-map"/></svg><span>Auswertung</span></button>
       <button role="tab" type="button" id="vt-mail" aria-selected="false" aria-controls="view-mail" hidden><svg class="i" aria-hidden="true"><use href="#i-mail"/></svg><span>E-Mail</span></button>
       <button role="tab" type="button" id="vt-users" aria-selected="false" aria-controls="view-users" hidden><svg class="i" aria-hidden="true"><use href="#i-users"/></svg><span>Mitarbeiter</span></button>

@@ -2094,6 +2094,21 @@ with sync_playwright() as p:
         pg.locator('#dlg-hr-person #hr-eintritt-hint').scroll_into_view_if_needed()
         pg.screenshot(path=os.path.join(SH, f'hr_verwaltung_eintritt_dialog_{breite}.png'))
         ctx.close()
+    # Verwaltung → Mitarbeiter (Administrator): Resturlaub in Einzahl und Mehrzahl – Spalte und Dialog. Kontostand der Antwort
+    # nachgestellt (−1 Tag ergibt sich z. B. bei neuen Mitarbeitern ohne Urlaubsanspruch durch den Betriebsurlaub 24.12./31.12.)
+    ctx, pg = anmelden('admin', PW, '198.51.100.2')
+    def rest_setzen(route):
+        r = route.fetch(); j = r.json()
+        for p_ in j.get('personen', []):
+            if p_['nutzer'] == ids['erika']: p_['konto']['rest'] = -1
+        route.fulfill(response=r, json=j)
+    pg.route('**/api/?action=mitarbeiter_hr*', rest_setzen)
+    pg.goto(B + '/admin/#users'); pg.wait_for_selector(f'#view-users tr[data-uid="{ids["erika"]}"] td.u-urlaub span')
+    spalte_ = pg.text_content(f'#view-users tr[data-uid="{ids["erika"]}"] td.u-urlaub span').strip()
+    pg.click(f'#view-users tr[data-uid="{ids["erika"]}"]'); pg.wait_for_selector(f'#dlg-user[open] p.hint:has-text("Urlaub {JE}:")')
+    dialog_ = pg.text_content(f'#dlg-user p.hint:has-text("Urlaub {JE}:")')
+    check('Verwaltung → Mitarbeiter: Resturlaub „−1 Tag“ in der Einzahl (Spalte und Dialog)', spalte_ == '−1 Tag' and f'Urlaub {JE}: −1 Tag Rest' in dialog_, (spalte_, dialog_))
+    ctx.close()
     hr(ids['erika'], eintritt=None)
     ctx, pg = anmelden('paul', 'Personal-Zugang-77', '198.51.100.5', 390)
     pg.goto(B + '/admin/#urlaub'); pg.wait_for_selector('#hr-uebertrag-bis')

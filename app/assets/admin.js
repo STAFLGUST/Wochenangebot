@@ -3319,7 +3319,7 @@
         <td class="muted">${p && p.group !== s.group ? esc(p.group) : ''}</td></tr>`);
     });
     $('#series-body').innerHTML = `
-      <div class="dlg-head"><div><h2 id="ser-title">${esc(s.name)}</h2><p>${s.code ? 'Art.-Nr. ' + esc(s.code) + ' · ' : ''}${esc(s.group)}${s.inLatest ? '' : ' · nicht mehr im Angebot'}</p></div>
+      <div class="dlg-head"><div><h2 id="ser-title">${esc(s.name)}</h2><p>${[s.code && 'Art.-Nr. ' + esc(s.code), s.group && esc(s.group), !s.inLatest && 'nicht mehr im Angebot'].filter(Boolean).join(' · ')}</p></div>
         <button type="button" class="btn icon ghost" data-close aria-label="Schließen">${icon('x')}</button></div>
       <div class="dlg-body">
         <div class="ser-range">${rangeSeg()}<span class="muted">${esc(wkLong(W[0]))} – ${esc(wkLong(W[W.length - 1]))}${x.delta ? ` · Änderung <span class="delta ${x.delta > 0 ? 'up' : 'down'}">${fmtDelta(x.delta)}</span>` : ''}</span></div>
@@ -3639,7 +3639,7 @@
     const zahl = (v) => fmtNum.format(v), bereich = (e) => (f.min != null && f.max != null ? `${zahl(f.min)} – ${zahl(f.max)}${e}` : f.min != null ? `ab ${zahl(f.min)}${e}` : `bis ${zahl(f.max)}${e}`);
     if (s.typ === 'text') return `${s.titel} enthält „${f.q}“`;
     if (s.typ === 'zahl') return `${s.titel} ${bereich(' kg')}`;
-    if (s.typ === 'preis') return `${s.titel}: ${[f.art === 'mit' ? 'mit Preis' : f.art === 'ohne' ? 'ohne Preis' : '', f.min != null || f.max != null ? bereich(' €') : ''].filter(Boolean).join(', ')}`;
+    if (s.typ === 'preis') return `${s.titel}: ${[f.art === 'mit' ? 'mit Preis' : f.art === 'ohne' ? 'ohne Preis' : '', f.min != null || f.max != null ? bereich(' €/kg') : ''].filter(Boolean).join(', ')}`;
     if (s.typ === 'mhd') return `${s.titel}: ${[(f.stufen || []).map((x) => MHD_STUFEN.find((m) => m[0] === x)[1]).join(', '), f.von || f.bis ? `${f.von ? 'ab ' + mhdShort(f.von) : ''}${f.von && f.bis ? ' ' : ''}${f.bis ? 'bis ' + mhdShort(f.bis) : ''}` : ''].filter(Boolean).join('; ')}`;
     return `${s.titel}: ${f.art === 'mit' ? 'mit Zugängen' : 'ohne Zugänge'}`;
   }
@@ -3666,7 +3666,7 @@
     const art = (opts) => `<select ${a('art')} aria-label="${esc(s.titel)}">${opts.map(([v, t]) => `<option value="${v}"${(f.art || '') === v ? ' selected' : ''}>${t}</option>`).join('')}</select>`;
     if (s.typ === 'text') return `<input type="search" ${a('q')} value="${esc(f.q || '')}" placeholder="enthält … (${esc(s.ph)})" aria-label="${esc(s.titel)} enthält" autocomplete="off">`;
     if (s.typ === 'zahl') return `<div class="st-fzeile">${num('min', 'von', 'kg')}${num('max', 'bis', 'kg')}</div>`;
-    if (s.typ === 'preis') return `${art([['', 'alle Artikel'], ['mit', 'nur mit Preis'], ['ohne', 'nur ohne Preis']])}<div class="st-fzeile">${num('min', 'von', '€')}${num('max', 'bis', '€')}</div>`;
+    if (s.typ === 'preis') return `${art([['', 'alle Artikel'], ['mit', 'nur mit Preis'], ['ohne', 'nur ohne Preis']])}<div class="st-fzeile">${num('min', 'von', '€/kg')}${num('max', 'bis', '€/kg')}</div>`;
     if (s.typ === 'mhd') return `<div class="st-fstufen">${MHD_STUFEN.map(([v, t]) => `<label class="${v.startsWith('mhd-') ? v : ''}"><input type="checkbox" ${a('stufe')} value="${v}"${(f.stufen || []).includes(v) ? ' checked' : ''}>${v === 'mhd-past' ? SKULL : ''}${t}</label>`).join('')}</div>
       <div class="st-fzeile"><label class="st-fz"><span>ab</span><input type="date" ${a('von')} value="${f.von || ''}" aria-label="MHD ab"></label><label class="st-fz"><span>bis</span><input type="date" ${a('bis')} value="${f.bis || ''}" aria-label="MHD bis"></label></div>`;
     return art([['', 'alle Artikel'], ['mit', 'nur mit erwarteten Zugängen'], ['ohne', 'nur ohne erwartete Zugänge']]);
@@ -4219,10 +4219,13 @@
     const w = window.open('', '_blank');
     if (!w) { toast('Druckfenster wurde blockiert – bitte Pop-ups für diese Seite erlauben.'); return; }
     const title = `Bestand vom ${stock.date ? dmy(stock.date) : '?'}${isMhdQuery(stockQ) ? ` – MHD bis ${dmy(isoToday(14))}` : stockQ ? ` – Suche „${stockQ}“` : ''}${Object.keys(stockFilter).length ? ` – Filter: ${filterAlle()}` : ''}`;
+    const schrift = new URL('../assets/fonts/geist-latin-wght-normal.woff2', location.href).href;   // Druckfenster lädt app.css nicht
     w.document.write(`<!doctype html><html lang="de"><head><meta charset="utf-8"><title>${esc(title)}</title><style>
       @page { size: A4 landscape; margin: 10mm; }
+      @font-face { font-family: "Geist"; font-weight: 100 900; src: url("${schrift}") format("woff2"); }
       * { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
-      body { font: 9.5pt/1.3 -apple-system, "Segoe UI", Roboto, Arial, sans-serif; color: #1b1a18; margin: 0; }
+      body { font: 9.5pt/1.3 "Geist", -apple-system, "Segoe UI", Roboto, Arial, sans-serif; color: #1b1a18; margin: 0; }
+      .s-reg { display: inline-flex; flex-direction: column; align-items: flex-end; } .s-eta { font-size: 7.5pt; font-weight: 600; color: #555; } .s-eta.alt { color: #b45309; }
       h1 { font-size: 13pt; margin: 0 0 2px; } .meta { color: #666; font-size: 8.5pt; margin: 0 0 8px; }
       table { width: 100%; border-collapse: collapse; } th, td { padding: 2.5px 5px; border-bottom: .5pt solid #ddd; }
       th { font-size: 8pt; text-align: center; vertical-align: bottom; border-bottom: 1pt solid #999; }
@@ -4236,7 +4239,8 @@
       ${stockTableHTML(res, true).replace(/ tabindex="0"/g, '').replace(/<button[^>]*>/g, '').replace(/<\/button>/g, '')}
       </body></html>`);
     w.document.close();
-    setTimeout(() => { try { w.focus(); w.print(); } catch { /* Fenster geschlossen */ } }, 300);
+    const drucken = () => { try { w.focus(); w.print(); } catch { /* Fenster geschlossen */ } };
+    setTimeout(() => { try { w.document.fonts.ready.then(drucken); } catch { drucken(); } }, 300);   // Schrift erst geladen, dann drucken
   }
 
   /* ======================= Angebot: Vorwoche, Bestand ======================= */
