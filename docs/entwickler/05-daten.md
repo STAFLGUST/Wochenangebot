@@ -1027,20 +1027,40 @@ Die einzige Beschreibung der Regeln; Code-Kommentare verweisen hierher.
   `--entfernen <sendung-id>[,…]` entfernt es diese Kalkulationen aus dem Dokument. Ohne geprüften Export wird nichts entfernt –
   die Exportdatei ist das Archiv dieser Vorgänge (GoBD) und gehört in die Sicherung. Die Anwendung selbst löscht nie eine Fassung.
 
-### Container-Import: Grenze der Schnappschuss-Umrisse (`module/containerimport/eudr.php`, seit 23.11.2026)
+### Container-Import: Umrisse abgeschlossener Bewertungen (`module/containerimport/eudr.php`, seit 23.11.2026)
 
-- Jeder Abschluss einer Bewertung kopiert die Farmer samt Umriss in `abschluss.betriebe` von `containerimport-eudr-sendungen`,
-  beim Wiederöffnen wandert er nach `fruehere` (die letzten `EUDR_MAX_FRUEHERE` behalten ihre Farmer). Jede Aktion des Moduls
-  liest das ganze Dokument; ohne Grenze brach `store_read` ab rund 400 000 Punkten mit einem Speicherfehler ab (HTTP 500 für
-  Container-Import, Tracking, Dokumente und Kalkulation).
-- **`EUDR_MAX_PUNKTE_SCHNAPPSCHUESSE` = 100 000** Punkte aller Umrisse in Abschlüssen und früheren Abschlüssen zusammen
-  (`eudr_schnappschuss_punkte`), geprüft beim Abschluss; darüber 422 statt eines Speicherabbruchs. Wiederöffnen fügt keine
-  Punkte hinzu und geht immer. Das Datenformat bleibt unverändert (GR-006).
-- **Gemessen** (Dateibetrieb, `memory_limit = 128M`, alle Bibliotheken geladen wie in einer Anfrage): 100 000 Punkte sind rund
-  2,8 MiB Dokument und 31 MiB Speicher; mit Farmern an `EUDR_MAX_PUNKTE` (150 000, allein 54 MiB) braucht der Stand der Seite
-  85 MiB, der Abschluss 86 von 128 MiB.
-- **Greift die Grenze**, lässt sich keine weitere Bewertung abschließen. Abhilfe ist der Umbau „Umrisse der Schnappschüsse in
-  ein eigenes Dokument je Container“ (Entscheidung des Inhabers, Datenformat und Aufbewahrung nach GR-106).
+- **Warum:** Jeder Abschluss kopierte die Farmer samt Umriss in `abschluss.betriebe` von `containerimport-eudr-sendungen`.
+  Jede Aktion des Moduls liest dieses Dokument ganz. Ab rund 400 000 Punkten brach `store_read` mit einem Speicherfehler ab
+  (HTTP 500 für Container-Import, Tracking, Dokumente und Kalkulation). Eine Gesamtgrenze (KERN-3, 100 000 Punkte) hätte
+  nach rund 50 Abschlüssen jeden weiteren Abschluss verweigert; sie ist wieder entfernt.
+- **`containerimport-eudr-schnappschuss/<Kennung>`** (je Abschluss ein Dokument, `eudr_schnappschuss_ablegen`):
+  `{"sendung": "s…", "wer": {"t", "von"}, "betriebe": [<Sichten der Farmer samt "geometrie">]}`. Einmal geschrieben, nie
+  geändert oder gelöscht (GoBD, GR-106); die Kennung `a…` ist neu je Abschluss. Höchstens `EUDR_MAX_PUNKTE` Punkte, weil die
+  Farmer eines Containers eine Teilmenge aller Farmer sind (gemessen: 150 000 Punkte sind 3,4 MiB, Lesen und Export 48 von
+  128 MiB).
+- **Am Container** steht nur noch `abschluss.betriebe` ohne `geometrie` und `abschluss.schnappschuss`
+  = `{"id", "sha256", "punkte"}`. `sha256` ist über `json_encode` der Farmer gebildet (`eudr_schnappschuss_summe`).
+  `eudr_schnappschuss_betriebe` liest die Umrisse und prüft dabei die Prüfsumme; fehlt das Dokument oder passt sie nicht,
+  antworten Export und Karte mit 500 und einem Hinweis statt mit veränderten Umrissen.
+- **Ältere Abschlüsse** (ohne `schnappschuss`) tragen die Umrisse weiter eingebettet und werden so gelesen (GR-006). Es gibt
+  keine Migration; Wiederöffnen verschiebt einen Abschluss wie bisher nach `fruehere`, ein neuer Abschluss legt ein neues
+  Dokument an. Frühere Abschlüsse verweisen weiter auf ihr Dokument (auch wenn `fruehere[*].betriebe` nach
+  `EUDR_MAX_FRUEHERE` entfällt).
+- **Leser:** Der Stand der Seite (`eudr_sendung_sicht`) liefert die Farmer jedes Abschlusses ohne Umriss. Die Karte im Fenster
+  „Container“ holt sie mit `containerimport_eudr_schnappschuss` (GET `sendung`, Recht „EUDR ansehen“), der Export für TRACES
+  liest sie über `eudr_schnappschuss_betriebe` (ohne die aktuellen Farmer zu lesen). Druck, Liste und Gesamtprüfung brauchen
+  keinen Umriss.
+- **Gemessen** (`memory_limit = 128M`, alle Bibliotheken geladen, 100 Farmer zu 200 Punkten, je Container 10 Farmer):
+  vorher bei 120 Abschlüssen 6,6 MiB Dokument, Stand 90 MiB Spitze und 7,4 MiB Antwort, bei 200 Abschlüssen Speicherabbruch;
+  nachher bei 200 Abschlüssen 1,9 MiB Dokument, Stand und Abschluss 32 MiB Spitze, 2,9 MiB Antwort.
+- **Rückfall auf eine Vorversion:** Sie liest alle Container weiter und schreibt den Verweis beim Speichern unverändert zurück.
+  Bei Abschlüssen ab diesem Stand sieht sie keine Umrisse: Die Karte im Fenster zeichnet nicht (Fehler in der
+  Browser-Konsole), ihr Export liefert die Farmer mit `"geometry": null` – diese Datei nicht bei TRACES einreichen. Liste,
+  Profil, Druck und Gesamtprüfung zeigt sie wie gewohnt. Nach der Rückkehr ist alles wieder da (geprüft mit dem Stand vor
+  KERN-3b gegen Daten dieses Stands).
+- **Sicherung:** Die Dokumente liegen im Dateibetrieb im Unterordner `containerimport-eudr-schnappschuss/` und kommen mit
+  `deploy/sichern.sh` ins Archiv; im SQLite-Betrieb stehen sie in der Datenbank und damit im Abzug (`deploy/datenbank.py
+  snapshot`). Beides am 23.11.2026 mit einem Wegwerf-Ordner geprüft.
 
 ## 5.4 Datenverantwortung (GR-101)
 
