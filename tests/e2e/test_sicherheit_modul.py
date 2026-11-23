@@ -284,6 +284,11 @@ with sync_playwright() as p:
     pd.wait_for_selector('#db-notfall:not([hidden])')
     check('Dashboard: Hinweis „Notfallmodus aktiv“ für Administratoren', 'Notfallmodus aktiv' in pd.inner_text('#db-notfall'))
     ctx2.close()
+    # Hauptknopf im aktiven Notfall auch mit Zeiger darüber lesbar (Rahmen-Hover darf die weiße Fläche nicht überstimmen)
+    pg.hover('#nf-aus'); pg.evaluate("Promise.all(document.getAnimations().filter((a) => a instanceof CSSTransition).map((a) => a.finished.catch(() => null)))")
+    kh = pg.evaluate('''(s) => { const L = (c) => { const v = c.match(/[\\d.]+/g).slice(0, 3).map((x) => { x = x / 255; return x <= .03928 ? x / 12.92 : ((x + .055) / 1.055) ** 2.4; }); return .2126 * v[0] + .7152 * v[1] + .0722 * v[2]; }; const e = document.querySelector(s), st = getComputedStyle(e); const a = L(st.backgroundColor), b = L(st.color); return [st.backgroundColor, st.color, Math.round((Math.max(a, b) + .05) / (Math.min(a, b) + .05) * 100) / 100]; }''', '#nf-aus')
+    check('Notfall aktiv: „Notfall beenden …“ mit Zeiger darüber lesbar (Kontrast ≥ 4,5:1)', kh[2] >= 4.5, kh)
+    pg.mouse.move(0, 0)
     pg.click('#nf-aus'); pg.wait_for_selector('#sic-dlg[open] #nf-notiz')
     check('Beenden-Dialog nennt den feldbezogenen Rückweg und die unberührten Listen',
           'bleibt so, wie Sie es eingestellt haben' in pg.inner_text('#sic-dlg') and 'nie sperren' in pg.inner_text('#sic-dlg'),

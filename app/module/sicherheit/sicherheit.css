@@ -260,7 +260,7 @@ td.sic-pfad { overflow-wrap: normal; }   /* in der Tabelle Dateinamen am Stück 
 .sic-held.aktiv { background: linear-gradient(125deg, var(--sic-rot), var(--sic-rot-dunkel)); color: #fff; border-color: transparent; box-shadow: 0 16px 40px rgba(140, 20, 36, .32); }
 .sic-held.aktiv .sic-held-icon { background: rgba(255, 255, 255, .16); color: #fff; }
 .sic-held.aktiv .sic-ueber, .sic-held.aktiv .sub { color: rgba(255, 255, 255, .85); }
-.sic-held.aktiv .btn.primary { background: #fff; border-color: #fff; color: var(--sic-rot-dunkel); }
+.sic-held.aktiv .btn.primary, .sic-held.aktiv .btn.primary:hover { background: #fff; border-color: #fff; color: var(--sic-rot-dunkel); }
 .sic-held.aktiv .sic-dl dt { color: rgba(255, 255, 255, .8); }
 .sic-held.warn .sic-held-icon { background: var(--sic-warn-bg); color: var(--sic-warn); }
 .sic-held.bad .sic-held-icon { background: var(--sic-bad-bg); color: var(--sic-bad); }
@@ -470,7 +470,7 @@ button.lf-marke:hover { background: var(--sic-bad-bg); }
 .sic-konsole.aktiv { background: linear-gradient(125deg, var(--sic-rot), var(--sic-rot-dunkel)); color: #fff; border-color: transparent; }
 .sic-konsole.aktiv .sic-ueber, .sic-konsole.aktiv span { color: rgba(255, 255, 255, .9); }
 .ko-titel { font-size: 20px; }
-.sic-konsole.aktiv .btn.primary { align-self: flex-start; background: #fff; border-color: #fff; color: var(--sic-rot-dunkel); }
+.sic-konsole.aktiv .btn.primary, .sic-konsole.aktiv .btn.primary:hover { align-self: flex-start; background: #fff; border-color: #fff; color: var(--sic-rot-dunkel); }
 .sic-evliste button, .ev-zeile { display: grid; grid-template-columns: 46px 12px minmax(0, 1fr); gap: 0 10px; align-items: start; }
 .ev-zeile { padding: 8px 10px; font-size: 13.5px; }
 .ev-zeit { color: var(--sic-muted); font-size: 12.5px; padding-top: 1px; }
