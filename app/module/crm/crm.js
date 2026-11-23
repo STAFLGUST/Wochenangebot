@@ -147,12 +147,14 @@
     S.byKey.set(k.key, k);
   }
   /* vorher: Stand von Ansprechpartnern bzw. Notiz beim Öffnen – der Server lehnt mit 409 ab, wenn jemand das Feld inzwischen
-     geändert hat; dann gilt seine Fassung (Liste neu gezeigt, Notiz vom Aufrufer zurückgesetzt) */
+     geändert hat; die Basis steht dann auf seiner Fassung (Liste neu gezeigt; bei der Notiz bleibt der eigene Text im Feld,
+     die fremde Fassung zeigt der Aufrufer im Hinweis) */
   async function speichereFelder(key, felder, vorher = null) {
     const r = await api('crm_kunde_save', vorher ? { key, felder, vorher } : { key, felder });
     const neu = (r.status === 200 || r.status === 409) ? r.data.kunde : null;
     if (neu) { ersetze(neu); if (basis.key === key) for (const f of Object.keys(vorher || {})) basis[f] = neu.crm[f]; }
     if (r.status === 409 && neu && vorher && 'kontakte' in vorher && offenKey === key && $('#kontakte')) $('#kontakte').innerHTML = neu.crm.kontakte.map(kontaktZeile).join('');
+    if (r.status === 409 && vorher && 'notiz' in vorher) return null;   // Notiz: der Aufrufer zeigt die fremde Fassung im Hinweis am Feld
     if (r.status !== 200) { toast(fehlerText(r, 'Speichern fehlgeschlagen'), true); return null; }
     return neu;
   }
@@ -829,9 +831,15 @@
       if (name === 'anrufAktiv') v = v === 'Ja';
       if (['potenzialKg', 'preisKg', 'dbKg', 'bestellKg'].includes(name)) v = v.trim() === '' ? null : v.trim();   // deutsche Schreibweise liest der Server (crm_zahl)
       blattStatus('Wird gespeichert …');
-      const k = await speichereFelder(offenKey, { [name]: v }, name === 'notiz' ? { notiz: basis.notiz } : null);
+      const basisNotiz = basis.notiz;
+      const k = await speichereFelder(offenKey, { [name]: v }, name === 'notiz' ? { notiz: basisNotiz } : null);
+      if (name === 'notiz') $('#notiz-fremd')?.remove();
       if (k) blattStatus('Gespeichert.', 'ok');
-      else { blattStatus('Nicht gespeichert – bitte Eingabe prüfen.', 'fehler'); const alt = S.byKey.get(offenKey); if (alt) el.value = name === 'anrufAktiv' ? (alt.crm.anrufAktiv ? 'Ja' : 'Nein') : zahlOderText(alt.crm[name]); }
+      else if (name === 'notiz' && basis.notiz !== basisNotiz) {
+        // 409: die Basis steht jetzt auf der fremden Fassung; der eigene Text bleibt im Feld, Speichern ist eine bewusste Entscheidung
+        blattStatus('Nicht gespeichert – die Notiz wurde inzwischen geändert.', 'fehler');
+        el.closest('label').insertAdjacentHTML('afterend', `<div class="crm-meldung fehler breit" id="notiz-fremd" role="status">Inzwischen von ${esc(S.byKey.get(offenKey)?.crm.geaendertVon || 'jemand anderem')} gespeichert: ${basis.notiz ? `„${esc(basis.notiz)}“` : '(leer)'}. Ihr Text steht weiter im Feld – ergänzen oder so übernehmen. <button type="button" class="btn" data-notiz-behalten>Meinen Text speichern</button></div>`);
+      } else { blattStatus('Nicht gespeichert – bitte Eingabe prüfen.', 'fehler'); const alt = S.byKey.get(offenKey); if (alt) el.value = name === 'anrufAktiv' ? (alt.crm.anrufAktiv ? 'Ja' : 'Nein') : zahlOderText(alt.crm[name]); }
       return;
     }
     // Auswahl direkt in einer Tabelle (Kunden, Wiedervorlage, Pipeline)
@@ -940,6 +948,7 @@
     if (t.closest('[data-schliessen]')) { if (t.closest('#dlg-kunde') && !kuSchliessenOk()) return; t.closest('dialog').close(); return; }
     if (t.closest('[data-kontakt-neu]')) { $('#kontakte').insertAdjacentHTML('beforeend', kontaktZeile()); $('#kontakte [data-kontakt]:last-child input').focus(); return; }
     if (t.closest('[data-kontakt-weg]')) { t.closest('[data-kontakt]').remove(); return; }
+    if (t.closest('[data-notiz-behalten]')) { $('[data-blatt="notiz"]').dispatchEvent(new Event('change', { bubbles: true })); return; }   // ohne Änderung im Feld feuert der Browser kein change
     if (t.closest('[data-kontakte-speichern]')) {
       blattStatus('Ansprechpartner werden gespeichert …');
       const k = await speichereFelder(offenKey, { kontakte: kontakteAusFormular() }, { kontakte: basis.kontakte });

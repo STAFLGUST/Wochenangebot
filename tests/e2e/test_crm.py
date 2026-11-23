@@ -3,7 +3,8 @@
 Geprüft: Freigabe (produktiv seit 23.10.2026: jeder Mitarbeiter mit CRM-Recht, keine Testfreigabe), Rechte crm.sehen / crm.bearbeiten /
 crm.exportieren serverseitig (GR-103) inkl. ohne Anmeldung, ohne CSRF, falsche Methode; Kunden kommen aus den
 Kundenstammdaten der Verwaltung (nur lesend, E-1: das CRM schreibt das Dokument „kunden“ nie, keine Zugangsdaten in der
-Antwort); Kundenblatt (nur mitgeschickte Felder, gleichzeitiges Bearbeiten verschiedener Felder, Prüfungen und Grenzen);
+Antwort); Kundenblatt (nur mitgeschickte Felder, gleichzeitiges Bearbeiten verschiedener Felder, Prüfungen und Grenzen;
+Gesprächsnotiz nach 409: eigener Text bleibt im Feld, fremde Fassung im Hinweis);
 Aktivitäten (Letzter Kontakt, nächster Schritt, Bestellung → letzter Auftrag, Schnappschuss von Firma/Kundennummer nach
 GR-106); Interessenten; CSV-Export (Recht, BOM, keine Formeln); Protokoll ohne Kontaktdaten und Notizen; Oberfläche
 (Cockpit, Kunden, Kundenblatt, Wiedervorlagen, Pipeline, Karte, Auswertung, hell/dunkel; Desktop und 390 px).
@@ -345,6 +346,24 @@ with sync_playwright() as p:
     check('Ansprechpartner von anderer Sitzung ergänzt: Hinweis, Liste mit der neuen Fassung, nichts überschrieben', st_x == 200 and namen_ == ['Dora Disponentin', 'Erik Einkauf']
           and liste_ == ['Dora Disponentin', 'Erik Einkauf'] and 'nicht gespeichert' in pg.text_content('#blatt-status') and 'inzwischen' in pg.text_content('#crm-toast'),
           (st_x, namen_, liste_, pg.text_content('#blatt-status')))
+    # Gesprächsnotiz von anderer Sitzung geändert: eigener Text bleibt im Feld, die fremde Fassung steht im Hinweis; Übernehmen ist eine bewusste Entscheidung
+    _n = dokument('crm-kunden')['eintraege']['kaaa111111111'].get('notiz', '')
+    st_x, _ = X.call('crm_kunde_save', {'key': 'kaaa111111111', 'felder': {'notiz': 'Bedarf: Kalbsrücken'}, 'vorher': {'notiz': _n}})
+    nz_ = '#kunde-inhalt textarea[data-blatt="notiz"]'
+    pg.wait_for_function("!document.querySelector('#crm-toast').classList.contains('zeigen')")   # Meldung des vorigen Konflikts abwarten
+    pg.fill(nz_, 'Bedarf: Rinderbrust'); pg.press(nz_, 'Tab')
+    pg.wait_for_function("document.querySelector('#blatt-status').textContent.startsWith('Nicht gespeichert')")
+    hinweis_ = pg.evaluate("document.querySelector('#notiz-fremd')?.textContent || ''")
+    check('Gesprächsnotiz inzwischen geändert: eigener Text bleibt im Feld, fremde Fassung mit Namen im Hinweis (keine irreführende Meldung „neue Fassung geladen“), nichts überschrieben', st_x == 200
+          and pg.input_value(nz_) == 'Bedarf: Rinderbrust' and 'Kalbsrücken' in hinweis_ and 'Xena Export' in hinweis_ and 'zeigen' not in pg.get_attribute('#crm-toast', 'class') and dokument('crm-kunden')['eintraege']['kaaa111111111']['notiz'] == 'Bedarf: Kalbsrücken',
+          (st_x, pg.input_value(nz_), hinweis_))
+    if hinweis_:
+        pg.locator('#notiz-fremd').scroll_into_view_if_needed(); pg.screenshot(path=os.path.join(SH, 'crm_notiz_konflikt_1280.png'))
+        pg.set_viewport_size({'width': 390, 'height': 844}); pg.locator('#notiz-fremd').scroll_into_view_if_needed()
+        pg.screenshot(path=os.path.join(SH, 'crm_notiz_konflikt_390.png')); pg.set_viewport_size({'width': 1280, 'height': 900})
+        pg.click('[data-notiz-behalten]'); pg.wait_for_function("document.querySelector('#blatt-status').textContent === 'Gespeichert.'")
+    check('„Meinen Text speichern“ übernimmt den eigenen Text, Hinweis verschwindet', dokument('crm-kunden')['eintraege']['kaaa111111111']['notiz'] == 'Bedarf: Rinderbrust'
+          and pg.locator('#notiz-fremd').count() == 0, dokument('crm-kunden')['eintraege']['kaaa111111111']['notiz'])
     pg.click('#kunde-aktionen [data-ku-tab="verlauf"]'); pg.wait_for_selector('#dlg-kunde[open] #verlauf li')
     check('Knopf „Aktivität“ im Kopf öffnet den Verlauf mit dem Eingabefeld', pg.evaluate("document.activeElement.id") == 'akt-notiz')
     pg.select_option('#akt-art', 'Besuch'); pg.fill('#akt-notiz', 'Kühlhaus besichtigt'); pg.fill('#akt-naechster', 'Preise schicken')

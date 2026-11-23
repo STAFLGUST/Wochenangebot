@@ -613,6 +613,9 @@
   const MAIL_TYP = { woche: 'Wochenangebot', angebot: 'Angebotslink', invite: 'Einladung', reset: 'Passwort-Link', test: 'Testmail', hinweis: 'Hinweis Abmeldung', bestellung: 'Bestellwunsch', bestellkopie: 'Kopie Bestellwunsch', restposten: 'Sonderposten', benachrichtigung: 'Benachrichtigung', einkauf: 'Einkaufsbedarf', einzelangebot: 'Einzelangebot', mhd: 'MHD-Liste' };
   const dlgKunde = $('#dlg-kunde');
   let editKid = null;
+  const K_FELDER = ['firma', 'nr', 'gruppe', 'vertreter', 'vertreter2', 'versandart', 'ansprechpartner', 'strasse', 'plz', 'ort', 'land', 'email', 'telefon', 'notiz'];
+  // Was das Formular zeigt und schickt – Vergleich nach einem 409 (die Revision gilt für die ganze Kundenliste)
+  const kStand = (c) => JSON.stringify(c ? [K_FELDER.map((k) => c[k] || ''), c.active, c.mailAngebot, c.angeboteDirekt || c.angebote, c.login && [c.login.username, c.login.active, c.login.hasPassword]] : null);
   const offerChip = (id, perGruppe) => `<span class="k-chip${id === OSTD ? ' std' : ''}${perGruppe ? ' grp' : ''}"${perGruppe ? ` title="${id === OSTD ? 'automatisch: Kundengruppe ohne eigenes Angebot' : 'über die Kundengruppe freigeschaltet'}"` : ''}>${esc(offerShort(id))}</span>`;
   const K_MAX = 500;   // Zeilen in der Kundenliste (Suche/Filter grenzt ein)
   function kVertreterOpts() {
@@ -790,7 +793,7 @@
       for (const el of $$('#kunde-body input, #kunde-body select, #kunde-body textarea')) el.disabled = true;
       for (const el of $$('#kunde-body [type="submit"], #kunde-body [data-kact]')) el.hidden = true;
     }
-    dlgKunde.showModal();
+    if (!dlgKunde.open) dlgKunde.showModal();
     $('#kunde-body [name="firma"]').focus();
   }
   /* Daten der Warenwirtschaft (nur lesen, aus dem Kundenimport; nur mit „Kunden bearbeiten“ ausgeliefert) */
@@ -861,11 +864,12 @@
     const f = e.target, err = $('#kunde-err');
     err.textContent = '';
     const c = editKid ? kunden.find((x) => x.id === editKid) : null;
+    const alt = kStand(c);
     const body = { id: editKid || '', rev: kundenRev, active: f.active.checked, mailAngebot: f.mailAngebot.checked, angebote: $$('#kunde-body [name="angebot"]:checked').map((x) => x.value) };
     const invite = !!(f.pwmode && [...f.querySelectorAll('[name="pwmode"]')].find((x) => x.checked && x.value === 'invite'));
     if (c && c.abgemeldet && c.mailAngebot === false && body.mailAngebot
       && !(await confirmBox('Wochenangebot wieder einschalten?', `„${esc(c.firma)}“ hat sich am ${esc(dateTime(c.abgemeldet.t))} selbst abgemeldet. Bitte nur wieder einschalten, wenn der Kunde ausdrücklich zugestimmt hat.`, 'Kunde hat zugestimmt'))) return;
-    for (const k of ['firma', 'nr', 'gruppe', 'vertreter', 'vertreter2', 'versandart', 'ansprechpartner', 'strasse', 'plz', 'ort', 'land', 'email', 'telefon', 'notiz']) body[k] = f[k].value.trim();
+    for (const k of K_FELDER) body[k] = f[k].value.trim();
     const pw = invite ? '' : f.password.value.trim();
     if (f.hasLogin.checked) {
       if (pw && pw.length < 10) { err.textContent = 'Das Passwort muss mindestens 10 Zeichen lang sein.'; return; }
@@ -890,7 +894,18 @@
       }
       toast(pw && body.login ? `Gespeichert. Zugangsdaten für „${r.customer.login.username}“ jetzt sicher an den Kunden weitergeben – das Passwort wird nicht noch einmal angezeigt.` : c ? `Änderungen an „${r.customer.firma}“ gespeichert.` : `Kunde „${r.customer.firma}“ angelegt.`, pw ? 7000 : 3200);
       renderKundenView();
-    } catch (ex) { err.textContent = ex.message; if (ex.status === 409) renderKundenView(); } finally { btn.disabled = false; }   // 409: Liste und Revision neu laden, Fenster bleibt offen
+    } catch (ex) {
+      err.textContent = ex.message;
+      if (ex.status !== 409) return;
+      await renderKundenView();   // Liste und Revision neu laden; blieb dieser Kunde unverändert, bleibt das Fenster offen und erneutes Speichern ist richtig
+      const neu = c && dlgKunde.open ? kunden.find((x) => x.id === editKid) : null;
+      if (c && dlgKunde.open && !neu) { dlgKunde.close(); toast(`Kunde „${c.firma}“ wurde inzwischen gelöscht.`, 7000); }
+      else if (neu && kStand(neu) !== alt) {   // sonst überschriebe das nächste Speichern die fremde Änderung mit den alten Werten
+        openKunde(editKid);
+        $('#kunde-err').textContent = 'Dieser Kunde wurde inzwischen an anderer Stelle geändert. Die neue Fassung ist geladen – bitte prüfen und erneut speichern.';
+        $('#kunde-err').scrollIntoView({ block: 'nearest' });
+      } else if (dlgKunde.open) err.textContent = 'Die Kundenliste wurde inzwischen an anderer Stelle geändert und ist neu geladen. Ihre Eingaben stehen noch hier – bitte erneut speichern.';
+    } finally { btn.disabled = false; }
   });
 
   /* ---------- Kundenstammdaten aus der Warenwirtschaft importieren (CSV) ----------

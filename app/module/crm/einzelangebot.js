@@ -24,9 +24,7 @@
     const n = /^\d+(\.\d+)?$/.test(t) ? Number(t) : NaN;
     return Number.isFinite(n) ? n : NaN;
   }
-  // Cent wie PHP round() auf dem Server (1,005 → 101): erst die Binärdarstellung glätten – wie W.glatt im Eingabebereich (admin.js, hier nicht geladen)
-  const glatt = (x) => Math.round(Number(x.toPrecision(15)));
-  const cent = (v) => glatt(v * 100);
+  const cent = (v) => F.glatt(v * 100);   // Cent wie PHP round() auf dem Server (1,005 → 101)
   const text = (v) => (v == null || Number.isNaN(v) ? '' : String(cent(v) / 100).replace('.', ','));
   const preisText = (v) => (v == null || Number.isNaN(v) ? '' : (cent(v) / 100).toFixed(2).replace('.', ','));   // Preise immer mit zwei Stellen
   const euro = (v) => NF2.format(v) + ' €';
@@ -41,7 +39,7 @@
   /* Summe der Positionen mit Menge und Preis (wie der Server: Cent je kg × kg) */
   function summen(pos) {
     let kg = 0, sum = 0;
-    for (const p of pos) { const q = zahl(p.qty, 'qty') ?? (p.partie ? Math.floor(p.partie.kg * 100 + 1e-6) / 100 : null), pr = zahl(p.price); if (q > 0) { kg += q; if (pr >= 0 && pr !== null) sum += glatt(cent(pr) * q) / 100; } }
+    for (const p of pos) { const q = zahl(p.qty, 'qty') ?? (p.partie ? Math.floor(p.partie.kg * 100 + 1e-6) / 100 : null), pr = zahl(p.price); if (q > 0) { kg += q; if (pr >= 0 && pr !== null) sum += F.glatt(cent(pr) * q) / 100; } }
     return { kg, sum };
   }
 

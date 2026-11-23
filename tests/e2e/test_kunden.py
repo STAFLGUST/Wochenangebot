@@ -1,6 +1,7 @@
 """Kunden: Stammdaten, Freischaltung von Angeboten, Kunden-Anmeldung auf der Angebotsseite.
 Regeln: Kunden sehen nur freigeschaltete Angebote, nie den Eingabebereich; Passwörter nie im Klartext/Hash nach außen.
-Nach einem 409 beim Speichern lädt die Kundenliste neu und bleibt bedienbar."""
+Nach einem 409 beim Speichern lädt die Kundenliste neu und bleibt bedienbar; hat eine zweite Sitzung denselben Kunden geändert,
+zeigt das Fenster die neue Fassung (erneutes Speichern überschreibt sie nicht still)."""
 from umgebung import storage_raw, storage_write
 from umgebung import BASE  # Testserver je Gruppe (parallel)
 import http.cookiejar
@@ -327,6 +328,36 @@ with sync_playwright() as p:
           and len(errs) == n_err, errs[n_err:])
     if auf:
         a.click('#kunde-body [data-close]'); a.wait_for_function("!document.querySelector('#dlg-kunde').open")
+    # 409, weil eine zweite Sitzung DIESEN Kunden geändert hat: Fenster zeigt die neue Fassung, erneutes Speichern überschreibt sie nicht
+    a.locator('#view-kunden tr[data-kid]:has-text("Ohne Zugang")').click(); a.wait_for_selector('#dlg-kunde[open]')
+    st_, r_ = A.call('kunde_save', {'id': K2, 'rev': A.call('kunden')[1]['rev'], 'firma': 'Ohne Zugang KG', 'telefon': '040 222222'})
+    assert st_ == 200, r_
+    a.fill('#kunde-body [name=ort]', 'Kiel'); a.set_viewport_size({'width': 390, 'height': 844}); a.click('#kunde-body [type=submit]')
+    try:   # Endzustand nach dem Neuladen abwarten (die Meldung des Servers erscheint schon vorher)
+        a.wait_for_function("document.querySelector('#kunde-err').textContent.includes('neue Fassung')", timeout=8000)
+    except Exception:
+        pass
+    check('409 nach fremder Änderung am selben Kunden: Hinweis, Fenster zeigt die neue Fassung (Telefon der zweiten Sitzung)',
+          'neue Fassung' in a.text_content('#kunde-err') and a.input_value('#kunde-body [name=telefon]') == '040 222222'
+          and a.input_value('#kunde-body [name=ort]') != 'Kiel', (a.text_content('#kunde-err'), a.input_value('#kunde-body [name=telefon]')))
+    check('390 px: Hinweis zur neuen Fassung im sichtbaren Bereich', a.evaluate("(() => { const r = document.querySelector('#kunde-err').getBoundingClientRect(); return r.height > 0 && r.top >= 0 && r.bottom <= innerHeight; })()"))
+    a.screenshot(path=SH + '/kunden-409-neue-fassung-390.png')
+    a.set_viewport_size({'width': 1280, 'height': 900}); a.screenshot(path=SH + '/kunden-409-neue-fassung-1280.png')
+    a.click('#kunde-body [type=submit]'); a.wait_for_function("!document.querySelector('#dlg-kunde').open")
+    k2_ = next(x for x in A.call('kunden')[1]['customers'] if x['id'] == K2)
+    check('erneutes Speichern behält die Telefonnummer der zweiten Sitzung', k2_['telefon'] == '040 222222', k2_.get('telefon'))
+    # 409, weil der Kunde inzwischen gelöscht wurde: Fenster schließt mit Hinweis (kein leeres „Kunde anlegen“ mit alter ID)
+    a.locator('#view-kunden tr[data-kid]:has-text("Zwischendurch")').click(); a.wait_for_selector('#dlg-kunde[open]')
+    l_ = A.call('kunden')[1]
+    st_, r_ = A.call('kunde_delete', {'id': next(x['id'] for x in l_['customers'] if x['firma'] == 'Zwischendurch GmbH'), 'rev': l_['rev']})
+    assert st_ == 200, r_
+    a.fill('#kunde-body [name=ort]', 'Kiel'); a.click('#kunde-body [type=submit]')
+    try:
+        a.wait_for_function("!document.querySelector('#dlg-kunde').open", timeout=8000)
+    except Exception:
+        pass
+    check('409 nach Löschen des Kunden: Fenster geschlossen, Hinweis „gelöscht“', not a.evaluate("document.querySelector('#dlg-kunde').open")
+          and 'gelöscht' in a.inner_text('#toast'), a.inner_text('#toast'))
 
     # Kunde im Browser
     cctx = br.new_context(viewport={'width': 1280, 'height': 900}); c = cctx.new_page(); cerr = []
