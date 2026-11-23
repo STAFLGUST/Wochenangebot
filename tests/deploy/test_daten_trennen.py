@@ -535,6 +535,38 @@ with tempfile.TemporaryDirectory() as t:
     code, out = lauf('zusammenfuehren', str(d), str(i), '--offline')
     check('Kennzeichen in daten/ ohne Vermerk entfernt: zusammenfuehren repariert nicht automatisch, nichts geändert',
           code == 1 and 'Nicht automatisch reparieren' in out and (baum(d), baum(i)) == davor, out)
+# Abbruch zwischen Vermerk und Umschalten: beide Kennzeichen stehen, die Anwendung läuft getrennt weiter und speichert innen eine
+# neue Fassung. Erneutes zusammenfuehren darf sie nicht beim Aufräumen löschen (Fortsetzung nur ohne Kennzeichen in daten/).
+for art, meldung in (('dateien', 'Datei gibt es in beiden Ordnern mit verschiedenem Inhalt'), ('sqlite', 'Datensatz in beiden Datenbanken mit verschiedenem Inhalt')):
+    for geaendert in (True, False):
+        with tempfile.TemporaryDirectory() as t:
+            t = Path(t); d = aufbau2(t); i = t / 'daten-intern'; w = f'{art}, Abbruch nach dem Vermerk' + (', innen geändert' if geaendert else '')
+            if art == 'sqlite':
+                subprocess.run([sys.executable, str(DB), 'migrate', str(d), '--offline'], check=True, capture_output=True)
+            vorher = {n: dt.dok_lesen(d, n) for n in NAMEN}
+            lauf('trennen', str(d), str(i), '--offline')
+            ruecknahme = abbrechen('aufraeumen', 1)
+            try:
+                dt.zusammenfuehren(d.resolve(), i.resolve(), dt.REGELN)
+            except OSError:
+                pass
+            finally:
+                ruecknahme()
+            check(f'{w}: Testvoraussetzung – beide Kennzeichen und der Vermerk stehen',
+                  (d / '.daten-getrennt').is_file() and (i / '.daten-intern').is_file() and (i / '.zusammengefuehrt').is_file())
+            neu = {'personen': [{'name': 'nach dem Abbruch gespeichert'}]}
+            if geaendert:
+                dt.dok_schreiben(i, 'hr-personal', neu)
+            code, out = lauf('zusammenfuehren', str(d), str(i), '--offline')
+            if geaendert:
+                check(f'{w}: erneutes zusammenfuehren bricht mit Meldung ab, die neue Fassung bleibt, getrennt wie zuvor',
+                      code == 1 and meldung in out and dt.dok_lesen(i, 'hr-personal') == neu
+                      and (d / '.daten-getrennt').is_file() and (i / '.daten-intern').is_file(), out)
+            else:
+                nachher = {n: dt.dok_lesen(d, n) for n in NAMEN}
+                check(f'{w}: erneutes zusammenfuehren vollendet über den vergleichenden Weg ohne Verlust',
+                      code == 0 and nachher == vorher and dt.leer(i) and not (d / '.daten-getrennt').exists(),
+                      (out, [n for n in vorher if nachher[n] != vorher[n]]))
 
 # ─────────────── Wie auf dem Server am 05.11.2026: Stufe 1 → 5 in einem Schritt, danach gleicht der Postausgang die Kopien ab ───────────────
 # Das veröffentlichte Dokument bestellung entsteht innen aus dem Original – es darf dort keine Empfängeradressen behalten, sonst bringt

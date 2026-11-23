@@ -595,8 +595,10 @@ def bereinigen(haupt, intern, regeln):
 
 
 def zusammenfuehren(haupt, intern, regeln):
-    # Abbruch beim Aufräumen (Schritt 4): alles ist zurückkopiert, daten/ schon ohne Kennzeichen – nur noch aufräumen
-    if (intern / ZURUECK).is_file():
+    # Abbruch beim Aufräumen (Schritt 4): alles ist zurückkopiert, daten/ schon ohne Kennzeichen – nur noch aufräumen. Trägt daten/
+    # das Kennzeichen noch (Abbruch vor dem Umschalten), lief die Anwendung getrennt weiter und kann innen Neueres gespeichert
+    # haben: dann der vergleichende Weg unten, der jede abweichende Datei meldet, statt sie beim Aufräumen zu löschen
+    if (intern / ZURUECK).is_file() and not (haupt / MARKER_HAUPT).is_file():
         return aufraeumen(haupt, intern, regeln, int((intern / ZURUECK).read_text().strip() or 0), [])
     if not (haupt / MARKER_HAUPT).is_file():
         if (intern / MARKER_INTERN).is_file():

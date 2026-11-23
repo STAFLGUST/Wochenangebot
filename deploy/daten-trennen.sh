@@ -43,9 +43,10 @@ if [ "$AKTION" = zusammenfuehren ] && [ ! -f daten/.daten-getrennt ] && [ ! -f d
   echo "Daten sind nicht getrennt – nichts zusammenzuführen, die Anwendung läuft unverändert weiter."
   exit 0
 fi
-if [ "$AKTION" = zusammenfuehren ] && [ -f daten-intern/.zusammengefuehrt ]; then
+if [ "$AKTION" = zusammenfuehren ] && [ -f daten-intern/.zusammengefuehrt ] && [ ! -f daten/.daten-getrennt ]; then
   # Fortsetzung nach einem Abbruch beim Aufräumen: alle Daten liegen schon in daten/; eine neue Sicherung scheiterte an den
-  # widersprüchlichen Kennzeichen (sichern.sh), die vom ersten Versuch liegt in sicherungen/
+  # widersprüchlichen Kennzeichen (sichern.sh), die vom ersten Versuch liegt in sicherungen/. Trägt daten/ das Kennzeichen
+  # noch, lief die Anwendung getrennt weiter: neu sichern, daten_trennen.py vergleicht erneut
   echo "Abgebrochenes Zusammenführen wird vollendet (nur Aufräumen; Sicherung vom ersten Versuch in sicherungen/)."
 else
   sh deploy/sichern.sh --jetzt
