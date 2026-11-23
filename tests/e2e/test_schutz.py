@@ -321,7 +321,7 @@ with sync_playwright() as p:
         a.set_input_files('#im-datei', files=[{'name': 'sicherheitseinstellungen.json', 'mimeType': 'application/json', 'buffer': json.dumps(ex).encode()}])
         a.wait_for_selector('#im-vorschau table.vorschau tr.neu')
         check(f'{w}px: Importdialog zeigt je Einstellung „jetzt“ und „danach“, Änderungen hervorgehoben',
-              [t.strip() for t in a.locator('#im-vorschau table thead th').all_inner_texts()] == ['Einstellung', 'jetzt', 'danach']
+              [t.strip() for t in a.locator('#im-vorschau table thead th').all_text_contents()] == ['Einstellung', 'jetzt', 'danach']
               and 'Passwort-Mindestlänge' in a.inner_text('#im-vorschau tr.neu') and '16' in a.inner_text('#im-vorschau tr.neu')
               and 'Einstellung ändert sich' in a.inner_text('#im-vorschau') and a.is_enabled('#im-los'), a.inner_text('#im-vorschau'))
         a.screenshot(path=os.path.join(SH, f'sicherheit_import_vorschau_{w}.png'))
