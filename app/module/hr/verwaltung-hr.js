@@ -239,7 +239,7 @@
     const f = hrDlg.querySelector('form');
     f.dataset.uid = uid;
     f.innerHTML = `<div class="dlg-head"><div><h2 id="hrp-title">${esc(`${p.vorname} ${p.nachname}`.trim())}</h2><p>${p.zugang ? 'Mitarbeiter mit Anmeldung' : 'Mitarbeiter ohne Anmeldung'}</p></div>
-        <button class="btn icon ghost" type="button" data-close aria-label="Abbrechen">${icon('x')}</button></div>
+        <button class="btn icon ghost" type="button" data-close aria-label="Schließen">${icon('x')}</button></div>
       <div class="dlg-body form-grid two">${formular(uid)}<p class="form-err span2" role="alert"></p></div>
       <div class="dlg-foot"><button type="button" class="btn" data-close>Abbrechen</button><button type="submit" class="btn primary">Speichern</button></div>`;
     hrDlg.showModal();

@@ -251,7 +251,7 @@
     const zugang = !u || u.zugang !== false;
     $('#user-body').innerHTML = `
       <div class="dlg-head"><div><h2 id="us-title">${u ? 'Mitarbeiter bearbeiten' : 'Mitarbeiter anlegen'}</h2><p>${u ? `Angelegt ${esc(dateTime(u.created))}${u.createdBy ? ' von ' + esc(u.createdBy) : ''}` : 'Mit Anmeldung: Benutzername und Passwort. Ohne Anmeldung: nur für die Urlaubsverwaltung (z. B. Lager).'}</p></div>
-        <button class="btn icon ghost" type="button" data-close aria-label="Abbrechen">${icon('x')}</button></div>
+        <button class="btn icon ghost" type="button" data-close aria-label="Schließen">${icon('x')}</button></div>
       <div class="dlg-body form-grid two">
         <label class="fld"><span>Vorname</span><input name="vorname" value="${esc(vor)}" maxlength="40" required autocomplete="off" placeholder="z. B. Max"></label>
         <label class="fld"><span>Nachname</span><input name="nachname" value="${esc(nach)}" maxlength="40"${u ? '' : ' required'} autocomplete="off" placeholder="z. B. Mustermann"></label>

@@ -191,8 +191,10 @@ with sync_playwright() as pw:
                         pg.click('#user-add'); pg.wait_for_selector('#dlg-user[open] #user-err', state='attached')
                         fe = pg.evaluate("""() => { const e = document.querySelector('#user-err'), b = e.closest('.dlg-body'); e.textContent = 'Benutzername ist schon vergeben.';
                           e.scrollIntoView({ block: 'nearest' }); const h = e.getBoundingClientRect().height; e.textContent = ''; return [Math.round(h), b.scrollHeight > b.clientHeight]; }""")
+                        kz = pg.evaluate("(() => { const x = document.querySelector('#dlg-user button.icon[data-close]'), s = getComputedStyle(x); return [x.getAttribute('aria-label'), Math.round(x.getBoundingClientRect().width), s.borderTopLeftRadius]; })()")
                         pg.evaluate("document.querySelector('#dlg-user').close()")
                         check(f'{teil} {tag}: Fehlermeldung im langen Formular sichtbar (nicht auf Höhe 0)', fe[0] >= 15 and fe[1], fe)
+                        check(f'{teil} {tag}: Kreuz im Fenster „Mitarbeiter“ wie in jedem Fenster („Schließen“, 36 px, 9 px rund)', kz[0] == 'Schließen' and kz[1] == 36 and kz[2] == '9px', kz)
                     if v == 'orders':   # Werkzeugleiste „Bestellungen“: Suche und Statusauswahl gleich hoch (wie in den anderen Leisten)
                         hoehen = pg.evaluate("['#orders-filter .search input', '#orders-filter select'].map((s) => Math.round(document.querySelector(s).getBoundingClientRect().height))")
                         check(f'{teil} {tag}: Suche und Auswahl der Werkzeugleiste gleich hoch', hoehen[0] == hoehen[1], hoehen)
@@ -362,7 +364,7 @@ with sync_playwright() as pw:
     # Form jedes Fensters auf jeder Seite im Rahmen (C2): Schleier, Rundung je Ecke, Linie, Schatten, Lage, Kreuz zum Schließen
     FENSTER_FORM = r'''(id) => { const d = document.getElementById(id); d.getAnimations().forEach((a) => a.finish()); if (document.activeElement) document.activeElement.blur();
       const s = getComputedStyle(d), b = getComputedStyle(d, '::backdrop'), r = d.getBoundingClientRect();
-      const x = [...d.querySelectorAll('button[aria-label$="chließen"]')].find((e) => e.offsetParent), xr = x && x.getBoundingClientRect(), xs = x && getComputedStyle(x);
+      const x = [...d.querySelectorAll('button[aria-label$="chließen"], button.icon[data-close]')].find((e) => e.offsetParent), xr = x && x.getBoundingClientRect(), xs = x && getComputedStyle(x);
       return { id, unschaerfe: b.backdropFilter, schleier: b.backgroundColor, rund: [s.borderTopLeftRadius, s.borderTopRightRadius, s.borderBottomRightRadius, s.borderBottomLeftRadius].join(' '),
                schatten: s.boxShadow, linie: s.borderTopColor, lr: [Math.round(r.left), Math.round(r.right)],
                kreuz: x ? [Math.round(xr.width), Math.round(xr.height), xs.borderTopLeftRadius, xs.backgroundColor].join(' ') : null }; }'''
