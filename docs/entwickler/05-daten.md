@@ -1053,7 +1053,9 @@ Die einzige Beschreibung der Regeln; Code-Kommentare verweisen hierher.
   Farmer eines Containers eine Teilmenge aller Farmer sind (gemessen: 150 000 Punkte sind 3,4 MiB, Lesen und Export 48 von
   128 MiB).
 - **Am Container** steht nur noch `abschluss.betriebe` ohne `geometrie` und `abschluss.schnappschuss`
-  = `{"id", "sha256", "punkte"}`. `sha256` ist über `json_encode` der Farmer gebildet (`eudr_schnappschuss_summe`).
+  = `{"id", "sha256", "punkte"}`. `sha256` ist über `json_encode` der Farmer in ihrer gespeicherten Form gebildet (`eudr_schnappschuss_summe`: einmal durch
+  `json_decode` und zurück – `-0.0` schreibt `json_encode` als `-0`, gelesen wird daraus `0`, etwa bei der Mitte einer Fläche am
+  Äquator; für alle übrigen Werte dieselbe Summe wie zuvor).
   `eudr_schnappschuss_betriebe` liest die Umrisse und prüft dabei die Prüfsumme; fehlt das Dokument oder passt sie nicht,
   antworten Export und Karte mit 500 und einem Hinweis statt mit veränderten Umrissen.
 - **Ältere Abschlüsse** (ohne `schnappschuss`) tragen die Umrisse weiter eingebettet und werden so gelesen (GR-006). Es gibt

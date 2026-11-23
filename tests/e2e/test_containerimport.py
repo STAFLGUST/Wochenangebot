@@ -1040,6 +1040,19 @@ I.call('containerimport_eudr_betriebe_save', {'betriebe': [{'id': gross['id'], '
 ex = L.call('containerimport_eudr_export&sendung=' + ids_viele[-1])[1]
 check('Export eines dieser Container: der Umriss von damals mit allen Punkten, auch nach einer späteren Änderung am Farmer (GR-106)',
       [f['geometry'] for f in ex['geojson']['features']] == [umriss] and len(betrieb('Estancia Beispiel')['geometrie']['coordinates'][0]) == 9, ex.get('error'))
+# Fläche am Äquator: die Mitte des Rahmens rundet auf −0, json_encode schreibt „-0“, gelesen wird 0. Die Prüfsumme gilt der
+# gespeicherten Form – sonst verweigerten Karte und Export jeden solchen Abschluss.
+aequator = {'type': 'Polygon', 'coordinates': [[[-49.5, -0.002002], [-49.48, -0.002002], [-49.48, 0.002001], [-49.5, 0.002001], [-49.5, -0.002002]]]}
+gb = betrieb('Estancia Beispiel')
+st = I.call('containerimport_eudr_betriebe_save', {'betriebe': [{'id': gb['id'], 'rev': gb['rev'], 'geometrie': aequator, 'land': 'BR'}]})[0]   # Pará, sonst „liegt nicht in Paraguay“
+a, r = I.call('containerimport_eudr_sendung_save', {**SENDUNG, 'partie': 'P-AEQUATOR', 'aktiv': False, 'betriebe': [gb['id']]})
+st2 = I.call('containerimport_eudr_sendung_abschluss', {'id': r.get('id', ''), 'rev': 1, 'ergebnis': 'nicht_vernachlaessigbar', 'begruendung': 'Fläche am Äquator.'})[0]
+st3, r3 = L.call('containerimport_eudr_schnappschuss&sendung=' + r.get('id', ''))
+st4, ex = L.call('containerimport_eudr_export&sendung=' + r.get('id', ''))
+check('Fläche am Äquator (Mitte des Rahmens −0): Karte und Export lesen den Schnappschuss', (st, a, st2, st3, st4) == (200, 200, 200, 200, 200)
+      and len(ex['geojson']['features']) == 1 and [f['geometry'] for f in ex['geojson']['features']] == [b['geometrie'] for b in r3['betriebe']], (st, a, st2, st3, st4, r3.get('error')))
+check('bestehende Prüfsummen unverändert: ohne −0 dieselbe SHA-256 wie bisher (json_encode der Farmer)',
+      hashlib.sha256(json.dumps(erst_doc['betriebe'], ensure_ascii=False, separators=(',', ':')).encode()).hexdigest() == erst['sha256'], erst['sha256'])
 check('keine JavaScript-Fehler', not errs, errs)
 
 print(f'{sum(res)}/{len(res)} passed')

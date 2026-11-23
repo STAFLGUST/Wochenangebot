@@ -783,7 +783,8 @@ function eudr_schnappschuss_betriebe(array $a): array
         fail('Die festgehaltenen Umrisse dieser Bewertung fehlen oder wurden verändert – bitte an den Administrator wenden.', 500);
     return $bs;
 }
-function eudr_schnappschuss_summe(array $betriebe): string { return hash('sha256', json_encode($betriebe, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_THROW_ON_ERROR)); }
+/* Prüfsumme über die gespeicherte Form: −0 schreibt json_encode als „-0“, gelesen wird daraus 0 (Fläche am Äquator) */
+function eudr_schnappschuss_summe(array $betriebe): string { $f = JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_THROW_ON_ERROR; return hash('sha256', json_encode(json_decode(json_encode($betriebe, $f), true), $f)); }
 function eudr_ohne_umriss(array $betriebe): array { return array_map(fn($b) => array_diff_key($b, ['geometrie' => 1]), $betriebe); }
 
 /* Sendung für die Oberfläche: mit Profil – bei abgeschlossener Bewertung dem gespeicherten Schnappschuss, dessen Farmer ohne
