@@ -263,6 +263,13 @@ with sync_playwright() as pw:
               f.innerHTML = '<label class="vs-check vs-zusatz-zeile"><input type="checkbox"> Mit Preisänderung</label>'; document.body.append(f);
               const w = Math.round(f.querySelector('input').getBoundingClientRect().width); f.remove(); return w; }""")
             check('versand Handy mit Finger: Kästchen im Fenster „Senden“ 20 px', kw >= 20, kw)
+        if name == 'sicherheit':   # Verweis im Fließtext: Tippfläche ≥ 32 px, die Zeile wird davon nicht höher
+            zl = fp.evaluate("""() => { const p = document.createElement('p'); p.style.cssText = 'width:300px;margin:0';
+              p.innerHTML = 'Rollen und Rechte ändern Sie in der <a class="sic-link" href="#">Verwaltung → Mitarbeiter</a>.';
+              document.querySelector('#sic-app').append(p); const mit = p.getBoundingClientRect().height, a = p.querySelector('a').getBoundingClientRect().height;
+              p.innerHTML = 'Rollen und Rechte ändern Sie in der <b>Verwaltung → Mitarbeiter</b>.'; const ohne = p.getBoundingClientRect().height; p.remove();
+              return [Math.round(mit), Math.round(ohne), Math.round(a)]; }""")
+            check('sicherheit Handy mit Finger: Verweis im Text antippbar (≥ 32 px), die Zeile bleibt gleich hoch', zl[0] <= zl[1] + 1 and zl[2] >= 32, zl)
         if name in ('angebot', 'versand'):   # Angebot mit Bestand (oben übernommen) zeigt den Bestand-Knopf, der Versand „Im Angebot ansehen“
             fp.wait_for_selector('.e-bst' if name == 'angebot' else '.vs-link')
             fi = fp.evaluate(FINGER)

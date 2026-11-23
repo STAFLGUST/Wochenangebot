@@ -603,7 +603,7 @@ button.lf-marke:hover { background: var(--sic-bad-bg); }
 }
 @media (max-width: 480px) { body.sic .sic-kopf .brand-logo { width: 30px; height: 28px; object-fit: cover; object-position: left center; }
   #sic-neu { display: none; } .sic-kopf .sic-rund { width: 36px; height: 36px; } .sic-aktionen { gap: 6px; } }
-@media (pointer: coarse) { .sic .btn.sm { height: 36px; } .sic-link { min-height: 32px; } .sic-check input, .geo-opt input { width: 20px; height: 20px; } }
+@media (pointer: coarse) { .sic .btn.sm { height: 36px; } .sic-link { padding-block: var(--r-tipp-polster); margin-block: calc(-1 * var(--r-tipp-polster)); } .sic-check input, .geo-opt input { width: 20px; height: 20px; } }
 
 /* ── Rahmen „C2“ (gemeinsame Seitenleiste ../../assets/rahmen.css und rahmen.js, Entwurf freigegeben 06.11.2026) ──
    Aufbau, Reiter und Abläufe der Seite bleiben unverändert. Neu: ruhige deckende Flächen mit feinen Linien statt Glas,
