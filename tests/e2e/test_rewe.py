@@ -24,6 +24,7 @@ import datetime
 import io
 import json
 import os
+import re
 
 from openpyxl import load_workbook
 from playwright.sync_api import sync_playwright
@@ -813,6 +814,17 @@ with sync_playwright() as p:
     pg.wait_for_function(f"location.hash === '#woche/{naechste}' && document.querySelector('#rw-w-titel').textContent.includes('KW {int(naechste[5:])}')")
     pg.wait_for_selector(f'{zeile} [data-s="bestellt"]')
     pg.click(f'{zeile} [data-s="bestellt"]'); pg.wait_for_selector(f'{zeile} .rw-mzahl')
+    pg.wait_for_function("[...document.querySelectorAll('.rw-zeile')].some(z => z.textContent.includes('Musterdorf') && z.querySelector('[data-s=\"bestellt\"][aria-pressed=\"true\"]') && !z.querySelector('[data-s][disabled]'))")
+    vb0 = next(x for g in M.call(f'rewe_woche&kw={naechste}')[1]['woche']['gruppen'] for x in g['maerkte'] if x['ort'] == 'Musterdorf')['antwort']
+    for falsch_ in ('1,5', '-2'):   # keine stille 15 bzw. 2: nur ganze Stückzahlen 0–999
+        pg.evaluate("document.querySelector('#rw-toast').textContent = ''")
+        pg.fill(f'{zeile} .rw-mzahl >> nth=0', falsch_); pg.press(f'{zeile} .rw-mzahl >> nth=0', 'Enter')
+        pg.wait_for_function("(t) => document.querySelector('#rw-toast').textContent !== '' || [...document.querySelectorAll('.rw-zeile')].some(z => z.textContent.includes('Musterdorf')"
+                             " && z.querySelector('.rw-mzahl') && z.querySelector('.rw-mzahl').value !== t && !z.querySelector('[data-s][disabled]'))", arg=falsch_)
+        vb = next(x for g in M.call(f'rewe_woche&kw={naechste}')[1]['woche']['gruppen'] for x in g['maerkte'] if x['ort'] == 'Musterdorf')['antwort']
+        check(f'Menge „{falsch_}“ eingetippt: Hinweis „ganze Stückzahl“, Menge nicht gespeichert', 'ganze Stückzahl' in text(pg, '#rw-toast')
+              and vb0 and vb['mengen'] == vb0['mengen'], (text(pg, '#rw-toast'), vb0, vb))
+    pg.wait_for_function("[...document.querySelectorAll('.rw-zeile')].some(z => z.textContent.includes('Musterdorf') && z.querySelector('.rw-mzahl') && !z.querySelector('[data-s][disabled]'))")
     pg.fill(f'{zeile} .rw-mzahl >> nth=0', '3'); pg.press(f'{zeile} .rw-mzahl >> nth=0', 'Enter')
     pg.wait_for_function("[...document.querySelectorAll('.rw-zeile')].some(z => z.textContent.includes('Musterdorf') && z.querySelector('.rw-mzahl') && z.querySelector('.rw-mzahl').value === '3' && !z.querySelector('[data-s][disabled]'))")
     vb = next(x for g in M.call(f'rewe_woche&kw={naechste}')[1]['woche']['gruppen'] for x in g['maerkte'] if x['ort'] == 'Musterdorf')['antwort']
@@ -850,6 +862,20 @@ with sync_playwright() as p:
     pg.mouse.click(5, 5)
     check('Pop-up aus „Meine Woche“: Beispielstadt, ein Klick daneben schließt nicht', pg.is_visible('#dlg-dauer[open]') and 'alle 2 Wochen' in text(pg, '#dlg-dauer [aria-pressed="true"][data-dd-rh]'))
     pg.click('#dlg-dauer .rw-dialogkopf [data-dd-zu]'); pg.wait_for_selector('#dlg-dauer', state='hidden')
+    # Hinweis in der Marktkarte geändert (Revision +1), danach „Dauerauftrag ändern“ aus der Zeile: kein Konflikt mit der eigenen Änderung
+    pg.click(f'{bz} .rw-mname'); pg.wait_for_selector('#dlg-karte[open] #kt-hinweis')
+    hinweis_alt = pg.input_value('#kt-hinweis')
+    pg.fill('#kt-hinweis', hinweis_alt + '\nRampe 2')
+    pg.wait_for_function("document.querySelector('#kt-hstatus').textContent.includes('gespeichert') && !document.querySelector('#kt-hstatus').textContent.includes('noch nicht')", timeout=8000)
+    pg.keyboard.press('Escape'); pg.wait_for_selector('#dlg-karte', state='hidden')
+    pg.click(f'{bz} [data-dauer-dlg]'); pg.wait_for_selector('#dlg-dauer[open] #dd-titel:has-text("Beispielstadt")')
+    pg.click('#dlg-dauer [data-dd-speichern]')
+    pg.wait_for_function("!document.querySelector('#dlg-dauer').open || document.querySelector('#dd-meldung').textContent !== ''")
+    check('Hinweis geändert, dann Dauerauftrag aus „Meine Woche“ gespeichert: ohne Konflikt mit sich selbst', pg.is_hidden('#dlg-dauer')
+          and 'Rampe 2' in M.call('rewe_markt&id=' + maerkte['Beispielstadt']['id'])[1]['markt']['hinweis'], text(pg, '#dd-meldung') if pg.is_visible('#dlg-dauer') else '')
+    if pg.is_visible('#dlg-dauer'):
+        pg.click('#dlg-dauer .rw-dialogkopf [data-dd-zu]'); pg.wait_for_selector('#dlg-dauer', state='hidden')
+    pg.wait_for_selector('.rw-zeile:has-text("Beispielstadt") [data-s="bestellt"]')
     # Antwort zurücksetzen (wieder offen): erster Klick fragt nach, zweiter setzt zurück; „Rückgängig“ holt sie zurück
     if not pg.locator('.rw-zeile:has-text("Beispielstadt") [data-zurueck]').count():
         pg.click('.rw-zeile:has-text("Beispielstadt") [data-s="kein"]'); pg.wait_for_selector('.rw-zeile:has-text("Beispielstadt") [data-zurueck]')
@@ -871,6 +897,8 @@ with sync_playwright() as p:
     pg.click('#rw-m-tabelle tr:has-text("Beispielstadt")'); pg.wait_for_selector('.rw-heat')
     check('Marktakte: Adresse #markt/<id>, Jahre im Verlauf, Kennzahlen, Ansprechpartner', '#markt/' in pg.url and pg.locator('.rw-heat .jahr').count() >= 2
           and 'Frau Test' in text(pg, '#rw-akte') and 'Nur gereifte Ware' in text(pg, '#rw-akte'))
+    letzte_ = pg.locator('#rw-akte .rw-zahlen div:has-text("Letzte Bestellung") b').inner_text()
+    check('Marktakte: „Letzte Bestellung“ als KW n/JJJJ wie überall', re.fullmatch(r'KW \d{1,2}/\d{4}', letzte_) is not None, letzte_)
     pg.click('#rw-a-notiz'); pg.wait_for_selector('#dlg-notiz[open]')
     pg.select_option('#nz-art', 'telefonat'); pg.fill('#nz-text', 'Vac. Set angeboten'); pg.click('#nz-form button[type="submit"]')
     pg.wait_for_selector('#dlg-notiz[open]', state='hidden'); pg.wait_for_selector('.rw-verlaufsliste li:has-text("Vac. Set angeboten")')
@@ -880,8 +908,9 @@ with sync_playwright() as p:
     pg.select_option('#mk-tag', 'mi'); pg.click('#mk-form button[type="submit"]'); pg.wait_for_selector('#dlg-markt[open]', state='hidden')
     pg.wait_for_selector('.rw-kv:has-text("Mittwoch")')
     check('Abfragetag geändert', 'Mittwoch' in text(pg, '.rw-kv'))
+    # nur das Raster der Akte zählen: die geschlossene Marktkarte (vorher für Beispielstadt geöffnet) behält ihres im DOM
     check('Marktakte: Dauerauftrag „… + 1 Filetkopf extra“, Wochenverlauf KW 2 „Bestellt 1 Roastbeef Dry Aged + 1 Filetkopf extra“',
-          '1 Roastbeef Dry Aged + 1 Filetkopf extra' in text(pg, '.rw-kv') and pg.locator('.rw-heat i[title="KW 2: Bestellt 1 Roastbeef Dry Aged + 1 Filetkopf extra"]').count() == 1, text(pg, '.rw-kv'))
+          '1 Roastbeef Dry Aged + 1 Filetkopf extra' in text(pg, '.rw-kv') and pg.locator('#rw-akte .rw-heat i[title="KW 2: Bestellt 1 Roastbeef Dry Aged + 1 Filetkopf extra"]').count() == 1, text(pg, '.rw-kv'))
     pg.screenshot(path=os.path.join(SH, 'rewe_akte_1280.png'), full_page=True)
     pg.click('#rw-a-dauer'); pg.wait_for_selector('#dlg-dauer[open] #dd-titel:has-text("Beispielstadt")')
     check('Pop-up aus der Marktakte: „Dauerauftrag · Beispielstadt“', 'Dauerauftrag · Beispielstadt' in text(pg, '#dd-titel'))
@@ -902,6 +931,11 @@ with sync_playwright() as p:
     check('Pop-up: ein Klick daneben schließt nicht (Escape schließt wie überall, Prüfung „einheit“)', pg.is_visible('#dlg-dauer[open]'))
     pg.click('#dlg-dauer [data-dd-rh="1"]'); pg.wait_for_selector('#dlg-dauer [data-dd-rh="1"][aria-pressed="true"]')
     pg.click('#dlg-dauer [data-dd-menge="rb"][data-d="1"]'); pg.wait_for_function("document.querySelector('#dlg-dauer [data-dd-mzahl=\"rb\"]').value === '2'")
+    pg.evaluate("document.querySelector('#rw-toast').textContent = ''")
+    pg.fill('#dlg-dauer [data-dd-mzahl="rb"]', '1,5'); pg.press('#dlg-dauer [data-dd-mzahl="rb"]', 'Tab')
+    pg.wait_for_function("document.querySelector('#rw-toast').textContent !== '' || document.querySelector('#dlg-dauer [data-dd-mzahl=\"rb\"]').value !== '1,5'")
+    check('Pop-up: „1,5“ im Mengenfeld → Hinweis, Menge bleibt 2 (nicht 15)', pg.input_value('#dlg-dauer [data-dd-mzahl="rb"]') == '2'
+          and 'ganze Stückzahl' in text(pg, '#rw-toast'), (pg.input_value('#dlg-dauer [data-dd-mzahl="rb"]'), text(pg, '#rw-toast')))
     pg.screenshot(path=os.path.join(SH, 'rewe_dauer_1280.png'))
     pg.click('#dlg-dauer [data-dd-speichern]'); pg.wait_for_selector('#dlg-dauer', state='hidden')
     pg.wait_for_selector('#rw-d-liste [data-dauer]:has-text("Beispielstadt"):has-text("jede Woche")')

@@ -53,4 +53,6 @@
   .kk-druck .ci-marke { padding: 0; background: none; font-weight: 700; }
   .kk-druck .kk-zahlen td, .kk-druck .kk-zahlen th { text-align: right; }
   .kk-druck .kk-zahlen .kk-text, .kk-druck .kk-zahlen tbody th { text-align: left; }
+  .kk-druck th, .kk-druck .kk-zahlen tbody th, .kk-druck .ci-unter { font-size: inherit; }   /* Zeilennamen, Köpfe, Unterzeilen in der Tabellenschrift */
 }
+@media (pointer: coarse) { .kk-tab input[type=checkbox] { width: 20px; height: 20px; } }   /* Kästchen am Handy 20 px */

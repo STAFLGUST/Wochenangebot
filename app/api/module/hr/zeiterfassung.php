@@ -10,8 +10,10 @@ declare(strict_types=1);
    Zuordnung: zuerst über die Personalnummer (HR-Angabe „personalnummer“), sonst über den Namen; unbekannte Namen werden
    Mitarbeiter ohne Anmeldung (mit Personalnummer und Abteilung). Gibt es Stammdaten „Abteilungen“ (Verwaltung), wird nur
    eine dort bekannte Abteilung übernommen (auch über eine frühere Bezeichnung), sonst ein Hinweis. Erneute Übernahme ersetzt die zuvor aus der
-   Zeiterfassung übernommenen Einträge im Zeitraum des Berichts. Tage, für die im System schon ein Eintrag steht
-   (Antrag, Personalstelle, Excel-Planung), bleiben unverändert; abweichende Arten erscheinen in der Vorschau.
+   Zeiterfassung übernommenen Einträge im Zeitraum des Berichts – außer solchen, die die Personalstelle storniert oder geändert
+   hat (ihre Korrektur geht vor, Entscheidung 22.11.2026; gekürzt oder verschoben gilt auch der ursprüngliche Zeitraum, den
+   hr_eintrag_save beim ersten Ändern als „import“ festhält). Tage, für die im System schon ein Eintrag steht (Antrag, Personalstelle,
+   Excel-Planung, korrigierter Import), bleiben unverändert; abweichende Arten erscheinen in der Vorschau.
    Form von Vorschau/Übernahme wie im Importvertrag (docs/plattform/schnittstellen/import.md). */
 if (!defined('WA_API')) { http_response_code(404); exit; }   // nur über api/index.php nutzbar
 
@@ -148,17 +150,33 @@ function hr_zeit_planen(array $e, ?array $me = null): array
     foreach ($neu as $wer => $x) $neuAbt[$wer] = $abtWert($x['abteilung']) ?? ['abteilung' => '', 'abteilungNr' => null];
     // zuvor aus der Zeiterfassung übernommene Einträge im Zeitraum des Berichts werden ersetzt
     $rv = $l['von']; $rb = $l['bis'];
+    // Korrekturen der Personalstelle haben Vorrang (Entscheidung 22.11.2026): stornierte oder von Hand geänderte Einträge aus der
+    // Zeiterfassung ersetzt ein erneuter Import nicht – ihre Tage gelten als belegt und erscheinen als „abweichend, nicht übernommen“
+    $korrektur = function (array $x): bool { return ($x['quelle'] ?? '') === 'zeiterfassung' && ($x['status'] === 'storniert' || isset($x['geaendert'])); };
     // nie die eigenen und nie die von Mitarbeitern, deren Zeilen als mehrdeutig übersprungen werden (sonst gingen sie verloren)
-    $alt = $rv === null ? [] : array_values(array_filter($abw['eintraege'], function ($x) use ($rv, $rb, $eigen, $mehrdeutigIds) {
-        return ($x['quelle'] ?? '') === 'zeiterfassung' && $x['von'] >= $rv && $x['bis'] <= $rb && !isset($eigen[$x['person']]) && !isset($mehrdeutigIds[$x['person']]);   // nur ganz im Zeitraum (Rest bleibt)
+    $alt = $rv === null ? [] : array_values(array_filter($abw['eintraege'], function ($x) use ($rv, $rb, $eigen, $mehrdeutigIds, $korrektur) {
+        return ($x['quelle'] ?? '') === 'zeiterfassung' && !$korrektur($x) && $x['von'] >= $rv && $x['bis'] <= $rb && !isset($eigen[$x['person']]) && !isset($mehrdeutigIds[$x['person']]);   // nur ganz im Zeitraum (Rest bleibt)
     }));
     $altIds = array_column($alt, 'id');
     $bleibt = array_values(array_filter($abw['eintraege'], function ($x) use ($altIds) { return !in_array($x['id'], $altIds, true); }));
     // belegte Tage je Person (aktive Einträge, die bleiben)
-    $belegt = [];
+    $belegt = []; $korrigiert = [];
     foreach ($bleibt as $x) {
-        if (!in_array($x['status'], HR_AKTIV, true)) continue;
-        for ($d = $x['von']; $d <= $x['bis']; $d = hr_plus($d, 1)) $belegt[$x['person']][$d] = $x['art'];
+        $k = $korrektur($x); $aktiv = in_array($x['status'], HR_AKTIV, true);
+        if (!$k && !$aktiv) continue;
+        for ($d = $x['von']; $d <= $x['bis']; $d = hr_plus($d, 1)) {
+            if ($k) $korrigiert[$x['person']][$d] = true;
+            if ($aktiv) $belegt[$x['person']][$d] = $x['art'];
+            elseif (!isset($belegt[$x['person']][$d])) $belegt[$x['person']][$d] = 'storniert';   // ein aktiver Eintrag am selben Tag geht vor
+        }
+        // gekürzt, verschoben oder einer anderen Person zugeordnet: auch die Tage des ursprünglichen Imports sind korrigiert
+        if ($k && is_array($x['import'] ?? null)) {
+            $ip = (string)$x['import']['person'];
+            for ($d = $x['import']['von']; $d <= $x['import']['bis']; $d = hr_plus($d, 1)) {
+                $korrigiert[$ip][$d] = true;
+                $belegt[$ip][$d] ??= 'entfernt';
+            }
+        }
     }
     $tage = []; $gleich = 0; $abweichend = [];
     foreach ($l['eintraege'] as $x) {
@@ -169,7 +187,7 @@ function hr_zeit_planen(array $e, ?array $me = null): array
             if (hr_wochentag($d) > 5 || hr_feiertag($d) !== null) continue;
             if (isset($belegt[$pid][$d])) {
                 if ($belegt[$pid][$d] === $x['art']) $gleich++;
-                else $abweichend[] = [$l['personen'][$x['wer']]['name'], $d, $belegt[$pid][$d], $x['art']];
+                else $abweichend[] = [$l['personen'][$x['wer']]['name'], $d, $belegt[$pid][$d], $x['art'], isset($korrigiert[$pid][$d])];
                 continue;
             }
             $tage[$pid][$d] = $code;
@@ -224,8 +242,12 @@ function hr_zeit_vorschau(array $e, array $me): array
     }
     if ($pl['alt']) { $n['entfaellt'] += count($pl['alt']); $z[] = ['art' => 'entfaellt', 'schluessel' => 'Abwesenheiten', 'name' => 'frühere Übernahme', 'text' => count($pl['alt']) . ' Einträge der letzten Übernahme aus der Zeiterfassung werden ersetzt']; }
     $abw = [];
-    foreach ($pl['abweichend'] as [$name, $d, $ist, $neu]) $abw[$name][] = hr_de($d) . " ($ist statt $neu)";
-    foreach ($abw as $name => $tage) { $n['fehler']++; $z[] = ['art' => 'fehler', 'schluessel' => 'abweichend', 'name' => $name, 'text' => 'im System anders eingetragen, bleibt unverändert: ' . implode(', ', array_slice($tage, 0, 10)) . (count($tage) > 10 ? ' …' : '')]; }
+    foreach ($pl['abweichend'] as [$name, $d, $ist, $neu, $korr]) $abw[$name][$korr ? 1 : 0][] = hr_de($d) . " ($ist statt $neu)";
+    foreach ($abw as $name => $je) foreach ($je as $korr => $tage) {
+        $n['fehler']++;
+        $z[] = ['art' => 'fehler', 'schluessel' => 'abweichend', 'name' => $name, 'text' => ($korr ? 'abweichend, nicht übernommen (Korrektur der Personalstelle): ' : 'im System anders eingetragen, bleibt unverändert: ')
+            . implode(', ', array_slice($tage, 0, 10)) . (count($tage) > 10 ? ' …' : '')];
+    }
     foreach ($l['fehler'] as $f) { $n['fehler']++; $z[] = ['art' => 'fehler', 'zeile' => $f['zeile'], 'schluessel' => $f['schluessel'], 'name' => '', 'text' => $f['text']]; }
     $h = [['stufe' => 'info', 'text' => 'Abwesenheitsbericht ' . ($l['von'] ? hr_de($l['von']) . '–' . hr_de($l['bis']) : '') . ': ' . count($l['personen']) . ' Mitarbeiter, ' . count($l['eintraege']) . ' Abwesenheiten (ohne Feiertage).']];
     if ($pl['gleich']) $h[] = ['stufe' => 'info', 'text' => $pl['gleich'] . ' Tage sind schon gleich eingetragen (Antrag, Personalstelle oder Excel-Planung) und bleiben, wie sie sind.'];

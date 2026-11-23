@@ -83,9 +83,48 @@ with tempfile.TemporaryDirectory() as tmp:
         (root / name).unlink()
     if saved_index is not None:
         (root / 'index.php').write_bytes(saved_index)
+    # .storage.lock and .sqlite planted as links (daten/ is writable in the containers): the root tool never creates the link
+    # target on the host (e.g. /etc/nologin), never hangs on a FIFO and never opens a database outside the data directory
+    victim = Path(tmp) / 'host-nologin'
+    (root / '.storage.lock').unlink(missing_ok=True)
+    (root / '.storage.lock').symlink_to(victim)
+    r = command(root, 'check')
+    check('lock file as link: refused, link target never created', r.returncode != 0 and not victim.exists() and not victim.is_symlink())
+    (root / '.storage.lock').unlink()
+    os.mkfifo(root / '.storage.lock')
+    try:
+        r = subprocess.run([sys.executable, str(REPO / 'deploy/datenbank.py'), 'check', str(root)], capture_output=True, text=True, timeout=20)
+        fifo_ok = r.returncode != 0
+    except subprocess.TimeoutExpired:
+        fifo_ok = False
+    check('lock file as FIFO: refused without hanging', fifo_ok)
+    (root / '.storage.lock').unlink()
+    (root / '.sqlite').rename(Path(tmp) / 'host-db')
+    (root / '.sqlite').symlink_to(Path(tmp) / 'host-db')
+    r = command(root, 'check')
+    check('database directory as link: refused', r.returncode != 0 and 'symbolic link' in r.stderr)
+    (root / '.sqlite').unlink()
+    (Path(tmp) / 'host-db').rename(root / '.sqlite')
+    check('regular lock file and database: check works again', command(root, 'check').returncode == 0)
     (root / '.sqlite/store.sqlite').rename(root / '.sqlite/saved.sqlite')
     check('missing active DB fails closed without stale fallback', php(root, 'store_read("angebot");').returncode != 0 and not (root / '.sqlite/store.sqlite').exists())
     (root / '.sqlite/saved.sqlite').rename(root / '.sqlite/store.sqlite')
+    # A link planted as a folder name on the way to a document (daten/ is writable in the containers) must never let the
+    # rollback write onto the host: refused before anything changes; a link as file name likewise
+    check('test setup: document in a sub-folder', php(root, 'store_write("ordner/x", ["n"=>1]);').returncode == 0)
+    host_dir = Path(tmp) / 'host-dir'; host_dir.mkdir()
+    (root / 'ordner').symlink_to(host_dir)
+    stand = sorted((str(p.relative_to(root)), p.is_symlink() or p.read_bytes()) for p in root.rglob('*') if not p.is_dir() or p.is_symlink())
+    r = command(root, 'rollback', '--offline')
+    check('rollback with a folder link in the data directory: refused, nothing written to the link target, nothing changed',
+          r.returncode != 0 and 'symbolic link' in r.stderr.lower() and not any(host_dir.iterdir()) and (root / '.sqlite-active').is_file()
+          and sorted((str(p.relative_to(root)), p.is_symlink() or p.read_bytes()) for p in root.rglob('*') if not p.is_dir() or p.is_symlink()) == stand)
+    (root / 'ordner').unlink(); (root / 'ordner').mkdir()
+    (root / 'ordner' / 'x.php').symlink_to(Path(tmp) / 'host-file')
+    r = command(root, 'rollback', '--offline')
+    check('rollback with a file link at a document name: refused, link target never created', r.returncode != 0 and not (Path(tmp) / 'host-file').exists()
+          and (root / '.sqlite-active').is_file())
+    (root / 'ordner' / 'x.php').unlink()
     check('rollback succeeds', command(root, 'rollback', '--offline').returncode == 0)
     check('rollback preserves latest writes and deletions', not (root / 'deleted.php').exists() and php(root, 'echo store_read("new")["value"];').stdout == '42' and php(root, 'echo store_read("a")["n"];').stdout == '120')
     check('rollback retains separate encryption key', (root / 'mail-schluessel.php').exists())

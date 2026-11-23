@@ -20,6 +20,7 @@
   const darfHr = () => may('hr.verwalten') && may('hr.zugang');
   const WT = ['Mo', 'Di', 'Mi', 'Do', 'Fr', 'Sa', 'So'];
   const zahl = (n) => window.STAFL_FORMAT.zahl(Math.round(Number(n || 0) * 2) / 2, 0, 1);   // halbe Tage, echtes Minus wie überall
+  const tageText = (n) => `${zahl(n)} ${Math.abs(Math.round(Number(n || 0) * 2) / 2) === 1 ? 'Tag' : 'Tage'}`;   // wie hr.js: „1 Tag“, „−1 Tag“, „0,5 Tage“
   let daten = null;                      // Antwort von mitarbeiter_hr (aktuelles Jahr)
   // Kennzeichen „Resturlaub verfällt nicht“ (Verfall je Mitarbeiter abgeschaltet) in den Listen
   const kVerfall = '<small class="hr-kein-verfall" title="Resturlaub aus dem Vorjahr verfällt nicht">kein Verfall</small>';
@@ -35,6 +36,8 @@
     return daten;
   }
   const person = (uid) => (daten ? daten.personen.find((p) => p.nutzer === uid) : null);
+  // Felder, die das Formular schickt – Vergleich vor einer Wiederholung nach 409 (Revision gilt für die ganze Liste)
+  const stand = (p) => (p ? JSON.stringify([p.abteilung, p.abteilungNr, p.personalnummer, p.pos, p.eintritt, p.vertretung, p.arbeitstage, p.aktiv, p.verfall, p.jahre[String(JAHR)] || null]) : '');
 
   /* ---------- Spalten der Mitarbeiterliste (Administratoren) ---------- */
   function zelle(uid) {
@@ -42,7 +45,7 @@
     if (!p) return { abteilung: '', urlaub: '' };
     return {
       abteilung: esc(p.abteilung || ''),
-      urlaub: p.aktiv ? `<span title="Resturlaub ${JAHR}">${esc(zahl(p.konto.rest))} Tage</span>${p.verfall === false ? kVerfall : ''}` : '<span class="muted" title="nicht im Urlaubsplan">–</span>',
+      urlaub: p.aktiv ? `<span title="Resturlaub ${JAHR}">${esc(tageText(p.konto.rest))}</span>${p.verfall === false ? kVerfall : ''}` : '<span class="muted" title="nicht im Urlaubsplan">–</span>',
     };
   }
 
@@ -73,7 +76,7 @@
     // eigene Person: Urlaubsangaben ändert eine andere Person der Personalstelle (Vier-Augen-Prinzip, der Server prüft das)
     const eigen = !!(uid && W.me && W.me.id === uid);
     const aus = eigen ? ' disabled' : '';
-    return `<fieldset class="span2 hr-teil${eigen ? ' hr-eigen' : ''}" id="hr-teil" data-uid="${esc(uid || '')}"><legend>Urlaubsverwaltung</legend>
+    return `<fieldset class="span2 hr-teil${eigen ? ' hr-eigen' : ''}" id="hr-teil" data-uid="${esc(uid || '')}" data-stand="${esc(stand(p))}"><legend>Urlaubsverwaltung</legend>
       ${eigen ? `<p class="hr-eigen-hinweis">${icon('lock', 'sm')}<span>Ihre eigenen Urlaubsangaben (Anspruch, Übertrag, Verfall, Arbeitstage, Urlaubsplan, Personalnummer, Vertretung, Eintritt) ändert eine andere Person der Personalstelle (Vier-Augen-Prinzip). Abteilung und Position können Sie selbst ändern.</span></p>` : ''}
       <div class="form-grid two">
         ${abtFeld}
@@ -91,7 +94,7 @@
         <label class="check span2"><input type="checkbox" name="hr_aktiv"${!p || p.aktiv ? ' checked' : ''}${aus}> im Urlaubsplan (Kalender, Export für den Steuerberater)</label>
       </div>
       ${abtL.length ? '' : `<datalist id="hr-abteilungen">${abt.map((a) => `<option value="${esc(a)}">`).join('')}</datalist>`}
-      ${p && p.aktiv ? `<p class="hint" style="margin:0">Urlaub ${JAHR}: ${esc(zahl(p.konto.rest))} Tage Rest · ${esc(zahl(p.konto.genommen))} genommen · ${esc(zahl(p.konto.geplant))} geplant${p.konto.verfaellt > 0 ? ` · ${esc(zahl(p.konto.verfaellt))} Tage Übertrag verfallen nach dem ${esc(tagMonat((p.konto.frist || '').slice(5)))}` : ''}${p.gleitKonto && p.gleitKonto.aktiv ? ` · Gleittage: ${esc(zahl(p.gleitKonto.rest))} Rest (gewähren in HR → Übersicht)` : ''}</p>` : ''}
+      ${p && p.aktiv ? `<p class="hint" style="margin:0">Urlaub ${JAHR}: ${esc(tageText(p.konto.rest))} Rest · ${esc(zahl(p.konto.genommen))} genommen · ${esc(zahl(p.konto.geplant))} geplant${p.konto.verfaellt > 0 ? ` · ${esc(zahl(p.konto.verfaellt))} Tage Übertrag verfallen nach dem ${esc(tagMonat((p.konto.frist || '').slice(5)))}` : ''}${p.gleitKonto && p.gleitKonto.aktiv ? ` · Gleittage: ${esc(zahl(p.gleitKonto.rest))} Rest (gewähren in HR → Übersicht)` : ''}</p>` : ''}
     </fieldset>`;
   }
 
@@ -122,7 +125,16 @@
     if (abtSel) { if (abtSel.value !== '=') body.abteilungNr = abtSel.value; } else body.abteilung = wert('hr_abteilung');
     let r;
     try { r = await api('mitarbeiter_hr_save', { body }); }
-    catch (ex) { if (ex.status !== 409) throw ex; await laden(); r = await api('mitarbeiter_hr_save', { body: { ...body, rev: daten.rev } }); }
+    catch (ex) {
+      if (ex.status !== 409) throw ex;
+      await laden();
+      // jemand hat inzwischen diesen Mitarbeiter geändert: nicht mit den alten Werten überschreiben, sondern die neue Fassung zeigen
+      if (teil.dataset.uid && stand(person(uid)) !== teil.dataset.stand) {
+        teil.outerHTML = formular(uid);
+        throw Object.assign(new Error('Die Urlaubsangaben wurden inzwischen von jemand anderem geändert. Die neue Fassung ist geladen – bitte prüfen und erneut speichern.'), { status: 409 });
+      }
+      r = await api('mitarbeiter_hr_save', { body: { ...body, rev: daten.rev } });   // nur ein anderer Mitarbeiter war betroffen
+    }
     daten.rev = r.rev;
     if (r.person) { const i = daten.personen.findIndex((p) => p.nutzer === uid); if (i >= 0) daten.personen[i] = r.person; else daten.personen.push(r.person); }
   }
@@ -220,14 +232,14 @@
         e.preventDefault();
         const f = e.target, err = f.querySelector('.form-err');
         err.textContent = '';
-        try { await speichern(f.dataset.uid, f); hrDlg.close(); toast('Gespeichert.'); renderNurHr(host); } catch (ex) { err.textContent = ex.message; }
+        try { await speichern(f.dataset.uid, f); hrDlg.close(); toast('Gespeichert.'); renderNurHr(host); } catch (ex) { err.textContent = ex.message; err.scrollIntoView({ block: 'nearest' }); }
       });
     }
     const p = person(uid);
     const f = hrDlg.querySelector('form');
     f.dataset.uid = uid;
     f.innerHTML = `<div class="dlg-head"><div><h2 id="hrp-title">${esc(`${p.vorname} ${p.nachname}`.trim())}</h2><p>${p.zugang ? 'Mitarbeiter mit Anmeldung' : 'Mitarbeiter ohne Anmeldung'}</p></div>
-        <button class="btn icon ghost" type="button" data-close aria-label="Abbrechen">${icon('x')}</button></div>
+        <button class="btn icon ghost" type="button" data-close aria-label="Schließen">${icon('x')}</button></div>
       <div class="dlg-body form-grid two">${formular(uid)}<p class="form-err span2" role="alert"></p></div>
       <div class="dlg-foot"><button type="button" class="btn" data-close>Abbrechen</button><button type="submit" class="btn primary">Speichern</button></div>`;
     hrDlg.showModal();
@@ -426,7 +438,8 @@
       if ($('#hr-ueberziehen').value === '' || !(ueberziehenMax >= 0 && ueberziehenMax <= 30) || (ueberziehenMax * 2) % 1) { $('#hr-einst-err').textContent = 'Resturlaub überziehen: bitte 0 bis 30 Tage in ganzen oder halben Tagen (0 = nie).'; return; }
       if ($('#hr-plan-einzeltage').value === '' || !Number.isInteger(planung.einzeltageMax) || planung.einzeltageMax < 0 || planung.einzeltageMax > 50) { $('#hr-einst-err').textContent = 'Jahresplanung: einzelne Urlaubstage bitte als ganze Zahl zwischen 0 (keine Prüfung) und 50.'; return; }
       const r = await api('hr_einstellungen_save', { body: { sperren: liste('hr-sperren'), ferien: liste('hr-ferien'), uebertragBis: bis,
-        verfallAb: ab ? Number(ab) : null, regelSperren: $('#hr-regelsperren').checked, schliesstage: $('#hr-schliesstage').checked, ueberziehenMax, amStueckMax, regeln: $('#hr-regeln').value, planung } });
+        verfallAb: ab ? Number(ab) : null, regelSperren: $('#hr-regelsperren').checked, schliesstage: $('#hr-schliesstage').checked, ueberziehenMax, amStueckMax, regeln: $('#hr-regeln').value, planung,
+        rev: daten.einstRev } });   // 409, wenn inzwischen jemand anderes gespeichert hat: Hinweis, nichts überschrieben
       Object.assign(daten, { sperren: r.sperren, ferien: r.ferien, uebertragBis: r.uebertragBis, verfallAb: r.verfallAb, regelSperren: r.regelSperren, schliesstage: r.schliesstage, ueberziehenMax: r.ueberziehenMax, amStueckMax: r.amStueckMax, sperrenAuto: r.sperrenAuto, regeln: r.regeln, planung: r.planung });
       toast('Urlaubseinstellungen gespeichert.');
       renderUrlaub();

@@ -2,7 +2,7 @@
 
 <!-- ERZEUGT von `python3 werkzeuge/doku.py erzeugen` – nicht von Hand ändern. Quelle: Funktionen und Kommentare im Code. Die CI prüft, dass diese Datei zum Code passt. -->
 
-11 Dateien, 298 Funktionen – in der Reihenfolge der Datei, **fett** die Abschnitte. Text = erste Aussage des Kommentars direkt über der Funktion (Python: Docstring). Übersicht aller Module: [README.md](README.md).
+11 Dateien, 299 Funktionen – in der Reihenfolge der Datei, **fett** die Abschnitte. Text = erste Aussage des Kommentars direkt über der Funktion (Python: Docstring). Übersicht aller Module: [README.md](README.md).
 
 ## `app/api/aktionen/hr.php`
 
@@ -478,6 +478,7 @@ _HR · Urlaubsverwaltung (Modul hr, Oberfläche hr.intern unter /module/hr/)._
 - `anmelden(user, pw, ip, breite, verfall_hinweis)`
 - `plan_setzen(**w)`
 - `zeit(cl, uebernehmen, stand, **opt)`
+- `rest_setzen(route)`
 - `zr_setzen(i, von, bis)`
 - `anmelden_handy(user, pw, ip, hoehe)` – ── Handy (Prüfung 10.11.2026): echte Mobil-Simulation (390 px, Touch, mobiles Ansichtsfenster, 3-fache Pixeldichte) – im Browser (Höhe 664 mit Leisten) und …
 

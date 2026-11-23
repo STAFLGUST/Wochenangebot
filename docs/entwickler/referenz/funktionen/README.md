@@ -6,19 +6,19 @@ Karte für Entwickler und Agenten: Abschnitte und Funktionen jeder Code-Datei (P
 
 | Modul | Kennung | Dateien | Funktionen |
 | --- | --- | --- | --- |
-| [Angebot](angebot.md) | `angebot` | 62 | 982 |
+| [Angebot](angebot.md) | `angebot` | 62 | 984 |
 | [Bestand](bestand.md) | `bestand` | 9 | 74 |
 | [Leergut](leergut.md) | `leergut` | 4 | 131 |
 | [CRM](crm.md) | `crm` | 9 | 177 |
 | [REWE](rewe.md) | `rewe` | 5 | 186 |
-| [Qualitätssicherung](qs.md) | `qs` | 22 | 494 |
+| [Qualitätssicherung](qs.md) | `qs` | 22 | 496 |
 | [Einkauf](einkauf.md) | `einkauf` | 2 | 6 |
-| [Container-Import](containerimport.md) | `containerimport` | 35 | 369 |
-| [HR](hr.md) | `hr` | 11 | 298 |
+| [Container-Import](containerimport.md) | `containerimport` | 34 | 374 |
+| [HR](hr.md) | `hr` | 11 | 299 |
 | [Marketing](marketing.md) | `marketing` | 4 | 77 |
 | [Controlling](controlling.md) | `controlling` | 17 | 258 |
 | [Versand](versand.md) | `versand` | 4 | 32 |
-| [Verwaltung](verwaltung.md) | `verwaltung` | 22 | 235 |
+| [Verwaltung](verwaltung.md) | `verwaltung` | 22 | 237 |
 | [Sicherheit](sicherheit.md) | `sicherheit` | 5 | 109 |
 | [Dashboard](dashboard.md) | `dashboard` | 2 | 45 |
-| [Plattformkern](plattform.md) | `plattform` | 125 | 1270 |
+| [Plattformkern](plattform.md) | `plattform` | 125 | 1283 |

@@ -36,7 +36,7 @@
   const summeAus = (monate, auswahl, k) => summe(monate.flatMap((m) => auswahl.map((r) => wert(m, r.nr, k))));
   const gesamt = (monate, auswahl) => { const kg = summeAus(monate, auswahl, 'kg'), umsatz = summeAus(monate, auswahl, 'umsatz'), db = summeAus(monate, auswahl, 'db'); return { kg, umsatz, db, spanne: dbAnteil(db, umsatz) }; };
   const zeitraumText = (monate) => monate.length === MONATE().length ? `Jahr ${S.jahr}` : monate.length === 1 ? `${monatsname(monate[0])} ${S.jahr}` : monate.length ? `${monate.length} ausgewählte Monate ${S.jahr}` : 'Keine Monate ausgewählt';
-  const anzeige = (k, v) => k === 'umsatz' || k === 'db' ? euro(v) : k === 'kg' ? (ist(v) ? `${kg(v)} kg` : '—') : pct(v);
+  const anzeige = (k, v) => k === 'umsatz' || k === 'db' ? euro(v) : k === 'kg' ? kg(v) : pct(v);   // kg() bringt die Einheit (und „—“) schon mit
 
   /* ---------- Gerüst des Bereichs ---------- */
   const GERUEST = `

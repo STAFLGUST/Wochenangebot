@@ -392,3 +392,29 @@ Rechte: ansehen und rechnen mit „EUDR ansehen“, speichern und festschreiben 
   Modulen).
 - **Rückfall:** `sh /opt/wochenangebot/deploy/release-zurueck.sh`. Die Vorversion zeigt den Reiter nicht und fasst das neue
   Dokument nicht an; nach der Rückkehr ist alles wieder da.
+
+## 16. EUDR: Umrisse abgeschlossener Bewertungen in eigenen Dokumenten (ab dem Release mit KERN-3b)
+
+Korrektur aus dem Nachtlauf 22./23.11.2026. Kein Schritt auf dem Server, keine Migration, keine neuen Rechte.
+
+- **Was war falsch:** Jeder Abschluss einer EUDR-Bewertung kopierte die Umrisse aller Farmer ins Dokument der Container.
+  Dieses Dokument liest jede Aktion des Moduls ganz. Ab rund 200 Abschlüssen (je 10 Farmer zu 200 Punkten) fiel das ganze
+  Modul mit einem Speicherfehler aus (*getestet* mit erzeugten Daten).
+- **Was jetzt gilt:** Die Umrisse eines Abschlusses liegen in einem eigenen Dokument
+  `containerimport-eudr-schnappschuss/<Kennung>`, einmal geschrieben und nie geändert (GoBD, GR-106). Am Container stehen die
+  Farmer ohne Umriss und ein Verweis mit SHA-256-Prüfsumme. Karte im Fenster „Container“ und „GeoJSON für TRACES“ lesen die
+  Umrisse von dort und prüfen die Prüfsumme; passt sie nicht, verweigern sie mit einem Hinweis. Wiederöffnen löscht nichts:
+  Der frühere Abschluss verweist weiter auf sein Dokument, ein neuer Abschluss legt ein neues an.
+- **Bestehende Abschlüsse** behalten ihre eingebetteten Umrisse und werden genauso angezeigt und exportiert (*getestet*,
+  Testgruppe `containerimport`). Sie werden nicht umgeschrieben.
+- **Gemessen** (*getestet*, `memory_limit = 128M`): 200 Abschlüsse mit je 10 Farmern zu 200 Punkten brauchten vorher mehr
+  als 128 MiB (Abbruch), jetzt 32 MiB; das Dokument der Container hat dann 1,9 statt 11,5 MiB. 61 Abschlüsse mit je
+  4001 Punkten: 0,19 statt 5,7 MiB.
+- **Sicherung:** Die neuen Dokumente kommen mit der täglichen Sicherung mit – im Dateibetrieb als Unterordner im Archiv, im
+  SQLite-Betrieb in der Datenbank (*getestet* mit `deploy/sichern.sh` in einem Wegwerf-Ordner, beide Speicherarten).
+- **Rückfall:** `sh /opt/wochenangebot/deploy/release-zurueck.sh`. Die Vorversion liest alle Container weiter und beschädigt
+  nichts. Bei Abschlüssen ab diesem Release sieht sie aber keine Umrisse: Die Karte im Fenster bricht ab (TypeError in der
+  Browser-Konsole), „GeoJSON für TRACES“ liefert die Farmer mit `"geometry": null` – **diese Datei während des Rückfalls
+  nicht bei TRACES einreichen**. Liste, Profil
+  und Druck zeigt sie wie gewohnt. Nach der Rückkehr auf dieses Release ist alles wieder da (*getestet* mit dem Stand vor der
+  Korrektur gegen Daten dieses Stands).

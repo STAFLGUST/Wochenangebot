@@ -150,11 +150,18 @@ sichere_ordner() {
     O_QUELLE="$ARBEIT/abzug-$O_NAME"
     python3 "$BASIS/deploy/datenbank.py" snapshot "$O_ORDNER" --output "$O_QUELLE" >/dev/null || fehler "Datenbank-Sicherung fehlgeschlagen ($O_NAME)"
   fi
-  tar czf "$O_DATEI" -C "$O_QUELLE" -X "$AUSSER" . || fehler "Archiv konnte nicht erstellt werden ($O_NAME)"
+  # Datendateien der Quelle vor und nach dem Archiv zählen, maßgeblich die kleinere Zahl: die Anwendung läuft weiter und legt
+  # währenddessen Dokumente an oder entfernt sie; fehlerhaft ist das Archiv nur mit weniger Dateien als beide Zählungen
+  qzahl() { (cd "$O_QUELLE" && find . -name '*.php' ! -path './geo/*' ! -name 'sicherung.php' ! -name 'mail-schluessel.php' | wc -l); }
+  O_QZAHL=$(qzahl)
+  # GNU tar endet mit Code 1 („file changed as we read it“), wenn die Anwendung währenddessen ein Dokument per Umbenennen
+  # ersetzt oder anlegt – das Archiv ist vollständig; abgeschnitten Gelesenes verwirft die Prüfung jeder Datei unten
+  O_RC=0; tar czf "$O_DATEI" -C "$O_QUELLE" -X "$AUSSER" . || O_RC=$?
+  [ "$O_RC" -le 1 ] || fehler "Archiv konnte nicht erstellt werden ($O_NAME)"
+  O_QNACH=$(qzahl); [ "$O_QNACH" -ge "$O_QZAHL" ] || O_QZAHL=$O_QNACH
   # Wiederherstellungstest: in einen leeren Ordner entpacken und jede Datendatei prüfen
   O_PRUEF="$ARBEIT/pruef-$O_NAME"; mkdir "$O_PRUEF"
   tar xzf "$O_DATEI" -C "$O_PRUEF" || fehler "Archiv nicht lesbar ($O_NAME)"
-  O_QZAHL=$(cd "$O_QUELLE" && find . -name '*.php' ! -path './geo/*' ! -name 'sicherung.php' ! -name 'mail-schluessel.php' | wc -l)
   O_DATEIEN=$(find "$O_PRUEF" -name '*.php' | wc -l)
   O_FEHLER=0
   if command -v python3 >/dev/null 2>&1; then

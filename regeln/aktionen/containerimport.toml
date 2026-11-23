@@ -74,6 +74,10 @@ schreibend = true
 [aktion.containerimport_eudr_export]
 oberflaeche = "containerimport.intern"
 
+# Farmer einer abgeschlossenen Bewertung samt Umriss (Schnappschuss) für die Karte im Fenster „Container“
+[aktion.containerimport_eudr_schnappschuss]
+oberflaeche = "containerimport.intern"
+
 # Dokumente je Container (module/containerimport/dokumente.php): Liste eines Containers samt entfernter Dateien
 [aktion.containerimport_dokumente]
 oberflaeche = "containerimport.intern"

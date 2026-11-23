@@ -478,6 +478,15 @@ class EchtesRegelwerk(unittest.TestCase):
         self.assertTrue(e["volle_suite_noetig"])
         self.assertIn("users", e["testgruppen"])
 
+    def test_jedes_betriebswerkzeug_koordinationspflichtig(self):
+        # auch Python- und PHP-Werkzeuge unter deploy/ (Release, Datentrennung, Notfall) – nicht nur die Shell-Skripte
+        rw = regeln.laden(WURZEL)
+        for p in sorted(WURZEL.glob("deploy/**/*")):
+            if p.is_file() and p.suffix in (".sh", ".py", ".php"):
+                self.assertIn("Betrieb: Docker, Caddy, Release und Sicherung", regeln.koordination(rw, str(p.relative_to(WURZEL))), p)
+        self.assertIn("Speicherschicht, Datenformate und Migrationen", regeln.koordination(rw, "deploy/daten_trennen.py"))
+        self.assertIn("Globale Tests und Testdaten", regeln.koordination(rw, "tests/e2e/kunden_hilfe.py"))
+
     def test_folgen_fuer_bestand(self):
         e = regeln.folgen(regeln.laden(WURZEL), ["app/api/lib/bestand.php"])
         self.assertEqual(e["module"], ["bestand"])

@@ -203,6 +203,23 @@ with sync_playwright() as pw:
           and not [t for t in konsole if 'viewBox' in t], (vb2, konsole))
     a.unroute('**/api/?action=auswertung*')
     a.click('#vt-auswertung'); a.wait_for_selector('#aw-svg #aw-pts .aw-pt')
+    # Schneller Wechsel des Zeitraums: „90 Tage“, sofort „Heute“ – die spätere Wahl gilt, auch wenn die 90-Tage-Antwort zuletzt kommt
+    gehalten.clear()
+    a.evaluate("() => { const j = Response.prototype.json; window.__json = []; Response.prototype.json = function () { const u = this.url; return j.call(this).then((x) => { window.__json.push(u); return x; }); }; }")
+    a.route(re.compile(r'action=auswertung&tage=90\b'), lambda route: gehalten.append(route))
+    a.click('[data-aw-tage="90"]')
+    for _ in range(100):   # Ereignisse verarbeiten, bis die angehaltene Anfrage da ist
+        if gehalten: break
+        a.wait_for_timeout(50)
+    a.click('[data-aw-tage="1"]'); a.wait_for_function("window.__json.some((u) => u.includes('tage=1')) && document.querySelector('[data-aw-tage=\"1\"][aria-pressed=true]')")
+    heute = (a.inner_text('#aw-sum'), a.locator('#aw-pts .aw-pt').count())
+    with a.expect_response(lambda r: 'tage=90' in r.url):
+        gehalten[0].continue_()
+    a.wait_for_function("window.__json.some((u) => u.includes('tage=90'))")   # danach ist die Antwort verarbeitet (Mikroaufgaben vor dem nächsten Abfragen)
+    a.unroute(re.compile(r'action=auswertung&tage=90\b'))
+    check('UI: späte Antwort eines früher gewählten Zeitraums überschreibt „Heute“ nicht', a.get_attribute('[data-aw-tage="1"]', 'aria-pressed') == 'true'
+          and (a.inner_text('#aw-sum'), a.locator('#aw-pts .aw-pt').count()) == heute and heute[1] == 3 and a.locator('#view-auswertung .aw-map').count() == 1,
+          (heute, a.inner_text('#aw-sum'), a.locator('#aw-pts .aw-pt').count()))
     a.set_viewport_size({'width': 390, 'height': 844}); a.wait_for_timeout(300)
     a.click('[data-aw=fit]'); a.wait_for_timeout(100)
     a.screenshot(path=SH + '/auswertung-390.png', full_page=False)

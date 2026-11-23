@@ -1,5 +1,8 @@
 """Stammdaten → Angebote mit Kundengruppen (Freischaltung über die Gruppe), Import der Kundenstammdaten aus der
-Warenwirtschaft (CSV, alle Spalten, Aktiv-Regel 18 Monate) und Passwort-Auswahl im Kunden-Dialog. Nur synthetische
+Warenwirtschaft (CSV, alle Spalten, Aktiv-Regel 18 Monate) und Passwort-Auswahl im Kunden-Dialog. Artikelpreise-Import:
+Kunde der neu angelegten Gruppe sieht den Gruppenpreis ohne Sonderposten des Wochenangebots, der Bestellwunsch rechnet
+damit. Kundenimport: Firma + PLZ trifft je Lauf nur einen Kunden (zweite Filiale wird eigener Kunde), Stichtag der
+Aktiv-Regel am Monatsende. Nur synthetische
 Testdaten (tests/fixtures/kunden); Datumswerte für die Aktiv-Regel relativ zu heute."""
 import calendar
 import csv
@@ -7,6 +10,7 @@ import datetime
 import io
 import json
 import os
+import subprocess
 import sys
 import urllib.request
 import zoneinfo
@@ -16,7 +20,7 @@ from playwright.sync_api import sync_playwright
 from auth_helpers import expire_session
 from kunden_hilfe import Client
 from smtp_test import TestSmtp
-from umgebung import BASE, FIX, SH, SMTP_PORT, WORK, storage_raw
+from umgebung import BASE, FIX, REPO, SH, SMTP_PORT, WORK, storage_raw
 
 PW = 'Sicheres-Passwort-1'
 KPW = 'Kantine-Kennwort-5'
@@ -302,6 +306,11 @@ with sync_playwright() as p:
     akt = f'{jetzt[0]:04d}-{jetzt[1]:02d}'
     basis = (A.call('draft')[1].get('draft') or A.call('draft')[1]['published'])['meta']
     kw_neu = (basis.get('week'), basis.get('year')) != (jetzt[1], jetzt[0])   # Angebotswoche ändert sich nur, wenn der Entwurf eine andere KW hat
+    dr = A.call('draft')[1]; m0 = dr.get('draft') or dr['published']
+    for i in m0['items']:
+        if i.get('code') == '10601':
+            i['sale'] = {'value': 20.0}   # Empfehlung im Wochenangebot – gilt nicht im neuen Angebot der Gruppe 1
+    assert A.call('save_draft', {'model': m0, 'revision': dr['revision']})[0] == 200
     a.click('#of-preise-link'); a.wait_for_selector('#view-importe .imp-art[data-art="angebot_preise"]')
     check('Verweis öffnet die Importzentrale mit „Artikelpreise (CSV)“', a.locator('#view-importe [data-imp-waehlen="angebot_preise"]').is_visible())
     a.set_input_files('#view-importe input[data-imp-datei="angebot_preise"]', PREISE); a.wait_for_selector('#view-importe [data-pi] #pi-hoch')
@@ -389,6 +398,24 @@ with sync_playwright() as p:
           and next(i for i in A.call('draft')[1]['draft']['items'] if i.get('code') == '10601')['price']['value'] == 26.1)
     check('Schnittstelle: leere Preisliste 422', A.call('import_pruefen', {'art': 'angebot_preise', 'daten': {'preise': []}})[0] == 422)
     check('Schnittstelle: frühere Importart „Wochenangebot (Excel)“ gibt es nicht mehr (404)', A.call('import_pruefen', {'art': 'angebot_excel'})[0] == 404)
+    # Kunde der Gruppe 1: Gruppenpreis aus der Datei ohne Sonderposten des Wochenangebots, Bestellwunsch rechnet damit (GR-004)
+    dr = A.call('draft')[1]
+    st, r = A.call('publish', {'model': dr['draft'], 'revision': dr['revision']})
+    if st == 403 and r.get('code') == 'confirmation_required':
+        assert A.call('reauth', {'password': PW})[0] == 200
+        st, r = A.call('publish', {'model': dr['draft'], 'revision': dr['revision']})
+    assert st == 200, r
+    kunde({'firma': 'Gastro Gruppe Eins', 'nr': 'T-1', 'gruppe': '1', 'email': 'k1@example.org', 'angebote': [],
+           'login': {'username': 'gastro.eins', 'password': KPW, 'mustChange': False, 'active': True}})
+    K1 = Client('203.0.113.1'); assert K1.call('kunde_login', {'username': 'gastro.eins', 'password': KPW})[0] == 200
+    ki = next((i for i in K1.call('offer&angebot=' + neu['id'])[1]['offer']['items'] if i.get('code') == '10601'), {})
+    check('Kunde der Gruppe 1: 10601 mit Gruppenpreis 23,00 aus der Datei, kein Sonderposten des Wochenangebots',
+          ki.get('price') == {'status': 'value', 'value': 23.0} and not ki.get('sale') and 'regular' not in ki, ki)
+    st, r = K1.call('kunde_bestellung', {'angebot': neu['id'], 'publishedAt': A.call('draft')[1]['published']['publishedAt'],
+                                         'positions': [{'id': ki.get('id'), 'qty': 2, 'price': 20.0}], 'requestId': 'import-empfehlung-00000001'})
+    bw = next((b for b in doc('bestellungen') if b.get('nr') == r.get('nr')), {}) if st == 200 else {}
+    check('Bestellwunsch der Gruppe 1: 2 kg × 23,00 € = 46,00 €, nicht als Sonderposten', bw.get('total') == 46.0 and bw['positions'][0]['price'] == 23.0
+          and '(Sonderposten)' not in bw['positions'][0]['name'], (st, r, bw.get('positions')))
 
     # ---------- Kunden importieren ----------
     a.click('#vt-kunden'); a.wait_for_selector('#k-list tr[data-kid]')
@@ -497,6 +524,36 @@ with sync_playwright() as p:
     check('Angebote 390 px: kein seitliches Scrollen', over <= 1, over)
     a.screenshot(path=SH + '/stammdaten-angebote-mobil.png')
     br.close()
+
+
+
+def bestaetigt(aktion, daten):
+    st_, r_ = A.call(aktion, daten)
+    if st_ == 403 and r_.get('code') == 'confirmation_required':
+        assert A.call('reauth', {'password': PW})[0] == 200
+        st_, r_ = A.call(aktion, daten)
+    return st_, r_
+
+
+# ---------- Abgleich über Firma + PLZ nur einmal je Lauf: zwei Filialen mit gleichem Namen und gleicher PLZ ----------
+st, r = bestaetigt('kunde_save', {'rev': A.call('kunden')[1]['rev'], 'active': True, 'firma': 'Filiale Muster', 'nr': '', 'plz': '20357', 'ort': 'Hamburg',
+                                  'strasse': 'Alte Str. 1', 'angebote': []})
+assert st == 200, r
+fid = r['customer']['id']
+filialen = [{'nr': '7001', 'firma': 'Filiale Muster', 'plz': '20357', 'ort': 'Hamburg', 'strasse': 'Lagerstr. 5'},
+            {'nr': '7002', 'firma': 'Filiale Muster', 'plz': '20357', 'ort': 'Hamburg', 'strasse': 'Marktweg 9'}]
+st, r = bestaetigt('kunden_import', {'rev': A.call('kunden')[1]['rev'], 'rows': filialen, 'quelle': 'filialen.csv'})
+fil = {c.get('nr'): c for c in doc('kunden')['customers'] if c['firma'] == 'Filiale Muster'}
+check('gleiche Firma und PLZ zweimal in der Datei: bestehender Kunde bekommt die erste Nummer, die zweite Filiale wird eigener Kunde',
+      st == 200 and set(fil) == {'7001', '7002'} and fil['7001']['id'] == fid and fil['7001'].get('strasse') == 'Lagerstr. 5' and fil['7002']['id'] != fid,
+      (r.get('stat'), {k: (v['id'], v.get('strasse')) for k, v in fil.items()}))
+
+# ---------- Stichtag der Aktiv-Regel am Monatsende (Funktion direkt, mit festem „heute“) ----------
+PHP = r"""define('WA_API', 1); date_default_timezone_set('Europe/Berlin'); require $argv[1] . '/app/api/module/verwaltung/import.php';
+echo json_encode(array_map('kunden_aktiv_stichtag', ['2026-08-31', '2026-08-29', '2026-10-31', '2025-08-29', '2027-08-31', '2026-11-22']));"""
+aus = subprocess.run(['php', '-r', PHP, REPO], capture_output=True, text=True)
+check('Stichtag 18 Monate: am Monatsende der letzte Tag des Zielmonats (31.08.2026 → 28.02.2025, nicht 03.03.2025)',
+      aus.stdout and json.loads(aus.stdout) == ['2025-02-28', '2025-02-28', '2025-04-30', '2024-02-29', '2026-02-28', '2025-05-22'], (aus.stdout, aus.stderr[:300]))
 
 check('keine JavaScript-Fehler', not errors, errors[:3])
 print(f'{sum(res)}/{len(res)} passed')

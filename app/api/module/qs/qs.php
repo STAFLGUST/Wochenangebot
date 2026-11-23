@@ -622,7 +622,8 @@ function qs_perioden(string $intervall, string $ab, string $bis): array
 }
 /* Fälligkeit einer Prüfung.
    Kalender (täglich, wöchentlich, monatlich): offen = aktuelle Periode ohne Nachweis; versäumt = vergangene Perioden seit
-   „ab“ (erste Fälligkeit, sonst Anlage der Prüfung) ohne Nachweis; Quote über das Fenster (30 Tage, 12 Wochen, 12 Monate).
+   „ab“ (erste Fälligkeit, sonst Anlage der Prüfung) ohne Nachweis, höchstens die letzten 1000 Perioden (dann ab `versaeumtAb`);
+   Quote über das Fenster (30 Tage, 12 Wochen, 12 Monate).
    Rollend (vierteljährlich und länger): nächste = letzter Nachweis + Intervall, ohne Nachweis die erste Fälligkeit (sonst sofort).
    „bei Bedarf“ und inaktive Prüfungen haben keine Fälligkeit. Ampel: rot = überfällig bzw. letzte Periode versäumt,
    gelb = jetzt fällig bzw. bald fällig, grün = erledigt bzw. später fällig. */
@@ -667,7 +668,7 @@ function qs_faelligkeit_kern(array $p, array $eigene, string $heute): array
 {
     $letzter = $eigene[0] ?? null;
     $out = ['letzter' => $letzter ? $letzter['datum'] : '', 'letztesErgebnis' => $letzter ? $letzter['ergebnis'] : '', 'anzahl' => count($eigene),
-            'art' => '', 'naechste' => '', 'restTage' => null, 'ampel' => '', 'offen' => false, 'versaeumt' => [], 'versaeumtAnzahl' => 0, 'quote' => null];
+            'art' => '', 'naechste' => '', 'restTage' => null, 'ampel' => '', 'offen' => false, 'versaeumt' => [], 'versaeumtAnzahl' => 0, 'versaeumtAb' => '', 'quote' => null];
     $iv = (string)($p['intervall'] ?? '');
     if (empty($p['aktiv']) || $iv === 'anlass' || (!isset(QS_KALENDER[$iv]) && !isset(QS_ROLLEND[$iv]))) return $out;
     if (isset(QS_KALENDER[$iv])) {
@@ -682,6 +683,9 @@ function qs_faelligkeit_kern(array $p, array $eigene, string $heute): array
             $out['naechste'] = $erste ? $erste[1] : $ab; $out['restTage'] = qs_tage_bis($heute, $out['naechste']); $out['ampel'] = 'gruen';
             return $out;
         }
+        // qs_perioden liefert höchstens 1000 Perioden: lange Zeiträume vom Ende her zählen, damit die laufende Periode dabei ist
+        $seit = $art === 'tag' ? qs_plus_tage($heute, -999) : ($art === 'woche' ? qs_plus_tage($heute, -999 * 7) : qs_plus_monate(substr($heute, 0, 8) . '01', -999));
+        if ($ab < $seit) { $ab = $art === 'woche' ? qs_plus_tage($seit, 1 - (int)qs_dt($seit)->format('N')) : $seit; $out['versaeumtAb'] = $ab; }
         $alle = qs_perioden($iv, $ab, $heute);
         $aktuell = null;
         if ($alle && $alle[count($alle) - 1][1] >= $heute) $aktuell = array_pop($alle);   // laufende Periode (heute bzw. diese Woche/dieser Monat)
@@ -794,7 +798,7 @@ function qs_startseite(array $me): array
             $detail = $art === 'heute' ? 'heute fällig'
                 : ($art === 'demnaechst' ? 'fällig bis ' . startseite_de($f['naechste'])
                 : ($f['restTage'] !== null && $f['restTage'] < 0 ? -$f['restTage'] . ($f['restTage'] === -1 ? ' Tag' : ' Tage') . ' überfällig'
-                : ($n ? $n . '× versäumt' . ($f['offen'] && $f['restTage'] === 0 ? ' · heute fällig' : '') : 'fällig')));
+                : ($n ? $n . '× versäumt' . ($f['versaeumtAb'] !== '' ? ' seit ' . qs_de($f['versaeumtAb']) : '') . ($f['offen'] && $f['restTage'] === 0 ? ' · heute fällig' : '') : 'fällig')));
             $out[] = ['art' => $art, 'titel' => 'Prüfung: ' . $p['titel'], 'detail' => $detail, 'datum' => $f['naechste'], 'ziel' => 'pruefplan'];
         }
     }
@@ -852,7 +856,7 @@ function qs_csv_pruefplan(array $pruefungen, array $namen): string
         $z[] = [$p['kapitel'], $p['titel'], QS_INTERVALLE[$p['intervall']] ?? $p['intervall'], $p['beschreibung'], $p['sollwert'], $p['massnahme'], $p['womit'], $p['zustaendig'], $p['vertreter'],
                 implode(', ', array_map(function ($i) use ($namen) { return $namen[$i] ?? ''; }, (array)($p['ausfuehrende'] ?? []))),
                 qs_de($f['letzter']), $f['letztesErgebnis'] !== '' ? (QS_ERGEBNIS[$f['letztesErgebnis']] ?? '') : '', qs_de($f['naechste']),
-                $f['quote'] ? $f['quote']['erfuellt'] . ' von ' . $f['quote']['faellig'] : '', $f['art'] === 'kalender' ? (string)$f['versaeumtAnzahl'] : '', empty($p['aktiv']) ? 'inaktiv' : 'aktiv'];
+                $f['quote'] ? $f['quote']['erfuellt'] . ' von ' . $f['quote']['faellig'] : '', $f['art'] === 'kalender' ? $f['versaeumtAnzahl'] . ($f['versaeumtAb'] !== '' ? ' seit ' . qs_de($f['versaeumtAb']) : '') : '', empty($p['aktiv']) ? 'inaktiv' : 'aktiv'];
     }
     return qs_csv(['Kapitel', 'Prüfung', 'Intervall', 'Frequenz / Durchführung', 'Sollwert', 'Maßnahme bei Abweichung', 'Wo? Womit?', 'Zuständig', 'Vertreter', 'Durchführung',
                    'Letzter Nachweis', 'Ergebnis', 'Nächste Fälligkeit', 'Erfüllt (Zeitraum)', 'Versäumt seit Beginn', 'Status'], $z);

@@ -172,7 +172,7 @@ Rückfall: Die Vorversion ignoriert das Dokument `sicherheit-bereitschaft` und d
 ## 8. Gestaltung „Leitstand“ (26.10.2026)
 
 Entwurf des Inhabers (Zeichenfläche „Sicherheitszentrale – Design“), umgesetzt in `app/module/sicherheit/`. Dunkel ist das Modul
-ein Leitstand (Graphit, Bordeaux- und Blaulicht, Zahlen in Geist Mono), hell dieselbe Gliederung – es folgt wie alle Module der
+ein Leitstand (Graphit, Bordeaux- und Blaulicht, Zahlen in Geist Mono – Spaltenköpfe wie überall in Geist), hell dieselbe Gliederung – es folgt wie alle Module der
 Hell/Dunkel-Wahl am Konto (Entscheidung des Inhabers). Kopf mit „· Leitstand“, Uhr und Lage-Pille. Lagebild oben: Sicherheitslage
 als Ring in Abschnitten (in Ordnung, Hinweise, kritisch), **Abwehr der letzten 24 Stunden** (Angriffsmuster, abgewiesene Anfragen,
 gesperrte Adressen, Verlauf je Stunde aus `fw_stunden()`), **Notfall-Konsole** (Auslösen, Probealarm, Leitfaden, letzte Übung).

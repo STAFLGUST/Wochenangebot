@@ -79,6 +79,7 @@
   const kwPlus = (kw, n) => { const d = montag(kw); d.setUTCDate(d.getUTCDate() + 7 * n); return isoKw(d); };
   const kwText = (kw) => (kw ? `KW ${+kw.slice(5)}/${kw.slice(0, 4)}` : '');
   const kwKurz = (kw) => (kw ? `KW ${+kw.slice(5)}` : '');
+  const stueck = (v) => { const t = String(v).trim(); return /^\d{0,3}$/.test(t) ? Number(t) : NaN; };   // Mengenfeld: ganze Stückzahl 0–999, leer = 0
   const kwOk = (v) => /^\d{4}-\d{2}$/.test(v) && +v.slice(5) >= 1 && +v.slice(5) <= 53;
   function zeitraum(kw) { const a = montag(kw), b = new Date(a); b.setUTCDate(b.getUTCDate() + 6); const f = (d) => d.toISOString().slice(0, 10); return `${datum(f(a)).slice(0, 6)}–${datum(f(b))}`; }
 
@@ -471,8 +472,9 @@
     const t = ev.target;
     if (t.dataset.mzahl) {   // Menge eingetippt
       const m = finde(t.dataset.markt); if (!m || !m.antwort) return;
-      const n = parseInt(t.value.replace(/\D/g, ''), 10);
-      const neu = { ...obj(m.antwort.mengen), [t.dataset.mzahl]: Number.isFinite(n) && n > 0 ? Math.min(n, 999) : 0 };
+      const n = stueck(t.value);
+      if (Number.isNaN(n)) { toast('Bitte eine ganze Stückzahl (0–999) eingeben.', true); renderWoche(); return; }
+      const neu = { ...obj(m.antwort.mengen), [t.dataset.mzahl]: n };
       if (!summe(neu)) { toast('Mindestens eine Menge – sonst „Kein Bedarf“ wählen.', true); renderWoche(); return; }
       sende(m.id, { status: 'bestellt', mengen: neu });
     } else if (t.dataset.notiz) sende(t.dataset.notiz, { notiz: t.value.trim() });
@@ -586,7 +588,7 @@
               <div><span>Bestellungen ${esc(jahr)}</span><b>${obj(z[jahr]).lieferungen || 0}</b></div>
               <div><span>Bestellungen ${esc(vorjahr)}</span><b>${obj(z[vorjahr]).lieferungen || 0}</b></div>
               <div><span>Stück ${esc(jahr)}</span><b>${zahl(summe(obj(z[jahr]).mengen))}</b></div>
-              <div><span>Letzte Bestellung</span><b>${esc(z.letzte ? kwKurz(z.letzte) + '/' + z.letzte.slice(2, 4) : '—')}</b></div>
+              <div><span>Letzte Bestellung</span><b>${esc(z.letzte ? kwText(z.letzte) : '—')}</b></div>
             </div>
             <div class="rw-heat">${heat}</div>
             <div class="rw-legende"><span><i class="rw-z b"></i>bestellt</span><span><i class="rw-z"></i>kein Bedarf</span><span><i class="rw-z n"></i>nicht erreicht</span><span><i class="rw-z p"></i>Pause</span><span><i class="rw-z o"></i>keine Angabe</span></div>
@@ -760,7 +762,7 @@
             <div><span>Bestellungen ${esc(jahr)}</span><b>${obj(z[jahr]).lieferungen || 0}</b></div>
             <div><span>Bestellungen ${esc(String(+jahr - 1))}</span><b>${obj(z[String(+jahr - 1)]).lieferungen || 0}</b></div>
             <div><span>Stück ${esc(jahr)}</span><b>${zahl(summe(obj(z[jahr]).mengen))}</b></div>
-            <div><span>Letzte Bestellung</span><b>${esc(z.letzte ? kwKurz(z.letzte) + '/' + z.letzte.slice(2, 4) : '—')}</b></div>
+            <div><span>Letzte Bestellung</span><b>${esc(z.letzte ? kwText(z.letzte) : '—')}</b></div>
           </div>
           <div class="rw-heat">${heatHtml(A)}</div>
           <div class="rw-legende"><span><i class="rw-z b"></i>bestellt</span><span><i class="rw-z"></i>kein Bedarf</span><span><i class="rw-z n"></i>nicht erreicht</span><span><i class="rw-z p"></i>Pause</span><span><i class="rw-z o"></i>keine Angabe</span></div>
@@ -786,7 +788,9 @@
     if (r.status !== 200 || !r.data.ok) { kStatus('nicht gespeichert'); toast(fehlerText(r, 'Hinweis nicht gespeichert'), true); return; }
     if (K.akte && K.akte.markt.id === m.id) K.akte.markt = r.data.markt;
     if (K.akte && K.akte.markt.id === m.id && $('#kt-hinweis')) kStatus($('#kt-hinweis').value === text ? '✓ gespeichert' : 'noch nicht gespeichert');
-    if (S.woche) { jedeZeile(m.id, (x) => { x.hinweis = r.data.markt.hinweis; }); renderWoche(); }
+    // mit der neuen Revision: sonst meldet „Dauerauftrag ändern“ aus der Zeile einen Konflikt mit der eigenen Änderung
+    if (S.woche) { jedeZeile(m.id, (x) => { x.hinweis = r.data.markt.hinweis; x.rev = r.data.markt.rev; }); renderWoche(); }
+    const lm = S.maerkte && S.maerkte.find((x) => x.id === m.id); if (lm) lm.rev = r.data.markt.rev;
     if ($('#kt-hinweis') && K.akte && K.akte.markt.id === m.id && $('#kt-hinweis').value !== text) K.timer = setTimeout(hinweisSpeichern, 900);   // weitergetippt
   }
   dk.addEventListener('input', (ev) => { if (ev.target.id === 'kt-hinweis') { kStatus('noch nicht gespeichert'); clearTimeout(K.timer); K.timer = setTimeout(hinweisSpeichern, 900); } });
@@ -1010,7 +1014,7 @@
     else if (t.id === 'dd-pbis') e.pauseBis = t.value;
     else if (t.id === 'dd-ende') { e.bisAn = t.checked; if (t.checked && !e.bis) e.bis = kwPlus(e.ab > S.d.abfrage ? e.ab : S.d.abfrage, 11); }
     else if (t.id === 'dd-bis') e.bis = t.value;
-    else if (t.dataset.ddMzahl) { const n = parseInt(t.value.replace(/\D/g, ''), 10); e.mengen[t.dataset.ddMzahl] = Number.isFinite(n) && n > 0 ? Math.min(n, 999) : 0; }
+    else if (t.dataset.ddMzahl) { const n = stueck(t.value); if (Number.isNaN(n)) toast('Bitte eine ganze Stückzahl (0–999) eingeben.', true); else e.mengen[t.dataset.ddMzahl] = n; }
     else return;
     renderDauerDlg();
   });

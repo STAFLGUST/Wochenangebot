@@ -49,19 +49,25 @@ switch ($action) {
             foreach (history_ids() as $id) if (strcmp($id, $cur) < 0) $prev = $id;   // jüngste Woche vor der Angebotswoche
             $h = $prev ? history_week($prev) : null;
             if ($h) {
-                $var = [];
+                // Zuordnung über Artikelnummer und Bezeichnung (der Preisverlauf führt keine Artikel-IDs; eine Nummer darf
+                // mehrfach vorkommen), nur über die Nummer, wenn sie genau einmal vorkommt; Artikel ohne Nummer behalten den Wochenpreis
+                $schluessel = fn(array $it): string => (string)$it['code'] . "\x1f" . mb_strtolower(trim((string)($it['name'] ?? '')));
+                $var = []; $jeNr = []; $anzahl = [];
                 if (modul_zugang_frei($me, 'angebot')) {
                     require_once dirname(__DIR__) . '/module/angebot/wochen.php';
                     [$voll] = angebot_woche_modell($prev);
-                    // Zuordnung über die Artikelnummer (der Preisverlauf führt keine Artikel-IDs); Artikel ohne Nummer
-                    // behalten den Wochenpreis
-                    foreach (is_array($voll['items'] ?? null) ? $voll['items'] : [] as $it)
-                        if (!empty($it['variants']) && !empty($it['code'])) $var[(string)$it['code']] = $it['variants'];
+                    foreach (is_array($voll['items'] ?? null) ? $voll['items'] : [] as $it) {
+                        if (empty($it['code'])) continue;
+                        $anzahl[(string)$it['code']] = ($anzahl[(string)$it['code']] ?? 0) + 1;
+                        if (!empty($it['variants'])) { $var[$schluessel($it)] = $it['variants']; $jeNr[(string)$it['code']] = $it['variants']; }
+                    }
                 }
                 $items = [];
                 foreach (($h['items'] ?? []) as $it) {
                     $row = ['code' => $it['code'] ?? null, 'name' => $it['name'] ?? '', 'price' => $it['price'] ?? ['status' => 'none']];
-                    if (isset($var[(string)($it['code'] ?? '')])) $row['variants'] = $var[(string)$it['code']];
+                    $c = (string)($it['code'] ?? '');
+                    $v = $c === '' ? null : ($var[$schluessel($it)] ?? (($anzahl[$c] ?? 0) === 1 ? ($jeNr[$c] ?? null) : null));
+                    if ($v) $row['variants'] = $v;
                     $items[] = $row;
                 }
                 $h = ['id' => $prev, 'week' => $h['week'], 'year' => $h['year'], 'items' => $items];

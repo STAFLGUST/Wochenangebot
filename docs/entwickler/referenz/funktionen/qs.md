@@ -2,7 +2,7 @@
 
 <!-- ERZEUGT von `python3 werkzeuge/doku.py erzeugen` – nicht von Hand ändern. Quelle: Funktionen und Kommentare im Code. Die CI prüft, dass diese Datei zum Code passt. -->
 
-22 Dateien, 494 Funktionen – in der Reihenfolge der Datei, **fett** die Abschnitte. Text = erste Aussage des Kommentars direkt über der Funktion (Python: Docstring). Übersicht aller Module: [README.md](README.md).
+22 Dateien, 496 Funktionen – in der Reihenfolge der Datei, **fett** die Abschnitte. Text = erste Aussage des Kommentars direkt über der Funktion (Python: Docstring). Übersicht aller Module: [README.md](README.md).
 
 ## `app/api/aktionen/qs.php`
 
@@ -337,6 +337,7 @@ _Qualitätssicherung · Vorlagen und Lenkungsangaben in Word- und Excel-Dateien 
 - `qs_platzhalter_feld(name)`
 - `qs_werte_stamm(d, stamm)`
 - `qs_wer_kurz(stamm, wer, kuerzel)` – Wer (Kürzel aus der Verknüpfung, sonst Schnappschuss-Kürzel, sonst Name)
+- `qs_lenkung_kuerzel(v, stamm)` – Kürzel für erstellt, geprüft, freigegeben: der Schnappschuss `lenkung` der Freigabe (GR-106 – ein späterer Nachtrag trägt dieselben Kürzel ein, auch wenn …
 - `qs_werte_lenkung(d, v, stamm)`
 
 **ZIP lesen und schreiben (Office Open XML)**
@@ -652,6 +653,7 @@ _Qualitätssicherung (Modul qs, Oberfläche qs.intern unter /module/qs/) – QM-
 - `anmelden(user, pw, ip, breite, thema, hoehe, ziel)`
 - `toast(pg, inhalt)`
 - `nachts_erfasst(erfasst_t)`
+- `ab_setzen(route)`
 
 ## `tests/e2e/test_qs_ablage.py`
 

@@ -12,7 +12,8 @@
    Reiter: EUDR (diese Ansichten) und Tracking (Schiff, Häfen, Ankunft – eigene Datei tracking.js, trägt sich in REITER ein).
    Daten: containerimport_start (Stand), containerimport_eudr_pruefen (Dateien prüfen, ohne zu speichern),
    containerimport_eudr_betriebe_save, _original, _gegenpruefung, _sendung_save, _sendung_abschluss (jede Antwort bringt den neuen
-   Stand mit), containerimport_eudr_export (GeoJSON für das EU-Informationssystem), containerimport_eudr_whisp (Whisp für
+   Stand mit), containerimport_eudr_export (GeoJSON für das EU-Informationssystem), containerimport_eudr_schnappschuss
+   (Umrisse einer abgeschlossenen Bewertung für die Karte im Fenster), containerimport_eudr_whisp (Whisp für
    einen Betrieb abfragen; speichert nichts, Deutung in eudr-whisp.js).
    Unterlagen einlesen: Entwaldungsberichte (PDF) liest der Browser mit pdf.js (assets/vendor/pdfjs, eudr-bericht.js);
    Lieferanten-GeoJSON und eingefügte Koordinaten prüft der Server. Am Betrieb stehen Name und Prüfsumme der Datei. Beim
@@ -516,7 +517,15 @@
     oeffnen($('#dlg-sendung'));
     if (!neu) HAKEN.fenster(s);
     const karte = $('#sendung-karte');
-    if (karte) window.EUDR_KARTE.zeichnen(karte, { betriebe: gezeigt });
+    if (karte) { if (zu) schnappschussKarte(s.id, karte); else window.EUDR_KARTE.zeichnen(karte, { betriebe: gezeigt }); }
+  }
+  /* Karte einer abgeschlossenen Bewertung: der Stand bringt die Farmer des Schnappschusses ohne Umriss mit, die Umrisse holt erst das Fenster */
+  async function schnappschussKarte(id, el) {
+    const r = await api('containerimport_eudr_schnappschuss', null, '&sendung=' + encodeURIComponent(id));
+    if (!el.isConnected) return;   // Fenster inzwischen geschlossen oder neu aufgebaut
+    if (r.status === 401) { zeigeAnmeldung(); return; }
+    if (r.status !== 200 || !r.data.ok) { el.innerHTML = `<p class="ci-leer">${esc(fehlerText(r, 'Die Umrisse konnten nicht geladen werden'))}</p>`; el.dataset.karte = 'fehler'; return; }
+    window.EUDR_KARTE.zeichnen(el, { betriebe: r.data.betriebe });
   }
   function sendungAusFenster() {
     const f = $('#sendung-inhalt'), w = werte(f), alt = sendung(f.dataset.id);

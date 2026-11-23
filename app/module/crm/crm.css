@@ -89,10 +89,10 @@ body.crm .crm-kopf .brand-logo { height: 28px; width: auto; }
 .crm-fuss { padding: 0 8px; font-size: 13px; color: var(--crm-muted); }
 
 /* ── Bereiche (Reiter) ── */
-.crm-tabs { display: flex; gap: 4px; padding: 4px; margin-bottom: 24px; border-radius: 999px; background: var(--crm-aus); width: max-content; max-width: 100%; overflow-x: auto; scrollbar-width: none; box-sizing: border-box; }
-.crm-tabs button { display: inline-flex; align-items: center; gap: 6px; height: 36px; padding: 0 16px; border: 0; border-radius: 999px; background: none; color: var(--crm-muted);
+.crm-tabs { display: flex; gap: 4px; padding: 4px; margin-bottom: 24px; border-radius: 999px; background: var(--r-neutral-bg); width: max-content; max-width: 100%; overflow-x: auto; scrollbar-width: none; box-sizing: border-box; }
+.crm-tabs button { display: inline-flex; align-items: center; gap: 6px; height: 36px; padding: 0 16px; border: 0; border-radius: 999px; background: none; color: var(--r-text-2);
   font: inherit; font-size: 14px; font-weight: 600; cursor: pointer; white-space: nowrap; }
-.crm-tabs button[aria-selected="true"] { background: var(--crm-reiter-aktiv); color: var(--crm-text); box-shadow: 0 1px 3px rgba(0, 0, 0, .1); }
+.crm-tabs button[aria-selected="true"] { background: var(--r-flaeche); color: var(--r-text); box-shadow: var(--r-schatten-aktiv); }
 .crm-zahl { min-width: 20px; height: 20px; padding: 0 6px; border-radius: 10px; background: var(--crm-akzent); color: #fff; font-size: 12px; line-height: 20px; text-align: center; box-sizing: border-box; }
 .crm-zahl[hidden] { display: none; }
 
@@ -109,8 +109,8 @@ body.crm .crm-kopf .brand-logo { height: 28px; width: auto; }
 
 /* ── Kennzahlen ── */
 .crm-kpis { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 12px; margin-bottom: 20px; }
-.crm-wert { padding: 16px 18px; border-radius: 22px; display: flex; flex-direction: column; gap: 4px; min-width: 0; }
-.crm-wert span { font-size: 13px; color: var(--crm-muted); }
+.crm-wert { padding: 16px 18px; border-radius: 16px; display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+.crm-wert span { font-size: 13px; font-weight: 500; color: var(--r-leise); }
 .crm-wert b { font-size: 28px; font-weight: 700; letter-spacing: -.02em; font-variant-numeric: tabular-nums; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .crm-wert small { font-size: 12px; color: var(--crm-muted); }
 .crm-wert.akzent b { color: var(--crm-akzent-ink); }
@@ -122,7 +122,7 @@ body.crm .crm-kopf .brand-logo { height: 28px; width: auto; }
 .crm-karte-kopf { display: flex; align-items: center; gap: 10px; justify-content: space-between; margin-bottom: 2px; }
 .crm-karte-kopf .btn { height: 30px; font-size: 13px; }
 @media (pointer: coarse) {
-  .crm-karte-kopf .btn, .crm-mehrfach .optionen .btn, .crm-tabelle .btn { height: 36px; }
+  .crm-karte-kopf .btn, .crm-mehrfach .optionen .btn { height: 36px; }
   body.crm a[href^="tel:"]:not(.btn):not(.crm-rund), body.crm a[href^="mailto:"]:not(.btn):not(.crm-rund) { display: inline-flex; align-items: center; min-height: 32px; }   /* Telefonnummern am Handy sicher antippen */
 }   /* Fingerbedienung: Tippflächen ≥ 36 px */
 .crm-zeilen { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; }
@@ -183,7 +183,7 @@ body.crm .crm-kopf .brand-logo { height: 28px; width: auto; }
 .crm-tabelle-rahmen { border-radius: 22px; overflow: auto; max-width: 100%; max-height: calc(100dvh - 250px); }
 .crm-tabelle { width: 100%; border-collapse: collapse; font-size: 14px; }
 .crm-tabelle th, .crm-tabelle td { padding: 9px 12px; text-align: left; border-bottom: 1px solid var(--crm-linie); vertical-align: top; }
-.crm-tabelle th { font-size: 12px; font-weight: 650; color: var(--crm-muted); text-transform: uppercase; letter-spacing: .04em; background: var(--crm-deckend); position: sticky; top: 0; z-index: 2; white-space: nowrap; }
+.crm-tabelle th { font-size: 11px; font-weight: 600; color: var(--r-leise); text-transform: uppercase; letter-spacing: .06em; background: var(--r-flaeche-2); position: sticky; top: 0; z-index: 2; white-space: nowrap; }
 .crm-tabelle tbody tr:hover td { background: var(--crm-aus); }
 .crm-tabelle tr.aus td { opacity: .58; }
 .crm-tabelle td.nw { white-space: nowrap; }
@@ -263,10 +263,9 @@ body.crm .crm-kopf .brand-logo { height: 28px; width: auto; }
 .crm-karte-flaeche #km-flaechen-text text { fill: var(--g); font-weight: 650; text-anchor: middle; paint-order: stroke; stroke: var(--crm-deckend); stroke-linejoin: round; pointer-events: none; }
 
 /* ── Kundenblatt (Dialog) ── */
-.crm-dialog { width: min(560px, calc(100vw - 32px)); max-height: calc(100dvh - 32px); padding: 0; border: 1px solid var(--crm-rand); border-radius: 26px;
-  background: var(--crm-deckend); color: var(--crm-text); box-shadow: 0 30px 80px rgba(0, 0, 0, .3); }
+.crm-dialog { width: min(560px, calc(100vw - 32px)); max-height: calc(100dvh - 32px); padding: 0; border: 1px solid var(--r-linie-2); border-radius: 16px;
+  background: var(--crm-deckend); color: var(--crm-text); box-shadow: var(--r-schatten-menue); }
 .crm-dialog.breit { width: min(1040px, calc(100vw - 32px)); }
-.crm-dialog::backdrop { background: rgba(20, 16, 16, .38); -webkit-backdrop-filter: blur(4px); backdrop-filter: blur(4px); }
 .crm-dialog > form { padding: 24px; display: flex; flex-direction: column; gap: 14px; }
 /* Knopfreihe am Fensterende bleibt beim Scrollen langer Fenster sichtbar (wie in Sicherheit) */
 .crm-dialog > form > .crm-knoepfe:last-child{ position:sticky; bottom:0; z-index:2; margin:0 -24px -24px; padding:8px 24px 24px; background:var(--crm-deckend) }
@@ -345,7 +344,7 @@ body.crm .crm-kopf .brand-logo { height: 28px; width: auto; }
   .crm-tabs { margin-bottom: 18px; }
   .crm-tabs button { padding: 0 12px; }
   .crm-kpis { grid-template-columns: 1fr 1fr; gap: 8px; }
-  .crm-wert { padding: 12px 14px; border-radius: 18px; }
+  .crm-wert { padding: 12px 14px; }
   .crm-wert b { font-size: 22px; }
   .crm-karte { padding: 16px; border-radius: 22px; }
   .crm-leiste select, .crm-mehrfach { flex: 1 1 140px; min-width: 0; max-width: none; }
@@ -441,14 +440,14 @@ body.crm { --crm-mhd-vorbei-bg: #d9d6d2; --crm-mhd-vorbei-fg: #1f1d1a; --crm-mhd
   .crm-mhd-tabelle td { display: block; padding: 0; border: 0; text-align: left !important; }
   .crm-mhd-tabelle td.crm-mhd-wahlspalte { grid-row: 1 / span 3; width: auto; }
   .crm-mhd-tabelle td.crm-mhd-kunde, .crm-mhd-tabelle td.crm-mhd-tel { grid-column: -4 / -1; }
-  .crm-mhd-tabelle td[data-label]::before { content: attr(data-label); display: block; color: var(--crm-muted); font-size: 10px; font-weight: 700; letter-spacing: .05em; text-transform: uppercase; }
+  .crm-mhd-tabelle td[data-label]::before { content: attr(data-label); display: block; color: var(--r-leise); font-size: 11px; font-weight: 600; letter-spacing: .06em; text-transform: uppercase; }
   .crm-mhd-tabelle td.crm-mhd-tel::before { display: none; }
 }
 
 /* ── Cockpit (cockpit.js): Mein Cockpit, Master-Cockpit mit Umschalter (Auftrag des Inhabers 01.11.2026) ── */
 .crm-ck-titel { align-items: flex-end; }
 .crm-ck-titel p { margin-top: 6px; }
-.crm-ck-kicker { display: block; margin-bottom: 4px; font-size: 12px; font-weight: 650; letter-spacing: .08em; text-transform: uppercase; color: var(--crm-modul); }
+.crm-ck-kicker { display: block; margin-bottom: 4px; font-size: 12px; font-weight: 650; letter-spacing: .08em; text-transform: uppercase; color: var(--crm-muted); }   /* Modulfarbe nur an Symbolen (C2) */
 .crm-ck-wahl { margin-left: auto; display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
 .crm-ck-wahl select { width: auto; min-width: 220px; height: 38px; border-radius: 12px; font-size: 14px; }
 .crm-ck-vtwahl { flex-direction: row !important; }
@@ -501,7 +500,6 @@ a.crm-ck-tel { color: var(--crm-text); }
 /* ── Kunden-Pop-up: Kopf mit Reitern, Übersicht ── */
 .crm-ku .crm-dkopf { display: grid; grid-template-columns: minmax(0, 1fr) auto auto; gap: 10px 12px; align-items: start; padding-bottom: 12px; }
 .crm-dkopf-text { min-width: 0; }
-.crm-dkopf-text .crm-ck-kicker { color: var(--crm-muted); }
 .crm-dkopf-aktionen { display: flex; gap: 8px; flex-wrap: wrap; justify-content: flex-end; }
 .crm-dkopf-aktionen .btn { height: 38px; display: inline-flex; align-items: center; text-decoration: none; }
 .crm-ku-reiter { grid-column: 1 / -1; justify-self: start; max-width: 100%; overflow-x: auto; scrollbar-width: none; }
@@ -596,7 +594,7 @@ a.crm-ck-tel { color: var(--crm-text); }
   .crm-ck-karten td[colspan] { grid-column: 1 / -1; }   /* Hinweiszeilen („Keine Vertreter …“) über die ganze Karte */
   .crm-ck-vergleich .crm-ck-karten tr { grid-template-columns: repeat(4, minmax(0, 1fr)); }
   .crm-ck-karten td.knopf .btn { width: 100%; }
-  .crm-ck-karten td[data-label]::before { content: attr(data-label); display: block; color: var(--crm-muted); font-size: 10px; font-weight: 700; letter-spacing: .05em; text-transform: uppercase; }
+  .crm-ck-karten td[data-label]::before { content: attr(data-label); display: block; color: var(--r-leise); font-size: 11px; font-weight: 600; letter-spacing: .06em; text-transform: uppercase; }
   .crm-ck-karten tbody tr:hover td { background: none; }
   /* Kundenliste und Wiedervorlagen als Karten statt enger Tabelle */
   .crm-karten-rahmen { max-height: none; overflow: visible; border-radius: 0; background: transparent; border: 0; box-shadow: none; -webkit-backdrop-filter: none; backdrop-filter: none; }
@@ -608,7 +606,7 @@ a.crm-ck-tel { color: var(--crm-text); }
   .crm-karten td.kunde { grid-column: 1 / -1; order: -1; min-width: 0 !important; }
   .crm-karten td.kunde .crm-firma { max-width: 100%; }
   .crm-karten td.crm-leer { grid-column: 1 / -1; }
-  .crm-karten td[data-label]::before { content: attr(data-label); display: block; margin-bottom: 3px; color: var(--crm-muted); font-size: 10.5px; font-weight: 700; letter-spacing: .05em; text-transform: uppercase; }
+  .crm-karten td[data-label]::before { content: attr(data-label); display: block; margin-bottom: 3px; color: var(--r-leise); font-size: 11px; font-weight: 600; letter-spacing: .06em; text-transform: uppercase; }
   .crm-karten select, .crm-tabelle.crm-karten td.wann select { width: 100%; max-width: none; height: 38px; }
   #k-tabelle td.vt { order: 1; } #k-tabelle td.schritt { order: 2; }
   #wv-tabelle td.aktiv { order: 1; } #wv-tabelle td.wann { order: 2; grid-column: 1 / -1; } #wv-tabelle td.erledigt { order: 3; }
@@ -670,7 +668,7 @@ a.crm-ck-tel { color: var(--crm-text); }
 }
 /* Fenster am Handy als Blatt von unten – wie in Controlling, Leergut, QS, REWE und Sicherheit */
 @media (max-width: 560px) {
-  .crm-dialog, .crm-dialog.breit { width: 100vw; max-width: 100vw; max-height: 94dvh; margin: auto 0 0; border-radius: 22px 22px 0 0; border-bottom: 0; }
+  .crm-dialog, .crm-dialog.breit { width: 100vw; max-width: 100vw; max-height: 94dvh; margin: auto 0 0; border-radius: 20px 20px 0 0; border-bottom: 0; }
 }
 
 /* ── Rahmen „C2“ (gemeinsame Seitenleiste ../../assets/rahmen.css und rahmen.js, Entwurf freigegeben 06.11.2026) ──
@@ -699,4 +697,6 @@ body.crm.r .crm-rund:hover { background: var(--r-flaeche-2); }
 @media (pointer: coarse) {
   .crm-firma { min-height: 32px; }
   .crm-zeilen .was > .crm-firma { line-height: 32px; }
+  .crm-tabelle .btn { height: 36px; }   /* steht hinter „.crm-tabelle .btn { height: 30px }“ */
+  .crm .crm-mhd-check input, .crm-mhd-wahlspalte input { width: 20px; height: 20px; }
 }

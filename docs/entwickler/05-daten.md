@@ -263,7 +263,8 @@ Preise des Wochenangebots zurückzufallen) und je Artikel `"vorwoche": {"std": 2
 (Artikel-IDs aus dem Excel-Import sind Zellpositionen), vom genauesten zum gröbsten Schlüssel; ein Schlüssel zählt nur, wenn er
 in Vorwoche und aktuellem Angebot je genau einmal vorkommt. Ausgeliefert wird nur `angebot_vorwoche()` =
 `{kw, jahr, stufen, aenderungen: {Artikel-ID: {art: "neu"} | {art: "guenstiger"|"teurer", d, alt, p, stufe}}}` des angefragten
-Angebots (GR-002); unveränderte Artikel fehlen. `p` = Veränderung in Prozent des Vorwochenpreises (1 Nachkommastelle, mit
+Angebots (GR-002); unveränderte Artikel fehlen. `d` und `alt` auf Cent wie angezeigt und bestellt (gespeichert sind bis zu 4
+Nachkommastellen: 4,245 → 4,2549 ist keine Änderung, 4,254 → 4,256 ist ▲ 0,01). `p` = Veränderung in Prozent des Vorwochenpreises (1 Nachkommastelle, mit
 Vorzeichen), `stufe` 1–3 für die Neigung des Pfeils (Darstellung „nur Pfeil“): unter 2 % → 1, ab 2 % → 2, ab 5 % → 3, gerechnet
 am ungerundeten Wert (1,96 % ist Stufe 1, angezeigt als 2,0 %); die Grenzen stehen nur in `ANGEBOT_VORWOCHE_STUFEN` und gehen als `stufen` mit (Legende). Nichts davon wird
 gespeichert – beides rechnet `angebot_vorwoche()` bei jeder Anfrage.
@@ -423,7 +424,8 @@ Aus dem Kundenimport (Kundendaten-Export der Warenwirtschaft, `kunden_import_lau
   (`wawiFelder`). Ausgeliefert nur an Nutzer mit `kunden.bearbeiten` (`customer_public($c, true)`), nie an CRM, Kunden,
   E-Mail-Antworten oder ins Protokoll (dort nur die Anzahl).
 - `autoInaktiv`: vom Import deaktiviert (Aktiv-Regel: keine Rechnung, kein Lieferschein und keine Neuanlage in
-  `KUNDEN_AKTIV_MONATE` = 18 Monaten, oder „*“ in der Warenwirtschaft). Nur so gekennzeichnete Kunden aktiviert ein
+  `KUNDEN_AKTIV_MONATE` = 18 Monaten, oder „*“ in der Warenwirtschaft; Stichtag `kunden_aktiv_stichtag()`: heute vor 18 Monaten,
+  am Monatsende höchstens der letzte Tag des Zielmonats – 31.08.2026 → 28.02.2025). Nur so gekennzeichnete Kunden aktiviert ein
   späterer Import wieder. `kunde_save` entfernt das Kennzeichen, sobald der Kunde aktiv ist oder der Status von Hand
   geändert wird.
 - `aktivVonHand`: von Hand wieder aktiviert (`kunde_save`, Wechsel inaktiv → aktiv); der Import deaktiviert den Kunden
@@ -501,7 +503,10 @@ Mitarbeiter sind die Nutzer der Plattform (`users_load()`); HR speichert nur eig
   `zurueckgezogen`, `storniert` – Einträge werden nie gelöscht, nur der Status ändert sich (mit
   `entscheidung: {t, by, grund}`). `quelle`: `antrag`, `vorplanung` (seit 10.11.2026: mehrere Zeiträume auf einmal über
   `hr_vorplanung`, sonst wie `antrag`), `personalstelle`, `zeiterfassung`; optional `vertretung2` (zusätzliche Vertretung,
-  seit 10.11.2026 – fehlt das Feld: keine), `geaendert`,
+  seit 10.11.2026 – fehlt das Feld: keine), `geaendert`, `import` (seit 23.11.2026, nur bei `quelle: zeiterfassung`:
+  `{person, von, bis}` des Imports, festgehalten beim ersten Ändern durch die Personalstelle – ein erneuter Import bucht diese
+  Tage nicht wieder, sie erscheinen als „abweichend, nicht übernommen“; vorher geänderte Einträge haben das Feld nicht, dort
+  zählt nur der aktuelle Zeitraum),
   `urlaubAbzug` (in der Zeiterfassung vom Urlaub abgezogene Krankheit – nur Hinweis für die Personalstelle; Krankheit
   zählt in `hr_konto` nie gegen den Urlaub, Inhaber 30.10.2026). Überschneidungen (`hr_kollision`) gelten nur zwischen aktiven
   Einträgen derselben Gruppe: Abwesenheiten (U/K/G/F) untereinander und freie Tage (X) untereinander – ein freier Tag in
@@ -534,7 +539,7 @@ Mitarbeiter sind die Nutzer der Plattform (`users_load()`); HR speichert nur eig
   (`HR_KALENDER_ARTEN`: Art → Kürzel, seit 11.11.2026; in der Oberfläche CSS-Klasse `Uplus`), alles andere „A“ – nie offene Anträge, Notizen, Tage oder Konten. Andere Abteilungen sieht man wie
   `kollege`. Antwortfeld `sicht` = wirksame Sicht, `urlaubAbteilung` = Name der eigenen Abteilung (sonst `null`). Wer „U“
   von „A“ unterscheiden kann, kann Krankheitstage ableiten; deshalb kein Standardrecht.
-- **`hr-einstellungen`**: `{"rev": 1, "sperren": [{"von": "…", "bis": "…", "text": "Inventur"}], "ferien": [ … ], "uebertragBis": "03-31", "antraege": true}` – `uebertragBis` (Verfallstag des Resturlaubs, Monat-Tag) ist optional; fehlt es, gilt der 31.03. `antraege` (Schalter „Urlaubsanträge über die Plattform“, Verwaltung → Urlaub, Aktion `hr_antraege_save`) ist optional; nur `false` schaltet Anträge aus, fehlt es, sind sie eingeschaltet.
+- **`hr-einstellungen`**: `{"rev": 1, "sperren": [{"von": "…", "bis": "…", "text": "Inventur"}], "ferien": [ … ], "uebertragBis": "03-31", "antraege": true}` – `uebertragBis` (Verfallstag des Resturlaubs, Monat-Tag) ist optional; fehlt es, gilt der 31.03. `antraege` (Schalter „Urlaubsanträge über die Plattform“, Verwaltung → Urlaub, Aktion `hr_antraege_save`) ist optional; nur `false` schaltet Anträge aus, fehlt es, sind sie eingeschaltet. `rev` zählt jede Änderung. `revUrlaub` (seit 23.11.2026, fehlt: 0) zählt nur die Speicherungen des Formulars „Urlaub“ (`hr_einstellungen_save`); `hr_einstellungen_save` mit `rev` (Stand beim Laden = `revUrlaub`, in den Antworten als `einstRev`) lehnt einen veralteten Stand mit 409 ab – ohne `rev` (ältere Oberflächen) wie bisher. Schalter „Urlaubsanträge“ und E-Mail-Einstellungen ändern `revUrlaub` nicht und liefern kein `einstRev`: sonst übernähme die Seite mit ihrer Antwort auch eine fremde Speicherung des Formulars und überschriebe sie danach still.
   Seit 03.11.2026 zusätzlich optional: `regelSperren` (Sperren aus den Urlaubsregeln – Ostergeschäft: zwei Wochen vor
   Karfreitag, Weihnachtsgeschäft: 30.11. bis 23.12. (seit 11.11.2026; vorher ab dem Montag der letzten Novemberwoche), ohne
   Sonderregelung Dezember bis 24.12. –
@@ -584,6 +589,10 @@ Kundenstammdaten liest das CRM nur über Funktionen der Verwaltung; eigene Dokum
 - **`crm-kunden`**: `{"rev": 5, "updatedAt": "…", "eintraege": {"k0123456789ab": {"segment": "Gastronomie", "phase": "Angebot", "kontakte": [{"name": "…", "funktion": "…", "telefon": "…", "email": "…"}], "anrufStatus": "Offen", "wiedervorlage": "2026-01-12", "geaendert": "…", "geaendertVon": "…"}}}`.
   Schlüssel = Kunden-ID der Verwaltung oder Interessenten-ID (`i…`). `crm_kunde_save` ändert nur die mitgeschickten
   Felder (`array_merge` mit dem gespeicherten Blatt); fehlende liefert beim Lesen `crm_standard()`. Alle Felder mit Prüfung: `crm_felder()`.
+  Ansprechpartner und Notiz ersetzt der Browser im Ganzen; er schickt dazu ihren Stand beim Öffnen als `vorher` mit (optional,
+  nur erweitert) – weicht der gespeicherte Wert ab, antwortet der Server 409 `konflikt` mit dem aktuellen Kunden. Der Browser
+  zeigt dann die neuen Ansprechpartner; bei der Notiz bleibt der eigene Text im Feld, die fremde Fassung steht im Hinweis
+  darunter („Meinen Text speichern“ überschreibt sie bewusst).
 - **`crm-interessenten`**: `{"rev": 2, "updatedAt": "…", "liste": [{"id": "i0123456789ab", "firma": "…", "ansprechpartner": "…", "strasse": "…", "plz": "…", "ort": "…", "land": "…", "telefon": "…", "email": "…", "vertreter": "", "vertreter2": "", "aktiv": true, "erstellt": "…", "erstelltVon": "…", "geaendert": "…", "geaendertVon": "…"}]}`.
 - **`crm-aktivitaeten`**: `{"rev": 40, "updatedAt": "…", "liste": [{"id": "a…", "key": "k…", "art": "Telefonat", "notiz": "…", "naechster": "…", "faellig": "…", "at": "…", "von": "…", "vonId": "u…", "firma": "Testfirma GmbH", "nr": "10001"}]}`.
   `firma` und `nr` sind Schnappschüsse (GR-106); höchstens 50 000 Einträge, die ältesten fallen weg.
@@ -593,7 +602,8 @@ Kundenstammdaten liest das CRM nur über Funktionen der Verwaltung; eigene Dokum
 Eigene Dokumente, alle unter der Sperre `marketing-beitraege`:
 
 - **`marketing-beitraege`**: `{"rev": 12, "updatedAt": "…", "liste": [{"id": "b0123456789ab", "titel": "…", "status": "freigabe", "prioritaet": "normal", "marke": "standard-fleisch", "kanaele": ["instagram"], "format": "reel", "saeule": "wissen", "kampagne": "k…", "verantwortlich": "u…", "verantwortlichSchnappschuss": "…", "drehtermin": "2026-11-02", "produktionBis": "2026-11-04", "veroeffentlichung": "2026-11-06T18:30", "hook": "…", "text": "…", "hashtags": "…", "cta": "…", "notizen": "…", "checkliste": [{"text": "…", "erledigt": false}], "links": [{"titel": "…", "url": "https://…"}], "ki": false, "freigabe": {"t": "…", "von": "…", "vonId": "u…"}, "veroeffentlicht": {"instagram": "https://…"}, "ergebnisse": {"instagram": {"reichweite": 1200, "interaktionen": 85, "aufrufe": null}}, "kommentare": [{"id": "c…", "t": "…", "von": "…", "vonId": "u…", "text": "…"}], "verlauf": [{"t": "…", "von": "…", "was": "…"}], "rev": 4, "erstellt": {…}, "geaendert": {"t": "…", "von": "…"}}]}`.
-  `rev` je Beitrag schützt vor stillem Überschreiben (409 mit aktuellem Beitrag). `marketing_beitrag_save` prüft und ändert nur
+  `rev` je Beitrag schützt vor stillem Überschreiben (409 mit aktuellem Beitrag). Ein Kommentar erhöht `rev` ebenfalls; der offene
+  Dialog zählt seine Basis nur um den eigenen Kommentar weiter (hat dazwischen jemand gespeichert, meldet das nächste Speichern 409). `marketing_beitrag_save` prüft und ändert nur
   mitgeschickte, geänderte Felder (`mkt_felder_pruefen`); fehlende ergänzt beim Lesen `mkt_beitrag_leer()`, unbekannte bleiben.
   Namen in `freigabe`, `kommentare`, `verlauf` und `verantwortlichSchnappschuss` sind Schnappschüsse (GR-106).
 - **`marketing-kampagnen`**: `{"rev": 2, "liste": [{"id": "k…", "name": "…", "ziel": "…", "von": "…", "bis": "…", "marke": "", "farbe": "#c27a1a", "archiviert": false, "erstellt": {…}}]}`.
@@ -789,7 +799,9 @@ laufen unter der Sperre `qs-dokumente`. Zuständig/Vertreter sind **Kürzel** (S
   "zustaendig", "vertreter", "notiz", "eingezogen": {"t", "von", "vonId", "grund"}|null, "ueberprueft": {"t", "von", "vonId", "notiz"}?,
   "versionen": [{"id": "v…", "nr": 3|null, "datum": "JJJJ-MM-TT|", "status": "entwurf|pruefung|geprueft|freigegeben|ersetzt|verworfen",
   "aenderungen", "grund", "erstellt", "bearbeiter": ["<Nutzer-ID>"], "geprueft", "freigegeben", "kuerzel": {"erstellt", "geprueft",
-  "freigegeben"}|null, "quelle": "hand|paket", "verlauf": […]}], "verlauf": […]}`. Gelenkt sind A, F, L, E, V; Ordner (O) und externe
+  "freigegeben"}|null, "lenkung": {"erstellt", "geprueft", "freigegeben"}?, "quelle": "hand|paket", "verlauf": […]}], "verlauf": […]}`.
+  `lenkung` (optional, seit 11/2026) hält die Kürzel der Lenkungsangaben zum Freigabezeitpunkt fest; spätere Nachträge in die Version
+  tragen sie ein (GR-106), ältere Versionen ohne das Feld rechnen wie bisher aus der Verknüpfung. Gelenkt sind A, F, L, E, V; Ordner (O) und externe
   Dokumente (X) haben keine Versionen. Die Versionsnummer entsteht erst bei der Freigabe (höchste + 1), `datum` = Freigabetag; die
   vorige gültige Version wird `ersetzt`. Wer in `bearbeiter` steht, prüft nicht (4-Augen-Prinzip, serverseitig). Die Antwort ergänzt
   `zustand` (`gueltig|entwurf|pruefung|ohne|eingezogen|register`) und `ueberpruefung` (`{"seit", "faelligAb", "faellig"}` – seit der
@@ -826,7 +838,8 @@ laufen unter der Sperre `qs-dokumente`. Zuständig/Vertreter sind **Kürzel** (S
   quartal|halbjahr|jaehrlich|zweijaehrlich|dreijaehrlich|anlass", "start": "JJJJ-MM-TT|", "womit", "sollwert", "massnahme", "zustaendig",
   "vertreter", "ausfuehrende": ["<Nutzer-ID>"], "aktiv", "verlauf"}`. Die Antwort ergänzt `faellig`: Kalender-Intervalle (`art: kalender`)
   zählen jede vergangene Periode ohne Nachweis als versäumt (`versaeumt` neueste zuerst, `versaeumtAnzahl`, `quote` über 30 Tage / 12 Wochen /
-  12 Monate, `offen` = laufende Periode ohne Nachweis); arbeitstäglich = Mo–Fr ohne Hamburger Feiertage (`hr_feiertag`). Rollende Intervalle
+  12 Monate, `offen` = laufende Periode ohne Nachweis); liegt `start` mehr als 1000 Perioden zurück, zählen nur die letzten 1000 und
+  `versaeumtAb` nennt den ersten gezählten Tag (Oberfläche, Startseite und CSV: „versäumt seit …“), sonst ist es leer; arbeitstäglich = Mo–Fr ohne Hamburger Feiertage (`hr_feiertag`). Rollende Intervalle
   (`art: rollend`) rechnen ab dem letzten Nachweis, sonst ab `start`, sonst sofort fällig. `monate` = die letzten 6 Monate und der laufende
   (`{"m", "faellig", "erfuellt", "abweichung"}`).
 - **`qs-nachweise`**: `{"id": "n…", "pruefung", "datum", "ergebnis": "io|abweichung", "bemerkung", "durch", "massnahme": "m…|", "erfasst",
@@ -843,7 +856,9 @@ Audit-Bericht (`qs_bericht`, `qs_bericht_excel`, GET `von`/`bis`, höchstens zwe
 liest nur: Kalender-Intervalle je Periode wie die Fälligkeit (gezählt im Monat des Periodenendes; eine Periode zählt, wenn sie zum
 Stichtag `bis` vorbei ist oder schon einen Nachweis hat; Nachweise nach dem Stichtag zählen nicht), längere Intervalle als Fristenkette
 (`eingehalten|verspaetet|ueberfaellig|offen|nie`), Abweichungen mit Maßnahme, Maßnahmen (bis zum Stichtag erfasst, im Zeitraum offen oder
-abgeschlossen; Status Stand heute), Freigaben/Überprüfungen/Einziehungen und Handbuch-Änderungen im Zeitraum. Excel ohne Formeln.
+abgeschlossen; Status Stand heute), Freigaben/Überprüfungen/Einziehungen und Handbuch-Änderungen im Zeitraum. „Ohne Änderung überprüft“
+und Einziehungen kommen aus dem Dokument-`verlauf` (auch frühere und wieder aufgehobene; je Tag einmal), die Felder `ueberprueft` und
+`eingezogen` (nur der letzte Stand) dienen als Rückfall. Excel ohne Formeln.
 
 Verfahrensdokumentation nach GoBD (`module/qs/verfahren.php`, Aktionen `qs_verfahren*`, eigene sensible Rechte `qs.verfahren_sehen` →
 `_bearbeiten` → `_freigeben`):
@@ -1024,8 +1039,47 @@ Die einzige Beschreibung der Regeln; Code-Kommentare verweisen hierher.
   Fassung war gespeichert, der Nutzer sah 500, und jeder weitere Versuch vergrößerte das Dokument.
 - **Aufräumweg:** `deploy/ci-kalkulationen-auslagern.php` (nur auf dem Server). Ohne Angaben zeigt es die Größe je Container;
   mit `--export <datei>` schreibt es das ganze Dokument als JSON und liest es zur Gegenprobe wieder ein; erst mit
-  `--entfernen <sendung-id>[,…]` entfernt es diese Kalkulationen aus dem Dokument. Ohne geprüften Export wird nichts entfernt –
+  `--entfernen <sendung-id>[,…]` entfernt es diese Kalkulationen aus dem Dokument – nur, wenn sie noch genau so im Export stehen
+  (eine seither gespeicherte Fassung bricht ohne Änderung ab; Exportdatei nur für den Besitzer lesbar). Ohne geprüften Export wird nichts entfernt –
   die Exportdatei ist das Archiv dieser Vorgänge (GoBD) und gehört in die Sicherung. Die Anwendung selbst löscht nie eine Fassung.
+
+### Container-Import: Umrisse abgeschlossener Bewertungen (`module/containerimport/eudr.php`, seit 23.11.2026)
+
+- **Warum:** Jeder Abschluss kopierte die Farmer samt Umriss in `abschluss.betriebe` von `containerimport-eudr-sendungen`.
+  Jede Aktion des Moduls liest dieses Dokument ganz. Ab rund 400 000 Punkten brach `store_read` mit einem Speicherfehler ab
+  (HTTP 500 für Container-Import, Tracking, Dokumente und Kalkulation). Eine Gesamtgrenze (KERN-3, 100 000 Punkte) hätte
+  nach rund 50 Abschlüssen jeden weiteren Abschluss verweigert; sie ist wieder entfernt.
+- **`containerimport-eudr-schnappschuss/<Kennung>`** (je Abschluss ein Dokument, `eudr_schnappschuss_ablegen`):
+  `{"sendung": "s…", "wer": {"t", "von"}, "betriebe": [<Sichten der Farmer samt "geometrie">]}`. Einmal geschrieben, nie
+  geändert oder gelöscht (GoBD, GR-106); die Kennung `a…` ist neu je Abschluss. Höchstens `EUDR_MAX_PUNKTE` Punkte, weil die
+  Farmer eines Containers eine Teilmenge aller Farmer sind (gemessen: 150 000 Punkte sind 3,4 MiB, Lesen und Export 48 von
+  128 MiB vor der Prüfsumme über die gespeicherte Form; diese hält die Farmer beim Prüfen kurz ein zweites Mal im Speicher,
+  bei Höchstgröße synthetisch gemessen rund 38 MiB mehr, geschätzt 86–90 von 128 MiB – Stand 23.11.2026).
+- **Am Container** steht nur noch `abschluss.betriebe` ohne `geometrie` und `abschluss.schnappschuss`
+  = `{"id", "sha256"}`. `sha256` ist über `json_encode` der Farmer in ihrer gespeicherten Form gebildet (`eudr_schnappschuss_summe`: einmal durch
+  `json_decode` und zurück – `-0.0` schreibt `json_encode` als `-0`, gelesen wird daraus `0`, etwa bei der Mitte einer Fläche am
+  Äquator; für alle übrigen Werte dieselbe Summe wie zuvor).
+  `eudr_schnappschuss_betriebe` liest die Umrisse und prüft dabei die Prüfsumme; fehlt das Dokument oder passt sie nicht,
+  antworten Export und Karte mit 500 und einem Hinweis statt mit veränderten Umrissen.
+- **Ältere Abschlüsse** (ohne `schnappschuss`) tragen die Umrisse weiter eingebettet und werden so gelesen (GR-006). Es gibt
+  keine Migration; Wiederöffnen verschiebt einen Abschluss wie bisher nach `fruehere`, ein neuer Abschluss legt ein neues
+  Dokument an. Frühere Abschlüsse verweisen weiter auf ihr Dokument (auch wenn `fruehere[*].betriebe` nach
+  `EUDR_MAX_FRUEHERE` entfällt).
+- **Leser:** Der Stand der Seite (`eudr_sendung_sicht`) liefert die Farmer jedes Abschlusses ohne Umriss. Die Karte im Fenster
+  „Container“ holt sie mit `containerimport_eudr_schnappschuss` (GET `sendung`, Recht „EUDR ansehen“), der Export für TRACES
+  liest sie über `eudr_schnappschuss_betriebe` (ohne die aktuellen Farmer zu lesen). Druck, Liste und Gesamtprüfung brauchen
+  keinen Umriss.
+- **Gemessen** (`memory_limit = 128M`, alle Bibliotheken geladen, 100 Farmer zu 200 Punkten, je Container 10 Farmer):
+  vorher bei 120 Abschlüssen 6,6 MiB Dokument, Stand 90 MiB Spitze und 7,4 MiB Antwort, bei 200 Abschlüssen Speicherabbruch;
+  nachher bei 200 Abschlüssen 1,9 MiB Dokument, Stand und Abschluss 32 MiB Spitze, 2,9 MiB Antwort.
+- **Rückfall auf eine Vorversion:** Daten werden nicht beschädigt – sie liest alle Container weiter und schreibt den Verweis
+  beim Speichern unverändert zurück. Bei Abschlüssen ab diesem Stand sieht sie aber keine Umrisse: Ihre Karte im Fenster
+  „Container“ bricht mit einem TypeError ab (Browser-Konsole), ihr Export liefert die Farmer mit `"geometry": null` – diese
+  Datei nicht bei TRACES einreichen. Liste, Profil, Druck und Gesamtprüfung zeigt sie wie gewohnt. Nach der Rückkehr ist alles
+  wieder da (geprüft mit dem Stand vor KERN-3b gegen Daten dieses Stands).
+- **Sicherung:** Die Dokumente liegen im Dateibetrieb im Unterordner `containerimport-eudr-schnappschuss/` und kommen mit
+  `deploy/sichern.sh` ins Archiv; im SQLite-Betrieb stehen sie in der Datenbank und damit im Abzug (`deploy/datenbank.py
+  snapshot`). Beides am 23.11.2026 mit einem Wegwerf-Ordner geprüft.
 
 ## 5.4 Datenverantwortung (GR-101)
 

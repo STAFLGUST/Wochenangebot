@@ -2,7 +2,7 @@
 
 <!-- ERZEUGT von `python3 werkzeuge/doku.py erzeugen` – nicht von Hand ändern. Quelle: Funktionen und Kommentare im Code. Die CI prüft, dass diese Datei zum Code passt. -->
 
-22 Dateien, 235 Funktionen – in der Reihenfolge der Datei, **fett** die Abschnitte. Text = erste Aussage des Kommentars direkt über der Funktion (Python: Docstring). Übersicht aller Module: [README.md](README.md).
+22 Dateien, 237 Funktionen – in der Reihenfolge der Datei, **fett** die Abschnitte. Text = erste Aussage des Kommentars direkt über der Funktion (Python: Docstring). Übersicht aller Module: [README.md](README.md).
 
 ## `app/api/lib/auswertung.php`
 
@@ -72,7 +72,7 @@ _Importvertrag der Verwaltung – Schnittstelle zur Importzentrale (docs/plattfo
 
 - `kunden_wawi_wert(typ, v)` – Wert eines WaWi-Felds prüfen; null = leer bzw. ungültig (dann nicht gespeichert)
 - `kunden_wawi_neu(alt, roh, felder)` – WaWi-Daten nach einer Zeile der Datei: Felder, die die Datei enthält ($felder), werden übernommen bzw. geleert; die übrigen (ältere Exporte ohne die Spalte, …
-- `kunden_aktiv_stichtag()` – Stichtag der Aktiv-Regel (JJJJ-MM-TT, Ortszeit): heute vor KUNDEN_AKTIV_MONATE Monaten
+- `kunden_aktiv_stichtag(heute)` – Stichtag der Aktiv-Regel (JJJJ-MM-TT, Ortszeit): heute vor KUNDEN_AKTIV_MONATE Monaten, am Monatsende höchstens der letzte Tag des Zielmonats (31.08. → …
 - `kunden_letztes_datum(w)` – Jüngstes Datum aus letzter Rechnung, letztem Lieferschein (Rechnung ggf. an einen Rechnungsempfänger) und Anlage; '' = keines
 - `kunden_dmy(iso)`
 - `kunden_import_lauf(b, pruefen, details)` – Kundenstammdaten aus der Warenwirtschaft (CSV im Browser gelesen): Abgleich über die Kundennummer, sonst über Firma + PLZ bei Kunden ohne Nummer.
@@ -404,6 +404,20 @@ _Stammdaten → Angebote mit Kundengruppen (Freischaltung über die Gruppe), Imp
 - `importiere(rows, felder, quelle)`
 - `speichern(nr, aktiv)`
 
+**Stammdaten → Angebote**
+
+**Kundengruppe nur einmal zuordenbar**
+
+**Artikelpreise: nur noch über Verwaltung → Import (Auftrag des Inhabers 04.11.2026)**
+
+**Kunden importieren**
+
+**Kunden-Dialog: Daten der Warenwirtschaft, Filter nach Status**
+
+**Neuer Kunde: Passwort-Auswahl**
+
+- `bestaetigt(aktion, daten)`
+
 ## `tests/e2e/test_lieferanten.py`
 
 _Stammdaten → Lieferanten und Versandarten (Wunsch des Inhabers 06.11.2026): vollständiger Lieferanten-Export der Warenwirtschaft (alle Spalten, Name darf fehlen, Umsätze nur für Bearbeiter), Versandarten (Nummer, …_
@@ -413,7 +427,7 @@ _Stammdaten → Lieferanten und Versandarten (Wunsch des Inhabers 06.11.2026): v
 
 ## `tests/e2e/test_master.py`
 
-_Testgruppe master: Artikelstammdaten und Bezeichnungsregeln (Fleischart, Herkunft, Zustand, VK-Gruppe)._
+_Testgruppe master: Artikelstammdaten und Bezeichnungsregeln (Fleischart, Herkunft, Zustand, VK-Gruppe); nach 409 (Import, „Als Stammdaten speichern“) keine Erfolgsmeldung; Pop-up mit VK-Gruppe außerhalb der Liste …_
 
 - `check(n, c, i)`
 - `login(pg, user, pw)`
@@ -427,6 +441,7 @@ _Testgruppe master: Artikelstammdaten und Bezeichnungsregeln (Fleischart, Herkun
 - `open_art(pg, code)`
 - `save_art(pg)`
 - `wait_master(pg)`
+- `schliessen()` – VK-Gruppe außerhalb der Liste (der Import trägt sie trotzdem ein): Pop-up speichert andere Änderungen
 
 ## `tests/e2e/test_vertreter.py`
 

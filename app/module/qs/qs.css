@@ -46,9 +46,9 @@ body.qm :focus-visible{outline:none;box-shadow:var(--qm-focus)}
 
 /* Leiste mit Reitern und Schnellaktionen */
 .qm-leiste{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;margin:22px 0 14px}
-.qm-tabs{display:flex;gap:4px;width:max-content;max-width:100%;overflow:auto;padding:4px;border-radius:999px;background:var(--qm-chip);scrollbar-width:none}
-.qm-tabs button{height:38px;padding:0 16px;border:0;border-radius:999px;background:transparent;color:var(--qm-muted);font:inherit;font-size:14px;font-weight:650;white-space:nowrap;cursor:pointer}
-.qm-tabs button[aria-selected="true"]{background:var(--qm-card);color:var(--qm-text);box-shadow:0 1px 4px rgba(0,0,0,.12)}
+.qm-tabs{display:flex;gap:4px;width:max-content;max-width:100%;overflow:auto;padding:4px;border-radius:999px;background:var(--r-neutral-bg);scrollbar-width:none}
+.qm-tabs button{height:36px;padding:0 16px;border:0;border-radius:999px;background:transparent;color:var(--r-text-2);font:inherit;font-size:14px;font-weight:600;white-space:nowrap;cursor:pointer}
+.qm-tabs button[aria-selected="true"]{background:var(--r-flaeche);color:var(--r-text);box-shadow:var(--r-schatten-aktiv)}
 .qm-schnell{display:flex;gap:8px;flex-wrap:wrap}
 .qm-schnell .btn{display:inline-flex;align-items:center;gap:7px}
 .qm .btn .i{width:16px;height:16px}
@@ -56,8 +56,8 @@ body.qm :focus-visible{outline:none;box-shadow:var(--qm-focus)}
 
 /* Kennzahlen */
 .qm-kpis{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px;margin-bottom:12px}
-.qm-kpi{min-width:0;padding:14px 16px;border-radius:18px;background:var(--qm-glass);border:1px solid var(--qm-border);box-shadow:inset 0 1px 0 var(--qm-gloss),var(--qm-shadow)}
-.qm-kpi span{display:block;color:var(--qm-muted);font-size:10px;font-weight:750;letter-spacing:.07em;text-transform:uppercase}
+.qm-kpi{min-width:0;padding:14px 16px;border-radius:16px;background:var(--qm-glass);border:1px solid var(--qm-border);box-shadow:inset 0 1px 0 var(--qm-gloss),var(--qm-shadow)}
+.qm-kpi span{display:block;color:var(--r-leise);font-size:13px;font-weight:500}
 .qm-kpi b{display:block;margin:5px 0 2px;font-size:23px;line-height:1.15;font-weight:760;letter-spacing:-.03em;font-variant-numeric:tabular-nums;overflow-wrap:anywhere}
 .qm-kpi small{color:var(--qm-muted);font-size:11px}
 .qm-kpi.warn b{color:var(--qm-rot)}
@@ -89,7 +89,7 @@ textarea.qm-eingabe{height:auto;padding:8px 10px;resize:vertical;line-height:1.4
 /* Tabellen */
 .qm-tabelle-wrap{width:100%;overflow-x:auto}
 .qm-tabelle{width:100%;border-collapse:collapse}
-.qm-tabelle th{padding:9px 8px;background:var(--qm-head-bg);color:var(--qm-head-text);text-align:left;font-size:10px;font-weight:750;letter-spacing:.055em;text-transform:uppercase;border-bottom:1px solid var(--qm-border);white-space:nowrap;vertical-align:bottom}
+.qm-tabelle th{padding:9px 8px;background:var(--qm-head-bg);color:var(--qm-head-text);text-align:left;font-size:11px;font-weight:600;letter-spacing:.06em;text-transform:uppercase;border-bottom:1px solid var(--qm-border);white-space:nowrap;vertical-align:bottom}
 .qm-tabelle th small{display:block;font-size:10.5px;font-weight:600;letter-spacing:0;text-transform:none;opacity:.85}
 .qm-tabelle td{padding:9px 8px;border-bottom:1px solid var(--qm-line);font-size:12.5px;vertical-align:middle}
 .qm-tabelle tbody tr.qm-klick{cursor:pointer}
@@ -126,9 +126,8 @@ textarea.qm-eingabe{height:auto;padding:8px 10px;resize:vertical;line-height:1.4
 .qm-schmal{max-width:220px}
 
 /* Dialoge */
-.qm-dialog{width:min(860px,calc(100vw - 28px));max-height:calc(100dvh - 28px);padding:0;border:1px solid var(--qm-border);border-radius:22px;background:var(--qm-card);color:var(--qm-text);box-shadow:0 28px 80px rgba(0,0,0,.32)}
+.qm-dialog{width:min(860px,calc(100vw - 28px));max-height:calc(100dvh - 28px);padding:0;border:1px solid var(--r-linie-2);border-radius:16px;background:var(--qm-card);color:var(--qm-text);box-shadow:var(--r-schatten-menue)}
 .qm-dialog-klein{width:min(520px,calc(100vw - 28px))}
-.qm-dialog::backdrop{background:rgba(20,16,16,.42);backdrop-filter:blur(4px)}
 .qm-dialog form{padding:18px;display:flex;flex-direction:column;gap:12px}
 .qm-dialogkopf{display:flex;align-items:flex-start;justify-content:space-between;gap:12px}
 .qm-dialogkopf h2{margin:0;font-size:20px}
@@ -178,7 +177,7 @@ textarea.qm-eingabe{height:auto;padding:8px 10px;resize:vertical;line-height:1.4
   .qm-karten tr{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:2px 10px;padding:9px 6px;border-bottom:1px solid var(--qm-line)}
   .qm-karten td[colspan]{grid-column:1/-1}   /* Hinweiszeilen über die ganze Karte */
   .qm-karten td{display:block;padding:3px 0;border:0;min-width:0;text-align:left!important;white-space:normal}
-  .qm-karten td[data-label]::before{content:attr(data-label);display:block;color:var(--qm-muted);font-size:9.5px;font-weight:750;letter-spacing:.05em;text-transform:uppercase}
+  .qm-karten td[data-label]::before{content:attr(data-label);display:block;color:var(--r-leise);font-size:11px;font-weight:600;letter-spacing:.06em;text-transform:uppercase}
   .qm-karten td.qm-voll{grid-column:1/-1}
   .qm-karten td.qm-voll::before{display:none}
   .qm-karten td:empty{display:none}
@@ -193,10 +192,10 @@ textarea.qm-eingabe{height:auto;padding:8px 10px;resize:vertical;line-height:1.4
   .qm-user-name{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
   .qm-initialen,.qm-rund{width:38px;height:38px}
   .qm-leiste{margin:14px 0 10px}
-  .qm-tabs button{height:36px;padding:0 13px;font-size:13px}
+  .qm-tabs button{padding:0 12px}
   .qm-schnell{width:100%;display:grid;grid-template-columns:1fr 1fr}
   .qm-schnell .btn{justify-content:center}
-  .qm-kpis{gap:7px}.qm-kpi{padding:10px;border-radius:14px}.qm-kpi b{font-size:19px}.qm-kpi span{font-size:11px}
+  .qm-kpis{gap:7px}.qm-kpi{padding:10px}.qm-kpi b{font-size:19px}
   .qm-panel{padding:11px;border-radius:16px}
   .qm-panelkopf h2{font-size:15px}
   .qm-filterzeile{display:grid;grid-template-columns:1fr 1fr;width:100%}
@@ -205,7 +204,7 @@ textarea.qm-eingabe{height:auto;padding:8px 10px;resize:vertical;line-height:1.4
   .qm-filterzeile>*{min-width:0}
   .qm-panelkopf-filter .qm-filterzeile .btn{grid-column:1/-1}   /* lange Knopftexte (Dachser-Liste, Abschreibung) über die ganze Breite */
   .qm-formraster{grid-template-columns:1fr}
-  .qm-dialog{width:100vw;max-width:100vw;max-height:94dvh;margin:auto 0 0;border-radius:22px 22px 0 0}
+  .qm-dialog{width:100vw;max-width:100vw;max-height:94dvh;margin:auto 0 0;border-radius:20px 20px 0 0}
   .qm-dialog form{padding:15px}
   .qm-dialog form>.qm-knopfreihe:last-child{margin:0 -15px -15px;padding:8px 15px calc(15px + env(safe-area-inset-bottom))}
   .qm-knopfreihe .btn{min-height:40px}
@@ -465,7 +464,7 @@ button.qm-kpi{font:inherit;text-align:left;color:inherit;cursor:pointer}
 .qm-plan-wrap{width:100%;overflow-x:auto}
 .qm-plan{min-width:1060px;display:flex;flex-direction:column}
 .qm-plan-zeile{display:grid;grid-template-columns:270px repeat(12,minmax(0,1fr)) 150px 104px;align-items:center;gap:0 2px;padding:7px 6px;border-bottom:1px solid var(--qm-line)}
-.qm-plan-zeile.kopf{background:var(--qm-head-bg);border-radius:10px;border-bottom:0;color:var(--qm-head-text);font-size:10.5px;font-weight:750;letter-spacing:.05em;text-transform:uppercase}
+.qm-plan-zeile.kopf{background:var(--qm-head-bg);border-radius:10px;border-bottom:0;color:var(--qm-head-text);font-size:11px;font-weight:600;letter-spacing:.06em;text-transform:uppercase}
 .qm-plan-zeile.kopf span{text-align:center}.qm-plan-zeile.kopf span:first-child{text-align:left}
 .qm-plan-zeile.kopf .heute{color:var(--qm-accent)}
 .qm-plan-zeile.qm-klick{cursor:pointer}.qm-plan-zeile.qm-klick:hover{background:var(--qm-total-bg)}
@@ -620,6 +619,7 @@ button.qm-kpi{font:inherit;text-align:left;color:inherit;cursor:pointer}
 :root body.qm.r {
   --qm-bg: var(--r-grund); --qm-text: var(--r-text); --qm-glass: var(--r-flaeche); --qm-kopf: var(--r-grund); --qm-card: var(--r-flaeche);
   --qm-border: var(--r-linie-2); --qm-line: var(--r-linie); --qm-gloss: transparent; --qm-shadow: var(--r-schatten);
+  --qm-head-bg: var(--r-flaeche-2); --qm-head-text: var(--r-leise); --qm-total-bg: var(--r-hover);   /* Tabellenköpfe wie im Rahmen; Hover-, Summen- und Zebraflächen sichtbar abgesetzt */
 }
 :root body.qm.r .qm-bg { display: none; }
 body.qm.r .qm-glas { -webkit-backdrop-filter: none; backdrop-filter: none; box-shadow: var(--r-schatten); }
@@ -637,7 +637,7 @@ body.qm.r .qm-rund:hover { background: var(--r-flaeche-2); }
 /* Druck im Rahmen: die Seite liegt jetzt in .r-app (nicht mehr direkt unter body) – wie oben für .qm-seite freigeben */
 @media print { body.qm.r > .r-app:not(#print-root) { display: block !important; } body.qm.r .r-inhalt { display: block; } }
 /* Fingerbedienung (Prüfung am Handy 10.11.2026): Verweise auf Dokumente mit Tippfläche ≥ 32 px */
-@media(pointer:coarse){.qm-verweis{min-height:32px}.qm-details summary{padding:8px 0}}
+@media(pointer:coarse){.qm-verweis{min-height:32px}.qm-details summary{padding:8px 0}.qm input[type="checkbox"]{width:20px;height:20px}}
 
 /* ---------- Verfahrensdokumentation nach GoBD (Reiter „Verfahrensdoku“, verfahren.js) ---------- */
 .vf-kopf{display:flex;flex-direction:column;gap:10px}

@@ -78,7 +78,7 @@ button.og-kasten:hover{border-color:var(--qm-accent)}
   .og-seite{overflow:visible}
 }
 @media(max-width:560px){
-  .qm-dialog.og-dialog{height:94dvh}
+  .qm-dialog.og-dialog{width:100vw;height:94dvh}
   .og-kopf{grid-template-columns:minmax(0,1fr) auto}
   .og-werkzeug{grid-column:1/-1;order:3}
   .og-rahmen{padding:14px 15px calc(14px + env(safe-area-inset-bottom))}

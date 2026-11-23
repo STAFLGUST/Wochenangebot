@@ -1,6 +1,6 @@
 """Testgruppe hist: Preisverlauf – Import alter Angebotslisten, Zeiträume, Datendialog; Frühere Wochen ansehen (KW wechseln,
 Angebot wählen, Quelle Wochenablage/Veröffentlichung/Version/Preisverlauf, Rechte); Wochenablage je KW (ablegen, ersetzen,
-damalige Angebotsdefinitionen, alte Versionen retten, nie auf der Kundenseite)."""
+damalige Angebotsdefinitionen, alte Versionen retten, nie auf der Kundenseite); Preise mit 4 Nachkommastellen auf Cent wie überall."""
 import sys
 from umgebung import BASE  # Testserver je Gruppe (parallel)
 import datetime, glob, json, os, re
@@ -418,6 +418,31 @@ with sync_playwright() as p:
                                                   'items': [{'code': '10601', 'name': 'Roastbeef', 'price': {'status': 'value', 'value': 20}}]})
     ids = [w['id'] for w in api_get(a, 'history_list')[1]['weeks']]
     check('import restores deleted week', r[0] == 200 and pw['id'] in ids and pw['id'] not in (dok('historie_geloescht') or []), (r, ids))
+    # Preise mit mehr als 2 Nachkommastellen (bis 4 gespeichert): Anzeige, Spanne und Änderungen auf Cent wie überall
+    for kw, a1, b1 in ((50, 4.245, 4.255), (51, 4.2549, 4.30)):
+        assert api_post_bestaetigt(a, 'history_import', {'week': kw, 'year': 2026, 'source': 'Rundung.xlsx', 'items': [
+            {'code': '99501', 'name': 'Rundungstest A', 'price': {'status': 'value', 'value': a1}}, {'code': '99502', 'name': 'Rundungstest B', 'price': {'status': 'value', 'value': b1}}]})[0] == 200
+    a.set_viewport_size({'width': 1440, 'height': 950}); a.reload(); a.wait_for_selector('tr[data-id]'); a.click('#vt-hist'); a.wait_for_selector('.htab')
+    a.fill('#hist-q', '9950'); a.wait_for_function("document.querySelectorAll('.htab tbody tr').length === 2")
+    norm = lambda t: re.sub(r'[\u00a0\u202f]', ' ', t).strip()   # noqa: E731  geschützte Leerzeichen vor der Einheit
+    zeile = lambda c: [norm(a.locator(f'.htab tbody tr:has(td.h-code:text-is("{c}")) td.{k}').inner_text()) for k in ('h-cur', 'h-delta', 'h-range')]   # noqa: E731
+    za, zb = zeile('99501'), zeile('99502')
+    check('Preisverlauf auf Cent: 4,245 → 4,2549 „Aktuell 4,25“ ohne Änderung; 4,255 → 4,30 Spanne „4,26 – 4,30“',
+          za == ['4,25 €/kg', '±0,00 €/kg', '4,25 €/kg'] and zb[0] == '4,30 €/kg' and zb[2] == '4,26 – 4,30 €/kg', (za, zb))
+    a.locator('.htab tbody tr:has(td.h-code:text-is("99501"))').click(); a.wait_for_selector('#dlg-series[open]')
+    t = a.inner_text('#dlg-series'); akt = norm(a.inner_text('#dlg-series .hstats > div:first-child strong'))
+    check('… im Fenster: Aktuell 4,25 €/kg, Wochenwerte mit 2 Stellen, keine Preisänderung', akt == '4,25 €/kg' and '4,2549' not in t and '4,245' not in t and '0 preisänderungen' in t.lower(), (akt, t[:400]))   # Überschrift in Großbuchstaben (CSS)
+    a.keyboard.press('Escape')
+    # Fenster eines Artikels ohne Gruppe, der nicht mehr im Angebot steht: Untertitel ohne leere Teile (kein „· ·“ oder „·“ am Ende)
+    r = api_post_bestaetigt(a, 'history_import', {'week': 37, 'year': 2026, 'source': 'Ohne-Gruppe.xlsx',
+                                                  'items': [{'code': '99001', 'name': 'Testartikel ohne Gruppe', 'price': {'status': 'value', 'value': 9.5}}]})
+    a.set_viewport_size({'width': 1440, 'height': 950}); a.reload(); a.wait_for_selector('tr[data-id]'); a.click('#vt-hist'); a.wait_for_selector('.htab')
+    a.click('#view-hist [data-hrange="Alle"]'); a.fill('#hist-q', 'Testartikel ohne Gruppe')
+    a.wait_for_function("document.querySelectorAll('.htab tbody tr[data-skey]').length === 1")
+    a.click('.htab tbody tr[data-skey]'); a.wait_for_selector('#dlg-series[open]')
+    sub = a.inner_text('#dlg-series .dlg-head p')
+    check('Preisverlauf-Fenster: Untertitel ohne leere Teile (ohne Gruppe, nicht mehr im Angebot)', r[0] == 200 and sub == 'Art.-Nr. 99001 · nicht mehr im Angebot', (r[0], sub))
+    a.keyboard.press('Escape')
     check('no JS errors', not errs, errs)
     br.close()
 print(f'{sum(res)}/{len(res)} passed')

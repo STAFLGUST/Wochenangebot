@@ -5,7 +5,8 @@ nächsten Protokolleintrag gelöscht, der Grenzmonat und neuere bleiben; im lauf
 Inhalte der gelöschten Monate; die Protokollansicht bietet ältere Monate nie an (auch nicht vor dem Aufräumen und nicht
 über ?month=); das Monatsdokument ist ein Ringpuffer (PROTOKOLL_EINTRAEGE_MAX = 20 000 Einträge, PROTOKOLL_BYTES_MAX =
 4 MiB, Befund 22.11.2026): die ältesten Einträge fallen weg, der neue Vorgang bleibt, genau ein fortgeschriebener
-Vermerk „protokoll_groesse“; Oberfläche „Protokoll“ mit Hinweis zur Aufbewahrung, Desktop und 390 px, ohne
+Vermerk „protokoll_groesse“; eine Flut gelungener Kundenanmeldungen verdrängt nur Anmeldeeinträge (Rechte- und
+Fehlanmeldungseinträge bleiben); Oberfläche „Protokoll“ mit Hinweis zur Aufbewahrung, Desktop und 390 px, ohne
 JavaScript-Fehler.
 """
 import json
@@ -104,6 +105,35 @@ Client('198.51.100.45').call('login', {'username': 'admin', 'password': 'falsch-
 log, roh = protokoll(), storage_raw('protokoll/' + JETZT) or ''
 check('Byte-Grenze je Monatsdokument: gekürzt, neuer Vorgang und Vermerk vorhanden', len(roh) <= MAXB and len(log) < 50
       and any(e['a'] == 'login_fail' for e in log) and len([e for e in log if e['a'] == 'protokoll_groesse']) == 1, (len(roh), len(log)))
+# Flut gelungener Kundenanmeldungen (ungebremst): verdrängt nur Anmeldeeinträge, nie Rechte-, Mitarbeiter- oder Sicherheitseinträge
+WICHTIG = [{'t': JETZT + '-01T07:00:00+00:00', 'u': 'admin', 'n': 'Administrator', 'r': 'admin', 'ip': '', 'a': 'user', 's': 'Rolle von „vera“ geändert'},
+           {'t': JETZT + '-01T07:01:00+00:00', 'u': 'kunde:opfer', 'n': '', 'r': 'kunde', 'ip': '192.0.2.7', 'a': 'kunde_login_fail', 's': 'Kunden-Anmeldung fehlgeschlagen'}]
+storage_write('protokoll/' + JETZT, WICHTIG + [{'t': JETZT + '-01T08:00:00+00:00', 'u': 'kunde:viel', 'n': 'Firma Viel', 'r': 'kunde', 'ip': '', 'a': 'kunde_login',
+                                                's': 'Kunde angemeldet %d' % i} for i in range(MAXE)])
+Client('198.51.100.46').call('login', {'username': 'admin', 'password': 'falsch-falsch-7'})
+log = protokoll()
+anm = [e['s'] for e in log if e['a'] == 'kunde_login']
+check('Flut gelungener Kundenanmeldungen: Rechte- und Fehlanmeldungseinträge bleiben, die ältesten Anmeldungen fallen weg',
+      log[:2] == WICHTIG and len(anm) == MAXE - 3 and anm[0] == 'Kunde angemeldet 3' and any(e['a'] == 'login_fail' for e in log)
+      and [e['weg'] for e in log if e['a'] == 'protokoll_groesse'] == [3], (log[:3], len(anm), anm[:1]))
+# ebenso selbst gesetzte Kunden-Passwörter (kunde_password, ebenfalls ungebremst)
+storage_write('protokoll/' + JETZT, WICHTIG + [{'t': JETZT + '-01T08:00:00+00:00', 'u': 'kunde:viel', 'n': 'Firma Viel', 'r': 'kunde', 'ip': '', 'a': 'kunde_password',
+                                                's': 'Kunde hat eigenes Passwort festgelegt %d' % i} for i in range(MAXE)])
+Client('198.51.100.47').call('login', {'username': 'admin', 'password': 'falsch-falsch-8'})
+log = protokoll()
+pw = [e['s'] for e in log if e['a'] == 'kunde_password']
+check('Flut selbst gesetzter Kunden-Passwörter: Rechte- und Fehlanmeldungseinträge bleiben, die ältesten Passwort-Einträge fallen weg',
+      log[:2] == WICHTIG and len(pw) == MAXE - 3 and pw[0] == 'Kunde hat eigenes Passwort festgelegt 3' and any(e['a'] == 'login_fail' for e in log)
+      and [e['weg'] for e in log if e['a'] == 'protokoll_groesse'] == [3], (log[:3], len(pw), pw[:1]))
+# eine Anmelde-Flut verdrängt nicht den älteren Nachweis „Passwort über den Link festgelegt“ (Prüfung SEC-1b-1)
+LINK = {'t': JETZT + '-01T07:30:00+00:00', 'u': 'kunde:opfer', 'n': 'Firma Opfer', 'r': 'kunde', 'ip': '192.0.2.8', 'a': 'kunde_password',
+        's': 'Kunde hat Passwort über den Link aus der E-Mail festgelegt'}
+storage_write('protokoll/' + JETZT, WICHTIG + [LINK] + [{'t': JETZT + '-01T08:00:00+00:00', 'u': 'kunde:viel', 'n': 'Firma Viel', 'r': 'kunde', 'ip': '',
+                                                         'a': 'kunde_login', 's': 'Kunde angemeldet %d' % i} for i in range(MAXE)])
+Client('198.51.100.48').call('login', {'username': 'admin', 'password': 'falsch-falsch-9'})
+log = protokoll()
+check('Flut gelungener Kundenanmeldungen: der ältere Nachweis „Passwort über den Link festgelegt“ bleibt, verworfen werden Anmeldungen',
+      log[:3] == WICHTIG + [LINK] and [e['weg'] for e in log if e['a'] == 'protokoll_groesse'] == [4], (log[:4], len(log)))
 storage_write('protokoll/' + JETZT, [])   # aufgeräumt für die Oberflächenprüfung
 
 # Oberfläche

@@ -8,6 +8,7 @@ from pathlib import Path
 import re
 import shutil
 import sqlite3
+import stat
 import sys
 import tarfile
 import tempfile
@@ -82,8 +83,22 @@ def validate(db):
 
 
 def connect(root):
-    # mode=rw prevents accidentally creating an empty replacement when the DB is missing.
-    return sqlite3.connect((root / '.sqlite/store.sqlite').resolve().as_uri() + '?mode=rw', uri=True, timeout=30)
+    # mode=rw prevents accidentally creating an empty replacement when the DB is missing. No resolve(): a link planted as
+    # .sqlite or store.sqlite in the writable data directory would let this root tool open a database of the host.
+    db = root / '.sqlite' / 'store.sqlite'
+    if db.parent.is_symlink() or db.is_symlink():
+        raise ValueError('Database path is a symbolic link – refusing to open it')
+    return sqlite3.connect(db.absolute().as_uri() + '?mode=rw', uri=True, timeout=30)
+
+
+def open_lock(root):
+    """Open (create) the shared lock file .storage.lock for flock without following a link: as root, open('a') on a link
+    planted there would create any empty file of the host (e.g. /etc/nologin). O_NONBLOCK: a FIFO there never hangs."""
+    fd = os.open(root / '.storage.lock', os.O_RDONLY | os.O_CREAT | os.O_NOFOLLOW | os.O_NONBLOCK | os.O_CLOEXEC, 0o644)
+    if not stat.S_ISREG(os.fstat(fd).st_mode):
+        os.close(fd)
+        raise ValueError('.storage.lock is not a regular file')
+    return os.fdopen(fd, 'rb')
 
 
 def migrate(root):
@@ -116,6 +131,16 @@ def rollback(root):
         raise ValueError('SQLite not active')
     with connect(root) as db:
         rows = validate(db)
+    # daten/ is writable in the containers (ADR-007): a link planted as a folder or file name on the way to a document would
+    # let this root tool write onto the host. Check every target before changing anything, and refuse.
+    for name, _, _ in rows:
+        p = root
+        for part in Path(name + '.php').parts:
+            if p != root and p.exists() and not p.is_dir():
+                raise ValueError('Not a directory in the data directory – refusing rollback: ' + str(p.relative_to(root)))
+            p = p / part
+            if p.is_symlink():
+                raise ValueError('Symbolic link in the data directory – refusing rollback: ' + str(p.relative_to(root)))
     stage = Path(tempfile.mkdtemp(prefix='.export-', dir=root))
     try:
         for name, raw, stamp in rows:
@@ -244,7 +269,7 @@ def snapshot(root, target):
                 if p.is_symlink() or not p.is_file() or '.teile' in rel.parts:
                     continue   # never follow links; unfinished uploads are not part of the backup
                 (target / rel).parent.mkdir(parents=True, exist_ok=True)
-                shutil.copy2(p, target / rel)
+                shutil.copy2(p, target / rel, follow_symlinks=False)
     else:
         raise ValueError('Snapshot command requires an active database')
     print('Consistent SQLite snapshot created and verified')
@@ -262,7 +287,7 @@ def main():
         p.error('Data directory missing')
     if a.command in ('migrate', 'rollback') and not a.offline:
         p.error('Stop application first and pass --offline')
-    with (root / '.storage.lock').open('a') as lock:
+    with open_lock(root) as lock:
         fcntl.flock(lock, fcntl.LOCK_EX if a.command in ('migrate', 'rollback') else fcntl.LOCK_SH)
         if a.command == 'migrate': migrate(root)
         elif a.command == 'rollback': rollback(root)

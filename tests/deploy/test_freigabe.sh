@@ -53,13 +53,19 @@ echo "compose \$*\${STAFL_APP_VERSION:+ [STAFL_APP_VERSION=\$STAFL_APP_VERSION]}
 # beim Bau: aktiver Commit, ob app/ unverändert ist (wie im Commit oder wie bereitgestellt), und letzte Zeile des Bauplans
 [ "\$1" = build ] && echo "bau-stand \$(git rev-parse HEAD) app-\$({ git diff --quiet HEAD -- app || python3 deploy/bereitstellen.py --pruefen >/dev/null; } && echo alt || echo neu) \$(tail -1 deploy/image/Dockerfile)"
 if [ "\$1" = build ] && [ -f "$T/bau-fehler" ]; then echo "Bau fehlgeschlagen"; exit 1; fi
+# „up“ scheitert einmal, solange $T/up-fehler-einmal existiert, bzw. immer, solange $T/up-fehler existiert
+if [ "\$1" = up ] && [ -f "$T/up-fehler-einmal" ]; then rm -f "$T/up-fehler-einmal"; echo "Error response from daemon: port is already allocated"; exit 1; fi
+if [ "\$1" = up ] && [ -f "$T/up-fehler" ]; then echo "Error response from daemon: port is already allocated"; exit 1; fi
 exit 0
 STUB
 # Docker-Ersatz: gibt Befehle aus; stafl-app:release-vorher fehlt (inspect und tag scheitern), solange $T/kein-vorher
-# existiert, „tag“ allgemein, solange $T/tag-fehler existiert, „image prune“, solange $T/prune-fehler existiert
+# existiert („rmi“ legt es an, ein „tag“ auf release-vorher entfernt es), „tag“ allgemein, solange $T/tag-fehler existiert,
+# „image prune“, solange $T/prune-fehler existiert
 cat > "$T/docker.sh" <<STUB
 #!/bin/sh
 echo "docker \$*"
+[ "\$*" != "rmi stafl-app:release-vorher" ] || touch "$T/kein-vorher"
+[ "\$1 \$3" != "tag stafl-app:release-vorher" ] || [ -f "$T/tag-fehler" ] || rm -f "$T/kein-vorher"
 if [ -f "$T/kein-vorher" ] && { [ "\$1 \$2" = "tag stafl-app:release-vorher" ] || [ "\$1 \$2 \$3" = "image inspect stafl-app:release-vorher" ]; }; then echo "Error: No such image"; exit 1; fi
 if [ "\$1" = tag ] && [ -f "$T/tag-fehler" ]; then echo "Error: tag fehlgeschlagen"; exit 1; fi
 if [ "\$1 \$2" = "image prune" ] && [ -f "$T/prune-fehler" ]; then echo "Cannot connect to the Docker daemon"; exit 1; fi
@@ -111,9 +117,15 @@ ok "Seite nach Rückfall erreichbar" 'curl -fsS "http://127.0.0.1:$WEB_PORT/api/
 ok "Rückfall: Prüfliste und Versionsnummern wieder für die Vorversion" 'grep -q "aus Commit $G_SHA" "$LISTE" && python3 "$B/deploy/bereitstellen.py" --pruefen >/dev/null \
   && seite "" | grep -q "assets/frontend.js?v=$(vnr frontend.js)\""'
 lauf || true; ok "defekter Release wird nicht erneut versucht" '[ "$(kopf)" = "$G_SHA" ] && [ "$(cat "$B/.release-abgelehnt")" = "$X_SHA" ]'
-# Status nach dem automatischen Rückfall nennt den abgelehnten Release als „vorher“ – der Notfall-Rückfall darf nie dorthin
+# Status nach dem automatischen Rückfall nennt den abgelehnten Release als „vorher“ – der Notfall-Rückfall darf nie dorthin, sondern
+# auf den Stand vor dem letzten erfolgreichen Release (.release-vorher schreibt nur ein erfolgreicher Lauf)
+ok "automatischer Rückfall: .release-vorher bleibt der Stand vor dem letzten erfolgreichen Release" '[ "$(cat "$B/.release-vorher")" = "$A_SHA" ] && [ "$(st vorher)" = "$X_SHA" ]'
 zurueck || true
-ok "Notfall-Rückfall nach automatischem Rückfall: nie auf den abgelehnten Release" '[ "$(kopf)" = "$G_SHA" ] && grep -q "automatisch zurückgenommen" "$T/out.txt" && [ "$(cat "$B/.release-abgelehnt")" = "$X_SHA" ]'
+ok "Notfall-Rückfall nach automatischem Rückfall: auf den Stand vor dem letzten erfolgreichen Release, nie auf den abgelehnten" '[ "$(kopf)" = "$A_SHA" ] && grep -q "Zurückgesetzt auf" "$T/out.txt"'
+# Die Sperre des neueren, abgelehnten Release bleibt: sonst spielte der nächste Lauf ihn wieder ein (Notfall-Rückfall still zurückgenommen)
+ok "Notfall-Rückfall: Sperre des neueren, abgelehnten Release bleibt stehen" '[ "$(cat "$B/.release-abgelehnt")" = "$X_SHA" ]'
+lauf || true
+ok "… nächster Lauf nach dem Notfall-Rückfall: abgelehnter Release nicht erneut versucht (keine Sicherung, kein Codewechsel, keine Ausgabe)" '[ "$(kopf)" = "$A_SHA" ] && [ ! -s "$T/out.txt" ]'
 git -C "$B" reset -q --hard "$G_SHA"   # Ausgangslage der folgenden Prüfungen unabhängig vom Ergebnis oben
 
 rm -f "$B/.release-abgelehnt"
@@ -122,6 +134,7 @@ echo ORIGINAL > "$T/opfer"; chmod 600 "$T/opfer"; rm -f "$B/daten/deployment.php
 ln -s "$T/opfer" "$B/daten/deployment.php"; ln -s "$T/opfer2" "$B/daten/deployment.php.tmp"
 printf '{"release":"%s","ci_ok":["%s"]}' "$X_SHA" "$G_SHA" > "$T/state.json"
 lauf || true; ok "Release ohne erfolgreiche CI abgelehnt" '[ "$(kopf)" = "$G_SHA" ] && grep -q "ohne erfolgreiche CI" "$T/out.txt"'
+ok "abgelehnter Release: .release-vorher unverändert (nicht der aktive Stand)" '[ "$(cat "$B/.release-vorher")" = "$A_SHA" ]'
 ok "Status folgt keinem Verweis in daten/ (Ziel unverändert, Verweis ersetzt)" '[ "$(cat "$T/opfer")" = ORIGINAL ] && [ "$(stat -c %a "$T/opfer")" = 600 ] && [ ! -e "$T/opfer2" ] \
   && [ ! -L "$B/daten/deployment.php" ] && grep -q "ohne erfolgreiche CI" "$B/daten/deployment.php"'
 rm -f "$B/daten/deployment.php.tmp"
@@ -178,12 +191,32 @@ O_SHA=$(commit apache-oidc x "echo '# geändert' >> '$T/src/deploy/anmeldung/apa
 printf '{"release":"%s","ci_ok":["%s"]}' "$O_SHA" "$O_SHA" > "$T/state.json"
 lauf || true; ok "Apache-Konfiguration der Anmeldung geändert: nur die App neu erstellt" '[ "$(kopf)" = "$O_SHA" ] && grep -qx "compose up -d --force-recreate app" "$T/out.txt" && ! grep -qx "compose up -d --force-recreate" "$T/out.txt"'
 
+# docker compose up scheitert beim Einspielen (Port belegt, Docker hängt): zurück auf die Vorversion statt Abbruch ohne Prüfung
+touch "$T/up-fehler-einmal"
+UP_SHA=$(commit compose-up-fehler x "echo '# up' >> '$T/src/docker-compose.yml'")
+printf '{"release":"%s","ci_ok":["%s"]}' "$UP_SHA" "$UP_SHA" > "$T/state.json"
+RC=0; lauf || RC=$?
+ok "compose up scheitert: zurück auf die Vorversion, Status fehlgeschlagen, abgelehnt, .release-vorher unverändert" '[ "$RC" = 1 ] && [ "$(kopf)" = "$O_SHA" ] \
+  && [ "$(st ok)" = False ] && [ "$(st sha)" = "$O_SHA" ] && grep -q "zurückgesetzt" "$B/daten/deployment.php" && [ "$(cat "$B/.release-abgelehnt")" = "$UP_SHA" ] \
+  && grep -q "Einspielen fehlgeschlagen – zurück auf" "$T/out.txt" && [ "$(grep -c "^compose up -d --force-recreate$" "$T/out.txt")" = 2 ] && [ "$(cat "$B/.release-vorher")" = "$C_SHA" ]'
+lauf || true
+ok "… nächster Lauf: nicht schon live gemeldet, abgelehnter Stand nicht erneut versucht" '[ "$(kopf)" = "$O_SHA" ] && ! grep -q "^compose" "$T/out.txt"'
+touch "$T/up-fehler"
+UP2_SHA=$(commit compose-up-fehler-2 x "echo '# up 2' >> '$T/src/docker-compose.yml'")
+printf '{"release":"%s","ci_ok":["%s"]}' "$UP2_SHA" "$UP2_SHA" > "$T/state.json"
+RC=0; lauf || RC=$?
+ok "compose up scheitert auch beim Rückfall: Status Sofort prüfen mit dem tatsächlichen Stand, abgelehnt" '[ "$RC" = 1 ] && [ "$(kopf)" = "$O_SHA" ] \
+  && [ "$(st ok)" = False ] && [ "$(st sha)" = "$O_SHA" ] && grep -q "Rückfall auf die Vorversion gescheitert" "$B/daten/deployment.php" \
+  && [ "$(cat "$B/.release-abgelehnt")" = "$UP2_SHA" ] && [ "$(cat "$B/.release-vorher")" = "$C_SHA" ]'
+rm -f "$T/up-fehler" "$B/.release-abgelehnt"
+
 # Sicherung vor dem Release mit dem Skript des NEUEN Commits (ein defektes altes Skript blockiert die Korrektur nicht)
 ok "temporäres Sicherungsskript steht in .gitignore" 'git -C "$REPO" check-ignore -q deploy/.sichern-release.sh'
 K_SHA=$(commit sichern-kaputt x "sed -i 's/^set -eu\$/set -eu; echo kaputt; exit 3/' '$T/src/deploy/sichern.sh'")
 printf '{"release":"%s","ci_ok":["%s"]}' "$K_SHA" "$K_SHA" > "$T/state.json"
 lauf || true
 ok "neues Sicherungsskript defekt: nicht eingespielt" '[ "$(kopf)" = "$O_SHA" ] && [ "$(st ok)" = False ] && grep -q "Sicherung vor dem Release fehlgeschlagen" "$B/daten/deployment.php" && [ ! -e "$B/deploy/.sichern-release.sh" ]'
+ok "Sicherung fehlgeschlagen: .release-vorher unverändert" '[ "$(cat "$B/.release-vorher")" = "$C_SHA" ]'
 git -C "$B" reset -q --hard "$K_SHA"   # Lage wie im Betrieb: aktiver Stand mit defektem Sicherungsskript
 ok "Testvoraussetzung: aktives Sicherungsskript defekt" '! sh "$B/deploy/sichern.sh" --jetzt >/dev/null 2>&1'
 F_SHA=$(commit sichern-repariert x "sed -i 's/^set -eu; echo kaputt; exit 3\$/set -eu/' '$T/src/deploy/sichern.sh'")
@@ -254,6 +287,11 @@ printf '{"release":"%s","ci_ok":["%s"]}' "$Q_SHA" "$Q_SHA" > "$T/state.json"
 lauf || true
 ok "Image geändert, Release defekt: zurück, altes Image wieder aktiv" '[ "$(kopf)" = "$P_SHA" ] && [ "$(st ok)" = False ] && grep -q "zurückgesetzt" "$B/daten/deployment.php" \
   && grep -q "^docker tag stafl-app:release-vorher stafl-app:lokal" "$T/out.txt" && [ "$(grep -cx "compose up -d --force-recreate app app-mitarbeiter" "$T/out.txt")" = 2 ]'
+# release-vorher hielt danach das Image von P (aktiv), nicht das von J (.release-vorher): der Notfall-Rückfall auf J baut J's Image
+zurueck || true
+ok "… Notfall-Rückfall danach: Image aus dem Bauplan des vorherigen Stands gebaut, nicht das aktive für dessen Code getaggt" '[ "$(kopf)" = "$J_SHA" ] \
+  && grep -q "release-vorher fehlt" "$T/out.txt" && grep -qx "bau-stand $P_SHA app-alt # Update 2" "$T/out.txt" && ! grep -q "^docker tag" "$T/out.txt"'
+git -C "$B" reset -q --hard "$P_SHA"   # Ausgangslage der folgenden Prüfungen
 S_SHA=$(commit repariert2 x "sed -i 's/ kaputt(//' '$T/src/app/api/index.php'")
 printf '{"release":"%s","ci_ok":["%s"]}' "$S_SHA" "$S_SHA" > "$T/state.json"
 lauf || true
@@ -321,6 +359,28 @@ rm -f "$T/bau-fehler" "$T/kein-vorher"
 cp "$T/env.ohne" "$B/.env"
 zurueck_lage "$ZI_SHA" "$ZC_SHA"; zurueck || true
 ok "Notfall-Rückfall, Image unterscheidet sich ohne COMPOSE_FILE: weder Tag noch Bau noch neue Container" '[ "$(kopf)" = "$ZC_SHA" ] && ! grep -qE "^(compose|docker)" "$T/out.txt"'
+# Trennstufe (ADR-007): Daten weiter getrennt, als der vorherige Stand kennt – dort bräche jeder Speicherzugriff ab
+T4_SHA=$(commit trennstufe-4 x "sed -i 's/^const DATEN_TRENNSTUFE = [0-9]*;/const DATEN_TRENNSTUFE = 4;/' '$T/src/app/api/lib/datenbereiche-liste.php'")
+T5_SHA=$(commit trennstufe-5 x "git -C '$T/src' checkout HEAD~1 -- app/api/lib/datenbereiche-liste.php")
+git -C "$B" fetch -q origin main
+mkdir -p "$B/daten-intern"; echo 5 > "$B/daten-intern/.daten-intern"; echo 5 > "$B/daten/.daten-getrennt"
+zurueck_lage "$T5_SHA" "$T4_SHA"; RC=0; zurueck || RC=$?
+ok "Notfall-Rückfall, Daten weiter getrennt als der vorherige Stand: Abbruch ohne Änderung, Weg genannt" '[ "$RC" = 1 ] && [ "$(kopf)" = "$T5_SHA" ] \
+  && grep -q "kennt nur Stufe 4" "$T/out.txt" && grep -q "daten-trennen.sh zusammenfuehren" "$T/out.txt" && [ ! -e "$B/.release-abgelehnt" ] \
+  && ! grep -qE "^(compose|docker)" "$T/out.txt" && git -C "$B" diff --quiet HEAD'
+rm "$B/daten/.daten-getrennt"   # Kennzeichen außen fehlt (daten/ ist im Container beschreibbar): maßgeblich bleibt das innere
+zurueck_lage "$T5_SHA" "$T4_SHA"; RC=0; zurueck || RC=$?
+ok "… auch wenn nur daten-intern das Kennzeichen trägt" '[ "$RC" = 1 ] && [ "$(kopf)" = "$T5_SHA" ] && grep -q "Stufe 5" "$T/out.txt"'
+# Unlesbares Kennzeichen: nie eine Stufe annehmen (bisher galt „1“ – Rückfall auf Stufe 4 erlaubt, obwohl die Daten Stufe 5 sind)
+echo fünf > "$B/daten-intern/.daten-intern"
+zurueck_lage "$T5_SHA" "$T4_SHA"; RC=0; zurueck || RC=$?
+ok "Notfall-Rückfall, Kennzeichen der Trennung unlesbar: Abbruch ohne Änderung, Weg genannt" '[ "$RC" = 1 ] && [ "$(kopf)" = "$T5_SHA" ] \
+  && grep -q "daten-intern/.daten-intern unlesbar" "$T/out.txt" && grep -q "daten-trennen.sh status" "$T/out.txt" && [ ! -e "$B/.release-abgelehnt" ] \
+  && ! grep -qE "^(compose|docker)" "$T/out.txt" && git -C "$B" diff --quiet HEAD'
+echo 4 > "$B/daten-intern/.daten-intern"; echo 4 > "$B/daten/.daten-getrennt"
+zurueck_lage "$T5_SHA" "$T4_SHA"; zurueck || true
+ok "Notfall-Rückfall, Daten auf der Stufe des vorherigen Stands: Rückfall wie bisher" '[ "$(kopf)" = "$T4_SHA" ] && grep -q "Zurückgesetzt auf" "$T/out.txt"'
+rm -rf "$B/daten-intern" "$B/daten/.daten-getrennt"
 
 # Bereitstellung: geänderte Datei → neue Adresse (Browser lädt sie sofort), nur aus Git-Objekten, Nachholen, Übergang
 git -C "$B" reset -q --hard "$ZC_SHA"; python3 "$B/deploy/bereitstellen.py" >/dev/null
@@ -385,15 +445,22 @@ ok "Notfall-Rückfall auf den Stand mit Liste: dessen Liste und Seiten wieder ak
 H_SHA=$ALT_SHA   # aktueller Stand für die folgenden Prüfungen
 
 # Active SQLite must never be silently opened by an old file-only release.
-L_SHA=$(commit ohne-sqlite x "rm '$T/src/app/api/storage.php'")
+# … der Release ändert zugleich das Image (COMPOSE_FILE aktiv): abgelehnt vor Bau, Sicherung und Umtaggen – sonst liefe der
+# Rückfall mit einem release-vorher, das nie für diesen Versuch gemerkt wurde
+L_SHA=$(commit ohne-sqlite x "rm '$T/src/app/api/storage.php'; echo '# Update L' >> '$T/src/deploy/image/Dockerfile'")
 kill "$WEB_PID"; wait "$WEB_PID" 2>/dev/null || true
 python3 "$B/deploy/datenbank.py" migrate "$B/daten" --offline >/dev/null
 (cd "$B/app" && exec php -S 127.0.0.1:$WEB_PORT >/dev/null 2>&1) & WEB_PID=$!
 printf '{"release":"%s","ci_ok":["%s"]}' "$L_SHA" "$L_SHA" > "$T/state.json"
+printf 'COMPOSE_FILE=docker-compose.yml:deploy/anmeldung/docker-compose.anmeldung.yml\n' >> "$B/.env"; N0=$(anzahl)
 lauf || true
-ok "SQLite: inkompatiblen Release vor Codewechsel abweisen" '[ "$(kopf)" = "$H_SHA" ] && grep -q "SQLite aktiv" "$T/out.txt"'
+ok "SQLite: inkompatiblen Release vor Codewechsel abweisen (Status fehlgeschlagen, nicht alle 2 Minuten erneut)" '[ "$(kopf)" = "$H_SHA" ] && grep -q "SQLite aktiv" "$T/out.txt" \
+  && [ "$(st ok)" = False ] && [ "$(cat "$B/.release-abgelehnt")" = "$L_SHA" ]'
+ok "SQLite: abgelehnt vor Image-Bau, Sicherung und Umtaggen (kein Rückfallweg)" '! grep -qE "^(compose|docker)" "$T/out.txt" && [ "$(anzahl)" = "$N0" ] \
+  && ! grep -q "zurück auf" "$T/out.txt" && git -C "$B" diff --quiet HEAD -- deploy docker-compose.yml'
+cp "$T/env.ohne" "$B/.env"
 printf '%s\n{"vorher":"%s"}' '<?php http_response_code(404); exit; ?>' "$L_SHA" > "$B/daten/deployment.php"
-printf '%s\n' "$L_SHA" > "$B/.release-vorher"
+printf '%s\n' "$L_SHA" > "$B/.release-vorher"; rm -f "$B/.release-abgelehnt"   # hier zählt nur die Sperre wegen SQLite
 sh "$B/deploy/release-zurueck.sh" > "$T/out.txt" 2>&1 || true
 ok "SQLite: auch manueller Code-Rückfall ist gesperrt" '[ "$(kopf)" = "$H_SHA" ] && grep -q "SQLite aktiv" "$T/out.txt"'
 

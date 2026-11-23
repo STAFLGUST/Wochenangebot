@@ -17,7 +17,8 @@ eigener Zeitraum, ohne EK-Recht kein Lagerwert (1280 und 390 px, hell und dunkel
 Bereich Arbeitszeit (02.11.2026): Rechte controlling.arbeitszeit_sehen / _importieren (Umsatz-Recht genügt nicht); Import des
 Zeitberichts über die Importzentrale (synthetische .xlsx, Leser im Browser): Folgezeilen mit weiteren Stempeln, unlesbare und
 doppelte Zeilen, Stempelfehler (Kommen/Gehen fehlt, Kommen = Gehen, unplausibel lang, ohne Stempel, Saldo passt nicht) markiert
-und nicht im bereinigten Saldo, heutiger Tag „laufend“, Abteilung des jüngsten Tages, Gründe von Abwesenheiten nicht gespeichert;
+und nicht im bereinigten Saldo, heutiger Tag „laufend“ (Warnung, wenn ein späterer Import ihn nicht mehr enthält; in den Kennzahlen
+genannt), Abteilung des jüngsten Tages, Gründe von Abwesenheiten nicht gespeichert;
 Auswertung je Monat, Mitarbeiter und Abteilung, Filter, Fehlerliste, Pop-up; neuer Import ersetzt nur seinen Zeitraum, 409 bei
 veraltetem Stand, 422 bei falscher Datei oder Anfrage; Oberfläche mit Ansichten, Fehlerart, CSV, Pop-up (1280 und 390 px).
 Nur synthetische Testdaten.
@@ -183,8 +184,13 @@ with sync_playwright() as p:
     check('Anteile berechnet (V1 26.000 von 39.800 € = 65,3 %, Prozent mit 1 Stelle wie überall), ohne Vertreter und Nummer ohne Stammsatz als Zeilen', '65,3 %' in zeilen and 'ohne Vertreter' in zeilen
           and 'Vertreter V2 (nicht in den Stammdaten)' in zeilen, zeilen[:600])
     check('Stand: aus den importierten Umsatzdaten mit letztem Import', 'importierten Umsatzdaten' in text(pg, '#ctl-u-stand') and 'Ina Import' in text(pg, '#ctl-u-stand'))
+    pg.select_option('#ctl-u-monatskennzahl', 'kg'); pg.wait_for_function("document.querySelector('#ctl-u-diagrammhinweis').textContent.startsWith('Menge')")
+    html_ = pg.inner_html('#ctl-u-diagramm')
+    check('Monatsvergleich Menge: Einheit einmal („… kg“, nie „kg kg“) in Wert und Beschriftung', re.search(r'kg(\s|&nbsp;)+kg', html_) is None and re.search(r'\d(\s|&nbsp;)+kg', html_) is not None, html_[:300])
     pg.select_option('#ctl-u-diagrammart', 'linie'); pg.wait_for_selector('#ctl-u-diagramm polyline')
     check('Liniendiagramm', pg.locator('#ctl-u-diagramm svg[role="img"]').count() == 1)
+    check('Liniendiagramm Menge: Einheit einmal im Tooltip', re.search(r'kg(\s|&nbsp;)+kg', pg.inner_html('#ctl-u-diagramm')) is None)
+    pg.select_option('#ctl-u-monatskennzahl', 'umsatz')
     pg.click('#ctl-u-vertreterfilter summary'); pg.uncheck('#ctl-u-vertreteroptionen [data-vertreter="V2"]')
     pg.wait_for_function("!document.querySelector('#ctl-u-vertreterzeilen').textContent.includes('V2')")
     check('Vertreterfilter wirkt auf Kennzahlen', '27.800,00 €' in text(pg, '#ctl-u-kpis'), text(pg, '#ctl-u-kpis'))
@@ -580,12 +586,21 @@ with sync_playwright() as p:
     st, r = AR.call('controlling_arbeitszeit_daten')
     check('Grunddaten: Stand bis heute, Abteilungen, Mitarbeiter', st == 200 and r['stand']['bis'] == heute.isoformat() and r['abteilungen'] == ['Versand', 'Zerlegung']
           and len(r['personen']) == 3 and r['stand']['importe'][0]['wer'] == 'Ida Import', r)
+    # Folgeimport, der erst nach dem offenen Tag beginnt: ohne Warnung zählte der Tag in keiner Summe
+    morgen = date.fromordinal(heute.toordinal() + 1).strftime('%d-%m-%Y')
+    st, v2 = zb(ID, {'blaetter': [{'name': 'Zeitbericht', 'grid': [KOPF, az_zeile('Anna', 'Muster', morgen, '06:00', '14:00', '08:00', '08:00', '00:00', '101', 'Zerlegung')]}]})
+    w = [h['text'] for h in v2.get('hinweise', []) if h['stufe'] == 'warn']
+    check('Vorschau eines späteren Zeitraums: offener Tag davor als Warnung mit Datum', st == 200
+          and any('1 gespeicherter Tag vor dem Zeitraum der Datei ist noch nicht abgeschlossen (ab ' + heute.strftime('%d.%m.%Y') in t for t in w), (st, v2.get('hinweise')))
 
     # Oberfläche Arbeitszeit
     ctx, pg = neu()
     pg.goto(B + '/admin/'); pg.wait_for_selector('#screen-auth:not([hidden])')
     pg.fill('#au-user', 'aron'); pg.fill('#pw1', AZ_PW['aron']); pg.click('#auth-submit'); pg.wait_for_selector('#screen-auth', state='hidden')
     pg.goto(B + '/module/controlling/#arbeitszeit'); pg.wait_for_selector('#ctl-az-kpis .ctl-kpi')
+    try: pg.wait_for_function("document.querySelector('#ctl-az-kpis').textContent.includes('noch offen')", timeout=10000)
+    except Exception: pass   # die Prüfung darunter meldet den Fehler
+    check('Kennzahlen (Zeitraum bis heute): offener Tag genannt', '1 Tag noch offen (nicht gezählt)' in text(pg, '#ctl-az-kpis'), text(pg, '#ctl-az-kpis'))
     pg.fill('#ctl-az-von', '2026-09'); pg.fill('#ctl-az-bis', '2026-10'); pg.dispatch_event('#ctl-az-bis', 'change')
     pg.wait_for_function("document.querySelector('#ctl-az-kpis') && document.querySelector('#ctl-az-kpis').textContent.includes('52:00')")
     kpi = text(pg, '#ctl-az-kpis')
@@ -643,6 +658,11 @@ with sync_playwright() as p:
         pg.goto(B + '/admin/'); pg.wait_for_selector('#screen-auth:not([hidden])')
         pg.fill('#au-user', 'aron'); pg.fill('#pw1', AZ_PW['aron']); pg.click('#auth-submit'); pg.wait_for_selector('#screen-auth', state='hidden')
         pg.goto(B + '/module/controlling/#arbeitszeit'); pg.wait_for_selector('#ctl-az-kpis .ctl-kpi')
+        try: pg.wait_for_function("document.querySelector('#ctl-az-kpis').textContent.includes('noch offen')", timeout=10000)
+        except Exception: pass   # die Prüfung darunter meldet den Fehler
+        pg.locator('#ctl-az-kpis').screenshot(path=os.path.join(SH, f'controlling_arbeitszeit_offen_{breite}_{thema}.png'))
+        check(f'{breite}px {thema}: Kennzahlen mit offenem Tag ohne waagerechtes Scrollen', 'noch offen' in text(pg, '#ctl-az-kpis')
+              and pg.evaluate('document.documentElement.scrollWidth <= window.innerWidth + 1'))
         pg.fill('#ctl-az-von', '2026-09'); pg.fill('#ctl-az-bis', '2026-10'); pg.dispatch_event('#ctl-az-bis', 'change')
         pg.wait_for_function("document.querySelector('#ctl-az-kpis').textContent.includes('52:00')")
         check(f'{breite}px {thema}: kein waagerechtes Scrollen', pg.evaluate('document.documentElement.scrollWidth <= window.innerWidth + 1'))

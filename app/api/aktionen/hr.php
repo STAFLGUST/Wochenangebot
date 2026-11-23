@@ -36,7 +36,8 @@ function hr_einstellungen_aus(array $einst): array
     return ['sperren' => $einst['sperrenEigene'], 'regelSperren' => $einst['regelSperren'], 'schliesstage' => $einst['schliesstage'],
             'sperrenAuto' => array_merge(hr_regel_sperren($j, $einst['schliesstage']), hr_regel_sperren($j + 1, $einst['schliesstage'])),
             'ferien' => $einst['ferien'], 'regeln' => $einst['regeln'], 'regelnStandard' => HR_REGELN_STANDARD, 'verfallAb' => $einst['verfallAb'],
-            'planung' => array_diff_key(hr_planung_einst(), ['abschluss' => true]), 'ueberziehenMax' => $einst['ueberziehenMax'], 'amStueckMax' => $einst['amStueckMax']];
+            'planung' => array_diff_key(hr_planung_einst(), ['abschluss' => true]), 'ueberziehenMax' => $einst['ueberziehenMax'], 'amStueckMax' => $einst['amStueckMax'],
+            'einstRev' => $einst['revUrlaub']];   // Stand des Formulars für hr_einstellungen_save (409 bei fremder Änderung)
 }
 
 switch ($action) {
@@ -452,6 +453,8 @@ switch ($action) {
                     $artVorher = $e['art'];
                     if (!in_array($e['status'], HR_AKTIV, true)) fail('Erledigte Einträge lassen sich nicht mehr ändern.', 409);
                     if ($e['status'] === 'beantragt') fail('Offene Anträge bitte genehmigen oder ablehnen.', 409);
+                    // erste Korrektur eines Imports: ursprünglichen Zeitraum festhalten, damit ein erneuter Import ihn nicht wieder bucht (hr_zeit_planen)
+                    if (($e['quelle'] ?? '') === 'zeiterfassung' && !isset($e['geaendert'])) $e['import'] = ['person' => $e['person'], 'von' => $e['von'], 'bis' => $e['bis']];
                     $e = array_merge($e, ['person' => $p['id'], 'art' => $art, 'von' => $von, 'bis' => $bis, 'notiz' => s($b['notiz'] ?? '', 300) ?? '', 'geaendert' => $jetzt]);
                     if ($art !== 'K') unset($e['urlaubAbzug']);   // „vom Urlaub abgezogen“ gilt nur für Krankheit aus der Zeiterfassung
                     $abw['eintraege'][$i] = $e;
@@ -697,10 +700,13 @@ switch ($action) {
             }
             $alt = hr_einstellungen(); $vorher = $alt['uebertragBis'];
             $planungVorher = hr_planung_einst();
-            with_lock('hr-einstellungen', function () use ($sperren, $ferien, $bis, $zusatz, $planung) {
+            $rev = array_key_exists('rev', $b) ? (int)$b['rev'] : null;   // Stand beim Laden; ältere Oberflächen ohne „rev“ wie bisher
+            with_lock('hr-einstellungen', function () use ($sperren, $ferien, $bis, $zusatz, $planung, $rev) {
                 $d = store_read('hr-einstellungen') ?? [];
+                // das Formular ersetzt Sperren, Ferien, Regeln und Planung im Ganzen: nicht über eine fremde Änderung hinweg speichern
+                if ($rev !== null && $rev !== (int)($d['revUrlaub'] ?? 0)) fail('Die Urlaubseinstellungen wurden inzwischen von jemand anderem geändert. Bitte die Seite neu laden und Ihre Änderung erneut eintragen.', 409);
                 if ($planung !== null) $zusatz['planung'] = array_merge(is_array($d['planung'] ?? null) ? $d['planung'] : [], $planung);
-                store_write('hr-einstellungen', array_merge($d, ['rev' => (int)($d['rev'] ?? 0) + 1, 'sperren' => $sperren, 'ferien' => $ferien],
+                store_write('hr-einstellungen', array_merge($d, ['rev' => (int)($d['rev'] ?? 0) + 1, 'revUrlaub' => (int)($d['revUrlaub'] ?? 0) + 1, 'sperren' => $sperren, 'ferien' => $ferien],
                                                             $bis !== null ? ['uebertragBis' => $bis] : [], $zusatz));
             });
             if ($planung !== null && array_diff_assoc($planung, array_intersect_key($planungVorher, $planung))) {

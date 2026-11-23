@@ -1,6 +1,6 @@
 """Regressionstests der Design- und Fehlerprüfung: Angebots-IDs, Kundenpreise unter Zahlen-IDs, Einzelangebote
 (Senden, Leeren, Mengen, Hinweis/Titel/CSV im Portal), Kundenimport (Nummern ohne führende Null, Zeilen ohne Nummer),
-Rechte von mail_info und history_prev, Veröffentlichen nur mit dem Recht am Inhalt (Preisverlauf ohne Kundenpreise,
+Rechte von mail_info und history_prev (doppelte Artikelnummer: Kundenpreis je Artikel), Veröffentlichen nur mit dem Recht am Inhalt (Preisverlauf ohne Kundenpreise,
 entfernte Woche bleibt entfernt, draft_ping nur mit Modulzugang Angebot), Bestellwunsch mit verschobenen Positionen, Filter-Schublade (inert) und
 mobile Darstellung im Eingabebereich. Nur synthetische Testdaten; es werden keine echten E-Mails versendet."""
 import csv
@@ -129,6 +129,9 @@ entwurf['items'][1]['price'] = {'status': 'value', 'value': 6.66}
 assert A.call('save_draft', {'revision': rev(), 'model': entwurf})[0] == 200
 st, r = L.call('publish', {'revision': rev()})
 check('entfernte Woche bleibt entfernt, wenn „Preisverlauf bearbeiten“ fehlt', st == 200 and doc('historie/' + HID) is None, (st, r))
+# zweiter Artikel mit derselben Nummer und eigenem Kundenpreis (zulässig, der Editor warnt nur): history_prev ordnet je Artikel zu
+DOPPEL = 'Doppelte Nummer Schiffsware'
+entwurf['items'].append({**json.loads(json.dumps(entwurf['items'][0])), 'id': 'doppel-nr', 'name': DOPPEL, 'variants': {ANG: {'status': 'value', 'value': 9.99}}})
 assert A.call('save_draft', {'revision': rev(), 'model': entwurf})[0] == 200
 st, r = A.call('publish', {'revision': rev()})
 check('mit „Preisverlauf bearbeiten“ nimmt das Veröffentlichen die Woche wieder auf', st == 200 and doc('historie/' + HID) is not None, (st, r))
@@ -146,9 +149,12 @@ lea([], [])
 st, r = L.call('history_data')
 check('history_data mit Modulzugang Angebot: keine Kundenpreise (GR-002)', st == 200 and '"variants"' not in json.dumps(r, ensure_ascii=False), st)
 st, r = L.call(f'history_prev&week={KW["week"] + 1}&year={KW["year"]}')
-vor = next((i for i in (r.get('week') or {}).get('items', []) if i['code'] == entwurf['items'][0]['code']), None)
-check('history_prev mit Modulzugang Angebot: Vorwochenpreis des Kundenangebots aus dem Wochenstand', st == 200 and vor
-      and (vor.get('variants') or {}).get(ANG) == {'status': 'value', 'value': 8.88}, (st, vor))
+gleich = [i for i in (r.get('week') or {}).get('items', []) if i['code'] == entwurf['items'][0]['code']]
+vor = {i['name']: ((i.get('variants') or {}).get(ANG) or {}).get('value') for i in gleich}
+check('history_prev mit Modulzugang Angebot: Vorwochenpreis des Kundenangebots aus dem Wochenstand', st == 200
+      and vor.get(entwurf['items'][0]['name']) == 8.88, (st, vor))
+check('history_prev: zwei Artikel mit derselben Nummer behalten je ihren Kundenpreis (8,88 und 9,99)', len(gleich) == 2 and vor.get(DOPPEL) == 9.99
+      and vor.get(entwurf['items'][0]['name']) == 8.88, vor)
 check('draft_ping mit Modulzugang Angebot erlaubt', L.call('draft_ping', {})[0] == 200)
 
 

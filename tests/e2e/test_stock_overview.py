@@ -90,6 +90,11 @@ with sync_playwright() as pw:
     check('bold headings', page.locator('.stab thead th').evaluate_all("els => els.every(e => +getComputedStyle(e).fontWeight >= 700)"))
     check('missing price is dash', row('900004').locator('.s-prev').inner_text() == '—' and row('900005').locator('.s-vk').inner_text() == '—')
     check('deliveries collapsed to button', row('900001').locator('.s-incoming button').inner_text() == 'Zugänge (2)' and page.locator('.stab .st-incoming').count() == 0)
+    # „Zugänge (2)“ so hoch und groß wie jeder andere kleine Knopf des Eingabebereichs (Vergleichsknopf in derselben Ansicht)
+    knopf = page.evaluate("""() => { const m = (e) => [Math.round(e.getBoundingClientRect().height), getComputedStyle(e).fontSize];
+        const v = document.createElement('button'); v.className = 'btn sm'; v.textContent = 'Vergleich'; document.querySelector('#view-stock').append(v);
+        const r = [m(document.querySelector('.stab td.s-incoming .btn.sm')), m(v)]; v.remove(); return r; }""")
+    check('Bestandsliste: kleiner Knopf „Zugänge“ gleich hoch und gleich groß wie überall', knopf[0] == knopf[1], knopf)
     row('900001').locator('[data-incoming]').click(); page.wait_for_selector('#dlg-stock-item[open]')
     check('arrival button opens focused dialog', page.locator('#sa-title').inner_text() == 'Erwartete Zugänge' and page.locator('#dlg-stock-item .zutab tbody tr').count() == 2 and '22.10.2026' in page.locator('#dlg-stock-item').inner_text() and '30,00 kg' in page.locator('#dlg-stock-item').inner_text() and page.locator('#dlg-stock-item .lottab').count() == 0)
     zk = page.locator('#dlg-stock-item .zutab thead th').all_inner_texts()
@@ -106,6 +111,9 @@ with sync_playwright() as pw:
     with page.context.expect_page() as popup: page.click('[data-st=print]')
     printpage = popup.value; printpage.wait_for_load_state()
     check('print includes comparison and deliveries', 'TEST-A' in printpage.inner_text('body') and 'Vorwoche' in printpage.inner_text('body'))
+    # Druckfenster lädt admin.css nicht: Menge und ETA stehen trotzdem untereinander (nicht „50,00 kgETA …“), Schrift Geist wie am Bildschirm
+    druck = printpage.evaluate("async () => { await document.fonts.ready; return [document.body.innerText, getComputedStyle(document.body).fontFamily, document.fonts.check('9.5pt Geist')]; }")
+    check('Druck: Menge und ETA getrennt, Schrift Geist', 'kgETA' not in druck[0] and '50,00 kg\nETA 24.10.2026' in druck[0] and druck[1].split(',')[0].strip('"') == 'Geist' and druck[2], druck[1:])
     printpage.close()
     page.wait_for_function("!document.querySelector('#toast').classList.contains('show')")
     for width in (1440,390):
@@ -202,6 +210,10 @@ with sync_playwright() as pw:
     tf = Decimal(su.inner_text('.stab tfoot .s-total-kg').replace(' kg', '').replace('.', '').replace(',', '.'))
     check('Summenzeile: keine Doppelzählung der Warengruppen-Summen (= Gesamtsumme der Tabelle)', su.locator('.stab tr.wg-sum').count() >= 2
           and zeile(su)['gesamt']['kg'] == ganz(tf) + ' kg' and tf == alle['gesamt']['kg'], (zeile(su)['gesamt'], str(tf)))
+    # Ein tbody je Warengruppe: nur die unterste Zeile der Tabelle hat die runden Ecken der Karte, nicht jede Gruppensumme
+    ecken = su.evaluate("() => [...document.querySelectorAll('.stab tr.wg-sum, .stab tfoot tr')].map((tr) => [tr.className, getComputedStyle(tr.firstElementChild).borderBottomLeftRadius, getComputedStyle(tr.lastElementChild).borderBottomRightRadius])")
+    check('Warengruppen-Summen ohne runde Ecken mitten in der Liste, nur die letzte Zeile gerundet', len(ecken) >= 3
+          and all(e[1:] == ['0px', '0px'] for e in ecken[:-1]) and ecken[-1][0] == 'st-total' and '0px' not in ecken[-1][1:], ecken)
     thema(su, 'light'); su.screenshot(path=os.path.join(SH, 'stock-summenzeile.png'), animations='disabled')
     thema(su, 'dark'); su.screenshot(path=os.path.join(SH, 'stock-summenzeile-dunkel.png'), animations='disabled'); thema(su, 'light')
     # folgt der Suche …
@@ -219,6 +231,12 @@ with sync_playwright() as pw:
     check('Summenzeile folgt dem Filter; Zugang ohne EK-Preis „– €“', zeile(su) == schwein and schwein['erfasst']['eur'] == '– €' and schwein['mhd'] == {'kg': '0 kg', 'eur': '0 €'}, (zeile(su), schwein))
     su.click('.st-fleiste [data-fweg="*"]'); su.wait_for_function("document.querySelectorAll('.stab tr.srow').length === 5")
     check('Summenzeile: nach „Alle Filter entfernen“ wieder alle Zeilen', zeile(su) == soll(alle))
+    # Preisfilter in derselben Einheit wie die Spalte (€/kg), auch im Text des gesetzten Filters
+    su.click('.stab th [data-sfilter=vk]'); su.fill('#st-pop input[data-ff=min]', '5')
+    su.wait_for_function("document.querySelector('.st-fleiste') && document.querySelector('.st-fleiste').textContent.includes('ab 5')")
+    einheit = su.evaluate("[[...document.querySelectorAll('#st-pop .st-fz em')].map((e) => e.textContent), document.querySelector('.st-fleiste').textContent]")
+    su.keyboard.press('Escape'); su.click('.st-fleiste [data-fweg="*"]'); su.wait_for_function("document.querySelectorAll('.stab tr.srow').length === 5")
+    check('Bestandsfilter Preis: Felder und Filtertext in €/kg', einheit[0] == ['€/kg', '€/kg'] and 'ab 5,00 €/kg' in einheit[1], einheit)
     # Laptop (1280 px): eine Zeile darf umbrechen, die Seite scrollt nicht seitlich
     su.set_viewport_size({'width': 1280, 'height': 1000}); su.wait_for_function('document.documentElement.clientWidth === 1280')
     check('Summenzeile bei 1280 px ohne waagerechtes Scrollen', su.evaluate('document.documentElement.scrollWidth') <= 1280)

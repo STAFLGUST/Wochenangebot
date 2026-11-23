@@ -52,6 +52,7 @@
   const ortstag = (t) => { const d = new Date(t); return isNaN(d) ? '' : d.toLocaleDateString('sv-SE', { timeZone: 'Europe/Berlin' }); };   // Kalendertag in deutscher Zeit (wie ortstag() im Server), ungültig → ''
   const zeitpunkt = (t) => { const d = new Date(t); return isNaN(d) ? '' : window.STAFL_FORMAT.datumZeit(d); };   // 02.11.2026, 14:05 wie überall
   const zahl = (n) => window.STAFL_FORMAT.zahl(n, 0, 2);   // echtes Minus wie überall (format.js)
+  const seitText = (f) => (f.versaeumtAb ? ` seit ${esc(datum(f.versaeumtAb))}` : '');   // nur die letzten 1000 Perioden gezählt (qs_faelligkeit_kern)
   const darf = (r) => !!(S.d && S.d.rechte && S.d.rechte[r]);
   const natCmp = (a, b) => String(a).localeCompare(String(b), 'de', { numeric: true, sensitivity: 'base' });
   const person = (k) => S.d.personen.find((p) => p.id === k) || null;
@@ -232,7 +233,7 @@
       : `<p class="qm-leerzeile">${meineKuerzel().length || darf('freigeben') ? 'Keine offenen Aufgaben für Sie.' : 'Keine offenen Aufgaben. Ist Ihr Kürzel unter Einstellungen mit Ihnen verknüpft, erscheinen hier Ihre Kontrollen und Maßnahmen.'}</p>`;
     // Fällige Prüfungen
     const fl = [...faellig].sort((a, b) => (a.faellig.ampel === b.faellig.ampel ? 0 : a.faellig.ampel === 'rot' ? -1 : 1) || ((a.faellig.restTage ?? -9999) - (b.faellig.restTage ?? -9999)) || natCmp(a.titel, b.titel)).slice(0, 10);
-    $('#qm-u-faellig').innerHTML = fl.length ? `<ul class="qm-aufgaben">${fl.map((p) => `<li><button class="qm-aufgabe" type="button" data-pruefung="${esc(p.id)}"><span class="qm-symbol ${p.faellig.ampel}">${icon('klemmbrett')}</span><span><b>${esc(p.titel)}</b><span class="qm-sub">${esc(p.kapitel)} · ${esc(ivKurz(p.intervall))}${p.faellig.versaeumtAnzahl ? ` · ${zahl(p.faellig.versaeumtAnzahl)} versäumt` : ''}</span></span>${faelligChip(p)}</button></li>`).join('')}</ul>${faellig.length > 10 ? `<p class="qm-hilfe">und ${zahl(faellig.length - 10)} weitere im Prüfplan</p>` : ''}`
+    $('#qm-u-faellig').innerHTML = fl.length ? `<ul class="qm-aufgaben">${fl.map((p) => `<li><button class="qm-aufgabe" type="button" data-pruefung="${esc(p.id)}"><span class="qm-symbol ${p.faellig.ampel}">${icon('klemmbrett')}</span><span><b>${esc(p.titel)}</b><span class="qm-sub">${esc(p.kapitel)} · ${esc(ivKurz(p.intervall))}${p.faellig.versaeumtAnzahl ? ` · ${zahl(p.faellig.versaeumtAnzahl)} versäumt${seitText(p.faellig)}` : ''}</span></span>${faelligChip(p)}</button></li>`).join('')}</ul>${faellig.length > 10 ? `<p class="qm-hilfe">und ${zahl(faellig.length - 10)} weitere im Prüfplan</p>` : ''}`
       : '<p class="qm-leerzeile">Keine Prüfung fällig.</p>';
     // Stand der Dokumente je Kapitel
     $('#qm-u-kapitel').innerHTML = d.kapitel.filter((k) => k.aktiv !== false).map((k) => {
@@ -827,7 +828,7 @@
       const ausf = (p.ausfuehrende || []).map(mitarbeiterName).filter(Boolean);
       const sub = [p.kapitel, ivKurz(p.intervall), p.zustaendig ? 'Zuständig ' + p.zustaendig : '', ausf.length ? ausf.slice(0, 2).join(', ') + (ausf.length > 2 ? ` +${ausf.length - 2}` : '') : ''].filter(Boolean).join(' · ');
       const mitte = p.intervall === 'anlass' || !p.aktiv ? `<span class="qm-bedarf">${p.aktiv ? 'bei Bedarf' : 'inaktiv'} · ${zahl(f.anzahl || 0)} Nachweise${f.letzter ? ', zuletzt ' + esc(datum(f.letzter)) : ''}</span>` : planZellen(p);
-      return `<div class="qm-plan-zeile qm-klick${p.aktiv ? '' : ' qm-aus'}${istMeine(p) ? ' qm-meine' : ''}" data-pruefung="${esc(p.id)}"><span class="qm-plan-titel"><b>${esc(p.titel)}</b><span>${esc(sub)}</span></span>${mitte}<span>${faelligChip(p)}${f.art === 'kalender' && f.versaeumtAnzahl ? `<span class="qm-sub">${zahl(f.versaeumtAnzahl)} versäumt</span>` : ''}</span><span>${darfNachweis(p) ? `<button class="btn sm" type="button" data-nachweis="${esc(p.id)}">Nachweis</button>` : ''}</span></div>`;
+      return `<div class="qm-plan-zeile qm-klick${p.aktiv ? '' : ' qm-aus'}${istMeine(p) ? ' qm-meine' : ''}" data-pruefung="${esc(p.id)}"><span class="qm-plan-titel"><b>${esc(p.titel)}</b><span>${esc(sub)}</span></span>${mitte}<span>${faelligChip(p)}${f.art === 'kalender' && f.versaeumtAnzahl ? `<span class="qm-sub">${zahl(f.versaeumtAnzahl)} versäumt${seitText(f)}</span>` : ''}</span><span>${darfNachweis(p) ? `<button class="btn sm" type="button" data-nachweis="${esc(p.id)}">Nachweis</button>` : ''}</span></div>`;
     }).join('');
     $('#qm-p-liste').innerHTML = `<div class="qm-plan">${kopf}${zeilen || `<p class="qm-leerzeile">${S.d.pruefungen.length ? 'Keine passenden Prüfungen.' : 'Der Prüfplan ist noch leer.'}</p>`}</div>`;
   }
@@ -849,7 +850,7 @@
       + feld('Ab wann', esc(datum(p.start))) + feld('Zuständig', p.zustaendig ? wer(p.zustaendig) + (p.vertreter ? ' · Vertreter ' + wer(p.vertreter) : '') : '') + feld('Durchführung durch', esc(ausf.join(', ')));
     const art = p.intervall === 'woechentlich' ? 'Wochen' : p.intervall === 'monatlich' ? 'Monate' : 'Tage';
     $('#pr-versaeumt').innerHTML = f.art === 'kalender' && f.versaeumtAnzahl
-      ? `<section class="qm-karte qm-versaeumt"><h3>${chip(`${zahl(f.versaeumtAnzahl)} versäumt`, 'rot')} ${art} ohne Nachweis seit Beginn</h3><p class="qm-hilfe">${(f.versaeumt || []).slice(0, 40).map(periodeText).map(esc).join(' · ')}${(f.versaeumt || []).length > 40 ? ' …' : ''}</p>${darfNachweis(p) ? '<p class="qm-hilfe">Wurde die Kontrolle doch durchgeführt: Nachweis mit dem richtigen Datum nachtragen – er erscheint als „nachgetragen“.</p>' : ''}</section>` : '';
+      ? `<section class="qm-karte qm-versaeumt"><h3>${chip(`${zahl(f.versaeumtAnzahl)} versäumt`, 'rot')} ${art} ohne Nachweis ${f.versaeumtAb ? `seit ${esc(datum(f.versaeumtAb))} (frühere nicht gezählt)` : 'seit Beginn'}</h3><p class="qm-hilfe">${(f.versaeumt || []).slice(0, 40).map(periodeText).map(esc).join(' · ')}${(f.versaeumt || []).length > 40 ? ' …' : ''}</p>${darfNachweis(p) ? '<p class="qm-hilfe">Wurde die Kontrolle doch durchgeführt: Nachweis mit dem richtigen Datum nachtragen – er erscheint als „nachgetragen“.</p>' : ''}</section>` : '';
     const nw = S.d.nachweise.filter((n) => n.pruefung === p.id);
     $('#pr-nachweise').innerHTML = nw.length ? `<table class="qm-tabelle qm-karten"><thead><tr><th>Datum</th><th>Ergebnis</th><th>Bemerkung</th><th>Durchgeführt</th><th>Maßnahme</th><th></th></tr></thead><tbody>${nw.map((n) => {
       const m = n.massnahme ? S.d.massnahmen.find((x) => x.id === n.massnahme) : null;
@@ -966,7 +967,7 @@
         const k = basis.filter((m) => m.status === s).sort(s === 'wirksam' ? (a, b) => natCmp(b.nr, a.nr) : sortFrist);
         const max = s === 'wirksam' ? 8 : 60;
         return `<section class="qm-spalte${s === 'wirksam' ? ' blass' : ''}" data-spalte="${s}"><div class="qm-spaltenkopf"><h2><i style="background:${farbe}"></i>${esc(n)}</h2><small>${zahl(k.length)}</small></div>
-          ${k.slice(0, max).map((m) => `<button type="button" class="qm-mkarte" data-massn="${esc(m.id)}"><span class="qm-mk-kopf"><span>${esc(m.nr)}${m.anforderung ? ' · IFS ' + esc(m.anforderung) : m.kapitel ? ' · Kapitel ' + esc(m.kapitel) : ''}</span><span>${esc(m.bezug || S.d.quellen[m.quelle] || '')}</span></span>
+          ${k.slice(0, max).map((m) => `<button type="button" class="qm-mkarte" data-massn="${esc(m.id)}"><span class="qm-mk-kopf"><span>${esc(m.nr)}${m.anforderung ? ' · IFS ' + esc(m.anforderung) : m.kapitel ? ' · Kapitel ' + esc(m.kapitel) : ''}</span><span title="${esc(m.bezug || S.d.quellen[m.quelle] || '')}">${esc(m.bezug || S.d.quellen[m.quelle] || '')}</span></span>
             <b>${esc(m.feststellung)}</b>${m.ursache ? `<span class="qm-sub qm-kurz">Ursache: ${esc(m.ursache)}</span>` : ''}
             <span class="qm-mk-fuss"><span class="qm-avatar" title="${esc(werName(m.zustaendig))}">${esc(m.zustaendig || '—')}</span>${(s === 'wirksam' || s === 'umgesetzt') && m.erledigtAm ? chip('umgesetzt ' + datum(m.erledigtAm)) : m.frist ? chip('bis ' + datum(m.frist), m.ueberfaellig ? 'rot' : '') : ''}</span></button>`).join('') || '<p class="qm-leer-spalte">—</p>'}
           ${k.length > max ? `<p class="qm-leer-spalte">und ${zahl(k.length - max)} weitere – Ansicht „Liste“</p>` : ''}</section>`;

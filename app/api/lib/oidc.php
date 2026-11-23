@@ -174,7 +174,8 @@ function oidc_geloescht_merken(string $sub): void
 }
 
 /* Angemeldeter Mitarbeiter auf einem Keycloak-Host. Die PHP-Sitzung dieses Hosts (eigenes __Host-Cookie) trägt nur noch
-   CSRF-Token und Sitzungsregister; sie folgt der Keycloak-Sitzung (sid) und wird bei jedem Wechsel neu vergeben. */
+   CSRF-Token und Sitzungsregister; sie folgt der Keycloak-Sitzung (sid) und wird bei jedem Wechsel neu vergeben. Fehlt bei
+   gleicher Anmeldung nur der Registereintrag, entsteht die Sitzung neu mit dem bisherigen CSRF-Token (seit 23.11.2026). */
 function oidc_nutzer(): ?array
 {
     $id = oidc_identitaet();
@@ -213,12 +214,18 @@ function oidc_nutzer(): ?array
         if (!$neu) oidc_erneuern($u, $grund, $ende, $id['authTime']);
         unset($_SESSION['oidcEnde'], $_SESSION['oidcEndeAuth'], $_SESSION['oidcErneuert']);
     }
-    $passt = ($_SESSION['uid'] ?? '') === $u['id'] && ($_SESSION['oidcSub'] ?? '') === $id['sub'] && ($_SESSION['oidcSid'] ?? '') === $id['sid']
-        && (int)($_SESSION['sv'] ?? -1) === (int)$u['sv'] && isset((store_read('sitzungen') ?? [])[(string)($_SESSION['sid'] ?? '')]);
+    $gleich = ($_SESSION['uid'] ?? '') === $u['id'] && ($_SESSION['oidcSub'] ?? '') === $id['sub'] && ($_SESSION['oidcSid'] ?? '') === $id['sid']
+        && (int)($_SESSION['sv'] ?? -1) === (int)$u['sv'];
+    $passt = $gleich && isset((store_read('sitzungen') ?? [])[(string)($_SESSION['sid'] ?? '')]);
     if (!$passt) {
         oidc_admin_konto_pruefen($u, $id, false);
+        // Dieselbe Anmeldung (Konto, Keycloak-Konto und -Sitzung, Sitzungsversion), nur der Registereintrag fehlt (aufgeräumt
+        // nach Leerlauf auf diesem Host, während der Mitarbeiter anderswo arbeitet): CSRF-Token behalten, damit offene Seiten
+        // weiter speichern. Nach Ablauf oder beendeter Sitzung ($ende) und bei jeder anderen Identität ein neues Token.
+        $csrf = $gleich && $ende === 0 ? (string)($_SESSION['csrf'] ?? '') : '';
         $_SESSION = [];
         sign_in($u);
+        if ($csrf !== '') $_SESSION['csrf'] = $csrf;
         $_SESSION['oidcSub'] = $id['sub'];
         $_SESSION['oidcSid'] = $id['sid'];
         oidc_sitzung_vermerken((string)($_SESSION['sid'] ?? ''), $id['sid']);
