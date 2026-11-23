@@ -2462,6 +2462,8 @@ dialog.modal.pv { width: min(1480px, calc(100vw - 32px)); height: calc(100dvh - 
   /* Fenster wie die Suche (Strg K) und der Versand: deckend, 16 px (--r-glas), Schatten der Menüs; den Hintergrund ohne
      Unschärfe setzt rahmen.css für jede Seite im Rahmen (body.r dialog::backdrop) */
   body.adm.r dialog.modal { border-color: var(--r-linie-2); box-shadow: var(--r-schatten-menue); }
+  body.adm.r .menu { border-color: var(--r-linie-2); border-radius: 16px; box-shadow: var(--r-schatten-menue); }   /* Menüs wie Fenster und Suche */
+  body.adm.r .menu button { border-radius: 9px; }
   body.adm.r::before { display: none; }
   body.adm.r .topbar { padding: 0; }
   body.adm.r .topbar-inner { max-width: none; border-radius: 0; padding: 12px 24px; }

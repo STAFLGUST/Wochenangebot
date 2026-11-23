@@ -198,8 +198,8 @@ body.mkt .mkt-kopf .brand-logo { height: 28px; width: auto; }
 .mkt-ueber { color: var(--mkt-fehler); font-weight: 650; }
 
 /* ── Kundenblatt (Dialog) ── */
-.mkt-dialog { width: min(560px, calc(100vw - 32px)); max-height: calc(100dvh - 32px); padding: 0; border: 1px solid var(--mkt-rand); border-radius: 26px;
-  background: var(--mkt-deckend); color: var(--mkt-text); box-shadow: 0 30px 80px rgba(0, 0, 0, .3); }
+.mkt-dialog { width: min(560px, calc(100vw - 32px)); max-height: calc(100dvh - 32px); padding: 0; border: 1px solid var(--r-linie-2); border-radius: 16px;
+  background: var(--mkt-deckend); color: var(--mkt-text); box-shadow: var(--r-schatten-menue); }
 .mkt-dialog.breit { width: min(1040px, calc(100vw - 32px)); }
 .mkt-dialog > form { padding: 24px; display: flex; flex-direction: column; gap: 14px; }
 /* Knopfreihe am Fensterende bleibt beim Scrollen langer Fenster sichtbar (wie in Sicherheit) */
@@ -516,7 +516,7 @@ body.mkt .mkt-kopf .brand-logo { height: 28px; width: auto; }
 }
 /* Fenster am Handy als Blatt von unten – wie in Controlling, Leergut, QS, REWE und Sicherheit */
 @media (max-width: 560px) {
-  .mkt-dialog:not(.breit) { width: 100vw; max-width: 100vw; max-height: 94dvh; margin: auto 0 0; border-radius: 22px 22px 0 0; border-bottom: 0; }
+  .mkt-dialog:not(.breit) { width: 100vw; max-width: 100vw; max-height: 94dvh; margin: auto 0 0; border-radius: 20px 20px 0 0; border-bottom: 0; }
 }
 /* Avatar im dunklen Design: dunkle Schrift auf dem hellen Modulrosa (weiß wäre nur 2,3:1) */
 @media screen and (prefers-color-scheme: dark) { :root:not([data-theme="light"]) .mkt-avatar { color: #1a0b0e; } }

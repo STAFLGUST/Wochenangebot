@@ -211,6 +211,12 @@ a.r-eintrag[aria-current="page"] { background: var(--r-aktiv); box-shadow: var(-
 /* ── Fenster (<dialog>) auf jeder Seite im Rahmen: der Hintergrund ist nur abgedunkelt, nie unscharf (C2: kein Glas).
    Eine Regel für alle Module (Gewichtung 0,1,3 schlägt die eigenen Fensterregeln der Module, z. B. „.hr-dialog“). ── */
 body.r dialog::backdrop { background: var(--r-schleier); -webkit-backdrop-filter: none; backdrop-filter: none; }
+/* Kreuz zum Schließen (jedes Fenster hat eins mit „…schließen“ als Beschriftung, Gruppe einheit): überall dieselbe ruhige
+   Fläche wie im Container-Import – 36 px, 9 px rund, ohne Füllung und Rand; × als Zeichen oder Symbol. :root hebt die Gewichtung
+   über die runden Knöpfe der Module (z. B. „body.crm.r .crm-rund“), die auch als Kreuz dienen. */
+:root body.r dialog button[aria-label$="chließen"] { box-sizing: border-box; width: 36px; min-width: 36px; height: 36px; padding: 0; border: 0; border-radius: 9px;
+  display: inline-grid; place-items: center; flex: none; background: transparent; box-shadow: none; color: var(--r-text-2); font-size: 22px; line-height: 1; }
+:root body.r dialog button[aria-label$="chließen"]:hover { background: var(--r-hover); color: var(--r-text); }
 
 /* ── Suche (Dialog) ── */
 .r-palette { box-sizing: border-box; width: min(560px, calc(100vw - 32px)); max-height: min(520px, calc(100dvh - 120px)); margin: 12vh auto auto; padding: 0;

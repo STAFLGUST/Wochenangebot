@@ -319,6 +319,20 @@ with sync_playwright() as pw:
         if breite == 390:   # am Handy jedes Fenster über die ganze Breite (Suche und Hinweis „Dashboard als Startseite“ schweben)
             schmal = [(f['id'], f['lr']) for f in liste if f['id'] not in ('r-palette', 'db-sp') and (abs(f['lr'][0]) > 1 or abs(f['lr'][1] - 390) > 1)]
             check(f'{name} 390 px: jedes Fenster so breit wie der Bildschirm', not schmal, schmal)
+        # eine Fensterform: PC 16 px mit Linie und Schatten der Suche; Handy Blatt von unten (20 px oben) oder ganz (0 px)
+        if breite == 1440:
+            anders = [(f['id'], f['rund'], f['linie'], f['schatten']) for f in liste if (f['rund'], f['linie'], f['schatten']) != (suche['rund'], suche['linie'], suche['schatten'])]
+        else:
+            anders = [(f['id'], f['rund']) for f in liste if f['id'] not in ('r-palette', 'db-sp') and f['rund'] not in ('20px 20px 0px 0px', '0px 0px 0px 0px')]
+        check(f'{name} {breite} px: Fenster in der Form des Rahmens', not anders, anders[:4])
+        kreuze = {f['kreuz'] for f in liste if f['kreuz']}
+        check(f'{name} {breite} px: Kreuz zum Schließen wie bei der Suche ({suche["kreuz"]})', kreuze <= {suche['kreuz']}, kreuze)
+    ctx, pg = neue_seite(1440, False)   # Menüs im Eingabebereich (Mehr, Drucken) wie Fenster und Suche
+    als_bereich(pg, 'angebot.eingabe'); pg.goto(B + '/admin/'); pg.wait_for_selector('#screen-editor:not([hidden])')
+    me = pg.evaluate("""() => { const m = document.querySelector('#menu-more'); m.hidden = false; const s = getComputedStyle(m);
+      const r = [s.borderTopLeftRadius, s.borderTopColor, s.boxShadow]; m.hidden = true; return r; }""")
+    check('Eingabebereich: Menü „Mehr“ in der Form der Fenster und der Suche', me == [suche['rund'].split(' ')[0], suche['linie'], suche['schatten']], (me, suche))
+    pg.unroute_all(behavior='ignoreErrors'); ctx.close()   # Statusabfrage noch unterwegs: Umleitung ohne Fehler beenden
     # Getippte Eingaben: erstes Escape zeigt den gemeinsamen Hinweis (theme.js), zweites schließt – hier am Formular
     # „Korrektur melden“ (HR) und „Neue Kampagne“ (Marketing) stellvertretend für alle Formularfenster
     ctx, pg = neue_seite(1440, False)

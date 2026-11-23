@@ -263,8 +263,8 @@ body.crm .crm-kopf .brand-logo { height: 28px; width: auto; }
 .crm-karte-flaeche #km-flaechen-text text { fill: var(--g); font-weight: 650; text-anchor: middle; paint-order: stroke; stroke: var(--crm-deckend); stroke-linejoin: round; pointer-events: none; }
 
 /* ── Kundenblatt (Dialog) ── */
-.crm-dialog { width: min(560px, calc(100vw - 32px)); max-height: calc(100dvh - 32px); padding: 0; border: 1px solid var(--crm-rand); border-radius: 26px;
-  background: var(--crm-deckend); color: var(--crm-text); box-shadow: 0 30px 80px rgba(0, 0, 0, .3); }
+.crm-dialog { width: min(560px, calc(100vw - 32px)); max-height: calc(100dvh - 32px); padding: 0; border: 1px solid var(--r-linie-2); border-radius: 16px;
+  background: var(--crm-deckend); color: var(--crm-text); box-shadow: var(--r-schatten-menue); }
 .crm-dialog.breit { width: min(1040px, calc(100vw - 32px)); }
 .crm-dialog > form { padding: 24px; display: flex; flex-direction: column; gap: 14px; }
 /* Knopfreihe am Fensterende bleibt beim Scrollen langer Fenster sichtbar (wie in Sicherheit) */
@@ -669,7 +669,7 @@ a.crm-ck-tel { color: var(--crm-text); }
 }
 /* Fenster am Handy als Blatt von unten – wie in Controlling, Leergut, QS, REWE und Sicherheit */
 @media (max-width: 560px) {
-  .crm-dialog, .crm-dialog.breit { width: 100vw; max-width: 100vw; max-height: 94dvh; margin: auto 0 0; border-radius: 22px 22px 0 0; border-bottom: 0; }
+  .crm-dialog, .crm-dialog.breit { width: 100vw; max-width: 100vw; max-height: 94dvh; margin: auto 0 0; border-radius: 20px 20px 0 0; border-bottom: 0; }
 }
 
 /* ── Rahmen „C2“ (gemeinsame Seitenleiste ../../assets/rahmen.css und rahmen.js, Entwurf freigegeben 06.11.2026) ──
