@@ -1026,7 +1026,7 @@ Caddy setzt auf allen Hosts `script-src 'self'` (ohne `'unsafe-inline'`), `conne
   Antwort. Grenze ist `ci_kalkulation_eingabe`: unlesbare Werte → 422; Unvollständiges (Kurs, Gewicht, KN-Code, Vermerk)
   bleibt speicherbar und erscheint als Prüfhinweis der Stufe `fehler` – dann liefert das Ergebnis keine Zahlen
   (`vollstaendig: false`) und lässt sich nicht festschreiben. Hinweise haben immer die Form `{stufe, text, pos}`. Zahlen
-  nimmt der Server auch als deutschen Text („1.234,5“, gemeinsame Lese-Hilfe `eudr_zahl_text`); ein einzelner Punkt vor drei
+  nimmt der Server auch als deutschen Text („1.234,5“, gemeinsame Lese-Hilfe `zahl_text_de` in `lib/kern.php`); ein einzelner Punkt vor drei
   Ziffern, der über die Grenze des Feldes führt („9.875“ als Preis), wird mit eigener Meldung abgelehnt. Zinstage nur ganz.
   Beim Überschreiben eines Satzes heißt ein leeres Feld „Vorgabe“. Die Seite zeigt getippten Text unverändert (`zt` wandelt
   nur echte Zahlen); was sie zeigt, entscheidet `ansicht()` ('neu' | 'entwurf' | 'endgueltig' | 'aelter'). Zollsätze nur in `CI_KALK_SAETZE` (Quelle,

@@ -107,12 +107,12 @@ function crm_datum($v, string $was): string
     if (!preg_match('/^\d{4}-\d{2}-\d{2}$/', $v) || !checkdate((int)substr($v, 5, 2), (int)substr($v, 8, 2), (int)substr($v, 0, 4))) throw new InvalidArgumentException("$was: bitte ein gültiges Datum angeben.");
     return $v;
 }
-/* Zahl ab 0 oder null (leer). Deutsche Schreibweise über eudr_zahl_text (gemeinsame Lesehilfe, Container-Import): „1.500“ = 1500,
+/* Zahl ab 0 oder null (leer). Deutsche Schreibweise über zahl_text_de (gemeinsame Lesehilfe, lib/kern.php): „1.500“ = 1500,
    „1.234,5“ = 1234,5. Bei Preisen ($menge = false) gilt ein Punkt ohne Komma als Dezimalzeichen („4.50“, „4.500“ = 4,50 €). */
 function crm_zahl($v, string $was, bool $menge = false): ?float
 {
     if ($v === null || $v === '') return null;
-    if (is_string($v)) $v = !$menge && strpos($v, ',') === false ? trim($v) : eudr_zahl_text($v);
+    if (is_string($v)) $v = !$menge && strpos($v, ',') === false ? trim($v) : zahl_text_de($v);
     if (!is_numeric($v)) throw new InvalidArgumentException("$was: bitte eine Zahl angeben.");
     $n = round((float)$v, 2);
     if ($n < 0 || $n > 10000000) throw new InvalidArgumentException("$was: Wert außerhalb des erlaubten Bereichs.");
