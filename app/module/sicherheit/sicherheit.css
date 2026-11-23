@@ -237,7 +237,7 @@ td.sic-pfad { overflow-wrap: normal; }   /* in der Tabelle Dateinamen am Stück 
 .sic-livepunkt { width: 8px; height: 8px; border-radius: 50%; background: var(--sic-ok-hell); animation: sic-puls-gruen 2s ease-in-out infinite; }
 @keyframes sic-puls-gruen { 0%, 100% { opacity: 1; } 50% { opacity: .35; } }
 .sic-suche { display: flex; align-items: center; gap: 8px; height: 36px; padding: 0 12px; border-radius: 999px; background: var(--sic-aus); flex: 1; min-width: 180px; max-width: 360px; }
-.sic-suche input { border: 0; background: transparent; color: inherit; font: inherit; font-size: 14px; outline: none; width: 100%; }
+.sic-suche input { align-self: stretch; border: 0; background: transparent; color: inherit; font: inherit; font-size: 14px; outline: none; width: 100%; }
 .sic-wahl select { height: 36px; border-radius: 999px; border: 0; padding: 0 12px; background: var(--sic-aus); color: inherit; font: inherit; font-size: 14px; }
 .ev-leiste { justify-content: space-between; }
 
@@ -602,7 +602,7 @@ button.lf-marke:hover { background: var(--sic-bad-bg); }
 }
 @media (max-width: 480px) { body.sic .sic-kopf .brand-logo { width: 30px; height: 28px; object-fit: cover; object-position: left center; }
   #sic-neu { display: none; } .sic-kopf .sic-rund { width: 36px; height: 36px; } .sic-aktionen { gap: 6px; } }
-@media (pointer: coarse) { .sic .btn.sm { height: 36px; } }
+@media (pointer: coarse) { .sic .btn.sm { height: 36px; } .sic-link { min-height: 32px; } .sic-check input, .geo-opt input { width: 20px; height: 20px; } }
 
 /* ── Rahmen „C2“ (gemeinsame Seitenleiste ../../assets/rahmen.css und rahmen.js, Entwurf freigegeben 06.11.2026) ──
    Aufbau, Reiter und Abläufe der Seite bleiben unverändert. Neu: ruhige deckende Flächen mit feinen Linien statt Glas,

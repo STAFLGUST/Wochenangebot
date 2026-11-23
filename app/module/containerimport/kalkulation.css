@@ -54,3 +54,4 @@
   .kk-druck .kk-zahlen td, .kk-druck .kk-zahlen th { text-align: right; }
   .kk-druck .kk-zahlen .kk-text, .kk-druck .kk-zahlen tbody th { text-align: left; }
 }
+@media (pointer: coarse) { .kk-tab input[type=checkbox] { width: 20px; height: 20px; } }   /* Kästchen am Handy 20 px */

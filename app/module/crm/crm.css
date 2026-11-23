@@ -122,7 +122,7 @@ body.crm .crm-kopf .brand-logo { height: 28px; width: auto; }
 .crm-karte-kopf { display: flex; align-items: center; gap: 10px; justify-content: space-between; margin-bottom: 2px; }
 .crm-karte-kopf .btn { height: 30px; font-size: 13px; }
 @media (pointer: coarse) {
-  .crm-karte-kopf .btn, .crm-mehrfach .optionen .btn, .crm-tabelle .btn { height: 36px; }
+  .crm-karte-kopf .btn, .crm-mehrfach .optionen .btn { height: 36px; }
   body.crm a[href^="tel:"]:not(.btn):not(.crm-rund), body.crm a[href^="mailto:"]:not(.btn):not(.crm-rund) { display: inline-flex; align-items: center; min-height: 32px; }   /* Telefonnummern am Handy sicher antippen */
 }   /* Fingerbedienung: Tippflächen ≥ 36 px */
 .crm-zeilen { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; }
@@ -698,4 +698,6 @@ body.crm.r .crm-rund:hover { background: var(--r-flaeche-2); }
 @media (pointer: coarse) {
   .crm-firma { min-height: 32px; }
   .crm-zeilen .was > .crm-firma { line-height: 32px; }
+  .crm-tabelle .btn { height: 36px; }   /* steht hinter „.crm-tabelle .btn { height: 30px }“ */
+  .crm .crm-mhd-check input, .crm-mhd-wahlspalte input { width: 20px; height: 20px; }
 }

@@ -340,3 +340,5 @@ body.lg.r .lg-rund:hover { background: var(--r-flaeche-2); }
   body.lg.r .lg-seite { padding: 16px 16px 32px; }
   body.lg.r .lg-modul { font-size: 18px; }
 }
+/* Fingerbedienung (Durchsicht 23.11.2026): Knöpfe in Tabellen 36 px, kleine Verweise ≥ 32 px, Kästchen 20 px wie .check (app.css) */
+@media(pointer:coarse){.lg input[type="checkbox"]{width:20px;height:20px}}

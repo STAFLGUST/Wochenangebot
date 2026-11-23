@@ -714,3 +714,5 @@ body.rw.r .rw-rund:hover { background: var(--r-flaeche-2); }
   .rw-ddfuss{margin:0 -15px -15px;padding:8px 15px calc(15px + env(safe-area-inset-bottom));flex-wrap:wrap}
   .rw-dkteil{white-space:normal}
 }
+/* Fingerbedienung (Durchsicht 23.11.2026): Knöpfe in Tabellen 36 px, kleine Verweise ≥ 32 px, Kästchen 20 px wie .check (app.css) */
+@media(pointer:coarse){.rw-entfernen{min-height:32px}.rw input[type="checkbox"],.rw-markttabelle input[type="checkbox"]{width:20px;height:20px}}

@@ -269,3 +269,5 @@ body.ci .dlg-foot { border-top: 1px solid var(--r-linie); align-items: center; }
   .ci-d-tab { font-size: 9pt; } .ci-d-tab tr { break-inside: avoid; }
   .ci-d-fuss { margin-top: 10pt; font-size: 9pt; color: #444; }
 }
+/* Fingerbedienung (Durchsicht 23.11.2026): Knöpfe in Tabellen 36 px, kleine Verweise ≥ 32 px, Kästchen 20 px wie .check (app.css) */
+@media (pointer: coarse) { .ci-check input, .ci-wahl input { width: 20px; height: 20px; } }

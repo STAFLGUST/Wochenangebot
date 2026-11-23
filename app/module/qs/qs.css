@@ -637,7 +637,7 @@ body.qm.r .qm-rund:hover { background: var(--r-flaeche-2); }
 /* Druck im Rahmen: die Seite liegt jetzt in .r-app (nicht mehr direkt unter body) – wie oben für .qm-seite freigeben */
 @media print { body.qm.r > .r-app:not(#print-root) { display: block !important; } body.qm.r .r-inhalt { display: block; } }
 /* Fingerbedienung (Prüfung am Handy 10.11.2026): Verweise auf Dokumente mit Tippfläche ≥ 32 px */
-@media(pointer:coarse){.qm-verweis{min-height:32px}.qm-details summary{padding:8px 0}}
+@media(pointer:coarse){.qm-verweis{min-height:32px}.qm-details summary{padding:8px 0}.qm input[type="checkbox"]{width:20px;height:20px}}
 
 /* ---------- Verfahrensdokumentation nach GoBD (Reiter „Verfahrensdoku“, verfahren.js) ---------- */
 .vf-kopf{display:flex;flex-direction:column;gap:10px}

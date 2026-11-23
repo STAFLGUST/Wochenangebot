@@ -284,6 +284,15 @@ with sync_playwright() as pw:
     BAUSTEINE['kartenbeschriftung'] = r"""(finger ? [...inhalt.querySelectorAll('td[data-label]')].filter(sicht) : []).map((e) => { const b = getComputedStyle(e, '::before');
       return b.content === 'none' || b.display === 'none' || parseFloat(b.fontSize) >= 11 ? null : name(e).slice(0, 30) + ' ' + b.fontSize; })"""
     TITEL['kartenbeschriftung'] = 'Beschriftungen der Karten-Tabellen am Handy mindestens 11 px'
+    # Tippflächen mit Finger: Knöpfe, Verweise, Auswahlen, Felder ≥ 32 px hoch (Verweise im Fließtext und Diagramme ausgenommen),
+    # Kästchen ≥ 20 px (wie .check in app.css); Schalter (role=switch) haben ihre eigene Größe
+    BAUSTEINE['tippflaeche'] = r"""(finger ? [...inhalt.querySelectorAll('button, a[href], summary, select, input:not([type=hidden]):not([type=checkbox]):not([type=radio]), [role=button]')] : [])
+      .filter((e) => sicht(e) && !e.closest('svg, .hr-jp-balken, [role=tablist]')).map((e) => { const r = e.getBoundingClientRect(), s = getComputedStyle(e);
+        if (e.tagName === 'A' && s.display === 'inline' && e.closest('p, li, td, small')) return null;
+        return r.height >= 31.5 ? null : name(e) + ' ' + Math.round(r.width) + '×' + Math.round(r.height); })
+      .concat((finger ? [...inhalt.querySelectorAll('input[type=checkbox], input[type=radio]')] : []).filter((e) => sicht(e) && e.getAttribute('role') !== 'switch' && getComputedStyle(e).opacity !== '0')
+        .map((e) => e.getBoundingClientRect().width >= 19.5 ? null : name(e) + ' Kästchen ' + Math.round(e.getBoundingClientRect().width)))"""
+    TITEL['tippflaeche'] = 'Tippflächen mit Finger mindestens 32 px, Kästchen 20 px'
     TOUR = r"""({ finger }) => { const inhalt = document.querySelector('.r-inhalt');
       const sicht = (e) => { const r = e.getBoundingClientRect(), s = getComputedStyle(e); return r.width > 1 && r.height > 1 && s.visibility !== 'hidden' && !e.closest('[hidden], dialog, .sr-only, [aria-hidden="true"]'); };
       const name = (e) => (e.id ? '#' + e.id : e.tagName.toLowerCase() + (typeof e.className === 'string' && e.className.trim() ? '.' + e.className.trim().split(/\s+/).slice(0, 2).join('.') : ''))

@@ -279,7 +279,7 @@ body.ctl{--ctl-b-balken:rgba(115,132,167,.55);--ctl-b-amber-bg:rgba(227,182,111,
 .ctl-b-chip{display:inline-flex;align-items:center;gap:4px;height:32px;padding:0 4px 0 12px;border-radius:99px;background:var(--ctl-green-soft);color:var(--ctl-green);font-size:13px;font-weight:600}
 .ctl-b-chip button{width:28px;height:28px;border:0;border-radius:50%;background:transparent;color:inherit;display:grid;place-items:center;cursor:pointer}.ctl-b-chip .i{width:14px;height:14px}
 .ctl-b-suche{margin-left:auto;display:inline-flex;align-items:center;gap:8px;height:42px;min-width:240px;padding:0 12px;border:1px solid var(--ctl-border);border-radius:12px;background:var(--ctl-card);color:var(--ctl-muted)}
-.ctl-b-suche input{flex:1;min-width:0;border:0;outline:none;background:transparent;color:var(--ctl-text);font:inherit;font-size:14px}.ctl-b-suche .i{width:16px;height:16px}
+.ctl-b-suche input{flex:1;align-self:stretch;min-width:0;border:0;outline:none;background:transparent;color:var(--ctl-text);font:inherit;font-size:14px}.ctl-b-suche .i{width:16px;height:16px}
 .ctl-b-kpis .ctl-kpi small{display:block;line-height:1.4}
 .ctl-b-panel{margin-bottom:12px}
 .ctl-b-kopf{align-items:flex-start;flex-wrap:wrap}
@@ -413,4 +413,4 @@ body.ctl.r .ctl-rund:hover { background: var(--r-flaeche-2); }
   body.ctl.r .ctl-modul { font-size: 18px; }
 }
 /* Fingerbedienung (Prüfung am Handy 10.11.2026): kleine Umschalter 36 px hoch */
-@media(pointer:coarse){.ctl-seg.klein button,.ctl-ua-abc button{height:36px}}
+@media(pointer:coarse){.ctl-seg.klein button,.ctl-ua-abc button{height:36px}.ctl-ua-check input,.ctl-b-filteroptionen input,.ctl-filterliste input{width:20px;height:20px}}

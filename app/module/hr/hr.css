@@ -555,6 +555,8 @@ body.hr .hr-kopf .brand-logo { height: 28px; width: auto; }
   .hr-zusatz { min-height: 40px; }
   .hr-chip, .hr-modus button { height: 36px; }   /* Abteilungen, Monat / ± 2 Wochen */
   details > summary { min-height: 36px; display: flex; align-items: center; }
+  .hr-tabelle .btn, .hr-liste .btn { height: 36px; }
+  .hr-check input[type="checkbox"] { width: 20px; height: 20px; }
 }
 /* Blättern (Jahr, Monat): Titel schmaler, damit „Weiter“ neben dem Titel bleibt statt allein in die nächste Zeile zu rutschen */
 @media (max-width: 560px) {
