@@ -238,7 +238,8 @@ nur mit `-h` bzw. für echte Dateien (`find -type f`); Angaben, denen root folgt
 in root-Dateien außerhalb (`.release-vorher`). Auch gelesen wird dort nur, was eine echte Datei ist: der SQLite-Abzug der
 Sicherung (`datenbank.py snapshot`) überspringt Verweise unter `index.php`, `deployment.php`, `.daten-getrennt` und `.daten-intern`
 und kopiert ohne ihnen zu folgen; die Sperrdatei `.storage.lock` öffnen `datenbank.py` und `daten_trennen.py` ohne einem Verweis zu
-folgen (nur eine echte Datei), die Datenbank `.sqlite/store.sqlite` nie über einen Verweis. Code eines Testzweigs läuft nie auf dem Server.
+folgen (nur eine echte Datei), die Datenbank `.sqlite/store.sqlite` nie über einen Verweis; `datenbank.py rollback` bricht vor jeder Änderung ab, wenn ein
+Ordner- oder Dateiname auf dem Weg zu einem Dokument ein Verweis ist. Code eines Testzweigs läuft nie auf dem Server.
 
 Dieselbe Regel gilt für **Ordnernamen** und für jeden Ordner, in den ein weniger vertrauter Prozess schreiben darf:
 `daten_trennen.py` legt Zielordner Schritt für Schritt an und bricht ab, sobald eine Komponente ein Verweis ist
