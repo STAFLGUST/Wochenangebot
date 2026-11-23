@@ -89,7 +89,7 @@ textarea.qm-eingabe{height:auto;padding:8px 10px;resize:vertical;line-height:1.4
 /* Tabellen */
 .qm-tabelle-wrap{width:100%;overflow-x:auto}
 .qm-tabelle{width:100%;border-collapse:collapse}
-.qm-tabelle th{padding:9px 8px;background:var(--qm-head-bg);color:var(--qm-head-text);text-align:left;font-size:10px;font-weight:750;letter-spacing:.055em;text-transform:uppercase;border-bottom:1px solid var(--qm-border);white-space:nowrap;vertical-align:bottom}
+.qm-tabelle th{padding:9px 8px;background:var(--qm-head-bg);color:var(--qm-head-text);text-align:left;font-size:11px;font-weight:600;letter-spacing:.06em;text-transform:uppercase;border-bottom:1px solid var(--qm-border);white-space:nowrap;vertical-align:bottom}
 .qm-tabelle th small{display:block;font-size:10.5px;font-weight:600;letter-spacing:0;text-transform:none;opacity:.85}
 .qm-tabelle td{padding:9px 8px;border-bottom:1px solid var(--qm-line);font-size:12.5px;vertical-align:middle}
 .qm-tabelle tbody tr.qm-klick{cursor:pointer}
@@ -464,7 +464,7 @@ button.qm-kpi{font:inherit;text-align:left;color:inherit;cursor:pointer}
 .qm-plan-wrap{width:100%;overflow-x:auto}
 .qm-plan{min-width:1060px;display:flex;flex-direction:column}
 .qm-plan-zeile{display:grid;grid-template-columns:270px repeat(12,minmax(0,1fr)) 150px 104px;align-items:center;gap:0 2px;padding:7px 6px;border-bottom:1px solid var(--qm-line)}
-.qm-plan-zeile.kopf{background:var(--qm-head-bg);border-radius:10px;border-bottom:0;color:var(--qm-head-text);font-size:10.5px;font-weight:750;letter-spacing:.05em;text-transform:uppercase}
+.qm-plan-zeile.kopf{background:var(--qm-head-bg);border-radius:10px;border-bottom:0;color:var(--qm-head-text);font-size:11px;font-weight:600;letter-spacing:.06em;text-transform:uppercase}
 .qm-plan-zeile.kopf span{text-align:center}.qm-plan-zeile.kopf span:first-child{text-align:left}
 .qm-plan-zeile.kopf .heute{color:var(--qm-accent)}
 .qm-plan-zeile.qm-klick{cursor:pointer}.qm-plan-zeile.qm-klick:hover{background:var(--qm-total-bg)}
@@ -619,6 +619,7 @@ button.qm-kpi{font:inherit;text-align:left;color:inherit;cursor:pointer}
 :root body.qm.r {
   --qm-bg: var(--r-grund); --qm-text: var(--r-text); --qm-glass: var(--r-flaeche); --qm-kopf: var(--r-grund); --qm-card: var(--r-flaeche);
   --qm-border: var(--r-linie-2); --qm-line: var(--r-linie); --qm-gloss: transparent; --qm-shadow: var(--r-schatten);
+  --qm-head-bg: var(--r-flaeche-2); --qm-head-text: var(--r-leise); --qm-total-bg: var(--r-flaeche-2);   /* Tabellenköpfe wie im Rahmen */
 }
 :root body.qm.r .qm-bg { display: none; }
 body.qm.r .qm-glas { -webkit-backdrop-filter: none; backdrop-filter: none; box-shadow: var(--r-schatten); }

@@ -88,7 +88,7 @@ textarea.lg-eingabe{height:auto;padding:8px 10px;resize:vertical;line-height:1.4
 /* Tabellen */
 .lg-tabelle-wrap{width:100%;overflow-x:auto}
 .lg-tabelle{width:100%;border-collapse:collapse}
-.lg-tabelle th{padding:9px 8px;background:var(--lg-head-bg);color:var(--lg-head-text);text-align:left;font-size:10px;font-weight:750;letter-spacing:.055em;text-transform:uppercase;border-bottom:1px solid var(--lg-border);white-space:nowrap;vertical-align:bottom}
+.lg-tabelle th{padding:9px 8px;background:var(--lg-head-bg);color:var(--lg-head-text);text-align:left;font-size:11px;font-weight:600;letter-spacing:.06em;text-transform:uppercase;border-bottom:1px solid var(--lg-border);white-space:nowrap;vertical-align:bottom}
 .lg-tabelle th small{display:block;font-size:10.5px;font-weight:600;letter-spacing:0;text-transform:none;opacity:.85}
 .lg-tabelle td{padding:9px 8px;border-bottom:1px solid var(--lg-line);font-size:12.5px;vertical-align:middle}
 .lg-tabelle tbody tr.lg-klick{cursor:pointer}
@@ -325,6 +325,7 @@ textarea.lg-mono{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospac
 :root body.lg.r {
   --lg-bg: var(--r-grund); --lg-text: var(--r-text); --lg-glass: var(--r-flaeche); --lg-kopf: var(--r-grund); --lg-card: var(--r-flaeche);
   --lg-border: var(--r-linie-2); --lg-line: var(--r-linie); --lg-gloss: transparent; --lg-shadow: var(--r-schatten);
+  --lg-head-bg: var(--r-flaeche-2); --lg-head-text: var(--r-leise); --lg-total-bg: var(--r-flaeche-2);   /* Tabellenköpfe wie im Rahmen */
 }
 :root body.lg.r .lg-bg { display: none; }
 body.lg.r .lg-glas { -webkit-backdrop-filter: none; backdrop-filter: none; box-shadow: var(--r-schatten); }

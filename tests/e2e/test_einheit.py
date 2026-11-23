@@ -255,6 +255,45 @@ with sync_playwright() as pw:
             fi = fp.evaluate(FINGER)
             check(f'{name} Handy mit Finger: Bestand-Knopf, „Zum Versand“ und Verweise mindestens 36 px hoch', fi['tipp'] and all(h >= 36 for _, h in fi['tipp']), fi['tipp'][:6])
     fctx.close()
+    # Bausteine je Reiter jeder Modulseite (Durchsicht 23.11.2026): Tabellenköpfe, Kennzahl-Kacheln, Reiterleiste, Knöpfe,
+    # Beschriftungen und Tippflächen in EINER Form auf allen Modulseiten; Farben als --r-* über ein Probe-Element gelesen. PC 1440
+    # hell, Handy 390 mit Finger – gemessen ohne Bildschirmfoto (ein Ganzseitenfoto hebt in Chromium die Finger-Emulation auf).
+    # Jeder Baustein: JS-Ausdruck (inhalt, sicht, name, tok, finger) → Liste der Abweichungen (null = in Ordnung)
+    BAUSTEINE = {}
+    BAUSTEINE['tabellenkopf'] = r"""[...inhalt.querySelectorAll('thead th')].filter((e) => sicht(e) && !e.closest('.hr-plan')).map((e) => { const s = getComputedStyle(e);
+      return s.fontSize === '11px' && s.fontWeight === '600' && s.textTransform === 'uppercase' && s.color === tok.leise && s.backgroundColor === tok.flaeche2 ? null
+        : name(e) + ' ' + s.fontSize + '/' + s.fontWeight + ' ' + s.textTransform + ' ' + s.color + ' auf ' + s.backgroundColor; })"""
+    TITEL = {'tabellenkopf': 'Tabellenköpfe 11 px/600 in Großbuchstaben, Schrift --r-leise auf --r-flaeche-2'}
+    TOUR = r"""({ finger }) => { const inhalt = document.querySelector('.r-inhalt');
+      const sicht = (e) => { const r = e.getBoundingClientRect(), s = getComputedStyle(e); return r.width > 1 && r.height > 1 && s.visibility !== 'hidden' && !e.closest('[hidden], dialog, .sr-only, [aria-hidden="true"]'); };
+      const name = (e) => (e.id ? '#' + e.id : e.tagName.toLowerCase() + (typeof e.className === 'string' && e.className.trim() ? '.' + e.className.trim().split(/\s+/).slice(0, 2).join('.') : ''))
+        + ' „' + (e.textContent || e.getAttribute('aria-label') || '').trim().replace(/\s+/g, ' ').slice(0, 24) + '“';
+      const p = document.createElement('i'); p.style.cssText = 'color:var(--r-leise);background-color:var(--r-flaeche-2);border-top:1px solid var(--r-neutral-bg);outline:1px solid var(--r-flaeche)';
+      document.body.append(p); const ps = getComputedStyle(p), tok = { leise: ps.color, flaeche2: ps.backgroundColor, spur: ps.borderTopColor, flaeche: ps.outlineColor }; p.remove();
+      return { /*BAUSTEINE*/ }; }"""
+    TOUR = TOUR.replace('/*BAUSTEINE*/', ', '.join(f"'{k}': ({v}).filter(Boolean)" for k, v in BAUSTEINE.items()))
+    REITER = r"""(i) => { const l = [...document.querySelectorAll('.r-inhalt [role=tablist]')].find((t) => t.offsetParent && !t.closest('dialog'));
+      const t = l ? [...l.querySelectorAll('[role=tab]')].filter((b) => b.offsetParent) : []; if (i >= 0 && t[i]) t[i].click(); return t.length; }"""
+    befund = {}
+    for breite, finger in ((1440, False), (390, True)):
+        tctx = br.new_context(viewport={'width': breite, 'height': 900 if breite > 500 else 844}, is_mobile=finger, has_touch=finger, locale='de-DE',
+                              timezone_id='Europe/Berlin', extra_http_headers={'X-Forwarded-For': '198.51.100.40'})
+        tp = tctx.new_page(); tp.on('pageerror', lambda e: fehler.append(f'{tp.url}: {e}'))
+        tp.goto(B + '/admin/'); tp.wait_for_selector('#screen-auth:not([hidden])')
+        tp.fill('#au-user', 'admin'); tp.fill('#pw1', PW); tp.click('#auth-submit'); tp.wait_for_selector('#screen-auth', state='hidden')
+        for name, bereich, pfad, warte, _ in SEITEN:
+            if not pfad.startswith('/module/'):
+                continue
+            tp.goto(B + pfad); tp.wait_for_selector(warte, timeout=20000); tp.wait_for_selector('.r-app.r-bereit', timeout=20000)
+            for i in range(max(tp.evaluate(REITER, -1), 1)):
+                if tp.evaluate(REITER, i):   # Reiter gewählt; die Daten liegen seit dem Laden der Seite vor, gezeichnet wird im nächsten Bild
+                    tp.wait_for_function(REITER.replace('if (i >= 0 && t[i]) t[i].click(); return t.length;', "return !!t[i] && t[i].getAttribute('aria-selected') === 'true';"), arg=i)
+                tp.evaluate('document.fonts.ready.then(() => new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r))))')
+                for k, v in tp.evaluate(TOUR, {'finger': finger}).items():
+                    befund.setdefault((k, breite, name), []).extend(v)
+        tctx.close()
+    for (k, breite, name), abw in sorted(befund.items()):
+        check(f'{name} {breite} px, alle Reiter: {TITEL[k]}', not abw, sorted(set(abw))[:5])
     # Fenster (Vorgabe des Inhabers 02.11.2026): auf jeder Seite schließt ein Klick neben ein <dialog> es nie, Escape schließt.
     # Jedes Fenster der Seite wird direkt geöffnet (Inhalt egal – geprüft wird das gemeinsame Verhalten), dann wird an einer
     # Stelle außerhalb geklickt (am Handy füllen manche Fenster den Bildschirm – dann nur Escape).

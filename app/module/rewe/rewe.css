@@ -89,7 +89,7 @@ textarea.rw-eingabe{height:auto;padding:8px 10px;resize:vertical;line-height:1.4
 /* Tabellen */
 .rw-tabelle-wrap{width:100%;overflow-x:auto}
 .rw-tabelle{width:100%;border-collapse:collapse}
-.rw-tabelle th{padding:9px 8px;background:var(--rw-head-bg);color:var(--rw-head-text);text-align:left;font-size:10px;font-weight:750;letter-spacing:.055em;text-transform:uppercase;border-bottom:1px solid var(--rw-border);white-space:nowrap;vertical-align:bottom}
+.rw-tabelle th{padding:9px 8px;background:var(--rw-head-bg);color:var(--rw-head-text);text-align:left;font-size:11px;font-weight:600;letter-spacing:.06em;text-transform:uppercase;border-bottom:1px solid var(--rw-border);white-space:nowrap;vertical-align:bottom}
 .rw-tabelle th small{display:block;font-size:10.5px;font-weight:600;letter-spacing:0;text-transform:none;opacity:.85}
 .rw-tabelle td{padding:9px 8px;border-bottom:1px solid var(--rw-line);font-size:12.5px;vertical-align:middle}
 .rw-tabelle tbody tr.rw-klick{cursor:pointer}
@@ -342,7 +342,7 @@ body.rw{--rw-blau:#3a5280;--rw-blau-soft:rgba(115,132,167,.2)}
 .rw-zkopf,.rw-zeile{display:grid;grid-template-columns:minmax(250px,1.15fr) 318px minmax(340px,1.2fr) 38px;gap:16px;align-items:start;padding:10px 16px}
 .rw-zkopf{align-items:center;padding:8px 16px}
 .rw-zeile+.rw-zeile{border-top:1px solid var(--rw-line)}
-.rw-zkopf{background:var(--rw-head-bg);color:var(--rw-head-text);font-size:10px;font-weight:750;letter-spacing:.055em;text-transform:uppercase}
+.rw-zkopf{background:var(--rw-head-bg);color:var(--rw-head-text);font-size:11px;font-weight:600;letter-spacing:.06em;text-transform:uppercase}
 .rw-zeile{;background:var(--rw-card)}
 .rw-zeile.erledigt{background:transparent}
 .rw-zeile.gerade{box-shadow:inset 3px 0 0 var(--rw-green);background:var(--rw-card)}   /* gerade beantwortet, bleibt im Filter „Offen“ stehen */
@@ -592,6 +592,7 @@ textarea.rw-khinweis{min-height:180px;background:var(--rw-gelb-soft);border-colo
 :root body.rw.r {
   --rw-bg: var(--r-grund); --rw-text: var(--r-text); --rw-glass: var(--r-flaeche); --rw-kopf: var(--r-grund); --rw-card: var(--r-flaeche);
   --rw-border: var(--r-linie-2); --rw-line: var(--r-linie); --rw-gloss: transparent; --rw-shadow: var(--r-schatten);
+  --rw-head-bg: var(--r-flaeche-2); --rw-head-text: var(--r-leise); --rw-total-bg: var(--r-flaeche-2);   /* Tabellenköpfe wie im Rahmen */
 }
 :root body.rw.r .rw-bg { display: none; }
 body.rw.r .rw-glas { -webkit-backdrop-filter: none; backdrop-filter: none; box-shadow: var(--r-schatten); }
@@ -661,7 +662,7 @@ body.rw.r .rw-rund:hover { background: var(--r-flaeche-2); }
 .rw-dpanel .rw-fussnote{padding:10px 16px 14px;margin:0}
 .rw-dliste{list-style:none;margin:0;padding:0}
 .rw-dliste>li{display:grid;grid-template-columns:minmax(0,1.25fr) minmax(0,1.2fr) minmax(0,2fr) 18px;gap:14px;align-items:center;padding:13px 16px;border-bottom:1px solid var(--rw-line)}
-.rw-dliste>li.rw-dlkopf{padding:9px 16px;background:var(--rw-head-bg);color:var(--rw-head-text);font-size:10px;font-weight:750;letter-spacing:.055em;text-transform:uppercase}
+.rw-dliste>li.rw-dlkopf{padding:9px 16px;background:var(--rw-head-bg);color:var(--rw-head-text);font-size:11px;font-weight:600;letter-spacing:.06em;text-transform:uppercase}
 .rw-dliste>li.rw-leerzeile{display:block}
 .rw-dliste>li.rw-klick{cursor:pointer}
 .rw-dliste>li.rw-klick:hover{background:var(--rw-total-bg)}

@@ -324,7 +324,7 @@ body.hr .hr-kopf .brand-logo { height: 28px; width: auto; }
 /* ── Tabellen ── */
 .hr-tabelle { width: 100%; border-collapse: collapse; font-size: 14px; }
 .hr-tabelle th, .hr-tabelle td { padding: 10px 14px; text-align: left; border-bottom: 1px solid var(--hr-linie); white-space: nowrap; }
-.hr-tabelle th { font-size: 12px; font-weight: 650; color: var(--hr-muted); text-transform: uppercase; letter-spacing: .04em; background: var(--hr-deckend); position: sticky; top: 0; }
+.hr-tabelle th { font-size: 11px; font-weight: 600; color: var(--r-leise); text-transform: uppercase; letter-spacing: .06em; background: var(--r-flaeche-2); position: sticky; top: 0; }
 .hr-tabelle td.zahl, .hr-tabelle th.zahl { text-align: right; font-variant-numeric: tabular-nums; }
 .hr-tabelle tr.aus td { opacity: .5; }
 .hr-tabelle tbody tr:hover td { background: var(--hr-aus); }
@@ -339,6 +339,7 @@ body.hr .hr-kopf .brand-logo { height: 28px; width: auto; }
 @media (max-width: 640px) {
   .hr-ueb th, .hr-ueb td { padding: 9px 10px; }
   .hr-ueb tbody tr:not(.abt) th, .hr-ueb thead th:first-child, .hr-ueb tfoot th { position: sticky; left: 0; z-index: 1; background: var(--hr-deckend); }   /* Name bleibt beim Wischen stehen */
+  .hr-ueb thead th:first-child { background: var(--r-flaeche-2); }   /* Kopfzelle wie die übrigen Tabellenköpfe */
 }
 .hr-ueb tfoot th, .hr-ueb tfoot td { font-weight: 700; border-bottom: 0; border-top: 2px solid var(--hr-linie); }
 .hr-ueb tfoot th { text-align: left; text-transform: none; letter-spacing: 0; font-size: 14px; color: var(--hr-text); background: none; position: static; }

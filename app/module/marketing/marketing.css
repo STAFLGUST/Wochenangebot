@@ -175,7 +175,7 @@ body.mkt .mkt-kopf .brand-logo { height: 28px; width: auto; }
 .mkt-tabelle-rahmen { border-radius: 22px; overflow: auto; max-width: 100%; max-height: calc(100dvh - 250px); }
 .mkt-tabelle { width: 100%; border-collapse: collapse; font-size: 14px; }
 .mkt-tabelle th, .mkt-tabelle td { padding: 9px 12px; text-align: left; border-bottom: 1px solid var(--mkt-linie); vertical-align: top; }
-.mkt-tabelle th { font-size: 12px; font-weight: 650; color: var(--mkt-muted); text-transform: uppercase; letter-spacing: .04em; background: var(--mkt-deckend); position: sticky; top: 0; z-index: 2; white-space: nowrap; }
+.mkt-tabelle th { font-size: 11px; font-weight: 600; color: var(--r-leise); text-transform: uppercase; letter-spacing: .06em; background: var(--r-flaeche-2); position: sticky; top: 0; z-index: 2; white-space: nowrap; }
 .mkt-tabelle tbody tr:hover td { background: var(--mkt-aus); }
 .mkt-tabelle tr.aus td { opacity: .58; }
 .mkt-tabelle td.nw { white-space: nowrap; }
