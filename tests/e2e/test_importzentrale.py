@@ -270,7 +270,8 @@ with sync_playwright() as p:
     a.goto(BASE + '/admin/'); a.wait_for_selector('#screen-auth:not([hidden])')
     a.fill('#au-user', 'admin'); a.fill('#pw1', PW); a.click('#auth-submit'); a.wait_for_selector('#screen-editor:not([hidden]) tr[data-id]')
     y = lambda s: a.locator(s).bounding_box()['y']   # noqa: E731
-    check('Navigation: Import als erster Punkt unter Verwaltung', a.locator('#vt-importe').is_visible() and y('#side-admin') < y('#vt-importe') < y('#vt-orders'))
+    check('Navigation: Import als erster Punkt unter Verwaltung; „Bestellungen“ bei den Arbeitsansichten vor „Stammdaten“',
+          a.locator('#vt-importe').is_visible() and y('#vt-orders') < y('#side-stamm') < y('#side-admin') < y('#vt-importe'))
     a.click('#vt-importe'); a.wait_for_selector('#view-importe .imp-art[data-art="kunden"]')
     gruppen = a.eval_on_selector_all('#view-importe .imp-gruppe', 'gs => gs.map((g) => [g.querySelector("h2").textContent, [...g.querySelectorAll(".imp-art")].map((x) => x.dataset.art)])')
     check('Liste: alle Importarten, nach Bereich gruppiert; danach die Gruppe „Export“ (Export für WinAB aus Entwurf und veröffentlichtem Stand, Test editor_aux)', a.locator('#view-importe .imp-art[data-art]').count() == len(ALLE)
