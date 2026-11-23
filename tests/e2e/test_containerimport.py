@@ -24,7 +24,7 @@ import re
 import tempfile
 from playwright.sync_api import sync_playwright
 from kunden_hilfe import Client, B
-from umgebung import REPO, SH, FIX, shot, storage_raw, storage_write, _json
+from umgebung import SH, FIX, shot, storage_raw, storage_write, storage_docs, _json
 
 PW = 'Sicheres-Passwort-1'
 res = []
@@ -119,11 +119,13 @@ I, L, O = login('ina'), login('lea'), login('ole')
 
 # ---------- Rechte ----------
 st, r = Client('198.51.100.30').call('containerimport_start')
-check('ohne Anmeldung: kein Zugriff (401)', st == 401 and 'betriebe' not in r, (st, r))
+check('ohne Anmeldung: kein Zugriff (401), auch nicht auf die Umrisse eines Schnappschusses', st == 401 and 'betriebe' not in r
+      and Client('198.51.100.30').call('containerimport_eudr_schnappschuss&sendung=x')[0] == 401, (st, r))
 st, r = O.call('containerimport_start')
 check('Modulzugang ohne „EUDR ansehen“: 403', st == 403 and 'Berechtigung' in r.get('error', ''), (st, r))
-check('ohne „EUDR ansehen“: auch prüfen, Farmer-Nummern auflösen und exportieren 403', O.call('containerimport_eudr_pruefen', {'dateien': [DATEI]})[0] == 403
-      and O.call('containerimport_eudr_nummern', {'land': 'PY', 'nummern': '1'})[0] == 403 and O.call('containerimport_eudr_export&sendung=x')[0] == 403)
+check('ohne „EUDR ansehen“: auch prüfen, Farmer-Nummern auflösen, exportieren und Umrisse eines Schnappschusses 403', O.call('containerimport_eudr_pruefen', {'dateien': [DATEI]})[0] == 403
+      and O.call('containerimport_eudr_nummern', {'land': 'PY', 'nummern': '1'})[0] == 403 and O.call('containerimport_eudr_export&sendung=x')[0] == 403
+      and O.call('containerimport_eudr_schnappschuss&sendung=x')[0] == 403)
 st, r = L.call('containerimport_start')
 check('nur ansehen: Stand ohne Recht zu bearbeiten, leer', st == 200 and r['rechte'] == {'bearbeiten': False, 'whisp': False} and r['betriebe'] == [] and r['sendungen'] == [], (st, r))
 check('nur ansehen: Speichern 403', [L.call(a, {})[0] for a in ('containerimport_eudr_betriebe_save', 'containerimport_eudr_sendung_save', 'containerimport_eudr_gegenpruefung', 'containerimport_eudr_sendung_abschluss')] == [403] * 4)
@@ -419,10 +421,9 @@ s = r['sendungen'][0]
 check('alle Nachweise da: kein Risiko erkennbar', st == 200 and s['profil']['stand'] == 'ok' and set(profil(s).values()) == {'ok', 'hinweis'} and 'Sorgfaltserklärung kann abgegeben werden' in s['profil']['vorschlag'], s['profil'])
 check('Abschluss mit veraltetem Stand 409, unbekanntes Ergebnis 422', I.call('containerimport_eudr_sendung_abschluss', {'id': sid, 'rev': s['rev'] - 1, 'ergebnis': 'vernachlaessigbar'})[0] == 409
       and I.call('containerimport_eudr_sendung_abschluss', {'id': sid, 'rev': s['rev'], 'ergebnis': 'egal'})[0] == 422)
-# Grenze der Schnappschüsse: jeder Abschluss hält die Umrisse seiner Farmer im Dokument der Container fest, das jede Aktion ganz
-# liest. Ein archivierter Container trägt in einem früheren Abschluss so viele Punkte, dass dieser Abschluss die Grenze um einen
-# Punkt überschreitet (422, nichts gespeichert) bzw. genau erreicht (gelingt).
-GRENZE = int(re.search(r'const EUDR_MAX_PUNKTE_SCHNAPPSCHUESSE = (\d+);', open(os.path.join(REPO, 'app', 'api', 'module', 'containerimport', 'eudr.php'), encoding='utf-8').read())[1])
+check('Umrisse eines Schnappschusses: offene Bewertung 409, unbekannter Container 404', I.call('containerimport_eudr_schnappschuss&sendung=' + sid)[0] == 409
+      and I.call('containerimport_eudr_schnappschuss&sendung=nein')[0] == 404)
+SCHNAPP = 'containerimport-eudr-schnappschuss'
 
 
 def punktzahl(g):
@@ -433,33 +434,41 @@ def gespeicherte_sendung(i):
     return next(x for x in _json(storage_raw('containerimport-eudr-sendungen'))['liste'] if x['id'] == i)
 
 
-def ballast(n):
-    doc = _json(storage_raw('containerimport-eudr-sendungen'))
-    ring = [[round(-58 + k * 1e-6, 6), -23.0] for k in range(n - 1)] + [[-58.0, -23.0]]
-    doc['liste'] = [x for x in doc['liste'] if x['id'] != 'sBallast'] + ([{**gespeicherte_sendung(sid), 'id': 'sBallast', 'partie': 'P-BALLAST', 'aktiv': False, 'betriebe': [], 'abschluss': None,
-        'fruehere': [{'ergebnis': 'nicht_vernachlaessigbar', 'begruendung': '', 'betriebe': [{'name': 'Ballast', 'geometrie': {'type': 'Polygon', 'coordinates': [ring]}}]}]}] if n else [])
-    storage_write('containerimport-eudr-sendungen', doc)
-
-
-eigene = sum(punktzahl(b['geometrie']) for b in stand()['betriebe'] if b['id'] in gut)
-frei = GRENZE - eigene - sum(punktzahl(b['geometrie']) for x in _json(storage_raw('containerimport-eudr-sendungen'))['liste'] for a in [x.get('abschluss'), *x.get('fruehere', [])] if a for b in a.get('betriebe', []))
-ballast(frei + 1)
+umrisse = {b['id']: b['geometrie'] for b in stand()['betriebe'] if b['id'] in gut}
 st, r = I.call('containerimport_eudr_sendung_abschluss', {'id': sid, 'rev': s['rev'], 'ergebnis': 'vernachlaessigbar', 'begruendung': 'Alle Nachweise geprüft.'})
-check('Schnappschüsse über der Grenze: Abschluss 422 mit verständlicher Meldung, nichts gespeichert', st == 422 and 'zu umfangreich' in r.get('error', '')
-      and gespeicherte_sendung(sid)['abschluss'] is None and gespeicherte_sendung(sid)['rev'] == s['rev'], (st, r.get('error'), eigene, frei))
-ballast(frei)
-st, r = I.call('containerimport_eudr_sendung_abschluss', {'id': sid, 'rev': s['rev'], 'ergebnis': 'vernachlaessigbar', 'begruendung': 'Alle Nachweise geprüft.'})
-ballast(0)
 s = r['sendungen'][0]
-check('Bewertung abgeschlossen (Schnappschüsse genau an der Grenze): Ergebnis, Bearbeiter, Schnappschuss von Profil und Farmern', st == 200 and s['abschluss']['ergebnis'] == 'vernachlaessigbar' and s['abschluss']['wer']['von'] == 'Ina Import'
+check('Bewertung abgeschlossen: Ergebnis, Bearbeiter, Schnappschuss von Profil und Farmern', st == 200 and s['abschluss']['ergebnis'] == 'vernachlaessigbar' and s['abschluss']['wer']['von'] == 'Ina Import'
       and s['abschluss']['profil']['stand'] == 'ok' and len(s['abschluss']['betriebe']) == 2, (st, r.get('error')))
+# Die Umrisse liegen je Abschluss in einem eigenen Dokument. Das Dokument der Container liest jede Aktion ganz – dort stehen nur
+# die Farmer ohne Umriss und der Verweis mit Prüfsumme (früher wuchs es mit jedem Abschluss um alle Umrisse, KERN-3).
+ab = gespeicherte_sendung(sid)['abschluss']
+erst = ab.get('schnappschuss') or {}
+erst_doc = _json(storage_raw(f"{SCHNAPP}/{erst.get('id')}")) or {}
+check('Abschluss legt die Umrisse in ein eigenes Dokument; am Container nur die Farmer ohne Umriss und der Verweis (Kennung, SHA-256, Punkte)',
+      re.fullmatch(r'[0-9a-f]{64}', erst.get('sha256', '')) and erst['punkte'] == sum(map(punktzahl, umrisse.values()))
+      and all('geometrie' not in b for b in ab['betriebe']) and [b['id'] for b in ab['betriebe']] == [b['id'] for b in erst_doc.get('betriebe', [])]
+      and erst_doc['sendung'] == sid and erst_doc['wer'] == ab['wer'] and {b['id']: b['geometrie'] for b in erst_doc['betriebe']} == umrisse, (erst, list(erst_doc)))
+check('Stand der Seite: Farmer des Abschlusses ohne Umriss', all('geometrie' not in b for b in s['abschluss']['betriebe']), s['abschluss']['betriebe'][0].keys())
+st, r = L.call('containerimport_eudr_schnappschuss&sendung=' + sid)
+check('Umrisse des Schnappschusses auf Anfrage, auch mit „nur ansehen“: die gespeicherten Farmer samt Umriss', st == 200 and r['betriebe'] == erst_doc['betriebe'], (st, r.get('error')))
 nb = betrieb('Estancia Ejemplo Norte')
 I.call('containerimport_eudr_betriebe_save', {'betriebe': [{**nb, 'name': 'Estancia Umbenannt', 'bericht': {**nb['bericht'], 'entwaldung': 'nicht_konform'}}]})
 s = stand()['sendungen'][0]
 check('spätere Änderung am Farmer ändert die abgeschlossene Bewertung nicht (GR-106)', s['profil']['stand'] == 'ok' and 'Estancia Ejemplo Norte' in [b['name'] for b in s['abschluss']['betriebe']]
       and betrieb('Estancia Umbenannt')['ampel'] == 'rot', s['profil'])
 r = I.call('containerimport_eudr_export&sendung=' + sid)[1]
-check('Export eines abgeschlossenen Containers nutzt den Schnappschuss', any(f['properties']['ProductionPlace'].startswith('Estancia Ejemplo Norte') for f in r['geojson']['features']), r)
+check('Export eines abgeschlossenen Containers nutzt den Schnappschuss samt Umrissen', any(f['properties']['ProductionPlace'].startswith('Estancia Ejemplo Norte') for f in r['geojson']['features'])
+      and [f['geometry'] for f in r['geojson']['features']] == [b['geometrie'] for b in erst_doc['betriebe'] if b['stand'] != 'fehler'], r)
+falsch = json.loads(json.dumps(erst_doc))
+g = falsch['betriebe'][0]['geometrie']
+(g['coordinates'] if g['type'] == 'Point' else g['coordinates'][0][0] if g['type'] == 'Polygon' else g['coordinates'][0][0][0])[0] += 0.001
+storage_write(f"{SCHNAPP}/{erst['id']}", falsch)
+st, r = I.call('containerimport_eudr_export&sendung=' + sid)
+st2, r2 = I.call('containerimport_eudr_schnappschuss&sendung=' + sid)
+storage_write(f"{SCHNAPP}/{erst['id']}", erst_doc)
+check('veränderter Schnappschuss (Prüfsumme passt nicht): Export und Karte verweigern mit Hinweis statt veränderter Umrisse; wiederhergestellt wieder da',
+      st == 500 and st2 == 500 and 'verändert' in r.get('error', '') and 'geojson' not in r and 'betriebe' not in r2
+      and I.call('containerimport_eudr_export&sendung=' + sid)[0] == 200, (st, st2, r.get('error')))
 st, r = I.call('containerimport_eudr_sendung_save', {**SENDUNG, 'id': sid, 'rev': s['rev'], 'nummer': 'ANDERS', 'partie': 'P-ANDERS', 'lieferantNr': '70020', 'betriebe': [], 'dds': {'referenz': '26DEABC123456', 'datum': '2026-11-16'}, 'notiz': 'DDS abgegeben',
                                                      'stand': 'angekommen', 'container': 'MSKU 907032 3', 'akte': 'AK-2026-014/2'})
 s = r['sendungen'][0]
@@ -484,7 +493,8 @@ check('wieder geöffnet: früherer Abschluss samt Schnappschuss im Verlauf, Prof
       and s['fruehere'][0]['ergebnis'] == 'vernachlaessigbar' and 'betriebe' not in s['fruehere'][0]
       and s['profil']['stand'] == 'kritisch' and s['profil']['vernachlaessigbar'] == 'nein', s)
 frueher = next(x for x in _json(storage_raw('containerimport-eudr-sendungen'))['liste'] if x['id'] == sid)['fruehere'][0]
-check('wieder geöffnet: der Schnappschuss bleibt gespeichert (GR-106), wird aber nicht mit jedem Stand ausgeliefert', len(frueher['betriebe']) == 2 and frueher['profil']['stand'] == 'ok')
+check('wieder geöffnet: der Schnappschuss bleibt gespeichert (GR-106), wird aber nicht mit jedem Stand ausgeliefert', len(frueher['betriebe']) == 2 and frueher['profil']['stand'] == 'ok'
+      and frueher['schnappschuss'] == erst and _json(storage_raw(f"{SCHNAPP}/{erst['id']}")) == erst_doc)
 nb = betrieb('Estancia Umbenannt')
 I.call('containerimport_eudr_betriebe_save', {'betriebe': [{**nb, 'name': 'Estancia Ejemplo Norte', 'bericht': {**nb['bericht'], 'entwaldung': 'konform'}}]})
 st, r = I.call('containerimport_eudr_betriebe_save', {'betriebe': [{**betrieb('Estancia Vertauscht'), 'aktiv': False}]})
@@ -915,15 +925,24 @@ with sync_playwright() as pw:
         shot(k, os.path.join(SH, 'containerimport-karte-echt-strassen.png'))
         k.context.close()
 
+    # Abgeschlossene Bewertung: der Stand bringt die Farmer des Schnappschusses ohne Umriss, die Karte im Fenster holt die Umrisse nach
+    s = next(x for x in stand()['sendungen'] if x['id'] == sid)
+    st, r = I.call('containerimport_eudr_sendung_abschluss', {'id': sid, 'rev': s['rev'], 'ergebnis': 'nicht_vernachlaessigbar', 'begruendung': 'Abschluss für die Ansicht im Fenster.'})
+    flaechen_zu = len([b for b in I.call('containerimport_eudr_schnappschuss&sendung=' + sid)[1].get('betriebe', []) if b['geometrie']['type'] != 'Point'])
+    check('Vorbereitung: Bewertung für die Oberfläche abgeschlossen', st == 200 and flaechen_zu >= 2, (st, r.get('error'), flaechen_zu))
+
     # Handy 390 px, dunkel: nichts läuft über den Rand
     m = seite('ina', {'width': 390, 'height': 844}, 'dark'); m.wait_for_selector('#ci-app:not([hidden]) #ci-sendungen tr[data-sendung]')
     breit = lambda pg: pg.evaluate('document.documentElement.scrollWidth <= window.innerWidth + 1')
     check('390 px: Liste ohne Querlauf', breit(m))
     shot(m, os.path.join(SH, 'containerimport-sendungen-390-dunkel.png'))
     m.click('#ci-sendungen tr[data-sendung]'); m.wait_for_selector('#dlg-sendung[open]')
+    m.wait_for_function("document.querySelector('#sendung-karte')?.dataset.karte === 'bereit'")
+    check('390 px: abgeschlossener Container – Karte mit den Umrissen des Schnappschusses', m.locator('#sendung-karte .ci-k-flaeche').count() == flaechen_zu, m.locator('#sendung-karte .ci-k-flaeche').count())
     check('390 px: Fenster „Container“ passt in die Breite, Tippflächen ab 36 px', m.evaluate("document.querySelector('#dlg-sendung').getBoundingClientRect().width <= window.innerWidth")
           and m.eval_on_selector_all('#dlg-sendung button, #dlg-sendung select, #dlg-sendung input:not([type=checkbox])', 'els => els.filter(e => e.offsetParent).every(e => e.getBoundingClientRect().height >= 36)'))
     shot(m, os.path.join(SH, 'containerimport-sendung-390-dunkel.png'))
+    m.locator('#sendung-karte').scroll_into_view_if_needed(); shot(m, os.path.join(SH, 'containerimport-sendung-abgeschlossen-karte-390-dunkel.png'))
     m.keyboard.press('Escape'); m.click('[data-sicht="karte"]'); m.wait_for_function("document.querySelector('#ci-karte')?.dataset.karte === 'bereit'")
     check('390 px: Karte ohne Querlauf', breit(m))
     shot(m, os.path.join(SH, 'containerimport-karte-390-dunkel.png'))
@@ -933,6 +952,9 @@ with sync_playwright() as pw:
     v = seite('lea'); v.wait_for_selector('#ci-app:not([hidden]) #ci-sendungen tr[data-sendung]')
     check('nur ansehen: keine Knöpfe „Unterlagen einlesen“ und „Neue Container“', v.locator('#ci-lesen').count() == 0 and v.locator('#ci-sendung-neu').count() == 0)
     v.click('#ci-sendungen tr[data-sendung]'); v.wait_for_selector('#dlg-sendung[open]')
+    v.wait_for_function("document.querySelector('#sendung-karte')?.dataset.karte === 'bereit'")
+    check('nur ansehen: abgeschlossener Container – Karte mit den Umrissen des Schnappschusses', v.locator('#sendung-karte .ci-k-flaeche').count() == flaechen_zu and 'Bewertung abgeschlossen' in v.inner_text('#dlg-sendung'))
+    v.locator('#sendung-karte').scroll_into_view_if_needed(); shot(v.locator('#dlg-sendung'), os.path.join(SH, 'containerimport-sendung-abgeschlossen-1280.png'))
     check('nur ansehen: Felder gesperrt, kein „Speichern“, Export bleibt', v.eval_on_selector_all('#dlg-sendung input, #dlg-sendung select, #dlg-sendung textarea', 'els => els.every(e => e.disabled)')
           and v.locator('#dlg-sendung button[type=submit]').count() == 0 and v.locator('#dlg-sendung [data-export-sendung]').count() == 1)
     v.context.close()
@@ -966,6 +988,58 @@ check('gesperrte Dateiart wird abgewiesen (422)', st == 422, (st, r))
 eingang = A.call('qs_eingang')
 check('QM-System: die Originale erscheinen im Eingang (nur mit qs.bearbeiten)', eingang[0] == 200 and 'Compliance_Report_Estancia_Beispiel.pdf' in json.dumps(eingang[1], ensure_ascii=False) and I.call('qs_eingang')[0] == 403, eingang[0])
 check('Protokoll nennt die Ablage', 'im Eingang des QM-Systems abgelegt' in json.dumps(A.call('log')[1], ensure_ascii=False))
+
+# ---------- Schnappschüsse: Abschluss von vor dem Umbau, Wiederöffnen, viele Abschlüsse ----------
+ab = gespeicherte_sendung(sid)['abschluss']
+zweit = ab['schnappschuss']
+zweit_doc = _json(storage_raw(f"{SCHNAPP}/{zweit['id']}"))
+# so liegt ein Abschluss in bestehenden Daten: Farmer samt Umriss eingebettet, ohne Verweis
+alt = {**gespeicherte_sendung(sid), 'id': 'sAltbestand', 'partie': 'P-ALTBESTAND', 'aktiv': False,
+       'abschluss': {**{k: w for k, w in ab.items() if k != 'schnappschuss'}, 'betriebe': zweit_doc['betriebe']}}
+doc = _json(storage_raw('containerimport-eudr-sendungen'))
+doc['liste'].append(alt)
+storage_write('containerimport-eudr-sendungen', doc)
+roh = storage_raw('containerimport-eudr-sendungen')
+st, r = L.call('containerimport_eudr_schnappschuss&sendung=sAltbestand')
+ex = L.call('containerimport_eudr_export&sendung=sAltbestand')[1]
+x = next(y for y in stand()['sendungen'] if y['id'] == 'sAltbestand')
+check('Abschluss von vor dem Umbau (Umrisse eingebettet): Stand ohne Umriss, Karte und Export mit den eingebetteten Umrissen',
+      st == 200 and r['betriebe'] == alt['abschluss']['betriebe'] and [f['geometry'] for f in ex['geojson']['features']] == [b['geometrie'] for b in alt['abschluss']['betriebe'] if b['stand'] != 'fehler']
+      and [b['name'] for b in x['abschluss']['betriebe']] == [b['name'] for b in alt['abschluss']['betriebe']] and all('geometrie' not in b for b in x['abschluss']['betriebe']), (st, r.get('error')))
+check('Lesen ändert den Altbestand nicht (keine Migration)', storage_raw('containerimport-eudr-sendungen') == roh)
+
+s = next(x for x in stand()['sendungen'] if x['id'] == sid)
+st, r = I.call('containerimport_eudr_sendung_abschluss', {'id': sid, 'rev': s['rev'], 'oeffnen': True, 'grund': 'Zweite Prüfung'})
+s = next(x for x in r['sendungen'] if x['id'] == sid)
+st2 = I.call('containerimport_eudr_sendung_abschluss', {'id': sid, 'rev': s['rev'], 'ergebnis': 'nicht_vernachlaessigbar', 'begruendung': 'Nach der zweiten Prüfung festgehalten.'})[0]
+gs = gespeicherte_sendung(sid)
+dritt = gs['abschluss']['schnappschuss']
+check('Wiederöffnen und erneut abschließen: neues Schnappschuss-Dokument; frühere Abschlüsse verweisen weiter auf ihre, unverändert',
+      st == 200 and st2 == 200 and [f.get('schnappschuss') for f in gs['fruehere']] == [erst, zweit] and dritt['id'] not in (erst['id'], zweit['id']) and _json(storage_raw(f"{SCHNAPP}/{zweit['id']}")) == zweit_doc and _json(storage_raw(f"{SCHNAPP}/{erst['id']}")) == erst_doc
+      and _json(storage_raw(f"{SCHNAPP}/{dritt['id']}"))['sendung'] == sid, (st, st2, [f.get('schnappschuss') for f in gs['fruehere']]))
+
+# Viele Abschlüsse: mit der Grenze aus KERN-3 (100 000 Punkte aller eingebetteten Umrisse) ging nach rund 25 dieser Abschlüsse
+# keiner mehr, ohne Grenze fiel ab rund 400 000 Punkten das Modul aus. Jetzt wächst das Dokument der Container je Abschluss nur
+# um Profil und Farmer ohne Umriss.
+gross = betrieb('Estancia Beispiel')
+umriss = {'type': 'Polygon', 'coordinates': [kreis(4000, (-56.3, -22.9), 0.05)]}
+st = I.call('containerimport_eudr_betriebe_save', {'betriebe': [{'id': gross['id'], 'rev': gross['rev'], 'geometrie': umriss}]})[0]
+vorher = len(storage_raw('containerimport-eudr-sendungen'))
+staende, ids_viele = [], []
+for n in range(61):
+    a, r = I.call('containerimport_eudr_sendung_save', {**SENDUNG, 'partie': f'P-VIELE-{n:02d}', 'aktiv': False, 'betriebe': [gross['id']]})
+    b2 = I.call('containerimport_eudr_sendung_abschluss', {'id': r.get('id', ''), 'rev': 1, 'ergebnis': 'nicht_vernachlaessigbar', 'begruendung': 'Test vieler Abschlüsse.'})[0]
+    staende.append((a, b2)); ids_viele.append(r.get('id', ''))
+punkte = [gespeicherte_sendung(i)['abschluss']['schnappschuss']['punkte'] for i in ids_viele]
+zuwachs = (len(storage_raw('containerimport-eudr-sendungen')) - vorher) / 61
+check('61 Abschlüsse hintereinander mit je 4001 Punkten: alle gelingen, zusammen weit über der früheren Grenze von 100 000 Punkten',
+      st == 200 and staende == [(200, 200)] * 61 and punkte == [4001] * 61 and sum(punkte) > 100000, (st, [x for x in staende if x != (200, 200)][:3], punkte[:3]))
+check('Dokument der Container wächst je Abschluss nur um Profil und Farmer (unter einem Fünftel des Umrisses), die Umrisse liegen in eigenen Dokumenten',
+      zuwachs < len(json.dumps(umriss)) / 5 and len(storage_docs(SCHNAPP)) >= 61 + 3, (round(zuwachs), len(json.dumps(umriss)), len(storage_docs(SCHNAPP))))
+I.call('containerimport_eudr_betriebe_save', {'betriebe': [{'id': gross['id'], 'rev': betrieb('Estancia Beispiel')['rev'], 'geometrie': {'type': 'Polygon', 'coordinates': [kreis(8, (-56.3, -22.9), 0.05)]}}]})
+ex = L.call('containerimport_eudr_export&sendung=' + ids_viele[-1])[1]
+check('Export eines dieser Container: der Umriss von damals mit allen Punkten, auch nach einer späteren Änderung am Farmer (GR-106)',
+      [f['geometry'] for f in ex['geojson']['features']] == [umriss] and len(betrieb('Estancia Beispiel')['geometrie']['coordinates'][0]) == 9, ex.get('error'))
 check('keine JavaScript-Fehler', not errs, errs)
 
 print(f'{sum(res)}/{len(res)} passed')

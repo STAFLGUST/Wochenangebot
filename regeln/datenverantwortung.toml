@@ -913,7 +913,15 @@ name = "containerimport-eudr-sendungen"
 eigentuemer = "containerimport"
 bereich = "intern"
 schutz = "vertraulich"
-beschreibung = "Container-Import: Container (im Code „sendung“; Partie-, Akten- und Containernummer, Lieferant mit Nummer der Stammdaten und Name als Schnappschuss, Schlachthof, Stand, Tracking (Schiff, Reederei, Konnossement, Häfen, Abfahrt, Ankunft), Auftragsnummer, Ware, Lose, zugeordnete Farmer, Farmer-Nummern ohne Unterlagen, Nachweise, Referenz der Sorgfaltserklärung) und abgeschlossene Risikobewertungen mit Schnappschuss von Profil und Betrieben"
+beschreibung = "Container-Import: Container (im Code „sendung“; Partie-, Akten- und Containernummer, Lieferant mit Nummer der Stammdaten und Name als Schnappschuss, Schlachthof, Stand, Tracking (Schiff, Reederei, Konnossement, Häfen, Abfahrt, Ankunft), Auftragsnummer, Ware, Lose, zugeordnete Farmer, Farmer-Nummern ohne Unterlagen, Nachweise, Referenz der Sorgfaltserklärung) und abgeschlossene Risikobewertungen mit Schnappschuss von Profil und Betrieben (seit 23.11.2026 ohne Umriss, mit Verweis auf containerimport-eudr-schnappschuss/*: Kennung, SHA-256, Punkte; ältere Abschlüsse mit eingebettetem Umriss)"
+[[dokument]]
+name = "containerimport-eudr-schnappschuss/*"
+eigentuemer = "containerimport"
+bereich = "intern"
+schutz = "vertraulich"
+dynamisch = true   # EUDR_SCHNAPPSCHUSS . Kennung (module/containerimport/eudr.php)
+beschreibung = "Container-Import: die Farmer einer abgeschlossenen EUDR-Bewertung samt Umriss in WGS84 (Sichten zum Zeitpunkt des Abschlusses), je Abschluss ein Dokument mit Kennung des Containers und wer/wann; der Container verweist mit Kennung und SHA-256 darauf"
+historie = "GoBD/GR-106: einmal geschrieben, nie geändert oder gelöscht – auch nicht beim Wiederöffnen (der frühere Abschluss verweist weiter darauf); Leser prüfen die SHA-256 am Container"
 [[dokument]]
 name = "containerimport-schlachthoefe"
 eigentuemer = "containerimport"
