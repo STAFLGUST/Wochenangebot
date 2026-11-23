@@ -2,7 +2,7 @@
 
 <!-- ERZEUGT von `python3 werkzeuge/doku.py erzeugen` – nicht von Hand ändern. Quelle: Funktionen und Kommentare im Code. Die CI prüft, dass diese Datei zum Code passt. -->
 
-125 Dateien, 1281 Funktionen – in der Reihenfolge der Datei, **fett** die Abschnitte. Text = erste Aussage des Kommentars direkt über der Funktion (Python: Docstring). Übersicht aller Module: [README.md](README.md).
+125 Dateien, 1282 Funktionen – in der Reihenfolge der Datei, **fett** die Abschnitte. Text = erste Aussage des Kommentars direkt über der Funktion (Python: Docstring). Übersicht aller Module: [README.md](README.md).
 
 ## `.github/scripts/apt_vorrat.py`
 
@@ -344,6 +344,7 @@ _Antworten, Eingaben, Datenprüfung_
 
 **Datenprüfung**
 
+- `zahl_text_de(v)` – Eingabe einer Zahl lesbar für is_numeric: deutscher Text „1.234,5“ → „1234.5“, „0,5“ → „0.5“; Punkte gelten nur in Dreiergruppen nach einer Ziffer 1–9 als …
 - `s(v, max, allowEmpty)`
 - `clean_price(p, where)`
 
@@ -560,7 +561,7 @@ _Protokoll, Änderungstexte, Anmeldeversuche_
 
 **Protokoll**
 
-- `protokoll_verwerfen(log, n)` – $n Einträge verwerfen: zuerst die ältesten gelungenen Kundenanmeldungen, dann die ältesten übrigen; der Vermerk über entfernte Einträge bleibt.
+- `protokoll_verwerfen(log, n)` – $n Einträge verwerfen: zuerst die ältesten gelungenen Kundenanmeldungen und selbst gesetzten Kunden-Passwörter, dann die ältesten übrigen; der Vermerk über …
 - `protokoll_kuerzen(log)` – Monatsdokument auf die Grenzen bringen: Einträge verwerfen (protokoll_verwerfen) und das im Dokument vermerken (ein Eintrag je Monat, er wird fortgeschrieben …
 - `protokoll_kundenseite()` – Getrenntes Protokoll (ADR-007 Stufe 2d, ab Trennstufe 4): Die Kundenseite (ohne internen Ordner) schreibt ihre Einträge in „kundenprotokoll/JJJJ-MM“ im …
 - `protokoll_beide()`
@@ -685,7 +686,7 @@ _Mitarbeiter-Sitzung, Rollen, Passwortbestätigung, CSRF_
 - `require_admin_confirmation(key)` – $key: Aktion im Katalog BESTAETIGUNG (lib/sicherheit.php) – ist die Bestätigung abgeschaltet, genügt die Administrator-Anmeldung
 - `confirm_password(me, password, invalidStatus)` – Gemeinsame, kontoweite Bremse für Passwortbestätigungen; nie durch neue Sitzungen zurücksetzen.
 - `keep_current_session(u)` – Nach Änderungen am zweiten Faktor nur die bestätigende Sitzung behalten.
-- `require_csrf()` – CSRF-Token der Kopfzeile gegen das der Sitzung; 403 mit code „csrf“, damit eine Oberfläche ein neues Token holen kann
+- `require_csrf()` – CSRF-Token der Kopfzeile gegen das der Sitzung; 403 mit code „csrf“ (wertet derzeit keine Oberfläche aus – das QS-Organigramm holt nach jedem 403 einmal ein …
 
 ## `app/api/lib/startseite.php`
 
