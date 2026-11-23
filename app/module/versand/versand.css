@@ -5,12 +5,12 @@
    Liste „Angebote dieser Woche“, der Verlauf und die Fenster „Veröffentlichen“ und „Senden“. Hell und dunkel über die --r-*. */
 body.vs { line-height: 1.45; }
 .vs .r-i { width: 18px; height: 18px; }
-.vs-knopf { display: inline-flex; align-items: center; justify-content: center; gap: 8px; height: 38px; padding: 0 16px; box-sizing: border-box; border: 1px solid var(--r-linie-2); border-radius: 10px;
+.vs-knopf { display: inline-flex; align-items: center; justify-content: center; gap: 8px; height: 36px; padding: 0 16px; box-sizing: border-box; border: 1px solid var(--r-linie-2); border-radius: 999px;
   background: var(--r-flaeche); color: var(--r-text); font: inherit; font-size: 14px; font-weight: 600; white-space: nowrap; text-decoration: none; cursor: pointer; }
 .vs-knopf:hover { background: var(--r-flaeche-2); color: var(--r-text); }
 .vs-knopf.primaer { background: var(--r-akzent); border-color: var(--r-akzent); color: var(--r-akzent-ink); }
 .vs-knopf.primaer:hover { background: var(--r-akzent-hover); border-color: var(--r-akzent-hover); }
-.vs-knopf.klein { height: 32px; padding: 0 11px; font-size: 13px; border-radius: 9px; }
+.vs-knopf.klein { height: 32px; padding: 0 12px; font-size: 13px; }
 .vs-knopf.nur-symbol { width: 34px; height: 34px; padding: 0; }
 .vs-knopf:disabled, .vs-knopf[aria-disabled="true"] { opacity: .5; cursor: not-allowed; }
 .vs-knopf .r-i { width: 16px; height: 16px; }

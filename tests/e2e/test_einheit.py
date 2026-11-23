@@ -270,6 +270,17 @@ with sync_playwright() as pw:
         : name(e) + ' Beschriftung ' + s.fontSize + '/' + s.fontWeight + ' ' + s.textTransform + ' ' + s.color + ', Kachel ' + r; })"""
     TITEL = {'tabellenkopf': 'Tabellenköpfe 11 px/600 in Großbuchstaben, Schrift --r-leise auf --r-flaeche-2',
              'kennzahl': 'Kennzahl-Kacheln 16 px rund, Beschriftung 13 px/500 in normaler Schreibweise (--r-leise)'}
+    BAUSTEINE['reiterleiste'] = r"""(() => { const l = [...inhalt.querySelectorAll('[role=tablist]')].find(sicht); if (!l) return [];
+      const s = getComputedStyle(l), t = [...l.querySelectorAll('[role=tab]')].filter(sicht), a = t.find((b) => b.getAttribute('aria-selected') === 'true'), out = [];
+      if (s.backgroundColor !== tok.spur || s.borderTopLeftRadius !== '999px' || s.paddingTop !== '4px') out.push(name(l).slice(0, 20) + ' Spur ' + s.backgroundColor + ' r' + s.borderTopLeftRadius + ' p' + s.paddingTop);
+      for (const b of t) { const q = getComputedStyle(b), h = Math.round(b.getBoundingClientRect().height);
+        if (h !== 36 || q.fontSize !== '14px' || q.fontWeight !== '600' || q.borderTopLeftRadius !== '999px') out.push(name(b) + ' ' + h + ' px ' + q.fontSize + '/' + q.fontWeight + ' r' + q.borderTopLeftRadius); }
+      if (a && getComputedStyle(a).backgroundColor !== tok.flaeche) out.push('gewählt ' + name(a) + ' ' + getComputedStyle(a).backgroundColor);
+      return out; })()"""
+    BAUSTEINE['knopf'] = r"""[...inhalt.querySelectorAll('.btn, .ci-knopf, .vs-knopf')].filter((e) => sicht(e) && !e.closest('[role=tablist]')).map((e) => {
+      const r = getComputedStyle(e).borderTopLeftRadius; return r === '999px' ? null : name(e) + ' r' + r; })"""
+    TITEL['reiterleiste'] = 'Reiterleiste als Kapsel (Spur --r-neutral-bg), Reiter 36 px, 14 px/600, gewählt --r-flaeche'
+    TITEL['knopf'] = 'Knöpfe als Kapsel wie überall'
     TOUR = r"""({ finger }) => { const inhalt = document.querySelector('.r-inhalt');
       const sicht = (e) => { const r = e.getBoundingClientRect(), s = getComputedStyle(e); return r.width > 1 && r.height > 1 && s.visibility !== 'hidden' && !e.closest('[hidden], dialog, .sr-only, [aria-hidden="true"]'); };
       const name = (e) => (e.id ? '#' + e.id : e.tagName.toLowerCase() + (typeof e.className === 'string' && e.className.trim() ? '.' + e.className.trim().split(/\s+/).slice(0, 2).join('.') : ''))

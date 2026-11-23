@@ -45,9 +45,9 @@ body.rw :focus-visible{outline:none;box-shadow:var(--rw-focus)}
 
 /* Leiste mit Reitern und Schnellaktionen */
 .rw-leiste{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;margin:22px 0 14px}
-.rw-tabs{display:flex;gap:4px;width:max-content;max-width:100%;overflow:auto;padding:4px;border-radius:999px;background:var(--rw-chip);scrollbar-width:none}
-.rw-tabs button{height:38px;padding:0 16px;border:0;border-radius:999px;background:transparent;color:var(--rw-muted);font:inherit;font-size:14px;font-weight:650;white-space:nowrap;cursor:pointer}
-.rw-tabs button[aria-selected="true"]{background:var(--rw-card);color:var(--rw-text);box-shadow:0 1px 4px rgba(0,0,0,.12)}
+.rw-tabs{display:flex;gap:4px;width:max-content;max-width:100%;overflow:auto;padding:4px;border-radius:999px;background:var(--r-neutral-bg);scrollbar-width:none}
+.rw-tabs button{height:36px;padding:0 16px;border:0;border-radius:999px;background:transparent;color:var(--r-text-2);font:inherit;font-size:14px;font-weight:600;white-space:nowrap;cursor:pointer}
+.rw-tabs button[aria-selected="true"]{background:var(--r-flaeche);color:var(--r-text);box-shadow:var(--r-schatten-aktiv)}
 .rw-schnell{display:flex;gap:8px;flex-wrap:wrap}
 .rw-schnell .btn{display:inline-flex;align-items:center;gap:7px}
 .rw .btn .i{width:16px;height:16px}
@@ -254,7 +254,7 @@ textarea.rw-eingabe{height:auto;padding:8px 10px;resize:vertical;line-height:1.4
   .rw-user-name{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
   .rw-initialen,.rw-rund{width:38px;height:38px}
   .rw-leiste{margin:14px 0 10px}
-  .rw-tabs button{height:36px;padding:0 13px;font-size:13px}
+  .rw-tabs button{padding:0 12px}
   .rw-schnell{width:100%;display:grid;grid-template-columns:1fr 1fr}
   .rw-schnell .btn{justify-content:center}
   .rw-kpis{gap:7px}.rw-kpi{padding:10px}.rw-kpi b{font-size:19px}

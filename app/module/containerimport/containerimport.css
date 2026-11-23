@@ -5,12 +5,12 @@
    Druckfassung des Risikoprofils. Hell und dunkel über die --r-*; Mobil ab 390 px. */
 body.ci { line-height: 1.45; }
 .ci .r-i { width: 18px; height: 18px; }
-.ci-knopf { display: inline-flex; align-items: center; justify-content: center; gap: 8px; min-height: 38px; padding: 0 16px; box-sizing: border-box; border: 1px solid var(--r-linie-2); border-radius: 10px;
+.ci-knopf { display: inline-flex; align-items: center; justify-content: center; gap: 8px; min-height: 36px; padding: 0 16px; box-sizing: border-box; border: 1px solid var(--r-linie-2); border-radius: 999px;
   background: var(--r-flaeche); color: var(--r-text); font: inherit; font-size: 14px; font-weight: 600; white-space: nowrap; text-decoration: none; cursor: pointer; }
 .ci-knopf:hover { background: var(--r-flaeche-2); color: var(--r-text); }
 .ci-knopf.primaer { background: var(--r-akzent); border-color: var(--r-akzent); color: var(--r-akzent-ink); }
 .ci-knopf.primaer:hover { background: var(--r-akzent-hover); border-color: var(--r-akzent-hover); }
-.ci-knopf.klein { min-height: 36px; padding: 0 11px; font-size: 13px; border-radius: 9px; }
+.ci-knopf.klein { min-height: 36px; padding: 0 12px; font-size: 13px; }
 .ci-knopf:disabled { opacity: .5; cursor: not-allowed; }
 .ci-knopf[aria-busy="true"] { opacity: .7; cursor: progress; }
 .ci-knopf .r-i { width: 16px; height: 16px; }
@@ -28,9 +28,9 @@ body.ci { line-height: 1.45; }
 .ci-ampel.gruen { background: var(--r-ok); } .ci-ampel.gelb { background: var(--r-warn); } .ci-ampel.rot { background: var(--r-rot); }
 
 /* Reiter, Hilfe, Leiste über den Listen */
-.ci-reiter { display: flex; gap: 4px; border-bottom: 1px solid var(--r-linie); }
-.ci-reiter button { min-height: 40px; padding: 0 14px; border: 0; border-bottom: 2px solid transparent; background: none; color: var(--r-text-2); font: inherit; font-size: 14px; font-weight: 600; cursor: pointer; }
-.ci-reiter button[aria-selected="true"] { border-bottom-color: var(--r-akzent); color: var(--r-text); }
+.ci-reiter { display: flex; gap: 4px; width: max-content; max-width: 100%; box-sizing: border-box; padding: 4px; border-radius: 999px; background: var(--r-neutral-bg); overflow-x: auto; scrollbar-width: none; }
+.ci-reiter button { flex: none; height: 36px; padding: 0 16px; border: 0; border-radius: 999px; background: none; color: var(--r-text-2); font: inherit; font-size: 14px; font-weight: 600; white-space: nowrap; cursor: pointer; }
+.ci-reiter button[aria-selected="true"] { background: var(--r-flaeche); color: var(--r-text); box-shadow: var(--r-schatten-aktiv); }
 .ci-hilfe { padding: 12px 18px; font-size: 14px; }
 .ci-hilfe summary { font-weight: 600; cursor: pointer; }
 .ci-hilfe summary span { font-weight: 400; }

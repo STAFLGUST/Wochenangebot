@@ -21,15 +21,15 @@ body.ctl {
 @media(prefers-reduced-motion:reduce){.ctl-toast{transition:none}}
 
 /* ── Bereiche des Controllings (oberste Ebene) und Reiter im Bereich ── */
-.ctl-bereiche{display:flex;gap:4px;width:max-content;max-width:100%;overflow:auto;padding:4px;margin:20px 0 4px;border-radius:999px;background:rgba(90,78,74,.1);scrollbar-width:none}
-.ctl-bereiche button{display:inline-flex;align-items:center;gap:7px;height:40px;padding:0 18px;border:0;border-radius:999px;background:transparent;color:var(--ctl-muted);font:inherit;font-size:14px;font-weight:650;white-space:nowrap;cursor:pointer}
-.ctl-bereiche button[aria-selected="true"]{background:var(--ctl-card);color:var(--ctl-text);box-shadow:0 1px 4px rgba(0,0,0,.12)}
+.ctl-bereiche{display:flex;gap:4px;width:max-content;max-width:100%;overflow:auto;padding:4px;margin:20px 0 4px;border-radius:999px;background:var(--r-neutral-bg);scrollbar-width:none}
+.ctl-bereiche button{display:inline-flex;align-items:center;gap:7px;height:36px;padding:0 16px;border:0;border-radius:999px;background:transparent;color:var(--r-text-2);font:inherit;font-size:14px;font-weight:600;white-space:nowrap;cursor:pointer}
+.ctl-bereiche button[aria-selected="true"]{background:var(--r-flaeche);color:var(--r-text);box-shadow:var(--r-schatten-aktiv)}
 .ctl-tabs button{height:34px;padding:0 14px;font-size:13px}
 .ctl-modul{display:inline-flex;align-items:center;gap:8px}.ctl-modul .i{color:#6b8a3a}
 .ctl-leer-bereich{max-width:560px;margin:40px auto;padding:28px;border-radius:24px;text-align:center;color:var(--ctl-muted)}
 .ctl-leer-bereich[hidden]{display:none}
 .ctl-stand{color:var(--ctl-muted);font-size:12px}
-@media(max-width:560px){.ctl-bereiche{margin-top:14px}.ctl-bereiche button{height:38px;padding:0 14px}.ctl-modul .i{display:none}}
+@media(max-width:560px){.ctl-bereiche{margin-top:14px}.ctl-bereiche button{padding:0 12px}.ctl-modul .i{display:none}}
 @media(max-width:480px){body.ctl .ctl-kopf .brand-logo{width:30px;height:28px;object-fit:cover;object-position:left center}}
 .ctl input[type="checkbox"]{accent-color:var(--ctl-accent)}
 @media(max-width:560px){
@@ -113,7 +113,7 @@ dialog.modal.ctl-dialog-detail{width:min(1060px,calc(100vw - 32px))}
 .ctl-sr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
 .ctl-dialog .dlg-head{border-color:var(--ctl-line)}.ctl-dialog .dlg-foot{border-color:var(--ctl-line);background:rgba(90,78,74,.04)}
 .ctl-dialog .dlg-head p{color:var(--ctl-muted)}.ctl-dialog .dlg-head h2{font-size:22px;letter-spacing:-.02em}.ctl-dialog .ctl-eyebrow{margin-bottom:4px}
-.ctl-dialog .dlg-foot .btn{height:44px;padding:0 16px;border-radius:12px}
+.ctl-dialog .dlg-foot .btn{height:40px;padding:0 16px}
 .ctl-dialog .ctl-rund .i{width:18px;height:18px}
 .ctl-ua-fbody{display:flex;flex-direction:column;gap:20px}
 .ctl-ua-fgruppe{border:0;margin:0;padding:0;min-width:0;display:flex;flex-direction:column;gap:9px}

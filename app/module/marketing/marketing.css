@@ -84,10 +84,10 @@ body.mkt .mkt-kopf .brand-logo { height: 28px; width: auto; }
 .mkt-fuss { padding: 0 8px; font-size: 13px; color: var(--mkt-muted); }
 
 /* ── Bereiche (Reiter) ── */
-.mkt-tabs { display: flex; gap: 4px; padding: 4px; margin-bottom: 24px; border-radius: 999px; background: var(--mkt-aus); width: max-content; max-width: 100%; overflow-x: auto; scrollbar-width: none; box-sizing: border-box; }
-.mkt-tabs button { display: inline-flex; align-items: center; gap: 6px; height: 36px; padding: 0 16px; border: 0; border-radius: 999px; background: none; color: var(--mkt-muted);
+.mkt-tabs { display: flex; gap: 4px; padding: 4px; margin-bottom: 24px; border-radius: 999px; background: var(--r-neutral-bg); width: max-content; max-width: 100%; overflow-x: auto; scrollbar-width: none; box-sizing: border-box; }
+.mkt-tabs button { display: inline-flex; align-items: center; gap: 6px; height: 36px; padding: 0 16px; border: 0; border-radius: 999px; background: none; color: var(--r-text-2);
   font: inherit; font-size: 14px; font-weight: 600; cursor: pointer; white-space: nowrap; }
-.mkt-tabs button[aria-selected="true"] { background: var(--mkt-reiter-aktiv); color: var(--mkt-text); box-shadow: 0 1px 3px rgba(0, 0, 0, .1); }
+.mkt-tabs button[aria-selected="true"] { background: var(--r-flaeche); color: var(--r-text); box-shadow: var(--r-schatten-aktiv); }
 .mkt-zahl { min-width: 20px; height: 20px; padding: 0 6px; border-radius: 10px; background: var(--mkt-akzent); color: #fff; font-size: 12px; line-height: 20px; text-align: center; box-sizing: border-box; }
 .mkt-zahl[hidden] { display: none; }
 

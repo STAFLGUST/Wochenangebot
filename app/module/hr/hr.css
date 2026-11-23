@@ -109,10 +109,10 @@ body.hr .hr-kopf .brand-logo { height: 28px; width: auto; }
 .hr-fuss { padding: 0 8px; font-size: 13px; color: var(--hr-muted); }
 
 /* ── Bereiche (Reiter) ── */
-.hr-tabs { display: flex; gap: 4px; padding: 4px; margin-bottom: 24px; border-radius: 999px; background: var(--hr-aus); width: max-content; max-width: 100%; overflow-x: auto; scrollbar-width: none; }
-.hr-tabs button { display: inline-flex; align-items: center; gap: 6px; height: 36px; padding: 0 16px; border: 0; border-radius: 999px; background: none; color: var(--hr-muted);
+.hr-tabs { display: flex; gap: 4px; padding: 4px; margin-bottom: 24px; border-radius: 999px; background: var(--r-neutral-bg); width: max-content; max-width: 100%; overflow-x: auto; scrollbar-width: none; }
+.hr-tabs button { display: inline-flex; align-items: center; gap: 6px; height: 36px; padding: 0 16px; border: 0; border-radius: 999px; background: none; color: var(--r-text-2);
   font: inherit; font-size: 14px; font-weight: 600; cursor: pointer; white-space: nowrap; }
-.hr-tabs button[aria-selected="true"] { background: var(--hr-reiter-aktiv); color: var(--hr-text); box-shadow: 0 1px 3px rgba(0, 0, 0, .1); }
+.hr-tabs button[aria-selected="true"] { background: var(--r-flaeche); color: var(--r-text); box-shadow: var(--r-schatten-aktiv); }
 .hr-tabs button[hidden] { display: none; }
 .hr-zahl { min-width: 20px; height: 20px; padding: 0 6px; border-radius: 10px; background: var(--hr-akzent); color: #fff; font-size: 12px; line-height: 20px; text-align: center; box-sizing: border-box; }
 .hr-zahl[hidden] { display: none; }
