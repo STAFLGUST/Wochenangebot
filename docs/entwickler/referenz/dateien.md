@@ -531,7 +531,7 @@ Jede Code-Datei beginnt mit einem Kopfkommentar; dessen erste Aussage steht hier
 | `datenbank-umschalten.sh` | plattform | Speicher umschalten: Dateien → SQLite (migrate) oder zurück (rollback), im Wartungsfenster durch den Betreiber. |
 | `datenbank.py` | plattform | Offline migration/rollback and online SQLite backup. |
 | `einrichten.sh` | plattform | Einmalig auf dem Server ausführen: richtet die automatische Aktualisierung ein. |
-| `freigabe-einspielen.sh` | plattform | Release-Modus: spielt nur einen von Hand freigegebenen Commit ein (GitHub-Workflow „Release“), prüft danach die Erreichbarkeit wie ein Besucher und kehrt bei Fehlern automatisch zur Vorversion zurück. |
+| `freigabe-einspielen.sh` | plattform | Release-Modus: spielt nur einen von Hand freigegebenen Commit ein (GitHub-Workflow „Release“), prüft danach die Erreichbarkeit wie ein Besucher und kehrt bei Fehlern automatisch zur Vorversion zurück – auch wenn … |
 | `ip-freigabe-aus.php` | plattform | Offline emergency tool, also supports SQLite. |
 | `ip-freigabe-aus.sh` | plattform | Notfall: IP-Freigabe und Ländersperre ausschalten (z. |
 | `karte-laden.sh` | plattform | Detailkarte (Straßen, Gebäude, Ortsnamen) für CRM-Karte und Auswertung laden – OpenStreetMap-Daten als eine Datei auf dem eigenen Server (keine fremden Kartendienste beim Ansehen). |
@@ -772,6 +772,7 @@ Jede Code-Datei beginnt mit einem Kopfkommentar; dessen erste Aussage steht hier
 | `test_cdn.py` | plattform | bunny.net vor dem Server (Caddyfile, Abschnitt „cdn“) mit echtem Caddy in der Fassung des Betriebs. |
 | `test_cdn_netzsperre.py` | plattform | Netzsperre für bunny.net (deploy/cdn_netzsperre.py) |
 | `test_cdn_netzsperre.sh` | plattform | Test von deploy/cdn-netzsperre.sh (Netzsperre für bunny.net) – mit Platzhaltern für nft, systemctl, ip, journalctl und curl, Liste aus Dateien mit Dokumentationsadressen (WA_TESTNETZE=1), in einem Wegwerf-Ordner. |
+| `test_ci_auslagern.sh` | plattform | Test von deploy/ci-kalkulationen-auslagern.php (Kalkulationen des Container-Imports auslagern, GoBD) |
 | `test_dashboard_domains.py` | plattform | Dashboard-Hosts: Modul-Hosts bleiben 503-Platzhalter bis zur Freigabe (GR-105); die Hosts der zentralen Anmeldung (ADR-003, Inbetriebnahme Schritt 6) führen nur zu Zielen, die es ausschließlich mit der … |
 | `test_daten_trennen.py` | plattform | Test von deploy/daten_trennen.py (ADR-007 Stufe 2: interne Dokumente aus dem gemeinsamen Datenordner) – in Wegwerf-Ordnern, für Dateien und SQLite |
 | `test_daten_trennen.sh` | plattform | Test von deploy/daten-trennen.sh (ADR-007 Stufe 2) – mit Platzhaltern für docker, sichern.sh und chown in einem Wegwerf-Ordner; die eigentliche Trennung macht das echte deploy/daten_trennen.py (eigene Tests: … |
@@ -863,7 +864,7 @@ Jede Code-Datei beginnt mit einem Kopfkommentar; dessen erste Aussage steht hier
 | `test_lieferanten.py` | verwaltung | Stammdaten → Lieferanten und Versandarten (Wunsch des Inhabers 06.11.2026): vollständiger Lieferanten-Export der Warenwirtschaft (alle Spalten, Name darf fehlen, Umsätze nur für Bearbeiter), Versandarten (Nummer, … |
 | `test_mail_intern.py` | plattform | Postfach für interne E-Mails (z. |
 | `test_marketing.py` | marketing | Marketing · Redaktionsplan (Modul marketing, Oberfläche marketing.intern unter /module/marketing/). |
-| `test_master.py` | verwaltung | Testgruppe master: Artikelstammdaten und Bezeichnungsregeln (Fleischart, Herkunft, Zustand, VK-Gruppe). |
+| `test_master.py` | verwaltung | Testgruppe master: Artikelstammdaten und Bezeichnungsregeln (Fleischart, Herkunft, Zustand, VK-Gruppe); nach 409 (Import, „Als Stammdaten speichern“) keine Erfolgsmeldung; Pop-up mit VK-Gruppe außerhalb der Liste … |
 | `test_mhd_mail.py` | plattform | Bestand → „MHD an Verkauf“: die MHD-Liste (Suche „MHD“: kürzestes MHD bis heute + 14 Tage) per E-Mail an die Empfänger der Benachrichtigung „MHD-Liste an den Verkauf“ – Bild der Liste eingebettet (cid), Excel-Datei … |
 | `test_modul_wartung.py` | plattform | Wartung je Oberfläche (GR-107) |
 | `test_module_status.py` | plattform | Modulzustand zur Laufzeit (GR-102) |

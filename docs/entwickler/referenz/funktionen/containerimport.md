@@ -2,7 +2,7 @@
 
 <!-- ERZEUGT von `python3 werkzeuge/doku.py erzeugen` – nicht von Hand ändern. Quelle: Funktionen und Kommentare im Code. Die CI prüft, dass diese Datei zum Code passt. -->
 
-35 Dateien, 369 Funktionen – in der Reihenfolge der Datei, **fett** die Abschnitte. Text = erste Aussage des Kommentars direkt über der Funktion (Python: Docstring). Übersicht aller Module: [README.md](README.md).
+35 Dateien, 376 Funktionen – in der Reihenfolge der Datei, **fett** die Abschnitte. Text = erste Aussage des Kommentars direkt über der Funktion (Python: Docstring). Übersicht aller Module: [README.md](README.md).
 
 ## `app/api/aktionen/containerimport.php`
 
@@ -124,9 +124,13 @@ _Container-Import: Container (ein Einkauf bei einem Lieferanten, eine Partienumm
 - `eudr_kriterium(id, titel, stand, text, betriebe)` – Ein Kriterium des Profils: stand ok \| hinweis \| offen \| kritisch
 - `eudr_kriterien()` – Kriterien des Risikoprofils (Art. 10 der Verordnung) als Tabelle: jede Zeile bewertet die Sendung mit ihren Betrieben ($bs = Sichten der Betriebe) und …
 - `eudr_profil(s, bs)` – Risikoprofil einer Sendung: alle Kriterien, Gesamtstand (das schlechteste Kriterium) und ein Vorschlag.
-- `eudr_sendung_betriebe(s, sichten)` – Betriebe einer Sendung als Sichten: nach dem Abschluss der Schnappschuss, sonst der aktuelle Stand
+- `eudr_sendung_betriebe(s, sichten, stelle)` – Betriebe einer Sendung als Sichten: nach dem Abschluss der Schnappschuss (seit 23.11.2026 ohne Umriss, mit Umriss: eudr_schnappschuss_betriebe), sonst der …
 - `eudr_abschluss(s, eingabe, sichten, me)` – Abschluss einer Bewertung aus der Eingabe: Ergebnis, Begründung, Bearbeiter und Schnappschuss von Profil und Betrieben (GR-106).
-- `eudr_sendung_sicht(s, betriebe, hofNamen)` – Sendung für die Oberfläche: mit Profil – bei abgeschlossener Bewertung dem gespeicherten Schnappschuss; frühere Abschlüsse nur mit Ergebnis, Begründung und …
+- `eudr_schnappschuss_ablegen(sendung, a)` – Farmer eines Abschlusses (eudr_abschluss) mit Umriss in ein eigenes Dokument legen – neue Kennung, nie überschrieben – und den Abschluss für das Dokument der …
+- `eudr_schnappschuss_betriebe(a)` – Farmer eines Abschlusses samt Umriss: aus seinem Dokument, nur wenn die Prüfsumme stimmt; Abschlüsse von vor dem 23.11.2026 tragen sie eingebettet
+- `eudr_schnappschuss_summe(betriebe)`
+- `eudr_ohne_umriss(betriebe)`
+- `eudr_sendung_sicht(s, betriebe, hofNamen, stelle)` – Sendung für die Oberfläche: mit Profil – bei abgeschlossener Bewertung dem gespeicherten Schnappschuss, dessen Farmer ohne Umriss (die Karte holt ihn mit …
 
 **GeoJSON für das EU-Informationssystem**
 
@@ -311,6 +315,7 @@ _STAFL-Plattform · Modul Container-Import – Container (ein Einkauf bei einem 
 - `nummernPruefen()` – Eingefügte Nummern prüfen lassen (speichert nichts) und als Vorschau zeigen
 - `nummernUebernehmen()` – Vorschau ins Fenster übernehmen; gespeichert wird mit „Speichern“ (der Server löst die Nummern dabei erneut auf)
 - `sendungOeffnen(id)`
+- `schnappschussKarte(id, el)` – Karte einer abgeschlossenen Bewertung: der Stand bringt die Farmer des Schnappschusses ohne Umriss mit, die Umrisse holt erst das Fenster
 - `sendungAusFenster()`
 - `schlachthofWahlNeu()` – Lieferant im Fenster geändert: zur Wahl stehen nur seine Schlachthöfe; der gewählte bleibt, wenn er dazugehört
 - `sendungSpeichern(zusatz)`
@@ -534,6 +539,9 @@ _Modul Container-Import, Reiter EUDR (app/module/containerimport/, Oberfläche c
 **Eigene Gegenprüfung**
 
 **Abschluss**
+
+- `punktzahl(g)`
+- `gespeicherte_sendung(i)`
 
 **Oberfläche**
 

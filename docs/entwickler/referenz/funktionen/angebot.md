@@ -2,7 +2,7 @@
 
 <!-- ERZEUGT von `python3 werkzeuge/doku.py erzeugen` – nicht von Hand ändern. Quelle: Funktionen und Kommentare im Code. Die CI prüft, dass diese Datei zum Code passt. -->
 
-62 Dateien, 982 Funktionen – in der Reihenfolge der Datei, **fett** die Abschnitte. Text = erste Aussage des Kommentars direkt über der Funktion (Python: Docstring). Übersicht aller Module: [README.md](README.md).
+62 Dateien, 984 Funktionen – in der Reihenfolge der Datei, **fett** die Abschnitte. Text = erste Aussage des Kommentars direkt über der Funktion (Python: Docstring). Übersicht aller Module: [README.md](README.md).
 
 ## `app/api/lib/angebote.php`
 
@@ -236,7 +236,7 @@ _Druck der Angebote: Fußzeile des Briefbogens unter jedem gedruckten Angebot (W
 - `druck_fuss_text(v, zeilen, laenge)` – Text einer Spalte: höchstens DRUCK_FUSS_ZEILEN Zeilen, ohne Steuerzeichen, Leerzeichen bereinigt
 - `druck_fuss_clean(in)` – Eingabe prüfen: drei Spalten, zwei Zeilen, Modus – unbekannte Felder fallen weg
 - `druck_fuss_gespeichert()` – Gespeicherte Einstellung (roh) oder null
-- `druck_fuss()` – Wirksame Fußzeile: eigene Texte, sonst die Vorgabe; „eigen“ sagt, ob Texte hinterlegt sind
+- `druck_fuss()` – Wirksame Fußzeile: eigene Texte, jedes leere Feld mit der Vorgabe; „eigen“ sagt, ob Texte hinterlegt sind
 - `druck_angemeldet()` – Angemeldet im Sinne der Fußzeile: Mitarbeiter oder Kunde mit eigenem Passwort.
 - `druck_fuss_public(angemeldet)` – Für die Angebotsseite (Druck): nur Texte und Modus.
 - `druck_fuss_speichern(in, me)` – Speichern (nur das Feld „druck“; Fracht und Hinweis bleiben unverändert).
@@ -384,7 +384,7 @@ _Eingabebereich – Fenster „Artikel hinzufügen“ (gemeinsam für „Angebot
 - `pickZeilen(basis)` – Angezeigte Artikel: gewählte Gruppe, sonst (bei Suche) alle Gruppen; sortiert nach Gruppe und Artikelnummer
 - `oeffnen(c)`
 - `renderPick()`
-- `suchPlatzhalter()` – Suchfeld oben: sucht in der gewählten Gruppe, ohne gewählte Gruppe in allen Gruppen
+- `suchPlatzhalter()` – Suchfeld oben: sucht in der gewählten Gruppe, ohne gewählte Gruppe in allen Gruppen.
 - `gruppenFiltern()` – Gruppenleiste nach dem Suchtext links filtern (Nummer oder Name); die gewählte Gruppe bleibt sichtbar
 - `renderPickNav(basis)`
 - `detailHTML(a)`
@@ -1392,6 +1392,10 @@ _Jedes Angebot für sich (Inhaber 19.11.2026, Schritt 1)_
 - `angebote_setzen(fn)`
 - `kopieren(quelle, name)` – Angebot kopieren: Stellen und Zusatzpreise kommen mit; aus dem Wochenangebot werden dessen Zusatzpreise die der Kopie
 
+**Artikelpreise-Import übernimmt keine Empfehlung des Wochenangebots (wie „Artikel hinzufügen“ im Editor)**
+
+- `bestaetigt(aktion, daten)`
+
 ## `tests/e2e/test_angebotsliste.py`
 
 _Angebotsliste (Standardansicht der Angebotsseite)_
@@ -1604,6 +1608,7 @@ _search_
 
 - `check(name, cond, info)`
 - `drop(fd)` – filters (Desktop: Aufklappmenüs in der Filterleiste)
+- `vier_stellen(route)` – Preise mit mehr als 2 Nachkommastellen (gespeichert bis 4): CSV und Preisfilter wie die Anzeige auf Cent
 
 ## `tests/e2e/test_gemeinsam.py`
 

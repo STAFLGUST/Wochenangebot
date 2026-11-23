@@ -2,7 +2,7 @@
 
 <!-- ERZEUGT von `python3 werkzeuge/doku.py erzeugen` – nicht von Hand ändern. Quelle: Funktionen und Kommentare im Code. Die CI prüft, dass diese Datei zum Code passt. -->
 
-125 Dateien, 1270 Funktionen – in der Reihenfolge der Datei, **fett** die Abschnitte. Text = erste Aussage des Kommentars direkt über der Funktion (Python: Docstring). Übersicht aller Module: [README.md](README.md).
+125 Dateien, 1281 Funktionen – in der Reihenfolge der Datei, **fett** die Abschnitte. Text = erste Aussage des Kommentars direkt über der Funktion (Python: Docstring). Übersicht aller Module: [README.md](README.md).
 
 ## `.github/scripts/apt_vorrat.py`
 
@@ -560,7 +560,8 @@ _Protokoll, Änderungstexte, Anmeldeversuche_
 
 **Protokoll**
 
-- `protokoll_kuerzen(log)` – Monatsdokument auf die Grenzen bringen: älteste Einträge verwerfen und das im Dokument vermerken (ein Eintrag je Monat, er wird fortgeschrieben – sonst …
+- `protokoll_verwerfen(log, n)` – $n Einträge verwerfen: zuerst die ältesten gelungenen Kundenanmeldungen, dann die ältesten übrigen; der Vermerk über entfernte Einträge bleibt.
+- `protokoll_kuerzen(log)` – Monatsdokument auf die Grenzen bringen: Einträge verwerfen (protokoll_verwerfen) und das im Dokument vermerken (ein Eintrag je Monat, er wird fortgeschrieben …
 - `protokoll_kundenseite()` – Getrenntes Protokoll (ADR-007 Stufe 2d, ab Trennstufe 4): Die Kundenseite (ohne internen Ordner) schreibt ihre Einträge in „kundenprotokoll/JJJJ-MM“ im …
 - `protokoll_beide()`
 - `protokoll_monat(m)` – Einträge eines Monats (zeitlich sortiert) – auf der Mitarbeiterseite ab Trennstufe 4 beide Protokolle zusammen
@@ -684,7 +685,7 @@ _Mitarbeiter-Sitzung, Rollen, Passwortbestätigung, CSRF_
 - `require_admin_confirmation(key)` – $key: Aktion im Katalog BESTAETIGUNG (lib/sicherheit.php) – ist die Bestätigung abgeschaltet, genügt die Administrator-Anmeldung
 - `confirm_password(me, password, invalidStatus)` – Gemeinsame, kontoweite Bremse für Passwortbestätigungen; nie durch neue Sitzungen zurücksetzen.
 - `keep_current_session(u)` – Nach Änderungen am zweiten Faktor nur die bestätigende Sitzung behalten.
-- `require_csrf()`
+- `require_csrf()` – CSRF-Token der Kopfzeile gegen das der Sitzung; 403 mit code „csrf“, damit eine Oberfläche ein neues Token holen kann
 
 ## `app/api/lib/startseite.php`
 
@@ -878,6 +879,7 @@ _STAFL-Plattform · Gemeinsamer Rahmen_
 - `feststellen(fest, merken)`
 - `leisteBinden(nav)` – Ereignisse einmal je Leiste (zeichnen() kann mehrfach laufen)
 - `mobilkopf(start)` – Kopfzeile am Handy (nur unter 900 px sichtbar): Menüknopf und Logo; einmal je Seite
+- `startKnopf(start, aktiv)` – „Start“ im Kopf der Seiten aus den Bausteinen des Rahmens (.r-seitenkopf, z. B. Versand, Container-Import): derselbe Knopf .stafl-zurueck wie auf allen …
 - `zeichnen(o)` – Leiste zeichnen. o.module Liste aus module_status (data.module) o.aktiv 'start' oder die Modul-ID der Seite o.nutzer Konto aus status (name, rollenName) …
 - `entfernen()` – Leiste entfernen (z. B. nach dem Abmelden): Seite wieder ohne Rahmen
 - `holen(action, body, csrf)`
@@ -1061,6 +1063,9 @@ _Daten trennen (ADR-007 Stufe 2): interne Dokumente aus daten/ in daten-intern/ 
 - `trennen(haupt, intern, regeln, ziel)`
 - `bereinigen(haupt, intern, regeln)` – Ab Stufe 2: kunden auf die Portalfelder kürzen, bestellung ohne Adressen.
 - `zusammenfuehren(haupt, intern, regeln)`
+- `ohne_vergleich(regeln)` – Interne Dokumente, die beim Zusammenführen nicht kopiert, sondern vereint bzw. ersetzt werden.
+- `interne_kopien(intern, ohne)` – Datendateien in daten-intern, die unverändert nach daten/ zurückgehen (ohne Dateiablage, Kennzeichen und ohne).
+- `aufraeumen(haupt, intern, regeln, stufe, zeilen)` – 4. Schritt des Zusammenführens: interne Kopien und den Auszug der Kundenseite entfernen, Kennzeichen zuletzt.
 - `main()`
 
 ## `deploy/datenbank.py`
@@ -1072,6 +1077,7 @@ _Offline migration/rollback and online SQLite backup._
 - `documents(root)`
 - `validate(db)`
 - `connect(root)`
+- `open_lock(root)` – Open (create) the shared lock file .storage.lock for flock without following a link: as root, open('a') on a link planted there would create any empty file …
 - `migrate(root)`
 - `rollback(root)`
 - `legacy_files(root)` – Old data files after the switch to SQLite: same selection as documents(), never read by the application.
@@ -1153,6 +1159,21 @@ _Test von deploy/daten_trennen.py (ADR-007 Stufe 2: interne Dokumente aus dem ge
 - `php_lib(code, daten, intern)` – Anwendung mit allen Funktionen (lib/laden.php) gegen diesen Datenordner – Mitarbeiterseite mit intern, Kundenseite ohne.
 - `aufbau2(t)`
 - `portal(c)`
+
+**Altbestand des Speicher-Umbaus: inaktive Datenbank im gemeinsamen Ordner**
+
+**Trennstufe 3 (ADR-007 Stufe 2c): Veröffentlichtes maßgeblich innen, Kundenseite nur eine Kopie**
+
+**Trennstufe 4 (ADR-007 Stufe 2d): Protokoll der Mitarbeiterseite innen, Kundenseite schreibt kundenprotokoll/**
+
+**Trennstufe 5 (ADR-007 Stufe 2e): Zähler, Anmeldeversuche und Live-Verkehr je Seite**
+
+**Wie im Betrieb: von Stufe 1 (seit 04.11.2026) in einem Schritt auf die höchste Stufe und zurück**
+
+**Abbruch beim Aufräumen des Zusammenführens (daten/ schon ohne Kennzeichen, daten-intern noch markiert)**
+
+- `abbrechen(name, ab)` – dt.<name> scheitert ab dem ab-ten Aufruf wie ein Abbruch (Strom, SSH); liefert die Rücknahme.
+- `f(*a, **k)`
 
 ## `tests/deploy/test_datenbank.py`
 
@@ -1481,6 +1502,9 @@ _Dashboard-Host (dashboard-stafl.de): nur Grundaktionen (lib/herkunft.php, host_
 _Zentrale Anmeldung – Verhalten der Anwendung ohne Keycloak (lib/oidc.php, GR-110)._
 
 - `check(n, c, i)`
+- `php(code)`
+- `anfrage(cookie, sub, kc, token, vor)` – Schreibende Anfrage (require_auth(true)) eines Keycloak-Hosts mit Sitzungs-Cookie, Identität und CSRF-Kopfzeile
+- `neues_token(a, alt)`
 
 ## `tests/e2e/test_passkeys.py`
 

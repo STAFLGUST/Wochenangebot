@@ -134,7 +134,7 @@ _STAFL-Plattform · Leergut – Oberfläche der Leergutkonten_
 **Formate**
 
 - `mengen(m, {…})` – Mengen „E2 +12 · H1 −3“ (nur Werte ≠ 0)
-- `ganz(v)` – Ganze Zahl aus einer Eingabe („1.200“, „−15“); '' → 0, ungültig → NaN
+- `ganz(v)` – Ganze Zahl aus einer Eingabe („1.200“, „−15“); '' → 0, ungültig → NaN.
 - `saldoBis(bewegungen, stichtag)`
 - `fristChip(a)`
 - `kundenLeergut()` – Leergut bei Kunden: Konten der Art Kunde mit Saldo, nach Wert.
