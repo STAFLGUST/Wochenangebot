@@ -1065,7 +1065,7 @@ _Daten trennen (ADR-007 Stufe 2): interne Dokumente aus daten/ in daten-intern/ 
 - `zusammenfuehren(haupt, intern, regeln)`
 - `ohne_vergleich(regeln)` – Interne Dokumente, die beim Zusammenführen nicht kopiert, sondern vereint bzw. ersetzt werden.
 - `interne_kopien(intern, ohne)` – Datendateien in daten-intern, die unverändert nach daten/ zurückgehen (ohne Dateiablage, Kennzeichen und ohne).
-- `aufraeumen(haupt, intern, regeln, stufe, zeilen)` – 4. Schritt des Zusammenführens: interne Kopien und den Auszug der Kundenseite entfernen, Kennzeichen zuletzt.
+- `aufraeumen(haupt, intern, regeln, stufe, zeilen, fortgesetzt)` – 4. Schritt des Zusammenführens: interne Kopien und den Auszug der Kundenseite entfernen, Kennzeichen zuletzt.
 - `main()`
 
 ## `deploy/datenbank.py`
