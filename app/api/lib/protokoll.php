@@ -21,18 +21,19 @@ const PROTOKOLL_BYTES_MAX = 4194304;            // 4 MiB je Monatsdokument (Lese
 const PROTOKOLL_TEXT_MAX = 2000;                // Zeichen je Vorgangstext
 const PROTOKOLL_DETAILS_MAX = 2000;             // Änderungszeilen je Eintrag (wie die großen Aufrufer schon selbst kürzen)
 
-/* $n Einträge verwerfen: zuerst die ältesten gelungenen Kundenanmeldungen und selbst gesetzten Kunden-Passwörter, dann die
-   ältesten übrigen; der Vermerk über entfernte Einträge bleibt. Beides kann ein Kunde ungebremst auslösen (kundenportal.php) –
-   eine Flut davon verdrängt so nur Kundeneinträge, nie Rechte-, Mitarbeiter- oder Sicherheitseinträge wie Fehlanmeldungen mit
-   IP-Adresse (Befund SEC-1, 22.11.2026). */
+/* $n Einträge verwerfen: zuerst die ältesten gelungenen Kundenanmeldungen, dann die ältesten selbst gesetzten Kunden-Passwörter,
+   dann die ältesten übrigen; der Vermerk über entfernte Einträge bleibt. Beides kann ein Kunde ungebremst auslösen
+   (kundenportal.php) – eine Flut davon verdrängt so nur Kundeneinträge, nie Rechte-, Mitarbeiter- oder Sicherheitseinträge wie
+   Fehlanmeldungen mit IP-Adresse (Befund SEC-1, 22.11.2026). Eine Anmelde-Flut verdrängt auch nicht den Nachweis „Passwort über
+   den Link aus der E-Mail festgelegt“ (kunde_password), etwa nach einer Übernahme über das Postfach (Prüfung SEC-1b-1). */
 function protokoll_verwerfen(array $log, int $n): array
 {
-    $zuerst = $danach = [];
+    $anmeldung = $passwort = $danach = [];
     foreach ($log as $k => $e) {
         $a = $e['a'] ?? '';
-        if ($a === 'kunde_login' || $a === 'kunde_password') $zuerst[] = $k; elseif ($a !== 'protokoll_groesse') $danach[] = $k;
+        if ($a === 'kunde_login') $anmeldung[] = $k; elseif ($a === 'kunde_password') $passwort[] = $k; elseif ($a !== 'protokoll_groesse') $danach[] = $k;
     }
-    return array_values(array_diff_key($log, array_flip(array_slice([...$zuerst, ...$danach], 0, $n))));
+    return array_values(array_diff_key($log, array_flip(array_slice([...$anmeldung, ...$passwort, ...$danach], 0, $n))));
 }
 /* Monatsdokument auf die Grenzen bringen: Einträge verwerfen (protokoll_verwerfen) und das im Dokument vermerken (ein Eintrag je
    Monat, er wird fortgeschrieben – sonst füllte der Vermerk selbst das Dokument). */

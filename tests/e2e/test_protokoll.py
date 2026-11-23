@@ -125,6 +125,15 @@ pw = [e['s'] for e in log if e['a'] == 'kunde_password']
 check('Flut selbst gesetzter Kunden-Passwörter: Rechte- und Fehlanmeldungseinträge bleiben, die ältesten Passwort-Einträge fallen weg',
       log[:2] == WICHTIG and len(pw) == MAXE - 3 and pw[0] == 'Kunde hat eigenes Passwort festgelegt 3' and any(e['a'] == 'login_fail' for e in log)
       and [e['weg'] for e in log if e['a'] == 'protokoll_groesse'] == [3], (log[:3], len(pw), pw[:1]))
+# eine Anmelde-Flut verdrängt nicht den älteren Nachweis „Passwort über den Link festgelegt“ (Prüfung SEC-1b-1)
+LINK = {'t': JETZT + '-01T07:30:00+00:00', 'u': 'kunde:opfer', 'n': 'Firma Opfer', 'r': 'kunde', 'ip': '192.0.2.8', 'a': 'kunde_password',
+        's': 'Kunde hat Passwort über den Link aus der E-Mail festgelegt'}
+storage_write('protokoll/' + JETZT, WICHTIG + [LINK] + [{'t': JETZT + '-01T08:00:00+00:00', 'u': 'kunde:viel', 'n': 'Firma Viel', 'r': 'kunde', 'ip': '',
+                                                         'a': 'kunde_login', 's': 'Kunde angemeldet %d' % i} for i in range(MAXE)])
+Client('198.51.100.48').call('login', {'username': 'admin', 'password': 'falsch-falsch-9'})
+log = protokoll()
+check('Flut gelungener Kundenanmeldungen: der ältere Nachweis „Passwort über den Link festgelegt“ bleibt, verworfen werden Anmeldungen',
+      log[:3] == WICHTIG + [LINK] and [e['weg'] for e in log if e['a'] == 'protokoll_groesse'] == [4], (log[:4], len(log)))
 storage_write('protokoll/' + JETZT, [])   # aufgeräumt für die Oberflächenprüfung
 
 # Oberfläche
