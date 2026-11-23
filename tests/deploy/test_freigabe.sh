@@ -118,7 +118,11 @@ lauf || true; ok "defekter Release wird nicht erneut versucht" '[ "$(kopf)" = "$
 # auf den Stand vor dem letzten erfolgreichen Release (.release-vorher schreibt nur ein erfolgreicher Lauf)
 ok "automatischer Rückfall: .release-vorher bleibt der Stand vor dem letzten erfolgreichen Release" '[ "$(cat "$B/.release-vorher")" = "$A_SHA" ] && [ "$(st vorher)" = "$X_SHA" ]'
 zurueck || true
-ok "Notfall-Rückfall nach automatischem Rückfall: auf den Stand vor dem letzten erfolgreichen Release, nie auf den abgelehnten" '[ "$(kopf)" = "$A_SHA" ] && grep -q "Zurückgesetzt auf" "$T/out.txt" && [ "$(cat "$B/.release-abgelehnt")" = "$G_SHA" ]'
+ok "Notfall-Rückfall nach automatischem Rückfall: auf den Stand vor dem letzten erfolgreichen Release, nie auf den abgelehnten" '[ "$(kopf)" = "$A_SHA" ] && grep -q "Zurückgesetzt auf" "$T/out.txt"'
+# Die Sperre des neueren, abgelehnten Release bleibt: sonst spielte der nächste Lauf ihn wieder ein (Notfall-Rückfall still zurückgenommen)
+ok "Notfall-Rückfall: Sperre des neueren, abgelehnten Release bleibt stehen" '[ "$(cat "$B/.release-abgelehnt")" = "$X_SHA" ]'
+lauf || true
+ok "… nächster Lauf nach dem Notfall-Rückfall: abgelehnter Release nicht erneut versucht (keine Sicherung, kein Codewechsel, keine Ausgabe)" '[ "$(kopf)" = "$A_SHA" ] && [ ! -s "$T/out.txt" ]'
 git -C "$B" reset -q --hard "$G_SHA"   # Ausgangslage der folgenden Prüfungen unabhängig vom Ergebnis oben
 
 rm -f "$B/.release-abgelehnt"

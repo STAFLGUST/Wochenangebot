@@ -133,7 +133,10 @@ Server aus dem eingespielten (also freigegebenen, CI-geprüften) Commit:
 
 `sh /opt/wochenangebot/deploy/release-zurueck.sh` geht auf den Stand vor dem letzten **erfolgreichen** Release zurück (`.release-vorher`
 im Installationsordner, nur root, schreibt nur ein erfolgreicher Lauf – abgelehnte oder gescheiterte Läufe lassen sie unverändert; `daten/deployment.php` ist im Container änderbar und nur Anzeige – fehlt
-`.release-vorher` noch (Releases vor dieser Datei), gilt dessen `vorher` nur, wenn es ein Vorgänger des aktiven Stands ist); Daten bleiben unverändert, der zurückgenommene Stand wird nicht erneut automatisch eingespielt.
+`.release-vorher` noch (Releases vor dieser Datei), gilt dessen `vorher` nur, wenn es ein Vorgänger des aktiven Stands ist); Daten bleiben unverändert, der zurückgenommene Stand wird nicht erneut automatisch eingespielt
+(`.release-abgelehnt`). Sperrt diese Datei schon einen neueren Release – nach einem automatischen Rückfall der abgelehnte –,
+bleibt dessen Sperre stehen; sonst spielte der nächste Lauf ihn wieder ein und nähme den Notfall-Rückfall still zurück.
+Die Datei enthält immer genau einen Commit (so lesen sie auch ältere Stände nach einem Rückfall).
 Danach Versionsnummern und Prüfliste des zurückgeholten Stands (`deploy/bereitstellen.py`). Container und Image wie beim
 automatischen Rückfall:
 
@@ -147,6 +150,12 @@ automatischen Rückfall:
 - Gesperrt, nichts geändert: Rückfall auf einen Stand, der die Trennstufe der Daten nicht kennt (`DATEN_TRENNSTUFE` des
   Zielstands kleiner als das höhere der Kennzeichen `daten/.daten-getrennt` und `daten-intern/.daten-intern`) – dort bräche
   jeder Speicherzugriff ab. Weg: erst `sh deploy/daten-trennen.sh zusammenfuehren` (Freigabe, Wartungsfenster), dann erneut.
+
+**Abgelehnten Release erneut versuchen** (z. B. nach einer vorübergehenden Störung beim Einspielen): Normalweg ist ein neuer
+Release – er läuft auf dem neuesten `main` und ist damit ein anderer Commit, den keine Sperre betrifft. Soll genau der
+gesperrte Stand noch einmal versucht werden: `rm /opt/wochenangebot/.release-abgelehnt` (root). Der nächste Lauf von
+`aktualisieren.sh` (höchstens 2 Minuten) versucht dann den neuesten Release erneut – mit Sicherung, Healthcheck und
+automatischem Rückfall wie immer.
 
 ## Was der Lauf nach der Freigabe prüft (`.github/scripts/release-pruefen.sh`)
 

@@ -1,7 +1,8 @@
 #!/bin/sh
 # Notfall: auf die Version vor dem letzten Release zurückgehen (Daten bleiben unverändert).
 #   sh /opt/wochenangebot/deploy/release-zurueck.sh
-# Der zurückgenommene Stand wird nicht erneut automatisch eingespielt; ein neuer Release ist dafür nötig.
+# Der zurückgenommene Stand wird nicht erneut automatisch eingespielt; ein neuer Release ist dafür nötig. Sperrt
+# .release-abgelehnt schon einen neueren Release (automatisch zurückgenommen), bleibt diese Sperre stattdessen stehen.
 #
 # Container wie in freigabe-einspielen.sh: alle neu erstellen, wenn sich Caddyfile, docker-compose.yml oder die
 # Ergänzungsdatei der Anmeldung zwischen den Ständen unterscheiden. Unterscheidet sich deploy/image/ und ist die
@@ -85,7 +86,9 @@ if git diff --name-only "$JETZT" "$VORHER" | grep -q '^deploy/image/' && envwert
   fi
 fi
 
-echo "$JETZT" > .release-abgelehnt
+# Sperre eines neueren, schon abgelehnten Release behalten (Nachfolger von JETZT, z. B. nach einem automatischen Rückfall):
+# sonst spielte der nächste Lauf ihn wieder ein und nähme diesen Rückfall still zurück. Eine Zeile wie bisher (ältere Stände lesen sie so)
+git merge-base --is-ancestor "$JETZT" "$(cat .release-abgelehnt 2>/dev/null || true)" 2>/dev/null || echo "$JETZT" > .release-abgelehnt
 git reset -q --hard "$VORHER"
 # Versionsnummern und Prüfliste aus dem zurückgeholten Commit (dessen eigenes Skript; ältere Stände bringen beides mit)
 if [ -f deploy/bereitstellen.py ]; then python3 deploy/bereitstellen.py || echo "Hinweis: Bereitstellung unvollständig – aktualisieren.sh holt sie nach"; fi
