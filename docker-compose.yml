@@ -2,7 +2,7 @@
 services:
   app:
     # Fest über Digest (gleiches Grundimage wie deploy/image/Dockerfile); aktualisieren: docs/entwickler/08-betrieb.md, „Images aktualisieren“
-    image: php:8.3-apache@sha256:a800bbd2c0aa322702259ed475556b2cbc311076a8d3c4bba9bfe96838745472
+    image: php:8.3-apache@sha256:e520186957084dc0a5baaea83b2ef0c20b16e78c1de31b6fdb21dc1240cce42e
     restart: unless-stopped
     logging:                        # Container-Protokoll begrenzt: höchstens 3 × 10 MB je Dienst (sonst wächst es unbegrenzt)
       driver: json-file
@@ -26,7 +26,7 @@ services:
 
   caddy:
     # Fest über Version und Digest (vorher „caddy:2“ – wechselte unbemerkt); aktualisieren: docs/entwickler/08-betrieb.md, „Images aktualisieren“
-    image: caddy:2.11.9@sha256:4e2425f6009577e7c651010f16679c28f7d12df3e7b1914f941a7a3370746b3c
+    image: caddy:2.11.9@sha256:4851e54a46b206517c574821bb5cc67f170d2156041e9fbc4c9193b45e84a75b
     restart: unless-stopped
     logging:                        # Container-Protokoll begrenzt: höchstens 3 × 10 MB je Dienst (sonst wächst es unbegrenzt)
       driver: json-file

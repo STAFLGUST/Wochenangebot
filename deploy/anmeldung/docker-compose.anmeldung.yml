@@ -224,7 +224,7 @@ services:
       kunde:                                               # Ziel app (Kundenseite); Relais der Datenleck-Prüfung (Port 8081)
 
   keycloak:
-    image: quay.io/keycloak/keycloak:26.8.2@sha256:c68e286cacd87b942ac1939a0a1481461109d6acd3a57dc496969a319a76bbf0
+    image: quay.io/keycloak/keycloak:26.8.2@sha256:7e66a96e4739239070aeaf72e4c5decf0f7f682cfc725b9f7ea2b336eaba38b3
     restart: unless-stopped
     logging:                        # Container-Protokoll begrenzt: höchstens 3 × 10 MB je Dienst (sonst wächst es unbegrenzt)
       driver: json-file
@@ -271,7 +271,7 @@ services:
       anmeldung:
 
   keycloak-db:
-    image: postgres:17-alpine@sha256:a77aa70e641402a21411b92b721c58d10f23b50ae5fdd2333efd22d166e1e5f7
+    image: postgres:17-alpine@sha256:f9cf3e1f0066f0eb0c48707d864f0ac5941e9ff454a072077d97a4d278d07d73
     restart: unless-stopped
     logging:                        # Container-Protokoll begrenzt: höchstens 3 × 10 MB je Dienst (sonst wächst es unbegrenzt)
       driver: json-file

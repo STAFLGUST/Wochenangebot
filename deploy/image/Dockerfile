@@ -10,7 +10,7 @@
 # Grundimage fest über den Digest (Mehrplattform-Index) – neue Digests trägt der wöchentliche Lauf „Sicherheitsupdates“
 # per Pull Request ein (werkzeuge/images_aktualisieren.py, überall gleich); CI (Bau, Vergleich mit dem Grundimage,
 # Schwachstellen-Scan) muss grün sein.
-FROM php:8.3-apache@sha256:a800bbd2c0aa322702259ed475556b2cbc311076a8d3c4bba9bfe96838745472
+FROM php:8.3-apache@sha256:e520186957084dc0a5baaea83b2ef0c20b16e78c1de31b6fdb21dc1240cce42e
 
 RUN set -eux; \
     apt-get update; \
