@@ -519,7 +519,7 @@ for art in ('dateien', 'sqlite'):
             code, out = lauf('zusammenfuehren', str(d), str(i), '--offline')
             nachher = {n: dt.dok_lesen(d, n) for n in NAMEN}
             check(f'{w}: erneutes zusammenfuehren vollendet ohne Verlust', code == 0 and nachher == vorher and dt.leer(i)
-                  and not (d / '.daten-getrennt').exists() and dt.dok_namen(d, 'kundenprotokoll/') == [] and dt.dok_lesen(d, 'kundenstamm') is None,
+                  and 'fortgesetzt' in out and 'Datensätze' not in out and not (d / '.daten-getrennt').exists() and dt.dok_namen(d, 'kundenprotokoll/') == [] and dt.dok_lesen(d, 'kundenstamm') is None,
                   (out, [n for n in vorher if nachher[n] != vorher[n]]))
             r = php_lib("echo json_encode([store_stufe(), store_read('hr-personal'), customers_load()['customers'][0]['email']]);", d, i)
             check(f'{w}: danach liest die Mitarbeiterseite alles aus daten/', r.startswith('[') and json.loads(r) == [0, vorher['hr-personal'], KUNDE['email']], r)

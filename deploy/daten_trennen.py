@@ -599,7 +599,7 @@ def zusammenfuehren(haupt, intern, regeln):
     # das Kennzeichen noch (Abbruch vor dem Umschalten), lief die Anwendung getrennt weiter und kann innen Neueres gespeichert
     # haben: dann der vergleichende Weg unten, der jede abweichende Datei meldet, statt sie beim Aufräumen zu löschen
     if (intern / ZURUECK).is_file() and not (haupt / MARKER_HAUPT).is_file():
-        return aufraeumen(haupt, intern, regeln, int((intern / ZURUECK).read_text().strip() or 0), [])
+        return aufraeumen(haupt, intern, regeln, int((intern / ZURUECK).read_text().strip() or 0), [], fortgesetzt=True)
     if not (haupt / MARKER_HAUPT).is_file():
         if (intern / MARKER_INTERN).is_file():
             raise ValueError('daten-intern ist markiert, daten/ aber ohne Kennzeichen, und kein abgebrochenes Zusammenführen vermerkt '
@@ -685,7 +685,7 @@ def interne_kopien(intern, ohne):
             and str(p.relative_to(intern).with_suffix('')) not in ohne]
 
 
-def aufraeumen(haupt, intern, regeln, stufe, zeilen):
+def aufraeumen(haupt, intern, regeln, stufe, zeilen, fortgesetzt=False):
     """4. Schritt des Zusammenführens: interne Kopien und den Auszug der Kundenseite entfernen, Kennzeichen zuletzt. Läuft nur, wenn
     alles zurückkopiert ist (vermerkt in daten-intern/.zusammengefuehrt); ein Abbruch hier wird durch erneuten Aufruf vollendet."""
     (haupt / MARKER_HAUPT).unlink(missing_ok=True)   # 3. umschalten: ab hier liest die Anwendung wieder alles aus daten/
@@ -711,6 +711,9 @@ def aufraeumen(haupt, intern, regeln, stufe, zeilen):
         (intern / 'dateien').rmdir()
     (intern / MARKER_INTERN).unlink(missing_ok=True)
     (intern / ZURUECK).unlink(missing_ok=True)
+    if fortgesetzt:   # die Zahlen des ersten Laufs kennt dieser Aufruf nicht
+        print(f'Abgebrochenes Zusammenführen fortgesetzt (von Stufe {stufe}): aufgeräumt, alle Daten liegen wieder in daten/')
+        return
     print(f'Zusammengeführt (von Stufe {stufe}): {len(zeilen)} Datensätze, {len(dateien)} Datendateien und {len(ablage)} Dateien der Ablage wieder in daten/'
           + ('; Kundendokument und Bestell-Einstellungen wieder vollständig' if stufe >= 2 else ''))
 
