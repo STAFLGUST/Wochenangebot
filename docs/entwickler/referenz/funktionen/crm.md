@@ -176,7 +176,7 @@ _STAFL-Plattform · CRM · Vertrieb Cockpit, Kunden, Wiedervorlagen (Anruf-Rhyth
 
 - `setzeDaten(d)`
 - `ersetze(k)` – Eintrag nach dem Speichern ersetzen (Server liefert den ganzen Eintrag zurück)
-- `speichereFelder(key, felder, vorher)` – vorher: Stand von Ansprechpartnern bzw. Notiz beim Öffnen – der Server lehnt mit 409 ab, wenn jemand das Feld inzwischen geändert hat; dann gilt seine …
+- `speichereFelder(key, felder, vorher)` – vorher: Stand von Ansprechpartnern bzw. Notiz beim Öffnen – der Server lehnt mit 409 ab, wenn jemand das Feld inzwischen geändert hat; die Basis steht dann …
 
 **Cockpit (cockpit.js): Mein Cockpit, Master-Cockpit**
 

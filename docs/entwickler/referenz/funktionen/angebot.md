@@ -1608,7 +1608,7 @@ _search_
 
 - `check(name, cond, info)`
 - `drop(fd)` – filters (Desktop: Aufklappmenüs in der Filterleiste)
-- `vier_stellen(route)` – Preise mit mehr als 2 Nachkommastellen (gespeichert bis 4): CSV und Preisfilter wie die Anzeige auf Cent
+- `vier_stellen(route)`
 
 ## `tests/e2e/test_gemeinsam.py`
 
