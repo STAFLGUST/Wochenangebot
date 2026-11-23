@@ -109,6 +109,22 @@ with tempfile.TemporaryDirectory() as tmp:
     (root / '.sqlite/store.sqlite').rename(root / '.sqlite/saved.sqlite')
     check('missing active DB fails closed without stale fallback', php(root, 'store_read("angebot");').returncode != 0 and not (root / '.sqlite/store.sqlite').exists())
     (root / '.sqlite/saved.sqlite').rename(root / '.sqlite/store.sqlite')
+    # A link planted as a folder name on the way to a document (daten/ is writable in the containers) must never let the
+    # rollback write onto the host: refused before anything changes; a link as file name likewise
+    check('test setup: document in a sub-folder', php(root, 'store_write("ordner/x", ["n"=>1]);').returncode == 0)
+    host_dir = Path(tmp) / 'host-dir'; host_dir.mkdir()
+    (root / 'ordner').symlink_to(host_dir)
+    stand = sorted((str(p.relative_to(root)), p.is_symlink() or p.read_bytes()) for p in root.rglob('*') if not p.is_dir() or p.is_symlink())
+    r = command(root, 'rollback', '--offline')
+    check('rollback with a folder link in the data directory: refused, nothing written to the link target, nothing changed',
+          r.returncode != 0 and 'symbolic link' in r.stderr.lower() and not any(host_dir.iterdir()) and (root / '.sqlite-active').is_file()
+          and sorted((str(p.relative_to(root)), p.is_symlink() or p.read_bytes()) for p in root.rglob('*') if not p.is_dir() or p.is_symlink()) == stand)
+    (root / 'ordner').unlink(); (root / 'ordner').mkdir()
+    (root / 'ordner' / 'x.php').symlink_to(Path(tmp) / 'host-file')
+    r = command(root, 'rollback', '--offline')
+    check('rollback with a file link at a document name: refused, link target never created', r.returncode != 0 and not (Path(tmp) / 'host-file').exists()
+          and (root / '.sqlite-active').is_file())
+    (root / 'ordner' / 'x.php').unlink()
     check('rollback succeeds', command(root, 'rollback', '--offline').returncode == 0)
     check('rollback preserves latest writes and deletions', not (root / 'deleted.php').exists() and php(root, 'echo store_read("new")["value"];').stdout == '42' and php(root, 'echo store_read("a")["n"];').stdout == '120')
     check('rollback retains separate encryption key', (root / 'mail-schluessel.php').exists())

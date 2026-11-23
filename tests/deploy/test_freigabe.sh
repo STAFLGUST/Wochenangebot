@@ -59,10 +59,13 @@ if [ "\$1" = up ] && [ -f "$T/up-fehler" ]; then echo "Error response from daemo
 exit 0
 STUB
 # Docker-Ersatz: gibt Befehle aus; stafl-app:release-vorher fehlt (inspect und tag scheitern), solange $T/kein-vorher
-# existiert, „tag“ allgemein, solange $T/tag-fehler existiert, „image prune“, solange $T/prune-fehler existiert
+# existiert („rmi“ legt es an, ein „tag“ auf release-vorher entfernt es), „tag“ allgemein, solange $T/tag-fehler existiert,
+# „image prune“, solange $T/prune-fehler existiert
 cat > "$T/docker.sh" <<STUB
 #!/bin/sh
 echo "docker \$*"
+[ "\$*" != "rmi stafl-app:release-vorher" ] || touch "$T/kein-vorher"
+[ "\$1 \$3" != "tag stafl-app:release-vorher" ] || [ -f "$T/tag-fehler" ] || rm -f "$T/kein-vorher"
 if [ -f "$T/kein-vorher" ] && { [ "\$1 \$2" = "tag stafl-app:release-vorher" ] || [ "\$1 \$2 \$3" = "image inspect stafl-app:release-vorher" ]; }; then echo "Error: No such image"; exit 1; fi
 if [ "\$1" = tag ] && [ -f "$T/tag-fehler" ]; then echo "Error: tag fehlgeschlagen"; exit 1; fi
 if [ "\$1 \$2" = "image prune" ] && [ -f "$T/prune-fehler" ]; then echo "Cannot connect to the Docker daemon"; exit 1; fi
@@ -118,7 +121,11 @@ lauf || true; ok "defekter Release wird nicht erneut versucht" '[ "$(kopf)" = "$
 # auf den Stand vor dem letzten erfolgreichen Release (.release-vorher schreibt nur ein erfolgreicher Lauf)
 ok "automatischer Rückfall: .release-vorher bleibt der Stand vor dem letzten erfolgreichen Release" '[ "$(cat "$B/.release-vorher")" = "$A_SHA" ] && [ "$(st vorher)" = "$X_SHA" ]'
 zurueck || true
-ok "Notfall-Rückfall nach automatischem Rückfall: auf den Stand vor dem letzten erfolgreichen Release, nie auf den abgelehnten" '[ "$(kopf)" = "$A_SHA" ] && grep -q "Zurückgesetzt auf" "$T/out.txt" && [ "$(cat "$B/.release-abgelehnt")" = "$G_SHA" ]'
+ok "Notfall-Rückfall nach automatischem Rückfall: auf den Stand vor dem letzten erfolgreichen Release, nie auf den abgelehnten" '[ "$(kopf)" = "$A_SHA" ] && grep -q "Zurückgesetzt auf" "$T/out.txt"'
+# Die Sperre des neueren, abgelehnten Release bleibt: sonst spielte der nächste Lauf ihn wieder ein (Notfall-Rückfall still zurückgenommen)
+ok "Notfall-Rückfall: Sperre des neueren, abgelehnten Release bleibt stehen" '[ "$(cat "$B/.release-abgelehnt")" = "$X_SHA" ]'
+lauf || true
+ok "… nächster Lauf nach dem Notfall-Rückfall: abgelehnter Release nicht erneut versucht (keine Sicherung, kein Codewechsel, keine Ausgabe)" '[ "$(kopf)" = "$A_SHA" ] && [ ! -s "$T/out.txt" ]'
 git -C "$B" reset -q --hard "$G_SHA"   # Ausgangslage der folgenden Prüfungen unabhängig vom Ergebnis oben
 
 rm -f "$B/.release-abgelehnt"
@@ -280,6 +287,11 @@ printf '{"release":"%s","ci_ok":["%s"]}' "$Q_SHA" "$Q_SHA" > "$T/state.json"
 lauf || true
 ok "Image geändert, Release defekt: zurück, altes Image wieder aktiv" '[ "$(kopf)" = "$P_SHA" ] && [ "$(st ok)" = False ] && grep -q "zurückgesetzt" "$B/daten/deployment.php" \
   && grep -q "^docker tag stafl-app:release-vorher stafl-app:lokal" "$T/out.txt" && [ "$(grep -cx "compose up -d --force-recreate app app-mitarbeiter" "$T/out.txt")" = 2 ]'
+# release-vorher hielt danach das Image von P (aktiv), nicht das von J (.release-vorher): der Notfall-Rückfall auf J baut J's Image
+zurueck || true
+ok "… Notfall-Rückfall danach: Image aus dem Bauplan des vorherigen Stands gebaut, nicht das aktive für dessen Code getaggt" '[ "$(kopf)" = "$J_SHA" ] \
+  && grep -q "release-vorher fehlt" "$T/out.txt" && grep -qx "bau-stand $P_SHA app-alt # Update 2" "$T/out.txt" && ! grep -q "^docker tag" "$T/out.txt"'
+git -C "$B" reset -q --hard "$P_SHA"   # Ausgangslage der folgenden Prüfungen
 S_SHA=$(commit repariert2 x "sed -i 's/ kaputt(//' '$T/src/app/api/index.php'")
 printf '{"release":"%s","ci_ok":["%s"]}' "$S_SHA" "$S_SHA" > "$T/state.json"
 lauf || true
@@ -359,6 +371,12 @@ ok "Notfall-Rückfall, Daten weiter getrennt als der vorherige Stand: Abbruch oh
 rm "$B/daten/.daten-getrennt"   # Kennzeichen außen fehlt (daten/ ist im Container beschreibbar): maßgeblich bleibt das innere
 zurueck_lage "$T5_SHA" "$T4_SHA"; RC=0; zurueck || RC=$?
 ok "… auch wenn nur daten-intern das Kennzeichen trägt" '[ "$RC" = 1 ] && [ "$(kopf)" = "$T5_SHA" ] && grep -q "Stufe 5" "$T/out.txt"'
+# Unlesbares Kennzeichen: nie eine Stufe annehmen (bisher galt „1“ – Rückfall auf Stufe 4 erlaubt, obwohl die Daten Stufe 5 sind)
+echo fünf > "$B/daten-intern/.daten-intern"
+zurueck_lage "$T5_SHA" "$T4_SHA"; RC=0; zurueck || RC=$?
+ok "Notfall-Rückfall, Kennzeichen der Trennung unlesbar: Abbruch ohne Änderung, Weg genannt" '[ "$RC" = 1 ] && [ "$(kopf)" = "$T5_SHA" ] \
+  && grep -q "daten-intern/.daten-intern unlesbar" "$T/out.txt" && grep -q "daten-trennen.sh status" "$T/out.txt" && [ ! -e "$B/.release-abgelehnt" ] \
+  && ! grep -qE "^(compose|docker)" "$T/out.txt" && git -C "$B" diff --quiet HEAD'
 echo 4 > "$B/daten-intern/.daten-intern"; echo 4 > "$B/daten/.daten-getrennt"
 zurueck_lage "$T5_SHA" "$T4_SHA"; zurueck || true
 ok "Notfall-Rückfall, Daten auf der Stufe des vorherigen Stands: Rückfall wie bisher" '[ "$(kopf)" = "$T4_SHA" ] && grep -q "Zurückgesetzt auf" "$T/out.txt"'
@@ -427,14 +445,20 @@ ok "Notfall-Rückfall auf den Stand mit Liste: dessen Liste und Seiten wieder ak
 H_SHA=$ALT_SHA   # aktueller Stand für die folgenden Prüfungen
 
 # Active SQLite must never be silently opened by an old file-only release.
-L_SHA=$(commit ohne-sqlite x "rm '$T/src/app/api/storage.php'")
+# … der Release ändert zugleich das Image (COMPOSE_FILE aktiv): abgelehnt vor Bau, Sicherung und Umtaggen – sonst liefe der
+# Rückfall mit einem release-vorher, das nie für diesen Versuch gemerkt wurde
+L_SHA=$(commit ohne-sqlite x "rm '$T/src/app/api/storage.php'; echo '# Update L' >> '$T/src/deploy/image/Dockerfile'")
 kill "$WEB_PID"; wait "$WEB_PID" 2>/dev/null || true
 python3 "$B/deploy/datenbank.py" migrate "$B/daten" --offline >/dev/null
 (cd "$B/app" && exec php -S 127.0.0.1:$WEB_PORT >/dev/null 2>&1) & WEB_PID=$!
 printf '{"release":"%s","ci_ok":["%s"]}' "$L_SHA" "$L_SHA" > "$T/state.json"
+printf 'COMPOSE_FILE=docker-compose.yml:deploy/anmeldung/docker-compose.anmeldung.yml\n' >> "$B/.env"; N0=$(anzahl)
 lauf || true
 ok "SQLite: inkompatiblen Release vor Codewechsel abweisen (Status fehlgeschlagen, nicht alle 2 Minuten erneut)" '[ "$(kopf)" = "$H_SHA" ] && grep -q "SQLite aktiv" "$T/out.txt" \
   && [ "$(st ok)" = False ] && [ "$(cat "$B/.release-abgelehnt")" = "$L_SHA" ]'
+ok "SQLite: abgelehnt vor Image-Bau, Sicherung und Umtaggen (kein Rückfallweg)" '! grep -qE "^(compose|docker)" "$T/out.txt" && [ "$(anzahl)" = "$N0" ] \
+  && ! grep -q "zurück auf" "$T/out.txt" && git -C "$B" diff --quiet HEAD -- deploy docker-compose.yml'
+cp "$T/env.ohne" "$B/.env"
 printf '%s\n{"vorher":"%s"}' '<?php http_response_code(404); exit; ?>' "$L_SHA" > "$B/daten/deployment.php"
 printf '%s\n' "$L_SHA" > "$B/.release-vorher"; rm -f "$B/.release-abgelehnt"   # hier zählt nur die Sperre wegen SQLite
 sh "$B/deploy/release-zurueck.sh" > "$T/out.txt" 2>&1 || true

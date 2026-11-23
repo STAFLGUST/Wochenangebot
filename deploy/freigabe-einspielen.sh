@@ -20,7 +20,8 @@
 # Anwendungs-Image (deploy/image): Ist die Ergänzungsdatei der Anmeldung über COMPOSE_FILE in .env aktiv und ändert das
 # Release deploy/image/, wird das Image vorab als stafl-app:release-neu gebaut (Code bleibt bis dahin unverändert), erst
 # beim Einspielen auf den aktiven Namen umgetaggt; das bisherige Image bleibt als stafl-app:release-vorher für den Rückfall
-# (auch für den manuellen Notfall-Rückfall deploy/release-zurueck.sh). Nach erfolgreichem Healthcheck werden hängende
+# (auch für den manuellen Notfall-Rückfall deploy/release-zurueck.sh; nach einem automatischen Rückfall ist es das aktive Image und
+# wird verworfen – der Notfall-Rückfall baut dann aus dem Bauplan seines Stands). Nach erfolgreichem Healthcheck werden hängende
 # Images ohne Namen entfernt (docker image prune -f).
 # Bereitstellung (deploy/bereitstellen.py des eingespielten Stands): nach jedem Codewechsel setzt sie die Versionsnummern
 # der Skripte/Stylesheets und erzeugt die Prüfliste der Dateiprüfung aus genau diesem Commit. Fehlt sie oder schlägt sie
@@ -120,12 +121,11 @@ bereitstellen() { # Versionsnummern und Prüfliste aus dem aktiven Commit (Skrip
 }
 einspielen() { # sha vorher [zurueck]: Code wechseln; Container nur neu erstellen, wenn sich Konfiguration oder Image ändern.
   # Aufgerufen nur unter if/||, dort wirkt set -e nicht: jeder wichtige Schritt meldet seinen Fehler selbst (return 1)
-  if [ -f daten/.sqlite-active ] && ! git cat-file -e "$1:app/api/storage.php" 2>/dev/null; then
-    echo "SQLite aktiv: Vor einem Rückfall auf Dateispeicherung erst deploy/datenbank-umschalten.sh rollback ausführen."
-    return 1
-  fi
   if [ "$BAUEN" = 1 ] && [ "${3:-}" = zurueck ]; then
     $DOCKER tag "$BILD_VORHER" "$APP_BILD" || echo "Altes Image $BILD_VORHER nicht gefunden – App läuft mit dem neuen Image"
+    # release-vorher ist jetzt das aktive Image, nicht das des Stands in .release-vorher: der Notfall-Rückfall baut dessen Image
+    # sonst nicht neu, sondern taggte dieses für den alten Code
+    $DOCKER rmi "$BILD_VORHER" >/dev/null 2>&1 || true
   elif [ "$BAUEN" = 1 ]; then
     $DOCKER tag "$APP_BILD" "$BILD_VORHER" || true   # für den Rückfall merken
     $DOCKER tag "$BILD_NEU" "$APP_BILD" || return 1
@@ -175,6 +175,11 @@ N=$(printf '%s' "$CI" | json "print(sum(1 for r in d.get('workflow_runs', []) if
 git fetch -q origin main
 git cat-file -e "$SHA^{commit}" 2>/dev/null || ablehnen "Commit $SHA liegt nicht auf main – nicht eingespielt"
 git merge-base --is-ancestor "$SHA" origin/main || ablehnen "Commit $SHA liegt nicht auf main – nicht eingespielt"
+# SQLite aktiv, der Release kennt aber nur Dateien: vor Bau, Sicherung und Umtaggen ablehnen (beim Einspielen liefe sonst ein
+# Rückfall mit einem release-vorher, das nie für diesen Versuch gemerkt wurde)
+if [ -f daten/.sqlite-active ] && ! git cat-file -e "$SHA:app/api/storage.php" 2>/dev/null; then
+  ablehnen "SQLite aktiv: Release $SHA kennt nur Dateispeicherung – nicht eingespielt (erst deploy/datenbank-umschalten.sh rollback)"
+fi
 
 # 4. Anwendungs-Image vorab bauen, wenn das Release deploy/image/ ändert und die App dieses Image nutzt (COMPOSE_FILE).
 #    Nur Bauplan und Compose-Dateien des neuen Stands auschecken, bauen, sofort zurück: App-Code und laufende Container

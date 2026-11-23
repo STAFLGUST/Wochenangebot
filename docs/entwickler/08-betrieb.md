@@ -115,8 +115,10 @@ Schritte im Einzelnen:
 5. **`freigabe-einspielen.sh`** fragt die GitHub-API mit einem nur lesenden Token (`GITHUB_TOKEN_LESEN` in `.env`) nach
    dem neuesten erfolgreichen Release-Lauf auf `main` (selbst nach Startzeit ausgewählt, nicht der erste Eintrag der
    Antwort), prüft erneut die CI und dass der Commit auf `main` liegt. Ein abgelehnter oder zurückgenommener Commit steht in
-   `.release-abgelehnt` und wird nicht erneut versucht. Ein Release, der älter ist als der aktive Stand, wird nie
-   automatisch eingespielt (nur Vermerk im Protokoll) – zurück geht es nur von Hand mit `deploy/release-zurueck.sh`.
+   `.release-abgelehnt` und wird nicht erneut versucht (erneut versuchen und Verhalten beim Notfall-Rückfall:
+   [`docs/release-freigabe.md`](../release-freigabe.md#notfall-rückfall-von-hand-deployrelease-zuruecksh)).
+   Ein Release, der älter ist als der aktive Stand, wird nie automatisch eingespielt (nur Vermerk im Protokoll) – zurück geht
+   es nur von Hand mit `deploy/release-zurueck.sh`.
    Anlass: Am 03.11.2026 lieferte GitHub einmalig einen vier Tage alten Lauf zuerst; der Server ging darauf zurück, und das
    alte Prüfskript (ohne bunny-Schlüssel) lehnte danach den richtigen Release ab.
 6. **Image:** Ändert das Release `deploy/image/` und enthält `COMPOSE_FILE` die Ergänzungsdatei der Anmeldung, wird das
@@ -218,7 +220,7 @@ Ohne gültigen Schlüssel wirkt nichts davon. Jede neue Weiterleitung (`reverse_
 | `wartung-aus.sh` | Notfall: alle Wartungen beenden | Inhaber |
 | `notzugang.sh` | Notfall: alten Eingabebereich mit eigener Anmeldung öffnen/schließen – nur über einen SSH-Tunnel (`127.0.0.1:8190`); `.env` ändert sich erst nach erfolgreichem `docker compose up`, jeder Aufruf gleicht den Container ab, `status` fragt auch den laufenden Container | Inhaber |
 | `cdn-netzsperre.sh`, `cdn_netzsperre.py` | Netzsperre: Port 80/443 nur für die Edge-Server von bunny.net (nftables, eigene Tabelle `inet stafl_netzsperre`): `status` / `beobachten` (nur zählen) / `an` (verwerfen, Probe über bunny, sonst zurück auf beobachten) / `aus` (Notfall, sofort) / `aktualisieren` (Liste höchstens alle 6 Stunden, Regeln setzen); Anleitung `docs/bunny-cdn.md`, Abschnitt 7 | Inhaber; Timer `wochenangebot-netzsperre` (alle 30 Min.) |
-| `daten-trennen.sh` | `status` (Stufe und Plan) / `trennen` (auf die höchste Trennstufe des eingespielten Stands: Sicherung, Stopp, `daten_trennen.py`, Start – auch von Stufe 1 auf 2) / `zusammenfuehren` (zurück in einen Ordner, vor einem Rückfall auf ein Release mit niedrigerer Stufe; bricht es beim Aufräumen ab – Vermerk `daten-intern/.zusammengefuehrt`, alle Daten schon in `daten/` –, vollendet ein erneuter Aufruf es ohne neue Sicherung; `trennen` verweigert bis dahin) | Inhaber, nur mit Freigabe und Wartungsfenster |
+| `daten-trennen.sh` | `status` (Stufe und Plan) / `trennen` (auf die höchste Trennstufe des eingespielten Stands: Sicherung, Stopp, `daten_trennen.py`, Start – auch von Stufe 1 auf 2) / `zusammenfuehren` (zurück in einen Ordner, vor einem Rückfall auf ein Release mit niedrigerer Stufe; bricht es beim Aufräumen ab – Vermerk `daten-intern/.zusammengefuehrt`, alle Daten schon in `daten/` –, vollendet ein erneuter Aufruf es ohne neue Sicherung; `trennen` verweigert bis dahin. Trägt `daten/` das Kennzeichen noch (Abbruch vor dem Umschalten, die Anwendung lief getrennt weiter), sichert ein erneuter Aufruf neu und vergleicht wie beim ersten Mal – eine innen geänderte Datei bricht ab, statt beim Aufräumen gelöscht zu werden) | Inhaber, nur mit Freigabe und Wartungsfenster |
 | `postfach-schluessel.sh` | `status` / `umziehen` (Schlüssel des Postfach-Passworts nach `daten-geheim/`, Passwörter an Server und Benutzer binden) / `zurueck` (vor einem Rückfall: zurück auf Format v1 und in den Datenordner) | Inhaber, einmalig nach dem Release mit dem Postausgang |
 | `passwort-zuruecksetzen.sh` | Notfall: Passwort eines Nutzers zurücksetzen bzw. Administrator neu anlegen (`--neu`). Mitarbeiter „ohne Anmeldung“ (Feld `zugang` = `false`) werden abgelehnt – eine Anmeldung richtet man in der Verwaltung ein | Inhaber |
 | `ip-freigabe-aus.sh` | Notfall: IP-Freigabe und Ländersperre ausschalten | Inhaber |
@@ -236,7 +238,8 @@ nur mit `-h` bzw. für echte Dateien (`find -type f`); Angaben, denen root folgt
 in root-Dateien außerhalb (`.release-vorher`). Auch gelesen wird dort nur, was eine echte Datei ist: der SQLite-Abzug der
 Sicherung (`datenbank.py snapshot`) überspringt Verweise unter `index.php`, `deployment.php`, `.daten-getrennt` und `.daten-intern`
 und kopiert ohne ihnen zu folgen; die Sperrdatei `.storage.lock` öffnen `datenbank.py` und `daten_trennen.py` ohne einem Verweis zu
-folgen (nur eine echte Datei), die Datenbank `.sqlite/store.sqlite` nie über einen Verweis. Code eines Testzweigs läuft nie auf dem Server.
+folgen (nur eine echte Datei), die Datenbank `.sqlite/store.sqlite` nie über einen Verweis; `datenbank.py rollback` bricht vor jeder Änderung ab, wenn ein
+Ordner- oder Dateiname auf dem Weg zu einem Dokument ein Verweis ist. Code eines Testzweigs läuft nie auf dem Server.
 
 Dieselbe Regel gilt für **Ordnernamen** und für jeden Ordner, in den ein weniger vertrauter Prozess schreiben darf:
 `daten_trennen.py` legt Zielordner Schritt für Schritt an und bricht ab, sobald eine Komponente ein Verweis ist
@@ -309,7 +312,9 @@ Hostname der Testadresse in der bunny-Zone der Kundenseite). Neue Stände werden
 
 - `deploy/sichern.sh` sichert `daten/` (nach der Trennung auch `daten-intern/`) täglich (eigener Timer oder über
   `aktualisieren.sh`) und vor jedem Release; jede Sicherung wird probeweise entpackt und geprüft. Bei SQLite über die
-  Backup-API (konsistenter Snapshot).
+  Backup-API (konsistenter Snapshot). Die Anwendung läuft dabei weiter: ersetzt oder legt sie während des Archivs Dokumente
+  an, endet GNU tar mit Code 1 („file changed as we read it“) – das gilt als Erfolg; abgeschnitten Gelesenes verwirft die
+  Prüfung jeder Datendatei, fehlende Dateien die Zählung vor und nach dem Archiv.
 - Läuft Keycloak, wird dessen Datenbank mitgesichert (`pg_dump`, Inhalt geprüft).
 - **Erst prüfen, dann festschreiben.** Archive und Stand der Dateiablage entstehen als `.tmp`. Erst wenn alle Prüfungen
   bestehen, werden sie gemeinsam umbenannt, danach greift die Aufbewahrung. Ein Fehler entfernt alles dieses Laufs; ältere

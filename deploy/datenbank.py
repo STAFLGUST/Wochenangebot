@@ -131,6 +131,16 @@ def rollback(root):
         raise ValueError('SQLite not active')
     with connect(root) as db:
         rows = validate(db)
+    # daten/ is writable in the containers (ADR-007): a link planted as a folder or file name on the way to a document would
+    # let this root tool write onto the host. Check every target before changing anything, and refuse.
+    for name, _, _ in rows:
+        p = root
+        for part in Path(name + '.php').parts:
+            if p != root and p.exists() and not p.is_dir():
+                raise ValueError('Not a directory in the data directory – refusing rollback: ' + str(p.relative_to(root)))
+            p = p / part
+            if p.is_symlink():
+                raise ValueError('Symbolic link in the data directory – refusing rollback: ' + str(p.relative_to(root)))
     stage = Path(tempfile.mkdtemp(prefix='.export-', dir=root))
     try:
         for name, raw, stamp in rows:

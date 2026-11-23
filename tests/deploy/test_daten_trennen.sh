@@ -54,6 +54,21 @@ ok "Testvoraussetzung: Zusammenführen beim Aufräumen abgebrochen" '[ ! -e "$T/
 ok "zusammenführen erneut: vollendet (ohne neue Sicherung, die an den Kennzeichen scheiterte), Dienste gestoppt und gestartet" '[ $CODE = 0 ] && echo "$AUS" | grep -q "vollendet" \
   && ! grep -q "^sichern" "$T/aufrufe" && grep -qx "docker compose stop app app-mitarbeiter postausgang" "$T/aufrufe" && grep -qx "docker compose start app app-mitarbeiter postausgang" "$T/aufrufe" \
   && [ -f "$T/i/daten/hr-personal.php" ] && [ ! -e "$T/i/daten-intern/.daten-intern" ] && [ ! -e "$T/i/daten-intern/.zusammengefuehrt" ]'
+# Abbruch zwischen Vermerk und Umschalten (daten/ noch gekennzeichnet): die Anwendung lief getrennt weiter und speicherte innen
+# Neueres – erneut zusammenführen sichert neu und bricht mit Meldung ab, statt die innere Fassung beim Aufräumen zu löschen
+neu; lauf trennen
+(cd "$T/i" && python3 -c "
+import sys; sys.path.insert(0, 'deploy'); from pathlib import Path; import daten_trennen as dt
+def abbruch(*a): raise OSError('Abbruch (Test)')
+dt.aufraeumen = abbruch
+try: dt.zusammenfuehren(Path('daten').resolve(), Path('daten-intern').resolve(), dt.REGELN)
+except OSError: pass")
+ok "Testvoraussetzung: Abbruch direkt nach dem Vermerk, beide Kennzeichen stehen" '[ -f "$T/i/daten/.daten-getrennt" ] && [ -f "$T/i/daten-intern/.daten-intern" ] && [ -f "$T/i/daten-intern/.zusammengefuehrt" ]'
+printf '%s\n{"personen":[{"name":"nach dem Abbruch"}]}' "$G" > "$T/i/daten-intern/hr-personal.php"
+: > "$T/aufrufe"; lauf zusammenfuehren
+ok "… erneut zusammenführen: neue Sicherung, Abbruch wegen abweichender Fassung, innere Fassung bleibt" '[ $CODE = 1 ] && [ "$(sed -n 1p "$T/aufrufe")" = "sichern --jetzt" ] \
+  && ! echo "$AUS" | grep -q "vollendet" && echo "$AUS" | grep -q "verschiedenem Inhalt" && grep -q "nach dem Abbruch" "$T/i/daten-intern/hr-personal.php" \
+  && [ -f "$T/i/daten-intern/.daten-intern" ] && [ -f "$T/i/daten/.daten-getrennt" ] && ! grep -q "compose start" "$T/aufrufe"'
 # Kennzeichen in daten/ von außen entfernt (ohne Vermerk): nicht „nichts zu tun“, sondern Abbruch, Anwendung bleibt gestoppt
 neu; lauf trennen; rm "$T/i/daten/.daten-getrennt"
 : > "$T/aufrufe"; lauf zusammenfuehren

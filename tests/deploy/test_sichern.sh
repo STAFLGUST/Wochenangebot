@@ -28,19 +28,43 @@ mv "$T/sicherungen" "$T/s2"; touch "$T/sicherungen"   # Ablage nicht anlegbar �
 sh "$T/deploy/sichern.sh" --jetzt >/dev/null 2>&1 || true
 ok "unerwarteter Abbruch hinterlässt Fehlerstatus" '[ "$(feld "$T/daten" ok)" = False ] && grep -q "Abbruch" "$T/daten/sicherung.php"'
 rm "$T/sicherungen"; mv "$T/s2" "$T/sicherungen"
-# Die Anwendung läuft weiter: während des Archivs entsteht ein Dokument (z. B. Protokoll des neuen Monats) bzw. eins verschwindet
+# Die Anwendung läuft weiter: während des Archivs ersetzt sie Dokumente per Umbenennen bzw. legt eins an. GNU tar endet dann mit
+# Code 1 („file changed as we read it“); die Attrappe ruft das echte tar und ändert den Ordner an dessen erstem Zwischenhalt
 mkdir "$T/bin-waehrend"; ECHT_TAR=$(command -v tar); export ECHT_TAR T
+cat > "$T/bin-waehrend/aendern" <<'EOF2'
+#!/bin/sh
+[ -f "$T/waehrend" ] && [ ! -e "$T/waehrend.erledigt" ] || exit 0
+touch "$T/waehrend.erledigt"
+cp "$T/daten/angebot.php" "$T/daten/angebot.php.tmp" && mv "$T/daten/angebot.php.tmp" "$T/daten/angebot.php"
+printf '%s\n[]' '<?php http_response_code(404); exit; ?>' > "$T/daten/neu-waehrend.php.tmp" && mv "$T/daten/neu-waehrend.php.tmp" "$T/daten/neu-waehrend.php"
+EOF2
 cat > "$T/bin-waehrend/tar" <<'EOF2'
 #!/bin/sh
-[ "$1" != czf ] || [ ! -f "$T/weg-vorher" ] || rm -f "$T/daten/weg.php"
-"$ECHT_TAR" "$@"; rc=$?
-[ "$1" != czf ] || [ ! -f "$T/neu-danach" ] || printf '%s\n[]' '<?php http_response_code(404); exit; ?>' > "$T/daten/neu-waehrend.php"
-exit $rc
+[ "$1" = czf ] || exec "$ECHT_TAR" "$@"
+[ ! -f "$T/weg-vorher" ] || rm -f "$T/daten/weg.php"
+# Abgeschnitten gelesen (z. B. „file shrank“): Datei vor dem Archiv kürzen, Code 1 wie GNU tar
+[ ! -f "$T/abschneiden" ] || { cp "$T/daten/angebot.php" "$T/angebot.voll"; head -c 60 "$T/angebot.voll" > "$T/daten/angebot.php"; }
+"$ECHT_TAR" "$@" --checkpoint=1 --checkpoint-action=exec="$T/bin-waehrend/aendern"; rc=$?
+[ ! -f "$T/abschneiden" ] || { rc=1; mv "$T/angebot.voll" "$T/daten/angebot.php"; }
+[ ! -f "$T/neu-danach" ] || printf '%s\n[]' '<?php http_response_code(404); exit; ?>' > "$T/daten/neu-danach.php"
+echo "$rc" > "$T/tar-rc"; exit $rc
 EOF2
-chmod +x "$T/bin-waehrend/tar"; touch "$T/neu-danach"; sleep 1
+chmod +x "$T/bin-waehrend/tar" "$T/bin-waehrend/aendern"; touch "$T/waehrend"; sleep 1
 PATH="$T/bin-waehrend:$PATH" sh "$T/deploy/sichern.sh" --jetzt >/dev/null 2>&1 || true
-ok "Dokument entsteht während des Archivs: Sicherung trotzdem in Ordnung" '[ -f "$T/daten/neu-waehrend.php" ] && [ "$(feld "$T/daten" ok)" = True ] && [ "$(feld "$T/daten" fehler)" = 0 ]'
-rm -f "$T/neu-danach" "$T/daten/neu-waehrend.php"
+ok "Testvoraussetzung: Ordner während des Archivs geändert, tar endete mit Code 1" '[ -e "$T/waehrend.erledigt" ] && [ "$(cat "$T/tar-rc")" = 1 ] && [ -f "$T/daten/neu-waehrend.php" ]'
+ok "Dokumente während des Archivs ersetzt bzw. angelegt (tar Code 1): Sicherung trotzdem in Ordnung" '[ "$(feld "$T/daten" ok)" = True ] && [ "$(feld "$T/daten" fehler)" = 0 ] \
+  && tar xzOf "$(ls "$T"/sicherungen/daten-*.tar.gz | tail -1)" ./angebot.php | cmp -s - "$T/daten/angebot.php"'
+rm -f "$T/waehrend" "$T/waehrend.erledigt" "$T/daten/neu-waehrend.php"
+touch "$T/abschneiden"; sleep 1
+PATH="$T/bin-waehrend:$PATH" sh "$T/deploy/sichern.sh" --jetzt >/dev/null 2>&1 || true
+ok "tar Code 1 mit abgeschnitten gelesenem Dokument: die Prüfung jeder Datei verwirft die Sicherung" '[ "$(cat "$T/tar-rc")" = 1 ] && [ "$(feld "$T/daten" ok)" = False ] \
+  && [ "$(feld "$T/daten" fehler)" = 1 ] && grep -q "im Archiv fehlerhaft" "$T/daten/sicherung.php" && [ -z "$(find "$T/sicherungen" -name "*.tmp")" ]'
+rm -f "$T/abschneiden"
+# … ebenso ein Dokument, das gleich nach dem Archiv entsteht bzw. kurz davor verschwindet (Zählung vor und nach tar)
+touch "$T/neu-danach"; sleep 1
+PATH="$T/bin-waehrend:$PATH" sh "$T/deploy/sichern.sh" --jetzt >/dev/null 2>&1 || true
+ok "Dokument entsteht gleich nach dem Archiv: Sicherung trotzdem in Ordnung" '[ -f "$T/daten/neu-danach.php" ] && [ "$(feld "$T/daten" ok)" = True ] && [ "$(feld "$T/daten" fehler)" = 0 ]'
+rm -f "$T/neu-danach" "$T/daten/neu-danach.php"
 printf '%s\n[]' '<?php http_response_code(404); exit; ?>' > "$T/daten/weg.php"; touch "$T/weg-vorher"; sleep 1
 PATH="$T/bin-waehrend:$PATH" sh "$T/deploy/sichern.sh" --jetzt >/dev/null 2>&1 || true
 ok "Dokument verschwindet vor dem Archiv: Sicherung trotzdem in Ordnung" '[ ! -e "$T/daten/weg.php" ] && [ "$(feld "$T/daten" ok)" = True ] && [ "$(feld "$T/daten" fehler)" = 0 ]'
@@ -287,7 +311,8 @@ rm "$W/daten/defekt.php"; lauf
 ok "Aufbewahrung: weniger als 30 Läufe – alle bleiben, auch ältere als 30 Tage (Schutz bei verstellter Uhr)" '[ "$(feld "$W/daten" ok)" = True ] \
   && [ -f "$W/sicherungen/daten-$Z40.tar.gz" ] && [ -d "$W/sicherungen/dateien/${TAG10}_080000" ]'
 VOR=$(ls "$W"/sicherungen/daten-*.tar.gz | wc -l); export VOR
-N=1; while [ "$N" -le 31 ]; do alt "$(vor "-$((N % 2 + 1)) days -$N minutes")"; N=$((N + 1)); done   # je Tag unter dem Deckel von 24
+# je Tag unter dem Deckel von 24, kurz vor 12 Uhr UTC: relativ zur Uhrzeit rutschten Läufe kurz nach Mitternacht UTC auf TAG3 (unten)
+N=1; while [ "$N" -le 31 ]; do alt "$(vor "$(date -u -d "$((N % 2 + 1)) days ago" +%Y-%m-%d) 12:00 $N minutes ago")"; N=$((N + 1)); done
 lauf
 ok "Aufbewahrung nach Zeit: alle Läufe der letzten 7 Tage, der letzte jedes Tages bis 30 Tage; Archiv, Keycloak-Sicherung und Stand gemeinsam" '[ "$(feld "$W/daten" ok)" = True ] \
   && [ ! -e "$W/sicherungen/daten-$Z40.tar.gz" ] && [ ! -e "$W/sicherungen/anmeldung-$Z40.dump" ] && [ ! -e "$W/sicherungen/dateien/$Z40" ] \
