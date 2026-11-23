@@ -287,7 +287,8 @@ rm "$W/daten/defekt.php"; lauf
 ok "Aufbewahrung: weniger als 30 Läufe – alle bleiben, auch ältere als 30 Tage (Schutz bei verstellter Uhr)" '[ "$(feld "$W/daten" ok)" = True ] \
   && [ -f "$W/sicherungen/daten-$Z40.tar.gz" ] && [ -d "$W/sicherungen/dateien/${TAG10}_080000" ]'
 VOR=$(ls "$W"/sicherungen/daten-*.tar.gz | wc -l); export VOR
-N=1; while [ "$N" -le 31 ]; do alt "$(vor "-$((N % 2 + 1)) days -$N minutes")"; N=$((N + 1)); done   # je Tag unter dem Deckel von 24
+# je Tag unter dem Deckel von 24, kurz vor 12 Uhr UTC: relativ zur Uhrzeit rutschten Läufe kurz nach Mitternacht UTC auf TAG3 (unten)
+N=1; while [ "$N" -le 31 ]; do alt "$(vor "$(date -u -d "$((N % 2 + 1)) days ago" +%Y-%m-%d) 12:00 $N minutes ago")"; N=$((N + 1)); done
 lauf
 ok "Aufbewahrung nach Zeit: alle Läufe der letzten 7 Tage, der letzte jedes Tages bis 30 Tage; Archiv, Keycloak-Sicherung und Stand gemeinsam" '[ "$(feld "$W/daten" ok)" = True ] \
   && [ ! -e "$W/sicherungen/daten-$Z40.tar.gz" ] && [ ! -e "$W/sicherungen/anmeldung-$Z40.dump" ] && [ ! -e "$W/sicherungen/dateien/$Z40" ] \
