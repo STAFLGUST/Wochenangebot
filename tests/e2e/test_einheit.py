@@ -205,6 +205,8 @@ with sync_playwright() as pw:
                         glanz = pg.evaluate("[...document.querySelectorAll('.btn.primary')].filter((b) => b.offsetParent).map((b) => [b.textContent.trim().slice(0, 24), getComputedStyle(b).backgroundImage, getComputedStyle(b).boxShadow]).filter((x) => x[1] !== 'none' || x[2] !== 'none')")
                         check(f'{teil} {tag}: Hauptknöpfe flach (ohne Verlauf und Schatten)', not glanz, glanz)
                     if dunkel and name != 'dashboard':   # Hauptknopf im dunklen Design überall wie Versand und Container-Import (weiße Schrift)
+                        pg.mouse.move(0, 0)   # Zeiger vom letzten Klick nicht über einem Hauptknopf (sonst Hover-Farbe bzw. Übergang)
+                        pg.evaluate("Promise.all(document.getAnimations().filter((a) => a instanceof CSSTransition).map((a) => a.finished.catch(() => null)))")
                         hk = pg.evaluate(HAUPTKNOPF)
                         check(f'{teil} {tag}: Hauptknöpfe in der Akzentfarbe des Rahmens ({hk["n"]})', not hk['abw'], hk)
                     if not dunkel:
