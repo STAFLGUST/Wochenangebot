@@ -299,6 +299,9 @@ with sync_playwright() as pw:
       .concat((finger ? [...inhalt.querySelectorAll('input[type=checkbox], input[type=radio]')] : []).filter((e) => sicht(e) && e.getAttribute('role') !== 'switch' && getComputedStyle(e).opacity !== '0')
         .map((e) => e.getBoundingClientRect().width >= 19.5 ? null : name(e) + ' Kästchen ' + Math.round(e.getBoundingClientRect().width)))"""
     TITEL['tippflaeche'] = 'Tippflächen mit Finger mindestens 32 px, Kästchen 20 px'
+    BAUSTEINE['verweis'] = r"""[...inhalt.querySelectorAll('a[href]')].filter((e) => sicht(e) && e.textContent.trim()).map((e) => { const c = getComputedStyle(e).color;
+      return c === 'rgb(0, 0, 238)' || c === 'rgb(85, 26, 139)' ? name(e) + ' ' + c : null; })"""
+    TITEL['verweis'] = 'Verweise mit Text in der Farbe des Rahmens, nicht Browser-Blau'   # ohne Text (Logo) zeigt die Farbe nichts
     TOUR = r"""({ finger }) => { const inhalt = document.querySelector('.r-inhalt');
       const sicht = (e) => { const r = e.getBoundingClientRect(), s = getComputedStyle(e); return r.width > 1 && r.height > 1 && s.visibility !== 'hidden' && !e.closest('[hidden], dialog, .sr-only, [aria-hidden="true"]'); };
       const name = (e) => (e.id ? '#' + e.id : e.tagName.toLowerCase() + (typeof e.className === 'string' && e.className.trim() ? '.' + e.className.trim().split(/\s+/).slice(0, 2).join('.') : ''))

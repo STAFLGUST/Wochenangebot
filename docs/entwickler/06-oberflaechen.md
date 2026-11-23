@@ -540,7 +540,8 @@ Teilaktualisierungen dasselbe Ergebnis liefern wie ein Neuzeichnen. Messen mit P
     Reiterleiste als Kapsel mit Spur `--r-neutral-bg`, Reiter 36 px, 14 px/600, gewählt `--r-flaeche`; Tabellenköpfe 11 px/600
     in Großbuchstaben, `--r-leise` auf `--r-flaeche-2` (am Handy ebenso die Beschriftungen der Karten-Tabellen,
     `td[data-label]::before`); Kennzahl-Kacheln 16 px rund, Beschriftung 13 px/500 in normaler Schreibweise (`--r-leise`);
-    Knöpfe als Kapsel. Module setzen diese Werte in ihren eigenen Regeln bzw. im Abschnitt „Rahmen „C2““ ihres Stylesheets.
+    Knöpfe als Kapsel; Verweise mit Text in `--r-akzent-text` (nie Browser-Blau); Überschriften und Texte nie in der
+    Modulfarbe (nur Symbole). Module setzen diese Werte in ihren eigenen Regeln bzw. im Abschnitt „Rahmen „C2““ ihres Stylesheets.
   - Folgenreiche Schritte (Löschen, Zurückziehen, Verwerfen) fragen im eigenen Fenster nach; der Fokus liegt auf „Abbrechen“,
     Escape heißt „nein“.
   - Aufklappmenüs aus `<details>` bekommen `data-menue`: `theme.js` schließt sie mit Escape (Fokus zurück auf den Titel)
