@@ -152,6 +152,7 @@ automatischen Rückfall:
 - Gesperrt, nichts geändert: Rückfall auf einen Stand, der die Trennstufe der Daten nicht kennt (`DATEN_TRENNSTUFE` des
   Zielstands kleiner als das höhere der Kennzeichen `daten/.daten-getrennt` und `daten-intern/.daten-intern`) – dort bräche
   jeder Speicherzugriff ab. Weg: erst `sh deploy/daten-trennen.sh zusammenfuehren` (Freigabe, Wartungsfenster), dann erneut.
+  Ebenso bei einem unlesbaren Kennzeichen (Inhalt keine Zahl): keine Stufe annehmen, Zustand mit `sh deploy/daten-trennen.sh status` prüfen.
 
 **Abgelehnten Release erneut versuchen** (z. B. nach einer vorübergehenden Störung beim Einspielen): Normalweg ist ein neuer
 Release – er läuft auf dem neuesten `main` und ist damit ein anderer Commit, den keine Sperre betrifft. Soll genau der

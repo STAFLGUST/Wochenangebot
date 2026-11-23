@@ -371,6 +371,12 @@ ok "Notfall-Rückfall, Daten weiter getrennt als der vorherige Stand: Abbruch oh
 rm "$B/daten/.daten-getrennt"   # Kennzeichen außen fehlt (daten/ ist im Container beschreibbar): maßgeblich bleibt das innere
 zurueck_lage "$T5_SHA" "$T4_SHA"; RC=0; zurueck || RC=$?
 ok "… auch wenn nur daten-intern das Kennzeichen trägt" '[ "$RC" = 1 ] && [ "$(kopf)" = "$T5_SHA" ] && grep -q "Stufe 5" "$T/out.txt"'
+# Unlesbares Kennzeichen: nie eine Stufe annehmen (bisher galt „1“ – Rückfall auf Stufe 4 erlaubt, obwohl die Daten Stufe 5 sind)
+echo fünf > "$B/daten-intern/.daten-intern"
+zurueck_lage "$T5_SHA" "$T4_SHA"; RC=0; zurueck || RC=$?
+ok "Notfall-Rückfall, Kennzeichen der Trennung unlesbar: Abbruch ohne Änderung, Weg genannt" '[ "$RC" = 1 ] && [ "$(kopf)" = "$T5_SHA" ] \
+  && grep -q "daten-intern/.daten-intern unlesbar" "$T/out.txt" && grep -q "daten-trennen.sh status" "$T/out.txt" && [ ! -e "$B/.release-abgelehnt" ] \
+  && ! grep -qE "^(compose|docker)" "$T/out.txt" && git -C "$B" diff --quiet HEAD'
 echo 4 > "$B/daten-intern/.daten-intern"; echo 4 > "$B/daten/.daten-getrennt"
 zurueck_lage "$T5_SHA" "$T4_SHA"; zurueck || true
 ok "Notfall-Rückfall, Daten auf der Stufe des vorherigen Stands: Rückfall wie bisher" '[ "$(kopf)" = "$T4_SHA" ] && grep -q "Zurückgesetzt auf" "$T/out.txt"'

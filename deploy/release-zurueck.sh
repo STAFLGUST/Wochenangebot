@@ -55,10 +55,22 @@ fi
 # Trennstufe (ADR-007): Sind die Daten weiter getrennt, als der vorherige Stand kennt, bräche dort jeder Speicherzugriff ab
 # („Daten sind weiter getrennt“). Stufe der Daten: das höhere der beiden Kennzeichen; Stufe des Stands: DATEN_TRENNSTUFE,
 # ältere Stände ohne die Konstante kennen höchstens Stufe 1 (Stufe 2a) bzw. keine Trennung
-trennstufe() { if [ -f "$1" ]; then awk 'NR == 1 { v = $0 + 0 } END { print (v < 1) ? 1 : int(v) }' "$1"; else echo 0; fi; }
-DATENSTUFE=$(trennstufe daten/.daten-getrennt); I=$(trennstufe daten-intern/.daten-intern); [ "$I" -le "$DATENSTUFE" ] || DATENSTUFE=$I
+# Stufe eines Kennzeichens wie stufe_lesen() in deploy/daten_trennen.py: fehlt es 0, leer 1, sonst die Zahl (mindestens 1).
+# Anderer Inhalt bricht ab – eine angenommene Stufe könnte den Rückfall auf einen Stand erlauben, der die Daten nicht kennt
+trennstufe() {
+  if [ ! -f "$1" ]; then echo 0; return 0; fi
+  s=$(cat "$1") || return 1
+  case $s in *[!0-9]*) return 1 ;; esac
+  awk -v s="$s" 'BEGIN { print (s + 0 < 1) ? 1 : s + 0 }'
+}
+unlesbar() { echo "Kennzeichen $1 unlesbar – kein Rückfall, nichts geändert. Zustand prüfen: sh deploy/daten-trennen.sh status"; exit 1; }
+DATENSTUFE=$(trennstufe daten/.daten-getrennt) || unlesbar daten/.daten-getrennt
+INNEN=$(trennstufe daten-intern/.daten-intern) || unlesbar daten-intern/.daten-intern
+if [ "$INNEN" -gt "$DATENSTUFE" ]; then DATENSTUFE=$INNEN; fi
 ZIELSTUFE=$(git show "$VORHER:app/api/lib/datenbereiche-liste.php" 2>/dev/null | sed -n 's/^const DATEN_TRENNSTUFE = \([0-9][0-9]*\);.*/\1/p' | head -1)
-[ -n "$ZIELSTUFE" ] || { git show "$VORHER:app/api/storage.php" 2>/dev/null | grep -q 'daten-getrennt' && ZIELSTUFE=1 || ZIELSTUFE=0; }
+if [ -z "$ZIELSTUFE" ]; then
+  if git show "$VORHER:app/api/storage.php" 2>/dev/null | grep -q 'daten-getrennt'; then ZIELSTUFE=1; else ZIELSTUFE=0; fi
+fi
 if [ "$DATENSTUFE" -gt "$ZIELSTUFE" ]; then
   echo "Daten sind getrennt (Stufe $DATENSTUFE), der vorherige Stand $VORHER kennt nur Stufe $ZIELSTUFE – kein Rückfall, nichts geändert."
   echo "Zuerst sh deploy/daten-trennen.sh zusammenfuehren (Freigabe, Wartungsfenster), dann erneut sh deploy/release-zurueck.sh."
