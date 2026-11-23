@@ -153,7 +153,7 @@ switch ($action) {
                 $doc = crm_kunden_doc();
                 $alt = $doc['eintraege'][$key] ?? [];
                 $blatt = crm_blatt($alt, $key[0] === 'i', $aktiv);
-                foreach ($vorher as $f => $v) if ($v != $blatt[$f]) return 'Das Feld „' . $F[$f][0] . '“ wurde inzwischen von ' . ($blatt['geaendertVon'] ?: 'jemand anderem') . ' geändert. Die neue Fassung ist geladen – bitte prüfen und erneut eintragen.';
+                foreach ($vorher as $f => $v) if ($v !== $blatt[$f]) return 'Das Feld „' . $F[$f][0] . '“ wurde inzwischen von ' . ($blatt['geaendertVon'] ?: 'jemand anderem') . ' geändert. Die neue Fassung ist geladen – bitte prüfen und erneut eintragen.';
                 $d = crm_protokoll_aenderungen($key, $nr, $blatt, $neu);
                 if (!$d) return null;
                 $doc['eintraege'][$key] = array_merge($alt, $neu, ['geaendert' => now(), 'geaendertVon' => $me['name']]);
