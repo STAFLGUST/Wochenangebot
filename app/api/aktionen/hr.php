@@ -453,6 +453,8 @@ switch ($action) {
                     $artVorher = $e['art'];
                     if (!in_array($e['status'], HR_AKTIV, true)) fail('Erledigte Einträge lassen sich nicht mehr ändern.', 409);
                     if ($e['status'] === 'beantragt') fail('Offene Anträge bitte genehmigen oder ablehnen.', 409);
+                    // erste Korrektur eines Imports: ursprünglichen Zeitraum festhalten, damit ein erneuter Import ihn nicht wieder bucht (hr_zeit_planen)
+                    if (($e['quelle'] ?? '') === 'zeiterfassung' && !isset($e['geaendert'])) $e['import'] = ['person' => $e['person'], 'von' => $e['von'], 'bis' => $e['bis']];
                     $e = array_merge($e, ['person' => $p['id'], 'art' => $art, 'von' => $von, 'bis' => $bis, 'notiz' => s($b['notiz'] ?? '', 300) ?? '', 'geaendert' => $jetzt]);
                     if ($art !== 'K') unset($e['urlaubAbzug']);   // „vom Urlaub abgezogen“ gilt nur für Krankheit aus der Zeiterfassung
                     $abw['eintraege'][$i] = $e;

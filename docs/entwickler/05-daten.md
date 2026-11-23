@@ -503,7 +503,10 @@ Mitarbeiter sind die Nutzer der Plattform (`users_load()`); HR speichert nur eig
   `zurueckgezogen`, `storniert` – Einträge werden nie gelöscht, nur der Status ändert sich (mit
   `entscheidung: {t, by, grund}`). `quelle`: `antrag`, `vorplanung` (seit 10.11.2026: mehrere Zeiträume auf einmal über
   `hr_vorplanung`, sonst wie `antrag`), `personalstelle`, `zeiterfassung`; optional `vertretung2` (zusätzliche Vertretung,
-  seit 10.11.2026 – fehlt das Feld: keine), `geaendert`,
+  seit 10.11.2026 – fehlt das Feld: keine), `geaendert`, `import` (seit 23.11.2026, nur bei `quelle: zeiterfassung`:
+  `{person, von, bis}` des Imports, festgehalten beim ersten Ändern durch die Personalstelle – ein erneuter Import bucht diese
+  Tage nicht wieder, sie erscheinen als „abweichend, nicht übernommen“; vorher geänderte Einträge haben das Feld nicht, dort
+  zählt nur der aktuelle Zeitraum),
   `urlaubAbzug` (in der Zeiterfassung vom Urlaub abgezogene Krankheit – nur Hinweis für die Personalstelle; Krankheit
   zählt in `hr_konto` nie gegen den Urlaub, Inhaber 30.10.2026). Überschneidungen (`hr_kollision`) gelten nur zwischen aktiven
   Einträgen derselben Gruppe: Abwesenheiten (U/K/G/F) untereinander und freie Tage (X) untereinander – ein freier Tag in

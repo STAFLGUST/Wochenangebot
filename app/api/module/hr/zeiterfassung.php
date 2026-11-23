@@ -11,7 +11,8 @@ declare(strict_types=1);
    Mitarbeiter ohne Anmeldung (mit Personalnummer und Abteilung). Gibt es Stammdaten „Abteilungen“ (Verwaltung), wird nur
    eine dort bekannte Abteilung übernommen (auch über eine frühere Bezeichnung), sonst ein Hinweis. Erneute Übernahme ersetzt die zuvor aus der
    Zeiterfassung übernommenen Einträge im Zeitraum des Berichts – außer solchen, die die Personalstelle storniert oder geändert
-   hat (ihre Korrektur geht vor, Entscheidung 22.11.2026). Tage, für die im System schon ein Eintrag steht (Antrag, Personalstelle,
+   hat (ihre Korrektur geht vor, Entscheidung 22.11.2026; gekürzt oder verschoben gilt auch der ursprüngliche Zeitraum, den
+   hr_eintrag_save beim ersten Ändern als „import“ festhält). Tage, für die im System schon ein Eintrag steht (Antrag, Personalstelle,
    Excel-Planung, korrigierter Import), bleiben unverändert; abweichende Arten erscheinen in der Vorschau.
    Form von Vorschau/Übernahme wie im Importvertrag (docs/plattform/schnittstellen/import.md). */
 if (!defined('WA_API')) { http_response_code(404); exit; }   // nur über api/index.php nutzbar
@@ -167,6 +168,14 @@ function hr_zeit_planen(array $e, ?array $me = null): array
             if ($k) $korrigiert[$x['person']][$d] = true;
             if ($aktiv) $belegt[$x['person']][$d] = $x['art'];
             elseif (!isset($belegt[$x['person']][$d])) $belegt[$x['person']][$d] = 'storniert';   // ein aktiver Eintrag am selben Tag geht vor
+        }
+        // gekürzt, verschoben oder einer anderen Person zugeordnet: auch die Tage des ursprünglichen Imports sind korrigiert
+        if ($k && is_array($x['import'] ?? null)) {
+            $ip = (string)$x['import']['person'];
+            for ($d = $x['import']['von']; $d <= $x['import']['bis']; $d = hr_plus($d, 1)) {
+                $korrigiert[$ip][$d] = true;
+                $belegt[$ip][$d] ??= 'entfernt';
+            }
         }
     }
     $tage = []; $gleich = 0; $abweichend = [];

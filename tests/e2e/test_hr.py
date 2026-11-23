@@ -1969,6 +1969,18 @@ with sync_playwright() as p:
           and (ek2.get('entscheidung') or {}).get('grund') == 'war Urlaub, Zeiterfassung falsch' and ('Erika Editor', 'K', '2025-02-10', '2025-02-14', 'genehmigt') not in ze2
           and ('Bernd Muster', 'G', '2025-03-05', '2025-03-05', 'genehmigt') in ze2 and ('Bernd Muster', 'K', '2025-03-05', '2025-03-05', 'genehmigt') not in ze2
           and ('Carla Probe', 'U', '2025-03-17', '2025-03-18', 'genehmigt') in ze2, (st, ek2, ze2))
+    # gekürzt, danach verschoben: ein erneuter Import bucht die ursprünglichen Tage nicht wieder (Feld „import“ vom ersten Ändern)
+    ec = next(e for e in r['eintraege'] if e['quelle'] == 'zeiterfassung' and e['name'] == 'Carla Probe')
+    st_k, _ = P.call('hr_eintrag_save', {'id': ec['id'], 'person': ec['person'], 'art': 'U', 'von': '2025-03-17', 'bis': '2025-03-17'})
+    st_v, _ = P.call('hr_eintrag_save', {'id': ec['id'], 'person': ec['person'], 'art': 'U', 'von': '2025-03-19', 'bis': '2025-03-19'})
+    st, v6 = zeit(P)
+    zk = {z['name']: z['text'] for z in v6.get('zeilen', []) if 'Korrektur der Personalstelle' in z['text']}
+    check('gekürzt und verschoben: Vorschau meldet die ursprünglichen Tage als Korrektur der Personalstelle', st_k == 200 and st_v == 200 and st == 200
+          and '17.03.2025 (entfernt statt U)' in zk.get('Karla Probe', '') and '18.03.2025 (entfernt statt U)' in zk.get('Karla Probe', ''), (st_k, st_v, zk))   # Name wie im Bericht
+    st, _ = zeit(P, True, v6['stand'])
+    r = P.call('hr_verwaltung&jahr=2025')[1]
+    zc = sorted((e['von'], e['bis'], e['status']) for e in r['eintraege'] if e['quelle'] == 'zeiterfassung' and e['name'] == 'Carla Probe')
+    check('… übernommen: kein neuer Eintrag für die gekürzten Tage, die Korrektur bleibt', st == 200 and zc == [('2025-03-19', '2025-03-19', 'genehmigt')], (st, zc))
 
     # ── Verwaltung → Mitarbeiter (Personalstelle ohne Administratorrechte): nur HR-Angaben ──
     pg.click('#vt-users'); pg.wait_for_selector('#view-users tr[data-hr-uid]')
