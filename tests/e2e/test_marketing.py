@@ -369,6 +369,21 @@ with sync_playwright() as p:
           and [e for e in Bb.call('marketing_start')[1]['beitraege'] if e['id'] == ideeneu['id']][0]['cta'] == 'Frage in die Kommentare')
     pg.click('#bt-neu-laden'); pg.wait_for_selector('#bt-konflikt', state='hidden')
     check('neue Fassung geladen', pg.input_value('#bt-cta') == 'Frage in die Kommentare')
+    # eigener Kommentar ohne fremde Änderung: Speichern danach klappt (Basis zählt nur den eigenen Kommentar weiter)
+    pg.fill('#bt-kommentar', 'Hook passt.'); pg.click('#bt-kommentar-add'); pg.wait_for_selector('#bt-kommentare li:has-text("Hook passt.")')
+    pg.fill('#bt-hashtags', '#grillen'); pg.click('#bt-speichern'); pg.wait_for_function("document.querySelector('#bt-meldung').textContent.startsWith('Gespeichert')")
+    check('Kommentar, dann Speichern ohne fremde Änderung: gespeichert, kein Konflikt', pg.is_hidden('#bt-konflikt')
+          and [e for e in Bb.call('marketing_start')[1]['beitraege'] if e['id'] == ideeneu['id']][0]['hashtags'] == '#grillen')
+    # Kommentar nach fremder Änderung: das Formular übernimmt die fremde Fassung nicht still – Speichern meldet 409, nichts überschrieben
+    _b = [e for e in Bb.call('marketing_start')[1]['beitraege'] if e['id'] == ideeneu['id']][0]
+    st_f, _ = F.call('marketing_beitrag_save', {'id': _b['id'], 'rev': _b['rev'], 'felder': {'titel': 'Story: Frage der Woche (Titel von Frieda)'}})
+    pg.fill('#bt-kommentar', 'Noch ein Gedanke.'); pg.click('#bt-kommentar-add'); pg.wait_for_selector('#bt-kommentare li:has-text("Noch ein Gedanke.")')
+    pg.fill('#bt-hook', 'Hook nach dem Kommentar'); pg.evaluate("document.querySelector('#bt-meldung').textContent = ''"); pg.click('#bt-speichern')
+    pg.wait_for_function("!document.querySelector('#bt-konflikt').hidden || document.querySelector('#bt-meldung').textContent.startsWith('Gespeichert')")
+    _b = [e for e in Bb.call('marketing_start')[1]['beitraege'] if e['id'] == ideeneu['id']][0]
+    check('Kommentar nach fremder Änderung, dann Speichern: Konflikthinweis, Titel der anderen Sitzung bleibt', st_f == 200 and pg.is_visible('#bt-konflikt')
+          and _b['titel'] == 'Story: Frage der Woche (Titel von Frieda)' and _b['hook'] != 'Hook nach dem Kommentar', (st_f, _b['titel'], _b['hook']))
+    pg.click('#bt-neu-laden'); pg.wait_for_selector('#bt-konflikt', state='hidden')
     pg.click('#dlg-beitrag .mkt-dfuss [data-schliessen]'); pg.wait_for_selector('#dlg-beitrag', state='hidden')
 
     pg.click('#mkt-tabs button[data-tab="board"]'); pg.wait_for_selector('.mkt-board')

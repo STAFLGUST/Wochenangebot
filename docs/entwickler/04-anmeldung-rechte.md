@@ -144,6 +144,13 @@ In PHP (`lib/oidc.php`, aufgerufen aus `current_user()` in `lib/sitzung.php`):
 4. **Hostsitzung:** Passt die PHP-Sitzung nicht mehr (anderer Nutzer, anderes `sub`, andere Keycloak-`sid`, geänderte
    Sitzungsversion `sv`, fehlt im Register), wird sie geleert und mit `sign_in()` neu vergeben. `authAt` und
    `adminConfirmedAt` sind dann der Anmeldezeitpunkt bei Keycloak (`auth_time`), nicht der Sitzungsbeginn hier.
+   **CSRF-Token (seit 23.11.2026):** Fehlt bei sonst gleicher Anmeldung (Konto, `sub`, Keycloak-`sid`, `sv`) nur der
+   Registereintrag – `sess_prune` räumt ihn nach `idleMinutes` ab, wenn ein offener Tab nur Hintergrundabfragen sendet,
+   während der Mitarbeiter in einem anderen Modul arbeitet –, behält die neue Sitzung das bisherige Token; der Tab speichert
+   weiter. Sitzungskennung und Registereintrag sind trotzdem neu. Ein neues Token gibt es bei jeder anderen Identität,
+   neuer Keycloak-Sitzung (Ab- und Wiederanmelden), erhöhtem `sv` und nach Ablauf oder „Sitzung beenden“
+   (`oidc_ende_zeit`). Ein falsches Token beantwortet `require_csrf()` mit 403 `code: csrf`. Geprüft in
+   `tests/e2e/test_oidc_kern.py` (CLI mit Identität als Server-Umgebung).
 
 Auf Keycloak-Hosts überspringt `require_auth()` die eigenen Prüfungen `mustChange` und „zweiter Faktor fehlt“ – das
 erledigt Keycloak. `me_payload()` meldet dort `zentral: true`, `bereich`, `dashboard` und `modulzugang`.
@@ -314,7 +321,7 @@ Das Register ersetzt keine Rechteprüfung (`regeln/aktionen/LIESMICH.md`).
 ### CSRF
 
 `require_auth(true)` (bzw. `require_perm($recht, true)`) vergleicht `X-CSRF-Token` mit `$_SESSION['csrf']` per
-`hash_equals` → sonst 403. Das Token liefern `status`/`login` an die Oberfläche. Für Aktionen, die bewusst ohne
+`hash_equals` → sonst 403 mit `code: csrf` (über `require_csrf()`). Das Token liefern `status`/`login` an die Oberfläche. Für Aktionen, die bewusst ohne
 vollständige Anmeldeprüfung laufen (z. B. `twofa_begin`), gibt es `require_csrf()`; Kunden haben ein eigenes Token
 (`require_customer_csrf()`, `kcsrf`). Jede schreibende Aktion prüft CSRF – die JSON-Pflicht im Einstieg allein genügt
 nicht.

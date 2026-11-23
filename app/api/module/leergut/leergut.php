@@ -267,7 +267,10 @@ function lg_partner_pruefen(array $b, ?array $alt, array $stamm): array
     if (array_key_exists('kundenNr', $b) || !isset($row['kundenNr'])) {   // ohne Angabe bleibt die gespeicherte Nummer
         $nr = lg_text($b['kundenNr'] ?? '', 12, 'WinAB-Kundennummer');
         if ($nr !== '' && !preg_match('/^\d{1,12}$/', $nr)) throw new InvalidArgumentException('WinAB-Kundennummer: bitte nur Ziffern.');
-        foreach ($stamm['partner'] as $p) if ($nr !== '' && ($alt === null || $p['id'] !== $alt['id']) && (string)($p['kundenNr'] ?? '') === $nr)
+        // wie CRM, Controlling und REWE über code_key: „012345“ und „12345“ sind dieselbe Nummer (gespeichert bleibt die Eingabe).
+        // Nur eine geänderte Nummer prüfen: Paare wie „012345“ / „Kunde (12345)“ aus dem früheren WinAB-Abgleich sperren sonst jedes Speichern.
+        $pruefen = $nr !== '' && $nr !== (string)($alt['kundenNr'] ?? '');
+        foreach ($stamm['partner'] as $p) if ($pruefen && ($alt === null || $p['id'] !== $alt['id']) && (string)($p['kundenNr'] ?? '') !== '' && code_key((string)$p['kundenNr']) === code_key($nr))
             throw new InvalidArgumentException("Die WinAB-Kundennummer $nr gehört schon zu „{$p['name']}“.");
         $row['kundenNr'] = $nr;
     }
@@ -844,14 +847,14 @@ function lg_partner_stamm(array $partner): array
     $kd = [];
     if (array_filter($partner, function ($p) { return (string)($p['kundenNr'] ?? '') !== ''; }))
         foreach (customers_load()['customers'] as $c) if (is_array($c) && ($c['nr'] ?? '') !== '')
-            $kd[(string)$c['nr']] = ['versandart' => (string)($c['versandart'] ?? ''), 'bestand' => lg_winab_zahl(is_array($c['wawi'] ?? null) ? ($c['wawi']['lademittelbestand'] ?? null) : null)];
+            $kd[code_key((string)$c['nr'])] = ['versandart' => (string)($c['versandart'] ?? ''), 'bestand' => lg_winab_zahl(is_array($c['wawi'] ?? null) ? ($c['wawi']['lademittelbestand'] ?? null) : null)];
     $versand = []; $bestand = [];
     foreach ($partner as $p) {
-        $lf = (string)($p['lieferantNr'] ?? ''); $k = (string)($p['kundenNr'] ?? '');
-        $v = $lf !== '' ? (string)($lst[$lf]['versandart'] ?? '') : ($k !== '' ? ($kd[$k]['versandart'] ?? '') : '');
+        $lf = (string)($p['lieferantNr'] ?? ''); $k = (string)($p['kundenNr'] ?? ''); $kk = $k !== '' ? code_key($k) : '';
+        $v = $lf !== '' ? (string)($lst[$lf]['versandart'] ?? '') : ($k !== '' ? ($kd[$kk]['versandart'] ?? '') : '');
         if ($v !== '') $versand[$p['id']] = lg_versand_text($v, $va);
         $b = [];
-        if ($k !== '' && isset($kd[$k]['bestand'])) $b[] = [$k, $kd[$k]['bestand']];
+        if ($k !== '' && isset($kd[$kk]['bestand'])) $b[] = [$k, $kd[$kk]['bestand']];
         foreach (array_unique(array_filter(array_merge([$lf], is_array($p['lieferantNrWeitere'] ?? null) ? $p['lieferantNrWeitere'] : []), 'strlen')) as $nr)
             if (($z = lg_winab_zahl($lst[$nr]['lademittelbestand'] ?? null)) !== null) $b[] = [$nr, $z];
         if ($b) $bestand[$p['id']] = $b;
@@ -866,8 +869,11 @@ function lg_partner_stamm(array $partner): array
 function lg_winab_abgleich(array $w, array $stamm, array $bew, array $me): array
 {
     $heute = date('d.m.Y');
+    // Kundennummern über code_key nachschlagen (der .XLS-Bericht liefert sie als Zahl ohne führende Null, die .CSV als Text)
     $nachNr = [];
-    foreach ($stamm['partner'] as $i => $p) if ((string)($p['kundenNr'] ?? '') !== '') $nachNr[(string)$p['kundenNr']] = $i;
+    foreach ($stamm['partner'] as $i => $p) if ((string)($p['kundenNr'] ?? '') !== '') $nachNr[code_key((string)$p['kundenNr'])] = $i;
+    $imBericht = [];
+    foreach (array_keys($w['kunden']) as $nr) $imBericht[code_key((string)$nr)] = true;
     $lfIdx = lg_lf_index($stamm['partner']);
     [$lst, $va] = lg_lieferantenstamm();
     $namen = [];
@@ -916,7 +922,7 @@ function lg_winab_abgleich(array $w, array $stamm, array $bew, array $me): array
     $neuKunden = [];
     foreach (array_keys($genutzt) as $kd) {
         $kd = (string)$kd;
-        if (strpos($kd, 'L:') === 0 || isset($nachNr[$kd])) continue;
+        if (strpos($kd, 'L:') === 0 || isset($nachNr[code_key($kd)])) continue;
         $name = $w['kunden'][$kd] ?? '';
         if ($name === '') { $stammNamen = $stammNamen ?? lg_kundenstamm_namen(); $name = $stammNamen[$kd] ?? 'Kunde'; }
         $name = $eindeutig(rtrim(mb_substr($name, 0, 84)) . ' (' . $kd . ')');
@@ -924,7 +930,7 @@ function lg_winab_abgleich(array $w, array $stamm, array $bew, array $me): array
             'fristTage' => 0, 'email' => '', 'ansprechpartner' => '', 'lieferanten' => '', 'lademittel' => $lmsFuer($kd), 'aktiv' => true, 'quelle' => 'winab',
             'notiz' => "Aus $herkunft angelegt. Salden ab " . date('d.m.Y', strtotime($w['bericht']['von'])) . ' (übernommener Zeitraum).',
             'erstellt' => lg_wer($me), 'rev' => 1, 'geaendert' => lg_wer($me)];
-        $nachNr[$kd] = count($stamm['partner']) - 1;
+        $nachNr[code_key($kd)] = count($stamm['partner']) - 1;
         $neuKunden[] = $name;
     }
     if (count($stamm['partner']) > LG_MAX_PARTNER) throw new InvalidArgumentException('Zu viele Partner (höchstens ' . LG_MAX_PARTNER . ').');
@@ -952,8 +958,8 @@ function lg_winab_abgleich(array $w, array $stamm, array $bew, array $me): array
             if (!isset($w['lieferanten'][(string)$k['lf']]) || !isset($lfIdx[(string)$k['lf']])) continue;   // nicht in der Datei oder nicht zugeordnet
             $alt['L:' . $k['lf'] . '|' . $k['art'] . '|' . $k['beleg']] = $i;
         } else {
-            if (!isset($w['kunden'][(string)$k['kd']])) continue;   // Kunde nicht in der Datei (z. B. auf einzelne Kunden gefiltert): nicht anfassen
-            $alt[$k['kd'] . '|' . $k['art'] . '|' . $k['beleg']] = $i;
+            if (!isset($imBericht[code_key((string)$k['kd'])])) continue;   // Kunde nicht in der Datei (z. B. auf einzelne Kunden gefiltert): nicht anfassen
+            $alt[code_key((string)$k['kd']) . '|' . $k['art'] . '|' . $k['beleg']] = $i;
         }
     }
     $z = ['kunden' => count($neuKunden), 'lieferantenNeu' => count($neuLief), 'neu' => 0, 'gleich' => 0, 'geaendert' => 0, 'ausgeglichen' => 0,
@@ -971,6 +977,7 @@ function lg_winab_abgleich(array $w, array $stamm, array $bew, array $me): array
     $ohneKonto = [];   // Lieferanten mit Belegen, aber ohne Partner: nur gezählt (Vorschau zeigt sie zur Zuordnung)
     foreach ($w['belege'] as $key => $b) {
         $istLf = isset($b['lf']);
+        if (!$istLf) $key = code_key($b['kd']) . '|' . $b['art'] . '|' . $b['beleg'];   // wie $alt: gleicher Beleg aus .XLS und .CSV
         $weg = [];
         if ($istLf) {
             $pi = lg_lf_konto($lfIdx, $b['lf'], $b['datum']);
@@ -988,7 +995,7 @@ function lg_winab_abgleich(array $w, array $stamm, array $bew, array $me): array
                 continue;
             }
         }
-        $pid = $stamm['partner'][$istLf ? $pi : $nachNr[$b['kd']]]['id'];
+        $pid = $stamm['partner'][$istLf ? $pi : $nachNr[code_key($b['kd'])]]['id'];
         if (!$istLf && $b['datum'] < $beginn[(string)$pid][0]) { $z['vorStart']++; continue; }   // Kundenkonto mit Excel-Liste oder eigenem Beginn
         $imExcelZeitraum = isset($excelBis[$pid]) && $b['datum'] <= $excelBis[$pid];
         if ($imExcelZeitraum) {
@@ -1034,8 +1041,8 @@ function lg_winab_abgleich(array $w, array $stamm, array $bew, array $me): array
     $z['daten'] = 0;
     foreach ($w['daten'] ?? [] as $kd => $dt) {
         $kd = (string)$kd;
-        if (!isset($nachNr[$kd])) continue;
-        $i = $nachNr[$kd];
+        if (!isset($nachNr[code_key($kd)])) continue;
+        $i = $nachNr[code_key($kd)];
         $vorher = is_array($stamm['partner'][$i]['winab'] ?? null) ? $stamm['partner'][$i]['winab'] : [];
         $felder = [];
         foreach (['ersteLieferung', 'letzteLieferung', 'letzteRueckgabe'] as $f) {

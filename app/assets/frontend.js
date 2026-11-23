@@ -247,8 +247,9 @@ function passes(it, skip) {
   }
   if (skip !== 'range' && (state.min != null || state.max != null)) {
     if (it.price.status !== 'value') return false;
-    if (state.min != null && it.price.value < state.min) return false;
-    if (state.max != null && it.price.value > state.max) return false;
+    const pv = rundeWieServer(it.price.value * 100) / 100;   // wie angezeigt und bestellt (gespeichert bis 4 Stellen)
+    if (state.min != null && pv < state.min) return false;
+    if (state.max != null && pv > state.max) return false;
   }
   return true;
 }
@@ -1220,7 +1221,7 @@ function exportCSV(list, suffix) {
     const p = it.price;
     lines.push([
       it.code || '', it.name, it.category, it.origin || '', it.group, it.section, COND_LABEL[it.condition], it.features.join(', '),
-      p.status === 'value' ? String(p.value).replace('.', ',') : '',
+      p.status === 'value' ? (rundeWieServer(p.value * 100) / 100).toFixed(2).replace('.', ',') : '',   // Cent wie Anzeige und Bestellung; CSV maschinenlesbar, ohne format.js
       (p.label ? p.label + ': ' : '') + PRICE_STATUS_LABELS[p.status],
       it.altPrices.map((a) => `${a.label}: ${priceShort(a)}`).join(' | '),
       mitGueltigkeit(m) ? (m.gueltigBis ? String(m.gueltigBis).split('-').reverse().join('.') : '') : m.week ? `KW ${m.week}/${m.year ?? ''}` : '',

@@ -46,6 +46,7 @@
   --r-m-start: #8c1d2c; --r-m-sonst: #6a645f;
   --r-breite: 60px;              /* Spalte der Seitenleiste: schmal; festgestellt --r-breite-offen */
   --r-breite-offen: 208px;
+  --r-tipp-polster: 10px;        /* kleine Verweise mit Finger: Polster nach außen, Tippfläche ≥ 36 px ohne höhere Zeile */
 }
 /* Dunkel (Wahl am Konto oder Systemeinstellung): nur andere Werte, gleicher Aufbau */
 @media screen and (prefers-color-scheme: dark) {
@@ -208,11 +209,20 @@ a.r-eintrag[aria-current="page"] { background: var(--r-aktiv); box-shadow: var(-
   .r-pin { display: none; }   /* das Menü ist ohnehin voll breit */
 }
 
+/* ── Fenster (<dialog>) auf jeder Seite im Rahmen: der Hintergrund ist nur abgedunkelt, nie unscharf (C2: kein Glas).
+   Eine Regel für alle Module (Gewichtung 0,1,3 schlägt die eigenen Fensterregeln der Module, z. B. „.hr-dialog“). ── */
+body.r dialog::backdrop { background: var(--r-schleier); -webkit-backdrop-filter: none; backdrop-filter: none; }
+/* Kreuz zum Schließen (jedes Fenster hat eins mit „…schließen“ als Beschriftung, Gruppe einheit): überall dieselbe ruhige
+   Fläche wie im Container-Import – 36 px, 9 px rund, ohne Füllung und Rand; × als Zeichen oder Symbol. :root hebt die Gewichtung
+   über die runden Knöpfe der Module (z. B. „body.crm.r .crm-rund“), die auch als Kreuz dienen. */
+:root body.r dialog button[aria-label$="chließen"] { box-sizing: border-box; width: 36px; min-width: 36px; height: 36px; padding: 0; border: 0; border-radius: 9px;
+  display: inline-grid; place-items: center; flex: none; background: transparent; box-shadow: none; color: var(--r-text-2); font-size: 22px; line-height: 1; }
+:root body.r dialog button[aria-label$="chließen"]:hover { background: var(--r-hover); color: var(--r-text); }
+
 /* ── Suche (Dialog) ── */
 .r-palette { box-sizing: border-box; width: min(560px, calc(100vw - 32px)); max-height: min(520px, calc(100dvh - 120px)); margin: 12vh auto auto; padding: 0;
   border: 1px solid var(--r-linie-2); border-radius: 16px; background: var(--r-flaeche); color: var(--r-text); box-shadow: var(--r-schatten-menue); font-family: var(--font); }
 .r-palette[open] { display: flex; flex-direction: column; }
-.r-palette::backdrop { background: var(--r-schleier); -webkit-backdrop-filter: none; backdrop-filter: none; }   /* kein Glas (C2) */
 .r-palette-feld { display: flex; align-items: center; gap: 10px; padding: 12px 12px 12px 16px; border-bottom: 1px solid var(--r-linie); color: var(--r-leise); }
 .r-palette-feld .r-i { width: 18px; height: 18px; }
 .r-palette-feld input { flex: 1; min-width: 0; height: 32px; border: 0; outline: 0; background: transparent; color: var(--r-text); font: inherit; font-size: 16px; }
@@ -239,6 +249,15 @@ body.r .stafl-zurueck { height: 36px; padding: 0 12px 0 8px; border: 1px solid v
 body.r .stafl-zurueck:hover { background: var(--r-flaeche-2); color: var(--r-text); }
 body.r .stafl-zurueck.kompakt { width: 36px; padding: 0; }
 @media (max-width: 560px) { body.r .stafl-zurueck { width: 36px; padding: 0; } }
+.r-seitenkopf .stafl-zurueck { flex: none; }   /* in der Zeile vor dem Titel (rahmen.js: startKnopf) */
+/* Den Knopf setzt der Rahmen – die Linkfarbe eines Moduls (z. B. „.ci-main a“) färbt ihn nicht um */
+body.r .r-seitenkopf a.stafl-zurueck { color: var(--r-text-2); }
+body.r .r-seitenkopf a.stafl-zurueck:hover { color: var(--r-text); }
+
+/* ── Hauptknopf (.btn.primary aus app.css) auf jeder Seite im Rahmen in der Akzentfarbe des Rahmens: im dunklen Design wie
+   Container-Import, Versand und Eingabebereich (--r-akzent mit weißer Schrift) statt Rosa mit dunkler Schrift; hell gleich ── */
+body.r .btn.primary { background: var(--r-akzent); border-color: var(--r-akzent); color: var(--r-akzent-ink); }
+body.r .btn.primary:hover { background: var(--r-akzent-hover); border-color: var(--r-akzent-hover); }
 
 /* ── Bausteine für Seiten im Rahmen ── */
 .r-seite { box-sizing: border-box; width: 100%; max-width: 1120px; margin: 0 auto; padding: 32px 40px 56px; display: flex; flex-direction: column; gap: 28px; }
@@ -257,10 +276,22 @@ body.r .stafl-zurueck.kompakt { width: 36px; padding: 0; }
 .r-abschnitt > h2, .r-abschnitt-kopf h2 { margin: 0; font-size: 15px; font-weight: 600; }
 .r-abschnitt-kopf { display: flex; align-items: center; justify-content: space-between; gap: 12px; min-height: 24px; }
 .r-karte { background: var(--r-flaeche); border: 1px solid var(--r-linie); border-radius: 16px; box-shadow: var(--r-schatten); }
+/* Modulseiten aus diesen Bausteinen (Container-Import, Versand – erkennbar an data-rahmen) haben den Kopf der übrigen Module:
+   „Start“, Symbol und Name (22 px) in einer Zeile, der Stand daneben; Inhalt über die ganze Breite mit 24 px Rand. Die
+   Startseite (ohne data-rahmen) behält ihren zentrierten Aufbau mit großem Titel. */
+body[data-rahmen] .r-seite { max-width: none; margin: 0; padding: 24px 24px 40px; }
+body[data-rahmen] .r-seitenkopf { flex-wrap: nowrap; }
+body[data-rahmen] .r-seitenkopf > :first-child { flex: 1 1 0; min-width: 0; min-height: 40px; display: flex; flex-wrap: wrap; align-items: center; align-content: center; gap: 4px 12px; }
+body[data-rahmen] .r-seitenkopf h1 { display: inline-flex; align-items: center; gap: 8px; font-size: 22px; letter-spacing: -.01em; }
+body[data-rahmen] .r-seitenkopf h1 .r-i { width: 22px; height: 22px; color: var(--r-m); }
+body[data-rahmen] .r-seitenkopf .r-unterzeile { margin: 0; }
 @media (max-width: 900px) {
   .r-seite { padding: 22px 16px 40px; gap: 22px; }
   .r-seitenkopf h1 { font-size: 26px; }
+  body[data-rahmen] .r-seite { padding: 16px 16px 32px; }
+  body[data-rahmen] .r-seitenkopf h1 { font-size: 18px; }
 }
+@media (max-width: 560px) { body[data-rahmen] .r-seitenkopf h1 .r-i { display: none; } }   /* Handy: nur der Name, wie in den übrigen Modulen */
 @media (prefers-reduced-motion: reduce) {
   .r-app.r-bewegung .r-leiste, .r-app.r-bewegung.r-offen .r-leiste, .r-rund { transition: none; }
 }

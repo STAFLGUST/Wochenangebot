@@ -221,6 +221,9 @@ with sync_playwright() as pw:
     pg.emulate_media(media='print')
     check('Druckansicht: Kalkulation mit Ergebnis in eigenem Block der Druckfassung (A4 quer)', pg.evaluate("window.__gedruckt === true && !!document.querySelector('#ci-druck > .kk-druck')")
           and 'Kalkulation Partie P-470003' in pg.inner_text('#ci-druck') and 'Fassung 1 · vorläufig' in pg.inner_text('#ci-druck') and '8,8484' in pg.inner_text('#ci-druck') and pg.is_hidden('#ci-app'))
+    gross = pg.evaluate("""() => [...document.querySelectorAll('#ci-druck .kk-druck table')].flatMap((t) => { const f = parseFloat(getComputedStyle(t).fontSize);
+      return [...t.querySelectorAll('th, td, .ci-unter')].filter((e) => parseFloat(getComputedStyle(e).fontSize) > f + 0.1).map((e) => e.textContent.trim().slice(0, 24) + ' ' + getComputedStyle(e).fontSize); })""")
+    check('Druck: Zeilennamen, Spaltenköpfe und Unterzeilen in der Schrift der Tabelle (nicht größer als die Zahlen)', not gross, gross[:6])
     pdf = pg.pdf(prefer_css_page_size=True)
     with open(os.path.join(SH, 'containerimport-kalkulation-druck.pdf'), 'wb') as datei:
         datei.write(pdf)

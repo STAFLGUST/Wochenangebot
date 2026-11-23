@@ -5,7 +5,7 @@ declare(strict_types=1);
    Eingabe (JSON auf stdin): {"eingabe": {...}, "saetze": {...} (optional, sonst CI_KALK_SAETZE)}
    Ausgabe (JSON): {"eingabe": geprüfte Eingabe, "ergebnis": Ergebnis} oder {"fehler": Meldung der Eingabeprüfung}. */
 define('WA_API', true);
-function now(): string { return gmdate('Y-m-d\TH:i:s\Z'); }
+require __DIR__ . '/../../app/api/lib/kern.php';   // now(), zahl_text_de()
 require __DIR__ . '/../../app/api/module/containerimport/eudr.php';
 require __DIR__ . '/../../app/api/module/containerimport/kalkulation.php';
 $in = json_decode((string)stream_get_contents(STDIN), true);

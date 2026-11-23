@@ -47,11 +47,11 @@
     if (!host) return;
     const plus = !cfg.ro && bl.length < BLOECKE;
     if (bl.length < 2) {
-      host.innerHTML = plus ? `<button type="button" class="btn sm wb-plus" data-wa="neu">${icon('plus', 'sm')}Weitere Werbung</button><span class="wb-rh">erscheint auf der Angebotsseite rechts daneben</span>` : '';
+      host.innerHTML = plus ? `<button type="button" class="btn sm wb-plus" data-wa="neu">${icon('plus', 'sm')}Weitere Werbung</button><span class="wb-rh">erscheint auf der Angebotsseite als zweiter Werbeblock</span>` : '';
       return;
     }
     host.innerHTML = `<div class="wb-tabs" role="tablist" aria-label="Werbungen">${bl.map((x, i) => `<button type="button" role="tab" class="wb-tab" data-wr="${i}" aria-selected="${i === akt}">
-        <span>Werbung ${i + 1}<small>${i === 0 ? 'oben links' : 'rechts daneben'}</small></span><span class="wb-tz">${x.sel.length}</span></button>`).join('')}</div>`;
+        <span>Werbung ${i + 1}<small>${i === 0 ? 'erster Block' : 'zweiter Block'}</small></span><span class="wb-tz">${x.sel.length}</span></button>`).join('')}</div>`;
   }
 
   /* Felder und Liste der angezeigten Werbung */
@@ -97,7 +97,7 @@
     akt = 0;
     const ro = c.ro;
     body.innerHTML = `<div class="dlg-head"><div><h2 id="wb-title">${icon('megaphone')}Werbung schalten</h2>
-        <p>Angebot „${esc(c.angebot)}“: Diese Artikel stehen auf der Angebotsseite oben im Werbeblock und sind in der Liste hervorgehoben. Eine weitere Werbung erscheint rechts daneben. Für Kunden sichtbar nach „Veröffentlichen“.</p></div>
+        <p>Angebot „${esc(c.angebot)}“: Diese Artikel stehen auf der Angebotsseite im Werbeblock und sind in der Liste hervorgehoben. Eine weitere Werbung erscheint als zweiter Werbeblock. Für Kunden sichtbar nach „Veröffentlichen“.</p></div>
         <button type="button" class="btn icon ghost" data-close aria-label="Schließen">${icon('x')}</button></div>
       <div class="dlg-body">
         <div class="wb-reiter" id="wb-reiter"></div>

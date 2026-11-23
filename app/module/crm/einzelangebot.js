@@ -24,8 +24,9 @@
     const n = /^\d+(\.\d+)?$/.test(t) ? Number(t) : NaN;
     return Number.isFinite(n) ? n : NaN;
   }
-  const text = (v) => (v == null || Number.isNaN(v) ? '' : String(Math.round(v * 100) / 100).replace('.', ','));
-  const preisText = (v) => (v == null || Number.isNaN(v) ? '' : (Math.round(v * 100) / 100).toFixed(2).replace('.', ','));   // Preise immer mit zwei Stellen
+  const cent = (v) => F.glatt(v * 100);   // Cent wie PHP round() auf dem Server (1,005 → 101)
+  const text = (v) => (v == null || Number.isNaN(v) ? '' : String(cent(v) / 100).replace('.', ','));
+  const preisText = (v) => (v == null || Number.isNaN(v) ? '' : (cent(v) / 100).toFixed(2).replace('.', ','));   // Preise immer mit zwei Stellen
   const euro = (v) => NF2.format(v) + ' €';
   const plus = (tage) => { const d = new Date(); d.setDate(d.getDate() + tage); return d.toLocaleDateString('sv-SE'); };
   const kurz = (code) => { const s = String(code || '').trim(); return /^\d+$/.test(s) ? (s.replace(/^0+/, '') || '0') : s.toUpperCase(); };
@@ -38,7 +39,7 @@
   /* Summe der Positionen mit Menge und Preis (wie der Server: Cent je kg × kg) */
   function summen(pos) {
     let kg = 0, sum = 0;
-    for (const p of pos) { const q = zahl(p.qty, 'qty') ?? (p.partie ? Math.floor(p.partie.kg * 100 + 1e-6) / 100 : null), pr = zahl(p.price); if (q > 0) { kg += q; if (pr >= 0 && pr !== null) sum += Math.round(Math.round(pr * 100) * q) / 100; } }
+    for (const p of pos) { const q = zahl(p.qty, 'qty') ?? (p.partie ? Math.floor(p.partie.kg * 100 + 1e-6) / 100 : null), pr = zahl(p.price); if (q > 0) { kg += q; if (pr >= 0 && pr !== null) sum += F.glatt(cent(pr) * q) / 100; } }
     return { kg, sum };
   }
 

@@ -626,6 +626,41 @@ check('WinAB-Lademittelbestand je Konto: Lieferant aus dem Lieferantenstamm (-1.
       wb.get(must['id']) == [['2550077', -1234]] and wb.get(p6['id']) == [['9100006', 17]] and pz['2550078']['id'] not in wb
       and s['versand'].get(p6['id']) == '1 · Direktlieferung', (wb, s.get('versand')))
 check('WinAB-Lademittelbestand: Leser sieht ihn auch (nur Anzeige, keine Umsätze)', L.call('leergut_start')[1].get('winabBestand', {}).get(must['id']) == [['2550077', -1234]])
+# Führende Null: Konto von Hand mit „0091011“, der .XLS-Bericht liefert die Zahl 91011, die .CSV den Text „0091011“ – derselbe Kunde
+st, r = V.call('leergut_partner_save', {'name': 'Testkunde Null (von Hand)', 'art': 'kunde', 'kundenNr': '0091011', 'lademittel': ['e2']})
+nullk = r.get('partner', {})
+st2, r2 = V.call('leergut_partner_save', {'name': 'Kunde ohne Null', 'art': 'kunde', 'kundenNr': '91011', 'lademittel': ['e2']})
+check('WinAB-Kundennummer mit führender Null: dieselbe Nummer ohne Null ist doppelt (422)', st == 200 and nullk.get('kundenNr') == '0091011'
+      and st2 == 422 and 'Testkunde Null (von Hand)' in r2.get('error', ''), (st, r, st2, r2))
+# Altbestand des früheren Abgleichs ohne code_key: „0091011“ und ein angelegtes „Kunde (91011)“ nebeneinander. Speichern ohne
+# geänderte Nummer bleibt möglich; wer die Nummer ändert, wird weiter geprüft.
+sd = json.loads(storage_raw('leergut-stamm').split('?>\n', 1)[-1])
+paar = {**nullk, 'id': 'pAltpaar91011', 'name': 'Kunde (91011)', 'kundenNr': '91011', 'rev': 1}
+storage_write('leergut-stamm', {**sd, 'partner': sd['partner'] + [paar]})
+st, r = V.call('leergut_partner_save', {'id': nullk['id'], 'rev': nullk['rev'], 'name': nullk['name'], 'art': 'kunde', 'kundenNr': '0091011', 'lademittel': ['e2'], 'notiz': 'Altpaar'})
+st2, r2 = V.call('leergut_partner_save', {'id': paar['id'], 'rev': 1, 'name': paar['name'], 'art': 'kunde', 'kundenNr': '91011', 'lademittel': ['e2'], 'notiz': 'Altpaar'})
+st3, r3 = V.call('leergut_partner_save', {'id': paar['id'], 'rev': 2, 'name': paar['name'], 'art': 'kunde', 'kundenNr': '00091011', 'lademittel': ['e2']})
+storage_write('leergut-stamm', sd)
+check('Altpaar „0091011“ / „Kunde (91011)“: beide speicherbar ohne geänderte Nummer, eine geänderte Nummer weiter 422',
+      st == 200 and st2 == 200 and st3 == 422 and 'gehört schon' in r3.get('error', ''), (st, r.get('error'), st2, r2.get('error'), st3, r3.get('error')))
+WN = {'bericht': {'datei': 'Lademittel_Null.XLS', 'von': '2026-01-01', 'bis': '2026-10-15', 'datum': '2026-10-15'},
+      'kunden': [{'nr': '91011', 'name': 'Testkunde Null'}],
+      'belege': [{'kd': '91011', 'art': 'Lieferschein', 'beleg': '510001', 'datum': '2026-05-04', 'abgang': {'e2': 6}, 'zugang': {}}]}
+n0_ = len(V.call('leergut_start')[1]['partner'])
+st, r = V.call('leergut_winab_import', WN)
+s = V.call('leergut_start')[1]
+bn = [b for b in V.call('leergut_konto&partner=' + nullk['id'])[1]['bewegungen'] if b.get('quelle') == 'winab']
+check('WinAB .XLS mit Kundennummer ohne führende Null: kein zweites Konto, Beleg am Konto „0091011“, Nummer unverändert (GR-006)',
+      st == 200 and r['zahlen']['kunden'] == 0 and r['zahlen']['neu'] == 1 and len(s['partner']) == n0_ and [b['abgang'] for b in bn] == [{'e2': 6}]
+      and {p['id']: p['kundenNr'] for p in s['partner']}[nullk['id']] == '0091011', (st, r.get('zahlen'), r.get('neueKunden'), bn))
+st, r = V.call('leergut_winab_import', {**WN, 'bericht': {**WN['bericht'], 'quelle': 'csv', 'dateiVon': '2026-01-01'}, 'kunden': [{'nr': '0091011'}],
+                                        'belege': [{**WN['belege'][0], 'kd': '0091011'}], 'lieferanten': []})
+check('… derselbe Beleg aus der .CSV (Text mit Null): unverändert, nicht doppelt gebucht', st == 200 and r['zahlen']['gleich'] == 1 and r['zahlen']['neu'] == 0
+      and r['zahlen']['ausgeglichen'] == 0 and r['zahlen']['kunden'] == 0, r.get('zahlen'))
+storage_write('kunden', {'rev': 3, 'customers': [{'id': 'klg000000001', 'nr': '9100006', 'firma': 'Fleischerei Beispiel', 'active': True, 'versandart': '1', 'wawi': {'lademittelbestand': 17}},
+                                                 {'id': 'klg000000002', 'nr': '91011', 'firma': 'Testkunde Null', 'active': True, 'wawi': {'lademittelbestand': 4}}]})
+check('WinAB-Lademittelbestand aus dem Kundenstamm auch bei führender Null am Konto', V.call('leergut_start')[1].get('winabBestand', {}).get(nullk['id']) == [['0091011', 4]],
+      V.call('leergut_start')[1].get('winabBestand'))
 # Konto mit „Tausch laut WinAB zählt“: der reine Tausch fällt weg, der gebuchte Beleg wird storniert
 mp = next(p for p in s['partner'] if p['id'] == must['id'])
 st, r = V.call('leergut_partner_save', {'id': mp['id'], 'rev': mp['rev'], 'name': mp['name'], 'art': 'lieferant', 'lademittel': ['e2', 'h1'], 'wareneingangTausch': True})
@@ -919,6 +954,13 @@ with sync_playwright() as p:
           and pg.locator('#bw-mengen tr').count() == 3)
     pg.fill('#bw-mengen [data-seite="a"][data-lm="e2"]', 'zwölf'); pg.click('#bw-form [type="submit"]')
     check('Bewegung: Text statt Zahl wird vor dem Senden gemeldet', 'ganze Stückzahlen' in text(pg, '#bw-meldung') and pg.get_attribute('#bw-mengen [data-seite="a"][data-lm="e2"]', 'aria-invalid') == 'true')
+    for falsch_ in ('1.5', '2.50'):   # Punkt nur als Tausenderpunkt wie im Server: kein stilles 15 bzw. 250
+        pg.evaluate("document.querySelector('#bw-meldung').textContent = ''")
+        pg.fill('#bw-mengen [data-seite="a"][data-lm="e2"]', falsch_); pg.click('#bw-form [type="submit"]')
+        pg.wait_for_function("document.querySelector('#bw-meldung').textContent !== '' || !document.querySelector('#dlg-bewegung').open")
+        check(f'Bewegung: „{falsch_}“ ist keine Stückzahl (Saldo danach „?“, nicht gebucht)', 'ganze Stückzahlen' in text(pg, '#bw-meldung')
+              and pg.get_attribute('#bw-mengen [data-seite="a"][data-lm="e2"]', 'aria-invalid') == 'true' and '?' in text(pg, '#bw-mengen [data-danach="e2"]')
+              and pg.is_visible('#dlg-bewegung'), (text(pg, '#bw-meldung'), text(pg, '#bw-mengen [data-danach="e2"]')))
     pg.fill('#bw-mengen [data-seite="a"][data-lm="e2"]', '1.200'); pg.fill('#bw-mengen [data-seite="z"][data-lm="e2"]', '200'); pg.fill('#bw-beleg', 'UI-LS-1')
     check('Bewegung: Saldo danach rechnet mit', vz(saldo_sp['e2'] + 1000) in text(pg, '#bw-mengen [data-danach="e2"]'), text(pg, '#bw-mengen'))
     pg.check('#bw-alle')

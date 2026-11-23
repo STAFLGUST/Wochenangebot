@@ -9,7 +9,8 @@ Freigabe, nur PDF, nicht lesbar ohne Reste, Ordner, beim Ändern, eingezogen); V
 ausgefüllt (Grenzen: über 20000 Textelemente je Textteil – auch bei nur öffnenden Tags – oder über 8 MB geänderte Textteile zusammen
 gilt die Datei als nicht lesbar); Freigabe trägt Version, Datum, Kürzel, Änderungen ein (ausgefüllte Fassung neu, Rohfassung bleibt, ZIP mit der
 ausgefüllten); Datei ohne Platzhalter bleibt, nicht lesbare Datei hält die Freigabe nicht auf; Nachtragen in freigegebene Version
-füllt sofort; Überarbeitung übernimmt die Rohfassungen als Kopie (Platzhalter erkannt, Löschen im Entwurf lässt die freigegebene
+füllt sofort (Kürzel wie bei der Freigabe, auch nach einer Kürzeländerung; leere selbstschließende Textelemente bleiben gültiges
+XML); Überarbeitung übernimmt die Rohfassungen als Kopie (Platzhalter erkannt, Löschen im Entwurf lässt die freigegebene
 Version unberührt), zweite Freigabe mit Version 2; Rechte; Protokoll; Oberfläche (Anlegen mit vorgewählter Vorlage und Nummer,
 Datei im Entwurf mit Herkunft und Platzhaltern, Kapitelwechsel schlägt neue Nummer vor, Vorlagen-Karte, „Dateien übernehmen“,
 1280/390 px hell und dunkel, keine JavaScript-Fehler). Nur erfundene Testdaten.
@@ -26,6 +27,7 @@ import re
 import urllib.error
 import urllib.request
 import zipfile
+from xml.etree import ElementTree
 
 from playwright.sync_api import sync_playwright
 
@@ -313,6 +315,23 @@ st, r = hochladen(Q, D1, v['id'], 'Aushang.docx', docx([['Aushang {{Nr}} – Ver
 na = [f for f in r['dokument']['versionen'][0]['dateien'] if f['id'] == r.get('datei')] if st == 200 else [{}]
 check('Nachtragen: sofort ausgefüllt, Antwort nennt die ausgefüllte Fassung', st == 200 and na[0].get('roh') and na[0].get('nachgetragen')
       and 'Aushang 1.4-F15 – Version 1' in word_text(roh(L, 'qs_datei&id=' + r['datei'])[1]), (st, na))
+# leerer, selbstschließender Lauf vor einem Platzhalter (<w:t xml:space="preserve"/>, so schreiben ihn manche Programme): Datei bleibt gültiges XML
+st, r = hochladen(Q, D1, v['id'], 'Leerer Lauf.docx', docx_roh({'word/document.xml': WK + '<w:p><w:r><w:t xml:space="preserve"/></w:r><w:r><w:t>Nr: {{Nr}}</w:t></w:r></w:p></w:body></w:document>'}))
+try:
+    wx = ElementTree.fromstring(zipfile.ZipFile(io.BytesIO(roh(L, 'qs_datei&id=' + r['datei'])[1])).read('word/document.xml'))
+    wt = ''.join(e.text or '' for e in wx.iter('{http://schemas.openxmlformats.org/wordprocessingml/2006/main}t'))
+except (ElementTree.ParseError, KeyError, zipfile.BadZipFile) as e:
+    wt = f'ungültig: {e}'
+check('Nachtragen mit leerem Textelement <w:t xml:space="preserve"/>: gültiges XML, Platzhalter ersetzt', st == 200 and wt == 'Nr: 1.4-F15', (st, wt))
+check('Prüfdatei wieder entfernt (mit Grund)', st == 200 and Q.call('qs_datei_entfernen', {'datei': r['datei'], 'grund': 'nur Test'})[0] == 200)
+# Kürzel der Lenkungsangaben sind ein Schnappschuss der Freigabe (GR-106): Fritz bekommt ein neues Kürzel, ein Nachtrag in Version 1 trägt weiter FF ein
+pers_alt = L.call('qs_start')[1]['personen']
+check('Kürzel von Fritz geändert (FF → FX)', V.call('qs_stamm_save', {'personen': [{**p_, 'id': 'FX'} if p_['id'] == 'FF' else p_ for p_ in pers_alt]})[0] == 200)
+st, r = hochladen(Q, D1, v['id'], 'Aushang 2.docx', docx([['geprüft {{Geprüft}} · freigegeben {{Freigegeben}}']]))
+t = word_text(roh(L, 'qs_datei&id=' + r['datei'])[1]) if st == 200 else ''
+check('Nachtragen nach Kürzeländerung: Kürzel wie bei der Freigabe (FF, nicht FX)', 'geprüft FF · freigegeben FF' in t, (st, t))
+check('Kürzel zurück (FF), Prüfdatei wieder entfernt', V.call('qs_stamm_save', {'personen': pers_alt})[0] == 200
+      and st == 200 and Q.call('qs_datei_entfernen', {'datei': r['datei'], 'grund': 'nur Test'})[0] == 200)
 
 # ── Überarbeitung übernimmt die Rohfassungen ──
 st, r = Be.call('qs_version_save', {'dokument': D1, 'aenderungen': 'Grenzwerte angepasst', 'grund': 'Kundenaudit', 'dateien': True})

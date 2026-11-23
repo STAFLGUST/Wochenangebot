@@ -146,11 +146,17 @@
     if (i >= 0) S.d.kunden[i] = k; else S.d.kunden.push(k);
     S.byKey.set(k.key, k);
   }
-  async function speichereFelder(key, felder) {
-    const r = await api('crm_kunde_save', { key, felder });
+  /* vorher: Stand von Ansprechpartnern bzw. Notiz beim Öffnen – der Server lehnt mit 409 ab, wenn jemand das Feld inzwischen
+     geändert hat; die Basis steht dann auf seiner Fassung (Liste neu gezeigt; bei der Notiz bleibt der eigene Text im Feld,
+     die fremde Fassung zeigt der Aufrufer im Hinweis) */
+  async function speichereFelder(key, felder, vorher = null) {
+    const r = await api('crm_kunde_save', vorher ? { key, felder, vorher } : { key, felder });
+    const neu = (r.status === 200 || r.status === 409) ? r.data.kunde : null;
+    if (neu) { ersetze(neu); if (basis.key === key) for (const f of Object.keys(vorher || {})) basis[f] = neu.crm[f]; }
+    if (r.status === 409 && neu && vorher && 'kontakte' in vorher && offenKey === key && $('#kontakte')) $('#kontakte').innerHTML = neu.crm.kontakte.map(kontaktZeile).join('');
+    if (r.status === 409 && vorher && 'notiz' in vorher) return null;   // Notiz: der Aufrufer zeigt die fremde Fassung im Hinweis am Feld
     if (r.status !== 200) { toast(fehlerText(r, 'Speichern fehlgeschlagen'), true); return null; }
-    ersetze(r.data.kunde);
-    return r.data.kunde;
+    return neu;
   }
 
   /* ---------- Cockpit (cockpit.js): Mein Cockpit, Master-Cockpit ---------- */
@@ -530,7 +536,7 @@
     if (zahl.haus) teile.push(`${zahl.haus} auf Hausnummer genau`);
     if (zahl.strasse) teile.push(`${zahl.strasse} an der Straße (Hausnummer nicht gefunden)`);
     if (zahl.plz) teile.push(`${zahl.plz} am Mittelpunkt der Postleitzahl`);
-    return `Kunden: ${teile.join(', ') || 'keine'}. Anschriften: OpenStreetMap-Adressverzeichnis auf dem eigenen Server (Stand ${esc(stand.erzeugt || '—')}).`;
+    return `Kunden: ${teile.join(', ') || 'keine'}. Anschriften: OpenStreetMap-Adressverzeichnis auf dem eigenen Server (Stand ${esc(de(stand.erzeugt))}).`;
   }
   function kartenPopZu() {
     const pop = $('#km-pop'); if (pop) pop.hidden = true;
@@ -677,6 +683,7 @@
 
   /* ---------- Kundenblatt ---------- */
   let offenKey = '';
+  let basis = {};   // Ansprechpartner und Notiz, wie sie im offenen Kundenblatt stehen (für die Konfliktprüfung beim Speichern)
   function feld(label, name, k, typ = 'text', extra = '') {
     const v = k.crm[name];
     const wertText = typ === 'number' ? zahl(v) : (v ?? '');
@@ -730,6 +737,7 @@
     if (tab) kuTab = tab; else if (offenKey !== key) kuTab = mitUmsatz(k) ? 'uebersicht' : 'kundenblatt';
     if ((kuTab === 'uebersicht' && !mitUmsatz(k)) || (kuTab === 'angebote' && !mitAngeboten(k))) kuTab = 'kundenblatt';
     offenKey = key;
+    basis = { key, kontakte: k.crm.kontakte, notiz: k.crm.notiz };
     const b = darf();
     $('#kunde-kicker').textContent = [k.art === 'interessent' ? 'Interessent' : (k.nr ? 'Kunde ' + k.nr : 'Kunde'), k.crm.segment !== 'Nicht zugeordnet' ? k.crm.segment : '', k.crm.phase].filter(Boolean).join(' · ');
     $('#kunde-titel').textContent = k.firma || 'Kunde';
@@ -821,11 +829,17 @@
       const name = el.dataset.blatt;
       let v = el.value;
       if (name === 'anrufAktiv') v = v === 'Ja';
-      if (['potenzialKg', 'preisKg', 'dbKg', 'bestellKg'].includes(name)) v = v.trim() === '' ? null : v.trim().replace(',', '.');
+      if (['potenzialKg', 'preisKg', 'dbKg', 'bestellKg'].includes(name)) v = v.trim() === '' ? null : v.trim();   // deutsche Schreibweise liest der Server (crm_zahl)
       blattStatus('Wird gespeichert …');
-      const k = await speichereFelder(offenKey, { [name]: v });
+      const basisNotiz = basis.notiz;
+      const k = await speichereFelder(offenKey, { [name]: v }, name === 'notiz' ? { notiz: basisNotiz } : null);
+      if (name === 'notiz') $('#notiz-fremd')?.remove();
       if (k) blattStatus('Gespeichert.', 'ok');
-      else { blattStatus('Nicht gespeichert – bitte Eingabe prüfen.', 'fehler'); const alt = S.byKey.get(offenKey); if (alt) el.value = name === 'anrufAktiv' ? (alt.crm.anrufAktiv ? 'Ja' : 'Nein') : zahlOderText(alt.crm[name]); }
+      else if (name === 'notiz' && basis.notiz !== basisNotiz) {
+        // 409: die Basis steht jetzt auf der fremden Fassung; der eigene Text bleibt im Feld, Speichern ist eine bewusste Entscheidung
+        blattStatus('Nicht gespeichert – die Notiz wurde inzwischen geändert.', 'fehler');
+        el.closest('label').insertAdjacentHTML('afterend', `<div class="crm-meldung fehler breit" id="notiz-fremd" role="status">Inzwischen von ${esc(S.byKey.get(offenKey)?.crm.geaendertVon || 'jemand anderem')} gespeichert: ${basis.notiz ? `„${esc(basis.notiz)}“` : '(leer)'}. Ihr Text steht weiter im Feld – ergänzen oder so übernehmen. <button type="button" class="btn" data-notiz-behalten>Meinen Text speichern</button></div>`);
+      } else { blattStatus('Nicht gespeichert – bitte Eingabe prüfen.', 'fehler'); const alt = S.byKey.get(offenKey); if (alt) el.value = name === 'anrufAktiv' ? (alt.crm.anrufAktiv ? 'Ja' : 'Nein') : zahlOderText(alt.crm[name]); }
       return;
     }
     // Auswahl direkt in einer Tabelle (Kunden, Wiedervorlage, Pipeline)
@@ -934,9 +948,10 @@
     if (t.closest('[data-schliessen]')) { if (t.closest('#dlg-kunde') && !kuSchliessenOk()) return; t.closest('dialog').close(); return; }
     if (t.closest('[data-kontakt-neu]')) { $('#kontakte').insertAdjacentHTML('beforeend', kontaktZeile()); $('#kontakte [data-kontakt]:last-child input').focus(); return; }
     if (t.closest('[data-kontakt-weg]')) { t.closest('[data-kontakt]').remove(); return; }
+    if (t.closest('[data-notiz-behalten]')) { $('[data-blatt="notiz"]').dispatchEvent(new Event('change', { bubbles: true })); return; }   // ohne Änderung im Feld feuert der Browser kein change
     if (t.closest('[data-kontakte-speichern]')) {
       blattStatus('Ansprechpartner werden gespeichert …');
-      const k = await speichereFelder(offenKey, { kontakte: kontakteAusFormular() });
+      const k = await speichereFelder(offenKey, { kontakte: kontakteAusFormular() }, { kontakte: basis.kontakte });
       if (k) { blattStatus('Ansprechpartner gespeichert.', 'ok'); toast('Ansprechpartner gespeichert.'); $('#kontakte').innerHTML = k.crm.kontakte.map(kontaktZeile).join(''); }
       else blattStatus('Ansprechpartner nicht gespeichert – bitte Eingaben prüfen.', 'fehler');
       return;

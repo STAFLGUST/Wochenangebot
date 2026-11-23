@@ -81,7 +81,7 @@
   function kennzahlen() {
     const s = S.d.summe;
     const k = [];
-    k.push(kachel('Soll', std(s.sollOk) + ' Std.', `${esc(anzahl(s.tageOk, 'Tag', 'Tage'))} ohne Stempelfehler gewertet`));
+    k.push(kachel('Soll', std(s.sollOk) + ' Std.', `${esc(anzahl(s.tageOk, 'Tag', 'Tage'))} ohne Stempelfehler gewertet${s.laufend ? ` · ${esc(anzahl(s.laufend, 'Tag', 'Tage'))} noch offen (nicht gezählt)` : ''}`));
     k.push(kachel('Ist', std(s.istOk) + ' Std.', `gearbeitet${s.abwOk ? `, dazu ${esc(std(s.abwOk))} Std. Abwesenheit` : ''}`));
     k.push(kachel('Saldo bereinigt', stdVz(s.saldoOk) + ' Std.', `laut Zeiterfassung ${esc(stdVz(s.saldo))} Std. (alle Tage)`, s.saldoOk < 0 ? ' minus' : ''));
     k.push(kachel('Stempelfehler', anzahl(s.fehlerTage, 'Tag', 'Tage'), s.fehlerTage ? `nicht gewertet, dort ${esc(stdVz(s.saldoFehler))} Std. Saldo${s.ohne ? ` · ${esc(NF.format(s.ohne))} ohne jeden Stempel` : ''}` : 'keine im Zeitraum', s.fehlerTage ? ' warn' : ''));

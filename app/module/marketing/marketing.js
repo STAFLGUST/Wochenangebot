@@ -578,6 +578,7 @@
   function fuelle(e, vorgabe = {}) {
     const E = S.d.einstellungen, x = e || { ...vorgabeBeitrag(), ...vorgabe };
     S.offen = e ? e.id : null;
+    S.basis = e ? e.rev : null;   // Fassung, aus der das Formular gefüllt ist – Speichern schickt sie mit (409 bei fremder Änderung)
     $('#bt-titel').value = x.titel || '';
     $('#bt-sub').textContent = e ? `angelegt ${e.erstellt ? 'von ' + e.erstellt.von + ' · ' : ''}zuletzt geändert ${e.geaendert ? deZeit(e.geaendert.t) + ' von ' + e.geaendert.von : ''}` : 'neuer Beitrag';
     $('#bt-hook').value = x.hook || ''; $('#bt-text').value = x.text || ''; $('#bt-hashtags').value = x.hashtags || ''; $('#bt-cta').value = x.cta || ''; $('#bt-notizen').value = x.notizen || '';
@@ -639,7 +640,7 @@
     const f = sammle(), m = $('#bt-meldung');
     if (!f.titel) { m.className = 'mkt-meldung fehler'; m.textContent = 'Bitte einen Titel angeben.'; $('#bt-titel').focus(); return null; }
     const body = { felder: f };
-    if (e) { body.id = e.id; body.rev = e.rev; }
+    if (e) { body.id = e.id; body.rev = S.basis; }
     if (status) body.status = status;
     $('#bt-speichern').disabled = true;
     const r = await api('marketing_beitrag_save', body);
@@ -647,7 +648,7 @@
     if (r.status === 409 && r.data.beitrag) {
       $('#bt-konflikt').hidden = false;
       $('#bt-konflikt').innerHTML = `${esc(r.data.error)} <button type="button" class="btn" id="bt-neu-laden">Neue Fassung laden</button>`;
-      ersetze(r.data.beitrag); return null;
+      ersetze(r.data.beitrag); S.basis = r.data.beitrag.rev; return null;   // wie bisher: ein zweites Speichern nach dem Hinweis gilt
     }
     if (r.status !== 200) { m.className = 'mkt-meldung fehler'; m.textContent = fehlerText(r, 'Speichern fehlgeschlagen'); return null; }
     const vorher = e ? e.status : '';
@@ -719,7 +720,9 @@
     const r = await api('marketing_kommentar', { id: e.id, text });
     if (r.status !== 200) { toast(fehlerText(r, 'Kommentar nicht gespeichert'), true); return; }
     $('#bt-kommentar').value = '';
-    ersetze(r.data.beitrag);   // ungespeicherte Eingaben im Dialog bleiben; nur der Stand (rev) folgt dem Server
+    ersetze(r.data.beitrag);   // ungespeicherte Eingaben im Dialog bleiben
+    // Basis nur um den eigenen Kommentar weiterzählen; hat dazwischen jemand gespeichert, meldet das nächste Speichern 409
+    if (S.offen === e.id && r.data.beitrag.rev === S.basis + 1) S.basis = r.data.beitrag.rev;
     zeichneKommentare(r.data.beitrag);
   }
   /* Kampagnen-Dialog schließen */

@@ -51,7 +51,7 @@ _CRM · Vertrieb: Daten und Regeln des Moduls „crm“ (Oberfläche crm.intern,
 **Prüfen der Eingaben**
 
 - `crm_datum(v, was)`
-- `crm_zahl(v, was)`
+- `crm_zahl(v, was, menge)` – Zahl ab 0 oder null (leer).
 - `crm_wahl(v, erlaubt, was, leer)`
 - `crm_text(v, max, was)`
 - `crm_email(v, was)`
@@ -176,7 +176,7 @@ _STAFL-Plattform · CRM · Vertrieb Cockpit, Kunden, Wiedervorlagen (Anruf-Rhyth
 
 - `setzeDaten(d)`
 - `ersetze(k)` – Eintrag nach dem Speichern ersetzen (Server liefert den ganzen Eintrag zurück)
-- `speichereFelder(key, felder)`
+- `speichereFelder(key, felder, vorher)` – vorher: Stand von Ansprechpartnern bzw. Notiz beim Öffnen – der Server lehnt mit 409 ab, wenn jemand das Feld inzwischen geändert hat; die Basis steht dann …
 
 **Cockpit (cockpit.js): Mein Cockpit, Master-Cockpit**
 

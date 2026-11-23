@@ -76,6 +76,17 @@ function such_passt(string $eingabe, array $felder): bool
 
 /* ---------------- Datenprüfung ---------------- */
 
+/* Eingabe einer Zahl lesbar für is_numeric: deutscher Text „1.234,5“ → „1234.5“, „0,5“ → „0.5“; Punkte gelten nur in
+   Dreiergruppen nach einer Ziffer 1–9 als Tausendertrenner („0.500“ bleibt 0,5). Leer → null, keine Zeichenkette → unverändert.
+   Gemeinsame Lesehilfe (Container-Import, Kalkulation, CRM). */
+function zahl_text_de($v)
+{
+    if (!is_string($v)) return $v;
+    if ($v === '') return null;
+    $v = str_replace([' ', "\u{a0}"], '', trim($v));
+    if (preg_match('/^[1-9]\d{0,2}(\.\d{3})+(,\d+)?$/', $v)) $v = str_replace('.', '', $v);
+    return str_replace(',', '.', $v);
+}
 function s($v, int $max, bool $allowEmpty = true): ?string
 {
     if ($v === null) return null;

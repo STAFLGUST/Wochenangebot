@@ -129,9 +129,11 @@ function angebot_vorwoche(array $model, array $def, array $offer): ?array
         $alt = array_key_exists($oid, $m) ? $m[$oid] : (array_key_exists(OFFER_STD, $m) ? $m[OFFER_STD] : false);
         if ($alt === false) { $aend[$id] = ['art' => 'neu']; continue; }
         if ((!is_int($alt) && !is_float($alt)) || ($it['price']['status'] ?? '') !== 'value') continue;
-        $d = round((float)$it['price']['value'] - $alt, 2);
+        // Preise wie angezeigt und bestellt auf Cent (gespeichert bis 4 Stellen): 4,245 → 4,2549 ist keine Änderung
+        $alt = round((float)$alt, 2);
+        $d = round(round((float)$it['price']['value'], 2) - $alt, 2);
         if ($d == 0) continue;
-        // Stufe am ungerundeten Wert („unter 2 %“ heißt unter 2 %, Inhaber 20.11.2026); angezeigt wird p auf eine Stelle.
+        // Stufe am ungerundeten Prozentwert („unter 2 %“ heißt unter 2 %, Inhaber 20.11.2026); angezeigt wird p auf eine Stelle.
         // Vorwochenpreis 0 oder kleiner: keine Prozentangabe, stärkste Stufe.
         $roh = $alt > 0 ? round($d / $alt * 100, 6) : null;
         $p = $roh === null ? null : round($roh, 1);

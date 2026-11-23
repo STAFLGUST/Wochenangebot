@@ -3,7 +3,8 @@
 Geprüft: Freigabe (produktiv seit 23.10.2026: jeder Mitarbeiter mit CRM-Recht, keine Testfreigabe), Rechte crm.sehen / crm.bearbeiten /
 crm.exportieren serverseitig (GR-103) inkl. ohne Anmeldung, ohne CSRF, falsche Methode; Kunden kommen aus den
 Kundenstammdaten der Verwaltung (nur lesend, E-1: das CRM schreibt das Dokument „kunden“ nie, keine Zugangsdaten in der
-Antwort); Kundenblatt (nur mitgeschickte Felder, gleichzeitiges Bearbeiten verschiedener Felder, Prüfungen und Grenzen);
+Antwort); Kundenblatt (nur mitgeschickte Felder, gleichzeitiges Bearbeiten verschiedener Felder, Prüfungen und Grenzen;
+Gesprächsnotiz nach 409: eigener Text bleibt im Feld, fremde Fassung im Hinweis);
 Aktivitäten (Letzter Kontakt, nächster Schritt, Bestellung → letzter Auftrag, Schnappschuss von Firma/Kundennummer nach
 GR-106); Interessenten; CSV-Export (Recht, BOM, keine Formeln); Protokoll ohne Kontaktdaten und Notizen; Oberfläche
 (Cockpit, Kunden, Kundenblatt, Wiedervorlagen, Pipeline, Karte, Auswertung, hell/dunkel; Desktop und 390 px).
@@ -173,6 +174,36 @@ check('gleichzeitiges Bearbeiten verschiedener Felder überschreibt nichts', c['
 st, r = Bb.call('crm_kunde_save', {'key': 'kbbb222222222', 'felder': {'kontakte': [{'name': 'Clara Koch', 'funktion': 'Küchenchefin', 'telefon': '0431 1111', 'email': 'c.koch@beispiel.example'},
                                                                                    {'name': '', 'funktion': '', 'telefon': '', 'email': ''}]}})
 check('Ansprechpartner gespeichert, leere Zeile weggelassen', st == 200 and r['kunde']['crm']['kontakte'] == [{'name': 'Clara Koch', 'funktion': 'Küchenchefin', 'telefon': '0431 1111', 'email': 'c.koch@beispiel.example'}], r)
+# Ansprechpartner und Notiz mit dem Stand beim Öffnen („vorher“, nur erweitert): wer als Zweiter speichert, überschreibt nicht still
+alt_k = r['kunde']['crm']['kontakte']
+st1, _ = Bb.call('crm_kunde_save', {'key': 'kbbb222222222', 'felder': {'kontakte': alt_k + [{'name': 'Max Müller'}]}, 'vorher': {'kontakte': alt_k}})
+st2, r2 = X.call('crm_kunde_save', {'key': 'kbbb222222222', 'felder': {'kontakte': alt_k + [{'name': 'Sara Schmidt'}]}, 'vorher': {'kontakte': alt_k}})
+c = dokument('crm-kunden')['eintraege']['kbbb222222222']
+check('Ansprechpartner gleichzeitig ergänzt: zweite Sitzung 409 mit Namen und aktuellem Kundenblatt, erster Eintrag bleibt', st1 == 200 and st2 == 409
+      and r2.get('code') == 'konflikt' and 'Bert Bearbeiter' in r2.get('error', '') and [k['name'] for k in r2['kunde']['crm']['kontakte']] == ['Clara Koch', 'Max Müller']
+      and [k['name'] for k in c['kontakte']] == ['Clara Koch', 'Max Müller'], (st1, st2, r2.get('error'), c.get('kontakte')))
+st1, _ = Bb.call('crm_kunde_save', {'key': 'kbbb222222222', 'felder': {'notiz': 'Bedarf: Grillware'}, 'vorher': {'notiz': ''}})
+st2, r2 = X.call('crm_kunde_save', {'key': 'kbbb222222222', 'felder': {'notiz': 'Bedarf: Suppenfleisch'}, 'vorher': {'notiz': ''}})
+st3, r3 = X.call('crm_kunde_save', {'key': 'kbbb222222222', 'felder': {'notiz': 'Bedarf: Grillware, Suppenfleisch'}, 'vorher': {'notiz': 'Bedarf: Grillware'}})
+check('Gesprächsnotiz: zweite Sitzung mit altem Stand 409, mit aktuellem Stand gespeichert', st1 == 200 and st2 == 409 and st3 == 200
+      and r3['kunde']['crm']['notiz'] == 'Bedarf: Grillware, Suppenfleisch', (st1, st2, st3))
+check('ohne „vorher“ (ältere Oberfläche) wie bisher gespeichert', X.call('crm_kunde_save', {'key': 'kbbb222222222', 'felder': {'notiz': ''}})[0] == 200
+      and dokument('crm-kunden')['eintraege']['kbbb222222222']['notiz'] == '')
+# streng verglichen: „401“ und „0401“ sind verschiedene Stände (PHP hielt die Zahlentexte mit != für gleich)
+st1, _ = Bb.call('crm_kunde_save', {'key': 'kbbb222222222', 'felder': {'notiz': '401'}, 'vorher': {'notiz': ''}})
+st2, _ = Bb.call('crm_kunde_save', {'key': 'kbbb222222222', 'felder': {'notiz': '0401'}, 'vorher': {'notiz': '401'}})
+st3, r3 = X.call('crm_kunde_save', {'key': 'kbbb222222222', 'felder': {'notiz': '401 Rückruf'}, 'vorher': {'notiz': '401'}})
+check('Gesprächsnotiz „401“ inzwischen zu „0401“ geändert: zweite Sitzung mit altem Stand 409', (st1, st2, st3) == (200, 200, 409)
+      and dokument('crm-kunden')['eintraege']['kbbb222222222']['notiz'] == '0401', (st1, st2, st3, r3.get('error')))
+X.call('crm_kunde_save', {'key': 'kbbb222222222', 'felder': {'notiz': ''}})
+# Zahlen in deutscher Schreibweise: Mengen „1.500“ = 1500 kg, Preise „4.50“ = 4,50 €; unlesbar → 422
+for feld_, ein_, soll_ in (('potenzialKg', '1.500', 1500), ('potenzialKg', '1.234,5', 1234.5), ('bestellKg', '12.000', 12000), ('potenzialKg', '0,5', 0.5),
+                           ('preisKg', '4,50', 4.5), ('preisKg', '4.50', 4.5), ('preisKg', '1.234,50', 1234.5), ('dbKg', '1,25', 1.25)):
+    st, r = Bb.call('crm_kunde_save', {'key': 'kddd444444444', 'felder': {feld_: ein_}})
+    check(f'Kundenblatt: {feld_} „{ein_}“ → {soll_}', st == 200 and r['kunde']['crm'][feld_] == soll_, (st, r.get('kunde', {}).get('crm', {}).get(feld_), r.get('error')))
+for ein_ in ('1.5.0', '12 kg', '1,2,3'):
+    check(f'Kundenblatt: Potenzial „{ein_}“ unlesbar → 422', Bb.call('crm_kunde_save', {'key': 'kddd444444444', 'felder': {'potenzialKg': ein_}})[0] == 422)
+Bb.call('crm_kunde_save', {'key': 'kddd444444444', 'felder': {'potenzialKg': None, 'bestellKg': None, 'preisKg': None, 'dbKg': None}})
 for name, felder in (('unbekanntes Segment', {'segment': 'Raumfahrt'}), ('ungültiges Datum', {'wiedervorlage': '2026-02-30'}), ('negative Menge', {'potenzialKg': -3}),
                      ('Text statt Zahl', {'dbKg': 'viel'}), ('ungültige E-Mail eines Ansprechpartners', {'kontakte': [{'name': 'A', 'email': 'kein-mail'}]}),
                      ('zu viele Ansprechpartner', {'kontakte': [{'name': f'P{i}'} for i in range(13)]}), ('zu lange Notiz', {'notiz': 'x' * 2001}),
@@ -264,6 +295,10 @@ with sync_playwright() as p:
     check('Cockpit ohne zugeordneten Vertreter: Hinweis, Kennzahlen, Heute dran (Wiedervorlagen), letzte Aktivität, keine Umsätze', 'Aktive Kunden' in kp
           and 'Angebot nachfassen' in kp and 'Muster schicken' in kp and 'Erstgespräch vor Ort' in kp and 'kein Vertreter zugeordnet' in kp and '€' not in kp, kp[:500])
     check('Reiter Wiedervorlagen mit Zahl der fälligen', pg.text_content('#crm-faellig').strip() == '2', pg.text_content('#crm-faellig'))
+    # gekürzte Zeilen (eine Zeile mit „…“) tragen den vollen Text im Tooltip – Regel „kein abgeschnittener Text“ (Gruppe einheit)
+    akt = pg.evaluate("""() => [...document.querySelectorAll('#tab-cockpit section')].filter((s) => /Aktivit/.test((s.querySelector('h3') || {}).textContent || ''))
+      .flatMap((s) => [...s.querySelectorAll('.crm-zeilen small')]).map((e) => [e.textContent.trim(), e.title])""")
+    check('Cockpit „Letzte Aktivitäten“: jede Zeile mit vollem Text im Tooltip', akt and all(t == x for x, t in akt), akt[:3])
     pg.screenshot(path=os.path.join(SH, 'crm_cockpit_1280.png'), full_page=True)
 
     pg.click('#crm-tabs button[data-tab="kunden"]'); pg.wait_for_selector('#k-tabelle')
@@ -302,11 +337,44 @@ with sync_playwright() as p:
     pg.fill('#kunde-inhalt input[data-blatt="dbKg"]', 'abc'); pg.press('#kunde-inhalt input[data-blatt="dbKg"]', 'Tab')
     pg.wait_for_function("document.querySelector('#blatt-status').classList.contains('fehler')")
     check('ungültige Zahl: Hinweis, alter Wert bleibt', pg.input_value('#kunde-inhalt input[data-blatt="dbKg"]') == '1,25' and dokument('crm-kunden')['eintraege']['kaaa111111111']['dbKg'] == 1.25)
+    for ein_, soll_ in (('1.500', 1500), ('120,5', 120.5)):   # deutsche Schreibweise mit Tausenderpunkt: 1.500 kg, nicht 1,5 kg
+        pg.fill('#kunde-inhalt input[data-blatt="potenzialKg"]', ein_); pg.press('#kunde-inhalt input[data-blatt="potenzialKg"]', 'Tab')
+        pg.wait_for_function("['Gespeichert.', 'Nicht gespeichert – bitte Eingabe prüfen.'].includes(document.querySelector('#blatt-status').textContent)")
+        check(f'Potenzial „{ein_}“ im Kundenblatt gespeichert als {soll_} kg', dokument('crm-kunden')['eintraege']['kaaa111111111']['potenzialKg'] == soll_,
+              dokument('crm-kunden')['eintraege']['kaaa111111111']['potenzialKg'])
     pg.click('[data-kontakt-neu]')
     zeile = pg.locator('#kontakte [data-kontakt]').last
     zeile.locator('[data-k="name"]').fill('Dora Disponentin'); zeile.locator('[data-k="telefon"]').fill('040 7654321')
     pg.click('[data-kontakte-speichern]'); pg.wait_for_function("document.querySelector('#blatt-status').textContent === 'Ansprechpartner gespeichert.'")
     check('Ansprechpartner im Kundenblatt hinzugefügt', dokument('crm-kunden')['eintraege']['kaaa111111111']['kontakte'][0]['name'] == 'Dora Disponentin')
+    # zweite Sitzung ergänzt inzwischen einen Ansprechpartner: Hinweis, neue Fassung im Kundenblatt, nichts überschrieben
+    _k = dokument('crm-kunden')['eintraege']['kaaa111111111']['kontakte']
+    st_x, _ = X.call('crm_kunde_save', {'key': 'kaaa111111111', 'felder': {'kontakte': _k + [{'name': 'Erik Einkauf'}]}, 'vorher': {'kontakte': _k}})
+    pg.click('[data-kontakt-neu]'); pg.locator('#kontakte [data-kontakt]').last.locator('[data-k="name"]').fill('Fritz Fahrer')
+    pg.click('[data-kontakte-speichern]'); pg.wait_for_function("document.querySelector('#blatt-status').textContent !== 'Ansprechpartner werden gespeichert …'")
+    namen_ = [k['name'] for k in dokument('crm-kunden')['eintraege']['kaaa111111111']['kontakte']]
+    liste_ = pg.eval_on_selector_all('#kontakte [data-k="name"]', 'e => e.map((x) => x.value)')
+    check('Ansprechpartner von anderer Sitzung ergänzt: Hinweis, Liste mit der neuen Fassung, nichts überschrieben', st_x == 200 and namen_ == ['Dora Disponentin', 'Erik Einkauf']
+          and liste_ == ['Dora Disponentin', 'Erik Einkauf'] and 'nicht gespeichert' in pg.text_content('#blatt-status') and 'inzwischen' in pg.text_content('#crm-toast'),
+          (st_x, namen_, liste_, pg.text_content('#blatt-status')))
+    # Gesprächsnotiz von anderer Sitzung geändert: eigener Text bleibt im Feld, die fremde Fassung steht im Hinweis; Übernehmen ist eine bewusste Entscheidung
+    _n = dokument('crm-kunden')['eintraege']['kaaa111111111'].get('notiz', '')
+    st_x, _ = X.call('crm_kunde_save', {'key': 'kaaa111111111', 'felder': {'notiz': 'Bedarf: Kalbsrücken'}, 'vorher': {'notiz': _n}})
+    nz_ = '#kunde-inhalt textarea[data-blatt="notiz"]'
+    pg.wait_for_function("!document.querySelector('#crm-toast').classList.contains('zeigen')")   # Meldung des vorigen Konflikts abwarten
+    pg.fill(nz_, 'Bedarf: Rinderbrust'); pg.press(nz_, 'Tab')
+    pg.wait_for_function("document.querySelector('#blatt-status').textContent.startsWith('Nicht gespeichert')")
+    hinweis_ = pg.evaluate("document.querySelector('#notiz-fremd')?.textContent || ''")
+    check('Gesprächsnotiz inzwischen geändert: eigener Text bleibt im Feld, fremde Fassung mit Namen im Hinweis (keine irreführende Meldung „neue Fassung geladen“), nichts überschrieben', st_x == 200
+          and pg.input_value(nz_) == 'Bedarf: Rinderbrust' and 'Kalbsrücken' in hinweis_ and 'Xena Export' in hinweis_ and 'zeigen' not in pg.get_attribute('#crm-toast', 'class') and dokument('crm-kunden')['eintraege']['kaaa111111111']['notiz'] == 'Bedarf: Kalbsrücken',
+          (st_x, pg.input_value(nz_), hinweis_))
+    if hinweis_:
+        pg.locator('#notiz-fremd').scroll_into_view_if_needed(); pg.screenshot(path=os.path.join(SH, 'crm_notiz_konflikt_1280.png'))
+        pg.set_viewport_size({'width': 390, 'height': 844}); pg.locator('#notiz-fremd').scroll_into_view_if_needed()
+        pg.screenshot(path=os.path.join(SH, 'crm_notiz_konflikt_390.png')); pg.set_viewport_size({'width': 1280, 'height': 900})
+        pg.click('[data-notiz-behalten]'); pg.wait_for_function("document.querySelector('#blatt-status').textContent === 'Gespeichert.'")
+    check('„Meinen Text speichern“ übernimmt den eigenen Text, Hinweis verschwindet', dokument('crm-kunden')['eintraege']['kaaa111111111']['notiz'] == 'Bedarf: Rinderbrust'
+          and pg.locator('#notiz-fremd').count() == 0, dokument('crm-kunden')['eintraege']['kaaa111111111']['notiz'])
     pg.click('#kunde-aktionen [data-ku-tab="verlauf"]'); pg.wait_for_selector('#dlg-kunde[open] #verlauf li')
     check('Knopf „Aktivität“ im Kopf öffnet den Verlauf mit dem Eingabefeld', pg.evaluate("document.activeElement.id") == 'akt-notiz')
     pg.select_option('#akt-art', 'Besuch'); pg.fill('#akt-notiz', 'Kühlhaus besichtigt'); pg.fill('#akt-naechster', 'Preise schicken')
@@ -356,6 +424,7 @@ with sync_playwright() as p:
           pg.locator(pt_haus).count() == 1 and pg.locator('#km-pts .pt[data-plz="20095"]').count() == 0 and pg.locator(pt_strasse).count() == 1)
     check('Karte: Hinweis zur Genauigkeit (Hausnummer, Straße, Postleitzahl) mit Stand des Verzeichnisses',
           '1 auf Hausnummer genau' in kt and '1 an der Straße' in kt and 'am Mittelpunkt der Postleitzahl' in kt and 'OpenStreetMap-Adressverzeichnis' in kt, kt[-400:])
+    check('Karte: Stand des Verzeichnisses als deutsches Datum (TT.MM.JJJJ)', re.search(r'\(Stand \d\d\.\d\d\.\d{4}\)', kt) is not None, kt[-200:])
     pg.locator(pt_strasse).dispatch_event('click'); pg.wait_for_selector('#km-pop:not([hidden])')
     check('Karte: Punkt an der Straße ist als solcher gekennzeichnet', 'Hausnummer nicht gefunden' in pg.inner_text('#km-pop') and 'Testgasse 9' in pg.inner_text('#km-pop'))
     pg.locator(pt_haus).dispatch_event('click')
@@ -685,13 +754,15 @@ VERA = {'900001', '900002', '900003'}   # Vertreter 11 oder Vertreter 2 = 11 (90
 for u, n, r_, p_, extra in (('vv', 'Vera Verkauf', 'viewer', 'Editor-Zugang-77', {'grant': ['crm.sehen'], 'vertreter': '11'}),
                             ('gf', 'Gesa Führung', 'editor', 'Konto-Passwort-9', {'grant': ['crm.master']}),
                             ('vk', 'Karl Kilo', 'viewer', 'Merk-Kennwort-31', {'grant': ['crm.sehen'], 'deny': ['crm.umsatz_euro'], 'vertreter': '11'}),
-                            ('vn', 'Nina Ohnezahl', 'viewer', 'Weg-Kennwort-42', {'grant': ['crm.sehen'], 'deny': ['crm.umsatz_euro', 'crm.umsatz_kg'], 'vertreter': '11'})):
+                            ('vn', 'Nina Ohnezahl', 'viewer', 'Weg-Kennwort-42', {'grant': ['crm.sehen'], 'deny': ['crm.umsatz_euro', 'crm.umsatz_kg'], 'vertreter': '11'}),
+                            ('vb', 'Volker Verkauf', 'viewer', 'Editor-Zugang-77', {'grant': ['crm.sehen'], 'vertreter': '12'})):
     st, r = A.call('user_save', {'id': '', 'name': n, 'username': u, 'role': r_, 'active': True, 'password': p_, 'mustChange': False, **extra})
     assert st == 200, r
 VV = Client('198.51.100.31'); VV.call('login', {'username': 'vv', 'password': 'Editor-Zugang-77'})
 GF = Client('198.51.100.32'); GF.call('login', {'username': 'gf', 'password': 'Konto-Passwort-9'})
 VK = Client('198.51.100.33'); VK.call('login', {'username': 'vk', 'password': 'Merk-Kennwort-31'})
 VN = Client('198.51.100.34'); VN.call('login', {'username': 'vn', 'password': 'Weg-Kennwort-42'})
+VB = Client('198.51.100.35'); VB.call('login', {'username': 'vb', 'password': 'Editor-Zugang-77'})
 st, d = VV.call('crm_start')
 check('crm_start: eigener Vertreter und Rechte € und kg, kein Master', st == 200 and d['ich'] == '11' and d['rechte']['euro'] and d['rechte']['kg'] and not d['rechte']['master'])
 check('Cockpit ohne Anmeldung 401, ohne CRM-Recht 403', N.call('crm_cockpit')[0] == 401 and O.call('crm_cockpit')[0] == 403 and O.call('crm_kunde_umsatz&key=kaaa111111111')[0] == 403)
@@ -772,6 +843,17 @@ check('Pop-up nur kg: keine Umsätze, kein Preis, kein Preisniveau', st == 200 a
 st, u = VN.call('crm_kunde_umsatz&key=kaaa111111111')
 roh = json.dumps(u)
 check('Pop-up ohne € und kg: Artikel und Signale ohne Zahlen', st == 200 and '"umsatz' not in roh and '"menge' not in roh and u['kunde']['artikel'][0]['nr'] == '700002' and '777777' not in roh)
+# Kunden anderer Vertreter: ohne Master keine Umsätze und Mengen – sonst ließe sich das gesperrte Master-Cockpit aus den Pop-ups nachbauen
+st, u = VB.call('crm_kunde_umsatz&key=kaaa111111111')   # Vertreter 12 öffnet einen Kunden von Vertreter 11
+roh = json.dumps(u)
+st2, u2 = VB.call('crm_kunde_umsatz&key=kbbb222222222')   # eigener Kunde (Vertreter 12, Vertreter 2 = 11)
+st3, u3 = GF.call('crm_kunde_umsatz&key=kaaa111111111')   # Master
+st4, u4 = VV.call('crm_kunde_umsatz&key=kfff666666666')   # Kunde ohne Vertreter
+check('Pop-up, Kunde eines anderen Vertreters ohne Master: keine Umsätze und Mengen, kein Preisniveau, gekennzeichnet', st == 200 and u.get('fremd') is True
+      and '"umsatz' not in roh and '"menge' not in roh and (u.get('kunde') or {}).get('preisniveau') is None and u['rechte']['euro'] is False, roh[:300])
+check('Pop-up: eigener Kunde (auch als Vertreter 2) und Master mit Zahlen; Kunde ohne Vertreter für Verkäufer ohne Zahlen', st2 == 200 and u2.get('fremd') is False
+      and 'umsatz' in u2['kunde']['w']['j365'] and st3 == 200 and u3.get('fremd') is False and 'umsatz' in u3['kunde']['w']['j365']
+      and st4 == 200 and u4.get('fremd') is True and '"umsatz' not in json.dumps(u4), (st2, st3, st4, u2.get('fremd'), u3.get('fremd')))
 roh = json.dumps(VV.call('crm_kunde_umsatz&key=kaaa111111111')[1])
 check('Pop-up ohne Einkaufswerte, DB oder Spanne', '777777' not in roh and '888888' not in roh and '"ek' not in roh.lower())
 st, pz = A.call('controlling_umsatz_pausen&bis=' + E.strftime('%Y-%m'))
@@ -818,12 +900,22 @@ with sync_playwright() as p:
     pg.click('[data-k-chip="signal"]'); pg.wait_for_function("document.querySelectorAll('#k-tabelle tbody tr').length === 3")
     check('UI Kunden „Mit Signal“: Kennzeichen in der Liste', 'Bestellpause' in pg.inner_text('#k-tabelle') and 'kauft weniger' in pg.inner_text('#k-tabelle'))
     pg.click('[data-k-chip="alle"]'); pg.wait_for_function("document.querySelectorAll('#k-tabelle tbody tr').length > 4")
+    pg.click('#k-tabelle button[data-oeffnen="kfff666666666"]'); pg.wait_for_selector('#dlg-kunde[open] [data-ku-panel="uebersicht"] .crm-ck-hinweis')
+    ue = pg.inner_text('[data-ku-panel="uebersicht"]')
+    check('UI Pop-up, Kunde ohne eigenen Vertreter: Hinweis statt Umsätzen und Mengen', 'nur für Kunden Ihres Vertreters' in ue and '€' not in ue and ' kg' not in ue, ue[:400])
+    pg.screenshot(path=os.path.join(SH, 'crm_popup_fremd_1280.png'))
+    pg.set_viewport_size({'width': 390, 'height': 844}); pg.screenshot(path=os.path.join(SH, 'crm_popup_fremd_390.png')); pg.set_viewport_size({'width': 1280, 'height': 900})
+    pg.click('#dlg-kunde [data-schliessen]')
     ctx.close()
 
     ctx, pg = seite('gf', 'Konto-Passwort-9', '198.51.100.32')
     t = pg.inner_text('#tab-cockpit')
     check('UI Master-Cockpit: Vertrieb gesamt, Vertreter im Vergleich, auffällige Kunden, Kunden ohne Vertreter', 'Vertrieb gesamt' in t and 'vertreter im vergleich' in t.lower()
           and '11 – Vera Vertrieb' in t and 'ohne Vertreter' in t and 'auffällige kunden' in t.lower() and pg.get_attribute('[data-ck-wahl="alle"]', 'aria-pressed') == 'true', t[:600])
+    kf = pg.evaluate("""() => { const k = document.querySelector('#tab-cockpit .crm-ck-kicker'); if (!k) return [null];
+      const p = document.createElement('i'); p.style.color = 'var(--crm-modul)'; k.parentNode.append(p); const modul = getComputedStyle(p).color; p.remove();
+      return [k.textContent, getComputedStyle(k).color, modul]; }""")
+    check('UI Master-Cockpit: Überschrift „Master-Cockpit“ grau, nicht in der Modulfarbe (Modulfarbe nur an Symbolen)', kf[0] == 'Master-Cockpit' and kf[1] != kf[2], kf)
     pg.screenshot(path=os.path.join(SH, 'crm_master_cockpit_1280.png'), full_page=True)
     pg.click('#tab-cockpit .crm-ck-vergleich button[data-ck-wahl="12"]')
     pg.wait_for_function("document.querySelector('#tab-cockpit h1').textContent.includes('Tom Tour')")
@@ -934,6 +1026,12 @@ with sync_playwright() as p:
         pg.fill('tr[data-pos="0"] [data-p="qty"]', '12,5'); pg.fill('tr[data-pos="0"] [data-p="price"]', '13,90'); pg.fill('[data-k="titel"]', f'Test UI {breite}')
         pg.wait_for_function("document.querySelector('.crm-ez-summe').textContent.includes('173,75')")
         check(f'{breite}px: Summe aus Menge × Preis (Menge mit 2 Stellen wie überall)', '12,50 kg' in pg.inner_text('.crm-ez-summe'), pg.inner_text('.crm-ez-summe'))
+        # Preis mit drei Stellen: der Server rundet 1,005 auf 1,01 €/kg – die Summe vor dem Speichern zeigt schon 101,00 € (wie PDF)
+        pg.fill('tr[data-pos="0"] [data-p="qty"]', '100'); pg.fill('tr[data-pos="0"] [data-p="price"]', '1,005')
+        pg.wait_for_function("document.querySelector('.crm-ez-summe').textContent.includes('100,00 kg')")
+        check(f'{breite}px: Summe 100 kg × 1,005 €/kg = 101,00 € wie Server und PDF', '101,00 €' in pg.inner_text('.crm-ez-summe'), pg.inner_text('.crm-ez-summe'))
+        pg.fill('tr[data-pos="0"] [data-p="qty"]', '12,5'); pg.fill('tr[data-pos="0"] [data-p="price"]', '13,90')
+        pg.wait_for_function("document.querySelector('.crm-ez-summe').textContent.includes('173,75')")
         if breite == 1280:
             pg.click('#dlg-kunde [data-schliessen]'); pg.wait_for_selector('#crm-toast.zeigen')
             check('Schließen mit ungespeichertem Einzelangebot: Warnung, Pop-up bleibt offen', pg.is_visible('#dlg-kunde') and 'nicht gespeichert' in pg.text_content('#crm-toast'))

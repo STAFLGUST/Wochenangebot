@@ -75,17 +75,27 @@ with sync_playwright() as p:
           and css('#topbar .topbar-inner', 'backdropFilter', '::before') == 'none' and css('#topbar .topbar-inner', 'borderBottomWidth', '::before') == '1px'
           and not g.locator('#topbar .brand-logo').is_visible(), (css('#topbar .topbar-inner', 'borderTopLeftRadius'), css('#topbar .topbar-inner', 'backdropFilter', '::before')))
     check('Rahmen: eigene Navigation als deckende Karte ohne Unschärfe', css('.side-nav', 'backdropFilter') == 'none' and css('.side-nav', 'backgroundColor') == 'rgb(255, 255, 255)'
-          and css('.side-nav', 'borderTopLeftRadius') == '28px')
+          and css('.side-nav', 'borderTopLeftRadius') == '16px')
     check('active nav entry 44 px with 14 px radius', g.locator('#vt-edit').bounding_box()['height'] == 44 and css('#vt-edit', 'borderTopLeftRadius') == '14px')
     # „Veröffentlichen“ (früher der farbige Knopf) liegt seit 13.11.2026 im Modul Versand – in der Kopfleiste nur neutrale Knöpfe
     check('top bar: no publish/send buttons any more, „Drucken“ is a neutral pill', g.locator('#btn-publish').count() == 0 and g.locator('#btn-send').count() == 0
           and css('#btn-drucken', 'backgroundImage') == 'none' and css('#btn-drucken', 'borderTopLeftRadius') == '999px')
     check('other top bar buttons are neutral pills', css('#btn-preview', 'backgroundImage') == 'none' and css('#btn-preview', 'borderTopLeftRadius') == '999px')
-    check('group cards 28 px, offer list inside the side navigation card (no card of its own) with the active offer as entry', css('#groups .gcard', 'borderTopLeftRadius') == '28px'
+    check('group cards 16 px (wie die Karten des Rahmens), offer list inside the side navigation card (no card of its own) with the active offer as entry', css('#groups .gcard', 'borderTopLeftRadius') == '16px'
           and g.evaluate("document.querySelector('#offer-bar').parentElement.classList.contains('side-nav')") and css('#offer-bar', 'borderTopLeftRadius') == '0px' and css('#offer-bar', 'backdropFilter') in ('none', '')
           and css('#offer-bar .ob-o[aria-selected="true"]', 'borderTopLeftRadius') == '14px' and g.locator('#offer-bar .ob-o[aria-selected="true"]').bounding_box()['height'] >= 44)
     check('Rahmen: Tabellenkarten deckend', css('#groups .gcard', 'backgroundColor') == 'rgb(255, 255, 255)' and css('#groups .gcard', 'backdropFilter') == 'none', css('#groups .gcard', 'backgroundColor'))
+    # Schrift der Seitenleiste hell immer schwarz, nie rot (Vorgabe des Inhabers) – auch der Name des gewählten Angebots
+    ob = g.evaluate("""(() => { const c = (s) => { const e = document.querySelector(s); return e ? getComputedStyle(e).color : null; };
+        return [c('#offer-bar .ob-o[aria-selected="true"] .ob-n'), c('#offer-bar .ob-o:not([aria-selected="true"]) .ob-n'), c('#vt-edit')]; })()""")
+    check('Seitenleiste hell: gewähltes Angebot in derselben schwarzen Schrift wie die übrigen Einträge', all(ob) and len(set(ob)) == 1, ob)
+    # Bestellwünsche sind keine Stammdaten: „Bestellungen“ steht bei den Arbeitsansichten, vor der Überschrift „Stammdaten“
+    folge = g.evaluate("[...document.querySelectorAll('.side-tabs > *')].map((e) => e.id)")
+    check('Navigation: „Bestellungen“ vor „Stammdaten“', folge.index('vt-orders') < folge.index('side-stamm'), folge)
     check('price fields 10 px radius', css('#groups tr[data-id] .e-price .in.num', 'borderTopLeftRadius') == '10px')
+    # Rundungen wie im Rahmen (.r-karte 16 px): Karten, Werkzeugleiste, Kopf des Angebots – keine 22/28 px mehr
+    rund = g.evaluate("[...document.querySelectorAll('#view-edit :is(.gcard, .ed-toolbar, .ed-head, .np-card), #view-edit .meta-card:not(.ed-head .meta-card), .side-nav')].filter((e) => e.offsetParent).map((e) => e.className.split(' ')[0] + ' ' + getComputedStyle(e).borderTopLeftRadius)")
+    check('Karten und Leisten des Eingabebereichs 16 px gerundet (wie im Rahmen)', rund and all(r.endswith(' 16px') for r in rund), rund)
     sticky = g.evaluate("(() => { const t = document.querySelector('#view-edit .ed-toolbar'); return [getComputedStyle(t).position, getComputedStyle(t).backgroundColor]; })()")
     check('sticky bars opaque enough to read', sticky[0] == 'sticky' and alpha(sticky[1]) >= .85, sticky)
     g.click('#btn-more'); g.wait_for_selector('#menu-more:not([hidden])')
@@ -122,7 +132,7 @@ with sync_playwright() as p:
         if j.get('user'):
             j['user'].update({'zentral': True, 'bereich': 'angebot.eingabe', 'dashboard': adresse})
         route.fulfill(response=r, json=j)
-    for w in (1920, 1601, 1440, 1366, 1361, 1280, 1181, 1024, 390):
+    for w in (1920, 1601, 1440, 1366, 1361, 1280, 1181, 1024, 901, 768, 561, 390):
         z = br.new_page(viewport={'width': w, 'height': 844}, is_mobile=w < 500); z.on('pageerror', lambda x: errs.append(str(x)))
         login(z, 'admin', 'Sicheres-Passwort-1')
         z.route('**/api/?action=status*', lambda route: zentral(route, 'https://dashboard-stafl.de/'))
@@ -139,14 +149,20 @@ with sync_playwright() as p:
             check(f'{w}px zentrale Anmeldung: Knopf „Start“ links in der Kopfzeile, Logo nur in der Seitenleiste, Ziel vom Server', z.get_attribute('#btn-dashboard', 'href') == 'https://dashboard-stafl.de/'
                   and lb is None and zb['x'] - tb['x'] <= 40, (zb, lb, tb))
         lbl = z.locator('#btn-dashboard .lbl').bounding_box()
-        if w > 1600:
-            check(f'{w}px breit: Pfeil und Beschriftung „Start“ sichtbar', lbl['width'] > 20 and z.locator('#btn-dashboard .lbl').inner_text() == 'Start'
+        if w > 560:   # gleicher Knopf wie auf Bestand, Verwaltung und allen Modulseiten (app.css: nur am Handy nur der Pfeil)
+            check(f'{w}px: Pfeil und Beschriftung „Start“ sichtbar', lbl['width'] > 20 and z.locator('#btn-dashboard .lbl').inner_text() == 'Start'
                   and z.locator('#btn-dashboard svg use[href="#i-back"]').is_visible(), lbl)
         else:
             check(f'{w}px Beschriftung „Start“ nur für Screenreader, Pfeil (wie auf allen Modulseiten), Fläche ≥ 36 px', lbl['width'] <= 1 and zb['width'] >= 36 and zb['height'] >= 36
                   and z.locator('#btn-dashboard svg use[href="#i-back"]').is_visible(), (lbl, zb))
         check(f'{w}px mit Knopf: Kopfzeile ohne Überlappung, kein waagerechtes Scrollen', not z.evaluate(overlap_js)
               and z.evaluate('document.documentElement.scrollWidth') <= w)
+        # Knöpfe der Kopfzeile untereinander: keiner ragt über seine Fläche oder in den Nachbarn („Drucken“ mit Beschriftung bei 861–1180 px);
+        # der Pfeil „Zusatz“ hängt bewusst an „Drucken“ (druck.css: margin-left −6px)
+        knoepfe = z.evaluate("""() => { const k = [...document.querySelectorAll('#topbar .actions .btn, #topbar .actions .ibtn')].filter((e) => e.offsetParent)
+            .map((e) => { const r = e.getBoundingClientRect(); return [e.id, Math.round(r.left), Math.round(r.right), e.scrollWidth > e.clientWidth + 1]; }).sort((a, b) => a[1] - b[1]);
+          return k.filter((x, i) => x[3] || (i && x[0] !== 'btn-drucken-zusatz' && x[1] < k[i - 1][2] - 1)).map((x) => x[0]); }""")
+        check(f'{w}px: Knöpfe der Kopfzeile ohne Überlappung und ohne überstehende Beschriftung', not knoepfe, knoepfe)
         z.screenshot(path=SH + f'/dashboard-knopf-{w}.png')
         z.evaluate("document.documentElement.dataset.theme = 'dark'")
         z.screenshot(path=SH + f'/dashboard-knopf-{w}-dunkel.png')

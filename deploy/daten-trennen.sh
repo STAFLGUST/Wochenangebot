@@ -16,6 +16,7 @@
 #                                                # (danach mit dem älteren Release erneut `trennen`, falls es eine Trennung kennt)
 #
 # Ablauf und Abbruchverhalten: deploy/daten_trennen.py. Nach einem Fehler bleibt die Anwendung absichtlich gestoppt.
+# Bricht `zusammenfuehren` beim Aufräumen ab (Vermerk daten-intern/.zusammengefuehrt), vollendet ein erneuter Aufruf es.
 set -eu
 cd "$(dirname "$0")/.."
 DOCKER=${DOCKER:-docker}
@@ -38,11 +39,18 @@ if [ "$AKTION" = trennen ] && [ -f daten/.daten-getrennt ] && [ -z "$(python3 de
   echo "Daten sind bereits getrennt – nichts zu tun, die Anwendung läuft unverändert weiter."
   exit 0
 fi
-if [ "$AKTION" = zusammenfuehren ] && [ ! -f daten/.daten-getrennt ]; then
+if [ "$AKTION" = zusammenfuehren ] && [ ! -f daten/.daten-getrennt ] && [ ! -f daten-intern/.daten-intern ] && [ ! -f daten-intern/.zusammengefuehrt ]; then
   echo "Daten sind nicht getrennt – nichts zusammenzuführen, die Anwendung läuft unverändert weiter."
   exit 0
 fi
-sh deploy/sichern.sh --jetzt
+if [ "$AKTION" = zusammenfuehren ] && [ -f daten-intern/.zusammengefuehrt ] && [ ! -f daten/.daten-getrennt ]; then
+  # Fortsetzung nach einem Abbruch beim Aufräumen: alle Daten liegen schon in daten/; eine neue Sicherung scheiterte an den
+  # widersprüchlichen Kennzeichen (sichern.sh), die vom ersten Versuch liegt in sicherungen/. Trägt daten/ das Kennzeichen
+  # noch, lief die Anwendung getrennt weiter: neu sichern, daten_trennen.py vergleicht erneut
+  echo "Abgebrochenes Zusammenführen wird vollendet (nur Aufräumen; Sicherung vom ersten Versuch in sicherungen/)."
+else
+  sh deploy/sichern.sh --jetzt
+fi
 # shellcheck disable=SC2086  # APPS sind bewusst mehrere Dienstnamen
 $DOCKER compose stop $APPS
 if ! python3 deploy/daten_trennen.py "$AKTION" daten daten-intern --offline; then

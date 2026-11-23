@@ -351,7 +351,8 @@ function hr_einstellungen(): array
     $alle = $eigene;
     if ($regelSperren) { $j = (int)date('Y'); for ($y = $j - 1; $y <= $j + 3; $y++) $alle = array_merge($alle, hr_regel_sperren($y, $schliess)); }
     usort($alle, function ($a, $b) { return [$a['von'], $a['bis']] <=> [$b['von'], $b['bis']]; });
-    return ['rev' => (int)($d['rev'] ?? 0), 'sperren' => $alle, 'sperrenEigene' => $eigene, 'regelSperren' => $regelSperren, 'ferien' => $z($d['ferien'] ?? []),
+    // revUrlaub: Stand nur des Formulars „Urlaub“ (hr_einstellungen_save) – Schalter und E-Mail-Einstellungen zählen nicht mit (fehlt: 0, GR-006)
+    return ['rev' => (int)($d['rev'] ?? 0), 'revUrlaub' => (int)($d['revUrlaub'] ?? 0), 'sperren' => $alle, 'sperrenEigene' => $eigene, 'regelSperren' => $regelSperren, 'ferien' => $z($d['ferien'] ?? []),
             'uebertragBis' => hr_uebertrag_bis_norm($d['uebertragBis'] ?? null) ?? HR_UEBERTRAG_BIS,
             // Übergangsregel: Resturlaub verfällt erstmals am Verfallstag dieses Jahres (fehlt: jedes Jahr – GR-006)
             'verfallAb' => hr_verfall_ab_norm($d['verfallAb'] ?? null),
