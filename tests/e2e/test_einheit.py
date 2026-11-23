@@ -258,6 +258,11 @@ with sync_playwright() as pw:
         fi = fp.evaluate(FINGER)
         check(f'{name} Handy mit Finger: Eingaben ≥ 16 px (kein Hineinzoomen), kleine Knöpfe antippbar', fi['finger'] and not fi['eingabe'] and not fi['knopf'], fi)
         check(f'{name} Handy mit Finger: kein waagerechtes Scrollen', fp.evaluate('document.documentElement.scrollWidth') <= 390)
+        if name == 'versand':   # Kästchen „Zusatz“ im Fenster „Senden“ (Probe mit dem Aufbau aus versand.js)
+            kw = fp.evaluate("""() => { const f = document.createElement('fieldset'); f.className = 'vs-zusatz';
+              f.innerHTML = '<label class="vs-check vs-zusatz-zeile"><input type="checkbox"> Mit Preisänderung</label>'; document.body.append(f);
+              const w = Math.round(f.querySelector('input').getBoundingClientRect().width); f.remove(); return w; }""")
+            check('versand Handy mit Finger: Kästchen im Fenster „Senden“ 20 px', kw >= 20, kw)
         if name in ('angebot', 'versand'):   # Angebot mit Bestand (oben übernommen) zeigt den Bestand-Knopf, der Versand „Im Angebot ansehen“
             fp.wait_for_selector('.e-bst' if name == 'angebot' else '.vs-link')
             fi = fp.evaluate(FINGER)
