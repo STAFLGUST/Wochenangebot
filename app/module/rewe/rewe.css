@@ -592,7 +592,7 @@ textarea.rw-khinweis{min-height:180px;background:var(--rw-gelb-soft);border-colo
 :root body.rw.r {
   --rw-bg: var(--r-grund); --rw-text: var(--r-text); --rw-glass: var(--r-flaeche); --rw-kopf: var(--r-grund); --rw-card: var(--r-flaeche);
   --rw-border: var(--r-linie-2); --rw-line: var(--r-linie); --rw-gloss: transparent; --rw-shadow: var(--r-schatten);
-  --rw-head-bg: var(--r-flaeche-2); --rw-head-text: var(--r-leise); --rw-total-bg: var(--r-flaeche-2);   /* Tabellenköpfe wie im Rahmen */
+  --rw-head-bg: var(--r-flaeche-2); --rw-head-text: var(--r-leise); --rw-total-bg: var(--r-hover);   /* Tabellenköpfe wie im Rahmen; Hover-, Summen- und Zebraflächen sichtbar abgesetzt */
 }
 :root body.rw.r .rw-bg { display: none; }
 body.rw.r .rw-glas { -webkit-backdrop-filter: none; backdrop-filter: none; box-shadow: var(--r-schatten); }

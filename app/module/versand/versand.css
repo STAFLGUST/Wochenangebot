@@ -18,7 +18,7 @@ body.vs { line-height: 1.45; }
   font-variant-numeric: tabular-nums; background: rgba(255, 255, 255, .22); }
 .vs-link { padding: 0; border: 0; background: none; color: var(--r-akzent-text); font: inherit; font-size: 13px; font-weight: 600; cursor: pointer; text-decoration: none; }
 .vs-link:hover { text-decoration: underline; text-underline-offset: 3px; }
-@media (pointer: coarse) { .vs-link { padding-block: var(--r-tipp-polster); margin-block: calc(-1 * var(--r-tipp-polster)); } .vs-zusatz-zeile input { width: 20px; height: 20px; } }   /* Tippfläche am Handy ≥ 36 px (vorher 19 px), Zeile bleibt gleich hoch */
+@media (pointer: coarse) { .vs-link { padding-block: var(--r-tipp-polster); margin-block: calc(-1 * var(--r-tipp-polster)); } .vs-zusatz .vs-zusatz-zeile input { width: 20px; height: 20px; } }   /* Tippfläche am Handy ≥ 36 px (vorher 19 px), Zeile bleibt gleich hoch */
 .vs-marke { display: inline-block; padding: 1px 8px; border-radius: 6px; font-size: 12px; font-weight: 600; line-height: 1.5; white-space: nowrap; background: var(--r-neutral-bg); color: var(--r-neutral); }
 .vs-marke.ok { background: var(--r-ok-bg); color: var(--r-ok); }
 .vs-marke.warn { background: var(--r-warn-bg); color: var(--r-warn); }

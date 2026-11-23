@@ -191,8 +191,10 @@ with sync_playwright() as pw:
                         pg.click('#user-add'); pg.wait_for_selector('#dlg-user[open] #user-err', state='attached')
                         fe = pg.evaluate("""() => { const e = document.querySelector('#user-err'), b = e.closest('.dlg-body'); e.textContent = 'Benutzername ist schon vergeben.';
                           e.scrollIntoView({ block: 'nearest' }); const h = e.getBoundingClientRect().height; e.textContent = ''; return [Math.round(h), b.scrollHeight > b.clientHeight]; }""")
+                        kz = pg.evaluate("(() => { const x = document.querySelector('#dlg-user button.icon[data-close]'), s = getComputedStyle(x); return [x.getAttribute('aria-label'), Math.round(x.getBoundingClientRect().width), s.borderTopLeftRadius]; })()")
                         pg.evaluate("document.querySelector('#dlg-user').close()")
                         check(f'{teil} {tag}: Fehlermeldung im langen Formular sichtbar (nicht auf Höhe 0)', fe[0] >= 15 and fe[1], fe)
+                        check(f'{teil} {tag}: Kreuz im Fenster „Mitarbeiter“ wie in jedem Fenster („Schließen“, 36 px, 9 px rund)', kz[0] == 'Schließen' and kz[1] == 36 and kz[2] == '9px', kz)
                     if v == 'orders':   # Werkzeugleiste „Bestellungen“: Suche und Statusauswahl gleich hoch (wie in den anderen Leisten)
                         hoehen = pg.evaluate("['#orders-filter .search input', '#orders-filter select'].map((s) => Math.round(document.querySelector(s).getBoundingClientRect().height))")
                         check(f'{teil} {tag}: Suche und Auswahl der Werkzeugleiste gleich hoch', hoehen[0] == hoehen[1], hoehen)
@@ -258,6 +260,18 @@ with sync_playwright() as pw:
         fi = fp.evaluate(FINGER)
         check(f'{name} Handy mit Finger: Eingaben ≥ 16 px (kein Hineinzoomen), kleine Knöpfe antippbar', fi['finger'] and not fi['eingabe'] and not fi['knopf'], fi)
         check(f'{name} Handy mit Finger: kein waagerechtes Scrollen', fp.evaluate('document.documentElement.scrollWidth') <= 390)
+        if name == 'versand':   # Kästchen „Zusatz“ im Fenster „Senden“ (Probe mit dem Aufbau aus versand.js)
+            kw = fp.evaluate("""() => { const f = document.createElement('fieldset'); f.className = 'vs-zusatz';
+              f.innerHTML = '<label class="vs-check vs-zusatz-zeile"><input type="checkbox"> Mit Preisänderung</label>'; document.body.append(f);
+              const w = Math.round(f.querySelector('input').getBoundingClientRect().width); f.remove(); return w; }""")
+            check('versand Handy mit Finger: Kästchen im Fenster „Senden“ 20 px', kw >= 20, kw)
+        if name == 'sicherheit':   # Verweis im Fließtext: Tippfläche ≥ 32 px, die Zeile wird davon nicht höher
+            zl = fp.evaluate("""() => { const p = document.createElement('p'); p.style.cssText = 'width:300px;margin:0';
+              p.innerHTML = 'Rollen und Rechte ändern Sie in der <a class="sic-link" href="#">Verwaltung → Mitarbeiter</a>.';
+              document.querySelector('#sic-app').append(p); const mit = p.getBoundingClientRect().height, a = p.querySelector('a').getBoundingClientRect().height;
+              p.innerHTML = 'Rollen und Rechte ändern Sie in der <b>Verwaltung → Mitarbeiter</b>.'; const ohne = p.getBoundingClientRect().height; p.remove();
+              return [Math.round(mit), Math.round(ohne), Math.round(a)]; }""")
+            check('sicherheit Handy mit Finger: Verweis im Text antippbar (≥ 32 px), die Zeile bleibt gleich hoch', zl[0] <= zl[1] + 1 and zl[2] >= 32, zl)
         if name in ('angebot', 'versand'):   # Angebot mit Bestand (oben übernommen) zeigt den Bestand-Knopf, der Versand „Im Angebot ansehen“
             fp.wait_for_selector('.e-bst' if name == 'angebot' else '.vs-link')
             fi = fp.evaluate(FINGER)
@@ -350,7 +364,7 @@ with sync_playwright() as pw:
     # Form jedes Fensters auf jeder Seite im Rahmen (C2): Schleier, Rundung je Ecke, Linie, Schatten, Lage, Kreuz zum Schließen
     FENSTER_FORM = r'''(id) => { const d = document.getElementById(id); d.getAnimations().forEach((a) => a.finish()); if (document.activeElement) document.activeElement.blur();
       const s = getComputedStyle(d), b = getComputedStyle(d, '::backdrop'), r = d.getBoundingClientRect();
-      const x = [...d.querySelectorAll('button[aria-label$="chließen"]')].find((e) => e.offsetParent), xr = x && x.getBoundingClientRect(), xs = x && getComputedStyle(x);
+      const x = [...d.querySelectorAll('button[aria-label$="chließen"], button.icon[data-close]')].find((e) => e.offsetParent), xr = x && x.getBoundingClientRect(), xs = x && getComputedStyle(x);
       return { id, unschaerfe: b.backdropFilter, schleier: b.backgroundColor, rund: [s.borderTopLeftRadius, s.borderTopRightRadius, s.borderBottomRightRadius, s.borderBottomLeftRadius].join(' '),
                schatten: s.boxShadow, linie: s.borderTopColor, lr: [Math.round(r.left), Math.round(r.right)],
                kreuz: x ? [Math.round(xr.width), Math.round(xr.height), xs.borderTopLeftRadius, xs.backgroundColor].join(' ') : null }; }'''

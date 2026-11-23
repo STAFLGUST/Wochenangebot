@@ -326,7 +326,7 @@ textarea.lg-mono{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospac
 :root body.lg.r {
   --lg-bg: var(--r-grund); --lg-text: var(--r-text); --lg-glass: var(--r-flaeche); --lg-kopf: var(--r-grund); --lg-card: var(--r-flaeche);
   --lg-border: var(--r-linie-2); --lg-line: var(--r-linie); --lg-gloss: transparent; --lg-shadow: var(--r-schatten);
-  --lg-head-bg: var(--r-flaeche-2); --lg-head-text: var(--r-leise); --lg-total-bg: var(--r-flaeche-2);   /* Tabellenköpfe wie im Rahmen */
+  --lg-head-bg: var(--r-flaeche-2); --lg-head-text: var(--r-leise); --lg-total-bg: var(--r-hover);   /* Tabellenköpfe wie im Rahmen; Hover-, Summen- und Zebraflächen sichtbar abgesetzt */
 }
 :root body.lg.r .lg-bg { display: none; }
 body.lg.r .lg-glas { -webkit-backdrop-filter: none; backdrop-filter: none; box-shadow: var(--r-schatten); }
