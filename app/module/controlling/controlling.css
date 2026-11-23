@@ -397,7 +397,7 @@ button.ctl-az-zeile{cursor:pointer}button.ctl-az-zeile:hover{background:var(--ct
 :root body.ctl.r {
   --ctl-bg: var(--r-grund); --ctl-text: var(--r-text); --ctl-glass: var(--r-flaeche); --ctl-kopf: var(--r-grund); --ctl-card: var(--r-flaeche);
   --ctl-border: var(--r-linie-2); --ctl-line: var(--r-linie); --ctl-gloss: transparent; --ctl-shadow: var(--r-schatten);
-  --ctl-head-bg: var(--r-flaeche-2); --ctl-head-text: var(--r-leise); --ctl-total-bg: var(--r-flaeche-2);   /* Tabellenköpfe wie im Rahmen */
+  --ctl-head-bg: var(--r-flaeche-2); --ctl-head-text: var(--r-leise); --ctl-total-bg: var(--r-hover);   /* Tabellenköpfe wie im Rahmen; Hover-, Summen- und Zebraflächen sichtbar abgesetzt */
 }
 :root body.ctl.r .ctl-bg { display: none; }
 body.ctl.r .ctl-glas { -webkit-backdrop-filter: none; backdrop-filter: none; box-shadow: var(--r-schatten); }

@@ -619,7 +619,7 @@ button.qm-kpi{font:inherit;text-align:left;color:inherit;cursor:pointer}
 :root body.qm.r {
   --qm-bg: var(--r-grund); --qm-text: var(--r-text); --qm-glass: var(--r-flaeche); --qm-kopf: var(--r-grund); --qm-card: var(--r-flaeche);
   --qm-border: var(--r-linie-2); --qm-line: var(--r-linie); --qm-gloss: transparent; --qm-shadow: var(--r-schatten);
-  --qm-head-bg: var(--r-flaeche-2); --qm-head-text: var(--r-leise); --qm-total-bg: var(--r-flaeche-2);   /* Tabellenköpfe wie im Rahmen */
+  --qm-head-bg: var(--r-flaeche-2); --qm-head-text: var(--r-leise); --qm-total-bg: var(--r-hover);   /* Tabellenköpfe wie im Rahmen; Hover-, Summen- und Zebraflächen sichtbar abgesetzt */
 }
 :root body.qm.r .qm-bg { display: none; }
 body.qm.r .qm-glas { -webkit-backdrop-filter: none; backdrop-filter: none; box-shadow: var(--r-schatten); }
