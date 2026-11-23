@@ -281,6 +281,9 @@ with sync_playwright() as pw:
       const r = getComputedStyle(e).borderTopLeftRadius; return r === '999px' ? null : name(e) + ' r' + r; })"""
     TITEL['reiterleiste'] = 'Reiterleiste als Kapsel (Spur --r-neutral-bg), Reiter 36 px, 14 px/600, gewählt --r-flaeche'
     TITEL['knopf'] = 'Knöpfe als Kapsel wie überall'
+    BAUSTEINE['kartenbeschriftung'] = r"""(finger ? [...inhalt.querySelectorAll('td[data-label]')].filter(sicht) : []).map((e) => { const b = getComputedStyle(e, '::before');
+      return b.content === 'none' || b.display === 'none' || parseFloat(b.fontSize) >= 11 ? null : name(e).slice(0, 30) + ' ' + b.fontSize; })"""
+    TITEL['kartenbeschriftung'] = 'Beschriftungen der Karten-Tabellen am Handy mindestens 11 px'
     TOUR = r"""({ finger }) => { const inhalt = document.querySelector('.r-inhalt');
       const sicht = (e) => { const r = e.getBoundingClientRect(), s = getComputedStyle(e); return r.width > 1 && r.height > 1 && s.visibility !== 'hidden' && !e.closest('[hidden], dialog, .sr-only, [aria-hidden="true"]'); };
       const name = (e) => (e.id ? '#' + e.id : e.tagName.toLowerCase() + (typeof e.className === 'string' && e.className.trim() ? '.' + e.className.trim().split(/\s+/).slice(0, 2).join('.') : ''))

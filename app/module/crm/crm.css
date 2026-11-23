@@ -440,7 +440,7 @@ body.crm { --crm-mhd-vorbei-bg: #d9d6d2; --crm-mhd-vorbei-fg: #1f1d1a; --crm-mhd
   .crm-mhd-tabelle td { display: block; padding: 0; border: 0; text-align: left !important; }
   .crm-mhd-tabelle td.crm-mhd-wahlspalte { grid-row: 1 / span 3; width: auto; }
   .crm-mhd-tabelle td.crm-mhd-kunde, .crm-mhd-tabelle td.crm-mhd-tel { grid-column: -4 / -1; }
-  .crm-mhd-tabelle td[data-label]::before { content: attr(data-label); display: block; color: var(--crm-muted); font-size: 10px; font-weight: 700; letter-spacing: .05em; text-transform: uppercase; }
+  .crm-mhd-tabelle td[data-label]::before { content: attr(data-label); display: block; color: var(--r-leise); font-size: 11px; font-weight: 600; letter-spacing: .06em; text-transform: uppercase; }
   .crm-mhd-tabelle td.crm-mhd-tel::before { display: none; }
 }
 
@@ -595,7 +595,7 @@ a.crm-ck-tel { color: var(--crm-text); }
   .crm-ck-karten td[colspan] { grid-column: 1 / -1; }   /* Hinweiszeilen („Keine Vertreter …“) über die ganze Karte */
   .crm-ck-vergleich .crm-ck-karten tr { grid-template-columns: repeat(4, minmax(0, 1fr)); }
   .crm-ck-karten td.knopf .btn { width: 100%; }
-  .crm-ck-karten td[data-label]::before { content: attr(data-label); display: block; color: var(--crm-muted); font-size: 10px; font-weight: 700; letter-spacing: .05em; text-transform: uppercase; }
+  .crm-ck-karten td[data-label]::before { content: attr(data-label); display: block; color: var(--r-leise); font-size: 11px; font-weight: 600; letter-spacing: .06em; text-transform: uppercase; }
   .crm-ck-karten tbody tr:hover td { background: none; }
   /* Kundenliste und Wiedervorlagen als Karten statt enger Tabelle */
   .crm-karten-rahmen { max-height: none; overflow: visible; border-radius: 0; background: transparent; border: 0; box-shadow: none; -webkit-backdrop-filter: none; backdrop-filter: none; }
@@ -607,7 +607,7 @@ a.crm-ck-tel { color: var(--crm-text); }
   .crm-karten td.kunde { grid-column: 1 / -1; order: -1; min-width: 0 !important; }
   .crm-karten td.kunde .crm-firma { max-width: 100%; }
   .crm-karten td.crm-leer { grid-column: 1 / -1; }
-  .crm-karten td[data-label]::before { content: attr(data-label); display: block; margin-bottom: 3px; color: var(--crm-muted); font-size: 10.5px; font-weight: 700; letter-spacing: .05em; text-transform: uppercase; }
+  .crm-karten td[data-label]::before { content: attr(data-label); display: block; margin-bottom: 3px; color: var(--r-leise); font-size: 11px; font-weight: 600; letter-spacing: .06em; text-transform: uppercase; }
   .crm-karten select, .crm-tabelle.crm-karten td.wann select { width: 100%; max-width: none; height: 38px; }
   #k-tabelle td.vt { order: 1; } #k-tabelle td.schritt { order: 2; }
   #wv-tabelle td.aktiv { order: 1; } #wv-tabelle td.wann { order: 2; grid-column: 1 / -1; } #wv-tabelle td.erledigt { order: 3; }
