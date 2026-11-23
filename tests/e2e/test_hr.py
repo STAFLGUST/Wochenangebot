@@ -1969,6 +1969,18 @@ with sync_playwright() as p:
           and (ek2.get('entscheidung') or {}).get('grund') == 'war Urlaub, Zeiterfassung falsch' and ('Erika Editor', 'K', '2025-02-10', '2025-02-14', 'genehmigt') not in ze2
           and ('Bernd Muster', 'G', '2025-03-05', '2025-03-05', 'genehmigt') in ze2 and ('Bernd Muster', 'K', '2025-03-05', '2025-03-05', 'genehmigt') not in ze2
           and ('Carla Probe', 'U', '2025-03-17', '2025-03-18', 'genehmigt') in ze2, (st, ek2, ze2))
+    # gekürzt, danach verschoben: ein erneuter Import bucht die ursprünglichen Tage nicht wieder (Feld „import“ vom ersten Ändern)
+    ec = next(e for e in r['eintraege'] if e['quelle'] == 'zeiterfassung' and e['name'] == 'Carla Probe')
+    st_k, _ = P.call('hr_eintrag_save', {'id': ec['id'], 'person': ec['person'], 'art': 'U', 'von': '2025-03-17', 'bis': '2025-03-17'})
+    st_v, _ = P.call('hr_eintrag_save', {'id': ec['id'], 'person': ec['person'], 'art': 'U', 'von': '2025-03-19', 'bis': '2025-03-19'})
+    st, v6 = zeit(P)
+    zk = {z['name']: z['text'] for z in v6.get('zeilen', []) if 'Korrektur der Personalstelle' in z['text']}
+    check('gekürzt und verschoben: Vorschau meldet die ursprünglichen Tage als Korrektur der Personalstelle', st_k == 200 and st_v == 200 and st == 200
+          and '17.03.2025 (entfernt statt U)' in zk.get('Karla Probe', '') and '18.03.2025 (entfernt statt U)' in zk.get('Karla Probe', ''), (st_k, st_v, zk))   # Name wie im Bericht
+    st, _ = zeit(P, True, v6['stand'])
+    r = P.call('hr_verwaltung&jahr=2025')[1]
+    zc = sorted((e['von'], e['bis'], e['status']) for e in r['eintraege'] if e['quelle'] == 'zeiterfassung' and e['name'] == 'Carla Probe')
+    check('… übernommen: kein neuer Eintrag für die gekürzten Tage, die Korrektur bleibt', st == 200 and zc == [('2025-03-19', '2025-03-19', 'genehmigt')], (st, zc))
 
     # ── Verwaltung → Mitarbeiter (Personalstelle ohne Administratorrechte): nur HR-Angaben ──
     pg.click('#vt-users'); pg.wait_for_selector('#view-users tr[data-hr-uid]')
@@ -2048,13 +2060,21 @@ with sync_playwright() as p:
     st_c, _ = P.call('hr_einstellungen_save', {'sperren': v_['sperren'], 'ferien': v_['ferien'], 'regeln': 'Andere Regeln', 'rev': v_['einstRev']})
     check('Verwaltung → Urlaub: zweites Speichern mit altem Stand → 409, Sperre der ersten Sitzung bleibt', st_b == 200 and r_b['einstRev'] == v_['einstRev'] + 1 and st_c == 409
           and any(s_['text'] == 'Inventur' for s_ in P.call('mitarbeiter_hr')[1]['sperren']) and P.call('mitarbeiter_hr')[1]['regeln'] != 'Andere Regeln', (st_b, st_c))
+    # dieselbe Sitzung schaltet dazwischen die Urlaubsanträge um (aus und wieder an): das gibt ihr keinen neuen Stand des Formulars
+    st_t = []
+    for _ in range(2):
+        with pg.expect_response(lambda r_: 'action=hr_antraege_save' in r_.url) as schalter:
+            pg.click('#hr-antraege')
+        pg.wait_for_function('!document.querySelector("#hr-antraege").disabled')
+        st_t.append(schalter.value.status)
     pg.fill('#hr-regeln', '1. Test\nZweite Fassung.')
     with pg.expect_response(lambda r_: 'action=hr_einstellungen_save' in r_.url) as antwort:
         pg.click('#hr-einst [type="submit"]')
     if antwort.value.status == 409:
         pg.wait_for_function("document.querySelector('#hr-einst-err').textContent !== ''")
-    check('Oberfläche: inzwischen gespeichert → Hinweis, nichts überschrieben', antwort.value.status == 409 and 'inzwischen' in pg.text_content('#hr-einst-err')
-          and any(s_['text'] == 'Inventur' for s_ in P.call('mitarbeiter_hr')[1]['sperren']), (antwort.value.status, pg.text_content('#hr-einst-err')))
+    check('Oberfläche: inzwischen gespeichert, dazwischen Urlaubsanträge umgeschaltet → trotzdem Hinweis (409), nichts überschrieben', st_t == [200, 200]
+          and antwort.value.status == 409 and 'inzwischen' in pg.text_content('#hr-einst-err')
+          and any(s_['text'] == 'Inventur' for s_ in P.call('mitarbeiter_hr')[1]['sperren']), (st_t, antwort.value.status, pg.text_content('#hr-einst-err')))
     v_ = P.call('mitarbeiter_hr')[1]
     assert P.call('hr_einstellungen_save', {'sperren': [s_ for s_ in v_['sperren'] if s_['text'] != 'Inventur'], 'ferien': v_['ferien']})[0] == 200
     pg.goto(B + '/admin/#urlaub'); pg.reload(); pg.wait_for_selector('#hr-uebertrag-bis')

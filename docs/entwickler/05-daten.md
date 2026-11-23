@@ -503,7 +503,10 @@ Mitarbeiter sind die Nutzer der Plattform (`users_load()`); HR speichert nur eig
   `zurueckgezogen`, `storniert` – Einträge werden nie gelöscht, nur der Status ändert sich (mit
   `entscheidung: {t, by, grund}`). `quelle`: `antrag`, `vorplanung` (seit 10.11.2026: mehrere Zeiträume auf einmal über
   `hr_vorplanung`, sonst wie `antrag`), `personalstelle`, `zeiterfassung`; optional `vertretung2` (zusätzliche Vertretung,
-  seit 10.11.2026 – fehlt das Feld: keine), `geaendert`,
+  seit 10.11.2026 – fehlt das Feld: keine), `geaendert`, `import` (seit 23.11.2026, nur bei `quelle: zeiterfassung`:
+  `{person, von, bis}` des Imports, festgehalten beim ersten Ändern durch die Personalstelle – ein erneuter Import bucht diese
+  Tage nicht wieder, sie erscheinen als „abweichend, nicht übernommen“; vorher geänderte Einträge haben das Feld nicht, dort
+  zählt nur der aktuelle Zeitraum),
   `urlaubAbzug` (in der Zeiterfassung vom Urlaub abgezogene Krankheit – nur Hinweis für die Personalstelle; Krankheit
   zählt in `hr_konto` nie gegen den Urlaub, Inhaber 30.10.2026). Überschneidungen (`hr_kollision`) gelten nur zwischen aktiven
   Einträgen derselben Gruppe: Abwesenheiten (U/K/G/F) untereinander und freie Tage (X) untereinander – ein freier Tag in
@@ -536,7 +539,7 @@ Mitarbeiter sind die Nutzer der Plattform (`users_load()`); HR speichert nur eig
   (`HR_KALENDER_ARTEN`: Art → Kürzel, seit 11.11.2026; in der Oberfläche CSS-Klasse `Uplus`), alles andere „A“ – nie offene Anträge, Notizen, Tage oder Konten. Andere Abteilungen sieht man wie
   `kollege`. Antwortfeld `sicht` = wirksame Sicht, `urlaubAbteilung` = Name der eigenen Abteilung (sonst `null`). Wer „U“
   von „A“ unterscheiden kann, kann Krankheitstage ableiten; deshalb kein Standardrecht.
-- **`hr-einstellungen`**: `{"rev": 1, "sperren": [{"von": "…", "bis": "…", "text": "Inventur"}], "ferien": [ … ], "uebertragBis": "03-31", "antraege": true}` – `uebertragBis` (Verfallstag des Resturlaubs, Monat-Tag) ist optional; fehlt es, gilt der 31.03. `antraege` (Schalter „Urlaubsanträge über die Plattform“, Verwaltung → Urlaub, Aktion `hr_antraege_save`) ist optional; nur `false` schaltet Anträge aus, fehlt es, sind sie eingeschaltet. `rev` zählt jede Änderung; `hr_einstellungen_save` mit `rev` (Stand beim Laden, in den Antworten als `einstRev`) lehnt einen veralteten Stand mit 409 ab – ohne `rev` (ältere Oberflächen) wie bisher.
+- **`hr-einstellungen`**: `{"rev": 1, "sperren": [{"von": "…", "bis": "…", "text": "Inventur"}], "ferien": [ … ], "uebertragBis": "03-31", "antraege": true}` – `uebertragBis` (Verfallstag des Resturlaubs, Monat-Tag) ist optional; fehlt es, gilt der 31.03. `antraege` (Schalter „Urlaubsanträge über die Plattform“, Verwaltung → Urlaub, Aktion `hr_antraege_save`) ist optional; nur `false` schaltet Anträge aus, fehlt es, sind sie eingeschaltet. `rev` zählt jede Änderung. `revUrlaub` (seit 23.11.2026, fehlt: 0) zählt nur die Speicherungen des Formulars „Urlaub“ (`hr_einstellungen_save`); `hr_einstellungen_save` mit `rev` (Stand beim Laden = `revUrlaub`, in den Antworten als `einstRev`) lehnt einen veralteten Stand mit 409 ab – ohne `rev` (ältere Oberflächen) wie bisher. Schalter „Urlaubsanträge“ und E-Mail-Einstellungen ändern `revUrlaub` nicht und liefern kein `einstRev`: sonst übernähme die Seite mit ihrer Antwort auch eine fremde Speicherung des Formulars und überschriebe sie danach still.
   Seit 03.11.2026 zusätzlich optional: `regelSperren` (Sperren aus den Urlaubsregeln – Ostergeschäft: zwei Wochen vor
   Karfreitag, Weihnachtsgeschäft: 30.11. bis 23.12. (seit 11.11.2026; vorher ab dem Montag der letzten Novemberwoche), ohne
   Sonderregelung Dezember bis 24.12. –
@@ -1052,7 +1055,9 @@ Die einzige Beschreibung der Regeln; Code-Kommentare verweisen hierher.
   Farmer eines Containers eine Teilmenge aller Farmer sind (gemessen: 150 000 Punkte sind 3,4 MiB, Lesen und Export 48 von
   128 MiB).
 - **Am Container** steht nur noch `abschluss.betriebe` ohne `geometrie` und `abschluss.schnappschuss`
-  = `{"id", "sha256", "punkte"}`. `sha256` ist über `json_encode` der Farmer gebildet (`eudr_schnappschuss_summe`).
+  = `{"id", "sha256"}`. `sha256` ist über `json_encode` der Farmer in ihrer gespeicherten Form gebildet (`eudr_schnappschuss_summe`: einmal durch
+  `json_decode` und zurück – `-0.0` schreibt `json_encode` als `-0`, gelesen wird daraus `0`, etwa bei der Mitte einer Fläche am
+  Äquator; für alle übrigen Werte dieselbe Summe wie zuvor).
   `eudr_schnappschuss_betriebe` liest die Umrisse und prüft dabei die Prüfsumme; fehlt das Dokument oder passt sie nicht,
   antworten Export und Karte mit 500 und einem Hinweis statt mit veränderten Umrissen.
 - **Ältere Abschlüsse** (ohne `schnappschuss`) tragen die Umrisse weiter eingebettet und werden so gelesen (GR-006). Es gibt
@@ -1066,11 +1071,11 @@ Die einzige Beschreibung der Regeln; Code-Kommentare verweisen hierher.
 - **Gemessen** (`memory_limit = 128M`, alle Bibliotheken geladen, 100 Farmer zu 200 Punkten, je Container 10 Farmer):
   vorher bei 120 Abschlüssen 6,6 MiB Dokument, Stand 90 MiB Spitze und 7,4 MiB Antwort, bei 200 Abschlüssen Speicherabbruch;
   nachher bei 200 Abschlüssen 1,9 MiB Dokument, Stand und Abschluss 32 MiB Spitze, 2,9 MiB Antwort.
-- **Rückfall auf eine Vorversion:** Sie liest alle Container weiter und schreibt den Verweis beim Speichern unverändert zurück.
-  Bei Abschlüssen ab diesem Stand sieht sie keine Umrisse: Die Karte im Fenster zeichnet nicht (Fehler in der
-  Browser-Konsole), ihr Export liefert die Farmer mit `"geometry": null` – diese Datei nicht bei TRACES einreichen. Liste,
-  Profil, Druck und Gesamtprüfung zeigt sie wie gewohnt. Nach der Rückkehr ist alles wieder da (geprüft mit dem Stand vor
-  KERN-3b gegen Daten dieses Stands).
+- **Rückfall auf eine Vorversion:** Daten werden nicht beschädigt – sie liest alle Container weiter und schreibt den Verweis
+  beim Speichern unverändert zurück. Bei Abschlüssen ab diesem Stand sieht sie aber keine Umrisse: Ihre Karte im Fenster
+  „Container“ bricht mit einem TypeError ab (Browser-Konsole), ihr Export liefert die Farmer mit `"geometry": null` – diese
+  Datei nicht bei TRACES einreichen. Liste, Profil, Druck und Gesamtprüfung zeigt sie wie gewohnt. Nach der Rückkehr ist alles
+  wieder da (geprüft mit dem Stand vor KERN-3b gegen Daten dieses Stands).
 - **Sicherung:** Die Dokumente liegen im Dateibetrieb im Unterordner `containerimport-eudr-schnappschuss/` und kommen mit
   `deploy/sichern.sh` ins Archiv; im SQLite-Betrieb stehen sie in der Datenbank und damit im Abzug (`deploy/datenbank.py
   snapshot`). Beides am 23.11.2026 mit einem Wegwerf-Ordner geprüft.

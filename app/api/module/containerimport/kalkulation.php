@@ -92,12 +92,12 @@ const CI_KALK_VORGABE_KOPF = ['kurs' => null, 'datum' => '', 'seefracht' => 0.0,
     'nachlauf' => 0.0, 'nachlaufKg' => 0.0, 'zins' => 0.0, 'tage' => 70, 'zahlPromille' => 1.5, 'zahlFix' => 50.0, 'imagGewinn' => 10.0];
 
 /* ---------- Eingabe prüfen (Grenze: alles, was vom Browser kommt) ---------- */
-/* Zahl von 0 bis $max oder null (leer); Text auch deutsch („1.234,5“, eudr_zahl_text). Ein einzelner Punkt vor genau drei
+/* Zahl von 0 bis $max oder null (leer); Text auch deutsch („1.234,5“, zahl_text_de). Ein einzelner Punkt vor genau drei
    Ziffern („9.875“) gilt dort als Tausendertrenner – liegt die Zahl damit über $max, war wohl ein Dezimalpunkt gemeint:
    abgelehnt mit eigener Meldung statt still falsch gelesen. Nicht gerundet. */
 function ci_kalk_zahl($v, string $was, float $max): ?float
 {
-    $z = eudr_zahl_text($v);
+    $z = zahl_text_de($v);
     if ($z === null) return null;
     if (!is_bool($z) && is_numeric($z) && (float)$z >= 0 && (float)$z <= $max) return (float)$z;
     if (is_string($v) && preg_match('/^\d{1,3}\.\d{3}$/', trim($v)))

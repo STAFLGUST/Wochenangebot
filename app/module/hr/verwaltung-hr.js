@@ -385,7 +385,6 @@
     $('#hr-mail-err').textContent = '';
     try {
       const r = await api('hr_mail_save', { body: mailWerte() });
-      daten.einstRev = r.einstRev;   // eigene Änderung: das Formular „Urlaub“ bleibt speicherbar
       mailNeu(r.mail);
       toast('E-Mail-Einstellungen gespeichert.');
     } catch (ex) { $('#hr-mail-err').textContent = ex.message; }
@@ -453,7 +452,7 @@
     sw.disabled = true; $('#hr-antraege-err').textContent = '';
     try {
       const r = await api('hr_antraege_save', { body: { an } });
-      if (daten) Object.assign(daten, { antraege: r.antraege, einstRev: r.einstRev });
+      if (daten) daten.antraege = r.antraege;
       $('#hr-antraege-t').textContent = r.antraege ? 'Eingeschaltet' : 'Ausgeschaltet';
       toast(r.antraege ? 'Urlaubsanträge eingeschaltet.' : 'Urlaubsanträge ausgeschaltet.');
     } catch (ex) {

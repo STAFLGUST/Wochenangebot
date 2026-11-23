@@ -33,7 +33,7 @@ const EUDR_MAX_PUNKTE_ANFRAGE = 100000;  // Punkte aller Flächen einer Prüfung
    (HTTP 500 für das ganze Modul). Ein Schnappschuss hält höchstens EUDR_MAX_PUNKTE Punkte: seine Farmer sind eine Teilmenge
    aller Farmer. Ältere Abschlüsse tragen ihre Umrisse weiter eingebettet (GR-006, keine Migration). */
 const EUDR_SCHNAPPSCHUSS = 'containerimport-eudr-schnappschuss/';
-const EUDR_MAX_FRUEHERE = 5;             // frühere Abschlüsse je Sendung, die ihren Schnappschuss behalten
+const EUDR_MAX_FRUEHERE = 5;             // frühere Abschlüsse je Sendung, die ihre Farmerliste behalten (das Schnappschuss-Dokument bleibt immer)
 const EUDR_MAX_SENDUNGEN = 5000;
 const EUDR_MAX_ORTE_JE_DATEI = 1000;
 const EUDR_MAX_PRUEFUNGEN = 50;          // Gegenprüfungen je Betrieb
@@ -172,20 +172,10 @@ function eudr_wahl($v, array $erlaubt, string $was, ?string $standard = null): s
 /* Zahl ab 0 oder null (leer); Text auch in deutscher Schreibweise („1.234,5“) */
 function eudr_zahl($v, string $was): ?float
 {
-    $v = eudr_zahl_text($v);
+    $v = zahl_text_de($v);
     if ($v === null) return null;
     if (is_bool($v) || !is_numeric($v) || (float)$v < 0 || (float)$v > 1e9) throw new InvalidArgumentException("$was: bitte eine Zahl ab 0 angeben.");
     return round((float)$v, 3);
-}
-/* Eingabe einer Zahl lesbar für is_numeric: deutscher Text „1.234,5“ → „1234.5“, „0,5“ → „0.5“; Punkte gelten nur in
-   Dreiergruppen nach einer Ziffer 1–9 als Tausendertrenner („0.500“ bleibt 0,5). Leer → null, keine Zeichenkette → unverändert. */
-function eudr_zahl_text($v)
-{
-    if (!is_string($v)) return $v;
-    if ($v === '') return null;
-    $v = str_replace([' ', "\u{a0}"], '', trim($v));
-    if (preg_match('/^[1-9]\d{0,2}(\.\d{3})+(,\d+)?$/', $v)) $v = str_replace('.', '', $v);
-    return str_replace(',', '.', $v);
 }
 /* Zweistelliger Ländercode in Großbuchstaben */
 function eudr_land($v): string
@@ -764,14 +754,14 @@ function eudr_abschluss(array $s, array $eingabe, array $sichten, array $me): ar
     return ['ergebnis' => $ergebnis, 'begruendung' => $begruendung, 'wer' => eudr_wer($me), 'profil' => $profil, 'betriebe' => $bs];
 }
 /* Farmer eines Abschlusses (eudr_abschluss) mit Umriss in ein eigenes Dokument legen – neue Kennung, nie überschrieben – und
-   den Abschluss für das Dokument der Container liefern: Farmer ohne Umriss, dazu „schnappschuss“ (Kennung, SHA-256 der Farmer,
-   Punkte). Eine Vorversion liest den Abschluss weiter, sieht nur die Umrisse nicht (GR-006). */
+   den Abschluss für das Dokument der Container liefern: Farmer ohne Umriss, dazu „schnappschuss“ (Kennung, SHA-256 der Farmer).
+   Rückfall auf eine Vorversion: Daten bleiben unbeschädigt, aber bei Abschlüssen ab diesem Stand liefert ihr Export
+   "geometry": null (nicht bei TRACES einreichen) und ihre Karte bricht mit einem TypeError ab. */
 function eudr_schnappschuss_ablegen(string $sendung, array $a): array
 {
     $id = eudr_id('a');
     store_write(EUDR_SCHNAPPSCHUSS . $id, ['sendung' => $sendung, 'wer' => $a['wer'], 'betriebe' => $a['betriebe']]);
-    return ['betriebe' => eudr_ohne_umriss($a['betriebe'])] + $a + ['schnappschuss' => ['id' => $id, 'sha256' => eudr_schnappschuss_summe($a['betriebe']),
-        'punkte' => array_sum(array_map(fn($b) => geo_punktzahl($b['geometrie']), $a['betriebe']))]];
+    return ['betriebe' => eudr_ohne_umriss($a['betriebe'])] + $a + ['schnappschuss' => ['id' => $id, 'sha256' => eudr_schnappschuss_summe($a['betriebe'])]];
 }
 /* Farmer eines Abschlusses samt Umriss: aus seinem Dokument, nur wenn die Prüfsumme stimmt; Abschlüsse von vor dem
    23.11.2026 tragen sie eingebettet */
@@ -783,7 +773,8 @@ function eudr_schnappschuss_betriebe(array $a): array
         fail('Die festgehaltenen Umrisse dieser Bewertung fehlen oder wurden verändert – bitte an den Administrator wenden.', 500);
     return $bs;
 }
-function eudr_schnappschuss_summe(array $betriebe): string { return hash('sha256', json_encode($betriebe, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_THROW_ON_ERROR)); }
+/* Prüfsumme über die gespeicherte Form: −0 schreibt json_encode als „-0“, gelesen wird daraus 0 (Fläche am Äquator) */
+function eudr_schnappschuss_summe(array $betriebe): string { $f = JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_THROW_ON_ERROR; return hash('sha256', json_encode(json_decode(json_encode($betriebe, $f), true), $f)); }
 function eudr_ohne_umriss(array $betriebe): array { return array_map(fn($b) => array_diff_key($b, ['geometrie' => 1]), $betriebe); }
 
 /* Sendung für die Oberfläche: mit Profil – bei abgeschlossener Bewertung dem gespeicherten Schnappschuss, dessen Farmer ohne

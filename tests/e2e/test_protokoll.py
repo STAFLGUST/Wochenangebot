@@ -116,6 +116,15 @@ anm = [e['s'] for e in log if e['a'] == 'kunde_login']
 check('Flut gelungener Kundenanmeldungen: Rechte- und Fehlanmeldungseinträge bleiben, die ältesten Anmeldungen fallen weg',
       log[:2] == WICHTIG and len(anm) == MAXE - 3 and anm[0] == 'Kunde angemeldet 3' and any(e['a'] == 'login_fail' for e in log)
       and [e['weg'] for e in log if e['a'] == 'protokoll_groesse'] == [3], (log[:3], len(anm), anm[:1]))
+# ebenso selbst gesetzte Kunden-Passwörter (kunde_password, ebenfalls ungebremst)
+storage_write('protokoll/' + JETZT, WICHTIG + [{'t': JETZT + '-01T08:00:00+00:00', 'u': 'kunde:viel', 'n': 'Firma Viel', 'r': 'kunde', 'ip': '', 'a': 'kunde_password',
+                                                's': 'Kunde hat eigenes Passwort festgelegt %d' % i} for i in range(MAXE)])
+Client('198.51.100.47').call('login', {'username': 'admin', 'password': 'falsch-falsch-8'})
+log = protokoll()
+pw = [e['s'] for e in log if e['a'] == 'kunde_password']
+check('Flut selbst gesetzter Kunden-Passwörter: Rechte- und Fehlanmeldungseinträge bleiben, die ältesten Passwort-Einträge fallen weg',
+      log[:2] == WICHTIG and len(pw) == MAXE - 3 and pw[0] == 'Kunde hat eigenes Passwort festgelegt 3' and any(e['a'] == 'login_fail' for e in log)
+      and [e['weg'] for e in log if e['a'] == 'protokoll_groesse'] == [3], (log[:3], len(pw), pw[:1]))
 storage_write('protokoll/' + JETZT, [])   # aufgeräumt für die Oberflächenprüfung
 
 # Oberfläche

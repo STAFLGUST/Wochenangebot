@@ -267,8 +267,10 @@ function lg_partner_pruefen(array $b, ?array $alt, array $stamm): array
     if (array_key_exists('kundenNr', $b) || !isset($row['kundenNr'])) {   // ohne Angabe bleibt die gespeicherte Nummer
         $nr = lg_text($b['kundenNr'] ?? '', 12, 'WinAB-Kundennummer');
         if ($nr !== '' && !preg_match('/^\d{1,12}$/', $nr)) throw new InvalidArgumentException('WinAB-Kundennummer: bitte nur Ziffern.');
-        // wie CRM, Controlling und REWE über code_key: „012345“ und „12345“ sind dieselbe Nummer (gespeichert bleibt die Eingabe)
-        foreach ($stamm['partner'] as $p) if ($nr !== '' && ($alt === null || $p['id'] !== $alt['id']) && (string)($p['kundenNr'] ?? '') !== '' && code_key((string)$p['kundenNr']) === code_key($nr))
+        // wie CRM, Controlling und REWE über code_key: „012345“ und „12345“ sind dieselbe Nummer (gespeichert bleibt die Eingabe).
+        // Nur eine geänderte Nummer prüfen: Paare wie „012345“ / „Kunde (12345)“ aus dem früheren WinAB-Abgleich sperren sonst jedes Speichern.
+        $pruefen = $nr !== '' && $nr !== (string)($alt['kundenNr'] ?? '');
+        foreach ($stamm['partner'] as $p) if ($pruefen && ($alt === null || $p['id'] !== $alt['id']) && (string)($p['kundenNr'] ?? '') !== '' && code_key((string)$p['kundenNr']) === code_key($nr))
             throw new InvalidArgumentException("Die WinAB-Kundennummer $nr gehört schon zu „{$p['name']}“.");
         $row['kundenNr'] = $nr;
     }

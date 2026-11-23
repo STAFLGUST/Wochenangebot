@@ -189,6 +189,13 @@ check('Gesprächsnotiz: zweite Sitzung mit altem Stand 409, mit aktuellem Stand 
       and r3['kunde']['crm']['notiz'] == 'Bedarf: Grillware, Suppenfleisch', (st1, st2, st3))
 check('ohne „vorher“ (ältere Oberfläche) wie bisher gespeichert', X.call('crm_kunde_save', {'key': 'kbbb222222222', 'felder': {'notiz': ''}})[0] == 200
       and dokument('crm-kunden')['eintraege']['kbbb222222222']['notiz'] == '')
+# streng verglichen: „401“ und „0401“ sind verschiedene Stände (PHP hielt die Zahlentexte mit != für gleich)
+st1, _ = Bb.call('crm_kunde_save', {'key': 'kbbb222222222', 'felder': {'notiz': '401'}, 'vorher': {'notiz': ''}})
+st2, _ = Bb.call('crm_kunde_save', {'key': 'kbbb222222222', 'felder': {'notiz': '0401'}, 'vorher': {'notiz': '401'}})
+st3, r3 = X.call('crm_kunde_save', {'key': 'kbbb222222222', 'felder': {'notiz': '401 Rückruf'}, 'vorher': {'notiz': '401'}})
+check('Gesprächsnotiz „401“ inzwischen zu „0401“ geändert: zweite Sitzung mit altem Stand 409', (st1, st2, st3) == (200, 200, 409)
+      and dokument('crm-kunden')['eintraege']['kbbb222222222']['notiz'] == '0401', (st1, st2, st3, r3.get('error')))
+X.call('crm_kunde_save', {'key': 'kbbb222222222', 'felder': {'notiz': ''}})
 # Zahlen in deutscher Schreibweise: Mengen „1.500“ = 1500 kg, Preise „4.50“ = 4,50 €; unlesbar → 422
 for feld_, ein_, soll_ in (('potenzialKg', '1.500', 1500), ('potenzialKg', '1.234,5', 1234.5), ('bestellKg', '12.000', 12000), ('potenzialKg', '0,5', 0.5),
                            ('preisKg', '4,50', 4.5), ('preisKg', '4.50', 4.5), ('preisKg', '1.234,50', 1234.5), ('dbKg', '1,25', 1.25)):

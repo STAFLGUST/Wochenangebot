@@ -267,7 +267,7 @@ switch ($action) {
                     if (empty($s['abschluss'])) fail('Die Bewertung ist nicht abgeschlossen.', 409);
                     $grund = eudr_text($b['grund'] ?? '', 500, 'Grund', true);
                     $s['fruehere'][] = $s['abschluss'] + ['geoeffnet' => eudr_wer($me), 'grund' => $grund];   // samt Schnappschuss (GR-106)
-                    foreach (array_slice(array_keys($s['fruehere']), 0, -EUDR_MAX_FRUEHERE) as $k) unset($s['fruehere'][$k]['betriebe']);   // ältere: Profil bleibt, Umrisse nicht
+                    foreach (array_slice(array_keys($s['fruehere']), 0, -EUDR_MAX_FRUEHERE) as $k) unset($s['fruehere'][$k]['betriebe']);   // ältere: Profil und Verweis bleiben, die Farmerliste nicht (vor dem 23.11.2026 samt Umrissen)
                     $s['abschluss'] = null;
                 } else {
                     if (!empty($s['abschluss'])) fail('Die Bewertung ist bereits abgeschlossen.', 409);

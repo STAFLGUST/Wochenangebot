@@ -233,7 +233,8 @@ function keep_current_session(array $u): void
     $sid = (string)($_SESSION['sid'] ?? '');
     sess_remove(function ($k, $v) use ($u, $sid) { return $v['uid'] === $u['id'] && $k !== $sid; });
 }
-/* CSRF-Token der Kopfzeile gegen das der Sitzung; 403 mit code „csrf“, damit eine Oberfläche ein neues Token holen kann */
+/* CSRF-Token der Kopfzeile gegen das der Sitzung; 403 mit code „csrf“ (wertet derzeit keine Oberfläche aus – das QS-Organigramm
+   holt nach jedem 403 einmal ein neues Token, alle anderen zeigen die Meldung) */
 function require_csrf(): void
 {
     $tok = $_SERVER['HTTP_X_CSRF_TOKEN'] ?? '';
