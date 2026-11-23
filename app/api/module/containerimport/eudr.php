@@ -8,7 +8,8 @@ declare(strict_types=1);
    und ein Rückfall auf die Vorversion möglich (GR-006).
    Dokumente: containerimport-eudr-betriebe (Farmer: Produktionsorte, Umriss in WGS84), containerimport-eudr-sendungen
    (Container mit Lieferant aus den Stammdaten, Partie-, Akten- und Containernummer, Stand, ihren Farmern, Nachweisen und –
-   nach dem Abschluss – einem Schnappschuss von Profil und Farmern, GR-106).
+   nach dem Abschluss – einem Schnappschuss von Profil und Farmern, GR-106), containerimport-eudr-schnappschuss/<Kennung>
+   (die Farmer eines Abschlusses samt Umriss, je Abschluss ein Dokument, nie geändert – EUDR_SCHNAPPSCHUSS).
    Nichts wird gelöscht: Farmer und Container werden archiviert, Gegenprüfungen nur ergänzt.
    Farmer-Nummern (eigene Nummer, Nummer aus den Papieren, vermerkte Nummern am Container, Gesamtprüfung): farmer.php.
    Abgeleitete Werte (Fläche, Mittelpunkt, Befunde, Risikoprofil) werden bei jedem Lesen neu berechnet und nie gespeichert –
@@ -26,6 +27,12 @@ const EUDR_SPERRE = 'containerimport-eudr-betriebe';   // eine Sperre für beide
 const EUDR_MAX_BETRIEBE = 2000;
 const EUDR_MAX_PUNKTE = 150000;          // Punkte aller Betriebe zusammen: jede Antwort rechnet und liefert alle Umrisse (Speichergrenze 128 MB)
 const EUDR_MAX_PUNKTE_ANFRAGE = 100000;  // Punkte aller Flächen einer Prüfung
+/* Umrisse abgeschlossener Bewertungen (seit 23.11.2026): je Abschluss ein eigenes Dokument EUDR_SCHNAPPSCHUSS . <Kennung>,
+   einmal geschrieben, nie geändert. Am Container stehen nur die Farmer ohne Umriss und der Verweis mit Prüfsumme – jede Aktion
+   des Moduls liest das ganze Dokument der Container, mit eingebetteten Umrissen brach store_read ab rund 400 000 Punkten ab
+   (HTTP 500 für das ganze Modul). Ein Schnappschuss hält höchstens EUDR_MAX_PUNKTE Punkte: seine Farmer sind eine Teilmenge
+   aller Farmer. Ältere Abschlüsse tragen ihre Umrisse weiter eingebettet (GR-006, keine Migration). */
+const EUDR_SCHNAPPSCHUSS = 'containerimport-eudr-schnappschuss/';
 const EUDR_MAX_FRUEHERE = 5;             // frühere Abschlüsse je Sendung, die ihren Schnappschuss behalten
 const EUDR_MAX_SENDUNGEN = 5000;
 const EUDR_MAX_ORTE_JE_DATEI = 1000;
@@ -729,11 +736,18 @@ function eudr_profil(array $s, array $bs): array
     ];
 }
 
-/* Betriebe einer Sendung als Sichten: nach dem Abschluss der Schnappschuss, sonst der aktuelle Stand */
-function eudr_sendung_betriebe(array $s, array $sichten): array
+/* Betriebe einer Sendung als Sichten: nach dem Abschluss der Schnappschuss (seit 23.11.2026 ohne Umriss, mit Umriss:
+   eudr_schnappschuss_betriebe), sonst der aktuelle Stand in der Reihenfolge der Liste $sichten (doppelte und unbekannte
+   Kennungen fallen weg). $stelle = Kennung → Stelle in $sichten; eudr_stand baut die Tabelle einmal für alle Sendungen, sonst
+   Aufwand Sendungen × Betriebe in jeder Antwort. */
+function eudr_sendung_betriebe(array $s, array $sichten, ?array $stelle = null): array
 {
     if (!empty($s['abschluss'])) return $s['abschluss']['betriebe'];
-    return array_values(array_filter($sichten, fn($b) => in_array($b['id'], $s['betriebe'], true)));
+    $stelle ??= array_flip(array_column($sichten, 'id'));
+    $treffer = [];
+    foreach ($s['betriebe'] as $id) if (is_string($id) && isset($stelle[$id])) $treffer[$stelle[$id]] = true;
+    ksort($treffer);
+    return array_map(fn($i) => $sichten[$i], array_keys($treffer));
 }
 
 /* Abschluss einer Bewertung aus der Eingabe: Ergebnis, Begründung, Bearbeiter und Schnappschuss von Profil und Betrieben
@@ -749,15 +763,39 @@ function eudr_abschluss(array $s, array $eingabe, array $sichten, array $me): ar
         throw new InvalidArgumentException('Es sind noch Punkte offen. Bitte begründen, warum das Risiko trotzdem vernachlässigbar ist (mindestens 20 Zeichen).');
     return ['ergebnis' => $ergebnis, 'begruendung' => $begruendung, 'wer' => eudr_wer($me), 'profil' => $profil, 'betriebe' => $bs];
 }
+/* Farmer eines Abschlusses (eudr_abschluss) mit Umriss in ein eigenes Dokument legen – neue Kennung, nie überschrieben – und
+   den Abschluss für das Dokument der Container liefern: Farmer ohne Umriss, dazu „schnappschuss“ (Kennung, SHA-256 der Farmer,
+   Punkte). Eine Vorversion liest den Abschluss weiter, sieht nur die Umrisse nicht (GR-006). */
+function eudr_schnappschuss_ablegen(string $sendung, array $a): array
+{
+    $id = eudr_id('a');
+    store_write(EUDR_SCHNAPPSCHUSS . $id, ['sendung' => $sendung, 'wer' => $a['wer'], 'betriebe' => $a['betriebe']]);
+    return ['betriebe' => eudr_ohne_umriss($a['betriebe'])] + $a + ['schnappschuss' => ['id' => $id, 'sha256' => eudr_schnappschuss_summe($a['betriebe']),
+        'punkte' => array_sum(array_map(fn($b) => geo_punktzahl($b['geometrie']), $a['betriebe']))]];
+}
+/* Farmer eines Abschlusses samt Umriss: aus seinem Dokument, nur wenn die Prüfsumme stimmt; Abschlüsse von vor dem
+   23.11.2026 tragen sie eingebettet */
+function eudr_schnappschuss_betriebe(array $a): array
+{
+    if (!isset($a['schnappschuss'])) return $a['betriebe'];
+    $bs = store_read(EUDR_SCHNAPPSCHUSS . $a['schnappschuss']['id'])['betriebe'] ?? null;
+    if (!is_array($bs) || eudr_schnappschuss_summe($bs) !== $a['schnappschuss']['sha256'])
+        fail('Die festgehaltenen Umrisse dieser Bewertung fehlen oder wurden verändert – bitte an den Administrator wenden.', 500);
+    return $bs;
+}
+function eudr_schnappschuss_summe(array $betriebe): string { return hash('sha256', json_encode($betriebe, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_THROW_ON_ERROR)); }
+function eudr_ohne_umriss(array $betriebe): array { return array_map(fn($b) => array_diff_key($b, ['geometrie' => 1]), $betriebe); }
 
-/* Sendung für die Oberfläche: mit Profil – bei abgeschlossener Bewertung dem gespeicherten Schnappschuss; frühere
-   Abschlüsse nur mit Ergebnis, Begründung und Grund. Der Name des Schlachthofs ($hofNamen: Kennung → Name) ist bei offener
-   Bewertung der aktuelle, nach dem Abschluss der festgeschriebene. */
-function eudr_sendung_sicht(array $s, array $betriebe, array $hofNamen): array
+/* Sendung für die Oberfläche: mit Profil – bei abgeschlossener Bewertung dem gespeicherten Schnappschuss, dessen Farmer ohne
+   Umriss (die Karte holt ihn mit containerimport_eudr_schnappschuss); frühere Abschlüsse nur mit Ergebnis, Begründung und
+   Grund. Der Name des Schlachthofs ($hofNamen: Kennung → Name) ist bei offener Bewertung der aktuelle, nach dem Abschluss der
+   festgeschriebene. */
+function eudr_sendung_sicht(array $s, array $betriebe, array $hofNamen, array $stelle): array
 {
     $s['fruehere'] = array_map(fn($f) => array_diff_key($f, ['profil' => 1, 'betriebe' => 1]), $s['fruehere'] ?? []);   // Schnappschüsse bleiben gespeichert
+    if (!empty($s['abschluss'])) $s['abschluss']['betriebe'] = eudr_ohne_umriss($s['abschluss']['betriebe']);
     if (empty($s['abschluss'])) $s['schlachthofName'] = $hofNamen[$s['schlachthof']] ?? $s['schlachthofName'];
-    $bs = eudr_sendung_betriebe($s, $betriebe);
+    $bs = eudr_sendung_betriebe($s, $betriebe, $stelle);
     return $s + ['name' => eudr_container_name($s), 'containerPruefung' => eudr_containernummer($s['container']), 'profil' => !empty($s['abschluss']) ? $s['abschluss']['profil'] : eudr_profil($s, $bs),
         'farmerPruefung' => ci_farmer_pruefung($bs, $s['offeneNummern'])];
 }
@@ -786,9 +824,10 @@ function eudr_stand(): array
     $sendungen = eudr_sendungen()['liste'];
     $hoefe = ci_schlachthoefe()['liste'];
     $hofNamen = array_column($hoefe, 'name', 'id');
+    $stelle = array_flip(array_column($betriebe, 'id'));
     return [
         'betriebe' => $betriebe,
-        'sendungen' => array_map(fn($s) => eudr_sendung_sicht($s, $betriebe, $hofNamen), $sendungen),
+        'sendungen' => array_map(fn($s) => eudr_sendung_sicht($s, $betriebe, $hofNamen, $stelle), $sendungen),
         'offeneNummern' => ci_offene_nummern($sendungen, ci_nummern_index($betriebe)),
         'laender' => array_map(fn($l) => ['name' => $l['name'], 'klasse' => $l['klasse']], EUDR_LAENDER),
         'schlachthoefe' => $hoefe,

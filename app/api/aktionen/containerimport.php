@@ -6,7 +6,8 @@ declare(strict_types=1);
    app/api/module/containerimport/eudr.php und geometrie.php), Abfrage von Whisp für die Gegenprüfung (whisp.php).
    Rechte (GR-103): Modulzugang containerimport.zugang für jede Aktion; Inhalte (ansehen, Dateien prüfen, exportieren) mit
    containerimport.eudr_sehen, alles, was speichert, mit containerimport.eudr_bearbeiten. Nichts wird gelöscht (archivieren, Gegenprüfungen nur ergänzen);
-   eine abgeschlossene Bewertung hält Profil und Betriebe als Schnappschuss fest (GR-106).
+   eine abgeschlossene Bewertung hält Profil und Betriebe als Schnappschuss fest (GR-106), die Umrisse je Abschluss im
+   Dokument containerimport-eudr-schnappschuss/<Kennung>.
    Wird von api/index.php im globalen Gültigkeitsbereich eingebunden; jede Aktion endet mit respond()/fail(). */
 if (!defined('WA_API')) { http_response_code(404); exit; }   // nur über api/index.php nutzbar
 
@@ -252,7 +253,8 @@ switch ($action) {
             respond(['ok' => true, 'id' => $h['id']] + eudr_stand());
         }
 
-        /* Bewertung abschließen (Ergebnis, Begründung, Schnappschuss von Profil und Betrieben) oder wieder öffnen (mit Grund).
+        /* Bewertung abschließen (Ergebnis, Begründung, Schnappschuss von Profil und Betrieben, die Umrisse in einem eigenen
+           Dokument – eudr_schnappschuss_ablegen) oder wieder öffnen (mit Grund; der Schnappschuss bleibt).
            „Vernachlässigbar“ geht nie mit einem kritischen Kriterium, mit offenen Kriterien nur mit Begründung. */
         case 'containerimport_eudr_sendung_abschluss': {
             $me = eudr_bearbeiter();
@@ -269,7 +271,7 @@ switch ($action) {
                     $s['abschluss'] = null;
                 } else {
                     if (!empty($s['abschluss'])) fail('Die Bewertung ist bereits abgeschlossen.', 409);
-                    $s['abschluss'] = eudr_abschluss($s, $b, array_map('eudr_betrieb_sicht', eudr_betriebe()['liste']), $me);
+                    $s['abschluss'] = eudr_schnappschuss_ablegen($s['id'], eudr_abschluss($s, $b, array_map('eudr_betrieb_sicht', eudr_betriebe()['liste']), $me));
                     $s['schlachthofName'] = ci_schlachthof_namen()[$s['schlachthof']] ?? $s['schlachthofName'];   // ab jetzt der Name von heute (GR-106)
                 }
                 $s['rev']++; $s['geaendert'] = eudr_wer($me);
@@ -281,22 +283,33 @@ switch ($action) {
             respond(['ok' => true] + eudr_stand());
         }
 
-        /* GeoJSON-Datei für das EU-Informationssystem: Betriebe einer Sendung (abgeschlossen: der Schnappschuss) oder ein Betrieb */
+        /* GeoJSON-Datei für das EU-Informationssystem: Betriebe einer Sendung (abgeschlossen: der Schnappschuss, ohne die
+           aktuellen Farmer zu lesen) oder ein Betrieb */
         case 'containerimport_eudr_export': {
             eudr_leser();
             header('Cache-Control: no-store');
-            $betriebe = array_map('eudr_betrieb_sicht', eudr_betriebe()['liste']);
+            $sichten = fn() => array_map('eudr_betrieb_sicht', eudr_betriebe()['liste']);
             if (isset($_GET['betrieb'])) {
-                $bs = array_values(array_filter($betriebe, fn($x) => $x['id'] === $_GET['betrieb']));
+                $bs = array_values(array_filter($sichten(), fn($x) => $x['id'] === $_GET['betrieb']));
                 if (!$bs) fail('Farmer nicht gefunden.', 404);
                 $name = $bs[0]['kennung'] !== '' ? $bs[0]['kennung'] : $bs[0]['name'];
             } else {
                 [, $s] = eudr_holen(eudr_sendungen(), $_GET['sendung'] ?? '');
-                $bs = eudr_sendung_betriebe($s, $betriebe);
+                $bs = empty($s['abschluss']) ? eudr_sendung_betriebe($s, $sichten()) : eudr_schnappschuss_betriebe($s['abschluss']);
                 $name = eudr_container_name($s);
             }
             $datei = 'EUDR_' . trim((string)preg_replace('/[^A-Za-z0-9_-]+/', '_', $name), '_') . '.geojson';
             respond(['ok' => true, 'datei' => $datei] + eudr_geojson($bs));
+        }
+
+        /* Farmer einer abgeschlossenen Bewertung samt Umriss (GET sendung) für die Karte im Fenster „Container“ – der Stand der
+           Seite liefert die Schnappschüsse ohne Umriss */
+        case 'containerimport_eudr_schnappschuss': {
+            eudr_leser();
+            header('Cache-Control: no-store');
+            [, $s] = eudr_holen(eudr_sendungen(), $_GET['sendung'] ?? '');
+            if (empty($s['abschluss'])) fail('Die Bewertung ist nicht abgeschlossen.', 409);
+            respond(['ok' => true, 'betriebe' => eudr_schnappschuss_betriebe($s['abschluss'])]);
         }
 
         /* Dokumente je Container (module/containerimport/dokumente.php, GoBD): Dateien eines Containers (GET sendung), auch
