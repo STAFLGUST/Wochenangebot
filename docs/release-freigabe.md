@@ -98,7 +98,8 @@ Zwischenspeicher werden nur mit passender Prüfsumme aus der signierten Ubuntu-P
 5. Healthcheck wie ein Besucher – mit der Ergänzungsdatei der Anmeldung auch die Mitarbeiter-Hosts
    (`dashboard-stafl.de/api/?action=status` muss ohne Anmeldung mit 401 antworten; 502 heißt: Container `app-mitarbeiter`
    läuft nicht). Schlägt er fehl – oder scheitert schon das Einspielen (z. B. `docker compose up`: Port belegt, Docker
-   hängt) –: zurück auf den alten Commit, das alte Image wieder aktiv (`stafl-app:release-vorher` → aktiver Name),
+   hängt) –: zurück auf den alten Commit, das alte Image wieder aktiv (`stafl-app:release-vorher` → aktiver Name; danach wird
+   der Name `release-vorher` verworfen, weil er nun das aktive Image trägt – ein späterer Notfall-Rückfall baut sein Image neu),
    Container neu erstellt, Status „fehlgeschlagen“, der Release gilt als abgelehnt (kein erneuter Versuch). Scheitert auch
    der Rückfall, meldet der Status „Sofort prüfen!“ mit dem tatsächlich aktiven Stand.
 6. Nach erfolgreichem Healthcheck: `docker image prune -f` entfernt nur hängende Images ohne Namen (z. B. das von

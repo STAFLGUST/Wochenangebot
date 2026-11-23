@@ -59,10 +59,13 @@ if [ "\$1" = up ] && [ -f "$T/up-fehler" ]; then echo "Error response from daemo
 exit 0
 STUB
 # Docker-Ersatz: gibt Befehle aus; stafl-app:release-vorher fehlt (inspect und tag scheitern), solange $T/kein-vorher
-# existiert, „tag“ allgemein, solange $T/tag-fehler existiert, „image prune“, solange $T/prune-fehler existiert
+# existiert („rmi“ legt es an, ein „tag“ auf release-vorher entfernt es), „tag“ allgemein, solange $T/tag-fehler existiert,
+# „image prune“, solange $T/prune-fehler existiert
 cat > "$T/docker.sh" <<STUB
 #!/bin/sh
 echo "docker \$*"
+[ "\$*" != "rmi stafl-app:release-vorher" ] || touch "$T/kein-vorher"
+[ "\$1 \$3" != "tag stafl-app:release-vorher" ] || [ -f "$T/tag-fehler" ] || rm -f "$T/kein-vorher"
 if [ -f "$T/kein-vorher" ] && { [ "\$1 \$2" = "tag stafl-app:release-vorher" ] || [ "\$1 \$2 \$3" = "image inspect stafl-app:release-vorher" ]; }; then echo "Error: No such image"; exit 1; fi
 if [ "\$1" = tag ] && [ -f "$T/tag-fehler" ]; then echo "Error: tag fehlgeschlagen"; exit 1; fi
 if [ "\$1 \$2" = "image prune" ] && [ -f "$T/prune-fehler" ]; then echo "Cannot connect to the Docker daemon"; exit 1; fi
@@ -284,6 +287,11 @@ printf '{"release":"%s","ci_ok":["%s"]}' "$Q_SHA" "$Q_SHA" > "$T/state.json"
 lauf || true
 ok "Image geändert, Release defekt: zurück, altes Image wieder aktiv" '[ "$(kopf)" = "$P_SHA" ] && [ "$(st ok)" = False ] && grep -q "zurückgesetzt" "$B/daten/deployment.php" \
   && grep -q "^docker tag stafl-app:release-vorher stafl-app:lokal" "$T/out.txt" && [ "$(grep -cx "compose up -d --force-recreate app app-mitarbeiter" "$T/out.txt")" = 2 ]'
+# release-vorher hielt danach das Image von P (aktiv), nicht das von J (.release-vorher): der Notfall-Rückfall auf J baut J's Image
+zurueck || true
+ok "… Notfall-Rückfall danach: Image aus dem Bauplan des vorherigen Stands gebaut, nicht das aktive für dessen Code getaggt" '[ "$(kopf)" = "$J_SHA" ] \
+  && grep -q "release-vorher fehlt" "$T/out.txt" && grep -qx "bau-stand $P_SHA app-alt # Update 2" "$T/out.txt" && ! grep -q "^docker tag" "$T/out.txt"'
+git -C "$B" reset -q --hard "$P_SHA"   # Ausgangslage der folgenden Prüfungen
 S_SHA=$(commit repariert2 x "sed -i 's/ kaputt(//' '$T/src/app/api/index.php'")
 printf '{"release":"%s","ci_ok":["%s"]}' "$S_SHA" "$S_SHA" > "$T/state.json"
 lauf || true
