@@ -122,7 +122,7 @@
     const c = K.c, D = c.daten(), keys = new Set(liste.map((k) => k.key));
     const l = D.letzte.filter((a) => keys.has(a.key)).slice(0, 6);
     return `<section class="crm-karte crm-glas"><h3>${c.esc(titel)}</h3>${l.length ? `<ul class="crm-zeilen">${l.map((a) => `<li><div class="was">${c.kunde(a.key)
-      ? `<button type="button" class="crm-firma" data-oeffnen="${c.esc(a.key)}">${c.esc(a.art)} · ${c.esc(c.kunde(a.key).firma)}</button>` : `<b>${c.esc(a.art)} · ${c.esc(a.firma)}</b>`}<small>${c.esc(c.deZeit(a.at))} · ${c.esc(a.von)}${a.notiz ? ' · ' + c.esc(a.notiz) : ''}</small></div></li>`).join('')}</ul>`
+      ? `<button type="button" class="crm-firma" data-oeffnen="${c.esc(a.key)}">${c.esc(a.art)} · ${c.esc(c.kunde(a.key).firma)}</button>` : `<b>${c.esc(a.art)} · ${c.esc(a.firma)}</b>`}<small title="${c.esc(c.deZeit(a.at))} · ${c.esc(a.von)}${a.notiz ? ' · ' + c.esc(a.notiz) : ''}">${c.esc(c.deZeit(a.at))} · ${c.esc(a.von)}${a.notiz ? ' · ' + c.esc(a.notiz) : ''}</small></div></li>`).join('')}</ul>`
       : '<p class="crm-leer">Noch keine Aktivitäten.</p>'}</section>`;
   }
 

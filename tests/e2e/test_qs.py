@@ -687,6 +687,8 @@ with sync_playwright() as p:
     check('Maßnahmen-Tafel: vier Spalten, zwei Karten (aus Audit und aus Prüfung)', pg.locator('#qm-m-liste .qm-spalte').count() == 4 and pg.locator('#qm-m-liste .qm-mkarte').count() == 2
           and 'Öffnung abgedeckt' not in text(pg, '#qm-m-liste .qm-spalte[data-spalte="offen"]') and 'Fliegengitter' in text(pg, '#qm-m-liste .qm-spalte[data-spalte="offen"]')
           and 'Kalibrierung eines Thermometers nicht dokumentiert' in text(pg, '#qm-m-liste .qm-spalte[data-spalte="in_arbeit"]'), text(pg, '#qm-m-liste'))
+    bezug = pg.evaluate("[...document.querySelectorAll('#qm-m-liste .qm-mk-kopf > span:last-child')].map((e) => [e.textContent.trim(), e.title])")
+    check('Maßnahmen-Tafel: Bezug (einzeilig gekürzt) mit vollem Text im Tooltip', bezug and all(t == x and x for x, t in bezug), bezug)
     pg.screenshot(path=os.path.join(SH, 'qs_massnahmen_1280.png'), full_page=True)
     pg.click('[data-ansicht="liste"]')
     check('Liste: nicht abgeschlossene Maßnahmen', pg.locator('#qm-m-liste tr[data-massn]').count() == 2 and pg.is_visible('#qm-m-status'))

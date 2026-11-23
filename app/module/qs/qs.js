@@ -967,7 +967,7 @@
         const k = basis.filter((m) => m.status === s).sort(s === 'wirksam' ? (a, b) => natCmp(b.nr, a.nr) : sortFrist);
         const max = s === 'wirksam' ? 8 : 60;
         return `<section class="qm-spalte${s === 'wirksam' ? ' blass' : ''}" data-spalte="${s}"><div class="qm-spaltenkopf"><h2><i style="background:${farbe}"></i>${esc(n)}</h2><small>${zahl(k.length)}</small></div>
-          ${k.slice(0, max).map((m) => `<button type="button" class="qm-mkarte" data-massn="${esc(m.id)}"><span class="qm-mk-kopf"><span>${esc(m.nr)}${m.anforderung ? ' · IFS ' + esc(m.anforderung) : m.kapitel ? ' · Kapitel ' + esc(m.kapitel) : ''}</span><span>${esc(m.bezug || S.d.quellen[m.quelle] || '')}</span></span>
+          ${k.slice(0, max).map((m) => `<button type="button" class="qm-mkarte" data-massn="${esc(m.id)}"><span class="qm-mk-kopf"><span>${esc(m.nr)}${m.anforderung ? ' · IFS ' + esc(m.anforderung) : m.kapitel ? ' · Kapitel ' + esc(m.kapitel) : ''}</span><span title="${esc(m.bezug || S.d.quellen[m.quelle] || '')}">${esc(m.bezug || S.d.quellen[m.quelle] || '')}</span></span>
             <b>${esc(m.feststellung)}</b>${m.ursache ? `<span class="qm-sub qm-kurz">Ursache: ${esc(m.ursache)}</span>` : ''}
             <span class="qm-mk-fuss"><span class="qm-avatar" title="${esc(werName(m.zustaendig))}">${esc(m.zustaendig || '—')}</span>${(s === 'wirksam' || s === 'umgesetzt') && m.erledigtAm ? chip('umgesetzt ' + datum(m.erledigtAm)) : m.frist ? chip('bis ' + datum(m.frist), m.ueberfaellig ? 'rot' : '') : ''}</span></button>`).join('') || '<p class="qm-leer-spalte">—</p>'}
           ${k.length > max ? `<p class="qm-leer-spalte">und ${zahl(k.length - max)} weitere – Ansicht „Liste“</p>` : ''}</section>`;

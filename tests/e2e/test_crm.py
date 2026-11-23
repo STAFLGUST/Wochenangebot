@@ -264,6 +264,10 @@ with sync_playwright() as p:
     check('Cockpit ohne zugeordneten Vertreter: Hinweis, Kennzahlen, Heute dran (Wiedervorlagen), letzte Aktivität, keine Umsätze', 'Aktive Kunden' in kp
           and 'Angebot nachfassen' in kp and 'Muster schicken' in kp and 'Erstgespräch vor Ort' in kp and 'kein Vertreter zugeordnet' in kp and '€' not in kp, kp[:500])
     check('Reiter Wiedervorlagen mit Zahl der fälligen', pg.text_content('#crm-faellig').strip() == '2', pg.text_content('#crm-faellig'))
+    # gekürzte Zeilen (eine Zeile mit „…“) tragen den vollen Text im Tooltip – Regel „kein abgeschnittener Text“ (Gruppe einheit)
+    akt = pg.evaluate("""() => [...document.querySelectorAll('#tab-cockpit section')].filter((s) => /Aktivit/.test((s.querySelector('h3') || {}).textContent || ''))
+      .flatMap((s) => [...s.querySelectorAll('.crm-zeilen small')]).map((e) => [e.textContent.trim(), e.title])""")
+    check('Cockpit „Letzte Aktivitäten“: jede Zeile mit vollem Text im Tooltip', akt and all(t == x for x, t in akt), akt[:3])
     pg.screenshot(path=os.path.join(SH, 'crm_cockpit_1280.png'), full_page=True)
 
     pg.click('#crm-tabs button[data-tab="kunden"]'); pg.wait_for_selector('#k-tabelle')
