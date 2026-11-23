@@ -1053,7 +1053,7 @@ Die einzige Beschreibung der Regeln; Code-Kommentare verweisen hierher.
   Farmer eines Containers eine Teilmenge aller Farmer sind (gemessen: 150 000 Punkte sind 3,4 MiB, Lesen und Export 48 von
   128 MiB).
 - **Am Container** steht nur noch `abschluss.betriebe` ohne `geometrie` und `abschluss.schnappschuss`
-  = `{"id", "sha256", "punkte"}`. `sha256` ist über `json_encode` der Farmer in ihrer gespeicherten Form gebildet (`eudr_schnappschuss_summe`: einmal durch
+  = `{"id", "sha256"}`. `sha256` ist über `json_encode` der Farmer in ihrer gespeicherten Form gebildet (`eudr_schnappschuss_summe`: einmal durch
   `json_decode` und zurück – `-0.0` schreibt `json_encode` als `-0`, gelesen wird daraus `0`, etwa bei der Mitte einer Fläche am
   Äquator; für alle übrigen Werte dieselbe Summe wie zuvor).
   `eudr_schnappschuss_betriebe` liest die Umrisse und prüft dabei die Prüfsumme; fehlt das Dokument oder passt sie nicht,
@@ -1069,11 +1069,11 @@ Die einzige Beschreibung der Regeln; Code-Kommentare verweisen hierher.
 - **Gemessen** (`memory_limit = 128M`, alle Bibliotheken geladen, 100 Farmer zu 200 Punkten, je Container 10 Farmer):
   vorher bei 120 Abschlüssen 6,6 MiB Dokument, Stand 90 MiB Spitze und 7,4 MiB Antwort, bei 200 Abschlüssen Speicherabbruch;
   nachher bei 200 Abschlüssen 1,9 MiB Dokument, Stand und Abschluss 32 MiB Spitze, 2,9 MiB Antwort.
-- **Rückfall auf eine Vorversion:** Sie liest alle Container weiter und schreibt den Verweis beim Speichern unverändert zurück.
-  Bei Abschlüssen ab diesem Stand sieht sie keine Umrisse: Die Karte im Fenster zeichnet nicht (Fehler in der
-  Browser-Konsole), ihr Export liefert die Farmer mit `"geometry": null` – diese Datei nicht bei TRACES einreichen. Liste,
-  Profil, Druck und Gesamtprüfung zeigt sie wie gewohnt. Nach der Rückkehr ist alles wieder da (geprüft mit dem Stand vor
-  KERN-3b gegen Daten dieses Stands).
+- **Rückfall auf eine Vorversion:** Daten werden nicht beschädigt – sie liest alle Container weiter und schreibt den Verweis
+  beim Speichern unverändert zurück. Bei Abschlüssen ab diesem Stand sieht sie aber keine Umrisse: Ihre Karte im Fenster
+  „Container“ bricht mit einem TypeError ab (Browser-Konsole), ihr Export liefert die Farmer mit `"geometry": null` – diese
+  Datei nicht bei TRACES einreichen. Liste, Profil, Druck und Gesamtprüfung zeigt sie wie gewohnt. Nach der Rückkehr ist alles
+  wieder da (geprüft mit dem Stand vor KERN-3b gegen Daten dieses Stands).
 - **Sicherung:** Die Dokumente liegen im Dateibetrieb im Unterordner `containerimport-eudr-schnappschuss/` und kommen mit
   `deploy/sichern.sh` ins Archiv; im SQLite-Betrieb stehen sie in der Datenbank und damit im Abzug (`deploy/datenbank.py
   snapshot`). Beides am 23.11.2026 mit einem Wegwerf-Ordner geprüft.

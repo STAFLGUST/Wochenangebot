@@ -444,8 +444,8 @@ check('Bewertung abgeschlossen: Ergebnis, Bearbeiter, Schnappschuss von Profil u
 ab = gespeicherte_sendung(sid)['abschluss']
 erst = ab.get('schnappschuss') or {}
 erst_doc = _json(storage_raw(f"{SCHNAPP}/{erst.get('id')}")) or {}
-check('Abschluss legt die Umrisse in ein eigenes Dokument; am Container nur die Farmer ohne Umriss und der Verweis (Kennung, SHA-256, Punkte)',
-      re.fullmatch(r'[0-9a-f]{64}', erst.get('sha256', '')) and erst['punkte'] == sum(map(punktzahl, umrisse.values()))
+check('Abschluss legt die Umrisse in ein eigenes Dokument; am Container nur die Farmer ohne Umriss und der Verweis (Kennung, SHA-256)',
+      sorted(erst) == ['id', 'sha256'] and re.fullmatch(r'[0-9a-f]{64}', erst['sha256'])
       and all('geometrie' not in b for b in ab['betriebe']) and [b['id'] for b in ab['betriebe']] == [b['id'] for b in erst_doc.get('betriebe', [])]
       and erst_doc['sendung'] == sid and erst_doc['wer'] == ab['wer'] and {b['id']: b['geometrie'] for b in erst_doc['betriebe']} == umrisse, (erst, list(erst_doc)))
 check('Stand der Seite: Farmer des Abschlusses ohne Umriss', all('geometrie' not in b for b in s['abschluss']['betriebe']), s['abschluss']['betriebe'][0].keys())
@@ -1030,7 +1030,7 @@ for n in range(61):
     a, r = I.call('containerimport_eudr_sendung_save', {**SENDUNG, 'partie': f'P-VIELE-{n:02d}', 'aktiv': False, 'betriebe': [gross['id']]})
     b2 = I.call('containerimport_eudr_sendung_abschluss', {'id': r.get('id', ''), 'rev': 1, 'ergebnis': 'nicht_vernachlaessigbar', 'begruendung': 'Test vieler Abschlüsse.'})[0]
     staende.append((a, b2)); ids_viele.append(r.get('id', ''))
-punkte = [gespeicherte_sendung(i)['abschluss']['schnappschuss']['punkte'] for i in ids_viele]
+punkte = [sum(punktzahl(b['geometrie']) for b in _json(storage_raw(f"{SCHNAPP}/{gespeicherte_sendung(i)['abschluss']['schnappschuss']['id']}"))['betriebe']) for i in ids_viele]
 zuwachs = (len(storage_raw('containerimport-eudr-sendungen')) - vorher) / 61
 check('61 Abschlüsse hintereinander mit je 4001 Punkten: alle gelingen, zusammen weit über der früheren Grenze von 100 000 Punkten',
       st == 200 and staende == [(200, 200)] * 61 and punkte == [4001] * 61 and sum(punkte) > 100000, (st, [x for x in staende if x != (200, 200)][:3], punkte[:3]))

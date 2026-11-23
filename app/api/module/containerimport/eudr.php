@@ -33,7 +33,7 @@ const EUDR_MAX_PUNKTE_ANFRAGE = 100000;  // Punkte aller Flächen einer Prüfung
    (HTTP 500 für das ganze Modul). Ein Schnappschuss hält höchstens EUDR_MAX_PUNKTE Punkte: seine Farmer sind eine Teilmenge
    aller Farmer. Ältere Abschlüsse tragen ihre Umrisse weiter eingebettet (GR-006, keine Migration). */
 const EUDR_SCHNAPPSCHUSS = 'containerimport-eudr-schnappschuss/';
-const EUDR_MAX_FRUEHERE = 5;             // frühere Abschlüsse je Sendung, die ihren Schnappschuss behalten
+const EUDR_MAX_FRUEHERE = 5;             // frühere Abschlüsse je Sendung, die ihre Farmerliste behalten (das Schnappschuss-Dokument bleibt immer)
 const EUDR_MAX_SENDUNGEN = 5000;
 const EUDR_MAX_ORTE_JE_DATEI = 1000;
 const EUDR_MAX_PRUEFUNGEN = 50;          // Gegenprüfungen je Betrieb
@@ -764,14 +764,14 @@ function eudr_abschluss(array $s, array $eingabe, array $sichten, array $me): ar
     return ['ergebnis' => $ergebnis, 'begruendung' => $begruendung, 'wer' => eudr_wer($me), 'profil' => $profil, 'betriebe' => $bs];
 }
 /* Farmer eines Abschlusses (eudr_abschluss) mit Umriss in ein eigenes Dokument legen – neue Kennung, nie überschrieben – und
-   den Abschluss für das Dokument der Container liefern: Farmer ohne Umriss, dazu „schnappschuss“ (Kennung, SHA-256 der Farmer,
-   Punkte). Eine Vorversion liest den Abschluss weiter, sieht nur die Umrisse nicht (GR-006). */
+   den Abschluss für das Dokument der Container liefern: Farmer ohne Umriss, dazu „schnappschuss“ (Kennung, SHA-256 der Farmer).
+   Rückfall auf eine Vorversion: Daten bleiben unbeschädigt, aber bei Abschlüssen ab diesem Stand liefert ihr Export
+   "geometry": null (nicht bei TRACES einreichen) und ihre Karte bricht mit einem TypeError ab. */
 function eudr_schnappschuss_ablegen(string $sendung, array $a): array
 {
     $id = eudr_id('a');
     store_write(EUDR_SCHNAPPSCHUSS . $id, ['sendung' => $sendung, 'wer' => $a['wer'], 'betriebe' => $a['betriebe']]);
-    return ['betriebe' => eudr_ohne_umriss($a['betriebe'])] + $a + ['schnappschuss' => ['id' => $id, 'sha256' => eudr_schnappschuss_summe($a['betriebe']),
-        'punkte' => array_sum(array_map(fn($b) => geo_punktzahl($b['geometrie']), $a['betriebe']))]];
+    return ['betriebe' => eudr_ohne_umriss($a['betriebe'])] + $a + ['schnappschuss' => ['id' => $id, 'sha256' => eudr_schnappschuss_summe($a['betriebe'])]];
 }
 /* Farmer eines Abschlusses samt Umriss: aus seinem Dokument, nur wenn die Prüfsumme stimmt; Abschlüsse von vor dem
    23.11.2026 tragen sie eingebettet */

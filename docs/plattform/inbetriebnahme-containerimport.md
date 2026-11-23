@@ -413,7 +413,8 @@ Korrektur aus dem Nachtlauf 22./23.11.2026. Kein Schritt auf dem Server, keine M
 - **Sicherung:** Die neuen Dokumente kommen mit der täglichen Sicherung mit – im Dateibetrieb als Unterordner im Archiv, im
   SQLite-Betrieb in der Datenbank (*getestet* mit `deploy/sichern.sh` in einem Wegwerf-Ordner, beide Speicherarten).
 - **Rückfall:** `sh /opt/wochenangebot/deploy/release-zurueck.sh`. Die Vorversion liest alle Container weiter und beschädigt
-  nichts. Bei Abschlüssen ab diesem Release sieht sie aber keine Umrisse: Die Karte im Fenster zeichnet nicht, „GeoJSON für
-  TRACES“ liefert die Farmer ohne Geometrie – **diese Datei während des Rückfalls nicht bei TRACES einreichen**. Liste, Profil
+  nichts. Bei Abschlüssen ab diesem Release sieht sie aber keine Umrisse: Die Karte im Fenster bricht ab (TypeError in der
+  Browser-Konsole), „GeoJSON für TRACES“ liefert die Farmer mit `"geometry": null` – **diese Datei während des Rückfalls
+  nicht bei TRACES einreichen**. Liste, Profil
   und Druck zeigt sie wie gewohnt. Nach der Rückkehr auf dieses Release ist alles wieder da (*getestet* mit dem Stand vor der
   Korrektur gegen Daten dieses Stands).
