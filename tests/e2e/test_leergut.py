@@ -632,6 +632,17 @@ nullk = r.get('partner', {})
 st2, r2 = V.call('leergut_partner_save', {'name': 'Kunde ohne Null', 'art': 'kunde', 'kundenNr': '91011', 'lademittel': ['e2']})
 check('WinAB-Kundennummer mit führender Null: dieselbe Nummer ohne Null ist doppelt (422)', st == 200 and nullk.get('kundenNr') == '0091011'
       and st2 == 422 and 'Testkunde Null (von Hand)' in r2.get('error', ''), (st, r, st2, r2))
+# Altbestand des früheren Abgleichs ohne code_key: „0091011“ und ein angelegtes „Kunde (91011)“ nebeneinander. Speichern ohne
+# geänderte Nummer bleibt möglich; wer die Nummer ändert, wird weiter geprüft.
+sd = json.loads(storage_raw('leergut-stamm').split('?>\n', 1)[-1])
+paar = {**nullk, 'id': 'pAltpaar91011', 'name': 'Kunde (91011)', 'kundenNr': '91011', 'rev': 1}
+storage_write('leergut-stamm', {**sd, 'partner': sd['partner'] + [paar]})
+st, r = V.call('leergut_partner_save', {'id': nullk['id'], 'rev': nullk['rev'], 'name': nullk['name'], 'art': 'kunde', 'kundenNr': '0091011', 'lademittel': ['e2'], 'notiz': 'Altpaar'})
+st2, r2 = V.call('leergut_partner_save', {'id': paar['id'], 'rev': 1, 'name': paar['name'], 'art': 'kunde', 'kundenNr': '91011', 'lademittel': ['e2'], 'notiz': 'Altpaar'})
+st3, r3 = V.call('leergut_partner_save', {'id': paar['id'], 'rev': 2, 'name': paar['name'], 'art': 'kunde', 'kundenNr': '00091011', 'lademittel': ['e2']})
+storage_write('leergut-stamm', sd)
+check('Altpaar „0091011“ / „Kunde (91011)“: beide speicherbar ohne geänderte Nummer, eine geänderte Nummer weiter 422',
+      st == 200 and st2 == 200 and st3 == 422 and 'gehört schon' in r3.get('error', ''), (st, r.get('error'), st2, r2.get('error'), st3, r3.get('error')))
 WN = {'bericht': {'datei': 'Lademittel_Null.XLS', 'von': '2026-01-01', 'bis': '2026-10-15', 'datum': '2026-10-15'},
       'kunden': [{'nr': '91011', 'name': 'Testkunde Null'}],
       'belege': [{'kd': '91011', 'art': 'Lieferschein', 'beleg': '510001', 'datum': '2026-05-04', 'abgang': {'e2': 6}, 'zugang': {}}]}
