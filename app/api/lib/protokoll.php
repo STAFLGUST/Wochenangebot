@@ -15,21 +15,22 @@ const PROTOKOLL_MONATE = 6;
    Speicherabbruch (nicht abfangbar). Deshalb ein Ringpuffer wie bei den übrigen wachsenden Dokumenten (FW_VERKEHR_MAX,
    mailversand 3000, anmeldenamen 5000/20000) und zusätzlich eine Byte-Grenze, weil die Zahl der Einträge die Größe nicht
    begrenzt (ein Eintrag darf eine Änderungsliste führen). Format unverändert (GR-006): die ältesten Einträge fallen weg –
-   gelungene Kundenanmeldungen vor allen anderen (protokoll_verwerfen) –, ein Systemeintrag nennt wie viele. */
+   gelungene Kundenanmeldungen und Kunden-Passwörter vor allen anderen (protokoll_verwerfen) –, ein Systemeintrag nennt wie viele. */
 const PROTOKOLL_EINTRAEGE_MAX = 20000;          // Einträge je Monatsdokument
 const PROTOKOLL_BYTES_MAX = 4194304;            // 4 MiB je Monatsdokument (Lesen braucht ein Mehrfaches davon im Speicher)
 const PROTOKOLL_TEXT_MAX = 2000;                // Zeichen je Vorgangstext
 const PROTOKOLL_DETAILS_MAX = 2000;             // Änderungszeilen je Eintrag (wie die großen Aufrufer schon selbst kürzen)
 
-/* $n Einträge verwerfen: zuerst die ältesten gelungenen Kundenanmeldungen, dann die ältesten übrigen; der Vermerk über entfernte
-   Einträge bleibt. Gelungene Anmeldungen sind ungebremst (kundenportal.php) – eine Flut davon verdrängt so nur Anmeldeeinträge,
-   nie Rechte-, Mitarbeiter- oder Sicherheitseinträge wie Fehlanmeldungen mit IP-Adresse (Befund SEC-1, 22.11.2026). */
+/* $n Einträge verwerfen: zuerst die ältesten gelungenen Kundenanmeldungen und selbst gesetzten Kunden-Passwörter, dann die
+   ältesten übrigen; der Vermerk über entfernte Einträge bleibt. Beides kann ein Kunde ungebremst auslösen (kundenportal.php) –
+   eine Flut davon verdrängt so nur Kundeneinträge, nie Rechte-, Mitarbeiter- oder Sicherheitseinträge wie Fehlanmeldungen mit
+   IP-Adresse (Befund SEC-1, 22.11.2026). */
 function protokoll_verwerfen(array $log, int $n): array
 {
     $zuerst = $danach = [];
     foreach ($log as $k => $e) {
         $a = $e['a'] ?? '';
-        if ($a === 'kunde_login') $zuerst[] = $k; elseif ($a !== 'protokoll_groesse') $danach[] = $k;
+        if ($a === 'kunde_login' || $a === 'kunde_password') $zuerst[] = $k; elseif ($a !== 'protokoll_groesse') $danach[] = $k;
     }
     return array_values(array_diff_key($log, array_flip(array_slice([...$zuerst, ...$danach], 0, $n))));
 }
