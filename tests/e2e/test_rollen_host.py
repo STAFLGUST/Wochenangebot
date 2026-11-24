@@ -97,6 +97,11 @@ with sync_playwright() as pw:
         pg.wait_for_function("document.querySelector('#view-stock').textContent.trim().length > 0")
         check(f'UI {breite}: ohne Modulzugang Angebot – Bestandsliste da, kein Entwurf abgerufen', not [u for u in abrufe if 'action=draft' in u or 'action=versions' in u],
               [u for u in abrufe if 'action=' in u][:8])
+        # Leistung (24.11.2026): wo die Ansicht „Angebot“ nicht erlaubt ist (Bereich des Hosts oder Rechte), baut der Eingabebereich
+        # die Artikelliste des Editors gar nicht erst auf – auf dem Bestand-Host waren das ~10 000 versteckte Elemente
+        check(f'UI {breite}: Artikelliste des Angebotseditors nicht aufgebaut (Ansicht hier nicht erlaubt)',
+              pg.evaluate("[document.querySelector('#groups').childElementCount, document.querySelector('#view-edit').hidden]") == [0, True],
+              pg.evaluate("document.querySelector('#groups').innerHTML.slice(0, 120)"))
         pg.screenshot(path=SH + f'/rollen-bestand-ohne-angebot-{breite}.png')
         pg.close()
     check('keine Seitenfehler', not fehler, fehler[:3])
