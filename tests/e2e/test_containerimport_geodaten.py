@@ -69,6 +69,7 @@ with sync_playwright() as pw:
     check('EUDR-konform nein/unklar, ungefähre Auflösung, Zeitraum und „nicht berichtet“ ausgeschrieben', 'nein/unklar' in p.inner_text('#ci-geodaten details[data-gd="FNF17"] summary')
           and all(x in p.inner_text('#ci-geodaten details[data-gd="FNF03"] summary') for x in ('Auflösung ~30 m', 'Jahre 2015 – 2020', 'teilweise', 'Gesamtgenauigkeit nicht berichtet')))
     check('zugeklappt: Walddefinition und Grenzen verborgen', p.is_hidden('#ci-geodaten details[data-gd="FNF01"] .ci-gd-dl'))
+    p.evaluate("window.addEventListener('toggle', (e) => e.stopImmediatePropagation(), true)")   # wie in der CI (Chromium 141): „toggle“ kommt nicht an – der Aufklappstand darf nicht davon abhängen
     p.click('#ci-geodaten details[data-gd="FNF01"] summary')
     mehr = p.inner_text('#ci-geodaten details[data-gd="FNF01"] .ci-gd-dl')
     check('aufgeklappt: Walddefinition, Validierung, Genauigkeiten, bekannte Grenzen, Verweise', all(x in mehr for x in ('Walddefinition', 'Validierung', 'Hersteller- und Nutzergenauigkeit', 'PA 90 %', 'Bekannte Grenzen', '• Zweite Testgrenze.', 'Google Earth Engine', 'V1')), mehr)
