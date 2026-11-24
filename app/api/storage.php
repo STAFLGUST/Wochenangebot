@@ -256,8 +256,19 @@ function store_read(string $name)
     $data = json_decode($raw, true);
     return is_array($data) ? $data : null;
 }
+/* Lesen mit Merken für die Dauer einer Anfrage – nur für kleine, selten geänderte Dokumente, die Schleifen über alle Kunden
+   je Kunde mehrfach brauchen (offers_load: Versand, Startseite, Kundenverwaltung bei rund 3000 Kunden). Innerhalb einer
+   Sperre wird nie gemerkt, dort zählt der aktuelle Stand; Schreiben und Löschen des Dokuments sowie jede Sperre (Beginn und
+   Ende) vergessen das Gemerkte. */
+function store_read_gemerkt(string $name)
+{
+    if (!empty($GLOBALS['store_sperren'])) return store_read($name);
+    if (!array_key_exists($name, $GLOBALS['store_gemerkt'] ?? [])) $GLOBALS['store_gemerkt'][$name] = store_read($name);
+    return $GLOBALS['store_gemerkt'][$name];
+}
 function store_write(string $name, array $data): void
 {
+    unset($GLOBALS['store_gemerkt'][$name]);
     $json = json_encode($data, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_THROW_ON_ERROR);
     store_schreibschutz($name);
     if (store_sql($name)) {
@@ -276,6 +287,7 @@ function store_write(string $name, array $data): void
 }
 function store_delete(string $name): void
 {
+    unset($GLOBALS['store_gemerkt'][$name]);
     store_schreibschutz($name);
     if (store_sql($name)) { store_beitreten(store_bereich($name)); $q = store_db(store_bereich($name))->prepare('DELETE FROM documents WHERE name=?'); $q->execute([$name]); }
     else { $p = store_path($name); if (is_file($p) && !unlink($p)) throw new RuntimeException('Cannot delete data'); }
@@ -342,6 +354,12 @@ function with_lock(string $name, callable $fn)
    selbst: zwei Datenbanken lassen sich nicht in einem Schritt abschließen). Scheitert eine innere, setzt sie nur ihren Bereich
    zurück (wie bisher); ein nicht abgefangener Fehler setzt danach in der äußersten alles zurück. */
 function with_lock_in(string $b, string $name, callable $fn)
+{
+    $GLOBALS['store_gemerkt'] = []; $GLOBALS['store_sperren'] = ($GLOBALS['store_sperren'] ?? 0) + 1;   // store_read_gemerkt
+    try { return store_sperre_in($b, $name, $fn); }
+    finally { $GLOBALS['store_sperren']--; $GLOBALS['store_gemerkt'] = []; }
+}
+function store_sperre_in(string $b, string $name, callable $fn)
 {
     if (!in_array($name, STORE_SIDECARS, true) && store_mode($b) === 'sqlite') {
         if (!empty($GLOBALS['store_tx'][$b])) return $fn();

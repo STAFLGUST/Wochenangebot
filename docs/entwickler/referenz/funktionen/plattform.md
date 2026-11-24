@@ -2,7 +2,7 @@
 
 <!-- ERZEUGT von `python3 werkzeuge/doku.py erzeugen` – nicht von Hand ändern. Quelle: Funktionen und Kommentare im Code. Die CI prüft, dass diese Datei zum Code passt. -->
 
-125 Dateien, 1283 Funktionen – in der Reihenfolge der Datei, **fett** die Abschnitte. Text = erste Aussage des Kommentars direkt über der Funktion (Python: Docstring). Übersicht aller Module: [README.md](README.md).
+126 Dateien, 1287 Funktionen – in der Reihenfolge der Datei, **fett** die Abschnitte. Text = erste Aussage des Kommentars direkt über der Funktion (Python: Docstring). Übersicht aller Module: [README.md](README.md).
 
 ## `.github/scripts/apt_vorrat.py`
 
@@ -781,6 +781,7 @@ _Shared persistence for HTTP and maintenance tools._
 - `store_db(bereich)`
 - `store_sql(name)`
 - `store_read(name)`
+- `store_read_gemerkt(name)` – Lesen mit Merken für die Dauer einer Anfrage – nur für kleine, selten geänderte Dokumente, die Schleifen über alle Kunden je Kunde mehrfach brauchen …
 - `store_write(name, data)`
 - `store_delete(name)`
 - `store_mtime(name)`
@@ -790,6 +791,7 @@ _Shared persistence for HTTP and maintenance tools._
 - `store_beitreten(b)` – Schreiben in einen Bereich ohne eigene Transaktion, während in einem anderen eine läuft (z. B. Veröffentlichen: Entwurf innen, Angebot bis Trennstufe 2 …
 - `with_lock(name, fn)`
 - `with_lock_in(b, name, fn)` – Sperre bzw. Transaktion eines Dokuments in einem bestimmten Bereich (with_lock wählt den Bereich nach der Einteilung).
+- `store_sperre_in(b, name, fn)`
 - `store_stats()` – Kennzahlen für die Übersicht im Eingabebereich (beide Bereiche, soweit diese Seite sie sieht)
 
 ## `app/assets/admin-rollen.js`
@@ -1919,6 +1921,13 @@ _Hilfsskript für tests/unit/test_dateiablage_zip.py zu app/api/lib/dateiablage.
 
 - `store_ordner(bereich)`
 - `store_getrennt()`
+
+## `tests/unit/speicher_gemerkt.php`
+
+_Gemerktes Lesen der Speicherschicht (store_read_gemerkt in app/api/storage.php), ohne Server, in der Speicherart des Datenordners (Dateien oder SQLite – tests/unit/test_speicher_gemerkt.py prüft beide): innerhalb …_
+
+- `check(name, ok, wert)`
+- `fremd_schreiben(d)` – Ein anderer Prozess (wie eine zweite Anfrage) schreibt das Dokument
 
 ## `tests/unit/test_adressen.py`
 

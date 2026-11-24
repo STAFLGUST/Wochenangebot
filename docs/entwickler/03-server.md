@@ -241,6 +241,7 @@ Dokumente es gibt und wem sie gehören: [Kapitel 5](05-daten.md), [referenz/date
 | Funktion | Verhalten |
 | --- | --- |
 | `store_read(string $name)` | Dokument als Array oder `null`, wenn es fehlt |
+| `store_read_gemerkt(string $name)` | wie `store_read`, aber einmal je Anfrage gelesen – nur für kleine, selten geänderte Dokumente, die Schleifen über alle Kunden mehrfach brauchen (heute `angebote` über `offers_load`). Innerhalb jeder Sperre immer frisch; `store_write`, `store_delete` und Beginn/Ende jeder Sperre vergessen das Gemerkte. Nie für Dokumente, die ein Ablauf erst liest und dann ohne Sperre schreibt |
 | `store_write(string $name, array $data)` | ganzes Dokument ersetzen (`JSON_THROW_ON_ERROR`) |
 | `store_delete(string $name)` | Dokument löschen |
 | `store_mtime(string $name)` | Änderungszeit (Unix) oder `null` |

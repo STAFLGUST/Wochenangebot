@@ -145,6 +145,8 @@ jobs:
         run: python3 tests/unit/test_ci_kalkulation.py
       - name: Unit-Test gemeinsames Bearbeiten (Abgleich)
         run: node tests/unit/merge.test.js
+      - name: Unit-Test gemerktes Lesen der Speicherschicht (Dateien und SQLite)
+        run: python3 tests/unit/test_speicher_gemerkt.py
       - name: Adressverzeichnis der CRM-Karte (Aufbau mit pyosmium, Nachschlagen in PHP, gleiche Schreibweisen-Regeln)
         run: |
           python3 -m venv /tmp/adressen
