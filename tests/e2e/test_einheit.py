@@ -191,7 +191,8 @@ with sync_playwright() as pw:
                         pg.click('#user-add'); pg.wait_for_selector('#dlg-user[open] #user-err', state='attached')
                         fe = pg.evaluate("""() => { const e = document.querySelector('#user-err'), b = e.closest('.dlg-body'); e.textContent = 'Benutzername ist schon vergeben.';
                           e.scrollIntoView({ block: 'nearest' }); const h = e.getBoundingClientRect().height; e.textContent = ''; return [Math.round(h), b.scrollHeight > b.clientHeight]; }""")
-                        kz = pg.evaluate("(() => { const x = document.querySelector('#dlg-user button.icon[data-close]'), s = getComputedStyle(x); return [x.getAttribute('aria-label'), Math.round(x.getBoundingClientRect().width), s.borderTopLeftRadius]; })()")
+                        # Öffnungsanimation (pop, scale .985) erst beenden – sonst misst die Prüfung 35,46 px, je nachdem wie schnell die Seite ist
+                        kz = pg.evaluate("(() => { document.querySelector('#dlg-user').getAnimations().forEach((a) => a.finish()); const x = document.querySelector('#dlg-user button.icon[data-close]'), s = getComputedStyle(x); return [x.getAttribute('aria-label'), Math.round(x.getBoundingClientRect().width), s.borderTopLeftRadius]; })()")
                         pg.evaluate("document.querySelector('#dlg-user').close()")
                         check(f'{teil} {tag}: Fehlermeldung im langen Formular sichtbar (nicht auf Höhe 0)', fe[0] >= 15 and fe[1], fe)
                         check(f'{teil} {tag}: Kreuz im Fenster „Mitarbeiter“ wie in jedem Fenster („Schließen“, 36 px, 9 px rund)', kz[0] == 'Schließen' and kz[1] == 36 and kz[2] == '9px', kz)
