@@ -971,6 +971,8 @@ with sync_playwright() as pw:
           and ka.get('__Host-WA_ADMIN', {}).get('value') != k.get('__Host-WA_ADMIN', {}).get('value'), sorted(ka))
     pa.wait_for_selector('#screen-editor:not([hidden]), #screen-auth:not([hidden])', timeout=30000)
     check('Mitarbeiter-Eingabe zeigt den Editor (keine eigene Anmeldemaske)', pa.is_visible('#screen-editor'))
+    pa.wait_for_selector('#groups section.gcard', state='attached')
+    check('Angebot: Artikelliste des Editors aufgebaut (hier ist die Ansicht erlaubt)', pa.evaluate("document.querySelectorAll('#groups section.gcard').length") > 0)
     pa.wait_for_selector('#vt-edit:not([hidden])', state='attached'); pa.wait_for_selector('#vt-master[hidden]', state='attached')
     sicht_a = pa.evaluate("[...document.querySelectorAll('[id^=vt-]')].filter(b => !b.hidden).map(b => b.id.slice(3))")
     check('Angebot (angebot.stafl.test): nur Angebotsbereiche, keine Verwaltung (Stammdaten, Kunden, Import …) und keine Bestandsliste (wandert ins Bestandsmodul)',
@@ -1017,6 +1019,9 @@ with sync_playwright() as pw:
     check('Verwaltung: nur Verwaltungsbereiche (kein Angebot, Bestand, Einkauf, Bestellungen); Bearbeiterin ohne Nutzer/Sicherheit',
           'master' in sichtbar and not {'edit', 'einzel', 'hist', 'stock', 'einkauf', 'orders', 'angebote', 'users', 'sec', 'schutz', 'mail'} & set(sichtbar), sichtbar)
     check('Verwaltung: erster erlaubter Bereich geöffnet (nicht der Angebotseditor)', pv.is_hidden('#view-edit') and pv.is_visible('#view-master'))
+    # Leistung (24.11.2026): wo die Ansicht „Angebot“ nicht erlaubt ist, baut der Eingabebereich die Artikelliste nicht versteckt mit auf
+    check('Verwaltung: Artikelliste des Angebotseditors nicht aufgebaut', pv.evaluate("document.querySelector('#groups').childElementCount") == 0,
+          pv.evaluate("document.querySelector('#groups').innerHTML.slice(0, 120)"))
     check('Verwaltung: keine Angebotsaktionen in der Kopfzeile (Veröffentlichen, Entwurfsstand, Angebotsseite)',
           pv.is_hidden('#btn-publish') and pv.is_hidden('#save-state') and pv.is_hidden('#btn-site') and pv.is_hidden('#btn-send'))
     # Seit 13.11.2026 liegen „Veröffentlichen“ und „An Kunden senden“ im Modul Versand; im Angebot steht an ihrer Stelle „Drucken“
@@ -1070,6 +1075,8 @@ with sync_playwright() as pw:
     check('Bestand: nur die Bestandsliste (kein Angebot, Einkauf, Stammdaten, Import …)', sicht_b == ['stock'], sicht_b)
     check('Bestand: Bestandsliste geöffnet, Überschrift und Titel', pb.is_hidden('#view-edit') and pb.text_content('#topbar h1') == 'Bestand' and pb.title().startswith('Bestand'),
           (pb.text_content('#topbar h1'), pb.title()))
+    check('Bestand: Artikelliste des Angebotseditors nicht aufgebaut (im Betrieb ~10 000 versteckte Elemente)', pb.evaluate("document.querySelector('#groups').childElementCount") == 0,
+          pb.evaluate("document.querySelector('#groups').innerHTML.slice(0, 120)"))
     check('Bestand: keine Angebotsaktionen in der Kopfzeile (Veröffentlichen, Entwurfsstand, Angebotsseite, Versand)',
           pb.is_hidden('#btn-publish') and pb.is_hidden('#save-state') and pb.is_hidden('#btn-site') and pb.is_hidden('#btn-send'))
     pb.wait_for_selector('#view-stock [data-st="import"]')

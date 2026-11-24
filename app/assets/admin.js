@@ -1600,6 +1600,9 @@
   }
   function renderGroups() {
     renderWerbungBtn();
+    // Leistung: auf Hosts ohne Angebotseditor (Bestand, Verwaltung) die Artikelliste (~10 000 Elemente) nie aufbauen –
+    // sie wäre dort nur versteckt (Ansicht „edit“ nicht erlaubt, setView leitet um); Preise und Bestand nutzen das Modell
+    if (!viewAllowed('edit')) return;
     const host = $('#groups');
     const mem = folge(curOffer);
     if (!mem.length) {
