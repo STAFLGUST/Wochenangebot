@@ -29,7 +29,7 @@ const CI_VISEC_LISTE = 100;             // so viele ungültige bzw. offene Ohrma
 /* Stände einer Caravana, die noch nicht entschieden sind („offen“); auch leer = VISEC kennt sie noch nicht */
 const CI_VISEC_OFFEN = [
     'EN_PROCESO' => 'wartet auf Validierung', 'EN_ESPERA' => 'wartet auf den Erzeuger', 'EN_VALIDACION' => 'in Validierung',
-    'ERROR_SIGSA' => 'Nummer bei SENASA unbekannt', '' => 'bei VISEC nicht erfasst',
+    'ERROR_SIGSA' => 'Nummer bei SENASA unbekannt', '' => 'bei VISEC nicht erfasst', 'UNLESBAR' => 'Eintrag unlesbar',   // UNLESBAR: kein Stand von VISEC, sondern ein Eintrag ohne erwartete Form
 ];
 /* Form jedes abgelegten Ergebnisses (auch eines Fehlers) – die Sicht ergänzt t, von und stand */
 const CI_VISEC_LEER = ['fehler' => '', 'fehlerText' => '', 'anfrage' => '', 'observaciones' => '', 'registriert' => false, 'fechaDte' => '', 'fechaArribo' => '',
@@ -62,18 +62,20 @@ function ci_visec_nummern($v): array
     return array_map('strval', array_keys($aus));   // reine Ziffern würden sonst als Schlüssel zu Zahlen
 }
 
-/* Fremder Text: ohne Steuerzeichen, gekürzt */
+/* Fremder Text (auch eine Zahl, etwa eine Ohrmarke als JSON-Zahl): ohne Steuerzeichen, gekürzt */
 function ci_visec_text($v, int $max): string
 {
+    if (is_int($v)) $v = (string)$v;
     return is_string($v) ? mb_substr(trim((string)preg_replace('/[\x00-\x1F\x7F]+/u', ' ', $v)), 0, $max) : '';
 }
 /* Tag aus einem Zeitpunkt der Antwort („JJJJ-MM-TT…“), sonst leer */
 function ci_visec_datum($v): string { return is_string($v) && preg_match('/^\d{4}-\d{2}-\d{2}/', $v, $m) ? $m[0] : ''; }
 
-/* Eine DTE-Nummer bei VISEC abfragen → verdichtetes Ergebnis (Form CI_VISEC_LEER). Ein Fall, den VISEC nicht lösen kann
-   (error), ist ein Ergebnis. Token abgelehnt: fail (die übrigen Nummern brauchen es nicht zu versuchen); nicht erreichbar,
-   Serverfehler oder fremde Antwort: CiVisecFehler. */
-function ci_visec_dte(string $nummer): array
+/* Eine DTE-Nummer bei VISEC abfragen → verdichtetes Ergebnis (Form CI_VISEC_LEER) oder ein Hinweis (Text): Kennt VISEC den
+   DTE nicht (NOT_FOUND), ist das ein Ergebnis; jeder andere Fehlercode ist ein Hinweis – das zuletzt abgelegte Ergebnis bleibt.
+   Token abgelehnt: fail (die übrigen Nummern brauchen es nicht zu versuchen); nicht erreichbar, Serverfehler oder fremde
+   Antwort: CiVisecFehler. */
+function ci_visec_dte(string $nummer): array|string
 {
     $a = abruf_http((getenv('WA_VISEC_URL') ?: CI_VISEC_URL) . '/dte',   // WA_VISEC_URL nur in den Tests
         ['User-Agent: STAFL-Plattform (Container-Import)', 'Authorization: Bearer ' . ci_visec_token(), 'Accept: application/json', 'Content-Type: application/json'],
@@ -90,14 +92,16 @@ function ci_visec_dte(string $nummer): array
         'observaciones' => ci_visec_text($j['observaciones'] ?? null, 500)] + CI_VISEC_LEER;
     if (is_array($j['error'] ?? null)) {
         $code = strtoupper(ci_visec_text($j['error']['code'] ?? null, 40));
-        return ['fehler' => preg_match('/^[A-Z0-9_]{1,40}$/', $code) ? $code : 'FEHLER', 'fehlerText' => ci_visec_text($j['error']['description'] ?? null, 300)] + $e;
+        $code = preg_match('/^[A-Z0-9_]{1,40}$/', $code) ? $code : 'FEHLER';
+        $text = ci_visec_text($j['error']['description'] ?? null, 300);
+        if ($code !== 'NOT_FOUND') return "DTE $nummer: VISEC meldet $code" . ($text !== '' ? " ($text)" : '') . '.';
+        return ['fehler' => $code, 'fehlerText' => $text] + $e;
     }
     $d = $j['dte'] ?? null;
     if (!is_array($d)) throw new CiVisecFehler('VISEC hat unerwartet geantwortet.');
     foreach (is_array($d['caravanas'] ?? null) ? $d['caravanas'] : [] as $c) {
-        if (!is_array($c)) continue;
-        $nr = ci_visec_text($c['caravanaNumero'] ?? null, 40);
-        $stand = strtoupper(ci_visec_text($c['estado'] ?? null, 30));
+        $nr = is_array($c) ? ci_visec_text($c['caravanaNumero'] ?? null, 40) : '?';
+        $stand = is_array($c) ? strtoupper(ci_visec_text($c['estado'] ?? null, 30)) : 'UNLESBAR';   // nie still übergehen: zählt als offen
         $e['tiere']++;
         if ($stand === 'VALIDA') { $e['zahlen']['VALIDA']++; continue; }
         if ($stand === 'INVALIDA') { $e['zahlen']['INVALIDA']++; if (count($e['ungueltig']) < CI_VISEC_LISTE) $e['ungueltig'][] = $nr; continue; }
@@ -111,17 +115,20 @@ function ci_visec_dte(string $nummer): array
     ] + $e;
 }
 
-/* Alle DTE eines Containers abfragen (außerhalb jeder Sperre – das dauert) → [Nummer → Ergebnis, Fehlermeldung oder '']. Nach
-   dem Zeitbudget oder dem ersten CiVisecFehler bleiben die übrigen Nummern unabgefragt (ihr alter Stand bleibt). */
+/* Alle DTE eines Containers abfragen (außerhalb jeder Sperre – das dauert) → [Nummer → Ergebnis mit Abfragezeit t, Hinweise
+   als Text oder '']. Nach dem Zeitbudget oder dem ersten CiVisecFehler bleiben die übrigen Nummern unabgefragt, bei einem
+   Hinweis diese eine – ihr alter Stand bleibt. */
 function ci_visec_abfragen(array $nummern): array
 {
     $ende = microtime(true) + CI_VISEC_BUDGET;
-    $aus = [];
+    $aus = []; $hinweise = [];
     foreach ($nummern as $n) {
         if (microtime(true) + CI_VISEC_ZEITLIMIT > $ende) break;
-        try { $aus[$n] = ci_visec_dte($n); } catch (CiVisecFehler $f) { return [$aus, $f->getMessage()]; }
+        $t = now();   // Zeit der Abfrage, nicht der Ablage: eine langsamere ältere Abfrage überschreibt keine neuere (ci_visec_ablegen)
+        try { $r = ci_visec_dte($n); } catch (CiVisecFehler $f) { $hinweise[] = $f->getMessage(); break; }
+        if (is_string($r)) $hinweise[] = $r; else $aus[$n] = ['t' => $t] + $r;
     }
-    return [$aus, ''];
+    return [$aus, implode(' ', $hinweise)];
 }
 
 /* Abgelegte Antworten: Container-Kennung → DTE-Nummer → Ergebnis mit t (Abfrage) und von. Einmal je Anfrage gelesen, unter
@@ -131,20 +138,26 @@ function ci_visec_ergebnisse(): array
     $d = store_read_gemerkt(CI_VISEC_DOKUMENT);
     return is_array($d['ergebnisse'] ?? null) ? $d['ergebnisse'] : [];
 }
-/* Antworten einer Abfrage ablegen (unter der Sperre EUDR_SPERRE): je DTE ersetzt die jüngste die vorige */
+/* Antworten einer Abfrage ablegen (unter der Sperre EUDR_SPERRE): je DTE gilt die zuletzt gestellte Abfrage (t), auch wenn
+   zwei Bearbeiter gleichzeitig abfragen */
 function ci_visec_ablegen(string $sendung, array $ergebnisse, array $me): void
 {
     $doc = store_read(CI_VISEC_DOKUMENT);
     $alle = is_array($doc['ergebnisse'] ?? null) ? $doc['ergebnisse'] : [];
-    foreach ($ergebnisse as $n => $e) $alle[$sendung][(string)$n] = ['t' => now(), 'von' => (string)$me['name']] + $e;
+    foreach ($ergebnisse as $n => $e) {
+        if (($alle[$sendung][(string)$n]['t'] ?? '') > $e['t']) continue;
+        $alle[$sendung][(string)$n] = ['von' => (string)$me['name']] + $e;
+    }
     store_write(CI_VISEC_DOKUMENT, ['ergebnisse' => $alle]);
 }
 
-/* Container mit seinen DTE (Feld „visec“, in der Reihenfolge der Nummern), je DTE mit „stand“:
+/* Container mit seinen DTE (Feld „visec“, in der Reihenfolge der Nummern), je DTE mit „stand“ – nach dem Abschluss die beim
+   Abschluss festgehaltenen (abschluss.visec, GR-106):
    nie (nicht abgefragt) | fehler (VISEC kennt den DTE nicht oder nennt keine Tiere) | kritisch (ungültige Tiere) | offen
    (Tiere noch nicht entschieden) | ok – die eine Einstufung für Kriterium und Oberfläche */
 function ci_visec_zu(array $s): array
 {
+    if (isset($s['abschluss']['visec'])) return ['visec' => $s['abschluss']['visec']] + $s;
     $je = ci_visec_ergebnisse()[$s['id'] ?? ''] ?? [];
     $s['visec'] = array_map(function (string $n) use ($je): array {
         $e = is_array($je[$n] ?? null) ? $je[$n] + ['t' => '', 'von' => ''] + CI_VISEC_LEER : ['t' => '', 'von' => ''] + CI_VISEC_LEER;

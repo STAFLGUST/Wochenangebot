@@ -440,7 +440,8 @@ Das Risikoprofil bekommt das Kriterium „Tiere laut VISEC (Argentinien)“:
 | alle Tiere aller DTE gültig | in Ordnung, mit Zahl der Tiere und Datum der Abfrage |
 
 Container ohne DTE-Nummern haben das Kriterium nicht; für sie ändert sich nichts. Nach dem Abschluss der Bewertung wird nicht
-mehr abgefragt; das Profil hält das Kriterium mit Zahlen und Datum fest.
+mehr abgefragt; der Abschluss hält das Kriterium und die Antworten von VISEC fest, wie sie in diesem Moment galten. Während
+der Abfrage (bis rund 40 Sekunden) ist das Fenster gesperrt.
 
 **Einrichten (einmal, Serverkonsole, Ordner `/opt/wochenangebot`):**
 
@@ -465,7 +466,9 @@ Kriterium bleiben.
   nur in der Weboberfläche von VISEC zu haben, nicht über die Schnittstelle.
 - **Gespeichert** wird je Container und DTE die jüngste Antwort, verdichtet: Kopfdaten, Zahl der Tiere je Stand, höchstens
   100 Ohrmarken ungültiger bzw. noch offener Tiere und die Kennung der Anfrage bei VISEC (Dokument `containerimport-visec`,
-  vertraulich). Die vollständige Liste der Ohrmarken bleibt bei VISEC. Ein Fehler von VISEC überschreibt nichts.
+  vertraulich). Die vollständige Liste der Ohrmarken bleibt bei VISEC. Ein Fehler von VISEC überschreibt nichts – auch kein
+  anderer Fehlercode als „nicht gefunden“ (die Seite meldet ihn). Fragen zwei Bearbeiter gleichzeitig ab, gilt die zuletzt
+  gestellte Abfrage.
 - **Grenzen:** höchstens 30 DTE je Container; je Abfrage 15 Sekunden Frist, alle zusammen höchstens 40 Sekunden. Scheitert
   VISEC an einer Nummer oder reicht die Zeit nicht, bleibt das bisher Geholte; die übrigen Nummern nennt die Seite („bitte
   später erneut abfragen“). Scheitert schon die erste, kommt nur die Meldung.

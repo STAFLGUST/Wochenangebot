@@ -15,6 +15,7 @@ import http.server
 import json
 import os
 import threading
+import time
 from playwright.sync_api import sync_playwright
 from containerimport_hilfe import check, ende, nutzer_anlegen, stand, container_anlegen, container, seite
 from umgebung import AUX_PORT, SH, shot
@@ -37,7 +38,7 @@ DATEN = {   # DTE-Nummer → Antwort von POST /api/Visec/dte
     '100200300': {'dte': dte('100200300', tiere('VALIDA', 'VALIDA', 'VALIDA'))},
     '100200301': {'dte': dte('100200301', tiere('VALIDA', 'VALIDA', 'EN_VALIDACION', vorsilbe='AR-U'))},
 }
-SPIEL = {'modus': 'ok', 'anfragen': []}   # modus: ok | token | kaputt | fremd | abbruch
+SPIEL = {'modus': 'ok', 'anfragen': [], 'warten': 0}   # modus: ok | token | kaputt | fremd | abbruch; warten: Sekunden vor jeder Antwort
 
 
 class Visec(http.server.BaseHTTPRequestHandler):
@@ -50,6 +51,7 @@ class Visec(http.server.BaseHTTPRequestHandler):
     def do_POST(self):
         inhalt = json.loads(self.rfile.read(int(self.headers.get('Content-Length') or 0)) or b'null')
         SPIEL['anfragen'].append({'pfad': self.path, 'token': self.headers.get('Authorization'), 'inhalt': inhalt})
+        time.sleep(SPIEL['warten'])
         if self.headers.get('Authorization') != 'Bearer ' + TOKEN or SPIEL['modus'] == 'token':
             return self.antwort(401, b'')
         if SPIEL['modus'] == 'kaputt':
@@ -65,7 +67,9 @@ class Visec(http.server.BaseHTTPRequestHandler):
         if nummer == '777000777':   # einzelne Nummer, bei der VISEC scheitert
             return self.antwort(500, b'{}')
         r = {'requestId': UUID, 'serverDateUtc': '2026-11-24T12:00:00Z', 'serverVersion': '2026.11.23', 'observaciones': None, 'error': None, 'dte': None}
-        if nummer in DATEN:
+        if nummer == '888000888':   # anderer Fehlercode als NOT_FOUND
+            r['error'] = {'code': 'SIN_PERMISO', 'description': 'Sin permiso.'}
+        elif nummer in DATEN:
             r.update(DATEN[nummer])
         else:
             r['error'] = {'code': 'NOT_FOUND', 'description': 'No se encontró el DTE.'}
@@ -147,6 +151,18 @@ check('VISEC scheitert an der zweiten Nummer: die erste wird abgelegt, der Rest 
       st == 200 and r.get('offen') == ['777000777', '100200301'] and 'HTTP 500' in r.get('hinweis', '') and nach['100200300']['tropa'] == 'T-0043'
       and nach['100200301'] == vorher['100200301'] and nach['777000777']['stand'] == 'nie', (st, r.get('offen'), r.get('hinweis')))
 
+DATEN['100200300'] = {'dte': dte('100200300', [*tiere('VALIDA', 'VALIDA'), 'kaputt', {'caravanaNumero': 12345, 'estado': 'VALIDA'}], tropa=4711)}
+st, r = I.call('containerimport_eudr_sendung_save', {**container(stand(I), 'VISEC-1'), 'visecDte': '100200300\n888000888\n100200301'})
+st, r = I.call('containerimport_visec_abfragen', {'id': ar['id']})
+nach2 = {x['nummer']: x for x in container(r, 'VISEC-1')['visec']}
+check('Anderer Fehlercode als NOT_FOUND: nicht abgelegt (alter Stand bleibt), als Hinweis gemeldet, die übrigen Nummern trotzdem abgefragt',
+      st == 200 and r.get('offen') == ['888000888'] and 'SIN_PERMISO' in r.get('hinweis', '') and nach2['888000888']['stand'] == 'nie'
+      and [a['inhalt']['numero'] for a in SPIEL['anfragen'][-3:]] == ['100200300', '888000888', '100200301'], (st, r.get('offen'), r.get('hinweis')))
+check('Unlesbarer Eintrag zählt als offen (nie still übergangen), Zahlen als Ohrmarke und Tropa werden Text',
+      nach2['100200300']['zahlen'] == {'VALIDA': 3, 'INVALIDA': 0, 'offen': 1} and nach2['100200300']['offen'] == [['?', 'Eintrag unlesbar']] and nach2['100200300']['tropa'] == '4711'
+      and nach2['100200300']['stand'] == 'offen', nach2['100200300'])
+DATEN['100200300'] = {'dte': dte('100200300', tiere('VALIDA', 'VALIDA', 'VALIDA'))}
+
 # ---------- unbekannte DTE, noch nicht erfasste DTE, ungültige Tiere, Abschluss ----------
 DATEN['555000111'] = {'dte': dte('555000111', tiere(*(['INVALIDA'] * 150), 'VALIDA', vorsilbe='AR-X'), dte_id=-555000111, tropa='<img src=x onerror=alert(1)>\u0007'),
                       'observaciones': 'Sin permiso de lectura en SENASA.'}
@@ -164,10 +180,12 @@ check('Kriterium kritisch: 150 ungültige Tiere, betroffen ist nur diese DTE (vo
 st, r = I.call('containerimport_eudr_sendung_save', {**container(stand(I), 'VISEC-1'), 'visecDte': '100200300\n100200301\n999999999'})
 s = container(r, 'VISEC-1')
 k = kriterium(s)
+vor_abschluss = s['visec']
 check('Ohne die DTE mit ungültigen Tieren: offen wegen der unbekannten DTE (gespeicherte Ergebnisse gelten weiter)', k['stand'] == 'offen' and 'kennt einen DTE nicht' in k['text'] and k['betriebe'] == ['DTE 999999999'], k)
 st, r = I.call('containerimport_eudr_sendung_abschluss', {'id': s['id'], 'rev': s['rev'], 'ergebnis': 'nicht_vernachlaessigbar', 'begruendung': 'DTE 999999999 klären'})
 s = container(r, 'VISEC-1')
 check('Abschluss hält das Kriterium im Profil fest', st == 200 and s['abschluss'] and kriterium(s) == k, (st, r.get('error'), kriterium(s)))
+check('Abschluss hält die Antworten von VISEC fest (abschluss.visec, GR-106); angezeigt werden diese', s['abschluss'].get('visec') == vor_abschluss and s['visec'] == vor_abschluss, s['abschluss'].get('visec'))
 anfragen = len(SPIEL['anfragen'])
 st, r = I.call('containerimport_visec_abfragen', {'id': ar['id']})
 check('Nach dem Abschluss keine Abfrage mehr (409), nichts ging hinaus', st == 409 and 'abgeschlossen' in r.get('error', '') and len(SPIEL['anfragen']) == anfragen, (st, r.get('error')))
@@ -189,7 +207,13 @@ with sync_playwright() as pw:
     p.click(f'[data-sendung="{ui["id"]}"]'); p.wait_for_function(f"document.querySelector('#sendung-inhalt').dataset.id === '{ui['id']}'")
     check('Container aus Argentinien: Bereich mit leerer Eingabe, noch keine Ergebnisse', p.is_visible('#sendung-visec') and p.input_value('[name=visecDte]') == '' and p.locator('.ci-visec-dte').count() == 0)
     p.fill('[name=visecDte]', '300 400 500')
-    p.click('#visec-abfragen'); p.wait_for_function("document.querySelector('#sendung-visec').innerText.includes('Abgefragt am')")   # vorher steht die DTE schon als „nicht abgefragt“ da
+    SPIEL['warten'] = 1.5
+    p.click('#visec-abfragen'); p.wait_for_function("document.querySelector('#visec-laeuft') && document.querySelector('#visec-laeuft').textContent.includes('abgefragt')")
+    check('Während der Abfrage ist das Formular gesperrt (eine Eingabe ginge beim neuen Öffnen verloren)',
+          p.evaluate("document.querySelector('#sendung-inhalt .dlg-body').inert && document.querySelector('#sendung-inhalt .dlg-foot').inert"))
+    p.wait_for_function("document.querySelector('#sendung-visec').innerText.includes('Abgefragt am')")   # vorher steht die DTE schon als „nicht abgefragt“ da
+    SPIEL['warten'] = 0
+    check('Nach der Abfrage wieder frei', not p.evaluate("document.querySelector('#sendung-inhalt .dlg-body').inert"))
     text = p.inner_text('#sendung-visec')
     check('Speichern und abfragen in einem Schritt: Nummer gespeichert, DTE mit Marke, Zahlen, ungültigen und offenen Tieren',
           container(stand(I), 'VISEC-UI')['visecDte'] == ['300400500'] and 'DTE 300400500' in text and '1 ungültig' in text and '3 Tiere: 1 gültig · 1 ungültig · 1 offen' in text

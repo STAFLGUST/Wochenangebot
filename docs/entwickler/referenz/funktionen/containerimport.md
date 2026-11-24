@@ -260,13 +260,13 @@ _Container-Import · EUDR_
 - `ci_visec_token()`
 - `ci_visec_eingerichtet()`
 - `ci_visec_nummern(v)` – DTE-Nummern aus der Eingabe (Text mit einer Nummer je Zeile oder Liste): ohne Leerzeichen, groß, ohne Doppelte, in der Reihenfolge der Eingabe.
-- `ci_visec_text(v, max)` – Fremder Text: ohne Steuerzeichen, gekürzt
+- `ci_visec_text(v, max)` – Fremder Text (auch eine Zahl, etwa eine Ohrmarke als JSON-Zahl): ohne Steuerzeichen, gekürzt
 - `ci_visec_datum(v)` – Tag aus einem Zeitpunkt der Antwort („JJJJ-MM-TT…“), sonst leer
-- `ci_visec_dte(nummer)` – Eine DTE-Nummer bei VISEC abfragen → verdichtetes Ergebnis (Form CI_VISEC_LEER).
-- `ci_visec_abfragen(nummern)` – Alle DTE eines Containers abfragen (außerhalb jeder Sperre – das dauert) → [Nummer → Ergebnis, Fehlermeldung oder ''].
+- `ci_visec_dte(nummer)` – Eine DTE-Nummer bei VISEC abfragen → verdichtetes Ergebnis (Form CI_VISEC_LEER) oder ein Hinweis (Text): Kennt VISEC den DTE nicht (NOT_FOUND), ist das ein …
+- `ci_visec_abfragen(nummern)` – Alle DTE eines Containers abfragen (außerhalb jeder Sperre – das dauert) → [Nummer → Ergebnis mit Abfragezeit t, Hinweise als Text oder ''].
 - `ci_visec_ergebnisse()` – Abgelegte Antworten: Container-Kennung → DTE-Nummer → Ergebnis mit t (Abfrage) und von.
-- `ci_visec_ablegen(sendung, ergebnisse, me)` – Antworten einer Abfrage ablegen (unter der Sperre EUDR_SPERRE): je DTE ersetzt die jüngste die vorige
-- `ci_visec_zu(s)` – Container mit seinen DTE (Feld „visec“, in der Reihenfolge der Nummern), je DTE mit „stand“: nie (nicht abgefragt) \| fehler (VISEC kennt den DTE nicht oder …
+- `ci_visec_ablegen(sendung, ergebnisse, me)` – Antworten einer Abfrage ablegen (unter der Sperre EUDR_SPERRE): je DTE gilt die zuletzt gestellte Abfrage (t), auch wenn zwei Bearbeiter gleichzeitig abfragen
+- `ci_visec_zu(s)` – Container mit seinen DTE (Feld „visec“, in der Reihenfolge der Nummern), je DTE mit „stand“ – nach dem Abschluss die beim Abschluss festgehaltenen …
 - `ci_visec_kriterium(s)` – Kriterium „Tiere laut VISEC“ des Risikoprofils; null = der Container nennt keine DTE (kein Kriterium)
 
 ## `app/api/module/containerimport/whisp.php`

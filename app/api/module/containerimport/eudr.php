@@ -756,7 +756,8 @@ function eudr_abschluss(array $s, array $eingabe, array $sichten, array $me): ar
     if ($ergebnis === 'vernachlaessigbar' && $profil['vernachlaessigbar'] === 'nein') throw new InvalidArgumentException('Solange ein Kriterium kritisch ist, kann das Risiko nicht als vernachlässigbar bewertet werden.');
     if ($ergebnis === 'vernachlaessigbar' && $profil['vernachlaessigbar'] === 'begruendung' && mb_strlen($begruendung) < 20)
         throw new InvalidArgumentException('Es sind noch Punkte offen. Bitte begründen, warum das Risiko trotzdem vernachlässigbar ist (mindestens 20 Zeichen).');
-    return ['ergebnis' => $ergebnis, 'begruendung' => $begruendung, 'wer' => eudr_wer($me), 'profil' => $profil, 'betriebe' => $bs];
+    return ['ergebnis' => $ergebnis, 'begruendung' => $begruendung, 'wer' => eudr_wer($me), 'profil' => $profil, 'betriebe' => $bs]
+        + ($s['visecDte'] ? ['visec' => ci_visec_zu($s)['visec']] : []);   // Antworten von VISEC, wie sie beim Abschluss galten (visec.php)
 }
 /* Farmer eines Abschlusses (eudr_abschluss) mit Umriss in ein eigenes Dokument legen – neue Kennung, nie überschrieben – und
    den Abschluss für das Dokument der Container liefern: Farmer ohne Umriss, dazu „schnappschuss“ (Kennung, SHA-256 der Farmer).
@@ -789,7 +790,7 @@ function eudr_ohne_umriss(array $betriebe): array { return array_map(fn($b) => a
 function eudr_sendung_sicht(array $s, array $betriebe, array $hofNamen, array $stelle): array
 {
     $s = ci_visec_zu($s);   // Antworten von VISEC je DTE-Nummer für die Anzeige (das Kriterium liest sie selbst)
-    $s['fruehere'] = array_map(fn($f) => array_diff_key($f, ['profil' => 1, 'betriebe' => 1]), $s['fruehere'] ?? []);   // Schnappschüsse bleiben gespeichert
+    $s['fruehere'] = array_map(fn($f) => array_diff_key($f, ['profil' => 1, 'betriebe' => 1, 'visec' => 1]), $s['fruehere'] ?? []);   // Schnappschüsse bleiben gespeichert
     if (!empty($s['abschluss'])) $s['abschluss']['betriebe'] = eudr_ohne_umriss($s['abschluss']['betriebe']);
     if (empty($s['abschluss'])) $s['schlachthofName'] = $hofNamen[$s['schlachthof']] ?? $s['schlachthofName'];
     $bs = eudr_sendung_betriebe($s, $betriebe, $stelle);

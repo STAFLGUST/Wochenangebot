@@ -21,7 +21,7 @@
     offen: (d) => [`${d.zahlen.offen} offen`, 'warn'],
     ok: () => ['alle gültig', 'ok'],
   };
-  const sichtbar = (land, s) => land === 'AR' || s.visecDte.length > 0;
+  const sichtbar = (land, s) => land === 'AR' || (s.visecDte || []).length > 0;   // || []: offene Seite nach einem Rückfall des Servers
 
   function dteZeile(d) {
     const angaben = [d.tropa && `Tropa ${esc(d.tropa)}`, d.fechaDte && `DTE vom ${tag(d.fechaDte)}`, d.fechaArribo && `Ankunft ${tag(d.fechaArribo)}`, d.estado && `Stand ${esc(d.estado)}`].filter(Boolean);
@@ -38,11 +38,11 @@
   function zeichnen(s) {
     const el = $('#sendung-visec');
     if (!el) return;
-    const darf = S.d.rechte.bearbeiten && !s.abschluss;
+    const darf = S.d.rechte.bearbeiten && !s.abschluss, dte = s.visec || [];
     el.innerHTML = `<h3 class="ci-h">Tiere laut VISEC <span class="ci-leise">· Argentinien</span></h3>
-      ${darf ? `<label class="ci-feld breit"><span>DTE-Nummern aus den Papieren</span><textarea name="visecDte" rows="3" placeholder="je Zeile eine Nummer (Documento de Tránsito Electrónico)">${esc(s.visecDte.join('\n'))}</textarea>
+      ${darf ? `<label class="ci-feld breit"><span>DTE-Nummern aus den Papieren</span><textarea name="visecDte" rows="3" placeholder="je Zeile eine Nummer (Documento de Tránsito Electrónico)">${esc((s.visecDte || []).join('\n'))}</textarea>
         <small>Gespeichert wird mit dem Container. Bei VISEC geht nur die Nummer hin.</small></label>` : ''}
-      ${s.visec.length ? `<ul class="ci-visec-liste">${s.visec.map(dteZeile).join('')}</ul>` : (darf ? '' : '<p class="ci-leer">Keine DTE-Nummern eingetragen.</p>')}
+      ${dte.length ? `<ul class="ci-visec-liste">${dte.map(dteZeile).join('')}</ul>` : (darf ? '' : '<p class="ci-leer">Keine DTE-Nummern eingetragen.</p>')}
       ${darf && S.d.rechte.visec ? '<p class="ci-visec-knopf"><button class="ci-knopf" type="button" id="visec-abfragen">Speichern und bei VISEC abfragen</button><span id="visec-laeuft" class="ci-klein ci-leise" aria-live="polite"></span></p>'
         : darf ? '<p class="ci-klein ci-leise">Die Abfrage bei VISEC ist auf dem Server nicht eingerichtet (Token fehlt).</p>' : ''}
       <p class="ci-klein ci-leise">VISEC prüft jedes Tier gegen Entwaldung nach dem 31.12.2020, Schutzgebiete und Legalität. VISEC zertifiziert nicht – das Ergebnis stützt die eigene Prüfung.</p>`;
@@ -50,13 +50,17 @@
   }
 
   /* Fenster speichern (auch die eben eingetragenen Nummern; sendungSpeichern öffnet das Fenster neu), dann abfragen und das
-     Fenster mit dem neuen Profil noch einmal öffnen – es wird also zweimal aufgebaut */
+     Fenster mit dem neuen Profil noch einmal öffnen – es wird also zweimal aufgebaut. Während der Abfrage (bis rund 40 s) ist
+     das Formular gesperrt: das neue Öffnen verwürfe sonst, was in der Zwischenzeit eingetragen wurde. Schließen geht weiter. */
   async function abfragen() {
     const id = $('#sendung-inhalt').dataset.id;
     if (!await C.sendungSpeichern()) return;
+    const teile = ['#sendung-inhalt .dlg-body', '#sendung-inhalt .dlg-foot'].map((sel) => $(sel)).filter(Boolean);
+    teile.forEach((el) => { el.inert = true; });
     const laeuft = $('#visec-laeuft');
     if (laeuft) laeuft.textContent = 'VISEC wird abgefragt …';
     const r = await api('containerimport_visec_abfragen', { id });
+    teile.forEach((el) => { el.inert = false; });
     if (!uebernehmen(r, 'VISEC konnte nicht abgefragt werden')) { const l = $('#visec-laeuft'); if (l) l.textContent = ''; return; }
     const offen = r.data.offen.length;
     toast(offen ? `${r.data.hinweis ? r.data.hinweis + ' ' : ''}${zahl(offen, 'DTE wurde', 'DTE wurden')} nicht abgefragt – bitte später erneut abfragen.` : 'VISEC abgefragt.', offen > 0);
