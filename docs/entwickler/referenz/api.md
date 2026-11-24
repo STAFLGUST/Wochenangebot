@@ -6,7 +6,7 @@ Aufruf: `/api/?action=<aktion>` (GET lesend, POST mit JSON und `X-CSRF-Token` sc
 
 Spalten: **Art** – lesend, schreibend (nur POST) oder post (GET liest, POST schreibt); **Kennzeichen** – öffentlich (ohne Mitarbeiteranmeldung), Kunden-Wartung, wartungsfrei, fremde Herkunft, eigene Anmeldung (siehe [regeln/aktionen/LIESMICH.md](../../../regeln/aktionen/LIESMICH.md)).
 
-342 Aktionen in 17 Modulen.
+343 Aktionen in 17 Modulen.
 
 ## Angebot (`angebot`)
 
@@ -227,6 +227,7 @@ Spalten: **Art** – lesend, schreibend (nur POST) oder post (GET liest, POST sc
 | `containerimport_start` | `containerimport.intern` | lesend | – | – | `app/api/aktionen/containerimport.php` |
 | `containerimport_tracking_hafen` | `containerimport.intern` | schreibend | – | – | `app/api/aktionen/containerimport.php` |
 | `containerimport_tracking_save` | `containerimport.intern` | schreibend | – | – | `app/api/aktionen/containerimport.php` |
+| `containerimport_visec_abfragen` | `containerimport.intern` | schreibend | – | – | `app/api/aktionen/containerimport.php` |
 
 ## Import (`import`)
 

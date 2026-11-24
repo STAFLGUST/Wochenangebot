@@ -1030,6 +1030,14 @@ Caddy setzt auf allen Hosts `script-src 'self'` (ohne `'unsafe-inline'`), `conne
   Auswahl „Ergebnis“ leer und `pruefungEintragen` verlangt eine Wahl. Die Vorgangsnummer geht per POST statt in die Adresse
   (mit ihr lässt sich das Ergebnis bei Whisp ohne Anmeldung abrufen); deshalb der Schalter `sperre` in `api()`. Tests: Gruppe
   `containerimport_whisp` mit nachgebautem Dienst; gegen das echte Whisp lässt sich nur mit Schlüssel prüfen.
+  **VISEC Carne** (Argentinien, Bereich „Tiere laut VISEC“ im Fenster „Container“): `visec.js` hängt sich hinter den Haken
+  `fenster` (ruft den vorher gesetzten von `dokumente.js` mit auf) und zeichnet in `#sendung-visec`. Das Feld `visecDte`
+  liegt im Formular des Containers und wird mit ihm gespeichert (`sendungAusFenster` reicht es nur weiter, wenn es da ist).
+  „Speichern und bei VISEC abfragen“ nutzt `sendungSpeichern` und `sendungOeffnen` der Brücke: erst speichern, dann
+  `containerimport_visec_abfragen`, dann das Fenster neu öffnen (Profil mit dem Kriterium). Der Server ruft VISEC ab
+  (`app/api/module/containerimport/visec.php`), der Token `VISEC_API_TOKEN` kommt nie in den Browser; die Antworten liegen
+  je Container und DTE im Dokument `containerimport-visec` und stehen als `visec` am Container im Stand. Tests: Gruppe
+  `containerimport_visec` mit nachgebautem Dienst.
   **Reiter „Kalkulation“** (Auftrag des Inhabers 20.11.2026): `kalkulation.js`/`kalkulation.css`, Aktionen in eigener Datei
   `app/api/aktionen/containerimport_kalkulation.php` (eingebunden am Ende von `aktionen/containerimport.php`), Regeln in
   `app/api/module/containerimport/kalkulation.php`. Gerechnet wird nur auf dem Server: `ci_kalkulation_rechnen(eingabe, saetze)`

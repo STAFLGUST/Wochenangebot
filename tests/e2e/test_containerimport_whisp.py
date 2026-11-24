@@ -111,7 +111,7 @@ check('Betriebe angelegt (ein Umriss, ein Punkt)', st == 200 and nord and punkt 
 
 # ---------- Rechte ----------
 check('Stand: Abfrage eingerichtet – nur wer bearbeiten darf, bekommt sie angeboten',
-      I.call('containerimport_start')[1]['rechte'] == {'bearbeiten': True, 'whisp': True} and L.call('containerimport_start')[1]['rechte'] == {'bearbeiten': False, 'whisp': False})
+      I.call('containerimport_start')[1]['rechte'] == {'bearbeiten': True, 'whisp': True, 'visec': False} and L.call('containerimport_start')[1]['rechte'] == {'bearbeiten': False, 'whisp': False, 'visec': False})
 check('nur ansehen: Abfrage 403', L.call('containerimport_eudr_whisp', {'id': nord['id']})[0] == 403)
 csrf = I.csrf; I.csrf = ''
 check('ohne CSRF: 403', I.call('containerimport_eudr_whisp', {'id': nord['id']})[0] == 403)

@@ -40,6 +40,11 @@ schreibend = true
 oberflaeche = "containerimport.intern"
 schreibend = true
 
+# VISEC Carne (Argentinien): die DTE-Nummern eines Containers abfragen und die Antworten ablegen (nur die Nummern gehen an VISEC)
+[aktion.containerimport_visec_abfragen]
+oberflaeche = "containerimport.intern"
+schreibend = true
+
 # Farmer-Nummern aus den Papieren für einen Container auflösen, ohne zu speichern (Vorschau; POST wegen Inhalt)
 [aktion.containerimport_eudr_nummern]
 oberflaeche = "containerimport.intern"
