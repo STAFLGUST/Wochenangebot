@@ -38,7 +38,7 @@ const VARIANT_STATUS = ['value', 'request', 'hidden'];
 const OFFER_MAX = 100;   // Kundenangebote (je Kundengruppe höchstens eines) – Sonderangebote zählen extra (SONDER_MAX)
 function offers_load(): array
 {
-    $d = store_read('angebote');
+    $d = store_read_gemerkt('angebote');   // je Kunde mehrfach gebraucht (customer_offers) – einmal je Anfrage lesen
     return is_array($d) && isset($d['offers']) ? $d : ['rev' => 0, 'offers' => OFFER_DEFAULTS, 'updatedAt' => null];
 }
 function offer_ids(): array { return array_column(offers_load()['offers'], 'id'); }
