@@ -16,7 +16,7 @@
   S.suche.geodaten = '';
   const KONFORM = { ja: ['ja', 'ok'], teilweise: ['teilweise', 'warn'], nein: ['nein', 'rot'], nein_unklar: ['nein/unklar', 'warn'], unklar: ['unklar', 'warn'],
     nicht_berichtet: ['nicht berichtet', ''], nicht_zutreffend: ['nicht zutreffend', ''] };
-  const offen = new Set();   // aufgeklappte Einträge der Liste, damit Neuzeichnen (Suche, Abgleich) sie nicht zuklappt
+  const offen = new Set();   // aufgeklappte Einträge der Liste, damit Neuzeichnen (Suche, Abgleich) sie nicht zuklappt – Stand aus dem DOM vor jedem Neuzeichnen
   let daten = null, laden = null;
   /* Katalog einmal je Seite; nach einem Fehler beim nächsten Aufruf neu versuchen → Katalog | null */
   const katalog = () => (laden = laden || api('containerimport_eudr_geodaten').then((r) => {
@@ -66,6 +66,9 @@
       });
       return;
     }
+    // Auf- und Zuklappen der gezeigten Einträge übernehmen, bevor sie ersetzt werden. Nicht über das Ereignis „toggle“: es kommt
+    // später als der Klick und für ein inzwischen entferntes Element unter Umständen gar nicht (CI, Chromium 141: Eintrag zu).
+    for (const d of document.querySelectorAll('#ci-geodaten details[data-gd]')) offen[d.open ? 'add' : 'delete'](d.dataset.gd);
     const liste = daten.eintraege.filter((e) => SU.findet(S.suche.geodaten, e.id, e.name, e.hinweis, e.hersteller, e.sensor, e.methode, e.kategorie, e.walddefinition, e.klassen, e.zitat, KONFORM[e.eudrKonform] && KONFORM[e.eudrKonform][0]));
     $('#ci-inhalt').innerHTML = `<div class="ci-suchzeile">${suchfeld('Name, Kennung (FNF01), Hersteller, Sensor, Methode', 'Geodaten-Katalog')}</div>
       <div class="r-karte ci-hilfe ci-gd-quelle">${quelle()}</div>
@@ -102,9 +105,6 @@
     const v = e.target.closest('[data-geodaten]');
     if (v) fenster(v.dataset.geodaten);
   });
-  document.addEventListener('toggle', (e) => {   // toggle steigt nicht auf: im Einfangen hören
-    if (e.target.matches && e.target.matches('details[data-gd]')) offen[e.target.open ? 'add' : 'delete'](e.target.dataset.gd);
-  }, true);
   $('#geodaten-inhalt').addEventListener('submit', (e) => e.preventDefault());
 
   window.EUDR_GEODATEN = { verweis, beleg };

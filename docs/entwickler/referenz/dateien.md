@@ -184,6 +184,7 @@ Jede Code-Datei beginnt mit einem Kopfkommentar; dessen erste Aussage steht hier
 | `kalkulation.php` | containerimport | STAFL-Plattform · Modul Container-Import – Kalkulation je Container (Auftrag des Inhabers 20.11.2026) |
 | `schlachthoefe.php` | containerimport | STAFL-Plattform · Modul Container-Import – Schlachthöfe |
 | `tracking.php` | containerimport | STAFL-Plattform · Modul Container-Import – Tracking: wo ist der Container, wann kommt er an (Auftrag des Inhabers 19.11.2026: eigener Reiter neben EUDR; Schiffsname eintragen; wissen, wann der Container z. |
+| `visec.php` | containerimport | Container-Import · EUDR |
 | `whisp.php` | containerimport | Container-Import · EUDR |
 
 ## `app/api/module/controlling/`
@@ -408,6 +409,7 @@ Jede Code-Datei beginnt mit einem Kopfkommentar; dessen erste Aussage steht hier
 | `kalkulation.js` | containerimport | STAFL-Plattform · Modul Container-Import – Reiter „Kalkulation“ (Auftrag des Inhabers 20.11.2026) |
 | `schlachthoefe.js` | containerimport | STAFL-Plattform · Modul Container-Import – Schlachthöfe |
 | `tracking.js` | containerimport | STAFL-Plattform · Modul Container-Import – Reiter „Tracking“: wo ist der Container, wann kommt er an (Auftrag des Inhabers 19.11.2026). |
+| `visec.js` | containerimport | STAFL-Plattform · Modul Container-Import – Bereich „Tiere laut VISEC“ im Fenster eines Containers aus Argentinien (Auftrag des Inhabers 24.11.2026: bei Lieferungen aus Argentinien die Daten von carne.visec.com.ar … |
 
 ## `app/module/controlling/`
 
@@ -831,6 +833,7 @@ Jede Code-Datei beginnt mit einem Kopfkommentar; dessen erste Aussage steht hier
 | `test_containerimport_kalkulation.py` | containerimport | Container-Import: Kalkulation je Container (Aktionen containerimport_kalkulation_*, app/api/module/containerimport/kalkulation.php, Oberfläche app/module/containerimport/kalkulation.js). |
 | `test_containerimport_schlachthof.py` | containerimport | Container-Import: Schlachthöfe als Stammdaten unter dem Lieferanten (Aktion containerimport_schlachthof_save, app/api/module/containerimport/schlachthoefe.php, Oberfläche app/module/containerimport/schlachthoefe.js). |
 | `test_containerimport_tracking.py` | containerimport | Container-Import: Reiter „Tracking“ (Aktion containerimport_tracking_save, app/api/module/containerimport/tracking.php, Oberfläche app/module/containerimport/tracking.js) – erste Stufe ohne fremde Dienste. |
+| `test_containerimport_visec.py` | containerimport | Container-Import · EUDR (Argentinien) |
 | `test_containerimport_whisp.py` | containerimport | Container-Import · EUDR |
 | `test_controlling.py` | controlling | Controlling (Modul controlling, Oberfläche controlling.intern unter /module/controlling/) – Bereich Umsatzstatistik, Reiter Monatsmeldung |
 | `test_controlling_umsatzdaten.py` | controlling | Controlling · Umsatzdaten der Warenwirtschaft |

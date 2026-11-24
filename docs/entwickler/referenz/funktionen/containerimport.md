@@ -2,7 +2,7 @@
 
 <!-- ERZEUGT von `python3 werkzeuge/doku.py erzeugen` – nicht von Hand ändern. Quelle: Funktionen und Kommentare im Code. Die CI prüft, dass diese Datei zum Code passt. -->
 
-34 Dateien, 374 Funktionen – in der Reihenfolge der Datei, **fett** die Abschnitte. Text = erste Aussage des Kommentars direkt über der Funktion (Python: Docstring). Übersicht aller Module: [README.md](README.md).
+37 Dateien, 393 Funktionen – in der Reihenfolge der Datei, **fett** die Abschnitte. Text = erste Aussage des Kommentars direkt über der Funktion (Python: Docstring). Übersicht aller Module: [README.md](README.md).
 
 ## `app/api/aktionen/containerimport.php`
 
@@ -253,6 +253,22 @@ _STAFL-Plattform · Modul Container-Import – Tracking: wo ist der Container, w
 
 - `ci_tracking_pruefen(b, alt)` – Angaben des Trackings aus der Eingabe prüfen (genau die Felder aus CI_TRACKING_VORGABEN).
 
+## `app/api/module/containerimport/visec.php`
+
+_Container-Import · EUDR_
+
+- `ci_visec_token()`
+- `ci_visec_eingerichtet()`
+- `ci_visec_nummern(v)` – DTE-Nummern aus der Eingabe (Text mit einer Nummer je Zeile oder Liste): ohne Leerzeichen, groß, ohne Doppelte, in der Reihenfolge der Eingabe.
+- `ci_visec_text(v, max)` – Fremder Text (auch eine Zahl, etwa eine Ohrmarke als JSON-Zahl): ohne Steuerzeichen, gekürzt
+- `ci_visec_datum(v)` – Tag aus einem Zeitpunkt der Antwort („JJJJ-MM-TT…“), sonst leer
+- `ci_visec_dte(nummer)` – Eine DTE-Nummer bei VISEC abfragen → verdichtetes Ergebnis (Form CI_VISEC_LEER) oder ein Hinweis (Text): Kennt VISEC den DTE nicht (NOT_FOUND), ist das ein …
+- `ci_visec_abfragen(nummern)` – Alle DTE eines Containers abfragen (außerhalb jeder Sperre – das dauert) → [Nummer → Ergebnis mit Abfragezeit t, Hinweise als Text oder ''].
+- `ci_visec_ergebnisse()` – Abgelegte Antworten: Container-Kennung → DTE-Nummer → Ergebnis mit t (Abfrage) und von.
+- `ci_visec_ablegen(sendung, ergebnisse, me)` – Antworten einer Abfrage ablegen (unter der Sperre EUDR_SPERRE): je DTE gilt die zuletzt gestellte Abfrage (t), auch wenn zwei Bearbeiter gleichzeitig abfragen
+- `ci_visec_zu(s)` – Container mit seinen DTE (Feld „visec“, in der Reihenfolge der Nummern), je DTE mit „stand“ – nach dem Abschluss die beim Abschluss festgehaltenen …
+- `ci_visec_kriterium(s)` – Kriterium „Tiere laut VISEC“ des Risikoprofils; null = der Container nennt keine DTE (kein Kriterium)
+
 ## `app/api/module/containerimport/whisp.php`
 
 _Container-Import · EUDR_
@@ -495,6 +511,14 @@ _STAFL-Plattform · Modul Container-Import – Reiter „Tracking“: wo ist der
 - `fenster(id)`
 - `speichern()`
 
+## `app/module/containerimport/visec.js`
+
+_STAFL-Plattform · Modul Container-Import – Bereich „Tiere laut VISEC“ im Fenster eines Containers aus Argentinien (Auftrag des Inhabers 24.11.2026: bei Lieferungen aus Argentinien die Daten von carne.visec.com.ar …_
+
+- `dteZeile(d)`
+- `zeichnen(s)`
+- `abfragen()` – Fenster speichern (auch die eben eingetragenen Nummern; sendungSpeichern öffnet das Fenster neu), dann abfragen und das Fenster mit dem neuen Profil noch …
+
 ## `tests/e2e/containerimport_hilfe.py`
 
 _Gemeinsame Hilfen für die Testgruppen des Moduls Container-Import (containerimport_*)_
@@ -713,6 +737,19 @@ _Container-Import: Reiter „Tracking“ (Aktion containerimport_tracking_save, 
 **Oberfläche**
 
 - `seite(user, vp, schema)`
+
+## `tests/e2e/test_containerimport_visec.py`
+
+_Container-Import · EUDR (Argentinien)_
+
+- `tiere(*staende, vorsilbe)`
+- `dte(nummer, caravanas, dte_id, tropa)`
+
+**nachgebautes VISEC**
+
+- `log_message(*a)`
+- `antwort(status, roh, art)`
+- `do_POST()`
 
 ## `tests/e2e/test_containerimport_whisp.py`
 

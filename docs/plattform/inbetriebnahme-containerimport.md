@@ -418,3 +418,61 @@ Korrektur aus dem Nachtlauf 22./23.11.2026. Kein Schritt auf dem Server, keine M
   nicht bei TRACES einreichen**. Liste, Profil
   und Druck zeigt sie wie gewohnt. Nach der Rückkehr auf dieses Release ist alles wieder da (*getestet* mit dem Stand vor der
   Korrektur gegen Daten dieses Stands).
+
+## 17. Argentinien: Tiere laut VISEC Carne (ab dem Release mit der VISEC-Abfrage)
+
+Auftrag des Inhabers 24.11.2026: Bei Lieferungen aus Argentinien die Daten von VISEC Carne (`https://carne.visec.com.ar`)
+abrufen. VISEC ist die Plattform der argentinischen Rindfleischkette zur EUDR. Jedes Tier (Caravana = Ohrmarke) wird dort gegen
+Entwaldung nach dem 31.12.2020, Schutzgebiete und Legalität geprüft. VISEC zertifiziert nicht – das Ergebnis stützt die eigene
+Prüfung. Ohne Token auf dem Server gibt es den Knopf nicht. Weil sich die Container-Beschreibung ändert, startet dieses
+Release alle Container neu (kurze Unterbrechung aller Adressen, auch der Kundenseite).
+
+**So arbeitet man damit:** Im Fenster eines gespeicherten Containers erscheint bei Herkunftsland Argentinien der Bereich „Tiere laut VISEC“.
+Dort die DTE-Nummern aus den Papieren eintragen (Documento de Tránsito Electrónico, Transport der Tiere zum Schlachthof; eine
+je Zeile). „Speichern und bei VISEC abfragen“ speichert den Container und holt je DTE Tropa, Daten und den Stand jedes Tiers.
+Das Risikoprofil bekommt das Kriterium „Tiere laut VISEC (Argentinien)“:
+
+| VISEC meldet | Kriterium |
+| --- | --- |
+| mindestens ein Tier ungültig | kritisch – „vernachlässigbar“ ist dann beim Abschluss nicht möglich |
+| DTE noch nicht abgefragt, bei VISEC unbekannt oder ohne Tiere | offen |
+| Tiere noch in Prüfung (wartet, in Validierung, Nummer bei SENASA unbekannt, von VISEC nicht erfasst) | offen |
+| alle Tiere aller DTE gültig | in Ordnung, mit Zahl der Tiere und Datum der Abfrage |
+
+Container ohne DTE-Nummern haben das Kriterium nicht; für sie ändert sich nichts. Nach dem Abschluss der Bewertung wird nicht
+mehr abgefragt; der Abschluss hält das Kriterium und die Antworten von VISEC fest, wie sie in diesem Moment galten. Während
+der Abfrage (bis rund 40 Sekunden) ist das Fenster gesperrt.
+
+**Einrichten (einmal, Serverkonsole, Ordner `/opt/wochenangebot`):**
+
+1. Bei VISEC anmelden → Profil („Tu información personal“) → „Token de acceso a la API“ → „Generar token“. Ein neu erzeugter
+   Token ersetzt den alten.
+2. In `.env` eine Zeile ergänzen: `VISEC_API_TOKEN=<Token>` (nie ins Repository, nie in einen Chat).
+3. `docker compose up -d app-mitarbeiter`
+4. Prüfen: einen Container aus Argentinien öffnen, eine DTE-Nummer aus den Papieren eintragen, „Speichern und bei VISEC
+   abfragen“. Das ist der erste echte Abruf – weicht die Anzeige vom Erwarteten ab, bitte ein Bildschirmfoto zurückmelden.
+
+**Token abgelaufen:** Die Abfrage meldet „VISEC lehnt den Zugangstoken ab“ – Schritte 1 bis 3 wiederholen. Wie lange ein
+Token gilt, nennt VISEC nicht.
+
+**Abschalten:** Zeile in `.env` leeren, Schritt 3. Der Knopf verschwindet; eingetragene Nummern, Ergebnisse und das
+Kriterium bleiben.
+
+- **Was an VISEC geht:** je DTE nur die Nummer, mit dem Token des Kontos. Keine Namen, keine Containernummer. Jede Abfrage
+  steht im Aktivitätsprotokoll. Für das Verzeichnis der Verarbeitungstätigkeiten: VISEC Carne (Betreiber RDI 2K, Argentinien)
+  als Empfänger von DTE-Nummern.
+- **Schnittstelle** (Stand 24.11.2026, Beschreibung im Profil bei VISEC unter „Consultá la documentación de la API“): es gibt
+  nur die Abfrage eines DTE und einer einzelnen Caravana. Die Liste „Mis embarques“ und der GeoJSON-Download der Flächen sind
+  nur in der Weboberfläche von VISEC zu haben, nicht über die Schnittstelle.
+- **Gespeichert** wird je Container und DTE die jüngste Antwort, verdichtet: Kopfdaten, Zahl der Tiere je Stand, höchstens
+  100 Ohrmarken ungültiger bzw. noch offener Tiere und die Kennung der Anfrage bei VISEC (Dokument `containerimport-visec`,
+  vertraulich). Die vollständige Liste der Ohrmarken bleibt bei VISEC. Ein Fehler von VISEC überschreibt nichts – auch kein
+  anderer Fehlercode als „nicht gefunden“ (die Seite meldet ihn). Fragen zwei Bearbeiter gleichzeitig ab, gilt die zuletzt
+  gestellte Abfrage.
+- **Grenzen:** höchstens 30 DTE je Container; je Abfrage 15 Sekunden Frist, alle zusammen höchstens 40 Sekunden. Scheitert
+  VISEC an einer Nummer oder reicht die Zeit nicht, bleibt das bisher Geholte; die übrigen Nummern nennt die Seite („bitte
+  später erneut abfragen“). Scheitert schon die erste, kommt nur die Meldung.
+- *Getestet* mit nachgebautem Dienst (Gruppe `containerimport_visec`). Die Antwortfelder stammen aus der Beschreibung der
+  Schnittstelle bei VISEC; **ein echter Abruf ist noch nicht geprüft** (Schritt 4).
+- **Rückfall:** `sh /opt/wochenangebot/deploy/release-zurueck.sh`. Die Vorversion liest alle Container weiter und behält die
+  DTE-Nummern beim Speichern; sie zeigt Bereich und Kriterium nicht.

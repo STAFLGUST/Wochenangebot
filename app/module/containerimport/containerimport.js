@@ -14,7 +14,8 @@
    containerimport_eudr_betriebe_save, _original, _gegenpruefung, _sendung_save, _sendung_abschluss (jede Antwort bringt den neuen
    Stand mit), containerimport_eudr_export (GeoJSON für das EU-Informationssystem), containerimport_eudr_schnappschuss
    (Umrisse einer abgeschlossenen Bewertung für die Karte im Fenster), containerimport_eudr_whisp (Whisp für
-   einen Betrieb abfragen; speichert nichts, Deutung in eudr-whisp.js).
+   einen Betrieb abfragen; speichert nichts, Deutung in eudr-whisp.js), containerimport_visec_abfragen (Argentinien: DTE-Nummern
+   bei VISEC abfragen – Bereich im Fenster „Container“ in visec.js).
    Unterlagen einlesen: Entwaldungsberichte (PDF) liest der Browser mit pdf.js (assets/vendor/pdfjs, eudr-bericht.js);
    Lieferanten-GeoJSON und eingefügte Koordinaten prüft der Server. Am Betrieb stehen Name und Prüfsumme der Datei. Beim
    Übernehmen gehen die Originale – wenn angehakt – in Teilen an containerimport_eudr_original und von dort in den Eingang
@@ -182,8 +183,9 @@
   /* Reiter des Moduls: Zeichenfunktion je Reiter; weitere Dateien tragen ihre ein (Brücke STAFL_CI) */
   const REITER = { eudr: eudrZeichnen };
   const SICHTEN = { sendungen: sendungenSicht, betriebe: betriebeSicht, karte: karteSicht };   // weitere Dateien tragen ihre Ansicht ein (Brücke STAFL_CI)
-  /* Haken für weitere Dateien (dokumente.js): Zusatz in der Zeile eines Containers, Bereich im Fenster „Container“ */
-  const HAKEN = { zeile: () => '', fenster: () => {} };
+  /* Haken für weitere Dateien (dokumente.js, visec.js): Zusatz in der Zeile eines Containers, Bereich im Fenster „Container“ –
+     jede Datei hängt ihre Funktion an (push), alle laufen */
+  const HAKEN = { zeile: [], fenster: [] };
 
   /* Suchfeld einer Liste; schluessel = Platz des Suchtexts in S.suche (Vorgabe: die Ansicht). Tippen zeichnet den Reiter neu
      und behält den Fokus (ein Hörer für alle Suchfelder, siehe unten). */
@@ -193,7 +195,7 @@
     const liste = S.d.sendungen.filter((s) => (s.aktiv || S.archiv) && SU.findet(S.suche.sendungen, s.partie, s.akte, s.container, s.nummer, s.lieferant, s.lieferantNr, s.schlachthofName, s.ware, landName(s.land), s.dds.referenz, s.offeneNummern))
       .sort((a, b) => b.erstellt.t.localeCompare(a.erstellt.t));
     const zeile = (s) => `<tr data-sendung="${esc(s.id)}" tabindex="0" class="${s.aktiv ? '' : 'ci-archiv'}">
-      <td><span class="ci-name">${esc(titel(s))}</span><span class="ci-unter">${s.container ? `Container <span class="ci-zahlen">${esc(s.container)}</span>` : '—'}</span>${HAKEN.zeile(s)}</td>
+      <td><span class="ci-name">${esc(titel(s))}</span><span class="ci-unter">${s.container ? `Container <span class="ci-zahlen">${esc(s.container)}</span>` : '—'}</span>${HAKEN.zeile.map((f) => f(s)).join('')}</td>
       <td data-t="Lieferant"><span>${esc(s.lieferant)}</span><span class="ci-unter">${esc(landName(s.land))}${s.lieferantNr ? ` · Nr. ${esc(s.lieferantNr)}` : ' · nicht mit den Stammdaten verknüpft'}${s.schlachthofName ? ` · ${esc(s.schlachthofName)}` : ''}</span></td>
       <td data-t="Ware"><span>${esc(s.ware || '—')}</span><span class="ci-unter">${s.mengeKg === null ? '' : F.kg(s.mengeKg)}${s.lose ? ` · Lose ${esc(s.lose)}` : ''}</span></td>
       <td data-t="Stand">${marke(S.d.staende[s.stand], s.stand === 'angekommen' ? 'ok' : '')}</td>
@@ -494,6 +496,8 @@
         <h3 class="ci-h">Farmer dieses Containers</h3>${betriebe}
         ${!neu && gezeigt.length ? '<div class="ci-k-wrap flach" id="sendung-karte"></div>' : ''}
 
+        ${neu ? '' : '<section class="ci-visec" id="sendung-visec" hidden></section>'}
+
         <h3 class="ci-h">Nachweise des Lieferanten</h3>
         <div class="ci-raster">
           ${feld('Erklärung des Lieferanten zur EUDR vom', 'n_erklaerung', s.nachweis.erklaerung, { typ: 'date', aus })}
@@ -515,7 +519,7 @@
         ${darf && !neu ? (zu ? '<button class="ci-knopf" type="button" id="sendung-oeffnen">Bewertung wieder öffnen</button>' : `<button class="ci-knopf" type="button" id="sendung-archiv">${s.aktiv ? 'Archivieren' : 'Wiederherstellen'}</button><button class="ci-knopf" type="button" id="sendung-abschliessen">Bewertung abschließen</button>`) : ''}
         <button class="ci-knopf" type="button" data-zu>Schließen</button>${darf ? '<button class="ci-knopf primaer" type="submit">Speichern</button>' : ''}</div>`;
     oeffnen($('#dlg-sendung'));
-    if (!neu) HAKEN.fenster(s);
+    if (!neu) HAKEN.fenster.forEach((f) => f(s));
     const karte = $('#sendung-karte');
     if (karte) { if (zu) schnappschussKarte(s.id, karte); else window.EUDR_KARTE.zeichnen(karte, { betriebe: gezeigt }); }
   }
@@ -534,6 +538,7 @@
       ...lieferantAus(w.lieferant, alt), schlachthof: w.schlachthof, land: w.land, ware: w.ware, hs: w.hs, mengeKg: w.mengeKg,
       schlachtVon: w.schlachtVon, schlachtBis: w.schlachtBis, lose: w.lose, betriebe: w.betriebe || [], offeneNummern: w.offeneNummern || [], notiz: w.notiz,
       nachweis: { erklaerung: w.n_erklaerung, rueckverfolgung: w.n_rueckverfolgung, haltung: w.n_haltung, legalitaet: w.n_legalitaet }, dds: { referenz: w.d_referenz, datum: w.d_datum },
+      visecDte: w.visecDte,   // Feld aus visec.js; fehlt es (undefined, nicht gesendet), bleiben die gespeicherten Nummern
     };
   }
   /* Lieferant im Fenster geändert: zur Wahl stehen nur seine Schlachthöfe; der gewählte bleibt, wenn er dazugehört */
@@ -838,10 +843,10 @@
   $('#ci-theme').addEventListener('click', () => { document.documentElement.setAttribute('data-theme', dunkel() ? 'light' : 'dark'); themaKnopf(); });
   document.addEventListener('stafl-theme', themaKnopf);
 
-  /* Brücke für weitere Dateien des Moduls (schlachthoefe.js, tracking.js, dokumente.js): dieselben Hilfen und derselbe Zustand, keine zweite Kopie.
+  /* Brücke für weitere Dateien des Moduls (schlachthoefe.js, tracking.js, dokumente.js, visec.js): dieselben Hilfen und derselbe Zustand, keine zweite Kopie.
      Eine Datei trägt ihre Ansicht in sichten oder ihren Reiter in reiter ein und hängt ihre eigenen Ereignisse an (docs/entwickler/06-oberflaechen.md). */
   window.STAFL_CI = { S, $, esc, icon, SU, feld, kopf, werte, marke, tag, api, uebernehmen, toast, oeffnen, sendung, titel, landName, laenderWahl, lieferantFeld, lieferantAus, suchfeld, fokusBehalten, archivSchalter,
-    hex, fehlerText, pdfjs, teileHochladen, zeigeAnmeldung, herunterladen, HINWEIS_NUMMER, sichten: SICHTEN, reiter: REITER, haken: HAKEN };
+    hex, fehlerText, pdfjs, teileHochladen, zeigeAnmeldung, herunterladen, sendungOeffnen, sendungSpeichern, HINWEIS_NUMMER, sichten: SICHTEN, reiter: REITER, haken: HAKEN };
 
   /* ---------- Start (nach dem Laden aller Dateien des Moduls) ---------- */
   document.addEventListener('DOMContentLoaded', async () => {

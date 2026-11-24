@@ -127,7 +127,7 @@ check('ohne „EUDR ansehen“: auch prüfen, Farmer-Nummern auflösen, exportie
       and O.call('containerimport_eudr_nummern', {'land': 'PY', 'nummern': '1'})[0] == 403 and O.call('containerimport_eudr_export&sendung=x')[0] == 403
       and O.call('containerimport_eudr_schnappschuss&sendung=x')[0] == 403)
 st, r = L.call('containerimport_start')
-check('nur ansehen: Stand ohne Recht zu bearbeiten, leer', st == 200 and r['rechte'] == {'bearbeiten': False, 'whisp': False} and r['betriebe'] == [] and r['sendungen'] == [], (st, r))
+check('nur ansehen: Stand ohne Recht zu bearbeiten, leer', st == 200 and r['rechte'] == {'bearbeiten': False, 'whisp': False, 'visec': False} and r['betriebe'] == [] and r['sendungen'] == [], (st, r))
 check('nur ansehen: Speichern 403', [L.call(a, {})[0] for a in ('containerimport_eudr_betriebe_save', 'containerimport_eudr_sendung_save', 'containerimport_eudr_gegenpruefung', 'containerimport_eudr_sendung_abschluss')] == [403] * 4)
 csrf = I.csrf; I.csrf = ''
 check('Speichern ohne CSRF: 403', I.call('containerimport_eudr_sendung_save', SENDUNG)[0] == 403)
@@ -135,8 +135,9 @@ check('Farmer-Nummern auflösen ohne CSRF: 403', I.call('containerimport_eudr_nu
 I.csrf = csrf
 check('schreibende Aktionen per GET: 405', [I.call(a)[0] for a in ('containerimport_eudr_pruefen', 'containerimport_eudr_betriebe_save', 'containerimport_eudr_sendung_save')] == [405] * 3)
 st, r = I.call('containerimport_start')
-check('Whisp-Abfrage ohne Zugangsschlüssel auf dem Server: nicht angeboten, Aktion 503', r['rechte'] == {'bearbeiten': True, 'whisp': False}
-      and I.call('containerimport_eudr_whisp', {'id': 'x'})[0] == 503 and L.call('containerimport_eudr_whisp', {'id': 'x'})[0] == 403, r.get('rechte'))
+check('Whisp und VISEC ohne Zugangsschlüssel bzw. Token auf dem Server: nicht angeboten, Aktion 503', r['rechte'] == {'bearbeiten': True, 'whisp': False, 'visec': False}
+      and I.call('containerimport_eudr_whisp', {'id': 'x'})[0] == 503 and L.call('containerimport_eudr_whisp', {'id': 'x'})[0] == 403
+      and I.call('containerimport_visec_abfragen', {'id': 'x'})[0] == 503 and L.call('containerimport_visec_abfragen', {'id': 'x'})[0] == 403, r.get('rechte'))
 check('Stand: Lieferanten der Stammdaten zur Auswahl – nur Nummer und Name, nach Name sortiert, nur für Bearbeiter; Stände des Containers',
       r['lieferanten'] == [{'nr': '70020', 'name': 'Carnes del Sur Ltda.'}, {'nr': '70012', 'name': 'Frigorifico Beispiel S.A.'}, {'nr': '70031', 'name': 'OHNENAME'}]
       and L.call('containerimport_start')[1]['lieferanten'] == [] and list(r['staende']) == ['gekauft', 'unterwegs', 'dokumente', 'angekommen'] and 'Asunción' not in json.dumps(r, ensure_ascii=False) and '1.234.567' not in json.dumps(r), r.get('lieferanten'))

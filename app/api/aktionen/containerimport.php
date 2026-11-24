@@ -33,7 +33,7 @@ switch ($action) {
             require_once __DIR__ . '/../module/containerimport/whisp.php';
             header('Cache-Control: no-store');
             $darf = may($me, 'containerimport.eudr_bearbeiten');
-            respond(['ok' => true, 'name' => $me['name'], 'rechte' => ['bearbeiten' => $darf, 'whisp' => $darf && whisp_eingerichtet()],
+            respond(['ok' => true, 'name' => $me['name'], 'rechte' => ['bearbeiten' => $darf, 'whisp' => $darf && whisp_eingerichtet(), 'visec' => $darf && ci_visec_eingerichtet()],
                 'lieferanten' => $darf ? eudr_lieferanten() : []] + eudr_stand());   // Stammdaten nur zum Auswählen und nur hier, nicht in jeder Antwort
         }
 
@@ -174,6 +174,30 @@ switch ($action) {
             if ($liste[$i]['geometrie']['type'] === 'Point') fail('Whisp braucht einen Umriss – für einen einzelnen Punkt wäre das Ergebnis nicht die Fläche des Farmers.', 422);
             audit('containerimport', 'EUDR: Umriss von „' . $liste[$i]['name'] . '“ zur Prüfung an Whisp gesendet');   // vor dem Versand: auch ein abgelehnter Umriss hat das Haus verlassen
             respond(['ok' => true] + whisp_starten($liste[$i]['geometrie']));
+        }
+
+        /* VISEC Carne (Argentinien): die am Container gespeicherten DTE-Nummern abfragen und die Antworten je DTE ablegen
+           (visec.php). Nur die Nummern gehen hinaus. Abgefragt wird außerhalb der Sperre; abgelegt nur, solange die Bewertung
+           offen ist. Ohne VISEC_API_TOKEN in .env ist die Abfrage aus (503). Antwort: der neue Stand, „offen“ = Nummern, die
+           nicht mehr abgefragt wurden (Zeitbudget oder Fehler von VISEC), und „hinweis“ = dieser Fehler; scheitert schon die
+           erste Nummer, endet die Aktion mit der Meldung (502). */
+        case 'containerimport_visec_abfragen': {
+            $me = eudr_bearbeiter();
+            if (!ci_visec_eingerichtet()) fail('Die Abfrage von VISEC ist nicht eingerichtet.', 503);
+            $b = body();
+            [, $s] = eudr_holen(eudr_sendungen(), $b['id'] ?? '');
+            if (!empty($s['abschluss'])) fail('Die Bewertung ist abgeschlossen – zum erneuten Abfragen erst wieder öffnen.', 409);
+            if (!$s['visecDte']) fail('Am Container sind keine DTE-Nummern gespeichert.', 422);
+            if (session_status() === PHP_SESSION_ACTIVE) session_write_close();   // sonst wartet jede weitere Anfrage der Sitzung, solange VISEC antwortet
+            audit('containerimport', 'EUDR: DTE-Nummern des Containers „' . eudr_container_name($s) . '“ bei VISEC abgefragt (' . implode(', ', $s['visecDte']) . ')');   // vor dem Versand
+            [$ergebnisse, $hinweis] = ci_visec_abfragen($s['visecDte']);
+            if (!$ergebnisse) fail(($hinweis ?: 'VISEC hat nicht rechtzeitig geantwortet.') . ' Bitte später erneut abfragen.', 502);
+            with_lock(EUDR_SPERRE, function () use ($s, $ergebnisse, $me) {
+                [, $jetzt] = eudr_holen(eudr_sendungen(), $s['id']);
+                if (!empty($jetzt['abschluss'])) fail('Die Bewertung wurde inzwischen abgeschlossen – das Ergebnis wird nicht mehr abgelegt.', 409);
+                ci_visec_ablegen($s['id'], $ergebnisse, $me);
+            });
+            respond(['ok' => true, 'id' => $s['id'], 'offen' => array_values(array_diff($s['visecDte'], array_keys($ergebnisse))), 'hinweis' => $hinweis] + eudr_stand());
         }
 
         /* Farmer-Nummern aus den Papieren für das Fenster „Container“ auflösen, ohne zu speichern (Vorschau vor dem Übernehmen):

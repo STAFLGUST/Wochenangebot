@@ -497,7 +497,7 @@ beim Öffnen geladenen Gesamtstand ohne Versionskennung.
 
 **Abrufe nach außen** (Länderdaten `geo.php`, Ortsdaten `ort.php`, Bedrohungsliste `lib/firewall.php`, Datenleck-Prüfung
 `lib/nutzer.php`, Keycloak `lib/anmeldekonten.php`, Hafen Hamburg `module/containerimport/hafen.php`, Whisp
-`module/containerimport/whisp.php`) halten einen gemeinsamen Standard – die Helfer dafür stehen in `lib/abruf.php`:
+`module/containerimport/whisp.php`, VISEC `module/containerimport/visec.php`) halten einen gemeinsamen Standard – die Helfer dafür stehen in `lib/abruf.php`:
 
 | Regel | Warum | Wie |
 | --- | --- | --- |
@@ -549,6 +549,8 @@ meldet den Fehlschlag (502) und gibt ihre Sperrdatei frei.
 | `WA_ORT_URL` | `ort.php` | nur Tests: Quelle der Ortsdatenbank | `ORT_URL` |
 | `WHISP_API_KEY` | `module/containerimport/whisp.php` | Zugangsschlüssel für Whisp (FAO); nur im Mitarbeiter-Container | leer = Abfrage aus |
 | `WA_WHISP_URL` | `module/containerimport/whisp.php` | nur Tests: Adresse von Whisp | `WHISP_URL` |
+| `VISEC_API_TOKEN` | `module/containerimport/visec.php` | Token für VISEC Carne (Argentinien); nur im Mitarbeiter-Container | leer = Abfrage aus |
+| `WA_VISEC_URL` | `module/containerimport/visec.php` | nur Tests: Adresse von VISEC (der Testlauf setzt sie für jede Gruppe) | `CI_VISEC_URL` |
 | `WA_HAFEN_HH_URL` | `module/containerimport/hafen.php` | nur Tests: Adresse der Liste von Hafen Hamburg (der Testlauf setzt sie für jede Gruppe) | `CI_HAFEN_HH_URL` |
 | `WA_OIDC` | `lib/oidc.php` | `1` = Keycloak-Host (vom Webserver gesetzt) | aus |
 | `WA_OIDC_ISSUER` | `lib/oidc.php` | erwarteter Aussteller (`iss`) | – (ohne Wert keine Identität) |

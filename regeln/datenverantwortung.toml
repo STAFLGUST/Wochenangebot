@@ -945,6 +945,14 @@ dynamisch = true   # Name als Konstante CI_DOK_ZAHLEN, bei jedem Schreiben von c
 beschreibung = "Container-Import: Zahlen der Dokumente je Container (aktive Dateien, Dateien je Dokumentart, als „nicht nötig“ vermerkte Arten) aus containerimport-dokumente – damit der Stand der Seite nicht alle Dateien lesen muss"
 historie = "keine – abgeleitet, heilt sich bei jedem Schreiben von containerimport-dokumente; fehlt es, zählt der Stand der Seite aus containerimport-dokumente"
 [[dokument]]
+name = "containerimport-visec"
+eigentuemer = "containerimport"
+bereich = "intern"
+schutz = "vertraulich"
+beschreibung = "Container-Import · EUDR (Argentinien): Antworten von VISEC Carne je Container und DTE-Nummer – Tropa, Daten und Stand des DTE, Zahl der Tiere je Stand laut VISEC, höchstens 100 Ohrmarken ungültiger bzw. offener Tiere, Kennung der Anfrage, Fehlercode – mit Abfragezeit und Bearbeiter; je DTE die jüngste Abfrage. Grundlage des Kriteriums „Tiere laut VISEC“ im Risikoprofil."
+historie = "je DTE die jüngste Abfrage; der Abschluss hält Kriterium und Antworten im Dokument der Container fest (abschluss.visec, GR-106), danach wird für den Container nicht mehr abgefragt"
+dynamisch = true   # Name als Konstante CI_VISEC_DOKUMENT (module/containerimport/visec.php)
+[[dokument]]
 name = "containerimport-hafenmeldungen"
 eigentuemer = "containerimport"
 bereich = "intern"

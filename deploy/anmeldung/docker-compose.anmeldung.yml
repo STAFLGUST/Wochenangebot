@@ -150,6 +150,9 @@ services:
       # Container-Import: Abfrage von Whisp (FAO) für die eigene Gegenprüfung – Schlüssel von der Kontoseite bei Whisp, nur in
       # diesem Container (nicht in der Kundenseite); leer = Abfrage aus (docs/plattform/inbetriebnahme-containerimport.md)
       WHISP_API_KEY: ${WHISP_API_KEY:-}
+      # Container-Import: Abfrage von VISEC Carne (Argentinien, DTE-Nummern) – Token aus dem Profil bei VISEC, nur in diesem
+      # Container; leer = Abfrage aus (docs/plattform/inbetriebnahme-containerimport.md)
+      VISEC_API_TOKEN: ${VISEC_API_TOKEN:-}
       # Mitarbeiterkonten aus der Verwaltung (Stand 8, lib/anmeldekonten.php): Client „konten“ nur mit Service-Account; Keycloak im
       # internen Netz (nicht über Caddy). Ohne Geheimnis zeigt die Verwaltung „noch nicht eingerichtet“ – die Anwendung startet trotzdem
       OIDC_SECRET_KONTEN: ${OIDC_SECRET_KONTEN:-noch-nicht-eingerichtet}

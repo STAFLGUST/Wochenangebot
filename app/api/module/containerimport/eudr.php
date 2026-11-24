@@ -9,7 +9,8 @@ declare(strict_types=1);
    Dokumente: containerimport-eudr-betriebe (Farmer: Produktionsorte, Umriss in WGS84), containerimport-eudr-sendungen
    (Container mit Lieferant aus den Stammdaten, Partie-, Akten- und Containernummer, Stand, ihren Farmern, Nachweisen und –
    nach dem Abschluss – einem Schnappschuss von Profil und Farmern, GR-106), containerimport-eudr-schnappschuss/<Kennung>
-   (die Farmer eines Abschlusses samt Umriss, je Abschluss ein Dokument, nie geändert – EUDR_SCHNAPPSCHUSS).
+   (die Farmer eines Abschlusses samt Umriss, je Abschluss ein Dokument, nie geändert – EUDR_SCHNAPPSCHUSS),
+   containerimport-visec (Antworten von VISEC je Container und DTE-Nummer, Argentinien – visec.php).
    Nichts wird gelöscht: Farmer und Container werden archiviert, Gegenprüfungen nur ergänzt.
    Farmer-Nummern (eigene Nummer, Nummer aus den Papieren, vermerkte Nummern am Container, Gesamtprüfung): farmer.php.
    Abgeleitete Werte (Fläche, Mittelpunkt, Befunde, Risikoprofil) werden bei jedem Lesen neu berechnet und nie gespeichert –
@@ -22,6 +23,7 @@ require __DIR__ . '/tracking.php';        // Reiter Tracking: Schiff, Reederei, 
 require __DIR__ . '/hafen.php';           // Tracking: Ankunft in Hamburg aus der öffentlichen Liste des Hafens
 require __DIR__ . '/farmer.php';          // Farmer-Nummern am Container und Gesamtprüfung der Farmer
 require __DIR__ . '/dokumente.php';       // Dokumente je Container (Dateiablage, GoBD)
+require __DIR__ . '/visec.php';           // Argentinien: Tiere der DTE-Nummern laut VISEC Carne (Kriterium im Risikoprofil)
 
 const EUDR_SPERRE = 'containerimport-eudr-betriebe';   // eine Sperre für beide Dokumente (Sendungen verweisen auf Betriebe)
 const EUDR_MAX_BETRIEBE = 2000;
@@ -41,7 +43,7 @@ const EUDR_BEFUNDE_FASSUNG = 1;          // Fassung von geo_pruefen; hochzählen
 /* Stand eines Containers auf seinem Weg (Reihenfolge = Ablauf); wird von Hand gesetzt, auch nach dem Abschluss der Bewertung */
 const EUDR_STAENDE = ['gekauft' => 'gekauft', 'unterwegs' => 'unterwegs', 'dokumente' => 'Dokumente da', 'angekommen' => 'angekommen'];
 /* Felder, die älteren Einträgen fehlen (vor dem Container als Mittelpunkt, vor den Schlachthöfen) – eudr_sendungen ergänzt sie beim Lesen */
-const EUDR_SENDUNG_VORGABEN = ['partie' => '', 'akte' => '', 'lieferantNr' => '', 'stand' => 'gekauft', 'schlachthof' => '', 'schlachthofName' => '', 'offeneNummern' => []];
+const EUDR_SENDUNG_VORGABEN = ['partie' => '', 'akte' => '', 'lieferantNr' => '', 'stand' => 'gekauft', 'schlachthof' => '', 'schlachthofName' => '', 'offeneNummern' => [], 'visecDte' => []];
 const EUDR_NACHWEIS = ['konform', 'nicht_konform', 'unbekannt'];
 const EUDR_DREI = ['ja', 'nein', 'offen'];
 const EUDR_QUELLEN = ['bericht', 'geojson', 'koordinaten'];
@@ -503,6 +505,7 @@ function eudr_sendung_pruefen(array $b, array $betriebe, ?array $alt): array
         'mengeKg' => eudr_zahl($b['mengeKg'] ?? null, 'Menge'),
         'schlachtVon' => $von, 'schlachtBis' => $bis,
         'lose' => eudr_text($b['lose'] ?? '', 200, 'Lose'),
+        'visecDte' => array_key_exists('visecDte', $b) ? ci_visec_nummern($b['visecDte']) : ($alt['visecDte'] ?? []),   // ohne Eingabe bleiben die gespeicherten (visec.php)
         'betriebe' => $ids,
         'offeneNummern' => $offen,
         'nachweis' => [
@@ -626,7 +629,8 @@ function eudr_kriterium(string $id, string $titel, string $stand, string $text, 
 }
 
 /* Kriterien des Risikoprofils (Art. 10 der Verordnung) als Tabelle: jede Zeile bewertet die Sendung mit ihren Betrieben
-   ($bs = Sichten der Betriebe) und liefert ein Kriterium. Neue Prüfungen kommen als weitere Zeile hinzu. */
+   ($bs = Sichten der Betriebe) und liefert ein Kriterium – oder null, wenn es für diese Sendung keines gibt. Neue Prüfungen
+   kommen als weitere Zeile hinzu. */
 function eudr_kriterien(): array
 {
     return [
@@ -705,6 +709,7 @@ function eudr_kriterien(): array
         'erklaerung' => fn(array $s, array $bs): array => $s['nachweis']['erklaerung'] !== ''
             ? eudr_kriterium('erklaerung', 'Erklärung des Lieferanten', 'ok', 'Erklärung vom ' . date('d.m.Y', strtotime($s['nachweis']['erklaerung'])) . ' liegt vor.')
             : eudr_kriterium('erklaerung', 'Erklärung des Lieferanten', 'offen', 'Erklärung des Lieferanten zur EUDR fehlt.'),
+        'visec' => fn(array $s, array $bs): ?array => ci_visec_kriterium($s),   // nur für Container mit DTE-Nummern (null = kein Kriterium)
     ];
 }
 
@@ -712,7 +717,7 @@ function eudr_kriterien(): array
    Die Bewertung selbst trifft der Bearbeiter beim Abschluss. */
 function eudr_profil(array $s, array $bs): array
 {
-    $kriterien = array_values(array_map(fn(callable $k) => $k($s, $bs), eudr_kriterien()));
+    $kriterien = array_values(array_filter(array_map(fn(callable $k) => $k($s, $bs), eudr_kriterien())));
     $staende = array_column($kriterien, 'stand');
     $stand = in_array('kritisch', $staende, true) ? 'kritisch' : (in_array('offen', $staende, true) ? 'offen' : 'ok');
     return [
@@ -751,7 +756,8 @@ function eudr_abschluss(array $s, array $eingabe, array $sichten, array $me): ar
     if ($ergebnis === 'vernachlaessigbar' && $profil['vernachlaessigbar'] === 'nein') throw new InvalidArgumentException('Solange ein Kriterium kritisch ist, kann das Risiko nicht als vernachlässigbar bewertet werden.');
     if ($ergebnis === 'vernachlaessigbar' && $profil['vernachlaessigbar'] === 'begruendung' && mb_strlen($begruendung) < 20)
         throw new InvalidArgumentException('Es sind noch Punkte offen. Bitte begründen, warum das Risiko trotzdem vernachlässigbar ist (mindestens 20 Zeichen).');
-    return ['ergebnis' => $ergebnis, 'begruendung' => $begruendung, 'wer' => eudr_wer($me), 'profil' => $profil, 'betriebe' => $bs];
+    return ['ergebnis' => $ergebnis, 'begruendung' => $begruendung, 'wer' => eudr_wer($me), 'profil' => $profil, 'betriebe' => $bs]
+        + ($s['visecDte'] ? ['visec' => ci_visec_zu($s)['visec']] : []);   // Antworten von VISEC, wie sie beim Abschluss galten (visec.php)
 }
 /* Farmer eines Abschlusses (eudr_abschluss) mit Umriss in ein eigenes Dokument legen – neue Kennung, nie überschrieben – und
    den Abschluss für das Dokument der Container liefern: Farmer ohne Umriss, dazu „schnappschuss“ (Kennung, SHA-256 der Farmer).
@@ -783,7 +789,8 @@ function eudr_ohne_umriss(array $betriebe): array { return array_map(fn($b) => a
    festgeschriebene. */
 function eudr_sendung_sicht(array $s, array $betriebe, array $hofNamen, array $stelle): array
 {
-    $s['fruehere'] = array_map(fn($f) => array_diff_key($f, ['profil' => 1, 'betriebe' => 1]), $s['fruehere'] ?? []);   // Schnappschüsse bleiben gespeichert
+    $s = ci_visec_zu($s);   // Antworten von VISEC je DTE-Nummer für die Anzeige (das Kriterium liest sie selbst)
+    $s['fruehere'] = array_map(fn($f) => array_diff_key($f, ['profil' => 1, 'betriebe' => 1, 'visec' => 1]), $s['fruehere'] ?? []);   // Schnappschüsse bleiben gespeichert
     if (!empty($s['abschluss'])) $s['abschluss']['betriebe'] = eudr_ohne_umriss($s['abschluss']['betriebe']);
     if (empty($s['abschluss'])) $s['schlachthofName'] = $hofNamen[$s['schlachthof']] ?? $s['schlachthofName'];
     $bs = eudr_sendung_betriebe($s, $betriebe, $stelle);
