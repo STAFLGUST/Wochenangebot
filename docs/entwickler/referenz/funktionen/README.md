@@ -21,4 +21,4 @@ Karte für Entwickler und Agenten: Abschnitte und Funktionen jeder Code-Datei (P
 | [Verwaltung](verwaltung.md) | `verwaltung` | 22 | 237 |
 | [Sicherheit](sicherheit.md) | `sicherheit` | 5 | 109 |
 | [Dashboard](dashboard.md) | `dashboard` | 2 | 45 |
-| [Plattformkern](plattform.md) | `plattform` | 125 | 1283 |
+| [Plattformkern](plattform.md) | `plattform` | 126 | 1287 |

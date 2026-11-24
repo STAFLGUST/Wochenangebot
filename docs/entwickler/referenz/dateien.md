@@ -952,6 +952,7 @@ Jede Code-Datei beginnt mit einem Kopfkommentar; dessen erste Aussage steht hier
 | `dateiablage.php` | plattform | Reine Funktionen und Tabellen der Dateiablage (app/api/lib/dateiablage.php) ohne Server |
 | `dateiablage_zip.php` | plattform | Hilfsskript für tests/unit/test_dateiablage_zip.py zu app/api/lib/dateiablage.php. |
 | `merge.test.js` | angebot | Unit-Test: Drei-Wege-Abgleich beim gemeinsamen Bearbeiten des Entwurfs (OfferCore.mergeModels) und Aufbau nach Angebotskategorien mit eigener Gruppe je Angebot (OfferCore.nachKategorien). |
+| `speicher_gemerkt.php` | plattform | Gemerktes Lesen der Speicherschicht (store_read_gemerkt in app/api/storage.php), ohne Server, in der Speicherart des Datenordners (Dateien oder SQLite – tests/unit/test_speicher_gemerkt.py prüft beide): innerhalb … |
 | `stock_prices.php` | bestand | Isolated calendar/history selection tests, no server or production storage. |
 | `stock_prices.test.js` | bestand | Unit-Test: Preisvergleich, Wochenpreise und Summenzeile der Bestandsliste (StockCore aus app/assets/stock-core.js). |
 | `test_adressen.py` | plattform | Adressverzeichnis der CRM-Karte |
@@ -963,6 +964,7 @@ Jede Code-Datei beginnt mit einem Kopfkommentar; dessen erste Aussage steht hier
 | `test_eudr_geodatenkatalog.py` | containerimport | Geodaten-Katalog des Container-Imports (werkzeuge/eudr_geodatenkatalog.py) – ohne Netz, mit einer kleinen erfundenen Tabelle im Aufbau der Metadatenbank GEOS-EUDR (tests/fixtures/containerimport/geodatenkatalog/). … |
 | `test_images_aktualisieren.py` | plattform | Sicherheitsupdates der Container-Images (werkzeuge/images_aktualisieren.py) – ohne Netz, mit Digests aus einer Datei. python3 tests/unit/test_images_aktualisieren.py Prüft an einer Kopie der echten Dateien |
 | `test_run_e2e_teile.py` | plattform | Aufteilung der E2E-Testgruppen auf CI-Aufträge (tests/run_e2e.py |
+| `test_speicher_gemerkt.py` | plattform | Gemerktes Lesen der Speicherschicht in beiden Speicherarten: tests/unit/speicher_gemerkt.php einmal mit Dateien und einmal mit SQLite (leerer Datenordner, mit deploy/datenbank.py migrate --offline umgestellt). |
 
 ## `werkzeuge/`
 
