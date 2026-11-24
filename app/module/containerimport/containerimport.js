@@ -183,9 +183,9 @@
   /* Reiter des Moduls: Zeichenfunktion je Reiter; weitere Dateien tragen ihre ein (Brücke STAFL_CI) */
   const REITER = { eudr: eudrZeichnen };
   const SICHTEN = { sendungen: sendungenSicht, betriebe: betriebeSicht, karte: karteSicht };   // weitere Dateien tragen ihre Ansicht ein (Brücke STAFL_CI)
-  /* Haken für weitere Dateien (dokumente.js, visec.js): Zusatz in der Zeile eines Containers, Bereich im Fenster „Container“.
-     Wer sich einhängt, ruft den vorher gesetzten Haken mit auf (visec.js hinter dokumente.js). */
-  const HAKEN = { zeile: () => '', fenster: () => {} };
+  /* Haken für weitere Dateien (dokumente.js, visec.js): Zusatz in der Zeile eines Containers, Bereich im Fenster „Container“ –
+     jede Datei hängt ihre Funktion an (push), alle laufen */
+  const HAKEN = { zeile: [], fenster: [] };
 
   /* Suchfeld einer Liste; schluessel = Platz des Suchtexts in S.suche (Vorgabe: die Ansicht). Tippen zeichnet den Reiter neu
      und behält den Fokus (ein Hörer für alle Suchfelder, siehe unten). */
@@ -195,7 +195,7 @@
     const liste = S.d.sendungen.filter((s) => (s.aktiv || S.archiv) && SU.findet(S.suche.sendungen, s.partie, s.akte, s.container, s.nummer, s.lieferant, s.lieferantNr, s.schlachthofName, s.ware, landName(s.land), s.dds.referenz, s.offeneNummern))
       .sort((a, b) => b.erstellt.t.localeCompare(a.erstellt.t));
     const zeile = (s) => `<tr data-sendung="${esc(s.id)}" tabindex="0" class="${s.aktiv ? '' : 'ci-archiv'}">
-      <td><span class="ci-name">${esc(titel(s))}</span><span class="ci-unter">${s.container ? `Container <span class="ci-zahlen">${esc(s.container)}</span>` : '—'}</span>${HAKEN.zeile(s)}</td>
+      <td><span class="ci-name">${esc(titel(s))}</span><span class="ci-unter">${s.container ? `Container <span class="ci-zahlen">${esc(s.container)}</span>` : '—'}</span>${HAKEN.zeile.map((f) => f(s)).join('')}</td>
       <td data-t="Lieferant"><span>${esc(s.lieferant)}</span><span class="ci-unter">${esc(landName(s.land))}${s.lieferantNr ? ` · Nr. ${esc(s.lieferantNr)}` : ' · nicht mit den Stammdaten verknüpft'}${s.schlachthofName ? ` · ${esc(s.schlachthofName)}` : ''}</span></td>
       <td data-t="Ware"><span>${esc(s.ware || '—')}</span><span class="ci-unter">${s.mengeKg === null ? '' : F.kg(s.mengeKg)}${s.lose ? ` · Lose ${esc(s.lose)}` : ''}</span></td>
       <td data-t="Stand">${marke(S.d.staende[s.stand], s.stand === 'angekommen' ? 'ok' : '')}</td>
@@ -465,7 +465,7 @@
   }
   function sendungOeffnen(id) {
     const neu = !id;
-    const s = neu ? { id: '', rev: 0, partie: '', akte: '', container: '', stand: 'gekauft', nummer: '', lieferant: '', lieferantNr: '', land: 'PY', ware: '', hs: '', mengeKg: null, schlachtVon: '', schlachtBis: '', lose: '', betriebe: [], offeneNummern: [], visecDte: [],
+    const s = neu ? { id: '', rev: 0, partie: '', akte: '', container: '', stand: 'gekauft', nummer: '', lieferant: '', lieferantNr: '', land: 'PY', ware: '', hs: '', mengeKg: null, schlachtVon: '', schlachtBis: '', lose: '', betriebe: [], offeneNummern: [],
       nachweis: { erklaerung: '', rueckverfolgung: 'offen', haltung: 'offen', legalitaet: 'offen' }, dds: { referenz: '', datum: '' }, notiz: '', aktiv: true, abschluss: null } : sendung(id);
     if (!s) return;
     const darf = S.d.rechte.bearbeiten, zu = !!s.abschluss, aus = !darf || zu;
@@ -519,7 +519,7 @@
         ${darf && !neu ? (zu ? '<button class="ci-knopf" type="button" id="sendung-oeffnen">Bewertung wieder öffnen</button>' : `<button class="ci-knopf" type="button" id="sendung-archiv">${s.aktiv ? 'Archivieren' : 'Wiederherstellen'}</button><button class="ci-knopf" type="button" id="sendung-abschliessen">Bewertung abschließen</button>`) : ''}
         <button class="ci-knopf" type="button" data-zu>Schließen</button>${darf ? '<button class="ci-knopf primaer" type="submit">Speichern</button>' : ''}</div>`;
     oeffnen($('#dlg-sendung'));
-    if (!neu) HAKEN.fenster(s);
+    if (!neu) HAKEN.fenster.forEach((f) => f(s));
     const karte = $('#sendung-karte');
     if (karte) { if (zu) schnappschussKarte(s.id, karte); else window.EUDR_KARTE.zeichnen(karte, { betriebe: gezeigt }); }
   }
@@ -538,7 +538,7 @@
       ...lieferantAus(w.lieferant, alt), schlachthof: w.schlachthof, land: w.land, ware: w.ware, hs: w.hs, mengeKg: w.mengeKg,
       schlachtVon: w.schlachtVon, schlachtBis: w.schlachtBis, lose: w.lose, betriebe: w.betriebe || [], offeneNummern: w.offeneNummern || [], notiz: w.notiz,
       nachweis: { erklaerung: w.n_erklaerung, rueckverfolgung: w.n_rueckverfolgung, haltung: w.n_haltung, legalitaet: w.n_legalitaet }, dds: { referenz: w.d_referenz, datum: w.d_datum },
-      ...(w.visecDte === undefined ? {} : { visecDte: w.visecDte }),   // Feld aus visec.js; fehlt es, bleiben die gespeicherten Nummern
+      visecDte: w.visecDte,   // Feld aus visec.js; fehlt es (undefined, nicht gesendet), bleiben die gespeicherten Nummern
     };
   }
   /* Lieferant im Fenster geändert: zur Wahl stehen nur seine Schlachthöfe; der gewählte bleibt, wenn er dazugehört */

@@ -118,9 +118,9 @@ body.ci .dlg-foot { border-top: 1px solid var(--r-linie); align-items: center; }
 .ci-meldung .r-i { flex: none; width: 16px; height: 16px; margin-top: 2px; }
 .ci-meldung.ok { background: var(--r-ok-bg); color: var(--r-ok); }
 .ci-meldung.neutral { background: var(--r-neutral-bg); color: var(--r-text); }
-.ci-befunde, .ci-kriterien, .ci-wahl, .ci-pruefungen { list-style: none; margin: 0; padding: 0; border: 1px solid var(--r-linie); border-radius: 12px; overflow: hidden; font-size: 13.5px; }
+.ci-befunde, .ci-kriterien, .ci-wahl, .ci-pruefungen, .ci-visec-liste { list-style: none; margin: 0; padding: 0; border: 1px solid var(--r-linie); border-radius: 12px; overflow: hidden; font-size: 13.5px; }
 .ci-befunde li, .ci-kriterien li, .ci-wahl li, .ci-pruefungen li { display: flex; align-items: flex-start; gap: 10px; padding: 9px 12px; }
-.ci-befunde li + li, .ci-kriterien li + li, .ci-wahl li + li, .ci-pruefungen li + li { border-top: 1px solid var(--r-linie); }
+.ci-befunde li + li, .ci-kriterien li + li, .ci-wahl li + li, .ci-pruefungen li + li, .ci-visec-liste li + li { border-top: 1px solid var(--r-linie); }
 .ci-befunde .r-i { flex: none; width: 16px; height: 16px; margin-top: 2px; color: var(--r-text-2); }
 .ci-befunde .fehler { background: var(--r-rot-bg); } .ci-befunde .fehler .r-i { color: var(--r-rot); }
 .ci-kr-stand { flex: none; width: 96px; }
@@ -270,9 +270,8 @@ body.ci .dlg-foot { border-top: 1px solid var(--r-linie); align-items: center; }
   .ci-d-fuss { margin-top: 10pt; font-size: 9pt; color: #444; }
 }
 /* Bereich „Tiere laut VISEC“ im Fenster „Container“ (visec.js) */
-.ci-visec-liste { margin: 8px 0 0; padding: 0; list-style: none; border: 1px solid var(--r-linie); border-radius: 12px; }
+.ci-visec-liste { margin-top: 8px; }   /* Rahmen und Trennlinien: gemeinsame Listenregel oben */
 .ci-visec-dte { padding: 10px 14px; overflow-wrap: anywhere; }
-.ci-visec-dte + .ci-visec-dte { border-top: 1px solid var(--r-linie); }
 .ci-visec-dte p { margin: 4px 0 0; }
 .ci-visec-kopf { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
 .ci-visec-tiere summary { margin-top: 4px; font-size: 13px; cursor: pointer; }

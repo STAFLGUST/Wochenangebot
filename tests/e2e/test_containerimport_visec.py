@@ -8,7 +8,7 @@ abgelegt und dazugestellt (Zahlen je Stand, ungültige und offene Tiere mit Numm
 „Tiere laut VISEC“ im Risikoprofil (fehlt ohne DTE; nicht abgefragt, unbekannte DTE, offene Tiere = offen; ungültige = kritisch;
 alle gültig = in Ordnung) und seine Wirkung auf den Abschluss; nach dem Abschluss keine Abfrage mehr; Fehler von VISEC
 (Token abgelehnt, Serverfehler, fremde Antwort, Abbruch) als verständliche Meldung, ohne etwas zu überschreiben, der Token in
-keiner Antwort; Protokoll. Oberfläche: Bereich nur bei Argentinien oder gespeicherten Nummern, Speichern und Abfragen in einem
+keiner Antwort; scheitert VISEC an einer späteren Nummer, wird das Geholte abgelegt und der Rest gemeldet; Protokoll. Oberfläche: Bereich nur bei Argentinien oder gespeicherten Nummern, Speichern und Abfragen in einem
 Schritt, Profil im Fenster neu, nur ansehen ohne Eingabe und Knopf, fremde Texte maskiert, 390 px dunkel.
 Alle DTE- und Ohrmarkennummern sind erfunden (GR-007)."""
 import http.server
@@ -62,6 +62,8 @@ class Visec(http.server.BaseHTTPRequestHandler):
         if self.path != '/api/Visec/dte':
             return self.antwort(404, b'')
         nummer = (inhalt or {}).get('numero', '')
+        if nummer == '777000777':   # einzelne Nummer, bei der VISEC scheitert
+            return self.antwort(500, b'{}')
         r = {'requestId': UUID, 'serverDateUtc': '2026-11-24T12:00:00Z', 'serverVersion': '2026.11.23', 'observaciones': None, 'error': None, 'dte': None}
         if nummer in DATEN:
             r.update(DATEN[nummer])
@@ -83,7 +85,7 @@ py = container_anlegen(I, 'VISEC-2', land='PY')
 check('Container ohne DTE-Nummern: leer, kein Kriterium „Tiere laut VISEC“ im Profil', py.get('visecDte') == [] and kriterium(py) is None and py.get('visec') == [], py.get('visecDte'))
 k = kriterium(ar)
 check('Vor der Abfrage: Kriterium offen „noch nicht abgefragt“ mit beiden DTE', k and k['stand'] == 'offen' and 'Noch nicht bei VISEC abgefragt' in k['text'] and k['betriebe'] == ['DTE 100200300', 'DTE 100200301']
-      and ar['visec'] == [{'nummer': '100200300', 't': ''}, {'nummer': '100200301', 't': ''}], (k, ar.get('visec')))
+      and [(x['nummer'], x['stand'], x['t'], x['tiere']) for x in ar['visec']] == [('100200300', 'nie', '', 0), ('100200301', 'nie', '', 0)], (k, ar.get('visec')))
 for falsch, was in (('100 200\n<script>', 'Zeichen'), ('\n'.join(str(1000 + i) for i in range(31)), 'zu viele'), (['100200300', 5], 'Liste mit Zahl')):
     st, r = I.call('containerimport_eudr_sendung_save', {**ar, 'visecDte': falsch})
     check(f'Ungültige DTE-Nummern ({was}): 422, nichts gespeichert', st == 422 and 'DTE' in r.get('error', '') and container(stand(I), 'VISEC-1')['visecDte'] == ['100200300', '100200301'], (st, r.get('error')))
@@ -110,11 +112,11 @@ check('An VISEC geht je DTE nur die Nummer, mit dem Token in der Kopfzeile',
       [(a['pfad'], a['token'], a['inhalt']) for a in SPIEL['anfragen']] == [('/api/Visec/dte', 'Bearer ' + TOKEN, {'numero': n}) for n in ('100200300', '100200301')], SPIEL['anfragen'])
 check('Der Token steht in keiner Antwort', TOKEN not in roh and TOKEN not in json.dumps(stand(I)) and TOKEN not in json.dumps(stand(L)))
 v1, v2 = s['visec']
-check('Ergebnis je DTE: Tropa, Daten, Stand, Zahlen je Stand, Anfrage, Bearbeiter – ohne die ganze Liste der Tiere',
-      v1['tropa'] == 'T-0042' and v1['fechaDte'] == '2026-10-01' and v1['fechaArribo'] == '2026-10-01' and v1['fechaEstado'] == '2026-10-02T09:15' and v1['estado'] == 'CERRADO'
+check('Ergebnis je DTE verdichtet: Tropa, Daten, Stand, Zahlen je Stand, Anfrage, Bearbeiter, Einstufung „ok“ – ohne die ganze Liste der Tiere',
+      v1['tropa'] == 'T-0042' and v1['fechaDte'] == '2026-10-01' and v1['fechaArribo'] == '2026-10-01' and v1['estado'] == 'CERRADO' and v1['stand'] == 'ok'
       and v1['tiere'] == 3 and v1['zahlen'] == {'VALIDA': 3, 'INVALIDA': 0, 'offen': 0} and v1['registriert'] is True and v1['anfrage'] == UUID and v1['von'] == 'Ina Import'
-      and v1['t'] and 'caravanas' not in v1, v1)
-check('Offenes Tier mit Nummer und Stand auf Deutsch', v2['zahlen'] == {'VALIDA': 2, 'INVALIDA': 0, 'offen': 1} and v2['offen'] == [['AR-U0003', 'in Validierung']] and v2['ungueltig'] == [], v2)
+      and v1['t'] and 'caravanas' not in v1 and 'AR-T0001' not in json.dumps(stand(I)), v1)
+check('Offenes Tier mit Nummer und Stand auf Deutsch, Einstufung „offen“', v2['stand'] == 'offen' and v2['zahlen'] == {'VALIDA': 2, 'INVALIDA': 0, 'offen': 1} and v2['offen'] == [['AR-U0003', 'in Validierung']] and v2['ungueltig'] == [], v2)
 k = kriterium(s)
 check('Kriterium offen: ein Tier noch nicht abschließend geprüft, betroffen ist die zweite DTE',
       k['stand'] == 'offen' and '1 Tier ist bei VISEC noch nicht abschließend geprüft' in k['text'] and k['betriebe'] == ['DTE 100200301'], k)
@@ -136,17 +138,26 @@ for modus, status, text in (('token', 503, 'Zugangstoken ab'), ('kaputt', 502, '
           st == status and text in r.get('error', '') and TOKEN not in roh and container(stand(I), 'VISEC-1')['visec'] == vorher, (st, r.get('error')))
 SPIEL['modus'] = 'ok'
 
+DATEN['100200300'] = {'dte': dte('100200300', tiere('VALIDA', 'VALIDA', 'VALIDA'), tropa='T-0043')}
+st, r = I.call('containerimport_eudr_sendung_save', {**container(stand(I), 'VISEC-1'), 'visecDte': '100200300\n777000777\n100200301'})
+vorher = {x['nummer']: x for x in container(r, 'VISEC-1')['visec']}
+st, r = I.call('containerimport_visec_abfragen', {'id': ar['id']})
+nach = {x['nummer']: x for x in container(r, 'VISEC-1')['visec']}
+check('VISEC scheitert an der zweiten Nummer: die erste wird abgelegt, der Rest bleibt beim alten Stand und steht in „offen“ mit dem Grund',
+      st == 200 and r.get('offen') == ['777000777', '100200301'] and 'HTTP 500' in r.get('hinweis', '') and nach['100200300']['tropa'] == 'T-0043'
+      and nach['100200301'] == vorher['100200301'] and nach['777000777']['stand'] == 'nie', (st, r.get('offen'), r.get('hinweis')))
+
 # ---------- unbekannte DTE, noch nicht erfasste DTE, ungültige Tiere, Abschluss ----------
 DATEN['555000111'] = {'dte': dte('555000111', tiere(*(['INVALIDA'] * 150), 'VALIDA', vorsilbe='AR-X'), dte_id=-555000111, tropa='<img src=x onerror=alert(1)>\u0007'),
                       'observaciones': 'Sin permiso de lectura en SENASA.'}
 st, r = I.call('containerimport_eudr_sendung_save', {**container(stand(I), 'VISEC-1'), 'visecDte': '100200300\n100200301\n999999999\n555000111'})
 s = container(I.call('containerimport_visec_abfragen', {'id': ar['id']})[1], 'VISEC-1')
 v = {x['nummer']: x for x in s['visec']}
-check('Unbekannte DTE: Fehlercode und Text von VISEC abgelegt', v['999999999']['fehler'] == 'NOT_FOUND' and v['999999999']['fehlerText'] == 'No se encontró el DTE.' and v['999999999']['tiere'] == 0, v['999999999'])
+check('Unbekannte DTE: Fehlercode und Text von VISEC abgelegt, Einstufung „fehler“', v['999999999']['fehler'] == 'NOT_FOUND' and v['999999999']['fehlerText'] == 'No se encontró el DTE.' and v['999999999']['tiere'] == 0 and v['999999999']['stand'] == 'fehler', v['999999999'])
 x = v['555000111']
 check('Von VISEC noch nicht erfasster DTE (Nummer negativ): „nicht registriert“, Hinweis von VISEC, Steuerzeichen entfernt',
       x['registriert'] is False and x['observaciones'] == 'Sin permiso de lectura en SENASA.' and x['tropa'] == '<img src=x onerror=alert(1)>', x)
-check('Ungültige Tiere: Zahl vollständig, Nummern höchstens 100', x['zahlen'] == {'VALIDA': 1, 'INVALIDA': 150, 'offen': 0} and len(x['ungueltig']) == 100 and x['ungueltig'][0] == 'AR-X0001', x['zahlen'])
+check('Ungültige Tiere: Zahl vollständig, Nummern höchstens 100, Einstufung „kritisch“', x['zahlen'] == {'VALIDA': 1, 'INVALIDA': 150, 'offen': 0} and len(x['ungueltig']) == 100 and x['ungueltig'][0] == 'AR-X0001' and x['stand'] == 'kritisch', x['zahlen'])
 k = kriterium(s)
 check('Kriterium kritisch: 150 ungültige Tiere, betroffen ist nur diese DTE (vor „unbekannt“)', k['stand'] == 'kritisch' and 'VISEC weist 150 Tiere als ungültig aus' in k['text'] and k['betriebe'] == ['DTE 555000111'], k)
 
@@ -178,7 +189,7 @@ with sync_playwright() as pw:
     p.click(f'[data-sendung="{ui["id"]}"]'); p.wait_for_function(f"document.querySelector('#sendung-inhalt').dataset.id === '{ui['id']}'")
     check('Container aus Argentinien: Bereich mit leerer Eingabe, noch keine Ergebnisse', p.is_visible('#sendung-visec') and p.input_value('[name=visecDte]') == '' and p.locator('.ci-visec-dte').count() == 0)
     p.fill('[name=visecDte]', '300 400 500')
-    p.click('#visec-abfragen'); p.wait_for_selector('.ci-visec-dte')
+    p.click('#visec-abfragen'); p.wait_for_function("document.querySelector('#sendung-visec').innerText.includes('Abgefragt am')")   # vorher steht die DTE schon als „nicht abgefragt“ da
     text = p.inner_text('#sendung-visec')
     check('Speichern und abfragen in einem Schritt: Nummer gespeichert, DTE mit Marke, Zahlen, ungültigen und offenen Tieren',
           container(stand(I), 'VISEC-UI')['visecDte'] == ['300400500'] and 'DTE 300400500' in text and '1 ungültig' in text and '3 Tiere: 1 gültig · 1 ungültig · 1 offen' in text

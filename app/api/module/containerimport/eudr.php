@@ -630,7 +630,7 @@ function eudr_kriterium(string $id, string $titel, string $stand, string $text, 
 
 /* Kriterien des Risikoprofils (Art. 10 der Verordnung) als Tabelle: jede Zeile bewertet die Sendung mit ihren Betrieben
    ($bs = Sichten der Betriebe) und liefert ein Kriterium – oder null, wenn es für diese Sendung keines gibt. Neue Prüfungen
-   kommen als weitere Zeile hinzu. Die Sendung trägt dabei die Ergebnisse von VISEC (ci_visec_zu). */
+   kommen als weitere Zeile hinzu. */
 function eudr_kriterien(): array
 {
     return [
@@ -752,7 +752,7 @@ function eudr_abschluss(array $s, array $eingabe, array $sichten, array $me): ar
     $ergebnis = eudr_wahl($eingabe['ergebnis'] ?? null, ['vernachlaessigbar', 'nicht_vernachlaessigbar'], 'Ergebnis');
     $begruendung = eudr_text($eingabe['begruendung'] ?? '', 2000, 'Begründung');
     $bs = eudr_sendung_betriebe($s, $sichten);
-    $profil = eudr_profil(ci_visec_zu($s), $bs);
+    $profil = eudr_profil($s, $bs);
     if ($ergebnis === 'vernachlaessigbar' && $profil['vernachlaessigbar'] === 'nein') throw new InvalidArgumentException('Solange ein Kriterium kritisch ist, kann das Risiko nicht als vernachlässigbar bewertet werden.');
     if ($ergebnis === 'vernachlaessigbar' && $profil['vernachlaessigbar'] === 'begruendung' && mb_strlen($begruendung) < 20)
         throw new InvalidArgumentException('Es sind noch Punkte offen. Bitte begründen, warum das Risiko trotzdem vernachlässigbar ist (mindestens 20 Zeichen).');
@@ -788,7 +788,7 @@ function eudr_ohne_umriss(array $betriebe): array { return array_map(fn($b) => a
    festgeschriebene. */
 function eudr_sendung_sicht(array $s, array $betriebe, array $hofNamen, array $stelle): array
 {
-    $s = ci_visec_zu($s);   // Ergebnisse von VISEC je DTE-Nummer (Anzeige und Kriterium)
+    $s = ci_visec_zu($s);   // Antworten von VISEC je DTE-Nummer für die Anzeige (das Kriterium liest sie selbst)
     $s['fruehere'] = array_map(fn($f) => array_diff_key($f, ['profil' => 1, 'betriebe' => 1]), $s['fruehere'] ?? []);   // Schnappschüsse bleiben gespeichert
     if (!empty($s['abschluss'])) $s['abschluss']['betriebe'] = eudr_ohne_umriss($s['abschluss']['betriebe']);
     if (empty($s['abschluss'])) $s['schlachthofName'] = $hofNamen[$s['schlachthof']] ?? $s['schlachthofName'];

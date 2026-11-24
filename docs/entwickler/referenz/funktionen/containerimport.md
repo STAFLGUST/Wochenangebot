@@ -2,7 +2,7 @@
 
 <!-- ERZEUGT von `python3 werkzeuge/doku.py erzeugen` – nicht von Hand ändern. Quelle: Funktionen und Kommentare im Code. Die CI prüft, dass diese Datei zum Code passt. -->
 
-37 Dateien, 395 Funktionen – in der Reihenfolge der Datei, **fett** die Abschnitte. Text = erste Aussage des Kommentars direkt über der Funktion (Python: Docstring). Übersicht aller Module: [README.md](README.md).
+37 Dateien, 393 Funktionen – in der Reihenfolge der Datei, **fett** die Abschnitte. Text = erste Aussage des Kommentars direkt über der Funktion (Python: Docstring). Übersicht aller Module: [README.md](README.md).
 
 ## `app/api/aktionen/containerimport.php`
 
@@ -261,13 +261,12 @@ _Container-Import · EUDR_
 - `ci_visec_eingerichtet()`
 - `ci_visec_nummern(v)` – DTE-Nummern aus der Eingabe (Text mit einer Nummer je Zeile oder Liste): ohne Leerzeichen, groß, ohne Doppelte, in der Reihenfolge der Eingabe.
 - `ci_visec_text(v, max)` – Fremder Text: ohne Steuerzeichen, gekürzt
-- `ci_visec_datum(v, zeit)` – Zeitpunkt aus der Antwort als „JJJJ-MM-TT“ bzw. „JJJJ-MM-TTTHH:MM“ ($zeit); alles andere leer
-- `ci_visec_dte(nummer)` – Eine DTE-Nummer bei VISEC abfragen: Ergebnis zum Speichern.
-- `ci_visec_abfragen(nummern)` – Alle DTE eines Containers abfragen (außerhalb jeder Sperre – das dauert): Nummer → Ergebnis.
-- `ci_visec_ergebnisse()` – Gespeicherte Ergebnisse: Container-Kennung → DTE-Nummer → Ergebnis mit t (Abfrage) und von.
-- `ci_visec_ablegen(sendung, ergebnisse, me)` – Ergebnisse einer Abfrage ablegen (unter der Sperre EUDR_SPERRE): je DTE die jüngste ersetzt die vorige
-- `ci_visec_sicht(nummer, e)` – Sicht eines Ergebnisses für die Oberfläche: Zahlen je Stand statt der ganzen Liste, ungültige und offene Caravanas mit Nummer (höchstens CI_VISEC_LISTE).
-- `ci_visec_zu(s)` – Container mit den Ergebnissen seiner DTE-Nummern (Feld „visec“, in der Reihenfolge der Nummern) – für Sicht und Profil
+- `ci_visec_datum(v)` – Tag aus einem Zeitpunkt der Antwort („JJJJ-MM-TT…“), sonst leer
+- `ci_visec_dte(nummer)` – Eine DTE-Nummer bei VISEC abfragen → verdichtetes Ergebnis (Form CI_VISEC_LEER).
+- `ci_visec_abfragen(nummern)` – Alle DTE eines Containers abfragen (außerhalb jeder Sperre – das dauert) → [Nummer → Ergebnis, Fehlermeldung oder ''].
+- `ci_visec_ergebnisse()` – Abgelegte Antworten: Container-Kennung → DTE-Nummer → Ergebnis mit t (Abfrage) und von.
+- `ci_visec_ablegen(sendung, ergebnisse, me)` – Antworten einer Abfrage ablegen (unter der Sperre EUDR_SPERRE): je DTE ersetzt die jüngste die vorige
+- `ci_visec_zu(s)` – Container mit seinen DTE (Feld „visec“, in der Reihenfolge der Nummern), je DTE mit „stand“: nie (nicht abgefragt) \| fehler (VISEC kennt den DTE nicht oder …
 - `ci_visec_kriterium(s)` – Kriterium „Tiere laut VISEC“ des Risikoprofils; null = der Container nennt keine DTE (kein Kriterium)
 
 ## `app/api/module/containerimport/whisp.php`
@@ -516,10 +515,9 @@ _STAFL-Plattform · Modul Container-Import – Reiter „Tracking“: wo ist der
 
 _STAFL-Plattform · Modul Container-Import – Bereich „Tiere laut VISEC“ im Fenster eines Containers aus Argentinien (Auftrag des Inhabers 24.11.2026: bei Lieferungen aus Argentinien die Daten von carne.visec.com.ar …_
 
-- `dteMarke(d)` – Marke einer DTE: wie der Server das Kriterium bildet (ungültig vor offen vor gültig)
 - `dteZeile(d)`
 - `zeichnen(s)`
-- `abfragen()` – Fenster speichern (auch die eben eingetragenen Nummern), dann abfragen und das Fenster mit dem neuen Profil neu öffnen
+- `abfragen()` – Fenster speichern (auch die eben eingetragenen Nummern; sendungSpeichern öffnet das Fenster neu), dann abfragen und das Fenster mit dem neuen Profil noch …
 
 ## `tests/e2e/containerimport_hilfe.py`
 

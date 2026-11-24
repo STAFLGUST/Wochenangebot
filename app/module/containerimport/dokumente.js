@@ -39,13 +39,13 @@
   }
 
   /* ---------- Zähler in der Liste der Container ---------- */
-  C.haken.zeile = (s) => {
+  C.haken.zeile.push((s) => {
     const n = zahlen(s.id).anzahl, f = fehlen(s.id).length;
     return `<span class="ci-unter ci-dok-zahl">${icon('dok')}${n === 1 ? '1 Dokument' : `${n} Dokumente`}${f ? ` · ${f} ${f === 1 ? 'fehlt' : 'fehlen'}` : ' · vollständig'}</span>`;
-  };
+  });
 
   /* ---------- Fenster „Container“ ---------- */
-  C.haken.fenster = async (s) => {
+  C.haken.fenster.push(async (s) => {
     if (D.sendung !== s.id) Object.assign(D, { sendung: s.id, warte: [], arten: '', entfernen: '', entfernte: false });
     D.dateien = null; D.fehler = '';
     zeichnen();
@@ -54,7 +54,7 @@
     if (r.status === 200 && r.data.ok) { nachAktion(r.data, s.id); return; }
     D.fehler = C.fehlerText(r, 'Die Dokumente konnten nicht geladen werden');
     zeichnen();
-  };
+  });
   /* Der eine Weg nach jeder Antwort: Zahlen aller Container, Dateien und Vermerke des Containers sid übernehmen, dann die
      Liste (Zähler) und den Bereich neu zeichnen */
   function nachAktion(d, sid) {

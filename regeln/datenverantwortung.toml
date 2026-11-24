@@ -949,7 +949,7 @@ name = "containerimport-visec"
 eigentuemer = "containerimport"
 bereich = "intern"
 schutz = "vertraulich"
-beschreibung = "Container-Import · EUDR (Argentinien): Antworten von VISEC Carne je Container und DTE-Nummer – Tropa, Daten und Stand des DTE, Liste der Caravanas (Ohrmarken) mit ihrem Stand laut VISEC, Kennung der Anfrage, Fehlercode – mit Abfragezeit und Bearbeiter; je DTE die jüngste Abfrage. Grundlage des Kriteriums „Tiere laut VISEC“ im Risikoprofil."
+beschreibung = "Container-Import · EUDR (Argentinien): Antworten von VISEC Carne je Container und DTE-Nummer – Tropa, Daten und Stand des DTE, Zahl der Tiere je Stand laut VISEC, höchstens 100 Ohrmarken ungültiger bzw. offener Tiere, Kennung der Anfrage, Fehlercode – mit Abfragezeit und Bearbeiter; je DTE die jüngste Abfrage. Grundlage des Kriteriums „Tiere laut VISEC“ im Risikoprofil."
 historie = "je DTE die jüngste Abfrage; beim Abschluss hält das Risikoprofil das Kriterium mit Zahlen und Abfragedatum fest (GR-106), danach wird für den Container nicht mehr abgefragt"
 dynamisch = true   # Name als Konstante CI_VISEC_DOKUMENT (module/containerimport/visec.php)
 [[dokument]]

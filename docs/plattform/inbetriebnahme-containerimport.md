@@ -427,7 +427,7 @@ Entwaldung nach dem 31.12.2020, Schutzgebiete und Legalität geprüft. VISEC zer
 Prüfung. Ohne Token auf dem Server gibt es den Knopf nicht. Weil sich die Container-Beschreibung ändert, startet dieses
 Release alle Container neu (kurze Unterbrechung aller Adressen, auch der Kundenseite).
 
-**So arbeitet man damit:** Im Fenster „Container“ erscheint bei Herkunftsland Argentinien der Bereich „Tiere laut VISEC“.
+**So arbeitet man damit:** Im Fenster eines gespeicherten Containers erscheint bei Herkunftsland Argentinien der Bereich „Tiere laut VISEC“.
 Dort die DTE-Nummern aus den Papieren eintragen (Documento de Tránsito Electrónico, Transport der Tiere zum Schlachthof; eine
 je Zeile). „Speichern und bei VISEC abfragen“ speichert den Container und holt je DTE Tropa, Daten und den Stand jedes Tiers.
 Das Risikoprofil bekommt das Kriterium „Tiere laut VISEC (Argentinien)“:
@@ -463,10 +463,12 @@ Kriterium bleiben.
 - **Schnittstelle** (Stand 24.11.2026, Beschreibung im Profil bei VISEC unter „Consultá la documentación de la API“): es gibt
   nur die Abfrage eines DTE und einer einzelnen Caravana. Die Liste „Mis embarques“ und der GeoJSON-Download der Flächen sind
   nur in der Weboberfläche von VISEC zu haben, nicht über die Schnittstelle.
-- **Gespeichert** wird je Container und DTE die jüngste Antwort (Dokument `containerimport-visec`, vertraulich). Ein Fehler
-  von VISEC überschreibt nichts.
-- **Grenzen:** höchstens 30 DTE je Container; je Abfrage 15 Sekunden Frist, für alle DTE zusammen 40 Sekunden – was dann
-  noch fehlt, meldet die Seite („bitte erneut abfragen“).
+- **Gespeichert** wird je Container und DTE die jüngste Antwort, verdichtet: Kopfdaten, Zahl der Tiere je Stand, höchstens
+  100 Ohrmarken ungültiger bzw. noch offener Tiere und die Kennung der Anfrage bei VISEC (Dokument `containerimport-visec`,
+  vertraulich). Die vollständige Liste der Ohrmarken bleibt bei VISEC. Ein Fehler von VISEC überschreibt nichts.
+- **Grenzen:** höchstens 30 DTE je Container; je Abfrage 15 Sekunden Frist, alle zusammen höchstens 40 Sekunden. Scheitert
+  VISEC an einer Nummer oder reicht die Zeit nicht, bleibt das bisher Geholte; die übrigen Nummern nennt die Seite („bitte
+  später erneut abfragen“). Scheitert schon die erste, kommt nur die Meldung.
 - *Getestet* mit nachgebautem Dienst (Gruppe `containerimport_visec`). Die Antwortfelder stammen aus der Beschreibung der
   Schnittstelle bei VISEC; **ein echter Abruf ist noch nicht geprüft** (Schritt 4).
 - **Rückfall:** `sh /opt/wochenangebot/deploy/release-zurueck.sh`. Die Vorversion liest alle Container weiter und behält die

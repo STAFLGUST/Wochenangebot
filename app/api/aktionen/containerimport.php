@@ -178,8 +178,9 @@ switch ($action) {
 
         /* VISEC Carne (Argentinien): die am Container gespeicherten DTE-Nummern abfragen und die Antworten je DTE ablegen
            (visec.php). Nur die Nummern gehen hinaus. Abgefragt wird außerhalb der Sperre; abgelegt nur, solange die Bewertung
-           offen ist. Ohne VISEC_API_TOKEN in .env ist die Abfrage aus (503). Antwort: der neue Stand und „offen“ = Nummern,
-           die in der Zeit nicht mehr abgefragt wurden. */
+           offen ist. Ohne VISEC_API_TOKEN in .env ist die Abfrage aus (503). Antwort: der neue Stand, „offen“ = Nummern, die
+           nicht mehr abgefragt wurden (Zeitbudget oder Fehler von VISEC), und „hinweis“ = dieser Fehler; scheitert schon die
+           erste Nummer, endet die Aktion mit der Meldung (502). */
         case 'containerimport_visec_abfragen': {
             $me = eudr_bearbeiter();
             if (!ci_visec_eingerichtet()) fail('Die Abfrage von VISEC ist nicht eingerichtet.', 503);
@@ -189,13 +190,14 @@ switch ($action) {
             if (!$s['visecDte']) fail('Am Container sind keine DTE-Nummern gespeichert.', 422);
             if (session_status() === PHP_SESSION_ACTIVE) session_write_close();   // sonst wartet jede weitere Anfrage der Sitzung, solange VISEC antwortet
             audit('containerimport', 'EUDR: DTE-Nummern des Containers „' . eudr_container_name($s) . '“ bei VISEC abgefragt (' . implode(', ', $s['visecDte']) . ')');   // vor dem Versand
-            $ergebnisse = ci_visec_abfragen($s['visecDte']);
+            [$ergebnisse, $hinweis] = ci_visec_abfragen($s['visecDte']);
+            if (!$ergebnisse) fail(($hinweis ?: 'VISEC hat nicht rechtzeitig geantwortet.') . ' Bitte später erneut abfragen.', 502);
             with_lock(EUDR_SPERRE, function () use ($s, $ergebnisse, $me) {
                 [, $jetzt] = eudr_holen(eudr_sendungen(), $s['id']);
                 if (!empty($jetzt['abschluss'])) fail('Die Bewertung wurde inzwischen abgeschlossen – das Ergebnis wird nicht mehr abgelegt.', 409);
                 ci_visec_ablegen($s['id'], $ergebnisse, $me);
             });
-            respond(['ok' => true, 'id' => $s['id'], 'offen' => array_values(array_diff($s['visecDte'], array_keys($ergebnisse)))] + eudr_stand());
+            respond(['ok' => true, 'id' => $s['id'], 'offen' => array_values(array_diff($s['visecDte'], array_keys($ergebnisse))), 'hinweis' => $hinweis] + eudr_stand());
         }
 
         /* Farmer-Nummern aus den Papieren für das Fenster „Container“ auflösen, ohne zu speichern (Vorschau vor dem Übernehmen):

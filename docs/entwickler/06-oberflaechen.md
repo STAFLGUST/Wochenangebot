@@ -1009,7 +1009,7 @@ Caddy setzt auf allen Hosts `script-src 'self'` (ohne `'unsafe-inline'`), `conne
   immer über `fokusBehalten` aus der Brücke `window.STAFL_CI` (Fokus geht an das Element mit derselben `id` zurück).
   **Dokumente je Container** (Auftrag des Inhabers 20.11.2026): `dokumente.js` und `dokumente.css`, Server
   `app/api/module/containerimport/dokumente.php` (Regeln und GoBD: Kapitel Daten, Inbetriebnahme Abschnitt 14). Eingehängt über
-  zwei Haken der Brücke: `STAFL_CI.haken.zeile(s)` (Zähler in der Liste der Container) und `STAFL_CI.haken.fenster(s)` (füllt
+  zwei Haken der Brücke (Listen, jede Datei hängt ihre Funktion mit `push` an): `STAFL_CI.haken.zeile` (Zähler in der Liste der Container) und `STAFL_CI.haken.fenster` (füllt
   `#sendung-dokumente` im Fenster „Container“, lädt die Dateien mit `containerimport_dokumente`). Der Bereich liegt im Formular
   des Containers: keine Felder mit `name`, nur Knöpfe vom Typ `button`, die Eingabetaste im Feld „Grund“ wird abgefangen.
   Hochladen in Teilen zu 2 MB nacheinander mit Fortschritt über `STAFL_CI.teileHochladen(action, datei, felder, beiTeil, sperre)`
@@ -1030,9 +1030,11 @@ Caddy setzt auf allen Hosts `script-src 'self'` (ohne `'unsafe-inline'`), `conne
   Auswahl „Ergebnis“ leer und `pruefungEintragen` verlangt eine Wahl. Die Vorgangsnummer geht per POST statt in die Adresse
   (mit ihr lässt sich das Ergebnis bei Whisp ohne Anmeldung abrufen); deshalb der Schalter `sperre` in `api()`. Tests: Gruppe
   `containerimport_whisp` mit nachgebautem Dienst; gegen das echte Whisp lässt sich nur mit Schlüssel prüfen.
-  **VISEC Carne** (Argentinien, Bereich „Tiere laut VISEC“ im Fenster „Container“): `visec.js` hängt sich hinter den Haken
-  `fenster` (ruft den vorher gesetzten von `dokumente.js` mit auf) und zeichnet in `#sendung-visec`. Das Feld `visecDte`
-  liegt im Formular des Containers und wird mit ihm gespeichert (`sendungAusFenster` reicht es nur weiter, wenn es da ist).
+  **VISEC Carne** (Argentinien, Bereich „Tiere laut VISEC“ im Fenster „Container“): `visec.js` hängt sich an den Haken
+  `fenster` (wie `dokumente.js`: die Haken sind Listen, jede Datei hängt ihre Funktion an) und zeichnet in `#sendung-visec`.
+  Das Feld `visecDte` liegt im Formular des Containers und wird mit ihm gespeichert (fehlt es, sendet `api()` es nicht, und
+  der Server behält die gespeicherten Nummern). Die Einstufung je DTE (`stand`: nie, fehler, kritisch, offen, ok) liefert
+  der Server; `visec.js` übersetzt sie nur in Marken.
   „Speichern und bei VISEC abfragen“ nutzt `sendungSpeichern` und `sendungOeffnen` der Brücke: erst speichern, dann
   `containerimport_visec_abfragen`, dann das Fenster neu öffnen (Profil mit dem Kriterium). Der Server ruft VISEC ab
   (`app/api/module/containerimport/visec.php`), der Token `VISEC_API_TOKEN` kommt nie in den Browser; die Antworten liegen
