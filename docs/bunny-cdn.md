@@ -188,6 +188,14 @@ wie in den Tabellen oben (Ratenbegrenzungen also weiter **Log**). Noch offen: Pr
 importieren, eine Datei im QM-System hochladen), danach die Ratenbegrenzungen auf **Rate Limit**. Wird ein eigener Vorgang abgewiesen: Regel unter
 Shield → WAF → „Triggered Rules“ suchen und einzeln auf „Log“ stellen.
 
+**Stand 25.11.2026 – erster eigener Vorgang abgewiesen:** „MHD an Verkauf“ im Bestand bekam „Serverfehler (403)“. Laut
+Event Logs der Zone `stafl-dashboard-1` blockierte Regel **932235** („Remote Command Execution: Unix Command Injection“) jede
+Anfrage `stock_mhd_senden`: Das Bild ging als data-URL mit, und „;base64“ darin sieht für die Regel aus wie der Shell-Befehl
+`base64` nach einem Trennzeichen. Behoben in der Anwendung, nicht durch Lockern der Regel: Die Seite schickt nur noch die
+Base64-Daten ohne Präfix (Test in `mhd_mail`). **Merkregel:** Keine Anfrage an die Plattform schickt `data:…;base64,` – Bilder
+und Dateien als reine Base64-Daten oder als Datei hochladen. Erkennen lässt sich ein solcher Fall an „Serverfehler (403)“ ohne
+Text der Plattform (deren eigene Ablehnungen haben immer einen Satz).
+
 **Rückfall:** In der Zone Shield → WAF ausschalten bzw. DDoS-Empfindlichkeit „Off“; Ratenbegrenzungen löschen. Am Server
 ändert sich dabei nichts.
 

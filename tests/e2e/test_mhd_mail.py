@@ -5,6 +5,7 @@ Benachrichtigung „MHD-Liste an den Verkauf“ – Bild der Liste eingebettet (
 import base64
 import datetime as dt
 import io
+import json
 import os
 import re
 import struct
@@ -178,11 +179,16 @@ with sync_playwright() as p:
           and a.locator('.stab [data-ssort]').count() == 0 and a.locator('.stab [data-sfilter]').count() == 10)
     a.screenshot(path=os.path.join(SH, 'mhd-mail-1440.png'))
     n0 = len(smtp.messages)
+    gesendet = []
+    a.on('request', lambda q: gesendet.append(q.post_data or '') if 'stock_mhd_senden' in q.url else None)
     knopf.click(); a.wait_for_selector('#dlg-confirm[open]')
     check('Rückfrage nennt Anzahl und Empfänger-Einstellung', '3 Artikel' in a.inner_text('#confirm-body') and 'Benachrichtigungen' in a.inner_text('#confirm-body'))
     a.click('#confirm-body [data-v="1"]')
     a.wait_for_function("document.querySelector('#toast').textContent.includes('gesendet an')")
     check('Rückmeldung mit Empfängern', 'verkauf@example.org' in a.inner_text('#toast'), a.inner_text('#toast'))
+    # Die Firewall von bunny.net (Regel 932235, Unix Command Injection) blockiert jede Anfrage mit „;base64“ – also ohne data-URL senden
+    check('Anfrage enthält kein „;base64“ (sonst 403 der Firewall), Bild als reine Base64-Daten', len(gesendet) == 1 and ';base64' not in gesendet[0]
+          and json.loads(gesendet[0])['bild'].startswith('iVBORw0KGgo'), [g[:80] for g in gesendet])
     until(lambda: len(smtp.messages) >= n0 + 2)
     bild = teil(smtp.messages[n0]['msg'], 'image/png')[0].get_content()
     with open(os.path.join(SH, 'mhd-mail-bild.png'), 'wb') as f:
