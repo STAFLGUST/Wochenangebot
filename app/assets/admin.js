@@ -4197,7 +4197,9 @@
       else if (summe[t]) text(kgText(sum(list, summe[t])), x, w, y + ZH / 2, ausr);
       x += w;
     }
-    return { bild: cv.toDataURL('image/png'), breite };
+    // nur die Base64-Daten ohne „data:image/png;base64,“: „;base64“ hält die Firewall von bunny.net (Regel 932235) für einen
+    // Shell-Befehl und blockiert die Anfrage mit 403 (25.11.2026); der Server nimmt beides (mhd_bild_pruefen)
+    return { bild: cv.toDataURL('image/png').slice('data:image/png;base64,'.length), breite };
   }
   async function mhdAnVerkauf(btn) {
     const list = mhdListe();
