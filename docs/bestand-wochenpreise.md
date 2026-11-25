@@ -73,6 +73,18 @@ Escape und Schließen schließen ihn. CSV und Druck enthalten weiterhin die Lief
   der Tabelle; jeder einzeln oder alle lassen sich entfernen. Sie gelten für Summen, Druck (Überschrift „Filter: …“),
   PDF, CSV und „VK-Gruppen“, nur für diese Sitzung. Am Handy sind die Überschriften ausgeblendet; der Knopf „Filter“
   zeigt alle Filter in einem Fenster (am Desktop ebenso).
+- **Fenster „Filter“** (Knopf „Filter“, Auftrag Inhaber 25.11.2026): oben drei Filter, die es nur hier gibt:
+  - Artikel: Suche nach Art.-Nr. oder Bezeichnung grenzt eine Liste zum Ankreuzen ein (gewählte stehen oben). Gewählte
+    Artikel bleiben gewählt, wenn die Suche sie ausblendet; „Alle Treffer wählen“ und „Auswahl leeren“. Die Textfilter
+    „Art.-Nr.“ und „Art. Bezeichnung“ bleiben am Spaltenkopf.
+  - Gruppen: VK-Gruppen der Artikelstammdaten (dieselben wie im Fenster „VK-Gruppen“) mit Artikelzahl, dazu „ohne Gruppe“.
+    Mehrere Gruppen = eine davon (ODER). Die Gruppensuche blendet nur Gruppen aus.
+  - Warengruppe: aus der Artikelnummer (wie die Zwischenüberschriften der Liste). Zustand „frisch“ oder „gefroren“ und die
+    Fleischart (Rindfleisch, Kalbfleisch …). Warengruppen ohne Zustand (Wurstwaren, Weitere Artikel) fallen bei
+    „frisch“/„gefroren“ heraus.
+
+  Darunter MHD, Mengen, Erwartete Zugänge und Preise wie am Spaltenkopf. Kein Angebot nötig: die Gruppen hängen an den
+  Stammdaten, nicht an einem Angebot.
 - **VK-Gruppen:** Der Knopf „VK-Gruppen“ öffnet ein Fenster mit der aktuellen Auswahl je VK-Gruppe der Artikelstammdaten.
   - Je Gruppe stehen die Summen von eingelagertem Bestand, Kg kürz. MHD, erfasstem Bestand und Gesamt verfügbar sowie
     das früheste MHD (farbig wie in der Liste).

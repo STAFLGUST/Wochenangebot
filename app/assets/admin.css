@@ -521,7 +521,24 @@ body.adm .st-pop { background: var(--glas-fenster, var(--surface)); border-color
 .st-fstufen label { display: inline-flex; align-items: center; gap: 5px; padding: 4px 8px; border-radius: 8px; border: 1px solid var(--line); cursor: pointer; font-size: 12.5px; }
 .st-fstufen label input { margin: 0; }
 .st-falle { display: grid; gap: 16px; }
-.st-falle h3 { margin: 0; font-size: 13px; font-weight: 700; }
+.st-falle h3 { margin: 0; font-size: 13px; font-weight: 700; display: flex; align-items: baseline; gap: 8px; }
+.st-fgew { margin-left: auto; color: var(--accent); font-size: 12.5px; font-weight: 600; }
+/* Artikelauswahl und Gruppen im Fenster „Filter“ (Ankreuzlisten, 44 px Zeilen für den Finger) */
+.st-fart { max-height: 236px; overflow: auto; border: 1px solid var(--line); border-radius: 10px; }
+.st-fart label, .st-fgruppen label { display: flex; align-items: center; gap: 10px; min-height: 44px; padding: 0 12px; cursor: pointer; font-size: 13.5px; }
+.st-fart label { border-bottom: 1px solid var(--line); }
+.st-fart label:last-child { border-bottom: 0; }
+.st-fart label:has(input:checked), .st-fgruppen label:has(input:checked) { background: var(--accent-soft); }
+.st-fart input, .st-fgruppen input { margin: 0; flex: none; }
+.st-fart .hint { margin: 0; padding: 12px; }
+.st-fnr { width: 56px; flex: none; color: var(--muted); font-variant-numeric: tabular-nums; }
+.st-fname, .st-fgruppen span { flex: 1; min-width: 0; }
+.st-fart em, .st-fgruppen em { font-style: normal; color: var(--muted); font-size: 12px; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.st-fgruppen { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 6px; }
+.st-fgruppen label { border: 1px solid var(--line); border-radius: 10px; }
+.st-fgruppen label[hidden] { display: none; }
+.st-fknoepfe { display: flex; gap: 16px; font-size: 13px; }
+@media (max-width: 560px) { .st-fgruppen { grid-template-columns: 1fr; } }
 #dlg-stock-filter .dlg-foot { align-items: center; }
 #dlg-stock-filter .dlg-foot .hint { margin-left: auto; }
 .st-fleiste { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin: 0 0 10px; font-size: 13px; }

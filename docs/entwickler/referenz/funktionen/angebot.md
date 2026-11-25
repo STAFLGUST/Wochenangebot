@@ -2,7 +2,7 @@
 
 <!-- ERZEUGT von `python3 werkzeuge/doku.py erzeugen` – nicht von Hand ändern. Quelle: Funktionen und Kommentare im Code. Die CI prüft, dass diese Datei zum Code passt. -->
 
-62 Dateien, 984 Funktionen – in der Reihenfolge der Datei, **fett** die Abschnitte. Text = erste Aussage des Kommentars direkt über der Funktion (Python: Docstring). Übersicht aller Module: [README.md](README.md).
+62 Dateien, 985 Funktionen – in der Reihenfolge der Datei, **fett** die Abschnitte. Text = erste Aussage des Kommentars direkt über der Funktion (Python: Docstring). Übersicht aller Module: [README.md](README.md).
 
 ## `app/api/lib/angebote.php`
 
@@ -712,6 +712,7 @@ _Wochenangebot – Eingabebereich Bearbeitet einen Entwurf auf dem Server (autom
 - `stPopZeigen(k, btn)`
 - `stPopPlatz(btn)` – Lage am Trichter der Spalte; nach dem Neuzeichnen (kürzere Liste, Seite rollt nach) neu ausrichten statt schließen
 - `stPopZu(fokus)`
+- `sfArtikelListe()`
 - `openStockFilter()`
 
 **Fenster „VK-Gruppen“: aktuelle Auswahl (Suche und Filter) je VK-Gruppe der Artikelstammdaten**

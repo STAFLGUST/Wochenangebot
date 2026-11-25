@@ -129,6 +129,8 @@ _Summen exakt (Dezimal) und kaufmännisch gerundet wie die Anzeige – Gleitkomm
 
 **Bezeichnung aus den Artikelstammdaten, VK-Gruppen, Spaltenfilter**
 
+**Fenster „Filter“: Artikel einzeln, Gruppen (VK-Gruppe der Stammdaten), Warengruppe (Auftrag Inhaber 25.11.2026)**
+
 - `doc_(name)` – ── Bestandsverlauf: Tagesstand je Übernahme (Daten des Bestands, Auswertung später im Controlling) ──
 
 ## `tests/e2e/test_stock_overview.py`

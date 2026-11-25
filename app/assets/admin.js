@@ -3603,7 +3603,12 @@
      Text enthält · Zahlenbereich (kg) · Preis (mit/ohne, Bereich) · MHD (Stufen wie die Legende, Zeitraum) · Zugänge (mit/ohne).
      Gelten zusätzlich zur Suche für Liste, Summen, Druck, PDF, CSV und das Fenster „VK-Gruppen“; nur für diese Sitzung. */
   let stockFilter = {};
+  let sfSuche = '';   // Suche der Artikelauswahl im Fenster „Filter“ (grenzt nur die Liste zum Ankreuzen ein, filtert selbst nicht)
   const ST_SP = [
+    // nur im Fenster „Filter“ (keine Spalte): einzelne Artikel, VK-Gruppe der Artikelstammdaten, Warengruppe (Art.-Nr.)
+    { key: 'artikel', titel: 'Artikel', typ: 'artikel' },
+    { key: 'vkg', titel: 'Gruppen', typ: 'gruppe' },
+    { key: 'wg', titel: 'Warengruppe', typ: 'warengruppe' },
     { key: 'code', titel: 'Art.-Nr.', typ: 'text', ph: 'z. B. 106' },
     { key: 'name', titel: 'Art. Bezeichnung', typ: 'text', ph: 'z. B. Filet Färse' },
     { key: 'vk', titel: 'Aktueller Preis', typ: 'preis' },
@@ -3617,7 +3622,10 @@
   ];
   const ST_SPK = Object.fromEntries(ST_SP.map((s) => [s.key, s]));
   const MHD_STUFEN = [['mhd-past', 'abgelaufen'], ['mhd-0-4', 'heute – 4 Tage'], ['mhd-5-7', '5 – 7 Tage'], ['mhd-8-14', '8 – 14 Tage'], ['spaeter', 'später'], ['ohne', 'ohne MHD']];
-  const fWert = { code: (a) => a.code, name: (a) => `${a.name} ${a.nameImport || ''} ${a.merkmale || ''}`, vk: (a) => a.price, prev: (a) => a.prevPrice, kg: (a) => a.kg, mhd: (a) => a.mhd,
+  /* „Rindfleisch, frisch“ → ['Rindfleisch', 'frisch']; Warengruppen ohne Zustand (Wurstwaren, Weitere Artikel) → [Name, ''] */
+  const wgTeile = (label) => { const m = /^(.*), (frisch|gefroren)$/.exec(label); return m ? [m[1], m[2]] : [label, '']; };
+  const sfVkName = (k) => (k ? `${k} · ${(stock.vkgruppen || {})[k] || 'VK-Gruppe ' + k}` : 'ohne Gruppe');
+  const fWert = { artikel: (a) => S.normCode(a.code), vkg: (a) => a.vk || '', wg: (a) => a.wg.label, code: (a) => a.code, name: (a) => `${a.name} ${a.nameImport || ''} ${a.merkmale || ''}`, vk: (a) => a.price, prev: (a) => a.prevPrice, kg: (a) => a.kg, mhd: (a) => a.mhd,
     mhdKg: (a) => a.mhdKg, incomingKg: (a) => a.incomingKg, totalKg: (a) => a.totalKg, zugaenge: (a) => a.incoming.length };
   const preisZahl = (p) => (p && p.status === 'value' && Number.isFinite(p.value) ? p.value : null);
   const imBereich = (v, f) => (f.min == null || (v != null && v >= f.min)) && (f.max == null || (v != null && v <= f.max));
@@ -3632,6 +3640,8 @@
         if ((f.von && !(a.mhd && a.mhd >= f.von)) || (f.bis && !(a.mhd && a.mhd <= f.bis))) return false;
       }
       if (typ === 'zugang' && ((f.art === 'mit' && !v) || (f.art === 'ohne' && v))) return false;
+      if ((typ === 'artikel' && !f.codes.includes(v)) || (typ === 'gruppe' && !f.gruppen.includes(v))) return false;
+      if (typ === 'warengruppe') { const [art, zust] = wgTeile(v); if ((f.arten.length && !f.arten.includes(art)) || (f.zustand && zust !== f.zustand)) return false; }
     }
     return true;
   }
@@ -3643,6 +3653,10 @@
     if (s.typ === 'text') return `${s.titel} enthält „${f.q}“`;
     if (s.typ === 'zahl') return `${s.titel} ${bereich(' kg')}`;
     if (s.typ === 'preis') return `${s.titel}: ${[f.art === 'mit' ? 'mit Preis' : f.art === 'ohne' ? 'ohne Preis' : '', f.min != null || f.max != null ? bereich(' €/kg') : ''].filter(Boolean).join(', ')}`;
+    const liste = (l) => (l.length > 3 ? `${l.slice(0, 3).join(', ')} +${l.length - 3}` : l.join(', '));
+    if (s.typ === 'artikel') return `Artikel: ${liste(f.codes)}`;
+    if (s.typ === 'gruppe') return `Gruppen: ${liste(f.gruppen.map(sfVkName))}`;
+    if (s.typ === 'warengruppe') return `${s.titel}: ${[f.zustand ? 'nur ' + f.zustand : '', liste(f.arten)].filter(Boolean).join(', ')}`;
     if (s.typ === 'mhd') return `${s.titel}: ${[(f.stufen || []).map((x) => MHD_STUFEN.find((m) => m[0] === x)[1]).join(', '), f.von || f.bis ? `${f.von ? 'ab ' + mhdShort(f.von) : ''}${f.von && f.bis ? ' ' : ''}${f.bis ? 'bis ' + mhdShort(f.bis) : ''}` : ''].filter(Boolean).join('; ')}`;
     return `${s.titel}: ${f.art === 'mit' ? 'mit Zugängen' : 'ohne Zugänge'}`;
   }
@@ -3660,6 +3674,17 @@
       if (stufen.length || von || bis) f = { stufen, von, bis };
     }
     if (s.typ === 'zugang') { const art = w('art').value; if (art) f = { art }; }
+    const haken = (ff) => [...host.querySelectorAll(`[data-fk="${k}"][data-ff="${ff}"]`)];
+    if (s.typ === 'artikel') {   // die Liste zeigt nur Treffer der Suche: nicht sichtbare gewählte Artikel bleiben gewählt
+      const codes = new Set(stockFilter[k]?.codes || []);
+      for (const x of haken('code')) { if (x.checked) codes.add(x.value); else codes.delete(x.value); }
+      if (codes.size) f = { codes: [...codes] };
+    }
+    if (s.typ === 'gruppe') { const gruppen = haken('gruppe').filter((x) => x.checked).map((x) => x.value); if (gruppen.length) f = { gruppen }; }
+    if (s.typ === 'warengruppe') {
+      const arten = haken('art').filter((x) => x.checked).map((x) => x.value), zustand = haken('zustand').find((x) => x.checked)?.value || '';
+      if (arten.length || zustand) f = { arten, zustand };
+    }
     if (f) stockFilter[k] = f; else delete stockFilter[k];
   }
   /* Eingabefelder eines Filters (Fenster am Kopf und Filterdialog am Handy) */
@@ -3667,6 +3692,24 @@
     const s = ST_SPK[k], f = stockFilter[k] || {}, a = (ff) => `data-fk="${k}" data-ff="${ff}"`;
     const num = (ff, ph, e) => `<label class="st-fz"><span>${ph}</span><input type="number" inputmode="decimal" step="any" min="0" ${a(ff)} value="${f[ff] ?? ''}" aria-label="${esc(s.titel)} ${ph}"><em>${e}</em></label>`;
     const art = (opts) => `<select ${a('art')} aria-label="${esc(s.titel)}">${opts.map(([v, t]) => `<option value="${v}"${(f.art || '') === v ? ' selected' : ''}>${t}</option>`).join('')}</select>`;
+    const haken = (ff, v, an, inhalt, cls = '') => `<label class="${cls}"><input type="checkbox" ${a(ff)} value="${esc(v)}"${an ? ' checked' : ''}>${inhalt}</label>`;
+    if (s.typ === 'artikel') return `<input type="search" data-sfsuche value="${esc(sfSuche)}" placeholder="Art.-Nr. oder Bezeichnung" aria-label="Artikel suchen" autocomplete="off">
+      <div class="st-fart" data-sfliste>${sfArtikelListe()}</div>
+      <div class="st-fknoepfe"><button type="button" class="link-btn" data-sf="treffer">Alle Treffer wählen</button><button type="button" class="link-btn" data-sf="artleer">Auswahl leeren</button></div>`;
+    if (s.typ === 'gruppe') {
+      const n = new Map();
+      for (const x of stockItems()) n.set(x.vk || '', (n.get(x.vk || '') || 0) + 1);
+      const keys = [...n.keys()].sort((x, y) => (x === '') - (y === '') || x.localeCompare(y, 'de', { numeric: true }));
+      if (keys.length === 1 && keys[0] === '') return '<p class="hint">Den Artikeln ist noch keine VK-Gruppe zugeordnet (Verwaltung → Artikelstammdaten).</p>';
+      return `<input type="search" data-sfgsuche placeholder="Gruppe suchen" aria-label="Gruppe suchen" autocomplete="off">
+        <div class="st-fgruppen">${keys.map((k2) => haken('gruppe', k2, (f.gruppen || []).includes(k2), `<span>${esc(sfVkName(k2))}</span><em>${fmtInt.format(n.get(k2))} Art.</em>`)).join('')}</div>`;
+    }
+    if (s.typ === 'warengruppe') {
+      const arten = [...new Map(stockItems().sort((x, y) => x.wg.order - y.wg.order).map((x) => [wgTeile(x.wg.label)[0], 1])).keys()];
+      const zust = [['', 'frisch und gefroren'], ['frisch', 'frisch'], ['gefroren', 'gefroren']];
+      return `<div class="st-fstufen" role="radiogroup" aria-label="Zustand">${zust.map(([v, t]) => `<label><input type="radio" name="sf-zustand" ${a('zustand')} value="${v}"${(f.zustand || '') === v ? ' checked' : ''}>${t}</label>`).join('')}</div>
+        <div class="st-fstufen">${arten.map((x) => haken('art', x, (f.arten || []).includes(x), esc(x))).join('')}</div>`;
+    }
     if (s.typ === 'text') return `<input type="search" ${a('q')} value="${esc(f.q || '')}" placeholder="enthält … (${esc(s.ph)})" aria-label="${esc(s.titel)} enthält" autocomplete="off">`;
     if (s.typ === 'zahl') return `<div class="st-fzeile">${num('min', 'von', 'kg')}${num('max', 'bis', 'kg')}</div>`;
     if (s.typ === 'preis') return `${art([['', 'alle Artikel'], ['mit', 'nur mit Preis'], ['ohne', 'nur ohne Preis']])}<div class="st-fzeile">${num('min', 'von', '€/kg')}${num('max', 'bis', '€/kg')}</div>`;
@@ -3734,18 +3777,49 @@
   addEventListener('scroll', () => { if (!stPop.hidden) stPopPlatz(); }, { passive: true });
   /* Alle Filter in einem Fenster (Handy: Spaltenköpfe sind ausgeblendet; am Desktop als Überblick) */
   const dlgSF = $('#dlg-stock-filter');
+  /* Treffer der Artikelauswahl: gewählte zuerst, dann nach Art.-Nr.; Art.-Nr. und Bezeichnung suchen hier die Auswahlliste
+     (die Textfilter beider Spalten bleiben am Spaltenkopf) */
+  const sfTreffer = () => { const toks = SU.woerter(sfSuche); return stockItems().filter((x) => SU.passt(toks, x._hay)); };
+  function sfArtikelListe() {
+    const gew = new Set(stockFilter.artikel?.codes || []), an = (x) => gew.has(S.normCode(x.code));
+    const l = sfTreffer().sort((x, y) => an(y) - an(x) || byCode(x, y));
+    return l.length ? l.map((x) => `<label><input type="checkbox" data-fk="artikel" data-ff="code" value="${esc(S.normCode(x.code))}"${an(x) ? ' checked' : ''}><span class="st-fnr">${esc(x.code)}</span><span class="st-fname">${esc(x.name)}</span><em>${x.kg == null ? '—' : esc(kgText(x.kg))}</em></label>`).join('')
+      : '<p class="hint">Kein Artikel gefunden.</p>';
+  }
+  const SF_REIHE = ['artikel', 'vkg', 'wg', 'mhd', 'kg', 'mhdKg', 'incomingKg', 'totalKg', 'zugaenge', 'vk', 'prev'];
   function openStockFilter() {
     $('#stock-filter-body').innerHTML = `<div class="dlg-head"><div><h2 id="sf-title">Filter</h2><p>Gilt für Liste, Summen, Druck, PDF, CSV und „VK-Gruppen“.</p></div><button type="button" class="btn icon ghost" data-close aria-label="Schließen">${icon('x')}</button></div>
-      <div class="dlg-body st-falle">${ST_SP.map((s) => `<section><h3>${esc(s.titel)}</h3>${filterFelder(s.key)}</section>`).join('')}</div>
+      <div class="dlg-body st-falle">${SF_REIHE.map((k) => `<section data-sfteil="${k}"><h3>${esc(ST_SPK[k].titel)}${k === 'artikel' ? `<span class="st-fgew" data-sfgew>${sfGewText()}</span>` : ''}</h3>${filterFelder(k)}</section>`).join('')}</div>
       <div class="dlg-foot"><button type="button" class="btn ghost" data-sf="leeren">Alle Filter entfernen</button><span id="sf-zahl" class="hint"></span><button type="button" class="btn primary" data-close>Fertig</button></div>`;
     sfZahl();
     dlgSF.showModal();
   }
-  const sfZahl = () => { const z = $('#sf-zahl'); if (z) z.textContent = `${fmtInt.format(stockResult(stockQ).list.length)} Artikel`; };
-  dlgSF.addEventListener('input', (e) => { const el = e.target.closest('[data-fk]'); if (el) { clearTimeout(stFTimer); stFTimer = setTimeout(() => { filterLesen(el.dataset.fk, dlgSF); renderStockList(); sfZahl(); }, 200); } });
+  const sfGewText = () => { const n = stockFilter.artikel?.codes.length || 0; return n ? `${fmtInt.format(n)} gewählt` : ''; };
+  const sfZahl = () => {
+    const z = $('#sf-zahl'); if (z) z.textContent = `${fmtInt.format(stockResult(stockQ).list.length)} Artikel`;
+    const g = dlgSF.querySelector('[data-sfgew]'); if (g) g.textContent = sfGewText();
+  };
+  const sfListeNeu = () => { const l = dlgSF.querySelector('[data-sfliste]'); if (l) l.innerHTML = sfArtikelListe(); };
+  dlgSF.addEventListener('input', (e) => {
+    if (e.target.matches('[data-sfsuche]')) { sfSuche = e.target.value; clearTimeout(stFTimer); stFTimer = setTimeout(sfListeNeu, 150); return; }
+    if (e.target.matches('[data-sfgsuche]')) {
+      const toks = SU.woerter(e.target.value);
+      for (const l of dlgSF.querySelectorAll('.st-fgruppen label')) l.hidden = !SU.passt(toks, SU.heu(l.textContent));
+      return;
+    }
+    const el = e.target.closest('[data-fk]');
+    if (el) { clearTimeout(stFTimer); stFTimer = setTimeout(() => { filterLesen(el.dataset.fk, dlgSF); renderStockList(); sfZahl(); }, el.type === 'checkbox' || el.type === 'radio' ? 0 : 200); }
+  });
   dlgSF.addEventListener('click', (e) => {
     if (e.target.closest('[data-close]')) { dlgSF.close(); return; }
-    if (e.target.closest('[data-sf="leeren"]')) { stockFilter = {}; renderStockList(); openStockFilter(); }
+    if (e.target.closest('[data-sf="leeren"]')) { stockFilter = {}; renderStockList(); openStockFilter(); return; }
+    const art = e.target.closest('[data-sf="treffer"], [data-sf="artleer"]');
+    if (art) {
+      const codes = new Set(stockFilter.artikel?.codes || []);
+      if (art.dataset.sf === 'treffer') for (const x of sfTreffer()) codes.add(S.normCode(x.code)); else codes.clear();
+      if (codes.size) stockFilter.artikel = { codes: [...codes] }; else delete stockFilter.artikel;
+      sfListeNeu(); renderStockList(); sfZahl();
+    }
   });
   const filterLeiste = () => {
     const ks = Object.keys(stockFilter);
