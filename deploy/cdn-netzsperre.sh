@@ -75,6 +75,8 @@ Wants=network-online.target
 Type=oneshot
 WorkingDirectory=$BASIS
 ExecStart=/bin/sh $BASIS/deploy/cdn-netzsperre.sh aktualisieren
+# Gesamtfrist: ein hängender Lauf (Netz, nft) wird beendet, sonst startet der Timer keinen neuen und die Liste veraltet
+TimeoutStartSec=10min
 UNIT
   cat > "$UNITS/$TIMER.timer" <<'UNIT'
 [Unit]
@@ -131,6 +133,8 @@ case "$BEFEHL" in
     ;;
   aktualisieren)
     m=$(modus)
+    # ältere Unit ohne Gesamtfrist selbst nachziehen (kein Konsolenschritt nach dem Release) – nie nach „aus“, das sie entfernt hat
+    if [ "$m" != aus ] && [ -f "$UNITS/$TIMER.service" ] && ! grep -q '^TimeoutStartSec=' "$UNITS/$TIMER.service"; then timer_einrichten; fi
     if [ "$m" = aus ]; then entfernen; exit 0; fi
     if py faellig "$LISTE" 6; then py abrufen "$LISTE" || true; fi
     anwenden "$m"

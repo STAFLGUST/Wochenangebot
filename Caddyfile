@@ -79,7 +79,9 @@
 		X-Frame-Options "SAMEORIGIN"
 		Referrer-Policy "same-origin"
 		# Nur eigene Skripte/Daten – schützt vor eingeschleustem Code (XSS) und Einbettung in fremde Seiten
-		Content-Security-Policy "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self' data:; connect-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'self'; upgrade-insecure-requests"
+		# „?“: nur setzen, wenn die Anwendung keine eigene, engere Regel schickt (Dateiablage: „sandbox; default-src 'none'“).
+		# Ohne „?“ überschreibt Caddy sie, weil der Block wegen „-Server“ erst beim Schreiben der Antwort angewendet wird (Audit 22.11.2026).
+		?Content-Security-Policy "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self' data:; connect-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'self'; upgrade-insecure-requests"
 		Permissions-Policy "camera=(), microphone=(), geolocation=(), payment=(), usb=(), interest-cohort=()"
 		Cross-Origin-Resource-Policy "same-origin"
 		# Browser fragen bei jeder Datei kurz nach, ob es eine neue Fassung gibt (Antwort meist „unverändert“).
@@ -199,7 +201,7 @@ dashboard-stafl.de, angebot.dashboard-stafl.de, verwaltung.dashboard-stafl.de, b
 		X-Content-Type-Options "nosniff"
 		X-Frame-Options "SAMEORIGIN"
 		Referrer-Policy "same-origin"
-		Content-Security-Policy "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:{csp_karten}; font-src 'self' data:; connect-src 'self'{csp_karten}; object-src 'none'; base-uri 'self'; form-action 'self' https://login.dashboard-stafl.de; frame-ancestors 'self'; upgrade-insecure-requests"
+		?Content-Security-Policy "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:{csp_karten}; font-src 'self' data:; connect-src 'self'{csp_karten}; object-src 'none'; base-uri 'self'; form-action 'self' https://login.dashboard-stafl.de; frame-ancestors 'self'; upgrade-insecure-requests"
 		Permissions-Policy "camera=(), microphone=(), geolocation=(), payment=(), usb=(), interest-cohort=()"
 		Cross-Origin-Resource-Policy "same-origin"
 		X-Robots-Tag "noindex, nofollow"

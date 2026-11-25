@@ -116,6 +116,7 @@ ok "ungültiger Name abgelehnt, bevor Keycloak gefragt wird" '[ $CODE = 1 ] && e
 
 AUS=$(cat "$T/kc/aufrufe")
 ok "Verwaltungspasswort nur über die Umgebung (KC_CLI_PASSWORD), nie als Argument in der Prozessliste" '[ -n "$AUS" ] && ! grep -q -e test-nur-lokal -e --password -e "ohne KC_CLI_PASSWORD" "$T/kc/aufrufe"'
+ok "konten.sh setzt Passwörter nie als Argument (set-password/--new-password) – nur per Standardeingabe" '! grep -q -E -e "(^|[^a-z-])set-password" -e "--new-password" "$REPO/deploy/anmeldung/konten.sh"'
 
 echo "konten.sh pruefen: $PASS bestanden, $FAIL fehlgeschlagen"
 [ "$FAIL" = 0 ]

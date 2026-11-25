@@ -95,5 +95,8 @@ assert len(mit) == 1 and "img-src 'self' data: blob:{csp_karten};" in mit[0] and
 for r in richtlinien:   # nirgends eine fremde Adresse fest eingetragen – außer der Anmeldung als Formularziel
     assert set(re.findall(r"https://[^\s;\"]+", r)) <= {"https://login.dashboard-stafl.de"}, r
 assert "csp_karten" not in site("einkauf.dashboard-stafl.de") and "csp_karten" not in site("{$DOMAIN}, www.{$DOMAIN}")
+# Kante setzt ihre Richtlinie nur als Vorgabe – Begründung im Caddyfile
+gesetzt = re.findall(r'^\s*(\??)Content-Security-Policy "', caddy, re.M)
+assert gesetzt and set(gesetzt) == {"?"}, "Caddyfile: Content-Security-Policy nur als Vorgabe setzen (?Content-Security-Policy)"
 
 print("OK: ein Modul-Host ist 503-Platzhalter; Anmeldung (mit Prüfung vor jeder Seite), Dashboard, Mitarbeiter-Eingabe, Verwaltung, Bestand, HR, CRM, Marketing, Sicherheit, Controlling, Leergut, REWE, Qualitätssicherung, Versand und Container-Import nur mit der Ergänzungsdatei; fremde Kartendienste nur beim Container-Import.")

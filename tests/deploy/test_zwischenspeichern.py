@@ -8,6 +8,7 @@ Seiten leiten zur Anmeldung um, Schnittstelle mit eigener Angabe, Kartendatei mi
   (nie in fremden Zwischenspeichern wie bunny.net – dort nur, was ausdrücklich „public“ ist)
 - nie gespeichert: Weiterleitung zur Anmeldung, 401, 404 – auch wenn die Adresse ?v= trägt
 - eigene Angaben der Anwendung (Kartendatei, Schnittstelle) bleiben unberührt; Nachfrage (304) behält die Regel
+- Content-Security-Policy als Vorgabe („?“, wie im Caddyfile; dort statisch geprüft): die engere der Dateiablage bleibt stehen
 Dazu statisch: welcher Block welchen Zwischenspeicher bekommt (öffentliche Seite „public“, alle anderen „private“,
 Platzhalter-Hosts gar keinen). Braucht Docker (wie die Prüfung des Caddyfile in der CI)."""
 from pathlib import Path
@@ -85,6 +86,10 @@ konfig = "{\n\tauto_https off\n\tadmin off\n}\n\n" + abschnitt + """
 		header Cache-Control "no-store"
 		respond "{}" 200
 	}
+	handle /datei/* {
+		header Content-Security-Policy "sandbox; default-src 'none'"
+		respond "x" 200
+	}
 	handle /karte/* {
 		header Cache-Control "private, max-age=3600, no-transform"
 		respond "x" 200
@@ -101,6 +106,7 @@ for port, art in ((8080, "private"), (8090, "public")):
 	encode zstd gzip
 	header {{
 		?Cache-Control "private, no-cache"
+		?Content-Security-Policy "default-src 'self'"
 		-Server
 	}}
 	import zwischenspeichern {art}
@@ -176,6 +182,12 @@ try:
                                  ("/assets/app.css", 200, "private, no-cache", "ohne ?v= mit Rückfrage")):
         ist = abruf(OEFF, pfad)
         check(f"Öffentliche Seite {pfad}: {text}", ist[:2] == (code, cc), ist[:2])
+    def csp(pfad):
+        r = OHNE_PROXY.open(urllib.request.Request(PRIV + pfad), timeout=10)
+        r.read()
+        return r.headers.get_all("Content-Security-Policy") or []
+    check("Datei der Ablage behält ihre engere Richtlinie (Kante überschreibt sie nicht)", csp("/datei/a.pdf") == ["sandbox; default-src 'none'"], csp("/datei/a.pdf"))
+    check("Seite ohne eigene Richtlinie bekommt die der Kante", csp("/index.html") == ["default-src 'self'"], csp("/index.html"))
 finally:
     if not all(res):
         print(subprocess.run(["docker", "logs", "--tail", "20", name], capture_output=True, text=True).stderr[-1500:])

@@ -245,7 +245,8 @@ Schlüssel (`CDN_PFLICHT=1`) bleibt die zweite Schicht.
 - **Liste:** `api.bunny.net/system/edgeserverlist` (IPv4) und `…/ipv6`, geprüft (nur öffentliche Adressen, eine Antwort mit
   weniger als 100 IPv4-Adressen oder vielen ungültigen Einträgen wird verworfen) und mit der bisherigen zusammengeführt: Eine
   Adresse bleibt 14 Tage nach ihrem letzten Erscheinen. Fällt die Abfrage aus, bleibt die bisherige Liste. Abgerufen höchstens
-  alle 6 Stunden (Timer `wochenangebot-netzsperre`, alle 30 Minuten; setzt die Regeln auch nach einem Neustart).
+  alle 6 Stunden (Timer `wochenangebot-netzsperre`, alle 30 Minuten; setzt die Regeln auch nach einem Neustart; ein Lauf
+  endet spätestens nach 10 Minuten, eine ältere Unit ohne diese Frist schreibt der nächste Lauf selbst neu).
 - **Regeln:** eigene Tabelle `inet stafl_netzsperre` neben den Regeln von Docker, atomar ersetzt. Gilt nur für neue
   Verbindungen über die Schnittstelle der Standardroute an Port 80/443 – über die Docker-Weiterleitung (ursprünglicher
   Zielport) und an Dienste des Hosts (Docker-Proxy, IPv6). Abrufe vom Server selbst (Healthcheck über 127.0.0.1),

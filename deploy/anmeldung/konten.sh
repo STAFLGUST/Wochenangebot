@@ -72,6 +72,9 @@ startpasswort() { # startpasswort [<Anzahl Zeichen ohne Striche>]
   printf '%s' "$s" | sed 's/\(....\)/\1-/g; s/-$//'
 }
 
+# Passwort per Standardeingabe statt als Argument (Prozessliste); Werte enthalten nur [A-Za-z0-9-], kein JSON-Maskieren nötig.
+passwort_json() { printf '{"type":"password","value":"%s","temporary":%s}' "$1" "$2"; }
+
 kc_als() { # kc_als <benutzer> <passwort> <kcadm-Befehl…>
   u=$1; p=$2; shift 2
   # Passwort über die Umgebung (KC_CLI_PASSWORD liest kcadm selbst; docker compose exec -e übernimmt den Wert), nie als
@@ -113,10 +116,10 @@ verwaltung() {
     [ -n "$start" ] && [ -n "$start_pw" ] || abbruch "Verwaltungskonto fehlt und kein Start-Konto (daten-anmeldung/einrichtung.env)."
     kc_als "$start" "$start_pw" get realms/master --fields realm >/dev/null \
       || { grep -v '^Logging into' "$FEHLER" >&2; abbruch "Anmeldung mit dem Start-Konto fehlgeschlagen (läuft Keycloak? Schritt 3)."; }
-    if [ -z "$(kc_als "$start" "$start_pw" get users -r master -q username="$VERWALTUNG" -q exact=true --fields id --format csv --noquotes)" ]; then
-      kc_als "$start" "$start_pw" create users -r master -s username="$VERWALTUNG" -s enabled=true >/dev/null
-    fi
-    kc_als "$start" "$start_pw" set-password -r master --username "$VERWALTUNG" --new-password "$pw" >/dev/null
+    vid=$(kc_als "$start" "$start_pw" get users -r master -q username="$VERWALTUNG" -q exact=true --fields id --format csv --noquotes | head -1)
+    [ -n "$vid" ] || vid=$(kc_als "$start" "$start_pw" create users -r master -s username="$VERWALTUNG" -s enabled=true -i)
+    passwort_json "$pw" false | kc_als "$start" "$start_pw" update "users/$vid/reset-password" -r master -n -f - >/dev/null \
+      || { grep -v '^Logging into' "$FEHLER" >&2; abbruch "Passwort des Verwaltungskontos nicht gesetzt – Start-Konto bleibt bestehen."; }
     kc_als "$start" "$start_pw" add-roles -r master --uusername "$VERWALTUNG" --rolename admin >/dev/null
     kc_als "$VERWALTUNG" "$pw" get realms/master --fields realm >/dev/null || abbruch "neues Verwaltungskonto funktioniert nicht – Start-Konto bleibt bestehen."
     echo "angelegt:  Verwaltungskonto '$VERWALTUNG' (Realm master)"
@@ -159,8 +162,9 @@ neues_startpasswort() {
 import json, re, sys
 m = re.search(r"length\((\d+)\)", json.load(sys.stdin).get("passwordPolicy") or "")
 print(max(16, -(-int(m.group(1)) // 4) * 4) if m else 16)' 2>/dev/null) || min=16
-  sp=$(startpasswort "$min")
-  kc set-password -r "$REALM" --username "$1" --new-password "$sp" --temporary >/dev/null
+  sp=$(startpasswort "$min"); spid=$(nutzer_id_pflicht "$1")
+  # kc läuft rechts der Pipe in einer Unterschale, sein Abbruch beendet nur diese – sonst stünde unten ein nie gesetztes Passwort
+  passwort_json "$sp" true | kc update "users/$spid/reset-password" -r "$REALM" -n -f - >/dev/null || exit 1
   echo "Konto '$1' – Startpasswort (nur jetzt sichtbar, persönlich weitergeben): $sp"
   echo "Bei der ersten Anmeldung: eigenes Passwort festlegen (Einmalcode nur bei Pflicht-Konten)."
 }

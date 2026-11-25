@@ -2,7 +2,7 @@
 
 <!-- ERZEUGT von `python3 werkzeuge/doku.py erzeugen` – nicht von Hand ändern. Quelle: Funktionen und Kommentare im Code. Die CI prüft, dass diese Datei zum Code passt. -->
 
-126 Dateien, 1287 Funktionen – in der Reihenfolge der Datei, **fett** die Abschnitte. Text = erste Aussage des Kommentars direkt über der Funktion (Python: Docstring). Übersicht aller Module: [README.md](README.md).
+126 Dateien, 1288 Funktionen – in der Reihenfolge der Datei, **fett** die Abschnitte. Text = erste Aussage des Kommentars direkt über der Funktion (Python: Docstring). Übersicht aller Module: [README.md](README.md).
 
 ## `.github/scripts/apt_vorrat.py`
 
@@ -1209,6 +1209,7 @@ _Browser-Zwischenspeicher (Caddyfile, Abschnitt „zwischenspeichern“) mit ech
 - `redirect_request(*a, **k)`
 - `hostport(p)`
 - `abruf(basis, pfad, kopf)`
+- `csp(pfad)`
 
 ## `tests/e2e/auth_helpers.py`
 
