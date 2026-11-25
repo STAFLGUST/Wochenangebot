@@ -1,3 +1,4 @@
+<#ftl output_format="HTML">
 <#import "template.ftl" as layout>
 <#import "field.ftl" as field>
 <#import "buttons.ftl" as buttons>

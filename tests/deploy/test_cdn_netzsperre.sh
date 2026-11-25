@@ -51,13 +51,17 @@ mv "$T/v4.weg" "$T/v4.json"
 AUS=$($S beobachten 2>&1) && CODE=0 || CODE=$?
 ok "beobachten: Regeln ohne drop, Modus gespeichert" '[ $CODE = 0 ] && [ -e "$T/tabelle" ] && ! grep -q "^[[:space:]]*drop" "$T/tabelle" && [ "$(cat .cdn-netzsperre)" = beobachten ] && echo "$AUS" | grep -q "Nichts wird verworfen"'
 ok "nur die Schnittstelle der Standardroute" 'grep -q "iifname \"eth0\"" "$T/tabelle"'
-ok "Timer eingerichtet: Installationsordner, alle 30 Minuten, aktiviert" 'grep -q "WorkingDirectory=$T/inst" "$T/units/wochenangebot-netzsperre.service" && grep -q "ExecStart=/bin/sh $T/inst/deploy/cdn-netzsperre.sh aktualisieren" "$T/units/wochenangebot-netzsperre.service" && grep -q "OnUnitActiveSec=30min" "$T/units/wochenangebot-netzsperre.timer" && grep -q "systemctl enable --now wochenangebot-netzsperre.timer" "$T/aufrufe"'
+ok "Timer eingerichtet: Installationsordner, alle 30 Minuten, aktiviert" 'grep -q "WorkingDirectory=$T/inst" "$T/units/wochenangebot-netzsperre.service" && grep -q "ExecStart=/bin/sh $T/inst/deploy/cdn-netzsperre.sh aktualisieren" "$T/units/wochenangebot-netzsperre.service" && grep -q "OnUnitActiveSec=30min" "$T/units/wochenangebot-netzsperre.timer" && grep -q "^TimeoutStartSec=10min" "$T/units/wochenangebot-netzsperre.service" && grep -q "systemctl enable --now wochenangebot-netzsperre.timer" "$T/aufrufe"'
 ok "Liste und Stand nur für den Besitzer lesbar" '[ "$(stat -c %a .cdn-netzsperre-liste.json)" = 600 ] && [ "$(stat -c %a .cdn-netzsperre)" = 600 ] && [ "$(stat -c %a .cdn-netzsperre-regeln)" = 600 ]'
 AUS=$($S status 2>&1) && CODE=0 || CODE=$?
 ok "status: Modus, Zähler, Timer, fremde Adressen aus dem Kernel-Protokoll" '[ $CODE = 0 ] && echo "$AUS" | grep -q "Netzsperre: beobachten" && echo "$AUS" | grep -q "Gezählte fremde Verbindungen seit dem Setzen: 28" && echo "$AUS" | grep -q "Timer: active" && echo "$AUS" | grep -q "198.51.100.77" && echo "$AUS" | grep -q "300 IPv4, 1 IPv6"'
 VORHER=$(f_aufrufe)
 AUS=$($S aktualisieren 2>&1) && CODE=0 || CODE=$?
 ok "aktualisieren ohne Änderung: Regeln nicht neu gesetzt (Zähler bleiben)" '[ $CODE = 0 ] && [ "$(f_aufrufe)" = "$VORHER" ]'
+# Unit einer älteren Fassung ohne Gesamtfrist: der nächste Lauf schreibt sie selbst neu (Server ohne Konsolenschritt)
+sed -i '/^TimeoutStartSec=/d' "$T/units/wochenangebot-netzsperre.service"
+AUS=$($S aktualisieren 2>&1) && CODE=0 || CODE=$?
+ok "aktualisieren: Unit ohne Gesamtfrist wird nachgezogen, Regeln bleiben" '[ $CODE = 0 ] && grep -q "^TimeoutStartSec=10min" "$T/units/wochenangebot-netzsperre.service" && [ "$(f_aufrufe)" = "$VORHER" ]'
 
 AUS=$($S an 2>&1) && CODE=0 || CODE=$?
 ok "an: verwirft, Probe über bunny an die eigene Domain" '[ $CODE = 0 ] && grep -q "^[[:space:]]*drop" "$T/tabelle" && [ "$(cat .cdn-netzsperre)" = an ] && grep -q "curl .*https://angebot-stafl.de/api/?action=status" "$T/aufrufe" && echo "$AUS" | grep -q "Probe über bunny erfolgreich"'
@@ -93,7 +97,7 @@ AUS=$($S aus 2>&1) && CODE=0 || CODE=$?
 ok "aus (auch ohne .env): Regeln, Timer und Modus entfernt" '[ $CODE = 0 ] && [ ! -e "$T/tabelle" ] && [ ! -e .cdn-netzsperre ] && [ -z "$(ls "$T/units")" ] && grep -q "systemctl disable --now wochenangebot-netzsperre.timer" "$T/aufrufe" && echo "$AUS" | grep -q "wieder Verbindungen von überall"'
 VORHER=$(f_aufrufe)
 AUS=$($S aktualisieren 2>&1) && CODE=0 || CODE=$?
-ok "aktualisieren nach aus: nichts gesetzt" '[ $CODE = 0 ] && [ ! -e "$T/tabelle" ] && [ "$(f_aufrufe)" = "$VORHER" ]'
+ok "aktualisieren nach aus: nichts gesetzt, kein Timer neu angelegt" '[ $CODE = 0 ] && [ -z "$(ls "$T/units")" ] && [ ! -e "$T/tabelle" ] && [ "$(f_aufrufe)" = "$VORHER" ]'
 AUS=$($S vielleicht 2>&1) && CODE=0 || CODE=$?
 ok "unbekannter Befehl abgelehnt" '[ $CODE = 2 ]'
 if [ "$(id -u)" != 0 ]; then
