@@ -42,7 +42,11 @@ FINGER = """() => {
   const pages = D.querySelectorAll('.pl-page').length ? [...D.querySelectorAll('.pl-page')] : [D];
   const seiten = pages.map((p) => {
     const pb = p.getBoundingClientRect(), out = [];
-    const rein = (art, e) => { const b = e.getBoundingClientRect(); out.push([art, txt(art, e), r1(b.left - pb.left), r1(b.top - pb.top), r1(b.width), r1(b.height)]); stil(art, e); };
+    // Preisänderung ▼/▲: die Zeichen fehlen in Geist, der Browser nimmt eine Systemschrift (je Rechner verschieden breit); der Hinweis
+    // steht absolut und nimmt keinen Platz – Breite und waagerechte Lage zählen deshalb nicht, Höhe, senkrechte Lage, Text und Stil schon
+    const ohneBreite = (art) => art === 'vergleich';
+    const rein = (art, e) => { const b = e.getBoundingClientRect(), w = !ohneBreite(art);
+      out.push([art, txt(art, e), w ? r1(b.left - pb.left) : 0, r1(b.top - pb.top), w ? r1(b.width) : 0, r1(b.height)]); stil(art, e); };
     for (const [art, sel] of ART) for (const e of (p.matches(sel) ? [p] : p.querySelectorAll(sel))) rein(art, e);
     // Spalten: erste Zeile je Block bzw. Gruppe/Tabelle mit Lage, alle Zeilen für die Stile
     for (const g of p.querySelectorAll('.al-grp')) { const z = g.querySelector('tr.row'); if (z) for (const sel of ZELLEN) { const c = z.querySelector(sel); if (c) rein(sel.slice(5), c); } }
