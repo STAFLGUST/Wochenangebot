@@ -616,16 +616,21 @@ Leiste senkrecht, schmal ist sie eine waagerechte Spur. Mit `body.bereich-import
     ungeteilt in einer Spalte, entfällt ihr Kopf; „€/kg“ steht dann im Balken (`.al-st-eh`). Am Bildschirm bleibt der Kopf. Ausnahmen: eine Gruppe, die allein
     höher ist als eine Seite, und ein einzelner Block (Einzelangebot ab 9 Positionen, sortierte Liste ohne Gruppen) werden
     in gleich hohe Teile zerlegt (Gruppenkopf mit „Forts.“). Ein Bereich ohne Namen trägt eine Linie statt des Balkens.
-  - **Druck bleibt gleich – Fingerabdruck** (Inhaber 26.11.2026): Der Test `druck` hält für vier Varianten aus den
-    Testdaten (Wochenangebot, Fußzeile auf jeder Seite, ungegliedert, Entwurf mit 14 Bereichen) Lage und Größe jedes
-    Bausteins (Seite, Kopf, Balken, Block, Gruppe, Zeile, Spalten der ersten Zeile je Block, Fuß) und die Stile jeder
-    Bausteinart (Schrift, Farben, Rahmen, Abstände) fest und vergleicht sie mit
-    `tests/fixtures/angebote/druck-fingerabdruck.json` (Toleranz 0,6 px). Der Druck nutzt dieselben Klassen wie die
-    Bildschirmansicht (`.al-…` in `app.css`): Ändert eine Bildschirmregel den Druck mit, schlägt die CI an und nennt den
-    Baustein („Stil gruppe.al-gt paddingTop: 0px → 2px“). Gewollte Änderung am Druck nur mit Freigabe des Inhabers (er geht
-    an Kunden): `WA_DRUCK_REFERENZ=neu python3 tests/run_e2e.py druck` mit der Playwright-Fassung aus
-    `tests/requirements.txt` und die geänderte Referenz im PR begründen; in der CI wird nie eine Referenz geschrieben.
-    Unsichtbare Rahmen (Breite 0) zählen als „kein Rahmen“, damit andere Chromium-Fassungen nicht anschlagen.
+  - **Druck bleibt gleich – Fingerabdruck** (Inhaber 26.11.2026, `tests/e2e/druck_fingerabdruck.py`): Die Tests `druck`,
+    `angebot_design` und `preisaenderung` halten für alle Druckarten aus den Testdaten Lage und Größe jedes Bausteins (Seite, Kopf, Balken,
+    Block, Gruppe, Zeile, Spalten der ersten Zeile je Block; Hochformat: Gruppen, Zeilen, Tabellenzeilen; Fuß) und die
+    Stile jeder Bausteinart (Schrift, Farben, Rahmen, Abstände) fest und vergleichen sie mit den Referenzen
+    `tests/fixtures/angebote/druck-fingerabdruck.json` (Wochenangebot, Fußzeile auf jeder Seite, ungegliedert, Hochformat
+    „Kompakt“ und „Tabelle“, Entwurf mit 14 Bereichen, Einzelangebote mit 8, 46 und 190 Positionen) und
+    `…/druck-fingerabdruck-design.json` (Design „Gastro“ A4 hoch, „Export“ A4 quer mit vier Spalten, ohne Design) und
+    `…/druck-fingerabdruck-preisaenderung.json` (Test `preisaenderung`: mit Vorwoche ▼/▲, nur Pfeil, „Nur Änderungen“);
+    Toleranz 0,6 px. Ziffern im Kopf und Seitentext (Datum, Angebotsnummer) zählen nicht mit, unsichtbare Rahmen gelten als
+    „kein Rahmen“. Ändert eine Bildschirmregel den Druck mit, schlägt die CI an und nennt den Baustein („Stil gruppe.al-gt
+    paddingTop: 0px → 2px“). Lage und Größe gelten für die Chromium-Fassung der Referenz (Playwright aus
+    `tests/requirements.txt`, wie die CI); mit einer anderen Fassung prüft der Test nur Kennzahlen und Stile und meldet die
+    Lage als Hinweis. Gewollte Änderung am Druck nur mit Freigabe des Inhabers (er geht an Kunden):
+    `WA_DRUCK_REFERENZ=neu python3 tests/run_e2e.py druck angebot_design preisaenderung` und die geänderte Referenz im PR begründen; in der
+    CI wird nie eine Referenz geschrieben. Wird Playwright erhöht, die Referenzen im selben PR neu schreiben.
   - **Dichte:** drei Stufen (`STUFEN`: normal 8,3 pt, kompakt 7,9 pt, eng 7,5 pt; Zeilenhöhe und Abstände je Stufe als
     Variablen `--zeile`, `--ab-…` an `.pl-doc` in `angebot-druck.css` – nur dort). Der Satz rechnet alle Stufen und nimmt
     die größte Schrift, mit der es nicht mehr Seiten werden als mit der kleinsten. `?stufe=normal|kompakt|eng` legt die

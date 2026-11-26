@@ -24,6 +24,7 @@ from copy import deepcopy
 
 from playwright.sync_api import sync_playwright
 
+from druck_fingerabdruck import Fingerabdruck
 from kunden_hilfe import Client
 from smtp_test import TestSmtp
 from umgebung import BASE, SH, SMTP_PORT, shot, storage_write, until
@@ -35,6 +36,9 @@ res = []
 def check(n, c, i=''):
     res.append(bool(c))
     print(('PASS ' if c else 'FAIL ') + n + (('  ' + str(i)[:600]) if i and not c else ''))
+
+
+FINGER = Fingerabdruck('druck-fingerabdruck-preisaenderung.json', check)   # Druck mit Preisänderung bleibt gleich (tests/e2e/druck_fingerabdruck.py)
 
 
 smtp = TestSmtp(SMTP_PORT, password='Test-Postfach-1')
@@ -252,6 +256,7 @@ with sync_playwright() as p:
     check('… Legende im Kopf „Veränderung zur KW 43: ▼ günstiger ▲ teurer neu“', 'Veränderung zur KW 43' in leg and '▼ günstiger' in leg and '▲ teurer' in leg and 'neu' in leg, leg)
     shot(pg, SH + '/preisaenderung-1280.png')
     s1 = satz(pg)
+    FINGER.nehmen(pg, 'vergleich-vorwoche')
     shot(pg.locator('#print-root .pl-page').first, SH + '/preisaenderung-druck-s1.png')
     check('Druck mit Vergleich: dieselben Seiten, dieselbe Stufe und Füllung, dieselben Zeilenhöhen je Seite wie ohne (Aufbau unverändert)',
           s1['seiten'] == s0['seiten'] and s1['stufe'] == s0['stufe'] and s1['fuell'] == s0['fuell'] and s1['hoehen'] == s0['hoehen'] and s1['zeilen'] == s0['zeilen'],
@@ -265,6 +270,7 @@ with sync_playwright() as p:
     ids = pg.evaluate("() => [...document.querySelectorAll('#list .al-band tr.row')].map((r) => r.dataset.id)")
     check('Kurzfassung „Nur Änderungen“: nur G, T, N und X (geändert oder neu)', sorted(ids) == sorted([ID['G'], ID['T'], 'neu1', ID['X']]) and 'Nur Änderungen zur KW 43' in pg.locator('.vw-leg').first.inner_text(), ids)
     s2 = satz(pg)
+    FINGER.nehmen(pg, 'nur-aenderungen')
     check('… Druck der Kurzfassung: eine Seite mit den vier Artikeln', s2['seiten'] == 1 and s2['zeilen'] == 4, (s2['seiten'], s2['zeilen']))
     shot(pg.locator('#print-root .pl-page').first, SH + '/preisaenderung-druck-aenderungen.png')
     zurueck(pg)
@@ -441,6 +447,7 @@ with sync_playwright() as p:
     pg.evaluate("document.querySelector('#list tr.row[data-id=\"gr-g19\"]').scrollIntoView({block: 'center'})")
     shot(pg, SH + '/preisaenderung-pfeil-1280.png')
     s1 = satz(pg)
+    FINGER.nehmen(pg, 'vergleich-pfeil')
     n_svg = pg.evaluate("document.querySelectorAll('#print-root td.c-name > .vw svg').length")   # Grenzfälle und rd1 (4,25 → 4,26)
     check('Druck mit Pfeil: dieselben Seiten, Stufe, Füllung und Zeilenhöhen wie ohne; alle Pfeile ganz in der Zelle; keine Legende im Kopf',
           s1['seiten'] == s0['seiten'] and s1['stufe'] == s0['stufe'] and s1['fuell'] == s0['fuell'] and s1['hoehen'] == s0['hoehen']
@@ -456,9 +463,11 @@ with sync_playwright() as p:
     h.evaluate("document.querySelector('#list .card[data-id=\"gr-g19\"]').scrollIntoView()")
     shot(h, SH + '/preisaenderung-pfeil-390.png')
     m390.close()
+    browser_fassung = 'Chromium ' + br.version
     br.close()
 
 check('keine JavaScript-Fehler', not errors, errors[:3])
 smtp.close()
+FINGER.pruefen(browser_fassung)
 print(f'{sum(res)}/{len(res)} passed')
 sys.exit(0 if all(res) else 1)

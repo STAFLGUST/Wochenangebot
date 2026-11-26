@@ -21,6 +21,7 @@ from datetime import date, timedelta
 
 from playwright.sync_api import sync_playwright
 
+from druck_fingerabdruck import Fingerabdruck
 from kunden_hilfe import Client
 from umgebung import BASE, SH, shot, storage_raw
 
@@ -35,6 +36,9 @@ errors = []
 def check(n, c, i=''):
     res.append(bool(c))
     print(('PASS ' if c else 'FAIL ') + n + (('  ' + str(i)[:600]) if i else ''))
+
+
+FINGER = Fingerabdruck('druck-fingerabdruck-design.json', check)   # Druck mit Design bleibt gleich (tests/e2e/druck_fingerabdruck.py)
 
 
 def doc(name):
@@ -438,6 +442,7 @@ with sync_playwright() as p:
     check('Text-Abschnitt escaped: Markup erscheint als Text, kein Element, kein Skript', not w['xss'] and '<img src=x' in w['texte'][0] and '&lt;b&gt;' in w['html'], w['texte'][:1])
     shot(pg, f'{SH}/design-kundenseite-1280-hell.png')
     s = druck(pg)
+    FINGER.nehmen(pg, 'design-gastro-hoch')
     check('Druck „Gastro“: A4 hoch 192 × 280 mm, zwei Spalten, nichts ragt aus der Seite, keine Überlappung, keine Seite endet mit einer Überschrift, Zeilen lesbar',
           s['format'] == 'hoch' and s['spalten'] == 2 and heil(s, 192, 280, 2) == [] and 'portrait' in s['page'] and s['zeileMax'] < 3.5,
           (s['format'], s['spalten'], heil(s, 192, 280, 2)[:3], s['zeileMax']))
@@ -462,6 +467,7 @@ with sync_playwright() as p:
                   ohne_doppel(w['reihe']) == ERW and len(w['zeilen']) == ITEMS == len(set(w['zeilen'])), (w['reihe'], len(w['zeilen'])))
             check('… Spalten je Abschnitt: 4, 2 (Abschnitt), 4', set(w['k']) == {4, 2}, w['k'])
             s = druck(pg)
+            FINGER.nehmen(pg, 'design-export-quer')
             check('Druck „Export“: A4 quer 279 × 193 mm, höchstens vier Spalten, nichts ragt heraus, keine Überlappung, alle Artikel in Reihenfolge der Kundenseite',
                   s['format'] == 'quer' and s['spalten'] == 4 and heil(s, 279, 193, 4) == [] and s['zeilen'] == w['zeilen'] and ohne_doppel(s['reihe']) == ERW and 'landscape' in s['page'],
                   (heil(s, 279, 193, 4)[:3], ohne_doppel(s['reihe'])))
@@ -500,6 +506,7 @@ with sync_playwright() as p:
     laden(pg)
     w = pg.evaluate(WEB)
     s = druck(pg)
+    FINGER.nehmen(pg, 'ohne-design')
     check('ohne Design: Kundenseite ohne Texte in Angebotsreihenfolge, Druck drei Spalten quer', not w['texte'] and ohne_doppel(w['reihe']) == SEKT and set(w['k']) == {3}
           and s['spalten'] == 3 and s['format'] == 'quer' and heil(s, 279, 193, 3) == [] and s['zeilen'] == w['zeilen'], (w['reihe'], s['spalten']))
     zurueck(pg)
@@ -647,8 +654,10 @@ with sync_playwright() as p:
     a = anmelden(ctx, 'lea', PW_L)
     check('Leser ohne Bearbeitungsrecht: Knopf „Design“ ausgeblendet', a.locator('#btn-design').is_hidden())
     ctx.close()
+    browser_fassung = 'Chromium ' + br.version
     br.close()
 
+FINGER.pruefen(browser_fassung)
 check('keine JavaScript-Fehler', not errors, errors[:3])
 print(f'{sum(res)}/{len(res)} passed')
 sys.exit(0 if all(res) else 1)

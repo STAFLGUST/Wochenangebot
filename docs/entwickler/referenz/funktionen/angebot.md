@@ -2,7 +2,7 @@
 
 <!-- ERZEUGT von `python3 werkzeuge/doku.py erzeugen` – nicht von Hand ändern. Quelle: Funktionen und Kommentare im Code. Die CI prüft, dass diese Datei zum Code passt. -->
 
-62 Dateien, 988 Funktionen – in der Reihenfolge der Datei, **fett** die Abschnitte. Text = erste Aussage des Kommentars direkt über der Funktion (Python: Docstring). Übersicht aller Module: [README.md](README.md).
+62 Dateien, 985 Funktionen – in der Reihenfolge der Datei, **fett** die Abschnitte. Text = erste Aussage des Kommentars direkt über der Funktion (Python: Docstring). Übersicht aller Module: [README.md](README.md).
 
 ## `app/api/lib/angebote.php`
 
@@ -1505,12 +1505,6 @@ _Druck der Angebote (Wunsch des Inhabers 13.11.2026): die Druckfassung „Angebo
 - `zurueck(pg)`
 - `laden(pg, pfad)`
 - `heil(s, modus)` – Feste Vorgaben des Satzes, die für jede Druckfassung gelten: Liste der Verstöße (leer = in Ordnung)
-
-**Fingerabdruck des Drucks (Inhaber 26.11.2026: „damit das nun immer gleich bleibt“)**
-
-- `fingerabdruck(pg, variante)` – Fingerabdruck der gesetzten Druckfassung (nach satz()) unter dem Namen der Variante merken
-- `finger_vergleich(alt, neu)` – Abweichungen in Alltagssprache (leer = gleich)
-- `finger_pruefen(browser)`
 - `pdf_alles(data, s)` – Zeilen (Nummer + Bezeichnung) der Druckfassung, die im PDF fehlen
 
 **Angebotsseite (öffentlich): Druck = Angebotsansicht am Bildschirm**
