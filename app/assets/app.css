@@ -111,7 +111,9 @@
 /* ==========================================================================
    Basis
    ========================================================================== */
-*, *::before, *::after { box-sizing: border-box; }
+*:where(:not(#print-root, #print-root *)),
+*:where(:not(#print-root, #print-root *))::before,
+*:where(:not(#print-root, #print-root *))::after { box-sizing: border-box; }
 html { -webkit-text-size-adjust: 100%; scroll-padding-top: calc(var(--header-h) + 12px); }
 body {
   margin: 0; background: var(--bg); color: var(--text);
@@ -120,9 +122,9 @@ body {
 }
 button, input, select, textarea { font: inherit; color: inherit; }
 button { cursor: pointer; }
-svg.i { width: 18px; height: 18px; flex: none; stroke: currentColor; fill: none; stroke-width: 1.75; stroke-linecap: round; stroke-linejoin: round; }
+svg.i:where(:not(#print-root, #print-root *)) { width: 18px; height: 18px; flex: none; stroke: currentColor; fill: none; stroke-width: 1.75; stroke-linecap: round; stroke-linejoin: round; }
 svg.i.sm { width: 15px; height: 15px; }
-.sr-only { position: absolute !important; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0; }
+.sr-only:where(:not(#print-root, #print-root *)) { position: absolute !important; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0; }
 .muted { color: var(--muted); }
 .num { font-variant-numeric: tabular-nums; }
 :focus-visible { outline: none; box-shadow: var(--focus); border-radius: 6px; }
@@ -193,7 +195,7 @@ mark { background: var(--mark); color: inherit; border-radius: 3px; padding: 0 1
 .topbar .brand-company, .brand-logo + div .brand-company { display: none; }
 /* Logo im dunklen Design: weiß direkt auf dem dunklen Grund (keine helle Fläche) – eine Regel für jedes Standard-Fleisch-Logo
    aller Seiten (Kopf, Anmeldekarten, Angebotsliste). Die Datei hat einen durchsichtigen Grund; Druck bleibt farbig. */
-@media screen and (prefers-color-scheme: dark) { :root:not([data-theme="light"]) img[src*="logo-standard-fleisch"] { filter: brightness(0) invert(1); background: none; padding: 0; } }
+@media screen and (prefers-color-scheme: dark) { :root:not([data-theme="light"]) img[src*="logo-standard-fleisch"]:where(:not(#print-root, #print-root *)) { filter: brightness(0) invert(1); background: none; padding: 0; } }
 @media screen { :root[data-theme="dark"] img[src*="logo-standard-fleisch"] { filter: brightness(0) invert(1); background: none; padding: 0; } }
 @media (max-width: 640px) { .brand-logo { height: 28px; } }
 .brand h1 { margin: 0; font-size: 15px; line-height: 1.25; font-weight: 500; letter-spacing: 0; display: flex; align-items: baseline; gap: 8px; white-space: nowrap; }
@@ -400,20 +402,20 @@ kbd { font: 600 11px var(--font); color: var(--muted); border: 1px solid var(--l
 .grid tbody tr.row:focus-visible { outline: none; }
 .grid tbody tr.row:focus-visible td { background: var(--accent-soft); }
 .c-fav { width: 44px; padding-left: 10px !important; padding-right: 0 !important; }
-td.c-code { font-family: var(--mono); }
-.c-code { width: 86px; font-size: 12.5px; color: var(--text-2); font-variant-numeric: tabular-nums; white-space: nowrap; }
-.c-name { min-width: 180px; }
+td.c-code:where(:not(#print-root, #print-root *)) { font-family: var(--mono); }
+.c-code:where(:not(#print-root, #print-root *)) { width: 86px; font-size: 12.5px; color: var(--text-2); font-variant-numeric: tabular-nums; white-space: nowrap; }
+.c-name:where(:not(#print-root, #print-root *)) { min-width: 180px; }
 .c-cat { width: 112px; white-space: nowrap; }
 .c-origin { width: 160px; }   /* schmaler, damit die Bestellansicht mit Spalte Fleischart neben die Merkliste passt */
 .c-cond { width: 124px; white-space: nowrap; }
-.c-price { width: 130px; text-align: right; white-space: nowrap; }
+.c-price:where(:not(#print-root, #print-root *)) { width: 130px; text-align: right; white-space: nowrap; }
 .cat-cell { display: inline-flex; align-items: center; gap: 8px; color: var(--text-2); }
 .name-btn { border: 0; background: none; padding: 0; text-align: left; font-weight: 500; color: var(--text); line-height: 1.4; }
 .name-btn:hover, .name-btn:focus-visible { color: var(--accent); text-decoration: underline; text-underline-offset: 3px; }
 .sub { font-size: 12.5px; color: var(--muted); line-height: 1.35; margin-top: 2px; }
 .m-meta { display: none; }
 .tags { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 4px; }
-.tag { font-size: 11px; font-weight: 600; letter-spacing: .02em; padding: 1px 7px; border-radius: 5px; background: var(--surface-3); color: var(--text-2); white-space: nowrap; }
+.tag:where(:not(#print-root, #print-root *)) { font-size: 11px; font-weight: 600; letter-spacing: .02em; padding: 1px 7px; border-radius: 5px; background: var(--surface-3); color: var(--text-2); white-space: nowrap; }
 .tag.brand { background: var(--accent-soft); color: var(--accent); }
 
 .badge { display: inline-flex; align-items: center; gap: 6px; height: 22px; padding: 0 8px; border-radius: 6px; font-size: 12px; font-weight: 500; white-space: nowrap; }
@@ -606,7 +608,7 @@ html { accent-color: var(--accent); }   /* Häkchen, Auswahlknöpfe, Regler übe
 .stafl-toast.zeigen { opacity: 1; transform: translate(-50%, 0); }
 @media (prefers-reduced-motion: reduce) { .stafl-toast { transition: none; } }
 
-#print-root { display: none; }
+#print-root:where(:not(#print-root, #print-root *)) { display: none; }
 .filter-backdrop { display: none; }
 
 /* ==========================================================================
@@ -650,10 +652,10 @@ html { accent-color: var(--accent); }   /* Häkchen, Auswahlknöpfe, Regler übe
   .brand h1 { font-size: 17px; }
   .search kbd { display: none; }
   .search input { padding-right: 40px; }
-  .c-code { display: none; }
+  .c-code:where(:not(#print-root, #print-root *)) { display: none; }
   .m-meta { display: block; font-size: 12px; color: var(--muted); margin-top: 2px; }
-  .c-name { min-width: 0; }
-  .c-price { width: auto; white-space: normal; }
+  .c-name:where(:not(#print-root, #print-root *)) { min-width: 0; }
+  .c-price:where(:not(#print-root, #print-root *)) { width: auto; white-space: normal; }
   .c-price .pl { display: block; margin: 0; text-align: right; font-size: 9.5px; }
   .c-price .p-alt { white-space: nowrap; }
   .name-btn { overflow-wrap: anywhere; }
@@ -676,7 +678,9 @@ html { accent-color: var(--accent); }   /* Häkchen, Auswahlknöpfe, Regler übe
   .d-list { grid-template-columns: 110px minmax(0, 1fr); }
 }
 @keyframes rise { from { transform: translateY(24px); opacity: 0; } }
-@media (prefers-reduced-motion: reduce) { *, *::before, *::after { animation: none !important; transition: none !important; } }
+@media (prefers-reduced-motion: reduce) { *:where(:not(#print-root, #print-root *)),
+*:where(:not(#print-root, #print-root *))::before,
+*:where(:not(#print-root, #print-root *))::after { animation: none !important; transition: none !important; } }
 
 /* ==========================================================================
    Druck
@@ -685,39 +689,39 @@ html { accent-color: var(--accent); }   /* Häkchen, Auswahlknöpfe, Regler übe
   @page { size: A4 portrait; margin: 14mm 12mm 16mm 12mm; }
   html, body { background: #fff !important; color: #111 !important; }
   body:not(.adm) > *:not(#print-root) { display: none !important; }   /* Eingabebereich: eigene Druckregeln in admin.css */
-  #print-root { display: block !important; }
+  #print-root:where(:not(#print-root, #print-root *)) { display: block !important; }
   :root { color-scheme: light; }
 }
-.p-doc { font: 8.6pt/1.35 var(--font); color: #111; }
-.p-head { display: flex; justify-content: space-between; align-items: flex-end; gap: 8mm; padding-bottom: 4mm; border-bottom: 1.4pt solid #7b1e2b; margin-bottom: 5mm; }
-.p-head .p-logo { height: 14mm; width: auto; flex: none; background: none; padding: 0; }
-.p-ht { flex: 1; min-width: 0; }
-.p-title { font-size: 16pt; font-weight: 700; letter-spacing: -.01em; margin: 1mm 0 0; line-height: 1.15; }
-.p-title span { color: #7b1e2b; white-space: nowrap; }
-.p-sub { font-size: 9pt; color: #444; margin-top: 1.2mm; }
-.p-meta { text-align: right; font-size: 8pt; color: #555; line-height: 1.5; white-space: nowrap; }
-.p-meta strong { color: #111; }
-.p-cols { column-count: 2; column-gap: 8mm; column-fill: balance; }
+.p-doc:where(:not(#print-root, #print-root *)) { font: 8.6pt/1.35 var(--font); color: #111; }
+.p-head:where(:not(#print-root, #print-root *)) { display: flex; justify-content: space-between; align-items: flex-end; gap: 8mm; padding-bottom: 4mm; border-bottom: 1.4pt solid #7b1e2b; margin-bottom: 5mm; }
+.p-head .p-logo:where(:not(#print-root, #print-root *)) { height: 14mm; width: auto; flex: none; background: none; padding: 0; }
+.p-ht:where(:not(#print-root, #print-root *)) { flex: 1; min-width: 0; }
+.p-title:where(:not(#print-root, #print-root *)) { font-size: 16pt; font-weight: 700; letter-spacing: -.01em; margin: 1mm 0 0; line-height: 1.15; }
+.p-title span:where(:not(#print-root, #print-root *)) { color: #7b1e2b; white-space: nowrap; }
+.p-sub:where(:not(#print-root, #print-root *)) { font-size: 9pt; color: #444; margin-top: 1.2mm; }
+.p-meta:where(:not(#print-root, #print-root *)) { text-align: right; font-size: 8pt; color: #555; line-height: 1.5; white-space: nowrap; }
+.p-meta strong:where(:not(#print-root, #print-root *)) { color: #111; }
+.p-cols:where(:not(#print-root, #print-root *)) { column-count: 2; column-gap: 8mm; column-fill: balance; }
 .p-cols.flat { column-count: 1; }
-.p-section { column-span: all; font-size: 8pt; font-weight: 700; letter-spacing: .1em; text-transform: uppercase; color: #7b1e2b; margin: 4mm 0 1.5mm; padding-top: 1.5mm; break-after: avoid; }
-.p-section:first-child { margin-top: 0; padding-top: 0; }
-.p-group { margin: 0 0 3.2mm; }
-.p-gh { display: flex; justify-content: space-between; gap: 4mm; font-weight: 700; font-size: 8.8pt; padding: 1mm 1.5mm; background: #f3efed; border-radius: 1mm; break-after: avoid; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
-.p-gh > span:last-child { font-weight: 600; color: #666; font-size: 7.6pt; white-space: nowrap; }
-.p-row { display: grid; grid-template-columns: 11mm minmax(0, 1fr) auto; gap: 2mm; padding: .75mm 1.5mm; border-bottom: .3pt solid #e1dcd7; break-inside: avoid; align-items: baseline; }
-.p-c { font-family: var(--mono); font-size: 7.6pt; color: #555; }
-.p-n small { display: block; color: #666; font-size: 7.4pt; }
-.p-p { text-align: right; font-weight: 700; font-variant-numeric: tabular-nums; white-space: nowrap; }
-.p-p.req { font-weight: 600; color: #7b1e2b; font-size: 7.8pt; }
-.p-p.none { font-weight: 400; color: #888; }
-.p-table { width: 100%; border-collapse: collapse; }
-.p-table thead { display: table-header-group; }
-.p-table th { text-align: left; font-size: 7.6pt; font-weight: 700; color: #555; border-bottom: .8pt solid #999; padding: 1.2mm 1.5mm; letter-spacing: .03em; text-transform: uppercase; }
-.p-table td { padding: .9mm 1.5mm; border-bottom: .3pt solid #e1dcd7; vertical-align: top; }
-.p-table tr { break-inside: avoid; }
-.p-table .r { text-align: right; white-space: nowrap; }
-.p-table .gr td { background: #f3efed; font-weight: 700; padding-top: 1.4mm; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
-.p-table .sr td { font-weight: 700; color: #7b1e2b; text-transform: uppercase; letter-spacing: .08em; font-size: 7.6pt; padding-top: 3mm; border-bottom: .8pt solid #7b1e2b; }
+.p-section:where(:not(#print-root, #print-root *)) { column-span: all; font-size: 8pt; font-weight: 700; letter-spacing: .1em; text-transform: uppercase; color: #7b1e2b; margin: 4mm 0 1.5mm; padding-top: 1.5mm; break-after: avoid; }
+.p-section:first-child:where(:not(#print-root, #print-root *)) { margin-top: 0; padding-top: 0; }
+.p-group:where(:not(#print-root, #print-root *)) { margin: 0 0 3.2mm; }
+.p-gh:where(:not(#print-root, #print-root *)) { display: flex; justify-content: space-between; gap: 4mm; font-weight: 700; font-size: 8.8pt; padding: 1mm 1.5mm; background: #f3efed; border-radius: 1mm; break-after: avoid; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+.p-gh > span:last-child:where(:not(#print-root, #print-root *)) { font-weight: 600; color: #666; font-size: 7.6pt; white-space: nowrap; }
+.p-row:where(:not(#print-root, #print-root *)) { display: grid; grid-template-columns: 11mm minmax(0, 1fr) auto; gap: 2mm; padding: .75mm 1.5mm; border-bottom: .3pt solid #e1dcd7; break-inside: avoid; align-items: baseline; }
+.p-c:where(:not(#print-root, #print-root *)) { font-family: var(--mono); font-size: 7.6pt; color: #555; }
+.p-n small:where(:not(#print-root, #print-root *)) { display: block; color: #666; font-size: 7.4pt; }
+.p-p:where(:not(#print-root, #print-root *)) { text-align: right; font-weight: 700; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.p-p.req:where(:not(#print-root, #print-root *)) { font-weight: 600; color: #7b1e2b; font-size: 7.8pt; }
+.p-p.none:where(:not(#print-root, #print-root *)) { font-weight: 400; color: #888; }
+.p-table:where(:not(#print-root, #print-root *)) { width: 100%; border-collapse: collapse; }
+.p-table thead:where(:not(#print-root, #print-root *)) { display: table-header-group; }
+.p-table th:where(:not(#print-root, #print-root *)) { text-align: left; font-size: 7.6pt; font-weight: 700; color: #555; border-bottom: .8pt solid #999; padding: 1.2mm 1.5mm; letter-spacing: .03em; text-transform: uppercase; }
+.p-table td:where(:not(#print-root, #print-root *)) { padding: .9mm 1.5mm; border-bottom: .3pt solid #e1dcd7; vertical-align: top; }
+.p-table tr:where(:not(#print-root, #print-root *)) { break-inside: avoid; }
+.p-table .r:where(:not(#print-root, #print-root *)) { text-align: right; white-space: nowrap; }
+.p-table .gr td:where(:not(#print-root, #print-root *)) { background: #f3efed; font-weight: 700; padding-top: 1.4mm; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+.p-table .sr td:where(:not(#print-root, #print-root *)) { font-weight: 700; color: #7b1e2b; text-transform: uppercase; letter-spacing: .08em; font-size: 7.6pt; padding-top: 3mm; border-bottom: .8pt solid #7b1e2b; }
 .p-foot { margin-top: 4mm; break-before: avoid; padding-top: 2.5mm; border-top: .6pt solid #bbb; font-size: 7.6pt; color: #555; display: flex; justify-content: space-between; gap: 8mm; break-inside: avoid; }
 
 /* ---------- Kunden-Login ---------- */
@@ -794,9 +798,9 @@ body.in-wartung .topbar .search { visibility: hidden; }
 :root { --sale: #c2410c; --sale-bg: #fff1e6; }
 @media screen and (prefers-color-scheme: dark) { :root:not([data-theme="light"]) { --sale: #fb923c; --sale-bg: rgba(251,146,60,.14); } }
 @media screen { :root[data-theme="dark"] { --sale: #fb923c; --sale-bg: rgba(251,146,60,.14); } }
-.tag.sale { background: var(--sale-bg); color: var(--sale); }
+.tag.sale:where(:not(#print-root, #print-root *)) { background: var(--sale-bg); color: var(--sale); }
 .price.sale .pv, .price.sale .pu { color: var(--sale); }
-.p-was { font-size: 12px; color: var(--muted); font-variant-numeric: tabular-nums; }
+.p-was:where(:not(#print-root, #print-root *)) { font-size: 12px; color: var(--muted); font-variant-numeric: tabular-nums; }
 .sale-note { font-size: 11px; color: var(--sale); font-weight: 600; white-space: nowrap; }
 .d-price .row.sale .pv { color: var(--sale); }
 .d-price .row.sale .p-was { display: block; margin-top: 2px; }
@@ -831,79 +835,79 @@ body.is-test::after { content: "TESTUMGEBUNG · nur Testdaten · E-Mails nur im 
 /* ---------- Angebotsliste (Standardansicht): Aufbau wie die gedruckte Angebotsliste ----------
    Drei gleich hohe Blöcke nebeneinander (JS verteilt die Gruppen), feste Spaltenbreiten für Nummer und Preis,
    Preise rechtsbündig mit Ziffern gleicher Breite, Zebrastreifen für die Zeilenführung. */
-.al { --al-zebra: #f6f6f4; --al-rule: var(--text); background: var(--surface); border: 1px solid var(--line); border-radius: var(--r-lg); box-shadow: var(--shadow); padding: 18px 20px 6px; font-variant-numeric: tabular-nums; }
-@media screen and (prefers-color-scheme: dark) { :root:not([data-theme="light"]) .al { --al-zebra: rgba(255,255,255,.035); } }
+.al:where(:not(#print-root, #print-root *)) { --al-zebra: #f6f6f4; --al-rule: var(--text); background: var(--surface); border: 1px solid var(--line); border-radius: var(--r-lg); box-shadow: var(--shadow); padding: 18px 20px 6px; font-variant-numeric: tabular-nums; }
+@media screen and (prefers-color-scheme: dark) { :root:not([data-theme="light"]) .al:where(:not(#print-root, #print-root *)) { --al-zebra: rgba(255,255,255,.035); } }
 @media screen { :root[data-theme="dark"] .al { --al-zebra: rgba(255,255,255,.035); } }
-.al-head { display: flex; flex-wrap: wrap; align-items: flex-end; justify-content: space-between; gap: 10px 24px; margin: 0 0 16px; }
-.al-logo { display: block; height: 58px; width: auto; flex: none; }
-.al-ht { display: flex; flex-direction: column; align-items: flex-end; gap: 3px; text-align: right; min-width: 0; }
+.al-head:where(:not(#print-root, #print-root *)) { display: flex; flex-wrap: wrap; align-items: flex-end; justify-content: space-between; gap: 10px 24px; margin: 0 0 16px; }
+.al-logo:where(:not(#print-root, #print-root *)) { display: block; height: 58px; width: auto; flex: none; }
+.al-ht:where(:not(#print-root, #print-root *)) { display: flex; flex-direction: column; align-items: flex-end; gap: 3px; text-align: right; min-width: 0; }
 .al h2 { margin: 0; font-size: 17px; font-weight: 650; letter-spacing: -.01em; text-transform: none; }
-.al-ht > span { font-size: 13px; color: var(--text-2); }
-.al-sec { margin: 0 0 18px; }
+.al-ht > span:where(:not(#print-root, #print-root *)) { font-size: 13px; color: var(--text-2); }
+.al-sec:where(:not(#print-root, #print-root *)) { margin: 0 0 18px; }
 /* Text-Abschnitt aus dem Design des Angebots (frontend.js plAbschnitte): Überschrift und Text über die ganze Breite */
 .al-text { margin: 0 0 18px; padding: 4px 0 4px 14px; border-left: 3px solid var(--accent); }
 .al-text h3 { margin: 0; font-size: 16px; font-weight: 650; line-height: 1.3; color: var(--text); }
 .al-text h3:only-child { color: var(--accent); }
 .al-text p { margin: 4px 0 0; max-width: 72ch; font-size: 14px; line-height: 1.5; color: var(--text-2); overflow-wrap: anywhere; }
 /* Zeile („Band“) der Angebotsliste: k gleich breite Spalten; ein Abschnitt belegt --c davon, kleine Abschnitte stehen nebeneinander */
-.al-band { display: grid; grid-template-columns: repeat(var(--k, 3), minmax(0, 1fr)); margin: 0 0 18px; }
-.al-band > .al-sec { grid-column: span var(--c, 1); min-width: 0; margin: 0; }
-.al-band > .al-sec + .al-sec > .al-st { margin-left: 16px; }
-.al-band > .al-sec:not(:last-child) > .al-st { margin-right: 16px; }
-.al-band > .al-sec + .al-sec .al-col:first-child { padding-left: 16px; }
-.al-band > .al-sec:not(:last-child) .al-col:last-child { padding-right: 16px; }
+.al-band:where(:not(#print-root, #print-root *)) { display: grid; grid-template-columns: repeat(var(--k, 3), minmax(0, 1fr)); margin: 0 0 18px; }
+.al-band > .al-sec:where(:not(#print-root, #print-root *)) { grid-column: span var(--c, 1); min-width: 0; margin: 0; }
+.al-band > .al-sec + .al-sec > .al-st:where(:not(#print-root, #print-root *)) { margin-left: 16px; }
+.al-band > .al-sec:not(:last-child) > .al-st:where(:not(#print-root, #print-root *)) { margin-right: 16px; }
+.al-band > .al-sec + .al-sec .al-col:first-child:where(:not(#print-root, #print-root *)) { padding-left: 16px; }
+.al-band > .al-sec:not(:last-child) .al-col:last-child:where(:not(#print-root, #print-root *)) { padding-right: 16px; }
 .al-st.al-st-leer { visibility: hidden; }
-.al-st { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; margin: 0 0 12px; padding: 7px 12px; background: var(--surface-3); border-radius: 7px; }
-.al-st h3 { margin: 0; font-size: 15px; font-weight: 650; letter-spacing: -.005em; text-transform: none; }
-.al-st > span { font-size: 12px; color: var(--muted); white-space: nowrap; }
-.al-cols { display: grid; grid-template-columns: repeat(var(--k, 3), minmax(0, 1fr)); }
-.al-col { min-width: 0; padding: 0 16px; display: flex; flex-direction: column; gap: 14px; container-type: inline-size; }
-.al-col + .al-col { border-left: 1px solid var(--line); }
-.al-col:first-child { padding-left: 0; }
-.al-col:last-child { padding-right: 0; }
-.al-tab { --w-code: 54px; --w-price: 62px; --w-fav: 20px; width: 100%; table-layout: fixed; border-collapse: collapse; font-size: 13px; line-height: 1.3; }
+.al-st:where(:not(#print-root, #print-root *)) { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; margin: 0 0 12px; padding: 7px 12px; background: var(--surface-3); border-radius: 7px; }
+.al-st h3:where(:not(#print-root, #print-root *)) { margin: 0; font-size: 15px; font-weight: 650; letter-spacing: -.005em; text-transform: none; }
+.al-st > span:where(:not(#print-root, #print-root *)) { font-size: 12px; color: var(--muted); white-space: nowrap; }
+.al-cols:where(:not(#print-root, #print-root *)) { display: grid; grid-template-columns: repeat(var(--k, 3), minmax(0, 1fr)); }
+.al-col:where(:not(#print-root, #print-root *)) { min-width: 0; padding: 0 16px; display: flex; flex-direction: column; gap: 14px; container-type: inline-size; }
+.al-col + .al-col:where(:not(#print-root, #print-root *)) { border-left: 1px solid var(--line); }
+.al-col:first-child:where(:not(#print-root, #print-root *)) { padding-left: 0; }
+.al-col:last-child:where(:not(#print-root, #print-root *)) { padding-right: 0; }
+.al-tab:where(:not(#print-root, #print-root *)) { --w-code: 54px; --w-price: 62px; --w-fav: 20px; width: 100%; table-layout: fixed; border-collapse: collapse; font-size: 13px; line-height: 1.3; }
 .al-tab .w-fav { width: var(--w-fav); }
-.al-tab .w-code { width: var(--w-code); }
-.al-tab .w-price { width: var(--w-price); }
-.al-tab th { text-transform: none; letter-spacing: normal; }
-.al-h th { padding: 0 0 4px 5px; border-bottom: 1.5px solid var(--al-rule); font-size: 12.5px; font-weight: 650; text-align: left; vertical-align: bottom; }
-.al-hin { display: flex; align-items: flex-end; }
-.al-gt { flex: 1; min-width: 0; padding-right: 8px; }
-.al-hin .al-eh { flex: none; box-sizing: border-box; width: var(--w-price); padding-right: 6px; text-align: right; white-space: nowrap; }
+.al-tab .w-code:where(:not(#print-root, #print-root *)) { width: var(--w-code); }
+.al-tab .w-price:where(:not(#print-root, #print-root *)) { width: var(--w-price); }
+.al-tab th:where(:not(#print-root, #print-root *)) { text-transform: none; letter-spacing: normal; }
+.al-h th:where(:not(#print-root, #print-root *)) { padding: 0 0 4px 5px; border-bottom: 1.5px solid var(--al-rule); font-size: 12.5px; font-weight: 650; text-align: left; vertical-align: bottom; }
+.al-hin:where(:not(#print-root, #print-root *)) { display: flex; align-items: flex-end; }
+.al-gt:where(:not(#print-root, #print-root *)) { flex: 1; min-width: 0; padding-right: 8px; }
+.al-hin .al-eh:where(:not(#print-root, #print-root *)) { flex: none; box-sizing: border-box; width: var(--w-price); padding-right: 6px; text-align: right; white-space: nowrap; }
 .al-hin .al-fh { flex: none; width: var(--w-fav); }
-.al-sub th { padding: 3px 6px 2px; font-size: 11px; font-weight: 600; font-style: italic; color: var(--text-2); text-align: right; }
-.al-brand { color: var(--accent); font-style: italic; }
-.al-cont { font-size: 11px; font-weight: 500; color: var(--muted); }
-.al-tab tbody tr:nth-child(odd) td { background: var(--al-zebra); }
-.al-tab td { padding: 2px 6px; height: 25px; vertical-align: middle; }
+.al-sub th:where(:not(#print-root, #print-root *)) { padding: 3px 6px 2px; font-size: 11px; font-weight: 600; font-style: italic; color: var(--text-2); text-align: right; }
+.al-brand:where(:not(#print-root, #print-root *)) { color: var(--accent); font-style: italic; }
+.al-cont:where(:not(#print-root, #print-root *)) { font-size: 11px; font-weight: 500; color: var(--muted); }
+.al-tab tbody tr:nth-child(odd) td:where(:not(#print-root, #print-root *)) { background: var(--al-zebra); }
+.al-tab td:where(:not(#print-root, #print-root *)) { padding: 2px 6px; height: 25px; vertical-align: middle; }
 .al-tab td.c-fav { padding: 0; text-align: center; }
 .al-tab .star { width: 20px; height: 22px; border-radius: 5px; color: transparent; }
 .al-tab .star svg.i { width: 13px; height: 13px; }
 .al-tab tr:hover .star, .al-tab .star:focus-visible { color: var(--line-strong); }
 .al-tab .star:hover, .al-tab .star[aria-pressed="true"] { color: var(--accent); }
-.al-tab td.c-code { padding: 2px 4px 2px 5px; font-family: inherit; font-size: 12.5px; font-weight: 400; color: var(--text); white-space: nowrap; overflow: hidden; text-overflow: clip; }
-.al-tab td.c-name { overflow-wrap: break-word; hyphens: auto; }   /* nie mitten im Wort ohne Trennstrich („Roastbee f“) */
+.al-tab td.c-code:where(:not(#print-root, #print-root *)) { padding: 2px 4px 2px 5px; font-family: inherit; font-size: 12.5px; font-weight: 400; color: var(--text); white-space: nowrap; overflow: hidden; text-overflow: clip; }
+.al-tab td.c-name:where(:not(#print-root, #print-root *)) { overflow-wrap: break-word; hyphens: auto; }   /* nie mitten im Wort ohne Trennstrich („Roastbee f“) */
 .al-tab .name-btn { font-weight: 400; line-height: 1.3; padding: 2px 0; text-align: left; }
-.al-tab td.c-price { text-align: right; font-weight: 650; white-space: nowrap; width: auto; }
-.al-tab td.c-price.al-np { font-weight: 500; color: var(--muted); font-size: 12px; }
-.al-sale { color: var(--sale); }
-.al-tab .al-was { display: inline; margin-right: 6px; font-weight: 400; color: var(--muted); font-size: 11.5px; }   /* in derselben Zeile: Sonderposten-Zeilen behalten die Zeilenhöhe */
-.al-tab .al-tag { display: inline-block; margin-left: 6px; padding: 0 5px; border-radius: 4px; font-size: 10.5px; vertical-align: 1px; }
+.al-tab td.c-price:where(:not(#print-root, #print-root *)) { text-align: right; font-weight: 650; white-space: nowrap; width: auto; }
+.al-tab td.c-price.al-np:where(:not(#print-root, #print-root *)) { font-weight: 500; color: var(--muted); font-size: 12px; }
+.al-sale:where(:not(#print-root, #print-root *)) { color: var(--sale); }
+.al-tab .al-was:where(:not(#print-root, #print-root *)) { display: inline; margin-right: 6px; font-weight: 400; color: var(--muted); font-size: 11.5px; }   /* in derselben Zeile: Sonderposten-Zeilen behalten die Zeilenhöhe */
+.al-tab .al-tag:where(:not(#print-root, #print-root *)) { display: inline-block; margin-left: 6px; padding: 0 5px; border-radius: 4px; font-size: 10.5px; vertical-align: 1px; }
 /* Angebotene Partie im Einzelangebot (Charge, MHD, Menge – Inhaber 13.11.2026): schlichte Zeile unter der Bezeichnung */
 .partie { display: block; font-size: 12px; line-height: 1.3; color: var(--text-2); font-variant-numeric: tabular-nums; }
 .partie > span { white-space: nowrap; }   /* „MHD 04.12.2026“ nie trennen, umbrochen wird zwischen den Teilen */
 .al-tab .al-partie { font-size: 11.5px; padding-bottom: 2px; }
 .card-partie { font-size: 12.5px; color: var(--text); }
 @media (max-width: 640px) {
-  .al { padding: 14px 12px 4px; border-radius: var(--r); }
-  .al-st h3 { font-size: 14px; }
-  .al-logo { height: 44px; }
-  .al-ht { align-items: flex-start; text-align: left; }
-  .al-tab { font-size: 14px; }
-  .al-tab td { height: 34px; }
+  .al:where(:not(#print-root, #print-root *)) { padding: 14px 12px 4px; border-radius: var(--r); }
+  .al-st h3:where(:not(#print-root, #print-root *)) { font-size: 14px; }
+  .al-logo:where(:not(#print-root, #print-root *)) { height: 44px; }
+  .al-ht:where(:not(#print-root, #print-root *)) { align-items: flex-start; text-align: left; }
+  .al-tab:where(:not(#print-root, #print-root *)) { font-size: 14px; }
+  .al-tab td:where(:not(#print-root, #print-root *)) { height: 34px; }
   .al-tab .star { color: var(--muted); width: 34px; height: 34px; }   /* Merkliste am Handy: sichtbar und mit Daumen treffbar */
-  .al-tab td.c-code { display: table-cell; font-size: 13px; }
-  .al-tab { --w-code: 54px; --w-fav: 34px; --w-price: 66px; }
+  .al-tab td.c-code:where(:not(#print-root, #print-root *)) { display: table-cell; font-size: 13px; }
+  .al-tab:where(:not(#print-root, #print-root *)) { --w-code: 54px; --w-fav: 34px; --w-price: 66px; }
   .al-tab .qty { height: 28px; }
 }
 
@@ -939,13 +943,13 @@ body.is-test::after { content: "TESTUMGEBUNG · nur Testdaten · E-Mails nur im 
 @media screen { :root[data-theme="dark"] .webapp-hint.offline { border-color: rgba(217,168,101,.35); background: rgba(217,168,101,.12); color: var(--text); } }
 
 /* Hinweis unter dem Angebot (Preise, Mindestmenge, Fracht, Kontakt) – Bildschirm und Druck */
-.al-note { margin: 4px 0 16px; padding: 12px 16px; border: 1px solid var(--line); border-radius: 10px; background: var(--surface-2); font-size: 13px; line-height: 1.5; color: var(--text-2); }
-.al-note p { margin: 0; }
-.al-note p + p { margin-top: 2px; }
-.al-note .lead { color: var(--text); font-weight: 600; }
+.al-note:where(:not(#print-root, #print-root *)) { margin: 4px 0 16px; padding: 12px 16px; border: 1px solid var(--line); border-radius: 10px; background: var(--surface-2); font-size: 13px; line-height: 1.5; color: var(--text-2); }
+.al-note p:where(:not(#print-root, #print-root *)) { margin: 0; }
+.al-note p + p:where(:not(#print-root, #print-root *)) { margin-top: 2px; }
+.al-note .lead:where(:not(#print-root, #print-root *)) { color: var(--text); font-weight: 600; }
 .list-note { margin-top: 16px; }
-#print-root .al-note { margin: 3mm 0 0; padding: 2mm 3mm; border: .3mm solid #bbb; border-radius: 0; background: #fff; font-size: 8.4pt; line-height: 1.4; color: #222; break-inside: avoid; }
-#print-root .al-note .lead { color: #111; }
+#print-root .al-note:where(:not(#print-root, #print-root *)) { margin: 3mm 0 0; padding: 2mm 3mm; border: .3mm solid #bbb; border-radius: 0; background: #fff; font-size: 8.4pt; line-height: 1.4; color: #222; break-inside: avoid; }
+#print-root .al-note .lead:where(:not(#print-root, #print-root *)) { color: #111; }
 /* Gewicht und Fracht in der Bestellung */
 .ob-fr { font-size: 12.5px; font-weight: 600; white-space: nowrap; }
 .ob-fr.warn { color: var(--sale); }
@@ -956,7 +960,7 @@ body.is-test::after { content: "TESTUMGEBUNG · nur Testdaten · E-Mails nur im 
 .otab tr.or-fr td { color: var(--sale); }
 /* Angebotsansicht: volle Breite für die drei Blöcke (Merkliste über den Reiter, Bestellen in der Bestellansicht) */
 @media (min-width: 1280px) { body.mode-angebot .layout { grid-template-columns: minmax(0, 1fr); } body.mode-angebot .merk { display: none; } }
-@container (max-width: 330px) { .al-h th { font-size: 12px; } .al-hin .al-eh { font-size: 11.5px; } }
+@container (max-width: 330px) { .al-h th:where(:not(#print-root, #print-root *)) { font-size: 12px; } .al-hin .al-eh:where(:not(#print-root, #print-root *)) { font-size: 11.5px; } }
 #print-root .al-note.in-col { margin-top: 1mm; }
 /* Handy: im Kopf nur das Bildzeichen (die vier Felder), damit Titel und Knöpfe Platz haben – das ganze Logo steht über der Angebotsliste */
 @media (max-width: 480px) { .brand-logo { width: 30px; height: 28px; object-fit: cover; object-position: left center; } }
@@ -969,7 +973,8 @@ body.is-test::after { content: "TESTUMGEBUNG · nur Testdaten · E-Mails nur im 
 :root { --muted-fein: #68685f; --c-unknown-fein: #6b665f; }
 @media screen and (prefers-color-scheme: dark) { :root:not([data-theme="light"]) { --muted-fein: var(--muted); --c-unknown-fein: var(--c-unknown); } }
 @media screen { :root[data-theme="dark"] { --muted-fein: var(--muted); --c-unknown-fein: var(--c-unknown); } }
-body:not(.adm):not(.db) .al-st > span, body:not(.adm):not(.db) .g-meta { color: var(--muted-fein); }
+body:not(.adm):not(.db) .al-st > span:where(:not(#print-root, #print-root *)),
+body:not(.adm):not(.db) .g-meta { color: var(--muted-fein); }
 body:not(.adm):not(.db) .cond-unbekannt { color: var(--c-unknown-fein); }
 /* Lange Platzhalter im Suchfeld mit „…“ statt hart abgeschnitten (Handy) */
 body:not(.adm):not(.db) .search input { text-overflow: ellipsis; }
@@ -1013,25 +1018,26 @@ body:not(.adm):not(.db) .ibtn:hover { background: var(--accent-soft); color: var
 
 /* Werbung: eigener Abschnitt oben in der Liste (Band in der Akzentfarbe, Zeilen wie die Liste),
    beworbene Zeilen der Liste mit kleinem Kennzeichen */
-.werb-sec { margin-bottom: 22px; }
+.werb-sec:where(:not(#print-root, #print-root *)) { margin-bottom: 22px; }
 /* Zweite Werbung rechts neben der ersten (je die Hälfte der Spalten); schmal untereinander */
-.werb-duo { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0 28px; align-items: start; }
+.werb-duo:where(:not(#print-root, #print-root *)) { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0 28px; align-items: start; }
 .werb-duo.werb-stapel { grid-template-columns: minmax(0, 1fr); }
-.werb-duo > .werb-sec { min-width: 0; }
-.al-st.werb-st { justify-content: flex-start; flex-wrap: wrap; gap: 2px 14px; background: var(--accent-soft); }
-.werb-st h3 { display: inline-flex; align-items: center; gap: 7px; color: var(--accent); }
-.werb-st h3 > .i { width: 16px; height: 16px; flex: none; }
-.al-st.werb-st > .werb-txt { font-size: 12.5px; color: var(--text-2); white-space: normal; }
+.werb-duo > .werb-sec:where(:not(#print-root, #print-root *)) { min-width: 0; }
+.al-st.werb-st:where(:not(#print-root, #print-root *)) { justify-content: flex-start; flex-wrap: wrap; gap: 2px 14px; background: var(--accent-soft); }
+.werb-st h3:where(:not(#print-root, #print-root *)) { display: inline-flex; align-items: center; gap: 7px; color: var(--accent); }
+.werb-st h3 > .i:where(:not(#print-root, #print-root *)) { width: 16px; height: 16px; flex: none; }
+.al-st.werb-st > .werb-txt:where(:not(#print-root, #print-root *)) { font-size: 12.5px; color: var(--text-2); white-space: normal; }
 /* Werbung in einer Spalte: Balken direkt auf den Zeilen wie der Kopf einer Artikelgruppe, „€/kg“ rechts im Balken */
-.al .werb-sec.werb-ein > .al-st.werb-st { margin-bottom: 4px; align-items: center; }
-.werb-sec.werb-ein .al-h { display: none; }
-.al-st.werb-st > .werb-eh { margin-left: auto; font-size: 12.5px; font-weight: 650; color: var(--text); }
+.al .werb-sec.werb-ein > .al-st.werb-st:where(:not(#print-root, #print-root *)) { margin-bottom: 4px; align-items: center; }
+.werb-sec.werb-ein .al-h:where(:not(#print-root, #print-root *)) { display: none; }
+.al-st.werb-st > .werb-eh:where(:not(#print-root, #print-root *)) { margin-left: auto; font-size: 12.5px; font-weight: 650; color: var(--text); }
 .al:not(.al-print) .werb-ein .werb-st > .werb-eh { margin-right: var(--w-fav, 0px); }
 .werb-al { margin-bottom: 16px; padding: 14px 16px 2px; }
 .werb-al .werb-sec { margin-bottom: 6px; }
-.tag.werb-tag { background: var(--accent-soft); color: var(--accent); }
+.tag.werb-tag:where(:not(#print-root, #print-root *)) { background: var(--accent-soft); color: var(--accent); }
 /* Beworbene Artikel und Empfehlungen ohne Preisänderung: Zeile bzw. Karte dezent in der Akzentfarbe hervorgehoben */
-.al-tab tbody tr.row.werb-an td, .grid tbody tr.row.werb-an td { background: var(--accent-soft); }
+.al-tab tbody tr.row.werb-an td:where(:not(#print-root, #print-root *)),
+.grid tbody tr.row.werb-an td { background: var(--accent-soft); }
 .card.werb-an { box-shadow: inset 0 0 0 1.5px var(--accent-line), var(--shadow); }
 .m-werb { display: inline-block; margin-top: 4px; }
 
@@ -1177,7 +1183,7 @@ body:not(.adm):not(.db) .ibtn:hover { background: var(--accent-soft); color: var
 
   /* Seite */
   body.kseite .page { padding-top: 18px; }
-  body.kseite :is(.banner-inner, .order-hint, .webapp-hint, .favbar, .al-note) { border-radius: 18px; }
+  body.kseite :is(.banner-inner, .order-hint, .webapp-hint, .favbar, .al-note):where(:not(#print-root, #print-root *)) { border-radius: 18px; }
   body.kseite :is(.webapp-hint, .favbar) { background: var(--glas); border-color: var(--glas-rand); -webkit-backdrop-filter: var(--glas-filter); backdrop-filter: var(--glas-filter); }
 
   /* Umschalter Angebots-/Bestellansicht: Segment in einer Glaskapsel */
@@ -1216,27 +1222,27 @@ body:not(.adm):not(.db) .ibtn:hover { background: var(--accent-soft); color: var
   body.kseite .seg button[aria-pressed="true"] { background: var(--glas-stark); box-shadow: 0 1px 3px rgba(20, 18, 19, .12); }
 
   /* Angebotsliste: Glaskarte, Abschnittsbänder abgerundet, Zeilen abgerundet und gestreift, keine Spaltenlinien */
-  body.kseite .al {
+  body.kseite .al:where(:not(#print-root, #print-root *)) {
     --al-zebra: var(--zebra); --al-rule: var(--linie);
     padding: 26px 28px 14px; border-radius: 30px; background: var(--glas-karte); border: 1px solid var(--glas-rand);
     -webkit-backdrop-filter: var(--glas-filter); backdrop-filter: var(--glas-filter);
     box-shadow: inset 0 1px 0 var(--glas-glanz), 0 18px 50px rgba(60, 20, 25, .1);
   }
-  body.kseite .al-head { margin-bottom: 20px; }
+  body.kseite .al-head:where(:not(#print-root, #print-root *)) { margin-bottom: 20px; }
   body.kseite .al h2 { font-size: 21px; letter-spacing: -.015em; }
-  body.kseite .al-st { padding: 10px 16px; border-radius: 16px; background: var(--aus); margin-bottom: 14px; }
-  body.kseite .al-st.werb-st { background: var(--accent-soft); box-shadow: inset 0 0 0 1px var(--accent-line); }
-  body.kseite .al-col + .al-col { border-left: 0; }
-  body.kseite .al-col { padding: 0 16px; gap: 18px; }
-  body.kseite .al-col:first-child { padding-left: 0; }
-  body.kseite .al-col:last-child { padding-right: 0; }
-  body.kseite .al-tab { border-collapse: separate; border-spacing: 0; --w-code: 60px; }   /* Nummernspalte breiter: Zeile innen 10 px eingerückt */
-  body.kseite .al-h th { padding: 0 0 6px 10px; border-bottom: 1px solid var(--regel); font-size: 13px; }
-  body.kseite .al-tab td { height: 28px; padding: 2px 6px; }
-  body.kseite .al-tab td:first-child { border-radius: 9px 0 0 9px; padding-left: 10px; }
-  body.kseite .al-tab td:last-child { border-radius: 0 9px 9px 0; }
-  body.kseite .al-tab .al-tag { border-radius: 999px; padding: 1px 8px; font-weight: 600; }
-  body.kseite .al-note { background: var(--aus); border: 0; }
+  body.kseite .al-st:where(:not(#print-root, #print-root *)) { padding: 10px 16px; border-radius: 16px; background: var(--aus); margin-bottom: 14px; }
+  body.kseite .al-st.werb-st:where(:not(#print-root, #print-root *)) { background: var(--accent-soft); box-shadow: inset 0 0 0 1px var(--accent-line); }
+  body.kseite .al-col + .al-col:where(:not(#print-root, #print-root *)) { border-left: 0; }
+  body.kseite .al-col:where(:not(#print-root, #print-root *)) { padding: 0 16px; gap: 18px; }
+  body.kseite .al-col:first-child:where(:not(#print-root, #print-root *)) { padding-left: 0; }
+  body.kseite .al-col:last-child:where(:not(#print-root, #print-root *)) { padding-right: 0; }
+  body.kseite .al-tab:where(:not(#print-root, #print-root *)) { border-collapse: separate; border-spacing: 0; --w-code: 60px; }   /* Nummernspalte breiter: Zeile innen 10 px eingerückt */
+  body.kseite .al-h th:where(:not(#print-root, #print-root *)) { padding: 0 0 6px 10px; border-bottom: 1px solid var(--regel); font-size: 13px; }
+  body.kseite .al-tab td:where(:not(#print-root, #print-root *)) { height: 28px; padding: 2px 6px; }
+  body.kseite .al-tab td:first-child:where(:not(#print-root, #print-root *)) { border-radius: 9px 0 0 9px; padding-left: 10px; }
+  body.kseite .al-tab td:last-child:where(:not(#print-root, #print-root *)) { border-radius: 0 9px 9px 0; }
+  body.kseite .al-tab .al-tag:where(:not(#print-root, #print-root *)) { border-radius: 999px; padding: 1px 8px; font-weight: 600; }
+  body.kseite .al-note:where(:not(#print-root, #print-root *)) { background: var(--aus); border: 0; }
 
   /* Bestellansicht (Tabelle), Kacheln, Merkliste, leere Liste: Glaskarten */
   body.kseite :is(.grid, .merk, .empty, .card, .filters) { background: var(--glas-karte); border-color: var(--glas-rand); -webkit-backdrop-filter: var(--glas-filter); backdrop-filter: var(--glas-filter); }
@@ -1251,7 +1257,7 @@ body:not(.adm):not(.db) .ibtn:hover { background: var(--accent-soft); color: var
   body.kseite .merk, body.kseite .empty { border-radius: 24px; box-shadow: inset 0 1px 0 var(--glas-glanz), var(--glas-schatten); }
   body.kseite .merk { top: calc(var(--header-h) + 28px); }
   body.kseite .card { border-radius: 20px; box-shadow: inset 0 1px 0 var(--glas-glanz), var(--glas-schatten-k); }
-  body.kseite :is(.al-tab, .grid) tbody tr.row.werb-an td { background: var(--accent-soft); }   /* Werbung/Empfehlung */
+  body.kseite :is(.al-tab, .grid) tbody tr.row.werb-an td:where(:not(#print-root, #print-root *)) { background: var(--accent-soft); }   /* Werbung/Empfehlung */
   body.kseite .card.werb-an { box-shadow: inset 0 0 0 1.5px var(--accent-line), inset 0 1px 0 var(--glas-glanz), var(--glas-schatten-k); }
   body.kseite .card-price, body.kseite .card-qty, body.kseite .merk li, body.kseite .merk-order { border-color: var(--linie); }
   body.kseite .orderbar { background: var(--glas-kopf); border-top: 1px solid var(--glas-rand); -webkit-backdrop-filter: var(--glas-filter); backdrop-filter: var(--glas-filter); }
@@ -1287,9 +1293,9 @@ body:not(.adm):not(.db) .ibtn:hover { background: var(--accent-soft); color: var
   body.kseite .modebar button { min-height: 54px; padding: 8px 10px; gap: 10px; border-radius: 16px; }
   body.kseite .modebar button svg.i { width: 32px; height: 32px; padding: 8px; border-radius: 10px; }
   body.kseite .qn { height: 40px; }
-  body.kseite .al { padding: 18px 12px 8px; border-radius: 26px; }
-  body.kseite .al-tab td { height: 40px; }
-  body.kseite .al-st { padding: 10px 14px; }
+  body.kseite .al:where(:not(#print-root, #print-root *)) { padding: 18px 12px 8px; border-radius: 26px; }
+  body.kseite .al-tab td:where(:not(#print-root, #print-root *)) { height: 40px; }
+  body.kseite .al-st:where(:not(#print-root, #print-root *)) { padding: 10px 14px; }
   body.kseite .grid, body.kseite .merk, body.kseite .empty { border-radius: 20px; }
   body.kseite dialog.modal, body.kseite dialog.modal.wide, body.kseite dialog.sheet { border-radius: 24px 24px 0 0; }
 }
@@ -1335,15 +1341,15 @@ body:not(.adm):not(.db) .ibtn:hover { background: var(--accent-soft); color: var
 @media screen {
   :root[data-theme="dark"] { --vw-g: #8fd0aa; --vw-g-bg: rgba(143, 208, 170, .12); --vw-t: #f0a3ae; --vw-t-bg: rgba(240, 163, 174, .12); --vw-n: #e0bd7c; --vw-n-bg: rgba(224, 189, 124, .12); }
 }
-.vw { font-size: .78em; font-weight: 600; white-space: nowrap; font-variant-numeric: tabular-nums; letter-spacing: .01em; }
-.vw-guenstiger { color: var(--vw-g); }
-.vw-teurer { color: var(--vw-t); }
-.vw-neu { color: var(--vw-n); }
+.vw:where(:not(#print-root, #print-root *)) { font-size: .78em; font-weight: 600; white-space: nowrap; font-variant-numeric: tabular-nums; letter-spacing: .01em; }
+.vw-guenstiger:where(:not(#print-root, #print-root *)) { color: var(--vw-g); }
+.vw-teurer:where(:not(#print-root, #print-root *)) { color: var(--vw-t); }
+.vw-neu:where(:not(#print-root, #print-root *)) { color: var(--vw-n); }
 #list .al-tab td.c-name:has(> .vw) { position: relative; padding-right: 4.6em; }
 #list .al-tab td.c-name > .vw { position: absolute; right: 6px; top: 50%; transform: translateY(-50%); }
 #list .al-tab td.c-name:has(> .vw-pfeil) { padding-right: 2.2em; }
 /* Darstellung „nur Pfeil“ (?vergleich=pfeil): Inline-SVG in Schrifthöhe, Neigung je Stufe als transform am SVG (angebot-vorwoche.js) */
-.vw-svg { display: inline-block; width: 1.25em; height: 1.25em; vertical-align: -.3em; overflow: visible; }
+.vw-svg:where(:not(#print-root, #print-root *)) { display: inline-block; width: 1.25em; height: 1.25em; vertical-align: -.3em; overflow: visible; }
 .vw-leg .vw-pfeil .vw-svg { width: 1.1em; height: 1.1em; vertical-align: -.22em; }
 #list .al-tab td.c-name:has(> .vw) .name-btn { display: block; max-width: 100%; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
 .vw-pille { display: inline-block; margin-top: 3px; padding: 1px 7px; border-radius: 999px; font-size: 11.5px; line-height: 1.5; }
