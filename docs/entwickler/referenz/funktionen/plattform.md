@@ -2,7 +2,7 @@
 
 <!-- ERZEUGT von `python3 werkzeuge/doku.py erzeugen` – nicht von Hand ändern. Quelle: Funktionen und Kommentare im Code. Die CI prüft, dass diese Datei zum Code passt. -->
 
-126 Dateien, 1288 Funktionen – in der Reihenfolge der Datei, **fett** die Abschnitte. Text = erste Aussage des Kommentars direkt über der Funktion (Python: Docstring). Übersicht aller Module: [README.md](README.md).
+127 Dateien, 1292 Funktionen – in der Reihenfolge der Datei, **fett** die Abschnitte. Text = erste Aussage des Kommentars direkt über der Funktion (Python: Docstring). Übersicht aller Module: [README.md](README.md).
 
 ## `.github/scripts/apt_vorrat.py`
 
@@ -1222,6 +1222,15 @@ _HTTP-Client und Zeitsteuerung ausschließlich für isolierte Testdaten/Sitzunge
 - `expire_session(sid)`
 - `read_users()`
 - `expire_confirmation_lock()`
+
+## `tests/e2e/druck_fingerabdruck.py`
+
+_Fingerabdruck des Angebotsdrucks (Inhaber 26.11.2026_
+
+- `vergleich(alt, neu, lage)` – Abweichungen in Alltagssprache (leer = gleich); lage=False: nur Kennzahlen und Stile
+- `__init__(datei, check)`
+- `nehmen(pg, variante, medium_zurueck)`
+- `pruefen(browser)`
 
 ## `tests/e2e/kunden_hilfe.py`
 
