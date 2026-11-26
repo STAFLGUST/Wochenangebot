@@ -1,5 +1,8 @@
 /* Angebot · Druckfassung „Angebotsansicht“ (A4 quer, mit Design auch hoch) der Angebotsseite – gesetzt von assets/angebot-druck.js.
-   Aussehen wie die Vorschau (Angebotsansicht am Bildschirm, Regeln „body.kseite .al …“ in app.css): Kopf mit Logo und Titel,
+   Getrennt vom Bildschirm (26.11.2026): ALLE Regeln des Drucks stehen in dieser Datei – auch die Hochformat-Layouts „Kompakt“ und
+   „Tabelle“ –, app.css wirkt nicht mehr in #print-root (Block „Eingefrorene Regeln aus app.css“ unten, Wächter in
+   tests/e2e/druck_fingerabdruck.py). Den Druck ändert man nur hier, mit Freigabe des Inhabers und neuer Referenz des Fingerabdrucks.
+   Aussehen wie die Vorschau (Angebotsansicht am Bildschirm, wie sie am 26.11.2026 war): Kopf mit Logo und Titel,
    Bereiche als abgerundete graue Balken, Gruppenkopf mit „€/kg“ und Linie, abgerundete gestreifte Zeilen, Marke kursiv rot,
    Werbung und Sonderposten wie dort. Die Maße sind die der Bildschirmansicht in px (hier ausdrücklich gesetzt, weil die
    Bildschirmregeln nur für „screen“ gelten und am Handy andere Maße haben); gesetzt wird auf einer Fläche fester Breite
@@ -11,6 +14,218 @@
    und --ab-band von hier und misst alles andere – die Werte stehen also nur an dieser Stelle.
    Farben auch dann, wenn „Hintergrundgrafiken“ im Druckdialog aus ist (print-color-adjust); feste helle Farben, unabhängig
    vom Dunkelmodus. Die Messung in angebot-druck.js (#print-root.pl-messen, unsichtbar) nutzt dieselben Regeln. */
+/* ==========================================================================
+   Eingefrorene Regeln aus app.css für den Angebotsdruck (Inhaber 26.11.2026: „damit das nun immer gleich bleibt“)
+   Diese Regeln galten bis zum 26.11.2026 aus app.css auch im Druck (#print-root). Sie stehen hier unverändert –
+   gleiche Reihenfolge, gleiche Umgebung (@media), gleiche Gewichtung (:where zählt nicht) – und gelten nur im Druck
+   (#print-root, auch beim unsichtbaren Messen). In app.css gelten dieselben Regeln nur noch außerhalb des Drucks
+   (:where(:not(#print-root, #print-root *))). Änderungen an der Angebotsansicht am Bildschirm erreichen den Druck deshalb
+   nicht mehr; der Druck wird nur hier und in den Regeln darunter geändert. Wächter: tests/e2e/druck_fingerabdruck.py
+   (keine Regel aus app.css im Druck, Fingerabdruck aller Druckarten).
+   ========================================================================== */
+*:where(#print-root, #print-root *),
+*:where(#print-root, #print-root *)::before,
+*:where(#print-root, #print-root *)::after { box-sizing: border-box; }
+svg.i:where(#print-root, #print-root *) { width: 18px; height: 18px; flex: none; stroke: currentColor; fill: none; stroke-width: 1.75; stroke-linecap: round; stroke-linejoin: round; }
+.sr-only:where(#print-root, #print-root *) { position: absolute !important; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0; }
+mark:where(#print-root, #print-root *) { background: var(--mark); color: inherit; border-radius: 3px; padding: 0 1px; }
+@media screen and (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) img[src*="logo-standard-fleisch"]:where(#print-root, #print-root *) { filter: brightness(0) invert(1); background: none; padding: 0; }
+}
+@media screen {
+  :root[data-theme="dark"] img[src*="logo-standard-fleisch"]:where(#print-root, #print-root *) { filter: brightness(0) invert(1); background: none; padding: 0; }
+}
+td.c-code:where(#print-root, #print-root *) { font-family: var(--mono); }
+.c-code:where(#print-root, #print-root *) { width: 86px; font-size: 12.5px; color: var(--text-2); font-variant-numeric: tabular-nums; white-space: nowrap; }
+.c-name:where(#print-root, #print-root *) { min-width: 180px; }
+.c-price:where(#print-root, #print-root *) { width: 130px; text-align: right; white-space: nowrap; }
+.tag:where(#print-root, #print-root *) { font-size: 11px; font-weight: 600; letter-spacing: .02em; padding: 1px 7px; border-radius: 5px; background: var(--surface-3); color: var(--text-2); white-space: nowrap; }
+#print-root:where(#print-root, #print-root *) { display: none; }
+@media (max-width: 640px) {
+  .c-code:where(#print-root, #print-root *) { display: none; }
+  .c-name:where(#print-root, #print-root *) { min-width: 0; }
+  .c-price:where(#print-root, #print-root *) { width: auto; white-space: normal; }
+}
+@media (prefers-reduced-motion: reduce) {
+  *:where(#print-root, #print-root *),
+  *:where(#print-root, #print-root *)::before,
+  *:where(#print-root, #print-root *)::after { animation: none !important; transition: none !important; }
+}
+@media print {
+  #print-root:where(#print-root, #print-root *) { display: block !important; }
+}
+.p-doc:where(#print-root, #print-root *) { font: 8.6pt/1.35 var(--font); color: #111; }
+.p-head:where(#print-root, #print-root *) { display: flex; justify-content: space-between; align-items: flex-end; gap: 8mm; padding-bottom: 4mm; border-bottom: 1.4pt solid #7b1e2b; margin-bottom: 5mm; }
+.p-head .p-logo:where(#print-root, #print-root *) { height: 14mm; width: auto; flex: none; background: none; padding: 0; }
+.p-ht:where(#print-root, #print-root *) { flex: 1; min-width: 0; }
+.p-title:where(#print-root, #print-root *) { font-size: 16pt; font-weight: 700; letter-spacing: -.01em; margin: 1mm 0 0; line-height: 1.15; }
+.p-title span:where(#print-root, #print-root *) { color: #7b1e2b; white-space: nowrap; }
+.p-sub:where(#print-root, #print-root *) { font-size: 9pt; color: #444; margin-top: 1.2mm; }
+.p-meta:where(#print-root, #print-root *) { text-align: right; font-size: 8pt; color: #555; line-height: 1.5; white-space: nowrap; }
+.p-meta strong:where(#print-root, #print-root *) { color: #111; }
+.p-cols:where(#print-root, #print-root *) { column-count: 2; column-gap: 8mm; column-fill: balance; }
+.p-section:where(#print-root, #print-root *) { column-span: all; font-size: 8pt; font-weight: 700; letter-spacing: .1em; text-transform: uppercase; color: #7b1e2b; margin: 4mm 0 1.5mm; padding-top: 1.5mm; break-after: avoid; }
+.p-section:first-child:where(#print-root, #print-root *) { margin-top: 0; padding-top: 0; }
+.p-group:where(#print-root, #print-root *) { margin: 0 0 3.2mm; }
+.p-gh:where(#print-root, #print-root *) { display: flex; justify-content: space-between; gap: 4mm; font-weight: 700; font-size: 8.8pt; padding: 1mm 1.5mm; background: #f3efed; border-radius: 1mm; break-after: avoid; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+.p-gh > span:last-child:where(#print-root, #print-root *) { font-weight: 600; color: #666; font-size: 7.6pt; white-space: nowrap; }
+.p-row:where(#print-root, #print-root *) { display: grid; grid-template-columns: 11mm minmax(0, 1fr) auto; gap: 2mm; padding: .75mm 1.5mm; border-bottom: .3pt solid #e1dcd7; break-inside: avoid; align-items: baseline; }
+.p-c:where(#print-root, #print-root *) { font-family: var(--mono); font-size: 7.6pt; color: #555; }
+.p-n small:where(#print-root, #print-root *) { display: block; color: #666; font-size: 7.4pt; }
+.p-p:where(#print-root, #print-root *) { text-align: right; font-weight: 700; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.p-p.req:where(#print-root, #print-root *) { font-weight: 600; color: #7b1e2b; font-size: 7.8pt; }
+.p-p.none:where(#print-root, #print-root *) { font-weight: 400; color: #888; }
+.p-table:where(#print-root, #print-root *) { width: 100%; border-collapse: collapse; }
+.p-table thead:where(#print-root, #print-root *) { display: table-header-group; }
+.p-table th:where(#print-root, #print-root *) { text-align: left; font-size: 7.6pt; font-weight: 700; color: #555; border-bottom: .8pt solid #999; padding: 1.2mm 1.5mm; letter-spacing: .03em; text-transform: uppercase; }
+.p-table td:where(#print-root, #print-root *) { padding: .9mm 1.5mm; border-bottom: .3pt solid #e1dcd7; vertical-align: top; }
+.p-table tr:where(#print-root, #print-root *) { break-inside: avoid; }
+.p-table .r:where(#print-root, #print-root *) { text-align: right; white-space: nowrap; }
+.p-table .gr td:where(#print-root, #print-root *) { background: #f3efed; font-weight: 700; padding-top: 1.4mm; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+.p-table .sr td:where(#print-root, #print-root *) { font-weight: 700; color: #7b1e2b; text-transform: uppercase; letter-spacing: .08em; font-size: 7.6pt; padding-top: 3mm; border-bottom: .8pt solid #7b1e2b; }
+@media (max-width: 1200px) {
+  body.can-order .c-price:where(#print-root, #print-root *) { width: 120px; }
+}
+.tag.sale:where(#print-root, #print-root *) { background: var(--sale-bg); color: var(--sale); }
+.p-was:where(#print-root, #print-root *) { font-size: 12px; color: var(--muted); font-variant-numeric: tabular-nums; }
+.al:where(#print-root, #print-root *) { --al-zebra: #f6f6f4; --al-rule: var(--text); background: var(--surface); border: 1px solid var(--line); border-radius: var(--r-lg); box-shadow: var(--shadow); padding: 18px 20px 6px; font-variant-numeric: tabular-nums; }
+@media screen and (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) .al:where(#print-root, #print-root *) { --al-zebra: rgba(255,255,255,.035); }
+}
+@media screen {
+  :root[data-theme="dark"] .al:where(#print-root, #print-root *) { --al-zebra: rgba(255,255,255,.035); }
+}
+.al-head:where(#print-root, #print-root *) { display: flex; flex-wrap: wrap; align-items: flex-end; justify-content: space-between; gap: 10px 24px; margin: 0 0 16px; }
+.al-logo:where(#print-root, #print-root *) { display: block; height: 58px; width: auto; flex: none; }
+.al-ht:where(#print-root, #print-root *) { display: flex; flex-direction: column; align-items: flex-end; gap: 3px; text-align: right; min-width: 0; }
+.al-ht > span:where(#print-root, #print-root *) { font-size: 13px; color: var(--text-2); }
+.al-sec:where(#print-root, #print-root *) { margin: 0 0 18px; }
+.al-band:where(#print-root, #print-root *) { display: grid; grid-template-columns: repeat(var(--k, 3), minmax(0, 1fr)); margin: 0 0 18px; }
+.al-band > .al-sec:where(#print-root, #print-root *) { grid-column: span var(--c, 1); min-width: 0; margin: 0; }
+.al-band > .al-sec + .al-sec > .al-st:where(#print-root, #print-root *) { margin-left: 16px; }
+.al-band > .al-sec:not(:last-child) > .al-st:where(#print-root, #print-root *) { margin-right: 16px; }
+.al-band > .al-sec + .al-sec .al-col:first-child:where(#print-root, #print-root *) { padding-left: 16px; }
+.al-band > .al-sec:not(:last-child) .al-col:last-child:where(#print-root, #print-root *) { padding-right: 16px; }
+.al-st:where(#print-root, #print-root *) { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; margin: 0 0 12px; padding: 7px 12px; background: var(--surface-3); border-radius: 7px; }
+.al-st h3:where(#print-root, #print-root *) { margin: 0; font-size: 15px; font-weight: 650; letter-spacing: -.005em; text-transform: none; }
+.al-st > span:where(#print-root, #print-root *) { font-size: 12px; color: var(--muted); white-space: nowrap; }
+.al-cols:where(#print-root, #print-root *) { display: grid; grid-template-columns: repeat(var(--k, 3), minmax(0, 1fr)); }
+.al-col:where(#print-root, #print-root *) { min-width: 0; padding: 0 16px; display: flex; flex-direction: column; gap: 14px; container-type: inline-size; }
+.al-col + .al-col:where(#print-root, #print-root *) { border-left: 1px solid var(--line); }
+.al-col:first-child:where(#print-root, #print-root *) { padding-left: 0; }
+.al-col:last-child:where(#print-root, #print-root *) { padding-right: 0; }
+.al-tab:where(#print-root, #print-root *) { --w-code: 54px; --w-price: 62px; --w-fav: 20px; width: 100%; table-layout: fixed; border-collapse: collapse; font-size: 13px; line-height: 1.3; }
+.al-tab .w-code:where(#print-root, #print-root *) { width: var(--w-code); }
+.al-tab .w-price:where(#print-root, #print-root *) { width: var(--w-price); }
+.al-tab th:where(#print-root, #print-root *) { text-transform: none; letter-spacing: normal; }
+.al-h th:where(#print-root, #print-root *) { padding: 0 0 4px 5px; border-bottom: 1.5px solid var(--al-rule); font-size: 12.5px; font-weight: 650; text-align: left; vertical-align: bottom; }
+.al-hin:where(#print-root, #print-root *) { display: flex; align-items: flex-end; }
+.al-gt:where(#print-root, #print-root *) { flex: 1; min-width: 0; padding-right: 8px; }
+.al-hin .al-eh:where(#print-root, #print-root *) { flex: none; box-sizing: border-box; width: var(--w-price); padding-right: 6px; text-align: right; white-space: nowrap; }
+.al-sub th:where(#print-root, #print-root *) { padding: 3px 6px 2px; font-size: 11px; font-weight: 600; font-style: italic; color: var(--text-2); text-align: right; }
+.al-brand:where(#print-root, #print-root *) { color: var(--accent); font-style: italic; }
+.al-cont:where(#print-root, #print-root *) { font-size: 11px; font-weight: 500; color: var(--muted); }
+.al-tab tbody tr:nth-child(odd) td:where(#print-root, #print-root *) { background: var(--al-zebra); }
+.al-tab td:where(#print-root, #print-root *) { padding: 2px 6px; height: 25px; vertical-align: middle; }
+.al-tab td.c-code:where(#print-root, #print-root *) { padding: 2px 4px 2px 5px; font-family: inherit; font-size: 12.5px; font-weight: 400; color: var(--text); white-space: nowrap; overflow: hidden; text-overflow: clip; }
+.al-tab td.c-name:where(#print-root, #print-root *) { overflow-wrap: break-word; hyphens: auto; }
+.al-tab td.c-price:where(#print-root, #print-root *) { text-align: right; font-weight: 650; white-space: nowrap; width: auto; }
+.al-tab td.c-price.al-np:where(#print-root, #print-root *) { font-weight: 500; color: var(--muted); font-size: 12px; }
+.al-sale:where(#print-root, #print-root *) { color: var(--sale); }
+.al-tab .al-was:where(#print-root, #print-root *) { display: inline; margin-right: 6px; font-weight: 400; color: var(--muted); font-size: 11.5px; }
+.al-tab .al-tag:where(#print-root, #print-root *) { display: inline-block; margin-left: 6px; padding: 0 5px; border-radius: 4px; font-size: 10.5px; vertical-align: 1px; }
+.partie:where(#print-root, #print-root *) { display: block; font-size: 12px; line-height: 1.3; color: var(--text-2); font-variant-numeric: tabular-nums; }
+.partie > span:where(#print-root, #print-root *) { white-space: nowrap; }
+.al-tab .al-partie:where(#print-root, #print-root *) { font-size: 11.5px; padding-bottom: 2px; }
+@media (max-width: 640px) {
+  .al:where(#print-root, #print-root *) { padding: 14px 12px 4px; border-radius: var(--r); }
+  .al-st h3:where(#print-root, #print-root *) { font-size: 14px; }
+  .al-logo:where(#print-root, #print-root *) { height: 44px; }
+  .al-ht:where(#print-root, #print-root *) { align-items: flex-start; text-align: left; }
+  .al-tab:where(#print-root, #print-root *) { font-size: 14px; }
+  .al-tab td:where(#print-root, #print-root *) { height: 34px; }
+  .al-tab td.c-code:where(#print-root, #print-root *) { display: table-cell; font-size: 13px; }
+  .al-tab:where(#print-root, #print-root *) { --w-code: 54px; --w-fav: 34px; --w-price: 66px; }
+}
+.al-note:where(#print-root, #print-root *) { margin: 4px 0 16px; padding: 12px 16px; border: 1px solid var(--line); border-radius: 10px; background: var(--surface-2); font-size: 13px; line-height: 1.5; color: var(--text-2); }
+.al-note p:where(#print-root, #print-root *) { margin: 0; }
+.al-note p + p:where(#print-root, #print-root *) { margin-top: 2px; }
+.al-note .lead:where(#print-root, #print-root *) { color: var(--text); font-weight: 600; }
+#print-root .al-note:where(#print-root, #print-root *) { margin: 3mm 0 0; padding: 2mm 3mm; border: .3mm solid #bbb; border-radius: 0; background: #fff; font-size: 8.4pt; line-height: 1.4; color: #222; break-inside: avoid; }
+#print-root .al-note .lead:where(#print-root, #print-root *) { color: #111; }
+@container (max-width: 330px) {
+  .al-h th:where(#print-root, #print-root *) { font-size: 12px; }
+  .al-hin .al-eh:where(#print-root, #print-root *) { font-size: 11.5px; }
+}
+body:not(.adm):not(.db) .al-st > span:where(#print-root, #print-root *) { color: var(--muted-fein); }
+.werb-sec:where(#print-root, #print-root *) { margin-bottom: 22px; }
+.werb-duo:where(#print-root, #print-root *) { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0 28px; align-items: start; }
+.werb-duo.werb-stapel:where(#print-root, #print-root *) { grid-template-columns: minmax(0, 1fr); }
+.werb-duo > .werb-sec:where(#print-root, #print-root *) { min-width: 0; }
+.al-st.werb-st:where(#print-root, #print-root *) { justify-content: flex-start; flex-wrap: wrap; gap: 2px 14px; background: var(--accent-soft); }
+.werb-st h3:where(#print-root, #print-root *) { display: inline-flex; align-items: center; gap: 7px; color: var(--accent); }
+.werb-st h3 > .i:where(#print-root, #print-root *) { width: 16px; height: 16px; flex: none; }
+.al-st.werb-st > .werb-txt:where(#print-root, #print-root *) { font-size: 12.5px; color: var(--text-2); white-space: normal; }
+.al .werb-sec.werb-ein > .al-st.werb-st:where(#print-root, #print-root *) { margin-bottom: 4px; align-items: center; }
+.werb-sec.werb-ein .al-h:where(#print-root, #print-root *) { display: none; }
+.al-st.werb-st > .werb-eh:where(#print-root, #print-root *) { margin-left: auto; font-size: 12.5px; font-weight: 650; color: var(--text); }
+.tag.werb-tag:where(#print-root, #print-root *) { background: var(--accent-soft); color: var(--accent); }
+.al-tab tbody tr.row.werb-an td:where(#print-root, #print-root *) { background: var(--accent-soft); }
+@media screen {
+  body.kseite :is(.banner-inner, .order-hint, .webapp-hint, .favbar, .al-note):where(#print-root, #print-root *) { border-radius: 18px; }
+  body.kseite .al:where(#print-root, #print-root *) {
+    --al-zebra: var(--zebra); --al-rule: var(--linie);
+    padding: 26px 28px 14px; border-radius: 30px; background: var(--glas-karte); border: 1px solid var(--glas-rand);
+    -webkit-backdrop-filter: var(--glas-filter); backdrop-filter: var(--glas-filter);
+    box-shadow: inset 0 1px 0 var(--glas-glanz), 0 18px 50px rgba(60, 20, 25, .1);
+  }
+  body.kseite .al-head:where(#print-root, #print-root *) { margin-bottom: 20px; }
+  body.kseite .al-st:where(#print-root, #print-root *) { padding: 10px 16px; border-radius: 16px; background: var(--aus); margin-bottom: 14px; }
+  body.kseite .al-st.werb-st:where(#print-root, #print-root *) { background: var(--accent-soft); box-shadow: inset 0 0 0 1px var(--accent-line); }
+  body.kseite .al-col + .al-col:where(#print-root, #print-root *) { border-left: 0; }
+  body.kseite .al-col:where(#print-root, #print-root *) { padding: 0 16px; gap: 18px; }
+  body.kseite .al-col:first-child:where(#print-root, #print-root *) { padding-left: 0; }
+  body.kseite .al-col:last-child:where(#print-root, #print-root *) { padding-right: 0; }
+  body.kseite .al-tab:where(#print-root, #print-root *) { border-collapse: separate; border-spacing: 0; --w-code: 60px; }
+  body.kseite .al-h th:where(#print-root, #print-root *) { padding: 0 0 6px 10px; border-bottom: 1px solid var(--regel); font-size: 13px; }
+  body.kseite .al-tab td:where(#print-root, #print-root *) { height: 28px; padding: 2px 6px; }
+  body.kseite .al-tab td:first-child:where(#print-root, #print-root *) { border-radius: 9px 0 0 9px; padding-left: 10px; }
+  body.kseite .al-tab td:last-child:where(#print-root, #print-root *) { border-radius: 0 9px 9px 0; }
+  body.kseite .al-tab .al-tag:where(#print-root, #print-root *) { border-radius: 999px; padding: 1px 8px; font-weight: 600; }
+  body.kseite .al-note:where(#print-root, #print-root *) { background: var(--aus); border: 0; }
+  body.kseite :is(.al-tab, .grid) tbody tr.row.werb-an td:where(#print-root, #print-root *) { background: var(--accent-soft); }
+}
+@media screen and (max-width: 640px) {
+  body.kseite .al:where(#print-root, #print-root *) { padding: 18px 12px 8px; border-radius: 26px; }
+  body.kseite .al-tab td:where(#print-root, #print-root *) { height: 40px; }
+  body.kseite .al-st:where(#print-root, #print-root *) { padding: 10px 14px; }
+}
+:root[data-darstellung="einfach"] *:where(#print-root, #print-root *) {
+  -webkit-backdrop-filter: none !important; backdrop-filter: none !important;
+  animation: none !important; transition: none !important; scroll-behavior: auto !important;
+}
+.vw:where(#print-root, #print-root *) { font-size: .78em; font-weight: 600; white-space: nowrap; font-variant-numeric: tabular-nums; letter-spacing: .01em; }
+.vw-guenstiger:where(#print-root, #print-root *) { color: var(--vw-g); }
+.vw-teurer:where(#print-root, #print-root *) { color: var(--vw-t); }
+.vw-neu:where(#print-root, #print-root *) { color: var(--vw-n); }
+.vw-svg:where(#print-root, #print-root *) { display: inline-block; width: 1.25em; height: 1.25em; vertical-align: -.3em; overflow: visible; }
+/* Variablen und Grundwerte, die der Druck bis zum 26.11.2026 von :root und body (app.css) erbte – eingefroren mit den Werten
+   des Drucks (gemessen in allen Druckarten), gelten auch beim unsichtbaren Messen: Farben und Schrift des Bildschirms
+   (z. B. das Design „kseite“) erreichen den Druck nicht mehr. */
+#print-root {
+  --accent: #8c1d2c; --accent-line: #ecc9ce; --accent-soft: #fbf1f2; --font: "Geist", -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif; --line: #e4e4e0; --mono: "Geist Mono", "SF Mono", ui-monospace, Menlo, Consolas, "Liberation Mono", monospace; --muted: #6f6f6a; --muted-fein: #68685f; --r: 10px; --r-lg: 14px; --sale: #c2410c; --sale-bg: #fff1e6; --shadow: none; --surface: #ffffff; --surface-2: #fafaf9; --surface-3: #efefec; --text: #0b0b0b; --text-2: #4f4f4a; --vw-g: #1f5a3c; --vw-n: #7a5418; --vw-t: #8c1d2c;
+  font-family: Geist, -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif; font-size: 14px; line-height: 1.5; font-weight: 400;
+  font-feature-settings: "cv11", "ss01"; -webkit-font-smoothing: antialiased; color: #111;
+  font-style: normal; font-variant: normal; font-stretch: 100%; font-kerning: auto; font-optical-sizing: auto; font-variation-settings: normal;
+  letter-spacing: normal; word-spacing: 0px; text-transform: none; text-align: start; text-indent: 0; white-space: normal; hyphens: manual;
+  text-rendering: auto; tab-size: 8; direction: ltr; color-scheme: light; -webkit-text-size-adjust: 100%;
+  /* nur am Bildschirm gesetzt (Design „kseite“), im Druck leer: auch beim Messen leer, wie im Druck */
+  --aus: initial; --zebra: initial; --linie: initial; --regel: initial; --glas-filter: initial; --glas-glanz: initial; --glas-karte: initial; --glas-rand: initial;
+}
+/* Seite selbst: kein Rand um den Druck, unabhängig von body-Regeln des Bildschirms */
+@media print { html, body { margin: 0 !important; padding: 0 !important; } }
+/* ---------- Ende der eingefrorenen Regeln aus app.css ---------- */
+
 #print-root.pl-messen { display: block !important; position: absolute; left: -4000px; top: 0; visibility: hidden; pointer-events: none; contain: layout style; }
 #print-root .pl-m { display: flow-root; }
 #print-root .pl-mb { width: calc(var(--c) * (100% - (var(--k, 3) - 1) * var(--ab-spalte)) / var(--k, 3) + (var(--c) - 1) * var(--ab-spalte)); }   /* Balken über c von k Spalten */

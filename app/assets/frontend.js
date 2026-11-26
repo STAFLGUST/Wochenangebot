@@ -1150,7 +1150,7 @@ function buildPrint({ scope, layout, grouped }) {
   const label = `${COMPANY ? COMPANY + ' · ' : ''}${m.notice || 'Angebot'} ${kwKurz(m)} · Preise in € je kg`.replace(/["\\]/g, '');
   // Angebotsansicht: Seiten fester Höhe mit eigenem Kopf (Seite x von y) und Fuß – Ränder passend zum Satzspiegel in angebot-druck.js
   ps.textContent = layout === 'liste' ? `@page { size: A4 ${plRaster().format === 'hoch' ? 'portrait' : 'landscape'}; margin: 8mm 9mm; }`
-    : `@page { size: A4 portrait; margin: 14mm 12mm 16mm 12mm; }\n@page { @bottom-left { content: "${label}"; font: 7.5pt ${getComputedStyle(document.body).fontFamily.replace(/"/g, "'")}; color: #777; } @bottom-right { content: "Seite " counter(page) " von " counter(pages); font: 7.5pt sans-serif; color: #777; } }`;
+    : `@page { size: A4 portrait; margin: 14mm 12mm 16mm 12mm; }\n@page { @bottom-left { content: "${label}"; font: 7.5pt ${getComputedStyle(document.getElementById('print-root') || document.body).fontFamily.replace(/"/g, "'")}; color: #777; } @bottom-right { content: "Seite " counter(page) " von " counter(pages); font: 7.5pt sans-serif; color: #777; } }`;
   document.title = (mitGueltigkeit(m) ? `${offerTitle()} ${bisText(m)}` : `${offerTitle()} KW ${m.week ?? ''} ${m.year ?? ''}`) + (scope === 'fav' ? ' – Merkliste' : '');
 }
 function designFenster() {
