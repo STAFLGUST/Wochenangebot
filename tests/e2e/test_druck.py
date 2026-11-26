@@ -16,6 +16,7 @@ druckt das gewählte Angebot als Entwurf wie die Vorschau, speichert vorher), �
 WA.angebot.druck.drucken für andere Module, Fenster „Fußzeile im Druck“ nur für Administratoren, 390 px, keine
 JavaScript-Fehler. Nur Testdaten (Seed-Angebot) und erfundene Angaben in der Fußzeile."""
 import json
+import os
 import re
 import sys
 import urllib.error
@@ -351,6 +352,74 @@ def heil(s, modus=None):
     return f
 
 
+# ---------- Fingerabdruck des Drucks (Inhaber 26.11.2026: „damit das nun immer gleich bleibt“) ----------
+# Lage und Größe jedes Bausteins je Seite (Balken, Gruppen, Blöcke, Zeilen, Spalten der ersten Zeile je Block, Kopf, Fuß) und
+# die Stile jeder Bausteinart (Schrift, Farben, Rahmen, Abstände). Vergleich mit tests/fixtures/angebote/druck-fingerabdruck.json:
+# jede Abweichung > TOLERANZ px oder jede Stiländerung schlägt an. Absichtliche Änderung am Druck (nur mit Freigabe des Inhabers,
+# der Druck geht an Kunden): WA_DRUCK_REFERENZ=neu python3 tests/run_e2e.py druck – mit der Playwright-Fassung aus
+# tests/requirements.txt (wie die CI) – und die geänderte Referenz im PR begründen.
+FINGER = """() => {
+  const D = document.querySelector('#print-root .pl-doc');
+  const ART = [['seite', '.pl-page'], ['kopf', '.pl-ph'], ['logo', 'img.al-logo'], ['werbung', '.werb-sec'], ['band', '.al-band'], ['balken', '.al-st'],
+    ['block', '.al-grp'], ['gruppe', '.al-gt'], ['zeile', 'tr.row'], ['fuss', '.pl-fuss'], ['hinweis', '.pl-hinweis'], ['brief', '.pl-brief'], ['siegel', '.pl-siegel']];
+  const ZELLEN = ['td.c-code', 'td.c-name', 'td.c-price'];
+  const PROPS = ['fontFamily', 'fontSize', 'fontWeight', 'fontStyle', 'lineHeight', 'letterSpacing', 'textTransform', 'textAlign', 'whiteSpace', 'color',
+    'backgroundColor', 'borderRadius', 'paddingTop', 'paddingRight', 'paddingBottom', 'paddingLeft'];
+  // Rahmen ohne Breite oder Stil = „kein Rahmen“ (die Farbe eines unsichtbaren Rahmens unterscheidet sich je Chromium-Fassung)
+  const rahmen = (c, s) => (c['border' + s + 'Style'] === 'none' || parseFloat(c['border' + s + 'Width']) === 0 ? 'kein' : `${c['border' + s + 'Width']} ${c['border' + s + 'Style']} ${c['border' + s + 'Color']}`);
+  const r1 = (v) => Math.round(v * 10) / 10, txt = (e) => (e.textContent || e.getAttribute('alt') || '').replace(/\\s+/g, ' ').trim().slice(0, 28);
+  const stile = {};
+  const stil = (art, e) => { const k = art + (e.classList.length ? '.' + [...e.classList].sort().join('.') : ''); if (!stile[k]) { const c = getComputedStyle(e); stile[k] = Object.fromEntries(PROPS.map((p) => [p, c[p]]).concat(['Top', 'Right', 'Bottom', 'Left'].map((x) => ['border' + x, rahmen(c, x)]))); } };
+  const seiten = [...D.querySelectorAll('.pl-page')].map((p) => {
+    const pb = p.getBoundingClientRect(), out = [];
+    const rein = (art, e) => { const b = e.getBoundingClientRect(); out.push([art, txt(e), r1(b.left - pb.left), r1(b.top - pb.top), r1(b.width), r1(b.height)]); stil(art, e); };
+    for (const [art, sel] of ART) for (const e of (p.matches(sel) ? [p] : p.querySelectorAll(sel))) rein(art, e);
+    for (const g of p.querySelectorAll('.al-grp')) { const z = g.querySelector('tr.row'); if (z) for (const sel of ZELLEN) { const c = z.querySelector(sel); if (c) rein(sel.slice(5), c); } }
+    for (const z of p.querySelectorAll('tr.row')) for (const sel of ZELLEN) { const c = z.querySelector(sel); if (c) stil(sel.slice(5), c); }
+    return out;
+  });
+  return { meta: { seiten: seiten.length, stufe: D.dataset.stufe, spalten: +D.dataset.spalten, z: r1(parseFloat(getComputedStyle(D).getPropertyValue('--z')) * 1000) / 1000 }, stile, seiten };
+}"""
+TOLERANZ = 0.6   # px auf der Satzfläche: Rundung, kein sichtbarer Unterschied
+REFERENZ = os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', 'fixtures', 'angebote', 'druck-fingerabdruck.json')
+_finger = {}
+
+
+def fingerabdruck(pg, variante):
+    """Fingerabdruck der gesetzten Druckfassung (nach satz()) unter dem Namen der Variante merken"""
+    _finger[variante] = pg.evaluate(FINGER)
+
+
+def finger_vergleich(alt, neu):
+    """Abweichungen in Alltagssprache (leer = gleich)"""
+    d = []
+    if alt['meta'] != neu['meta']: d.append(f"Kennzahlen: {alt['meta']} → {neu['meta']}")
+    for k in sorted(set(alt['stile']) | set(neu['stile'])):
+        a, b = alt['stile'].get(k), neu['stile'].get(k)
+        if a is None or b is None: d.append(f"Bausteinart {k}: {'neu' if a is None else 'fehlt'}"); continue
+        d += [f"Stil {k} {p}: {a[p]} → {b.get(p)}" for p in a if a[p] != b.get(p)]
+    for i, (sa, sb) in enumerate(zip(alt['seiten'], neu['seiten'])):
+        if len(sa) != len(sb): d.append(f"Seite {i + 1}: {len(sa)} → {len(sb)} Bausteine"); continue
+        for x, y in zip(sa, sb):
+            if x[:2] != y[:2]: d.append(f"Seite {i + 1}: {x[0]} „{x[1]}“ → {y[0]} „{y[1]}“"); break
+            if any(abs(u - v) > TOLERANZ for u, v in zip(x[2:], y[2:])): d.append(f"Seite {i + 1}, {x[0]} „{x[1]}“: x/y/Breite/Höhe {x[2:]} → {y[2:]}")
+    return d
+
+
+def finger_pruefen(browser):
+    neu = {'browser': browser, 'varianten': _finger}
+    if os.environ.get('WA_DRUCK_REFERENZ') == 'neu':
+        if os.environ.get('CI'): check('Fingerabdruck: in der CI wird keine Referenz geschrieben', False); return
+        with open(REFERENZ, 'w', encoding='utf-8') as f: json.dump(neu, f, ensure_ascii=False, separators=(',', ':')); f.write('\n')
+        check(f'Fingerabdruck: Referenz neu geschrieben ({", ".join(_finger)}; {browser})', True); return
+    try: alt = json.load(open(REFERENZ, encoding='utf-8'))
+    except FileNotFoundError: check('Fingerabdruck: Referenz vorhanden (tests/fixtures/angebote/druck-fingerabdruck.json)', False); return
+    for v in alt['varianten']:
+        d = finger_vergleich(alt['varianten'][v], _finger[v]) if v in _finger else ['Variante nicht gesetzt']
+        check(f'Druck unverändert (Fingerabdruck „{v}“: Lage, Größe und Stil jedes Bausteins wie in der Referenz)', not d,
+              f"{len(d)} Abweichungen, z. B.: " + ' | '.join(d[:12]) + ('' if alt['browser'] == browser else f" – Achtung: Referenz mit {alt['browser']}, Test mit {browser}"))
+
+
 def pdf_alles(data, s):
     """Zeilen (Nummer + Bezeichnung) der Druckfassung, die im PDF fehlen"""
     t = pdf_chromium_text(data)
@@ -359,6 +428,7 @@ def pdf_alles(data, s):
 
 with sync_playwright() as p:
     br = p.chromium.launch()
+    browser_fassung = 'Chromium ' + br.version
 
     # ---------- Angebotsseite (öffentlich): Druck = Angebotsansicht am Bildschirm ----------
     ctx = br.new_context(viewport={'width': 1440, 'height': 950})
@@ -370,6 +440,7 @@ with sync_playwright() as p:
       sonder: document.querySelectorAll('#list .al-band .al-sale').length, anfrage: document.querySelectorAll('#list .al-band td.al-np').length, alle: document.querySelectorAll('#list tr.row').length,
       hinweis: (document.querySelector('#list .al-note') || {}).innerText || '' })""")
     s = satz(pg)
+    fingerabdruck(pg, 'wochenangebot')
     balken = pg.evaluate("() => [...document.querySelectorAll('#print-root .al-st:not(.werb-st)')].map((b) => b.textContent)")
     check('Druck: Balken der Bereiche ohne Artikelzahl (Wunsch des Inhabers 18.11.2026)', len(balken) >= 4 and not any(re.search(r'\d+ Artikel', b) for b in balken), balken[:3])
     check('Druck-DOM: jeder Artikel der Angebotsansicht genau einmal, in derselben Reihenfolge', len(schirm['zeilen']) == 276 and s['zeilen'] == schirm['zeilen'], (len(s['zeilen']), len(schirm['zeilen'])))
@@ -458,6 +529,7 @@ with sync_playwright() as p:
     # Variante „auf jeder Seite“ (?fuss=jede) und über die Einstellung
     laden(pg, '/?fuss=jede')
     s2 = satz(pg)
+    fingerabdruck(pg, 'fusszeile-jede-seite')
     check('Variante „jede Seite“: Fußzeile mit Hinweis am Fuß jeder Seite, vollständig, nichts läuft über, nicht weniger Seiten als mit „letzte“',
           s2['fuss'] == 'jede' and heil(s2, 'jede') == [] and s2['zeilen'] == schirm['zeilen'] and s2['seiten'] >= N and all(z in x['fuss']['hinweis'] for x in s2['jeSeite'] for z in hin), (s2['seiten'], N, heil(s2, 'jede')))
     zurueck(pg)
@@ -492,6 +564,7 @@ with sync_playwright() as p:
       f.querySelector('input[name=grouped]').checked = false; f.requestSubmit(); }""")
     pg.wait_for_function('window.__gedruckt >= 1')
     s6 = satz(pg, wie='')
+    fingerabdruck(pg, 'ungegliedert')
     z6 = [[b['zeilen'] for b in s6['bloecke']][i:i + 3] for i in range(0, len(s6['bloecke']), 3)]
     check('ungegliedert: alle Artikel als eine Liste gleichmäßig über die drei Spalten jeder Seite („Forts.“), ohne Werbung, nichts läuft über',
           len(s6['zeilen']) == 276 and s6['forts'] == len(s6['bloecke']) - 1 >= 2 and len(s6['gruppen']) == 1 and not s6['werb'] and heil(s6, 'letzte') == [] and s6['seiten'] <= 4
@@ -542,6 +615,7 @@ with sync_playwright() as p:
     vs = v.evaluate("""() => ({ zeilen: [...document.querySelectorAll('#list .al-band tr.row')].map((r) => r.dataset.id), gruppen: [...document.querySelectorAll('#list .al-band .al-gt')].map((g) => g.textContent.trim()),
       bereiche: [...document.querySelectorAll('#list .al-band .al-st:not(.al-st-leer) h3')].map((h) => h.textContent.trim()) })""")
     s7 = satz(v)
+    fingerabdruck(v, 'entwurf-14-bereiche')
     check('Entwurf mit 14 Bereichen: Druck vollständig wie die Vorschau (Artikel, Gruppen, Bereiche, Reihenfolge)', len(vs['zeilen']) == GESAMT and s7['zeilen'] == vs['zeilen'] and s7['gruppen'] == vs['gruppen']
           and s7['bereiche'] == vs['bereiche'] and len(s7['bereiche']) == 14, (len(s7['zeilen']), GESAMT, len(s7['bereiche'])))
     check('… feste Vorgaben eingehalten (drei Spalten, nichts läuft über, Fußzeile nur am Ende)', heil(s7, 'letzte') == [], heil(s7, 'letzte'))
@@ -837,6 +911,8 @@ with sync_playwright() as p:
     zurueck(mk)
     mc.close()
     br.close()
+
+finger_pruefen(browser_fassung)
 
 check('keine JavaScript-Fehler', not errors, errors[:3])
 print(f'{sum(res)}/{len(res)} passed')

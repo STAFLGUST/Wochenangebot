@@ -616,6 +616,16 @@ Leiste senkrecht, schmal ist sie eine waagerechte Spur. Mit `body.bereich-import
     ungeteilt in einer Spalte, entfällt ihr Kopf; „€/kg“ steht dann im Balken (`.al-st-eh`). Am Bildschirm bleibt der Kopf. Ausnahmen: eine Gruppe, die allein
     höher ist als eine Seite, und ein einzelner Block (Einzelangebot ab 9 Positionen, sortierte Liste ohne Gruppen) werden
     in gleich hohe Teile zerlegt (Gruppenkopf mit „Forts.“). Ein Bereich ohne Namen trägt eine Linie statt des Balkens.
+  - **Druck bleibt gleich – Fingerabdruck** (Inhaber 26.11.2026): Der Test `druck` hält für vier Varianten aus den
+    Testdaten (Wochenangebot, Fußzeile auf jeder Seite, ungegliedert, Entwurf mit 14 Bereichen) Lage und Größe jedes
+    Bausteins (Seite, Kopf, Balken, Block, Gruppe, Zeile, Spalten der ersten Zeile je Block, Fuß) und die Stile jeder
+    Bausteinart (Schrift, Farben, Rahmen, Abstände) fest und vergleicht sie mit
+    `tests/fixtures/angebote/druck-fingerabdruck.json` (Toleranz 0,6 px). Der Druck nutzt dieselben Klassen wie die
+    Bildschirmansicht (`.al-…` in `app.css`): Ändert eine Bildschirmregel den Druck mit, schlägt die CI an und nennt den
+    Baustein („Stil gruppe.al-gt paddingTop: 0px → 2px“). Gewollte Änderung am Druck nur mit Freigabe des Inhabers (er geht
+    an Kunden): `WA_DRUCK_REFERENZ=neu python3 tests/run_e2e.py druck` mit der Playwright-Fassung aus
+    `tests/requirements.txt` und die geänderte Referenz im PR begründen; in der CI wird nie eine Referenz geschrieben.
+    Unsichtbare Rahmen (Breite 0) zählen als „kein Rahmen“, damit andere Chromium-Fassungen nicht anschlagen.
   - **Dichte:** drei Stufen (`STUFEN`: normal 8,3 pt, kompakt 7,9 pt, eng 7,5 pt; Zeilenhöhe und Abstände je Stufe als
     Variablen `--zeile`, `--ab-…` an `.pl-doc` in `angebot-druck.css` – nur dort). Der Satz rechnet alle Stufen und nimmt
     die größte Schrift, mit der es nicht mehr Seiten werden als mit der kleinsten. `?stufe=normal|kompakt|eng` legt die
