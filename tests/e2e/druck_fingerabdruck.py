@@ -1,8 +1,8 @@
 """Fingerabdruck des Angebotsdrucks (Inhaber 26.11.2026: „damit das nun immer gleich bleibt“) – gemeinsam für die Testgruppen
-druck und angebot_design.
+druck, angebot_design und preisaenderung.
 
 Festgehalten werden Lage und Größe jedes Bausteins je Seite (Kopf, Balken, Blöcke, Gruppen, Zeilen, Spalten der ersten Zeile je
-Block, Fuß; in den Hochformat-Layouts „Kompakt“ und „Tabelle“ Gruppen, Zeilen und Tabellenzeilen) und die Stile jeder
+Block, Preisänderung ▼/▲/Pfeil, Fuß; in den Hochformat-Layouts „Kompakt“ und „Tabelle“ Gruppen, Zeilen und Tabellenzeilen) und die Stile jeder
 Bausteinart (Schrift, Farben, Rahmen, Abstände). Verglichen wird mit einer Referenz unter tests/fixtures/angebote/: jede
 Abweichung über TOLERANZ px oder jede Stiländerung schlägt an und wird benannt („Stil gruppe.al-gt paddingTop: 0px → 2px“).
 
@@ -10,7 +10,7 @@ Ziffern im Kopf und im Seitentext (Datum, Angebotsnummer, Stand) zählen nicht m
 Unsichtbare Rahmen (Breite 0) zählen als „kein Rahmen“ – ihre Farbe unterscheidet sich je Chromium-Fassung.
 
 Gewollte Änderung am Druck (nur mit Freigabe des Inhabers, der Druck geht an Kunden):
-  WA_DRUCK_REFERENZ=neu python3 tests/run_e2e.py druck angebot_design
+  WA_DRUCK_REFERENZ=neu python3 tests/run_e2e.py druck angebot_design preisaenderung
 mit der Playwright-Fassung aus tests/requirements.txt (wie die CI), die geänderte Referenz im PR begründen. Lage und Größe gelten
 für die Chromium-Fassung der Referenz; mit einer anderen Fassung prüft der Test nur Kennzahlen und Stile (Hinweis im Protokoll).
 Wird Playwright in tests/requirements.txt erhöht, die Referenzen im selben PR neu schreiben. In der CI (Variable CI)
@@ -26,7 +26,7 @@ FINGER = """() => {
   const D = document.querySelector('#print-root > .pl-doc, #print-root > .p-doc, #print-root .pl-doc, #print-root .p-doc');
   if (!D) return null;
   const ART = [['seite', '.pl-page'], ['kopf', '.pl-ph, .p-head'], ['logo', 'img.al-logo, img.p-logo'], ['werbung', '.werb-sec'], ['fest', '.pl-fest'],
-    ['band', '.al-band'], ['balken', '.al-st'], ['block', '.al-grp'], ['gruppe', '.al-gt'], ['zeile', 'tr.row'],
+    ['band', '.al-band'], ['balken', '.al-st'], ['block', '.al-grp'], ['gruppe', '.al-gt'], ['zeile', 'tr.row'], ['vergleich', '.vw'],
     ['abschnitt-h', '.p-section'], ['gruppe-h', '.p-group'], ['gruppenkopf-h', '.p-gh, .p-gt'], ['zeile-h', '.p-row'], ['tabelle-h', '.p-table'],
     ['tabzeile-h', '.p-table tr'], ['hinweis-h', '.al-note, .p-note'],
     ['fuss', '.pl-fuss'], ['hinweis', '.pl-hinweis'], ['brief', '.pl-brief'], ['siegel', '.pl-siegel']];
