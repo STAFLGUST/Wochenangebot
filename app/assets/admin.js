@@ -3563,7 +3563,6 @@
     return t ? { t, alt: false } : { t: etas[etas.length - 1], alt: true };
   }
   const etaHTML = (a) => (a.nextEta ? `<small class="s-eta${a.nextEta.alt ? ' alt' : ''}" title="${a.nextEta.alt ? 'ETA überschritten – noch nicht eingelagert' : 'nächste erwartete Ankunft'}">ETA ${esc(mhdShort(a.nextEta.t))}</small>` : '');
-  const incomingHTML = (a) => a.incoming.length ? `<ul class="st-incoming">${a.incoming.map((d) => `<li><strong>${esc(kgText(d.kg))}</strong> · ${d.arrival ? 'ETA ' + esc(dmy(d.arrival)) : 'ETA unbekannt'}${d.marke || d.lot ? ` <small>${d.marke ? esc(d.marke) + (d.lot ? ' · ' : '') : ''}${d.lot ? 'Partie ' + esc(d.lot) : ''}</small>` : ''}</li>`).join('')}</ul>` : '<span class="muted">keine Zugangsdaten</span>';
   const vkText = (p) => (!p ? '—' : p.status === 'value' ? fmtNum.format(p.value) + ' €' : p.status === 'request' ? 'a. Anfr.' : '—');
   /* Summe in ganzen Gramm (exakt, unabhängig von der Reihenfolge) */
   const sum = (list, f) => list.reduce((t, a) => t + (Number.isFinite(a[f]) ? Math.round(a[f] * 1000) : 0), 0) / 1000;
@@ -3876,9 +3875,8 @@
     }
   });
   dlgSV.addEventListener('change', (e) => { if (e.target.id === 'vk-sort') { vkSort = e.target.value; openStockVk(); } });
-  const sortTh = (key, cls, label, print, mhd) => {
+  const sortTh = (key, cls, label, mhd) => {
     const f = stockFilter[key];
-    if (print) return `<th class="${cls}">${label}</th>`;
     if (mhd) {   // MHD-Liste: fest nach kürzestem MHD sortiert, Filter bleiben
       const fest = key === 'mhd';
       return `<th class="${cls}${f ? ' gefiltert' : ''}" aria-sort="${fest ? 'ascending' : 'none'}"><span class="st-th"><span class="sort-btn fest${fest ? ' on' : ''}"${fest ? ' title="MHD-Liste: immer nach kürzestem MHD sortiert"' : ''}>${label}<span class="sort-ind" aria-hidden="true">${fest ? '▲' : ''}</span></span>`
@@ -3889,28 +3887,28 @@
     return `<th class="${cls}${f ? ' gefiltert' : ''}" aria-sort="${dir}"><span class="st-th"><button type="button" class="sort-btn${on ? ' on' : ''}" data-ssort="${key}" title="Nach ${esc(label.replace('<br>', ' '))} sortieren">${label}<span class="sort-ind" aria-hidden="true">${on ? (stockSort.dir > 0 ? '▲' : '▼') : ''}</span></button>`
       + `<button type="button" class="st-fbtn${f ? ' on' : ''}" data-sfilter="${key}" aria-haspopup="dialog" aria-label="Sortieren und Filtern: ${esc(ST_SPK[key].titel)}${f ? ' (Filter aktiv)' : ''}" title="${f ? esc(filterText(key)) : 'Sortieren und Filtern'}">${icon('filter', 'sm')}</button></span></th>`;
   };
-  const stockHead = (print = false, mhd = false) => `<tr>${sortTh('code', 's-code', 'Art.-Nr.', print, mhd)}${sortTh('name', 's-name', 'Art. Bezeichnung', print, mhd)}${sortTh('vk', 's-vk', `Aktueller Preis<br>${esc(stockWeekLabel('current'))}`, print, mhd)}${sortTh('prev', 's-prev', `Preis Vorwoche<br>${esc(stockWeekLabel('previous'))}`, print, mhd)}${sortTh('kg', 's-kg', 'Eingelagerter<br>Bestand', print, mhd)}${sortTh('mhd', 's-mhd', 'Kürz.<br>MHD', print, mhd)}${sortTh('mhdKg', 's-mkg', 'Menge kürz.<br>MHD', print, mhd)}${sortTh('incomingKg', 's-registered', 'Erfasster<br>Bestand', print, mhd)}${sortTh('totalKg', 's-total-kg', 'Gesamt<br>verfügbar', print, mhd)}${sortTh('zugaenge', 's-incoming', 'Erwartete<br>Zugänge', print, mhd)}</tr>`;
+  const stockHead = (mhd = false) => `<tr>${sortTh('code', 's-code', 'Art.-Nr.', mhd)}${sortTh('name', 's-name', 'Art. Bezeichnung', mhd)}${sortTh('vk', 's-vk', `Aktueller Preis<br>${esc(stockWeekLabel('current'))}`, mhd)}${sortTh('prev', 's-prev', `Preis Vorwoche<br>${esc(stockWeekLabel('previous'))}`, mhd)}${sortTh('kg', 's-kg', 'Eingelagerter<br>Bestand', mhd)}${sortTh('mhd', 's-mhd', 'Kürz.<br>MHD', mhd)}${sortTh('mhdKg', 's-mkg', 'Menge kürz.<br>MHD', mhd)}${sortTh('incomingKg', 's-registered', 'Erfasster<br>Bestand', mhd)}${sortTh('totalKg', 's-total-kg', 'Gesamt<br>verfügbar', mhd)}${sortTh('zugaenge', 's-incoming', 'Erwartete<br>Zugänge', mhd)}</tr>`;
   /* Bezeichnung in der Liste: normal Angebotsbezeichnung mit Merkmalen darunter; in der MHD-Liste die volle Bezeichnung der
      Warenwirtschaft ohne Merkmalzeile (Inhaber, 03.11.2026) – wie in der MHD-Mail */
   const nameZelle = (a, mhd) => (mhd
     ? `<td class="s-name s-orig" title="${esc(stockOrigName(a))}${stockOrigName(a) !== a.name ? ` – im Angebot: ${esc(a.name)}` : ''}">${esc(stockOrigName(a))}</td>`
     : `<td class="s-name" title="${esc(a.name)}${a.merkmale ? ` · ${esc(a.merkmale)}` : ''}${a.nameImport ? ` – in der Bestandsliste: ${esc(a.nameImport)}` : ''}">${esc(a.name)}${merkHTML(a)}</td>`);
-  const stockRow = (a, print = false, mhd = false) => `<tr class="srow" data-sidx="${a.idx}" tabindex="0">
+  const stockRow = (a, mhd = false) => `<tr class="srow" data-sidx="${a.idx}" tabindex="0">
       <td class="s-code">${esc(a.code)}</td>${nameZelle(a, mhd)}
       <td class="s-vk" data-l="Aktuell ${esc(stockWeekLabel('current'))}">${esc(stockPriceText(a.price))}</td>
       <td class="s-prev" data-l="Vorwoche ${esc(stockWeekLabel('previous'))}">${esc(stockPriceText(a.prevPrice))}</td>
       <td class="s-kg" data-l="Eingelagerter Bestand">${a.kg == null ? '—' : esc(kgText(a.kg))}</td>
       <td class="s-mhd ${a.cls}" data-l="Kürz. MHD">${esc(mhdShort(a.mhd))}</td><td class="s-mkg ${a.cls}" data-l="Menge kürz. MHD"><span>${mhdKgHTML(a)}</span></td>
       <td class="s-registered" data-l="Erfasster Bestand"><span class="s-reg">${esc(kgText(a.incomingKg))}${etaHTML(a)}</span></td><td class="s-total-kg" data-l="Gesamt verfügbar">${esc(kgText(a.totalKg))}</td>
-      <td class="s-incoming" data-l="Erwartete Zugänge">${print ? incomingHTML(a) : a.incoming.length ? `<button type="button" class="btn sm" data-incoming="${a.idx}" aria-haspopup="dialog" aria-label="Erwartete Zugänge für ${esc(a.name)} anzeigen">Zugänge (${a.incoming.length})</button>` : '—'}</td></tr>`;
+      <td class="s-incoming" data-l="Erwartete Zugänge">${a.incoming.length ? `<button type="button" class="btn sm" data-incoming="${a.idx}" aria-haspopup="dialog" aria-label="Erwartete Zugänge für ${esc(a.name)} anzeigen">Zugänge (${a.incoming.length})</button>` : '—'}</td></tr>`;
   const totalRow = (label, list, cls) => `<tr class="${cls}"><td colspan="4">${esc(label)}</td><td class="s-kg" data-l="Eingelagerter Bestand">${esc(kgText(sum(list, 'kg')))}</td><td class="s-mhd"></td><td class="s-mkg" data-l="Menge kürz. MHD">${esc(kgText(sum(list, 'mhdKg')))}</td><td class="s-registered" data-l="Erfasster Bestand">${esc(kgText(sum(list, 'incomingKg')))}</td><td class="s-total-kg" data-l="Gesamt verfügbar">${esc(kgText(sum(list, 'totalKg')))}</td><td class="s-incoming"></td></tr>`;
-  function stockTableHTML(res, print = false) {
+  function stockTableHTML(res) {
     const mhd = res.flat;   // flache Liste = Suche „MHD“
-    const rows = (list) => list.map((a) => stockRow(a, print, mhd)).join('');
+    const rows = (list) => list.map((a) => stockRow(a, mhd)).join('');
     let body;
     if (res.flat) body = `<tbody>${rows(res.list)}</tbody>`;
     else body = res.groups.map((g, i) => `<tbody class="wg">${i ? '<tr class="wg-gap" aria-hidden="true"><td colspan="10"></td></tr>' : ''}<tr class="wg-h"><td colspan="10">${esc(g.label)}</td></tr>${rows(g.items)}${totalRow('Summe ' + g.label, g.items, 'wg-sum')}</tbody>`).join('');
-    return `<table class="stab${res.flat ? ' flat' : ''}"><thead>${stockHead(print, mhd)}</thead>${body}<tfoot>${totalRow('Gesamtsumme', res.list, 'st-total')}</tfoot></table>`;
+    return `<table class="stab${res.flat ? ' flat' : ''}"><thead>${stockHead(mhd)}</thead>${body}<tfoot>${totalRow('Gesamtsumme', res.list, 'st-total')}</tfoot></table>`;
   }
   const legendHTML = () => `<div class="mhd-legend" aria-label="MHD-Kennzeichnung"><span class="mhd-past">${SKULL} abgelaufen</span><span class="mhd-0-4">heute – 4 Tage</span><span class="mhd-5-7">5 – 7 Tage</span><span class="mhd-8-14">8 – 14 Tage</span></div>`;
 
@@ -4292,34 +4290,29 @@
     }
   }
 
-  /* Druck / PDF (DIN A4) */
+  /* Druck (DIN A4 quer): die Druckfassung setzt app/module/bestand/druck.js – hier nur die Werte als Text, kein Bildschirm-Markup,
+     damit Änderungen an der Liste den Druck nicht verschieben (Inhaber 26.11.2026) */
+  const druckSumme = (titel, list) => ({ titel, kg: kgText(sum(list, 'kg')), mhdKg: kgText(sum(list, 'mhdKg')), erfasst: kgText(sum(list, 'incomingKg')), gesamt: kgText(sum(list, 'totalKg')) });
+  const druckPreis = (p) => (p?.status === 'ambiguous' ? 'mehrere' : stockPriceText(p));
+  const druckZeile = (a, flach) => ({
+    nr: a.code, name: flach ? stockOrigName(a) : a.name, merkmale: a.merkmale || '',
+    preis: druckPreis(a.price), vorwoche: druckPreis(a.prevPrice),
+    kg: a.kg == null ? '—' : kgText(a.kg), mhd: mhdShort(a.mhd), stufe: (a.cls || '').replace(/^mhd-/, ''), mhdKg: kgText(a.mhdKg),
+    erfasst: kgText(a.incomingKg), eta: a.nextEta ? mhdShort(a.nextEta.t) : '', etaAlt: !!a.nextEta?.alt, gesamt: kgText(a.totalKg),
+    zugaenge: a.incoming.map((d) => ({ kg: kgText(d.kg), eta: d.arrival ? dmy(d.arrival).replace(/\.(\d\d)(\d\d)$/, '.$2') : 'ETA unbekannt', info: [d.marke, d.lot ? 'Partie ' + d.lot : ''].filter(Boolean).join(' · ') })),
+  });
   function printStock() {
+    if (!window.WA?.bestand?.druck) { toast('Die Druckfassung ist noch nicht geladen – bitte die Seite neu laden.'); return; }
     const res = stockResult(stockQ);
-    const w = window.open('', '_blank');
-    if (!w) { toast('Druckfenster wurde blockiert – bitte Pop-ups für diese Seite erlauben.'); return; }
-    const title = `Bestand vom ${stock.date ? dmy(stock.date) : '?'}${isMhdQuery(stockQ) ? ` – MHD bis ${dmy(isoToday(14))}` : stockQ ? ` – Suche „${stockQ}“` : ''}${Object.keys(stockFilter).length ? ` – Filter: ${filterAlle()}` : ''}`;
-    const schrift = new URL('../assets/fonts/geist-latin-wght-normal.woff2', location.href).href;   // Druckfenster lädt app.css nicht
-    w.document.write(`<!doctype html><html lang="de"><head><meta charset="utf-8"><title>${esc(title)}</title><style>
-      @page { size: A4 landscape; margin: 10mm; }
-      @font-face { font-family: "Geist"; font-weight: 100 900; src: url("${schrift}") format("woff2"); }
-      * { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
-      body { font: 9.5pt/1.3 "Geist", -apple-system, "Segoe UI", Roboto, Arial, sans-serif; color: #1b1a18; margin: 0; }
-      .s-reg { display: inline-flex; flex-direction: column; align-items: flex-end; } .s-eta { font-size: 7.5pt; font-weight: 600; color: #555; } .s-eta.alt { color: #b45309; }
-      h1 { font-size: 13pt; margin: 0 0 2px; } .meta { color: #666; font-size: 8.5pt; margin: 0 0 8px; }
-      table { width: 100%; border-collapse: collapse; } th, td { padding: 2.5px 5px; border-bottom: .5pt solid #ddd; }
-      th { font-size: 8pt; text-align: center; vertical-align: bottom; border-bottom: 1pt solid #999; }
-      td.s-name { white-space: normal; } .st-incoming { margin:0; padding-left:12px; } .st-price-change.up { color:#b91c1c; } .st-price-change.down { color:#15803d; } .s-code { width: 44px; } .s-vk, .s-prev, .s-kg, .s-mkg, .s-registered, .s-total-kg { text-align: right; white-space: nowrap; } .s-mhd { text-align: center; white-space: nowrap; }
-      .s-mkg { font-weight: 700; } thead { display: table-header-group; } tr { break-inside: avoid; }
-      .wg-h td { font-weight: 700; padding-top: 8px; border-bottom: 1pt solid #999; } .wg-sum td, .st-total td { font-weight: 700; background: #f3f1ee; }
-      .wg-gap td { border: 0; height: 6px; padding: 0; } .st-total td { border-top: 1.5pt solid #333; }
-      .mhd-past { background: #d9d6d2; color: #1f1d1a; } .mhd-0-4 { background: #fbe0dd; color: #8f1d14; } .mhd-5-7 { background: #fde7d3; color: #7a3209; } .mhd-8-14 { background: #fbf0c9; color: #6b4a05; } .mhd-past, .mhd-0-4, .mhd-5-7, .mhd-8-14 { font-weight: 700; } .mhd-skull { font-size: 1.15em; margin-right: 3px; }
-    </style></head><body><h1>${esc(company ? company + ' · ' : '')}${esc(title)}</h1>
-      <p class="meta">${fmtInt.format(res.list.length)} Artikel · Bestand und erwartete Zugänge getrennt · Standardpreise ${esc(stockWeekLabel('current'))} / ${esc(stockWeekLabel('previous'))} · gedruckt ${esc(dateTime(new Date().toISOString()))} · intern – nicht zur Weitergabe</p>
-      ${stockTableHTML(res, true).replace(/ tabindex="0"/g, '').replace(/<button[^>]*>/g, '').replace(/<\/button>/g, '')}
-      </body></html>`);
-    w.document.close();
-    const drucken = () => { try { w.focus(); w.print(); } catch { /* Fenster geschlossen */ } };
-    setTimeout(() => { try { w.document.fonts.ready.then(drucken); } catch { drucken(); } }, 300);   // Schrift erst geladen, dann drucken
+    const titel = `${company ? company + ' · ' : ''}Bestand vom ${stock.date ? dmy(stock.date) : '?'}${isMhdQuery(stockQ) ? ` – MHD bis ${dmy(isoToday(14))}` : stockQ ? ` – Suche „${stockQ}“` : ''}${Object.keys(stockFilter).length ? ` – Filter: ${filterAlle()}` : ''}`;
+    window.WA.bestand.druck.drucken({
+      titel, flach: !!res.flat, preise: !!stockPrices?.allowed,
+      meta: `${fmtInt.format(res.list.length)} Artikel · Bestand und erwartete Zugänge getrennt · Standardpreise ${stockWeekLabel('current')} / ${stockWeekLabel('previous')} · gedruckt ${dateTime(new Date().toISOString())} · intern – nicht zur Weitergabe`,
+      kw: { aktuell: stockWeekLabel('current'), vorwoche: stockWeekLabel('previous') },
+      gruppen: res.flat ? [{ titel: '', zeilen: res.list.map((a) => druckZeile(a, true)), summe: null }]
+        : res.groups.map((g) => ({ titel: g.label, zeilen: g.items.map((a) => druckZeile(a, false)), summe: druckSumme('Summe ' + g.label, g.items) })),
+      gesamt: druckSumme('Gesamtsumme', res.list),
+    });
   }
 
   /* ======================= Angebot: Vorwoche, Bestand ======================= */

@@ -718,7 +718,7 @@ _Wochenangebot – Eingabebereich Bearbeitet einen Entwurf auf dem Server (autom
 **Fenster „VK-Gruppen“: aktuelle Auswahl (Suche und Filter) je VK-Gruppe der Artikelstammdaten**
 
 - `openStockVk()`
-- `stockTableHTML(res, print)`
+- `stockTableHTML(res)`
 - `renderStockView()`
 - `renderStockList()`
 - `openStockIncoming(idx)`
@@ -737,7 +737,7 @@ _Wochenangebot – Eingabebereich Bearbeitet einen Entwurf auf dem Server (autom
 
 - `mhdBild(list)` – Bild für die E-Mail: Schrift wie in der Anwendung (14 px), Spalten knapp, damit das Bild in der E-Mail in Originalgröße (Breite = Rückgabe „breite“, …
 - `mhdAnVerkauf(btn)`
-- `printStock()` – Druck / PDF (DIN A4)
+- `printStock()`
 
 **Angebot: Vorwoche, Bestand**
 

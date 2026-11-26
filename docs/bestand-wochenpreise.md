@@ -44,6 +44,18 @@ Zugänge werden in der Übersicht nur
 als Button mit Anzahl gezeigt. Er öffnet einen Dialog mit den einzelnen Mengen und ETAs;
 Escape und Schließen schließen ihn. CSV und Druck enthalten weiterhin die Lieferdetails.
 
+**Druck** (Knopf „Drucken“, DIN A4 quer; neu gebaut am 26.11.2026 auf Wunsch des Inhabers): eine eigene Druckfassung in
+`app/module/bestand/druck.js`. Sie bekommt von der Liste nur fertige Werte (Text für kg, €, Datum) und setzt Tabelle und
+Stylesheet selbst; Markup und CSS der Bildschirmliste nutzt sie nicht. Änderungen an Liste, Filtern oder `admin.css`
+verschieben den Druck deshalb nicht.
+- Eine Zeile je Artikel, Merkmale klein unter der Bezeichnung, ETA unter „Erfasster Bestand“, erwartete Zugänge einzeilig
+  je Lieferung (kg · ETA · Partie). Warengruppen mit Zwischensumme, die Gesamtsumme genau einmal am Ende.
+- Kopfzeile auf jeder Seite, unten „intern – nicht zur Weitergabe“ und „Seite x von y“, Legende der MHD-Farben oben.
+- Prüfung in `tests/e2e/test_stock.py` (Abschnitt „Druck“): keine Zahl ragt in die Nachbarspalte, Zugänge vollständig,
+  Zeilenhöhe, Gesamtsumme einmal, kein Bildschirm-Markup, Seitenzahl (Testdaten: 342 Artikel auf höchstens 16 Seiten),
+  Grenzwerte (lange Marke und Partie, mehrdeutiger Preis, Summen über 1 Mio. kg, ohne Preisrecht: keine Preisspalten).
+  Wer den Druck ändert, ändert nur `druck.js` und diese Prüfungen.
+
 ## Bezeichnung aus den Stammdaten, Spaltenfilter, VK-Gruppen
 
 - **Bezeichnung:** Angezeigt wird die Bezeichnung aus den Artikelstammdaten (Verwaltung → Artikelstammdaten), nicht der
