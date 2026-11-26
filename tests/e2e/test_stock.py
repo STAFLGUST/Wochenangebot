@@ -115,7 +115,7 @@ with sync_playwright() as p:
     check('CSV of MHD selection', len(csv) == len(exp_mhd) + 1 and csv[0].startswith('Art.-Nr.;Bezeichnung;Aktuell KW'), len(csv))
     with ctx.expect_page() as pp: a.click('[data-st=print]')
     pr = pp.value; pr.wait_for_load_state()
-    check('print view', 'Bestand vom 16.10.2026' in pr.inner_text('h1') and pr.locator('tr.srow').count() == len(exp_mhd))
+    check('print view', 'Bestand vom 16.10.2026' in pr.inner_text('h1') and pr.locator('tr.z').count() == len(exp_mhd))
     pr.close()
     a.fill('#st-q', ''); a.wait_for_timeout(200)
     # Detail
@@ -277,7 +277,7 @@ with sync_playwright() as p:
     a.click('#st-pop [data-pop=zu]')
     with ctx.expect_page() as pp: a.click('[data-st=print]')
     pr = pp.value; pr.wait_for_load_state()
-    check('Druck: gefilterte Auswahl, Filter in der Überschrift, ohne Trichter', 'Filter: Erwartete Zugänge: mit Zugängen' in pr.inner_text('h1') and pr.locator('tr.srow').count() == a.locator('.stab tr.srow').count()
+    check('Druck: gefilterte Auswahl, Filter in der Überschrift, ohne Trichter', 'Filter: Erwartete Zugänge: mit Zugängen' in pr.inner_text('h1') and pr.locator('tr.z').count() == a.locator('.stab tr.srow').count()
           and pr.locator('svg').count() == 0, pr.inner_text('h1'))
     pr.close()
     a.click('.st-fleiste [data-fweg="*"]'); a.wait_for_function(f"document.querySelectorAll('.stab tr.srow').length === {gesamt}")
@@ -302,6 +302,39 @@ with sync_playwright() as p:
     check('VK-Gruppen: nur die gefilterte Auswahl (ohne „Ohne VK-Gruppe“)', a.eval_on_selector_all('#dlg-stock-vk tbody[data-vk]', 'els => els.map((e) => e.dataset.vk)') == ['1100', '1200'])
     a.keyboard.press('Escape'); a.click('.st-fleiste [data-fweg="*"]')
     a.wait_for_function(f"document.querySelectorAll('.stab tr.srow').length === {gesamt}")
+    # ---------- Druck: eigene Druckfassung (app/module/bestand/druck.js), abgeschottet von der Bildschirmliste (Inhaber 26.11.2026) ----------
+    with ctx.expect_page() as pp: a.click('[data-st=print]')
+    pr = pp.value; pr.wait_for_load_state(); pr.evaluate('document.fonts.ready')
+    pr.emulate_media(media='print'); pr.set_viewport_size({'width': 1054, 'height': 740})   # A4 quer abzüglich Rand bei 96 dpi
+    check('Druck: eigenes Dokument ohne Stylesheets, Knöpfe und Markup der Bildschirmliste',
+          pr.locator('link[rel=stylesheet], button, .stab, .srow, [data-sfilter]').count() == 0 and pr.locator('body.bestand-druck').count() == 1)
+    check('Druck: jede Zeile ein Artikel, Gesamtsumme genau einmal am Ende (kein wiederholter Tabellenfuß)',
+          pr.locator('tr.z').count() == gesamt and pr.locator('tr.gesamt').count() == 1 and pr.locator('tfoot').count() == 0
+          and pr.evaluate("document.querySelector('table > tbody:last-child tr.gesamt') !== null"))
+    ueber = pr.evaluate("""[...document.querySelectorAll('td, th')].filter((c) => c.scrollWidth > c.clientWidth + 1 && !c.closest('td.zu')).map((c) => c.textContent.trim()).slice(0, 5)""")
+    check('Druck: keine Zahl ragt in die Nachbarspalte, Tabelle passt auf A4 quer', not ueber and pr.evaluate("document.querySelector('table').scrollWidth <= document.body.clientWidth + 1"), ueber)
+    hoch = pr.evaluate("""Math.max(0, ...[...document.querySelectorAll('tr.z')].filter((r) => !r.querySelector('td.zu span:nth-child(2)')).map((r) => r.getBoundingClientRect().height))""")
+    check('Druck: Zeilen ohne mehrere Zugänge höchstens zwei Textzeilen hoch', 0 < hoch <= 36, hoch)
+    pdf = pr.pdf(prefer_css_page_size=True, print_background=True); seiten = pdf.count(b'/Type /Page') - pdf.count(b'/Type /Pages')
+    check(f'Druck: {gesamt} Artikel auf höchstens 16 Seiten A4 quer (vorher 37)', 0 < seiten <= 16, seiten)
+    zu = pr.evaluate("[...document.querySelectorAll('td.zu span')].filter((x) => x.scrollWidth > x.clientWidth + 1).map((x) => x.textContent).slice(0, 3)")
+    check('Druck: Zugänge vollständig (kg, ETA, Partie nicht abgeschnitten)', not zu, zu)
+    open(SH + '/stock-druck.pdf', 'wb').write(pdf); pr.close()
+    # Grenzwerte direkt an der Druckfassung: lange Marke/Partie, mehrdeutiger Preis, Preis mit Zusatz, Summe über 1 Mio. kg, ohne Preisrecht
+    grenz = {'nr': '99999', 'name': 'Rinderhüfte ohne Deckel, Färse, Weidehaltung, Uruguay, frisch, vakuumverpackt', 'merkmale': 'Rind · UY · frisch',
+             'preis': 'mehrere', 'vorwoche': '12,5000 €/kg · ab 100 kg', 'kg': '999.999,99 kg', 'mhd': '01.12.2026', 'stufe': '0-4', 'mhdKg': '999.999,99 kg',
+             'erfasst': '999.999,99 kg', 'eta': '19.12.2026', 'etaAlt': True, 'gesamt': '1.999.999,98 kg',
+             'zugaenge': [{'kg': '99.999,99 kg', 'eta': '19.12.26', 'info': 'Frigorífico Rio Platense SA · Partie 12345678901234567890'}]}
+    for preise in (True, False):
+        html = a.evaluate("([z, p]) => WA.bestand.druck.html({ titel: 'Grenzwerte', meta: 'Test', preise: p, kw: { aktuell: 'KW 48/2026', vorwoche: 'KW 47/2026' }, flach: false, "
+                          "gruppen: [{ titel: 'Rindfleisch, frisch', zeilen: [z, z], summe: { titel: 'Summe', kg: '1.999.999,98 kg', mhdKg: '1.999.999,98 kg', erfasst: '1.999.999,98 kg', gesamt: '3.999.999,96 kg' } }], "
+                          "gesamt: { titel: 'Gesamtsumme', kg: '1.999.999,98 kg', mhdKg: '1.999.999,98 kg', erfasst: '1.999.999,98 kg', gesamt: '3.999.999,96 kg' } })", [grenz, preise])
+        g = ctx.new_page(); g.set_viewport_size({'width': 1054, 'height': 740}); g.emulate_media(media='print'); g.set_content(html); g.evaluate('document.fonts.ready')
+        ueber = g.evaluate("[...document.querySelectorAll('td, th, td.zu span')].filter((c) => c.scrollWidth > c.clientWidth + 1).map((c) => c.textContent.trim()).slice(0, 5)")
+        check(f'Druck Grenzwerte ({"mit" if preise else "ohne"} Preisrecht): nichts ragt über, Partie vollständig, Spalten passen',
+              not ueber and 'Partie 12345678901234567890' in g.inner_text('td.zu') and g.locator('thead th').count() == (10 if preise else 8)
+              and 'Berechtigung' not in g.inner_text('body'), ueber)
+        g.close()
     # ---------- Fenster „Filter“: Artikel einzeln, Gruppen (VK-Gruppe der Stammdaten), Warengruppe (Auftrag Inhaber 25.11.2026) ----------
     a.click('[data-st=filter]'); a.wait_for_selector('#dlg-stock-filter[open] [data-sfliste]')
     teile = a.eval_on_selector_all('#dlg-stock-filter section[data-sfteil]', 'els => els.map((e) => e.dataset.sfteil)')

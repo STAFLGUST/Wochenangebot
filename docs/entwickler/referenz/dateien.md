@@ -390,6 +390,7 @@ Jede Code-Datei beginnt mit einem Kopfkommentar; dessen erste Aussage steht hier
 | Datei | Modul | Inhalt |
 | --- | --- | --- |
 | `bestandsliste.css` | bestand | Bestand – Stile der Bestandsliste im Eingabebereich, die das Modul Bestand selbst pflegt (eingebunden in app/admin/index.html). |
+| `druck.js` | bestand | STAFL-Plattform · Bestand · Druckfassung der Bestandsliste (Knopf „Drucken“, DIN A4 quer; Inhaber 26.11.2026). |
 
 ## `app/module/containerimport/`
 

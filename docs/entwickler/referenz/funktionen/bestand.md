@@ -2,7 +2,7 @@
 
 <!-- ERZEUGT von `python3 werkzeuge/doku.py erzeugen` – nicht von Hand ändern. Quelle: Funktionen und Kommentare im Code. Die CI prüft, dass diese Datei zum Code passt. -->
 
-9 Dateien, 74 Funktionen – in der Reihenfolge der Datei, **fett** die Abschnitte. Text = erste Aussage des Kommentars direkt über der Funktion (Python: Docstring). Übersicht aller Module: [README.md](README.md).
+10 Dateien, 76 Funktionen – in der Reihenfolge der Datei, **fett** die Abschnitte. Text = erste Aussage des Kommentars direkt über der Funktion (Python: Docstring). Übersicht aller Module: [README.md](README.md).
 
 ## `app/api/lib/bestand-pdf.php`
 
@@ -107,6 +107,13 @@ _Bestand – Einlesen der WinAB-Bestandsliste („Partieliste … verfügbar“)
 - `bestandSummen(zeilen)` – Summen der gerade angezeigten Zeilen (Suche und Filter; Variante B, Wunsch Inhaber 11.11.2026).
 - `summenZeileHTML(s, mitEk)` – Schlanke Textzeile zwischen Werkzeugleiste und Tabelle (Stile: app/module/bestand/bestandsliste.css): ganze kg und €, „Gesamt verfügbar“ vorn, dann …
 
+## `app/module/bestand/druck.js`
+
+_STAFL-Plattform · Bestand · Druckfassung der Bestandsliste (Knopf „Drucken“, DIN A4 quer; Inhaber 26.11.2026)._
+
+- `html(d)`
+- `drucken(daten)`
+
 ## `tests/e2e/test_bestand_pdf.py`
 
 _Bestand: Marke je Partie (Spalte E der WinAB-Liste, Überschrift „Marke“ eine Spalte rechts davon), dezente MHD-Farben (hell/dunkel) und PDF ohne Preise, erfassten Bestand, Gesamt verfügbar und erwartete Zugänge._
@@ -128,6 +135,8 @@ _Summen exakt (Dezimal) und kaufmännisch gerundet wie die Anzeige – Gleitkomm
 - `marked_first()`
 
 **Bezeichnung aus den Artikelstammdaten, VK-Gruppen, Spaltenfilter**
+
+**Druck: eigene Druckfassung (app/module/bestand/druck.js), abgeschottet von der Bildschirmliste (Inhaber 26.11.2026)**
 
 **Fenster „Filter“: Artikel einzeln, Gruppen (VK-Gruppe der Stammdaten), Warengruppe (Auftrag Inhaber 25.11.2026)**
 
