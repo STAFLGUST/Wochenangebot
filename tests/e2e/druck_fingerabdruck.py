@@ -62,15 +62,33 @@ FINGER = """() => {
 
 
 # Wächter 1: keine Regel eines anderen Stylesheets (app.css …) trifft ein Element des Drucks – der Druck hat seine Regeln nur in
-# angebot-druck.css (Trennung 26.11.2026). Geprüft wird je Selektor, unabhängig vom Medium (auch Handy-, Dunkel- und Bildschirmregeln).
+# angebot-druck.css (Trennung 26.11.2026). Geprüft wird je Selektor, unabhängig vom Medium (auch Handy-, Dunkel- und Bildschirmregeln),
+# in mehreren Zuständen der Seite (ZUSTAENDE) und mit einer Probe seltener Druckbausteine (PROBE).
 FREMD = """() => {
   const R = document.querySelector('#print-root'), els = [R, ...R.querySelectorAll('*')], out = [];
   const ohnePseudo = (s) => s.replace(/::?(before|after|marker|placeholder|selection|first-line|first-letter|backdrop|-webkit-[a-z-]+)\\b(\\([^)]*\\))?/g, '');
+  const teile = (s) => { const t = []; let tiefe = 0, a = 0; for (let i = 0; i < s.length; i++) { const c = s[i];
+    if (c === '(' || c === '[') tiefe++; else if (c === ')' || c === ']') tiefe--; else if (c === ',' && !tiefe) { t.push(s.slice(a, i)); a = i + 1; } } t.push(s.slice(a)); return t.map((x) => x.trim()); };
   const gehe = (rs, quelle) => { for (const r of rs) { if (r.cssRules && !r.selectorText) { gehe(r.cssRules, quelle); continue; } if (!r.selectorText) continue;
-    for (const s of r.selectorText.split(/,(?![^(]*\\))/)) { try { if (els.some((e) => e.matches(ohnePseudo(s.trim()) || '*'))) out.push(quelle + ': ' + s.trim()); } catch {} } } };
+    for (const s of teile(r.selectorText)) { try { if (els.some((e) => e.matches(ohnePseudo(s) || '*'))) out.push(quelle + ': ' + s); } catch (f) { out.push(quelle + ': nicht lesbar ' + s); } } } };
   for (const sh of document.styleSheets) { const q = (sh.href || 'eingebettet').replace(/^.*\\//, '').replace(/\\?.*$/, ''); if (q === 'angebot-druck.css') continue; try { gehe(sh.cssRules, q); } catch {} }
   return [...new Set(out)];
 }"""
+# Zustände der Seite, unter denen Wächter 1 zusätzlich prüft (Regeln, die nur dann greifen): ausdrücklich dunkel/hell, einfache
+# Darstellung, bestellberechtigter Kunde, Designvorschau
+ZUSTAENDE = [[], [['H', 'data-theme', 'dark']], [['H', 'data-theme', 'light']], [['H', 'data-darstellung', 'einfach']], [['B', 'class', 'can-order']],
+             [['H', 'class', 'druckansicht']]]
+ZUSTAND = """(zu) => { const H = document.documentElement, B = document.body;
+  H.removeAttribute('data-theme'); H.removeAttribute('data-darstellung'); B.classList.remove('can-order'); H.classList.remove('druckansicht');
+  for (const [w, a, v] of zu || []) { const e = w === 'H' ? H : B; if (a === 'class') e.classList.add(v); else e.setAttribute(a, v); } }"""
+# Probe für Wächter 1: seltene Bausteine des Drucks, die in den Testdaten nicht vorkommen (Partie mit MHD im Einzelangebot,
+# Suchtreffer <mark>, gestapelte Werbung, Sonderpreis mit altem Preis, „a. Anfr.“). Neue seltene Druckbausteine hier ergänzen.
+PROBE = """(an) => { document.querySelectorAll('[data-druckprobe]').forEach((e) => e.remove()); if (!an) return;
+  const D = document.querySelector('#print-root .pl-doc, #print-root .p-doc') || document.querySelector('#print-root');
+  const p = document.createElement('div'); p.dataset.druckprobe = '1';
+  p.innerHTML = '<div class="werb-duo werb-stapel"><div class="werb-sec"></div></div><table class="al-tab"><tbody><tr class="row"><td class="c-code"><mark>1</mark></td>'
+    + '<td class="c-name">x <span class="partie al-partie"><span>P</span> · <span>MHD</span></span></td><td class="c-price al-np"><span class="al-was">2</span><span class="al-sale">1</span></td></tr></tbody></table>';
+  D.appendChild(p); }"""
 # Wächter 2 (Störversuch): fremde Farben, Schriften, Größen und Abstände an :root und body – der Druck muss gleich bleiben
 STOER_CSS = ('--accent --accent-line --accent-soft --line --muted --muted-fein --sale --sale-bg --surface --surface-2 --surface-3 --text --text-2 '
              '--vw-g --vw-n --vw-t --aus --zebra --linie --regel').split()
@@ -109,7 +127,10 @@ class Fingerabdruck:
         pg.evaluate('document.fonts.ready')
         pg.emulate_media(media='print')
         self.varianten[variante] = pg.evaluate(FINGER)
-        self.fremd[variante] = pg.evaluate(FREMD)
+        pg.evaluate(PROBE, True); fremd = set()
+        for zu in ZUSTAENDE: pg.evaluate(ZUSTAND, zu); fremd |= set(pg.evaluate(FREMD))
+        pg.evaluate(ZUSTAND, []); pg.evaluate(PROBE, False)
+        self.fremd[variante] = sorted(fremd)
         # Vergleich gegen eine Messung nach neutraler Neuberechnung (leere Störung): der zweispaltige Satz „Kompakt“ (column-fill: balance)
         # verteilt nach jeder Neuberechnung der Seite etwas anders – unabhängig vom Inhalt; gezählt wird nur, was die fremden Werte bewirken
         pg.evaluate(STOER, [True, '--neutral: 0;']); neutral = pg.evaluate(FINGER)

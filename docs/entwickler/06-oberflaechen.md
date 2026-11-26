@@ -632,7 +632,8 @@ Leiste senkrecht, schmal ist sie eine waagerechte Spur. Mit `body.bereich-import
     `WA_DRUCK_REFERENZ=neu python3 tests/run_e2e.py druck angebot_design preisaenderung` und die geänderte Referenz im PR begründen; in der
     CI wird nie eine Referenz geschrieben. Wird Playwright erhöht, die Referenzen im selben PR neu schreiben.
   - **Druck getrennt vom Bildschirm** (26.11.2026): Alle Regeln des Angebotsdrucks stehen in `assets/angebot-druck.css`.
-    Die 141 Regeln, die bis dahin aus `app.css` in den Druck wirkten (gemessen in allen Druckarten, beim Messen und im Druck),
+    Die 150 Regeln, die bis dahin aus `app.css` in den Druck wirkten (gemessen in allen Druckarten, beim Messen und im Druck,
+    dazu in den Zuständen dunkel/hell/einfach/Besteller/Designvorschau und mit seltenen Bausteinen wie Partie und Suchtreffer),
     stehen dort eingefroren mit dem Zusatz `:where(#print-root, #print-root *)` – gleiche Reihenfolge, Umgebung (`@media`) und
     Gewichtung; in `app.css` tragen dieselben Selektoren `:where(:not(#print-root, #print-root *))`. Variablen (`--accent`,
     `--font` …) und geerbte Grundwerte (Schrift, Größe, Zeilenhöhe, Farbe …) stehen fest an `#print-root`. Folge: Änderungen
@@ -640,8 +641,11 @@ Leiste senkrecht, schmal ist sie eine waagerechte Spur. Mit `body.bereich-import
     Druck vorkommen (`.al-…`, `.c-…`, `.p-…`), bekommen deshalb `:where(:not(#print-root, #print-root *))` an den letzten
     Teil des Selektors (vor `::before`/`::after`); soll der Druck sich mit ändern, gehört die Regel in `angebot-druck.css`.
     Wächter im Fingerabdruck: „Druck getrennt vom Bildschirm“ (keine Regel eines anderen Stylesheets trifft ein Element in
-    `#print-root`, je Selektor, unabhängig vom Medium) und „Störversuch“ (fremde Farben, Schrift, Größen und Abstände an
-    `:root`/`body` ändern den Druck nicht).
+    `#print-root`, je Selektor, unabhängig vom Medium, in allen `ZUSTAENDE` und mit der `PROBE` seltener Druckbausteine –
+    neue seltene Bausteine dort ergänzen) und „Störversuch“ (fremde Farben, Schrift, Größen und Abstände an
+    `:root`/`body` ändern den Druck nicht; geprüft wird das Restyling des gesetzten Drucks, nicht ein neuer Satz). Auf
+    Seitenebene: `html, body` ohne Rand im Druck (`angebot-druck.css`), die Schrift der Hochformat-Fußzeile kommt von
+    `#print-root` (`frontend.js`).
   - **Dichte:** drei Stufen (`STUFEN`: normal 8,3 pt, kompakt 7,9 pt, eng 7,5 pt; Zeilenhöhe und Abstände je Stufe als
     Variablen `--zeile`, `--ab-…` an `.pl-doc` in `angebot-druck.css` – nur dort). Der Satz rechnet alle Stufen und nimmt
     die größte Schrift, mit der es nicht mehr Seiten werden als mit der kleinsten. `?stufe=normal|kompakt|eng` legt die
