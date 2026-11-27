@@ -62,7 +62,6 @@ function stock_pdf(array $st, array $zeilen, string $zusatz = '', bool $mhdListe
     };
     $titel = 'Bestand vom ' . (!empty($st['date']) ? date('d.m.Y', strtotime($st['date'])) : '?') . $zusatz;
     $firma = (string)($CFG['company'] ?? '');
-    $meta = $anzahl . ' Artikel' . ' · eingelagerter Bestand ohne Preise und Zugänge · erstellt ' . date('d.m.Y, H:i') . ' Uhr';
 
     // Seiten vorab einteilen (für „Seite x von y“): Kopf auf Seite 1 höher (Logo, Legende)
     $kopf1 = 92; $kopfN = 50; $tabKopf = 22;
@@ -83,9 +82,7 @@ function stock_pdf(array $st, array $zeilen, string $zusatz = '', bool $mhdListe
         $y = $MT;
         if ($p === 0) {
             $lh = $pdf->jpeg(__DIR__ . '/druck-logo.jpg', $x0, $y, 120);
-            $pdf->text($x1, $y + 14, $titel, 14, true, '#1b1a18', 'r');
-            $pdf->text($x1, $y + 28, $meta, 7.8, false, '#5f5b55', 'r');
-            $pdf->text($x1, $y + 39, 'Intern – nur für den Verkauf; Mengen ohne Gewähr (Stand der Bestandsliste).', 7.8, false, '#5f5b55', 'r');
+            $pdf->text($x1, $y + 14, $titel, 14, true, '#1b1a18', 'r');   // darunter nichts mehr (Inhaber 27.11.2026)
             // Legende
             $ly = $y + max($lh, 40) + 12; $lx = $x0;
             $pdf->text($lx, $ly + 8, 'MHD:', 8, true, '#1b1a18'); $lx += 26;

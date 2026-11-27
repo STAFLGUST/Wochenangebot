@@ -149,6 +149,7 @@ with sync_playwright() as p:
     with a.expect_download() as dl: a.click('[data-st=pdf]')
     raw = open(dl.value.path(), 'rb').read()
     text, farben = pdf_text(raw)
+    open(os.path.join(WORK, 'bestand.pdf'), 'wb').write(raw)   # zum Ansehen (tests/.arbeit/bestand.pdf)
     voll = '\n'.join(text)
     check('PDF erstellt (Dateiname mit Bestandsdatum)', raw.startswith(b'%PDF-1.4') and dl.value.suggested_filename == f'Bestand_{heute.isoformat()}.pdf', dl.value.suggested_filename)
     check('PDF: Spalten Art.-Nr., Bezeichnung, Eingelagerter Bestand, Kürz. MHD, Menge kürz. MHD', all(x in text for x in ['Art.-Nr.', 'Art. Bezeichnung', 'Eingelagerter Bestand', 'Kürz. MHD', 'Menge kürz. MHD']), text[:20])
@@ -159,6 +160,8 @@ with sync_playwright() as p:
           and '1.124,51 kg' in text and '2.982,67 kg' in text, [t for t in text if 'umme' in t or 'kg' in t][-8:])
     check('PDF: MHD in den hellen Tönen markiert (heute – 4 Tage, abgelaufen)', '0.984 0.878 0.867' in farben and '0.851 0.839 0.824' in farben, sorted(farben))
     check('PDF: Seitenzahl', 'Seite 1 von 1' in text, [t for t in text if 'Seite' in t])
+    check('PDF: unter der Überschrift nichts mehr (keine Artikelzahl, kein „erstellt“, kein Hinweis; Inhaber 27.11.2026)',
+          not any(x in voll for x in ['Artikel ·', 'erstellt', 'ohne Gewähr', 'nur für den Verkauf']), text[:8])
     # Auswahl wie angezeigt
     a.fill('#st-q', 'Testfilet'); a.wait_for_function("document.querySelectorAll('.stab tr.srow').length === 1")
     with a.expect_download() as dl: a.click('[data-st=pdf]')
