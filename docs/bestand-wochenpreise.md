@@ -50,7 +50,8 @@ Stylesheet selbst; Markup und CSS der Bildschirmliste nutzt sie nicht. Änderung
 verschieben den Druck deshalb nicht.
 - Eine Zeile je Artikel, Merkmale klein unter der Bezeichnung, ETA unter „Erfasster Bestand“, erwartete Zugänge einzeilig
   je Lieferung (kg · ETA · Partie). Warengruppen mit Zwischensumme, die Gesamtsumme genau einmal am Ende.
-- Kopfzeile auf jeder Seite, unten „intern – nicht zur Weitergabe“ und „Seite x von y“, Legende der MHD-Farben oben.
+- Oben nur die Überschrift (Datum, Suche, Filter) und darunter die Legende der MHD-Farben – keine Zeile mit Artikelzahl, Wochen
+  oder Uhrzeit (Inhaber 27.11.2026; im PDF ebenso). Tabellenkopf auf jeder Seite, unten „intern – nicht zur Weitergabe“ und „Seite x von y“.
 - Prüfung in `tests/e2e/test_stock.py` (Abschnitt „Druck“): keine Zahl ragt in die Nachbarspalte, Zugänge vollständig,
   Zeilenhöhe, Gesamtsumme einmal, kein Bildschirm-Markup, Seitenzahl (Testdaten: 342 Artikel auf höchstens 16 Seiten),
   Grenzwerte (lange Marke und Partie, mehrdeutiger Preis, Summen über 1 Mio. kg, ohne Preisrecht: keine Preisspalten).

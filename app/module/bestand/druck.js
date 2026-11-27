@@ -3,7 +3,7 @@
    Stylesheet selbst – sie nutzt weder Markup noch CSS der Bestandsliste. Änderungen an Liste, Filtern oder admin.css
    ändern den Druck deshalb nicht; geändert wird er nur hier (Prüfung: tests/e2e/test_stock.py, Abschnitt „Druck“).
    Für andere Module: WA.bestand.druck.drucken(daten) öffnet das Druckfenster, WA.bestand.druck.html(daten) liefert das Dokument.
-   daten = { titel, meta, preise (false = ohne Preisspalten), kw: { aktuell, vorwoche }, flach, gruppen: [{ titel, zeilen: [Zeile], summe }], gesamt }
+   daten = { titel, preise (false = ohne Preisspalten), kw: { aktuell, vorwoche }, flach, gruppen: [{ titel, zeilen: [Zeile], summe }], gesamt }
      Zeile = { nr, name, merkmale, preis, vorwoche, kg, mhd, stufe ('past'|'0-4'|'5-7'|'8-14'|''), mhdKg, erfasst, eta,
                etaAlt, gesamt, zugaenge: [{ kg, eta, info }] } – alle Werte schon als Text (kg, €, Datum)
      Summe = { titel, kg, mhdKg, erfasst, gesamt }
@@ -19,8 +19,7 @@
             @bottom-right { content: "Seite " counter(page) " von " counter(pages); font: 7pt Geist, Arial, sans-serif; color: #77716a; } }
     * { box-sizing: border-box; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
     body { margin: 0; font: 8.5pt/1.25 Geist, -apple-system, "Segoe UI", Roboto, Arial, sans-serif; color: #1b1a18; }
-    h1 { font-size: 12pt; font-weight: 650; margin: 0 0 1px; }
-    .meta { margin: 0 0 6px; font-size: 7.5pt; color: #5f5a56; }
+    h1 { font-size: 12pt; font-weight: 650; margin: 0 0 5px; }
     table { width: 100%; border-collapse: collapse; table-layout: fixed; }
     col.nr { width: 5%; } col.name { width: 19%; } col.preis { width: 5.5%; } col.kg { width: 9%; } col.mhd { width: 6.5%; } col.zu { width: 22.5%; }
     table.ohne-preise col.zu { width: 33.5%; }
@@ -64,7 +63,7 @@
     const schrift = new URL('../assets/fonts/geist-latin-wght-normal.woff2', location.href).href;
     return `<!doctype html><html lang="de"><head><meta charset="utf-8"><title>${esc(d.titel)}</title><style>
       @font-face { font-family: "Geist"; font-weight: 100 900; src: url("${esc(schrift)}") format("woff2"); }${CSS}</style></head>
-      <body class="bestand-druck"><h1>${esc(d.titel)}</h1><p class="meta">${esc(d.meta)}</p>
+      <body class="bestand-druck"><h1>${esc(d.titel)}</h1>
       <div class="legende"><span class="past">† MHD abgelaufen</span><span class="s0-4">heute – 4 Tage</span><span class="s5-7">5 – 7 Tage</span><span class="s8-14">8 – 14 Tage</span></div>
       <table${preise ? '' : ' class="ohne-preise"'}><colgroup><col class="nr"><col class="name">${preise ? '<col class="preis"><col class="preis">' : ''}<col class="kg"><col class="mhd"><col class="kg"><col class="kg"><col class="kg"><col class="zu"></colgroup>
       <thead>${kopf}</thead>${body}<tbody>${summe(d.gesamt, 'gesamt', preise)}</tbody></table></body></html>`;

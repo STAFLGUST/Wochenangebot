@@ -308,6 +308,8 @@ with sync_playwright() as p:
     pr.emulate_media(media='print'); pr.set_viewport_size({'width': 1054, 'height': 740})   # A4 quer abzüglich Rand bei 96 dpi
     check('Druck: eigenes Dokument ohne Stylesheets, Knöpfe und Markup der Bildschirmliste',
           pr.locator('link[rel=stylesheet], button, .stab, .srow, [data-sfilter]').count() == 0 and pr.locator('body.bestand-druck').count() == 1)
+    check('Druck: unter der Überschrift gleich die Legende (keine Zeile mit Artikelzahl, Wochen, Uhrzeit; Inhaber 27.11.2026)',
+          pr.evaluate("document.querySelector('h1').nextElementSibling.className") == 'legende' and 'gedruckt' not in pr.inner_text('body'))
     check('Druck: jede Zeile ein Artikel, Gesamtsumme genau einmal am Ende (kein wiederholter Tabellenfuß)',
           pr.locator('tr.z').count() == gesamt and pr.locator('tr.gesamt').count() == 1 and pr.locator('tfoot').count() == 0
           and pr.evaluate("document.querySelector('table > tbody:last-child tr.gesamt') !== null"))
@@ -326,7 +328,7 @@ with sync_playwright() as p:
              'erfasst': '999.999,99 kg', 'eta': '19.12.2026', 'etaAlt': True, 'gesamt': '1.999.999,98 kg',
              'zugaenge': [{'kg': '99.999,99 kg', 'eta': '19.12.26', 'info': 'Frigorífico Rio Platense SA · Partie 12345678901234567890'}]}
     for preise in (True, False):
-        html = a.evaluate("([z, p]) => WA.bestand.druck.html({ titel: 'Grenzwerte', meta: 'Test', preise: p, kw: { aktuell: 'KW 48/2026', vorwoche: 'KW 47/2026' }, flach: false, "
+        html = a.evaluate("([z, p]) => WA.bestand.druck.html({ titel: 'Grenzwerte', preise: p, kw: { aktuell: 'KW 48/2026', vorwoche: 'KW 47/2026' }, flach: false, "
                           "gruppen: [{ titel: 'Rindfleisch, frisch', zeilen: [z, z], summe: { titel: 'Summe', kg: '1.999.999,98 kg', mhdKg: '1.999.999,98 kg', erfasst: '1.999.999,98 kg', gesamt: '3.999.999,96 kg' } }], "
                           "gesamt: { titel: 'Gesamtsumme', kg: '1.999.999,98 kg', mhdKg: '1.999.999,98 kg', erfasst: '1.999.999,98 kg', gesamt: '3.999.999,96 kg' } })", [grenz, preise])
         g = ctx.new_page(); g.set_viewport_size({'width': 1054, 'height': 740}); g.emulate_media(media='print'); g.set_content(html); g.evaluate('document.fonts.ready')

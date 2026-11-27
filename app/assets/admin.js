@@ -4307,7 +4307,6 @@
     const titel = `${company ? company + ' · ' : ''}Bestand vom ${stock.date ? dmy(stock.date) : '?'}${isMhdQuery(stockQ) ? ` – MHD bis ${dmy(isoToday(14))}` : stockQ ? ` – Suche „${stockQ}“` : ''}${Object.keys(stockFilter).length ? ` – Filter: ${filterAlle()}` : ''}`;
     window.WA.bestand.druck.drucken({
       titel, flach: !!res.flat, preise: !!stockPrices?.allowed,
-      meta: `${fmtInt.format(res.list.length)} Artikel · Bestand und erwartete Zugänge getrennt · Standardpreise ${stockWeekLabel('current')} / ${stockWeekLabel('previous')} · gedruckt ${dateTime(new Date().toISOString())} · intern – nicht zur Weitergabe`,
       kw: { aktuell: stockWeekLabel('current'), vorwoche: stockWeekLabel('previous') },
       gruppen: res.flat ? [{ titel: '', zeilen: res.list.map((a) => druckZeile(a, true)), summe: null }]
         : res.groups.map((g) => ({ titel: g.label, zeilen: g.items.map((a) => druckZeile(a, false)), summe: druckSumme('Summe ' + g.label, g.items) })),
